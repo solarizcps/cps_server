@@ -2410,8 +2410,7 @@
                   slot: slot,
                   kalip_id: k.id,
                   kalip_basi_cift: k.kalip_basi_cift,
-                  bagli_kalip_adet: k.varsayilan_bagli_kalip,
-                  renk: k.renk || null
+                  bagli_kalip_adet: k.varsayilan_bagli_kalip
                 })
               }).catch(function(){});
             });
