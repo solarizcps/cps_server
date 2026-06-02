@@ -1,0 +1,59 @@
+# -*- coding: utf-8 -*-
+"""
+personel_giris/routes.py
+========================
+Personel uretim giris ekrani Flask Blueprint.
+
+Endpoint'ler (minimum):
+  GET  /personel-giris/             -> HTML (telefon UI)
+  GET  /personel-giris/health       -> JSON saglik check
+
+Sonra eklenecek (FAZ 3-6):
+  POST /personel-giris/login
+  GET  /personel-giris/personeller
+  GET  /personel-giris/emir/<emir_no>
+  GET  /personel-giris/prosesler/<emir_no>
+  POST /personel-giris/kaydet
+  GET  /personel-giris/gecmis/<pid>
+"""
+import sqlite3
+import os
+from flask import Blueprint, render_template, jsonify
+
+personel_giris_bp = Blueprint(
+    'personel_giris',
+    __name__,
+    url_prefix='/personel-giris',
+    template_folder='../../templates/personel_giris',
+)
+
+
+def _db_path():
+    """CPS DB yolu."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    return os.path.normpath(os.path.join(here, '..', '..', 'mock_data.db'))
+
+
+@personel_giris_bp.route('/', methods=['GET'])
+def index():
+    """Personel uretim giris ekrani (HTML)."""
+    return render_template('personel_giris/index.html')
+
+
+@personel_giris_bp.route('/health', methods=['GET'])
+def health():
+    """Saglik kontrolu - DB ve personel sayisi."""
+    try:
+        conn = sqlite3.connect(_db_path(), timeout=5)
+        cur = conn.cursor()
+        toplam = cur.execute("SELECT COUNT(*) FROM personel_kullanici").fetchone()[0]
+        aktif = cur.execute("SELECT COUNT(*) FROM personel_kullanici WHERE aktif=1").fetchone()[0]
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'modul': 'personel_giris',
+            'personel_kullanici_toplam': toplam,
+            'aktif_personel': aktif,
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'mesaj': str(e)}), 500

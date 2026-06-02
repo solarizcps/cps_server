@@ -1,0 +1,455 @@
+{% extends "base.html" %}
+
+{% block title %}Finans Takvim - V2{% endblock %}
+
+{% set active = 'finans' %}
+
+{% block content %}
+<div class="fk-wrap">
+
+  <div class="page-header fk-header">
+    <div class="page-header-baslik">
+      <h1 class="page-title">
+        <span class="fk-icon">TK</span>
+        Finans Takvim
+      </h1>
+      <div class="page-subtitle">
+        Tum odemeler, ekstreler ve finansal aktiviteler
+      </div>
+    </div>
+    <div class="fk-konsol-back">
+      <a href="/finans/konsol" class="fk-back-btn">&larr; Konsola Don</a>
+    </div>
+  </div>
+
+  <!-- VIEW TOGGLE (Aylik Takvim / Liste Gorunumu) -->
+  <div class="fk-view-tabs">
+    <button class="fk-vtab fk-vtab-active" data-view="calendar" onclick="fkSetView('calendar')">Aylik Takvim</button>
+    <button class="fk-vtab" data-view="liste" onclick="fkSetView('liste')">Liste Gorunumu</button>
+  </div>
+
+  <!-- TOGGLE FILTER BAR (Cekler / Cari / Kart / Krediler / Manuel) -->
+  <div class="fk-toggle-bar">
+    <button class="fk-toggle fk-tgl-cek fk-toggle-on" data-kaynak="CEK" onclick="fkToggleKaynak(this)">Cekler</button>
+    <button class="fk-toggle fk-tgl-cari fk-toggle-on" data-kaynak="CARI" onclick="fkToggleKaynak(this)">Cari Odemeler</button>
+    <button class="fk-toggle fk-tgl-kart fk-toggle-on" data-kaynak="KART" onclick="fkToggleKaynak(this)">Kredi Kartlari</button>
+    <button class="fk-toggle fk-tgl-kredi fk-toggle-on" data-kaynak="KREDI" onclick="fkToggleKaynak(this)">Krediler</button>
+    <button class="fk-toggle fk-tgl-manuel fk-toggle-on" data-kaynak="MANUEL" onclick="fkToggleKaynak(this)">Manuel Odemeler</button>
+  </div>
+
+  <!-- ============ CALENDAR VIEW (default) ============ -->
+  <div id="fk-view-calendar" class="fk-view-panel">
+
+    <div class="fk-cal-layout">
+
+      <!-- LEFT: Calendar grid -->
+      <div class="fk-cal-main">
+
+        <!-- Calendar header: ay nav + bugun -->
+        <div class="fk-cal-header">
+          <div class="fk-cal-nav">
+            <a href="?ay={{ prev_ay }}" class="fk-nav-btn fk-nav-prev" title="Onceki ay">&lsaquo;</a>
+            <h2 class="fk-cal-title">{{ ay_baslik }}</h2>
+            <a href="?ay={{ next_ay }}" class="fk-nav-btn fk-nav-next" title="Sonraki ay">&rsaquo;</a>
+          </div>
+          <a href="/finans/takvim" class="fk-cal-bugun-btn">Bugun</a>
+        </div>
+
+        <!-- Calendar grid -->
+        <div class="fk-cal-grid">
+          <!-- Header (gun adlari) -->
+          <div class="fk-cal-day-head">Pzt</div>
+          <div class="fk-cal-day-head">Sal</div>
+          <div class="fk-cal-day-head">Car</div>
+          <div class="fk-cal-day-head">Per</div>
+          <div class="fk-cal-day-head">Cum</div>
+          <div class="fk-cal-day-head fk-cal-day-head-cum">Cts</div>
+          <div class="fk-cal-day-head fk-cal-day-head-cum">Paz</div>
+
+          <!-- Gun hucreleri -->
+          {% for cell in cal_hucreler %}
+          <div class="fk-cal-cell {% if cell.diger_ay %}fk-cell-diger{% endif %} {% if cell.bugun %}fk-cell-bugun{% endif %} {% if cell.hafta_sonu %}fk-cell-hafta-sonu{% endif %}">
+            <div class="fk-cell-num">{{ cell.gun_num }}</div>
+            <div class="fk-cell-items">
+              {% for it in cell.kayitlar %}
+              <div class="fk-cell-item fk-cell-{{ it.kaynak|lower }}" data-kaynak="{{ it.kaynak }}" data-durum="{{ it.durum }}" data-entity="{{ it.entity }}" title="{{ it.baslik }} - {{ '{:,.0f}'.format(it.tutar) }} {{ it.para_birimi }}">
+                <span class="fk-cell-badge">{{ it.kaynak }}</span>
+                <span class="fk-cell-baslik">{{ it.baslik[:20] }}</span>
+                <span class="fk-cell-tutar">{{ '{:,.0f}'.format(it.tutar) }} {{ it.para_birimi }}</span>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+
+      </div>
+
+      <!-- RIGHT: En Yakin Odemeler -->
+      <aside class="fk-cal-side">
+        <div class="fk-side-header">
+          <h3 class="fk-side-h3">En Yakin Odemeler</h3>
+        </div>
+        <div class="fk-side-list">
+          {% if en_yakin %}
+          {% for it in en_yakin %}
+          <div class="fk-side-card fk-side-{{ it.durum_class }}" data-kaynak="{{ it.kaynak }}" data-durum="{{ it.durum }}" data-entity="{{ it.entity }}">
+            <div class="fk-side-top">
+              <span class="fk-side-tarih">{{ it.gun_num }} {{ it.ay_kisa }}</span>
+              <span class="fk-side-badge fk-side-badge-{{ it.kaynak|lower }}">{{ it.kaynak }}</span>
+            </div>
+            <div class="fk-side-baslik">{{ it.baslik }}</div>
+            <div class="fk-side-bottom">
+              <span class="fk-side-tutar">{{ '{:,.0f}'.format(it.tutar) }} {{ it.para_birimi }}</span>
+              <span class="fk-durum fk-durum-{{ it.durum_class }}">{{ it.durum }}</span>
+            </div>
+          </div>
+          {% endfor %}
+          <button class="fk-side-tumu" onclick="fkSetView('liste')">Tumunu Gor &rarr;</button>
+          {% else %}
+          <div class="fk-side-empty">
+            <p>Yaklasan odeme yok.</p>
+          </div>
+          {% endif %}
+        </div>
+      </aside>
+
+    </div>
+
+  </div>
+
+  <!-- ============ LISTE VIEW (eski format, ikinci sekme) ============ -->
+  <div id="fk-view-liste" class="fk-view-panel" style="display:none;">
+
+    <!-- KPI 4 KART -->
+    <div class="fk-kpi-bar">
+      <div class="fk-kpi-card fk-kpi-bugun">
+        <div class="fk-kpi-label">Bugun</div>
+        <div class="fk-kpi-deger">{{ kpi.bugun_sayi or 0 }}</div>
+        <div class="fk-kpi-sub">{{ '{:,.0f}'.format(kpi.bugun_tutar or 0) }} TL</div>
+      </div>
+      <div class="fk-kpi-card fk-kpi-hafta">
+        <div class="fk-kpi-label">Bu Hafta</div>
+        <div class="fk-kpi-deger">{{ kpi.hafta_sayi or 0 }}</div>
+        <div class="fk-kpi-sub">{{ '{:,.0f}'.format(kpi.hafta_tutar or 0) }} TL</div>
+      </div>
+      <div class="fk-kpi-card fk-kpi-gecikti">
+        <div class="fk-kpi-label">Gecikti</div>
+        <div class="fk-kpi-deger">{{ kpi.gecikti_sayi or 0 }}</div>
+        <div class="fk-kpi-sub">{{ '{:,.0f}'.format(kpi.gecikti_tutar or 0) }} TL</div>
+      </div>
+      <div class="fk-kpi-card fk-kpi-bekleyen">
+        <div class="fk-kpi-label">Toplam Bekleyen</div>
+        <div class="fk-kpi-deger">{{ kpi.bekleyen_sayi or 0 }}</div>
+        <div class="fk-kpi-sub">{{ '{:,.0f}'.format(kpi.bekleyen_tutar or 0) }} TL</div>
+      </div>
+    </div>
+
+    <!-- ALT FILTRELER (select) - madde 16 -->
+    <div class="fk-filter-bar">
+      <div class="fk-filter-grup">
+        <label class="fk-filter-label">Firma:</label>
+        <select id="fk-flt-entity" class="fk-filter-input">
+          <option value="">Hepsi</option>
+          <option value="solariz">Solariz</option>
+          <option value="nexgen">NexGen</option>
+          <option value="pera">Pera</option>
+          {% if can_view_sahsi %}
+          <option value="sahsi">Sahsi</option>
+          {% endif %}
+        </select>
+      </div>
+      <div class="fk-filter-grup">
+        <label class="fk-filter-label">Durum:</label>
+        <select id="fk-flt-durum" class="fk-filter-input">
+          <option value="">Hepsi</option>
+          <option value="BEKLIYOR">Bekliyor</option>
+          <option value="GECIKTI">Gecikti</option>
+          <option value="ODENDI">Odendi</option>
+          <option value="PLANLANDI">Planlandi</option>
+        </select>
+      </div>
+    </div>
+
+    {% if not gunler %}
+    <div class="fk-empty">
+      <div class="fk-empty-icon">--</div>
+      <h3 class="fk-empty-h3">Takvimde kayit yok</h3>
+      <p>Demo veri yok - kayitlar eklendiginde otomatik canli olacak.</p>
+    </div>
+    {% else %}
+    {% for gun in gunler %}
+    <div class="fk-day-block fk-day-{{ gun.day_class }}">
+      <div class="fk-day-header">
+        <div class="fk-day-tarih">
+          <span class="fk-day-num">{{ gun.gun_num }}</span>
+          <div>
+            <div class="fk-day-name">{{ gun.gun_adi }}</div>
+            <div class="fk-day-tarih-full">{{ gun.tarih }}</div>
+          </div>
+        </div>
+        <div class="fk-day-summary">
+          {% if gun.tag %}<span class="fk-tag fk-tag-{{ gun.tag_class }}">{{ gun.tag }}</span>{% endif %}
+          <span class="fk-day-toplam">{{ '{:,.0f}'.format(gun.toplam_tutar) }} TL</span>
+          <span class="fk-day-sayi">{{ gun.kayit_sayi }} odeme</span>
+        </div>
+      </div>
+      <div class="fk-day-items">
+        {% for it in gun.kayitlar %}
+        <div class="fk-item fk-item-{{ it.durum_class }}" data-kaynak="{{ it.kaynak }}" data-durum="{{ it.durum }}" data-entity="{{ it.entity }}">
+          <div class="fk-item-left">
+            <span class="fk-item-kaynak fk-kaynak-{{ it.kaynak|lower }}">{{ it.kaynak }}</span>
+            <span class="fk-item-entity">{{ it.entity }}</span>
+          </div>
+          <div class="fk-item-baslik">
+            <strong>{{ it.baslik }}</strong>
+            {% if it.alt_baslik %}<span class="fk-item-alt">{{ it.alt_baslik }}</span>{% endif %}
+          </div>
+          <div class="fk-item-right">
+            <span class="fk-item-tutar">{{ '{:,.2f}'.format(it.tutar) }} {{ it.para_birimi }}</span>
+            <span class="fk-durum fk-durum-{{ it.durum_class }}">{{ it.durum }}</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+  </div>
+
+  <!-- INFO BAR -->
+  <div class="fk-info-bar">
+    <span class="fk-info-icon">i</span>
+    {% if veri_kaynak == 'DEMO' %}
+      <span><strong>DEMO veri</strong> gosteriliyor - gercek odemeler eklendiginde otomatik canli olacak.</span>
+    {% else %}
+      <span>Canli veri - {{ kayit_sayi }} kayit.</span>
+    {% endif %}
+  </div>
+
+</div>
+
+<style>
+/* === FAZ 3D V2 - Finans Takvim - scoped fk- prefix === */
+.fk-wrap { padding:0; }
+.fk-header { display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:12px; }
+.fk-icon { display:inline-block; background:#d4a52f; color:#1a1d2e; font-weight:700; font-size:13px; padding:4px 8px; border-radius:4px; margin-right:8px; }
+.fk-back-btn { display:inline-block; padding:6px 12px; background:transparent; color:#6b7280; border:1px solid #e8eaf0; border-radius:4px; font-size:12px; font-weight:600; text-decoration:none; }
+.fk-back-btn:hover { background:#fef9c3; color:#1a1d2e; border-color:#d4a52f; }
+
+/* VIEW TABS */
+.fk-view-tabs { display:flex; gap:8px; margin-top:14px; }
+.fk-vtab { padding:8px 18px; background:#f8f9fc; border:1px solid #e8eaf0; border-radius:6px; font-size:13px; font-weight:600; color:#6b7280; cursor:pointer; }
+.fk-vtab-active { background:#1a1d2e; color:#d4a52f; border-color:#1a1d2e; }
+.fk-vtab:hover:not(.fk-vtab-active) { background:#fef9c3; color:#1a1d2e; }
+
+/* TOGGLE BAR */
+.fk-toggle-bar { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; padding:10px; background:#f8f9fc; border:1px solid #e8eaf0; border-radius:6px; }
+.fk-toggle { padding:5px 12px; background:#fff; border:1.5px solid #e8eaf0; border-radius:20px; font-size:11px; font-weight:700; cursor:pointer; text-transform:uppercase; letter-spacing:0.5px; transition:all 0.15s; }
+.fk-toggle:hover { transform:translateY(-1px); }
+.fk-toggle-on.fk-tgl-cek    { background:#fef3c7; color:#854d0e; border-color:#fef3c7; }
+.fk-toggle-on.fk-tgl-cari   { background:#e0e7ff; color:#4338ca; border-color:#e0e7ff; }
+.fk-toggle-on.fk-tgl-kart   { background:#fce7f3; color:#9d174d; border-color:#fce7f3; }
+.fk-toggle-on.fk-tgl-kredi  { background:#dcfce7; color:#166534; border-color:#dcfce7; }
+.fk-toggle-on.fk-tgl-manuel { background:#dbeafe; color:#1e40af; border-color:#dbeafe; }
+.fk-toggle:not(.fk-toggle-on) { opacity:0.45; }
+
+.fk-view-panel { margin-top:14px; }
+
+/* ===== CALENDAR LAYOUT ===== */
+.fk-cal-layout { display:grid; grid-template-columns:1fr 320px; gap:14px; }
+@media (max-width:1100px) { .fk-cal-layout { grid-template-columns:1fr; } }
+
+/* Calendar Main */
+.fk-cal-main { background:#fff; border:1px solid #e8eaf0; border-radius:8px; overflow:hidden; }
+.fk-cal-header { display:flex; justify-content:space-between; align-items:center; padding:14px 18px; background:#fafbfc; border-bottom:1px solid #e8eaf0; }
+.fk-cal-nav { display:flex; align-items:center; gap:14px; }
+.fk-cal-title { font-size:22px; font-weight:700; color:#1a1d2e; margin:0; min-width:180px; text-align:center; }
+.fk-nav-btn { display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; background:#fff; border:1px solid #e8eaf0; border-radius:6px; font-size:18px; color:#6b7280; text-decoration:none; }
+.fk-nav-btn:hover { background:#fef9c3; color:#1a1d2e; border-color:#d4a52f; }
+.fk-cal-bugun-btn { padding:6px 16px; background:#d4a52f; color:#1a1d2e; border-radius:6px; font-size:12px; font-weight:700; text-decoration:none; text-transform:uppercase; }
+.fk-cal-bugun-btn:hover { background:#b8902a; }
+
+/* Calendar Grid */
+.fk-cal-grid { display:grid; grid-template-columns:repeat(7, 1fr); border-top:1px solid #e8eaf0; }
+.fk-cal-day-head { padding:8px 6px; background:#fafbfc; text-align:center; font-size:11px; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:0.5px; border-bottom:1px solid #e8eaf0; border-right:1px solid #e8eaf0; }
+.fk-cal-day-head:last-child { border-right:none; }
+.fk-cal-day-head-cum { color:#9d174d; }
+
+.fk-cal-cell { min-height:110px; padding:5px; background:#fff; border-bottom:1px solid #e8eaf0; border-right:1px solid #e8eaf0; display:flex; flex-direction:column; gap:3px; }
+.fk-cal-cell:nth-child(7n) { border-right:none; }
+.fk-cell-diger { background:#fafbfc; opacity:0.45; }
+.fk-cell-bugun { background:#fef9c3; border:2px solid #d4a52f; }
+.fk-cell-hafta-sonu { background:#fcfcfd; }
+.fk-cell-num { font-size:13px; font-weight:700; color:#1a1d2e; padding:2px 4px; }
+.fk-cell-bugun .fk-cell-num { color:#d4a52f; font-size:14px; }
+.fk-cell-items { display:flex; flex-direction:column; gap:2px; overflow:hidden; }
+
+.fk-cell-item {
+  display:flex; flex-direction:column; gap:1px;
+  padding:3px 5px; border-radius:3px;
+  font-size:9px; line-height:1.2;
+  border-left:3px solid #6b7280;
+  background:#f8f9fc; color:#1a1d2e;
+  cursor:default; transition:all 0.15s;
+}
+.fk-cell-item:hover { transform:translateX(1px); }
+.fk-cell-cek    { border-left-color:#854d0e; background:#fef3c7; }
+.fk-cell-cari   { border-left-color:#4338ca; background:#e0e7ff; }
+.fk-cell-kart   { border-left-color:#9d174d; background:#fce7f3; }
+.fk-cell-kredi  { border-left-color:#166534; background:#dcfce7; }
+.fk-cell-manuel { border-left-color:#1e40af; background:#dbeafe; }
+
+.fk-cell-badge { font-size:8px; font-weight:700; letter-spacing:0.5px; text-transform:uppercase; opacity:0.8; }
+.fk-cell-baslik { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.fk-cell-tutar { font-weight:700; font-variant-numeric:tabular-nums; font-size:8px; }
+
+/* ===== SIDE PANEL ===== */
+.fk-cal-side { background:#fff; border:1px solid #e8eaf0; border-radius:8px; overflow:hidden; max-height:760px; display:flex; flex-direction:column; }
+.fk-side-header { padding:12px 14px; background:#fafbfc; border-bottom:1px solid #e8eaf0; }
+.fk-side-h3 { font-size:14px; font-weight:700; color:#1a1d2e; margin:0; }
+.fk-side-list { padding:10px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:8px; }
+
+.fk-side-card { padding:10px 12px; background:#fff; border:1px solid #e8eaf0; border-left:4px solid #d4a52f; border-radius:6px; }
+.fk-side-gecikti  { border-left-color:#dc2626; background:#fff5f5; }
+.fk-side-bugun    { border-left-color:#d4a52f; background:#fef9c3; }
+.fk-side-yaklasan { border-left-color:#2563eb; }
+.fk-side-odendi   { border-left-color:#16a34a; opacity:0.7; }
+.fk-side-planlandi { border-left-color:#4338ca; }
+.fk-side-bekliyor { border-left-color:#6b7280; }
+
+.fk-side-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; }
+.fk-side-tarih { font-size:11px; font-weight:700; color:#6b7280; text-transform:uppercase; }
+.fk-side-badge { font-size:9px; font-weight:700; padding:2px 6px; border-radius:3px; letter-spacing:0.5px; }
+.fk-side-badge-cek    { background:#fef3c7; color:#854d0e; }
+.fk-side-badge-cari   { background:#e0e7ff; color:#4338ca; }
+.fk-side-badge-kart   { background:#fce7f3; color:#9d174d; }
+.fk-side-badge-kredi  { background:#dcfce7; color:#166534; }
+.fk-side-badge-manuel { background:#dbeafe; color:#1e40af; }
+
+.fk-side-baslik { font-size:12px; font-weight:600; color:#1a1d2e; margin-bottom:4px; line-height:1.3; }
+.fk-side-bottom { display:flex; justify-content:space-between; align-items:center; }
+.fk-side-tutar { font-size:13px; font-weight:700; color:#1a1d2e; font-variant-numeric:tabular-nums; }
+
+.fk-side-tumu { width:100%; padding:8px; margin-top:6px; background:transparent; border:1px dashed #d4a52f; border-radius:4px; color:#d4a52f; font-size:11px; font-weight:700; cursor:pointer; text-transform:uppercase; }
+.fk-side-tumu:hover { background:#fef9c3; }
+.fk-side-empty { text-align:center; padding:24px 12px; color:#9ca3af; font-size:12px; }
+
+/* ===== LISTE VIEW (eski) ===== */
+.fk-kpi-bar { display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; }
+@media (max-width:760px) { .fk-kpi-bar { grid-template-columns:repeat(2, 1fr); } }
+.fk-kpi-card { background:#fff; border:1px solid #e8eaf0; border-radius:6px; padding:12px 14px; border-left:4px solid #d4a52f; }
+.fk-kpi-bugun    { border-left-color:#d4a52f; }
+.fk-kpi-hafta    { border-left-color:#2563eb; }
+.fk-kpi-gecikti  { border-left-color:#dc2626; }
+.fk-kpi-bekleyen { border-left-color:#6b7280; }
+.fk-kpi-label { font-size:11px; color:#6b7280; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; }
+.fk-kpi-deger { font-size:24px; font-weight:700; color:#1a1d2e; margin-top:4px; }
+.fk-kpi-sub { font-size:11px; color:#9ca3af; margin-top:2px; }
+
+.fk-filter-bar { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px; padding:14px; background:#f8f9fc; border:1px solid #e8eaf0; border-radius:6px; margin-top:14px; }
+.fk-filter-grup { display:flex; flex-direction:column; gap:4px; }
+.fk-filter-label { font-size:11px; color:#6b7280; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; }
+.fk-filter-input { padding:7px 10px; border:1px solid #e8eaf0; border-radius:4px; background:#fff; font-size:13px; color:#1a1d2e; }
+.fk-filter-input:focus { border-color:#d4a52f; outline:none; box-shadow:0 0 0 2px rgba(212,165,47,0.2); }
+
+.fk-day-block { background:#fff; border:1px solid #e8eaf0; border-radius:6px; margin-top:12px; overflow:hidden; }
+.fk-day-bugun    { border-left:4px solid #d4a52f; }
+.fk-day-gecikti  { border-left:4px solid #dc2626; }
+.fk-day-yaklasan { border-left:4px solid #2563eb; }
+.fk-day-normal   { border-left:4px solid #e8eaf0; }
+.fk-day-odendi   { border-left:4px solid #16a34a; }
+.fk-day-header { display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:#f8f9fc; border-bottom:1px solid #e8eaf0; }
+.fk-day-tarih { display:flex; align-items:center; gap:10px; }
+.fk-day-num { display:inline-flex; align-items:center; justify-content:center; width:38px; height:38px; background:#1a1d2e; color:#d4a52f; font-weight:700; font-size:18px; border-radius:6px; }
+.fk-day-name { font-size:13px; font-weight:700; color:#1a1d2e; }
+.fk-day-tarih-full { font-size:11px; color:#6b7280; }
+.fk-day-summary { display:flex; align-items:center; gap:10px; }
+.fk-day-toplam { font-weight:700; color:#1a1d2e; font-size:13px; font-variant-numeric:tabular-nums; }
+.fk-day-sayi { font-size:11px; color:#6b7280; }
+.fk-tag { font-size:10px; font-weight:700; padding:2px 8px; border-radius:3px; text-transform:uppercase; letter-spacing:0.5px; }
+.fk-tag-bugun    { background:#fef3c7; color:#92400e; }
+.fk-tag-yaklasan { background:#dbeafe; color:#1e40af; }
+.fk-tag-gecikti  { background:#fee2e2; color:#991b1b; }
+
+.fk-day-items { padding:6px 14px; }
+.fk-item { display:grid; grid-template-columns:140px 1fr 200px; gap:12px; padding:8px 0; border-bottom:1px dashed #f1f3f6; align-items:center; transition:background 0.15s; }
+.fk-item:last-child { border-bottom:none; }
+.fk-item:hover { background:#fef9c3; }
+.fk-item-left { display:flex; align-items:center; gap:6px; }
+.fk-item-kaynak { display:inline-block; padding:2px 8px; border-radius:3px; font-size:10px; font-weight:700; letter-spacing:0.5px; }
+.fk-kaynak-cek    { background:#fef3c7; color:#854d0e; }
+.fk-kaynak-cari   { background:#e0e7ff; color:#4338ca; }
+.fk-kaynak-kart   { background:#fce7f3; color:#9d174d; }
+.fk-kaynak-kredi  { background:#dcfce7; color:#166534; }
+.fk-kaynak-manuel { background:#dbeafe; color:#1e40af; }
+.fk-item-entity { font-size:11px; color:#6b7280; text-transform:uppercase; }
+.fk-item-baslik strong { font-size:13px; color:#1a1d2e; font-weight:600; }
+.fk-item-alt { font-size:11px; color:#9ca3af; margin-left:6px; }
+.fk-item-right { display:flex; align-items:center; gap:6px; justify-content:flex-end; flex-wrap:wrap; }
+.fk-item-tutar { font-weight:700; color:#1a1d2e; font-size:13px; font-variant-numeric:tabular-nums; }
+
+.fk-durum { display:inline-block; padding:2px 8px; border-radius:3px; font-size:10px; font-weight:700; letter-spacing:0.5px; }
+.fk-durum-gecikti  { background:#fee2e2; color:#dc2626; }
+.fk-durum-bugun    { background:#fef3c7; color:#92400e; }
+.fk-durum-yaklasan { background:#dbeafe; color:#2563eb; }
+.fk-durum-odendi   { background:#dcfce7; color:#16a34a; }
+.fk-durum-bekliyor { background:#f3f4f6; color:#6b7280; }
+.fk-durum-planlandi { background:#e0e7ff; color:#4338ca; }
+.fk-durum-normal   { background:#f3f4f6; color:#6b7280; }
+
+/* INFO + EMPTY */
+.fk-info-bar { margin-top:14px; padding:8px 12px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:4px; font-size:12px; color:#1e40af; display:flex; align-items:center; gap:8px; }
+.fk-info-icon { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; background:#1e40af; color:#fff; border-radius:50%; font-size:11px; font-weight:700; }
+.fk-empty { text-align:center; padding:48px 16px; }
+.fk-empty-icon { display:inline-flex; align-items:center; justify-content:center; width:48px; height:48px; background:#fef9c3; border:2px solid #d4a52f; border-radius:50%; font-weight:700; font-size:18px; color:#d4a52f; margin-bottom:12px; }
+.fk-empty-h3 { font-size:16px; font-weight:700; color:#1a1d2e; margin-bottom:6px; }
+.fk-empty p { color:#6b7280; font-size:13px; }
+</style>
+
+<script>
+(function(){
+  window.fkSetView = function(v) {
+    document.getElementById("fk-view-calendar").style.display = (v === "calendar" ? "" : "none");
+    document.getElementById("fk-view-liste").style.display    = (v === "liste"    ? "" : "none");
+    document.querySelectorAll(".fk-vtab").forEach(function(t){
+      t.classList.toggle("fk-vtab-active", t.getAttribute("data-view") === v);
+    });
+  };
+
+  window.fkToggleKaynak = function(btn) {
+    btn.classList.toggle("fk-toggle-on");
+    fkUygulaToggle();
+  };
+
+  function fkUygulaToggle() {
+    var aktif = [];
+    document.querySelectorAll(".fk-toggle.fk-toggle-on").forEach(function(b){
+      aktif.push(b.getAttribute("data-kaynak"));
+    });
+    document.querySelectorAll(".fk-cell-item, .fk-side-card, .fk-item").forEach(function(it){
+      var k = it.getAttribute("data-kaynak");
+      it.style.display = (aktif.indexOf(k) !== -1) ? "" : "none";
+    });
+  }
+
+  function fkUygulaSelect() {
+    var entity = (document.getElementById("fk-flt-entity") || {}).value || "";
+    var durum  = (document.getElementById("fk-flt-durum")  || {}).value || "";
+    document.querySelectorAll(".fk-item").forEach(function(it){
+      var iEntity = it.getAttribute("data-entity");
+      var iDurum  = it.getAttribute("data-durum");
+      var ok = true;
+      if (entity && iEntity !== entity) ok = false;
+      if (durum  && iDurum  !== durum ) ok = false;
+      it.style.display = ok ? "" : "none";
+    });
+  }
+
+  document.querySelectorAll(".fk-filter-input").forEach(function(s){
+    s.addEventListener("change", fkUygulaSelect);
+  });
+})();
+</script>
+{% endblock %}

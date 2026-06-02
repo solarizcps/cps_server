@@ -1,0 +1,93 @@
+{# --------------------------------------------------------------
+   Belge / Görsel yükleme + liste bölümü (partial)
+   Kullanım:
+     {% set upload_url = '/grafik/urun/' ~ urun.Id ~ '/belge/yukle' %}
+     {% set panel_baslik = 'Görseller & Tasarım Föyü' %}
+     {% include 'grafik/_belge_section.html' %}
+   Beklenen context:
+     - belgeler        : list (belge_liste() sonucu)
+     - belge_tipleri   : BELGE_TIPLERI
+     - upload_url      : yükleme endpoint URL'i
+     - panel_baslik    : opsiyonel panel başlığı
+--------------------------------------------------------------- #}
+<section class="panel belge-panel">
+  <div class="panel-head">
+    <h3>📎 {{ panel_baslik or 'Belgeler & Görseller' }} ({{ belgeler|length }})</h3>
+    <button class="btn btn-sm btn-primary"
+            onclick="document.getElementById('belge-yukle-{{ upload_url|replace('/','_') }}').showModal()">
+      + Yükle
+    </button>
+  </div>
+
+  {% if belgeler %}
+  <div class="belge-grid">
+    {% for b in belgeler %}
+    <div class="belge-card">
+      {% set ext = b.OrijinalAd.rsplit('.',1)[-1].lower() if '.' in b.OrijinalAd else '' %}
+      {% if ext in ['jpg','jpeg','png','webp','gif'] %}
+      <a href="/yonetim/belge/{{ b.Id }}" target="_blank" class="belge-thumb">
+        <img src="/yonetim/belge/{{ b.Id }}" alt="{{ b.OrijinalAd }}" loading="lazy">
+      </a>
+      {% elif ext == 'pdf' %}
+      <a href="/yonetim/belge/{{ b.Id }}" target="_blank" class="belge-thumb belge-thumb-icon belge-pdf">
+        <span style="font-size:2.2rem;">📄</span>
+        <span class="belge-ext">PDF</span>
+      </a>
+      {% else %}
+      <a href="/yonetim/belge/{{ b.Id }}" target="_blank" class="belge-thumb belge-thumb-icon">
+        <span style="font-size:2.2rem;">📎</span>
+        <span class="belge-ext">{{ ext|upper or 'DOSYA' }}</span>
+      </a>
+      {% endif %}
+      <div class="belge-info">
+        <div class="belge-tipi">
+          {% for k, a in belge_tipleri %}{% if k == b.BelgeTipi %}{{ a }}{% endif %}{% endfor %}
+        </div>
+        <div class="belge-ad" title="{{ b.OrijinalAd }}">{{ b.OrijinalAd }}</div>
+        <div class="belge-meta">
+          <span>{{ (b.DosyaBoyut/1024)|round(0)|int }} KB</span>
+          <span>· {{ (b.YuklemeTarih or '')[:10] }}</span>
+        </div>
+        {% if b.Aciklama %}<div class="belge-aciklama">{{ b.Aciklama }}</div>{% endif %}
+        <div class="belge-aksiyon">
+          <a href="/yonetim/belge/{{ b.Id }}/indir" class="btn btn-sm btn-ghost">⬇ İndir</a>
+          <form method="post" action="/grafik/belge/{{ b.Id }}/sil" style="display:inline;"
+                onsubmit="return confirm('Belgeyi sil?');">
+            <button class="btn btn-sm btn-danger">🗑</button>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="empty">Henüz belge yok. "+ Yükle" ile PDF (tasarım föyü) veya JPG/PNG (görsel) ekleyebilirsin.</p>
+  {% endif %}
+
+  <!-- Upload modal -->
+  <dialog id="belge-yukle-{{ upload_url|replace('/','_') }}" class="modal">
+    <form method="post" action="{{ upload_url }}" enctype="multipart/form-data" class="modal-form">
+      <h3>📎 Belge Yükle</h3>
+      <p class="muted" style="font-size:.85rem; margin:0;">
+        İzinli: <strong>PDF, JPG, PNG, WEBP, GIF</strong> — max 20 MB
+      </p>
+      <label>Dosya *
+        <input type="file" name="dosya" required accept=".pdf,.jpg,.jpeg,.png,.webp,.gif">
+      </label>
+      <label>Belge Tipi
+        <select name="belge_tipi">
+          {% for k, a in belge_tipleri %}
+          <option value="{{ k }}" {% if k == 'TEKNIK_CIZIM' %}selected{% endif %}>{{ a }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Açıklama (opsiyonel)
+        <input type="text" name="aciklama" placeholder="Örn: Revizyon 2, Pantone 137C">
+      </label>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" onclick="this.closest('dialog').close()">İptal</button>
+        <button class="btn btn-primary">Yükle</button>
+      </div>
+    </form>
+  </dialog>
+</section>

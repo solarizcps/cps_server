@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block title %}{{ cari.CName }} — Cari Detay{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <div class="page-title">
+      {{ cari.CName }}
+      {% if cari.CTip == 1 %}<span class="badge badge-musteri" style="margin-left:8px;">MÜŞTERİ</span>
+      {% elif cari.CTip == 2 %}<span class="badge badge-tedarikci" style="margin-left:8px;">TEDARİKÇİ</span>{% endif %}
+    </div>
+    <div class="page-sub">
+      <span class="tag">{{ cari.CKod }}</span>
+      {% if cari.Sehir %} · {{ cari.Sehir }}{% endif %}
+      {% if cari.Telefon %} · {{ cari.Telefon }}{% endif %}
+    </div>
+  </div>
+  <div>
+    <a class="btn btn-outline" href="/finans/cari{% if cari.CTip %}?tip={{ cari.CTip }}{% endif %}">← Geri</a>
+  </div>
+</div>
+
+<!-- Özet KPI -->
+<div class="kpi-grid">
+  <div class="kpi-kart" style="--kpi-color: var(--text2);">
+    <div class="kpi-etiket">Hareket Sayısı</div>
+    <div class="kpi-sayi">{{ ozet.HareketSayisi | sayi }}</div>
+  </div>
+  <div class="kpi-kart" style="--kpi-color: var(--sol-dark);">
+    <div class="kpi-etiket">Toplam Borç</div>
+    <div class="kpi-sayi">{{ ozet.ToplamBorc | tl }}</div>
+  </div>
+  <div class="kpi-kart" style="--kpi-color: var(--blue);">
+    <div class="kpi-etiket">Toplam Alacak</div>
+    <div class="kpi-sayi">{{ ozet.ToplamAlacak | tl }}</div>
+  </div>
+  <div class="kpi-kart" style="--kpi-color: {% if ozet.Bakiye > 0 %}var(--green){% elif ozet.Bakiye < 0 %}var(--red){% else %}var(--text2){% endif %};">
+    <div class="kpi-etiket">Güncel Bakiye</div>
+    <div class="kpi-sayi">{{ ozet.Bakiye | tl }}</div>
+    <div class="kpi-alt">
+      {% if ozet.Bakiye > 0 %}Bize alacak{% elif ozet.Bakiye < 0 %}Bizim borç{% else %}Kapalı{% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Cari bilgileri -->
+<div class="oz-card">
+  <div class="oz-hdr">
+    <span class="oz-hdr-t">Cari Bilgileri</span>
+  </div>
+  <div class="oz-body">
+    <div class="detay-grid">
+      <div class="detay-item">
+        <div class="label">Vergi No</div>
+        <div class="value mono">{{ cari.VergiNo or '—' }}</div>
+      </div>
+      <div class="detay-item">
+        <div class="label">Vergi Dairesi</div>
+        <div class="value">{{ cari.VergiDairesi or '—' }}</div>
+      </div>
+      <div class="detay-item">
+        <div class="label">Telefon</div>
+        <div class="value mono">{{ cari.Telefon or '—' }}</div>
+      </div>
+      <div class="detay-item">
+        <div class="label">İlk İşlem</div>
+        <div class="value mono">{{ ozet.IlkIslem | tarih }}</div>
+      </div>
+      <div class="detay-item">
+        <div class="label">Son İşlem</div>
+        <div class="value mono">{{ ozet.SonIslem | tarih }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Anlaşmalar -->
+{% if anlasmalar %}
+<div class="oz-card" style="margin-top:14px;">
+  <div class="oz-hdr">
+    <span class="oz-hdr-t">Anlaşmalar / Projeler</span>
+    <a class="oz-hdr-l" href="/finans/anlasma">Tüm Anlaşmalar &rsaquo;</a>
+  </div>
+  <div class="oz-body" style="padding:0;">
+    {% for a in anlasmalar %}
+      {% set yuzde = (a.TahsilEdilen / a.ToplamTutar * 100) if a.ToplamTutar > 0 else 0 %}
+      <a href="/finans/anlasma/{{ a.Id }}" style="display:block; padding:14px 16px; border-bottom:0.5px solid var(--border); color:var(--text); text-decoration:none; transition:background .15s;"
+         onmouseover="this.style.background='var(--bg3)'"
+         onmouseout="this.style.background='transparent'">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <div>
+            <span class="tag">{{ a.ProjeKod }}</span>
+            <span style="font-size:13px; font-weight:700; margin-left:6px;">{{ a.ProjeAdi }}</span>
+            {% if a.Durum == 'TAMAMLANDI' %}<span class="badge badge-tahsilat" style="margin-left:6px;">TAMAMLANDI</span>
+            {% elif a.Durum == 'IPTAL' %}<span class="badge badge-odeme" style="margin-left:6px;">İPTAL</span>
+            {% else %}<span class="badge badge-musteri" style="margin-left:6px;">AKTİF</span>{% endif %}
+          </div>
+          <div style="font-family:var(--mono); font-size:13px; font-weight:700;">
+            {{ a.TahsilEdilen | tl }} / <span style="color:var(--text3);">{{ a.ToplamTutar | tl }}</span>
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="flex:1; height:5px; background:var(--bg4); border-radius:999px; overflow:hidden;">
+            <div style="height:100%; width:{{ yuzde }}%; background:linear-gradient(90deg, var(--sol), var(--sol-dark)); border-radius:999px;"></div>
+          </div>
+          <div style="font-family:var(--mono); font-size:10px; color:var(--text3);">%{{ "%.1f"|format(yuzde) }}</div>
+        </div>
+      </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Hareketler -->
+<div class="oz-card" style="margin-top:14px;">
+  <div class="oz-hdr">
+    <span class="oz-hdr-t">Hareket Geçmişi</span>
+    <form method="get" style="display:flex; gap:6px; align-items:center;">
+      <input type="date" name="tarih_bas" class="filter-sel" value="{{ tarih_bas }}" style="font-size:11px; padding:4px 8px;">
+      <input type="date" name="tarih_bit" class="filter-sel" value="{{ tarih_bit }}" style="font-size:11px; padding:4px 8px;">
+      <button class="btn btn-primary btn-sm" type="submit">Filtrele</button>
+      {% if tarih_bas or tarih_bit %}
+        <a class="btn btn-outline btn-sm" href="/finans/cari/{{ cari.CKod }}">↺</a>
+      {% endif %}
+    </form>
+  </div>
+
+  {% if hareketler %}
+  <div class="tbl-wrap" style="border:none; box-shadow:none; border-radius:0;">
+    <table>
+      <thead>
+        <tr>
+          <th>Tarih</th>
+          <th>Belge No</th>
+          <th>Tip</th>
+          <th>Açıklama</th>
+          <th class="num">Borç</th>
+          <th class="num">Alacak</th>
+          <th class="num">Bakiye</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for h in hareketler %}
+          <tr>
+            <td class="mono">{{ h.Tarih | tarih }}</td>
+            <td><span class="tag">{{ h.BelgeNo or '—' }}</span></td>
+            <td>
+              {% if h.BelgeTip == 'FATURA' %}<span class="badge badge-fatura">FATURA</span>
+              {% elif h.BelgeTip == 'TAHSILAT' %}<span class="badge badge-tahsilat">TAHSİLAT</span>
+              {% elif h.BelgeTip == 'ODEME' %}<span class="badge badge-odeme">ÖDEME</span>
+              {% elif h.BelgeTip == 'CEK' %}<span class="badge badge-cek">ÇEK</span>
+              {% elif h.BelgeTip == 'SENET' %}<span class="badge badge-senet">SENET</span>
+              {% else %}<span class="badge badge-fatura">{{ h.BelgeTip }}</span>{% endif %}
+            </td>
+            <td>{{ h.Aciklama or '—' }}</td>
+            <td class="num">{% if h.Borc %}{{ h.Borc | tl }}{% endif %}</td>
+            <td class="num">{% if h.Alacak %}{{ h.Alacak | tl }}{% endif %}</td>
+            <td class="num bold {% if h.Bakiye > 0 %}pos{% elif h.Bakiye < 0 %}neg{% endif %}">
+              {{ h.Bakiye | tl }}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div style="padding:48px; text-align:center; color:var(--text3);">
+      Bu cariye ait hareket yok
+    </div>
+  {% endif %}
+</div>
+
+{% endblock %}

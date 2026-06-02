@@ -1,0 +1,671 @@
+{% extends "base.html" %}
+{% block title %}Yeni Anlaşma — Finans{% endblock %}
+
+{% block head %}
+<style>
+.form-box { background:#fff; border:0.5px solid var(--border); border-radius:12px; padding:16px 18px; margin-bottom:12px; box-shadow:var(--shadow); }
+.form-box h3 { font-size:11px; color:var(--text3); letter-spacing:2px; text-transform:uppercase; font-weight:700; margin:0 0 12px 0; padding-bottom:8px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+.fg { margin-bottom:10px; }
+.fg label { display:block; font-size:10px; color:var(--text3); letter-spacing:1.2px; text-transform:uppercase; margin-bottom:4px; font-weight:700; }
+.fg input, .fg select, .fg textarea {
+  width:100%; background:var(--bg3); border:1px solid var(--border); border-radius:7px;
+  padding:8px 11px; color:var(--text); font-size:13px; outline:none; font-family:var(--sans);
+  transition:border-color .2s;
+}
+.fg input::placeholder, .fg textarea::placeholder { color:#b8bbc0; font-style:italic; opacity:0.5; }
+.fg input:focus, .fg select:focus, .fg textarea:focus { border-color:var(--sol); box-shadow:0 0 0 3px var(--accent-glow); }
+.fg textarea { min-height:50px; resize:vertical; }
+.grid { display:grid; gap:10px; }
+.g2 { grid-template-columns: 1fr 1fr; }
+.g3 { grid-template-columns: repeat(3, 1fr); }
+.g4 { grid-template-columns: repeat(4, 1fr); }
+.g5 { grid-template-columns: repeat(5, 1fr); }
+@media(max-width:768px){ .g2,.g3,.g4,.g5 { grid-template-columns:1fr; } }
+
+.row-box { background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin-bottom:8px; position:relative; }
+.row-box.model   { border-left:4px solid #2563eb; }
+.row-box.avans   { border-left:4px solid #f59e0b; background:#fffbeb; }
+.row-box.mahsup  { border-left:4px solid #ea580c; background:#fff7ed; }
+.row-box.plan    { border-left:4px solid var(--sol-dark); }
+.row-box.cek     { border-left:4px solid #7c3aed; background:#f5f3ff; margin-left:12px; }
+.row-box .sira { position:absolute; top:-7px; left:10px; color:#fff; padding:1px 10px; border-radius:999px; font-size:10px; font-weight:700; }
+.row-box.model  .sira { background:#2563eb; }
+.row-box.avans  .sira { background:#f59e0b; }
+.row-box.mahsup .sira { background:#ea580c; }
+.row-box.plan   .sira { background:var(--sol-dark); }
+.row-box.cek    .sira { background:#7c3aed; }
+.row-box .sil { position:absolute; top:6px; right:8px; background:none; border:none; color:var(--red); font-size:18px; cursor:pointer; font-weight:700; }
+.row-box .fg { margin-bottom:6px; }
+.row-box .fg input, .row-box .fg select { padding:6px 9px; font-size:12px; }
+.row-box .fg label { font-size:10px; }
+
+.cek-wrap { margin-top:8px; padding:8px; background:#faf5ff; border:1px dashed #c4b5fd; border-radius:8px; }
+.cek-wrap h5 { font-size:10px; color:#6d28d9; text-transform:uppercase; font-weight:700; margin:0 0 6px 0; letter-spacing:1px; display:flex; justify-content:space-between; align-items:center; }
+
+.ozet-cubugu {
+  background:var(--sol-light); border:1px solid var(--sol); border-radius:8px;
+  padding:10px 14px; font-weight:700; display:flex; justify-content:space-between; align-items:center;
+  gap:10px; flex-wrap:wrap; font-size:13px;
+}
+.ozet-cubugu .ok { color:var(--green); }
+.ozet-cubugu .err { color:var(--red); }
+
+.teminat-box { display:none; background:#fef3c7; border:1px solid #fcd34d; border-radius:8px; padding:8px 10px; margin-top:4px; }
+.teminat-box.gorsun { display:block; }
+
+.hata-kutu { background:rgba(220,38,38,0.08); border:1px solid rgba(220,38,38,0.25); color:var(--red); padding:10px 14px; border-radius:8px; margin-bottom:10px; font-size:13px; font-weight:600; }
+.btn-xs { padding:4px 10px; font-size:11px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <div class="page-title">{{ 'Anlaşmayı Düzenle' if duzenle else 'Yeni Anlaşma' }}</div>
+    <div class="page-sub">{% if duzenle %}Mevcut anlaşma düzenleniyor. Tamamlanmış taksitler ve tahsil edilmiş çekler değiştirilemez.{% else %}Proje, modeller, avans + mahsup planı, ödeme planı{% endif %}</div>
+  </div>
+  <div>
+    {% if duzenle %}
+      <a class="btn btn-outline" href="/finans/anlasma/{{ anlasma_id }}">← Vazgeç</a>
+    {% else %}
+      <a class="btn btn-outline" href="/finans/anlasma">← İptal</a>
+    {% endif %}
+  </div>
+</div>
+
+<div id="hataAlani"></div>
+
+<!-- 1. PROJE BİLGİLERİ -->
+<div class="form-box">
+  <h3><span>1. Proje Bilgileri</span></h3>
+  <div class="grid g3">
+    <div class="fg">
+      <label>Proje Kodu *</label>
+      <input type="text" id="ProjeKod" placeholder="PROJE-KODU">
+    </div>
+    <div class="fg" style="grid-column: span 2;">
+      <label>Proje Adı *</label>
+      <input type="text" id="ProjeAdi" placeholder="Proje adı">
+    </div>
+  </div>
+  <div class="fg">
+    <label>Müşteri *</label>
+    <select id="CKod">
+      <option value="">— Seçin —</option>
+      {% for m in musteriler %}
+        <option value="{{ m.CKod }}">{{ m.CKod }} · {{ m.CName }}{% if m.Sehir %} ({{ m.Sehir }}){% endif %}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="grid g3">
+    <div class="fg"><label>Başlangıç Tarihi</label><input type="date" id="BaslangicTarih"></div>
+    <div class="fg"><label>Bitiş (Tahmini)</label><input type="date" id="BitisTarih"></div>
+    <div class="fg"><label>KDV Oranı (%)</label><input type="number" id="KdvOrani" min="0" max="100" step="0.1" value="10" oninput="hesapla()"></div>
+  </div>
+  <div class="fg">
+    <label>Proje Notu (serbest)</label>
+    <textarea id="Notlar" placeholder="Örn: Erken anlaşma yapıldı, fiyat farkı yansıtılmaz"></textarea>
+  </div>
+</div>
+
+<!-- 2. MODELLER -->
+<div class="form-box">
+  <h3><span>2. Modeller (bir anlaşma, birden fazla model)</span>
+    <button type="button" class="btn btn-outline btn-xs" onclick="modelEkle()">+ Model Ekle</button>
+  </h3>
+  <div id="modelList"></div>
+  <div class="ozet-cubugu">
+    <span>Toplam Miktar: <span id="mToplamMiktar">0</span> çift</span>
+    <span>KDV Hariç: <span id="mTopHaric">0,00 ₺</span></span>
+    <span>KDV (<span id="mKdvOran">10</span>%): <span id="mTopKdv">0,00 ₺</span></span>
+    <span style="color:var(--sol-dark);">Sözleşme Toplamı: <span id="mTopDahil">0,00 ₺</span></span>
+  </div>
+</div>
+
+<!-- 3. ALINAN AVANSLAR + MAHSUP PLANI -->
+<div class="form-box">
+  <h3><span>3. Alınan Avanslar (opsiyonel) + Mahsup Planı</span>
+    <button type="button" class="btn btn-outline btn-xs" onclick="avansEkle()">+ Avans Ekle</button>
+  </h3>
+  <div id="avansList"></div>
+  <div class="ozet-cubugu">
+    <span>Toplam Avans: <span id="avansToplam">0,00 ₺</span></span>
+    <span>Mahsup Planı Toplamı: <span id="mahsupToplam">0,00 ₺</span></span>
+    <span id="avansUyari"></span>
+  </div>
+</div>
+
+<!-- 4. ÖDEME PLANI -->
+<div class="form-box">
+  <h3><span>4. Ödeme Planı (Net = Sözleşme − Avans)</span>
+    <button type="button" class="btn btn-outline btn-xs" onclick="planEkle()">+ Ödeme Satırı Ekle</button>
+  </h3>
+  <div id="planList"></div>
+  <div class="ozet-cubugu">
+    <span>Ödeme Planı Toplamı: <span id="planToplam">0,00 ₺</span></span>
+    <span>Hedef (Sözleşme − Avans): <span id="planHedef">0,00 ₺</span></span>
+    <span id="planUyari"></span>
+  </div>
+</div>
+
+<div style="display:flex; justify-content:flex-end; gap:10px; margin-top:14px;">
+  <a href="/finans/anlasma" class="btn btn-outline">İptal</a>
+  <button class="btn btn-primary" type="button" onclick="kaydet()">✓ Anlaşmayı Kaydet</button>
+</div>
+
+<script>
+'use strict';
+
+let modelCtr = 0, avansCtr = 0, planCtr = 0;
+const fmt = n => (n||0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₺';
+
+// ============== MODELLER ==============
+function modelEkle(v) {
+  v = v || {};
+  modelCtr++;
+  const s = modelCtr;
+  const d = document.createElement('div');
+  d.className = 'row-box model';
+  d.dataset.mSira = s;
+  d.dataset.recId = v.Id || '';
+  d.innerHTML = `
+    <span class="sira">Model ${s}</span>
+    <button class="sil" type="button" onclick="this.closest('.row-box').remove(); hesapla();">&times;</button>
+    <div class="grid g4" style="margin-top:4px;">
+      <div class="fg"><label>Kod</label><input class="m-kod" type="text" value="${v.ModelKod || ''}" placeholder="YAZ-001"></div>
+      <div class="fg"><label>Model Adı *</label><input class="m-adi" type="text" value="${v.ModelAdi || ''}" placeholder="Ürün adı"></div>
+      <div class="fg"><label>Renk</label><input class="m-renk" type="text" value="${v.Renk || ''}" placeholder="Beyaz"></div>
+      <div class="fg"><label>Miktar (çift) *</label><input class="m-miktar" type="number" min="0" value="${v.Miktar || ''}" oninput="hesapla()"></div>
+    </div>
+    <div class="grid g3">
+      <div class="fg"><label>Birim (KDV Hariç) ₺</label><input class="m-birim" type="number" step="0.01" min="0" value="${v.BirimFiyat || ''}" oninput="hesapla()"></div>
+      <div class="fg"><label>Satır Toplamı (KDV Dahil)</label><input class="m-toplam" type="text" readonly style="background:#e9ecef;"></div>
+      <div class="fg"><label>Not</label><input class="m-not" type="text" value="${v.Notu || ''}"></div>
+    </div>
+  `;
+  document.getElementById('modelList').appendChild(d);
+  hesapla();
+}
+
+function modelToplamlari() {
+  const kdv = parseFloat(document.getElementById('KdvOrani').value) || 0;
+  let miktar = 0, haric = 0;
+  document.querySelectorAll('#modelList .row-box').forEach(r => {
+    const m = parseFloat(r.querySelector('.m-miktar').value) || 0;
+    const b = parseFloat(r.querySelector('.m-birim').value) || 0;
+    const sHaric = m * b;
+    const sDahil = sHaric * (1 + kdv/100);
+    miktar += m;
+    haric  += sHaric;
+    r.querySelector('.m-toplam').value = fmt(sDahil);
+  });
+  const kdvTop = haric * (kdv / 100);
+  const dahil  = haric + kdvTop;
+  return { miktar, haric, kdvTop, dahil, kdv };
+}
+
+// ============== AVANSLAR + MAHSUPLAR ==============
+function avansEkle(v) {
+  v = v || {};
+  avansCtr++;
+  const s = avansCtr;
+  const d = document.createElement('div');
+  d.className = 'row-box avans';
+  d.dataset.aSira = s;
+  d.dataset.recId = v.Id || '';
+  d.innerHTML = `
+    <span class="sira">Avans ${s}</span>
+    <button class="sil" type="button" onclick="this.closest('.row-box').remove(); hesapla();">&times;</button>
+    <div class="grid g4" style="margin-top:4px;">
+      <div class="fg"><label>Tarih *</label><input class="av-tarih" type="date" value="${v.AvansTarih || ''}"></div>
+      <div class="fg"><label>Tutar (₺) *</label><input class="av-tutar" type="number" step="0.01" min="0" value="${v.Tutar || ''}" oninput="hesapla()"></div>
+      <div class="fg"><label>Tip</label>
+        <select class="av-tip">
+          <option value="HAVALE" ${v.OdemeTipi==='HAVALE' ? 'selected':''}>Havale / EFT</option>
+          <option value="NAKIT"  ${v.OdemeTipi==='NAKIT' ? 'selected':''}>Nakit</option>
+          <option value="CEK"    ${v.OdemeTipi==='CEK' ? 'selected':''}>Çek</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>Teminat Mektubu?</label>
+        <select class="av-tem" onchange="this.closest('.row-box').querySelector('.teminat-box').classList.toggle('gorsun', this.value==='1');">
+          <option value="0" ${!v.TeminatMektup ? 'selected':''}>Hayır</option>
+          <option value="1" ${v.TeminatMektup ? 'selected':''}>Evet</option>
+        </select>
+      </div>
+    </div>
+    <div class="teminat-box ${v.TeminatMektup ? 'gorsun' : ''}">
+      <div class="grid g2">
+        <div class="fg"><label>Teminat Mektubu Tutarı ₺</label><input class="av-tem-tutar" type="number" step="0.01" min="0" value="${v.TeminatTutar || ''}"></div>
+        <div class="fg"><label>Teminat Notu</label><input class="av-tem-not" type="text" value="${v.TeminatNotu || ''}" placeholder="Örn: Ziraat Bank TM ref"></div>
+      </div>
+    </div>
+    <div class="fg">
+      <label>Açıklama</label>
+      <input class="av-aciklama" type="text" value="${v.Aciklama || ''}" placeholder="Örn: Üretim Çin malzemesi gelince başlar">
+    </div>
+
+    <div style="margin-top:10px; background:#fff; border-radius:8px; padding:8px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+        <div style="font-size:10px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:1.2px;">
+          ↓ Mahsup Planı
+        </div>
+        <button type="button" class="btn btn-outline btn-xs" onclick="mahsupEkle(${s})">+ Mahsup Satırı</button>
+      </div>
+      <div class="mahsup-list"></div>
+      <div style="font-size:11px; color:var(--text3);">
+        Bu avans <strong class="av-toplam-ozet">0,00 ₺</strong> —
+        planlanan kesinti: <strong class="av-mahsup-ozet">0,00 ₺</strong>
+      </div>
+    </div>
+  `;
+  document.getElementById('avansList').appendChild(d);
+  // Mahsupları yükle
+  (v.mahsuplar || []).forEach(mh => mahsupEkle(s, mh));
+  hesapla();
+}
+
+function mahsupEkle(avansSira, v) {
+  v = v || {};
+  const avansRow = document.querySelector(`[data-a-sira="${avansSira}"]`);
+  if (!avansRow) return;
+  const list = avansRow.querySelector('.mahsup-list');
+  const idx = list.children.length + 1;
+  const d = document.createElement('div');
+  d.className = 'row-box mahsup';
+  d.dataset.recId = v.Id || '';
+  if (v.Durum === 'MAHSUP_EDILDI') d.dataset.kilit = '1';
+  d.innerHTML = `
+    <span class="sira">Mahsup ${idx} ${v.Durum === 'MAHSUP_EDILDI' ? '🔒' : ''}</span>
+    ${v.Durum === 'MAHSUP_EDILDI' ? '' : '<button class="sil" type="button" onclick="this.closest(\'.row-box\').remove(); hesapla();">&times;</button>'}
+    <div class="grid g3" style="margin-top:4px;">
+      <div class="fg"><label>Mahsup Tarihi *</label><input class="mh-tarih" type="date" value="${v.MahsupTarih || ''}" ${v.Durum==='MAHSUP_EDILDI'?'readonly':''}></div>
+      <div class="fg"><label>Tutar ₺ *</label><input class="mh-tutar" type="number" step="0.01" min="0" value="${v.Tutar || ''}" oninput="hesapla()" ${v.Durum==='MAHSUP_EDILDI'?'readonly':''}></div>
+      <div class="fg"><label>Açıklama</label><input class="mh-aciklama" type="text" value="${v.Aciklama || ''}" placeholder="Örn: 1. sevk mahsubu" ${v.Durum==='MAHSUP_EDILDI'?'readonly':''}></div>
+    </div>
+  `;
+  list.appendChild(d);
+  hesapla();
+}
+
+function avansToplamlari() {
+  let top = 0, mTop = 0;
+  document.querySelectorAll('#avansList .row-box.avans').forEach(r => {
+    const t = parseFloat(r.querySelector('.av-tutar').value) || 0;
+    top += t;
+    let mhTop = 0;
+    r.querySelectorAll('.mahsup-list .row-box.mahsup').forEach(m => {
+      mhTop += parseFloat(m.querySelector('.mh-tutar').value) || 0;
+    });
+    mTop += mhTop;
+    const os1 = r.querySelector('.av-toplam-ozet'); if (os1) os1.textContent = fmt(t);
+    const os2 = r.querySelector('.av-mahsup-ozet'); if (os2) os2.textContent = fmt(mhTop);
+  });
+  return { top, mTop };
+}
+
+// ============== ÖDEME PLANI + ÇEKLER ==============
+function planEkle(v) {
+  v = v || {};
+  planCtr++;
+  const s = planCtr;
+  const modelSec = modelSeceneklerHtml(v.ModelId);
+  const d = document.createElement('div');
+  d.className = 'row-box plan';
+  d.dataset.pSira = s;
+  d.dataset.recId = v.Id || '';
+  if (v.Durum === 'GELDI') d.dataset.kilit = '1';
+  const kilit = v.Durum === 'GELDI';
+  d.innerHTML = `
+    <span class="sira">#${s} ${kilit ? '🔒 Tahsil edildi' : ''}</span>
+    ${kilit ? '' : '<button class="sil" type="button" onclick="this.closest(\'.row-box\').remove(); hesapla();">&times;</button>'}
+    <div class="grid g5" style="margin-top:4px;">
+      <div class="fg"><label>Tarih *</label><input class="p-tarih" type="date" value="${v.PlanTarih || ''}" ${kilit?'readonly':''}></div>
+      <div class="fg"><label>Tip *</label>
+        <select class="p-tip" onchange="cekAlaniniGuncelle(this)" ${kilit?'disabled':''}>
+          <option value="NAKIT"        ${v.OdemeTipi==='NAKIT'?'selected':''}>Nakit</option>
+          <option value="CEK"          ${v.OdemeTipi==='CEK'?'selected':''}>Çek</option>
+          <option value="HAVALE"       ${v.OdemeTipi==='HAVALE'?'selected':''}>Havale / EFT</option>
+          <option value="SEVK_SONRASI" ${v.OdemeTipi==='SEVK_SONRASI'?'selected':''}>Sevk Sonrası</option>
+          <option value="ON_AVANS"     ${v.OdemeTipi==='ON_AVANS'?'selected':''}>Ön Avans</option>
+          <option value="DIGER"        ${v.OdemeTipi==='DIGER'?'selected':''}>Diğer</option>
+        </select>
+      </div>
+      <div class="fg"><label>Model (ops.)</label>
+        <select class="p-model" ${kilit?'disabled':''}>${modelSec}</select>
+      </div>
+      <div class="fg"><label>Tutar ₺ *</label><input class="p-tutar" type="number" step="0.01" min="0" value="${v.Tutar || ''}" oninput="hesapla(); cekTutarDagit(this)" ${kilit?'readonly':''}></div>
+      <div class="fg"><label>Açıklama</label><input class="p-aciklama" type="text" value="${v.Aciklama || ''}"></div>
+    </div>
+
+    <div class="cek-wrap" style="display:${v.OdemeTipi==='CEK' ? 'block' : 'none'};">
+      <h5>
+        <span>Çek Detayları <span class="cek-uyari" style="color:var(--red); margin-left:6px;"></span></span>
+        <span>
+          Adet:
+          <input class="p-cekadet" type="number" min="1" value="${v.CekAdeti || 1}" style="width:60px; display:inline-block; padding:3px 6px; font-size:12px;" onchange="cekAdetDegisti(this)">
+          <button type="button" class="btn btn-outline btn-xs" onclick="cekEkle(this.closest('.row-box'))">+ Çek Ekle</button>
+        </span>
+      </h5>
+      <div class="cek-list"></div>
+    </div>
+  `;
+  document.getElementById('planList').appendChild(d);
+  // Çekleri yükle
+  if (v.cekler && v.cekler.length > 0) {
+    v.cekler.forEach(c => cekEkle(d, c));
+  } else if (v.OdemeTipi === 'CEK') {
+    cekEkle(d);
+  }
+  hesapla();
+}
+
+function modelSeceneklerHtml(selectedModelId) {
+  let html = '<option value="">— Tümü (anlaşma seviyesi) —</option>';
+  document.querySelectorAll('#modelList .row-box').forEach(r => {
+    const sira = r.dataset.mSira;
+    const recId = r.dataset.recId;
+    const adi  = r.querySelector('.m-adi').value || `Model ${sira}`;
+    const renk = r.querySelector('.m-renk').value || '';
+    const sel = (selectedModelId && recId == selectedModelId) ? 'selected' : '';
+    html += `<option value="${sira}" ${sel}>${adi}${renk ? ' / '+renk : ''}</option>`;
+  });
+  return html;
+}
+
+function cekEkle(row, v) {
+  v = v || {};
+  const list = row.querySelector('.cek-list');
+  const idx = list.children.length + 1;
+  const kilit = v.Durum === 'TAHSIL';
+  const d = document.createElement('div');
+  d.className = 'row-box cek';
+  d.dataset.recId = v.Id || '';
+  if (kilit) d.dataset.kilit = '1';
+  d.innerHTML = `
+    <span class="sira">Çek ${idx} ${kilit ? '🔒' : ''}</span>
+    ${kilit ? '' : '<button class="sil" type="button" onclick="this.closest(\'.row-box\').remove(); cekYenidenNumara(); hesapla();">&times;</button>'}
+    <div class="grid g5" style="margin-top:4px;">
+      <div class="fg"><label>Çek No</label><input class="c-no" type="text" value="${v.CekNo || ''}" ${kilit?'readonly':''}></div>
+      <div class="fg"><label>Banka</label><input class="c-banka" type="text" value="${v.CekBanka || ''}" ${kilit?'readonly':''}></div>
+      <div class="fg"><label>Alım Tarihi *</label><input class="c-alim" type="date" value="${v.CekAlimTarih || ''}" ${kilit?'readonly':''}></div>
+      <div class="fg"><label>Vade Tarihi *</label><input class="c-vade" type="date" value="${v.CekVadeTarih || ''}" ${kilit?'readonly':''}></div>
+      <div class="fg"><label>Tutar ₺ *</label><input class="c-tutar" type="number" step="0.01" min="0" value="${v.Tutar || ''}" oninput="hesapla()" ${kilit?'readonly':''}></div>
+    </div>
+    <div class="fg"><label>Not</label><input class="c-not" type="text" value="${v.Notu || ''}" ${kilit?'readonly':''}></div>
+  `;
+  list.appendChild(d);
+  const adet = row.querySelector('.p-cekadet');
+  if (adet) adet.value = list.children.length;
+}
+
+function cekAlaniniGuncelle(selectEl) {
+  const row = selectEl.closest('.row-box');
+  const wrap = row.querySelector('.cek-wrap');
+  const goster = selectEl.value === 'CEK';
+  wrap.style.display = goster ? 'block' : 'none';
+  if (goster && row.querySelector('.cek-list').children.length === 0) {
+    cekEkle(row);  // otomatik 1 çek açık gelsin
+  }
+}
+
+function cekAdetDegisti(inp) {
+  const row = inp.closest('.row-box');
+  const istenilen = Math.max(1, parseInt(inp.value) || 1);
+  const list = row.querySelector('.cek-list');
+  while (list.children.length < istenilen) cekEkle(row);
+  while (list.children.length > istenilen) list.lastElementChild.remove();
+  cekTutarDagit(row.querySelector('.p-tutar'));
+  hesapla();
+}
+
+function cekYenidenNumara() {
+  setTimeout(() => {
+    document.querySelectorAll('#planList .row-box.plan').forEach(pRow => {
+      pRow.querySelectorAll('.cek-list .row-box.cek').forEach((cRow, i) => {
+        cRow.querySelector('.sira').textContent = 'Çek ' + (i+1);
+      });
+      const adet = pRow.querySelector('.p-cekadet');
+      if (adet) adet.value = pRow.querySelector('.cek-list').children.length;
+    });
+  }, 1);
+}
+
+function cekTutarDagit(inp) {
+  const row = inp.closest('.row-box');
+  const tip = row.querySelector('.p-tip').value;
+  if (tip !== 'CEK') return;
+  const tutar = parseFloat(row.querySelector('.p-tutar').value) || 0;
+  const cekler = row.querySelectorAll('.cek-list .row-box.cek');
+  if (cekler.length === 0) return;
+  const bas = +(tutar / cekler.length).toFixed(2);
+  const kalan = +(tutar - bas * (cekler.length - 1)).toFixed(2);
+  cekler.forEach((c, i) => {
+    const el = c.querySelector('.c-tutar');
+    if (!el.dataset.elleDegistirildi) {
+      el.value = (i === cekler.length - 1 ? kalan : bas);
+    }
+  });
+}
+
+document.addEventListener('input', (e) => {
+  if (e.target.classList.contains('c-tutar')) e.target.dataset.elleDegistirildi = '1';
+});
+
+// ============== GENEL HESAP + UYARILAR ==============
+function hesapla() {
+  const mt = modelToplamlari();
+  document.getElementById('mToplamMiktar').textContent = mt.miktar.toLocaleString('tr-TR');
+  document.getElementById('mTopHaric').textContent = fmt(mt.haric);
+  document.getElementById('mKdvOran').textContent  = mt.kdv;
+  document.getElementById('mTopKdv').textContent   = fmt(mt.kdvTop);
+  document.getElementById('mTopDahil').textContent = fmt(mt.dahil);
+
+  const at = avansToplamlari();
+  document.getElementById('avansToplam').textContent  = fmt(at.top);
+  document.getElementById('mahsupToplam').textContent = fmt(at.mTop);
+
+  const avUy = document.getElementById('avansUyari');
+  avUy.innerHTML = '';
+  if (at.top > mt.dahil && mt.dahil > 0) {
+    avUy.innerHTML = '<span class="err">⚠ Avans sözleşmeyi aşıyor</span>';
+  } else if (at.top > 0 && Math.abs(at.top - at.mTop) > 0.01) {
+    avUy.innerHTML = `<span class="err">⚠ Mahsup toplamı avans tutarına eşit olmalı (fark: ${fmt(at.top - at.mTop)})</span>`;
+  } else if (at.top > 0) {
+    avUy.innerHTML = '<span class="ok">✓ Mahsup planı avans tutarı ile eşit</span>';
+  }
+
+  const hedef = mt.dahil - at.top;
+  document.getElementById('planHedef').textContent = fmt(hedef);
+
+  let planTop = 0;
+  document.querySelectorAll('#planList .row-box.plan').forEach(r => {
+    planTop += parseFloat(r.querySelector('.p-tutar').value) || 0;
+  });
+  document.getElementById('planToplam').textContent = fmt(planTop);
+
+  const pUy = document.getElementById('planUyari');
+  pUy.innerHTML = '';
+  if (hedef > 0 && Math.abs(hedef - planTop) > 0.01) {
+    const fark = hedef - planTop;
+    pUy.innerHTML = `<span class="err">⚠ Plan ${fark > 0 ? 'eksik' : 'fazla'}: ${fmt(Math.abs(fark))}</span>`;
+  } else if (hedef > 0) {
+    pUy.innerHTML = '<span class="ok">✓ Plan hedef ile eşit</span>';
+  }
+
+  document.querySelectorAll('#planList .row-box.plan').forEach(r => {
+    if (r.querySelector('.p-tip').value !== 'CEK') return;
+    const planT = parseFloat(r.querySelector('.p-tutar').value) || 0;
+    let cekT = 0;
+    r.querySelectorAll('.cek-list .c-tutar').forEach(c => cekT += parseFloat(c.value) || 0);
+    const u = r.querySelector('.cek-uyari');
+    if (Math.abs(planT - cekT) > 0.01 && planT > 0) {
+      u.textContent = `(fark: ${fmt(planT - cekT)})`;
+    } else {
+      u.textContent = '';
+    }
+  });
+
+  document.querySelectorAll('#planList .p-model').forEach(sel => {
+    const eski = sel.value;
+    sel.innerHTML = modelSeceneklerHtml();
+    sel.value = eski;
+  });
+}
+
+// ============== KAYDET (JSON POST) ==============
+function topla() {
+  const modeller = [];
+  document.querySelectorAll('#modelList .row-box').forEach((r, i) => {
+    modeller.push({
+      Id: r.dataset.recId ? parseInt(r.dataset.recId) : 0,
+      Sira: i + 1,
+      ModelKod: r.querySelector('.m-kod').value,
+      ModelAdi: r.querySelector('.m-adi').value,
+      Renk:     r.querySelector('.m-renk').value,
+      Miktar:   r.querySelector('.m-miktar').value,
+      BirimFiyat: r.querySelector('.m-birim').value,
+      Notu:     r.querySelector('.m-not').value,
+    });
+  });
+
+  const avanslar = [];
+  document.querySelectorAll('#avansList .row-box.avans').forEach(r => {
+    const mahsuplar = [];
+    r.querySelectorAll('.mahsup-list .row-box.mahsup').forEach(m => {
+      mahsuplar.push({
+        Id: m.dataset.recId ? parseInt(m.dataset.recId) : 0,
+        MahsupTarih: m.querySelector('.mh-tarih').value,
+        Tutar:       m.querySelector('.mh-tutar').value,
+        Aciklama:    m.querySelector('.mh-aciklama').value,
+      });
+    });
+    avanslar.push({
+      Id: r.dataset.recId ? parseInt(r.dataset.recId) : 0,
+      AvansTarih:    r.querySelector('.av-tarih').value,
+      Tutar:         r.querySelector('.av-tutar').value,
+      OdemeTipi:     r.querySelector('.av-tip').value,
+      TeminatMektup: r.querySelector('.av-tem').value === '1',
+      TeminatTutar:  r.querySelector('.av-tem-tutar').value,
+      TeminatNotu:   r.querySelector('.av-tem-not').value,
+      Aciklama:      r.querySelector('.av-aciklama').value,
+      mahsuplar,
+    });
+  });
+
+  const plan = [];
+  document.querySelectorAll('#planList .row-box.plan').forEach(r => {
+    const cekler = [];
+    r.querySelectorAll('.cek-list .row-box.cek').forEach(c => {
+      cekler.push({
+        Id: c.dataset.recId ? parseInt(c.dataset.recId) : 0,
+        CekNo:        c.querySelector('.c-no').value,
+        CekBanka:     c.querySelector('.c-banka').value,
+        CekAlimTarih: c.querySelector('.c-alim').value,
+        CekVadeTarih: c.querySelector('.c-vade').value,
+        Tutar:        c.querySelector('.c-tutar').value,
+        Notu:         c.querySelector('.c-not').value,
+      });
+    });
+    plan.push({
+      Id: r.dataset.recId ? parseInt(r.dataset.recId) : 0,
+      PlanTarih:  r.querySelector('.p-tarih').value,
+      OdemeTipi:  r.querySelector('.p-tip').value,
+      ModelSira:  r.querySelector('.p-model').value,
+      Tutar:      r.querySelector('.p-tutar').value,
+      CekAdeti:   parseInt(r.querySelector('.p-cekadet').value) || 1,
+      Aciklama:   r.querySelector('.p-aciklama').value,
+      cekler,
+    });
+  });
+
+  const mt = modelToplamlari();
+
+  return {
+    anlasma: {
+      ProjeKod:       document.getElementById('ProjeKod').value.trim(),
+      ProjeAdi:       document.getElementById('ProjeAdi').value.trim(),
+      CKod:           document.getElementById('CKod').value,
+      BaslangicTarih: document.getElementById('BaslangicTarih').value,
+      BitisTarih:     document.getElementById('BitisTarih').value,
+      ToplamTutar:    mt.dahil,
+      KdvOrani:       document.getElementById('KdvOrani').value,
+      Notlar:         document.getElementById('Notlar').value,
+    },
+    modeller, avanslar, plan,
+  };
+}
+
+function hataGoster(msg) {
+  document.getElementById('hataAlani').innerHTML = `<div class="hata-kutu">⚠ ${msg}</div>`;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+const DUZENLE_MODU = {{ 'true' if duzenle else 'false' }};
+const ANLASMA_ID = {{ anlasma_id if duzenle else 'null' }};
+
+async function kaydet() {
+  document.getElementById('hataAlani').innerHTML = '';
+  const data = topla();
+
+  if (!data.anlasma.ProjeKod || !data.anlasma.ProjeAdi || !data.anlasma.CKod) {
+    return hataGoster('Proje Kodu, Adı ve Müşteri zorunludur.');
+  }
+  if (data.modeller.length === 0) {
+    return hataGoster('En az 1 model eklemelisin.');
+  }
+  for (const m of data.modeller) {
+    if (!m.ModelAdi || !m.Miktar) return hataGoster('Model adı ve miktar zorunlu.');
+  }
+
+  const url = DUZENLE_MODU ? `/finans/anlasma/${ANLASMA_ID}/duzenle` : '/finans/anlasma/yeni';
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const j = await r.json();
+    if (j.ok) {
+      window.location.href = j.redirect;
+    } else {
+      hataGoster(j.hata || 'Kayıt hatası.');
+    }
+  } catch (e) {
+    hataGoster('Sunucu hatası: ' + e);
+  }
+}
+
+{% if duzenle %}
+// ============ DÜZENLEME MODU: MEVCUT VERİYİ YÜKLE ============
+const MEVCUT = {{ mevcut | tojson }};
+// Proje bilgileri
+document.getElementById('ProjeKod').value       = MEVCUT.anlasma.ProjeKod || '';
+document.getElementById('ProjeAdi').value       = MEVCUT.anlasma.ProjeAdi || '';
+document.getElementById('CKod').value           = MEVCUT.anlasma.CKod || '';
+document.getElementById('BaslangicTarih').value = MEVCUT.anlasma.BaslangicTarih || '';
+document.getElementById('BitisTarih').value     = MEVCUT.anlasma.BitisTarih || '';
+document.getElementById('KdvOrani').value       = MEVCUT.anlasma.KdvOrani || 10;
+document.getElementById('Notlar').value         = MEVCUT.anlasma.Notlar || '';
+
+// Modeller (varsayılan boş model satırını sil, mevcutları yükle)
+document.getElementById('modelList').innerHTML = '';
+modelCtr = 0;
+MEVCUT.modeller.forEach(m => modelEkle(m));
+
+// Avanslar
+MEVCUT.avanslar.forEach(a => avansEkle(a));
+
+// Ödeme planı
+MEVCUT.plan.forEach(p => planEkle(p));
+
+hesapla();
+{% else %}
+// Yeni mod: başlangıçta 1 boş model
+modelEkle();
+hesapla();
+{% endif %}
+</script>
+
+{% endblock %}

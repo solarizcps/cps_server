@@ -1,0 +1,15 @@
+# Ignore everything
+*
+
+# Allow active CPS only
+!.gitignore
+!.cursorrules
+
+!app/
+!app/**
+
+!docs/
+!docs/**
+
+# keep SQLite for now
+!app/mock_data.db

@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% set tab = 'grafik' %}
+{% set active = 'grafik' %}
+
+{% block title %}Fiyat Teklifleri{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div class="page-head-main">
+    <div class="crumbs"><a href="/grafik">Grafik</a> › <strong>Fiyat Teklifleri</strong></div>
+    <h1>💰 Fiyat Teklifleri</h1>
+    <p class="muted">Çin, Türkiye ve diğer ülkelerden gelen fiyat teklifleri. Kur teklif tarihinde sabitlenir.</p>
+  </div>
+  <div class="page-head-actions">
+    <button class="btn btn-primary" onclick="document.getElementById('tkf-yeni').showModal()">+ Yeni Teklif</button>
+  </div>
+</div>
+
+<div class="kpi-grid kpi-grid-5">
+  <div class="kpi kpi-info">
+    <div class="kpi-v">{{ kpi.alindi }}</div>
+    <div class="kpi-l">Alındı</div>
+  </div>
+  <div class="kpi kpi-success">
+    <div class="kpi-v">{{ kpi.siparis_oldu }}</div>
+    <div class="kpi-l">Siparişe Oldu</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-v">{{ kpi.reddedildi }}</div>
+    <div class="kpi-l">Reddedildi</div>
+  </div>
+  <div class="kpi kpi-danger">
+    <div class="kpi-v">{{ kpi.suresi }}</div>
+    <div class="kpi-l">Süresi Geçti</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-v">{{ kpi.toplam }}</div>
+    <div class="kpi-l">Toplam</div>
+  </div>
+</div>
+
+<div class="panel">
+  <form method="get" class="row">
+    <input type="text" name="q" placeholder="TKF no, tedarikçi, ürün..." value="{{ arama or '' }}" class="flex-1">
+    <select name="d">
+      <option value="">Tüm durumlar</option>
+      {% for kod, ad, _ in durumlar %}
+      <option value="{{ kod }}" {% if durum == kod %}selected{% endif %}>{{ ad }}</option>
+      {% endfor %}
+    </select>
+    <select name="u">
+      <option value="">Tüm ülkeler</option>
+      {% for kod, ad in ulke_kodlari %}
+      <option value="{{ kod }}" {% if ulke == kod %}selected{% endif %}>{{ ad }}</option>
+    {% endfor %}
+    </select>
+    <button class="btn btn-ghost">Filtrele</button>
+  </form>
+</div>
+
+<div class="panel">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Teklif No</th><th>Ülke</th><th>Tedarikçi</th><th>Müşteri</th>
+        <th>Ürün</th><th class="num">Miktar × Fiyat</th>
+        <th class="num">Toplam</th><th>Kur</th><th>Tarih</th>
+        <th>Durum</th><th>Sipariş</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in teklifler %}
+      <tr>
+        <td><strong>{{ t.TeklifNo }}</strong></td>
+        <td>{% for k, a in ulke_kodlari %}{% if k == t.UlkeKodu %}{{ a }}{% endif %}{% endfor %}</td>
+        <td>{{ t.TedarikciAd or '—' }}</td>
+        <td>{% if t.MusteriAd %}<span class="pill pill-info">{{ t.MusteriAd }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td>{{ t.UrunAd or '—' }}{% if t.UrunKodu %} <code class="muted">{{ t.UrunKodu }}</code>{% endif %}</td>
+        <td class="num">{{ "{:,.0f}".format(t.Miktar) }} × {{ "%.2f"|format(t.BirimFiyat) }} {{ t.ParaBirimi }}</td>
+        <td class="num"><strong>{{ "{:,.2f}".format(t.ToplamTutar) }} {{ t.ParaBirimi }}</strong></td>
+        <td class="muted small">{{ "%.4f"|format(t.KurSnapshot) }} 🔒</td>
+        <td class="muted small">{{ (t.TeklifTarihi or '')[:10] }}</td>
+        <td>
+          {% for kod, ad, renk in durumlar %}
+          {% if t.Durum == kod %}<span class="pill" style="background:{{ renk }};color:#fff;">{{ ad }}</span>{% endif %}
+        {% endfor %}
+      </td>
+        <td>
+          {% if t.DonusumSiparisNo %}<a href="/grafik/siparis" class="small">{{ t.DonusumSiparisNo }} ↗</a>
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+        <td class="actions"><a href="/grafik/teklif/{{ t.Id }}" class="btn btn-sm btn-ghost">Detay</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="12"><div class="empty"><div class="empty-ic">💰</div><p>Henüz teklif yok. + Yeni Teklif ile başla.</p></div></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<dialog id="tkf-yeni" class="modal">
+  <form method="post" action="/grafik/teklif/yeni" class="modal-form" style="min-width:620px;">
+    <h3>Yeni Fiyat Teklifi</h3>
+    <p class="muted" style="font-size:.82rem; margin:0 0 8px;">
+      💡 Kur teklif tarihindeki merkez bankası kurundan alınıp sabitlenir. Bugünkü kur kullanılmaz.
+    </p>
+
+    <div class="form-row">
+      <label style="flex:1;">Ülke *
+        <select name="UlkeKodu" required>
+          {% for kod, ad in ulke_kodlari %}
+          <option value="{{ kod }}" {% if kod == 'CN' %}selected{% endif %}>{{ ad }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label style="flex:2;">Kayıtlı Tedarikçi (opsiyonel)
+        <select name="TedarikciId">
+          <option value="">— Serbest giriş —</option>
+          {% for td in tedarikciler %}
+          <option value="{{ td.Id }}">{{ td.Ad }} ({{ td.Ulke or 'CN' }})</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <label>Tedarikçi Adı (kayıtlı değilse zorunlu)
+      <input type="text" name="TedarikciAd" placeholder="Ör: Ningbo Plastic Co.">
+    </label>
+    <label>Müşteri (opsiyonel — bu teklif hangi müşteri için?)
+      <select name="MusteriCKod">
+        <option value="">—</option>
+        {% for m in musteriler %}
+        <option value="{{ m.CKod }}">{{ m.CName }} ({{ m.CKod }})</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <div class="form-row">
+      <label style="flex:2;">Ürün Adı *
+        <input type="text" name="UrunAd" required placeholder="Ör: PVC Logo (Kaplan çiçek)">
+      </label>
+      <label style="flex:1;">Ürün Kodu <input type="text" name="UrunKodu" placeholder="opsiyonel"></label>
+    </div>
+
+    <div class="form-row">
+      <label style="flex:1;">Miktar * <input type="number" name="Miktar" min="1" step="1" required></label>
+      <label style="flex:1;">Birim Fiyat * <input type="number" name="BirimFiyat" min="0" step="0.01" required></label>
+      <label style="flex:1;">Para Birimi
+        <select name="ParaBirimi">
+          <option value="USD" selected>USD</option>
+          <option value="EUR">EUR</option>
+          <option value="CNY">CNY</option>
+          <option value="TRY">TRY</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="form-row">
+      <label style="flex:1;">Teklif Tarihi <input type="date" name="TeklifTarihi">
+        <small class="muted" style="font-size:.72rem;">Boş: bugün. Kur bu tarihe göre sabitlenir.</small>
+      </label>
+      <label style="flex:1;">Geçerlilik Tarihi <input type="date" name="GecerlilikTarihi"></label>
+    </div>
+    <label>Notlar <textarea name="Notlar" rows="2" placeholder="Kalite, teslim süresi, MOQ, ödeme koşulları..."></textarea></label>
+
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" onclick="this.closest('dialog').close()">İptal</button>
+      <button class="btn btn-primary">Teklif Al (Kur Sabitlensin)</button>
+    </div>
+  </form>
+</dialog>
+{% endblock %}

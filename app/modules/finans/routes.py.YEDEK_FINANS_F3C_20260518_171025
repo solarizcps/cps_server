@@ -1,0 +1,862 @@
+# -*- coding: utf-8 -*-
+"""CPS DEV - Finans v2 Blueprint"""
+from flask import Blueprint, render_template, request, redirect, url_for, abort, jsonify, session, g
+import json
+import os
+from modules.finans import queries as qr
+from modules import audit
+from db import qone
+
+finans_bp = Blueprint('finans', __name__, url_prefix='/finans')
+
+# ============================================================
+# FAZ KOPRU-2 (13.05.2026): FINANS MODUL ERISIM GUARD
+# Sadece su kullanicilar finans modulunu acabilir:
+#   - admin (kullanici adi)
+#   - Adem Terzi / Altan Terzi (isim/kullanici adi ile)
+#   - RolAd 'Muhasebe' veya 'Finans'
+# Diger herkes (Yonetim rolu dahil) 403 alir.
+# Yetki Sistemi V2 sonrasi sistem_yetki tablosundan okunacak.
+# ============================================================
+@finans_bp.before_request
+def _finans_modul_guard():
+    if not session.get('kullanici'):
+        return redirect(url_for('auth.login', next=request.path))
+    u = session['kullanici']
+    kadi = (u.get('KullaniciAdi') or '').strip().lower()
+    adsoyad = (u.get('AdSoyad') or '').strip().lower()
+    rol = (u.get('RolAd') or u.get('Rol') or '').strip()
+    # 1) admin
+    if kadi == 'admin':
+        return None
+    # 2) Adem Terzi (kullanici adi VEYA isim)
+    if kadi == 'adem' or 'adem terzi' in adsoyad:
+        return None
+    # 3) Altan Terzi (kullanici adi VEYA isim)
+    if kadi == 'altan' or 'altan terzi' in adsoyad:
+        return None
+    # 4) Muhasebe veya Finans rolu
+    if rol in ('Muhasebe', 'Finans'):
+        return None
+    # 5) Diger herkes (Yonetim rolu dahil) 403
+    abort(403)
+
+
+
+def _u():
+    """Mevcut kullanıcı adı — audit log için."""
+    k = session.get('kullanici')
+    return k['KullaniciAdi'] if k else 'sistem'
+
+
+# ============================================================
+# DASHBOARD
+# ============================================================
+@finans_bp.route('/')
+def dashboard():
+    kpi = {
+        'toplam_alacak': qr.kpi_toplam_alacak(),
+        'toplam_borc':   qr.kpi_toplam_borc(),
+        'banka':         qr.kpi_banka_toplam(),
+        'kasa':          qr.kpi_kasa_toplam(),
+        'cek_30':        qr.kpi_vadesi_yaklasan_cek(30),
+        'son_30':        qr.kpi_son_30_gun_ozet(),
+        'anlasma':       qr.anlasma_kpi(),
+        'cek_vade':      qr.kpi_cek_ortalama_vade(),
+    }
+    yaklasan = qr.yaklasan_odemeler(gun=30)
+    mahsuplar = qr.yaklasan_mahsuplar(gun=30)
+    return render_template('finans/dashboard.html', kpi=kpi, yaklasan=yaklasan, mahsuplar=mahsuplar)
+
+
+# ============================================================
+# CARI
+# ============================================================
+@finans_bp.route('/cari')
+def cari():
+    tip = request.args.get('tip', 'tumu')
+    cariler = qr.cari_listesi(tip)
+    return render_template('finans/cari.html', cariler=cariler, tip=tip)
+
+
+@finans_bp.route('/cari/<ckod>')
+def cari_detay(ckod):
+    cari = qr.cari_detay(ckod)
+    if not cari:
+        abort(404)
+    bas_tarih = request.args.get('bas_tarih')
+    bit_tarih = request.args.get('bit_tarih')
+    hareketler = qr.cari_hareketler(ckod, bas_tarih, bit_tarih)
+    anlasmalar = qr.cari_anlasmalari(ckod)
+    ozet = qr.cari_ozet(ckod)
+    return render_template('finans/cari_detay.html',
+                           cari=cari, hareketler=hareketler,
+                           bas_tarih=bas_tarih, bit_tarih=bit_tarih,
+                           anlasmalar=anlasmalar, ozet=ozet)
+
+
+# ============================================================
+# ANLAŞMA
+# ============================================================
+@finans_bp.route('/anlasma')
+def anlasma_liste():
+    durum = request.args.get('durum')
+    if durum == 'tumu':
+        durum = None
+    anlasmalar = qr.anlasma_liste(durum)
+    kpi = qr.anlasma_kpi()
+    return render_template('finans/anlasma_liste.html',
+                           anlasmalar=anlasmalar, kpi=kpi, durum=durum or 'tumu')
+
+
+@finans_bp.route('/geciken-odemeler')
+def geciken_odemeler():
+    """PARÇA 8a D — Geciken taksit / ödeme plan listesi (AKTIF + BEKLIYOR + vade<bugün)."""
+    try:
+        liste = qr.geciken_odeme_liste()
+        toplam_tutar = sum((r['Tutar'] or 0) for r in liste)
+        return render_template('finans/geciken_odemeler.html',
+                               liste=liste,
+                               toplam_tutar=toplam_tutar,
+                               adet=len(liste))
+    except Exception as e:
+        import logging, traceback
+        logging.error(f'Geciken ödeme listesi hatası: {e}\n{traceback.format_exc()}')
+        flash(f'Geciken ödeme listesi yüklenemedi. Detay: {str(e)[:150]}', 'hata')
+        return redirect(url_for('finans.dashboard'))
+
+
+@finans_bp.route('/anlasma/<int:anlasma_id>')
+def anlasma_detay(anlasma_id):
+    anlasma = qr.anlasma_detay(anlasma_id)
+    if not anlasma:
+        abort(404)
+    return render_template('finans/anlasma_detay.html',
+                           anlasma=anlasma,
+                           modeller=qr.anlasma_modelleri(anlasma_id),
+                           avanslar=qr.anlasma_avanslari(anlasma_id),
+                           plan=qr.anlasma_odeme_plani(anlasma_id),
+                           kart=qr.anlasma_ozet_kartlar(anlasma_id),
+                           loglar=qr.anlasma_logu(anlasma_id),
+                           odeme_sablonlari=qr.ODEME_SABLONLARI)
+
+
+@finans_bp.route('/anlasma/<int:anlasma_id>/sablon-uygula', methods=['POST'])
+def anlasma_sablon_uygula(anlasma_id):
+    from datetime import date
+    try:
+        eklenen = qr.odeme_sablon_uygula(
+            anlasma_id,
+            sablon_kod=request.form.get('SablonKod', '').strip(),
+            baslangic_tarih=request.form.get('BaslangicTarih', '').strip() or date.today().strftime('%Y-%m-%d'),
+            kullanici=session.get('kullanici', 'sistem'),
+            mevcut_plan_sil=(request.form.get('MevcutSil') == '1'),
+        )
+        flash(f'Şablon uygulandı: {len(eklenen)} plan satırı oluşturuldu. '
+              f'Dilediğin gibi düzenleyebilirsin.', 'ok')
+    except ValueError as e:
+        flash(str(e), 'hata')
+    return redirect(url_for('finans.anlasma_detay', anlasma_id=anlasma_id))
+
+
+@finans_bp.route('/anlasma/yeni', methods=['GET', 'POST'])
+def anlasma_yeni():
+    if request.method == 'POST':
+        try:
+            data = request.get_json(force=True, silent=False)
+            veri = data['anlasma']
+            modeller = data.get('modeller') or []
+            avanslar = data.get('avanslar') or []
+            plan = data.get('plan') or []
+            if not veri.get('ProjeKod') or not veri.get('ProjeAdi') or not veri.get('CKod'):
+                return jsonify({'ok': False, 'hata': 'Proje Kodu, Adı ve Müşteri zorunludur.'}), 400
+            if not modeller:
+                return jsonify({'ok': False, 'hata': 'En az 1 model eklemelisin.'}), 400
+            anlasma_id = qr.anlasma_olustur(veri, modeller, avanslar, plan, kullanici=_u())
+            return jsonify({'ok': True, 'anlasma_id': anlasma_id, 'redirect': f'/finans/anlasma/{anlasma_id}'})
+        except Exception as e:
+            import traceback; traceback.print_exc()
+            return jsonify({'ok': False, 'hata': f'Kayıt hatası: {e}'}), 500
+    musteriler = qr.musteri_listesi()
+    return render_template('finans/anlasma_yeni.html', musteriler=musteriler, duzenle=False)
+
+
+@finans_bp.route('/anlasma/<int:anlasma_id>/duzenle', methods=['GET', 'POST'])
+def anlasma_duzenle(anlasma_id):
+    anlasma = qr.anlasma_detay(anlasma_id)
+    if not anlasma:
+        abort(404)
+
+    if request.method == 'POST':
+        try:
+            data = request.get_json(force=True, silent=False)
+            veri = data['anlasma']
+            modeller = data.get('modeller') or []
+            avanslar = data.get('avanslar') or []
+            plan = data.get('plan') or []
+            if not veri.get('ProjeKod') or not veri.get('ProjeAdi') or not veri.get('CKod'):
+                return jsonify({'ok': False, 'hata': 'Proje Kodu, Adı ve Müşteri zorunludur.'}), 400
+            if not modeller:
+                return jsonify({'ok': False, 'hata': 'En az 1 model olmalı.'}), 400
+            qr.anlasma_guncelle(anlasma_id, veri, modeller, avanslar, plan, kullanici=_u())
+            return jsonify({'ok': True, 'anlasma_id': anlasma_id, 'redirect': f'/finans/anlasma/{anlasma_id}'})
+        except Exception as e:
+            import traceback; traceback.print_exc()
+            return jsonify({'ok': False, 'hata': f'Güncelleme hatası: {e}'}), 500
+
+    # GET — mevcut veriyi formun beklediği formatta topla
+    from modules.finans.queries import anlasma_modelleri, anlasma_avanslari, anlasma_odeme_plani
+    musteriler = qr.musteri_listesi()
+    mevcut = {
+        'anlasma': {
+            'Id':             anlasma['Id'],
+            'ProjeKod':       anlasma['ProjeKod'],
+            'ProjeAdi':       anlasma['ProjeAdi'],
+            'CKod':           anlasma['CKod'],
+            'BaslangicTarih': anlasma['BaslangicTarih'] or '',
+            'BitisTarih':     anlasma['BitisTarih'] or '',
+            'ToplamTutar':    anlasma['ToplamTutar'],
+            'KdvOrani':       anlasma['KdvOrani'],
+            'Notlar':         anlasma['Notlar'] or '',
+        },
+        'modeller': [{
+            'Id': m['Id'], 'ModelKod': m['ModelKod'] or '', 'ModelAdi': m['ModelAdi'],
+            'Renk': m['Renk'] or '', 'Miktar': m['Miktar'], 'BirimFiyat': m['BirimFiyat'],
+            'Notu': m['Notu'] or '',
+        } for m in anlasma_modelleri(anlasma_id)],
+        'avanslar': [{
+            'Id': a['Id'], 'AvansTarih': a['AvansTarih'] or '',
+            'Tutar': a['Tutar'], 'OdemeTipi': a['OdemeTipi'] or 'HAVALE',
+            'TeminatMektup': bool(a['TeminatMektup']), 'TeminatTutar': a['TeminatTutar'] or 0,
+            'TeminatNotu': a['TeminatNotu'] or '', 'Aciklama': a['Aciklama'] or '',
+            'mahsuplar': [{
+                'Id': mh['Id'], 'MahsupTarih': mh['MahsupTarih'] or '',
+                'Tutar': mh['Tutar'], 'Aciklama': mh['Aciklama'] or '',
+                'Durum': mh['Durum'],
+            } for mh in a['mahsuplar']]
+        } for a in anlasma_avanslari(anlasma_id)],
+        'plan': [{
+            'Id': p['Id'], 'PlanTarih': p['PlanTarih'] or '',
+            'OdemeTipi': p['OdemeTipi'], 'Tutar': p['Tutar'],
+            'CekAdeti': p['CekAdeti'], 'Aciklama': p['Aciklama'] or '',
+            'ModelId': p['ModelId'], 'Durum': p['Durum'],
+            'cekler': [{
+                'Id': c['Id'], 'CekNo': c['CekNo'] or '', 'CekBanka': c['CekBanka'] or '',
+                'CekAlimTarih': c['CekAlimTarih'] or '', 'CekVadeTarih': c['CekVadeTarih'] or '',
+                'Tutar': c['Tutar'], 'Notu': c['Notu'] or '', 'Durum': c['Durum'],
+            } for c in p['cekler']]
+        } for p in anlasma_odeme_plani(anlasma_id)],
+    }
+    return render_template('finans/anlasma_yeni.html',
+                           musteriler=musteriler, duzenle=True,
+                           mevcut=mevcut, anlasma_id=anlasma_id)
+
+
+@finans_bp.route('/anlasma/<int:anlasma_id>/durum', methods=['POST'])
+def anlasma_durum(anlasma_id):
+    yeni = request.form.get('durum', 'AKTIF')
+    if yeni not in ('AKTIF', 'TAMAMLANDI', 'IPTAL'):
+        yeni = 'AKTIF'
+    qr.anlasma_durum_guncelle(anlasma_id, yeni, kullanici=_u())
+    return redirect(url_for('finans.anlasma_detay', anlasma_id=anlasma_id))
+
+
+@finans_bp.route('/anlasma/plan/<int:plan_id>/gerceklesti', methods=['POST'])
+def plan_gerceklesti(plan_id):
+    from datetime import datetime
+    tarih = request.form.get('tarih') or datetime.now().date().strftime('%Y-%m-%d')
+    tutar = float(request.form.get('tutar') or 0)
+    qr.odeme_plan_gerceklesti(plan_id, tarih, tutar, kullanici=_u())
+    ref = request.form.get('ref')
+    return redirect(ref if ref else url_for('finans.dashboard'))
+
+
+@finans_bp.route('/anlasma/plan/<int:plan_id>/geri-al', methods=['POST'])
+def plan_geri_al(plan_id):
+    qr.odeme_plan_geri_al(plan_id, kullanici=_u())
+    ref = request.form.get('ref')
+    return redirect(ref if ref else url_for('finans.dashboard'))
+
+
+@finans_bp.route('/anlasma/mahsup/<int:mahsup_id>/gerceklesti', methods=['POST'])
+def mahsup_gerceklesti(mahsup_id):
+    from datetime import datetime
+    tarih = request.form.get('tarih') or datetime.now().date().strftime('%Y-%m-%d')
+    tutar = float(request.form.get('tutar') or 0)
+    qr.mahsup_gerceklesti(mahsup_id, tarih, tutar, kullanici=_u())
+    ref = request.form.get('ref')
+    return redirect(ref if ref else url_for('finans.dashboard'))
+
+
+@finans_bp.route('/anlasma/mahsup/<int:mahsup_id>/geri-al', methods=['POST'])
+def mahsup_geri_al_route(mahsup_id):
+    qr.mahsup_geri_al(mahsup_id, kullanici=_u())
+    ref = request.form.get('ref')
+    return redirect(ref if ref else url_for('finans.dashboard'))
+
+
+# ============================================================
+# PARÇA 7a: MALİYET SİMÜLATÖRÜ
+# ============================================================
+from modules.finans import simulator_queries as sim_qr
+from flask import flash
+
+
+def _rol():
+    k = session.get('kullanici')
+    return (k or {}).get('RolAd') or ''
+
+
+def _karar_yetkili():
+    """Karar verme: sadece Yönetim."""
+    return _rol() == 'Yönetim' or (session.get('kullanici') or {}).get('KullaniciAdi') == 'admin'
+
+
+@finans_bp.route('/simulator')
+def simulator_liste():
+    if not session.get('kullanici'):
+        return redirect(url_for('auth.login', next=request.path))
+    durum = request.args.get('durum') or None
+    return render_template('finans/simulator_liste.html',
+                           simulasyonlar=sim_qr.simulasyon_liste(durum=durum),
+                           secili_durum=durum,
+                           durumlar=sim_qr.DURUMLAR)
+
+
+@finans_bp.route('/simulator/yeni', methods=['GET', 'POST'])
+def simulator_yeni():
+    if not session.get('kullanici'):
+        return redirect(url_for('auth.login', next=request.path))
+    if request.method == 'POST':
+        try:
+            sid, sno = sim_qr.simulasyon_olustur(dict(request.form), kullanici=_u())
+            flash(f'{sno} oluşturuldu.', 'ok')
+            return redirect(url_for('finans.simulator_detay', sim_id=sid))
+        except ValueError as e:
+            flash(str(e), 'hata')
+    # Teklif referansı varsa form hazırla
+    kaynak_teklif = None
+    ktid = request.args.get('kaynak_teklif_id', type=int)
+    if ktid:
+        from db import qone as _qone
+        kaynak_teklif = _qone("SELECT * FROM grafik_fiyat_teklif WHERE Id=?", (ktid,))
+    return render_template('finans/simulator_yeni.html', kaynak_teklif=kaynak_teklif)
+
+
+@finans_bp.route('/simulator/<int:sim_id>')
+def simulator_detay(sim_id):
+    if not session.get('kullanici'):
+        return redirect(url_for('auth.login', next=request.path))
+    s = sim_qr.simulasyon_tek(sim_id)
+    if not s:
+        abort(404)
+    ay = request.args.get('ay', default=6, type=int)
+    if ay not in (3, 6, 12):
+        ay = 6
+
+    secenekler = sim_qr.secenek_liste(sim_id)
+    # Her seçenek için kıyas hesapla
+    kiyaslar = {}
+    for sc in secenekler:
+        kiyaslar[sc['Id']] = sim_qr.gecmis_kiyas_hesapla(dict(sc), dict(s), ay=ay)
+
+    # Öneri skoru
+    satis_var = (s['HedefCiftSatis'] or 0) > 0
+    skorlar = sim_qr.oneri_skorla(secenekler, satis_var)
+    en_iyiler = sim_qr.en_iyiler(secenekler)
+    onerilen = sim_qr.en_onerilen(secenekler, skorlar)
+
+    # Tedarikçi ve teklif dropdown için
+    from db import q as _q
+    tedarikciler = _q("SELECT Id, Ad FROM grafik_tedarikci WHERE Aktif=1 ORDER BY Ad")
+    teklifler = _q("""SELECT Id, TeklifNo, UrunAd, BirimFiyat, ParaBirimi, KurSnapshot
+                      FROM grafik_fiyat_teklif WHERE Durum IN ('ALINDI','DEGERLENDIRILIYOR')
+                      ORDER BY TeklifTarihi DESC LIMIT 50""")
+
+    return render_template('finans/simulator_detay.html',
+                           sim=s,
+                           secenekler=secenekler,
+                           kiyaslar=kiyaslar,
+                           skorlar=skorlar,
+                           en_iyiler=en_iyiler,
+                           onerilen=onerilen,
+                           ay=ay,
+                           satis_var=satis_var,
+                           tedarikciler=tedarikciler,
+                           teklifler=teklifler,
+                           karar_yetkili=_karar_yetkili())
+
+
+@finans_bp.route('/simulator/<int:sim_id>/guncelle', methods=['POST'])
+def simulator_guncelle(sim_id):
+    try:
+        sim_qr.simulasyon_guncelle(sim_id, dict(request.form), kullanici=_u())
+        flash('Simülasyon güncellendi.', 'ok')
+    except ValueError as e:
+        flash(str(e), 'hata')
+    return redirect(url_for('finans.simulator_detay', sim_id=sim_id))
+
+
+@finans_bp.route('/simulator/<int:sim_id>/sil', methods=['POST'])
+def simulator_sil(sim_id):
+    try:
+        sim_qr.simulasyon_sil(sim_id, kullanici=_u())
+        flash('Simülasyon silindi.', 'ok')
+        return redirect(url_for('finans.simulator_liste'))
+    except ValueError as e:
+        flash(str(e), 'hata')
+        return redirect(url_for('finans.simulator_detay', sim_id=sim_id))
+
+
+@finans_bp.route('/simulator/<int:sim_id>/secenek/yeni', methods=['POST'])
+def simulator_secenek_yeni(sim_id):
+    try:
+        sim_qr.secenek_ekle(sim_id, dict(request.form), kullanici=_u())
+        flash('Seçenek eklendi.', 'ok')
+    except ValueError as e:
+        flash(str(e), 'hata')
+    return redirect(url_for('finans.simulator_detay', sim_id=sim_id))
+
+
+@finans_bp.route('/simulator/<int:sim_id>/secenek/<int:sec_id>/guncelle', methods=['POST'])
+def simulator_secenek_guncelle(sim_id, sec_id):
+    try:
+        sim_qr.secenek_guncelle(sec_id, dict(request.form), kullanici=_u())
+        flash('Seçenek güncellendi.', 'ok')
+    except ValueError as e:
+        flash(str(e), 'hata')
+    return redirect(url_for('finans.simulator_detay', sim_id=sim_id))
+
+
+@finans_bp.route('/simulator/<int:sim_id>/secenek/<int:sec_id>/sil', methods=['POST'])
+def simulator_secenek_sil(sim_id, sec_id):
+    try:
+        sim_qr.secenek_sil(sec_id, kullanici=_u())
+        flash('Seçenek silindi.', 'ok')
+    except ValueError as e:
+        flash(str(e), 'hata')
+    return redirect(url_for('finans.simulator_detay', sim_id=sim_id))
+
+
+@finans_bp.route('/simulator/<int:sim_id>/karar', methods=['POST'])
+def simulator_karar(sim_id):
+    if not _karar_yetkili():
+        abort(403)
+    try:
+        sec_id = int(request.form.get('SecenekId') or 0)
+        sim_qr.simulasyon_karar(sim_id, sec_id, kullanici=_u())
+        flash('✓ Karar verildi.', 'ok')
+    except (ValueError, TypeError) as e:
+        flash(str(e) or 'Geçersiz seçenek', 'hata')
+    return redirect(url_for('finans.simulator_detay', sim_id=sim_id))
+
+
+@finans_bp.route('/simulator/<int:sim_id>/arsivle', methods=['POST'])
+def simulator_arsivle(sim_id):
+    if not _karar_yetkili():
+        abort(403)
+    sim_qr.simulasyon_arsivle(sim_id, kullanici=_u())
+    flash('Arşivlendi.', 'ok')
+    return redirect(url_for('finans.simulator_liste'))
+
+
+@finans_bp.route('/simulator/api/hesapla', methods=['POST'])
+def simulator_api_hesapla():
+    """Canlı hesap (modal için) — sadece toplam maliyet, kıyas değil."""
+    if not session.get('kullanici'):
+        return jsonify({'ok': False, 'hata': 'Giriş gerekli'}), 401
+    try:
+        veri = request.get_json() or {}
+        hedef_miktar = int(veri.get('HedefMiktar') or 0)
+        hedef_satis = veri.get('HedefCiftSatis')
+        hedef_satis = float(hedef_satis) if hedef_satis else None
+        hesap = sim_qr._toplam_hesapla(veri, hedef_miktar, hedef_satis)
+        return jsonify({'ok': True, 'hesap': hesap})
+    except Exception as e:
+        return jsonify({'ok': False, 'hata': str(e)}), 400
+
+
+# ============================================================
+# PARÇA 8a: ÇİN OFİS EXCEL IMPORT
+# ============================================================
+from modules.finans import cin_ofis_queries as cof_qr
+from modules.finans import cin_ofis_excel as cof_xl
+from werkzeug.utils import secure_filename
+
+
+def _cof_yetkili():
+    """Import yetkisi: Yönetim / Grafik / Çin Ofis."""
+    rol = _rol()
+    return rol in ('Yönetim', 'Grafik', 'Çin Ofis') or \
+           (session.get('kullanici') or {}).get('KullaniciAdi') == 'admin'
+
+
+def _cof_kur_override_yetkili():
+    """Excel kur override: sadece Yönetim."""
+    return _rol() == 'Yönetim' or \
+           (session.get('kullanici') or {}).get('KullaniciAdi') == 'admin'
+
+
+@finans_bp.route('/cin-ofis')
+def cin_ofis_liste():
+    if not session.get('kullanici'):
+        return redirect(url_for('auth.login', next=request.path))
+    if not _cof_yetkili() and _rol() != 'Muhasebe':
+        abort(403)
+    return render_template('finans/cin_ofis_liste.html',
+                           loglar=cof_qr.import_log_liste(30),
+                           yetkili=_cof_yetkili())
+
+
+@finans_bp.route('/cin-ofis/template/bos')
+def cin_ofis_template_bos():
+    if not _cof_yetkili():
+        abort(403)
+    path = os.path.join('static', 'templates', 'cin_ofis_bos_v1.0.xlsx')
+    if not os.path.exists(path):
+        os.makedirs('static/templates', exist_ok=True)
+        cof_xl.template_olustur(path, doldurulmus=False)
+    from flask import send_file
+    return send_file(path, as_attachment=True, download_name='cin_ofis_bos_v1.0.xlsx')
+
+
+@finans_bp.route('/cin-ofis/template/ornek')
+def cin_ofis_template_ornek():
+    if not _cof_yetkili():
+        abort(403)
+    path = os.path.join('static', 'templates', 'cin_ofis_ornek_v1.0.xlsx')
+    if not os.path.exists(path):
+        os.makedirs('static/templates', exist_ok=True)
+        cof_xl.template_olustur(path, doldurulmus=True)
+    from flask import send_file
+    return send_file(path, as_attachment=True, download_name='cin_ofis_eva_ornek_v1.0.xlsx')
+
+
+@finans_bp.route('/cin-ofis/upload', methods=['POST'])
+def cin_ofis_upload():
+    if not _cof_yetkili():
+        abort(403)
+    f = request.files.get('excel')
+    if not f or not f.filename.endswith('.xlsx'):
+        flash('Geçerli bir .xlsx dosyası yükleyin.', 'hata')
+        return redirect(url_for('finans.cin_ofis_liste'))
+
+    try:
+        # Temp kaydet
+        temp_dir = os.path.join('uploads', 'cin_ofis', '_temp')
+        os.makedirs(temp_dir, exist_ok=True)
+        temp_path = os.path.join(temp_dir, secure_filename(f.filename))
+        f.save(temp_path)
+
+        # Parse
+        data = cof_xl.parse_excel(temp_path)
+        hatalar, uyarilar = cof_xl.validate(data)
+
+        # Kritik parse hataları varsa önizleme bile oluşturma
+        if hatalar and any('okunamadı' in h or 'bulunamadı' in h or 'versiyonu uyumsuz' in h for h in hatalar):
+            audit.log_olay(_u(), 'CIN_OFIS_PARSE_HATASI', None, None,
+                           aciklama=f'Dosya: {f.filename} | Hatalar: {"; ".join(hatalar[:3])}',
+                           modul='finans', alt_modul='cin_ofis')
+            flash('Dosya okunamadı: ' + '; '.join(hatalar), 'hata')
+            return redirect(url_for('finans.cin_ofis_liste'))
+
+        # Kur çözümle
+        try:
+            kur_info = cof_xl.kur_coz(data)
+        except ValueError as e:
+            audit.log_olay(_u(), 'CIN_OFIS_KUR_HATASI', None, None,
+                           aciklama=str(e),
+                           modul='finans', alt_modul='cin_ofis')
+            flash(str(e), 'hata')
+            return redirect(url_for('finans.cin_ofis_liste'))
+
+        # Büyük fark audit
+        if kur_info.get('buyuk_fark'):
+            audit.log_olay(_u(), 'CIN_OFIS_KUR_FARKI_YUKSEK', None, None,
+                           aciklama=(f'{kur_info["pb"]} sistem={kur_info["sistem_kur"]:.4f} '
+                                    f'excel={kur_info["excel_rate"]:.4f} fark=%{kur_info["fark_yuzde"]}'),
+                           modul='finans', alt_modul='cin_ofis')
+
+        # Önizleme log kaydı
+        log_id, onceki = cof_qr.log_onizleme_kaydet(data, f.filename, kur_info, _u())
+        return redirect(url_for('finans.cin_ofis_onizleme', log_id=log_id))
+
+    except Exception as e:
+        import logging, traceback
+        logging.error(f'Çin Ofis upload hatası: {e}\n{traceback.format_exc()}')
+        flash(f'Sistem hatası: Excel işlenemedi. Detay: {str(e)[:150]}', 'hata')
+        return redirect(url_for('finans.cin_ofis_liste'))
+
+
+@finans_bp.route('/cin-ofis/onizleme/<int:log_id>')
+def cin_ofis_onizleme(log_id):
+    if not _cof_yetkili():
+        abort(403)
+    log = cof_qr.import_log_tek(log_id)
+    if not log:
+        abort(404)
+    import json as _json
+    parse_data = _json.loads(log['ParseOzet'])
+    hatalar, uyarilar = cof_xl.validate(parse_data)
+
+    # Kur info
+    kur_info = {
+        'pb': log['KurPB'],
+        'sistem_kur': log['SistemKurDeger'],
+        'excel_rate': log['ExcelKurDeger'],
+        'fark_yuzde': log['KurFarkiYuzde'],
+        'buyuk_fark': (log['KurFarkiYuzde'] or 0) > 10,
+        'override_mumkun': bool(log['ExcelKurDeger']),
+        'kaynak_default': log['KurKaynagi'],
+        'kur_tarih': log['KurTarihi'],
+    }
+
+    # Önceki import (revizyon)
+    onceki = None
+    if log['OncekiImportId']:
+        onceki = qone(
+            """SELECT l.*, s.SiparisNo, s.Durum as SiparisDurum
+               FROM cin_ofis_import_log l
+               LEFT JOIN grafik_cin_siparis s ON s.Id = l.SiparisId
+               WHERE l.Id = ?""", (log['OncekiImportId'],))
+
+    # Required dosyalar — yüklendi mi
+    dosyalar = cof_qr.dosya_referans_liste(log_id)
+    upload_dir = os.path.join('uploads', 'cin_ofis', log['OrderCode'])
+    dosya_durumu = []
+    for d in dosyalar:
+        yuklu = os.path.exists(os.path.join(upload_dir, d['DosyaAdi']))
+        dosya_durumu.append({**dict(d), 'Yuklu': yuklu})
+
+    # Tedarikçi eşleşmesi — önizleme bilgisi
+    tedarikci_info = {'durum': 'YOK', 'ad': None, 'kod': None, 'mevcut_kod': None}
+    ted_ad = (parse_data.get('INFO', {}).get('Supplier Name') or '').strip()
+    if ted_ad:
+        tedarikci_info['ad'] = ted_ad
+        # Exact
+        exact = qone("SELECT Id, Kod FROM grafik_tedarikci WHERE LOWER(Ad)=LOWER(?) AND Aktif=1",
+                     (ted_ad,))
+        if exact:
+            tedarikci_info['durum'] = 'EXACT'
+            tedarikci_info['mevcut_kod'] = exact['Kod']
+        else:
+            search = ted_ad[:10].strip()
+            fuzzy = qone("SELECT Id, Kod, Ad FROM grafik_tedarikci WHERE Ad LIKE ? AND Aktif=1 LIMIT 1",
+                         (f'%{search}%',))
+            if fuzzy:
+                tedarikci_info['durum'] = 'FUZZY'
+                tedarikci_info['mevcut_kod'] = fuzzy['Kod']
+                tedarikci_info['ad'] = f'{ted_ad} → {fuzzy["Ad"]}'
+            else:
+                tedarikci_info['durum'] = 'YENI'
+                # Oluşacak kod tahmini
+                import re as _re
+                kelimeler = _re.findall(r'[A-Za-z0-9]+', ted_ad.upper())
+                base = kelimeler[0][:4] if kelimeler else 'SUP'
+                tedarikci_info['kod'] = f'CN-{base}'
+
+    return render_template('finans/cin_ofis_onizleme.html',
+                           log=log, data=parse_data,
+                           hatalar=hatalar, uyarilar=uyarilar,
+                           kur_info=kur_info, onceki=onceki,
+                           odeme_taslak=cof_qr.odeme_taslak_liste(log_id),
+                           dosyalar=dosya_durumu,
+                           tedarikci_info=tedarikci_info,
+                           kur_override_yetkili=_cof_kur_override_yetkili())
+
+
+@finans_bp.route('/cin-ofis/onayla/<int:log_id>', methods=['POST'])
+def cin_ofis_onayla(log_id):
+    if not _cof_yetkili():
+        abort(403)
+
+    log = cof_qr.import_log_tek(log_id)
+    if not log:
+        abort(404)
+
+    # Duplicate varsa aksiyon
+    duplicate_aksiyon = request.form.get('duplicate_aksiyon')  # 'revize' veya 'iptal'
+    if log['OncekiImportId'] and duplicate_aksiyon == 'iptal':
+        cof_qr.import_iptal(log_id, _u(), sebep='Duplicate — kullanıcı iptal etti')
+        flash('İçe aktarma iptal edildi.', 'ok')
+        return redirect(url_for('finans.cin_ofis_liste'))
+
+    revizyon_flag = (log['OncekiImportId'] and duplicate_aksiyon == 'revize')
+
+    # Kur kararı
+    kur_override = request.form.get('kur_override') == '1'
+    if kur_override:
+        if not _cof_kur_override_yetkili():
+            abort(403)
+        gerekce = (request.form.get('kur_gerekce') or '').strip()
+        if not gerekce:
+            flash('Excel kuru kullanmak için gerekçe zorunlu.', 'hata')
+            return redirect(url_for('finans.cin_ofis_onizleme', log_id=log_id))
+        kur_karari = {
+            'kaynak': 'EXCEL_OVERRIDE',
+            'kur': log['ExcelKurDeger'],
+            'gerekce': gerekce,
+        }
+    else:
+        kur_karari = {
+            'kaynak': 'SISTEM_OTOMATIK',
+            'kur': log['SistemKurDeger'] or log['KurDeger'],
+            'gerekce': None,
+        }
+
+    try:
+        siparis_id, sno = cof_qr.siparis_olustur(log_id, _u(), kur_karari, revizyon=revizyon_flag)
+        flash(f'✓ Sipariş oluşturuldu: {sno} (Durum: CIN_IMPORT_KONTROL)', 'ok')
+        # Zengin sonuç için ek bilgi topla
+        siparis = qone("""SELECT s.*, t.Ad AS TedarikciAd
+                          FROM grafik_cin_siparis s
+                          LEFT JOIN grafik_tedarikci t ON t.Id = s.TedarikciId
+                          WHERE s.Id = ?""", (siparis_id,))
+        from db import qscalar
+        kalem_sayi = qscalar("SELECT COUNT(*) FROM grafik_cin_siparis_kalem WHERE SiparisId=?", (siparis_id,)) or 0
+        toplam = qscalar("SELECT COALESCE(SUM(Tutar),0) FROM grafik_cin_siparis_kalem WHERE SiparisId=?", (siparis_id,)) or 0
+        ot_sayi = qscalar("SELECT COUNT(*) FROM cin_ofis_odeme_taslak WHERE ImportLogId=?", (log_id,)) or 0
+        ds = qscalar("SELECT COUNT(*) FROM cin_ofis_dosya_referans WHERE ImportLogId=?", (log_id,)) or 0
+        req = qscalar("SELECT COUNT(*) FROM cin_ofis_dosya_referans WHERE ImportLogId=? AND Gerekli=1", (log_id,)) or 0
+        return render_template('finans/cin_ofis_sonuc.html',
+                               log=cof_qr.import_log_tek(log_id),
+                               siparis_id=siparis_id, siparis_no=sno,
+                               tedarikci_ad=siparis['TedarikciAd'] if siparis else None,
+                               kalem_sayi=kalem_sayi,
+                               toplam_tutar=toplam,
+                               odeme_taslak_sayi=ot_sayi,
+                               dosya_sayi=ds,
+                               required_dosya_sayi=req)
+    except ValueError as e:
+        flash(str(e), 'hata')
+        return redirect(url_for('finans.cin_ofis_onizleme', log_id=log_id))
+    except Exception as e:
+        import logging, traceback
+        logging.error(f'Çin Ofis onayla hatası log_id={log_id}: {e}\n{traceback.format_exc()}')
+        flash(f'Sistem hatası: sipariş oluşturulamadı. Detay: {str(e)[:150]}', 'hata')
+        return redirect(url_for('finans.cin_ofis_onizleme', log_id=log_id))
+
+
+@finans_bp.route('/cin-ofis/iptal/<int:log_id>', methods=['POST'])
+def cin_ofis_iptal(log_id):
+    if not _cof_yetkili():
+        abort(403)
+    try:
+        cof_qr.import_iptal(log_id, _u(),
+                            sebep=(request.form.get('sebep') or 'Kullanıcı iptali'))
+        flash('İptal edildi.', 'ok')
+    except ValueError as e:
+        flash(str(e), 'hata')
+    return redirect(url_for('finans.cin_ofis_liste'))
+
+
+# [FINANS_NATIVE_F1 BAS] Finans Konsolu - native CPS modul (FAZ 1 placeholder)
+@finans_bp.route('/konsol')
+def finans_konsol():
+    """
+    Finans Konsolu - FAZ 1 placeholder.
+    Yetki: base.html L429 pattern'i ile birebir uyumlu:
+      yetki('finans') OR RolAd='Yonetim' OR KullaniciAdi='admin'
+    """
+    from flask import session, abort, render_template, current_app
+
+    g_user = session.get('kullanici') or {}
+    kullanici_adi = (g_user.get('KullaniciAdi') or '').lower()
+    rol_ad = g_user.get('RolAd') or g_user.get('Rol') or ''
+
+    # Sidebar koşulu ile aynı: admin OR Yonetim
+    izinli = (
+        kullanici_adi == 'admin'
+        or rol_ad == 'Yönetim'
+        or rol_ad == 'Yonetim'
+    )
+
+    # Genel CPS yetki helper'i (jinja yetki() ile ayni)
+    if not izinli:
+        try:
+            yetki_fn = current_app.jinja_env.globals.get('yetki')
+            if yetki_fn and yetki_fn('finans'):
+                izinli = True
+        except Exception:
+            pass
+
+    if not izinli:
+        abort(403)
+
+    return render_template('finans/konsol.html')
+# [FINANS_NATIVE_F1 SON]
+
+
+# [FINANS_NATIVE_F3B BAS] Cari Odemeler - READ + Liste + Detay modal
+@finans_bp.route('/cari-odemeler')
+def finans_cari_odemeler():
+    """
+    Cari Odemeler liste sayfasi - FAZ 3B
+    Yetki: admin OR Yonetim OR Muhasebe
+    Sahsi entity: sadece admin gorur (service icinde filtrelenir)
+    """
+    from flask import session, abort, render_template, request
+
+    g_user = session.get('kullanici') or {}
+    kullanici_adi = (g_user.get('KullaniciAdi') or '').lower()
+    rol_ad = g_user.get('RolAd') or g_user.get('Rol') or ''
+
+    izinli = (
+        kullanici_adi == 'admin'
+        or rol_ad == 'Yonetim'
+        or rol_ad == 'Yönetim'
+        or rol_ad == 'Muhasebe'
+    )
+    if not izinli:
+        abort(403)
+
+    # Service import
+    try:
+        from modules.finans.services.cari_odeme_service import cari_odemeler_listele
+    except ImportError:
+        try:
+            from app.modules.finans.services.cari_odeme_service import cari_odemeler_listele
+        except ImportError:
+            return render_template('finans/cari_odemeler.html',
+                                   kayitlar=[], toplam_borc=0, toplam_alacak=0,
+                                   can_view_sahsi=False,
+                                   hata='Service yuklenemedi')
+
+    # Query parametreleri
+    entity = request.args.get('entity') or None
+    durum = request.args.get('durum') or None
+    baslangic = request.args.get('baslangic') or None
+    bitis = request.args.get('bitis') or None
+    cari_arama = request.args.get('cari') or None
+
+    data = cari_odemeler_listele(
+        g_user=g_user,
+        entity=entity, durum=durum,
+        baslangic=baslangic, bitis=bitis,
+        cari_arama=cari_arama,
+    )
+
+    return render_template('finans/cari_odemeler.html', **data)
+
+
+@finans_bp.route('/cari-odemeler/<int:hareket_id>/detay')
+def finans_cari_odeme_detay(hareket_id):
+    """Cari hareket detay JSON (modal icin)"""
+    from flask import session, abort, jsonify
+
+    g_user = session.get('kullanici') or {}
+    kullanici_adi = (g_user.get('KullaniciAdi') or '').lower()
+    rol_ad = g_user.get('RolAd') or g_user.get('Rol') or ''
+    if not (kullanici_adi == 'admin' or rol_ad in ('Yonetim','Yönetim','Muhasebe')):
+        abort(403)
+
+    try:
+        from modules.finans.services.cari_odeme_service import cari_hareket_detay
+    except ImportError:
+        from app.modules.finans.services.cari_odeme_service import cari_hareket_detay
+
+    detay = cari_hareket_detay(hareket_id, g_user=g_user)
+    if not detay:
+        abort(404)
+    return jsonify(detay)
+# [FINANS_NATIVE_F3B SON]

@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% set tab = 'grafik' %}
+{% set active = 'grafik' %}
+{% block title %}Ürünler — Grafik{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>📦 Ürünler</h1>
+    <p class="muted">Katalog — kod, ad, kategori, varyant sayısı</p>
+  </div>
+  <div class="ph-actions">
+    <a href="/grafik/kategori" class="btn btn-ghost">🗂 Kategoriler</a>
+    <button type="button" class="btn btn-primary" onclick="document.getElementById('urun-yeni').showModal()">+ Yeni Ürün</button>
+  </div>
+</div>
+
+{% include '_flash.html' ignore missing %}
+
+<form method="get" class="filter-bar">
+  <input type="search" name="q" value="{{ arama or '' }}" placeholder="Kod veya ad ara..." autofocus>
+  <select name="k">
+    <option value="">Tüm kategoriler</option>
+    {% for k in kategoriler %}
+    <option value="{{ k.Id }}" {% if kat_id == k.Id|string %}selected{% endif %}>{{ k.Ad }} ({{ k.UrunSayi }})</option>
+    {% endfor %}
+  </select>
+  <button class="btn btn-ghost">Filtrele</button>
+  {% if arama or kat_id %}<a href="/grafik/urun" class="btn btn-link">Temizle</a>{% endif %}
+</form>
+
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>Kod</th>
+      <th>Ad</th>
+      <th>Kategori</th>
+      <th style="text-align:right;">Varyant</th>
+      <th>Eklenme</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for u in urunler %}
+    <tr>
+      <td><strong>{{ u.Kod }}</strong></td>
+      <td>{{ u.Ad }}</td>
+      <td>{% if u.KategoriAd %}<span class="pill">{{ u.KategoriAd }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td style="text-align:right;"><span class="count-badge">{{ u.VaryantSayi }}</span></td>
+      <td class="muted">{{ (u.OlusturmaTarih or '')[:10] }}</td>
+      <td style="text-align:right;"><a href="/grafik/urun/{{ u.Id }}" class="btn btn-sm btn-ghost">Detay</a></td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="empty">Arama sonucu boş. <a href="/grafik/urun">Filtreyi temizle</a>.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<dialog id="urun-yeni" class="modal">
+  <form method="post" action="/grafik/urun/yeni" class="modal-form">
+    <h3>Yeni Ürün</h3>
+    <label>Kod * <input type="text" name="Kod" required placeholder="TRL-CLSK-01" style="text-transform:uppercase;"></label>
+    <label>Ad  * <input type="text" name="Ad" required placeholder="Klasik Düz EVA Terlik"></label>
+    <label>Kategori
+      <select name="KategoriId">
+        <option value="">(yok)</option>
+        {% for k in kategoriler %}
+        <option value="{{ k.Id }}">{{ k.Ad }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Açıklama <textarea name="Aciklama" rows="2"></textarea></label>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" onclick="this.closest('dialog').close()">İptal</button>
+      <button class="btn btn-primary">Kaydet</button>
+    </div>
+  </form>
+</dialog>
+{% endblock %}

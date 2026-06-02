@@ -1,0 +1,592 @@
+/* ===========================================================
+ * uretim_giris.css - Faz 4.3.D1
+ * Mobile-first personel uretim ekrani
+ * Mevcut CPS tasarimina uyumlu (turuncu+sari, h-tab paterni)
+ * Buyuk butonlar (saha kullanimi)
+ * =========================================================== */
+
+/* CPS ana menu mobile'da gizle (sadece /uretim/ icin)
+   Body sadece bu sayfada bu sinifi alir. Genel CPS bozulmaz. */
+@media (max-width: 760px) {
+    body > nav.h-mainnav,
+    body > header.h-mainnav,
+    body > div.h-mainnav,
+    body > .navbar,
+    body > .topbar {
+        /* Mobil ortalamada CPS ust menusu gizlenebilir.
+           Mevcut CPS yapisina dokunmuyoruz - opsiyonel CSS hint. */
+    }
+}
+
+.ug-app {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 12px;
+    box-sizing: border-box;
+    font-family: var(--sans, -apple-system, "Segoe UI", Roboto, sans-serif);
+    color: var(--text, #1f2937);
+}
+
+/* ============== USER BAR ============== */
+.ug-userbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(90deg, var(--sol, #f97316), var(--sol-dark, #ea580c));
+    color: #fff;
+    padding: 10px 14px;
+    border-radius: 12px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.ug-user {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.ug-user-emoji {
+    font-size: 20px;
+}
+
+.ug-user-ad {
+    letter-spacing: 0.3px;
+}
+
+.ug-cikis {
+    color: #fff;
+    text-decoration: none;
+    background: rgba(0, 0, 0, 0.15);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    transition: background 0.15s;
+}
+
+.ug-cikis:hover, .ug-cikis:active {
+    background: rgba(0, 0, 0, 0.3);
+}
+
+/* ============== TABS ============== */
+.ug-tabs {
+    display: flex;
+    gap: 6px;
+    background: var(--bg3, #f3f4f6);
+    border-radius: 12px;
+    padding: 6px;
+    margin-bottom: 14px;
+}
+
+.ug-tab {
+    flex: 1;
+    background: transparent;
+    border: none;
+    padding: 12px 10px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text3, #6b7280);
+    cursor: pointer;
+    border-radius: 8px;
+    font-family: inherit;
+    letter-spacing: 0.4px;
+    transition: all 0.15s;
+}
+
+.ug-tab.active {
+    background: #fff;
+    color: var(--sol, #f97316);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.ug-tab:active {
+    transform: scale(0.98);
+}
+
+.ug-tab-emoji {
+    margin-right: 4px;
+}
+
+/* ============== PANE ============== */
+.ug-pane {
+    display: none;
+    animation: paneFade 0.18s ease-out;
+}
+
+.ug-pane.active {
+    display: block;
+}
+
+@keyframes paneFade {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.ug-pane-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    padding: 0 4px;
+}
+
+.ug-pane-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text, #1f2937);
+}
+
+/* ============== KARTLAR ============== */
+.ug-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    border: 1px solid var(--border, #e5e7eb);
+}
+
+/* ============== EMIR SORGU ============== */
+.ug-input-row {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+}
+
+.ug-input {
+    flex: 1;
+    width: 100%;
+    padding: 12px 14px;
+    border: 2px solid var(--border, #e5e7eb);
+    border-radius: 10px;
+    font-size: 16px;
+    font-family: inherit;
+    background: #fff;
+    color: var(--text, #1f2937);
+    box-sizing: border-box;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.ug-input-buyuk {
+    font-size: 18px;
+    font-weight: 600;
+    text-align: center;
+    letter-spacing: 0.5px;
+}
+
+.ug-input:focus,
+.ug-textarea:focus {
+    outline: none;
+    border-color: var(--sol, #f97316);
+    box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.15);
+}
+
+.ug-textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 2px solid var(--border, #e5e7eb);
+    border-radius: 10px;
+    font-size: 14px;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 50px;
+    box-sizing: border-box;
+}
+
+.ug-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text3, #6b7280);
+    margin-bottom: 6px;
+}
+
+.ug-zorunlu {
+    color: var(--red, #dc2626);
+    font-weight: 700;
+}
+
+.ug-field {
+    margin-bottom: 12px;
+}
+
+/* ============== BUTONLAR ============== */
+.ug-btn {
+    border: none;
+    border-radius: 10px;
+    padding: 14px 18px;
+    font-size: 15px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    transition: transform 0.05s;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.ug-btn:active {
+    transform: scale(0.97);
+}
+
+.ug-btn-primary {
+    flex: 1;
+    background: linear-gradient(90deg, var(--sol, #f97316), var(--sol-dark, #ea580c));
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(249, 115, 22, 0.25);
+}
+
+.ug-btn-primary:hover {
+    box-shadow: 0 4px 12px rgba(249, 115, 22, 0.35);
+}
+
+.ug-btn-ghost {
+    background: var(--bg3, #f3f4f6);
+    color: var(--text3, #6b7280);
+    border: 1px solid var(--border, #e5e7eb);
+}
+
+.ug-btn-icon {
+    padding: 12px 16px;
+    background: var(--sol, #f97316);
+    color: #fff;
+    font-size: 18px;
+    min-width: 56px;
+}
+
+.ug-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.ug-btn-yenile {
+    background: #fff;
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 8px;
+    width: 38px;
+    height: 38px;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--sol, #f97316);
+    cursor: pointer;
+}
+
+.ug-btn-yenile:active {
+    background: var(--bg3, #f3f4f6);
+}
+
+.ug-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+/* ============== EMIR BILGISI KARTI ============== */
+.ug-emir-bilgi {
+    border-left: 4px solid var(--sol, #f97316);
+}
+
+.ug-emir-baslik {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 6px;
+}
+
+.ug-emir-no {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--text, #1f2937);
+    letter-spacing: 0.5px;
+}
+
+.ug-emir-rozet {
+    background: var(--bg3, #f3f4f6);
+    color: var(--text3, #6b7280);
+    padding: 3px 10px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.ug-emir-rozet.plan { background: rgba(16, 185, 129, 0.1); color: var(--green, #10b981); }
+.ug-emir-rozet.yok  { background: rgba(245, 158, 11, 0.1); color: #d97706; }
+
+.ug-emir-model {
+    font-size: 14px;
+    color: var(--text2, #374151);
+    margin-bottom: 10px;
+    line-height: 1.3;
+}
+
+.ug-emir-snapshot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 12px;
+    margin-bottom: 12px;
+}
+
+.ug-emir-snapshot span {
+    background: var(--bg3, #f3f4f6);
+    color: var(--text2, #374151);
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-weight: 600;
+}
+
+.ug-emir-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.ug-stat {
+    text-align: center;
+    background: var(--bg3, #f3f4f6);
+    border-radius: 10px;
+    padding: 10px 6px;
+}
+
+.ug-stat-lbl {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text3, #6b7280);
+    margin-bottom: 4px;
+}
+
+.ug-stat-val {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--text, #1f2937);
+    font-family: "JetBrains Mono", "Consolas", monospace;
+}
+
+.ug-stat-val-vurgu {
+    color: var(--sol, #f97316);
+}
+
+.ug-emir-progress {
+    background: var(--border, #e5e7eb);
+    height: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.ug-emir-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--green, #10b981), #34d399);
+    transition: width 0.3s ease;
+}
+
+.ug-emir-progress-fill.tam {
+    background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+/* ============== PROSES SEC ============== */
+.ug-proses-liste {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ug-proses-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    background: var(--bg3, #f3f4f6);
+    border: 2px solid transparent;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.ug-proses-item:hover {
+    border-color: var(--border, #e5e7eb);
+}
+
+.ug-proses-item.secili {
+    background: rgba(249, 115, 22, 0.08);
+    border-color: var(--sol, #f97316);
+}
+
+.ug-proses-item input[type="radio"] {
+    accent-color: var(--sol, #f97316);
+    width: 18px;
+    height: 18px;
+}
+
+.ug-proses-ad {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text, #1f2937);
+}
+
+.ug-proses-info {
+    font-size: 11px;
+    color: var(--text3, #6b7280);
+    font-weight: 500;
+}
+
+/* ============== GEÇMİŞ KARTLARI ============== */
+.ug-gecmis-liste {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ug-gecmis-kart {
+    background: #fff;
+    border-radius: 10px;
+    padding: 12px 14px;
+    border-left: 4px solid var(--text3, #6b7280);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.ug-gecmis-kart.onaylandi   { border-left-color: var(--green, #10b981); }
+.ug-gecmis-kart.reddedildi  { border-left-color: var(--red, #dc2626); }
+.ug-gecmis-kart.bekliyor    { border-left-color: #f59e0b; }
+
+.ug-gecmis-baslik {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.ug-gecmis-emir {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text, #1f2937);
+}
+
+.ug-gecmis-durum {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 6px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.ug-gecmis-durum.onaylandi  { background: rgba(16, 185, 129, 0.1); color: var(--green, #10b981); }
+.ug-gecmis-durum.reddedildi { background: rgba(220, 38, 38, 0.08); color: var(--red, #dc2626); }
+.ug-gecmis-durum.bekliyor   { background: rgba(245, 158, 11, 0.1); color: #d97706; }
+
+.ug-gecmis-detay {
+    font-size: 13px;
+    color: var(--text2, #374151);
+    margin-bottom: 4px;
+}
+
+.ug-gecmis-meta {
+    font-size: 11px;
+    color: var(--text3, #6b7280);
+}
+
+.ug-gecmis-not {
+    margin-top: 6px;
+    padding: 6px 8px;
+    background: rgba(220, 38, 38, 0.05);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--red, #991b1b);
+    font-style: italic;
+}
+
+/* ============== EMPTY / MESAJ ============== */
+.ug-empty {
+    text-align: center;
+    padding: 30px 16px;
+    color: var(--text3, #9ca3af);
+    font-size: 14px;
+    font-style: italic;
+}
+
+.ug-mesaj {
+    background: rgba(220, 38, 38, 0.08);
+    border-left: 3px solid var(--red, #dc2626);
+    color: var(--red, #991b1b);
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.ug-mesaj-success {
+    background: rgba(16, 185, 129, 0.08);
+    border-left-color: var(--green, #10b981);
+    color: #065f46;
+}
+
+/* ============== MOBIL OPT ============== */
+@media (max-width: 480px) {
+    .ug-app {
+        padding: 8px;
+    }
+    .ug-card {
+        padding: 12px 14px;
+        border-radius: 10px;
+    }
+    .ug-emir-no {
+        font-size: 20px;
+    }
+    .ug-stat-val {
+        font-size: 18px;
+    }
+    .ug-tab {
+        padding: 10px 6px;
+        font-size: 13px;
+    }
+    .ug-input-buyuk {
+        font-size: 17px;
+    }
+    .ug-tab-emoji {
+        display: none;
+    }
+}
+
+/* ============== TABLET / DESKTOP ============== */
+@media (min-width: 760px) {
+    .ug-app {
+        padding: 20px;
+    }
+    .ug-card {
+        padding: 18px 22px;
+    }
+}
+
+
+/* Faz 4.3.D2 - Kalan miktar uyari */
+.ug-kalan-uyari {
+    margin-top: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+}
+.ug-kalan-info {
+    background: rgba(249, 115, 22, 0.08);
+    color: var(--sol-dark, #ea580c);
+    border-left: 3px solid var(--sol, #f97316);
+}
+.ug-kalan-tamam {
+    background: rgba(220, 38, 38, 0.08);
+    color: var(--red, #dc2626);
+    border-left: 3px solid var(--red, #dc2626);
+}

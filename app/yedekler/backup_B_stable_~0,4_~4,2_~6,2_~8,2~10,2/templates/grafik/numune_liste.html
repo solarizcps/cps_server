@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% set tab = 'grafik' %}
+{% set active = 'grafik' %}
+{% block title %}Numuneler — Grafik{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>🧪 Numuneler</h1>
+    <p class="muted">Müşteri talepleri → Tedarikçiye numune → Onay/Red → Sipariş</p>
+  </div>
+  <div class="ph-actions">
+    <button type="button" class="btn btn-primary" onclick="document.getElementById('num-yeni').showModal()">+ Yeni Numune</button>
+  </div>
+</div>
+
+{% include '_flash.html' ignore missing %}
+
+<!-- KPI -->
+<div class="kpi-grid">
+  <div class="kpi-card" style="border-left:4px solid #6b7280;">
+    <div class="kpi-label">Talep</div>
+    <div class="kpi-value">{{ kpi.talep }}</div>
+  </div>
+  <div class="kpi-card" style="border-left:4px solid #0891b2;">
+    <div class="kpi-label">Tedarikçide</div>
+    <div class="kpi-value">{{ kpi.gonderildi }}</div>
+  </div>
+  <div class="kpi-card" style="border-left:4px solid #059669;">
+    <div class="kpi-label">Onaylandı</div>
+    <div class="kpi-value">{{ kpi.onay }}</div>
+  </div>
+  <div class="kpi-card" style="border-left:4px solid #dc2626;">
+    <div class="kpi-label">Red / Revize</div>
+    <div class="kpi-value">{{ kpi.red }}</div>
+  </div>
+  <div class="kpi-card" style="border-left:4px solid #F97316;">
+    <div class="kpi-label">Siparişe Döndü</div>
+    <div class="kpi-value">{{ kpi.tamamlandi }}</div>
+  </div>
+</div>
+
+<form method="get" class="filter-bar">
+  <input type="search" name="q" value="{{ arama or '' }}" placeholder="NUM-2026-0001 veya başlık ara...">
+  <select name="d">
+    <option value="">Tüm durumlar</option>
+    {% for kod, ad, renk in durumlar %}
+    <option value="{{ kod }}" {% if durum == kod %}selected{% endif %}>{{ ad }}</option>
+    {% endfor %}
+  </select>
+  <select name="t">
+    <option value="">Tüm tedarikçiler</option>
+    {% for t in tedarikciler %}
+    <option value="{{ t.Id }}" {% if ted_id == t.Id|string %}selected{% endif %}>{{ t.Ad }}</option>
+    {% endfor %}
+  </select>
+  <select name="m">
+    <option value="">Tüm müşteriler</option>
+    {% for m in musteriler %}
+    <option value="{{ m.CKod }}" {% if musteri == m.CKod %}selected{% endif %}>{{ m.CName }}</option>
+    {% endfor %}
+  </select>
+  <button class="btn btn-ghost">Filtrele</button>
+  {% if arama or durum or ted_id or musteri %}<a href="/grafik/numune" class="btn btn-link">Temizle</a>{% endif %}
+</form>
+
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>Numune No</th>
+      <th>Başlık</th>
+      <th>Müşteri</th>
+      <th>Tedarikçi</th>
+      <th>Ürün</th>
+      <th>Durum</th>
+      <th style="text-align:right;">İter.</th>
+      <th>Talep / Beklenen</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for n in numuneler %}
+    <tr>
+      <td><strong>{{ n.NumuneNo }}</strong></td>
+      <td>{{ n.Baslik }}</td>
+      <td>{% if n.MusteriAd %}<span class="pill">{{ n.MusteriAd }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td>
+        {% if n.TedarikciUlke == 'Çin' %}🇨🇳{% elif n.TedarikciUlke == 'Türkiye' %}🇹🇷{% endif %}
+        {{ n.TedarikciAd or '—' }}
+      </td>
+      <td>{% if n.UrunKod %}<code>{{ n.UrunKod }}</code>{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td>
+        {% for kod, ad, renk in durumlar %}
+          {% if n.Durum == kod %}
+          <span class="pill" style="background:{{ renk }};color:#fff;">{{ ad }}</span>
+          {% endif %}
+        {% endfor %}
+      </td>
+      <td style="text-align:right;"><span class="count-badge">{{ n.IterasyonSayi }}</span></td>
+      <td class="muted" style="font-size:.85rem;">
+        {{ (n.TalepTarihi or '')[:10] }}<br>
+        {% if n.BeklenenTarih %}→ {{ n.BeklenenTarih[:10] }}{% endif %}
+      </td>
+      <td style="text-align:right;"><a href="/grafik/numune/{{ n.Id }}" class="btn btn-sm btn-ghost">Detay</a></td>
+    </tr>
+    {% else %}
+    <tr><td colspan="9" class="empty">Numune bulunamadı.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<dialog id="num-yeni" class="modal">
+  <form method="post" action="/grafik/numune/yeni" class="modal-form" style="min-width:500px;">
+    <h3>Yeni Numune Talebi</h3>
+    <label>Başlık * <input type="text" name="Baslik" required placeholder="Kaplan için çiçek desen pach"></label>
+    <div class="form-row">
+      <label style="flex:1;">Müşteri
+        <select name="MusteriCKod">
+          <option value="">(seçilmedi)</option>
+          {% for m in musteriler %}<option value="{{ m.CKod }}">{{ m.CName }}</option>{% endfor %}
+        </select>
+      </label>
+      <label style="flex:1;">Tedarikçi
+        <select name="TedarikciId">
+          <option value="">(seçilmedi)</option>
+          {% for t in tedarikciler %}<option value="{{ t.Id }}">{{ t.Ad }}</option>{% endfor %}
+        </select>
+      </label>
+    </div>
+    <label>Ürün (opsiyonel)
+      <select name="UrunId">
+        <option value="">(seçilmedi)</option>
+        {% for u in urunler %}<option value="{{ u.Id }}">{{ u.Kod }} — {{ u.Ad }}</option>{% endfor %}
+      </select>
+    </label>
+    <div class="form-row">
+      <label style="flex:1;">Talep Tarihi <input type="date" name="TalepTarihi"></label>
+      <label style="flex:1;">Beklenen <input type="date" name="BeklenenTarih"></label>
+    </div>
+    <label>Notlar <textarea name="Notlar" rows="2"></textarea></label>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" onclick="this.closest('dialog').close()">İptal</button>
+      <button class="btn btn-primary">Talep Aç</button>
+    </div>
+  </form>
+</dialog>
+{% endblock %}

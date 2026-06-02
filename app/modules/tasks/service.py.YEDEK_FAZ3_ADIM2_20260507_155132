@@ -1,0 +1,540 @@
+# -*- coding: utf-8 -*-
+"""
+CPS DEV - Tasks Modulu - Service (Is Mantigi Cekirdegi)
+========================================================
+
+TUM task DB islemleri buradan akar.
+routes.py SQL DOKUNMAZ, sadece bu modulun fonksiyonlarini cagirir.
+
+KULLANIM:
+    from modules.tasks import service as tsk
+
+    task_id = tsk.create_task(
+        title="...",
+        created_by="adem",
+        department="uretim",
+        ...
+    )
+
+    tsk.change_task_status(task_id, "devam_ediyor", user, note="...")
+
+KURALLAR:
+    1. db.qone/q/qexec/qscalar kullanilir (raw sqlite3 YOK)
+    2. Status transition merkezi (ALLOWED_TRANSITIONS)
+    3. Her status degisiminde:
+       - tasks UPDATE
+       - task_logs INSERT
+       - notify helper cagrisi
+    4. Terminal state'lerden geri donus YOK (tamamlandi, iptal)
+    5. created_at / updated_at otomatik
+    6. Validation merkezi (_validate_*)
+
+EXCEPTIONS:
+    TaskError              -> generic
+    TaskNotFound           -> 404
+    InvalidTransition      -> 400
+    ValidationError        -> 400
+    (PermissionDenied permissions.py'dan gelir -> 403)
+"""
+
+from db import qone, q, qexec, qscalar
+from modules.tasks import permissions as perm
+from modules.tasks import notify
+
+
+# ============================================================
+# CUSTOM EXCEPTIONS
+# ============================================================
+class TaskError(Exception):
+    """Generic task hatasi."""
+    pass
+
+
+class TaskNotFound(TaskError):
+    """Task bulunamadi."""
+    pass
+
+
+class InvalidTransition(TaskError):
+    """Gecersiz status gecisi."""
+    pass
+
+
+class ValidationError(TaskError):
+    """Veri dogrulama hatasi."""
+    pass
+
+
+# ============================================================
+# STATUS AKIS TANIMLARI
+# ============================================================
+ALLOWED_TRANSITIONS = {
+    "bekliyor":       ["devam_ediyor", "iptal"],
+    "devam_ediyor":   ["onay_bekliyor", "tamamlandi", "iptal"],
+    "onay_bekliyor":  ["tamamlandi", "revize_istendi", "iptal"],
+    "revize_istendi": ["devam_ediyor", "iptal"],
+    # Terminal state'ler (cikis YOK)
+    "tamamlandi":     [],
+    "iptal":          [],
+    # gecikti / goruldu - Faz B'de
+    "goruldu":        ["devam_ediyor", "iptal"],
+    "gecikti":        ["devam_ediyor", "iptal"],
+}
+
+VALID_STATUSES = set(ALLOWED_TRANSITIONS.keys())
+
+VALID_PRIORITIES = {"dusuk", "orta", "yuksek", "kritik"}
+
+VALID_TASK_TYPES = {
+    "operasyon_talimati", "bilgi_istegi", "gecikme_sorgusu",
+    "malzeme_takibi", "numune_takibi", "kalite_blokaj",
+    "satin_alma_takibi", "plan_revizyonu",
+    "otomatik_uyari", "onay_hatirlatma",
+}
+
+
+# ============================================================
+# VALIDATION HELPERS
+# ============================================================
+def _validate_status(status):
+    if status not in VALID_STATUSES:
+        raise ValidationError(f"Gecersiz status: {status}")
+
+
+def _validate_transition(eski, yeni):
+    """Eski->yeni gecisi kuraallara uygun mu?"""
+    _validate_status(eski)
+    _validate_status(yeni)
+    if yeni not in ALLOWED_TRANSITIONS.get(eski, []):
+        raise InvalidTransition(
+            f"Gecersiz gecis: {eski} -> {yeni}. "
+            f"Izin verilenler: {ALLOWED_TRANSITIONS.get(eski, [])}"
+        )
+
+
+def _validate_priority(priority):
+    if priority not in VALID_PRIORITIES:
+        raise ValidationError(f"Gecersiz priority: {priority}")
+
+
+def _validate_task_type(task_type):
+    if task_type not in VALID_TASK_TYPES:
+        raise ValidationError(f"Gecersiz task_type: {task_type}")
+
+
+# ============================================================
+# KULLANICI BILGI HELPER (notify icin kullanici_id cikar)
+# ============================================================
+def _resolve_user_for_notify(kullanici_adi):
+    """
+    bildirim_log INTEGER kullanici_id bekliyor.
+    tasks_users tablosundan id ve rol cikar.
+
+    Returns:
+        (id, rol) tuple veya (None, None)
+    """
+    if not kullanici_adi:
+        return (None, None)
+    r = qone(
+        "SELECT id, rol FROM tasks_users WHERE kullanici_adi=? AND aktif=1",
+        (kullanici_adi,)
+    )
+    if not r:
+        return (None, None)
+    return (r["id"], r["rol"])
+
+
+# ============================================================
+# LOG INSERT (her aksiyon icin)
+# ============================================================
+def _log(task_id, user_kadi, action, old_status=None, new_status=None, note=None):
+    """task_logs'a kayit ekle."""
+    qexec("""
+        INSERT INTO task_logs (
+            task_id, user_id, action, old_status, new_status, note
+        ) VALUES (?, ?, ?, ?, ?, ?)
+    """, (task_id, user_kadi, action, old_status, new_status, note))
+
+
+# ============================================================
+# 1) TASK CREATE
+# ============================================================
+def create_task(
+    title,
+    created_by,
+    department,
+    description=None,
+    task_type="operasyon_talimati",
+    priority="orta",
+    assigned_to=None,
+    due_date=None,
+    related_order_no=None,
+    related_emir_no=None,
+    related_model=None,
+    related_customer=None,
+    baglam_tipi=None,
+    baglam_id=None,
+    baglam_ozet=None,
+    requires_approval=0,
+    approval_user_id=None,
+    requires_response=0,
+    parent_task_id=None,
+):
+    """
+    Yeni gorev olustur.
+
+    Returns:
+        int: yeni task id
+
+    Raises:
+        ValidationError: zorunlu alan eksik / format hatali
+    """
+    # Validation
+    if not title or not title.strip():
+        raise ValidationError("title zorunlu")
+    if not created_by:
+        raise ValidationError("created_by zorunlu")
+    if not department:
+        raise ValidationError("department zorunlu")
+
+    _validate_priority(priority)
+    _validate_task_type(task_type)
+
+    # Onay zorunluysa approval_user_id de olmali
+    if requires_approval and not approval_user_id:
+        raise ValidationError("requires_approval=1 ise approval_user_id zorunlu")
+
+    # INSERT - qexec lastrowid donmeli (yeni id)
+    task_id = qexec("""
+        INSERT INTO tasks (
+            title, description, task_type, priority, status,
+            created_by, assigned_to, department,
+            due_date,
+            related_order_no, related_emir_no, related_model, related_customer,
+            baglam_tipi, baglam_id, baglam_ozet,
+            requires_approval, approval_user_id,
+            requires_response,
+            parent_task_id
+        ) VALUES (
+            ?, ?, ?, ?, 'bekliyor',
+            ?, ?, ?,
+            ?,
+            ?, ?, ?, ?,
+            ?, ?, ?,
+            ?, ?,
+            ?,
+            ?
+        )
+    """, (
+        title.strip(), description, task_type, priority,
+        created_by, assigned_to, department,
+        due_date,
+        related_order_no, related_emir_no, related_model, related_customer,
+        baglam_tipi, baglam_id, baglam_ozet,
+        int(bool(requires_approval)), approval_user_id,
+        int(bool(requires_response)),
+        parent_task_id,
+    ))
+
+    # qexec lastrowid donmediyse, fallback: en son eklenen id'yi bul
+    if not task_id:
+        # Race-condition riski dusuk: ayni created_by ayni title ile cok hizli iki kayit nadir
+        fallback = qone("""
+            SELECT id FROM tasks
+            WHERE created_by=? AND title=?
+            ORDER BY id DESC LIMIT 1
+        """, (created_by, title.strip()))
+        if fallback:
+            task_id = fallback["id"]
+
+    if not task_id:
+        raise TaskError("Task olusturuldu ama id alinamadi (db.qexec lastrowid donmuyor)")
+
+    # Log
+    _log(task_id, created_by, "created", None, "bekliyor",
+         note=f"Olusturuldu: {title}")
+
+    # Bildirim: assigned_to varsa ona; yoksa atlanir
+    if assigned_to:
+        notify_id, notify_rol = _resolve_user_for_notify(assigned_to)
+        if notify_id:
+            try:
+                notify.notify_yeni_gorev(
+                    kullanici_id=notify_id,
+                    rol=notify_rol or "personel",
+                    task_id=task_id,
+                    title=title.strip(),
+                    priority=priority,
+                )
+            except Exception:
+                # Bildirim hatasi task'i bozmasin
+                pass
+
+    return task_id
+
+
+# ============================================================
+# 2) GET (detay)
+# ============================================================
+def get_task(task_id):
+    """
+    Task detayi (sadece tasks tablosu).
+
+    Returns:
+        dict | None
+    """
+    return qone("SELECT * FROM tasks WHERE id=?", (task_id,))
+
+
+def get_task_or_404(task_id):
+    """Yoksa exception."""
+    t = get_task(task_id)
+    if not t:
+        raise TaskNotFound(f"Task bulunamadi: id={task_id}")
+    return t
+
+
+# ============================================================
+# 3) LIST (filtreli)
+# ============================================================
+def list_tasks(
+    status=None,
+    department=None,
+    assigned_to=None,
+    created_by=None,
+    task_type=None,
+    baglam_tipi=None,
+    baglam_id=None,
+    include_iptal=False,
+    limit=200,
+):
+    """
+    Filtreli task listesi.
+    Tum parametreler opsiyonel.
+    """
+    parts = ["SELECT * FROM tasks WHERE 1=1"]
+    params = []
+
+    if not include_iptal:
+        parts.append("AND status != 'iptal'")
+
+    if status:
+        parts.append("AND status = ?")
+        params.append(status)
+    if department:
+        parts.append("AND department = ?")
+        params.append(department)
+    if assigned_to:
+        parts.append("AND assigned_to = ?")
+        params.append(assigned_to)
+    if created_by:
+        parts.append("AND created_by = ?")
+        params.append(created_by)
+    if task_type:
+        parts.append("AND task_type = ?")
+        params.append(task_type)
+    if baglam_tipi:
+        parts.append("AND baglam_tipi = ?")
+        params.append(baglam_tipi)
+    if baglam_id:
+        parts.append("AND baglam_id = ?")
+        params.append(baglam_id)
+
+    parts.append("ORDER BY created_at DESC LIMIT ?")
+    params.append(int(limit))
+
+    sql = " ".join(parts)
+    return q(sql, tuple(params))
+
+
+# ============================================================
+# 4) STATUS CHANGE (TEK MERKEZI HELPER)
+# ============================================================
+def change_task_status(task_id, new_status, user, note=None):
+    """
+    Task status'unu degistir. TUM gecisler buradan.
+
+    Args:
+        task_id (int)
+        new_status (str): yeni durum
+        user (dict): session.kullanici
+        note (str|None): aciklama
+
+    Returns:
+        dict: guncellenen task
+
+    Raises:
+        TaskNotFound
+        InvalidTransition
+        PermissionDenied
+        ValidationError
+    """
+    task = get_task_or_404(task_id)
+    old_status = task.get("status")
+
+    # 1) Validation: gecis kurallari
+    _validate_transition(old_status, new_status)
+
+    # 2) Yetki: bu kullanici bu gecisi yapabilir mi?
+    perm.require(
+        perm.can_change_status(task, user, new_status),
+        f"Yetki yok: {old_status} -> {new_status}"
+    )
+
+    # 3) UPDATE - status'a gore otomatik timestamp
+    user_kadi = perm._kullanici_adi(user) or "sistem"
+    sql_set = ["status = ?", "updated_at = datetime('now', 'localtime')"]
+    sql_params = [new_status]
+
+    if new_status == "devam_ediyor" and not task.get("started_at"):
+        sql_set.append("started_at = datetime('now', 'localtime')")
+    elif new_status == "tamamlandi":
+        sql_set.append("completed_at = datetime('now', 'localtime')")
+    elif new_status == "revize_istendi":
+        sql_set.append("rejected_at = datetime('now', 'localtime')")
+        if note:
+            sql_set.append("rejection_reason = ?")
+            sql_params.append(note)
+    elif new_status == "onay_bekliyor":
+        # bos - timestamp yok
+        pass
+
+    sql_params.append(task_id)
+    sql = f"UPDATE tasks SET {', '.join(sql_set)} WHERE id = ?"
+    qexec(sql, tuple(sql_params))
+
+    # Onay senaryolari icin approved_at (onay_bekliyor -> tamamlandi)
+    if old_status == "onay_bekliyor" and new_status == "tamamlandi":
+        qexec("UPDATE tasks SET approved_at = datetime('now', 'localtime') WHERE id = ?",
+              (task_id,))
+
+    # 4) LOG
+    action_map = {
+        "devam_ediyor":   "started",
+        "tamamlandi":     "completed",
+        "onay_bekliyor":  "submitted_for_approval",
+        "revize_istendi": "rejected",
+        "iptal":          "cancelled",
+        "goruldu":        "seen",
+    }
+    action = action_map.get(new_status, "status_changed")
+    # onay_bekliyor -> tamamlandi ozel
+    if old_status == "onay_bekliyor" and new_status == "tamamlandi":
+        action = "approved"
+
+    _log(task_id, user_kadi, action, old_status, new_status, note)
+
+    # 5) NOTIFY (assigned_to'ya bildirim - genelde)
+    # Ozel durumlar:
+    #   onay_bekliyor -> approval_user_id'ye git
+    #   approved/rejected -> assigned_to'ya git
+    bildirim_hedef = task.get("assigned_to")
+    if new_status == "onay_bekliyor":
+        bildirim_hedef = task.get("approval_user_id")
+
+    if bildirim_hedef:
+        notify_id, notify_rol = _resolve_user_for_notify(bildirim_hedef)
+        if notify_id:
+            try:
+                notify.notify_status_degisti(
+                    kullanici_id=notify_id,
+                    rol=notify_rol or "personel",
+                    task_id=task_id,
+                    title=task.get("title", ""),
+                    eski=old_status,
+                    yeni=new_status,
+                )
+            except Exception:
+                pass
+
+    return get_task(task_id)
+
+
+# ============================================================
+# 5) UPDATE (basic field guncelleme, status DEGIL)
+# ============================================================
+def update_task(task_id, user, **fields):
+    """
+    Task duzenleme (title/description/priority/due_date vb.)
+    STATUS BURADAN DEGISTIRILEMEZ - change_task_status() kullanilmali.
+
+    Args:
+        task_id
+        user (dict)
+        fields: izin verilen alanlar
+    """
+    task = get_task_or_404(task_id)
+    perm.require(perm.can_edit_task(task, user), "Edit yetkisi yok")
+
+    ALLOWED = {"title", "description", "priority", "due_date",
+               "assigned_to", "approval_user_id", "requires_approval",
+               "requires_response"}
+
+    set_parts = []
+    set_params = []
+    for k, v in fields.items():
+        if k not in ALLOWED:
+            raise ValidationError(f"Bu alan duzenlenemez: {k}")
+        if k == "priority":
+            _validate_priority(v)
+        if k in ("requires_approval", "requires_response"):
+            v = int(bool(v))
+        set_parts.append(f"{k} = ?")
+        set_params.append(v)
+
+    if not set_parts:
+        return task
+
+    set_parts.append("updated_at = datetime('now', 'localtime')")
+    set_params.append(task_id)
+    sql = f"UPDATE tasks SET {', '.join(set_parts)} WHERE id = ?"
+    qexec(sql, tuple(set_params))
+
+    user_kadi = perm._kullanici_adi(user) or "sistem"
+    _log(task_id, user_kadi, "updated", task.get("status"), task.get("status"),
+         note=f"Alanlar: {', '.join(fields.keys())}")
+
+    return get_task(task_id)
+
+
+# ============================================================
+# 6) GET LOGS
+# ============================================================
+def get_task_logs(task_id):
+    """task_logs satirlari (eski->yeni)."""
+    return q("SELECT * FROM task_logs WHERE task_id=? ORDER BY created_at ASC",
+             (task_id,))
+
+
+# ============================================================
+# 7) GET FILES
+# ============================================================
+def get_task_files(task_id):
+    """task_files satirlari (silinmemisler)."""
+    return q("""
+        SELECT * FROM task_files
+        WHERE task_id=? AND COALESCE(deleted, 0) = 0
+        ORDER BY uploaded_at DESC
+    """, (task_id,))
+
+
+# ============================================================
+# 8) SAYIM (badge icin)
+# ============================================================
+def my_open_count(kullanici_adi, departman=None):
+    """Kullanicinin acik gorev sayisi (kendine + birim havuzu)."""
+    if not kullanici_adi:
+        return 0
+    sql = """
+        SELECT COUNT(*) FROM tasks
+        WHERE status NOT IN ('tamamlandi', 'iptal')
+          AND (
+              assigned_to = ?
+              OR approval_user_id = ?
+    """
+    params = [kullanici_adi, kullanici_adi]
+    if departman:
+        sql += " OR (department = ? AND assigned_to IS NULL)"
+        params.append(departman)
+    sql += ")"
+    return qscalar(sql, tuple(params)) or 0

@@ -1,0 +1,739 @@
+# -*- coding: utf-8 -*-
+"""
+SOLARIZ CPS - PLANLAMA / KARAR MASASI (Faz 2)
+==============================================
+Operasyon karar masasi.
+- Kart + durum odakli gorunum
+- Sadece okuma, henuz yazma yok
+- Korgun + CPS verileri ayri tutulur
+"""
+from flask import Blueprint, render_template, jsonify, session, redirect, url_for
+
+
+planlama_bp = Blueprint(
+    'planlama_bp',
+    __name__,
+    url_prefix='/planlama'
+)
+
+
+# =====================================================
+# YETKI KONTROLU
+# =====================================================
+def _yetki_var_mi():
+    """Sadece Yonetim rolu + admin kullanici gorebilir."""
+    u = session.get('kullanici')
+    if not u or not isinstance(u, dict):
+        return False
+    rol = u.get('RolAd') or ''
+    kad = u.get('KullaniciAdi') or ''
+    return rol == 'Yönetim' or kad == 'admin'
+
+
+# =====================================================
+# MOCK VERI - Faz 3'te Korgun + CPS'den otomatik beslenecek
+# =====================================================
+MOCK_SIPARISLER = [
+    {
+        "siparis_no": "33680",
+        "emir_no": "E.110626",
+        "model": "BRP-9000",
+        "musteri": "Lc Waikiki",
+        "miktar": 1200,
+        "termin": "2026-05-31",
+        
+        "zaman": {
+            "kova": "BU_HAFTA",
+            "termin_durumu": "yaklasiyor"
+        },
+        
+        "musteri_etiketleri": ["LCW", "NAKIT"],
+        "oncelik": "NORMAL",
+        
+        "korgun": {
+            "yapilan": 480,
+            "kalan": 720,
+            "yuzde": 28.1,
+            "son_proses": "MAMUL / Temizleme"
+        },
+        
+        "cps": {
+            "darbogaz": {
+                "var": True,
+                "ana": "MAMUL",
+                "alt_proses": "Temizleme",
+                "sapma": 88.6,
+                "seviye": "KRITIK"
+            },
+            "production_ready": {
+                "durum": "HAZIR",
+                "detay": [
+                    {"parca": "EVA", "durum": "tamam"},
+                    {"parca": "Patch", "durum": "tamam"},
+                    {"parca": "Isik", "durum": "tamam"},
+                    {"parca": "Toka", "durum": "tamam"}
+                ],
+                "bloke_sebebi": None,
+                "tahmini_hazir": None
+            },
+            "notlar": ["Halil onayi bekleniyor"]
+        }
+    },
+    {
+        "siparis_no": "33700",
+        "emir_no": "E.110700",
+        "model": "XYZ-5000",
+        "musteri": "Boyner",
+        "miktar": 600,
+        "termin": "2026-06-15",
+        
+        "zaman": {
+            "kova": "SONRAKI_HAFTA",
+            "termin_durumu": "normal"
+        },
+        
+        "musteri_etiketleri": [],
+        "oncelik": "NORMAL",
+        
+        "korgun": {
+            "yapilan": 30,
+            "kalan": 570,
+            "yuzde": 5.0,
+            "son_proses": "GOVDE / Kesim"
+        },
+        
+        "cps": {
+            "darbogaz": {
+                "var": False,
+                "ana": None,
+                "alt_proses": None,
+                "sapma": 0,
+                "seviye": "NORMAL"
+            },
+            "production_ready": {
+                "durum": "KISMI",
+                "detay": [
+                    {"parca": "EVA", "durum": "tamam"},
+                    {"parca": "Patch", "durum": "tamam"},
+                    {"parca": "Isik", "durum": "3 gun sonra"},
+                    {"parca": "Toka", "durum": "tamam"}
+                ],
+                "bloke_sebebi": "Isik 3 gun sonra gelecek",
+                "tahmini_hazir": "2026-05-09"
+            },
+            "notlar": []
+        }
+    },
+    {
+        "siparis_no": "33750",
+        "emir_no": "E.110750",
+        "model": "DEF-7000",
+        "musteri": "Koton",
+        "miktar": 800,
+        "termin": "2026-05-25",
+        
+        "zaman": {
+            "kova": "BU_AY",
+            "termin_durumu": "yaklasiyor"
+        },
+        
+        "musteri_etiketleri": [],
+        "oncelik": "ACIL",
+        
+        "korgun": {
+            "yapilan": 0,
+            "kalan": 800,
+            "yuzde": 0,
+            "son_proses": "Henuz baslamadi"
+        },
+        
+        "cps": {
+            "darbogaz": {
+                "var": False,
+                "ana": None,
+                "alt_proses": None,
+                "sapma": 0,
+                "seviye": "NORMAL"
+            },
+            "production_ready": {
+                "durum": "BLOKE",
+                "detay": [
+                    {"parca": "EVA", "durum": "tamam"},
+                    {"parca": "Patch", "durum": "tamam"},
+                    {"parca": "Isik", "durum": "tamam"},
+                    {"parca": "Toka", "durum": "EKSIK"}
+                ],
+                "bloke_sebebi": "Toka eksik - tedarikciden termin bekleniyor",
+                "tahmini_hazir": None
+            },
+            "notlar": ["ACIL: tedarikciye baski yapilmasi gerekiyor"]
+        }
+    },
+    {
+        "siparis_no": "33800",
+        "emir_no": "E.110800",
+        "model": "GHI-9000",
+        "musteri": "Lc Waikiki",
+        "miktar": 2000,
+        "termin": "2026-08-15",
+        
+        "zaman": {
+            "kova": "3_AY",
+            "termin_durumu": "uzak"
+        },
+        
+        "musteri_etiketleri": ["LCW"],
+        "oncelik": "NORMAL",
+        
+        "korgun": {
+            "yapilan": 0,
+            "kalan": 2000,
+            "yuzde": 0,
+            "son_proses": "Henuz baslamadi"
+        },
+        
+        "cps": {
+            "darbogaz": {
+                "var": False,
+                "ana": None,
+                "alt_proses": None,
+                "sapma": 0,
+                "seviye": "NORMAL"
+            },
+            "production_ready": {
+                "durum": "BILINMIYOR",
+                "detay": [],
+                "bloke_sebebi": "Henuz degerlendirilmedi",
+                "tahmini_hazir": None
+            },
+            "notlar": []
+        }
+    },
+    {
+        "siparis_no": "33638",
+        "emir_no": "E.110626",
+        "model": "CRX-71033-LCW",
+        "musteri": "Lc Waikiki",
+        "miktar": 7000,
+        "termin": "2026-05-31",
+        
+        "zaman": {
+            "kova": "BU_HAFTA",
+            "termin_durumu": "yaklasiyor"
+        },
+        
+        "musteri_etiketleri": ["LCW", "NAKIT"],
+        "oncelik": "NORMAL",
+        
+        "korgun": {
+            "yapilan": 1970,
+            "kalan": 5030,
+            "yuzde": 28.1,
+            "son_proses": "GOVDE / Kesim"
+        },
+        
+        "cps": {
+            "darbogaz": {
+                "var": False,
+                "ana": None,
+                "alt_proses": None,
+                "sapma": 0,
+                "seviye": "NORMAL"
+            },
+            "production_ready": {
+                "durum": "HAZIR",
+                "detay": [
+                    {"parca": "EVA", "durum": "tamam"},
+                    {"parca": "Patch", "durum": "tamam"},
+                    {"parca": "Isik", "durum": "tamam"},
+                    {"parca": "Toka", "durum": "tamam"}
+                ],
+                "bloke_sebebi": None,
+                "tahmini_hazir": None
+            },
+            "notlar": []
+        }
+    }
+]
+
+
+# =====================================================
+# ENDPOINT 1: HTML SAYFA
+# =====================================================
+@planlama_bp.route('/karar-masasi', methods=['GET'])
+def karar_masasi():
+    if not _yetki_var_mi():
+        return render_template('hata.html',
+                               kod=403, baslik='Yetkisiz Erisim',
+                               mesaj='Bu sayfaya erisim yetkiniz yok.'), 403
+    return render_template('planlama/karar_masasi.html')
+
+
+# =====================================================
+# ENDPOINT 2: JSON VERI
+# =====================================================
+
+# =====================================================
+# KARAR MASASI v3 — MOCK VERI MOTORU (Faz 1)
+# =====================================================
+from datetime import datetime, timedelta
+
+KM_BUGUN_STR = "2026-05-06"  # Mock bugun
+
+def _km_termin_durum(termin_str, bugun_str=KM_BUGUN_STR):
+    """termin durumu: uzak / yakin / gecti"""
+    try:
+        termin = datetime.strptime(termin_str, "%Y-%m-%d").date()
+        bugun = datetime.strptime(bugun_str, "%Y-%m-%d").date()
+        kalan_gun = (termin - bugun).days
+        if kalan_gun < 0:
+            return ("gecti", kalan_gun)
+        elif kalan_gun <= 7:
+            return ("yakin", kalan_gun)
+        else:
+            return ("uzak", kalan_gun)
+    except Exception:
+        return ("uzak", 999)
+
+
+def _km_satir_rengi(satir):
+    """Renk onceligi: BLOKE > GECIKMIS > NAKIT > KISMI > HAZIR"""
+    # 1. BLOKE
+    if satir.get("uretilebilirlik") == "BLOKE":
+        return "bloke"
+    # 2. GECIKMIS
+    durum, _ = _km_termin_durum(satir.get("termin", ""))
+    if durum == "gecti":
+        return "gecikmis"
+    # 3. NAKIT/VIP
+    etiketler = satir.get("musteri_etiketleri", []) or []
+    if any(e.upper() in ["NAKIT", "NAKİT", "VIP"] for e in etiketler):
+        return "nakit"
+    # 4. KISMI
+    if satir.get("uretilebilirlik") == "KISMI":
+        return "kismi"
+    # 5. HAZIR (default)
+    return "hazir"
+
+
+def _km_skor(satir):
+    """Akilli sira skoru. Yuksek skor = yukari"""
+    skor = 0
+    renk = satir.get("satir_rengi", "hazir")
+
+    if renk == "bloke":      skor += 1000
+    elif renk == "gecikmis": skor += 800
+    elif renk == "nakit":    skor += 600
+    elif renk == "kismi":    skor += 400
+    elif renk == "hazir":    skor += 200
+
+    # Termin yakinligi
+    _, kalan_gun = _km_termin_durum(satir.get("termin", ""))
+    if kalan_gun >= 0:
+        skor += max(0, 200 - kalan_gun * 5)
+    else:
+        skor += 250  # gecikmis ekstra puan
+
+    # Darbogaz siddeti
+    darbogaz = satir.get("darbogaz", {})
+    if darbogaz.get("var"):
+        skor += int(darbogaz.get("sapma", 0))
+
+    # Bant atanmamis
+    if not satir.get("bant"):
+        skor += 50
+
+    # NAKIT/VIP etiketleri ekstra
+    etiketler = satir.get("musteri_etiketleri", []) or []
+    if any(e.upper() in ["NAKIT", "NAKİT"] for e in etiketler):
+        skor += 100
+    if "VIP" in [e.upper() for e in etiketler]:
+        skor += 80
+
+    return skor
+
+
+def _km_mock_satirlar():
+    """22 satir gercek fabrika benzeri mock veri"""
+    raw = [
+        # ============== BLOKE (3 satir) ==============
+        {"musteri":"Koton","etiketler":[],"sip":"33750","emir":"110750","model":"DEF-7000","renk":"Siyah","beden":"36-40",
+         "adet":800,"yapilan":0,"termin":"2026-05-25","oncelik":"ACIL","bant":None,
+         "patch":"tamam","isik":"tamam","toka":"yok","uretilebilirlik":"BLOKE",
+         "bloke_sebebi":"Toka tedarik bekliyor",
+         "darbogaz":{"var":False},
+         "not":"ACIL: tedarikciye baski",
+         "talimat":""},
+        {"musteri":"Defacto","etiketler":[],"sip":"33780","emir":"110780","model":"PTK-2000","renk":"Lacivert","beden":"36-41",
+         "adet":1500,"yapilan":0,"termin":"2026-06-10","oncelik":"NORMAL","bant":None,
+         "patch":"yok","isik":"tamam","toka":"tamam","uretilebilirlik":"BLOKE",
+         "bloke_sebebi":"Patch eksik",
+         "darbogaz":{"var":False},
+         "not":"Patch tedariki gec",
+         "talimat":""},
+        {"musteri":"Lc Waikiki","etiketler":["NAKIT"],"sip":"33820","emir":"110820","model":"CRX-71050","renk":"Beyaz","beden":"23-32",
+         "adet":2400,"yapilan":120,"termin":"2026-05-30","oncelik":"NAKIT","bant":None,
+         "patch":"tamam","isik":"yok","toka":"tamam","uretilebilirlik":"BLOKE",
+         "bloke_sebebi":"Isik gelmedi",
+         "darbogaz":{"var":False},
+         "not":"NAKIT musteri, isik gelmesi kritik",
+         "talimat":""},
+
+        # ============== GECIKMIS (2 satir) ==============
+        {"musteri":"Tedi Discount","etiketler":[],"sip":"33459","emir":"109158","model":"CRP-82046","renk":"Pembe","beden":"23-32",
+         "adet":3000,"yapilan":2402,"termin":"2026-04-28","oncelik":"GECIKTI","bant":"B-3",
+         "patch":"tamam","isik":"tamam","toka":"tamam","uretilebilirlik":"HAZIR",
+         "bloke_sebebi":None,
+         "darbogaz":{"var":True,"ana":"GOVDE","alt":"Saya","sapma":45},
+         "not":"Termin gecti, musteriyle yeni tarih",
+         "talimat":"Bant-3 oncelik, mesai gerekir"},
+        {"musteri":"Boyner","etiketler":[],"sip":"33465","emir":"109200","model":"FLT-3500","renk":"Bej","beden":"36-41",
+         "adet":1200,"yapilan":1080,"termin":"2026-05-02","oncelik":"GECIKTI","bant":"B-2",
+         "patch":"tamam","isik":"tamam","toka":"tamam","uretilebilirlik":"HAZIR",
+         "bloke_sebebi":None,
+         "darbogaz":{"var":False},
+         "not":"%90 bitti, son sevkiyat",
+         "talimat":"Mekval bandında bitir"},
+
+        # ============== NAKIT/VIP (4 satir) ==============
+        {"musteri":"Lc Waikiki","etiketler":["NAKIT"],"sip":"33680","emir":"110626","model":"BRP-9000","renk":"Beyaz","beden":"23-32",
+         "adet":1200,"yapilan":480,"termin":"2026-05-31","oncelik":"NAKIT","bant":"B-2",
+         "patch":"tamam","isik":"tamam","toka":"tamam","uretilebilirlik":"HAZIR",
+         "bloke_sebebi":None,
+         "darbogaz":{"var":True,"ana":"MAMUL","alt":"Temizleme","sapma":88},
+         "not":"Halil onayi bekleniyor",
+         "talimat":"Temizleme bandını boşalt"},
+        {"musteri":"Lc Waikiki","etiketler":["NAKIT"],"sip":"33681","emir":"110627","model":"BRP-9000","renk":"Siyah","beden":"23-32",
+         "adet":1200,"yapilan":600,"termin":"2026-05-31","oncelik":"NAKIT","bant":"B-2",
+         "patch":"tamam","isik":"tamam","toka":"tamam","uretilebilirlik":"HAZIR",
+         "bloke_sebebi":None,
+         "darbogaz":{"var":False},
+         "not":"BRP-9000 ikinci renk",
+         "talimat":"Aynı bantta seri devam"},
+        {"musteri":"Pera Boutique","etiketler":["VIP"],"sip":"33800","emir":"110800","model":"VIP-5500","renk":"Krem","beden":"36-40",
+         "adet":400,"yapilan":160,"termin":"2026-05-20","oncelik":"NAKIT","bant":"B-1",
+         "patch":"tamam","isik":"tamam","toka":"tamam","uretilebilirlik":"HAZIR",
+         "bloke_sebebi":None,
+         "darbogaz":{"var":False},
+         "not":"VIP musteri, ozel paketleme",
+         "talimat":"Kalite ozel kontrol"},
+        {"musteri":"Şahin Taban","etiketler":["NAKIT"],"sip":"33660","emir":"110660","model":"CRP-8130-L","renk":"Beyaz","beden":"23-32",
+         "adet":600,"yapilan":600,"termin":"2026-06-30","oncelik":"NAKIT","bant":"B-1",
+         "patch":"tamam","isik":"tamam","toka":"tamam","uretilebilirlik":"HAZIR",
+         "bloke_sebebi":None,
+         "darbogaz":{"var":False},
+         "not":"E-ticaret, bitti, sevk hazir",
+         "talimat":"Sevk paketle"},
+
+        # ============== KISMI (4 satir) ==============
+        {"musteri":"Boyner","etiketler":[],"sip":"33700","emir":"110700","model":"XYZ-5000","renk":"Lacivert","beden":"36-41",
+         "adet":600,"yapilan":30,"termin":"2026-06-15","oncelik":"NORMAL","bant":None,
+         "patch":"tamam","isik":"bekle","toka":"tamam","uretilebilirlik":"KISMI",
+         "bloke_sebebi":"Isik 3 gun sonra",
+         "darbogaz":{"var":False},
+         "not":"Isik geldiginde basla",
+         "talimat":""},
+        {"musteri":"Tedi Discount","etiketler":[],"sip":"33850","emir":"110850","model":"TDD-4400","renk":"Pembe","beden":"26-33",
+         "adet":2000,"yapilan":200,"termin":"2026-06-25","oncelik":"NORMAL","bant":None,
+         "patch":"bekle","isik":"tamam","toka":"tamam","uretilebilirlik":"KISMI",
+         "bloke_sebebi":"Patch yarin gelir",
+         "darbogaz":{"var":False},
+         "not":"",
+         "talimat":""},
+        {"musteri":"Lc Waikiki","etiketler":[],"sip":"33870","emir":"110870","model":"GRX-8800","renk":"Mavi","beden":"33-38",
+         "adet":1800,"yapilan":900,"termin":"2026-07-10","oncelik":"NORMAL","bant":"B-3",
+         "patch":"tamam","isik":"tamam","toka":"bekle","uretilebilirlik":"KISMI",
+         "bloke_sebebi":"Toka 2 gun sonra",
+         "darbogaz":{"var":True,"ana":"ATKI","alt":"Kesim","sapma":22},
+         "not":"Kesim hizi dustu",
+         "talimat":"Kesim bandında hızlanma gerek"},
+        {"musteri":"İsna Tekstil","etiketler":[],"sip":"33577","emir":"110577","model":"YPF-9024","renk":"Mavi","beden":"26-33",
+         "adet":1500,"yapilan":960,"termin":"2026-06-05","oncelik":"NORMAL","bant":"B-2",
+         "patch":"tamam","isik":"bekle","toka":"tamam","uretilebilirlik":"KISMI",
+         "bloke_sebebi":"Isik partisi yarin",
+         "darbogaz":{"var":False},
+         "not":"İsna stetch parti",
+         "talimat":""},
+
+        # ============== HAZIR — normal akis (9 satir) ==============
+        {"musteri":"Lc Waikiki","etiketler":[],"sip":"33638","emir":"110626","model":"CRX-71033-LCW","renk":"Beyaz","beden":"33-38",
+         "adet":7000,"yapilan":1970,"termin":"2026-05-31","oncelik":"NORMAL","bant":"B-1",
+         "patch":"tamam","isik":"tamam","toka":"tamam","uretilebilirlik":"HAZIR",
+         "bloke_sebebi":None,
+         "darbogaz":{"var":False},
+         "not":"",
+         "talimat":"Monta hattını besle"},
+        {"musteri":"Lc Waikiki","etiketler":[],"sip":"33635","emir":"110510","model":"CRX-71037-LCW","renk":"Siyah","beden":"23-32",
+         "adet":5760,"yapilan":2880,"termin":"2026-06-10","oncelik":"NORMAL","bant":"B-1",
+         "patch":"tamam","isik":"tamam","toka":"tamam","uretilebilirlik":"HAZIR",
+         "bloke_sebebi":None,
+         "darbogaz":{"var":False},
+         "not":"",
+         "talimat":"Saya devam"},
+        {"musteri":"Lc Waikiki","etiketler":[],"sip":"33657","emir":"110687","model":"CRX-71043","renk":"Kirmizi","beden":"33-38",
+         "adet":6160,"yapilan":4400,"termin":"2026-05-25","oncelik":"NORMAL","bant":"B-1",
+         "patch":"tamam","isik":"tamam","toka":"tamam","uretilebilirlik":"HAZIR",
+         "bloke_sebebi":None,
+         "darbogaz":{"var":False},
+         "not":"VENOM serisi, %71 bitti",
+         "talimat":"Kesim son parti, monta basla"},
+        {"musteri":"Tedi Discount","etiketler":[],"sip":"33456","emir":"109131","model":"CRP-8128-L","renk":"Beyaz","beden":"33-38",
+         "adet":3200,"yapilan":3200,"termin":"2026-05-15","oncelik":"NORMAL","bant":"B-2",
+         "patch":"tamam","isik":"tamam","toka":"tamam","uretilebilirlik":"HAZIR",
+         "bloke_sebebi":None,
+         "darbogaz":{"var":False},
+         "not":"Bitti",
+         "talimat":"Sevkiyat hazırla"},
+        {"musteri":"Terteks (Twigy)","etiketler":[],"sip":"33443","emir":"108918","model":"CRP-82063-TWG","renk":"Beyaz","beden":"23-32",
+         "adet":2160,"yapilan":1800,"termin":"2026-06-20","oncelik":"NORMAL","bant":"B-3",
+         "patch":"tamam","isik":"tamam","toka":"tamam","uretilebilirlik":"HAZIR",
+         "bloke_sebebi":None,
+         "darbogaz":{"var":False},
+         "not":"",
+         "talimat":"Monta devam"},
+        {"musteri":"Terteks (Twigy)","etiketler":[],"sip":"33443","emir":"108978","model":"CRP-82066-TWG","renk":"Siyah","beden":"23-32",
+         "adet":1800,"yapilan":1200,"termin":"2026-06-20","oncelik":"NORMAL","bant":"B-3",
+         "patch":"tamam","isik":"tamam","toka":"tamam","uretilebilirlik":"HAZIR",
+         "bloke_sebebi":None,
+         "darbogaz":{"var":True,"ana":"GOVDE","alt":"Saya","sapma":12},
+         "not":"Hafif sapma izle",
+         "talimat":"Saya hizi normal"},
+        {"musteri":"Genceller (Esem)","etiketler":[],"sip":"33658","emir":"110778","model":"CRM-4750-ESM","renk":"Mavi","beden":"36-44",
+         "adet":3600,"yapilan":2400,"termin":"2026-06-05","oncelik":"NORMAL","bant":"B-2",
+         "patch":"tamam","isik":"tamam","toka":"tamam","uretilebilirlik":"HAZIR",
+         "bloke_sebebi":None,
+         "darbogaz":{"var":False},
+         "not":"E-ticaret",
+         "talimat":"Kesim devam"},
+        {"musteri":"Genceller (Esem)","etiketler":[],"sip":"33658","emir":"110917","model":"CRF-8250-ESM","renk":"Lacivert","beden":"36-44",
+         "adet":1200,"yapilan":600,"termin":"2026-06-12","oncelik":"NORMAL","bant":None,
+         "patch":"tamam","isik":"tamam","toka":"tamam","uretilebilirlik":"HAZIR",
+         "bloke_sebebi":None,
+         "darbogaz":{"var":False},
+         "not":"Bant atanacak",
+         "talimat":""},
+        {"musteri":"Boyner","etiketler":[],"sip":"33890","emir":"110890","model":"BNR-7700","renk":"Bej","beden":"36-41",
+         "adet":900,"yapilan":300,"termin":"2026-07-25","oncelik":"NORMAL","bant":None,
+         "patch":"tamam","isik":"tamam","toka":"tamam","uretilebilirlik":"HAZIR",
+         "bloke_sebebi":None,
+         "darbogaz":{"var":False},
+         "not":"Yaz koleksiyonu",
+         "talimat":""},
+    ]
+
+    # Her satiri zenginlestir
+    satirlar = []
+    for i, r in enumerate(raw, 1):
+        kalan = r["adet"] - r["yapilan"]
+        ilerleme = round(r["yapilan"] / r["adet"] * 100, 1) if r["adet"] > 0 else 0
+        durum, kalan_gun = _km_termin_durum(r["termin"])
+        gunluk_hedef = 0
+        kac_gun = 0
+        if r.get("bant") and kalan > 0:
+            # Bant varsa bir hedef var
+            gunluk_hedef = max(100, min(600, int(kalan / max(kalan_gun, 1))))
+            kac_gun = int(kalan / gunluk_hedef) if gunluk_hedef > 0 else 0
+
+        # Darbogaz ikon tipi
+        darbogaz = dict(r["darbogaz"])
+        if darbogaz.get("var"):
+            darbogaz["ikon_tipi"] = "alev"
+        elif r["uretilebilirlik"] == "BLOKE":
+            darbogaz = {"var": True, "ikon_tipi": "paket-yok",
+                        "metin": r.get("bloke_sebebi", "")}
+
+        s = {
+            "satir_id": f"S{i:03d}",
+            "musteri": r["musteri"],
+            "musteri_etiketleri": r["etiketler"],
+            "siparis_no": r["sip"],
+            "emir_no": r["emir"],
+            "model": r["model"],
+            "renk": r["renk"],
+            "beden": r["beden"],
+            "siparis_adet": r["adet"],
+            "yapilan": r["yapilan"],
+            "kalan": kalan,
+            "ilerleme_yuzde": ilerleme,
+            "termin": r["termin"],
+            "kalan_gun": kalan_gun,
+            "termin_durumu": durum,
+            "oncelik": r["oncelik"],
+            "bant": r["bant"],
+            "gunluk_hedef": gunluk_hedef,
+            "kac_gunde_biter": kac_gun,
+            "hazirlik": {
+                "patch": r["patch"],
+                "isik":  r["isik"],
+                "toka":  r["toka"]
+            },
+            "uretilebilirlik": r["uretilebilirlik"],
+            "bloke_sebebi": r.get("bloke_sebebi"),
+            "darbogaz": darbogaz,
+            "planlama_notu": r.get("not", ""),
+            "usta_talimati": r.get("talimat", "")
+        }
+        s["satir_rengi"] = _km_satir_rengi(s)
+        s["skor"] = _km_skor(s)
+        satirlar.append(s)
+
+    # Akilli sira: skor azalan
+    satirlar.sort(key=lambda x: -x["skor"])
+    for i, s in enumerate(satirlar, 1):
+        s["plan_sirasi"] = i
+
+    return satirlar
+
+
+def _km_ozet(satirlar):
+    """KPI bandi sayilarini mock satirlardan otomatik hesapla"""
+    bugun = datetime.strptime(KM_BUGUN_STR, "%Y-%m-%d").date()
+    hafta_sonu = bugun + timedelta(days=7)
+
+    bu_hafta = 0
+    kritik = 0
+    hazir = 0
+    bloke = 0
+    darbogaz = 0
+    termin_riski = 0
+
+    for s in satirlar:
+        termin = datetime.strptime(s["termin"], "%Y-%m-%d").date()
+        if bugun <= termin <= hafta_sonu:
+            bu_hafta += 1
+        if s["termin_durumu"] == "gecti":
+            kritik += 1
+        if s["uretilebilirlik"] == "HAZIR" and s["satir_rengi"] != "gecikmis":
+            hazir += 1
+        if s["uretilebilirlik"] == "BLOKE":
+            bloke += 1
+        if s.get("darbogaz", {}).get("var") and s.get("darbogaz", {}).get("ikon_tipi") == "alev":
+            darbogaz += 1
+        if s["termin_durumu"] == "yakin" and s["uretilebilirlik"] != "HAZIR":
+            termin_riski += 1
+
+    return {
+        "toplam_siparis": len(satirlar),
+        "bu_hafta_plan": bu_hafta,
+        "kritik_geciken": kritik,
+        "uretime_hazir": hazir,
+        "bloke": bloke,
+        "darbogazli": darbogaz,
+        "gunluk_kapasite": 8500,
+        "termin_riski": termin_riski
+    }
+
+@planlama_bp.route('/karar-masasi/data', methods=['GET'])
+def karar_masasi_data():
+    if not _yetki_var_mi():
+        return jsonify({"hata": "yetkisiz"}), 403
+    try:
+        satirlar = _km_mock_satirlar()
+        ozet = _km_ozet(satirlar)
+        return jsonify({
+            "ok": True,
+            "kaynak": "MOCK",
+            "satir_sayisi": len(satirlar),
+            "uretim_tarihi": KM_BUGUN_STR,
+            "satirlar": satirlar,
+            "ozet": ozet,
+            "akilli_sira": True
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({
+            "ok": False,
+            "hata": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
+
+
+# ============== FAZ 4.3 - USTAYA GONDER ==============
+# Karar Masasi satirini usta_gorevleri tablosuna gonderir
+# Hicbir mevcut sisteme dokunmaz, sadece SQLite
+
+from flask import jsonify as _jsonify, request as _flask_request, session as _flask_session
+from modules.usta import gorev_db as _gorev_db
+
+
+@planlama_bp.route('/karar-masasi/ustaya-gonder', methods=['POST'])
+def karar_masasi_ustaya_gonder():
+    """
+    Karar Masasi satirini usta_gorevleri tablosuna ekler.
+
+    Body:
+    {
+        "satir_id": "MOCK_001",
+        "atanan_usta": "Hasan" | "" (opsiyonel),
+        "olusturan_notu": "Acil" (opsiyonel),
+        "snapshot": {
+            "siparis_no": "33680",       <- zorunlu
+            "musteri": "Lc Waikiki",     <- zorunlu
+            "model": "BRP-9000",         <- zorunlu
+            "emir_no": "110626",
+            "bant": "B-2",
+            "kalan": 720,
+            "uretilebilirlik": "HAZIR",
+            "darbogaz_metin": "Temizleme +88%",
+            "talimat": "Temizleme bandini bosalt",
+            "musteri_etiketi": "NAKIT",
+            "termin": "2026-05-31",
+            "termin_durumu": "uzak",
+            "skor": 75
+        }
+    }
+    """
+    # Login kontrolu
+    kullanici = _flask_session.get('kullanici')
+    if not kullanici:
+        return _jsonify({
+            "ok": False,
+            "hata": "yetki_yok",
+            "mesaj": "Login gerekli"
+        }), 401
+
+    olusturan_ad = (
+        kullanici.get('AdSoyad') or
+        kullanici.get('KullaniciAdi') or
+        'bilinmeyen'
+    )
+
+    body = _flask_request.get_json(silent=True) or {}
+    snapshot = body.get('snapshot') or {}
+
+    # Snapshot validasyonu
+    if not snapshot:
+        return _jsonify({
+            "ok": False,
+            "hata": "snapshot_eksik",
+            "mesaj": "snapshot alani zorunlu"
+        }), 400
+
+    # gorev_db.gorev_ekle icin payload hazirla
+    payload = {
+        "karar_masasi_satir_id": body.get('satir_id'),
+        "siparis_no": snapshot.get('siparis_no'),
+        "emir_no": snapshot.get('emir_no'),
+        "musteri": snapshot.get('musteri'),
+        "model": snapshot.get('model'),
+        "bant": snapshot.get('bant'),
+        "hedef_adet": snapshot.get('kalan') or 0,
+        "kalan_adet": snapshot.get('kalan'),
+        "uretilebilirlik": snapshot.get('uretilebilirlik'),
+        "darbogaz": snapshot.get('darbogaz_metin'),
+        "talimat": snapshot.get('talimat'),
+        "oncelik": snapshot.get('skor') or 50,
+        "musteri_etiketi": snapshot.get('musteri_etiketi'),
+        "atanan_usta": body.get('atanan_usta'),
+        "olusturan": olusturan_ad,
+        "olusturan_notu": body.get('olusturan_notu'),
+        "termin": snapshot.get('termin'),
+        "termin_durumu": snapshot.get('termin_durumu'),
+    }
+
+    sonuc = _gorev_db.gorev_ekle(payload)
+
+    if not sonuc.get("ok"):
+        return _jsonify(sonuc), 400
+
+    return _jsonify(sonuc)

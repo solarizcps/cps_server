@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Cari Hesaplar — Finans{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <div class="page-title">Cari Hesaplar</div>
+    <div class="page-sub">{{ cariler | length }} kayıt listeleniyor</div>
+  </div>
+  <div>
+    <a class="btn btn-outline" href="/finans/">← Finans Paneli</a>
+  </div>
+</div>
+
+<!-- Filtre toolbar -->
+<div class="toolbar">
+  <div class="period-group">
+    <a href="/finans/cari"        class="period-btn {% if not tip %}active{% endif %}">Hepsi</a>
+    <a href="/finans/cari?tip=1"  class="period-btn {% if tip == 1 %}active{% endif %}">Müşteri</a>
+    <a href="/finans/cari?tip=2"  class="period-btn {% if tip == 2 %}active{% endif %}">Tedarikçi</a>
+  </div>
+
+  <form method="get" style="display:flex; gap:8px; align-items:center; margin-left:auto;">
+    {% if tip %}<input type="hidden" name="tip" value="{{ tip }}">{% endif %}
+    <input type="search" name="q" class="search-input" placeholder="Kod veya ünvan ara..." value="{{ arama }}">
+    <button class="btn btn-primary btn-sm" type="submit">Ara</button>
+    {% if arama %}<a class="btn btn-outline btn-sm" href="/finans/cari{% if tip %}?tip={{ tip }}{% endif %}">Temizle</a>{% endif %}
+  </form>
+</div>
+
+{% if cariler %}
+<div class="tbl-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Kod</th>
+        <th>Ünvan</th>
+        <th>Tip</th>
+        <th>Şehir</th>
+        <th>Telefon</th>
+        <th class="num">Bakiye</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in cariler %}
+        <tr class="clickable" onclick="window.location='/finans/cari/{{ c.CKod }}'">
+          <td><span class="tag">{{ c.CKod }}</span></td>
+          <td style="font-weight:600;">
+            <a href="/finans/cari/{{ c.CKod }}">{{ c.CName }}</a>
+          </td>
+          <td>
+            {% if c.CTip == 1 %}<span class="badge badge-musteri">MÜŞTERİ</span>
+            {% elif c.CTip == 2 %}<span class="badge badge-tedarikci">TEDARİKÇİ</span>
+            {% else %}<span class="badge badge-fatura">KARMA</span>{% endif %}
+          </td>
+          <td>{{ c.Sehir or '—' }}</td>
+          <td>{{ c.Telefon or '—' }}</td>
+          <td class="num bold {% if c.Bakiye > 0 %}pos{% elif c.Bakiye < 0 %}neg{% endif %}">
+            {{ c.Bakiye | tl }}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div style="margin-top:10px; color:var(--text3); font-size:11px; font-family:var(--mono);">
+  Pozitif bakiye = bize alacak &nbsp;·&nbsp; Negatif bakiye = bizim borç
+</div>
+
+{% else %}
+  <div class="empty-state">
+    <div class="ico">📭</div>
+    <div>Kayıt bulunamadı</div>
+  </div>
+{% endif %}
+
+{% endblock %}

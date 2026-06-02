@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+{% block title %}Şablon Yönetimi - Solariz CPS{% endblock %}
+
+{% block content %}
+<style>
+.sablon-page {
+    padding: 24px;
+    max-width: 1280px;
+    margin: 0 auto;
+}
+.sablon-page h1 {
+    font-size: 24px;
+    color: #1e3a5f;
+    margin: 0 0 8px 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.sablon-page .baslik-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid #e0e6ed;
+}
+.sablon-page .ozet {
+    color: #666;
+    font-size: 14px;
+}
+.sablon-page .ozet b {
+    color: #1e3a5f;
+}
+.btn-yeni-sablon {
+    background: #d4a52f;
+    color: #fff;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+.btn-yeni-sablon:hover { opacity: 0.55; }
+
+.sablon-liste {
+    display: grid;
+    gap: 16px;
+}
+.sablon-karti {
+    background: #fff;
+    border: 1px solid #e0e6ed;
+    border-radius: 8px;
+    padding: 18px 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    transition: box-shadow 0.15s;
+}
+.sablon-karti:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.sablon-karti.pasif {
+    opacity: 0.7;
+    background: #fafafa;
+}
+.kart-bas {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+.kart-bas .baslik {
+    font-size: 17px;
+    font-weight: 700;
+    color: #1e3a5f;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.kart-bas .sablon-id {
+    color: #888;
+    font-weight: 400;
+    font-size: 14px;
+}
+.durum-rozet {
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+.durum-aktif { background: #d4f7df; color: #1d6c3c; }
+.durum-pasif { background: #f0f0f0; color: #888; }
+
+.kart-istatistik {
+    color: #666;
+    font-size: 13px;
+    margin-bottom: 10px;
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+.kart-istatistik .istk { display: flex; gap: 6px; align-items: center; }
+.kart-istatistik b { color: #1e3a5f; font-weight: 600; }
+
+.kart-prosesler {
+    color: #444;
+    font-size: 13px;
+    margin: 8px 0;
+    line-height: 1.5;
+}
+.kart-prosesler .etk { color: #888; margin-right: 6px; font-weight: 500; }
+.kart-prosesler .pros-item {
+    display: inline-block;
+    background: #f0f4f8;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin: 2px 4px 2px 0;
+    font-size: 12px;
+}
+
+.kart-eslesme {
+    color: #555;
+    font-size: 12.5px;
+    margin: 6px 0 12px 0;
+    background: #fff8e1;
+    padding: 6px 10px;
+    border-radius: 4px;
+    border-left: 3px solid #d4a52f;
+}
+.kart-eslesme .etk { color: #888; margin-right: 6px; font-weight: 500; }
+.kart-eslesme .yok { color: #aaa; font-style: italic; }
+
+.kart-aksiyon {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+.kart-aksiyon button {
+    padding: 6px 14px;
+    border-radius: 5px;
+    font-size: 13px;
+    cursor: pointer;
+    border: 1px solid #ccc;
+    background: #fff;
+    color: #444;
+    transition: all 0.15s;
+}
+.btn-detay { color: #1e3a5f; border-color: #1e3a5f; }
+.btn-detay:hover { background: #1e3a5f; color: #fff; }
+.btn-disabled {
+    opacity: 0.45;
+    cursor: not-allowed !important;
+}
+.btn-disabled:hover { background: #fff; color: #444; }
+
+/* Yukleme + bos */
+.yukleniyor, .bos-durum {
+    text-align: center;
+    color: #888;
+    padding: 50px 20px;
+    font-size: 15px;
+}
+
+/* MODAL */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+.modal-overlay.acik { display: flex; }
+.modal-icerik {
+    background: #fff;
+    border-radius: 10px;
+    width: 92%;
+    max-width: 640px;
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+}
+.modal-bas {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 22px;
+    border-bottom: 1px solid #e0e6ed;
+}
+.modal-bas h2 {
+    margin: 0;
+    color: #1e3a5f;
+    font-size: 19px;
+}
+.modal-kapat {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #888;
+    padding: 0 8px;
+}
+.modal-kapat:hover { color: #1e3a5f; }
+.modal-body { padding: 18px 22px; }
+.modal-bolum {
+    margin-bottom: 18px;
+}
+.modal-bolum h3 {
+    color: #1e3a5f;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0 0 8px 0;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #e0e6ed;
+}
+.modal-bolum .bilgi {
+    margin: 4px 0;
+    font-size: 14px;
+}
+.modal-bolum .bilgi b { color: #1e3a5f; }
+.modal-bolum ol { padding-left: 24px; margin: 4px 0; }
+.modal-bolum ul { padding-left: 24px; margin: 4px 0; }
+.modal-bolum li { padding: 3px 0; font-size: 14px; }
+.modal-foot {
+    padding: 14px 22px;
+    border-top: 1px solid #e0e6ed;
+    text-align: right;
+}
+.modal-foot button {
+    padding: 8px 18px;
+    border-radius: 5px;
+    border: 1px solid #1e3a5f;
+    background: #1e3a5f;
+    color: #fff;
+    cursor: pointer;
+    font-size: 14px;
+}
+.modal-foot button:hover { background: #2a4a73; }
+</style>
+
+<div class="sablon-page">
+    <div class="baslik-bar">
+        <div>
+            <h1>Şablon Yönetimi</h1>
+            <div class="ozet" id="ozetBilgi">Yükleniyor...</div>
+        </div>
+        <button class="btn-yeni-sablon" disabled title="C.4 sprintinde aktif olacak">
+            + Yeni Şablon
+        </button>
+    </div>
+
+    <div id="sablonListe" class="sablon-liste">
+        <div class="yukleniyor">Şablonlar yükleniyor...</div>
+    </div>
+</div>
+
+<!-- DETAY MODAL -->
+<div class="modal-overlay" id="detayModal" onclick="if(event.target===this) sablonDetayKapat()">
+    <div class="modal-icerik">
+        <div class="modal-bas">
+            <h2 id="modalBaslik">Şablon Detayı</h2>
+            <button class="modal-kapat" onclick="sablonDetayKapat()">&times;</button>
+        </div>
+        <div class="modal-body" id="modalBody">
+            <div class="yukleniyor">Yükleniyor...</div>
+        </div>
+        <div class="modal-foot">
+            <button onclick="sablonDetayKapat()">Kapat</button>
+        </div>
+    </div>
+</div>
+
+<script src="/static/hedef/sablon.js?v=20260518"></script>
+
+{% endblock %}

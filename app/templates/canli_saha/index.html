@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Canli Saha (5055) - Solariz CPS</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/canli_saha.css') }}?v=1">
+</head>
+<body>
+
+<div class="cs-wrap">
+
+  <header class="cs-header">
+    <h1>📡 Canli Saha (5055)</h1>
+    <div class="cs-badge">LEGACY_5055 · READ-ONLY</div>
+  </header>
+
+  <div class="cs-info-banner">
+    Bu sayfa 5055 sisteminden gercek zamanli uretim verisini gosterir.
+    <strong>Buradan onay veya degisiklik yapilamaz</strong> — sadece goruntuleme.
+    Onay icin asil 5055 ekrani veya CPS Hedef paneli kullanilmalidir.
+  </div>
+
+  <div class="cs-toolbar">
+    <label>Gun: 
+      <select id="cs-gun">
+        <option value="1">Bugun</option>
+        <option value="3">Son 3 gun</option>
+        <option value="7">Son 7 gun</option>
+        <option value="30" selected>Son 30 gun</option>
+        <option value="90">Son 90 gun</option>
+      </select>
+    </label>
+    <label>Personel: <input type="text" id="cs-personel" placeholder="ad veya bir kismi"></label>
+    <label>Emir No: <input type="number" id="cs-emir" placeholder="orn 110376"></label>
+    <button id="cs-yenile">🔄 Yenile</button>
+    <span id="cs-status" class="cs-status"></span>
+  </div>
+
+  <div id="cs-hata" class="cs-hata-banner" style="display:none;"></div>
+
+  <div class="cs-ozet" id="cs-ozet" style="display:none;">
+    <div class="cs-ozet-item"><span class="cs-label">Toplam Kayit</span><span id="cs-ozet-kayit" class="cs-val">-</span></div>
+    <div class="cs-ozet-item"><span class="cs-label">Toplam Cift</span><span id="cs-ozet-miktar" class="cs-val">-</span></div>
+    <div class="cs-ozet-item ok"><span class="cs-label">Onayli</span><span id="cs-ozet-onayli" class="cs-val">-</span></div>
+    <div class="cs-ozet-item warn"><span class="cs-label">Bekleyen</span><span id="cs-ozet-bekleyen" class="cs-val">-</span></div>
+    <div class="cs-ozet-item err"><span class="cs-label">Reddedilen</span><span id="cs-ozet-reddedilen" class="cs-val">-</span></div>
+  </div>
+
+  <div class="cs-tablo-wrap">
+    <table class="cs-tablo" id="cs-tablo">
+      <thead>
+        <tr>
+          <th>Tarih</th>
+          <th>Saat</th>
+          <th>Emir No</th>
+          <th>Model</th>
+          <th>Proses</th>
+          <th>Personel</th>
+          <th class="cs-r">Miktar</th>
+          <th>Onay</th>
+          <th>Usta</th>
+          <th>Kaynak</th>
+        </tr>
+      </thead>
+      <tbody id="cs-tbody">
+        <tr><td colspan="10" class="cs-yukleniyor">Yukleniyor...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<script src="{{ url_for('static', filename='js/canli_saha.js') }}?v=1"></script>
+</body>
+</html>

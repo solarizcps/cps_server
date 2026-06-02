@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Projeler / Anlaşmalar — Finans{% endblock %}
+
+{% block head %}
+<style>
+.ak-card { background:#fff; border:0.5px solid var(--border); border-radius:12px; padding:14px 18px; margin-bottom:10px; box-shadow:var(--shadow); transition: box-shadow .15s; }
+.ak-card:hover { box-shadow:0 2px 8px rgba(0,0,0,0.08); }
+.ak-head { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; gap:14px; }
+.ak-left { flex:1; }
+.ak-kod { display:inline-block; background:var(--bg4); color:var(--text2); padding:2px 8px; border-radius:4px; font-size:11px; font-weight:700; margin-right:8px; }
+.ak-ad  { font-size:16px; font-weight:700; color:var(--text); display:inline; }
+.ak-tarih { font-size:12px; color:var(--text3); margin-top:3px; }
+.ak-stats { display:grid; grid-template-columns:repeat(5, 1fr); gap:14px; margin-top:10px; }
+.ak-stat .l { font-size:9px; color:var(--text3); text-transform:uppercase; letter-spacing:1.3px; font-weight:700; margin-bottom:3px; }
+.ak-stat .v { font-size:14px; font-weight:700; color:var(--text); }
+.ak-stat .v.g { color:var(--green); }
+.ak-stat .v.r { color:var(--red); }
+.ak-stat .v.o { color:#92400e; }
+.durum-pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:11px; font-weight:700; }
+.durum-AKTIF { background:#e0f2fe; color:#0369a1; }
+.durum-TAMAMLANDI { background:#dcfce7; color:#15803d; }
+.durum-IPTAL { background:#fee2e2; color:var(--red); }
+.progress-bar { height:5px; background:var(--bg4); border-radius:999px; overflow:hidden; margin-top:10px; }
+.progress-fill { height:100%; background:linear-gradient(90deg, #fbbf24, #f97316); border-radius:999px; }
+.filter-tabs { display:flex; gap:4px; margin-bottom:14px; }
+.filter-tab { padding:6px 14px; border:1px solid var(--border); border-radius:7px; font-size:12px; font-weight:600; cursor:pointer; background:#fff; color:var(--text2); text-decoration:none; }
+.filter-tab.active { background:var(--sol-dark); color:#fff; border-color:var(--sol-dark); }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <div class="page-title">Projeler / Anlaşmalar</div>
+    <div class="page-sub">{{ anlasmalar | length }} proje listeleniyor</div>
+  </div>
+  <div style="display:flex; gap:8px;">
+    <a class="btn btn-outline" href="/finans/">← Finans Paneli</a>
+    <a class="btn btn-primary" href="/finans/anlasma/yeni">+ Yeni Anlaşma</a>
+  </div>
+</div>
+
+<div class="kpi-grid">
+  <div class="kpi-kart" style="--kpi-color: var(--sol-dark);">
+    <div class="kpi-etiket">Aktif Anlaşma</div>
+    <div class="kpi-sayi">{{ kpi.aktif }}</div>
+    <div class="kpi-alt">proje devam ediyor</div>
+  </div>
+  <div class="kpi-kart" style="--kpi-color: #2563eb;">
+    <div class="kpi-etiket">Toplam Portföy</div>
+    <div class="kpi-sayi">{{ kpi.portfoy | tl }}</div>
+    <div class="kpi-alt">aktif anlaşmalar</div>
+  </div>
+  <div class="kpi-kart" style="--kpi-color: var(--green);">
+    <div class="kpi-etiket">Kalan (Bekliyor)</div>
+    <div class="kpi-sayi">{{ kpi.kalan | tl }}</div>
+    <div class="kpi-alt">tahsil edilecek</div>
+  </div>
+  <div class="kpi-kart" style="--kpi-color: #f59e0b;">
+    <div class="kpi-etiket">Bu Ay Beklenen</div>
+    <div class="kpi-sayi">{{ kpi.bu_ay_beklenen | tl }}</div>
+    <div class="kpi-alt">vadesi bu ay gelen</div>
+  </div>
+  <div class="kpi-kart" style="--kpi-color: var(--red);">
+    <div class="kpi-etiket">⚠ Geciken Taksit</div>
+    <div class="kpi-sayi">{{ kpi.geciken_tutar | tl }}</div>
+    <div class="kpi-alt">{{ kpi.geciken_adet }} taksit — aksiyon alın</div>
+  </div>
+</div>
+
+<div class="filter-tabs">
+  <a class="filter-tab {{ 'active' if durum == 'tumu' else '' }}" href="/finans/anlasma?durum=tumu">Hepsi</a>
+  <a class="filter-tab {{ 'active' if durum == 'AKTIF' else '' }}" href="/finans/anlasma?durum=AKTIF">Aktif</a>
+  <a class="filter-tab {{ 'active' if durum == 'TAMAMLANDI' else '' }}" href="/finans/anlasma?durum=TAMAMLANDI">Tamamlandı</a>
+  <a class="filter-tab {{ 'active' if durum == 'IPTAL' else '' }}" href="/finans/anlasma?durum=IPTAL">İptal</a>
+</div>
+
+{% for a in anlasmalar %}
+<a class="ak-card" href="/finans/anlasma/{{ a.Id }}" style="display:block; color:inherit;">
+  <div class="ak-head">
+    <div class="ak-left">
+      <span class="ak-kod">{{ a.ProjeKod }}</span>
+      <span class="ak-ad">{{ a.ProjeAdi }}</span>
+      <span class="durum-pill durum-{{ a.Durum }}" style="margin-left:8px;">{{ a.Durum }}</span>
+      <div class="ak-tarih">
+        {{ a.CName }}
+        {% if a.BaslangicTarih %} · {{ a.BaslangicTarih | tarih }}{% endif %}
+        {% if a.BitisTarih %} → {{ a.BitisTarih | tarih }}{% endif %}
+        {% if a.ModelSayi > 0 %} · {{ a.ModelSayi }} model{% endif %}
+      </div>
+    </div>
+    <div style="text-align:right;">
+      <div class="ak-stat">
+        <div class="l">Toplam</div>
+        <div class="v" style="font-size:16px;">{{ a.ToplamTutar | tl }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ak-stats">
+    <div class="ak-stat">
+      <div class="l">Miktar</div>
+      <div class="v">{{ a.ToplamMiktar | sayi }} çift</div>
+    </div>
+    <div class="ak-stat">
+      <div class="l">Avans Alınan</div>
+      <div class="v o">{{ a.AvansToplam | tl if a.AvansToplam else '—' }}</div>
+    </div>
+    <div class="ak-stat">
+      <div class="l">Tahsil Edilen</div>
+      <div class="v g">{{ a.TahsilEdilen | tl }}</div>
+    </div>
+    <div class="ak-stat">
+      <div class="l">Kalan</div>
+      <div class="v r">{{ a.Kalan | tl }}</div>
+    </div>
+    <div class="ak-stat">
+      <div class="l">İlerleme</div>
+      <div class="v">{{ a.GeldiSayi }} / {{ a.PlanSatirSayi }}</div>
+    </div>
+  </div>
+
+  {% set y = ((a.TahsilEdilen + a.MahsupEdilen) / a.ToplamTutar * 100) if a.ToplamTutar > 0 else 0 %}
+  <div class="progress-bar"><div class="progress-fill" style="width: {{ y }}%;"></div></div>
+  <div style="text-align:right; font-size:10px; color:var(--text3); margin-top:4px;">%{{ "%.1f" | format(y) }} tamamlandı</div>
+</a>
+{% else %}
+<div class="oz-card"><div class="oz-body" style="text-align:center; padding:40px; color:var(--text3);">
+  Henüz anlaşma yok. <a href="/finans/anlasma/yeni" style="color:var(--sol-dark); font-weight:700;">+ Yeni Anlaşma</a> ekle.
+</div></div>
+{% endfor %}
+
+{% endblock %}

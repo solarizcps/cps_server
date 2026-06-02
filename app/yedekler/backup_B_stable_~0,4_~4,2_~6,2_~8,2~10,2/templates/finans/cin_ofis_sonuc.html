@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}İçe Aktarma Başarılı — {{ siparis_no }}{% endblock %}
+
+{% block content %}
+
+<div class="page-head">
+  <div class="page-head-main">
+    <div class="crumbs">
+      <a href="/finans">Finans</a> ›
+      <a href="/finans/cin-ofis">Çin Ofis İçe Aktarma</a> ›
+      <strong>Sonuç</strong>
+    </div>
+    <h1>✓ İçe Aktarma Başarılı</h1>
+    <p class="muted">Çin Ofis Excel başarıyla siparişe dönüştürüldü.</p>
+  </div>
+</div>
+
+<div class="alert alert-success">
+  <div class="alert-ic">✓</div>
+  <div class="alert-body">
+    <strong>Sipariş oluşturuldu: {{ siparis_no }}</strong>
+    Durum: <span class="pill pill-info">Kontrol Bekliyor</span>
+  </div>
+</div>
+
+<div class="panel panel-primary">
+  <h3>📋 Oluşan Sipariş Özeti</h3>
+  <div class="form-grid form-grid-3">
+    <div>
+      <div class="muted small">Sipariş No</div>
+      <div style="font-size:var(--font-lg); font-weight:700;">{{ siparis_no }}</div>
+    </div>
+    <div>
+      <div class="muted small">Sipariş Kodu (Excel)</div>
+      <div style="font-weight:700;">{{ log.OrderCode }}</div>
+    </div>
+    <div>
+      <div class="muted small">Durum</div>
+      <span class="pill pill-info">Kontrol Bekliyor</span>
+    </div>
+    <div>
+      <div class="muted small">Tedarikçi</div>
+      <div>{{ tedarikci_ad or '—' }}</div>
+    </div>
+    <div>
+      <div class="muted small">Kalem Sayısı</div>
+      <div><strong>{{ kalem_sayi }}</strong> kalem</div>
+    </div>
+    <div>
+      <div class="muted small">Toplam Tutar</div>
+      <div style="font-weight:700;">
+        {{ "%.2f"|format(toplam_tutar or 0) }} {{ log.KurPB }}
+      </div>
+    </div>
+    <div>
+      <div class="muted small">Kur</div>
+      <div class="mono">
+        {{ "%.4f"|format(log.KurDeger or 0) }}
+        <span class="pill {% if log.KurKaynagi == 'EXCEL_OVERRIDE' %}pill-danger{% else %}pill-muted{% endif %} small">
+          {{ log.KurKaynagi }}
+        </span>
+      </div>
+    </div>
+    <div>
+      <div class="muted small">Ödeme Taslak</div>
+      <div>{{ odeme_taslak_sayi }} satır</div>
+    </div>
+    <div>
+      <div class="muted small">Dosya Referansı</div>
+      <div>{{ dosya_sayi }} ({{ required_dosya_sayi }} zorunlu)</div>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <h3>Sonraki Adımlar (Türkiye Ekibi)</h3>
+  <ol class="stack-sm" style="padding-left:20px;">
+    <li>Siparişi açıp kalem ve kur bilgisini <strong>doğrulayın</strong></li>
+    <li>Sipariş'e <strong>müşteri atayın</strong></li>
+    <li><strong>Finans anlaşması</strong> oluşturun (ProjeKod = <code>{{ siparis_no }}</code>)</li>
+    <li>Ödeme taslağını anlaşmanın planına taşıyın</li>
+    <li>Eksik dosyaları yükleyin: <code>/uploads/cin_ofis/{{ log.OrderCode }}/</code></li>
+    <li>Sipariş notlarına tahmini navlun ve vergi bilgisini ekleyin</li>
+    <li>Her şey doğruysa siparişte <strong>"Kontrolü Tamamla"</strong> butonu ile ONAYLANDI durumuna alın (sadece Yönetim)</li>
+  </ol>
+</div>
+
+<div class="form-actions" style="justify-content:flex-start;">
+  <a href="/grafik/siparis/{{ siparis_id }}" class="btn btn-primary">→ Siparişi Aç</a>
+  <a href="/finans/cin-ofis" class="btn btn-ghost">Çin Ofis İçe Aktarma Listesine Dön</a>
+</div>
+
+{% endblock %}

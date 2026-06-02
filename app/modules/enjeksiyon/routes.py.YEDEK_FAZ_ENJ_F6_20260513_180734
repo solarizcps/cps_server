@@ -1,0 +1,111 @@
+﻿# -*- coding: utf-8 -*-
+"""CPS DEV - Enjeksiyon Takip Routes (FAZ 5)
+
+URL yapisi:
+  /enjeksiyon/          -> Yonetim (admin/Yonetim/Planlama) - sidebar'li
+  /enjeksiyon/saha      -> Saha (login yeterli) - sidebar'siz, tablet icin
+  /enjeksiyon/api/...   -> API endpointleri
+
+F5'te inline HTML kaldirildi, render_template'e gecildi.
+F6'da yonetim.html ve saha.html R4 birebir doldurulacak.
+
+Yetki desenleri hedef modulu (modules.hedef.routes) ile uyumludur.
+"""
+from flask import (Blueprint, render_template, redirect, url_for,
+                   request, session, abort, jsonify)
+from functools import wraps
+
+
+enjeksiyon_bp = Blueprint(
+    'enjeksiyon', __name__,
+    url_prefix='/enjeksiyon',
+    template_folder='../../templates/enjeksiyon'
+)
+
+
+# ============== YETKI HELPER'LARI ==============
+
+def _yonetim_yetkisi():
+    """admin / Yonetim / Planlama erisebilir.
+
+    Hedef modulundeki _admin_mi() ile ayni desen.
+    """
+    u = session.get('kullanici')
+    if not u:
+        return False
+    if u.get('KullaniciAdi') == 'admin':
+        return True
+    if u.get('RolAd') in ('Yönetim', 'Planlama'):
+        return True
+    return False
+
+
+def yonetim_yetkili(f):
+    """Sidebar'li yonetim sayfalari icin decorator."""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get('kullanici'):
+            return redirect(url_for('auth.login', next=request.path))
+        if not _yonetim_yetkisi():
+            abort(403)
+        return f(*args, **kwargs)
+    return wrapper
+
+
+def saha_yetkili(f):
+    """Saha ekrani icin decorator - login olmus herkes."""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get('kullanici'):
+            return redirect(url_for('auth.login', next=request.path))
+        return f(*args, **kwargs)
+    return wrapper
+
+
+# ============== SAYFALAR ==============
+
+@enjeksiyon_bp.route('/')
+@yonetim_yetkili
+def yonetim_panel():
+    """Yonetim icin enjeksiyon takip ana paneli (sidebar'li, base.html extend)."""
+    return render_template('enjeksiyon/yonetim.html')
+
+
+@enjeksiyon_bp.route('/saha')
+@saha_yetkili
+def saha_panel():
+    """Ferhat gibi saha kullanicilari icin sade tablet ekrani (sidebar'siz)."""
+    return render_template('enjeksiyon/saha.html')
+
+
+# ============== API ==============
+
+@enjeksiyon_bp.route('/api/saglik')
+def api_saglik():
+    """Modul saglik kontrolu."""
+    return jsonify({
+        'durum': 'ok',
+        'modul': 'enjeksiyon',
+        'faz': 'F5',
+        'blueprint': enjeksiyon_bp.name,
+        'url_prefix': enjeksiyon_bp.url_prefix,
+        'templates': ['yonetim.html', 'saha.html']
+    })
+
+
+@enjeksiyon_bp.route('/api/makine')
+@yonetim_yetkili
+def api_makine_listele():
+    """Aktif makine listesi."""
+    from modules.enjeksiyon.db import makine_listele
+    rows = makine_listele()
+    return jsonify({'durum': 'ok', 'kayit_sayisi': len(rows), 'veri': rows})
+
+
+@enjeksiyon_bp.route('/api/aksama-sebep')
+@yonetim_yetkili
+def api_aksama_sebep_listele():
+    """Aktif aksama sebepleri - dropdown icin."""
+    from modules.enjeksiyon.db import aksama_sebep_listele
+    rows = aksama_sebep_listele()
+    return jsonify({'durum': 'ok', 'kayit_sayisi': len(rows), 'veri': rows})

@@ -1,0 +1,51 @@
+{
+  "belge_id": 85,
+  "parti_id": 8,
+  "olusma_tarih": "2026-04-25 01:24:33",
+  "parse": {
+    "basarili": false,
+    "durum": "ONERI_BEKLIYOR",
+    "mesaj": "Bu beyannamede maliyet kalemi tespit edilemedi. PDF formati beklenen yapida olmayabilir. Manuel giris gerekli.",
+    "kalem_sayisi": 0,
+    "kalemler": [],
+    "parti_bilgi": {},
+    "uyarilar": [],
+    "kaynak_ref": null,
+    "dosya_hash": "4341f3173cf17fad0c185a10a0c2cfdd558a66080cc60b9973c95dd9d7a2d0a3",
+    "insan_onayi_bekliyor": false,
+    "guven_skoru": null,
+    "guven_seviyesi": null,
+    "guven_detay": [],
+    "matematik_ok": null,
+    "ekstra_kalemler": [],
+    "tespit_edilen_kolonlar": {},
+    "mantiksizlik_uyarilari": [],
+    "oneriler": [],
+    "meta": {
+      "belge_tipi_etiket": "Gumruk Beyannamesi",
+      "beyanname_no": null,
+      "tescil_tarihi": null,
+      "teslim_sekli": null,
+      "odeme_sekli": null,
+      "para_birimi_ana": "TRY",
+      "doviz_tutari": null,
+      "doviz_para": null,
+      "kur": null,
+      "brut_kg": null,
+      "net_kg": null,
+      "ist_kiymet": null,
+      "vergi_toplam": 0,
+      "masraf_toplam": 0,
+      "toplam_ifade": null,
+      "guvenli_okuma_hatasi": true,
+      "elenen_kalem_sayisi": 0
+    }
+  },
+  "ek_bilgi": {
+    "dosya_adi": "sebs nexgen - beyanname.pdf",
+    "belge_tipi": "BEYANNAME",
+    "dosya_hash": "4341f3173cf17fad0c185a10a0c2cfdd558a66080cc60b9973c95dd9d7a2d0a3"
+  },
+  "is_duplicate": false,
+  "existing_ref": null
+}

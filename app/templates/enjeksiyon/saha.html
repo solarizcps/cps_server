@@ -1,0 +1,55 @@
+﻿<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>Enjeksiyon Takip - Saha</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif; font-size: 13px; color: #1f2937; background: #f8f8f3; }
+.bar { background: #f8c641; color: #fff; padding: 10px 16px; display: flex; align-items: center; gap: 14px; }
+.bar .logo { font-weight: 700; font-size: 15px; line-height: 1; }
+.bar .logo small { display: block; font-size: 8px; font-weight: 400; letter-spacing: 1.4px; margin-top: 2px; opacity: 0.95; }
+.bar .crumb { font-size: 13px; font-weight: 600; margin-left: 10px; }
+.bar .crumb .sep { margin: 0 6px; opacity: 0.7; }
+.bar .user { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.bar .user .av { width: 24px; height: 24px; border-radius: 50%; background: rgba(255,255,255,0.25); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+.bar .user .name { font-weight: 700; font-size: 12px; line-height: 1.1; }
+.bar .user .name small { display: block; font-size: 10px; font-weight: 400; opacity: 0.9; margin-top: 1px; }
+.bar .out { margin-left: 6px; cursor: pointer; opacity: 0.9; font-size: 14px; color: #fff; text-decoration: none; }
+.body { padding: 14px; max-width: 1400px; margin: 0 auto; }
+.kart { background: #fff; border: 1px solid #e3e3e0; border-radius: 6px; padding: 30px; text-align: center; }
+.kart h1 { margin: 0 0 8px; font-size: 22px; color: #1f2937; }
+.kart p { color: #6b7280; margin: 6px 0; }
+.banner { background: #fffbeb; border: 1px solid #fde68a; border-left: 4px solid #d4a52f; border-radius: 6px; padding: 14px 18px; margin-bottom: 14px; font-size: 13px; color: #92400e; }
+.banner b { font-weight: 700; }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <div class="logo">Solariz<small>CPS SISTEMI</small></div>
+  <div class="crumb">URETIM<span class="sep">&rsaquo;</span>ENJEKSIYON TAKIP</div>
+  <div class="user">
+    <div class="av">{{ (session.kullanici.KullaniciAdi or '?')[0]|upper }}</div>
+    <div class="name">{{ session.kullanici.AdSoyad or session.kullanici.KullaniciAdi }}<small>{{ session.kullanici.RolAd or 'Saha' }}</small></div>
+    <a href="/auth/cikis" class="out" title="Cikis">&#x23FB;</a>
+  </div>
+</div>
+
+<div class="body">
+
+  <div class="banner">
+    <b>FAZ 5 iskelet aktif.</b> Tablet icin sade saha ekrani. R4 mockup birebir HTML F6'da gelecek.
+  </div>
+
+  <div class="kart">
+    <h1>Enjeksiyon Takip - Saha</h1>
+    <p>4 makine se&ccedil;imi + saatlik tur + g&uuml;n sonu kayit ekrani</p>
+    <p style="font-size: 11px; color: #888780; margin-top: 20px;">Sidebar gizli &middot; rota: <code style="background: #fef6e0; padding: 2px 6px; border-radius: 3px;">/enjeksiyon/saha</code></p>
+  </div>
+
+</div>
+
+</body>
+</html>

@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Personel Giris — Solariz CPS</title>
+<style>
+body { font-family: 'Segoe UI', sans-serif; background: #f0f4f8; padding: 40px; text-align: center; }
+h1 { color: #1a3c6e; font-size: 36px; }
+.status { color: #059669; font-size: 18px; margin-top: 20px; }
+.kucuk { color: #888; font-size: 13px; margin-top: 14px; }
+</style>
+</head>
+<body>
+<h1>🏭 Personel Üretim Girişi</h1>
+<div class="status">✅ Blueprint çalışıyor</div>
+<div class="kucuk">FAZ 2 iskelet OK — FAZ 3'te gerçek UI yüklenecek</div>
+</body>
+</html>

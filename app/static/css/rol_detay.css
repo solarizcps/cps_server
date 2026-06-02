@@ -1,0 +1,494 @@
+/* ============================================================
+ * rol_detay.css - V2 Yetki Matrisi (D4.6 - 16.05.2026)
+ *
+ * Tasarim:
+ *   - Ust ozet kartlar (5 metrik)
+ *   - Modul grup accordion (kapali/acik)
+ *   - 7 boyut yetki matrisi (kompakt)
+ *   - Aktif modul vurgusu (mavi border + yesil rozet)
+ *   - Riskli modul uyarisi (kirmizi border + rozet)
+ *   - Sticky save bar (sade, 2 metrik)
+ * ============================================================ */
+
+/* ============================================================
+ * UST OZET KARTLAR (5 metrik mini-kart)
+ * ============================================================ */
+.v2-ust-ozet {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.v2-ozet-kart {
+    background: #fff;
+    border: 0.5px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow .15s;
+}
+
+.v2-ozet-kart:hover { box-shadow: var(--shadow-md); }
+
+.v2-ozet-deger {
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+}
+
+.v2-ozet-deger.tehlike { color: #dc2626; }
+
+.v2-ozet-etiket {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1.3px;
+    color: var(--text3);
+    margin-top: 6px;
+    font-weight: 600;
+}
+
+/* ============================================================
+ * UTILITY BAR (Tumunu Ac / Kapat)
+ * ============================================================ */
+.v2-util-bar {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.v2-util-btn {
+    background: var(--bg4);
+    border: 0.5px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text2);
+    cursor: pointer;
+    transition: all .12s;
+}
+
+.v2-util-btn:hover {
+    background: var(--sol-light);
+    color: var(--sol-dark);
+}
+
+/* ============================================================
+ * MODUL GRUP - KART (Accordion)
+ * ============================================================ */
+.v2-modul-kart {
+    background: #fff;
+    border: 0.5px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 8px;
+    overflow: hidden;
+    transition: border-color .15s, box-shadow .15s;
+    border-left: 3px solid transparent;
+}
+
+/* Aktif modul (en az 1 yetki acik) - mavi sol border */
+.v2-modul-kart.v2-aktif {
+    border-left-color: #2563eb;
+    box-shadow: 0 1px 3px rgba(37, 99, 235, 0.08);
+}
+
+/* Riskli modul (can_delete veya can_manage) - kirmizi sol border */
+.v2-modul-kart.v2-riskli {
+    border-left-color: #dc2626;
+    box-shadow: 0 1px 3px rgba(220, 38, 38, 0.10);
+}
+
+/* ============================================================
+ * MODUL KART BASLIK (Tikla -> Acilir)
+ * ============================================================ */
+.v2-kart-bas {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    cursor: pointer;
+    user-select: none;
+    background: linear-gradient(90deg, var(--bg4), transparent);
+    transition: background .12s;
+}
+
+.v2-kart-bas:hover {
+    background: linear-gradient(90deg, var(--sol-light), transparent);
+}
+
+.v2-kart-bas-sol {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+}
+
+.v2-kart-bas-sag {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.v2-modul-ad {
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--text);
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+}
+
+.v2-alt-modul-ad {
+    font-size: 12px;
+    color: var(--text2);
+    font-weight: 500;
+}
+
+/* ============================================================
+ * MODUL ROZETLER (yetki sayisi + V/C/U/R aksiyonlar)
+ * ============================================================ */
+.v2-rozet {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+}
+
+.v2-rozet-yetki { background: var(--bg4); color: var(--text2); }
+.v2-rozet-aktif { background: #d1fae5; color: #065f46; }
+.v2-rozet-riskli { background: #fee2e2; color: #991b1b; }
+
+.v2-rozet-aksiyonlar {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text3);
+    margin-left: 6px;
+}
+
+/* ============================================================
+ * ACCORDION OK
+ * ============================================================ */
+.v2-ok {
+    color: var(--text3);
+    font-size: 11px;
+    transition: transform .2s;
+    margin-left: 4px;
+}
+
+.v2-modul-kart.v2-acik .v2-ok {
+    transform: rotate(90deg);
+}
+
+/* ============================================================
+ * KART ICERIK (Acildiginda gorulur)
+ * ============================================================ */
+.v2-kart-icerik {
+    display: none;
+    padding: 0;
+    border-top: 1px solid var(--border);
+}
+
+.v2-modul-kart.v2-acik .v2-kart-icerik {
+    display: block;
+}
+
+/* ============================================================
+ * HIZLI EYLEM SATIRI (Sadece Gor, Calisan, Hicbiri)
+ * ============================================================ */
+.v2-eylem-cubuk {
+    padding: 8px 16px;
+    background: #fafafa;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    font-size: 10px;
+}
+
+.v2-eylem-etiket {
+    color: var(--text3);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.1px;
+    margin-right: 4px;
+}
+
+.v2-eylem-btn {
+    background: transparent;
+    border: 0.5px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text2);
+    cursor: pointer;
+    transition: all .12s;
+}
+
+.v2-eylem-btn:hover {
+    background: var(--sol-light);
+    color: var(--sol-dark);
+    border-color: var(--sol);
+}
+
+/* ============================================================
+ * 7 SUTUN MATRIS - HEADER + ROW
+ * ============================================================ */
+.v2-matris-hdr,
+.v2-matris-row {
+    display: grid;
+    grid-template-columns:
+        1fr           /* Yetki adi */
+        44px 44px 44px 44px 44px 44px 44px   /* 7 action */
+        30px;         /* ESKI badge (kucuk) */
+    align-items: center;
+    padding: 0 16px;
+}
+
+.v2-matris-hdr {
+    padding-top: 8px;
+    padding-bottom: 8px;
+    background: var(--bg4);
+    border-bottom: 1px solid var(--border);
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+}
+
+.v2-matris-hdr span {
+    text-align: center;
+}
+
+.v2-matris-hdr span:first-child {
+    text-align: left;
+}
+
+/* Sutun renkleri (risk artan: mavi -> kirmizi) */
+.v2-hdr-view    { color: #2563eb; }
+.v2-hdr-create  { color: #16a34a; }
+.v2-hdr-update  { color: #d97706; }
+.v2-hdr-delete  { color: #dc2626; }
+.v2-hdr-approve { color: #7c3aed; }
+.v2-hdr-report  { color: #0891b2; }
+.v2-hdr-manage  { color: #991b1b; }
+.v2-hdr-eski    { color: var(--text3); font-style: italic; font-size: 8px; }
+
+/* Tehlikeli sutunlar - ust border vurgu */
+.v2-hdr-delete,
+.v2-hdr-manage {
+    background: #fef2f2;
+}
+
+/* ============================================================
+ * MATRIS ROW
+ * ============================================================ */
+.v2-matris-row {
+    padding-top: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--bg3);
+    transition: background .1s;
+}
+
+.v2-matris-row:last-child { border-bottom: none; }
+.v2-matris-row:hover { background: var(--bg3); }
+
+.v2-yetki-ad {
+    font-size: 13px;
+    color: var(--text);
+    font-weight: 500;
+}
+
+.v2-yetki-kod-tooltip {
+    cursor: help;
+    border-bottom: 1px dotted var(--border2);
+}
+
+/* ============================================================
+ * CHECKBOX HUCRELERI
+ * ============================================================ */
+.v2-cb {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 24px;
+}
+
+.v2-cb input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--sol-dark);
+    margin: 0;
+}
+
+/* Tehlikeli action checkbox'lar - bos halde bile kirmizi border */
+.v2-cb.v2-cb-delete,
+.v2-cb.v2-cb-manage {
+    background: #fef2f2;
+    border-radius: 4px;
+    position: relative;
+}
+
+.v2-cb.v2-cb-delete::before,
+.v2-cb.v2-cb-manage::before {
+    content: "";
+    position: absolute;
+    top: 2px; left: 2px; right: 2px; bottom: 2px;
+    border: 1px dashed #dc2626;
+    border-radius: 3px;
+    pointer-events: none;
+    opacity: 0.3;
+}
+
+.v2-cb.v2-cb-delete input[type="checkbox"] { accent-color: #dc2626; }
+.v2-cb.v2-cb-manage input[type="checkbox"] { accent-color: #991b1b; }
+
+.v2-cb.v2-cb-approve input[type="checkbox"] { accent-color: #7c3aed; }
+
+/* ============================================================
+ * ESKI BADGE (kucuk, sade, gecici)
+ * ============================================================ */
+.v2-eski-badge {
+    display: inline-block;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 700;
+    text-align: center;
+    min-width: 22px;
+    line-height: 1.4;
+    opacity: 0.7;
+}
+
+.v2-eski-G  { background: #dbeafe; color: #1e40af; }
+.v2-eski-D  { background: #fef3c7; color: #92400e; }
+.v2-eski-GD { background: #d1fae5; color: #065f46; }
+.v2-eski-bos { background: var(--bg4); color: var(--text3); }
+
+/* ============================================================
+ * SUPERADMIN BANNER
+ * ============================================================ */
+.v2-superadmin-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #fef3c7, #fbbf24);
+    color: #78350f;
+    padding: 3px 10px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.3px;
+    text-transform: uppercase;
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+.v2-readonly-info {
+    background: linear-gradient(90deg, #fef3c7, #fff);
+    border: 1px solid #fbbf24;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    font-size: 12px;
+    color: #78350f;
+}
+
+/* ============================================================
+ * STICKY SAVE BAR (Sade - 2 metrik)
+ * ============================================================ */
+.v2-save-bar {
+    position: sticky;
+    bottom: 0;
+    background: #fff;
+    border-radius: 10px;
+    border: 0.5px solid var(--border);
+    box-shadow: 0 -4px 16px rgba(0,0,0,0.08);
+    padding: 12px 18px;
+    margin-top: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 10;
+}
+
+.v2-save-istat {
+    display: flex;
+    gap: 14px;
+    font-size: 12px;
+    color: var(--text2);
+    font-family: var(--mono);
+    align-items: center;
+}
+
+.v2-save-istat-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.v2-save-istat-deger {
+    font-weight: 700;
+    font-size: 14px;
+}
+
+.v2-save-istat-deger.tehlike { color: #dc2626; }
+
+/* ============================================================
+ * TOOLTIP (Hover ile action aciklamasi)
+ * ============================================================ */
+.v2-tooltip {
+    position: relative;
+    cursor: help;
+}
+
+.v2-tooltip::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--text);
+    color: white;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+    text-transform: none;
+    letter-spacing: 0;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .15s;
+    z-index: 100;
+}
+
+.v2-tooltip:hover::after {
+    opacity: 1;
+}
+
+/* ============================================================
+ * MOBILE - 768px alti
+ * Accordion mantigi mobile dostu zaten; sadece matris yatay scroll
+ * ============================================================ */
+@media (max-width: 768px) {
+    .v2-matris-hdr,
+    .v2-matris-row {
+        min-width: 580px;
+    }
+    .v2-kart-icerik {
+        overflow-x: auto;
+    }
+    .v2-ust-ozet {
+        grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+    }
+}

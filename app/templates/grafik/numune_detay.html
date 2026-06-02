@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+{% set tab = 'grafik' %}
+{% set active = 'grafik' %}
+{% block title %}{{ numune.NumuneNo }} — Numune{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="crumbs"><a href="/grafik/numune">Numuneler</a> › <strong>{{ numune.NumuneNo }}</strong></div>
+    <h1>🧪 {{ numune.Baslik }}</h1>
+    <p class="muted">
+      {% for kod, ad, renk in durumlar %}
+        {% if numune.Durum == kod %}
+        <span class="pill" style="background:{{ renk }};color:#fff;">{{ ad }}</span>
+        {% endif %}
+      {% endfor %}
+      · Talep: {{ numune.TalepTarihi or '—' }}
+      {% if numune.BeklenenTarih %}· Beklenen: {{ numune.BeklenenTarih }}{% endif %}
+    </p>
+  </div>
+  <div class="ph-actions">
+    <!-- Hızlı durum değiştir -->
+    <form method="post" action="/grafik/numune/{{ numune.Id }}/durum" style="display:inline;">
+      <select name="Durum" onchange="this.form.submit()" class="btn-ghost" style="padding:7px 10px;">
+        {% for kod, ad, renk in durumlar %}
+        <option value="{{ kod }}" {% if numune.Durum == kod %}selected{% endif %}>{{ ad }}</option>
+        {% endfor %}
+      </select>
+    </form>
+    <form method="post" action="/grafik/numune/{{ numune.Id }}/sil" style="display:inline;"
+          onsubmit="return confirm('Numune ve tüm iterasyonları silinecek. Emin misin?');">
+      <button class="btn btn-danger">🗑 Sil</button>
+    </form>
+  </div>
+</div>
+
+{% include '_flash.html' ignore missing %}
+
+<div class="twocol">
+  <!-- SOL: Temel Bilgi -->
+  <section class="panel">
+    <h3>Numune Bilgileri</h3>
+    <form method="post" action="/grafik/numune/{{ numune.Id }}/guncelle" class="form-stack">
+      <label>Başlık * <input type="text" name="Baslik" value="{{ numune.Baslik }}" required></label>
+      <div class="form-row">
+        <label style="flex:1;">Müşteri
+          <select name="MusteriCKod">
+            <option value="">(yok)</option>
+            {% for m in musteriler %}
+            <option value="{{ m.CKod }}" {% if numune.MusteriCKod == m.CKod %}selected{% endif %}>{{ m.CName }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label style="flex:1;">Tedarikçi
+          <select name="TedarikciId">
+            <option value="">(yok)</option>
+            {% for t in tedarikciler %}
+            <option value="{{ t.Id }}" {% if numune.TedarikciId == t.Id %}selected{% endif %}>{{ t.Ad }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+      <label>Ürün
+        <select name="UrunId">
+          <option value="">(yok)</option>
+          {% for u in urunler %}
+          <option value="{{ u.Id }}" {% if numune.UrunId == u.Id %}selected{% endif %}>{{ u.Kod }} — {{ u.Ad }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Beklenen Tarih <input type="date" name="BeklenenTarih" value="{{ numune.BeklenenTarih or '' }}"></label>
+      <label>Notlar <textarea name="Notlar" rows="3">{{ numune.Notlar or '' }}</textarea></label>
+      <div style="display:flex; justify-content:flex-end;">
+        <button class="btn btn-primary">💾 Kaydet</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- SAĞ: İterasyon Timeline -->
+  <section class="panel">
+    <div class="panel-head">
+      <h3>İterasyon Geçmişi ({{ iterasyonlar|length }})</h3>
+      <button class="btn btn-sm btn-primary" onclick="document.getElementById('iter-yeni').showModal()">+ İterasyon</button>
+    </div>
+
+    {% if iterasyonlar %}
+    <div class="timeline">
+      {% for it in iterasyonlar %}
+      <div class="timeline-item">
+        <div class="tl-marker
+            {% if it.Durum == 'ONAY' %}tl-ok{% elif it.Durum == 'RED' %}tl-err{% elif it.Durum == 'REVIZYON' %}tl-warn{% else %}tl-info{% endif %}">
+          #{{ it.Sira }}
+        </div>
+        <div class="tl-body">
+          <div class="tl-head">
+            <strong>{{ it.Durum }}</strong>
+            <span class="muted">· {{ it.Tarih }}</span>
+            <span class="muted" style="font-size:.82rem;">· {{ it.OlusturanKullanici }}</span>
+            <form method="post" action="/grafik/numune/iterasyon/{{ it.Id }}/sil" style="display:inline; float:right;"
+                  onsubmit="return confirm('İterasyonu sil?');">
+              <button class="btn-icon" title="Sil">🗑</button>
+            </form>
+          </div>
+          {% if it.FeedbackNotu %}
+          <div class="tl-note">{{ it.FeedbackNotu }}</div>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty">Henüz iterasyon yok. İlk gönderimi "+ İterasyon" ile ekle.</p>
+    {% endif %}
+  </section>
+</div>
+
+<dialog id="iter-yeni" class="modal">
+  <form method="post" action="/grafik/numune/{{ numune.Id }}/iterasyon/yeni" class="modal-form">
+    <h3>Yeni İterasyon</h3>
+    <p class="muted" style="font-size:.85rem; margin:0;">
+      İterasyon durumu Numune'nin ana durumunu otomatik günceller.
+    </p>
+    <label>Tarih <input type="date" name="Tarih" required value="{{ numune.TalepTarihi or '' }}"></label>
+    <label>Durum *
+      <select name="Durum" required>
+        <option value="">(seç)</option>
+        {% for kod, ad in iter_durumlari %}
+        <option value="{{ kod }}">{{ ad }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Feedback / Not <textarea name="Feedback" rows="3" placeholder="Neler konuşuldu, ne istendi?"></textarea></label>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" onclick="this.closest('dialog').close()">İptal</button>
+      <button class="btn btn-primary">Ekle</button>
+    </div>
+  </form>
+</dialog>
+
+<style>
+.timeline { display:flex; flex-direction:column; gap:12px; }
+.timeline-item { display:flex; gap:12px; align-items:flex-start; }
+.tl-marker {
+  flex-shrink:0; width:44px; height:44px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-weight:700; color:#fff; font-size:.82rem;
+}
+.tl-ok   { background:#059669; }
+.tl-err  { background:#dc2626; }
+.tl-warn { background:#F97316; }
+.tl-info { background:#0891b2; }
+.tl-body { flex:1; padding:8px 12px; background:#f9fafb; border-radius:6px; min-height:44px; }
+.tl-head { font-size:.9rem; }
+.tl-note { margin-top:4px; font-size:.88rem; color:#374151; line-height:1.4; }
+</style>
+
+<!-- Belgeler: Proforma, teknik çizim, numune görselleri -->
+<div style="margin-top:20px;">
+  {% set upload_url = '/grafik/numune/' ~ numune.Id ~ '/belge/yukle' %}
+  {% set panel_baslik = 'Belgeler & Numune Görselleri' %}
+  {% include 'grafik/_belge_section.html' %}
+</div>
+
+{% if siparisler_bagli %}
+<section class="panel" style="margin-top:20px; background:linear-gradient(135deg,#fff,#ecfdf5);">
+  <div class="panel-head">
+    <h3>📋 Bu Numuneden Oluşan Siparişler ({{ siparisler_bagli|length }})</h3>
+  </div>
+  <table class="data-table compact">
+    <thead>
+      <tr>
+        <th>Sipariş No</th><th>Tedarikçi</th><th>Durum</th>
+        <th style="text-align:right;">Toplam USD</th><th>Tarih</th><th>Finans</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for sp in siparisler_bagli %}
+      <tr>
+        <td><strong>{{ sp.SiparisNo }}</strong></td>
+        <td>{{ sp.TedarikciAd or '—' }}</td>
+        <td>
+          {% if sp.Durum == 'TASLAK' %}<span class="pill" style="background:#6b7280;color:#fff;">Taslak</span>
+          {% elif sp.Durum == 'ONAYLANDI' %}<span class="pill" style="background:#059669;color:#fff;">Onaylandı</span>
+          {% elif sp.Durum == 'TAMAMLANDI' %}<span class="pill" style="background:#1f2937;color:#fff;">Tamamlandı</span>
+          {% else %}<span class="pill">{{ sp.Durum }}</span>{% endif %}
+        </td>
+        <td style="text-align:right; font-variant-numeric:tabular-nums;">${{ "{:,.2f}".format(sp.ToplamTutar or 0) }}</td>
+        <td class="muted" style="font-size:.82rem;">{{ (sp.SiparisTarihi or '')[:10] }}</td>
+        <td>{% if sp.FinansAnlasmaId %}<a href="/finans/anlasma/{{ sp.FinansAnlasmaId }}" style="font-size:.82rem;">Anlaşma ↗</a>{% else %}—{% endif %}</td>
+        <td style="text-align:right;"><a href="/grafik/siparis/{{ sp.Id }}" class="btn btn-sm">Detay</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+{% if dhl_sevkiyatlari %}
+<section class="panel" style="margin-top:20px;">
+  <div class="panel-head">
+    <h3>📦 DHL / Kurye Sevkiyatları ({{ dhl_sevkiyatlari|length }})</h3>
+    <a href="/grafik/sevkiyat" class="btn btn-sm btn-ghost">+ Yeni DHL</a>
+  </div>
+  <table class="data-table compact">
+    <thead>
+      <tr>
+        <th>Sevkiyat No</th><th>Kurye</th><th>Takip No</th><th>Yön</th>
+        <th style="text-align:right;">Kg</th><th>Durum</th><th>Sevk → Varış</th>
+        <th style="text-align:right;">Masraf</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for sv in dhl_sevkiyatlari %}
+      <tr>
+        <td><strong>{{ sv.SevkiyatNo }}</strong></td>
+        <td>{{ sv.Forwarder or '—' }}</td>
+        <td><code>{{ sv.TakipNo or '—' }}</code></td>
+        <td>{{ sv.GonderimYonu or '—' }}</td>
+        <td style="text-align:right;">{{ sv.AgirlikKg or 0 }} kg</td>
+        <td>{{ sv.Durum }}</td>
+        <td class="muted" style="font-size:.82rem;">
+          {{ (sv.SevkTarihi or '')[:10] }}
+          {% if sv.GerceklesenVarisTarihi %}<br>✓ {{ sv.GerceklesenVarisTarihi[:10] }}{% endif %}
+        </td>
+        <td style="text-align:right; font-variant-numeric:tabular-nums;">{{ "{:,.0f}".format(sv.ToplamMasrafTL or 0) }} ₺</td>
+        <td style="text-align:right;"><a href="/grafik/sevkiyat/{{ sv.Id }}" class="btn btn-sm">Detay</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+{% endblock %}

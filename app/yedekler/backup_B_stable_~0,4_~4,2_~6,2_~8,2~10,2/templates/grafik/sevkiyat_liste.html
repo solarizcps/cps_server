@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+{% set tab = 'grafik' %}
+{% set active = 'grafik' %}
+{% block title %}Sevkiyat & Maliyet — Grafik{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>🚢 Sevkiyat & Maliyet Dağıtım</h1>
+    <p class="muted">Uçak/konteyner/karayolu sevkiyat · Masraflar · 5 yöntem ile kalem maliyeti</p>
+  </div>
+  <div class="ph-actions">
+    <button type="button" class="btn btn-primary" onclick="document.getElementById('svk-yeni').showModal()">+ Yeni Sevkiyat</button>
+  </div>
+</div>
+
+{% include '_flash.html' ignore missing %}
+
+<div class="kpi-grid">
+  <div class="kpi-card" style="border-left:4px solid #6b7280;">
+    <div class="kpi-label">Hazırlık</div><div class="kpi-value">{{ kpi.hazirlik }}</div>
+  </div>
+  <div class="kpi-card" style="border-left:4px solid #0891b2;">
+    <div class="kpi-label">Yolda</div><div class="kpi-value">{{ kpi.yolda }}</div>
+  </div>
+  <div class="kpi-card" style="border-left:4px solid #F97316;">
+    <div class="kpi-label">Gümrükte</div><div class="kpi-value">{{ kpi.gumruk }}</div>
+  </div>
+  <div class="kpi-card" style="border-left:4px solid #059669;">
+    <div class="kpi-label">Teslim (Kesinleşti)</div><div class="kpi-value">{{ kpi.teslim }}</div>
+  </div>
+  <div class="kpi-card" style="background:linear-gradient(135deg,#fff7ed,#ffedd5);">
+    <div class="kpi-label">⏳ Tahmini Masraf</div>
+    <div class="kpi-value" style="font-size:1.15rem; color:#F97316;">{{ "{:,.0f}".format(kpi.tahmini_masraf_tl) }} ₺</div>
+    <div class="kpi-sub" style="font-size:.72rem;">Hazırlık + Yolda + Gümrük</div>
+  </div>
+  <div class="kpi-card" style="background:linear-gradient(135deg,#ecfdf5,#d1fae5);">
+    <div class="kpi-label">✓ Gerçek Masraf</div>
+    <div class="kpi-value" style="font-size:1.15rem; color:#059669;">{{ "{:,.0f}".format(kpi.gercek_masraf_tl) }} ₺</div>
+    <div class="kpi-sub" style="font-size:.72rem;">Teslim alınmış</div>
+  </div>
+</div>
+
+<form method="get" class="filter-bar">
+  <input type="search" name="q" value="{{ arama or '' }}" placeholder="SVK no, konsimento veya sipariş no...">
+  <select name="d">
+    <option value="">Tüm durumlar</option>
+    {% for kod, ad, renk in durumlar %}
+    <option value="{{ kod }}" {% if durum == kod %}selected{% endif %}>{{ ad }}</option>
+    {% endfor %}
+  </select>
+  <select name="n">
+    <option value="">Tüm nakliye tipleri</option>
+    {% for kod, ad, _ in nakliye_tipleri %}
+    <option value="{{ kod }}" {% if nakliye == kod %}selected{% endif %}>{{ ad }}</option>
+    {% endfor %}
+  </select>
+  <button class="btn btn-ghost">Filtrele</button>
+  {% if arama or durum or nakliye %}<a href="/grafik/sevkiyat" class="btn btn-link">Temizle</a>{% endif %}
+</form>
+
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>Sevkiyat No</th>
+      <th>Sipariş</th>
+      <th>Tedarikçi</th>
+      <th>Tip</th>
+      <th>Durum</th>
+      <th>Sevk → Varış</th>
+      <th style="text-align:right;">Toplam Masraf</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for s in sevkiyatlar %}
+    <tr>
+      <td><strong>{{ s.SevkiyatNo }}</strong>
+          {% if s.DagitimHesaplandi %}<span class="pill" style="background:#059669;color:#fff;font-size:.7rem;">✓ Dağıtıldı</span>{% endif %}
+      </td>
+      <td>
+        {% if s.SiparisNo %}<code>{{ s.SiparisNo }}</code>
+        {% elif s.NumuneNo %}<code>{{ s.NumuneNo }}</code><br><span class="muted" style="font-size:.75rem;">numune</span>
+        {% else %}<span class="muted">—</span>{% endif %}
+      </td>
+      <td>
+        {% if s.TedarikciAd %}{{ s.TedarikciAd }}
+        {% elif s.NakliyeTipi == 'DHL' %}<span class="muted">({{ s.Forwarder or 'DHL' }})</span>
+        {% else %}—{% endif %}
+      </td>
+      <td>
+        {% for kod, ad, _ in nakliye_tipleri %}{% if s.NakliyeTipi == kod %}{{ ad }}{% endif %}{% endfor %}
+      </td>
+      <td>
+        {% if s.Durum == 'TESLIM' %}
+          <span class="pill" style="background:#059669;color:#fff;">✓ Teslim Alındı</span>
+        {% elif s.Durum == 'IPTAL' %}
+          <span class="pill" style="background:#dc2626;color:#fff;">✗ İptal</span>
+        {% else %}
+          {% for kod, ad, renk in durumlar %}
+            {% if s.Durum == kod %}
+            <span class="pill" style="background:{{ renk }};color:#fff;">{{ ad }}</span>
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+      </td>
+      <td class="muted" style="font-size:.85rem;">
+        {{ (s.SevkTarihi or '—')[:10] }}<br>
+        {% if s.GerceklesenVarisTarihi %}✓ {{ s.GerceklesenVarisTarihi[:10] }}
+        {% elif s.BeklenenVarisTarihi %}→ {{ s.BeklenenVarisTarihi[:10] }}{% endif %}
+      </td>
+      <td style="text-align:right; font-variant-numeric:tabular-nums;">
+        <strong>{{ "{:,.0f}".format(s.ToplamMasrafTL or 0) }} ₺</strong>
+        {% if s.Durum == 'TESLIM' %}
+          <div style="font-size:.72rem; color:#059669; font-weight:600;">✓ KESİNLEŞTİ</div>
+        {% else %}
+          <div style="font-size:.72rem; color:#F97316; font-weight:600;">⏳ TAHMİNİ</div>
+        {% endif %}
+      </td>
+      <td style="text-align:right;"><a href="/grafik/sevkiyat/{{ s.Id }}" class="btn btn-sm btn-ghost">Detay</a></td>
+    </tr>
+    {% else %}
+    <tr><td colspan="8" class="empty">Sevkiyat yok. "+ Yeni Sevkiyat" ile onaylanmış bir siparişten başla.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<dialog id="svk-yeni" class="modal">
+  <form method="post" action="/grafik/sevkiyat/yeni" class="modal-form" style="min-width:560px;" id="svk-form">
+    <h3>Yeni Sevkiyat</h3>
+
+    <label>Nakliye Tipi *
+      <select name="NakliyeTipi" id="sel-nakliye" required onchange="sevkiyatFormGuncelle()">
+        {% for kod, ad, aciklama in nakliye_tipleri %}
+        <option value="{{ kod }}" {% if kod == 'KONTEYNER' %}selected{% endif %}>{{ ad }} — {{ aciklama }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <!-- SIPARIS alanı (KONTEYNER/UCAK/KARAYOLU için zorunlu, DHL için opsiyonel) -->
+    <div id="grp-siparis">
+      <label>Onaylı Sipariş <span id="siparis-ast" style="color:#dc2626;">*</span>
+        <select name="SiparisId" id="sel-siparis" onchange="siparisMevcutKontrol()">
+          <option value="" data-sayi="0">— (sipariş yok)</option>
+          {% for s in siparisler %}
+          <option value="{{ s.Id }}" data-sayi="{{ s.MevcutSevkiyatSayisi or 0 }}">
+            {{ s.SiparisNo }} — {{ s.TedarikciAd }} (${{ "{:,.0f}".format(s.ToplamTutar) }})
+            {% if s.MevcutSevkiyatSayisi and s.MevcutSevkiyatSayisi > 0 %}
+              · 🚢 {{ s.MevcutSevkiyatSayisi }} sevkiyat var
+            {% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </label>
+      <div id="siparis-bilgi" style="display:none; margin-top:6px; padding:8px 12px;
+           background:#eff6ff; border-left:3px solid #0891b2; border-radius:4px;
+           font-size:.82rem; color:#1e40af;">
+        <strong>ℹ Bilgi:</strong> <span id="siparis-bilgi-text"></span>
+        Aynı siparişe yeni sevkiyat açabilirsin (parçalı sevkiyat). Her sevkiyat kendi
+        masraf ve dağıtımını bağımsız yönetir.
+      </div>
+    </div>
+
+    <!-- DHL özel alanlar -->
+    <div id="grp-dhl" style="display:none;">
+      <label>Kaynak Numune (DHL için)
+        <select name="NumuneId">
+          <option value="">— (numune bağlantısı yok)</option>
+          {% for n in numuneler %}
+          <option value="{{ n.Id }}">{{ n.NumuneNo }} — {{ n.Baslik }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <div class="form-row">
+        <label style="flex:1;">Kurye
+          <select name="Forwarder" id="sel-kurye">
+            <option value="DHL" selected>DHL</option>
+            <option value="FedEx">FedEx</option>
+            <option value="UPS">UPS</option>
+            <option value="TNT">TNT</option>
+            <option value="ARAS">Aras / Yerel</option>
+          </select>
+        </label>
+        <label style="flex:1;">Gönderim Yönü
+          <select name="GonderimYonu">
+            {% for kod, ad in gonderim_yonleri %}
+            <option value="{{ kod }}" {% if kod == 'CN_TR' %}selected{% endif %}>{{ ad }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+      <div class="form-row">
+        <label style="flex:1;">Takip No <input type="text" name="TakipNo" placeholder="Ör: JD014600..."></label>
+        <label style="flex:1;">Ağırlık (kg) <input type="number" name="AgirlikKg" min="0" step="0.01" value="0"></label>
+      </div>
+      <label style="display:flex; align-items:center; gap:8px;">
+        <input type="checkbox" name="UrunMaliyetineDahil" value="1" checked>
+        <span>Bu DHL masrafını ürün maliyetine dahil et</span>
+      </label>
+      <p class="muted" style="font-size:.82rem; margin:0;">
+        Tikliysa masraf ürünlere dağıtılır. Tikli değilse <strong>operasyonel gider</strong> olarak ayrı kayıt edilir.
+      </p>
+    </div>
+
+    <!-- Konteyner/Uçak/Karayolu alanları -->
+    <div id="grp-freight">
+      <div class="form-row">
+        <label style="flex:1;">Forwarder <input type="text" name="Forwarder" id="inp-forwarder" placeholder="Hacızade, MSC..."></label>
+        <label style="flex:1;">Konsimento <input type="text" name="Konsimento"></label>
+      </div>
+      <label>Dağıtım Yöntemi
+        <select name="DagitimYontemi">
+          {% for kod, ad, aciklama in dagitim_yontemleri %}
+          <option value="{{ kod }}">{{ ad }} — {{ aciklama }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+
+    <div class="form-row">
+      <label style="flex:1;">Sevk Tarihi <input type="date" name="SevkTarihi"></label>
+      <label style="flex:1;">Beklenen Varış <input type="date" name="BeklenenVarisTarihi"></label>
+    </div>
+    <label>Notlar <textarea name="Notlar" rows="2"></textarea></label>
+
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" onclick="this.closest('dialog').close()">İptal</button>
+      <button class="btn btn-primary">Oluştur</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+function sevkiyatFormGuncelle() {
+  const tip = document.getElementById('sel-nakliye').value;
+  const isDHL = tip === 'DHL';
+  // DHL ise sipariş zorunlu değil
+  document.getElementById('siparis-ast').style.display = isDHL ? 'none' : 'inline';
+  // DHL alanlarını göster/gizle
+  document.getElementById('grp-dhl').style.display = isDHL ? 'block' : 'none';
+  // Freight alanlarını tersine
+  document.getElementById('grp-freight').style.display = isDHL ? 'none' : 'block';
+}
+
+// Parça 4: Seçili siparişin mevcut sevkiyat sayısını göster
+function siparisMevcutKontrol() {
+  const sel = document.getElementById('sel-siparis');
+  const bilgi = document.getElementById('siparis-bilgi');
+  const txt = document.getElementById('siparis-bilgi-text');
+  if (!sel || !bilgi) return;
+  const opt = sel.options[sel.selectedIndex];
+  const sayi = parseInt(opt.getAttribute('data-sayi') || '0');
+  if (sayi > 0) {
+    txt.textContent = `Bu siparişin zaten ${sayi} sevkiyatı var.`;
+    bilgi.style.display = 'block';
+  } else {
+    bilgi.style.display = 'none';
+  }
+}
+
+// Sayfa yüklendiğinde bir kere çağır
+document.addEventListener('DOMContentLoaded', function() {
+  sevkiyatFormGuncelle();
+  siparisMevcutKontrol();
+});
+</script>
+{% endblock %}

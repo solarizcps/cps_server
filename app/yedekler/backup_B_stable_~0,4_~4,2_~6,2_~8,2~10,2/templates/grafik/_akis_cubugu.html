@@ -1,0 +1,68 @@
+{#
+  _akis_cubugu.html — Süreç akış çubuğu partial (Parça 3 / R11 / H6)
+
+  Giriş: `akis` dict — aşağıdaki yapıya göre.
+  {
+    'adim_fiyat':    bool,   # Bir teklif üzerinden mi geldi?
+    'adim_siparis':  bool,   # Sipariş oluşmuş mu?
+    'adim_onay':     bool,   # Onaylandı mı?
+    'adim_uretim':   bool,   # Üretimde/hazır/sevkte mi?
+    'adim_sevkiyat': bool,   # Sevkiyat kaydı açıldı mı?
+    'adim_masraf':   bool,   # Sevkiyatta masraf var mı?
+    'adim_teslim':   bool,   # Sevkiyat TESLIM mi?
+    'adim_gercek':   bool,   # Dağıtım IsTahmini=0 olmuş mu?
+
+    'siparis_no':    'CIN-2026-0001',
+    'teklif_id':     1,       # adim_fiyat True ise
+    'sevkiyat_id':   1,       # adim_sevkiyat True ise
+    'uyarilar':      [('Sevkiyat açıl...', '/grafik/sevkiyat'), ...]
+  }
+#}
+
+{% set akis = akis or {} %}
+
+<div class="akis-cubuk" style="
+  display:flex; gap:2px; margin:12px 0 16px; padding:0;
+  border-radius:8px; overflow:hidden; border:1px solid #e5e7eb;">
+  {% set adimlar = [
+    ('adim_fiyat',    '💰', 'Fiyat',      'teklif_id', '/grafik/teklif/{}'),
+    ('adim_siparis',  '📋', 'Sipariş',    None, None),
+    ('adim_onay',     '✓',  'Onay',       None, None),
+    ('adim_uretim',   '🏭', 'Üretim',     None, None),
+    ('adim_sevkiyat', '🚢', 'Sevkiyat',   'sevkiyat_id', '/grafik/sevkiyat/{}'),
+    ('adim_masraf',   '💸', 'Masraf',     'sevkiyat_id', '/grafik/sevkiyat/{}#masraf'),
+    ('adim_teslim',   '📦', 'Teslim',     None, None),
+    ('adim_gercek',   '🎯', 'Gerçek ₺',   None, None),
+  ] %}
+  {% for key, ikon, etiket, link_key, link_fmt in adimlar %}
+    {% set aktif = akis.get(key, False) %}
+    {% set renk = '#059669' if aktif else '#d1d5db' %}
+    {% set bg   = '#d1fae5' if aktif else '#f9fafb' %}
+    {% set txt  = '#065f46' if aktif else '#9ca3af' %}
+    {% set href = None %}
+    {% if aktif and link_key and akis.get(link_key) and link_fmt %}
+      {% set href = link_fmt.replace('{}', akis[link_key]|string) %}
+    {% endif %}
+    <div style="flex:1; background:{{ bg }}; color:{{ txt }}; padding:8px 6px; text-align:center; font-size:.78rem; border-left:3px solid {{ renk }};"
+         {% if href %}onclick="location.href='{{ href }}'" style="cursor:pointer;"{% endif %}>
+      <div style="font-size:1.1rem; line-height:1;">{{ ikon }}</div>
+      <div style="margin-top:3px; font-weight:600;">{{ etiket }}</div>
+      {% if aktif %}<div style="font-size:.68rem; margin-top:2px;">✓</div>
+      {% else %}<div style="font-size:.68rem; margin-top:2px; color:#9ca3af;">—</div>{% endif %}
+    </div>
+  {% endfor %}
+</div>
+
+{% if akis.get('uyarilar') %}
+<div style="background:#fff7ed; border-left:4px solid #F97316; padding:10px 14px; border-radius:6px; margin-bottom:16px; font-size:.88rem;">
+  <div style="font-weight:600; color:#9a3412; margin-bottom:6px;">⚠ Süreç eksik adımlar:</div>
+  <ul style="margin:0; padding-left:20px;">
+    {% for mesaj, link in akis.uyarilar %}
+    <li style="margin:2px 0;">
+      {{ mesaj }}
+      {% if link %}— <a href="{{ link }}" class="btn btn-sm btn-ghost">Git →</a>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}

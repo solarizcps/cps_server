@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Maliyet Simülatörü — Finans{% endblock %}
+
+{% block content %}
+
+<div class="page-head">
+  <div class="page-head-main">
+    <div class="crumbs"><a href="/finans">Finans</a> › <strong>Maliyet Simülatörü</strong></div>
+    <h1>🧮 Ön Maliyet ve Karar Simülatörü</h1>
+    <p class="muted">Sipariş öncesi ithalat maliyeti, tedarikçi karşılaştırması, geçmiş veriye göre yorum.</p>
+  </div>
+  <div class="page-head-actions">
+    <a href="/finans/simulator/yeni" class="btn btn-primary">+ Yeni Simülasyon</a>
+  </div>
+</div>
+
+{% include '_flash.html' ignore missing %}
+
+<div class="kpi-grid kpi-grid-3">
+  {% set aktif = simulasyonlar|selectattr('Durum','equalto','TASLAK')|list|length %}
+  {% set karar = simulasyonlar|selectattr('Durum','equalto','KARAR')|list|length %}
+  {% set arsiv = simulasyonlar|selectattr('Durum','equalto','ARSIVLENMIS')|list|length %}
+  <div class="kpi kpi-primary">
+    <div class="kpi-v">{{ aktif }}</div>
+    <div class="kpi-l">TASLAK</div>
+    <div class="kpi-sub">karar bekliyor</div>
+  </div>
+  <div class="kpi kpi-success">
+    <div class="kpi-v">{{ karar }}</div>
+    <div class="kpi-l">KARAR VERİLEN</div>
+    <div class="kpi-sub">tamamlanmış</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-v">{{ arsiv }}</div>
+    <div class="kpi-l">ARŞİV</div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="row">
+    <a href="/finans/simulator" class="btn btn-sm {% if not secili_durum %}btn-primary{% else %}btn-ghost{% endif %}">Tümü</a>
+    {% for d in durumlar %}
+    <a href="/finans/simulator?durum={{ d }}" class="btn btn-sm {% if secili_durum == d %}btn-primary{% else %}btn-ghost{% endif %}">{{ d }}</a>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="panel">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Simülasyon No</th><th>Başlık</th><th>Ürün</th>
+        <th class="num">Miktar</th>
+        <th class="num">Seçenek</th>
+        <th>Durum</th><th>Seçilen</th>
+        <th>Oluşturan</th><th>Tarih</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in simulasyonlar %}
+      <tr onclick="location.href='/finans/simulator/{{ s.Id }}'" style="cursor:pointer;">
+        <td><strong>{{ s.SimulasyonNo }}</strong></td>
+        <td>{{ s.Baslik }}</td>
+        <td class="muted">{{ s.UrunAdi or '—' }}</td>
+        <td class="num">{{ "{:,}".format(s.HedefMiktar) }}</td>
+        <td class="num">{{ s.SecenekSayisi }}</td>
+        <td>
+          {% if s.Durum == 'TASLAK' %}<span class="pill pill-primary">TASLAK</span>
+          {% elif s.Durum == 'KARAR' %}<span class="pill pill-success">✓ KARAR</span>
+          {% else %}<span class="pill pill-muted">Arşiv</span>{% endif %}
+        </td>
+        <td class="muted">{{ s.SecilenEtiket or '—' }}</td>
+        <td class="muted small">{{ s.OlusturanKullanici }}</td>
+        <td class="muted small">{{ (s.OlusturmaTarih or '')[:10] }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9">
+        <div class="empty">
+          <div class="empty-ic">🧮</div>
+          <p>Henüz simülasyon yok. Üstten "+ Yeni Simülasyon" ile başlayın.</p>
+        </div>
+      </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

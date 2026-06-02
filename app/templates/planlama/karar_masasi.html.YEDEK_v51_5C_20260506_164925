@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% set page_title = "Karar Masası" %}
+
+{% block content %}
+<div class="km-sayfa">
+
+  <div class="km-baslik">
+    <div class="km-baslik-sol">
+      <span class="km-baslik-icon">📋</span>
+      <span class="km-baslik-metin">Planlama / Karar Masası</span>
+    </div>
+    <div class="km-baslik-sag">
+      <span class="km-rozet km-rozet-mock" id="km-kaynak-rozet">MOCK</span>
+      <span class="km-rozet km-rozet-gorunum">Standart 18 ▾</span>
+      <span class="km-rozet km-rozet-akilli" id="km-akilli-rozet" onclick="km_akilli_sira_toggle()">⚡ Akıllı sıra ON</span>
+    </div>
+  </div>
+  <div class="km-altbaslik">Bugün fabrikada ne yapılmalı? — operasyon karar ekranı</div>
+
+  <div class="km-kpi" id="km-kpi">
+    <div class="km-kpi-hucre">
+      <div class="km-kpi-label">Toplam sip.</div>
+      <div class="km-kpi-deger" id="km-kpi-toplam">—</div>
+    </div>
+    <div class="km-kpi-hucre">
+      <div class="km-kpi-label">Bu hafta</div>
+      <div class="km-kpi-deger" id="km-kpi-hafta">—</div>
+    </div>
+    <div class="km-kpi-hucre km-kpi-kritik">
+      <div class="km-kpi-label">Kritik</div>
+      <div class="km-kpi-deger" id="km-kpi-kritik">—</div>
+    </div>
+    <div class="km-kpi-hucre km-kpi-hazir">
+      <div class="km-kpi-label">Hazır</div>
+      <div class="km-kpi-deger" id="km-kpi-hazir">—</div>
+    </div>
+    <div class="km-kpi-hucre km-kpi-bloke">
+      <div class="km-kpi-label">Bloke</div>
+      <div class="km-kpi-deger" id="km-kpi-bloke">—</div>
+    </div>
+    <div class="km-kpi-hucre km-kpi-darbogaz">
+      <div class="km-kpi-label">Darboğaz</div>
+      <div class="km-kpi-deger" id="km-kpi-darbogaz">—</div>
+    </div>
+    <div class="km-kpi-hucre">
+      <div class="km-kpi-label">Kapasite</div>
+      <div class="km-kpi-deger" id="km-kpi-kapasite">—</div>
+    </div>
+    <div class="km-kpi-hucre km-kpi-termin">
+      <div class="km-kpi-label">Termin riski</div>
+      <div class="km-kpi-deger" id="km-kpi-termin">—</div>
+    </div>
+  </div>
+
+  <div class="km-filtre-cubuk" id="km-filtre-cubuk">
+    <span class="km-filtre-pin">📌 Sticky</span>
+    <span class="km-filtre-ayrac"></span>
+
+    <div class="km-zaman-pill-grup">
+      <button class="km-zaman-pill aktif" data-zaman="hafta" onclick="km_filtre_zaman(this)">Bu hafta</button>
+      <button class="km-zaman-pill" data-zaman="sonraki" onclick="km_filtre_zaman(this)">Sonraki</button>
+      <button class="km-zaman-pill" data-zaman="bu_ay" onclick="km_filtre_zaman(this)">Bu ay</button>
+      <button class="km-zaman-pill" data-zaman="3_ay" onclick="km_filtre_zaman(this)">3 ay</button>
+      <button class="km-zaman-pill" data-zaman="hepsi" onclick="km_filtre_zaman(this)">Hepsi</button>
+    </div>
+
+    <span class="km-filtre-ayrac"></span>
+
+    <select class="km-filtre-dd" id="km-fil-musteri" onchange="km_uygula()">
+      <option value="">Müşteri ▾</option>
+    </select>
+    <select class="km-filtre-dd" id="km-fil-oncelik" onchange="km_uygula()">
+      <option value="">Öncelik ▾</option>
+      <option value="ACIL">ACİL</option>
+      <option value="NAKIT">NAKİT</option>
+      <option value="GECIKTI">GECİKTİ</option>
+      <option value="NORMAL">NORMAL</option>
+    </select>
+    <select class="km-filtre-dd" id="km-fil-uretilebilirlik" onchange="km_uygula()">
+      <option value="">Üretilebilirlik ▾</option>
+      <option value="HAZIR">HAZIR</option>
+      <option value="KISMI">KISMİ</option>
+      <option value="BLOKE">BLOKE</option>
+    </select>
+    <select class="km-filtre-dd" id="km-fil-bant" onchange="km_uygula()">
+      <option value="">Bant ▾</option>
+      <option value="B-1">B-1</option>
+      <option value="B-2">B-2</option>
+      <option value="B-3">B-3</option>
+      <option value="ATANMAMIS">Atanmamış</option>
+    </select>
+
+    <input type="text" class="km-filtre-arama" id="km-fil-arama" placeholder="🔍 Ara: müşteri / sip / model" oninput="km_uygula()">
+
+    <button class="km-filtre-temizle" onclick="km_filtre_temizle()">Temizle</button>
+  </div>
+
+  <div class="km-akilli-serit" id="km-akilli-serit">
+    <span class="km-akilli-icon">⚡</span>
+    <span class="km-akilli-baslik">Akıllı sıra:</span>
+    <span class="km-akilli-aciklama">Bloke → Geciken → Nakit → Kısmi → Hazır</span>
+    <span class="km-akilli-sag" onclick="km_akilli_sira_toggle()">Manuel düzene geç →</span>
+  </div>
+
+  <div class="km-tablo-cerceve">
+    <table class="km-tablo" id="km-tablo">
+      <thead>
+        <tr>
+          <th class="km-st km-st-1" style="width:36px;text-align:center;">#</th>
+          <th class="km-st km-st-2" style="width:26px;"></th>
+          <th class="km-st km-st-3" style="min-width:130px;">Müşteri</th>
+          <th class="km-st km-st-4" style="min-width:80px;">Sipariş</th>
+          <th>Emir</th>
+          <th>Model</th>
+          <th>Renk</th>
+          <th>Beden</th>
+          <th style="text-align:right;">Adet</th>
+          <th style="text-align:right;">Yapılan</th>
+          <th style="text-align:right;">Kalan</th>
+          <th>Termin</th>
+          <th style="text-align:center;">Öncelik</th>
+          <th style="text-align:center;">Bant</th>
+          <th style="text-align:right;">Günlük</th>
+          <th style="text-align:right;">Süre</th>
+          <th class="km-bolum-ayrac" style="text-align:center;">Hazırlık</th>
+          <th style="text-align:center;">Üret.</th>
+          <th style="min-width:160px;">Darboğaz</th>
+          <th style="min-width:200px;">Ustaya talimat</th>
+          <th style="text-align:center;width:30px;">⋮</th>
+        </tr>
+      </thead>
+      <tbody id="km-tbody">
+      </tbody>
+    </table>
+  </div>
+
+  <div class="km-bilgi-cubuk">
+    <span id="km-bilgi-sayim">— satır</span>
+    <span class="km-bilgi-ayrac"></span>
+    <span id="km-bilgi-sorgu">—</span>
+  </div>
+
+  <div class="km-toast" id="km-toast" style="display:none;"></div>
+
+</div>
+
+<link rel="stylesheet" href="{{ url_for('static', filename='css/karar_masasi.css') }}?v={{ range(1,99999)|random }}">
+<script src="{{ url_for('static', filename='js/planlama_karar_masasi.js') }}?v={{ range(1,99999)|random }}"></script>
+{% endblock %}

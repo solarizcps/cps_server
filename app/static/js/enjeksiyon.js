@@ -1,0 +1,2600 @@
+/* enjeksiyon.js - PATCH C (F8 FIX FINAL)
+   - SSR yapiyor: makine kart <a href>, form value Jinja'dan
+   - F6.6 makineDegistir KALDIRILDI (artik <a href> tam reload)
+   - F8_JS_STATE init/formDoldur/saatlikDoldur/istasyonDoldur KALDIRILDI
+   - chr(34) bug otomatik silindi (istasyonDoldur silinince)
+   - Auto-save KORUNDU - raporId DOM'dan okunuyor
+   - F25.2 + F25.3 dokunulmadi
+   - bfcache restore icin pageshow listener eklendi
+*/
+
+/* === BEGIN: ENJ_CPS_DEBUG === */
+/* F9.1: Production console temizligi.
+   cpsLog  -> sadece localStorage.cps_debug='1' iken cikar
+   cpsWarn -> her zaman cikar (uyarilar onemli)
+   cpsError-> her zaman cikar (hatalar kritik)
+   Acmak:  localStorage.setItem('cps_debug','1')
+   Kapatmak: localStorage.removeItem('cps_debug')
+*/
+(function () {
+    'use strict';
+    var DEBUG = (function () {
+        try { return localStorage.getItem('cps_debug') === '1'; }
+        catch (e) { return false; }
+    })();
+    window.CPS_DEBUG = DEBUG;
+    window.cpsLog = function () {
+        if (DEBUG && console && console.log) {
+            console.log.apply(console, arguments);
+        }
+    };
+    window.cpsWarn = function () {
+        if (console && console.warn) {
+            console.warn.apply(console, arguments);
+        }
+    };
+    window.cpsError = function () {
+        if (console && console.error) {
+            console.error.apply(console, arguments);
+        }
+    };
+})();
+/* === END: ENJ_CPS_DEBUG === */
+
+
+/* === BEGIN: ENJ_UI_DELEGATE === */
+/* F9.1: Sorumluluk = optimistic UI feedback + toplu buton delegated handler.
+   Backend authoritative state ENJ_F8_AUTOSAVE bloğunda yapılır.
+   Bu blok sadece: click anında anlık görsel tepki + toplu butonu bridge. */
+(function () {
+    'use strict';
+
+    // Optimistic UI helper — backend response beklemeden anlik visual feedback
+    function abToggle(btn) {
+        btn.classList.toggle('on');
+        // F9_2_P3A_DURUM_SYNC
+        try {
+          var _aktif = btn.classList.contains('on');
+          btn.classList.remove('durum-aktif', 'durum-kapali');
+          btn.classList.add(_aktif ? 'durum-aktif' : 'durum-kapali');
+          btn.dataset.durum = _aktif ? 'AKTIF' : 'KAPALI';
+        } catch(e) {}
+    }
+
+    document.addEventListener('click', function (e) {
+        // Slot click — anlik gorsel tepki (backend ENJ_F8_AUTOSAVE PATCH gonderir)
+        var slot = e.target.closest('.enj-ist-cell .s');
+        if (slot) {
+          e.preventDefault();
+          // F9_2_P3B_ROUTER
+          if (window.EnjSlotPopup && window.EnjSlotPopup.handleSlotClick) {
+            window.EnjSlotPopup.handleSlotClick(slot);
+          } else {
+            abToggle(slot);
+          }
+          return;
+        }
+
+        // Toplu buton bridge — F9.0.5 TOPLU bloguna delegate
+        var toplu = e.target.closest('[data-toplu]');
+        if (toplu) {
+            e.preventDefault();
+            var panel = toplu.closest('.enj-mak-panel');
+            if (panel && window._enjTopluUygulaG) {
+                window._enjTopluUygulaG(panel, toplu.dataset.toplu);
+            }
+        }
+    });
+
+    cpsLog('[CPS LOCAL] enjeksiyon.js Patch C yuklendi');
+})();
+/* === END: ENJ_UI_DELEGATE === */
+
+
+/* === BEGIN: ENJ_F25_2_KALIP_SECICI === */
+(function () {
+    'use strict';
+    var kayitlar = [], goruntulenenler = [], aktifIdx = -1;
+    var input = document.getElementById('enj-kalip-input');
+    var liste = document.getElementById('enj-kalip-liste');
+    var hiddenId = document.getElementById('enj-kalip-id');
+    if (!input || !liste || !hiddenId) return;
+
+    fetch('/enjeksiyon/api/kalip-listesi')
+        .then(function (r) { return r.json(); })
+        .then(function (d) { if (d && d.ok) { kayitlar = d.kayitlar || []; cpsLog('[CPS LOCAL] F25.2 kalip listesi: ' + kayitlar.length + ' kayit'); } })
+        .catch(function () {});
+
+    function escHTML(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+    input.addEventListener('input', function () {
+        var q = (input.value || '').trim().toLocaleLowerCase('tr');
+        if (q.length < 1) { liste.hidden = true; hiddenId.value = ''; return; }
+        goruntulenenler = kayitlar.filter(function (k) {
+            return (k.kalip_kod || '').toLocaleLowerCase('tr').indexOf(q) >= 0 ||
+                   (k.model_kod || '').toLocaleLowerCase('tr').indexOf(q) >= 0 ||
+                   (k.model_ad  || '').toLocaleLowerCase('tr').indexOf(q) >= 0 ||
+                   (k.asorti    || '').toLocaleLowerCase('tr').indexOf(q) >= 0;
+        }).slice(0, 30);
+        if (goruntulenenler.length === 0) {
+            liste.innerHTML = '<div class="enj-kalip-bos">Eslesme yok</div>';
+        } else {
+            var html = '';
+            for (var i = 0; i < goruntulenenler.length; i++) {
+                html += '<div class="enj-kalip-item" data-id="' + goruntulenenler[i].id + '">' + escHTML(goruntulenenler[i].display || '') + '</div>';
+            }
+            liste.innerHTML = html;
+        }
+        liste.hidden = false;
+        aktifIdx = -1;
+    });
+
+    liste.addEventListener('click', function (e) {
+        var item = e.target.closest('.enj-kalip-item');
+        if (item && item.dataset.id) selectById(parseInt(item.dataset.id, 10));
+    });
+
+    input.addEventListener('keydown', function (e) {
+        if (liste.hidden) return;
+        if (e.key === 'ArrowDown') { aktifIdx = Math.min(aktifIdx + 1, goruntulenenler.length - 1); updateAktif(); e.preventDefault(); }
+        else if (e.key === 'ArrowUp') { aktifIdx = Math.max(aktifIdx - 1, 0); updateAktif(); e.preventDefault(); }
+        else if (e.key === 'Enter' && aktifIdx >= 0) { selectById(goruntulenenler[aktifIdx].id); e.preventDefault(); }
+        else if (e.key === 'Escape') { liste.hidden = true; }
+    });
+
+    function updateAktif() {
+        var items = liste.querySelectorAll('.enj-kalip-item');
+        for (var i = 0; i < items.length; i++) {
+            if (i === aktifIdx) { items[i].classList.add('aktif'); items[i].scrollIntoView({ block: 'nearest' }); }
+            else items[i].classList.remove('aktif');
+        }
+    }
+
+    document.addEventListener('click', function (e) { if (!e.target.closest('.enj-kalip-secici')) liste.hidden = true; });
+
+    function selectById(id) {
+        fetch('/enjeksiyon/api/kalip/' + id)
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (!d || !d.ok) return;
+                var sec = d.secilen;
+                var disp = sec.kalip_kod + ' / ' + (sec.model_ad || sec.model_kod) + (sec.asorti ? ' (' + sec.asorti + ')' : '');
+                input.value = disp;
+                hiddenId.value = sec.id;
+                liste.hidden = true;
+                formDoldur(d);
+                urunPaneliGuncelle(d);
+                document.dispatchEvent(new CustomEvent('enj-kalip-secildi', { detail: d }));
+            })
+            .catch(function () {});
+    }
+
+    function formDoldur(d) {
+        var sec = d.secilen;
+        var renkInp = document.getElementById('enj-renk');
+        var kbcInp  = document.getElementById('enj-kalip-basi-cift');
+        // PATCH F: bkInp (bagli_kalip) ARTIK SET EDILMEYECEK.
+        // Bagli kalip backend authoritative + aktif slot sayisindan turetilir.
+        // Kalip secimi bagli kalip alanini DEGISTIRMEZ.
+        if (renkInp) renkInp.value = sec.renk || '';
+        if (kbcInp) {
+            // F_KBC_MASTER_DATA_BLOCK: master data sayfasi referans
+            kbcInp.value = (sec.kalip_basi_cift != null) ? sec.kalip_basi_cift : '';
+            kbcInp.readOnly = true;
+            kbcInp.title = 'KBC degeri Kalip Yonetim sayfasindan duzeltilir';
+            kbcInp.dataset.masterValue = (sec.kalip_basi_cift != null) ? String(sec.kalip_basi_cift) : '';
+        }
+    }
+
+    function urunPaneliGuncelle(d) {
+        var panel = document.querySelector('.enj-urun');
+        if (!panel) return;
+        panel.dataset.state = d.state || 'empty';
+
+        var govdeBlok = panel.querySelector('[data-tip="govde"]');
+        if (govdeBlok && d.govde) {
+            var gkk = govdeBlok.querySelector('[data-field="kalip-kod"]');
+            var gmk = govdeBlok.querySelector('[data-field="model-kod"]');
+            var gimg = govdeBlok.querySelector('[data-field="gorsel"]');
+            if (gkk) gkk.textContent = d.govde.kalip_kod || '';
+            if (gmk) gmk.textContent = d.govde.model_ad || d.govde.model_kod || '';
+            if (gimg) {
+                if (d.govde.gorsel_dosya) {
+                    gimg.src = '/static/img/kaliplar/' + d.govde.gorsel_dosya;
+                    gimg.hidden = false;
+                    gimg.onerror = function () { gimg.hidden = true; gimg.onerror = null; };
+                } else { gimg.hidden = true; gimg.removeAttribute('src'); }
+            }
+        }
+
+        var atkiBlok = panel.querySelector('[data-tip="atki"]');
+        if (atkiBlok) {
+            var akk = atkiBlok.querySelector('[data-field="kalip-kod"]');
+            var amk = atkiBlok.querySelector('[data-field="model-kod"]');
+            var aimg = atkiBlok.querySelector('[data-field="gorsel"]');
+            if (d.atki) {
+                if (akk) akk.textContent = d.atki.kalip_kod || '';
+                if (amk) amk.textContent = d.atki.model_ad || d.atki.model_kod || '';
+                if (aimg) {
+                    if (d.atki.gorsel_dosya) {
+                        aimg.src = '/static/img/kaliplar/' + d.atki.gorsel_dosya;
+                        aimg.hidden = false;
+                        aimg.onerror = function () { aimg.hidden = true; aimg.onerror = null; };
+                    } else { aimg.hidden = true; aimg.removeAttribute('src'); }
+                }
+            } else {
+                if (akk) akk.textContent = '';
+                if (amk) amk.textContent = '';
+                if (aimg) { aimg.hidden = true; aimg.removeAttribute('src'); }
+            }
+        }
+    }
+
+    cpsLog('[CPS LOCAL] F25.2 kalip secici yuklendi');
+})();
+/* === END: ENJ_F25_2_KALIP_SECICI === */
+
+
+/* === BEGIN: ENJ_F25_3_SOFT_WARNING === */
+(function () {
+    'use strict';
+    var kbc = document.getElementById('enj-kalip-basi-cift');
+    if (!kbc) return;
+
+    function kontrolEt() {
+        var mv = kbc.dataset.masterValue;
+        if (mv === undefined || mv === '' || mv === null) {
+            kbc.classList.remove('enj-master-fark');
+            return;
+        }
+        var current = (kbc.value || '').toString().trim();
+        if (current === '' || current === mv) {
+            kbc.classList.remove('enj-master-fark');
+        } else {
+            kbc.classList.add('enj-master-fark');
+        }
+    }
+
+    kbc.addEventListener('input', kontrolEt);
+    kbc.addEventListener('change', kontrolEt);
+
+    var mo = new MutationObserver(function (muts) {
+        for (var i = 0; i < muts.length; i++) {
+            if (muts[i].type === 'attributes' && muts[i].attributeName === 'data-master-value') {
+                kbc.classList.remove('enj-master-fark');
+            }
+        }
+    });
+    mo.observe(kbc, { attributes: true });
+
+    cpsLog('[CPS LOCAL] F25.3 soft warning yuklendi');
+})();
+/* === END: ENJ_F25_3_SOFT_WARNING === */
+
+
+/* === BEGIN: ENJ_F8_AUTOSAVE === */
+(function () {
+    'use strict';
+
+    // raporId DOM'dan oku (SSR'da .enj-wrap data-rapor-id'de bulunur)
+    var wrap = document.querySelector('.enj-wrap');
+    if (!wrap) {
+        cpsWarn('[F8] .enj-wrap bulunamadi, auto-save pasif');
+        return;
+    }
+    var raporId = parseInt(wrap.dataset.raporId || '', 10);
+    if (!raporId || isNaN(raporId)) {
+        cpsWarn('[F8] data-rapor-id bos veya gecersiz, auto-save pasif');
+        return;
+    }
+
+    // === API helper ===
+    function api(url, opts) {
+        opts = opts || {};
+        opts.headers = opts.headers || {};
+        if (opts.body && typeof opts.body !== 'string') {
+            opts.headers['Content-Type'] = 'application/json';
+            opts.body = JSON.stringify(opts.body);
+        }
+        opts.keepalive = true;
+        return fetch(url, opts).then(function (r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        });
+    }
+
+    // === Debounce ===
+    var DEBOUNCE = 800;
+    var timers = {};
+    var pending = {};
+
+    function setError(el, msg) {
+        if (!el) return;
+        el.classList.add('enj-save-err');
+        el.title = msg || 'Kayit hatasi';
+        setTimeout(function () {
+            el.classList.remove('enj-save-err');
+            el.removeAttribute('title');
+        }, 3000);
+    }
+
+    function patch(url, body, target) {
+        return api(url, { method: 'PATCH', body: body }).then(function (d) {
+            if (!d || !d.ok) throw new Error((d && d.hata) || 'API hatasi');
+        }).catch(function (err) {
+            cpsError('[F8] PATCH:', url, err.message);
+            setError(target, 'Kayit: ' + err.message);
+        });
+    }
+
+    function schedule(key, fn) {
+        if (timers[key]) clearTimeout(timers[key]);
+        pending[key] = fn;
+        timers[key] = setTimeout(function () {
+            delete timers[key]; delete pending[key]; fn();
+        }, DEBOUNCE);
+    }
+
+    function flushKey(key) {
+        if (!timers[key]) return;
+        clearTimeout(timers[key]);
+        delete timers[key];
+        var fn = pending[key]; delete pending[key];
+        if (fn) fn();
+    }
+
+    function flushAll() {
+        Object.keys(timers).forEach(flushKey);
+    }
+
+    function getNum(el) {
+        var v = (el.value || '').trim();
+        if (v === '') return null;
+        var n = parseInt(v, 10);
+        return isNaN(n) ? null : n;
+    }
+
+    function getTxt(el) {
+        var v = (el.value || '').trim();
+        return v === '' ? null : v;
+    }
+
+    // === Form alanlari auto-save ===
+    // PATCH D: enj-bagli-kalip artik readonly + backend authoritative, listeden cikti
+    [
+        ['enj-emir-no',         'emir_no',          'text'],
+        ['enj-renk',            'renk',             'text'],
+        ['enj-kalip-basi-cift', 'kalip_basi_cift',  'int'],
+        ['enj-personel-sayisi', 'personel_sayisi',  'int']
+    ].forEach(function (spec) {
+        var inp = document.getElementById(spec[0]);
+        if (!inp) return;
+        var key = 'f_' + spec[0];
+        function save() {
+            var v = (spec[2] === 'int') ? getNum(inp) : getTxt(inp);
+            var body = {}; body[spec[1]] = v;
+            patch('/enjeksiyon/api/rapor/' + raporId, body, inp);
+        }
+        inp.addEventListener('input', function () { schedule(key, save); });
+        inp.addEventListener('blur', function () { flushKey(key); });
+    });
+
+    // === Saatlik tur ===
+    document.querySelectorAll('tr[data-saatlik-id] .tur-inp').forEach(function (inp) {
+        var tr = inp.closest('tr[data-saatlik-id]');
+        var sid = tr && tr.dataset.saatlikId;
+        if (!sid) return;
+        var key = 's_tur_' + sid;
+        function save() {
+            var v = getNum(inp);
+            if (v === null) v = 0;
+            patch('/enjeksiyon/api/saatlik/' + sid, { tur_adet: v }, inp);
+        }
+        inp.addEventListener('input', function () { schedule(key, save); });
+        inp.addEventListener('blur', function () { flushKey(key); });
+    });
+
+    // === Saatlik durum ===
+    document.querySelectorAll('tr[data-saatlik-id] .durum-sel').forEach(function (sel) {
+        var tr = sel.closest('tr[data-saatlik-id]');
+        var sid = tr && tr.dataset.saatlikId;
+        if (!sid) return;
+        sel.addEventListener('change', function () {
+            patch('/enjeksiyon/api/saatlik/' + sid, { durum: sel.value }, sel);
+        });
+    });
+
+    // === Saatlik aksama ===
+    document.querySelectorAll('tr[data-saatlik-id] .aks-sel').forEach(function (sel) {
+        var tr = sel.closest('tr[data-saatlik-id]');
+        var sid = tr && tr.dataset.saatlikId;
+        if (!sid) return;
+        sel.addEventListener('change', function () {
+            var v = sel.value;
+            patch('/enjeksiyon/api/saatlik/' + sid, {
+                aksama_sebep_id: v === '' ? null : parseInt(v, 10)
+            }, sel);
+        });
+    });
+
+    // === A/B istasyon click - PATCH D: response.bagli_kalip_adet ile input guncelle ===
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest && e.target.closest('button.s');
+        if (!btn) return;
+        var iid = btn.dataset.istasyonId;
+        if (!iid) return;
+        setTimeout(function () {
+            var aktif = btn.classList.contains('on') ? 1 : 0;
+            api('/enjeksiyon/api/istasyon/' + iid, {
+                method: 'PATCH',
+                body: { aktif: aktif }
+            }).then(function (d) {
+                if (!d || !d.ok) throw new Error((d && d.hata) || 'API hatasi');
+                // Bagli kalip adetini guncelle (backend authoritative)
+                if (typeof d.bagli_kalip_adet === 'number') {
+                    var bk = document.getElementById('enj-bagli-kalip');
+                    if (bk) bk.value = d.bagli_kalip_adet;
+                }
+            }).catch(function (err) {
+                cpsError('[F8] istasyon PATCH:', err.message);
+                setError(btn, 'Kayit: ' + err.message);
+            });
+        }, 0);
+    }, false);
+
+    // === Kalip secimi event (F25.2 dispatchEvent) - PATCH D: bagli_kalip_adet GONDERILMEZ ===
+    document.addEventListener('enj-kalip-secildi', function (e) {
+        var d = e.detail || {};
+        var sec = d.secilen;
+        if (!sec) return;
+        var body = {
+            kalip_id: sec.id,
+            kalip_no: sec.kalip_kod || null,
+            renk: sec.renk || null,
+            kalip_basi_cift: sec.kalip_basi_cift != null ? sec.kalip_basi_cift : null
+            // bagli_kalip_adet artik kalip secimi ile gelmiyor (aktif slot sayisindan turetilir)
+        };
+        var inp = document.getElementById('enj-kalip-input');
+        patch('/enjeksiyon/api/rapor/' + raporId, body, inp);
+    });
+
+    // === Sayfa kapaniyor / makine kart click oncesi flush ===
+    document.addEventListener('click', function (e) {
+        if (e.target.closest && e.target.closest('a.enj-mak-kart')) flushAll();
+    }, true);
+    window.addEventListener('beforeunload', flushAll);
+
+    cpsLog('[CPS LOCAL] F8 auto-save aktif (rapor_id=' + raporId + ')');
+})();
+/* === END: ENJ_F8_AUTOSAVE === */
+
+
+/* === BEGIN: ENJ_BFCACHE_FIX === */
+(function () {
+    'use strict';
+    // Geri/Ileri tuslarinda veya bfcache restore'da sayfayi YENIDEN YUKLE
+    // Bu Edge/Chrome'un form input cache'ini bypass eder
+    window.addEventListener('pageshow', function (e) {
+        if (e.persisted) {
+            cpsLog('[CPS LOCAL] bfcache restore yakalandi, reload tetikleniyor');
+            window.location.reload();
+        }
+    });
+})();
+/* === END: ENJ_BFCACHE_FIX === */
+
+
+/* === BEGIN: ENJ_F9_0_5_TOPLU === */
+(function () {
+    'use strict';
+
+    function getRaporId() {
+        var wrap = document.querySelector('.enj-wrap');
+        if (!wrap) return null;
+        var v = parseInt(wrap.dataset.raporId || '', 10);
+        return (isNaN(v) || !v) ? null : v;
+    }
+
+    function uiGuncelleSlotlar(aktifSlotlar) {
+        // aktifSlotlar: ["1A", "1B", "2A", ...]
+        // Aktif makinenin panelini bul, butun .s butonlarini gez
+        var panel = document.querySelector('.enj-mak-panel.aktif');
+        if (!panel) return;
+        var aktifSet = {};
+        for (var i = 0; i < aktifSlotlar.length; i++) {
+            aktifSet[aktifSlotlar[i]] = true;
+        }
+        var cells = panel.querySelectorAll('.enj-ist-cell');
+        cells.forEach(function (cell, idx) {
+            var ist_no = idx + 1;
+            var btns = cell.querySelectorAll('button.s');
+            btns.forEach(function (btn) {
+                var key = ist_no + btn.dataset.slot;
+                if (aktifSet[key]) {
+                    btn.classList.add('on');
+                } else {
+                    btn.classList.remove('on');
+                }
+            });
+        });
+    }
+
+    function uiGuncelleBagli(bagli) {
+        if (typeof bagli !== 'number') return;
+        var bk = document.getElementById('enj-bagli-kalip');
+        if (bk) bk.value = bagli;
+    }
+
+    window._enjTopluUygulaG = function (panel, action) {
+        if (!panel || !action) return;
+        if (!/^(a|b|x)$/i.test(action)) return;
+        action = action.toLowerCase();
+
+        // KAPAT icin onay
+        if (action === 'x') {
+            var onay = window.confirm('Bu makinedeki aktif slotlar kapatilacak. Emin misiniz?');
+            if (!onay) return;
+        }
+
+        var raporId = getRaporId();
+        if (!raporId) {
+            alert('Rapor ID bulunamadi, sayfayi yenileyin');
+            return;
+        }
+
+        var url = '/enjeksiyon/api/rapor/' + raporId + '/toplu-istasyon';
+        fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: action }),
+            keepalive: true
+        }).then(function (r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        }).then(function (d) {
+            if (!d || !d.ok) {
+                cpsError('[F8] Toplu API hatasi:', d);
+                alert('Toplu islem basarisiz: ' + ((d && d.hata) || 'bilinmeyen hata'));
+                return;
+            }
+            // UI senkronizasyon
+            if (d.aktif_slotlar) uiGuncelleSlotlar(d.aktif_slotlar);
+            if (typeof d.bagli_kalip_adet === 'number') uiGuncelleBagli(d.bagli_kalip_adet);
+            cpsLog('[CPS LOCAL] Toplu islem OK: ' + action + ' -> ' + d.aktif_slotlar.length + ' aktif slot');
+        }).catch(function (err) {
+            cpsError('[F8] Toplu islem hatasi:', err.message);
+            alert('Toplu islem hatasi: ' + err.message);
+        });
+    };
+
+    cpsLog('[CPS LOCAL] F9.0.5 toplu uygula yuklendi');
+})();
+/* === END: ENJ_F9_0_5_TOPLU === */
+
+/* === BEGIN: F9_2_P3B_POPUP_CONTROLLER === */
+/* F9.2 Patch 3.B - Slot Durum Yonetim Popup
+   - Tek global instance (window.EnjSlotPopup)
+   - 4 durum (AKTIF/KAPALI/SETUP/ARIZA) icin farkli icerik
+   - AKTIF/KAPALI'da gercek aksiyon (Slotu Kapat / Aktif Yap)
+   - SETUP/ARIZA butonlari placeholder (Patch 3.C)
+   - 220ms debounce, ayni slot toggle, dis-tik kapanma
+   - Scroll = repositionPopup, Resize = closePopup
+*/
+(function () {
+    'use strict';
+    
+    var DEBOUNCE_MS = 220;
+    
+    var popup = null;
+    var aktifSlot = null;
+    var sonAcilis = 0;
+    var _toastTimer = null;
+    
+    // Public API
+    window.EnjSlotPopup = {
+        handleSlotClick: handleSlotClick,
+        close: closeSlotPopup
+    };
+    
+    function init() {
+        popup = document.getElementById('enj-slot-popup');
+        if (!popup) {
+            if (window.cpsLog) window.cpsLog('[F9.2 P3B] popup DOM yok');
+            return;
+        }
+        
+        // Popup ici butonlara delegation
+        popup.addEventListener('click', function (e) {
+            var btn = e.target.closest('.esp-btn');
+            if (!btn) return;
+            e.preventDefault();
+            e.stopPropagation();
+            
+            if (btn.classList.contains('placeholder')) {
+                var tt = btn.getAttribute('data-tooltip') || 'Bu eylem yakinda aktiflesecek';
+                showToast(tt);
+                return;
+            }
+            
+            var action = btn.getAttribute('data-action');
+            executeAction(action);
+        });
+        
+        // Dis-tik kapatma
+        document.addEventListener('click', function (e) {
+            if (!popup || popup.hidden) return;
+            if (e.target.closest('#enj-slot-popup')) return;
+            if (e.target.closest('.enj-ist-cell .s')) return; // slot click ayri ele alinir
+            closeSlotPopup();
+        }, true); // capture phase
+        
+        // ESC kapatma
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && popup && !popup.hidden) closeSlotPopup();
+        });
+        
+        // SCROLL: pozisyon takip (kapatma DEGIL - Adem revize 2)
+        var _scrollDebounce = null;
+        window.addEventListener('scroll', function () {
+            if (!popup || popup.hidden || !aktifSlot) return;
+            clearTimeout(_scrollDebounce);
+            _scrollDebounce = setTimeout(function () {
+                if (aktifSlot && !popup.hidden) repositionPopup();
+            }, 16);
+        }, true);
+        
+        // RESIZE: kapat (layout shift sirasinda)
+        window.addEventListener('resize', function () {
+            if (popup && !popup.hidden) closeSlotPopup();
+        });
+        
+        // visibilitychange (sekme degisti)
+        document.addEventListener('visibilitychange', function () {
+            if (document.hidden && popup && !popup.hidden) closeSlotPopup();
+        });
+        
+        if (window.cpsLog) window.cpsLog('[F9.2 P3B] Popup controller hazir');
+    }
+    
+    function handleSlotClick(slot) {
+        if (!popup) return;
+        
+        // Ayni slot tikrar tiklandi -> kapan (toggle)
+        if (aktifSlot === slot && !popup.hidden) {
+            closeSlotPopup();
+            return;
+        }
+        
+        // Debounce gate (220ms)
+        var simdi = Date.now();
+        if (!popup.hidden && (simdi - sonAcilis < DEBOUNCE_MS)) {
+            return;
+        }
+        
+        // Eski popup acik mi? Anlik gec
+        if (!popup.hidden) {
+            // Kapatmadan dogrudan yeni icerik
+            openSlotPopup(slot, true);
+        } else {
+            openSlotPopup(slot, false);
+        }
+    }
+    
+    function openSlotPopup(slot, isHotSwap) {
+        var durum = slot.dataset.durum || 'KAPALI';
+        var istNo = slot.dataset.istasyonNo || '?';
+        var slotHarf = slot.dataset.slot || '?';
+        var istId = slot.dataset.istasyonId || '';
+        var kalipKod = slot.dataset.kalipKod || '';
+        var setupYeni = slot.dataset.setupYeni || '';
+        var arizaSebep = slot.dataset.arizaSebep || '';
+        
+        // Makine id panel'den
+        var makineId = '?';
+        var panel = slot.closest('.enj-mak-panel');
+        if (panel) makineId = panel.getAttribute('data-makine-id') || '?';
+        
+        var data = {
+            makineId: makineId,
+            istNo: istNo,
+            slot: slotHarf,
+            istId: istId,
+            kalipKod: kalipKod,
+            setupYeni: setupYeni,
+            arizaSebep: arizaSebep,
+            durum: durum
+        };
+        
+        renderPopup(durum, data);
+        aktifSlot = slot;
+        
+        if (isHotSwap) {
+            // Popup zaten acik, sadece pozisyon ve content guncelle
+            requestAnimationFrame(function () {
+                repositionPopup();
+            });
+        } else {
+            // Yeni popup
+            popup.hidden = false;
+            popup.classList.remove('kapanan');
+            // Pozisyon hesabi ICIN once gorunur olmali (offsetHeight icin)
+            popup.style.left = '-9999px';
+            popup.style.top = '-9999px';
+            requestAnimationFrame(function () {
+                repositionPopup();
+                popup.classList.add('aktif');
+            });
+        }
+        
+        sonAcilis = Date.now();
+    }
+    
+    function renderPopup(durum, data) {
+        // Popup class
+        popup.className = 'enj-slot-popup durum-' + durum.toLowerCase();
+        
+        // Baslik (MAK 2 • IST 3-A format)
+        var baslikEl = popup.querySelector('.esp-mak-ist');
+        baslikEl.textContent = 'MAK ' + data.makineId + ' • İST ' + data.istNo + '-' + data.slot;
+        
+        var altEl = popup.querySelector('.esp-alt');
+        var detayEl = popup.querySelector('.esp-detay');
+        var aksiyonEl = popup.querySelector('.esp-aksiyonlar');
+        
+        // 4 durum icin ayri render
+        // F9_2_P3C_POPUP_BTN_AKTIF
+        if (durum === 'AKTIF') {
+            altEl.textContent = data.kalipKod || 'Aktif';
+            detayEl.hidden = true;
+            detayEl.innerHTML = '';
+            aksiyonEl.innerHTML = 
+                btnHTML('🔧', 'Setup Başlat', 'setup-baslat', '') +
+                btnHTML('⚠', 'Arıza Bildir', 'ariza-baslat', '') +
+                btnHTML('⛔', 'Slotu Kapat', 'durdur', '');
+        } else if (durum === 'KAPALI') {
+            altEl.textContent = 'Boş';
+            detayEl.hidden = true;
+            detayEl.innerHTML = '';
+            aksiyonEl.innerHTML = 
+                btnHTML('▶', 'Aktif Yap', 'baslat', '') +
+                btnHTML('🔧', 'Setup Başlat', 'setup-baslat', '') +
+                btnHTML('⚠', 'Arıza Bildir', 'ariza-baslat', '');
+        } else if (durum === 'SETUP') {
+            altEl.textContent = 'Setup sürmekte';
+            detayEl.hidden = false;
+            detayEl.innerHTML = 
+                '<div class="esp-kalip-satir"><span>Eski:</span> <span class="esp-kalip-deger">' + (data.kalipKod || '—') + '</span></div>' +
+                '<div class="esp-kalip-satir"><span>Yeni:</span> <span class="esp-kalip-deger">' + (data.setupYeni || '—') + '</span></div>';
+            aksiyonEl.innerHTML = 
+                btnHTML('✓', 'Setup Tamamla', 'setup-bitir-basari', '') +
+                btnHTML('↩', 'İptal Et', 'setup-bitir-iptal', '') +
+                btnHTML('⚠', 'Arıza Bildir', 'placeholder', 'Önce setup\'ı bitirin, sonra arıza bildirin');
+        } else if (durum === 'ARIZA') {
+            altEl.textContent = 'Arıza sürmekte';
+            detayEl.hidden = false;
+            var sebepTr = arizaSebepTurkce(data.arizaSebep);
+            detayEl.innerHTML = '<div class="esp-ariza-sebep">⚠ ' + sebepTr + '</div>';
+            aksiyonEl.innerHTML = 
+                btnHTML('✓', 'Arızayı Kapat', 'ariza-bitir', '') +
+                btnHTML('🔧', "Setup'a Al", 'placeholder', 'Önce arızayı kapatın, sonra setup başlatın');
+        } else {
+            // Bilinmeyen durum - defansif
+            altEl.textContent = '—';
+            detayEl.hidden = true;
+            detayEl.innerHTML = '';
+            aksiyonEl.innerHTML = '';
+        }
+    }
+    
+    function btnHTML(ikon, metin, action, tooltip) {
+        var cls = 'esp-btn';
+        if (action === 'placeholder') {
+            cls += ' placeholder';
+        } else {
+            cls += ' esp-btn-' + action;
+        }
+        var tt = tooltip ? ' data-tooltip="' + escapeAttr(tooltip) + '"' : '';
+        return '<button type="button" class="' + cls + '" data-action="' + action + '"' + tt + '>' +
+               '<span class="esp-btn-ikon">' + ikon + '</span>' +
+               '<span class="esp-btn-metin">' + metin + '</span>' +
+               '</button>';
+    }
+    
+    function escapeAttr(s) {
+        return String(s).replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    }
+    
+    function arizaSebepTurkce(sebep) {
+        var map = {
+            'KALIP': 'Kalıp Arızası',
+            'HIDROLIK': 'Hidrolik Arızası',
+            'ELEKTRIK': 'Elektrik Arızası',
+            'MALZEME': 'Malzeme Arızası',
+            'OPERATOR': 'Operatör Hatası',
+            'BILINMIYOR': 'Bilinmeyen Arıza'
+        };
+        return map[sebep] || sebep || 'Arıza';
+    }
+    
+    function repositionPopup() {
+        if (!aktifSlot || !popup || popup.hidden) return;
+        
+        var rect = aktifSlot.getBoundingClientRect();
+        var popupW = popup.offsetWidth || 220;
+        var popupH = popup.offsetHeight || 180;
+        var margin = 8;
+        var vw = window.innerWidth;
+        var vh = window.innerHeight;
+        
+        // Ilk tercih: sag
+        var pozX = rect.right + margin;
+        var pozY = rect.top;
+        
+        // Saga sigmiyor mu?
+        if (pozX + popupW > vw - margin) {
+            pozX = rect.left - popupW - margin;
+        }
+        // Sol da sigmiyor mu?
+        if (pozX < margin) {
+            pozX = Math.max(margin, (vw - popupW) / 2);
+        }
+        // Alta sigmiyor mu?
+        if (pozY + popupH > vh - margin) {
+            pozY = vh - popupH - margin;
+        }
+        if (pozY < margin) pozY = margin;
+        
+        popup.style.left = pozX + 'px';
+        popup.style.top = pozY + 'px';
+    }
+    
+    function executeAction(action) {
+        if (!aktifSlot) return;
+        var istId = aktifSlot.dataset.istasyonId;
+        if (!istId) {
+            showToast('İstasyon ID yok - sayfayı yenileyin');
+            return;
+        }
+        
+        // F9_2_P3C_POPUP_ROUTER
+        if (action === 'durdur') {
+            durumGec(istId, 'KAPALI');
+        } else if (action === 'baslat') {
+            durumGec(istId, 'AKTIF');
+        } else if (action === 'setup-baslat') {
+            if (window.EnjModal) window.EnjModal.open('setup-baslat', aktifSlot);
+            else showToast('Modal henüz hazır değil');
+        } else if (action === 'setup-bitir-basari') {
+            if (window.EnjModal) window.EnjModal.open('setup-bitir', aktifSlot, {defaultSuccess: true});
+            else showToast('Modal henüz hazır değil');
+        } else if (action === 'setup-bitir-iptal') {
+            if (window.EnjModal) window.EnjModal.open('setup-bitir', aktifSlot, {defaultSuccess: false});
+            else showToast('Modal henüz hazır değil');
+        } else if (action === 'ariza-baslat') {
+            if (window.EnjModal) window.EnjModal.open('ariza-baslat', aktifSlot);
+            else showToast('Modal henüz hazır değil');
+        } else if (action === 'ariza-bitir') {
+            if (window.EnjModal) window.EnjModal.open('ariza-bitir', aktifSlot);
+            else showToast('Modal henüz hazır değil');
+        }
+    }
+    
+    function durumGec(istId, yeniDurum) {
+        var slot = aktifSlot;
+        closeSlotPopup();
+        
+        fetch('/enjeksiyon/api/istasyon/' + istId + '/durum', {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            credentials: 'same-origin',
+            body: JSON.stringify({durum: yeniDurum})
+        })
+        .then(function (r) {
+            return r.json().then(function (d) { return {ok: r.ok, status: r.status, data: d}; });
+        })
+        .then(function (res) {
+            if (!res.ok || !res.data.ok) {
+                var hata = (res.data && res.data.hata) || ('HTTP ' + res.status);
+                showToast('Hata: ' + hata);
+                return;
+            }
+            // Slot DOM update
+            if (slot) {
+                var yeniAktif = (yeniDurum === 'AKTIF');
+                if (yeniAktif) {
+                    slot.classList.add('on');
+                } else {
+                    slot.classList.remove('on');
+                }
+                slot.classList.remove('durum-aktif', 'durum-kapali', 'durum-setup', 'durum-ariza');
+                slot.classList.add('durum-' + yeniDurum.toLowerCase());
+                slot.dataset.durum = yeniDurum;
+            }
+        })
+        .catch(function (err) {
+            showToast('Bağlantı hatası');
+            if (window.cpsError) window.cpsError('[F9.2 P3B] fetch err', err);
+        });
+    }
+    
+    function closeSlotPopup() {
+        if (!popup || popup.hidden) return;
+        popup.classList.remove('aktif');
+        popup.classList.add('kapanan');
+        setTimeout(function () {
+            popup.hidden = true;
+            popup.classList.remove('kapanan');
+            aktifSlot = null;
+        }, 100);
+    }
+    
+    function showToast(metin) {
+        var toast = document.getElementById('esp-toast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'esp-toast';
+            toast.className = 'esp-toast';
+            document.body.appendChild(toast);
+        }
+        toast.textContent = metin;
+        // Force reflow
+        void toast.offsetWidth;
+        toast.classList.add('aktif');
+        clearTimeout(_toastTimer);
+        _toastTimer = setTimeout(function () {
+            toast.classList.remove('aktif');
+        }, 2500);
+    }
+    
+    // F9_2_P3C_TOAST_GLOBAL - showToast'u modal IIFE'sine expose
+    window._enjShowToast = showToast;
+    
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
+/* === END: F9_2_P3B_POPUP_CONTROLLER === */
+
+/* ═══════════════════════════════════════════════════════════════════
+   === BEGIN: F9_2_P3C_MODAL_CONTROLLER ===
+   ═══════════════════════════════════════════════════════════════════
+   F9.2 Patch 3.C - Modal Detay Yonetimi
+   
+   YAPI (Adem'in disiplin kurali uyarinca):
+     EnjModalUI    - Render, DOM build, modal ac/kapat, gorsel guncelleme
+     EnjModalState - State, validation, secili kalip/sebep, form kontrol
+     EnjModalAPI   - Fetch, submit, backend response, hata yonetimi
+   
+   4 modal tip:
+     setup-baslat  - sebep radio + kalip dropdown + 'sonra' checkbox + not
+     setup-bitir   - 2 buyuk buton (EVET/HAYIR), durumsal metin, kalip ekrani
+     ariza-baslat  - 6 chip buton (2x3) + detay text
+     ariza-bitir   - 2 buyuk buton (URETIM/DURUR)
+   
+   Public API: window.EnjModal.open(tip, slot, options)
+                window.EnjModal.close()
+   ═══════════════════════════════════════════════════════════════════ */
+(function () {
+    'use strict';
+    
+    /* ════════════════════════════════════════════════════════════
+       STATE BOLUMU - EnjModalState
+       Form verileri, secili kalip/sebep, validation
+       ════════════════════════════════════════════════════════════ */
+    var state = {
+        modalTip: null,         // 'setup-baslat' | 'setup-bitir' | 'ariza-baslat' | 'ariza-bitir'
+        slot: null,             // aktif slot DOM elementi
+        istId: null,            // istasyon id
+        
+        // Setup Baslat
+        sebepSetup: 'PLANLI_DEGISIM',
+        yeniKalipId: null,
+        yeniKalipKod: null,
+        kalipSonra: false,
+        not: '',
+        
+        // Setup Bitir
+        defaultSuccess: true,
+        eskiKalipKod: null,
+        setupYeniKalipKod: null,
+        setupYeniKalipId: null,  // varsa setup_kalip_id_yeni (slot data'sindan)
+        modalKalipId: null,       // modal icinde secilen (varsa override)
+        modalKalipKod: null,
+        
+        // Ariza Baslat
+        sebepAriza: null,
+        sebepDetay: '',
+        
+        // Ariza Bitir
+        arizaSebepMevcut: null,
+        arizaSure: null
+    };
+    
+    function resetState() {
+        state.modalTip = null;
+        state.slot = null;
+        state.istId = null;
+        state.sebepSetup = 'PLANLI_DEGISIM';
+        state.yeniKalipId = null;
+        state.yeniKalipKod = null;
+        state.kalipSonra = false;
+        state.not = '';
+        state.defaultSuccess = true;
+        state.eskiKalipKod = null;
+        state.setupYeniKalipKod = null;
+        state.setupYeniKalipId = null;
+        state.modalKalipId = null;
+        state.modalKalipKod = null;
+        state.sebepAriza = null;
+        state.sebepDetay = '';
+        state.arizaSebepMevcut = null;
+        state.arizaSure = null;
+    }
+    
+    /* Validation - Setup Baslat */
+    function validateSetupBaslat() {
+        if (!state.sebepSetup) return false;
+        // Sebep secili + (kalip secili VEYA checkbox isaretli)
+        if (state.kalipSonra) return true;
+        if (state.yeniKalipId) return true;
+        return false;
+    }
+    
+    /* Validation - Setup Bitir EVET butonu */
+    function validateSetupBitirBasari() {
+        // success=true icin kalip lazim
+        // Oncelik: modal'da secildi > slot'tan gelen setup_yeni > yok
+        var kalipVar = state.modalKalipId || state.setupYeniKalipId;
+        return !!kalipVar;
+    }
+    
+    /* Validation - Ariza Baslat */
+    function validateArizaBaslat() {
+        return !!state.sebepAriza;
+    }
+    
+    
+    /* ════════════════════════════════════════════════════════════
+       UI BOLUMU - EnjModalUI
+       Render, DOM build, modal ac/kapat, gorsel guncelleme
+       ════════════════════════════════════════════════════════════ */
+    var overlayEl, modalEl, bodyEl, footerEl, headerTipEl, headerMakIstEl;
+    var miniKalipCache = null;  // F25.2 mini cache (kalip listesi)
+    
+    function initUI() {
+        overlayEl = document.getElementById('enj-modal-overlay');
+        if (!overlayEl) return false;
+        modalEl = document.getElementById('enj-modal');
+        bodyEl = overlayEl.querySelector('.enj-modal-body');
+        footerEl = overlayEl.querySelector('.enj-modal-footer');
+        headerTipEl = overlayEl.querySelector('.emh-tip');
+        headerMakIstEl = overlayEl.querySelector('.emh-makine-ist');
+        
+        // Close X
+        var closeBtn = overlayEl.querySelector('.enj-modal-close');
+        if (closeBtn) closeBtn.addEventListener('click', closeModal);
+        
+        // Overlay dis-tik (overlay'in kendisi tiklandiysa)
+        overlayEl.addEventListener('click', function (e) {
+            if (e.target === overlayEl) closeModal();
+        });
+        
+        // ESC kapatma (modal acikken popup ESC'sinden once)
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && !overlayEl.hidden) {
+                e.stopPropagation();
+                closeModal();
+            }
+        }, true); // capture
+        
+        return true;
+    }
+    
+    function openModal(tip, slot, options) {
+        if (!overlayEl) {
+            if (!initUI()) {
+                if (window._enjShowToast) window._enjShowToast('Modal DOM yok');
+                return;
+            }
+        }
+        
+        resetState();
+        state.modalTip = tip;
+        state.slot = slot;
+        state.istId = slot ? slot.dataset.istasyonId : null;
+        
+        // Slot data'sini state'e kopyala
+        if (slot) {
+            state.eskiKalipKod = slot.dataset.kalipKod || '';
+            state.setupYeniKalipKod = slot.dataset.setupYeni || '';
+            // setup_yeni_kalip_id slot data'sinda yok, sadece kod var.
+            // Setup bitir modal'da kalip_id setup_kalip_id_yeni'den okumak lazim.
+            // Cozum: setupYeniKalipId modal acildiginda yeni endpoint ile cekilebilir,
+            // ya da slot.dataset.setupYeniId ekle. Su an: setupYeniKalipKod kullaniyoruz,
+            // submit aninda backend setup_kalip_id_yeni'yi otomatik kullanir (override yoksa).
+            state.arizaSebepMevcut = slot.dataset.arizaSebep || '';
+        }
+        
+        if (options) {
+            if (options.defaultSuccess !== undefined) state.defaultSuccess = options.defaultSuccess;
+        }
+        
+        // Modal class + header
+        modalEl.className = 'enj-modal tip-' + tip;
+        
+        var makineId = slot && slot.closest('.enj-mak-panel');
+        makineId = makineId ? (makineId.getAttribute('data-makine-id') || '?') : '?';
+        var istNo = slot ? (slot.dataset.istasyonNo || '?') : '?';
+        var slotHarf = slot ? (slot.dataset.slot || '?') : '?';
+        headerMakIstEl.textContent = 'MAK ' + makineId + ' • İST ' + istNo + '-' + slotHarf;
+        
+        // Render
+        switch (tip) {
+            case 'setup-baslat':
+                headerTipEl.innerHTML = '🟠 SETUP BAŞLAT';
+                renderSetupBaslat();
+                break;
+            case 'setup-bitir':
+                headerTipEl.innerHTML = '🟠 SETUP BİTİR';
+                renderSetupBitir();
+                break;
+            case 'ariza-baslat':
+                headerTipEl.innerHTML = '🔴 ARIZA BİLDİR';
+                renderArizaBaslat();
+                break;
+            case 'ariza-bitir':
+                headerTipEl.innerHTML = '🔴 ARIZAYI KAPAT';
+                renderArizaBitir();
+                break;
+        }
+        
+        // Body scroll lock
+        document.body.classList.add('modal-acik');
+        
+        // Goster
+        overlayEl.hidden = false;
+        overlayEl.classList.remove('kapanan');
+        requestAnimationFrame(function () {
+            overlayEl.classList.add('aktif');
+        });
+    }
+    
+    function closeModal() {
+        if (!overlayEl || overlayEl.hidden) return;
+        overlayEl.classList.remove('aktif');
+        overlayEl.classList.add('kapanan');
+        setTimeout(function () {
+            overlayEl.hidden = true;
+            overlayEl.classList.remove('kapanan');
+            document.body.classList.remove('modal-acik');
+            bodyEl.innerHTML = '';
+            footerEl.innerHTML = '';
+            resetState();
+        }, 160);
+    }
+    
+    /* Render: Setup Baslat */
+    function renderSetupBaslat() {
+        var eskiKalipDisplay = state.eskiKalipKod || '— (slot boş)';
+        var eskiCls = state.eskiKalipKod ? '' : ' bos';
+        
+        bodyEl.innerHTML =
+            '<div class="emb-bolum">' +
+                '<label class="emb-label">Mevcut Kalıp</label>' +
+                '<div class="emb-mevcut-kalip' + eskiCls + '">' + escapeHTML(eskiKalipDisplay) + '</div>' +
+            '</div>' +
+            
+            '<div class="emb-bolum">' +
+                '<label class="emb-label">Setup Sebebi<span class="gerekli">*</span></label>' +
+                '<div class="emb-radio-grup">' +
+                    radioHTML('PLANLI_DEGISIM', '📅', 'Planlı Değişim', true) +
+                    radioHTML('ARIZA_SONRASI', '⚙', 'Arıza Sonrası', false) +
+                    radioHTML('ACIL', '⚠', 'Acil', false) +
+                '</div>' +
+            '</div>' +
+            
+            '<div class="emb-bolum">' +
+                '<label class="emb-label">Yeni Kalıp</label>' +
+                kalipSeciciHTML() +
+                '<label class="emb-checkbox-row">' +
+                    '<input type="checkbox" id="esb-kalip-sonra">' +
+                    '<span class="emb-checkbox-label">' +
+                        '<span class="baslik">Kalıp sonra seçilecek</span>' +
+                        '<span class="alt">Setup biterken belirlenecek</span>' +
+                    '</span>' +
+                '</label>' +
+            '</div>' +
+            
+            '<div class="emb-bolum">' +
+                '<label class="emb-label">Not (opsiyonel)</label>' +
+                '<textarea class="emb-not-input" id="esb-not" placeholder="örn: kalıp temizlendi, ayar değiştirildi" maxlength="200"></textarea>' +
+            '</div>';
+        
+        footerEl.innerHTML =
+            '<button type="button" class="emf-btn iptal" data-act="iptal">İPTAL</button>' +
+            '<button type="button" class="emf-btn submit" data-act="submit" disabled>SETUP BAŞLAT 🟠</button>';
+        
+        bindSetupBaslat();
+    }
+    
+    /* Render: Setup Bitir */
+    function renderSetupBitir() {
+        var hasEski = !!state.eskiKalipKod;
+        var hasYeni = !!state.setupYeniKalipKod;
+        
+        // 4 senaryo
+        var eskiHTML, yeniHTML, kalipSeciciEk = '';
+        
+        eskiHTML = hasEski 
+            ? '<span class="deger">' + escapeHTML(state.eskiKalipKod) + '</span>'
+            : '<span class="deger bos">— (slot boştu)</span>';
+        
+        yeniHTML = hasYeni
+            ? '<span class="deger">' + escapeHTML(state.setupYeniKalipKod) + '</span>'
+            : '<span class="deger uyari">⚠ Henüz seçilmedi</span>';
+        
+        if (!hasYeni) {
+            // Modal icinde kalip secimi gerekli
+            kalipSeciciEk = 
+                '<div class="emb-bolum" id="esb-modal-kalip-secim">' +
+                    '<label class="emb-label">Kalıp Seç<span class="gerekli">*</span></label>' +
+                    kalipSeciciHTML() +
+                '</div>';
+        }
+        
+        // Buton metinleri - durumsal
+        var evetMetin, evetAlt, hayirMetin, hayirAlt;
+        if (hasYeni) {
+            evetMetin = 'EVET';
+            evetAlt = escapeHTML(state.setupYeniKalipKod) + ' aktif olsun';
+        } else {
+            evetMetin = 'EVET';
+            evetAlt = 'Önce kalıp seç';
+        }
+        if (hasEski) {
+            hayirMetin = 'HAYIR';
+            hayirAlt = escapeHTML(state.eskiKalipKod) + ' geri dönsün';
+        } else {
+            hayirMetin = 'HAYIR';
+            hayirAlt = 'Slot KAPALI kalsın';
+        }
+        
+        var evetDisabled = !hasYeni ? 'disabled' : '';
+        
+        bodyEl.innerHTML =
+            '<div class="emb-bilgi-satir">' +
+                '<div class="satir"><span class="etiket">Setup süresi:</span><span class="deger">hesaplanıyor</span></div>' +
+            '</div>' +
+            
+            '<div class="emb-kalip-flow">' +
+                '<div class="emb-kalip-row"><span class="etiket">Eski</span>' + eskiHTML + '</div>' +
+                '<div class="emb-kalip-ok">↓</div>' +
+                '<div class="emb-kalip-row"><span class="etiket">Yeni</span>' + yeniHTML + '</div>' +
+            '</div>' +
+            
+            kalipSeciciEk +
+            
+            '<div class="emb-bolum">' +
+                '<label class="emb-label">Setup BAŞARILI mı?</label>' +
+                '<div class="emb-buyuk-secim">' +
+                    '<button type="button" class="emb-buyuk-btn bb-basari" data-act="evet" ' + evetDisabled + '>' +
+                        '<span class="bb-ikon">✓</span>' +
+                        '<span class="bb-icerik">' +
+                            '<span class="bb-baslik">' + evetMetin + '</span>' +
+                            '<span class="bb-alt">' + evetAlt + '</span>' +
+                        '</span>' +
+                    '</button>' +
+                    '<button type="button" class="emb-buyuk-btn bb-iptal" data-act="hayir">' +
+                        '<span class="bb-ikon">✗</span>' +
+                        '<span class="bb-icerik">' +
+                            '<span class="bb-baslik">' + hayirMetin + '</span>' +
+                            '<span class="bb-alt">' + hayirAlt + '</span>' +
+                        '</span>' +
+                    '</button>' +
+                '</div>' +
+            '</div>';
+        
+        footerEl.innerHTML =
+            '<button type="button" class="emf-btn iptal" data-act="iptal">İPTAL</button>';
+        
+        // Setup yeni kalip slot data'sindan zaten var (kullanılacak)
+        // Eger setupYeniKalipKod varsa, yeni kalip id'yi de "saklamak" lazim ama
+        // slot data'sinda yok. Backend zaten setup_kalip_id_yeni'yi kullanir
+        // (override yoksa). Bu yuzden modalKalipId opsiyonel.
+        
+        bindSetupBitir();
+    }
+    
+    /* Render: Ariza Baslat */
+    function renderArizaBaslat() {
+        bodyEl.innerHTML =
+            '<div class="emb-bolum">' +
+                '<label class="emb-label">Arıza Sebebi<span class="gerekli">*</span></label>' +
+                '<div class="emb-chip-grid">' +
+                    chipHTML('KALIP', '🔧', 'KALIP') +
+                    chipHTML('HIDROLIK', '💧', 'HİDROLİK') +
+                    chipHTML('ELEKTRIK', '⚡', 'ELEKTRİK') +
+                    chipHTML('MALZEME', '📦', 'MALZEME') +
+                    chipHTML('OPERATOR', '👤', 'OPERATÖR') +
+                    chipHTML('BILINMIYOR', '❓', 'BİLİNMİYOR') +
+                '</div>' +
+            '</div>' +
+            
+            '<div class="emb-bolum">' +
+                '<label class="emb-label">Detay (opsiyonel)</label>' +
+                '<textarea class="emb-not-input" id="eab-detay" placeholder="örn: ısıtıcı yanık, motor çıkardı" maxlength="200"></textarea>' +
+            '</div>';
+        
+        footerEl.innerHTML =
+            '<button type="button" class="emf-btn iptal" data-act="iptal">İPTAL</button>' +
+            '<button type="button" class="emf-btn submit ariza" data-act="submit" disabled>🔴 ARIZAYI BİLDİR</button>';
+        
+        bindArizaBaslat();
+    }
+    
+    /* Render: Ariza Bitir */
+    function renderArizaBitir() {
+        var sebepTr = arizaSebepTurkce(state.arizaSebepMevcut);
+        
+        bodyEl.innerHTML =
+            '<div class="emb-bilgi-satir">' +
+                '<div class="satir"><span class="etiket">Arıza süresi:</span><span class="deger">hesaplanıyor</span></div>' +
+                '<div class="satir"><span class="etiket">Sebep:</span><span class="deger">⚠ ' + escapeHTML(sebepTr) + '</span></div>' +
+            '</div>' +
+            
+            '<div class="emb-bolum">' +
+                '<label class="emb-label">Slot artık ne yapsın?</label>' +
+                '<div class="emb-buyuk-secim">' +
+                    '<button type="button" class="emb-buyuk-btn bb-basari" data-act="uretim">' +
+                        '<span class="bb-ikon">▶</span>' +
+                        '<span class="bb-icerik">' +
+                            '<span class="bb-baslik">ÜRETİME DEVAM ET</span>' +
+                            '<span class="bb-alt">slot AKTİF olsun</span>' +
+                        '</span>' +
+                    '</button>' +
+                    '<button type="button" class="emb-buyuk-btn bb-durur" data-act="durur">' +
+                        '<span class="bb-ikon">⏸</span>' +
+                        '<span class="bb-icerik">' +
+                            '<span class="bb-baslik">DURUR KALSIN</span>' +
+                            '<span class="bb-alt">slot KAPALI olsun</span>' +
+                        '</span>' +
+                    '</button>' +
+                '</div>' +
+            '</div>';
+        
+        footerEl.innerHTML =
+            '<button type="button" class="emf-btn iptal" data-act="iptal">İPTAL</button>';
+        
+        bindArizaBitir();
+    }
+    
+    /* HTML Helpers */
+    function radioHTML(id, ikon, metin, secili) {
+        var cls = secili ? 'emb-radio secili' : 'emb-radio';
+        var ch = secili ? 'checked' : '';
+        return '<label class="' + cls + '" data-sebep="' + id + '">' +
+            '<input type="radio" name="esb-sebep" value="' + id + '" ' + ch + '>' +
+            '<span class="emb-radio-ikon">' + ikon + '</span>' +
+            '<span class="emb-radio-metin">' + escapeHTML(metin) + '</span>' +
+            '</label>';
+    }
+    
+    function chipHTML(id, ikon, metin) {
+        return '<button type="button" class="emb-chip" data-sebep="' + id + '">' +
+            '<span class="emb-chip-ikon">' + ikon + '</span>' +
+            '<span class="emb-chip-metin">' + escapeHTML(metin) + '</span>' +
+            '</button>';
+    }
+    
+    function kalipSeciciHTML() {
+        return '<div class="enj-modal-kalip-secici">' +
+            '<input type="text" class="enj-modal-kalip-input" placeholder="Ara: kod, model..." autocomplete="off">' +
+            '<div class="enj-modal-kalip-liste" hidden></div>' +
+            '</div>';
+    }
+    
+    /* Event Binding - Setup Baslat */
+    function bindSetupBaslat() {
+        // Radio butonlar
+        bodyEl.querySelectorAll('.emb-radio').forEach(function (r) {
+            r.addEventListener('click', function () {
+                bodyEl.querySelectorAll('.emb-radio').forEach(function (x) {
+                    x.classList.remove('secili');
+                });
+                r.classList.add('secili');
+                r.querySelector('input[type="radio"]').checked = true;
+                state.sebepSetup = r.getAttribute('data-sebep');
+                refreshSetupBaslatSubmit();
+            });
+        });
+        
+        // Kalip dropdown
+        var kalipKontEl = bodyEl.querySelector('.enj-modal-kalip-secici');
+        if (kalipKontEl) {
+            initMiniKalipDropdown(kalipKontEl, function (id, kod) {
+                state.yeniKalipId = id;
+                state.yeniKalipKod = kod;
+                refreshSetupBaslatSubmit();
+            });
+        }
+        
+        // Checkbox "Kalip sonra"
+        var cb = document.getElementById('esb-kalip-sonra');
+        if (cb) {
+            cb.addEventListener('change', function () {
+                state.kalipSonra = cb.checked;
+                var kalipInp = bodyEl.querySelector('.enj-modal-kalip-input');
+                if (kalipInp) {
+                    kalipInp.disabled = cb.checked;
+                    if (cb.checked) {
+                        kalipInp.value = '';
+                        state.yeniKalipId = null;
+                        state.yeniKalipKod = null;
+                        var liste = bodyEl.querySelector('.enj-modal-kalip-liste');
+                        if (liste) liste.hidden = true;
+                    }
+                }
+                refreshSetupBaslatSubmit();
+            });
+        }
+        
+        // Not
+        var notEl = document.getElementById('esb-not');
+        if (notEl) {
+            notEl.addEventListener('input', function () {
+                state.not = notEl.value || '';
+            });
+        }
+        
+        // Footer
+        footerEl.querySelector('[data-act="iptal"]').addEventListener('click', closeModal);
+        footerEl.querySelector('[data-act="submit"]').addEventListener('click', submitSetupBaslat);
+    }
+    
+    function refreshSetupBaslatSubmit() {
+        var btn = footerEl.querySelector('[data-act="submit"]');
+        if (!btn) return;
+        btn.disabled = !validateSetupBaslat();
+    }
+    
+    /* Event Binding - Setup Bitir */
+    function bindSetupBitir() {
+        // Buyuk butonlar
+        bodyEl.querySelectorAll('.emb-buyuk-btn').forEach(function (b) {
+            b.addEventListener('click', function () {
+                if (b.disabled) return;
+                var act = b.getAttribute('data-act');
+                if (act === 'evet') {
+                    submitSetupBitir(true);
+                } else if (act === 'hayir') {
+                    submitSetupBitir(false);
+                }
+            });
+        });
+        
+        // Modal icinde kalip secimi varsa (setupYeniKalipKod yoksa)
+        var kalipKontEl = bodyEl.querySelector('.enj-modal-kalip-secici');
+        if (kalipKontEl) {
+            initMiniKalipDropdown(kalipKontEl, function (id, kod) {
+                state.modalKalipId = id;
+                state.modalKalipKod = kod;
+                refreshSetupBitirEvet();
+            });
+        }
+        
+        // Footer
+        footerEl.querySelector('[data-act="iptal"]').addEventListener('click', closeModal);
+    }
+    
+    function refreshSetupBitirEvet() {
+        var evetBtn = bodyEl.querySelector('[data-act="evet"]');
+        if (!evetBtn) return;
+        var ok = validateSetupBitirBasari();
+        evetBtn.disabled = !ok;
+        // Buton metnini guncelle (kalip secildikten sonra)
+        if (ok && state.modalKalipKod) {
+            var altEl = evetBtn.querySelector('.bb-alt');
+            if (altEl) altEl.textContent = state.modalKalipKod + ' aktif olsun';
+        }
+    }
+    
+    /* Event Binding - Ariza Baslat */
+    function bindArizaBaslat() {
+        // Chip butonlar
+        bodyEl.querySelectorAll('.emb-chip').forEach(function (c) {
+            c.addEventListener('click', function () {
+                bodyEl.querySelectorAll('.emb-chip').forEach(function (x) {
+                    x.classList.remove('secili');
+                });
+                c.classList.add('secili');
+                state.sebepAriza = c.getAttribute('data-sebep');
+                refreshArizaBaslatSubmit();
+            });
+        });
+        
+        // Detay
+        var detayEl = document.getElementById('eab-detay');
+        if (detayEl) {
+            detayEl.addEventListener('input', function () {
+                state.sebepDetay = detayEl.value || '';
+            });
+        }
+        
+        // Footer
+        footerEl.querySelector('[data-act="iptal"]').addEventListener('click', closeModal);
+        footerEl.querySelector('[data-act="submit"]').addEventListener('click', submitArizaBaslat);
+    }
+    
+    function refreshArizaBaslatSubmit() {
+        var btn = footerEl.querySelector('[data-act="submit"]');
+        if (!btn) return;
+        btn.disabled = !validateArizaBaslat();
+    }
+    
+    /* Event Binding - Ariza Bitir */
+    function bindArizaBitir() {
+        bodyEl.querySelectorAll('.emb-buyuk-btn').forEach(function (b) {
+            b.addEventListener('click', function () {
+                var act = b.getAttribute('data-act');
+                if (act === 'uretim') {
+                    submitArizaBitir('AKTIF');
+                } else if (act === 'durur') {
+                    submitArizaBitir('KAPALI');
+                }
+            });
+        });
+        footerEl.querySelector('[data-act="iptal"]').addEventListener('click', closeModal);
+    }
+    
+    /* Mini F25.2 - Modal scope */
+    function initMiniKalipDropdown(container, onSelect) {
+        var input = container.querySelector('.enj-modal-kalip-input');
+        var liste = container.querySelector('.enj-modal-kalip-liste');
+        if (!input || !liste) return;
+        
+        var goruntulenenler = [];
+        var aktifIdx = -1;
+        
+        fetchKalipListesi(function (kayitlar) {
+            // Cache yuklu, listening hazir
+        });
+        
+        input.addEventListener('input', function () {
+            if (input.disabled) return;
+            var q = (input.value || '').trim().toLocaleLowerCase('tr');
+            if (q.length < 1) { liste.hidden = true; return; }
+            
+            fetchKalipListesi(function (kayitlar) {
+                goruntulenenler = kayitlar.filter(function (k) {
+                    return (k.kalip_kod || '').toLocaleLowerCase('tr').indexOf(q) >= 0 ||
+                           (k.model_kod || '').toLocaleLowerCase('tr').indexOf(q) >= 0 ||
+                           (k.model_ad || '').toLocaleLowerCase('tr').indexOf(q) >= 0 ||
+                           (k.asorti || '').toLocaleLowerCase('tr').indexOf(q) >= 0;
+                }).slice(0, 30);
+                
+                if (goruntulenenler.length === 0) {
+                    liste.innerHTML = '<div class="enj-modal-kalip-bos">Eslesme yok</div>';
+                } else {
+                    var html = '';
+                    for (var i = 0; i < goruntulenenler.length; i++) {
+                        var k = goruntulenenler[i];
+                        var disp = escapeHTML(k.kalip_kod + ' / ' + (k.model_ad || k.model_kod));
+                        html += '<div class="enj-modal-kalip-item" data-id="' + k.id + '" data-kod="' + escapeAttr(k.kalip_kod) + '">' + disp + '</div>';
+                    }
+                    liste.innerHTML = html;
+                }
+                liste.hidden = false;
+                aktifIdx = -1;
+            });
+        });
+        
+        liste.addEventListener('click', function (e) {
+            var item = e.target.closest('.enj-modal-kalip-item');
+            if (item && item.dataset.id) {
+                var id = parseInt(item.dataset.id, 10);
+                var kod = item.dataset.kod || '';
+                input.value = kod;
+                liste.hidden = true;
+                if (onSelect) onSelect(id, kod);
+            }
+        });
+        
+        // Dis-tik kapatma
+        document.addEventListener('click', function (e) {
+            if (liste.hidden) return;
+            if (!e.target.closest('.enj-modal-kalip-secici')) liste.hidden = true;
+        });
+        
+        // Keyboard
+        input.addEventListener('keydown', function (e) {
+            if (liste.hidden) return;
+            var items = liste.querySelectorAll('.enj-modal-kalip-item');
+            if (e.key === 'ArrowDown') {
+                aktifIdx = Math.min(aktifIdx + 1, items.length - 1);
+                updateAktif(items);
+                e.preventDefault();
+            } else if (e.key === 'ArrowUp') {
+                aktifIdx = Math.max(aktifIdx - 1, 0);
+                updateAktif(items);
+                e.preventDefault();
+            } else if (e.key === 'Enter' && aktifIdx >= 0) {
+                items[aktifIdx].click();
+                e.preventDefault();
+            } else if (e.key === 'Escape') {
+                liste.hidden = true;
+                e.stopPropagation();
+            }
+        });
+        
+        function updateAktif(items) {
+            for (var i = 0; i < items.length; i++) {
+                if (i === aktifIdx) {
+                    items[i].classList.add('aktif');
+                    items[i].scrollIntoView({block: 'nearest'});
+                } else {
+                    items[i].classList.remove('aktif');
+                }
+            }
+        }
+    }
+    
+    function fetchKalipListesi(callback) {
+        if (miniKalipCache) {
+            callback(miniKalipCache);
+            return;
+        }
+        fetch('/enjeksiyon/api/kalip-listesi')
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (d && d.ok) {
+                    miniKalipCache = d.kayitlar || [];
+                    callback(miniKalipCache);
+                } else {
+                    callback([]);
+                }
+            })
+            .catch(function () { callback([]); });
+    }
+    
+    
+    /* ════════════════════════════════════════════════════════════
+       API BOLUMU - EnjModalAPI
+       Fetch, submit, backend response, hata yonetimi
+       ════════════════════════════════════════════════════════════ */
+    
+    function submitSetupBaslat() {
+        if (!validateSetupBaslat()) return;
+        if (!state.istId) return notify('İstasyon ID yok');
+        
+        var body = {
+            sebep: state.sebepSetup
+        };
+        if (!state.kalipSonra && state.yeniKalipId) {
+            body.yeni_kalip_id = state.yeniKalipId;
+        }
+        if (state.kalipSonra) {
+            body.kalip_sonra = true;
+        }
+        if (state.not) {
+            body.not = state.not;
+        }
+        
+        apiSubmit('/setup-start', body, function (data) {
+            updateSlotAfterSetupStart();
+            closeModal();
+        });
+    }
+    
+    function submitSetupBitir(success) {
+        if (success && !validateSetupBitirBasari()) {
+            notify('Yeni kalıp seçmeden setup tamamlanamaz.');
+            return;
+        }
+        if (!state.istId) return notify('İstasyon ID yok');
+        
+        var body = {
+            success: success
+        };
+        // success=true: override varsa gonder
+        if (success && state.modalKalipId) {
+            body.yeni_kalip_id = state.modalKalipId;
+        }
+        // success=false: hedef_durum = KAPALI eger eski yoksa
+        if (!success && !state.eskiKalipKod) {
+            body.hedef_durum = 'KAPALI';
+        }
+        
+        apiSubmit('/setup-end', body, function (data) {
+            updateSlotAfterSetupEnd(data);
+            closeModal();
+        });
+    }
+    
+    function submitArizaBaslat() {
+        if (!validateArizaBaslat()) return;
+        if (!state.istId) return notify('İstasyon ID yok');
+        
+        var body = {
+            sebep: state.sebepAriza
+        };
+        if (state.sebepDetay) {
+            body.sebep_detay = state.sebepDetay;
+        }
+        
+        apiSubmit('/ariza-start', body, function (data) {
+            updateSlotAfterArizaStart();
+            closeModal();
+        });
+    }
+    
+    function submitArizaBitir(yeniDurum) {
+        if (!state.istId) return notify('İstasyon ID yok');
+        
+        var body = {
+            hedef_durum: yeniDurum
+        };
+        
+        apiSubmit('/ariza-end', body, function (data) {
+            updateSlotAfterArizaEnd(data, yeniDurum);
+            closeModal();
+        });
+    }
+    
+    function apiSubmit(endpoint, body, onSuccess) {
+        // Tum submit butonlari disabled (cift-tik onleme)
+        var allBtn = overlayEl.querySelectorAll('button');
+        allBtn.forEach(function (b) { b.disabled = true; });
+        
+        fetch('/enjeksiyon/api/istasyon/' + state.istId + endpoint, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            credentials: 'same-origin',
+            body: JSON.stringify(body)
+        })
+        .then(function (r) {
+            return r.json().then(function (d) { return {ok: r.ok, status: r.status, data: d}; });
+        })
+        .then(function (res) {
+            if (!res.ok || !res.data.ok) {
+                var hata = (res.data && res.data.hata) || ('HTTP ' + res.status);
+                // Operator dostu mesajlar
+                if (hata.indexOf('yeni_kalip_id zorunlu') >= 0) {
+                    hata = 'Yeni kalıp seçmeden setup tamamlanamaz.';
+                }
+                notify('Hata: ' + hata);
+                allBtn.forEach(function (b) { b.disabled = false; });
+                // Submit-baslat butonu icin validation tekrar
+                refreshAllSubmitButtons();
+                return;
+            }
+            onSuccess(res.data);
+        })
+        .catch(function (err) {
+            notify('Bağlantı hatası');
+            allBtn.forEach(function (b) { b.disabled = false; });
+            refreshAllSubmitButtons();
+        });
+    }
+    
+    function refreshAllSubmitButtons() {
+        if (state.modalTip === 'setup-baslat') refreshSetupBaslatSubmit();
+        if (state.modalTip === 'setup-bitir') refreshSetupBitirEvet();
+        if (state.modalTip === 'ariza-baslat') refreshArizaBaslatSubmit();
+    }
+    
+    
+    /* Slot DOM Update - Modal sonrasi */
+    function updateSlotAfterSetupStart() {
+        if (!state.slot) return;
+        state.slot.classList.remove('durum-aktif', 'durum-kapali', 'durum-ariza');
+        state.slot.classList.add('durum-setup');
+        state.slot.classList.remove('on');
+        state.slot.dataset.durum = 'SETUP';
+        if (state.yeniKalipKod) {
+            state.slot.dataset.setupYeni = state.yeniKalipKod;
+        }
+    }
+    
+    function updateSlotAfterSetupEnd(data) {
+        if (!state.slot) return;
+        var yeniDurum = data.durum || 'AKTIF';
+        state.slot.classList.remove('durum-aktif', 'durum-kapali', 'durum-setup', 'durum-ariza');
+        state.slot.classList.add('durum-' + yeniDurum.toLowerCase());
+        if (yeniDurum === 'AKTIF') {
+            state.slot.classList.add('on');
+        } else {
+            state.slot.classList.remove('on');
+        }
+        state.slot.dataset.durum = yeniDurum;
+        state.slot.dataset.setupYeni = '';
+        // Yeni kalip kodu update et
+        if (data.kalip_id && state.modalKalipKod) {
+            state.slot.dataset.kalipKod = state.modalKalipKod;
+        } else if (data.kalip_id && state.setupYeniKalipKod) {
+            state.slot.dataset.kalipKod = state.setupYeniKalipKod;
+        }
+    }
+    
+    function updateSlotAfterArizaStart() {
+        if (!state.slot) return;
+        state.slot.classList.remove('durum-aktif', 'durum-kapali', 'durum-setup');
+        state.slot.classList.add('durum-ariza');
+        state.slot.classList.remove('on');
+        state.slot.dataset.durum = 'ARIZA';
+        state.slot.dataset.arizaSebep = state.sebepAriza;
+    }
+    
+    function updateSlotAfterArizaEnd(data, yeniDurum) {
+        if (!state.slot) return;
+        state.slot.classList.remove('durum-aktif', 'durum-kapali', 'durum-setup', 'durum-ariza');
+        state.slot.classList.add('durum-' + yeniDurum.toLowerCase());
+        if (yeniDurum === 'AKTIF') {
+            state.slot.classList.add('on');
+        } else {
+            state.slot.classList.remove('on');
+        }
+        state.slot.dataset.durum = yeniDurum;
+        state.slot.dataset.arizaSebep = '';
+    }
+    
+    
+    /* Helpers */
+    function escapeHTML(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+            return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c];
+        });
+    }
+    function escapeAttr(s) {
+        return String(s == null ? '' : s).replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    }
+    function arizaSebepTurkce(sebep) {
+        var map = {
+            'KALIP': 'Kalıp Arızası',
+            'HIDROLIK': 'Hidrolik Arızası',
+            'ELEKTRIK': 'Elektrik Arızası',
+            'MALZEME': 'Malzeme Arızası',
+            'OPERATOR': 'Operatör Hatası',
+            'BILINMIYOR': 'Bilinmeyen Arıza'
+        };
+        return map[sebep] || sebep || 'Arıza';
+    }
+    function notify(metin) {
+        if (window._enjShowToast) {
+            window._enjShowToast(metin);
+        } else {
+            console.warn('[EnjModal]', metin);
+        }
+    }
+    
+    
+    /* ════════════════════════════════════════════════════════════
+       PUBLIC API
+       ════════════════════════════════════════════════════════════ */
+    window.EnjModal = {
+        open: openModal,
+        close: closeModal
+    };
+    
+    /* INIT */
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initUI);
+    } else {
+        initUI();
+    }
+})();
+/* === END: F9_2_P3C_MODAL_CONTROLLER === */
+
+
+/* === BEGIN: ENJ_FOTO_FIX === */
+/* Enjeksiyon foto upload kontrolu - tikla, kamera ac, upload, onizleme */
+(function () {
+    'use strict';
+    var wrap = document.querySelector('.enj-wrap');
+    if (!wrap) return;
+    var raporId = parseInt(wrap.dataset.raporId || '', 10);
+    if (!raporId || isNaN(raporId)) return;
+
+    var MAX = 5 * 1024 * 1024;
+
+    function fmtMB(bytes) {
+        return (Math.round((bytes / 1024 / 1024) * 10) / 10).toFixed(1);
+    }
+
+    function loadExisting() {
+        fetch('/enjeksiyon/api/foto?rapor_id=' + raporId)
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (!d || !d.ok || !d.fotolar) return;
+                d.fotolar.forEach(function (f) {
+                    var cell = document.querySelector('.enj-gs-foto[data-foto-tip="' + f.tip + '"]');
+                    if (!cell) return;
+                    var thumb = cell.querySelector('.enj-foto-thumb');
+                    var zone = cell.querySelector('.zone');
+                    if (thumb && f.url) {
+                        thumb.src = f.url + '?t=' + Date.now();
+                        thumb.hidden = false;
+                        if (zone) zone.style.display = 'none';
+                    }
+                });
+            })
+            .catch(function () { });
+    }
+
+    function bind(cell) {
+        var input = cell.querySelector('input[type="file"]');
+        var zone = cell.querySelector('.zone');
+        var thumb = cell.querySelector('.enj-foto-thumb');
+        var tip = cell.dataset.fotoTip;
+        if (!input || !tip) return;
+
+        function trigger() { input.click(); }
+        if (zone) zone.addEventListener('click', trigger);
+        if (thumb) thumb.addEventListener('click', trigger);
+
+        input.addEventListener('change', function () {
+            var f = input.files && input.files[0];
+            if (!f) return;
+            if (f.size > MAX) {
+                alert('Dosya 5 MB sinirini asiyor (' + fmtMB(f.size) + ' MB)');
+                input.value = '';
+                return;
+            }
+            if (!f.type || f.type.indexOf('image/') !== 0) {
+                alert('Sadece resim dosyasi kabul edilir');
+                input.value = '';
+                return;
+            }
+
+            var fd = new FormData();
+            fd.append('rapor_id', raporId);
+            fd.append('tip', tip);
+            fd.append('dosya', f);
+
+            var origText = zone ? zone.innerHTML : '';
+            if (zone) zone.textContent = 'Yukleniyor...';
+
+            fetch('/enjeksiyon/api/foto/ekle', { method: 'POST', body: fd })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (!d || !d.ok) throw new Error((d && d.hata) || 'Yukleme hatasi');
+                    if (thumb && d.url) {
+                        thumb.src = d.url + '?t=' + Date.now();
+                        thumb.hidden = false;
+                        if (zone) zone.style.display = 'none';
+                    }
+                })
+                .catch(function (err) {
+                    alert('Foto yukleme hatasi: ' + err.message);
+                    if (zone) {
+                        zone.innerHTML = origText;
+                        zone.style.display = '';
+                    }
+                })
+                .then(function () {
+                    input.value = '';
+                });
+        });
+    }
+
+    document.querySelectorAll('.enj-gs-foto[data-foto-tip]').forEach(bind);
+    loadExisting();
+    if (typeof cpsLog === 'function') cpsLog('[CPS LOCAL] ENJ_FOTO_FIX aktif');
+})();
+/* === END: ENJ_FOTO_FIX === */
+
+/* === BEGIN: ENJ_FOTO_SIL === */
+/* Yuklenmis fotograflara X silme butonu ekler (MutationObserver ile) */
+(function () {
+    'use strict';
+
+    function silBtnEkle(thumb) {
+        if (!thumb) return;
+        var cell = thumb.closest('.enj-gs-foto');
+        if (!cell) return;
+        if (cell.querySelector('.enj-foto-sil')) return;
+
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'enj-foto-sil';
+        btn.title = 'Fotografi sil';
+        btn.innerHTML = '\u2715';
+
+        function syncVis() {
+            btn.style.display = thumb.hidden ? 'none' : 'flex';
+        }
+        syncVis();
+
+        btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            e.preventDefault();
+
+            var wrap = document.querySelector('.enj-wrap');
+            var raporId = parseInt((wrap && wrap.dataset.raporId) || '', 10);
+            var tip = cell.dataset.fotoTip;
+            if (!raporId || !tip) return;
+
+            if (!confirm('Bu fotografi silmek istediginizden emin misiniz?')) return;
+
+            fetch('/enjeksiyon/api/foto?rapor_id=' + raporId)
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (!d || !d.ok) throw new Error('foto listesi hatasi');
+                    var foto = (d.fotolar || []).filter(function (f) { return f.tip === tip; })[0];
+                    if (!foto) throw new Error('Foto bulunamadi');
+                    return fetch('/enjeksiyon/api/foto/' + foto.id, { method: 'DELETE' });
+                })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (!d || !d.ok) throw new Error((d && d.hata) || 'Silme hatasi');
+                    thumb.hidden = true;
+                    thumb.src = '';
+                    var zone = cell.querySelector('.zone');
+                    if (zone) zone.style.display = '';
+                    btn.style.display = 'none';
+                })
+                .catch(function (err) {
+                    alert('Silme hatasi: ' + err.message);
+                });
+        });
+
+        cell.appendChild(btn);
+
+        var mo = new MutationObserver(syncVis);
+        mo.observe(thumb, { attributes: true, attributeFilter: ['hidden'] });
+    }
+
+    function tara() {
+        document.querySelectorAll('.enj-gs-foto[data-foto-tip] .enj-foto-thumb').forEach(silBtnEkle);
+    }
+
+    tara();
+    setTimeout(tara, 500);
+    setTimeout(tara, 1500);
+    setTimeout(tara, 3000);
+})();
+/* === END: ENJ_FOTO_SIL === */
+
+/* === BEGIN: ENJ_AB_FAZ2_FINAL === */
+(function () {
+  'use strict';
+  var wrap = document.querySelector('.enj-wrap');
+  if (!wrap) return;
+  var raporId = parseInt(wrap.dataset.raporId || '', 10);
+  if (!raporId || isNaN(raporId)) return;
+
+  var DEBOUNCE = 600;
+  var timers = {};
+  function deb(key, fn) {
+    if (timers[key]) clearTimeout(timers[key]);
+    timers[key] = setTimeout(fn, DEBOUNCE);
+  }
+  function fJSON(url, opts) {
+    return fetch(url, opts || {}).then(function (r) { return r.json(); });
+  }
+
+  function loadOzet() {
+    fJSON('/enjeksiyon/api/rapor/' + raporId + '/ab-ozet').then(function (d) {
+      if (!d || !d.ok) return;
+      ['A','B'].forEach(function (slot) {
+        var sl = slot.toLowerCase();
+        var data = d[slot] || {};
+        var setV = function (id, v) {
+          var el = document.getElementById(id);
+          if (el) el.value = (v == null) ? '' : v;
+        };
+        setV('enj-cev-' + sl + '-top', data.cevrim);
+        setV('enj-uret-' + sl + '-top', data.uretilen);
+        var ayar = data.ayar;
+        if (ayar) {
+          setV('enj-renk-' + sl, ayar.renk);
+          setV('enj-bagli-' + sl, ayar.bagli_kalip_adet);
+          setV('enj-kbc-' + sl, ayar.kalip_basi_cift);
+          setV('enj-pisme-' + sl, ayar.pisme_suresi_sn);
+          setV('enj-kalip-' + sl + '-id', ayar.kalip_id);
+          if (ayar.kalip_kod) setV('enj-kalip-' + sl + '-input', ayar.kalip_kod);
+        }
+      });
+    }).catch(function () {});
+  }
+
+  function slotToplu(slot, payload) {
+    payload.slot = slot;
+    return fJSON('/enjeksiyon/api/rapor/' + raporId + '/slot-toplu', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+  }
+
+  function saatlikPatch(sid, payload) {
+    return fJSON('/enjeksiyon/api/saatlik/' + sid, {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+  }
+
+  document.querySelectorAll('.enj-ab-faz2-inp').forEach(function (inp) {
+    inp.addEventListener('input', function () {
+      var slot = inp.dataset.slot;
+      var field = inp.dataset.field;
+      if (!slot || !field) return;
+      var raw = inp.value;
+      var val;
+      if (field === 'renk') {
+        val = raw === '' ? null : raw;
+      } else {
+        val = raw === '' ? null : parseInt(raw, 10);
+        if (isNaN(val)) val = null;
+      }
+      var payload = {}; payload[field] = val;
+      deb(slot + '_' + field, function () {
+        slotToplu(slot, payload).then(function (d) {
+          if (d && d.ok) loadOzet();
+        }).catch(function () {});
+      });
+    });
+  });
+
+  function kalipSecici(slot) {
+    var sl = slot.toLowerCase();
+    var inp = document.getElementById('enj-kalip-' + sl + '-input');
+    var hid = document.getElementById('enj-kalip-' + sl + '-id');
+    var listEl = document.getElementById('enj-kalip-' + sl + '-liste');
+    if (!inp || !hid || !listEl) return;
+
+    inp.addEventListener('input', function () {
+      var q = inp.value.trim();
+      if (q.length < 1) { listEl.hidden = true; listEl.innerHTML = ''; return; }
+      deb('ks_' + sl, function () {
+        fJSON('/enjeksiyon/api/kalip/arama?q=' + encodeURIComponent(q)).then(function (d) {
+          if (!d || !d.kaliplar) { listEl.hidden = true; return; }
+          listEl.innerHTML = '';
+          d.kaliplar.slice(0, 10).forEach(function (k) {
+            var item = document.createElement('div');
+            item.className = 'enj-kalip-item';
+            item.textContent = k.kalip_kod + ' · ' + (k.model_kod || '') + (k.renk ? ' · ' + k.renk : '');
+            item.addEventListener('click', function () {
+              hid.value = k.id;
+              inp.value = k.kalip_kod;
+              listEl.hidden = true;
+              slotToplu(slot, {
+                kalip_id: k.id,
+                kalip_basi_cift: k.kalip_basi_cift,
+                bagli_kalip_adet: k.varsayilan_bagli_kalip,
+                renk: k.renk || null
+              }).then(function () { loadOzet(); });
+            });
+            listEl.appendChild(item);
+          });
+          listEl.hidden = d.kaliplar.length === 0;
+        });
+      });
+    });
+
+    document.addEventListener('click', function (e) {
+      if (!listEl.contains(e.target) && e.target !== inp) listEl.hidden = true;
+    });
+  }
+  kalipSecici('A');
+  kalipSecici('B');
+
+  document.querySelectorAll('tr[data-saatlik-id]').forEach(function (tr) {
+    var sid = tr.dataset.saatlikId;
+    if (!sid) return;
+    function bind(sel, field) {
+      var el = tr.querySelector(sel);
+      if (!el) return;
+      el.addEventListener('input', function () {
+        var raw = el.value;
+        var val = raw === '' ? 0 : parseInt(raw, 10);
+        if (isNaN(val) || val < 0) val = 0;
+        var p = {}; p[field] = val;
+        deb('sk_' + sid + '_' + field, function () {
+          saatlikPatch(sid, p).then(function (d) {
+            if (d && d.ok) loadOzet();
+          });
+        });
+      });
+    }
+    bind('.cev-a-inp', 'cevrim_a');
+    bind('.cev-b-inp', 'cevrim_b');
+
+    // PATCH 1 V2: A ve B icin AYRI durum/sebep listenerlar
+    // HTML'de .durum-a-sel/.durum-b-sel/.aks-a-sel/.aks-b-sel zaten var
+    // Eski .durum-sel ve .aks-sel (varsa) geriye uyum icin tutuldu
+    var ds = tr.querySelector('.durum-sel');
+    if (ds) ds.addEventListener('change', function () {
+      saatlikPatch(sid, {durum: ds.value});
+    });
+    var as = tr.querySelector('.aks-sel');
+    if (as) as.addEventListener('change', function () {
+      var v = as.value === '' ? null : parseInt(as.value, 10);
+      saatlikPatch(sid, {aksama_sebep_id: isNaN(v) ? null : v});
+    });
+
+    // V2 - A tarafi durum
+    var dsa = tr.querySelector('.durum-a-sel');
+    if (dsa) dsa.addEventListener('change', function () {
+      saatlikPatch(sid, {durum_a: dsa.value || null});
+    });
+    // V2 - B tarafi durum
+    var dsb = tr.querySelector('.durum-b-sel');
+    if (dsb) dsb.addEventListener('change', function () {
+      saatlikPatch(sid, {durum_b: dsb.value || null});
+    });
+    // V2 - A tarafi sebep
+    var asa = tr.querySelector('.aks-a-sel');
+    if (asa) asa.addEventListener('change', function () {
+      var va = asa.value === '' ? null : parseInt(asa.value, 10);
+      saatlikPatch(sid, {aksama_sebep_a_id: isNaN(va) ? null : va});
+    });
+    // V2 - B tarafi sebep
+    var asb = tr.querySelector('.aks-b-sel');
+    if (asb) asb.addEventListener('change', function () {
+      var vb = asb.value === '' ? null : parseInt(asb.value, 10);
+      saatlikPatch(sid, {aksama_sebep_b_id: isNaN(vb) ? null : vb});
+    });
+  });
+
+  var personel = document.getElementById('enj-personel-sayisi');
+  if (personel) {
+    personel.addEventListener('input', function () {
+      var v = personel.value === '' ? null : parseInt(personel.value, 10);
+      deb('personel', function () {
+        fJSON('/enjeksiyon/api/rapor/' + raporId, {
+          method: 'PATCH',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({personel_sayisi: isNaN(v) ? null : v})
+        });
+      });
+    });
+  }
+
+  loadOzet();
+})();
+/* === END: ENJ_AB_FAZ2_FINAL === */
+
+/* === BEGIN: ENJ_AB_GORSEL_V2 === */
+(function () {
+  'use strict';
+  var wrap = document.querySelector('.enj-wrap');
+  if (!wrap) return;
+
+  ['A','B'].forEach(function (slot) {
+    var sl = slot.toLowerCase();
+    var panel = document.querySelector('.enj-ab-faz2[data-slot="' + slot + '"]');
+    if (!panel) return;
+    if (panel.querySelector('.enj-ab-faz2-gorsel')) return;
+
+    var box = document.createElement('div');
+    box.className = 'enj-ab-faz2-gorsel';
+    box.id = 'enj-gorsel-' + sl;
+
+    var img = document.createElement('img');
+    img.id = 'enj-gorsel-' + sl + '-img';
+    img.hidden = true;
+    img.alt = slot + ' kalip gorseli';
+    box.appendChild(img);
+
+    var yok = document.createElement('span');
+    yok.className = 'g-yok';
+    yok.id = 'enj-gorsel-' + sl + '-yok';
+    yok.textContent = 'Kalip secilmedi';
+    box.appendChild(yok);
+
+    panel.appendChild(box);
+  });
+
+  var raporId = parseInt(wrap.dataset.raporId || '', 10);
+  if (!raporId || isNaN(raporId)) return;
+
+  function loadGorseller() {
+    fetch('/enjeksiyon/api/rapor/' + raporId + '/ab-ozet')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.ok) return;
+        ['A','B'].forEach(function (slot) {
+          var sl = slot.toLowerCase();
+          var data = d[slot] || {};
+          var ayar = data.ayar || {};
+          var img = document.getElementById('enj-gorsel-' + sl + '-img');
+          var yok = document.getElementById('enj-gorsel-' + sl + '-yok');
+          if (!img || !yok) return;
+          if (ayar && ayar.gorsel) {
+            img.src = ayar.gorsel;
+            img.hidden = false;
+            yok.hidden = true;
+            img.onerror = function () {
+              img.hidden = true;
+              yok.textContent = 'Gorsel yok';
+              yok.hidden = false;
+            };
+          } else {
+            img.hidden = true;
+            img.src = '';
+            yok.textContent = (ayar && ayar.kalip_id) ? 'Gorsel yok' : 'Kalip secilmedi';
+            yok.hidden = false;
+          }
+        });
+      })
+      .catch(function () {});
+  }
+
+  loadGorseller();
+  setInterval(loadGorseller, 3000);
+})();
+/* === END: ENJ_AB_GORSEL_V2 === */
+
+/* === BEGIN: ENJ_AB_KALIP_FIX === */
+(function () {
+  'use strict';
+  var wrap = document.querySelector('.enj-wrap');
+  if (!wrap) return;
+  var raporId = parseInt(wrap.dataset.raporId || '', 10);
+  if (!raporId || isNaN(raporId)) return;
+
+  var KALIP_CACHE = null;
+  function loadKalipListesi() {
+    if (KALIP_CACHE) return Promise.resolve(KALIP_CACHE);
+    return fetch('/enjeksiyon/api/kalip-listesi')
+      .then(function(r){ return r.json(); })
+      .then(function(d) {
+        if (d && d.ok && d.kayitlar) KALIP_CACHE = d.kayitlar;
+        return KALIP_CACHE || [];
+      })
+      .catch(function() { return []; });
+  }
+
+  function setupKalipPicker(slot) {
+    var sl = slot.toLowerCase();
+    var oldInp = document.getElementById('enj-kalip-' + sl + '-input');
+    var hid = document.getElementById('enj-kalip-' + sl + '-id');
+    var listEl = document.getElementById('enj-kalip-' + sl + '-liste');
+    if (!oldInp || !hid || !listEl) return;
+
+    // Clone to remove old broken listeners
+    var inp = oldInp.cloneNode(true);
+    oldInp.parentNode.replaceChild(inp, oldInp);
+
+    var timer;
+    inp.addEventListener('input', function () {
+      var q = inp.value.trim();
+      if (q.length < 1) { listEl.hidden = true; listEl.innerHTML = ''; return; }
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(function () {
+        loadKalipListesi().then(function (list) {
+          var ql = q.toLowerCase();
+          var matches = list.filter(function (k) {
+            return (k.kalip_kod || '').toLowerCase().indexOf(ql) >= 0 ||
+                   (k.model_kod || '').toLowerCase().indexOf(ql) >= 0 ||
+                   (k.model_ad || '').toLowerCase().indexOf(ql) >= 0 ||
+                   (k.display || '').toLowerCase().indexOf(ql) >= 0;
+          }).slice(0, 15);
+          listEl.innerHTML = '';
+          if (matches.length === 0) {
+            var noResult = document.createElement('div');
+            noResult.className = 'enj-kalip-item';
+            noResult.style.color = '#999';
+            noResult.style.fontStyle = 'italic';
+            noResult.textContent = 'Sonuc yok';
+            listEl.appendChild(noResult);
+            listEl.hidden = false;
+            return;
+          }
+          matches.forEach(function (k) {
+            var item = document.createElement('div');
+            item.className = 'enj-kalip-item';
+            item.textContent = k.display || (k.kalip_kod + ' · ' + (k.model_kod || ''));
+            item.addEventListener('click', function () {
+              hid.value = k.id;
+              inp.value = k.kalip_kod;
+              listEl.hidden = true;
+
+              // Instant local update
+              var setV = function(id, v) {
+                var el = document.getElementById(id);
+                if (el) el.value = (v == null) ? '' : v;
+              };
+              setV('enj-renk-' + sl, k.renk);
+              setV('enj-bagli-' + sl, k.varsayilan_bagli_kalip);
+              setV('enj-kbc-' + sl, k.kalip_basi_cift);
+
+              // Backend sync
+              fetch('/enjeksiyon/api/rapor/' + raporId + '/slot-toplu', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                  slot: slot,
+                  kalip_id: k.id,
+                  kalip_basi_cift: k.kalip_basi_cift,
+                  bagli_kalip_adet: k.varsayilan_bagli_kalip,
+                  renk: k.renk || null
+                })
+              }).catch(function(){});
+            });
+            listEl.appendChild(item);
+          });
+          listEl.hidden = false;
+        });
+      }, 200);
+    });
+
+    document.addEventListener('click', function (e) {
+      if (!listEl.contains(e.target) && e.target !== inp) listEl.hidden = true;
+    });
+  }
+
+  setTimeout(function () {
+    setupKalipPicker('A');
+    setupKalipPicker('B');
+  }, 150);
+})();
+/* === END: ENJ_AB_KALIP_FIX === */
+
+/* ===== ENJ_AB_RENK_KARTELA_V3 START ===== */
+(function () {
+  'use strict';
+  if (window.__ENJ_AB_RENK_V3_LOADED) return;
+  window.__ENJ_AB_RENK_V3_LOADED = true;
+
+  var ENJ_RENK_DB = [
+    {k:"0001",a:"S\u0130YAH",h:"#111"},{k:"0002",a:"S\u0130YAH MAT S\u0130YAH",h:"#222"},
+    {k:"0030",a:"GR\u0130",h:"#888"},{k:"0031",a:"BUZ GR\u0130",h:"#b0c4d8"},
+    {k:"0041",a:"F\u00dcME",h:"#555"},{k:"0042",a:"ANTRAS\u0130T UGG",h:"#444"},
+    {k:"0100",a:"OPT\u0130K BEYAZ",h:"#fff"},{k:"0102",a:"OFF WHITE",h:"#f5f0e8"},
+    {k:"0103",a:"LIGHT ECURU",h:"#f0ebe0"},{k:"0105",a:"BEYAZ C\u0130HAN",h:"#fafafa"},
+    {k:"0106",a:"BEYAZ POLTAP",h:"#f8f8f8"},{k:"0170",a:"PEMBE",h:"#ffb6c1"},
+    {k:"0171",a:"TOZ PEMBE",h:"#f4c2c2"},{k:"0172",a:"\u015eEKER PEMBE",h:"#ffc0cb"},
+    {k:"0173",a:"LIGHT PEMBE",h:"#ffd6e0"},{k:"0201",a:"BEJ",h:"#d2b48c"},
+    {k:"0202",a:"KOYU BEJ",h:"#c19a6b"},{k:"0221",a:"A\u00c7IK PUDRA",h:"#e8d5c4"},
+    {k:"0220",a:"KOYU PUDRA",h:"#c9a090"},{k:"0240",a:"SOMON",h:"#fa8072"},
+    {k:"0241",a:"CORAL",h:"#ff7f50"},{k:"0242",a:"KOYU CORAL",h:"#e55b3c"},
+    {k:"0250",a:"TURUNCU",h:"#ff8c00"},{k:"0260",a:"KREM",h:"#fffdd0"},
+    {k:"0261",a:"KOYU KREM",h:"#e8d8a0"},{k:"0263",a:"KREM FRUDA",h:"#f5e6c8"},
+    {k:"0268",a:"KREM PAW PETROL",h:"#c8b89a"},{k:"0301",a:"KIRMIZI",h:"#dc143c"},
+    {k:"0302",a:"B.KIRMIZI",h:"#c00000"},{k:"0303",a:"KOYU KIRMIZI",h:"#8b0000"},
+    {k:"0400",a:"A\u00c7IK LAC\u0130VERT",h:"#4169e1"},{k:"0401",a:"LAC\u0130VERT",h:"#000080"},
+    {k:"0402",a:"LAC\u0130VERT EL\u0130S TERL\u0130K",h:"#1a237e"},{k:"0449",a:"L\u0130LA",h:"#c8a2c8"},
+    {k:"0450",a:"A\u00c7IK L\u0130LA",h:"#e6d0e6"},{k:"0451",a:"KOYU L\u0130LA",h:"#9b59b6"},
+    {k:"0455",a:"MOR",h:"#800080"},{k:"0500",a:"A\u00c7IK SARI",h:"#fffacd"},
+    {k:"0502",a:"HARDAL",h:"#d4a017"},{k:"0560",a:"FUSYA",h:"#ff00ff"},
+    {k:"0677",a:"MAV\u0130",h:"#4fc3f7"},{k:"0678",a:"BUZ MAV\u0130",h:"#b3e5fc"},
+    {k:"0680",a:"CYAN",h:"#00bcd4"},{k:"0683",a:"SAX MAV\u0130",h:"#4682b4"},
+    {k:"0688",a:"BEBE MAV\u0130",h:"#aed6f1"},{k:"0700",a:"TURKUAZ",h:"#40e0d0"},
+    {k:"0702",a:"PETROL YE\u015e\u0130L\u0130",h:"#2e8b57"},{k:"0721",a:"A\u00c7IK SU YE\u015e\u0130L",h:"#90ee90"},
+    {k:"0722",a:"YOSUN YE\u015e\u0130L\u0130",h:"#6b8e23"},{k:"0726",a:"HAK\u0130 YE\u015e\u0130L",h:"#556b2f"},
+    {k:"0730",a:"DUL MINT",h:"#98ff98"},{k:"0820",a:"L\u0130ME",h:"#32cd32"},
+    {k:"0850",a:"POWDER PINK",h:"#ffb7c5"},{k:"0902",a:"V\u0130ZON",h:"#b5a99a"},
+    {k:"0903",a:"V\u0130ZON (UGG)",h:"#a89080"},{k:"0929",a:"KOYU CAMEL",h:"#8b6914"},
+    {k:"0930",a:"CAMEL",h:"#c19a6b"},{k:"0960",a:"KAHVERENG\u0130",h:"#8b4513"},
+    {k:"0961",a:"S\u00dcTL\u00dc KAHVE",h:"#c8a27a"},{k:"0990",a:"BORDO",h:"#800020"}
+  ];
+  var HEX = {};
+  ENJ_RENK_DB.forEach(function(r){ HEX[r.k] = r.h; });
+
+  function parseVal(v) {
+    if (!v) return null;
+    var m = String(v).match(/^(\d{4})\s*-\s*(.+)$/);
+    return m ? { k: m[1].trim(), a: m[2].trim() } : null;
+  }
+
+  function build(inp) {
+    if (inp.__renkV3 || !inp) return;
+    inp.__renkV3 = true;
+
+    var fld = inp.closest('.enj-fld');
+    if (!fld) return;
+
+    /* fld = position anchor (MEVCUT INPUT TYPE DEGISMIYOR) */
+    fld.style.position = 'relative';
+    fld.style.overflow = 'visible';
+
+    /* Mevcut input'a minimum style (type, class, parent AYNEN) */
+    inp.style.paddingLeft = '28px';
+    inp.style.textOverflow = 'ellipsis';
+    inp.style.overflow = 'hidden';
+    inp.style.cursor = 'pointer';
+
+    /* Swatch dot (absolute, grid etkilemez) */
+    var sw = document.createElement('span');
+    sw.className = 'enj-ab-renk-v3-sw empty';
+    fld.appendChild(sw);
+
+    /* Kartela dropdown (absolute, grid etkilemez) */
+    var krt = document.createElement('div');
+    krt.className = 'enj-ab-renk-v3-krt';
+    krt.innerHTML =
+      '<div class="enj-ab-renk-v3-sh"><input type="text" placeholder="Renk ara (ad veya kod)..." autocomplete="off"></div>' +
+      '<div class="enj-ab-renk-v3-ls"></div>';
+    fld.appendChild(krt);
+
+    var ls = krt.querySelector('.enj-ab-renk-v3-ls');
+    var si = krt.querySelector('.enj-ab-renk-v3-sh input');
+
+    function render(f) {
+      f = (f || '').toLocaleLowerCase('tr-TR').trim();
+      var rows = ENJ_RENK_DB.filter(function(r) {
+        return !f || r.a.toLocaleLowerCase('tr-TR').indexOf(f) >= 0 || r.k.indexOf(f) >= 0;
+      });
+      if (!rows.length) {
+        ls.innerHTML = '<div style="padding:16px;text-align:center;color:#999;font-size:12px">Sonu\u00e7 yok</div>';
+        return;
+      }
+      ls.innerHTML = rows.map(function(r) {
+        return '<div class="enj-ab-renk-v3-r" data-k="'+r.k+'" data-a="'+r.a+'" data-h="'+r.h+'">' +
+          '<span class="c" style="background:'+r.h+'"></span>' +
+          '<span class="t"><b>'+r.a+'</b><small>'+r.k+'</small></span></div>';
+      }).join('');
+    }
+
+    function updateSw() {
+      var p = parseVal(inp.value);
+      if (p && HEX[p.k]) {
+        sw.style.background = HEX[p.k];
+        sw.classList.remove('empty');
+      } else {
+        sw.style.background = '';
+        sw.classList.add('empty');
+      }
+    }
+
+    function openK() {
+      document.querySelectorAll('.enj-ab-renk-v3-krt.open').forEach(function(x){ x.classList.remove('open'); });
+      krt.classList.add('open');
+      render('');
+      si.value = '';
+      setTimeout(function(){ try{si.focus();}catch(e){} }, 50);
+    }
+    function closeK() { krt.classList.remove('open'); }
+
+    inp.addEventListener('click', function(e) {
+      e.stopPropagation();
+      krt.classList.contains('open') ? closeK() : openK();
+    });
+
+    si.addEventListener('input', function() { render(si.value); });
+    si.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeK(); });
+    si.addEventListener('click', function(e) { e.stopPropagation(); });
+
+    ls.addEventListener('click', function(e) {
+      var row = e.target.closest('.enj-ab-renk-v3-r');
+      if (!row) return;
+      inp.value = row.dataset.k + ' - ' + row.dataset.a;
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+      inp.dispatchEvent(new Event('change', { bubbles: true }));
+      updateSw();
+      closeK();
+    });
+
+    /* Init: mevcut persisted deger varsa swatch'i guncelle */
+    updateSw();
+  }
+
+  function initAll() {
+    var a = document.getElementById('enj-renk-a');
+    var b = document.getElementById('enj-renk-b');
+    if (a) build(a);
+    if (b) build(b);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAll);
+  } else {
+    initAll();
+  }
+  setTimeout(initAll, 500);
+  setTimeout(initAll, 1500);
+
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('.enj-ab-renk-v3-krt') && !e.target.closest('#enj-renk-a') && !e.target.closest('#enj-renk-b')) {
+      document.querySelectorAll('.enj-ab-renk-v3-krt.open').forEach(function(x){ x.classList.remove('open'); });
+    }
+  });
+
+  var oldDl = document.getElementById('enj-renk-dl');
+  if (oldDl) oldDl.remove();
+})();
+/* ===== ENJ_AB_RENK_KARTELA_V3 END ===== */

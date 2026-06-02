@@ -1,0 +1,62 @@
+﻿{% extends "base.html" %}
+{% set active = 'enjeksiyon' %}
+{% set aktif_grup = 'uretim' %}
+
+{% block title %}Enjeksiyon Takip - Yonetim{% endblock %}
+
+{% block content %}
+<div style="padding: 20px 30px; max-width: 1400px;">
+
+  <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 18px;">
+    <h2 style="margin: 0; color: #1f2937; font-size: 22px; font-weight: 700;">
+      Enjeksiyon Takip
+      <span style="font-size: 13px; font-weight: 500; color: #888780; margin-left: 8px;">/ Yonetim Paneli</span>
+    </h2>
+  </div>
+
+  <div style="background: #fffbeb; border: 1px solid #fde68a; border-left: 4px solid #d4a52f; border-radius: 6px; padding: 14px 18px; margin-bottom: 18px;">
+    <div style="font-size: 13px; font-weight: 700; color: #92400e; margin-bottom: 4px;">FAZ 5 iskelet aktif</div>
+    <div style="font-size: 12px; color: #92400e;">R4 mockup'in birebir HTML hali F6'da gelecek. Bu sayfa simdilik modul durumunu gosterir.</div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 20px;">
+
+    <div style="background: #fff; border: 1px solid #e3e3e0; border-radius: 6px; padding: 14px 16px;">
+      <div style="font-size: 11px; color: #888780; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: 6px;">MAKINELER</div>
+      <div style="font-size: 24px; font-weight: 700; color: #1f2937;" id="m-count">4</div>
+      <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">aktif makine</div>
+    </div>
+
+    <div style="background: #fff; border: 1px solid #e3e3e0; border-radius: 6px; padding: 14px 16px;">
+      <div style="font-size: 11px; color: #888780; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: 6px;">AKSAMA SEBEP</div>
+      <div style="font-size: 24px; font-weight: 700; color: #1f2937;" id="a-count">11</div>
+      <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">tanimli sebep</div>
+    </div>
+
+    <div style="background: #fff; border: 1px solid #e3e3e0; border-radius: 6px; padding: 14px 16px;">
+      <div style="font-size: 11px; color: #888780; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: 6px;">KAYITLI RAPOR</div>
+      <div style="font-size: 24px; font-weight: 700; color: #1f2937;">0</div>
+      <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">F6'da dolacak</div>
+    </div>
+
+    <div style="background: #fff; border: 1px solid #e3e3e0; border-radius: 6px; padding: 14px 16px;">
+      <div style="font-size: 11px; color: #888780; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: 6px;">SAHA EKRANI</div>
+      <a href="/enjeksiyon/saha" target="_blank" style="font-size: 14px; font-weight: 600; color: #1e40af; text-decoration: none;">/enjeksiyon/saha &rarr;</a>
+      <div style="font-size: 11px; color: #6b7280; margin-top: 4px;">tablet icin sade ekran</div>
+    </div>
+
+  </div>
+
+  <div style="background: #fff; border: 1px solid #e3e3e0; border-radius: 6px; padding: 14px 18px;">
+    <div style="font-size: 12px; color: #888780; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: 10px;">Modul durumu</div>
+    <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
+      <tr><td style="padding: 6px 0; color: #6b7280; width: 160px;">Blueprint</td><td style="padding: 6px 0;"><code style="background: #fef6e0; padding: 2px 6px; border-radius: 3px; font-size: 12px;">enjeksiyon</code> @ <code style="background: #fef6e0; padding: 2px 6px; border-radius: 3px; font-size: 12px;">/enjeksiyon</code></td></tr>
+      <tr><td style="padding: 6px 0; color: #6b7280;">Migration</td><td style="padding: 6px 0;"><code style="background: #fef6e0; padding: 2px 6px; border-radius: 3px; font-size: 12px;">003_enjeksiyon_tablolari</code> (7 tablo + seed yuklu)</td></tr>
+      <tr><td style="padding: 6px 0; color: #6b7280;">Saglik kontrol</td><td style="padding: 6px 0;"><a href="/enjeksiyon/api/saglik" style="color: #1e40af;">/enjeksiyon/api/saglik</a></td></tr>
+      <tr><td style="padding: 6px 0; color: #6b7280;">Makine API</td><td style="padding: 6px 0;"><a href="/enjeksiyon/api/makine" style="color: #1e40af;">/enjeksiyon/api/makine</a></td></tr>
+      <tr><td style="padding: 6px 0; color: #6b7280;">Aksama sebep API</td><td style="padding: 6px 0;"><a href="/enjeksiyon/api/aksama-sebep" style="color: #1e40af;">/enjeksiyon/api/aksama-sebep</a></td></tr>
+    </table>
+  </div>
+
+</div>
+{% endblock %}

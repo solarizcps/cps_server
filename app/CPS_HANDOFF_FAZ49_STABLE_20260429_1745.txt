@@ -1,0 +1,65 @@
+================================================================================
+CPS FAZ 4.9 STABLE — 2026-04-29 17:45
+================================================================================
+
+DURUM: STABLE - Test edilmis, calisir, dogrulanmis.
+PRODUCTION HAZIR (FAZ 4.7 + F1 + F2 + F3 + Hedef Duzeltme + Routing)
+
+================================================================================
+TAMAMLANAN OZELLIKLER
+================================================================================
+
+1. SABLON ROUTING (Patch 7B - dunden)
+   - korgun.py: get_alt_emirler() helper
+   - routes.py: _resolve_target_emir()
+   - "Atki LCW" sablonu -> ATKI alt emirine yaziliyor
+   - Test: 110626 -> 110649, 109772 -> 109774, 110852, 109814 hepsi dogrulandi
+
+2. HEDEF DUZELTME (ADIM G)
+   - korgun.py get_emir_ozet():
+     M tipi: Urt_Em_gch.FisNo bazli + Siparis_Har SUM fallback
+     Y tipi: parent emir miras + fallback
+   - 14.000 hatasi -> 7.000 dogru
+   - siparisler[]: sadece gercek bagli (sadece 33638)
+
+3. PLAN-DETAY ENRICHMENT (RE-A2)
+   - alt_parcalar her parca icin prosesler[] + mesaj
+   - Sablon prosesleri gosteriliyor, uretim yoksa 0
+   - "henuz sablon uygulanmadi" mesaji
+
+4. DARBOGAZ HESABI (ADIM H)
+   - yapilan_darbogaz = min(ATKI, GOVDE, MAMUL)
+   - ATKI/GOVDE: emir_alt_proses son siralanan proses
+   - MAMUL: emir_alt_proses varsa son sirali, yoksa Korgun proses_kod numerik MAX
+   - Yeni alanlar: yapilan_darbogaz, kalan_darbogaz, yuzde_darbogaz, darbogaz_kategori
+
+5. MINI DETAY V4 (FAZ 4.7)
+   - PLAN satirina tiklayinca alt 5 satir kompakt detay
+   - Format:
+     -> DURUM: 0 / 7.000 (%0) - DARBOGAZ: ATKI       (kalin siyah, kirmizi vurgu)
+     -> PARCALAR: ATKI E.110649 - GOVDE E.110648    (gri, kucuk)  [F3]
+     -> ATKI: Capak 0 - Rivet Takma 0 - ...         (gri secondary)
+     -> GOVDE: sablon yok                            (gri secondary)
+     -> MAMUL: 🔸 Kesim 600 - Temizleme 120 - ...   (koyu primary)
+
+6. F1 - DURUM SATIRI
+   - Mini detayda en uste darbogaz ozeti
+   - DARBOGAZ kategori ATKI/GOVDE/MAMUL kirmizi vurgu
+
+7. F2.1 - BACKEND BATCH ENDPOINT
+   - GET /hedef/plan-darbogaz?emirler=110626,110627,...
+   - Max 100 emir, regex validation, dedupe
+   - 5 batch SQL (3 Korgun + 2 SQLite)
+   - Performans: ~2sn 50 emir icin
+   - Hata fallback: ok=false donerse PLAN listesi bozulmaz
+
+8. F2.2 - FRONTEND LAZY LOAD
+   - PLAN tablosu render bittikten sonra batch fetch
+   - YAPILAN/KALAN/% sutunlarini darbogaz mantigina cevirir
+   - Single-run guard (window._f22RanOnce)
+   - Per-row guard (data-f22-done attr)
+   - Cache busting (?_f22cb=timestamp)
+   - 1500ms gecikme (render bitsin)
+   - Sessiz fallback (hata olursa eski degerler kalir)
+   - ZORLA TETIK: 6 kez 1sn arayla retry
+   - Emir parsing: data-emir-no -> EMIR sutunu -> E.XX

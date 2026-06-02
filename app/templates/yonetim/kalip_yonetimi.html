@@ -1,0 +1,376 @@
+﻿{% extends "base.html" %}
+{% block title %}Kalıp Yönetimi · Solariz CPS{% endblock %}
+
+{% block content %}
+<style>
+  .ky-container { max-width: 1400px; margin: 0 auto; padding: 16px; }
+  .ky-header { display: flex; justify-content: space-between; align-items: center;
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+    border: 1px solid #f59e0b; border-radius: 12px; padding: 16px 20px; margin-bottom: 12px; }
+  .ky-header h1 { margin: 0; font-size: 22px; color: #78350f; }
+  .ky-stats { font-size: 14px; color: #92400e; }
+  .ky-info { background:#dbeafe; border:1px solid #3b82f6; border-radius:8px; padding:10px 14px; margin-bottom:12px; font-size:13px; color:#1e40af; }
+  .ky-toolbar { background: white; border: 1px solid #e5e7eb; border-radius: 12px;
+    padding: 12px 16px; margin-bottom: 12px;
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .ky-toolbar input, .ky-toolbar select {
+    padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; outline: none; }
+  .ky-toolbar input:focus, .ky-toolbar select:focus { border-color: #f59e0b; }
+  .ky-search { flex: 1; min-width: 250px; }
+  .ky-btn { padding: 8px 16px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+  .ky-btn-yeni { background: #10b981; color: white; }
+  .ky-btn-yeni:hover { background: #059669; }
+  .ky-btn-excel { background: #3b82f6; color: white; }
+  .ky-btn-excel:hover { background: #2563eb; }
+  .ky-tablo-wrap { background: white; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
+  .ky-tablo { width: 100%; border-collapse: collapse; }
+  .ky-tablo thead { background: #1f2937; color: white; }
+  .ky-tablo th { padding: 12px 10px; text-align: left; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+  .ky-tablo td { padding: 10px; border-bottom: 1px solid #f3f4f6; font-size: 14px; vertical-align: middle; }
+  .ky-tablo tbody tr:hover { background: #fefce8; }
+  .ky-tablo tbody tr.ky-degisti { background: #fef3c7; }
+  .ky-gorsel-cell { text-align: center; width: 110px; }
+  .ky-gorsel-buyuk { width: 80px; height: 80px; object-fit: cover; border-radius: 8px; background: #f3f4f6; border: 1px solid #d1d5db; cursor: pointer; transition: transform 0.15s; display: block; margin: 0 auto; }
+  .ky-gorsel-buyuk:hover { transform: scale(1.05); border-color: #f59e0b; }
+  .ky-gorsel-bos { width: 80px; height: 80px; border-radius: 8px; background: #fee2e2; border: 2px dashed #ef4444; display: flex; align-items: center; justify-content: center; color: #ef4444; font-size: 28px; cursor: pointer; margin: 0 auto; }
+  .ky-gorsel-bos:hover { background: #fecaca; }
+  .ky-gorsel-adi { font-size: 10px; color: #6b7280; margin-top: 4px; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ky-gorsel-yok { color: #ef4444; font-weight: 600; }
+  .ky-upload-btn { background: #3b82f6; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; margin-top: 4px; font-weight: 600; }
+  .ky-upload-btn:hover { background: #2563eb; }
+  .ky-kbc-input { width: 60px; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; font-weight: 600; text-align: center; outline: none; }
+  .ky-kbc-input:focus { border-color: #f59e0b; box-shadow: 0 0 0 2px #fef3c7; }
+  .ky-input-text { padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; outline: none; width: 100%; box-sizing: border-box; }
+  .ky-input-text:focus { border-color: #f59e0b; }
+  .ky-tip { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+  .ky-tip-govde { background: #dbeafe; color: #1e40af; }
+  .ky-tip-atki { background: #fce7f3; color: #9f1239; }
+  .ky-aktif { cursor: pointer; font-size: 18px; }
+  .ky-aktif-evet { color: #10b981; }
+  .ky-aktif-hayir { color: #d1d5db; }
+  .ky-kaydet-btn { background: #d1d5db; color: #6b7280; border: none; padding: 6px 12px; border-radius: 6px; cursor: not-allowed; font-size: 12px; font-weight: 600; transition: all 0.15s; }
+  .ky-kaydet-btn.aktif { background: #10b981; color: white; cursor: pointer; }
+  .ky-kaydet-btn.aktif:hover { background: #059669; }
+  .ky-mesaj { position: fixed; bottom: 20px; right: 20px; background: #1f2937; color: white; padding: 12px 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); font-size: 14px; z-index: 10000; display: none; max-width: 400px; }
+  .ky-mesaj.ok { background: #10b981; }
+  .ky-mesaj.hata { background: #ef4444; }
+  .ky-mesaj.show { display: block; }
+  .ky-modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 9999; align-items: center; justify-content: center; }
+  .ky-modal.show { display: flex; }
+  .ky-modal img { max-width: 90%; max-height: 90%; border-radius: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+  .ky-modal-close { position: absolute; top: 20px; right: 30px; background: white; border: none; border-radius: 50%; width: 40px; height: 40px; font-size: 24px; cursor: pointer; }
+</style>
+
+<div class="ky-container">
+  <div class="ky-header">
+    <h1>🎯 Kalıp Yönetimi · Master Data</h1>
+    <div class="ky-stats" id="ky-toplam">Yükleniyor...</div>
+  </div>
+
+  <div class="ky-info">ℹ️ Görsel önerilen ölçü: <b>300×300px</b> (kare). Format: JPG/PNG/WEBP. Max boyut: 2MB.</div>
+
+  <div class="ky-toolbar">
+    <input type="text" class="ky-search" id="ky-arama" placeholder="🔍 Kalıp kodu, model veya renk ara...">
+    <select id="ky-filtre-tip">
+      <option value="">Tüm Tipler</option>
+      <option value="GOVDE">Sadece GÖVDE</option>
+      <option value="ATKI">Sadece ATKI</option>
+    </select>
+    <select id="ky-filtre-aktif">
+      <option value="1">Sadece Aktif</option>
+      <option value="0">Sadece Pasif</option>
+      <option value="">Hepsi</option>
+    </select>
+    <button class="ky-btn ky-btn-yeni" disabled title="Yakında">+ Yeni Kalıp</button>
+    <button class="ky-btn ky-btn-excel" disabled title="Yakında">📂 Excel İmport</button>
+  </div>
+
+  <div class="ky-tablo-wrap">
+    <table class="ky-tablo" id="ky-tablo">
+      <thead>
+        <tr>
+          <th style="width:110px">📷 GÖRSEL</th>
+          <th style="width:120px">KOD</th>
+          <th>MODEL</th>
+          <th style="width:80px">KBÇ</th>
+          <th style="width:100px">ASORTI</th>
+          <th style="width:90px">TİP</th>
+          <th style="width:110px">RENK</th>
+          <th style="width:70px">AKTİF</th>
+          <th style="width:90px">İŞLEM</th>
+        </tr>
+      </thead>
+      <tbody id="ky-tbody">
+        <tr><td colspan="9" style="text-align:center; padding:30px; color:#9ca3af">Yükleniyor...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="ky-mesaj" id="ky-mesaj"></div>
+
+<div class="ky-modal" id="ky-modal">
+  <button class="ky-modal-close" id="ky-modal-close">×</button>
+  <img id="ky-modal-img" src="" alt="">
+</div>
+
+<input type="file" id="ky-file-input" accept="image/jpeg,image/png,image/webp,image/jpg" style="display:none">
+
+<script>
+(function() {
+  'use strict';
+
+  let TUMU = [];
+
+  function mesaj(metin, tip) {
+    const el = document.getElementById('ky-mesaj');
+    el.textContent = metin;
+    el.className = 'ky-mesaj show ' + (tip || 'ok');
+    setTimeout(() => el.classList.remove('show'), 4000);
+  }
+
+  function escapeHtml(s) {
+    if (s == null) return '';
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+  }
+
+  function render() {
+    const arama = document.getElementById('ky-arama').value.toLowerCase().trim();
+    const tip = document.getElementById('ky-filtre-tip').value;
+    const aktif = document.getElementById('ky-filtre-aktif').value;
+
+    const filtre = TUMU.filter(k => {
+      if (tip && k.kalip_tipi !== tip) return false;
+      if (aktif !== '' && String(k.aktif) !== aktif) return false;
+      if (arama) {
+        const hedef = (k.kalip_kod + ' ' + (k.model_kod||'') + ' ' + (k.model_ad||'') + ' ' + (k.renk||'')).toLowerCase();
+        if (hedef.indexOf(arama) < 0) return false;
+      }
+      return true;
+    });
+
+    document.getElementById('ky-toplam').textContent = 'Toplam: ' + filtre.length + ' / ' + TUMU.length + ' kalıp';
+
+    const tbody = document.getElementById('ky-tbody');
+    if (filtre.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:30px; color:#9ca3af">Kayıt bulunamadı</td></tr>';
+      return;
+    }
+
+    // Cache busting timestamp
+    const cb = Date.now();
+
+    tbody.innerHTML = filtre.map(k => {
+      const gorselSrc = k.gorsel_dosya ? ('/static/img/kaliplar/' + escapeHtml(k.gorsel_dosya) + '?v=' + cb) : '';
+      let gorselHTML;
+      if (gorselSrc) {
+        gorselHTML = '<img src="' + gorselSrc + '" class="ky-gorsel-buyuk" data-src="' + gorselSrc + '" onerror="this.outerHTML=\'<div class=ky-gorsel-bos data-upload>📷</div>\'">';
+      } else {
+        gorselHTML = '<div class="ky-gorsel-bos" data-upload>📷</div>';
+      }
+      const gorselAd = k.gorsel_dosya
+        ? '<div class="ky-gorsel-adi" title="' + escapeHtml(k.gorsel_dosya) + '">' + escapeHtml(k.gorsel_dosya) + '</div>'
+        : '<div class="ky-gorsel-adi ky-gorsel-yok">YOK</div>';
+
+      const tipClass = k.kalip_tipi === 'GOVDE' ? 'ky-tip-govde' : 'ky-tip-atki';
+      const aktifIcon = k.aktif ? '✅' : '⭕';
+      const aktifClass = k.aktif ? 'ky-aktif-evet' : 'ky-aktif-hayir';
+
+      return '<tr data-id="' + k.id + '">' +
+        '<td class="ky-gorsel-cell">' + gorselHTML + gorselAd +
+          '<button class="ky-upload-btn" data-upload title="Önerilen: 300×300px JPG/PNG max 2MB">📂 Yükle</button>' +
+        '</td>' +
+        '<td><strong>' + escapeHtml(k.kalip_kod) + '</strong></td>' +
+        '<td>' + escapeHtml(k.model_kod || '-') + (k.model_ad ? ' · ' + escapeHtml(k.model_ad) : '') + '</td>' +
+        '<td><input type="number" class="ky-kbc-input" min="1" max="10" value="' + (k.kalip_basi_cift||1) + '" data-field="kalip_basi_cift" data-orig="' + (k.kalip_basi_cift||1) + '"></td>' +
+        '<td><input type="text" class="ky-input-text" value="' + escapeHtml(k.asorti||'') + '" data-field="asorti" data-orig="' + escapeHtml(k.asorti||'') + '" placeholder="-"></td>' +
+        '<td><span class="ky-tip ' + tipClass + '">' + escapeHtml(k.kalip_tipi) + '</span></td>' +
+        '<td>' + escapeHtml(k.renk || '-') + '</td>' +
+        '<td><span class="ky-aktif ' + aktifClass + '" data-field="aktif" data-orig="' + k.aktif + '">' + aktifIcon + '</span></td>' +
+        '<td><button class="ky-kaydet-btn" data-id="' + k.id + '">💾 Kaydet</button></td>' +
+        '</tr>';
+    }).join('');
+
+    bindRowEvents();
+  }
+
+  function bindRowEvents() {
+    document.querySelectorAll('#ky-tbody tr[data-id]').forEach(tr => {
+      const id = tr.dataset.id;
+      const btn = tr.querySelector('.ky-kaydet-btn');
+
+      function checkDegisiklik() {
+        let degisti = false;
+        tr.querySelectorAll('[data-field]').forEach(el => {
+          const f = el.dataset.field;
+          const orig = el.dataset.orig;
+          let val;
+          if (el.tagName === 'SPAN') val = (el.dataset.now != null ? el.dataset.now : orig);
+          else val = el.value;
+          if (f === 'kalip_basi_cift' || f === 'aktif' || f === 'varsayilan_bagli_kalip') {
+            if (parseInt(val||0,10) !== parseInt(orig||0,10)) degisti = true;
+          } else {
+            if (String(val||'').trim() !== String(orig||'').trim()) degisti = true;
+          }
+        });
+        btn.classList.toggle('aktif', degisti);
+        tr.classList.toggle('ky-degisti', degisti);
+      }
+
+      tr.querySelectorAll('input').forEach(inp => {
+        inp.addEventListener('input', checkDegisiklik);
+        inp.addEventListener('change', checkDegisiklik);
+      });
+
+      const aktifEl = tr.querySelector('.ky-aktif');
+      if (aktifEl) {
+        aktifEl.addEventListener('click', () => {
+          const simdiki = aktifEl.dataset.now != null ? aktifEl.dataset.now : aktifEl.dataset.orig;
+          const yeni = simdiki === '1' ? '0' : '1';
+          aktifEl.dataset.now = yeni;
+          aktifEl.textContent = yeni === '1' ? '✅' : '⭕';
+          aktifEl.className = 'ky-aktif ' + (yeni === '1' ? 'ky-aktif-evet' : 'ky-aktif-hayir');
+          aktifEl.setAttribute('data-field', 'aktif');
+          checkDegisiklik();
+        });
+      }
+
+      btn.addEventListener('click', () => kaydet(id, tr));
+
+      const imgEl = tr.querySelector('.ky-gorsel-buyuk');
+      if (imgEl) {
+        imgEl.addEventListener('click', (e) => {
+          e.stopPropagation();
+          modalAc(imgEl.dataset.src);
+        });
+      }
+      tr.querySelectorAll('[data-upload]').forEach(el => {
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          gorselUploadTetikle(id);
+        });
+      });
+    });
+  }
+
+  function kaydet(id, tr) {
+    const payload = {};
+    tr.querySelectorAll('[data-field]').forEach(el => {
+      const f = el.dataset.field;
+      const orig = el.dataset.orig;
+      let val;
+      if (el.tagName === 'SPAN') val = (el.dataset.now != null ? el.dataset.now : orig);
+      else val = el.value;
+      let degisti = false;
+      if (f === 'kalip_basi_cift' || f === 'aktif' || f === 'varsayilan_bagli_kalip') {
+        degisti = parseInt(val||0,10) !== parseInt(orig||0,10);
+      } else {
+        degisti = String(val||'').trim() !== String(orig||'').trim();
+      }
+      if (degisti) {
+        payload[f] = (f === 'kalip_basi_cift' || f === 'aktif' || f === 'varsayilan_bagli_kalip') ? parseInt(val,10) : val;
+      }
+    });
+
+    if (Object.keys(payload).length === 0) {
+      mesaj('Değişiklik yok', 'hata');
+      return;
+    }
+
+    fetch('/yonetim/api/kalip/' + id, {
+      method: 'PATCH',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        mesaj('✅ Kaydedildi: ' + Object.keys(payload).join(', '), 'ok');
+        yukle();
+      } else {
+        mesaj('❌ Hata: ' + (d.hata||'bilinmiyor'), 'hata');
+      }
+    })
+    .catch(e => mesaj('❌ Bağlantı hatası: ' + e, 'hata'));
+  }
+
+  function gorselUploadTetikle(id) {
+    const fi = document.getElementById('ky-file-input');
+    fi.value = '';
+    fi.dataset.kalipId = id;
+    fi.click();
+  }
+
+  function modalAc(src) {
+    document.getElementById('ky-modal-img').src = src;
+    document.getElementById('ky-modal').classList.add('show');
+  }
+  function modalKapat() {
+    document.getElementById('ky-modal').classList.remove('show');
+  }
+
+  function yukle() {
+    fetch('/yonetim/api/kaliplar')
+      .then(r => r.json())
+      .then(d => {
+        if (d.ok) {
+          TUMU = d.kayitlar || [];
+          render();
+        } else {
+          document.getElementById('ky-tbody').innerHTML = '<tr><td colspan="9" style="text-align:center; padding:30px; color:#ef4444">Hata: ' + escapeHtml(d.hata||'bilinmiyor') + '</td></tr>';
+        }
+      })
+      .catch(e => {
+        document.getElementById('ky-tbody').innerHTML = '<tr><td colspan="9" style="text-align:center; padding:30px; color:#ef4444">Bağlantı hatası</td></tr>';
+      });
+  }
+
+  // Event delegations - PAGE LEVEL (DOM hazir oldugunda baglanir)
+  document.getElementById('ky-arama').addEventListener('input', render);
+  document.getElementById('ky-filtre-tip').addEventListener('change', render);
+  document.getElementById('ky-filtre-aktif').addEventListener('change', render);
+
+  document.getElementById('ky-modal-close').addEventListener('click', modalKapat);
+  document.getElementById('ky-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'ky-modal') modalKapat();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') modalKapat();
+  });
+
+  document.getElementById('ky-file-input').addEventListener('change', function() {
+    const file = this.files[0];
+    if (!file) return;
+    const id = this.dataset.kalipId;
+    if (!id) { mesaj('❌ Kalıp ID yok', 'hata'); return; }
+
+    const kb = (file.size/1024).toFixed(0);
+    if (file.size > 2 * 1024 * 1024) {
+      mesaj('❌ Dosya 2MB üstü (' + kb + ' KB)', 'hata');
+      return;
+    }
+
+    mesaj('⏳ Yükleniyor: ' + file.name + ' (' + kb + ' KB)', 'ok');
+
+    const fd = new FormData();
+    fd.append('file', file);
+    const baslangic = Date.now();
+
+    fetch('/yonetim/api/kalip/' + id + '/gorsel', { method: 'POST', body: fd })
+      .then(r => r.json())
+      .then(d => {
+        const sure = ((Date.now()-baslangic)/1000).toFixed(1);
+        if (d.ok) {
+          mesaj('✅ Yüklendi: ' + d.gorsel_dosya + ' (' + kb + ' KB, ' + sure + 's)', 'ok');
+          yukle();
+        } else {
+          mesaj('❌ Hata: ' + (d.hata||'bilinmiyor'), 'hata');
+        }
+      })
+      .catch(e => mesaj('❌ Bağlantı hatası: ' + e, 'hata'));
+  });
+
+  yukle();
+})();
+</script>
+{% endblock %}

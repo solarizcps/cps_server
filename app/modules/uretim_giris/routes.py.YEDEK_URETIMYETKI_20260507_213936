@@ -1,0 +1,412 @@
+# -*- coding: utf-8 -*-
+
+from flask import Blueprint, render_template, redirect, url_for, request, session, abort, Response
+from functools import wraps
+import requests
+from config import Config
+
+# 🔥 Blueprint
+uretim_giris_bp = Blueprint('uretim_giris', __name__, url_prefix='/uretim')
+
+
+# ================== YETKI ==================
+def _uretim_yetkili_mi():
+    u = session.get('kullanici')
+    if not u:
+        return False
+
+    if u.get('KullaniciAdi') == 'admin':
+        return True
+
+    rol = u.get('RolAd') or ''
+    return rol in ('Personel', 'Usta', 'Yönetim', 'Üretim')
+
+
+def uretim_yetkili(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get('kullanici'):
+            return redirect(url_for('auth.login', next=request.path))
+
+        if not _uretim_yetkili_mi():
+            abort(403)
+
+        return f(*args, **kwargs)
+    return wrapper
+
+
+# ================== PANEL ==================
+@uretim_giris_bp.route('/')
+@uretim_yetkili
+def panel():
+    return render_template('uretim_giris/index.html')
+
+
+# ================== PROXY ==================
+@uretim_giris_bp.route('/proxy/<path:path>', methods=['GET', 'POST'])
+def uretim_proxy(path):
+
+    url = f"{Config.MES_API_URL}/{path}"
+
+    try:
+        if request.method == 'GET':
+            r = requests.get(url)
+        else:
+            r = requests.post(url, json=request.get_json())
+
+        return Response(
+            r.content,
+            status=r.status_code,
+            content_type=r.headers.get('Content-Type')
+        )
+
+    except Exception as e:
+        return {"ok": False, "hata": str(e)}, 500
+
+
+# ================== DB SERVIS ==================
+from modules.uretim_giris.service_db import emir_getir, toplam_yapilan
+
+
+@uretim_giris_bp.route('/emir/<emir_no>')
+def emir_detay(emir_no):
+
+    veri = emir_getir(emir_no)
+
+    if not veri:
+        return {"ok": False, "hata": "Emir bulunamadi"}
+
+    yapilan = toplam_yapilan(emir_no)
+    kalan = veri["hedef"] - yapilan
+
+    return {
+        "ok": True,
+        "emir": veri,
+        "yapilan": yapilan,
+        "kalan": kalan
+    }
+
+# Faz 4.3 - Korgun direct: Emir ozet
+from flask import jsonify as _jsonify_emir
+from modules.common import korgun as _korgun
+
+
+@uretim_giris_bp.route('/emir/<int:emir_no>', methods=['GET'])
+@uretim_yetkili
+def uretim_emir_ozet(emir_no):
+    """GET /uretim/emir/<no> - Korgun MSSQL'dan emir bilgisi."""
+    try:
+        sonuc = _korgun.get_emir_ozet(emir_no)
+        if not sonuc.get('ok'):
+            status = 404 if sonuc.get('hata') == 'emir_bulunamadi' else 500
+            return _jsonify_emir(sonuc), status
+        return _jsonify_emir(sonuc), 200
+    except Exception as e:
+        return _jsonify_emir({'ok': False, 'hata': 'sistem_hatasi',
+                              'mesaj': str(e)[:200]}), 500
+
+
+# Faz 4.3 - Uretim Kaydet
+import sqlite3 as _sqlite_uk
+from datetime import datetime as _dt_uk
+from flask import jsonify as _jsonify_uk, request as _request_uk, session as _session_uk
+from config import Config as _Config_uk
+from modules.common import korgun as _korgun_uk
+
+
+@uretim_giris_bp.route('/kaydet', methods=['POST'])
+@uretim_yetkili
+def uretim_kaydet():
+    """POST /uretim/kaydet - Yeni uretim kaydi (onay_durum=bekliyor)."""
+    try:
+        veri = _request_uk.get_json(silent=True) or {}
+        emir_no = veri.get('emir_no')
+        miktar = veri.get('miktar')
+        proses_kodu = (veri.get('proses_kodu') or '').strip()
+        proses_adi = (veri.get('proses_adi') or '').strip()
+        not_metin = (veri.get('not') or '').strip()
+
+        # Validation
+        try:
+            emir_no = int(emir_no)
+            if emir_no <= 0: raise ValueError()
+        except Exception:
+            return _jsonify_uk({'ok': False, 'hata': 'gecersiz_emir'}), 400
+
+        try:
+            miktar = int(miktar)
+            if miktar <= 0: raise ValueError()
+        except Exception:
+            return _jsonify_uk({'ok': False, 'hata': 'gecersiz_miktar',
+                                'mesaj': 'Miktar pozitif olmali'}), 400
+
+        # === Proses_id validasyonu (mock_data.db.emir_alt_proses) ===
+        if not proses_kodu:
+            return _jsonify_uk({'ok': False, 'hata': 'proses_eksik',
+                                'mesaj': 'Proses secimi zorunlu'}), 400
+        try:
+            _pid_int = int(proses_kodu)
+        except Exception:
+            return _jsonify_uk({'ok': False, 'hata': 'gecersiz_proses',
+                                'mesaj': 'proses_kodu sayisal olmali'}), 400
+        _con_chk = _sqlite_uk.connect(_Config_uk.MOCK_DB_PATH)
+        try:
+            _row_chk = _con_chk.execute(
+                "SELECT id, proses_adi, hedef_adet FROM emir_alt_proses "
+                "WHERE id = ? AND emir_no = ? AND aktif = 1",
+                (_pid_int, str(emir_no))
+            ).fetchone()
+        finally:
+            _con_chk.close()
+        if not _row_chk:
+            return _jsonify_uk({'ok': False, 'hata': 'gecersiz_proses',
+                                'mesaj': 'Bu proses bu emire ait degil veya pasif'}), 400
+        # DB'deki ad ile override (frontend yanlis gondermisse bile guvende)
+        if _row_chk[1]:
+            proses_adi = _row_chk[1]
+
+        # Korgun'dan emir bilgisi (hedef/kalan icin)
+        ozet = _korgun_uk.get_emir_ozet(emir_no)
+        if not ozet.get('ok'):
+            return _jsonify_uk({'ok': False, 'hata': 'emir_bulunamadi',
+                                'mesaj': ozet.get('mesaj', '')}), 404
+
+        hedef = ozet.get('hedef_adet', 0) or 0
+        yapilan = ozet.get('yapilan_adet', 0) or 0
+
+        # === FAZ 4.5: HEDEF YOKSA engelle ===
+        if int(hedef or 0) <= 0:
+            return _jsonify_uk({
+                'ok': False,
+                'hata': 'hedef_yok',
+                'mesaj': "Bu emir icin hedef tanimli degil. Korgun'da once hedef olmali.",
+                'emir_no': emir_no,
+            }), 400
+
+        # === FAZ 5.0: PROSES BAZINDA LIMIT KONTROLU ===
+        # Hesaba katilan: bekliyor + onaylandi (PROSES BAZINDA)
+        # Limit kaynak: emir_alt_proses.hedef_adet > 0 ise o, yoksa Korgun toplam hedefi (fallback)
+        con = _sqlite_uk.connect(_Config_uk.MOCK_DB_PATH)
+        try:
+            # Bu prosesin onaylanan + bekleyen toplam miktari
+            r = con.execute("""
+                SELECT COALESCE(SUM(miktar), 0)
+                FROM uretim_kayit
+                WHERE emir_no=? AND proses_kodu=?
+                  AND onay_durum IN ('bekliyor','onaylandi')
+            """, (emir_no, proses_kodu)).fetchone()
+            toplam_proses = int(r[0] or 0)
+
+            # Limit kaynak: alt_hedef oncelikli, yoksa Korgun fallback
+            _alt_hedef = int(_row_chk[2] or 0) if (len(_row_chk) > 2 and _row_chk[2] is not None) else 0
+            if _alt_hedef and _alt_hedef > 0:
+                limit = _alt_hedef
+                limit_kaynak = 'alt_proses'
+            else:
+                limit = int(hedef or 0)
+                limit_kaynak = 'korgun'
+
+            # Kontrol
+            if limit > 0:
+                kalan = max(0, limit - toplam_proses)
+                if miktar > kalan:
+                    return _jsonify_uk({
+                        'ok': False,
+                        'hata': 'hedef_asimi',
+                        'mesaj': f"Bu prosesin limiti {limit} cift. Su ana kadar {toplam_proses} girilmis. Kalan {kalan}, {miktar} giremezsin.",
+                        'limit': limit,
+                        'limit_kaynak': limit_kaynak,
+                        'proses_kodu': proses_kodu,
+                        'proses_adi': proses_adi,
+                        'toplam_proses': toplam_proses,
+                        'kalan': kalan,
+                        'yeni_miktar': miktar,
+                    }), 400
+
+            # Personel bilgisi (CPS session'dan)
+            u = _session_uk.get('kullanici', {}) or {}
+            personel_id = u.get('Id')
+            personel_ad = u.get('AdSoyad') or u.get('KullaniciAdi') or '?'
+
+            # === FAZ 4.5: DUPLICATE KONTROL (60 sn icinde ayni kayit) ===
+            _DUP_WIN_SEC = 60
+            _dup = con.execute(
+                "SELECT id, olusturma FROM uretim_kayit "
+                "WHERE emir_no=? "
+                "AND COALESCE(personel_id,0)=COALESCE(?,0) "
+                "AND COALESCE(proses_kodu,'')=COALESCE(?,'') "
+                "AND miktar=? "
+                "AND datetime(olusturma) > datetime('now','localtime','-' || ? || ' seconds') "
+                "ORDER BY id DESC LIMIT 1",
+                (emir_no, personel_id, proses_kodu or None, miktar, _DUP_WIN_SEC)
+            ).fetchone()
+            if _dup:
+                return _jsonify_uk({
+                    'ok': False,
+                    'hata': 'duplicate',
+                    'mesaj': 'Ayni kayit son ' + str(_DUP_WIN_SEC) + ' sn icinde girilmis (id=' + str(_dup[0]) + ')',
+                    'mevcut_id': _dup[0],
+                }), 409
+
+            simdi = _dt_uk.now()
+            cur = con.execute("""
+                INSERT INTO uretim_kayit (
+                    emir_no, model_kod, model_adi, miktar,
+                    proses_kodu, proses_adi,
+                    personel_id, personel_ad,
+                    tarih, saat, not_metin, onay_durum
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'bekliyor')
+            """, (
+                emir_no,
+                ozet.get('model_kod'),
+                ozet.get('model_adi'),
+                miktar,
+                proses_kodu or None,
+                proses_adi or None,
+                personel_id,
+                personel_ad,
+                simdi.strftime('%Y-%m-%d'),
+                simdi.strftime('%H:%M'),
+                not_metin or None,
+            ))
+            yeni_id = cur.lastrowid
+            con.commit()
+        finally:
+            con.close()
+
+        # === FAZ 4.6: VARDIYA hesabi (07-17=gunduz, 17-07=gece) ===
+        try:
+            _hh = simdi.hour
+            if 7 <= _hh < 17:
+                _vardiya = 'gunduz'
+            else:
+                _vardiya = 'gece'
+        except Exception:
+            _vardiya = None
+
+        return _jsonify_uk({
+            'ok': True,
+            'uretim_kayit_id': yeni_id,
+            'emir_no': emir_no,
+            'miktar': miktar,
+            'onay_durum': 'bekliyor',
+            'vardiya': _vardiya,
+            'mesaj': 'Kayit eklendi, onay bekliyor.',
+        }), 200
+
+    except Exception as e:
+        return _jsonify_uk({'ok': False, 'hata': 'sistem_hatasi',
+                            'mesaj': f'{type(e).__name__}: {str(e)[:200]}'}), 500
+
+
+# --- Eklendi: emir alt proses listesi (mock_data.db kaynak) ---
+@uretim_giris_bp.route('/emir/<emir_no>/prosesler', methods=['GET'])
+def uretim_emir_prosesler(emir_no):
+    """Emir'in alt proseslerini mock_data.db.emir_alt_proses'ten dondur."""
+    import sqlite3
+    import os as _os
+    from flask import jsonify, current_app
+
+    candidates = [
+        _os.path.join(current_app.root_path, 'mock_data.db'),
+        _os.path.join(_os.path.dirname(current_app.root_path), 'mock_data.db'),
+        _os.path.join(_os.getcwd(), 'mock_data.db'),
+        r'C:\cps_dev\mock_data.db',
+    ]
+    db_path = next((p for p in candidates if _os.path.exists(p)), candidates[0])
+
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT id, emir_no, proses_adi, hedef_adet, aktif, siralama, kaynak
+            FROM emir_alt_proses
+            WHERE emir_no = ? AND aktif = 1
+            ORDER BY siralama ASC, id ASC
+            """,
+            (str(emir_no),),
+        )
+        rows = []
+        for r in cur.fetchall():
+            d = dict(r)
+            d['proses_id'] = d['id']
+            d['sira'] = d['siralama']
+            # Frontend uyumu icin yaygin alias'lar
+            d['adi'] = d['proses_adi']
+            d['ad'] = d['proses_adi']
+            d['name'] = d['proses_adi']
+            d['label'] = d['proses_adi']
+            d['proses'] = d['proses_adi']
+            # Frontend p.kod ve p.hedef icin
+            d['kod'] = str(d['id'])
+            d['hedef'] = d['hedef_adet']
+            rows.append(d)
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'emir_no': emir_no,
+            'prosesler': rows,
+            'count': len(rows),
+            'kaynak_db': db_path,
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'hata': str(e),
+            'prosesler': [],
+            'kaynak_db': db_path,
+        }), 500
+
+
+
+# === CPS LOCAL /uretim/gecmisim ENDPOINT ===
+# Login olan personelin son uretim kayitlari (mock_data.db.uretim_kayit)
+
+@uretim_giris_bp.route('/gecmisim', methods=['GET'])
+@uretim_yetkili
+def uretim_gecmisim():
+    """GET /uretim/gecmisim - Login personelin son uretim kayitlari."""
+    try:
+        try:
+            limit = int(_request_uk.args.get('limit', 50))
+            if limit <= 0 or limit > 500:
+                limit = 50
+        except Exception:
+            limit = 50
+
+        u = _session_uk.get('kullanici', {}) or {}
+        personel_id = u.get('Id')
+
+        kayitlar = []
+        if personel_id:
+            con = _sqlite_uk.connect(_Config_uk.MOCK_DB_PATH)
+            try:
+                con.row_factory = _sqlite_uk.Row
+                rows = con.execute("""
+                    SELECT id, emir_no, model_kod, model_adi,
+                           miktar, proses_kodu, proses_adi,
+                           personel_id, personel_ad,
+                           tarih, saat, not_metin,
+                           onay_durum, usta_id, usta_ad, usta_not,
+                           onay_tarihi, olusturma
+                      FROM uretim_kayit
+                     WHERE personel_id = ?
+                     ORDER BY olusturma DESC, id DESC
+                     LIMIT ?
+                """, (personel_id, limit)).fetchall()
+                kayitlar = [dict(r) for r in rows]
+            finally:
+                con.close()
+
+        return _jsonify_uk({
+            'ok': True, 'success': True,
+            'kayitlar': kayitlar,
+            'kayit_sayisi': len(kayitlar),
+            'limit': limit
+        }), 200
+    except Exception as e:
+        return _jsonify_uk({'ok': False, 'hata': 'sistem_hatasi',
+                            'mesaj': f'{type(e).__name__}: {str(e)[:200]}'}), 500

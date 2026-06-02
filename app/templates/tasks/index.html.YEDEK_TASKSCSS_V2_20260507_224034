@@ -1,0 +1,383 @@
+{% extends "base.html" %}
+
+{#
+  CPS DEV - Tasks Modulu - Liste Sayfasi (v5)
+  Route:  GET /tasks
+  CSS:    /static/css/tasks.css
+  JS:     /static/js/tasks.js
+  Font:   Inter (Google Fonts)
+#}
+
+{% block title %}
+<style>
+/* FAZ 6.1 - Tasks mobil CSS injection */
+.tasks-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+.tasks-table-card {
+  max-width: 100%;
+  overflow: hidden;
+}
+@media (max-width: 768px) {
+  .tasks-table {
+    font-size: 12px;
+    min-width: 800px;
+  }
+  .tasks-table th,
+  .tasks-table td {
+    padding: 4px 6px;
+    white-space: nowrap;
+  }
+  .tasks-filter-grid,
+  .tasks-form-row {
+    grid-template-columns: 1fr !important;
+  }
+  .tasks-summary {
+    flex-wrap: wrap;
+  }
+  .tasks-page-size-wrap {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+}
+@media (max-width: 480px) {
+  .tasks-table {
+    font-size: 11px;
+  }
+  .tasks-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+}
+</style>
+Gorevler - Solariz CPS{% endblock %}
+
+{% block head %}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/tasks.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="tasks-page" data-sayfa="tasks-liste">
+
+  {# ============== HEADER ============== #}
+  <div class="tasks-header">
+    <div class="tasks-title">
+      <h1>Gorevler</h1>
+      <p>CPS Gorev Modulu</p>
+    </div>
+    <div class="tasks-actions">
+      <button type="button" class="tasks-btn" id="tasks-btn-yenile">
+        &#x21bb; Yenile
+      </button>
+      <button type="button" class="tasks-btn tasks-btn-primary" id="tasks-btn-yeni">
+        + Yeni Gorev
+      </button>
+    </div>
+  </div>
+
+
+  {# ============== SUMMARY ============== #}
+  <div class="tasks-summary" id="tasks-summary">
+    <div class="tasks-summary-item tasks-summary-blue">
+      <div class="tasks-summary-icon">&#x1F4CB;</div>
+      <div class="tasks-summary-text">
+        <span class="tasks-summary-label">Acik Gorev</span>
+        <span class="tasks-summary-number" data-sum="acik">0</span>
+      </div>
+    </div>
+    <div class="tasks-summary-item tasks-summary-orange">
+      <div class="tasks-summary-icon">&#x23F1;</div>
+      <div class="tasks-summary-text">
+        <span class="tasks-summary-label">Onay Bekleyen</span>
+        <span class="tasks-summary-number" data-sum="onay">0</span>
+      </div>
+    </div>
+    <div class="tasks-summary-item tasks-summary-red">
+      <div class="tasks-summary-icon">&#x26A0;</div>
+      <div class="tasks-summary-text">
+        <span class="tasks-summary-label">Geciken</span>
+        <span class="tasks-summary-number" data-sum="gecikti">0</span>
+      </div>
+    </div>
+    <div class="tasks-summary-item tasks-summary-green">
+      <div class="tasks-summary-icon">&#x2713;</div>
+      <div class="tasks-summary-text">
+        <span class="tasks-summary-label">Bugun Biten</span>
+        <span class="tasks-summary-number" data-sum="bugun">0</span>
+      </div>
+    </div>
+  </div>
+
+
+  {# ============== FILTER PANEL ============== #}
+  <div class="tasks-filter-panel">
+
+    <div class="tasks-filter-grid">
+      <div class="tasks-field">
+        <label>Ara</label>
+        <input type="search" id="f-q" placeholder="baslik, aciklama, siparis..." autocomplete="off">
+      </div>
+      <div class="tasks-field">
+        <label>Durum</label>
+        <select id="f-status">
+          <option value="">Tumu</option>
+          <option value="bekliyor">Bekliyor</option>
+          <option value="devam_ediyor">Devam ediyor</option>
+          <option value="onay_bekliyor">Onay bekliyor</option>
+          <option value="revize_istendi">Revize istendi</option>
+          <option value="tamamlandi">Tamamlandi</option>
+          <option value="gecikti">Gecikti</option>
+          <option value="iptal">Iptal</option>
+        </select>
+      </div>
+      <div class="tasks-field">
+        <label>Oncelik</label>
+        <select id="f-priority">
+          <option value="">Tumu</option>
+          <option value="kritik">Kritik</option>
+          <option value="yuksek">Yuksek</option>
+          <option value="orta">Orta</option>
+          <option value="dusuk">Dusuk</option>
+        </select>
+      </div>
+      <div class="tasks-field">
+        <label>Departman</label>
+        <select id="f-dept">
+          <option value="">Tumu</option>
+          <option value="yonetim">Yonetim</option>
+          <option value="planlama">Planlama</option>
+          <option value="uretim">Uretim</option>
+          <option value="kalite">Kalite</option>
+          <option value="depo">Depo</option>
+          <option value="satin_alma">Satin Alma</option>
+          <option value="grafik">Grafik</option>
+          <option value="finans">Finans</option>
+        </select>
+      </div>
+      <div class="tasks-field">
+        <label>Atanan</label>
+        <select id="f-assigned">
+          <option value="">Tumu</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="tasks-filter-grid second-row">
+      <div class="tasks-field">
+        <label>Siparis No</label>
+        <input type="text" id="f-order" placeholder="Siparis No..." autocomplete="off">
+      </div>
+      <div class="tasks-field">
+        <label>Emir No</label>
+        <input type="text" id="f-emir" placeholder="Emir No..." autocomplete="off">
+      </div>
+      <div class="tasks-field">
+        <label>Olusturan</label>
+        <select id="f-creator">
+          <option value="">Tumu</option>
+        </select>
+      </div>
+      <div class="tasks-field">
+        <label>Tarih (Termin)</label>
+        <div style="display:flex; gap:6px;">
+          <input type="date" id="f-date-start">
+          <input type="date" id="f-date-end">
+        </div>
+      </div>
+      <div class="tasks-field-actions">
+        <button type="button" class="tasks-btn tasks-btn-ghost" id="tasks-btn-temizle">
+          &#x2715; Temizle
+        </button>
+      </div>
+      <div class="tasks-field-actions">
+        <button type="button" class="tasks-btn tasks-btn-primary" id="tasks-btn-filtrele">
+          Filtrele
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+
+  {# ============== TABLE CARD ============== #}
+  <div class="tasks-table-card">
+
+    <div class="tasks-table-wrap">
+      <table class="tasks-table" id="tasks-table">
+        <thead>
+          <tr>
+            <th class="col-id sortable"       data-sort="id">ID <span class="sort-ic"></span></th>
+            <th class="col-priority sortable" data-sort="priority">Oncelik <span class="sort-ic"></span></th>
+            <th class="col-title sortable"    data-sort="title">Baslik <span class="sort-ic"></span></th>
+            <th class="col-dept sortable"     data-sort="department">Departman <span class="sort-ic"></span></th>
+            <th class="col-user sortable"     data-sort="assigned_to">Atanan <span class="sort-ic"></span></th>
+            <th class="col-status sortable"   data-sort="status">Durum <span class="sort-ic"></span></th>
+            <th class="col-date sortable"     data-sort="due_date">Termin <span class="sort-ic"></span></th>
+            <th class="col-order sortable"    data-sort="related_order_no">Siparis <span class="sort-ic"></span></th>
+            <th class="col-creator sortable"  data-sort="created_by">Olusturan <span class="sort-ic"></span></th>
+            <th class="col-updated sortable"  data-sort="updated_at">Guncelleme <span class="sort-ic"></span></th>
+            <th class="col-action"></th>
+          </tr>
+        </thead>
+        <tbody id="tasks-tbody">
+          <tr><td colspan="11" class="tasks-empty">Yukleniyor...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="tasks-table-footer">
+      <div class="tasks-pagination-info" id="tasks-page-info">
+        Toplam 0 kayit
+      </div>
+      <div class="tasks-pagination">
+        <div class="tasks-page-size-wrap">
+          <select class="tasks-page-size" id="tasks-page-size">
+            <option value="10">10</option>
+            <option value="25" selected>25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+          <span>kayit/sayfa</span>
+        </div>
+        <button type="button" class="tasks-page-btn" id="tasks-page-prev" disabled>&lsaquo;</button>
+        <span id="tasks-page-current"></span>
+        <button type="button" class="tasks-page-btn" id="tasks-page-next" disabled>&rsaquo;</button>
+      </div>
+    </div>
+
+  </div>
+
+
+  {# ============== DETAY MODAL ============== #}
+  <div class="tasks-modal-backdrop" id="tasks-detay-modal" aria-hidden="true">
+    <div class="tasks-modal" role="dialog">
+      <div class="tasks-modal-header">
+        <h2 class="tasks-modal-title" id="tasks-detay-title">Gorev #—</h2>
+        <button type="button" class="tasks-modal-close" data-close="1" aria-label="Kapat">&times;</button>
+      </div>
+      <div class="tasks-modal-body" id="tasks-detay-body">
+        <div class="tasks-empty">Yukleniyor...</div>
+      </div>
+      <div class="tasks-modal-footer" id="tasks-detay-foot"></div>
+    </div>
+  </div>
+
+
+  {# ============== CREATE MODAL ============== #}
+  <div class="tasks-modal-backdrop" id="tasks-create-modal" aria-hidden="true">
+    <div class="tasks-modal tasks-modal-create" role="dialog">
+      <div class="tasks-modal-header">
+        <h2 class="tasks-modal-title">Yeni Gorev</h2>
+        <button type="button" class="tasks-modal-close" data-close="1" aria-label="Kapat">&times;</button>
+      </div>
+      <div class="tasks-modal-body">
+        <form id="tasks-create-form" autocomplete="off">
+
+          <div class="tasks-form-row">
+            <label>Baslik <span class="zorunlu">*</span></label>
+            <input type="text" name="title" required maxlength="200">
+          </div>
+
+          <div class="tasks-form-row">
+            <label>Aciklama</label>
+            <textarea name="description" rows="3" maxlength="2000"></textarea>
+          </div>
+
+          <div class="tasks-form-grid">
+            <div class="tasks-form-row">
+              <label>Departman <span class="zorunlu">*</span></label>
+              <select name="department" required>
+                <option value="uretim">Uretim</option>
+                <option value="planlama">Planlama</option>
+                <option value="kalite">Kalite</option>
+                <option value="depo">Depo</option>
+                <option value="satin_alma">Satin Alma</option>
+                <option value="grafik">Grafik</option>
+                <option value="finans">Finans</option>
+                <option value="yonetim">Yonetim</option>
+              </select>
+            </div>
+
+            <div class="tasks-form-row">
+              <label>Atanan</label>
+              <select name="assigned_to" id="tasks-create-assigned">
+                <option value="">— birim havuzu —</option>
+              </select>
+            </div>
+
+            <div class="tasks-form-row">
+              <label>Oncelik</label>
+              <select name="priority">
+                <option value="dusuk">Dusuk</option>
+                <option value="orta" selected>Orta</option>
+                <option value="yuksek">Yuksek</option>
+                <option value="kritik">Kritik</option>
+              </select>
+            </div>
+
+            <div class="tasks-form-row">
+              <label>Termin</label>
+              <input type="date" name="due_date">
+            </div>
+
+            <div class="tasks-form-row">
+              <label>Siparis No</label>
+              <input type="text" name="related_order_no" maxlength="40">
+            </div>
+
+            <div class="tasks-form-row">
+              <label>Emir No</label>
+              <input type="text" name="related_emir_no" maxlength="40">
+            </div>
+
+            <div class="tasks-form-row">
+              <label>Model</label>
+              <input type="text" name="related_model" maxlength="100">
+            </div>
+
+            <div class="tasks-form-row">
+              <label>Musteri</label>
+              <input type="text" name="related_customer" maxlength="100">
+            </div>
+          </div>
+
+          <div class="tasks-form-row">
+            <label class="tasks-cb-row">
+              <input type="checkbox" name="requires_approval" value="1" id="tasks-create-req-approval">
+              <span>Onay gerektirir</span>
+            </label>
+          </div>
+
+          <div class="tasks-form-row" id="tasks-create-approval-wrap" style="display:none;">
+            <label>Onaylayacak Kisi</label>
+            <select name="approval_user_id" id="tasks-create-approval">
+              <option value="">— sec —</option>
+            </select>
+          </div>
+
+          <div class="tasks-form-err" id="tasks-create-err" style="display:none;"></div>
+        </form>
+      </div>
+      <div class="tasks-modal-footer">
+        <button type="button" class="tasks-btn" data-close="1">Vazgec</button>
+        <button type="button" class="tasks-btn tasks-btn-primary" id="tasks-create-submit">Olustur</button>
+      </div>
+    </div>
+  </div>
+
+
+  {# ============== TOAST ============== #}
+  <div class="tasks-toast" id="tasks-toast" role="status" aria-live="polite"></div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/tasks.js') }}"></script>
+{% endblock %}

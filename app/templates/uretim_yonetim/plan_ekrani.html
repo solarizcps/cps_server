@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Üretim Plan — SOLARIZ CPS</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #f5f7fa;
+    color: #2c3e50;
+    padding: 20px;
+}
+.header {
+    background: linear-gradient(135deg, #f27a1a 0%, #ff9947 100%);
+    color: white;
+    padding: 20px 25px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(242,122,26,0.3);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.header h1 { font-size: 22px; }
+.header .info { font-size: 14px; opacity: 0.95; }
+.kilit-uyari {
+    background: #fff3cd;
+    border-left: 5px solid #ffc107;
+    padding: 12px 18px;
+    margin-bottom: 15px;
+    border-radius: 6px;
+    display: none;
+}
+.siparis-list { display: grid; gap: 15px; }
+.siparis-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    border-left: 6px solid #6c757d;
+    transition: transform 0.2s;
+}
+.siparis-card:hover { transform: translateX(3px); }
+.siparis-card.seviye-BUYUK_SAPMA { border-left-color: #dc3545; background: #fff5f5; }
+.siparis-card.seviye-IZLE { border-left-color: #ffc107; background: #fffdf5; }
+.siparis-card.seviye-NORMAL { border-left-color: #28a745; }
+
+.siparis-baslik {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+.siparis-baslik h3 { font-size: 18px; }
+.siparis-baslik .musteri { font-size: 13px; color: #6c757d; }
+.seviye-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+.seviye-badge.BUYUK_SAPMA { background: #dc3545; color: white; }
+.seviye-badge.IZLE { background: #ffc107; color: #333; }
+.seviye-badge.NORMAL { background: #28a745; color: white; }
+
+.kategoriler { display: grid; gap: 8px; margin-bottom: 12px; }
+.kategori-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.kategori-label {
+    width: 70px;
+    font-weight: 600;
+    font-size: 13px;
+    color: #555;
+}
+.kategori-bar {
+    flex: 1;
+    height: 24px;
+    background: #e9ecef;
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+}
+.kategori-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #28a745, #20c997);
+    transition: width 0.6s;
+}
+.kategori-fill.darbogaz { background: linear-gradient(90deg, #dc3545, #ff6b6b); }
+.kategori-yuzde {
+    width: 60px;
+    text-align: right;
+    font-weight: bold;
+    font-size: 13px;
+}
+
+.darbogaz-info {
+    background: #fff5f5;
+    border: 1px solid #ffcccc;
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin-top: 12px;
+    font-size: 13px;
+}
+.darbogaz-info strong { color: #dc3545; }
+
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #888;
+    background: white;
+    border-radius: 12px;
+}
+.loading { text-align: center; padding: 40px; color: #888; }
+</style>
+</head>
+<body>
+
+<div class="header">
+    <div>
+        <h1>📋 Üretim Plan — Sipariş Bazlı</h1>
+        <div class="info" id="user-info">Yükleniyor...</div>
+    </div>
+    <div style="text-align: right;">
+        <div style="font-size: 12px; opacity: 0.8;">Vardiya</div>
+        <div style="font-size: 18px; font-weight: bold;" id="vardiya-saat">--:--</div>
+    </div>
+</div>
+
+<div class="kilit-uyari" id="kilit-uyari">
+    ⚠️ <strong>DİKKAT:</strong> Sapma tespit edildi, sebep girişi gerekli.
+</div>
+
+<div id="content" class="loading">Yükleniyor...</div>
+
+<script>
+// =====================================================
+// KILIT KONTROLU - Her sayfa yuklenirken
+// =====================================================
+async function kilitKontrol() {
+    try {
+        const r = await fetch('/uretim-yonetim/kilit/durum');
+        const d = await r.json();
+        
+        if (d.kilit_aktif) {
+            // KILITLI! Hemen kilit ekranina yonlendir
+            window.location.href = '/uretim-yonetim/kilit-ekrani';
+            return false;
+        }
+        
+        document.getElementById('user-info').textContent = 
+            'Kullanıcı: ' + d.kullanici;
+        return true;
+    } catch (e) {
+        console.error('Kilit kontrol hatasi:', e);
+        return false;
+    }
+}
+
+// =====================================================
+// SAAT GUNCELLE
+// =====================================================
+function saatGuncelle() {
+    const n = new Date();
+    const ss = String(n.getHours()).padStart(2, '0');
+    const dk = String(n.getMinutes()).padStart(2, '0');
+    document.getElementById('vardiya-saat').textContent = ss + ':' + dk;
+}
+setInterval(saatGuncelle, 1000);
+saatGuncelle();
+
+// =====================================================
+// PLAN VERILERINI YUKLE
+// =====================================================
+async function planYukle() {
+    try {
+        const r = await fetch('/uretim-yonetim/plan');
+        
+        if (r.status === 403) {
+            // Kilit aktif olmus
+            window.location.href = '/uretim-yonetim/kilit-ekrani';
+            return;
+        }
+        
+        const d = await r.json();
+        const content = document.getElementById('content');
+        
+        if (!d.siparisler || d.siparisler.length === 0) {
+            content.innerHTML = '<div class="empty-state">📭 Aktif sipariş yok</div>';
+            return;
+        }
+        
+        // Sapma var mi kontrol
+        const sapmaVar = d.siparisler.some(s => s.seviye === 'BUYUK_SAPMA');
+        if (sapmaVar) {
+            document.getElementById('kilit-uyari').style.display = 'block';
+        }
+        
+        let html = '<div class="siparis-list">';
+        for (const s of d.siparisler) {
+            html += renderSiparis(s);
+        }
+        html += '</div>';
+        content.innerHTML = html;
+        
+    } catch (e) {
+        document.getElementById('content').innerHTML = 
+            '<div class="empty-state">⚠️ Hata: ' + e.message + '</div>';
+    }
+}
+
+// =====================================================
+// SIPARIS KARTI RENDER
+// =====================================================
+function renderSiparis(s) {
+    const seviye = s.seviye || 'NORMAL';
+    const darbogaz = s.ana_darbogaz;
+    
+    function bar(yuzde, isDarbogaz) {
+        const yuzdeNum = parseFloat(yuzde) || 0;
+        const cls = isDarbogaz ? 'kategori-fill darbogaz' : 'kategori-fill';
+        return `
+            <div class="kategori-bar">
+                <div class="${cls}" style="width: ${yuzdeNum}%"></div>
+            </div>
+            <div class="kategori-yuzde">%${yuzdeNum.toFixed(1)}</div>
+        `;
+    }
+    
+    return `
+        <div class="siparis-card seviye-${seviye}">
+            <div class="siparis-baslik">
+                <div>
+                    <h3>📦 ${s.siparis_no} — ${s.model_kod || ''}</h3>
+                    <div class="musteri">${s.musteri || ''} • Hedef: ${s.hedef_toplam || 0} çift</div>
+                </div>
+                <span class="seviye-badge ${seviye}">${seviye.replace('_', ' ')}</span>
+            </div>
+            
+            <div class="kategoriler">
+                <div class="kategori-row">
+                    <div class="kategori-label">ATKI</div>
+                    ${bar(s.atki_yuzde, darbogaz === 'ATKI')}
+                </div>
+                <div class="kategori-row">
+                    <div class="kategori-label">GÖVDE</div>
+                    ${bar(s.govde_yuzde, darbogaz === 'GOVDE')}
+                </div>
+                <div class="kategori-row">
+                    <div class="kategori-label">MAMUL</div>
+                    ${bar(s.mamul_yuzde, darbogaz === 'MAMUL')}
+                </div>
+            </div>
+            
+            ${seviye === 'BUYUK_SAPMA' ? `
+                <div class="darbogaz-info">
+                    🔴 <strong>DARBOĞAZ:</strong> ${darbogaz} → 
+                    Proses ${s.alt_darbogaz_proses} • 
+                    Sorumlu: <strong>${s.kilitlenecek_usta}</strong> • 
+                    Sapma: <strong>%${s.sapma_yuzde}</strong>
+                </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+// =====================================================
+// BASLAT
+// =====================================================
+(async () => {
+    const ok = await kilitKontrol();
+    if (ok) await planYukle();
+})();
+
+// Her 60 saniyede bir refresh (yeni sapma yakalama)
+setInterval(async () => {
+    const ok = await kilitKontrol();
+    if (ok) await planYukle();
+}, 60000);
+</script>
+
+</body>
+</html>

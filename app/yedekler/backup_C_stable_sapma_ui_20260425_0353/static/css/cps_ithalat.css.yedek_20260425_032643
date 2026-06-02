@@ -1,0 +1,2721 @@
+/**
+ * CPS DEV - Ithalat Modulu Stilleri
+ * ----------------------------------
+ * Prefix: cps-ith-*
+ *
+ * YENI (bu versiyonda):
+ *   .cps-ith-para-toplam  — para birimi bazli kart grid
+ *   .cps-ith-para-kart    — tekil kart
+ *   .cps-ith-para-kart-usd / -try / -eur  — para birimine gore renk
+ *   .cps-ith-para-kart-cift  — cift maliyet karti icin farkli ton
+ */
+
+/* =====================================================================
+   KOK KONTEYNER
+   ===================================================================== */
+.cps-ith-sayfa {
+  padding: 16px 20px;
+  max-width: 1600px;
+  margin: 0 auto;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               "Helvetica Neue", Arial, sans-serif;
+  color: #1f2937;
+}
+
+/* Detay sayfasi full-width - maliyet kartlari tum alani kullansin */
+.cps-ith-detay {
+  padding: 16px 20px;
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               "Helvetica Neue", Arial, sans-serif;
+  color: #1f2937;
+}
+
+.cps-ith-gizle { display: none !important; }
+
+
+/* =====================================================================
+   BASLIK SERIDI
+   ===================================================================== */
+.cps-ith-baslik-seridi {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.cps-ith-baslik {
+  font-size: 22px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.cps-ith-baslik-aksiyon {
+  display: flex;
+  gap: 8px;
+}
+
+
+/* =====================================================================
+   BUTONLAR
+   ===================================================================== */
+.cps-ith-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.cps-ith-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.cps-ith-btn-primary {
+  background: #2563eb; color: #fff; border-color: #2563eb;
+}
+.cps-ith-btn-primary:hover:not(:disabled) {
+  background: #1d4ed8; border-color: #1d4ed8;
+}
+
+.cps-ith-btn-ghost {
+  background: #fff; color: #374151; border-color: #d1d5db;
+}
+.cps-ith-btn-ghost:hover:not(:disabled) {
+  background: #f9fafb; border-color: #9ca3af;
+}
+
+.cps-ith-btn-tehlike {
+  color: #b91c1c; border-color: #fecaca;
+}
+.cps-ith-btn-tehlike:hover:not(:disabled) {
+  background: #fef2f2; border-color: #fca5a5;
+}
+
+.cps-ith-btn-sm { padding: 5px 10px; font-size: 12px; }
+
+.cps-ith-btn-ikon {
+  padding: 5px 8px;
+  font-size: 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #6b7280;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.cps-ith-btn-ikon:hover:not(:disabled) {
+  background: #f3f4f6; color: #111827;
+}
+
+
+/* =====================================================================
+   KPI SERIDI (liste sayfasi)
+   ===================================================================== */
+.cps-ith-kpi-serit {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.cps-ith-kpi-kart {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 14px 16px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition: box-shadow 0.15s ease;
+}
+.cps-ith-kpi-kart:hover { box-shadow: 0 4px 8px rgba(0, 0, 0, 0.06); }
+
+.cps-ith-kpi-etiket {
+  font-size: 12px; color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.cps-ith-kpi-deger {
+  font-size: 24px; font-weight: 700;
+  color: #111827; line-height: 1.1; margin-bottom: 4px;
+}
+
+.cps-ith-kpi-alt { font-size: 12px; color: #9ca3af; }
+
+.cps-ith-kpi-uyari { border-color: #fecaca; background: #fef2f2; }
+.cps-ith-kpi-uyari .cps-ith-kpi-deger { color: #dc2626; }
+
+.cps-ith-kpi-ana { border-color: #bfdbfe; background: #eff6ff; }
+.cps-ith-kpi-ana .cps-ith-kpi-deger { color: #1e40af; }
+
+
+/* =====================================================================
+   FILTRE SERIDI
+   ===================================================================== */
+.cps-ith-filtre-serit {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.cps-ith-filtre-grup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+}
+
+.cps-ith-filtre-grup label {
+  font-size: 11px; color: #6b7280;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.cps-ith-filtre-ara { flex: 1; min-width: 200px; }
+.cps-ith-filtre-aksiyon { min-width: auto; }
+
+.cps-ith-input {
+  padding: 7px 10px;
+  font-size: 13px;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  background: #fff;
+  color: #1f2937;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.cps-ith-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+.cps-ith-input[readonly] { background: #f9fafb; color: #6b7280; }
+
+textarea.cps-ith-input {
+  resize: vertical; min-height: 60px; font-family: inherit;
+}
+
+
+/* =====================================================================
+   TABLO + DURUM BLOKLARI
+   ===================================================================== */
+.cps-ith-tablo-kap {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  min-height: 200px;
+}
+
+.cps-ith-tablo-durum {
+  padding: 40px 20px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 14px;
+}
+.cps-ith-tablo-durum.cps-ith-hata { color: #dc2626; }
+.cps-ith-tablo-durum .cps-ith-btn { margin-left: 8px; }
+.cps-ith-tablo-durum a { color: #2563eb; text-decoration: underline; }
+
+
+/* SPINNER */
+.cps-ith-spinner {
+  display: inline-block;
+  width: 14px; height: 14px;
+  border: 2px solid #e5e7eb;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: cps-ith-spin 0.7s linear infinite;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+@keyframes cps-ith-spin { to { transform: rotate(360deg); } }
+
+
+/* TABLO */
+.cps-ith-tablo {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.cps-ith-tablo thead th {
+  background: #f3f4f6;
+  padding: 10px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #4b5563;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  text-align: left;
+  border-bottom: 1px solid #e5e7eb;
+  white-space: nowrap;
+}
+
+.cps-ith-th-risk { width: 28px; padding: 10px 4px !important; }
+.cps-ith-th-sag { text-align: right !important; }
+
+.cps-ith-tablo tbody tr {
+  border-bottom: 1px solid #f3f4f6;
+  transition: background 0.1s ease;
+}
+.cps-ith-tablo-kap .cps-ith-tablo tbody tr { cursor: pointer; }
+.cps-ith-tablo tbody tr:hover { background: #f9fafb; }
+.cps-ith-tablo tbody tr:last-child { border-bottom: none; }
+.cps-ith-tablo td {
+  padding: 10px 12px;
+  vertical-align: middle;
+  color: #1f2937;
+}
+
+.cps-ith-tablo-alt {
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+  margin-top: 8px;
+}
+.cps-ith-tablo-alt tbody tr { cursor: default; }
+
+
+/* RISK */
+.cps-ith-risk { text-align: center; padding: 10px 4px !important; }
+.cps-ith-risk-nokta {
+  display: inline-block;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: #d1d5db;
+}
+.cps-ith-risk-uyari .cps-ith-risk-nokta {
+  background: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+}
+.cps-ith-risk-kritik .cps-ith-risk-nokta {
+  background: #dc2626;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.2);
+}
+.cps-ith-risk-kritik { background: #fef2f2 !important; }
+.cps-ith-risk-kritik:hover { background: #fee2e2 !important; }
+
+
+/* HUCRELER */
+.cps-ith-hucre-kod {
+  font-family: "SF Mono", Consolas, Monaco, "Courier New", monospace;
+  font-size: 12px; color: #4b5563; white-space: nowrap;
+}
+.cps-ith-hucre-baslik {
+  font-weight: 500; max-width: 240px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cps-ith-hucre-tedarikci {
+  max-width: 180px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: #4b5563;
+}
+.cps-ith-hucre-tutar,
+.cps-ith-hucre-cift {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cps-ith-hucre-cift { font-weight: 600; color: #111827; }
+.cps-ith-para,
+.cps-ith-birim {
+  color: #9ca3af; font-size: 11px; font-weight: 400;
+}
+.cps-ith-hucre-odeme { white-space: nowrap; color: #4b5563; }
+.cps-ith-odeme-ek { color: #9ca3af; font-size: 11px; }
+.cps-ith-hucre-sapma {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap; font-weight: 500; color: #4b5563;
+}
+.cps-ith-sapma-uyari { color: #d97706; }
+.cps-ith-sapma-kritik { color: #dc2626; font-weight: 600; }
+
+
+/* DURUM ETIKETLERI */
+.cps-ith-durum-etiket {
+  display: inline-block;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  background: #f3f4f6;
+  color: #6b7280;
+}
+.cps-ith-d-taslak { background: #f3f4f6; color: #6b7280; }
+.cps-ith-d-aktif  { background: #dbeafe; color: #1e40af; }
+.cps-ith-d-teslim { background: #fef3c7; color: #92400e; }
+.cps-ith-d-kapali { background: #d1fae5; color: #065f46; }
+.cps-ith-d-iptal  { background: #fee2e2; color: #991b1b; text-decoration: line-through; }
+
+
+/* TABLO OZET ALT */
+.cps-ith-tablo-ozet {
+  padding: 10px 14px;
+  background: #f9fafb;
+  border-top: 1px solid #e5e7eb;
+  font-size: 12px;
+  color: #6b7280;
+  text-align: right;
+}
+#cps-ith-ozet-sayi { font-weight: 600; color: #374151; }
+
+
+/* =====================================================================
+   ======== DETAY SAYFASI ==============================================
+   ===================================================================== */
+
+.cps-ith-detay-ust {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.cps-ith-geri-link {
+  color: #2563eb;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+}
+.cps-ith-geri-link:hover { text-decoration: underline; }
+.cps-ith-ust-aksiyon { display: flex; gap: 8px; }
+
+
+.cps-ith-detay-baslik {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px 8px 0 0;
+  padding: 16px 20px;
+  border-bottom: none;
+}
+.cps-ith-detay-kod {
+  font-family: "SF Mono", Consolas, Monaco, "Courier New", monospace;
+  font-size: 13px; color: #6b7280; margin-bottom: 4px;
+}
+.cps-ith-detay-ad {
+  font-size: 22px; font-weight: 600;
+  color: #111827; margin: 0 0 8px 0; line-height: 1.2;
+}
+.cps-ith-detay-alt {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 14px; color: #4b5563; flex-wrap: wrap;
+}
+.cps-ith-detay-ayrac { color: #d1d5db; }
+
+
+.cps-ith-detay-kpi {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-bottom: none;
+  overflow: hidden;
+}
+.cps-ith-detay-kpi .cps-ith-kpi-kart {
+  border: none;
+  border-right: 1px solid #e5e7eb;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 14px 16px;
+}
+.cps-ith-detay-kpi .cps-ith-kpi-kart:last-child { border-right: none; }
+.cps-ith-detay-kpi .cps-ith-kpi-kart:hover { box-shadow: none; background: #f9fafb; }
+.cps-ith-detay-kpi .cps-ith-kpi-deger { font-size: 20px; }
+
+
+.cps-ith-sekme-bar {
+  display: flex; gap: 0;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-bottom: none;
+  padding: 0 8px;
+  overflow-x: auto;
+}
+.cps-ith-sekme {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 12px 18px;
+  font-size: 13px; font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.cps-ith-sekme:hover { color: #374151; }
+.cps-ith-sekme-aktif {
+  color: #2563eb;
+  border-bottom-color: #2563eb;
+  font-weight: 600;
+}
+.cps-ith-sekme-rozet {
+  display: inline-block;
+  min-width: 18px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #e5e7eb;
+  color: #4b5563;
+  border-radius: 10px;
+  text-align: center;
+}
+.cps-ith-sekme-aktif .cps-ith-sekme-rozet {
+  background: #dbeafe; color: #1e40af;
+}
+
+
+.cps-ith-sekme-alan {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0 0 8px 8px;
+  padding: 20px;
+  min-height: 300px;
+}
+.cps-ith-sekme-icerik { display: none; }
+.cps-ith-sekme-icerik-aktif { display: block; }
+
+
+.cps-ith-bolum-baslik {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cps-ith-bolum-baslik h2 {
+  font-size: 16px; font-weight: 600;
+  color: #111827; margin: 0;
+}
+.cps-ith-bolum-alt-baslik {
+  font-size: 13px; font-weight: 600;
+  color: #4b5563;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin: 20px 0 10px 0;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+
+.cps-ith-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.cps-ith-form-grup {
+  display: flex; flex-direction: column; gap: 4px; min-width: 0;
+}
+.cps-ith-form-grup label {
+  font-size: 11px; color: #6b7280;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.cps-ith-form-grup-gen { grid-column: 1 / -1; }
+
+.cps-ith-form-aksiyon {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px solid #f3f4f6;
+}
+.cps-ith-kayit-durum {
+  font-size: 12px; color: #6b7280; min-height: 14px;
+}
+.cps-ith-kayit-durum.ok { color: #059669; }
+.cps-ith-kayit-durum.hata { color: #dc2626; }
+
+
+.cps-ith-inline-form {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.cps-ith-inline-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+.cps-ith-inline-grid .cps-ith-form-grup { min-width: 0; }
+.cps-ith-inline-aksiyon {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+}
+
+
+/* =====================================================================
+   YENI: PARA BIRIMI BAZLI TOPLAM KARTLARI (maliyet sekmesi ustu)
+   ===================================================================== */
+.cps-ith-para-toplam {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+  width: 100%;
+  align-items: stretch;
+  justify-items: stretch;
+}
+
+.cps-ith-para-kart {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-left: 4px solid #d1d5db;
+  border-radius: 6px;
+  padding: 12px 14px;
+  transition: box-shadow 0.15s ease;
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+}
+.cps-ith-para-kart:hover {
+  box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+}
+
+.cps-ith-para-kart-etiket {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin-bottom: 6px;
+}
+
+.cps-ith-para-kart-deger {
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cps-ith-para-kart-deger-bos {
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+.cps-ith-para-kart-alt {
+  font-size: 11px;
+  color: #9ca3af;
+  font-variant-numeric: tabular-nums;
+}
+.cps-ith-para-kart-alt-uyari {
+  color: #d97706;
+  font-style: italic;
+}
+
+/* Para birimine gore renkler */
+.cps-ith-para-kart-usd {
+  border-left-color: #2563eb;
+  background: #eff6ff;
+}
+.cps-ith-para-kart-usd .cps-ith-para-kart-deger {
+  color: #1e40af;
+}
+
+.cps-ith-para-kart-try {
+  border-left-color: #059669;
+  background: #ecfdf5;
+}
+.cps-ith-para-kart-try .cps-ith-para-kart-deger {
+  color: #065f46;
+}
+
+.cps-ith-para-kart-eur {
+  border-left-color: #7c3aed;
+  background: #f5f3ff;
+}
+.cps-ith-para-kart-eur .cps-ith-para-kart-deger {
+  color: #5b21b6;
+}
+
+.cps-ith-para-kart-cny {
+  border-left-color: #dc2626;
+  background: #fef2f2;
+}
+.cps-ith-para-kart-cny .cps-ith-para-kart-deger {
+  color: #991b1b;
+}
+
+.cps-ith-para-kart-gbp {
+  border-left-color: #0284c7;
+  background: #f0f9ff;
+}
+.cps-ith-para-kart-gbp .cps-ith-para-kart-deger {
+  color: #075985;
+}
+
+/* Cift maliyet karti biraz daha baskin - daha koyu arkaplan */
+.cps-ith-para-kart-cift {
+  border-left-width: 5px;
+  background-image: linear-gradient(to bottom right, rgba(255,255,255,0.5), transparent);
+}
+.cps-ith-para-kart-cift .cps-ith-para-kart-deger {
+  font-size: 22px;
+}
+
+
+/* =====================================================================
+   TIP OZET KARTLARI (maliyet sekmesi)
+   ===================================================================== */
+.cps-ith-tip-ozet {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.cps-ith-tip-kart {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+.cps-ith-tip-kart-ad {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin-bottom: 6px;
+}
+.cps-ith-tip-kart-deger {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 4px;
+}
+.cps-ith-tip-kart-alt {
+  font-size: 11px;
+  color: #9ca3af;
+  font-variant-numeric: tabular-nums;
+}
+.cps-ith-tip-kart.bekliyor {
+  border-style: dashed;
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+.cps-ith-tip-kart.sapma-uyari {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+.cps-ith-tip-kart.sapma-kritik {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+
+/* =====================================================================
+   TIP BAZLI SAPMA TABLOSU
+   ===================================================================== */
+.cps-ith-sapma-bolum { margin-bottom: 20px; }
+.cps-ith-sapma-tablo { font-size: 13px; }
+.cps-ith-sapma-tablo thead th { font-size: 11px; background: #f3f4f6; }
+.cps-ith-sapma-tablo tbody tr { transition: background 0.1s ease; }
+.cps-ith-sapma-tablo tbody tr:hover { background: #fafafa !important; }
+
+.cps-ith-sapma-kritik-satir {
+  background: #fef2f2 !important;
+  border-left: 3px solid #dc2626;
+}
+.cps-ith-sapma-kritik-satir:hover { background: #fee2e2 !important; }
+
+.cps-ith-sapma-uyari-satir {
+  background: #fffbeb !important;
+  border-left: 3px solid #f59e0b;
+}
+.cps-ith-sapma-uyari-satir:hover { background: #fef3c7 !important; }
+
+.cps-ith-sapma-bekliyor-satir {
+  background: #fafafa !important;
+  border-left: 3px solid #d1d5db;
+}
+
+.cps-ith-sapma-yeni-satir {
+  background: #eff6ff !important;
+  border-left: 3px solid #60a5fa;
+}
+
+.cps-ith-sapma-mix-satir {
+  background: #fefce8 !important;
+  border-left: 3px solid #ca8a04;
+}
+
+.cps-ith-sapma-tip { font-weight: 600; color: #111827; }
+
+.cps-ith-sapma-para-satir {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+.cps-ith-sapma-para-satir + .cps-ith-sapma-para-satir {
+  margin-top: 2px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.cps-ith-sapma-yeni-hucre { color: #1e40af; font-weight: 500; }
+.cps-ith-sapma-mix-hucre { color: #ca8a04; }
+.cps-ith-sapma-durum { min-width: 180px; }
+
+/* Sapma tablosundaki kritik etikette cizgisiz goster */
+.cps-ith-sapma-tablo .cps-ith-durum-etiket.cps-ith-d-iptal {
+  text-decoration: none;
+}
+
+.cps-ith-sapma-alt-not {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 3px;
+  font-style: italic;
+}
+
+
+/* =====================================================================
+   PLAN LISTESI (odeme sekmesi)
+   ===================================================================== */
+.cps-ith-plan-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cps-ith-plan-kart {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.cps-ith-plan-kart.gecikmis {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+.cps-ith-plan-kart.iptal { opacity: 0.6; }
+.cps-ith-plan-kart.odendi { border-color: #86efac; }
+
+.cps-ith-plan-ust {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+}
+
+.cps-ith-plan-sira {
+  background: #eff6ff;
+  color: #1e40af;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-family: "SF Mono", Consolas, Monaco, monospace;
+}
+.cps-ith-plan-bilgi { min-width: 0; }
+.cps-ith-plan-aciklama {
+  font-size: 14px;
+  font-weight: 500;
+  color: #111827;
+  margin-bottom: 2px;
+}
+.cps-ith-plan-meta { font-size: 12px; color: #6b7280; }
+.cps-ith-plan-tarih {
+  font-size: 13px; color: #4b5563;
+  text-align: right; min-width: 110px;
+}
+.cps-ith-plan-tarih.gecikmis { color: #dc2626; font-weight: 600; }
+.cps-ith-plan-tutar {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+  text-align: right;
+  min-width: 110px;
+  font-variant-numeric: tabular-nums;
+}
+.cps-ith-plan-tutar-alt {
+  font-size: 11px;
+  color: #9ca3af;
+  font-weight: 400;
+}
+.cps-ith-plan-aksiyon { display: flex; gap: 4px; }
+
+.cps-ith-plan-durum-bar {
+  padding: 6px 14px;
+  background: #f9fafb;
+  border-top: 1px solid #f3f4f6;
+  font-size: 12px;
+  color: #6b7280;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.cps-ith-plan-hareketler { padding: 0 14px 10px 14px; }
+.cps-ith-hareket-satir {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: #4b5563;
+  border-top: 1px dashed #e5e7eb;
+}
+.cps-ith-hareket-satir.iptal {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+.cps-ith-hareket-tarih {
+  color: #6b7280;
+  font-variant-numeric: tabular-nums;
+}
+.cps-ith-hareket-tutar {
+  font-weight: 600;
+  color: #111827;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+
+/* UPLOAD */
+.cps-ith-upload-kart {
+  background: #f9fafb;
+  border: 1px dashed #d1d5db;
+  border-radius: 6px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.cps-ith-upload-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  align-items: end;
+}
+.cps-ith-upload-aksiyon {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cps-ith-upload-aksiyon label { visibility: hidden; }
+
+
+/* DURUM + ZAMAN CIZELGESI */
+.cps-ith-durum-kontrol {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 14px;
+  margin-bottom: 18px;
+}
+.cps-ith-durum-mevcut {
+  font-size: 13px; color: #4b5563; margin-bottom: 12px;
+}
+.cps-ith-durum-butonlar {
+  display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;
+}
+.cps-ith-durum-not {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.cps-ith-durum-not label {
+  font-size: 12px; color: #6b7280;
+}
+
+.cps-ith-zaman-cizelgesi { position: relative; padding-left: 20px; }
+.cps-ith-zaman-cizelgesi::before {
+  content: '';
+  position: absolute;
+  left: 7px; top: 8px; bottom: 8px;
+  width: 2px; background: #e5e7eb;
+}
+.cps-ith-zaman-kayit {
+  position: relative; padding: 10px 0 10px 16px;
+}
+.cps-ith-zaman-kayit::before {
+  content: '';
+  position: absolute;
+  left: -16px; top: 16px;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid #2563eb;
+}
+.cps-ith-zaman-tarih {
+  font-size: 11px; color: #6b7280;
+  margin-bottom: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.cps-ith-zaman-aciklama {
+  font-size: 13px; color: #1f2937; line-height: 1.4;
+}
+.cps-ith-zaman-kullanici {
+  font-size: 11px; color: #9ca3af; margin-top: 2px;
+}
+
+
+/* KALEM AKSIYON */
+.cps-ith-kalem-aksiyon {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+
+/* =====================================================================
+   URUN KARTI (maliyet sekmesi alti - "Bu Parti Urunleri")
+   - KIYAS ODAKLI GUNCELLENMIS
+   ===================================================================== */
+.cps-ith-urun-bolum {
+  margin-top: 24px;
+}
+
+.cps-ith-urun-kartlari {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.cps-ith-urun-kart {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-left: 4px solid #7c3aed;
+  border-radius: 6px;
+  padding: 12px 14px;
+  transition: all 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cps-ith-urun-kart:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border-left-color: #5b21b6;
+}
+.cps-ith-urun-kart-bos {
+  opacity: 0.7;
+  border-left-color: #d1d5db;
+  background: #f9fafb;
+}
+.cps-ith-urun-kart-hata {
+  border-left-color: #dc2626;
+  background: #fef2f2;
+}
+
+.cps-ith-urun-kart-ust {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.cps-ith-urun-kart-kod {
+  font-family: "SF Mono", Consolas, Monaco, "Courier New", monospace;
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.cps-ith-urun-kart-rozet {
+  display: inline-block;
+  min-width: 24px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #e5e7eb;
+  color: #6b7280;
+  border-radius: 10px;
+  text-align: center;
+}
+.cps-ith-urun-kart-rozet-dolu {
+  background: #ddd6fe;
+  color: #5b21b6;
+}
+
+/* YENI: Mini kartta kiyas kriteri etiketi */
+.cps-ith-urun-kart-kriter {
+  display: inline-block;
+  padding: 2px 6px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  border-radius: 3px;
+  white-space: nowrap;
+  margin-right: 6px;
+  background: #e5e7eb;
+  color: #4b5563;
+}
+.cps-ith-urun-kart-kriter.cps-ith-kriter-yuksek {
+  background: #d1fae5;
+  color: #065f46;
+}
+.cps-ith-urun-kart-kriter.cps-ith-kriter-orta {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.cps-ith-urun-kart-kriter.cps-ith-kriter-dusuk {
+  background: #fef3c7;
+  color: #92400e;
+}
+.cps-ith-urun-kart-kriter.cps-ith-kriter-yok {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.cps-ith-urun-kart-govde {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cps-ith-urun-kart-yukleniyor,
+.cps-ith-urun-kart-bos-mesaj {
+  color: #9ca3af;
+  font-size: 12px;
+  font-style: italic;
+  padding: 6px 0;
+}
+
+.cps-ith-urun-kart-satir {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 12px;
+  color: #4b5563;
+  line-height: 1.3;
+}
+.cps-ith-urun-kart-et {
+  color: #6b7280;
+  flex-shrink: 0;
+}
+.cps-ith-urun-kart-dv {
+  font-variant-numeric: tabular-nums;
+  color: #111827;
+}
+.cps-ith-urun-kart-dv strong {
+  font-weight: 700;
+  font-size: 14px;
+}
+.cps-ith-urun-kart-birim {
+  color: #9ca3af;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.cps-ith-urun-kart-tek-alim {
+  color: #9ca3af;
+  font-size: 12px;
+  font-style: italic;
+  text-align: center;
+  padding: 4px;
+}
+
+/* Sapma kutusu - renkli */
+.cps-ith-urun-kart-sapma {
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
+.cps-ith-urun-sapma-kritik-pahali {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+.cps-ith-urun-sapma-uyari-pahali {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+.cps-ith-urun-sapma-normal-pahali {
+  background: #fff7ed;
+  color: #9a3412;
+}
+.cps-ith-urun-sapma-kritik-ucuz {
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+.cps-ith-urun-sapma-uyari-ucuz {
+  background: #ecfdf5;
+  color: #065f46;
+}
+.cps-ith-urun-sapma-normal-ucuz {
+  background: #f0fdf4;
+  color: #166534;
+}
+.cps-ith-urun-sapma-esit {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.cps-ith-urun-kart-btn {
+  margin-top: 4px;
+  align-self: flex-start;
+}
+
+
+/* =====================================================================
+   MODAL (Urun Detay) - KIYAS OZETI GUNCELLENMIS
+   ===================================================================== */
+.cps-ith-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 20px;
+  overflow-y: auto;
+}
+
+.cps-ith-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  cursor: pointer;
+}
+
+.cps-ith-modal-panel {
+  position: relative;
+  background: #fff;
+  border-radius: 10px;
+  width: 100%;
+  max-width: 1080px;
+  max-height: 90vh;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+}
+.cps-ith-modal-panel-sm {
+  max-width: 640px;
+}
+
+.cps-ith-modal-baslik {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+  flex-shrink: 0;
+}
+
+.cps-ith-modal-baslik h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #111827;
+  font-family: "SF Mono", Consolas, Monaco, "Courier New", monospace;
+}
+
+.cps-ith-modal-alt {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+.cps-ith-modal-kapat {
+  background: transparent;
+  border: none;
+  color: #6b7280;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-family: inherit;
+}
+.cps-ith-modal-kapat:hover {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.cps-ith-modal-icerik {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.cps-ith-modal-bolum {
+  margin-bottom: 24px;
+}
+.cps-ith-modal-bolum:last-child {
+  margin-bottom: 0;
+}
+
+.cps-ith-modal-bolum-baslik {
+  margin: 0 0 10px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4b5563;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.cps-ith-modal-bos {
+  padding: 20px;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 13px;
+  font-style: italic;
+}
+
+/* KIYAS OZETI BOLUMU (en ustte, en onemli) */
+.cps-ith-modal-kiyas-bolum {
+  background: #fafafa;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+.cps-ith-modal-kiyas-bolum .cps-ith-modal-bolum-baslik {
+  border-bottom-color: #d1d5db;
+}
+
+/* YENI: Kiyas kriteri bilgi bandi (modal ustu) */
+.cps-ith-kriter-band {
+  margin: 8px 0 14px 0;
+  padding: 12px 14px;
+  border-radius: 6px;
+  border-left: 4px solid #6b7280;
+  background: #f9fafb;
+}
+.cps-ith-kriter-band.cps-ith-kriter-yuksek {
+  background: #ecfdf5;
+  border-left-color: #059669;
+}
+.cps-ith-kriter-band.cps-ith-kriter-orta {
+  background: #eff6ff;
+  border-left-color: #2563eb;
+}
+.cps-ith-kriter-band.cps-ith-kriter-dusuk {
+  background: #fffbeb;
+  border-left-color: #d97706;
+}
+.cps-ith-kriter-band.cps-ith-kriter-yok {
+  background: #f9fafb;
+  border-left-color: #9ca3af;
+}
+
+.cps-ith-kriter-band-baslik {
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 4px;
+}
+
+.cps-ith-kriter-band-aciklama {
+  font-size: 13px;
+  color: #4b5563;
+  line-height: 1.4;
+  margin-bottom: 6px;
+}
+
+.cps-ith-kriter-band-detay {
+  font-size: 11px;
+  color: #6b7280;
+  font-variant-numeric: tabular-nums;
+  padding-top: 6px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+/* Modal tablosunda GTIP hucresi */
+.cps-ith-modal-gtip {
+  font-family: "SF Mono", Consolas, Monaco, "Courier New", monospace;
+  font-size: 12px;
+  color: #1e40af;
+  background: #eff6ff;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+.cps-ith-modal-gtip-yok {
+  color: #9ca3af;
+  font-style: italic;
+  font-size: 11px;
+}
+
+.cps-ith-modal-kiyas-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.cps-ith-modal-kiyas-kart {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-left: 4px solid #d1d5db;
+  border-radius: 6px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cps-ith-modal-kiyas-kart-bu {
+  border-left-color: #2563eb;
+  background: #eff6ff;
+}
+.cps-ith-modal-kiyas-kart-onceki {
+  border-left-color: #6b7280;
+}
+.cps-ith-modal-kiyas-kart-min {
+  border-left-color: #059669;
+  background: #f0fdf4;
+}
+.cps-ith-modal-kiyas-kart-max {
+  border-left-color: #dc2626;
+  background: #fef2f2;
+}
+
+.cps-ith-modal-kiyas-et {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.cps-ith-modal-kiyas-dv {
+  font-size: 18px;
+  color: #111827;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.cps-ith-modal-kiyas-dv strong {
+  font-weight: 700;
+}
+.cps-ith-modal-kiyas-br {
+  color: #6b7280;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.cps-ith-modal-kiyas-alt {
+  font-size: 11px;
+  color: #6b7280;
+  font-family: "SF Mono", Consolas, Monaco, monospace;
+}
+
+.cps-ith-modal-kiyas-sapma {
+  margin-top: 4px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.cps-ith-modal-sapma-kritik {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+.cps-ith-modal-sapma-uyari {
+  background: #fef3c7;
+  color: #92400e;
+}
+.cps-ith-modal-sapma-ucuz {
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+.cps-ith-modal-sapma-hafif-ucuz {
+  background: #ecfdf5;
+  color: #065f46;
+}
+
+.cps-ith-modal-kiyas-try {
+  margin-top: 10px;
+  padding: 6px 10px;
+  background: #f9fafb;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #4b5563;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.cps-ith-modal-kiyas-uyari {
+  margin-top: 10px;
+  padding: 6px 10px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #92400e;
+}
+
+.cps-ith-modal-kiyas-tek {
+  padding: 10px;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #92400e;
+  margin-bottom: 10px;
+}
+
+/* Ortalama bolumu (eski yapi, tum alimlar icin) */
+.cps-ith-modal-ortalama-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.cps-ith-modal-metrik {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 12px 14px;
+}
+
+.cps-ith-modal-metrik-et {
+  font-size: 11px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.cps-ith-modal-metrik-dv {
+  font-size: 18px;
+  color: #111827;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.cps-ith-modal-metrik-dv-bos {
+  color: #9ca3af;
+  font-size: 14px;
+}
+.cps-ith-modal-metrik-br {
+  color: #6b7280;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.cps-ith-modal-metrik-alt {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 4px;
+}
+
+.cps-ith-modal-ortalama-alt {
+  font-size: 11px;
+  color: #6b7280;
+  text-align: right;
+  margin-top: 8px;
+  font-style: italic;
+}
+
+/* Partiler tablosu - bu parti / min / max vurgulama */
+.cps-ith-modal-partiler-tablo tbody tr.cps-ith-modal-bu-parti-satir {
+  background: #eff6ff !important;
+  font-weight: 500;
+}
+.cps-ith-modal-partiler-tablo tbody tr.cps-ith-modal-min-satir {
+  border-left: 3px solid #059669;
+}
+.cps-ith-modal-partiler-tablo tbody tr.cps-ith-modal-max-satir {
+  border-left: 3px solid #dc2626;
+}
+.cps-ith-modal-partiler-tablo tbody tr.cps-ith-modal-bu-parti-satir.cps-ith-modal-min-satir,
+.cps-ith-modal-partiler-tablo tbody tr.cps-ith-modal-bu-parti-satir.cps-ith-modal-max-satir {
+  box-shadow: inset 3px 0 0 currentColor;
+}
+
+.cps-ith-modal-parti-link {
+  color: #2563eb;
+  text-decoration: none;
+  font-family: "SF Mono", Consolas, Monaco, monospace;
+  font-size: 12px;
+  font-weight: 600;
+}
+.cps-ith-modal-parti-link:hover {
+  text-decoration: underline;
+}
+
+.cps-ith-modal-parti-etiket {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  margin-left: 6px;
+  border-radius: 3px;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+}
+.cps-ith-parti-et-bu  { background: #dbeafe; color: #1e40af; }
+.cps-ith-parti-et-min { background: #d1fae5; color: #065f46; }
+.cps-ith-parti-et-max { background: #fee2e2; color: #991b1b; }
+
+/* Fark % hucresi - renkli */
+.cps-ith-modal-fark-kritik-pahali {
+  color: #991b1b;
+  font-weight: 600;
+}
+.cps-ith-modal-fark-uyari-pahali {
+  color: #c2410c;
+  font-weight: 500;
+}
+.cps-ith-modal-fark-ucuz {
+  color: #059669;
+  font-weight: 600;
+}
+.cps-ith-modal-fark-hafif-ucuz {
+  color: #065f46;
+  font-weight: 500;
+}
+
+.cps-ith-modal-kirilim-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.cps-ith-modal-kirilim-grid > div {
+  min-width: 0;
+}
+
+.cps-ith-modal-kirilim-liste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cps-ith-modal-kirilim-liste li {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 13px;
+  color: #1f2937;
+}
+.cps-ith-modal-kirilim-liste li:last-child {
+  border-bottom: none;
+}
+
+.cps-ith-modal-kirilim-sag {
+  font-size: 12px;
+  color: #6b7280;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+
+/* =====================================================================
+   YENI: FORM IPUCU, INPUT HATA, AUTOCOMPLETE, TASIMA BADGE
+   ===================================================================== */
+
+.cps-ith-form-ipucu {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 3px;
+  font-style: italic;
+  line-height: 1.3;
+}
+
+.cps-ith-input.cps-ith-input-hata {
+  border-color: #dc2626;
+  background: #fef2f2;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+}
+
+.cps-ith-modal-panel-sm {
+  max-width: 720px;
+}
+
+.cps-ith-btn-spinner {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+}
+.cps-ith-btn-spinner .cps-ith-spinner {
+  margin-right: 0;
+  border-top-color: #fff;
+}
+
+.cps-ith-autocomplete-liste {
+  position: absolute;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  max-height: 240px;
+  overflow-y: auto;
+  margin-top: 2px;
+  z-index: 100;
+  min-width: 240px;
+  left: 0;
+  right: 0;
+  top: 100%;
+}
+
+.cps-ith-autocomplete-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #f3f4f6;
+  transition: background 0.1s ease;
+}
+.cps-ith-autocomplete-item:last-child {
+  border-bottom: none;
+}
+.cps-ith-autocomplete-item:hover {
+  background: #eff6ff;
+}
+
+.cps-ith-autocomplete-ad {
+  font-size: 13px;
+  font-weight: 500;
+  color: #111827;
+}
+
+.cps-ith-autocomplete-kod {
+  font-size: 11px;
+  color: #6b7280;
+  font-family: "SF Mono", Consolas, Monaco, "Courier New", monospace;
+  margin-top: 2px;
+}
+
+.cps-ith-form-grup {
+  position: relative;
+}
+
+
+/* =====================================================================
+   TASIMA TIPI BADGE
+   ===================================================================== */
+.cps-ith-tasima-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 10px;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+
+.cps-ith-tasima-ikon {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.cps-ith-tasima-ad {
+  font-size: 11px;
+}
+
+.cps-ith-tasima-air    { background: #dbeafe; color: #1e40af; }
+.cps-ith-tasima-sea    { background: #cffafe; color: #155e75; }
+.cps-ith-tasima-truck  { background: #fed7aa; color: #9a3412; }
+.cps-ith-tasima-rail   { background: #e9d5ff; color: #6b21a8; }
+.cps-ith-tasima-express{ background: #fef3c7; color: #92400e; }
+.cps-ith-tasima-diger  { background: #f3f4f6; color: #4b5563; }
+
+
+/* =====================================================================
+   URUN TIPI BADGE (ileride kullanim icin altyapi)
+   ===================================================================== */
+.cps-ith-urun-tip-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 10px;
+  white-space: nowrap;
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.cps-ith-urun-tip-ikon {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.cps-ith-urun-isikli   { background: #fef9c3; color: #854d0e; }
+.cps-ith-urun-terlik   { background: #dbeafe; color: #1e40af; }
+.cps-ith-urun-spor     { background: #d1fae5; color: #065f46; }
+.cps-ith-urun-sandalet { background: #fce7f3; color: #9f1239; }
+.cps-ith-urun-bot      { background: #e5e7eb; color: #374151; }
+
+
+/* =====================================================================
+   MINI KART - USD referans
+   ===================================================================== */
+.cps-ith-urun-kart-sapma-ref {
+  font-size: 10px;
+  color: #9ca3af;
+  text-align: center;
+  font-style: italic;
+  padding: 2px 4px;
+  margin-top: 2px;
+}
+
+
+/* =====================================================================
+   PARSE ONAY MODALI (guven skoru preview - Faz 1+2)
+   ===================================================================== */
+
+/* Modal alt bar - uygula/reddet butonlari */
+.cps-ith-modal-alt-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+  gap: 12px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+}
+
+.cps-ith-onay-butonlar {
+  display: flex;
+  gap: 8px;
+}
+
+/* Guven skoru karti */
+.cps-ith-onay-guven {
+  margin-bottom: 20px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 2px solid #e5e7eb;
+  background: #fff;
+}
+
+.cps-ith-onay-guven-yuksek {
+  border-color: #10b981;
+  background: linear-gradient(to bottom, #ecfdf5 0%, #fff 100%);
+}
+.cps-ith-onay-guven-orta {
+  border-color: #f59e0b;
+  background: linear-gradient(to bottom, #fffbeb 0%, #fff 100%);
+}
+.cps-ith-onay-guven-dusuk {
+  border-color: #f97316;
+  background: linear-gradient(to bottom, #fff7ed 0%, #fff 100%);
+}
+.cps-ith-onay-guven-red {
+  border-color: #dc2626;
+  background: linear-gradient(to bottom, #fef2f2 0%, #fff 100%);
+}
+
+.cps-ith-onay-guven-kutu {
+  padding: 18px 20px;
+}
+
+.cps-ith-onay-guven-skor {
+  font-size: 28px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.cps-ith-onay-guven-emoji {
+  font-size: 32px;
+  line-height: 1;
+}
+.cps-ith-onay-guven-skor strong {
+  font-size: 36px;
+  color: #1f2937;
+}
+.cps-ith-onay-guven-max {
+  font-size: 15px;
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+.cps-ith-onay-guven-baslik {
+  font-size: 14px;
+  color: #4b5563;
+  margin-top: 6px;
+  font-weight: 500;
+}
+
+.cps-ith-onay-mtk-ok,
+.cps-ith-onay-mtk-uyari {
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.cps-ith-onay-mtk-ok {
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+.cps-ith-onay-mtk-uyari {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  font-weight: 500;
+}
+
+.cps-ith-onay-faz-bilgi {
+  margin-top: 10px;
+  padding: 6px 10px;
+  background: #f3f4f6;
+  color: #4b5563;
+  border-radius: 4px;
+  font-size: 11px;
+  font-style: italic;
+  border-left: 3px solid #6366f1;
+}
+
+/* Tespit edilenler grid */
+.cps-ith-onay-tespit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 6px 14px;
+}
+
+.cps-ith-onay-tespit-satir {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 10px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 5px;
+  font-size: 13px;
+  min-width: 0;
+  gap: 10px;
+}
+
+.cps-ith-onay-tespit-et {
+  color: #4b5563;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.cps-ith-onay-tespit-dv {
+  color: #111827;
+  font-weight: 500;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.cps-ith-onay-tespit-bos {
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.cps-ith-onay-tespit-ayirici {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-top: 4px;
+  font-weight: 600;
+}
+
+/* Guven skoru detay listesi */
+.cps-ith-onay-detay-liste {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.cps-ith-onay-detay-item {
+  display: flex;
+  align-items: flex-start;
+  padding: 7px 10px;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 13px;
+  gap: 10px;
+}
+.cps-ith-onay-detay-item:last-child {
+  border-bottom: none;
+}
+
+.cps-ith-onay-detay-ikon {
+  font-weight: 700;
+  font-size: 14px;
+  min-width: 16px;
+  text-align: center;
+}
+.cps-ith-onay-detay-ok .cps-ith-onay-detay-ikon { color: #059669; }
+.cps-ith-onay-detay-uyari .cps-ith-onay-detay-ikon { color: #d97706; }
+.cps-ith-onay-detay-hata .cps-ith-onay-detay-ikon { color: #dc2626; }
+
+.cps-ith-onay-detay-metin {
+  color: #1f2937;
+  flex: 1;
+}
+.cps-ith-onay-detay-hata .cps-ith-onay-detay-metin { color: #991b1b; }
+.cps-ith-onay-detay-uyari .cps-ith-onay-detay-metin { color: #92400e; }
+
+.cps-ith-onay-detay-puan {
+  font-size: 11px;
+  color: #dc2626;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  background: #fee2e2;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+/* Mantiksizlik uyarilari bolumu */
+.cps-ith-onay-mantiksizlik {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+.cps-ith-onay-mantiksizlik .cps-ith-modal-bolum-baslik {
+  color: #991b1b;
+  border-bottom-color: #fecaca;
+}
+
+.cps-ith-onay-uyari-liste {
+  list-style: disc;
+  margin: 0;
+  padding-left: 22px;
+}
+.cps-ith-onay-uyari-liste li {
+  padding: 3px 0;
+  font-size: 13px;
+  color: #4b5563;
+}
+.cps-ith-onay-mantiksizlik .cps-ith-onay-uyari-liste li {
+  color: #991b1b;
+  font-weight: 500;
+}
+
+/* Ekstra kalemler */
+.cps-ith-onay-ekstra-info {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 8px;
+  font-style: italic;
+}
+
+.cps-ith-onay-ekstra-liste {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 10px 0;
+}
+.cps-ith-onay-ekstra-liste li {
+  padding: 6px 10px;
+  background: #eff6ff;
+  border-left: 3px solid #3b82f6;
+  margin-bottom: 4px;
+  font-size: 13px;
+  border-radius: 3px;
+  color: #1e40af;
+}
+
+.cps-ith-onay-ekstra-toggle {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #374151;
+}
+.cps-ith-onay-ekstra-toggle input {
+  margin-right: 6px;
+}
+
+/* Belgeler listesi — parse durum rozetleri */
+.cps-ith-belge-rozet {
+  display: inline-block;
+  padding: 2px 7px;
+  margin-left: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+.cps-ith-belge-rozet-ok {
+  background: #d1fae5;
+  color: #065f46;
+}
+.cps-ith-belge-rozet-onay {
+  background: #fef3c7;
+  color: #92400e;
+  animation: cps-ith-pulse 2s ease-in-out infinite;
+}
+.cps-ith-belge-rozet-red {
+  background: #fee2e2;
+  color: #991b1b;
+}
+@keyframes cps-ith-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.cps-ith-belge-aciklama {
+  color: #4b5563;
+}
+
+/* YENI: Duplicate uyari kutusu - preview modal icinde */
+.cps-ith-onay-duplicate-box {
+  background: #fff1f2;
+  border: 2px solid #dc2626;
+  border-left: 6px solid #991b1b;
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin-bottom: 18px;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.1);
+  position: relative;
+}
+
+.cps-ith-onay-duplicate-box::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  right: -1px;
+  height: 3px;
+  background: linear-gradient(90deg, #dc2626 0%, #f97316 100%);
+  border-radius: 8px 8px 0 0;
+}
+
+.cps-ith-onay-duplicate-baslik {
+  font-size: 15px;
+  font-weight: 700;
+  color: #991b1b;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cps-ith-onay-duplicate-metin {
+  font-size: 13px;
+  color: #7f1d1d;
+  line-height: 1.5;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 4px;
+}
+
+.cps-ith-onay-duplicate-metin strong {
+  color: #991b1b;
+  font-weight: 700;
+}
+
+.cps-ith-onay-duplicate-not {
+  font-size: 12px;
+  color: #991b1b;
+  background: #fef2f2;
+  border-left: 3px solid #dc2626;
+  padding: 8px 12px;
+  border-radius: 4px;
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+/* YENI: Alt bar Override butonu - kirmizi, belirgin, dikkat cekici */
+.cps-ith-btn.cps-ith-onay-override-btn {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  color: #fff;
+  border: 1px solid #991b1b;
+  font-weight: 700;
+  padding: 10px 18px;
+  box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3);
+  animation: cps-ith-override-pulse 2s ease-in-out infinite;
+}
+.cps-ith-btn.cps-ith-onay-override-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
+  box-shadow: 0 3px 10px rgba(220, 38, 38, 0.4);
+  transform: translateY(-1px);
+}
+.cps-ith-btn.cps-ith-onay-override-btn:disabled {
+  background: #f87171;
+  box-shadow: none;
+  animation: none;
+}
+
+@keyframes cps-ith-override-pulse {
+  0%, 100% { box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3); }
+  50%      { box-shadow: 0 2px 14px rgba(220, 38, 38, 0.5); }
+}
+
+/* Normal onay butonu ile override arasindaki fark belirgin olsun */
+.cps-ith-btn.cps-ith-btn-primary {
+  font-weight: 600;
+}
+
+/* YENI: Belge grubu notu (aynı referans için kaç yükleme) */
+.cps-ith-belge-grup-not {
+  font-size: 11px;
+  color: #6b7280;
+  font-style: italic;
+  margin-top: 3px;
+  padding: 2px 6px;
+  background: #f3f4f6;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+/* YENI: Tedarikci gorunen ad - orijinal tooltip ile */
+.cps-ith-tedarikci-gorunen {
+  font-weight: 500;
+  color: #1f2937;
+}
+.cps-ith-tedarikci-orijinal {
+  font-size: 11px;
+  color: #6b7280;
+  margin-left: 6px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+
+/* YENI: Karar metrikleri - preview modalin en onemli bolumu */
+.cps-ith-onay-karar-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.cps-ith-onay-karar-metrik {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px 14px;
+  text-align: center;
+}
+
+.cps-ith-onay-karar-metrik.cps-ith-onay-karar-vurgu {
+  background: #eff6ff;
+  border: 2px solid #2563eb;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.1);
+}
+
+.cps-ith-onay-karar-et {
+  font-size: 11px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.cps-ith-onay-karar-dv {
+  font-size: 18px;
+  color: #111827;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.cps-ith-onay-karar-dv strong {
+  font-weight: 700;
+}
+.cps-ith-onay-karar-vurgu .cps-ith-onay-karar-dv {
+  font-size: 24px;
+  color: #1e40af;
+}
+.cps-ith-onay-karar-birim {
+  font-size: 11px;
+  color: #9ca3af;
+  font-weight: 500;
+}
+.cps-ith-onay-karar-vurgu .cps-ith-onay-karar-birim {
+  color: #3b82f6;
+}
+.cps-ith-onay-karar-bos {
+  color: #9ca3af;
+  font-size: 14px;
+}
+
+
+/* =====================================================================
+   MANUEL SATIR EKLEME (B asamasi)
+   ===================================================================== */
+
+/* Manuel Satir Ekle butonu (tablo altinda) */
+.cps-ith-onay-oneri-manuel-ekle-wrap {
+  padding: 10px 0 6px 0;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.cps-ith-onay-oneri-manuel-ekle-btn {
+  background: #f3f4f6;
+  color: #1f2937;
+  border: 1px dashed #9ca3af;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.cps-ith-onay-oneri-manuel-ekle-btn:hover {
+  background: #e5e7eb;
+  border-color: #2563eb;
+  border-style: solid;
+  color: #1e3a8a;
+}
+
+.cps-ith-onay-oneri-manuel-ekle-btn > span:first-child {
+  font-size: 16px;
+  line-height: 1;
+  color: #2563eb;
+}
+
+/* Manuel olarak eklenen satir (acik mavi - hafif) */
+.cps-ith-onay-oneri-tbl tbody tr.cps-ith-onay-oneri-row-manuel {
+  background: #f0f7ff;
+}
+.cps-ith-onay-oneri-tbl tbody tr.cps-ith-onay-oneri-row-manuel:hover {
+  background: #e0efff;
+}
+
+/* Manuel etiket (aciklama altinda kucuk italik) */
+.cps-ith-onay-oneri-manuel-etiket {
+  font-size: 10px;
+  color: #2563eb;
+  font-style: italic;
+  margin-top: 3px;
+  font-weight: 500;
+}
+
+/* Manuel satirda aciklama input'u */
+.cps-ith-onay-oneri-aciklama-input {
+  width: 100%;
+  padding: 4px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: inherit;
+  background: #fff;
+}
+.cps-ith-onay-oneri-aciklama-input:focus {
+  border-color: #3b82f6;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+/* Validation hata stili (aciklama veya tutar input) */
+.cps-ith-onay-oneri-input-hata {
+  border-color: #dc2626 !important;
+  background: #fef2f2 !important;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.1) !important;
+}
+
+/* Sil butonu kolonu (parser satirinda bos, manuel'de dolu) */
+.cps-ith-onay-oneri-th-sil {
+  width: 40px;
+  text-align: center !important;
+}
+.cps-ith-onay-oneri-sil-td {
+  width: 40px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+/* Sil butonu (sadece manuel satirda gorunur) */
+.cps-ith-onay-oneri-sil-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: #9ca3af;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+.cps-ith-onay-oneri-sil-btn:hover {
+  background: #fee2e2;
+  border-color: #dc2626;
+  color: #dc2626;
+}
+
+
+/* =====================================================================
+   ONERI AKISI (beyanname, maliyet_pdf) - tablo + editable + checkbox
+   ===================================================================== */
+
+/* Ust bilgi kutusu */
+.cps-ith-onay-oneri-bilgi {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+
+.cps-ith-onay-oneri-bilgi-baslik {
+  font-size: 11px;
+  font-weight: 700;
+  color: #0369a1;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+
+.cps-ith-onay-oneri-bilgi-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 14px;
+  font-size: 12px;
+}
+
+.cps-ith-onay-oneri-bilgi-et {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.cps-ith-onay-oneri-bilgi-dv {
+  color: #0f172a;
+  font-weight: 500;
+}
+
+/* Oneri bolumu */
+.cps-ith-onay-oneri-bolum {
+  background: #fafafa;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 14px 16px;
+}
+
+.cps-ith-onay-oneri-info {
+  font-size: 12px;
+  color: #78350f;
+  background: #fffbeb;
+  border-left: 3px solid #f59e0b;
+  padding: 6px 10px;
+  border-radius: 3px;
+  margin-bottom: 12px;
+}
+
+.cps-ith-onay-oneri-tbl-wrap {
+  overflow-x: auto;
+  background: #fff;
+  border-radius: 4px;
+}
+
+.cps-ith-onay-oneri-tbl {
+  width: 100%;
+  font-size: 13px;
+  border-collapse: collapse;
+}
+
+.cps-ith-onay-oneri-tbl thead th {
+  background: #f3f4f6;
+  border-bottom: 2px solid #d1d5db;
+  padding: 8px 10px;
+  text-align: left;
+  font-weight: 600;
+  color: #374151;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.cps-ith-onay-oneri-th-cb {
+  width: 40px;
+  text-align: center !important;
+}
+
+.cps-ith-onay-oneri-tbl tbody tr {
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.cps-ith-onay-oneri-tbl tbody tr:hover {
+  background: #f9fafb;
+}
+
+.cps-ith-onay-oneri-tbl tbody td {
+  padding: 8px 10px;
+  vertical-align: top;
+}
+
+/* Checkbox satiri */
+.cps-ith-onay-oneri-cb-td {
+  text-align: center;
+  width: 40px;
+}
+.cps-ith-onay-oneri-cb {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+/* Aciklama kolonu */
+.cps-ith-onay-oneri-ad {
+  min-width: 220px;
+  max-width: 320px;
+  color: #111827;
+  word-break: break-word;
+}
+
+/* Uyari mini - aciklama altinda */
+.cps-ith-onay-oneri-uyari-mini {
+  font-size: 11px;
+  color: #991b1b;
+  margin-top: 4px;
+  font-weight: 500;
+  font-style: italic;
+}
+
+/* Tutar input */
+.cps-ith-onay-oneri-tutar-input {
+  width: 120px;
+  padding: 4px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-family: inherit;
+  font-size: 13px;
+  background: #fff;
+}
+.cps-ith-onay-oneri-tutar-input:focus {
+  border-color: #3b82f6;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+/* Select */
+.cps-ith-onay-oneri-select {
+  padding: 4px 6px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 12px;
+  background: #fff;
+  font-family: inherit;
+}
+.cps-ith-onay-oneri-select:focus {
+  border-color: #3b82f6;
+  outline: none;
+}
+
+/* Kritik satir - 10M ustu */
+.cps-ith-onay-oneri-tbl tbody tr.cps-ith-onay-oneri-row-kritik {
+  background: #fef2f2;
+}
+.cps-ith-onay-oneri-tbl tbody tr.cps-ith-onay-oneri-row-kritik:hover {
+  background: #fee2e2;
+}
+.cps-ith-onay-oneri-tbl tbody tr.cps-ith-onay-oneri-row-kritik td {
+  border-bottom-color: #fecaca;
+}
+
+/* Yuksek satir */
+.cps-ith-onay-oneri-tbl tbody tr.cps-ith-onay-oneri-row-yuksek {
+  background: #fffbeb;
+}
+
+/* Genel toplam satiri */
+.cps-ith-onay-oneri-tbl tbody tr.cps-ith-onay-oneri-row-toplam {
+  background: #f5f5f4;
+  font-style: italic;
+}
+
+/* Alt toplam */
+.cps-ith-onay-oneri-toplam {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: #eff6ff;
+  border-left: 3px solid #2563eb;
+  border-radius: 3px;
+  font-size: 14px;
+  color: #1e3a8a;
+  font-variant-numeric: tabular-nums;
+  min-height: 20px;
+}
+
+.cps-ith-onay-oneri-toplam-label {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.cps-ith-onay-oneri-toplam em {
+  color: #9ca3af;
+  font-style: italic;
+  font-size: 12px;
+}
+
+/* Kayit durum mesaji - "uyari" renk (sari) */
+.cps-ith-kayit-durum.uyari {
+  color: #92400e;
+  font-weight: 500;
+}
+
+/* Onay modal - teknik debug hatasi */
+.cps-ith-onay-hata-detay {
+  padding: 16px;
+  margin: 16px 0;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+}
+
+.cps-ith-onay-hata-baslik {
+  font-size: 14px;
+  font-weight: 600;
+  color: #991b1b;
+  margin-bottom: 12px;
+}
+
+.cps-ith-onay-hata-debug {
+  background: #fff;
+  padding: 12px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.cps-ith-onay-debug-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+  font-family: "SF Mono", Consolas, Monaco, monospace;
+  font-size: 11px;
+}
+.cps-ith-onay-debug-tbl td {
+  padding: 4px 8px;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: top;
+}
+.cps-ith-onay-debug-tbl td:first-child {
+  font-weight: 600;
+  color: #4b5563;
+  width: 35%;
+  white-space: nowrap;
+}
+.cps-ith-onay-debug-tbl td:last-child {
+  color: #111827;
+  word-break: break-all;
+}
+.cps-ith-onay-debug-tbl code {
+  background: #f3f4f6;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.cps-ith-onay-hata-oneri {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: #fffbeb;
+  border-left: 3px solid #f59e0b;
+  font-size: 12px;
+  color: #78350f;
+  line-height: 1.5;
+}
+
+
+/* =====================================================================
+   RESPONSIVE
+   ===================================================================== */
+@media (max-width: 1200px) {
+  .cps-ith-detay-kpi { grid-template-columns: repeat(3, 1fr); }
+  .cps-ith-detay-kpi .cps-ith-kpi-kart:nth-child(3) { border-right: none; }
+}
+
+@media (max-width: 1100px) {
+  .cps-ith-kpi-serit { grid-template-columns: repeat(2, 1fr); }
+  .cps-ith-inline-grid { grid-template-columns: repeat(3, 1fr); }
+  .cps-ith-form-grid { grid-template-columns: repeat(2, 1fr); }
+  .cps-ith-upload-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 768px) {
+  .cps-ith-sayfa,
+  .cps-ith-detay { padding: 12px; }
+  .cps-ith-kpi-serit { grid-template-columns: 1fr; }
+  .cps-ith-detay-kpi { grid-template-columns: 1fr 1fr; }
+  .cps-ith-detay-kpi .cps-ith-kpi-kart {
+    border-right: 1px solid #e5e7eb;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  .cps-ith-filtre-grup { min-width: 100%; }
+  .cps-ith-baslik,
+  .cps-ith-detay-ad { font-size: 18px; }
+  .cps-ith-kpi-deger { font-size: 20px; }
+  .cps-ith-inline-grid,
+  .cps-ith-form-grid,
+  .cps-ith-upload-grid { grid-template-columns: 1fr; }
+  .cps-ith-plan-ust { grid-template-columns: 1fr 1fr; row-gap: 8px; }
+  .cps-ith-hareket-satir { grid-template-columns: 1fr 1fr; gap: 6px; }
+
+  .cps-ith-tablo thead th:nth-child(3),
+  .cps-ith-tablo tbody td:nth-child(3),
+  .cps-ith-tablo thead th:nth-child(4),
+  .cps-ith-tablo tbody td:nth-child(4),
+  .cps-ith-tablo thead th:nth-child(8),
+  .cps-ith-tablo tbody td:nth-child(8) { display: none; }
+
+  /* Modal mobilde tam ekran */
+  .cps-ith-modal { padding: 0; }
+  .cps-ith-modal-panel { border-radius: 0; min-height: 100vh; }
+  .cps-ith-modal-icerik { max-height: calc(100vh - 80px); }
+  .cps-ith-modal-kirilim-grid { grid-template-columns: 1fr; }
+}

@@ -1,0 +1,107 @@
+{
+  "belge_id": 112,
+  "parti_id": 9,
+  "olusma_tarih": "2026-04-25 22:27:57",
+  "parse": {
+    "basarili": false,
+    "durum": "BEKLIYOR_ONAY",
+    "mesaj": "Güven skoru 70/100 — Önizleme onayı bekleniyor. 2 kalem (FOB: 20882.35 USD, Komisyon: 626.47) - PI: PI20260402-2",
+    "kalem_sayisi": 2,
+    "kalemler": [
+      {
+        "tip": "FOB",
+        "kaynak": "TAHMINI",
+        "tutar": 20882.3529,
+        "para_birimi": "USD",
+        "aciklama": "Urun: 2507-3 (40000 adet) | Teslim: EXW",
+        "cari_ad": "Chengyu Global Trading Co., Limited",
+        "fatura_no": "PI20260402-2",
+        "not_metni": "Teslim: EXW (EX-T FACTORY) | Kur: USD/RMB 6.8 | Toplam miktar: 40000"
+      },
+      {
+        "tip": "KOMISYON",
+        "kaynak": "TAHMINI",
+        "tutar": 626.4706,
+        "para_birimi": "USD",
+        "aciklama": "Proforma komisyon",
+        "cari_ad": "Chengyu Global Trading Co., Limited",
+        "fatura_no": "PI20260402-2",
+        "not_metni": "Proforma satiri: 'commission' (toplam uzerinden)"
+      }
+    ],
+    "parti_bilgi": {
+      "tedarikci_ad": "Chengyu Global Trading Co., Limited",
+      "yukleme_tarih": "2026-04-30",
+      "para_birimi": "USD",
+      "toplam_cift": 40000,
+      "toplam_tutar": 20882.35,
+      "komisyon_tutar": 626.47,
+      "birim_maliyet": 0.5221
+    },
+    "uyarilar": [
+      "Teslim sekli: EXW",
+      "Proforma'da belirtilen kur: USD/RMB 6.8",
+      "Odeme sarti (otomatik plan olusturulmadi): 30%  as deposite,  The balance should be paid before shipment by T/T",
+      "1 urun satiri okundu"
+    ],
+    "kaynak_ref": "PI20260402-2",
+    "dosya_hash": "e972c7e6599dcc8607fc7697f5218fddee64ef497aa9199d792b3f0c6a48109d",
+    "insan_onayi_bekliyor": false,
+    "guven_skoru": 70,
+    "guven_seviyesi": "orta",
+    "guven_detay": [
+      {
+        "madde": "Header satiri bulundu (L10)",
+        "durum": "ok",
+        "puan": 0
+      },
+      {
+        "madde": "Kaynak referans: PI20260402-2",
+        "durum": "ok",
+        "puan": 0
+      },
+      {
+        "madde": "Tedarikci: Chengyu Global Trading Co., Limited",
+        "durum": "ok",
+        "puan": 0
+      },
+      {
+        "madde": "Para birimi: USD",
+        "durum": "ok",
+        "puan": 0
+      },
+      {
+        "madde": "Matematik FAIL: 40000.0 × 3.55 = 142000.00 ≠ 20882.35 (fark: 121117.65)",
+        "durum": "hata",
+        "puan": -30
+      }
+    ],
+    "matematik_ok": false,
+    "ekstra_kalemler": [],
+    "tespit_edilen_kolonlar": {
+      "0": "Kolon item",
+      "2": "Kolon spec",
+      "4": "Kolon unit_price",
+      "5": "Kolon qty",
+      "6": "Kolon unit_of_measure",
+      "7": "Kolon amount_rmb",
+      "8": "Kolon amount_usd"
+    },
+    "mantiksizlik_uyarilari": [],
+    "oneriler": [],
+    "meta": {}
+  },
+  "ek_bilgi": {
+    "dosya_adi": "Copy of pi-PI20260402-2 lighting.xls",
+    "belge_tipi": "COMMERCIAL_INVOICE",
+    "dosya_hash": "e972c7e6599dcc8607fc7697f5218fddee64ef497aa9199d792b3f0c6a48109d"
+  },
+  "is_duplicate": true,
+  "existing_ref": {
+    "kaynak_ref": "PI20260402-2",
+    "onceki_belge_id": 111,
+    "onceki_tarih": "2026-04-25 22:22:00",
+    "onceki_durum": "UYGULANDI",
+    "onceki_kalem_sayisi": 0
+  }
+}

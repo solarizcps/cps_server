@@ -1,0 +1,297 @@
+# -*- coding: utf-8 -*-
+"""
+Kredi Karti Service V2 - FAZ 4B-1
+Tablo: finans_kredi_karti
+Yetki: admin + altan (helper kontrol routes'ta)
+admin + altan tum entity'leri gorur (Karar 1)
+Fiziksel DELETE YOK - iptal icin Aktif=0
+"""
+import sqlite3
+import os
+import re
+from datetime import datetime, date
+
+
+# ===== SABITLER =====
+ENTITY_SET = ("solariz", "nexgen", "pera", "sahsi")
+PARA_BIRIMI_SET = ("TRY", "USD", "EUR")
+KART_TIPI_SET = ("kredi", "bankamatik", "ticari", "diger")
+
+
+def _db_path():
+    here = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(here))), "mock_data.db")
+
+
+def _conn(db_path=None):
+    c = sqlite3.connect(db_path or _db_path())
+    c.row_factory = sqlite3.Row
+    return c
+
+
+def _kullanici_adi(g_user):
+    if not g_user:
+        return None
+    return (g_user.get("KullaniciAdi") or "").strip().lower()
+
+
+def _now():
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+# ===== VALIDATION =====
+class ValidationError(ValueError):
+    pass
+
+
+def _validate(data):
+    """Form validasyon. Hata varsa ValidationError raise."""
+    entity = (data.get("entity") or "").strip().lower()
+    if entity not in ENTITY_SET:
+        raise ValidationError(f"Entity gecersiz: {entity!r}. Set: {ENTITY_SET}")
+
+    kart_ad = (data.get("kart_adi") or data.get("KartAd") or "").strip()
+    if not kart_ad:
+        raise ValidationError("Kart Adi bos olamaz")
+    if len(kart_ad) > 100:
+        raise ValidationError("Kart Adi en fazla 100 karakter")
+
+    banka = (data.get("banka") or data.get("Banka") or "").strip()
+    if len(banka) > 80:
+        raise ValidationError("Banka en fazla 80 karakter")
+
+    son4 = (data.get("son4") or data.get("Son4") or "").strip()
+    if son4:
+        if not re.match(r"^\d{1,4}$", son4):
+            raise ValidationError(f"Son 4 hane sadece rakam (1-4 karakter): {son4!r}")
+
+    # Limit
+    try:
+        limit = float(data.get("limit") or data.get("Limit_") or 0)
+    except (ValueError, TypeError):
+        raise ValidationError("Limit sayisal olmali")
+    if limit < 0:
+        raise ValidationError(f"Limit negatif olamaz: {limit}")
+    if limit > 100_000_000:
+        raise ValidationError(f"Limit 100M ustune cikamaz: {limit}")
+
+    para_birimi = (data.get("para_birimi") or data.get("ParaBirimi") or "TRY").strip().upper()
+    if para_birimi not in PARA_BIRIMI_SET:
+        raise ValidationError(f"Para birimi gecersiz: {para_birimi!r}. Set: {PARA_BIRIMI_SET}")
+
+    # DonemKesim (1-31, opsiyonel) - 0 falsy oldugu icin "or" kullanmiyoruz
+    dk = data.get("donem_kesim")
+    if dk is None or dk == "":
+        dk = data.get("DonemKesim")
+    if dk is None or str(dk).strip() == "":
+        donem_kesim = None
+    else:
+        try:
+            donem_kesim = int(dk)
+        except (ValueError, TypeError):
+            raise ValidationError("Donem Kesim Gunu sayisal olmali")
+        if not (1 <= donem_kesim <= 31):
+            raise ValidationError(f"Donem Kesim Gunu 1-31 arasi olmali: {donem_kesim}")
+
+    # SonOdemeGun (1-31, opsiyonel)
+    sg = data.get("son_odeme_gun")
+    if sg is None or sg == "":
+        sg = data.get("SonOdemeGun")
+    if sg is None or str(sg).strip() == "":
+        son_odeme_gun = None
+    else:
+        try:
+            son_odeme_gun = int(sg)
+        except (ValueError, TypeError):
+            raise ValidationError("Son Odeme Gunu sayisal olmali")
+        if not (1 <= son_odeme_gun <= 31):
+            raise ValidationError(f"Son Odeme Gunu 1-31 arasi olmali: {son_odeme_gun}")
+
+    kart_tipi = (data.get("kart_tipi") or data.get("KartTipi") or "kredi").strip().lower()
+    if kart_tipi not in KART_TIPI_SET:
+        kart_tipi = "kredi"
+
+    try:
+        kull_limit = float(data.get("kullanilabilir_limit") or data.get("KullanilabilirLimit") or 0)
+    except (ValueError, TypeError):
+        kull_limit = 0
+    if kull_limit < 0:
+        kull_limit = 0
+    if kull_limit > limit:
+        kull_limit = limit
+
+    kart_sahibi = (data.get("kart_sahibi") or data.get("KartSahibi") or "").strip()[:120]
+    notu = (data.get("aciklama") or data.get("notu") or data.get("Notu") or "").strip()[:500]
+
+    return {
+        "entity": entity,
+        "KartAd": kart_ad,
+        "Banka": banka,
+        "KartTipi": kart_tipi,
+        "KartSahibi": kart_sahibi,
+        "Limit_": limit,
+        "KullanilabilirLimit": kull_limit,
+        "DonemKesim": donem_kesim,
+        "SonOdemeGun": son_odeme_gun,
+        "ParaBirimi": para_birimi,
+        "Son4": son4 if son4 else None,
+        "Notu": notu,
+    }
+
+
+
+# ===== LISTELE =====
+def kredi_kartlari_listele(g_user=None, filtre=None, db_path=None):
+    """
+    Kart liste + filtre + KPI.
+    admin + altan tum entity gorur.
+    """
+    f = filtre or {}
+    c = _conn(db_path)
+
+    where = ["1=1"]
+    params = []
+
+    if f.get("entity"):
+        where.append("entity = ?")
+        params.append(f["entity"].lower())
+
+    if f.get("banka"):
+        where.append("Banka LIKE ?")
+        params.append("%" + f["banka"] + "%")
+
+    if f.get("search"):
+        where.append("(KartAd LIKE ? OR Banka LIKE ? OR Son4 LIKE ?)")
+        s = "%" + f["search"] + "%"
+        params.extend([s, s, s])
+
+    # Pasif kartlar default gizli
+    if not f.get("pasif_dahil"):
+        where.append("Aktif = 1")
+
+    sql = f"""
+        SELECT * FROM finans_kredi_karti
+         WHERE {' AND '.join(where)}
+         ORDER BY entity, Banka, KartAd
+    """
+    rows = c.execute(sql, params).fetchall()
+    items = [dict(r) for r in rows]
+
+    # KPI hesap
+    kpi = {
+        "toplam_kart": 0, "aktif_kart": 0, "pasif_kart": 0,
+        "toplam_limit": 0, "toplam_kullanim": 0, "kullanim_yuzde": 0,
+        "yaklasan_odeme": 0,
+    }
+    bugun = date.today()
+    for it in items:
+        kpi["toplam_kart"] += 1
+        if it.get("Aktif") == 1:
+            kpi["aktif_kart"] += 1
+            limit = it.get("Limit_") or 0
+            kull = it.get("KullanilabilirLimit") or 0
+            kpi["toplam_limit"] += limit
+            kpi["toplam_kullanim"] += (limit - kull)
+            son_g = it.get("SonOdemeGun")
+            if son_g:
+                # Bu ayin son odeme tarihi
+                try:
+                    son_t = date(bugun.year, bugun.month, min(son_g, 28))
+                    if 0 <= (son_t - bugun).days <= 10:
+                        kpi["yaklasan_odeme"] += 1
+                except Exception:
+                    pass
+        else:
+            kpi["pasif_kart"] += 1
+
+    if kpi["toplam_limit"] > 0:
+        kpi["kullanim_yuzde"] = round(100 * kpi["toplam_kullanim"] / kpi["toplam_limit"], 1)
+
+    c.close()
+    return {
+        "items": items,
+        "kpi": kpi,
+        "filtre": f,
+        "entity_set": list(ENTITY_SET),
+        "para_birimi_set": list(PARA_BIRIMI_SET),
+        "kart_tipi_set": list(KART_TIPI_SET),
+    }
+
+
+# ===== TEK KAYIT =====
+def tek_kayit(kart_id, db_path=None):
+    c = _conn(db_path)
+    r = c.execute("SELECT * FROM finans_kredi_karti WHERE Id = ?", (kart_id,)).fetchone()
+    c.close()
+    return dict(r) if r else None
+
+
+# ===== YENI KAYIT =====
+def yeni(data, g_user, db_path=None):
+    clean = _validate(data)
+    kullanici = _kullanici_adi(g_user) or "system"
+
+    c = _conn(db_path)
+    cur = c.execute("""
+        INSERT INTO finans_kredi_karti
+            (entity, KartAd, Banka, KartTipi, KartSahibi, Limit_, KullanilabilirLimit,
+             DonemKesim, SonOdemeGun, ParaBirimi, Son4, Aktif, Notu, KaynakModul,
+             OlusturmaTarih, OlusturanKullanici)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 'MANUEL', ?, ?)
+    """, (clean["entity"], clean["KartAd"], clean["Banka"], clean["KartTipi"],
+          clean["KartSahibi"], clean["Limit_"], clean["KullanilabilirLimit"],
+          clean["DonemKesim"], clean["SonOdemeGun"], clean["ParaBirimi"],
+          clean["Son4"], clean["Notu"], _now(), kullanici))
+    yeni_id = cur.lastrowid
+    c.commit()
+    c.close()
+    return yeni_id
+
+
+# ===== GUNCELLE =====
+def guncelle(kart_id, data, g_user, db_path=None):
+    mevcut = tek_kayit(kart_id, db_path=db_path)
+    if not mevcut:
+        raise ValidationError(f"Kart bulunamadi: Id={kart_id}")
+    if mevcut.get("Aktif") == 0:
+        raise ValidationError("Pasif kart guncellenemez (once aktif et)")
+
+    clean = _validate(data)
+    kullanici = _kullanici_adi(g_user) or "system"
+
+    c = _conn(db_path)
+    c.execute("""
+        UPDATE finans_kredi_karti
+           SET entity = ?, KartAd = ?, Banka = ?, KartTipi = ?, KartSahibi = ?,
+               Limit_ = ?, KullanilabilirLimit = ?, DonemKesim = ?, SonOdemeGun = ?,
+               ParaBirimi = ?, Son4 = ?, Notu = ?,
+               GuncellemeTarih = ?, Guncelleyen = ?
+         WHERE Id = ?
+    """, (clean["entity"], clean["KartAd"], clean["Banka"], clean["KartTipi"],
+          clean["KartSahibi"], clean["Limit_"], clean["KullanilabilirLimit"],
+          clean["DonemKesim"], clean["SonOdemeGun"], clean["ParaBirimi"],
+          clean["Son4"], clean["Notu"], _now(), kullanici, kart_id))
+    c.commit()
+    c.close()
+    return True
+
+
+# ===== IPTAL / PASIF (DELETE yerine) =====
+def iptal(kart_id, g_user, db_path=None):
+    """Aktif=0 set eder. Fiziksel DELETE YOK."""
+    mevcut = tek_kayit(kart_id, db_path=db_path)
+    if not mevcut:
+        raise ValidationError(f"Kart bulunamadi: Id={kart_id}")
+    if mevcut.get("Aktif") == 0:
+        return False  # zaten pasif
+
+    kullanici = _kullanici_adi(g_user) or "system"
+    c = _conn(db_path)
+    c.execute("""
+        UPDATE finans_kredi_karti
+           SET Aktif = 0, GuncellemeTarih = ?, Guncelleyen = ?
+         WHERE Id = ?
+    """, (_now(), kullanici, kart_id))
+    c.commit()
+    c.close()
+    return True

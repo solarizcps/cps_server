@@ -1,0 +1,91 @@
+{
+  "belge_id": 59,
+  "parti_id": 5,
+  "olusma_tarih": "2026-04-24 22:20:54",
+  "parse": {
+    "basarili": false,
+    "durum": "BEKLIYOR_ONAY",
+    "mesaj": "Güven skoru 100/100 — Yüksek güven (test fazı: manuel onay). 1 kalem (FOB: 3875.00 USD) - PI: pi20251218",
+    "kalem_sayisi": 1,
+    "kalemler": [
+      {
+        "tip": "FOB",
+        "kaynak": "TAHMINI",
+        "tutar": 3874.9971,
+        "para_birimi": "USD",
+        "aciklama": "Urun: 251218 (10300 adet) | Teslim: CFR",
+        "cari_ad": "承钰寰球贸易有限公司",
+        "fatura_no": "pi20251218",
+        "not_metni": "Teslim: CFR | Toplam miktar: 10300"
+      }
+    ],
+    "parti_bilgi": {
+      "tedarikci_ad": "承钰寰球贸易有限公司",
+      "para_birimi": "USD",
+      "toplam_cift": 10300,
+      "toplam_tutar": 3875.0,
+      "birim_maliyet": 0.3762
+    },
+    "uyarilar": [
+      "Yukleme tarihi serbest metin icinde bulunamadi",
+      "Teslim sekli: CFR",
+      "1 urun satiri okundu"
+    ],
+    "kaynak_ref": "pi20251218",
+    "dosya_hash": "bd4d39f67132ed8d73d4b380f878c9858459a43e6c3dd300ba4c09a8cf535d0a",
+    "insan_onayi_bekliyor": false,
+    "guven_skoru": 100,
+    "guven_seviyesi": "yuksek",
+    "guven_detay": [
+      {
+        "madde": "Header satiri bulundu (L15)",
+        "durum": "ok",
+        "puan": 0
+      },
+      {
+        "madde": "Kaynak referans: pi20251218",
+        "durum": "ok",
+        "puan": 0
+      },
+      {
+        "madde": "Tedarikci: 承钰寰球贸易有限公司",
+        "durum": "ok",
+        "puan": 0
+      },
+      {
+        "madde": "Para birimi: USD",
+        "durum": "ok",
+        "puan": 0
+      },
+      {
+        "madde": "Matematik kontrolu gecti (miktar × fiyat = tutar)",
+        "durum": "ok",
+        "puan": 0
+      }
+    ],
+    "matematik_ok": true,
+    "ekstra_kalemler": [],
+    "tespit_edilen_kolonlar": {
+      "0": "Kolon item",
+      "1": "Kolon spec",
+      "2": "Kolon unit_price",
+      "3": "Kolon qty",
+      "4": "Kolon unit_of_measure",
+      "5": "Kolon amount_usd"
+    },
+    "mantiksizlik_uyarilari": []
+  },
+  "ek_bilgi": {
+    "dosya_adi": "commercial invoice  by air 26.0202.xls",
+    "belge_tipi": "COMMERCIAL_INVOICE",
+    "dosya_hash": "bd4d39f67132ed8d73d4b380f878c9858459a43e6c3dd300ba4c09a8cf535d0a"
+  },
+  "is_duplicate": true,
+  "existing_ref": {
+    "kaynak_ref": "pi20251218",
+    "onceki_belge_id": 58,
+    "onceki_tarih": "2026-04-24 22:19:43",
+    "onceki_durum": "UYGULANDI",
+    "onceki_kalem_sayisi": 0
+  }
+}

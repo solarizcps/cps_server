@@ -1,0 +1,427 @@
+{% extends "base.html" %}
+
+{% block title %}Cari Odemeler - Finans Konsolu{% endblock %}
+
+{% set active = 'finans' %}
+
+{% block content %}
+<div class="fk-wrap">
+
+  <div class="page-header fk-header">
+    <div class="page-header-baslik">
+      <h1 class="page-title">
+        <span class="fk-icon">CO</span>
+        Cari Odemeler
+      </h1>
+      <div class="page-subtitle">
+        Tedarikci/Musteri cari hareket listesi - FAZ 3B (READ-only, Korgun sync YOK)
+      </div>
+    </div>
+    <div class="fk-konsol-back">
+      <a href="/finans/konsol" class="fk-back-btn">&larr; Konsola Don</a>
+    </div>
+  </div>
+
+  <!-- FILTRELER -->
+  <div class="fk-filter-bar">
+    <div class="fk-filter-grup">
+      <label class="fk-filter-label">Firma:</label>
+      <select id="fk-flt-entity" class="fk-filter-input">
+        <option value="">Hepsi</option>
+        <option value="solariz">Solariz</option>
+        <option value="nexgen">NexGen</option>
+        <option value="pera">Pera</option>
+        {% if can_view_sahsi %}
+        <option value="sahsi">Sahsi</option>
+        {% endif %}
+      </select>
+    </div>
+
+    <div class="fk-filter-grup">
+      <label class="fk-filter-label">Cari:</label>
+      <input type="text" id="fk-flt-cari" class="fk-filter-input" placeholder="Cari ad veya kod..."/>
+    </div>
+
+    <div class="fk-filter-grup">
+      <label class="fk-filter-label">Durum:</label>
+      <select id="fk-flt-durum" class="fk-filter-input">
+        <option value="">Hepsi</option>
+        <option value="BEKLIYOR">Bekliyor</option>
+        <option value="ACIK">Acik</option>
+        <option value="GECIKTI">Gecikti</option>
+        <option value="ODENDI">Odendi</option>
+      </select>
+    </div>
+
+    <div class="fk-filter-grup">
+      <label class="fk-filter-label">Bas Tarih:</label>
+      <input type="date" id="fk-flt-baslangic" class="fk-filter-input"/>
+    </div>
+
+    <div class="fk-filter-grup">
+      <label class="fk-filter-label">Bitis Tarih:</label>
+      <input type="date" id="fk-flt-bitis" class="fk-filter-input"/>
+    </div>
+
+    <div class="fk-filter-grup">
+      <button id="fk-btn-filtre" class="fk-btn-primary">Filtrele</button>
+      <button id="fk-btn-temizle" class="fk-btn-secondary">Temizle</button>
+    </div>
+  </div>
+
+  <!-- KPI -->
+  <div class="fk-kpi-bar">
+    <div class="fk-kpi-card">
+      <div class="fk-kpi-label">Toplam Hareket</div>
+      <div class="fk-kpi-deger" id="fk-kpi-total">{{ kayitlar|length }}</div>
+    </div>
+    <div class="fk-kpi-card">
+      <div class="fk-kpi-label">Toplam Borc</div>
+      <div class="fk-kpi-deger fk-kpi-borc" id="fk-kpi-borc">{{ '{:,.2f}'.format(toplam_borc or 0) }}</div>
+    </div>
+    <div class="fk-kpi-card">
+      <div class="fk-kpi-label">Toplam Alacak</div>
+      <div class="fk-kpi-deger fk-kpi-alacak" id="fk-kpi-alacak">{{ '{:,.2f}'.format(toplam_alacak or 0) }}</div>
+    </div>
+    <div class="fk-kpi-card">
+      <div class="fk-kpi-label">Net Bakiye</div>
+      <div class="fk-kpi-deger" id="fk-kpi-net">{{ '{:,.2f}'.format((toplam_alacak or 0) - (toplam_borc or 0)) }}</div>
+    </div>
+  </div>
+
+  <!-- TABLO -->
+  <div class="card fk-list-card">
+    <div class="card-body" style="padding:0;">
+
+      {% if not kayitlar %}
+      <div class="fk-empty">
+        <div class="fk-empty-icon">--</div>
+        <h3 class="fk-empty-h3">Kayit bulunamadi</h3>
+        <p>Filtre kriterlerini degistirin veya Korgun sync (FAZ 3B sonrasi) bekleyin.</p>
+      </div>
+      {% else %}
+      <table class="fk-table">
+        <thead>
+          <tr>
+            <th>Cari Kod</th>
+            <th>Cari Adi</th>
+            <th>Belge No</th>
+            <th>Vade</th>
+            <th class="fk-th-num">Borc</th>
+            <th class="fk-th-num">Alacak</th>
+            <th>Para</th>
+            <th>Durum</th>
+            <th>Kaynak</th>
+            <th>Entity</th>
+            <th class="fk-th-aksiyon">Detay</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for k in kayitlar %}
+          <tr class="fk-row fk-row-{{ k.durum_class }}">
+            <td><strong>{{ k.CKod }}</strong></td>
+            <td>{{ k.CName }}</td>
+            <td><span class="fk-monospace">{{ k.BelgeNo or '-' }}</span></td>
+            <td>{{ k.VadeTarih or k.Tarih }}</td>
+            <td class="fk-td-num">{{ '{:,.2f}'.format(k.Borc or 0) }}</td>
+            <td class="fk-td-num fk-td-alacak">{{ '{:,.2f}'.format(k.Alacak or 0) }}</td>
+            <td>{{ k.ParaBirimi or 'TRY' }}</td>
+            <td>
+              <span class="fk-durum fk-durum-{{ k.durum_class }}">{{ k.Durum or 'BEKLIYOR' }}</span>
+            </td>
+            <td>
+              <span class="fk-kaynak fk-kaynak-{{ (k.KaynakModul or 'MOCK')|lower }}">{{ k.KaynakModul or 'MOCK' }}</span>
+            </td>
+            <td>{{ k.entity or 'solariz' }}</td>
+            <td class="fk-td-aksiyon">
+              <button class="fk-btn-mini" onclick="fkDetayAc({{ k.Id or 0 }})">Detay</button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+
+    </div>
+  </div>
+
+  <!-- DETAY MODAL -->
+  <div id="fk-detay-modal" class="fk-modal" style="display:none;">
+    <div class="fk-modal-content">
+      <div class="fk-modal-header">
+        <h2>Cari Hareket Detayi</h2>
+        <button class="fk-modal-close" onclick="fkDetayKapat()">&times;</button>
+      </div>
+      <div class="fk-modal-body">
+        <div id="fk-detay-icerik">
+          <p class="fk-muted">Detay verileri FAZ 3B sonrasinda (CRUD) doldurulacak. Su an placeholder.</p>
+          <p>Hareket ID: <strong id="fk-detay-id">-</strong></p>
+        </div>
+      </div>
+      <div class="fk-modal-footer">
+        <button class="fk-btn-secondary" onclick="fkDetayKapat()">Kapat</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<style>
+/* === FAZ 3B - Cari Odemeler - scoped fk- prefix === */
+.fk-wrap { padding:0; }
+.fk-header { display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:12px; }
+.fk-icon { display:inline-block; background:#d4a52f; color:#1a1d2e; font-weight:700; font-size:13px; padding:4px 8px; border-radius:4px; margin-right:8px; }
+.fk-back-btn {
+  display:inline-block;
+  padding:6px 12px;
+  background:transparent;
+  color:#6b7280;
+  border:1px solid #e8eaf0;
+  border-radius:4px;
+  font-size:12px;
+  font-weight:600;
+  text-decoration:none;
+  transition:all 0.15s;
+}
+.fk-back-btn:hover { background:#fef9c3; color:#1a1d2e; border-color:#d4a52f; }
+
+.fk-filter-bar {
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));
+  gap:10px;
+  padding:14px;
+  background:#f8f9fc;
+  border:1px solid #e8eaf0;
+  border-radius:6px;
+  margin-top:16px;
+}
+.fk-filter-grup { display:flex; flex-direction:column; gap:4px; }
+.fk-filter-label { font-size:11px; color:#6b7280; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; }
+.fk-filter-input {
+  padding:7px 10px;
+  border:1px solid #e8eaf0;
+  border-radius:4px;
+  background:#fff;
+  font-size:13px;
+  color:#1a1d2e;
+}
+.fk-filter-input:focus { border-color:#d4a52f; outline:none; box-shadow:0 0 0 2px rgba(212,165,47,0.2); }
+.fk-btn-primary {
+  padding:7px 16px;
+  background:#d4a52f;
+  color:#1a1d2e;
+  border:none;
+  border-radius:4px;
+  font-weight:700;
+  font-size:13px;
+  cursor:pointer;
+  transition:background 0.15s;
+}
+.fk-btn-primary:hover { background:#b8902a; }
+.fk-btn-secondary {
+  padding:7px 16px;
+  background:transparent;
+  color:#6b7280;
+  border:1px solid #e8eaf0;
+  border-radius:4px;
+  font-weight:600;
+  font-size:12px;
+  cursor:pointer;
+}
+.fk-btn-secondary:hover { background:#f8f9fc; }
+.fk-btn-mini {
+  padding:4px 10px;
+  background:transparent;
+  border:1px solid #d4a52f;
+  color:#d4a52f;
+  border-radius:3px;
+  font-size:11px;
+  font-weight:600;
+  cursor:pointer;
+}
+.fk-btn-mini:hover { background:#d4a52f; color:#1a1d2e; }
+
+.fk-kpi-bar { display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; margin-top:16px; }
+@media (max-width:760px) { .fk-kpi-bar { grid-template-columns:repeat(2, 1fr); } }
+.fk-kpi-card {
+  background:#fff;
+  border:1px solid #e8eaf0;
+  border-left:4px solid #d4a52f;
+  border-radius:6px;
+  padding:12px 14px;
+}
+.fk-kpi-label { font-size:11px; color:#6b7280; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; }
+.fk-kpi-deger { font-size:20px; font-weight:700; color:#1a1d2e; margin-top:4px; }
+.fk-kpi-borc { color:#dc2626; }
+.fk-kpi-alacak { color:#16a34a; }
+
+.fk-list-card { margin-top:16px; }
+.fk-table { width:100%; border-collapse:collapse; font-size:13px; }
+.fk-table th {
+  background:#f8f9fc;
+  padding:10px 12px;
+  text-align:left;
+  font-size:11px;
+  font-weight:700;
+  color:#6b7280;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  border-bottom:2px solid #e8eaf0;
+}
+.fk-th-num { text-align:right; }
+.fk-th-aksiyon { text-align:center; }
+.fk-table td { padding:10px 12px; border-bottom:1px solid #f1f3f6; color:#1a1d2e; }
+.fk-td-num { text-align:right; font-variant-numeric:tabular-nums; }
+.fk-td-alacak { color:#16a34a; font-weight:600; }
+.fk-td-aksiyon { text-align:center; }
+.fk-row:hover { background:#fef9c3; }
+.fk-monospace { font-family:'Courier New', monospace; font-size:12px; }
+
+.fk-durum {
+  display:inline-block;
+  padding:2px 8px;
+  border-radius:3px;
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:0.5px;
+}
+.fk-durum-bekliyor { background:#dbeafe; color:#2563eb; }
+.fk-durum-acik     { background:#fef3c7; color:#92400e; }
+.fk-durum-gecikti  { background:#fee2e2; color:#dc2626; }
+.fk-durum-odendi   { background:#dcfce7; color:#16a34a; }
+
+.fk-kaynak {
+  display:inline-block;
+  padding:2px 8px;
+  border-radius:3px;
+  font-size:10px;
+  font-weight:600;
+}
+.fk-kaynak-mock    { background:#e0e7ff; color:#4338ca; }
+.fk-kaynak-korgun  { background:#fef9c3; color:#854d0e; }
+.fk-kaynak-manuel  { background:#dcfce7; color:#166534; }
+.fk-kaynak-bridge  { background:#fce7f3; color:#9d174d; }
+
+.fk-empty { text-align:center; padding:48px 16px; }
+.fk-empty-icon {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:48px;
+  height:48px;
+  background:#fef9c3;
+  border:2px solid #d4a52f;
+  border-radius:50%;
+  font-weight:700;
+  font-size:18px;
+  color:#d4a52f;
+  margin-bottom:12px;
+}
+.fk-empty-h3 { font-size:16px; font-weight:700; color:#1a1d2e; margin-bottom:6px; }
+.fk-empty p { color:#6b7280; font-size:13px; }
+
+.fk-modal {
+  position:fixed; top:0; left:0; right:0; bottom:0;
+  background:rgba(0,0,0,0.5);
+  z-index:9999;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.fk-modal-content {
+  background:#fff;
+  border-radius:8px;
+  max-width:600px;
+  width:90%;
+  max-height:85vh;
+  overflow:auto;
+  border-top:4px solid #d4a52f;
+}
+.fk-modal-header { padding:16px; border-bottom:1px solid #e8eaf0; display:flex; justify-content:space-between; align-items:center; }
+.fk-modal-header h2 { font-size:18px; font-weight:700; color:#1a1d2e; margin:0; }
+.fk-modal-close { background:none; border:none; font-size:24px; color:#6b7280; cursor:pointer; padding:0; width:32px; height:32px; }
+.fk-modal-body { padding:16px; }
+.fk-modal-footer { padding:12px 16px; border-top:1px solid #e8eaf0; text-align:right; }
+.fk-muted { color:#9ca3af; font-style:italic; font-size:12px; }
+</style>
+
+<script>
+(function(){
+  // Filtre - sadece client-side, sayfa yenilemez
+  var btnFiltre = document.getElementById('fk-btn-filtre');
+  var btnTemizle = document.getElementById('fk-btn-temizle');
+
+  function filtreUygula() {
+    var entity = document.getElementById('fk-flt-entity').value.toLowerCase();
+    var cari = document.getElementById('fk-flt-cari').value.toLowerCase();
+    var durum = document.getElementById('fk-flt-durum').value;
+    var bas = document.getElementById('fk-flt-baslangic').value;
+    var bit = document.getElementById('fk-flt-bitis').value;
+
+    var rows = document.querySelectorAll('.fk-row');
+    var visible = 0, borc = 0, alacak = 0;
+
+    rows.forEach(function(r){
+      var cells = r.querySelectorAll('td');
+      var rCKod = cells[0].textContent.trim().toLowerCase();
+      var rCName = cells[1].textContent.trim().toLowerCase();
+      var rVade = cells[3].textContent.trim();
+      var rBorc = parseFloat(cells[4].textContent.replace(/[^\d.-]/g, '')) || 0;
+      var rAlacak = parseFloat(cells[5].textContent.replace(/[^\d.-]/g, '')) || 0;
+      var rDurum = cells[7].textContent.trim().toUpperCase();
+      var rEntity = cells[9].textContent.trim().toLowerCase();
+
+      var goster = true;
+      if (entity && rEntity !== entity) goster = false;
+      if (cari && rCKod.indexOf(cari) === -1 && rCName.indexOf(cari) === -1) goster = false;
+      if (durum && rDurum.indexOf(durum) === -1) goster = false;
+      if (bas && rVade < bas) goster = false;
+      if (bit && rVade > bit) goster = false;
+
+      r.style.display = goster ? '' : 'none';
+      if (goster) {
+        visible++;
+        borc += rBorc;
+        alacak += rAlacak;
+      }
+    });
+
+    document.getElementById('fk-kpi-total').textContent = visible;
+    document.getElementById('fk-kpi-borc').textContent = borc.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2});
+    document.getElementById('fk-kpi-alacak').textContent = alacak.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2});
+    document.getElementById('fk-kpi-net').textContent = (alacak - borc).toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2});
+  }
+
+  function filtreTemizle() {
+    document.getElementById('fk-flt-entity').value = '';
+    document.getElementById('fk-flt-cari').value = '';
+    document.getElementById('fk-flt-durum').value = '';
+    document.getElementById('fk-flt-baslangic').value = '';
+    document.getElementById('fk-flt-bitis').value = '';
+    filtreUygula();
+  }
+
+  if (btnFiltre) btnFiltre.addEventListener('click', filtreUygula);
+  if (btnTemizle) btnTemizle.addEventListener('click', filtreTemizle);
+
+  // Enter ile filtrele
+  document.querySelectorAll('.fk-filter-input').forEach(function(inp){
+    inp.addEventListener('keypress', function(e){ if (e.key === 'Enter') filtreUygula(); });
+  });
+
+  // Detay modal
+  window.fkDetayAc = function(id) {
+    document.getElementById('fk-detay-id').textContent = id;
+    document.getElementById('fk-detay-modal').style.display = 'flex';
+  };
+  window.fkDetayKapat = function() {
+    document.getElementById('fk-detay-modal').style.display = 'none';
+  };
+
+  // Modal disina tikla = kapat
+  document.getElementById('fk-detay-modal').addEventListener('click', function(e){
+    if (e.target === this) fkDetayKapat();
+  });
+})();
+</script>
+{% endblock %}

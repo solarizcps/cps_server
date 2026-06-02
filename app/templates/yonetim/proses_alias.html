@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+{% block title %}Proses Alias — Solariz CPS{% endblock %}
+
+{% block content %}
+
+<style>
+  .pa-hdr {
+    display:flex; justify-content:space-between; align-items:flex-end;
+    margin-bottom:14px; gap:14px;
+  }
+  .pa-title { font-size:20px; font-weight:600; color:var(--text1); }
+  .pa-sub { font-size:13px; color:var(--text3); margin-top:4px; }
+
+  .pa-kpis {
+    display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; margin-bottom:14px;
+  }
+  .pa-kpi {
+    background:var(--card); border:1px solid var(--border);
+    border-radius:8px; padding:14px 16px;
+  }
+  .pa-kpi-lbl {
+    font-size:11px; color:var(--text3); text-transform:uppercase;
+    letter-spacing:.5px; margin-bottom:6px;
+  }
+  .pa-kpi-val { font-size:24px; font-weight:600; color:var(--text1); }
+  .pa-kpi.ok .pa-kpi-val { color:#16a34a; }
+  .pa-kpi.warn .pa-kpi-val { color:#ca8a04; }
+
+  .pa-search {
+    background:var(--card); border:1px solid var(--border);
+    border-radius:8px; padding:10px 14px; margin-bottom:10px;
+    display:flex; gap:10px; align-items:center;
+  }
+  .pa-search input {
+    flex:1; padding:7px 10px; border:1px solid var(--border);
+    border-radius:6px; font-size:13px;
+  }
+
+  .pa-tbl-wrap {
+    background:var(--card); border:1px solid var(--border);
+    border-radius:8px; overflow:hidden;
+  }
+  .pa-tbl { width:100%; border-collapse:collapse; font-size:13px; }
+  .pa-tbl thead th {
+    background:var(--bg2); color:var(--text2);
+    padding:9px 12px; text-align:left; font-weight:600;
+    font-size:11px; text-transform:uppercase; letter-spacing:.5px;
+    border-bottom:1px solid var(--border);
+  }
+  .pa-tbl tbody td {
+    padding:9px 12px; border-bottom:1px solid var(--border);
+    color:var(--text1);
+  }
+  .pa-tbl tbody tr:hover td { background:var(--hover); }
+  .pa-tbl tbody tr.row-ok td { background:rgba(22,163,74,.06); }
+  .pa-tbl tbody tr.row-warn td { background:rgba(202,138,4,.06); }
+  .pa-tbl tbody tr.row-ok:hover td { background:rgba(22,163,74,.12); }
+  .pa-tbl tbody tr.row-warn:hover td { background:rgba(202,138,4,.12); }
+
+  .pa-badge {
+    display:inline-block; padding:2px 8px; border-radius:10px;
+    font-size:11px; font-weight:600;
+  }
+  .pa-badge.ok { background:#dcfce7; color:#166534; }
+  .pa-badge.warn { background:#fef3c7; color:#92400e; }
+
+  .pa-kod {
+    font-family:'Courier New',monospace; font-weight:600;
+    background:var(--bg2); padding:2px 6px; border-radius:3px;
+  }
+
+  .pa-msg {
+    padding:14px; text-align:center; color:var(--text3);
+    font-size:13px;
+  }
+</style>
+
+<div class="pa-hdr">
+  <div>
+    <div class="pa-title">📋 Proses Alias Yönetimi</div>
+    <div class="pa-sub">Saha varyantları → standart kod eşleşmesi (D6.0.1 - read-only görünürlük)</div>
+  </div>
+</div>
+
+<div class="pa-kpis">
+  <div class="pa-kpi">
+    <div class="pa-kpi-lbl">TOPLAM</div>
+    <div class="pa-kpi-val" id="kpi_toplam">—</div>
+  </div>
+  <div class="pa-kpi ok">
+    <div class="pa-kpi-lbl">ONAYLI</div>
+    <div class="pa-kpi-val" id="kpi_onayli">—</div>
+  </div>
+  <div class="pa-kpi warn">
+    <div class="pa-kpi-lbl">BEKLEYEN</div>
+    <div class="pa-kpi-val" id="kpi_bekleyen">—</div>
+  </div>
+</div>
+
+<div class="pa-search">
+  <span style="font-size:13px; color:var(--text3);">🔍</span>
+  <input id="pa_filter" type="text" placeholder="saha adı, standart kod veya kategori ara...">
+  <button id="pa_refresh" style="padding:7px 12px; background:var(--sol-dark); color:#fff; border:none; border-radius:6px; font-size:12px; cursor:pointer;">↻ Yenile</button>
+</div>
+
+<div class="pa-tbl-wrap">
+  <table class="pa-tbl">
+    <thead>
+      <tr>
+        <th style="width:30%;">SAHA ADI</th>
+        <th style="width:10%;">KOD</th>
+        <th style="width:20%;">STANDART ADI</th>
+        <th style="width:10%;">KATEGORİ</th>
+        <th style="width:8%;">GÜVEN</th>
+        <th style="width:12%;">KAYNAK</th>
+        <th style="width:10%;">DURUM</th>
+      </tr>
+    </thead>
+    <tbody id="pa_tbody">
+      <tr><td colspan="7" class="pa-msg">Yükleniyor...</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+(function() {
+  const $tbody = document.getElementById('pa_tbody');
+  const $kpiToplam = document.getElementById('kpi_toplam');
+  const $kpiOnayli = document.getElementById('kpi_onayli');
+  const $kpiBekleyen = document.getElementById('kpi_bekleyen');
+  const $filter = document.getElementById('pa_filter');
+  const $refresh = document.getElementById('pa_refresh');
+
+  let _aliaslar = [];
+
+  function renderRows(items) {
+    if (!items || items.length === 0) {
+      $tbody.innerHTML = '<tr><td colspan="7" class="pa-msg">Kayıt yok</td></tr>';
+      return;
+    }
+    const html = items.map(a => {
+      const rowCls = a.onayli_mi ? 'row-ok' : 'row-warn';
+      const badge = a.onayli_mi
+        ? '<span class="pa-badge ok">ONAYLI</span>'
+        : '<span class="pa-badge warn">BEKLEYEN</span>';
+      const esc = s => String(s||'').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+      return `<tr class="${rowCls}">
+        <td>${esc(a.saha_adi)}</td>
+        <td><span class="pa-kod">${esc(a.standart_kod)}</span></td>
+        <td>${esc(a.standart_adi)}</td>
+        <td>${esc(a.kategori)}</td>
+        <td>${a.guven_skoru}</td>
+        <td style="font-size:11px; color:var(--text3);">${esc(a.karar_kaynak)}</td>
+        <td>${badge}</td>
+      </tr>`;
+    }).join('');
+    $tbody.innerHTML = html;
+  }
+
+  function applyFilter() {
+    const q = ($filter.value || '').toLowerCase().trim();
+    if (!q) {
+      renderRows(_aliaslar);
+      return;
+    }
+    const filtered = _aliaslar.filter(a =>
+      (a.saha_adi||'').toLowerCase().includes(q) ||
+      (a.standart_kod||'').toLowerCase().includes(q) ||
+      (a.standart_adi||'').toLowerCase().includes(q) ||
+      (a.kategori||'').toLowerCase().includes(q)
+    );
+    renderRows(filtered);
+  }
+
+  async function load() {
+    $tbody.innerHTML = '<tr><td colspan="7" class="pa-msg">Yükleniyor...</td></tr>';
+    try {
+      const res = await fetch('/yonetim/proses-alias/liste', { credentials: 'same-origin' });
+      const data = await res.json();
+      if (!data.ok) {
+        $tbody.innerHTML = `<tr><td colspan="7" class="pa-msg" style="color:#dc2626;">Hata: ${data.mesaj || 'bilinmeyen'}</td></tr>`;
+        return;
+      }
+      _aliaslar = data.aliaslar || [];
+      $kpiToplam.textContent = data.toplam || 0;
+      $kpiOnayli.textContent = data.onayli || 0;
+      $kpiBekleyen.textContent = data.bekleyen || 0;
+      applyFilter();
+    } catch (e) {
+      $tbody.innerHTML = `<tr><td colspan="7" class="pa-msg" style="color:#dc2626;">Network hatası: ${e.message}</td></tr>`;
+    }
+  }
+
+  $filter.addEventListener('input', applyFilter);
+  $refresh.addEventListener('click', load);
+
+  load();
+})();
+</script>
+
+{% endblock %}

@@ -1,0 +1,262 @@
+# -*- coding: utf-8 -*-
+"""CPS DEV - Enjeksiyon Takip Routes (FAZ 6.6)
+
+Degisiklik (F6.6):
+  - Ust panel sade 4 makine kart, secili makinenin A/B paneli alta acilir
+  - Querystring ?makine=N ile secili makine korunur
+  - Demo slot state korundu (F7'de DB)
+"""
+from datetime import datetime
+from flask import (Blueprint, render_template, redirect, url_for,
+                   request, session, abort, jsonify)
+from functools import wraps
+
+
+enjeksiyon_bp = Blueprint(
+    'enjeksiyon', __name__,
+    url_prefix='/enjeksiyon',
+    template_folder='../../templates/enjeksiyon'
+)
+
+
+SAATLER = {
+    'gunduz': [(7,8),(8,9),(9,10),(10,11),(11,12),(12,13),(13,14),(14,15),(15,16),(16,17)],
+    'gece':   [(17,18),(18,19),(19,20),(20,21),(21,22),(22,23),(23,0),(0,1),(1,2),(2,3),(3,4),(4,5),(5,6),(6,7)],
+    'mesai':  [],
+}
+
+VARDIYA_METIN = {
+    'gunduz': 'GUNDUZ VARDIYASI (07:00 - 17:00)',
+    'gece':   'GECE VARDIYASI (17:00 - 07:00)',
+    'mesai':  'MESAI',
+}
+
+
+def vardiya_otomatik(now=None):
+    h = (now or datetime.now()).hour
+    return 'gunduz' if 7 <= h < 17 else 'gece'
+
+
+def _yonetim_yetkisi():
+    u = session.get('kullanici')
+    if not u:
+        return False
+    if u.get('KullaniciAdi') == 'admin':
+        return True
+    if u.get('RolAd') in ('Yönetim', 'Planlama'):
+        return True
+    return False
+
+
+def yonetim_yetkili(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get('kullanici'):
+            return redirect(url_for('auth.login', next=request.path))
+        if not _yonetim_yetkisi():
+            abort(403)
+        return f(*args, **kwargs)
+    return wrapper
+
+
+def saha_yetkili(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get('kullanici'):
+            return redirect(url_for('auth.login', next=request.path))
+        return f(*args, **kwargs)
+    return wrapper
+
+
+# F6.6 demo: aktif slot key listesi (F7'de enj_istasyon_durumu'ndan gelecek)
+F66_DEMO_DURUM = {
+    1: {'aktif': True,  'aktif_slot_keys': ['1A','1B','2A','2B','3A','4A']},
+    2: {'aktif': True,  'aktif_slot_keys': ['1A','1B','2A']},
+    3: {'aktif': False, 'aktif_slot_keys': []},
+    4: {'aktif': False, 'aktif_slot_keys': []},
+}
+
+
+def _makineleri_zenginlestir(rows):
+    for m in rows:
+        d = F66_DEMO_DURUM.get(m['id'], {'aktif': False, 'aktif_slot_keys': []})
+        m['aktif'] = d['aktif']
+        m['aktif_slot_keys'] = d['aktif_slot_keys']
+    return rows
+
+
+@enjeksiyon_bp.route('/')
+@yonetim_yetkili
+def yonetim_panel():
+    from modules.enjeksiyon.db import makine_listele, aksama_sebep_listele
+
+    vardiya = request.args.get('vardiya', '').strip()
+    if vardiya not in SAATLER:
+        vardiya = vardiya_otomatik()
+
+    makineler = _makineleri_zenginlestir(makine_listele())
+
+    try:
+        secili_makine_id = int(request.args.get('makine', ''))
+    except ValueError:
+        secili_makine_id = makineler[0]['id'] if makineler else None
+
+    valid_ids = [m['id'] for m in makineler]
+    if secili_makine_id not in valid_ids:
+        secili_makine_id = valid_ids[0] if valid_ids else None
+
+    return render_template(
+        'enjeksiyon/yonetim.html',
+        makineler=makineler,
+        secili_makine_id=secili_makine_id,
+        aksama_sebepleri=aksama_sebep_listele(),
+        bugun=datetime.now().strftime('%d.%m.%Y'),
+        vardiya=vardiya,
+        vardiya_metin=VARDIYA_METIN.get(vardiya, vardiya),
+        saatler=SAATLER[vardiya],
+    )
+
+
+@enjeksiyon_bp.route('/saha')
+@saha_yetkili
+def saha_panel():
+    return render_template('enjeksiyon/saha.html')
+
+
+@enjeksiyon_bp.route('/api/saglik')
+def api_saglik():
+    return jsonify({'durum': 'ok', 'modul': 'enjeksiyon', 'faz': 'F6.6'})
+
+
+@enjeksiyon_bp.route('/api/makine')
+@yonetim_yetkili
+def api_makine_listele():
+    from modules.enjeksiyon.db import makine_listele
+    rows = makine_listele()
+    return jsonify({'durum': 'ok', 'kayit_sayisi': len(rows), 'veri': rows})
+
+
+@enjeksiyon_bp.route('/api/aksama-sebep')
+@yonetim_yetkili
+def api_aksama_sebep_listele():
+    from modules.enjeksiyon.db import aksama_sebep_listele
+    rows = aksama_sebep_listele()
+    return jsonify({'durum': 'ok', 'kayit_sayisi': len(rows), 'veri': rows})
+
+# === BEGIN: ENJ_F25_API_KALIP ===
+# F25.1 - Kalip Master API (dropdown listesi + detay)
+# Tarih: 20260514
+
+from flask import jsonify
+import sqlite3 as _sqlite3
+
+
+def _enj_kalip_db_path():
+    # CPS standart DB yolu - app/mock_data.db
+    import os
+    base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    return os.path.join(base, 'mock_data.db')
+
+
+def _enj_kalip_row_to_dict(row):
+    return {
+        'id': row[0],
+        'kalip_kod': row[1],
+        'kalip_tipi': row[2],
+        'model_kod': row[3],
+        'model_ad': row[4],
+        'asorti': row[5],
+        'kalip_basi_cift': row[6],
+        'varsayilan_bagli_kalip': row[7],
+        'renk': row[8],
+        'gorsel_dosya': row[9],
+        'aktif': row[10],
+    }
+
+
+@enjeksiyon_bp.route('/api/kalip-listesi', methods=['GET'])
+def enj_api_kalip_listesi():
+    """
+    Dropdown icin GOVDE kayitlarini liste halinde dondurur.
+    Sadece aktif=1 ve kalip_tipi='GOVDE'.
+    Display formati: 'TR-23B16 / CRX-LCW Bebe (22-28)'
+    """
+    try:
+        con = _sqlite3.connect(_enj_kalip_db_path())
+        cur = con.cursor()
+        cur.execute('''
+            SELECT id, kalip_kod, kalip_tipi, model_kod, model_ad, asorti,
+                   kalip_basi_cift, varsayilan_bagli_kalip, renk, gorsel_dosya, aktif
+            FROM enj_kalip
+            WHERE aktif = 1 AND kalip_tipi = 'GOVDE'
+            ORDER BY kalip_kod, model_kod, asorti
+        ''')
+        rows = cur.fetchall()
+        con.close()
+
+        kayitlar = []
+        for r in rows:
+            d = _enj_kalip_row_to_dict(r)
+            ad = d['model_ad'] or d['model_kod']
+            asorti_str = f" ({d['asorti']})" if d['asorti'] else ''
+            d['display'] = f"{d['kalip_kod']} / {ad}{asorti_str}"
+            kayitlar.append(d)
+
+        return jsonify({'ok': True, 'sayi': len(kayitlar), 'kayitlar': kayitlar})
+    except Exception as e:
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+
+
+@enjeksiyon_bp.route('/api/kalip/<int:kalip_id>', methods=['GET'])
+def enj_api_kalip_detay(kalip_id):
+    """
+    Verilen GOVDE id'sinin detayini + eslesen ATKI'yi (varsa) dondurur.
+    state: 'govde-atki' veya 'govde-only'
+    """
+    try:
+        con = _sqlite3.connect(_enj_kalip_db_path())
+        cur = con.cursor()
+
+        cur.execute('''
+            SELECT id, kalip_kod, kalip_tipi, model_kod, model_ad, asorti,
+                   kalip_basi_cift, varsayilan_bagli_kalip, renk, gorsel_dosya, aktif
+            FROM enj_kalip
+            WHERE id = ? AND aktif = 1
+        ''', (kalip_id,))
+        secilen_row = cur.fetchone()
+
+        if not secilen_row:
+            con.close()
+            return jsonify({'ok': False, 'hata': 'Kayit bulunamadi'}), 404
+
+        secilen = _enj_kalip_row_to_dict(secilen_row)
+
+        if secilen['kalip_tipi'] != 'GOVDE':
+            con.close()
+            return jsonify({'ok': False, 'hata': 'GOVDE kaydi bekleniyor, gelen: ' + str(secilen['kalip_tipi'])}), 400
+
+        # Eslesen ATKI'yi bul: ayni model_kod + ayni asorti + kalip_tipi='ATKI'
+        cur.execute('''
+            SELECT id, kalip_kod, kalip_tipi, model_kod, model_ad, asorti,
+                   kalip_basi_cift, varsayilan_bagli_kalip, renk, gorsel_dosya, aktif
+            FROM enj_kalip
+            WHERE model_kod = ? AND aktif = 1 AND kalip_tipi = 'ATKI'
+                  AND (asorti = ? OR (asorti IS NULL AND ? IS NULL))
+            LIMIT 1
+        ''', (secilen['model_kod'], secilen['asorti'], secilen['asorti']))
+        atki_row = cur.fetchone()
+        con.close()
+
+        atki = _enj_kalip_row_to_dict(atki_row) if atki_row else None
+        state = 'govde-atki' if atki else 'govde-only'
+
+        return jsonify({
+            'ok': True,
+            'state': state,
+            'secilen': secilen,
+            'govde': secilen,
+            'atki': atki,
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+# === END: ENJ_F25_API_KALIP ===

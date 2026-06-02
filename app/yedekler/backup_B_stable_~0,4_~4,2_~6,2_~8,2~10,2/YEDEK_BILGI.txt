@@ -1,0 +1,13 @@
+CPS DEV Stabil Yedek
+====================
+Tarih  : ~0,4-~4,2-~6,2 ~8,2:~10,2
+Etiket : B_stable
+
+B Asamasi Sonrasi — Manuel Satir Ekleme Ozelligi Calisir Durumda
+- Bilir / tanimayan faturalar ONERI BEKLIYOR modunda acilir
+- "+ Manuel Satir Ekle" butonu ile kalem eklenebilir
+- Validation: aciklama bos olamaz / tutar 0'dan buyuk olmali
+- Sil (X) butonu calisir
+- Guvenlik filtresi (10M+ TRY / 1M+ USD) regresyon testleri gecti
+
+A Asamasi 8/8 + B Asamasi 5/5 test gecti.

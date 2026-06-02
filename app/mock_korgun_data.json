@@ -1,0 +1,348 @@
+{
+  "siparisler": [
+    {
+      "sip_no": 33637,
+      "musteri": "Lc Waikiki",
+      "cari_kod": "120.01.033",
+      "model_kod": "CRX-71032-LCW",
+      "model_adi": "CRX-71032 KAUCUK SARGILI GARSON TERLIK EVA - LCW GS 33-38",
+      "hedef": 7000,
+      "termin": "2023-11-10",
+      "belge_no": "GS LCW 33-38 KAUCUK BEYAZ",
+      "_kaynak": "Korgun gercek veri 30.04.2026 - 15+15+15 emir, MAMUL Temizleme'de takildi",
+      "emirler": [
+        {"emir_no": 110570, "tip": "M", "kategori": "MAMUL", "yaz_say": 480, "parent_emir": null, "model_kod": "CRX-71032-LCW",
+         "prosesler": [
+           {"proses_kod": "28", "proses_adi": "Monta Baslayacak", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "30", "proses_adi": "Monta", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "35", "proses_adi": "Temizleme", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110571, "tip": "M", "kategori": "MAMUL", "yaz_say": 480, "parent_emir": null, "model_kod": "CRX-71032-LCW",
+         "prosesler": [
+           {"proses_kod": "28", "proses_adi": "Monta Baslayacak", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "30", "proses_adi": "Monta", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "35", "proses_adi": "Temizleme", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110572, "tip": "M", "kategori": "MAMUL", "yaz_say": 480, "parent_emir": null, "model_kod": "CRX-71032-LCW",
+         "prosesler": [
+           {"proses_kod": "28", "proses_adi": "Monta Baslayacak", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "30", "proses_adi": "Monta", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "35", "proses_adi": "Temizleme", "biten": 0, "baslayacak": 480, "devam": 0}
+         ]},
+        {"emir_no": 110573, "tip": "M", "kategori": "MAMUL", "yaz_say": 480, "parent_emir": null, "model_kod": "CRX-71032-LCW",
+         "prosesler": [
+           {"proses_kod": "28", "proses_adi": "Monta Baslayacak", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "30", "proses_adi": "Monta", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "35", "proses_adi": "Temizleme", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110574, "tip": "M", "kategori": "MAMUL", "yaz_say": 480, "parent_emir": null, "model_kod": "CRX-71032-LCW",
+         "prosesler": [
+           {"proses_kod": "28", "proses_adi": "Monta Baslayacak", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "30", "proses_adi": "Monta", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "35", "proses_adi": "Temizleme", "biten": 0, "baslayacak": 480, "devam": 0}
+         ]},
+        {"emir_no": 110575, "tip": "M", "kategori": "MAMUL", "yaz_say": 480, "parent_emir": null, "model_kod": "CRX-71032-LCW",
+         "prosesler": [
+           {"proses_kod": "28", "proses_adi": "Monta Baslayacak", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "30", "proses_adi": "Monta", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "35", "proses_adi": "Temizleme", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110576, "tip": "M", "kategori": "MAMUL", "yaz_say": 480, "parent_emir": null, "model_kod": "CRX-71032-LCW",
+         "prosesler": [
+           {"proses_kod": "28", "proses_adi": "Monta Baslayacak", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "30", "proses_adi": "Monta", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "35", "proses_adi": "Temizleme", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110577, "tip": "M", "kategori": "MAMUL", "yaz_say": 480, "parent_emir": null, "model_kod": "CRX-71032-LCW",
+         "prosesler": [
+           {"proses_kod": "28", "proses_adi": "Monta Baslayacak", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "30", "proses_adi": "Monta", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "35", "proses_adi": "Temizleme", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110578, "tip": "M", "kategori": "MAMUL", "yaz_say": 480, "parent_emir": null, "model_kod": "CRX-71032-LCW",
+         "prosesler": [
+           {"proses_kod": "28", "proses_adi": "Monta Baslayacak", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "30", "proses_adi": "Monta", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "35", "proses_adi": "Temizleme", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110579, "tip": "M", "kategori": "MAMUL", "yaz_say": 480, "parent_emir": null, "model_kod": "CRX-71032-LCW",
+         "prosesler": [
+           {"proses_kod": "28", "proses_adi": "Monta Baslayacak", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "30", "proses_adi": "Monta", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "35", "proses_adi": "Temizleme", "biten": 0, "baslayacak": 480, "devam": 0}
+         ]},
+        {"emir_no": 110580, "tip": "M", "kategori": "MAMUL", "yaz_say": 480, "parent_emir": null, "model_kod": "CRX-71032-LCW",
+         "prosesler": [
+           {"proses_kod": "28", "proses_adi": "Monta Baslayacak", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "30", "proses_adi": "Monta", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "35", "proses_adi": "Temizleme", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110581, "tip": "M", "kategori": "MAMUL", "yaz_say": 480, "parent_emir": null, "model_kod": "CRX-71032-LCW",
+         "prosesler": [
+           {"proses_kod": "28", "proses_adi": "Monta Baslayacak", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "30", "proses_adi": "Monta", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "35", "proses_adi": "Temizleme", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110582, "tip": "M", "kategori": "MAMUL", "yaz_say": 480, "parent_emir": null, "model_kod": "CRX-71032-LCW",
+         "prosesler": [
+           {"proses_kod": "28", "proses_adi": "Monta Baslayacak", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "30", "proses_adi": "Monta", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "35", "proses_adi": "Temizleme", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110583, "tip": "M", "kategori": "MAMUL", "yaz_say": 480, "parent_emir": null, "model_kod": "CRX-71032-LCW",
+         "prosesler": [
+           {"proses_kod": "28", "proses_adi": "Monta Baslayacak", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "30", "proses_adi": "Monta", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "35", "proses_adi": "Temizleme", "biten": 0, "baslayacak": 480, "devam": 0}
+         ]},
+        {"emir_no": 110584, "tip": "M", "kategori": "MAMUL", "yaz_say": 280, "parent_emir": null, "model_kod": "CRX-71032-LCW",
+         "prosesler": [
+           {"proses_kod": "28", "proses_adi": "Monta Baslayacak", "biten": 280, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "30", "proses_adi": "Monta", "biten": 280, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "35", "proses_adi": "Temizleme", "biten": 280, "baslayacak": 0, "devam": 0}
+         ]},
+
+        {"emir_no": 110585, "tip": "Y", "kategori": "GOVDE", "yaz_say": 480, "parent_emir": 110570, "model_kod": "EVA CRX-001",
+         "prosesler": [
+           {"proses_kod": "26", "proses_adi": "Enjeksiyon", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "50", "proses_adi": "Eva Hazir", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110587, "tip": "Y", "kategori": "GOVDE", "yaz_say": 480, "parent_emir": 110571, "model_kod": "EVA CRX-001",
+         "prosesler": [
+           {"proses_kod": "26", "proses_adi": "Enjeksiyon", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "50", "proses_adi": "Eva Hazir", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110589, "tip": "Y", "kategori": "GOVDE", "yaz_say": 480, "parent_emir": 110572, "model_kod": "EVA CRX-001",
+         "prosesler": [
+           {"proses_kod": "26", "proses_adi": "Enjeksiyon", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "50", "proses_adi": "Eva Hazir", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110591, "tip": "Y", "kategori": "GOVDE", "yaz_say": 480, "parent_emir": 110573, "model_kod": "EVA CRX-001",
+         "prosesler": [
+           {"proses_kod": "26", "proses_adi": "Enjeksiyon", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "50", "proses_adi": "Eva Hazir", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110593, "tip": "Y", "kategori": "GOVDE", "yaz_say": 480, "parent_emir": 110574, "model_kod": "EVA CRX-001",
+         "prosesler": [
+           {"proses_kod": "26", "proses_adi": "Enjeksiyon", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "50", "proses_adi": "Eva Hazir", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110595, "tip": "Y", "kategori": "GOVDE", "yaz_say": 480, "parent_emir": 110575, "model_kod": "EVA CRX-001",
+         "prosesler": [
+           {"proses_kod": "26", "proses_adi": "Enjeksiyon", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "50", "proses_adi": "Eva Hazir", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110597, "tip": "Y", "kategori": "GOVDE", "yaz_say": 480, "parent_emir": 110576, "model_kod": "EVA CRX-001",
+         "prosesler": [
+           {"proses_kod": "26", "proses_adi": "Enjeksiyon", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "50", "proses_adi": "Eva Hazir", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110599, "tip": "Y", "kategori": "GOVDE", "yaz_say": 480, "parent_emir": 110577, "model_kod": "EVA CRX-001",
+         "prosesler": [
+           {"proses_kod": "26", "proses_adi": "Enjeksiyon", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "50", "proses_adi": "Eva Hazir", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110601, "tip": "Y", "kategori": "GOVDE", "yaz_say": 480, "parent_emir": 110578, "model_kod": "EVA CRX-001",
+         "prosesler": [
+           {"proses_kod": "26", "proses_adi": "Enjeksiyon", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "50", "proses_adi": "Eva Hazir", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110603, "tip": "Y", "kategori": "GOVDE", "yaz_say": 480, "parent_emir": 110579, "model_kod": "EVA CRX-001",
+         "prosesler": [
+           {"proses_kod": "26", "proses_adi": "Enjeksiyon", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "50", "proses_adi": "Eva Hazir", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110605, "tip": "Y", "kategori": "GOVDE", "yaz_say": 480, "parent_emir": 110580, "model_kod": "EVA CRX-001",
+         "prosesler": [
+           {"proses_kod": "26", "proses_adi": "Enjeksiyon", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "50", "proses_adi": "Eva Hazir", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110607, "tip": "Y", "kategori": "GOVDE", "yaz_say": 480, "parent_emir": 110581, "model_kod": "EVA CRX-001",
+         "prosesler": [
+           {"proses_kod": "26", "proses_adi": "Enjeksiyon", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "50", "proses_adi": "Eva Hazir", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110609, "tip": "Y", "kategori": "GOVDE", "yaz_say": 480, "parent_emir": 110582, "model_kod": "EVA CRX-001",
+         "prosesler": [
+           {"proses_kod": "26", "proses_adi": "Enjeksiyon", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "50", "proses_adi": "Eva Hazir", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110611, "tip": "Y", "kategori": "GOVDE", "yaz_say": 480, "parent_emir": 110583, "model_kod": "EVA CRX-001",
+         "prosesler": [
+           {"proses_kod": "26", "proses_adi": "Enjeksiyon", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "50", "proses_adi": "Eva Hazir", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110613, "tip": "Y", "kategori": "GOVDE", "yaz_say": 280, "parent_emir": 110584, "model_kod": "EVA CRX-001",
+         "prosesler": [
+           {"proses_kod": "26", "proses_adi": "Enjeksiyon", "biten": 280, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "50", "proses_adi": "Eva Hazir", "biten": 280, "baslayacak": 0, "devam": 0}
+         ]},
+
+        {"emir_no": 110586, "tip": "Y", "kategori": "ATKI", "yaz_say": 480, "parent_emir": 110570, "model_kod": "EVA CRX-ATKI",
+         "prosesler": [
+           {"proses_kod": "26", "proses_adi": "Enjeksiyon", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "50", "proses_adi": "Eva Hazir", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110588, "tip": "Y", "kategori": "ATKI", "yaz_say": 480, "parent_emir": 110571, "model_kod": "EVA CRX-ATKI",
+         "prosesler": [
+           {"proses_kod": "26", "proses_adi": "Enjeksiyon", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "50", "proses_adi": "Eva Hazir", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110590, "tip": "Y", "kategori": "ATKI", "yaz_say": 480, "parent_emir": 110572, "model_kod": "EVA CRX-ATKI",
+         "prosesler": [
+           {"proses_kod": "26", "proses_adi": "Enjeksiyon", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "50", "proses_adi": "Eva Hazir", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110592, "tip": "Y", "kategori": "ATKI", "yaz_say": 480, "parent_emir": 110573, "model_kod": "EVA CRX-ATKI",
+         "prosesler": [
+           {"proses_kod": "26", "proses_adi": "Enjeksiyon", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "50", "proses_adi": "Eva Hazir", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110594, "tip": "Y", "kategori": "ATKI", "yaz_say": 480, "parent_emir": 110574, "model_kod": "EVA CRX-ATKI",
+         "prosesler": [
+           {"proses_kod": "26", "proses_adi": "Enjeksiyon", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "50", "proses_adi": "Eva Hazir", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110596, "tip": "Y", "kategori": "ATKI", "yaz_say": 480, "parent_emir": 110575, "model_kod": "EVA CRX-ATKI",
+         "prosesler": [
+           {"proses_kod": "26", "proses_adi": "Enjeksiyon", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "50", "proses_adi": "Eva Hazir", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110598, "tip": "Y", "kategori": "ATKI", "yaz_say": 480, "parent_emir": 110576, "model_kod": "EVA CRX-ATKI",
+         "prosesler": [
+           {"proses_kod": "26", "proses_adi": "Enjeksiyon", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "50", "proses_adi": "Eva Hazir", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110600, "tip": "Y", "kategori": "ATKI", "yaz_say": 480, "parent_emir": 110577, "model_kod": "EVA CRX-ATKI",
+         "prosesler": [
+           {"proses_kod": "26", "proses_adi": "Enjeksiyon", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "50", "proses_adi": "Eva Hazir", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110602, "tip": "Y", "kategori": "ATKI", "yaz_say": 480, "parent_emir": 110578, "model_kod": "EVA CRX-ATKI",
+         "prosesler": [
+           {"proses_kod": "26", "proses_adi": "Enjeksiyon", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "50", "proses_adi": "Eva Hazir", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110604, "tip": "Y", "kategori": "ATKI", "yaz_say": 480, "parent_emir": 110579, "model_kod": "EVA CRX-ATKI",
+         "prosesler": [
+           {"proses_kod": "26", "proses_adi": "Enjeksiyon", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "50", "proses_adi": "Eva Hazir", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110606, "tip": "Y", "kategori": "ATKI", "yaz_say": 480, "parent_emir": 110580, "model_kod": "EVA CRX-ATKI",
+         "prosesler": [
+           {"proses_kod": "26", "proses_adi": "Enjeksiyon", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "50", "proses_adi": "Eva Hazir", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110608, "tip": "Y", "kategori": "ATKI", "yaz_say": 480, "parent_emir": 110581, "model_kod": "EVA CRX-ATKI",
+         "prosesler": [
+           {"proses_kod": "26", "proses_adi": "Enjeksiyon", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "50", "proses_adi": "Eva Hazir", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110610, "tip": "Y", "kategori": "ATKI", "yaz_say": 480, "parent_emir": 110582, "model_kod": "EVA CRX-ATKI",
+         "prosesler": [
+           {"proses_kod": "26", "proses_adi": "Enjeksiyon", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "50", "proses_adi": "Eva Hazir", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110612, "tip": "Y", "kategori": "ATKI", "yaz_say": 480, "parent_emir": 110583, "model_kod": "EVA CRX-ATKI",
+         "prosesler": [
+           {"proses_kod": "26", "proses_adi": "Enjeksiyon", "biten": 480, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "50", "proses_adi": "Eva Hazir", "biten": 480, "baslayacak": 0, "devam": 0}
+         ]},
+        {"emir_no": 110614, "tip": "Y", "kategori": "ATKI", "yaz_say": 280, "parent_emir": 110584, "model_kod": "EVA CRX-ATKI",
+         "prosesler": [
+           {"proses_kod": "26", "proses_adi": "Enjeksiyon", "biten": 280, "baslayacak": 0, "devam": 0},
+           {"proses_kod": "50", "proses_adi": "Eva Hazir", "biten": 280, "baslayacak": 0, "devam": 0}
+         ]}
+      ]
+    },
+    {
+      "sip_no": 33638,
+      "musteri": "Lc Waikiki",
+      "cari_kod": "120.01.033",
+      "model_kod": "CRX-71033-LCW",
+      "model_adi": "CRX-71033 ISIKSIZ SARGILI GARSON TERLIK EVA - LCW GS 33-38",
+      "hedef": 7000,
+      "termin": "2023-11-10",
+      "belge_no": "GS LCW 33-38 ISIKSIZ BEYAZ",
+      "_kaynak": "Korgun gercek veri 30.04.2026 - sadece Kesim yapildi",
+      "emirler": [
+        {"emir_no": 110615, "tip": "M", "kategori": "MAMUL", "yaz_say": 480, "parent_emir": null, "model_kod": "CRX-71033-LCW",
+         "prosesler": [{"proses_kod": "02", "proses_adi": "Kesim", "biten": 480, "baslayacak": 0, "devam": 0}]},
+        {"emir_no": 110618, "tip": "M", "kategori": "MAMUL", "yaz_say": 480, "parent_emir": null, "model_kod": "CRX-71033-LCW",
+         "prosesler": [{"proses_kod": "02", "proses_adi": "Kesim", "biten": 480, "baslayacak": 0, "devam": 0}]},
+        {"emir_no": 110619, "tip": "M", "kategori": "MAMUL", "yaz_say": 480, "parent_emir": null, "model_kod": "CRX-71033-LCW",
+         "prosesler": [{"proses_kod": "02", "proses_adi": "Kesim", "biten": 480, "baslayacak": 0, "devam": 0}]},
+        {"emir_no": 110620, "tip": "M", "kategori": "MAMUL", "yaz_say": 480, "parent_emir": null, "model_kod": "CRX-71033-LCW",
+         "prosesler": [{"proses_kod": "02", "proses_adi": "Kesim", "biten": 480, "baslayacak": 0, "devam": 0}]},
+        {"emir_no": 110621, "tip": "M", "kategori": "MAMUL", "yaz_say": 480, "parent_emir": null, "model_kod": "CRX-71033-LCW",
+         "prosesler": [{"proses_kod": "02", "proses_adi": "Kesim", "biten": 480, "baslayacak": 0, "devam": 0}]},
+        {"emir_no": 110622, "tip": "M", "kategori": "MAMUL", "yaz_say": 480, "parent_emir": null, "model_kod": "CRX-71033-LCW",
+         "prosesler": [{"proses_kod": "02", "proses_adi": "Kesim", "biten": 480, "baslayacak": 0, "devam": 0}]},
+        {"emir_no": 110623, "tip": "M", "kategori": "MAMUL", "yaz_say": 480, "parent_emir": null, "model_kod": "CRX-71033-LCW",
+         "prosesler": [{"proses_kod": "02", "proses_adi": "Kesim", "biten": 480, "baslayacak": 0, "devam": 0}]},
+        {"emir_no": 110624, "tip": "M", "kategori": "MAMUL", "yaz_say": 480, "parent_emir": null, "model_kod": "CRX-71033-LCW",
+         "prosesler": [{"proses_kod": "02", "proses_adi": "Kesim", "biten": 480, "baslayacak": 0, "devam": 0}]},
+        {"emir_no": 110625, "tip": "M", "kategori": "MAMUL", "yaz_say": 480, "parent_emir": null, "model_kod": "CRX-71033-LCW",
+         "prosesler": [{"proses_kod": "02", "proses_adi": "Kesim", "biten": 480, "baslayacak": 0, "devam": 0}]},
+        {"emir_no": 110626, "tip": "M", "kategori": "MAMUL", "yaz_say": 480, "parent_emir": null, "model_kod": "CRX-71033-LCW",
+         "prosesler": [{"proses_kod": "02", "proses_adi": "Kesim", "biten": 480, "baslayacak": 0, "devam": 0}]},
+        {"emir_no": 110627, "tip": "M", "kategori": "MAMUL", "yaz_say": 480, "parent_emir": null, "model_kod": "CRX-71033-LCW",
+         "prosesler": [{"proses_kod": "02", "proses_adi": "Kesim", "biten": 480, "baslayacak": 0, "devam": 0}]},
+        {"emir_no": 110628, "tip": "M", "kategori": "MAMUL", "yaz_say": 480, "parent_emir": null, "model_kod": "CRX-71033-LCW",
+         "prosesler": [{"proses_kod": "02", "proses_adi": "Kesim", "biten": 480, "baslayacak": 0, "devam": 0}]},
+        {"emir_no": 110629, "tip": "M", "kategori": "MAMUL", "yaz_say": 480, "parent_emir": null, "model_kod": "CRX-71033-LCW",
+         "prosesler": [{"proses_kod": "02", "proses_adi": "Kesim", "biten": 480, "baslayacak": 0, "devam": 0}]},
+        {"emir_no": 110630, "tip": "M", "kategori": "MAMUL", "yaz_say": 480, "parent_emir": null, "model_kod": "CRX-71033-LCW",
+         "prosesler": [{"proses_kod": "02", "proses_adi": "Kesim", "biten": 480, "baslayacak": 0, "devam": 0}]},
+        {"emir_no": 110631, "tip": "M", "kategori": "MAMUL", "yaz_say": 280, "parent_emir": null, "model_kod": "CRX-71033-LCW",
+         "prosesler": [{"proses_kod": "02", "proses_adi": "Kesim", "biten": 280, "baslayacak": 0, "devam": 0}]},
+
+        {"emir_no": 110616, "tip": "Y", "kategori": "GOVDE", "yaz_say": 480, "parent_emir": 110615, "model_kod": "EVA CRX-001", "prosesler": []},
+        {"emir_no": 110632, "tip": "Y", "kategori": "GOVDE", "yaz_say": 480, "parent_emir": 110618, "model_kod": "EVA CRX-001", "prosesler": []},
+        {"emir_no": 110634, "tip": "Y", "kategori": "GOVDE", "yaz_say": 480, "parent_emir": 110619, "model_kod": "EVA CRX-001", "prosesler": []},
+        {"emir_no": 110636, "tip": "Y", "kategori": "GOVDE", "yaz_say": 480, "parent_emir": 110620, "model_kod": "EVA CRX-001", "prosesler": []},
+        {"emir_no": 110638, "tip": "Y", "kategori": "GOVDE", "yaz_say": 480, "parent_emir": 110621, "model_kod": "EVA CRX-001", "prosesler": []},
+        {"emir_no": 110640, "tip": "Y", "kategori": "GOVDE", "yaz_say": 480, "parent_emir": 110622, "model_kod": "EVA CRX-001", "prosesler": []},
+        {"emir_no": 110642, "tip": "Y", "kategori": "GOVDE", "yaz_say": 480, "parent_emir": 110623, "model_kod": "EVA CRX-001", "prosesler": []},
+        {"emir_no": 110644, "tip": "Y", "kategori": "GOVDE", "yaz_say": 480, "parent_emir": 110624, "model_kod": "EVA CRX-001", "prosesler": []},
+        {"emir_no": 110646, "tip": "Y", "kategori": "GOVDE", "yaz_say": 480, "parent_emir": 110625, "model_kod": "EVA CRX-001", "prosesler": []},
+        {"emir_no": 110648, "tip": "Y", "kategori": "GOVDE", "yaz_say": 480, "parent_emir": 110626, "model_kod": "EVA CRX-001", "prosesler": []},
+        {"emir_no": 110652, "tip": "Y", "kategori": "GOVDE", "yaz_say": 480, "parent_emir": 110627, "model_kod": "EVA CRX-001", "prosesler": []},
+        {"emir_no": 110654, "tip": "Y", "kategori": "GOVDE", "yaz_say": 480, "parent_emir": 110628, "model_kod": "EVA CRX-001", "prosesler": []},
+        {"emir_no": 110656, "tip": "Y", "kategori": "GOVDE", "yaz_say": 480, "parent_emir": 110629, "model_kod": "EVA CRX-001", "prosesler": []},
+        {"emir_no": 110658, "tip": "Y", "kategori": "GOVDE", "yaz_say": 480, "parent_emir": 110630, "model_kod": "EVA CRX-001", "prosesler": []},
+        {"emir_no": 110660, "tip": "Y", "kategori": "GOVDE", "yaz_say": 280, "parent_emir": 110631, "model_kod": "EVA CRX-001", "prosesler": []},
+
+        {"emir_no": 110617, "tip": "Y", "kategori": "ATKI", "yaz_say": 480, "parent_emir": 110615, "model_kod": "EVA CRX-ATKI", "prosesler": []},
+        {"emir_no": 110633, "tip": "Y", "kategori": "ATKI", "yaz_say": 480, "parent_emir": 110618, "model_kod": "EVA CRX-ATKI", "prosesler": []},
+        {"emir_no": 110635, "tip": "Y", "kategori": "ATKI", "yaz_say": 480, "parent_emir": 110619, "model_kod": "EVA CRX-ATKI", "prosesler": []},
+        {"emir_no": 110637, "tip": "Y", "kategori": "ATKI", "yaz_say": 480, "parent_emir": 110620, "model_kod": "EVA CRX-ATKI", "prosesler": []},
+        {"emir_no": 110639, "tip": "Y", "kategori": "ATKI", "yaz_say": 480, "parent_emir": 110621, "model_kod": "EVA CRX-ATKI", "prosesler": []},
+        {"emir_no": 110641, "tip": "Y", "kategori": "ATKI", "yaz_say": 480, "parent_emir": 110622, "model_kod": "EVA CRX-ATKI", "prosesler": []},
+        {"emir_no": 110643, "tip": "Y", "kategori": "ATKI", "yaz_say": 480, "parent_emir": 110623, "model_kod": "EVA CRX-ATKI", "prosesler": []},
+        {"emir_no": 110645, "tip": "Y", "kategori": "ATKI", "yaz_say": 480, "parent_emir": 110624, "model_kod": "EVA CRX-ATKI", "prosesler": []},
+        {"emir_no": 110647, "tip": "Y", "kategori": "ATKI", "yaz_say": 480, "parent_emir": 110625, "model_kod": "EVA CRX-ATKI", "prosesler": []},
+        {"emir_no": 110649, "tip": "Y", "kategori": "ATKI", "yaz_say": 480, "parent_emir": 110626, "model_kod": "EVA CRX-ATKI", "prosesler": []},
+        {"emir_no": 110653, "tip": "Y", "kategori": "ATKI", "yaz_say": 480, "parent_emir": 110627, "model_kod": "EVA CRX-ATKI", "prosesler": []},
+        {"emir_no": 110655, "tip": "Y", "kategori": "ATKI", "yaz_say": 480, "parent_emir": 110628, "model_kod": "EVA CRX-ATKI", "prosesler": []},
+        {"emir_no": 110657, "tip": "Y", "kategori": "ATKI", "yaz_say": 480, "parent_emir": 110629, "model_kod": "EVA CRX-ATKI", "prosesler": []},
+        {"emir_no": 110659, "tip": "Y", "kategori": "ATKI", "yaz_say": 480, "parent_emir": 110630, "model_kod": "EVA CRX-ATKI", "prosesler": []},
+        {"emir_no": 110661, "tip": "Y", "kategori": "ATKI", "yaz_say": 280, "parent_emir": 110631, "model_kod": "EVA CRX-ATKI", "prosesler": []}
+      ]
+    },
+    {
+      "sip_no": 33558,
+      "musteri": "Esem Crocs e-ticaret",
+      "cari_kod": "120.01.045",
+      "model_kod": "CRF-8250-ESM",
+      "model_adi": "CRF-8250 ESEM CROCS",
+      "hedef": 1000,
+      "termin": "2026-05-15",
+      "belge_no": "ESM CROCS 8250",
+      "emirler": [
+        {"emir_no": 110920, "tip": "M", "kategori": "MAMUL", "yaz_say": 1000, "parent_emir": null, "model_kod": "CRF-8250-ESM",
+         "prosesler": [{"proses_kod": "02", "proses_adi": "Kesim", "biten": 402, "baslayacak": 598, "devam": 0}]}
+      ]
+    }
+  ]
+}

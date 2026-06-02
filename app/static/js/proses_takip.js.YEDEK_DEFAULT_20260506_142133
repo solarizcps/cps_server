@@ -1,0 +1,271 @@
+/* SOLARIZ CPS - PLANLAMA / PROSES TAKIP MVP */
+var pt_state = { data: [], period: 'bugun', loading: false };
+
+var PT_COLS = [
+  {key:'Lokasyon',label:'Lokasyon'},
+  {key:'CariAdi',label:'Cari'},
+  {key:'SipNo',label:'Sip No'},
+  {key:'BelgeNo',label:'Belge'},
+  {key:'SKOD',label:'Model'},
+  {key:'StokAdi',label:'Stok Adi'},
+  {key:'ProsesAdi',label:'Proses'},
+  {key:'EmirNo',label:'Emir No'},
+  {key:'Cikan',label:'Cikan'},
+  {key:'EndTarih',label:'Tarih'}
+];
+
+var PT_PROSES_RENK = {
+  'Enjeksiyon':'#6366f1','Kesim':'#f59e0b','Saya':'#ec4899','Mekval':'#ef4444',
+  'Monta':'#10b981','Monta Baslayacak':'#f97316','Temizleme':'#06b6d4','Eva Hazir':'#8b5cf6'
+};
+
+function pt_log(m){ console.log('[PT] '+m); }
+
+function pt_set_kaynak(k,s){
+  var el=document.getElementById('pt-veri-kaynak');
+  var sEl=document.getElementById('pt-sorgu-suresi');
+  if(el){ el.textContent=k; el.className='pt-veri-kaynak';
+    if(k==='KORGUN') el.classList.add('korgun');
+    else if(k==='MOCK_FALLBACK') el.classList.add('mock');
+    else el.classList.add('beklemede'); }
+  if(sEl && s) sEl.textContent=s+' sn';
+}
+
+function pt_uyari_goster(m){
+  var b=document.getElementById('pt-uyari-bandi');
+  var ms=document.getElementById('pt-uyari-mesaj');
+  if(b && ms){ ms.textContent=m; b.style.display='block'; }
+}
+
+function pt_uyari_gizle(){
+  var b=document.getElementById('pt-uyari-bandi');
+  if(b) b.style.display='none';
+}
+
+function pt_filtre_toggle(){
+  var p=document.getElementById('pt-filtre-paneli');
+  if(p) p.classList.toggle('kapali');
+}
+
+function pt_sec_toggle(id){
+  var el=document.getElementById(id);
+  if(!el) return;
+  el.style.display = el.style.display==='none' ? '' : 'none';
+}
+
+function pt_lok_tumu(){
+  var cbs=document.querySelectorAll('.pt-lok-cb');
+  var hep=true;
+  cbs.forEach(function(c){ if(!c.checked) hep=false; });
+  cbs.forEach(function(c){ c.checked=!hep; });
+}
+
+function pt_prs_tumu(){
+  var cbs=document.querySelectorAll('.pt-pr-cb');
+  var hep=true;
+  cbs.forEach(function(c){ if(!c.checked) hep=false; });
+  cbs.forEach(function(c){ c.checked=!hep; });
+}
+
+function pt_set_period(btn){
+  pt_state.period=btn.getAttribute('data-period');
+  document.querySelectorAll('.pt-period-btn').forEach(function(b){ b.classList.remove('aktif'); });
+  btn.classList.add('aktif');
+}
+
+function pt_goster(){
+  if(pt_state.loading){ pt_log('Yukleniyor...'); return; }
+  var seciliLok=[];
+  document.querySelectorAll('.pt-lok-cb:checked').forEach(function(c){ seciliLok.push(c.value); });
+  if(seciliLok.length===0){ alert('Lutfen once lokasyon secin.'); return; }
+
+  var seciliPros=[];
+  document.querySelectorAll('.pt-pr-cb:checked').forEach(function(c){ seciliPros.push(c.getAttribute('data-p')); });
+
+  var seciliDurum=[];
+  if(document.getElementById('pt-drm-basl').checked) seciliDurum.push('baslayacak');
+  if(document.getElementById('pt-drm-devam').checked) seciliDurum.push('devam');
+  if(document.getElementById('pt-drm-biten').checked) seciliDurum.push('biten');
+
+  var tarihBas=(document.getElementById('pt-tarih-bas')||{}).value||'';
+  var tarihBit=(document.getElementById('pt-tarih-bit')||{}).value||'';
+
+  var qs='period='+encodeURIComponent(pt_state.period);
+  qs+='&lokasyon='+encodeURIComponent(seciliLok.join(','));
+  if(seciliPros.length) qs+='&proses='+encodeURIComponent(seciliPros.join(','));
+  if(seciliDurum.length) qs+='&durum='+encodeURIComponent(seciliDurum.join(','));
+  if(tarihBas) qs+='&tarih_bas='+encodeURIComponent(tarihBas);
+  if(tarihBit) qs+='&tarih_bit='+encodeURIComponent(tarihBit);
+
+  var url='/planlama/proses-takip/data?'+qs;
+  pt_log('Fetch: '+url);
+  pt_state.loading=true;
+  pt_uyari_gizle();
+  pt_set_kaynak('YUKLENIYOR...','');
+
+  var tbody=document.getElementById('pt-tbody');
+  if(tbody) tbody.innerHTML='<tr><td colspan="11" class="pt-empty">Korgun sorgusu...</td></tr>';
+
+  fetch(url,{credentials:'include'})
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(function(d){
+      pt_state.loading=false;
+      pt_log('Cevap: '+d.kaynak+', kayit='+(d.siparis_sayisi||0));
+      pt_set_kaynak(d.kaynak||'-', d.sorgu_suresi_sn||'');
+      if(d.kaynak==='MOCK_FALLBACK' && d.uyari) pt_uyari_goster(d.uyari);
+
+      if(!d.kayitlar || d.kayitlar.length===0){
+        pt_state.data=[];
+        pt_render_thead();
+        pt_render_tbody([]);
+        pt_render_ozet([]);
+        if(tbody) tbody.innerHTML='<tr><td colspan="11" class="pt-empty">Bu filtreye uyan kayit yok.</td></tr>';
+        return;
+      }
+      pt_state.data=d.kayitlar;
+      pt_render_thead();
+      pt_uygula();
+    })
+    .catch(function(e){
+      pt_state.loading=false;
+      pt_log('HATA: '+e.message);
+      pt_set_kaynak('HATA','');
+      pt_uyari_goster('Sorgu hatasi: '+e.message);
+      if(tbody) tbody.innerHTML='<tr><td colspan="11" class="pt-empty">Hata: '+e.message+'</td></tr>';
+    });
+}
+
+function pt_render_thead(){
+  var tr=document.getElementById('pt-thead');
+  if(!tr) return;
+  var html='';
+  PT_COLS.forEach(function(c){ html+='<th>'+c.label+'</th>'; });
+  tr.innerHTML=html;
+}
+
+function pt_uygula(){
+  if(!pt_state.data || !pt_state.data.length){
+    pt_render_tbody([]);
+    pt_render_ozet([]);
+    return;
+  }
+  var sipAra=((document.getElementById('pt-sip-ara')||{}).value||'').toLowerCase();
+  var emirAra=((document.getElementById('pt-emir-ara')||{}).value||'').toLowerCase();
+  var modelAra=((document.getElementById('pt-model-ara')||{}).value||'').toLowerCase();
+
+  var filt=pt_state.data.filter(function(r){
+    if(sipAra){
+      var s=String(r.SipNo||'').toLowerCase();
+      var b=String(r.BelgeNo||'').toLowerCase();
+      if(s.indexOf(sipAra)<0 && b.indexOf(sipAra)<0) return false;
+    }
+    if(emirAra && String(r.EmirNo||'').toLowerCase().indexOf(emirAra)<0) return false;
+    if(modelAra){
+      var sk=String(r.SKOD||'').toLowerCase();
+      var sa=String(r.StokAdi||'').toLowerCase();
+      if(sk.indexOf(modelAra)<0 && sa.indexOf(modelAra)<0) return false;
+    }
+    return true;
+  });
+
+  filt.sort(function(a,b){
+    var c=(a.CariAdi||'').localeCompare(b.CariAdi||'','tr');
+    if(c) return c;
+    var s=String(a.SipNo||'').localeCompare(String(b.SipNo||''),'tr');
+    if(s) return s;
+    var m=(a.SKOD||'').localeCompare(b.SKOD||'','tr');
+    if(m) return m;
+    return (a.ProsesAdi||'').localeCompare(b.ProsesAdi||'','tr');
+  });
+
+  pt_render_tbody(filt);
+  pt_render_ozet(filt);
+}
+
+function pt_render_tbody(rows){
+  var tbody=document.getElementById('pt-tbody');
+  if(!tbody) return;
+  if(!rows.length){
+    tbody.innerHTML='<tr><td colspan="11" class="pt-empty">Filtreye uyan kayit yok.</td></tr>';
+    return;
+  }
+
+  var html=rows.map(function(r){
+    var cikan=parseFloat(r.Cikan||0);
+    var tarih=String(r.EndTarih||'').substring(0,10);
+    var pAdi=r.ProsesAdi||r.Proses||'-';
+    var pRenk=PT_PROSES_RENK[pAdi]||'#1e3a8a';
+
+    var durBadge;
+    if(cikan===0) durBadge='<span class="pt-durum-badge basl">Baslayacak</span>';
+    else if(tarih) durBadge='<span class="pt-durum-badge biten">Biten</span>';
+    else durBadge='<span class="pt-durum-badge devam">Devam</span>';
+
+    var cells='';
+    PT_COLS.forEach(function(col){
+      switch(col.key){
+        case 'Lokasyon': cells+='<td>'+(r.Lokasyon||'-')+'</td>'; break;
+        case 'CariAdi': cells+='<td title="'+(r.CariAdi||'')+'">'+(r.CariAdi||'-')+'</td>'; break;
+        case 'SipNo': cells+='<td>'+(r.SipNo&&r.SipNo!=='-'?'<span class="pt-tag">'+r.SipNo+'</span>':'-')+'</td>'; break;
+        case 'BelgeNo': cells+='<td>'+(r.BelgeNo||'-')+'</td>'; break;
+        case 'SKOD': cells+='<td><span class="pt-tag">'+(r.SKOD||'-')+'</span></td>'; break;
+        case 'StokAdi': cells+='<td>'+(r.StokAdi||'-')+'</td>'; break;
+        case 'ProsesAdi': cells+='<td>'+durBadge+' <span style="padding:2px 6px;border-radius:10px;font-size:11px;font-weight:600;background:'+pRenk+'20;color:'+pRenk+';">'+pAdi+'</span></td>'; break;
+        case 'EmirNo': cells+='<td>'+(r.EmirNo||'-')+'</td>'; break;
+        case 'Cikan': cells+='<td class="pt-num">'+Math.round(cikan).toLocaleString('tr-TR')+'</td>'; break;
+        case 'EndTarih': cells+='<td>'+(tarih||'-')+'</td>'; break;
+      }
+    });
+    return '<tr>'+cells+'</tr>';
+  }).join('');
+  tbody.innerHTML=html;
+
+  var alt=document.getElementById('pt-tablo-alt');
+  if(alt){
+    var top=rows.reduce(function(s,r){ return s+parseFloat(r.Cikan||0); },0);
+    alt.textContent=rows.length.toLocaleString('tr-TR')+' kayit - Toplam: '+Math.round(top).toLocaleString('tr-TR')+' cift';
+  }
+}
+
+function pt_render_ozet(rows){
+  var t=rows.length;
+  var b=0,d=0,k=0,tc=0,bc=0,dc=0,kc=0;
+  rows.forEach(function(r){
+    var cikan=parseFloat(r.Cikan||0);
+    var tarih=String(r.EndTarih||'').substring(0,10);
+    tc+=cikan;
+    if(cikan===0){ b++; bc+=cikan; }
+    else if(tarih){ k++; kc+=cikan; }
+    else{ d++; dc+=cikan; }
+  });
+  var setEl=function(id,v){
+    var el=document.getElementById(id);
+    if(el) el.textContent=(typeof v==='number')?v.toLocaleString('tr-TR'):v;
+  };
+  setEl('pt-oz-t',t); setEl('pt-oz-b',b); setEl('pt-oz-d',d); setEl('pt-oz-k',k);
+  setEl('pt-oz-tc',Math.round(tc)); setEl('pt-oz-bc',Math.round(bc));
+  setEl('pt-oz-dc',Math.round(dc)); setEl('pt-oz-kc',Math.round(kc));
+}
+
+function pt_sifirla(){
+  document.querySelectorAll('.pt-lok-cb,.pt-pr-cb').forEach(function(c){ c.checked=false; });
+  document.querySelectorAll('#pt-drm-basl,#pt-drm-devam,#pt-drm-biten').forEach(function(c){ c.checked=false; });
+  document.querySelectorAll('#pt-tarih-bas,#pt-tarih-bit,#pt-sip-ara,#pt-emir-ara,#pt-model-ara').forEach(function(i){ i.value=''; });
+  pt_state.period='bugun';
+  document.querySelectorAll('.pt-period-btn').forEach(function(b){ b.classList.remove('aktif'); });
+  var bgn=document.querySelector('.pt-period-btn[data-period="bugun"]');
+  if(bgn) bgn.classList.add('aktif');
+  pt_state.data=[];
+  pt_set_kaynak('-','');
+  pt_uyari_gizle();
+  var tbody=document.getElementById('pt-tbody');
+  if(tbody) tbody.innerHTML='<tr><td colspan="11" class="pt-empty">Once lokasyon secin, sonra Goster butonuna basin.</td></tr>';
+  pt_render_ozet([]);
+  var alt=document.getElementById('pt-tablo-alt');
+  if(alt) alt.textContent='';
+}
+
+document.addEventListener('DOMContentLoaded', function(){
+  pt_log('proses_takip.js loaded');
+  pt_set_kaynak('-','');
+});

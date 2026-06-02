@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% set tab = 'grafik' %}
+{% set active = 'grafik' %}
+{% block title %}{{ urun.Kod }} — {{ urun.Ad }}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="crumbs"><a href="/grafik/urun">Ürünler</a> › <strong>{{ urun.Kod }}</strong></div>
+    <h1>📦 {{ urun.Ad }}</h1>
+    <p class="muted">{{ urun.KategoriAd or 'Kategorisiz' }} · {% if urun.Aciklama %}{{ urun.Aciklama }}{% else %}<span class="muted">açıklama yok</span>{% endif %}</p>
+  </div>
+  <div class="ph-actions">
+    <form method="post" action="/grafik/urun/{{ urun.Id }}/sil" style="display:inline;"
+          onsubmit="return confirm('Bu ürün ve tüm varyantları pasif edilecek. Emin misin?');">
+      <button class="btn btn-danger">🗑 Ürünü Sil</button>
+    </form>
+  </div>
+</div>
+
+{% include '_flash.html' ignore missing %}
+
+<div class="twocol">
+  <!-- SOL: Ürün düzenleme -->
+  <section class="panel">
+    <h3>Ürün Bilgileri</h3>
+    <form method="post" action="/grafik/urun/{{ urun.Id }}/guncelle" class="form-stack">
+      <label>Kod * <input type="text" name="Kod" value="{{ urun.Kod }}" required style="text-transform:uppercase;"></label>
+      <label>Ad  * <input type="text" name="Ad" value="{{ urun.Ad }}" required></label>
+      <label>Kategori
+        <select name="KategoriId">
+          <option value="">(yok)</option>
+          {% for k in kategoriler %}
+          <option value="{{ k.Id }}" {% if urun.KategoriId == k.Id %}selected{% endif %}>{{ k.Ad }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Açıklama <textarea name="Aciklama" rows="3">{{ urun.Aciklama or '' }}</textarea></label>
+      <div style="display:flex; justify-content:flex-end;">
+        <button class="btn btn-primary">Kaydet</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- SAĞ: Varyantlar -->
+  <section class="panel">
+    <div class="panel-head">
+      <h3>Varyantlar ({{ varyantlar|length }})</h3>
+      <button class="btn btn-sm btn-primary" onclick="document.getElementById('var-yeni').showModal()">+ Varyant</button>
+    </div>
+
+    {% if varyantlar %}
+    <table class="data-table compact">
+      <thead>
+        <tr>
+          <th>Kod</th>
+          <th>Renk</th>
+          <th>Beden</th>
+          <th>Stok Kodu</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for v in varyantlar %}
+        <tr>
+          <td><code>{{ v.Kod or '—' }}</code></td>
+          <td>
+            {% if v.RenkHex %}<span class="color-dot" style="background:{{ v.RenkHex }};"></span>{% endif %}
+            {{ v.RenkAd or '—' }}
+          </td>
+          <td>{{ v.Beden or '—' }}</td>
+          <td class="muted">{{ v.StokKod or '—' }}</td>
+          <td style="text-align:right;">
+            <form method="post" action="/grafik/urun/varyant/{{ v.Id }}/sil" style="display:inline;"
+                  onsubmit="return confirm('Varyantı sil?');">
+              <button class="btn-icon" title="Sil">🗑</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="empty">Henüz varyant eklenmedi.</p>
+    {% endif %}
+  </section>
+</div>
+
+<dialog id="var-yeni" class="modal">
+  <form method="post" action="/grafik/urun/{{ urun.Id }}/varyant/yeni" class="modal-form">
+    <h3>Yeni Varyant</h3>
+    <label>Varyant Kodu <input type="text" name="Kod" placeholder="{{ urun.Kod }}-01"></label>
+    <label>Renk Adı * <input type="text" name="RenkAd" required placeholder="Siyah, Lacivert, Kırmızı..."></label>
+    <label>Renk (HEX) <input type="color" name="RenkHex" value="#000000"></label>
+    <label>Beden <input type="text" name="Beden" placeholder="38, 40, 42 (boş bırakılabilir)"></label>
+    <label>Solariz Stok Kodu <input type="text" name="StokKod" placeholder="opsiyonel"></label>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" onclick="this.closest('dialog').close()">İptal</button>
+      <button class="btn btn-primary">Kaydet</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Belgeler & Tasarım Föyü -->
+<div style="margin-top:20px;">
+  {% set upload_url = '/grafik/urun/' ~ urun.Id ~ '/belge/yukle' %}
+  {% set panel_baslik = 'Görseller & Tasarım Föyü' %}
+  {% include 'grafik/_belge_section.html' %}
+</div>
+{% endblock %}

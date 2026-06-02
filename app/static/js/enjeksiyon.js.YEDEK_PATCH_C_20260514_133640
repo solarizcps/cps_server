@@ -1,0 +1,529 @@
+﻿/* enjeksiyon.js - FAZ 6.6
+   Makine sekme toggle (client-side) + URL state. */
+(function () {
+    'use strict';
+
+    function makineDegistir(mid) {
+        document.querySelectorAll('.enj-mak-kart').forEach(function (k) {
+            k.classList.toggle('aktif', k.dataset.makineId === mid);
+        });
+        document.querySelectorAll('.enj-mak-panel').forEach(function (p) {
+            p.classList.toggle('aktif', p.dataset.makineId === mid);
+        });
+        try {
+            var url = new URL(window.location);
+            url.searchParams.set('makine', mid);
+            window.history.replaceState({}, '', url);
+        } catch (e) { /* IE / eski tarayici fallback */ }
+    }
+
+    function abToggle(btn) {
+        btn.classList.toggle('on');
+        // F7'de POST API cagrilacak. F6.6 client-only.
+    }
+
+    function topluUygula(makinePanel, action) {
+        var slots = makinePanel.querySelectorAll('.enj-ist-cell .s');
+        slots.forEach(function (s) {
+            if (action === 'a' && s.dataset.slot === 'A') s.classList.add('on');
+            else if (action === 'b' && s.dataset.slot === 'B') s.classList.add('on');
+            else if (action === 'x') s.classList.remove('on');
+        });
+    }
+
+    document.addEventListener('click', function (e) {
+        var mak = e.target.closest('.enj-mak-kart');
+        if (mak) { e.preventDefault(); makineDegistir(mak.dataset.makineId); return; }
+
+        var slot = e.target.closest('.enj-ist-cell .s');
+        if (slot) { e.preventDefault(); abToggle(slot); return; }
+
+        var toplu = e.target.closest('[data-toplu]');
+        if (toplu) {
+            e.preventDefault();
+            var panel = toplu.closest('.enj-mak-panel');
+            if (panel) topluUygula(panel, toplu.dataset.toplu);
+            return;
+        }
+    });
+
+    console.log('[CPS LOCAL] enjeksiyon.js F6.6 yuklendi');
+})();
+
+
+/* === BEGIN: ENJ_F25_2_KALIP_SECICI === */
+(function () {
+    'use strict';
+    var kayitlar = [], goruntulenenler = [], aktifIdx = -1;
+    var input = document.getElementById('enj-kalip-input');
+    var liste = document.getElementById('enj-kalip-liste');
+    var hiddenId = document.getElementById('enj-kalip-id');
+    if (!input || !liste || !hiddenId) return;
+
+    fetch('/enjeksiyon/api/kalip-listesi')
+        .then(function (r) { return r.json(); })
+        .then(function (d) { if (d && d.ok) { kayitlar = d.kayitlar || []; console.log('[CPS LOCAL] F25.2 kalip listesi: ' + kayitlar.length + ' kayit'); } })
+        .catch(function () {});
+
+    function escHTML(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+    input.addEventListener('input', function () {
+        var q = (input.value || '').trim().toLocaleLowerCase('tr');
+        if (q.length < 1) { liste.hidden = true; hiddenId.value = ''; return; }
+        goruntulenenler = kayitlar.filter(function (k) {
+            return (k.kalip_kod || '').toLocaleLowerCase('tr').indexOf(q) >= 0 ||
+                   (k.model_kod || '').toLocaleLowerCase('tr').indexOf(q) >= 0 ||
+                   (k.model_ad  || '').toLocaleLowerCase('tr').indexOf(q) >= 0 ||
+                   (k.asorti    || '').toLocaleLowerCase('tr').indexOf(q) >= 0;
+        }).slice(0, 30);
+        if (goruntulenenler.length === 0) {
+            liste.innerHTML = '<div class="enj-kalip-bos">Eşleşme yok</div>';
+        } else {
+            var html = '';
+            for (var i = 0; i < goruntulenenler.length; i++) {
+                html += '<div class="enj-kalip-item" data-id="' + goruntulenenler[i].id + '">' + escHTML(goruntulenenler[i].display || '') + '</div>';
+            }
+            liste.innerHTML = html;
+        }
+        liste.hidden = false;
+        aktifIdx = -1;
+    });
+
+    liste.addEventListener('click', function (e) {
+        var item = e.target.closest('.enj-kalip-item');
+        if (item && item.dataset.id) selectById(parseInt(item.dataset.id, 10));
+    });
+
+    input.addEventListener('keydown', function (e) {
+        if (liste.hidden) return;
+        if (e.key === 'ArrowDown') { aktifIdx = Math.min(aktifIdx + 1, goruntulenenler.length - 1); updateAktif(); e.preventDefault(); }
+        else if (e.key === 'ArrowUp') { aktifIdx = Math.max(aktifIdx - 1, 0); updateAktif(); e.preventDefault(); }
+        else if (e.key === 'Enter' && aktifIdx >= 0) { selectById(goruntulenenler[aktifIdx].id); e.preventDefault(); }
+        else if (e.key === 'Escape') { liste.hidden = true; }
+    });
+
+    function updateAktif() {
+        var items = liste.querySelectorAll('.enj-kalip-item');
+        for (var i = 0; i < items.length; i++) {
+            if (i === aktifIdx) { items[i].classList.add('aktif'); items[i].scrollIntoView({ block: 'nearest' }); }
+            else items[i].classList.remove('aktif');
+        }
+    }
+
+    document.addEventListener('click', function (e) { if (!e.target.closest('.enj-kalip-secici')) liste.hidden = true; });
+
+    function selectById(id) {
+        fetch('/enjeksiyon/api/kalip/' + id)
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (!d || !d.ok) return;
+                var sec = d.secilen;
+                var disp = sec.kalip_kod + ' / ' + (sec.model_ad || sec.model_kod) + (sec.asorti ? ' (' + sec.asorti + ')' : '');
+                input.value = disp;
+                hiddenId.value = sec.id;
+                liste.hidden = true;
+                formDoldur(d);
+                urunPaneliGuncelle(d);
+                document.dispatchEvent(new CustomEvent('enj-kalip-secildi', { detail: d }));
+            })
+            .catch(function () {});
+    }
+
+    function formDoldur(d) {
+        var sec = d.secilen;
+        var renkInp = document.getElementById('enj-renk');
+        var kbcInp  = document.getElementById('enj-kalip-basi-cift');
+        var bkInp   = document.getElementById('enj-bagli-kalip');
+        if (renkInp) renkInp.value = sec.renk || '';
+        if (kbcInp) {
+            kbcInp.value = (sec.kalip_basi_cift != null) ? sec.kalip_basi_cift : '';
+            kbcInp.dataset.masterValue = (sec.kalip_basi_cift != null) ? String(sec.kalip_basi_cift) : '';
+        }
+        if (bkInp) bkInp.value = (sec.varsayilan_bagli_kalip != null) ? sec.varsayilan_bagli_kalip : 8;
+    }
+
+    function urunPaneliGuncelle(d) {
+        var panel = document.querySelector('.enj-urun');
+        if (!panel) return;
+        panel.dataset.state = d.state || 'empty';
+
+        var govdeBlok = panel.querySelector('[data-tip="govde"]');
+        if (govdeBlok && d.govde) {
+            var gkk = govdeBlok.querySelector('[data-field="kalip-kod"]');
+            var gmk = govdeBlok.querySelector('[data-field="model-kod"]');
+            var gimg = govdeBlok.querySelector('[data-field="gorsel"]');
+            if (gkk) gkk.textContent = d.govde.kalip_kod || '';
+            if (gmk) gmk.textContent = d.govde.model_ad || d.govde.model_kod || '';
+            if (gimg) {
+                if (d.govde.gorsel_dosya) {
+                    gimg.src = '/static/img/kaliplar/' + d.govde.gorsel_dosya;
+                    gimg.hidden = false;
+                    gimg.onerror = function () { gimg.hidden = true; gimg.onerror = null; };
+                } else { gimg.hidden = true; gimg.removeAttribute('src'); }
+            }
+        }
+
+        var atkiBlok = panel.querySelector('[data-tip="atki"]');
+        if (atkiBlok) {
+            var akk = atkiBlok.querySelector('[data-field="kalip-kod"]');
+            var amk = atkiBlok.querySelector('[data-field="model-kod"]');
+            var aimg = atkiBlok.querySelector('[data-field="gorsel"]');
+            if (d.atki) {
+                if (akk) akk.textContent = d.atki.kalip_kod || '';
+                if (amk) amk.textContent = d.atki.model_ad || d.atki.model_kod || '';
+                if (aimg) {
+                    if (d.atki.gorsel_dosya) {
+                        aimg.src = '/static/img/kaliplar/' + d.atki.gorsel_dosya;
+                        aimg.hidden = false;
+                        aimg.onerror = function () { aimg.hidden = true; aimg.onerror = null; };
+                    } else { aimg.hidden = true; aimg.removeAttribute('src'); }
+                }
+            } else {
+                if (akk) akk.textContent = '';
+                if (amk) amk.textContent = '';
+                if (aimg) { aimg.hidden = true; aimg.removeAttribute('src'); }
+            }
+        }
+    }
+
+    console.log('[CPS LOCAL] F25.2 kalip secici yuklendi');
+})();
+/* === END: ENJ_F25_2_KALIP_SECICI === */
+
+
+/* === BEGIN: ENJ_F25_3_SOFT_WARNING === */
+(function () {
+    'use strict';
+    var kbc = document.getElementById('enj-kalip-basi-cift');
+    if (!kbc) return;
+
+    function kontrolEt() {
+        var mv = kbc.dataset.masterValue;
+        if (mv === undefined || mv === '' || mv === null) {
+            kbc.classList.remove('enj-master-fark');
+            return;
+        }
+        var current = (kbc.value || '').toString().trim();
+        if (current === '' || current === mv) {
+            kbc.classList.remove('enj-master-fark');
+        } else {
+            kbc.classList.add('enj-master-fark');
+        }
+    }
+
+    kbc.addEventListener('input', kontrolEt);
+    kbc.addEventListener('change', kontrolEt);
+
+    // formDoldur sonrasi otomatik tetikleme icin MutationObserver
+    var mo = new MutationObserver(function (muts) {
+        for (var i = 0; i < muts.length; i++) {
+            if (muts[i].type === 'attributes' && muts[i].attributeName === 'data-master-value') {
+                kbc.classList.remove('enj-master-fark');
+            }
+        }
+    });
+    mo.observe(kbc, { attributes: true });
+
+    console.log('[CPS LOCAL] F25.3 soft warning yuklendi');
+})();
+/* === END: ENJ_F25_3_SOFT_WARNING === */
+
+/* === BEGIN: ENJ_F8_JS_STATE === */
+(function () {
+    'use strict';
+
+    var P = new URLSearchParams(location.search);
+    function todayISO() {
+        var d = new Date();
+        var m = String(d.getMonth() + 1).padStart(2, '0');
+        var g = String(d.getDate()).padStart(2, '0');
+        return d.getFullYear() + '-' + m + '-' + g;
+    }
+    var TARIH = P.get('tarih') || todayISO();
+    var VARDIYA = P.get('vardiya') || 'gunduz';
+    var MAKINE = P.get('makine') || '1';
+
+    var raporId = null;
+    var initialized = false;
+
+    // === API ===
+    function api(url, opts) {
+        opts = opts || {};
+        opts.headers = opts.headers || {};
+        if (opts.body && typeof opts.body !== 'string') {
+            opts.headers['Content-Type'] = 'application/json';
+            opts.body = JSON.stringify(opts.body);
+        }
+        opts.keepalive = true;
+        return fetch(url, opts).then(function (r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        });
+    }
+
+    // === SETVAL ===
+    function setVal(id, v) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.value = (v === null || v === undefined) ? '' : v;
+    }
+
+    // === FORM DOLDUR ===
+    function formDoldur(rapor) {
+        setVal('enj-emir-no',         rapor.emir_no);
+        setVal('enj-renk',            rapor.renk);
+        setVal('enj-bagli-kalip',     rapor.bagli_kalip_adet);
+        setVal('enj-kalip-basi-cift', rapor.kalip_basi_cift);
+        setVal('enj-personel-sayisi', rapor.personel_sayisi);
+
+        var kbc = document.getElementById('enj-kalip-basi-cift');
+        if (kbc && rapor.kalip_basi_cift != null) {
+            kbc.dataset.masterValue = String(rapor.kalip_basi_cift);
+        }
+
+        if (rapor.kalip_id) {
+            var hid = document.getElementById('enj-kalip-id');
+            if (hid) hid.value = rapor.kalip_id;
+            var inp = document.getElementById('enj-kalip-input');
+            if (inp && rapor.kalip_no) inp.value = rapor.kalip_no;
+        }
+    }
+
+    // === SAATLIK DOLDUR ===
+    function saatlikDoldur(saatlik) {
+        var trList = document.querySelectorAll('tr[data-saat-bas]');
+        trList.forEach(function (tr) {
+            var bas = parseInt(tr.dataset.saatBas, 10);
+            var basStr = String(bas).padStart(2, '0') + ':00';
+            var sk = null;
+            for (var i = 0; i < saatlik.length; i++) {
+                if (saatlik[i].saat_baslangic === basStr) { sk = saatlik[i]; break; }
+            }
+            if (!sk) return;
+            tr.dataset.saatlikId = sk.id;
+            var tInp = tr.querySelector('.tur-inp');
+            if (tInp) tInp.value = (sk.tur_adet) ? sk.tur_adet : '';
+            var dSel = tr.querySelector('.durum-sel');
+            if (dSel && sk.durum) dSel.value = sk.durum;
+            var aSel = tr.querySelector('.aks-sel');
+            if (aSel) aSel.value = sk.aksama_sebep_id || '';
+        });
+    }
+
+    // === ISTASYON DOLDUR ===
+    function istasyonDoldur(istasyonlar) {
+        // Aktif makine paneli secili olani bul
+        var panel = document.querySelector('.enj-mak-panel.aktif') ||
+                    document.querySelector('.enj-mak-panel[data-makine-id=' + chr(34) + MAKINE + chr(34) + ']') ||
+                    document.querySelector('.enj-mak-panel');
+        if (!panel) return;
+
+        // Cell sirasiyla istasyon numarasi
+        var cells = panel.querySelectorAll('.enj-ist-cell');
+        cells.forEach(function (cell, idx) {
+            var ist_no = idx + 1;
+            cell.dataset.istasyonNo = ist_no;
+            var btns = cell.querySelectorAll('button.s');
+            btns.forEach(function (btn) {
+                var slot = btn.dataset.slot;
+                var row = null;
+                for (var i = 0; i < istasyonlar.length; i++) {
+                    if (istasyonlar[i].istasyon_no === ist_no && istasyonlar[i].slot === slot) {
+                        row = istasyonlar[i]; break;
+                    }
+                }
+                if (!row) return;
+                btn.dataset.istasyonId = row.id;
+                btn.classList.toggle('on', !!row.aktif);
+            });
+        });
+    }
+
+    // === AUTO-SAVE ===
+    var DEBOUNCE = 800;
+    var timers = {};
+    var pending = {};
+
+    function setError(el, msg) {
+        if (!el) return;
+        el.classList.add('enj-save-err');
+        el.title = msg || 'Kayit hatasi';
+        setTimeout(function () {
+            el.classList.remove('enj-save-err');
+            el.removeAttribute('title');
+        }, 3000);
+    }
+
+    function patch(url, body, target) {
+        return api(url, { method: 'PATCH', body: body }).then(function (d) {
+            if (!d || !d.ok) throw new Error((d && d.hata) || 'API hatasi');
+        }).catch(function (err) {
+            console.error('[F8] PATCH:', url, err.message);
+            setError(target, 'Kayit: ' + err.message);
+        });
+    }
+
+    function schedule(key, fn) {
+        if (timers[key]) clearTimeout(timers[key]);
+        pending[key] = fn;
+        timers[key] = setTimeout(function () {
+            delete timers[key]; delete pending[key]; fn();
+        }, DEBOUNCE);
+    }
+
+    function flushKey(key) {
+        if (!timers[key]) return;
+        clearTimeout(timers[key]);
+        delete timers[key];
+        var fn = pending[key]; delete pending[key];
+        if (fn) fn();
+    }
+
+    function flushAll() {
+        Object.keys(timers).forEach(flushKey);
+    }
+
+    function getNum(el) {
+        var v = (el.value || '').trim();
+        if (v === '') return null;
+        var n = parseInt(v, 10);
+        return isNaN(n) ? null : n;
+    }
+
+    function getTxt(el) {
+        var v = (el.value || '').trim();
+        return v === '' ? null : v;
+    }
+
+    function autoSaveBagla() {
+        if (!raporId) return;
+
+        // Form alanlari
+        [
+            ['enj-emir-no',         'emir_no',          'text'],
+            ['enj-renk',            'renk',             'text'],
+            ['enj-bagli-kalip',     'bagli_kalip_adet', 'int'],
+            ['enj-kalip-basi-cift', 'kalip_basi_cift',  'int'],
+            ['enj-personel-sayisi', 'personel_sayisi',  'int']
+        ].forEach(function (spec) {
+            var inp = document.getElementById(spec[0]);
+            if (!inp) return;
+            var key = 'f_' + spec[0];
+            function save() {
+                var v = (spec[2] === 'int') ? getNum(inp) : getTxt(inp);
+                var body = {}; body[spec[1]] = v;
+                patch('/enjeksiyon/api/rapor/' + raporId, body, inp);
+            }
+            inp.addEventListener('input', function () { schedule(key, save); });
+            inp.addEventListener('blur', function () { flushKey(key); });
+        });
+
+        // Saatlik tur
+        document.querySelectorAll('tr[data-saatlik-id] .tur-inp').forEach(function (inp) {
+            var tr = inp.closest('tr[data-saatlik-id]');
+            var sid = tr && tr.dataset.saatlikId;
+            if (!sid) return;
+            var key = 's_tur_' + sid;
+            function save() {
+                var v = getNum(inp);
+                if (v === null) v = 0;
+                patch('/enjeksiyon/api/saatlik/' + sid, { tur_adet: v }, inp);
+            }
+            inp.addEventListener('input', function () { schedule(key, save); });
+            inp.addEventListener('blur', function () { flushKey(key); });
+        });
+
+        // Saatlik durum
+        document.querySelectorAll('tr[data-saatlik-id] .durum-sel').forEach(function (sel) {
+            var tr = sel.closest('tr[data-saatlik-id]');
+            var sid = tr && tr.dataset.saatlikId;
+            if (!sid) return;
+            sel.addEventListener('change', function () {
+                patch('/enjeksiyon/api/saatlik/' + sid, { durum: sel.value }, sel);
+            });
+        });
+
+        // Saatlik aksama
+        document.querySelectorAll('tr[data-saatlik-id] .aks-sel').forEach(function (sel) {
+            var tr = sel.closest('tr[data-saatlik-id]');
+            var sid = tr && tr.dataset.saatlikId;
+            if (!sid) return;
+            sel.addEventListener('change', function () {
+                var v = sel.value;
+                patch('/enjeksiyon/api/saatlik/' + sid, {
+                    aksama_sebep_id: v === '' ? null : parseInt(v, 10)
+                }, sel);
+            });
+        });
+
+        // A/B istasyon - mevcut abToggle'i wrap et (override)
+        if (typeof window._enj_origAbToggle === 'undefined' && typeof abToggle === 'function') {
+            // Bu fonksiyon zaten document click delegation icinde cagriliyor.
+            // Direkt override etmek yerine click handler ekle (capture):
+        }
+        // Click delegation - button.s
+        document.addEventListener('click', function (e) {
+            var btn = e.target.closest && e.target.closest('button.s');
+            if (!btn) return;
+            var iid = btn.dataset.istasyonId;
+            if (!iid) return;
+            // Click sonrasi (mevcut abToggle calistiktan sonra) state'i gonder
+            setTimeout(function () {
+                var aktif = btn.classList.contains('on') ? 1 : 0;
+                patch('/enjeksiyon/api/istasyon/' + iid, { aktif: aktif }, btn);
+            }, 0);
+        }, false);
+
+        // Kalip secimi event (F25.2 dispatchEvent)
+        document.addEventListener('enj-kalip-secildi', function (e) {
+            var d = e.detail || {};
+            var sec = d.secilen;
+            if (!sec) return;
+            var body = {
+                kalip_id: sec.id,
+                kalip_no: sec.kalip_kod || null,
+                renk: sec.renk || null,
+                kalip_basi_cift: sec.kalip_basi_cift != null ? sec.kalip_basi_cift : null,
+                bagli_kalip_adet: sec.varsayilan_bagli_kalip != null ? sec.varsayilan_bagli_kalip : null
+            };
+            var inp = document.getElementById('enj-kalip-input');
+            patch('/enjeksiyon/api/rapor/' + raporId, body, inp);
+        });
+
+        // Makine kart click oncesi flush
+        document.addEventListener('click', function (e) {
+            if (e.target.closest && e.target.closest('.enj-mak-kart')) flushAll();
+        }, true);
+
+        // Sayfa kapaniyor
+        window.addEventListener('beforeunload', flushAll);
+    }
+
+    // === INIT ===
+    function init() {
+        if (initialized) return;
+        initialized = true;
+        var qs = 'tarih=' + encodeURIComponent(TARIH) +
+                 '&vardiya=' + encodeURIComponent(VARDIYA) +
+                 '&makine_id=' + encodeURIComponent(MAKINE);
+        api('/enjeksiyon/api/rapor?' + qs).then(function (d) {
+            if (!d.ok) { console.error('[F8] API hatasi:', d); return; }
+            raporId = d.rapor.id;
+            formDoldur(d.rapor);
+            saatlikDoldur(d.saatlik);
+            istasyonDoldur(d.istasyonlar);
+            autoSaveBagla();
+            console.log('[CPS LOCAL] F8 state yuklu (rapor_id=' + raporId +
+                        ', ' + d.saatlik.length + ' saat, ' + d.istasyonlar.length + ' istasyon)');
+        }).catch(function (e) {
+            console.error('[F8] init:', e);
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
+/* === END: ENJ_F8_JS_STATE === */

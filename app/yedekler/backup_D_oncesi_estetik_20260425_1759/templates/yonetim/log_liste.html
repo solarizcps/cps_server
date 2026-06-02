@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Audit Log — Yönetim{% endblock %}
+
+{% block head %}
+<style>
+.log-filtre { background:#fff; border:0.5px solid var(--border); border-radius:10px; padding:12px 16px; margin-bottom:14px; box-shadow:var(--shadow-sm); }
+.log-filtre form { display:grid; grid-template-columns:repeat(6, 1fr) auto; gap:8px; align-items:end; }
+.log-filtre label { display:block; font-size:9px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:1.2px; margin-bottom:3px; }
+.log-filtre input, .log-filtre select { width:100%; padding:7px 10px; border:1px solid var(--border); border-radius:6px; font-size:12px; font-family:var(--sans); }
+
+.log-tablo { background:#fff; border:0.5px solid var(--border); border-radius:10px; overflow:hidden; box-shadow:var(--shadow-sm); }
+.log-row { display:grid; grid-template-columns:145px 95px 115px 115px 1fr 105px; padding:9px 14px; border-bottom:0.5px solid var(--border); font-size:12.5px; align-items:center; }
+.log-row:hover { background:var(--bg3); }
+.log-row.hdr { background:var(--bg4); font-size:10px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:1.2px; }
+.log-row .tr { font-family:var(--mono); font-size:11px; color:var(--text3); }
+.log-row .kul { font-weight:600; }
+.log-row .mdl { font-size:10px; color:var(--text3); text-transform:uppercase; letter-spacing:1px; text-align:right; }
+.log-row .act { font-size:12.5px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <div class="page-title">Audit Log / Değişiklik Geçmişi</div>
+    <div class="page-sub">{{ loglar | length }} kayıt gösteriliyor (en yeni 500)</div>
+  </div>
+</div>
+
+<!-- Filtreler -->
+<div class="log-filtre">
+  <form method="get">
+    <div>
+      <label>Modül</label>
+      <select name="modul">
+        <option value="">— Tümü —</option>
+        <option value="finans"  {% if f.modul == 'finans' %}selected{% endif %}>Finans</option>
+        <option value="grafik"  {% if f.modul == 'grafik' %}selected{% endif %}>Grafik</option>
+        <option value="yonetim" {% if f.modul == 'yonetim' %}selected{% endif %}>Yönetim</option>
+      </select>
+    </div>
+    <div>
+      <label>Alt Modül</label>
+      <input type="text" name="alt_modul" value="{{ f.alt_modul or '' }}" placeholder="anlasma, kullanici..." maxlength="32">
+    </div>
+    <div>
+      <label>Kullanıcı</label>
+      <select name="kullanici">
+        <option value="">— Tümü —</option>
+        {% for k in kullanicilar %}
+        <option value="{{ k.KullaniciAdi }}" {% if f.kullanici == k.KullaniciAdi %}selected{% endif %}>{{ k.KullaniciAdi }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>İşlem</label>
+      <select name="islem">
+        <option value="">— Tümü —</option>
+        {% for i in ['EKLE','DUZENLE','SIL','LOGIN','LOGOUT','SIFRE_DEGISTIR','SIFRE_SIFIRLA','YETKI_GUNCELLE'] %}
+        <option value="{{ i }}" {% if f.islem == i %}selected{% endif %}>{{ i }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>Baş. Tarih</label>
+      <input type="date" name="bas" value="{{ f.bas or '' }}">
+    </div>
+    <div>
+      <label>Bit. Tarih</label>
+      <input type="date" name="bit" value="{{ f.bit or '' }}">
+    </div>
+    <div style="display:flex; gap:4px;">
+      <button type="submit" class="btn btn-primary btn-sm">🔍 Filtrele</button>
+      <a href="/yonetim/log" class="btn btn-outline btn-sm">↺</a>
+    </div>
+  </form>
+</div>
+
+<!-- Tablo -->
+<div class="log-tablo">
+  <div class="log-row hdr">
+    <div>Tarih</div>
+    <div>İşlem</div>
+    <div>Kullanıcı</div>
+    <div>Tablo / Kayıt</div>
+    <div>Açıklama</div>
+    <div style="text-align:right;">Modül</div>
+  </div>
+
+  {% for l in loglar %}
+  <div class="log-row">
+    <div class="tr">{{ l.Tarih | tarih_saat }}</div>
+    <div>
+      {% if l.Islem == 'EKLE' %}<span class="badge badge-tahsilat">EKLE</span>
+      {% elif l.Islem == 'DUZENLE' %}<span class="badge badge-fatura">DÜZENLE</span>
+      {% elif l.Islem == 'SIL' %}<span class="badge badge-odeme">SİL</span>
+      {% elif l.Islem == 'LOGIN' %}<span class="badge badge-musteri">LOGIN</span>
+      {% elif l.Islem == 'LOGOUT' %}<span class="badge" style="background:#f3f4f6;color:#374151;">LOGOUT</span>
+      {% elif l.Islem == 'SIFRE_DEGISTIR' %}<span class="badge" style="background:#fef3c7;color:var(--sol-dark);">🔑 ŞİFRE</span>
+      {% elif l.Islem == 'SIFRE_SIFIRLA' %}<span class="badge" style="background:#fef3c7;color:var(--sol-dark);">🔑 SIFIRLA</span>
+      {% elif l.Islem == 'YETKI_GUNCELLE' %}<span class="badge" style="background:#ede9fe;color:#6d28d9;">YETKİ</span>
+      {% else %}<span class="badge badge-fatura">{{ l.Islem }}</span>{% endif %}
+    </div>
+    <div class="kul">{{ l.AdSoyad or l.KullaniciAdi }}</div>
+    <div class="tr" style="font-size:11px;">
+      {% if l.TabloAdi %}{{ l.TabloAdi }}{% if l.KayitId %} #{{ l.KayitId }}{% endif %}{% else %}—{% endif %}
+    </div>
+    <div class="act">{{ l.Aciklama or '—' }}</div>
+    <div class="mdl">
+      {% if l.Modul %}{{ l.Modul }}{% if l.AltModul %}/{{ l.AltModul }}{% endif %}{% else %}—{% endif %}
+    </div>
+  </div>
+  {% else %}
+  <div style="padding:40px; text-align:center; color:var(--text3);">
+    Filtrelere uyan log kaydı bulunamadı.
+  </div>
+  {% endfor %}
+</div>
+
+{% endblock %}

@@ -1,0 +1,506 @@
+/* =====================================================
+   KARAR MASASI v5.1 — KURUMSAL SADE CSS
+   Tum class .km-* prefix izolasyonu
+   Tasarim hedefi: butun gun acik durabilen operasyon ekrani
+   ===================================================== */
+
+.km-sayfa { padding: 14px 18px 24px 18px; }
+
+/* === BASLIK === */
+.km-baslik {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+.km-baslik-sol {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.km-baslik-icon { font-size: 22px; }
+.km-baslik-metin {
+  font-size: 16.5px;
+  font-weight: 500;
+  color: #1A1A1A;
+  letter-spacing: -0.2px;
+}
+.km-baslik-sag { display: flex; gap: 6px; align-items: center; }
+
+.km-altbaslik {
+  font-size: 11.5px;
+  color: #888780;
+  margin-bottom: 12px;
+}
+
+/* === ROZETLER (UST) === */
+.km-rozet {
+  font-size: 10.5px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  display: inline-block;
+  border: 0.5px solid #DDD;
+  background: transparent;
+  color: #444441;
+}
+.km-rozet-mock { color: #888780; }
+.km-rozet-gorunum { color: #444441; }
+
+/* === KPI BANDI (sade tek cubuk) === */
+.km-kpi {
+  display: flex;
+  margin-bottom: 12px;
+  border: 0.5px solid #ECEAE2;
+  border-radius: 5px;
+  overflow: hidden;
+  background: #FFFFFF;
+}
+.km-kpi-hucre {
+  flex: 1;
+  padding: 8px 13px;
+  border-right: 0.5px solid #ECEAE2;
+}
+.km-kpi-hucre:last-child { border-right: 0; }
+.km-kpi-hucre-genis { flex: 1.4; }
+
+.km-kpi-label {
+  font-size: 9.5px;
+  color: #888780;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 1px;
+}
+.km-kpi-deger {
+  font-size: 15px;
+  font-weight: 500;
+  color: #1A1A1A;
+  font-variant-numeric: tabular-nums;
+}
+.km-kpi-deger-kritik { color: #A32D2D; }
+
+.km-kpi-kapasite-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.km-kpi-kapasite-bolum { color: #B5B3AA; font-weight: 400; }
+.km-kpi-kapasite-oran {
+  font-size: 10.5px;
+  font-weight: 500;
+}
+.km-kpi-oran-yesil { color: #5A8C3D; }
+.km-kpi-oran-amber { color: #BA7517; }
+.km-kpi-oran-kirmizi { color: #A32D2D; }
+
+/* === FILTRE CUBUGU === */
+.km-filtre-cubuk {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.km-tab-grup {
+  display: flex;
+  gap: 0;
+  border: 0.5px solid #DDD;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #F4F2EC;
+}
+.km-tab {
+  padding: 4px 11px;
+  font-size: 11.5px;
+  cursor: pointer;
+  color: #888780;
+  background: transparent;
+  border: none;
+  border-left: 0.5px solid #ECEAE2;
+  font-family: inherit;
+}
+.km-tab:first-child { border-left: 0; }
+.km-tab:hover { background: #FFFFFF; color: #1A1A1A; }
+.km-tab.aktif {
+  background: #FFFFFF;
+  color: #1A1A1A;
+  font-weight: 500;
+}
+
+.km-filtre-dd {
+  font-size: 11.5px;
+  color: #444441;
+  padding: 4px 10px;
+  border: 0.5px solid #DDD;
+  border-radius: 4px;
+  background: #FFFFFF;
+  cursor: pointer;
+  font-family: inherit;
+  outline: none;
+}
+.km-filtre-dd:hover { border-color: #888780; }
+.km-filtre-dd:focus { border-color: #185FA5; }
+
+.km-filtre-arama {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: #444441;
+  padding: 4px 12px;
+  border: 0.5px solid #DDD;
+  border-radius: 4px;
+  background: #FFFFFF;
+  outline: none;
+  font-family: inherit;
+  min-width: 200px;
+}
+.km-filtre-arama:focus { border-color: #185FA5; }
+
+.km-gelismis-link {
+  font-size: 11px;
+  color: #888780;
+  cursor: pointer;
+  padding: 4px 0;
+  user-select: none;
+}
+.km-gelismis-link:hover { color: #1A1A1A; }
+
+.km-filtre-temizle {
+  font-size: 11px;
+  color: #888780;
+  padding: 4px 10px;
+  border: 0.5px solid #DDD;
+  border-radius: 4px;
+  background: #FFFFFF;
+  cursor: pointer;
+  font-family: inherit;
+}
+.km-filtre-temizle:hover { background: #F4F2EC; color: #1A1A1A; }
+
+/* === SIRA YONETIMI CUBUGU === */
+.km-sira-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 12px;
+  background: #FFFFFF;
+  border: 0.5px solid #ECEAE2;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
+.km-sira-bar-sol {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 11.5px;
+  color: #444441;
+}
+.km-sira-baslik { color: #1A1A1A; font-weight: 500; }
+.km-sira-aciklama { color: #888780; }
+.km-sira-link {
+  font-size: 11px;
+  color: #888780;
+  cursor: pointer;
+  user-select: none;
+}
+.km-sira-link:hover { color: #1A1A1A; text-decoration: underline; }
+
+/* === TOGGLE PILL === */
+.km-toggle {
+  position: relative;
+  display: inline-block;
+  width: 26px;
+  height: 14px;
+  border-radius: 7px;
+  vertical-align: middle;
+  transition: background 0.15s ease;
+}
+.km-toggle.on { background: #1A1A1A; }
+.km-toggle.off { background: #D5D3CB; }
+.km-toggle-dot {
+  position: absolute;
+  top: 2px;
+  width: 10px;
+  height: 10px;
+  background: #FFFFFF;
+  border-radius: 50%;
+  transition: all 0.15s ease;
+}
+.km-toggle.on .km-toggle-dot { right: 2px; left: auto; }
+.km-toggle.off .km-toggle-dot { left: 2px; right: auto; }
+
+/* === MANUEL MOD CUBUGU === */
+.km-manuel-bar {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 12px;
+  background: #FFF8E1;
+  border: 0.5px solid #E8D89F;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
+body.km-manuel-aktif .km-manuel-bar { display: flex; }
+body.km-manuel-aktif .km-sira-bar { display: none; }
+
+.km-manuel-bar-sol {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 11.5px;
+  color: #6B5510;
+}
+.km-manuel-bar-baslik { font-weight: 500; }
+.km-manuel-bar-aciklama { color: #6B5510; }
+.km-manuel-bar-sag {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.km-manuel-geri-al {
+  font-size: 11px;
+  color: #6B5510;
+  cursor: pointer;
+  user-select: none;
+}
+.km-manuel-geri-al:hover { text-decoration: underline; }
+.km-manuel-don-buton {
+  font-size: 11px;
+  padding: 4px 11px;
+  background: #1A1A1A;
+  color: #FFFFFF;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  font-family: inherit;
+}
+.km-manuel-don-buton:hover { background: #333; }
+
+/* === FILTRE KILIDI (manuel mod aktifken) === */
+body.km-manuel-aktif .km-filtre-cubuk {
+  opacity: 0.5;
+  pointer-events: none;
+}
+body.km-manuel-aktif .km-filtre-cubuk select,
+body.km-manuel-aktif .km-filtre-cubuk input {
+  cursor: not-allowed;
+}
+
+/* === TABLO === */
+.km-tablo-cerceve {
+  background: #FFFFFF;
+  border: 0.5px solid #ECEAE2;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.km-tablo {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12.5px;
+  font-family: inherit;
+  background: #FFFFFF;
+}
+.km-tablo thead tr { height: 32px; }
+.km-tablo th {
+  padding: 5px 10px;
+  text-align: left;
+  font-weight: 500;
+  font-size: 10px;
+  color: #888780;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  border-bottom: 0.5px solid #DDD;
+  background: #FFFFFF;
+}
+.km-tablo th.km-th-num { text-align: right; }
+.km-tablo th.km-th-mid { text-align: center; }
+.km-tablo th.km-th-grip { width: 22px; padding: 5px 4px; }
+.km-tablo th.km-th-no { width: 24px; padding: 5px 4px; text-align: center; }
+.km-tablo th.km-th-aksiyon { width: 26px; padding: 5px 4px; }
+
+.km-tablo tbody td {
+  padding: 8px 10px;
+  vertical-align: middle;
+  border-bottom: 0.5px solid #ECEAE2;
+}
+
+/* === SATIR (sade) === */
+.km-row {
+  transition: background 0.08s ease;
+  height: 36px;
+  background: #FFFFFF;
+}
+.km-row:hover { background: #FAFAF8; }
+
+/* manuel modda hover */
+body.km-manuel-aktif .km-row { background: #FFFDF7; }
+body.km-manuel-aktif .km-row:hover { background: #FFF9EB; }
+
+/* === SATIR DURUMLARI === */
+/* HAZIR: tamamen beyaz, hicbir vurgu yok */
+.km-row-hazir { /* class kullanilmiyor, default beyaz */ }
+
+/* KISMI: sadece sol border */
+.km-row-kismi {
+  box-shadow: inset 4px 0 0 #BA7517;
+}
+
+/* NAKIT: sadece sol border */
+.km-row-nakit {
+  box-shadow: inset 4px 0 0 #9C4D7B;
+}
+
+/* GECIKMIS: sol gri border (siyah dolgu YOK) */
+.km-row-gecikmis {
+  box-shadow: inset 4px 0 0 #B5B3AA;
+}
+
+/* BLOKE: sol kirmizi border + hafif glow */
+.km-row-bloke {
+  box-shadow: inset 4px 0 0 #C53A3A, 0 0 0 1px rgba(197,58,58,0.06);
+}
+.km-row-bloke:hover {
+  box-shadow: inset 4px 0 0 #C53A3A, 0 0 0 1px rgba(197,58,58,0.15);
+  background: #FCF7F7;
+}
+
+/* === HUCRE TIPLERI === */
+.km-num { font-variant-numeric: tabular-nums; text-align: right; }
+.km-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; }
+
+.km-hucre-merkez { text-align: center; }
+.km-hucre-soluk { color: #B5B3AA; }
+.km-hucre-bos { color: #B5B3AA; }
+.km-hucre-mid-text { color: #444441; }
+.km-hucre-text-primary { color: #1A1A1A; }
+
+/* === MUSTERI + NAKIT etiketi === */
+.km-musteri-nakit-etiket {
+  font-size: 9.5px;
+  color: #9C4D7B;
+  margin-left: 5px;
+  font-weight: 500;
+}
+
+/* === BLOKE METNI === */
+.km-bloke-metin {
+  font-size: 10.5px;
+  color: #A32D2D;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+/* === TERMIN === */
+.km-termin-uzak { color: #1A1A1A; }
+.km-termin-yakin { color: #BA7517; font-weight: 500; }
+.km-termin-gecti {
+  color: #A32D2D;
+  font-weight: 500;
+}
+.km-termin-kalan-gun {
+  color: #A32D2D;
+  font-size: 10.5px;
+  margin-left: 4px;
+}
+
+/* === DARBOGAZ (kompakt) === */
+.km-darbogaz-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: #1A1A1A;
+}
+.km-darbogaz-icon {
+  color: #BA7517;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+/* === USTA TALIMATI === */
+.km-talimat {
+  font-size: 11.5px;
+  color: #1A1A1A;
+}
+.km-talimat-bos {
+  font-size: 11.5px;
+  color: #888780;
+  font-style: italic;
+}
+
+/* === GRIP (drag handle - Faz 1'de gizli) === */
+.km-grip {
+  opacity: 0;
+  transition: opacity 0.1s ease;
+  cursor: grab;
+  color: #B5B3AA;
+  font-size: 14px;
+}
+.km-row:hover .km-grip { opacity: 0.6; }
+body.km-manuel-aktif .km-grip { opacity: 0.55; }
+
+/* === TASINMIS ISARETLER (manuel modda) === */
+.km-tasindi-isaret {
+  font-size: 8.5px;
+  padding: 1px 5px;
+  background: #FFE7B5;
+  color: #6B5510;
+  border-radius: 6px;
+  margin-left: 3px;
+  font-weight: 500;
+}
+
+/* === AKSIYON BUTON === */
+.km-aksiyon-btn {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 14px;
+  color: #888780;
+  padding: 4px 6px;
+  border-radius: 3px;
+  font-family: inherit;
+}
+.km-aksiyon-btn:hover { background: rgba(0,0,0,0.05); color: #1A1A1A; }
+
+/* === BILGI CUBUGU === */
+.km-bilgi-cubuk {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 10.5px;
+  color: #888780;
+  padding: 9px 0 0 0;
+  margin-top: 12px;
+  border-top: 0.5px solid #ECEAE2;
+}
+.km-bilgi-ayrac { color: #B5B3AA; }
+
+/* === TOAST === */
+.km-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: #1A1A1A;
+  color: #FFFFFF;
+  padding: 10px 14px;
+  border-radius: 4px;
+  font-size: 12px;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  max-width: 320px;
+}
+
+/* === RESPONSIVE === */
+@media (max-width: 1100px) {
+  .km-kpi { flex-wrap: wrap; }
+  .km-kpi-hucre { flex: 1 1 33%; }
+  .km-filtre-arama { min-width: 140px; }
+}
+@media (max-width: 700px) {
+  .km-kpi-hucre { flex: 1 1 50%; }
+  .km-baslik-sag { flex-wrap: wrap; }
+}

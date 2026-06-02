@@ -1,0 +1,346 @@
+// =====================================================
+// KARAR MASASI v3 — JS RENDER MOTORU (Faz 1)
+// Tum fonksiyonlar km_ prefix izolasyonu
+// =====================================================
+
+(function () {
+  "use strict";
+
+  const KM_BUGUN = "2026-05-06";
+
+  const km_state = {
+    satirlar: [],
+    ozet: {},
+    kaynak: "MOCK",
+    akilli_sira: true,
+    filtre: {
+      zaman: "hafta",
+      musteri: "",
+      oncelik: "",
+      uretilebilirlik: "",
+      bant: "",
+      arama: ""
+    }
+  };
+
+  function km_log() {
+    var args = ["[KM]"].concat(Array.from(arguments));
+    console.log.apply(console, args);
+  }
+
+  // === RENK HESABI (frontend kopyasi - backend zaten dolduruyor) ===
+  function km_satir_rengi(s) {
+    if (s.uretilebilirlik === "BLOKE") return "bloke";
+    if (s.termin_durumu === "gecti") return "gecikmis";
+    var et = (s.musteri_etiketleri || []).map(function(x){ return (x||"").toUpperCase(); });
+    if (et.indexOf("NAKIT") >= 0 || et.indexOf("NAKİT") >= 0 || et.indexOf("VIP") >= 0) return "nakit";
+    if (s.uretilebilirlik === "KISMI") return "kismi";
+    return "hazir";
+  }
+
+  function km_termin_durum_class(durum) {
+    if (durum === "gecti") return "km-termin-gecti";
+    if (durum === "yakin") return "km-termin-yakin";
+    return "km-termin-uzak";
+  }
+
+  // === RENDER: KPI ===
+  function km_render_kpi(ozet) {
+    var idMap = {
+      "km-kpi-toplam": ozet.toplam_siparis,
+      "km-kpi-hafta": ozet.bu_hafta_plan,
+      "km-kpi-kritik": ozet.kritik_geciken,
+      "km-kpi-hazir": ozet.uretime_hazir,
+      "km-kpi-bloke": ozet.bloke,
+      "km-kpi-darbogaz": ozet.darbogazli,
+      "km-kpi-kapasite": (ozet.gunluk_kapasite || 0).toLocaleString("tr-TR"),
+      "km-kpi-termin": ozet.termin_riski
+    };
+    Object.keys(idMap).forEach(function(id){
+      var el = document.getElementById(id);
+      if (el) el.textContent = idMap[id] !== undefined ? idMap[id] : "—";
+    });
+  }
+
+  // === RENDER: HAZIRLIK 3 IKON ===
+  function km_render_hazirlik(h) {
+    function ikon(durum, baslik) {
+      if (durum === "tamam") return '<span class="km-icon-ok" title="'+baslik+': tamam">✓</span>';
+      if (durum === "bekle") return '<span class="km-icon-bekle" title="'+baslik+': bekleniyor">⏱</span>';
+      if (durum === "yok")   return '<span class="km-icon-yok" title="'+baslik+': eksik">✗</span>';
+      return '<span class="km-icon-bekle">?</span>';
+    }
+    return '<span class="km-icon-grup">' +
+      ikon(h.patch, "Patch") +
+      ikon(h.isik, "Işık") +
+      ikon(h.toka, "Toka") +
+      '</span>';
+  }
+
+  // === RENDER: ROZETLER ===
+  function km_render_oncelik_rozet(onc) {
+    var c = "km-onc-rozet";
+    if (onc === "ACIL")    return '<span class="'+c+' km-onc-rozet-acil">ACİL</span>';
+    if (onc === "NAKIT")   return '<span class="'+c+' km-onc-rozet-nakit">NAKİT</span>';
+    if (onc === "GECIKTI") return '<span class="'+c+' km-onc-rozet-gecikti">GECİKTİ</span>';
+    return '<span class="'+c+' km-onc-rozet-normal">NORMAL</span>';
+  }
+  function km_render_uret_rozet(u) {
+    if (u === "HAZIR") return '<span class="km-uret-rozet km-uret-rozet-hazir">HAZIR</span>';
+    if (u === "KISMI") return '<span class="km-uret-rozet km-uret-rozet-kismi">KISMİ</span>';
+    if (u === "BLOKE") return '<span class="km-uret-rozet km-uret-rozet-bloke">BLOKE</span>';
+    return '<span class="km-uret-rozet">—</span>';
+  }
+
+  // === RENDER: TERMIN ===
+  function km_render_termin(s) {
+    var t = (s.termin || "").substring(5).replace("-",".");  // "MM.DD"
+    var cls = km_termin_durum_class(s.termin_durumu);
+    var prefix = "";
+    if (s.termin_durumu === "gecti") prefix = "⚠ ";
+    return '<span class="'+cls+'">'+prefix+t+'</span>';
+  }
+
+  // === RENDER: DARBOGAZ ===
+  function km_render_darbogaz(s) {
+    var d = s.darbogaz || {};
+    if (!d.var) return '<span style="color:#999;">—</span>';
+    if (d.ikon_tipi === "paket-yok") {
+      return '<span class="km-darbogaz-tag"><span class="km-darbogaz-icon km-darbogaz-yok-icon">📦</span>'+
+             (d.metin || s.bloke_sebebi || "Aksesuar eksik")+'</span>';
+    }
+    var ana = d.ana || "";
+    var alt = d.alt ? (" / " + d.alt) : "";
+    var sapma = (d.sapma !== undefined) ? (" <strong>+"+d.sapma+"%</strong>") : "";
+    return '<span class="km-darbogaz-tag"><span class="km-darbogaz-icon">🔥</span>'+ana+alt+sapma+'</span>';
+  }
+
+  // === RENDER: TEK SATIR ===
+  function km_render_satir(s, idx) {
+    var renk = s.satir_rengi || km_satir_rengi(s);
+    var bant = s.bant || '<span style="color:#999;">—</span>';
+    var gunluk = s.gunluk_hedef ? s.gunluk_hedef.toLocaleString("tr-TR") : '<span style="color:#999;">—</span>';
+    var sure = s.kac_gunde_biter ? (s.kac_gunde_biter + " gün") : '<span style="color:#999;">—</span>';
+    var kac_gun = s.kac_gunde_biter || 0;
+    if (kac_gun > 0 && kac_gun <= 3) sure = '<span style="color:#C5832D;font-weight:600;">'+kac_gun+' gün</span>';
+    if (s.termin_durumu === "gecti" && kac_gun > 0) sure = '<span style="color:#F09595;">'+kac_gun+' gün</span>';
+
+    var talimat = s.usta_talimati ? 
+      ('<span class="km-talimat">'+_esc(s.usta_talimati)+'</span>') :
+      ('<span class="km-talimat-bos">— bekleniyor —</span>');
+
+    var dot = '<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+_dotRenk(renk)+';"></span>';
+
+    return ''+
+      '<tr class="km-row km-row-'+renk+'" data-renk="'+renk+'">'+
+        '<td class="km-st km-st-1">'+idx+'</td>'+
+        '<td class="km-st km-st-2">'+dot+'</td>'+
+        '<td class="km-st km-st-3">'+_esc(s.musteri||"")+'</td>'+
+        '<td class="km-st km-st-4 km-mono">'+_esc(s.siparis_no||"")+'</td>'+
+        '<td class="km-mono">'+_esc(s.emir_no||"")+'</td>'+
+        '<td style="font-weight:600;">'+_esc(s.model||"")+'</td>'+
+        '<td>'+_esc(s.renk||"")+'</td>'+
+        '<td>'+_esc(s.beden||"")+'</td>'+
+        '<td class="km-num">'+(s.siparis_adet||0).toLocaleString("tr-TR")+'</td>'+
+        '<td class="km-num" style="color:#185FA5;">'+(s.yapilan||0).toLocaleString("tr-TR")+'</td>'+
+        '<td class="km-num" style="font-weight:600;">'+(s.kalan||0).toLocaleString("tr-TR")+'</td>'+
+        '<td>'+km_render_termin(s)+'</td>'+
+        '<td style="text-align:center;">'+km_render_oncelik_rozet(s.oncelik)+'</td>'+
+        '<td class="km-mono" style="text-align:center;">'+bant+'</td>'+
+        '<td class="km-num">'+gunluk+'</td>'+
+        '<td class="km-num">'+sure+'</td>'+
+        '<td class="km-bolum-ayrac" style="text-align:center;">'+km_render_hazirlik(s.hazirlik||{})+'</td>'+
+        '<td style="text-align:center;">'+km_render_uret_rozet(s.uretilebilirlik)+'</td>'+
+        '<td>'+km_render_darbogaz(s)+'</td>'+
+        '<td>'+talimat+'</td>'+
+        '<td style="text-align:center;"><button class="km-aksiyon-btn" onclick="km_aksiyon_menu(event,\''+s.satir_id+'\')" title="Aksiyon menüsü">⋮</button></td>'+
+      '</tr>';
+  }
+
+  function _dotRenk(r) {
+    if (r === "bloke")    return "#C53A3A";
+    if (r === "gecikmis") return "#F1EFE8";
+    if (r === "nakit")    return "#9C4D7B";
+    if (r === "kismi")    return "#D89A28";
+    return "#6FAE4F";
+  }
+
+  function _esc(s) {
+    return String(s).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];
+    });
+  }
+
+  // === RENDER: TBODY ===
+  function km_render_tbody(satirlar) {
+    var tb = document.getElementById("km-tbody");
+    if (!tb) return;
+    if (!satirlar.length) {
+      tb.innerHTML = '<tr><td colspan="21" style="text-align:center;padding:30px;color:#999;">Filtreye uygun satır yok.</td></tr>';
+      return;
+    }
+    var html = "";
+    for (var i = 0; i < satirlar.length; i++) {
+      html += km_render_satir(satirlar[i], i + 1);
+    }
+    tb.innerHTML = html;
+  }
+
+  // === FILTRELEME ===
+  function km_filtrele(satirlar, f) {
+    return satirlar.filter(function(s){
+      // Zaman
+      if (f.zaman && f.zaman !== "hepsi") {
+        var kg = s.kalan_gun;
+        if (f.zaman === "hafta" && (kg < 0 || kg > 7)) return false;
+        if (f.zaman === "sonraki" && (kg < 8 || kg > 14)) return false;
+        if (f.zaman === "bu_ay" && (kg < 0 || kg > 30)) return false;
+        if (f.zaman === "3_ay" && (kg < 0 || kg > 90)) return false;
+      }
+      if (f.musteri && s.musteri !== f.musteri) return false;
+      if (f.oncelik && s.oncelik !== f.oncelik) return false;
+      if (f.uretilebilirlik && s.uretilebilirlik !== f.uretilebilirlik) return false;
+      if (f.bant) {
+        if (f.bant === "ATANMAMIS") {
+          if (s.bant) return false;
+        } else if (s.bant !== f.bant) return false;
+      }
+      if (f.arama) {
+        var q = f.arama.toLowerCase();
+        var hay = (s.musteri+" "+s.siparis_no+" "+s.emir_no+" "+s.model+" "+s.renk).toLowerCase();
+        if (hay.indexOf(q) < 0) return false;
+      }
+      return true;
+    });
+  }
+
+  function km_uygula() {
+    // Filtre state'i input'lardan oku
+    km_state.filtre.musteri = (document.getElementById("km-fil-musteri")||{}).value || "";
+    km_state.filtre.oncelik = (document.getElementById("km-fil-oncelik")||{}).value || "";
+    km_state.filtre.uretilebilirlik = (document.getElementById("km-fil-uretilebilirlik")||{}).value || "";
+    km_state.filtre.bant = (document.getElementById("km-fil-bant")||{}).value || "";
+    km_state.filtre.arama = (document.getElementById("km-fil-arama")||{}).value || "";
+
+    var sonuc = km_filtrele(km_state.satirlar, km_state.filtre);
+    if (km_state.akilli_sira) {
+      sonuc.sort(function(a,b){ return (b.skor||0) - (a.skor||0); });
+    }
+
+    km_render_tbody(sonuc);
+
+    var sayim = document.getElementById("km-bilgi-sayim");
+    if (sayim) sayim.textContent = sonuc.length + " satır (toplam " + km_state.satirlar.length + ")";
+  }
+
+  // === FILTRE FONKSIYONLARI (HTML onclick) ===
+  window.km_filtre_zaman = function(btn) {
+    document.querySelectorAll(".km-zaman-pill").forEach(function(b){ b.classList.remove("aktif"); });
+    btn.classList.add("aktif");
+    km_state.filtre.zaman = btn.getAttribute("data-zaman");
+    km_uygula();
+  };
+
+  window.km_filtre_temizle = function() {
+    document.getElementById("km-fil-musteri").value = "";
+    document.getElementById("km-fil-oncelik").value = "";
+    document.getElementById("km-fil-uretilebilirlik").value = "";
+    document.getElementById("km-fil-bant").value = "";
+    document.getElementById("km-fil-arama").value = "";
+    document.querySelectorAll(".km-zaman-pill").forEach(function(b){ b.classList.remove("aktif"); });
+    var hepsiBtn = document.querySelector(".km-zaman-pill[data-zaman='hepsi']");
+    if (hepsiBtn) hepsiBtn.classList.add("aktif");
+    km_state.filtre.zaman = "hepsi";
+    km_uygula();
+  };
+
+  window.km_uygula = km_uygula;
+
+  // === AKILLI SIRA TOGGLE ===
+  window.km_akilli_sira_toggle = function() {
+    km_state.akilli_sira = !km_state.akilli_sira;
+    var rozet = document.getElementById("km-akilli-rozet");
+    var serit = document.getElementById("km-akilli-serit");
+    if (km_state.akilli_sira) {
+      if (rozet) { rozet.textContent = "⚡ Akıllı sıra ON"; rozet.classList.remove("kapali"); }
+      if (serit) serit.classList.remove("kapali");
+    } else {
+      if (rozet) { rozet.textContent = "⚡ Manuel sıra"; rozet.classList.add("kapali"); }
+      if (serit) serit.classList.add("kapali");
+    }
+    km_uygula();
+  };
+
+  // === AKSIYON MENU (Faz 2 toast) ===
+  window.km_aksiyon_menu = function(ev, satir_id) {
+    if (ev) ev.stopPropagation();
+    km_toast("⋮ Aksiyon menüsü Faz 2'de aktif olacak (satır: "+satir_id+")");
+  };
+
+  // === TOAST ===
+  function km_toast(metin) {
+    var el = document.getElementById("km-toast");
+    if (!el) return;
+    el.textContent = metin;
+    el.style.display = "block";
+    setTimeout(function(){ el.style.display = "none"; }, 2800);
+  }
+
+  // === MUSTERI DROPDOWN DOLDUR ===
+  function km_musteri_dd_doldur(satirlar) {
+    var dd = document.getElementById("km-fil-musteri");
+    if (!dd) return;
+    var set = {};
+    satirlar.forEach(function(s){ if (s.musteri) set[s.musteri] = true; });
+    var arr = Object.keys(set).sort();
+    var html = '<option value="">Müşteri ▾</option>';
+    arr.forEach(function(m){ html += '<option value="'+_esc(m)+'">'+_esc(m)+'</option>'; });
+    dd.innerHTML = html;
+  }
+
+  // === YUKLE ===
+  function km_yukle() {
+    var t0 = performance.now();
+    var bilgi = document.getElementById("km-bilgi-sorgu");
+    if (bilgi) bilgi.textContent = "yükleniyor...";
+
+    fetch("/planlama/karar-masasi/data", { credentials: "same-origin" })
+      .then(function(r){
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
+      .then(function(data){
+        if (!data || !data.ok) {
+          throw new Error(data && data.hata ? data.hata : "Bilinmeyen hata");
+        }
+        km_state.satirlar = data.satirlar || [];
+        km_state.ozet = data.ozet || {};
+        km_state.kaynak = data.kaynak || "MOCK";
+
+        km_render_kpi(km_state.ozet);
+        km_musteri_dd_doldur(km_state.satirlar);
+        km_uygula();
+
+        var dt = (performance.now() - t0).toFixed(0);
+        if (bilgi) bilgi.textContent = "kaynak: " + km_state.kaynak + " · " + dt + " ms";
+        km_log("yuklendi", km_state.satirlar.length, "satir,", dt, "ms");
+      })
+      .catch(function(err){
+        if (bilgi) bilgi.textContent = "Hata: " + err.message;
+        km_log("HATA", err);
+      });
+  }
+
+  // === INIT ===
+  function km_init() {
+    km_log("karar_masasi.js loaded, BUGUN=" + KM_BUGUN);
+    km_yukle();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", km_init);
+  } else {
+    km_init();
+  }
+
+})();

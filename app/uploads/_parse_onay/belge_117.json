@@ -1,0 +1,89 @@
+{
+  "belge_id": 117,
+  "parti_id": 10,
+  "olusma_tarih": "2026-04-26 01:25:11",
+  "parse": {
+    "basarili": false,
+    "durum": "BEKLIYOR_ONAY",
+    "mesaj": "Güven skoru 70/100 — Önizleme onayı bekleniyor. 1 kalem (FOB: 2685.00 USD)",
+    "kalem_sayisi": 1,
+    "kalemler": [
+      {
+        "tip": "FOB",
+        "kaynak": "TAHMINI",
+        "tutar": 2685.0,
+        "para_birimi": "USD",
+        "aciklama": "Urun: 2 (5000 adet) | Teslim: CFR",
+        "cari_ad": "Instruction / 中文说明",
+        "fatura_no": null,
+        "not_metni": "Teslim: CFR | Toplam miktar: 5000"
+      }
+    ],
+    "parti_bilgi": {
+      "tedarikci_ad": "Instruction / 中文说明",
+      "para_birimi": "USD",
+      "toplam_cift": 5000,
+      "toplam_tutar": 2685.0,
+      "birim_maliyet": 0.537
+    },
+    "uyarilar": [
+      "PI No bulunamadi - idempotency kontrolu yapilamaz",
+      "Yukleme tarihi serbest metin icinde bulunamadi",
+      "Teslim sekli: CFR",
+      "1 urun satiri okundu",
+      "DIKKAT: Kaynak referans (PI/Invoice No) yok - idempotency kontrolu yapilamayacak"
+    ],
+    "kaynak_ref": null,
+    "dosya_hash": "1a96084029caa766a9faee42ff83295e92c313a5fb819bc1164f3f3aee94968d",
+    "insan_onayi_bekliyor": false,
+    "guven_skoru": 70,
+    "guven_seviyesi": "orta",
+    "guven_detay": [
+      {
+        "madde": "Header satiri bulundu (L3)",
+        "durum": "ok",
+        "puan": 0
+      },
+      {
+        "madde": "PI/Invoice No bulunamadi",
+        "durum": "hata",
+        "puan": -25
+      },
+      {
+        "madde": "Tedarikci: Instruction / 中文说明",
+        "durum": "ok",
+        "puan": 0
+      },
+      {
+        "madde": "Para birimi: USD",
+        "durum": "ok",
+        "puan": 0
+      },
+      {
+        "madde": "Matematik kontrolu yapilamadi (miktar/fiyat eksik)",
+        "durum": "uyari",
+        "puan": 0
+      }
+    ],
+    "matematik_ok": true,
+    "ekstra_kalemler": [],
+    "tespit_edilen_kolonlar": {
+      "0": "Kolon item",
+      "4": "Kolon item",
+      "11": "Kolon unit_of_measure",
+      "12": "Kolon qty",
+      "14": "Kolon amount_rmb",
+      "16": "Kolon amount_usd"
+    },
+    "mantiksizlik_uyarilari": [],
+    "oneriler": [],
+    "meta": {}
+  },
+  "ek_bilgi": {
+    "dosya_adi": "CPS_China_Office_Standard_Forms_V3_Spec_Payment_CN  new.xlsx",
+    "belge_tipi": "COMMERCIAL_INVOICE",
+    "dosya_hash": "1a96084029caa766a9faee42ff83295e92c313a5fb819bc1164f3f3aee94968d"
+  },
+  "is_duplicate": false,
+  "existing_ref": null
+}

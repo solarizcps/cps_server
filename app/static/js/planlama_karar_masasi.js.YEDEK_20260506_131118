@@ -1,0 +1,267 @@
+/* =====================================================
+   SOLARIZ CPS - PLANLAMA / PROSES TAKIP
+   Karar masasi gorunumu - filtre + kart render
+   Sadece okuma, henuz yazma yok.
+   ===================================================== */
+
+(function () {
+  'use strict';
+
+  var STATE = {
+    siparisler: [],
+    filtreler: {
+      zaman: 'HEPSI',
+      musteri: 'HEPSI',
+      oncelik: 'HEPSI',
+      production_ready: 'HEPSI'
+    }
+  };
+
+  // =====================================================
+  // VERI YUKLE
+  // =====================================================
+  function veriYukle() {
+    fetch('/planlama/proses-takip/data')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && d.ok && Array.isArray(d.siparisler)) {
+          STATE.siparisler = d.siparisler;
+          
+          // Veri kaynagini goster
+          var kaynak = document.getElementById('pl-veri-kaynak');
+          if (kaynak) kaynak.textContent = d.kaynak || 'MOCK';
+          
+          render();
+        } else {
+          gosterBos('Veri alinamadi');
+        }
+      })
+      .catch(function (e) {
+        gosterBos('Hata: ' + e.message);
+      });
+  }
+
+  // =====================================================
+  // FILTRE
+  // =====================================================
+  function filtrele(siparisler) {
+    return siparisler.filter(function (s) {
+      // Zaman
+      if (STATE.filtreler.zaman !== 'HEPSI' && s.zaman.kova !== STATE.filtreler.zaman) return false;
+      
+      // Musteri
+      if (STATE.filtreler.musteri !== 'HEPSI' && s.musteri !== STATE.filtreler.musteri) return false;
+      
+      // Oncelik (etiket veya oncelik alani)
+      if (STATE.filtreler.oncelik !== 'HEPSI') {
+        var f = STATE.filtreler.oncelik;
+        var has = (s.oncelik === f) || (s.musteri_etiketleri || []).indexOf(f) !== -1;
+        if (!has) return false;
+      }
+      
+      // Production ready
+      if (STATE.filtreler.production_ready !== 'HEPSI') {
+        if (s.cps.production_ready.durum !== STATE.filtreler.production_ready) return false;
+      }
+      
+      return true;
+    });
+  }
+
+  // =====================================================
+  // OZET HESAP
+  // =====================================================
+  function ozetGuncelle(filtreli) {
+    var toplam = filtreli.length;
+    var hazir = 0, kismi = 0, bloke = 0, darbogaz = 0;
+    
+    filtreli.forEach(function (s) {
+      var pr = s.cps.production_ready.durum;
+      if (pr === 'HAZIR') hazir++;
+      else if (pr === 'KISMI') kismi++;
+      else if (pr === 'BLOKE') bloke++;
+      
+      if (s.cps.darbogaz.var) darbogaz++;
+    });
+    
+    document.getElementById('pl-ozet-toplam').textContent = toplam;
+    document.getElementById('pl-ozet-hazir').textContent = hazir;
+    document.getElementById('pl-ozet-kismi').textContent = kismi;
+    document.getElementById('pl-ozet-bloke').textContent = bloke;
+    document.getElementById('pl-ozet-darbogaz').textContent = darbogaz;
+  }
+
+  // =====================================================
+  // KART RENDER
+  // =====================================================
+  function kartHTML(s) {
+    var pr = s.cps.production_ready;
+    var db = s.cps.darbogaz;
+    
+    // Etiketler
+    var etiketler = '';
+    var zamanLbl = {
+      'BU_HAFTA': 'Bu hafta',
+      'SONRAKI_HAFTA': 'Sonraki hafta',
+      'BU_AY': 'Bu ay',
+      '3_AY': '3 ay',
+      '6_AY': '6 ay',
+      '1_YIL': '1 yil'
+    }[s.zaman.kova] || s.zaman.kova;
+    etiketler += '<span class="pl-etiket pl-etiket-zaman">' + zamanLbl + '</span>';
+    
+    (s.musteri_etiketleri || []).forEach(function (e) {
+      etiketler += '<span class="pl-etiket pl-etiket-' + e + '">' + e + '</span>';
+    });
+    
+    if (s.oncelik && s.oncelik !== 'NORMAL') {
+      etiketler += '<span class="pl-etiket pl-etiket-' + s.oncelik + '">' + s.oncelik + '</span>';
+    }
+    
+    // Musteri etiketi
+    if (s.musteri && ['Boyner', 'Koton'].indexOf(s.musteri) !== -1) {
+      etiketler += '<span class="pl-etiket pl-etiket-' + s.musteri + '">' + s.musteri.toUpperCase() + '</span>';
+    }
+    
+    // KORGUN bloku
+    var korgunHTML = 
+      '<div class="pl-blok pl-blok-korgun">' +
+        '<div class="pl-blok-baslik">📊 KORGUN — Gerçek üretim</div>' +
+        '<div class="pl-blok-satir"><span class="label">Hedef</span><span class="value">' + s.miktar + ' çift</span></div>' +
+        '<div class="pl-blok-satir"><span class="label">Yapılan</span><span class="value">' + s.korgun.yapilan + '</span></div>' +
+        '<div class="pl-blok-satir"><span class="label">Kalan</span><span class="value">' + s.korgun.kalan + '</span></div>' +
+        '<div class="pl-blok-satir"><span class="label">İlerleme</span><span class="value">%' + s.korgun.yuzde + '</span></div>' +
+        '<div class="pl-blok-satir"><span class="label">Son proses</span><span class="value">' + s.korgun.son_proses + '</span></div>' +
+      '</div>';
+    
+    // CPS bloku
+    var darbogazHTML = '';
+    if (db.var) {
+      darbogazHTML = 
+        '<div class="pl-darbogaz-vurgu">🔴 ' + db.ana + ' → ' + db.alt_proses + 
+        ' (Sapma %' + db.sapma + ')</div>';
+    } else {
+      darbogazHTML = '<div class="pl-blok-satir"><span class="label">Darboğaz</span><span class="value">—</span></div>';
+    }
+    
+    var prDetay = '';
+    if (pr.durum === 'KISMI' || pr.durum === 'BLOKE') {
+      prDetay = '<div class="pl-pr-bloke-sebep">⚠ ' + (pr.bloke_sebebi || '') + '</div>';
+    }
+    
+    var prDetayListe = '';
+    if (pr.detay && pr.detay.length > 0) {
+      var detayItems = pr.detay.map(function (d) {
+        var ikon = d.durum === 'tamam' ? '✓' : (d.durum === 'EKSIK' ? '✗' : '⏳');
+        return ikon + ' ' + d.parca;
+      }).join(' &nbsp;·&nbsp; ');
+      prDetayListe = '<div class="pl-pr-detay">' + detayItems + '</div>';
+    }
+    
+    var cpsHTML = 
+      '<div class="pl-blok pl-blok-cps">' +
+        '<div class="pl-blok-baslik">🧠 CPS — Operasyon zekâsı</div>' +
+        darbogazHTML +
+        '<div style="margin-top:8px;">' +
+          '<span class="pl-pr-rozet pl-pr-' + pr.durum + '">' + uretilebilirlikLabel(pr.durum) + '</span>' +
+        '</div>' +
+        prDetayListe +
+        prDetay +
+      '</div>';
+    
+    // Notlar
+    var notlarHTML = '';
+    if (s.cps.notlar && s.cps.notlar.length > 0) {
+      notlarHTML = '<div class="pl-notlar">📝 ' + s.cps.notlar.join(' · ') + '</div>';
+    }
+    
+    return (
+      '<div class="pl-kart pr-' + pr.durum + '">' +
+        '<div class="pl-kart-baslik">' +
+          '<div class="pl-kart-baslik-sol">' +
+            '<h3>📦 #' + s.siparis_no + ' — ' + s.model + '</h3>' +
+            '<div class="pl-musteri-info">' + s.musteri + 
+              ' &nbsp;·&nbsp; Termin: ' + s.termin + 
+              ' &nbsp;·&nbsp; Emir: ' + s.emir_no + '</div>' +
+            '<div class="pl-etiketler">' + etiketler + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="pl-ikili">' + korgunHTML + cpsHTML + '</div>' +
+        notlarHTML +
+      '</div>'
+    );
+  }
+
+  function uretilebilirlikLabel(durum) {
+    return {
+      'HAZIR': '🟢 ÜRETİLEBİLİR',
+      'KISMI': '🟡 KISMİ HAZIR',
+      'BLOKE': '🔴 BLOKE',
+      'BILINMIYOR': '⚪ BELİRSİZ'
+    }[durum] || durum;
+  }
+
+  // =====================================================
+  // RENDER
+  // =====================================================
+  function render() {
+    var filtreli = filtrele(STATE.siparisler);
+    ozetGuncelle(filtreli);
+    
+    var liste = document.getElementById('pl-kart-listesi');
+    if (filtreli.length === 0) {
+      liste.innerHTML = '<div class="pl-empty">📭 Bu filtreye uyan sipariş yok</div>';
+      return;
+    }
+    
+    // Siralama: BLOKE en üstte, sonra darbogaz olanlar, sonra HAZIR, sonra digerleri
+    filtreli.sort(function (a, b) {
+      var prSira = { 'BLOKE': 1, 'KISMI': 2, 'HAZIR': 3, 'BILINMIYOR': 4 };
+      var aPr = prSira[a.cps.production_ready.durum] || 5;
+      var bPr = prSira[b.cps.production_ready.durum] || 5;
+      if (aPr !== bPr) return aPr - bPr;
+      // Darbogaz olanlar üstte
+      if (a.cps.darbogaz.var !== b.cps.darbogaz.var) return a.cps.darbogaz.var ? -1 : 1;
+      // Sonra termine göre
+      return (a.termin || '').localeCompare(b.termin || '');
+    });
+    
+    liste.innerHTML = filtreli.map(kartHTML).join('');
+  }
+
+  function gosterBos(mesaj) {
+    document.getElementById('pl-kart-listesi').innerHTML = 
+      '<div class="pl-empty">' + mesaj + '</div>';
+  }
+
+  // =====================================================
+  // FILTRE BUTONLARI
+  // =====================================================
+  function filtreButonlariBaglat() {
+    document.querySelectorAll('.pl-filtre-secenekler').forEach(function (grup) {
+      var filtreAdi = grup.dataset.filtre;
+      grup.querySelectorAll('.pl-flt').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          // Aktif sinifini grupta degistir
+          grup.querySelectorAll('.pl-flt').forEach(function (b) {
+            b.classList.remove('aktif');
+          });
+          btn.classList.add('aktif');
+          
+          // STATE guncelle ve render et
+          STATE.filtreler[filtreAdi] = btn.dataset.deger;
+          render();
+        });
+      });
+    });
+  }
+
+  // =====================================================
+  // BASLAT
+  // =====================================================
+  document.addEventListener('DOMContentLoaded', function () {
+    filtreButonlariBaglat();
+    veriYukle();
+  });
+
+})();

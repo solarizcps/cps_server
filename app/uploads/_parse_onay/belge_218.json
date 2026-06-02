@@ -1,0 +1,83 @@
+{
+  "belge_id": 218,
+  "parti_id": 17,
+  "olusma_tarih": "2026-05-21 16:18:22",
+  "parse": {
+    "basarili": false,
+    "durum": "ONERI_BEKLIYOR",
+    "mesaj": "Beyanname parse edildi - 2 guvenli kalem onerisi. Lutfen kalemleri dogrulayip maliyete ekleyin.",
+    "kalem_sayisi": 0,
+    "kalemler": [],
+    "parti_bilgi": {},
+    "uyarilar": [
+      "Dosya No: 26-00750",
+      "Mense Ulke: ÇİN",
+      "GTIP: 39264000",
+      "Ticari Tanim: PLASTİK",
+      "Konteyner(ler): CULU6004400",
+      "Teslim Sekli: CFR",
+      "Odeme Sekli: PEŞİN",
+      "Toplam Vergi (GV+KDV+DV): 11,229.33 TRY",
+      "Toplam Diger Masraf: 20,000.00 TRY"
+    ],
+    "kaynak_ref": null,
+    "dosya_hash": null,
+    "insan_onayi_bekliyor": false,
+    "guven_skoru": null,
+    "guven_seviyesi": null,
+    "guven_detay": [],
+    "matematik_ok": null,
+    "ekstra_kalemler": [],
+    "tespit_edilen_kolonlar": {},
+    "mantiksizlik_uyarilari": [],
+    "oneriler": [
+      {
+        "aciklama": "Damga Vergisi",
+        "tutar": 11229.33,
+        "para_birimi": "TRY",
+        "tip_onerisi": "GUMRUK",
+        "kaynak_onerisi": "GERCEKLESEN",
+        "varsayilan_isaretli": true,
+        "uyari": null,
+        "kaynak_satir": "Beyanname: DV",
+        "alt_kod": "DV",
+        "fatura_no": null,
+        "kur_onerisi": 44.5107
+      },
+      {
+        "aciklama": "Depo gideri (ardiye)",
+        "tutar": 20000.0,
+        "para_birimi": "TRY",
+        "tip_onerisi": "DEPOLAMA",
+        "kaynak_onerisi": "GERCEKLESEN",
+        "varsayilan_isaretli": true,
+        "uyari": null,
+        "kaynak_satir": "Beyanname: DEPO",
+        "alt_kod": "DEPO",
+        "fatura_no": null,
+        "kur_onerisi": 44.5107
+      }
+    ],
+    "meta": {
+      "belge_tipi_etiket": "Gumruk Beyannamesi",
+      "beyanname_no": null,
+      "tescil_tarihi": null,
+      "teslim_sekli": "CFR",
+      "odeme_sekli": "PEŞİN",
+      "para_birimi_ana": "TRY",
+      "doviz_tutari": null,
+      "doviz_para": "USD",
+      "kur": 44.5107,
+      "brut_kg": null,
+      "net_kg": null,
+      "ist_kiymet": null,
+      "elenen_kalem_sayisi": 0
+    }
+  },
+  "ek_bilgi": {
+    "belge_tipi": "BEYANNAME",
+    "dosya_adi": "test"
+  },
+  "is_duplicate": false,
+  "existing_ref": null
+}

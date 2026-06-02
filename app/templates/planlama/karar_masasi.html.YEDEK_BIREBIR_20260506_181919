@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% set page_title = "Karar Masası" %}
+
+{% block content %}
+<div class="km-sayfa">
+
+  <div class="km-baslik">
+    <div class="km-baslik-sol">
+      <span class="km-baslik-icon">📋</span>
+      <span class="km-baslik-metin">Planlama / Karar Masası</span>
+    </div>
+    <div class="km-baslik-sag">
+      <span class="km-rozet km-rozet-mock">MOCK</span>
+      <span class="km-rozet km-rozet-gorunum">10 kolon</span>
+    </div>
+  </div>
+  <div class="km-altbaslik" id="km-altbaslik">— sipariş · son güncelleme —</div>
+
+  <div class="km-kpi" id="km-kpi">
+    <div class="km-kpi-hucre">
+      <div class="km-kpi-label">Toplam</div>
+      <div class="km-kpi-deger" id="km-kpi-toplam">—</div>
+    </div>
+    <div class="km-kpi-hucre">
+      <div class="km-kpi-label">Kritik</div>
+      <div class="km-kpi-deger km-kpi-deger-kritik" id="km-kpi-kritik">—</div>
+    </div>
+    <div class="km-kpi-hucre">
+      <div class="km-kpi-label">Hazır</div>
+      <div class="km-kpi-deger" id="km-kpi-hazir">—</div>
+    </div>
+    <div class="km-kpi-hucre">
+      <div class="km-kpi-label">Bloke</div>
+      <div class="km-kpi-deger km-kpi-deger-kritik" id="km-kpi-bloke">—</div>
+    </div>
+    <div class="km-kpi-hucre">
+      <div class="km-kpi-label">Darboğaz</div>
+      <div class="km-kpi-deger" id="km-kpi-darbogaz">—</div>
+    </div>
+    <div class="km-kpi-hucre km-kpi-hucre-genis">
+      <div class="km-kpi-label">Kapasite</div>
+      <div class="km-kpi-kapasite-row" id="km-kpi-kapasite">—</div>
+    </div>
+  </div>
+
+  <div class="km-filtre-cubuk" id="km-filtre-cubuk">
+    <div class="km-tab-grup">
+      <button class="km-tab aktif" data-zaman="hepsi" onclick="km_filtre_zaman(this)">Hepsi</button>
+      <button class="km-tab" data-zaman="hafta" onclick="km_filtre_zaman(this)">Bu hafta</button>
+      <button class="km-tab" data-zaman="bu_ay" onclick="km_filtre_zaman(this)">Bu ay</button>
+      <button class="km-tab" data-zaman="3_ay" onclick="km_filtre_zaman(this)">3 ay</button>
+    </div>
+    <select class="km-filtre-dd" id="km-fil-musteri" onchange="km_uygula()">
+      <option value="">Müşteri ▾</option>
+    </select>
+    <select class="km-filtre-dd" id="km-fil-uretilebilirlik" onchange="km_uygula()">
+      <option value="">Üretilebilirlik ▾</option>
+      <option value="HAZIR">HAZIR</option>
+      <option value="KISMI">KISMİ</option>
+      <option value="BLOKE">BLOKE</option>
+    </select>
+    <input type="text" class="km-filtre-arama" id="km-fil-arama" placeholder="🔍 Ara: müşteri / sip / model" oninput="km_uygula()">
+    <button class="km-filtre-temizle" onclick="km_filtre_temizle()">Temizle</button>
+  </div>
+
+  <div class="km-sira-bar" id="km-sira-bar">
+    <div class="km-sira-bar-sol">
+      <span class="km-toggle on"><span class="km-toggle-dot"></span></span>
+      <span class="km-sira-baslik">Akıllı sıra</span>
+      <span style="color:#B5B3AA;">·</span>
+      <span class="km-sira-aciklama">termin · darboğaz · öncelik · bant</span>
+    </div>
+    <span class="km-sira-link" onclick="km_manuel_mod_ac()">Manuel moda geç</span>
+  </div>
+
+  <div class="km-manuel-bar" id="km-manuel-bar">
+    <div class="km-manuel-bar-sol">
+      <span class="km-toggle off"><span class="km-toggle-dot"></span></span>
+      <span class="km-manuel-bar-baslik">Manuel sıra</span>
+      <span style="color:#B5B3AA;">·</span>
+      <span class="km-manuel-bar-aciklama" id="km-manuel-sayac">0 satır taşındı</span>
+    </div>
+    <div class="km-manuel-bar-sag">
+      <span class="km-manuel-geri-al" onclick="km_manuel_geri_al()">Geri al</span>
+      <button class="km-manuel-don-buton" onclick="km_manuel_mod_kapat()">Akıllı sıraya dön</button>
+    </div>
+  </div>
+
+  <div class="km-tablo-cerceve">
+    <table class="km-tablo" id="km-tablo">
+      <thead>
+        <tr>
+          <th class="km-th-no">#</th>
+          <th>Müşteri / Sipariş</th>
+          <th>Model</th>
+          <th class="km-th-num">Kalan</th>
+          <th>Termin</th>
+          <th>Üretilebilir</th>
+          <th>Darboğaz</th>
+          <th class="km-th-mid">Bant</th>
+          <th>Usta talimatı</th>
+          <th class="km-th-aksiyon">⋮</th>
+        </tr>
+      </thead>
+      <tbody id="km-tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="km-bilgi-cubuk">
+    <span id="km-bilgi-sayim">— satır</span>
+    <span class="km-bilgi-ayrac">·</span>
+    <span id="km-bilgi-sorgu">—</span>
+  </div>
+
+  <div class="km-toast" id="km-toast" style="display:none;"></div>
+
+</div>
+
+<link rel="stylesheet" href="{{ url_for('static', filename='css/karar_masasi.css') }}?v={{ range(1,99999)|random }}">
+<script src="{{ url_for('static', filename='js/planlama_karar_masasi.js') }}?v={{ range(1,99999)|random }}"></script>
+{% endblock %}

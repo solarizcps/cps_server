@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block title %}Hedef · Solariz CPS{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/hedef.css') }}?v={{ range(100000, 999999) | random }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/darbogaz_uyari.css') }}?v={{ range(100000, 999999) | random }}">
+{# FAZ 6.3 - KPI Operasyon Bandi CSS #}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/hedef_operasyon.css') }}?v={{ range(100000, 999999) | random }}">
+{% endblock %}
+
+{% block content %}
+
+{# DARBOGAZ UYARI BANDI #}
+{% include 'hedef/_darbogaz_band.html' %}
+
+<div class="h-toolbar">
+  <div class="h-toolbar-left">
+    <h1>📊 Hedef Yönetimi</h1>
+    <p>Korgun ve CPS onaylı üretim kayıtları üzerinden canlı hedef takibi.</p>
+  </div>
+  <div class="h-toolbar-right">
+    <button class="h-btn-yeni" id="btnYeniHedef" disabled>+ Yeni Hedef</button>
+    <button class="h-btn-yeni" id="btnSistemOner" disabled title="Faz 3: Otomatik hedef oneri motoru ile aktif olacak" style="margin-left:8px;">&#x1F916; Sistemden Hedef Oner</button>
+  </div>
+</div>
+
+{# FAZ 6.3 - KPI Operasyon Bandi - hedef_operasyon.js doldurur #}
+<div id="kpi-band-faz63" data-kpi-band="1"></div>
+
+<div class="h-tabs" role="tablist">
+  <button class="h-tab active" data-tab="plan">PLAN</button>
+  <button class="h-tab" data-tab="sablon">ŞABLON</button>
+  <button class="h-tab" data-tab="sapma">SAPMA</button>
+  <button class="h-tab" data-tab="ozet">ÖZET</button>
+  <button class="h-tab" data-tab="rapor">RAPOR</button>
+  <button class="h-tab" data-tab="onay">ONAYLAR <span id="onayBadge" class="h-badge"></span></button>
+  <button class="h-tab" data-tab="gecmis">GE&#199;M&#304;&#350;</button>
+  <button class="h-tab" data-tab="personel">PERSONEL</button>
+</div>
+
+<div class="h-pane active" id="pane-plan">
+  <div id="planError"></div>
+  <div class="tbl-wrap">
+    <table id="planTable">
+      <!-- PLAN_ZENGIN_V1_THEAD -->
+      <thead>
+        <tr>
+          <th class="text" style="width:54px;">G&#214;RSEL</th>
+          <th class="text">EM&#304;R</th>
+          <th class="text">S&#304;PAR&#304;&#350;</th>
+          <th class="text">M&#220;&#350;TER&#304;</th>
+          <th class="text">MODEL</th>
+          <th class="num">HEDEF</th>
+          <th class="num">YAPILAN</th>
+          <th class="num">KALAN</th>
+          <th class="text">TERM&#304;N</th>
+          <th class="text">SON PROSES</th>
+          <th class="num">%</th>
+        </tr>
+      </thead>
+      <tbody id="planBody">
+        <tr class="h-row-loading"><td colspan="11">Yükleniyor...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="h-pane" id="pane-sablon">
+  <div class="h-empty">Şablonlar UI.3 aşamasında eklenecek.</div>
+</div>
+<div class="h-pane" id="pane-sapma">
+  <div class="h-empty">Sapma analizi UI.4 aşamasında eklenecek.</div>
+</div>
+<div class="h-pane" id="pane-ozet">
+  <div class="h-empty">Özet ekranı UI.5 aşamasında eklenecek.</div>
+</div>
+
+<div class="h-pane" id="pane-rapor">
+  <div id="raporError"></div>
+  <div class="rapor-filtre" style="display:flex; gap:8px; align-items:center; margin-bottom:12px;">
+    <label style="font-size:12.5px; color:var(--text3);">Ba&#351;lang&#305;&#231;:</label>
+    <input type="date" id="raporTarihBas" style="padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:12.5px;">
+    <label style="font-size:12.5px; color:var(--text3);">Biti&#351;:</label>
+    <input type="date" id="raporTarihBit" style="padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:12.5px;">
+    <button id="raporFiltreleBtn" style="background:var(--sol-dark); color:#fff; border:none; border-radius:6px; padding:6px 14px; font-size:12.5px; font-weight:600; cursor:pointer;">Filtrele</button>
+    <span id="raporInfo" style="font-size:11.5px; color:var(--text3); margin-left:8px;"></span>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>EM&#304;R NO</th>
+          <th>S&#304;PAR&#304;&#350; NO</th>
+          <th>M&#220;&#350;TER&#304;</th>
+          <th>MODEL</th>
+          <th>RENK</th>
+          <th>BEDEN</th>
+          <th>PROSES</th>
+          <th>M&#304;KTAR</th>
+          <th>PERSONEL</th>
+          <th>ONAY</th>
+          <th>TAR&#304;H</th>
+          <th>SAAT</th>
+        </tr>
+      </thead>
+      <tbody id="raporBody">
+        <tr class="h-row-empty"><td colspan="12">RAPOR sekmesine ge&#231;ildi&#287;inde y&#252;klenecek.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="h-pane" id="pane-onay">
+  <div id="onayError"></div>
+  <div id="onaySuccess" class="h-success" style="display:none;"></div>
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>EM&#304;R NO</th>
+          <th>MODEL</th>
+          <th>PROSES</th>
+          <th>M&#304;KTAR</th>
+          <th>PERSONEL</th>
+          <th>TAR&#304;H/SAAT</th>
+          <th>NOT</th>
+          <th>AKS&#304;YON</th>
+        </tr>
+      </thead>
+      <tbody id="onayBody">
+        <tr class="h-row-loading"><td colspan="9">Y&#252;kleniyor...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="h-pane" id="pane-gecmis">
+  <div id="gecmisError"></div>
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>EM&#304;R NO</th>
+          <th>MODEL</th>
+          <th>PROSES</th>
+          <th>M&#304;KTAR</th>
+          <th>PERSONEL</th>
+          <th>DURUM</th>
+          <th>USTA</th>
+          <th>ONAY ZAMAN</th>
+          <th>USTA NOTU</th>
+        </tr>
+      </thead>
+      <tbody id="gecmisBody">
+        <tr class="h-row-loading"><td colspan="9">Y&#252;kleniyor...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- PERSONEL SEKMESI - HEDEF GENISLETME (13.05.2026 FAZ 1 iskelet) -->
+<div class="h-pane" id="pane-personel">
+  <div style="padding:24px;">
+    <h2 style="margin-top:0; color:var(--text);">👥 PERSONEL YÖNETİMİ</h2>
+    <p style="color:var(--text3); font-size:14px;">Hazırlanıyor...</p>
+
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-top:20px;">
+      <div style="background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:16px; opacity:0.6;">
+        <div style="font-size:11px; font-weight:600; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px;">Personel Listesi</div>
+        <div style="font-size:24px; font-weight:700; margin-top:6px; color:var(--text);">— kişi</div>
+      </div>
+      <div style="background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:16px; opacity:0.6;">
+        <div style="font-size:11px; font-weight:600; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px;">Aktif / Pasif</div>
+        <div style="font-size:24px; font-weight:700; margin-top:6px; color:var(--text);">— / —</div>
+      </div>
+      <div style="background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:16px; opacity:0.6;">
+        <div style="font-size:11px; font-weight:600; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px;">Prosese Bağlı</div>
+        <div style="font-size:24px; font-weight:700; margin-top:6px; color:var(--text);">—</div>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:24px;">
+      <button class="h-btn-yeni" disabled style="opacity:0.5; cursor:not-allowed;">+ Yeni Personel</button>
+      <button class="h-btn-yeni" disabled style="opacity:0.5; cursor:not-allowed; background:var(--bg3); color:var(--text);">🔑 Şifre Sıfırla</button>
+      <button class="h-btn-yeni" disabled style="opacity:0.5; cursor:not-allowed; background:var(--bg3); color:var(--text);">⚙ Prosese Bağla</button>
+      <button class="h-btn-yeni" disabled style="opacity:0.5; cursor:not-allowed; background:var(--bg3); color:var(--text);">⏸ Pasifleştir</button>
+    </div>
+
+    <div style="margin-top:28px; padding:14px; background:var(--bg2); border:1px solid var(--border); border-radius:8px; font-size:13px; color:var(--text3);">
+      <strong style="color:var(--text);">ℹ Not:</strong> Bu sekme şimdilik iskelet. Personel CRUD işlemleri sonraki aşamada eklenecek.
+      Mevcut personel listesi: <a href="/personel-giris/personeller" target="_blank" style="color:var(--sol);">personel-giris/personeller</a>
+    </div>
+  </div>
+</div>
+
+<!-- Reddet Modal (not zorunlu) -->
+<div id="reddetModal" class="h-modal" style="display:none;">
+  <div class="h-modal-icin">
+    <div class="h-modal-header"><h3>Reddet</h3></div>
+    <div class="h-modal-body">
+      <label for="reddetNot" style="display:block; font-size:12.5px; font-weight:600; margin-bottom:6px;">Reddetme nedeni <span style="color:var(--red);">*</span></label>
+      <textarea id="reddetNot" rows="3" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:6px; font-family:inherit; font-size:13px; resize:vertical;" placeholder="&#214;rn: Miktar yanlis girilmis, tekrar girin..."></textarea>
+      <div id="reddetNotError" class="h-error" style="display:none; margin-top:8px;"></div>
+    </div>
+    <div class="h-modal-footer">
+      <button class="h-btn-yeni" id="reddetIptalBtn" style="background:var(--bg3); color:var(--text); margin-right:8px;">&#304;ptal</button>
+      <button class="h-btn-yeni" id="reddetOnaylaBtn" style="background:var(--red);">REDDET</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/hedef.js') }}?v={{ range(100000, 999999) | random }}"></script>
+<script src="{{ url_for('static', filename='js/darbogaz_uyari.js') }}?v={{ range(100000, 999999) | random }}"></script>
+{# FAZ 6.3 - KPI Operasyon Bandi #}
+<script src="{{ url_for('static', filename='js/hedef_operasyon.js') }}?v={{ range(100000, 999999) | random }}"></script>
+{% endblock %}

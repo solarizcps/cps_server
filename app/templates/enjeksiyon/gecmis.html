@@ -1,0 +1,438 @@
+{% extends "base.html" %}
+{% set active = 'enjeksiyon' %}
+{% set aktif_grup = 'uretim' %}
+
+{% block title %}Enjeksiyon - Gecmis Raporlar{% endblock %}
+
+{% block content %}
+<!-- PATCH_3B13_DENSITY_FINAL -->
+<style>
+  /* === GENEL === */
+  .gec-wrap {
+    padding: 12px;
+    background: #F7F8FA;
+    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: 13px; color: #111827;
+  }
+
+  .gec-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .gec-head h2 { margin: 0; font-size: 16px; font-weight: 700; color: #111827; }
+  .gec-head .sub { color: #6B7280; font-weight: 400; }
+  .gec-head .back {
+    margin-left: auto; padding: 5px 11px; border: 1px solid #E5E7EB;
+    border-radius: 7px; background: #FFFFFF; color: #374151;
+    text-decoration: none; font-size: 12px; font-weight: 500;
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .gec-head .back:hover { background: #F9FAFB; }
+
+  /* === FILTRE TAB === */
+  .filt-tabs { display: flex; gap: 5px; margin-bottom: 8px; }
+  .filt-tab {
+    padding: 5px 13px; border: 1px solid #E5E7EB; border-radius: 6px;
+    background: #F3F4F6; color: #6B7280; cursor: pointer;
+    font-size: 12px; font-weight: 600;
+  }
+  .filt-tab:hover { background: #E5E7EB; color: #111827; }
+  .filt-tab.aktif { background: #FBBF24; color: #111827; border-color: #FBBF24; font-weight: 700; }
+
+  /* === FILTRE BAR === */
+  .gec-filt {
+    background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 9px;
+    padding: 9px; margin-bottom: 9px; display: flex; flex-wrap: wrap; gap: 8px;
+    align-items: end; box-shadow: 0 1px 2px rgba(15,23,42,.04);
+  }
+  .gec-filt .grp { display: flex; flex-direction: column; gap: 2px; }
+  .gec-filt label { font-size: 10px; font-weight: 600; color: #6B7280; text-transform: uppercase; letter-spacing: 0.3px; }
+  .gec-filt input, .gec-filt select {
+    padding: 5px 8px; border: 1px solid #E5E7EB; border-radius: 5px;
+    font-size: 13px; color: #111827; background: #FFFFFF; min-width: 110px;
+  }
+  .gec-filt input:focus, .gec-filt select:focus { outline: none; border-color: #FBBF24; }
+  .gec-filt select { min-width: 175px; }
+  .gec-filt .chk {
+    display: flex; align-items: center; gap: 5px; padding: 5px 10px;
+    background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 5px;
+    cursor: pointer; font-size: 12px; color: #374151;
+  }
+  .gec-filt .chk input { min-width: auto; margin: 0; }
+  .gec-filt button { padding: 6px 14px; border: none; border-radius: 5px; cursor: pointer; font-size: 13px; font-weight: 600; }
+  .gec-filt .btn-pri { background: #FBBF24; color: #111827; }
+  .gec-filt .btn-pri:hover { background: #F59E0B; }
+  .gec-filt .btn-sec { background: #FFFFFF; color: #6B7280; border: 1px solid #E5E7EB; }
+  .gec-filt .gizli { display: none; }
+
+  /* === LISTE === */
+  .gec-liste-wrap {
+    background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 9px;
+    overflow: hidden; box-shadow: 0 1px 2px rgba(15,23,42,.04);
+  }
+  .gec-liste-bar {
+    padding: 6px 12px; background: #F9FAFB; border-bottom: 1px solid #E5E7EB;
+    display: flex; align-items: center; gap: 12px; font-size: 12px; color: #6B7280;
+  }
+  .gec-liste-bar b { color: #111827; font-weight: 600; }
+  .gec-liste-bar .pag { margin-left: auto; display: flex; gap: 4px; align-items: center; }
+  .gec-liste-bar .pag button {
+    padding: 3px 9px; border: 1px solid #E5E7EB; background: #FFFFFF;
+    border-radius: 5px; cursor: pointer; font-size: 12px; color: #374151;
+  }
+  .gec-liste-bar .pag button:hover:not(:disabled) { background: #F9FAFB; }
+  .gec-liste-bar .pag button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .gec-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .gec-tbl thead th {
+    background: #F9FAFB; color: #374151; font-weight: 700;
+    padding: 7px 5px; text-align: center; border-bottom: 1px solid #E5E7EB;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px;
+  }
+  .gec-tbl tbody td { padding: 7px 5px; border-bottom: 1px solid #EEF0F3; text-align: center; color: #111827; }
+  .gec-tbl tbody tr.satir { cursor: pointer; }
+  .gec-tbl tbody tr.satir:hover { background: #F8FAFC; }
+  .gec-tbl tbody tr.satir.aktif { background: #FFF3C4; }
+  .gec-tbl tbody tr.satir.v1 { color: #6B7280; }
+  .gec-tbl .col-l { text-align: left; padding-left: 10px; }
+  .gec-tbl .num { text-align: right; padding-right: 10px; font-variant-numeric: tabular-nums; }
+  .gec-tbl .badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 700; }
+  .gec-tbl .b-v1 { background: #F3F4F6; color: #6B7280; }
+  .gec-tbl .b-q { background: #FEE2E2; color: #DC2626; }
+  .gec-tbl .b-prob { background: #FEF3C7; color: #92400E; }
+  .gec-tbl .v-ok { color: #16A34A; font-weight: 700; }
+  .gec-tbl .v-mid { color: #B45309; font-weight: 700; }
+  .gec-tbl .v-bad { color: #DC2626; font-weight: 700; }
+  .gec-tbl .fire-on { color: #DC2626; font-weight: 700; }
+  .gec-tbl .empty { color: #D1D5DB; }
+  .gec-tbl .expand-ico { color: #9CA3AF; font-size: 12px; width: 22px; }
+  .gec-tbl tr.satir.aktif .expand-ico { color: #111827; }
+
+  /* === DETAY === */
+  .det-row td { padding: 0 !important; background: #F7F8FA; border-bottom: none; }
+  .det-cont {
+    background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(15,23,42,.05); padding: 11px; margin: 5px 0;
+  }
+  .det-bas {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: 9px; padding-bottom: 7px; border-bottom: 1px solid #EEF0F3;
+  }
+  .det-bas h3 { margin: 0; font-size: 14px; font-weight: 700; color: #111827; }
+  .det-bas .meta { font-size: 11px; color: #6B7280; margin-top: 3px; }
+  .det-bas .meta b { color: #111827; font-weight: 600; }
+  .det-kapat {
+    padding: 4px 10px; background: #FFFFFF; border: 1px solid #E5E7EB;
+    border-radius: 6px; color: #6B7280; cursor: pointer; font-size: 11px; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;
+  }
+  .det-kapat:hover { background: #FEE2E2; color: #DC2626; border-color: #FCA5A5; }
+
+  .det-grid {
+    display: grid;
+    grid-template-columns: 295px minmax(480px, 1fr) 390px;
+    gap: 10px; align-items: start;
+  }
+
+  /* === SOL KPI (3.B.10 degerleri) === */
+  .det-sol { display: flex; flex-direction: column; gap: 8px; }
+
+  .op-uretim {
+    background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
+    border: 1px solid #E5E7EB; border-left: 4px solid #16A34A;
+    border-radius: 10px; padding: 12px;
+    box-shadow: 0 1px 2px rgba(15,23,42,.04);
+  }
+  .op-uretim .hd { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .op-uretim .hd .ikon { width: 28px; height: 28px; background: #F3F4F6; border-radius: 7px; display: flex; align-items: center; justify-content: center; color: #6B7280; }
+  .op-uretim .hd .lbl { font-size: 10px; color: #6B7280; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; }
+  .op-uretim .val { font-size: 30px; font-weight: 800; color: #111827; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; text-align: center; padding: 5px 0 8px; }
+  .op-uretim .birim { font-size: 13px; color: #6B7280; font-weight: 500; margin-left: 4px; }
+  .op-uretim .alt { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding-top: 8px; border-top: 1px solid #EEF0F3; }
+  .op-uretim .alt .ab { text-align: center; }
+  .op-uretim .alt .ab .l { font-size: 10px; color: #6B7280; text-transform: uppercase; font-weight: 600; }
+  .op-uretim .alt .ab .n { font-size: 16px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .op-uretim .alt .ab .n .u { font-size: 11px; color: #6B7280; font-weight: 500; margin-left: 2px; }
+  .op-uretim .alt .ab.a .n { color: #047857; }
+  .op-uretim .alt .ab.b .n { color: #B45309; }
+
+  .op-fire {
+    background: linear-gradient(180deg, #FFFFFF 0%, #FEF2F2 100%);
+    border: 1px solid #FCA5A5; border-left: 4px solid #DC2626;
+    border-radius: 10px; padding: 12px; text-align: center;
+    box-shadow: 0 1px 2px rgba(15,23,42,.04);
+  }
+  .op-fire.temiz {
+    background: linear-gradient(180deg, #FFFFFF 0%, #ECFDF5 100%);
+    border: 1px solid #A7F3D0; border-left: 4px solid #16A34A;
+  }
+  .op-fire .hd { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; text-align: left; }
+  .op-fire .hd .ikon { width: 28px; height: 28px; background: #FEE2E2; border-radius: 7px; display: flex; align-items: center; justify-content: center; color: #DC2626; }
+  .op-fire.temiz .hd .ikon { background: #DCFCE7; color: #047857; }
+  .op-fire .hd .lbl { font-size: 10px; color: #DC2626; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; }
+  .op-fire.temiz .hd .lbl { color: #047857; }
+  .op-fire .val { font-size: 26px; font-weight: 800; color: #DC2626; line-height: 1; font-variant-numeric: tabular-nums; padding-top: 4px; }
+  .op-fire.temiz .val { color: #047857; }
+  .op-fire .val .birim { font-size: 12px; color: #DC2626; font-weight: 500; margin-left: 4px; }
+  .op-fire.temiz .val .birim { color: #047857; }
+  .op-fire .yuzde { font-size: 14px; font-weight: 700; color: #DC2626; margin-top: 3px; }
+  .op-fire.temiz .yuzde { color: #047857; }
+  .op-fire .alt-info { font-size: 10px; color: #6B7280; text-transform: uppercase; font-weight: 700; letter-spacing: 0.3px; margin-top: 7px; padding-top: 5px; border-top: 1px solid rgba(0,0,0,.06); }
+  .op-fire .alt-info b { color: #111827; font-size: 11px; font-weight: 700; }
+
+  .op-mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .op-mini {
+    background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 8px;
+    padding: 8px 9px; display: flex; align-items: center; gap: 8px;
+    box-shadow: 0 1px 2px rgba(15,23,42,.04);
+  }
+  .op-mini .ikon { width: 26px; height: 26px; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .op-mini .ikon.verim { background: #DCFCE7; color: #16A34A; }
+  .op-mini .ikon.personel { background: #DBEAFE; color: #2563EB; }
+  .op-mini .ikon.tur { background: #FEF3C7; color: #B45309; }
+  .op-mini .ikon.problem { background: #FED7AA; color: #C2410C; }
+  .op-mini .icerik { flex: 1; min-width: 0; }
+  .op-mini .lbl { font-size: 9px; color: #6B7280; text-transform: uppercase; font-weight: 700; letter-spacing: 0.4px; }
+  .op-mini .val { font-size: 15px; font-weight: 700; color: #111827; line-height: 1.2; font-variant-numeric: tabular-nums; }
+  .op-mini .alt { font-size: 9px; color: #9CA3AF; }
+  .op-mini.verim-ok .val { color: #16A34A; }
+  .op-mini.verim-mid .val { color: #B45309; }
+  .op-mini.verim-bad .val { color: #DC2626; }
+
+  /* ====================================================
+     ORTA: flex korunur, .ic flex:0 0 auto (grow etmez)
+     row height: 32px, padding: 4px 6px
+     ==================================================== */
+  .det-orta {
+    background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 10px;
+    overflow: hidden; display: flex; flex-direction: column;
+    box-shadow: 0 1px 2px rgba(15,23,42,.04);
+  }
+  .det-orta h4 {
+    margin: 0; height: 32px; padding: 0 12px; background: #FFFFFF;
+    border-bottom: 1px solid #E5E7EB;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 11.5px; color: #111827; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.4px; flex-shrink: 0;
+  }
+  .det-orta h4 .saytac-norm { font-weight: 500; color: #6B7280; text-transform: none; font-size: 11px; }
+  .det-orta h4 .saytac-prob { font-weight: 600; color: #DC2626; text-transform: none; font-size: 11px; }
+  /* .ic: flex:0 0 auto → grow etmez, overflow scroll */
+  .det-orta .ic { flex: 0 0 auto; overflow-y: auto; max-height: 360px; }
+  .det-orta .alt-link {
+    height: 22px; padding: 0 12px; background: #F9FAFB;
+    border-top: 1px solid #E5E7EB; color: #2563EB; font-size: 11px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .det-orta .alt-link:hover { background: #F3F4F6; }
+
+  /* SAATLİK TABLO — 32px row */
+  .saat-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .saat-tbl thead th {
+    background: #F9FAFB; padding: 5px 6px;
+    font-size: 10.5px; color: #374151; font-weight: 700;
+    text-transform: uppercase; border-bottom: 1px solid #E5E7EB;
+    letter-spacing: 0.3px; position: sticky; top: 0; z-index: 1; text-align: center;
+  }
+  .saat-tbl thead th.col-durum,
+  .saat-tbl thead th.col-sebep { text-align: left; padding-left: 10px; }
+  .saat-tbl td {
+    padding: 4px 6px; border-bottom: 1px solid #EEF0F3; text-align: center;
+    font-variant-numeric: tabular-nums; color: #111827;
+    font-size: 12px; vertical-align: middle; height: 32px;
+    line-height: 1;
+  }
+  .saat-tbl tr:last-child td { border-bottom: none; }
+  .saat-tbl tr:hover td { background: #F9FAFB; }
+  .saat-tbl tr.problem-row td { background: #FFF7ED; }
+  .saat-tbl tr.problem-row:hover td { background: #FFEDD5; }
+  .saat-tbl td.saat-col { font-weight: 700; color: #111827; white-space: nowrap; font-size: 12px; }
+  .saat-tbl td.uretim-c { font-weight: 600; }
+  .saat-tbl td.durum-c { text-align: left; padding-left: 10px; font-weight: 500; }
+  .saat-tbl td.sebep-c { text-align: left; padding-left: 10px; color: #6B7280; font-size: 11px; }
+
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  .dot-cal { background: #16A34A; }
+  .dot-mol { background: #F59E0B; }
+  .dot-arz { background: #DC2626; }
+  .dot-kap { background: #9CA3AF; }
+  .saat-tbl .durum-cal { color: #16A34A; }
+  .saat-tbl .durum-mol { color: #B45309; }
+  .saat-tbl .durum-arz { color: #DC2626; }
+  .saat-tbl .durum-kap { color: #6B7280; }
+
+  /* ====================================================
+     SAG: flex korunur, .ic flex:0 0 auto
+     row height: 40px, padding: 5px 8px
+     8 istasyon scroll olmadan
+     ==================================================== */
+  .det-sag {
+    background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 10px;
+    overflow: hidden; display: flex; flex-direction: column;
+    box-shadow: 0 1px 2px rgba(15,23,42,.04);
+  }
+  .det-sag h4 {
+    margin: 0; height: 32px; padding: 0 12px; background: #FFFFFF;
+    border-bottom: 1px solid #E5E7EB;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 11.5px; color: #111827; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.4px; flex-shrink: 0;
+  }
+  .det-sag h4 .akt { font-weight: 500; color: #047857; text-transform: none; font-size: 11px; }
+  .det-sag .ic { flex: 0 0 auto; overflow-y: auto; }
+  .det-sag .alt-not {
+    height: 22px; padding: 0 12px; background: #F9FAFB;
+    border-top: 1px solid #E5E7EB; color: #9CA3AF; font-size: 10.5px;
+    display: flex; align-items: center; flex-shrink: 0;
+  }
+
+  /* İSTASYON TABLO — 40px row */
+  .ist-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .ist-tbl thead th {
+    background: #F9FAFB; padding: 5px 8px;
+    font-size: 10.5px; color: #374151; font-weight: 700;
+    text-transform: uppercase; border-bottom: 1px solid #E5E7EB;
+    letter-spacing: 0.3px; position: sticky; top: 0; z-index: 1; text-align: left;
+  }
+  .ist-tbl thead th.no-head { text-align: center; width: 38px; }
+  .ist-tbl thead th.a-head { color: #047857; }
+  .ist-tbl thead th.b-head { color: #B45309; }
+  .ist-tbl td {
+    padding: 5px 8px; border-bottom: 1px solid #EEF0F3;
+    vertical-align: middle; background: #FFFFFF;
+    font-size: 12px; height: 40px;
+  }
+  .ist-tbl tr:last-child td { border-bottom: none; }
+  .ist-tbl tr:hover td { background: #F9FAFB; }
+  .ist-tbl td.no { font-weight: 700; background: #F9FAFB; text-align: center; width: 38px; font-size: 13px; color: #111827; }
+  .ist-tbl tr:hover td.no { background: #F3F4F6; }
+  .ist-tbl td.a-col { border-left: 4px solid #16A34A; }
+  .ist-tbl td.b-col { border-left: 4px solid #F59E0B; }
+  .ist-tbl .kalip { font-weight: 700; color: #111827; font-size: 12px; line-height: 1.2; }
+  .ist-tbl .ist-info { display: flex; align-items: center; gap: 5px; margin-top: 2px; flex-wrap: wrap; }
+  .ist-tbl .renk-info { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: #374151; }
+  .ist-tbl .renk-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; border: 1px solid rgba(0,0,0,.1); }
+  .ist-tbl .pisme-pill {
+    display: inline-flex; padding: 1px 6px; border-radius: 999px;
+    font-size: 10px; font-weight: 700; white-space: nowrap;
+  }
+  .ist-tbl .pisme-pill.pisme-a { background: #DCFCE7; color: #166534; }
+  .ist-tbl .pisme-pill.pisme-b { background: #FEF3C7; color: #92400E; }
+  .ist-tbl tr.tum-pasif td.a-col, .ist-tbl tr.tum-pasif td.b-col { opacity: 0.6; }
+  .ist-tbl tr.tum-pasif .kalip { font-style: italic; font-weight: 500; color: #9CA3AF; }
+
+  /* === LEGEND ~70px toplam === */
+  .det-legend {
+    display: grid; grid-template-columns: 1fr 1fr 1.5fr; gap: 10px;
+    margin-top: 7px; background: #FFFFFF; border: 1px solid #E5E7EB;
+    border-radius: 9px; padding: 5px 12px; font-size: 11px;
+    box-shadow: 0 1px 2px rgba(15,23,42,.04);
+  }
+  .legend-box h5 { margin: 0 0 2px; font-size: 9px; color: #6B7280; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; }
+  .legend-box .row { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #374151; padding: 1px 0; line-height: 1.2; }
+  .legend-box .row .ldot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .legend-box .row .lbadge { display: inline-block; padding: 1px 5px; border-radius: 3px; font-size: 10px; font-weight: 700; min-width: 20px; text-align: center; flex-shrink: 0; }
+  .legend-box .row .lbadge.prob { background: #FEF3C7; color: #92400E; }
+  .legend-box .row .lbadge.uyari { background: #F3F4F6; color: #6B7280; }
+  .legend-box.dr .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+  .legend-box ul { margin: 0; padding-left: 12px; font-size: 11px; color: #374151; line-height: 1.35; }
+  .legend-box ul li { margin-bottom: 1px; }
+
+  .gec-uyari {
+    background: #FEF2F2; border: 1px solid #FCA5A5; color: #DC2626;
+    padding: 7px 12px; border-radius: 7px; margin-bottom: 8px; display: none;
+  }
+  .gec-uyari.aktif { display: block; }
+  .gec-uyari .x { float: right; cursor: pointer; }
+
+  @media (max-width: 1500px) {
+    .det-grid { grid-template-columns: 275px minmax(440px, 1fr) 355px; gap: 9px; }
+  }
+  @media (max-width: 1280px) {
+    .det-grid { grid-template-columns: 1fr; }
+    .det-legend { grid-template-columns: 1fr; }
+  }
+</style>
+
+<div class="gec-wrap" id="gec-wrap">
+  <div class="gec-head">
+    <h2>Enjeksiyon <span class="sub">/ Gecmis Raporlar</span></h2>
+    <a class="back" href="/enjeksiyon">&larr; Canli ekrana don</a>
+  </div>
+  <div class="gec-uyari" id="gec-uyari">
+    <span class="x" onclick="document.getElementById('gec-uyari').classList.remove('aktif')">&times;</span>
+    <span id="gec-uyari-msg"></span>
+  </div>
+  <div class="filt-tabs">
+    <div class="filt-tab aktif" data-tab="gunluk">Gunluk</div>
+    <div class="filt-tab" data-tab="haftalik">Haftalik</div>
+    <div class="filt-tab" data-tab="aylik">Aylik</div>
+    <div class="filt-tab" data-tab="aralik">Tarih Araligi</div>
+  </div>
+  <div class="gec-filt">
+    <div class="grp" id="grp-gunluk"><label>Tarih</label><input type="date" id="f-tarih-tek"></div>
+    <div class="grp gizli" id="grp-haftalik"><label>Hafta Baslangici</label><input type="date" id="f-tarih-hafta"></div>
+    <div class="grp gizli" id="grp-aylik"><label>Ay</label><input type="month" id="f-tarih-ay"></div>
+    <div class="grp gizli" id="grp-aralik-bas"><label>Tarih Baslangic</label><input type="date" id="f-tarih-bas"></div>
+    <div class="grp gizli" id="grp-aralik-bit"><label>Tarih Bitis</label><input type="date" id="f-tarih-bit"></div>
+    <div class="grp">
+      <label>Vardiya</label>
+      <select id="f-vardiya">
+        <option value="">Tumu</option>
+        <option value="gunduz">Gunduz (07:00 - 17:00)</option>
+        <option value="gece">Gece (17:00 - 03:00)</option>
+        <option value="mesai">Mesai (17:00 - 19:00)</option>
+      </select>
+    </div>
+    <div class="grp">
+      <label>Makine</label>
+      <select id="f-makine">
+        <option value="">Tumu</option>
+        <option value="1">Makine 1</option>
+        <option value="2">Makine 2</option>
+        <option value="3">Makine 3</option>
+        <option value="4">Makine 4</option>
+      </select>
+    </div>
+    <div class="grp"><label>Operator</label><input type="text" id="f-operator" placeholder="Tumu" style="min-width:115px;"></div>
+    <label class="chk"><input type="checkbox" id="f-problemli"> Problemli</label>
+    <label class="chk"><input type="checkbox" id="f-fireli"> Fireli</label>
+    <button class="btn-pri" id="btn-filtrele">Filtrele</button>
+    <button class="btn-sec" id="btn-temizle">Temizle</button>
+  </div>
+  <div class="gec-liste-wrap">
+    <div class="gec-liste-bar">
+      <span>Toplam: <b id="gec-toplam">0</b></span>
+      <span>Gosterilen: <b id="gec-gosterilen">0</b></span>
+      <div class="pag">
+        <button id="btn-onceki" disabled>&laquo;</button>
+        <span id="gec-sayfa">1 / 1</span>
+        <button id="btn-sonraki" disabled>&raquo;</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="gec-tbl">
+        <thead>
+          <tr>
+            <th style="width:22px;"></th>
+            <th class="col-l">Tarih</th>
+            <th>Vardiya</th>
+            <th class="col-l">Makine</th>
+            <th class="col-l">Operator</th>
+            <th>Personel</th>
+            <th>Tur A</th><th>Tur B</th>
+            <th>Uretim A (cift)</th><th>Uretim B (cift)</th>
+            <th>Fire (cift)</th><th>Net (cift)</th>
+            <th>Verim</th><th>Problem</th>
+          </tr>
+        </thead>
+        <tbody id="gec-tbody">
+          <tr><td colspan="14" style="padding:26px;color:#9CA3AF;">Filtrele butonuna basin</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/enj_gecmis.js') }}?v=p3b13_20260525"></script>
+{% endblock %}

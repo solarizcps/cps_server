@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% set tab = 'grafik' %}
+{% set active = 'grafik' %}
+
+{% block title %}{{ teklif.TeklifNo }} - Fiyat Teklifi{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h2>💰 {{ teklif.TeklifNo }}</h2>
+    <p class="muted">
+      {% for kod, ad, renk in durumlar %}
+        {% if teklif.Durum == kod %}<span class="pill" style="background:{{ renk }};color:#fff;">{{ ad }}</span>{% endif %}
+      {% endfor %}
+      · {% for k, a in ulke_kodlari %}{% if k == teklif.UlkeKodu %}{{ a }}{% endif %}{% endfor %}
+      · {{ teklif.TedarikciAd }}
+      {% if teklif.DonusumSiparisNo %}· Siparişe oldu: <a href="/grafik/siparis">{{ teklif.DonusumSiparisNo }} ↗</a>{% endif %}
+    </p>
+  </div>
+  <div style="display:flex; gap:8px;">
+    <a href="/grafik/teklif" class="btn btn-ghost">← Liste</a>
+    <a href="/finans/simulator/yeni?kaynak_teklif_id={{ teklif.Id }}" class="btn btn-ghost" style="border-color:#7c3aed; color:#7c3aed;">🧮 Simülasyon Başlat</a>
+    {% if teklif.Durum == 'ALINDI' and teklif.UlkeKodu == 'CN' %}
+    <form method="post" action="/grafik/teklif/{{ teklif.Id }}/siparise-donustur" style="display:inline;"
+          onsubmit="return confirm('Bu teklif siparişe çevrilecek. Kur ({{ "%.4f"|format(teklif.KurSnapshot) }}) aynen taşınacak. Devam?');">
+      <button class="btn btn-primary">→ Siparişe Çevir</button>
+    </form>
+    {% endif %}
+    {% if teklif.Durum != 'SIPARIS_OLDU' %}
+    <form method="post" action="/grafik/teklif/{{ teklif.Id }}/sil" style="display:inline;"
+          onsubmit="return confirm('Teklif silinsin mi?');">
+      <button class="btn btn-danger">🗑 Sil</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="detail-grid">
+  <section class="panel">
+    <h3>Teklif Bilgileri</h3>
+    <form method="post" action="/grafik/teklif/{{ teklif.Id }}/guncelle" class="form-stack">
+      <div class="form-row">
+        <label style="flex:1;">Ülke
+          <select name="UlkeKodu" {% if teklif.Durum == 'SIPARIS_OLDU' %}disabled{% endif %}>
+            {% for kod, ad in ulke_kodlari %}
+            <option value="{{ kod }}" {% if teklif.UlkeKodu == kod %}selected{% endif %}>{{ ad }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label style="flex:2;">Tedarikçi Adı
+          <input type="text" name="TedarikciAd" value="{{ teklif.TedarikciAd or '' }}"
+                 {% if teklif.Durum == 'SIPARIS_OLDU' %}readonly{% endif %}>
+        </label>
+      </div>
+      <label>Müşteri
+        <select name="MusteriCKod" {% if teklif.Durum == 'SIPARIS_OLDU' %}disabled{% endif %}>
+          <option value="">—</option>
+          {% for m in musteriler %}
+          <option value="{{ m.CKod }}" {% if teklif.MusteriCKod == m.CKod %}selected{% endif %}>{{ m.CName }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <div class="form-row">
+        <label style="flex:2;">Ürün Adı
+          <input type="text" name="UrunAd" value="{{ teklif.UrunAd or '' }}"
+                 {% if teklif.Durum == 'SIPARIS_OLDU' %}readonly{% endif %}>
+        </label>
+        <label style="flex:1;">Ürün Kodu
+          <input type="text" name="UrunKodu" value="{{ teklif.UrunKodu or '' }}"
+                 {% if teklif.Durum == 'SIPARIS_OLDU' %}readonly{% endif %}>
+        </label>
+      </div>
+      <div class="form-row">
+        <label style="flex:1;">Miktar
+          <input type="number" name="Miktar" value="{{ teklif.Miktar|int }}" min="1"
+                 {% if teklif.Durum == 'SIPARIS_OLDU' %}readonly{% endif %}>
+        </label>
+        <label style="flex:1;">Birim Fiyat
+          <input type="number" name="BirimFiyat" value="{{ teklif.BirimFiyat }}" min="0" step="0.01"
+                 {% if teklif.Durum == 'SIPARIS_OLDU' %}readonly{% endif %}>
+        </label>
+        <label style="flex:1;">Para Birimi
+          <input type="text" value="{{ teklif.ParaBirimi }}" readonly style="background:#f3f4f6;">
+          <small class="muted" style="font-size:.72rem;">🔒 değiştirilemez</small>
+        </label>
+      </div>
+      <label>Geçerlilik Tarihi
+        <input type="date" name="GecerlilikTarihi" value="{{ teklif.GecerlilikTarihi or '' }}"
+               {% if teklif.Durum == 'SIPARIS_OLDU' %}readonly{% endif %}>
+      </label>
+      <label>Notlar <textarea name="Notlar" rows="3"
+                               {% if teklif.Durum == 'SIPARIS_OLDU' %}readonly{% endif %}>{{ teklif.Notlar or '' }}</textarea></label>
+      {% if teklif.Durum != 'SIPARIS_OLDU' %}
+      <div style="display:flex; justify-content:flex-end;">
+        <button class="btn btn-primary">💾 Kaydet (Kur sabit kalır)</button>
+      </div>
+      {% endif %}
+    </form>
+  </section>
+
+  <section class="panel" style="background:linear-gradient(135deg,#fff,#fef3c7);">
+    <h3>Kur Snapshot 🔒</h3>
+    <table class="data-table compact">
+      <tr>
+        <td class="muted">Teklif Tarihi</td>
+        <td><strong>{{ (teklif.TeklifTarihi or '')[:10] }}</strong></td>
+      </tr>
+      <tr>
+        <td class="muted">Para Birimi</td>
+        <td><strong>{{ teklif.ParaBirimi }}</strong></td>
+      </tr>
+      <tr>
+        <td class="muted">Sabit Kur</td>
+        <td style="font-size:1.2rem; color:#F97316;"><strong>{{ "%.4f"|format(teklif.KurSnapshot) }}</strong></td>
+      </tr>
+      <tr>
+        <td class="muted">Toplam (orijinal)</td>
+        <td><strong>{{ "{:,.2f}".format(teklif.ToplamTutar) }} {{ teklif.ParaBirimi }}</strong></td>
+      </tr>
+      <tr>
+        <td class="muted">Toplam TL (sabit)</td>
+        <td><strong style="color:#059669;">{{ "{:,.2f}".format(teklif.ToplamTutar * teklif.KurSnapshot) }} ₺</strong></td>
+      </tr>
+    </table>
+    <p class="muted" style="font-size:.82rem; margin:8px 0 0;">
+      Bu kur sipariş dönüşümünde aynen taşınır. Bugünkü kura dönmez, geçmiş fiyat korunur.
+    </p>
+  </section>
+</div>
+
+{% if teklif.Durum == 'ALINDI' %}
+<section class="panel" style="margin-top:20px; background:#eff6ff; border-left:4px solid #0891b2;">
+  <h3 style="margin-top:0;">Durum Değişikliği</h3>
+  <form method="post" action="/grafik/teklif/{{ teklif.Id }}/durum" style="display:flex; gap:8px; align-items:end;">
+    <label style="flex:1;">Yeni Durum
+      <select name="Durum">
+        {% for kod, ad, _ in durumlar %}
+          {% if kod != 'SIPARIS_OLDU' %}
+          <option value="{{ kod }}" {% if teklif.Durum == kod %}selected{% endif %}>{{ ad }}</option>
+          {% endif %}
+        {% endfor %}
+      </select>
+    </label>
+    <button class="btn">Güncelle</button>
+  </form>
+  <p class="muted" style="font-size:.82rem; margin:6px 0 0;">
+    💡 "Siparişe Oldu" durumu sadece "→ Siparişe Çevir" butonu ile otomatik olur.
+  </p>
+</section>
+{% endif %}
+{% endblock %}

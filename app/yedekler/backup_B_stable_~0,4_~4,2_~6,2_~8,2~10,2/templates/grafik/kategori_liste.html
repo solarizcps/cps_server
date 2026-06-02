@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% set tab = 'grafik' %}
+{% set active = 'grafik' %}
+{% block title %}Kategoriler — Grafik{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="crumbs"><a href="/grafik/urun">Ürünler</a> › <strong>Kategoriler</strong></div>
+    <h1>🗂 Ürün Kategorileri</h1>
+    <p class="muted">EVA terlik, pach, bant, ambalaj — ürünlerin gruplandığı alanlar</p>
+  </div>
+</div>
+
+{% include '_flash.html' ignore missing %}
+
+<div class="twocol">
+  <!-- SOL: Liste -->
+  <section class="panel">
+    <h3>Kategori Listesi ({{ kategoriler|length }})</h3>
+    <table class="data-table compact">
+      <thead>
+        <tr>
+          <th style="width:60px;">Sıra</th>
+          <th>Ad</th>
+          <th>Açıklama</th>
+          <th style="text-align:right;">Ürün</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for k in kategoriler %}
+        <tr>
+          <form method="post" action="/grafik/kategori/{{ k.Id }}/guncelle">
+            <td><input type="number" name="Sira" value="{{ k.Sira }}" style="width:55px;"></td>
+            <td><input type="text" name="Ad" value="{{ k.Ad }}" required></td>
+            <td><input type="text" name="Aciklama" value="{{ k.Aciklama or '' }}"></td>
+            <td style="text-align:right;"><span class="count-badge">{{ k.UrunSayi }}</span></td>
+            <td style="text-align:right; white-space:nowrap;">
+              <button class="btn btn-sm btn-ghost">💾</button>
+          </form>
+              <form method="post" action="/grafik/kategori/{{ k.Id }}/sil" style="display:inline;"
+                    onsubmit="return confirm('Kategoriyi sil? Bu kategoride ürün varsa işlem başarısız olur.');">
+                <button class="btn-icon" title="Sil">🗑</button>
+              </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="empty">Henüz kategori yok.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <!-- SAĞ: Yeni ekle -->
+  <section class="panel">
+    <h3>Yeni Kategori</h3>
+    <form method="post" action="/grafik/kategori/yeni" class="form-stack">
+      <label>Ad * <input type="text" name="Ad" required placeholder="Kemer, Etiket, Astar..."></label>
+      <label>Açıklama <input type="text" name="Aciklama"></label>
+      <label>Sıra <input type="number" name="Sira" value="{{ (kategoriler|map(attribute='Sira')|list|max|default(0)) + 1 }}"></label>
+      <button class="btn btn-primary">+ Ekle</button>
+    </form>
+    <div style="margin-top:20px; padding:12px; background:#f8fafc; border-radius:6px; font-size:.85rem;" class="muted">
+      <strong>İpucu:</strong> Sıra numarası listelerin ve dropdown'ların sıralamasını belirler. Düşük sayı üstte görünür.
+    </div>
+  </section>
+</div>
+{% endblock %}

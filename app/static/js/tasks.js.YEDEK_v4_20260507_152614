@@ -1,0 +1,682 @@
+/* ==========================================================
+   CPS TASKS - FAZ 2A v3 - Frontend Logic
+   ==========================================================
+   - 9 filtre (durum/oncelik/dept/atanan/q/siparis/emir/olusturan/tarih)
+   - Pagination (sayfa basi 10/25/50/100)
+   - Avatar + isim + rol (atanan/olusturan)
+   - 3 ikon (detay/duzenle/dropdown) -> simdilik detay aktif
+   - Sira: kolon basligi click
+   ========================================================== */
+
+(function () {
+  "use strict";
+
+  // ============ STATE ============
+  const state = {
+    tasks: [],
+    sortKey: "id",
+    sortDir: "desc",
+    page: 1,
+    pageSize: 25,
+    filter: {
+      q: "", status: "", priority: "", department: "", assigned_to: "",
+      order: "", emir: "", creator: "", date_start: "", date_end: ""
+    },
+    users: [],
+    currentDetail: null,
+  };
+
+  // ============ DOM ============
+  const $ = (s, c = document) => c.querySelector(s);
+  const $$ = (s, c = document) => Array.from(c.querySelectorAll(s));
+
+  const els = {
+    tbody:    $("#tasks-tbody"),
+    table:    $("#tasks-table"),
+    btnYenile: $("#tasks-btn-yenile"),
+    btnYeni:   $("#tasks-btn-yeni"),
+    btnTemizle: $("#tasks-btn-temizle"),
+    btnFiltrele: $("#tasks-btn-filtrele"),
+
+    fQ:    $("#f-q"),
+    fStat: $("#f-status"),
+    fPrio: $("#f-priority"),
+    fDept: $("#f-dept"),
+    fAss:  $("#f-assigned"),
+    fOrd:  $("#f-order"),
+    fEmr:  $("#f-emir"),
+    fCre:  $("#f-creator"),
+    fDS:   $("#f-date-start"),
+    fDE:   $("#f-date-end"),
+
+    summary: $("#tasks-summary"),
+
+    pageInfo:    $("#tasks-page-info"),
+    pageSize:    $("#tasks-page-size"),
+    pagePrev:    $("#tasks-page-prev"),
+    pageNext:    $("#tasks-page-next"),
+    pageCurrent: $("#tasks-page-current"),
+
+    detayModal: $("#tasks-detay-modal"),
+    detayTitle: $("#tasks-detay-title"),
+    detayBody:  $("#tasks-detay-body"),
+    detayFoot:  $("#tasks-detay-foot"),
+
+    createModal: $("#tasks-create-modal"),
+    createForm:  $("#tasks-create-form"),
+    createSubmit: $("#tasks-create-submit"),
+    createErr:   $("#tasks-create-err"),
+    createReqApproval: $("#tasks-create-req-approval"),
+    createApprovalWrap: $("#tasks-create-approval-wrap"),
+    createApproval: $("#tasks-create-approval"),
+    createAssigned: $("#tasks-create-assigned"),
+
+    toast: $("#tasks-toast"),
+  };
+
+  // ============ HELPERS ============
+  function fmtDate(s, withTime) {
+    if (!s) return "";
+    const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/);
+    if (!m) return s;
+    const [, y, mo, d, hh, mm] = m;
+    const ds = `${d}.${mo}.${y}`;
+    if (withTime && hh) return `${ds} ${hh}:${mm}`;
+    return ds;
+  }
+
+  function relativeDue(due_date, status) {
+    if (!due_date) return null;
+    if (status === "iptal") return null;
+    const due = new Date(due_date);
+    if (isNaN(due.getTime())) return null;
+    const today = new Date(new Date().toDateString());
+    const diff = Math.round((due - today) / 86400000);
+    if (status === "tamamlandi") return { text: "(Tamamlandi)", cls: "task-date-mute" };
+    if (diff < 0)  return { text: `(${Math.abs(diff)} gun gecti)`, cls: "task-date-danger" };
+    if (diff === 0) return { text: "(Bugun)", cls: "task-date-warn" };
+    if (diff <= 3) return { text: `(${diff} gun)`, cls: "task-date-warn" };
+    return { text: `(${diff} gun)`, cls: "task-date-ok" };
+  }
+
+  function escHtml(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  function isOverdue(t) {
+    if (!t.due_date) return false;
+    if (t.status === "tamamlandi" || t.status === "iptal") return false;
+    const due = new Date(t.due_date);
+    if (isNaN(due.getTime())) return false;
+    return due < new Date(new Date().toDateString());
+  }
+
+  function initials(name) {
+    if (!name) return "?";
+    const s = String(name).trim();
+    if (!s) return "?";
+    return s.substring(0, 2).toUpperCase();
+  }
+
+  function userRole(kadi) {
+    const u = state.users.find(x => x.kullanici_adi === kadi);
+    return u ? u.rol_kisa : "";
+  }
+
+  function toast(msg, type) {
+    els.toast.textContent = msg;
+    els.toast.className = "tasks-toast is-show" + (type ? " is-" + type : "");
+    setTimeout(() => { els.toast.className = "tasks-toast"; }, 2600);
+  }
+
+  async function api(path, opts) {
+    opts = opts || {};
+    const cfg = {
+      method: opts.method || "GET",
+      headers: { "Accept": "application/json" },
+      credentials: "same-origin",
+    };
+    if (opts.body) {
+      cfg.headers["Content-Type"] = "application/json";
+      cfg.body = JSON.stringify(opts.body);
+    }
+    const r = await fetch(path, cfg);
+    let data = null;
+    try { data = await r.json(); } catch (e) {}
+    if (!r.ok) {
+      const msg = (data && data.error) || `HTTP ${r.status}`;
+      const err = new Error(msg);
+      err.status = r.status;
+      throw err;
+    }
+    return data;
+  }
+
+  // ============ KPI ============
+  function updateSummary() {
+    const today = new Date(new Date().toDateString());
+    let acik = 0, onay = 0, gecikti = 0, biten = 0;
+    state.tasks.forEach(t => {
+      const s = t.status;
+      if (s !== "tamamlandi" && s !== "iptal") acik++;
+      if (s === "onay_bekliyor") onay++;
+      if (isOverdue(t)) gecikti++;
+      if (t.completed_at) {
+        const dt = new Date(t.completed_at);
+        if (!isNaN(dt) && dt >= today) biten++;
+      }
+    });
+    setSum("acik", acik);
+    setSum("onay", onay);
+    setSum("gecikti", gecikti);
+    setSum("bugun", biten);
+  }
+  function setSum(k, v) {
+    const el = els.summary.querySelector(`[data-sum="${k}"]`);
+    if (el) el.textContent = v;
+  }
+
+  // ============ LISTE ============
+  async function loadTasks() {
+    els.tbody.innerHTML = `<tr><td colspan="11" class="tasks-empty">Yukleniyor...</td></tr>`;
+    try {
+      const r = await api("/api/tasks?limit=1000");
+      state.tasks = (r && r.data && r.data.tasks) || [];
+      updateSummary();
+      state.page = 1;
+      render();
+    } catch (e) {
+      els.tbody.innerHTML = `<tr><td colspan="11" class="tasks-empty" style="color:#dc2626">HATA: ${escHtml(e.message)}</td></tr>`;
+    }
+  }
+
+  // ============ FILTER + SORT ============
+  function applyFilters(rows) {
+    const f = state.filter;
+    let out = rows;
+    if (f.status)      out = out.filter(t => t.status === f.status);
+    if (f.priority)    out = out.filter(t => t.priority === f.priority);
+    if (f.department)  out = out.filter(t => t.department === f.department);
+    if (f.assigned_to) out = out.filter(t => t.assigned_to === f.assigned_to);
+    if (f.creator)     out = out.filter(t => t.created_by === f.creator);
+    if (f.order)       out = out.filter(t => (t.related_order_no || "").toLowerCase().includes(f.order.toLowerCase()));
+    if (f.emir)        out = out.filter(t => (t.related_emir_no  || "").toLowerCase().includes(f.emir.toLowerCase()));
+    if (f.date_start)  out = out.filter(t => t.due_date && t.due_date >= f.date_start);
+    if (f.date_end)    out = out.filter(t => t.due_date && t.due_date <= f.date_end);
+    if (f.q) {
+      const q = f.q.toLowerCase();
+      out = out.filter(t =>
+        (t.title || "").toLowerCase().includes(q)
+        || (t.description || "").toLowerCase().includes(q)
+        || (t.related_order_no || "").toLowerCase().includes(q)
+        || (t.related_emir_no || "").toLowerCase().includes(q)
+        || (t.related_model || "").toLowerCase().includes(q)
+        || (t.related_customer || "").toLowerCase().includes(q)
+      );
+    }
+    return out;
+  }
+  function applySort(rows) {
+    const k = state.sortKey, d = state.sortDir;
+    const arr = rows.slice();
+    arr.sort((a, b) => {
+      let av = a[k], bv = b[k];
+      if (av == null) av = "";
+      if (bv == null) bv = "";
+      if (k === "priority") {
+        const order = { kritik: 4, yuksek: 3, orta: 2, dusuk: 1 };
+        av = order[av] || 0; bv = order[bv] || 0;
+      }
+      if (typeof av === "string") av = av.toLowerCase();
+      if (typeof bv === "string") bv = bv.toLowerCase();
+      if (av < bv) return d === "asc" ? -1 : 1;
+      if (av > bv) return d === "asc" ?  1 : -1;
+      return 0;
+    });
+    return arr;
+  }
+
+  // ============ RENDER ============
+  function render() {
+    let rows = applyFilters(state.tasks);
+    rows = applySort(rows);
+    const total = rows.length;
+
+    // Pagination
+    const totalPages = Math.max(1, Math.ceil(total / state.pageSize));
+    if (state.page > totalPages) state.page = totalPages;
+    const start = (state.page - 1) * state.pageSize;
+    const pageRows = rows.slice(start, start + state.pageSize);
+    renderPagination(total, totalPages, start, pageRows.length);
+
+    // Sort indikatorleri
+    $$("th[data-sort]", els.table).forEach(th => {
+      th.removeAttribute("data-dir");
+      if (th.dataset.sort === state.sortKey) th.dataset.dir = state.sortDir;
+    });
+
+    // Body
+    if (pageRows.length === 0) {
+      els.tbody.innerHTML = `<tr><td colspan="11" class="tasks-empty">Kayit yok</td></tr>`;
+      return;
+    }
+    els.tbody.innerHTML = pageRows.map(rowHtml).join("");
+
+    // Action handlers
+    $$(".task-icon-btn[data-action='detay']", els.tbody).forEach(b => {
+      b.addEventListener("click", () => openDetay(parseInt(b.dataset.id, 10)));
+    });
+  }
+
+  function renderPagination(total, totalPages, start, shown) {
+    const from = total === 0 ? 0 : start + 1;
+    const to = start + shown;
+    els.pageInfo.textContent = `Toplam ${total} kayit (${from} - ${to} arasi)`;
+    els.pageCurrent.textContent = `${state.page} / ${totalPages}`;
+    els.pagePrev.disabled = state.page <= 1;
+    els.pageNext.disabled = state.page >= totalPages;
+  }
+
+  function rowHtml(t) {
+    const overdue = isOverdue(t);
+    let cls = "";
+    if (t.status === "tamamlandi") cls = "row-completed";
+    else if (t.status === "iptal") cls = "row-canceled";
+
+    // Priority pill
+    const prioMap = { kritik: "Kritik", yuksek: "Yuksek", orta: "Orta", dusuk: "Dusuk" };
+    const prioCls = "task-badge priority-" + (t.priority || "orta");
+    const prioText = prioMap[t.priority] || t.priority || "";
+
+    // Status pill
+    const statusMap = {
+      bekliyor: "Bekliyor",
+      devam_ediyor: "Devam Ediyor",
+      onay_bekliyor: "Onay Bekliyor",
+      revize_istendi: "Revize Istendi",
+      tamamlandi: "Tamamlandi",
+      gecikti: "Gecikti",
+      iptal: "Iptal",
+    };
+    let statusKey = t.status || "bekliyor";
+    if (overdue && statusKey !== "tamamlandi") statusKey = "gecikti";
+    const statusCls = "task-badge status-" + statusKey;
+    const statusText = statusMap[statusKey] || statusKey;
+
+    // Title (cift satir)
+    let titleSub = "";
+    if (t.description) {
+      const d = String(t.description).trim();
+      if (d) titleSub = `<div class="task-title-sub">${escHtml(d.slice(0, 60))}${d.length > 60 ? "..." : ""}</div>`;
+    }
+
+    // Atanan (avatar + isim + rol)
+    const atRol = userRole(t.assigned_to);
+    const atHtml = t.assigned_to
+      ? `<div class="task-user">
+           <span class="task-avatar">${escHtml(initials(t.assigned_to))}</span>
+           <div class="task-user-info">
+             <div class="task-user-name">${escHtml(t.assigned_to)}</div>
+             ${atRol ? `<div class="task-user-role">${escHtml(atRol)}</div>` : ""}
+           </div>
+         </div>`
+      : `<span style="color:#94a3b8;font-style:italic;">— birim havuzu —</span>`;
+
+    // Olusturan
+    const crRol = userRole(t.created_by);
+    const crHtml = t.created_by
+      ? `<div class="task-user">
+           <span class="task-avatar">${escHtml(initials(t.created_by))}</span>
+           <div class="task-user-info">
+             <div class="task-user-name">${escHtml(t.created_by)}</div>
+             ${crRol ? `<div class="task-user-role">${escHtml(crRol)}</div>` : ""}
+           </div>
+         </div>`
+      : "";
+
+    // Termin (tarih + relative)
+    const rel = relativeDue(t.due_date, t.status);
+    const dateHtml = t.due_date
+      ? `<div class="task-date-main">${escHtml(fmtDate(t.due_date))}</div>${rel ? `<div class="task-date-sub ${rel.cls}">${escHtml(rel.text)}</div>` : ""}`
+      : `<span class="task-date-mute">—</span>`;
+
+    return `
+      <tr class="${cls}" data-id="${t.id}">
+        <td class="col-id"><span class="task-id-cell">${t.id}</span></td>
+        <td class="col-priority"><span class="${prioCls}">${escHtml(prioText)}</span></td>
+        <td class="col-title">
+          <div class="task-title-main" title="${escHtml(t.title || "")}">${escHtml(t.title || "")}</div>
+          ${titleSub}
+        </td>
+        <td class="col-dept">${escHtml(t.department || "—")}</td>
+        <td class="col-user">${atHtml}</td>
+        <td class="col-status"><span class="${statusCls}">${escHtml(statusText)}</span></td>
+        <td class="col-date">${dateHtml}</td>
+        <td class="col-order">${escHtml(t.related_order_no || "—")}</td>
+        <td class="col-creator">${crHtml || "—"}</td>
+        <td class="col-updated"><span class="task-date-mute" style="font-size:12px;">${escHtml(fmtDate(t.updated_at, true))}</span></td>
+        <td class="col-action">
+          <div class="task-row-actions">
+            <button class="task-icon-btn task-icon-btn-primary" data-action="detay" data-id="${t.id}" title="Detay">&#x1F441;</button>
+          </div>
+        </td>
+      </tr>`;
+  }
+
+  // ============ DETAY MODAL ============
+  async function openDetay(taskId) {
+    showModal(els.detayModal);
+    els.detayTitle.textContent = `Gorev #${taskId}`;
+    els.detayBody.innerHTML = `<div class="tasks-empty">Yukleniyor...</div>`;
+    els.detayFoot.innerHTML = "";
+
+    try {
+      const r = await api(`/api/tasks/${taskId}`);
+      const d = r.data || {};
+      state.currentDetail = d;
+      renderDetay(d);
+    } catch (e) {
+      els.detayBody.innerHTML = `<div class="tasks-empty" style="color:#dc2626">HATA: ${escHtml(e.message)}</div>`;
+    }
+  }
+
+  function renderDetay(d) {
+    const t = d.task || {};
+    const logs = d.logs || [];
+    const files = d.files || [];
+    const perms = d.permissions || {};
+
+    // Baglam chips
+    const chips = [];
+    if (t.related_order_no)  chips.push(`Siparis: ${escHtml(t.related_order_no)}`);
+    if (t.related_emir_no)   chips.push(`Emir: ${escHtml(t.related_emir_no)}`);
+    if (t.related_model)     chips.push(`Model: ${escHtml(t.related_model)}`);
+    if (t.related_customer)  chips.push(`Musteri: ${escHtml(t.related_customer)}`);
+    const baglamHtml = chips.length
+      ? `<div class="task-detay-baglam">${chips.map(c => `<span class="task-detay-chip">${c}</span>`).join("")}</div>`
+      : "";
+
+    const statusMap = {
+      bekliyor: "Bekliyor", devam_ediyor: "Devam Ediyor",
+      onay_bekliyor: "Onay Bekliyor", revize_istendi: "Revize Istendi",
+      tamamlandi: "Tamamlandi", iptal: "Iptal", gecikti: "Gecikti",
+    };
+    const prioMap = { kritik: "Kritik", yuksek: "Yuksek", orta: "Orta", dusuk: "Dusuk" };
+
+    const logsHtml = logs.length === 0
+      ? `<div class="task-detay-empty">Log yok</div>`
+      : `<div class="task-detay-logs">` +
+          logs.map(l => `
+            <div class="log-row">
+              <span class="when">${escHtml(fmtDate(l.created_at, true))}</span>
+              <span class="who">${escHtml(l.user_id || "")}</span>
+              <span class="what">${escHtml(l.action)}${l.old_status ? " " + escHtml(l.old_status) + " &rarr; " : " "}${escHtml(l.new_status || "")}</span>
+              <span class="note" style="color:#94a3b8;">${escHtml(l.note || "")}</span>
+            </div>`).join("") +
+        `</div>`;
+
+    const filesHtml = files.length === 0
+      ? `<div class="task-detay-empty">Dosya yok</div>`
+      : `<div class="task-detay-files">` +
+          files.map(f => `
+            <div class="file-row">
+              <span class="nm">${escHtml(f.file_name)}</span>
+              <span style="color:#94a3b8;">${escHtml(f.uploaded_by || "")} &middot; ${escHtml(fmtDate(f.uploaded_at, true))}</span>
+            </div>`).join("") +
+        `</div>`;
+
+    els.detayBody.innerHTML = `
+      <div class="task-detay-baslik">${escHtml(t.title || "")}</div>
+      ${baglamHtml}
+      ${t.description ? `<div class="task-detay-aciklama">${escHtml(t.description)}</div>` : ""}
+
+      <div class="task-detay-grid">
+        <div><div class="lbl">Durum</div><div class="val"><span class="task-badge status-${escHtml(t.status)}">${escHtml(statusMap[t.status] || t.status || "")}</span></div></div>
+        <div><div class="lbl">Oncelik</div><div class="val"><span class="task-badge priority-${escHtml(t.priority || "orta")}">${escHtml(prioMap[t.priority] || t.priority || "orta")}</span></div></div>
+        <div><div class="lbl">Departman</div><div class="val">${escHtml(t.department || "—")}</div></div>
+        <div><div class="lbl">Atanan</div><div class="val">${escHtml(t.assigned_to || "— birim havuzu —")}</div></div>
+        <div><div class="lbl">Olusturan</div><div class="val">${escHtml(t.created_by || "")}</div></div>
+        <div><div class="lbl">Termin</div><div class="val">${escHtml(fmtDate(t.due_date) || "—")}</div></div>
+        <div><div class="lbl">Olusturma</div><div class="val" style="font-weight:600;color:#64748b;">${escHtml(fmtDate(t.created_at, true))}</div></div>
+        <div><div class="lbl">Son Guncelleme</div><div class="val" style="font-weight:600;color:#64748b;">${escHtml(fmtDate(t.updated_at, true))}</div></div>
+        ${t.requires_approval ? `<div><div class="lbl">Onaylayacak</div><div class="val">${escHtml(t.approval_user_id || "—")}</div></div>` : ""}
+        ${t.completed_at ? `<div><div class="lbl">Tamamlanma</div><div class="val" style="font-weight:600;color:#64748b;">${escHtml(fmtDate(t.completed_at, true))}</div></div>` : ""}
+        ${t.rejection_reason ? `<div style="grid-column:1/-1;"><div class="lbl">Revize Sebebi</div><div class="val" style="color:#dc2626;">${escHtml(t.rejection_reason)}</div></div>` : ""}
+      </div>
+
+      <div class="task-detay-section-title">Tarihce (${logs.length})</div>
+      ${logsHtml}
+
+      <div class="task-detay-section-title">Dosyalar (${files.length})</div>
+      ${filesHtml}
+    `;
+
+    // Footer butonlar
+    const buttons = [];
+    const status = t.status;
+
+    if (status === "bekliyor" || status === "revize_istendi") {
+      buttons.push(`<button class="tasks-btn tasks-btn-primary" data-action="start">Baslat</button>`);
+    }
+    if (status === "devam_ediyor") {
+      const lbl = t.requires_approval ? "Onaya Gonder" : "Tamamla";
+      buttons.push(`<button class="tasks-btn tasks-btn-primary" data-action="complete">${lbl}</button>`);
+    }
+    if (status === "onay_bekliyor" && perms.can_approve) {
+      buttons.push(`<button class="tasks-btn tasks-btn-primary" data-action="approve">Onayla</button>`);
+      buttons.push(`<button class="tasks-btn" data-action="reject">Revize Iste</button>`);
+    }
+    if (status !== "tamamlandi" && status !== "iptal") {
+      buttons.push(`<button class="tasks-btn" data-action="cancel" style="color:#dc2626;border-color:#fecaca;">Iptal</button>`);
+    }
+    buttons.push(`<button class="tasks-btn" data-close="1">Kapat</button>`);
+
+    els.detayFoot.innerHTML = buttons.join("");
+
+    $$("[data-action]", els.detayFoot).forEach(b => {
+      b.addEventListener("click", () => doAction(t.id, b.dataset.action));
+    });
+  }
+
+  async function doAction(taskId, action) {
+    let body = {};
+    if (action === "reject") {
+      const reason = window.prompt("Revize sebebi:");
+      if (!reason) return;
+      body.note = reason;
+    } else if (action === "cancel") {
+      const note = window.prompt("Iptal aciklamasi (opsiyonel):") || "Iptal edildi";
+      body.note = note;
+    }
+
+    try {
+      await api(`/api/tasks/${taskId}/${action}`, { method: "POST", body });
+      toast(`Islem basarili: ${action}`, "ok");
+      await loadTasks();
+      if (state.currentDetail && state.currentDetail.task && state.currentDetail.task.id === taskId) {
+        openDetay(taskId);
+      }
+    } catch (e) {
+      toast(`HATA: ${e.message}`, "err");
+    }
+  }
+
+  // ============ KULLANICI LISTESI ============
+  function loadUsers() {
+    state.users = [
+      { kullanici_adi: "adem",    rol_kisa: "Yonetim" },
+      { kullanici_adi: "halil",   rol_kisa: "Uretim Sorumlusu" },
+      { kullanici_adi: "hasan",   rol_kisa: "Uretim Personeli" },
+      { kullanici_adi: "alpay",   rol_kisa: "Planlama" },
+      { kullanici_adi: "samet",   rol_kisa: "Satin Alma" },
+      { kullanici_adi: "ibrahim", rol_kisa: "Kalite Kontrol" },
+    ];
+    populateUserSelects();
+  }
+  function populateUserSelects() {
+    const opts = state.users.map(u =>
+      `<option value="${escHtml(u.kullanici_adi)}">${escHtml(u.kullanici_adi)} (${escHtml(u.rol_kisa)})</option>`).join("");
+    els.fAss.innerHTML       = `<option value="">Tumu</option>` + opts;
+    els.fCre.innerHTML       = `<option value="">Tumu</option>` + opts;
+    els.createAssigned.innerHTML = `<option value="">— birim havuzu —</option>` + opts;
+    els.createApproval.innerHTML = `<option value="">— sec —</option>` + opts;
+  }
+
+  // ============ CREATE ============
+  function openCreate() {
+    els.createForm.reset();
+    els.createErr.style.display = "none";
+    els.createApprovalWrap.style.display = "none";
+    showModal(els.createModal);
+  }
+
+  async function submitCreate() {
+    const fd = new FormData(els.createForm);
+    const body = {};
+    fd.forEach((v, k) => {
+      if (v === "" || v === null) return;
+      body[k] = v;
+    });
+    if (els.createReqApproval.checked) body.requires_approval = 1;
+    if (!body.title || !body.title.trim()) {
+      showCreateErr("Baslik zorunlu");
+      return;
+    }
+    if (body.requires_approval && !body.approval_user_id) {
+      showCreateErr("Onay gerektirir secildi - onaylayacak kisi secin");
+      return;
+    }
+
+    els.createSubmit.disabled = true;
+    try {
+      await api("/api/tasks", { method: "POST", body });
+      toast("Gorev olusturuldu", "ok");
+      hideModal(els.createModal);
+      await loadTasks();
+    } catch (e) {
+      showCreateErr(e.message);
+    } finally {
+      els.createSubmit.disabled = false;
+    }
+  }
+  function showCreateErr(msg) {
+    els.createErr.textContent = msg;
+    els.createErr.style.display = "block";
+  }
+
+  // ============ MODAL ============
+  function showModal(m) {
+    m.classList.add("show");
+    m.setAttribute("aria-hidden", "false");
+  }
+  function hideModal(m) {
+    m.classList.remove("show");
+    m.setAttribute("aria-hidden", "true");
+  }
+
+  // ============ FILTERS ============
+  function readFilters() {
+    state.filter.q          = els.fQ.value.trim();
+    state.filter.status     = els.fStat.value;
+    state.filter.priority   = els.fPrio.value;
+    state.filter.department = els.fDept.value;
+    state.filter.assigned_to = els.fAss.value;
+    state.filter.order      = els.fOrd.value.trim();
+    state.filter.emir       = els.fEmr.value.trim();
+    state.filter.creator    = els.fCre.value;
+    state.filter.date_start = els.fDS.value;
+    state.filter.date_end   = els.fDE.value;
+  }
+  function clearFilters() {
+    [els.fQ, els.fStat, els.fPrio, els.fDept, els.fAss,
+     els.fOrd, els.fEmr, els.fCre, els.fDS, els.fDE].forEach(e => { e.value = ""; });
+    readFilters();
+    state.page = 1;
+    render();
+  }
+
+  // ============ EVENTS ============
+  function bindEvents() {
+    els.btnYenile.addEventListener("click", loadTasks);
+    els.btnYeni.addEventListener("click", openCreate);
+    els.btnTemizle.addEventListener("click", clearFilters);
+    els.btnFiltrele.addEventListener("click", () => {
+      readFilters(); state.page = 1; render();
+    });
+
+    // Quick search (q live)
+    let qTimer;
+    els.fQ.addEventListener("input", () => {
+      clearTimeout(qTimer);
+      qTimer = setTimeout(() => { readFilters(); state.page = 1; render(); }, 250);
+    });
+
+    // Live select changes
+    [els.fStat, els.fPrio, els.fDept, els.fAss, els.fCre].forEach(e => {
+      e.addEventListener("change", () => { readFilters(); state.page = 1; render(); });
+    });
+
+    // Pagination
+    els.pageSize.addEventListener("change", () => {
+      state.pageSize = parseInt(els.pageSize.value, 10) || 25;
+      state.page = 1;
+      render();
+    });
+    els.pagePrev.addEventListener("click", () => {
+      if (state.page > 1) { state.page--; render(); }
+    });
+    els.pageNext.addEventListener("click", () => {
+      state.page++; render();
+    });
+
+    // Sort
+    $$("th[data-sort]", els.table).forEach(th => {
+      th.addEventListener("click", () => {
+        const k = th.dataset.sort;
+        if (state.sortKey === k) {
+          state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+        } else {
+          state.sortKey = k;
+          state.sortDir = "asc";
+        }
+        state.page = 1;
+        render();
+      });
+    });
+
+    // Modal close
+    document.addEventListener("click", (e) => {
+      if (e.target.dataset && e.target.dataset.close === "1") {
+        const m = e.target.closest(".tasks-modal-backdrop");
+        if (m) hideModal(m);
+      }
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        $$(".tasks-modal-backdrop.show").forEach(hideModal);
+      }
+    });
+
+    // Create
+    els.createSubmit.addEventListener("click", submitCreate);
+    els.createForm.addEventListener("submit", (e) => { e.preventDefault(); submitCreate(); });
+    els.createReqApproval.addEventListener("change", () => {
+      els.createApprovalWrap.style.display = els.createReqApproval.checked ? "" : "none";
+    });
+  }
+
+  // ============ INIT ============
+  function init() {
+    bindEvents();
+    loadUsers();
+    loadTasks();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+})();

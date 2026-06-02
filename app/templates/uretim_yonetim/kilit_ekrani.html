@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>⚠️ KİLİT — Sebep Gerekli</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #1a1a2e;
+    color: white;
+}
+.kilit-container {
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+.kilit-box {
+    background: white;
+    color: #2c3e50;
+    border-radius: 16px;
+    padding: 40px;
+    max-width: 600px;
+    width: 100%;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    border-top: 8px solid #dc3545;
+}
+.uyari-baslik {
+    text-align: center;
+    margin-bottom: 25px;
+}
+.uyari-baslik .ikon {
+    font-size: 56px;
+    margin-bottom: 10px;
+}
+.uyari-baslik h1 {
+    color: #dc3545;
+    font-size: 26px;
+    margin-bottom: 8px;
+}
+.uyari-baslik .alt {
+    font-size: 14px;
+    color: #6c757d;
+}
+
+.sapma-bilgi {
+    background: #fff5f5;
+    border: 2px solid #ffcccc;
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 25px;
+}
+.sapma-bilgi .row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px dashed #ffcccc;
+}
+.sapma-bilgi .row:last-child { border-bottom: none; }
+.sapma-bilgi .label { font-weight: 600; color: #555; }
+.sapma-bilgi .value { color: #dc3545; font-weight: bold; }
+
+.form-bolum {
+    margin-bottom: 20px;
+}
+.form-bolum label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 15px;
+}
+.sebep-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+.sebep-list label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 15px;
+    background: #f8f9fa;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-weight: normal;
+    margin-bottom: 0;
+    user-select: none;
+}
+.sebep-list label:hover { background: #fff5f5; border-color: #ffcccc; }
+.sebep-list input[type="radio"] { width: 18px; height: 18px; cursor: pointer; }
+.sebep-list input[type="radio"]:checked + span { color: #dc3545; font-weight: 600; }
+.sebep-list label:has(input:checked) {
+    background: #fff5f5;
+    border-color: #dc3545;
+}
+
+textarea {
+    width: 100%;
+    min-height: 80px;
+    padding: 12px;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 14px;
+    resize: vertical;
+    user-select: text;
+}
+textarea:focus { outline: none; border-color: #dc3545; }
+
+.gonder-btn {
+    width: 100%;
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    color: white;
+    border: none;
+    padding: 16px;
+    font-size: 17px;
+    font-weight: bold;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 10px;
+}
+.gonder-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(220,53,69,0.4);
+}
+.gonder-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.uyari-alt {
+    margin-top: 15px;
+    text-align: center;
+    color: #6c757d;
+    font-size: 12px;
+}
+
+.error-msg {
+    background: #f8d7da;
+    color: #721c24;
+    padding: 10px;
+    border-radius: 6px;
+    margin-top: 12px;
+    font-size: 13px;
+    display: none;
+}
+</style>
+</head>
+<body>
+
+<div class="kilit-container">
+    <div class="kilit-box">
+        <div class="uyari-baslik">
+            <div class="ikon">⚠️</div>
+            <h1>DARBOĞAZ TESPİT EDİLDİ</h1>
+            <div class="alt">Sebep girilmeden sistem kullanılamaz</div>
+        </div>
+        
+        <div class="sapma-bilgi" id="sapma-bilgi">
+            <div class="row"><span class="label">Sipariş</span><span class="value" id="info-siparis">-</span></div>
+            <div class="row"><span class="label">Proses</span><span class="value" id="info-proses">-</span></div>
+            <div class="row"><span class="label">Olması gereken</span><span class="value" id="info-gerekli">-</span></div>
+            <div class="row"><span class="label">Yapılan</span><span class="value" id="info-yapilan">-</span></div>
+            <div class="row"><span class="label">Sapma</span><span class="value" id="info-sapma">-</span></div>
+        </div>
+        
+        <div class="form-bolum">
+            <label>SEBEP NEDİR? (zorunlu)</label>
+            <div class="sebep-list">
+                <label><input type="radio" name="sebep" value="PERSONEL_EKSIK"><span>👥 Personel eksik</span></label>
+                <label><input type="radio" name="sebep" value="MAKINA_ARIZA"><span>🔧 Makina arıza</span></label>
+                <label><input type="radio" name="sebep" value="ELEKTRIK"><span>⚡ Elektrik</span></label>
+                <label><input type="radio" name="sebep" value="MALZEME"><span>📦 Malzeme</span></label>
+                <label style="grid-column: 1 / -1;"><input type="radio" name="sebep" value="DIGER"><span>📝 Diğer</span></label>
+            </div>
+        </div>
+        
+        <div class="form-bolum">
+            <label>AÇIKLAMA (en az 5 karakter)</label>
+            <textarea id="aciklama" placeholder="Sebebi detaylı yazın..." maxlength="500"></textarea>
+        </div>
+        
+        <button class="gonder-btn" id="gonder-btn" onclick="sebepGonder()">
+            G Ö N D E R
+        </button>
+        
+        <div class="error-msg" id="error-msg"></div>
+        
+        <div class="uyari-alt">
+            ⛔ Bu ekran kapatılamaz • Geri tuşu yok • Sebep girilmeden API çalışmaz
+        </div>
+    </div>
+</div>
+
+<script>
+// =====================================================
+// KILIT EKRANI KIOSK MODU
+// =====================================================
+// Geri tusu kapali
+history.pushState(null, '', location.href);
+window.addEventListener('popstate', () => {
+    history.pushState(null, '', location.href);
+});
+
+// F5, F12, Ctrl+R kapali
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'F5' || e.key === 'F12') { e.preventDefault(); return false; }
+    if (e.ctrlKey && (e.key === 'r' || e.key === 'R')) { e.preventDefault(); return false; }
+    if (e.ctrlKey && e.shiftKey && e.key === 'I') { e.preventDefault(); return false; }
+});
+
+// Sag tik kapali
+document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+// Sayfa kapatilirken uyari
+window.addEventListener('beforeunload', (e) => {
+    e.preventDefault();
+    e.returnValue = 'Sebep girmeden kapatamazsiniz!';
+});
+
+// =====================================================
+// SAPMA BILGISINI YUKLE
+// =====================================================
+async function bilgiYukle() {
+    try {
+        const r = await fetch('/uretim-yonetim/kilit/durum');
+        const d = await r.json();
+        
+        if (!d.kilit_aktif) {
+            // Kilit yok, plan ekranina don
+            window.location.href = '/uretim-yonetim/plan-ekrani';
+            return;
+        }
+        
+        const s = d.sapma_detay;
+        if (s) {
+            document.getElementById('info-siparis').textContent = s.siparis_no;
+            document.getElementById('info-proses').textContent = s.proses_adi + ' (' + s.proses_kod + ')';
+            document.getElementById('info-gerekli').textContent = s.olmasi_gereken + ' çift';
+            document.getElementById('info-yapilan').textContent = s.gercek + ' çift';
+            document.getElementById('info-sapma').textContent = '%' + s.sapma_yuzde;
+        }
+    } catch (e) {
+        document.getElementById('error-msg').style.display = 'block';
+        document.getElementById('error-msg').textContent = 'Bilgi yüklenemedi: ' + e.message;
+    }
+}
+
+// =====================================================
+// SEBEP GONDER
+// =====================================================
+async function sebepGonder() {
+    const sebepRadio = document.querySelector('input[name="sebep"]:checked');
+    const aciklama = document.getElementById('aciklama').value.trim();
+    const errorDiv = document.getElementById('error-msg');
+    const btn = document.getElementById('gonder-btn');
+    
+    errorDiv.style.display = 'none';
+    
+    // Validasyon
+    if (!sebepRadio) {
+        errorDiv.style.display = 'block';
+        errorDiv.textContent = '⚠️ Sebep seçmelisin';
+        return;
+    }
+    if (aciklama.length < 5) {
+        errorDiv.style.display = 'block';
+        errorDiv.textContent = '⚠️ Açıklama en az 5 karakter olmalı (şu an: ' + aciklama.length + ')';
+        return;
+    }
+    
+    btn.disabled = true;
+    btn.textContent = 'Gönderiliyor...';
+    
+    try {
+        const r = await fetch('/uretim-yonetim/sebep', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                sebep_kategori: sebepRadio.value,
+                aciklama: aciklama,
+            }),
+        });
+        const d = await r.json();
+        
+        if (d.durum === 'OK') {
+            btn.textContent = '✓ Kilit açıldı, yönlendiriliyor...';
+            // beforeunload kapatma uyarisini kaldir
+            window.onbeforeunload = null;
+            setTimeout(() => {
+                window.location.href = d.redirect || '/uretim-yonetim/plan-ekrani';
+            }, 800);
+        } else {
+            errorDiv.style.display = 'block';
+            errorDiv.textContent = '⚠️ ' + (d.mesaj || 'Hata: ' + JSON.stringify(d));
+            btn.disabled = false;
+            btn.textContent = 'G Ö N D E R';
+        }
+    } catch (e) {
+        errorDiv.style.display = 'block';
+        errorDiv.textContent = '⚠️ Hata: ' + e.message;
+        btn.disabled = false;
+        btn.textContent = 'G Ö N D E R';
+    }
+}
+
+// Baslat
+bilgiYukle();
+</script>
+
+</body>
+</html>

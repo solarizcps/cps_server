@@ -1,0 +1,127 @@
+﻿# -*- coding: utf-8 -*-
+"""CPS DEV - Enjeksiyon Takip Routes (FAZ 6)
+
+F6: Yonetim sayfasi R4 birebir HTML icerigi.
+    Makine listesi + aksama sebepleri + bugun tarihi template'e gecer.
+    Istasyon durumu F6'da hardcoded demo (F7'de DB'den gelecek).
+
+URL yapisi:
+  /enjeksiyon/          -> Yonetim sayfasi (sidebar'li, R4 birebir gövde)
+  /enjeksiyon/saha      -> Saha placeholder (F7+ ayri faz)
+  /enjeksiyon/api/...   -> API endpointleri
+"""
+from datetime import datetime
+from flask import (Blueprint, render_template, redirect, url_for,
+                   request, session, abort, jsonify)
+from functools import wraps
+
+
+enjeksiyon_bp = Blueprint(
+    'enjeksiyon', __name__,
+    url_prefix='/enjeksiyon',
+    template_folder='../../templates/enjeksiyon'
+)
+
+
+# ============== YETKI ==============
+
+def _yonetim_yetkisi():
+    u = session.get('kullanici')
+    if not u:
+        return False
+    if u.get('KullaniciAdi') == 'admin':
+        return True
+    if u.get('RolAd') in ('Yönetim', 'Planlama'):
+        return True
+    return False
+
+
+def yonetim_yetkili(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get('kullanici'):
+            return redirect(url_for('auth.login', next=request.path))
+        if not _yonetim_yetkisi():
+            abort(403)
+        return f(*args, **kwargs)
+    return wrapper
+
+
+def saha_yetkili(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get('kullanici'):
+            return redirect(url_for('auth.login', next=request.path))
+        return f(*args, **kwargs)
+    return wrapper
+
+
+# ============== F6 DEMO ISTASYON DURUMU ==============
+# F7'de bu DB'den (enj_gunluk_rapor + enj_istasyon_durumu) gelecek.
+
+F6_DEMO_DURUM = {
+    1: {'aktif': True,  'aktif_istasyonlar': [1, 2, 3, 4]},
+    2: {'aktif': True,  'aktif_istasyonlar': [1, 2]},
+    3: {'aktif': False, 'aktif_istasyonlar': []},
+    4: {'aktif': False, 'aktif_istasyonlar': []},
+}
+
+
+def _makineleri_zenginlestir(rows):
+    """F6 demo state ekle. F7'de bu fonksiyon DB'den dolacak."""
+    for m in rows:
+        d = F6_DEMO_DURUM.get(m['id'], {'aktif': False, 'aktif_istasyonlar': []})
+        m['aktif'] = d['aktif']
+        m['aktif_istasyonlar'] = d['aktif_istasyonlar']
+    return rows
+
+
+# ============== SAYFALAR ==============
+
+@enjeksiyon_bp.route('/')
+@yonetim_yetkili
+def yonetim_panel():
+    """R4 birebir yonetim sayfasi."""
+    from modules.enjeksiyon.db import makine_listele, aksama_sebep_listele
+    return render_template(
+        'enjeksiyon/yonetim.html',
+        makineler=_makineleri_zenginlestir(makine_listele()),
+        aksama_sebepleri=aksama_sebep_listele(),
+        bugun=datetime.now().strftime('%d.%m.%Y'),
+    )
+
+
+@enjeksiyon_bp.route('/saha')
+@saha_yetkili
+def saha_panel():
+    """Ferhat icin sade tablet ekrani - F7'de ayri faz."""
+    return render_template('enjeksiyon/saha.html')
+
+
+# ============== API ==============
+
+@enjeksiyon_bp.route('/api/saglik')
+def api_saglik():
+    return jsonify({
+        'durum': 'ok',
+        'modul': 'enjeksiyon',
+        'faz': 'F6',
+        'blueprint': enjeksiyon_bp.name,
+        'url_prefix': enjeksiyon_bp.url_prefix,
+    })
+
+
+@enjeksiyon_bp.route('/api/makine')
+@yonetim_yetkili
+def api_makine_listele():
+    from modules.enjeksiyon.db import makine_listele
+    rows = makine_listele()
+    return jsonify({'durum': 'ok', 'kayit_sayisi': len(rows), 'veri': rows})
+
+
+@enjeksiyon_bp.route('/api/aksama-sebep')
+@yonetim_yetkili
+def api_aksama_sebep_listele():
+    from modules.enjeksiyon.db import aksama_sebep_listele
+    rows = aksama_sebep_listele()
+    return jsonify({'durum': 'ok', 'kayit_sayisi': len(rows), 'veri': rows})

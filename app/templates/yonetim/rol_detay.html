@@ -1,0 +1,353 @@
+{% extends "base.html" %}
+{% block title %}{{ rol.Ad }} - Yetki Matrisi V2{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/rol_detay.css') }}">
+<style>
+.r-bas { background:#fff; border:0.5px solid var(--border); border-radius:10px; padding:14px 16px; margin-bottom:12px; box-shadow:var(--shadow-sm); }
+.r-bas input { width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-family:var(--sans); font-size:14px; }
+.r-bas label { display:block; font-size:10px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:1.3px; margin-bottom:4px; }
+.r-bas-grid { display:grid; grid-template-columns:280px 1fr; gap:14px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <div class="page-title">
+      {{ rol.Ad }}
+      {% if rol.SuperAdmin %}
+      <span class="v2-superadmin-badge">SuperAdmin</span>
+      {% endif %}
+    </div>
+    <div class="page-sub">Yetki matrisi V2 - 7 boyut</div>
+  </div>
+  <div style="display:flex; gap:8px;">
+    <a class="btn btn-outline" href="/yonetim/rol">&larr; Roller</a>
+    {% if not rol.SuperAdmin %}
+    <form method="post" action="/yonetim/rol/{{ rol.Id }}/sil" style="display:inline;" onsubmit="return confirm('Bu rolu silmek istediginize emin misiniz?')">
+      <button class="btn btn-outline" type="submit" style="color:var(--red);">Rolu Sil</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+{% if rol.SuperAdmin %}
+<div class="v2-readonly-info">
+  <strong>SuperAdmin rolu:</strong> Bu rol tum yetkilere otomatik sahiptir (*). Asagidaki matris referans icin gosterilir.
+</div>
+{% endif %}
+
+<!-- UST OZET KARTLAR -->
+<div class="v2-ust-ozet">
+  <div class="v2-ozet-kart">
+    <div class="v2-ozet-deger">{{ metrik.kullanici_sayi }}</div>
+    <div class="v2-ozet-etiket">Kullanici</div>
+  </div>
+  <div class="v2-ozet-kart">
+    <div class="v2-ozet-deger">{{ metrik.aktif_yetki }}</div>
+    <div class="v2-ozet-etiket">Aktif Yetki</div>
+  </div>
+  <div class="v2-ozet-kart">
+    <div class="v2-ozet-deger">{{ metrik.modul_erisim }}</div>
+    <div class="v2-ozet-etiket">Modul Erisim</div>
+  </div>
+  <div class="v2-ozet-kart">
+    <div class="v2-ozet-deger {% if metrik.riskli_yetki > 0 %}tehlike{% endif %}">{{ metrik.riskli_yetki }}</div>
+    <div class="v2-ozet-etiket">Riskli Yetki</div>
+  </div>
+  <div class="v2-ozet-kart">
+    <div class="v2-ozet-deger" style="font-size:13px;">{{ gruplar | length }} grup</div>
+    <div class="v2-ozet-etiket">Modul Grup</div>
+  </div>
+</div>
+
+<form method="post" action="/yonetim/rol/{{ rol.Id }}/kaydet" id="rolForm">
+
+<!-- Rol bilgisi -->
+<div class="r-bas">
+  <div class="r-bas-grid">
+    <div>
+      <label>Rol Adi</label>
+      <input type="text" name="Ad" value="{{ rol.Ad }}" required>
+    </div>
+    <div>
+      <label>Aciklama</label>
+      <input type="text" name="Aciklama" value="{{ rol.Aciklama or '' }}" placeholder="(opsiyonel) rol tarifi">
+    </div>
+  </div>
+</div>
+
+<!-- Utility bar -->
+<div class="v2-util-bar">
+  <button type="button" class="v2-util-btn" onclick="v2TumunuAc()">Tumunu Ac</button>
+  <button type="button" class="v2-util-btn" onclick="v2TumunuKapat()">Tumunu Kapat</button>
+</div>
+
+<!-- MODUL GRUPLARI (Accordion) -->
+{% for grup_key, grup in gruplar.items() %}
+{# Bu grup icin aktif/riskli sayisini hesapla (Jinja loop) #}
+{% set grup_aktif = namespace(view=0, create=0, update=0, delete=0, approve=0, report=0, manage=0, toplam=0, riskli=0) %}
+{% for y in grup.yetkiler %}
+  {% set m = mevcut.get(y.Id, {}) %}
+  {% if m.can_view %}{% set grup_aktif.view = grup_aktif.view + 1 %}{% endif %}
+  {% if m.can_create %}{% set grup_aktif.create = grup_aktif.create + 1 %}{% endif %}
+  {% if m.can_update %}{% set grup_aktif.update = grup_aktif.update + 1 %}{% endif %}
+  {% if m.can_delete %}{% set grup_aktif.delete = grup_aktif.delete + 1 %}{% set grup_aktif.riskli = grup_aktif.riskli + 1 %}{% endif %}
+  {% if m.can_approve %}{% set grup_aktif.approve = grup_aktif.approve + 1 %}{% endif %}
+  {% if m.can_report %}{% set grup_aktif.report = grup_aktif.report + 1 %}{% endif %}
+  {% if m.can_manage %}{% set grup_aktif.manage = grup_aktif.manage + 1 %}{% if not m.can_delete %}{% set grup_aktif.riskli = grup_aktif.riskli + 1 %}{% endif %}{% endif %}
+  {% if m.can_view or m.can_create or m.can_update or m.can_delete or m.can_approve or m.can_report or m.can_manage %}
+    {% set grup_aktif.toplam = grup_aktif.toplam + 1 %}
+  {% endif %}
+{% endfor %}
+
+<div class="v2-modul-kart{% if grup_aktif.toplam > 0 %} v2-aktif v2-acik{% endif %}{% if grup_aktif.riskli > 0 %} v2-riskli{% endif %}" data-grup="{{ grup_key }}">
+
+  <div class="v2-kart-bas" onclick="v2ToggleKart(this)">
+    <div class="v2-kart-bas-sol">
+      <span class="v2-modul-ad">{{ grup.modul }}</span>
+      {% if grup.alt_modul %}<span class="v2-alt-modul-ad">{{ grup.alt_modul }}</span>{% endif %}
+    </div>
+    <div class="v2-kart-bas-sag">
+      <span class="v2-rozet v2-rozet-yetki">{{ grup.yetkiler | length }} yetki</span>
+      {% if grup_aktif.toplam > 0 %}
+      <span class="v2-rozet v2-rozet-aktif">{{ grup_aktif.toplam }} aktif</span>
+      {% endif %}
+      {% if grup_aktif.riskli > 0 %}
+      <span class="v2-rozet v2-rozet-riskli">{{ grup_aktif.riskli }} riskli</span>
+      {% endif %}
+      <span class="v2-rozet-aksiyonlar">
+        {%- if grup_aktif.view %}V:{{ grup_aktif.view }} {% endif -%}
+        {%- if grup_aktif.create %}C:{{ grup_aktif.create }} {% endif -%}
+        {%- if grup_aktif.update %}U:{{ grup_aktif.update }} {% endif -%}
+        {%- if grup_aktif.report %}R:{{ grup_aktif.report }}{% endif -%}
+      </span>
+      <span class="v2-ok">&#x25B6;</span>
+    </div>
+  </div>
+
+  <div class="v2-kart-icerik">
+    <!-- Hizli eylem cubuk -->
+    <div class="v2-eylem-cubuk">
+      <span class="v2-eylem-etiket">Hizli:</span>
+      <button type="button" class="v2-eylem-btn" onclick="v2GrupSet(this, 'view')">Sadece Gor</button>
+      <button type="button" class="v2-eylem-btn" onclick="v2GrupSet(this, 'view_report')">Gor+Rap</button>
+      <button type="button" class="v2-eylem-btn" onclick="v2GrupSet(this, 'work')">Calisan</button>
+      <button type="button" class="v2-eylem-btn" onclick="v2GrupSet(this, 'none')">Hicbiri</button>
+    </div>
+
+    <!-- Matris header -->
+    <div class="v2-matris-hdr">
+      <span>Yetki</span>
+      <span class="v2-hdr-view v2-tooltip" data-tip="Goruntuleme">Gor</span>
+      <span class="v2-hdr-create v2-tooltip" data-tip="Yeni olusturma">Olu</span>
+      <span class="v2-hdr-update v2-tooltip" data-tip="Mevcut guncelleme">Gun</span>
+      <span class="v2-hdr-delete v2-tooltip" data-tip="DIKKAT: Silme">Sil</span>
+      <span class="v2-hdr-approve v2-tooltip" data-tip="Onaylama">Ony</span>
+      <span class="v2-hdr-report v2-tooltip" data-tip="Rapor goruntuleme">Rap</span>
+      <span class="v2-hdr-manage v2-tooltip" data-tip="TEHLIKE: Yonetim">Yon</span>
+      <span class="v2-hdr-eski v2-tooltip" data-tip="Eski 2-boyut (migration)">ESKI</span>
+    </div>
+
+    <!-- Matris rows -->
+    {% for y in grup.yetkiler %}
+    {% set m = mevcut.get(y.Id, {}) %}
+    <div class="v2-matris-row" data-yid="{{ y.Id }}">
+      <div class="v2-yetki-ad">
+        <span class="v2-yetki-kod-tooltip v2-tooltip" data-tip="{{ y.Kod }}">{{ y.Ad }}</span>
+      </div>
+      <div class="v2-cb v2-cb-view">
+        <input type="checkbox" name="v2_can_view_{{ y.Id }}" value="1"
+               class="v2-action v2-action-view"
+               data-yid="{{ y.Id }}" data-action="can_view"
+               {% if m.can_view %}checked{% endif %}
+               onchange="v2ChangeAction(this)">
+      </div>
+      <div class="v2-cb v2-cb-create">
+        <input type="checkbox" name="v2_can_create_{{ y.Id }}" value="1"
+               class="v2-action v2-action-create"
+               data-yid="{{ y.Id }}" data-action="can_create"
+               {% if m.can_create %}checked{% endif %}
+               onchange="v2ChangeAction(this)">
+      </div>
+      <div class="v2-cb v2-cb-update">
+        <input type="checkbox" name="v2_can_update_{{ y.Id }}" value="1"
+               class="v2-action v2-action-update"
+               data-yid="{{ y.Id }}" data-action="can_update"
+               {% if m.can_update %}checked{% endif %}
+               onchange="v2ChangeAction(this)">
+      </div>
+      <div class="v2-cb v2-cb-delete">
+        <input type="checkbox" name="v2_can_delete_{{ y.Id }}" value="1"
+               class="v2-action v2-action-delete"
+               data-yid="{{ y.Id }}" data-action="can_delete"
+               {% if m.can_delete %}checked{% endif %}
+               onchange="v2ChangeAction(this)">
+      </div>
+      <div class="v2-cb v2-cb-approve">
+        <input type="checkbox" name="v2_can_approve_{{ y.Id }}" value="1"
+               class="v2-action v2-action-approve"
+               data-yid="{{ y.Id }}" data-action="can_approve"
+               {% if m.can_approve %}checked{% endif %}
+               onchange="v2ChangeAction(this)">
+      </div>
+      <div class="v2-cb v2-cb-report">
+        <input type="checkbox" name="v2_can_report_{{ y.Id }}" value="1"
+               class="v2-action v2-action-report"
+               data-yid="{{ y.Id }}" data-action="can_report"
+               {% if m.can_report %}checked{% endif %}
+               onchange="v2ChangeAction(this)">
+      </div>
+      <div class="v2-cb v2-cb-manage">
+        <input type="checkbox" name="v2_can_manage_{{ y.Id }}" value="1"
+               class="v2-action v2-action-manage"
+               data-yid="{{ y.Id }}" data-action="can_manage"
+               {% if m.can_manage %}checked{% endif %}
+               onchange="v2ChangeAction(this)">
+      </div>
+      <div class="v2-cb">
+        {% set eski_g = m.Gorebilir %}
+        {% set eski_d = m.Duzenleyebilir %}
+        {% if eski_g and eski_d %}
+          <span class="v2-eski-badge v2-eski-GD">GD</span>
+        {% elif eski_g %}
+          <span class="v2-eski-badge v2-eski-G">G</span>
+        {% elif eski_d %}
+          <span class="v2-eski-badge v2-eski-D">D</span>
+        {% else %}
+          <span class="v2-eski-badge v2-eski-bos">-</span>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endfor %}
+
+<!-- STICKY SAVE BAR (Sade - 2 metrik) -->
+<div class="v2-save-bar">
+  <div class="v2-save-istat">
+    <div class="v2-save-istat-item">
+      <span class="v2-save-istat-deger" id="v2-toplam-aktif">0</span>
+      <span>aktif yetki</span>
+    </div>
+    <div class="v2-save-istat-item">
+      <span class="v2-save-istat-deger tehlike" id="v2-toplam-riskli">0</span>
+      <span>riskli yetki</span>
+    </div>
+  </div>
+  <div style="display:flex; gap:8px;">
+    <button type="button" class="btn btn-outline" onclick="location.reload()">Iptal</button>
+    <button type="submit" class="btn btn-primary" id="v2SaveBtn">Kaydet</button>
+  </div>
+</div>
+
+</form>
+
+<script>
+var v2InChange = false;
+
+function v2ToggleKart(elem) {
+  var kart = elem.closest('.v2-modul-kart');
+  kart.classList.toggle('v2-acik');
+}
+
+function v2TumunuAc() {
+  document.querySelectorAll('.v2-modul-kart').forEach(function(k) {
+    k.classList.add('v2-acik');
+  });
+}
+
+function v2TumunuKapat() {
+  document.querySelectorAll('.v2-modul-kart').forEach(function(k) {
+    k.classList.remove('v2-acik');
+  });
+}
+
+function v2ChangeAction(cb) {
+  if (v2InChange) return;
+  v2InChange = true;
+  try {
+    var action = cb.dataset.action;
+
+    // Tehlikeli action confirm
+    if (cb.checked && (action === 'can_delete' || action === 'can_manage')) {
+      var actionAd = action === 'can_delete' ? 'SILME' : 'YONETIM';
+      if (!confirm('DIKKAT: ' + actionAd + ' yetkisi acmak istediginize emin misiniz?')) {
+        cb.checked = false;
+      }
+    }
+
+    // Olu/Gun/Rap acilirsa Gor otomatik acilir
+    if (cb.checked && (action === 'can_create' || action === 'can_update' || action === 'can_report')) {
+      var row = cb.closest('.v2-matris-row');
+      var viewCb = row.querySelector('.v2-action-view');
+      if (viewCb && !viewCb.checked) viewCb.checked = true;
+    }
+
+    // Gor kapanirsa hepsi kapanir
+    if (!cb.checked && action === 'can_view') {
+      var row = cb.closest('.v2-matris-row');
+      row.querySelectorAll('.v2-action').forEach(function(c) {
+        if (c !== cb) c.checked = false;
+      });
+    }
+  } finally {
+    v2InChange = false;
+    v2GuncelleIstat();
+  }
+}
+
+function v2GrupSet(elem, preset) {
+  var kart = elem.closest('.v2-modul-kart');
+  var aktifSet = [];
+  if (preset === 'view') aktifSet = ['view'];
+  else if (preset === 'view_report') aktifSet = ['view', 'report'];
+  else if (preset === 'work') aktifSet = ['view', 'create', 'update', 'report'];
+
+  ['view','create','update','delete','approve','report','manage'].forEach(function(a) {
+    kart.querySelectorAll('.v2-action-' + a).forEach(function(cb) {
+      cb.checked = aktifSet.indexOf(a) !== -1;
+    });
+  });
+  v2GuncelleIstat();
+}
+
+function v2GuncelleIstat() {
+  // Aktif yetki = en az 1 action acik yetki sayisi (yani unique row)
+  var aktif = 0;
+  var riskli = 0;
+  document.querySelectorAll('.v2-matris-row').forEach(function(row) {
+    var cbs = row.querySelectorAll('.v2-action');
+    var rowAktif = false;
+    var rowRiskli = false;
+    cbs.forEach(function(c) {
+      if (c.checked) {
+        rowAktif = true;
+        if (c.dataset.action === 'can_delete' || c.dataset.action === 'can_manage') {
+          rowRiskli = true;
+        }
+      }
+    });
+    if (rowAktif) aktif++;
+    if (rowRiskli) riskli++;
+  });
+
+  var aktifEl = document.getElementById('v2-toplam-aktif');
+  var riskliEl = document.getElementById('v2-toplam-riskli');
+  if (aktifEl) aktifEl.innerText = aktif;
+  if (riskliEl) riskliEl.innerText = riskli;
+}
+
+document.getElementById('rolForm').addEventListener('submit', function() {
+  var btn = document.getElementById('v2SaveBtn');
+  btn.disabled = true;
+  btn.innerText = 'Kaydediliyor...';
+});
+
+document.addEventListener('DOMContentLoaded', v2GuncelleIstat);
+</script>
+
+{% endblock %}

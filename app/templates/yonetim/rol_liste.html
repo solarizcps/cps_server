@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Roller — Yönetim{% endblock %}
+
+{% block head %}
+<style>
+.r-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:12px; }
+.r-kart { background:#fff; border:0.5px solid var(--border); border-radius:10px; padding:16px; box-shadow:var(--shadow-sm); transition:box-shadow .15s; display:flex; flex-direction:column; }
+.r-kart:hover { box-shadow:var(--shadow-md); }
+.r-ad { font-size:15px; font-weight:700; margin-bottom:4px; }
+.r-ac { font-size:12px; color:var(--text3); flex:1; min-height:32px; }
+.r-alt { display:flex; justify-content:space-between; align-items:center; margin-top:12px; padding-top:10px; border-top:0.5px solid var(--border); }
+.r-sayi { font-family:var(--mono); font-size:11px; color:var(--text3); }
+.r-sayi strong { color:var(--text); }
+.yeni-form { background:#fff; border:2px dashed var(--border2); border-radius:10px; padding:16px; display:flex; flex-direction:column; gap:8px; }
+.yeni-form input, .yeni-form textarea { width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-family:var(--sans); font-size:13px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <div class="page-title">Roller ve Yetkiler</div>
+    <div class="page-sub">{{ roller | length }} rol tanımlı · Bir role tıkla → yetki matrisini düzenle</div>
+  </div>
+</div>
+
+<div class="r-grid">
+
+  <!-- Yeni rol formu -->
+  <form class="yeni-form" method="post" action="/yonetim/rol/yeni">
+    <div style="font-weight:700; font-size:14px; margin-bottom:4px;">+ Yeni Rol</div>
+    <input type="text" name="Ad" placeholder="Rol adı (örn: Satış Temsilcisi)" required>
+    <textarea name="Aciklama" placeholder="Açıklama (opsiyonel)" rows="2"></textarea>
+    <button type="submit" class="btn btn-primary btn-sm">Oluştur</button>
+  </form>
+
+  {% for r in roller %}
+  <a href="/yonetim/rol/{{ r.Id }}" class="r-kart" style="color:inherit; text-decoration:none;">
+    <div class="r-ad">{{ r.Ad }}</div>
+    <div class="r-ac">{{ r.Aciklama or '—' }}</div>
+    <div class="r-alt">
+      <div class="r-sayi"><strong>{{ r.KullaniciSayi }}</strong> kullanıcı</div>
+      <span class="btn btn-outline btn-sm">Yetkiler →</span>
+    </div>
+  </a>
+  {% endfor %}
+
+</div>
+
+{% endblock %}

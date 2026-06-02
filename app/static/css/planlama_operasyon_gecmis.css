@@ -1,0 +1,233 @@
+/* ============================================================
+   F9_5_2_OPERASYON_GECMIS_CSS
+   Patch: OP_RAPOR_V2_GECMIS
+   Snapshot: STABLE_OP_RAPOR_V2_GECMIS_PRE_PATCH_20260515_153601
+   Bu dosya operasyon_raporu.html GECMIS sekmesini stillendirir.
+   Mevcut planlama_operasyon.css dokunulmaz.
+   ============================================================ */
+
+/* ---- SEKME SERIDI (CANLI + GECMIS) ---- */
+.or-sekme-serit {
+  display: flex; gap: 0;
+  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 16px;
+  padding: 0 4px;
+}
+.or-sekme {
+  padding: 10px 18px;
+  font-size: 14px;
+  color: #6b7280;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  display: inline-flex; align-items: center; gap: 6px;
+  user-select: none;
+  transition: color 120ms, border-color 120ms;
+}
+.or-sekme:hover { color: #1f2937; }
+.or-sekme.aktif {
+  color: #1f2937; font-weight: 500;
+  border-bottom-color: #1f2937;
+}
+.or-sekme-icon {
+  width: 14px; height: 14px;
+  display: inline-block; vertical-align: middle;
+}
+
+/* GECMIS sayfa ana kabi - varsayilan gizli */
+.or-gec-sayfa { display: none; padding: 0 8px; }
+.or-gec-sayfa.aktif { display: block; }
+
+/* ---- FILTRE BAR ---- */
+.or-gec-filtre-bar {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.or-gec-tarih-row {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: 8px; margin-bottom: 12px;
+}
+.or-gec-tarih-row .lbl { font-size: 12px; color: #6b7280; margin-right: 4px; }
+.or-gec-tarih-btn {
+  padding: 4px 10px; font-size: 12px; min-height: 28px;
+  background: #fff; border: 1px solid #d1d5db;
+  border-radius: 6px; cursor: pointer; color: #374151;
+}
+.or-gec-tarih-btn:hover { background: #f3f4f6; }
+.or-gec-tarih-btn.aktif {
+  background: #eff6ff; color: #1e40af; border-color: #93c5fd;
+}
+.or-gec-tarih-input {
+  padding: 4px 10px; font-size: 12px; height: 28px;
+  border: 1px solid #d1d5db; border-radius: 6px;
+  color: #374151; background: #fff;
+}
+.or-gec-filtre-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px; margin-bottom: 10px;
+}
+.or-gec-filtre-grid label {
+  display: block; font-size: 11px; color: #6b7280; margin-bottom: 3px;
+}
+.or-gec-filtre-grid select,
+.or-gec-filtre-grid input {
+  width: 100%; height: 30px; font-size: 12px;
+  border: 1px solid #d1d5db; border-radius: 6px;
+  padding: 0 8px; background: #fff; color: #374151;
+}
+.or-gec-filtre-aksiyon {
+  display: flex; gap: 8px; align-items: end; justify-content: flex-end;
+  margin-top: 8px;
+}
+.or-gec-btn-filtrele {
+  height: 30px; padding: 0 14px; font-size: 12px;
+  background: #1f2937; color: #fff; border: 0; border-radius: 6px;
+  cursor: pointer; font-weight: 500;
+}
+.or-gec-btn-filtrele:hover { background: #111827; }
+.or-gec-btn-temizle {
+  height: 30px; padding: 0 12px; font-size: 12px;
+  background: #fff; color: #6b7280; border: 1px solid #d1d5db;
+  border-radius: 6px; cursor: pointer;
+}
+.or-gec-btn-temizle:hover { background: #f3f4f6; }
+
+/* ---- TABLO ---- */
+.or-gec-tablo-kabi {
+  border: 1px solid #e5e7eb; border-radius: 8px;
+  overflow: hidden; background: #fff;
+}
+.or-gec-tablo-scroll { overflow-x: auto; }
+.or-gec-tablo {
+  width: 100%; border-collapse: collapse;
+  font-size: 11.5px; min-width: 1180px;
+}
+.or-gec-tablo thead tr {
+  background: #f9fafb; position: sticky; top: 0; z-index: 2;
+}
+.or-gec-tablo th {
+  padding: 8px; text-align: left; font-weight: 500;
+  color: #6b7280; border-bottom: 1px solid #e5e7eb;
+  white-space: nowrap;
+}
+.or-gec-tablo th.sag { text-align: right; }
+.or-gec-tablo th.ort { text-align: center; }
+.or-gec-tablo td {
+  padding: 7px 8px; border-bottom: 1px solid #f3f4f6;
+  color: #374151;
+}
+.or-gec-tablo td.sag { text-align: right; font-variant-numeric: tabular-nums; }
+.or-gec-tablo td.ort { text-align: center; }
+.or-gec-tablo td.makine { font-weight: 500; }
+.or-gec-tablo td.bos { color: #d1d5db; }
+.or-gec-tablo td.fire { color: #b91c1c; }
+.or-gec-tablo td.verim { color: #15803d; font-weight: 500; }
+.or-gec-tablo tbody tr:hover { background: #fafafa; }
+
+/* ---- SAHA DILI PILL'LER ---- */
+.or-gec-pill {
+  display: inline-block; padding: 1px 7px;
+  border-radius: 4px; font-size: 11px; font-weight: 500;
+}
+.or-gec-pill-cls { background: #dcfce7; color: #166534; }
+.or-gec-pill-klp { background: #fef3c7; color: #92400e; }
+.or-gec-pill-arz { background: #fee2e2; color: #991b1b; }
+.or-gec-pill-kpl { background: #f3f4f6; color: #4b5563; }
+.or-gec-pill-drs { background: #ede9fe; color: #5b21b6; }
+
+/* GOVDE / ATKI */
+.or-gec-tip-govde { background: #dbeafe; color: #1e40af; }
+.or-gec-tip-atki  { background: #fef3c7; color: #92400e; }
+
+/* ---- ANOMALI BADGE ---- */
+.or-gec-anomali-1 { color: #b45309; font-weight: 500; }
+.or-gec-anomali-2 { color: #b91c1c; font-weight: 600; }
+.or-gec-anomali-2::after { content: ' !'; }
+
+/* ---- PAGINATION ---- */
+.or-gec-tablo-alt {
+  background: #f9fafb; padding: 8px 12px;
+  border-top: 1px solid #e5e7eb;
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 11.5px; color: #6b7280;
+}
+.or-gec-tablo-alt strong { color: #1f2937; font-weight: 500; }
+.or-gec-dagilim { color: #9ca3af; margin-left: 8px; font-size: 11px; }
+.or-gec-pgn { display: flex; gap: 4px; align-items: center; }
+.or-gec-pgn button {
+  height: 24px; padding: 0 8px; font-size: 11px;
+  background: #fff; border: 1px solid #d1d5db;
+  border-radius: 4px; cursor: pointer; color: #374151;
+}
+.or-gec-pgn button:hover { background: #f3f4f6; }
+.or-gec-pgn button.aktif {
+  background: #1f2937; color: #fff; border-color: #1f2937;
+}
+.or-gec-pgn button:disabled {
+  opacity: 0.5; cursor: not-allowed;
+}
+.or-gec-pgn select {
+  height: 24px; font-size: 11px; margin-left: 8px;
+  border: 1px solid #d1d5db; border-radius: 4px;
+  padding: 0 6px; background: #fff;
+}
+
+/* ---- KPI ALT SERIT ---- */
+.or-gec-kpi-serit {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px; margin-top: 12px;
+}
+.or-gec-kpi {
+  background: #f9fafb; border-radius: 6px; padding: 10px 12px;
+}
+.or-gec-kpi-lbl {
+  font-size: 10px; color: #6b7280; margin-bottom: 2px;
+}
+.or-gec-kpi-val {
+  font-size: 18px; font-weight: 500; font-variant-numeric: tabular-nums;
+  color: #1f2937;
+}
+.or-gec-kpi-alt { font-size: 10px; color: #9ca3af; }
+.or-gec-kpi-val.success { color: #15803d; }
+.or-gec-kpi-val.danger  { color: #b91c1c; }
+
+/* ---- EXPORT BUTONLARI (placeholder) ---- */
+.or-gec-export {
+  display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px;
+}
+.or-gec-export button {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 32px; padding: 0 12px; font-size: 12px;
+  background: #fff; border: 1px solid #d1d5db;
+  border-radius: 6px; color: #6b7280; cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* ---- KALIP DEGISIM ESKI -> YENI ---- */
+.or-gec-kalip-eski { color: #9ca3af; font-size: 10.5px; }
+.or-gec-kalip-yon  { color: #9ca3af; margin: 0 2px; }
+
+/* ---- BOS / LOADING ---- */
+.or-gec-bos {
+  padding: 40px 16px; text-align: center;
+  color: #9ca3af; font-size: 13px;
+}
+.or-gec-yukleniyor {
+  padding: 24px; text-align: center;
+  color: #6b7280; font-size: 13px;
+}
+.or-gec-hata {
+  padding: 16px; background: #fef2f2; color: #991b1b;
+  border: 1px solid #fecaca; border-radius: 6px;
+  font-size: 12px; margin: 12px 0;
+}
+
+/* ---- RESPONSIVE ---- */
+@media (max-width: 900px) {
+  .or-gec-filtre-grid { grid-template-columns: repeat(2, 1fr); }
+  .or-gec-kpi-serit   { grid-template-columns: repeat(3, 1fr); }
+}

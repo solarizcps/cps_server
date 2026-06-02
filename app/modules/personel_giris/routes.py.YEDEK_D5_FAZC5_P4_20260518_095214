@@ -1,0 +1,588 @@
+# -*- coding: utf-8 -*-
+"""
+personel_giris/routes.py
+========================
+Personel telefon UI backend endpoint'leri.
+
+5055 ile birebir uyumlu API:
+  GET  /personel-giris/                  -> HTML (telefon UI)
+  GET  /personel-giris/health            -> JSON saglik
+  POST /personel-giris/login             -> Sifre kontrol
+  GET  /personel-giris/personeller       -> Aktif personel listesi
+  GET  /personel-giris/dogrula/<pid>     -> Session refresh
+  GET  /personel-giris/emir/<emir_no>    -> Emir detay (placeholder, Korgun sonra)
+  GET  /personel-giris/emir-toplam/<no>  -> Toplam + benim toplam
+  GET  /personel-giris/prosesler/<no>    -> Emir prosesleri (5055 emir_proses tablosu)
+  POST /personel-giris/kaydet            -> Uretim kaydet (CPS_CANLI)
+  GET  /personel-giris/gecmis/<pid>      -> Personel gecmis
+  GET  /personel-giris/prim/<pid>        -> Personel prim (placeholder)
+"""
+import sqlite3
+import os
+import datetime
+import traceback
+from flask import Blueprint, render_template, jsonify, request
+
+personel_giris_bp = Blueprint(
+    'personel_giris',
+    __name__,
+    url_prefix='/personel-giris',
+    template_folder='../../templates/personel_giris',
+)
+
+# Kaynak 5055 DB (gercek lokasyon)
+DB_5055_KAYNAK = r"D:\Ortak\Solariz-ARGE\solariz.db"
+# 8080 SYSTEM hesabi kaynak'a erisemiyor, snapshot local kopya kullan
+DB_5055_SNAPSHOT = r"D:\Firma_Ozel\adem\Solariz_CPS_SERVER\app\5055_snapshot\solariz.db"
+DB_5055 = DB_5055_SNAPSHOT  # Geriye uyumluluk
+SNAPSHOT_TTL_SANIYE = 3600  # 60 dakika
+
+
+def _db_path():
+    """CPS DB yolu."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    return os.path.normpath(os.path.join(here, '..', '..', 'mock_data.db'))
+
+
+def _cps_conn():
+    """CPS DB baglantisi."""
+    conn = sqlite3.connect(_db_path(), timeout=10)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _refresh_5055_snapshot_if_stale():
+    """Snapshot 60dk eski ise yenile. Kaynak erisilemezse eski snapshot kullan."""
+    import os, shutil, time
+    try:
+        if not os.path.exists(DB_5055_SNAPSHOT):
+            os.makedirs(os.path.dirname(DB_5055_SNAPSHOT), exist_ok=True)
+            if os.path.exists(DB_5055_KAYNAK):
+                shutil.copy2(DB_5055_KAYNAK, DB_5055_SNAPSHOT)
+            return
+        snap_age = time.time() - os.path.getmtime(DB_5055_SNAPSHOT)
+        if snap_age > SNAPSHOT_TTL_SANIYE:
+            if os.path.exists(DB_5055_KAYNAK):
+                try:
+                    shutil.copy2(DB_5055_KAYNAK, DB_5055_SNAPSHOT)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+
+# ============================================================
+# D5 FAZ A - LEGACY 5055 KORUMA KATMANI (WARNING LAYER)
+# BEGIN_LEGACY_LAYER
+# ============================================================
+USE_CPS_NATIVE_PROSES = False  # Faz B'de True olacak
+
+def _legacy_5055_available():
+    """5055 erisilebilir mi? Kaynak veya snapshot dosyasi var mi?"""
+    try:
+        return os.path.exists(DB_5055_KAYNAK) or os.path.exists(DB_5055_SNAPSHOT)
+    except Exception:
+        return False
+
+def _legacy_snapshot_mode():
+    """Hangi mod? CANLI (kaynak), SNAPSHOT (sadece kopya), NONE"""
+    try:
+        if os.path.exists(DB_5055_KAYNAK):
+            return 'CANLI'
+        if os.path.exists(DB_5055_SNAPSHOT):
+            return 'SNAPSHOT'
+    except Exception:
+        pass
+    return 'NONE'
+
+def _legacy_warning(endpoint, emir_no, mode, reason):
+    """Merkezi LEGACY_5055_WARNING log."""
+    msg = "[LEGACY_5055_WARNING] endpoint=" + str(endpoint) + " emir_no=" + str(emir_no) + " mode=" + str(mode) + " reason=" + str(reason)
+    try:
+        from flask import current_app
+        current_app.logger.warning(msg)
+    except Exception:
+        print(msg, flush=True)
+# END_LEGACY_LAYER
+
+
+def _5055_conn():
+    """5055 READ-ONLY baglantisi. Hata atmaz, None doner."""
+    try:
+        if not _legacy_5055_available():
+            return None
+        _refresh_5055_snapshot_if_stale()
+        if not os.path.exists(DB_5055_SNAPSHOT):
+            return None
+        uri = "file:" + DB_5055_SNAPSHOT.replace("\\", "/") + "?mode=ro&nolock=1"
+        conn = sqlite3.connect(uri, uri=True, timeout=5)
+        conn.row_factory = sqlite3.Row
+        return conn
+    except Exception as e:
+        try:
+            from flask import current_app
+            current_app.logger.warning("[LEGACY_5055] connection_fail: " + str(e)[:120])
+        except Exception:
+            pass
+        return None
+@personel_giris_bp.before_request
+def _bypass_cps_auth():
+    """Personel telefon UI kendi login sistemine sahip - CPS auth bypass."""
+    # Burada None dondurursek before_request normal akisa devam eder.
+    # Eger CPS'in global auth filter'i varsa, o yine de calisir.
+    # Bu sebepten endpoint icinde de kendi kontrolumuzu yapacagiz.
+    return None
+
+
+# ============================================================
+# 1. ANA EKRAN (HTML)
+# ============================================================
+@personel_giris_bp.route('/', methods=['GET'])
+def index():
+    return render_template('personel_giris/index.html')
+
+
+# ============================================================
+# 2. HEALTH
+# ============================================================
+@personel_giris_bp.route('/health', methods=['GET'])
+def health():
+    try:
+        conn = _cps_conn()
+        toplam = conn.execute("SELECT COUNT(*) FROM personel_kullanici").fetchone()[0]
+        aktif = conn.execute("SELECT COUNT(*) FROM personel_kullanici WHERE aktif=1").fetchone()[0]
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'modul': 'personel_giris',
+            'personel_kullanici_toplam': toplam,
+            'aktif_personel': aktif,
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'mesaj': str(e)}), 500
+
+
+# ============================================================
+# 3. LOGIN - sifre kontrol
+# ============================================================
+@personel_giris_bp.route('/login', methods=['POST'])
+def login():
+    data = request.get_json(silent=True) or {}
+    kullanici = (data.get('kullanici') or '').strip().lower()
+    sifre = (data.get('sifre') or '').strip()
+
+    if not kullanici or not sifre:
+        return jsonify({'ok': False, 'mesaj': 'Kullanici ve sifre gerekli'}), 400
+
+    try:
+        conn = _cps_conn()
+        # Case-insensitive lookup (5055'te 'halil kıraç' format)
+        row = conn.execute("""
+            SELECT id, ad, kullanici_adi, sifre, aktif
+              FROM personel_kullanici
+             WHERE LOWER(kullanici_adi) = ? AND aktif = 1
+             LIMIT 1
+        """, (kullanici,)).fetchone()
+        conn.close()
+
+        if not row:
+            return jsonify({'ok': False, 'mesaj': 'Kullanici bulunamadi'}), 200
+        if row['sifre'] != sifre:
+            return jsonify({'ok': False, 'mesaj': 'Sifre yanlis'}), 200
+
+        return jsonify({
+            'ok': True,
+            'personel': {
+                'id': row['id'],
+                'ad': row['ad'],
+                'kullanici_adi': row['kullanici_adi']
+            }
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'mesaj': str(e)}), 500
+
+
+# ============================================================
+# 4. PERSONELLER (aktif liste)
+# ============================================================
+@personel_giris_bp.route('/personeller', methods=['GET'])
+def personeller():
+    try:
+        conn = _cps_conn()
+        rows = conn.execute("""
+            SELECT id, ad, kullanici_adi
+              FROM personel_kullanici
+             WHERE aktif = 1
+             ORDER BY ad
+        """).fetchall()
+        conn.close()
+        return jsonify([dict(r) for r in rows])
+    except Exception as e:
+        return jsonify({'hata': str(e)}), 500
+
+
+# ============================================================
+# 5. DOGRULA - session refresh
+# ============================================================
+@personel_giris_bp.route('/dogrula/<int:pid>', methods=['GET'])
+def dogrula(pid):
+    try:
+        conn = _cps_conn()
+        row = conn.execute("""
+            SELECT id, ad, kullanici_adi, aktif FROM personel_kullanici WHERE id = ?
+        """, (pid,)).fetchone()
+        conn.close()
+        if not row or row['aktif'] != 1:
+            return jsonify({'ok': False}), 200
+        return jsonify({'ok': True, 'personel': dict(row)})
+    except Exception as e:
+        return jsonify({'ok': False, 'mesaj': str(e)}), 500
+
+
+# ============================================================
+# 6. EMIR detay - placeholder (FAZ 5/6'da Korgun zenginlestirme)
+# ============================================================
+@personel_giris_bp.route('/emir/<int:emir_no>', methods=['GET'])
+def emir_detay(emir_no):
+    """
+    Emir detayi - gercek veri enrichment.
+    Kaynak siralamasi:
+      EmirMiktar:
+        1) CPS emir_alt_proses MAX(hedef_adet)
+        2) 5055 emir_proses MAX(limit_miktar) (proses_adi NOT LIKE '%.%')
+      toplam_girilen / bugun_girilen / kalan:
+        CPS uretim_kayit (onaylandi + bekliyor)
+      ModelKod / ModelAdi / CariAdi / TerTarih:
+        Korgun proxy (sonraki sprint - simdilik bos)
+    """
+    personel_id = request.args.get('personel_id', type=int)
+
+    emir_miktar = 0
+    # A) CPS emir_alt_proses
+    try:
+        ccps = _cps_conn()
+        row = ccps.execute("""
+            SELECT MAX(hedef_adet) m FROM emir_alt_proses
+             WHERE emir_no = ? AND aktif = 1
+        """, (emir_no,)).fetchone()
+        ccps.close()
+        if row and row['m']:
+            emir_miktar = row['m']
+    except Exception:
+        pass
+
+    # B) 5055 emir_proses fallback (D5 FAZ A - None kontrolu + warning)
+    if not emir_miktar:
+        c5055 = _5055_conn()
+        if c5055 is None:
+            _legacy_warning('/emir/' + str(emir_no), emir_no, _legacy_snapshot_mode(), '5055_NOT_AVAILABLE')
+        else:
+            try:
+                row = c5055.execute("""
+                    SELECT MAX(limit_miktar) m FROM emir_proses
+                     WHERE emir_no = ?
+                       AND proses_adi NOT LIKE '%.%'
+                       AND limit_miktar > 0
+                """, (emir_no,)).fetchone()
+                c5055.close()
+                if row and row['m']:
+                    emir_miktar = row['m']
+                else:
+                    _legacy_warning('/emir/' + str(emir_no), emir_no, _legacy_snapshot_mode(), 'EMIR_PROSES_EMPTY')
+            except Exception as e:
+                _legacy_warning('/emir/' + str(emir_no), emir_no, 'ERROR', str(type(e).__name__) + ":" + str(e)[:80])
+
+    # CPS toplam / bugun girilen
+    toplam_girilen = 0
+    bugun_girilen = 0
+    try:
+        ccps = _cps_conn()
+        toplam_girilen = ccps.execute("""
+            SELECT COALESCE(SUM(miktar), 0) FROM uretim_kayit
+             WHERE emir_no = ? AND onay_durum IN ('onaylandi', 'bekliyor')
+        """, (emir_no,)).fetchone()[0]
+        if personel_id:
+            bugun_girilen = ccps.execute("""
+                SELECT COALESCE(SUM(miktar), 0) FROM uretim_kayit
+                 WHERE emir_no = ? AND personel_id = ?
+                   AND date(tarih) = date('now', 'localtime')
+                   AND onay_durum IN ('onaylandi', 'bekliyor')
+            """, (emir_no, personel_id)).fetchone()[0]
+        ccps.close()
+    except Exception:
+        pass
+
+    kalan = max(0, (emir_miktar or 0) - (toplam_girilen or 0))
+
+    return jsonify({
+        'EmirNo': emir_no,
+        'ModelKod': '',
+        'ModelAdi': '',
+        'RenkAdi': '',
+        'CariAdi': '',
+        'TerTarih': '',
+        'Location': '',
+        'EmirMiktar': emir_miktar or 0,
+        'prosesler': [],
+        'toplam_girilen': toplam_girilen or 0,
+        'bugun_girilen': bugun_girilen or 0,
+        'kalan': kalan
+    })
+
+
+# ============================================================
+# 7. EMIR-TOPLAM - bu emirden ne kadar girilmis
+# ============================================================
+@personel_giris_bp.route('/emir-toplam/<int:emir_no>', methods=['GET'])
+def emir_toplam(emir_no):
+    personel_id = request.args.get('personel_id', type=int)
+    proses = request.args.get('proses', '')
+
+    try:
+        conn = _cps_conn()
+
+        # Toplam (onaylananlar - tum sistemden)
+        toplam = conn.execute("""
+            SELECT COALESCE(SUM(miktar), 0)
+              FROM uretim_kayit
+             WHERE emir_no = ? AND onay_durum = 'onaylandi'
+        """, (emir_no,)).fetchone()[0]
+
+        # Benim toplam (bu personelin bugunku - bekleyenler dahil)
+        benim = 0
+        if personel_id:
+            if proses:
+                benim = conn.execute("""
+                    SELECT COALESCE(SUM(miktar), 0)
+                      FROM uretim_kayit
+                     WHERE emir_no = ? AND personel_id = ?
+                       AND proses_adi = ?
+                       AND date(tarih) = date('now', 'localtime')
+                """, (emir_no, personel_id, proses)).fetchone()[0]
+            else:
+                benim = conn.execute("""
+                    SELECT COALESCE(SUM(miktar), 0)
+                      FROM uretim_kayit
+                     WHERE emir_no = ? AND personel_id = ?
+                       AND date(tarih) = date('now', 'localtime')
+                """, (emir_no, personel_id)).fetchone()[0]
+
+        conn.close()
+        return jsonify({'toplam': toplam, 'benim': benim})
+    except Exception as e:
+        return jsonify({'toplam': 0, 'benim': 0, 'hata': str(e)})
+
+
+# ============================================================
+# 8. PROSESLER - bir emir'in alt prosesleri (5055 emir_proses tablosu)
+# ============================================================
+@personel_giris_bp.route('/prosesler/<int:emir_no>', methods=['GET'])
+def prosesler(emir_no):
+    """D5 FAZ B: CPS-first. Once emir_alt_proses, sonra 5055 fallback."""
+    try:
+        # ============ ADIM 1: CPS-NATIVE OKU ============
+        ccps = _cps_conn()
+        cps_rows = list(ccps.execute("""
+            SELECT id, emir_no, proses_adi,
+                   hedef_adet as limit_miktar,
+                   siralama,
+                   created_at as olusturma
+              FROM emir_alt_proses
+             WHERE emir_no = ? AND aktif = 1
+             ORDER BY siralama, id
+        """, (str(emir_no),)).fetchall())
+
+        if cps_rows:
+            # CPS_NATIVE PATH
+            result = []
+            for r in cps_rows:
+                d = dict(r)
+                total = ccps.execute("""
+                    SELECT COALESCE(SUM(miktar), 0)
+                      FROM uretim_kayit
+                     WHERE emir_no = ? AND proses_adi = ?
+                       AND onay_durum IN ('onaylandi', 'bekliyor')
+                """, (emir_no, d['proses_adi'])).fetchone()[0]
+                d['toplam_girilen'] = total
+                d['veri_kaynagi'] = 'CPS_NATIVE'
+                result.append(d)
+            ccps.close()
+            return jsonify(result)
+        ccps.close()
+
+        # ============ ADIM 2: 5055 SNAPSHOT FALLBACK (D5 FAZ A korundu) ============
+        c5055 = _5055_conn()
+        if c5055 is None:
+            _legacy_warning('/prosesler/' + str(emir_no), emir_no, _legacy_snapshot_mode(), 'CPS_EMPTY_AND_5055_NOT_AVAILABLE')
+            return jsonify([])
+
+        rows = c5055.execute("""
+            SELECT id, emir_no, proses_adi, limit_miktar, olusturma
+              FROM emir_proses
+             WHERE emir_no = ?
+               AND proses_adi NOT LIKE '%.%'
+             ORDER BY id
+        """, (emir_no,)).fetchall()
+        c5055.close()
+
+        if not rows:
+            _legacy_warning('/prosesler/' + str(emir_no), emir_no, _legacy_snapshot_mode(), 'CPS_EMPTY_AND_5055_EMPTY')
+
+        # CPS uretim_kayit toplamlari (5055 path)
+        ccps = _cps_conn()
+        result = []
+        for r in rows:
+            d = dict(r)
+            total = ccps.execute("""
+                SELECT COALESCE(SUM(miktar), 0)
+                  FROM uretim_kayit
+                 WHERE emir_no = ? AND proses_adi = ?
+                   AND onay_durum IN ('onaylandi', 'bekliyor')
+            """, (emir_no, d['proses_adi'])).fetchone()[0]
+            d['toplam_girilen'] = total
+            d['veri_kaynagi'] = 'LEGACY_5055_SNAPSHOT'
+            result.append(d)
+        ccps.close()
+
+        return jsonify(result)
+    except Exception as e:
+        _legacy_warning('/prosesler/' + str(emir_no), emir_no, 'ERROR', str(type(e).__name__) + ":" + str(e)[:80])
+        return jsonify([])
+
+
+# ============================================================
+# 9. KAYDET - ANA KAYIT ENDPOINT
+# ============================================================
+@personel_giris_bp.route('/kaydet', methods=['POST'])
+def kaydet():
+    """
+    Personel uretim kaydi.
+    POST body:
+      emir_no, model_kod, model_adi, emir_miktar, miktar,
+      proses_adi (opsiyonel), personel_id, personel_ad,
+      tarih, saat
+    """
+    data = request.get_json(silent=True) or {}
+
+    # Zorunlu alanlar
+    emir_no = data.get('emir_no')
+    miktar = data.get('miktar')
+    personel_id = data.get('personel_id')
+    personel_ad = data.get('personel_ad', '').strip()
+
+    if not emir_no or not miktar or not personel_id:
+        return jsonify({'ok': False, 'mesaj': 'emir_no, miktar, personel_id zorunlu'}), 400
+
+    try:
+        miktar = int(miktar)
+        emir_no = int(emir_no)
+        personel_id = int(personel_id)
+    except (ValueError, TypeError):
+        return jsonify({'ok': False, 'mesaj': 'Sayisal alanlar gecersiz'}), 400
+
+    if miktar <= 0:
+        return jsonify({'ok': False, 'mesaj': 'Miktar 0 dan buyuk olmali'}), 400
+
+    # Opsiyonel alanlar
+    model_kod = (data.get('model_kod') or '').strip()
+    model_adi = (data.get('model_adi') or '').strip()
+    proses_adi = (data.get('proses_adi') or '').strip()
+    tarih = data.get('tarih') or datetime.datetime.now().strftime('%Y-%m-%d')
+    saat = data.get('saat') or datetime.datetime.now().strftime('%H:%M')
+
+    try:
+        conn = _cps_conn()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO uretim_kayit (
+                emir_no, model_kod, model_adi, miktar,
+                proses_kodu, proses_adi,
+                personel_id, personel_ad,
+                tarih, saat,
+                not_metin, onay_durum,
+                usta_id, usta_ad, usta_not,
+                onay_tarihi, olusturma,
+                kaynak, legacy_id, legacy_db, import_tarihi, import_hash
+            ) VALUES (
+                ?, ?, ?, ?,
+                NULL, ?,
+                ?, ?,
+                ?, ?,
+                NULL, 'bekliyor',
+                NULL, NULL, NULL,
+                NULL, datetime('now', 'localtime'),
+                'CPS_CANLI', NULL, NULL, NULL, NULL
+            )
+        """, (
+            emir_no, model_kod, model_adi, miktar,
+            proses_adi,
+            personel_id, personel_ad,
+            tarih, saat
+        ))
+        kayit_id = cur.lastrowid
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'mesaj': f'{miktar} cift kaydedildi',
+            'id': kayit_id
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'mesaj': str(e)}), 500
+
+
+# ============================================================
+# 10. GECMIS - personel kayit gecmisi
+# ============================================================
+@personel_giris_bp.route('/gecmis/<int:pid>', methods=['GET'])
+def gecmis(pid):
+    limit = request.args.get('limit', 30, type=int)
+    try:
+        conn = _cps_conn()
+        rows = conn.execute("""
+            SELECT id, emir_no, model_kod, model_adi, miktar,
+                   proses_adi, tarih, saat, onay_durum, olusturma
+              FROM uretim_kayit
+             WHERE personel_id = ?
+             ORDER BY olusturma DESC
+             LIMIT ?
+        """, (pid, limit)).fetchall()
+        conn.close()
+        return jsonify([dict(r) for r in rows])
+    except Exception as e:
+        return jsonify({'hata': str(e)}), 500
+
+
+# ============================================================
+# 11. PRIM - placeholder
+# ============================================================
+@personel_giris_bp.route('/prim/<int:pid>', methods=['GET'])
+def prim(pid):
+    """Prim placeholder - simdilik sadece toplam uretim."""
+    try:
+        conn = _cps_conn()
+        bugun = conn.execute("""
+            SELECT COALESCE(SUM(miktar), 0)
+              FROM uretim_kayit
+             WHERE personel_id = ?
+               AND date(tarih) = date('now', 'localtime')
+               AND onay_durum = 'onaylandi'
+        """, (pid,)).fetchone()[0]
+
+        ay = conn.execute("""
+            SELECT COALESCE(SUM(miktar), 0)
+              FROM uretim_kayit
+             WHERE personel_id = ?
+               AND strftime('%Y-%m', tarih) = strftime('%Y-%m', 'now', 'localtime')
+               AND onay_durum = 'onaylandi'
+        """, (pid,)).fetchone()[0]
+        conn.close()
+
+        return jsonify({
+            'bugun_cift': bugun,
+            'ay_cift': ay,
+            'tahmini_prim_tl': 0  # Sonra hesaplanir
+        })
+    except Exception as e:
+        return jsonify({'bugun_cift': 0, 'ay_cift': 0, 'hata': str(e)})

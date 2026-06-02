@@ -1,0 +1,302 @@
+# -*- coding: utf-8 -*-
+"""
+CPS DEV - Ana Uygulama (Faz 1)
+===============================
+Flask ana giriş noktası. Tüm modülleri kayıt eder, yetki sistemi aktif.
+
+Çalıştır:
+    python app.py
+Tarayıcıdan:
+    http://127.0.0.1:5057/
+"""
+from flask import Flask, render_template, session, g, redirect, url_for, request, flash
+from datetime import timedelta, datetime, date
+from config import Config
+
+# Blueprint'ler
+from modules.auth import auth_bp, kullanici_yetkileri
+from modules.finans import finans_bp
+from modules.yonetim import yonetim_bp
+from modules.grafik import grafik_bp
+from modules.ithalat import ithalat_bp
+from modules.hedef import hedef_bp
+from modules.hedef import plan_v2_bp
+from modules.uretim_giris import uretim_giris_bp
+from modules.usta import usta_bp
+from modules.uretim_yonetim.routes import uretim_yonetim_bp
+from modules.planlama.routes import planlama_bp
+from modules.planlama.proses_takip import proses_takip_bp
+from modules.tasks import tasks_bp
+
+
+app = Flask(__name__)
+app.config.from_object(Config)
+app.secret_key = Config.SECRET_KEY
+app.permanent_session_lifetime = timedelta(days=Config.SESSION_DAYS)
+app.config['MAX_CONTENT_LENGTH'] = Config.MAX_UPLOAD_MB * 1024 * 1024
+
+# MODÜLLER
+app.register_blueprint(auth_bp)
+app.register_blueprint(finans_bp)
+app.register_blueprint(yonetim_bp)
+app.register_blueprint(grafik_bp)
+app.register_blueprint(ithalat_bp)
+app.register_blueprint(hedef_bp)
+app.register_blueprint(plan_v2_bp)
+app.register_blueprint(uretim_giris_bp)
+app.register_blueprint(usta_bp)
+app.register_blueprint(uretim_yonetim_bp)
+app.register_blueprint(planlama_bp)
+app.register_blueprint(proses_takip_bp)
+app.register_blueprint(tasks_bp)
+
+
+# ============================================================
+# GLOBAL BEFORE/AFTER
+# ============================================================
+@app.before_request
+def oturum_kontrol():
+    g.user = session.get('kullanici')
+
+    # Yetki cache
+    if g.user:
+        g.yetkiler = kullanici_yetkileri(g.user)
+    else:
+        g.yetkiler = set()
+
+    yol = request.path
+    # Login gerektirmeyen
+    acik = (yol.startswith('/static')
+            or yol.startswith('/giris')
+            or yol == '/favicon.ico')
+    if acik:
+        return
+
+    if not g.user:
+        return redirect(url_for('auth.login', next=yol))
+
+    # Zorunlu şifre değiştir ise sadece o sayfaya izin
+    if g.user.get('ZorunluSifreDegistir') and yol not in ('/sifre-degistir', '/cikis'):
+        return redirect(url_for('auth.sifre_degistir'))
+
+
+# ============================================================
+# ROUTES
+# ============================================================
+@app.route('/')
+def index():
+    return render_template('index.html', db_mode=Config.DB_MODE)
+
+
+# ============================================================
+# CONTEXT / FILTER'lar
+# ============================================================
+@app.context_processor
+def inject_globals():
+    u = session.get('kullanici')
+    yetkiler = g.get('yetkiler', set()) if u else set()
+    return {
+        'DB_MODE':    Config.DB_MODE,
+        'APP_NAME':   'CPS Dev',
+        'now':        date.today().strftime('%Y-%m-%d'),
+        'g_user':     u,
+        'g_yetkiler': yetkiler,
+        'yetki':      lambda k: ('*' in yetkiler) or (k in yetkiler),
+    }
+
+
+@app.template_filter('tarih_obj')
+def filter_tarih_obj(value):
+    if not value:
+        return date.today()
+    s = str(value)[:10]
+    try:
+        return datetime.strptime(s, '%Y-%m-%d').date()
+    except Exception:
+        return date.today()
+
+
+@app.template_filter('tl')
+def format_tl(value):
+    if value is None:
+        return '—'
+    try:
+        f = float(value)
+        sign = '-' if f < 0 else ''
+        f = abs(f)
+        s = f"{f:,.2f}"
+        s = s.replace(',', 'X').replace('.', ',').replace('X', '.')
+        return f"{sign}{s} ₺"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+@app.template_filter('usd')
+def format_usd(value):
+    if value is None:
+        return '—'
+    try:
+        f = float(value)
+        sign = '-' if f < 0 else ''
+        f = abs(f)
+        s = f"{f:,.2f}"
+        s = s.replace(',', 'X').replace('.', ',').replace('X', '.')
+        return f"{sign}${s}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+@app.template_filter('para')
+def format_para(value, birim='TRY'):
+    """Genel para formatı, birime göre sembol."""
+    if value is None:
+        return '—'
+    sembol = {'TRY': '₺', 'USD': '$', 'EUR': '€', 'CNY': '¥'}.get(birim, birim)
+    try:
+        f = float(value)
+        sign = '-' if f < 0 else ''
+        f = abs(f)
+        s = f"{f:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        if birim == 'TRY':
+            return f"{sign}{s} ₺"
+        return f"{sign}{sembol}{s}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+@app.template_filter('sayi')
+def format_sayi(value):
+    if value is None:
+        return '—'
+    try:
+        return f"{int(value):,}".replace(',', '.')
+    except (TypeError, ValueError):
+        return str(value)
+
+
+@app.template_filter('tarih')
+def format_tarih(value):
+    if not value:
+        return '—'
+    s = str(value)[:10]
+    try:
+        y, m, d = s.split('-')
+        return f"{d}.{m}.{y}"
+    except ValueError:
+        return s
+
+
+@app.template_filter('tarih_saat')
+def format_tarih_saat(value):
+    if not value:
+        return '—'
+    s = str(value)
+    if len(s) < 16:
+        return format_tarih(s)
+    try:
+        t = s[:10]; sa = s[11:16]
+        y, m, d = t.split('-')
+        return f"{d}.{m}.{y} {sa}"
+    except Exception:
+        return s
+
+
+@app.template_filter('boyut')
+def format_boyut(b):
+    """1024 -> 1 KB, 1048576 -> 1 MB"""
+    if b is None:
+        return '—'
+    try:
+        b = int(b)
+    except Exception:
+        return str(b)
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if b < 1024:
+            return f"{b} {unit}"
+        b //= 1024
+    return f"{b} TB"
+
+
+# ============================================================
+# HATA SAYFALARI
+# ============================================================
+@app.errorhandler(403)
+def hata_403(e):
+    return render_template('hata.html',
+                           kod=403, baslik='Yetkisiz Erişim',
+                           mesaj='Bu sayfaya erişim yetkiniz yok.'), 403
+
+
+@app.errorhandler(404)
+def hata_404(e):
+    # Referer varsa dön, yoksa panel
+    ref = request.referrer
+    if ref and request.host in ref:
+        # Aynı site içinden geliyorsa ve loop riski yoksa dön
+        try:
+            from urllib.parse import urlparse
+            if urlparse(ref).path != request.path:
+                flash('⚠ Sayfa bulunamadı — önceki sayfaya döndünüz.', 'uyari')
+                return redirect(ref)
+        except Exception:
+            pass
+    # Referer yok veya aynı sayfaysa: hata sayfası (sidebar + ana link'ler ile)
+    return render_template('hata.html',
+                           kod=404, baslik='Sayfa Bulunamadı',
+                           mesaj='Aradığınız sayfa bulunamadı.'), 404
+
+
+@app.errorhandler(500)
+def hata_500(e):
+    # 1) Audit log'a yaz (teknik detay kullanıcıya gösterilmez)
+    try:
+        from modules import audit
+        from flask import session as _s
+        kullanici = _s.get('kullanici', 'anonim')
+        exc_ozet = type(e).__name__ + ': ' + (str(e)[:240] if str(e) else 'N/A')
+        audit.log_olay(kullanici, 'SISTEM_HATASI', 'system', 0,
+                       aciklama=f"500 hatası: path={request.path}, exc={exc_ozet}",
+                       modul='system', alt_modul='error')
+    except Exception:
+        # Log kendi hata verdiyse (audit tablosu down olabilir) sessiz geç
+        pass
+
+    # 2) Kullanıcıya friendly mesaj + referer varsa geri yönlendir
+    ref = request.referrer
+    if ref and request.host in ref:
+        try:
+            from urllib.parse import urlparse
+            if urlparse(ref).path != request.path:
+                flash('⚠ Sistem hatası oluştu — önceki sayfaya döndünüz. '
+                      'Sorun devam ederse teknik ekibe bildirin.', 'hata')
+                return redirect(ref)
+        except Exception:
+            pass
+    return render_template('hata.html',
+                           kod=500, baslik='Sunucu Hatası',
+                           mesaj='Beklenmedik bir hata oluştu. '
+                                 'Teknik ekibe otomatik bildirildi.'), 500
+
+
+# ============================================================
+# BAŞLAT
+# ============================================================
+if __name__ == '__main__':
+    print("=" * 60)
+    print(f"  CPS DEV — Faz 1")
+    print(f"  DB_MODE: {Config.DB_MODE}")
+    print(f"  URL:     http://127.0.0.1:{Config.PORT}/")
+    print(f"  Giriş:   http://127.0.0.1:{Config.PORT}/giris")
+    print(f"  Yönetim: http://127.0.0.1:{Config.PORT}/yonetim/")
+    print(f"  Finans:  http://127.0.0.1:{Config.PORT}/finans/")
+    print(f"  Ithalat: http://127.0.0.1:{Config.PORT}/ithalat/parti/liste")
+    print("=" * 60)
+    # CPS_DEBUG_ENV_AWARE_V1: FLASK_DEBUG env varsa onu kullan
+    import os as _os
+    _dbg_env = _os.environ.get('FLASK_DEBUG')
+    if _dbg_env is not None:
+        _dbg = _dbg_env not in ('0', 'false', 'False', '')
+    else:
+        _dbg = Config.DEBUG
+    app.run(host=Config.HOST, port=Config.PORT, debug=_dbg)
+

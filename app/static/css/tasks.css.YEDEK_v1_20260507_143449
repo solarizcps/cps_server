@@ -1,0 +1,491 @@
+/* ==========================================================
+   CPS DEV - Tasks Modulu - Stiller
+   ==========================================================
+   Faz 2A: Liste sayfasi + 2 modal (detay/create)
+
+   Mevcut CPS pallet kullanilir:
+     --bg, --bg2, --bg3, --bg4, --border, --border2,
+     --sol, --sol-dark, --sol-light, --sol-text,
+     --green, --orange, --red, --yellow, --blue, --purple,
+     --text, --text2, --text3,
+     --shadow-sm, --shadow, --shadow-md,
+     --radius, --radius-sm
+
+   Class prefix: tasks-*
+   ========================================================== */
+
+
+/* ============== KPI MINI STRIP =============== */
+.tasks-kpi-strip {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 14px;
+  margin: 8px 0 12px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+.tasks-kpi-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.tasks-kpi-etiket {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  color: var(--text3);
+  font-weight: 600;
+}
+.tasks-kpi-sayi {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text);
+}
+.tasks-kpi-item[data-kpi="acik"] .tasks-kpi-sayi          { color: var(--text); }
+.tasks-kpi-item[data-kpi="onay_bekliyor"] .tasks-kpi-sayi { color: var(--orange); }
+.tasks-kpi-item[data-kpi="gecikti"] .tasks-kpi-sayi       { color: var(--red); }
+.tasks-kpi-item[data-kpi="bugun_biten"] .tasks-kpi-sayi   { color: var(--green); }
+.tasks-kpi-sep {
+  color: var(--border2);
+  font-weight: 700;
+}
+
+
+/* ============== FILTER BAR =============== */
+.tasks-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  flex-wrap: wrap;
+}
+.tasks-filter-input,
+.tasks-filter-select {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  font-size: 13px;
+  color: var(--text);
+  font-family: var(--sans);
+  outline: none;
+}
+.tasks-filter-input { min-width: 220px; flex: 0 1 280px; }
+.tasks-filter-select { min-width: 130px; }
+.tasks-filter-input:focus,
+.tasks-filter-select:focus {
+  border-color: var(--sol-dark);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+.tasks-filter-info {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text3);
+  font-weight: 600;
+}
+
+
+/* ============== ANA TABLO =============== */
+.tasks-tbl-wrap {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: auto;
+  max-height: calc(100vh - 280px);
+}
+.tasks-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.tasks-tbl thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 10px;
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  color: var(--text3);
+  font-weight: 700;
+  white-space: nowrap;
+  z-index: 2;
+}
+.tasks-tbl thead th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+.tasks-tbl thead th.sortable:hover {
+  background: var(--bg4);
+  color: var(--text2);
+}
+.tasks-tbl thead th .sort-ic::after {
+  content: " ";
+  display: inline-block;
+  width: 0; height: 0;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+.tasks-tbl thead th[data-dir="asc"]  .sort-ic::after {
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 5px solid var(--text2);
+}
+.tasks-tbl thead th[data-dir="desc"] .sort-ic::after {
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--text2);
+}
+
+.tasks-tbl tbody td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  color: var(--text2);
+}
+.tasks-tbl tbody tr:hover {
+  background: var(--bg3);
+}
+.tasks-tbl tbody tr.row-kritik    { background: #fef2f2; }
+.tasks-tbl tbody tr.row-kritik:hover { background: #fee2e2; }
+.tasks-tbl tbody tr.row-yuksek    { background: #fff7ed; }
+.tasks-tbl tbody tr.row-yuksek:hover { background: #ffedd5; }
+.tasks-tbl tbody tr.row-tamamlandi { background: #f0fdf4; }
+.tasks-tbl tbody tr.row-tamamlandi:hover { background: #dcfce7; }
+.tasks-tbl tbody tr.row-iptal      { opacity: .6; }
+.tasks-tbl tbody tr.row-gecikti td.col-due { color: var(--red); font-weight: 700; }
+
+.tasks-tbl .col-id      { font-weight: 700; color: var(--text3); }
+.tasks-tbl .col-title   { font-weight: 600; color: var(--text); }
+.tasks-tbl .col-onclock { font-size: 11px; color: var(--red); }
+
+
+/* ============== STATUS PILL =============== */
+.tasks-pill {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.tasks-pill-bekliyor       { background: var(--bg4);   color: var(--text2); }
+.tasks-pill-devam_ediyor   { background: #dbeafe;      color: #1d4ed8; }
+.tasks-pill-onay_bekliyor  { background: #fef3c7;      color: var(--sol-text); }
+.tasks-pill-revize_istendi { background: #fee2e2;      color: var(--red); }
+.tasks-pill-tamamlandi     { background: #dcfce7;      color: var(--green); }
+.tasks-pill-gecikti        { background: #fecaca;      color: #991b1b; }
+.tasks-pill-iptal          { background: var(--bg4);   color: var(--text3); text-decoration: line-through; }
+
+
+/* ============== ONCELIK INDIKATOR =============== */
+.tasks-onclik {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.tasks-onclik-kritik { background: #fee2e2; color: #991b1b; }
+.tasks-onclik-yuksek { background: #ffedd5; color: var(--orange); }
+.tasks-onclik-orta   { background: var(--bg4); color: var(--text2); }
+.tasks-onclik-dusuk  { background: var(--bg4); color: var(--text3); }
+
+
+/* ============== ISLEM BUTONU (kucuk) =============== */
+.tasks-btn-detay {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--text2);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tasks-btn-detay:hover {
+  background: var(--bg3);
+  border-color: var(--border2);
+}
+
+
+/* ============== EMPTY STATE =============== */
+.tasks-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text3);
+  font-size: 13px;
+}
+
+
+/* ============== MODAL =============== */
+.tasks-modal {
+  position: fixed;
+  inset: 0;
+  display: none;
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+}
+.tasks-modal.is-open { display: flex; }
+.tasks-modal-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, .55);
+}
+.tasks-modal-box {
+  position: relative;
+  background: #fff;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  width: min(720px, 92vw);
+}
+.tasks-modal-detay  { width: min(820px, 94vw); }
+.tasks-modal-create { width: min(680px, 92vw); }
+
+.tasks-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.tasks-modal-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+.tasks-modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--text3);
+  padding: 0 4px;
+}
+.tasks-modal-close:hover { color: var(--text); }
+
+.tasks-modal-body {
+  padding: 16px 18px;
+  overflow: auto;
+  flex: 1;
+}
+.tasks-modal-foot {
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+
+/* ============== DETAY MODAL ICERIK =============== */
+.tasks-detay-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px 18px;
+  margin-bottom: 14px;
+}
+.tasks-detay-grid .lbl {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  color: var(--text3);
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+.tasks-detay-grid .val {
+  font-size: 13px;
+  color: var(--text);
+  word-break: break-word;
+}
+.tasks-detay-baslik {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.tasks-detay-aciklama {
+  font-size: 13px;
+  color: var(--text2);
+  background: var(--bg3);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  white-space: pre-wrap;
+}
+.tasks-detay-baglam {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.tasks-detay-baglam .chip {
+  display: inline-block;
+  padding: 3px 9px;
+  background: var(--bg4);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text2);
+}
+.tasks-detay-section-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  color: var(--text3);
+  font-weight: 700;
+  margin: 12px 0 6px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+}
+.tasks-detay-logs {
+  font-size: 12px;
+}
+.tasks-detay-logs .log-row {
+  display: grid;
+  grid-template-columns: 110px 130px 1fr 90px;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px dashed var(--border);
+  color: var(--text2);
+}
+.tasks-detay-logs .log-row .when { color: var(--text3); }
+.tasks-detay-logs .log-row .who  { font-weight: 600; }
+.tasks-detay-logs .log-row .what { font-weight: 700; color: var(--text2); }
+.tasks-detay-files .file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+  color: var(--text2);
+}
+.tasks-detay-files .file-row .nm { font-weight: 600; }
+.tasks-detay-empty {
+  font-size: 12px;
+  color: var(--text3);
+  font-style: italic;
+}
+
+
+/* ============== CREATE FORM =============== */
+.tasks-form-row {
+  margin-bottom: 12px;
+}
+.tasks-form-row label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  color: var(--text3);
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.tasks-form-row input[type="text"],
+.tasks-form-row input[type="date"],
+.tasks-form-row textarea,
+.tasks-form-row select {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  font-size: 13px;
+  font-family: var(--sans);
+  color: var(--text);
+  outline: none;
+}
+.tasks-form-row textarea { resize: vertical; min-height: 60px; }
+.tasks-form-row input:focus,
+.tasks-form-row select:focus,
+.tasks-form-row textarea:focus {
+  border-color: var(--sol-dark);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+.tasks-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0 14px;
+}
+.tasks-form-row .zorunlu { color: var(--red); }
+.tasks-cb-row {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  font-size: 13px !important;
+  color: var(--text2) !important;
+  font-weight: 600 !important;
+}
+.tasks-form-err {
+  background: #fee2e2;
+  color: var(--red);
+  border: 1px solid #fecaca;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+
+/* ============== TOAST =============== */
+.tasks-toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: var(--text);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: var(--shadow-md);
+  z-index: 1100;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity .2s, transform .2s;
+  pointer-events: none;
+}
+.tasks-toast.is-show {
+  opacity: 1;
+  transform: translateY(0);
+}
+.tasks-toast.is-err   { background: var(--red); }
+.tasks-toast.is-ok    { background: var(--green); }
+
+
+/* ============== TABLET / MEDIUM =============== */
+@media (max-width: 1100px) {
+  .tasks-form-grid          { grid-template-columns: 1fr; }
+  .tasks-tbl                { font-size: 12px; }
+  .tasks-tbl thead th,
+  .tasks-tbl tbody td       { padding: 6px 8px; }
+  .tasks-filter-input       { flex: 1 1 100%; min-width: 0; }
+  .tasks-detay-grid         { grid-template-columns: 1fr; }
+  .tasks-detay-logs .log-row { grid-template-columns: 90px 1fr; row-gap: 2px; }
+  .tasks-detay-logs .log-row .what,
+  .tasks-detay-logs .log-row .who  { grid-column: 2; }
+}
+
+
+/* ============== KUCUK SARTLAR =============== */
+.tasks-mute { color: var(--text3); font-size: 12px; }
+.tasks-strong { color: var(--text); font-weight: 700; }

@@ -1,0 +1,381 @@
+{% extends "base.html" %}
+
+{% block title %}Manuel Odemeler - Finans{% endblock %}
+
+{% set active = 'finans' %}
+
+{% block content %}
+<div class="fk-wrap">
+
+  <div class="page-header fk-header">
+    <div class="page-header-baslik">
+      <h1 class="page-title">
+        <span class="fk-icon">MO</span>
+        Manuel Odemeler
+      </h1>
+      <div class="page-subtitle">
+        Maas, kira, fatura, vergi, nakliye ve diger manuel odeme takibi
+      </div>
+    </div>
+    <div class="fk-konsol-back">
+      <a href="/finans/konsol" class="fk-back-btn">&larr; Konsola Don</a>
+      <button class="fk-btn-yeni" onclick="fkModalAc('yeni')">+ Yeni Odeme</button>
+    </div>
+  </div>
+
+  <!-- KPI 5 KART -->
+  <div class="fk-kpi-bar">
+    <div class="fk-kpi-card fk-kpi-toplam">
+      <div class="fk-kpi-label">Toplam Kayit</div>
+      <div class="fk-kpi-deger">{{ kpi.toplam_kayit or 0 }}</div>
+      <div class="fk-kpi-sub">aktif</div>
+    </div>
+    <div class="fk-kpi-card fk-kpi-bugun">
+      <div class="fk-kpi-label">Bugun Bekleyen</div>
+      <div class="fk-kpi-deger">{{ kpi.bugun_sayi or 0 }}</div>
+      <div class="fk-kpi-sub">{{ '{:,.0f}'.format(kpi.bugun_tutar or 0) }} TL</div>
+    </div>
+    <div class="fk-kpi-card fk-kpi-gecikti">
+      <div class="fk-kpi-label">Geciken</div>
+      <div class="fk-kpi-deger">{{ kpi.gecikti_sayi or 0 }}</div>
+      <div class="fk-kpi-sub">{{ '{:,.0f}'.format(kpi.gecikti_tutar or 0) }} TL</div>
+    </div>
+    <div class="fk-kpi-card fk-kpi-bekleyen">
+      <div class="fk-kpi-label">Toplam Bekleyen</div>
+      <div class="fk-kpi-deger">{{ kpi.bekleyen_sayi or 0 }}</div>
+      <div class="fk-kpi-sub">{{ '{:,.0f}'.format(kpi.bekleyen_tutar or 0) }} TL</div>
+    </div>
+    <div class="fk-kpi-card fk-kpi-odendi">
+      <div class="fk-kpi-label">Odendi</div>
+      <div class="fk-kpi-deger">{{ kpi.odendi_sayi or 0 }}</div>
+      <div class="fk-kpi-sub">{{ '{:,.0f}'.format(kpi.odendi_tutar or 0) }} TL</div>
+    </div>
+  </div>
+
+  <!-- FILTRELER -->
+  <form method="get" action="/finans/manuel-odemeler" class="fk-filter-bar">
+    <div class="fk-filter-grup">
+      <label class="fk-filter-label">Firma:</label>
+      <select name="entity" class="fk-filter-input">
+        <option value="">Hepsi</option>
+        {% for e in entity_set %}
+        <option value="{{ e }}" {% if filtre.entity == e %}selected{% endif %}>{{ e|capitalize }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="fk-filter-grup">
+      <label class="fk-filter-label">Durum:</label>
+      <select name="durum" class="fk-filter-input">
+        <option value="">Hepsi</option>
+        {% for d in durum_set %}
+        <option value="{{ d }}" {% if filtre.durum == d %}selected{% endif %}>{{ d }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="fk-filter-grup">
+      <label class="fk-filter-label">Kategori:</label>
+      <select name="tip" class="fk-filter-input">
+        <option value="">Hepsi</option>
+        {% for k in kategori_set %}
+        <option value="{{ k }}" {% if filtre.tip == k %}selected{% endif %}>{{ k|capitalize }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="fk-filter-grup fk-filter-grup-wide">
+      <label class="fk-filter-label">Arama:</label>
+      <input type="text" name="search" value="{{ filtre.search or '' }}" placeholder="Aciklama, not..." class="fk-filter-input">
+    </div>
+    <div class="fk-filter-grup fk-filter-grup-btn">
+      <button type="submit" class="fk-filter-btn">Filtrele</button>
+      <a href="/finans/manuel-odemeler" class="fk-filter-reset">Sifirla</a>
+    </div>
+  </form>
+
+  <!-- LISTE -->
+  {% if not items %}
+  <div class="fk-empty">
+    <div class="fk-empty-icon">MO</div>
+    <h3 class="fk-empty-h3">Manuel odeme kaydi yok</h3>
+    <p>Sag ustteki "+ Yeni Odeme" butonu ile ilk kaydi olusturun.</p>
+  </div>
+  {% else %}
+  <div class="fk-tbl-wrap">
+    <table class="fk-tbl">
+      <thead>
+        <tr>
+          <th>Vade</th>
+          <th>Entity</th>
+          <th>Kategori</th>
+          <th>Aciklama</th>
+          <th class="fk-num">Tutar</th>
+          <th>Durum</th>
+          <th>Olusturan</th>
+          <th class="fk-aksiyon">Islem</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in items %}
+        <tr class="fk-row-{{ it.Durum|lower }}">
+          <td>{{ it.VadeTarih }}</td>
+          <td><span class="fk-entity fk-entity-{{ it.entity }}">{{ it.entity|capitalize }}</span></td>
+          <td><span class="fk-kat fk-kat-{{ it.Tip }}">{{ it.Tip|capitalize }}</span></td>
+          <td>
+            <strong>{{ it.Aciklama }}</strong>
+            {% if it.Notu %}<div class="fk-row-not">{{ it.Notu }}</div>{% endif %}
+          </td>
+          <td class="fk-num">{{ '{:,.2f}'.format(it.Tutar or 0) }} {{ it.ParaBirimi or 'TRY' }}</td>
+          <td><span class="fk-durum fk-durum-{{ it.Durum|lower }}">{{ it.Durum }}</span></td>
+          <td class="fk-aud">{{ it.OlusturanKullanici or '-' }}<br><small>{{ it.OlusturmaTarih or '' }}</small></td>
+          <td class="fk-aksiyon">
+            {% if it.Durum != 'IPTAL' %}
+            <button class="fk-btn-mini" onclick='fkModalAc("edit", {{ it.Id }})'>Duzenle</button>
+            <button class="fk-btn-mini fk-btn-iptal" onclick='fkIptal({{ it.Id }})'>Iptal</button>
+            {% else %}
+            <span class="fk-iptal-mark">IPTAL</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <!-- MODAL: Yeni/Edit -->
+  <div id="fk-modal" class="fk-modal" style="display:none;" onclick="fkModalKapat(event)">
+    <div class="fk-modal-icerik" onclick="event.stopPropagation()">
+      <div class="fk-modal-header">
+        <h3 id="fk-modal-baslik">Yeni Manuel Odeme</h3>
+        <button class="fk-modal-x" onclick="fkModalKapat()">&times;</button>
+      </div>
+      <form id="fk-form" method="post" onsubmit="return fkKaydet(event)">
+        <input type="hidden" id="fk-id" name="id" value="">
+        <div class="fk-form-grid">
+          <div class="fk-form-grup">
+            <label>Entity <span class="fk-zor">*</span></label>
+            <select name="entity" id="fk-f-entity" required>
+              {% for e in entity_set %}<option value="{{ e }}">{{ e|capitalize }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="fk-form-grup">
+            <label>Kategori <span class="fk-zor">*</span></label>
+            <select name="tip" id="fk-f-tip" required>
+              {% for k in kategori_set %}<option value="{{ k }}">{{ k|capitalize }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="fk-form-grup fk-form-grup-full">
+            <label>Aciklama (Baslik) <span class="fk-zor">*</span></label>
+            <input type="text" name="baslik" id="fk-f-baslik" required maxlength="200" placeholder="Ornek: Personel maas Mayis 2026">
+          </div>
+          <div class="fk-form-grup">
+            <label>Tutar <span class="fk-zor">*</span></label>
+            <input type="number" name="tutar" id="fk-f-tutar" required min="0" max="10000000" step="0.01" placeholder="0.00">
+          </div>
+          <div class="fk-form-grup">
+            <label>Para Birimi</label>
+            <select name="para_birimi" id="fk-f-pb">
+              {% for p in para_birimi_set %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="fk-form-grup">
+            <label>Vade Tarihi <span class="fk-zor">*</span></label>
+            <input type="date" name="vade_tarihi" id="fk-f-vade" required>
+          </div>
+          <div class="fk-form-grup">
+            <label>Durum</label>
+            <select name="durum" id="fk-f-durum">
+              {% for d in durum_set %}{% if d != 'IPTAL' %}<option value="{{ d }}">{{ d }}</option>{% endif %}{% endfor %}
+            </select>
+          </div>
+          <div class="fk-form-grup fk-form-grup-full">
+            <label>Not (opsiyonel)</label>
+            <textarea name="notu" id="fk-f-notu" rows="2" maxlength="500" placeholder="Ek bilgi..."></textarea>
+          </div>
+        </div>
+        <div class="fk-modal-altbar">
+          <button type="button" class="fk-btn-mini" onclick="fkModalKapat()">Vazgec</button>
+          <button type="submit" class="fk-btn-yeni">Kaydet</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+</div>
+
+<style>
+/* FAZ 4A Manuel Odemeler - fk- scoped */
+.fk-wrap { padding:0; }
+.fk-header { display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:12px; }
+.fk-icon { display:inline-block; background:#d4a52f; color:#1a1d2e; font-weight:700; font-size:13px; padding:4px 8px; border-radius:4px; margin-right:8px; }
+.fk-konsol-back { display:flex; gap:8px; align-items:center; }
+.fk-back-btn { display:inline-block; padding:6px 12px; background:transparent; color:#6b7280; border:1px solid #e8eaf0; border-radius:4px; font-size:12px; font-weight:600; text-decoration:none; }
+.fk-back-btn:hover { background:#fef9c3; color:#1a1d2e; border-color:#d4a52f; }
+.fk-btn-yeni { padding:8px 16px; background:#d4a52f; color:#1a1d2e; border:none; border-radius:4px; font-size:13px; font-weight:700; cursor:pointer; }
+.fk-btn-yeni:hover { background:#b8902a; }
+
+/* KPI */
+.fk-kpi-bar { display:grid; grid-template-columns:repeat(5, 1fr); gap:10px; margin-top:14px; }
+@media (max-width:900px) { .fk-kpi-bar { grid-template-columns:repeat(2, 1fr); } }
+.fk-kpi-card { background:#fff; border:1px solid #e8eaf0; border-radius:6px; padding:12px 14px; border-left:4px solid #d4a52f; }
+.fk-kpi-toplam   { border-left-color:#6b7280; }
+.fk-kpi-bugun    { border-left-color:#d4a52f; }
+.fk-kpi-gecikti  { border-left-color:#dc2626; }
+.fk-kpi-bekleyen { border-left-color:#2563eb; }
+.fk-kpi-odendi   { border-left-color:#16a34a; }
+.fk-kpi-label { font-size:11px; color:#6b7280; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; }
+.fk-kpi-deger { font-size:22px; font-weight:700; color:#1a1d2e; margin-top:2px; }
+.fk-kpi-sub { font-size:11px; color:#9ca3af; margin-top:2px; }
+
+/* Filter */
+.fk-filter-bar { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)) auto; gap:10px; padding:14px; background:#f8f9fc; border:1px solid #e8eaf0; border-radius:6px; margin-top:14px; align-items:end; }
+.fk-filter-grup { display:flex; flex-direction:column; gap:4px; }
+.fk-filter-grup-wide { grid-column:span 2; }
+.fk-filter-grup-btn { flex-direction:row; gap:6px; }
+.fk-filter-label { font-size:11px; color:#6b7280; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; }
+.fk-filter-input { padding:7px 10px; border:1px solid #e8eaf0; border-radius:4px; background:#fff; font-size:13px; color:#1a1d2e; }
+.fk-filter-input:focus { border-color:#d4a52f; outline:none; box-shadow:0 0 0 2px rgba(212,165,47,0.2); }
+.fk-filter-btn { padding:7px 14px; background:#1a1d2e; color:#d4a52f; border:none; border-radius:4px; font-size:12px; font-weight:700; cursor:pointer; }
+.fk-filter-reset { padding:7px 12px; background:transparent; color:#6b7280; text-decoration:none; font-size:12px; font-weight:600; border:1px solid #e8eaf0; border-radius:4px; }
+
+/* Table */
+.fk-tbl-wrap { margin-top:14px; background:#fff; border:1px solid #e8eaf0; border-radius:6px; overflow:auto; }
+.fk-tbl { width:100%; border-collapse:collapse; }
+.fk-tbl th { padding:10px; background:#fafbfc; text-align:left; font-size:11px; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:0.5px; border-bottom:1px solid #e8eaf0; }
+.fk-tbl td { padding:10px; font-size:13px; color:#1a1d2e; border-bottom:1px solid #f1f3f6; vertical-align:top; }
+.fk-tbl tr:hover { background:#fef9c3; }
+.fk-tbl .fk-num { text-align:right; font-variant-numeric:tabular-nums; font-weight:600; }
+.fk-tbl .fk-aksiyon { white-space:nowrap; }
+.fk-tbl .fk-aud { font-size:11px; color:#6b7280; }
+.fk-tbl .fk-aud small { color:#9ca3af; font-size:10px; }
+.fk-tbl .fk-row-not { font-size:11px; color:#6b7280; margin-top:2px; font-style:italic; }
+
+.fk-row-iptal { opacity:0.5; }
+.fk-row-iptal td { text-decoration:line-through; }
+
+/* Entity badge */
+.fk-entity { display:inline-block; padding:2px 8px; border-radius:3px; font-size:10px; font-weight:700; letter-spacing:0.5px; }
+.fk-entity-solariz { background:#fef9c3; color:#854d0e; }
+.fk-entity-nexgen { background:#dbeafe; color:#1e40af; }
+.fk-entity-pera { background:#dcfce7; color:#166534; }
+.fk-entity-sahsi { background:#fce7f3; color:#9d174d; }
+
+/* Kategori badge */
+.fk-kat { display:inline-block; padding:2px 6px; border-radius:3px; font-size:10px; font-weight:700; background:#f3f4f6; color:#6b7280; }
+.fk-kat-maas { background:#dcfce7; color:#166534; }
+.fk-kat-kira { background:#fef3c7; color:#854d0e; }
+.fk-kat-vergi { background:#fee2e2; color:#991b1b; }
+.fk-kat-kart { background:#fce7f3; color:#9d174d; }
+.fk-kat-kredi { background:#e0e7ff; color:#4338ca; }
+.fk-kat-cek { background:#fef3c7; color:#92400e; }
+.fk-kat-cari { background:#dbeafe; color:#1e40af; }
+.fk-kat-fatura { background:#cffafe; color:#0e7490; }
+.fk-kat-nakliye { background:#ede9fe; color:#6b21a8; }
+.fk-kat-diger { background:#f3f4f6; color:#6b7280; }
+
+/* Durum */
+.fk-durum { display:inline-block; padding:2px 8px; border-radius:3px; font-size:10px; font-weight:700; letter-spacing:0.5px; }
+.fk-durum-bekliyor { background:#dbeafe; color:#1e40af; }
+.fk-durum-odendi { background:#dcfce7; color:#16a34a; }
+.fk-durum-gecikti { background:#fee2e2; color:#dc2626; }
+.fk-durum-iptal { background:#f3f4f6; color:#6b7280; }
+
+.fk-iptal-mark { font-size:10px; color:#9ca3af; font-weight:700; }
+
+/* Mini buttons */
+.fk-btn-mini { padding:4px 10px; background:#fff; color:#1a1d2e; border:1px solid #e8eaf0; border-radius:3px; font-size:11px; font-weight:600; cursor:pointer; margin-right:4px; }
+.fk-btn-mini:hover { background:#fef9c3; border-color:#d4a52f; }
+.fk-btn-iptal { color:#dc2626; }
+.fk-btn-iptal:hover { background:#fee2e2; border-color:#dc2626; }
+
+/* Modal */
+.fk-modal { position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; display:flex; align-items:center; justify-content:center; }
+.fk-modal-icerik { background:#fff; max-width:640px; width:92%; max-height:88vh; overflow:auto; border-radius:8px; border:2px solid #d4a52f; }
+.fk-modal-header { padding:14px 18px; background:#1a1d2e; color:#d4a52f; display:flex; justify-content:space-between; align-items:center; border-radius:6px 6px 0 0; }
+.fk-modal-header h3 { margin:0; font-size:15px; font-weight:700; }
+.fk-modal-x { background:transparent; color:#d4a52f; border:none; font-size:24px; cursor:pointer; line-height:1; padding:0 6px; }
+.fk-form-grid { padding:16px; display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.fk-form-grup { display:flex; flex-direction:column; gap:4px; }
+.fk-form-grup-full { grid-column:1 / -1; }
+.fk-form-grup label { font-size:12px; color:#6b7280; font-weight:600; }
+.fk-zor { color:#dc2626; font-weight:700; }
+.fk-form-grup input, .fk-form-grup select, .fk-form-grup textarea { padding:7px 10px; border:1px solid #e8eaf0; border-radius:4px; background:#fff; font-size:13px; color:#1a1d2e; font-family:inherit; }
+.fk-form-grup input:focus, .fk-form-grup select:focus, .fk-form-grup textarea:focus { border-color:#d4a52f; outline:none; box-shadow:0 0 0 2px rgba(212,165,47,0.2); }
+.fk-modal-altbar { padding:12px 16px; background:#fafbfc; border-top:1px solid #e8eaf0; display:flex; justify-content:flex-end; gap:8px; border-radius:0 0 6px 6px; }
+
+/* Empty */
+.fk-empty { text-align:center; padding:48px 16px; background:#fff; border:1px dashed #e8eaf0; border-radius:6px; margin-top:14px; }
+.fk-empty-icon { display:inline-flex; align-items:center; justify-content:center; width:48px; height:48px; background:#fef9c3; border:2px solid #d4a52f; border-radius:50%; font-weight:700; font-size:18px; color:#d4a52f; margin-bottom:12px; }
+.fk-empty-h3 { font-size:16px; font-weight:700; color:#1a1d2e; margin-bottom:6px; }
+.fk-empty p { color:#6b7280; font-size:13px; }
+</style>
+
+<script>
+(function(){
+  window.fkModalAc = function(mod, id) {
+    document.getElementById("fk-modal").style.display = "flex";
+    document.getElementById("fk-id").value = "";
+    document.getElementById("fk-form").reset();
+    if (mod === "yeni") {
+      document.getElementById("fk-modal-baslik").textContent = "Yeni Manuel Odeme";
+      var bugun = new Date().toISOString().split("T")[0];
+      document.getElementById("fk-f-vade").value = bugun;
+    } else if (mod === "edit" && id) {
+      document.getElementById("fk-modal-baslik").textContent = "Manuel Odeme Duzenle #" + id;
+      // AJAX ile mevcut veriyi cek
+      fetch("/finans/manuel-odemeler/" + id + "/json")
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          if (!d || !d.ok) { alert("Kayit yuklenemedi"); return; }
+          var it = d.kayit;
+          document.getElementById("fk-id").value = it.Id;
+          document.getElementById("fk-f-entity").value = it.entity;
+          document.getElementById("fk-f-tip").value = it.Tip;
+          document.getElementById("fk-f-baslik").value = it.Aciklama || "";
+          document.getElementById("fk-f-tutar").value = it.Tutar || 0;
+          document.getElementById("fk-f-pb").value = it.ParaBirimi || "TRY";
+          document.getElementById("fk-f-vade").value = it.VadeTarih || "";
+          document.getElementById("fk-f-durum").value = it.Durum || "BEKLIYOR";
+          document.getElementById("fk-f-notu").value = it.Notu || "";
+        });
+    }
+  };
+
+  window.fkModalKapat = function(e) {
+    if (e && e.target.id !== "fk-modal") return;
+    document.getElementById("fk-modal").style.display = "none";
+  };
+
+  window.fkKaydet = function(e) {
+    e.preventDefault();
+    var form = document.getElementById("fk-form");
+    var id = document.getElementById("fk-id").value;
+    var url = id ? ("/finans/manuel-odemeler/" + id + "/guncelle") : "/finans/manuel-odemeler/yeni";
+    var fd = new FormData(form);
+    fetch(url, { method: "POST", body: fd })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (d.ok) {
+          window.location.reload();
+        } else {
+          alert("Hata: " + (d.hata || "Bilinmiyor"));
+        }
+      })
+      .catch(function(err){ alert("Hata: " + err); });
+    return false;
+  };
+
+  window.fkIptal = function(id) {
+    if (!confirm("Bu odeme kaydini iptal etmek istediginizden emin misiniz?\n(Fiziksel silme yapilmaz, Durum=IPTAL olarak isaretlenir)")) return;
+    fetch("/finans/manuel-odemeler/" + id + "/iptal", { method: "POST" })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (d.ok) {
+          window.location.reload();
+        } else {
+          alert("Hata: " + (d.hata || "Bilinmiyor"));
+        }
+      });
+  };
+})();
+</script>
+{% endblock %}

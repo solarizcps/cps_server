@@ -1,0 +1,263 @@
+// =====================================================
+// D5 FAZ C.3 - Sablon Yonetimi JS
+// =====================================================
+// Backend endpoint: /hedef/sablon/liste (GET)
+// C.4 sprintinde eklenecek: /hedef/sablon/eslesme/liste
+// =====================================================
+
+(function() {
+    'use strict';
+
+    var sablonlarCache = [];
+    var eslesmelerCache = {};
+
+    // ---- API CAGRILARI ----
+    function fetchSablonlar() {
+        return fetch('/hedef/sablon/liste', { credentials: 'same-origin' })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            });
+    }
+
+    // sablon_eslesme'i frontend'den dogrudan okuma yok (C.4'te endpoint eklenecek)
+    // Su an icin: sablon_id -> eslesme bilgisi cache'i ayri bir kucuk endpoint ile gelecek.
+    // C.3'te ZATEN sablon_eslesme yoksa "Eslesme yok" gosterilecek.
+    // C.4'te bu fonksiyon /hedef/sablon-eslesme/liste'ye baglanacak.
+    function fetchEslesmeler() {
+        // Placeholder: C.3'te basit map gosterimi
+        // Backend henuz hazir degil, bos donduruyoruz
+        return Promise.resolve({ kayitlar: [] });
+    }
+
+    // ---- HTML ESCAPE ----
+    function esc(s) {
+        if (s === null || s === undefined) return '';
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    // ---- KART RENDER ----
+    function kartHTML(s) {
+        var aktif = s.aktif === undefined ? 1 : s.aktif;
+        // /sablon/liste WHERE aktif=1 donduruyor, hepsi aktif gelecek
+        // Pasif gosterimi gelecekte C.4'te
+        var durumClass = aktif ? 'durum-aktif' : 'durum-pasif';
+        var durumText = aktif ? 'Aktif' : 'Pasif';
+        var kartClass = aktif ? '' : 'pasif';
+
+        var prosesler = s.prosesler || [];
+        var prsHTML = '';
+        if (prosesler.length === 0) {
+            prsHTML = '<span style="color:#aaa;font-style:italic;">Proses yok</span>';
+        } else {
+            var ilk3 = prosesler.slice(0, 3);
+            ilk3.forEach(function(p, i) {
+                prsHTML += '<span class="pros-item">' + (i+1) + '. ' + esc(p) + '</span>';
+            });
+            if (prosesler.length > 3) {
+                prsHTML += '<span class="pros-item" style="background:#e3eaf2;">+' +
+                    (prosesler.length - 3) + ' tane daha</span>';
+            }
+        }
+
+        var eslesmeler = eslesmelerCache[s.id] || [];
+        var eslesmeHTML = '';
+        if (eslesmeler.length === 0) {
+            eslesmeHTML = '<span class="yok">Eşleşme kuralı yok (C.4 sprintinde eklenecek)</span>';
+        } else {
+            eslesmeler.forEach(function(e) {
+                eslesmeHTML += '<span style="margin-right:8px;">' +
+                    esc(e.eslesme_tipi) + '=' + esc(e.eslesme_degeri) +
+                    ' (öncelik ' + e.oncelik + ')</span>';
+            });
+        }
+        var eslesmeSayisi = eslesmeler.length;
+        var kullanim = s.kullanim_sayisi !== undefined ? s.kullanim_sayisi : '-';
+
+        return '<div class="sablon-karti ' + kartClass + '" data-id="' + s.id + '">' +
+            '<div class="kart-bas">' +
+                '<div class="baslik">' +
+                    '<span class="sablon-id">#' + s.id + '</span>' +
+                    esc(s.sablon_adi || '(adsiz)') +
+                '</div>' +
+                '<span class="durum-rozet ' + durumClass + '">' + durumText + '</span>' +
+            '</div>' +
+            '<div class="kart-istatistik">' +
+                '<div class="istk"><b>' + (s.proses_sayisi || 0) + '</b> proses</div>' +
+                '<div class="istk"><b>' + kullanim + '</b> kullanım</div>' +
+                '<div class="istk"><b>' + eslesmeSayisi + '</b> eşleşme kuralı</div>' +
+            '</div>' +
+            '<div class="kart-prosesler">' +
+                '<span class="etk">Prosesler:</span>' + prsHTML +
+            '</div>' +
+            '<div class="kart-eslesme">' +
+                '<span class="etk">Eşleşme:</span>' + eslesmeHTML +
+            '</div>' +
+            '<div class="kart-aksiyon">' +
+                '<button class="btn-detay" onclick="sablonDetayAc(' + s.id + ')">Detay</button>' +
+                '<button class="btn-disabled" disabled title="C.4 sprintinde aktif olacak">Düzenle</button>' +
+                '<button class="btn-disabled" disabled title="C.4 sprintinde aktif olacak">Sil</button>' +
+            '</div>' +
+        '</div>';
+    }
+
+    // ---- LISTE RENDER ----
+    function listeRender(sablonlar) {
+        var el = document.getElementById('sablonListe');
+        if (!sablonlar || sablonlar.length === 0) {
+            el.innerHTML = '<div class="bos-durum">Henüz şablon tanımlanmamış</div>';
+            return;
+        }
+        var html = '';
+        sablonlar.forEach(function(s) { html += kartHTML(s); });
+        el.innerHTML = html;
+
+        // Ozet
+        var aktifSay = sablonlar.filter(function(x) { return x.aktif !== 0; }).length;
+        var pasifSay = sablonlar.length - aktifSay;
+        document.getElementById('ozetBilgi').innerHTML =
+            'Toplam <b>' + sablonlar.length + '</b> şablon' +
+            ' (<b>' + aktifSay + '</b> aktif, <b>' + pasifSay + '</b> pasif)';
+    }
+
+    // ---- DETAY MODAL ----
+    window.sablonDetayAc = function(sablonId) {
+        var s = sablonlarCache.find(function(x) { return x.id === sablonId; });
+        if (!s) {
+            alert('Şablon bulunamadı: ' + sablonId);
+            return;
+        }
+
+        document.getElementById('modalBaslik').textContent =
+            'Şablon Detayı: ' + (s.sablon_adi || '(adsiz)');
+
+        var prosesler = s.prosesler || [];
+        var eslesmeler = eslesmelerCache[s.id] || [];
+
+        var html = '';
+        // Bilgiler
+        html += '<div class="modal-bolum">';
+        html += '<h3>Bilgiler</h3>';
+        html += '<div class="bilgi"><b>ID:</b> ' + s.id + '</div>';
+        html += '<div class="bilgi"><b>Durum:</b> ' +
+                ((s.aktif === undefined || s.aktif) ? 'Aktif' : 'Pasif') + '</div>';
+        if (s.aciklama) {
+            html += '<div class="bilgi"><b>Açıklama:</b> ' + esc(s.aciklama) + '</div>';
+        }
+        if (s.olusturan_ad) {
+            html += '<div class="bilgi"><b>Oluşturan:</b> ' + esc(s.olusturan_ad) + '</div>';
+        }
+        if (s.olusturma) {
+            html += '<div class="bilgi"><b>Oluşturma:</b> ' + esc(s.olusturma) + '</div>';
+        }
+        if (s.guncelleme) {
+            html += '<div class="bilgi"><b>Güncelleme:</b> ' + esc(s.guncelleme) + '</div>';
+        }
+        html += '</div>';
+
+        // Prosesler
+        html += '<div class="modal-bolum">';
+        html += '<h3>Prosesler (sıralı)</h3>';
+        if (prosesler.length === 0) {
+            html += '<div class="bilgi" style="color:#aaa;font-style:italic;">Proses tanımlanmamış</div>';
+        } else {
+            html += '<ol>';
+            prosesler.forEach(function(p) {
+                html += '<li>' + esc(p) + '</li>';
+            });
+            html += '</ol>';
+        }
+        html += '</div>';
+
+        // Eslesme
+        html += '<div class="modal-bolum">';
+        html += '<h3>Eşleşme Kuralları (öncelik sırasıyla)</h3>';
+        if (eslesmeler.length === 0) {
+            html += '<div class="bilgi" style="color:#aaa;font-style:italic;">' +
+                    'Henüz eşleşme kuralı tanımlanmamış. C.4 sprintinde eklenebilecek.</div>';
+        } else {
+            html += '<ul>';
+            eslesmeler.forEach(function(e) {
+                html += '<li><b>' + esc(e.eslesme_tipi) + '</b> = ' +
+                        esc(e.eslesme_degeri) + ' (öncelik ' + e.oncelik + ')</li>';
+            });
+            html += '</ul>';
+        }
+        html += '</div>';
+
+        // Kullanim
+        html += '<div class="modal-bolum">';
+        html += '<h3>Kullanım</h3>';
+        var kul = s.kullanim_sayisi;
+        if (kul !== undefined) {
+            html += '<div class="bilgi">Bu şablon şu anda <b>' + kul +
+                    '</b> emir_alt_proses kaydında kullanılıyor.</div>';
+        } else {
+            html += '<div class="bilgi" style="color:#aaa;">Kullanım bilgisi C.4 sprintinde gelecek</div>';
+        }
+        html += '</div>';
+
+        document.getElementById('modalBody').innerHTML = html;
+        document.getElementById('detayModal').classList.add('acik');
+    };
+
+    window.sablonDetayKapat = function() {
+        document.getElementById('detayModal').classList.remove('acik');
+    };
+
+    // ESC ile kapatma
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' || e.keyCode === 27) {
+            sablonDetayKapat();
+        }
+    });
+
+    // ---- INIT ----
+    function init() {
+        Promise.all([fetchSablonlar(), fetchEslesmeler()])
+            .then(function(arr) {
+                var sablonResp = arr[0];
+                var eslesmeResp = arr[1];
+
+                if (!sablonResp.ok) {
+                    document.getElementById('sablonListe').innerHTML =
+                        '<div class="bos-durum">Hata: ' + esc(sablonResp.mesaj || 'Bilinmeyen') + '</div>';
+                    return;
+                }
+
+                sablonlarCache = sablonResp.kayitlar || [];
+
+                // Eslesme cache (sablon_id -> [kurallar])
+                var eslesmeler = eslesmeResp.kayitlar || [];
+                eslesmelerCache = {};
+                eslesmeler.forEach(function(e) {
+                    if (!eslesmelerCache[e.sablon_id]) eslesmelerCache[e.sablon_id] = [];
+                    eslesmelerCache[e.sablon_id].push(e);
+                });
+                // Her sablonun eslesmelerini oncelik'e gore sirala
+                Object.keys(eslesmelerCache).forEach(function(k) {
+                    eslesmelerCache[k].sort(function(a, b) {
+                        return (a.oncelik || 999) - (b.oncelik || 999);
+                    });
+                });
+
+                listeRender(sablonlarCache);
+            })
+            .catch(function(err) {
+                document.getElementById('sablonListe').innerHTML =
+                    '<div class="bos-durum">Yükleme hatası: ' + esc(err.message || err) + '</div>';
+                console.error('sablon yukleme hatasi:', err);
+            });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();

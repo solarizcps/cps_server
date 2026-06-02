@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% set active = 'enjeksiyon' %}
+{% set aktif_grup = 'uretim' %}
+
+{% block title %}Enjeksiyon Takip - Yönetim{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/enjeksiyon.css') }}?v=f66_20260513">
+
+<div class="enj-wrap">
+
+  <div class="enj-page-head">
+    <h2>Enjeksiyon Takip <span class="sub">/ Yönetim Paneli</span></h2>
+    <div class="enj-vrd-badge">Vardiya: <b>{{ vardiya_metin }}</b></div>
+  </div>
+
+  <div class="enj-mak-secim">
+    <div class="enj-lbl">MAKİNE SEÇ<small>Açık / Kapalı</small></div>
+    {% for m in makineler %}
+    <div class="enj-mak-kart {% if m.id == secili_makine_id %}aktif{% endif %}" data-makine-id="{{ m.id }}">
+      <div class="ad"><span class="no">{{ m.sira }}</span>MAKİNE</div>
+      {% if m.aktif %}
+      <div class="enj-tick" title="Açık">&check;</div>
+      {% else %}
+      <div class="enj-toggle" title="Kapalı"></div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  {% for m in makineler %}
+  <div class="enj-mak-panel {% if m.id == secili_makine_id %}aktif{% endif %}" data-makine-id="{{ m.id }}">
+    <div class="basl">
+      <div class="lbl"><span class="no">{{ m.sira }}</span>MAKİNE<span class="sub">{{ m.istasyon_sayisi }} İSTASYON</span></div>
+      <div class="tools">
+        <button type="button" class="enj-mini-btn" data-toplu="a">A TÜMÜ</button>
+        <button type="button" class="enj-mini-btn" data-toplu="b">B TÜMÜ</button>
+        <button type="button" class="enj-mini-btn kapat" data-toplu="x">KAPAT</button>
+        {% if m.aktif %}
+        <div class="enj-tick">&check;</div>
+        {% else %}
+        <div class="enj-toggle"></div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="enj-ist-wrap"><div class="enj-ist-list {% if m.istasyon_sayisi == 6 %}k6{% endif %}">
+      {% for i in range(1, m.istasyon_sayisi + 1) %}
+      {% set ka = i|string + 'A' %}{% set kb = i|string + 'B' %}
+      <div class="enj-ist-cell">
+        <div class="no">İST {{ i }}</div>
+        <div class="ab">
+          <button type="button" class="s {% if ka in m.aktif_slot_keys %}on{% endif %}" data-slot="A">A</button>
+          <button type="button" class="s {% if kb in m.aktif_slot_keys %}on{% endif %}" data-slot="B">B</button>
+        </div>
+      </div>
+      {% endfor %}
+    </div></div>
+  </div>
+  {% endfor %}
+
+  <div class="enj-fwrap">
+    <div class="enj-form">
+      <div class="enj-fr r6">
+        <div class="enj-fld"><label>Tarih</label><input type="text" value="{{ bugun }}" readonly></div>
+        <div class="enj-fld"><label>Vardiya</label>
+          <select onchange="window.location='?vardiya='+this.value+'&makine={{ secili_makine_id }}'">
+            <option value="gunduz" {% if vardiya == 'gunduz' %}selected{% endif %}>GÜNDÜZ (07:00-17:00)</option>
+            <option value="gece"   {% if vardiya == 'gece' %}selected{% endif %}>GECE (17:00-07:00)</option>
+            <option value="mesai"  {% if vardiya == 'mesai' %}selected{% endif %}>MESAİ</option>
+          </select>
+        </div>
+        <div class="enj-fld"><label>Emir / Sipariş</label><select><option>Seçiniz</option></select></div>
+        <div class="enj-fld"><label>Kalıp No</label><div class="enj-kalip-secici"><input type="text" class="enj-kalip-input" id="enj-kalip-input" placeholder="Ara: kod, model, asorti..." autocomplete="off"><input type="hidden" id="enj-kalip-id" value=""><div class="enj-kalip-liste" id="enj-kalip-liste" hidden></div></div></div>
+        <div class="enj-fld"><label>Renk</label><input type="text" id="enj-renk" placeholder="Renk giriniz"></div>
+        <div class="enj-fld"><label>Bağlı Kalıp (adet)</label><input type="number" id="enj-bagli-kalip" placeholder="0"></div>
+      </div>
+      <div class="enj-fr r6">
+        <div class="enj-fld"><label>Kalıp Başı Çift</label><input type="number" id="enj-kalip-basi-cift" placeholder="0"></div>
+        <div class="enj-fld"><label>Teorik Çift / Tur</label><input type="number" class="calc" readonly placeholder="—"></div>
+        <div class="enj-fld"><label>Personel Sayısı</label><input type="number" placeholder="0"></div>
+        <div class="enj-fld"><label class="g">Teorik Çift (günlük)</label><input type="number" class="gh" readonly placeholder="—"></div>
+        <div class="enj-fld"><label class="b">Net Çıkan Çift (günlük)</label><input type="number" class="bh" readonly placeholder="—"></div>
+        <div class="enj-fld enj-fld-empty"></div>
+        <div class="enj-fld enj-fld-empty"></div>
+      </div>
+    </div>
+    <div class="enj-urun" data-state="empty">
+  <div class="enj-urun-header">SEÇİLİ ÜRÜN</div>
+
+  <div class="enj-urun-empty">
+    <div class="enj-urun-ph">ürün görseli</div>
+    <div class="enj-urun-empty-cap">Kalıp seçiniz</div>
+  </div>
+
+  <div class="enj-urun-blok" data-tip="govde">
+    <div class="enj-urun-blok-head">
+      <span class="enj-urun-badge enj-urun-badge-govde">GÖVDE</span>
+      <span class="enj-urun-kod" data-field="kalip-kod"></span>
+    </div>
+    <div class="enj-urun-img-wrap">
+      <img class="enj-urun-img" data-field="gorsel" alt="Gövde görseli" hidden>
+      <div class="enj-urun-img-ph">[gövde görseli]</div>
+    </div>
+    <div class="enj-urun-model" data-field="model-kod"></div>
+  </div>
+
+  <div class="enj-urun-divider"></div>
+
+  <div class="enj-urun-blok" data-tip="atki">
+    <div class="enj-urun-blok-head">
+      <span class="enj-urun-badge enj-urun-badge-atki">ATKI</span>
+      <span class="enj-urun-kod" data-field="kalip-kod"></span>
+    </div>
+    <div class="enj-urun-img-wrap">
+      <img class="enj-urun-img" data-field="gorsel" alt="Atkı görseli" hidden>
+      <div class="enj-urun-img-ph">[atkı görseli]</div>
+    </div>
+    <div class="enj-urun-model" data-field="model-kod"></div>
+  </div>
+</div>
+  </div>
+
+  <div class="enj-main">
+    <div class="enj-tbl-card">
+      <div class="enj-tbl-basl">SAATLİK TABLO &middot; <b>{{ vardiya_metin }}</b></div>
+      <div class="enj-tbl-body">
+        <table class="enj-tbl">
+        <colgroup>
+          <col class="col-saat">
+          <col class="col-tur">
+          <col class="col-durum">
+          <col class="col-aksama">
+        </colgroup>
+        
+        <thead><tr><th><span class="enj-saat-tarih">{{ bugun }}</span>SAAT</th><th>TUR (ADET)</th><th>DURUM</th><th>AKSAMA / SEBEBİ</th></tr></thead>
+        <tbody>
+          {% if vardiya == 'mesai' %}
+          <tr><td colspan="4" class="enj-mesai-info">Mesai saatleri sonraki fazda yapılandırılacak. Gündüz veya gece vardiyasını seçiniz.</td></tr>
+          {% else %}
+          {% for bas, bit in saatler %}
+          <tr data-saat-bas="{{ bas }}">
+            <td>{{ '%02d:00 - %02d:00'|format(bas, bit) }}</td>
+            <td><input type="number" class="tur-inp" min="0" placeholder="0"></td>
+            <td><select class="durum-sel"><option value="calisiyor">ÇALIŞIYOR</option><option value="durus">DURUŞ</option><option value="yavas">YAVAŞ</option></select></td>
+            <td><select class="aks-sel"><option value="">—</option>{% for a in aksama_sebepleri %}<option value="{{ a.id }}">{{ a.ad }}</option>{% endfor %}</select></td>
+          </tr>
+          {% endfor %}
+          {% endif %}
+        </tbody>
+      </table>
+        </div>
+    </div>
+
+    <div class="enj-ozet">
+      <h4>GÜNLÜK ÖZET</h4>
+      <div class="or"><span class="l">TOPLAM TUR</span><span class="v muted">—</span></div>
+      <div class="or"><span class="l">TEORİK ÇİFT</span><span class="v muted">—</span></div>
+      <div class="or"><span class="l">NET ÇIKAN ÇİFT</span><span class="v muted">—</span></div>
+      <div class="or"><span class="l">FİRE (ÇİFT)</span><span class="v muted">—</span></div>
+      <div class="or"><span class="l">KORGUN KAPATTIĞI</span><span class="v muted">—</span></div>
+      <div class="or"><span class="l">FARK</span><span class="v muted">—</span></div>
+      <div class="or"><span class="l">FİRE ORANI (%)</span><span class="v muted">—</span></div>
+    </div>
+  </div>
+
+  <div class="enj-gs">
+    <h4>GÜN SONU BİLGİLERİ <small>3 fire tipi · kg cinsinden · her biri için tartı fotoğrafı</small></h4>
+    <div class="enj-gs-grid">
+      <div class="enj-fld"><label>BOŞ ATIŞ FİRE (KG)</label><input type="number" step="0.001" min="0" placeholder="0,000"></div>
+      <div class="enj-fld"><label>TERLİK FİRE (KG)</label><input type="number" step="0.001" min="0" placeholder="0,000"></div>
+      <div class="enj-fld"><label>YOLLUK FİRE (KG)</label><input type="number" step="0.001" min="0" placeholder="0,000"></div>
+      <div class="enj-gs-foto"><label>BOŞ ATIŞ FOTO</label><div class="zone">&#x1F4F7; Yükle</div></div>
+      <div class="enj-gs-foto"><label>TERLİK FİRE FOTO</label><div class="zone">&#x1F4F7; Yükle</div></div>
+      <div class="enj-gs-foto"><label>YOLLUK FİRE FOTO</label><div class="zone">&#x1F4F7; Yükle</div></div>
+    </div>
+    <div class="enj-gs-altsatir">
+      <div class="enj-gs-foto"><label>PLC EKRAN FOTOĞRAFI</label><div class="zone">&#x1F5A5; Yükle</div></div>
+      <div class="enj-gs-not"><label>GÜN SONU NOTU</label><textarea class="enj-note" placeholder="Açıklama giriniz..."></textarea></div>
+    </div>
+  </div>
+
+  <div class="enj-act">
+    <button type="button" class="enj-btn"><span>&#x1F551;</span>GEÇMİŞ KAYITLAR</button>
+    <button type="button" class="enj-btn kaydet"><span>&#x1F4BE;</span>KAYDET</button>
+  </div>
+
+</div>
+
+<script src="{{ url_for('static', filename='js/enjeksiyon.js') }}?v=f66_20260513"></script>
+{% endblock %}

@@ -1,0 +1,659 @@
+/* CPS PLAN v2 - Stiller */
+.planv2-wrap {
+  max-width: 100%;
+  padding: 16px 24px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.planv2-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.planv2-header h1 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+}
+.planv2-mode-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+.planv2-mode-badge.canli {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.planv2-info {
+  background: #eff6ff;
+  border-left: 3px solid #3b82f6;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: #1e40af;
+  margin-bottom: 16px;
+  border-radius: 4px;
+}
+
+.planv2-loading {
+  text-align: center;
+  padding: 40px;
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+/* Tablo */
+.planv2-tablo {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+  font-size: 13px;
+}
+.planv2-tablo thead {
+  background: #f3f4f6;
+}
+.planv2-tablo th {
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #374151;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #e5e7eb;
+}
+.planv2-tablo td {
+  padding: 12px;
+  border-bottom: 1px solid #f3f4f6;
+  color: #1f2937;
+}
+.planv2-tablo tbody tr {
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.planv2-tablo tbody tr:hover {
+  background: #fef3c7;
+}
+
+.col-durum { width: 30px; text-align: center; }
+.col-sipno { width: 90px; font-weight: 600; }
+.col-musteri { width: 160px; }
+.col-model { width: 200px; }
+.col-hedef, .col-yapilan, .col-kalan { width: 90px; text-align: right; }
+.col-termin { width: 110px; }
+.col-darbogaz { width: 90px; }
+.col-yuzde { width: 60px; text-align: right; }
+
+/* Durum noktası */
+.planv2-durum-nokta {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #9ca3af;
+}
+.planv2-durum-nokta.kirmizi { background: #dc2626; }
+.planv2-durum-nokta.sari { background: #f59e0b; }
+.planv2-durum-nokta.yesil { background: #10b981; }
+
+.planv2-darbogaz-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #fee2e2;
+  color: #991b1b;
+}
+.planv2-darbogaz-pill.govde { background: #dbeafe; color: #1e40af; }
+.planv2-darbogaz-pill.mamul { background: #f3f4f6; color: #1f2937; }
+
+.planv2-yuzde-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #fee2e2;
+  color: #991b1b;
+}
+.planv2-yuzde-pill.sari { background: #fef3c7; color: #92400e; }
+.planv2-yuzde-pill.yesil { background: #d1fae5; color: #065f46; }
+
+.planv2-empty {
+  text-align: center;
+  padding: 40px;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+/* Detay overlay */
+.planv2-detay-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+.planv2-detay-panel {
+  background: #fff;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 1100px;
+  max-height: 85vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+.planv2-detay-baslik {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+.planv2-detay-baslik h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+}
+.planv2-detay-kapat {
+  background: transparent;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 4px 10px;
+}
+.planv2-detay-kapat:hover { color: #111827; }
+.planv2-detay-icerik {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* KORGUN ve CPS bloklari */
+.planv2-blok {
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+.planv2-blok-baslik {
+  padding: 10px 14px;
+  background: #f9fafb;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #e5e7eb;
+}
+.planv2-blok.korgun .planv2-blok-baslik { background: #dbeafe; color: #1e40af; }
+.planv2-blok.cps .planv2-blok-baslik { background: #f3e8ff; color: #6b21a8; }
+.planv2-blok.durum .planv2-blok-baslik { background: #fee2e2; color: #991b1b; }
+.planv2-blok-icerik {
+  padding: 14px;
+}
+
+/* Korgun bar grafigi */
+.planv2-bar-row {
+  display: grid;
+  grid-template-columns: 60px 1fr 100px 60px;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+.planv2-bar-label { font-weight: 600; color: #1f2937; }
+.planv2-bar-track {
+  background: #f3f4f6;
+  border-radius: 10px;
+  height: 14px;
+  overflow: hidden;
+}
+.planv2-bar-fill {
+  height: 100%;
+  background: #10b981;
+  border-radius: 10px;
+  transition: width 0.3s;
+}
+.planv2-bar-fill.kirmizi { background: #dc2626; }
+.planv2-bar-fill.sari { background: #f59e0b; }
+.planv2-bar-row.darbogaz .planv2-bar-label { color: #991b1b; }
+
+.planv2-bar-sayi { text-align: right; color: #6b7280; font-size: 11px; }
+.planv2-bar-yuzde { text-align: right; font-weight: 600; color: #1f2937; }
+
+/* Emir listesi */
+.planv2-emir-listesi {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #4b5563;
+}
+.planv2-emir-satir {
+  padding: 4px 0;
+  border-top: 1px solid #f3f4f6;
+}
+
+/* CPS prosesleri */
+.planv2-cps-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+.planv2-cps-item {
+  background: #faf5ff;
+  border: 1px solid #e9d5ff;
+  padding: 8px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.planv2-cps-item-adi { font-weight: 600; color: #6b21a8; }
+.planv2-cps-item-deger { color: #1f2937; font-size: 14px; margin-top: 2px; }
+
+/* Durum mesaji */
+.planv2-durum-mesaj {
+  font-size: 13px;
+  color: #1f2937;
+  font-weight: 600;
+}
+.planv2-durum-detay {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 6px;
+}
+
+/* === U3 HIYERARSI === */
+/* PLAN listesi alt yorum satiri */
+.planv2-summary-row {
+    cursor: pointer;
+}
+.planv2-summary-row .planv2-summary-td {
+    padding: 4px 12px 10px 56px;
+    color: #6b7280;
+    font-size: 11px;
+    font-style: italic;
+    background: #fafafa;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+/* DURUM blogu - 3 net satir */
+.planv2-durum-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+.planv2-durum-row {
+    font-size: 14px;
+    color: #1f2937;
+}
+.planv2-durum-label {
+    display: inline-block;
+    width: 90px;
+    font-weight: 700;
+    color: #991b1b;
+    letter-spacing: 0.3px;
+}
+.planv2-durum-row strong {
+    color: #111827;
+}
+.planv2-summary-text {
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: #fef3c7;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #92400e;
+    font-weight: 500;
+}
+.planv2-darbogaz-ozet {
+    margin-top: 6px;
+    font-size: 12px;
+    color: #6b7280;
+}
+
+/* MODEL kart */
+.planv2-model-kart {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    margin-bottom: 14px;
+    overflow: hidden;
+}
+.planv2-model-baslik {
+    padding: 10px 14px;
+    background: #f0f9ff;
+    border-bottom: 1px solid #e5e7eb;
+    font-size: 13px;
+    color: #1e40af;
+}
+.planv2-model-icon { font-size: 16px; }
+.planv2-model-hedef {
+    color: #6b7280;
+    font-size: 12px;
+}
+.planv2-model-adi {
+    font-size: 11px;
+    color: #6b7280;
+    margin-top: 2px;
+}
+
+/* Model bar (kompakt) */
+.planv2-model-bar {
+    padding: 10px 14px;
+    background: #fafafa;
+    border-bottom: 1px solid #f3f4f6;
+}
+.planv2-bar-mini {
+    display: grid;
+    grid-template-columns: 60px 1fr 100px;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 4px;
+    font-size: 11px;
+}
+.planv2-bar-mini-label {
+    font-weight: 600;
+    color: #1f2937;
+}
+.planv2-bar-mini-track {
+    background: #f3f4f6;
+    border-radius: 8px;
+    height: 8px;
+    overflow: hidden;
+}
+.planv2-bar-mini-fill {
+    height: 100%;
+    background: #10b981;
+    border-radius: 8px;
+}
+.planv2-bar-mini-fill.kirmizi { background: #dc2626; }
+.planv2-bar-mini-fill.sari { background: #f59e0b; }
+.planv2-bar-mini-deger {
+    text-align: right;
+    color: #6b7280;
+    font-size: 10px;
+}
+
+/* Emir listesi baslik */
+.planv2-emir-listesi-baslik {
+    padding: 8px 14px 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.planv2-emir-empty {
+    padding: 12px 14px;
+    color: #9ca3af;
+    font-style: italic;
+    font-size: 12px;
+}
+
+/* EMIR kart */
+.planv2-emir-kart {
+    margin: 4px 14px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    overflow: hidden;
+}
+.planv2-emir-baslik {
+    padding: 8px 12px;
+    background: #f9fafb;
+    font-size: 12px;
+    color: #1f2937;
+    border-bottom: 1px solid #f3f4f6;
+}
+.planv2-emir-korgun, .planv2-emir-cps {
+    padding: 8px 12px;
+    font-size: 11px;
+}
+.planv2-emir-korgun {
+    background: #eff6ff;
+    border-bottom: 1px solid #f3f4f6;
+}
+.planv2-emir-cps {
+    background: #faf5ff;
+}
+.planv2-emir-alt-baslik {
+    font-weight: 700;
+    color: #374151;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+}
+.planv2-emir-row {
+    display: grid;
+    grid-template-columns: 60px 1fr auto;
+    gap: 8px;
+    padding: 2px 0;
+    font-size: 11px;
+}
+.planv2-emir-row-label {
+    font-weight: 600;
+    color: #1f2937;
+}
+.planv2-emir-row-emir {
+    color: #6b7280;
+    font-size: 10px;
+}
+.planv2-emir-row-deger {
+    text-align: right;
+    color: #1f2937;
+    font-weight: 500;
+}
+.planv2-emir-row-deger em {
+    color: #9ca3af;
+    font-style: italic;
+    font-weight: normal;
+}
+.planv2-emir-cps-row {
+    color: #6b21a8;
+    padding: 2px 0;
+}
+/* === /U3 HIYERARSI === */
+
+
+/* === SADE KORGUN TABLO === */
+.planv2-ust-bilgi {
+    padding: 12px 16px;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+    font-size: 13px;
+    color: #1f2937;
+    margin-bottom: 12px;
+    border-radius: 4px;
+}
+
+.planv2-sade-tablo {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    overflow: hidden;
+}
+.planv2-sade-tablo thead {
+    background: #f3f4f6;
+}
+.planv2-sade-tablo th {
+    text-align: left;
+    padding: 8px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #374151;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid #e5e7eb;
+}
+.planv2-sade-tablo th.num,
+.planv2-sade-tablo td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+.planv2-sade-tablo td {
+    padding: 6px 10px;
+    border-bottom: 1px solid #f3f4f6;
+    color: #1f2937;
+}
+.planv2-sade-tablo tbody tr:hover {
+    background: #fef3c7;
+}
+
+.planv2-kat-pill {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+}
+.planv2-kat-pill.kat-mamul { background: #fee2e2; color: #991b1b; }
+.planv2-kat-pill.kat-govde { background: #dbeafe; color: #1e40af; }
+.planv2-kat-pill.kat-atki { background: #f3e8ff; color: #6b21a8; }
+
+.biten-yesil { color: #065f46; font-weight: 600; }
+.kalan-kirmizi { color: #991b1b; font-weight: 600; }
+.baslayacak-gri { color: #6b7280; }
+
+.planv2-toplam {
+    background: #f9fafb !important;
+    border-top: 2px solid #d1d5db;
+}
+.planv2-toplam td {
+    padding: 10px;
+    font-size: 13px;
+}
+
+.planv2-cps-dipnot {
+    margin-top: 12px;
+    padding: 8px 10px;
+    background: #faf5ff;
+    border-left: 3px solid #a855f7;
+    font-size: 11px;
+    color: #6b21a8;
+    border-radius: 4px;
+}
+
+
+/* === PIVOT TABLO === */
+.planv2-pivot-tablo {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    overflow: hidden;
+}
+.planv2-pivot-tablo thead {
+    background: #f3f4f6;
+}
+.planv2-pivot-tablo th {
+    text-align: left;
+    padding: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #374151;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid #e5e7eb;
+}
+.planv2-pivot-tablo th.num,
+.planv2-pivot-tablo td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+.col-expand {
+    width: 30px;
+    text-align: center;
+}
+
+.planv2-pivot-ana {
+    cursor: pointer;
+    transition: background 0.1s;
+}
+.planv2-pivot-ana:hover {
+    background: #fef3c7;
+}
+.planv2-pivot-ana td {
+    padding: 10px;
+    border-bottom: 1px solid #f3f4f6;
+    color: #1f2937;
+    font-weight: 500;
+}
+
+.planv2-expand-icon {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    line-height: 18px;
+    text-align: center;
+    background: #f3f4f6;
+    border-radius: 3px;
+    font-weight: 700;
+    color: #374151;
+    font-size: 14px;
+}
+.planv2-pivot-ana:hover .planv2-expand-icon {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.planv2-pivot-detay td.planv2-detay-cell {
+    padding: 0;
+    background: #fafafa;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.planv2-emir-tablo {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+    margin: 0;
+}
+.planv2-emir-tablo thead {
+    background: #fff;
+}
+.planv2-emir-tablo th {
+    text-align: left;
+    padding: 6px 12px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #6b7280;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid #e5e7eb;
+}
+.planv2-emir-tablo th.num,
+.planv2-emir-tablo td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+.planv2-emir-tablo td {
+    padding: 4px 12px;
+    border-bottom: 1px solid #f3f4f6;
+    color: #374151;
+}
+.planv2-emir-tablo tbody tr:hover {
+    background: #f9fafb;
+}
+.planv2-emir-tablo td:first-child {
+    padding-left: 50px;
+    font-weight: 600;
+    color: #1f2937;
+}

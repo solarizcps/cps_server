@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+
+{% block title %}Operasyon Raporu - Solariz CPS{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/planlama_operasyon.css') }}?v={{ range(100000, 999999) | random }}">
+
+<!-- F9_5_2_OPERASYON_GECMIS_TAB_BEGIN -->
+<link rel="stylesheet" href="{{ url_for('static', filename='css/planlama_operasyon_gecmis.css') }}?v={{ range(100000, 999999) | random }}">
+
+<div class="or-sekme-serit">
+  <div class="or-sekme aktif" data-sekme="canli">
+    <svg class="or-sekme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M20.07 4.93a10 10 0 0 1 0 14.14M3.93 19.07a10 10 0 0 1 0-14.14"/></svg>
+    CANLI IZLEME
+  </div>
+  <div class="or-sekme" data-sekme="gecmis">
+    <svg class="or-sekme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+    GEÇMIŞ / EXCEL DETAY
+  </div>
+  <!-- F_OP_RAPOR_KALIP_YONETIM_TAB -->
+  <a class="or-sekme" href="/yonetim/kalip-yonetimi" style="text-decoration:none">
+    <svg class="or-sekme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+    KALIP YONETIMI
+  </a>
+</div>
+<!-- F9_5_2_OPERASYON_GECMIS_TAB_END -->
+<div class="or-sayfa">
+
+  <!-- ============ UST BASLIK + CANLI BADGE ============ -->
+  <div class="or-ust">
+    <div class="or-baslik">
+      <div class="or-breadcrumb">Planlama / Enjeksiyon</div>
+      <h2>Operasyon raporu</h2>
+    </div>
+    <div class="or-canli-bilgi">
+      <span class="or-canli-badge" id="or-canli-badge">
+        <span class="or-canli-dot"></span>CANLI
+      </span>
+      <span class="or-son-guncelleme">Son güncelleme: <span id="or-son-gun">—</span></span>
+      <button class="or-btn-yenile" id="or-btn-yenile" title="Yenile">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ============ FILTRE BAR ============ -->
+  <div class="or-filtre">
+    <div class="or-filtre-grup">
+      <label>Tarih</label>
+      <input type="date" id="or-tarih" class="or-input">
+    </div>
+    <div class="or-filtre-grup">
+      <label>Vardiya</label>
+      <select id="or-vardiya" class="or-input">
+        <option value="gunduz">Gündüz (07:00–17:00)</option>
+        <option value="gece">Gece (17:00–07:00)</option>
+      </select>
+    </div>
+    <button class="or-btn-uygula" id="or-btn-uygula">Yenile</button>
+    <div class="or-filtre-spacer"></div>
+    <div class="or-vardiya-bilgi" id="or-vardiya-bilgi">
+      <span class="or-vardiya-etiket">Vardiya ilerleme</span>
+      <span class="or-vardiya-deger"><span id="or-vardiya-dk">—</span> / <span id="or-vardiya-sure">—</span></span>
+      <span class="or-vardiya-yuzde" id="or-vardiya-yuzde">—</span>
+    </div>
+  </div>
+
+  <!-- ============ KPI SERIDI ============ -->
+  <div class="or-kpi-serit" id="or-kpi-serit">
+    <div class="or-kpi"><div class="or-kpi-label">Toplam tur</div><div class="or-kpi-deger" id="kpi-tur">—</div><div class="or-kpi-alt" id="kpi-tur-alt">—</div></div>
+    <div class="or-kpi"><!-- FIELD_TEST_READY -->
+    <div class="or-kpi-label" title="V1: Anlık istasyon düzenine göre hesaplanır. Vardiya içi kalıp değişimleri için saatlik snapshot gerekli.">Yaklaşık Teorik</div><div class="or-kpi-deger" id="kpi-teorik">—</div><div class="or-kpi-alt" id="kpi-teorik-alt">—</div></div>
+    <div class="or-kpi"><div class="or-kpi-label">Net çift</div><div class="or-kpi-deger" id="kpi-net">—</div><div class="or-kpi-alt" id="kpi-net-alt">—</div></div>
+    <div class="or-kpi"><!-- TERMINOLOGY_V1 -->
+    <div class="or-kpi-label">Toplam kalıp değişim</div><div class="or-kpi-deger" id="kpi-setup">—</div><div class="or-kpi-alt" id="kpi-setup-alt">—</div></div>
+    <div class="or-kpi"><div class="or-kpi-label">Toplam arıza</div><div class="or-kpi-deger" id="kpi-ariza">—</div><div class="or-kpi-alt" id="kpi-ariza-alt">—</div></div>
+    <div class="or-kpi"><div class="or-kpi-label">Verim %</div><div class="or-kpi-deger" id="kpi-verim">—</div><div class="or-kpi-alt" id="kpi-verim-alt">—</div></div>
+    <div class="or-kpi"><div class="or-kpi-label">Çalışan istasyon</div><div class="or-kpi-deger" id="kpi-aktif">—</div><div class="or-kpi-alt" id="kpi-aktif-alt">—</div></div>
+  </div>
+
+  <!-- ============ MAKINE KARTLARI ============ -->
+  <div class="or-makine-grid" id="or-makine-grid">
+    <div class="or-yukleniyor">Veriler yükleniyor…</div>
+  </div>
+
+  <!-- ============ DETAY PANELI (Accordion) ============ -->
+  <div class="or-detay" id="or-detay" style="display:none;">
+    <div class="or-detay-baslik">
+      <span id="or-detay-makine-ad">—</span>
+      <span class="or-detay-durum-badge" id="or-detay-durum">—</span>
+      <span class="or-detay-vardiya">Vardiya <span id="or-detay-vardiya-dk">—</span></span>
+      <button class="or-btn-detay-kapat" id="or-btn-detay-kapat">Kapat ▼</button>
+    </div>
+    <div class="or-detay-icerik" id="or-detay-icerik">
+      <div class="or-yukleniyor">Detay yükleniyor…</div>
+    </div>
+  </div>
+
+  <!-- ============ ALT BILGI ============ -->
+  <div class="or-alt-bilgi" id="or-alt-bilgi">
+    <div class="or-uyari-ozet" id="or-uyari-ozet"></div>
+    <div class="or-renk-legend">
+      <span class="or-renk-item"><span class="or-renk-kutu r-aktif"></span>Çalışıyor</span>
+      <span class="or-renk-item"><span class="or-renk-kutu r-setup"></span>Kalıp Değişim</span>
+      <span class="or-renk-item"><span class="or-renk-kutu r-ariza"></span>Arıza</span>
+      <span class="or-renk-item"><span class="or-renk-kutu r-kapali"></span>Kapalı</span>
+      <span class="or-renk-item"><span class="or-renk-kutu r-hibrit"></span>Karışık Durum</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- F9_5_2_OPERASYON_GECMIS_CONTAINER_BEGIN -->
+<div class="or-gec-sayfa">
+
+  <div class="or-gec-filtre-bar">
+
+    <div class="or-gec-tarih-row">
+      <span class="lbl">Tarih araligi</span>
+      <button class="or-gec-tarih-btn aktif" data-preset="bugun">Bugun</button>
+      <button class="or-gec-tarih-btn" data-preset="son15">Son 15 gun</button>
+      <button class="or-gec-tarih-btn" data-preset="buay">Bu ay</button>
+      <button class="or-gec-tarih-btn" data-preset="son6ay">Son 6 ay</button>
+      <button class="or-gec-tarih-btn" data-preset="buyil">Bu yil</button>
+      <input type="date" class="or-gec-tarih-input" id="orgec-tarih-bas">
+      <span style="color:#9ca3af;">-</span>
+      <input type="date" class="or-gec-tarih-input" id="orgec-tarih-bit">
+    </div>
+
+    <div class="or-gec-filtre-grid">
+      <div>
+        <label>Makine</label>
+        <select id="orgec-makine">
+          <option value="">Tumu</option>
+          <option value="1">M1</option>
+          <option value="2">M2</option>
+          <option value="3">M3</option>
+          <option value="4">M4</option>
+        </select>
+      </div>
+      <div>
+        <label>Operator</label>
+        <select id="orgec-operator">
+          <option value="">Tumu</option>
+          <option value="admin">admin</option>
+          <option value="bilinmeyen">bilinmeyen</option>
+        </select>
+      </div>
+      <div>
+        <label>Kalip tipi</label>
+        <select id="orgec-kalip-tipi">
+          <option value="">Tumu</option>
+          <option value="GOVDE">GOVDE</option>
+          <option value="ATKI">ATKI</option>
+        </select>
+      </div>
+      <div>
+        <label>Vardiya</label>
+        <select id="orgec-vardiya">
+          <option value="">Tumu</option>
+          <option value="gunduz">Gunduz</option>
+          <option value="mesai">Mesai</option>
+          <option value="gece">Gece</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="or-gec-filtre-grid">
+      <div>
+        <label>Durum</label>
+        <select id="orgec-durum">
+          <option value="">Tumu</option>
+          <option value="CLS">CLS - Calisiyor</option>
+          <option value="KLP">KLP - Kalip degisim</option>
+          <option value="ARZ">ARZ - Ariza</option>
+          <option value="KPL">KPL - Kapali</option>
+          <option value="DRS">DRS - Durus</option>
+        </select>
+      </div>
+      <div style="grid-column: span 3;">
+        <label>Arama (makine, kalip, operator, sebep)</label>
+        <input type="text" id="orgec-arama" placeholder="Anahtar kelime...">
+      </div>
+    </div>
+
+    <div class="or-gec-filtre-aksiyon">
+      <button class="or-gec-btn-temizle" id="orgec-btn-temizle">Temizle</button>
+      <button class="or-gec-btn-filtrele" id="orgec-btn-filtrele">Filtrele</button>
+    </div>
+
+  </div>
+
+  <div id="orgec-icerik">
+    <div class="or-gec-yukleniyor">Hazirlaniyor...</div>
+  </div>
+
+</div>
+<!-- F9_5_2_OPERASYON_GECMIS_CONTAINER_END -->
+<script src="{{ url_for('static', filename='js/planlama_operasyon.js') }}?v={{ range(100000, 999999) | random }}"></script>
+<!-- F9_5_2_OPERASYON_GECMIS_SCRIPT_BEGIN -->
+<script src="{{ url_for('static', filename='js/planlama_operasyon_gecmis.js') }}?v={{ range(100000, 999999) | random }}"></script>
+<!-- F9_5_2_OPERASYON_GECMIS_SCRIPT_END -->
+{% endblock %}

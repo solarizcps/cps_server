@@ -1,0 +1,486 @@
+{% extends "base.html" %}
+{% block title %}{{ anlasma.ProjeKod }} — {{ anlasma.ProjeAdi }}{% endblock %}
+
+{% block head %}
+<style>
+.detay-head {
+  background:#fff; border:0.5px solid var(--border); border-radius:12px;
+  padding:14px 18px; margin-bottom:12px; box-shadow:var(--shadow);
+  display:flex; justify-content:space-between; align-items:center; gap:14px;
+}
+.durum-pill { display:inline-block; padding:3px 11px; border-radius:999px; font-size:11px; font-weight:700; }
+.durum-AKTIF { background:#e0f2fe; color:#0369a1; }
+.durum-TAMAMLANDI { background:#dcfce7; color:#15803d; }
+.durum-IPTAL { background:#fee2e2; color:var(--red); }
+
+.kpi-mini-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:8px; margin-bottom:12px; }
+.kpi-mini { background:#fff; border:0.5px solid var(--border); border-radius:10px; padding:10px 12px; box-shadow:var(--shadow); position:relative; overflow:hidden; }
+.kpi-mini::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--mcolor,var(--accent)); }
+.kpi-mini .l { font-size:9px; color:var(--text3); text-transform:uppercase; letter-spacing:1.2px; font-weight:700; margin-bottom:4px; }
+.kpi-mini .v { font-size:16px; font-weight:700; color:var(--mcolor, var(--text)); }
+.kpi-mini .a { font-size:10px; color:var(--text3); margin-top:2px; }
+
+.bolum-kart { background:#fff; border:0.5px solid var(--border); border-radius:12px; margin-bottom:12px; box-shadow:var(--shadow); }
+.bolum-kart .bolum-head { padding:12px 16px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+.bolum-kart .bolum-head h3 { font-size:11px; color:var(--text3); letter-spacing:2px; text-transform:uppercase; font-weight:700; margin:0; }
+.bolum-kart .bolum-body { padding:14px 16px; }
+
+table.tbl { width:100%; border-collapse:collapse; font-size:13px; }
+table.tbl thead tr { background:var(--bg4); text-transform:uppercase; font-size:10px; color:var(--text3); letter-spacing:1.2px; }
+table.tbl th { text-align:left; padding:8px 10px; font-weight:700; }
+table.tbl td { padding:10px; border-bottom:1px solid var(--border); }
+table.tbl td.num { text-align:right; font-weight:600; }
+
+.tip-pill { display:inline-block; padding:2px 9px; border-radius:4px; font-size:11px; font-weight:700; }
+.tip-NAKIT   { background:#dcfce7; color:#15803d; }
+.tip-HAVALE  { background:#dbeafe; color:#1e40af; }
+.tip-CEK     { background:#ede9fe; color:#6d28d9; }
+.tip-ON_AVANS{ background:#fef3c7; color:#92400e; }
+.tip-SEVK_SONRASI { background:#ffedd5; color:#9a3412; }
+.tip-DIGER   { background:#f3f4f6; color:#374151; }
+
+.durum-GELDI     { background:#dcfce7; color:#15803d; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:700; }
+.durum-BEKLIYOR  { background:#f3f4f6; color:#6b7280; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:700; }
+.durum-GECIKMIS  { background:rgba(220,38,38,0.15); color:var(--red); padding:2px 8px; border-radius:4px; font-size:11px; font-weight:700; }
+.durum-MAHSUP_EDILDI { background:#dcfce7; color:#15803d; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:700; }
+
+.ce-row { background:var(--bg3); padding:8px 12px; font-size:12px; border-left:3px solid #6d28d9; }
+
+.inline-form input { padding:4px 8px; border:1px solid var(--border); border-radius:5px; font-size:12px; width:120px; }
+.inline-form button { padding:4px 10px; font-size:12px; }
+
+.avans-box { background:#fef3c7; border:1px solid #fcd34d; border-radius:10px; padding:12px; margin-bottom:10px; }
+.avans-head { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; }
+.avans-meta { font-size:12px; color:#92400e; }
+.teminat-tag { background:#fed7aa; color:#9a3412; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:700; margin-left:6px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="detay-head">
+  <div>
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+      <span style="background:var(--bg4); color:var(--text2); padding:3px 10px; border-radius:4px; font-size:11px; font-weight:700;">{{ anlasma.ProjeKod }}</span>
+      <div style="font-size:18px; font-weight:700;">{{ anlasma.ProjeAdi }}</div>
+      <span class="durum-pill durum-{{ anlasma.Durum }}">{{ anlasma.Durum }}</span>
+    </div>
+    <div style="font-size:12px; color:var(--text3); margin-top:5px;">
+      <strong>{{ anlasma.CName }}</strong>
+      {% if anlasma.BaslangicTarih %} · {{ anlasma.BaslangicTarih | tarih }}{% endif %}
+      {% if anlasma.BitisTarih %} → {{ anlasma.BitisTarih | tarih }}{% endif %}
+      {% if anlasma.Sehir %} · {{ anlasma.Sehir }}{% endif %}
+    </div>
+  </div>
+  <div style="display:flex; gap:6px;">
+    <a class="btn btn-outline" href="/finans/anlasma">← Liste</a>
+    {% if anlasma.Durum == 'AKTIF' %}
+      <a class="btn btn-outline" href="/finans/anlasma/{{ anlasma.Id }}/duzenle">✏ Düzenle</a>
+      <form method="post" action="/finans/anlasma/{{ anlasma.Id }}/durum" style="display:inline;"
+            onsubmit="return confirm('Anlaşmayı TAMAMLANDI yap?');">
+        <input type="hidden" name="durum" value="TAMAMLANDI">
+        <button class="btn btn-success" type="submit">✓ Kapat</button>
+      </form>
+      <form method="post" action="/finans/anlasma/{{ anlasma.Id }}/durum" style="display:inline;"
+            onsubmit="return confirm('İPTAL edilsin mi?');">
+        <input type="hidden" name="durum" value="IPTAL">
+        <button class="btn btn-danger" type="submit">✕ İptal</button>
+      </form>
+    {% else %}
+      <form method="post" action="/finans/anlasma/{{ anlasma.Id }}/durum" style="display:inline;">
+        <input type="hidden" name="durum" value="AKTIF">
+        <button class="btn btn-outline" type="submit">↺ Yeniden Aç</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+<!-- META: Oluşturan / Son düzenleyen -->
+<div style="font-size:11px; color:var(--text3); padding:4px 2px 10px 2px; display:flex; gap:16px; flex-wrap:wrap;">
+  {% if anlasma.OlusturanKullanici %}
+    <span>👤 Oluşturan: <strong style="color:var(--text2);">{{ anlasma.OlusturanKullanici }}</strong>{% if anlasma.OlusturmaTarih %} · {{ anlasma.OlusturmaTarih | tarih }}{% endif %}</span>
+  {% endif %}
+  {% if anlasma.SonDuzenleyen %}
+    <span>✏ Son düzenleyen: <strong style="color:var(--sol-dark);">{{ anlasma.SonDuzenleyen }}</strong>{% if anlasma.SonDuzenlemeTarih %} · {{ anlasma.SonDuzenlemeTarih[:10] | tarih }} {{ anlasma.SonDuzenlemeTarih[11:16] }}{% endif %}</span>
+  {% endif %}
+</div>
+
+<!-- KPI (6 KART) -->
+<div class="kpi-mini-grid">
+  <div class="kpi-mini" style="--mcolor: #1e40af;">
+    <div class="l">Sözleşme Toplamı</div>
+    <div class="v">{{ kart.toplam | tl }}</div>
+    <div class="a">KDV dahil</div>
+  </div>
+  <div class="kpi-mini" style="--mcolor: #92400e;">
+    <div class="l">Alınan Avans</div>
+    <div class="v">{{ kart.avans_alinan | tl }}</div>
+    <div class="a">{{ avanslar | length }} avans</div>
+  </div>
+  <div class="kpi-mini" style="--mcolor: #15803d;">
+    <div class="l">Mahsup Edilen</div>
+    <div class="v">{{ kart.avans_mahsup_edilen | tl }}</div>
+    <div class="a">avans kesintisi</div>
+  </div>
+  <div class="kpi-mini" style="--mcolor: #9a3412;">
+    <div class="l">Kalan Avans</div>
+    <div class="v">{{ kart.avans_kalan | tl }}</div>
+    <div class="a">mahsup edilecek</div>
+  </div>
+  <div class="kpi-mini" style="--mcolor: #6d28d9;">
+    <div class="l">Ödeme Planı</div>
+    <div class="v">{{ kart.plan_toplam | tl }}</div>
+    <div class="a">Hedef: {{ kart.net_plan_hedef | tl }}</div>
+  </div>
+  <div class="kpi-mini" style="--mcolor: var(--green);">
+    <div class="l">Tahsil Edilen</div>
+    <div class="v">{{ kart.tahsil_edilen | tl }}</div>
+    <div class="a">plan tahsilatı</div>
+  </div>
+</div>
+
+{% if anlasma.Notlar %}
+<div class="bolum-kart" style="background:var(--sol-light); border-color:var(--sol);">
+  <div class="bolum-body" style="padding:10px 16px;">
+    <div style="font-size:10px; font-weight:700; color:#92400e; text-transform:uppercase; letter-spacing:1.2px; margin-bottom:4px;">Proje Notu</div>
+    <div style="font-size:13px;">{{ anlasma.Notlar }}</div>
+  </div>
+</div>
+{% endif %}
+
+<!-- MODELLER -->
+{% if modeller %}
+<div class="bolum-kart">
+  <div class="bolum-head"><h3>Modeller ({{ modeller | length }})</h3></div>
+  <div class="bolum-body" style="padding:0;">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th>Kod</th><th>Model</th><th>Renk</th>
+          <th class="num">Miktar</th><th class="num">Birim (KDV Hariç)</th><th class="num">Satır Toplamı (KDV Dahil)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set kdv = anlasma.KdvOrani or 10 %}
+        {% for m in modeller %}
+        <tr>
+          <td style="font-weight:600;">{{ m.ModelKod or '—' }}</td>
+          <td>{{ m.ModelAdi }}{% if m.Notu %}<div style="font-size:11px; color:var(--text3);">{{ m.Notu }}</div>{% endif %}</td>
+          <td>{{ m.Renk or '—' }}</td>
+          <td class="num">{{ m.Miktar | sayi }} çift</td>
+          <td class="num">{{ m.BirimFiyat | tl }}</td>
+          <td class="num" style="color:var(--sol-dark);">{{ (m.Miktar * m.BirimFiyat * (1 + kdv / 100)) | tl }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- AVANSLAR -->
+{% if avanslar %}
+<div class="bolum-kart">
+  <div class="bolum-head"><h3>Alınan Avanslar ({{ avanslar | length }})</h3></div>
+  <div class="bolum-body">
+    {% for av in avanslar %}
+    <div class="avans-box">
+      <div class="avans-head">
+        <div>
+          <strong style="font-size:16px;">{{ av.Tutar | tl }}</strong>
+          <span style="font-size:12px; color:var(--text2); margin-left:8px;">{{ av.AvansTarih | tarih }} · {{ av.OdemeTipi }}</span>
+          {% if av.TeminatMektup %}
+            <span class="teminat-tag">📜 Teminat {{ av.TeminatTutar | tl }}</span>
+          {% endif %}
+        </div>
+        <div class="avans-meta">
+          Mahsup: {{ av.mahsup_edilen | tl }} / {{ av.mahsup_toplam | tl }}
+          · Kalan: <strong>{{ av.mahsup_kalan | tl }}</strong>
+        </div>
+      </div>
+      {% if av.Aciklama %}<div style="font-size:12px; margin-top:4px; color:#92400e;">{{ av.Aciklama }}</div>{% endif %}
+      {% if av.TeminatNotu %}<div style="font-size:11px; margin-top:3px; color:#9a3412;">📜 {{ av.TeminatNotu }}</div>{% endif %}
+
+      {% if av.mahsuplar %}
+      <div style="margin-top:10px; background:#fff; border-radius:8px; padding:8px;">
+        <div style="font-size:10px; font-weight:700; color:var(--text3); text-transform:uppercase; margin-bottom:6px;">Mahsup Planı ({{ av.mahsuplar | length }} parça)</div>
+        <table class="tbl" style="font-size:12px;">
+          <thead>
+            <tr><th>Tarih</th><th>Açıklama</th><th class="num">Tutar</th><th>Durum</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for mh in av.mahsuplar %}
+            <tr>
+              <td style="font-weight:600;">{{ mh.MahsupTarih | tarih }}</td>
+              <td>{{ mh.Aciklama or '—' }}</td>
+              <td class="num">{{ mh.Tutar | tl }}</td>
+              <td>
+                {% if mh.Durum == 'MAHSUP_EDILDI' %}
+                  <span class="durum-MAHSUP_EDILDI">✓ Mahsup</span>
+                  {% if mh.GerceklesmeTarih %}<span style="font-size:10px; color:var(--text3); margin-left:4px;">{{ mh.GerceklesmeTarih | tarih }}</span>{% endif %}
+                {% else %}
+                  <span class="durum-BEKLIYOR">Bekliyor</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if mh.Durum == 'BEKLIYOR' %}
+                  <form method="post" action="/finans/anlasma/mahsup/{{ mh.Id }}/gerceklesti" class="inline-form" style="display:inline-flex; gap:4px; align-items:center;">
+                    <input type="hidden" name="ref" value="/finans/anlasma/{{ anlasma.Id }}">
+                    <input type="date" name="tarih" value="{{ now }}">
+                    <input type="number" name="tutar" value="{{ mh.Tutar }}" step="0.01">
+                    <button class="btn btn-primary" type="submit">Mahsup Et</button>
+                  </form>
+                {% else %}
+                  <form method="post" action="/finans/anlasma/mahsup/{{ mh.Id }}/geri-al" style="display:inline;">
+                    <input type="hidden" name="ref" value="/finans/anlasma/{{ anlasma.Id }}">
+                    <button class="btn btn-outline" type="submit" style="font-size:11px;">Geri Al</button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- ÖDEME PLANI -->
+<div class="bolum-kart">
+  <div class="bolum-head">
+    <h3>Ödeme Planı ({{ plan | length }} satır)</h3>
+    <div style="display:flex; gap:12px; align-items:center;">
+      <span style="font-size:11px; color:var(--text3);">Net hedef: <strong>{{ kart.net_plan_hedef | tl }}</strong></span>
+      {% if anlasma.Durum != 'KAPALI' %}
+      <button type="button" class="btn btn-sm" style="background:#eff6ff; color:#1e40af; border:1px solid #93c5fd;"
+              onclick="document.getElementById('sablon-uygula').showModal()">📋 Şablon Uygula</button>
+      {% endif %}
+    </div>
+  </div>
+  <div class="bolum-body" style="padding:0;">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th>#</th><th>Tarih</th><th>Tip</th><th>Model</th><th>Açıklama</th>
+          <th class="num">Tutar</th><th>Durum</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in plan %}
+        <tr>
+          <td>{{ p.Sira }}</td>
+          <td style="font-weight:600;">{{ p.PlanTarih | tarih }}</td>
+          <td><span class="tip-pill tip-{{ p.OdemeTipi }}">{{ p.OdemeTipi | replace('_', ' ') }}{% if p.OdemeTipi == 'CEK' and p.CekAdeti > 1 %} ×{{ p.CekAdeti }}{% endif %}</span></td>
+          <td>{{ p.ModelAdi or 'Tümü' }}{% if p.Renk %} / {{ p.Renk }}{% endif %}</td>
+          <td>{{ p.Aciklama or '—' }}</td>
+          <td class="num">{{ p.Tutar | tl }}</td>
+          <td>
+            {% if p.Durum == 'GELDI' %}
+              <span class="durum-GELDI">✓ Geldi</span>
+              {% if p.GerceklesmeTarih %}<div style="font-size:10px; color:var(--text3);">{{ p.GerceklesmeTarih | tarih }}</div>{% endif %}
+            {% elif p.EfektifDurum == 'GECIKMIS' %}
+              <span class="durum-GECIKMIS">Geçti</span>
+            {% else %}
+              <span class="durum-BEKLIYOR">Bekliyor</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if p.Durum == 'BEKLIYOR' %}
+              <form method="post" action="/finans/anlasma/plan/{{ p.Id }}/gerceklesti" class="inline-form" style="display:inline-flex; gap:4px; align-items:center;">
+                <input type="hidden" name="ref" value="/finans/anlasma/{{ anlasma.Id }}">
+                <input type="date" name="tarih" value="{{ now }}">
+                <input type="number" name="tutar" value="{{ p.Tutar }}" step="0.01">
+                <button class="btn btn-primary" type="submit">✓ Geldi</button>
+              </form>
+            {% else %}
+              <form method="post" action="/finans/anlasma/plan/{{ p.Id }}/geri-al" style="display:inline;">
+                <input type="hidden" name="ref" value="/finans/anlasma/{{ anlasma.Id }}">
+                <button class="btn btn-outline" type="submit" style="font-size:11px;">Geri Al</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+
+        {% if p.cekler %}
+        <tr><td colspan="8" style="padding:0;">
+          <div style="padding:4px 16px 8px; background:#fafafa;">
+            <div style="font-size:10px; text-transform:uppercase; color:var(--text3); letter-spacing:1.2px; font-weight:700; margin-bottom:4px;">
+              ↳ Çek Detayları ({{ p.cekler | length }})
+            </div>
+            {% for c in p.cekler %}
+            <div class="ce-row" style="margin-bottom:3px; display:flex; gap:14px; flex-wrap:wrap; align-items:center;">
+              <span><strong>#{{ c.CekSira }}</strong></span>
+              <span><strong>{{ c.CekBanka or '—' }}</strong> · çek no: <strong>{{ c.CekNo or '—' }}</strong></span>
+              <span>Alım: {{ c.CekAlimTarih | tarih if c.CekAlimTarih else '—' }}</span>
+              <span>Vade: <strong>{{ c.CekVadeTarih | tarih if c.CekVadeTarih else '—' }}</strong></span>
+              <span style="margin-left:auto; font-weight:700;">{{ c.Tutar | tl }}</span>
+              {% if c.Durum == 'TAHSIL' %}
+                <span class="durum-GELDI">✓ Tahsil{% if c.TahsilTarih %} · {{ c.TahsilTarih | tarih }}{% endif %}</span>
+              {% elif c.Durum == 'KARSILIKSIZ' %}
+                <span class="durum-GECIKMIS">Karşılıksız</span>
+              {% else %}
+                <span class="durum-BEKLIYOR">Portföyde</span>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+        </td></tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {# Parça 5.5: Canlı plan toplam göstergesi #}
+  {% set _plan_toplam = plan | sum(attribute='Tutar') or 0 %}
+  {% set _anlasma_toplam = anlasma.ToplamTutar or 0 %}
+  {% set _fark = _anlasma_toplam - _plan_toplam %}
+  {% set _yuzde = (_plan_toplam / _anlasma_toplam * 100) if _anlasma_toplam > 0 else 0 %}
+  <div style="padding:10px 16px; border-top:1px solid #e5e7eb;
+              background:{% if (_fark|abs) < 1 %}#dcfce7{% elif _fark > 0 %}#fef3c7{% else %}#fee2e2{% endif %};
+              border-left:4px solid {% if (_fark|abs) < 1 %}#059669{% elif _fark > 0 %}#F97316{% else %}#dc2626{% endif %};
+              font-size:.88rem;">
+    {% if (_fark|abs) < 1 %}
+      ✓ <strong>Plan toplam:</strong> {{ _plan_toplam | tl }} / {{ _anlasma_toplam | tl }} (%100) — tam örtüşüyor.
+    {% elif _fark > 0 %}
+      ⚠ <strong>Plan eksik:</strong> {{ _plan_toplam | tl }} / {{ _anlasma_toplam | tl }}
+      (%{{ "%.1f"|format(_yuzde) }}) — <strong>{{ _fark | tl }} eksik</strong>. Yeni taksit ekleyin veya şablon uygulayın.
+    {% else %}
+      ⚠ <strong>Plan fazla:</strong> {{ _plan_toplam | tl }} / {{ _anlasma_toplam | tl }}
+      (%{{ "%.1f"|format(_yuzde) }}) — <strong>{{ _fark|abs | tl }} fazla</strong>. Taksitlerden birini azaltın.
+    {% endif %}
+  </div>
+</div>
+
+<div style="color:var(--text3); font-size:11px; margin-top:10px;">
+  💡 "Geldi" butonuna basınca taksit işaretlenir ve müşteri cari ekstresine otomatik tahsilat hareketi düşer.
+  Avans mahsupları muhasebe kaydı için "Mahsup Et" ile işaretlenir.
+</div>
+
+<!-- DEĞİŞİKLİK GEÇMİŞİ -->
+{% if loglar %}
+<div class="bolum-kart" style="margin-top:16px;">
+  <div class="bolum-head">
+    <h3>📜 Değişiklik Geçmişi ({{ loglar | length }} kayıt)</h3>
+  </div>
+  <div class="bolum-body" style="padding:0;">
+    <style>
+      .timeline { position:relative; padding:14px 18px 14px 36px; }
+      .timeline::before { content:''; position:absolute; left:20px; top:18px; bottom:18px; width:2px; background:var(--border); }
+      .tl-item { position:relative; padding:8px 0 8px 0; }
+      .tl-item::before { content:''; position:absolute; left:-22px; top:14px; width:10px; height:10px; border-radius:50%; border:2px solid #fff; }
+      .tl-ekle::before      { background:#2563eb; }
+      .tl-duzenle::before   { background:#f59e0b; }
+      .tl-sil::before       { background:var(--red); }
+      .tl-durum::before     { background:#7c3aed; }
+      .tl-odeme::before     { background:var(--green); }
+      .tl-mahsup::before    { background:#ea580c; }
+      .tl-head { display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; font-size:13px; }
+      .tl-user { font-weight:700; color:var(--text); }
+      .tl-time { font-size:11px; color:var(--text3); }
+      .tl-islem-pill { display:inline-block; padding:1px 7px; border-radius:4px; font-size:10px; font-weight:700; letter-spacing:0.5px; }
+      .pill-EKLE     { background:#dbeafe; color:#1e40af; }
+      .pill-DUZENLE  { background:#fef3c7; color:#92400e; }
+      .pill-SIL      { background:#fee2e2; color:var(--red); }
+      .pill-DURUM    { background:#ede9fe; color:#6d28d9; }
+      .pill-ODEME_GELDI { background:#dcfce7; color:#15803d; }
+      .pill-ODEME_GERI  { background:#fef3c7; color:#92400e; }
+      .pill-MAHSUP_YAPILDI { background:#dcfce7; color:#15803d; }
+      .pill-MAHSUP_GERI { background:#fee2e2; color:var(--red); }
+      .tl-body { font-size:12px; color:var(--text2); margin-top:3px; line-height:1.5; }
+      .tl-tablo { font-size:10px; color:var(--text3); font-family:var(--mono); }
+    </style>
+    <div class="timeline">
+    {% for lg in loglar %}
+      {% set cls = 'tl-' + lg.Islem | lower | replace('_', '-') | replace('-geldi','-odeme') | replace('-geri','-odeme') | replace('yapildi','mahsup') %}
+      {% set cls_map = {
+        'EKLE':'tl-ekle', 'DUZENLE':'tl-duzenle', 'SIL':'tl-sil',
+        'DURUM':'tl-durum', 'ODEME_GELDI':'tl-odeme', 'ODEME_GERI':'tl-odeme',
+        'MAHSUP_YAPILDI':'tl-mahsup', 'MAHSUP_GERI':'tl-mahsup'
+      } %}
+      <div class="tl-item {{ cls_map.get(lg.Islem, 'tl-ekle') }}">
+        <div class="tl-head">
+          <span class="tl-user">👤 {{ lg.AdSoyad or lg.KullaniciAdi }}</span>
+          <span class="tl-islem-pill pill-{{ lg.Islem }}">{{ lg.Islem | replace('_', ' ') }}</span>
+          <span class="tl-time">{{ lg.Tarih[:10] | tarih }} · {{ lg.Tarih[11:19] }}</span>
+          <span class="tl-tablo">{{ lg.TabloAdi }}{% if lg.KayitId %}#{{ lg.KayitId }}{% endif %}</span>
+        </div>
+        {% if lg.Aciklama %}
+        <div class="tl-body">{{ lg.Aciklama }}</div>
+        {% endif %}
+      </div>
+    {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ÖDEME ŞABLONU UYGULAMA MODALI -->
+<dialog id="sablon-uygula" class="modal">
+  <form method="post" action="/finans/anlasma/{{ anlasma.Id }}/sablon-uygula" class="modal-form" style="min-width:560px;">
+    <h3>📋 Ödeme Şablonu Uygula</h3>
+    <p class="muted" style="font-size:.85rem; margin:0 0 8px;">
+      Şablon <strong>başlangıç</strong> plan satırları oluşturur. Sonrasında her satırı düzenleyebilir / silebilir / yeni ekleyebilirsin.
+    </p>
+
+    <label>Şablon *
+      <select name="SablonKod" required id="sblk">
+        {% for kod, s in odeme_sablonlari.items() %}
+        <option value="{{ kod }}">{{ s.ad }} — {{ s.aciklama }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <div id="sablon-onizle" style="background:#f9fafb; padding:10px 14px; border-radius:6px; margin:8px 0; font-size:.85rem;">
+      <div style="font-weight:600; margin-bottom:6px;">Önizleme:</div>
+      <div id="sablon-onizle-icerik"></div>
+    </div>
+
+    <div class="form-row">
+      <label style="flex:1;">Başlangıç Tarihi *
+        <input type="date" name="BaslangicTarih" required>
+        <small class="muted" style="font-size:.72rem;">Taksit tarihleri bu tarihten itibaren hesaplanır.</small>
+      </label>
+    </div>
+
+    <label style="display:flex; align-items:center; gap:8px; padding:8px; background:#fef3c7; border-radius:6px;">
+      <input type="checkbox" name="MevcutSil" value="1">
+      <span style="font-size:.85rem;">⚠ Mevcut plan satırlarını sil (baştan başlat). Tik yoksa mevcutlara eklenir.</span>
+    </label>
+
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" onclick="this.closest('dialog').close()">İptal</button>
+      <button class="btn btn-primary">Uygula</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+// Şablon önizlemesi (toplam tutara göre canlı hesap)
+(function(){
+  const sablonlar = {
+    {% for kod, s in odeme_sablonlari.items() %}
+    {{ kod|tojson }}: [{% for et, y, g, t in s.satirlar %}{etiket:{{ et|tojson }}, yuzde:{{ y }}, gun:{{ g }}, tip:{{ t|tojson }}}{{ ", " if not loop.last }}{% endfor %}],
+    {% endfor %}
+  };
+  const toplam = {{ anlasma.ToplamTutar or 0 }};
+  const sel = document.getElementById('sblk');
+  const inc = document.getElementById('sablon-onizle-icerik');
+  function yenile() {
+    const satirlar = sablonlar[sel.value] || [];
+    inc.innerHTML = satirlar.map(s => {
+      const tutar = (toplam * s.yuzde / 100);
+      const tutarStr = new Intl.NumberFormat('tr-TR',{maximumFractionDigits:0}).format(tutar);
+      return `<div>• <strong>${s.etiket}</strong> (%${s.yuzde}) — ${tutarStr} ₺ — +${s.gun} gün — ${s.tip}</div>`;
+    }).join('');
+  }
+  sel.addEventListener('change', yenile);
+  yenile();
+})();
+</script>
+
+{% endblock %}

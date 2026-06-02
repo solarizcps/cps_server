@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% set page_title = "Karar Masasi" %}
+
+{% block content %}
+<div class="km-sayfa">
+
+  <div class="km-baslik-blok">
+    <div class="km-baslik">
+      <span class="km-baslik-icon"><i class="ti ti-clipboard-list"></i></span>
+      <span class="km-baslik-metin">Planlama / Karar Masası</span>
+    </div>
+    <div class="km-baslik-sag">
+      <span class="km-rozet-mock">MOCK</span>
+      <span class="km-rozet-kolon">10 kolon <i class="ti ti-chevron-down"></i></span>
+      <span class="km-akilli-sira-rozet">Akıllı sıra <span class="km-as-on">ON</span></span>
+    </div>
+  </div>
+  <div class="km-altbaslik">Bugün fabrikada ne yapılmalı? Öncelik, üretilebilirlik ve darboğaz görünümü.</div>
+
+  <div class="km-kpi">
+    <div class="km-kpi-hucre">
+      <div class="km-kpi-icon km-kpi-icon-mavi"><i class="ti ti-clipboard-list"></i></div>
+      <div class="km-kpi-icerik">
+        <div class="km-kpi-label">TOPLAM SİPARİŞ</div>
+        <div class="km-kpi-deger" id="km-kpi-toplam">—</div>
+        <div class="km-kpi-alt">Tüm siparişler</div>
+      </div>
+    </div>
+    <div class="km-kpi-hucre">
+      <div class="km-kpi-icon km-kpi-icon-kirmizi"><i class="ti ti-alert-triangle"></i></div>
+      <div class="km-kpi-icerik">
+        <div class="km-kpi-label">KRİTİK / GECİKEN</div>
+        <div class="km-kpi-deger km-kpi-deger-kirmizi" id="km-kpi-kritik">—</div>
+        <div class="km-kpi-alt">Acil müdahale</div>
+      </div>
+    </div>
+    <div class="km-kpi-hucre">
+      <div class="km-kpi-icon km-kpi-icon-yesil"><i class="ti ti-circle-check"></i></div>
+      <div class="km-kpi-icerik">
+        <div class="km-kpi-label">ÜRETİME HAZIR</div>
+        <div class="km-kpi-deger" id="km-kpi-hazir">—</div>
+        <div class="km-kpi-alt">Planlanabilir</div>
+      </div>
+    </div>
+    <div class="km-kpi-hucre">
+      <div class="km-kpi-icon km-kpi-icon-kirmizi"><i class="ti ti-lock"></i></div>
+      <div class="km-kpi-icerik">
+        <div class="km-kpi-label">BLOKE</div>
+        <div class="km-kpi-deger km-kpi-deger-kirmizi" id="km-kpi-bloke">—</div>
+        <div class="km-kpi-alt">Malzeme / Proses</div>
+      </div>
+    </div>
+    <div class="km-kpi-hucre">
+      <div class="km-kpi-icon km-kpi-icon-amber"><i class="ti ti-flame"></i></div>
+      <div class="km-kpi-icerik">
+        <div class="km-kpi-label">DARBOĞAZ</div>
+        <div class="km-kpi-deger" id="km-kpi-darbogaz">—</div>
+        <div class="km-kpi-alt">Kapasite riski</div>
+      </div>
+    </div>
+    <div class="km-kpi-hucre km-kpi-hucre-genis">
+      <div class="km-kpi-icon km-kpi-icon-mor"><i class="ti ti-chart-bar"></i></div>
+      <div class="km-kpi-icerik">
+        <div class="km-kpi-label">KAPASİTE KULLANIMI</div>
+        <div class="km-kpi-kapasite" id="km-kpi-kapasite">—</div>
+        <div class="km-kpi-progress-row">
+          <div class="km-kpi-progress"><div class="km-kpi-progress-bar" id="km-kpi-progress-bar" style="width:0%"></div></div>
+        </div>
+        <div class="km-kpi-alt" id="km-kpi-kapasite-alt">Kalan: —</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="km-filtre-cubuk" id="km-filtre-cubuk">
+    <div class="km-tab-grup">
+      <button class="km-tab aktif" data-zaman="hepsi" onclick="km_filtre_zaman(this)"><i class="ti ti-list"></i> Hepsi</button>
+      <button class="km-tab" data-zaman="hafta" onclick="km_filtre_zaman(this)">Bu hafta</button>
+      <button class="km-tab" data-zaman="bu_ay" onclick="km_filtre_zaman(this)">Bu ay</button>
+      <button class="km-tab" data-zaman="3_ay" onclick="km_filtre_zaman(this)">3 ay</button>
+    </div>
+    <div class="km-fil-blok">
+      <div class="km-fil-label">Müşteri</div>
+      <select class="km-filtre-dd" id="km-fil-musteri" onchange="km_uygula()">
+        <option value="">Tümü ▾</option>
+      </select>
+    </div>
+    <div class="km-fil-blok">
+      <div class="km-fil-label">Üretilebilirlik</div>
+      <select class="km-filtre-dd" id="km-fil-uretilebilirlik" onchange="km_uygula()">
+        <option value="">Tümü ▾</option>
+        <option value="HAZIR">HAZIR</option>
+        <option value="KISMI">KISMİ</option>
+        <option value="BLOKE">BLOKE</option>
+      </select>
+    </div>
+    <div class="km-fil-arama-wrap">
+      <i class="ti ti-search km-arama-ikon"></i>
+      <input type="text" class="km-filtre-arama" id="km-fil-arama" placeholder="Ara: müşteri / sipariş / model" oninput="km_uygula()">
+    </div>
+    <button class="km-fil-buton" onclick="km_toast('Gelişmiş filtre Faz 2&#39;de aktif olacak.')">
+      <i class="ti ti-adjustments-horizontal"></i> Gelişmiş filtre
+    </button>
+    <button class="km-fil-buton" onclick="km_filtre_temizle()">
+      <i class="ti ti-refresh"></i> Temizle
+    </button>
+  </div>
+
+  <div class="km-sira-bar" id="km-sira-bar">
+    <div class="km-sira-bar-sol">
+      <span class="km-toggle on"><span class="km-toggle-dot"></span></span>
+      <span class="km-sira-baslik">Akıllı sıra</span>
+      <span class="km-sira-ayrac">·</span>
+      <span class="km-sira-aciklama">termin · darboğaz · öncelik · bant</span>
+    </div>
+    <span class="km-sira-link" onclick="km_manuel_mod_ac()">Manuel moda geç →</span>
+  </div>
+
+  <div class="km-manuel-bar" id="km-manuel-bar">
+    <div class="km-manuel-bar-sol">
+      <span class="km-toggle off"><span class="km-toggle-dot"></span></span>
+      <span class="km-manuel-bar-baslik">Manuel sıra aktif</span>
+      <span class="km-manuel-bar-rozet" id="km-manuel-sayac">0 değişiklik yapıldı</span>
+      <span class="km-manuel-bar-ayrac"><i class="ti ti-info-circle"></i></span>
+      <span class="km-manuel-bar-not">Sıralama değişiklikleri sadece bu filtre görünümünde geçerlidir.</span>
+    </div>
+    <div class="km-manuel-bar-sag">
+      <button class="km-manuel-don-buton" onclick="km_manuel_mod_kapat()">Akıllı sıraya dön</button>
+      <span class="km-manuel-link" onclick="km_manuel_geri_al()"><i class="ti ti-arrow-back-up"></i> Geri al</span>
+      <span class="km-manuel-link" onclick="km_manuel_sifirla()"><i class="ti ti-refresh"></i> Sıfırla</span>
+    </div>
+  </div>
+
+  <div class="km-tablo-cerceve">
+    <table class="km-tablo" id="km-tablo">
+      <thead>
+        <tr>
+          <th class="km-th-no">#</th>
+          <th>MÜŞTERİ / SİPARİŞ</th>
+          <th>MODEL</th>
+          <th class="km-th-num">KALAN</th>
+          <th>TERMİN</th>
+          <th>ÜRETİLEBİLİR</th>
+          <th>DARBOĞAZ</th>
+          <th class="km-th-mid">BANT</th>
+          <th>USTA TALİMATI</th>
+          <th class="km-th-aksiyon">⋮</th>
+        </tr>
+      </thead>
+      <tbody id="km-tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="km-altbar">
+    <span class="km-altbar-sol" id="km-bilgi-sayim">— sipariş listeleniyor</span>
+    <div class="km-altbar-sag">
+      <span class="km-altbar-sayfa">20 / sayfa <i class="ti ti-chevron-down"></i></span>
+      <button class="km-sayfa-buton"><i class="ti ti-chevron-left"></i></button>
+      <span class="km-sayfa-aktif">1</span>
+      <span class="km-sayfa-pasif">2</span>
+      <button class="km-sayfa-buton"><i class="ti ti-chevron-right"></i></button>
+    </div>
+  </div>
+
+  <div class="km-toast" id="km-toast" style="display:none;"></div>
+
+</div>
+
+<link rel="stylesheet" href="{{ url_for('static', filename='css/karar_masasi.css') }}?v={{ range(1,99999)|random }}">
+<script src="{{ url_for('static', filename='js/planlama_karar_masasi.js') }}?v={{ range(1,99999)|random }}"></script>
+{% endblock %}

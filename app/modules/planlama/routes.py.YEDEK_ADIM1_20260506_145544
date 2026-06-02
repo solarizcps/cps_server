@@ -1,0 +1,287 @@
+# -*- coding: utf-8 -*-
+"""
+SOLARIZ CPS - PLANLAMA / KARAR MASASI (Faz 2)
+==============================================
+Operasyon karar masasi.
+- Kart + durum odakli gorunum
+- Sadece okuma, henuz yazma yok
+- Korgun + CPS verileri ayri tutulur
+"""
+from flask import Blueprint, render_template, jsonify, session, redirect, url_for
+
+
+planlama_bp = Blueprint(
+    'planlama_bp',
+    __name__,
+    url_prefix='/planlama'
+)
+
+
+# =====================================================
+# YETKI KONTROLU
+# =====================================================
+def _yetki_var_mi():
+    """Sadece Yonetim rolu + admin kullanici gorebilir."""
+    u = session.get('kullanici')
+    if not u or not isinstance(u, dict):
+        return False
+    rol = u.get('RolAd') or ''
+    kad = u.get('KullaniciAdi') or ''
+    return rol == 'Yönetim' or kad == 'admin'
+
+
+# =====================================================
+# MOCK VERI - Faz 3'te Korgun + CPS'den otomatik beslenecek
+# =====================================================
+MOCK_SIPARISLER = [
+    {
+        "siparis_no": "33680",
+        "emir_no": "E.110626",
+        "model": "BRP-9000",
+        "musteri": "Lc Waikiki",
+        "miktar": 1200,
+        "termin": "2026-05-31",
+        
+        "zaman": {
+            "kova": "BU_HAFTA",
+            "termin_durumu": "yaklasiyor"
+        },
+        
+        "musteri_etiketleri": ["LCW", "NAKIT"],
+        "oncelik": "NORMAL",
+        
+        "korgun": {
+            "yapilan": 480,
+            "kalan": 720,
+            "yuzde": 28.1,
+            "son_proses": "MAMUL / Temizleme"
+        },
+        
+        "cps": {
+            "darbogaz": {
+                "var": True,
+                "ana": "MAMUL",
+                "alt_proses": "Temizleme",
+                "sapma": 88.6,
+                "seviye": "KRITIK"
+            },
+            "production_ready": {
+                "durum": "HAZIR",
+                "detay": [
+                    {"parca": "EVA", "durum": "tamam"},
+                    {"parca": "Patch", "durum": "tamam"},
+                    {"parca": "Isik", "durum": "tamam"},
+                    {"parca": "Toka", "durum": "tamam"}
+                ],
+                "bloke_sebebi": None,
+                "tahmini_hazir": None
+            },
+            "notlar": ["Halil onayi bekleniyor"]
+        }
+    },
+    {
+        "siparis_no": "33700",
+        "emir_no": "E.110700",
+        "model": "XYZ-5000",
+        "musteri": "Boyner",
+        "miktar": 600,
+        "termin": "2026-06-15",
+        
+        "zaman": {
+            "kova": "SONRAKI_HAFTA",
+            "termin_durumu": "normal"
+        },
+        
+        "musteri_etiketleri": [],
+        "oncelik": "NORMAL",
+        
+        "korgun": {
+            "yapilan": 30,
+            "kalan": 570,
+            "yuzde": 5.0,
+            "son_proses": "GOVDE / Kesim"
+        },
+        
+        "cps": {
+            "darbogaz": {
+                "var": False,
+                "ana": None,
+                "alt_proses": None,
+                "sapma": 0,
+                "seviye": "NORMAL"
+            },
+            "production_ready": {
+                "durum": "KISMI",
+                "detay": [
+                    {"parca": "EVA", "durum": "tamam"},
+                    {"parca": "Patch", "durum": "tamam"},
+                    {"parca": "Isik", "durum": "3 gun sonra"},
+                    {"parca": "Toka", "durum": "tamam"}
+                ],
+                "bloke_sebebi": "Isik 3 gun sonra gelecek",
+                "tahmini_hazir": "2026-05-09"
+            },
+            "notlar": []
+        }
+    },
+    {
+        "siparis_no": "33750",
+        "emir_no": "E.110750",
+        "model": "DEF-7000",
+        "musteri": "Koton",
+        "miktar": 800,
+        "termin": "2026-05-25",
+        
+        "zaman": {
+            "kova": "BU_AY",
+            "termin_durumu": "yaklasiyor"
+        },
+        
+        "musteri_etiketleri": [],
+        "oncelik": "ACIL",
+        
+        "korgun": {
+            "yapilan": 0,
+            "kalan": 800,
+            "yuzde": 0,
+            "son_proses": "Henuz baslamadi"
+        },
+        
+        "cps": {
+            "darbogaz": {
+                "var": False,
+                "ana": None,
+                "alt_proses": None,
+                "sapma": 0,
+                "seviye": "NORMAL"
+            },
+            "production_ready": {
+                "durum": "BLOKE",
+                "detay": [
+                    {"parca": "EVA", "durum": "tamam"},
+                    {"parca": "Patch", "durum": "tamam"},
+                    {"parca": "Isik", "durum": "tamam"},
+                    {"parca": "Toka", "durum": "EKSIK"}
+                ],
+                "bloke_sebebi": "Toka eksik - tedarikciden termin bekleniyor",
+                "tahmini_hazir": None
+            },
+            "notlar": ["ACIL: tedarikciye baski yapilmasi gerekiyor"]
+        }
+    },
+    {
+        "siparis_no": "33800",
+        "emir_no": "E.110800",
+        "model": "GHI-9000",
+        "musteri": "Lc Waikiki",
+        "miktar": 2000,
+        "termin": "2026-08-15",
+        
+        "zaman": {
+            "kova": "3_AY",
+            "termin_durumu": "uzak"
+        },
+        
+        "musteri_etiketleri": ["LCW"],
+        "oncelik": "NORMAL",
+        
+        "korgun": {
+            "yapilan": 0,
+            "kalan": 2000,
+            "yuzde": 0,
+            "son_proses": "Henuz baslamadi"
+        },
+        
+        "cps": {
+            "darbogaz": {
+                "var": False,
+                "ana": None,
+                "alt_proses": None,
+                "sapma": 0,
+                "seviye": "NORMAL"
+            },
+            "production_ready": {
+                "durum": "BILINMIYOR",
+                "detay": [],
+                "bloke_sebebi": "Henuz degerlendirilmedi",
+                "tahmini_hazir": None
+            },
+            "notlar": []
+        }
+    },
+    {
+        "siparis_no": "33638",
+        "emir_no": "E.110626",
+        "model": "CRX-71033-LCW",
+        "musteri": "Lc Waikiki",
+        "miktar": 7000,
+        "termin": "2026-05-31",
+        
+        "zaman": {
+            "kova": "BU_HAFTA",
+            "termin_durumu": "yaklasiyor"
+        },
+        
+        "musteri_etiketleri": ["LCW", "NAKIT"],
+        "oncelik": "NORMAL",
+        
+        "korgun": {
+            "yapilan": 1970,
+            "kalan": 5030,
+            "yuzde": 28.1,
+            "son_proses": "GOVDE / Kesim"
+        },
+        
+        "cps": {
+            "darbogaz": {
+                "var": False,
+                "ana": None,
+                "alt_proses": None,
+                "sapma": 0,
+                "seviye": "NORMAL"
+            },
+            "production_ready": {
+                "durum": "HAZIR",
+                "detay": [
+                    {"parca": "EVA", "durum": "tamam"},
+                    {"parca": "Patch", "durum": "tamam"},
+                    {"parca": "Isik", "durum": "tamam"},
+                    {"parca": "Toka", "durum": "tamam"}
+                ],
+                "bloke_sebebi": None,
+                "tahmini_hazir": None
+            },
+            "notlar": []
+        }
+    }
+]
+
+
+# =====================================================
+# ENDPOINT 1: HTML SAYFA
+# =====================================================
+@planlama_bp.route('/karar-masasi', methods=['GET'])
+def karar_masasi():
+    if not _yetki_var_mi():
+        return render_template('hata.html',
+                               kod=403, baslik='Yetkisiz Erisim',
+                               mesaj='Bu sayfaya erisim yetkiniz yok.'), 403
+    return render_template('planlama/karar_masasi.html')
+
+
+# =====================================================
+# ENDPOINT 2: JSON VERI
+# =====================================================
+@planlama_bp.route('/karar-masasi/data', methods=['GET'])
+def karar_masasi_data():
+    if not _yetki_var_mi():
+        return jsonify({"hata": "yetkisiz"}), 403
+    
+    # Gelecekte: Korgun + CPS'den otomatik beslenecek
+    # Simdilik: mock veri
+    return jsonify({
+        "ok": True,
+        "siparis_sayisi": len(MOCK_SIPARISLER),
+        "siparisler": MOCK_SIPARISLER,
+        "kaynak": "MOCK"  # Faz 3'te 'KORGUN+CPS' olacak
+    })

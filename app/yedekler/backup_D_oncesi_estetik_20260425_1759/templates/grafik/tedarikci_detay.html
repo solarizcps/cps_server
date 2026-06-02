@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% set tab = 'grafik' %}
+{% set active = 'grafik' %}
+{% block title %}{{ tedarikci.Kod }} — {{ tedarikci.Ad }}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="crumbs"><a href="/grafik/tedarikci">Tedarikçiler</a> › <strong>{{ tedarikci.Kod }}</strong></div>
+    <h1>
+      {% if tedarikci.Ulke == 'Çin' %}🇨🇳{% elif tedarikci.Ulke == 'Türkiye' %}🇹🇷{% else %}🏭{% endif %}
+      {{ tedarikci.Ad }}
+    </h1>
+    <p class="muted">{{ tedarikci.Sehir or '—' }} · {{ tedarikci.Ulke }} · Nakliye: {{ tedarikci.NakliyeTipi }}</p>
+  </div>
+  <div class="ph-actions">
+    <form method="post" action="/grafik/tedarikci/{{ tedarikci.Id }}/sil" style="display:inline;"
+          onsubmit="return confirm('Tedarikçiyi pasif et?');">
+      <button class="btn btn-danger">🗑 Sil</button>
+    </form>
+  </div>
+</div>
+
+{% include '_flash.html' ignore missing %}
+
+<form method="post" action="/grafik/tedarikci/{{ tedarikci.Id }}/guncelle">
+  <div class="twocol">
+    <!-- SOL: Temel Bilgi -->
+    <section class="panel">
+      <h3>Temel Bilgiler</h3>
+      <div class="form-stack">
+        <div class="form-row">
+          <label style="flex:1;">Kod <input type="text" value="{{ tedarikci.Kod }}" disabled></label>
+          <label style="flex:2;">Ad * <input type="text" name="Ad" value="{{ tedarikci.Ad }}" required></label>
+        </div>
+        <div class="form-row">
+          <label style="flex:1;">Şehir <input type="text" name="Sehir" value="{{ tedarikci.Sehir or '' }}"></label>
+          <label style="flex:1;">Ülke
+            <select name="Ulke">
+              <option value="Çin" {% if tedarikci.Ulke == 'Çin' %}selected{% endif %}>🇨🇳 Çin</option>
+              <option value="Türkiye" {% if tedarikci.Ulke == 'Türkiye' %}selected{% endif %}>🇹🇷 Türkiye</option>
+            </select>
+          </label>
+        </div>
+        <div class="form-row">
+          <label style="flex:1;">Nakliye Tipi
+            <select name="NakliyeTipi">
+              {% for n in ['FOB','CIF','EXW','CFR'] %}
+              <option value="{{ n }}" {% if tedarikci.NakliyeTipi == n %}selected{% endif %}>{{ n }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label style="flex:1;">Vade (gün) <input type="number" name="VadeGun" min="0" value="{{ tedarikci.VadeGun or 0 }}"></label>
+        </div>
+      </div>
+    </section>
+
+    <!-- SAĞ: İletişim -->
+    <section class="panel">
+      <h3>İletişim</h3>
+      <div class="form-stack">
+        <label>Kişi <input type="text" name="Iletisim" value="{{ tedarikci.Iletisim or '' }}"></label>
+        <label>Email <input type="email" name="Email" value="{{ tedarikci.Email or '' }}"></label>
+        <div class="form-row">
+          <label style="flex:1;">WhatsApp <input type="text" name="WhatsApp" value="{{ tedarikci.WhatsApp or '' }}"></label>
+          <label style="flex:1;">WeChat <input type="text" name="WeChat" value="{{ tedarikci.WeChat or '' }}"></label>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel" style="margin-top:20px;">
+    <h3>Notlar</h3>
+    <textarea name="Notlar" rows="4" style="width:100%;">{{ tedarikci.Notlar or '' }}</textarea>
+  </section>
+
+  <div style="display:flex; justify-content:flex-end; margin-top:16px; gap:8px;">
+    <a href="/grafik/tedarikci" class="btn btn-ghost">İptal</a>
+    <button class="btn btn-primary">💾 Kaydet</button>
+  </div>
+</form>
+
+<!-- Belgeler: Sözleşme, katalog, fiyat listesi -->
+<div style="margin-top:20px;">
+  {% set upload_url = '/grafik/tedarikci/' ~ tedarikci.Id ~ '/belge/yukle' %}
+  {% set panel_baslik = 'Sözleşme & Belgeler' %}
+  {% include 'grafik/_belge_section.html' %}
+</div>
+{% endblock %}

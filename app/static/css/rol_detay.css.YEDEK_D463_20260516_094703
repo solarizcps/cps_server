@@ -1,0 +1,332 @@
+/* ============================================================
+ * rol_detay.css - Yetki V2 7 Boyut Matrix UI
+ * PATCH D4.1 - 16.05.2026
+ * 
+ * Mevcut rol_detay.html inline style'lari KORUR.
+ * Sadece V2 (7 sutun) ozelliklerini ekler.
+ * ============================================================ */
+
+/* ============================================================
+ * 7 SUTUN GRID LAYOUT
+ * ============================================================ */
+.v2-y-row {
+    display: grid;
+    grid-template-columns:
+        1fr           /* Yetki adi/aciklama (esnek) */
+        50px          /* Gor (can_view) */
+        50px          /* Olu (can_create) */
+        50px          /* Gun (can_update) */
+        50px          /* Sil (can_delete) */
+        50px          /* Ony (can_approve) */
+        50px          /* Rap (can_report) */
+        50px          /* Yon (can_manage) */
+        60px;         /* ESKI (badge) */
+    padding: 10px 16px;
+    border-bottom: 0.5px solid var(--border);
+    align-items: center;
+    transition: background .1s;
+}
+
+.v2-y-row:last-child {
+    border-bottom: none;
+}
+
+.v2-y-row:hover {
+    background: var(--bg3);
+}
+
+.v2-y-hdr {
+    display: grid;
+    grid-template-columns:
+        1fr 50px 50px 50px 50px 50px 50px 50px 60px;
+    padding: 8px 16px;
+    background: var(--bg4);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 1.3px;
+    border-bottom: 1px solid var(--border);
+}
+
+.v2-y-hdr span {
+    text-align: center;
+}
+
+.v2-y-hdr span:first-child {
+    text-align: left;
+}
+
+/* ============================================================
+ * SUTUN BASLIK RENKLERI (Risk Artan Sira)
+ * ============================================================ */
+.v2-col-view    { color: #2563eb; } /* Mavi - Gor */
+.v2-col-create  { color: #16a34a; } /* Yesil - Olu */
+.v2-col-update  { color: #d97706; } /* Amber - Gun */
+.v2-col-delete  { color: #dc2626; } /* Kirmizi - Sil (DIKKAT) */
+.v2-col-approve { color: #7c3aed; } /* Mor - Ony */
+.v2-col-report  { color: #0891b2; } /* Cyan - Rap */
+.v2-col-manage  { color: #991b1b; } /* Koyu kirmizi - Yon (TEHLIKE) */
+.v2-col-eski    { color: var(--text3); font-style: italic; }
+
+/* ============================================================
+ * CHECKBOX / TOGGLE
+ * ============================================================ */
+.v2-cb {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.v2-cb input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--sol-dark);
+}
+
+/* Tehlikeli action'lar icin ozel accent */
+.v2-cb-delete input[type="checkbox"] {
+    accent-color: #dc2626;
+}
+
+.v2-cb-approve input[type="checkbox"] {
+    accent-color: #7c3aed;
+}
+
+.v2-cb-manage input[type="checkbox"] {
+    accent-color: #991b1b;
+}
+
+/* Aktif olunca daha belirgin yap (Sil/Yon) */
+.v2-cb-delete input[type="checkbox"]:checked + .v2-cb-warn,
+.v2-cb-manage input[type="checkbox"]:checked + .v2-cb-warn {
+    display: inline-block;
+}
+
+.v2-cb-warn {
+    display: none;
+    color: #dc2626;
+    font-size: 9px;
+    margin-left: 2px;
+}
+
+/* ============================================================
+ * YETKI ADI / KOD GORUNUMU
+ * ============================================================ */
+.v2-y-info {
+    font-size: 13px;
+}
+
+.v2-y-info strong {
+    font-weight: 600;
+    color: var(--text);
+}
+
+.v2-y-info .v2-kod {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text3);
+    margin-left: 4px;
+    background: var(--bg4);
+    padding: 1px 5px;
+    border-radius: 3px;
+}
+
+/* ============================================================
+ * ESKI BADGE (Migration Takip - GECICI)
+ * ============================================================ */
+.v2-eski-badge {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    text-align: center;
+    min-width: 28px;
+}
+
+.v2-eski-G  { background: #dbeafe; color: #1e40af; }   /* Sadece Gor */
+.v2-eski-D  { background: #fef3c7; color: #92400e; }   /* Sadece Duzenle */
+.v2-eski-GD { background: #d1fae5; color: #065f46; }   /* Ikisi */
+.v2-eski-bos { background: var(--bg4); color: var(--text3); }   /* Hicbiri */
+
+/* ============================================================
+ * GRUP BASLIK + HIZLI EYLEMLER
+ * ============================================================ */
+.v2-grup-eylem {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    color: var(--text3);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all .12s;
+    user-select: none;
+}
+
+.v2-grup-eylem:hover {
+    background: var(--sol-light);
+    color: var(--sol-dark);
+}
+
+.v2-grup-eylem.v2-eylem-tehlike:hover {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.v2-grup-eylem-grup {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.v2-grup-eylem-ayrac {
+    color: var(--border2);
+    font-size: 10px;
+}
+
+/* ============================================================
+ * AKSIYON BAR (Genisletilmis Istat)
+ * ============================================================ */
+.v2-istat {
+    display: flex;
+    gap: 14px;
+    font-size: 11px;
+    color: var(--text3);
+    font-family: var(--mono);
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.v2-istat-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--bg4);
+}
+
+.v2-istat-item.aktif {
+    background: var(--sol-light);
+    color: var(--sol-dark);
+    font-weight: 700;
+}
+
+.v2-istat-item.tehlike {
+    background: #fee2e2;
+    color: #dc2626;
+    font-weight: 700;
+}
+
+.v2-istat-deger {
+    font-weight: 700;
+    font-size: 13px;
+}
+
+/* ============================================================
+ * SUPERADMIN BADGE
+ * ============================================================ */
+.v2-superadmin-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #fef3c7, #fbbf24);
+    color: #78350f;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.3px;
+    text-transform: uppercase;
+    margin-left: 8px;
+}
+
+.v2-readonly-info {
+    background: linear-gradient(90deg, #fef3c7, #fff);
+    border: 1px solid #fbbf24;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    font-size: 12px;
+    color: #78350f;
+}
+
+/* ============================================================
+ * MOBILE - Horizontal Scroll
+ * Mockup: matrix mantigi korunur, sayfa yana kaydirilir
+ * ============================================================ */
+@media (max-width: 768px) {
+    .v2-y-row,
+    .v2-y-hdr {
+        min-width: 720px;  /* 7 sutun + ESKI sigsin */
+    }
+
+    .grup {
+        overflow-x: auto;
+    }
+
+    .v2-grup-eylem-grup {
+        flex-wrap: wrap;
+    }
+}
+
+/* ============================================================
+ * TOOLTIP (Hover ile action aciklamasi)
+ * ============================================================ */
+.v2-tooltip {
+    position: relative;
+    cursor: help;
+}
+
+.v2-tooltip::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--text);
+    color: white;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+    text-transform: none;
+    letter-spacing: 0;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .15s;
+    z-index: 100;
+    margin-bottom: 4px;
+}
+
+.v2-tooltip:hover::after {
+    opacity: 1;
+}
+
+/* ============================================================
+ * GRUP COLLAPSED (acik/kapali)
+ * Mevcut .grup pattern korunur, sadece visibility ekler
+ * ============================================================ */
+.grup.v2-collapsed .v2-y-row,
+.grup.v2-collapsed .v2-y-hdr {
+    display: none;
+}
+
+.v2-grup-collapse-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text3);
+    padding: 2px 6px;
+    transition: transform .15s;
+}
+
+.grup.v2-collapsed .v2-grup-collapse-btn {
+    transform: rotate(-90deg);
+}

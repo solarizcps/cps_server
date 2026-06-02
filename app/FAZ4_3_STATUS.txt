@@ -1,0 +1,111 @@
+FAZ 4.3 - STABLE SNAPSHOT
+=========================
+Tamamlanma:  2026-04-27 23:49
+Klasor yedek: C:\cps_dev_backup_FAZ4_3_STABLE_20260427_2349
+DB ayri yedek: C:\cps_dev_db_backups\mock_data_backup_FAZ4_3_20260427_2349.db
+
+
+DURUM
+-----
+- Uretim kayit sistemi aktif (mock_data.db.uretim_kayit)
+- Alt proses sistemi aktif (mock_data.db.emir_alt_proses)
+- Usta onay sistemi aktif (ONAYLA / REDDET)
+- Gecmis (/hedef/) ve gecmisim (/uretim/) aktif
+- Durumlar: bekliyor / onaylandi / reddedildi tam calisiyor
+- Sistem LOCAL DB ile calisiyor
+- MES v2 devre disi (PLAN/RAPOR sekmeleri haric - henuz local'e cekilmedi)
+- Korgun sadece veri kaynagi (read-only, pytds 25.7.184.221:1433)
+
+
+AKTIF ENDPOINT'LER
+------------------
+URETIM:
+  GET  /uretim/                       panel
+  GET  /uretim/emir/<no>              emir ozeti (Korgun)
+  GET  /uretim/emir/<no>/prosesler    alt prosesler (mock_data.db)
+  GET  /uretim/gecmisim?limit=N       personel kayitlari
+  POST /uretim/kaydet                 yeni kayit (proses_id + hedef asimi validasyon)
+
+HEDEF:
+  GET  /hedef/                        panel
+  GET  /hedef/onaylar/bekleyen        bekleyen onaylar
+  GET  /hedef/gecmis?limit=N          onay/red gecmisi
+  POST /hedef/onayla                  usta onay
+  POST /hedef/reddet                  usta red (not >=5 karakter zorunlu)
+
+
+VERI AKISI
+----------
+Frontend (port 5057)
+   |
+   | HTTP + session cookie
+   v
+Flask routes (modules/uretim_giris/routes.py, modules/hedef/routes.py)
+   |
+   +--> mock_data.db                                     READ + WRITE
+   |    (uretim_kayit, emir_alt_proses)
+   |
+   +--> Korgun MSSQL Solariz22 (pytds)                   READ only
+        25.7.184.221:1433
+
+
+ANAHTAR DOSYALAR
+----------------
+modules/uretim_giris/routes.py    /uretim/* handler'lar (uretim_kaydet validasyon dahil)
+modules/hedef/routes.py           /hedef/* handler'lar (onay/red endpoint'leri)
+static/js/uretim_giris.js         uretim ekrani + GECMISIM lazy-load (sona IIFE)
+static/js/hedef.js                hedef ekrani + ONAYLAR/GECMIS override IIFE
+mock_data.db                      SQLite, 2 tablo
+
+
+YARIN - FAZ 4.4
+---------------
+Konu: /hedef/ PLAN ve RAPOR ekranlari
+
+Yapilacaklar:
+  - MES v2 baglantisini tamamen kaldir
+  - PLAN ekrani: emir bazli hedef / yapilan / kalan
+      kaynak: mock_data.db (yapilan) + Korgun (hedef/sip bilgisi)
+  - RAPOR ekrani: tarih araligina gore
+      * personel bazli toplam adet
+      * proses bazli toplam adet
+      * emir bazli toplam
+  - Hedef hesabinda sadece ONAYLANAN kayitlar (onay_durum='onaylandi') dahil
+  - Personel bazli gunluk cikti -> performans altyapisi
+
+Dikkat:
+  - /uretim/ akisini bozma
+  - /hedef/onaylar ve /hedef/gecmis bozma
+  - mock_data.db yapisini degistirme (yeni tablo eklenebilir, mevcut tablolar dokunulmaz)
+  - Korgun DB'ye yazma YOK
+
+
+GIT KOMUTLARI (opsiyonel)
+-------------------------
+cd C:\cps_dev
+git add -A
+git commit -m "FAZ 4.3 STABLE - uretim + onay + gecmisim tam calisiyor"
+
+
+GERI DONUS PLANI (acil durumda)
+-------------------------------
+Eger yarin bir sey bozulursa:
+  1) CPS sunucusunu durdur
+  2) C:\cps_dev'i sil
+  3) C:\cps_dev_backup_FAZ4_3_STABLE_20260427_2349 icindekileri C:\cps_dev'e kopyala
+  4) Sunucuyu tekrar baslat
+Veya sadece DB'yi geri yuklemek icin:
+  copy C:\cps_dev_db_backups\mock_data_backup_FAZ4_3_20260427_2349.db C:\cps_dev\mock_data.db
+
+
+PATCH GECMISI (BU SEANSTA EKLENENLER)
+-------------------------------------
+- patch_uretim_prosesler_v2.py        /emir/<no>/prosesler eklendi
+- fix_double_prefix.py                cift /uretim prefix'i duzeltildi
+- add_proses_aliases.py               ad/adi/name/label/proses alias
+- add_kod_hedef_aliases.py            kod/hedef alias
+- setup_hedef_onaylar.py              4 hedef endpoint + override IIFE
+- setup_uretim_validation_ve_gecmisim.py  proses_id validasyon + gecmisim
+
+Tum yedekler routes.py.bak_* / hedef.js.bak_* / uretim_giris.js.bak_* olarak
+ilgili dosyalarin yaninda mevcut.

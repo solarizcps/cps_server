@@ -1,0 +1,298 @@
+{% extends "base.html" %}
+{% block title %}Şablon Yönetimi - Solariz CPS{% endblock %}
+
+{% block content %}
+<style>
+.sablon-page { padding: 24px; max-width: 1280px; margin: 0 auto; }
+.sablon-page h1 { font-size: 24px; color: #1e3a5f; margin: 0 0 8px 0; display: flex; align-items: center; gap: 12px; }
+.sablon-page .baslik-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 2px solid #e0e6ed; }
+.sablon-page .ozet { color: #666; font-size: 14px; }
+.sablon-page .ozet b { color: #1e3a5f; }
+
+/* Aksiyon butonlari ust bar (aktif!) */
+.bas-aksiyon { display: flex; gap: 8px; }
+.btn-yeni-sablon, .btn-yeni-eslesme {
+  background: #d4a52f; color: #fff; border: none;
+  padding: 10px 18px; border-radius: 6px;
+  font-size: 14px; font-weight: 600; cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-yeni-sablon:hover, .btn-yeni-eslesme:hover { background: #b8902b; }
+
+/* TAB BAR */
+.tab-bar { display: flex; gap: 4px; border-bottom: 2px solid #e0e6ed; margin-bottom: 20px; }
+.tab-btn {
+  background: transparent; border: none; padding: 10px 20px;
+  font-size: 14px; font-weight: 600; color: #666;
+  cursor: pointer; border-bottom: 3px solid transparent;
+  margin-bottom: -2px; transition: all 0.15s;
+}
+.tab-btn:hover { color: #1e3a5f; background: #f8f9fb; }
+.tab-btn.aktif { color: #1e3a5f; border-bottom-color: #d4a52f; }
+.tab-panel { display: none; }
+.tab-panel.aktif { display: block; }
+
+.sablon-liste { display: grid; gap: 16px; }
+.sablon-karti { background: #fff; border: 1px solid #e0e6ed; border-radius: 8px; padding: 18px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: box-shadow 0.15s; }
+.sablon-karti:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.sablon-karti.pasif { opacity: 0.7; background: #fafafa; }
+.kart-bas { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.kart-bas .baslik { font-size: 17px; font-weight: 700; color: #1e3a5f; display: flex; align-items: center; gap: 10px; }
+.kart-bas .sablon-id { color: #888; font-weight: 400; font-size: 14px; }
+.durum-rozet { padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+.durum-aktif { background: #d4f7df; color: #1d6c3c; }
+.durum-pasif { background: #f0f0f0; color: #888; }
+
+.kart-istatistik { color: #666; font-size: 13px; margin-bottom: 10px; display: flex; gap: 16px; flex-wrap: wrap; }
+.kart-istatistik .istk { display: flex; gap: 6px; align-items: center; }
+.kart-istatistik b { color: #1e3a5f; font-weight: 600; }
+.kart-prosesler { color: #444; font-size: 13px; margin: 8px 0; line-height: 1.5; }
+.kart-prosesler .etk { color: #888; margin-right: 6px; font-weight: 500; }
+.kart-prosesler .pros-item { display: inline-block; background: #f0f4f8; padding: 2px 8px; border-radius: 4px; margin: 2px 4px 2px 0; font-size: 12px; }
+.kart-eslesme { color: #555; font-size: 12.5px; margin: 6px 0 12px 0; background: #fff8e1; padding: 6px 10px; border-radius: 4px; border-left: 3px solid #d4a52f; }
+.kart-eslesme .etk { color: #888; margin-right: 6px; font-weight: 500; }
+.kart-eslesme .yok { color: #aaa; font-style: italic; }
+
+.kart-aksiyon { display: flex; gap: 8px; margin-top: 8px; }
+.kart-aksiyon button { padding: 6px 14px; border-radius: 5px; font-size: 13px; cursor: pointer; border: 1px solid #ccc; background: #fff; color: #444; transition: all 0.15s; }
+.btn-detay { color: #1e3a5f; border-color: #1e3a5f; }
+.btn-detay:hover { background: #1e3a5f; color: #fff; }
+.btn-duzenle { color: #b8902b; border-color: #b8902b; }
+.btn-duzenle:hover { background: #d4a52f; color: #fff; border-color: #d4a52f; }
+.btn-sil { color: #c44; border-color: #c44; }
+.btn-sil:hover { background: #c44; color: #fff; }
+.btn-disabled { opacity: 0.45; cursor: not-allowed !important; }
+
+.yukleniyor, .bos-durum { text-align: center; color: #888; padding: 50px 20px; font-size: 15px; }
+
+/* ESLESME TABLO */
+.eslesme-tablo { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e0e6ed; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+.eslesme-tablo thead { background: #f8f9fb; }
+.eslesme-tablo th { padding: 12px 14px; text-align: left; font-size: 12px; font-weight: 600; color: #1e3a5f; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 2px solid #e0e6ed; }
+.eslesme-tablo td { padding: 11px 14px; font-size: 14px; border-bottom: 1px solid #f0f0f0; color: #333; }
+.eslesme-tablo tr:hover td { background: #fafbfd; }
+.eslesme-tablo .onc { font-weight: 600; color: #d4a52f; }
+.eslesme-tablo .tip-pill { display: inline-block; background: #f0f4f8; padding: 2px 8px; border-radius: 4px; font-size: 12px; color: #1e3a5f; }
+.eslesme-tablo .sablon-link { color: #1e3a5f; font-weight: 600; }
+.eslesme-tablo .islem-grup { display: flex; gap: 6px; }
+.eslesme-tablo .islem-grup button { padding: 4px 10px; font-size: 12px; border-radius: 4px; border: 1px solid #ccc; background: #fff; cursor: pointer; }
+.eslesme-tablo .islem-grup .btn-duzenle:hover { background: #d4a52f; color: #fff; }
+.eslesme-tablo .islem-grup .btn-sil:hover { background: #c44; color: #fff; }
+
+/* MODAL (mevcut korundu) */
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.45); z-index: 1000; align-items: center; justify-content: center; }
+.modal-overlay.acik { display: flex; }
+.modal-icerik { background: #fff; border-radius: 10px; width: 92%; max-width: 640px; max-height: 85vh; overflow-y: auto; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
+.modal-bas { display: flex; justify-content: space-between; align-items: center; padding: 18px 22px; border-bottom: 1px solid #e0e6ed; }
+.modal-bas h2 { margin: 0; color: #1e3a5f; font-size: 19px; }
+.modal-kapat { background: none; border: none; font-size: 24px; cursor: pointer; color: #888; padding: 0 8px; }
+.modal-kapat:hover { color: #1e3a5f; }
+.modal-body { padding: 18px 22px; }
+.modal-bolum { margin-bottom: 18px; }
+.modal-bolum h3 { color: #1e3a5f; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 8px 0; padding-bottom: 4px; border-bottom: 1px solid #e0e6ed; }
+.modal-bolum .bilgi { margin: 4px 0; font-size: 14px; }
+.modal-bolum .bilgi b { color: #1e3a5f; }
+.modal-bolum ol, .modal-bolum ul { padding-left: 24px; margin: 4px 0; }
+.modal-bolum li { padding: 3px 0; font-size: 14px; }
+.modal-foot { padding: 14px 22px; border-top: 1px solid #e0e6ed; text-align: right; display: flex; gap: 8px; justify-content: flex-end; }
+.modal-foot button { padding: 8px 18px; border-radius: 5px; cursor: pointer; font-size: 14px; border: 1px solid #ccc; background: #fff; color: #444; }
+.modal-foot .btn-kaydet { background: #1e3a5f; color: #fff; border-color: #1e3a5f; }
+.modal-foot .btn-kaydet:hover { background: #2a4a73; }
+.modal-foot .btn-sil-onay { background: #c44; color: #fff; border-color: #c44; }
+.modal-foot .btn-sil-onay:hover { background: #a33; }
+
+/* FORM */
+.form-grup { margin-bottom: 14px; }
+.form-grup label { display: block; font-size: 13px; font-weight: 600; color: #1e3a5f; margin-bottom: 5px; }
+.form-grup input[type="text"], .form-grup input[type="number"], .form-grup select, .form-grup textarea { width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 5px; font-size: 14px; font-family: inherit; box-sizing: border-box; }
+.form-grup input:focus, .form-grup select:focus, .form-grup textarea:focus { outline: none; border-color: #d4a52f; }
+.form-grup small { display: block; color: #888; font-size: 12px; margin-top: 4px; }
+.form-hata { background: #fee; border: 1px solid #fcc; color: #c33; padding: 8px 12px; border-radius: 5px; font-size: 13px; margin-top: 10px; }
+
+/* Proses sira liste */
+.proses-sira-liste { border: 1px solid #e0e6ed; border-radius: 5px; max-height: 280px; overflow-y: auto; }
+.proses-sira-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid #f0f0f0; background: #fafbfd; }
+.proses-sira-item:last-child { border-bottom: none; }
+.proses-sira-item .sira-no { color: #888; font-size: 13px; font-weight: 600; min-width: 22px; }
+.proses-sira-item .proses-adi { flex: 1; font-size: 14px; }
+.proses-sira-item .sira-aksiyon { display: flex; gap: 4px; }
+.proses-sira-item .sira-aksiyon button { padding: 3px 8px; font-size: 12px; border: 1px solid #ccc; background: #fff; border-radius: 4px; cursor: pointer; }
+.proses-sira-item .sira-aksiyon button:hover { background: #1e3a5f; color: #fff; }
+.proses-sira-item .sira-aksiyon .btn-prs-sil:hover { background: #c44; color: #fff; }
+.proses-bos { padding: 14px; text-align: center; color: #aaa; font-size: 13px; font-style: italic; }
+
+.btn-ekle { padding: 8px 14px; background: #1e3a5f; color: #fff; border: none; border-radius: 5px; font-size: 13px; cursor: pointer; }
+.btn-ekle:hover { background: #2a4a73; }
+
+/* Sil onay uyarisi */
+.sil-onay-uyari { background: #fff8e1; border-left: 3px solid #d4a52f; padding: 10px 14px; margin: 10px 0; font-size: 13px; color: #5a4a1a; border-radius: 4px; }
+</style>
+
+<div class="sablon-page">
+    <div class="baslik-bar">
+        <div>
+            <h1>Şablon Yönetimi</h1>
+            <div class="ozet" id="ozetBilgi">Yükleniyor...</div>
+        </div>
+        <div class="bas-aksiyon">
+            <button class="btn-yeni-sablon" id="btnYeniSablon">+ Yeni Şablon</button>
+            <button class="btn-yeni-eslesme" id="btnYeniEslesme" style="display:none">+ Yeni Eşleşme</button>
+        </div>
+    </div>
+
+    <!-- TAB BAR -->
+    <div class="tab-bar">
+        <button class="tab-btn aktif" data-tab="sablonlar">Şablonlar</button>
+        <button class="tab-btn" data-tab="eslesme">Eşleşme Kuralları</button>
+    </div>
+
+    <!-- TAB PANEL: SABLONLAR -->
+    <div class="tab-panel aktif" id="tabPanel-sablonlar">
+        <div id="sablonListe" class="sablon-liste">
+            <div class="yukleniyor">Şablonlar yükleniyor...</div>
+        </div>
+    </div>
+
+    <!-- TAB PANEL: ESLESME -->
+    <div class="tab-panel" id="tabPanel-eslesme">
+        <div id="eslesmeYukleniyor" class="yukleniyor">Eşleşme kuralları yükleniyor...</div>
+        <table class="eslesme-tablo" id="eslesmeTablo" style="display:none">
+            <thead>
+                <tr>
+                    <th style="width:60px">Önc.</th>
+                    <th style="width:120px">Tip</th>
+                    <th>Değer</th>
+                    <th>Şablon</th>
+                    <th>Açıklama</th>
+                    <th style="width:140px">İşlem</th>
+                </tr>
+            </thead>
+            <tbody id="eslesmeTbody"></tbody>
+        </table>
+        <div id="eslesmeBos" class="bos-durum" style="display:none">Henüz eşleşme kuralı yok.</div>
+    </div>
+</div>
+
+<!-- DETAY MODAL (mevcut, korundu) -->
+<div class="modal-overlay" id="detayModal" onclick="if(event.target===this) sablonDetayKapat()">
+    <div class="modal-icerik">
+        <div class="modal-bas">
+            <h2 id="modalBaslik">Şablon Detayı</h2>
+            <button class="modal-kapat" onclick="sablonDetayKapat()">&times;</button>
+        </div>
+        <div class="modal-body" id="modalBody">
+            <div class="yukleniyor">Yükleniyor...</div>
+        </div>
+        <div class="modal-foot">
+            <button onclick="sablonDetayKapat()">Kapat</button>
+        </div>
+    </div>
+</div>
+
+<!-- YENI/DUZENLE SABLON MODAL -->
+<div class="modal-overlay" id="sablonFormModal" onclick="if(event.target===this) sablonFormKapat()">
+    <div class="modal-icerik">
+        <div class="modal-bas">
+            <h2 id="sablonFormBaslik">Yeni Şablon</h2>
+            <button class="modal-kapat" onclick="sablonFormKapat()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="sablonFormId" value="">
+            <div class="form-grup">
+                <label>Şablon Adı *</label>
+                <input type="text" id="sablonFormAdi" maxlength="100" placeholder="Örn: Atki LCW">
+            </div>
+            <div class="form-grup">
+                <label>Açıklama</label>
+                <textarea id="sablonFormAciklama" rows="2" maxlength="500" placeholder="Opsiyonel"></textarea>
+            </div>
+            <div class="form-grup">
+                <label>Prosesler * (en az 1, sıralı)</label>
+                <div class="proses-sira-liste" id="sablonFormProsesler">
+                    <div class="proses-bos">Henüz proses eklenmedi</div>
+                </div>
+                <div style="margin-top:8px; display:flex; gap:6px;">
+                    <input type="text" id="sablonFormProsesYeni" list="prosesOnerileri" placeholder="Proses adı (örn: Çapak)" style="flex:1;" maxlength="60">
+                    <datalist id="prosesOnerileri"></datalist>
+                    <button class="btn-ekle" id="btnProsesEkle" type="button">+ Ekle</button>
+                </div>
+            </div>
+            <div id="sablonFormHata" class="form-hata" style="display:none"></div>
+        </div>
+        <div class="modal-foot">
+            <button onclick="sablonFormKapat()">İptal</button>
+            <button class="btn-kaydet" id="btnSablonKaydet">Kaydet</button>
+        </div>
+    </div>
+</div>
+
+<!-- SIL ONAY MODAL -->
+<div class="modal-overlay" id="silOnayModal" onclick="if(event.target===this) silOnayKapat()">
+    <div class="modal-icerik" style="max-width:520px">
+        <div class="modal-bas">
+            <h2 id="silOnayBaslik">Silme Onayı</h2>
+            <button class="modal-kapat" onclick="silOnayKapat()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p id="silOnayMesaj">Bu kaydı silmek istediğinize emin misiniz?</p>
+            <div id="silOnayUyari" class="sil-onay-uyari" style="display:none"></div>
+        </div>
+        <div class="modal-foot">
+            <button onclick="silOnayKapat()">İptal</button>
+            <button class="btn-sil-onay" id="btnSilOnay">Sil</button>
+        </div>
+    </div>
+</div>
+
+<!-- YENI/DUZENLE ESLESME MODAL -->
+<div class="modal-overlay" id="eslesmeFormModal" onclick="if(event.target===this) eslesmeFormKapat()">
+    <div class="modal-icerik" style="max-width:560px">
+        <div class="modal-bas">
+            <h2 id="eslesmeFormBaslik">Yeni Eşleşme Kuralı</h2>
+            <button class="modal-kapat" onclick="eslesmeFormKapat()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="eslesmeFormId" value="">
+            <div class="form-grup">
+                <label>Şablon *</label>
+                <select id="eslesmeFormSablonId"></select>
+            </div>
+            <div class="form-grup">
+                <label>Eşleşme Tipi *</label>
+                <select id="eslesmeFormTip">
+                    <option value="musteri">Müşteri (Cari adı)</option>
+                    <option value="model">Model</option>
+                    <option value="tip">Tip</option>
+                    <option value="ozel">Özel</option>
+                    <option value="location">Lokasyon</option>
+                    <option value="cari_kod">Cari Kodu</option>
+                    <option value="stok_kodu">Stok Kodu</option>
+                    <option value="ozkod">Özkod</option>
+                    <option value="varsayilan">Varsayılan</option>
+                </select>
+            </div>
+            <div class="form-grup">
+                <label>Değer *</label>
+                <input type="text" id="eslesmeFormDeger" maxlength="100" placeholder="Örn: LCW">
+            </div>
+            <div class="form-grup">
+                <label>Öncelik (1-999) *</label>
+                <input type="number" id="eslesmeFormOncelik" min="1" max="999" value="50">
+                <small>Düşük sayılar yüksek önceliklidir (1 = en yüksek).</small>
+            </div>
+            <div class="form-grup">
+                <label>Açıklama</label>
+                <textarea id="eslesmeFormAciklama" rows="2" maxlength="200" placeholder="Opsiyonel"></textarea>
+            </div>
+            <div id="eslesmeFormHata" class="form-hata" style="display:none"></div>
+        </div>
+        <div class="modal-foot">
+            <button onclick="eslesmeFormKapat()">İptal</button>
+            <button class="btn-kaydet" id="btnEslesmeKaydet">Kaydet</button>
+        </div>
+    </div>
+</div>
+
+<script src="/static/hedef/sablon.js?v=20260518c4"></script>
+
+{% endblock %}

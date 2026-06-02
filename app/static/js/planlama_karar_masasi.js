@@ -1,0 +1,6515 @@
+// KARAR MASASI v6 — MOCKUP BIREBIR
+
+
+
+
+
+
+
+(function () {
+
+
+
+
+
+
+
+  "use strict";
+
+
+
+
+
+
+
+  const KM_BUGUN = "2026-05-06";
+
+
+
+
+
+
+
+  const km_state = {
+
+
+
+
+
+
+
+    satirlar: [], satirlar_snapshot: null, ozet: {},
+
+
+
+
+
+
+
+    kaynak: "MOCK", sorgu_ms: 0,
+
+
+
+
+
+
+
+    akilli_sira: true, manuel_mod: false, manuel_taslar: [],
+
+
+
+
+
+
+
+    aksiyon_acik: null,
+
+
+
+
+
+
+
+    filtre: { zaman: "hepsi", musteri: "", uretilebilirlik: "", arama: "" }
+
+
+
+
+
+
+
+  };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  function km_log() { var args = ["[KM]"].concat(Array.from(arguments)); console.log.apply(console, args); }
+
+
+
+
+
+
+
+  function _esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]; }); }
+
+
+
+
+
+
+
+  function _fmt(n) { if (n == null || n === "") return "—"; return Number(n).toLocaleString("tr-TR"); }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  function km_satir_rengi(s) {
+
+
+
+
+
+
+
+    if (s.uretilebilirlik === "BLOKE") return "bloke";
+
+
+
+
+
+
+
+    if (s.termin_durumu === "gecti") return "gecikmis";
+
+
+
+
+
+
+
+    var et = (s.musteri_etiketleri || []).map(function(x){ return (x||"").toUpperCase(); });
+
+
+
+
+
+
+
+    if (et.indexOf("NAKIT") >= 0 || et.indexOf("NAKİT") >= 0 || et.indexOf("VIP") >= 0) return "nakit";
+
+
+
+
+
+
+
+    if (s.uretilebilirlik === "KISMI") return "kismi";
+
+
+
+
+
+
+
+    return "hazir";
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  function km_render_kpi(ozet) {
+
+
+
+
+
+
+
+    document.getElementById("km-kpi-toplam").textContent = ozet.toplam_siparis || 0;
+
+
+
+
+
+
+
+    document.getElementById("km-kpi-kritik").textContent = ozet.kritik_geciken || 0;
+
+
+
+
+
+
+
+    document.getElementById("km-kpi-hazir").textContent = ozet.uretime_hazir || 0;
+
+
+
+
+
+
+
+    document.getElementById("km-kpi-bloke").textContent = ozet.bloke || 0;
+
+
+
+
+
+
+
+    document.getElementById("km-kpi-darbogaz").textContent = ozet.darbogazli || 0;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    var kullanim = km_state.satirlar.reduce(function(t, s){ return t + (s.gunluk_hedef || 0); }, 0);
+
+
+
+
+
+
+
+    var toplam = ozet.gunluk_kapasite || 6000;
+
+
+
+
+
+
+
+    if (kullanim === 0) kullanim = 4200;
+
+
+
+
+
+
+
+    var oran = toplam > 0 ? Math.round((kullanim / toplam) * 100) : 0;
+
+
+
+
+
+
+
+    var oranClass = "";
+
+
+
+
+
+
+
+    var barClass = "";
+
+
+
+
+
+
+
+    if (oran >= 95) { oranClass = "kirmizi"; barClass = "kirmizi"; }
+
+
+
+
+
+
+
+    else if (oran >= 85) { oranClass = "amber"; barClass = "amber"; }
+
+
+
+
+
+
+
+    document.getElementById("km-kpi-kapasite").innerHTML =
+
+
+
+
+
+
+
+      _fmt(kullanim) + ' <span class="km-kapasite-bolum">/ ' + _fmt(toplam) + '</span>' +
+
+
+
+
+
+
+
+      ' <span class="km-kapasite-oran ' + oranClass + '">%' + oran + '</span>';
+
+
+
+
+
+
+
+    var bar = document.getElementById("km-kpi-progress-bar");
+
+
+
+
+
+
+
+    if (bar) { bar.style.width = Math.min(oran, 100) + '%'; bar.className = 'km-kpi-progress-bar' + (barClass ? ' ' + barClass : ''); }
+
+
+
+
+
+
+
+    var alt = document.getElementById("km-kpi-kapasite-alt");
+
+
+
+
+
+
+
+    if (alt) alt.textContent = "Kalan: " + _fmt(toplam - kullanim) + " (%" + (100 - oran) + ")";
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  function km_render_termin(s) {
+
+
+
+
+
+
+
+    var t = (s.termin || "").substring(5).replace("-", ".");
+
+
+
+
+
+
+
+    if (s.termin_durumu === "gecti") {
+
+
+
+
+
+
+
+      var kg = s.kalan_gun != null ? Math.abs(s.kalan_gun) : "—";
+
+
+
+
+
+
+
+      return '<span class="km-termin-gecti">' + t + '</span><span class="km-termin-kalan-gun">↓ ' + kg + ' gün</span>';
+
+
+
+
+
+
+
+    }
+
+
+
+
+
+
+
+    if (s.termin_durumu === "yakin") return '<span class="km-termin-yakin">' + t + '</span>';
+
+
+
+
+
+
+
+    return '<span class="km-termin-uzak">' + t + '</span>';
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  function km_render_uretilebilirlik(s) {
+
+
+
+
+
+
+
+    if (s.uretilebilirlik === "BLOKE") return '<span class="km-uret-bloke">BLOKE</span>';
+
+
+
+
+
+
+
+    if (s.uretilebilirlik === "KISMI") {
+
+
+
+
+
+
+
+      var sb = s.bloke_sebebi ? (" · " + _esc(s.bloke_sebebi)) : "";
+
+
+
+
+
+
+
+      return '<span class="km-uret-kismi">Kısmi' + sb + '</span>';
+
+
+
+
+
+
+
+    }
+
+
+
+
+
+
+
+    return '<span class="km-uret-hazir">Hazır</span>';
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  function km_render_darbogaz(s) {
+
+
+
+
+
+
+
+    var d = s.darbogaz || {};
+
+
+
+
+
+
+
+    if (!d.var) return '<span class="km-hucre-soluk">—</span>';
+
+
+
+
+
+
+
+    if (d.ikon_tipi === "paket-yok") {
+
+
+
+
+
+
+
+      return '<span class="km-darbogaz-tag">' + _esc(d.metin || s.bloke_sebebi || "Aksesuar eksik") + '</span>';
+
+
+
+
+
+
+
+    }
+
+
+
+
+
+
+
+    var alt = d.alt || "";
+
+
+
+
+
+
+
+    var sapma = (d.sapma !== undefined) ? (' +' + d.sapma + '%') : '';
+
+
+
+
+
+
+
+    var title = d.ana ? (d.ana + ' · ' + alt + ' prosesi') : (alt + ' prosesi');
+
+
+
+
+
+
+
+    return '<span class="km-darbogaz-tag" title="' + _esc(title) + '"><i class="ti ti-flame km-darbogaz-icon"></i> ' + _esc(alt) + sapma + '</span>';
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  function km_render_talimat(s) {
+
+
+
+
+
+
+
+    if (s.usta_talimati && s.usta_talimati.trim()) return '<span class="km-talimat">' + _esc(s.usta_talimati) + '</span>';
+
+
+
+
+
+
+
+    return '<span class="km-talimat-bos">— bekleniyor —</span>';
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  function km_render_satir(s, idx) {
+
+
+
+
+
+
+
+    var renk = s.satir_rengi || km_satir_rengi(s);
+
+
+
+
+
+
+
+    var rowClass = "km-row";
+
+
+
+
+
+
+
+    if (renk === "bloke") rowClass += " km-row-bloke";
+
+
+
+
+
+
+
+    if (renk === "gecikmis") rowClass += " km-row-gecikmis";
+
+
+
+
+
+
+
+    if (renk === "nakit") rowClass += " km-row-nakit";
+
+
+
+
+
+
+
+    if (renk === "kismi") rowClass += " km-row-kismi";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    var tasiBilgi = (km_state.manuel_taslar || []).filter(function(t){ return t.satir_id === s.satir_id; }).pop();
+
+
+
+
+
+
+
+    var tasiIsaret = tasiBilgi ? '<span class="km-tasindi-isaret">' + (tasiBilgi.yon === "yukari" ? "↑" : "↓") + '</span>' : "";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    var nakitEtk = "";
+
+
+
+
+
+
+
+    var et = (s.musteri_etiketleri || []).map(function(x){ return (x||"").toUpperCase(); });
+
+
+
+
+
+
+
+    if (et.indexOf("NAKIT") >= 0 || et.indexOf("NAKİT") >= 0) nakitEtk = ' <span class="km-musteri-nakit-etiket">NAKİT</span>';
+
+
+
+
+
+
+
+    else if (et.indexOf("VIP") >= 0) nakitEtk = ' <span class="km-musteri-nakit-etiket">VIP</span>';
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    var bant = s.bant ? ('<span class="km-mono">' + _esc(s.bant) + '</span>') : '<span class="km-hucre-soluk">—</span>';
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    return '<tr class="' + rowClass + '" data-satir-id="' + _esc(s.satir_id) + '"' +
+
+
+
+
+
+
+
+       ' data-siparis-no="' + _esc(s.siparis_no || '') + '"' +
+
+
+
+
+
+
+
+       ' data-musteri="' + _esc(s.musteri || '') + '"' +
+
+
+
+
+
+
+
+       ' data-model="' + _esc(s.model || '') + '"' +
+
+
+
+
+
+
+
+       ' data-emir-no="' + _esc(s.emir_no || '') + '"' +
+
+
+
+
+
+
+
+       ' data-bant="' + _esc(s.bant || '') + '"' +
+
+
+
+
+
+
+
+       ' data-kalan="' + ((s.kalan == null) ? '' : s.kalan) + '"' +
+
+
+
+
+
+
+
+       ' data-termin="' + _esc(s.termin || '') + '"' +
+
+
+
+
+
+
+
+       ' data-termin-durumu="' + _esc(s.termin_durumu || '') + '"' +
+
+
+
+
+
+
+
+       ' data-uretilebilirlik="' + _esc(s.uretilebilirlik || '') + '"' +
+
+
+
+
+
+
+
+       ' data-darbogaz="' + _esc((s.darbogaz && (s.darbogaz.metin || s.darbogaz.alt)) || '') + '"' +
+
+
+
+
+
+
+
+       ' data-musteri-etiketleri="' + _esc((s.musteri_etiketleri || []).join(',')) + '">' +
+
+
+
+
+
+
+
+      '<td class="km-hucre-merkez" style="color:#9ca3af; font-weight:600;">' + idx + tasiIsaret + '</td>' +
+
+
+
+
+
+
+
+      '<td><div class="km-musteri-sip-ust">' + _esc(s.musteri || "") + nakitEtk + '</div>' +
+
+
+
+
+
+
+
+      '<span class="km-musteri-sip-alt">' + _esc(s.siparis_no || "") + '</span></td>' +
+
+
+
+
+
+
+
+      '<td class="km-model">' + _esc(s.model || "") + '</td>' +
+
+
+
+
+
+
+
+      '<td class="km-num" style="text-align:right;">' + _fmt(s.kalan) + '</td>' +
+
+
+
+
+
+
+
+      '<td>' + km_render_termin(s) + '</td>' +
+
+
+
+
+
+
+
+      '<td>' + km_render_uretilebilirlik(s) + '</td>' +
+
+
+
+
+
+
+
+      '<td>' + km_render_darbogaz(s) + '</td>' +
+
+
+
+
+
+
+
+      '<td class="km-hucre-merkez">' + bant + '</td>' +
+
+
+
+
+
+
+
+      '<td>' + km_render_talimat(s) + '</td>' +
+
+
+
+
+
+
+
+      '<td class="km-hucre-merkez" style="display:flex;gap:6px;align-items:center;justify-content:center;"><button class="km-ug-trigger" onclick="km_ug_ac(\'' + _esc(s.satir_id) + '\')" title="Ustaya Gönder" style="background:transparent;border:0;cursor:pointer;font-size:16px;padding:2px 4px;opacity:0.7;line-height:1;">📨</button><button class="km-aksiyon-btn" onclick="km_aksiyon_menu(event,\'' + _esc(s.satir_id) + '\')">⋮</button></td>' +
+
+
+
+
+
+
+
+    (s.organizasyon && s.organizasyon.durum !== 'yok' ? '<td class="km-td km-td-org">' + km_render_org(s.organizasyon) + '</td>' : '<td class="km-td km-td-org"></td>') +
+
+
+
+
+
+
+
+    (s.organizasyon_risk ? '<td class="km-td km-td-risk">' + km_render_risk(s.organizasyon_risk) + '</td>' : '<td class="km-td km-td-risk"></td>') +
+
+
+
+
+
+
+
+    (s.mudahale_onerisi ? '<td class="km-td km-td-mud">' + km_render_mudahale(s.mudahale_onerisi) + '</td>' : '<td class="km-td km-td-mud"></td>') +
+
+
+
+
+
+
+
+    (s.gorev_hazirlik ? '<td class="km-td km-td-gh">' + km_render_gorev_hazir(s.gorev_hazirlik) + '</td>' : '<td class="km-td km-td-gh"></td>') +
+
+
+
+
+
+
+
+    '</tr>';
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  function km_render_tbody(satirlar) {
+
+
+
+
+
+
+
+    var tb = document.getElementById("km-tbody");
+
+
+
+
+
+
+
+    if (!tb) return;
+
+
+
+
+
+
+
+    if (!satirlar.length) { tb.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:40px;color:#9ca3af;">Filtreye uygun satır yok.</td></tr>'; return; }
+
+
+
+
+
+
+
+    var html = "";
+
+
+
+
+
+
+
+    for (var i = 0; i < satirlar.length; i++) html += km_render_satir(satirlar[i], i + 1);
+
+
+
+
+
+
+
+    tb.innerHTML = html;
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  function km_filtrele(satirlar, f) {
+
+
+
+
+
+
+
+    return satirlar.filter(function(s){
+
+
+
+
+
+
+
+      if (f.zaman && f.zaman !== "hepsi") {
+
+
+
+
+
+
+
+        var kg = s.kalan_gun;
+
+
+
+
+
+
+
+        if (f.zaman === "hafta" && (kg < 0 || kg > 7)) return false;
+
+
+
+
+
+
+
+        if (f.zaman === "bu_ay" && (kg < 0 || kg > 30)) return false;
+
+
+
+
+
+
+
+        if (f.zaman === "3_ay" && (kg < 0 || kg > 90)) return false;
+
+
+
+
+
+
+
+      }
+
+
+
+
+
+
+
+      if (f.musteri && s.musteri !== f.musteri) return false;
+
+
+
+
+
+
+
+      if (f.uretilebilirlik && s.uretilebilirlik !== f.uretilebilirlik) return false;
+
+
+
+
+
+
+
+      if (f.arama) {
+
+
+
+
+
+
+
+        var q = f.arama.toLowerCase();
+
+
+
+
+
+
+
+        var hay = (s.musteri+" "+s.siparis_no+" "+s.emir_no+" "+s.model+" "+s.renk).toLowerCase();
+
+
+
+
+
+
+
+        if (hay.indexOf(q) < 0) return false;
+
+
+
+
+
+
+
+      }
+
+
+
+
+
+
+
+      return true;
+
+
+
+
+
+
+
+    });
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  function km_uygula() {
+
+
+
+
+
+
+
+    if (km_state.manuel_mod) { km_toast("Manuel sıra aktif. Filtre değiştirmek için önce akıllı sıraya dön."); return; }
+
+
+
+
+
+
+
+    km_state.filtre.musteri = (document.getElementById("km-fil-musteri") || {}).value || "";
+
+
+
+
+
+
+
+    km_state.filtre.uretilebilirlik = (document.getElementById("km-fil-uretilebilirlik") || {}).value || "";
+
+
+
+
+
+
+
+    km_state.filtre.arama = (document.getElementById("km-fil-arama") || {}).value || "";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    var sonuc = km_filtrele(km_state.satirlar, km_state.filtre);
+
+
+
+
+
+
+
+    if (km_state.akilli_sira) sonuc.sort(function(a,b){ return (b.skor||0) - (a.skor||0); });
+
+
+
+
+
+
+
+    km_render_tbody(sonuc);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    var sayim = document.getElementById("km-bilgi-sayim");
+
+
+
+
+
+
+
+    if (sayim) sayim.textContent = sonuc.length + " sipariş listeleniyor";
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  window.km_filtre_zaman = function(btn) {
+
+
+
+
+
+
+
+    if (km_state.manuel_mod) { km_toast("Manuel sıra aktif. Filtre değiştirmek için önce akıllı sıraya dön."); return; }
+
+
+
+
+
+
+
+    document.querySelectorAll(".km-tab").forEach(function(b){ b.classList.remove("aktif"); });
+
+
+
+
+
+
+
+    btn.classList.add("aktif");
+
+
+
+
+
+
+
+    km_state.filtre.zaman = btn.getAttribute("data-zaman");
+
+
+
+
+
+
+
+    km_uygula();
+
+
+
+
+
+
+
+  };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  window.km_filtre_temizle = function() {
+
+
+
+
+
+
+
+    if (km_state.manuel_mod) { km_toast("Manuel sıra aktif. Filtre değiştirmek için önce akıllı sıraya dön."); return; }
+
+
+
+
+
+
+
+    document.getElementById("km-fil-musteri").value = "";
+
+
+
+
+
+
+
+    document.getElementById("km-fil-uretilebilirlik").value = "";
+
+
+
+
+
+
+
+    document.getElementById("km-fil-arama").value = "";
+
+
+
+
+
+
+
+    document.querySelectorAll(".km-tab").forEach(function(b){ b.classList.remove("aktif"); });
+
+
+
+
+
+
+
+    var hepsiBtn = document.querySelector(".km-tab[data-zaman='hepsi']");
+
+
+
+
+
+
+
+    if (hepsiBtn) hepsiBtn.classList.add("aktif");
+
+
+
+
+
+
+
+    km_state.filtre.zaman = "hepsi";
+
+
+
+
+
+
+
+    km_uygula();
+
+
+
+
+
+
+
+  };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  window.km_uygula = km_uygula;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  function km_filtre_kilit_yakalayici(ev) {
+
+
+
+
+
+
+
+    if (km_state.manuel_mod) {
+
+
+
+
+
+
+
+      ev.preventDefault(); ev.stopPropagation();
+
+
+
+
+
+
+
+      km_toast("Manuel sıra aktif. Filtre değiştirmek için önce akıllı sıraya dön.");
+
+
+
+
+
+
+
+    }
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  window.km_manuel_mod_ac = function() {
+
+
+
+
+
+
+
+    if (km_state.manuel_mod) return;
+
+
+
+
+
+
+
+    km_state.manuel_mod = true; km_state.akilli_sira = false;
+
+
+
+
+
+
+
+    document.body.classList.add("km-manuel-aktif");
+
+
+
+
+
+
+
+    km_state.satirlar_snapshot = JSON.parse(JSON.stringify(km_state.satirlar));
+
+
+
+
+
+
+
+    km_state.manuel_taslar = [];
+
+
+
+
+
+
+
+    var fc = document.getElementById("km-filtre-cubuk");
+
+
+
+
+
+
+
+    if (fc && !fc._kmKilitliMi) {
+
+
+
+
+
+
+
+      fc.addEventListener("click", km_filtre_kilit_yakalayici, true);
+
+
+
+
+
+
+
+      fc.addEventListener("change", km_filtre_kilit_yakalayici, true);
+
+
+
+
+
+
+
+      fc.addEventListener("input", km_filtre_kilit_yakalayici, true);
+
+
+
+
+
+
+
+      fc._kmKilitliMi = true;
+
+
+
+
+
+
+
+    }
+
+
+
+
+
+
+
+    km_render_manuel_sayac();
+
+
+
+
+
+
+
+    km_toast("Manuel mod aktif. Filtreler kilitlendi.", 1500);
+
+
+
+
+
+
+
+    km_log("manuel mod ON");
+
+
+
+
+
+
+
+  };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  window.km_manuel_mod_kapat = function() {
+
+
+
+
+
+
+
+    if (!km_state.manuel_mod) return;
+
+
+
+
+
+
+
+    if (km_state.manuel_taslar && km_state.manuel_taslar.length > 0) {
+
+
+
+
+
+
+
+      var onay = confirm("Tüm manuel sıralama silinecek, devam edilsin mi?");
+
+
+
+
+
+
+
+      if (!onay) return;
+
+
+
+
+
+
+
+    }
+
+
+
+
+
+
+
+    km_state.manuel_mod = false; km_state.akilli_sira = true;
+
+
+
+
+
+
+
+    document.body.classList.remove("km-manuel-aktif");
+
+
+
+
+
+
+
+    if (km_state.satirlar_snapshot) {
+
+
+
+
+
+
+
+      km_state.satirlar = km_state.satirlar_snapshot;
+
+
+
+
+
+
+
+      km_state.satirlar_snapshot = null;
+
+
+
+
+
+
+
+    }
+
+
+
+
+
+
+
+    km_state.manuel_taslar = [];
+
+
+
+
+
+
+
+    var fc = document.getElementById("km-filtre-cubuk");
+
+
+
+
+
+
+
+    if (fc && fc._kmKilitliMi) {
+
+
+
+
+
+
+
+      fc.removeEventListener("click", km_filtre_kilit_yakalayici, true);
+
+
+
+
+
+
+
+      fc.removeEventListener("change", km_filtre_kilit_yakalayici, true);
+
+
+
+
+
+
+
+      fc.removeEventListener("input", km_filtre_kilit_yakalayici, true);
+
+
+
+
+
+
+
+      fc._kmKilitliMi = false;
+
+
+
+
+
+
+
+    }
+
+
+
+
+
+
+
+    km_uygula();
+
+
+
+
+
+
+
+    km_log("manuel mod OFF");
+
+
+
+
+
+
+
+  };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  window.km_manuel_geri_al = function() {
+
+
+
+
+
+
+
+    if (!km_state.manuel_mod) return;
+
+
+
+
+
+
+
+    if (!km_state.manuel_taslar || km_state.manuel_taslar.length === 0) { km_toast("Geri alınacak hareket yok."); return; }
+
+
+
+
+
+
+
+    var son = km_state.manuel_taslar.pop();
+
+
+
+
+
+
+
+    var idx = km_state.satirlar.findIndex(function(s){ return s.satir_id === son.satir_id; });
+
+
+
+
+
+
+
+    if (idx >= 0) {
+
+
+
+
+
+
+
+      var s = km_state.satirlar.splice(idx, 1)[0];
+
+
+
+
+
+
+
+      km_state.satirlar.splice(son.eski_idx, 0, s);
+
+
+
+
+
+
+
+    }
+
+
+
+
+
+
+
+    km_render_tbody(km_state.satirlar);
+
+
+
+
+
+
+
+    km_render_manuel_sayac();
+
+
+
+
+
+
+
+  };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  window.km_manuel_sifirla = function() {
+
+
+
+
+
+
+
+    if (!km_state.manuel_mod) return;
+
+
+
+
+
+
+
+    if (!km_state.manuel_taslar || km_state.manuel_taslar.length === 0) return;
+
+
+
+
+
+
+
+    if (!confirm("Tüm manuel değişiklikler sıfırlansın mı?")) return;
+
+
+
+
+
+
+
+    if (km_state.satirlar_snapshot) {
+
+
+
+
+
+
+
+      km_state.satirlar = JSON.parse(JSON.stringify(km_state.satirlar_snapshot));
+
+
+
+
+
+
+
+    }
+
+
+
+
+
+
+
+    km_state.manuel_taslar = [];
+
+
+
+
+
+
+
+    km_render_tbody(km_state.satirlar);
+
+
+
+
+
+
+
+    km_render_manuel_sayac();
+
+
+
+
+
+
+
+  };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  function km_render_manuel_sayac() {
+
+
+
+
+
+
+
+    var el = document.getElementById("km-manuel-sayac");
+
+
+
+
+
+
+
+    if (el) el.textContent = (km_state.manuel_taslar || []).length + " değişiklik yapıldı";
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  function km_sira_tasi(satir_id, hedef_idx) {
+
+
+
+
+
+
+
+    var idx = km_state.satirlar.findIndex(function(s){ return s.satir_id === satir_id; });
+
+
+
+
+
+
+
+    if (idx < 0) return;
+
+
+
+
+
+
+
+    if (hedef_idx < 0) hedef_idx = 0;
+
+
+
+
+
+
+
+    if (hedef_idx >= km_state.satirlar.length) hedef_idx = km_state.satirlar.length - 1;
+
+
+
+
+
+
+
+    if (hedef_idx === idx) return;
+
+
+
+
+
+
+
+    var yon = hedef_idx < idx ? "yukari" : "asagi";
+
+
+
+
+
+
+
+    var s = km_state.satirlar.splice(idx, 1)[0];
+
+
+
+
+
+
+
+    km_state.satirlar.splice(hedef_idx, 0, s);
+
+
+
+
+
+
+
+    km_state.manuel_taslar.push({ satir_id: satir_id, eski_idx: idx, yeni_idx: hedef_idx, yon: yon });
+
+
+
+
+
+
+
+    km_render_tbody(km_state.satirlar);
+
+
+
+
+
+
+
+    km_render_manuel_sayac();
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  window.km_sira_uste_al = function(sid) { if (!km_state.manuel_mod) km_manuel_mod_ac(); km_sira_tasi(sid, 0); km_aksiyon_kapat(); };
+
+
+
+
+
+
+
+  window.km_sira_yukari = function(sid) { if (!km_state.manuel_mod) km_manuel_mod_ac(); var idx = km_state.satirlar.findIndex(function(s){ return s.satir_id === sid; }); km_sira_tasi(sid, idx - 1); km_aksiyon_kapat(); };
+
+
+
+
+
+
+
+  window.km_sira_asagi = function(sid) { if (!km_state.manuel_mod) km_manuel_mod_ac(); var idx = km_state.satirlar.findIndex(function(s){ return s.satir_id === sid; }); km_sira_tasi(sid, idx + 1); km_aksiyon_kapat(); };
+
+
+
+
+
+
+
+  window.km_sira_alta_al = function(sid) { if (!km_state.manuel_mod) km_manuel_mod_ac(); km_sira_tasi(sid, km_state.satirlar.length - 1); km_aksiyon_kapat(); };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  window.km_aksiyon_menu = function(ev, satir_id) {
+
+
+
+
+
+
+
+    if (ev) ev.stopPropagation();
+
+
+
+
+
+
+
+    km_aksiyon_kapat();
+
+
+
+
+
+
+
+    var btn = ev.currentTarget;
+
+
+
+
+
+
+
+    var rect = btn.getBoundingClientRect();
+
+
+
+
+
+
+
+    var manuel = km_state.manuel_mod;
+
+
+
+
+
+
+
+    var menu = '<div id="km-aksiyon-acik" style="position:fixed;top:' + (rect.bottom+4) + 'px;left:' + Math.max(10, rect.right - 220) + 'px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.12);min-width:220px;z-index:999;font-size:13px;padding:6px 0;">';
+
+
+
+
+
+
+
+    if (manuel) {
+
+
+
+
+
+
+
+      menu += '<div style="padding:8px 14px;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;font-weight:700;">Sıra</div>';
+
+
+
+
+
+
+
+      menu += '<div class="km-am-item" onclick="km_sira_uste_al(\'' + satir_id + '\')" style="padding:9px 16px;cursor:pointer;color:#111827;">↑↑ En üste al</div>';
+
+
+
+
+
+
+
+      menu += '<div class="km-am-item" onclick="km_sira_yukari(\'' + satir_id + '\')" style="padding:9px 16px;cursor:pointer;color:#111827;">↑ 1 sıra yukarı</div>';
+
+
+
+
+
+
+
+      menu += '<div class="km-am-item" onclick="km_sira_asagi(\'' + satir_id + '\')" style="padding:9px 16px;cursor:pointer;color:#111827;">↓ 1 sıra aşağı</div>';
+
+
+
+
+
+
+
+      menu += '<div class="km-am-item" onclick="km_sira_alta_al(\'' + satir_id + '\')" style="padding:9px 16px;cursor:pointer;color:#111827;">↓↓ En alta al</div>';
+
+
+
+
+
+
+
+      menu += '<div style="border-top:1px solid #f1f3f5;margin:4px 0;"></div>';
+
+
+
+
+
+
+
+    }
+
+
+
+
+
+
+
+    menu += '<div class="km-am-item" onclick="km_faz2(\'Detay\')" style="padding:9px 16px;cursor:pointer;color:#111827;">Detay</div>';
+
+
+
+
+
+
+
+    menu += '<div class="km-am-item" onclick="km_ug_ac(\'' + satir_id + '\')" style="padding:9px 16px;cursor:pointer;color:#111827;">Ustaya gönder</div>';
+
+
+
+
+
+
+
+    menu += '<div class="km-am-item" onclick="km_faz2(\'Not ekle\')" style="padding:9px 16px;cursor:pointer;color:#111827;">Not ekle</div>';
+
+
+
+
+
+
+
+    if (!manuel) {
+
+
+
+
+
+
+
+      menu += '<div class="km-am-item" onclick="km_faz2(\'Öncelik değiştir\')" style="padding:9px 16px;cursor:pointer;color:#111827;">Öncelik değiştir</div>';
+
+
+
+
+
+
+
+      menu += '<div class="km-am-item" onclick="km_faz2(\'Beklet\')" style="padding:9px 16px;cursor:pointer;color:#111827;">Beklet</div>';
+
+
+
+
+
+
+
+      menu += '<div class="km-am-item" onclick="km_faz2(\'Acil yap\')" style="padding:9px 16px;cursor:pointer;color:#b91c1c;">Acil yap</div>';
+
+
+
+
+
+
+
+    }
+
+
+
+
+
+
+
+    menu += '</div>';
+
+
+
+
+
+
+
+    document.body.insertAdjacentHTML('beforeend', menu);
+
+
+
+
+
+
+
+    km_state.aksiyon_acik = document.getElementById('km-aksiyon-acik');
+
+
+
+
+
+
+
+    document.querySelectorAll('.km-am-item').forEach(function(el){
+
+
+
+
+
+
+
+      el.addEventListener('mouseenter', function(){ el.style.background = '#f9fafb'; });
+
+
+
+
+
+
+
+      el.addEventListener('mouseleave', function(){ el.style.background = ''; });
+
+
+
+
+
+
+
+    });
+
+
+
+
+
+
+
+    setTimeout(function(){ document.addEventListener('click', km_aksiyon_kapat, { once: true }); }, 50);
+
+
+
+
+
+
+
+  };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  function km_aksiyon_kapat() {
+
+
+
+
+
+
+
+    if (km_state.aksiyon_acik) { km_state.aksiyon_acik.remove(); km_state.aksiyon_acik = null; }
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+  window.km_faz2 = function(eylem) { km_toast("'" + eylem + "' Faz 2'de aktif olacak."); km_aksiyon_kapat(); };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  function km_toast(metin, sure) {
+
+
+
+
+
+
+
+    var el = document.getElementById("km-toast");
+
+
+
+
+
+
+
+    if (!el) return;
+
+
+
+
+
+
+
+    el.textContent = metin; el.style.display = "block";
+
+
+
+
+
+
+
+    if (km_state._toastTimer) clearTimeout(km_state._toastTimer);
+
+
+
+
+
+
+
+    km_state._toastTimer = setTimeout(function(){ el.style.display = "none"; }, sure || 2800);
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+  window.km_toast = km_toast;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  function km_musteri_dd_doldur(satirlar) {
+
+
+
+
+
+
+
+    var dd = document.getElementById("km-fil-musteri");
+
+
+
+
+
+
+
+    if (!dd) return;
+
+
+
+
+
+
+
+    var set = {};
+
+
+
+
+
+
+
+    satirlar.forEach(function(s){ if (s.musteri) set[s.musteri] = true; });
+
+
+
+
+
+
+
+    var arr = Object.keys(set).sort();
+
+
+
+
+
+
+
+    var html = '<option value="">Tümü ▾</option>';
+
+
+
+
+
+
+
+    arr.forEach(function(m){ html += '<option value="' + _esc(m) + '">' + _esc(m) + '</option>'; });
+
+
+
+
+
+
+
+    dd.innerHTML = html;
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  function km_yukle() {
+
+
+
+
+
+
+
+    var t0 = performance.now();
+
+
+
+
+
+
+
+    fetch("/planlama/karar-masasi/data", { credentials: "same-origin" })
+
+
+
+
+
+
+
+      .then(function(r){ if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+
+
+
+
+
+
+
+      .then(function(data){
+
+
+
+
+
+
+
+        if (!data || !data.ok) throw new Error(data && data.hata ? data.hata : "Bilinmeyen hata");
+
+
+
+
+
+
+
+        km_state.satirlar = data.satirlar || [];
+
+
+
+
+
+
+
+        km_state.ozet = data.ozet || {};
+
+
+
+
+
+
+
+        km_state.kaynak = data.kaynak || "MOCK";
+
+
+
+
+
+
+
+        km_render_kpi(km_state.ozet);
+
+
+
+
+
+
+
+        km_musteri_dd_doldur(km_state.satirlar);
+
+
+
+
+
+
+
+        km_uygula();
+
+
+
+
+
+
+
+        var dt = (performance.now() - t0).toFixed(0);
+
+
+
+
+
+
+
+        km_state.sorgu_ms = dt;
+
+
+
+
+
+
+
+        km_log("yuklendi", km_state.satirlar.length, "satir,", dt, "ms");
+
+
+
+
+
+
+
+      })
+
+
+
+
+
+
+
+      .catch(function(err){ km_log("HATA", err); });
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  function km_init() {
+
+
+
+
+
+
+
+    km_log("karar_masasi.js v6 (mockup birebir) loaded, BUGUN=" + KM_BUGUN);
+
+
+
+
+
+
+
+    km_yukle();
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", km_init);
+
+
+
+
+
+
+
+  else km_init();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  // ── Görev Hazırlık Badge (FAZ43 Sprint 4 — READONLY) ──
+
+
+
+
+
+
+
+  function km_render_gorev_hazir(gh) {
+
+
+
+
+
+
+
+    if (!gh || !gh.hazir) return "";
+
+
+
+
+
+
+
+    var RENK = {acil:"#dc2626",guclendir:"#ea580c",kontrol:"#ca8a04"};
+
+
+
+
+
+
+
+    var renk = RENK[gh.mudahale_tip] || "#6b7280";
+
+
+
+
+
+
+
+    var bg = gh.mudahale_tip==="acil" ? "#fef2f2"
+
+
+
+
+
+
+
+           : gh.mudahale_tip==="guclendir" ? "#fff7ed" : "#fffbeb";
+
+
+
+
+
+
+
+    var safe = JSON.stringify(gh).replace(/"/g, "&quot;");
+
+
+
+
+
+
+
+    return "<div class=\"km-gh-wrap\" style=\"background:" + bg + ";border:1px dashed " + renk + ";"
+
+
+
+
+
+
+
+      + "border-radius:4px;padding:3px 8px;cursor:pointer;font-size:10.5px;\""
+
+
+
+
+
+
+
+      + " onclick=\"km_gh_detay(event,this)\" data-gh=\"" + safe + "\">"
+
+
+
+
+
+
+
+      + "<span style=\"font-weight:700;color:" + renk + "\">\uD83D\uDCCB G\u00f6rev Haz\u0131r</span>"
+
+
+
+
+
+
+
+      + "<div style=\"color:#6b7280;font-size:10px\">" + (gh.hedef_kisi||"") + " \u00b7 " + (gh.oncelik||"") + "</div>"
+
+
+
+
+
+
+
+      + "</div>";
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  // ── FAZ43 Sprint 5: Görev Oluştur Modal ──────────────────────
+
+
+
+  var _kmGhModal = null;
+
+
+
+
+
+
+
+  function km_gh_detay(e, el) {
+
+
+
+    e.stopPropagation();
+
+
+
+    try {
+
+
+
+      var gh = JSON.parse(el.getAttribute('data-gh').replace(/&quot;/g,'"'));
+
+
+
+      _kmGhModal = gh;
+
+
+
+      var renkMap = {acil:"#dc2626",guclendir:"#ea580c",kontrol:"#ca8a04"};
+
+
+
+      var renk = renkMap[gh.mudahale_tip] || "#6b7280";
+
+
+
+      var html =
+
+
+
+        '<div id="km-gh-backdrop" style="position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9100;display:flex;align-items:center;justify-content:center;" onclick="km_gh_kapat()">' +
+
+
+
+        '<div style="background:#fff;border-radius:10px;padding:24px;width:440px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,.2);" onclick="event.stopPropagation()">' +
+
+
+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
+
+
+
+        '<h3 style="margin:0;font-size:15px;font-weight:700">📋 Görev Oluştur</h3>' +
+
+
+
+        '<button onclick="km_gh_kapat()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#9ca3af">✕</button>' +
+
+
+
+        '</div>' +
+
+
+
+        '<div style="font-size:12px;color:#6b7280;margin-bottom:14px;padding:8px 10px;background:#f9fafb;border-radius:6px;border-left:3px solid '+renk+'">' +
+
+
+
+        '<strong style="color:'+renk+'">'+gh.konu+'</strong>' +
+
+
+
+        '</div>' +
+
+
+
+        '<table style="width:100%;font-size:12px;border-collapse:collapse;margin-bottom:16px">' +
+
+
+
+        '<tr><td style="padding:4px 0;color:#9ca3af;width:100px">Hedef Kişi</td><td style="font-weight:600">'+_esc(gh.hedef_kisi||"—")+'</td></tr>' +
+
+
+
+        '<tr><td style="padding:4px 0;color:#9ca3af">Ekip</td><td>'+_esc(gh.hedef_ekip||"—")+'</td></tr>' +
+
+
+
+        '<tr><td style="padding:4px 0;color:#9ca3af">Sipariş</td><td>'+_esc(gh.siparis_no||"—")+'</td></tr>' +
+
+
+
+        '<tr><td style="padding:4px 0;color:#9ca3af">Proses</td><td>'+_esc(gh.proses||"—")+'</td></tr>' +
+
+
+
+        '<tr><td style="padding:4px 0;color:#9ca3af">Risk</td><td><strong style="color:'+renk+'">'+gh.risk_skoru+'/100</strong></td></tr>' +
+
+
+
+        '<tr><td style="padding:4px 0;color:#9ca3af">Öncelik</td><td>'+_esc(gh.oncelik||"—")+'</td></tr>' +
+
+
+
+        '</table>' +
+
+
+
+        '<div style="font-size:11.5px;color:#374151;background:#fffbeb;border-radius:5px;padding:8px 10px;margin-bottom:16px;line-height:1.5">'+_esc(gh.mesaj||"")+'</div>' +
+
+
+
+        '<div style="display:flex;gap:10px;justify-content:flex-end;">' +
+
+
+
+        '<button onclick="km_gh_kapat()" style="padding:8px 16px;border-radius:6px;border:1px solid #e5e7eb;background:#fff;cursor:pointer;font-size:13px">İptal</button>' +
+
+
+
+        '<button id="km-gh-olustur-btn" onclick="km_gh_gonder()" style="padding:8px 20px;border-radius:6px;border:none;background:#d97706;color:#fff;cursor:pointer;font-size:13px;font-weight:600">✓ Görev Oluştur</button>' +
+
+
+
+        '</div>' +
+
+
+
+        '</div></div>';
+
+
+
+      var div = document.createElement('div');
+
+
+
+      div.id = 'km-gh-modal-wrap';
+
+
+
+      div.innerHTML = html;
+
+
+
+      document.body.appendChild(div);
+
+
+
+    } catch(err) {
+
+
+
+      console.error("[KM] modal hata:", err);
+
+
+
+    }
+
+
+
+  }
+
+
+
+
+
+
+
+  function km_gh_kapat() {
+
+
+
+    var el = document.getElementById('km-gh-modal-wrap');
+
+
+
+    if (el) el.remove();
+
+
+
+    _kmGhModal = null;
+
+
+
+  }
+
+
+
+
+
+
+
+  function km_gh_gonder() {
+
+
+
+    var btn = document.getElementById('km-gh-olustur-btn');
+
+
+
+    if (!btn || !_kmGhModal) return;
+
+
+
+    btn.disabled = true;
+
+
+
+    btn.textContent = 'Oluşturuluyor…';
+
+
+
+
+
+
+
+    fetch('/planlama/api/karar-masasi/gorev-olustur', {
+
+
+
+      method: 'POST',
+
+
+
+      credentials: 'same-origin',
+
+
+
+      headers: {'Content-Type':'application/json'},
+
+
+
+      body: JSON.stringify(_kmGhModal)
+
+
+
+    })
+
+
+
+    .then(function(r){ return r.json(); })
+
+
+
+    .then(function(d){
+
+
+
+      var _sid = _kmGhModal ? _kmGhModal.satir_id : null;
+
+
+
+      km_gh_kapat();
+
+
+
+      if (d.ok && !d.duplicate) {
+
+
+
+        var bg='#f0fdf4',bo='#86efac',rc='#16a34a',et='Gorev Olusturuldu #'+d.task_id;
+
+        if(_sid){document.querySelectorAll('tr[data-satir-id="'+_sid+'"').forEach(function(tr){var td=tr.querySelector('.km-td-gh');if(td)td.innerHTML='<div style="background:'+bg+';border:1px solid '+bo+';border-radius:4px;padding:3px 8px;font-size:11px;font-weight:700;color:'+rc+'">'+et+'</div>';});}
+
+
+
+      } else if (d.ok && d.duplicate) {
+
+
+
+        var bg='#eff6ff',bo='#93c5fd',rc='#2563eb',et='Acik Gorev #'+d.task_id;
+
+        if(_sid){document.querySelectorAll('tr[data-satir-id="'+_sid+'"').forEach(function(tr){var td=tr.querySelector('.km-td-gh');if(td)td.innerHTML='<div style="background:'+bg+';border:1px solid '+bo+';border-radius:4px;padding:3px 8px;font-size:11px;font-weight:700;color:'+rc+'">'+et+'</div>';});}
+
+
+
+      } else {
+
+
+
+        alert('Hata: ' + (d.hata || 'Bilinmeyen hata'));
+
+
+
+        if (btn) { btn.disabled = false; btn.textContent = 'Gorev Olustur'; }
+
+
+
+      }
+
+
+
+    })
+
+
+
+    .catch(function(err){
+
+
+
+      alert('Bağlantı hatası: ' + err.message);
+
+
+
+      if (btn) { btn.disabled = false; btn.textContent = '✓ Görev Oluştur'; }
+
+
+
+    });
+
+
+
+  }
+
+
+
+
+
+
+
+  function _km_gh_badge_guncelle(satir_id, task_id) {
+
+
+
+    if (!satir_id) return;
+
+
+
+    var rows = document.querySelectorAll('tr[data-satir-id="'+satir_id+'"]');
+
+
+
+    rows.forEach(function(tr){
+
+
+
+      var ghTd = tr.querySelector('.km-td-gh');
+
+
+
+      if (ghTd) {
+
+
+
+        ghTd.innerHTML = '<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:4px;padding:3px 8px;">'
+
+
+
+          + '<span style="font-size:11px;font-weight:700;color:#16a34a">✅ Görev Oluşturuldu</span>'
+
+
+
+          + '<div style="font-size:10px;color:#6b7280">Görev #'+task_id+'</div>'
+
+
+
+          + '</div>';
+
+
+
+      }
+
+
+
+    });
+
+
+
+  }
+
+
+
+
+
+
+
+  document.addEventListener('keydown', function(e){
+
+
+
+    if (e.key === 'Escape') km_gh_kapat();
+
+
+
+  });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  // ── END Görev Modal ──────────────────────────────────────────
+
+
+
+
+
+
+
+  // ── END Görev Badge ──
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  // ── Müdahale Öneri Badge (FAZ43 Sprint 3) ──
+
+
+
+
+
+
+
+  function km_render_mudahale(m) {
+
+
+
+
+
+
+
+    if (!m || m.tip === "takip" && m.oncelik === "dusuk" && !m.ikon) return "";
+
+
+
+
+
+
+
+    var renk = m.renk || "#9ca3af";
+
+
+
+
+
+
+
+    var bg   = {
+
+
+
+
+
+
+
+      "#dc2626": "#fef2f2", "#ea580c": "#fff7ed",
+
+
+
+
+
+
+
+      "#ca8a04": "#fffbeb", "#16a34a": "#f0fdf4"
+
+
+
+
+
+
+
+    }[renk] || "#f9fafb";
+
+
+
+
+
+
+
+    return '<div class="km-mud-wrap" style="background:' + bg + ';border-left:3px solid ' + renk + ';border-radius:4px;padding:4px 8px;">'
+
+
+
+
+
+
+
+      + '<div style="font-size:11px;font-weight:700;color:' + renk + '">' + (m.ikon||"") + ' ' + (m.mesaj||"") + '</div>'
+
+
+
+
+
+
+
+      + '<div style="font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:.3px">' + (m.tip||"") + '</div>'
+
+
+
+
+
+
+
+      + '</div>';
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+  // ── END Müdahale ──
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  // ── Org Risk Badge (FAZ43 Sprint 2) ──
+
+
+
+
+
+
+
+  function km_render_risk(risk) {
+
+
+
+
+
+
+
+    if (!risk || risk.seviye === "yok") return "";
+
+
+
+
+
+
+
+    var cfg = {
+
+
+
+
+
+
+
+      kritik: {bg:"#fef2f2",color:"#dc2626",dot:"🔴",et:"KRİTİK"},
+
+
+
+
+
+
+
+      orta:   {bg:"#fffbeb",color:"#ca8a04",dot:"🟡",et:"ORTA"},
+
+
+
+
+
+
+
+      dusuk:  {bg:"#f0fdf4",color:"#16a34a",dot:"🟢",et:"DÜŞÜK"}
+
+
+
+
+
+
+
+    };
+
+
+
+
+
+
+
+    var c = cfg[risk.seviye] || cfg.dusuk;
+
+
+
+
+
+
+
+    return '<div class="km-risk-wrap" style="background:' + c.bg + ';border-radius:5px;padding:3px 7px;" title="' + (risk.neden||"") + '">'
+
+
+
+
+
+
+
+      + '<span style="font-size:10px;font-weight:700;color:' + c.color + '">' + c.dot + ' ' + c.et + '</span>'
+
+
+
+
+
+
+
+      + '<div style="font-size:10px;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px">' + (risk.neden||"") + '</div>'
+
+
+
+
+
+
+
+      + '<div style="font-size:10px;color:' + c.color + ';font-weight:600">' + (risk.skor||0) + '/100</div>'
+
+
+
+
+
+
+
+      + '</div>';
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+  // ── END Risk Badge ──
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  // ── CORE_ILISKI Org Katmanı (FAZ43 PARÇA 3) ──
+
+
+
+
+
+
+
+  function km_render_org(org) {
+
+
+
+
+
+
+
+    if (!org || org.durum === "yok") return "";
+
+
+
+
+
+
+
+    var RENKLER = {tam:"#16a34a",eksik:"#ca8a04",belirsiz:"#ea580c",kritik:"#dc2626",hata:"#9ca3af"};
+
+
+
+
+
+
+
+    var renk = RENKLER[org.durum] || "#9ca3af";
+
+
+
+
+
+
+
+    var ekip  = org.ekip  ? '<span class="km-org-ekip">'  + (org.ekip||"")  + '</span>' : "";
+
+
+
+
+
+
+
+    var lider = org.lider ? '<span class="km-org-lider">🏅 ' + org.lider + '</span>' : "";
+
+
+
+
+
+
+
+    var vardy = org.vardiya ? '<span class="km-org-vardy">' + org.vardiya + '</span>' : "";
+
+
+
+
+
+
+
+    return '<div class="km-org-wrap"><span class="km-org-dot" style="background:'+renk+'"></span>'
+
+
+
+
+
+
+
+      + ekip + lider + vardy + '</div>';
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+  // ── END Org ──
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+})();
+
+
+
+
+
+
+
+// BEGIN: KM_UG_MODAL_JS_v1
+
+
+
+
+
+
+
+(function(){
+
+
+
+
+
+
+
+  var _ug_aktif_satir_id = null;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  function _ug_satir_bul(sid) {
+
+
+
+
+
+
+
+    // KM_UG_MODAL_FIX_v1: DOM dataset based (no km_state dependency)
+
+
+
+
+
+
+
+    var tr = document.querySelector('[data-satir-id="' + sid + '"]');
+
+
+
+
+
+
+
+    if (!tr) return null;
+
+
+
+
+
+
+
+    var ds = tr.dataset || {};
+
+
+
+
+
+
+
+    var darbogazMetin = ds.darbogaz || '';
+
+
+
+
+
+
+
+    return {
+
+
+
+
+
+
+
+      satir_id: sid,
+
+
+
+
+
+
+
+      siparis_no: ds.siparisNo || '',
+
+
+
+
+
+
+
+      musteri: ds.musteri || '',
+
+
+
+
+
+
+
+      model: ds.model || '',
+
+
+
+
+
+
+
+      emir_no: ds.emirNo || '',
+
+
+
+
+
+
+
+      bant: ds.bant || '',
+
+
+
+
+
+
+
+      kalan: (ds.kalan != null && ds.kalan !== '') ? (parseInt(ds.kalan, 10) || 0) : 0,
+
+
+
+
+
+
+
+      termin: ds.termin || '',
+
+
+
+
+
+
+
+      termin_durumu: ds.terminDurumu || '',
+
+
+
+
+
+
+
+      uretilebilirlik: ds.uretilebilirlik || '',
+
+
+
+
+
+
+
+      darbogaz: { var: !!darbogazMetin, metin: darbogazMetin },
+
+
+
+
+
+
+
+      musteri_etiketleri: ds.musteriEtiketleri ? ds.musteriEtiketleri.split(',').filter(Boolean) : []
+
+
+
+
+
+
+
+    };
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  function _ug_darbogaz_metin(s) {
+
+
+
+
+
+
+
+    var d = s.darbogaz || {};
+
+
+
+
+
+
+
+    if (!d.var) return '';
+
+
+
+
+
+
+
+    return d.metin || d.alt || '';
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  function _ug_musteri_etiketi(s) {
+
+
+
+
+
+
+
+    return ((s.musteri_etiketleri || []).join(',')) || '';
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  function _ug_oncelik_oku() {
+
+
+
+
+
+
+
+    var r = document.querySelector('input[name="km-ug-oncelik"]:checked');
+
+
+
+
+
+
+
+    return r ? r.value : 'normal';
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  function _ug_oncelik_skor(o) {
+
+
+
+
+
+
+
+    if (o === 'dusuk') return 30;
+
+
+
+
+
+
+
+    if (o === 'yuksek') return 80;
+
+
+
+
+
+
+
+    return 50;
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  function _ug_format_kalan(n) {
+
+
+
+
+
+
+
+    if (n === undefined || n === null) return '—';
+
+
+
+
+
+
+
+    try { return Number(n).toLocaleString('tr-TR'); } catch(e) { return String(n); }
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  function _ug_setText(id, val) {
+
+
+
+
+
+
+
+    var el = document.getElementById(id);
+
+
+
+
+
+
+
+    if (!el) return;
+
+
+
+
+
+
+
+    el.textContent = (val || val === 0) ? val : '—';
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  function _ug_modal_doldur(s) {
+
+
+
+
+
+
+
+    _ug_setText('km-ug-siparis', s.siparis_no);
+
+
+
+
+
+
+
+    _ug_setText('km-ug-musteri', s.musteri);
+
+
+
+
+
+
+
+    _ug_setText('km-ug-model', s.model);
+
+
+
+
+
+
+
+    var k = document.getElementById('km-ug-kalan');
+
+
+
+
+
+
+
+    if (k) k.textContent = _ug_format_kalan(s.kalan);
+
+
+
+
+
+
+
+    var dm = _ug_darbogaz_metin(s);
+
+
+
+
+
+
+
+    _ug_setText('km-ug-darbogaz', dm || '—');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    var rNormal = document.querySelector('input[name="km-ug-oncelik"][value="normal"]');
+
+
+
+
+
+
+
+    if (rNormal) rNormal.checked = true;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    var t = document.getElementById('km-ug-talimat');
+
+
+
+
+
+
+
+    if (t) t.value = '';
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    var btn = document.getElementById('km-ug-gonder-btn');
+
+
+
+
+
+
+
+    if (btn) btn.disabled = false;
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  function _ug_toast(msg) {
+
+
+
+
+
+
+
+    if (typeof km_toast === 'function') km_toast(msg);
+
+
+
+
+
+
+
+    else console.log('[KM-UG]', msg);
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  window.km_ug_ac = function(satir_id) {
+
+
+
+
+
+
+
+    if (typeof km_aksiyon_kapat === 'function') km_aksiyon_kapat();
+
+
+
+
+
+
+
+    var s = _ug_satir_bul(satir_id);
+
+
+
+
+
+
+
+    if (!s) { _ug_toast('Satır bulunamadı: ' + satir_id); return; }
+
+
+
+
+
+
+
+    _ug_aktif_satir_id = satir_id;
+
+
+
+
+
+
+
+    _ug_modal_doldur(s);
+
+
+
+
+
+
+
+    var dlg = document.getElementById('km-ug-modal');
+
+
+
+
+
+
+
+    if (!dlg) { _ug_toast('Modal elementi yok (km-ug-modal)'); return; }
+
+
+
+
+
+
+
+    if (typeof dlg.showModal === 'function') {
+
+
+
+
+
+
+
+      try { dlg.showModal(); } catch(e) { dlg.setAttribute('open',''); }
+
+
+
+
+
+
+
+    } else {
+
+
+
+
+
+
+
+      dlg.setAttribute('open','');
+
+
+
+
+
+
+
+    }
+
+
+
+
+
+
+
+  };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  window.km_ug_kapat = function() {
+
+
+
+
+
+
+
+    var dlg = document.getElementById('km-ug-modal');
+
+
+
+
+
+
+
+    if (dlg) {
+
+
+
+
+
+
+
+      if (typeof dlg.close === 'function' && dlg.open) {
+
+
+
+
+
+
+
+        try { dlg.close(); } catch(e) { dlg.removeAttribute('open'); _ug_aktif_satir_id = null; }
+
+
+
+
+
+
+
+      } else {
+
+
+
+
+
+
+
+        dlg.removeAttribute('open');
+
+
+
+
+
+
+
+        _ug_aktif_satir_id = null;
+
+
+
+
+
+
+
+      }
+
+
+
+
+
+
+
+    } else {
+
+
+
+
+
+
+
+      _ug_aktif_satir_id = null;
+
+
+
+
+
+
+
+    }
+
+
+
+
+
+
+
+  };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  window.km_ug_gonder = function() {
+
+
+
+
+
+
+
+    var sid = _ug_aktif_satir_id;
+
+
+
+
+
+
+
+    if (!sid) { _ug_toast('Aktif satır yok'); return; }
+
+
+
+
+
+
+
+    var s = _ug_satir_bul(sid);
+
+
+
+
+
+
+
+    if (!s) { _ug_toast('Satır bulunamadı'); return; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    var oncelik = _ug_oncelik_oku();
+
+
+
+
+
+
+
+    var skor    = _ug_oncelik_skor(oncelik);
+
+
+
+
+
+
+
+    var talimat = (document.getElementById('km-ug-talimat') || {}).value || '';
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    var payload = {
+
+
+
+
+
+
+
+      satir_id: s.satir_id,
+
+
+
+
+
+
+
+      atanan_usta: 'test_usta',
+
+
+
+
+
+
+
+      olusturan_notu: talimat,
+
+
+
+
+
+
+
+      snapshot: {
+
+
+
+
+
+
+
+        siparis_no: s.siparis_no || '',
+
+
+
+
+
+
+
+        musteri: s.musteri || '',
+
+
+
+
+
+
+
+        model: s.model || '',
+
+
+
+
+
+
+
+        emir_no: s.emir_no || '',
+
+
+
+
+
+
+
+        bant: s.bant || '',
+
+
+
+
+
+
+
+        kalan: (s.kalan === undefined || s.kalan === null) ? 0 : s.kalan,
+
+
+
+
+
+
+
+        uretilebilirlik: s.uretilebilirlik || '',
+
+
+
+
+
+
+
+        darbogaz_metin: _ug_darbogaz_metin(s),
+
+
+
+
+
+
+
+        musteri_etiketi: _ug_musteri_etiketi(s),
+
+
+
+
+
+
+
+        termin: s.termin || '',
+
+
+
+
+
+
+
+        termin_durumu: s.termin_durumu || '',
+
+
+
+
+
+
+
+        skor: skor
+
+
+
+
+
+
+
+      }
+
+
+
+
+
+
+
+    };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    var btn = document.getElementById('km-ug-gonder-btn');
+
+
+
+
+
+
+
+    if (btn) btn.disabled = true;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    fetch('/planlama/karar-masasi/ustaya-gonder', {
+
+
+
+
+
+
+
+      method: 'POST',
+
+
+
+
+
+
+
+      headers: { 'Content-Type': 'application/json' },
+
+
+
+
+
+
+
+      credentials: 'same-origin',
+
+
+
+
+
+
+
+      body: JSON.stringify(payload)
+
+
+
+
+
+
+
+    })
+
+
+
+
+
+
+
+    .then(function(r){
+
+
+
+
+
+
+
+      return r.json().then(
+
+
+
+
+
+
+
+        function(j){ return { ok: r.ok, status: r.status, data: j }; },
+
+
+
+
+
+
+
+        function(){  return { ok: r.ok, status: r.status, data: {} }; }
+
+
+
+
+
+
+
+      );
+
+
+
+
+
+
+
+    })
+
+
+
+
+
+
+
+    .then(function(res){
+
+
+
+
+
+
+
+      if (!res.ok) {
+
+
+
+
+
+
+
+        var msg = (res.data && res.data.hata) ? res.data.hata : ('HTTP ' + res.status);
+
+
+
+
+
+
+
+        _ug_toast('Gönderilemedi: ' + msg);
+
+
+
+
+
+
+
+        if (btn) btn.disabled = false;
+
+
+
+
+
+
+
+        return;
+
+
+
+
+
+
+
+      }
+
+
+
+
+
+
+
+      _ug_toast('Ustaya gönderildi: ' + (s.musteri || s.siparis_no || sid));
+
+
+
+
+
+
+
+      window.km_ug_kapat();
+
+
+
+
+
+
+
+    })
+
+
+
+
+
+
+
+    .catch(function(err){
+
+
+
+
+
+
+
+      _ug_toast('Bağlantı hatası: ' + (err && err.message ? err.message : err));
+
+
+
+
+
+
+
+      if (btn) btn.disabled = false;
+
+
+
+
+
+
+
+    });
+
+
+
+
+
+
+
+  };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  function _ug_init() {
+
+
+
+
+
+
+
+    var dlg = document.getElementById('km-ug-modal');
+
+
+
+
+
+
+
+    if (!dlg) return;
+
+
+
+
+
+
+
+    dlg.addEventListener('click', function(e){
+
+
+
+
+
+
+
+      if (e.target === dlg) window.km_ug_kapat();
+
+
+
+
+
+
+
+    });
+
+
+
+
+
+
+
+    dlg.addEventListener('close', function(){
+
+
+
+
+
+
+
+      _ug_aktif_satir_id = null;
+
+
+
+
+
+
+
+      var btn = document.getElementById('km-ug-gonder-btn');
+
+
+
+
+
+
+
+      if (btn) btn.disabled = false;
+
+
+
+
+
+
+
+    });
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _ug_init);
+
+
+
+
+
+
+
+  else _ug_init();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  // ── Görev Hazırlık Badge (FAZ43 Sprint 4 — READONLY) ──
+
+
+
+
+
+
+
+  function km_gh_detay(e, el) {
+
+
+
+
+
+
+
+    e.stopPropagation();
+
+
+
+
+
+
+
+    try {
+
+
+
+
+
+
+
+      var gh = JSON.parse(el.dataset.gh);
+
+
+
+
+
+
+
+      var msg = "GÖREV HAZIRLIK PAYLOAD\n──────────────────\n"
+
+
+
+
+
+
+
+        + "Hedef: " + gh.hedef_kisi + "\n"
+
+
+
+
+
+
+
+        + "Ekip:  " + (gh.hedef_ekip||"") + "\n"
+
+
+
+
+
+
+
+        + "Konu:  " + gh.konu + "\n"
+
+
+
+
+
+
+
+        + "Mesaj: " + gh.mesaj + "\n"
+
+
+
+
+
+
+
+        + "Öncelik: " + gh.oncelik + "\n"
+
+
+
+
+
+
+
+        + "Risk: " + gh.risk_skoru + "/100\n"
+
+
+
+
+
+
+
+        + "Sipariş: " + gh.siparis_no + "\n"
+
+
+
+
+
+
+
+        + "\n[Sprint 5'te Görev Oluştur butonu buraya gelecek]";
+
+
+
+
+
+
+
+      alert(msg);
+
+
+
+
+
+
+
+    } catch(err) { console.log("[KM] gh parse error", err); }
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+
+
+  // ── FAZ43 Sprint 5: Görev Oluştur Modal ──────────────────────
+
+
+
+  var _kmGhModal = null;
+
+
+
+
+
+
+
+  function km_gh_detay(e, el) {
+
+
+
+    e.stopPropagation();
+
+
+
+    try {
+
+
+
+      var gh = JSON.parse(el.getAttribute('data-gh').replace(/&quot;/g,'"'));
+
+
+
+      _kmGhModal = gh;
+
+
+
+      var renkMap = {acil:"#dc2626",guclendir:"#ea580c",kontrol:"#ca8a04"};
+
+
+
+      var renk = renkMap[gh.mudahale_tip] || "#6b7280";
+
+
+
+      var html =
+
+
+
+        '<div id="km-gh-backdrop" style="position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9100;display:flex;align-items:center;justify-content:center;" onclick="km_gh_kapat()">' +
+
+
+
+        '<div style="background:#fff;border-radius:10px;padding:24px;width:440px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,.2);" onclick="event.stopPropagation()">' +
+
+
+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
+
+
+
+        '<h3 style="margin:0;font-size:15px;font-weight:700">📋 Görev Oluştur</h3>' +
+
+
+
+        '<button onclick="km_gh_kapat()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#9ca3af">✕</button>' +
+
+
+
+        '</div>' +
+
+
+
+        '<div style="font-size:12px;color:#6b7280;margin-bottom:14px;padding:8px 10px;background:#f9fafb;border-radius:6px;border-left:3px solid '+renk+'">' +
+
+
+
+        '<strong style="color:'+renk+'">'+gh.konu+'</strong>' +
+
+
+
+        '</div>' +
+
+
+
+        '<table style="width:100%;font-size:12px;border-collapse:collapse;margin-bottom:16px">' +
+
+
+
+        '<tr><td style="padding:4px 0;color:#9ca3af;width:100px">Hedef Kişi</td><td style="font-weight:600">'+_esc(gh.hedef_kisi||"—")+'</td></tr>' +
+
+
+
+        '<tr><td style="padding:4px 0;color:#9ca3af">Ekip</td><td>'+_esc(gh.hedef_ekip||"—")+'</td></tr>' +
+
+
+
+        '<tr><td style="padding:4px 0;color:#9ca3af">Sipariş</td><td>'+_esc(gh.siparis_no||"—")+'</td></tr>' +
+
+
+
+        '<tr><td style="padding:4px 0;color:#9ca3af">Proses</td><td>'+_esc(gh.proses||"—")+'</td></tr>' +
+
+
+
+        '<tr><td style="padding:4px 0;color:#9ca3af">Risk</td><td><strong style="color:'+renk+'">'+gh.risk_skoru+'/100</strong></td></tr>' +
+
+
+
+        '<tr><td style="padding:4px 0;color:#9ca3af">Öncelik</td><td>'+_esc(gh.oncelik||"—")+'</td></tr>' +
+
+
+
+        '</table>' +
+
+
+
+        '<div style="font-size:11.5px;color:#374151;background:#fffbeb;border-radius:5px;padding:8px 10px;margin-bottom:16px;line-height:1.5">'+_esc(gh.mesaj||"")+'</div>' +
+
+
+
+        '<div style="display:flex;gap:10px;justify-content:flex-end;">' +
+
+
+
+        '<button onclick="km_gh_kapat()" style="padding:8px 16px;border-radius:6px;border:1px solid #e5e7eb;background:#fff;cursor:pointer;font-size:13px">İptal</button>' +
+
+
+
+        '<button id="km-gh-olustur-btn" onclick="km_gh_gonder()" style="padding:8px 20px;border-radius:6px;border:none;background:#d97706;color:#fff;cursor:pointer;font-size:13px;font-weight:600">✓ Görev Oluştur</button>' +
+
+
+
+        '</div>' +
+
+
+
+        '</div></div>';
+
+
+
+      var div = document.createElement('div');
+
+
+
+      div.id = 'km-gh-modal-wrap';
+
+
+
+      div.innerHTML = html;
+
+
+
+      document.body.appendChild(div);
+
+
+
+    } catch(err) {
+
+
+
+      console.error("[KM] modal hata:", err);
+
+
+
+    }
+
+
+
+  }
+
+
+
+
+
+
+
+  function km_gh_kapat() {
+
+
+
+    var el = document.getElementById('km-gh-modal-wrap');
+
+
+
+    if (el) el.remove();
+
+
+
+    _kmGhModal = null;
+
+
+
+  }
+
+
+
+
+
+
+
+  function km_gh_gonder() {
+
+
+
+    var btn = document.getElementById('km-gh-olustur-btn');
+
+
+
+    if (!btn || !_kmGhModal) return;
+
+
+
+    btn.disabled = true;
+
+
+
+    btn.textContent = 'Oluşturuluyor…';
+
+
+
+
+
+
+
+    fetch('/planlama/api/karar-masasi/gorev-olustur', {
+
+
+
+      method: 'POST',
+
+
+
+      credentials: 'same-origin',
+
+
+
+      headers: {'Content-Type':'application/json'},
+
+
+
+      body: JSON.stringify(_kmGhModal)
+
+
+
+    })
+
+
+
+    .then(function(r){ return r.json(); })
+
+
+
+    .then(function(d){
+
+
+
+      km_gh_kapat();
+
+
+
+      if (d.ok && !d.duplicate) {
+
+
+
+        _km_gh_badge_guncelle(_kmGhModal && _kmGhModal.satir_id, d.task_id);
+
+
+
+        km_log('Görev oluşturuldu #' + d.task_id);
+
+
+
+      } else if (d.ok && d.duplicate) {
+
+
+
+        alert('⚠️ Bu satır için zaten açık görev var. (Görev #' + d.task_id + ')');
+
+
+
+      } else {
+
+
+
+        alert('Hata: ' + (d.hata || 'Bilinmeyen hata'));
+
+
+
+        if (btn) { btn.disabled = false; btn.textContent = '✓ Görev Oluştur'; }
+
+
+
+      }
+
+
+
+    })
+
+
+
+    .catch(function(err){
+
+
+
+      alert('Bağlantı hatası: ' + err.message);
+
+
+
+      if (btn) { btn.disabled = false; btn.textContent = '✓ Görev Oluştur'; }
+
+
+
+    });
+
+
+
+  }
+
+
+
+
+
+
+
+  function _km_gh_badge_guncelle(satir_id, task_id) {
+
+
+
+    if (!satir_id) return;
+
+
+
+    var rows = document.querySelectorAll('tr[data-satir-id="'+satir_id+'"]');
+
+
+
+    rows.forEach(function(tr){
+
+
+
+      var ghTd = tr.querySelector('.km-td-gh');
+
+
+
+      if (ghTd) {
+
+
+
+        ghTd.innerHTML = '<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:4px;padding:3px 8px;">'
+
+
+
+          + '<span style="font-size:11px;font-weight:700;color:#16a34a">✅ Görev Oluşturuldu</span>'
+
+
+
+          + '<div style="font-size:10px;color:#6b7280">Görev #'+task_id+'</div>'
+
+
+
+          + '</div>';
+
+
+
+      }
+
+
+
+    });
+
+
+
+  }
+
+
+
+
+
+
+
+  document.addEventListener('keydown', function(e){
+
+
+
+    if (e.key === 'Escape') km_gh_kapat();
+
+
+
+  });
+
+
+
+  // ── END Görev Modal ──────────────────────────────────────────
+
+
+
+
+
+
+
+  // ── END Görev Badge ──
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  // ── Müdahale Öneri Badge (FAZ43 Sprint 3) ──
+
+
+
+
+
+
+
+  function km_render_mudahale(m) {
+
+
+
+
+
+
+
+    if (!m || m.tip === "takip" && m.oncelik === "dusuk" && !m.ikon) return "";
+
+
+
+
+
+
+
+    var renk = m.renk || "#9ca3af";
+
+
+
+
+
+
+
+    var bg   = {
+
+
+
+
+
+
+
+      "#dc2626": "#fef2f2", "#ea580c": "#fff7ed",
+
+
+
+
+
+
+
+      "#ca8a04": "#fffbeb", "#16a34a": "#f0fdf4"
+
+
+
+
+
+
+
+    }[renk] || "#f9fafb";
+
+
+
+
+
+
+
+    return '<div class="km-mud-wrap" style="background:' + bg + ';border-left:3px solid ' + renk + ';border-radius:4px;padding:4px 8px;">'
+
+
+
+
+
+
+
+      + '<div style="font-size:11px;font-weight:700;color:' + renk + '">' + (m.ikon||"") + ' ' + (m.mesaj||"") + '</div>'
+
+
+
+
+
+
+
+      + '<div style="font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:.3px">' + (m.tip||"") + '</div>'
+
+
+
+
+
+
+
+      + '</div>';
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+  // ── END Müdahale ──
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  // ── Org Risk Badge (FAZ43 Sprint 2) ──
+
+
+
+
+
+
+
+  function km_render_risk(risk) {
+
+
+
+
+
+
+
+    if (!risk || risk.seviye === "yok") return "";
+
+
+
+
+
+
+
+    var cfg = {
+
+
+
+
+
+
+
+      kritik: {bg:"#fef2f2",color:"#dc2626",dot:"🔴",et:"KRİTİK"},
+
+
+
+
+
+
+
+      orta:   {bg:"#fffbeb",color:"#ca8a04",dot:"🟡",et:"ORTA"},
+
+
+
+
+
+
+
+      dusuk:  {bg:"#f0fdf4",color:"#16a34a",dot:"🟢",et:"DÜŞÜK"}
+
+
+
+
+
+
+
+    };
+
+
+
+
+
+
+
+    var c = cfg[risk.seviye] || cfg.dusuk;
+
+
+
+
+
+
+
+    return '<div class="km-risk-wrap" style="background:' + c.bg + ';border-radius:5px;padding:3px 7px;" title="' + (risk.neden||"") + '">'
+
+
+
+
+
+
+
+      + '<span style="font-size:10px;font-weight:700;color:' + c.color + '">' + c.dot + ' ' + c.et + '</span>'
+
+
+
+
+
+
+
+      + '<div style="font-size:10px;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px">' + (risk.neden||"") + '</div>'
+
+
+
+
+
+
+
+      + '<div style="font-size:10px;color:' + c.color + ';font-weight:600">' + (risk.skor||0) + '/100</div>'
+
+
+
+
+
+
+
+      + '</div>';
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+  // ── END Risk Badge ──
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  // ── CORE_ILISKI Org Katmanı (FAZ43 PARÇA 3) ──
+
+
+
+
+
+
+
+  function km_render_org(org) {
+
+
+
+
+
+
+
+    if (!org || org.durum === "yok") return "";
+
+
+
+
+
+
+
+    var RENKLER = {tam:"#16a34a",eksik:"#ca8a04",belirsiz:"#ea580c",kritik:"#dc2626",hata:"#9ca3af"};
+
+
+
+
+
+
+
+    var renk = RENKLER[org.durum] || "#9ca3af";
+
+
+
+
+
+
+
+    var ekip  = org.ekip  ? '<span class="km-org-ekip">'  + (org.ekip||"")  + '</span>' : "";
+
+
+
+
+
+
+
+    var lider = org.lider ? '<span class="km-org-lider">🏅 ' + org.lider + '</span>' : "";
+
+
+
+
+
+
+
+    var vardy = org.vardiya ? '<span class="km-org-vardy">' + org.vardiya + '</span>' : "";
+
+
+
+
+
+
+
+    return '<div class="km-org-wrap"><span class="km-org-dot" style="background:'+renk+'"></span>'
+
+
+
+
+
+
+
+      + ekip + lider + vardy + '</div>';
+
+
+
+
+
+
+
+  }
+
+
+
+
+
+
+
+  // ── END Org ──
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+})();
+
+/* ── FAZ43 SP5 Global Modal Fonksiyonlari (IIFE disi) ── */
+var _kmGhModalG = null;
+
+function km_gh_detay(e, el) {
+  if (e) e.stopPropagation();
+  try {
+    var raw = el.getAttribute('data-gh').replace(/&quot;/g, '"');
+    _kmGhModalG = JSON.parse(raw);
+    var gh = _kmGhModalG;
+    var renkMap = {acil:"#dc2626", guclendir:"#ea580c", kontrol:"#ca8a04"};
+    var renk = renkMap[gh.mudahale_tip] || "#6b7280";
+    var esc = function(s){ return String(s||"").replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); };
+    var html =
+      '<div id="km-gh-backdrop" style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;" onclick="km_gh_kapat()">'
+      +'<div style="background:#fff;border-radius:10px;padding:24px;width:440px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,.25);" onclick="event.stopPropagation()">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">'
+      +'<h3 style="margin:0;font-size:15px;font-weight:700">&#128203; Gorev Olustur</h3>'
+      +'<button onclick="km_gh_kapat()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#9ca3af;line-height:1">&#x2715;</button>'
+      +'</div>'
+      +'<div style="font-size:12px;margin-bottom:14px;padding:8px 10px;background:#f9fafb;border-radius:6px;border-left:3px solid '+renk+'">'
+      +'<strong style="color:'+renk+'">'+esc(gh.konu)+'</strong></div>'
+      +'<table style="width:100%;font-size:12px;border-collapse:collapse;margin-bottom:14px">'
+      +'<tr><td style="padding:4px 0;color:#9ca3af;width:100px">Hedef Kisi</td><td style="font-weight:600">'+esc(gh.hedef_kisi||"—")+'</td></tr>'
+      +'<tr><td style="padding:4px 0;color:#9ca3af">Ekip</td><td>'+esc(gh.hedef_ekip||"—")+'</td></tr>'
+      +'<tr><td style="padding:4px 0;color:#9ca3af">Siparis</td><td>'+esc(gh.siparis_no||"—")+'</td></tr>'
+      +'<tr><td style="padding:4px 0;color:#9ca3af">Proses</td><td>'+esc(gh.proses||"—")+'</td></tr>'
+      +'<tr><td style="padding:4px 0;color:#9ca3af">Risk</td><td><strong style="color:'+renk+'">'+(gh.risk_skoru||0)+'/100</strong></td></tr>'
+      +'<tr><td style="padding:4px 0;color:#9ca3af">Oncelik</td><td>'+esc(gh.oncelik||"—")+'</td></tr>'
+      +'</table>'
+      +'<div style="font-size:11.5px;color:#374151;background:#fffbeb;border-radius:5px;padding:8px 10px;margin-bottom:16px;line-height:1.5">'+esc(gh.mesaj||"")+'</div>'
+      +'<div style="display:flex;gap:10px;justify-content:flex-end;">'
+      +'<button onclick="km_gh_kapat()" style="padding:8px 16px;border-radius:6px;border:1px solid #e5e7eb;background:#fff;cursor:pointer;font-size:13px">Iptal</button>'
+      +'<button id="km-gh-btn" onclick="km_gh_gonder()" style="padding:8px 20px;border-radius:6px;border:none;background:#d97706;color:#fff;cursor:pointer;font-size:13px;font-weight:600">&#10003; Gorev Olustur</button>'
+      +'</div></div></div>';
+    var wrap = document.createElement('div');
+    wrap.id = 'km-gh-wrap';
+    wrap.innerHTML = html;
+    document.body.appendChild(wrap);
+  } catch(err) { console.error("[KM] modal hata:", err); }
+}
+
+function km_gh_kapat() {
+  var el = document.getElementById('km-gh-wrap');
+  if (el) el.remove();
+}
+
+function km_gh_gonder() {
+  var btn = document.getElementById('km-gh-btn');
+  if (!btn || !_kmGhModalG) return;
+  btn.disabled = true; btn.textContent = 'Gonderiliyor...';
+  var gh = JSON.parse(JSON.stringify(_kmGhModalG));
+  fetch('/planlama/api/karar-masasi/gorev-olustur', {
+    method:'POST', credentials:'same-origin',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(gh)
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    var sid = gh.satir_id;
+    km_gh_kapat();
+    if (d.ok) {
+      var bg = d.duplicate ? "#eff6ff" : "#f0fdf4";
+      var bo = d.duplicate ? "#93c5fd" : "#86efac";
+      var rc = d.duplicate ? "#2563eb" : "#16a34a";
+      var et = d.duplicate ? "Acik Gorev #"+d.task_id : "Gorev Olusturuldu #"+d.task_id;
+      if (sid) {
+        document.querySelectorAll('tr[data-satir-id="'+sid+'"]').forEach(function(tr){
+          var td = tr.querySelector('.km-td-gh');
+          if (td) td.innerHTML = '<div style="background:'+bg+';border:1px solid '+bo+';border-radius:4px;padding:4px 8px;font-size:11px;font-weight:700;color:'+rc+'">'+et+'</div>';
+        });
+      }
+    } else {
+      alert('Hata: '+(d.hata||'Bilinmeyen hata'));
+    }
+  })
+  .catch(function(err){ alert('Baglanti hatasi: '+err.message); });
+}
+
+document.addEventListener('keydown', function(e){ if(e.key==='Escape') km_gh_kapat(); });
+/* ── END Global Modal ── */
+
+
+
+
+
+
+
+
+// END: KM_UG_MODAL_JS_v1
