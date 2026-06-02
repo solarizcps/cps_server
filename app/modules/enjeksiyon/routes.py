@@ -1580,6 +1580,8 @@ def _ab_hesapla_tum_saatlikler(cur, rapor_id):
 
 
 # F_KBC_MASTER_DATA_BLOCK: kalip_basi_cift kaldirildi - master data sayfasindan duzeltilir
+from modules.enjeksiyon import setup_db as _setup_db
+
 _AB_SLOT_WHITELIST = {"kalip_id", "renk", "bagli_kalip_adet", "pisme_suresi_sn"}
 
 
@@ -1608,6 +1610,14 @@ def enj_api_slot_toplu(rapor_id):
         if not cur.fetchone():
             con.close()
             return jsonify({"ok": False, "hata": "rapor bulunamadi"}), 404
+        blocked = _setup_db.guard_slot_toplu(cur, rapor_id, slot, guncel)
+        if blocked:
+            con.close()
+            return jsonify({
+                "ok": False,
+                "hata": "Aktif setup kilitli. Kalip degistirmek icin Kalip Degistir kullanin.",
+                "setup_id": blocked["setup_id"],
+            }), 409
         set_parts = [k + " = ?" for k in guncel.keys()]
         params = list(guncel.values()) + [rapor_id, slot]
         cur.execute(
@@ -1713,7 +1723,6 @@ def enj_api_ab_ozet(rapor_id):
 
 
 # ===== BEGIN: ENJ_SETUP_V1_FAZ1 =====
-from modules.enjeksiyon import setup_db as _setup_db
 
 
 @enjeksiyon_bp.route("/api/rapor/<int:rapor_id>/setup", methods=["GET"])

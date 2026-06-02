@@ -18,6 +18,11 @@ _TASLAK_PATCH = frozenset({
     "aktif_goz_sayisi", "kalip_basi_cift", "notlar",
 })
 
+# ENJ_SETUP_V1 FAZ2: slot-toplu ile AKTIF setup alanlari degistirilemez
+_SLOT_TOPLU_LOCKED = frozenset({
+    "kalip_id", "renk", "pisme_suresi_sn", "bagli_kalip_adet", "kalip_basi_cift",
+})
+
 
 def _now():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -109,6 +114,20 @@ def get_active_setup(cur, rapor_id, slot):
         (rapor_id, slot),
     )
     return _row_to_dict(cur.fetchone())
+
+
+def guard_slot_toplu(cur, rapor_id, slot, guncel):
+    """AKTIF setup varken kilitli alan yazimini engelle.
+
+    guncel: whitelist + renk koruma sonrasi guncellenecek alanlar dict.
+    Donus: None (izin) veya {"setup_id": int} (engel).
+    """
+    active = get_active_setup(cur, rapor_id, slot)
+    if not active:
+        return None
+    if _SLOT_TOPLU_LOCKED & set(guncel.keys()):
+        return {"setup_id": active["id"]}
+    return None
 
 
 def list_setups(cur, rapor_id, slot=None, durum=None):
