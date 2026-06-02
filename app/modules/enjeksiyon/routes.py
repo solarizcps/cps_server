@@ -399,6 +399,8 @@ _RAPOR_PATCH_WHITELIST = {
     "teorik_cift_tur", "teorik_cift_gunluk",
     "yukseklik_mm", "bos_agirlik_gr",
     "gun_sonu_notu", "durum",
+    # ENJ-FIRE: gun sonu fire breakdown (migration 012)
+    "bos_atis_kg", "teknik_fire_kg", "yolluk_fire_kg",
 }
 
 # Saatlik PATCH icin whitelist

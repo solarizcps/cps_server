@@ -246,9 +246,9 @@
   <div class="enj-gs">
     <h4>GÜN SONU BİLGİLERİ <small>3 fire tipi · kg cinsinden · her biri için tartı fotoğrafı</small></h4>
     <div class="enj-gs-grid">
-      <div class="enj-fld"><label>BOŞ ATIŞ FİRE (KG)</label><input type="number" step="0.001" min="0" placeholder="0,000"></div>
-      <div class="enj-fld"><label>TERLİK FİRE (KG)</label><input type="number" step="0.001" min="0" placeholder="0,000"></div>
-      <div class="enj-fld"><label>YOLLUK FİRE (KG)</label><input type="number" step="0.001" min="0" placeholder="0,000"></div>
+      <div class="enj-fld"><label>BOŞ ATIŞ FİRE (KG)</label><input type="number" step="0.001" min="0" id="enj-fire-bos" data-field="bos_atis_kg" class="enj-gs-fire-inp" placeholder="0,000" autocomplete="off" value="{{ rapor.bos_atis_kg if rapor.bos_atis_kg is not none else '' }}"></div>
+      <div class="enj-fld"><label>TERLİK FİRE (KG)</label><input type="number" step="0.001" min="0" id="enj-fire-teknik" data-field="teknik_fire_kg" class="enj-gs-fire-inp" placeholder="0,000" autocomplete="off" value="{{ rapor.teknik_fire_kg if rapor.teknik_fire_kg is not none else '' }}"></div>
+      <div class="enj-fld"><label>YOLLUK FİRE (KG)</label><input type="number" step="0.001" min="0" id="enj-fire-yolluk" data-field="yolluk_fire_kg" class="enj-gs-fire-inp" placeholder="0,000" autocomplete="off" value="{{ rapor.yolluk_fire_kg if rapor.yolluk_fire_kg is not none else '' }}"></div>
       <div class="enj-gs-foto" data-foto-tip="bos_atis"><label>BOŞ ATIŞ FOTO</label><div class="zone">&#x1F4F7; Yükle</div><input type="file" accept="image/*" capture="environment" hidden><img class="enj-foto-thumb" hidden alt="foto"></div>
       <div class="enj-gs-foto" data-foto-tip="terlik_fire"><label>TERLİK FİRE FOTO</label><div class="zone">&#x1F4F7; Yükle</div><input type="file" accept="image/*" capture="environment" hidden><img class="enj-foto-thumb" hidden alt="foto"></div>
       <div class="enj-gs-foto" data-foto-tip="yolluk_fire"><label>YOLLUK FİRE FOTO</label><div class="zone">&#x1F4F7; Yükle</div><input type="file" accept="image/*" capture="environment" hidden><img class="enj-foto-thumb" hidden alt="foto"></div>

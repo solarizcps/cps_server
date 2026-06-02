@@ -359,19 +359,33 @@
         return v === '' ? null : v;
     }
 
+    function getFloat(el) {
+        var v = (el.value || '').trim().replace(',', '.');
+        if (v === '') return null;
+        var n = parseFloat(v);
+        return isNaN(n) ? null : n;
+    }
+
     // === Form alanlari auto-save ===
     // PATCH D: enj-bagli-kalip artik readonly + backend authoritative, listeden cikti
     [
         ['enj-emir-no',         'emir_no',          'text'],
         ['enj-renk',            'renk',             'text'],
         ['enj-kalip-basi-cift', 'kalip_basi_cift',  'int'],
-        ['enj-personel-sayisi', 'personel_sayisi',  'int']
+        ['enj-personel-sayisi', 'personel_sayisi',  'int'],
+        // ENJ-FIRE: gun sonu fire breakdown kg
+        ['enj-fire-bos',        'bos_atis_kg',      'float'],
+        ['enj-fire-teknik',     'teknik_fire_kg',   'float'],
+        ['enj-fire-yolluk',     'yolluk_fire_kg',   'float']
     ].forEach(function (spec) {
         var inp = document.getElementById(spec[0]);
         if (!inp) return;
         var key = 'f_' + spec[0];
         function save() {
-            var v = (spec[2] === 'int') ? getNum(inp) : getTxt(inp);
+            var v;
+            if (spec[2] === 'int') v = getNum(inp);
+            else if (spec[2] === 'float') v = getFloat(inp);
+            else v = getTxt(inp);
             var body = {}; body[spec[1]] = v;
             patch('/enjeksiyon/api/rapor/' + raporId, body, inp);
         }
