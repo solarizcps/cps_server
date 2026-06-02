@@ -183,6 +183,18 @@ def log_setup_end(con, rapor_id, istasyon_id,
     )
 
 
+def log_ab_setup_event(con, rapor_id, event_type, setup_id=None, meta_extra=None):
+    """ENJ_SETUP_V1 — enj_ab_setup olaylari (SETUP_CREATED/APPROVED/CLOSED)."""
+    extra = {"setup_id": setup_id}
+    if meta_extra:
+        extra.update(meta_extra)
+    return log_event(
+        con, rapor_id, "SETUP", event_type,
+        onceki_deger=None, yeni_deger=setup_id,
+        meta_extra=extra,
+    )
+
+
 def log_ariza_start(con, rapor_id, istasyon_id,
                     sebep, sebep_detay=None,
                     kullanici_id=None, meta_extra=None):

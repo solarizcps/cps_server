@@ -43,7 +43,10 @@ EVENT_TYPE_MAP = {
     'SETUP': [
         'SETUP_START',
         'SETUP_END',
-        'SETUP_UZUN_UYARI'
+        'SETUP_UZUN_UYARI',
+        'SETUP_CREATED',
+        'SETUP_APPROVED',
+        'SETUP_CLOSED',
     ],
     'ARIZA': [
         'ARIZA_START',
@@ -91,6 +94,9 @@ SETUP_SEBEPLER = [
     'ACIL'
 ]
 
+# ENJ_SETUP_V1 — slot setup kayit durumlari
+SETUP_DURUM = ['TASLAK', 'AKTIF', 'KAPANDI', 'IPTAL']
+
 SPAM_WINDOWS = {
     ('SLOT', 'A_B_TOGGLE'): 2,
     ('SLOT', 'TOPLU_A'): 2,
@@ -100,6 +106,9 @@ SPAM_WINDOWS = {
     ('SETUP', 'SETUP_START'): 0,
     ('SETUP', 'SETUP_END'): 0,
     ('SETUP', 'SETUP_UZUN_UYARI'): 600,
+    ('SETUP', 'SETUP_CREATED'): 0,
+    ('SETUP', 'SETUP_APPROVED'): 0,
+    ('SETUP', 'SETUP_CLOSED'): 0,
     ('ARIZA', 'ARIZA_START'): 0,
     ('ARIZA', 'ARIZA_END'): 0,
     ('ARIZA', 'ARIZA_UZUN'): 600,
@@ -126,6 +135,9 @@ F9_2_ACTIVE = [
     ('SETUP', 'SETUP_START'),
     ('SETUP', 'SETUP_END'),
     ('SETUP', 'SETUP_UZUN_UYARI'),
+    ('SETUP', 'SETUP_CREATED'),
+    ('SETUP', 'SETUP_APPROVED'),
+    ('SETUP', 'SETUP_CLOSED'),
     ('ARIZA', 'ARIZA_START'),
     ('ARIZA', 'ARIZA_END'),
     ('ARIZA', 'ARIZA_UZUN'),

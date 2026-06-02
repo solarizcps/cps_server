@@ -1712,6 +1712,108 @@ def enj_api_ab_ozet(rapor_id):
 # ===== END: ENJ_AB_FAZ1_V1 =====
 
 
+# ===== BEGIN: ENJ_SETUP_V1_FAZ1 =====
+from modules.enjeksiyon import setup_db as _setup_db
+
+
+@enjeksiyon_bp.route("/api/rapor/<int:rapor_id>/setup", methods=["GET"])
+def enj_api_setup_list(rapor_id):
+    """Slot setup listesi veya aktif setup."""
+    try:
+        slot = (request.args.get("slot") or "").upper().strip()
+        durum = (request.args.get("durum") or "").upper().strip()
+        con = _sqlite3.connect(_enj_kalip_db_path())
+        cur = con.cursor()
+        if slot in ("A", "B") and request.args.get("aktif") == "1":
+            row = _setup_db.get_active_setup(cur, rapor_id, slot)
+            con.close()
+            return jsonify({"ok": True, "setup": row})
+        rows = _setup_db.list_setups(
+            cur, rapor_id,
+            slot=slot if slot in ("A", "B") else None,
+            durum=durum if durum else None,
+        )
+        con.close()
+        return jsonify({"ok": True, "setups": rows})
+    except Exception as e:
+        return jsonify({"ok": False, "hata": str(e)}), 500
+
+
+@enjeksiyon_bp.route("/api/rapor/<int:rapor_id>/setup", methods=["POST"])
+def enj_api_setup_create(rapor_id):
+    """Yeni TASLAK setup."""
+    try:
+        body = request.get_json(silent=True) or {}
+        con = _sqlite3.connect(_enj_kalip_db_path())
+        result = _setup_db.create_setup(con, rapor_id, body, _f72_get_user())
+        if result.get("ok"):
+            con.commit()
+            con.close()
+            return jsonify(result)
+        con.close()
+        return jsonify(result), 400
+    except Exception as e:
+        return jsonify({"ok": False, "hata": str(e)}), 500
+
+
+@enjeksiyon_bp.route("/api/rapor/<int:rapor_id>/setup/<int:setup_id>", methods=["PATCH"])
+def enj_api_setup_patch(rapor_id, setup_id):
+    """TASLAK setup guncelle."""
+    try:
+        body = request.get_json(silent=True) or {}
+        con = _sqlite3.connect(_enj_kalip_db_path())
+        result = _setup_db.update_setup(con, setup_id, rapor_id, body)
+        if result.get("ok"):
+            con.commit()
+            con.close()
+            return jsonify(result)
+        con.close()
+        return jsonify(result), 400
+    except Exception as e:
+        return jsonify({"ok": False, "hata": str(e)}), 500
+
+
+@enjeksiyon_bp.route("/api/rapor/<int:rapor_id>/setup/<int:setup_id>/onayla", methods=["POST"])
+def enj_api_setup_onayla(rapor_id, setup_id):
+    """TASLAK -> AKTIF."""
+    try:
+        con = _sqlite3.connect(_enj_kalip_db_path())
+        result = _setup_db.approve_setup(con, setup_id, rapor_id, _f72_get_user())
+        if result.get("ok"):
+            con.commit()
+            con.close()
+            return jsonify(result)
+        con.close()
+        return jsonify(result), 400
+    except Exception as e:
+        return jsonify({"ok": False, "hata": str(e)}), 500
+
+
+@enjeksiyon_bp.route("/api/rapor/<int:rapor_id>/setup/<int:setup_id>/kapat", methods=["POST"])
+def enj_api_setup_kapat(rapor_id, setup_id):
+    """AKTIF -> KAPANDI."""
+    try:
+        body = request.get_json(silent=True) or {}
+        con = _sqlite3.connect(_enj_kalip_db_path())
+        result = _setup_db.close_setup(
+            con, setup_id, rapor_id,
+            body.get("degisim_sebebi"),
+            _f72_get_user(),
+            notlar=body.get("notlar"),
+        )
+        if result.get("ok"):
+            con.commit()
+            con.close()
+            return jsonify(result)
+        con.close()
+        return jsonify(result), 400
+    except Exception as e:
+        return jsonify({"ok": False, "hata": str(e)}), 500
+
+
+# ===== END: ENJ_SETUP_V1_FAZ1 =====
+
+
 # === BEGIN: ENJ_AB_RENK ===
 _RENKLER_DATA = [{"kod": "0001", "ad": "SİYAH"}, {"kod": "0002", "ad": "SİYAH MAT SİYAH"}, {"kod": "0030", "ad": "GRİ"}, {"kod": "0031", "ad": "BUZ GRİ"}, {"kod": "0041", "ad": "FÜME"}, {"kod": "0042", "ad": "ANTRASİT UGG"}, {"kod": "0100", "ad": "OPTIK BEYAZ"}, {"kod": "0102", "ad": "OFF WHITE"}, {"kod": "0103", "ad": "LIGHT ECURU"}, {"kod": "0105", "ad": "BEYAZ CİHAN)"}, {"kod": "0106", "ad": "BEYAZ POLTAP)"}, {"kod": "0170", "ad": "PEMBE"}, {"kod": "0171", "ad": "TOZ PEMBE"}, {"kod": "0172", "ad": "ŞEKER PEMBE"}, {"kod": "0173", "ad": "LIGHT PEMBE"}, {"kod": "0201", "ad": "BEJ"}, {"kod": "0202", "ad": "KOYU BEJ"}, {"kod": "0221", "ad": "ACIK PUDRA"}, {"kod": "0220", "ad": "KOYU PUDRA"}, {"kod": "0240", "ad": "SOMON"}, {"kod": "0241", "ad": "CORAL"}, {"kod": "0242", "ad": "KOYU CORAL"}, {"kod": "0250", "ad": "TURUNCU"}, {"kod": "0260", "ad": "KREM"}, {"kod": "0261", "ad": "KOYU KREM"}, {"kod": "0263", "ad": "KREM FRUDA"}, {"kod": "0268", "ad": "KREM PAW PETROL"}, {"kod": "0301", "ad": "KIRMIZI"}, {"kod": "0302", "ad": "B.KIRMII"}, {"kod": "0303", "ad": "KOYU KIRMIZI"}, {"kod": "0400", "ad": "AÇIK LACİVERT"}, {"kod": "0401", "ad": "LACİVERT"}, {"kod": "0402", "ad": "LACİVERT ELİS TERLİK"}, {"kod": "0449", "ad": "LILA"}, {"kod": "0450", "ad": "AÇIK LILA"}, {"kod": "0451", "ad": "KOYU LİLA"}, {"kod": "0455", "ad": "MOR"}, {"kod": "0500", "ad": "AÇIK SARI"}, {"kod": "0502", "ad": "HARDAL"}, {"kod": "0560", "ad": "FUSYA"}, {"kod": "0677", "ad": "MAVİ"}, {"kod": "0678", "ad": "BUZ MAVİ"}, {"kod": "0680", "ad": "CYAN"}, {"kod": "0683", "ad": "SAX MAVİ"}, {"kod": "0688", "ad": "BEBE MAVİ"}, {"kod": "0700", "ad": "TURKUAZ"}, {"kod": "0702", "ad": "PETROL YEŞİLİ"}, {"kod": "0721", "ad": "AÇIK SU YEŞİL"}, {"kod": "0722", "ad": "YOSUN YEŞİLİ"}, {"kod": "0726", "ad": "HAKİ YEŞİL"}, {"kod": "0730", "ad": "DUL MINT"}, {"kod": "0820", "ad": "LİME"}, {"kod": "0850", "ad": "POWDER PINK"}, {"kod": "0902", "ad": "VİZON"}, {"kod": "0903", "ad": "VİZON(UGG)"}, {"kod": "0929", "ad": "KOYU CAMEL"}, {"kod": "0930", "ad": "CAMEL"}, {"kod": "0960", "ad": "KAHVERENGİ"}, {"kod": "0961", "ad": "SÜTLÜ KAHVE"}, {"kod": "0990", "ad": "BORDO"}]
 
