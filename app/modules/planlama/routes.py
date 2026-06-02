@@ -2773,6 +2773,15 @@ def f951_operasyon_raporu_sayfa():
     return render_template("planlama/operasyon_raporu.html")
 
 
+# KALIP_GORUNUM_PLANLAMA: Planlama için read-only kalıp listesi alias
+# Write API'leri /yonetim/api/kalip/* -> @ky_kalip_yetki (SuperAdmin) korumasında kalır.
+@planlama_bp.route("/kalip-gorunum", methods=["GET"])
+@yetki_gerekli('planlama.operasyon_raporu', 'can_view')
+def planlama_kalip_gorunum():
+    """Planlama için read-only kalıp görünümü. Yazma API'leri yonetim SuperAdmin korumasında."""
+    return render_template("yonetim/kalip_yonetimi.html")
+
+
 
 
 
