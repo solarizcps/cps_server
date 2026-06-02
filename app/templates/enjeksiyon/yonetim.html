@@ -7,7 +7,7 @@
 {% block content %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/enjeksiyon.css') }}?v=f9_1_20260514">
 
-<div class="enj-wrap" data-rapor-id="{{ rapor.id or "" }}" data-tarih="{{ secili_tarih }}" data-vardiya="{{ vardiya }}" data-makine-id="{{ secili_makine_id }}">
+<div class="enj-wrap" data-rapor-id="{{ rapor.id or "" }}" data-tarih="{{ secili_tarih }}" data-vardiya="{{ vardiya }}" data-makine-id="{{ secili_makine_id }}" data-bagli-kalip="{{ rapor.bagli_kalip_adet if rapor.bagli_kalip_adet is not none else '' }}">
 
   <div class="enj-page-head">
     <h2>Enjeksiyon Takip <span class="sub">/ Yönetim Paneli</span></h2>
@@ -93,9 +93,12 @@
               </div>
             </div>
             <div class="enj-fld"><label>Renk</label><input type="text" class="enj-ab-faz2-inp" id="enj-renk-a" data-slot="A" data-field="renk" autocomplete="off"></div>
-            <input type="hidden" id="enj-bagli-a" data-slot="A" data-field="bagli_kalip_adet" class="enj-ab-faz2-inp">
-            <div class="enj-fld"><label>KBÇ</label><input type="number" class="enj-ab-faz2-inp" id="enj-kbc-a" data-slot="A" data-field="kalip_basi_cift" autocomplete="off"></div>
             <div class="enj-fld"><label>Pişme (sn)</label><input type="number" class="enj-ab-faz2-inp" id="enj-pisme-a" data-slot="A" data-field="pisme_suresi_sn" autocomplete="off"></div>
+          </div>
+          <div class="enj-ab-carpan-gosterge" aria-label="A tarafı kalıp çarpanları">
+            <div class="ecg-cell"><span class="ecg-lbl">Bağlı / aktif göz</span><span class="ecg-val" id="enj-gosterge-bagli-a">—</span></div>
+            <div class="ecg-cell"><span class="ecg-lbl">KBÇ</span><span class="ecg-val" id="enj-gosterge-kbc-a">—</span></div>
+            <div class="ecg-cell ecg-kap"><span class="ecg-lbl">Tur kapasitesi</span><span class="ecg-val" id="enj-gosterge-kap-a">—</span><span class="ecg-unit">çift/tur</span></div>
           </div>
           <div class="enj-ab-faz2-metrics">
             <div class="enj-ab-faz2-met"><label>A TUR</label><input type="text" readonly id="enj-cev-a-top" class="met-val" placeholder="—"></div>
@@ -115,9 +118,12 @@
               </div>
             </div>
             <div class="enj-fld"><label>Renk</label><input type="text" class="enj-ab-faz2-inp" id="enj-renk-b" data-slot="B" data-field="renk" autocomplete="off"></div>
-            <input type="hidden" id="enj-bagli-b" data-slot="B" data-field="bagli_kalip_adet" class="enj-ab-faz2-inp">
-            <div class="enj-fld"><label>KBÇ</label><input type="number" class="enj-ab-faz2-inp" id="enj-kbc-b" data-slot="B" data-field="kalip_basi_cift" autocomplete="off"></div>
             <div class="enj-fld"><label>Pişme (sn)</label><input type="number" class="enj-ab-faz2-inp" id="enj-pisme-b" data-slot="B" data-field="pisme_suresi_sn" autocomplete="off"></div>
+          </div>
+          <div class="enj-ab-carpan-gosterge" aria-label="B tarafı kalıp çarpanları">
+            <div class="ecg-cell"><span class="ecg-lbl">Bağlı / aktif göz</span><span class="ecg-val" id="enj-gosterge-bagli-b">—</span></div>
+            <div class="ecg-cell"><span class="ecg-lbl">KBÇ</span><span class="ecg-val" id="enj-gosterge-kbc-b">—</span></div>
+            <div class="ecg-cell ecg-kap"><span class="ecg-lbl">Tur kapasitesi</span><span class="ecg-val" id="enj-gosterge-kap-b">—</span><span class="ecg-unit">çift/tur</span></div>
           </div>
           <div class="enj-ab-faz2-metrics">
             <div class="enj-ab-faz2-met"><label>B TUR</label><input type="text" readonly id="enj-cev-b-top" class="met-val" placeholder="—"></div>
