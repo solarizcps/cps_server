@@ -895,14 +895,14 @@ def _ky_db_path():
 
 
 @yonetim_bp.route('/kalip-yonetimi', methods=['GET'])
-@ky_kalip_yetki  # F_KY_YETKI_GENISLET
+@yetki_gerekli('planlama.enjeksiyon.kalip', 'can_view')  # KALIP_FAZ_A: merkezi yetki sistemine alindi
 def ky_kalip_yonetimi_sayfa():
     """Kalip Yonetimi sayfasi (Master Data)."""
     return render_template('yonetim/kalip_yonetimi.html')
 
 
 @yonetim_bp.route('/api/kaliplar', methods=['GET'])
-@yetki_gerekli('planlama.operasyon_raporu', 'can_view')  # KALIP_GORUNUM_PLANLAMA: okuma acildi
+@yetki_gerekli('planlama.enjeksiyon.kalip', 'can_view')  # KALIP_FAZ_A: merkezi yetki sistemine alindi
 def ky_api_kaliplar():
     """Tum kaliplar listesi (master data)."""
     try:
@@ -944,7 +944,7 @@ _KY_PATCH_WHITELIST = {
 
 
 @yonetim_bp.route('/api/kalip/<int:kalip_id>', methods=['PATCH'])
-@ky_kalip_yetki  # F_KY_YETKI_GENISLET
+@yetki_gerekli('planlama.enjeksiyon.kalip', 'can_update')  # KALIP_FAZ_A: merkezi yetki sistemine alindi
 def ky_api_kalip_patch(kalip_id):
     """Kalip duzenleme - master data update."""
     try:
@@ -1044,7 +1044,7 @@ def _ky_uzanti_ok(ad):
 
 
 @yonetim_bp.route('/api/kalip/<int:kalip_id>/gorsel', methods=['POST'])
-@ky_kalip_yetki  # F_KY_YETKI_GENISLET
+@yetki_gerekli('planlama.enjeksiyon.kalip', 'can_create')  # KALIP_FAZ_A: merkezi yetki sistemine alindi
 def ky_api_kalip_gorsel_upload(kalip_id):
     """Kalip gorsel yukle. Eski gorseli korur (asla silmez)."""
     try:
