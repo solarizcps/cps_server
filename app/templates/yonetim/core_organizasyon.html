@@ -119,6 +119,36 @@ async function kullaniciDetay(profilId, adSoyad) {
       : `<div class="co-bridge-yok">❌ Bridge bağlantısı yok</div>
          <div style="font-size:12px;color:var(--text3);margin-top:4px">Faz 4 — PDKS entegrasyonu</div>`;
 
+    // SAHA_PERSONEL için usta atama section
+    let ustaAtamaHtml = '';
+    if (p.profil_tipi === 'SAHA_PERSONEL') {
+      try {
+        const uR = await fetch('/yonetim/api/core/usta-personel/ustalar');
+        const uD = await uR.json();
+        if (uD.ok && uD.ustalar.length) {
+          const opts = uD.ustalar.map(u =>
+            `<option value="${u.id}">${u.ad_soyad} (${u.bagli_personel_sayisi} personel)</option>`
+          ).join('');
+          ustaAtamaHtml = `
+            <div class="co-d-sec" id="ustaAtamaSec_${profilId}">
+              <div class="co-d-sec-title">Usta Ataması</div>
+              <div style="margin-bottom:8px">
+                <select id="ustaSecim_${profilId}" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+                  <option value="">— Usta seç —</option>
+                  ${opts}
+                </select>
+              </div>
+              <button
+                onclick="ustaPersonelBagla(${profilId})"
+                style="width:100%;padding:7px;background:#d4a52f;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">
+                Bağla
+              </button>
+              <div id="ustaAtamaSonuc_${profilId}" style="margin-top:8px;font-size:12px"></div>
+            </div>`;
+        }
+      } catch(_) {}
+    }
+
     drawerAc(p.ad_soyad, `
       <div class="co-d-sec">
         <div class="co-d-sec-title">Profil</div>
@@ -136,9 +166,42 @@ async function kullaniciDetay(profilId, adSoyad) {
       </div>
       <div class="co-d-sec">
         <div class="co-d-sec-title">Bridge Durumu</div>${bridgeHtml}
-      </div>`);
+      </div>
+      ${ustaAtamaHtml}`);
   } catch(e) {
     drawerAc(adSoyad, `<p style="color:red">Hata: ${e.message}</p>`);
+  }
+}
+
+// ── Usta-Personel Bağlama ─────────────────────────────────────
+async function ustaPersonelBagla(personelProfilId) {
+  const sel = document.getElementById(`ustaSecim_${personelProfilId}`);
+  const sonuc = document.getElementById(`ustaAtamaSonuc_${personelProfilId}`);
+  if (!sel || !sel.value) {
+    if (sonuc) sonuc.innerHTML = '<span style="color:#ca8a04">Lütfen bir usta seçin.</span>';
+    return;
+  }
+  const ustaProfilId = parseInt(sel.value);
+  sonuc.innerHTML = '<span style="color:#6b7280">Kaydediliyor…</span>';
+  try {
+    const r = await fetch('/yonetim/api/core/usta-personel/bagla', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        usta_profil_id:     ustaProfilId,
+        personel_profil_id: personelProfilId
+      })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      sonuc.innerHTML = `<span style="color:#16a34a">✅ ${d.usta.ad} → ${d.personel.ad} bağlandı (id:${d.iliski_id})</span>`;
+      sel.disabled = true;
+      document.querySelector(`#ustaAtamaSec_${personelProfilId} button`).disabled = true;
+    } else {
+      sonuc.innerHTML = `<span style="color:#dc2626">❌ ${d.hata}</span>`;
+    }
+  } catch(e) {
+    sonuc.innerHTML = `<span style="color:#dc2626">Hata: ${e.message}</span>`;
   }
 }
 
@@ -526,6 +589,36 @@ async function kullaniciDetay(profilId, adSoyad) {
       : `<div class="co-bridge-yok">❌ Bridge bağlantısı yok</div>
          <div style="font-size:12px;color:var(--text3);margin-top:4px">Faz 4 — PDKS entegrasyonu</div>`;
 
+    // SAHA_PERSONEL için usta atama section
+    let ustaAtamaHtml = '';
+    if (p.profil_tipi === 'SAHA_PERSONEL') {
+      try {
+        const uR = await fetch('/yonetim/api/core/usta-personel/ustalar');
+        const uD = await uR.json();
+        if (uD.ok && uD.ustalar.length) {
+          const opts = uD.ustalar.map(u =>
+            `<option value="${u.id}">${u.ad_soyad} (${u.bagli_personel_sayisi} personel)</option>`
+          ).join('');
+          ustaAtamaHtml = `
+            <div class="co-d-sec" id="ustaAtamaSec_${profilId}">
+              <div class="co-d-sec-title">Usta Ataması</div>
+              <div style="margin-bottom:8px">
+                <select id="ustaSecim_${profilId}" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+                  <option value="">— Usta seç —</option>
+                  ${opts}
+                </select>
+              </div>
+              <button
+                onclick="ustaPersonelBagla(${profilId})"
+                style="width:100%;padding:7px;background:#d4a52f;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">
+                Bağla
+              </button>
+              <div id="ustaAtamaSonuc_${profilId}" style="margin-top:8px;font-size:12px"></div>
+            </div>`;
+        }
+      } catch(_) {}
+    }
+
     drawerAc(p.ad_soyad, `
       <div class="co-d-sec">
         <div class="co-d-sec-title">Profil</div>
@@ -543,9 +636,42 @@ async function kullaniciDetay(profilId, adSoyad) {
       </div>
       <div class="co-d-sec">
         <div class="co-d-sec-title">Bridge Durumu</div>${bridgeHtml}
-      </div>`);
+      </div>
+      ${ustaAtamaHtml}`);
   } catch(e) {
     drawerAc(adSoyad, `<p style="color:red">Hata: ${e.message}</p>`);
+  }
+}
+
+// ── Usta-Personel Bağlama ─────────────────────────────────────
+async function ustaPersonelBagla(personelProfilId) {
+  const sel = document.getElementById(`ustaSecim_${personelProfilId}`);
+  const sonuc = document.getElementById(`ustaAtamaSonuc_${personelProfilId}`);
+  if (!sel || !sel.value) {
+    if (sonuc) sonuc.innerHTML = '<span style="color:#ca8a04">Lütfen bir usta seçin.</span>';
+    return;
+  }
+  const ustaProfilId = parseInt(sel.value);
+  sonuc.innerHTML = '<span style="color:#6b7280">Kaydediliyor…</span>';
+  try {
+    const r = await fetch('/yonetim/api/core/usta-personel/bagla', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        usta_profil_id:     ustaProfilId,
+        personel_profil_id: personelProfilId
+      })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      sonuc.innerHTML = `<span style="color:#16a34a">✅ ${d.usta.ad} → ${d.personel.ad} bağlandı (id:${d.iliski_id})</span>`;
+      sel.disabled = true;
+      document.querySelector(`#ustaAtamaSec_${personelProfilId} button`).disabled = true;
+    } else {
+      sonuc.innerHTML = `<span style="color:#dc2626">❌ ${d.hata}</span>`;
+    }
+  } catch(e) {
+    sonuc.innerHTML = `<span style="color:#dc2626">Hata: ${e.message}</span>`;
   }
 }
 

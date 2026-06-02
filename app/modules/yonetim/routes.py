@@ -1474,6 +1474,49 @@ def core_usta_personel_bagla():
 # END USTA_PERSONEL_BAGLA
 # ════════════════════════════════════════════════════════════════
 
+# ════════════════════════════════════════════════════════════════
+# CORE_ILISKI FAZ1C-3 — Usta Listesi API
+# BEGIN USTA_PERSONEL_USTALAR
+# ════════════════════════════════════════════════════════════════
+
+@yonetim_bp.route('/api/core/usta-personel/ustalar', methods=['GET'])
+@yetki_gerekli('yonetim', 'can_view')
+def core_usta_personel_ustalar():
+    """
+    Aktif SAHA_USTASI listesini ve her birinin bağlı personel sayısını döner.
+    Drawer dropdown için kullanılır.
+    """
+    con = _get_conn()
+    try:
+        rows = con.execute("""
+            SELECT
+                kp.id,
+                kp.gercek_ad AS ad_soyad,
+                COUNT(upi.id) AS bagli_personel_sayisi
+            FROM kullanici_profil kp
+            LEFT JOIN usta_personel_iliskisi upi
+                   ON upi.usta_profil_id = kp.id AND upi.aktif = 1
+            WHERE kp.profil_tipi = 'SAHA_USTASI' AND kp.aktif = 1
+            GROUP BY kp.id
+            ORDER BY kp.gercek_ad
+        """).fetchall()
+    finally:
+        con.close()
+    return jsonify({
+        "ok": True,
+        "ustalar": [
+            {
+                "id":                   r["id"],
+                "ad_soyad":             r["ad_soyad"],
+                "bagli_personel_sayisi": r["bagli_personel_sayisi"]
+            }
+            for r in rows
+        ]
+    })
+
+# END USTA_PERSONEL_USTALAR
+# ════════════════════════════════════════════════════════════════
+
 
 # ════════════════════════════════════════════════════════════════
 # TASKS ADMIN TAKİP PANELİ
