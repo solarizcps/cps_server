@@ -902,7 +902,7 @@ def ky_kalip_yonetimi_sayfa():
 
 
 @yonetim_bp.route('/api/kaliplar', methods=['GET'])
-@ky_kalip_yetki  # F_KY_YETKI_GENISLET
+@yetki_gerekli('planlama.operasyon_raporu', 'can_view')  # KALIP_GORUNUM_PLANLAMA: okuma acildi
 def ky_api_kaliplar():
     """Tum kaliplar listesi (master data)."""
     try:
