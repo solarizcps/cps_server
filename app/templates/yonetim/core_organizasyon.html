@@ -122,6 +122,14 @@ async function kullaniciDetay(profilId, adSoyad) {
     // SAHA_PERSONEL için usta atama section (pre-loaded list)
     let ustaAtamaHtml = '';
     if (p.profil_tipi === 'SAHA_PERSONEL') {
+      if (d.bagli_usta_id && d.bagli_usta_ad) {
+        ustaAtamaHtml = `
+          <div class="co-d-sec">
+            <div class="co-d-sec-title">Usta Ataması</div>
+            <div class="co-d-row"><span class="co-d-lbl">Bağlı Usta</span>
+              <span class="co-d-val" style="color:#16a34a;font-weight:600">${d.bagli_usta_ad}</span></div>
+          </div>`;
+      } else {
       const ustalar = window._ustaListesi || [];
       if (ustalar.length) {
         const opts = ustalar.map(u =>
@@ -149,6 +157,7 @@ async function kullaniciDetay(profilId, adSoyad) {
             <div class="co-d-sec-title">Usta Ataması</div>
             <div style="color:#ca8a04;font-size:12px">Usta listesi yüklenemedi — sayfayı yenile.</div>
           </div>`;
+      }
       }
     }
 
@@ -601,6 +610,14 @@ async function kullaniciDetay(profilId, adSoyad) {
     // SAHA_PERSONEL için usta atama section (pre-loaded list)
     let ustaAtamaHtml = '';
     if (p.profil_tipi === 'SAHA_PERSONEL') {
+      if (d.bagli_usta_id && d.bagli_usta_ad) {
+        ustaAtamaHtml = `
+          <div class="co-d-sec">
+            <div class="co-d-sec-title">Usta Ataması</div>
+            <div class="co-d-row"><span class="co-d-lbl">Bağlı Usta</span>
+              <span class="co-d-val" style="color:#16a34a;font-weight:600">${d.bagli_usta_ad}</span></div>
+          </div>`;
+      } else {
       const ustalar = window._ustaListesi || [];
       if (ustalar.length) {
         const opts = ustalar.map(u =>
@@ -628,6 +645,7 @@ async function kullaniciDetay(profilId, adSoyad) {
             <div class="co-d-sec-title">Usta Ataması</div>
             <div style="color:#ca8a04;font-size:12px">Usta listesi yüklenemedi — sayfayı yenile.</div>
           </div>`;
+      }
       }
     }
 

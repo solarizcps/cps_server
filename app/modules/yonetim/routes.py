@@ -1271,6 +1271,22 @@ def core_kullanici_detay(profil_id):
                 WHERE sk.KullaniciAdi=? LIMIT 1)
         """, (kp["kullanici_adi"],)).fetchone()
 
+        # FAZ1C-4A: SAHA_PERSONEL icin aktif usta baglantisi
+        bagli_usta_id = bagli_usta_ad = iliski_id = None
+        if kp["profil_tipi"] == "SAHA_PERSONEL":
+            upi = con.execute("""
+                SELECT upi.id AS iliski_id, u.id AS usta_id, u.gercek_ad AS usta_ad
+                FROM usta_personel_iliskisi upi
+                JOIN kullanici_profil u ON u.id = upi.usta_profil_id
+                WHERE upi.personel_profil_id = ? AND upi.aktif = 1
+                ORDER BY upi.id DESC
+                LIMIT 1
+            """, (profil_id,)).fetchone()
+            if upi:
+                bagli_usta_id = upi["usta_id"]
+                bagli_usta_ad = upi["usta_ad"]
+                iliski_id = upi["iliski_id"]
+
     finally:
         con.close()
 
@@ -1295,6 +1311,9 @@ def core_kullanici_detay(profil_id):
             "identity_durum": bridge["IdentityDurum"] if bridge else None,
             "guven_skoru":    bridge["GuvenSkoru"]     if bridge else None,
         } if bridge else {"var": False},
+        "bagli_usta_id":  bagli_usta_id,
+        "bagli_usta_ad":  bagli_usta_ad,
+        "iliski_id":      iliski_id,
     })
 
 
