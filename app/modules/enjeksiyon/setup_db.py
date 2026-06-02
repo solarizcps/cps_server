@@ -77,6 +77,43 @@ def _aktif_goz_canli(cur, rapor_id, slot):
     return int(cur.fetchone()[0] or 0)
 
 
+def _sync_setup_to_istasyon(cur, rapor_id, slot, setup_row):
+    """AKTIF setup degerlerini ilgili slot istasyon satirlarina yaz."""
+    slot = (slot or "").upper()
+    if slot not in ("A", "B"):
+        return {"ok": False, "hata": "slot A veya B olmali"}
+    if not setup_row or not setup_row.get("kalip_id"):
+        return {"ok": False, "hata": "sync icin kalip_id zorunlu"}
+
+    cur.execute(
+        """
+        UPDATE enj_istasyon_durumu
+        SET kalip_id=?, renk=?, pisme_suresi_sn=?
+        WHERE rapor_id=? AND slot=?
+        """,
+        (
+            setup_row["kalip_id"],
+            setup_row.get("renk"),
+            setup_row.get("pisme_suresi_sn"),
+            rapor_id,
+            slot,
+        ),
+    )
+    affected = int(cur.rowcount or 0)
+    if affected <= 0:
+        return {
+            "ok": False,
+            "hata": "istasyon bulunamadi (rapor=%s slot=%s)" % (rapor_id, slot),
+        }
+    return {"ok": True, "guncellenen_istasyon": affected}
+
+
+def _recalc_rapor_saatlik(cur, rapor_id):
+    """Mevcut hesap motorunu kullan (formul degistirilmez)."""
+    from modules.enjeksiyon.routes import _ab_hesapla_tum_saatlikler
+    return _ab_hesapla_tum_saatlikler(cur, rapor_id)
+
+
 def validate_setup(data, for_approve=False):
     """for_approve=True ise zorunlu alanlar kontrol edilir."""
     err = []
@@ -289,16 +326,35 @@ def approve_setup(con, setup_id, rapor_id, user=None):
     )
     row = _fetch_setup(cur, setup_id, rapor_id)
 
+    sync = _sync_setup_to_istasyon(cur, rapor_id, row["slot"], row)
+    if not sync.get("ok"):
+        return sync
+
+    try:
+        recalc = _recalc_rapor_saatlik(cur, rapor_id)
+    except Exception as e:
+        return {"ok": False, "hata": "hesap yenileme hatasi: %s" % e}
+
     try:
         from modules.enjeksiyon.audit import log_ab_setup_event
         log_ab_setup_event(
             con, rapor_id, "SETUP_APPROVED", setup_id=setup_id,
-            meta_extra={"slot": row["slot"], "setup": row},
+            meta_extra={
+                "slot": row["slot"],
+                "setup": row,
+                "istasyon_sync": sync,
+                "yeniden_hesaplanan_saatlik": recalc,
+            },
         )
     except Exception:
         pass
 
-    return {"ok": True, "setup": row}
+    return {
+        "ok": True,
+        "setup": row,
+        "istasyon_sync": sync,
+        "yeniden_hesaplanan_saatlik": recalc,
+    }
 
 
 def close_setup(con, setup_id, rapor_id, degisim_sebebi, user=None, notlar=None):
