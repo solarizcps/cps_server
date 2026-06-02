@@ -2099,20 +2099,48 @@
     el.textContent = (v == null || v === '') ? '—' : String(v);
   }
 
+  function enjGostergeKbcVal(ayar) {
+    if (!ayar) return null;
+    if (ayar.efektif_kalip_basi_cift != null && ayar.efektif_kalip_basi_cift !== '') {
+      return ayar.efektif_kalip_basi_cift;
+    }
+    if (ayar.kalip_basi_cift != null && ayar.kalip_basi_cift !== '') {
+      return ayar.kalip_basi_cift;
+    }
+    return null;
+  }
+
+  /** Aktif göz: kapasite_per_cycle / efektif KBÇ; yoksa bagli_kalip_adet fallback */
+  function enjGostergeAktifGoz(kapasite, ayar, fallbackBagli) {
+    var kbc = enjGostergeKbcVal(ayar);
+    var kap = (kapasite != null && kapasite !== '') ? Number(kapasite) : null;
+    if (kap != null && kbc != null && Number(kbc) > 0) {
+      return Math.round(kap / Number(kbc));
+    }
+    if (ayar && ayar.bagli_kalip_adet != null && ayar.bagli_kalip_adet !== '') {
+      return ayar.bagli_kalip_adet;
+    }
+    if (ayar && fallbackBagli != null && fallbackBagli !== '') {
+      return fallbackBagli;
+    }
+    return null;
+  }
+
+  function enjGostergeSlotSet(sl, slotData, fallbackBagli) {
+    var data = slotData || {};
+    var ayar = data.ayar;
+    var kap = data.kapasite_per_cycle;
+    enjGostergeTxt('enj-gosterge-bagli-' + sl, enjGostergeAktifGoz(kap, ayar, fallbackBagli));
+    enjGostergeTxt('enj-gosterge-kbc-' + sl, enjGostergeKbcVal(ayar));
+    enjGostergeTxt('enj-gosterge-kap-' + sl, kap);
+  }
+  window.enjGostergeSlotSet = enjGostergeSlotSet;
+
   /** KBÇ: efektif (COALESCE) > ham istasyon > mevcut span değeri koru */
   function enjGostergeKbcSet(sl, ayar) {
-    var el = document.getElementById('enj-gosterge-kbc-' + sl);
-    if (!el) return;
-    var v;
-    if (ayar) {
-      if (ayar.efektif_kalip_basi_cift != null && ayar.efektif_kalip_basi_cift !== '') {
-        v = ayar.efektif_kalip_basi_cift;
-      } else if (ayar.kalip_basi_cift != null && ayar.kalip_basi_cift !== '') {
-        v = ayar.kalip_basi_cift;
-      }
-    }
+    var v = enjGostergeKbcVal(ayar);
     if (v == null) return;
-    el.textContent = String(v);
+    enjGostergeTxt('enj-gosterge-kbc-' + sl, v);
   }
   window.enjGostergeKbcSet = enjGostergeKbcSet;
 
@@ -2165,20 +2193,14 @@
         };
         setV('enj-cev-' + sl + '-top', data.cevrim);
         setV('enj-uret-' + sl + '-top', data.uretilen);
-        enjGostergeTxt('enj-gosterge-kap-' + sl, data.kapasite_per_cycle);
         var ayar = data.ayar;
         if (ayar) {
           enjRenkSetFromServer(sl, ayar.renk);
           setV('enj-pisme-' + sl, ayar.pisme_suresi_sn);
           setV('enj-kalip-' + sl + '-id', ayar.kalip_id);
           if (ayar.kalip_kod) setV('enj-kalip-' + sl + '-input', ayar.kalip_kod);
-          var bagli = ayar.bagli_kalip_adet;
-          if (bagli == null || bagli === '') bagli = bagliMakine;
-          enjGostergeTxt('enj-gosterge-bagli-' + sl, bagli);
-          enjGostergeKbcSet(sl, ayar);
-        } else {
-          enjGostergeTxt('enj-gosterge-bagli-' + sl, bagliMakine);
         }
+        enjGostergeSlotSet(sl, data, bagliMakine);
       });
     }).catch(function () {});
   }
@@ -2484,12 +2506,6 @@
 
               // Instant local update (renk: uretim doluysa korunur)
               enjRenkMasterOner(sl, k.renk);
-              (function (s, bagli, kbc) {
-                var elB = document.getElementById('enj-gosterge-bagli-' + s);
-                var elK = document.getElementById('enj-gosterge-kbc-' + s);
-                if (elB) elB.textContent = (bagli != null && bagli !== '') ? String(bagli) : '—';
-                if (elK) elK.textContent = (kbc != null && kbc !== '') ? String(kbc) : '—';
-              })(sl, k.varsayilan_bagli_kalip, k.kalip_basi_cift);
 
               // Backend sync (renk:null gonderilmez)
               var syncBody = enjSlotTopluPayload(slot, {
@@ -2505,13 +2521,8 @@
                 return fetch('/enjeksiyon/api/rapor/' + raporId + '/ab-ozet');
               }).then(function (r) { return r.json(); })
               .then(function (d) {
-                if (d && d.ok && d[slot]) {
-                  var elKap = document.getElementById('enj-gosterge-kap-' + sl);
-                  var kap = d[slot].kapasite_per_cycle;
-                  if (elKap) elKap.textContent = (kap != null && kap !== '') ? String(kap) : '—';
-                  if (d[slot].ayar && window.enjGostergeKbcSet) {
-                    window.enjGostergeKbcSet(sl, d[slot].ayar);
-                  }
+                if (d && d.ok && d[slot] && window.enjGostergeSlotSet) {
+                  window.enjGostergeSlotSet(sl, d[slot], wrap.dataset.bagliKalip);
                 }
               }).catch(function(){});
             });
