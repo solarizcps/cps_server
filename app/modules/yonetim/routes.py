@@ -1459,8 +1459,8 @@ def core_usta_personel_bagla():
     finally:
         con.close()
 
-    audit.log(_u(), 'usta_personel_bagla',
-              f'iliski_id={yeni_id} usta={usta["gercek_ad"]} personel={personel["gercek_ad"]}')
+    audit.log(_u(), 'usta_personel_bagla', 'usta_personel_iliskisi', yeni_id,
+              aciklama=f'usta={usta["gercek_ad"]} personel={personel["gercek_ad"]}')
 
     return jsonify({
         'ok': True,
