@@ -119,34 +119,37 @@ async function kullaniciDetay(profilId, adSoyad) {
       : `<div class="co-bridge-yok">❌ Bridge bağlantısı yok</div>
          <div style="font-size:12px;color:var(--text3);margin-top:4px">Faz 4 — PDKS entegrasyonu</div>`;
 
-    // SAHA_PERSONEL için usta atama section
+    // SAHA_PERSONEL için usta atama section (pre-loaded list)
     let ustaAtamaHtml = '';
     if (p.profil_tipi === 'SAHA_PERSONEL') {
-      try {
-        const uR = await fetch('/yonetim/api/core/usta-personel/ustalar');
-        const uD = await uR.json();
-        if (uD.ok && uD.ustalar.length) {
-          const opts = uD.ustalar.map(u =>
-            `<option value="${u.id}">${u.ad_soyad} (${u.bagli_personel_sayisi} personel)</option>`
-          ).join('');
-          ustaAtamaHtml = `
-            <div class="co-d-sec" id="ustaAtamaSec_${profilId}">
-              <div class="co-d-sec-title">Usta Ataması</div>
-              <div style="margin-bottom:8px">
-                <select id="ustaSecim_${profilId}" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
-                  <option value="">— Usta seç —</option>
-                  ${opts}
-                </select>
-              </div>
-              <button
-                onclick="ustaPersonelBagla(${profilId})"
-                style="width:100%;padding:7px;background:#d4a52f;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">
-                Bağla
-              </button>
-              <div id="ustaAtamaSonuc_${profilId}" style="margin-top:8px;font-size:12px"></div>
-            </div>`;
-        }
-      } catch(_) {}
+      const ustalar = window._ustaListesi || [];
+      if (ustalar.length) {
+        const opts = ustalar.map(u =>
+          `<option value="${u.id}">${u.ad_soyad} (${u.bagli_personel_sayisi} personel)</option>`
+        ).join('');
+        ustaAtamaHtml = `
+          <div class="co-d-sec" id="ustaAtamaSec_${profilId}">
+            <div class="co-d-sec-title">Usta Ataması</div>
+            <div style="margin-bottom:8px">
+              <select id="ustaSecim_${profilId}" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+                <option value="">— Usta seç —</option>
+                ${opts}
+              </select>
+            </div>
+            <button
+              onclick="ustaPersonelBagla(${profilId})"
+              style="width:100%;padding:7px;background:#d4a52f;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">
+              Bağla
+            </button>
+            <div id="ustaAtamaSonuc_${profilId}" style="margin-top:8px;font-size:12px"></div>
+          </div>`;
+      } else {
+        ustaAtamaHtml = `
+          <div class="co-d-sec">
+            <div class="co-d-sec-title">Usta Ataması</div>
+            <div style="color:#ca8a04;font-size:12px">Usta listesi yüklenemedi — sayfayı yenile.</div>
+          </div>`;
+      }
     }
 
     drawerAc(p.ad_soyad, `
@@ -402,6 +405,12 @@ async function yukle() {
     const oz  = await ozR.json();
     const kul = await kulR.json();
     if (!oz.ok || !kul.ok) { alert('API hatası'); return; }
+    // Usta listesini ayri fetch — hata olursa yukle() patlamasin
+    try {
+      const ustaR = await fetch('/yonetim/api/core/usta-personel/ustalar');
+      const ustaD = await ustaR.json();
+      window._ustaListesi = (ustaD.ok && ustaD.ustalar) ? ustaD.ustalar : [];
+    } catch(_) { window._ustaListesi = []; }
 
     // KPI
     document.getElementById('kProfil').textContent  = oz.toplam_profil;
@@ -589,34 +598,37 @@ async function kullaniciDetay(profilId, adSoyad) {
       : `<div class="co-bridge-yok">❌ Bridge bağlantısı yok</div>
          <div style="font-size:12px;color:var(--text3);margin-top:4px">Faz 4 — PDKS entegrasyonu</div>`;
 
-    // SAHA_PERSONEL için usta atama section
+    // SAHA_PERSONEL için usta atama section (pre-loaded list)
     let ustaAtamaHtml = '';
     if (p.profil_tipi === 'SAHA_PERSONEL') {
-      try {
-        const uR = await fetch('/yonetim/api/core/usta-personel/ustalar');
-        const uD = await uR.json();
-        if (uD.ok && uD.ustalar.length) {
-          const opts = uD.ustalar.map(u =>
-            `<option value="${u.id}">${u.ad_soyad} (${u.bagli_personel_sayisi} personel)</option>`
-          ).join('');
-          ustaAtamaHtml = `
-            <div class="co-d-sec" id="ustaAtamaSec_${profilId}">
-              <div class="co-d-sec-title">Usta Ataması</div>
-              <div style="margin-bottom:8px">
-                <select id="ustaSecim_${profilId}" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
-                  <option value="">— Usta seç —</option>
-                  ${opts}
-                </select>
-              </div>
-              <button
-                onclick="ustaPersonelBagla(${profilId})"
-                style="width:100%;padding:7px;background:#d4a52f;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">
-                Bağla
-              </button>
-              <div id="ustaAtamaSonuc_${profilId}" style="margin-top:8px;font-size:12px"></div>
-            </div>`;
-        }
-      } catch(_) {}
+      const ustalar = window._ustaListesi || [];
+      if (ustalar.length) {
+        const opts = ustalar.map(u =>
+          `<option value="${u.id}">${u.ad_soyad} (${u.bagli_personel_sayisi} personel)</option>`
+        ).join('');
+        ustaAtamaHtml = `
+          <div class="co-d-sec" id="ustaAtamaSec_${profilId}">
+            <div class="co-d-sec-title">Usta Ataması</div>
+            <div style="margin-bottom:8px">
+              <select id="ustaSecim_${profilId}" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+                <option value="">— Usta seç —</option>
+                ${opts}
+              </select>
+            </div>
+            <button
+              onclick="ustaPersonelBagla(${profilId})"
+              style="width:100%;padding:7px;background:#d4a52f;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">
+              Bağla
+            </button>
+            <div id="ustaAtamaSonuc_${profilId}" style="margin-top:8px;font-size:12px"></div>
+          </div>`;
+      } else {
+        ustaAtamaHtml = `
+          <div class="co-d-sec">
+            <div class="co-d-sec-title">Usta Ataması</div>
+            <div style="color:#ca8a04;font-size:12px">Usta listesi yüklenemedi — sayfayı yenile.</div>
+          </div>`;
+      }
     }
 
     drawerAc(p.ad_soyad, `
