@@ -1831,9 +1831,10 @@
         // Yeni kalip kodu update et
         if (data.kalip_id && state.modalKalipKod) {
             state.slot.dataset.kalipKod = state.modalKalipKod;
-        } else if (data.kalip_id && state.setupYeniKalipKod) {
+        } else         if (data.kalip_id && state.setupYeniKalipKod) {
             state.slot.dataset.kalipKod = state.setupYeniKalipKod;
         }
+        document.dispatchEvent(new CustomEvent('enj-ab-ozet-refresh'));
     }
     
     function updateSlotAfterArizaStart() {
@@ -2180,6 +2181,26 @@
     return p;
   }
 
+  function enjSlotAyarFromOzet(sl, slotData, fallbackBagli) {
+    var data = slotData || {};
+    var ayar = data.ayar;
+    var setV = function (id, v) {
+      var el = document.getElementById(id);
+      if (el) el.value = (v == null || v === '') ? '' : v;
+    };
+    if (ayar) {
+      enjRenkSetFromServer(sl, ayar.renk);
+      setV('enj-pisme-' + sl, ayar.pisme_suresi_sn);
+      setV('enj-kalip-' + sl + '-id', ayar.kalip_id);
+      setV('enj-kalip-' + sl + '-input', ayar.kalip_kod || '');
+    } else {
+      setV('enj-kalip-' + sl + '-input', '');
+      setV('enj-kalip-' + sl + '-id', '');
+    }
+    enjGostergeSlotSet(sl, data, fallbackBagli);
+  }
+  window.enjSlotAyarFromOzet = enjSlotAyarFromOzet;
+
   function loadOzet() {
     fJSON('/enjeksiyon/api/rapor/' + raporId + '/ab-ozet').then(function (d) {
       if (!d || !d.ok) return;
@@ -2193,14 +2214,7 @@
         };
         setV('enj-cev-' + sl + '-top', data.cevrim);
         setV('enj-uret-' + sl + '-top', data.uretilen);
-        var ayar = data.ayar;
-        if (ayar) {
-          enjRenkSetFromServer(sl, ayar.renk);
-          setV('enj-pisme-' + sl, ayar.pisme_suresi_sn);
-          setV('enj-kalip-' + sl + '-id', ayar.kalip_id);
-          if (ayar.kalip_kod) setV('enj-kalip-' + sl + '-input', ayar.kalip_kod);
-        }
-        enjGostergeSlotSet(sl, data, bagliMakine);
+        enjSlotAyarFromOzet(sl, data, bagliMakine);
       });
     }).catch(function () {});
   }
@@ -2521,8 +2535,8 @@
                 return fetch('/enjeksiyon/api/rapor/' + raporId + '/ab-ozet');
               }).then(function (r) { return r.json(); })
               .then(function (d) {
-                if (d && d.ok && d[slot] && window.enjGostergeSlotSet) {
-                  window.enjGostergeSlotSet(sl, d[slot], wrap.dataset.bagliKalip);
+                if (d && d.ok && d[slot] && window.enjSlotAyarFromOzet) {
+                  window.enjSlotAyarFromOzet(sl, d[slot], wrap.dataset.bagliKalip);
                 }
               }).catch(function(){});
             });
