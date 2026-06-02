@@ -13,3 +13,8 @@
 
 # keep SQLite for now
 !app/mock_data.db
+# Force ignore Python cache
+**/__pycache__/
+**/__pycache__/**
+*.pyc
+*.pyo
