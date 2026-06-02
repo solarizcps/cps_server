@@ -2096,6 +2096,23 @@
     el.textContent = (v == null || v === '') ? '—' : String(v);
   }
 
+  /** KBÇ: efektif (COALESCE) > ham istasyon > mevcut span değeri koru */
+  function enjGostergeKbcSet(sl, ayar) {
+    var el = document.getElementById('enj-gosterge-kbc-' + sl);
+    if (!el) return;
+    var v;
+    if (ayar) {
+      if (ayar.efektif_kalip_basi_cift != null && ayar.efektif_kalip_basi_cift !== '') {
+        v = ayar.efektif_kalip_basi_cift;
+      } else if (ayar.kalip_basi_cift != null && ayar.kalip_basi_cift !== '') {
+        v = ayar.kalip_basi_cift;
+      }
+    }
+    if (v == null) return;
+    el.textContent = String(v);
+  }
+  window.enjGostergeKbcSet = enjGostergeKbcSet;
+
   function loadOzet() {
     fJSON('/enjeksiyon/api/rapor/' + raporId + '/ab-ozet').then(function (d) {
       if (!d || !d.ok) return;
@@ -2119,10 +2136,9 @@
           var bagli = ayar.bagli_kalip_adet;
           if (bagli == null || bagli === '') bagli = bagliMakine;
           enjGostergeTxt('enj-gosterge-bagli-' + sl, bagli);
-          enjGostergeTxt('enj-gosterge-kbc-' + sl, ayar.kalip_basi_cift);
+          enjGostergeKbcSet(sl, ayar);
         } else {
           enjGostergeTxt('enj-gosterge-bagli-' + sl, bagliMakine);
-          enjGostergeTxt('enj-gosterge-kbc-' + sl, null);
         }
       });
     }).catch(function () {});
@@ -2454,6 +2470,9 @@
                   var elKap = document.getElementById('enj-gosterge-kap-' + sl);
                   var kap = d[slot].kapasite_per_cycle;
                   if (elKap) elKap.textContent = (kap != null && kap !== '') ? String(kap) : '—';
+                  if (d[slot].ayar && window.enjGostergeKbcSet) {
+                    window.enjGostergeKbcSet(sl, d[slot].ayar);
+                  }
                 }
               }).catch(function(){});
             });

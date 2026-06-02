@@ -1649,8 +1649,12 @@ def enj_api_ab_ozet(rapor_id):
             if slot in ("A", "B"):
                 kap[slot] = int(k or 0)
         cur.execute(
-            "SELECT slot, kalip_id, renk, bagli_kalip_adet, kalip_basi_cift, pisme_suresi_sn "
-            "FROM enj_istasyon_durumu WHERE rapor_id=? AND aktif=1 ORDER BY istasyon_no",
+            "SELECT i.slot, i.kalip_id, i.renk, i.bagli_kalip_adet, i.kalip_basi_cift, "
+            "       i.pisme_suresi_sn, "
+            "       COALESCE(i.kalip_basi_cift, k.kalip_basi_cift) AS efektif_kalip_basi_cift "
+            "FROM enj_istasyon_durumu i "
+            "LEFT JOIN enj_kalip k ON k.id = i.kalip_id "
+            "WHERE i.rapor_id=? AND i.aktif=1 ORDER BY i.istasyon_no",
             (rapor_id,)
         )
         ayar = {"A": None, "B": None}
@@ -1659,7 +1663,8 @@ def enj_api_ab_ozet(rapor_id):
             if s in ("A", "B") and ayar[s] is None:
                 ayar[s] = {"kalip_id": row[1], "renk": row[2],
                            "bagli_kalip_adet": row[3], "kalip_basi_cift": row[4],
-                           "pisme_suresi_sn": row[5]}
+                           "pisme_suresi_sn": row[5],
+                           "efektif_kalip_basi_cift": row[6]}
         for s in ("A", "B"):
             if ayar[s] and ayar[s].get("kalip_id"):
                 cur.execute(
