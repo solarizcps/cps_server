@@ -2519,6 +2519,7 @@
   window.openKalipDegistirModal = openKalipDegistirModal;
 
   function slotToplu(slot, payload, meta) {
+    slot = String(slot || '').toUpperCase();
     var p = Object.assign({}, payload || {});
     if ('renk' in p && (p.renk == null || String(p.renk).trim() === '')) {
       delete p.renk;
@@ -2535,19 +2536,52 @@
       });
     }).then(function (res) {
       if (res.locked409 && res.data && res.data.setup_id) {
+        loadOzet();
         if (p.kalip_id) {
           openKalipDegistirModal(slot, res.data.setup_id, p, meta || {});
-        } else {
-          loadOzet();
-          if (window._enjShowToast) {
-            window._enjShowToast(res.data.hata || 'Aktif setup kilitli');
-          }
+        } else if (window._enjShowToast) {
+          window._enjShowToast(res.data.hata || 'Aktif setup kilitli');
         }
       }
       return res;
     });
   }
+
+  /** A/B ortak: aktif setup varken kalip degisimi modal/onay akisina zorla. */
+  function kalipSecimSubmit(slot, payload, meta) {
+    slot = String(slot || '').toUpperCase();
+    var p = Object.assign({}, payload || {});
+    if ('renk' in p && (p.renk == null || String(p.renk).trim() === '')) {
+      delete p.renk;
+    }
+    if (!p.kalip_id) {
+      return slotToplu(slot, payload, meta);
+    }
+    return fetch(
+      '/enjeksiyon/api/rapor/' + raporId + '/setup?slot=' + encodeURIComponent(slot) + '&aktif=1',
+      {credentials: 'same-origin'}
+    )
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var active = d && d.setup;
+        if (active && active.id && String(active.kalip_id || '') !== String(p.kalip_id)) {
+          openKalipDegistirModal(slot, active.id, p, meta || {});
+          return {
+            status: 409,
+            ok: false,
+            locked409: true,
+            data: {setup_id: active.id, hata: 'Aktif setup kilitli. Kalip Degistir kullanin.'}
+          };
+        }
+        return slotToplu(slot, payload, meta);
+      })
+      .catch(function () {
+        return slotToplu(slot, payload, meta);
+      });
+  }
+
   window.enjSlotToplu = slotToplu;
+  window.enjKalipSecimSubmit = kalipSecimSubmit;
 
   function saatlikPatch(sid, payload) {
     return fJSON('/enjeksiyon/api/saatlik/' + sid, {
@@ -2579,56 +2613,6 @@
       });
     });
   });
-
-  function kalipSecici(slot) {
-    var sl = slot.toLowerCase();
-    var inp = document.getElementById('enj-kalip-' + sl + '-input');
-    var hid = document.getElementById('enj-kalip-' + sl + '-id');
-    var listEl = document.getElementById('enj-kalip-' + sl + '-liste');
-    if (!inp || !hid || !listEl) return;
-
-    inp.addEventListener('input', function () {
-      var q = inp.value.trim();
-      if (q.length < 1) { listEl.hidden = true; listEl.innerHTML = ''; return; }
-      deb('ks_' + sl, function () {
-        fJSON('/enjeksiyon/api/kalip/arama?q=' + encodeURIComponent(q)).then(function (d) {
-          if (!d || !d.kaliplar) { listEl.hidden = true; return; }
-          listEl.innerHTML = '';
-          d.kaliplar.slice(0, 10).forEach(function (k) {
-            var item = document.createElement('div');
-            item.className = 'enj-kalip-item';
-            item.textContent = k.kalip_kod + ' · ' + (k.model_kod || '') + (k.renk ? ' · ' + k.renk : '');
-            item.addEventListener('click', function () {
-              hid.value = k.id;
-              inp.value = k.kalip_kod;
-              listEl.hidden = true;
-              enjRenkMasterOner(sl, k.renk);
-              slotToplu(slot, enjSlotTopluPayload(slot, {
-                kalip_id: k.id,
-                kalip_basi_cift: k.kalip_basi_cift,
-                bagli_kalip_adet: k.varsayilan_bagli_kalip
-              }, k.renk), {
-                yeniKalipKod: k.kalip_kod,
-                yeniKalipId: k.id,
-                masterRenk: k.renk,
-                yeniPisme: k.pisme_suresi_sn
-              }).then(function (res) {
-                if (res && res.ok) loadOzet();
-              });
-            });
-            listEl.appendChild(item);
-          });
-          listEl.hidden = d.kaliplar.length === 0;
-        });
-      });
-    });
-
-    document.addEventListener('click', function (e) {
-      if (!listEl.contains(e.target) && e.target !== inp) listEl.hidden = true;
-    });
-  }
-  kalipSecici('A');
-  kalipSecici('B');
 
   document.querySelectorAll('tr[data-saatlik-id]').forEach(function (tr) {
     var sid = tr.dataset.saatlikId;
@@ -2842,11 +2826,7 @@
             item.className = 'enj-kalip-item';
             item.textContent = k.display || (k.kalip_kod + ' · ' + (k.model_kod || ''));
             item.addEventListener('click', function () {
-              hid.value = k.id;
-              inp.value = k.kalip_kod;
               listEl.hidden = true;
-
-              if (window.enjRenkMasterOner) window.enjRenkMasterOner(sl, k.renk);
 
               var syncBody = (window.enjSlotTopluPayload)(slot, {
                 kalip_id: k.id,
@@ -2861,33 +2841,17 @@
                 yeniPisme: k.pisme_suresi_sn
               };
 
-              if (window.enjSlotToplu) {
-                window.enjSlotToplu(slot, syncBody, meta).then(function (res) {
-                  if (res && res.ok && window.enjLoadOzet) window.enjLoadOzet();
-                });
-                return;
-              }
+              var submitFn = window.enjKalipSecimSubmit || window.enjSlotToplu;
+              if (!submitFn) return;
 
-              fetch('/enjeksiyon/api/rapor/' + raporId + '/slot-toplu', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(syncBody)
-              }).then(function (r) {
-                return r.json().then(function (d) { return {status: r.status, data: d}; });
-              }).then(function (res) {
-                if (res.status === 409 && res.data && res.data.setup_id && window.openKalipDegistirModal) {
-                  window.openKalipDegistirModal(slot, res.data.setup_id, syncBody, meta);
-                  return;
+              submitFn(slot, syncBody, meta).then(function (res) {
+                if (res && res.ok) {
+                  hid.value = k.id;
+                  inp.value = k.kalip_kod;
+                  if (window.enjRenkMasterOner) window.enjRenkMasterOner(sl, k.renk);
+                  if (window.enjLoadOzet) window.enjLoadOzet();
                 }
-                return fetch('/enjeksiyon/api/rapor/' + raporId + '/ab-ozet');
-              }).then(function (r) {
-                if (!r || !r.json) return;
-                return r.json();
-              }).then(function (d) {
-                if (d && d.ok && d[slot] && window.enjSlotAyarFromOzet) {
-                  window.enjSlotAyarFromOzet(sl, d[slot], wrap.dataset.bagliKalip);
-                }
-              }).catch(function(){});
+              }).catch(function () {});
             });
             listEl.appendChild(item);
           });
@@ -2901,10 +2865,8 @@
     });
   }
 
-  setTimeout(function () {
-    setupKalipPicker('A');
-    setupKalipPicker('B');
-  }, 150);
+  setupKalipPicker('A');
+  setupKalipPicker('B');
 })();
 /* === END: ENJ_AB_KALIP_FIX === */
 
