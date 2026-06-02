@@ -153,6 +153,107 @@ def get_active_setup(cur, rapor_id, slot):
     return _row_to_dict(cur.fetchone())
 
 
+def _live_tur_kapasitesi(cur, rapor_id, slot):
+    """Canli istasyon KBÇ toplami — setup yoksa fallback."""
+    cur.execute(
+        "SELECT COALESCE(SUM(COALESCE(i.kalip_basi_cift, k.kalip_basi_cift, 0)),0) "
+        "FROM enj_istasyon_durumu i LEFT JOIN enj_kalip k ON k.id = i.kalip_id "
+        "WHERE i.rapor_id=? AND i.slot=? AND i.aktif=1",
+        (rapor_id, slot),
+    )
+    row = cur.fetchone()
+    return int(row[0] or 0) if row else 0
+
+
+def _slot_snapshot_from_setup(cur, rapor_id, slot, setup):
+    """AKTIF setup veya canli fallback ile slot snapshot alanlarini uret."""
+    if setup:
+        ag = int(setup.get("aktif_goz_sayisi") or 0)
+        kbc = int(setup.get("kalip_basi_cift") or 0)
+        tur_kap = ag * kbc if ag > 0 and kbc > 0 else _live_tur_kapasitesi(cur, rapor_id, slot)
+        if ag <= 0:
+            ag = _aktif_goz_canli(cur, rapor_id, slot)
+        return {
+            "setup_id": setup.get("id"),
+            "kalip_id": setup.get("kalip_id"),
+            "kalip_kod": setup.get("kalip_kod_snapshot"),
+            "aktif_goz": ag,
+            "kalip_basi_cift": kbc,
+            "tur_kapasitesi": tur_kap,
+        }
+    tur_kap = _live_tur_kapasitesi(cur, rapor_id, slot)
+    ag = _aktif_goz_canli(cur, rapor_id, slot)
+    kbc = int(tur_kap // ag) if ag > 0 and tur_kap > 0 else 0
+    kalip_id = None
+    kalip_kod = None
+    cur.execute(
+        "SELECT i.kalip_id, k.kalip_kod "
+        "FROM enj_istasyon_durumu i "
+        "LEFT JOIN enj_kalip k ON k.id = i.kalip_id "
+        "WHERE i.rapor_id=? AND i.slot=? AND i.aktif=1 AND i.kalip_id IS NOT NULL "
+        "LIMIT 1",
+        (rapor_id, slot),
+    )
+    kr = cur.fetchone()
+    if kr:
+        kalip_id, kalip_kod = kr[0], kr[1]
+    return {
+        "setup_id": None,
+        "kalip_id": kalip_id,
+        "kalip_kod": kalip_kod,
+        "aktif_goz": ag,
+        "kalip_basi_cift": kbc,
+        "tur_kapasitesi": tur_kap,
+    }
+
+
+def freeze_saatlik_snapshot(cur, saatlik_id, kaynak="TUR_GIRIS"):
+    """Saatlik satira o anki A/B setup snapshot yazar; mevcut snapshot uzerine yazmaz."""
+    cur.execute(
+        """
+        SELECT rapor_id,
+               tur_kapasitesi_a_snapshot, tur_kapasitesi_b_snapshot
+        FROM enj_saatlik_kayit WHERE id=?
+        """,
+        (saatlik_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return {"ok": False, "hata": "saatlik kayit bulunamadi"}
+
+    rapor_id = row[0]
+    frozen = {"A": row[1] is not None, "B": row[2] is not None}
+    if frozen["A"] and frozen["B"]:
+        return {"ok": True, "skipped": True, "reason": "snapshot zaten mevcut"}
+
+    updates = {}
+    for slot in ("A", "B"):
+        if frozen[slot]:
+            continue
+        sfx = slot.lower()
+        setup = get_active_setup(cur, rapor_id, slot)
+        snap = _slot_snapshot_from_setup(cur, rapor_id, slot, setup)
+        updates["setup_id_" + sfx] = snap["setup_id"]
+        updates["kalip_id_" + sfx + "_snapshot"] = snap["kalip_id"]
+        updates["kalip_kod_" + sfx + "_snapshot"] = snap["kalip_kod"]
+        updates["aktif_goz_" + sfx + "_snapshot"] = snap["aktif_goz"]
+        updates["kalip_basi_cift_" + sfx + "_snapshot"] = snap["kalip_basi_cift"]
+        updates["tur_kapasitesi_" + sfx + "_snapshot"] = snap["tur_kapasitesi"]
+
+    if not updates:
+        return {"ok": True, "skipped": True, "reason": "snapshot zaten mevcut"}
+
+    updates["snapshot_zamani"] = _now()
+    updates["snapshot_kaynak"] = kaynak
+    set_parts = [k + "=?" for k in updates.keys()]
+    params = list(updates.values()) + [saatlik_id]
+    cur.execute(
+        "UPDATE enj_saatlik_kayit SET " + ", ".join(set_parts) + " WHERE id=?",
+        params,
+    )
+    return {"ok": True, "frozen_slots": [s for s in ("A", "B") if not frozen[s]]}
+
+
 def guard_slot_toplu(cur, rapor_id, slot, guncel):
     """AKTIF setup varken kilitli alan yazimini engelle.
 

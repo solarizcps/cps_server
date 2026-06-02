@@ -11,6 +11,8 @@ from flask import (Blueprint, render_template, redirect, url_for,
                    request, session, abort, jsonify)
 from functools import wraps
 
+from modules.enjeksiyon import setup_db as _setup_db
+
 
 enjeksiyon_bp = Blueprint(
     'enjeksiyon', __name__,
@@ -632,6 +634,12 @@ def enj_api_saatlik_patch(saatlik_id):
         set_parts.append("son_guncelleme = CURRENT_TIMESTAMP")
         params = list(guncellenecek.values()) + [saatlik_id]
         cur.execute(f"UPDATE enj_saatlik_kayit SET {', '.join(set_parts)} WHERE id = ?", params)
+        # ENJ_TIME_SETUP_SNAPSHOT TS1: tur girisinde kapasite snapshot dondur
+        if "cevrim_a" in guncellenecek or "cevrim_b" in guncellenecek:
+            try:
+                _setup_db.freeze_saatlik_snapshot(cur, saatlik_id)
+            except Exception:
+                pass
         # ENJ_AB_FAZ1_V1 - hesap motoru
         try:
             _ab_hesapla_saatlik(cur, saatlik_id)
@@ -1537,38 +1545,67 @@ def enj_foto_sil(foto_id):
 # ===== BEGIN: ENJ_AB_FAZ1_V1 =====
 # FAZ 1 - veri katmani: hesap motoru + 2 yeni endpoint
 
+def _ab_live_kap(cur, rapor_id):
+    """Canli A/B tur kapasitesi (legacy fallback)."""
+    cur.execute(
+        # ENJ_KBC_FIX: COALESCE(istasyon, master) — once uretim ozel, yoksa kalip yonetimi
+        "SELECT i.slot, COALESCE(SUM(COALESCE(i.kalip_basi_cift, k.kalip_basi_cift, 0)),0) "
+        "FROM enj_istasyon_durumu i LEFT JOIN enj_kalip k ON k.id = i.kalip_id "
+        "WHERE i.rapor_id=? AND i.aktif=1 GROUP BY i.slot",
+        (rapor_id,),
+    )
+    kap = {"A": 0, "B": 0}
+    for slot, k in cur.fetchall():
+        if slot in ("A", "B"):
+            kap[slot] = int(k or 0)
+    return kap
+
+
 def _ab_hesapla_saatlik(cur, saatlik_id):
     """Bir saatlik kayit icin uretilen_a, uretilen_b hesapla ve update et."""
-    cur.execute("SELECT rapor_id, cevrim_a, cevrim_b FROM enj_saatlik_kayit WHERE id=?", (saatlik_id,))
+    cur.execute(
+        "SELECT rapor_id, cevrim_a, cevrim_b, "
+        "tur_kapasitesi_a_snapshot, tur_kapasitesi_b_snapshot "
+        "FROM enj_saatlik_kayit WHERE id=?",
+        (saatlik_id,),
+    )
     row = cur.fetchone()
     if not row:
         return None
     rapor_id = row[0]
     cev_a = int(row[1] or 0)
     cev_b = int(row[2] or 0)
-    cur.execute(
-        # ENJ_KBC_FIX: COALESCE(istasyon, master) — once uretim ozel, yoksa kalip yonetimi
-        "SELECT i.slot, COALESCE(SUM(COALESCE(i.kalip_basi_cift, k.kalip_basi_cift, 0)),0) "
-        "FROM enj_istasyon_durumu i LEFT JOIN enj_kalip k ON k.id = i.kalip_id "
-        "WHERE i.rapor_id=? AND i.aktif=1 GROUP BY i.slot",
-        (rapor_id,)
-    )
-    kap = {"A": 0, "B": 0}
-    for slot, k in cur.fetchall():
-        if slot in ("A", "B"):
-            kap[slot] = int(k or 0)
-    uret_a = cev_a * kap["A"]
-    uret_b = cev_b * kap["B"]
+    kap_a_snap = row[3]
+    kap_b_snap = row[4]
+    kap_live = None
+    if kap_a_snap is None or kap_b_snap is None:
+        kap_live = _ab_live_kap(cur, rapor_id)
+    kap_a = int(kap_a_snap) if kap_a_snap is not None else kap_live["A"]
+    kap_b = int(kap_b_snap) if kap_b_snap is not None else kap_live["B"]
+    uret_a = cev_a * kap_a
+    uret_b = cev_b * kap_b
     cur.execute(
         "UPDATE enj_saatlik_kayit SET uretilen_a=?, uretilen_b=? WHERE id=?",
         (uret_a, uret_b, saatlik_id)
     )
-    return {"uretilen_a": uret_a, "uretilen_b": uret_b, "kapasite_a": kap["A"], "kapasite_b": kap["B"]}
+    return {
+        "uretilen_a": uret_a,
+        "uretilen_b": uret_b,
+        "kapasite_a": kap_a,
+        "kapasite_b": kap_b,
+        "snapshot_a": kap_a_snap is not None,
+        "snapshot_b": kap_b_snap is not None,
+    }
 
 
 def _ab_hesapla_tum_saatlikler(cur, rapor_id):
-    """Bir rapor icin tum saatlik kayitlari yeniden hesapla."""
-    cur.execute("SELECT id FROM enj_saatlik_kayit WHERE rapor_id=?", (rapor_id,))
+    """Legacy saatlik kayitlari yeniden hesapla; snapshot'li satirlara dokunma."""
+    cur.execute(
+        "SELECT id FROM enj_saatlik_kayit WHERE rapor_id=? "
+        "AND tur_kapasitesi_a_snapshot IS NULL "
+        "AND tur_kapasitesi_b_snapshot IS NULL",
+        (rapor_id,),
+    )
     sayac = 0
     for r in cur.fetchall():
         try:
@@ -1580,7 +1617,6 @@ def _ab_hesapla_tum_saatlikler(cur, rapor_id):
 
 
 # F_KBC_MASTER_DATA_BLOCK: kalip_basi_cift kaldirildi - master data sayfasindan duzeltilir
-from modules.enjeksiyon import setup_db as _setup_db
 
 _AB_SLOT_WHITELIST = {"kalip_id", "renk", "bagli_kalip_adet", "pisme_suresi_sn"}
 
