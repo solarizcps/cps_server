@@ -124,7 +124,7 @@
     el('f-tarih-ay').value=buAy(); el('f-tarih-bas').value=gunOnce(7); el('f-tarih-bit').value=bugun();
     el('f-makine').value=''; el('f-vardiya').value=''; el('f-operator').value='';
     el('f-problemli').checked=false; el('f-fireli').checked=false;
-    tabAktif('gunluk');
+    tabAktif('haftalik');
   }
   function tarihAralikHesap() {
     if (state.aktifTab==='gunluk'){var t=el('f-tarih-tek').value||bugun();return{bas:t,bit:t};}

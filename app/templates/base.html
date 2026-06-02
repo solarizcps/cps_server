@@ -792,12 +792,16 @@ window.__cpsRootMap = function(pathname) {
         <span class="sn-arrow">{% if aktif_grup in ('enjeksiyon', 'uretim') %}▼{% else %}►{% endif %}</span>
         <svg class="sn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10v4"/><path d="M11 10v4"/><path d="M15 10v4"/></svg>
         <span class="sn-baslik">Saha</span>
-        <span class="sn-count">1</span>
+        <span class="sn-count">2</span>
       </div>
       <div class="sn-grup{% if aktif_grup not in ('enjeksiyon', 'uretim') %} kapali{% endif %}" data-grup="ferhat">
-        <a href="/enjeksiyon/" class="si {% if '/enjeksiyon' in rp %}active{% endif %}" title="Enjeksiyon">
+        <a href="/enjeksiyon/" class="si {% if '/enjeksiyon' in rp and '/enjeksiyon/gecmis' not in rp %}active{% endif %}" title="Enjeksiyon">
           <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10v4"/><path d="M11 10v4"/><path d="M15 10v4"/></svg></span>
           <span class="sl">Enjeksiyon</span>
+        </a>
+        <a href="/enjeksiyon/gecmis" class="si {% if '/enjeksiyon/gecmis' in rp %}active{% endif %}" title="Geçmiş / Rapor">
+          <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 16v-5"/><path d="M12 16v-8"/><path d="M17 16v-3"/></svg></span>
+          <span class="sl">Geçmiş / Rapor</span>
         </a>
       </div>
       {% endif %}
