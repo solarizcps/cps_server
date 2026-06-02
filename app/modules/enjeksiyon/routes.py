@@ -1545,8 +1545,10 @@ def _ab_hesapla_saatlik(cur, saatlik_id):
     cev_a = int(row[1] or 0)
     cev_b = int(row[2] or 0)
     cur.execute(
-        "SELECT slot, COALESCE(SUM(COALESCE(kalip_basi_cift,0)),0) "
-        "FROM enj_istasyon_durumu WHERE rapor_id=? AND aktif=1 GROUP BY slot",
+        # ENJ_KBC_FIX: COALESCE(istasyon, master) — once uretim ozel, yoksa kalip yonetimi
+        "SELECT i.slot, COALESCE(SUM(COALESCE(i.kalip_basi_cift, k.kalip_basi_cift, 0)),0) "
+        "FROM enj_istasyon_durumu i LEFT JOIN enj_kalip k ON k.id = i.kalip_id "
+        "WHERE i.rapor_id=? AND i.aktif=1 GROUP BY i.slot",
         (rapor_id,)
     )
     kap = {"A": 0, "B": 0}
@@ -1635,8 +1637,8 @@ def enj_api_ab_ozet(rapor_id):
         r = cur.fetchone()
         fire_toplam = int(r[0]) if r else 0
         cur.execute(
-            # F_KBC_MASTER_DATA_BLOCK: JOIN ile enj_kalip ana tablodan referans
-            "SELECT i.slot, COALESCE(SUM(COALESCE(k.kalip_basi_cift,0)),0) "
+            # ENJ_KBC_FIX: COALESCE(istasyon, master) — once uretim ozel, yoksa kalip yonetimi
+            "SELECT i.slot, COALESCE(SUM(COALESCE(i.kalip_basi_cift, k.kalip_basi_cift, 0)),0) "
             "FROM enj_istasyon_durumu i LEFT JOIN enj_kalip k ON k.id = i.kalip_id "
             "WHERE i.rapor_id=? AND i.aktif=1 GROUP BY i.slot", (rapor_id,)
         )
