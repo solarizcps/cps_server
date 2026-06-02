@@ -1595,6 +1595,11 @@ def enj_api_slot_toplu(rapor_id):
         if slot not in ("A", "B"):
             return jsonify({"ok": False, "hata": "slot A veya B olmali"}), 400
         guncel = {k: body[k] for k in _AB_SLOT_WHITELIST if k in body}
+        # ENJ-RENK-KORUMA: bos/null renk = degistirme (uretim rengini silme)
+        if "renk" in guncel:
+            _rv = guncel["renk"]
+            if _rv is None or (isinstance(_rv, str) and not _rv.strip()):
+                del guncel["renk"]
         if not guncel:
             return jsonify({"ok": False, "hata": "guncellenecek alan yok"}), 400
         con = _sqlite3.connect(_enj_kalip_db_path())

@@ -176,7 +176,9 @@
         // PATCH F: bkInp (bagli_kalip) ARTIK SET EDILMEYECEK.
         // Bagli kalip backend authoritative + aktif slot sayisindan turetilir.
         // Kalip secimi bagli kalip alanini DEGISTIRMEZ.
-        if (renkInp) renkInp.value = sec.renk || '';
+        if (renkInp && !String(renkInp.value || '').trim()) {
+            renkInp.value = sec.renk || '';
+        }
         if (kbcInp) {
             // F_KBC_MASTER_DATA_BLOCK: master data sayfasi referans
             kbcInp.value = (sec.kalip_basi_cift != null) ? sec.kalip_basi_cift : '';
@@ -466,10 +468,11 @@
         var body = {
             kalip_id: sec.id,
             kalip_no: sec.kalip_kod || null,
-            renk: sec.renk || null,
             kalip_basi_cift: sec.kalip_basi_cift != null ? sec.kalip_basi_cift : null
-            // bagli_kalip_adet artik kalip secimi ile gelmiyor (aktif slot sayisindan turetilir)
         };
+        if (sec.renk && String(sec.renk).trim()) {
+            body.renk = String(sec.renk).trim();
+        }
         var inp = document.getElementById('enj-kalip-input');
         patch('/enjeksiyon/api/rapor/' + raporId, body, inp);
     });
@@ -2113,6 +2116,42 @@
   }
   window.enjGostergeKbcSet = enjGostergeKbcSet;
 
+  /** ENJ-RENK-KORUMA: uretim rengi oncelikli, master sadece oneri */
+  function enjRenkInputDolu(sl) {
+    var el = document.getElementById('enj-renk-' + sl);
+    return el && String(el.value || '').trim() !== '';
+  }
+
+  function enjRenkMasterOner(sl, masterRenk) {
+    if (enjRenkInputDolu(sl)) return;
+    var m = (masterRenk == null) ? '' : String(masterRenk).trim();
+    if (!m) return;
+    var el = document.getElementById('enj-renk-' + sl);
+    if (el) el.value = m;
+  }
+
+  function enjRenkSetFromServer(sl, serverRenk) {
+    var el = document.getElementById('enj-renk-' + sl);
+    if (!el) return;
+    var srv = (serverRenk == null) ? '' : String(serverRenk).trim();
+    if (srv !== '') {
+      el.value = srv;
+    }
+    // ayar.renk bos/null + input dolu → mevcut uretim rengini koru
+  }
+
+  function enjSlotTopluPayload(slot, base, masterRenk) {
+    var sl = String(slot || '').toLowerCase();
+    var p = Object.assign({}, base || {});
+    if ('renk' in p && (p.renk == null || String(p.renk).trim() === '')) {
+      delete p.renk;
+    }
+    if (!enjRenkInputDolu(sl) && masterRenk != null && String(masterRenk).trim() !== '') {
+      p.renk = String(masterRenk).trim();
+    }
+    return p;
+  }
+
   function loadOzet() {
     fJSON('/enjeksiyon/api/rapor/' + raporId + '/ab-ozet').then(function (d) {
       if (!d || !d.ok) return;
@@ -2129,7 +2168,7 @@
         enjGostergeTxt('enj-gosterge-kap-' + sl, data.kapasite_per_cycle);
         var ayar = data.ayar;
         if (ayar) {
-          setV('enj-renk-' + sl, ayar.renk);
+          enjRenkSetFromServer(sl, ayar.renk);
           setV('enj-pisme-' + sl, ayar.pisme_suresi_sn);
           setV('enj-kalip-' + sl + '-id', ayar.kalip_id);
           if (ayar.kalip_kod) setV('enj-kalip-' + sl + '-input', ayar.kalip_kod);
@@ -2145,11 +2184,15 @@
   }
 
   function slotToplu(slot, payload) {
-    payload.slot = slot;
+    var p = payload || {};
+    if ('renk' in p && (p.renk == null || String(p.renk).trim() === '')) {
+      delete p.renk;
+    }
+    p.slot = slot;
     return fJSON('/enjeksiyon/api/rapor/' + raporId + '/slot-toplu', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(payload)
+      body: JSON.stringify(p)
     });
   }
 
@@ -2205,12 +2248,12 @@
               hid.value = k.id;
               inp.value = k.kalip_kod;
               listEl.hidden = true;
-              slotToplu(slot, {
+              enjRenkMasterOner(sl, k.renk);
+              slotToplu(slot, enjSlotTopluPayload(slot, {
                 kalip_id: k.id,
                 kalip_basi_cift: k.kalip_basi_cift,
-                bagli_kalip_adet: k.varsayilan_bagli_kalip,
-                renk: k.renk || null
-              }).then(function () { loadOzet(); });
+                bagli_kalip_adet: k.varsayilan_bagli_kalip
+              }, k.renk)).then(function () { loadOzet(); });
             });
             listEl.appendChild(item);
           });
@@ -2439,12 +2482,8 @@
               inp.value = k.kalip_kod;
               listEl.hidden = true;
 
-              // Instant local update
-              var setV = function(id, v) {
-                var el = document.getElementById(id);
-                if (el) el.value = (v == null) ? '' : v;
-              };
-              setV('enj-renk-' + sl, k.renk);
+              // Instant local update (renk: uretim doluysa korunur)
+              enjRenkMasterOner(sl, k.renk);
               (function (s, bagli, kbc) {
                 var elB = document.getElementById('enj-gosterge-bagli-' + s);
                 var elK = document.getElementById('enj-gosterge-kbc-' + s);
@@ -2452,16 +2491,16 @@
                 if (elK) elK.textContent = (kbc != null && kbc !== '') ? String(kbc) : '—';
               })(sl, k.varsayilan_bagli_kalip, k.kalip_basi_cift);
 
-              // Backend sync
+              // Backend sync (renk:null gonderilmez)
+              var syncBody = enjSlotTopluPayload(slot, {
+                kalip_id: k.id,
+                kalip_basi_cift: k.kalip_basi_cift,
+                bagli_kalip_adet: k.varsayilan_bagli_kalip
+              }, k.renk);
               fetch('/enjeksiyon/api/rapor/' + raporId + '/slot-toplu', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                  slot: slot,
-                  kalip_id: k.id,
-                  kalip_basi_cift: k.kalip_basi_cift,
-                  bagli_kalip_adet: k.varsayilan_bagli_kalip
-                })
+                body: JSON.stringify(syncBody)
               }).then(function () {
                 return fetch('/enjeksiyon/api/rapor/' + raporId + '/ab-ozet');
               }).then(function (r) { return r.json(); })
