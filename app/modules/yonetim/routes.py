@@ -1144,6 +1144,9 @@ def core_organizasyon_ozet():
             WHERE kp.aktif=1
               AND NOT EXISTS (SELECT 1 FROM kullanici_proses kup WHERE kup.kullanici_profil_id=kp.id AND kup.aktif=1)
         """).fetchone()[0]
+        usta_personel_iliski_sayisi = con.execute(
+            "SELECT COUNT(*) FROM usta_personel_iliskisi WHERE aktif=1"
+        ).fetchone()[0]
     finally:
         con.close()
     return jsonify({
@@ -1156,6 +1159,7 @@ def core_organizasyon_ozet():
         "bridge_eksik":     bridge_eksik,
         "ekip_eksik":       ekip_eksik,
         "proses_eksik":     proses_eksik,
+        "usta_personel_iliski_sayisi": usta_personel_iliski_sayisi,
     })
 
 
@@ -1356,6 +1360,118 @@ def core_ekip_detay(ekip_id):
 
 # END CORE_DRAWER
 # ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════
+
+
+# ════════════════════════════════════════════════════════════════
+# FAZ1C-2 — Usta-Personel Bağlama API
+# BEGIN USTA_PERSONEL_BAGLA
+# ════════════════════════════════════════════════════════════════
+
+@yonetim_bp.route('/api/core/usta-personel/bagla', methods=['POST'])
+@yetki_gerekli('yonetim', 'can_create')
+def core_usta_personel_bagla():
+    """
+    Bir SAHA_USTASI ile bir SAHA_PERSONEL arasında usta_personel_iliskisi kaydı oluşturur.
+
+    Body (JSON):
+      usta_profil_id     int  zorunlu  — kullanici_profil.id (profil_tipi=SAHA_USTASI)
+      personel_profil_id int  zorunlu  — kullanici_profil.id (profil_tipi=SAHA_PERSONEL)
+      proses_id          int  opsiyonel
+      departman_id       int  opsiyonel
+
+    Validasyon:
+      - usta profil_tipi = SAHA_USTASI olmalı
+      - personel profil_tipi = SAHA_PERSONEL olmalı
+      - aynı (usta, personel, proses_id) ile aktif kayıt varsa duplicate yazılmaz
+    """
+    data = request.get_json(silent=True) or {}
+
+    usta_profil_id     = data.get('usta_profil_id')
+    personel_profil_id = data.get('personel_profil_id')
+    proses_id          = data.get('proses_id') or None
+    departman_id       = data.get('departman_id') or None
+
+    if not usta_profil_id or not personel_profil_id:
+        return jsonify({'ok': False, 'hata': 'usta_profil_id ve personel_profil_id zorunlu'}), 400
+
+    try:
+        usta_profil_id     = int(usta_profil_id)
+        personel_profil_id = int(personel_profil_id)
+        if proses_id    is not None: proses_id    = int(proses_id)
+        if departman_id is not None: departman_id = int(departman_id)
+    except (TypeError, ValueError):
+        return jsonify({'ok': False, 'hata': 'id alanları sayısal olmalı'}), 400
+
+    con = _get_conn()
+    try:
+        # Usta kontrolü
+        usta = con.execute(
+            "SELECT id, gercek_ad, profil_tipi FROM kullanici_profil WHERE id=? AND aktif=1",
+            (usta_profil_id,)
+        ).fetchone()
+        if not usta:
+            return jsonify({'ok': False, 'hata': f'usta_profil_id={usta_profil_id} bulunamadı'}), 404
+        if usta['profil_tipi'] != 'SAHA_USTASI':
+            return jsonify({
+                'ok': False,
+                'hata': f"'{usta['gercek_ad']}' profil_tipi={usta['profil_tipi']} — SAHA_USTASI olmalı"
+            }), 422
+
+        # Personel kontrolü
+        personel = con.execute(
+            "SELECT id, gercek_ad, profil_tipi FROM kullanici_profil WHERE id=? AND aktif=1",
+            (personel_profil_id,)
+        ).fetchone()
+        if not personel:
+            return jsonify({'ok': False, 'hata': f'personel_profil_id={personel_profil_id} bulunamadı'}), 404
+        if personel['profil_tipi'] != 'SAHA_PERSONEL':
+            return jsonify({
+                'ok': False,
+                'hata': f"'{personel['gercek_ad']}' profil_tipi={personel['profil_tipi']} — SAHA_PERSONEL olmalı"
+            }), 422
+
+        # Duplicate kontrolü: aynı (usta, personel, proses_id) ile aktif kayıt
+        dup = con.execute("""
+            SELECT id FROM usta_personel_iliskisi
+            WHERE usta_profil_id=? AND personel_profil_id=?
+              AND (proses_id IS ? OR (proses_id IS NULL AND ? IS NULL))
+              AND aktif=1
+        """, (usta_profil_id, personel_profil_id, proses_id, proses_id)).fetchone()
+        if dup:
+            return jsonify({
+                'ok': False,
+                'hata': 'Bu usta-personel-proses kombinasyonu zaten aktif',
+                'mevcut_iliski_id': dup['id']
+            }), 409
+
+        # Kaydet
+        olusturan_id = (session.get('kullanici') or {}).get('Id')
+        con.execute("""
+            INSERT INTO usta_personel_iliskisi
+              (usta_profil_id, personel_profil_id, proses_id, departman_id,
+               aktif, kaynak, olusturan_id)
+            VALUES (?, ?, ?, ?, 1, 'manuel', ?)
+        """, (usta_profil_id, personel_profil_id, proses_id, departman_id, olusturan_id))
+        con.commit()
+        yeni_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+    finally:
+        con.close()
+
+    audit.log(_u(), 'usta_personel_bagla',
+              f'iliski_id={yeni_id} usta={usta["gercek_ad"]} personel={personel["gercek_ad"]}')
+
+    return jsonify({
+        'ok': True,
+        'iliski_id': yeni_id,
+        'usta':     {'id': usta['id'],     'ad': usta['gercek_ad']},
+        'personel': {'id': personel['id'], 'ad': personel['gercek_ad']},
+        'proses_id':    proses_id,
+        'departman_id': departman_id,
+    }), 201
+
+# END USTA_PERSONEL_BAGLA
 # ════════════════════════════════════════════════════════════════
 
 
