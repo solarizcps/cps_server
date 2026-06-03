@@ -373,8 +373,11 @@ function renderMakineKart(m) {
 
   // FOOTER (mevcut korunuyor)
   var aktif_oran = (m.anlik_durum.aktif_oran * 100).toFixed(0);
+  var personel_str = (m.personel_sayisi != null && m.personel_sayisi > 0)
+    ? ' · <em>Personel:</em> <strong>' + m.personel_sayisi + '</strong>'
+    : '';
   html += '<div class="or-mak-alt">';
-  html += '<span class="or-mak-aktif-orani">Çalışan istasyon: <strong>' + s.AKTIF + "/" + top + " (%" + aktif_oran + ")</strong></span>";
+  html += '<span class="or-mak-aktif-orani">Çalışan istasyon: <strong>' + s.AKTIF + "/" + top + " (%" + aktif_oran + ")</strong>" + personel_str + '</span>';
   html += '<button class="or-mak-detay-btn" data-makine-id="' + m.makine_id + '">Detay →</button>';
   html += "</div>";
 

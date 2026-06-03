@@ -179,6 +179,14 @@
     html += pageHtml(sf, ts);
     html += '</div></div>';
 
+    // P4: max personel sayfadaki TUR satirlarindan
+    var maxPersonel = null;
+    satirlar.forEach(function(s) {
+      if (s.satir_tipi === 'TUR' && s.personel_sayisi != null && s.personel_sayisi > 0) {
+        if (maxPersonel === null || s.personel_sayisi > maxPersonel) maxPersonel = s.personel_sayisi;
+      }
+    });
+
     // KPI serit
     html += '<div class=\"or-gec-kpi-serit\">';
     html += kpiHtml('Toplam tur',   sayiFmt(kpi.toplam_tur),  '');
@@ -188,6 +196,7 @@
     html += kpiHtml('Ort. verim',   (kpi.ortalama_verim_yuzde||0) + '%', '');
     html += kpiHtml('Ariza',        kpi.toplam_ariza_hhmmss || '00:00:00', '');
     html += kpiHtml('Kalip dgs',    kpi.toplam_kalip_degisim_hhmmss || '00:00:00', '');
+    html += kpiHtml('Personel',     maxPersonel != null ? String(maxPersonel) : '-', '');
     html += '</div>';
 
     // Export placeholder

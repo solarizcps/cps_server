@@ -504,6 +504,74 @@ body.modal-acik {
 /* Modal genislik varyantlari */
 .enj-modal.tip-ariza-baslat { width: 520px; }
 .enj-modal.tip-setup-bitir { width: 480px; }
+.enj-modal.tip-kalip-degistir {
+    width: 780px;
+    max-width: 92vw;
+}
+.enj-modal.tip-kalip-degistir .enj-modal-header { border-top: 3px solid #059669; }
+
+/* ENJ_SETUP FAZ-UI1-FIX — unified setup modal layout */
+.enj-modal.tip-kalip-degistir .enj-modal-body {
+    padding: 14px 20px 18px;
+}
+.esu-intro { margin-bottom: 12px; }
+.esu-eski-card {
+    margin-bottom: 14px;
+    padding: 10px 12px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+}
+.esu-eski-card .emb-kalip-degistir-blok {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    border: none;
+}
+.esu-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 16px;
+}
+.esu-grid .esu-full { grid-column: 1 / -1; }
+.esu-grid .emb-bolum { margin-bottom: 12px; }
+.esu-hint {
+    margin: 4px 0 0;
+    font-size: 11px;
+    color: #64748b;
+    line-height: 1.35;
+}
+.esu-readonly {
+    background: #f1f5f9 !important;
+    color: #334155;
+    cursor: default;
+}
+.esu-fld-invalid {
+    border-color: #dc2626 !important;
+    box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15);
+}
+.enj-modal .esu-renk-fld,
+.enj-modal .esu-renk-wrap .enj-fld {
+    position: relative;
+    overflow: visible;
+}
+.enj-modal .enj-ab-renk-v3-krt {
+    z-index: 2100;
+    width: 100%;
+    max-width: 320px;
+}
+.enj-ab-faz2-disp,
+.enj-kalip-input-faz2 {
+    cursor: pointer;
+    background: #f8fafc;
+}
+.enj-ab-kap-inline.enj-setup-opener {
+    cursor: pointer;
+}
+@media (max-width: 640px) {
+    .enj-modal.tip-kalip-degistir { width: 92vw; }
+    .esu-grid { grid-template-columns: 1fr; }
+}
 
 /* BLOK 4: 4 Tip Border (header ust kenar) */
 .enj-modal.tip-setup-baslat .enj-modal-header { border-top: 3px solid #d97706; }

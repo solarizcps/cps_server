@@ -3397,15 +3397,44 @@ saatlik_olaylar AS (
 
     gr.vardiya                                     AS vardiya,
 
-    k.kalip_kod                                    AS kalip_kod,
+    -- P2: kalip_kod snapshot'tan; gr.kalip_id bos olabilir
+    CASE
+      WHEN sk.kalip_kod_a_snapshot IS NOT NULL AND sk.kalip_kod_b_snapshot IS NOT NULL
+        THEN 'A:' || sk.kalip_kod_a_snapshot || ' / B:' || sk.kalip_kod_b_snapshot
+      WHEN sk.kalip_kod_a_snapshot IS NOT NULL
+        THEN sk.kalip_kod_a_snapshot
+      WHEN sk.kalip_kod_b_snapshot IS NOT NULL
+        THEN sk.kalip_kod_b_snapshot
+      ELSE k.kalip_kod
+    END                                            AS kalip_kod,
 
     NULL                                           AS kalip_kod_eski,
 
-    k.kalip_tipi                                   AS kalip_tipi,
+    COALESCE(k.kalip_tipi, ka.kalip_tipi, kb.kalip_tipi)
+                                                   AS kalip_tipi,
 
-    sk.tur_adet                                    AS tur,
+    -- tur = A + B cevrim (eski tur_adet fallback)
+    COALESCE(
+      NULLIF(COALESCE(sk.cevrim_a, 0) + COALESCE(sk.cevrim_b, 0), 0),
+      sk.tur_adet,
+      0
+    )                                              AS tur,
 
-    (sk.tur_adet * COALESCE(gr.teorik_cift_tur,0)) AS teorik_cift,
+    -- P1: teorik = snapshot A + snapshot B; fallback uretilen; son fallback 0
+    -- Kural: gecmisteki saatin setup snapshot'i kullanilir, anlik setup degil
+    CASE
+      WHEN sk.kalip_basi_cift_a_snapshot IS NOT NULL
+        OR sk.kalip_basi_cift_b_snapshot IS NOT NULL
+      THEN
+        COALESCE(sk.cevrim_a, 0) * COALESCE(sk.aktif_goz_a_snapshot, 0) * COALESCE(sk.kalip_basi_cift_a_snapshot, 0)
+        +
+        COALESCE(sk.cevrim_b, 0) * COALESCE(sk.aktif_goz_b_snapshot, 0) * COALESCE(sk.kalip_basi_cift_b_snapshot, 0)
+      WHEN (sk.uretilen_a IS NOT NULL AND sk.uretilen_a > 0)
+        OR (sk.uretilen_b IS NOT NULL AND sk.uretilen_b > 0)
+      THEN
+        COALESCE(sk.uretilen_a, 0) + COALESCE(sk.uretilen_b, 0)
+      ELSE 0
+    END                                            AS teorik_cift,
 
     NULL                                           AS net_cift,
 
@@ -3427,7 +3456,20 @@ saatlik_olaylar AS (
 
     sk.rapor_id                                    AS rapor_id,
 
-    0                                              AS anomali_seviye
+    0                                              AS anomali_seviye,
+
+    -- P4: personel snapshot (rapordan max A/B)
+    gr.personel_sayisi                             AS personel_sayisi,
+
+    -- P2 ek: ayri A/B kalip kodu (JSON icin)
+    sk.kalip_kod_a_snapshot                        AS kalip_kod_a,
+
+    sk.kalip_kod_b_snapshot                        AS kalip_kod_b,
+
+    -- Cevrim A/B dogrudan
+    COALESCE(sk.cevrim_a, 0)                       AS cevrim_a,
+
+    COALESCE(sk.cevrim_b, 0)                       AS cevrim_b
 
   FROM enj_saatlik_kayit sk
 
@@ -3436,6 +3478,10 @@ saatlik_olaylar AS (
   JOIN enj_makine        m  ON m.id  = gr.makine_id
 
   LEFT JOIN enj_kalip    k  ON k.id  = gr.kalip_id
+
+  LEFT JOIN enj_kalip    ka ON ka.id = sk.kalip_id_a_snapshot
+
+  LEFT JOIN enj_kalip    kb ON kb.id = sk.kalip_id_b_snapshot
 
 ),
 
@@ -3497,7 +3543,11 @@ ariza_olaylar AS (
 
       ELSE 0
 
-    END                                            AS anomali_seviye
+    END                                            AS anomali_seviye,
+
+    NULL AS personel_sayisi, NULL AS kalip_kod_a, NULL AS kalip_kod_b,
+
+    NULL AS cevrim_a, NULL AS cevrim_b
 
   FROM enj_event_log e
 
@@ -3601,7 +3651,11 @@ setup_olaylar AS (
 
       ELSE 0
 
-    END                                            AS anomali_seviye
+    END                                            AS anomali_seviye,
+
+    NULL AS personel_sayisi, NULL AS kalip_kod_a, NULL AS kalip_kod_b,
+
+    NULL AS cevrim_a, NULL AS cevrim_b
 
   FROM enj_event_log e
 
@@ -3943,11 +3997,21 @@ FROM olaylar ''' + where
 
                 'kod':      d.get('kalip_kod'),
 
+                'kod_a':    d.get('kalip_kod_a'),
+
+                'kod_b':    d.get('kalip_kod_b'),
+
                 'kod_eski': d.get('kalip_kod_eski'),
 
                 'tipi':     d.get('kalip_tipi'),
 
             },
+
+            'personel_sayisi': d.get('personel_sayisi'),
+
+            'cevrim_a':  d.get('cevrim_a'),
+
+            'cevrim_b':  d.get('cevrim_b'),
 
             'tur':         d.get('tur'),
 

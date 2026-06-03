@@ -975,6 +975,8 @@ def rapor_aggregate(con, makine_id, tarih_str, vardiya, simdi_dt=None):
         "makine_id": makine_id,
         "tarih": tarih_str,
         "vardiya": vardiya,
+        # P4: personel_sayisi = max(A_personel, B_personel) backend tarafindan sync ediliyor
+        "personel_sayisi": rapor.get("personel_sayisi"),
         "aralik": {
             "baslangic": aralik["baslangic"].strftime("%Y-%m-%d %H:%M"),
             "bitis": aralik["bitis"].strftime("%Y-%m-%d %H:%M"),

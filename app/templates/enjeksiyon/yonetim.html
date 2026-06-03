@@ -77,7 +77,7 @@
           </select>
         </div>
         <div class="enj-fld"><label>Emir / Sipariş</label><select id="enj-emir-no"><option value="">Seçiniz</option>{% if rapor.emir_no %}<option value="{{ rapor.emir_no }}" selected>{{ rapor.emir_no }}</option>{% endif %}</select></div>
-        <div class="enj-fld"><label>Personel Sayısı</label><input type="number" id="enj-personel-sayisi" placeholder="0" autocomplete="off" value="{{ rapor.personel_sayisi if rapor.personel_sayisi is not none else '' }}"></div>
+        <div class="enj-fld"><label title="Günlük rapor göstergesi: max(A setup personel, B setup personel). Slot değeri setup modalında girilir.">Personel Sayısı (genel)</label><input type="number" id="enj-personel-sayisi" placeholder="0" autocomplete="off" value="{{ rapor.personel_sayisi if rapor.personel_sayisi is not none else '' }}"></div>
       </div>
 
       <div class="enj-ab-faz2-pair">
@@ -86,16 +86,15 @@
           <div class="enj-ab-faz2-inputs">
             <div class="enj-fld">
               <label>Kalıp Kodu</label>
-              <div class="enj-kalip-secici">
-                <input type="text" class="enj-kalip-input-faz2" id="enj-kalip-a-input" data-slot="A" placeholder="Ara: kod, model..." autocomplete="off">
+              <div class="enj-kalip-secici enj-setup-opener" data-slot="A">
+                <input type="text" class="enj-kalip-input-faz2" id="enj-kalip-a-input" data-slot="A" placeholder="Setup için tıklayın…" autocomplete="off" readonly tabindex="0">
                 <input type="hidden" id="enj-kalip-a-id">
-                <div class="enj-kalip-liste-faz2" id="enj-kalip-a-liste" hidden></div>
               </div>
             </div>
-            <div class="enj-fld"><label>Renk</label><input type="text" class="enj-ab-faz2-inp" id="enj-renk-a" data-slot="A" data-field="renk" autocomplete="off"></div>
-            <div class="enj-fld"><label>Pişme (sn)</label><input type="number" class="enj-ab-faz2-inp" id="enj-pisme-a" data-slot="A" data-field="pisme_suresi_sn" autocomplete="off"></div>
+            <div class="enj-fld"><label>Renk</label><input type="text" class="enj-ab-faz2-disp enj-setup-opener" id="enj-renk-a" data-slot="A" autocomplete="off" readonly tabindex="0"></div>
+            <div class="enj-fld"><label>Pişme (sn)</label><input type="text" class="enj-ab-faz2-disp enj-setup-opener" id="enj-pisme-a" data-slot="A" autocomplete="off" readonly tabindex="0"></div>
           </div>
-          <p class="enj-ab-kap-inline" aria-label="A tarafı kapasite özeti">Aktif göz: <span class="ecg-n" id="enj-gosterge-bagli-a">—</span> | KBÇ: <span class="ecg-n" id="enj-gosterge-kbc-a">—</span> | Tur: <span class="ecg-n" id="enj-gosterge-kap-a">—</span> çift</p>
+          <p class="enj-ab-kap-inline enj-setup-opener" data-slot="A" title="Setup değiştirmek için tıklayın" aria-label="A tarafı kapasite özeti">Personel: <span class="ecg-n" id="enj-gosterge-personel-a">—</span> | Aktif göz: <span class="ecg-n" id="enj-gosterge-bagli-a">—</span> | KBÇ: <span class="ecg-n" id="enj-gosterge-kbc-a">—</span> | Tur: <span class="ecg-n" id="enj-gosterge-kap-a">—</span> çift</p>
           <div class="enj-ab-faz2-metrics">
             <div class="enj-ab-faz2-met"><label>A TUR</label><input type="text" readonly id="enj-cev-a-top" class="met-val" placeholder="—"></div>
             <div class="enj-ab-faz2-met uret"><label>A ÜRET.</label><input type="text" readonly id="enj-uret-a-top" class="met-val" placeholder="—"></div>
@@ -107,16 +106,15 @@
           <div class="enj-ab-faz2-inputs">
             <div class="enj-fld">
               <label>Kalıp Kodu</label>
-              <div class="enj-kalip-secici">
-                <input type="text" class="enj-kalip-input-faz2" id="enj-kalip-b-input" data-slot="B" placeholder="Ara: kod, model..." autocomplete="off">
+              <div class="enj-kalip-secici enj-setup-opener" data-slot="B">
+                <input type="text" class="enj-kalip-input-faz2" id="enj-kalip-b-input" data-slot="B" placeholder="Setup için tıklayın…" autocomplete="off" readonly tabindex="0">
                 <input type="hidden" id="enj-kalip-b-id">
-                <div class="enj-kalip-liste-faz2" id="enj-kalip-b-liste" hidden></div>
               </div>
             </div>
-            <div class="enj-fld"><label>Renk</label><input type="text" class="enj-ab-faz2-inp" id="enj-renk-b" data-slot="B" data-field="renk" autocomplete="off"></div>
-            <div class="enj-fld"><label>Pişme (sn)</label><input type="number" class="enj-ab-faz2-inp" id="enj-pisme-b" data-slot="B" data-field="pisme_suresi_sn" autocomplete="off"></div>
+            <div class="enj-fld"><label>Renk</label><input type="text" class="enj-ab-faz2-disp enj-setup-opener" id="enj-renk-b" data-slot="B" autocomplete="off" readonly tabindex="0"></div>
+            <div class="enj-fld"><label>Pişme (sn)</label><input type="text" class="enj-ab-faz2-disp enj-setup-opener" id="enj-pisme-b" data-slot="B" autocomplete="off" readonly tabindex="0"></div>
           </div>
-          <p class="enj-ab-kap-inline" aria-label="B tarafı kapasite özeti">Aktif göz: <span class="ecg-n" id="enj-gosterge-bagli-b">—</span> | KBÇ: <span class="ecg-n" id="enj-gosterge-kbc-b">—</span> | Tur: <span class="ecg-n" id="enj-gosterge-kap-b">—</span> çift</p>
+          <p class="enj-ab-kap-inline enj-setup-opener" data-slot="B" title="Setup değiştirmek için tıklayın" aria-label="B tarafı kapasite özeti">Personel: <span class="ecg-n" id="enj-gosterge-personel-b">—</span> | Aktif göz: <span class="ecg-n" id="enj-gosterge-bagli-b">—</span> | KBÇ: <span class="ecg-n" id="enj-gosterge-kbc-b">—</span> | Tur: <span class="ecg-n" id="enj-gosterge-kap-b">—</span> çift</p>
           <div class="enj-ab-faz2-metrics">
             <div class="enj-ab-faz2-met"><label>B TUR</label><input type="text" readonly id="enj-cev-b-top" class="met-val" placeholder="—"></div>
             <div class="enj-ab-faz2-met uret"><label>B ÜRET.</label><input type="text" readonly id="enj-uret-b-top" class="met-val" placeholder="—"></div>

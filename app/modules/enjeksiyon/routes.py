@@ -626,16 +626,35 @@ def enj_api_saatlik_patch(saatlik_id):
         cur = con.cursor()
 
         cur.execute("SELECT id, rapor_id FROM enj_saatlik_kayit WHERE id = ?", (saatlik_id,))
-        if not cur.fetchone():
+        row = cur.fetchone()
+        if not row:
             con.close()
             return jsonify({"ok": False, "hata": "kayit bulunamadi"}), 404
+
+        rapor_id_sk = row[1]
+
+        # SETUP GATE: cevrim_a/b > 0 giriliyorsa aktif + tam setup sart
+        has_cevrim_a = "cevrim_a" in guncellenecek and (guncellenecek["cevrim_a"] or 0) > 0
+        has_cevrim_b = "cevrim_b" in guncellenecek and (guncellenecek["cevrim_b"] or 0) > 0
+        if has_cevrim_a:
+            engel = _setup_db.guard_tur_giris(cur, rapor_id_sk, "A")
+            if engel:
+                con.close()
+                return jsonify({"ok": False, "hata": engel["mesaj"], "mesaj": engel["mesaj_tr"],
+                                "tip": "SETUP_EKSIK", "slot": "A"}), 422
+        if has_cevrim_b:
+            engel = _setup_db.guard_tur_giris(cur, rapor_id_sk, "B")
+            if engel:
+                con.close()
+                return jsonify({"ok": False, "hata": engel["mesaj"], "mesaj": engel["mesaj_tr"],
+                                "tip": "SETUP_EKSIK", "slot": "B"}), 422
 
         set_parts = [f"{k} = ?" for k in guncellenecek.keys()]
         set_parts.append("son_guncelleme = CURRENT_TIMESTAMP")
         params = list(guncellenecek.values()) + [saatlik_id]
         cur.execute(f"UPDATE enj_saatlik_kayit SET {', '.join(set_parts)} WHERE id = ?", params)
-        # ENJ_TIME_SETUP_SNAPSHOT TS1: tur girisinde kapasite snapshot dondur
-        if "cevrim_a" in guncellenecek or "cevrim_b" in guncellenecek:
+        # ENJ_TIME_SETUP_SNAPSHOT TS1: tur girisinde kapasite snapshot dondur (0-yaz yasagi icinde)
+        if has_cevrim_a or has_cevrim_b or "cevrim_a" in guncellenecek or "cevrim_b" in guncellenecek:
             try:
                 _setup_db.freeze_saatlik_snapshot(cur, saatlik_id)
             except Exception:
@@ -1689,52 +1708,96 @@ def enj_api_ab_ozet(rapor_id):
         )
         r = cur.fetchone()
         fire_toplam = int(r[0]) if r else 0
-        cur.execute(
-            # ENJ_KBC_FIX: COALESCE(istasyon, master) — once uretim ozel, yoksa kalip yonetimi
-            "SELECT i.slot, COALESCE(SUM(COALESCE(i.kalip_basi_cift, k.kalip_basi_cift, 0)),0) "
-            "FROM enj_istasyon_durumu i LEFT JOIN enj_kalip k ON k.id = i.kalip_id "
-            "WHERE i.rapor_id=? AND i.aktif=1 GROUP BY i.slot", (rapor_id,)
-        )
+        # P4: Aktif göz + KBÇ setup merkezli. Fallback: canli istasyon
         kap = {"A": 0, "B": 0}
-        for slot, k in cur.fetchall():
-            if slot in ("A", "B"):
-                kap[slot] = int(k or 0)
-        cur.execute(
-            "SELECT i.slot, i.kalip_id, i.renk, i.bagli_kalip_adet, i.kalip_basi_cift, "
-            "       i.pisme_suresi_sn, "
-            "       COALESCE(i.kalip_basi_cift, k.kalip_basi_cift) AS efektif_kalip_basi_cift "
-            "FROM enj_istasyon_durumu i "
-            "LEFT JOIN enj_kalip k ON k.id = i.kalip_id "
-            "WHERE i.rapor_id=? AND i.aktif=1 ORDER BY i.istasyon_no",
-            (rapor_id,)
-        )
+        aktif_goz = {"A": 0, "B": 0}
+        setup_kbc = {"A": None, "B": None}
         ayar = {"A": None, "B": None}
-        for row in cur.fetchall():
-            s = row[0]
-            if s in ("A", "B") and ayar[s] is None:
-                ayar[s] = {"kalip_id": row[1], "renk": row[2],
-                           "bagli_kalip_adet": row[3], "kalip_basi_cift": row[4],
-                           "pisme_suresi_sn": row[5],
-                           "efektif_kalip_basi_cift": row[6]}
-        for s in ("A", "B"):
-            if ayar[s] and ayar[s].get("kalip_id"):
-                cur.execute(
-                    "SELECT kalip_kod, model_kod, gorsel_dosya FROM enj_kalip WHERE id=?",
-                    (ayar[s]["kalip_id"],)
-                )
-                kr = cur.fetchone()
-                if kr:
-                    ayar[s]["kalip_kod"] = kr[0]
-                    ayar[s]["model_kod"] = kr[1]
-                    # ENJ_AB_GORSEL_V2 - gorsel URL
-                    if kr[2]:
-                        _g = str(kr[2])
-                        if _g.startswith("/") or _g.startswith("http"):
-                            ayar[s]["gorsel"] = _g
+        setup_hazir = {"A": False, "B": False}
+
+        for slot in ("A", "B"):
+            active_setup = _setup_db.get_active_setup(cur, rapor_id, slot)
+            if active_setup:
+                ag = int(active_setup.get("aktif_goz_sayisi") or 0)
+                kbc = int(active_setup.get("kalip_basi_cift") or 0)
+                aktif_goz[slot] = ag
+                setup_kbc[slot] = kbc
+                kap[slot] = ag * kbc if ag > 0 and kbc > 0 else 0
+                eksik = not (active_setup.get("kalip_id") and kbc > 0 and ag > 0
+                             and (active_setup.get("renk") or "").strip()
+                             and (active_setup.get("pisme_suresi_sn") or 0) > 0
+                             and (active_setup.get("personel_sayisi") or 0) > 0)
+                setup_hazir[slot] = not eksik
+                # ayar dict'i setup'tan doldur (gorsel ve kalip_kod icin)
+                kalip_id_s = active_setup.get("kalip_id")
+                ayar_dict = {
+                    "kalip_id": kalip_id_s,
+                    "renk": active_setup.get("renk"),
+                    "bagli_kalip_adet": ag,
+                    "kalip_basi_cift": kbc,
+                    "efektif_kalip_basi_cift": kbc,
+                    "pisme_suresi_sn": active_setup.get("pisme_suresi_sn"),
+                    "aktif_goz_sayisi": ag,
+                }
+                if kalip_id_s:
+                    cur.execute(
+                        "SELECT kalip_kod, model_kod, gorsel_dosya FROM enj_kalip WHERE id=?",
+                        (kalip_id_s,)
+                    )
+                    kr = cur.fetchone()
+                    if kr:
+                        ayar_dict["kalip_kod"] = kr[0]
+                        ayar_dict["model_kod"] = kr[1]
+                        if kr[2]:
+                            _g = str(kr[2])
+                            ayar_dict["gorsel"] = _g if (_g.startswith("/") or _g.startswith("http")) else "/static/img/kalip/" + _g
                         else:
-                            ayar[s]["gorsel"] = "/static/img/kalip/" + _g
-                    else:
-                        ayar[s]["gorsel"] = None
+                            ayar_dict["gorsel"] = None
+                else:
+                    # kalip_kod_snapshot'tan al
+                    ayar_dict["kalip_kod"] = active_setup.get("kalip_kod_snapshot")
+                ayar[slot] = ayar_dict
+            else:
+                # Setup yok: canli istasyon fallback (eski mantik)
+                cur.execute(
+                    "SELECT COALESCE(SUM(COALESCE(i.kalip_basi_cift, k.kalip_basi_cift, 0)),0) "
+                    "FROM enj_istasyon_durumu i LEFT JOIN enj_kalip k ON k.id = i.kalip_id "
+                    "WHERE i.rapor_id=? AND i.slot=? AND i.aktif=1",
+                    (rapor_id, slot)
+                )
+                kap_r = cur.fetchone()
+                kap[slot] = int(kap_r[0] or 0) if kap_r else 0
+                # ilk aktif istasyon ayar bilgisi
+                cur.execute(
+                    "SELECT i.kalip_id, i.renk, i.bagli_kalip_adet, i.kalip_basi_cift, "
+                    "       i.pisme_suresi_sn, "
+                    "       COALESCE(i.kalip_basi_cift, k.kalip_basi_cift) AS efektif_kbc "
+                    "FROM enj_istasyon_durumu i "
+                    "LEFT JOIN enj_kalip k ON k.id = i.kalip_id "
+                    "WHERE i.rapor_id=? AND i.slot=? AND i.aktif=1 ORDER BY i.istasyon_no LIMIT 1",
+                    (rapor_id, slot)
+                )
+                ar = cur.fetchone()
+                if ar:
+                    ayar_dict = {"kalip_id": ar[0], "renk": ar[1], "bagli_kalip_adet": ar[2],
+                                 "kalip_basi_cift": ar[3], "pisme_suresi_sn": ar[4],
+                                 "efektif_kalip_basi_cift": ar[5]}
+                    if ar[0]:
+                        cur.execute(
+                            "SELECT kalip_kod, model_kod, gorsel_dosya FROM enj_kalip WHERE id=?",
+                            (ar[0],)
+                        )
+                        kr = cur.fetchone()
+                        if kr:
+                            ayar_dict["kalip_kod"] = kr[0]
+                            ayar_dict["model_kod"] = kr[1]
+                            if kr[2]:
+                                _g = str(kr[2])
+                                ayar_dict["gorsel"] = _g if (_g.startswith("/") or _g.startswith("http")) else "/static/img/kalip/" + _g
+                            else:
+                                ayar_dict["gorsel"] = None
+                    ayar[slot] = ayar_dict
+
         con.close()
         uretA = int(uretA or 0)
         uretB = int(uretB or 0)
@@ -1744,9 +1807,11 @@ def enj_api_ab_ozet(rapor_id):
         net_orani = 100.0 - fire_orani if uret_toplam > 0 else 0
         return jsonify({"ok": True,
             "A": {"cevrim": int(cevA or 0), "uretilen": uretA,
-                  "kapasite_per_cycle": kap["A"], "ayar": ayar["A"]},
+                  "kapasite_per_cycle": kap["A"], "aktif_goz": aktif_goz["A"],
+                  "setup_hazir": setup_hazir["A"], "ayar": ayar["A"]},
             "B": {"cevrim": int(cevB or 0), "uretilen": uretB,
-                  "kapasite_per_cycle": kap["B"], "ayar": ayar["B"]},
+                  "kapasite_per_cycle": kap["B"], "aktif_goz": aktif_goz["B"],
+                  "setup_hazir": setup_hazir["B"], "ayar": ayar["B"]},
             "toplam": {"cevrim": int(cevA or 0) + int(cevB or 0),
                        "uretilen": uret_toplam, "fire": fire_toplam, "net": net_toplam,
                        "fire_orani": round(fire_orani, 2),
@@ -1756,6 +1821,105 @@ def enj_api_ab_ozet(rapor_id):
         return jsonify({"ok": False, "hata": str(e)}), 500
 
 # ===== END: ENJ_AB_FAZ1_V1 =====
+
+
+# ===== BEGIN: ENJ_SNAPSHOT_FIX_V1 =====
+
+def _duzelt_sifir_snapshot_rapor(cur, rapor_id):
+    """Rapordaki tur_kapasitesi=0 snapshot satirlarini duzelt.
+
+    Duzeltme sadece guvenliyse yapilir:
+    - cevrim_a/b > 0
+    - snapshot = 0 (NULL degil)
+    - Karsilik gelen aktif setup mevcut ve tam (aktif_goz > 0, kbc > 0)
+
+    Snapshot NULL olanlara dokunmaz (henuz hic freeze edilmemis satirlar).
+    A duzeltmesi B'ye dokunmaz, B A'ya dokunmaz.
+    """
+    bulunan = {"A": 0, "B": 0}
+    duzeltilen = {"A": 0, "B": 0}
+
+    for slot in ("A", "B"):
+        sfx = slot.lower()
+        # 0 snapshotu olan ve o slotta cevrim > 0 satirlari bul
+        cur.execute(
+            "SELECT id, rapor_id, cevrim_{sfx}, setup_id_{sfx}, "
+            "tur_kapasitesi_{sfx}_snapshot, aktif_goz_{sfx}_snapshot, "
+            "kalip_basi_cift_{sfx}_snapshot "
+            "FROM enj_saatlik_kayit "
+            "WHERE rapor_id=? "
+            "AND cevrim_{sfx} > 0 "
+            "AND tur_kapasitesi_{sfx}_snapshot = 0".format(sfx=sfx),
+            (rapor_id,),
+        )
+        rows = cur.fetchall()
+        bulunan[slot] = len(rows)
+
+        for row in rows:
+            sk_id = row[0]
+            # Satirda kayitli setup_id varsa onu kullan, yoksa aktif setup ara
+            setup_id_kayitli = row[3]
+            # Aktif setup'u dogrudan sorgula (setup_id bilgisi referans icin)
+            setup = _setup_db.get_active_setup(cur, rapor_id, slot)
+            if not setup and setup_id_kayitli:
+                # Aktif setup kapandiysa, kayitli setup_id'den cek
+                setups = _setup_db.list_setups(cur, rapor_id, slot=slot)
+                for s in setups:
+                    if s.get("id") == setup_id_kayitli:
+                        setup = s
+                        break
+
+            if not setup:
+                continue
+
+            ag = int(setup.get("aktif_goz_sayisi") or 0)
+            kbc = int(setup.get("kalip_basi_cift") or 0)
+            if ag <= 0 or kbc <= 0:
+                continue
+
+            new_kap = ag * kbc
+            cevrim_val = row[2] or 0
+            new_uretilen = cevrim_val * new_kap
+
+            # Sadece snapshot kolonunu guncelle, diger slotu dokunma
+            cur.execute(
+                "UPDATE enj_saatlik_kayit SET "
+                "tur_kapasitesi_{sfx}_snapshot=?, "
+                "aktif_goz_{sfx}_snapshot=?, "
+                "kalip_basi_cift_{sfx}_snapshot=?, "
+                "uretilen_{sfx}=? "
+                "WHERE id=?".format(sfx=sfx),
+                (new_kap, ag, kbc, new_uretilen, sk_id),
+            )
+            duzeltilen[slot] += 1
+
+    return {"bulunan": bulunan, "duzeltilen": duzeltilen}
+
+
+@enjeksiyon_bp.route("/api/rapor/<int:rapor_id>/snapshot-duzelt", methods=["POST"])
+def enj_api_snapshot_duzelt(rapor_id):
+    """Rapordaki bozuk (tur_kapasitesi=0) snapshot satirlarini duzelt.
+
+    Guvenli: sadece acikca 0 olanlara dokunur, NULL olanlara hayir.
+    A duzeltmesi B'yi, B A'yi etkilemez.
+    """
+    try:
+        con = _sqlite3.connect(_enj_kalip_db_path())
+        cur = con.cursor()
+        cur.execute("SELECT id FROM enj_gunluk_rapor WHERE id=?", (rapor_id,))
+        if not cur.fetchone():
+            con.close()
+            return jsonify({"ok": False, "hata": "rapor bulunamadi"}), 404
+
+        sonuc = _duzelt_sifir_snapshot_rapor(cur, rapor_id)
+        con.commit()
+        con.close()
+        return jsonify({"ok": True, "rapor_id": rapor_id, **sonuc})
+    except Exception as e:
+        return jsonify({"ok": False, "hata": str(e)}), 500
+
+
+# ===== END: ENJ_SNAPSHOT_FIX_V1 =====
 
 
 # ===== BEGIN: ENJ_SETUP_V1_FAZ1 =====

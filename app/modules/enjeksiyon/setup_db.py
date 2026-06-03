@@ -114,6 +114,30 @@ def _recalc_rapor_saatlik(cur, rapor_id):
     return _ab_hesapla_tum_saatlikler(cur, rapor_id)
 
 
+def _sync_rapor_personel_max(cur, rapor_id):
+    """
+    Gunluk rapor personel_sayisi = max(AKTIF A, AKTIF B setup personel).
+    Ornek: A=5, B=4 -> rapor 5. Her setup kendi personel snapshot'ini tasir.
+    """
+    cur.execute(
+        """
+        SELECT MAX(CAST(personel_sayisi AS INTEGER))
+        FROM enj_ab_setup
+        WHERE rapor_id=? AND durum='AKTIF'
+          AND personel_sayisi IS NOT NULL AND personel_sayisi > 0
+        """,
+        (rapor_id,),
+    )
+    row = cur.fetchone()
+    mx = int(row[0]) if row and row[0] is not None else None
+    if mx is not None and mx > 0:
+        cur.execute(
+            "UPDATE enj_gunluk_rapor SET personel_sayisi=? WHERE id=?",
+            (mx, rapor_id),
+        )
+    return mx
+
+
 def validate_setup(data, for_approve=False):
     """for_approve=True ise zorunlu alanlar kontrol edilir."""
     err = []
@@ -227,12 +251,22 @@ def freeze_saatlik_snapshot(cur, saatlik_id, kaynak="TUR_GIRIS"):
         return {"ok": True, "skipped": True, "reason": "snapshot zaten mevcut"}
 
     updates = {}
+    skipped_zero = []
     for slot in ("A", "B"):
         if frozen[slot]:
             continue
         sfx = slot.lower()
         setup = get_active_setup(cur, rapor_id, slot)
         snap = _slot_snapshot_from_setup(cur, rapor_id, slot, setup)
+
+        # KURAL: tur_kapasitesi = 0 snapshot'a yazilmaz.
+        # aktif_goz > 0 VE kbc > 0 olmadan snapshot birakilir NULL.
+        if not (snap["aktif_goz"] and snap["aktif_goz"] > 0
+                and snap["kalip_basi_cift"] and snap["kalip_basi_cift"] > 0
+                and snap["tur_kapasitesi"] and snap["tur_kapasitesi"] > 0):
+            skipped_zero.append(slot)
+            continue
+
         updates["setup_id_" + sfx] = snap["setup_id"]
         updates["kalip_id_" + sfx + "_snapshot"] = snap["kalip_id"]
         updates["kalip_kod_" + sfx + "_snapshot"] = snap["kalip_kod"]
@@ -241,7 +275,8 @@ def freeze_saatlik_snapshot(cur, saatlik_id, kaynak="TUR_GIRIS"):
         updates["tur_kapasitesi_" + sfx + "_snapshot"] = snap["tur_kapasitesi"]
 
     if not updates:
-        return {"ok": True, "skipped": True, "reason": "snapshot zaten mevcut"}
+        return {"ok": True, "skipped": True, "reason": "snapshot zaten mevcut",
+                "skipped_zero": skipped_zero}
 
     updates["snapshot_zamani"] = _now()
     updates["snapshot_kaynak"] = kaynak
@@ -251,7 +286,53 @@ def freeze_saatlik_snapshot(cur, saatlik_id, kaynak="TUR_GIRIS"):
         "UPDATE enj_saatlik_kayit SET " + ", ".join(set_parts) + " WHERE id=?",
         params,
     )
-    return {"ok": True, "frozen_slots": [s for s in ("A", "B") if not frozen[s]]}
+    return {"ok": True, "frozen_slots": [s for s in ("A", "B") if not frozen[s]],
+            "skipped_zero": skipped_zero}
+
+
+def guard_tur_giris(cur, rapor_id, slot):
+    """Uretim tur girisi icin setup gate kontrolu.
+
+    Donus:
+      None  -> izin ver
+      dict  -> {"engel": True, "mesaj": str} -> engelle
+    """
+    slot = slot.upper()
+    setup = get_active_setup(cur, rapor_id, slot)
+
+    if not setup:
+        return {
+            "engel": True,
+            "mesaj": "Once {} tarafi kalip/setup baslatin.".format(slot),
+            "mesaj_tr": "Önce {} tarafı kalıp/setup başlatın.".format(slot),
+        }
+
+    eksik = []
+    if not setup.get("kalip_id") and not setup.get("kalip_kod_snapshot"):
+        eksik.append("kalip")
+    if not (setup.get("renk") or "").strip():
+        eksik.append("renk")
+    if not (setup.get("pisme_suresi_sn") or 0) > 0:
+        eksik.append("pisme suresi")
+    if not (setup.get("personel_sayisi") or 0) > 0:
+        eksik.append("personel")
+    if not (setup.get("aktif_goz_sayisi") or 0) > 0:
+        eksik.append("aktif goz")
+    if not (setup.get("kalip_basi_cift") or 0) > 0:
+        eksik.append("KBC")
+
+    if eksik:
+        return {
+            "engel": True,
+            "mesaj": "{} setup bilgileri eksik: {}. Setup ekranini kontrol edin.".format(
+                slot, ", ".join(eksik)
+            ),
+            "mesaj_tr": "{} setup bilgileri eksik ({}). Setup ekranını kontrol edin.".format(
+                slot, ", ".join(eksik)
+            ),
+        }
+
+    return None
 
 
 def guard_slot_toplu(cur, rapor_id, slot, guncel):
@@ -436,6 +517,8 @@ def approve_setup(con, setup_id, rapor_id, user=None):
     except Exception as e:
         return {"ok": False, "hata": "hesap yenileme hatasi: %s" % e}
 
+    rapor_personel_max = _sync_rapor_personel_max(cur, rapor_id)
+
     try:
         from modules.enjeksiyon.audit import log_ab_setup_event
         log_ab_setup_event(
@@ -455,6 +538,7 @@ def approve_setup(con, setup_id, rapor_id, user=None):
         "setup": row,
         "istasyon_sync": sync,
         "yeniden_hesaplanan_saatlik": recalc,
+        "rapor_personel_max": rapor_personel_max,
     }
 
 
@@ -496,7 +580,9 @@ def close_setup(con, setup_id, rapor_id, degisim_sebebi, user=None, notlar=None)
     except Exception:
         pass
 
-    return {"ok": True, "setup": row}
+    rapor_personel_max = _sync_rapor_personel_max(cur, rapor_id)
+
+    return {"ok": True, "setup": row, "rapor_personel_max": rapor_personel_max}
 
 
 def cancel_setup(con, setup_id, rapor_id, user=None):
