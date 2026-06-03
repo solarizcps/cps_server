@@ -1714,8 +1714,14 @@ def _ab_hesapla_saatlik(cur, saatlik_id):
         set_parts.append("uretilen_a=?")
         params.append(uret_a)
     else:
-        kap_a  = int(kap_a_snap)
-        uret_a = cur_uret_a  # dokunma
+        kap_a = int(kap_a_snap)
+        # MIXED-SNAPSHOT FIX: A frozen ama uretilen=0, cevrim>0 — frozen kap ile doldur
+        if cev_a > 0 and (cur_uret_a is None or cur_uret_a == 0):
+            uret_a = cev_a * kap_a
+            set_parts.append("uretilen_a=?")
+            params.append(uret_a)
+        else:
+            uret_a = cur_uret_a  # dogunma (dolu veya cevrim=0)
 
     if not b_korundu:
         kap_b  = kap_live["B"]
@@ -1723,8 +1729,14 @@ def _ab_hesapla_saatlik(cur, saatlik_id):
         set_parts.append("uretilen_b=?")
         params.append(uret_b)
     else:
-        kap_b  = int(kap_b_snap)
-        uret_b = cur_uret_b  # dokunma
+        kap_b = int(kap_b_snap)
+        # MIXED-SNAPSHOT FIX: B frozen ama uretilen=0, cevrim>0 — frozen kap ile doldur
+        if cev_b > 0 and (cur_uret_b is None or cur_uret_b == 0):
+            uret_b = cev_b * kap_b
+            set_parts.append("uretilen_b=?")
+            params.append(uret_b)
+        else:
+            uret_b = cur_uret_b  # dogunma (dolu veya cevrim=0)
 
     if set_parts:
         params.append(saatlik_id)
