@@ -1644,95 +1644,177 @@
         var gozCount = window.enjCountAktifGozForSlot ? window.enjCountAktifGozForSlot(sl) : 0;
         state.aktifGozSayisi = gozCount;
 
-        var flowHTML = '';
-        if (isBaslat) {
-            flowHTML =
-                '<div class="esu-intro">' +
-                    '<p class="emb-bilgi-metin">Slot ' + escapeHTML(sl) +
-                    ' için setup başlatın. Tüm alanlar zorunludur.</p>' +
-                '</div>';
-        } else {
-            flowHTML =
-                '<div class="esu-eski-card">' +
-                    setupReceteSnapshotHTML('Eski setup', {
-                        kalip_kod_snapshot: eski.kalip_kod_snapshot,
-                        renk: eski.renk,
-                        pisme_suresi_sn: eski.pisme_suresi_sn,
-                        aktif_goz_sayisi: eski.aktif_goz_sayisi,
-                        kalip_basi_cift: eski.kalip_basi_cift
-                    }) +
-                '</div>';
-        }
+        // Gorsel kaynak (eski setup veya bos)
+        var _rawGorsel = (state.eskiSetup && (state.eskiSetup.gorsel || state.eskiSetup.gorsel_dosya)) || null;
+        var gorselSrc = _rawGorsel
+            ? ((_rawGorsel.startsWith('/') || _rawGorsel.startsWith('http'))
+                ? _rawGorsel
+                : '/static/img/kaliplar/' + _rawGorsel)
+            : null;
 
+        // ---- SATIR 1: Gorsel (sol) + Mevcut Setup ozet (sag) ----
+        var gorselKartHTML =
+            '<div class="tsu-blok tsu-gorsel-blok">' +
+                '<div class="tsu-blok-baslik">KALIP GÖRSELİ</div>' +
+                '<div class="tsu-gorsel-cerceve" id="esu-kalip-gorsel-wrap">' +
+                    (gorselSrc
+                        ? '<img id="esu-kalip-gorsel-img" src="' + escapeHTML(gorselSrc) + '" alt="Kalıp görseli" ' +
+                          'onerror="this.style.display=\'none\';var s=this.nextSibling;if(s)s.style.display=\'\';">' +
+                          '<span class="tsu-gorsel-yok" style="display:none">Kalıp görseli yok</span>'
+                        : '<span class="tsu-gorsel-yok">Kalıp görseli yok</span>') +
+                '</div>' +
+            '</div>';
+
+        var pismeTxt = (eski.pisme_suresi_sn != null && eski.pisme_suresi_sn !== '')
+            ? (escapeHTML(String(eski.pisme_suresi_sn)) + ' sn') : '—';
+        var eskiKalipTxt = eski.kalip_kod_snapshot || eski.kalip_kod || '—';
+
+        var mevSetupHTML = isBaslat
+            ? '<div class="tsu-blok tsu-mev-blok tsu-baslat-bilgi">' +
+                  '<div class="tsu-blok-baslik">BİLGİ</div>' +
+                  '<p class="tsu-baslat-txt">Slot <strong>' + escapeHTML(sl) + '</strong> için yeni setup başlatılacak.<br>Tüm alanlar zorunludur.</p>' +
+              '</div>'
+            : '<div class="tsu-blok tsu-mev-blok">' +
+                  '<div class="tsu-blok-baslik">MEVCUT SETUP</div>' +
+                  '<div class="tsu-mev-liste">' +
+                      tsuMevSatir('⚙', 'Kalıp',    eskiKalipTxt) +
+                      tsuMevSatir('🎨', 'Renk',     eski.renk || '—') +
+                      tsuMevSatir('⏱', 'Pişme',    pismeTxt) +
+                      tsuMevSatir('👥', 'Personel', eski.personel_sayisi != null ? String(eski.personel_sayisi) : '—') +
+                      tsuMevSatir('👁', 'Aktif göz', eski.aktif_goz_sayisi != null ? String(eski.aktif_goz_sayisi) : '—') +
+                      tsuMevSatir('⚙', 'KBÇ',      eski.kalip_basi_cift != null ? String(eski.kalip_basi_cift) : '—') +
+                  '</div>' +
+              '</div>';
+
+        var satir1HTML =
+            '<div class="tsu-satir tsu-satir-1">' +
+                gorselKartHTML +
+                mevSetupHTML +
+            '</div>';
+
+        // ---- SATIR 2: Yeni setup formu (sol) + Uretim bilgileri (sag) ----
         var renkVal = (init.renk != null && init.renk !== '') ? escapeHTML(String(init.renk)) : '';
-        var formHTML =
-            '<div class="esu-grid">' +
-                '<div class="emb-bolum esu-full esu-kalip-wrap">' +
-                    '<label class="emb-label">Kalıp<span class="gerekli">*</span></label>' +
+
+        var yeniSetupHTML =
+            '<div class="tsu-blok tsu-form-blok">' +
+                '<div class="tsu-blok-baslik">YENİ SETUP BİLGİLERİ</div>' +
+                '<div class="tsu-form-alan">' +
+                    '<label class="tsu-label">KALIP <span class="gerekli">*</span></label>' +
                     kalipSeciciHTML() +
                 '</div>' +
-                '<div class="emb-bolum esu-renk-wrap">' +
-                    '<label class="emb-label">Renk<span class="gerekli">*</span></label>' +
+                '<div class="tsu-form-alan">' +
+                    '<label class="tsu-label">RENK <span class="gerekli">*</span></label>' +
                     '<div class="enj-fld esu-renk-fld">' +
-                        '<input type="text" class="emb-not-input esu-fld" id="esu-renk" value="' +
+                        '<input type="text" class="tsu-inp esu-fld" id="esu-renk" value="' +
                         renkVal + '" autocomplete="off" placeholder="Renk seçin…">' +
                     '</div>' +
                 '</div>' +
-                setupFormColHTML('Pişme süresi (sn)', 'esu-pisme', 'number', init.pisme_suresi_sn, '1') +
-                setupFormColHTML(
-                    'Personel sayısı (Slot ' + sl + ')',
-                    'esu-personel',
-                    'number',
-                    init.personel_sayisi,
-                    '1',
-                    { hint: 'Bu değer yalnızca Slot ' + escapeHTML(sl) + ' setup snapshot\'ına yazılır. Varsayılan: üstteki genel personel.' }
-                ) +
-                setupFormColHTML(
-                    'Aktif göz',
-                    'esu-goz-display',
-                    'text',
-                    gozCount > 0 ? gozCount : '0',
-                    null,
-                    {
-                        readonly: true,
-                        hint: 'Üst gridde Slot ' + escapeHTML(sl) + ' için seçili istasyon sayısı'
-                    }
-                ) +
-                setupFormColHTML('KBÇ / kalıp içi çift', 'esu-kbc', 'number', init.kalip_basi_cift, '1') +
+                '<div class="tsu-form-alan">' +
+                    '<label class="tsu-label">PİŞME SÜRESİ (SN) <span class="gerekli">*</span></label>' +
+                    '<input type="number" id="esu-pisme" class="tsu-inp esu-fld" step="1" ' +
+                    'value="' + ((init.pisme_suresi_sn != null && init.pisme_suresi_sn !== '') ? escapeHTML(String(init.pisme_suresi_sn)) : '') + '" autocomplete="off">' +
+                '</div>' +
             '</div>';
 
+        var gozVal = gozCount > 0 ? gozCount : '0';
+        var peVal  = (init.personel_sayisi != null && init.personel_sayisi !== '') ? escapeHTML(String(init.personel_sayisi)) : '';
+        var kbcVal = (init.kalip_basi_cift != null && init.kalip_basi_cift !== '') ? escapeHTML(String(init.kalip_basi_cift)) : '';
+
+        var uretimHTML =
+            '<div class="tsu-blok tsu-uretim-blok">' +
+                '<div class="tsu-blok-baslik">ÜRETİM BİLGİLERİ</div>' +
+                '<div class="tsu-uretim-grid">' +
+                    '<div class="tsu-form-alan">' +
+                        '<label class="tsu-label">PERSONEL SAYISI (SLOT ' + escapeHTML(sl) + ') <span class="gerekli">*</span></label>' +
+                        '<div class="tsu-inp-ikonlu">' +
+                            '<input type="number" id="esu-personel" class="tsu-inp esu-fld" step="1" value="' + peVal + '" autocomplete="off">' +
+                            '<span class="tsu-inp-ikon">👥</span>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="tsu-form-alan">' +
+                        '<label class="tsu-label">AKTİF GÖZ <span class="gerekli">*</span></label>' +
+                        '<div class="tsu-inp-ikonlu">' +
+                            '<input type="text" id="esu-goz-display" class="tsu-inp esu-readonly" readonly value="' + gozVal + '">' +
+                            '<span class="tsu-inp-ikon">👁</span>' +
+                        '</div>' +
+                        '<p class="tsu-hint">Üst gridde Slot ' + escapeHTML(sl) + ' için seçili istasyon</p>' +
+                    '</div>' +
+                    '<div class="tsu-form-alan tsu-kbc-alan">' +
+                        '<label class="tsu-label">KBÇ / KALIP İÇİ ÇİFT <span class="gerekli">*</span></label>' +
+                        '<div class="tsu-inp-ikonlu">' +
+                            '<input type="number" id="esu-kbc" class="tsu-inp esu-fld" step="1" value="' + kbcVal + '" autocomplete="off">' +
+                            '<span class="tsu-inp-ikon">⚙</span>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+
+        var satir2HTML =
+            '<div class="tsu-satir tsu-satir-2">' +
+                yeniSetupHTML +
+                uretimHTML +
+            '</div>';
+
+        // ---- SATIR 3: Sebep (degistir modunda) + Not ----
         var sebepHTML = '';
         if (!isBaslat) {
             sebepHTML =
-                '<div class="emb-bolum esu-full">' +
-                    '<label class="emb-label">Değişim sebebi<span class="gerekli">*</span></label>' +
-                    '<div class="emb-radio-grup">' +
-                        kalipDegistirRadioHTML('SIPARIS_BITTI', '✓', 'Sipariş bitti', true) +
-                        kalipDegistirRadioHTML('HAMMADDE_BITTI', '⏳', 'Hammadde bitti', false) +
-                        kalipDegistirRadioHTML('KALIP_ARIZA', '⚙', 'Kalıp arıza', false) +
-                        kalipDegistirRadioHTML('RENK_DEGISIMI', '🎨', 'Renk değişimi', false) +
-                        kalipDegistirRadioHTML('YANLIS_SECIM', '↩', 'Yanlış seçim', false) +
-                        kalipDegistirRadioHTML('DIGER', '…', 'Diğer', false) +
+                '<div class="tsu-alt-blok">' +
+                    '<label class="tsu-label">DEĞİŞİM SEBEBİ <span class="gerekli">*</span></label>' +
+                    '<div class="tsu-sebep-grup">' +
+                        tsuSebepBtnHTML('SIPARIS_BITTI', '✓', 'Sipariş bitti', true) +
+                        tsuSebepBtnHTML('HAMMADDE_BITTI', '⏳', 'Hammadde bitti', false) +
+                        tsuSebepBtnHTML('KALIP_ARIZA', '⚙', 'Kalıp arıza', false) +
+                        tsuSebepBtnHTML('RENK_DEGISIMI', '🎨', 'Renk değişimi', false) +
+                        tsuSebepBtnHTML('YANLIS_SECIM', '↩', 'Yanlış seçim', false) +
+                        tsuSebepBtnHTML('DIGER', '…', 'Diğer', false) +
                     '</div>' +
                 '</div>';
         }
 
-        bodyEl.innerHTML = flowHTML + formHTML + sebepHTML +
-            '<div class="emb-bolum esu-full">' +
-                '<label class="emb-label">Not (opsiyonel)</label>' +
-                '<textarea class="emb-not-input" id="ekd-not" placeholder="Ek açıklama" maxlength="200"></textarea>' +
+        var notHTML =
+            '<div class="tsu-alt-blok tsu-not-blok">' +
+                '<label class="tsu-label">NOT (OPSİYONEL)</label>' +
+                '<textarea class="tsu-textarea emb-not-input" id="ekd-not" ' +
+                'placeholder="Ek açıklama (opsiyonel)" maxlength="200"></textarea>' +
             '</div>';
 
+        var satir3HTML =
+            '<div class="tsu-satir tsu-satir-3">' +
+                sebepHTML +
+                notHTML +
+            '</div>';
+
+        bodyEl.innerHTML = satir1HTML + satir2HTML + satir3HTML;
+
         footerEl.innerHTML =
-            '<button type="button" class="emf-btn iptal" data-act="iptal">İPTAL</button>' +
-            '<button type="button" class="emf-btn submit" data-act="submit" disabled>' +
-            (isBaslat ? 'SETUP KAYDET ✓' : 'SETUP DEĞİŞTİR ✓') +
+            '<button type="button" class="emf-btn iptal" data-act="iptal">✕ İPTAL</button>' +
+            '<button type="button" class="emf-btn submit tsu-submit-btn" data-act="submit" disabled>' +
+            (isBaslat ? '✓ SETUP KAYDET' : '✓ SETUP DEĞİŞTİR') +
             '</button>';
 
         var kalipInp = bodyEl.querySelector('.enj-modal-kalip-input');
         if (kalipInp && init.kalip_kod) kalipInp.value = init.kalip_kod;
 
         bindKalipDegistir(isBaslat);
+    }
+
+    /** Mevcut setup ozet satiri */
+    function tsuMevSatir(ikon, label, deger) {
+        return '<div class="tsu-mev-satir">' +
+            '<span class="tsu-mev-ikon">' + ikon + '</span>' +
+            '<span class="tsu-mev-label">' + escapeHTML(label) + '</span>' +
+            '<span class="tsu-mev-deger">' + escapeHTML(String(deger)) + '</span>' +
+        '</div>';
+    }
+
+    /** Sebep kart butonu */
+    function tsuSebepBtnHTML(id, ikon, metin, secili) {
+        return '<button type="button" class="tsu-sebep-btn' + (secili ? ' secili' : '') + '" ' +
+            'data-sebep="' + id + '">' +
+            '<span class="tsu-sebep-ikon">' + ikon + '</span>' +
+            '<span>' + escapeHTML(metin) + '</span>' +
+        '</button>';
     }
     
     /* HTML Helpers */
@@ -1867,6 +1949,27 @@
                 kbcEl.value = String(k.kalip_basi_cift);
             }
             state.formKalipBasiCift = k.kalip_basi_cift;
+
+            // Kalip gorsel preview guncelle (yeni tsu tasarimi)
+            var wrap = document.getElementById('esu-kalip-gorsel-wrap');
+            if (wrap) {
+                var gorselUrl = k.gorsel || k.image_url || null;
+                if (!gorselUrl && k.gorsel_dosya) {
+                    var gd = String(k.gorsel_dosya);
+                    gorselUrl = (gd.startsWith('/') || gd.startsWith('http'))
+                        ? gd
+                        : '/static/img/kaliplar/' + gd;
+                }
+                if (gorselUrl) {
+                    wrap.innerHTML =
+                        '<img id="esu-kalip-gorsel-img" src="' + escapeHTML(gorselUrl) + '" alt="Kalıp görseli" ' +
+                        'onerror="this.style.display=\'none\';this.nextSibling.style.display=\'\'">' +
+                        '<span class="tsu-gorsel-yok" style="display:none">Kalıp görseli yok</span>';
+                } else {
+                    wrap.innerHTML = '<span class="tsu-gorsel-yok">Kalıp görseli yok</span>';
+                }
+            }
+
             refreshSetupSubmitBtn();
         });
     }
@@ -1878,13 +1981,27 @@
             state.sebepKalipDegistir = 'VARDIYA_BASLANGICI';
         }
 
+        // Yeni tablet kart sebep butonlari
+        bodyEl.querySelectorAll('.tsu-sebep-btn').forEach(function (r) {
+            r.addEventListener('click', function () {
+                bodyEl.querySelectorAll('.tsu-sebep-btn').forEach(function (x) {
+                    x.classList.remove('secili');
+                });
+                r.classList.add('secili');
+                state.sebepKalipDegistir = r.getAttribute('data-sebep');
+                refreshSetupSubmitBtn();
+            });
+        });
+
+        // Geriye donuk uyum: eski .emb-radio varsa onlara da baglan
         bodyEl.querySelectorAll('.emb-radio').forEach(function (r) {
             r.addEventListener('click', function () {
                 bodyEl.querySelectorAll('.emb-radio').forEach(function (x) {
                     x.classList.remove('secili');
                 });
                 r.classList.add('secili');
-                r.querySelector('input[type="radio"]').checked = true;
+                var radioInp = r.querySelector('input[type="radio"]');
+                if (radioInp) radioInp.checked = true;
                 state.sebepKalipDegistir = r.getAttribute('data-sebep');
                 refreshSetupSubmitBtn();
             });

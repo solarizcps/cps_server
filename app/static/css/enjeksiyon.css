@@ -504,15 +504,246 @@ body.modal-acik {
 /* Modal genislik varyantlari */
 .enj-modal.tip-ariza-baslat { width: 520px; }
 .enj-modal.tip-setup-bitir { width: 480px; }
-.enj-modal.tip-kalip-degistir {
-    width: 780px;
-    max-width: 92vw;
-}
-.enj-modal.tip-kalip-degistir .enj-modal-header { border-top: 3px solid #059669; }
+/* ============================================================
+   TSU — Tablet Setup Modal (ENJ_SETUP_MODAL_TABLET_UI_V1)
+   Hedef: 1024-1366px tablet, scroll yok, kompakt
+   ============================================================ */
 
-/* ENJ_SETUP FAZ-UI1-FIX — unified setup modal layout */
+.enj-modal.tip-kalip-degistir {
+    width: 960px;
+    max-width: 96vw;
+    max-height: 92vh;
+}
+.enj-modal.tip-kalip-degistir .enj-modal-header {
+    border-top: 3px solid #059669;
+}
 .enj-modal.tip-kalip-degistir .enj-modal-body {
-    padding: 14px 20px 18px;
+    padding: 12px 16px 10px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Yatay satir — iki blok yan yana */
+.tsu-satir {
+    display: flex;
+    gap: 12px;
+    align-items: stretch;
+}
+.tsu-satir-1 { flex-shrink: 0; }
+.tsu-satir-2 { flex: 1; }
+.tsu-satir-3 { flex-shrink: 0; }
+
+/* Genel blok kutu */
+.tsu-blok {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.tsu-blok-baslik {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    color: #64748b;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 5px;
+    margin-bottom: 2px;
+}
+
+/* Satir 1 Sol: Gorsel */
+.tsu-gorsel-blok {
+    width: 200px;
+    flex-shrink: 0;
+}
+.tsu-gorsel-cerceve {
+    flex: 1;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 120px;
+    max-height: 170px;
+    overflow: hidden;
+}
+.tsu-gorsel-cerceve img {
+    max-height: 160px;
+    max-width: 100%;
+    object-fit: contain;
+    display: block;
+}
+.tsu-gorsel-yok {
+    font-size: 11px;
+    color: #94a3b8;
+    text-align: center;
+    padding: 8px;
+}
+
+/* Satir 1 Sag: Mevcut Setup */
+.tsu-mev-blok {
+    flex: 1;
+}
+.tsu-mev-liste {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.tsu-mev-satir {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    padding: 2px 0;
+}
+.tsu-mev-ikon { font-size: 13px; width: 18px; text-align: center; flex-shrink: 0; }
+.tsu-mev-label { color: #64748b; min-width: 72px; flex-shrink: 0; }
+.tsu-mev-deger { font-weight: 600; color: #1e293b; }
+
+.tsu-baslat-bilgi { justify-content: center; }
+.tsu-baslat-txt { font-size: 12.5px; color: #374151; line-height: 1.5; }
+
+/* Satir 2 Sol: Yeni Setup Formu */
+.tsu-form-blok {
+    flex: 1;
+    min-width: 0;
+}
+.tsu-form-alan {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-bottom: 8px;
+}
+.tsu-form-alan:last-child { margin-bottom: 0; }
+.tsu-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    color: #374151;
+}
+.tsu-label .gerekli { color: #dc2626; margin-left: 2px; }
+.tsu-inp {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 7px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 5px;
+    font-size: 13px;
+    color: #1e293b;
+    background: #fff;
+    outline: none;
+    transition: border-color .15s;
+}
+.tsu-inp:focus { border-color: #059669; box-shadow: 0 0 0 2px rgba(5,150,105,.12); }
+.tsu-inp.esu-fld-invalid { border-color: #dc2626 !important; box-shadow: 0 0 0 2px rgba(220,38,38,.15); }
+.tsu-inp.esu-readonly { background: #f1f5f9; color: #475569; cursor: default; }
+.tsu-hint { font-size: 10px; color: #94a3b8; margin-top: 1px; }
+
+/* Input + ikon sag */
+.tsu-inp-ikonlu {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+.tsu-inp-ikonlu .tsu-inp { padding-right: 32px; }
+.tsu-inp-ikon {
+    position: absolute;
+    right: 8px;
+    font-size: 14px;
+    pointer-events: none;
+    opacity: .6;
+}
+
+/* Satir 2 Sag: Uretim Bilgileri */
+.tsu-uretim-blok { flex: 1; min-width: 0; }
+.tsu-uretim-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 10px;
+}
+.tsu-kbc-alan { grid-column: 1 / -1; }
+
+/* Satir 3: Sebep + Not */
+.tsu-alt-blok {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.tsu-sebep-grup {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.tsu-sebep-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    border: 1.5px solid #d1d5db;
+    border-radius: 20px;
+    background: #fff;
+    font-size: 12px;
+    color: #374151;
+    cursor: pointer;
+    transition: border-color .12s, background .12s;
+}
+.tsu-sebep-btn:hover { border-color: #059669; background: #f0fdf4; }
+.tsu-sebep-btn.secili {
+    border-color: #d97706;
+    background: #fffbeb;
+    color: #92400e;
+    font-weight: 600;
+}
+.tsu-sebep-ikon { font-size: 13px; }
+
+.tsu-not-blok { min-width: 220px; max-width: 340px; }
+.tsu-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 6px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 5px;
+    font-size: 12.5px;
+    resize: none;
+    min-height: 40px;
+    max-height: 56px;
+    font-family: inherit;
+    color: #1e293b;
+}
+.tsu-textarea:focus { outline: none; border-color: #059669; }
+
+/* Submit butonu */
+.tsu-submit-btn {
+    background: #d97706 !important;
+    color: #fff !important;
+    font-weight: 700;
+    letter-spacing: .04em;
+}
+.tsu-submit-btn:not(:disabled):hover { background: #b45309 !important; }
+.tsu-submit-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Kalip secici input uyumu */
+.enj-modal.tip-kalip-degistir .enj-modal-kalip-input {
+    padding: 7px 10px;
+    font-size: 13px;
+}
+
+/* Responsive: 1024px'den dar */
+@media (max-width: 1024px) {
+    .enj-modal.tip-kalip-degistir { width: 96vw; }
+    .tsu-gorsel-blok { width: 150px; }
+}
+@media (max-width: 768px) {
+    .tsu-satir { flex-direction: column; }
+    .tsu-gorsel-blok { width: 100%; }
+    .tsu-gorsel-cerceve { max-height: 120px; }
+    .tsu-not-blok { max-width: 100%; }
 }
 .esu-intro { margin-bottom: 12px; }
 .esu-eski-card {

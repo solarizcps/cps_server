@@ -1581,55 +1581,114 @@ def _ab_live_kap(cur, rapor_id):
 
 
 def _ab_hesapla_saatlik(cur, saatlik_id):
-    """Bir saatlik kayit icin uretilen_a, uretilen_b hesapla ve update et."""
+    """Bir saatlik kayit icin uretilen_a, uretilen_b hesapla ve update et.
+
+    EDGE GUARD: Her slot kendi snapshot'ina gore bagimsiz korunur.
+    - A snapshot doluysa A'ya (uretilen_a) dokunulmaz.
+    - B snapshot doluysa B'ye (uretilen_b) dokunulmaz.
+    - Sadece snapshot NULL olan slotun uretimi hesaplanir.
+    """
     cur.execute(
         "SELECT rapor_id, cevrim_a, cevrim_b, "
-        "tur_kapasitesi_a_snapshot, tur_kapasitesi_b_snapshot "
+        "tur_kapasitesi_a_snapshot, tur_kapasitesi_b_snapshot, "
+        "uretilen_a, uretilen_b "
         "FROM enj_saatlik_kayit WHERE id=?",
         (saatlik_id,),
     )
     row = cur.fetchone()
     if not row:
         return None
-    rapor_id = row[0]
-    cev_a = int(row[1] or 0)
-    cev_b = int(row[2] or 0)
+    rapor_id   = row[0]
+    cev_a      = int(row[1] or 0)
+    cev_b      = int(row[2] or 0)
     kap_a_snap = row[3]
     kap_b_snap = row[4]
+    cur_uret_a = row[5]  # mevcut uretilen_a (snapshot doluysa korunacak)
+    cur_uret_b = row[6]  # mevcut uretilen_b (snapshot doluysa korunacak)
+
+    # A snapshot doluysa: uretilen_a KORUNUR, sadece B hesaplanir (gerekirse)
+    # B snapshot doluysa: uretilen_b KORUNUR, sadece A hesaplanir (gerekirse)
+    a_korundu = kap_a_snap is not None
+    b_korundu = kap_b_snap is not None
+
+    if a_korundu and b_korundu:
+        # Ikisi de snapshot'lu - hicbir sey hesaplanmaz
+        return {
+            "uretilen_a": cur_uret_a,
+            "uretilen_b": cur_uret_b,
+            "kapasite_a": int(kap_a_snap),
+            "kapasite_b": int(kap_b_snap),
+            "snapshot_a": True,
+            "snapshot_b": True,
+            "skipped": True,
+        }
+
+    # Canli kapasite sadece NULL olan slot icin gerekli
     kap_live = None
-    if kap_a_snap is None or kap_b_snap is None:
+    if not a_korundu or not b_korundu:
         kap_live = _ab_live_kap(cur, rapor_id)
-    kap_a = int(kap_a_snap) if kap_a_snap is not None else kap_live["A"]
-    kap_b = int(kap_b_snap) if kap_b_snap is not None else kap_live["B"]
-    uret_a = cev_a * kap_a
-    uret_b = cev_b * kap_b
-    cur.execute(
-        "UPDATE enj_saatlik_kayit SET uretilen_a=?, uretilen_b=? WHERE id=?",
-        (uret_a, uret_b, saatlik_id)
-    )
+
+    set_parts = []
+    params    = []
+
+    if not a_korundu:
+        kap_a  = kap_live["A"]
+        uret_a = cev_a * kap_a
+        set_parts.append("uretilen_a=?")
+        params.append(uret_a)
+    else:
+        kap_a  = int(kap_a_snap)
+        uret_a = cur_uret_a  # dokunma
+
+    if not b_korundu:
+        kap_b  = kap_live["B"]
+        uret_b = cev_b * kap_b
+        set_parts.append("uretilen_b=?")
+        params.append(uret_b)
+    else:
+        kap_b  = int(kap_b_snap)
+        uret_b = cur_uret_b  # dokunma
+
+    if set_parts:
+        params.append(saatlik_id)
+        cur.execute(
+            "UPDATE enj_saatlik_kayit SET " + ", ".join(set_parts) + " WHERE id=?",
+            params,
+        )
+
     return {
         "uretilen_a": uret_a,
         "uretilen_b": uret_b,
         "kapasite_a": kap_a,
         "kapasite_b": kap_b,
-        "snapshot_a": kap_a_snap is not None,
-        "snapshot_b": kap_b_snap is not None,
+        "snapshot_a": a_korundu,
+        "snapshot_b": b_korundu,
     }
 
 
 def _ab_hesapla_tum_saatlikler(cur, rapor_id):
-    """Legacy saatlik kayitlari yeniden hesapla; snapshot'li satirlara dokunma."""
+    """Snapshot'siz saatlik kayitlari yeniden hesapla.
+
+    EDGE GUARD (slot bazli):
+    En az bir slotun snapshot'i NULL olan satirlar isleme alinir.
+    _ab_hesapla_saatlik icinde her slot kendi korumasini yapar:
+      - A snapshot doluysa uretilen_a dokunulmaz.
+      - B snapshot doluysa uretilen_b dokunulmaz.
+    Yani 'AND' yerine 'OR' ile secim — daha genis ama guvenliyiz
+    cunku asil koruma _ab_hesapla_saatlik icinde slot bazli yapiliyor.
+    """
     cur.execute(
         "SELECT id FROM enj_saatlik_kayit WHERE rapor_id=? "
-        "AND tur_kapasitesi_a_snapshot IS NULL "
-        "AND tur_kapasitesi_b_snapshot IS NULL",
+        "AND (tur_kapasitesi_a_snapshot IS NULL "
+        "  OR tur_kapasitesi_b_snapshot IS NULL)",
         (rapor_id,),
     )
     sayac = 0
     for r in cur.fetchall():
         try:
-            _ab_hesapla_saatlik(cur, r[0])
-            sayac += 1
+            result = _ab_hesapla_saatlik(cur, r[0])
+            if result and not result.get("skipped"):
+                sayac += 1
         except Exception:
             pass
     return sayac

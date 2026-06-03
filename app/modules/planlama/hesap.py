@@ -483,7 +483,12 @@ def slot_teorik_cift(slot, kalip, tur_toplam, sureler, vardiya_dk):
 # 6. MAKINE TEORIK / BRUT / NET / FIRE
 # =============================================================================
 def makine_teorik_brut_net_fire(rapor, slotlar_zenginlestirilmis, saatlik_obj, vardiya_dk):
-    """F9_5_3: A/B uretim + fire breakdown + fallback + tutarsizlik uyarilari."""
+    """F9_5_3: A/B uretim + fire breakdown + fallback + tutarsizlik uyarilari.
+
+    SNAPSHOT FIX: brut_cift icin birincil kaynak saatlik snapshot toplamlaridır
+    (SUM uretilen_a/b). slot_teorik_cift() sadece teorik kapasite hesabi icin
+    kullanılır ve fallback brut olarak kalır.
+    """
     uyarilar = []
     tur_a = saatlik_obj.get("toplam_a", 0) or 0
     tur_b = saatlik_obj.get("toplam_b", 0) or 0
@@ -495,8 +500,14 @@ def makine_teorik_brut_net_fire(rapor, slotlar_zenginlestirilmis, saatlik_obj, v
         eski_sistem_fallback = True
         uyarilar.append({"kod":"ESKI_SISTEM_FALLBACK","seviye":"info",
                          "mesaj":"Eski sistem raporu - A/B tur tahmini bolundu."})
+
+    # Snapshot bazli fiili uretim toplamı (birincil kaynak)
+    snap_uret_a = saatlik_obj.get("uretim_a_db", 0) or 0
+    snap_uret_b = saatlik_obj.get("uretim_b_db", 0) or 0
+    snap_uret_toplam = snap_uret_a + snap_uret_b
+
     slot_kalipsiz = kapasite_eksik = bagli_eksik = 0
-    teorik_a = teorik_b = uretim_a = uretim_b = 0
+    teorik_a = teorik_b = teorik_fallback_a = teorik_fallback_b = 0
     aktif_a = aktif_b = teorik_govde = teorik_atki = 0
     for s in slotlar_zenginlestirilmis:
         slot_kod = (s.get("slot") or "").upper()
@@ -524,11 +535,11 @@ def makine_teorik_brut_net_fire(rapor, slotlar_zenginlestirilmis, saatlik_obj, v
             continue
         if is_a:
             teorik_a += t
-            uretim_a += t
+            teorik_fallback_a += t
             aktif_a += 1
         else:
             teorik_b += t
-            uretim_b += t
+            teorik_fallback_b += t
             aktif_b += 1
         if kalip_tipi == "ATKI":
             teorik_atki += t
@@ -540,6 +551,18 @@ def makine_teorik_brut_net_fire(rapor, slotlar_zenginlestirilmis, saatlik_obj, v
         uyarilar.append({"kod":"KAPASITE_EKSIK","seviye":"warning","mesaj":str(kapasite_eksik)+" kbc eksik"})
     if bagli_eksik > 0:
         uyarilar.append({"kod":"BAGLI_KALIP_EKSIK","seviye":"warning","mesaj":str(bagli_eksik)+" bagli eksik"})
+
+    # Brut uretim: snapshot toplamı önce, yoksa teorik fallback
+    if snap_uret_toplam > 0:
+        uretim_a = snap_uret_a
+        uretim_b = snap_uret_b
+    else:
+        uretim_a = teorik_fallback_a
+        uretim_b = teorik_fallback_b
+        if snap_uret_toplam == 0 and (uretim_a + uretim_b) > 0:
+            uyarilar.append({"kod":"BRUT_FALLBACK_TEORIK","seviye":"info",
+                             "mesaj":"Snapshot uretim yok, teorik fallback kullanildi."})
+
     teorik_toplam = teorik_a + teorik_b
     brut_cift = uretim_a + uretim_b
     teorik_son = teorik_toplam if teorik_toplam > 0 else None
