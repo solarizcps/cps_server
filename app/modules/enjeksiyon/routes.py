@@ -760,6 +760,23 @@ def enj_api_istasyon_patch(istasyon_id):
                 except Exception:
                     pass
 
+        # ISTASYON-GOZ-SYNC: aktif istasyon sayisini AKTIF setup'a yaz
+        if ist_row:
+            _ist_rapor_id = ist_row[0]
+            _ist_slot = (ist_row[2] or "").upper()
+            if _ist_slot in ("A", "B"):
+                cur.execute(
+                    "SELECT COUNT(*) FROM enj_istasyon_durumu "
+                    "WHERE rapor_id=? AND slot=? AND aktif=1",
+                    (_ist_rapor_id, _ist_slot),
+                )
+                _canli_goz = int((cur.fetchone() or [0])[0])
+                cur.execute(
+                    "UPDATE enj_ab_setup SET aktif_goz_sayisi=? "
+                    "WHERE rapor_id=? AND slot=? AND durum='AKTIF'",
+                    (_canli_goz, _ist_rapor_id, _ist_slot),
+                )
+
         con.commit()
         con.close()
 
