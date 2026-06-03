@@ -511,29 +511,33 @@ body.modal-acik {
 
 .enj-modal.tip-kalip-degistir {
     width: 960px;
-    max-width: 96vw;
-    max-height: 92vh;
+    max-width: 96vw !important;
+    max-height: 92vh !important;
+    min-width: min(960px, 96vw);
 }
 .enj-modal.tip-kalip-degistir .enj-modal-header {
     border-top: 3px solid #059669;
 }
 .enj-modal.tip-kalip-degistir .enj-modal-body {
-    padding: 12px 16px 10px;
-    overflow: hidden;
+    padding: 10px 14px 8px;
+    overflow-y: auto;
+    overflow-x: hidden;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
+    min-height: 0;
 }
 
-/* Yatay satir — iki blok yan yana */
+/* Yatay satir — iki blok yan yana (grid) */
 .tsu-satir {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 12px;
     align-items: stretch;
 }
-.tsu-satir-1 { flex-shrink: 0; }
-.tsu-satir-2 { flex: 1; }
-.tsu-satir-3 { flex-shrink: 0; }
+.tsu-satir-1 { }
+.tsu-satir-2 { }
+.tsu-satir-3 { grid-template-columns: 1fr; }
 
 /* Genel blok kutu */
 .tsu-blok {
@@ -544,6 +548,7 @@ body.modal-acik {
     display: flex;
     flex-direction: column;
     gap: 8px;
+    min-width: 0;
 }
 .tsu-blok-baslik {
     font-size: 10px;
@@ -557,8 +562,7 @@ body.modal-acik {
 
 /* Satir 1 Sol: Gorsel */
 .tsu-gorsel-blok {
-    width: 200px;
-    flex-shrink: 0;
+    min-width: 0;
 }
 .tsu-gorsel-cerceve {
     flex: 1;
@@ -734,15 +738,55 @@ body.modal-acik {
     font-size: 13px;
 }
 
-/* Responsive: 1024px'den dar */
+/* Responsive: tablet 1024px */
 @media (max-width: 1024px) {
-    .enj-modal.tip-kalip-degistir { width: 96vw; }
-    .tsu-gorsel-blok { width: 150px; }
+    .enj-modal.tip-kalip-degistir {
+        width: 96vw;
+        max-height: 96vh !important;
+    }
+    .enj-modal.tip-kalip-degistir .enj-modal-header {
+        padding: 8px 14px;
+    }
+    .enj-modal.tip-kalip-degistir .enj-modal-footer {
+        padding: 7px 14px;
+    }
+    .enj-modal.tip-kalip-degistir .enj-modal-body {
+        padding: 6px 10px 5px;
+        gap: 5px;
+    }
+    /* Satir 1: gorsel cok kucuk, mevcut setup kompakt */
+    .tsu-satir-1 { grid-template-columns: 140px 1fr; }
+    .tsu-gorsel-blok { min-width: 0; }
+    .tsu-gorsel-cerceve { min-height: 60px; max-height: 100px; }
+    .tsu-gorsel-cerceve img { max-height: 90px; }
+    .tsu-mev-satir { font-size: 11px; padding: 1px 0; }
+    .tsu-mev-ikon { font-size: 11px; width: 15px; }
+    .tsu-mev-label { min-width: 58px; font-size: 11px; }
+    .tsu-mev-deger { font-size: 11px; }
+    /* Satir 2: form kompakt */
+    .tsu-satir-2 { grid-template-columns: 1fr 1fr; }
+    .tsu-form-alan { gap: 1px; margin-bottom: 4px; }
+    .tsu-inp { padding: 4px 7px; font-size: 12px; height: 30px; }
+    .tsu-inp-ikonlu .tsu-inp { padding-right: 26px; }
+    .tsu-inp-ikon { font-size: 12px; right: 5px; }
+    .tsu-uretim-grid { gap: 5px; }
+    /* Satir 3: sebep + not kompakt */
+    .tsu-sebep-grup { gap: 3px; flex-wrap: wrap; }
+    .tsu-sebep-btn { padding: 4px 7px; font-size: 11px; }
+    .tsu-textarea { min-height: 32px; max-height: 48px; font-size: 12px; padding: 4px 6px; }
+    .tsu-alt-blok { gap: 3px; }
+    /* Genel blok */
+    .tsu-blok { padding: 6px 8px; gap: 4px; }
+    .tsu-blok-baslik { font-size: 9px; letter-spacing: 0.04em; margin-bottom: 2px; }
+    .tsu-label { font-size: 10px; margin-bottom: 1px; }
+    .tsu-satir { gap: 6px; }
+    .enj-modal-kalip-input { padding: 4px 7px; font-size: 12px; height: 30px; }
 }
+
+/* Responsive: telefon 768px - tek sutun */
 @media (max-width: 768px) {
-    .tsu-satir { flex-direction: column; }
-    .tsu-gorsel-blok { width: 100%; }
-    .tsu-gorsel-cerceve { max-height: 120px; }
+    .tsu-satir { grid-template-columns: 1fr; }
+    .tsu-gorsel-cerceve { max-height: 100px; }
     .tsu-not-blok { max-width: 100%; }
 }
 .esu-intro { margin-bottom: 12px; }
