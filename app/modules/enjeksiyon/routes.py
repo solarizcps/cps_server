@@ -649,6 +649,43 @@ def enj_api_saatlik_patch(saatlik_id):
                 return jsonify({"ok": False, "hata": engel["mesaj"], "mesaj": engel["mesaj_tr"],
                                 "tip": "SETUP_EKSIK", "slot": "B"}), 422
 
+        # MAX_TUR GUARD: pisme_suresi_sn uzerinden saatlik tur limiti
+        if has_cevrim_a or has_cevrim_b:
+            sk_snap = cur.execute(
+                "SELECT setup_id_a, setup_id_b FROM enj_saatlik_kayit WHERE id=?",
+                (saatlik_id,),
+            ).fetchone()
+            if sk_snap:
+                for slot_flag, slot_id_val, field in (
+                    (has_cevrim_a, sk_snap[0], "cevrim_a"),
+                    (has_cevrim_b, sk_snap[1], "cevrim_b"),
+                ):
+                    if not slot_flag:
+                        continue
+                    cev = guncellenecek.get(field, 0) or 0
+                    setup_id_val = slot_id_val
+                    if setup_id_val:
+                        pis_row = cur.execute(
+                            "SELECT pisme_suresi_sn FROM enj_ab_setup WHERE id=?",
+                            (setup_id_val,),
+                        ).fetchone()
+                    else:
+                        pis_row = None
+                    if pis_row and pis_row[0] and pis_row[0] > 0:
+                        import math
+                        max_tur = math.floor(3600 / pis_row[0] * 1.15)
+                        if cev > max_tur:
+                            slot_lbl = "A" if field == "cevrim_a" else "B"
+                            con.close()
+                            return jsonify({
+                                "ok": False,
+                                "hata": f"Slot {slot_lbl}: Bu pisirme suresinde saatlik maksimum tur {max_tur} olabilir (girilen: {cev})",
+                                "mesaj": f"Slot {slot_lbl}: Bu pişme süresinde saatlik maksimum tur {max_tur} olabilir (girilen: {cev})",
+                                "tip": "MAX_TUR_ASILDI",
+                                "slot": slot_lbl,
+                                "max_tur": max_tur,
+                            }), 400
+
         set_parts = [f"{k} = ?" for k in guncellenecek.keys()]
         set_parts.append("son_guncelleme = CURRENT_TIMESTAMP")
         params = list(guncellenecek.values()) + [saatlik_id]

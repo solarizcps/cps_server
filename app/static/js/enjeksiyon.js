@@ -3282,6 +3282,15 @@
             alert(mesaj);
           }
         }
+        // MAX_TUR GUARD: 400 = saatlik tur limiti asildi
+        if (!d.ok && d.tip === 'MAX_TUR_ASILDI') {
+          var mesajT = d.mesaj || d.hata || 'Girilen tur değeri bu pişme süresi için çok yüksek.';
+          if (window._enjShowToast) {
+            window._enjShowToast(mesajT, 'hata');
+          } else {
+            alert(mesajT);
+          }
+        }
         return d;
       });
     }).catch(function() { return {ok: false}; });
