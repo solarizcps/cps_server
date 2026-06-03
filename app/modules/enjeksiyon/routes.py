@@ -1612,15 +1612,38 @@ def _ab_hesapla_saatlik(cur, saatlik_id):
     b_korundu = kap_b_snap is not None
 
     if a_korundu and b_korundu:
-        # Ikisi de snapshot'lu - hicbir sey hesaplanmaz
+        # Ikisi de snapshot'lu — normal skipped.
+        # AMA: cevrim > 0 iken uretilen = 0/NULL ise frozen kap ile doldur.
+        fix_parts = []
+        fix_params = []
+        uret_a_out = cur_uret_a
+        uret_b_out = cur_uret_b
+
+        if cev_a > 0 and (cur_uret_a is None or cur_uret_a == 0):
+            uret_a_out = cev_a * int(kap_a_snap)
+            fix_parts.append("uretilen_a=?")
+            fix_params.append(uret_a_out)
+
+        if cev_b > 0 and (cur_uret_b is None or cur_uret_b == 0):
+            uret_b_out = cev_b * int(kap_b_snap)
+            fix_parts.append("uretilen_b=?")
+            fix_params.append(uret_b_out)
+
+        if fix_parts:
+            fix_params.append(saatlik_id)
+            cur.execute(
+                "UPDATE enj_saatlik_kayit SET " + ", ".join(fix_parts) + " WHERE id=?",
+                fix_params,
+            )
+
         return {
-            "uretilen_a": cur_uret_a,
-            "uretilen_b": cur_uret_b,
+            "uretilen_a": uret_a_out,
+            "uretilen_b": uret_b_out,
             "kapasite_a": int(kap_a_snap),
             "kapasite_b": int(kap_b_snap),
             "snapshot_a": True,
             "snapshot_b": True,
-            "skipped": True,
+            "skipped": not bool(fix_parts),
         }
 
     # Canli kapasite sadece NULL olan slot icin gerekli
@@ -1679,8 +1702,12 @@ def _ab_hesapla_tum_saatlikler(cur, rapor_id):
     """
     cur.execute(
         "SELECT id FROM enj_saatlik_kayit WHERE rapor_id=? "
-        "AND (tur_kapasitesi_a_snapshot IS NULL "
-        "  OR tur_kapasitesi_b_snapshot IS NULL)",
+        "AND ("
+        "  tur_kapasitesi_a_snapshot IS NULL "
+        "  OR tur_kapasitesi_b_snapshot IS NULL "
+        "  OR (cevrim_a > 0 AND (uretilen_a IS NULL OR uretilen_a = 0)) "
+        "  OR (cevrim_b > 0 AND (uretilen_b IS NULL OR uretilen_b = 0)) "
+        ")",
         (rapor_id,),
     )
     sayac = 0
