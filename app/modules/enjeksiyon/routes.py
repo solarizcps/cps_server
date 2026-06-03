@@ -671,20 +671,30 @@ def enj_api_saatlik_patch(saatlik_id):
                         ).fetchone()
                     else:
                         pis_row = None
-                    if pis_row and pis_row[0] and pis_row[0] > 0:
-                        import math
-                        max_tur = math.floor(3600 / pis_row[0] * 1.15)
-                        if cev > max_tur:
-                            slot_lbl = "A" if field == "cevrim_a" else "B"
-                            con.close()
-                            return jsonify({
-                                "ok": False,
-                                "hata": f"Slot {slot_lbl}: Bu pisirme suresinde saatlik maksimum tur {max_tur} olabilir (girilen: {cev})",
-                                "mesaj": f"Slot {slot_lbl}: Bu pişme süresinde saatlik maksimum tur {max_tur} olabilir (girilen: {cev})",
-                                "tip": "MAX_TUR_ASILDI",
-                                "slot": slot_lbl,
-                                "max_tur": max_tur,
-                            }), 400
+                    slot_lbl = "A" if field == "cevrim_a" else "B"
+                    pisme_val = pis_row[0] if pis_row else None
+                    if not pisme_val or pisme_val <= 0:
+                        # PISME ZERO GUARD: geçersiz pişme süresi → 500 yerine 400
+                        con.close()
+                        return jsonify({
+                            "ok": False,
+                            "hata": f"Slot {slot_lbl}: Pisme suresi gecersiz. Setup kontrol edin.",
+                            "mesaj": "Pişme süresi geçersiz. Setup kontrol edin.",
+                            "tip": "PISME_SURESI_HATALI",
+                            "slot": slot_lbl,
+                        }), 400
+                    import math
+                    max_tur = math.floor(3600 / pisme_val * 1.15)
+                    if cev > max_tur:
+                        con.close()
+                        return jsonify({
+                            "ok": False,
+                            "hata": f"Slot {slot_lbl}: Bu pisirme suresinde saatlik maksimum tur {max_tur} olabilir (girilen: {cev})",
+                            "mesaj": f"Slot {slot_lbl}: Bu pişme süresinde saatlik maksimum tur {max_tur} olabilir (girilen: {cev})",
+                            "tip": "MAX_TUR_ASILDI",
+                            "slot": slot_lbl,
+                            "max_tur": max_tur,
+                        }), 400
 
         set_parts = [f"{k} = ?" for k in guncellenecek.keys()]
         set_parts.append("son_guncelleme = CURRENT_TIMESTAMP")
