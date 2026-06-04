@@ -1886,11 +1886,17 @@ def enj_api_ab_ozet(rapor_id):
         )
         cevA, cevB, uretA, uretB = cur.fetchone()
         cur.execute(
-            "SELECT COALESCE(toplam_fire_cift,0) FROM enj_gunluk_rapor WHERE id=?",
+            "SELECT COALESCE(toplam_fire_cift,0), "
+            "       COALESCE(bos_atis_kg,0), COALESCE(teknik_fire_kg,0), COALESCE(yolluk_fire_kg,0) "
+            "FROM enj_gunluk_rapor WHERE id=?",
             (rapor_id,)
         )
         r = cur.fetchone()
         fire_toplam = int(r[0]) if r else 0
+        bos_atis_kg_val  = float(r[1]) if r else 0.0
+        teknik_kg_val    = float(r[2]) if r else 0.0
+        yolluk_kg_val    = float(r[3]) if r else 0.0
+        toplam_fire_kg_val = round(bos_atis_kg_val + teknik_kg_val + yolluk_kg_val, 3)
         # P4: Aktif göz + KBÇ setup merkezli. Fallback: canli istasyon
         kap = {"A": 0, "B": 0}
         aktif_goz = {"A": 0, "B": 0}
@@ -1998,7 +2004,11 @@ def enj_api_ab_ozet(rapor_id):
             "toplam": {"cevrim": int(cevA or 0) + int(cevB or 0),
                        "uretilen": uret_toplam, "fire": fire_toplam, "net": net_toplam,
                        "fire_orani": round(fire_orani, 2),
-                       "net_orani": round(net_orani, 2)}
+                       "net_orani": round(net_orani, 2),
+                       "bos_atis_kg": bos_atis_kg_val,
+                       "teknik_fire_kg": teknik_kg_val,
+                       "yolluk_fire_kg": yolluk_kg_val,
+                       "toplam_fire_kg": toplam_fire_kg_val}
         })
     except Exception as e:
         return jsonify({"ok": False, "hata": str(e)}), 500

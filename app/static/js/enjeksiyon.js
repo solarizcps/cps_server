@@ -3126,6 +3126,12 @@
       setTxt('enj-ozet-korgun',       null); // ab-ozet API korgun donmuyor, — kalsin
       setTxt('enj-ozet-fark',         null); // ab-ozet API fark donmuyor, — kalsin
       setTxt('enj-ozet-fire-orani',   top.fire_orani != null ? top.fire_orani : null, '%');
+      // FIRE-1: kg görünürlük
+      var fmtKg = function(v) { return (v != null && v > 0) ? v.toFixed(3) : null; };
+      setTxt('enj-ozet-bos-atis-kg',      fmtKg(top.bos_atis_kg), ' kg');
+      setTxt('enj-ozet-teknik-kg',        fmtKg(top.teknik_fire_kg), ' kg');
+      setTxt('enj-ozet-yolluk-kg',        fmtKg(top.yolluk_fire_kg), ' kg');
+      setTxt('enj-ozet-toplam-fire-kg',   fmtKg(top.toplam_fire_kg), ' kg');
     }).catch(function () {});
   }
 
