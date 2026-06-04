@@ -1693,15 +1693,19 @@ def _ab_hesapla_saatlik(cur, saatlik_id):
         uret_a_out = cur_uret_a
         uret_b_out = cur_uret_b
 
-        if cev_a > 0 and (cur_uret_a is None or cur_uret_a == 0):
-            uret_a_out = cev_a * int(kap_a_snap)
+        # A: tur degisince (sifir dahil) uretimi yeniden hesapla
+        beklenen_a = cev_a * int(kap_a_snap)
+        if (cur_uret_a or 0) != beklenen_a:
+            uret_a_out = beklenen_a
             fix_parts.append("uretilen_a=?")
-            fix_params.append(uret_a_out)
+            fix_params.append(beklenen_a)
 
-        if cev_b > 0 and (cur_uret_b is None or cur_uret_b == 0):
-            uret_b_out = cev_b * int(kap_b_snap)
+        # B: tur degisince (sifir dahil) uretimi yeniden hesapla
+        beklenen_b = cev_b * int(kap_b_snap)
+        if (cur_uret_b or 0) != beklenen_b:
+            uret_b_out = beklenen_b
             fix_parts.append("uretilen_b=?")
-            fix_params.append(uret_b_out)
+            fix_params.append(beklenen_b)
 
         if fix_parts:
             fix_params.append(saatlik_id)
@@ -1735,13 +1739,14 @@ def _ab_hesapla_saatlik(cur, saatlik_id):
         params.append(uret_a)
     else:
         kap_a = int(kap_a_snap)
-        # MIXED-SNAPSHOT FIX: A frozen ama uretilen=0, cevrim>0 — frozen kap ile doldur
-        if cev_a > 0 and (cur_uret_a is None or cur_uret_a == 0):
-            uret_a = cev_a * kap_a
+        # MIXED-SNAPSHOT FIX: A frozen - tur degisince (sifir dahil) uretimi yeniden hesapla
+        beklenen_a_mix = cev_a * kap_a
+        if (cur_uret_a or 0) != beklenen_a_mix:
+            uret_a = beklenen_a_mix
             set_parts.append("uretilen_a=?")
-            params.append(uret_a)
+            params.append(beklenen_a_mix)
         else:
-            uret_a = cur_uret_a  # dogunma (dolu veya cevrim=0)
+            uret_a = cur_uret_a
 
     if not b_korundu:
         kap_b  = kap_live["B"]
@@ -1750,13 +1755,14 @@ def _ab_hesapla_saatlik(cur, saatlik_id):
         params.append(uret_b)
     else:
         kap_b = int(kap_b_snap)
-        # MIXED-SNAPSHOT FIX: B frozen ama uretilen=0, cevrim>0 — frozen kap ile doldur
-        if cev_b > 0 and (cur_uret_b is None or cur_uret_b == 0):
-            uret_b = cev_b * kap_b
+        # MIXED-SNAPSHOT FIX: B frozen - tur degisince (sifir dahil) uretimi yeniden hesapla
+        beklenen_b_mix = cev_b * kap_b
+        if (cur_uret_b or 0) != beklenen_b_mix:
+            uret_b = beklenen_b_mix
             set_parts.append("uretilen_b=?")
-            params.append(uret_b)
+            params.append(beklenen_b_mix)
         else:
-            uret_b = cur_uret_b  # dogunma (dolu veya cevrim=0)
+            uret_b = cur_uret_b
 
     if set_parts:
         params.append(saatlik_id)
