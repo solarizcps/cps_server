@@ -939,7 +939,8 @@ def ky_api_kaliplar():
 
 _KY_PATCH_WHITELIST = {
     'kalip_kod', 'kalip_tipi', 'model_kod', 'model_ad', 'asorti',
-    'kalip_basi_cift', 'varsayilan_bagli_kalip', 'renk', 'gorsel_dosya', 'aktif'
+    'kalip_basi_cift', 'varsayilan_bagli_kalip', 'renk', 'gorsel_dosya', 'aktif',
+    'kapasite_cift',
 }
 
 
@@ -1016,6 +1017,94 @@ def ky_api_kalip_patch(kalip_id):
         })
     except Exception as e:
         return _jsonify_ky({'ok': False, 'hata': str(e)}), 500
+
+# === BEGIN: F_KALIP_EKLE ===
+@yonetim_bp.route('/api/kalip/ekle', methods=['POST'])
+@yetki_gerekli('planlama.enjeksiyon.kalip', 'can_create')
+def ky_api_kalip_ekle():
+    """Yeni kalip olustur. Zorunlu: kalip_kod, kalip_tipi, model_kod."""
+    try:
+        body = request.get_json(silent=True) or {}
+
+        kalip_kod = (body.get('kalip_kod') or '').strip()
+        kalip_tipi = (body.get('kalip_tipi') or 'GOVDE').strip().upper()
+        model_kod = (body.get('model_kod') or '').strip()
+
+        if not kalip_kod:
+            return _jsonify_ky({'ok': False, 'hata': 'kalip_kod zorunlu'}), 400
+        if not model_kod:
+            return _jsonify_ky({'ok': False, 'hata': 'model_kod zorunlu'}), 400
+        if kalip_tipi not in ('GOVDE', 'ATKI'):
+            return _jsonify_ky({'ok': False, 'hata': 'kalip_tipi GOVDE veya ATKI olmali'}), 400
+
+        model_ad = (body.get('model_ad') or '').strip() or None
+        asorti = (body.get('asorti') or '').strip() or None
+        renk = (body.get('renk') or '').strip() or None
+
+        try:
+            kalip_basi_cift = int(body.get('kalip_basi_cift') or 1)
+            if kalip_basi_cift < 1:
+                kalip_basi_cift = 1
+        except (ValueError, TypeError):
+            kalip_basi_cift = 1
+
+        try:
+            varsayilan_bagli_kalip = int(body.get('varsayilan_bagli_kalip') or 8)
+        except (ValueError, TypeError):
+            varsayilan_bagli_kalip = 8
+
+        try:
+            kapasite_cift = int(body.get('kapasite_cift') or 0) or None
+        except (ValueError, TypeError):
+            kapasite_cift = None
+
+        aktif = 1 if body.get('aktif', 1) not in (0, '0', False) else 0
+
+        con = _sqlite3_ky.connect(_ky_db_path())
+        cur = con.cursor()
+
+        existing = cur.execute(
+            'SELECT id FROM enj_kalip WHERE kalip_kod = ?', (kalip_kod,)
+        ).fetchone()
+        if existing:
+            con.close()
+            return _jsonify_ky({
+                'ok': False,
+                'hata': f'Kalip kodu zaten mevcut: {kalip_kod}',
+                'tip': 'DUPLICATE_KOD',
+            }), 400
+
+        cur.execute("""
+            INSERT INTO enj_kalip
+            (kalip_kod, kalip_tipi, model_kod, model_ad, asorti,
+             kalip_basi_cift, varsayilan_bagli_kalip, renk, kapasite_cift, aktif,
+             olusturma_tarihi, guncelleme_tarihi)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        """, (kalip_kod, kalip_tipi, model_kod, model_ad, asorti,
+              kalip_basi_cift, varsayilan_bagli_kalip, renk, kapasite_cift, aktif))
+        con.commit()
+        yeni_id = cur.lastrowid
+
+        r = cur.execute("""
+            SELECT id, kalip_kod, kalip_tipi, model_kod, model_ad, asorti,
+                   kalip_basi_cift, varsayilan_bagli_kalip, renk, gorsel_dosya, aktif
+            FROM enj_kalip WHERE id = ?
+        """, (yeni_id,)).fetchone()
+        con.close()
+
+        kayit = {
+            'id': r[0], 'kalip_kod': r[1], 'kalip_tipi': r[2], 'model_kod': r[3],
+            'model_ad': r[4], 'asorti': r[5], 'kalip_basi_cift': r[6],
+            'varsayilan_bagli_kalip': r[7], 'renk': r[8], 'gorsel_dosya': r[9],
+            'aktif': r[10],
+        }
+        audit.log(_u(), 'kalip_ekle', f'kalip_id={yeni_id} kod={kalip_kod} tip={kalip_tipi}')
+        return _jsonify_ky({'ok': True, 'kalip': kayit, 'id': yeni_id}), 201
+
+    except Exception as e:
+        return _jsonify_ky({'ok': False, 'hata': str(e)}), 500
+# === END: F_KALIP_EKLE ===
+
 
 # === END: F_KALIP_YONETIM_ENDPOINT ===
 

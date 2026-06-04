@@ -861,6 +861,14 @@ window.__cpsRootMap = function(pathname) {
           <span class="sl">Hedef</span>
         </a>
 
+        <!-- KALIP_MASTER_MENU (KALIP_MASTER_FAZ1 - 20260603) -->
+        {% if yetki('planlama.enjeksiyon.kalip') %}
+        <a href="/yonetim/kalip-yonetimi" class="si {% if '/yonetim/kalip-yonetimi' in rp %}active{% endif %}" title="Kalıp Master">
+          <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="15" rx="2"/><path d="M16 7V5a2 2 0 0 0-4 0v2"/><path d="M8 7V5a2 2 0 0 0-4 0v2"/><line x1="12" y1="12" x2="12" y2="17"/><line x1="9.5" y1="14.5" x2="14.5" y2="14.5"/></svg></span>
+          <span class="sl">Kalıp Master</span>
+        </a>
+        {% endif %}
+
         
 
 

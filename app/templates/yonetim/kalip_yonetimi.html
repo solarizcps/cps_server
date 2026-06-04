@@ -59,6 +59,22 @@
   .ky-modal.show { display: flex; }
   .ky-modal img { max-width: 90%; max-height: 90%; border-radius: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
   .ky-modal-close { position: absolute; top: 20px; right: 30px; background: white; border: none; border-radius: 50%; width: 40px; height: 40px; font-size: 24px; cursor: pointer; }
+  /* Yeni Kalıp Ekle Modal */
+  .ky-ekle-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 10001; align-items: center; justify-content: center; }
+  .ky-ekle-overlay.show { display: flex; }
+  .ky-ekle-panel { background: white; border-radius: 16px; padding: 28px 32px; width: 480px; max-width: 95vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 12px 48px rgba(0,0,0,0.4); }
+  .ky-ekle-panel h2 { margin: 0 0 20px; font-size: 20px; color: #1f2937; }
+  .ky-ekle-row { margin-bottom: 14px; }
+  .ky-ekle-row label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 4px; }
+  .ky-ekle-row label .zorunlu { color: #ef4444; }
+  .ky-ekle-row input, .ky-ekle-row select { width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; box-sizing: border-box; outline: none; }
+  .ky-ekle-row input:focus, .ky-ekle-row select:focus { border-color: #f59e0b; box-shadow: 0 0 0 2px #fef3c7; }
+  .ky-ekle-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
+  .ky-ekle-iptal { background: #f3f4f6; color: #374151; border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .ky-ekle-iptal:hover { background: #e5e7eb; }
+  .ky-ekle-kaydet { background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .ky-ekle-kaydet:hover { background: #059669; }
+  .ky-ekle-kaydet:disabled { background: #d1d5db; color: #9ca3af; cursor: not-allowed; }
 </style>
 
 <div class="ky-container">
@@ -81,7 +97,7 @@
       <option value="0">Sadece Pasif</option>
       <option value="">Hepsi</option>
     </select>
-    <button class="ky-btn ky-btn-yeni" disabled title="Yakında">+ Yeni Kalıp</button>
+    <button class="ky-btn ky-btn-yeni" id="ky-btn-yeni-kalip">+ Yeni Kalıp</button>
     <button class="ky-btn ky-btn-excel" disabled title="Yakında">📂 Excel İmport</button>
   </div>
 
@@ -115,6 +131,48 @@
 </div>
 
 <input type="file" id="ky-file-input" accept="image/jpeg,image/png,image/webp,image/jpg" style="display:none">
+
+<!-- Yeni Kalıp Ekle Modal -->
+<div class="ky-ekle-overlay" id="ky-ekle-overlay">
+  <div class="ky-ekle-panel">
+    <h2>➕ Yeni Kalıp Ekle</h2>
+    <div class="ky-ekle-row">
+      <label>Kalıp Kodu <span class="zorunlu">*</span></label>
+      <input type="text" id="ky-ekle-kod" placeholder="Örn: KA-001" maxlength="50">
+    </div>
+    <div class="ky-ekle-row">
+      <label>Kalıp Tipi <span class="zorunlu">*</span></label>
+      <select id="ky-ekle-tip">
+        <option value="GOVDE">GÖVDE</option>
+        <option value="ATKI">ATKI</option>
+      </select>
+    </div>
+    <div class="ky-ekle-row">
+      <label>Model Kodu <span class="zorunlu">*</span></label>
+      <input type="text" id="ky-ekle-model-kod" placeholder="Örn: M-101" maxlength="50">
+    </div>
+    <div class="ky-ekle-row">
+      <label>Model Adı</label>
+      <input type="text" id="ky-ekle-model-ad" placeholder="Opsiyonel" maxlength="100">
+    </div>
+    <div class="ky-ekle-row">
+      <label>Asorti</label>
+      <input type="text" id="ky-ekle-asorti" placeholder="Opsiyonel" maxlength="50">
+    </div>
+    <div class="ky-ekle-row">
+      <label>Renk</label>
+      <input type="text" id="ky-ekle-renk" placeholder="Opsiyonel" maxlength="50">
+    </div>
+    <div class="ky-ekle-row">
+      <label>Kalıp Başı Çift (KBÇ)</label>
+      <input type="number" id="ky-ekle-kbc" min="1" max="10" value="1" style="width:100px">
+    </div>
+    <div class="ky-ekle-actions">
+      <button class="ky-ekle-iptal" id="ky-ekle-iptal">İptal</button>
+      <button class="ky-ekle-kaydet" id="ky-ekle-kaydet">💾 Kalıp Ekle</button>
+    </div>
+  </div>
+</div>
 
 <script>
 (function() {
@@ -186,8 +244,11 @@
         '<td><input type="text" class="ky-input-text" value="' + escapeHtml(k.asorti||'') + '" data-field="asorti" data-orig="' + escapeHtml(k.asorti||'') + '" placeholder="-"></td>' +
         '<td><span class="ky-tip ' + tipClass + '">' + escapeHtml(k.kalip_tipi) + '</span></td>' +
         '<td>' + escapeHtml(k.renk || '-') + '</td>' +
-        '<td><span class="ky-aktif ' + aktifClass + '" data-field="aktif" data-orig="' + k.aktif + '">' + aktifIcon + '</span></td>' +
-        '<td><button class="ky-kaydet-btn" data-id="' + k.id + '">💾 Kaydet</button></td>' +
+        '<td><span class="ky-aktif ' + aktifClass + '" data-field="aktif" data-orig="' + k.aktif + '" title="Tıklayarak aktif/pasif değiştir">' + aktifIcon + '</span></td>' +
+        '<td style="white-space:nowrap">' +
+          '<button class="ky-kaydet-btn" data-id="' + k.id + '">💾 Kaydet</button>' +
+          ' <button class="ky-pasif-btn" data-id="' + k.id + '" data-aktif="' + k.aktif + '" title="' + (k.aktif ? 'Pasifleştir' : 'Aktif Et') + '" style="padding:4px 8px;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;background:' + (k.aktif ? '#fee2e2' : '#d1fae5') + ';color:' + (k.aktif ? '#dc2626' : '#059669') + '">' + (k.aktif ? '⛔ Pasifleştir' : '✅ Aktif Et') + '</button>' +
+        '</td>' +
         '</tr>';
     }).join('');
 
@@ -250,6 +311,34 @@
           gorselUploadTetikle(id);
         });
       });
+
+      const pasifBtn = tr.querySelector('.ky-pasif-btn');
+      if (pasifBtn) {
+        pasifBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const aktifSu = parseInt(pasifBtn.dataset.aktif, 10);
+          const yeniAktif = aktifSu === 1 ? 0 : 1;
+          const onay = aktifSu === 1
+            ? 'Bu kalıbı pasifleştirmek istediğinize emin misiniz?\nEnjeksiyon picker\'da görünmez olur.'
+            : 'Bu kalıbı aktif etmek istediğinize emin misiniz?';
+          if (!confirm(onay)) return;
+          fetch('/yonetim/api/kalip/' + id, {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({aktif: yeniAktif})
+          })
+          .then(r => r.json())
+          .then(d => {
+            if (d.ok) {
+              mesaj(yeniAktif === 1 ? '✅ Kalıp aktif edildi' : '⛔ Kalıp pasifleştirildi', 'ok');
+              yukle();
+            } else {
+              mesaj('❌ Hata: ' + (d.hata || 'bilinmiyor'), 'hata');
+            }
+          })
+          .catch(e => mesaj('❌ Bağlantı hatası: ' + e, 'hata'));
+        });
+      }
     });
   }
 
@@ -368,6 +457,80 @@
         }
       })
       .catch(e => mesaj('❌ Bağlantı hatası: ' + e, 'hata'));
+  });
+
+  // === Yeni Kalıp Ekle Modal ===
+  function ekleModalAc() {
+    document.getElementById('ky-ekle-kod').value = '';
+    document.getElementById('ky-ekle-tip').value = 'GOVDE';
+    document.getElementById('ky-ekle-model-kod').value = '';
+    document.getElementById('ky-ekle-model-ad').value = '';
+    document.getElementById('ky-ekle-asorti').value = '';
+    document.getElementById('ky-ekle-renk').value = '';
+    document.getElementById('ky-ekle-kbc').value = '1';
+    document.getElementById('ky-ekle-overlay').classList.add('show');
+    document.getElementById('ky-ekle-kod').focus();
+  }
+
+  function ekleModalKapat() {
+    document.getElementById('ky-ekle-overlay').classList.remove('show');
+  }
+
+  document.getElementById('ky-btn-yeni-kalip').addEventListener('click', ekleModalAc);
+  document.getElementById('ky-ekle-iptal').addEventListener('click', ekleModalKapat);
+  document.getElementById('ky-ekle-overlay').addEventListener('click', (e) => {
+    if (e.target.id === 'ky-ekle-overlay') ekleModalKapat();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') ekleModalKapat();
+  });
+
+  document.getElementById('ky-ekle-kaydet').addEventListener('click', function() {
+    const kalip_kod = document.getElementById('ky-ekle-kod').value.trim();
+    const kalip_tipi = document.getElementById('ky-ekle-tip').value;
+    const model_kod = document.getElementById('ky-ekle-model-kod').value.trim();
+    const model_ad = document.getElementById('ky-ekle-model-ad').value.trim();
+    const asorti = document.getElementById('ky-ekle-asorti').value.trim();
+    const renk = document.getElementById('ky-ekle-renk').value.trim();
+    const kalip_basi_cift = parseInt(document.getElementById('ky-ekle-kbc').value, 10) || 1;
+
+    if (!kalip_kod) { mesaj('❌ Kalıp kodu zorunlu', 'hata'); document.getElementById('ky-ekle-kod').focus(); return; }
+    if (!model_kod) { mesaj('❌ Model kodu zorunlu', 'hata'); document.getElementById('ky-ekle-model-kod').focus(); return; }
+
+    const btn = this;
+    btn.disabled = true;
+    btn.textContent = '⏳ Kaydediliyor...';
+
+    const payload = { kalip_kod, kalip_tipi, model_kod, kalip_basi_cift };
+    if (model_ad) payload.model_ad = model_ad;
+    if (asorti) payload.asorti = asorti;
+    if (renk) payload.renk = renk;
+
+    fetch('/yonetim/api/kalip/ekle', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    })
+    .then(r => r.json().then(d => ({status: r.status, data: d})))
+    .then(({status, data}) => {
+      btn.disabled = false;
+      btn.textContent = '💾 Kalıp Ekle';
+      if (data.ok) {
+        mesaj('✅ Kalıp eklendi: ' + kalip_kod, 'ok');
+        ekleModalKapat();
+        yukle();
+      } else if (data.tip === 'DUPLICATE_KOD') {
+        mesaj('❌ Bu kalıp kodu zaten mevcut: ' + kalip_kod, 'hata');
+        document.getElementById('ky-ekle-kod').focus();
+      } else {
+        mesaj('❌ Hata: ' + (data.hata || 'bilinmiyor'), 'hata');
+      }
+    })
+    .catch(e => {
+      btn.disabled = false;
+      btn.textContent = '💾 Kalıp Ekle';
+      mesaj('❌ Bağlantı hatası: ' + e, 'hata');
+    });
   });
 
   yukle();
