@@ -3083,6 +3083,22 @@
         }
       });
       enjRefreshSlotPersonelDisplays();
+
+      // ENJ_GUNLUK_OZET: d.toplam -> span ID'lere yaz
+      var top = d.toplam || {};
+      var setTxt = function (id, v, suffix) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        if (v == null || v === '') { el.textContent = '—'; el.classList.add('muted'); }
+        else { el.textContent = v + (suffix || ''); el.classList.remove('muted'); }
+      };
+      setTxt('enj-ozet-toplam-tur',   top.cevrim   != null ? top.cevrim   : null);
+      setTxt('enj-ozet-teorik-cift',  top.uretilen != null ? top.uretilen : null);
+      setTxt('enj-ozet-net-cift',     top.net      != null ? top.net      : null);
+      setTxt('enj-ozet-fire-cift',    top.fire     != null ? top.fire     : null);
+      setTxt('enj-ozet-korgun',       null); // ab-ozet API korgun donmuyor, — kalsin
+      setTxt('enj-ozet-fark',         null); // ab-ozet API fark donmuyor, — kalsin
+      setTxt('enj-ozet-fire-orani',   top.fire_orani != null ? top.fire_orani : null, '%');
     }).catch(function () {});
   }
 

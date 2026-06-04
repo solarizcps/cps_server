@@ -371,13 +371,25 @@ function renderMakineKart(m) {
   html +=   '<span class="or-mak-ozet-cell or-son-olay"><em>Son</em> ' + _f2b_sonOlaySozcuk(m.olay_ozet) + '</span>';
   html += '</div>';
 
-  // FOOTER (mevcut korunuyor)
+  // FOOTER: benzersiz aktif istasyon sayisi + toplam slot
   var aktif_oran = (m.anlik_durum.aktif_oran * 100).toFixed(0);
   var personel_str = (m.personel_sayisi != null && m.personel_sayisi > 0)
     ? ' · <em>Personel:</em> <strong>' + m.personel_sayisi + '</strong>'
     : '';
+  // Aktif slotlardan benzersiz istasyon_no sayisi hesapla
+  var _aktif_ist_set = {};
+  (m.slotlar || []).forEach(function(sl) {
+    if ((sl.durum || '').toUpperCase() === 'AKTIF' && sl.istasyon_no != null) {
+      _aktif_ist_set[sl.istasyon_no] = true;
+    }
+  });
+  var aktif_ist_sayi = Object.keys(_aktif_ist_set).length;
+  var aktif_slot_sayi = s.AKTIF || 0;
+  var ist_slot_str = aktif_ist_sayi > 0
+    ? aktif_ist_sayi + ' istasyon / ' + aktif_slot_sayi + ' slot aktif'
+    : aktif_slot_sayi + ' slot aktif';
   html += '<div class="or-mak-alt">';
-  html += '<span class="or-mak-aktif-orani">Çalışan istasyon: <strong>' + s.AKTIF + "/" + top + " (%" + aktif_oran + ")</strong>" + personel_str + '</span>';
+  html += '<span class="or-mak-aktif-orani"><strong>' + ist_slot_str + '</strong> (%' + aktif_oran + ')' + personel_str + '</span>';
   html += '<button class="or-mak-detay-btn" data-makine-id="' + m.makine_id + '">Detay →</button>';
   html += "</div>";
 
