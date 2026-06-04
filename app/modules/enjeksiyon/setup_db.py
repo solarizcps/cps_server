@@ -195,9 +195,9 @@ def _slot_snapshot_from_setup(cur, rapor_id, slot, setup):
     if setup:
         ag = int(setup.get("aktif_goz_sayisi") or 0)
         kbc = int(setup.get("kalip_basi_cift") or 0)
-        tur_kap = ag * kbc if ag > 0 and kbc > 0 else _live_tur_kapasitesi(cur, rapor_id, slot)
-        if ag <= 0:
-            ag = _aktif_goz_canli(cur, rapor_id, slot)
+        # Setup varsa SADECE setup degerlerini kullan; live fallback yok.
+        # ag veya kbc=0 ise tur_kap=0 kalir; freeze guard (265-268) NULL birakir.
+        tur_kap = ag * kbc
         return {
             "setup_id": setup.get("id"),
             "kalip_id": setup.get("kalip_id"),
