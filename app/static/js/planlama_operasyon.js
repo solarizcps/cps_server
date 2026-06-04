@@ -17,7 +17,7 @@
     genel: null,
     secili_makine: null,
     // F9_5_4C: aktif detay sekme
-    detay_aktif_sekme: "istasyon",
+    detay_aktif_sekme: "saatlik",
     makine_detay: null,
     auto_refresh_timer: null,
     auto_refresh_aktif: true,
@@ -707,7 +707,7 @@ function _f2c_sekmeDegistir(sekme) {
 
 function renderDetay(m) {
   state.makine_detay = m;
-  if (!state.detay_aktif_sekme) state.detay_aktif_sekme = "istasyon";
+  state.detay_aktif_sekme = "saatlik";
 
   document.getElementById("or-detay-makine-ad").textContent = m.makine_kod + " · " + m.makine_ad + " · Detay";
   var durum_tip = m.anlik_durum ? m.anlik_durum.tip : "RAPOR_YOK";
