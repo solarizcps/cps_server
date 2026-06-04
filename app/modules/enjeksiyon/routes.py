@@ -294,6 +294,8 @@ def _enj_kalip_row_to_dict(row):
         'renk': row[8],
         'gorsel_dosya': row[9],
         'aktif': row[10],
+        'kapasite_cift': row[11] if len(row) > 11 else None,
+        'kalip_durumu': row[12] if len(row) > 12 else 'AKTIF',
     }
 
 
@@ -309,7 +311,8 @@ def enj_api_kalip_listesi():
         cur = con.cursor()
         cur.execute('''
             SELECT id, kalip_kod, kalip_tipi, model_kod, model_ad, asorti,
-                   kalip_basi_cift, varsayilan_bagli_kalip, renk, gorsel_dosya, aktif
+                   kalip_basi_cift, varsayilan_bagli_kalip, renk, gorsel_dosya, aktif,
+                   kapasite_cift, kalip_durumu
             FROM enj_kalip
             WHERE aktif = 1 AND kalip_tipi = 'GOVDE'
             ORDER BY kalip_kod, model_kod, asorti
@@ -342,7 +345,8 @@ def enj_api_kalip_detay(kalip_id):
 
         cur.execute('''
             SELECT id, kalip_kod, kalip_tipi, model_kod, model_ad, asorti,
-                   kalip_basi_cift, varsayilan_bagli_kalip, renk, gorsel_dosya, aktif
+                   kalip_basi_cift, varsayilan_bagli_kalip, renk, gorsel_dosya, aktif,
+                   kapasite_cift, kalip_durumu
             FROM enj_kalip
             WHERE id = ? AND aktif = 1
         ''', (kalip_id,))
@@ -361,7 +365,8 @@ def enj_api_kalip_detay(kalip_id):
         # Eslesen ATKI'yi bul: ayni model_kod + ayni asorti + kalip_tipi='ATKI'
         cur.execute('''
             SELECT id, kalip_kod, kalip_tipi, model_kod, model_ad, asorti,
-                   kalip_basi_cift, varsayilan_bagli_kalip, renk, gorsel_dosya, aktif
+                   kalip_basi_cift, varsayilan_bagli_kalip, renk, gorsel_dosya, aktif,
+                   kapasite_cift, kalip_durumu
             FROM enj_kalip
             WHERE model_kod = ? AND aktif = 1 AND kalip_tipi = 'ATKI'
                   AND (asorti = ? OR (asorti IS NULL AND ? IS NULL))

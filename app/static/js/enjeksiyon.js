@@ -1701,6 +1701,7 @@
                 '<div class="tsu-form-alan">' +
                     '<label class="tsu-label">KALIP <span class="gerekli">*</span></label>' +
                     kalipSeciciHTML() +
+                    '<div id="esu-kalip-master-hint" style="margin-top:6px"></div>' +
                 '</div>' +
                 '<div class="tsu-form-alan">' +
                     '<label class="tsu-label">RENK <span class="gerekli">*</span></label>' +
@@ -1968,6 +1969,32 @@
                 } else {
                     wrap.innerHTML = '<span class="tsu-gorsel-yok">Kalıp görseli yok</span>';
                 }
+            }
+
+            // --- Kalip Master hint + durum uyarisi ---
+            var hintEl = document.getElementById('esu-kalip-master-hint');
+            if (hintEl) {
+                var dur = String(k.kalip_durumu || 'AKTIF').toUpperCase();
+                var bannerHTML = '';
+                if (dur === 'BAKIMDA') {
+                    bannerHTML =
+                        '<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:6px 10px;margin-bottom:6px;font-size:12px;font-weight:600;color:#92400e">' +
+                        '⚠️ Bu kalıp <strong>BAKIMDA</strong>. Seçebilirsiniz ancak durumunu kontrol edin.' +
+                        '</div>';
+                } else if (dur === 'ARIZALI') {
+                    bannerHTML =
+                        '<div style="background:#fee2e2;border:1px solid #ef4444;border-radius:6px;padding:6px 10px;margin-bottom:6px;font-size:12px;font-weight:600;color:#991b1b">' +
+                        '🔴 Bu kalıp <strong>ARIZALI</strong>. Kullanmadan önce bakım durumunu onaylayın.' +
+                        '</div>';
+                }
+                var vbk = k.varsayilan_bagli_kalip != null ? String(k.varsayilan_bagli_kalip) : '—';
+                var kap = k.kapasite_cift != null ? String(k.kapasite_cift) : '—';
+                var hintInfoHTML =
+                    '<div style="font-size:11px;color:#6b7280;display:flex;gap:14px;flex-wrap:wrap">' +
+                    '<span title="Varsayılan bağlı kalıp (öneri)">🔗 Önerilen bağlı kalıp: <strong style="color:#374151">' + escapeHTML(vbk) + '</strong></span>' +
+                    '<span title="Toplam kalıp kapasitesi (çift)">📦 Kapasite: <strong style="color:#374151">' + escapeHTML(kap) + '</strong> çift</span>' +
+                    '</div>';
+                hintEl.innerHTML = bannerHTML + hintInfoHTML;
             }
 
             refreshSetupSubmitBtn();
