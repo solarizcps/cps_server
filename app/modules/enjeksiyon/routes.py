@@ -217,6 +217,10 @@ def yonetim_panel():
                 }
         # F9_2_P3A_IST_MAP - END
 
+    # ENJ_TEST_RESET: admin flag'i template'e geç (buton görünürlüğü için)
+    from modules.auth import is_superadmin as _isa_main
+    _is_admin_flag = _isa_main(session.get("kullanici"))
+
     return render_template(
         'enjeksiyon/yonetim.html',
         makineler=makineler,
@@ -232,6 +236,7 @@ def yonetim_panel():
         vardiya=vardiya,
         vardiya_metin=VARDIYA_METIN.get(vardiya, vardiya),
         saatler=SAATLER[vardiya],
+        is_admin=_is_admin_flag,
     )
 
 
@@ -2559,6 +2564,88 @@ def enj_api_raporlar_detay(rapor_id):
 
 # === END: PATCH 3.A ===
 
+
+
+# =====================================================================
+# ENJ_TEST_RESET — test-only saatlik tur/uretim sifirlama
+# KURAL: Sadece gun_sonu_notu LIKE '%TEST%' olan raporlarda calisir.
+# Sadece admin/superadmin cagirabilir.
+# =====================================================================
+@enjeksiyon_bp.route("/api/rapor/<int:rapor_id>/test-reset", methods=["POST"])
+def enj_api_test_reset(rapor_id):
+    """
+    TEST raporlarinda saatlik cevrim_a/b ve uretilen_a/b degerlerini sifirla.
+    Sadece gun_sonu_notu LIKE '%TEST%' olan raporlarda calisir.
+    Snapshot, setup, istasyon ve kalip verilerine DOKUNULMAZ.
+    """
+    try:
+        # Admin kontrolü
+        u = session.get("kullanici")
+        from modules.auth import is_superadmin as _isa
+        if not _isa(u):
+            return jsonify({
+                "ok": False,
+                "hata": "Bu islem sadece sistem yoneticisi (superadmin) tarafindan yapilabilir.",
+                "tip": "YETKISIZ",
+            }), 403
+
+        con = _sqlite3.connect(_enj_kalip_db_path())
+        cur = con.cursor()
+
+        # Rapor var mı?
+        cur.execute(
+            "SELECT id, gun_sonu_notu FROM enj_gunluk_rapor WHERE id = ?",
+            (rapor_id,)
+        )
+        rapor = cur.fetchone()
+        if not rapor:
+            con.close()
+            return jsonify({"ok": False, "hata": "Rapor bulunamadi"}), 404
+
+        gun_sonu_notu = (rapor[1] or "").upper()
+        if "TEST" not in gun_sonu_notu:
+            con.close()
+            return jsonify({
+                "ok": False,
+                "hata": "Bu rapor bir TEST raporu degil. Reset sadece gun_sonu_notu icinde 'TEST' gecen raporlarda calisir.",
+                "tip": "TEST_RAPORU_DEGIL",
+            }), 403
+
+        # Sadece cevrim ve uretim alanlarini sifirla — snapshot'lara, setup'a, istasyona DOKUNMA
+        cur.execute("""
+            UPDATE enj_saatlik_kayit
+            SET cevrim_a = 0, cevrim_b = 0, uretilen_a = 0, uretilen_b = 0,
+                son_guncelleme = CURRENT_TIMESTAMP
+            WHERE rapor_id = ?
+        """, (rapor_id,))
+        etkilenen = cur.rowcount
+        con.commit()
+
+        # Audit log
+        try:
+            from modules.enjeksiyon.audit import log_event
+            log_event(
+                con, rapor_id, "ADMIN", "ENJ_TEST_RESET",
+                None, None,
+                meta_extra={
+                    "resetlenen_satir": etkilenen,
+                    "yapan": (u or {}).get("KullaniciAdi") or "bilinmiyor",
+                }
+            )
+        except Exception:
+            pass
+
+        con.close()
+        return jsonify({
+            "ok": True,
+            "resetlenen_saatlik_satir": etkilenen,
+            "mesaj": f"{etkilenen} saatlik kayit sifirlandi (cevrim/uretim). Snapshot ve setup korundu.",
+        })
+
+    except Exception as e:
+        return jsonify({"ok": False, "hata": str(e)}), 500
+
+# === END: ENJ_TEST_RESET ===
 
 
 # =====================================================================

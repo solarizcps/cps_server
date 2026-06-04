@@ -161,7 +161,15 @@
 
   <div class="enj-main">
     <div class="enj-tbl-card">
-      <div class="enj-tbl-basl">SAATLİK TABLO &middot; <b>{{ vardiya_metin }}</b></div>
+      <div class="enj-tbl-basl" style="display:flex;align-items:center;gap:12px;">
+        <span>SAATLİK TABLO &middot; <b>{{ vardiya_metin }}</b></span>
+        {%- if is_admin and rapor and rapor.id and rapor.gun_sonu_notu and 'TEST' in (rapor.gun_sonu_notu|upper) %}
+        <button type="button" id="enj-test-reset-btn"
+          style="background:#fef2f2;color:#dc2626;border:1px solid #fca5a5;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:0.03em;"
+          title="Sadece bu TEST raporundaki tur/üretim değerleri sıfırlanır. Snapshot ve setup korunur.">
+          🧪 Test Verisini Sıfırla
+        </button>
+        {%- endif %}</div>
       <div class="enj-tbl-body">
         <table class="enj-tbl">
         <!-- ENJ_AB_FAZ2_FINAL SAATLIK BEGIN -->
@@ -349,6 +357,48 @@
 .enj-ozet { align-self: stretch !important; min-height: 100%; }
 /* F_AB_DURUM_CSS_END V5 */
 </style>
+
+{%- if is_admin and rapor and rapor.id and rapor.gun_sonu_notu and 'TEST' in (rapor.gun_sonu_notu|upper) %}
+<script>
+(function() {
+  'use strict';
+  var btn = document.getElementById('enj-test-reset-btn');
+  if (!btn) return;
+  btn.addEventListener('click', function() {
+    var onay = confirm(
+      'Sadece bu TEST raporundaki tur ve üretim değerleri sıfırlanacak.\n' +
+      'Setup, snapshot, kalıp ve istasyon verileri SİLİNMEYECEK.\n\n' +
+      'Devam edilsin mi?'
+    );
+    if (!onay) return;
+    btn.disabled = true;
+    btn.textContent = '⏳ Sıfırlanıyor...';
+    fetch('/enjeksiyon/api/rapor/{{ rapor.id }}/test-reset', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      btn.disabled = false;
+      btn.textContent = '🧪 Test Verisini Sıfırla';
+      if (d.ok) {
+        alert('✅ ' + (d.mesaj || (d.resetlenen_saatlik_satir + ' satır sıfırlandı.')));
+        window.location.reload();
+      } else {
+        alert('❌ Hata: ' + (d.hata || 'bilinmiyor'));
+      }
+    })
+    .catch(function(e) {
+      btn.disabled = false;
+      btn.textContent = '🧪 Test Verisini Sıfırla';
+      alert('❌ Bağlantı hatası: ' + e);
+    });
+  });
+})();
+</script>
+{%- endif %}
+
 {% endblock %}
 
 
