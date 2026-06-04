@@ -1098,7 +1098,8 @@ def ky_api_kalip_ekle():
             'varsayilan_bagli_kalip': r[7], 'renk': r[8], 'gorsel_dosya': r[9],
             'aktif': r[10],
         }
-        audit.log(_u(), 'kalip_ekle', f'kalip_id={yeni_id} kod={kalip_kod} tip={kalip_tipi}')
+        audit.log(_u(), 'kalip_ekle', 'enj_kalip', yeni_id,
+                  aciklama=f'kod={kalip_kod} tip={kalip_tipi}')
         return _jsonify_ky({'ok': True, 'kalip': kayit, 'id': yeni_id}), 201
 
     except Exception as e:
