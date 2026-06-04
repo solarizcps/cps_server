@@ -910,7 +910,9 @@ def rapor_aggregate(con, makine_id, tarih_str, vardiya, simdi_dt=None):
     
     # 3) Slotlar
     cur.execute("""
-        SELECT i.id, i.istasyon_no, i.slot, i.durum, i.kalip_id,
+        SELECT i.id, i.istasyon_no, i.slot,
+               CASE WHEN i.aktif = 1 THEN 'AKTIF' ELSE 'KAPALI' END as durum,
+               i.kalip_id,
                k.kalip_kod, k.model_kod, k.kalip_basi_cift, k.kapasite_cift,
                k.varsayilan_bagli_kalip, k.kalip_tipi,
                i.bagli_kalip_adet,
