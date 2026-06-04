@@ -306,8 +306,11 @@
 
   function bindRowEvents() {
     document.querySelectorAll('#ky-tbody tr[data-id]').forEach(tr => {
+      // Sadece ana satirlar (aciklama expand satirlarini atla)
+      if (tr.classList.contains('ky-aciklama-row')) return;
       const id = tr.dataset.id;
       const btn = tr.querySelector('.ky-kaydet-btn');
+      if (!btn) return;
 
       function checkDegisiklik() {
         let degisti = false;
@@ -497,21 +500,27 @@
         }
       })
       .catch(e => {
+        console.error('[KY] yukle hatasi:', e);
         document.getElementById('ky-tbody').innerHTML = '<tr><td colspan="13" style="text-align:center; padding:30px; color:#ef4444">Bağlantı hatası</td></tr>';
       });
   }
 
-  // Event delegations - PAGE LEVEL (DOM hazir oldugunda baglanir)
-  document.getElementById('ky-arama').addEventListener('input', render);
-  document.getElementById('ky-filtre-tip').addEventListener('change', render);
-  document.getElementById('ky-filtre-aktif').addEventListener('change', render);
+  // Event delegations - PAGE LEVEL
+  var _elArama = document.getElementById('ky-arama');
+  if (_elArama) _elArama.addEventListener('input', render);
+  var _elFTip = document.getElementById('ky-filtre-tip');
+  if (_elFTip) _elFTip.addEventListener('change', render);
+  var _elFAktif = document.getElementById('ky-filtre-aktif');
+  if (_elFAktif) _elFAktif.addEventListener('change', render);
 
-  document.getElementById('ky-modal-close').addEventListener('click', modalKapat);
-  document.getElementById('ky-modal').addEventListener('click', (e) => {
+  var _elModalClose = document.getElementById('ky-modal-close');
+  if (_elModalClose) _elModalClose.addEventListener('click', modalKapat);
+  var _elModal = document.getElementById('ky-modal');
+  if (_elModal) _elModal.addEventListener('click', (e) => {
     if (e.target.id === 'ky-modal') modalKapat();
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') modalKapat();
+    if (e.key === 'Escape') { modalKapat(); }
   });
 
   document.getElementById('ky-file-input').addEventListener('change', function() {
@@ -567,16 +576,20 @@
     document.getElementById('ky-ekle-overlay').classList.remove('show');
   }
 
-  document.getElementById('ky-btn-yeni-kalip').addEventListener('click', ekleModalAc);
-  document.getElementById('ky-ekle-iptal').addEventListener('click', ekleModalKapat);
-  document.getElementById('ky-ekle-overlay').addEventListener('click', (e) => {
+  var _elBtnYeni = document.getElementById('ky-btn-yeni-kalip');
+  if (_elBtnYeni) _elBtnYeni.addEventListener('click', ekleModalAc);
+  var _elEkleIptal = document.getElementById('ky-ekle-iptal');
+  if (_elEkleIptal) _elEkleIptal.addEventListener('click', ekleModalKapat);
+  var _elEkleOverlay = document.getElementById('ky-ekle-overlay');
+  if (_elEkleOverlay) _elEkleOverlay.addEventListener('click', (e) => {
     if (e.target.id === 'ky-ekle-overlay') ekleModalKapat();
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') ekleModalKapat();
   });
 
-  document.getElementById('ky-ekle-kaydet').addEventListener('click', function() {
+  var _elEkleKaydet = document.getElementById('ky-ekle-kaydet');
+  if (_elEkleKaydet) _elEkleKaydet.addEventListener('click', function() {
     const kalip_kod = document.getElementById('ky-ekle-kod').value.trim();
     const kalip_tipi = document.getElementById('ky-ekle-tip').value;
     const model_kod = document.getElementById('ky-ekle-model-kod').value.trim();
