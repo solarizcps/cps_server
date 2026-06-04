@@ -582,6 +582,30 @@ def enj_api_rapor_bul_veya_olustur():
         return jsonify({"ok": False, "hata": str(e)}), 500
 
 
+def _get_gramaj_fire_decision(cur, rapor_id):
+    """Rapordaki aktif setup gramaj snapshot'larina gore fire hesap karari verir.
+
+    Donus: (gramaj: float|None, uyari: str|None)
+      - Tek benzersiz gramaj varsa: (gramaj, None)
+      - Gramaj yoksa: (None, 'FIRE_GRAMAJ_EKSIK')
+      - Farkli gramajlar varsa: (None, 'FIRE_GRAMAJ_BELIRSIZ')
+    """
+    cur.execute(
+        "SELECT cift_agirlik_gr_snapshot FROM enj_ab_setup "
+        "WHERE rapor_id=? AND durum='AKTIF' AND cift_agirlik_gr_snapshot IS NOT NULL",
+        (rapor_id,),
+    )
+    rows = cur.fetchall()
+    if not rows:
+        return None, "FIRE_GRAMAJ_EKSIK"
+    benzersiz = set(float(r[0]) for r in rows if r[0] is not None)
+    if not benzersiz:
+        return None, "FIRE_GRAMAJ_EKSIK"
+    if len(benzersiz) == 1:
+        return benzersiz.pop(), None
+    return None, "FIRE_GRAMAJ_BELIRSIZ"
+
+
 @enjeksiyon_bp.route("/api/rapor/<int:rapor_id>", methods=["PATCH"])
 def enj_api_rapor_patch(rapor_id):
     """Form alanlarini guncelle (whitelist).
@@ -615,9 +639,38 @@ def enj_api_rapor_patch(rapor_id):
         params = list(guncellenecek.values()) + [rapor_id]
         cur.execute(f"UPDATE enj_gunluk_rapor SET {', '.join(set_parts)} WHERE id = ?", params)
         con.commit()
+
+        # FIRE-3-1: teknik_fire_kg degistiyse guvenli gramaj kuraliyla toplam_fire_cift hesapla
+        fire_uyari = None
+        fire_cift_hesaplandi = False
+        toplam_fire_cift_yeni = None
+        if "teknik_fire_kg" in guncellenecek:
+            teknik_kg = guncellenecek["teknik_fire_kg"]
+            if teknik_kg is not None and float(teknik_kg) >= 0:
+                gramaj, fire_uyari = _get_gramaj_fire_decision(cur, rapor_id)
+                if gramaj and gramaj > 0:
+                    toplam_fire_cift_yeni = round(float(teknik_kg) * 1000 / gramaj)
+                    cur.execute(
+                        "UPDATE enj_gunluk_rapor SET toplam_fire_cift=? WHERE id=?",
+                        (toplam_fire_cift_yeni, rapor_id),
+                    )
+                    con.commit()
+                    fire_cift_hesaplandi = True
+
         con.close()
 
-        return jsonify({"ok": True, "guncellenen": list(guncellenecek.keys())})
+        resp = {"ok": True, "guncellenen": list(guncellenecek.keys()),
+                "fire_cift_hesaplandi": fire_cift_hesaplandi}
+        if toplam_fire_cift_yeni is not None:
+            resp["toplam_fire_cift"] = toplam_fire_cift_yeni
+        if fire_uyari:
+            uyari_mesajlar = {
+                "FIRE_GRAMAJ_BELIRSIZ": "A/B gramaj farklı, teknik fire kg çift'e otomatik çevrilmedi.",
+                "FIRE_GRAMAJ_EKSIK": "Kalıp gramajı tanımlanmamış, çift hesabı yapılamadı.",
+            }
+            resp["uyari"] = fire_uyari
+            resp["uyari_mesaj"] = uyari_mesajlar.get(fire_uyari, fire_uyari)
+        return jsonify(resp)
     except Exception as e:
         return jsonify({"ok": False, "hata": str(e)}), 500
 
