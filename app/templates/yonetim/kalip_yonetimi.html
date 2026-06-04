@@ -253,7 +253,7 @@
         '<td><input type="number" class="ky-kbc-input" min="1" max="9999" value="' + (k.kapasite_cift||'') + '" data-field="kapasite_cift" data-orig="' + (k.kapasite_cift||'') + '" placeholder="—" title="Toplam kalıp kapasitesi (çift)"></td>' +
         '<td><input type="text" class="ky-input-text" value="' + escapeHtml(k.asorti||'') + '" data-field="asorti" data-orig="' + escapeHtml(k.asorti||'') + '" placeholder="-"></td>' +
         '<td><span class="ky-tip ' + tipClass + '">' + escapeHtml(k.kalip_tipi) + '</span></td>' +
-        '<td>' + escapeHtml(k.renk || '-') + '</td>' +
+        '<td><input type="text" class="ky-input-text" value="' + escapeHtml(k.renk||'') + '" data-field="renk" data-orig="' + escapeHtml(k.renk||'') + '" placeholder="-" maxlength="50" style="width:95px"></td>' +
         '<td><span class="ky-aktif ' + aktifClass + '" data-field="aktif" data-orig="' + k.aktif + '" title="Tıklayarak aktif/pasif değiştir">' + aktifIcon + '</span></td>' +
         '<td style="white-space:nowrap">' +
           '<button class="ky-kaydet-btn" data-id="' + k.id + '">💾 Kaydet</button>' +
