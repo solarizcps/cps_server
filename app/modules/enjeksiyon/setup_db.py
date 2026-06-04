@@ -11,6 +11,7 @@ _SETUP_COLS = (
     "durum", "baslangic_zamani", "bitis_zamani",
     "degisim_sebebi", "notlar",
     "created_by", "created_at", "updated_at",
+    "cift_agirlik_gr_snapshot",
 )
 
 _TASLAK_PATCH = frozenset({
@@ -57,15 +58,15 @@ def _rapor_makine(cur, rapor_id):
 
 def _kalip_snapshot(cur, kalip_id):
     if not kalip_id:
-        return None, None, None
+        return None, None, None, None
     cur.execute(
-        "SELECT kalip_kod, model_kod, kalip_basi_cift FROM enj_kalip WHERE id=?",
+        "SELECT kalip_kod, model_kod, kalip_basi_cift, cift_agirlik_gr FROM enj_kalip WHERE id=?",
         (kalip_id,),
     )
     row = cur.fetchone()
     if not row:
-        return None, None, None
-    return row[0], row[1], row[2]
+        return None, None, None, None
+    return row[0], row[1], row[2], row[3]
 
 
 def _aktif_goz_canli(cur, rapor_id, slot):
@@ -375,7 +376,7 @@ def create_setup(con, rapor_id, data, user=None):
 
     slot = data["slot"].upper()
     kalip_id = data.get("kalip_id")
-    kk, mk, kbc_m = _kalip_snapshot(cur, kalip_id) if kalip_id else (None, None, None)
+    kk, mk, kbc_m, gramaj_m = _kalip_snapshot(cur, kalip_id) if kalip_id else (None, None, None, None)
     kbc = data.get("kalip_basi_cift")
     if kbc is None and kbc_m is not None:
         kbc = kbc_m
@@ -392,8 +393,9 @@ def create_setup(con, rapor_id, data, user=None):
             kalip_id, kalip_kod_snapshot, model_kod_snapshot,
             renk, pisme_suresi_sn, personel_sayisi,
             aktif_goz_sayisi, kalip_basi_cift,
-            durum, notlar, created_by, created_at, updated_at
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            durum, notlar, created_by, created_at, updated_at,
+            cift_agirlik_gr_snapshot
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """,
         (
             rapor_id, rp["makine_id"], slot,
@@ -401,6 +403,7 @@ def create_setup(con, rapor_id, data, user=None):
             data.get("renk"), data.get("pisme_suresi_sn"),
             data.get("personel_sayisi"), int(aktif or 0), kbc,
             "TASLAK", data.get("notlar"), uid, now, now,
+            gramaj_m,
         ),
     )
     setup_id = cur.lastrowid
@@ -431,9 +434,10 @@ def update_setup(con, setup_id, rapor_id, data):
         return {"ok": False, "hata": "guncellenecek alan yok"}
 
     if "kalip_id" in guncel and guncel["kalip_id"]:
-        kk, mk, kbc_m = _kalip_snapshot(cur, guncel["kalip_id"])
+        kk, mk, kbc_m, gramaj_m = _kalip_snapshot(cur, guncel["kalip_id"])
         guncel["kalip_kod_snapshot"] = kk
         guncel["model_kod_snapshot"] = mk
+        guncel["cift_agirlik_gr_snapshot"] = gramaj_m
         if "kalip_basi_cift" not in guncel and kbc_m is not None:
             guncel["kalip_basi_cift"] = kbc_m
 
