@@ -375,10 +375,6 @@
         ['enj-renk',            'renk',             'text'],
         ['enj-kalip-basi-cift', 'kalip_basi_cift',  'int'],
         ['enj-personel-sayisi', 'personel_sayisi',  'int'],
-        // ENJ-FIRE: gun sonu fire breakdown kg
-        ['enj-fire-bos',        'bos_atis_kg',      'float'],
-        ['enj-fire-teknik',     'teknik_fire_kg',   'float'],
-        ['enj-fire-yolluk',     'yolluk_fire_kg',   'float']
     ].forEach(function (spec) {
         var inp = document.getElementById(spec[0]);
         if (!inp) return;
@@ -386,12 +382,53 @@
         function save() {
             var v;
             if (spec[2] === 'int') v = getNum(inp);
-            else if (spec[2] === 'float') v = getFloat(inp);
             else v = getTxt(inp);
             var body = {}; body[spec[1]] = v;
             patch('/enjeksiyon/api/rapor/' + raporId, body, inp);
         }
         inp.addEventListener('input', function () { schedule(key, save); });
+        inp.addEventListener('blur', function () { flushKey(key); });
+    });
+
+    // FIRE-4-1: Fire kg inputlari — PATCH + loadOzet + gramaj uyarisi
+    var _fireUyariEl = document.getElementById('enj-fire-gramaj-uyari');
+    function _showFireUyari(uyariKod, uyariMesaj) {
+        if (!_fireUyariEl) return;
+        if (uyariKod) {
+            _fireUyariEl.textContent = uyariMesaj || uyariKod;
+            _fireUyariEl.style.display = '';
+        } else {
+            _fireUyariEl.textContent = '';
+            _fireUyariEl.style.display = 'none';
+        }
+    }
+    [
+        ['enj-fire-bos',     'bos_atis_kg'],
+        ['enj-fire-teknik',  'teknik_fire_kg'],
+        ['enj-fire-yolluk',  'yolluk_fire_kg']
+    ].forEach(function (spec) {
+        var inp = document.getElementById(spec[0]);
+        if (!inp) return;
+        var key = 'ff_' + spec[0];
+        function saveFireKg() {
+            var v = getFloat(inp);
+            var body = {}; body[spec[1]] = v;
+            api('/enjeksiyon/api/rapor/' + raporId, { method: 'PATCH', body: body })
+                .then(function (d) {
+                    if (!d || !d.ok) {
+                        setError(inp, (d && d.hata) || 'Kayit hatasi');
+                        return;
+                    }
+                    // Fix B: gramaj uyarisi
+                    _showFireUyari(d.uyari || null, d.uyari_mesaj || null);
+                    // Fix A: ozet refresh
+                    loadOzet();
+                })
+                .catch(function (err) {
+                    setError(inp, 'Kayit: ' + err.message);
+                });
+        }
+        inp.addEventListener('input', function () { schedule(key, saveFireKg); });
         inp.addEventListener('blur', function () { flushKey(key); });
     });
 
