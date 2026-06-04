@@ -13,8 +13,27 @@
 
 # keep SQLite for now
 !app/mock_data.db
+
 # Force ignore Python cache
 **/__pycache__/
 **/__pycache__/**
 *.pyc
 *.pyo
+
+# Development artifacts: yedek/backup/test dosyalari
+*.YEDEK_*
+*.bak
+*_backup_*.py
+*_backup_*.js
+*_backup_*.html
+*_backup_*.css
+app/_live_test*.py
+app/_live_test*.py
+app/_patch_check*.py
+app/_rapor_recon*.py
+app/=
+
+# Extra DB snapshots (ana mock_data.db korunuyor)
+app/mock_data_*.db
+app/mock_data.db.YEDEK_*
+app/mock_data.db.KALIP_*
