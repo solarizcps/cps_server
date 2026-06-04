@@ -109,6 +109,7 @@
           <th style="width:120px">KOD</th>
           <th>MODEL</th>
           <th style="width:80px">KBÇ</th>
+          <th style="width:80px" title="Kalıp başı toplam çift kapasitesi">KAP.ÇİFT</th>
           <th style="width:100px">ASORTI</th>
           <th style="width:90px">TİP</th>
           <th style="width:110px">RENK</th>
@@ -117,7 +118,7 @@
         </tr>
       </thead>
       <tbody id="ky-tbody">
-        <tr><td colspan="9" style="text-align:center; padding:30px; color:#9ca3af">Yükleniyor...</td></tr>
+        <tr><td colspan="10" style="text-align:center; padding:30px; color:#9ca3af">Yükleniyor...</td></tr>
       </tbody>
     </table>
   </div>
@@ -211,7 +212,7 @@
 
     const tbody = document.getElementById('ky-tbody');
     if (filtre.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:30px; color:#9ca3af">Kayıt bulunamadı</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:30px; color:#9ca3af">Kayıt bulunamadı</td></tr>';
       return;
     }
 
@@ -241,6 +242,7 @@
         '<td><strong>' + escapeHtml(k.kalip_kod) + '</strong></td>' +
         '<td>' + escapeHtml(k.model_kod || '-') + (k.model_ad ? ' · ' + escapeHtml(k.model_ad) : '') + '</td>' +
         '<td><input type="number" class="ky-kbc-input" min="1" max="10" value="' + (k.kalip_basi_cift||1) + '" data-field="kalip_basi_cift" data-orig="' + (k.kalip_basi_cift||1) + '"></td>' +
+        '<td><input type="number" class="ky-kbc-input" min="1" max="9999" value="' + (k.kapasite_cift||'') + '" data-field="kapasite_cift" data-orig="' + (k.kapasite_cift||'') + '" placeholder="—" title="Toplam kalıp kapasitesi (çift)"></td>' +
         '<td><input type="text" class="ky-input-text" value="' + escapeHtml(k.asorti||'') + '" data-field="asorti" data-orig="' + escapeHtml(k.asorti||'') + '" placeholder="-"></td>' +
         '<td><span class="ky-tip ' + tipClass + '">' + escapeHtml(k.kalip_tipi) + '</span></td>' +
         '<td>' + escapeHtml(k.renk || '-') + '</td>' +
@@ -406,11 +408,11 @@
           TUMU = d.kayitlar || [];
           render();
         } else {
-          document.getElementById('ky-tbody').innerHTML = '<tr><td colspan="9" style="text-align:center; padding:30px; color:#ef4444">Hata: ' + escapeHtml(d.hata||'bilinmiyor') + '</td></tr>';
+          document.getElementById('ky-tbody').innerHTML = '<tr><td colspan="10" style="text-align:center; padding:30px; color:#ef4444">Hata: ' + escapeHtml(d.hata||'bilinmiyor') + '</td></tr>';
         }
       })
       .catch(e => {
-        document.getElementById('ky-tbody').innerHTML = '<tr><td colspan="9" style="text-align:center; padding:30px; color:#ef4444">Bağlantı hatası</td></tr>';
+        document.getElementById('ky-tbody').innerHTML = '<tr><td colspan="10" style="text-align:center; padding:30px; color:#ef4444">Bağlantı hatası</td></tr>';
       });
   }
 
