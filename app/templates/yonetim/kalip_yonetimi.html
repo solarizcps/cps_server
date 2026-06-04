@@ -125,6 +125,8 @@
           <th>MODEL</th>
           <th style="width:80px">KBÇ</th>
           <th style="width:80px" title="Kalıp başı toplam çift kapasitesi">KAP.ÇİFT</th>
+          <th style="width:75px" title="Çift başı ağırlık (gr)">GR/ÇFT</th>
+          <th style="width:70px" title="Önerilen pişme süresi (sn)">PİŞME</th>
           <th style="width:100px">ASORTI</th>
           <th style="width:90px">TİP</th>
           <th style="width:110px">RENK</th>
@@ -134,7 +136,7 @@
         </tr>
       </thead>
       <tbody id="ky-tbody">
-        <tr><td colspan="11" style="text-align:center; padding:30px; color:#9ca3af">Yükleniyor...</td></tr>
+        <tr><td colspan="13" style="text-align:center; padding:30px; color:#9ca3af">Yükleniyor...</td></tr>
       </tbody>
     </table>
   </div>
@@ -192,6 +194,14 @@
       <label>Varsayılan Bağlı Kalıp <span style="color:#6b7280;font-weight:400;font-size:12px">— setup önerisi</span></label>
       <input type="number" id="ky-ekle-vbk" min="1" max="99" value="8" style="width:120px">
     </div>
+    <div class="ky-ekle-row">
+      <label>Gramaj (gr/çift) <span style="color:#6b7280;font-weight:400;font-size:12px">— fire hesabı için</span></label>
+      <input type="number" id="ky-ekle-gramaj" min="0.1" max="9999" step="0.1" placeholder="Ör: 180" style="width:120px">
+    </div>
+    <div class="ky-ekle-row">
+      <label>Önerilen Pişme (sn) <span style="color:#6b7280;font-weight:400;font-size:12px">— setup önerisi</span></label>
+      <input type="number" id="ky-ekle-pisme" min="1" max="9999" placeholder="Ör: 250" style="width:120px">
+    </div>
     <div class="ky-ekle-actions">
       <button class="ky-ekle-iptal" id="ky-ekle-iptal">İptal</button>
       <button class="ky-ekle-kaydet" id="ky-ekle-kaydet">💾 Kalıp Ekle</button>
@@ -236,7 +246,7 @@
 
     const tbody = document.getElementById('ky-tbody');
     if (filtre.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:30px; color:#9ca3af">Kayıt bulunamadı</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="13" style="text-align:center; padding:30px; color:#9ca3af">Kayıt bulunamadı</td></tr>';
       return;
     }
 
@@ -267,6 +277,8 @@
         '<td>' + escapeHtml(k.model_kod || '-') + (k.model_ad ? ' · ' + escapeHtml(k.model_ad) : '') + '</td>' +
         '<td><input type="number" class="ky-kbc-input" min="1" max="10" value="' + (k.kalip_basi_cift||1) + '" data-field="kalip_basi_cift" data-orig="' + (k.kalip_basi_cift||1) + '"></td>' +
         '<td><input type="number" class="ky-kbc-input" min="1" max="9999" value="' + (k.kapasite_cift||'') + '" data-field="kapasite_cift" data-orig="' + (k.kapasite_cift||'') + '" placeholder="—" title="Toplam kalıp kapasitesi (çift)"></td>' +
+        '<td><input type="number" class="ky-kbc-input" min="0.1" max="9999" step="0.1" value="' + (k.cift_agirlik_gr||'') + '" data-field="cift_agirlik_gr" data-orig="' + (k.cift_agirlik_gr||'') + '" placeholder="—" title="Çift başı ağırlık (gr)" style="width:65px"></td>' +
+        '<td><input type="number" class="ky-kbc-input" min="1" max="9999" value="' + (k.pisme_suresi_sn||'') + '" data-field="pisme_suresi_sn" data-orig="' + (k.pisme_suresi_sn||'') + '" placeholder="—" title="Önerilen pişme süresi (sn)" style="width:60px"></td>' +
         '<td><input type="text" class="ky-input-text" value="' + escapeHtml(k.asorti||'') + '" data-field="asorti" data-orig="' + escapeHtml(k.asorti||'') + '" placeholder="-"></td>' +
         '<td><span class="ky-tip ' + tipClass + '">' + escapeHtml(k.kalip_tipi) + '</span></td>' +
         '<td><input type="text" class="ky-input-text" value="' + escapeHtml(k.renk||'') + '" data-field="renk" data-orig="' + escapeHtml(k.renk||'') + '" placeholder="-" maxlength="50" style="width:95px"></td>' +
@@ -283,7 +295,7 @@
         '</td>' +
         '</tr>' +
         '<tr class="ky-aciklama-row' + (k.aciklama ? ' show' : '') + '" id="ky-aciklama-row-' + k.id + '" data-id="' + k.id + '">' +
-          '<td class="ky-aciklama-cell" colspan="11">' +
+          '<td class="ky-aciklama-cell" colspan="13">' +
             '<textarea class="ky-aciklama-input" rows="2" data-field="aciklama" data-orig="' + escapeHtml(k.aciklama||'') + '" placeholder="Açıklama / not..." maxlength="500">' + escapeHtml(k.aciklama||'') + '</textarea>' +
           '</td>' +
         '</tr>';
@@ -481,11 +493,11 @@
           TUMU = d.kayitlar || [];
           render();
         } else {
-          document.getElementById('ky-tbody').innerHTML = '<tr><td colspan="11" style="text-align:center; padding:30px; color:#ef4444">Hata: ' + escapeHtml(d.hata||'bilinmiyor') + '</td></tr>';
+          document.getElementById('ky-tbody').innerHTML = '<tr><td colspan="13" style="text-align:center; padding:30px; color:#ef4444">Hata: ' + escapeHtml(d.hata||'bilinmiyor') + '</td></tr>';
         }
       })
       .catch(e => {
-        document.getElementById('ky-tbody').innerHTML = '<tr><td colspan="11" style="text-align:center; padding:30px; color:#ef4444">Bağlantı hatası</td></tr>';
+        document.getElementById('ky-tbody').innerHTML = '<tr><td colspan="13" style="text-align:center; padding:30px; color:#ef4444">Bağlantı hatası</td></tr>';
       });
   }
 
@@ -545,6 +557,8 @@
     document.getElementById('ky-ekle-kbc').value = '1';
     document.getElementById('ky-ekle-kapasite-cift').value = '1';
     document.getElementById('ky-ekle-vbk').value = '8';
+    document.getElementById('ky-ekle-gramaj').value = '';
+    document.getElementById('ky-ekle-pisme').value = '';
     document.getElementById('ky-ekle-overlay').classList.add('show');
     document.getElementById('ky-ekle-kod').focus();
   }
@@ -572,6 +586,8 @@
     const kalip_basi_cift = parseInt(document.getElementById('ky-ekle-kbc').value, 10) || 1;
     const kapasite_cift = parseInt(document.getElementById('ky-ekle-kapasite-cift').value, 10) || 1;
     const varsayilan_bagli_kalip = parseInt(document.getElementById('ky-ekle-vbk').value, 10) || 8;
+    const cift_agirlik_gr = parseFloat(document.getElementById('ky-ekle-gramaj').value) || null;
+    const pisme_suresi_sn = parseInt(document.getElementById('ky-ekle-pisme').value, 10) || null;
 
     if (!kalip_kod) { mesaj('❌ Kalıp kodu zorunlu', 'hata'); document.getElementById('ky-ekle-kod').focus(); return; }
     if (!model_kod) { mesaj('❌ Model kodu zorunlu', 'hata'); document.getElementById('ky-ekle-model-kod').focus(); return; }
@@ -581,6 +597,8 @@
     btn.textContent = '⏳ Kaydediliyor...';
 
     const payload = { kalip_kod, kalip_tipi, model_kod, kalip_basi_cift, kapasite_cift, varsayilan_bagli_kalip };
+    if (cift_agirlik_gr) payload.cift_agirlik_gr = cift_agirlik_gr;
+    if (pisme_suresi_sn) payload.pisme_suresi_sn = pisme_suresi_sn;
     if (model_ad) payload.model_ad = model_ad;
     if (asorti) payload.asorti = asorti;
     if (renk) payload.renk = renk;

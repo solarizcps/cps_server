@@ -911,7 +911,8 @@ def ky_api_kaliplar():
         cur.execute("""
             SELECT id, kalip_kod, kalip_tipi, model_kod, model_ad, asorti,
                    kalip_basi_cift, varsayilan_bagli_kalip, renk, gorsel_dosya, aktif,
-                   kapasite_cift, kalip_durumu, aciklama
+                   kapasite_cift, kalip_durumu, aciklama,
+                   cift_agirlik_gr, pisme_suresi_sn
             FROM enj_kalip
             ORDER BY aktif DESC, kalip_kod, model_kod, asorti
         """)
@@ -935,6 +936,8 @@ def ky_api_kaliplar():
                 'kapasite_cift': r[11],
                 'kalip_durumu': r[12] or 'AKTIF',
                 'aciklama': r[13],
+                'cift_agirlik_gr': r[14],
+                'pisme_suresi_sn': r[15],
             })
         return _jsonify_ky({'ok': True, 'sayi': len(kayitlar), 'kayitlar': kayitlar})
     except Exception as e:
@@ -945,6 +948,7 @@ _KY_PATCH_WHITELIST = {
     'kalip_kod', 'kalip_tipi', 'model_kod', 'model_ad', 'asorti',
     'kalip_basi_cift', 'varsayilan_bagli_kalip', 'renk', 'gorsel_dosya', 'aktif',
     'kapasite_cift', 'kalip_durumu', 'aciklama',
+    'cift_agirlik_gr', 'pisme_suresi_sn',
 }
 
 _KY_KALIP_DURUMU_SECENEKLER = {'AKTIF', 'BAKIMDA', 'ARIZALI', 'PASIF'}
@@ -1002,7 +1006,8 @@ def ky_api_kalip_patch(kalip_id):
         cur.execute("""
             SELECT id, kalip_kod, kalip_tipi, model_kod, model_ad, asorti,
                    kalip_basi_cift, varsayilan_bagli_kalip, renk, gorsel_dosya, aktif,
-                   kapasite_cift, kalip_durumu, aciklama
+                   kapasite_cift, kalip_durumu, aciklama,
+                   cift_agirlik_gr, pisme_suresi_sn
             FROM enj_kalip WHERE id = ?
         """, (kalip_id,))
         r = cur.fetchone()
@@ -1014,6 +1019,7 @@ def ky_api_kalip_patch(kalip_id):
             'varsayilan_bagli_kalip': r[7], 'renk': r[8], 'gorsel_dosya': r[9],
             'aktif': r[10], 'kapasite_cift': r[11],
             'kalip_durumu': r[12] or 'AKTIF', 'aciklama': r[13],
+            'cift_agirlik_gr': r[14], 'pisme_suresi_sn': r[15],
         }
         
         # Audit log
@@ -1071,6 +1077,16 @@ def ky_api_kalip_ekle():
         except (ValueError, TypeError):
             kapasite_cift = None
 
+        try:
+            cift_agirlik_gr = float(body.get('cift_agirlik_gr') or 0) or None
+        except (ValueError, TypeError):
+            cift_agirlik_gr = None
+
+        try:
+            pisme_suresi_sn = int(body.get('pisme_suresi_sn') or 0) or None
+        except (ValueError, TypeError):
+            pisme_suresi_sn = None
+
         aktif = 1 if body.get('aktif', 1) not in (0, '0', False) else 0
 
         con = _sqlite3_ky.connect(_ky_db_path())
@@ -1091,17 +1107,20 @@ def ky_api_kalip_ekle():
             INSERT INTO enj_kalip
             (kalip_kod, kalip_tipi, model_kod, model_ad, asorti,
              kalip_basi_cift, varsayilan_bagli_kalip, renk, kapasite_cift, aktif,
+             cift_agirlik_gr, pisme_suresi_sn,
              olusturma_tarihi, guncelleme_tarihi)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         """, (kalip_kod, kalip_tipi, model_kod, model_ad, asorti,
-              kalip_basi_cift, varsayilan_bagli_kalip, renk, kapasite_cift, aktif))
+              kalip_basi_cift, varsayilan_bagli_kalip, renk, kapasite_cift, aktif,
+              cift_agirlik_gr, pisme_suresi_sn))
         con.commit()
         yeni_id = cur.lastrowid
 
         r = cur.execute("""
             SELECT id, kalip_kod, kalip_tipi, model_kod, model_ad, asorti,
                    kalip_basi_cift, varsayilan_bagli_kalip, renk, gorsel_dosya, aktif,
-                   kapasite_cift, kalip_durumu, aciklama
+                   kapasite_cift, kalip_durumu, aciklama,
+                   cift_agirlik_gr, pisme_suresi_sn
             FROM enj_kalip WHERE id = ?
         """, (yeni_id,)).fetchone()
         con.close()
@@ -1112,6 +1131,7 @@ def ky_api_kalip_ekle():
             'varsayilan_bagli_kalip': r[7], 'renk': r[8], 'gorsel_dosya': r[9],
             'aktif': r[10], 'kapasite_cift': r[11],
             'kalip_durumu': r[12] or 'AKTIF', 'aciklama': r[13],
+            'cift_agirlik_gr': r[14], 'pisme_suresi_sn': r[15],
         }
         audit.log(_u(), 'kalip_ekle', 'enj_kalip', yeni_id,
                   aciklama=f'kod={kalip_kod} tip={kalip_tipi}')

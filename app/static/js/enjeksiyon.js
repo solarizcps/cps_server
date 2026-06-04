@@ -1989,10 +1989,14 @@
                 }
                 var vbk = k.varsayilan_bagli_kalip != null ? String(k.varsayilan_bagli_kalip) : '—';
                 var kap = k.kapasite_cift != null ? String(k.kapasite_cift) : '—';
+                var gramaj = k.cift_agirlik_gr != null ? k.cift_agirlik_gr + ' gr/çift' : '—';
+                var pismeOneri = k.pisme_suresi_sn != null ? k.pisme_suresi_sn + ' sn' : '—';
                 var hintInfoHTML =
                     '<div style="font-size:11px;color:#6b7280;display:flex;gap:14px;flex-wrap:wrap">' +
                     '<span title="Varsayılan bağlı kalıp (öneri)">🔗 Önerilen bağlı kalıp: <strong style="color:#374151">' + escapeHTML(vbk) + '</strong></span>' +
                     '<span title="Toplam kalıp kapasitesi (çift)">📦 Kapasite: <strong style="color:#374151">' + escapeHTML(kap) + '</strong> çift</span>' +
+                    '<span title="Gramaj (gr/çift)">⚖️ Gramaj: <strong style="color:#374151">' + escapeHTML(gramaj) + '</strong></span>' +
+                    '<span title="Önerilen pişme süresi">🕐 Pişme: <strong style="color:#374151">' + escapeHTML(pismeOneri) + '</strong></span>' +
                     '</div>';
                 hintEl.innerHTML = bannerHTML + hintInfoHTML;
             }
