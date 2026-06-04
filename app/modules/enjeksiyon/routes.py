@@ -669,17 +669,22 @@ def enj_api_saatlik_patch(saatlik_id):
                         continue
                     cev = guncellenecek.get(field, 0) or 0
                     setup_id_val = slot_id_val
+                    slot_lbl = "A" if field == "cevrim_a" else "B"
                     if setup_id_val:
                         pis_row = cur.execute(
                             "SELECT pisme_suresi_sn FROM enj_ab_setup WHERE id=?",
                             (setup_id_val,),
                         ).fetchone()
                     else:
-                        pis_row = None
-                    slot_lbl = "A" if field == "cevrim_a" else "B"
+                        # PISME FALLBACK: saatlik snapshot freeze olmamissa rapor bazli AKTIF setup'tan al
+                        pis_row = cur.execute(
+                            "SELECT pisme_suresi_sn FROM enj_ab_setup "
+                            "WHERE rapor_id=? AND slot=? AND durum='AKTIF' LIMIT 1",
+                            (rapor_id_sk, slot_lbl),
+                        ).fetchone()
                     pisme_val = pis_row[0] if pis_row else None
                     if not pisme_val or pisme_val <= 0:
-                        # PISME ZERO GUARD: geçersiz pişme süresi → 500 yerine 400
+                        # PISME ZERO GUARD: gecersiz pisirme suresi → 500 yerine 400
                         con.close()
                         return jsonify({
                             "ok": False,

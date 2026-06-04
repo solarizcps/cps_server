@@ -3357,6 +3357,54 @@
     });
   });
 
+  /* SAATLIK KAYDET BUTONU: tum satirlardaki tur/durum/sebep degerlerini toplu gonder */
+  var kaydetBtn = document.querySelector('.enj-btn.kaydet');
+  if (kaydetBtn) {
+    kaydetBtn.addEventListener('click', function () {
+      var satirlar = document.querySelectorAll('tr[data-saatlik-id]');
+      if (!satirlar.length) {
+        if (window._enjShowToast) window._enjShowToast('Kaydedilecek satır bulunamadı.', 'uyari');
+        return;
+      }
+      kaydetBtn.disabled = true;
+      var bekleyen = satirlar.length;
+      var hatalar = [];
+      satirlar.forEach(function (tr) {
+        var sid = tr.dataset.saatlikId;
+        var payload = {};
+        var cevA = tr.querySelector('.cev-a-inp');
+        var cevB = tr.querySelector('.cev-b-inp');
+        var durA = tr.querySelector('.durum-a-sel');
+        var durB = tr.querySelector('.durum-b-sel');
+        var aksA = tr.querySelector('.aks-a-sel');
+        var aksB = tr.querySelector('.aks-b-sel');
+        if (cevA) payload.cevrim_a = cevA.value === '' ? 0 : (parseInt(cevA.value, 10) || 0);
+        if (cevB) payload.cevrim_b = cevB.value === '' ? 0 : (parseInt(cevB.value, 10) || 0);
+        if (durA) payload.durum_a = durA.value || null;
+        if (durB) payload.durum_b = durB.value || null;
+        if (aksA) { var va = aksA.value; payload.aksama_sebep_a_id = va === '' ? null : (parseInt(va, 10) || null); }
+        if (aksB) { var vb = aksB.value; payload.aksama_sebep_b_id = vb === '' ? null : (parseInt(vb, 10) || null); }
+        saatlikPatch(sid, payload).then(function (d) {
+          bekleyen--;
+          if (d && !d.ok && d.tip !== 'SETUP_EKSIK') hatalar.push(d.hata || 'bilinmeyen');
+          if (bekleyen === 0) {
+            kaydetBtn.disabled = false;
+            if (hatalar.length) {
+              var msg = hatalar.slice(0, 3).join(' | ');
+              if (window._enjShowToast) window._enjShowToast('Bazı satırlar kaydedilemedi: ' + msg, 'hata');
+            } else {
+              if (window._enjShowToast) window._enjShowToast('Tüm saatlik kayıtlar kaydedildi.', 'basari');
+            }
+            loadOzet();
+          }
+        }).catch(function () {
+          bekleyen--;
+          if (bekleyen === 0) { kaydetBtn.disabled = false; loadOzet(); }
+        });
+      });
+    });
+  }
+
   /* Genel personel: rapor alani — A/B setup snapshot'larini dogrudan degistirmez */
   var personel = document.getElementById('enj-personel-sayisi');
   if (personel) {
