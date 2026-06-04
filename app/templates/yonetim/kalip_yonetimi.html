@@ -168,6 +168,14 @@
       <label>Kalıp Başı Çift (KBÇ)</label>
       <input type="number" id="ky-ekle-kbc" min="1" max="10" value="1" style="width:100px">
     </div>
+    <div class="ky-ekle-row">
+      <label>Kapasite (Çift) <span style="color:#6b7280;font-weight:400;font-size:12px">— toplam kalıp kapasitesi</span></label>
+      <input type="number" id="ky-ekle-kapasite-cift" min="1" max="9999" value="1" style="width:120px">
+    </div>
+    <div class="ky-ekle-row">
+      <label>Varsayılan Bağlı Kalıp <span style="color:#6b7280;font-weight:400;font-size:12px">— setup önerisi</span></label>
+      <input type="number" id="ky-ekle-vbk" min="1" max="99" value="8" style="width:120px">
+    </div>
     <div class="ky-ekle-actions">
       <button class="ky-ekle-iptal" id="ky-ekle-iptal">İptal</button>
       <button class="ky-ekle-kaydet" id="ky-ekle-kaydet">💾 Kalıp Ekle</button>
@@ -470,6 +478,8 @@
     document.getElementById('ky-ekle-asorti').value = '';
     document.getElementById('ky-ekle-renk').value = '';
     document.getElementById('ky-ekle-kbc').value = '1';
+    document.getElementById('ky-ekle-kapasite-cift').value = '1';
+    document.getElementById('ky-ekle-vbk').value = '8';
     document.getElementById('ky-ekle-overlay').classList.add('show');
     document.getElementById('ky-ekle-kod').focus();
   }
@@ -495,6 +505,8 @@
     const asorti = document.getElementById('ky-ekle-asorti').value.trim();
     const renk = document.getElementById('ky-ekle-renk').value.trim();
     const kalip_basi_cift = parseInt(document.getElementById('ky-ekle-kbc').value, 10) || 1;
+    const kapasite_cift = parseInt(document.getElementById('ky-ekle-kapasite-cift').value, 10) || 1;
+    const varsayilan_bagli_kalip = parseInt(document.getElementById('ky-ekle-vbk').value, 10) || 8;
 
     if (!kalip_kod) { mesaj('❌ Kalıp kodu zorunlu', 'hata'); document.getElementById('ky-ekle-kod').focus(); return; }
     if (!model_kod) { mesaj('❌ Model kodu zorunlu', 'hata'); document.getElementById('ky-ekle-model-kod').focus(); return; }
@@ -503,7 +515,7 @@
     btn.disabled = true;
     btn.textContent = '⏳ Kaydediliyor...';
 
-    const payload = { kalip_kod, kalip_tipi, model_kod, kalip_basi_cift };
+    const payload = { kalip_kod, kalip_tipi, model_kod, kalip_basi_cift, kapasite_cift, varsayilan_bagli_kalip };
     if (model_ad) payload.model_ad = model_ad;
     if (asorti) payload.asorti = asorti;
     if (renk) payload.renk = renk;

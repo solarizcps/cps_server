@@ -1090,7 +1090,8 @@ def ky_api_kalip_ekle():
 
         r = cur.execute("""
             SELECT id, kalip_kod, kalip_tipi, model_kod, model_ad, asorti,
-                   kalip_basi_cift, varsayilan_bagli_kalip, renk, gorsel_dosya, aktif
+                   kalip_basi_cift, varsayilan_bagli_kalip, renk, gorsel_dosya, aktif,
+                   kapasite_cift
             FROM enj_kalip WHERE id = ?
         """, (yeni_id,)).fetchone()
         con.close()
@@ -1099,7 +1100,7 @@ def ky_api_kalip_ekle():
             'id': r[0], 'kalip_kod': r[1], 'kalip_tipi': r[2], 'model_kod': r[3],
             'model_ad': r[4], 'asorti': r[5], 'kalip_basi_cift': r[6],
             'varsayilan_bagli_kalip': r[7], 'renk': r[8], 'gorsel_dosya': r[9],
-            'aktif': r[10],
+            'aktif': r[10], 'kapasite_cift': r[11],
         }
         audit.log(_u(), 'kalip_ekle', 'enj_kalip', yeni_id,
                   aciklama=f'kod={kalip_kod} tip={kalip_tipi}')
