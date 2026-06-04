@@ -45,6 +45,21 @@
   .ky-tip { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
   .ky-tip-govde { background: #dbeafe; color: #1e40af; }
   .ky-tip-atki { background: #fce7f3; color: #9f1239; }
+  /* kalip_durumu select */
+  .ky-durum-select { padding: 4px 6px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 11px; font-weight: 600; outline: none; cursor: pointer; width: 96px; }
+  .ky-durum-select:focus { border-color: #f59e0b; }
+  .ky-durum-AKTIF   { background:#d1fae5; color:#065f46; }
+  .ky-durum-BAKIMDA { background:#fef3c7; color:#92400e; }
+  .ky-durum-ARIZALI { background:#fee2e2; color:#991b1b; }
+  .ky-durum-PASIF   { background:#f3f4f6; color:#6b7280; }
+  /* aciklama expand row */
+  .ky-aciklama-row { display: none; background: #f9fafb; }
+  .ky-aciklama-row.show { display: table-row; }
+  .ky-aciklama-cell { padding: 6px 10px 10px 120px; }
+  .ky-aciklama-input { width: 100%; max-width: 600px; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; outline: none; box-sizing: border-box; font-family: inherit; resize: vertical; }
+  .ky-aciklama-input:focus { border-color: #f59e0b; box-shadow: 0 0 0 2px #fef3c7; }
+  .ky-aciklama-toggle { font-size: 11px; color: #6b7280; cursor: pointer; text-decoration: underline; margin-left: 6px; white-space: nowrap; }
+  .ky-aciklama-toggle:hover { color: #374151; }
   .ky-aktif { cursor: pointer; font-size: 18px; }
   .ky-aktif-evet { color: #10b981; }
   .ky-aktif-hayir { color: #d1d5db; }
@@ -113,12 +128,13 @@
           <th style="width:100px">ASORTI</th>
           <th style="width:90px">TİP</th>
           <th style="width:110px">RENK</th>
+          <th style="width:100px">DURUM</th>
           <th style="width:70px">AKTİF</th>
           <th style="width:90px">İŞLEM</th>
         </tr>
       </thead>
       <tbody id="ky-tbody">
-        <tr><td colspan="10" style="text-align:center; padding:30px; color:#9ca3af">Yükleniyor...</td></tr>
+        <tr><td colspan="11" style="text-align:center; padding:30px; color:#9ca3af">Yükleniyor...</td></tr>
       </tbody>
     </table>
   </div>
@@ -220,7 +236,7 @@
 
     const tbody = document.getElementById('ky-tbody');
     if (filtre.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:30px; color:#9ca3af">Kayıt bulunamadı</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:30px; color:#9ca3af">Kayıt bulunamadı</td></tr>';
       return;
     }
 
@@ -254,11 +270,22 @@
         '<td><input type="text" class="ky-input-text" value="' + escapeHtml(k.asorti||'') + '" data-field="asorti" data-orig="' + escapeHtml(k.asorti||'') + '" placeholder="-"></td>' +
         '<td><span class="ky-tip ' + tipClass + '">' + escapeHtml(k.kalip_tipi) + '</span></td>' +
         '<td><input type="text" class="ky-input-text" value="' + escapeHtml(k.renk||'') + '" data-field="renk" data-orig="' + escapeHtml(k.renk||'') + '" placeholder="-" maxlength="50" style="width:95px"></td>' +
+        '<td><select class="ky-durum-select ky-durum-' + escapeHtml(k.kalip_durumu||'AKTIF') + '" data-field="kalip_durumu" data-orig="' + escapeHtml(k.kalip_durumu||'AKTIF') + '">' +
+          ['AKTIF','BAKIMDA','ARIZALI','PASIF'].map(function(d){
+            return '<option value="'+d+'"'+(d===(k.kalip_durumu||'AKTIF')?' selected':'')+'>'+d+'</option>';
+          }).join('') +
+        '</select></td>' +
         '<td><span class="ky-aktif ' + aktifClass + '" data-field="aktif" data-orig="' + k.aktif + '" title="Tıklayarak aktif/pasif değiştir">' + aktifIcon + '</span></td>' +
         '<td style="white-space:nowrap">' +
           '<button class="ky-kaydet-btn" data-id="' + k.id + '">💾 Kaydet</button>' +
           ' <button class="ky-pasif-btn" data-id="' + k.id + '" data-aktif="' + k.aktif + '" title="' + (k.aktif ? 'Pasifleştir' : 'Aktif Et') + '" style="padding:4px 8px;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;background:' + (k.aktif ? '#fee2e2' : '#d1fae5') + ';color:' + (k.aktif ? '#dc2626' : '#059669') + '">' + (k.aktif ? '⛔ Pasifleştir' : '✅ Aktif Et') + '</button>' +
+          ' <span class="ky-aciklama-toggle" data-toggle-aciklama="' + k.id + '" title="Açıklama / Not">📝</span>' +
         '</td>' +
+        '</tr>' +
+        '<tr class="ky-aciklama-row' + (k.aciklama ? ' show' : '') + '" id="ky-aciklama-row-' + k.id + '" data-id="' + k.id + '">' +
+          '<td class="ky-aciklama-cell" colspan="11">' +
+            '<textarea class="ky-aciklama-input" rows="2" data-field="aciklama" data-orig="' + escapeHtml(k.aciklama||'') + '" placeholder="Açıklama / not..." maxlength="500">' + escapeHtml(k.aciklama||'') + '</textarea>' +
+          '</td>' +
         '</tr>';
     }).join('');
 
@@ -272,7 +299,10 @@
 
       function checkDegisiklik() {
         let degisti = false;
-        tr.querySelectorAll('[data-field]').forEach(el => {
+        const checkEls = Array.from(tr.querySelectorAll('[data-field]'));
+        const acRow = document.getElementById('ky-aciklama-row-' + id);
+        if (acRow) acRow.querySelectorAll('[data-field]').forEach(el => checkEls.push(el));
+        checkEls.forEach(el => {
           const f = el.dataset.field;
           const orig = el.dataset.orig;
           let val;
@@ -292,6 +322,34 @@
         inp.addEventListener('input', checkDegisiklik);
         inp.addEventListener('change', checkDegisiklik);
       });
+
+      // Aciklama textarea (expand row) degisiklik takibi
+      const aciklamaRow = document.getElementById('ky-aciklama-row-' + id);
+      if (aciklamaRow) {
+        const aciklamaTA = aciklamaRow.querySelector('textarea[data-field="aciklama"]');
+        if (aciklamaTA) {
+          aciklamaTA.addEventListener('input', checkDegisiklik);
+          aciklamaTA.addEventListener('change', checkDegisiklik);
+        }
+      }
+
+      // kalip_durumu select renk sinifi guncelle
+      const durumSel = tr.querySelector('.ky-durum-select');
+      if (durumSel) {
+        durumSel.addEventListener('change', function() {
+          durumSel.className = 'ky-durum-select ky-durum-' + durumSel.value;
+          checkDegisiklik();
+        });
+      }
+
+      // Aciklama toggle (📝 butonu)
+      const toggleBtn = tr.querySelector('[data-toggle-aciklama]');
+      if (toggleBtn && aciklamaRow) {
+        toggleBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          aciklamaRow.classList.toggle('show');
+        });
+      }
 
       const aktifEl = tr.querySelector('.ky-aktif');
       if (aktifEl) {
@@ -354,7 +412,14 @@
 
   function kaydet(id, tr) {
     const payload = {};
-    tr.querySelectorAll('[data-field]').forEach(el => {
+    // Ana satir elemanlari
+    const allEls = Array.from(tr.querySelectorAll('[data-field]'));
+    // Aciklama expand row (ayri <tr>) elemanlarini da ekle
+    const aciklamaRow = document.getElementById('ky-aciklama-row-' + id);
+    if (aciklamaRow) {
+      aciklamaRow.querySelectorAll('[data-field]').forEach(el => allEls.push(el));
+    }
+    allEls.forEach(el => {
       const f = el.dataset.field;
       const orig = el.dataset.orig;
       let val;
@@ -416,11 +481,11 @@
           TUMU = d.kayitlar || [];
           render();
         } else {
-          document.getElementById('ky-tbody').innerHTML = '<tr><td colspan="10" style="text-align:center; padding:30px; color:#ef4444">Hata: ' + escapeHtml(d.hata||'bilinmiyor') + '</td></tr>';
+          document.getElementById('ky-tbody').innerHTML = '<tr><td colspan="11" style="text-align:center; padding:30px; color:#ef4444">Hata: ' + escapeHtml(d.hata||'bilinmiyor') + '</td></tr>';
         }
       })
       .catch(e => {
-        document.getElementById('ky-tbody').innerHTML = '<tr><td colspan="10" style="text-align:center; padding:30px; color:#ef4444">Bağlantı hatası</td></tr>';
+        document.getElementById('ky-tbody').innerHTML = '<tr><td colspan="11" style="text-align:center; padding:30px; color:#ef4444">Bağlantı hatası</td></tr>';
       });
   }
 

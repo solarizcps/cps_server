@@ -911,7 +911,7 @@ def ky_api_kaliplar():
         cur.execute("""
             SELECT id, kalip_kod, kalip_tipi, model_kod, model_ad, asorti,
                    kalip_basi_cift, varsayilan_bagli_kalip, renk, gorsel_dosya, aktif,
-                   kapasite_cift
+                   kapasite_cift, kalip_durumu, aciklama
             FROM enj_kalip
             ORDER BY aktif DESC, kalip_kod, model_kod, asorti
         """)
@@ -933,6 +933,8 @@ def ky_api_kaliplar():
                 'gorsel_dosya': r[9],
                 'aktif': r[10],
                 'kapasite_cift': r[11],
+                'kalip_durumu': r[12] or 'AKTIF',
+                'aciklama': r[13],
             })
         return _jsonify_ky({'ok': True, 'sayi': len(kayitlar), 'kayitlar': kayitlar})
     except Exception as e:
@@ -942,8 +944,10 @@ def ky_api_kaliplar():
 _KY_PATCH_WHITELIST = {
     'kalip_kod', 'kalip_tipi', 'model_kod', 'model_ad', 'asorti',
     'kalip_basi_cift', 'varsayilan_bagli_kalip', 'renk', 'gorsel_dosya', 'aktif',
-    'kapasite_cift',
+    'kapasite_cift', 'kalip_durumu', 'aciklama',
 }
+
+_KY_KALIP_DURUMU_SECENEKLER = {'AKTIF', 'BAKIMDA', 'ARIZALI', 'PASIF'}
 
 
 @yonetim_bp.route('/api/kalip/<int:kalip_id>', methods=['PATCH'])
@@ -971,6 +975,11 @@ def ky_api_kalip_patch(kalip_id):
         
         if 'kalip_tipi' in guncel and guncel['kalip_tipi'] not in ('GOVDE', 'ATKI'):
             return _jsonify_ky({'ok': False, 'hata': 'kalip_tipi GOVDE veya ATKI olmali'}), 400
+
+        if 'kalip_durumu' in guncel:
+            guncel['kalip_durumu'] = str(guncel['kalip_durumu']).strip().upper()
+            if guncel['kalip_durumu'] not in _KY_KALIP_DURUMU_SECENEKLER:
+                return _jsonify_ky({'ok': False, 'hata': 'kalip_durumu AKTIF/BAKIMDA/ARIZALI/PASIF olmali'}), 400
         
         con = _sqlite3_ky.connect(_ky_db_path())
         cur = con.cursor()
@@ -993,7 +1002,7 @@ def ky_api_kalip_patch(kalip_id):
         cur.execute("""
             SELECT id, kalip_kod, kalip_tipi, model_kod, model_ad, asorti,
                    kalip_basi_cift, varsayilan_bagli_kalip, renk, gorsel_dosya, aktif,
-                   kapasite_cift
+                   kapasite_cift, kalip_durumu, aciklama
             FROM enj_kalip WHERE id = ?
         """, (kalip_id,))
         r = cur.fetchone()
@@ -1004,6 +1013,7 @@ def ky_api_kalip_patch(kalip_id):
             'model_ad': r[4], 'asorti': r[5], 'kalip_basi_cift': r[6],
             'varsayilan_bagli_kalip': r[7], 'renk': r[8], 'gorsel_dosya': r[9],
             'aktif': r[10], 'kapasite_cift': r[11],
+            'kalip_durumu': r[12] or 'AKTIF', 'aciklama': r[13],
         }
         
         # Audit log
@@ -1091,7 +1101,7 @@ def ky_api_kalip_ekle():
         r = cur.execute("""
             SELECT id, kalip_kod, kalip_tipi, model_kod, model_ad, asorti,
                    kalip_basi_cift, varsayilan_bagli_kalip, renk, gorsel_dosya, aktif,
-                   kapasite_cift
+                   kapasite_cift, kalip_durumu, aciklama
             FROM enj_kalip WHERE id = ?
         """, (yeni_id,)).fetchone()
         con.close()
@@ -1101,6 +1111,7 @@ def ky_api_kalip_ekle():
             'model_ad': r[4], 'asorti': r[5], 'kalip_basi_cift': r[6],
             'varsayilan_bagli_kalip': r[7], 'renk': r[8], 'gorsel_dosya': r[9],
             'aktif': r[10], 'kapasite_cift': r[11],
+            'kalip_durumu': r[12] or 'AKTIF', 'aciklama': r[13],
         }
         audit.log(_u(), 'kalip_ekle', 'enj_kalip', yeni_id,
                   aciklama=f'kod={kalip_kod} tip={kalip_tipi}')
