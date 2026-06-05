@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}Kullanıcılar — Yönetim{% endblock %}
+
+{% block head %}
+<style>
+.k-grid { display:grid; grid-template-columns:1fr; gap:8px; }
+.k-kart { background:#fff; border:0.5px solid var(--border); border-radius:10px; padding:14px 16px; display:flex; align-items:center; gap:14px; box-shadow:var(--shadow-sm); }
+.k-avtr { width:38px; height:38px; border-radius:50%; background:linear-gradient(135deg, var(--sol), var(--sol-dark)); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:15px; flex-shrink:0; }
+.k-ana { flex:1; }
+.k-ad { font-weight:700; font-size:14px; }
+.k-sub { font-size:11px; color:var(--text3); margin-top:2px; display:flex; gap:10px; flex-wrap:wrap; }
+.k-eylem { display:flex; gap:6px; }
+.form-inline { display:flex; gap:8px; align-items:center; }
+.form-inline input, .form-inline select { padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:12px; font-family:var(--sans); }
+.rol-pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:10px; font-weight:700; background:var(--bg4); color:var(--text2); text-transform:uppercase; letter-spacing:.8px; }
+.modal-bd { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1000; align-items:center; justify-content:center; }
+.modal-bd.open { display:flex; }
+.modal-ic { background:#fff; border-radius:12px; padding:24px; width:440px; max-width:90%; box-shadow:0 24px 64px rgba(0,0,0,.2); }
+.modal-ic h3 { margin-bottom:16px; }
+.fg { margin-bottom:12px; }
+.fg label { display:block; font-size:10px; color:var(--text3); font-weight:700; text-transform:uppercase; letter-spacing:1.3px; margin-bottom:4px; }
+.fg input, .fg select { width:100%; padding:9px 12px; border:1px solid var(--border); border-radius:6px; font-size:13px; font-family:var(--sans); outline:none; }
+.fg input:focus, .fg select:focus { border-color:var(--sol); }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <div class="page-title">Kullanıcılar</div>
+    <div class="page-sub">{{ kullanicilar | length }} kullanıcı · {{ roller | length }} rol tanımlı</div>
+  </div>
+  <div>
+    <button class="btn btn-primary" onclick="yeniAc()">+ Yeni Kullanıcı</button>
+  </div>
+</div>
+
+<div class="k-grid">
+{% for k in kullanicilar %}
+<div class="k-kart" style="{% if not k.Aktif %}opacity:0.55;{% endif %}">
+  <div class="k-avtr">{{ (k.AdSoyad or k.KullaniciAdi)[0] | upper }}</div>
+  <div class="k-ana">
+    <div class="k-ad">
+      {{ k.AdSoyad or k.KullaniciAdi }}
+      <span style="color:var(--text3); font-weight:400; font-size:11px; margin-left:6px;">@{{ k.KullaniciAdi }}</span>
+      {% if k.RolAd %}<span class="rol-pill" style="margin-left:6px;">{{ k.RolAd }}</span>{% endif %}
+      {% if not k.Aktif %}<span class="rol-pill" style="background:#fee2e2; color:var(--red); margin-left:6px;">PASİF</span>{% endif %}
+      {% if k.ZorunluSifreDegistir %}<span class="rol-pill" style="background:#fef3c7; color:var(--sol-dark); margin-left:6px;">🔑 şifre değiştirmeli</span>{% endif %}
+    </div>
+    <div class="k-sub">
+      {% if k.Email %}<span>✉ {{ k.Email }}</span>{% endif %}
+      {% if k.OlusturmaTarih %}<span>Oluşturma: {{ k.OlusturmaTarih | tarih_saat }}</span>{% endif %}
+      {% if k.SonGirisTarih %}<span>Son giriş: {{ k.SonGirisTarih | tarih_saat }}</span>{% endif %}
+    </div>
+  </div>
+  <div class="k-eylem">
+    <button class="btn btn-outline btn-sm" onclick='duzenleAc({{ k | tojson }})'>✏ Düzenle</button>
+    <form method="post" action="/yonetim/kullanici/{{ k.Id }}/sifre-sifirla" style="display:inline;" onsubmit="return sifrePrompt(this)">
+      <input type="hidden" name="yeni_sifre" class="yeni-sif">
+      <button class="btn btn-outline btn-sm" type="submit">🔑 Şifre</button>
+    </form>
+    <form method="post" action="/yonetim/kullanici/{{ k.Id }}/pasif" style="display:inline;" onsubmit="return confirm('{% if k.Aktif %}Pasif{% else %}Aktif{% endif %} yapılsın mı?')">
+      <input type="hidden" name="aktif" value="{% if k.Aktif %}0{% else %}1{% endif %}">
+      <button class="btn btn-outline btn-sm" type="submit" style="{% if k.Aktif %}color:var(--red);{% else %}color:var(--green);{% endif %}">
+        {% if k.Aktif %}🚫 Pasif{% else %}✅ Aktif{% endif %}
+      </button>
+    </form>
+  </div>
+</div>
+{% endfor %}
+</div>
+
+<!-- YENİ / DÜZENLE MODAL -->
+<div class="modal-bd" id="modal">
+  <div class="modal-ic">
+    <h3 id="modalBas">Yeni Kullanıcı</h3>
+    <form method="post" id="modalForm">
+      <div class="fg">
+        <label>Kullanıcı Adı</label>
+        <input type="text" name="KullaniciAdi" id="mKadi" required pattern="[a-z0-9_.]+" placeholder="kücük harf, rakam, . _">
+      </div>
+      <div class="fg">
+        <label>Ad Soyad</label>
+        <input type="text" name="AdSoyad" id="mAd" required>
+      </div>
+      <div class="fg">
+        <label>Email</label>
+        <input type="email" name="Email" id="mMail">
+      </div>
+      <div class="fg" id="sifreFg">
+        <label>Başlangıç Şifresi</label>
+        <input type="text" name="Sifre" id="mSif" value="solariz2026" required>
+      </div>
+      <div class="fg">
+        <label>Rol</label>
+        <select name="RolId" id="mRol">
+          <option value="">— Rol seç —</option>
+          {% for r in roller %}
+          <option value="{{ r.Id }}">{{ r.Ad }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="fg" id="aktifFg" style="display:none;">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" name="Aktif" id="mAkt" value="1" checked>
+          <span style="font-size:13px;">Aktif</span>
+        </label>
+      </div>
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+        <button type="button" class="btn btn-outline" onclick="modalKapat()">İptal</button>
+        <button type="submit" class="btn btn-primary">Kaydet</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function yeniAc() {
+  document.getElementById('modalBas').innerText = 'Yeni Kullanıcı';
+  var f = document.getElementById('modalForm');
+  f.action = '/yonetim/kullanici/yeni';
+  document.getElementById('mKadi').value = '';
+  document.getElementById('mKadi').readOnly = false;
+  document.getElementById('mAd').value = '';
+  document.getElementById('mMail').value = '';
+  document.getElementById('mSif').value = 'solariz2026';
+  document.getElementById('mRol').value = '';
+  document.getElementById('sifreFg').style.display = 'block';
+  document.getElementById('aktifFg').style.display = 'none';
+  document.getElementById('modal').classList.add('open');
+}
+
+function duzenleAc(k) {
+  document.getElementById('modalBas').innerText = 'Kullanıcı Düzenle: ' + k.KullaniciAdi;
+  var f = document.getElementById('modalForm');
+  f.action = '/yonetim/kullanici/' + k.Id + '/guncelle';
+  document.getElementById('mKadi').value = k.KullaniciAdi;
+  document.getElementById('mKadi').readOnly = true;
+  document.getElementById('mAd').value = k.AdSoyad || '';
+  document.getElementById('mMail').value = k.Email || '';
+  document.getElementById('mRol').value = k.RolId || '';
+  document.getElementById('mAkt').checked = k.Aktif;
+  document.getElementById('sifreFg').style.display = 'none';
+  document.getElementById('aktifFg').style.display = 'block';
+  document.getElementById('modal').classList.add('open');
+}
+
+function modalKapat() {
+  document.getElementById('modal').classList.remove('open');
+}
+
+function sifrePrompt(form) {
+  var y = prompt('Yeni şifreyi girin (kullanıcı ilk girişte tekrar değiştirmek zorunda kalacak):', 'solariz2026');
+  if (!y || y.length < 4) return false;
+  form.querySelector('.yeni-sif').value = y;
+  return confirm('Şifre sıfırlanacak: ' + y + '\n\nEmin misiniz?');
+}
+
+document.getElementById('modal').addEventListener('click', function(e){
+  if (e.target === this) modalKapat();
+});
+</script>
+
+{% endblock %}

@@ -1,0 +1,62 @@
+{# ----------------------------------------------------------
+   Cari Hesap Özeti paneli (sipariş/sevkiyat detayında)
+   Beklenen context: cari_ozet (dict)
+----------------------------------------------------------- #}
+{% if cari_ozet and cari_ozet.FinansAnlasmaId %}
+<section class="panel cari-panel" style="background:linear-gradient(135deg,#eff6ff,#dbeafe); border-left:4px solid #0891b2; margin-bottom:16px;">
+  <div class="cari-head">
+    <h3 style="margin:0;">🏦 Cari Hesap Özeti</h3>
+    <div class="muted" style="font-size:.82rem;">
+      {{ cari_ozet.TedarikciAd }} · Cari Kod: <code>{{ cari_ozet.CariCKod or '—' }}</code>
+    </div>
+  </div>
+
+  <div class="cari-grid">
+    <div class="cari-item">
+      <div class="cari-label">Anlaşma Borcu</div>
+      <div class="cari-value">
+        {{ "{:,.0f}".format(cari_ozet.AnlasmaBorcTL or 0) }} ₺
+      </div>
+    </div>
+    <div class="cari-item">
+      <div class="cari-label">Ödenen ({{ cari_ozet.OdemeSayi }} avans)</div>
+      <div class="cari-value" style="color:#059669;">
+        {{ "{:,.0f}".format(cari_ozet.AvansToplamTL or 0) }} ₺
+      </div>
+    </div>
+    <div class="cari-item">
+      <div class="cari-label">Kalan Borç</div>
+      <div class="cari-value" style="color:{% if cari_ozet.KalanTL > 0 %}#dc2626{% else %}#059669{% endif %};">
+        <strong>{{ "{:,.0f}".format(cari_ozet.KalanTL or 0) }} ₺</strong>
+      </div>
+    </div>
+    <div class="cari-item" style="align-self:center;">
+      <a href="/finans/anlasma/{{ cari_ozet.FinansAnlasmaId }}" target="_blank" class="btn btn-sm btn-primary" style="white-space:nowrap;">
+        💰 {{ cari_ozet.ProjeKod }} ↗
+      </a>
+    </div>
+  </div>
+</section>
+
+<style>
+.cari-panel .cari-head {
+  display:flex; justify-content:space-between; align-items:center; gap:12px;
+  margin-bottom:12px; flex-wrap:wrap;
+}
+.cari-grid {
+  display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap:12px;
+}
+.cari-item {
+  background:#fff; padding:10px 14px; border-radius:8px;
+  border:1px solid rgba(8,145,178,0.15);
+}
+.cari-label {
+  font-size:.75rem; color:#64748b; text-transform:uppercase; letter-spacing:.5px;
+}
+.cari-value {
+  font-size:1.15rem; font-weight:600; color:#1e293b; margin-top:4px;
+  font-variant-numeric: tabular-nums;
+}
+</style>
+{% endif %}

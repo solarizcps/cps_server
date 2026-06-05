@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}Finans — Solariz CPS{% endblock %}
+
+{% block content %}
+
+<div class="page-head">
+  <div class="page-head-main">
+    <div class="crumbs">Finans</div>
+    <h1>Finans Paneli</h1>
+    <p class="muted">Cari hesaplar, çek/senet takibi, avans mahsup, ödeme planı</p>
+  </div>
+  <div class="page-head-actions">
+    <a class="btn btn-ghost" href="/finans/cari?tip=musteri">Müşteriler</a>
+    <a class="btn btn-ghost" href="/finans/cari?tip=tedarikci">Tedarikçiler</a>
+    <a class="btn btn-primary" href="/finans/anlasma">Projeler / Anlaşmalar</a>
+  </div>
+</div>
+
+{% if kpi.anlasma.geciken_adet > 0 %}
+<div class="alert alert-danger">
+  <div class="alert-ic">⚠</div>
+  <div class="alert-body">
+    <strong>{{ kpi.anlasma.geciken_adet }} geciken taksit · Toplam {{ kpi.anlasma.geciken_tutar | tl }}</strong>
+    Vadesi geçmiş ve henüz tahsil edilmemiş taksitler var.
+  </div>
+  <a class="btn btn-sm btn-ghost" href="/finans/geciken-odemeler">İncele →</a>
+</div>
+{% endif %}
+
+<div class="kpi-grid kpi-grid-4">
+  <div class="kpi kpi-success">
+    <div class="kpi-v">{{ kpi.toplam_alacak | tl }}</div>
+    <div class="kpi-l">Toplam Alacak</div>
+    <div class="kpi-sub">Müşterilerden</div>
+  </div>
+  <div class="kpi kpi-danger">
+    <div class="kpi-v">{{ kpi.toplam_borc | tl }}</div>
+    <div class="kpi-l">Toplam Borç</div>
+    <div class="kpi-sub">Tedarikçilere</div>
+  </div>
+  <div class="kpi kpi-info">
+    <div class="kpi-v">{{ kpi.banka | tl }}</div>
+    <div class="kpi-l">Banka (TL)</div>
+    <div class="kpi-sub">Tüm TL hesaplar</div>
+  </div>
+  <div class="kpi kpi-primary">
+    <div class="kpi-v">{{ kpi.kasa | tl }}</div>
+    <div class="kpi-l">Kasa</div>
+    <div class="kpi-sub">Merkez kasa</div>
+  </div>
+  <div class="kpi kpi-primary">
+    <div class="kpi-v">{{ kpi.cek_30 | tl }}</div>
+    <div class="kpi-l">Vadesi 30 Gün Çek</div>
+    <div class="kpi-sub">Portföyden</div>
+  </div>
+  <div class="kpi kpi-info">
+    <div class="kpi-v">{{ kpi.cek_vade.portfoy_kalan_gun }} gün</div>
+    <div class="kpi-l">Portföy Ort. Kalan Vade</div>
+    <div class="kpi-sub">{{ kpi.cek_vade.portfoy_adet }} çek · {{ kpi.cek_vade.portfoy_tutar | tl }}</div>
+  </div>
+  <div class="kpi kpi-info">
+    <div class="kpi-v">{{ kpi.cek_vade.alis_vade_gun }} gün</div>
+    <div class="kpi-l">Ort. Çek Vade Süresi</div>
+    <div class="kpi-sub">alış → vade (ağırlıklı)</div>
+  </div>
+  <div class="kpi kpi-success">
+    <div class="kpi-v">{{ kpi.son_30.net | tl }}</div>
+    <div class="kpi-l">Net (30 Gün)</div>
+    <div class="kpi-sub">Gelir {{ kpi.son_30.gelir | tl }} / Gider {{ kpi.son_30.gider | tl }}</div>
+  </div>
+</div>
+
+<div class="panel">
+  <h3>Hızlı Erişim</h3>
+  <div class="home-grid">
+    <a class="home-card home-card-primary" href="/finans/anlasma">
+      <div class="home-card-ic">📅</div>
+      <div class="home-card-title">Projeler / Anlaşmalar</div>
+      <div class="home-card-sub">{{ kpi.anlasma.aktif }} aktif · Bu ay {{ kpi.anlasma.bu_ay_beklenen | tl }}</div>
+    </a>
+    <a class="home-card home-card-info" href="/finans/cari?tip=musteri">
+      <div class="home-card-ic">👥</div>
+      <div class="home-card-title">Müşteriler</div>
+      <div class="home-card-sub">Bakiye &amp; hareket</div>
+    </a>
+    <a class="home-card home-card-danger" href="/finans/cari?tip=tedarikci">
+      <div class="home-card-ic">🚚</div>
+      <div class="home-card-title">Tedarikçiler</div>
+      <div class="home-card-sub">Borç &amp; ödeme</div>
+    </a>
+    <a class="home-card home-card-warn" href="/finans/cari">
+      <div class="home-card-ic">🗂</div>
+      <div class="home-card-title">Tüm Cari</div>
+      <div class="home-card-sub">Arama &amp; filtre</div>
+    </a>
+    <a class="home-card home-card-info" href="/finans/simulator">
+      <div class="home-card-ic">🧮</div>
+      <div class="home-card-title">Maliyet Simülatörü</div>
+      <div class="home-card-sub">İthalat / İhracat · Ön maliyet</div>
+    </a>
+    <a class="home-card home-card-danger" href="/finans/cin-ofis">
+      <div class="home-card-ic">📥</div>
+      <div class="home-card-title">Çin Ofis İçe Aktarma</div>
+      <div class="home-card-sub">Excel → Sipariş taslağı</div>
+    </a>
+    <div class="home-card disabled">
+      <div class="home-card-ic">💳</div>
+      <div class="home-card-title">Çek / Senet</div>
+      <div class="home-card-sub">Yakında</div>
+    </div>
+    <div class="home-card disabled">
+      <div class="home-card-ic">🏦</div>
+      <div class="home-card-title">Banka / Kasa</div>
+      <div class="home-card-sub">Yakında</div>
+    </div>
+    <div class="home-card disabled">
+      <div class="home-card-ic">📊</div>
+      <div class="home-card-title">Raporlar</div>
+      <div class="home-card-sub">Yakında</div>
+    </div>
+  </div>
+</div>
+
+{% if yaklasan %}
+<div class="panel">
+  <div class="panel-head">
+    <h3>📅 Yaklaşan Ödemeler (30 Gün) — {{ yaklasan | length }} adet</h3>
+    <a href="/finans/anlasma" class="btn btn-sm btn-ghost">Tümünü Gör →</a>
+  </div>
+  <table class="data-table data-table-compact">
+    <thead>
+      <tr>
+        <th>Vade</th><th>Durum</th><th>Müşteri</th>
+        <th>Proje / Açıklama</th><th>Tip</th><th class="num">Tutar</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for y in yaklasan %}
+      {% set gun_farki = ((y.PlanTarih | tarih_obj) - (now | tarih_obj)).days if y.PlanTarih else 0 %}
+      <tr>
+        <td><strong>{{ y.PlanTarih | tarih }}</strong></td>
+        <td>
+          {% if gun_farki < 0 %}<span class="pill pill-danger">GECİKTİ ({{ -gun_farki }}g)</span>
+          {% elif gun_farki == 0 %}<span class="pill pill-warn">BUGÜN</span>
+          {% elif gun_farki <= 7 %}<span class="pill pill-warn">{{ gun_farki }} gün</span>
+          {% else %}<span class="pill pill-info">{{ gun_farki }} gün</span>{% endif %}
+        </td>
+        <td>{{ y.CName or y.CKod }}</td>
+        <td>
+          <a href="/finans/anlasma/{{ y.AnlasmaId }}">
+            <strong>{{ y.ProjeKod }}</strong>{% if y.Aciklama %} · {{ y.Aciklama }}{% endif %}
+          </a>
+        </td>
+        <td>
+          {% if y.OdemeTipi == 'CEK' %}<span class="pill pill-info">ÇEK{% if y.CekAdeti > 1 %} ×{{ y.CekAdeti }}{% endif %}</span>
+          {% elif y.OdemeTipi == 'NAKIT' %}<span class="pill pill-success">NAKİT</span>
+          {% elif y.OdemeTipi == 'HAVALE' %}<span class="pill pill-info">HAVALE</span>
+          {% elif y.OdemeTipi == 'SEVK_SONRASI' %}<span class="pill pill-warn">SEVK SONRASI</span>
+          {% else %}<span class="pill pill-muted">{{ y.OdemeTipi }}</span>{% endif %}
+        </td>
+        <td class="num"><strong>{{ y.Tutar | tl }}</strong></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if mahsuplar %}
+<div class="panel">
+  <h3>🔻 Yaklaşan Avans Mahsupları (30 Gün) — {{ mahsuplar | length }} adet</h3>
+  <table class="data-table data-table-compact">
+    <thead>
+      <tr>
+        <th>Tarih</th><th>Müşteri</th><th>Proje</th>
+        <th>Açıklama</th><th class="num">Mahsup Tutarı</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in mahsuplar %}
+      <tr>
+        <td><strong>{{ m.MahsupTarih | tarih }}</strong></td>
+        <td>{{ m.CName or m.CKod }}</td>
+        <td><a href="/finans/anlasma/{{ m.AnlasmaId }}"><strong>{{ m.ProjeKod }}</strong></a></td>
+        <td>{{ m.Aciklama or '—' }}</td>
+        <td class="num"><strong>{{ m.Tutar | tl }}</strong></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Özet — Solariz CPS{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <div class="page-title">Solariz CPS — Özet</div>
+    <div class="page-sub">
+      Hoş geldin, {{ g_user.AdSoyad or g_user.KullaniciAdi }}!
+      {% if g_user.RolAd %}<span class="rol-pill" style="background:var(--sol-light); color:var(--sol-dark); padding:2px 8px; border-radius:999px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px; margin-left:6px;">{{ g_user.RolAd }}</span>{% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="ozet-grid">
+  <div class="ozet-kart sol">
+    <div class="sayi">Faz 1</div>
+    <div class="etiket">Aktif Geliştirme</div>
+    <div class="alt">Yetki + Kur + Belge + Audit</div>
+  </div>
+  <div class="ozet-kart yesil">
+    <div class="sayi">{{ db_mode.upper() }}</div>
+    <div class="etiket">DB Modu</div>
+    <div class="alt">{% if db_mode == 'mock' %}SQLite lokal{% else %}MSSQL Solariz22{% endif %}</div>
+  </div>
+  <div class="ozet-kart mavi">
+    <div class="sayi">5057</div>
+    <div class="etiket">Port</div>
+    <div class="alt">127.0.0.1</div>
+  </div>
+  <div class="ozet-kart mor">
+    <div class="sayi">v0.2</div>
+    <div class="etiket">Sürüm</div>
+    <div class="alt">dev build (Faz 1)</div>
+  </div>
+</div>
+
+<div class="oz-card">
+  <div class="oz-hdr"><span class="oz-hdr-t">Modüller</span></div>
+  <div class="oz-body">
+    <div class="hk-grid">
+
+      {% if yetki('finans') or g_user.RolAd == 'Yönetim' or g_user.KullaniciAdi == 'admin' %}
+      <a href="/finans/" class="hk-i">
+        <div class="hk-ic" style="background:#fef3c7; color:var(--sol-dark);">💰</div>
+        <div class="hk-ad">Finans</div>
+        <div class="hk-sub">Cari, çek, anlaşma, plan</div>
+      </a>
+      {% endif %}
+
+      {% if yetki('grafik.numune') or g_user.RolAd == 'Yönetim' %}
+      <div class="hk-i disabled">
+        <div class="hk-ic" style="background:#ede9fe; color:#6d28d9;">🎨</div>
+        <div class="hk-ad">Grafik (Faz 2)</div>
+        <div class="hk-sub">Numune, Çin sipariş, maliyet</div>
+      </div>
+      {% endif %}
+
+      {% if g_user.RolAd == 'Yönetim' or g_user.KullaniciAdi == 'admin' %}
+      <a href="/yonetim/" class="hk-i">
+        <div class="hk-ic" style="background:#dbeafe; color:#2563eb;">⚙</div>
+        <div class="hk-ad">Yönetim</div>
+        <div class="hk-sub">Kullanıcı, rol, kur, log</div>
+      </a>
+      {% endif %}
+
+      <div class="hk-i disabled">
+        <div class="hk-ic" style="background:#dcfce7;">📦</div>
+        <div class="hk-ad">Üretim Takip</div>
+        <div class="hk-sub">Faz 3+ (mevcut port 5055)</div>
+      </div>
+
+      <div class="hk-i disabled">
+        <div class="hk-ic" style="background:#fee2e2;">📊</div>
+        <div class="hk-ad">Korgun Dashboard</div>
+        <div class="hk-sub">Port 5056</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Kullanıcı özel notu -->
+<div class="oz-card" style="margin-top:14px;">
+  <div class="oz-hdr"><span class="oz-hdr-t">Faz 1 Durum</span></div>
+  <div class="oz-body">
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:10px;">
+      <div style="padding:12px; background:rgba(22,163,74,0.08); border-radius:8px; border:1px solid rgba(22,163,74,0.25);">
+        <div style="font-size:11px; color:var(--green); font-weight:700; text-transform:uppercase; letter-spacing:1.5px;">✓ Tamamlandı</div>
+        <div style="font-size:13px; margin-top:4px;">Kullanıcı / Rol / Yetki sistemi</div>
+      </div>
+      <div style="padding:12px; background:rgba(22,163,74,0.08); border-radius:8px; border:1px solid rgba(22,163,74,0.25);">
+        <div style="font-size:11px; color:var(--green); font-weight:700; text-transform:uppercase; letter-spacing:1.5px;">✓ Tamamlandı</div>
+        <div style="font-size:13px; margin-top:4px;">Kur tablosu (USD/EUR/CNY)</div>
+      </div>
+      <div style="padding:12px; background:rgba(22,163,74,0.08); border-radius:8px; border:1px solid rgba(22,163,74,0.25);">
+        <div style="font-size:11px; color:var(--green); font-weight:700; text-transform:uppercase; letter-spacing:1.5px;">✓ Tamamlandı</div>
+        <div style="font-size:13px; margin-top:4px;">Belge servisi (sistem_belge)</div>
+      </div>
+      <div style="padding:12px; background:rgba(22,163,74,0.08); border-radius:8px; border:1px solid rgba(22,163,74,0.25);">
+        <div style="font-size:11px; color:var(--green); font-weight:700; text-transform:uppercase; letter-spacing:1.5px;">✓ Tamamlandı</div>
+        <div style="font-size:13px; margin-top:4px;">Audit log modül/alt_modul</div>
+      </div>
+      <div style="padding:12px; background:rgba(245,158,11,0.08); border-radius:8px; border:1px solid rgba(245,158,11,0.25);">
+        <div style="font-size:11px; color:var(--sol-dark); font-weight:700; text-transform:uppercase; letter-spacing:1.5px;">⋯ Faz 2'de</div>
+        <div style="font-size:13px; margin-top:4px;">Tedarikçi + Ürün yönetimi</div>
+      </div>
+      <div style="padding:12px; background:rgba(245,158,11,0.08); border-radius:8px; border:1px solid rgba(245,158,11,0.25);">
+        <div style="font-size:11px; color:var(--sol-dark); font-weight:700; text-transform:uppercase; letter-spacing:1.5px;">⋯ Faz 2'de</div>
+        <div style="font-size:13px; margin-top:4px;">Grafik modülü (numune/sipariş/maliyet)</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

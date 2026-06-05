@@ -1,0 +1,49 @@
+## UI/UX Kuralları
+
+Sidebar ve üst menü global yapıdır.
+Adem açık onayı olmadan değiştirilmez.
+
+Yeni ekranlarda:
+- Mevcut CPS tasarım dili korunur.
+- Sadece ilgili iç sayfa geliştirilir.
+- Global CSS değişikliği yapılmadan önce risk analizi yapılır.
+- base.html değişiklikleri yüksek risk kabul edilir.
+
+
+## CPS İş Akışı Kuralı
+
+Temel üretim mantığı:
+
+Planlama karar verir.
+Usta uygular.
+Personel veri girer.
+CPS takip eder.
+
+Bu akışı tersine çevirecek geliştirme yapılmaz.
+
+Planlama ekranları karar destek amaçlıdır.
+Usta ekranları uygulama amaçlıdır.
+Personel ekranları veri giriş amaçlıdır.
+
+
+## AI Çalışma Rolleri
+
+GPT-5.5 rolü:
+- Baş mimar
+- Sistem analizi
+- Veri ilişkileri
+- Risk kontrol
+- Geliştirme planı çıkarma
+
+Sonnet 4.6 rolü:
+- Onaylanan planı uygular
+- Küçük ve kontrollü patch yapar
+- Test eder
+- Değişiklik raporu verir
+
+Sıra:
+GPT analiz →
+Adem karar →
+Sonnet uygulama
+
+Mimari onay olmadan kod yazılmaz.

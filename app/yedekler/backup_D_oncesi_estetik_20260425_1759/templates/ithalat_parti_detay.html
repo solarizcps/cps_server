@@ -1,0 +1,554 @@
+{% extends "base.html" %}
+
+{% block title %}{{ parti_kod }} - Ithalat Detay{% endblock %}
+
+{% block head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/cps_ithalat.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="cps-ith-detay"
+     data-sayfa="parti-detay"
+     data-parti-id="{{ parti_id }}">
+
+  <div class="cps-ith-detay-ust">
+    <a href="{{ url_for('ithalat.parti_liste_sayfa') }}"
+       class="cps-ith-geri-link">← Parti Listesi</a>
+    <div class="cps-ith-ust-aksiyon">
+      <button type="button" class="cps-ith-btn cps-ith-btn-ghost"
+              id="cps-ith-btn-detay-yenile">Yenile</button>
+    </div>
+  </div>
+
+  <div class="cps-ith-detay-baslik">
+    <div class="cps-ith-detay-baslik-sol">
+      <div class="cps-ith-detay-kod" id="cps-ith-detay-kod">{{ parti_kod }}</div>
+      <h1 class="cps-ith-detay-ad" id="cps-ith-detay-baslik">—</h1>
+      <div class="cps-ith-detay-alt">
+        <span id="cps-ith-detay-tedarikci">—</span>
+        <span class="cps-ith-detay-ayrac">·</span>
+        <span id="cps-ith-detay-para">—</span>
+        <span class="cps-ith-detay-ayrac">·</span>
+        <span class="cps-ith-durum-etiket" id="cps-ith-detay-durum">—</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="cps-ith-detay-kpi">
+    <div class="cps-ith-kpi-kart">
+      <div class="cps-ith-kpi-etiket">Tahmini</div>
+      <div class="cps-ith-kpi-deger" id="cps-ith-k-tahmini">—</div>
+    </div>
+    <div class="cps-ith-kpi-kart">
+      <div class="cps-ith-kpi-etiket">Gerçekleşen</div>
+      <div class="cps-ith-kpi-deger" id="cps-ith-k-gerceklesen">—</div>
+    </div>
+    <div class="cps-ith-kpi-kart">
+      <div class="cps-ith-kpi-etiket">Etkin Toplam</div>
+      <div class="cps-ith-kpi-deger" id="cps-ith-k-etkin">—</div>
+    </div>
+    <div class="cps-ith-kpi-kart cps-ith-kpi-ana">
+      <div class="cps-ith-kpi-etiket">Çift Maliyet</div>
+      <div class="cps-ith-kpi-deger" id="cps-ith-k-cift">—</div>
+      <div class="cps-ith-kpi-alt" id="cps-ith-k-cift-alt">—</div>
+    </div>
+    <div class="cps-ith-kpi-kart">
+      <div class="cps-ith-kpi-etiket">Sapma</div>
+      <div class="cps-ith-kpi-deger" id="cps-ith-k-sapma">—</div>
+    </div>
+  </div>
+
+  <div class="cps-ith-sekme-bar" role="tablist">
+    <button type="button" class="cps-ith-sekme cps-ith-sekme-aktif"
+            role="tab" data-sekme="genel">Genel Bilgiler</button>
+    <button type="button" class="cps-ith-sekme" role="tab" data-sekme="maliyet">
+      Maliyet
+      <span class="cps-ith-sekme-rozet" id="cps-ith-rozet-maliyet"></span>
+    </button>
+    <button type="button" class="cps-ith-sekme" role="tab" data-sekme="odeme">
+      Ödeme Planı
+      <span class="cps-ith-sekme-rozet" id="cps-ith-rozet-odeme"></span>
+    </button>
+    <button type="button" class="cps-ith-sekme" role="tab" data-sekme="belge">
+      Belgeler
+      <span class="cps-ith-sekme-rozet" id="cps-ith-rozet-belge"></span>
+    </button>
+    <button type="button" class="cps-ith-sekme" role="tab" data-sekme="durum">
+      Durum Takibi
+    </button>
+  </div>
+
+  <div class="cps-ith-sekme-alan">
+
+    <div class="cps-ith-tablo-durum cps-ith-gizle" id="cps-ith-detay-yukleniyor">
+      <span class="cps-ith-spinner"></span> Yukleniyor...
+    </div>
+    <div class="cps-ith-tablo-durum cps-ith-hata cps-ith-gizle" id="cps-ith-detay-hata">
+      Detay yuklenemedi. <a href="#" id="cps-ith-detay-hata-tekrar">Tekrar dene</a>
+    </div>
+
+    {# =========================================================== #}
+    {# SEKME 1 - GENEL BILGILER                                    #}
+    {# =========================================================== #}
+    <section class="cps-ith-sekme-icerik cps-ith-sekme-icerik-aktif"
+             data-sekme-icerik="genel">
+      <form class="cps-ith-form-grid" id="cps-ith-form-genel">
+        <div class="cps-ith-form-grup">
+          <label for="gn-kod">Parti No</label>
+          <input type="text" id="gn-kod" class="cps-ith-input" readonly>
+        </div>
+        <div class="cps-ith-form-grup cps-ith-form-grup-gen">
+          <label for="gn-baslik">Baslik *</label>
+          <input type="text" id="gn-baslik" class="cps-ith-input"
+                 data-alan="baslik" maxlength="200">
+        </div>
+        <div class="cps-ith-form-grup">
+          <label for="gn-tedarikci-kod">Tedarikci Kod</label>
+          <input type="text" id="gn-tedarikci-kod" class="cps-ith-input"
+                 data-alan="tedarikci_kod" maxlength="50">
+        </div>
+        <div class="cps-ith-form-grup">
+          <label for="gn-tedarikci-ad">Tedarikci Ad</label>
+          <input type="text" id="gn-tedarikci-ad" class="cps-ith-input"
+                 data-alan="tedarikci_ad" maxlength="200">
+        </div>
+        <div class="cps-ith-form-grup">
+          <label for="gn-para">Para Birimi</label>
+          <input type="text" id="gn-para" class="cps-ith-input" readonly>
+        </div>
+        <div class="cps-ith-form-grup">
+          <label for="gn-yukleme">Yukleme Tarihi</label>
+          <input type="date" id="gn-yukleme" class="cps-ith-input"
+                 data-alan="yukleme_tarih">
+        </div>
+        <div class="cps-ith-form-grup">
+          <label for="gn-varis">Tahmini Varis</label>
+          <input type="date" id="gn-varis" class="cps-ith-input"
+                 data-alan="tahmini_varis_tarih">
+        </div>
+        <div class="cps-ith-form-grup">
+          <label for="gn-varis-g">Gerceklesen Varis</label>
+          <input type="date" id="gn-varis-g" class="cps-ith-input"
+                 data-alan="gerceklesen_varis_tarih">
+        </div>
+        <div class="cps-ith-form-grup">
+          <label for="gn-kg">Toplam Kg</label>
+          <input type="number" id="gn-kg" class="cps-ith-input"
+                 data-alan="toplam_kg" step="0.01" min="0">
+        </div>
+        <div class="cps-ith-form-grup">
+          <label for="gn-cift">Toplam Cift</label>
+          <input type="number" id="gn-cift" class="cps-ith-input"
+                 data-alan="toplam_cift" min="0">
+        </div>
+        <div class="cps-ith-form-grup cps-ith-form-grup-gen">
+          <label for="gn-aciklama">Aciklama</label>
+          <textarea id="gn-aciklama" class="cps-ith-input"
+                    data-alan="aciklama" rows="2"></textarea>
+        </div>
+        <div class="cps-ith-form-aksiyon cps-ith-form-grup-gen">
+          <span class="cps-ith-kayit-durum" id="cps-ith-genel-durum"></span>
+          <button type="button"
+                  class="cps-ith-btn cps-ith-btn-primary"
+                  id="cps-ith-genel-kaydet">Degisiklikleri Kaydet</button>
+        </div>
+      </form>
+    </section>
+
+    {# =========================================================== #}
+    {# SEKME 2 - MALIYET                                           #}
+    {# =========================================================== #}
+    <section class="cps-ith-sekme-icerik" data-sekme-icerik="maliyet">
+      <div class="cps-ith-bolum-baslik">
+        <h2>Maliyet Kalemleri</h2>
+        <button type="button"
+                class="cps-ith-btn cps-ith-btn-primary cps-ith-btn-sm"
+                id="cps-ith-btn-kalem-ekle">+ Yeni Kalem</button>
+      </div>
+
+      <div class="cps-ith-para-toplam" id="cps-ith-para-toplam"></div>
+
+      <div class="cps-ith-tip-ozet" id="cps-ith-tip-ozet"></div>
+
+      <div class="cps-ith-sapma-bolum" id="cps-ith-sapma-bolum">
+        <div class="cps-ith-bolum-alt-baslik">Tip Bazlı Sapma Özeti</div>
+        <table class="cps-ith-tablo cps-ith-tablo-alt cps-ith-sapma-tablo">
+          <thead>
+            <tr>
+              <th>Tip</th>
+              <th class="cps-ith-th-sag">Tahmini Toplam</th>
+              <th class="cps-ith-th-sag">Gerçekleşen</th>
+              <th class="cps-ith-th-sag">Etkin Toplam</th>
+              <th class="cps-ith-th-sag">Fark</th>
+              <th class="cps-ith-th-sag">Sapma %</th>
+              <th>Durum / Uyarı</th>
+            </tr>
+          </thead>
+          <tbody id="cps-ith-sapma-tbody"></tbody>
+        </table>
+        <div class="cps-ith-tablo-durum cps-ith-gizle" id="cps-ith-sapma-bos">
+          Henüz kalem yok — sapma hesaplanamadı.
+        </div>
+      </div>
+
+      <div class="cps-ith-inline-form cps-ith-gizle" id="cps-ith-kalem-form">
+        <div class="cps-ith-inline-grid">
+          <div class="cps-ith-form-grup">
+            <label>Tip *</label>
+            <select class="cps-ith-input" id="km-tip" data-form-alan="tip">
+              <option value="FOB">FOB</option>
+              <option value="NAVLUN">NAVLUN</option>
+              <option value="GUMRUK">GÜMRÜK</option>
+              <option value="SIGORTA">SİGORTA</option>
+              <option value="DEPOLAMA">DEPOLAMA</option>
+              <option value="KOMISYON">KOMİSYON</option>
+              <option value="LIMAN">LİMAN</option>
+              <option value="DIGER">DİĞER</option>
+            </select>
+          </div>
+          <div class="cps-ith-form-grup">
+            <label>Kaynak *</label>
+            <select class="cps-ith-input" id="km-kaynak" data-form-alan="kaynak">
+              <option value="TAHMINI">TAHMİNİ</option>
+              <option value="GERCEKLESEN">GERÇEKLEŞEN</option>
+            </select>
+          </div>
+          <div class="cps-ith-form-grup">
+            <label>Tutar *</label>
+            <input type="number" class="cps-ith-input" id="km-tutar"
+                   data-form-alan="tutar" step="0.01" min="0">
+          </div>
+          <div class="cps-ith-form-grup">
+            <label>Para Birimi *</label>
+            <select class="cps-ith-input" id="km-para" data-form-alan="para_birimi">
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+              <option value="TRY">TRY</option>
+              <option value="CNY">CNY</option>
+            </select>
+          </div>
+          <div class="cps-ith-form-grup">
+            <label>Manuel Kur</label>
+            <input type="number" class="cps-ith-input" id="km-kur"
+                   data-form-alan="manuel_kur" step="0.0001" min="0"
+                   placeholder="Otomatik">
+          </div>
+          <div class="cps-ith-form-grup cps-ith-form-grup-gen">
+            <label>Aciklama</label>
+            <input type="text" class="cps-ith-input" id="km-aciklama"
+                   data-form-alan="aciklama" maxlength="200">
+          </div>
+          <div class="cps-ith-form-grup">
+            <label>Fatura No</label>
+            <input type="text" class="cps-ith-input" id="km-fatura-no"
+                   data-form-alan="fatura_no" maxlength="50">
+          </div>
+          <div class="cps-ith-form-grup">
+            <label>Fatura Tarih</label>
+            <input type="date" class="cps-ith-input" id="km-fatura-tarih"
+                   data-form-alan="fatura_tarih">
+          </div>
+          <div class="cps-ith-form-grup">
+            <label>Cari Kod</label>
+            <input type="text" class="cps-ith-input" id="km-cari-kod"
+                   data-form-alan="cari_kod" maxlength="50">
+          </div>
+          <div class="cps-ith-form-grup">
+            <label>Cari Ad</label>
+            <input type="text" class="cps-ith-input" id="km-cari-ad"
+                   data-form-alan="cari_ad" maxlength="200">
+          </div>
+        </div>
+        <div class="cps-ith-inline-aksiyon">
+          <button type="button" class="cps-ith-btn cps-ith-btn-ghost"
+                  id="cps-ith-kalem-iptal">Vazgec</button>
+          <button type="button" class="cps-ith-btn cps-ith-btn-primary"
+                  id="cps-ith-kalem-kaydet">Kaydet</button>
+        </div>
+      </div>
+
+      <div class="cps-ith-bolum-alt-baslik">Kalem Listesi</div>
+      <table class="cps-ith-tablo cps-ith-tablo-alt">
+        <thead>
+          <tr>
+            <th>Tip</th>
+            <th>Kaynak</th>
+            <th class="cps-ith-th-sag">Tutar</th>
+            <th>Para</th>
+            <th class="cps-ith-th-sag">Kur</th>
+            <th>Fatura</th>
+            <th>Cari</th>
+            <th>Aciklama</th>
+            <th class="cps-ith-th-sag">Islem</th>
+          </tr>
+        </thead>
+        <tbody id="cps-ith-kalem-tbody"></tbody>
+      </table>
+
+      <div class="cps-ith-tablo-durum cps-ith-gizle" id="cps-ith-kalem-bos">
+        Henuz maliyet kalemi eklenmemis.
+      </div>
+
+      {# ==== YENI: Bu Parti Urunleri ==== #}
+      <div class="cps-ith-urun-bolum" id="cps-ith-urun-bolum">
+        <div class="cps-ith-bolum-alt-baslik">Bu Parti Ürünleri</div>
+        <div class="cps-ith-urun-kartlari" id="cps-ith-urun-kartlari"></div>
+        <div class="cps-ith-tablo-durum cps-ith-gizle" id="cps-ith-urun-bos">
+          Bu partide ürün kodu bulunamadı (proforma FOB kalemi gerekli).
+        </div>
+      </div>
+      {# ==== /YENI ==== #}
+    </section>
+
+    {# =========================================================== #}
+    {# SEKME 3 - ODEME PLANI                                       #}
+    {# =========================================================== #}
+    <section class="cps-ith-sekme-icerik" data-sekme-icerik="odeme">
+      <div class="cps-ith-bolum-baslik">
+        <h2>Ödeme Planı</h2>
+        <button type="button"
+                class="cps-ith-btn cps-ith-btn-primary cps-ith-btn-sm"
+                id="cps-ith-btn-plan-ekle">+ Yeni Plan</button>
+      </div>
+
+      <div class="cps-ith-inline-form cps-ith-gizle" id="cps-ith-plan-form">
+        <div class="cps-ith-inline-grid">
+          <div class="cps-ith-form-grup">
+            <label>Planlanan Tarih *</label>
+            <input type="date" class="cps-ith-input" id="pl-tarih"
+                   data-form-alan="planlanan_tarih">
+          </div>
+          <div class="cps-ith-form-grup">
+            <label>Tutar *</label>
+            <input type="number" class="cps-ith-input" id="pl-tutar"
+                   data-form-alan="tutar" step="0.01" min="0">
+          </div>
+          <div class="cps-ith-form-grup">
+            <label>Para Birimi *</label>
+            <select class="cps-ith-input" id="pl-para"
+                    data-form-alan="para_birimi">
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+              <option value="TRY">TRY</option>
+              <option value="CNY">CNY</option>
+            </select>
+          </div>
+          <div class="cps-ith-form-grup">
+            <label>Odeme Tipi</label>
+            <select class="cps-ith-input" id="pl-tip" data-form-alan="odeme_tipi">
+              <option value="">(yok)</option>
+              <option value="DEPOZITO">Depozito</option>
+              <option value="ARA_ODEME">Ara ödeme</option>
+              <option value="SON_ODEME">Son ödeme</option>
+              <option value="NAVLUN_ODEMESI">Navlun ödemesi</option>
+              <option value="GUMRUK_ODEMESI">Gümrük ödemesi</option>
+              <option value="DIGER">Diğer</option>
+            </select>
+          </div>
+          <div class="cps-ith-form-grup cps-ith-form-grup-gen">
+            <label>Aciklama</label>
+            <input type="text" class="cps-ith-input" id="pl-aciklama"
+                   data-form-alan="aciklama" maxlength="200">
+          </div>
+          <div class="cps-ith-form-grup">
+            <label>Cari Kod</label>
+            <input type="text" class="cps-ith-input" id="pl-cari-kod"
+                   data-form-alan="cari_kod" maxlength="50">
+          </div>
+          <div class="cps-ith-form-grup">
+            <label>Cari Ad</label>
+            <input type="text" class="cps-ith-input" id="pl-cari-ad"
+                   data-form-alan="cari_ad" maxlength="200">
+          </div>
+        </div>
+        <div class="cps-ith-inline-aksiyon">
+          <button type="button" class="cps-ith-btn cps-ith-btn-ghost"
+                  id="cps-ith-plan-iptal">Vazgec</button>
+          <button type="button" class="cps-ith-btn cps-ith-btn-primary"
+                  id="cps-ith-plan-kaydet">Kaydet</button>
+        </div>
+      </div>
+
+      <div class="cps-ith-plan-liste" id="cps-ith-plan-liste"></div>
+      <div class="cps-ith-tablo-durum cps-ith-gizle" id="cps-ith-plan-bos">
+        Henuz odeme plani eklenmemis.
+      </div>
+    </section>
+
+    {# =========================================================== #}
+    {# SEKME 4 - BELGELER                                          #}
+    {# =========================================================== #}
+    <section class="cps-ith-sekme-icerik" data-sekme-icerik="belge">
+      <div class="cps-ith-bolum-baslik">
+        <h2>Belgeler</h2>
+      </div>
+
+      <div class="cps-ith-upload-kart" id="cps-ith-upload">
+        <div class="cps-ith-upload-grid">
+          <div class="cps-ith-form-grup">
+            <label>Belge Tipi</label>
+            <select class="cps-ith-input" id="bl-tip">
+              <option value="ANLASMA_EXCEL">Anlaşma Excel</option>
+              <option value="PROFORMA">Proforma Fatura</option>
+              <option value="COMMERCIAL_INVOICE">Commercial Invoice</option>
+              <option value="PACKING_LIST">Packing List</option>
+              <option value="BEYANNAME">Gümrük Beyannamesi</option>
+              <option value="FATURA">Fatura</option>
+              <option value="TEKNIK_CIZIM">Teknik Çizim</option>
+              <option value="GORSEL">Görsel</option>
+              <option value="SERTIFIKA">Sertifika</option>
+              <option value="DIGER" selected>Diğer</option>
+            </select>
+          </div>
+          <div class="cps-ith-form-grup">
+            <label>Dosya</label>
+            <input type="file" class="cps-ith-input" id="bl-dosya"
+                   accept=".xlsx,.xls,.xlsm,.pdf,.docx,.doc,.csv,.jpg,.jpeg,.png,.webp,.gif,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*">
+          </div>
+          <div class="cps-ith-form-grup cps-ith-form-grup-gen">
+            <label>Aciklama</label>
+            <input type="text" class="cps-ith-input" id="bl-aciklama" maxlength="200">
+          </div>
+          <div class="cps-ith-form-grup cps-ith-upload-aksiyon">
+            <button type="button" class="cps-ith-btn cps-ith-btn-primary"
+                    id="cps-ith-btn-belge-yukle">Yukle</button>
+            <span class="cps-ith-kayit-durum" id="cps-ith-belge-durum"></span>
+          </div>
+        </div>
+      </div>
+
+      <table class="cps-ith-tablo cps-ith-tablo-alt">
+        <thead>
+          <tr>
+            <th>Tip</th>
+            <th>Dosya</th>
+            <th class="cps-ith-th-sag">Boyut</th>
+            <th>Yukleyen</th>
+            <th>Tarih</th>
+            <th>Aciklama</th>
+          </tr>
+        </thead>
+        <tbody id="cps-ith-belge-tbody"></tbody>
+      </table>
+
+      <div class="cps-ith-tablo-durum cps-ith-gizle" id="cps-ith-belge-bos">
+        Bu parti icin henuz belge yuklenmemis.
+      </div>
+    </section>
+
+    {# =========================================================== #}
+    {# SEKME 5 - DURUM TAKIBI                                      #}
+    {# =========================================================== #}
+    <section class="cps-ith-sekme-icerik" data-sekme-icerik="durum">
+      <div class="cps-ith-bolum-baslik">
+        <h2>Durum Takibi</h2>
+      </div>
+
+      <div class="cps-ith-durum-kontrol">
+        <div class="cps-ith-durum-mevcut">
+          Mevcut durum: <span class="cps-ith-durum-etiket"
+                              id="cps-ith-durum-mevcut">—</span>
+        </div>
+
+        <div class="cps-ith-durum-butonlar">
+          <button type="button" class="cps-ith-btn cps-ith-btn-ghost"
+                  data-durum="TASLAK">Taslak</button>
+          <button type="button" class="cps-ith-btn cps-ith-btn-ghost"
+                  data-durum="AKTIF">Yolda</button>
+          <button type="button" class="cps-ith-btn cps-ith-btn-ghost"
+                  data-durum="TESLIM">Geldi</button>
+          <button type="button" class="cps-ith-btn cps-ith-btn-ghost"
+                  data-durum="KAPALI">Kapali</button>
+          <button type="button" class="cps-ith-btn cps-ith-btn-ghost cps-ith-btn-tehlike"
+                  data-durum="IPTAL">Iptal</button>
+        </div>
+
+        <div class="cps-ith-durum-not">
+          <label for="cps-ith-durum-not-input">
+            Not (opsiyonel — gecmise islenir):
+          </label>
+          <textarea id="cps-ith-durum-not-input"
+                    class="cps-ith-input" rows="2"
+                    placeholder="Durum degisiminin sebebi..."></textarea>
+          <span class="cps-ith-kayit-durum" id="cps-ith-durum-sonuc"></span>
+        </div>
+      </div>
+
+      <div class="cps-ith-bolum-alt-baslik">Zaman Çizelgesi</div>
+      <div class="cps-ith-zaman-cizelgesi" id="cps-ith-zaman">
+        <div class="cps-ith-tablo-durum" id="cps-ith-zaman-bos">
+          Henuz kayit yok.
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  {# =========================================================== #}
+  {# URUN KARTI MODALI (gizli)                                   #}
+  {# =========================================================== #}
+  <div class="cps-ith-modal cps-ith-gizle" id="cps-ith-urun-modal">
+    <div class="cps-ith-modal-backdrop" id="cps-ith-modal-backdrop"></div>
+    <div class="cps-ith-modal-panel">
+      <div class="cps-ith-modal-baslik">
+        <div>
+          <h3 id="cps-ith-modal-urun">Ürün Kartı</h3>
+          <div class="cps-ith-modal-alt" id="cps-ith-modal-alt">—</div>
+        </div>
+        <button type="button" class="cps-ith-modal-kapat"
+                id="cps-ith-modal-kapat" title="Kapat">✕</button>
+      </div>
+
+      <div class="cps-ith-modal-icerik" id="cps-ith-modal-icerik">
+        <div class="cps-ith-tablo-durum" id="cps-ith-modal-yukleniyor">
+          <span class="cps-ith-spinner"></span> Yukleniyor...
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# =========================================================== #}
+  {# PARSE ONAY MODALI (guven skoru preview)                     #}
+  {# =========================================================== #}
+  <div class="cps-ith-modal cps-ith-gizle" id="cps-ith-onay-modal">
+    <div class="cps-ith-modal-backdrop" id="cps-ith-onay-modal-backdrop"></div>
+    <div class="cps-ith-modal-panel">
+      <div class="cps-ith-modal-baslik">
+        <div>
+          <h3 id="cps-ith-onay-baslik">Belge Önizleme</h3>
+          <div class="cps-ith-modal-alt" id="cps-ith-onay-alt">—</div>
+        </div>
+        <button type="button" class="cps-ith-modal-kapat"
+                id="cps-ith-onay-kapat" title="Kapat (Esc)">✕</button>
+      </div>
+
+      <div class="cps-ith-modal-icerik" id="cps-ith-onay-icerik">
+        <div class="cps-ith-tablo-durum">
+          <span class="cps-ith-spinner"></span> Yukleniyor...
+        </div>
+      </div>
+
+      <div class="cps-ith-modal-alt-bar" id="cps-ith-onay-aksiyon-bar">
+        <span class="cps-ith-kayit-durum" id="cps-ith-onay-durum"></span>
+        <div class="cps-ith-onay-butonlar">
+          <button type="button" class="cps-ith-btn cps-ith-btn-ghost cps-ith-btn-tehlike"
+                  id="cps-ith-onay-reddet">Reddet</button>
+          <button type="button" class="cps-ith-btn cps-ith-btn-primary"
+                  id="cps-ith-onay-uygula">
+            <span class="cps-ith-btn-metin">Onayla ve Uygula ▶</span>
+            <span class="cps-ith-btn-spinner cps-ith-gizle">
+              <span class="cps-ith-spinner"></span>
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('static', filename='js/cps_ithalat_detay.js') }}"
+          defer></script>
+{% endblock %}

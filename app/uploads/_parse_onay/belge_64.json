@@ -1,0 +1,62 @@
+{
+  "belge_id": 64,
+  "parti_id": 6,
+  "olusma_tarih": "2026-04-24 23:10:01",
+  "parse": {
+    "basarili": false,
+    "durum": "ONERI_BEKLIYOR",
+    "mesaj": "Bu beyannamede maliyet kalemleri guvenli okunamadi. (1 mantiksiz tutar guvenlik filtresi ile elendi.) Manuel giris gerekli.",
+    "kalem_sayisi": 0,
+    "kalemler": [],
+    "parti_bilgi": {},
+    "uyarilar": [
+      "Beyanname No: 26343100IM00081892",
+      "Tescil Tarihi: 06.04.2026",
+      "Dosya No: 26-00750",
+      "GTIP: 39264000",
+      "Ticari Tanim: PLASTİK",
+      "Konteyner(ler): CULU6004400",
+      "Fatura Bedeli: 3,875.00 USD (kur 44.5107)",
+      "Odeme Sekli: PEŞİN",
+      "⚠ 1 mantiksiz tutar guvenlik filtresi ile ELENDI (10M TRY ustu) - oneriye alinmadi",
+      "  → Elenen: TAHMIL_TAHLIYE = 2,277,000,000.00 TRY (10.000.000 TRY ustu - mantiksiz)"
+    ],
+    "kaynak_ref": "26343100IM00081892",
+    "dosya_hash": "fdc8f0f9a82eb121e4a33bba3bb57fe7d0299add1a5cec4d020bb067837a3c85",
+    "insan_onayi_bekliyor": false,
+    "guven_skoru": null,
+    "guven_seviyesi": null,
+    "guven_detay": [],
+    "matematik_ok": null,
+    "ekstra_kalemler": [],
+    "tespit_edilen_kolonlar": {},
+    "mantiksizlik_uyarilari": [],
+    "oneriler": [],
+    "meta": {
+      "belge_tipi_etiket": "Gumruk Beyannamesi",
+      "beyanname_no": "26343100IM00081892",
+      "tescil_tarihi": "2026-04-06",
+      "teslim_sekli": null,
+      "odeme_sekli": "PEŞİN",
+      "para_birimi_ana": "TRY",
+      "doviz_tutari": 3875.0,
+      "doviz_para": "USD",
+      "kur": 44.5107,
+      "brut_kg": null,
+      "net_kg": null,
+      "ist_kiymet": null,
+      "vergi_toplam": 0,
+      "masraf_toplam": 0,
+      "toplam_ifade": null,
+      "guvenli_okuma_hatasi": true,
+      "elenen_kalem_sayisi": 1
+    }
+  },
+  "ek_bilgi": {
+    "dosya_adi": "pvc pach - beyanname.pdf",
+    "belge_tipi": "BEYANNAME",
+    "dosya_hash": "fdc8f0f9a82eb121e4a33bba3bb57fe7d0299add1a5cec4d020bb067837a3c85"
+  },
+  "is_duplicate": false,
+  "existing_ref": null
+}

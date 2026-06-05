@@ -1,0 +1,184 @@
+================================================================================
+CPS FAZ 4.8 STABLE — 2026-04-29 11:00
+================================================================================
+
+DURUM: STABLE (test edilmis, calisir, dogrulanmis)
+
+================================================================================
+TAMAMLANAN OZELLIKLER
+================================================================================
+
+1. SABLON ROUTING (Korgun + CPS)
+   - korgun.py: get_alt_emirler() helper
+   - routes.py: _resolve_target_emir() - sablon adindan kategori
+   - "Atki LCW" sablonu -> ATKI alt emiri (ornegin 110626 -> 110649)
+   - Test edildi: 110626, 109772, 109774, 109814, 110852 - hepsi dogru
+   - DB kaniti: emir_alt_proses ID 33-36 110649'a aktif olarak yazildi
+
+2. HEDEF DUZELTME (FisNo bazli + fallback)
+   - korgun.py get_emir_ozet():
+     M tipi: Urt_Em_gch.FisNo bazli + Siparis_Har SUM fallback
+     Y tipi: parent emirin hesabini miras + fallback
+   - 14.000 hatasi -> 7.000 dogru
+   - siparisler[]: sadece gercek baglI siparis (33558+33638 -> sadece 33638)
+
+3. DARBOGAZ HESABI
+   - plan-detay endpoint:
+     yapilan_darbogaz = min(ATKI tamamlanan, GOVDE tamamlanan, MAMUL tamamlanan)
+     ATKI/GOVDE: emir_alt_proses son siralanan proses (siralama MAX) miktari
+     MAMUL: emir_alt_proses varsa son sirali, yoksa Korgun proses_kod numerik MAX
+   - JSON yeni alanlar (eski yapilan/kalan/yuzde KORUNDU):
+     yapilan_darbogaz, kalan_darbogaz, yuzde_darbogaz
+     darbogaz_kategori, darbogaz_detay
+   - Sablon yoksa = 0 (siparis ilerleyemez)
+
+4. MINI DETAY (V4)
+   - PLAN satirina tiklanca alt 4 satir kompakt detay
+   - Format:
+     -> DURUM: 0 / 7.000 (%0) - DARBOGAZ: ATKI       (kalin siyah, kirmizi vurgu)
+     -> ATKI: Capak 0 - Rivet Takma 0 - ...
+     -> GOVDE: sablon yok
+     -> MAMUL: 🔸 Kesim 600 - Temizleme 120 - ...    (koyu, ilk vurgu)
+   - Eski V3 buyuk panel devre disi (pasif kalip yer kapliyor)
+
+5. ALT PARCA PROSES LISTESI (RE-A2)
+   - plan-detay alt_parcalar her parca icin:
+     prosesler[] (sablon proseleri + uretim_kayit yapilan)
+     mesaj (sablon yoksa "henuz sablon uygulanmadi")
+
+6. ESKI VERILER
+   - 110626 emir_alt_proses 8 kayit aktif=0 (pasif)
+   - 109772 emir_alt_proses 8 kayit aktif=0
+   - 110649 emir_alt_proses 4 eski + 4 yeni aktif (33-36)
+   - uretim_kayit eski 4 test kaydi 110626'da kaliyor (1970 yapilan)
+
+================================================================================
+ETKILENEN DOSYALAR
+================================================================================
+
+modules/common/korgun.py
+  - get_alt_emirler() helper (yeni)
+  - get_emir_ozet() FisNo bazli hedef hesabi
+
+modules/hedef/routes.py
+  - hedef_sablon_uygula() routing-aware (Patch 7B)
+  - _resolve_target_emir() helper
+  - hedef_plan_detay() FAZ 4.7 MINI enrichment (alt prosesler)
+  - hedef_plan_detay() FAZ 4.7 DARBOGAZ hesabi (yapilan_darbogaz...)
+
+static/js/hedef.js
+  - V4 mini detay IIFE
+  - _miniHtml() icinde _durumSatir()
+  - ANA -> MAMUL etiket
+
+static/css/hedef.css
+  - .plan-detay-mini stilleri
+  - DURUM satir kalin siyah, DARBOGAZ kirmizi
+  - ATKI/GOVDE gri secondary, MAMUL koyu primary
+
+================================================================================
+YEDEKLER
+================================================================================
+
+KOD:
+- C:\cps_dev_backup_FAZ47_STABLE_20260429_0330  (gece 03:30, faz 4.7)
+- C:\cps_dev_backup_FAZ48_STABLE_20260429_1100  (sabah 11:00, faz 4.8 BU)
+
+DB:
+- C:\cps_dev_db_backups\mock_data_faz47_stable_20260429.db
+- C:\cps_dev_db_backups\mock_data_faz48_stable_20260429_1100.db
+
+DOSYA YEDEKLERI (her patch icin):
+- routes.py.bak_pre_routing_*
+- routes.py.bak_pre_mini_a_*
+- routes.py.bak_pre_re_a2_*
+- routes.py.bak_pre_h_*
+- korgun.py.bak_pre_g_*
+- hedef.js.bak_pre_f1_*
+- hedef.js.bak_pre_mamul_*
+- hedef.css.bak_pre_kompakt_*
+- hedef.css.bak_pre_mini_b_*
+- hedef.css.bak_pre_f1_*
+
+================================================================================
+BEKLEYEN ISLER (oncelik sirasi)
+================================================================================
+
+1. F2 - PLAN listesi sutunlari (YAPILAN/KALAN/%)
+   - /hedef/plan endpoint darbogaz mantigina cevir
+   - Performans: batch SQL gerekli (50+ emir, Korgun cagrisi)
+   - Tek sorgu: tum alt emirler (Urt_Em2Em IN (...))
+   - Tek sorgu: emir_alt_proses son siralanan (window function)
+   - Frontend: PLAN tablosunda yapilan_darbogaz/kalan_darbogaz/yuzde_darbogaz kullan
+
+2. UI bug - SABLON sekmesi MEVCUT PROSES sayisi
+   - 109774 dogru (4) ama 110627 vb. 0 gorunuyor
+   - emir_alt_proses count sorgusu hangi emir uzerinden olacak
+
+3. GOVDE sablonu ekle ve test
+   - Su an sadece "Atki LCW" var
+   - "Govde EVA" gibi yeni bir sablon
+   - Routing GOVDE icin de calisiyor mu (kanit lazim)
+
+4. Veri uyari bandi (eski test kayitlari)
+   - "Bu emirde eski test verisi var, gercek olmayabilir"
+   - 110626 ANA prosesleri (Kesim 600, Enjeksiyon 250...) referans olarak kalmali
+     ama "uyari" bandiyla isaret edilmeli
+
+5. PLAN gorseli UNC erisim (/hedef/gorsel/<modelkod>)
+   - Flask UNC path'i okuyup image serve etsin
+   - GORSEL sutunundaki bos ikon yerine asil model resmi
+
+6. Renk mapping (Adem verecek)
+   - RKOD 1=Siyah, 4=Beyaz vs.
+
+7. Personel Uretim & Prim Sistemi (ana proje)
+   - Yeni CPS sekmesi
+   - Mobil uretim girisi
+   - Prim hesabi
+   - PDKS entegrasyon
+
+================================================================================
+KURALLAR (degismeyen)
+================================================================================
+
+- Korgun = SADECE OKUNUR (SELECT)
+- CPS = mock_data.db'ye yazar
+- MES v2 KULLANILMIYOR
+- Sablon hedef uretmez (sadece proses listesi)
+- Manuel kayitlar geri-al'da korunur (kaynak='manuel')
+- Patch idempotent olmali (marker kontrol)
+- Yedek almadan kod degistirme
+- Markdown link tuzagi: ".py" yapistirirken dikkat
+
+================================================================================
+SUNUCU / DEPLOYMENT
+================================================================================
+
+URL: http://localhost:5057
+Restart:
+  taskkill /F /IM python.exe
+  cd C:\cps_dev
+  py app.py
+
+Test emir: 110626
+Sipariş: 33638 (7000 cift)
+Mamul: 110626 (CRX-71033-LCW)
+ATKI alt: 110649 (EVA CRX-ATKI)
+GOVDE alt: 110648 (EVA CRX-001)
+
+================================================================================
+SON DURUM (saat 11:00)
+================================================================================
+
+PLAN tablosu:
+  E.110626  33638  Lc Waikiki  CRX-71033-LCW  7.000  1.970  5.030  28.1%
+  (YAPILAN/KALAN/% hala eski hesap - F2'de duzelecek)
+
+Mini detay:
+  -> DURUM: 0 / 7.000 (%0) - DARBOGAZ: ATKI
+  -> ATKI: Capak 0 - Rivet Takma 0 - Tampon Baski 0 - Atki Silme 0
+  -> GOVDE: sablon yok
+  -> MAMUL: 🔸 Kesim 600 - Temizleme 120 - Enjeksiyon 250 - Monta 1.000
+
+================================================================================

@@ -1,0 +1,351 @@
+{% extends "base.html" %}
+
+{#
+  CPS DEV - Ithalat Parti Listesi
+  Route:    GET /ithalat/parti/liste
+  Queries:  modules/ithalat/queries.py
+  CSS:      /static/css/cps_ithalat.css
+  JS:       /static/js/cps_ithalat_parti.js
+#}
+
+{% block title %}Ithalat Partileri - Solariz CPS{% endblock %}
+
+{% block head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/cps_ithalat.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="cps-ith-sayfa" data-sayfa="parti-liste">
+
+  {# =============================================================== #}
+  {# UST BASLIK                                                      #}
+  {# =============================================================== #}
+  <div class="cps-ith-baslik-seridi">
+    <h1 class="cps-ith-baslik">Ithalat Partileri</h1>
+    <div class="cps-ith-baslik-aksiyon">
+      {% if yetki('ithalat.parti.duzenle') %}
+      <button type="button"
+              class="cps-ith-btn cps-ith-btn-primary"
+              id="cps-ith-btn-yeni-parti">
+        + Yeni Parti
+      </button>
+      {% endif %}
+      <button type="button"
+              class="cps-ith-btn cps-ith-btn-ghost"
+              id="cps-ith-btn-yenile"
+              title="Listeyi yenile">
+        Yenile
+      </button>
+    </div>
+  </div>
+
+  {# =============================================================== #}
+  {# KPI SERIDI - 4 KART                                             #}
+  {# =============================================================== #}
+  <div class="cps-ith-kpi-serit" id="cps-ith-kpi">
+
+    <div class="cps-ith-kpi-kart" data-kpi="toplam">
+      <div class="cps-ith-kpi-etiket">Toplam Parti</div>
+      <div class="cps-ith-kpi-deger" data-deger="toplam">&mdash;</div>
+      <div class="cps-ith-kpi-alt">son 12 ay</div>
+    </div>
+
+    <div class="cps-ith-kpi-kart" data-kpi="aktif">
+      <div class="cps-ith-kpi-etiket">Yoldaki Parti</div>
+      <div class="cps-ith-kpi-deger" data-deger="aktif">&mdash;</div>
+      <div class="cps-ith-kpi-alt" data-deger="aktif-tutar">&mdash;</div>
+    </div>
+
+    <div class="cps-ith-kpi-kart" data-kpi="bu-hafta-odeme">
+      <div class="cps-ith-kpi-etiket">Bu Hafta Odeme</div>
+      <div class="cps-ith-kpi-deger" data-deger="odeme-adet">&mdash;</div>
+      <div class="cps-ith-kpi-alt" data-deger="odeme-tutar">&mdash;</div>
+    </div>
+
+    <div class="cps-ith-kpi-kart cps-ith-kpi-uyari" data-kpi="riskli">
+      <div class="cps-ith-kpi-etiket">Riskli Parti</div>
+      <div class="cps-ith-kpi-deger" data-deger="riskli">&mdash;</div>
+      <div class="cps-ith-kpi-alt">gecikme / sapma</div>
+    </div>
+
+  </div>
+
+  {# =============================================================== #}
+  {# FILTRE SERIDI                                                   #}
+  {# =============================================================== #}
+  <div class="cps-ith-filtre-serit" id="cps-ith-filtre">
+
+    <div class="cps-ith-filtre-grup">
+      <label for="cps-ith-f-durum">Durum</label>
+      <select id="cps-ith-f-durum" class="cps-ith-input" data-filtre="durum">
+        <option value="">Hepsi</option>
+        <option value="TASLAK">Taslak</option>
+        <option value="AKTIF">Yolda</option>
+        <option value="TESLIM">Geldi</option>
+        <option value="KAPALI">Kapali</option>
+        <option value="IPTAL">Iptal</option>
+      </select>
+    </div>
+
+    <div class="cps-ith-filtre-grup">
+      <label for="cps-ith-f-tedarikci">Tedarikci</label>
+      <select id="cps-ith-f-tedarikci"
+              class="cps-ith-input"
+              data-filtre="tedarikci_kod">
+        <option value="">Hepsi</option>
+      </select>
+    </div>
+
+    <div class="cps-ith-filtre-grup">
+      <label for="cps-ith-f-tarih">Tarih Araligi</label>
+      <select id="cps-ith-f-tarih" class="cps-ith-input" data-filtre="tarih">
+        <option value="son-3-ay">Son 3 ay</option>
+        <option value="son-6-ay">Son 6 ay</option>
+        <option value="son-12-ay" selected>Son 12 ay</option>
+        <option value="tum">Tumu</option>
+      </select>
+    </div>
+
+    <div class="cps-ith-filtre-grup cps-ith-filtre-ara">
+      <label for="cps-ith-f-ara">Ara</label>
+      <input type="text"
+             id="cps-ith-f-ara"
+             class="cps-ith-input"
+             placeholder="Kod, baslik, tedarikci..."
+             data-filtre="ara"
+             autocomplete="off">
+    </div>
+
+    <div class="cps-ith-filtre-grup cps-ith-filtre-aksiyon">
+      <button type="button"
+              class="cps-ith-btn cps-ith-btn-ghost"
+              id="cps-ith-btn-filtre-sifirla">
+        Sifirla
+      </button>
+    </div>
+
+  </div>
+
+  {# =============================================================== #}
+  {# TABLO KONTEYNERI                                                #}
+  {# =============================================================== #}
+  <div class="cps-ith-tablo-kap">
+
+    <div class="cps-ith-tablo-durum cps-ith-gizle" id="cps-ith-yukleniyor">
+      <span class="cps-ith-spinner"></span> Yukleniyor...
+    </div>
+    <div class="cps-ith-tablo-durum cps-ith-gizle" id="cps-ith-bos">
+      Listede gosterilecek parti bulunamadi.
+      <button type="button"
+              class="cps-ith-btn cps-ith-btn-ghost"
+              id="cps-ith-bos-sifirla">
+        Filtreleri temizle
+      </button>
+    </div>
+    <div class="cps-ith-tablo-durum cps-ith-hata cps-ith-gizle" id="cps-ith-hata">
+      Liste yuklenemedi. <a href="#" id="cps-ith-hata-tekrar">Tekrar dene</a>
+    </div>
+
+    <table class="cps-ith-tablo" id="cps-ith-tablo">
+      <thead>
+        <tr>
+          <th class="cps-ith-th-risk" title="Risk gostergesi"></th>
+          <th>Parti No</th>
+          <th>Baslik</th>
+          <th>Tedarikci</th>
+          <th class="cps-ith-th-sag">Toplam Maliyet</th>
+          <th class="cps-ith-th-sag">Cift Maliyet</th>
+          <th>Durum</th>
+          <th>Ilk Odeme</th>
+          <th class="cps-ith-th-sag">Sapma</th>
+        </tr>
+      </thead>
+      <tbody id="cps-ith-tbody">
+        {# JS doldurur #}
+      </tbody>
+    </table>
+
+    <div class="cps-ith-tablo-ozet" id="cps-ith-tablo-ozet">
+      <span id="cps-ith-ozet-sayi">0</span> parti gosteriliyor
+    </div>
+
+  </div>
+
+</div>
+
+{# Satir sablonu - JS clone eder #}
+<template id="cps-ith-satir-sablon">
+  <tr class="cps-ith-satir" data-parti-id="">
+    <td class="cps-ith-risk">
+      <span class="cps-ith-risk-nokta" title=""></span>
+    </td>
+    <td class="cps-ith-hucre-kod">
+      <span data-alan="kod"></span>
+    </td>
+    <td class="cps-ith-hucre-baslik">
+      <span data-alan="baslik"></span>
+    </td>
+    <td class="cps-ith-hucre-tedarikci">
+      <span data-alan="tedarikci"></span>
+    </td>
+    <td class="cps-ith-hucre-tutar cps-ith-th-sag">
+      <span data-alan="etkin-toplam"></span>
+      <span class="cps-ith-para" data-alan="para"></span>
+    </td>
+    <td class="cps-ith-hucre-cift cps-ith-th-sag">
+      <span data-alan="cift-maliyet"></span>
+      <span class="cps-ith-birim" data-alan="cift-birim"></span>
+    </td>
+    <td class="cps-ith-hucre-durum">
+      <span class="cps-ith-durum-etiket" data-alan="durum"></span>
+    </td>
+    <td class="cps-ith-hucre-odeme">
+      <span data-alan="ilk-odeme-tarih"></span>
+      <span class="cps-ith-odeme-ek" data-alan="ilk-odeme-ek"></span>
+    </td>
+    <td class="cps-ith-hucre-sapma cps-ith-th-sag">
+      <span data-alan="sapma-yuzde"></span>
+    </td>
+  </tr>
+</template>
+
+{# =============================================================== #}
+{# YENI PARTI MODALI - TAM VERSIYON                                 #}
+{# =============================================================== #}
+<div class="cps-ith-modal cps-ith-gizle" id="cps-ith-yeni-parti-modal">
+  <div class="cps-ith-modal-backdrop" id="cps-ith-yeni-parti-backdrop"></div>
+  <div class="cps-ith-modal-panel cps-ith-modal-panel-sm">
+    <div class="cps-ith-modal-baslik">
+      <div>
+        <h3>Yeni İthalat Partisi Oluştur</h3>
+        <div class="cps-ith-modal-alt">
+          Yeni ithalat partisi için temel bilgileri girin.
+          (*) işaretliler zorunludur.
+        </div>
+      </div>
+      <button type="button" class="cps-ith-modal-kapat"
+              id="cps-ith-yeni-parti-kapat" title="Kapat (Esc)">✕</button>
+    </div>
+
+    <div class="cps-ith-modal-icerik">
+      <form class="cps-ith-form-grid" id="cps-ith-yeni-parti-form"
+            onsubmit="return false;">
+
+        <div class="cps-ith-form-grup cps-ith-form-grup-gen">
+          <label for="yp-baslik">Başlık *</label>
+          <input type="text" id="yp-baslik" class="cps-ith-input"
+                 maxlength="200" required
+                 placeholder="Örn: Mart Konteynır - EVA Terlik">
+          <div class="cps-ith-form-ipucu">
+            Partiyi tanımlayan kısa başlık. Dönem + ürün türü + paketleme şekli önerilir.
+          </div>
+        </div>
+
+        <div class="cps-ith-form-grup">
+          <label for="yp-tedarikci-ad">Tedarikçi Adı *</label>
+          <input type="text" id="yp-tedarikci-ad" class="cps-ith-input"
+                 maxlength="200" required
+                 autocomplete="off"
+                 placeholder="Yazmaya başlayın (otomatik öneri)">
+          <div class="cps-ith-form-ipucu">
+            Mevcut tedarikçilerden öneri gelir. Yeni tedarikçi ise manuel yazın.
+          </div>
+          {# Autocomplete dropdown container #}
+          <div class="cps-ith-autocomplete-liste cps-ith-gizle"
+               id="yp-tedarikci-oneriler"></div>
+        </div>
+
+        <div class="cps-ith-form-grup">
+          <label for="yp-tedarikci-kod">Tedarikçi Kodu</label>
+          <input type="text" id="yp-tedarikci-kod" class="cps-ith-input"
+                 maxlength="50"
+                 placeholder="WUXI (opsiyonel)">
+          <div class="cps-ith-form-ipucu">
+            Cari listeden seçilirse otomatik dolar. Manuel de girilebilir.
+          </div>
+        </div>
+
+        <div class="cps-ith-form-grup">
+          <label for="yp-para">Para Birimi *</label>
+          <select id="yp-para" class="cps-ith-input" required>
+            <option value="USD" selected>USD</option>
+            <option value="EUR">EUR</option>
+            <option value="TRY">TRY</option>
+            <option value="CNY">CNY</option>
+            <option value="GBP">GBP</option>
+          </select>
+          <div class="cps-ith-form-ipucu">
+            Partinin ana para birimi. Fatura/proforma buradan gelecek.
+          </div>
+        </div>
+
+        <div class="cps-ith-form-grup">
+          <label for="yp-cift">Toplam Çift *</label>
+          <input type="number" id="yp-cift" class="cps-ith-input"
+                 min="1" step="1" required
+                 placeholder="20000">
+          <div class="cps-ith-form-ipucu">
+            Ana karar metriği — çift maliyet bu sayı ile hesaplanır.
+          </div>
+        </div>
+
+        <div class="cps-ith-form-grup">
+          <label for="yp-yukleme">Yükleme Tarihi</label>
+          <input type="date" id="yp-yukleme" class="cps-ith-input">
+          <div class="cps-ith-form-ipucu">
+            Malın çıkış/yükleme tarihi. Biliniyorsa girin.
+          </div>
+        </div>
+
+        <div class="cps-ith-form-grup">
+          <label for="yp-varis">Tahmini Varış</label>
+          <input type="date" id="yp-varis" class="cps-ith-input">
+          <div class="cps-ith-form-ipucu">
+            Beklenen varış tarihi. ETA analizi için.
+          </div>
+        </div>
+
+        <div class="cps-ith-form-grup">
+          <label for="yp-kg">Toplam KG</label>
+          <input type="number" id="yp-kg" class="cps-ith-input"
+                 min="0" step="0.01"
+                 placeholder="1500.00">
+          <div class="cps-ith-form-ipucu">
+            Opsiyonel — navlun ve gümrük analizi için yararlı.
+          </div>
+        </div>
+
+        <div class="cps-ith-form-grup cps-ith-form-grup-gen">
+          <label for="yp-aciklama">Açıklama</label>
+          <textarea id="yp-aciklama" class="cps-ith-input"
+                    rows="2" maxlength="1000"
+                    placeholder="Ek notlar..."></textarea>
+          <div class="cps-ith-form-ipucu">
+            Opsiyonel — parti hakkında serbest not.
+          </div>
+        </div>
+
+        <div class="cps-ith-form-aksiyon cps-ith-form-grup-gen">
+          <span class="cps-ith-kayit-durum" id="cps-ith-yeni-parti-durum"></span>
+          <button type="button" class="cps-ith-btn cps-ith-btn-ghost"
+                  id="cps-ith-yeni-parti-iptal">Vazgeç</button>
+          <button type="button" class="cps-ith-btn cps-ith-btn-primary"
+                  id="cps-ith-yeni-parti-kaydet">
+            <span class="cps-ith-btn-metin">Oluştur</span>
+            <span class="cps-ith-btn-spinner cps-ith-gizle">
+              <span class="cps-ith-spinner"></span>
+            </span>
+          </button>
+        </div>
+
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('static', filename='js/cps_ithalat_parti.js') }}"
+          defer></script>
+{% endblock %}

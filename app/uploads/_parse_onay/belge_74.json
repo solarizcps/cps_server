@@ -1,0 +1,42 @@
+{
+  "belge_id": 74,
+  "parti_id": 4,
+  "olusma_tarih": "2026-04-24 23:36:19",
+  "parse": {
+    "basarili": false,
+    "durum": "ONERI_BEKLIYOR",
+    "mesaj": "Bu faturadan kalemler otomatik okunamadi. Manuel giris yapiniz - Maliyet sekmesinden kalem ekleyebilirsiniz.",
+    "kalem_sayisi": 0,
+    "kalemler": [],
+    "parti_bilgi": {},
+    "uyarilar": [
+      "Fatura No: BLR2026000002472"
+    ],
+    "kaynak_ref": "BLR2026000002472",
+    "dosya_hash": "534181e319c5c8311e97b11534dbb30aad2c47fd28904bee02409e1005a72ed4",
+    "insan_onayi_bekliyor": false,
+    "guven_skoru": null,
+    "guven_seviyesi": null,
+    "guven_detay": [],
+    "matematik_ok": null,
+    "ekstra_kalemler": [],
+    "tespit_edilen_kolonlar": {},
+    "mantiksizlik_uyarilari": [],
+    "oneriler": [],
+    "meta": {
+      "belge_tipi_etiket": "Tasima/Navlun Faturasi",
+      "fatura_no": "BLR2026000002472",
+      "fatura_tarihi": null,
+      "toplam_tutar": null,
+      "toplam_para": null,
+      "tasima_tipi": null
+    }
+  },
+  "ek_bilgi": {
+    "dosya_adi": "pvc pach - bilir gümrük faturası.pdf",
+    "belge_tipi": "FATURA",
+    "dosya_hash": "534181e319c5c8311e97b11534dbb30aad2c47fd28904bee02409e1005a72ed4"
+  },
+  "is_duplicate": false,
+  "existing_ref": null
+}

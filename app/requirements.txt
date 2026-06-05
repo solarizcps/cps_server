@@ -1,0 +1,20 @@
+# CPS DEV - Requirements
+# =======================
+# Ortam: Python 3.11+
+# Kurulum: pip install -r requirements.txt
+
+# Flask
+flask>=2.3.0
+
+# MSSQL baglantisi (prod)
+python-tds>=1.12.0
+
+# Excel okuma (BLOK 4.6-a - anlasma excel, proforma excel parser'i)
+openpyxl>=3.1.0     # xlsx/xlsm
+xlrd>=2.0.1         # eski xls formati
+
+# PDF okuma (BLOK 4.6-c - beyanname parser)
+pdfplumber>=0.10.0
+
+# Gorsel isleme (opsiyonel, OCR icin)
+# pillow>=10.0.0

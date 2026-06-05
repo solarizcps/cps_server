@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Çin Ofis İçe Aktarma — Finans{% endblock %}
+
+{% block content %}
+
+<div class="page-head">
+  <div class="page-head-main">
+    <div class="crumbs"><a href="/finans">Finans</a> › <strong>Çin Ofis İçe Aktarma</strong></div>
+    <h1>📥 Çin Ofis Excel İçe Aktarma</h1>
+    <p class="muted">Çin ofisinin hazırladığı Excel'i siparişe dönüştür. Kur, ödeme planı ve dosya referansları otomatik işlenir.</p>
+  </div>
+</div>
+
+{% include '_flash.html' ignore missing %}
+
+{% if yetkili %}
+<div class="panel">
+  <div class="panel-head">
+    <h3>Yeni İçe Aktarma</h3>
+    <div class="panel-actions">
+      <a href="/finans/cin-ofis/template/bos" class="btn btn-ghost btn-sm">📄 Boş Template</a>
+      <a href="/finans/cin-ofis/template/ornek" class="btn btn-ghost btn-sm">📋 Örnek (EVA)</a>
+    </div>
+  </div>
+
+  <form method="post" action="/finans/cin-ofis/upload" enctype="multipart/form-data" class="stack">
+    <div class="alert alert-info">
+      <div class="alert-ic">ℹ</div>
+      <div class="alert-body">
+        Yükleme sonrası önizleme sayfası açılır. Onaylamadan önce tüm veriyi kontrol edebilirsiniz.
+        Sistem kuru tanımlı olmalı — yoksa import durur.
+      </div>
+    </div>
+
+    <div class="row">
+      <input type="file" name="excel" accept=".xlsx" required class="flex-1">
+      <button type="submit" class="btn btn-primary">↑ Yükle ve Önizle</button>
+    </div>
+  </form>
+</div>
+{% endif %}
+
+<div class="panel">
+  <h3>Son İçe Aktarmalar</h3>
+
+  {% if loglar %}
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>#</th><th>Sipariş Kodu</th><th>Sipariş</th><th>Durum</th>
+        <th class="num">Kur</th><th>Kaynak</th><th>Kullanıcı</th><th>Tarih</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for l in loglar %}
+      <tr>
+        <td><strong>#{{ l.Id }}</strong></td>
+        <td>{{ l.OrderCode }}</td>
+        <td>
+          {% if l.SiparisNo %}
+            <a href="/grafik/siparis/{{ l.SiparisId }}"><strong>{{ l.SiparisNo }}</strong></a>
+          {% elif l.Durum == 'ON_IZLEME' %}
+            <span class="muted small">önizlemede</span>
+          {% elif l.Durum == 'IPTAL' %}
+            <span class="muted small">oluşturulmadı</span>
+          {% elif l.Durum == 'HATA' %}
+            <span class="muted small">hata — oluşmadı</span>
+          {% else %}
+            <span class="muted">—</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if l.Durum == 'ON_IZLEME' %}<span class="pill pill-primary">Önizleme</span>
+          {% elif l.Durum == 'BASARILI' %}<span class="pill pill-success">✓ Başarılı</span>
+          {% elif l.Durum == 'REVIZE_EDILDI' %}<span class="pill pill-info">Revize</span>
+          {% elif l.Durum == 'IPTAL' %}<span class="pill pill-muted">İptal</span>
+          {% else %}<span class="pill pill-danger">Hata</span>{% endif %}
+        </td>
+        <td class="num">
+          {% if l.KurDeger %}{{ "%.4f"|format(l.KurDeger) }} {{ l.KurPB }}{% else %}—{% endif %}
+        </td>
+        <td>
+          {% if l.KurKaynagi == 'EXCEL_OVERRIDE' %}
+            <span class="pill pill-danger">⚠ EXCEL</span>
+          {% elif l.KurKaynagi == 'SISTEM_OTOMATIK' %}
+            <span class="pill pill-muted">sistem</span>
+          {% elif l.KurKaynagi == 'TRY_NATIVE' %}
+            <span class="pill pill-muted">TRY</span>
+          {% else %}
+            {{ l.KurKaynagi or '—' }}
+          {% endif %}
+        </td>
+        <td class="muted small">{{ l.OlusturanKullanici }}</td>
+        <td class="muted small">{{ (l.OlusturmaTarih or '')[:16] }}</td>
+        <td class="actions">
+          {% if l.Durum == 'ON_IZLEME' %}
+            <a href="/finans/cin-ofis/onizleme/{{ l.Id }}" class="btn btn-sm btn-primary">Devam</a>
+          {% elif l.Durum == 'BASARILI' %}
+            <a href="/finans/cin-ofis/onizleme/{{ l.Id }}" class="btn btn-sm btn-ghost">Detay</a>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">
+    <div class="empty-ic">📭</div>
+    <p>Henüz import yok. Üstten Excel yükleyerek başlayın.</p>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

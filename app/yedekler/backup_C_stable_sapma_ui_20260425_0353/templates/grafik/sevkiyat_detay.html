@@ -1,0 +1,786 @@
+{% extends "base.html" %}
+{% set tab = 'grafik' %}
+{% set active = 'grafik' %}
+{% block title %}{{ sevkiyat.SevkiyatNo }} — Sevkiyat{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="crumbs"><a href="/grafik/sevkiyat">Sevkiyat</a> › <strong>{{ sevkiyat.SevkiyatNo }}</strong></div>
+    <h1>🚢 {{ sevkiyat.SevkiyatNo }}</h1>
+    <p class="muted">
+      {% for kod, ad, renk in durumlar %}
+        {% if sevkiyat.Durum == kod %}<span class="pill" style="background:{{ renk }};color:#fff;">{{ ad }}</span>{% endif %}
+      {% endfor %}
+      · {% for kod, ad, _ in nakliye_tipleri %}{% if sevkiyat.NakliyeTipi == kod %}{{ ad }}{% endif %}{% endfor %}
+      {% if sevkiyat.SiparisNo %}
+      · Sipariş: <code>{{ sevkiyat.SiparisNo }}</code>
+      {% elif sevkiyat.NumuneNo %}
+      · Numune: <a href="/grafik/numune/{{ sevkiyat.NumuneId }}"><code>{{ sevkiyat.NumuneNo }}</code></a>
+      {% endif %}
+      {% if sevkiyat.TedarikciAd %}· Tedarikçi: {{ sevkiyat.TedarikciAd }}{% endif %}
+      {% if sevkiyat.TakipNo %}· <strong>{{ sevkiyat.TakipNo }}</strong>{% endif %}
+      {% if sevkiyat.NakliyeTipi == 'DHL' and sevkiyat.UrunMaliyetineDahil == 0 %}
+      <span class="pill" style="background:#6b7280; color:#fff; font-size:.7rem;">OPERASYONEL GİDER</span>
+      {% endif %}
+    </p>
+  </div>
+  <div class="ph-actions">
+    <form method="post" action="/grafik/sevkiyat/{{ sevkiyat.Id }}/durum" style="display:inline;">
+      <select name="Durum" onchange="this.form.submit()" class="btn-ghost" style="padding:7px 10px;">
+        {% for kod, ad, _ in durumlar %}
+        <option value="{{ kod }}" {% if sevkiyat.Durum == kod %}selected{% endif %}>{{ ad }}</option>
+        {% endfor %}
+      </select>
+    </form>
+    <form method="post" action="/grafik/sevkiyat/{{ sevkiyat.Id }}/sil" style="display:inline;"
+          onsubmit="return confirm('Sevkiyat silinecek — masraflar ve dağıtım dahil. Emin misin?');">
+      <button class="btn btn-danger">🗑 Sil</button>
+    </form>
+  </div>
+</div>
+
+{% include '_flash.html' ignore missing %}
+
+{% include 'grafik/_akis_cubugu.html' ignore missing %}
+
+{% include 'grafik/_cari_ozet.html' ignore missing %}
+
+<!-- ÜST: bilgi + özet -->
+<div class="twocol">
+  <section class="panel">
+    <h3>Sevkiyat Bilgileri</h3>
+    <form method="post" action="/grafik/sevkiyat/{{ sevkiyat.Id }}/guncelle" class="form-stack">
+      <div class="form-row">
+        <label style="flex:1;">Nakliye Tipi
+          <select name="NakliyeTipi" id="sel-nakliye-det" onchange="detayFormGuncelle()">
+            {% for kod, ad, _ in nakliye_tipleri %}
+            <option value="{{ kod }}" {% if sevkiyat.NakliyeTipi == kod %}selected{% endif %}>{{ ad }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label style="flex:1;">Dağıtım Yöntemi
+          <select name="DagitimYontemi" id="sel-dagitim-yontem" onchange="dagitimYontemKontrol()">
+            {% for kod, ad, aciklama in dagitim_yontemleri %}
+            <option value="{{ kod }}" {% if sevkiyat.DagitimYontemi == kod %}selected{% endif %}>{{ ad }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+      <!-- Parça 5.5: Canlı dağıtım uyarısı -->
+      <div id="dagitim-uyari" style="display:none; padding:10px 14px; border-radius:6px; margin:8px 0; font-size:.85rem;"></div>
+
+      <!-- DHL özel alanlar -->
+      <div id="dhl-alanlari" style="{% if sevkiyat.NakliyeTipi != 'DHL' %}display:none;{% endif %}">
+        <div class="form-row">
+          <label style="flex:1;">Takip No <input type="text" name="TakipNo" value="{{ sevkiyat.TakipNo or '' }}"></label>
+          <label style="flex:1;">Gönderim Yönü
+            <select name="GonderimYonu">
+              {% for kod, ad in gonderim_yonleri %}
+              <option value="{{ kod }}" {% if sevkiyat.GonderimYonu == kod %}selected{% endif %}>{{ ad }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label style="flex:1;">Ağırlık (kg) <input type="number" name="AgirlikKg" min="0" step="0.01" value="{{ sevkiyat.AgirlikKg or 0 }}"></label>
+        </div>
+        <label>Kaynak Numune
+          <select name="NumuneId">
+            <option value="">— (yok)</option>
+            {% for n in numuneler %}
+            <option value="{{ n.Id }}" {% if sevkiyat.NumuneId == n.Id %}selected{% endif %}>{{ n.NumuneNo }} — {{ n.Baslik }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label style="display:flex; align-items:center; gap:8px; padding:8px; background:#f9fafb; border-radius:6px;">
+          <input type="checkbox" name="UrunMaliyetineDahil" value="1" {% if sevkiyat.UrunMaliyetineDahil %}checked{% endif %}>
+          <span><strong>Ürün maliyetine dahil et</strong> — Tikli değilse operasyonel gider olarak kayıt edilir, ürünlere yansımaz.</span>
+        </label>
+      </div>
+
+      <div class="form-row">
+        <label style="flex:1;">Forwarder <input type="text" name="Forwarder" value="{{ sevkiyat.Forwarder or '' }}"></label>
+        <label style="flex:1;">Konsimento <input type="text" name="Konsimento" value="{{ sevkiyat.Konsimento or '' }}"></label>
+      </div>
+      <div class="form-row">
+        <label style="flex:1;">Sevk Tarihi <input type="date" name="SevkTarihi" value="{{ sevkiyat.SevkTarihi or '' }}"></label>
+        <label style="flex:1;">Beklenen <input type="date" name="BeklenenVarisTarihi" value="{{ sevkiyat.BeklenenVarisTarihi or '' }}"></label>
+        <label style="flex:1;">Gerçek <input type="date" name="GerceklesenVarisTarihi" value="{{ sevkiyat.GerceklesenVarisTarihi or '' }}"></label>
+      </div>
+      <label>Notlar <textarea name="Notlar" rows="2">{{ sevkiyat.Notlar or '' }}</textarea></label>
+      <div style="display:flex; justify-content:flex-end;">
+        <button class="btn btn-primary">💾 Kaydet</button>
+      </div>
+    </form>
+
+    <script>
+    function detayFormGuncelle() {
+      const tip = document.getElementById('sel-nakliye-det').value;
+      document.getElementById('dhl-alanlari').style.display = (tip === 'DHL') ? 'block' : 'none';
+    }
+    </script>
+  </section>
+
+  <section class="panel" style="background:linear-gradient(135deg,#fff,#fef3c7);">
+    <div class="panel-head" style="margin-bottom:8px;">
+      <h3 style="margin:0;">Maliyet Özeti</h3>
+      {% if sevkiyat.Durum == 'TESLIM' %}
+        <span class="pill" style="background:#059669;color:#fff;font-size:.78rem;">✓ KESİNLEŞTİ</span>
+      {% elif sevkiyat.Durum == 'IPTAL' %}
+        <span class="pill" style="background:#6b7280;color:#fff;font-size:.78rem;">— İptal</span>
+      {% else %}
+        <span class="pill" style="background:#F97316;color:#fff;font-size:.78rem;">⏳ TAHMİNİ</span>
+      {% endif %}
+    </div>
+    {% if fiyat_gor %}
+    <dl class="info-dl" style="font-size:.95rem;">
+      <dt>FOB Toplam (USD)</dt>
+      <dd><strong>${{ "{:,.2f}".format(sevkiyat.FOBUSDToplam or 0) }}</strong></dd>
+      <dt>Sipariş Kuru</dt>
+      <dd>{{ "%.4f"|format(sevkiyat.SiparisKur or 0) }}</dd>
+      <dt>FOB (TRY)</dt>
+      <dd><strong>{{ "{:,.0f}".format((sevkiyat.FOBUSDToplam or 0) * (sevkiyat.SiparisKur or 0)) }} ₺</strong></dd>
+      <dt>Toplam Masraf (TRY)</dt>
+      <dd><strong style="color:#F97316;">{{ "{:,.0f}".format(sevkiyat.ToplamMasrafTL or 0) }} ₺</strong></dd>
+      <dt style="border-top:1px solid #e5e7eb; padding-top:6px;">Genel Toplam</dt>
+      <dd style="border-top:1px solid #e5e7eb; padding-top:6px; font-size:1.2rem; color:#F97316;">
+        <strong>{{ "{:,.0f}".format((sevkiyat.FOBUSDToplam or 0) * (sevkiyat.SiparisKur or 0) + (sevkiyat.ToplamMasrafTL or 0)) }} ₺</strong>
+      </dd>
+    </dl>
+    {% else %}
+    <p class="muted">Fiyat görme yetkin yok.</p>
+    {% endif %}
+  </section>
+</div>
+
+<!-- MASRAFLAR -->
+<section class="panel" style="margin-top:20px;">
+  <div class="panel-head">
+    <h3>💰 Masraflar ({{ masraflar|length }})</h3>
+    <button class="btn btn-sm btn-primary" onclick="document.getElementById('masraf-yeni').showModal()"
+            {% if kilit_aktif %}disabled title="Teslim sonrası kilit — Yönetim yetkisi gerekir"{% endif %}>
+      + Masraf Ekle
+    </button>
+  </div>
+
+  {% if masraflar %}
+  <table class="data-table compact">
+    <thead>
+      <tr>
+        <th>Tip</th>
+        <th>Detay</th>
+        <th>Belge</th>
+        <th style="text-align:right;">Tutar</th>
+        <th>PB</th>
+        <th style="text-align:right;">Kur</th>
+        <th style="text-align:right;">Tutar TRY</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in masraflar %}
+      <tr>
+        <td><span class="pill">{{ m.Tip }}</span></td>
+        <td>
+          {% if m.BirimSayi and m.BirimFiyat %}
+            <strong>{{ "%g"|format(m.BirimSayi) }}</strong> ×
+            <strong>{{ "%g"|format(m.BirimFiyat) }} {{ m.ParaBirimi }}</strong>
+            {% if m.Tip == 'NAVLUN' and sevkiyat.NakliyeTipi == 'UCAK' %}
+              <span class="muted" style="font-size:.78rem;">(kg × $/kg)</span>
+            {% elif m.Tip == 'NAVLUN' and sevkiyat.NakliyeTipi == 'KONTEYNER' %}
+              <span class="muted" style="font-size:.78rem;">(adet × birim)</span>
+            {% endif %}
+            <br>
+          {% endif %}
+          <span class="muted" style="font-size:.85rem;">{{ m.Aciklama or '' }}</span>
+        </td>
+        <td class="muted">{{ m.BelgeNo or '—' }}</td>
+        <td style="text-align:right; font-variant-numeric:tabular-nums;">{{ "{:,.2f}".format(m.Tutar) }}</td>
+        <td>{{ m.ParaBirimi }}</td>
+        <td style="text-align:right;" class="muted">{{ "%.4f"|format(m.KurSnapshot or 1) }}</td>
+        <td style="text-align:right; font-variant-numeric:tabular-nums;"><strong>{{ "{:,.0f}".format(m.TutarTL) }} ₺</strong></td>
+        <td style="text-align:right; white-space:nowrap;">
+          <button type="button" class="btn-icon" title="Düzenle"
+                  {% if kilit_aktif %}disabled style="opacity:.4; cursor:not-allowed;" title="Teslim sonrası kilit — Yönetim yetkisi gerekir"{% endif %}
+                  onclick="masrafDuzenleAc({{ m.Id }}, {{ m.Tutar }}, '{{ m.ParaBirimi }}', {{ m.KurSnapshot or 1 }}, '{{ m.IslemTarih or '' }}', '{{ m.Tip }}', '{{ (m.BelgeNo or '')|e }}', '{{ (m.Aciklama or '')|e }}', {{ m.BirimSayi or 0 }}, {{ m.BirimFiyat or 0 }})">
+            ✏
+          </button>
+          <form method="post" action="/grafik/sevkiyat/masraf/{{ m.Id }}/sil" style="display:inline;"
+                onsubmit="return confirm('Masrafı sil? Dağıtım sıfırlanacak.');">
+            <button class="btn-icon" title="Sil"
+                    {% if kilit_aktif %}disabled style="opacity:.4; cursor:not-allowed;"{% endif %}>🗑</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+      <tr style="background:#fff7ed; font-weight:700;">
+        <td colspan="6" style="text-align:right;">TOPLAM MASRAF</td>
+        <td style="text-align:right; font-variant-numeric:tabular-nums; color:#F97316;">
+          {{ "{:,.0f}".format(sevkiyat.ToplamMasrafTL or 0) }} ₺
+        </td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">Henüz masraf yok. Navlun, sigorta, gümrük vb. girebilirsin.</p>
+  {% endif %}
+</section>
+
+<!-- DAĞITIM -->
+<section class="panel" style="margin-top:20px;">
+  <div class="panel-head">
+    <h3>📊 Maliyet Dağıtımı
+      {% if sevkiyat.Durum == 'TESLIM' %}
+      <span class="pill" style="background:#059669;color:#fff;font-size:.72rem; margin-left:8px;">✓ GERÇEK BİRİM MALİYET</span>
+      {% elif sevkiyat.Durum == 'IPTAL' %}
+      <span class="pill" style="background:#6b7280;color:#fff;font-size:.72rem; margin-left:8px;">— İPTAL</span>
+      {% else %}
+      <span class="pill" style="background:#F97316;color:#fff;font-size:.72rem; margin-left:8px;">⏳ TAHMİNİ — TESLİM BEKLİYOR</span>
+      {% endif %}
+      <span class="muted" style="font-size:.85rem; font-weight:400;">
+        — Yöntem:
+        {% for kod, ad, _ in dagitim_yontemleri %}{% if sevkiyat.DagitimYontemi == kod %}<strong>{{ ad }}</strong>{% endif %}{% endfor %}
+      </span>
+    </h3>
+    {% if sevkiyat.DagitimYontemi == 'MANUEL' %}
+    <form method="post" action="/grafik/sevkiyat/{{ sevkiyat.Id }}/dagitim/hesapla" id="manuel-form">
+      <button type="submit" form="manuel-form" class="btn btn-sm btn-primary">🧮 Dağıtımı Hesapla (Manuel)</button>
+    {% else %}
+    <form method="post" action="/grafik/sevkiyat/{{ sevkiyat.Id }}/dagitim/hesapla" style="display:inline;">
+      <button class="btn btn-sm btn-primary">🧮 Dağıtımı Hesapla</button>
+    </form>
+    {% endif %}
+  </div>
+
+  {% if sevkiyat.Durum != 'TESLIM' and sevkiyat.Durum != 'IPTAL' %}
+  <div class="alert-warn" style="background:#fff7ed; border-left:4px solid #F97316; padding:10px 14px; border-radius:6px; margin-bottom:12px; font-size:.88rem;">
+    ⚠ <strong>Bu sevkiyat henüz teslim alınmadığı için birim maliyetler TAHMİNİDİR.</strong>
+    Teslim tamamlandığında (Durum → Teslim Alındı) gerçek birim maliyet kesinleşecek.
+    Nakliye/gümrük/ek masraflar değişirse hesaplamayı tekrarlayın.
+  </div>
+  {% endif %}
+
+  {% if kilit_aktif %}
+  <div style="background:#fee2e2; border-left:4px solid #dc2626; padding:10px 14px; border-radius:6px; margin-bottom:12px; font-size:.88rem;">
+    🔒 <strong>Bu sevkiyat TESLİM durumunda — masraf/dağıtım değişikliği kilitlenmiştir.</strong>
+    Geçmiş maliyetlerin bozulmaması için kilitli. Düzeltme için <strong>Yönetim</strong> yetkisi gerekir (her değişiklik audit log'a düşer).
+  </div>
+  {% endif %}
+
+  {% if oneri_yontem and oneri_yontem != sevkiyat.DagitimYontemi and sevkiyat.Durum not in ['TESLIM','IPTAL'] %}
+  <div style="background:#eff6ff; border-left:4px solid #0891b2; padding:10px 14px; border-radius:6px; margin-bottom:12px; font-size:.88rem;">
+    💡 <strong>Öneri:</strong>
+    {% for kod, ad, _ in dagitim_yontemleri %}{% if oneri_yontem == kod %}{{ ad }}{% endif %}{% endfor %}
+    — Kalemlerdeki verilere bakılırsa bu yöntem daha doğru dağıtım yapar.
+    <a href="#" onclick="document.getElementById('duz-form').scrollIntoView(); return false;" style="color:#0891b2; font-weight:600;">Üstten değiştir →</a>
+  </div>
+  {% endif %}
+
+  {% if sevkiyat.ToplamMasrafTL <= 0 %}
+  <p class="empty">Önce en az bir masraf ekleyin.</p>
+  {% elif sevkiyat.DagitimYontemi == 'MANUEL' and not dagitim %}
+  <!-- Manuel form: her kalem için yüzde -->
+  <p class="muted" style="font-size:.85rem;">Her kalem için bir yüzde gir. Toplam 100 olmalı.</p>
+  <table class="data-table compact">
+    <thead>
+      <tr>
+        <th>Ürün</th><th>Açıklama</th>
+        <th style="text-align:right;">Miktar</th>
+        <th style="text-align:right;">FOB USD</th>
+        <th style="text-align:right;">Ağırlık (kg)</th>
+        <th style="text-align:right;">Hacim (m³)</th>
+        <th style="text-align:right; width:120px;">Oran (%) *</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for k in kalemler %}
+      <tr>
+        <td><code>{{ k.UrunKod or '' }}</code></td>
+        <td>{{ k.Aciklama or '' }} {% if k.RenkAd %}({{ k.RenkAd }} {{ k.Beden or '' }}){% endif %}</td>
+        <td style="text-align:right; font-variant-numeric:tabular-nums;">{{ "{:,}".format(k.Miktar) }}</td>
+        <td style="text-align:right;">${{ "{:,.2f}".format(k.Tutar or 0) }}</td>
+        <td style="text-align:right;">{{ k.AgirlikKg or 0 }}</td>
+        <td style="text-align:right;">{{ k.HacimM3 or 0 }}</td>
+        <td style="text-align:right;">
+          <input type="number" form="manuel-form" name="oran_{{ k.Id }}"
+                 min="0" max="100" step="0.01" value="0" style="width:80px; text-align:right;">
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </form>
+  {% elif dagitim %}
+  <!-- Hesaplanmış dağıtım -->
+  <table class="data-table compact">
+    <thead>
+      <tr>
+        <th></th>
+        <th>Ürün</th>
+        <th>Varyant</th>
+        <th style="text-align:right;">Miktar</th>
+        <th style="text-align:right;">Dağıtım Ağırlığı</th>
+        <th style="text-align:right;">FOB (USD)</th>
+        <th style="text-align:right;">FOB (TRY)</th>
+        <th style="text-align:right;">Masraf Payı</th>
+        <th style="text-align:right;">Toplam TRY</th>
+        <th style="text-align:right;">
+          {% if sevkiyat.Durum == 'TESLIM' %}Gerçek Birim ₺{% else %}Tahmini Birim ₺{% endif %}
+        </th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in dagitim %}
+      <tr>
+        <td style="width:52px;">
+          {% if d.UrunGorselId %}
+          <img src="/belge/{{ d.UrunGorselId }}" class="urun-thumb" alt="">
+          {% else %}
+          <div class="urun-thumb-placeholder">📦</div>
+          {% endif %}
+        </td>
+        <td>
+          <div style="display:flex; align-items:center; gap:10px;">
+            {% if d.UrunGorselId %}
+            <img src="/belge/{{ d.UrunGorselId }}" alt="" class="urun-thumb">
+            {% else %}
+            <div class="urun-thumb urun-thumb-placeholder">📦</div>
+            {% endif %}
+            <div>
+              <code>{{ d.UrunKod or '' }}</code><br>
+              <span style="font-size:.82rem;">{{ d.UrunAd or '' }}</span>
+            </div>
+          </div>
+        </td>
+        <td>
+          {% if d.RenkHex %}<span class="color-dot" style="background:{{ d.RenkHex }};"></span>{% endif %}
+          {{ d.RenkAd or '' }} {{ d.Beden or '' }}
+          {% if d.Aciklama %}<span class="muted" style="font-size:.82rem;">{{ d.Aciklama }}</span>{% endif %}
+        </td>
+        <td style="text-align:right; font-variant-numeric:tabular-nums;">{{ "{:,}".format(d.KalemMiktar) }}</td>
+        <td style="text-align:right; font-variant-numeric:tabular-nums;">
+          {{ "%.2f"|format(d.DagitimAgirligi or 0) }}
+          {% if d.Yontem == 'MANUEL' %}%{% elif d.Yontem == 'AGIRLIK' %} kg
+          {% elif d.Yontem == 'HACIM' %} m³{% elif d.Yontem == 'MIKTAR' %} adet{% else %} $ {% endif %}
+        </td>
+        <td style="text-align:right;">${{ "{:,.2f}".format(d.FOBUSDTutar) }}</td>
+        <td style="text-align:right; font-variant-numeric:tabular-nums;">{{ "{:,.0f}".format(d.FOBTLTutar) }} ₺</td>
+        <td style="text-align:right; font-variant-numeric:tabular-nums;">{{ "{:,.0f}".format(d.MasrafPayiTL) }} ₺</td>
+        <td style="text-align:right; font-variant-numeric:tabular-nums;"><strong>{{ "{:,.0f}".format(d.ToplamTLTutar) }} ₺</strong></td>
+        <td style="text-align:right; font-variant-numeric:tabular-nums;
+                   {% if sevkiyat.Durum == 'TESLIM' %}color:#059669;{% else %}color:#F97316;{% endif %}">
+          <strong>{{ "%.4f"|format(d.BirimMaliyetTL) }} ₺</strong>
+          <div style="font-size:.7rem; font-weight:600; letter-spacing:.5px;">
+            {% if sevkiyat.Durum == 'TESLIM' %}✓ GERÇEK{% else %}⏳ TAHMİNİ{% endif %}
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="muted" style="font-size:.85rem; margin-top:8px;">
+    ✓ Hesaplandı — <strong>{{ sevkiyat.DagitimYontemi }}</strong> yöntemiyle.
+    Masraf eklerseniz veya yöntem değiştirirseniz yeniden hesaplamanız gerekir.
+  </p>
+  {% else %}
+  <p class="empty">Dağıtım henüz hesaplanmadı. Yukarıdan <strong>🧮 Dağıtımı Hesapla</strong>'ya bas.</p>
+  {% endif %}
+</section>
+
+<!-- MASRAF EKLE MODAL -->
+<dialog id="masraf-yeni" class="modal">
+  <form method="post" action="/grafik/sevkiyat/{{ sevkiyat.Id }}/masraf/yeni" class="modal-form" style="min-width:520px;">
+    <h3>Yeni Masraf</h3>
+    <p class="muted" style="font-size:.85rem; margin:0;">
+      Nakliye tipi: <strong>{% for kod, ad, _ in nakliye_tipleri %}{% if sevkiyat.NakliyeTipi == kod %}{{ ad }}{% endif %}{% endfor %}</strong>
+    </p>
+    <div class="form-row">
+      <label style="flex:1;">Tip *
+        <select name="Tip" id="masraf-tip" required onchange="masrafFormUpdate()">
+          {% set grup_sirasi = ['Uçak', 'Konteyner', 'Genel'] %}
+          {% for grup_ad in grup_sirasi %}
+          <optgroup label="{{ grup_ad }}">
+            {% for kod, ad in masraf_tipleri %}
+              {% if masraf_grup[kod] == grup_ad %}
+              <option value="{{ kod }}">{{ ad }}</option>
+              {% endif %}
+            {% endfor %}
+          </optgroup>
+          {% endfor %}
+        </select>
+      </label>
+      <label style="flex:1;">Para Birimi
+        <select name="ParaBirimi" id="masraf-pb" onchange="masrafKurCheck()">
+          <option value="TRY" selected>TRY</option>
+          <option value="USD">USD</option>
+          <option value="EUR">EUR</option>
+          <option value="CNY">CNY</option>
+        </select>
+      </label>
+    </div>
+    <!-- Parça 5.5: Canlı kur durumu göstergesi -->
+    <div id="masraf-kur-info" style="display:none; padding:8px 12px; border-radius:6px; font-size:.82rem; margin:4px 0;"></div>
+    <div class="form-row">
+      <label style="flex:1;">İşlem Tarihi
+        <input type="date" name="IslemTarih">
+        <small class="muted" style="font-size:.72rem;">Boş: bugünün kuru. Geçmiş tarih: o günün kuru sabitlenir.</small>
+      </label>
+      <label style="flex:1;">Belge No <input type="text" name="BelgeNo" placeholder="opsiyonel"></label>
+    </div>
+
+    <!-- NAVLUN için akıllı alanlar (UÇAK: kg × $/kg, KONTEYNER: adet × birim, KARAYOLU: düz) -->
+    <div id="masraf-navlun" style="display:none; background:#fff7ed; padding:12px; border-radius:8px; border-left:3px solid #F97316;">
+      <div style="font-weight:600; color:#F97316; margin-bottom:8px;" id="masraf-navlun-baslik">
+        {% if sevkiyat.NakliyeTipi == 'UCAK' %}✈ Uçak Navlun (Kg × Kg Başı Fiyat)
+        {% elif sevkiyat.NakliyeTipi == 'KONTEYNER' %}🚢 Konteyner Navlun (Adet × Birim Fiyat)
+        {% else %}🚚 Navlun{% endif %}
+      </div>
+      <div class="form-row">
+        <label style="flex:1;">
+          <span id="lbl-birim-sayi">
+            {% if sevkiyat.NakliyeTipi == 'UCAK' %}Toplam Ağırlık (kg) *
+            {% elif sevkiyat.NakliyeTipi == 'KONTEYNER' %}Konteyner Adet *
+            {% else %}Birim Sayısı{% endif %}
+          </span>
+          <input type="number" name="BirimSayi" min="0" step="0.01" value="0"
+                 oninput="hesaplaNavlun()" id="inp-birim-sayi">
+        </label>
+        <label style="flex:1;">
+          <span id="lbl-birim-fiyat">
+            {% if sevkiyat.NakliyeTipi == 'UCAK' %}Kg Başı Fiyat *
+            {% elif sevkiyat.NakliyeTipi == 'KONTEYNER' %}Konteyner Birim Fiyatı *
+            {% else %}Birim Fiyat{% endif %}
+          </span>
+          <input type="number" name="BirimFiyat" min="0" step="0.0001" value="0"
+                 oninput="hesaplaNavlun()" id="inp-birim-fiyat">
+        </label>
+      </div>
+      <div style="font-size:.88rem; color:#6b7280; margin-top:4px;">
+        Otomatik tutar: <strong id="hesap-tutar" style="color:#F97316;">0.00</strong>
+        <span id="hesap-aciklama" style="margin-left:8px;"></span>
+      </div>
+    </div>
+
+    <!-- Normal Tutar (NAVLUN dışında) -->
+    <div id="masraf-duz" class="form-row">
+      <label style="flex:1;">Tutar * <input type="number" name="Tutar" id="inp-tutar" min="0" step="0.01" value="0"></label>
+    </div>
+    <label>Açıklama <input type="text" name="Aciklama" id="inp-aciklama"></label>
+    <p class="muted" style="font-size:.82rem; margin:0;">
+      USD/EUR/CNY girersen sistem, işlem tarihindeki kuru otomatik alıp TRY'ye çevirir ve <strong>sabitler</strong>.
+    </p>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" onclick="this.closest('dialog').close()">İptal</button>
+      <button class="btn btn-primary">Ekle</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+const NAKLIYE = "{{ sevkiyat.NakliyeTipi }}";
+
+function masrafFormUpdate() {
+  const tip = document.getElementById('masraf-tip').value;
+  const navlun = document.getElementById('masraf-navlun');
+  const duz = document.getElementById('masraf-duz');
+  const inpTutar = document.getElementById('inp-tutar');
+  // Kg×fiyat veya adet×birim ile hesaplanabilen tipler
+  const carpmaTipleri = ['NAVLUN', 'NAVLUN_DENIZ', 'DHL', 'CARRIER_FEE', 'YAKIT'];
+  if (carpmaTipleri.includes(tip)) {
+    navlun.style.display = 'block';
+    duz.style.display = 'none';
+    inpTutar.required = false;
+    hesaplaNavlun();
+  } else {
+    navlun.style.display = 'none';
+    duz.style.display = 'flex';
+    inpTutar.required = true;
+    document.getElementById('inp-birim-sayi').value = 0;
+    document.getElementById('inp-birim-fiyat').value = 0;
+  }
+}
+
+function hesaplaNavlun() {
+  const bs = parseFloat(document.getElementById('inp-birim-sayi').value) || 0;
+  const bf = parseFloat(document.getElementById('inp-birim-fiyat').value) || 0;
+  const tutar = bs * bf;
+  document.getElementById('hesap-tutar').textContent = tutar.toFixed(2);
+  document.getElementById('inp-tutar').value = tutar.toFixed(2);
+
+  const aciklamaInp = document.getElementById('inp-aciklama');
+  let formulText = '';
+  if (bs > 0 && bf > 0) {
+    if (NAKLIYE === 'UCAK') {
+      formulText = `${bs} kg × ${bf} / kg = ${tutar.toFixed(2)}`;
+    } else if (NAKLIYE === 'KONTEYNER') {
+      formulText = `${bs} adet × ${bf} = ${tutar.toFixed(2)}`;
+    } else {
+      formulText = `${bs} × ${bf} = ${tutar.toFixed(2)}`;
+    }
+    document.getElementById('hesap-aciklama').textContent = `= ${formulText}`;
+    if (!aciklamaInp.value || aciklamaInp.dataset.auto === '1') {
+      aciklamaInp.value = formulText;
+      aciklamaInp.dataset.auto = '1';
+    }
+  } else {
+    document.getElementById('hesap-aciklama').textContent = '';
+  }
+}
+// init
+document.addEventListener('DOMContentLoaded', masrafFormUpdate);
+</script>
+
+<!-- BELGELER -->
+<div style="margin-top:20px;">
+  {% set upload_url = '/grafik/sevkiyat/' ~ sevkiyat.Id ~ '/belge/yukle' %}
+  {% set panel_baslik = 'Beyanname, Fatura, Konşimento' %}
+  {% include 'grafik/_belge_section.html' %}
+</div>
+
+<!-- Parça 5 / EK-1: MASRAF DÜZENLEME MODAL -->
+<dialog id="masraf-duzenle" class="modal">
+  <form method="post" id="masraf-duzenle-form" class="modal-form" style="min-width:520px;">
+    <h3>✏ Masraf Düzenle</h3>
+
+    <div class="form-row">
+      <label style="flex:1;">Tip
+        <select name="Tip" id="m-duz-tip">
+          {% set grup_sirasi = ['Uçak', 'Konteyner', 'Genel'] %}
+          {% for grup_ad in grup_sirasi %}
+          <optgroup label="{{ grup_ad }}">
+            {% for kod, ad in masraf_tipleri %}
+              {% if masraf_grup[kod] == grup_ad %}
+              <option value="{{ kod }}">{{ ad }}</option>
+              {% endif %}
+            {% endfor %}
+          </optgroup>
+          {% endfor %}
+        </select>
+      </label>
+      <label style="flex:1;">Para Birimi
+        <select name="ParaBirimi" id="m-duz-pb" onchange="kurPolitikaGoster()">
+          <option value="TRY">TRY</option>
+          <option value="USD">USD</option>
+          <option value="EUR">EUR</option>
+          <option value="CNY">CNY</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="form-row">
+      <label style="flex:1;">Tutar
+        <input type="number" name="Tutar" id="m-duz-tutar" min="0" step="0.01">
+      </label>
+      <label style="flex:1;">Belge No
+        <input type="text" name="BelgeNo" id="m-duz-belge">
+      </label>
+    </div>
+
+    <div class="form-row">
+      <label style="flex:1;">İşlem Tarihi
+        <input type="date" name="IslemTarih" id="m-duz-tarih" onchange="kurPolitikaGoster()">
+      </label>
+      <label style="flex:1;">Kur
+        <input type="number" name="KurSnapshot" id="m-duz-kur" step="0.0001" readonly
+               style="background:#f3f4f6;">
+      </label>
+    </div>
+
+    <!-- Kur politikası — sadece tarih/PB değiştiğinde görünür -->
+    <div id="m-duz-kur-politika" style="display:none; background:#fef3c7; padding:10px 14px; border-radius:6px; border-left:3px solid #F97316; margin:6px 0;">
+      <strong>⚠ Tarih veya para birimi değişti.</strong> Kur nasıl güncellensin?
+      <div style="margin-top:8px; display:flex; flex-direction:column; gap:4px;">
+        <label style="display:flex; align-items:center; gap:8px; font-weight:normal;">
+          <input type="radio" name="KurPolitikasi" value="KORU" checked onchange="kurPolitikaUygula()">
+          <span>Mevcut kuru koru <code id="m-duz-kur-eski"></code></span>
+        </label>
+        <label style="display:flex; align-items:center; gap:8px; font-weight:normal;">
+          <input type="radio" name="KurPolitikasi" value="YENI" onchange="kurPolitikaUygula()">
+          <span>Yeni tarihin kurunu al (sistemden çekilir)</span>
+        </label>
+      </div>
+    </div>
+
+    <label>Açıklama
+      <textarea name="Aciklama" id="m-duz-aciklama" rows="2"></textarea>
+    </label>
+
+    <div class="modal-actions" style="align-items:center;">
+      <span id="m-duz-kaydet-hint" style="font-size:.78rem; color:#6b7280; margin-right:auto;">
+        ℹ Değişiklik yok — mevcut kur korunarak kaydedilecek.
+      </span>
+      <button type="button" class="btn btn-ghost" onclick="this.closest('dialog').close()">İptal</button>
+      <button class="btn btn-primary">Kaydet</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+// Parça 5.5: Dağıtım uyarısı için kalem verileri
+window._kalemler = [
+  {% for k in kalemler %}
+  { Id: {{ k.Id }}, Ad: {{ (k.Aciklama or k.UrunKod or ('Kalem #' ~ k.Id))|tojson }},
+    UrunKod: {{ (k.UrunKod or '')|tojson }},
+    Miktar: {{ k.Miktar or 0 }}, Tutar: {{ k.Tutar or 0 }},
+    AgirlikKg: {{ k.AgirlikKg or 0 }}, HacimM3: {{ k.HacimM3 or 0 }} }{{ "," if not loop.last }}
+  {% endfor %}
+];
+
+let _masrafEdit = { eskiTarih: '', eskiPB: '', eskiKur: 1 };
+
+function masrafDuzenleAc(id, tutar, pb, kur, tarih, tip, belge, aciklama, birimSayi, birimFiyat) {
+  const form = document.getElementById('masraf-duzenle-form');
+  form.action = '/grafik/sevkiyat/masraf/' + id + '/guncelle';
+  document.getElementById('m-duz-tip').value = tip;
+  document.getElementById('m-duz-pb').value = pb;
+  document.getElementById('m-duz-tutar').value = tutar;
+  document.getElementById('m-duz-belge').value = belge || '';
+  document.getElementById('m-duz-tarih').value = tarih || '';
+  document.getElementById('m-duz-kur').value = (+kur).toFixed(4);
+  document.getElementById('m-duz-aciklama').value = aciklama || '';
+  document.getElementById('m-duz-kur-eski').textContent = (+kur).toFixed(4);
+  _masrafEdit = { eskiTarih: tarih || '', eskiPB: pb || 'TRY', eskiKur: kur };
+  kurPolitikaGoster();
+  document.getElementById('masraf-duzenle').showModal();
+}
+
+function kurPolitikaGoster() {
+  const tarih = document.getElementById('m-duz-tarih').value;
+  const pb = document.getElementById('m-duz-pb').value;
+  const politikaKutu = document.getElementById('m-duz-kur-politika');
+  const degisti = (tarih !== _masrafEdit.eskiTarih || pb !== _masrafEdit.eskiPB);
+  const isTRY = (pb === 'TRY');
+  politikaKutu.style.display = (degisti && !isTRY) ? 'block' : 'none';
+  if (isTRY) {
+    document.getElementById('m-duz-kur').value = '1.0000';
+  }
+  kaydetHintGuncelle();
+}
+
+function kurPolitikaUygula() {
+  const secim = document.querySelector('input[name="KurPolitikasi"]:checked').value;
+  const kurInput = document.getElementById('m-duz-kur');
+  if (secim === 'KORU') {
+    kurInput.value = (+_masrafEdit.eskiKur).toFixed(4);
+  } else {
+    kurInput.value = '';
+    kurInput.placeholder = 'Sistem kuru çekecek';
+  }
+  kaydetHintGuncelle();
+}
+
+// Parça 5.5: Edit modal kaydet butonu yanı etiket
+function kaydetHintGuncelle() {
+  const hint = document.getElementById('m-duz-kaydet-hint');
+  if (!hint) return;
+  const tarih = document.getElementById('m-duz-tarih').value;
+  const pb = document.getElementById('m-duz-pb').value;
+  const degisti = (tarih !== _masrafEdit.eskiTarih || pb !== _masrafEdit.eskiPB);
+  const isTRY = (pb === 'TRY');
+  if (!degisti) {
+    hint.innerHTML = 'ℹ Değişiklik yok — mevcut kur korunarak kaydedilecek.';
+    hint.style.color = '#6b7280';
+    return;
+  }
+  if (isTRY) {
+    hint.innerHTML = 'ℹ TRY seçildi — kur sabit 1.0000.';
+    hint.style.color = '#6b7280';
+    return;
+  }
+  const secim = (document.querySelector('input[name="KurPolitikasi"]:checked') || {}).value || 'KORU';
+  if (secim === 'KORU') {
+    hint.innerHTML = `ℹ <strong>Kur değişmeden kaydedilecek</strong> (${(+_masrafEdit.eskiKur).toFixed(4)}).`;
+    hint.style.color = '#059669';
+  } else {
+    hint.innerHTML = '⚠ <strong>Yeni tarihin kuru</strong> sistemden çekilip uygulanacak.';
+    hint.style.color = '#c2410c';
+  }
+}
+
+// Parça 5.5: Masraf yeni modal — Para birimi değişince kur kontrolü
+async function masrafKurCheck() {
+  const pb = document.getElementById('masraf-pb').value;
+  const box = document.getElementById('masraf-kur-info');
+  if (!box) return;
+  if (pb === 'TRY') {
+    box.style.display = 'none';
+    return;
+  }
+  // API çağrısı
+  box.style.display = 'block';
+  box.style.background = '#f3f4f6';
+  box.style.borderLeft = '3px solid #9ca3af';
+  box.style.color = '#374151';
+  box.innerHTML = 'Kur kontrol ediliyor...';
+  try {
+    const r = await fetch('/yonetim/kur/api?pb=' + encodeURIComponent(pb));
+    const data = await r.json();
+    if (data.ok) {
+      box.style.background = '#dcfce7';
+      box.style.borderLeft = '3px solid #059669';
+      box.style.color = '#065f46';
+      box.innerHTML = `✓ <strong>Sistemde ${pb} kuru:</strong> ${(+data.kur).toFixed(4)} (${data.tarih || 'güncel'}) — bu kullanılacak.`;
+    } else {
+      box.style.background = '#fee2e2';
+      box.style.borderLeft = '3px solid #dc2626';
+      box.style.color = '#991b1b';
+      box.innerHTML = `⚠ <strong>${pb} kuru tanımlı değil.</strong> Önce <a href="/yonetim/kur" target="_blank" style="color:#dc2626; font-weight:600;">/yonetim/kur</a> sayfasından tanımlayın, sonra devam edin.`;
+    }
+  } catch (e) {
+    box.style.display = 'none';
+  }
+}
+
+// Parça 5.5: Dağıtım yöntemi değişince kalem kontrolü
+function dagitimYontemKontrol() {
+  const sel = document.getElementById('sel-dagitim-yontem');
+  const box = document.getElementById('dagitim-uyari');
+  if (!sel || !box || !window._kalemler) return;
+  const yontem = sel.value;
+  const kalemler = window._kalemler;
+  let eksikAlan = null, etiket = null;
+  if (yontem === 'AGIRLIK') { eksikAlan = 'kg'; etiket = 'AgirlikKg'; }
+  else if (yontem === 'HACIM') { eksikAlan = 'm³'; etiket = 'HacimM3'; }
+  else if (yontem === 'MIKTAR') { eksikAlan = 'adet'; etiket = 'Miktar'; }
+  else if (yontem === 'FOB') { eksikAlan = 'FOB tutar'; etiket = 'Tutar'; }
+
+  if (!eksikAlan) {
+    // MANUEL için uyarı yok
+    box.style.display = 'none';
+    return;
+  }
+
+  const eksik = kalemler.filter(k => !(parseFloat(k[etiket]) > 0));
+  const toplam = kalemler.length;
+  box.style.display = 'block';
+  if (eksik.length === 0) {
+    box.style.background = '#dcfce7';
+    box.style.borderLeft = '4px solid #059669';
+    box.style.color = '#065f46';
+    box.innerHTML = `✓ <strong>${toplam}/${toplam} kalemde ${eksikAlan} değerleri dolu.</strong> Dağıtım sorunsuz hesaplanabilir.`;
+  } else {
+    const isimler = eksik.slice(0, 5).map(k => {
+      const satir = kalemler.indexOf(k) + 1;
+      return `Satır ${satir} (${k.Ad || k.UrunAd || ('Kalem #' + k.Id)})`;
+    }).join(', ');
+    const devami = eksik.length > 5 ? '...' : '';
+    box.style.background = '#fef3c7';
+    box.style.borderLeft = '4px solid #F97316';
+    box.style.color = '#9a3412';
+    box.innerHTML = `⚠ <strong>Bu yöntem için ${eksik.length}/${toplam} kalemde ${eksikAlan} eksik:</strong> ${isimler}${devami}. ` +
+      `Hesapla'ya basarsan hata alırsın. Önce kalemlere ${eksikAlan} girin veya başka yöntem seçin.`;
+  }
+}
+
+// Sayfa yüklendiğinde dağıtım kontrolünü bir kez çalıştır
+document.addEventListener('DOMContentLoaded', function() {
+  if (typeof dagitimYontemKontrol === 'function') dagitimYontemKontrol();
+});
+</script>
+
+<style>
+.info-dl { display:grid; grid-template-columns:auto 1fr; gap:6px 12px; font-size:.9rem; margin:0; }
+.info-dl dt { color:#6b7280; font-weight:500; }
+.info-dl dd { margin:0; color:#1f2937; text-align:right; }
+</style>
+{% endblock %}

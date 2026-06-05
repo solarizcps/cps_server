@@ -1,0 +1,26 @@
+CPS DEV Stabil Yedek
+====================
+Tarih : 20260425_1331
+Etiket: D_oncesi_estetik
+
+Bu yedek ESTETIK PATCH C1 oncesi alinmis stabil snapshot'tir.
+
+Tamamlanmis isler (bu noktaya kadar):
+- A asamasi: Ithalat core 8/8
+- B asamasi: Manuel satir ekleme 5/5
+- IslemTarih bug: Durum Takibi calisiyor
+- SAPMA hesabi backend: 3 parti dogrulandi
+- SAPMA UI (CSS + JS): tum senaryolar dogrulandi
+
+Sonra uygulanacak isler:
+- Patch C1: Estetik CSS (tip kart ferahlik, sapma rengi)
+- Patch C2: Tip kart 3 satirli yeni duzen (JS)
+- Patch C3: KPI ikonlari (JS)
+
+Kapsam disi (sonraya): Sol ic menu, para birimi switch, tablo sort.
+
+Geri yukleme:
+  xcopy "C:\cps_dev\yedekler\backup_D_oncesi_estetik_20260425_1331\modules\" "C:\cps_dev\modules\" /E /I /Y
+  xcopy "C:\cps_dev\yedekler\backup_D_oncesi_estetik_20260425_1331\static\"  "C:\cps_dev\static\"  /E /I /Y
+  xcopy "C:\cps_dev\yedekler\backup_D_oncesi_estetik_20260425_1331\templates\" "C:\cps_dev\templates\" /E /I /Y
+  copy "C:\cps_dev\yedekler\backup_D_oncesi_estetik_20260425_1331\mock_data.db" "C:\cps_dev\mock_data.db"

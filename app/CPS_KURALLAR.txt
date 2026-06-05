@@ -1,0 +1,61 @@
+CPS KURALLAR — DEGISMEZ
+========================
+
+1) Korgun = SADECE VERI KAYNAGI
+   - Read-only erisim
+   - Hicbir sekilde yazilmaz
+
+2) CPS = URETIM + PERSONEL + ANALIZ
+   - Tum yeni veri burada tutulur (mock_data.db)
+   - Personel kayitlari, onaylar, gecmis hepsi CPS
+
+3) Ana emir miktari ASILMAZ
+   - Korgun hedef + CPS bekleyen + CPS onayli = max hedef
+   - Backend validasyonu var (uretim_kaydet)
+
+4) Personel sadece KAYIT GIRER
+   - Onay yetkisi yok
+   - Kayitlari onay_durum='bekliyor' ile baslar
+
+5) Usta ONAYLAR, KAPATIR ve SABLON tanimlar           [FAZ 4.6 genisletme]
+   - /hedef/ ONAYLAR sekmesinden onay/red
+   - Onayla -> onay_durum='onaylandi'
+   - Reddet -> onay_durum='reddedildi' (>=5 karakter not zorunlu)
+   - SABLON: proses + saat -> hedef tanimi (lookup tablosu)
+     * Hibrit: genel temel sablon + emire ozel override
+   - Ileride sablon yetkisi planlama roluna devredilebilir
+
+6) PLAN = Korgun + CPS toplam ilerleme
+   - get_emir_ozet (Korgun hedef + Korgun yapilan)
+   - + CPS onayli (mock_data.db)
+   - = Toplam yapilan, kalan, %
+
+7) RAPOR = SADECE CPS analiz
+   - mock_data.db.uretim_kayit (onaylandi)
+   - Tarih araligi, personel/proses/emir bazli ozet
+   - Korgun verisi rapora KARISMAZ
+
+8) Korgun'a YAZMA YOK
+   - Hicbir endpoint Korgun'a INSERT/UPDATE/DELETE atmaz
+   - Sadece SELECT
+
+9) MES v2 KULLANILMAYACAK
+   - Eski /api/v2/... endpoint'leri devre disi
+   - Yeni gelistirmeler CPS local + Korgun read
+
+10) MESAI SISTEMI                                     [FAZ 4.6 yeni]
+    - Normal calisma gunu disinda is (hafta sonu, fazla mesai)
+    - Onceden tanimlanir: tarih + bas/bit saat + katilan personel
+    - Sadece RAPORLAMA amacli, kayit girisi engellenmez
+    - Raporda kayit 'mesai mi normal mi' ayirt edilir
+
+11) VARDIYA TANIMI                                    [FAZ 4.6 yeni]
+    - Gunduz: 07:00 - 17:00 (10 saat)
+    - Gece:   17:00 - 07:00 (ertesi gun) (14 saat)
+    - String: "gunduz" / "gece" (sayisal degil)
+    - Saatten otomatik hesaplanir, kayit response'unda doner
+    - NOT: FAZ 4.5'teki 1/2/3 sayisal hesap iptal edildi.
+
+==========================================
+BU KURALLAR DEGISMEZ. CELISKI VARSA UYARI.
+==========================================

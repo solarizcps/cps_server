@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Şifre Değiştir — Solariz CPS{% endblock %}
+
+{% block head %}
+<style>
+.sif-sarmal { display:flex; align-items:center; justify-content:center; min-height:60vh; padding:20px; }
+.sif-kutu { background:#fff; border:0.5px solid var(--border); border-radius:14px; padding:32px 36px; width:100%; max-width:420px; box-shadow:var(--shadow-md); }
+.sif-kutu h2 { font-size:20px; margin-bottom:6px; }
+.sif-kutu .sub { color:var(--text3); font-size:13px; margin-bottom:18px; }
+.sif-fg { margin-bottom:14px; }
+.sif-fg label { display:block; font-size:10px; font-weight:700; letter-spacing:1.3px; color:var(--text3); text-transform:uppercase; margin-bottom:5px; }
+.sif-fg input { width:100%; padding:10px 14px; border:1px solid var(--border); border-radius:8px; font-size:14px; font-family:var(--sans); outline:none; }
+.sif-fg input:focus { border-color:var(--sol); box-shadow:0 0 0 3px var(--accent-glow); }
+.zorunlu-uyari {
+  background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.3);
+  color:#92400e; padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:14px;
+  display:flex; gap:10px; align-items:flex-start;
+}
+.basarili {
+  background:rgba(22,163,74,0.08); border:1px solid rgba(22,163,74,0.3);
+  color:var(--green); padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:14px; text-align:center;
+}
+.hata-alert {
+  background:rgba(220,38,38,0.08); border:1px solid rgba(220,38,38,0.25);
+  color:var(--red); padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:14px; text-align:center;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="sif-sarmal">
+  <div class="sif-kutu">
+    <h2>🔑 Şifre Değiştir</h2>
+    <div class="sub">Güvenliğiniz için yeni bir şifre belirleyin</div>
+
+    {% if zorunlu and not basarili %}
+    <div class="zorunlu-uyari">
+      <span style="font-size:20px;">⚠</span>
+      <div>
+        <strong>İlk girişinizde şifrenizi değiştirmeniz zorunludur.</strong><br>
+        Değişiklik yapmadan diğer sayfalara erişemezsiniz.
+      </div>
+    </div>
+    {% endif %}
+
+    {% if basarili %}
+    <div class="basarili">✓ Şifreniz başarıyla değiştirildi.</div>
+    {% endif %}
+
+    {% if hata %}
+    <div class="hata-alert">{{ hata }}</div>
+    {% endif %}
+
+    <form method="post" {% if basarili and not zorunlu %}style="display:none;"{% endif %}>
+      <div class="sif-fg">
+        <label>Mevcut Şifre</label>
+        <input type="password" name="mevcut" required autofocus autocomplete="current-password">
+      </div>
+      <div class="sif-fg">
+        <label>Yeni Şifre</label>
+        <input type="password" name="yeni" required minlength="4" autocomplete="new-password">
+      </div>
+      <div class="sif-fg">
+        <label>Yeni Şifre (Tekrar)</label>
+        <input type="password" name="tekrar" required minlength="4" autocomplete="new-password">
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%; padding:11px; font-size:14px;">
+        Şifreyi Değiştir
+      </button>
+    </form>
+
+    {% if basarili %}
+    <div style="margin-top:16px; text-align:center;">
+      <a href="/" class="btn btn-primary">Ana Sayfaya Dön →</a>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+
+{% endblock %}

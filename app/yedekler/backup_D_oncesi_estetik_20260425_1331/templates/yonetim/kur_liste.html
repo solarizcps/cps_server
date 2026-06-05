@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Kur Tanımları — Yönetim{% endblock %}
+
+{% block head %}
+<style>
+.kur-ust { display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; margin-bottom:16px; }
+.kur-kart { background:#fff; border:0.5px solid var(--border); border-radius:10px; padding:16px 20px; box-shadow:var(--shadow-sm); }
+.kur-kart .pb { font-size:12px; color:var(--text3); text-transform:uppercase; letter-spacing:2px; font-weight:700; }
+.kur-kart .mk { font-size:28px; font-weight:800; margin:6px 0 2px; font-family:var(--mono); }
+.kur-kart .as { font-size:11px; color:var(--text3); font-family:var(--mono); }
+.kur-kart .tr { font-size:10px; color:var(--text3); margin-top:6px; }
+.k-form { background:#fff; border:0.5px solid var(--border); border-radius:10px; padding:16px 20px; box-shadow:var(--shadow-sm); margin-bottom:16px; }
+.k-form .fgrid { display:grid; grid-template-columns:140px 110px 110px 110px auto; gap:10px; align-items:end; }
+.k-form label { display:block; font-size:10px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:1.3px; margin-bottom:3px; }
+.k-form input, .k-form select { width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-family:var(--sans); font-size:13px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <div class="page-title">Kur Tanımları</div>
+    <div class="page-sub">USD / EUR / CNY · Snapshot prensibi: kullanılan kur her yerde kaydedilir</div>
+  </div>
+</div>
+
+<!-- Güncel kurlar -->
+<div class="kur-ust">
+  <div class="kur-kart">
+    <div class="pb">USD / TRY</div>
+    {% if usd %}
+    <div class="mk">{{ "%.4f" | format(usd.MerkezKur) | replace('.', ',') }} ₺</div>
+    <div class="as">Alış {{ "%.4f" | format(usd.Alis) | replace('.', ',') }} · Satış {{ "%.4f" | format(usd.Satis) | replace('.', ',') }}</div>
+    <div class="tr">📅 {{ usd.Tarih | tarih }}</div>
+    {% else %}
+    <div class="mk" style="color:var(--text3);">—</div>
+    <div class="tr">Kur tanımlı değil</div>
+    {% endif %}
+  </div>
+  <div class="kur-kart">
+    <div class="pb">EUR / TRY</div>
+    {% if eur %}
+    <div class="mk">{{ "%.4f" | format(eur.MerkezKur) | replace('.', ',') }} ₺</div>
+    <div class="as">Alış {{ "%.4f" | format(eur.Alis) | replace('.', ',') }} · Satış {{ "%.4f" | format(eur.Satis) | replace('.', ',') }}</div>
+    <div class="tr">📅 {{ eur.Tarih | tarih }}</div>
+    {% else %}
+    <div class="mk" style="color:var(--text3);">—</div>
+    <div class="tr">Kur tanımlı değil</div>
+    {% endif %}
+  </div>
+  <div class="kur-kart">
+    <div class="pb">CNY / TRY</div>
+    {% if cny %}
+    <div class="mk">{{ "%.4f" | format(cny.MerkezKur) | replace('.', ',') }} ₺</div>
+    <div class="as">Alış {{ "%.4f" | format(cny.Alis) | replace('.', ',') }} · Satış {{ "%.4f" | format(cny.Satis) | replace('.', ',') }}</div>
+    <div class="tr">📅 {{ cny.Tarih | tarih }}</div>
+    {% else %}
+    <div class="mk" style="color:var(--text3);">—</div>
+    <div class="tr">Kur tanımlı değil</div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Yeni kur ekle -->
+<div class="k-form">
+  <form method="post" action="/yonetim/kur/yeni">
+    <div class="fgrid">
+      <div>
+        <label>Tarih</label>
+        <input type="date" name="Tarih" value="{{ bugun }}" required>
+      </div>
+      <div>
+        <label>Para Birimi</label>
+        <select name="ParaBirimi" required>
+          <option value="USD">USD</option>
+          <option value="EUR">EUR</option>
+          <option value="CNY">CNY</option>
+        </select>
+      </div>
+      <div>
+        <label>Alış (₺)</label>
+        <input type="number" name="Alis" step="0.0001" min="0.01" required>
+      </div>
+      <div>
+        <label>Satış (₺)</label>
+        <input type="number" name="Satis" step="0.0001" min="0.01" required>
+      </div>
+      <div>
+        <button type="submit" class="btn btn-primary">+ Ekle / Güncelle</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<!-- Kur geçmişi -->
+<div class="oz-card">
+  <div class="oz-hdr"><span class="oz-hdr-t">Kur Geçmişi ({{ kurlar | length }} kayıt)</span></div>
+  <div class="tbl-wrap" style="border:none; box-shadow:none; border-radius:0;">
+    <table>
+      <thead>
+        <tr>
+          <th>Tarih</th>
+          <th>Para Birimi</th>
+          <th class="num">Alış</th>
+          <th class="num">Satış</th>
+          <th class="num">Merkez Kur</th>
+          <th>Kaynak</th>
+          <th>Ekleyen</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for k in kurlar %}
+        <tr>
+          <td class="mono">{{ k.Tarih | tarih }}</td>
+          <td><span class="tag">{{ k.ParaBirimi }}</span></td>
+          <td class="num mono">{{ "%.4f" | format(k.Alis) | replace('.', ',') }}</td>
+          <td class="num mono">{{ "%.4f" | format(k.Satis) | replace('.', ',') }}</td>
+          <td class="num mono bold">{{ "%.4f" | format(k.MerkezKur) | replace('.', ',') }}</td>
+          <td><span class="badge badge-fatura">{{ k.Kaynak }}</span></td>
+          <td style="font-size:11px; color:var(--text3);">{{ k.OlusturanKullanici or '—' }}</td>
+          <td>
+            <form method="post" action="/yonetim/kur/{{ k.Id }}/sil" style="display:inline;" onsubmit="return confirm('Silinsin mi?')">
+              <button class="btn btn-outline btn-sm" style="color:var(--red);" type="submit">🗑</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

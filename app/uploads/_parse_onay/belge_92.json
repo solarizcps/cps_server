@@ -1,0 +1,42 @@
+{
+  "belge_id": 92,
+  "parti_id": 6,
+  "olusma_tarih": "2026-04-25 02:00:09",
+  "parse": {
+    "basarili": false,
+    "durum": "ONERI_BEKLIYOR",
+    "mesaj": "Bu faturadan kalemler otomatik okunamadi. Manuel giris yapiniz - Maliyet sekmesinden kalem ekleyebilirsiniz.",
+    "kalem_sayisi": 0,
+    "kalemler": [],
+    "parti_bilgi": {},
+    "uyarilar": [
+      "Fatura No: BLR2026000001103"
+    ],
+    "kaynak_ref": "BLR2026000001103",
+    "dosya_hash": "44d8fe0fea82dc22ba50b9a0aceec1c3f91eb8aa1720dc985756869d03fa1504",
+    "insan_onayi_bekliyor": false,
+    "guven_skoru": null,
+    "guven_seviyesi": null,
+    "guven_detay": [],
+    "matematik_ok": null,
+    "ekstra_kalemler": [],
+    "tespit_edilen_kolonlar": {},
+    "mantiksizlik_uyarilari": [],
+    "oneriler": [],
+    "meta": {
+      "belge_tipi_etiket": "Tasima/Navlun Faturasi",
+      "fatura_no": "BLR2026000001103",
+      "fatura_tarihi": null,
+      "toplam_tutar": null,
+      "toplam_para": null,
+      "tasima_tipi": null
+    }
+  },
+  "ek_bilgi": {
+    "dosya_adi": "sebs - nexgen - bilir gümrük fatura.pdf",
+    "belge_tipi": "FATURA",
+    "dosya_hash": "44d8fe0fea82dc22ba50b9a0aceec1c3f91eb8aa1720dc985756869d03fa1504"
+  },
+  "is_duplicate": false,
+  "existing_ref": null
+}

@@ -1,0 +1,416 @@
+================================================================================
+CPS HANDOFF — 2 SEANS BİRLEŞİK ÖZETİ
+Son güncelleme: 2026-04-29 (Çarşamba)
+================================================================================
+
+YENİ CLAUDE'A NOT:
+Bu dosya iki seansın birleşik özetidir. Önceki seans 2026-04-28, bu seans
+2026-04-29. Sistem CPS (Solariz CPS) Türk EVA terlik fabrikasının üretim
+takip yazılımı. Adem (kullanıcı) 27 yıl EVA üretim deneyimi olan fabrika
+sahibi/yazılımcı.
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  CPS_KURALLAR (uyulması zorunlu)                                            ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+1. Korgun = SADECE OKUNUR (SELECT, hiç INSERT/UPDATE/DELETE)
+2. CPS = mock_data.db'ye yazar (uretim_kayit, sablon, sablon_proses, emir_alt_proses)
+3. MES v2 KULLANILMIYOR
+4. Şablon hedef üretmez (sadece proses listesi)
+5. uretim_kaydet sablon dokunmaz
+6. Manuel kayıtlar geri-al'da korunur (kaynak='manuel')
+7. Frontend yetki hook'ları hazır (şimdilik herkese açık)
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  STABLE NOKTALARI (rollback için)                                            ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+1) ŞABLON B3 STABLE (28.04 17:46)
+   C:\cps_dev_backup_SABLON_B3_STABLE_20260428_1746
+   C:\cps_dev_db_backups\mock_data_sablon_b3_stable_20260428_1746.db
+
+2) PLAN_DETAY_V3 ÇALIŞAN HALI (29.04 ~01:17)
+   C:\cps_dev\modules\hedef\routes.py.bak_20260429_011730 ← TEMİZ V3
+   Bu noktada Atki/Gövde + Ana hiyerarşi + TAKILDI bandı tam çalışıyor.
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  YAPILANLAR — TÜM BUGÜNE DEĞİN                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+1) ŞABLON B3 SİSTEMİ (28.04)
+─────────────────────────────
+- Sipariş emirlerine şablon uygulama (toplu)
+- Şablon Yönetimi (CRUD)
+- Şablon Geri Al (kaynak='sablon:%' filtre, manuel korunur)
+- Alt emirler ATKI/GÖVDE/TABAN/SAYA/DİĞER alt grupları
+- Sipariş toplam adedi düzeltildi (210.000 → 7.000)
+- Lazy load: alt emir miktar+RKOD arka planda
+- Korgun timeout 30sn, NOLOCK eklendi
+
+2) SİDEBAR KOMPLE YENİLEME (28.04)
+───────────────────────────────────
+- 6 grup: GENEL/FİNANS/TİCARET/ÜRETİM/KALİTE-TASARIM/YÖNETİM
+- 21 item (Görevler/Mesajlar/Termin Takip vb. gizli)
+- Lucide tarzı inline SVG ikonlar
+- Collapsible (sn-toggle) + aktif sayfa auto-open
+- Pill stil aktif + hover (turuncu kutu, beyaz ikon)
+- Kompakt (40px min-h, 4/6 margin)
+
+3) DİNAMİK ÜST TAB SİSTEMİ (28.04)
+───────────────────────────────────
+- Sol sidebar tıklayınca üstte tab oluşur (max 8)
+- × kapatma butonları
+- Aktif tab kapanırsa sol tab'a geçiş
+- localStorage 'cps_tabs_v1'
+- pathname + search anahtar
+
+4) PLAN EKRANI ZENGİNLEŞTİRME (28-29.04)
+──────────────────────────────────────────
+11 kolon: GÖRSEL | EMİR | SİPARİŞ | MÜŞTERİ | MODEL | HEDEF |
+          YAPILAN | KALAN | TERMİN | SON PROSES | %
+
+- Müşteri: ozet.cari_adi (get_emir_ozet)
+- Termin: ozet.termin_tarihi (Urt_Emir.TerTarih, kırmızı pill)
+- Son Proses: Urt_con_gch + Proses_M batch SQL (NOLOCK + ROW_NUMBER)
+- Görsel: backend StokKart.SResim path (frontend default ikon)
+
+5) PLAN DETAY PANEL — HİYERARŞİK V3 (29.04) ⭐ EN SON İŞ
+──────────────────────────────────────────────────────────
+PLAN satırına tıklayınca **inline expand** (sağ panel değil):
+
+LAYOUT:
+  1. Üst meta (Korgun+CPS breakdown gösterir)
+     "Yapılan: 1.970 (Korgun 480 + CPS 1.490)"
+  2. TAKILDI bandı (turuncu, vurgulu)
+     "TAKILDI: Ana → Kesim ... dün"
+  3. ATKI bloğu (mor sol şerit) - var ise
+  4. GÖVDE bloğu (mavi sol şerit) - var ise
+  5. ANA EMİR (en altta, gri secondary, küçük)
+
+VERİ KAYNAKLARI:
+  - get_emir_ozet (Korgun) - üst bilgi
+  - Urt_Em2Em + Urt_Emir + StokKart - alt parçalar
+  - Urt_con_gch + Proses_M batch (Korgun proses)
+  - mock_data.db.uretim_kayit (CPS proses)
+
+BİRLEŞTİRME:
+  - Anahtar: proses_adi.strip().lower() (Korgun '02' ↔ CPS 'KESIM')
+  - Aynı isim hem Korgun hem CPS'te varsa toplama
+  - Kategoriler: ATKI / GÖVDE / TABAN / SAYA / DİĞER
+
+ALGORİTMA:
+  - Atkı/Gövde sırası dinamik: en geride kalan üstte
+  - Proses sırası: proses_kod numerik artan (üretim sırası)
+  - TAKILDI = ilk TAMAM olmayan proses
+  - Rozet: TAKILDI / DEVAM / TAMAM / BEKLİYOR
+
+DURUM:
+  - Backend: TEMIZ V3 (yedek bak_20260429_011730)
+  - Frontend: pdv3-* class'lar, IIFE eski v2'yi override
+  - ÇALIŞIYOR: 110626 emirde TAKILDI bandı "Ana → Kesim" doğru
+  - Atki/Gövde blokları var ama "Henüz proses yok"
+  - Ana emir secondary: 4 proses (Kesim/Temizleme/Enjeksiyon/Monta)
+
+UYARI: 
+  Bir ara "fix_plan_detay_v3_uyari.py" çalıştırıldı (ben yazmadım,
+  başka kaynak). takıldı algoritmasında if/elif zincirini bozdu,
+  yedekten geri yüklendi.
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  KORGUN — TAM BİLGİ TABANI                                                   ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+CONNECTION (modules/common/korgun.py)
+──────────────────────────────────────
+- Server: 25.7.184.221 (Hamachi VPN)
+- DB: Solariz22
+- User: claude / Pass: 104099
+- Driver: pytds
+- Timeout: 30 saniye (önceki 10sn yetmezdi)
+- login_timeout: 10sn
+
+YAVAŞLIK ÇÖZÜMLERİ (kanıtlanmış)
+──────────────────────────────────
+1. WITH(NOLOCK) hint - lock beklemiyoruz (planlama_server.py'de var)
+2. Batch SQL - 30+ emir için tek query, IN clause
+3. Lazy load - ana fetch hızlı, detaylar arka plan
+4. NOLOCK + ROW_NUMBER OVER PARTITION BY - tek satır per emir
+
+SUNUCU BAŞLAMA / RESTART
+─────────────────────────
+- Multiple Python: Flask debug mode reloader 2 process açar (parent+child)
+  Bu normal davranış.
+- Restart: 
+  taskkill /F /IM python.exe
+  cd C:\cps_dev
+  py app.py
+- Backend değişiklik sonrası restart ŞART (debug mode otomatik yapar)
+- Sunucu URL: http://127.0.0.1:5057
+- "Failed to fetch" → genelde sunucu çökmüş
+
+KORGUN TABLO HARİTASI
+──────────────────────
+ANA EMİR/SİPARİŞ:
+  Urt_Emir       - emirler (EmirNo, ModelKod, Tip(M/Y), Location, YazSay,
+                   TerTarih, Durum)
+  Urt_Em2Em      - parent/yari mamul (EmirNo=ana, EmirNo_YM=alt, Proses, SKod)
+  Siparis_Kay    - sipariş başlık (SipNo, CariKod, BelgeNo, Durum, SipTip)
+                   ! TerminTarihi YOK !
+  Siparis_Har    - sipariş kalemleri (SipNo, SKOD, Miktar, Birim, Durum)
+                   ! TerminTarihi YOK !
+  Cari_Kart      - müşteri (CKod, CName)  ← !! Cari_M DEĞİL !!
+
+ÜRETİM HAREKETLERİ:
+  Urt_Em_gch     - genel hareket (EmirNo, FisNo=SipNo, RKOD, BedKod, Giren, Cikan)
+  Urt_con_gch    - proses çıkış (EmirNo, Proses, Personel, Cikan, EndTarih)
+  Urtx_Emir      - paralel/eski emirler tablosu
+  Urtx_con_gch   - paralel proses tablosu
+
+KATALOG:
+  Proses_M       - 41 standart proses (Pro=kod, Tanim=ad)
+                   01=Laminasyon, 02=Kesim, 15=Saya, 18=Saya Kontrol,
+                   25=Taban Üretim, 26=Enjeksiyon, 28=Monta Başlayacak,
+                   30=Monta, 32=Mekval, 35=Temizleme, 41=Çapak ...
+  Model_M        - model (ModelKod, Tanim)
+  StokKart       - ürün detay (SKOD, Tanim, OzKod1-50, SResim=UNC path)
+
+KEY İLİŞKİLER (kanıtlanmış)
+─────────────────────────────
+- Urt_Em_gch.FisNo  =  Siparis_Kay.SipNo
+- Siparis_Kay.SipNo =  Siparis_Har.SipNo
+- Siparis_Kay.CariKod = Cari_Kart.CKod
+- Urt_Emir.EmirNo  =  Urt_Em2Em.EmirNo (ana) veya .EmirNo_YM (alt)
+- Urt_con_gch.Proses = Proses_M.Pro
+
+ÖNEMLİ EKSİKLER
+────────────────
+- TerminTarihi kolonu Siparis_Har/Siparis_Kay'da YOK
+  → Sadece Urt_Emir.TerTarih kullanılıyor (eski tarihler olabilir, örn 2023)
+- Renk_M, Renk_K gibi renk katalog tablosu YOK
+  → Urt_Em_gch.RKOD sadece sayı (1-99)
+  → Adem mapping verecek (ileride)
+- BedKod_M tablosu olabilir, henüz test edilmedi (4 haneli BedKod)
+- StokKart.SResim UNC path (\\SOLARIZDB\Planlama\MODEL RESIMLERI\xxx.png)
+  → Tarayıcıda doğrudan açılamaz (security)
+  → Backend serve etmesi gerek (yeni endpoint /hedef/gorsel/<modelkod>)
+  → Şimdilik default SVG ikon
+
+PROSES KODU TUTARSIZLIK SORUNU
+────────────────────────────────
+Aynı proses 2 farklı kod ile yazılmış!
+
+| Kaynak           | Kesim için kod        |
+|------------------|------------------------|
+| Korgun Proses_M  | '02' (iki haneli)      |
+| CPS uretim_kayit | 'KESIM' (UPPERCASE)    |
+
+| Korgun           | CPS                    |
+|------------------|------------------------|
+| 02 = Kesim       | 'KESIM'                |
+| 26 = Enjeksiyon  | 'ENJEKSIYON'           |
+| 30 = Monta       | 'MONTA'                |
+| 35 = Temizleme   | '5' (tek haneli)       |
+
+ÇÖZÜM: Birleştirme anahtarı = proses_adi.strip().lower()
+       (proses_kodu DEĞİL, ad bazında eşleştirme)
+
+ESKİ TEST KAYITLARI (CPS uretim_kayit)
+────────────────────────────────────────
+Emir 110626 için CPS'te 4 onaylı kayıt:
+  proses_kodu='5'         adi='Temizleme'   onay='onaylandi'  toplam=120
+  proses_kodu='ENJEKSIYON' adi='Enjeksiyon' onay='onaylandi'  toplam=250
+  proses_kodu='KESIM'     adi='Kesim'       onay='onaylandi'  toplam=120
+  proses_kodu='MONTA'     adi='Monta'       onay='onaylandi'  toplam=1000
+                                                              =1490 toplam
+
+Korgun'da 110626:
+  Urt_con_gch: Proses=02 (Kesim) toplam=480 cift
+  Urt_Em_gch: FisNo=33638, Giren=480, Cikan=480
+
+110626'NIN ALT EMİRLERİ
+─────────────────────────
+Urt_Em2Em sorgusu:
+  E.110626 (ANA - Mamul, ModelKod=CRX-71033-LCW, SA001)
+  ├── E.110648 → Tip='Y', ModelKod='EVA CRX-001'
+  │   ModelAdi: "GOVDE EVA CRX- PATIK FILET GARSON"
+  │   → GÖVDE
+  └── E.110649 → Tip='Y', ModelKod='EVA CRX-ATKI'
+      ModelAdi: "ATKI EVA CRX- PATIK FILET GARSON"
+      → ATKI
+
+ALT PARÇA TESPİTİ
+──────────────────
+Backend ve frontend'de aynı algoritma:
+
+def alt_parca_kategori(model_kod, model_adi):
+    mk = (model_kod or '').upper()
+    ma = (model_adi or '').upper()
+    if 'ATKI' in mk or 'ATKI' in ma or 'ATKİ' in ma:
+        return 'Atkı'
+    if 'GOVDE' in mk or 'GOVDE' in ma or 'GÖVDE' in ma:
+        return 'Gövde'
+    if 'TABAN' in mk or 'TABAN' in ma:
+        return 'Taban'
+    if 'SAYA' in mk or 'SAYA' in ma:
+        return 'Saya'
+    return 'Diğer'
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  AKTİF PLAN DETAY V3 ENDPOINT JSON ŞEMASI                                    ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+GET /hedef/plan-detay/<emir_no>
+
+Response:
+{
+  "ok": true,
+  "emir_no": 110626,
+  "model_kod": "CRX-71033-LCW",
+  "model_adi": "CRX-71033 - ISIKSIZ SARGILI GARSON TERLIK EVA - LCW GS 33-38",
+  "musteri": "Lc Waikiki",
+  "termin": "2023-11-10",
+  "tip": "M",
+  "tip_aciklama": "Mamul",
+  "location": "SA001",
+  "hedef": 14000,
+  "yapilan": 1970,
+  "yapilan_korgun": 480,
+  "yapilan_cps": 1490,
+  "kalan": 12030,
+  "siparisler": [{"sip_no": 33558, ...}, ...],
+  "ana_prosesleri": [
+    {"proses_kod": "02", "proses_adi": "Kesim",
+     "yapilan": 600, "toplam_hedef": 14000, "yuzde": 4.3,
+     "durum": "devam", "son_tarih": "...",
+     "kaynaklar": ["korgun", "cps"],
+     "korgun_yapilan": 480, "cps_yapilan": 120}
+  ],
+  "alt_parcalar": [
+    {"kategori": "Gövde", "emir_no": 110648,
+     "model_kod": "EVA CRX-001", "model_adi": "GOVDE EVA CRX-...",
+     "location": "SU002", "prosesler": []},
+    {"kategori": "Atkı", "emir_no": 110649,
+     "model_kod": "EVA CRX-ATKI", "model_adi": "ATKI EVA CRX-...",
+     "prosesler": []}
+  ],
+  "takildi": {
+    "kategori": "Ana", "proses_adi": "Kesim", "proses_kod": "02",
+    "durum": "devam", "son_tarih": "...",
+    "yapilan": 600, "toplam_hedef": 14000
+  }
+}
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  AKTİF DOSYA MARKER'LARI                                                     ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+modules/hedef/routes.py
+  # === PLAN_MUSTERI_TEK_SATIR ===     (musteri alanı)
+  # === PLAN_TERMIN_PROSES_V1 ===      (termin + son_proses batch)
+  # === PLAN_DETAY_V3 endpoint ===     (detay endpoint - HİYERARŞİK)
+
+modules/common/korgun.py
+  # === FAZ 4.6 timeout 30s ===
+  # === FAZ 4.6 B3 LAZY: batch kaldirildi ===
+  # === FAZ 4.6 B3 fix_timeout v2 + polish ===
+  # === FAZ 4.6 toplam siparis fix ===
+
+templates/base.html
+  <!-- SIDEBAR_LUCIDE_V3 -->
+  /* hover-aktif-gibi */
+  /* SB_ACILINCA_ARALI_V1 */
+  <!-- DYN_TABS_V1 head -->
+  <!-- DYN_TABS_V1 body -->
+
+static/js/hedef.js
+  [CPS LOCAL] PLAN zengin v1 yuklendi
+  [CPS LOCAL] PLAN detay panel v1 yuklendi (eski - artık kullanılmıyor)
+  [CPS LOCAL] PLAN detay inline v2 yuklendi (eski - override edildi)
+  [CPS LOCAL] eski sag panel kesin kapat v3 (MutationObserver)
+  [CPS LOCAL] PLAN detay v3 yuklendi  ← AKTİF VE ÇALIŞAN
+  [CPS LOCAL] FAZ 4.6 B3 lazy detay yuklendi
+  [CPS LOCAL] FAZ 4.6 B3 siparis-uygula yuklendi
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  ŞU AN ÇALIŞAN ÖZELLİKLER                                                    ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+✓ /hedef/ → 7 sekme (PLAN, ŞABLON, SAPMA, ÖZET, RAPOR, ONAYLAR, GEÇMİŞ)
+✓ PLAN sekmesi 11 kolon, müşteri/termin/son proses tüm dolu
+✓ PLAN satıra tıkla → inline expand detay panel (HİYERARŞİK)
+✓ TAKILDI bandı doğru çalışıyor
+✓ Korgun + CPS proses birleştirme
+✓ Atkı/Gövde alt parça blokları
+✓ Ana emir secondary (gri, küçük)
+✓ Şablon B3: 33558 → 55 emir, gruplar, uygulama, geri al
+✓ Sidebar 6 grup, collapsible, Lucide ikonlar
+✓ Üst dinamik tab (× kapat, max 8)
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  BEKLEYEN İŞLER (sıraya göre)                                                ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+1) Stable backup al (PLAN_DETAY_V3_STABLE)
+   - C:\cps_dev_backup_PLAN_DETAY_V3_STABLE_20260429_HHMM
+   - mock_data.db ayrı kopya
+   - PLAN_DETAY_V3_STATUS.txt
+
+2) Görsel UNC erişim
+   - Yeni endpoint /hedef/gorsel/<modelkod>
+   - Flask UNC path okur, image serve eder
+   - PLAN GÖRSEL kolonu artık dolu görünür
+
+3) Renk mapping (Adem'in vereceği)
+   - RKOD 1=Siyah, 4=Beyaz vs.
+   - mock_data.db'de yeni tablo: renk_mapping veya JSON config
+
+4) Duplicate emir görünümü (110852 sorunu)
+   - Şablon B3'te aynı emir 3x görünüyor
+   - SQL'de DISTINCT EmirNo veya GROUP BY
+
+5) calisma_modu (TAKIM / BİREY)
+   - Mimari kararı: kayıt bazlı (proses bazlı DEĞİL)
+   - Şu an ertelendi (prim/performans sonra)
+   - personel_id varlığından tahmin yapılabilir
+
+6) Türetme fallback (alt emir yoksa)
+   - Şu an gerek yok (110626 alt emirli)
+   - İleride başka emir için CPS'ten ATKI/GÖVDE türetme
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  YENİ CLAUDE İÇİN BAŞLANGIÇ                                                  ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+1. Bu dosyayı oku (CPS_HANDOFF_2026_04_29.txt)
+2. type C:\cps_dev\SABLON_B3_STATUS.txt (eski seans özeti)
+3. type C:\cps_dev\CPS_KURALLAR.txt
+4. PLAN sekmesinde detay açıp test et (http://localhost:5057/hedef/)
+5. Bekleyen iş seç ve devam et
+
+ÖNCELİKLİ HATIRLATMALAR:
+- Backend değişiklik = restart şart (Flask debug auto-reload)
+- Patch yazmadan önce DAİMA debug yap
+- Yedek almadan kod değiştirme
+- Tek seansta çok şey yapma — küçük adımlarla
+- proses_adi.strip().lower() ile birleştirme (kod değil)
+- 110626 alt emirleri: 110648 (Gövde), 110649 (Atkı)
+- 110626 termin: 2023-11-10 (geçmiş tarih, normal)
+- 110626 yapılan: 1970 (Korgun 480 + CPS 1490)
+
+
+SUNUCU URL: http://localhost:5057
+TEST EMİR: 110626 (her şey için referans)
+ANA SEKMELER: PLAN, ŞABLON, SAPMA, ÖZET, RAPOR, ONAYLAR, GEÇMİŞ
+
+================================================================================
+SEANS SONU. Yarın iyi çalışmalar!
+================================================================================

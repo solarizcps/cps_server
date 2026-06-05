@@ -1,0 +1,489 @@
+{% extends "base.html" %}
+{% block title %}{{ sim.SimulasyonNo }} — Simülatör{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="crumbs">
+      <a href="/finans">Finans</a> ›
+      <a href="/finans/simulator">Simülatör</a> ›
+      <strong>{{ sim.SimulasyonNo }}</strong>
+    </div>
+    <h1>🧮 {{ sim.Baslik }}
+      {% if sim.Durum == 'TASLAK' %}
+        <span class="pill" style="background:#F97316;color:#fff; font-size:.65em; vertical-align:middle;">TASLAK</span>
+      {% elif sim.Durum == 'KARAR' %}
+        <span class="pill" style="background:#059669;color:#fff; font-size:.65em; vertical-align:middle;">✓ KARAR VERİLDİ</span>
+      {% else %}
+        <span class="pill" style="background:#6b7280;color:#fff; font-size:.65em; vertical-align:middle;">ARŞİV</span>
+      {% endif %}
+    </h1>
+  </div>
+  <div style="display:flex; gap:8px;">
+    <form method="get">
+      <label style="font-size:.82rem;">📅 Referans:
+        <select name="ay" onchange="this.form.submit()">
+          <option value="3" {% if ay==3 %}selected{% endif %}>Son 3 ay</option>
+          <option value="6" {% if ay==6 %}selected{% endif %}>Son 6 ay</option>
+          <option value="12" {% if ay==12 %}selected{% endif %}>Son 12 ay</option>
+        </select>
+      </label>
+    </form>
+    {% if sim.Durum == 'KARAR' and karar_yetkili %}
+    <form method="post" action="/finans/simulator/{{ sim.Id }}/arsivle" style="display:inline;"
+          onsubmit="return confirm('Arşivlensin mi?');">
+      <button class="btn btn-sm btn-ghost">Arşivle</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+{% include '_flash.html' ignore missing %}
+
+<div class="twocol" style="align-items:start;">
+  <!-- SOL: Meta -->
+  <section class="panel">
+    <h3>Simülasyon Bilgileri</h3>
+    <dl class="info-dl">
+      <dt>No</dt><dd><strong>{{ sim.SimulasyonNo }}</strong></dd>
+      <dt>Ürün</dt><dd>{{ sim.UrunAdi or '—' }}</dd>
+      <dt>Hedef Miktar</dt><dd>{{ "{:,}".format(sim.HedefMiktar) }} adet</dd>
+      <dt>Satış Fiyatı</dt><dd>
+        {% if sim.HedefCiftSatis %}{{ "{:,.2f}".format(sim.HedefCiftSatis) }} TL/çift
+        {% else %}<span class="muted">— (marj hesabı yok)</span>{% endif %}
+      </dd>
+      <dt>Teslim Tarihi</dt><dd>{{ sim.HedefTeslimTarih or '—' }}</dd>
+      <dt>Oluşturan</dt><dd>{{ sim.OlusturanKullanici }} · {{ (sim.OlusturmaTarih or '')[:10] }}</dd>
+      {% if sim.KararVerenKullanici %}
+      <dt>Karar Veren</dt><dd>{{ sim.KararVerenKullanici }} · {{ (sim.KararTarihi or '')[:10] }}</dd>
+      {% endif %}
+    </dl>
+    {% if sim.Notlar %}<p class="muted" style="font-size:.85rem; margin-top:12px;">{{ sim.Notlar }}</p>{% endif %}
+  </section>
+
+  <!-- SAĞ: Seçenekler Tablosu -->
+  <section class="panel" style="grid-column: span 2;">
+    <div class="panel-head">
+      <h3>Seçenekler ({{ secenekler|length }})</h3>
+      {% if sim.Durum != 'ARSIVLENMIS' %}
+      <button class="btn btn-sm btn-primary" onclick="secenekModalAc()">+ Seçenek Ekle</button>
+      {% endif %}
+    </div>
+
+    {% if secenekler %}
+    <table class="data-table compact">
+      <thead>
+        <tr>
+          <th>#</th><th>Etiket</th><th>Kaynak</th>
+          <th style="text-align:right;">FOB TL</th>
+          <th style="text-align:right;">Nakliye TL</th>
+          <th style="text-align:right;">Vergi TL</th>
+          <th style="text-align:right;">Ek TL</th>
+          <th style="text-align:right;">Toplam TL</th>
+          <th style="text-align:right;">Birim TL</th>
+          {% if satis_var %}<th style="text-align:right;">Marj</th>{% endif %}
+          <th style="text-align:center;">Süre</th>
+          <th style="text-align:center;">Skor</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for sc in secenekler %}
+        {% set is_ucuz = en_iyiler.en_ucuz_id == sc.Id %}
+        {% set is_hizli = en_iyiler.en_hizli_id == sc.Id %}
+        {% set is_marj = en_iyiler.en_marj_id == sc.Id %}
+        {% set is_onerilen = onerilen and onerilen.Id == sc.Id %}
+        {% set is_secilen = sim.SecilenSecenekId == sc.Id %}
+        <tr style="{% if is_secilen %}background:#d1fae5; border-left:4px solid #059669;{% elif is_onerilen %}background:#fef9c3; border-left:4px solid #eab308;{% endif %}">
+          <td>
+            <strong>{{ sc.Sira }}</strong>
+            {% if is_secilen %}<br><span style="font-size:.68rem; color:#059669; font-weight:700;">✓ SEÇİLEN</span>{% endif %}
+          </td>
+          <td>
+            <strong>{{ sc.Etiket }}</strong>
+            <div style="margin-top:3px;">
+              {% if is_ucuz %}<span style="background:#059669; color:#fff; font-size:.65rem; padding:1px 5px; border-radius:3px;">✓ EN UCUZ</span>{% endif %}
+              {% if is_hizli %}<span style="background:#0891b2; color:#fff; font-size:.65rem; padding:1px 5px; border-radius:3px; margin-left:3px;">⚡ EN HIZLI</span>{% endif %}
+              {% if is_marj %}<span style="background:#eab308; color:#fff; font-size:.65rem; padding:1px 5px; border-radius:3px; margin-left:3px;">💰 EN İYİ MARJ</span>{% endif %}
+              {% if is_onerilen and not is_secilen %}<span style="background:#7c3aed; color:#fff; font-size:.65rem; padding:1px 5px; border-radius:3px; margin-left:3px;">★ EN ÖNERİLEN</span>{% endif %}
+            </div>
+          </td>
+          <td style="font-size:.82rem;" class="muted">
+            {{ sc.Ulke or '—' }}<br>
+            {{ sc.TedarikciAd or '—' }}<br>
+            {% if sc.NakliyeTipi %}{{ sc.NakliyeTipi }}{% endif %}
+          </td>
+          <td style="text-align:right; font-variant-numeric:tabular-nums;">{{ "{:,.0f}".format(sc.ToplamFOB or 0) }}</td>
+          <td style="text-align:right; font-variant-numeric:tabular-nums;">{{ "{:,.0f}".format(sc.ToplamNakliye or 0) }}</td>
+          <td style="text-align:right; font-variant-numeric:tabular-nums;">{{ "{:,.0f}".format(sc.ToplamVergi or 0) }}</td>
+          <td style="text-align:right; font-variant-numeric:tabular-nums;">{{ "{:,.0f}".format((sc.ToplamSigorta or 0) + (sc.ToplamExtras or 0)) }}</td>
+          <td style="text-align:right; font-variant-numeric:tabular-nums; font-weight:700;">{{ "{:,.0f}".format(sc.ToplamMaliyetTL or 0) }}</td>
+          <td style="text-align:right; font-variant-numeric:tabular-nums;"><strong>{{ "{:,.2f}".format(sc.BirimMaliyetTL or 0) }}</strong></td>
+          {% if satis_var %}
+          <td style="text-align:right; font-weight:600; color:{% if sc.MarjYuzde and sc.MarjYuzde >= 5 %}#059669{% elif sc.MarjYuzde and sc.MarjYuzde < 0 %}#dc2626{% else %}#F97316{% endif %};">
+            {% if sc.MarjYuzde is not none %}{{ "%.1f"|format(sc.MarjYuzde) }}%{% else %}—{% endif %}
+          </td>
+          {% endif %}
+          <td style="text-align:center;">{{ sc.NakliyeGunSuresi or '—' }}{% if sc.NakliyeGunSuresi %} gün{% endif %}</td>
+          <td style="text-align:center;">
+            {% set skor = skorlar.get(sc.Id, {}) %}
+            {% if skor.toplam %}<strong>{{ "%.0f"|format(skor.toplam) }}</strong>{% else %}—{% endif %}
+          </td>
+          <td style="text-align:right; white-space:nowrap;">
+            {% if sim.Durum != 'ARSIVLENMIS' %}
+            <button class="btn-icon" title="Düzenle" onclick='secenekDuzenleAc({{ sc.Id }}, {{ sc|tojson }})'>✏</button>
+            {% if not is_secilen %}
+            <form method="post" action="/finans/simulator/{{ sim.Id }}/secenek/{{ sc.Id }}/sil" style="display:inline;"
+                  onsubmit="return confirm('Seçeneği sil?');">
+              <button class="btn-icon" title="Sil">🗑</button>
+            </form>
+            {% endif %}
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted" style="text-align:center; padding:30px;">Henüz seçenek eklenmemiş. Yukarıdan ekleyin.</p>
+    {% endif %}
+  </section>
+</div>
+
+{# KARAR DESTEK KUTUSU #}
+{% if secenekler %}
+<section class="panel" style="margin-top:20px; background:linear-gradient(to right, #fff, #fefce8);">
+  <h3>💡 Karar Destek</h3>
+
+  <!-- Bölüm 1: Kriter bazlı en iyiler -->
+  <div style="display:grid; grid-template-columns:repeat({% if satis_var %}4{% else %}3{% endif %},1fr); gap:12px; margin-bottom:16px;">
+    {% macro en_iyi_kart(id, ikon, etiket, aciklama, renk) -%}
+      <div style="background:#fff; padding:12px; border-radius:6px; border-left:4px solid {{ renk }};">
+        <div style="font-size:.75rem; color:#6b7280;">{{ ikon }} {{ etiket }}</div>
+        {% if id %}
+          {% set sc = secenekler|selectattr('Id','equalto',id)|first %}
+          <div style="font-weight:700; margin:3px 0;">{{ sc.Etiket }}</div>
+          <div style="font-size:.82rem; color:#374151;">{{ aciklama }}</div>
+        {% else %}
+          <div class="muted" style="font-size:.82rem; margin-top:3px;">—</div>
+        {% endif %}
+      </div>
+    {%- endmacro %}
+
+    {% set uc = secenekler|selectattr('Id','equalto',en_iyiler.en_ucuz_id)|first %}
+    {{ en_iyi_kart(en_iyiler.en_ucuz_id, '✓', 'EN UCUZ', "{:,.0f}".format(uc.ToplamMaliyetTL or 0) + ' TL', '#059669') }}
+
+    {% if en_iyiler.en_hizli_id %}
+      {% set hz = secenekler|selectattr('Id','equalto',en_iyiler.en_hizli_id)|first %}
+      {{ en_iyi_kart(en_iyiler.en_hizli_id, '⚡', 'EN HIZLI', (hz.NakliyeGunSuresi|string) + ' gün', '#0891b2') }}
+    {% else %}
+      {{ en_iyi_kart(None, '⚡', 'EN HIZLI', '', '#0891b2') }}
+    {% endif %}
+
+    {% if satis_var %}
+      {% if en_iyiler.en_marj_id %}
+        {% set mrj = secenekler|selectattr('Id','equalto',en_iyiler.en_marj_id)|first %}
+        {{ en_iyi_kart(en_iyiler.en_marj_id, '💰', 'EN İYİ MARJ', ("%.1f"|format(mrj.MarjYuzde)) + '%', '#eab308') }}
+      {% else %}
+        {{ en_iyi_kart(None, '💰', 'EN İYİ MARJ', '', '#eab308') }}
+      {% endif %}
+    {% endif %}
+
+    {% if onerilen %}
+      {% set sk = skorlar.get(onerilen.Id, {}) %}
+      {{ en_iyi_kart(onerilen.Id, '★', 'EN ÖNERİLEN', 'Skor: ' + ("%.0f"|format(sk.toplam or 0)) + ' / 100', '#7c3aed') }}
+    {% endif %}
+  </div>
+
+  <!-- Bölüm 2: Geçmiş Veri Yorumları -->
+  <div style="background:#fff; padding:14px; border-radius:6px; border:1px solid #e5e7eb;">
+    <h4 style="margin:0 0 10px; color:#374151;">📊 Geçmiş Veri Yorumları
+      <span style="font-weight:400; color:#6b7280; font-size:.82rem;">(son {{ ay }} ay referans alınarak)</span>
+    </h4>
+    <p class="muted" style="font-size:.78rem; margin:0 0 12px;">
+      ℹ Yorumlar sadece fiyat/maliyet kıyasıdır. Kalite ve güvenilirlik kıyası değildir.
+    </p>
+    {% for sc in secenekler %}
+      {% set kiyas = kiyaslar.get(sc.Id, {}) %}
+      <details style="margin-bottom:8px; padding:8px 12px; background:#f9fafb; border-radius:4px;" {% if loop.first %}open{% endif %}>
+        <summary style="cursor:pointer; font-weight:600;">
+          Seçenek {{ sc.Sira }} — {{ sc.Etiket }}
+          {% if onerilen and onerilen.Id == sc.Id %}<span style="color:#7c3aed; font-size:.78rem;">★ En Önerilen</span>{% endif %}
+        </summary>
+        <ul style="margin:8px 0 0; padding-left:20px; font-size:.85rem;">
+          {% for tur_kod, tur_ad in [('navlun','Navlun'),('tedarikci','Tedarikçi Fiyatı'),('birim_mal','Birim Maliyet'),('marj','Marj')] %}
+            {% set k = kiyas.get(tur_kod, {}) %}
+            <li style="margin:4px 0;">
+              <strong>{{ tur_ad }}:</strong>
+              {% if k.durum == 'hesaplandi' %}
+                {% set renk_map = {'yesil':'#059669','turuncu':'#F97316','kirmizi':'#dc2626','gri':'#6b7280'} %}
+                <span style="color:{{ renk_map.get(k.renk, '#374151') }};">
+                  {{ k.cumle }}
+                </span>
+              {% elif k.durum == 'yetersiz_veri' %}
+                <span class="muted">{{ k.mesaj }}</span>
+              {% elif k.durum == 'uygulanmadi' %}
+                <span class="muted" style="font-style:italic;">{{ k.mesaj }}</span>
+              {% else %}
+                <span class="muted">—</span>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      </details>
+    {% endfor %}
+  </div>
+
+  <!-- Bölüm 3: Karar Ver -->
+  {% if sim.Durum != 'ARSIVLENMIS' %}
+  <div style="margin-top:16px; padding:14px; background:#fff; border-radius:6px; border:1px solid #e5e7eb;">
+    {% if sim.Durum == 'KARAR' %}
+    <p style="margin:0; color:#059669; font-weight:600;">
+      ✓ Karar verildi: <strong>
+        {% set sec = secenekler|selectattr('Id','equalto',sim.SecilenSecenekId)|first %}
+        {% if sec %}{{ sec.Etiket }}{% endif %}
+      </strong> — {{ sim.KararVerenKullanici }} tarafından {{ (sim.KararTarihi or '')[:10] }}
+    </p>
+    {% elif karar_yetkili %}
+    <form method="post" action="/finans/simulator/{{ sim.Id }}/karar" style="display:flex; gap:8px; align-items:center;">
+      <label style="flex:1; margin:0;">Karar: Hangi seçenek?
+        <select name="SecenekId" required>
+          <option value="">— Seçenek seç —</option>
+          {% for sc in secenekler %}
+          <option value="{{ sc.Id }}" {% if onerilen and onerilen.Id == sc.Id %}selected{% endif %}>
+            Seçenek {{ sc.Sira }} — {{ sc.Etiket }} · {{ "{:,.0f}".format(sc.ToplamMaliyetTL or 0) }} TL
+            {% if onerilen and onerilen.Id == sc.Id %}★ EN ÖNERİLEN{% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </label>
+      <button class="btn btn-primary">✓ Karar Ver</button>
+    </form>
+    {% else %}
+    <p class="muted" style="margin:0;">
+      🔒 Karar verme yetkisi Yönetim rolünde. Karar vermek için yönetime başvurun.
+    </p>
+    {% endif %}
+  </div>
+  {% endif %}
+</section>
+{% endif %}
+
+<!-- SEÇENEK EKLEME/DÜZENLEME MODAL -->
+<dialog id="secenek-modal" class="modal">
+  <form method="post" id="secenek-form" class="modal-form" style="min-width:640px; max-width:720px;">
+    <h3 id="secenek-modal-baslik">Yeni Seçenek</h3>
+
+    <div class="form-row">
+      <label style="flex:2;">Etiket *
+        <input type="text" name="Etiket" required placeholder="Örn: Dongguan / Konteyner">
+      </label>
+      <label style="flex:1;">Ülke
+        <select name="Ulke">
+          <option value="">—</option>
+          <option value="CN">Çin</option>
+          <option value="TR">Türkiye</option>
+          <option value="EU">Avrupa</option>
+          <option value="OT">Diğer</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="form-row">
+      <label style="flex:2;">Tedarikçi (kayıtlı)
+        <select name="TedarikciId" onchange="tedarikciSecildi(this)">
+          <option value="">—</option>
+          {% for t in tedarikciler %}
+          <option value="{{ t.Id }}" data-ad="{{ t.Ad }}">{{ t.Ad }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label style="flex:2;">veya Serbest İsim
+        <input type="text" name="TedarikciAd">
+      </label>
+    </div>
+
+    <div class="form-row">
+      <label style="flex:1;">Mevcut tekliften doldur (opsiyonel)
+        <select onchange="tekliftenDoldur(this)">
+          <option value="">— Seçin —</option>
+          {% for tk in teklifler %}
+          <option value="{{ tk.Id }}" data-fiyat="{{ tk.BirimFiyat }}" data-pb="{{ tk.ParaBirimi }}" data-kur="{{ tk.KurSnapshot }}">
+            {{ tk.TeklifNo }} — {{ tk.UrunAd }} — {{ tk.BirimFiyat }} {{ tk.ParaBirimi }}
+          </option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+
+    <h4 style="margin:16px 0 6px;">💰 Birim Fiyat</h4>
+    <div class="form-row">
+      <label style="flex:1;">Birim Fiyat *
+        <input type="number" step="0.0001" name="BirimFiyat" required min="0" oninput="canliHesap()">
+      </label>
+      <label style="flex:1;">Para Birimi
+        <select name="ParaBirimi" oninput="canliHesap()">
+          <option>USD</option><option>EUR</option><option>TRY</option><option>CNY</option>
+        </select>
+      </label>
+      <label style="flex:1;">Kur
+        <input type="number" step="0.0001" name="KurSnapshot" value="1" oninput="canliHesap()">
+      </label>
+    </div>
+
+    <h4 style="margin:16px 0 6px;">🚢 Nakliye</h4>
+    <div class="form-row">
+      <label style="flex:1;">Nakliye Tipi
+        <select name="NakliyeTipi" oninput="canliHesap()">
+          <option value="">—</option>
+          <option value="KONTEYNER">🚢 Konteyner</option>
+          <option value="UCAK">✈ Uçak</option>
+          <option value="KARAYOLU">🚚 Karayolu</option>
+          <option value="DHL">📦 DHL</option>
+        </select>
+      </label>
+      <label style="flex:1;">Teslim Süresi (gün)
+        <input type="number" name="NakliyeGunSuresi" min="0" oninput="canliHesap()">
+      </label>
+    </div>
+    <div class="form-row">
+      <label style="flex:1;">Sabit Maliyet
+        <input type="number" step="0.01" name="NakliyeSabitMaliyet" min="0" value="0" oninput="canliHesap()">
+        <small class="muted" style="font-size:.7rem;">Konteyner: tek ücret</small>
+      </label>
+      <label style="flex:1;">Birim Maliyet (kg başı)
+        <input type="number" step="0.01" name="NakliyeBirimMaliyet" min="0" value="0" oninput="canliHesap()">
+        <small class="muted" style="font-size:.7rem;">Uçak: $/kg</small>
+      </label>
+      <label style="flex:1;">Ağırlık (kg)
+        <input type="number" step="0.1" name="NakliyeAgirlikKg" min="0" value="0" oninput="canliHesap()">
+      </label>
+    </div>
+    <div class="form-row">
+      <label style="flex:1;">Nakliye Para Birimi
+        <select name="NakliyeParaBirimi" oninput="canliHesap()">
+          <option>USD</option><option>EUR</option><option>TRY</option>
+        </select>
+      </label>
+      <label style="flex:1;">Nakliye Kur
+        <input type="number" step="0.0001" name="NakliyeKur" value="1" oninput="canliHesap()">
+      </label>
+    </div>
+
+    <h4 style="margin:16px 0 6px;">📋 Ek Maliyetler</h4>
+    <div class="form-row">
+      <label style="flex:1;">Gümrük Vergisi (%)
+        <input type="number" step="0.01" name="GumrukVergisiYuzde" value="18" min="0" oninput="canliHesap()">
+      </label>
+      <label style="flex:1;">Sigorta (%)
+        <input type="number" step="0.01" name="SigortaYuzde" value="0.5" min="0" oninput="canliHesap()">
+      </label>
+      <label style="flex:1;">Müşavir (TL)
+        <input type="number" step="0.01" name="MusavirMaliyeti" value="0" min="0" oninput="canliHesap()">
+      </label>
+    </div>
+    <div class="form-row">
+      <label style="flex:1;">Diğer (TL)
+        <input type="number" step="0.01" name="DigerMaliyet" value="0" min="0" oninput="canliHesap()">
+      </label>
+      <label style="flex:2;">Açıklama
+        <input type="text" name="DigerMaliyetAciklama">
+      </label>
+    </div>
+
+    <label>Notlar
+      <textarea name="Notlar" rows="2"></textarea>
+    </label>
+
+    <!-- CANLI HESAP -->
+    <div id="canli-hesap" style="background:#fef9c3; padding:12px 14px; border-radius:6px; border-left:3px solid #eab308; margin:12px 0; font-size:.85rem;">
+      <div style="font-weight:600; margin-bottom:6px;">📊 Canlı Hesap Önizleme</div>
+      <div id="hesap-icerik" class="muted">Tüm alanları doldurunca otomatik hesaplanacak...</div>
+    </div>
+
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" onclick="document.getElementById('secenek-modal').close()">İptal</button>
+      <button class="btn btn-primary">Kaydet</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+const SIM_ID = {{ sim.Id }};
+const HEDEF_MIKTAR = {{ sim.HedefMiktar }};
+const HEDEF_SATIS = {{ sim.HedefCiftSatis or 'null' }};
+
+function secenekModalAc() {
+  const form = document.getElementById('secenek-form');
+  form.reset();
+  form.action = `/finans/simulator/${SIM_ID}/secenek/yeni`;
+  document.getElementById('secenek-modal-baslik').textContent = 'Yeni Seçenek';
+  document.getElementById('hesap-icerik').textContent = 'Alanları doldurdukça hesaplanacak...';
+  document.getElementById('secenek-modal').showModal();
+}
+
+function secenekDuzenleAc(sid, veri) {
+  const form = document.getElementById('secenek-form');
+  form.reset();
+  form.action = `/finans/simulator/${SIM_ID}/secenek/${sid}/guncelle`;
+  document.getElementById('secenek-modal-baslik').textContent = 'Seçeneği Düzenle';
+  // Form alanlarını doldur
+  for (const [key, val] of Object.entries(veri)) {
+    const el = form.elements[key];
+    if (el && val !== null) el.value = val;
+  }
+  canliHesap();
+  document.getElementById('secenek-modal').showModal();
+}
+
+function tedarikciSecildi(sel) {
+  const ad = sel.options[sel.selectedIndex]?.getAttribute('data-ad') || '';
+  if (ad) document.querySelector('[name="TedarikciAd"]').value = ad;
+}
+
+function tekliftenDoldur(sel) {
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt.value) return;
+  document.querySelector('[name="KaynakTeklifId"]')?.remove(); // eski hidden varsa sil
+  const hidden = document.createElement('input');
+  hidden.type = 'hidden'; hidden.name = 'KaynakTeklifId'; hidden.value = opt.value;
+  document.getElementById('secenek-form').appendChild(hidden);
+  document.querySelector('[name="BirimFiyat"]').value = opt.getAttribute('data-fiyat');
+  document.querySelector('[name="ParaBirimi"]').value = opt.getAttribute('data-pb');
+  document.querySelector('[name="KurSnapshot"]').value = opt.getAttribute('data-kur');
+  canliHesap();
+}
+
+async function canliHesap() {
+  const form = document.getElementById('secenek-form');
+  const veri = {};
+  new FormData(form).forEach((v, k) => { veri[k] = v; });
+  veri.HedefMiktar = HEDEF_MIKTAR;
+  veri.HedefCiftSatis = HEDEF_SATIS;
+
+  try {
+    const r = await fetch('/finans/simulator/api/hesapla', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(veri)
+    });
+    const data = await r.json();
+    if (data.ok) {
+      const h = data.hesap;
+      const fmt = n => new Intl.NumberFormat('tr-TR', {maximumFractionDigits: 0}).format(n);
+      const marj = h.MarjYuzde !== null
+        ? `Marj: <strong style="color:${h.MarjYuzde >= 5 ? '#059669' : h.MarjYuzde < 0 ? '#dc2626' : '#F97316'};">${h.MarjYuzde.toFixed(1)}%</strong>`
+        : 'Marj: — (satış fiyatı yok)';
+      document.getElementById('hesap-icerik').innerHTML = `
+        FOB: ${fmt(h.ToplamFOB)} TL &nbsp;·&nbsp;
+        Nakliye: ${fmt(h.ToplamNakliye)} TL &nbsp;·&nbsp;
+        Vergi: ${fmt(h.ToplamVergi)} TL &nbsp;·&nbsp;
+        Ek: ${fmt(h.ToplamSigorta + h.ToplamExtras)} TL<br>
+        <strong style="font-size:1.1em;">TOPLAM: ${fmt(h.ToplamMaliyetTL)} TL</strong>
+        &nbsp;→&nbsp; <strong>${h.BirimMaliyetTL.toFixed(2)} TL/çift</strong>
+        &nbsp;·&nbsp; ${marj}
+      `;
+    }
+  } catch(e) {}
+}
+</script>
+{% endblock %}

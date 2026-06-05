@@ -1,0 +1,523 @@
+{% extends "base.html" %}
+{% set tab = 'grafik' %}
+{% set active = 'grafik' %}
+{% block title %}{{ siparis.SiparisNo }} — Çin Sipariş{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="crumbs"><a href="/grafik/siparis">Çin Siparişler</a> › <strong>{{ siparis.SiparisNo }}</strong></div>
+    <h1>📋 {{ siparis.SiparisNo }}</h1>
+    <p class="muted">
+      {% for kod, ad, renk in durumlar %}
+        {% if siparis.Durum == kod %}
+        <span class="pill" style="background:{{ renk }};color:#fff;">{{ ad }}</span>
+        {% endif %}
+      {% endfor %}
+      · {{ siparis.TedarikciAd }}
+      {% if siparis.NumuneNo %}· Kaynak: <code>{{ siparis.NumuneNo }}</code>{% endif %}
+      · Açılış: {{ siparis.SiparisTarihi or '—' }}
+    </p>
+  </div>
+  <div class="ph-actions">
+    {% if siparis.Durum == 'TASLAK' %}
+    <form method="post" action="/grafik/siparis/{{ siparis.Id }}/onayla" style="display:inline;"
+          onsubmit="return confirm('Bu sipariş ONAYLANDI durumuna geçecek ve otomatik bir FİNANS ANLAŞMASI oluşturulacak. Emin misin?');">
+      <button class="btn btn-primary">✓ Onayla + Finans Anlaşması Oluştur</button>
+    </form>
+    <form method="post" action="/grafik/siparis/{{ siparis.Id }}/sil" style="display:inline;"
+          onsubmit="return confirm('Taslak silinecek. Emin misin?');">
+      <button class="btn btn-danger">🗑 Sil</button>
+    </form>
+    {% else %}
+    <form method="post" action="/grafik/siparis/{{ siparis.Id }}/durum" style="display:inline;">
+      <select name="Durum" onchange="if(confirm('Durum değişecek. Emin misin?')) this.form.submit(); else this.value='{{ siparis.Durum }}';" class="btn-ghost" style="padding:7px 10px;">
+        {% for kod, ad, renk in durumlar %}
+          {% if kod != 'TASLAK' %}
+          <option value="{{ kod }}" {% if siparis.Durum == kod %}selected{% endif %}>{{ ad }}</option>
+          {% endif %}
+        {% endfor %}
+      </select>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+{% include '_flash.html' ignore missing %}
+
+<!-- PARÇA 8a: CIN_IMPORT_KONTROL uyarı + kontrolü tamamla -->
+{% if siparis.Durum == 'CIN_IMPORT_KONTROL' %}
+  {% set kullanici = session.get('kullanici') or {} %}
+  {% set is_yonetim = kullanici.RolAd == 'Yönetim' or kullanici.KullaniciAdi == 'admin' %}
+<div class="panel panel-info">
+  <h3>🟣 Çin İçe Aktarma — Kontrol Bekliyor</h3>
+  <p class="muted">
+    Bu sipariş Çin Ofis Excel içe aktarmadan oluşturuldu. ONAYLANDI durumuna geçmeden
+    sevkiyat oluşturulamaz, anlaşma kesinleşemez.
+  </p>
+
+  {% if kontrol_onkosullar %}
+  <div class="alert alert-info mt-3">
+    <div class="alert-ic">📋</div>
+    <div class="alert-body">
+      <strong>Ön Koşul Kontrolü</strong>
+      <ul class="stack-sm mt-2" style="list-style:none; padding:0; margin:0;">
+        {% for c in kontrol_onkosullar %}
+        <li>
+          <span class="mono" style="color:{% if c.ok %}var(--success){% else %}var(--danger){% endif %}; font-weight:700;">
+            {% if c.ok %}✓{% else %}✗{% endif %}
+          </span>
+          {{ c.ad }}
+          {% if c.mesaj %}<span class="muted small"> — {{ c.mesaj }}</span>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="row mt-3">
+    {% if is_yonetim %}
+      {% if kontrol_onkosullar_tumu_ok %}
+      <form method="post" action="/grafik/siparis/{{ siparis.Id }}/kontrol-tamamla"
+            onsubmit="return confirm('Sipariş ONAYLANDI durumuna geçecek. Emin misiniz?');">
+        <button class="btn btn-success">✓ Kontrolü Tamamla ve Onayla</button>
+      </form>
+      {% else %}
+      <button class="btn btn-ghost" disabled>Eksik ön koşullar var (yukarıya bakın)</button>
+      {% endif %}
+
+      <button class="btn btn-ghost" onclick="document.getElementById('reddet-modal').showModal()"
+              style="color:var(--danger); border-color:var(--danger);">
+        ✗ Reddet
+      </button>
+
+      <dialog id="reddet-modal" class="modal">
+        <form method="post" action="/grafik/siparis/{{ siparis.Id }}/kontrol-reddet" class="modal-form">
+          <h3>Kontrolü Reddet</h3>
+          <p class="muted">Sipariş IPTAL durumuna alınacak. Sebep zorunludur.</p>
+          <div class="form-group required">
+            <label>Sebep</label>
+            <textarea name="sebep" rows="3" required
+                      placeholder="Örn: Excel verisi eksik, tedarikçi tekrar düzeltmeli..."></textarea>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn btn-ghost" onclick="this.closest('dialog').close()">İptal</button>
+            <button class="btn btn-danger">Reddet</button>
+          </div>
+        </form>
+      </dialog>
+    {% else %}
+      <p class="muted mb-0">
+        🔒 Yönetim onayı bekleniyor. Bu sipariş ONAYLANDI durumuna geçmeden sevkiyat yapılamaz.
+      </p>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+
+<!-- Onay sonrası finans bilgileri -->
+{% if siparis.FinansAnlasmaId %}
+<div class="panel" style="background:linear-gradient(135deg,#fef3c7,#fef08a); border-left:4px solid #F97316; margin-bottom:16px;">
+  <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap;">
+    <div>
+      <strong>✓ Onaylandı — Finans Anlaşması oluşturuldu</strong>
+      <div class="muted" style="font-size:.85rem; margin-top:4px;">
+        Onay: {{ (siparis.OnayTarihi or '')[:16] }} · {{ siparis.OnaylayanKullanici }} ·
+        Kur snapshot: <strong>{{ "%.4f"|format(siparis.KurSnapshot or 0) }}</strong>
+      </div>
+    </div>
+    <div style="text-align:right;">
+      <a href="/finans/anlasma/{{ siparis.FinansAnlasmaId }}" target="_blank" class="btn btn-primary">
+        🔗 {{ siparis.AnlasmaKod }} · {{ "{:,.0f}".format(siparis.AnlasmaToplamTL or 0) }} TRY
+      </a>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% include 'grafik/_akis_cubugu.html' ignore missing %}
+
+{% include 'grafik/_cari_ozet.html' ignore missing %}
+
+{% if siparis.Durum == 'CIN_IMPORT_KONTROL' %}
+<section class="panel" style="background: linear-gradient(to right, #faf5ff, #fff); border-left:4px solid #a855f7; margin-bottom:16px;">
+  <h3 style="color:#6b21a8;">🟣 Çin İçe Aktarma — Kontrol Bekliyor</h3>
+  <p style="margin:6px 0;">
+    Bu sipariş Çin ofis Excel içe aktarmasından oluşturuldu. Yönetim kontrolü sonrası
+    <strong>ONAYLANDI</strong> durumuna geçer.
+  </p>
+
+  {# Ön koşul kontrolü #}
+  {% set onkosullar = kontrol_onkosullar or [] %}
+  {% set tumu_ok = kontrol_onkosullar_tumu_ok|default(false) %}
+
+  {% if onkosullar %}
+  <div style="background:#fff; padding:12px; border-radius:6px; border:1px solid #e5e7eb; margin:10px 0;">
+    <strong style="display:block; margin-bottom:8px;">Ön Koşul Kontrolü:</strong>
+    <ul style="list-style:none; padding:0; margin:0;">
+      {% for ok in onkosullar %}
+      <li style="padding:4px 0;">
+        {% if ok.ok %}<span style="color:#059669;">✓</span>
+        {% else %}<span style="color:#dc2626;">✗</span>{% endif %}
+        <strong>{{ ok.ad }}</strong>
+        {% if ok.mesaj %}<span class="muted" style="font-size:.82rem;"> — {{ ok.mesaj }}</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if yonetim_mi %}
+    {% if tumu_ok %}
+    <form method="post" action="/grafik/siparis/{{ siparis.Id }}/kontrol-tamamla" style="display:inline;"
+          onsubmit="return confirm('Sipariş ONAYLANDI durumuna geçecek. Emin misin?');">
+      <button class="btn btn-primary" style="background:#059669; border-color:#059669;">
+        ✓ Kontrolü Tamamla ve Onayla
+      </button>
+    </form>
+    {% else %}
+    <button class="btn" disabled style="background:#9ca3af; color:#fff;" title="Ön koşullar tamamlanmadı">
+      ✓ Kontrolü Tamamla (ön koşullar eksik)
+    </button>
+    {% endif %}
+
+    <button class="btn btn-ghost" style="color:#dc2626; border-color:#dc2626;"
+            onclick="document.getElementById('kontrol-reddet-form').style.display='block'; return false;">
+      ✗ Reddet / İptal
+    </button>
+    <form id="kontrol-reddet-form" method="post" action="/grafik/siparis/{{ siparis.Id }}/kontrol-reddet"
+          style="display:none; margin-top:10px;"
+          onsubmit="return confirm('Sipariş IPTAL durumuna alınacak. Emin misin?');">
+      <label style="display:block;">
+        Reddetme sebebi (zorunlu):
+        <textarea name="sebep" rows="2" required style="width:100%;"></textarea>
+      </label>
+      <button class="btn btn-primary" style="background:#dc2626; border-color:#dc2626; margin-top:6px;">
+        Reddet
+      </button>
+    </form>
+  {% else %}
+  <p style="padding:10px; background:#f3f4f6; border-radius:4px; font-size:.88rem; margin:6px 0 0;">
+    🔒 Onaylama Yönetim yetkisindedir. Bu sipariş için Yönetim'den kontrol talebi bekleniyor.
+  </p>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if siparis.Durum == 'TASLAK' %}
+<div class="panel" style="background:#fef3c7; border-left:4px solid #F97316; margin-bottom:16px; padding:12px 16px;">
+  <strong>⚠ Bu sipariş TASLAK durumda — sevkiyat açılamaz, finans anlaşması oluşmaz.</strong>
+  <div class="muted" style="font-size:.85rem; margin-top:4px;">
+    Önce kalemleri ekle, sonra üstten <strong>"✓ Onayla + Finans Anlaşması Oluştur"</strong> butonuna bas.
+    Onaydan sonra bu sipariş için sevkiyat oluşturabilirsin.
+  </div>
+</div>
+{% elif siparis.Durum in ['ONAYLANDI','URETILIYOR','HAZIR'] %}
+<div class="panel" style="background:#eff6ff; border-left:4px solid #0891b2; margin-bottom:16px; padding:10px 16px; font-size:.88rem;">
+  {% if sevkiyat_ozet and sevkiyat_ozet.ToplamSevkiyat == 0 %}
+    ℹ Sipariş onaylandı — <a href="/grafik/sevkiyat" style="font-weight:600;">Sevkiyat oluştur →</a>
+  {% else %}
+    ℹ Bu siparişte <strong>{{ sevkiyat_ozet.ToplamSevkiyat }}</strong> sevkiyat var
+    ({{ sevkiyat_ozet.TeslimSevkiyat }} teslim alındı, {{ sevkiyat_ozet.DevamEden }} devam ediyor).
+    <a href="/grafik/sevkiyat" style="font-weight:600;">+ Yeni sevkiyat ekle →</a>
+  {% endif %}
+</div>
+{% endif %}
+
+{# Parça 4: Kısmi teslim uyarısı — bir kısım TESLIM, bir kısım aktif #}
+{% if sevkiyat_ozet and sevkiyat_ozet.KismiTeslim %}
+<div class="panel" style="background:#fef3c7; border-left:4px solid #F97316; margin-bottom:16px; padding:10px 16px; font-size:.88rem;">
+  📦 <strong>Kısmi teslim / çoklu sevkiyat</strong> — Bu siparişin bir kısmı teslim alındı
+  ({{ sevkiyat_ozet.TeslimSevkiyat }}), {{ sevkiyat_ozet.DevamEden }} sevkiyat devam ediyor.
+  <br><span class="muted">Akış çubuğu genel siparişin durumunu gösterir. Her sevkiyatın kendi maliyet durumu aşağıdaki tabloda.</span>
+</div>
+{% endif %}
+
+{# Parça 4: Bağlı sevkiyatlar tablosu — siparişin 1+ sevkiyatı varsa #}
+{% if sevkiyatlar and sevkiyatlar|length > 0 %}
+<section class="panel" style="margin-bottom:20px;">
+  <div class="panel-head">
+    <h3>🚢 Bu Siparişe Bağlı Sevkiyatlar ({{ sevkiyatlar|length }})</h3>
+    {% if siparis.Durum in ['ONAYLANDI','URETILIYOR','HAZIR','SEVKEDILDI'] %}
+    <a href="/grafik/sevkiyat" class="btn btn-sm btn-ghost">+ Yeni Sevkiyat</a>
+    {% endif %}
+  </div>
+  <table class="data-table compact">
+    <thead>
+      <tr>
+        <th>Sevkiyat No</th>
+        <th>Tip</th>
+        <th>Durum</th>
+        <th style="text-align:right;">Toplam Masraf</th>
+        <th>Tahmini / Gerçek</th>
+        <th>Teslim Tarihi</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for sv in sevkiyatlar %}
+      <tr>
+        <td><strong>{{ sv.SevkiyatNo }}</strong></td>
+        <td style="font-size:.82rem;">
+          {% if sv.NakliyeTipi == 'UCAK' %}✈ Uçak
+          {% elif sv.NakliyeTipi == 'KONTEYNER' %}🚢 Konteyner
+          {% elif sv.NakliyeTipi == 'DHL' %}📦 DHL
+          {% elif sv.NakliyeTipi == 'KARAYOLU' %}🚚 Karayolu
+          {% else %}{{ sv.NakliyeTipi }}{% endif %}
+        </td>
+        <td>
+          {% if sv.Durum == 'TESLIM' %}<span class="pill" style="background:#059669;color:#fff;">✓ Teslim</span>
+          {% elif sv.Durum == 'IPTAL' %}<span class="pill" style="background:#dc2626;color:#fff;">✗ İptal</span>
+          {% elif sv.Durum == 'HAZIRLIK' %}<span class="pill" style="background:#6b7280;color:#fff;">Hazırlık</span>
+          {% elif sv.Durum == 'YOLDA' %}<span class="pill" style="background:#0891b2;color:#fff;">Yolda</span>
+          {% elif sv.Durum == 'GUMRUK' %}<span class="pill" style="background:#F97316;color:#fff;">Gümrükte</span>
+          {% else %}<span class="pill" style="background:#94a3b8;color:#fff;">{{ sv.Durum }}</span>
+          {% endif %}
+        </td>
+        <td style="text-align:right; font-variant-numeric:tabular-nums;">
+          <strong>{{ "{:,.0f}".format(sv.ToplamMasrafTL or 0) }} ₺</strong>
+        </td>
+        <td>
+          {% if sv.Durum == 'TESLIM' and sv.DagSayisi > 0 and sv.GercekDagSayisi == sv.DagSayisi %}
+            <span style="color:#059669; font-weight:600; font-size:.78rem;">✓ GERÇEK</span>
+          {% elif sv.Durum == 'IPTAL' %}
+            <span class="muted" style="font-size:.78rem;">—</span>
+          {% elif sv.DagSayisi == 0 %}
+            <span class="muted" style="font-size:.78rem;">Dağıtım yok</span>
+          {% else %}
+            <span style="color:#F97316; font-weight:600; font-size:.78rem;">⏳ TAHMİNİ</span>
+          {% endif %}
+        </td>
+        <td class="muted" style="font-size:.82rem;">
+          {% if sv.GerceklesenVarisTarihi %}
+            ✓ {{ sv.GerceklesenVarisTarihi[:10] }}
+          {% elif sv.BeklenenVarisTarihi %}
+            → {{ sv.BeklenenVarisTarihi[:10] }} (beklenen)
+          {% else %}—{% endif %}
+        </td>
+        <td style="text-align:right;">
+          <a href="/grafik/sevkiyat/{{ sv.Id }}" class="btn btn-sm">Detay</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+<div class="twocol">
+  <!-- SOL: Temel Bilgi -->
+  <section class="panel">
+    <h3>Sipariş Bilgileri</h3>
+    {% if siparis.Durum in ['TASLAK','ONAYLANDI'] %}
+    <form method="post" action="/grafik/siparis/{{ siparis.Id }}/guncelle" class="form-stack">
+      <div class="form-row">
+        <label style="flex:1;">Tedarikçi *
+          <select name="TedarikciId" required {% if siparis.Durum != 'TASLAK' %}disabled{% endif %}>
+            {% for t in tedarikciler %}
+            <option value="{{ t.Id }}" {% if siparis.TedarikciId == t.Id %}selected{% endif %}>{{ t.Ad }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label style="flex:1;">Müşteri
+          <select name="MusteriCKod">
+            <option value="">(yok)</option>
+            {% for m in musteriler %}
+            <option value="{{ m.CKod }}" {% if siparis.MusteriCKod == m.CKod %}selected{% endif %}>{{ m.CName }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+      <label>Kaynak Numune
+        <select name="KaynakNumuneId" {% if siparis.Durum != 'TASLAK' %}disabled{% endif %}>
+          <option value="">(yok)</option>
+          {% if siparis.KaynakNumuneId %}
+          <option value="{{ siparis.KaynakNumuneId }}" selected>{{ siparis.NumuneNo }} — {{ siparis.NumuneBaslik }}</option>
+          {% endif %}
+          {% for n in numuneler_onayli %}
+            {% if n.Id != siparis.KaynakNumuneId %}
+            <option value="{{ n.Id }}">{{ n.NumuneNo }} — {{ n.Baslik }}</option>
+            {% endif %}
+          {% endfor %}
+        </select>
+      </label>
+      <label>Beklenen Çıkış <input type="date" name="BeklenenCikisTarihi" value="{{ siparis.BeklenenCikisTarihi or '' }}"></label>
+      <label>Notlar <textarea name="Notlar" rows="3">{{ siparis.Notlar or '' }}</textarea></label>
+      <div style="display:flex; justify-content:flex-end;">
+        <button class="btn btn-primary">💾 Kaydet</button>
+      </div>
+    </form>
+    {% else %}
+    <dl class="info-dl">
+      <dt>Tedarikçi</dt><dd>{{ siparis.TedarikciAd }}</dd>
+      <dt>Müşteri</dt><dd>{{ siparis.MusteriAd or '—' }}</dd>
+      <dt>Kaynak Numune</dt><dd>{{ siparis.NumuneNo or '—' }}</dd>
+      <dt>Beklenen Çıkış</dt><dd>{{ siparis.BeklenenCikisTarihi or '—' }}</dd>
+      <dt>Notlar</dt><dd>{{ siparis.Notlar or '—' }}</dd>
+    </dl>
+    {% endif %}
+  </section>
+
+  <!-- SAĞ: Toplam + Özet -->
+  <section class="panel" style="background:linear-gradient(135deg,#fff,#f9fafb);">
+    <h3>Toplam</h3>
+    {% if fiyat_gor %}
+    <div style="text-align:center; padding:24px 0;">
+      <div class="muted" style="font-size:.85rem; text-transform:uppercase; letter-spacing:1px;">Sipariş Tutarı (USD)</div>
+      <div style="font-size:2.4rem; font-weight:700; color:#F97316; margin-top:8px;">
+        ${{ "{:,.2f}".format(siparis.ToplamTutar or 0) }}
+      </div>
+      {% if siparis.KurSnapshot %}
+      <div class="muted" style="font-size:.85rem; margin-top:4px;">
+        ≈ {{ "{:,.0f}".format((siparis.ToplamTutar or 0) * siparis.KurSnapshot) }} TRY (kur: {{ "%.4f"|format(siparis.KurSnapshot) }})
+      </div>
+      {% endif %}
+    </div>
+    <dl class="info-dl">
+      <dt>Kalem sayısı</dt><dd>{{ kalemler|length }}</dd>
+      <dt>Toplam adet</dt><dd>{{ kalemler|sum(attribute='Miktar') }}</dd>
+      <dt>Para birimi</dt><dd>USD (sabit)</dd>
+    </dl>
+    {% else %}
+    <p class="empty">Fiyat görme yetkin yok.</p>
+    {% endif %}
+  </section>
+</div>
+
+<!-- KALEMLER -->
+<section class="panel" style="margin-top:20px;">
+  <div class="panel-head">
+    <h3>Sipariş Kalemleri ({{ kalemler|length }})</h3>
+    {% if siparis.Durum == 'TASLAK' %}
+    <button class="btn btn-sm btn-primary" onclick="document.getElementById('kalem-yeni').showModal()">+ Kalem Ekle</button>
+    {% endif %}
+  </div>
+
+  {% if kalemler %}
+  <table class="data-table compact">
+    <thead>
+      <tr>
+        <th></th>
+        <th>Ürün</th>
+        <th>Varyant</th>
+        <th>Açıklama</th>
+        <th style="text-align:right;">Miktar</th>
+        {% if fiyat_gor %}
+        <th style="text-align:right;">Birim Fiyat USD</th>
+        <th style="text-align:right;">Tutar USD</th>
+        {% endif %}
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for k in kalemler %}
+      <tr>
+        <td style="width:52px;">
+          {% if k.UrunGorselId %}
+          <img src="/belge/{{ k.UrunGorselId }}" class="urun-thumb" alt="">
+          {% else %}
+          <div class="urun-thumb-placeholder">📦</div>
+          {% endif %}
+        </td>
+        <td>
+          <div style="display:flex; align-items:center; gap:10px;">
+            {% if k.UrunGorselId %}
+            <img src="/belge/{{ k.UrunGorselId }}" alt="" class="urun-thumb">
+            {% else %}
+            <div class="urun-thumb urun-thumb-placeholder">📦</div>
+            {% endif %}
+            <div>
+              {% if k.UrunKod %}<code>{{ k.UrunKod }}</code><br><span style="font-size:.85rem;">{{ k.UrunAd }}</span>{% else %}<span class="muted">—</span>{% endif %}
+            </div>
+          </div>
+        </td>
+        <td>
+          {% if k.RenkHex %}<span class="color-dot" style="background:{{ k.RenkHex }};"></span>{% endif %}
+          {{ k.RenkAd or '' }} {{ k.Beden or '' }}
+        </td>
+        <td>{{ k.Aciklama or '' }}</td>
+        <td style="text-align:right; font-variant-numeric:tabular-nums;"><strong>{{ "{:,}".format(k.Miktar) }}</strong></td>
+        {% if fiyat_gor %}
+        <td style="text-align:right; font-variant-numeric:tabular-nums;">${{ "%.4f"|format(k.BirimFiyat) }}</td>
+        <td style="text-align:right; font-variant-numeric:tabular-nums;"><strong>${{ "{:,.2f}".format(k.Tutar) }}</strong></td>
+        {% endif %}
+        <td style="text-align:right;">
+          {% if siparis.Durum == 'TASLAK' %}
+          <form method="post" action="/grafik/siparis/kalem/{{ k.Id }}/sil" style="display:inline;"
+                onsubmit="return confirm('Kalemi sil?');">
+            <button class="btn-icon">🗑</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+      {% if fiyat_gor %}
+      <tr style="background:#fff7ed; font-weight:700;">
+        <td colspan="4" style="text-align:right;">TOPLAM</td>
+        <td style="text-align:right; font-variant-numeric:tabular-nums;">{{ "{:,}".format(kalemler|sum(attribute='Miktar')) }}</td>
+        <td></td>
+        <td style="text-align:right; font-variant-numeric:tabular-nums; color:#F97316;">
+          ${{ "{:,.2f}".format(siparis.ToplamTutar or 0) }}
+        </td>
+        <td></td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">
+    {% if siparis.Durum == 'TASLAK' %}
+    Henüz kalem yok. "+ Kalem Ekle" ile ilk ürünü ekle.
+    {% else %}Kalem yok.{% endif %}
+  </p>
+  {% endif %}
+</section>
+
+{% if siparis.Durum == 'TASLAK' %}
+<dialog id="kalem-yeni" class="modal">
+  <form method="post" action="/grafik/siparis/{{ siparis.Id }}/kalem/yeni" class="modal-form" style="min-width:480px;">
+    <h3>Yeni Kalem</h3>
+    <label>Varyant (Ürün + Renk + Beden)
+      <select name="VaryantId">
+        <option value="">(serbest açıklama ile)</option>
+        {% for v in varyantlar %}
+        <option value="{{ v.Id }}">{{ v.UrunKod }} — {{ v.RenkAd or '' }} {{ v.Beden or '' }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Açıklama <input type="text" name="Aciklama" placeholder="Varyant seçilmediyse buraya yaz"></label>
+    <div class="form-row">
+      <label style="flex:1;">Miktar (adet) * <input type="number" name="Miktar" required min="1" step="1" value="1000"></label>
+      <label style="flex:1;">Birim Fiyat USD * <input type="number" name="BirimFiyat" required min="0" step="0.0001" value="1.00"></label>
+    </div>
+    <div class="form-row" style="background:#f9fafb; padding:10px; border-radius:6px;">
+      <label style="flex:1;">Çift Sayısı <input type="number" name="CiftSayi" min="0" step="1" value="0"></label>
+      <label style="flex:1;">Ağırlık (kg) <input type="number" name="AgirlikKg" min="0" step="0.01" value="0"></label>
+      <label style="flex:1;">Hacim (m³) <input type="number" name="HacimM3" min="0" step="0.001" value="0"></label>
+    </div>
+    <p class="muted" style="font-size:.78rem; margin:0;">
+      Kg/m³ doldurursanız "Ağırlık/Hacim bazlı" dağıtım yapılabilir. Boş bırakırsanız sadece "Adet" veya "FOB" bazlı dağıtım seçilebilir.
+    </p>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" onclick="this.closest('dialog').close()">İptal</button>
+      <button class="btn btn-primary">Ekle</button>
+    </div>
+  </form>
+</dialog>
+{% endif %}
+
+<!-- Belgeler -->
+<div style="margin-top:20px;">
+  {% set upload_url = '/grafik/siparis/' ~ siparis.Id ~ '/belge/yukle' %}
+  {% set panel_baslik = 'Proforma, Fatura, Belgeler' %}
+  {% include 'grafik/_belge_section.html' %}
+</div>
+
+<style>
+.info-dl { display:grid; grid-template-columns:auto 1fr; gap:6px 12px; font-size:.9rem; margin:0; }
+.info-dl dt { color:#6b7280; font-weight:500; }
+.info-dl dd { margin:0; color:#1f2937; }
+</style>
+{% endblock %}

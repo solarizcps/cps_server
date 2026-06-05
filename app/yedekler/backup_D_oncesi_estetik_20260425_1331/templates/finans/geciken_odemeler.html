@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Geciken Ödemeler — Finans{% endblock %}
+
+{% block content %}
+
+<div class="page-head">
+  <div class="page-head-main">
+    <div class="crumbs"><a href="/finans">Finans</a> › <strong>Geciken Ödemeler</strong></div>
+    <h1>⚠ Geciken Taksit / Ödemeler</h1>
+    <p class="muted">
+      Aktif anlaşmalarda vadesi geçmiş ve henüz kapanmamış ödeme planı satırları.
+      En eski vade üstte.
+    </p>
+  </div>
+</div>
+
+{% include '_flash.html' ignore missing %}
+
+<div class="kpi-grid kpi-grid-2">
+  <div class="kpi kpi-danger">
+    <div class="kpi-v">{{ adet }}</div>
+    <div class="kpi-l">Geciken Taksit Adedi</div>
+  </div>
+  <div class="kpi kpi-danger">
+    <div class="kpi-v">{{ "{:,.2f}".format(toplam_tutar) }} ₺</div>
+    <div class="kpi-l">Geciken Toplam Tutar</div>
+  </div>
+</div>
+
+<div class="panel">
+  {% if liste %}
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Müşteri</th>
+        <th>Proje / Anlaşma</th>
+        <th>Ödeme Tipi</th>
+        <th>Vade Tarihi</th>
+        <th class="num">Gecikme</th>
+        <th class="num">Tutar</th>
+        <th>Durum</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in liste %}
+      <tr>
+        <td>
+          {% if r.CKod %}
+            <a href="/finans/cari/{{ r.CKod }}">{{ r.MusteriAd or r.CKod }}</a>
+          {% else %}
+            <span class="muted">—</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if r.AnlasmaId %}
+            <a href="/finans/anlasma/{{ r.AnlasmaId }}">
+              <strong>{{ r.ProjeKod }}</strong>
+              {% if r.ProjeAdi %}<span class="muted"> — {{ r.ProjeAdi }}</span>{% endif %}
+            </a>
+          {% else %}
+            <span class="muted">—</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if r.OdemeTipi %}
+            <span class="pill pill-muted">{{ r.OdemeTipi }}</span>
+          {% else %}
+            <span class="muted">—</span>
+          {% endif %}
+          {% if r.CekAdeti and r.CekAdeti > 1 %}
+            <span class="muted small">({{ r.CekAdeti }} adet)</span>
+          {% endif %}
+        </td>
+        <td>{{ r.PlanTarih }}</td>
+        <td class="num">
+          {% set gun = (r.GecikmeGun|int) if r.GecikmeGun is not none else 0 %}
+          {% if gun > 30 %}
+            <span class="pill pill-danger">{{ gun }} gün</span>
+          {% elif gun > 7 %}
+            <span class="pill pill-warn">{{ gun }} gün</span>
+          {% else %}
+            <span class="pill pill-muted">{{ gun }} gün</span>
+          {% endif %}
+        </td>
+        <td class="num"><strong>{{ "{:,.2f}".format(r.Tutar or 0) }} ₺</strong></td>
+        <td>
+          <span class="pill pill-warn">{{ r.PlanDurum }}</span>
+        </td>
+        <td class="actions">
+          {% if r.AnlasmaId %}
+            <a href="/finans/anlasma/{{ r.AnlasmaId }}" class="btn btn-sm btn-ghost">Anlaşmaya Git</a>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">
+    <div class="empty-ic">✓</div>
+    <p>Geciken ödeme yok.</p>
+    <p class="muted small">Tüm aktif anlaşmalardaki ödemeler vadesinde veya gelecekte.</p>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

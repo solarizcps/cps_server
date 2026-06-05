@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+{% set tab = 'grafik' %}
+{% set active = 'grafik' %}
+{% block title %}Çin Siparişler — Grafik{% endblock %}
+
+{% block content %}
+
+<div class="page-head">
+  <div class="page-head-main">
+    <div class="crumbs"><a href="/grafik">Grafik</a> › <strong>Çin Siparişler</strong></div>
+    <h1>📋 Çin Siparişler</h1>
+    <p class="muted">Numune onayı sonrası toplu sipariş → Onay → Üretim → Sevkiyat</p>
+  </div>
+  <div class="page-head-actions">
+    <button type="button" class="btn btn-primary" onclick="document.getElementById('sip-yeni').showModal()">+ Yeni Sipariş</button>
+  </div>
+</div>
+
+{% include '_flash.html' ignore missing %}
+
+<div class="kpi-grid kpi-grid-5">
+  <div class="kpi kpi-muted" style="border-left:4px solid #6b7280;">
+    <div class="kpi-v">{{ kpi.taslak }}</div>
+    <div class="kpi-l">Taslak</div>
+  </div>
+  <div class="kpi kpi-success">
+    <div class="kpi-v">{{ kpi.onaylandi }}</div>
+    <div class="kpi-l">Onaylandı</div>
+  </div>
+  <div class="kpi kpi-info">
+    <div class="kpi-v">{{ kpi.uretimde }}</div>
+    <div class="kpi-l">Üretimde</div>
+  </div>
+  <div class="kpi kpi-info">
+    <div class="kpi-v">{{ kpi.sevk }}</div>
+    <div class="kpi-l">Sevkte</div>
+  </div>
+  {% if fiyat_gor %}
+  <div class="kpi kpi-primary">
+    <div class="kpi-v">${{ "{:,.0f}".format(kpi.acik_tutar_usd) }}</div>
+    <div class="kpi-l">Açık Tutar (USD)</div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="panel">
+  <form method="get" class="row">
+    <input type="search" name="q" value="{{ arama or '' }}" placeholder="CIN-2026-0001 veya not ara..." class="flex-1">
+    <select name="d">
+      <option value="">Tüm durumlar</option>
+      {% for kod, ad, renk in durumlar %}
+      <option value="{{ kod }}" {% if durum == kod %}selected{% endif %}>{{ ad }}</option>
+      {% endfor %}
+    </select>
+    <select name="t">
+      <option value="">Tüm tedarikçiler</option>
+      {% for t in tedarikciler %}
+      <option value="{{ t.Id }}" {% if ted_id == t.Id|string %}selected{% endif %}>{{ t.Ad }}</option>
+      {% endfor %}
+    </select>
+    <select name="m">
+      <option value="">Tüm müşteriler</option>
+      {% for m in musteriler %}
+      <option value="{{ m.CKod }}" {% if musteri == m.CKod %}selected{% endif %}>{{ m.CName }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn btn-ghost">Filtrele</button>
+    {% if arama or durum or ted_id or musteri %}<a href="/grafik/siparis" class="btn btn-link">Temizle</a>{% endif %}
+  </form>
+</div>
+
+<div class="panel">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Sipariş No</th>
+        <th>Tedarikçi</th>
+        <th>Müşteri</th>
+        <th>Numune</th>
+        <th>Durum</th>
+        <th class="num">Kalem</th>
+        {% if fiyat_gor %}<th class="num">Tutar USD</th>{% endif %}
+        <th>Tarih</th>
+        <th>Finans</th>
+        <th>Sevkiyat</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in siparisler %}
+      <tr>
+        <td><strong>{{ s.SiparisNo }}</strong></td>
+        <td>
+          {% if s.TedarikciUlke == 'Çin' %}🇨🇳{% elif s.TedarikciUlke == 'Türkiye' %}🇹🇷{% endif %}
+          {{ s.TedarikciAd }}
+        </td>
+        <td>{% if s.MusteriAd %}<span class="pill pill-muted">{{ s.MusteriAd }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td>{% if s.NumuneNo %}<code>{{ s.NumuneNo }}</code>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td>
+          {% if s.Durum == 'TASLAK' %}<span class="pill pill-muted">Taslak</span>
+          {% elif s.Durum == 'CIN_IMPORT_KONTROL' %}<span class="pill pill-info">Çin İçe Aktarma — Kontrol</span>
+          {% elif s.Durum == 'ONAYLANDI' %}<span class="pill pill-success">Onaylandı</span>
+          {% elif s.Durum == 'URETILIYOR' %}<span class="pill pill-info">Üretiliyor</span>
+          {% elif s.Durum == 'HAZIR' %}<span class="pill pill-primary">Üretim Bitti</span>
+          {% elif s.Durum == 'SEVKEDILDI' %}<span class="pill pill-info">Sevk Edildi</span>
+          {% elif s.Durum == 'TAMAMLANDI' %}<span class="pill pill-success">Tamamlandı</span>
+          {% elif s.Durum == 'IPTAL' %}<span class="pill pill-danger">İptal</span>
+          {% else %}<span class="pill pill-muted">{{ s.Durum }}</span>{% endif %}
+        </td>
+        <td class="num">{{ s.KalemSayi }}</td>
+        {% if fiyat_gor %}
+        <td class="num">${{ "{:,.2f}".format(s.ToplamTutar or 0) }}</td>
+        {% endif %}
+        <td class="muted small">
+          {{ (s.SiparisTarihi or '')[:10] }}{% if s.BeklenenCikisTarihi %}<br>→ {{ s.BeklenenCikisTarihi[:10] }}{% endif %}
+        </td>
+        <td>
+          {% if s.AnlasmaKod %}
+            <a href="/finans/anlasma/{{ s.FinansAnlasmaId }}" target="_blank" class="small">{{ s.AnlasmaKod }} ↗</a>
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+        <td>
+          {% if s.Durum == 'TASLAK' %}
+            <span class="muted small">⚠ Onay Bekliyor</span>
+          {% elif s.SevkiyatSayi and s.SevkiyatSayi > 0 %}
+            <a href="/grafik/sevkiyat?q={{ s.SiparisNo }}" class="small">
+              {% if s.SonSevkiyatDurum == 'TESLIM' %}
+                <span style="color:var(--success);">✓ Teslim ({{ s.SevkiyatSayi }})</span>
+              {% elif s.SonSevkiyatDurum in ['HAZIRLIK','YOLDA','GUMRUK'] %}
+                <span style="color:var(--primary);">⏳ {{ s.SonSevkiyatDurum|title }} ({{ s.SevkiyatSayi }})</span>
+              {% else %}
+                {{ s.SevkiyatSayi }} sevkiyat
+              {% endif %}
+            </a>
+          {% elif s.Durum in ['ONAYLANDI','URETILIYOR','HAZIR'] %}
+            <a href="/grafik/sevkiyat" class="btn btn-sm btn-ghost">+ Sevkiyat</a>
+          {% else %}
+            <span class="muted">—</span>
+          {% endif %}
+        </td>
+        <td class="actions"><a href="/grafik/siparis/{{ s.Id }}" class="btn btn-sm btn-ghost">Detay</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="11">
+        <div class="empty">
+          <div class="empty-ic">📭</div>
+          <p>Sipariş bulunamadı.</p>
+        </div>
+      </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<dialog id="sip-yeni" class="modal">
+  <form method="post" action="/grafik/siparis/yeni" class="modal-form">
+    <h3>Yeni Sipariş Taslağı</h3>
+    <p class="muted small">Önce tedarikçi + temel bilgi. Detay sayfasında kalem ekleyip "Onayla" diyeceksin.</p>
+
+    <div class="form-group required">
+      <label>Tedarikçi</label>
+      <select name="TedarikciId" required>
+        <option value="">Seç...</option>
+        {% for t in tedarikciler %}<option value="{{ t.Id }}">{{ t.Ad }} ({{ t.Ulke }})</option>{% endfor %}
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Kaynak Numune (opsiyonel)</label>
+      <select name="KaynakNumuneId">
+        <option value="">(doğrudan sipariş)</option>
+        {% for n in numuneler_onayli %}
+        <option value="{{ n.Id }}">{{ n.NumuneNo }} — {{ n.Baslik }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Müşteri (son alıcı)</label>
+      <select name="MusteriCKod">
+        <option value="">(yok)</option>
+        {% for m in musteriler %}<option value="{{ m.CKod }}">{{ m.CName }}</option>{% endfor %}
+      </select>
+    </div>
+
+    <div class="form-grid form-grid-2">
+      <div class="form-group">
+        <label>Sipariş Tarihi</label>
+        <input type="date" name="SiparisTarihi">
+      </div>
+      <div class="form-group">
+        <label>Beklenen Çıkış</label>
+        <input type="date" name="BeklenenCikisTarihi">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Notlar</label>
+      <textarea name="Notlar" rows="2"></textarea>
+    </div>
+
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" onclick="this.closest('dialog').close()">İptal</button>
+      <button class="btn btn-primary">Taslak Oluştur</button>
+    </div>
+  </form>
+</dialog>
+
+{% endblock %}

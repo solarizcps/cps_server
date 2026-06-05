@@ -1,0 +1,105 @@
+SABLON B3 - STABLE SNAPSHOT
+============================
+Tarih:           2026-04-28 17:46
+Klasor yedek:    C:\cps_dev_backup_SABLON_B3_STABLE_20260428_1746
+DB ayri yedek:   C:\cps_dev_db_backups\mock_data_sablon_b3_stable_20260428_1746.db
+
+
+DURUM
+-----
+- Sablon B3 sistemi tamamlandi.
+- Siparis emirlerine sablon uygulama AKTIF.
+- Toplu sablon uygulama AKTIF.
+- Sablon Geri Al AKTIF.
+- Korgun = read-only (INSERT/UPDATE/DELETE yok).
+- CPS = mock_data.db'ye yazar (emir_alt_proses, sablon, sablon_proses).
+- Renk mapping bekliyor (RKOD -> renk adi, Adem tarafindan verilecek).
+
+
+SAGLIK KONTROL SONUCU (saglik.txt)
+-----------------------------------
+- 11 endpoint: hepsi tanimli
+- emir_alt_proses: 16 kayit (12 aktif + 4 pasif)
+  - kaynak dagilimi: 10 sablon + 6 manuel + 0 bos
+- sablon: 1 aktif (Atki LCW, 4 proses)
+- yetim sablon_proses: yok
+- duplicate aktif: yok
+- aktif/pasif karisikligi: yok
+- Korgun INSERT/UPDATE/DELETE: yok (read-only OK)
+- uretim_kaydet sablon kullanmiyor (kural OK)
+- syntax 3 dosya temiz
+- 21 OK, 0 RISK, 0 HATA
+
+
+AKTIF SABLON ENDPOINT'LERI
+---------------------------
+GET    /hedef/sablon/liste
+GET    /hedef/sablon/proses-onerileri
+POST   /hedef/sablon/ekle
+POST   /hedef/sablon/guncelle/<id>
+POST   /hedef/sablon/sil/<id>
+GET    /hedef/siparis/emirler?sipno=
+GET    /hedef/siparis/emir-detay?emirler=...
+POST   /hedef/sablon/uygula
+POST   /hedef/sablon/geri-al
+
+
+VERI AKISI
+----------
+Frontend SABLON sekmesi
+   |
+   +--> Sablon Yonetimi (CRUD)
+   |    POST /hedef/sablon/ekle/guncelle/sil
+   |    -> mock_data.db.sablon + sablon_proses
+   |
+   +--> Siparis Emirlerine Sablon Uygula
+        GET /hedef/siparis/emirler?sipno=33558
+        -> Korgun helper get_siparis_emirleri (read-only)
+           1) Siparis_Har -> ana emirler (Tip='M')
+           2) Urt_Em2Em -> alt emirler (Tip='Y')
+           3) Cari_Kart JOIN -> CariAdi
+           4) siparis_kalemleri (siparis toplam adedi)
+
+        Lazy: GET /hedef/siparis/emir-detay?emirler=1,2,3,...
+        -> Urt_Em_gch SUM(Giren) + RKOD (lot bazli emir miktari)
+
+        Toplu uygula: POST /hedef/sablon/uygula
+        -> mock_data.db.emir_alt_proses INSERT (kaynak='sablon:Atki LCW')
+
+        Geri al: POST /hedef/sablon/geri-al
+        -> emir_alt_proses UPDATE aktif=0
+           (kaynak LIKE 'sablon:%' filtre, manuel kayitlar korunur)
+
+
+GERI DONUS PLANI
+----------------
+Acil durumda:
+  1) CPS sunucusunu durdur
+  2) C:\cps_dev'i sil (yedek var)
+  3) Bu klasoru kopyala:
+     C:\cps_dev_backup_SABLON_B3_STABLE_20260428_1746
+  4) Sunucuyu tekrar baslat
+Veya sadece DB:
+  copy "C:\cps_dev_db_backups\mock_data_sablon_b3_stable_20260428_1746.db" C:\cps_dev\mock_data.db
+
+
+BEKLEYEN ISLER
+--------------
+1) Renk (RKOD) mapping
+   - Korgun'da renk katalogu yok
+   - Mock_data.db'de manuel mapping tablosu olusturulabilir
+   - Adem RKOD listesini verecek (ornek: 1=Siyah, 4=Beyaz)
+
+2) Duplicate emir gorunumu (110852 ornegi)
+   - Sql JOIN bazi emirleri tekrar uretiyor
+   - get_siparis_emirleri'da DISTINCT EmirNo veya GROUP BY duzeltmesi
+
+
+CPS_KURALLAR UYUMU
+-------------------
+- Korgun read-only:                              OK
+- MES v2 yok:                                    OK
+- Sablon hedef uretmez (sadece proses listesi):  OK
+- uretim_kaydet sablon dokunmuyor:               OK
+- mock_data.db schema: yeni tablo (eski bozulmuyor): OK
+- Manuel kayitlar geri-al'da korunuyor:          OK

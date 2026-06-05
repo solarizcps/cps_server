@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% set tab = 'grafik' %}
+{% set active = 'grafik' %}
+{% block title %}Grafik Paneli — CPS{% endblock %}
+
+{% block content %}
+
+<div class="page-head">
+  <div class="page-head-main">
+    <div class="crumbs">Grafik</div>
+    <h1>🎨 Grafik Paneli</h1>
+    <p class="muted">Ürün kataloğu, tedarikçiler, numune ve Çin sipariş yönetimi</p>
+  </div>
+</div>
+
+<div class="kpi-grid kpi-grid-5">
+  <div class="kpi kpi-primary">
+    <div class="kpi-v">{{ kpi.kategori_sayi }}</div>
+    <div class="kpi-l">Kategori</div>
+    <div class="kpi-sub"><a href="/grafik/kategori">Yönet →</a></div>
+  </div>
+  <div class="kpi kpi-info">
+    <div class="kpi-v">{{ kpi.urun_sayi }}</div>
+    <div class="kpi-l">Ürün</div>
+    <div class="kpi-sub"><a href="/grafik/urun">Listele →</a></div>
+  </div>
+  <div class="kpi kpi-info">
+    <div class="kpi-v">{{ kpi.varyant_sayi }}</div>
+    <div class="kpi-l">Varyant</div>
+    <div class="kpi-sub">Renk × Beden</div>
+  </div>
+  <div class="kpi kpi-warn">
+    <div class="kpi-v">{{ kpi.tedarikci_sayi }}</div>
+    <div class="kpi-l">Tedarikçi</div>
+    <div class="kpi-sub"><a href="/grafik/tedarikci">Listele →</a></div>
+  </div>
+  <div class="kpi kpi-info">
+    <div class="kpi-v">{{ kpi.numune_acik }}</div>
+    <div class="kpi-l">Açık Numune</div>
+    <div class="kpi-sub"><a href="/grafik/numune">Tümü {{ kpi.numune_toplam }} →</a></div>
+  </div>
+</div>
+
+<div class="panel">
+  <h3>Hazır Modüller</h3>
+  <div class="home-grid">
+    {% if yetki('grafik.urun') or g_user.RolAd == 'Yönetim' %}
+    <a href="/grafik/urun" class="home-card home-card-info">
+      <div class="home-card-ic">📦</div>
+      <div class="home-card-title">Ürün & Varyant</div>
+      <div class="home-card-sub">Ürün kataloğu ve renk/beden varyantları</div>
+    </a>
+    <a href="/grafik/kategori" class="home-card home-card-warn">
+      <div class="home-card-ic">🗂</div>
+      <div class="home-card-title">Kategoriler</div>
+      <div class="home-card-sub">EVA terlik, pach, bant, ambalaj</div>
+    </a>
+    {% endif %}
+    {% if yetki('grafik.tedarikci') or g_user.RolAd == 'Yönetim' %}
+    <a href="/grafik/tedarikci" class="home-card home-card-danger">
+      <div class="home-card-ic">🏭</div>
+      <div class="home-card-title">Tedarikçiler</div>
+      <div class="home-card-sub">Çin ve yerli tedarikçi kayıtları</div>
+    </a>
+    {% endif %}
+    {% if yetki('grafik.numune') or g_user.RolAd == 'Yönetim' %}
+    <a href="/grafik/numune" class="home-card home-card-info">
+      <div class="home-card-ic">🧪</div>
+      <div class="home-card-title">Numune Takip</div>
+      <div class="home-card-sub">Müşteri talepleri, iterasyon timeline</div>
+    </a>
+    {% endif %}
+    {% if yetki('grafik.cin_siparis') or g_user.RolAd == 'Yönetim' %}
+    <a href="/grafik/siparis" class="home-card home-card-primary">
+      <div class="home-card-ic">📋</div>
+      <div class="home-card-title">Çin Sipariş</div>
+      <div class="home-card-sub">FOB sipariş, otomatik finans anlaşması</div>
+    </a>
+    <a href="/grafik/teklif" class="home-card home-card-success">
+      <div class="home-card-ic">💰</div>
+      <div class="home-card-title">Fiyat Teklifleri</div>
+      <div class="home-card-sub">Çin/TR/AB fiyatları, kur snapshot</div>
+    </a>
+    {% endif %}
+    {% if yetki('grafik.maliyet') or g_user.RolAd == 'Yönetim' %}
+    <a href="/grafik/sevkiyat" class="home-card home-card-info">
+      <div class="home-card-ic">🚢</div>
+      <div class="home-card-title">Sevkiyat & Maliyet</div>
+      <div class="home-card-sub">Uçak/konteyner, 5 dağıtım yöntemi</div>
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="panel">
+  <h3>Yakında</h3>
+  <div class="home-grid">
+    <div class="home-card disabled">
+      <div class="home-card-ic">📊</div>
+      <div class="home-card-title">Analiz Dashboard</div>
+      <div class="home-card-sub">Uçak vs konteyner, tedarikçi performansı</div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
