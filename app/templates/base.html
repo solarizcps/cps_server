@@ -1121,10 +1121,52 @@ window.__cpsRootMap = function(pathname) {
 
       {% endif %}
 
-      <button class="sb-tog" onclick="var s=document.getElementById('sidebar');s.classList.toggle('expanded');this.textContent=s.classList.contains('expanded')?'◀':'▶'">▶</button>
+      <button class="sb-tog" type="button" aria-label="Sidebar genislet/daralt">&#9654;</button>
 
 
     </nav>
+<!-- MENU_SIDEBAR_STATE_PERSIST_FIX v1 (05.06.2026) -->
+<script>
+(function(){
+  var KEY = 'cps_sidebar_expanded';
+
+  function readExpanded() {
+    try { return localStorage.getItem(KEY) === '1'; } catch (e) { return false; }
+  }
+
+  function saveExpanded(expanded) {
+    try { localStorage.setItem(KEY, expanded ? '1' : '0'); } catch (e) {}
+  }
+
+  function applyExpanded(expanded) {
+    var sb = document.getElementById('sidebar');
+    if (!sb) return;
+    var tog = sb.querySelector('.sb-tog');
+    if (expanded) {
+      sb.classList.add('expanded');
+      if (tog) tog.textContent = '\u25C0';
+    } else {
+      sb.classList.remove('expanded');
+      if (tog) tog.textContent = '\u25BA';
+    }
+  }
+
+  applyExpanded(readExpanded());
+
+  document.addEventListener('click', function(ev) {
+    var tog = ev.target.closest && ev.target.closest('.sb-tog');
+    if (!tog) return;
+    var sb = document.getElementById('sidebar');
+    if (!sb) return;
+    var expanded = !sb.classList.contains('expanded');
+    applyExpanded(expanded);
+    saveExpanded(expanded);
+  }, false);
+
+  window.__cpsSidebarExpanded = { read: readExpanded, save: saveExpanded, apply: applyExpanded, KEY: KEY };
+})();
+</script>
+<!-- MENU_SIDEBAR_STATE_PERSIST_FIX END -->
 <!-- FAZ UI CLEANUP: SIDEBAR_2A1_CSS -->
 <style>
 .sn-sec.sn-secondary .sn-baslik { font-size: 0.85em; opacity: 0.7; font-weight: 400; }
@@ -1276,23 +1318,7 @@ window.__cpsRootMap = function(pathname) {
 </style>
 <!-- FAZ UI BUGFIX: SIDEBAR_UX_2A2_FIX2 END -->
 
-<!-- FAZ UI BUGFIX: SIDEBAR_UX_2A2_FIX3 -->
-<script>
-/* UX 2A.2 FIX3: Dar mod -> grup tiklaninca sidebar'i genislet */
-/* Capture phase: bizim hook ONCE calisir (expanded ekle), sonra mevcut JS acik toggle yapar */
-(function(){
-  document.addEventListener('click', function(e){
-    var t = e.target.closest('#sidebar .sn-sec.sn-toggle');
-    if (!t) return;
-    var sb = document.getElementById('sidebar');
-    if (!sb) return;
-    if (!sb.classList.contains('expanded')) {
-      sb.classList.add('expanded');
-    }
-  }, true);
-})();
-</script>
-<!-- FAZ UI BUGFIX: SIDEBAR_UX_2A2_FIX3 END -->
+<!-- MENU_SIDEBAR_STATE_PERSIST_FIX: FIX3 removed (grup tiklama expanded degistirmez) -->
 
 <!-- FAZ UI BUGFIX: SIDEBAR_UX_2A2_FIX4 -->
 <style>
@@ -1320,21 +1346,50 @@ window.__cpsRootMap = function(pathname) {
 </style>
 <!-- FAZ UI BUGFIX: SIDEBAR_UX_2A2_FIX4 END -->
 
-<!-- FAZ UI BUGFIX: SIDEBAR_UX_2A2_FIX5 -->
+<!-- MENU_DROPDOWN_PERSIST_FIX: SIDEBAR_UX_2A2_FIX5 replaced -->
 <script>
-/* UX 2A.2 FIX5: Accordion -- ayni anda tek grup acik kalsin */
-/* Bubble phase (default): mevcut JS once acik toggle eder, sonra biz digerlerini kapatiriz */
+/* MENU_DROPDOWN_PERSIST_FIX v1 (05.06.2026)
+   - Sayfa icerigine tiklama menu kapatmaz
+   - Sadece grup basligi / sb-tog ile kapanir
+   - Baska ana grup acilinca onceki kapanir */
 (function(){
-  document.addEventListener('click', function(e){
-    var t = e.target.closest('#sidebar .sn-sec.sn-toggle');
-    if (!t) return;
-    document.querySelectorAll('#sidebar .sn-sec.sn-toggle.acik').forEach(function(el){
-      if (el !== t) el.classList.remove('acik');
+  var SB = '#sidebar';
+
+  function closeOtherGroups(activeGrup) {
+    document.querySelectorAll(SB + ' .sn-sec.sn-toggle').forEach(function(h) {
+      if (h.getAttribute('data-grup') === activeGrup) return;
+      h.classList.remove('acik');
+      var ar = h.querySelector('.sn-arrow');
+      if (ar) ar.textContent = '\u25BA';
     });
-  });
+    document.querySelectorAll(SB + ' .sn-grup').forEach(function(body) {
+      if (body.getAttribute('data-grup') === activeGrup) return;
+      body.classList.add('kapali');
+    });
+  }
+
+  function toggleGroup(h) {
+    var grup = h.getAttribute('data-grup');
+    if (!grup) return;
+    var body = document.querySelector(SB + ' .sn-grup[data-grup="' + grup + '"]');
+    if (!body) return;
+    var simdiKapali = body.classList.toggle('kapali');
+    h.classList.toggle('acik', !simdiKapali);
+    if (!simdiKapali) closeOtherGroups(grup);
+    var ar = h.querySelector('.sn-arrow');
+    if (ar) ar.textContent = simdiKapali ? '\u25BA' : '\u25BC';
+  }
+
+  document.addEventListener('click', function(ev) {
+    var h = ev.target.closest && ev.target.closest(SB + ' .sn-sec.sn-toggle');
+    if (!h) return;
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    toggleGroup(h);
+  }, true);
 })();
 </script>
-<!-- FAZ UI BUGFIX: SIDEBAR_UX_2A2_FIX5 END -->
+<!-- MENU_DROPDOWN_PERSIST_FIX: FIX5 END -->
 
 <!-- FAZ UI BUGFIX: SIDEBAR_UX_2A2_FIX6 -->
 <style>
@@ -1943,55 +1998,7 @@ window.__cpsRootMap = function(pathname) {
 
 
 
-    <script>
-
-
-      (function(){
-
-
-        var sb = document.getElementById('sidebar');
-
-
-        if (!sb) return;
-
-
-        sb.querySelectorAll('.sn-sec.sn-toggle').forEach(function(h){
-
-
-          h.addEventListener('click', function(){
-
-
-            var grup = h.dataset.grup;
-
-
-            var body = sb.querySelector('.sn-grup[data-grup="' + grup + '"]');
-
-
-            if (!body) return;
-
-
-            var simdiKapali = body.classList.toggle('kapali');
-
-
-            h.classList.toggle('acik', !simdiKapali);
-
-
-            var ar = h.querySelector('.sn-arrow');
-
-
-            if (ar) ar.textContent = simdiKapali ? '►' : '▼';
-
-
-          });
-
-
-        });
-
-
-      })();
-
-
-    </script>
+    <!-- MENU_DROPDOWN_PERSIST_FIX: duplicate toggle handler removed (SIDEBAR_LUCIDE_V3) -->
 
 
     <!-- SIDEBAR_COMPACT_V2 - inline CSS + JS -->
@@ -2186,58 +2193,7 @@ window.__cpsRootMap = function(pathname) {
 
 
 
-    <script>
-
-
-      (function(){
-
-
-        var sb = document.getElementById('sidebar');
-
-
-        if (!sb) return;
-
-
-        sb.querySelectorAll('.sn-sec.sn-toggle').forEach(function(h){
-
-
-          h.addEventListener('click', function(){
-
-
-            var grup = h.dataset.grup;
-
-
-            var body = sb.querySelector('.sn-grup[data-grup="' + grup + '"]');
-
-
-            if (!body) return;
-
-
-            var acildi = body.classList.toggle('kapali');
-
-
-            // acildi=true ise simdi KAPALI demek
-
-
-            h.classList.toggle('acik', !acildi);
-
-
-            var ar = h.querySelector('.sn-arrow');
-
-
-            if (ar) ar.textContent = acildi ? '►' : '▼';
-
-
-          });
-
-
-        });
-
-
-      })();
-
-
-    </script>
+    <!-- MENU_DROPDOWN_PERSIST_FIX: duplicate toggle handler removed (SIDEBAR_YENIDEN_V1) -->
 
 
     <!-- /SIDEBAR_YENIDEN_V1 -->
@@ -2297,67 +2253,7 @@ window.__cpsRootMap = function(pathname) {
 {% block scripts %}{% endblock %}
 
 
-<!-- SIDEBAR_TOGGLE_DELEGATION -->
-
-
-<script>
-
-
-(function(){
-
-
-  // Document-level delegation - DOM hazir olsa olmasa da calisir
-
-
-  document.addEventListener('click', function(ev){
-
-
-    var h = ev.target.closest && ev.target.closest('#sidebar .sn-sec.sn-toggle');
-
-
-    if (!h) return;
-
-
-    var grup = h.getAttribute('data-grup');
-
-
-    if (!grup) return;
-
-
-    var body = document.querySelector('#sidebar .sn-grup[data-grup="' + grup + '"]');
-
-
-    if (!body) return;
-
-
-    var simdiKapali = body.classList.toggle('kapali');
-
-
-    h.classList.toggle('acik', !simdiKapali);
-
-
-    var ar = h.querySelector('.sn-arrow');
-
-
-    if (ar) ar.textContent = simdiKapali ? '\u25BA' : '\u25BC';
-
-
-    ev.preventDefault();
-
-
-    ev.stopPropagation();
-
-
-  }, false);
-
-
-  console.log('[CPS LOCAL] Sidebar toggle delegation aktif.');
-
-
-})();
-
-
-</script>
+<!-- MENU_DROPDOWN_PERSIST_FIX: SIDEBAR_TOGGLE_DELEGATION removed (unified handler in FIX5) -->
 
 
 
@@ -2881,6 +2777,8 @@ window.__cpsRootMap = function(pathname) {
 
 </script>
 
+
+<!-- MENU_SIDEBAR_STATE_PERSIST_FIX: outside-click expanded guard removed -->
 
 <!-- sidebar-scroll-fix -->
 
