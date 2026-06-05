@@ -1,0 +1,22 @@
+﻿benzerlik_skoru,isim,isim1,isim2,isim_sayisi,kategori,legacy_id,legacy_idler,legacy_sayisi,majority_ad,majority_adet,majority_oran,pk_ad,pk_id,pk_idler,pk_majority_uyum,risk,toplam_kayit,varyantlar
+,,,,2,A_LEGACY_COK_ISIM,4,,,ilham jameshev,59,0.67,burçak çelenk,1,,HAYIR,CRITICAL,88,ilham jameshev(59) | burçak çelenk(29)
+,,,,3,A_LEGACY_COK_ISIM,6,,,najova tunus,43,0.77,ceren nur erzin,3,,HAYIR,CRITICAL,56,najova tunus(43) | ceren nur erzin(12) | serhat(1)
+,,,,2,A_LEGACY_COK_ISIM,7,,,ilham jameshev,134,0.96,ilham jameshev,4,,EVET,MEDIUM,139,ilham jameshev(134) | sham koıbıch(5)
+,,,,2,A_LEGACY_COK_ISIM,8,,,bahtiyar baytarov,79,0.89,bahtiyar baytarov,5,,EVET,MEDIUM,89,bahtiyar baytarov(79) | malika govassemi(10)
+,,,,2,A_LEGACY_COK_ISIM,9,,,najova tunus,116,0.94,najova tunus,6,,EVET,MEDIUM,124,najova tunus(116) | mustafa enes öztürk(8)
+,,,,2,A_LEGACY_COK_ISIM,12,,,sham koıbıch,38,0.83,sham koıbıch,7,,EVET,MEDIUM,46,sham koıbıch(38) | badr safa(8)
+,,,,2,A_LEGACY_COK_ISIM,13,,,malika govassemi,71,0.99,malika govassemi,8,,EVET,MEDIUM,72,malika govassemi(71) | adem özkan(1)
+,,,,2,A_LEGACY_COK_ISIM,20,,,mostafa beltagy,51,0.91,mostafa beltagy,11,,EVET,MEDIUM,56,mostafa beltagy(51) | serhat gülmen(5)
+,halil kıraç,,,,B_URETIM_ISIM_COK_PID,,"2, 5",2,,,,,,,,CRITICAL,,
+,burçak çelenk,,,,B_URETIM_ISIM_COK_PID,,"3, 4",2,,,,,,,,CRITICAL,,
+,ilham jameshev,,,,B_URETIM_ISIM_COK_PID,,"4, 7",2,,,,,,,,CRITICAL,,
+,najova tunus,,,,B_URETIM_ISIM_COK_PID,,"6, 9",2,,,,,,,,CRITICAL,,
+,sham koıbıch,,,,B_URETIM_ISIM_COK_PID,,"7, 12",2,,,,,,,,CRITICAL,,
+,malika govassemi,,,,B_URETIM_ISIM_COK_PID,,"8, 13",2,,,,,,,,CRITICAL,,
+,mustafa enes öztürk,,,,B_URETIM_ISIM_COK_PID,,"9, 15",2,,,,,,,,CRITICAL,,
+,moustafa kordy,,,,B_URETIM_ISIM_COK_PID,,"10, 19",2,,,,,,,,CRITICAL,,
+,badr safa,,,,B_URETIM_ISIM_COK_PID,,"12, 22",2,,,,,,,,CRITICAL,,
+,adem özkan,,,,B_URETIM_ISIM_COK_PID,,"13, 23",2,,,,,,,,CRITICAL,,
+,merdan hojamkulov,,,,B_URETIM_ISIM_COK_PID,,"14, 24",2,,,,,,,,CRITICAL,,
+,aman hudayberdiyev,,,,B_URETIM_ISIM_COK_PID,,"16, 27",2,,,,,,,,CRITICAL,,
+0.957,,çetin göler,çetin görler,,C_BENZER_ISIM,,,,,,,,,,,CRITICAL,,

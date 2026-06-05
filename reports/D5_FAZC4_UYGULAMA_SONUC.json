@@ -1,0 +1,24 @@
+{
+  "sprint": "D5 Faz C.4",
+  "tarih": "2026-05-18",
+  "saat_bas": "07:18",
+  "saat_bit": "08:08",
+  "sure_dk": 49,
+  "sonuc": "BASARILI",
+  "saha_kesintisi": false,
+  "uretim_kayit_baslangic": 1375,
+  "uretim_kayit_bitis": 1380,
+  "hash": {
+    "routes_py": "7BA720964BC8537F",
+    "sablon_html": "B3331364975FF6B6",
+    "sablon_js": "32B4D05B97B8FCF8",
+    "personel_giris": "41B220D201B0E1F8"
+  },
+  "yeni_endpoint_sayisi": 5,
+  "endpoint_test_pass": 7,
+  "endpoint_test_fail": 0,
+  "atomic_move_sureleri_ms": [0.27, 0.2, 0.2],
+  "rollback_kullanildi": false,
+  "stable_tag": "STABLE_D5_FAZC4_SABLON_CRUD_OK_20260518_080809",
+  "kalan_isler": ["C.5 trigger", "C.6 scheduled", "C.7 hedef_adet", "C.8 USE_CPS_NATIVE=True", "C.9 final verify", "5055 port kapatma"]
+}

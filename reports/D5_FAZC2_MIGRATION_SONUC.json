@@ -1,0 +1,10 @@
+{
+  "zaman": "2026-05-16T16:34:18.560780",
+  "dry_run": false,
+  "tablo_olustu": true,
+  "index_sayisi": 3,
+  "seed_insert": 5,
+  "seed_skip": 0,
+  "toplam_kayit": 5,
+  "unique_constraint": "ENFORCED"
+}

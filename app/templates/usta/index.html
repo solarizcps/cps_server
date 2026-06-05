@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>Usta Paneli — Solariz CPS</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="theme-color" content="#f97316">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/usta.css') }}?v={{ range(100000, 999999) | random }}">
+</head>
+<body>
+
+<header class="u-header">
+  <div class="u-header-icin">
+    <div class="u-logo">
+      <span class="u-logo-emoji">🏭</span>
+      <span class="u-logo-text">USTA PANEL</span>
+    </div>
+    <div class="u-kullanici">
+      <span id="ustaAd">{{ session.get('kullanici', {}).get('AdSoyad', session.get('kullanici', {}).get('KullaniciAdi', '?')) }}</span>
+      <a href="/cikis" class="u-cikis">Çıkış</a>
+    </div>
+  </div>
+</header>
+
+<nav class="u-tabs">
+  <button class="u-tab active" data-tab="isler">📋 İŞLER</button>
+  <button class="u-tab" data-tab="giris">➕ GİRİŞ</button>
+  <button class="u-tab" data-tab="onay">✓ ONAY <span id="onayBadge" class="u-badge"></span></button>
+</nav>
+
+<main class="u-main">
+
+  <!-- ============ İŞLER SEKMESİ ============ -->
+  <section class="u-pane active" id="pane-isler">
+    <div class="u-pane-header">
+      <h2>Açık İşlerim</h2>
+      <button class="u-yenile" id="islerYenileBtn" title="Yenile">↻</button>
+    </div>
+    <div id="islerError" class="u-error" style="display:none;"></div>
+    <div id="islerList" class="u-card-list">
+      <div class="u-empty">Yükleniyor...</div>
+    </div>
+  </section>
+
+  <!-- ============ VERİ GİRİŞ SEKMESİ ============ -->
+  <section class="u-pane" id="pane-giris">
+    <div class="u-pane-header">
+      <h2>Veri Girişi</h2>
+    </div>
+    <div id="girisError" class="u-error" style="display:none;"></div>
+    <div id="girisSuccess" class="u-success" style="display:none;"></div>
+
+    <form id="girisForm" class="u-form" onsubmit="return false;">
+      <div class="u-field">
+        <label for="emirNo">Emir No <span class="u-zorunlu">*</span></label>
+        <input type="number" id="emirNo" name="emir_no" required autocomplete="off" inputmode="numeric">
+      </div>
+
+      <div class="u-field">
+        <label for="modelAdi">Model</label>
+        <input type="text" id="modelAdi" name="model_adi" autocomplete="off" placeholder="(opsiyonel)">
+      </div>
+
+      <div class="u-field">
+        <label for="prosesKodu">Proses Kodu <span class="u-zorunlu">*</span></label>
+        <select id="prosesKodu" name="proses_kodu" required>
+          <option value="">— Seçiniz —</option>
+          <option value="MONTA">Monta</option>
+          <option value="KESIM">Kesim</option>
+          <option value="SAYA">Saya</option>
+          <option value="ENJEKSIYON">Enjeksiyon</option>
+          <option value="TEMIZLEME">Temizleme</option>
+          <option value="PAKETLEME">Paketleme</option>
+          <option value="DIGER">Diğer</option>
+        </select>
+      </div>
+
+      <div class="u-field">
+        <label for="prosesAdi">Proses Adı <span class="u-zorunlu">*</span></label>
+        <input type="text" id="prosesAdi" name="proses_adi" required autocomplete="off" placeholder="örn. Monta">
+      </div>
+
+      <div class="u-field">
+        <label for="miktar">Miktar (çift) <span class="u-zorunlu">*</span></label>
+        <input type="number" id="miktar" name="miktar" required min="1" autocomplete="off" inputmode="numeric">
+      </div>
+
+      <div class="u-field">
+        <label for="girisNot">Not</label>
+        <textarea id="girisNot" name="not" rows="2" placeholder="(opsiyonel)"></textarea>
+      </div>
+
+      <div class="u-actions">
+        <button type="button" class="u-btn u-btn-primary" id="girisKaydetBtn">KAYDET</button>
+        <button type="button" class="u-btn u-btn-ghost" id="girisIptalBtn">Temizle</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- ============ ONAY SEKMESİ ============ -->
+  <section class="u-pane" id="pane-onay">
+    <div class="u-pane-header">
+      <h2>Bekleyen Onaylar</h2>
+      <button class="u-yenile" id="onayYenileBtn" title="Yenile">↻</button>
+    </div>
+    <div id="onayError" class="u-error" style="display:none;"></div>
+    <div id="onayList" class="u-card-list">
+      <div class="u-empty">Yükleniyor...</div>
+    </div>
+  </section>
+
+</main>
+
+<script src="{{ url_for('static', filename='js/usta.js') }}?v={{ range(100000, 999999) | random }}"></script>
+</body>
+</html>

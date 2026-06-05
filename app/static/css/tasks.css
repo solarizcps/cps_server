@@ -1,0 +1,821 @@
+/* ==========================================================
+   CPS TASKS - FAZ 2A v5 - SOFT ENTERPRISE
+   ==========================================================
+   Karakter: Inter font, 400/500/600/700, sakin, dengeli
+   Hiyerarsi: BASLIK > DURUM > TERMIN > ATANAN > SIPARIS
+   Renk:     #F97316 primary (Solariz turuncu)
+   Hisset:   SAP + Monday + CPS arasi kurumsal operasyon
+   ========================================================== */
+
+.tasks-page {
+  padding: 22px 24px 20px 24px;
+  background: #f6f7f9;
+  min-height: calc(100vh - 64px);
+  color: #0f172a;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  letter-spacing: -.01em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+
+/* ============== HEADER =============== */
+.tasks-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.tasks-title h1 {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0;
+  color: #0f172a;
+  letter-spacing: -.4px;
+  line-height: 1.2;
+}
+.tasks-title p {
+  margin: 5px 0 0 0;
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.tasks-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.tasks-btn {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all .15s ease;
+  font-family: inherit;
+  letter-spacing: -.01em;
+}
+.tasks-btn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #1e293b;
+}
+.tasks-btn:active { transform: translateY(1px); }
+.tasks-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.tasks-btn-primary {
+  background: #F97316;
+  border-color: #F97316;
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(249, 115, 22, .2);
+}
+.tasks-btn-primary:hover {
+  background: #EA580C;
+  border-color: #EA580C;
+  color: #fff;
+}
+
+.tasks-btn-ghost {
+  background: transparent;
+  border-color: #e2e8f0;
+  color: #64748b;
+}
+
+
+/* ============== SUMMARY (KPI) - SAKIN AMA BELIRGIN =============== */
+.tasks-summary {
+  background: #fff;
+  border: 1px solid #eef2f7;
+  border-radius: 8px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+.tasks-summary-item {
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-right: 1px solid #f1f5f9;
+  min-height: 78px;
+}
+.tasks-summary-item:last-child { border-right: 0; }
+
+.tasks-summary-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.tasks-summary-text { display: flex; flex-direction: column; gap: 2px; }
+.tasks-summary-label {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #64748b;
+  letter-spacing: .2px;
+  text-transform: uppercase;
+}
+.tasks-summary-number {
+  font-size: 26px;
+  line-height: 1.1;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.5px;
+  color: #0f172a;
+}
+
+.tasks-summary-blue   .tasks-summary-icon { background: #eff6ff; color: #3b82f6; }
+.tasks-summary-blue   .tasks-summary-number { color: #2563eb; }
+.tasks-summary-orange .tasks-summary-icon { background: #fff7ed; color: #f97316; }
+.tasks-summary-orange .tasks-summary-number { color: #ea580c; }
+.tasks-summary-red    .tasks-summary-icon { background: #fef2f2; color: #ef4444; }
+.tasks-summary-red    .tasks-summary-number { color: #dc2626; }
+.tasks-summary-green  .tasks-summary-icon { background: #f0fdf4; color: #22c55e; }
+.tasks-summary-green  .tasks-summary-number { color: #16a34a; }
+
+
+/* ============== FILTER PANEL - HAFIF SHADOW ILE AYRISMA =============== */
+.tasks-filter-panel {
+  background: #fff;
+  border: 1px solid #eef2f7;
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin-bottom: 14px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, .04);
+}
+.tasks-filter-grid {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 1fr 1fr 1fr;
+  gap: 12px;
+  align-items: end;
+}
+.tasks-filter-grid.second-row {
+  margin-top: 12px;
+  grid-template-columns: 1fr 1fr 1fr 1fr auto auto;
+}
+
+.tasks-field label {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 6px;
+  letter-spacing: -.005em;
+}
+.tasks-field input,
+.tasks-field select {
+  width: 100%;
+  height: 36px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0 11px;
+  font-size: 13px;
+  font-weight: 400;
+  color: #1e293b;
+  background: #fff;
+  outline: none;
+  font-family: inherit;
+  box-sizing: border-box;
+  letter-spacing: -.01em;
+}
+.tasks-field input::placeholder { color: #94a3b8; font-weight: 400; }
+.tasks-field input:focus,
+.tasks-field select:focus {
+  border-color: #F97316;
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, .12);
+}
+.tasks-field-actions {
+  display: flex;
+  gap: 8px;
+  align-items: end;
+}
+.tasks-field-actions .tasks-btn { white-space: nowrap; }
+
+
+/* ============== TABLE CARD =============== */
+.tasks-table-card {
+  background: #fff;
+  border: 1px solid #eef2f7;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, .04);
+}
+.tasks-table-wrap {
+  overflow-x: auto;
+}
+.tasks-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  min-width: 1200px;
+  font-family: inherit;
+}
+
+/* TABLO HEADER - OKUNUR AMA INCE */
+.tasks-table thead th {
+  background: #fafbfc;
+  color: #475569;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .25px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #eef2f7;
+  text-align: left;
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
+}
+.tasks-table thead th.sortable { cursor: pointer; }
+.tasks-table thead th.sortable:hover { background: #f1f5f9; color: #1e293b; }
+.tasks-table thead th .sort-ic { display: inline-block; margin-left: 4px; opacity: 0; }
+.tasks-table thead th[data-dir] .sort-ic { opacity: 1; }
+.tasks-table thead th[data-dir="asc"]  .sort-ic::before  { content: "▲"; font-size: 9px; color: #F97316; }
+.tasks-table thead th[data-dir="desc"] .sort-ic::before  { content: "▼"; font-size: 9px; color: #F97316; }
+
+/* TABLO BODY - NEFES */
+.tasks-table tbody td {
+  padding: 14px 14px;
+  border-bottom: 1px solid #f5f7fa;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 400;
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -.01em;
+}
+.tasks-table tbody tr { transition: background .12s; }
+.tasks-table tbody tr:hover { background: #fafbfc; }
+.tasks-table tbody tr:last-child td { border-bottom: 0; }
+.tasks-table tbody tr.row-completed   { background: #fbfefc; }
+.tasks-table tbody tr.row-completed:hover { background: #f0fdf4; }
+.tasks-table tbody tr.row-canceled    { opacity: .55; }
+
+/* Kolon genislikleri */
+.tasks-table .col-id       { width: 56px; }
+.tasks-table .col-priority { width: 100px; }
+.tasks-table .col-title    { width: 280px; }
+.tasks-table .col-dept     { width: 100px; }
+.tasks-table .col-user     { width: 150px; }
+.tasks-table .col-status   { width: 140px; }
+.tasks-table .col-date     { width: 120px; }
+.tasks-table .col-order    { width: 105px; }
+.tasks-table .col-creator  { width: 150px; }
+.tasks-table .col-updated  { width: 125px; }
+.tasks-table .col-action   { width: 70px; text-align: right; }
+
+.task-id-cell {
+  font-weight: 500;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+}
+
+/* TITLE - HIYERARSI 1. (DOMINANT AMA INCE 600) */
+.task-title-main {
+  font-weight: 600;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13.5px;
+  letter-spacing: -.015em;
+  line-height: 1.3;
+}
+
+
+/* ============== BADGES - SAKIN AMA OKUNUR =============== */
+.task-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  padding: 0 11px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  letter-spacing: -.005em;
+  font-family: inherit;
+}
+
+/* Oncelik */
+.priority-kritik { color: #dc2626; background: #fef2f2; border-color: #fecaca; }
+.priority-yuksek { color: #ea580c; background: #fff7ed; border-color: #fed7aa; }
+.priority-orta,
+.priority-normal { color: #475569; background: #f1f5f9; border-color: #e2e8f0; }
+.priority-dusuk  { color: #64748b; background: #f8fafc; border-color: #e2e8f0; }
+
+/* Durum - HIYERARSI 2. */
+.status-bekliyor       { color: #475569; background: #f1f5f9; border-color: #e2e8f0; }
+.status-devam_ediyor   { color: #2563eb; background: #eff6ff; border-color: #bfdbfe; }
+.status-onay_bekliyor  { color: #ea580c; background: #fff7ed; border-color: #fed7aa; }
+.status-revize_istendi { color: #b45309; background: #fefce8; border-color: #fde68a; }
+.status-tamamlandi     { color: #16a34a; background: #f0fdf4; border-color: #bbf7d0; }
+.status-gecikti        { color: #dc2626; background: #fef2f2; border-color: #fecaca; }
+.status-iptal          { color: #94a3b8; background: #f8fafc; border-color: #e2e8f0; text-decoration: line-through; }
+
+
+/* ============== USER CELL - HIYERARSI 4. (silikleştir) =============== */
+.task-user {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+.task-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #475569;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10.5px;
+  font-weight: 600;
+  flex-shrink: 0;
+  letter-spacing: .3px;
+  border: 1px solid #e2e8f0;
+}
+.task-user-info { min-width: 0; }
+.task-user-name {
+  font-weight: 500;
+  color: #1e293b;
+  line-height: 1.2;
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.task-user-role {
+  font-size: 10.5px;
+  color: #94a3b8;
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
+
+/* ============== DATE CELL - HIYERARSI 3. =============== */
+.task-date-main {
+  font-weight: 600;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+}
+.task-date-sub {
+  font-size: 11px;
+  font-weight: 600;
+  margin-top: 2px;
+  letter-spacing: -.005em;
+}
+.task-date-ok       { color: #16a34a; }
+.task-date-warn     { color: #ea580c; }
+.task-date-danger   { color: #dc2626; }
+.task-date-mute     { color: #94a3b8; font-weight: 500; }
+
+
+/* ============== ACTION ICONS =============== */
+.task-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.task-icon-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #475569;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  transition: all .15s ease;
+  font-family: inherit;
+}
+.task-icon-btn:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #0f172a;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(15, 23, 42, .06);
+}
+.task-icon-btn:active { transform: translateY(0); box-shadow: none; }
+
+
+/* ============== TABLE FOOTER (pagination) =============== */
+.tasks-table-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 18px;
+  border-top: 1px solid #f1f5f9;
+  background: #fafbfc;
+  color: #64748b;
+  font-size: 12.5px;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-weight: 500;
+}
+.tasks-pagination-info { font-weight: 500; }
+.tasks-pagination {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.tasks-page-size-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: #475569;
+  font-weight: 500;
+}
+.tasks-page-size {
+  height: 30px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0 24px 0 10px;
+  background: #fff;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #1e293b;
+  cursor: pointer;
+  font-family: inherit;
+  outline: none;
+}
+.tasks-page-size:focus {
+  border-color: #F97316;
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, .12);
+}
+.tasks-page-btn {
+  min-width: 30px;
+  height: 30px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: #475569;
+  padding: 0 8px;
+  transition: all .12s ease;
+  font-family: inherit;
+}
+.tasks-page-btn:hover:not(:disabled):not(.active) {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #1e293b;
+}
+.tasks-page-btn.active {
+  background: #F97316;
+  color: #fff;
+  border-color: #F97316;
+  font-weight: 600;
+}
+.tasks-page-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+
+/* ============== EMPTY =============== */
+.tasks-empty {
+  padding: 48px 20px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+
+/* ============== MODAL =============== */
+.tasks-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, .42);
+  z-index: 9998;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  font-family: 'Inter', system-ui, sans-serif;
+  letter-spacing: -.01em;
+}
+.tasks-modal-backdrop.show { display: flex; }
+.tasks-modal {
+  width: min(820px, 96vw);
+  max-height: 88vh;
+  overflow: hidden;
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #eef2f7;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, .2);
+  display: flex;
+  flex-direction: column;
+}
+.tasks-modal-create { width: min(720px, 94vw); }
+
+.tasks-modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+.tasks-modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0;
+  letter-spacing: -.2px;
+}
+.tasks-modal-close {
+  background: none;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  color: #94a3b8;
+  padding: 0 6px;
+  line-height: 1;
+}
+.tasks-modal-close:hover { color: #1e293b; }
+
+.tasks-modal-body {
+  padding: 20px;
+  overflow: auto;
+  flex: 1;
+}
+.tasks-modal-footer {
+  padding: 12px 20px;
+  border-top: 1px solid #f1f5f9;
+  background: #fafbfc;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+
+/* ============== DETAY MODAL ICERIK =============== */
+.task-detay-baslik {
+  font-size: 17px;
+  font-weight: 600;
+  color: #0f172a;
+  margin-bottom: 10px;
+  line-height: 1.3;
+  letter-spacing: -.2px;
+}
+.task-detay-baglam {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.task-detay-chip {
+  display: inline-block;
+  padding: 4px 10px;
+  background: #f1f5f9;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+.task-detay-aciklama {
+  font-size: 13px;
+  color: #475569;
+  background: #fafbfc;
+  border: 1px solid #f1f5f9;
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  white-space: pre-wrap;
+  line-height: 1.6;
+  font-weight: 400;
+}
+.task-detay-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px 24px;
+  margin-bottom: 18px;
+}
+.task-detay-grid .lbl {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .2px;
+  color: #94a3b8;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.task-detay-grid .val {
+  font-size: 13px;
+  color: #1e293b;
+  word-break: break-word;
+  font-weight: 500;
+}
+.task-detay-section-title {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: .2px;
+  color: #64748b;
+  font-weight: 600;
+  margin: 16px 0 8px;
+  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 6px;
+}
+.task-detay-logs { font-size: 12.5px; }
+.task-detay-logs .log-row {
+  display: grid;
+  grid-template-columns: 130px 130px 1fr 100px;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px dashed #f1f5f9;
+  color: #475569;
+}
+.task-detay-logs .log-row .when { color: #94a3b8; font-variant-numeric: tabular-nums; font-weight: 400; }
+.task-detay-logs .log-row .who  { font-weight: 500; color: #1e293b; }
+.task-detay-logs .log-row .what { font-weight: 600; color: #0f172a; }
+.task-detay-files .file-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  font-size: 12.5px;
+  color: #475569;
+  border-bottom: 1px dashed #f1f5f9;
+}
+.task-detay-files .file-row .nm { font-weight: 500; color: #0f172a; }
+.task-detay-empty {
+  font-size: 12.5px;
+  color: #94a3b8;
+  font-style: italic;
+  padding: 8px 0;
+}
+
+
+/* ============== CREATE FORM =============== */
+.tasks-form-row {
+  margin-bottom: 12px;
+}
+.tasks-form-row label {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 5px;
+  letter-spacing: -.005em;
+}
+.tasks-form-row input[type="text"],
+.tasks-form-row input[type="date"],
+.tasks-form-row textarea,
+.tasks-form-row select {
+  width: 100%;
+  padding: 0 11px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 400;
+  color: #0f172a;
+  outline: none;
+  box-sizing: border-box;
+  height: 36px;
+  letter-spacing: -.01em;
+}
+.tasks-form-row textarea {
+  resize: vertical;
+  min-height: 80px;
+  height: auto;
+  padding: 9px 11px;
+  line-height: 1.5;
+}
+.tasks-form-row input:focus,
+.tasks-form-row select:focus,
+.tasks-form-row textarea:focus {
+  border-color: #F97316;
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, .12);
+}
+.tasks-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 14px;
+}
+.tasks-form-row .zorunlu { color: #dc2626; }
+.tasks-cb-row {
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+  text-transform: none !important;
+  letter-spacing: -.005em !important;
+  font-size: 13px !important;
+  color: #1e293b !important;
+  font-weight: 500 !important;
+  cursor: pointer;
+  margin-bottom: 0 !important;
+}
+.tasks-cb-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #F97316;
+}
+.tasks-form-err {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  margin-top: 10px;
+}
+
+
+/* ============== TOAST =============== */
+.tasks-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: #0f172a;
+  color: #fff;
+  padding: 11px 18px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: 'Inter', sans-serif;
+  letter-spacing: -.01em;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, .25);
+  z-index: 9999;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity .2s, transform .2s;
+  pointer-events: none;
+}
+.tasks-toast.is-show { opacity: 1; transform: translateY(0); }
+.tasks-toast.is-err  { background: #dc2626; }
+.tasks-toast.is-ok   { background: #16a34a; }
+
+
+/* ============== RESPONSIVE =============== */
+@media (max-width: 1200px) {
+  .tasks-summary { grid-template-columns: repeat(2, 1fr); }
+  .tasks-summary-item:nth-child(even) { border-right: 0; }
+  .tasks-summary-item:nth-child(1),
+  .tasks-summary-item:nth-child(2) { border-bottom: 1px solid #f1f5f9; }
+
+  .tasks-filter-grid,
+  .tasks-filter-grid.second-row { grid-template-columns: repeat(3, 1fr); }
+  .tasks-filter-grid.second-row .tasks-field-actions { grid-column: 1 / -1; }
+}
+
+@media (max-width: 900px) {
+  .tasks-page { padding: 16px; }
+  .tasks-header { flex-direction: column; align-items: stretch; }
+  .tasks-actions { width: 100%; }
+  .tasks-actions .tasks-btn { flex: 1; justify-content: center; }
+
+  .tasks-summary { grid-template-columns: 1fr; }
+  .tasks-summary-item { border-right: 0; border-bottom: 1px solid #f1f5f9; }
+  .tasks-summary-item:last-child { border-bottom: 0; }
+
+  .tasks-filter-grid,
+  .tasks-filter-grid.second-row,
+  .tasks-form-grid { grid-template-columns: 1fr; }
+
+  .task-detay-grid { grid-template-columns: 1fr; }
+  .task-detay-logs .log-row {
+    grid-template-columns: 110px 1fr;
+    row-gap: 3px;
+  }
+  .task-detay-logs .log-row .what,
+  .task-detay-logs .log-row .who { grid-column: 2; }
+
+  .tasks-table-footer { flex-direction: column; align-items: stretch; }
+  .tasks-pagination-info { text-align: center; }
+}

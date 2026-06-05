@@ -1,0 +1,13 @@
+﻿personel_id,isim_sayisi,gorulen_isimler,kayit_sayisi,ilk_tarih,son_tarih,risk
+1,2,adem(45) | Sistem Yöneticisi(7),52,2026-04-14,2026-05-07,HIGH
+2,1,halil kıraç(1),1,2026-05-12,2026-05-12,MEDIUM
+3,1,Burçak Çelenk(2),2,2026-04-14,2026-04-14,MEDIUM
+10,1,moustafa kordy(4),4,2026-05-14,2026-05-16,HIGH
+11,1,begench pardayev(32),32,2026-04-17,2026-05-08,HIGH
+14,2,merdan hojamkulov(6) | serkan karayaka(5),11,2026-04-17,2026-05-16,HIGH
+16,2,aman hudayberdiyev(14) | mohammed bousafsaf(2),16,2026-04-17,2026-05-16,HIGH
+17,1,shemshat hangeldıyeva(31),31,2026-04-17,2026-05-08,HIGH
+18,2,guvannch hangeldıev(46) | anwar elsadat(3),49,2026-04-17,2026-05-16,HIGH
+21,1,hassan hubbiye(5),5,2026-05-04,2026-05-07,HIGH
+25,1,francis uchenna(23),23,2026-04-21,2026-05-08,HIGH
+28,1,Test Personel(1),1,2026-05-07,2026-05-07,MEDIUM

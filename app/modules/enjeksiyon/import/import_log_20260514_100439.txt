@@ -1,0 +1,39 @@
+  MODE     : INSERT
+  Excel    : Z:\Solariz_CPS_SERVER\app\modules\enjeksiyon\import\kalip_master.xlsx
+  DB       : C:\Users\Administrator\_f24_2_work\mock_data_import.db
+  Baslangic: 2026-05-14T10:04:43.732362
+
+  Basliklar: ['kalip_kod', 'kalip_tipi', 'model_kod', 'model_ad', 'asorti', 'kalip_basi_cift', 'varsayilan_bagli_kalip', 'renk', 'gorsel_dosya', 'aktif']
+  [OK] Basliklar dogru
+
+  DB mevcut kayit: 0
+
+  === SONUC ===
+  Eklendi          : 67
+  Atlandi          : 0
+  Hata             : 0
+  DB toplam kayit  : 67 (beklenen 67)
+  GOVDE            : 43 (beklenen 43)
+  ATKI             : 24 (beklenen 24)
+  Tekil model_kod  : 39 (beklenen 39)
+  Tekil kalip_kod  : 54 (beklenen 54)
+
+  Ilk 3 kayit:
+    (1, 'TR-21B1', 'GOVDE', 'CRP-8100', 'CRP-8100 Patik', '22-29')
+    (2, 'TR-21B1-A', 'ATKI', 'CRP-8100', 'CRP-8100 Patik', '22-29')
+    (3, 'TR-21B1', 'GOVDE', 'CRP-8100', 'CRP-8100 Patik', '26-29')
+
+  Son 3 kayit:
+    (67, 'TR-24B11-A', 'ATKI', 'CRP-5100', 'CRP-5100 PATİK', '24-29')
+    (66, 'TR-24B11', 'GOVDE', 'CRP-5100', 'CRP-5100 PATİK', '24-29')
+    (65, 'TR-24M2-A', 'ATKI', 'CRM-1800', 'CRM-1800 Merdane', '42')
+
+  Tekrar eden kalip_kod ornekleri:
+    TR-23B16: 3 satir
+    TR-23B16-A: 3 satir
+    X-3761: 3 satir
+    X-3761-A: 3 satir
+    TR-21B1: 2 satir
+
+  Bitis: 2026-05-14T10:04:43.771157
+  Migration ENJ_F24_2 BASARILI

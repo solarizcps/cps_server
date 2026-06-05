@@ -1,0 +1,22 @@
+{
+  "sprint": "D5 Faz C.5 P1",
+  "tarih": "2026-05-18",
+  "saat": "08:31",
+  "sonuc": "BASARILI",
+  "hash_eski": "7BA720964BC8537F",
+  "hash_yeni": "642B553F48D2EA0F",
+  "personel_giris_hash": "41B220D201B0E1F8",
+  "yeni_satir": 140,
+  "yeni_fonksiyon": 3,
+  "unit_test_pass": 15,
+  "unit_test_total": 15,
+  "canli_db_senaryo_pass": 5,
+  "canli_db_senaryo_total": 5,
+  "endpoint_regression_pass": 6,
+  "endpoint_regression_total": 6,
+  "atomic_move_ms": 0.23,
+  "saha_kesintisi": false,
+  "rollback_kullanildi": false,
+  "yedek": "routes.py.YEDEK_D5_FAZC5_P1_20260518_082019",
+  "next": "P2 - _sablon_uygula_internal refactor"
+}

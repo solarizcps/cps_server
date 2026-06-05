@@ -1,0 +1,32 @@
+﻿{
+    "zaman":  "2026-05-18T07:00:06",
+    "dosyalar":  {
+                     "yeni":  [
+                                  "app/templates/hedef/sablon.html (6.2 KB)",
+                                  "app/static/hedef/sablon.js (10.3 KB)"
+                              ],
+                     "degisen":  [
+                                     "app/modules/hedef/routes.py (L58, 1 satir)"
+                                 ]
+                 },
+    "testler":  {
+                    "T7_health":  "PASS (22 personel)",
+                    "T5_hedef_ana":  "PASS",
+                    "T2_sablon_liste_json":  "PASS (4 aktif sablon)",
+                    "T3_static_js_erisim":  "PASS (10537 byte)",
+                    "T8_uretim_kayit":  "PASS (1370 stabil)",
+                    "T4_prosesler_cps_native":  "PASS (regression)",
+                    "T1_hedef_sablon_html":  "PASS (6/6 string)",
+                    "T6_hedef_sapma":  "PASS (dokunulmadi)"
+                },
+    "yedek":  "routes.py.YEDEK_D5_FAZC3_20260518_065734",
+    "onay":  "A/A/A",
+    "hash_degisimi":  {
+                          "hedef_routes_oncesi":  "0C7D1F6F75935495",
+                          "personel_giris_routes":  "41B220D201B0E1F8 (degismedi)",
+                          "hedef_routes_sonrasi":  "3DF1592CC262B3F4"
+                      },
+    "baslik":  "Yonetim UI - Sablon Liste",
+    "snapshot":  "STABLE_D5_FAZC3_SABLON_UI_OK_20260518_070005",
+    "sprint":  "D5 Faz C.3"
+}

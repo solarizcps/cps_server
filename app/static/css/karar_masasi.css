@@ -1,0 +1,374 @@
+/* v6_BUYUT_20260506_182648 */
+/* KARAR MASASI v6 — MOCKUP BIREBIR */
+
+.km-sayfa { padding: 22px 28px; background: #f6f7f9; min-height: 100vh; }
+
+.km-baslik-blok { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.km-baslik { display: flex; align-items: center; gap: 10px; }
+.km-baslik-icon { font-size: 22px; color: #4a5568; }
+.km-baslik-metin { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; color: #111827; }
+.km-baslik-sag { display: flex; gap: 8px; align-items: center; }
+
+.km-rozet-mock {
+  font-size: 11px; padding: 4px 10px; border-radius: 999px;
+  background: #fff; color: #7e3f98; border: 1px solid #e9d5ff;
+  font-weight: 700; letter-spacing: 0.5px;
+}
+.km-rozet-kolon {
+  font-size: 12px; padding: 5px 12px; border-radius: 999px;
+  background: #fff; color: #4b5563; border: 1px solid #e5e7eb;
+  font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
+}
+.km-akilli-sira-rozet {
+  font-size: 12px; padding: 5px 12px; border-radius: 999px;
+  background: #111827; color: #fff;
+  font-weight: 600; display: inline-flex; align-items: center; gap: 6px;
+}
+.km-as-on {
+  font-size: 10px; padding: 2px 8px; border-radius: 999px;
+  background: #5dcaa5; color: #04342c; font-weight: 800; letter-spacing: 0.5px;
+}
+
+.km-altbaslik { font-size: 13px; color: #6b7280; margin-bottom: 18px; margin-left: 32px; }
+
+/* === KPI === */
+.km-kpi { display: flex; gap: 12px; margin-bottom: 16px; }
+.km-kpi-hucre {
+  flex: 1; min-width: 0;
+  background: #fff; border: 1px solid rgba(17,24,39,0.06);
+  border-radius: 14px; box-shadow: 0 4px 12px rgba(15,23,42,0.04);
+  padding: 18px 20px;
+  display: flex; align-items: flex-start; gap: 14px;
+}
+.km-kpi-hucre-genis { flex: 1.6; }
+
+.km-kpi-icon {
+  width: 44px; height: 44px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; flex-shrink: 0;
+}
+.km-kpi-icon-mavi { background: #e6f1fb; color: #185fa5; }
+.km-kpi-icon-kirmizi { background: #fceaea; color: #b91c1c; }
+.km-kpi-icon-yesil { background: #dcfce7; color: #166534; }
+.km-kpi-icon-amber { background: #fef3c7; color: #b45309; }
+.km-kpi-icon-mor { background: #ede9fe; color: #6d28d9; }
+
+.km-kpi-icerik { flex: 1; min-width: 0; }
+.km-kpi-label {
+  font-size: 11.5px; font-weight: 700; color: #6b7280;
+  letter-spacing: 0.06em; text-transform: uppercase;
+}
+.km-kpi-deger {
+  margin-top: 6px; font-size: 30px; font-weight: 800;
+  color: #111827; line-height: 1.1; font-variant-numeric: tabular-nums;
+}
+.km-kpi-deger-kirmizi { color: #b91c1c; }
+.km-kpi-alt { font-size: 12.5px; color: #9ca3af; margin-top: 4px; }
+
+.km-kpi-kapasite {
+  margin-top: 4px; font-size: 22px; font-weight: 800;
+  color: #111827; line-height: 1.1; font-variant-numeric: tabular-nums;
+}
+.km-kpi-kapasite .km-kapasite-bolum { color: #B5B3AA; font-weight: 500; font-size: 17px; }
+.km-kpi-kapasite .km-kapasite-oran {
+  font-size: 12px; padding: 3px 9px; border-radius: 999px;
+  background: #dcfce7; color: #166534; font-weight: 700; margin-left: 6px;
+  vertical-align: 4px;
+}
+.km-kpi-kapasite .km-kapasite-oran.amber { background: #fef3c7; color: #92400e; }
+.km-kpi-kapasite .km-kapasite-oran.kirmizi { background: #fee2e2; color: #b91c1c; }
+.km-kpi-progress-row { margin-top: 8px; }
+.km-kpi-progress { height: 6px; background: #f1f3f6; border-radius: 999px; overflow: hidden; }
+.km-kpi-progress-bar {
+  height: 100%; background: #5dcaa5; border-radius: 999px;
+  transition: width 0.3s ease;
+}
+.km-kpi-progress-bar.amber { background: #f0997b; }
+.km-kpi-progress-bar.kirmizi { background: #e24b4a; }
+
+/* === FILTRE === */
+.km-filtre-cubuk {
+  display: flex; gap: 12px; align-items: center;
+  margin-bottom: 14px; flex-wrap: nowrap;
+  background: #fff; border: 1px solid rgba(17,24,39,0.06);
+  border-radius: 14px; padding: 12px 16px;
+  box-shadow: 0 2px 8px rgba(15,23,42,0.025);
+}
+.km-tab-grup { display: flex; gap: 0; background: #f3f4f6; border-radius: 10px; padding: 4px; align-items: center; }
+.km-tab {
+  padding: 9px 16px; font-size: 14px; cursor: pointer; color: #6b7280;
+  background: transparent; border: 0; border-radius: 6px; font-family: inherit; font-weight: 500;
+  display: inline-flex; align-items: center; gap: 5px; transition: all 0.15s;
+}
+.km-tab:hover { color: #111827; }
+.km-tab.aktif { background: #111827; color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+
+.km-fil-blok { display: flex; align-items: center; min-width: 160px; }
+.km-fil-label { display: none; }
+.km-filtre-dd {
+  font-size: 14px; color: #111827; padding: 9px 14px;
+  border: 1px solid #e5e7eb; border-radius: 10px; background: #fff;
+  cursor: pointer; font-family: inherit; outline: none; height: 40px; width: 100%;
+}
+.km-filtre-dd:hover { border-color: #d1d5db; }
+
+.km-fil-arama-wrap { flex: 1; position: relative; min-width: 240px; }
+.km-arama-ikon {
+  position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+  color: #9ca3af; font-size: 16px; pointer-events: none;
+}
+.km-filtre-arama {
+  width: 100%; font-size: 14px; color: #111827;
+  padding: 9px 14px 9px 38px; border: 1px solid #e5e7eb;
+  border-radius: 10px; background: #fff; outline: none;
+  font-family: inherit; height: 40px; box-sizing: border-box;
+}
+.km-filtre-arama::placeholder { color: #9ca3af; }
+.km-filtre-arama:focus { border-color: #185fa5; }
+
+.km-fil-buton {
+  font-size: 13.5px; color: #4b5563; padding: 9px 14px;
+  border: 1px solid #e5e7eb; border-radius: 10px; background: #fff;
+  cursor: pointer; font-family: inherit; font-weight: 500; height: 40px;
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+.km-fil-buton:hover { background: #f9fafb; color: #111827; }
+
+/* === SIRA / MANUEL BAR === */
+.km-sira-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 11px 16px; background: #fff;
+  border: 1px solid rgba(17,24,39,0.06);
+  border-radius: 12px; margin-bottom: 14px;
+  box-shadow: 0 2px 6px rgba(15,23,42,0.025);
+}
+.km-sira-bar-sol { display: flex; align-items: center; gap: 12px; font-size: 14px; }
+.km-sira-baslik { color: #111827; font-weight: 600; }
+.km-sira-ayrac { color: #d1d5db; }
+.km-sira-aciklama { color: #6b7280; font-size: 12.5px; }
+.km-sira-link {
+  font-size: 12.5px; color: #6b7280; cursor: pointer; font-weight: 500;
+  padding: 4px 8px; border-radius: 6px;
+}
+.km-sira-link:hover { color: #111827; background: #f3f4f6; }
+
+.km-toggle {
+  position: relative; display: inline-block; width: 30px; height: 16px;
+  border-radius: 999px; vertical-align: middle; transition: background 0.15s;
+}
+.km-toggle.on { background: #d4a52f; }
+.km-toggle.off { background: #d1d5db; }
+.km-toggle-dot {
+  position: absolute; top: 2px; width: 12px; height: 12px;
+  background: #fff; border-radius: 50%; transition: all 0.15s;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+.km-toggle.on .km-toggle-dot { right: 2px; }
+.km-toggle.off .km-toggle-dot { left: 2px; }
+
+.km-manuel-bar {
+  display: none; align-items: center; justify-content: space-between;
+  padding: 11px 16px; background: #fffbea;
+  border: 1px solid #f7d76e;
+  border-radius: 12px; margin-bottom: 14px;
+}
+body.km-manuel-aktif .km-manuel-bar { display: flex; }
+body.km-manuel-aktif .km-sira-bar { display: none; }
+
+.km-manuel-bar-sol { display: flex; align-items: center; gap: 10px; font-size: 13px; flex-wrap: wrap; }
+.km-manuel-bar-baslik { color: #92400e; font-weight: 700; }
+.km-manuel-bar-rozet {
+  font-size: 11.5px; padding: 3px 10px; border-radius: 999px;
+  background: #fef3c7; color: #92400e; font-weight: 600;
+}
+.km-manuel-bar-ayrac { color: #d4a52f; font-size: 14px; }
+.km-manuel-bar-not { color: #6b5510; font-size: 12.5px; }
+
+.km-manuel-bar-sag { display: flex; gap: 12px; align-items: center; }
+.km-manuel-don-buton {
+  font-size: 12.5px; padding: 7px 14px; background: #111827; color: #fff;
+  border: 0; border-radius: 8px; cursor: pointer; font-weight: 600; font-family: inherit;
+}
+.km-manuel-don-buton:hover { background: #1f2937; }
+.km-manuel-link {
+  font-size: 12.5px; color: #6b5510; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 4px; font-weight: 500;
+}
+.km-manuel-link:hover { text-decoration: underline; }
+
+body.km-manuel-aktif .km-filtre-cubuk {
+  display: flex; gap: 12px; align-items: center;
+  margin-bottom: 14px; flex-wrap: nowrap;
+  background: #fff; border: 1px solid rgba(17,24,39,0.06);
+  border-radius: 14px; padding: 12px 16px;
+  box-shadow: 0 2px 8px rgba(15,23,42,0.025);
+}
+
+/* === TABLO === */
+.km-tablo-cerceve {
+  background: #fff; border: 1px solid rgba(17,24,39,0.06);
+  border-radius: 14px; overflow: hidden;
+  box-shadow: 0 4px 16px rgba(15,23,42,0.04);
+}
+.km-tablo {
+  width: 100%; border-collapse: separate; border-spacing: 0;
+  font-size: 14.5px; color: #111827; font-family: inherit;
+}
+.km-tablo thead tr { height: 48px; }
+.km-tablo th {
+  padding: 0 16px; text-align: left; font-weight: 700; font-size: 11.5px; color: #6b7280;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  white-space: nowrap; border-bottom: 1px solid #e5e7eb;
+  background: #fafbfc;
+}
+.km-tablo th.km-th-num { text-align: right; }
+.km-tablo th.km-th-mid { text-align: center; }
+.km-tablo th.km-th-no { width: 44px; text-align: center; }
+.km-tablo th.km-th-aksiyon { width: 36px; text-align: center; padding: 0 6px; }
+
+.km-tablo tbody td { padding: 16px 16px; vertical-align: middle; border-bottom: 1px solid #f1f3f5; }
+.km-tablo tbody tr:last-child td { border-bottom: 0; }
+
+.km-row { background: #fff; transition: background 0.08s; }
+.km-row:hover { background: #fafbfc; }
+
+.km-row-bloke td:first-child { box-shadow: inset 4px 0 0 #c53a3a; }
+.km-row-gecikmis td:first-child { box-shadow: inset 4px 0 0 #f59e0b; }
+.km-row-nakit td:first-child { box-shadow: inset 4px 0 0 #9c4d7b; }
+.km-row-kismi td:first-child { box-shadow: inset 4px 0 0 #d4a52f; }
+.km-row-bloke { background: #fffafa; }
+.km-row-bloke:hover { background: #fff5f5; }
+.km-row-gecikmis { background: #fffbeb; }
+
+.km-num { font-variant-numeric: tabular-nums; font-weight: 600; }
+.km-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #6b7280; }
+.km-hucre-merkez { text-align: center; }
+.km-hucre-soluk { color: #d1d5db; }
+
+.km-musteri-sip-ust { color: #111827; font-weight: 700; line-height: 1.3; font-size: 14.5px; }
+.km-musteri-sip-alt {
+  display: block; margin-top: 3px; font-size: 12.5px; color: #9ca3af; font-weight: 500; font-family: ui-monospace, monospace;
+}
+.km-musteri-nakit-etiket {
+  margin-left: 6px; color: #7e3f98; font-size: 10px;
+  font-weight: 800; letter-spacing: 0.04em;
+}
+.km-tasindi-isaret {
+  font-size: 10px; padding: 2px 6px; border-radius: 999px;
+  background: #fef3c7; color: #92400e; font-weight: 700; margin-left: 4px;
+}
+
+.km-model { font-weight: 600; color: #1f2937; }
+
+.km-uret-bloke {
+  color: #b91c1c; background: #fee2e2; border-radius: 6px;
+  padding: 5px 12px; font-weight: 700; font-size: 13px; display: inline-block;
+}
+.km-uret-hazir {
+  color: #166534; background: #dcfce7; border-radius: 6px;
+  padding: 5px 12px; font-weight: 600; font-size: 13px; display: inline-block;
+}
+.km-uret-kismi {
+  color: #92400e; background: #fef3c7; border-radius: 6px;
+  padding: 5px 12px; font-weight: 600; font-size: 13px; display: inline-block;
+}
+
+.km-termin-uzak { color: #1f2937; }
+.km-termin-yakin { color: #b45309; font-weight: 600; }
+.km-termin-gecti { color: #b91c1c; font-weight: 700; }
+.km-termin-kalan-gun { color: #b91c1c; font-size: 11.5px; margin-left: 4px; font-weight: 600; }
+
+.km-darbogaz-tag {
+  display: inline-flex; align-items: center; gap: 5px;
+  color: #92400e; font-weight: 600; font-size: 12.5px;
+}
+.km-darbogaz-icon { color: #d97706; font-size: 14px; }
+
+.km-talimat { color: #1f2937; font-weight: 500; font-size: 14px; }
+.km-talimat-bos { color: #9ca3af; font-style: italic; font-size: 12.5px; }
+
+.km-aksiyon-btn {
+  background: transparent; border: 0; cursor: pointer; font-size: 18px;
+  color: #6b7280; padding: 4px 8px; border-radius: 6px; font-family: inherit;
+}
+.km-aksiyon-btn:hover { background: #f3f4f6; color: #111827; }
+
+/* === ALT BAR (sayfalama) === */
+.km-altbar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 14px; padding: 12px 4px;
+}
+.km-altbar-sol { font-size: 12.5px; color: #6b7280; }
+.km-altbar-sag { display: flex; align-items: center; gap: 6px; }
+.km-altbar-sayfa {
+  font-size: 12.5px; color: #4b5563; padding: 6px 11px;
+  border: 1px solid #e5e7eb; border-radius: 8px; background: #fff;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
+}
+.km-sayfa-buton {
+  width: 32px; height: 32px; border: 1px solid #e5e7eb;
+  border-radius: 8px; background: #fff; color: #6b7280;
+  cursor: pointer; font-family: inherit; display: inline-flex;
+  align-items: center; justify-content: center; padding: 0; font-size: 14px;
+}
+.km-sayfa-buton:hover { background: #f9fafb; color: #111827; }
+.km-sayfa-aktif {
+  width: 32px; height: 32px; background: #111827; color: #fff;
+  border-radius: 8px; display: inline-flex; align-items: center;
+  justify-content: center; font-size: 13px; font-weight: 600;
+}
+.km-sayfa-pasif {
+  width: 32px; height: 32px; color: #6b7280;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 13px; cursor: pointer;
+}
+
+.km-toast {
+  position: fixed; bottom: 24px; right: 24px;
+  background: #111827; color: #fff; padding: 12px 16px;
+  border-radius: 10px; font-size: 13px; z-index: 1000;
+  box-shadow: 0 12px 30px rgba(15,23,42,0.2); max-width: 360px;
+}
+
+@media (max-width: 1300px) {
+  .km-kpi { flex-wrap: wrap; }
+  .km-kpi-hucre {
+  flex: 1; min-width: 0;
+  background: #fff; border: 1px solid rgba(17,24,39,0.06);
+  border-radius: 14px; box-shadow: 0 4px 12px rgba(15,23,42,0.04);
+  padding: 18px 20px;
+  display: flex; align-items: flex-start; gap: 14px;
+}
+}
+
+/* ── FAZ43 PARÇA 3 — Org Katmanı ── */
+.km-td-org { width:160px; vertical-align:middle; padding:6px 8px; }
+.km-org-wrap { display:flex; flex-direction:column; gap:1px; }
+.km-org-dot { display:inline-block; width:7px; height:7px; border-radius:50%;
+              margin-right:4px; vertical-align:middle; flex-shrink:0; }
+.km-org-ekip { font-size:11.5px; font-weight:600; color:#1f2937;
+               white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+               max-width:150px; display:block; }
+.km-org-lider { font-size:11px; color:#6b7280; display:block; }
+.km-org-vardy { font-size:10px; color:#9ca3af; background:#f3f4f6;
+                border-radius:3px; padding:1px 5px; display:inline-block; margin-top:1px; }
+/* ── END Org CSS ── */
+
+/* ── FAZ43 Sprint 2 — Risk Badge ── */
+.km-td-risk { width:150px; vertical-align:middle; padding:4px 6px; }
+.km-risk-wrap { cursor:default; }
+/* ── END Risk CSS ── */
+
+/* ── FAZ43 Sprint 3 — Müdahale Öneri ── */
+.km-td-mud { width:180px; vertical-align:middle; padding:4px 6px; }
+.km-mud-wrap { cursor:default; }
+/* ── END Müdahale CSS ── */
+
+/* ── FAZ43 Sprint 4 — Görev Hazırlık ── */
+.km-td-gh { width:130px; vertical-align:middle; padding:4px 6px; }
+.km-gh-wrap:hover { opacity:0.85; }
+/* ── END Görev CSS ── */
+
+/* ── FAZ43 Sprint 5 — Görev Modal ── */
+#km-gh-modal-wrap { position:fixed; z-index:9100; }
+/* ── END Modal CSS ── */

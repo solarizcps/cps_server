@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+{% block title %}Canlı Operasyon — Solariz CPS{% endblock %}
+{% block content %}
+<div class="co-sayfa">
+
+  <div class="co-baslik-blok">
+    <div>
+      <h2 class="co-baslik">⚡ Canlı Operasyon Akışı</h2>
+      <p class="co-alt">Fabrika geneli son olaylar — otomatik yenileme 30s</p>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <span id="co-son-guncelleme" style="font-size:11px;color:#9ca3af"></span>
+      <select id="co-sure-sec" onchange="coYukle()" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:6px;font-size:13px;background:#fff">
+        <option value="1h">Son 1 saat</option>
+        <option value="6h" selected>Son 6 saat</option>
+        <option value="bugun">Bugün</option>
+      </select>
+      <button onclick="coYukle()" style="padding:7px 14px;border-radius:6px;border:1px solid #e5e7eb;background:#fff;cursor:pointer;font-size:13px">⟳</button>
+    </div>
+  </div>
+
+  <!-- KPI -->
+  <div class="co-kpi-bar">
+    <div class="co-kpi"><div class="co-kpi-sayi co-k-turuncu" id="co-k-aktif">—</div><div class="co-kpi-etiket">AKTİF GÖREV</div></div>
+    <div class="co-kpi"><div class="co-kpi-sayi" id="co-k-olay">—</div><div class="co-kpi-etiket">SON OLAY</div></div>
+    <div class="co-kpi"><div class="co-kpi-sayi co-k-turuncu" id="co-k-esc">—</div><div class="co-kpi-etiket">ESCALATION</div></div>
+    <div class="co-kpi"><div class="co-kpi-sayi co-k-kirmizi" id="co-k-kritik">—</div><div class="co-kpi-etiket">KRİTİK</div></div>
+    <div class="co-kpi"><div class="co-kpi-sayi co-k-yesil" id="co-k-tamam">—</div><div class="co-kpi-etiket">TAMAMLANAN</div></div>
+  </div>
+
+  <!-- Feed -->
+  <div class="co-feed-wrap">
+    <div id="co-feed">
+      <div style="text-align:center;padding:40px;color:#9ca3af">Yükleniyor…</div>
+    </div>
+  </div>
+
+</div>
+
+<style>
+.co-sayfa { padding:22px 28px; background:#f6f7f9; min-height:100vh; }
+.co-baslik-blok { display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px; }
+.co-baslik { font-size:20px;font-weight:700;color:#111827;margin:0; }
+.co-alt { font-size:12px;color:#6b7280;margin:2px 0 0; }
+
+.co-kpi-bar { display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap; }
+.co-kpi { background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:12px 18px;min-width:90px; }
+.co-kpi-sayi { font-size:22px;font-weight:700;color:#111827; }
+.co-kpi-sayi.co-k-turuncu { color:#d97706; }
+.co-kpi-sayi.co-k-kirmizi { color:#dc2626; }
+.co-kpi-sayi.co-k-yesil   { color:#10b981; }
+.co-kpi-etiket { font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px; }
+
+.co-feed-wrap { background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:0; overflow:hidden; }
+
+.co-olay { display:flex;gap:12px;padding:12px 16px;border-bottom:1px solid #f3f4f6;transition:background .15s; }
+.co-olay:hover { background:#fef9e7; }
+.co-olay:last-child { border-bottom:none; }
+
+.co-dot { width:10px;height:10px;border-radius:50%;flex-shrink:0;margin-top:4px; }
+.co-dot.mavi     { background:#3b82f6; }
+.co-dot.yesil    { background:#10b981; }
+.co-dot.turuncu  { background:#f59e0b; }
+.co-dot.kirmizi  { background:#ef4444; }
+.co-dot.gri      { background:#d1d5db; }
+
+.co-zaman { font-size:11px;color:#9ca3af;white-space:nowrap; }
+.co-mesaj { font-size:13px;color:#111827;font-weight:500; }
+.co-meta  { font-size:11px;color:#6b7280;margin-top:2px; }
+
+.co-badge { display:inline-block;padding:1px 7px;border-radius:4px;font-size:10px;font-weight:600; }
+.co-badge-esc  { background:#fef3c7;color:#92400e; }
+.co-badge-km   { background:#ede9fe;color:#6d28d9; }
+.co-badge-yeni { background:#dbeafe;color:#1e40af; }
+</style>
+
+<script>
+var _coTimer = null;
+
+function coYukle() {
+  var sure = document.getElementById('co-sure-sec').value;
+  fetch('/yonetim/api/operasyon/canli-akis?sure=' + sure + '&limit=100', {credentials:'same-origin'})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d.ok) return;
+      // KPI
+      var k = d.kpi;
+      document.getElementById('co-k-aktif').textContent  = k.aktif_gorev;
+      document.getElementById('co-k-olay').textContent   = k.son_olay_sayisi;
+      document.getElementById('co-k-esc').textContent    = k.escalation;
+      document.getElementById('co-k-kritik').textContent = k.kritik;
+      document.getElementById('co-k-tamam').textContent  = k.tamamlanan;
+      // Feed
+      coRenderFeed(d.olaylar);
+      // Son güncelleme
+      var now = new Date();
+      document.getElementById('co-son-guncelleme').textContent =
+        'Son: ' + now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+    })
+    .catch(function(e){ console.error('[CO]', e); });
+}
+
+function _esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
+
+function coRenderFeed(olaylar) {
+  var feed = document.getElementById('co-feed');
+  if (!olaylar || !olaylar.length) {
+    feed.innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af">Bu dönemde olay yok</div>';
+    return;
+  }
+  var html = '';
+  olaylar.forEach(function(o){
+    var zaman = o.zaman ? o.zaman.substring(5,16) : '—';
+    var badge = '';
+    if (o.tip && o.tip.indexOf('escalation') >= 0)
+      badge = '<span class="co-badge co-badge-esc">ESC</span> ';
+    else if (o.kaynak === 'bildirim' && o.tip === 'gorev_yeni')
+      badge = '<span class="co-badge co-badge-yeni">YENİ</span> ';
+
+    var meta = [];
+    if (o.kullanici) meta.push('👤 ' + _esc(o.kullanici));
+    if (o.siparis)   meta.push('📦 ' + _esc(o.siparis));
+    if (o.proses)    meta.push('⚙️ ' + _esc(o.proses));
+    if (o.task_id)   meta.push('#' + o.task_id);
+
+    html += '<div class="co-olay">'
+      + '<div class="co-dot ' + (o.renk||'gri') + '"></div>'
+      + '<div style="flex:1">'
+      + '<div class="co-zaman">' + zaman + '</div>'
+      + '<div class="co-mesaj">' + badge + (o.ikon||'') + ' ' + _esc(o.mesaj||'') + '</div>'
+      + (meta.length ? '<div class="co-meta">' + meta.join(' · ') + '</div>' : '')
+      + '</div>'
+      + '</div>';
+  });
+  feed.innerHTML = html;
+}
+
+// Sayfa yüklenince + 30s yenile
+document.addEventListener('DOMContentLoaded', function(){
+  coYukle();
+  _coTimer = setInterval(coYukle, 30000);
+});
+</script>
+{% endblock %}

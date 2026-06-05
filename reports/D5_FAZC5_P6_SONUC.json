@@ -1,0 +1,18 @@
+{
+  "sprint": "D5 Faz C.5 P6",
+  "tarih": "2026-05-18",
+  "saat": "09:30",
+  "sonuc": "BASARILI",
+  "config_hash_eski": "D8121045BB25B6D5",
+  "config_hash_yeni": "2F6BFFBAECC77EF1",
+  "routes_hash_eski": "DD83F35FAC5CCEC1",
+  "routes_hash_yeni": "7EAC892167AFEAD1",
+  "personel_giris_hash": "41B220D201B0E1F8",
+  "flag_USE_CPS_NATIVE_PROSES": false,
+  "insert_sablon_id_kanitlandi": true,
+  "geri_al_cps_trigger_kanitlandi": true,
+  "uretim_kayit": 1380,
+  "saha_kesintisi": false,
+  "rollback_kullanildi": false,
+  "next": "P4 lazy hook (ozel onay)"
+}

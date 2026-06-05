@@ -1,0 +1,13 @@
+{
+  "zaman": "2026-05-16T16:23:08.996067",
+  "dry_run": false,
+  "onceki_toplam": 2273,
+  "sonraki_toplam": 2273,
+  "sablon_id_kolonu": true,
+  "idx_eap_sablon_id": true,
+  "sablon_id_dolu": 140,
+  "sablon_id_null": 2133,
+  "sablon_yildiz_null_kalan": 0,
+  "uretim_kayit_korundu": true,
+  "test_sorgu_pass": "4/4"
+}

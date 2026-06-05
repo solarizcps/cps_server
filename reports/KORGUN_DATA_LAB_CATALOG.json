@@ -1,0 +1,248 @@
+[
+  {
+    "tablo": "Urt_Emir",
+    "var": true,
+    "satir": 2750,
+    "kolon": 20,
+    "tarih_kol": [
+      "EmirTarihi",
+      "TerTarih",
+      "insDT",
+      "updDT",
+      "MrpBasTar",
+      "MrpTerTar"
+    ],
+    "min_t": "2019-08-29 14:53:29",
+    "max_t": "2026-05-15 14:49:44",
+    "ilk5": [
+      "EmirNo(int)",
+      "EmirTarihi(datetime)",
+      "Notu(nvarchar)",
+      "ModelKod(varchar)",
+      "Durum(varchar)"
+    ],
+    "mb": 2.62,
+    "hata": []
+  },
+  {
+    "tablo": "Urt_Em_gch",
+    "var": true,
+    "satir": 8896,
+    "kolon": 22,
+    "tarih_kol": [
+      "SendTar",
+      "insDT",
+      "updDT"
+    ],
+    "min_t": "2019-08-29 14:53:29",
+    "max_t": "2026-05-15 14:49:44",
+    "ilk5": [
+      "EmirNo(int)",
+      "SKOD(varchar)",
+      "RKOD(int)",
+      "BedKod(int)",
+      "Modul(varchar)"
+    ],
+    "mb": 9.33,
+    "hata": []
+  },
+  {
+    "tablo": "Urt_con_gch",
+    "var": true,
+    "satir": 5781,
+    "kolon": 25,
+    "tarih_kol": [
+      "SendTar",
+      "StartTarih",
+      "EndTarih",
+      "insDT",
+      "updDT"
+    ],
+    "min_t": "2019-08-29 14:53:29",
+    "max_t": "2026-05-08 11:04:22",
+    "ilk5": [
+      "EmirNo(int)",
+      "SKOD(varchar)",
+      "RKOD(int)",
+      "BedKod(int)",
+      "FisNo(int)"
+    ],
+    "mb": 6.89,
+    "hata": []
+  },
+  {
+    "tablo": "Urtx_con_gch",
+    "var": true,
+    "satir": 712481,
+    "kolon": 25,
+    "tarih_kol": [
+      "SendTar",
+      "StartTarih",
+      "EndTarih",
+      "insDT",
+      "updDT"
+    ],
+    "min_t": "2020-07-06 14:54:37",
+    "max_t": "2026-05-16 07:46:05",
+    "ilk5": [
+      "EmirNo(int)",
+      "SKOD(varchar)",
+      "RKOD(int)",
+      "BedKod(int)",
+      "FisNo(int)"
+    ],
+    "mb": 849.34,
+    "hata": []
+  },
+  {
+    "tablo": "Siparis_Har",
+    "var": true,
+    "satir": 26270,
+    "kolon": 32,
+    "tarih_kol": [
+      "TerminTarihi",
+      "insDT"
+    ],
+    "min_t": "2021-09-29 09:58:31",
+    "max_t": "2026-02-19 15:51:45",
+    "ilk5": [
+      "SipNo(int)",
+      "SipHarinx(int)",
+      "Konum(varchar)",
+      "SKOD(varchar)",
+      "Tanim(varchar)"
+    ],
+    "mb": 40.08,
+    "hata": []
+  },
+  {
+    "tablo": "Siparis_Kay",
+    "var": true,
+    "satir": 5181,
+    "kolon": 67,
+    "tarih_kol": [
+      "SipTar",
+      "UrGirTar",
+      "SevkTar",
+      "TeslimTar",
+      "iptalTar"
+    ],
+    "min_t": "2019-02-18 21:10:13",
+    "max_t": "2026-05-16 11:16:45",
+    "ilk5": [
+      "SipNo(int)",
+      "SipTip(varchar)",
+      "SipTur(varchar)",
+      "SipTar(datetime)",
+      "BelgeNo(varchar)"
+    ],
+    "mb": 16.55,
+    "hata": []
+  },
+  {
+    "tablo": "Cari_Kart",
+    "var": true,
+    "satir": 3270,
+    "kolon": 95,
+    "tarih_kol": [
+      "KartTar"
+    ],
+    "min_t": "2017-11-10 00:00:00",
+    "max_t": "2026-05-16 00:00:00",
+    "ilk5": [
+      "CKod(varchar)",
+      "CName(nvarchar)",
+      "Unvan(nvarchar)",
+      "Adr1(nvarchar)",
+      "Adr2(varchar)"
+    ],
+    "mb": 14.81,
+    "hata": []
+  },
+  {
+    "tablo": "Model_M",
+    "var": true,
+    "satir": 3145,
+    "kolon": 18,
+    "tarih_kol": [
+      "Tarih",
+      "insDT",
+      "updDT"
+    ],
+    "min_t": "2018-10-01 00:00:00",
+    "max_t": "2026-05-15 08:22:45",
+    "ilk5": [
+      "ModelKod(varchar)",
+      "Tanim(varchar)",
+      "Tarih(datetime)",
+      "BedKod(varchar)",
+      "OzKod1(varchar)"
+    ],
+    "mb": 2.7,
+    "hata": []
+  },
+  {
+    "tablo": "Proses_M",
+    "var": true,
+    "satir": 45,
+    "kolon": 16,
+    "tarih_kol": [
+      "insDT",
+      "updDT"
+    ],
+    "min_t": "2025-04-22 11:38:31",
+    "max_t": "2025-04-23 14:41:27",
+    "ilk5": [
+      "Pro(varchar)",
+      "Tanim(varchar)",
+      "PTime(int)",
+      "TimeTip(varchar)",
+      "Worker(int)"
+    ],
+    "mb": 0.03,
+    "hata": []
+  },
+  {
+    "tablo": "StokKart",
+    "var": true,
+    "satir": 7903,
+    "kolon": 96,
+    "tarih_kol": [
+      "KARTTAR",
+      "Temin",
+      "insDT"
+    ],
+    "min_t": "2017-11-06 00:00:00",
+    "max_t": "2026-05-15 00:00:00",
+    "ilk5": [
+      "SKOD(varchar)",
+      "StokSekli(varchar)",
+      "Tanim(nvarchar)",
+      "BEDKod(varchar)",
+      "StokTip(varchar)"
+    ],
+    "mb": 36.18,
+    "hata": []
+  },
+  {
+    "tablo": "Urt_Em2Em",
+    "var": true,
+    "satir": 67425,
+    "kolon": 11,
+    "tarih_kol": [
+      "insDT",
+      "updDT"
+    ],
+    "min_t": "2024-09-25 10:26:40",
+    "max_t": "2026-05-15 14:49:44",
+    "ilk5": [
+      "EmirNo(int)",
+      "Proses(varchar)",
+      "SKod(varchar)",
+      "EmirNo_YM(int)",
+      "kgid(int)"
+    ],
+    "mb": 35.37,
+    "hata": []
+  }
+]

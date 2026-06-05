@@ -1,0 +1,436 @@
+{% extends 'base.html' %}
+{% block title %}Görev Takip — Solariz CPS
+<!-- Timeline Drawer -->
+<div id="gt-tl-drawer" style="display:none;position:fixed;top:0;right:0;width:400px;max-width:95vw;height:100vh;background:#fff;box-shadow:-4px 0 24px rgba(0,0,0,.15);z-index:8000;overflow-y:auto;flex-direction:column;">
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid #e5e7eb;position:sticky;top:0;background:#fff;z-index:1;">
+    <div>
+      <div style="font-size:15px;font-weight:700;color:#111827" id="gt-tl-baslik">Timeline</div>
+      <div style="font-size:11px;color:#9ca3af" id="gt-tl-alt"></div>
+    </div>
+    <button onclick="gtTimelineKapat()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#9ca3af">✕</button>
+  </div>
+  <div id="gt-tl-icerik" style="padding:16px 20px;">
+    <div style="color:#9ca3af;text-align:center;padding:24px">Yükleniyor…</div>
+  </div>
+</div>
+<div id="gt-tl-overlay" onclick="gtTimelineKapat()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:7999;"></div>
+
+<style>
+.gt-tl-olay { display:flex; gap:12px; margin-bottom:16px; }
+.gt-tl-dot  { width:12px; height:12px; border-radius:50%; flex-shrink:0; margin-top:3px; }
+.gt-tl-dot.mavi     { background:#3b82f6; }
+.gt-tl-dot.yesil    { background:#10b981; }
+.gt-tl-dot.turuncu  { background:#f59e0b; }
+.gt-tl-dot.kirmizi  { background:#ef4444; }
+.gt-tl-dot.gri      { background:#9ca3af; }
+.gt-tl-line { border-left:2px solid #e5e7eb; margin-left:5px; margin-bottom:4px; height:16px; }
+.gt-tl-zaman { font-size:11px; color:#9ca3af; }
+.gt-tl-mesaj { font-size:13px; color:#111827; font-weight:500; }
+.gt-tl-meta  { font-size:11px; color:#6b7280; }
+</style>
+
+<script>
+function gtTimelineAc(taskId, title) {
+  document.getElementById('gt-tl-baslik').textContent = title;
+  document.getElementById('gt-tl-alt').textContent = 'Görev #' + taskId;
+  document.getElementById('gt-tl-icerik').innerHTML = '<div style="color:#9ca3af;text-align:center;padding:24px">Yükleniyor…</div>';
+  document.getElementById('gt-tl-drawer').style.display = 'flex';
+  document.getElementById('gt-tl-overlay').style.display = 'block';
+
+  fetch('/yonetim/api/gorev/' + taskId + '/timeline', {credentials:'same-origin'})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d.ok) {
+        document.getElementById('gt-tl-icerik').innerHTML = '<div style="color:red">Hata: ' + (d.hata||'') + '</div>';
+        return;
+      }
+      var html = '';
+      var IKON = {
+        gorev_olusturuldu:'📋', gorev_yeni:'🔔',
+        escalation_lvl1:'⚡', escalation_lvl2:'⚠️', escalation_lvl3:'🚨',
+        gorev_basladi:'▶️', gorev_tamamlandi:'✅',
+        gorev_iptal:'❌', gorev_cancelled:'❌',
+        gorev_completed:'✅', gorev_started:'▶️',
+      };
+      d.olaylar.forEach(function(o, i){
+        var ikon = IKON[o.tip] || '•';
+        var zaman = o.zaman ? o.zaman.substring(5,16) : '—';
+        html += '<div class="gt-tl-olay">'
+          + '<div>'
+          + '<div class="gt-tl-dot ' + (o.renk||'gri') + '"></div>'
+          + (i < d.olaylar.length-1 ? '<div class="gt-tl-line"></div>' : '')
+          + '</div>'
+          + '<div style="flex:1">'
+          + '<div class="gt-tl-zaman">' + zaman + ' · ' + _esc(o.kullanici||'') + '</div>'
+          + '<div class="gt-tl-mesaj">' + ikon + ' ' + _esc(o.mesaj||'') + '</div>'
+          + (o.meta && o.meta.escalation_level ? '<div class="gt-tl-meta">Escalation Seviye ' + o.meta.escalation_level + '</div>' : '')
+          + '</div></div>';
+      });
+      if (!d.olaylar.length) html = '<div style="color:#9ca3af;text-align:center;padding:24px">Olay kaydı yok</div>';
+      document.getElementById('gt-tl-icerik').innerHTML = html;
+      document.getElementById('gt-tl-alt').textContent = 'Görev #' + taskId + ' · ' + d.olay_sayisi + ' olay';
+    })
+    .catch(function(e){
+      document.getElementById('gt-tl-icerik').innerHTML = '<div style="color:red">Bağlantı hatası</div>';
+    });
+}
+
+function gtTimelineKapat() {
+  document.getElementById('gt-tl-drawer').style.display = 'none';
+  document.getElementById('gt-tl-overlay').style.display = 'none';
+}
+
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Escape') gtTimelineKapat();
+});
+</script>
+
+{% endblock %}
+{% block content %}
+<div class="gt-sayfa">
+
+  <div class="gt-baslik-blok">
+    <div>
+      <h2 class="gt-baslik">📋 Görev Takip Paneli</h2>
+      <p class="gt-alt">Tüm görevlerin anlık durumu — admin görünümü</p>
+    </div>
+    <button class="gt-yenile-btn" onclick="gtYukle()">⟳ Yenile</button>
+    <button class="gt-esc-btn" id="gt-esc-btn" onclick="gtEscalationKontrol()">⚡ Escalation Kontrol</button>
+    <span id="gt-esc-sonuc" class="gt-esc-sonuc"></span>
+  </div>
+
+  <!-- KPI -->
+  <div class="gt-kpi-bar">
+    <div class="gt-kpi">
+      <div class="gt-kpi-sayi" id="gt-kpi-toplam">—</div>
+      <div class="gt-kpi-etiket">TOPLAM</div>
+    </div>
+    <div class="gt-kpi">
+      <div class="gt-kpi-sayi gt-acik" id="gt-kpi-acik">—</div>
+      <div class="gt-kpi-etiket">AÇIK</div>
+    </div>
+    <div class="gt-kpi">
+      <div class="gt-kpi-sayi gt-gecikis" id="gt-kpi-gecikis">—</div>
+      <div class="gt-kpi-etiket">GECİKMİŞ</div>
+    </div>
+  </div>
+
+  <!-- Filtreler -->
+  <div class="gt-filtre-bar">
+    <button class="gt-filtre-btn aktif" data-status="" onclick="gtFiltre(this,'')">Tümü</button>
+    <button class="gt-filtre-btn" data-status="bekliyor,devam_ediyor" onclick="gtFiltre(this,'bekliyor,devam_ediyor')">Açık</button>
+    <button class="gt-filtre-btn" data-status="bekliyor" onclick="gtFiltre(this,'bekliyor')">Bekliyor</button>
+    <button class="gt-filtre-btn" data-status="devam_ediyor" onclick="gtFiltre(this,'devam_ediyor')">Devam Ediyor</button>
+    <button class="gt-filtre-btn" data-status="tamamlandi" onclick="gtFiltre(this,'tamamlandi')">Tamamlandı</button>
+    <span class="gt-filtre-ayrac">|</span>
+    <button class="gt-filtre-btn" data-source="karar_masasi" onclick="gtFiltreSource(this,'karar_masasi')">📋 Karar Masası</button>
+  </div>
+
+  <!-- Tablo -->
+  <div class="gt-tablo-wrap">
+    <table class="gt-tablo" id="gt-tablo">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Görev</th>
+          <th>Atanan</th>
+          <th>Oluşturan</th>
+          <th>Sipariş</th>
+          <th>Durum</th>
+          <th>Öncelik</th>
+          <th>Açık Süre</th>
+          <th>Bildirim</th>
+          <th>Son Bildirim</th>
+          <th>Gecikme</th>
+          <th>Kaynak</th>
+        </tr>
+      </thead>
+      <tbody id="gt-tbody">
+        <tr><td colspan="12" style="text-align:center;padding:24px;color:#9ca3af">Yükleniyor…</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<style>
+.gt-sayfa { padding:22px 28px; background:#f6f7f9; min-height:100vh; }
+.gt-baslik-blok { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; }
+.gt-baslik { font-size:20px; font-weight:700; color:#111827; margin:0; }
+.gt-alt { font-size:12px; color:#6b7280; margin:2px 0 0; }
+.gt-yenile-btn { padding:8px 16px; border-radius:6px; border:1px solid #e5e7eb;
+  background:#fff; cursor:pointer; font-size:13px; color:#374151; }
+.gt-yenile-btn:hover { background:#f3f4f6; }
+
+.gt-kpi-bar { display:flex; gap:12px; margin-bottom:16px; }
+.gt-kpi { background:#fff; border:1px solid #e5e7eb; border-radius:8px;
+  padding:12px 20px; min-width:100px; }
+.gt-kpi-sayi { font-size:24px; font-weight:700; color:#111827; }
+.gt-kpi-sayi.gt-acik { color:#d97706; }
+.gt-kpi-sayi.gt-gecikis { color:#dc2626; }
+.gt-kpi-etiket { font-size:10px; color:#9ca3af; text-transform:uppercase; letter-spacing:.5px; }
+
+.gt-filtre-bar { display:flex; gap:6px; margin-bottom:14px; align-items:center; flex-wrap:wrap; }
+.gt-filtre-btn { padding:5px 12px; border-radius:999px; border:1px solid #e5e7eb;
+  background:#fff; cursor:pointer; font-size:12px; color:#4b5563; }
+.gt-filtre-btn.aktif { background:#111827; color:#fff; border-color:#111827; }
+.gt-filtre-btn:hover:not(.aktif) { background:#f3f4f6; }
+.gt-filtre-ayrac { color:#e5e7eb; }
+.gt-esc-btn { padding:8px 14px; border-radius:6px; border:1px solid #f59e0b;
+  background:#fffbeb; color:#92400e; cursor:pointer; font-size:13px; font-weight:600; }
+.gt-esc-btn:hover { background:#fef3c7; }
+.gt-esc-btn:disabled { opacity:.5; cursor:not-allowed; }
+.gt-esc-sonuc { margin-left:10px; font-size:12px; color:#6b7280; }
+
+.gt-tablo-wrap { background:#fff; border-radius:8px; border:1px solid #e5e7eb; overflow:auto; }
+.gt-tablo { width:100%; border-collapse:collapse; font-size:12.5px; }
+.gt-tablo thead tr { background:#f9fafb; }
+.gt-tablo th { padding:10px 12px; text-align:left; font-size:11px; font-weight:600;
+  color:#6b7280; text-transform:uppercase; letter-spacing:.3px; border-bottom:1px solid #e5e7eb; }
+.gt-tablo td { padding:10px 12px; border-bottom:1px solid #f3f4f6; vertical-align:middle; }
+.gt-tablo tbody tr:hover td { background:#fef9e7; }
+
+.gt-durum-badge { padding:3px 10px; border-radius:999px; font-size:11px; font-weight:600; }
+.gt-durum-bekliyor { background:#fef3c7; color:#92400e; }
+.gt-durum-devam_ediyor { background:#dbeafe; color:#1e40af; }
+.gt-durum-tamamlandi { background:#d1fae5; color:#065f46; }
+.gt-durum-iptal { background:#f3f4f6; color:#9ca3af; }
+
+.gt-onc-badge { padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600; }
+.gt-onc-kritik { background:#fee2e2; color:#dc2626; }
+.gt-onc-yuksek { background:#ffedd5; color:#ea580c; }
+.gt-onc-orta   { background:#fef3c7; color:#ca8a04; }
+.gt-onc-dusuk  { background:#f0fdf4; color:#16a34a; }
+
+.gt-satir-kirmizi td { border-left:3px solid #dc2626; }
+.gt-satir-sari   td:first-child { border-left:3px solid #f59e0b; }
+.gt-satir-yesil  td:first-child { border-left:3px solid #10b981; }
+
+.gt-kaynak-badge { font-size:10px; padding:2px 7px; border-radius:4px;
+  background:#ede9fe; color:#6d28d9; }
+</style>
+
+<script>
+var _gtStatusF = '';
+var _gtSourceF = '';
+
+function gtFiltre(btn, status) {
+  document.querySelectorAll('.gt-filtre-btn').forEach(function(b){ b.classList.remove('aktif'); });
+  btn.classList.add('aktif');
+  _gtStatusF = status;
+  _gtSourceF = '';
+  gtYukle();
+}
+
+function gtFiltreSource(btn, source) {
+  document.querySelectorAll('.gt-filtre-btn').forEach(function(b){ b.classList.remove('aktif'); });
+  btn.classList.add('aktif');
+  _gtSourceF = source;
+  _gtStatusF = '';
+  gtYukle();
+}
+
+function gtYukle() {
+  var url = '/yonetim/api/gorev-takip?limit=200';
+  if (_gtStatusF) url += '&status=' + _gtStatusF;
+  if (_gtSourceF) url += '&source=' + _gtSourceF;
+
+  fetch(url, {credentials:'same-origin'})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d.ok) { console.error('[GT]', d.hata); return; }
+      document.getElementById('gt-kpi-toplam').textContent = d.toplam;
+      document.getElementById('gt-kpi-acik').textContent   = d.acik;
+      document.getElementById('gt-kpi-gecikis').textContent = d.gecikis;
+      gtRenderTablo(d.tasks);
+    })
+    .catch(function(e){ console.error('[GT] fetch hata', e); });
+}
+
+function _esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+}
+
+function gtRenderTablo(tasks) {
+  var tbody = document.getElementById('gt-tbody');
+  if (!tasks || !tasks.length) {
+    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:24px;color:#9ca3af">Kayıt yok</td></tr>';
+    return;
+  }
+
+  var html = '';
+  tasks.forEach(function(t, idx) {
+    var trClass = 'gt-satir-' + (t.renk || 'yesil');
+    var durumClass = 'gt-durum-' + (t.status || '');
+    var oncClass   = 'gt-onc-' + (t.priority || 'orta');
+
+    // Açık süre
+    var acikSure = t.age_hours < 1
+      ? Math.round(t.age_hours * 60) + ' dk'
+      : t.age_hours < 24
+        ? t.age_hours + ' saat'
+        : (t.age_days || 0) + ' gün';
+
+    // Son bildirim
+    var sonBld = t.last_notification_at
+      ? t.last_notification_at.substring(5,16)
+      : '—';
+
+    // Gecikme
+    var gecikme = t.overdue
+      ? '<span style="color:#dc2626;font-weight:700">⚠ Gecikmiş</span>'
+      : t.status === 'tamamlandi'
+        ? '<span style="color:#16a34a">✓</span>'
+        : '—';
+
+    // Kaynak
+    var kaynak = t.auto_source === 'karar_masasi'
+      ? '<span class="gt-kaynak-badge">📋 KM</span>'
+      : '<span style="color:#9ca3af;font-size:11px">manuel</span>';
+
+    html += '<tr class="' + trClass + '" style="cursor:pointer" onclick="gtTimelineAc(' + t.task_id + ',\'' + _esc(t.title) + '\')">'
+      + '<td style="color:#9ca3af">' + (idx+1) + '</td>'
+      + '<td><div style="font-weight:600;color:#111827">' + _esc(t.title) + '</div>'
+      +   '<div style="font-size:11px;color:#9ca3af">#' + t.task_id + ' · ' + _esc(t.task_type||'') + '</div></td>'
+      + '<td><div style="font-weight:500">' + _esc(t.assigned_to_ad||t.assigned_to||'—') + '</div>'
+      +   '<div style="font-size:11px;color:#9ca3af">' + _esc(t.assigned_to||'') + '</div></td>'
+      + '<td style="color:#6b7280">' + _esc(t.created_by_ad||t.created_by||'—') + '</td>'
+      + '<td style="font-size:11.5px">' + _esc(t.related_order_no||'—') + '</td>'
+      + '<td><span class="gt-durum-badge ' + durumClass + '">' + _esc(t.status||'') + '</span></td>'
+      + '<td><span class="gt-onc-badge ' + oncClass + '">' + _esc(t.priority||'') + '</span></td>'
+      + '<td style="white-space:nowrap">' + acikSure + '</td>'
+      + '<td style="text-align:center">'
+      +   '<span title="Toplam bildirim">' + (t.notification_count||0) + '</span>'
+      +   (t.okundu_sayisi ? '<span style="color:#9ca3af;font-size:10px"> /' + t.okundu_sayisi + ' ok</span>' : '')
+      + '</td>'
+      + '<td style="font-size:11px;color:#6b7280;white-space:nowrap">' + sonBld + '</td>'
+      + '<td>' + gecikme + '</td>'
+      + '<td>' + kaynak + '</td>'
+      + '</tr>';
+  });
+  tbody.innerHTML = html;
+}
+
+
+function gtEscalationKontrol() {
+  var btn = document.getElementById('gt-esc-btn');
+  var sonuc = document.getElementById('gt-esc-sonuc');
+  if (!btn) return;
+  btn.disabled = true; btn.textContent = 'Kontrol ediliyor…';
+  sonuc.textContent = '';
+
+  fetch('/yonetim/api/escalation/check', {
+    method: 'POST', credentials: 'same-origin',
+    headers: {'Content-Type':'application/json'},
+    body: '{}'
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    btn.disabled = false; btn.textContent = '⚡ Escalation Kontrol';
+    if (d.ok) {
+      sonuc.innerHTML = '<span style="color:#16a34a">✓ ' + d.escalation_uretildi + ' escalation</span>'
+        + (d.spam_atlandi ? ' <span style="color:#9ca3af">/ ' + d.spam_atlandi + ' atlandı</span>' : '');
+      gtYukle();
+    } else {
+      sonuc.textContent = 'Hata: ' + (d.hata || 'bilinmeyen');
+    }
+  })
+  .catch(function(e){
+    btn.disabled = false; btn.textContent = '⚡ Escalation Kontrol';
+    sonuc.textContent = 'Bağlantı hatası';
+  });
+}
+
+// Sayfa yüklenince
+document.addEventListener('DOMContentLoaded', gtYukle);
+</script>
+
+<!-- Timeline Drawer -->
+<div id="gt-tl-drawer" style="display:none;position:fixed;top:0;right:0;width:400px;max-width:95vw;height:100vh;background:#fff;box-shadow:-4px 0 24px rgba(0,0,0,.15);z-index:8000;overflow-y:auto;flex-direction:column;">
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid #e5e7eb;position:sticky;top:0;background:#fff;z-index:1;">
+    <div>
+      <div style="font-size:15px;font-weight:700;color:#111827" id="gt-tl-baslik">Timeline</div>
+      <div style="font-size:11px;color:#9ca3af" id="gt-tl-alt"></div>
+    </div>
+    <button onclick="gtTimelineKapat()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#9ca3af">✕</button>
+  </div>
+  <div id="gt-tl-icerik" style="padding:16px 20px;">
+    <div style="color:#9ca3af;text-align:center;padding:24px">Yükleniyor…</div>
+  </div>
+</div>
+<div id="gt-tl-overlay" onclick="gtTimelineKapat()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:7999;"></div>
+
+<style>
+.gt-tl-olay { display:flex; gap:12px; margin-bottom:16px; }
+.gt-tl-dot  { width:12px; height:12px; border-radius:50%; flex-shrink:0; margin-top:3px; }
+.gt-tl-dot.mavi     { background:#3b82f6; }
+.gt-tl-dot.yesil    { background:#10b981; }
+.gt-tl-dot.turuncu  { background:#f59e0b; }
+.gt-tl-dot.kirmizi  { background:#ef4444; }
+.gt-tl-dot.gri      { background:#9ca3af; }
+.gt-tl-line { border-left:2px solid #e5e7eb; margin-left:5px; margin-bottom:4px; height:16px; }
+.gt-tl-zaman { font-size:11px; color:#9ca3af; }
+.gt-tl-mesaj { font-size:13px; color:#111827; font-weight:500; }
+.gt-tl-meta  { font-size:11px; color:#6b7280; }
+</style>
+
+<script>
+function gtTimelineAc(taskId, title) {
+  document.getElementById('gt-tl-baslik').textContent = title;
+  document.getElementById('gt-tl-alt').textContent = 'Görev #' + taskId;
+  document.getElementById('gt-tl-icerik').innerHTML = '<div style="color:#9ca3af;text-align:center;padding:24px">Yükleniyor…</div>';
+  document.getElementById('gt-tl-drawer').style.display = 'flex';
+  document.getElementById('gt-tl-overlay').style.display = 'block';
+
+  fetch('/yonetim/api/gorev/' + taskId + '/timeline', {credentials:'same-origin'})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d.ok) {
+        document.getElementById('gt-tl-icerik').innerHTML = '<div style="color:red">Hata: ' + (d.hata||'') + '</div>';
+        return;
+      }
+      var html = '';
+      var IKON = {
+        gorev_olusturuldu:'📋', gorev_yeni:'🔔',
+        escalation_lvl1:'⚡', escalation_lvl2:'⚠️', escalation_lvl3:'🚨',
+        gorev_basladi:'▶️', gorev_tamamlandi:'✅',
+        gorev_iptal:'❌', gorev_cancelled:'❌',
+        gorev_completed:'✅', gorev_started:'▶️',
+      };
+      d.olaylar.forEach(function(o, i){
+        var ikon = IKON[o.tip] || '•';
+        var zaman = o.zaman ? o.zaman.substring(5,16) : '—';
+        html += '<div class="gt-tl-olay">'
+          + '<div>'
+          + '<div class="gt-tl-dot ' + (o.renk||'gri') + '"></div>'
+          + (i < d.olaylar.length-1 ? '<div class="gt-tl-line"></div>' : '')
+          + '</div>'
+          + '<div style="flex:1">'
+          + '<div class="gt-tl-zaman">' + zaman + ' · ' + _esc(o.kullanici||'') + '</div>'
+          + '<div class="gt-tl-mesaj">' + ikon + ' ' + _esc(o.mesaj||'') + '</div>'
+          + (o.meta && o.meta.escalation_level ? '<div class="gt-tl-meta">Escalation Seviye ' + o.meta.escalation_level + '</div>' : '')
+          + '</div></div>';
+      });
+      if (!d.olaylar.length) html = '<div style="color:#9ca3af;text-align:center;padding:24px">Olay kaydı yok</div>';
+      document.getElementById('gt-tl-icerik').innerHTML = html;
+      document.getElementById('gt-tl-alt').textContent = 'Görev #' + taskId + ' · ' + d.olay_sayisi + ' olay';
+    })
+    .catch(function(e){
+      document.getElementById('gt-tl-icerik').innerHTML = '<div style="color:red">Bağlantı hatası</div>';
+    });
+}
+
+function gtTimelineKapat() {
+  document.getElementById('gt-tl-drawer').style.display = 'none';
+  document.getElementById('gt-tl-overlay').style.display = 'none';
+}
+
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Escape') gtTimelineKapat();
+});
+</script>
+
+{% endblock %}

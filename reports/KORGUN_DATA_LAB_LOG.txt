@@ -1,0 +1,63 @@
+[16:58:16] ============================================================
+[16:58:16] KORGUN DATA LAB - KATALOG BASLADI
+[16:58:16] ============================================================
+[16:58:16] [OK] Baglanti (common.korgun)
+[16:58:16] --- Urt_Emir ---
+[16:58:16]   Kolon=20 ilk5=['EmirNo(int)', 'EmirTarihi(datetime)', 'Notu(nvarchar)', 'ModelKod(varchar)', 'Durum(varchar)']
+[16:58:16]   Tarih: ['EmirTarihi', 'TerTarih', 'insDT']
+[16:58:16]   Satir=2,750 (0.0sn) ~2.62MB
+[16:58:16]   Tarih: 2019-08-29 14:53:29 -> 2026-05-15 14:49:44
+[16:58:16] --- Urt_Em_gch ---
+[16:58:16]   Kolon=22 ilk5=['EmirNo(int)', 'SKOD(varchar)', 'RKOD(int)', 'BedKod(int)', 'Modul(varchar)']
+[16:58:16]   Tarih: ['SendTar', 'insDT', 'updDT']
+[16:58:16]   Satir=8,896 (0.0sn) ~9.33MB
+[16:58:16]   Tarih: 2019-08-29 14:53:29 -> 2026-05-15 14:49:44
+[16:58:16] --- Urt_con_gch ---
+[16:58:16]   Kolon=25 ilk5=['EmirNo(int)', 'SKOD(varchar)', 'RKOD(int)', 'BedKod(int)', 'FisNo(int)']
+[16:58:16]   Tarih: ['SendTar', 'StartTarih', 'EndTarih']
+[16:58:16]   Satir=5,781 (0.0sn) ~6.89MB
+[16:58:16]   Tarih: 2019-08-29 14:53:29 -> 2026-05-08 11:04:22
+[16:58:16] --- Urtx_con_gch ---
+[16:58:16]   Kolon=25 ilk5=['EmirNo(int)', 'SKOD(varchar)', 'RKOD(int)', 'BedKod(int)', 'FisNo(int)']
+[16:58:16]   Tarih: ['SendTar', 'StartTarih', 'EndTarih']
+[16:58:16]   Satir=712,481 (0.1sn) ~849.34MB
+[16:58:16]   Tarih: 2020-07-06 14:54:37 -> 2026-05-16 07:46:05
+[16:58:16] --- Siparis_Har ---
+[16:58:16]   Kolon=32 ilk5=['SipNo(int)', 'SipHarinx(int)', 'Konum(varchar)', 'SKOD(varchar)', 'Tanim(varchar)']
+[16:58:16]   Tarih: ['TerminTarihi', 'insDT']
+[16:58:16]   Satir=26,270 (0.0sn) ~40.08MB
+[16:58:16]   Tarih: 2021-09-29 09:58:31 -> 2026-02-19 15:51:45
+[16:58:16] --- Siparis_Kay ---
+[16:58:16]   Kolon=67 ilk5=['SipNo(int)', 'SipTip(varchar)', 'SipTur(varchar)', 'SipTar(datetime)', 'BelgeNo(varchar)']
+[16:58:16]   Tarih: ['SipTar', 'UrGirTar', 'SevkTar']
+[16:58:16]   Satir=5,181 (0.0sn) ~16.55MB
+[16:58:16]   Tarih: 2019-02-18 21:10:13 -> 2026-05-16 11:16:45
+[16:58:16] --- Cari_Kart ---
+[16:58:16]   Kolon=95 ilk5=['CKod(varchar)', 'CName(nvarchar)', 'Unvan(nvarchar)', 'Adr1(nvarchar)', 'Adr2(varchar)']
+[16:58:16]   Tarih: ['KartTar']
+[16:58:16]   Satir=3,270 (0.0sn) ~14.81MB
+[16:58:16]   Tarih: 2017-11-10 00:00:00 -> 2026-05-16 00:00:00
+[16:58:16] --- Model_M ---
+[16:58:16]   Kolon=18 ilk5=['ModelKod(varchar)', 'Tanim(varchar)', 'Tarih(datetime)', 'BedKod(varchar)', 'OzKod1(varchar)']
+[16:58:16]   Tarih: ['Tarih', 'insDT', 'updDT']
+[16:58:16]   Satir=3,145 (0.0sn) ~2.7MB
+[16:58:16]   Tarih: 2018-10-01 00:00:00 -> 2026-05-15 08:22:45
+[16:58:16] --- Proses_M ---
+[16:58:16]   Kolon=16 ilk5=['Pro(varchar)', 'Tanim(varchar)', 'PTime(int)', 'TimeTip(varchar)', 'Worker(int)']
+[16:58:16]   Tarih: ['insDT', 'updDT']
+[16:58:16]   Satir=45 (0.0sn) ~0.03MB
+[16:58:16]   Tarih: 2025-04-22 11:38:31 -> 2025-04-23 14:41:27
+[16:58:16] --- StokKart ---
+[16:58:16]   Kolon=96 ilk5=['SKOD(varchar)', 'StokSekli(varchar)', 'Tanim(nvarchar)', 'BEDKod(varchar)', 'StokTip(varchar)']
+[16:58:16]   Tarih: ['KARTTAR', 'Temin', 'insDT']
+[16:58:16]   Satir=7,903 (0.0sn) ~36.18MB
+[16:58:16]   Tarih: 2017-11-06 00:00:00 -> 2026-05-15 00:00:00
+[16:58:16] --- Urt_Em2Em ---
+[16:58:16]   Kolon=11 ilk5=['EmirNo(int)', 'Proses(varchar)', 'SKod(varchar)', 'EmirNo_YM(int)', 'kgid(int)']
+[16:58:16]   Tarih: ['insDT', 'updDT']
+[16:58:16]   Satir=67,425 (0.0sn) ~35.37MB
+[16:58:17]   Tarih: 2024-09-25 10:26:40 -> 2026-05-15 14:49:44
+[16:58:17] JSON yazildi
+[16:58:17] MD katalog yazildi
+[16:58:17] MD plan yazildi
+[16:58:17] BITTI - 3 dosya hazir

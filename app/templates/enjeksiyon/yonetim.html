@@ -1,0 +1,410 @@
+{% extends "base.html" %}
+{% set active = 'enjeksiyon' %}
+{% set aktif_grup = 'uretim' %}
+
+{% block title %}Enjeksiyon Takip - Yönetim{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/enjeksiyon.css') }}?v=enj_tsu5_20260603">
+
+<div class="enj-wrap" data-rapor-id="{{ rapor.id or "" }}" data-tarih="{{ secili_tarih }}" data-vardiya="{{ vardiya }}" data-makine-id="{{ secili_makine_id }}" data-bagli-kalip="{{ rapor.bagli_kalip_adet if rapor.bagli_kalip_adet is not none else '' }}">
+
+  <div class="enj-page-head">
+    <h2>Enjeksiyon Takip <span class="sub">/ Yönetim Paneli</span></h2>
+    <div class="enj-vrd-badge">Vardiya: <b>{{ vardiya_metin }}</b></div>
+  </div>
+
+  <div class="enj-mak-secim">
+    <div class="enj-lbl">MAKİNE SEÇ<small>Açık / Kapalı</small></div>
+    {% for m in makineler %}
+    <a class="enj-mak-kart {% if m.id == secili_makine_id %}aktif{% endif %}" data-makine-id="{{ m.id }}" href="?tarih={{ secili_tarih }}&vardiya={{ vardiya }}&makine={{ m.id }}" style="text-decoration:none;color:inherit;">
+      <div class="ad"><span class="no">{{ m.sira }}</span>MAKİNE</div>
+      {% if m.aktif %}
+      <div class="enj-tick" title="Açık">&check;</div>
+      {% else %}
+      <div class="enj-toggle" title="Kapalı"></div>
+      {% endif %}
+    </a>
+    {% endfor %}
+  </div>
+
+  {% for m in makineler %}
+  <div class="enj-mak-panel {% if m.id == secili_makine_id %}aktif{% endif %}" data-makine-id="{{ m.id }}">
+    <div class="basl">
+      <div class="lbl"><span class="no">{{ m.sira }}</span>MAKİNE<span class="sub">{{ m.istasyon_sayisi }} İSTASYON</span></div>
+      <div class="tools">
+        <button type="button" class="enj-mini-btn" data-toplu="a">A TÜMÜ</button>
+        <button type="button" class="enj-mini-btn" data-toplu="b">B TÜMÜ</button>
+        <button type="button" class="enj-mini-btn kapat" data-toplu="x">KAPAT</button>
+        {% if m.aktif %}
+        <div class="enj-tick">&check;</div>
+        {% else %}
+        <div class="enj-toggle"></div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="enj-ist-wrap"><div class="enj-ist-list {% if m.istasyon_sayisi == 6 %}k6{% endif %}">
+      {% for i in range(1, m.istasyon_sayisi + 1) %}
+      {% set ka = i|string + 'A' %}{% set kb = i|string + 'B' %}
+      {# F9_2_P3A_SLOT_DURUM BEGIN #}
+      {% set ia = ist_map.get(i|string + '_A') if (m.id == secili_makine_id and ist_map is defined) else None %}
+      {% set ib = ist_map.get(i|string + '_B') if (m.id == secili_makine_id and ist_map is defined) else None %}
+      {% set da = (ia.durum if ia else ('AKTIF' if ka in m.aktif_slot_keys else 'KAPALI'))|lower %}
+      {% set db = (ib.durum if ib else ('AKTIF' if kb in m.aktif_slot_keys else 'KAPALI'))|lower %}
+      {# F9_2_P3A_SLOT_DURUM END #}
+      <div class="enj-ist-cell">
+        <div class="no">İST {{ i }}</div>
+        <div class="ab">
+          <button type="button" class="s {% if ka in m.aktif_slot_keys %}on{% endif %} durum-{{ da }}" data-slot="A" data-istasyon-no="{{ i }}" data-durum="{{ da|upper }}"{% if ia %} data-istasyon-id="{{ ia.id }}"{% if ia.kalip_kod %} data-kalip-kod="{{ ia.kalip_kod }}"{% endif %}{% if ia.setup_yeni_kalip_kod %} data-setup-yeni="{{ ia.setup_yeni_kalip_kod }}"{% endif %}{% if ia.ariza_sebep %} data-ariza-sebep="{{ ia.ariza_sebep }}"{% endif %}{% else %}{% if m.id == secili_makine_id %}{% for ist in istasyonlar %}{% if ist.istasyon_no == i and ist.slot == "A" %} data-istasyon-id="{{ ist.id }}"{% endif %}{% endfor %}{% endif %}{% endif %}>A</button>
+          <button type="button" class="s {% if kb in m.aktif_slot_keys %}on{% endif %} durum-{{ db }}" data-slot="B" data-istasyon-no="{{ i }}" data-durum="{{ db|upper }}"{% if ib %} data-istasyon-id="{{ ib.id }}"{% if ib.kalip_kod %} data-kalip-kod="{{ ib.kalip_kod }}"{% endif %}{% if ib.setup_yeni_kalip_kod %} data-setup-yeni="{{ ib.setup_yeni_kalip_kod }}"{% endif %}{% if ib.ariza_sebep %} data-ariza-sebep="{{ ib.ariza_sebep }}"{% endif %}{% else %}{% if m.id == secili_makine_id %}{% for ist in istasyonlar %}{% if ist.istasyon_no == i and ist.slot == "B" %} data-istasyon-id="{{ ist.id }}"{% endif %}{% endfor %}{% endif %}{% endif %}>B</button>
+        </div>
+      </div>
+      {% endfor %}
+    </div></div>
+  </div>
+  {% endfor %}
+
+  <div class="enj-fwrap">
+    <div class="enj-form">
+      <!-- ENJ_AB_FAZ2_FINAL FORM BEGIN -->
+      <div class="enj-fr r-faz2-ortak">
+        <div class="enj-fld"><label>Tarih</label><input type="text" value="{{ bugun }}" readonly></div>
+        <div class="enj-fld"><label>Vardiya</label>
+          <select onchange="window.location='?tarih={{ secili_tarih }}&vardiya='+this.value+'&makine={{ secili_makine_id }}'">
+            <option value="gunduz" {% if vardiya == 'gunduz' %}selected{% endif %}>GÜNDÜZ (07:00-17:00)</option>
+            <option value="gece"   {% if vardiya == 'gece' %}selected{% endif %}>GECE (17:00-07:00)</option>
+            <option value="mesai"  {% if vardiya == 'mesai' %}selected{% endif %}>MESAİ</option>
+          </select>
+        </div>
+        <div class="enj-fld"><label>Emir / Sipariş</label><select id="enj-emir-no"><option value="">Seçiniz</option>{% if rapor.emir_no %}<option value="{{ rapor.emir_no }}" selected>{{ rapor.emir_no }}</option>{% endif %}</select></div>
+        <div class="enj-fld"><label title="Günlük rapor göstergesi: max(A setup personel, B setup personel). Slot değeri setup modalında girilir.">Personel Sayısı (genel)</label><input type="number" id="enj-personel-sayisi" placeholder="0" autocomplete="off" value="{{ rapor.personel_sayisi if rapor.personel_sayisi is not none else '' }}"></div>
+      </div>
+
+      <div class="enj-ab-faz2-pair">
+        <div class="enj-ab-faz2 a-faz2" data-slot="A">
+          <div class="enj-ab-faz2-baslik">A TARAFI</div>
+          <div class="enj-ab-faz2-inputs">
+            <div class="enj-fld">
+              <label>Kalıp Kodu</label>
+              <div class="enj-kalip-secici enj-setup-opener" data-slot="A">
+                <input type="text" class="enj-kalip-input-faz2" id="enj-kalip-a-input" data-slot="A" placeholder="Setup için tıklayın…" autocomplete="off" readonly tabindex="0">
+                <input type="hidden" id="enj-kalip-a-id">
+              </div>
+            </div>
+            <div class="enj-fld"><label>Renk</label><input type="text" class="enj-ab-faz2-disp enj-setup-opener" id="enj-renk-a" data-slot="A" autocomplete="off" readonly tabindex="0"></div>
+            <div class="enj-fld"><label>Pişme (sn)</label><input type="text" class="enj-ab-faz2-disp enj-setup-opener" id="enj-pisme-a" data-slot="A" autocomplete="off" readonly tabindex="0"></div>
+          </div>
+          <p class="enj-ab-kap-inline enj-setup-opener" data-slot="A" title="Setup değiştirmek için tıklayın" aria-label="A tarafı kapasite özeti">Personel: <span class="ecg-n" id="enj-gosterge-personel-a">—</span> | Aktif göz: <span class="ecg-n" id="enj-gosterge-bagli-a">—</span> | KBÇ: <span class="ecg-n" id="enj-gosterge-kbc-a">—</span> | Tur: <span class="ecg-n" id="enj-gosterge-kap-a">—</span> çift</p>
+          <div class="enj-ab-faz2-metrics">
+            <div class="enj-ab-faz2-met"><label>A TUR</label><input type="text" readonly id="enj-cev-a-top" class="met-val" placeholder="—"></div>
+            <div class="enj-ab-faz2-met uret"><label>A ÜRET.</label><input type="text" readonly id="enj-uret-a-top" class="met-val" placeholder="—"></div>
+          </div>
+        </div>
+
+        <div class="enj-ab-faz2 b-faz2" data-slot="B">
+          <div class="enj-ab-faz2-baslik">B TARAFI</div>
+          <div class="enj-ab-faz2-inputs">
+            <div class="enj-fld">
+              <label>Kalıp Kodu</label>
+              <div class="enj-kalip-secici enj-setup-opener" data-slot="B">
+                <input type="text" class="enj-kalip-input-faz2" id="enj-kalip-b-input" data-slot="B" placeholder="Setup için tıklayın…" autocomplete="off" readonly tabindex="0">
+                <input type="hidden" id="enj-kalip-b-id">
+              </div>
+            </div>
+            <div class="enj-fld"><label>Renk</label><input type="text" class="enj-ab-faz2-disp enj-setup-opener" id="enj-renk-b" data-slot="B" autocomplete="off" readonly tabindex="0"></div>
+            <div class="enj-fld"><label>Pişme (sn)</label><input type="text" class="enj-ab-faz2-disp enj-setup-opener" id="enj-pisme-b" data-slot="B" autocomplete="off" readonly tabindex="0"></div>
+          </div>
+          <p class="enj-ab-kap-inline enj-setup-opener" data-slot="B" title="Setup değiştirmek için tıklayın" aria-label="B tarafı kapasite özeti">Personel: <span class="ecg-n" id="enj-gosterge-personel-b">—</span> | Aktif göz: <span class="ecg-n" id="enj-gosterge-bagli-b">—</span> | KBÇ: <span class="ecg-n" id="enj-gosterge-kbc-b">—</span> | Tur: <span class="ecg-n" id="enj-gosterge-kap-b">—</span> çift</p>
+          <div class="enj-ab-faz2-metrics">
+            <div class="enj-ab-faz2-met"><label>B TUR</label><input type="text" readonly id="enj-cev-b-top" class="met-val" placeholder="—"></div>
+            <div class="enj-ab-faz2-met uret"><label>B ÜRET.</label><input type="text" readonly id="enj-uret-b-top" class="met-val" placeholder="—"></div>
+          </div>
+        </div>
+      </div>
+      <!-- ENJ_AB_RENK_KARTELA --><!-- ENJ_AB_FAZ2_FINAL FORM END -->
+    </div>
+    <div class="enj-urun" data-state="empty">
+  <div class="enj-urun-header">SEÇİLİ ÜRÜN</div>
+
+  <div class="enj-urun-empty">
+    <div class="enj-urun-ph">ürün görseli</div>
+    <div class="enj-urun-empty-cap">Kalıp seçiniz</div>
+  </div>
+
+  <div class="enj-urun-blok" data-tip="govde">
+    <div class="enj-urun-blok-head">
+      <span class="enj-urun-badge enj-urun-badge-govde">GÖVDE</span>
+      <span class="enj-urun-kod" data-field="kalip-kod"></span>
+    </div>
+    <div class="enj-urun-img-wrap">
+      <img class="enj-urun-img" data-field="gorsel" alt="Gövde görseli" hidden>
+      <div class="enj-urun-img-ph">[gövde görseli]</div>
+    </div>
+    <div class="enj-urun-model" data-field="model-kod"></div>
+  </div>
+
+  <div class="enj-urun-divider"></div>
+
+  <div class="enj-urun-blok" data-tip="atki">
+    <div class="enj-urun-blok-head">
+      <span class="enj-urun-badge enj-urun-badge-atki">ATKI</span>
+      <span class="enj-urun-kod" data-field="kalip-kod"></span>
+    </div>
+    <div class="enj-urun-img-wrap">
+      <img class="enj-urun-img" data-field="gorsel" alt="Atkı görseli" hidden>
+      <div class="enj-urun-img-ph">[atkı görseli]</div>
+    </div>
+    <div class="enj-urun-model" data-field="model-kod"></div>
+  </div>
+</div>
+  </div>
+
+  <div class="enj-main">
+    <div class="enj-tbl-card">
+      <div class="enj-tbl-basl" style="display:flex;align-items:center;gap:12px;">
+        <span>SAATLİK TABLO &middot; <b>{{ vardiya_metin }}</b></span>
+        {%- if is_admin and rapor and rapor.id and rapor.gun_sonu_notu and 'TEST' in (rapor.gun_sonu_notu|upper) %}
+        <button type="button" id="enj-test-reset-btn"
+          style="background:#fef2f2;color:#dc2626;border:1px solid #fca5a5;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:0.03em;"
+          title="Sadece bu TEST raporundaki tur/üretim değerleri sıfırlanır. Snapshot ve setup korunur.">
+          🧪 Test Verisini Sıfırla
+        </button>
+        {%- endif %}</div>
+      <div class="enj-tbl-body">
+        <table class="enj-tbl">
+        <!-- ENJ_AB_FAZ2_FINAL SAATLIK BEGIN -->
+        <colgroup>
+          <col class="col-saat">
+          <!-- F_AB_DURUM 7 kolon -->
+          <col class="col-tur a-col">
+          <col class="col-durum a-col">
+          <col class="col-aksama a-col">
+          <col class="col-tur b-col">
+          <col class="col-durum b-col">
+          <col class="col-aksama b-col">
+        </colgroup>
+
+        <thead>
+          <tr>
+            <th rowspan="2"><span class="enj-saat-tarih">{{ bugun }}</span>SAAT</th>
+            <th colspan="3" class="ab-grp-head ab-grp-a">A TARAFI</th>
+            <th colspan="3" class="ab-grp-head ab-grp-b">B TARAFI</th>
+          </tr>
+          <tr>
+            <th class="a-col">TUR</th>
+            <th class="a-col">DURUM</th>
+            <th class="a-col">SEBEP</th>
+            <th class="b-col">TUR</th>
+            <th class="b-col">DURUM</th>
+            <th class="b-col">SEBEP</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if vardiya == 'mesai' %}
+          <tr><td colspan="7" class="enj-mesai-info">Mesai saatleri sonraki fazda yapılandırılacak. Gündüz veya gece vardiyasını seçiniz.</td></tr>
+          {% else %}
+          {% for bas, bit in saatler %}
+          {% set ns = namespace(sk=none) %}{% set bas_str = '%02d:00'|format(bas) %}{% for s in saatlik_kayitlar %}{% if s.saat_baslangic == bas_str %}{% set ns.sk = s %}{% endif %}{% endfor %}
+          {# F_AB_DURUM: R1 sync mode fallback #}
+          {% set _d_a = (ns.sk.durum_a if ns.sk and ns.sk.durum_a else (ns.sk.durum if ns.sk and ns.sk.durum else '')) %}
+          {% set _d_b = (ns.sk.durum_b if ns.sk and ns.sk.durum_b else (ns.sk.durum if ns.sk and ns.sk.durum else '')) %}
+          {% set _aks_a = (ns.sk.aksama_sebep_a_id if ns.sk and ns.sk.aksama_sebep_a_id else (ns.sk.aksama_sebep_id if ns.sk and ns.sk.aksama_sebep_id else '')) %}
+          {% set _aks_b = (ns.sk.aksama_sebep_b_id if ns.sk and ns.sk.aksama_sebep_b_id else (ns.sk.aksama_sebep_id if ns.sk and ns.sk.aksama_sebep_id else '')) %}
+          <tr data-saat-bas="{{ bas }}"{% if ns.sk %} data-saatlik-id="{{ ns.sk.id }}"{% endif %}>
+            <td>{{ '%02d:00 - %02d:00'|format(bas, bit) }}</td>
+            <td class="a-col"><input type="number" class="cev-a-inp" min="0" placeholder="0" autocomplete="off" value="{{ ns.sk.cevrim_a if ns.sk and ns.sk.cevrim_a else '' }}"></td>
+            <td class="a-col"><select class="durum-a-sel">
+              <option value="calisiyor" {% if _d_a == 'calisiyor' %}selected{% endif %}>ÇALIŞIYOR</option>
+              <option value="durus" {% if _d_a == 'durus' %}selected{% endif %}>DURUŞ</option>
+              <option value="yavas" {% if _d_a == 'yavas' %}selected{% endif %}>YAVAŞ</option>
+            </select></td>
+            <td class="a-col"><select class="aks-a-sel"><option value="">—</option>{% for a in aksama_sebepleri %}<option value="{{ a.id }}" {% if _aks_a == a.id %}selected{% endif %}>{{ a.ad }}</option>{% endfor %}</select></td>
+            <td class="b-col"><input type="number" class="cev-b-inp" min="0" placeholder="0" autocomplete="off" value="{{ ns.sk.cevrim_b if ns.sk and ns.sk.cevrim_b else '' }}"></td>
+            <td class="b-col"><select class="durum-b-sel">
+              <option value="calisiyor" {% if _d_b == 'calisiyor' %}selected{% endif %}>ÇALIŞIYOR</option>
+              <option value="durus" {% if _d_b == 'durus' %}selected{% endif %}>DURUŞ</option>
+              <option value="yavas" {% if _d_b == 'yavas' %}selected{% endif %}>YAVAŞ</option>
+            </select></td>
+            <td class="b-col"><select class="aks-b-sel"><option value="">—</option>{% for a in aksama_sebepleri %}<option value="{{ a.id }}" {% if _aks_b == a.id %}selected{% endif %}>{{ a.ad }}</option>{% endfor %}</select></td>
+          </tr>
+          {% endfor %}
+          {% endif %}
+        </tbody>
+        <!-- ENJ_AB_FAZ2_FINAL SAATLIK END -->
+      </table>
+        </div>
+    </div>
+
+    <div class="enj-ozet">
+      <h4>GÜNLÜK ÖZET</h4>
+      <div class="or"><span class="l">TOPLAM TUR</span><span class="v muted" id="enj-ozet-toplam-tur">—</span></div>
+      <div class="or"><span class="l">TEORİK ÇİFT</span><span class="v muted" id="enj-ozet-teorik-cift">—</span></div>
+      <div class="or"><span class="l">NET ÇIKAN ÇİFT</span><span class="v muted" id="enj-ozet-net-cift">—</span></div>
+      <div class="or"><span class="l">FİRE (ÇİFT)</span><span class="v muted" id="enj-ozet-fire-cift">—</span></div>
+      <div id="enj-fire-gramaj-uyari" style="display:none;font-size:11px;color:#92400e;background:#fef3c7;border:1px solid #f59e0b;border-radius:4px;padding:3px 7px;margin:2px 0 4px 0;line-height:1.4"></div>
+      <div class="or"><span class="l">KORGUN KAPATTIĞI</span><span class="v muted" id="enj-ozet-korgun">—</span></div>
+      <div class="or"><span class="l">FARK</span><span class="v muted" id="enj-ozet-fark">—</span></div>
+      <div class="or"><span class="l">FİRE ORANI (%)</span><span class="v muted" id="enj-ozet-fire-orani">—</span></div>
+      <div class="or" style="border-top:1px solid #f3f4f6;margin-top:4px;padding-top:4px"><span class="l" style="color:#6b7280;font-size:11px">BOŞ ATIŞ (KG)</span><span class="v muted" id="enj-ozet-bos-atis-kg">—</span></div>
+      <div class="or"><span class="l" style="color:#6b7280;font-size:11px">TERLİK FİRE (KG)</span><span class="v muted" id="enj-ozet-teknik-kg">—</span></div>
+      <div class="or"><span class="l" style="color:#6b7280;font-size:11px">YOLLUK FİRE (KG)</span><span class="v muted" id="enj-ozet-yolluk-kg">—</span></div>
+      <div class="or"><span class="l" style="font-size:11px">TOPLAM FİRE (KG)</span><span class="v muted" id="enj-ozet-toplam-fire-kg">—</span></div>
+    </div>
+  </div>
+
+  <div class="enj-gs">
+    <h4>GÜN SONU BİLGİLERİ <small>3 fire tipi · kg cinsinden · her biri için tartı fotoğrafı</small></h4>
+    <div class="enj-gs-grid">
+      <div class="enj-fld"><label>BOŞ ATIŞ FİRE (KG)</label><input type="number" step="0.001" min="0" id="enj-fire-bos" data-field="bos_atis_kg" class="enj-gs-fire-inp" placeholder="0,000" autocomplete="off" value="{{ rapor.bos_atis_kg if rapor.bos_atis_kg is not none else '' }}"></div>
+      <div class="enj-fld"><label>TERLİK FİRE (KG)</label><input type="number" step="0.001" min="0" id="enj-fire-teknik" data-field="teknik_fire_kg" class="enj-gs-fire-inp" placeholder="0,000" autocomplete="off" value="{{ rapor.teknik_fire_kg if rapor.teknik_fire_kg is not none else '' }}"></div>
+      <div class="enj-fld"><label>YOLLUK FİRE (KG)</label><input type="number" step="0.001" min="0" id="enj-fire-yolluk" data-field="yolluk_fire_kg" class="enj-gs-fire-inp" placeholder="0,000" autocomplete="off" value="{{ rapor.yolluk_fire_kg if rapor.yolluk_fire_kg is not none else '' }}"></div>
+      <div class="enj-gs-foto" data-foto-tip="bos_atis"><label>BOŞ ATIŞ FOTO</label><div class="zone">&#x1F4F7; Yükle</div><input type="file" accept="image/*" capture="environment" hidden><img class="enj-foto-thumb" hidden alt="foto"></div>
+      <div class="enj-gs-foto" data-foto-tip="terlik_fire"><label>TERLİK FİRE FOTO</label><div class="zone">&#x1F4F7; Yükle</div><input type="file" accept="image/*" capture="environment" hidden><img class="enj-foto-thumb" hidden alt="foto"></div>
+      <div class="enj-gs-foto" data-foto-tip="yolluk_fire"><label>YOLLUK FİRE FOTO</label><div class="zone">&#x1F4F7; Yükle</div><input type="file" accept="image/*" capture="environment" hidden><img class="enj-foto-thumb" hidden alt="foto"></div>
+    </div>
+    <div class="enj-gs-altsatir">
+      <div class="enj-gs-foto" data-foto-tip="plc_ekran"><label>PLC EKRAN FOTOĞRAFI</label><div class="zone">&#x1F5A5; Yükle</div><input type="file" accept="image/*" capture="environment" hidden><img class="enj-foto-thumb" hidden alt="foto"></div>
+      <div class="enj-gs-not"><label>GÜN SONU NOTU</label><textarea class="enj-note" placeholder="Açıklama giriniz..."></textarea></div>
+    </div>
+  </div>
+
+  <div class="enj-act">
+    <button type="button" class="enj-btn"><span>&#x1F551;</span>GEÇMİŞ KAYITLAR</button>
+    <button type="button" class="enj-btn kaydet"><span>&#x1F4BE;</span>KAYDET</button>
+  </div>
+
+</div>
+  <!-- F9_2_P3B_POPUP_DOM BEGIN -->
+  <div id="enj-slot-popup" class="enj-slot-popup" hidden>
+    <div class="esp-baslik">
+      <div class="esp-mak-ist"></div>
+      <div class="esp-alt"></div>
+    </div>
+    <div class="esp-detay" hidden></div>
+    <div class="esp-aksiyonlar"></div>
+  </div>
+  <!-- F9_2_P3B_POPUP_DOM END -->
+
+
+
+  <!-- F9_2_P3C_MODAL_DOM BEGIN -->
+  <div id="enj-modal-overlay" class="enj-modal-overlay" hidden>
+    <div id="enj-modal" class="enj-modal" role="dialog" aria-modal="true">
+      <div class="enj-modal-header">
+        <div class="enj-modal-baslik">
+          <div class="emh-tip"></div>
+          <div class="emh-makine-ist"></div>
+        </div>
+        <button type="button" class="enj-modal-close" aria-label="Kapat">&times;</button>
+      </div>
+      <div class="enj-modal-body"></div>
+      <div class="enj-modal-footer"></div>
+    </div>
+  </div>
+  <!-- F9_2_P3C_MODAL_DOM END -->
+<script src="{{ url_for('static', filename='js/enjeksiyon.js') }}?v=enj_maxtur_20260603"></script>
+
+<style>
+/* F_AB_DURUM_CSS_BEGIN V5 + SAAT_ORTALA */
+.enj-tbl tbody td:first-child { text-align: center !important; vertical-align: middle !important; font-weight: 600; }
+/* Scroll container yedek */
+.enj-tbl-body { overflow-x: auto; max-width: 100%; }
+
+/* Tablo ana */
+.enj-tbl { width: 100% !important; min-width: 0 !important; table-layout: fixed !important; border-collapse: collapse; }
+
+/* Kolon genislikleri - !IMPORTANT zorla */
+.enj-tbl colgroup col.col-saat   { width: 70px !important; }
+.enj-tbl colgroup col.col-tur    { width: 50px !important; }
+.enj-tbl colgroup col.col-durum  { width: 95px !important; }
+.enj-tbl colgroup col.col-aksama { width: 105px !important; }
+/* Toplam: 70 + (50+95+105)*2 = 70 + 500 = 570px (rahat sigar) */
+
+/* Hucre padding daralt */
+.enj-tbl thead th, .enj-tbl tbody td { padding: 4px 3px !important; font-size: 11px !important; }
+.enj-tbl input.cev-a-inp, .enj-tbl input.cev-b-inp { padding: 2px !important; font-size: 11px !important; }
+.enj-tbl select { padding: 2px 16px 2px 2px !important; font-size: 10px !important; }
+
+/* Ust grup baslik */
+.enj-tbl .ab-grp-head { text-align: center; padding: 5px 4px !important; font-weight: 800; font-size: 12px; letter-spacing: 1px; }
+.enj-tbl .ab-grp-a { background: #86efac; color: #14532d; border-bottom: 3px solid #16a34a; }
+.enj-tbl .ab-grp-b { background: #fcd34d; color: #713f12; border-bottom: 3px solid #d97706; }
+
+/* Alt baslik */
+.enj-tbl thead .a-col { background: #d1fae5; color: #14532d; font-size: 10px !important; padding: 3px !important; font-weight: 700; }
+.enj-tbl thead .b-col { background: #fef3c7; color: #713f12; font-size: 10px !important; padding: 3px !important; font-weight: 700; }
+
+/* Body hucreler */
+.enj-tbl tbody td.a-col { background: #f0fdf4; }
+.enj-tbl tbody td.b-col { background: #fffbeb; }
+
+/* DIKEY AYIRICI - adjacent sibling */
+.enj-tbl .ab-grp-a + .ab-grp-b,
+.enj-tbl th.a-col + th.b-col,
+.enj-tbl td.a-col + td.b-col {
+  border-left: 4px solid #64748b !important;
+}
+
+/* Select/input full width */
+.enj-tbl select.durum-a-sel, .enj-tbl select.durum-b-sel,
+.enj-tbl select.aks-a-sel,   .enj-tbl select.aks-b-sel {
+  width: 100%; box-sizing: border-box;
+}
+.enj-tbl input.cev-a-inp, .enj-tbl input.cev-b-inp {
+  width: 100%; box-sizing: border-box; text-align: center;
+}
+
+/* Hover */
+.enj-tbl tbody tr:hover td.a-col { background: #dcfce7; }
+.enj-tbl tbody tr:hover td.b-col { background: #fef9c3; }
+
+/* Gunluk ozet panel - uste hizala (grid + flex destegi) */
+.enj-ozet { align-self: stretch !important; min-height: 100%; }
+/* F_AB_DURUM_CSS_END V5 */
+</style>
+
+{%- if is_admin and rapor and rapor.id and rapor.gun_sonu_notu and 'TEST' in (rapor.gun_sonu_notu|upper) %}
+<script>
+(function() {
+  'use strict';
+  var btn = document.getElementById('enj-test-reset-btn');
+  if (!btn) return;
+  btn.addEventListener('click', function() {
+    var onay = confirm(
+      'Sadece bu TEST raporundaki tur ve üretim değerleri sıfırlanacak.\n' +
+      'Setup, snapshot, kalıp ve istasyon verileri SİLİNMEYECEK.\n\n' +
+      'Devam edilsin mi?'
+    );
+    if (!onay) return;
+    btn.disabled = true;
+    btn.textContent = '⏳ Sıfırlanıyor...';
+    fetch('/enjeksiyon/api/rapor/{{ rapor.id }}/test-reset', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      btn.disabled = false;
+      btn.textContent = '🧪 Test Verisini Sıfırla';
+      if (d.ok) {
+        alert('✅ ' + (d.mesaj || (d.resetlenen_saatlik_satir + ' satır sıfırlandı.')));
+        window.location.reload();
+      } else {
+        alert('❌ Hata: ' + (d.hata || 'bilinmiyor'));
+      }
+    })
+    .catch(function(e) {
+      btn.disabled = false;
+      btn.textContent = '🧪 Test Verisini Sıfırla';
+      alert('❌ Bağlantı hatası: ' + e);
+    });
+  });
+})();
+</script>
+{%- endif %}
+
+{% endblock %}
+
+
+

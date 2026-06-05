@@ -1,0 +1,74 @@
+{
+  "baslangic": "2026-05-16T17:03:22.419296",
+  "tablolar": {
+    "Proses_M": {
+      "satir": 45,
+      "sure_sn": 0.1,
+      "filtre": null,
+      "durum": "OK"
+    },
+    "Urt_Emir": {
+      "satir": 2750,
+      "sure_sn": 0.1,
+      "filtre": null,
+      "durum": "OK"
+    },
+    "Model_M": {
+      "satir": 3145,
+      "sure_sn": 0.2,
+      "filtre": null,
+      "durum": "OK"
+    },
+    "Cari_Kart": {
+      "satir": 3270,
+      "sure_sn": 0.8,
+      "filtre": null,
+      "durum": "OK"
+    },
+    "Siparis_Kay": {
+      "satir": 5181,
+      "sure_sn": 1.2,
+      "filtre": null,
+      "durum": "OK"
+    },
+    "Urt_con_gch": {
+      "satir": 5781,
+      "sure_sn": 0.5,
+      "filtre": null,
+      "durum": "OK"
+    },
+    "StokKart": {
+      "satir": 7903,
+      "sure_sn": 1.8,
+      "filtre": null,
+      "durum": "OK"
+    },
+    "Urt_Em_gch": {
+      "satir": 8896,
+      "sure_sn": 0.6,
+      "filtre": null,
+      "durum": "OK"
+    },
+    "Siparis_Har": {
+      "satir": 26270,
+      "sure_sn": 2.0,
+      "filtre": null,
+      "durum": "OK"
+    },
+    "Urt_Em2Em": {
+      "satir": 67425,
+      "sure_sn": 1.2,
+      "filtre": null,
+      "durum": "OK"
+    },
+    "Urtx_con_gch": {
+      "satir": 145401,
+      "sure_sn": 13.3,
+      "filtre": "SendTar >= '2025-01-01'",
+      "durum": "OK"
+    }
+  },
+  "bitis": "2026-05-16T17:03:45.052156",
+  "db_boyut_mb": 46.68,
+  "db_dosya": "D:\\Firma_Ozel\\adem\\Solariz_CPS_SERVER\\data_lab\\korgun_snapshot_20260516\\korgun_dump.db"
+}

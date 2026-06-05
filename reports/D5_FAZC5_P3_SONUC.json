@@ -1,0 +1,20 @@
+{
+  "sprint": "D5 Faz C.5 P3",
+  "tarih": "2026-05-18",
+  "saat": "08:51",
+  "sonuc": "BASARILI",
+  "hash_eski": "3557C2EA6C4F054C",
+  "hash_yeni": "C534DCEC9D1FAB0F",
+  "personel_giris_hash": "41B220D201B0E1F8",
+  "yeni_endpoint": "/hedef/sablon/trigger-test/<emir_no>",
+  "yeni_satir": 130,
+  "atomic_move_ms": 0.25,
+  "smoke_test_pass": 5,
+  "smoke_test_total": 5,
+  "tarayici_test_basarili": ["110393"],
+  "tarayici_test_korgun_yok": ["110626", "111007", "999999"],
+  "uretim_kayit": 1380,
+  "saha_kesintisi": false,
+  "rollback_kullanildi": false,
+  "next_oneri": "P5 (manuel trigger endpoint) once, P4 en sonda"
+}

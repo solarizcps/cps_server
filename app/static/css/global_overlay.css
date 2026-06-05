@@ -1,0 +1,470 @@
+/* ==========================================================
+   CPS DEV - GLOBAL TASK OVERLAY (FAZ 3 ADIM 3)
+   ==========================================================
+   Karakter: SAP alarm + iPhone lock notification + CPS kurumsal
+   Font:     Inter (base.html'de Google Fonts'tan yuklenir)
+   Renk:     #F97316 turuncu (kontrollu vurgu, abartisiz)
+   Class:    cps-overlay-*  (cakismayi onlemek icin)
+   Z-index:  9999 (en ust)
+
+   Hiyerarsi:
+     1. Baslik (en dominant)
+     2. Oncelik + Durum badge
+     3. Termin / Departman / Olusturan meta
+     4. Aksiyon butonlari (Devam / Goto / Snooze / Kapat)
+   ========================================================== */
+
+
+/* ============== BACKDROP =============== */
+.cps-overlay-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, .42);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  z-index: 9999;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  letter-spacing: -.01em;
+  -webkit-font-smoothing: antialiased;
+}
+.cps-overlay-backdrop.cps-overlay-show {
+  display: flex;
+  animation: cps-overlay-backdrop-in .14s ease-out;
+}
+
+@keyframes cps-overlay-backdrop-in {
+  from { background: rgba(15, 23, 42, 0); }
+  to   { background: rgba(15, 23, 42, .42); }
+}
+
+
+/* ============== ANA KART =============== */
+.cps-overlay-card {
+  width: min(460px, 94vw);
+  max-height: 90vh;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow:
+    0 20px 50px rgba(15, 23, 42, .18),
+    0 4px 12px rgba(15, 23, 42, .08);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  animation: cps-overlay-card-in .18s cubic-bezier(.2, .8, .3, 1);
+}
+
+@keyframes cps-overlay-card-in {
+  from { opacity: 0; transform: scale(.96) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.cps-overlay-card.cps-overlay-leaving {
+  animation: cps-overlay-card-out .14s ease-in forwards;
+}
+@keyframes cps-overlay-card-out {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(.96); }
+}
+
+
+/* ============== HEADER =============== */
+.cps-overlay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px 12px;
+  border-top: 3px solid #F97316;
+  border-bottom: 1px solid #f1f5f9;
+  background: #fafbfc;
+}
+
+.cps-overlay-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  background: #F97316;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .6px;
+  text-transform: uppercase;
+  border-radius: 5px;
+}
+.cps-overlay-tag::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ffffff;
+  opacity: .9;
+}
+
+.cps-overlay-close {
+  background: none;
+  border: 0;
+  color: #94a3b8;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-family: inherit;
+  transition: color .12s, background .12s;
+}
+.cps-overlay-close:hover {
+  color: #1e293b;
+  background: #f1f5f9;
+}
+
+
+/* ============== BODY =============== */
+.cps-overlay-body {
+  padding: 18px 22px 14px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* TITLE - Hiyerarsi 1 */
+.cps-overlay-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0 0 12px 0;
+  line-height: 1.35;
+  letter-spacing: -.2px;
+  word-break: break-word;
+}
+
+
+/* ============== BADGES (Oncelik + Durum) - Hiyerarsi 2 =============== */
+.cps-overlay-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.cps-overlay-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  letter-spacing: -.005em;
+}
+
+/* Oncelik */
+.cps-overlay-priority-kritik { color: #dc2626; background: #fef2f2; border-color: #fecaca; }
+.cps-overlay-priority-yuksek { color: #ea580c; background: #fff7ed; border-color: #fed7aa; }
+.cps-overlay-priority-orta   { color: #475569; background: #f1f5f9; border-color: #e2e8f0; }
+.cps-overlay-priority-dusuk  { color: #64748b; background: #f8fafc; border-color: #e2e8f0; }
+
+/* Durum */
+.cps-overlay-status-bekliyor       { color: #475569; background: #f1f5f9; border-color: #e2e8f0; }
+.cps-overlay-status-devam_ediyor   { color: #2563eb; background: #eff6ff; border-color: #bfdbfe; }
+.cps-overlay-status-onay_bekliyor  { color: #ea580c; background: #fff7ed; border-color: #fed7aa; }
+.cps-overlay-status-revize_istendi { color: #b45309; background: #fefce8; border-color: #fde68a; }
+.cps-overlay-status-tamamlandi     { color: #16a34a; background: #f0fdf4; border-color: #bbf7d0; }
+.cps-overlay-status-gecikti        { color: #dc2626; background: #fef2f2; border-color: #fecaca; }
+.cps-overlay-status-iptal          { color: #94a3b8; background: #f8fafc; border-color: #e2e8f0; }
+
+
+/* ============== META (Termin / Dept / Olusturan) - Hiyerarsi 3-5 =============== */
+.cps-overlay-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  background: #fafbfc;
+  border: 1px solid #f1f5f9;
+  border-radius: 8px;
+  margin-bottom: 14px;
+}
+
+.cps-overlay-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.cps-overlay-meta-lbl {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+  flex-shrink: 0;
+}
+
+.cps-overlay-meta-val {
+  font-weight: 500;
+  color: #1e293b;
+  text-align: right;
+  word-break: break-word;
+}
+
+.cps-overlay-meta-warn   { color: #ea580c; font-weight: 600; }
+.cps-overlay-meta-danger { color: #dc2626; font-weight: 600; }
+.cps-overlay-meta-mute   { color: #94a3b8; font-weight: 400; }
+
+
+/* ============== QUEUE INDICATOR =============== */
+.cps-overlay-queue {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #c2410c;
+  margin-bottom: 12px;
+}
+.cps-overlay-queue.cps-overlay-show-queue { display: flex; }
+
+.cps-overlay-queue::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #F97316;
+}
+
+
+/* ============== ACTIONS =============== */
+.cps-overlay-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 14px 18px 16px;
+  border-top: 1px solid #f1f5f9;
+  background: #fafbfc;
+  position: relative;
+}
+
+.cps-overlay-btn {
+  height: 42px;
+  padding: 0 14px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  letter-spacing: -.01em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all .15s ease;
+  white-space: nowrap;
+}
+.cps-overlay-btn:active { transform: translateY(1px); }
+.cps-overlay-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* PRIMARY - Devam Ediyorum (turuncu solid) */
+.cps-overlay-btn-primary {
+  background: #F97316;
+  color: #ffffff;
+  border-color: #F97316;
+  box-shadow: 0 1px 2px rgba(249, 115, 22, .2);
+  grid-column: 1 / -1;
+}
+.cps-overlay-btn-primary:hover {
+  background: #EA580C;
+  border-color: #EA580C;
+}
+
+/* SECONDARY - Goreve Git (turuncu outline) */
+.cps-overlay-btn-secondary {
+  background: #ffffff;
+  color: #c2410c;
+  border-color: #fed7aa;
+  font-weight: 600;
+}
+.cps-overlay-btn-secondary:hover {
+  background: #fff7ed;
+  border-color: #fdba74;
+  color: #9a3412;
+}
+
+/* SOFT - Daha Sonra (acik gri) */
+.cps-overlay-btn-soft {
+  background: #ffffff;
+  color: #475569;
+  border-color: #e2e8f0;
+}
+.cps-overlay-btn-soft:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #1e293b;
+}
+
+/* GHOST - Kapat (border yok) */
+.cps-overlay-btn-ghost {
+  background: transparent;
+  color: #64748b;
+  border-color: transparent;
+  font-weight: 500;
+}
+.cps-overlay-btn-ghost:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
+.cps-overlay-snooze-arrow {
+  font-size: 9px;
+  margin-left: 2px;
+  opacity: .7;
+}
+
+
+/* ============== SNOOZE DROPDOWN =============== */
+.cps-overlay-snooze-menu {
+  position: absolute;
+  bottom: calc(100% - 14px);
+  left: 18px;
+  right: 18px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, .14);
+  padding: 6px;
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 10;
+}
+.cps-overlay-snooze-menu.cps-overlay-show-snooze {
+  display: flex;
+  animation: cps-overlay-card-in .12s ease-out;
+}
+
+.cps-overlay-snooze-menu button {
+  height: 36px;
+  padding: 0 12px;
+  background: #ffffff;
+  border: 0;
+  border-radius: 5px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1e293b;
+  cursor: pointer;
+  font-family: inherit;
+  letter-spacing: -.01em;
+  transition: background .1s;
+}
+.cps-overlay-snooze-menu button:hover {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+
+/* ============== TABLET (<= 740px) =============== */
+@media (max-width: 740px) {
+  .cps-overlay-backdrop {
+    padding: 12px;
+    align-items: flex-end;
+  }
+
+  .cps-overlay-card {
+    width: 100%;
+    max-width: 100%;
+    border-radius: 12px 12px 0 0;
+    margin-bottom: 0;
+    animation: cps-overlay-card-in-mobile .2s cubic-bezier(.2, .8, .3, 1);
+  }
+
+  @keyframes cps-overlay-card-in-mobile {
+    from { opacity: 0; transform: translateY(40px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .cps-overlay-header { padding: 14px 16px 12px; }
+  .cps-overlay-body   { padding: 16px 18px 12px; }
+
+  .cps-overlay-title { font-size: 16px; }
+
+  /* Mobil: butonlar dikey stack, yuksek (parmak ile rahat) */
+  .cps-overlay-actions {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    padding: 12px 14px 16px;
+  }
+  .cps-overlay-btn {
+    height: 46px;
+    font-size: 14px;
+  }
+  .cps-overlay-btn-primary { grid-column: auto; }
+
+  .cps-overlay-snooze-menu {
+    left: 14px;
+    right: 14px;
+  }
+  .cps-overlay-snooze-menu button {
+    height: 42px;
+    font-size: 14px;
+  }
+}
+
+
+/* ============== TELEFON (<= 480px) =============== */
+@media (max-width: 480px) {
+  .cps-overlay-backdrop { padding: 0; }
+  .cps-overlay-card {
+    border-radius: 14px 14px 0 0;
+    max-height: 92vh;
+  }
+  .cps-overlay-meta-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  .cps-overlay-meta-val { text-align: left; }
+}
+
+
+/* ============== ERISILEBILIRLIK =============== */
+.cps-overlay-backdrop:focus-within .cps-overlay-card {
+  outline: none;
+}
+
+.cps-overlay-btn:focus-visible {
+  outline: 2px solid #F97316;
+  outline-offset: 2px;
+}
+
+.cps-overlay-close:focus-visible {
+  outline: 2px solid #F97316;
+  outline-offset: 1px;
+}
+
+/* prefers-reduced-motion: animasyonlari kapat */
+@media (prefers-reduced-motion: reduce) {
+  .cps-overlay-backdrop,
+  .cps-overlay-card,
+  .cps-overlay-snooze-menu,
+  .cps-overlay-btn { animation: none !important; transition: none !important; }
+}

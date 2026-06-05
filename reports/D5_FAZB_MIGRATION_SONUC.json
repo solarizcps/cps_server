@@ -1,0 +1,14 @@
+{
+  "zaman": "2026-05-16 13:38:11",
+  "dry_run": false,
+  "kaynak_5055": 2127,
+  "cps_onceki_toplam": 123,
+  "cps_sonraki_toplam": 2250,
+  "insert": 2127,
+  "skip": 0,
+  "error": 0,
+  "hata_orani_pct": 0.0,
+  "manuel_korundu": true,
+  "uretim_kayit_korundu": true,
+  "unique_emir_no_cps": 592
+}

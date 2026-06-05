@@ -1,0 +1,316 @@
+{% extends "base.html" %}
+{% block title %}{{ kart.KartAd or 'Kart' }} - Ekstreler{% endblock %}
+{% set active = 'finans' %}
+{% block content %}
+<div class="fk-wrap">
+
+  <div class="page-header fk-header">
+    <div class="page-header-baslik">
+      <h1 class="page-title">
+        <span class="fk-icon">EK</span>
+        {{ kart.KartAd or 'Kart' }} - Ekstreler
+      </h1>
+      <div class="page-subtitle">
+        {{ kart.Banka or '' }}{% if kart.Son4 %} &bull; &bull;&bull;&bull;&bull; {{ kart.Son4 }}{% endif %} &bull; {{ kart.entity|capitalize }} &bull; Limit {{ '{:,.0f}'.format(kart.Limit_ or 0) }} {{ kart.ParaBirimi or 'TRY' }}
+      </div>
+    </div>
+    <div class="fk-konsol-back">
+      <a href="/finans/kredi-kartlari" class="fk-back-btn">&larr; Kartlara Don</a>
+      {% if kart.Aktif == 1 %}
+      <button class="fk-btn-yeni" onclick="fkModalAc('yeni')">+ Yeni Ekstre</button>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- KPI -->
+  <div class="fk-kpi-bar">
+    <div class="fk-kpi-card fk-kpi-toplam">
+      <div class="fk-kpi-label">Toplam Ekstre</div>
+      <div class="fk-kpi-deger">{{ kpi.toplam_ekstre or 0 }}</div>
+    </div>
+    <div class="fk-kpi-card fk-kpi-odenmedi">
+      <div class="fk-kpi-label">Odenmedi</div>
+      <div class="fk-kpi-deger">{{ kpi.odenmedi_sayi or 0 }}</div>
+    </div>
+    <div class="fk-kpi-card fk-kpi-kismen">
+      <div class="fk-kpi-label">Kismen</div>
+      <div class="fk-kpi-deger">{{ kpi.kismen_sayi or 0 }}</div>
+    </div>
+    <div class="fk-kpi-card fk-kpi-odendi">
+      <div class="fk-kpi-label">Odendi</div>
+      <div class="fk-kpi-deger">{{ kpi.odendi_sayi or 0 }}</div>
+    </div>
+    <div class="fk-kpi-card fk-kpi-kalan">
+      <div class="fk-kpi-label">Toplam Kalan</div>
+      <div class="fk-kpi-deger">{{ '{:,.0f}'.format(kpi.kalan or 0) }}</div>
+      <div class="fk-kpi-sub">TL</div>
+    </div>
+  </div>
+
+  {% if not items %}
+  <div class="fk-empty">
+    <div class="fk-empty-icon">EK</div>
+    <h3 class="fk-empty-h3">Ekstre kaydi yok</h3>
+    <p>{% if kart.Aktif == 1 %}+ Yeni Ekstre butonu ile ilk ekstreyi olusturun.{% else %}Pasif kart - ekstre eklenemez.{% endif %}</p>
+  </div>
+  {% else %}
+  <div class="fk-tbl-wrap">
+    <table class="fk-tbl">
+      <thead>
+        <tr>
+          <th>Donem</th>
+          <th>Son Odeme</th>
+          <th class="fk-num">Toplam Borc</th>
+          <th class="fk-num">Asgari</th>
+          <th class="fk-num">Odenen</th>
+          <th class="fk-num">Kalan</th>
+          <th>Durum</th>
+          <th class="fk-aksiyon">Islem</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in items %}
+        {% set kalan = (it.ToplamBorc or 0) - (it.OdenenTutar or 0) %}
+        <tr class="fk-row-{{ it.Durum|lower }}">
+          <td>
+            <strong>{{ it.DonemBaslangic }}</strong><br>
+            <small>{{ it.DonemBitis }}</small>
+          </td>
+          <td>{{ it.SonOdemeTarihi }}</td>
+          <td class="fk-num">{{ '{:,.2f}'.format(it.ToplamBorc or 0) }}</td>
+          <td class="fk-num">{{ '{:,.2f}'.format(it.AsgariOdeme or 0) }}</td>
+          <td class="fk-num">{{ '{:,.2f}'.format(it.OdenenTutar or 0) }}</td>
+          <td class="fk-num">{{ '{:,.2f}'.format(kalan) }}</td>
+          <td><span class="fk-durum fk-durum-{{ it.Durum|lower }}">{{ it.Durum }}</span></td>
+          <td class="fk-aksiyon">
+            <a href="/finans/kredi-kartlari/ekstre/{{ it.Id }}/hareketler" class="fk-btn-mini">Hareketler</a>
+            {% if it.Durum != 'IPTAL' and it.Durum != 'ODENDI' %}
+            <button class="fk-btn-mini" onclick='fkModalAc("kapat", {{ it.Id }}, {{ it.ToplamBorc or 0 }}, {{ it.OdenenTutar or 0 }})'>Ode</button>
+            <button class="fk-btn-mini" onclick='fkModalAc("edit", {{ it.Id }})'>Duzenle</button>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <!-- MODAL: Yeni/Edit Ekstre -->
+  <div id="fk-modal" class="fk-modal" style="display:none;" onclick="fkModalKapat(event)">
+    <div class="fk-modal-icerik" onclick="event.stopPropagation()">
+      <div class="fk-modal-header">
+        <h3 id="fk-modal-baslik">Yeni Ekstre</h3>
+        <button class="fk-modal-x" onclick="fkModalKapat()">&times;</button>
+      </div>
+      <form id="fk-form-ekstre" onsubmit="return fkKaydet(event)">
+        <input type="hidden" id="fk-id" name="id" value="">
+        <input type="hidden" name="kart_id" value="{{ kart.Id }}">
+        <div class="fk-form-grid">
+          <div class="fk-form-grup">
+            <label>Donem Baslangic <span class="fk-zor">*</span></label>
+            <input type="date" name="donem_baslangic" id="fk-f-db" required>
+          </div>
+          <div class="fk-form-grup">
+            <label>Donem Bitis <span class="fk-zor">*</span></label>
+            <input type="date" name="donem_bitis" id="fk-f-de" required>
+          </div>
+          <div class="fk-form-grup">
+            <label>Son Odeme Tarihi <span class="fk-zor">*</span></label>
+            <input type="date" name="son_odeme_tarihi" id="fk-f-so" required>
+          </div>
+          <div class="fk-form-grup">
+            <label>Durum</label>
+            <select name="durum" id="fk-f-d">
+              {% for d in durum_set %}{% if d != 'IPTAL' %}<option value="{{ d }}">{{ d }}</option>{% endif %}{% endfor %}
+            </select>
+          </div>
+          <div class="fk-form-grup">
+            <label>Toplam Borc <span class="fk-zor">*</span></label>
+            <input type="number" name="toplam_borc" id="fk-f-tb" required min="0" step="0.01">
+          </div>
+          <div class="fk-form-grup">
+            <label>Asgari Odeme</label>
+            <input type="number" name="asgari_odeme" id="fk-f-ao" min="0" step="0.01">
+          </div>
+          <div class="fk-form-grup fk-form-grup-full">
+            <label>Not</label>
+            <textarea name="notu" id="fk-f-not" rows="2" maxlength="500"></textarea>
+          </div>
+        </div>
+        <div class="fk-modal-altbar">
+          <button type="button" class="fk-btn-mini" onclick="fkModalKapat()">Vazgec</button>
+          <button type="submit" class="fk-btn-yeni">Kaydet</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Ekstre Kapat -->
+  <div id="fk-modal-kapat" class="fk-modal" style="display:none;" onclick="fkKapatKapat(event)">
+    <div class="fk-modal-icerik" onclick="event.stopPropagation()">
+      <div class="fk-modal-header">
+        <h3>Ekstre Odeme</h3>
+        <button class="fk-modal-x" onclick="fkKapatKapat()">&times;</button>
+      </div>
+      <form id="fk-form-kapat" onsubmit="return fkKapatGonder(event)">
+        <input type="hidden" id="fk-kapat-id" value="">
+        <div class="fk-form-grid">
+          <div class="fk-form-grup fk-form-grup-full">
+            <label>Toplam Borc</label>
+            <input type="text" id="fk-kapat-borc" readonly>
+          </div>
+          <div class="fk-form-grup fk-form-grup-full">
+            <label>Odenecek Tutar <span class="fk-zor">*</span></label>
+            <input type="number" id="fk-kapat-odenen" name="odenen_tutar" required min="0" step="0.01">
+          </div>
+          <div class="fk-form-grup fk-form-grup-full" style="font-size:11px;color:#6b7280;">
+            Eger borcun tamami odenirse durum ODENDI, kismen odenirse KISMEN_ODENDI olur.
+          </div>
+        </div>
+        <div class="fk-modal-altbar">
+          <button type="button" class="fk-btn-mini" onclick="fkKapatKapat()">Vazgec</button>
+          <button type="submit" class="fk-btn-yeni">Odeme Kaydet</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+</div>
+
+<style>
+.fk-wrap { padding:0; }
+.fk-header { display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:12px; }
+.fk-icon { display:inline-block; background:#d4a52f; color:#1a1d2e; font-weight:700; font-size:13px; padding:4px 8px; border-radius:4px; margin-right:8px; }
+.fk-konsol-back { display:flex; gap:8px; align-items:center; }
+.fk-back-btn { display:inline-block; padding:6px 12px; background:transparent; color:#6b7280; border:1px solid #e8eaf0; border-radius:4px; font-size:12px; font-weight:600; text-decoration:none; }
+.fk-back-btn:hover { background:#fef9c3; color:#1a1d2e; border-color:#d4a52f; }
+.fk-btn-yeni { padding:8px 16px; background:#d4a52f; color:#1a1d2e; border:none; border-radius:4px; font-size:13px; font-weight:700; cursor:pointer; }
+.fk-btn-yeni:hover { background:#b8902a; }
+
+.fk-kpi-bar { display:grid; grid-template-columns:repeat(5, 1fr); gap:10px; margin-top:14px; }
+@media (max-width:900px) { .fk-kpi-bar { grid-template-columns:repeat(2, 1fr); } }
+.fk-kpi-card { background:#fff; border:1px solid #e8eaf0; border-radius:6px; padding:12px 14px; border-left:4px solid #d4a52f; }
+.fk-kpi-toplam { border-left-color:#6b7280; }
+.fk-kpi-odenmedi { border-left-color:#dc2626; }
+.fk-kpi-kismen { border-left-color:#d4a52f; }
+.fk-kpi-odendi { border-left-color:#16a34a; }
+.fk-kpi-kalan { border-left-color:#2563eb; }
+.fk-kpi-label { font-size:11px; color:#6b7280; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; }
+.fk-kpi-deger { font-size:22px; font-weight:700; color:#1a1d2e; margin-top:2px; }
+.fk-kpi-sub { font-size:11px; color:#9ca3af; margin-top:2px; }
+
+.fk-tbl-wrap { margin-top:14px; background:#fff; border:1px solid #e8eaf0; border-radius:6px; overflow:auto; }
+.fk-tbl { width:100%; border-collapse:collapse; }
+.fk-tbl th { padding:10px; background:#fafbfc; text-align:left; font-size:11px; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:0.5px; border-bottom:1px solid #e8eaf0; }
+.fk-tbl td { padding:10px; font-size:13px; color:#1a1d2e; border-bottom:1px solid #f1f3f6; vertical-align:top; }
+.fk-tbl tr:hover { background:#fef9c3; }
+.fk-tbl .fk-num { text-align:right; font-variant-numeric:tabular-nums; font-weight:600; }
+.fk-tbl .fk-aksiyon { white-space:nowrap; }
+.fk-row-iptal { opacity:0.5; }
+.fk-row-iptal td { text-decoration:line-through; }
+.fk-row-odendi td { color:#16a34a; }
+
+.fk-durum { display:inline-block; padding:2px 8px; border-radius:3px; font-size:10px; font-weight:700; }
+.fk-durum-odenmedi { background:#fee2e2; color:#dc2626; }
+.fk-durum-kismen_odendi { background:#fef3c7; color:#92400e; }
+.fk-durum-odendi { background:#dcfce7; color:#16a34a; }
+.fk-durum-iptal { background:#f3f4f6; color:#6b7280; }
+
+.fk-btn-mini { padding:4px 10px; background:#fff; color:#1a1d2e; border:1px solid #e8eaf0; border-radius:3px; font-size:11px; font-weight:600; cursor:pointer; text-decoration:none; display:inline-block; margin-right:4px; }
+.fk-btn-mini:hover { background:#fef9c3; border-color:#d4a52f; }
+
+.fk-modal { position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; display:flex; align-items:center; justify-content:center; }
+.fk-modal-icerik { background:#fff; max-width:580px; width:92%; max-height:88vh; overflow:auto; border-radius:8px; border:2px solid #d4a52f; }
+.fk-modal-header { padding:14px 18px; background:#1a1d2e; color:#d4a52f; display:flex; justify-content:space-between; align-items:center; border-radius:6px 6px 0 0; }
+.fk-modal-header h3 { margin:0; font-size:15px; font-weight:700; }
+.fk-modal-x { background:transparent; color:#d4a52f; border:none; font-size:24px; cursor:pointer; line-height:1; padding:0 6px; }
+.fk-form-grid { padding:16px; display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.fk-form-grup { display:flex; flex-direction:column; gap:4px; }
+.fk-form-grup-full { grid-column:1 / -1; }
+.fk-form-grup label { font-size:12px; color:#6b7280; font-weight:600; }
+.fk-zor { color:#dc2626; font-weight:700; }
+.fk-form-grup input, .fk-form-grup select, .fk-form-grup textarea { padding:7px 10px; border:1px solid #e8eaf0; border-radius:4px; background:#fff; font-size:13px; color:#1a1d2e; font-family:inherit; }
+.fk-form-grup input:focus, .fk-form-grup select:focus, .fk-form-grup textarea:focus { border-color:#d4a52f; outline:none; box-shadow:0 0 0 2px rgba(212,165,47,0.2); }
+.fk-modal-altbar { padding:12px 16px; background:#fafbfc; border-top:1px solid #e8eaf0; display:flex; justify-content:flex-end; gap:8px; }
+
+.fk-empty { text-align:center; padding:48px 16px; background:#fff; border:1px dashed #e8eaf0; border-radius:6px; margin-top:14px; }
+.fk-empty-icon { display:inline-flex; align-items:center; justify-content:center; width:48px; height:48px; background:#fef9c3; border:2px solid #d4a52f; border-radius:50%; font-weight:700; font-size:18px; color:#d4a52f; margin-bottom:12px; }
+.fk-empty-h3 { font-size:16px; font-weight:700; color:#1a1d2e; margin-bottom:6px; }
+.fk-empty p { color:#6b7280; font-size:13px; }
+</style>
+
+<script>
+(function(){
+  var KART_ID = {{ kart.Id }};
+
+  window.fkModalAc = function(mod, id, toplamBorc, odenen) {
+    if (mod === "yeni") {
+      document.getElementById("fk-modal").style.display = "flex";
+      document.getElementById("fk-id").value = "";
+      document.getElementById("fk-form-ekstre").reset();
+      document.getElementById("fk-modal-baslik").textContent = "Yeni Ekstre";
+    } else if (mod === "edit" && id) {
+      document.getElementById("fk-modal").style.display = "flex";
+      document.getElementById("fk-id").value = id;
+      document.getElementById("fk-modal-baslik").textContent = "Ekstre Duzenle #" + id;
+      fetch("/finans/kredi-kartlari/ekstre/" + id + "/json")
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          if (!d || !d.ok) { alert("Ekstre yuklenemedi"); return; }
+          var it = d.kayit;
+          document.getElementById("fk-f-db").value = it.DonemBaslangic || "";
+          document.getElementById("fk-f-de").value = it.DonemBitis || "";
+          document.getElementById("fk-f-so").value = it.SonOdemeTarihi || "";
+          document.getElementById("fk-f-tb").value = it.ToplamBorc || 0;
+          document.getElementById("fk-f-ao").value = it.AsgariOdeme || 0;
+          document.getElementById("fk-f-d").value = it.Durum || "ODENMEDI";
+          document.getElementById("fk-f-not").value = it.Notu || "";
+        });
+    } else if (mod === "kapat" && id) {
+      document.getElementById("fk-modal-kapat").style.display = "flex";
+      document.getElementById("fk-kapat-id").value = id;
+      document.getElementById("fk-kapat-borc").value = (toplamBorc || 0).toLocaleString("tr-TR") + " TL";
+      document.getElementById("fk-kapat-odenen").value = (toplamBorc - odenen).toFixed(2);
+    }
+  };
+
+  window.fkModalKapat = function(e) {
+    if (e && e.target.id !== "fk-modal") return;
+    document.getElementById("fk-modal").style.display = "none";
+  };
+
+  window.fkKapatKapat = function(e) {
+    if (e && e.target.id !== "fk-modal-kapat") return;
+    document.getElementById("fk-modal-kapat").style.display = "none";
+  };
+
+  window.fkKaydet = function(e) {
+    e.preventDefault();
+    var id = document.getElementById("fk-id").value;
+    var url = id ? ("/finans/kredi-kartlari/ekstre/" + id + "/guncelle") : ("/finans/kredi-kartlari/" + KART_ID + "/ekstre/yeni");
+    var fd = new FormData(document.getElementById("fk-form-ekstre"));
+    fetch(url, { method: "POST", body: fd })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (d.ok) window.location.reload();
+        else alert("Hata: " + (d.hata || "Bilinmiyor"));
+      });
+    return false;
+  };
+
+  window.fkKapatGonder = function(e) {
+    e.preventDefault();
+    var id = document.getElementById("fk-kapat-id").value;
+    var fd = new FormData(document.getElementById("fk-form-kapat"));
+    fetch("/finans/kredi-kartlari/ekstre/" + id + "/kapat", { method: "POST", body: fd })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (d.ok) window.location.reload();
+        else alert("Hata: " + (d.hata || "Bilinmiyor"));
+      });
+    return false;
+  };
+})();
+</script>
+{% endblock %}

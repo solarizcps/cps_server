@@ -1,0 +1,20 @@
+{
+  "sprint": "D5 Faz C.5 P5",
+  "tarih": "2026-05-18",
+  "saat": "09:10",
+  "sonuc": "BASARILI",
+  "hash_eski": "C534DCEC9D1FAB0F",
+  "hash_yeni": "DD83F35FAC5CCEC1",
+  "personel_giris_hash": "41B220D201B0E1F8",
+  "yeni_endpoint": "/hedef/sablon/trigger/<emir_no>",
+  "test_emri": "111005",
+  "ilk_insert_basarili": true,
+  "duplicate_koruma_basarili": true,
+  "saha_native_view_basarili": true,
+  "temizlik_basarili": true,
+  "uretim_kayit": 1380,
+  "saha_kesintisi": false,
+  "rollback_kullanildi": false,
+  "admin_sifre_dogru": "f7a6ua61",
+  "next": "P6 config + audit"
+}

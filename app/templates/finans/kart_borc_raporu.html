@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% block title %}Kart Borc Raporu - Finans{% endblock %}
+{% set active = 'finans' %}
+{% block content %}
+<div class="f4c-wrap">
+
+  <div class="page-header f4c-header">
+    <div class="page-header-baslik">
+      <h1 class="page-title">
+        <span class="f4c-icon">RB</span>
+        Kart Bazli Borc Raporu
+      </h1>
+      <div class="page-subtitle">
+        Aktif kartlarin guncel borc/odenen/kalan durumu &bull; SELECT-only rapor
+      </div>
+    </div>
+    <div class="f4c-back-wrap">
+      <a href="/finans/konsol" class="f4c-back-btn">&larr; Konsola Don</a>
+      <a href="/finans/kredi-kartlari" class="f4c-back-btn">Kartlar &rarr;</a>
+    </div>
+  </div>
+
+  <!-- TOPLAM KPI -->
+  <div class="f4c-kpi-grid">
+    <div class="f4c-kpi-card f4c-kpi-kart">
+      <div class="f4c-kpi-label">Aktif Kart</div>
+      <div class="f4c-kpi-deger">{{ kpi.toplam_kart or 0 }}</div>
+    </div>
+    <div class="f4c-kpi-card f4c-kpi-limit">
+      <div class="f4c-kpi-label">Toplam Limit</div>
+      <div class="f4c-kpi-deger">{{ '{:,.0f}'.format(kpi.toplam_limit or 0) }}</div>
+      <div class="f4c-kpi-sub">TL</div>
+    </div>
+    <div class="f4c-kpi-card f4c-kpi-borc">
+      <div class="f4c-kpi-label">Toplam Borc</div>
+      <div class="f4c-kpi-deger">{{ '{:,.0f}'.format(kpi.toplam_borc or 0) }}</div>
+      <div class="f4c-kpi-sub">tum ekstreler</div>
+    </div>
+    <div class="f4c-kpi-card f4c-kpi-odenen">
+      <div class="f4c-kpi-label">Odenen</div>
+      <div class="f4c-kpi-deger">{{ '{:,.0f}'.format(kpi.toplam_odenen or 0) }}</div>
+    </div>
+    <div class="f4c-kpi-card f4c-kpi-kalan">
+      <div class="f4c-kpi-label">Kalan</div>
+      <div class="f4c-kpi-deger">{{ '{:,.0f}'.format(kpi.toplam_kalan or 0) }}</div>
+    </div>
+    <div class="f4c-kpi-card f4c-kpi-gecikmis">
+      <div class="f4c-kpi-label">Gecikmis</div>
+      <div class="f4c-kpi-deger">{{ kpi.gecikmis_ekstre or 0 }}</div>
+      <div class="f4c-kpi-sub">{{ kpi.yaklasan_odeme or 0 }} yaklasan</div>
+    </div>
+  </div>
+
+  <!-- FILTRELER -->
+  <form method="get" action="/finans/kart-borc-raporu" class="f4c-filter-bar">
+    <div class="f4c-filter-grup">
+      <label class="f4c-filter-label">Firma:</label>
+      <select name="entity" class="f4c-filter-input">
+        <option value="">Hepsi</option>
+        {% for e in entity_set %}
+        <option value="{{ e }}" {% if filtre and filtre.entity == e %}selected{% endif %}>{{ e|capitalize }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="f4c-filter-grup f4c-filter-btn">
+      <button type="submit" class="f4c-filter-submit">Filtrele</button>
+      <a href="/finans/kart-borc-raporu" class="f4c-filter-reset">Sifirla</a>
+    </div>
+  </form>
+
+  <!-- KART TABLO -->
+  {% if not items %}
+  <div class="f4c-empty">
+    <div class="f4c-empty-icon">RB</div>
+    <h3>Aktif kart yok</h3>
+    <p>Kart eklemek icin <a href="/finans/kredi-kartlari">Kredi Kartlari</a> sayfasini ziyaret edin.</p>
+  </div>
+  {% else %}
+  <div class="f4c-tbl-wrap">
+    <table class="f4c-tbl">
+      <thead>
+        <tr>
+          <th>Firma</th>
+          <th>Banka</th>
+          <th>Kart</th>
+          <th class="f4c-num">Limit</th>
+          <th class="f4c-num">Borc</th>
+          <th class="f4c-num">Odenen</th>
+          <th class="f4c-num">Kalan</th>
+          <th>Acik / Gecikmis</th>
+          <th>Yakin Vade</th>
+          <th>Kullanim</th>
+          <th class="f4c-aksiyon">Detay</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for k in items %}
+        <tr class="{% if k._gecikmis_ekstre > 0 %}f4c-row-gecikmis{% endif %}">
+          <td><span class="f4c-entity f4c-entity-{{ k.entity }}">{{ k.entity|capitalize }}</span></td>
+          <td>{{ k.Banka or '-' }}</td>
+          <td>
+            <strong>{{ k.KartAd }}</strong>
+            {% if k.Son4 %}<br><small>&bull;&bull;&bull;&bull; {{ k.Son4 }}</small>{% endif %}
+          </td>
+          <td class="f4c-num">{{ '{:,.0f}'.format(k.Limit_ or 0) }}</td>
+          <td class="f4c-num">{{ '{:,.0f}'.format(k._toplam_borc) }}</td>
+          <td class="f4c-num">{{ '{:,.0f}'.format(k._toplam_odenen) }}</td>
+          <td class="f4c-num f4c-kalan">{{ '{:,.0f}'.format(k._kalan) }}</td>
+          <td>
+            {{ k._acik_ekstre }} acik
+            {% if k._gecikmis_ekstre > 0 %}<br><span class="f4c-kucuk-gecikmis">{{ k._gecikmis_ekstre }} gecikmis</span>{% endif %}
+          </td>
+          <td>
+            {% if k._en_yakin_tarih %}
+              {{ k._en_yakin_tarih }}<br>
+              <small class="{% if k._en_yakin_gun < 0 %}f4c-vade-gecmis{% elif k._en_yakin_gun <= 3 %}f4c-vade-kritik{% elif k._en_yakin_gun <= 7 %}f4c-vade-yaklasan{% endif %}">
+                {% if k._en_yakin_gun < 0 %}{{ k._en_yakin_gun|abs }} gun gecmis
+                {% elif k._en_yakin_gun == 0 %}BUGUN
+                {% else %}{{ k._en_yakin_gun }} gun sonra{% endif %}
+              </small>
+            {% else %}-{% endif %}
+          </td>
+          <td>
+            <div class="f4c-bar">
+              <div class="f4c-bar-fill {% if k._kullanim_yuzde > 80 %}f4c-bar-kritik{% elif k._kullanim_yuzde > 50 %}f4c-bar-orta{% else %}f4c-bar-normal{% endif %}" style="width:{{ k._kullanim_yuzde }}%"></div>
+            </div>
+            <div class="f4c-bar-txt">{{ k._kullanim_yuzde }}%</div>
+          </td>
+          <td class="f4c-aksiyon">
+            <a href="/finans/kredi-kartlari/{{ k.Id }}/ekstreler" class="f4c-btn-mini">Ekstreler ({{ k._hareket_sayisi }})</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+</div>
+
+<style>
+.f4c-wrap { padding:0; }
+.f4c-header { display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:12px; }
+.f4c-icon { display:inline-block; background:#d4a52f; color:#1a1d2e; font-weight:700; font-size:13px; padding:4px 8px; border-radius:4px; margin-right:8px; }
+.f4c-back-wrap { display:flex; gap:8px; }
+.f4c-back-btn { padding:6px 12px; background:transparent; color:#6b7280; border:1px solid #e8eaf0; border-radius:4px; font-size:12px; font-weight:600; text-decoration:none; }
+.f4c-back-btn:hover { background:#fef9c3; color:#1a1d2e; border-color:#d4a52f; }
+
+.f4c-kpi-grid { display:grid; grid-template-columns:repeat(6, 1fr); gap:8px; margin-top:14px; }
+@media (max-width:1200px) { .f4c-kpi-grid { grid-template-columns:repeat(3, 1fr); } }
+@media (max-width:700px)  { .f4c-kpi-grid { grid-template-columns:repeat(2, 1fr); } }
+.f4c-kpi-card { background:#fff; border:1px solid #e8eaf0; border-radius:6px; padding:10px 12px; border-left:4px solid #6b7280; }
+.f4c-kpi-kart    { border-left-color:#6b7280; }
+.f4c-kpi-limit   { border-left-color:#2563eb; }
+.f4c-kpi-borc    { border-left-color:#d4a52f; }
+.f4c-kpi-odenen  { border-left-color:#16a34a; }
+.f4c-kpi-kalan   { border-left-color:#dc2626; }
+.f4c-kpi-gecikmis { border-left-color:#ea580c; }
+.f4c-kpi-label { font-size:10px; color:#6b7280; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; }
+.f4c-kpi-deger { font-size:20px; font-weight:700; color:#1a1d2e; margin-top:2px; font-variant-numeric:tabular-nums; }
+.f4c-kpi-sub { font-size:10px; color:#9ca3af; margin-top:2px; }
+
+.f4c-filter-bar { display:flex; gap:10px; padding:12px; background:#f8f9fc; border:1px solid #e8eaf0; border-radius:6px; margin-top:14px; align-items:end; }
+.f4c-filter-grup { display:flex; flex-direction:column; gap:4px; }
+.f4c-filter-label { font-size:11px; color:#6b7280; font-weight:600; text-transform:uppercase; }
+.f4c-filter-input { padding:7px 10px; border:1px solid #e8eaf0; border-radius:4px; font-size:13px; min-width:140px; }
+.f4c-filter-btn { flex-direction:row; gap:6px; }
+.f4c-filter-submit { padding:7px 14px; background:#1a1d2e; color:#d4a52f; border:none; border-radius:4px; font-weight:700; cursor:pointer; font-size:12px; }
+.f4c-filter-reset { padding:7px 12px; background:transparent; color:#6b7280; border:1px solid #e8eaf0; border-radius:4px; font-weight:600; font-size:12px; text-decoration:none; }
+
+.f4c-tbl-wrap { margin-top:14px; background:#fff; border:1px solid #e8eaf0; border-radius:6px; overflow:auto; }
+.f4c-tbl { width:100%; border-collapse:collapse; }
+.f4c-tbl th { padding:10px; background:#fafbfc; text-align:left; font-size:11px; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:0.5px; border-bottom:1px solid #e8eaf0; }
+.f4c-tbl td { padding:10px; font-size:13px; color:#1a1d2e; border-bottom:1px solid #f1f3f6; vertical-align:top; }
+.f4c-tbl tr:hover { background:#fef9c3; }
+.f4c-tbl .f4c-num { text-align:right; font-variant-numeric:tabular-nums; font-weight:600; }
+.f4c-tbl .f4c-aksiyon { white-space:nowrap; }
+.f4c-row-gecikmis { background:#fef2f2; }
+.f4c-row-gecikmis:hover { background:#fee2e2; }
+.f4c-kalan { color:#dc2626; font-weight:700; }
+.f4c-kucuk-gecikmis { font-size:10px; color:#dc2626; font-weight:700; }
+.f4c-vade-gecmis  { color:#dc2626; font-weight:700; }
+.f4c-vade-kritik  { color:#ea580c; font-weight:700; }
+.f4c-vade-yaklasan { color:#d4a52f; font-weight:700; }
+
+.f4c-entity { display:inline-block; padding:2px 8px; border-radius:3px; font-size:10px; font-weight:700; }
+.f4c-entity-solariz { background:#fef9c3; color:#854d0e; }
+.f4c-entity-nexgen { background:#dbeafe; color:#1e40af; }
+.f4c-entity-pera { background:#dcfce7; color:#166534; }
+.f4c-entity-sahsi { background:#fce7f3; color:#9d174d; }
+
+.f4c-bar { height:6px; background:#f1f3f6; border-radius:3px; overflow:hidden; }
+.f4c-bar-fill { height:100%; }
+.f4c-bar-normal { background:#16a34a; }
+.f4c-bar-orta { background:#d4a52f; }
+.f4c-bar-kritik { background:#dc2626; }
+.f4c-bar-txt { font-size:10px; color:#6b7280; text-align:right; margin-top:2px; }
+
+.f4c-btn-mini { padding:4px 10px; background:#fff; color:#1a1d2e; border:1px solid #e8eaf0; border-radius:3px; font-size:11px; font-weight:600; text-decoration:none; display:inline-block; }
+.f4c-btn-mini:hover { background:#fef9c3; border-color:#d4a52f; }
+
+.f4c-empty { text-align:center; padding:48px 16px; background:#fff; border:1px dashed #e8eaf0; border-radius:6px; margin-top:14px; }
+.f4c-empty-icon { display:inline-flex; align-items:center; justify-content:center; width:48px; height:48px; background:#fef9c3; border:2px solid #d4a52f; border-radius:50%; font-weight:700; font-size:18px; color:#d4a52f; margin-bottom:12px; }
+.f4c-empty h3 { font-size:16px; font-weight:700; color:#1a1d2e; margin-bottom:6px; }
+.f4c-empty p { color:#6b7280; font-size:13px; }
+.f4c-empty a { color:#d4a52f; font-weight:600; }
+</style>
+{% endblock %}

@@ -1,0 +1,649 @@
+﻿{% extends "base.html" %}
+{% block title %}Kalıp Yönetimi · Solariz CPS{% endblock %}
+
+{% block content %}
+<style>
+  .ky-container { max-width: 1400px; margin: 0 auto; padding: 16px; }
+  .ky-header { display: flex; justify-content: space-between; align-items: center;
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+    border: 1px solid #f59e0b; border-radius: 12px; padding: 16px 20px; margin-bottom: 12px; }
+  .ky-header h1 { margin: 0; font-size: 22px; color: #78350f; }
+  .ky-stats { font-size: 14px; color: #92400e; }
+  .ky-info { background:#dbeafe; border:1px solid #3b82f6; border-radius:8px; padding:10px 14px; margin-bottom:12px; font-size:13px; color:#1e40af; }
+  .ky-toolbar { background: white; border: 1px solid #e5e7eb; border-radius: 12px;
+    padding: 12px 16px; margin-bottom: 12px;
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .ky-toolbar input, .ky-toolbar select {
+    padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; outline: none; }
+  .ky-toolbar input:focus, .ky-toolbar select:focus { border-color: #f59e0b; }
+  .ky-search { flex: 1; min-width: 250px; }
+  .ky-btn { padding: 8px 16px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+  .ky-btn-yeni { background: #10b981; color: white; }
+  .ky-btn-yeni:hover { background: #059669; }
+  .ky-btn-excel { background: #3b82f6; color: white; }
+  .ky-btn-excel:hover { background: #2563eb; }
+  .ky-tablo-wrap { background: white; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
+  .ky-tablo { width: 100%; border-collapse: collapse; }
+  .ky-tablo thead { background: #1f2937; color: white; }
+  .ky-tablo th { padding: 12px 10px; text-align: left; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+  .ky-tablo td { padding: 10px; border-bottom: 1px solid #f3f4f6; font-size: 14px; vertical-align: middle; }
+  .ky-tablo tbody tr:hover { background: #fefce8; }
+  .ky-tablo tbody tr.ky-degisti { background: #fef3c7; }
+  .ky-gorsel-cell { text-align: center; width: 110px; }
+  .ky-gorsel-buyuk { width: 80px; height: 80px; object-fit: cover; border-radius: 8px; background: #f3f4f6; border: 1px solid #d1d5db; cursor: pointer; transition: transform 0.15s; display: block; margin: 0 auto; }
+  .ky-gorsel-buyuk:hover { transform: scale(1.05); border-color: #f59e0b; }
+  .ky-gorsel-bos { width: 80px; height: 80px; border-radius: 8px; background: #fee2e2; border: 2px dashed #ef4444; display: flex; align-items: center; justify-content: center; color: #ef4444; font-size: 28px; cursor: pointer; margin: 0 auto; }
+  .ky-gorsel-bos:hover { background: #fecaca; }
+  .ky-gorsel-adi { font-size: 10px; color: #6b7280; margin-top: 4px; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ky-gorsel-yok { color: #ef4444; font-weight: 600; }
+  .ky-upload-btn { background: #3b82f6; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; margin-top: 4px; font-weight: 600; }
+  .ky-upload-btn:hover { background: #2563eb; }
+  .ky-kbc-input { width: 60px; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; font-weight: 600; text-align: center; outline: none; }
+  .ky-kbc-input:focus { border-color: #f59e0b; box-shadow: 0 0 0 2px #fef3c7; }
+  .ky-input-text { padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; outline: none; width: 100%; box-sizing: border-box; }
+  .ky-input-text:focus { border-color: #f59e0b; }
+  .ky-tip { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+  .ky-tip-govde { background: #dbeafe; color: #1e40af; }
+  .ky-tip-atki { background: #fce7f3; color: #9f1239; }
+  /* kalip_durumu select */
+  .ky-durum-select { padding: 4px 6px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 11px; font-weight: 600; outline: none; cursor: pointer; width: 96px; }
+  .ky-durum-select:focus { border-color: #f59e0b; }
+  .ky-durum-AKTIF   { background:#d1fae5; color:#065f46; }
+  .ky-durum-BAKIMDA { background:#fef3c7; color:#92400e; }
+  .ky-durum-ARIZALI { background:#fee2e2; color:#991b1b; }
+  .ky-durum-PASIF   { background:#f3f4f6; color:#6b7280; }
+  /* aciklama expand row */
+  .ky-aciklama-row { display: none; background: #f9fafb; }
+  .ky-aciklama-row.show { display: table-row; }
+  .ky-aciklama-cell { padding: 6px 10px 10px 120px; }
+  .ky-aciklama-input { width: 100%; max-width: 600px; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; outline: none; box-sizing: border-box; font-family: inherit; resize: vertical; }
+  .ky-aciklama-input:focus { border-color: #f59e0b; box-shadow: 0 0 0 2px #fef3c7; }
+  .ky-aciklama-toggle { font-size: 11px; color: #6b7280; cursor: pointer; text-decoration: underline; margin-left: 6px; white-space: nowrap; }
+  .ky-aciklama-toggle:hover { color: #374151; }
+  .ky-aktif { cursor: pointer; font-size: 18px; }
+  .ky-aktif-evet { color: #10b981; }
+  .ky-aktif-hayir { color: #d1d5db; }
+  .ky-kaydet-btn { background: #d1d5db; color: #6b7280; border: none; padding: 6px 12px; border-radius: 6px; cursor: not-allowed; font-size: 12px; font-weight: 600; transition: all 0.15s; }
+  .ky-kaydet-btn.aktif { background: #10b981; color: white; cursor: pointer; }
+  .ky-kaydet-btn.aktif:hover { background: #059669; }
+  .ky-mesaj { position: fixed; bottom: 20px; right: 20px; background: #1f2937; color: white; padding: 12px 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); font-size: 14px; z-index: 10000; display: none; max-width: 400px; }
+  .ky-mesaj.ok { background: #10b981; }
+  .ky-mesaj.hata { background: #ef4444; }
+  .ky-mesaj.show { display: block; }
+  .ky-modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 9999; align-items: center; justify-content: center; }
+  .ky-modal.show { display: flex; }
+  .ky-modal img { max-width: 90%; max-height: 90%; border-radius: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+  .ky-modal-close { position: absolute; top: 20px; right: 30px; background: white; border: none; border-radius: 50%; width: 40px; height: 40px; font-size: 24px; cursor: pointer; }
+  /* Yeni Kalıp Ekle Modal */
+  .ky-ekle-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 10001; align-items: center; justify-content: center; }
+  .ky-ekle-overlay.show { display: flex; }
+  .ky-ekle-panel { background: white; border-radius: 16px; padding: 28px 32px; width: 480px; max-width: 95vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 12px 48px rgba(0,0,0,0.4); }
+  .ky-ekle-panel h2 { margin: 0 0 20px; font-size: 20px; color: #1f2937; }
+  .ky-ekle-row { margin-bottom: 14px; }
+  .ky-ekle-row label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 4px; }
+  .ky-ekle-row label .zorunlu { color: #ef4444; }
+  .ky-ekle-row input, .ky-ekle-row select { width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; box-sizing: border-box; outline: none; }
+  .ky-ekle-row input:focus, .ky-ekle-row select:focus { border-color: #f59e0b; box-shadow: 0 0 0 2px #fef3c7; }
+  .ky-ekle-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
+  .ky-ekle-iptal { background: #f3f4f6; color: #374151; border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .ky-ekle-iptal:hover { background: #e5e7eb; }
+  .ky-ekle-kaydet { background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .ky-ekle-kaydet:hover { background: #059669; }
+  .ky-ekle-kaydet:disabled { background: #d1d5db; color: #9ca3af; cursor: not-allowed; }
+</style>
+
+<div class="ky-container">
+  <div class="ky-header">
+    <h1>🎯 Kalıp Yönetimi · Master Data</h1>
+    <div class="ky-stats" id="ky-toplam">Yükleniyor...</div>
+  </div>
+
+  <div class="ky-info">ℹ️ Görsel önerilen ölçü: <b>300×300px</b> (kare). Format: JPG/PNG/WEBP. Max boyut: 2MB.</div>
+
+  <div class="ky-toolbar">
+    <input type="text" class="ky-search" id="ky-arama" placeholder="🔍 Kalıp kodu, model veya renk ara...">
+    <select id="ky-filtre-tip">
+      <option value="">Tüm Tipler</option>
+      <option value="GOVDE">Sadece GÖVDE</option>
+      <option value="ATKI">Sadece ATKI</option>
+    </select>
+    <select id="ky-filtre-aktif">
+      <option value="1">Sadece Aktif</option>
+      <option value="0">Sadece Pasif</option>
+      <option value="">Hepsi</option>
+    </select>
+    <button class="ky-btn ky-btn-yeni" id="ky-btn-yeni-kalip">+ Yeni Kalıp</button>
+    <button class="ky-btn ky-btn-excel" disabled title="Yakında">📂 Excel İmport</button>
+  </div>
+
+  <div class="ky-tablo-wrap">
+    <table class="ky-tablo" id="ky-tablo">
+      <thead>
+        <tr>
+          <th style="width:110px">📷 GÖRSEL</th>
+          <th style="width:120px">KOD</th>
+          <th>MODEL</th>
+          <th style="width:80px">KBÇ</th>
+          <th style="width:80px" title="Kalıp başı toplam çift kapasitesi">KAP.ÇİFT</th>
+          <th style="width:75px" title="Çift başı ağırlık (gr)">GR/ÇFT</th>
+          <th style="width:70px" title="Önerilen pişme süresi (sn)">PİŞME</th>
+          <th style="width:100px">ASORTI</th>
+          <th style="width:90px">TİP</th>
+          <th style="width:110px">RENK</th>
+          <th style="width:100px">DURUM</th>
+          <th style="width:70px">AKTİF</th>
+          <th style="width:90px">İŞLEM</th>
+        </tr>
+      </thead>
+      <tbody id="ky-tbody">
+        <tr><td colspan="13" style="text-align:center; padding:30px; color:#9ca3af">Yükleniyor...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="ky-mesaj" id="ky-mesaj"></div>
+
+<div class="ky-modal" id="ky-modal">
+  <button class="ky-modal-close" id="ky-modal-close">×</button>
+  <img id="ky-modal-img" src="" alt="">
+</div>
+
+<input type="file" id="ky-file-input" accept="image/jpeg,image/png,image/webp,image/jpg" style="display:none">
+
+<!-- Yeni Kalıp Ekle Modal -->
+<div class="ky-ekle-overlay" id="ky-ekle-overlay">
+  <div class="ky-ekle-panel">
+    <h2>➕ Yeni Kalıp Ekle</h2>
+    <div class="ky-ekle-row">
+      <label>Kalıp Kodu <span class="zorunlu">*</span></label>
+      <input type="text" id="ky-ekle-kod" placeholder="Örn: KA-001" maxlength="50">
+    </div>
+    <div class="ky-ekle-row">
+      <label>Kalıp Tipi <span class="zorunlu">*</span></label>
+      <select id="ky-ekle-tip">
+        <option value="GOVDE">GÖVDE</option>
+        <option value="ATKI">ATKI</option>
+      </select>
+    </div>
+    <div class="ky-ekle-row">
+      <label>Model Kodu <span class="zorunlu">*</span></label>
+      <input type="text" id="ky-ekle-model-kod" placeholder="Örn: M-101" maxlength="50">
+    </div>
+    <div class="ky-ekle-row">
+      <label>Model Adı</label>
+      <input type="text" id="ky-ekle-model-ad" placeholder="Opsiyonel" maxlength="100">
+    </div>
+    <div class="ky-ekle-row">
+      <label>Asorti</label>
+      <input type="text" id="ky-ekle-asorti" placeholder="Opsiyonel" maxlength="50">
+    </div>
+    <div class="ky-ekle-row">
+      <label>Renk</label>
+      <input type="text" id="ky-ekle-renk" placeholder="Opsiyonel" maxlength="50">
+    </div>
+    <div class="ky-ekle-row">
+      <label>Kalıp Başı Çift (KBÇ)</label>
+      <input type="number" id="ky-ekle-kbc" min="1" max="10" value="1" style="width:100px">
+    </div>
+    <div class="ky-ekle-row">
+      <label>Kapasite (Çift) <span style="color:#6b7280;font-weight:400;font-size:12px">— toplam kalıp kapasitesi</span></label>
+      <input type="number" id="ky-ekle-kapasite-cift" min="1" max="9999" value="1" style="width:120px">
+    </div>
+    <div class="ky-ekle-row">
+      <label>Varsayılan Bağlı Kalıp <span style="color:#6b7280;font-weight:400;font-size:12px">— setup önerisi</span></label>
+      <input type="number" id="ky-ekle-vbk" min="1" max="99" value="8" style="width:120px">
+    </div>
+    <div class="ky-ekle-row">
+      <label>Gramaj (gr/çift) <span style="color:#6b7280;font-weight:400;font-size:12px">— fire hesabı için</span></label>
+      <input type="number" id="ky-ekle-gramaj" min="0.1" max="9999" step="0.1" placeholder="Ör: 180" style="width:120px">
+    </div>
+    <div class="ky-ekle-row">
+      <label>Önerilen Pişme (sn) <span style="color:#6b7280;font-weight:400;font-size:12px">— setup önerisi</span></label>
+      <input type="number" id="ky-ekle-pisme" min="1" max="9999" placeholder="Ör: 250" style="width:120px">
+    </div>
+    <div class="ky-ekle-actions">
+      <button class="ky-ekle-iptal" id="ky-ekle-iptal">İptal</button>
+      <button class="ky-ekle-kaydet" id="ky-ekle-kaydet">💾 Kalıp Ekle</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  let TUMU = [];
+
+  function mesaj(metin, tip) {
+    const el = document.getElementById('ky-mesaj');
+    el.textContent = metin;
+    el.className = 'ky-mesaj show ' + (tip || 'ok');
+    setTimeout(() => el.classList.remove('show'), 4000);
+  }
+
+  function escapeHtml(s) {
+    if (s == null) return '';
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+  }
+
+  function render() {
+    const arama = document.getElementById('ky-arama').value.toLowerCase().trim();
+    const tip = document.getElementById('ky-filtre-tip').value;
+    const aktif = document.getElementById('ky-filtre-aktif').value;
+
+    const filtre = TUMU.filter(k => {
+      if (tip && k.kalip_tipi !== tip) return false;
+      if (aktif !== '' && String(k.aktif) !== aktif) return false;
+      if (arama) {
+        const hedef = (k.kalip_kod + ' ' + (k.model_kod||'') + ' ' + (k.model_ad||'') + ' ' + (k.renk||'')).toLowerCase();
+        if (hedef.indexOf(arama) < 0) return false;
+      }
+      return true;
+    });
+
+    document.getElementById('ky-toplam').textContent = 'Toplam: ' + filtre.length + ' / ' + TUMU.length + ' kalıp';
+
+    const tbody = document.getElementById('ky-tbody');
+    if (filtre.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="13" style="text-align:center; padding:30px; color:#9ca3af">Kayıt bulunamadı</td></tr>';
+      return;
+    }
+
+    // Cache busting timestamp
+    const cb = Date.now();
+
+    tbody.innerHTML = filtre.map(k => {
+      const gorselSrc = k.gorsel_dosya ? ('/static/img/kaliplar/' + escapeHtml(k.gorsel_dosya) + '?v=' + cb) : '';
+      let gorselHTML;
+      if (gorselSrc) {
+        gorselHTML = '<img src="' + gorselSrc + '" class="ky-gorsel-buyuk" data-src="' + gorselSrc + '" onerror="this.outerHTML=\'<div class=ky-gorsel-bos data-upload>📷</div>\'">';
+      } else {
+        gorselHTML = '<div class="ky-gorsel-bos" data-upload>📷</div>';
+      }
+      const gorselAd = k.gorsel_dosya
+        ? '<div class="ky-gorsel-adi" title="' + escapeHtml(k.gorsel_dosya) + '">' + escapeHtml(k.gorsel_dosya) + '</div>'
+        : '<div class="ky-gorsel-adi ky-gorsel-yok">YOK</div>';
+
+      const tipClass = k.kalip_tipi === 'GOVDE' ? 'ky-tip-govde' : 'ky-tip-atki';
+      const aktifIcon = k.aktif ? '✅' : '⭕';
+      const aktifClass = k.aktif ? 'ky-aktif-evet' : 'ky-aktif-hayir';
+
+      return '<tr data-id="' + k.id + '">' +
+        '<td class="ky-gorsel-cell">' + gorselHTML + gorselAd +
+          '<button class="ky-upload-btn" data-upload title="Önerilen: 300×300px JPG/PNG max 2MB">📂 Yükle</button>' +
+        '</td>' +
+        '<td><strong>' + escapeHtml(k.kalip_kod) + '</strong></td>' +
+        '<td>' + escapeHtml(k.model_kod || '-') + (k.model_ad ? ' · ' + escapeHtml(k.model_ad) : '') + '</td>' +
+        '<td><input type="number" class="ky-kbc-input" min="1" max="10" value="' + (k.kalip_basi_cift||1) + '" data-field="kalip_basi_cift" data-orig="' + (k.kalip_basi_cift||1) + '"></td>' +
+        '<td><input type="number" class="ky-kbc-input" min="1" max="9999" value="' + (k.kapasite_cift||'') + '" data-field="kapasite_cift" data-orig="' + (k.kapasite_cift||'') + '" placeholder="—" title="Toplam kalıp kapasitesi (çift)"></td>' +
+        '<td><input type="number" class="ky-kbc-input" min="0.1" max="9999" step="0.1" value="' + (k.cift_agirlik_gr||'') + '" data-field="cift_agirlik_gr" data-orig="' + (k.cift_agirlik_gr||'') + '" placeholder="—" title="Çift başı ağırlık (gr)" style="width:65px"></td>' +
+        '<td><input type="number" class="ky-kbc-input" min="1" max="9999" value="' + (k.pisme_suresi_sn||'') + '" data-field="pisme_suresi_sn" data-orig="' + (k.pisme_suresi_sn||'') + '" placeholder="—" title="Önerilen pişme süresi (sn)" style="width:60px"></td>' +
+        '<td><input type="text" class="ky-input-text" value="' + escapeHtml(k.asorti||'') + '" data-field="asorti" data-orig="' + escapeHtml(k.asorti||'') + '" placeholder="-"></td>' +
+        '<td><span class="ky-tip ' + tipClass + '">' + escapeHtml(k.kalip_tipi) + '</span></td>' +
+        '<td><input type="text" class="ky-input-text" value="' + escapeHtml(k.renk||'') + '" data-field="renk" data-orig="' + escapeHtml(k.renk||'') + '" placeholder="-" maxlength="50" style="width:95px"></td>' +
+        '<td><select class="ky-durum-select ky-durum-' + escapeHtml(k.kalip_durumu||'AKTIF') + '" data-field="kalip_durumu" data-orig="' + escapeHtml(k.kalip_durumu||'AKTIF') + '">' +
+          ['AKTIF','BAKIMDA','ARIZALI','PASIF'].map(function(d){
+            return '<option value="'+d+'"'+(d===(k.kalip_durumu||'AKTIF')?' selected':'')+'>'+d+'</option>';
+          }).join('') +
+        '</select></td>' +
+        '<td><span class="ky-aktif ' + aktifClass + '" data-field="aktif" data-orig="' + k.aktif + '" title="Tıklayarak aktif/pasif değiştir">' + aktifIcon + '</span></td>' +
+        '<td style="white-space:nowrap">' +
+          '<button class="ky-kaydet-btn" data-id="' + k.id + '">💾 Kaydet</button>' +
+          ' <button class="ky-pasif-btn" data-id="' + k.id + '" data-aktif="' + k.aktif + '" title="' + (k.aktif ? 'Pasifleştir' : 'Aktif Et') + '" style="padding:4px 8px;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;background:' + (k.aktif ? '#fee2e2' : '#d1fae5') + ';color:' + (k.aktif ? '#dc2626' : '#059669') + '">' + (k.aktif ? '⛔ Pasifleştir' : '✅ Aktif Et') + '</button>' +
+          ' <span class="ky-aciklama-toggle" data-toggle-aciklama="' + k.id + '" title="Açıklama / Not">📝</span>' +
+        '</td>' +
+        '</tr>' +
+        '<tr class="ky-aciklama-row' + (k.aciklama ? ' show' : '') + '" id="ky-aciklama-row-' + k.id + '" data-id="' + k.id + '">' +
+          '<td class="ky-aciklama-cell" colspan="13">' +
+            '<textarea class="ky-aciklama-input" rows="2" data-field="aciklama" data-orig="' + escapeHtml(k.aciklama||'') + '" placeholder="Açıklama / not..." maxlength="500">' + escapeHtml(k.aciklama||'') + '</textarea>' +
+          '</td>' +
+        '</tr>';
+    }).join('');
+
+    bindRowEvents();
+  }
+
+  function bindRowEvents() {
+    document.querySelectorAll('#ky-tbody tr[data-id]').forEach(tr => {
+      // Sadece ana satirlar (aciklama expand satirlarini atla)
+      if (tr.classList.contains('ky-aciklama-row')) return;
+      const id = tr.dataset.id;
+      const btn = tr.querySelector('.ky-kaydet-btn');
+      if (!btn) return;
+
+      function checkDegisiklik() {
+        let degisti = false;
+        const checkEls = Array.from(tr.querySelectorAll('[data-field]'));
+        const acRow = document.getElementById('ky-aciklama-row-' + id);
+        if (acRow) acRow.querySelectorAll('[data-field]').forEach(el => checkEls.push(el));
+        checkEls.forEach(el => {
+          const f = el.dataset.field;
+          const orig = el.dataset.orig;
+          let val;
+          if (el.tagName === 'SPAN') val = (el.dataset.now != null ? el.dataset.now : orig);
+          else val = el.value;
+          if (f === 'kalip_basi_cift' || f === 'aktif' || f === 'varsayilan_bagli_kalip') {
+            if (parseInt(val||0,10) !== parseInt(orig||0,10)) degisti = true;
+          } else {
+            if (String(val||'').trim() !== String(orig||'').trim()) degisti = true;
+          }
+        });
+        btn.classList.toggle('aktif', degisti);
+        tr.classList.toggle('ky-degisti', degisti);
+      }
+
+      tr.querySelectorAll('input').forEach(inp => {
+        inp.addEventListener('input', checkDegisiklik);
+        inp.addEventListener('change', checkDegisiklik);
+      });
+
+      // Aciklama textarea (expand row) degisiklik takibi
+      const aciklamaRow = document.getElementById('ky-aciklama-row-' + id);
+      if (aciklamaRow) {
+        const aciklamaTA = aciklamaRow.querySelector('textarea[data-field="aciklama"]');
+        if (aciklamaTA) {
+          aciklamaTA.addEventListener('input', checkDegisiklik);
+          aciklamaTA.addEventListener('change', checkDegisiklik);
+        }
+      }
+
+      // kalip_durumu select renk sinifi guncelle
+      const durumSel = tr.querySelector('.ky-durum-select');
+      if (durumSel) {
+        durumSel.addEventListener('change', function() {
+          durumSel.className = 'ky-durum-select ky-durum-' + durumSel.value;
+          checkDegisiklik();
+        });
+      }
+
+      // Aciklama toggle (📝 butonu)
+      const toggleBtn = tr.querySelector('[data-toggle-aciklama]');
+      if (toggleBtn && aciklamaRow) {
+        toggleBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          aciklamaRow.classList.toggle('show');
+        });
+      }
+
+      const aktifEl = tr.querySelector('.ky-aktif');
+      if (aktifEl) {
+        aktifEl.addEventListener('click', () => {
+          const simdiki = aktifEl.dataset.now != null ? aktifEl.dataset.now : aktifEl.dataset.orig;
+          const yeni = simdiki === '1' ? '0' : '1';
+          aktifEl.dataset.now = yeni;
+          aktifEl.textContent = yeni === '1' ? '✅' : '⭕';
+          aktifEl.className = 'ky-aktif ' + (yeni === '1' ? 'ky-aktif-evet' : 'ky-aktif-hayir');
+          aktifEl.setAttribute('data-field', 'aktif');
+          checkDegisiklik();
+        });
+      }
+
+      btn.addEventListener('click', () => kaydet(id, tr));
+
+      const imgEl = tr.querySelector('.ky-gorsel-buyuk');
+      if (imgEl) {
+        imgEl.addEventListener('click', (e) => {
+          e.stopPropagation();
+          modalAc(imgEl.dataset.src);
+        });
+      }
+      tr.querySelectorAll('[data-upload]').forEach(el => {
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          gorselUploadTetikle(id);
+        });
+      });
+
+      const pasifBtn = tr.querySelector('.ky-pasif-btn');
+      if (pasifBtn) {
+        pasifBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const aktifSu = parseInt(pasifBtn.dataset.aktif, 10);
+          const yeniAktif = aktifSu === 1 ? 0 : 1;
+          const onay = aktifSu === 1
+            ? 'Bu kalıbı pasifleştirmek istediğinize emin misiniz?\nEnjeksiyon picker\'da görünmez olur.'
+            : 'Bu kalıbı aktif etmek istediğinize emin misiniz?';
+          if (!confirm(onay)) return;
+          fetch('/yonetim/api/kalip/' + id, {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({aktif: yeniAktif})
+          })
+          .then(r => r.json())
+          .then(d => {
+            if (d.ok) {
+              mesaj(yeniAktif === 1 ? '✅ Kalıp aktif edildi' : '⛔ Kalıp pasifleştirildi', 'ok');
+              yukle();
+            } else {
+              mesaj('❌ Hata: ' + (d.hata || 'bilinmiyor'), 'hata');
+            }
+          })
+          .catch(e => mesaj('❌ Bağlantı hatası: ' + e, 'hata'));
+        });
+      }
+    });
+  }
+
+  function kaydet(id, tr) {
+    const payload = {};
+    // Ana satir elemanlari
+    const allEls = Array.from(tr.querySelectorAll('[data-field]'));
+    // Aciklama expand row (ayri <tr>) elemanlarini da ekle
+    const aciklamaRow = document.getElementById('ky-aciklama-row-' + id);
+    if (aciklamaRow) {
+      aciklamaRow.querySelectorAll('[data-field]').forEach(el => allEls.push(el));
+    }
+    allEls.forEach(el => {
+      const f = el.dataset.field;
+      const orig = el.dataset.orig;
+      let val;
+      if (el.tagName === 'SPAN') val = (el.dataset.now != null ? el.dataset.now : orig);
+      else val = el.value;
+      let degisti = false;
+      if (f === 'kalip_basi_cift' || f === 'aktif' || f === 'varsayilan_bagli_kalip') {
+        degisti = parseInt(val||0,10) !== parseInt(orig||0,10);
+      } else {
+        degisti = String(val||'').trim() !== String(orig||'').trim();
+      }
+      if (degisti) {
+        payload[f] = (f === 'kalip_basi_cift' || f === 'aktif' || f === 'varsayilan_bagli_kalip') ? parseInt(val,10) : val;
+      }
+    });
+
+    if (Object.keys(payload).length === 0) {
+      mesaj('Değişiklik yok', 'hata');
+      return;
+    }
+
+    fetch('/yonetim/api/kalip/' + id, {
+      method: 'PATCH',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        mesaj('✅ Kaydedildi: ' + Object.keys(payload).join(', '), 'ok');
+        yukle();
+      } else {
+        mesaj('❌ Hata: ' + (d.hata||'bilinmiyor'), 'hata');
+      }
+    })
+    .catch(e => mesaj('❌ Bağlantı hatası: ' + e, 'hata'));
+  }
+
+  function gorselUploadTetikle(id) {
+    const fi = document.getElementById('ky-file-input');
+    fi.value = '';
+    fi.dataset.kalipId = id;
+    fi.click();
+  }
+
+  function modalAc(src) {
+    document.getElementById('ky-modal-img').src = src;
+    document.getElementById('ky-modal').classList.add('show');
+  }
+  function modalKapat() {
+    document.getElementById('ky-modal').classList.remove('show');
+  }
+
+  function yukle() {
+    fetch('/yonetim/api/kaliplar')
+      .then(r => r.json())
+      .then(d => {
+        if (d.ok) {
+          TUMU = d.kayitlar || [];
+          render();
+        } else {
+          document.getElementById('ky-tbody').innerHTML = '<tr><td colspan="13" style="text-align:center; padding:30px; color:#ef4444">Hata: ' + escapeHtml(d.hata||'bilinmiyor') + '</td></tr>';
+        }
+      })
+      .catch(e => {
+        console.error('[KY] yukle hatasi:', e);
+        document.getElementById('ky-tbody').innerHTML = '<tr><td colspan="13" style="text-align:center; padding:30px; color:#ef4444">Bağlantı hatası</td></tr>';
+      });
+  }
+
+  // Event delegations - PAGE LEVEL
+  var _elArama = document.getElementById('ky-arama');
+  if (_elArama) _elArama.addEventListener('input', render);
+  var _elFTip = document.getElementById('ky-filtre-tip');
+  if (_elFTip) _elFTip.addEventListener('change', render);
+  var _elFAktif = document.getElementById('ky-filtre-aktif');
+  if (_elFAktif) _elFAktif.addEventListener('change', render);
+
+  var _elModalClose = document.getElementById('ky-modal-close');
+  if (_elModalClose) _elModalClose.addEventListener('click', modalKapat);
+  var _elModal = document.getElementById('ky-modal');
+  if (_elModal) _elModal.addEventListener('click', (e) => {
+    if (e.target.id === 'ky-modal') modalKapat();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { modalKapat(); }
+  });
+
+  document.getElementById('ky-file-input').addEventListener('change', function() {
+    const file = this.files[0];
+    if (!file) return;
+    const id = this.dataset.kalipId;
+    if (!id) { mesaj('❌ Kalıp ID yok', 'hata'); return; }
+
+    const kb = (file.size/1024).toFixed(0);
+    if (file.size > 2 * 1024 * 1024) {
+      mesaj('❌ Dosya 2MB üstü (' + kb + ' KB)', 'hata');
+      return;
+    }
+
+    mesaj('⏳ Yükleniyor: ' + file.name + ' (' + kb + ' KB)', 'ok');
+
+    const fd = new FormData();
+    fd.append('file', file);
+    const baslangic = Date.now();
+
+    fetch('/yonetim/api/kalip/' + id + '/gorsel', { method: 'POST', body: fd })
+      .then(r => r.json())
+      .then(d => {
+        const sure = ((Date.now()-baslangic)/1000).toFixed(1);
+        if (d.ok) {
+          mesaj('✅ Yüklendi: ' + d.gorsel_dosya + ' (' + kb + ' KB, ' + sure + 's)', 'ok');
+          yukle();
+        } else {
+          mesaj('❌ Hata: ' + (d.hata||'bilinmiyor'), 'hata');
+        }
+      })
+      .catch(e => mesaj('❌ Bağlantı hatası: ' + e, 'hata'));
+  });
+
+  // === Yeni Kalıp Ekle Modal ===
+  function ekleModalAc() {
+    document.getElementById('ky-ekle-kod').value = '';
+    document.getElementById('ky-ekle-tip').value = 'GOVDE';
+    document.getElementById('ky-ekle-model-kod').value = '';
+    document.getElementById('ky-ekle-model-ad').value = '';
+    document.getElementById('ky-ekle-asorti').value = '';
+    document.getElementById('ky-ekle-renk').value = '';
+    document.getElementById('ky-ekle-kbc').value = '1';
+    document.getElementById('ky-ekle-kapasite-cift').value = '1';
+    document.getElementById('ky-ekle-vbk').value = '8';
+    document.getElementById('ky-ekle-gramaj').value = '';
+    document.getElementById('ky-ekle-pisme').value = '';
+    document.getElementById('ky-ekle-overlay').classList.add('show');
+    document.getElementById('ky-ekle-kod').focus();
+  }
+
+  function ekleModalKapat() {
+    document.getElementById('ky-ekle-overlay').classList.remove('show');
+  }
+
+  var _elBtnYeni = document.getElementById('ky-btn-yeni-kalip');
+  if (_elBtnYeni) _elBtnYeni.addEventListener('click', ekleModalAc);
+  var _elEkleIptal = document.getElementById('ky-ekle-iptal');
+  if (_elEkleIptal) _elEkleIptal.addEventListener('click', ekleModalKapat);
+  var _elEkleOverlay = document.getElementById('ky-ekle-overlay');
+  if (_elEkleOverlay) _elEkleOverlay.addEventListener('click', (e) => {
+    if (e.target.id === 'ky-ekle-overlay') ekleModalKapat();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') ekleModalKapat();
+  });
+
+  var _elEkleKaydet = document.getElementById('ky-ekle-kaydet');
+  if (_elEkleKaydet) _elEkleKaydet.addEventListener('click', function() {
+    const kalip_kod = document.getElementById('ky-ekle-kod').value.trim();
+    const kalip_tipi = document.getElementById('ky-ekle-tip').value;
+    const model_kod = document.getElementById('ky-ekle-model-kod').value.trim();
+    const model_ad = document.getElementById('ky-ekle-model-ad').value.trim();
+    const asorti = document.getElementById('ky-ekle-asorti').value.trim();
+    const renk = document.getElementById('ky-ekle-renk').value.trim();
+    const kalip_basi_cift = parseInt(document.getElementById('ky-ekle-kbc').value, 10) || 1;
+    const kapasite_cift = parseInt(document.getElementById('ky-ekle-kapasite-cift').value, 10) || 1;
+    const varsayilan_bagli_kalip = parseInt(document.getElementById('ky-ekle-vbk').value, 10) || 8;
+    const cift_agirlik_gr = parseFloat(document.getElementById('ky-ekle-gramaj').value) || null;
+    const pisme_suresi_sn = parseInt(document.getElementById('ky-ekle-pisme').value, 10) || null;
+
+    if (!kalip_kod) { mesaj('❌ Kalıp kodu zorunlu', 'hata'); document.getElementById('ky-ekle-kod').focus(); return; }
+    if (!model_kod) { mesaj('❌ Model kodu zorunlu', 'hata'); document.getElementById('ky-ekle-model-kod').focus(); return; }
+
+    const btn = this;
+    btn.disabled = true;
+    btn.textContent = '⏳ Kaydediliyor...';
+
+    const payload = { kalip_kod, kalip_tipi, model_kod, kalip_basi_cift, kapasite_cift, varsayilan_bagli_kalip };
+    if (cift_agirlik_gr) payload.cift_agirlik_gr = cift_agirlik_gr;
+    if (pisme_suresi_sn) payload.pisme_suresi_sn = pisme_suresi_sn;
+    if (model_ad) payload.model_ad = model_ad;
+    if (asorti) payload.asorti = asorti;
+    if (renk) payload.renk = renk;
+
+    fetch('/yonetim/api/kalip/ekle', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    })
+    .then(r => r.json().then(d => ({status: r.status, data: d})))
+    .then(({status, data}) => {
+      btn.disabled = false;
+      btn.textContent = '💾 Kalıp Ekle';
+      if (data.ok) {
+        mesaj('✅ Kalıp eklendi: ' + kalip_kod, 'ok');
+        ekleModalKapat();
+        yukle();
+      } else if (data.tip === 'DUPLICATE_KOD') {
+        mesaj('❌ Bu kalıp kodu zaten mevcut: ' + kalip_kod, 'hata');
+        document.getElementById('ky-ekle-kod').focus();
+      } else {
+        mesaj('❌ Hata: ' + (data.hata || 'bilinmiyor'), 'hata');
+      }
+    })
+    .catch(e => {
+      btn.disabled = false;
+      btn.textContent = '💾 Kalıp Ekle';
+      mesaj('❌ Bağlantı hatası: ' + e, 'hata');
+    });
+  });
+
+  yukle();
+})();
+</script>
+{% endblock %}

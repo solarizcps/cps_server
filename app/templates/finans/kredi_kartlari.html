@@ -1,0 +1,401 @@
+{% extends "base.html" %}
+
+{% block title %}Kredi Kartlari - Finans{% endblock %}
+
+{% set active = 'finans' %}
+
+{% block content %}
+<div class="fk-wrap">
+
+  <div class="page-header fk-header">
+    <div class="page-header-baslik">
+      <h1 class="page-title">
+        <span class="fk-icon">KK</span>
+        Kredi Kartlari
+      </h1>
+      <div class="page-subtitle">
+        Sirket ve sahsi kredi karti portfoyu - manuel CRUD
+      </div>
+    </div>
+    <div class="fk-konsol-back">
+      <a href="/finans/konsol" class="fk-back-btn">&larr; Konsola Don</a>
+        <!-- [FINANS_NATIVE_F4C_P3B3b BAS] -->
+        {% if g_user.KullaniciAdi == 'admin' or g_user.KullaniciAdi == 'altan' %}
+        <a href="/finans/kart-borc-raporu" class="fk-back-btn">Kart Borc Raporu &rarr;</a>
+        {% endif %}
+        <!-- [FINANS_NATIVE_F4C_P3B3b SON] -->
+      <button class="fk-btn-yeni" onclick="fkModalAc('yeni')">+ Yeni Kart</button>
+    </div>
+  </div>
+
+  <!-- KPI 4 KART -->
+  <div class="fk-kpi-bar">
+    <div class="fk-kpi-card fk-kpi-toplam">
+      <div class="fk-kpi-label">Aktif Kart</div>
+      <div class="fk-kpi-deger">{{ kpi.aktif_kart or 0 }}</div>
+      <div class="fk-kpi-sub">{{ kpi.toplam_kart or 0 }} toplam ({{ kpi.pasif_kart or 0 }} pasif)</div>
+    </div>
+    <div class="fk-kpi-card fk-kpi-limit">
+      <div class="fk-kpi-label">Toplam Limit</div>
+      <div class="fk-kpi-deger">{{ '{:,.0f}'.format(kpi.toplam_limit or 0) }}</div>
+      <div class="fk-kpi-sub">TL</div>
+    </div>
+    <div class="fk-kpi-card fk-kpi-kullanim">
+      <div class="fk-kpi-label">Toplam Kullanim</div>
+      <div class="fk-kpi-deger">{{ '{:,.0f}'.format(kpi.toplam_kullanim or 0) }}</div>
+      <div class="fk-kpi-sub">{{ kpi.kullanim_yuzde or 0 }}% doluluk</div>
+    </div>
+    <div class="fk-kpi-card fk-kpi-yaklasan">
+      <div class="fk-kpi-label">Yaklasan Odeme</div>
+      <div class="fk-kpi-deger">{{ kpi.yaklasan_odeme or 0 }}</div>
+      <div class="fk-kpi-sub">10 gun icinde</div>
+    </div>
+  </div>
+
+  <!-- FILTRELER -->
+  <form method="get" action="/finans/kredi-kartlari" class="fk-filter-bar">
+    <div class="fk-filter-grup">
+      <label class="fk-filter-label">Firma:</label>
+      <select name="entity" class="fk-filter-input">
+        <option value="">Hepsi</option>
+        {% for e in entity_set %}
+        <option value="{{ e }}" {% if filtre.entity == e %}selected{% endif %}>{{ e|capitalize }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="fk-filter-grup">
+      <label class="fk-filter-label">Banka:</label>
+      <input type="text" name="banka" value="{{ filtre.banka or '' }}" placeholder="Akbank, Is, Garanti..." class="fk-filter-input">
+    </div>
+    <div class="fk-filter-grup fk-filter-grup-wide">
+      <label class="fk-filter-label">Arama:</label>
+      <input type="text" name="search" value="{{ filtre.search or '' }}" placeholder="Kart adi, banka, son 4..." class="fk-filter-input">
+    </div>
+    <div class="fk-filter-grup">
+      <label class="fk-filter-label">
+        <input type="checkbox" name="pasif_dahil" value="1" {% if filtre.pasif_dahil %}checked{% endif %}>
+        Pasifleri dahil et
+      </label>
+    </div>
+    <div class="fk-filter-grup fk-filter-grup-btn">
+      <button type="submit" class="fk-filter-btn">Filtrele</button>
+      <a href="/finans/kredi-kartlari" class="fk-filter-reset">Sifirla</a>
+    </div>
+  </form>
+
+  <!-- LISTE -->
+  {% if not items %}
+  <div class="fk-empty">
+    <div class="fk-empty-icon">KK</div>
+    <h3 class="fk-empty-h3">Kart kaydi yok</h3>
+    <p>Sag ustteki "+ Yeni Kart" butonu ile ilk kartinizi olusturun.</p>
+  </div>
+  {% else %}
+  <div class="fk-grid-cards">
+    {% for it in items %}
+    <div class="fk-card fk-card-{{ 'aktif' if it.Aktif == 1 else 'pasif' }} fk-card-entity-{{ it.entity }}">
+      <div class="fk-card-top">
+        <div class="fk-card-banka">{{ it.Banka or 'Banka belirsiz' }}</div>
+        <span class="fk-entity fk-entity-{{ it.entity }}">{{ it.entity|capitalize }}</span>
+      </div>
+      <div class="fk-card-kartad">{{ it.KartAd }}</div>
+      <div class="fk-card-son4">
+        {% if it.Son4 %}
+        <span class="fk-son4-mask">&bull;&bull;&bull;&bull; &bull;&bull;&bull;&bull; &bull;&bull;&bull;&bull;</span>
+        <span class="fk-son4-num">{{ it.Son4 }}</span>
+        {% else %}
+        <span class="fk-son4-empty">Son 4 hane yok</span>
+        {% endif %}
+      </div>
+      <div class="fk-card-limit-row">
+        <div>
+          <div class="fk-card-label">Limit</div>
+          <div class="fk-card-val">{{ '{:,.0f}'.format(it.Limit_ or 0) }} {{ it.ParaBirimi or 'TRY' }}</div>
+        </div>
+        <div>
+          <div class="fk-card-label">Kullanilabilir</div>
+          <div class="fk-card-val">{{ '{:,.0f}'.format(it.KullanilabilirLimit or 0) }}</div>
+        </div>
+      </div>
+      {% if it.Limit_ and it.Limit_ > 0 %}
+      {% set kullanim_yuzde = ((it.Limit_ - (it.KullanilabilirLimit or 0)) / it.Limit_ * 100)|round(1) %}
+      <div class="fk-card-bar">
+        <div class="fk-card-bar-fill {% if kullanim_yuzde > 80 %}fk-bar-kritik{% elif kullanim_yuzde > 50 %}fk-bar-orta{% else %}fk-bar-normal{% endif %}" style="width:{{ kullanim_yuzde }}%"></div>
+      </div>
+      <div class="fk-card-bar-text">{{ kullanim_yuzde }}% kullanim</div>
+      {% endif %}
+      <div class="fk-card-meta">
+        <span><strong>Kesim:</strong> {{ it.DonemKesim or '-' }}</span>
+        <span><strong>Son Odeme:</strong> {{ it.SonOdemeGun or '-' }}</span>
+        {% if it.Aktif == 0 %}<span class="fk-pasif-tag">PASIF</span>{% endif %}
+      </div>
+      {% if it.Notu %}<div class="fk-card-not">{{ it.Notu }}</div>{% endif %}
+      <div class="fk-card-actions">
+        {% if it.Aktif == 1 %}
+        <a href="/finans/kredi-kartlari/{{ it.Id }}/ekstreler" class="fk-btn-mini" style="text-decoration:none;">Ekstreler</a>
+        <button class="fk-btn-mini" onclick='fkModalAc("edit", {{ it.Id }})'>Duzenle</button>
+        <button class="fk-btn-mini fk-btn-iptal" onclick='fkIptal({{ it.Id }})'>Pasif Yap</button>
+        {% else %}
+        <span class="fk-pasif-mark">PASIF KART</span>
+        {% endif %}
+      </div>
+      <div class="fk-card-audit">
+        Olusturan: {{ it.OlusturanKullanici or '-' }} &bull; {{ it.OlusturmaTarih or '' }}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- MODAL: Yeni/Edit -->
+  <div id="fk-modal" class="fk-modal" style="display:none;" onclick="fkModalKapat(event)">
+    <div class="fk-modal-icerik" onclick="event.stopPropagation()">
+      <div class="fk-modal-header">
+        <h3 id="fk-modal-baslik">Yeni Kredi Karti</h3>
+        <button class="fk-modal-x" onclick="fkModalKapat()">&times;</button>
+      </div>
+      <form id="fk-form" onsubmit="return fkKaydet(event)">
+        <input type="hidden" id="fk-id" name="id" value="">
+        <div class="fk-form-grid">
+          <div class="fk-form-grup">
+            <label>Entity <span class="fk-zor">*</span></label>
+            <select name="entity" id="fk-f-entity" required>
+              {% for e in entity_set %}<option value="{{ e }}">{{ e|capitalize }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="fk-form-grup">
+            <label>Banka</label>
+            <input type="text" name="banka" id="fk-f-banka" maxlength="80" placeholder="Akbank, Is Bankasi...">
+          </div>
+          <div class="fk-form-grup fk-form-grup-full">
+            <label>Kart Adi <span class="fk-zor">*</span></label>
+            <input type="text" name="kart_adi" id="fk-f-kartad" required maxlength="100" placeholder="Ornek: Solariz Maximum, NexGen Wings...">
+          </div>
+          <div class="fk-form-grup">
+            <label>Son 4 Hane <span class="fk-opsiyonel">(ops)</span></label>
+            <input type="text" name="son4" id="fk-f-son4" maxlength="4" pattern="[0-9]{0,4}" placeholder="2197" inputmode="numeric">
+          </div>
+          <div class="fk-form-grup">
+            <label>Kart Tipi</label>
+            <select name="kart_tipi" id="fk-f-tipi">
+              {% for k in kart_tipi_set %}<option value="{{ k }}">{{ k|capitalize }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="fk-form-grup">
+            <label>Limit <span class="fk-zor">*</span></label>
+            <input type="number" name="limit" id="fk-f-limit" required min="0" max="100000000" step="0.01" placeholder="50000">
+          </div>
+          <div class="fk-form-grup">
+            <label>Para Birimi</label>
+            <select name="para_birimi" id="fk-f-pb">
+              {% for p in para_birimi_set %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="fk-form-grup">
+            <label>Donem Kesim Gunu <span class="fk-opsiyonel">(1-31)</span></label>
+            <input type="number" name="donem_kesim" id="fk-f-kesim" min="1" max="31" placeholder="5">
+          </div>
+          <div class="fk-form-grup">
+            <label>Son Odeme Gunu <span class="fk-opsiyonel">(1-31)</span></label>
+            <input type="number" name="son_odeme_gun" id="fk-f-odeme" min="1" max="31" placeholder="25">
+          </div>
+          <div class="fk-form-grup">
+            <label>Kullanilabilir Limit <span class="fk-opsiyonel">(ops)</span></label>
+            <input type="number" name="kullanilabilir_limit" id="fk-f-kull" min="0" step="0.01" placeholder="0">
+          </div>
+          <div class="fk-form-grup">
+            <label>Kart Sahibi <span class="fk-opsiyonel">(ops)</span></label>
+            <input type="text" name="kart_sahibi" id="fk-f-sahibi" maxlength="120">
+          </div>
+          <div class="fk-form-grup fk-form-grup-full">
+            <label>Aciklama / Not</label>
+            <textarea name="aciklama" id="fk-f-not" rows="2" maxlength="500" placeholder="Ek bilgi..."></textarea>
+          </div>
+        </div>
+        <div class="fk-modal-altbar">
+          <button type="button" class="fk-btn-mini" onclick="fkModalKapat()">Vazgec</button>
+          <button type="submit" class="fk-btn-yeni">Kaydet</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+</div>
+
+<style>
+/* FAZ 4B-1 Kredi Kartlari - fk- scoped */
+.fk-wrap { padding:0; }
+.fk-header { display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:12px; }
+.fk-icon { display:inline-block; background:#d4a52f; color:#1a1d2e; font-weight:700; font-size:13px; padding:4px 8px; border-radius:4px; margin-right:8px; }
+.fk-konsol-back { display:flex; gap:8px; align-items:center; }
+.fk-back-btn { display:inline-block; padding:6px 12px; background:transparent; color:#6b7280; border:1px solid #e8eaf0; border-radius:4px; font-size:12px; font-weight:600; text-decoration:none; }
+.fk-back-btn:hover { background:#fef9c3; color:#1a1d2e; border-color:#d4a52f; }
+.fk-btn-yeni { padding:8px 16px; background:#d4a52f; color:#1a1d2e; border:none; border-radius:4px; font-size:13px; font-weight:700; cursor:pointer; }
+.fk-btn-yeni:hover { background:#b8902a; }
+
+/* KPI */
+.fk-kpi-bar { display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-top:14px; }
+@media (max-width:900px) { .fk-kpi-bar { grid-template-columns:repeat(2, 1fr); } }
+.fk-kpi-card { background:#fff; border:1px solid #e8eaf0; border-radius:6px; padding:12px 14px; border-left:4px solid #d4a52f; }
+.fk-kpi-toplam   { border-left-color:#6b7280; }
+.fk-kpi-limit    { border-left-color:#d4a52f; }
+.fk-kpi-kullanim { border-left-color:#dc2626; }
+.fk-kpi-yaklasan { border-left-color:#2563eb; }
+.fk-kpi-label { font-size:11px; color:#6b7280; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; }
+.fk-kpi-deger { font-size:22px; font-weight:700; color:#1a1d2e; margin-top:2px; }
+.fk-kpi-sub { font-size:11px; color:#9ca3af; margin-top:2px; }
+
+/* Filter */
+.fk-filter-bar { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)) auto; gap:10px; padding:14px; background:#f8f9fc; border:1px solid #e8eaf0; border-radius:6px; margin-top:14px; align-items:end; }
+.fk-filter-grup { display:flex; flex-direction:column; gap:4px; }
+.fk-filter-grup-wide { grid-column:span 2; }
+.fk-filter-grup-btn { flex-direction:row; gap:6px; }
+.fk-filter-label { font-size:11px; color:#6b7280; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; }
+.fk-filter-input { padding:7px 10px; border:1px solid #e8eaf0; border-radius:4px; background:#fff; font-size:13px; color:#1a1d2e; }
+.fk-filter-input:focus { border-color:#d4a52f; outline:none; box-shadow:0 0 0 2px rgba(212,165,47,0.2); }
+.fk-filter-btn { padding:7px 14px; background:#1a1d2e; color:#d4a52f; border:none; border-radius:4px; font-size:12px; font-weight:700; cursor:pointer; }
+.fk-filter-reset { padding:7px 12px; background:transparent; color:#6b7280; text-decoration:none; font-size:12px; font-weight:600; border:1px solid #e8eaf0; border-radius:4px; }
+
+/* Card grid */
+.fk-grid-cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(310px, 1fr)); gap:14px; margin-top:14px; }
+.fk-card { background:#fff; border:1px solid #e8eaf0; border-radius:8px; padding:14px; position:relative; overflow:hidden; }
+.fk-card-aktif { border-top:4px solid #d4a52f; }
+.fk-card-pasif { opacity:0.55; border-top:4px solid #6b7280; }
+.fk-card:hover { box-shadow:0 4px 12px rgba(0,0,0,0.06); }
+
+.fk-card-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+.fk-card-banka { font-size:11px; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:0.5px; }
+.fk-card-kartad { font-size:15px; font-weight:700; color:#1a1d2e; margin-bottom:8px; }
+.fk-card-son4 { font-size:14px; color:#1a1d2e; margin-bottom:10px; font-variant-numeric:tabular-nums; letter-spacing:1px; }
+.fk-son4-mask { color:#9ca3af; margin-right:6px; }
+.fk-son4-num { font-weight:700; }
+.fk-son4-empty { font-size:11px; color:#9ca3af; font-style:italic; }
+
+.fk-card-limit-row { display:flex; justify-content:space-between; margin-bottom:8px; padding:8px 10px; background:#fafbfc; border-radius:4px; }
+.fk-card-label { font-size:10px; color:#6b7280; text-transform:uppercase; letter-spacing:0.5px; font-weight:600; }
+.fk-card-val { font-size:14px; font-weight:700; color:#1a1d2e; font-variant-numeric:tabular-nums; margin-top:2px; }
+
+.fk-card-bar { height:5px; background:#f1f3f6; border-radius:3px; overflow:hidden; margin-bottom:4px; }
+.fk-card-bar-fill { height:100%; transition:width 0.3s; }
+.fk-bar-normal  { background:#16a34a; }
+.fk-bar-orta    { background:#d4a52f; }
+.fk-bar-kritik  { background:#dc2626; }
+.fk-card-bar-text { font-size:10px; color:#6b7280; text-align:right; margin-bottom:8px; }
+
+.fk-card-meta { display:flex; gap:14px; flex-wrap:wrap; font-size:11px; color:#6b7280; margin-bottom:8px; }
+.fk-card-meta strong { color:#1a1d2e; }
+.fk-pasif-tag { background:#f3f4f6; color:#6b7280; padding:1px 6px; border-radius:3px; font-size:10px; font-weight:700; }
+
+.fk-card-not { font-size:11px; color:#6b7280; font-style:italic; padding:6px 8px; background:#fef9c3; border-radius:3px; margin-bottom:8px; }
+
+.fk-card-actions { display:flex; gap:6px; margin-bottom:6px; }
+.fk-card-audit { font-size:10px; color:#9ca3af; padding-top:6px; border-top:1px dashed #e8eaf0; }
+
+/* Entity badge */
+.fk-entity { display:inline-block; padding:2px 8px; border-radius:3px; font-size:10px; font-weight:700; letter-spacing:0.5px; }
+.fk-entity-solariz { background:#fef9c3; color:#854d0e; }
+.fk-entity-nexgen { background:#dbeafe; color:#1e40af; }
+.fk-entity-pera { background:#dcfce7; color:#166534; }
+.fk-entity-sahsi { background:#fce7f3; color:#9d174d; }
+
+/* Mini buttons */
+.fk-btn-mini { padding:4px 10px; background:#fff; color:#1a1d2e; border:1px solid #e8eaf0; border-radius:3px; font-size:11px; font-weight:600; cursor:pointer; }
+.fk-btn-mini:hover { background:#fef9c3; border-color:#d4a52f; }
+.fk-btn-iptal { color:#dc2626; }
+.fk-btn-iptal:hover { background:#fee2e2; border-color:#dc2626; }
+.fk-pasif-mark { font-size:10px; color:#9ca3af; font-weight:700; }
+
+/* Modal */
+.fk-modal { position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; display:flex; align-items:center; justify-content:center; }
+.fk-modal-icerik { background:#fff; max-width:680px; width:92%; max-height:88vh; overflow:auto; border-radius:8px; border:2px solid #d4a52f; }
+.fk-modal-header { padding:14px 18px; background:#1a1d2e; color:#d4a52f; display:flex; justify-content:space-between; align-items:center; border-radius:6px 6px 0 0; }
+.fk-modal-header h3 { margin:0; font-size:15px; font-weight:700; }
+.fk-modal-x { background:transparent; color:#d4a52f; border:none; font-size:24px; cursor:pointer; line-height:1; padding:0 6px; }
+.fk-form-grid { padding:16px; display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.fk-form-grup { display:flex; flex-direction:column; gap:4px; }
+.fk-form-grup-full { grid-column:1 / -1; }
+.fk-form-grup label { font-size:12px; color:#6b7280; font-weight:600; }
+.fk-zor { color:#dc2626; font-weight:700; }
+.fk-opsiyonel { color:#9ca3af; font-weight:400; font-size:10px; font-style:italic; }
+.fk-form-grup input, .fk-form-grup select, .fk-form-grup textarea { padding:7px 10px; border:1px solid #e8eaf0; border-radius:4px; background:#fff; font-size:13px; color:#1a1d2e; font-family:inherit; }
+.fk-form-grup input:focus, .fk-form-grup select:focus, .fk-form-grup textarea:focus { border-color:#d4a52f; outline:none; box-shadow:0 0 0 2px rgba(212,165,47,0.2); }
+.fk-modal-altbar { padding:12px 16px; background:#fafbfc; border-top:1px solid #e8eaf0; display:flex; justify-content:flex-end; gap:8px; border-radius:0 0 6px 6px; }
+
+/* Empty */
+.fk-empty { text-align:center; padding:48px 16px; background:#fff; border:1px dashed #e8eaf0; border-radius:6px; margin-top:14px; }
+.fk-empty-icon { display:inline-flex; align-items:center; justify-content:center; width:48px; height:48px; background:#fef9c3; border:2px solid #d4a52f; border-radius:50%; font-weight:700; font-size:18px; color:#d4a52f; margin-bottom:12px; }
+.fk-empty-h3 { font-size:16px; font-weight:700; color:#1a1d2e; margin-bottom:6px; }
+.fk-empty p { color:#6b7280; font-size:13px; }
+</style>
+
+<script>
+(function(){
+  window.fkModalAc = function(mod, id) {
+    document.getElementById("fk-modal").style.display = "flex";
+    document.getElementById("fk-id").value = "";
+    document.getElementById("fk-form").reset();
+    if (mod === "yeni") {
+      document.getElementById("fk-modal-baslik").textContent = "Yeni Kredi Karti";
+    } else if (mod === "edit" && id) {
+      document.getElementById("fk-modal-baslik").textContent = "Kart Duzenle #" + id;
+      fetch("/finans/kredi-kartlari/" + id + "/json")
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          if (!d || !d.ok) { alert("Kart yuklenemedi"); return; }
+          var it = d.kayit;
+          document.getElementById("fk-id").value = it.Id;
+          document.getElementById("fk-f-entity").value = it.entity;
+          document.getElementById("fk-f-banka").value = it.Banka || "";
+          document.getElementById("fk-f-kartad").value = it.KartAd || "";
+          document.getElementById("fk-f-son4").value = it.Son4 || "";
+          document.getElementById("fk-f-tipi").value = it.KartTipi || "kredi";
+          document.getElementById("fk-f-limit").value = it.Limit_ || 0;
+          document.getElementById("fk-f-pb").value = it.ParaBirimi || "TRY";
+          document.getElementById("fk-f-kesim").value = it.DonemKesim || "";
+          document.getElementById("fk-f-odeme").value = it.SonOdemeGun || "";
+          document.getElementById("fk-f-kull").value = it.KullanilabilirLimit || 0;
+          document.getElementById("fk-f-sahibi").value = it.KartSahibi || "";
+          document.getElementById("fk-f-not").value = it.Notu || "";
+        });
+    }
+  };
+
+  window.fkModalKapat = function(e) {
+    if (e && e.target.id !== "fk-modal") return;
+    document.getElementById("fk-modal").style.display = "none";
+  };
+
+  window.fkKaydet = function(e) {
+    e.preventDefault();
+    var form = document.getElementById("fk-form");
+    var id = document.getElementById("fk-id").value;
+    var url = id ? ("/finans/kredi-kartlari/" + id + "/guncelle") : "/finans/kredi-kartlari/yeni";
+    var fd = new FormData(form);
+    fetch(url, { method: "POST", body: fd })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (d.ok) {
+          window.location.reload();
+        } else {
+          alert("Hata: " + (d.hata || "Bilinmiyor"));
+        }
+      })
+      .catch(function(err){ alert("Hata: " + err); });
+    return false;
+  };
+
+  window.fkIptal = function(id) {
+    if (!confirm("Bu karti pasif yapmak istediginizden emin misiniz?\n(Fiziksel silme yapilmaz, Aktif=0 olarak isaretlenir)")) return;
+    fetch("/finans/kredi-kartlari/" + id + "/iptal", { method: "POST" })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (d.ok) {
+          window.location.reload();
+        } else {
+          alert("Hata: " + (d.hata || "Bilinmiyor"));
+        }
+      });
+  };
+})();
+</script>
+{% endblock %}

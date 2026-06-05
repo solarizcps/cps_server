@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>&#220;retim Giri&#351;i &middot; Solariz</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#f97316">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Solariz &#220;retim">
+
+<link rel="stylesheet" href="{{ url_for('static', filename='css/uretim_giris.css') }}?v={{ range(100000, 999999) | random }}">
+
+<style>
+  /* Standalone PWA temel reset - base.html extend etmedigimiz icin */
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #fef3c7;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.4;
+    color: #1f2937;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  body { padding: 12px 0; }
+  /* CSS variable fallback'lar - base.html kullanmadigimiz icin */
+  :root {
+    --sol: #f97316;
+    --sol-dark: #ea580c;
+    --bg3: #f3f4f6;
+    --border: #e5e7eb;
+    --text: #1f2937;
+    --text2: #374151;
+    --text3: #6b7280;
+    --green: #10b981;
+    --red: #dc2626;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+</style>
+</head>
+
+<body class="uretim-mobil">
+
+<div class="ug-app">
+
+  <!-- ============== USER BAR ============== -->
+  <div class="ug-userbar">
+    <div class="ug-user">
+      <span class="ug-user-emoji">&#128104;&#127995;&#8205;&#128295;</span>
+      <span class="ug-user-ad">{{ session.get('kullanici', {}).get('AdSoyad', session.get('kullanici', {}).get('KullaniciAdi', '?')) }}</span>
+    </div>
+    <a href="/cikis" class="ug-cikis">&#9166; &#199;&#305;k&#305;&#351;</a>
+  </div>
+
+  <!-- ============== TABS ============== -->
+  <div class="ug-tabs" role="tablist">
+    <button class="ug-tab active" data-tab="gir" type="button">
+      <span class="ug-tab-emoji">&#128221;</span>
+      &#220;RET&#304;M G&#304;R
+    </button>
+    <button class="ug-tab" data-tab="gecmis" type="button">
+      <span class="ug-tab-emoji">&#128203;</span>
+      GE&#199;M&#304;&#350;&#304;M
+    </button>
+  </div>
+
+  <!-- ============== PANE: ÜRETİM GİR ============== -->
+  <section class="ug-pane active" id="ug-pane-gir">
+
+    <!-- Emir No Sorgu -->
+    <div class="ug-card ug-emir-sorgu">
+      <label for="emirNo" class="ug-label">Emir No</label>
+      <div class="ug-input-row">
+        <input type="number" id="emirNo" class="ug-input ug-input-buyuk"
+               placeholder="&#214;rn: 110633" inputmode="numeric" autocomplete="off">
+        <button type="button" id="emirSorgulaBtn" class="ug-btn ug-btn-icon">
+          &#128269;
+        </button>
+      </div>
+    </div>
+
+    <!-- Emir Bilgisi -->
+    <div class="ug-card ug-emir-bilgi" id="emirBilgi" style="display:none;">
+      <div class="ug-emir-baslik">
+        <span class="ug-emir-no" id="emirBilgiNo">-</span>
+        <span class="ug-emir-rozet" id="emirBilgiPlanRozet">-</span>
+      </div>
+      <div class="ug-emir-model" id="emirBilgiModel">-</div>
+
+      <div class="ug-emir-snapshot" id="emirBilgiSnapshot"></div>
+
+      <div class="ug-emir-stats">
+        <div class="ug-stat">
+          <div class="ug-stat-lbl">Hedef</div>
+          <div class="ug-stat-val" id="emirBilgiHedef">0</div>
+        </div>
+        <div class="ug-stat">
+          <div class="ug-stat-lbl">Yap&#305;lan</div>
+          <div class="ug-stat-val" id="emirBilgiGercek">0</div>
+        </div>
+        <div class="ug-stat">
+          <div class="ug-stat-lbl">Kalan</div>
+          <div class="ug-stat-val ug-stat-val-vurgu" id="emirBilgiKalan">0</div>
+        </div>
+      </div>
+
+      <div class="ug-emir-progress">
+        <div class="ug-emir-progress-fill" id="emirBilgiProgress" style="width:0%"></div>
+      </div>
+    </div>
+
+    <!-- Proses Sec (TODO: Korgun bagli olunca aktif proses otomatik gelecek) -->
+    <div class="ug-card ug-proses-sec" id="prosesSec" style="display:none;">
+      <div class="ug-label">
+        Proses Se&#231;
+        <span style="font-weight:500; text-transform:none; color:#9ca3af; letter-spacing:0; margin-left:6px; font-size:11px;">
+          (ge&#231;ici - Korgun ba&#287;lan&#305;nca aktif proses otomatik)
+        </span>
+      </div>
+      <div class="ug-proses-liste" id="prosesListe"></div>
+    </div>
+
+    <!-- Miktar + Not + Kaydet -->
+    <div class="ug-card ug-form" id="ugForm" style="display:none;">
+      <div class="ug-field">
+        <label for="ugMiktar" class="ug-label">Miktar (&#231;ift) <span class="ug-zorunlu">*</span></label>
+        <input type="number" id="ugMiktar" class="ug-input ug-input-buyuk"
+               placeholder="0" min="1" inputmode="numeric" autocomplete="off">
+        <div id="kalanUyari" class="ug-kalan-uyari" style="display:none;"></div>
+      </div>
+
+      <div class="ug-field">
+        <label for="ugNot" class="ug-label">Not (opsiyonel)</label>
+        <textarea id="ugNot" class="ug-textarea" rows="2"
+                  placeholder="K&#305;sa bir not..."></textarea>
+      </div>
+
+      <div class="ug-actions">
+        <button type="button" class="ug-btn ug-btn-primary" id="ugKaydetBtn">
+          &#128190; KAYDET
+        </button>
+        <button type="button" class="ug-btn ug-btn-ghost" id="ugTemizleBtn">
+          Temizle
+        </button>
+      </div>
+    </div>
+
+    <div class="ug-mesaj" id="ugError" style="display:none;"></div>
+    <div class="ug-mesaj ug-mesaj-success" id="ugSuccess" style="display:none;"></div>
+
+    <div class="ug-empty" id="ugEmptyGir">
+      &#9757; Emir No yaz&#305;p sorgulay&#305;n.
+    </div>
+
+  </section>
+
+  <!-- ============== PANE: GEÇMİŞİM ============== -->
+  <section class="ug-pane" id="ug-pane-gecmis">
+    <div class="ug-pane-header">
+      <h3>Son &#220;retimlerim</h3>
+      <button type="button" class="ug-btn-yenile" id="gecmisYenileBtn" title="Yenile">&#8635;</button>
+    </div>
+
+    <div id="gecmisError" class="ug-mesaj" style="display:none;"></div>
+
+    <div class="ug-gecmis-liste" id="gecmisListe">
+      <div class="ug-empty">
+        &#8987; Hen&#252;z kay&#305;t yok. (D3 a&#351;amas&#305;nda y&#252;klenecek)
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script src="{{ url_for('static', filename='js/uretim_giris.js') }}?v={{ range(100000, 999999) | random }}"></script>
+
+</body>
+</html>

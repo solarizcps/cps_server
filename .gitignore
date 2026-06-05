@@ -1,0 +1,98 @@
+﻿# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Runtime / logs
+*.log
+*.tmp
+*.bak
+
+# Local DB - canlı DB yedekle yönetilecek
+app/mock_data.db
+*.db-journal
+*.sqlite-journal
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Gereksiz test dosyası
+Yeni Metin Belgesi.txt
+
+# Database
+*.db
+*.sqlite
+*.db.backup*
+*.db-journal
+app/5055_snapshot/
+
+# Python
+__pycache__/
+*.pyc
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Logs
+*.log
+
+# User uploads / live documents
+app/uploads/
+
+# Backup copies
+*.backup*
+*_backup_*
+*.YEDEK*
+*.STABLE_*
+
+
+# CPS temporary scripts
+app/debug_*
+app/diagnose_*
+app/fix_*
+app/apply_*
+app/kesif_*
+app/check_*
+app/_*
+app/*backup*
+app/*BACKUP*
+app/*yedek*
+app/*YEDEK*
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Upload files
+app/uploads/
+
+
+# CPS old patch / AI temp
+app/patch_*
+app/setup_*
+app/kesif*
+app/cleanup_*
+app/*debug*
+app/*DEBUG*
+app/*ANALIZ*
+app/*STATUS*
+app/*HANDOFF*
+app/*KURALLAR*
+app/*TEST*
+app/db_test.py
+app/app_patch.py
+app/*.bak
+app/*.backup
+app/*.BOZUK*
+
+# temporary txt
+app/*.txt
+

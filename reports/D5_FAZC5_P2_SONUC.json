@@ -1,0 +1,21 @@
+{
+  "sprint": "D5 Faz C.5 P2",
+  "tarih": "2026-05-18",
+  "saat": "08:43",
+  "sonuc": "BASARILI",
+  "hash_eski": "642B553F48D2EA0F",
+  "hash_yeni": "3557C2EA6C4F054C",
+  "personel_giris_hash": "41B220D201B0E1F8",
+  "endpoint_eski_satir": 94,
+  "endpoint_yeni_satir": 11,
+  "yeni_helper_satir": 110,
+  "net_degisim_satir": 27,
+  "atomic_move_ms": 0.24,
+  "smoke_test_pass": 8,
+  "smoke_test_total": 8,
+  "saha_kesintisi": false,
+  "uretim_kayit_baslangic": 1380,
+  "uretim_kayit_bitis": 1380,
+  "rollback_kullanildi": false,
+  "next": "P3 - /sablon/trigger-test dry-run endpoint"
+}

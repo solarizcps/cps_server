@@ -1,0 +1,793 @@
+﻿{% extends "base.html" %}
+{% block title %}Core Organizasyon - Solariz CPS
+<!-- ══ DRAWER ═══════════════════════════════════════════════════ -->
+<div id="coDrawer" class="co-drawer" onclick="if(event.target===this)drawerKapat()">
+  <div class="co-drawer-panel">
+    <div class="co-drawer-hdr">
+      <span id="drawerBaslik" class="co-drawer-title">Detay</span>
+      <button class="co-drawer-kapat" onclick="drawerKapat()">✕</button>
+    </div>
+    <div id="drawerIcerik" class="co-drawer-body">
+      <div class="co-loading">Yükleniyor…</div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .co-drawer { display:none; position:fixed; inset:0; background:rgba(0,0,0,.35);
+               z-index:9000; justify-content:flex-end; }
+  .co-drawer.acik { display:flex; }
+  .co-drawer-panel { width:420px; max-width:95vw; background:#fff; height:100%;
+                     overflow-y:auto; box-shadow:-4px 0 24px rgba(0,0,0,.15);
+                     display:flex; flex-direction:column; }
+  .co-drawer-hdr { display:flex; justify-content:space-between; align-items:center;
+                   padding:16px 20px; border-bottom:1px solid var(--border);
+                   background:#f9fafb; position:sticky; top:0; z-index:1; }
+  .co-drawer-title { font-size:15px; font-weight:600; color:var(--text1); }
+  .co-drawer-kapat { background:none; border:none; font-size:18px; cursor:pointer;
+                     color:var(--text3); padding:4px 8px; border-radius:4px; }
+  .co-drawer-kapat:hover { background:#f3f4f6; }
+  .co-drawer-body { padding:16px 20px; flex:1; font-size:13px; }
+
+  .co-d-sec  { margin-bottom:18px; }
+  .co-d-sec-title { font-size:11px; font-weight:600; color:var(--text3);
+                    text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px;
+                    padding-bottom:4px; border-bottom:1px solid var(--border); }
+  .co-d-row  { display:flex; justify-content:space-between; padding:5px 0;
+               border-bottom:1px solid #f3f4f6; }
+  .co-d-lbl  { color:var(--text3); }
+  .co-d-val  { font-weight:500; color:var(--text1); text-align:right; max-width:65%; }
+
+  .co-chip-list { display:flex; flex-wrap:wrap; gap:5px; margin-top:4px; }
+  .co-chip { padding:3px 10px; border-radius:12px; font-size:11px; font-weight:500; }
+  .co-chip.uretim   { background:#fef3c7; color:#92400e; }
+  .co-chip.lojistik { background:#dbeafe; color:#1e40af; }
+  .co-chip.operasyon{ background:#f0fdf4; color:#166534; }
+  .co-chip.ofis     { background:#faf5ff; color:#6b21a8; }
+  .co-chip.usta     { background:#f0fdf4; color:#166534; }
+  .co-chip.sorumlu  { background:#faf5ff; color:#6b21a8; }
+  .co-chip.calisan  { background:#f8fafc; color:#475569; }
+
+  .co-uye-item { display:flex; align-items:center; gap:8px; padding:6px 0;
+                 border-bottom:1px solid #f3f4f6; }
+  .co-uye-avatar { width:28px; height:28px; border-radius:50%; background:#d4a52f;
+                   color:#fff; display:flex; align-items:center; justify-content:center;
+                   font-size:11px; font-weight:600; flex-shrink:0; }
+  .co-uye-isim   { font-weight:500; font-size:13px; }
+  .co-uye-alt    { font-size:11px; color:var(--text3); }
+
+  .co-bridge-ok   { color:#16a34a; font-weight:600; }
+  .co-bridge-yok  { color:#dc2626; font-weight:600; }
+  .co-guven-bar   { height:6px; border-radius:3px; background:#e5e7eb; margin-top:4px; }
+  .co-guven-fill  { height:6px; border-radius:3px; background:#d4a52f; }
+
+  /* Tablo satırları tıklanabilir */
+  table.co-tbl tbody tr { cursor:pointer; }
+  table.co-tbl tbody tr:hover td { background:#fef9e7; }
+  .co-ekip-link { cursor:pointer; color:#d4a52f; text-decoration:underline dotted; }
+</style>
+
+<script>
+// ── Drawer ───────────────────────────────────────────────────────
+function drawerAc(baslik, html) {
+  document.getElementById('drawerBaslik').textContent = baslik;
+  document.getElementById('drawerIcerik').innerHTML = html;
+  document.getElementById('coDrawer').classList.add('acik');
+}
+function drawerKapat() {
+  document.getElementById('coDrawer').classList.remove('acik');
+}
+document.addEventListener('keydown', e => { if(e.key==='Escape') drawerKapat(); });
+
+function badge(val, map) {
+  return map[val] || `<span class="badge">${val||'—'}</span>`;
+}
+
+// ── Kullanıcı Detay ──────────────────────────────────────────────
+async function kullaniciDetay(profilId, adSoyad) {
+  drawerAc(adSoyad, '<div class="co-loading">Yükleniyor…</div>');
+  try {
+    const r = await fetch(`/yonetim/api/core/organizasyon/kullanici/${profilId}`);
+    const d = await r.json();
+    if (!d.ok) { drawerAc(adSoyad, `<p style="color:red">${d.hata}</p>`); return; }
+
+    const p = d.profil;
+    const ekipHtml = d.ekipler.length
+      ? d.ekipler.map(e =>
+          `<div class="co-d-row">
+             <span class="co-d-lbl">${e.rol==='lider'?'🏅 Lider':'👤 Üye'}</span>
+             <span class="co-d-val co-ekip-link" onclick="ekipDetayKod('${e.kod}','${e.ad}')">${e.ad}</span>
+           </div>`
+        ).join('')
+      : '<div style="color:#ca8a04;font-size:12px">Ekip atanmamış</div>';
+
+    const prosesHtml = d.prosesler.length
+      ? `<div class="co-chip-list">${d.prosesler.map(pr =>
+          `<span class="co-chip ${pr.kategori}" title="${pr.iliski}">${pr.ad}</span>`
+        ).join('')}</div>`
+      : '<span style="color:#ca8a04;font-size:12px">Proses atanmamış</span>';
+
+    const br = d.bridge;
+    const bridgeHtml = br.var
+      ? `<div class="co-d-row"><span class="co-d-lbl">Personel Adı</span>
+           <span class="co-d-val co-bridge-ok">✅ ${br.pk_ad}</span></div>
+         <div class="co-d-row"><span class="co-d-lbl">Identity</span>
+           <span class="co-d-val">${br.identity_durum||'—'}</span></div>
+         <div class="co-d-row"><span class="co-d-lbl">Güven Skoru</span>
+           <span class="co-d-val">${br.guven_skoru||0}/100</span></div>
+         <div class="co-guven-bar"><div class="co-guven-fill" style="width:${br.guven_skoru||0}%"></div></div>`
+      : `<div class="co-bridge-yok">❌ Bridge bağlantısı yok</div>
+         <div style="font-size:12px;color:var(--text3);margin-top:4px">Faz 4 — PDKS entegrasyonu</div>`;
+
+    // SAHA_PERSONEL için usta atama section (pre-loaded list)
+    let ustaAtamaHtml = '';
+    if (p.profil_tipi === 'SAHA_PERSONEL') {
+      if (d.bagli_usta_id && d.bagli_usta_ad) {
+        ustaAtamaHtml = `
+          <div class="co-d-sec">
+            <div class="co-d-sec-title">Usta Ataması</div>
+            <div class="co-d-row"><span class="co-d-lbl">Bağlı Usta</span>
+              <span class="co-d-val" style="color:#16a34a;font-weight:600">${d.bagli_usta_ad}</span></div>
+          </div>`;
+      } else {
+      const ustalar = window._ustaListesi || [];
+      if (ustalar.length) {
+        const opts = ustalar.map(u =>
+          `<option value="${u.id}">${u.ad_soyad} (${u.bagli_personel_sayisi} personel)</option>`
+        ).join('');
+        ustaAtamaHtml = `
+          <div class="co-d-sec" id="ustaAtamaSec_${profilId}">
+            <div class="co-d-sec-title">Usta Ataması</div>
+            <div style="margin-bottom:8px">
+              <select id="ustaSecim_${profilId}" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+                <option value="">— Usta seç —</option>
+                ${opts}
+              </select>
+            </div>
+            <button
+              onclick="ustaPersonelBagla(${profilId})"
+              style="width:100%;padding:7px;background:#d4a52f;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">
+              Bağla
+            </button>
+            <div id="ustaAtamaSonuc_${profilId}" style="margin-top:8px;font-size:12px"></div>
+          </div>`;
+      } else {
+        ustaAtamaHtml = `
+          <div class="co-d-sec">
+            <div class="co-d-sec-title">Usta Ataması</div>
+            <div style="color:#ca8a04;font-size:12px">Usta listesi yüklenemedi — sayfayı yenile.</div>
+          </div>`;
+      }
+      }
+    }
+
+    drawerAc(p.ad_soyad, `
+      <div class="co-d-sec">
+        <div class="co-d-sec-title">Profil</div>
+        <div class="co-d-row"><span class="co-d-lbl">Kullanıcı Adı</span><span class="co-d-val">${p.kullanici_adi}</span></div>
+        <div class="co-d-row"><span class="co-d-lbl">Departman</span><span class="co-d-val">${p.departman||'—'}</span></div>
+        <div class="co-d-row"><span class="co-d-lbl">Profil Tipi</span><span class="co-d-val">${p.profil_tipi}</span></div>
+        <div class="co-d-row"><span class="co-d-lbl">Durum</span>
+          <span class="co-d-val">${p.aktif ? '🟢 Aktif' : '⚪ Pasif'}</span></div>
+      </div>
+      <div class="co-d-sec">
+        <div class="co-d-sec-title">Ekip</div>${ekipHtml}
+      </div>
+      <div class="co-d-sec">
+        <div class="co-d-sec-title">Prosesler (${d.prosesler.length})</div>${prosesHtml}
+      </div>
+      <div class="co-d-sec">
+        <div class="co-d-sec-title">Bridge Durumu</div>${bridgeHtml}
+      </div>
+      ${ustaAtamaHtml}`);
+  } catch(e) {
+    drawerAc(adSoyad, `<p style="color:red">Hata: ${e.message}</p>`);
+  }
+}
+
+// ── Usta-Personel Bağlama ─────────────────────────────────────
+async function ustaPersonelBagla(personelProfilId) {
+  const sel = document.getElementById(`ustaSecim_${personelProfilId}`);
+  const sonuc = document.getElementById(`ustaAtamaSonuc_${personelProfilId}`);
+  if (!sel || !sel.value) {
+    if (sonuc) sonuc.innerHTML = '<span style="color:#ca8a04">Lütfen bir usta seçin.</span>';
+    return;
+  }
+  const ustaProfilId = parseInt(sel.value);
+  sonuc.innerHTML = '<span style="color:#6b7280">Kaydediliyor…</span>';
+  try {
+    const r = await fetch('/yonetim/api/core/usta-personel/bagla', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        usta_profil_id:     ustaProfilId,
+        personel_profil_id: personelProfilId
+      })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      sonuc.innerHTML = `<span style="color:#16a34a">✅ ${d.usta.ad} → ${d.personel.ad} bağlandı (id:${d.iliski_id})</span>`;
+      sel.disabled = true;
+      document.querySelector(`#ustaAtamaSec_${personelProfilId} button`).disabled = true;
+    } else {
+      sonuc.innerHTML = `<span style="color:#dc2626">❌ ${d.hata}</span>`;
+    }
+  } catch(e) {
+    sonuc.innerHTML = `<span style="color:#dc2626">Hata: ${e.message}</span>`;
+  }
+}
+
+// ── Ekip Detay ───────────────────────────────────────────────────
+async function ekipDetay(ekipId, ekipAd) {
+  drawerAc(ekipAd, '<div class="co-loading">Yükleniyor…</div>');
+  try {
+    const r = await fetch(`/yonetim/api/core/organizasyon/ekip/${ekipId}`);
+    const d = await r.json();
+    if (!d.ok) { drawerAc(ekipAd, `<p style="color:red">${d.hata}</p>`); return; }
+    const e = d.ekip;
+
+    const uyelerHtml = d.uyeler.length
+      ? d.uyeler.map(u => {
+          const harf = (u.ad||'?')[0].toUpperCase();
+          return `<div class="co-uye-item">
+            <div class="co-uye-avatar">${harf}</div>
+            <div>
+              <div class="co-uye-isim co-ekip-link" onclick="kullaniciDetay(${u.id},'${u.ad}')">${u.ad}</div>
+              <div class="co-uye-alt">${u.kullanici_adi} · ${u.rol} · ${u.dept||'—'}</div>
+            </div>
+          </div>`;
+        }).join('')
+      : '<div style="color:#ca8a04;font-size:12px">Üye yok</div>';
+
+    const prosesHtml = d.prosesler.length
+      ? `<div class="co-chip-list">${d.prosesler.map(p =>
+          `<span class="co-chip ${p.kategori}">${p.ad}</span>`
+        ).join('')}</div>`
+      : '<span style="color:#ca8a04;font-size:12px">Proses atanmamış</span>';
+
+    drawerAc(e.ad, `
+      <div class="co-d-sec">
+        <div class="co-d-sec-title">Ekip Bilgisi</div>
+        <div class="co-d-row"><span class="co-d-lbl">Tip</span><span class="co-d-val">${e.ekip_tipi}</span></div>
+        <div class="co-d-row"><span class="co-d-lbl">Departman</span><span class="co-d-val">${e.departman||'—'}</span></div>
+        <div class="co-d-row"><span class="co-d-lbl">Lider</span><span class="co-d-val">${e.lider_ad||'Atanmamış'}</span></div>
+        <div class="co-d-row"><span class="co-d-lbl">Vardiya</span><span class="co-d-val">${e.vardiya||'—'}</span></div>
+        <div class="co-d-row"><span class="co-d-lbl">Üye Sayısı</span><span class="co-d-val">${e.uye_sayisi}</span></div>
+      </div>
+      <div class="co-d-sec">
+        <div class="co-d-sec-title">Üyeler</div>${uyelerHtml}
+      </div>
+      <div class="co-d-sec">
+        <div class="co-d-sec-title">Prosesler</div>${prosesHtml}
+      </div>`);
+  } catch(e) {
+    drawerAc(ekipAd, `<p style="color:red">Hata: ${e.message}</p>`);
+  }
+}
+
+// Ekip kod üzerinden detay (kullanici drawerındaki ekip linkinden)
+async function ekipDetayKod(ekipKod, ekipAd) {
+  drawerAc(ekipAd, '<div class="co-loading">Yükleniyor…</div>');
+  const tbl = document.getElementById('drawerIcerik');
+  // Ekip ID'sini bilmiyoruz — listedeki data-ekip-id'den alacağız
+  // Alternatif: tüm ekiplerden koda göre bul (küçük liste)
+  const rows = document.querySelectorAll('table.co-tbl tbody tr');
+  let found = null;
+  rows.forEach(tr => {
+    const cells = tr.querySelectorAll('td');
+    if (cells.length > 3) {
+      const ekipCell = cells[3].textContent.trim();
+      if (ekipCell.includes(ekipAd)) {
+        const eid = tr.dataset.ekipId;
+        if (eid) found = eid;
+      }
+    }
+  });
+  if (found) { ekipDetay(found, ekipAd); return; }
+  drawerAc(ekipAd, '<p style="color:#ca8a04">Ekip ID bulunamadı. Tablodan tıklayın.</p>');
+}
+
+// ── Tablo satırlarına tıklama bağla ──────────────────────────────
+function tabloBagla() {
+  document.querySelectorAll('table.co-tbl tbody tr[data-profil-id]').forEach(tr => {
+    tr.addEventListener('click', function(e) {
+      if (e.target.classList.contains('co-ekip-link')) return;
+      const pid = this.dataset.profilId;
+      const ad  = this.dataset.adSoyad;
+      if (pid) kullaniciDetay(parseInt(pid), ad);
+    });
+  });
+}
+
+// tabloBagla yukle() sonunda otomatik çağrılır (aşağıdaki yukle() tanımına eklendi)
+</script>
+
+{% endblock %}
+
+{% block content %}
+<style>
+  .co-hdr { display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:14px; gap:14px; }
+  .co-title { font-size:20px; font-weight:600; color:var(--text1); }
+  .co-sub   { font-size:13px; color:var(--text3); margin-top:4px; }
+
+  .co-kpis { display:grid; grid-template-columns:repeat(6,1fr); gap:10px; margin-bottom:14px; }
+  .co-kpi  { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:12px 14px; }
+  .co-kpi-lbl { font-size:10px; color:var(--text3); text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px; }
+  .co-kpi-val { font-size:22px; font-weight:600; color:var(--text1); }
+  .co-kpi.warn .co-kpi-val  { color:#ca8a04; }
+  .co-kpi.ok   .co-kpi-val  { color:#16a34a; }
+  .co-kpi.info .co-kpi-val  { color:#d4a52f; }
+  .co-kpi.danger .co-kpi-val{ color:#dc2626; }
+
+  .co-uyari { background:#fffbeb; border:1px solid #fcd34d; border-radius:8px;
+              padding:12px 16px; margin-bottom:14px; font-size:13px; }
+  .co-uyari-bas { font-weight:600; color:#92400e; margin-bottom:8px; }
+  .co-uyari-satirlar { display:flex; gap:24px; flex-wrap:wrap; }
+  .co-uyari-grup { min-width:200px; }
+  .co-uyari-grup h4 { font-size:11px; color:#b45309; text-transform:uppercase;
+                      letter-spacing:.4px; margin-bottom:4px; }
+  .co-uyari-grup ul { margin:0; padding-left:14px; }
+  .co-uyari-grup li { font-size:12px; color:#78350f; margin-bottom:2px; }
+
+  .co-tbl-wrap { background:var(--card); border:1px solid var(--border);
+                 border-radius:8px; overflow:auto; max-height:calc(100vh - 280px); }
+  table.co-tbl { width:100%; border-collapse:collapse; font-size:12.5px; }
+  table.co-tbl thead { position:sticky; top:0; background:#f9fafb; z-index:2; }
+  table.co-tbl th, table.co-tbl td { padding:8px 10px; text-align:left;
+    border-bottom:1px solid var(--border); vertical-align:middle; }
+  table.co-tbl th { font-weight:600; color:var(--text2); font-size:11px;
+                    text-transform:uppercase; letter-spacing:.4px; }
+  table.co-tbl tr:hover td { background:#fafafa; }
+  .co-tbl-hdr { display:flex; justify-content:space-between; align-items:center;
+                padding:10px 14px; border-bottom:1px solid var(--border); }
+  .co-tbl-hdr-title { font-size:13px; font-weight:600; color:var(--text1); }
+
+  .badge { display:inline-block; padding:2px 8px; border-radius:12px;
+           font-size:11px; font-weight:500; }
+  .badge.lider    { background:#fef3c7; color:#92400e; }
+  .badge.uye      { background:#f0f9ff; color:#0369a1; }
+  .badge.usta     { background:#f0fdf4; color:#166534; }
+  .badge.sorumlu  { background:#faf5ff; color:#6b21a8; }
+  .badge.calisan  { background:#f8fafc; color:#475569; }
+  .badge.fonk     { background:#f1f5f9; color:#64748b; font-style:italic; }
+  .badge.ok-br    { background:#dcfce7; color:#166534; }
+  .badge.no-br    { background:#fef2f2; color:#991b1b; }
+  .badge.eksik    { background:#fef9c3; color:#854d0e; }
+  .badge.tam      { background:#f0fdf4; color:#166534; }
+
+  .co-loading { text-align:center; padding:40px; color:var(--text3); font-size:14px; }
+</style>
+
+<div class="co-hdr">
+  <div>
+    <div class="co-title">Core Organizasyon Haritası</div>
+    <div class="co-sub">CORE_ILISKI omurgası — kullanıcı / departman / ekip / proses ilişkileri</div>
+  </div>
+  <button class="sn-btn" onclick="yukle()">↻ Yenile</button>
+</div>
+
+<!-- KPI BAR -->
+<div class="co-kpis" id="kpiBar">
+  <div class="co-kpi"><div class="co-kpi-lbl">Profil</div><div class="co-kpi-val" id="kProfil">—</div></div>
+  <div class="co-kpi"><div class="co-kpi-lbl">Departman</div><div class="co-kpi-val" id="kDept">—</div></div>
+  <div class="co-kpi info"><div class="co-kpi-lbl">Ekip</div><div class="co-kpi-val" id="kEkip">—</div></div>
+  <div class="co-kpi info"><div class="co-kpi-lbl">Proses</div><div class="co-kpi-val" id="kProses">—</div></div>
+  <div class="co-kpi ok"><div class="co-kpi-lbl">Bridge Bağlı</div><div class="co-kpi-val" id="kBridge">—</div></div>
+  <div class="co-kpi warn"><div class="co-kpi-lbl">Eksik İlişki</div><div class="co-kpi-val" id="kEksik">—</div></div>
+</div>
+
+<!-- UYARI KUTUSU -->
+<div class="co-uyari" id="uyariKutu" style="display:none">
+  <div class="co-uyari-bas">⚠️ Eksik Bağlantılar</div>
+  <div class="co-uyari-satirlar">
+    <div class="co-uyari-grup">
+      <h4>Ekip ilişkisi yok</h4>
+      <ul id="ekipsizList"></ul>
+    </div>
+    <div class="co-uyari-grup">
+      <h4>Proses ilişkisi yok</h4>
+      <ul id="prosessizList"></ul>
+    </div>
+    <div class="co-uyari-grup">
+      <h4>Bridge eksik (22 üretim personeli)</h4>
+      <ul><li>Faz 4 konusu — PDKS entegrasyonu</li></ul>
+    </div>
+  </div>
+</div>
+
+<!-- KULLANICI TABLOSU -->
+<div class="co-tbl-wrap">
+  <div class="co-tbl-hdr">
+    <span class="co-tbl-hdr-title">Kullanıcı Profilleri</span>
+    <span id="tblSayac" style="font-size:12px;color:var(--text3)"></span>
+  </div>
+  <div id="tblBody"><div class="co-loading">Yükleniyor…</div></div>
+</div>
+
+<script>
+async function yukle() {
+  try {
+    const [ozR, kulR] = await Promise.all([
+      fetch('/yonetim/api/core/organizasyon/ozet'),
+      fetch('/yonetim/api/core/organizasyon/kullanicilar')
+    ]);
+    const oz  = await ozR.json();
+    const kul = await kulR.json();
+    if (!oz.ok || !kul.ok) { alert('API hatası'); return; }
+    // Usta listesini ayri fetch — hata olursa yukle() patlamasin
+    try {
+      const ustaR = await fetch('/yonetim/api/core/usta-personel/ustalar');
+      const ustaD = await ustaR.json();
+      window._ustaListesi = (ustaD.ok && ustaD.ustalar) ? ustaD.ustalar : [];
+    } catch(_) { window._ustaListesi = []; }
+
+    // KPI
+    document.getElementById('kProfil').textContent  = oz.toplam_profil;
+    document.getElementById('kDept').textContent    = oz.toplam_departman;
+    document.getElementById('kEkip').textContent    = oz.toplam_ekip;
+    document.getElementById('kProses').textContent  = oz.toplam_proses;
+    document.getElementById('kBridge').textContent  = oz.bridge_bagli + '/' + (oz.bridge_bagli + oz.bridge_eksik);
+    document.getElementById('kEksik').textContent   = oz.ekip_eksik + oz.proses_eksik;
+
+    // Uyari kutusu
+    const ekipsiz   = kul.kullanicilar.filter(u => u.aktif && !u.ekip && !u.fonksiyonel_hesap);
+    const prosessiz = kul.kullanicilar.filter(u => u.aktif && !u.proses_ozet && !u.fonksiyonel_hesap);
+    if (ekipsiz.length || prosessiz.length) {
+      document.getElementById('uyariKutu').style.display = '';
+      document.getElementById('ekipsizList').innerHTML =
+        ekipsiz.map(u => `<li>${u.ad_soyad} (${u.kullanici_adi})</li>`).join('') || '<li>—</li>';
+      document.getElementById('prosessizList').innerHTML =
+        prosessiz.map(u => `<li>${u.ad_soyad} (${u.kullanici_adi})</li>`).join('') || '<li>—</li>';
+    }
+
+    // Tablo
+    document.getElementById('tblSayac').textContent = kul.kullanicilar.length + ' profil';
+    const satırlar = kul.kullanicilar.map(u => {
+      const durum = !u.aktif ? '<span class="badge eksik">Pasif</span>'
+                  : !u.ekip && !u.proses_ozet && !u.fonksiyonel_hesap
+                    ? '<span class="badge eksik">Eksik</span>'
+                    : '<span class="badge tam">Tam</span>';
+      const ekipBadge = u.ekip
+        ? `<span class="badge ${u.ekip_rolu||'uye'}">${u.ekip_rolu||'üye'}</span> ${u.ekip}`
+        : (u.fonksiyonel_hesap ? '—' : '<span style="color:#ca8a04">Atanmadı</span>');
+      const prosesBadge = u.proses_ozet
+        ? `<span class="badge ${u.proses_iliskiler||'sorumlu'}" style="margin-right:4px">${u.proses_ozet}</span>` +
+          (u.proses_sayisi > 1 ? `<span style="font-size:11px;color:var(--text3)">+${u.proses_sayisi-1}</span>` : '')
+        : (u.fonksiyonel_hesap ? '—' : '<span style="color:#ca8a04">Yok</span>');
+      const bridgeBadge = u.bridge_var_mi
+        ? '<span class="badge ok-br">Bağlı</span>'
+        : '<span class="badge no-br">Yok</span>';
+      const fonkBadge = u.fonksiyonel_hesap
+        ? ' <span class="badge fonk">fonk.</span>' : '';
+      return `<tr data-profil-id="${u.profil_id}" data-ad-soyad="${u.ad_soyad}" data-ekip-id="">
+        <td><strong>${u.ad_soyad}</strong>${fonkBadge}</td>
+        <td style="color:var(--text3);font-size:12px">${u.kullanici_adi}</td>
+        <td>${u.departman || '—'}</td>
+        <td>${ekipBadge}</td>
+        <td>${prosesBadge}</td>
+        <td><span class="badge ${u.profil_tipi}">${u.profil_tipi}</span></td>
+        <td>${bridgeBadge}</td>
+        <td>${durum}</td>
+      </tr>`;
+    }).join('');
+
+    document.getElementById('tblBody').innerHTML = `
+      <table class="co-tbl">
+        <thead><tr>
+          <th>Ad Soyad</th><th>Kullanıcı</th><th>Departman</th>
+          <th>Ekip</th><th>Proses</th><th>Tip</th><th>Bridge</th><th>Durum</th>
+        </tr></thead>
+        <tbody>${satırlar}</tbody>
+      </table>`;
+    tabloBagla();
+  } catch(e) {
+    document.getElementById('tblBody').innerHTML =
+      `<div class="co-loading" style="color:#dc2626">Hata: ${e.message}</div>`;
+  }
+}
+yukle();
+</script>
+
+<!-- ══ DRAWER ═══════════════════════════════════════════════════ -->
+<div id="coDrawer" class="co-drawer" onclick="if(event.target===this)drawerKapat()">
+  <div class="co-drawer-panel">
+    <div class="co-drawer-hdr">
+      <span id="drawerBaslik" class="co-drawer-title">Detay</span>
+      <button class="co-drawer-kapat" onclick="drawerKapat()">✕</button>
+    </div>
+    <div id="drawerIcerik" class="co-drawer-body">
+      <div class="co-loading">Yükleniyor…</div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .co-drawer { display:none; position:fixed; inset:0; background:rgba(0,0,0,.35);
+               z-index:9000; justify-content:flex-end; }
+  .co-drawer.acik { display:flex; }
+  .co-drawer-panel { width:420px; max-width:95vw; background:#fff; height:100%;
+                     overflow-y:auto; box-shadow:-4px 0 24px rgba(0,0,0,.15);
+                     display:flex; flex-direction:column; }
+  .co-drawer-hdr { display:flex; justify-content:space-between; align-items:center;
+                   padding:16px 20px; border-bottom:1px solid var(--border);
+                   background:#f9fafb; position:sticky; top:0; z-index:1; }
+  .co-drawer-title { font-size:15px; font-weight:600; color:var(--text1); }
+  .co-drawer-kapat { background:none; border:none; font-size:18px; cursor:pointer;
+                     color:var(--text3); padding:4px 8px; border-radius:4px; }
+  .co-drawer-kapat:hover { background:#f3f4f6; }
+  .co-drawer-body { padding:16px 20px; flex:1; font-size:13px; }
+
+  .co-d-sec  { margin-bottom:18px; }
+  .co-d-sec-title { font-size:11px; font-weight:600; color:var(--text3);
+                    text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px;
+                    padding-bottom:4px; border-bottom:1px solid var(--border); }
+  .co-d-row  { display:flex; justify-content:space-between; padding:5px 0;
+               border-bottom:1px solid #f3f4f6; }
+  .co-d-lbl  { color:var(--text3); }
+  .co-d-val  { font-weight:500; color:var(--text1); text-align:right; max-width:65%; }
+
+  .co-chip-list { display:flex; flex-wrap:wrap; gap:5px; margin-top:4px; }
+  .co-chip { padding:3px 10px; border-radius:12px; font-size:11px; font-weight:500; }
+  .co-chip.uretim   { background:#fef3c7; color:#92400e; }
+  .co-chip.lojistik { background:#dbeafe; color:#1e40af; }
+  .co-chip.operasyon{ background:#f0fdf4; color:#166534; }
+  .co-chip.ofis     { background:#faf5ff; color:#6b21a8; }
+  .co-chip.usta     { background:#f0fdf4; color:#166534; }
+  .co-chip.sorumlu  { background:#faf5ff; color:#6b21a8; }
+  .co-chip.calisan  { background:#f8fafc; color:#475569; }
+
+  .co-uye-item { display:flex; align-items:center; gap:8px; padding:6px 0;
+                 border-bottom:1px solid #f3f4f6; }
+  .co-uye-avatar { width:28px; height:28px; border-radius:50%; background:#d4a52f;
+                   color:#fff; display:flex; align-items:center; justify-content:center;
+                   font-size:11px; font-weight:600; flex-shrink:0; }
+  .co-uye-isim   { font-weight:500; font-size:13px; }
+  .co-uye-alt    { font-size:11px; color:var(--text3); }
+
+  .co-bridge-ok   { color:#16a34a; font-weight:600; }
+  .co-bridge-yok  { color:#dc2626; font-weight:600; }
+  .co-guven-bar   { height:6px; border-radius:3px; background:#e5e7eb; margin-top:4px; }
+  .co-guven-fill  { height:6px; border-radius:3px; background:#d4a52f; }
+
+  /* Tablo satırları tıklanabilir */
+  table.co-tbl tbody tr { cursor:pointer; }
+  table.co-tbl tbody tr:hover td { background:#fef9e7; }
+  .co-ekip-link { cursor:pointer; color:#d4a52f; text-decoration:underline dotted; }
+</style>
+
+<script>
+// ── Drawer ───────────────────────────────────────────────────────
+function drawerAc(baslik, html) {
+  document.getElementById('drawerBaslik').textContent = baslik;
+  document.getElementById('drawerIcerik').innerHTML = html;
+  document.getElementById('coDrawer').classList.add('acik');
+}
+function drawerKapat() {
+  document.getElementById('coDrawer').classList.remove('acik');
+}
+document.addEventListener('keydown', e => { if(e.key==='Escape') drawerKapat(); });
+
+function badge(val, map) {
+  return map[val] || `<span class="badge">${val||'—'}</span>`;
+}
+
+// ── Kullanıcı Detay ──────────────────────────────────────────────
+async function kullaniciDetay(profilId, adSoyad) {
+  drawerAc(adSoyad, '<div class="co-loading">Yükleniyor…</div>');
+  try {
+    const r = await fetch(`/yonetim/api/core/organizasyon/kullanici/${profilId}`);
+    const d = await r.json();
+    if (!d.ok) { drawerAc(adSoyad, `<p style="color:red">${d.hata}</p>`); return; }
+
+    const p = d.profil;
+    const ekipHtml = d.ekipler.length
+      ? d.ekipler.map(e =>
+          `<div class="co-d-row">
+             <span class="co-d-lbl">${e.rol==='lider'?'🏅 Lider':'👤 Üye'}</span>
+             <span class="co-d-val co-ekip-link" onclick="ekipDetayKod('${e.kod}','${e.ad}')">${e.ad}</span>
+           </div>`
+        ).join('')
+      : '<div style="color:#ca8a04;font-size:12px">Ekip atanmamış</div>';
+
+    const prosesHtml = d.prosesler.length
+      ? `<div class="co-chip-list">${d.prosesler.map(pr =>
+          `<span class="co-chip ${pr.kategori}" title="${pr.iliski}">${pr.ad}</span>`
+        ).join('')}</div>`
+      : '<span style="color:#ca8a04;font-size:12px">Proses atanmamış</span>';
+
+    const br = d.bridge;
+    const bridgeHtml = br.var
+      ? `<div class="co-d-row"><span class="co-d-lbl">Personel Adı</span>
+           <span class="co-d-val co-bridge-ok">✅ ${br.pk_ad}</span></div>
+         <div class="co-d-row"><span class="co-d-lbl">Identity</span>
+           <span class="co-d-val">${br.identity_durum||'—'}</span></div>
+         <div class="co-d-row"><span class="co-d-lbl">Güven Skoru</span>
+           <span class="co-d-val">${br.guven_skoru||0}/100</span></div>
+         <div class="co-guven-bar"><div class="co-guven-fill" style="width:${br.guven_skoru||0}%"></div></div>`
+      : `<div class="co-bridge-yok">❌ Bridge bağlantısı yok</div>
+         <div style="font-size:12px;color:var(--text3);margin-top:4px">Faz 4 — PDKS entegrasyonu</div>`;
+
+    // SAHA_PERSONEL için usta atama section (pre-loaded list)
+    let ustaAtamaHtml = '';
+    if (p.profil_tipi === 'SAHA_PERSONEL') {
+      if (d.bagli_usta_id && d.bagli_usta_ad) {
+        ustaAtamaHtml = `
+          <div class="co-d-sec">
+            <div class="co-d-sec-title">Usta Ataması</div>
+            <div class="co-d-row"><span class="co-d-lbl">Bağlı Usta</span>
+              <span class="co-d-val" style="color:#16a34a;font-weight:600">${d.bagli_usta_ad}</span></div>
+          </div>`;
+      } else {
+      const ustalar = window._ustaListesi || [];
+      if (ustalar.length) {
+        const opts = ustalar.map(u =>
+          `<option value="${u.id}">${u.ad_soyad} (${u.bagli_personel_sayisi} personel)</option>`
+        ).join('');
+        ustaAtamaHtml = `
+          <div class="co-d-sec" id="ustaAtamaSec_${profilId}">
+            <div class="co-d-sec-title">Usta Ataması</div>
+            <div style="margin-bottom:8px">
+              <select id="ustaSecim_${profilId}" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+                <option value="">— Usta seç —</option>
+                ${opts}
+              </select>
+            </div>
+            <button
+              onclick="ustaPersonelBagla(${profilId})"
+              style="width:100%;padding:7px;background:#d4a52f;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">
+              Bağla
+            </button>
+            <div id="ustaAtamaSonuc_${profilId}" style="margin-top:8px;font-size:12px"></div>
+          </div>`;
+      } else {
+        ustaAtamaHtml = `
+          <div class="co-d-sec">
+            <div class="co-d-sec-title">Usta Ataması</div>
+            <div style="color:#ca8a04;font-size:12px">Usta listesi yüklenemedi — sayfayı yenile.</div>
+          </div>`;
+      }
+      }
+    }
+
+    drawerAc(p.ad_soyad, `
+      <div class="co-d-sec">
+        <div class="co-d-sec-title">Profil</div>
+        <div class="co-d-row"><span class="co-d-lbl">Kullanıcı Adı</span><span class="co-d-val">${p.kullanici_adi}</span></div>
+        <div class="co-d-row"><span class="co-d-lbl">Departman</span><span class="co-d-val">${p.departman||'—'}</span></div>
+        <div class="co-d-row"><span class="co-d-lbl">Profil Tipi</span><span class="co-d-val">${p.profil_tipi}</span></div>
+        <div class="co-d-row"><span class="co-d-lbl">Durum</span>
+          <span class="co-d-val">${p.aktif ? '🟢 Aktif' : '⚪ Pasif'}</span></div>
+      </div>
+      <div class="co-d-sec">
+        <div class="co-d-sec-title">Ekip</div>${ekipHtml}
+      </div>
+      <div class="co-d-sec">
+        <div class="co-d-sec-title">Prosesler (${d.prosesler.length})</div>${prosesHtml}
+      </div>
+      <div class="co-d-sec">
+        <div class="co-d-sec-title">Bridge Durumu</div>${bridgeHtml}
+      </div>
+      ${ustaAtamaHtml}`);
+  } catch(e) {
+    drawerAc(adSoyad, `<p style="color:red">Hata: ${e.message}</p>`);
+  }
+}
+
+// ── Usta-Personel Bağlama ─────────────────────────────────────
+async function ustaPersonelBagla(personelProfilId) {
+  const sel = document.getElementById(`ustaSecim_${personelProfilId}`);
+  const sonuc = document.getElementById(`ustaAtamaSonuc_${personelProfilId}`);
+  if (!sel || !sel.value) {
+    if (sonuc) sonuc.innerHTML = '<span style="color:#ca8a04">Lütfen bir usta seçin.</span>';
+    return;
+  }
+  const ustaProfilId = parseInt(sel.value);
+  sonuc.innerHTML = '<span style="color:#6b7280">Kaydediliyor…</span>';
+  try {
+    const r = await fetch('/yonetim/api/core/usta-personel/bagla', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        usta_profil_id:     ustaProfilId,
+        personel_profil_id: personelProfilId
+      })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      sonuc.innerHTML = `<span style="color:#16a34a">✅ ${d.usta.ad} → ${d.personel.ad} bağlandı (id:${d.iliski_id})</span>`;
+      sel.disabled = true;
+      document.querySelector(`#ustaAtamaSec_${personelProfilId} button`).disabled = true;
+    } else {
+      sonuc.innerHTML = `<span style="color:#dc2626">❌ ${d.hata}</span>`;
+    }
+  } catch(e) {
+    sonuc.innerHTML = `<span style="color:#dc2626">Hata: ${e.message}</span>`;
+  }
+}
+
+// ── Ekip Detay ───────────────────────────────────────────────────
+async function ekipDetay(ekipId, ekipAd) {
+  drawerAc(ekipAd, '<div class="co-loading">Yükleniyor…</div>');
+  try {
+    const r = await fetch(`/yonetim/api/core/organizasyon/ekip/${ekipId}`);
+    const d = await r.json();
+    if (!d.ok) { drawerAc(ekipAd, `<p style="color:red">${d.hata}</p>`); return; }
+    const e = d.ekip;
+
+    const uyelerHtml = d.uyeler.length
+      ? d.uyeler.map(u => {
+          const harf = (u.ad||'?')[0].toUpperCase();
+          return `<div class="co-uye-item">
+            <div class="co-uye-avatar">${harf}</div>
+            <div>
+              <div class="co-uye-isim co-ekip-link" onclick="kullaniciDetay(${u.id},'${u.ad}')">${u.ad}</div>
+              <div class="co-uye-alt">${u.kullanici_adi} · ${u.rol} · ${u.dept||'—'}</div>
+            </div>
+          </div>`;
+        }).join('')
+      : '<div style="color:#ca8a04;font-size:12px">Üye yok</div>';
+
+    const prosesHtml = d.prosesler.length
+      ? `<div class="co-chip-list">${d.prosesler.map(p =>
+          `<span class="co-chip ${p.kategori}">${p.ad}</span>`
+        ).join('')}</div>`
+      : '<span style="color:#ca8a04;font-size:12px">Proses atanmamış</span>';
+
+    drawerAc(e.ad, `
+      <div class="co-d-sec">
+        <div class="co-d-sec-title">Ekip Bilgisi</div>
+        <div class="co-d-row"><span class="co-d-lbl">Tip</span><span class="co-d-val">${e.ekip_tipi}</span></div>
+        <div class="co-d-row"><span class="co-d-lbl">Departman</span><span class="co-d-val">${e.departman||'—'}</span></div>
+        <div class="co-d-row"><span class="co-d-lbl">Lider</span><span class="co-d-val">${e.lider_ad||'Atanmamış'}</span></div>
+        <div class="co-d-row"><span class="co-d-lbl">Vardiya</span><span class="co-d-val">${e.vardiya||'—'}</span></div>
+        <div class="co-d-row"><span class="co-d-lbl">Üye Sayısı</span><span class="co-d-val">${e.uye_sayisi}</span></div>
+      </div>
+      <div class="co-d-sec">
+        <div class="co-d-sec-title">Üyeler</div>${uyelerHtml}
+      </div>
+      <div class="co-d-sec">
+        <div class="co-d-sec-title">Prosesler</div>${prosesHtml}
+      </div>`);
+  } catch(e) {
+    drawerAc(ekipAd, `<p style="color:red">Hata: ${e.message}</p>`);
+  }
+}
+
+// Ekip kod üzerinden detay (kullanici drawerındaki ekip linkinden)
+async function ekipDetayKod(ekipKod, ekipAd) {
+  drawerAc(ekipAd, '<div class="co-loading">Yükleniyor…</div>');
+  const tbl = document.getElementById('drawerIcerik');
+  // Ekip ID'sini bilmiyoruz — listedeki data-ekip-id'den alacağız
+  // Alternatif: tüm ekiplerden koda göre bul (küçük liste)
+  const rows = document.querySelectorAll('table.co-tbl tbody tr');
+  let found = null;
+  rows.forEach(tr => {
+    const cells = tr.querySelectorAll('td');
+    if (cells.length > 3) {
+      const ekipCell = cells[3].textContent.trim();
+      if (ekipCell.includes(ekipAd)) {
+        const eid = tr.dataset.ekipId;
+        if (eid) found = eid;
+      }
+    }
+  });
+  if (found) { ekipDetay(found, ekipAd); return; }
+  drawerAc(ekipAd, '<p style="color:#ca8a04">Ekip ID bulunamadı. Tablodan tıklayın.</p>');
+}
+
+// ── Tablo satırlarına tıklama bağla ──────────────────────────────
+function tabloBagla() {
+  document.querySelectorAll('table.co-tbl tbody tr[data-profil-id]').forEach(tr => {
+    tr.addEventListener('click', function(e) {
+      if (e.target.classList.contains('co-ekip-link')) return;
+      const pid = this.dataset.profilId;
+      const ad  = this.dataset.adSoyad;
+      if (pid) kullaniciDetay(parseInt(pid), ad);
+    });
+  });
+}
+
+// tabloBagla yukle() sonunda otomatik çağrılır (aşağıdaki yukle() tanımına eklendi)
+</script>
+
+{% endblock %}

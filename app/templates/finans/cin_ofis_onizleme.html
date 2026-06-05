@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+{% block title %}Önizleme {{ log.OrderCode }} — Çin Ofis{% endblock %}
+
+{% block content %}
+
+<div class="page-head">
+  <div class="page-head-main">
+    <div class="crumbs">
+      <a href="/finans">Finans</a> ›
+      <a href="/finans/cin-ofis">Çin Ofis İçe Aktarma</a> ›
+      <strong>Önizleme</strong>
+    </div>
+    <h1>📋 İçe Aktarma Önizleme — {{ log.OrderCode }}</h1>
+    <p class="muted">
+      Dosya: {{ log.DosyaAdi }} · Dil: {{ log.Dil }} · Şablon: {{ log.TemplateSurum }} · Kullanıcı: {{ log.OlusturanKullanici }}
+    </p>
+  </div>
+</div>
+
+{% include '_flash.html' ignore missing %}
+
+{% if onceki %}
+<div class="alert alert-warn">
+  <div class="alert-ic">⚠</div>
+  <div class="alert-body">
+    <strong>Bu Sipariş Kodu daha önce içe aktarılmış</strong>
+    Mevcut: <code>{{ onceki.OrderCode }}</code> ({{ (onceki.OlusturmaTarih or '')[:16] }} by {{ onceki.OlusturanKullanici }})
+    {% if onceki.SiparisNo %} — Sipariş: <a href="/grafik/siparis/{{ onceki.SiparisId }}">{{ onceki.SiparisNo }}</a> ({{ onceki.SiparisDurum }}){% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% if hatalar %}
+<div class="alert alert-danger">
+  <div class="alert-ic">✗</div>
+  <div class="alert-body">
+    <strong>{{ hatalar | length }} HATA — İçe aktarma devam edemez</strong>
+    <ul class="mt-2" style="margin-left:20px;">
+      {% for h in hatalar %}<li>{{ h }}</li>{% endfor %}
+    </ul>
+  </div>
+</div>
+{% endif %}
+
+{% if uyarilar %}
+<div class="alert alert-warn">
+  <div class="alert-ic">⚠</div>
+  <div class="alert-body">
+    <strong>{{ uyarilar | length }} uyarı</strong>
+    <ul class="mt-2" style="margin-left:20px;">
+      {% for u in uyarilar %}<li>{{ u }}</li>{% endfor %}
+    </ul>
+  </div>
+</div>
+{% endif %}
+
+<!-- KUR BİLGİSİ -->
+<div class="panel {% if kur_info.buyuk_fark %}panel-danger{% else %}panel-primary{% endif %}">
+  <h3>💱 Kur Bilgisi</h3>
+
+  {% if kur_info.buyuk_fark %}
+  <div class="alert alert-danger">
+    <div class="alert-ic">⚠⚠⚠</div>
+    <div class="alert-body">
+      <strong>KRİTİK KUR FARKI: %{{ "%.1f"|format(kur_info.fark_yuzde) }}</strong>
+      Excel kuru sistem kurundan belirgin şekilde farklı. Excel kuru kullanılmak isteniyorsa Yönetim çift onay vermelidir.
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="form-grid form-grid-3">
+    <div>
+      <div class="muted small">Para Birimi</div>
+      <div class="mono" style="font-size:var(--font-lg); font-weight:700;">{{ kur_info.pb }}</div>
+    </div>
+    <div>
+      <div class="muted small">Sistem Kuru (kullanılacak default)</div>
+      <div class="mono" style="font-size:var(--font-lg); font-weight:700;">
+        {% if kur_info.sistem_kur %}{{ "%.4f"|format(kur_info.sistem_kur) }}{% else %}—{% endif %}
+      </div>
+      {% if kur_info.kur_tarih %}<div class="xs muted">{{ kur_info.kur_tarih }}</div>{% endif %}
+    </div>
+    <div>
+      <div class="muted small">Excel Kuru</div>
+      <div class="mono" style="font-size:var(--font-lg); font-weight:700;">
+        {% if kur_info.excel_rate %}{{ "%.4f"|format(kur_info.excel_rate) }}
+          {% if kur_info.fark_yuzde %}<span class="small muted">(fark %{{ "%.1f"|format(kur_info.fark_yuzde) }})</span>{% endif %}
+        {% else %}—{% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- INFO -->
+<div class="panel">
+  <h3>📝 Sipariş Bilgileri (INFO)</h3>
+  <div class="form-grid form-grid-3">
+    <div><div class="muted small">Sipariş Kodu</div><strong>{{ data.INFO['Order Code'] }}</strong></div>
+    <div><div class="muted small">Tedarikçi</div>{{ data.INFO['Supplier Name'] or '—' }}</div>
+    <div><div class="muted small">İletişim</div>{{ data.INFO['Supplier Contact'] or '—' }}</div>
+    <div><div class="muted small">Toplam Konteyner</div>{{ data.INFO['Total Container Count'] or '—' }}</div>
+    <div><div class="muted small">Currency</div>{{ data.INFO['Currency'] }}</div>
+    <div><div class="muted small">Nakliye Tipi</div>{{ data.INFO['Shipment Type'] or '—' }}</div>
+    <div><div class="muted small">ETD</div>{{ data.INFO['Expected ETD'] or '—' }}</div>
+    <div><div class="muted small">ETA</div>{{ data.INFO['Expected ETA'] or '—' }}</div>
+    <div><div class="muted small">Limanlar</div>{{ data.INFO['Loading Port'] or '—' }} → {{ data.INFO['Discharge Port'] or '—' }}</div>
+  </div>
+  {% if data.INFO['Notes'] %}
+  <div class="mt-3"><div class="muted small">Notlar</div>{{ data.INFO['Notes'] }}</div>
+  {% endif %}
+</div>
+
+<!-- ITEMS -->
+<div class="panel">
+  <h3>📦 Kalemler ({{ data.ITEMS | length }})</h3>
+  {% if data.ITEMS %}
+  <table class="data-table data-table-compact">
+    <thead>
+      <tr>
+        <th>#</th><th>Konteyner</th><th>Kalite</th><th>Ürün Adı</th>
+        <th>Açıklama</th><th class="num">Miktar</th><th>Birim</th>
+        <th class="num">Birim Fiyat</th><th class="num">Satır Toplamı</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% set toplam = namespace(v=0) %}
+      {% for it in data.ITEMS %}
+      {% set lt = (it['Qty']|float(0)) * (it['Unit Price']|float(0)) %}
+      {% set toplam.v = toplam.v + lt %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>
+          <code>{{ it['Container Group'] }}</code> × {{ it['Container Qty'] }}
+          × <span class="pill pill-info">{{ it['Container Type'] }}</span>
+        </td>
+        <td>{{ it['Quality'] or '—' }}</td>
+        <td><strong>{{ it['Product Name'] }}</strong></td>
+        <td class="muted small">{{ it['Description'] or '—' }}</td>
+        <td class="num">{{ it['Qty'] }}</td>
+        <td>{{ it['Unit'] or '—' }}</td>
+        <td class="num">{{ "%.2f"|format(it['Unit Price']|float(0)) }}</td>
+        <td class="num"><strong>{{ "%.2f"|format(lt) }}</strong></td>
+      </tr>
+      {% endfor %}
+      <tr style="background:var(--bg-alt);">
+        <td colspan="8" class="text-right"><strong>Genel Toplam</strong></td>
+        <td class="num"><strong>{{ "%.2f"|format(toplam.v) }} {{ data.INFO['Currency'] }}</strong></td>
+      </tr>
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty"><p>Kalem yok.</p></div>
+  {% endif %}
+</div>
+
+<!-- PAYMENT -->
+<div class="panel">
+  <h3>💰 Ödeme Planı ({{ odeme_taslak | length }})</h3>
+  {% if odeme_taslak %}
+  <table class="data-table data-table-compact">
+    <thead>
+      <tr><th>#</th><th>Tip</th><th class="num">Oran</th><th class="num">Tutar</th><th>Vade Tarihi</th><th>Tetikleyici</th></tr>
+    </thead>
+    <tbody>
+      {% for p in odeme_taslak %}
+      <tr>
+        <td>{{ p.Sira }}</td>
+        <td>{{ p.OdemeTipi }}</td>
+        <td class="num">%{{ p.Oran }}</td>
+        <td class="num">{{ "%.2f"|format(p.Tutar or 0) }} {{ p.ParaBirimi }}</td>
+        <td>{{ p.PlanTarih }}</td>
+        <td class="muted small">{{ p.Tetikleyici or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="alert alert-warn">
+    <div class="alert-ic">⚠</div>
+    <div class="alert-body">PAYMENT sheet boş. Sipariş oluşturulur ama ödeme planı manuel eklenmelidir.</div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- FILES -->
+<div class="panel">
+  <h3>📎 Dosya Referansları ({{ dosyalar | length }})</h3>
+  {% if dosyalar %}
+  <table class="data-table data-table-compact">
+    <thead>
+      <tr><th>#</th><th>Dosya Adı</th><th>Tip</th><th>Zorunlu</th><th>Durum</th><th>Açıklama</th></tr>
+    </thead>
+    <tbody>
+      {% for d in dosyalar %}
+      <tr>
+        <td>{{ d.Sira }}</td>
+        <td><code>{{ d.DosyaAdi }}</code></td>
+        <td>{{ d.DosyaTipi }}</td>
+        <td>
+          {% if d.Gerekli %}<span class="pill pill-danger">Zorunlu</span>
+          {% else %}<span class="pill pill-muted">Opsiyonel</span>{% endif %}
+        </td>
+        <td>
+          {% if d.Yuklu %}<span class="pill pill-success">✓ Yüklü</span>
+          {% else %}<span class="pill pill-warn">Bekliyor</span>{% endif %}
+        </td>
+        <td class="muted small">{{ d.Aciklama or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="muted small">Dosya referansı yok.</div>
+  {% endif %}
+</div>
+
+<!-- ONAY FORMU -->
+{% if log.Durum == 'ON_IZLEME' %}
+<div class="panel panel-primary">
+  <h3>✓ İçe Aktarma Onayı</h3>
+
+  <form method="post" action="/finans/cin-ofis/onayla/{{ log.Id }}">
+    {% if onceki %}
+    <div class="form-group">
+      <label>Mükerrer Kayıt Aksiyonu</label>
+      <div class="stack-sm mt-2">
+        <label class="check-label">
+          <input type="radio" name="duplicate_aksiyon" value="revize" checked>
+          <span><strong>Revizyon olarak devam et</strong> — eski sipariş İPTAL olur, yeni oluşturulur</span>
+        </label>
+        <label class="check-label">
+          <input type="radio" name="duplicate_aksiyon" value="iptal">
+          <span><strong>İptal et</strong> — hiçbir şey yapılmaz</span>
+        </label>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if kur_info.override_mumkun %}
+      {% if kur_override_yetkili %}
+      <div class="form-group">
+        <label class="check-label">
+          <input type="checkbox" name="kur_override" value="1" id="kurOverrideChk">
+          <span><strong>Excel kurunu kullan</strong> ({{ "%.4f"|format(kur_info.excel_rate) }} {{ kur_info.pb }}) — sadece Yönetim</span>
+        </label>
+      </div>
+      <div class="form-group" id="kurGerekceWrap" style="display:none;">
+        <label>Gerekçe (zorunlu)</label>
+        <textarea name="kur_gerekce" rows="2" placeholder="Neden Excel kuru kullanılıyor?"></textarea>
+        <div class="form-hint">Bu karar audit log'a kaydedilecek.</div>
+      </div>
+      <script>
+        document.getElementById('kurOverrideChk').addEventListener('change', function(){
+          document.getElementById('kurGerekceWrap').style.display = this.checked ? '' : 'none';
+        });
+      </script>
+      {% else %}
+      <div class="alert alert-info">
+        <div class="alert-ic">🔒</div>
+        <div class="alert-body">
+          Excel kuru kullanmak Yönetim yetkisi gerektirir. Bu içe aktarma sistem kuru ile oluşacak.
+        </div>
+      </div>
+      {% endif %}
+    {% endif %}
+
+    <div class="form-actions">
+      <form method="post" action="/finans/cin-ofis/iptal/{{ log.Id }}" style="display:inline;">
+        <button type="submit" class="btn btn-ghost">İptal</button>
+      </form>
+      {% if hatalar %}
+      <button type="submit" class="btn btn-danger" disabled>Hatalar nedeniyle onaylanamaz</button>
+      {% else %}
+      <button type="submit" class="btn btn-primary">✓ Sipariş Oluştur (Kontrol Bekliyor)</button>
+      {% endif %}
+    </div>
+  </form>
+</div>
+{% else %}
+<div class="alert alert-info">
+  <div class="alert-ic">ℹ</div>
+  <div class="alert-body">
+    Bu içe aktarma zaten işlenmiş (Durum: <strong>{{ log.Durum }}</strong>).
+    {% if log.SiparisId %}<a href="/grafik/siparis/{{ log.SiparisId }}" class="btn btn-sm btn-ghost" style="margin-left:8px;">Siparişe Git →</a>{% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

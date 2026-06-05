@@ -1,0 +1,292 @@
+{% extends "base.html" %}
+{% block title %}Ekstre Hareketleri{% endblock %}
+{% set active = 'finans' %}
+{% block content %}
+<div class="fk-wrap">
+
+  <div class="page-header fk-header">
+    <div class="page-header-baslik">
+      <h1 class="page-title">
+        <span class="fk-icon">HR</span>
+        Ekstre Hareketleri
+      </h1>
+      <div class="page-subtitle">
+        {{ ekstre.KartAd or 'Kart' }}{% if ekstre.Son4 %} &bull; &bull;&bull;&bull;&bull; {{ ekstre.Son4 }}{% endif %} &bull;
+        Donem {{ ekstre.DonemBaslangic }} / {{ ekstre.DonemBitis }} &bull;
+        Toplam Borc {{ '{:,.2f}'.format(ekstre.ToplamBorc or 0) }} TL
+      </div>
+    </div>
+    <div class="fk-konsol-back">
+      <a href="/finans/kredi-kartlari/{{ ekstre.KartId }}/ekstreler" class="fk-back-btn">&larr; Ekstrelere Don</a>
+      {% if ekstre.Durum not in ('IPTAL', 'ODENDI') %}
+      <button class="fk-btn-yeni" onclick="fkModalAc('yeni')">+ Yeni Hareket</button>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- KPI -->
+  <div class="fk-kpi-bar">
+    <div class="fk-kpi-card fk-kpi-toplam">
+      <div class="fk-kpi-label">Toplam</div>
+      <div class="fk-kpi-deger">{{ kpi.toplam_hareket or 0 }}</div>
+    </div>
+    <div class="fk-kpi-card fk-kpi-aktif">
+      <div class="fk-kpi-label">Aktif</div>
+      <div class="fk-kpi-deger">{{ kpi.aktif_sayi or 0 }}</div>
+    </div>
+    <div class="fk-kpi-card fk-kpi-iptal">
+      <div class="fk-kpi-label">Iptal</div>
+      <div class="fk-kpi-deger">{{ kpi.iptal_sayi or 0 }}</div>
+    </div>
+    <div class="fk-kpi-card fk-kpi-taksitli">
+      <div class="fk-kpi-label">Taksitli</div>
+      <div class="fk-kpi-deger">{{ kpi.taksitli_sayi or 0 }}</div>
+    </div>
+    <div class="fk-kpi-card fk-kpi-tutar">
+      <div class="fk-kpi-label">Aktif Toplam</div>
+      <div class="fk-kpi-deger">{{ '{:,.0f}'.format(kpi.toplam_tutar or 0) }}</div>
+      <div class="fk-kpi-sub">TL</div>
+    </div>
+  </div>
+
+  {% if not items %}
+  <div class="fk-empty">
+    <div class="fk-empty-icon">HR</div>
+    <h3 class="fk-empty-h3">Hareket kaydi yok</h3>
+    <p>+ Yeni Hareket butonu ile ilk hareketi ekleyin.</p>
+  </div>
+  {% else %}
+  <div class="fk-tbl-wrap">
+    <table class="fk-tbl">
+      <thead>
+        <tr>
+          <th>Tarih</th>
+          <th>Islem</th>
+          <th>Kategori</th>
+          <th class="fk-num">Tutar</th>
+          <th>Taksit</th>
+          <th>Aciklama</th>
+          <th class="fk-aksiyon">Islem</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in items %}
+        <tr class="{% if not it._aktif %}fk-row-iptal{% endif %}">
+          <td>{{ it.HareketTarih }}</td>
+          <td><strong>{{ it.IslemAdi or '-' }}</strong></td>
+          <td>{{ it.Kategori or '-' }}</td>
+          <td class="fk-num">{{ '{:,.2f}'.format(it.IslemTutari or 0) }} {{ it.ParaBirimi or 'TRY' }}</td>
+          <td>{% if it.TaksitMi == 1 %}{{ it.TaksitNo }} / {{ it.TaksitSayisi }}{% else %}-{% endif %}</td>
+          <td>{{ it.Aciklama or '' }}</td>
+          <td class="fk-aksiyon">
+            {% if it._aktif and ekstre.Durum not in ('IPTAL', 'ODENDI') %}
+            <button class="fk-btn-mini" onclick='fkModalAc("edit", {{ it.Id }})'>Duzenle</button>
+            <button class="fk-btn-mini fk-btn-iptal" onclick='fkIptal({{ it.Id }})'>Iptal</button>
+            {% elif not it._aktif %}
+            <span class="fk-iptal-mark">IPTAL</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <!-- MODAL: Yeni/Edit Hareket -->
+  <div id="fk-modal" class="fk-modal" style="display:none;" onclick="fkModalKapat(event)">
+    <div class="fk-modal-icerik" onclick="event.stopPropagation()">
+      <div class="fk-modal-header">
+        <h3 id="fk-modal-baslik">Yeni Hareket</h3>
+        <button class="fk-modal-x" onclick="fkModalKapat()">&times;</button>
+      </div>
+      <form id="fk-form-hareket" onsubmit="return fkKaydet(event)">
+        <input type="hidden" id="fk-id" name="id" value="">
+        <input type="hidden" name="kart_id" value="{{ ekstre.KartId }}">
+        <input type="hidden" name="ekstre_id" value="{{ ekstre.Id }}">
+        <div class="fk-form-grid">
+          <div class="fk-form-grup">
+            <label>Tarih <span class="fk-zor">*</span></label>
+            <input type="date" name="hareket_tarih" id="fk-f-tarih" required>
+          </div>
+          <div class="fk-form-grup">
+            <label>Tutar <span class="fk-zor">*</span></label>
+            <input type="number" name="tutar" id="fk-f-tutar" required min="0" step="0.01">
+          </div>
+          <div class="fk-form-grup fk-form-grup-full">
+            <label>Islem Adi</label>
+            <input type="text" name="islem_adi" id="fk-f-islem" maxlength="120" placeholder="Ornek: Restoran X, Yakit istasyonu...">
+          </div>
+          <div class="fk-form-grup">
+            <label>Kategori</label>
+            <input type="text" name="kategori" id="fk-f-kat" maxlength="50" placeholder="Yemek/Yakit/Alisveris">
+          </div>
+          <div class="fk-form-grup">
+            <label>Para Birimi</label>
+            <select name="para_birimi" id="fk-f-pb">
+              {% for p in para_birimi_set %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="fk-form-grup">
+            <label>
+              <input type="checkbox" name="taksit_mi" id="fk-f-tm" value="1" onchange="fkTaksitToggle()">
+              Taksitli mi?
+            </label>
+          </div>
+          <div class="fk-form-grup">
+            <label>Taksit Sayisi (1-24)</label>
+            <input type="number" name="taksit_sayisi" id="fk-f-ts" min="0" max="24" value="0" disabled>
+          </div>
+          <div class="fk-form-grup">
+            <label>Taksit No (1-24)</label>
+            <input type="number" name="taksit_no" id="fk-f-tn" min="0" max="24" value="0" disabled>
+          </div>
+          <div class="fk-form-grup fk-form-grup-full">
+            <label>Aciklama</label>
+            <textarea name="aciklama" id="fk-f-acik" rows="2" maxlength="500"></textarea>
+          </div>
+        </div>
+        <div class="fk-modal-altbar">
+          <button type="button" class="fk-btn-mini" onclick="fkModalKapat()">Vazgec</button>
+          <button type="submit" class="fk-btn-yeni">Kaydet</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+</div>
+
+<style>
+.fk-wrap { padding:0; }
+.fk-header { display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:12px; }
+.fk-icon { display:inline-block; background:#d4a52f; color:#1a1d2e; font-weight:700; font-size:13px; padding:4px 8px; border-radius:4px; margin-right:8px; }
+.fk-konsol-back { display:flex; gap:8px; align-items:center; }
+.fk-back-btn { display:inline-block; padding:6px 12px; background:transparent; color:#6b7280; border:1px solid #e8eaf0; border-radius:4px; font-size:12px; font-weight:600; text-decoration:none; }
+.fk-back-btn:hover { background:#fef9c3; color:#1a1d2e; border-color:#d4a52f; }
+.fk-btn-yeni { padding:8px 16px; background:#d4a52f; color:#1a1d2e; border:none; border-radius:4px; font-size:13px; font-weight:700; cursor:pointer; }
+.fk-btn-yeni:hover { background:#b8902a; }
+
+.fk-kpi-bar { display:grid; grid-template-columns:repeat(5, 1fr); gap:10px; margin-top:14px; }
+@media (max-width:900px) { .fk-kpi-bar { grid-template-columns:repeat(2, 1fr); } }
+.fk-kpi-card { background:#fff; border:1px solid #e8eaf0; border-radius:6px; padding:12px 14px; border-left:4px solid #d4a52f; }
+.fk-kpi-toplam { border-left-color:#6b7280; }
+.fk-kpi-aktif { border-left-color:#16a34a; }
+.fk-kpi-iptal { border-left-color:#dc2626; }
+.fk-kpi-taksitli { border-left-color:#7c3aed; }
+.fk-kpi-tutar { border-left-color:#d4a52f; }
+.fk-kpi-label { font-size:11px; color:#6b7280; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; }
+.fk-kpi-deger { font-size:22px; font-weight:700; color:#1a1d2e; margin-top:2px; }
+.fk-kpi-sub { font-size:11px; color:#9ca3af; margin-top:2px; }
+
+.fk-tbl-wrap { margin-top:14px; background:#fff; border:1px solid #e8eaf0; border-radius:6px; overflow:auto; }
+.fk-tbl { width:100%; border-collapse:collapse; }
+.fk-tbl th { padding:10px; background:#fafbfc; text-align:left; font-size:11px; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:0.5px; border-bottom:1px solid #e8eaf0; }
+.fk-tbl td { padding:10px; font-size:13px; color:#1a1d2e; border-bottom:1px solid #f1f3f6; }
+.fk-tbl tr:hover { background:#fef9c3; }
+.fk-tbl .fk-num { text-align:right; font-variant-numeric:tabular-nums; font-weight:600; }
+.fk-tbl .fk-aksiyon { white-space:nowrap; }
+.fk-row-iptal { opacity:0.5; }
+.fk-row-iptal td { text-decoration:line-through; }
+.fk-iptal-mark { font-size:10px; color:#9ca3af; font-weight:700; }
+
+.fk-btn-mini { padding:4px 10px; background:#fff; color:#1a1d2e; border:1px solid #e8eaf0; border-radius:3px; font-size:11px; font-weight:600; cursor:pointer; margin-right:4px; }
+.fk-btn-mini:hover { background:#fef9c3; border-color:#d4a52f; }
+.fk-btn-iptal { color:#dc2626; }
+.fk-btn-iptal:hover { background:#fee2e2; border-color:#dc2626; }
+
+.fk-modal { position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; display:flex; align-items:center; justify-content:center; }
+.fk-modal-icerik { background:#fff; max-width:680px; width:92%; max-height:88vh; overflow:auto; border-radius:8px; border:2px solid #d4a52f; }
+.fk-modal-header { padding:14px 18px; background:#1a1d2e; color:#d4a52f; display:flex; justify-content:space-between; align-items:center; border-radius:6px 6px 0 0; }
+.fk-modal-header h3 { margin:0; font-size:15px; font-weight:700; }
+.fk-modal-x { background:transparent; color:#d4a52f; border:none; font-size:24px; cursor:pointer; line-height:1; padding:0 6px; }
+.fk-form-grid { padding:16px; display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.fk-form-grup { display:flex; flex-direction:column; gap:4px; }
+.fk-form-grup-full { grid-column:1 / -1; }
+.fk-form-grup label { font-size:12px; color:#6b7280; font-weight:600; }
+.fk-zor { color:#dc2626; font-weight:700; }
+.fk-form-grup input, .fk-form-grup select, .fk-form-grup textarea { padding:7px 10px; border:1px solid #e8eaf0; border-radius:4px; background:#fff; font-size:13px; color:#1a1d2e; font-family:inherit; }
+.fk-form-grup input:disabled { background:#f3f4f6; color:#9ca3af; }
+.fk-modal-altbar { padding:12px 16px; background:#fafbfc; border-top:1px solid #e8eaf0; display:flex; justify-content:flex-end; gap:8px; }
+
+.fk-empty { text-align:center; padding:48px 16px; background:#fff; border:1px dashed #e8eaf0; border-radius:6px; margin-top:14px; }
+.fk-empty-icon { display:inline-flex; align-items:center; justify-content:center; width:48px; height:48px; background:#fef9c3; border:2px solid #d4a52f; border-radius:50%; font-weight:700; font-size:18px; color:#d4a52f; margin-bottom:12px; }
+.fk-empty-h3 { font-size:16px; font-weight:700; color:#1a1d2e; margin-bottom:6px; }
+.fk-empty p { color:#6b7280; font-size:13px; }
+</style>
+
+<script>
+(function(){
+  var KART_ID = {{ ekstre.KartId }};
+  var EKSTRE_ID = {{ ekstre.Id }};
+
+  window.fkTaksitToggle = function() {
+    var tm = document.getElementById("fk-f-tm").checked;
+    document.getElementById("fk-f-ts").disabled = !tm;
+    document.getElementById("fk-f-tn").disabled = !tm;
+    if (!tm) {
+      document.getElementById("fk-f-ts").value = 0;
+      document.getElementById("fk-f-tn").value = 0;
+    }
+  };
+
+  window.fkModalAc = function(mod, id) {
+    document.getElementById("fk-modal").style.display = "flex";
+    document.getElementById("fk-form-hareket").reset();
+    document.getElementById("fk-id").value = "";
+    fkTaksitToggle();
+    if (mod === "yeni") {
+      document.getElementById("fk-modal-baslik").textContent = "Yeni Hareket";
+      document.getElementById("fk-f-tarih").value = new Date().toISOString().split("T")[0];
+    } else if (mod === "edit" && id) {
+      document.getElementById("fk-modal-baslik").textContent = "Hareket Duzenle #" + id;
+      document.getElementById("fk-id").value = id;
+      fetch("/finans/kredi-kartlari/hareket/" + id + "/json")
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          if (!d || !d.ok) { alert("Hareket yuklenemedi"); return; }
+          var it = d.kayit;
+          document.getElementById("fk-f-tarih").value = it.HareketTarih || "";
+          document.getElementById("fk-f-tutar").value = it.IslemTutari || 0;
+          document.getElementById("fk-f-islem").value = it.IslemAdi || "";
+          document.getElementById("fk-f-kat").value = it.Kategori || "";
+          document.getElementById("fk-f-pb").value = it.ParaBirimi || "TRY";
+          document.getElementById("fk-f-tm").checked = (it.TaksitMi == 1);
+          document.getElementById("fk-f-ts").value = it.TaksitSayisi || 0;
+          document.getElementById("fk-f-tn").value = it.TaksitNo || 0;
+          document.getElementById("fk-f-acik").value = it.Aciklama || "";
+          fkTaksitToggle();
+        });
+    }
+  };
+
+  window.fkModalKapat = function(e) {
+    if (e && e.target.id !== "fk-modal") return;
+    document.getElementById("fk-modal").style.display = "none";
+  };
+
+  window.fkKaydet = function(e) {
+    e.preventDefault();
+    var id = document.getElementById("fk-id").value;
+    var url = id ? ("/finans/kredi-kartlari/hareket/" + id + "/guncelle") : ("/finans/kredi-kartlari/ekstre/" + EKSTRE_ID + "/hareket/yeni");
+    var fd = new FormData(document.getElementById("fk-form-hareket"));
+    fetch(url, { method: "POST", body: fd })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (d.ok) window.location.reload();
+        else alert("Hata: " + (d.hata || "Bilinmiyor"));
+      });
+    return false;
+  };
+
+  window.fkIptal = function(id) {
+    if (!confirm("Bu hareketi iptal etmek istediginizden emin misiniz?")) return;
+    fetch("/finans/kredi-kartlari/hareket/" + id + "/iptal", { method: "POST" })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (d.ok) window.location.reload();
+        else alert("Hata: " + (d.hata || "Bilinmiyor"));
+      });
+  };
+})();
+</script>
+{% endblock %}

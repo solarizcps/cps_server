@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}PLAN v2 · Solariz CPS{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/plan_v2.css') }}?v={{ range(100000, 999999) | random }}">
+
+<div class="planv2-wrap">
+
+  <div class="planv2-header">
+    <h1>📋 PLAN v2 — Sipariş Bazlı Üretim Takibi</h1>
+    <div class="planv2-mode-badge" id="planv2ModeBadge">YÜKLENİYOR...</div>
+  </div>
+
+  <div class="planv2-info">
+    Sipariş bazlı planlama. Her satır 1 sipariş = 1 model.
+    Detayda KORGUN gerçek üretim ve CPS operasyon ayrı kutular halinde gösterilir.
+    <strong>Korgun ve CPS asla birleştirilmez.</strong>
+  </div>
+
+  <div class="planv2-loading" id="planv2Loading">Yükleniyor...</div>
+
+  <table class="planv2-tablo" id="planv2Tablo" style="display:none;">
+    <thead>
+      <tr>
+        <th class="col-durum">●</th>
+        <th class="col-sipno">SİPARİŞ</th>
+        <th class="col-musteri">MÜŞTERİ</th>
+        <th class="col-model">MODEL</th>
+        <th class="col-hedef">HEDEF</th>
+        <th class="col-yapilan">YAPILAN</th>
+        <th class="col-kalan">KALAN</th>
+        <th class="col-termin">TERMİN</th>
+        <th class="col-darbogaz">DARBOĞAZ</th>
+        <th class="col-yuzde">%</th>
+      </tr>
+    </thead>
+    <tbody id="planv2Body"></tbody>
+  </table>
+
+  <div class="planv2-empty" id="planv2Empty" style="display:none;">
+    Sipariş bulunamadı.
+  </div>
+
+  <!-- Detay paneli (satıra tıklayınca açılır) -->
+  <div class="planv2-detay-overlay" id="planv2DetayOverlay" style="display:none;">
+    <div class="planv2-detay-panel">
+      <div class="planv2-detay-baslik">
+        <h2 id="planv2DetayBaslik">Sipariş Detayı</h2>
+        <button class="planv2-detay-kapat" onclick="planv2DetayKapat()">✕</button>
+      </div>
+      <div class="planv2-detay-icerik" id="planv2DetayIcerik">
+        Yükleniyor...
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="{{ url_for('static', filename='js/plan_v2.js') }}?v={{ range(100000, 999999) | random }}"></script>
+{% endblock %}

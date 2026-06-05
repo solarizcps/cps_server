@@ -1,0 +1,22 @@
+{
+  "sprint": "D5 Faz C.5 P4",
+  "tarih": "2026-05-18",
+  "saat": "09:58",
+  "sonuc": "BASARILI",
+  "personel_giris_hash_eski": "41B220D201B0E1F8",
+  "personel_giris_hash_yeni": "F6D1953CC0243B0C",
+  "hedef_routes_hash": "7EAC892167AFEAD1",
+  "config_hash": "2F6BFFBAECC77EF1",
+  "flag_USE_CPS_NATIVE_PROSES": false,
+  "baseline_birebir_ayni": true,
+  "baseline_byte_fark": 0,
+  "yeni_satir_yaklasik": 50,
+  "atomic_move_ms": 39.04,
+  "smoke_test_pass": 5,
+  "smoke_test_total": 5,
+  "uretim_kayit": 1380,
+  "saha_kesintisi": false,
+  "rollback_kullanildi": false,
+  "c5_tam_tamam": true,
+  "next": "C.8 sprint - FLAG flip (ozel onay gerektirir)"
+}

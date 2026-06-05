@@ -1,0 +1,383 @@
+# -*- coding: utf-8 -*-
+"""
+SOLARIZ CPS - PLANLAMA / PROSES TAKIP (Faz 2 - MVP)
+====================================================
+Eski CPS'teki "Proses Rota Takip" yapisinin modüler tasinmasi.
+
+Veri kaynagi: Korgun MSSQL (Solariz22)
+Helper: modules.common.korgun._baglan()
+Mock fallback: Baglanti yoksa örnek veri donulur.
+
+KURAL: Korgun ve CPS birlestirilmez. Bu modul SADECE Korgun verisini saglar.
+"""
+from flask import Blueprint, render_template, jsonify, session, request
+from modules.auth import yetki_gerekli
+from datetime import datetime
+import json
+import os
+
+
+# Ayni planlama_bp blueprint'ini paylasiyoruz
+proses_takip_bp = Blueprint(
+    'proses_takip_bp',
+    __name__,
+    url_prefix='/planlama'
+)
+
+
+# =====================================================
+# PROSES KOD HARITASI (eski planlama_server.py'den)
+# =====================================================
+PROSES_KODLAR = {
+    'enjeksiyon': '26',
+    'eva': '50', 'eva hazir': '50', 'eva hazır': '50',
+    'kesim': '02',
+    'saya': '15',
+    'saya kontrol': '18',
+    'saya hazir': '42', 'saya hazır': '42',
+    'monta baslayacak': '28', 'monta başlayacak': '28', 'montabaslayacak': '28',
+    'monta': '30',
+    'mekval': '32',
+    'temizleme': '35',
+    'taban uretim': '25', 'taban üretim': '25',
+}
+
+
+# =====================================================
+# MOCK FALLBACK VERISI
+# =====================================================
+MOCK_PROSES_DATA = [
+    {
+        "EmirNo": "E.110626",
+        "Proses": "35",
+        "ProsesAdi": "Temizleme",
+        "SKOD": "BRP-9000",
+        "StokAdi": "BRP-9000 SLIPPER",
+        "Personel": "MOCK",
+        "Cikan": 480,
+        "EndTarih": "2026-05-06 14:23:00",
+        "ModelKod": "BRP-9000",
+        "SipNo": "33680",
+        "BelgeNo": "B-12340",
+        "CariAdi": "Lc Waikiki",
+        "Lokasyon": "SD002",
+        "UrunTipi": "BITMIS",
+    },
+    {
+        "EmirNo": "E.110700",
+        "Proses": "02",
+        "ProsesAdi": "Kesim",
+        "SKOD": "XYZ-5000",
+        "StokAdi": "XYZ-5000 SANDALET",
+        "Personel": "MOCK",
+        "Cikan": 30,
+        "EndTarih": "2026-05-06 09:15:00",
+        "ModelKod": "XYZ-5000",
+        "SipNo": "33700",
+        "BelgeNo": "B-12380",
+        "CariAdi": "Boyner",
+        "Lokasyon": "SU001",
+        "UrunTipi": "YM",
+    },
+    {
+        "EmirNo": "E.110626",
+        "Proses": "30",
+        "ProsesAdi": "Monta",
+        "SKOD": "CRX-71033-LCW",
+        "StokAdi": "CRX-71033-LCW",
+        "Personel": "MOCK",
+        "Cikan": 1970,
+        "EndTarih": "2026-05-05 18:00:00",
+        "ModelKod": "CRX-71033-LCW",
+        "SipNo": "33638",
+        "BelgeNo": "B-12340",
+        "CariAdi": "Lc Waikiki",
+        "Lokasyon": "SA001",
+        "UrunTipi": "BITMIS",
+    },
+]
+
+
+# =====================================================
+# KORGUN SORGUSU
+# =====================================================
+def _korgun_proses_rapor(period='bugun', lokasyon='', proses='',
+                          durum='', tarih_bas='', tarih_bit=''):
+    """
+    Korgun Urt_con_gch tablosundan proses raporu cek.
+    Eski planlama_server.py'deki SQL'in birebir kopyasi.
+    Helper: modules.common.korgun._baglan()
+    """
+    # Tarih filtresi
+    if tarih_bas and tarih_bit:
+        tarih_filtre = (f"CAST(cg.EndTarih AS DATE) >= CAST('{tarih_bas}' AS DATE) "
+                        f"AND CAST(cg.EndTarih AS DATE) <= CAST('{tarih_bit}' AS DATE)")
+    elif tarih_bas:
+        tarih_filtre = f"CAST(cg.EndTarih AS DATE) >= CAST('{tarih_bas}' AS DATE)"
+    elif period == 'bugun':
+        tarih_filtre = "CAST(cg.EndTarih AS DATE) = CAST(GETDATE() AS DATE)"
+    elif period == 'hafta':
+        tarih_filtre = "cg.EndTarih >= DATEADD(day,-7,GETDATE())"
+    elif period == 'ay':
+        tarih_filtre = "cg.EndTarih >= DATEADD(month,-1,GETDATE())"
+    elif period == 'yil':
+        tarih_filtre = "cg.EndTarih >= DATEADD(year,-1,GETDATE())"
+    else:
+        tarih_filtre = "CAST(cg.EndTarih AS DATE) = CAST(GETDATE() AS DATE)"
+
+    # Lokasyon filtresi
+    lok_filter = ""
+    if lokasyon:
+        l_list = ",".join(["'" + l.strip() + "'" for l in lokasyon.split(",") if l.strip()])
+        if l_list:
+            lok_filter = f"AND ue.Location IN ({l_list})"
+
+    # Proses filtresi
+    pros_filter = ""
+    if proses:
+        p_codes = []
+        for p in proses.split(","):
+            p = p.strip()
+            if not p:
+                continue
+            if p.isdigit() or (len(p) == 2 and p[0].isdigit()):
+                p_codes.append("'" + p + "'")
+            else:
+                kod = PROSES_KODLAR.get(p.lower())
+                if kod:
+                    p_codes.append("'" + kod + "'")
+                else:
+                    p_codes.append("'" + p + "'")
+        if p_codes:
+            pros_filter = f"AND cg.Proses IN ({','.join(p_codes)})"
+
+    # Durum filtresi
+    durum_filter = ""
+    if durum:
+        durum_list = [d.strip().lower() for d in durum.split(",") if d.strip()]
+        conditions = []
+        if 'baslayacak' in durum_list:
+            conditions.append("(cg.Cikan = 0 OR cg.Cikan IS NULL)")
+        if 'devam' in durum_list:
+            conditions.append("(cg.Cikan > 0 AND cg.EndTarih IS NULL)")
+        if 'biten' in durum_list:
+            conditions.append("(cg.Cikan > 0 AND cg.EndTarih IS NOT NULL)")
+        if conditions:
+            durum_filter = "AND (" + " OR ".join(conditions) + ")"
+
+    sql = f"""
+        SELECT TOP 3000
+            cg.EmirNo, cg.Proses,
+            ISNULL(pm.Tanim, cg.Proses) AS ProsesAdi,
+            cg.SKOD, ISNULL(st.Tanim, cg.SKOD) AS StokAdi,
+            cg.Personel, SUM(ISNULL(cg.Cikan, 0)) AS Cikan,
+            CONVERT(varchar, MAX(cg.EndTarih), 20) AS EndTarih,
+            ue.ModelKod, sk.SipNo,
+            ISNULL(sk.BelgeNo,'') AS BelgeNo,
+            ISNULL(cm.CName, sk.CariKod) AS CariAdi,
+            ISNULL(ue.Location,'') AS Lokasyon,
+            CASE WHEN cg.Proses IN ('35','50') THEN 'BITMIS' ELSE 'YM' END AS UrunTipi
+        FROM Urt_con_gch cg
+        LEFT JOIN Proses_M pm ON pm.Pro = cg.Proses
+        LEFT JOIN StokKart st ON st.SKOD = cg.SKOD
+        LEFT JOIN Urt_Emir ue ON ue.EmirNo = cg.EmirNo
+        LEFT JOIN Siparis_Kay sk ON sk.SipNo = cg.FisNo
+        LEFT JOIN Cari_Kart cm ON cm.CKod = sk.CariKod
+        WHERE cg.Cikan > 0 AND cg.Birim = 'CIFT'
+          AND {tarih_filtre}
+          {lok_filter} {pros_filter} {durum_filter}
+        GROUP BY cg.EmirNo, cg.Proses, pm.Tanim, cg.SKOD, st.Tanim,
+                 cg.Personel, ue.ModelKod, sk.SipNo, sk.BelgeNo,
+                 cm.CName, sk.CariKod, ue.Location
+    """
+
+    # Mevcut Korgun helper'ini kullan
+    from modules.common import korgun as kk
+    con = kk._baglan()
+    try:
+        cur = con.cursor()
+        cur.execute(sql)
+        cols = [c[0] for c in cur.description]
+        rows = []
+        for r in cur.fetchall():
+            d = {}
+            for i, c in enumerate(cols):
+                v = r[i]
+                # Bytearray (varchar) -> str
+                if isinstance(v, (bytes, bytearray)):
+                    try:
+                        v = v.decode('cp1254', errors='replace')
+                    except Exception:
+                        v = str(v)
+                d[c] = v
+            rows.append(d)
+        cur.close()
+        return rows
+    finally:
+        try:
+            con.close()
+        except Exception:
+            pass
+
+
+# =====================================================
+# ENDPOINT 1: HTML SAYFA
+# =====================================================
+@proses_takip_bp.route('/proses-takip', methods=['GET'])
+@yetki_gerekli('planlama.proses_takip')
+def proses_takip():
+    return render_template('planlama/proses_takip.html')
+
+
+# =====================================================
+# ENDPOINT 2: KORGUN PROSES RAPORU (JSON)
+# =====================================================
+@proses_takip_bp.route('/proses-takip/data', methods=['GET'])
+@yetki_gerekli('planlama.proses_takip')
+def proses_takip_data():
+    period = request.args.get('period', 'bugun')
+    lokasyon = request.args.get('lokasyon', '')
+    proses = request.args.get('proses', '')
+    durum = request.args.get('durum', '')
+    tarih_bas = request.args.get('tarih_bas', '')
+    tarih_bit = request.args.get('tarih_bit', '')
+
+    # Lokasyon SECILMEDEN sorgu yapma (performans)
+    if not lokasyon:
+        return jsonify({
+            "ok": True,
+            "kaynak": "BEKLEMEDE",
+            "mesaj": "Lokasyon seciniz",
+            "siparis_sayisi": 0,
+            "kayitlar": []
+        })
+
+    t_bas = datetime.now()
+    try:
+        rows = _korgun_proses_rapor(
+            period=period, lokasyon=lokasyon, proses=proses,
+            durum=durum, tarih_bas=tarih_bas, tarih_bit=tarih_bit
+        )
+        sure = (datetime.now() - t_bas).total_seconds()
+        return jsonify({
+            "ok": True,
+            "kaynak": "KORGUN",
+            "siparis_sayisi": len(rows),
+            "kayitlar": rows,
+            "sorgu_suresi_sn": round(sure, 2),
+        })
+    except Exception as e:
+        # Mock fallback
+        sure = (datetime.now() - t_bas).total_seconds()
+        return jsonify({
+            "ok": True,
+            "kaynak": "MOCK_FALLBACK",
+            "uyari": "Korgun erisilemiyor: " + str(e)[:120],
+            "siparis_sayisi": len(MOCK_PROSES_DATA),
+            "kayitlar": MOCK_PROSES_DATA,
+            "sorgu_suresi_sn": round(sure, 2),
+        })
+
+
+# =====================================================
+# DEBUG ENDPOINT'LERI (gecici)
+# =====================================================
+@proses_takip_bp.route('/proses-takip/debug/ham', methods=['GET'])
+@yetki_gerekli('planlama.proses_takip')
+def proses_takip_debug_ham():
+    try:
+        from modules.common import korgun as kk
+        con = kk._baglan()
+        cur = con.cursor()
+        sql = """
+            SELECT TOP 20
+                cg.EmirNo, cg.Proses, cg.SKOD, cg.Personel,
+                cg.Cikan, cg.Birim,
+                CONVERT(varchar, cg.EndTarih, 20) AS EndTarih,
+                cg.FisNo,
+                ue.Location AS Lokasyon, ue.ModelKod
+            FROM Urt_con_gch cg
+            LEFT JOIN Urt_Emir ue ON ue.EmirNo = cg.EmirNo
+            ORDER BY cg.EndTarih DESC
+        """
+        cur.execute(sql)
+        cols = [c[0] for c in cur.description]
+        rows = []
+        for r in cur.fetchall():
+            d = {}
+            for i, c in enumerate(cols):
+                v = r[i]
+                if isinstance(v, (bytes, bytearray)):
+                    try: v = v.decode('cp1254', errors='replace')
+                    except: v = str(v)
+                d[c] = str(v) if v is not None else None
+            rows.append(d)
+        cur.close()
+        con.close()
+        return jsonify({"ok": True, "row_count": len(rows), "kayitlar": rows})
+    except Exception as e:
+        return jsonify({"ok": False, "hata": str(e)}), 500
+
+
+@proses_takip_bp.route('/proses-takip/debug/info', methods=['GET'])
+@yetki_gerekli('planlama.proses_takip')
+def proses_takip_debug_info():
+    try:
+        from modules.common import korgun as kk
+        con = kk._baglan()
+        cur = con.cursor()
+        cur.execute("SELECT DISTINCT TOP 50 Location FROM Urt_Emir WHERE Location IS NOT NULL ORDER BY Location")
+        lokasyonlar = []
+        for r in cur.fetchall():
+            v = r[0]
+            if isinstance(v, (bytes, bytearray)):
+                try: v = v.decode('cp1254', errors='replace')
+                except: v = str(v)
+            lokasyonlar.append(str(v) if v else None)
+        cur.execute("SELECT DISTINCT TOP 50 Proses FROM Urt_con_gch WHERE Proses IS NOT NULL ORDER BY Proses")
+        prosesler = []
+        for r in cur.fetchall():
+            v = r[0]
+            if isinstance(v, (bytes, bytearray)):
+                try: v = v.decode('cp1254', errors='replace')
+                except: v = str(v)
+            prosesler.append(str(v) if v else None)
+        cur.execute("SELECT DISTINCT TOP 20 Birim FROM Urt_con_gch WHERE Birim IS NOT NULL")
+        birimler = []
+        for r in cur.fetchall():
+            v = r[0]
+            if isinstance(v, (bytes, bytearray)):
+                try: v = v.decode('cp1254', errors='replace')
+                except: v = str(v)
+            birimler.append(str(v) if v else None)
+        cur.execute("SELECT COUNT(*) FROM Urt_con_gch")
+        toplam_urt = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM Urt_con_gch WHERE Cikan > 0")
+        cikan_var = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM Urt_con_gch WHERE Cikan > 0 AND Birim = 'CIFT'")
+        cift_filtreli = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM Urt_con_gch WHERE Cikan > 0 AND Birim = 'CIFT' AND CAST(EndTarih AS DATE) >= DATEADD(day,-30,CAST(GETDATE() AS DATE))")
+        son_30_gun = cur.fetchone()[0]
+        cur.execute("SELECT MAX(EndTarih), MIN(EndTarih) FROM Urt_con_gch WHERE Cikan > 0")
+        max_tar, min_tar = cur.fetchone()
+        cur.close()
+        con.close()
+        return jsonify({
+            "ok": True,
+            "tablo_sayilari": {
+                "Urt_con_gch_toplam": toplam_urt,
+                "Cikan>0": cikan_var,
+                "Cikan>0 + Birim=CIFT": cift_filtreli,
+                "Son 30 gun": son_30_gun,
+            },
+            "tarih_araligi": {
+                "en_eski": str(min_tar) if min_tar else None,
+                "en_yeni": str(max_tar) if max_tar else None,
+            },
+            "lokasyonlar": lokasyonlar,
+            "proses_kodlari": prosesler,
+            "birimler": birimler,
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({"ok": False, "hata": str(e), "traceback": traceback.format_exc()}), 500

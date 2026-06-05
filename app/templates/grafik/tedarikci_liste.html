@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% set tab = 'grafik' %}
+{% set active = 'grafik' %}
+{% block title %}Tedarikçiler — Grafik{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>🏭 Tedarikçiler</h1>
+    <p class="muted">Çin ve yerli tedarikçi kartları</p>
+  </div>
+  <div class="ph-actions">
+    <button type="button" class="btn btn-primary" onclick="document.getElementById('ted-yeni').showModal()">+ Yeni Tedarikçi</button>
+  </div>
+</div>
+
+{% include '_flash.html' ignore missing %}
+
+<div class="panel">
+  <form method="get" class="row">
+    <input type="search" name="q" value="{{ arama or '' }}" placeholder="Kod, ad veya şehir ara..." autofocus class="flex-1">
+    <select name="u">
+      <option value="">Tüm ülkeler</option>
+      <option value="Çin" {% if ulke == 'Çin' %}selected{% endif %}>🇨🇳 Çin</option>
+      <option value="Türkiye" {% if ulke == 'Türkiye' %}selected{% endif %}>🇹🇷 Türkiye</option>
+    </select>
+    <button class="btn btn-ghost">Filtrele</button>
+    {% if arama or ulke %}<a href="/grafik/tedarikci" class="btn btn-link">Temizle</a>{% endif %}
+  </form>
+</div>
+
+<div class="panel">
+  <table class="data-table">
+  <thead>
+    <tr>
+      <th>Kod</th>
+      <th>Ad</th>
+      <th>Şehir / Ülke</th>
+      <th>İletişim</th>
+      <th>Nakliye / Vade</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for t in tedarikciler %}
+    <tr>
+      <td><strong>{{ t.Kod }}</strong></td>
+      <td>{{ t.Ad }}</td>
+      <td>
+        {% if t.Ulke == 'Çin' %}🇨🇳{% elif t.Ulke == 'Türkiye' %}🇹🇷{% endif %}
+        {{ t.Sehir or '—' }}
+        <span class="muted">· {{ t.Ulke }}</span>
+      </td>
+      <td>
+        {% if t.Iletisim %}<div>{{ t.Iletisim }}</div>{% endif %}
+        {% if t.Email %}<div class="muted" style="font-size:.85rem;">{{ t.Email }}</div>{% endif %}
+        {% if t.WhatsApp %}<div class="muted" style="font-size:.85rem;">WA: {{ t.WhatsApp }}</div>{% endif %}
+      </td>
+      <td>
+        <span class="pill">{{ t.NakliyeTipi }}</span>
+        {% if t.VadeGun %}<span class="muted" style="font-size:.85rem;"> · {{ t.VadeGun }} gün</span>{% endif %}
+      </td>
+      <td style="text-align:right;"><a href="/grafik/tedarikci/{{ t.Id }}" class="btn btn-sm btn-ghost">Detay</a></td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="empty">Tedarikçi bulunamadı. <a href="/grafik/tedarikci">Filtreyi temizle</a>.</td></tr>
+    {% endfor %}
+  </tbody>
+  </table>
+</div>
+
+<dialog id="ted-yeni" class="modal">
+  <form method="post" action="/grafik/tedarikci/yeni" class="modal-form" style="min-width:480px;">
+    <h3>Yeni Tedarikçi</h3>
+    <div class="form-row">
+      <label style="flex:1;">Kod * <input type="text" name="Kod" required style="text-transform:uppercase;"></label>
+      <label style="flex:2;">Ad * <input type="text" name="Ad" required></label>
+    </div>
+    <div class="form-row">
+      <label style="flex:1;">Şehir <input type="text" name="Sehir"></label>
+      <label style="flex:1;">Ülke
+        <select name="Ulke">
+          <option value="Çin" selected>🇨🇳 Çin</option>
+          <option value="Türkiye">🇹🇷 Türkiye</option>
+        </select>
+      </label>
+    </div>
+    <label>İletişim Kişi <input type="text" name="Iletisim"></label>
+    <div class="form-row">
+      <label style="flex:2;">Email <input type="email" name="Email"></label>
+      <label style="flex:1;">WhatsApp <input type="text" name="WhatsApp"></label>
+      <label style="flex:1;">WeChat <input type="text" name="WeChat"></label>
+    </div>
+    <div class="form-row">
+      <label style="flex:1;">Nakliye
+        <select name="NakliyeTipi">
+          <option value="FOB">FOB</option>
+          <option value="CIF">CIF</option>
+          <option value="EXW">EXW</option>
+          <option value="CFR">CFR</option>
+        </select>
+      </label>
+      <label style="flex:1;">Vade (gün) <input type="number" name="VadeGun" min="0" value="0"></label>
+    </div>
+    <label>Notlar <textarea name="Notlar" rows="2"></textarea></label>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" onclick="this.closest('dialog').close()">İptal</button>
+      <button class="btn btn-primary">Kaydet</button>
+    </div>
+  </form>
+</dialog>
+{% endblock %}
