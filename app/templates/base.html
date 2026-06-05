@@ -359,6 +359,8 @@ window.__cpsRootMap = function(pathname) {
 
 
       {% if active == 'hedef' %}{% set aktif_grup = 'uretim' %}{% endif %}
+      {# MENU_FIX_V1 (05.06.2026): enjeksiyon sayfasinda uretim grubu acik #}
+      {% if active == 'enjeksiyon' %}{% set aktif_grup = 'uretim' %}{% endif %}
 
 
       {% if active == 'grafik' and aktif_grup != 'finans' and aktif_grup != 'ticaret' %}{% set aktif_grup = 'kalite' %}{% endif %}
@@ -719,6 +721,13 @@ window.__cpsRootMap = function(pathname) {
           <span class="sl">Enjeksiyon Takip</span>
         </a>
         <!-- ENJ_F4_LINK_END -->
+        {# MENU_FIX_V1 (05.06.2026): Kalip Master burada da goster (yonetim rolunde) #}
+        {% if yetki('planlama.enjeksiyon.kalip') %}
+        <a href="/yonetim/kalip-yonetimi" class="si {% if '/yonetim/kalip-yonetimi' in rp %}active{% endif %}" title="Kalıp Master">
+          <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="15" rx="2"/><path d="M16 7V5a2 2 0 0 0-4 0v2"/><path d="M8 7V5a2 2 0 0 0-4 0v2"/><line x1="12" y1="12" x2="12" y2="17"/><line x1="9.5" y1="14.5" x2="14.5" y2="14.5"/></svg></span>
+          <span class="sl">Kalıp Master</span>
+        </a>
+        {% endif %}
 
 <a href="/personel-giris/" class="si {% if '/personel-giris/' in rp %}active{% endif %}" title="Üretim Girişi">
           <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/></svg></span>
@@ -769,22 +778,8 @@ window.__cpsRootMap = function(pathname) {
 
 
       
-      <!-- ENJ_F4_PLANLAMA_START -->
-      {% if yetki('planlama') %}
-      <div class="sn-sec sn-toggle{% if aktif_grup == 'uretim' %} acik{% endif %}" data-grup="uretim">
-        <span class="sn-arrow">{% if aktif_grup == 'uretim' %}▼{% else %}►{% endif %}</span>
-        <svg class="sn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10v4"/><path d="M11 10v4"/><path d="M15 10v4"/></svg>
-        <span class="sn-baslik">Üretim</span>
-        <span class="sn-count">1</span>
-      </div>
-      <div class="sn-grup{% if aktif_grup != 'uretim' %} kapali{% endif %}" data-grup="uretim">
-        <a href="/enjeksiyon/" class="si {% if '/enjeksiyon' in rp %}active{% endif %}" title="Enjeksiyon Takip">
-          <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10v4"/><path d="M11 10v4"/><path d="M15 10v4"/></svg></span>
-          <span class="sl">Enjeksiyon Takip</span>
-        </a>
-      </div>
-      {% endif %}
-      <!-- ENJ_F4_PLANLAMA_END -->
+      {# ENJ_F4_PLANLAMA_REMOVED (MENU_FIX_V1 05.06.2026): Duplicate data-grup="uretim" kaldirildi.
+         Planlama rolu icin enjeksiyon linki zaten Planlama menusunde mevcut. #}
 
       <!-- FERHAT_SAHA_MENU_V3 (15.05.2026 - Sade: sadece Enjeksiyon) -->
       {% if yetki('enjeksiyon') %}
@@ -849,6 +844,13 @@ window.__cpsRootMap = function(pathname) {
 
         </a>
 
+        {# MENU_FIX_V1 (05.06.2026): Planlama rolunde de Enjeksiyon gorunsun #}
+        {% if yetki('enjeksiyon') and not yetki('yonetim') %}
+        <a href="/enjeksiyon/" class="si {% if '/enjeksiyon' in rp %}active{% endif %}" title="Enjeksiyon Takip">
+          <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10v4"/><path d="M11 10v4"/><path d="M15 10v4"/></svg></span>
+          <span class="sl">Enjeksiyon Takip</span>
+        </a>
+        {% endif %}
         <!-- OPERASYON_RAPORU_MENU (15.05.2026 - Mehmet/Admin/Yonetim/Planlama) -->
         <a href="/planlama/operasyon-raporu" class="si {% if '/planlama/operasyon-raporu' in rp %}active{% endif %}" title="Operasyon Raporu">
           <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 16v-5"/><path d="M12 16v-8"/><path d="M17 16v-3"/></svg></span>
