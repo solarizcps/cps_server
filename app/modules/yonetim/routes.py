@@ -2463,6 +2463,7 @@ def personel_360_profil(profil_id):
     try:
         kp = con.execute("""
             SELECT kp.id, kp.gercek_ad, kp.kullanici_adi, kp.profil_tipi, kp.aktif,
+                   kp.kaynak, kp.kaynak_id,
                    dm.id AS dept_id, dm.ad AS dept_ad, dm.kod AS dept_kod
             FROM kullanici_profil kp
             LEFT JOIN departman_master dm ON dm.id = kp.departman_id
@@ -2568,6 +2569,98 @@ def personel_360_profil(profil_id):
         except Exception:
             yetkinlikler = []
 
+        # FAZ2D-1: readonly üretim özeti
+        _BOSH_OZET = {
+            "toplam_kayit": 0, "toplam_miktar": 0,
+            "onayli_kayit": 0, "onayli_miktar": 0,
+            "son_30_gun_miktar": 0, "son_90_gun_miktar": 0,
+            "son_is_tarihi": None, "farkli_proses_sayisi": 0,
+        }
+        uretim_ozet     = dict(_BOSH_OZET)
+        uretim_prosesler = []
+        son_uretimler   = []
+
+        pk_id = kp["kaynak_id"] if kp["kaynak"] == "personel_kullanici" else None
+        if pk_id is not None:
+            try:
+                oz = con.execute("""
+                    SELECT
+                        COUNT(*)                                                        AS toplam_kayit,
+                        COALESCE(SUM(miktar), 0)                                        AS toplam_miktar,
+                        COUNT(CASE WHEN onay_durum='onaylandi' THEN 1 END)              AS onayli_kayit,
+                        COALESCE(SUM(CASE WHEN onay_durum='onaylandi'
+                                         THEN miktar ELSE 0 END), 0)                    AS onayli_miktar,
+                        COALESCE(SUM(CASE WHEN tarih >= date('now','-30 days')
+                                         THEN miktar ELSE 0 END), 0)                    AS son_30_gun_miktar,
+                        COALESCE(SUM(CASE WHEN tarih >= date('now','-90 days')
+                                         THEN miktar ELSE 0 END), 0)                    AS son_90_gun_miktar,
+                        MAX(tarih)                                                       AS son_is_tarihi,
+                        COUNT(DISTINCT proses_kodu)                                     AS farkli_proses_sayisi
+                    FROM uretim_kayit
+                    WHERE personel_id = ?
+                """, (pk_id,)).fetchone()
+                if oz:
+                    uretim_ozet = {
+                        "toplam_kayit":         oz["toplam_kayit"],
+                        "toplam_miktar":        oz["toplam_miktar"],
+                        "onayli_kayit":         oz["onayli_kayit"],
+                        "onayli_miktar":        oz["onayli_miktar"],
+                        "son_30_gun_miktar":    oz["son_30_gun_miktar"],
+                        "son_90_gun_miktar":    oz["son_90_gun_miktar"],
+                        "son_is_tarihi":        oz["son_is_tarihi"],
+                        "farkli_proses_sayisi": oz["farkli_proses_sayisi"],
+                    }
+
+                pr_rows = con.execute("""
+                    SELECT proses_kodu, proses_adi,
+                           COUNT(*)                                                     AS kayit_sayisi,
+                           COALESCE(SUM(miktar), 0)                                     AS toplam_miktar,
+                           COALESCE(SUM(CASE WHEN onay_durum='onaylandi'
+                                            THEN miktar ELSE 0 END), 0)                 AS onayli_miktar,
+                           MAX(tarih)                                                    AS son_tarih
+                    FROM uretim_kayit
+                    WHERE personel_id = ?
+                    GROUP BY proses_kodu, proses_adi
+                    ORDER BY toplam_miktar DESC
+                """, (pk_id,)).fetchall()
+                uretim_prosesler = [
+                    {
+                        "proses_kodu":   r["proses_kodu"],
+                        "proses_adi":    r["proses_adi"],
+                        "kayit_sayisi":  r["kayit_sayisi"],
+                        "toplam_miktar": r["toplam_miktar"],
+                        "onayli_miktar": r["onayli_miktar"],
+                        "son_tarih":     r["son_tarih"],
+                    }
+                    for r in pr_rows
+                ]
+
+                su_rows = con.execute("""
+                    SELECT tarih, saat, proses_adi, proses_kodu,
+                           miktar, onay_durum, usta_ad, onay_tarihi
+                    FROM uretim_kayit
+                    WHERE personel_id = ?
+                    ORDER BY tarih DESC, saat DESC
+                    LIMIT 10
+                """, (pk_id,)).fetchall()
+                son_uretimler = [
+                    {
+                        "tarih":        r["tarih"],
+                        "saat":         r["saat"],
+                        "proses_adi":   r["proses_adi"],
+                        "proses_kodu":  r["proses_kodu"],
+                        "miktar":       r["miktar"],
+                        "onay_durum":   r["onay_durum"],
+                        "usta_ad":      r["usta_ad"],
+                        "onay_tarihi":  r["onay_tarihi"],
+                    }
+                    for r in su_rows
+                ]
+            except Exception:
+                uretim_ozet      = dict(_BOSH_OZET)
+                uretim_prosesler = []
+                son_uretimler    = []
+
     finally:
         con.close()
 
@@ -2605,9 +2698,12 @@ def personel_360_profil(profil_id):
             }
             for r in prosesler
         ],
-        "usta_bilgi":       usta_bilgi,
-        "personel_listesi": personel_listesi,
-        "yetkinlikler":     yetkinlikler,
+        "usta_bilgi":        usta_bilgi,
+        "personel_listesi":  personel_listesi,
+        "yetkinlikler":      yetkinlikler,
+        "uretim_ozet":       uretim_ozet,
+        "uretim_prosesler":  uretim_prosesler,
+        "son_uretimler":     son_uretimler,
     })
 
 @yonetim_bp.route('/api/personel-360/profil/<int:profil_id>/organizasyon', methods=['POST'])
