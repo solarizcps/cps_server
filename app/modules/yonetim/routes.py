@@ -2573,5 +2573,238 @@ def personel_360_profil(profil_id):
         "personel_listesi": personel_listesi,
     })
 
+@yonetim_bp.route('/api/personel-360/profil/<int:profil_id>/organizasyon', methods=['POST'])
+@yetki_gerekli('yonetim', 'can_update')
+def personel_360_org_guncelle(profil_id):
+    """
+    FAZ2B-2B: Personel 360 organizasyon güncelleme.
+    Yazılabilir alanlar: departman_id, profil_tipi, aktif, saha_organizasyon_sahibi_id
+    Zorunlu: guncelleme_notu
+    Yasak: kullanici_proses, sistem_kullanici, sistem_rol_yetki
+    """
+    IZINLI_TIPLER = {'SAHA_USTASI', 'SAHA_PERSONEL', 'yonetim', 'ofis', 'sistem', 'calisan'}
+
+    data = request.get_json(silent=True) or {}
+
+    # ── Zorunlu not ─────────────────────────────────────────────
+    notu = (data.get('guncelleme_notu') or '').strip()
+    if not notu:
+        return jsonify({'ok': False, 'hata': 'guncelleme_notu zorunlu'}), 400
+
+    # ── Opsiyonel alanlar ────────────────────────────────────────
+    yeni_dept_id  = data.get('departman_id')
+    yeni_tip      = data.get('profil_tipi')
+    yeni_aktif    = data.get('aktif')
+    yeni_sahip_id = data.get('saha_organizasyon_sahibi_id')
+
+    # Tip validasyonu
+    if yeni_tip is not None and yeni_tip not in IZINLI_TIPLER:
+        return jsonify({'ok': False, 'hata': f'profil_tipi izinsiz: {yeni_tip}'}), 422
+
+    # Aktif sadece 0/1
+    if yeni_aktif is not None and yeni_aktif not in (0, 1, '0', '1'):
+        return jsonify({'ok': False, 'hata': 'aktif sadece 0 veya 1 olabilir'}), 422
+    if yeni_aktif is not None:
+        yeni_aktif = int(yeni_aktif)
+
+    # dept_id sayısal
+    if yeni_dept_id is not None:
+        try:
+            yeni_dept_id = int(yeni_dept_id)
+        except (TypeError, ValueError):
+            return jsonify({'ok': False, 'hata': 'departman_id sayısal olmalı'}), 422
+
+    # sahip_id sayısal
+    if yeni_sahip_id is not None and str(yeni_sahip_id).strip() not in ('', 'null', 'None'):
+        try:
+            yeni_sahip_id = int(yeni_sahip_id)
+        except (TypeError, ValueError):
+            return jsonify({'ok': False, 'hata': 'saha_organizasyon_sahibi_id sayısal olmalı'}), 422
+    else:
+        yeni_sahip_id = None
+
+    # Kendine bağlama yasak
+    if yeni_sahip_id is not None and yeni_sahip_id == profil_id:
+        return jsonify({'ok': False, 'hata': 'Personel kendine saha sahibi olarak atanamaz'}), 422
+
+    con = _get_conn()
+    try:
+        # ── Hedef profili yükle ───────────────────────────────────
+        kp = con.execute("""
+            SELECT id, gercek_ad, kullanici_adi, profil_tipi, aktif, departman_id
+            FROM kullanici_profil WHERE id=?
+        """, (profil_id,)).fetchone()
+        if not kp:
+            return jsonify({'ok': False, 'hata': 'Profil bulunamadı'}), 404
+
+        # ── Departman kontrolü ───────────────────────────────────
+        if yeni_dept_id is not None:
+            dept_var = con.execute(
+                "SELECT id FROM departman_master WHERE id=? AND aktif=1", (yeni_dept_id,)
+            ).fetchone()
+            if not dept_var:
+                return jsonify({'ok': False, 'hata': f'departman_id={yeni_dept_id} bulunamadı veya pasif'}), 422
+
+        # ── Saha sahibi kontrolü ─────────────────────────────────
+        if yeni_sahip_id is not None:
+            if kp['profil_tipi'] not in ('SAHA_PERSONEL',) and (yeni_tip or kp['profil_tipi']) not in ('SAHA_PERSONEL',):
+                return jsonify({
+                    'ok': False,
+                    'hata': 'saha_organizasyon_sahibi_id sadece SAHA_PERSONEL için geçerli'
+                }), 422
+            sahip = con.execute(
+                "SELECT id, gercek_ad, profil_tipi FROM kullanici_profil WHERE id=? AND aktif=1",
+                (yeni_sahip_id,)
+            ).fetchone()
+            if not sahip:
+                return jsonify({'ok': False, 'hata': f'saha_organizasyon_sahibi_id={yeni_sahip_id} bulunamadı'}), 422
+            if sahip['profil_tipi'] != 'SAHA_USTASI':
+                return jsonify({
+                    'ok': False,
+                    'hata': f"'{sahip['gercek_ad']}' profil_tipi={sahip['profil_tipi']} — SAHA_USTASI olmalı"
+                }), 422
+
+        # ── Eski profil alanlarını sakla (audit için) ────────────
+        eski = {
+            'departman_id': kp['departman_id'],
+            'profil_tipi':  kp['profil_tipi'],
+            'aktif':        kp['aktif'],
+        }
+
+        # ── Güncellenecek alanlar ────────────────────────────────
+        set_parts = ["updated_at = datetime('now')"]
+        params    = []
+        degisen   = {}
+
+        if yeni_dept_id is not None and yeni_dept_id != kp['departman_id']:
+            set_parts.append('departman_id = ?')
+            params.append(yeni_dept_id)
+            degisen['departman_id'] = (kp['departman_id'], yeni_dept_id)
+
+        if yeni_tip is not None and yeni_tip != kp['profil_tipi']:
+            set_parts.append('profil_tipi = ?')
+            params.append(yeni_tip)
+            degisen['profil_tipi'] = (kp['profil_tipi'], yeni_tip)
+
+        if yeni_aktif is not None and yeni_aktif != kp['aktif']:
+            set_parts.append('aktif = ?')
+            params.append(yeni_aktif)
+            degisen['aktif'] = (kp['aktif'], yeni_aktif)
+
+        # ── Transaction başlat ───────────────────────────────────
+        kapanan_iliski_id = None
+        yeni_iliski_id    = None
+
+        now_str = __import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        today   = __import__('datetime').date.today().isoformat()
+
+        if params:
+            params.append(profil_id)
+            con.execute(
+                f"UPDATE kullanici_profil SET {', '.join(set_parts)} WHERE id=?",
+                params
+            )
+
+        # ── Saha sahibi işlemi ───────────────────────────────────
+        if yeni_sahip_id is not None:
+            # Mevcut aktif ilişkiyi bul
+            eski_iliski = con.execute("""
+                SELECT id FROM usta_personel_iliskisi
+                WHERE personel_profil_id=? AND aktif=1
+                ORDER BY id DESC LIMIT 1
+            """, (profil_id,)).fetchone()
+
+            if eski_iliski:
+                # Aynı usta ise değiştirme
+                ayni = con.execute("""
+                    SELECT id FROM usta_personel_iliskisi
+                    WHERE id=? AND usta_profil_id=?
+                """, (eski_iliski['id'], yeni_sahip_id)).fetchone()
+                if not ayni:
+                    kapanan_iliski_id = eski_iliski['id']
+                    con.execute("""
+                        UPDATE usta_personel_iliskisi
+                        SET aktif=0, bitis_tarihi=?, updated_at=?, guncelleme_notu=?
+                        WHERE id=?
+                    """, (today, now_str, notu, kapanan_iliski_id))
+
+                    con.execute("""
+                        INSERT INTO usta_personel_iliskisi
+                          (usta_profil_id, personel_profil_id, aktif, kaynak,
+                           olusturan_id, guncelleme_notu, baslangic_tarihi)
+                        VALUES (?, ?, 1, 'faz2b2_panel', ?, ?, ?)
+                    """, (yeni_sahip_id, profil_id,
+                          (session.get('kullanici') or {}).get('Id'),
+                          notu, today))
+                    yeni_iliski_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+            else:
+                # Aktif ilişki yok, yeni aç
+                con.execute("""
+                    INSERT INTO usta_personel_iliskisi
+                      (usta_profil_id, personel_profil_id, aktif, kaynak,
+                       olusturan_id, guncelleme_notu, baslangic_tarihi)
+                    VALUES (?, ?, 1, 'faz2b2_panel', ?, ?, ?)
+                """, (yeni_sahip_id, profil_id,
+                      (session.get('kullanici') or {}).get('Id'),
+                      notu, today))
+                yeni_iliski_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+        # Profil tipi SAHA_PERSONEL dışına çekiliyorsa aktif ilişkiyi kapat
+        elif yeni_tip is not None and yeni_tip != 'SAHA_PERSONEL' and kp['profil_tipi'] == 'SAHA_PERSONEL':
+            eski_iliski = con.execute("""
+                SELECT id FROM usta_personel_iliskisi
+                WHERE personel_profil_id=? AND aktif=1
+                ORDER BY id DESC LIMIT 1
+            """, (profil_id,)).fetchone()
+            if eski_iliski:
+                kapanan_iliski_id = eski_iliski['id']
+                con.execute("""
+                    UPDATE usta_personel_iliskisi
+                    SET aktif=0, bitis_tarihi=?, updated_at=?, guncelleme_notu=?
+                    WHERE id=?
+                """, (today, now_str, notu, kapanan_iliski_id))
+
+        con.commit()
+
+        # ── Audit ────────────────────────────────────────────────
+        for alan, (eski_val, yeni_val) in degisen.items():
+            audit.log(
+                _u(), 'DUZENLE', 'kullanici_profil', profil_id,
+                alan=alan, eski=eski_val, yeni=yeni_val,
+                aciklama=f"P360 org update: {alan} '{eski_val}'→'{yeni_val}' | not: {notu}",
+                modul='yonetim', alt_modul='personel_360'
+            )
+        if kapanan_iliski_id:
+            audit.log(
+                _u(), 'DUZENLE', 'usta_personel_iliskisi', kapanan_iliski_id,
+                alan='aktif', eski=1, yeni=0,
+                aciklama=f"P360 org: eski ilişki kapatıldı | not: {notu}",
+                modul='yonetim', alt_modul='personel_360'
+            )
+        if yeni_iliski_id:
+            audit.log(
+                _u(), 'EKLE', 'usta_personel_iliskisi', yeni_iliski_id,
+                aciklama=f"P360 org: yeni ilişki açıldı sahip_id={yeni_sahip_id} | not: {notu}",
+                modul='yonetim', alt_modul='personel_360'
+            )
+
+    except Exception as e:
+        import traceback
+        try:
+            con.rollback()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'hata': str(e), 'tb': traceback.format_exc()}), 500
+    finally:
+        con.close()
+
+    return jsonify({
+        'ok':                True,
+        'profil_id':         profil_id,
+        'degisen_alanlar':   list(degisen.keys()),
+        'kapanan_iliski_id': kapanan_iliski_id,
+        'yeni_iliski_id':    yeni_iliski_id,
+    })
+
 # END PERSONEL_360
 # ════════════════════════════════════════════════════════════════
