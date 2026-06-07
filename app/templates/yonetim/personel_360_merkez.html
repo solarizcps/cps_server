@@ -19,8 +19,8 @@
 
 <!-- Bilgi bandı -->
 <div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:10px 16px;margin-bottom:18px;font-size:13px;color:#713f12;">
-  <strong>📖 Görüntüleme + Organizasyon:</strong> Ekip/Proses/Usta sekmeleri salt okunurdur.
-  <strong>✏️ Organizasyon</strong> sekmesinden departman, profil tipi, durum ve saha sahibi güncellenebilir.
+  <strong>📖 Salt Okunur Sekmeler:</strong> Ekip, Proses, Usta, Yetkinlik ve Üretim sekmeleri yalnızca görüntülemedir.
+  <strong>✏️ Organizasyon</strong> sekmesinden departman, profil tipi ve sorumlu usta güncellenebilir.
 </div>
 
 <!-- İki kolonlu layout: sol = liste, sağ = detay -->
@@ -81,12 +81,21 @@
           </div>
         </div>
         <!-- Departman satırı -->
-        <div style="padding:10px 20px 14px;border-top:1px solid var(--border);
-                    display:flex;gap:8px;align-items:center;font-size:13px;">
-          <span style="color:var(--text3);">🏢 Departman:</span>
+        <div style="padding:10px 20px 6px;border-top:1px solid var(--border);
+                    display:flex;gap:8px;align-items:center;font-size:13px;flex-wrap:wrap;">
+          <span style="color:var(--text3);">🏢</span>
           <strong id="d-dept"></strong>
           <span id="d-dept-kod" style="font-family:var(--mono);font-size:11px;
                 color:var(--text3);background:var(--bg2);padding:1px 6px;border-radius:4px;"></span>
+          <!-- Eksik veri uyarı badge'leri -->
+          <span id="d-uyari-dept"    class="p360-uyari p360-uyari-kirmizi" style="display:none;">⚠ Departman yok</span>
+          <span id="d-uyari-usta"    class="p360-uyari p360-uyari-sari"    style="display:none;">⚠ Usta atanmamış</span>
+          <span id="d-uyari-yk"      class="p360-uyari p360-uyari-sari"    style="display:none;">⚠ Yetkinlik yok</span>
+          <span id="d-uyari-uretim"  class="p360-uyari p360-uyari-gri"     style="display:none;">⚠ Üretim kaydı yok</span>
+        </div>
+        <!-- Üst Özet Bar -->
+        <div id="d-ozet-bar"
+             style="display:none;padding:8px 20px 12px;gap:16px;flex-wrap:wrap;align-items:center;">
         </div>
       </div>
 
@@ -124,23 +133,22 @@
         </div>
       </div>
 
-      <!-- SEKME: Yetkinlik (FAZ2C-4 readonly + FAZ2C-5B form) -->
+      <!-- SEKME: Yetkinlik -->
       <div id="sekme-yetkinlik" class="p360-sekme-icerik" style="display:none;">
         <!-- Mevcut yetkinlik listesi -->
         <div class="oz-card" style="margin-bottom:14px;">
           <div class="oz-hdr"><span class="oz-hdr-t">Yetkinlikler</span></div>
           <div id="d-yetkinlik-liste" class="oz-body" style="padding:0;"></div>
         </div>
-        <!-- Yetkinlik atama formu (FAZ2C-5B) -->
+        <!-- Yetkinlik atama formu -->
         <div class="oz-card">
           <div class="oz-hdr">
             <span class="oz-hdr-t">Yetkinlik Ata / Güncelle</span>
-            <span style="font-size:11px;color:var(--text3);">FAZ2C-5B</span>
           </div>
           <div class="oz-body">
             <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:6px;
                         padding:8px 12px;margin-bottom:14px;font-size:12px;color:#166534;">
-              Aynı yetkinlik için mevcut aktif kayıt kapatılır, yeni kayıt açılır. Geçmiş silinmez.
+              Aynı yetkinlik için mevcut kayıt güncellenir. Yetkinlik geçmişi korunur, silinmez.
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
               <div>
@@ -237,14 +245,13 @@
         <div class="oz-card">
           <div class="oz-hdr">
             <span class="oz-hdr-t">Organizasyon Güncelleme</span>
-            <span style="font-size:11px;color:var(--text3);">FAZ2B-2B</span>
           </div>
           <div class="oz-body">
             <!-- Bilgi bandı -->
             <div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;
                         padding:8px 12px;margin-bottom:14px;font-size:12px;color:#92400e;">
-              Sadece organizasyon alanları değiştirilebilir. Proses ve sistem yetki tabloları etkilenmez.
-              Usta değişikliğinde eski ilişki silinmez, <strong>aktif=0</strong> yapılır.
+              Personel bilgilerini düzenleyebilirsiniz. Proses ve sistem yetki kayıtları etkilenmez.
+              Usta değişikliğinde önceki ilişki tarihçede korunur.
             </div>
 
             <div id="org-form-icerik">
@@ -330,6 +337,20 @@
   font-size: 12px; font-weight: 600; color: var(--text2);
   display: block; margin-bottom: 4px;
 }
+.p360-ozet-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 20px; padding: 4px 11px;
+  font-size: 12px; color: var(--text2); white-space: nowrap;
+}
+.p360-ozet-chip strong { color: var(--text1); font-size: 13px; }
+.p360-uyari {
+  display: inline-block; font-size: 11px; font-weight: 600;
+  padding: 2px 8px; border-radius: 4px; white-space: nowrap;
+}
+.p360-uyari-kirmizi { background: #fee2e2; color: #991b1b; }
+.p360-uyari-sari    { background: #fef3c7; color: #92400e; }
+.p360-uyari-gri     { background: #f3f4f6; color: #6b7280; }
 .uretim-pd-btn {
   padding: 4px 10px; border: 1px solid var(--border); border-radius: 5px;
   background: var(--bg2); color: var(--text2); font-size: 11px;
@@ -487,8 +508,56 @@
       `background:${tip.bg};color:${tip.renk};`;
     document.getElementById('d-aktif-badge').textContent = p.aktif ? '✔ Aktif' : '✖ Pasif';
     document.getElementById('d-aktif-badge').style.color = p.aktif ? '#166534' : '#dc2626';
-    document.getElementById('d-dept').textContent      = p.departman || 'Atanmamış';
+    document.getElementById('d-dept').textContent      = p.departman || '';
     document.getElementById('d-dept-kod').textContent  = p.departman_kod || '';
+
+    // ── Uyarı badge'leri ────────────────────────────────────────
+    const isSahaPer = p.profil_tipi === 'SAHA_PERSONEL';
+    const isUsta    = p.profil_tipi === 'USTA' || p.profil_tipi === 'SAHA_USTASI';
+    const yList0    = data.yetkinlikler || [];
+    const kar0      = data.uretim_kariyer || {};
+    const ubilgi    = data.usta_bilgi;
+
+    const _uyari = (id, goster) => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = goster ? '' : 'none';
+    };
+    _uyari('d-uyari-dept',   !p.departman);
+    _uyari('d-uyari-usta',   isSahaPer && !ubilgi);
+    _uyari('d-uyari-yk',     yList0.length === 0);
+    _uyari('d-uyari-uretim', !kar0.toplam_kayit);
+
+    // ── Üst Özet Bar ────────────────────────────────────────────
+    const ozetBar = document.getElementById('d-ozet-bar');
+    const chips = [];
+
+    if (isSahaPer && ubilgi) {
+      chips.push(`<span class="p360-ozet-chip">🔧 <span>Usta</span><strong>${ubilgi.usta_ad}</strong></span>`);
+    }
+    if (isUsta) {
+      const pCount = (data.personel_listesi || []).length;
+      if (pCount > 0)
+        chips.push(`<span class="p360-ozet-chip">👷 <span>Sorumlu</span><strong>${pCount} personel</strong></span>`);
+    }
+    if (yList0.length > 0) {
+      chips.push(`<span class="p360-ozet-chip">⭐ <span>Yetkinlik</span><strong>${yList0.length}</strong></span>`);
+    }
+    if (kar0.toplam_miktar) {
+      chips.push(`<span class="p360-ozet-chip">📊 <span>Kariyer</span><strong>${kar0.toplam_miktar.toLocaleString()} adet</strong></span>`);
+    }
+    if (kar0.son_is_tarihi) {
+      chips.push(`<span class="p360-ozet-chip">🗓 <span>Son İş</span><strong>${kar0.son_is_tarihi}</strong></span>`);
+    }
+    if ((data.ekipler || []).length > 0) {
+      chips.push(`<span class="p360-ozet-chip">👥 <span>Ekip</span><strong>${data.ekipler.length}</strong></span>`);
+    }
+
+    if (chips.length) {
+      ozetBar.innerHTML  = chips.join('');
+      ozetBar.style.display = 'flex';
+    } else {
+      ozetBar.style.display = 'none';
+    }
 
     // Ekip
     const ekipEl = document.getElementById('d-ekip-liste');
@@ -593,7 +662,6 @@
       yetkinlikEl.innerHTML = '<div class="p360-bos-mesaj">Yetkinlik kaydı yok.</div>';
     }
 
-    // Yetkinlik formu doldur (FAZ2C-5B)
     yetkinlikFormDoldur();
 
     // Üretim sekmesi (FAZ2E-3A dönemsel)
@@ -712,7 +780,7 @@
     orgFormDoldur(data);
   }
 
-  // ── Yetkinlik formu (FAZ2C-5B) ──────────────────────────────
+  // ── Yetkinlik formu ─────────────────────────────────────────
   let _yetkinlikSecenekler = null;  // cache
 
   async function yetkinlikFormDoldur() {
