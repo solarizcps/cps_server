@@ -2374,13 +2374,13 @@ def api_canli_akis():
 # ════════════════════════════════════════════════════════════════
 
 @yonetim_bp.route('/personel-360', methods=['GET'])
-@yetki_gerekli('yonetim', 'can_view')
+@yetki_gerekli('personel_360', 'can_view')
 def personel_360():
     return render_template('yonetim/personel_360_merkez.html')
 
 
 @yonetim_bp.route('/api/personel-360/secenekler', methods=['GET'])
-@yetki_gerekli('yonetim', 'can_view')
+@yetki_gerekli('personel_360', 'can_view')
 def personel_360_secenekler():
     """
     Personel 360 formu için dropdown seçenekleri: profiller, departmanlar, ekipler, prosesler.
@@ -2453,12 +2453,18 @@ def personel_360_secenekler():
 
 
 @yonetim_bp.route('/api/personel-360/profil/<int:profil_id>', methods=['GET'])
-@yetki_gerekli('yonetim', 'can_view')
+@yetki_gerekli('personel_360', 'can_view')
 def personel_360_profil(profil_id):
     """
     Tek personelin 360 görünümü: temel bilgi, departman, ekip, proses, usta ilişkisi.
     Sadece okuma — DB yazma yok.
     """
+    # FAZ2F-1B: Hassas alan capability flag'leri
+    _u_sess = session.get('kullanici')
+    has_ik      = is_superadmin(_u_sess) or yetki_var('personel_360.ik',  'can_view')
+    has_maas    = is_superadmin(_u_sess) or yetki_var('personel_maas',    'can_view')
+    has_maliyet = is_superadmin(_u_sess) or yetki_var('personel_maas',    'can_view')
+
     con = _get_conn()
     try:
         kp = con.execute("""
@@ -2734,6 +2740,12 @@ def personel_360_profil(profil_id):
         "uretim_ozet":       uretim_ozet,
         "uretim_prosesler":  uretim_prosesler,
         "son_uretimler":     son_uretimler,
+        "_caps": {
+            "ik":      has_ik,
+            "maas":    has_maas,
+            "maliyet": has_maliyet,
+            "usta":    False,
+        },
     })
 
 @yonetim_bp.route('/api/personel-360/profil/<int:profil_id>/organizasyon', methods=['POST'])
