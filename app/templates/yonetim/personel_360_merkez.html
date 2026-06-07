@@ -189,11 +189,33 @@
         </div>
       </div>
 
-      <!-- SEKME: Üretim (FAZ2D-2 readonly) -->
+      <!-- SEKME: Üretim (FAZ2D-2 readonly + FAZ2E-3A dönemsel) -->
       <div id="sekme-uretim" class="p360-sekme-icerik" style="display:none;">
-        <!-- Özet kartlar -->
+        <!-- Kariyer banner (tüm zamanlar, sabit) -->
+        <div id="d-uretim-kariyer"
+             style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;
+                    padding:9px 16px;margin-bottom:10px;display:flex;gap:20px;align-items:center;
+                    flex-wrap:wrap;font-size:12px;color:var(--text3);">
+          <span style="font-weight:600;color:var(--text2);">📋 Kariyer Toplamı:</span>
+          <span id="d-kariyer-miktar" style="font-weight:700;color:#2563eb;font-size:14px;"></span>
+          <span id="d-kariyer-onayli" style="color:#059669;"></span>
+          <span id="d-kariyer-son"></span>
+        </div>
+        <!-- Dönem buton bar -->
+        <div style="display:flex;gap:5px;margin-bottom:10px;flex-wrap:wrap;" id="uretim-period-bar">
+          <span style="font-size:11px;color:var(--text3);align-self:center;">Dönem:</span>
+          <button class="uretim-pd-btn uretim-pd-aktif" data-period="son_90_gun">Son 90g</button>
+          <button class="uretim-pd-btn" data-period="bu_ay">Bu Ay</button>
+          <button class="uretim-pd-btn" data-period="son_30_gun">Son 30g</button>
+          <button class="uretim-pd-btn" data-period="bu_yil">Bu Yıl</button>
+          <button class="uretim-pd-btn" data-period="bugun">Bugün</button>
+        </div>
+        <!-- Özet kartlar (dönem filtreli) -->
         <div class="oz-card" style="margin-bottom:14px;">
-          <div class="oz-hdr"><span class="oz-hdr-t">Üretim Özeti</span></div>
+          <div class="oz-hdr">
+            <span class="oz-hdr-t">Üretim Özeti</span>
+            <span id="d-uretim-period-etiket" style="font-size:11px;color:var(--text3);"></span>
+          </div>
           <div id="d-uretim-ozet" class="oz-body"></div>
         </div>
         <!-- Proses dağılımı -->
@@ -204,7 +226,7 @@
         <!-- Son üretimler -->
         <div class="oz-card">
           <div class="oz-hdr"><span class="oz-hdr-t">Son Üretimler</span>
-            <span style="font-size:11px;color:var(--text3);">son 10 kayıt</span>
+            <span style="font-size:11px;color:var(--text3);">dönem içi son 10 kayıt</span>
           </div>
           <div id="d-uretim-son" class="oz-body" style="padding:0;"></div>
         </div>
@@ -308,6 +330,15 @@
   font-size: 12px; font-weight: 600; color: var(--text2);
   display: block; margin-bottom: 4px;
 }
+.uretim-pd-btn {
+  padding: 4px 10px; border: 1px solid var(--border); border-radius: 5px;
+  background: var(--bg2); color: var(--text2); font-size: 11px;
+  cursor: pointer; transition: all 0.12s;
+}
+.uretim-pd-btn:hover { background: #ede9fe; color: #6d28d9; border-color: #c4b5fd; }
+.uretim-pd-btn.uretim-pd-aktif {
+  background: #2563eb; color: #fff; border-color: #2563eb; font-weight: 600;
+}
 .org-sel {
   width: 100%; box-sizing: border-box; padding: 7px 8px;
   border: 1px solid var(--border); border-radius: 6px;
@@ -332,8 +363,9 @@
     SISTEM:        { renk: '#374151', bg: '#f3f4f6', etiket: '⚙ Sistem'   },
   };
 
-  let tumProfiller = [];
-  let secilenId    = null;
+  let tumProfiller  = [];
+  let secilenId     = null;
+  let secilenPeriod = 'son_90_gun';
 
   // ── Sayfa yükle ────────────────────────────────────────────
   async function yukle() {
@@ -411,25 +443,34 @@
   async function profilSec(id) {
     secilenId = id;
     filtrele();
-
-    document.getElementById('p360-bos').style.display    = 'none';
-    document.getElementById('p360-detay').style.display  = 'block';
-
-    // Yükleniyor göster
+    document.getElementById('p360-bos').style.display   = 'none';
+    document.getElementById('p360-detay').style.display = 'block';
     document.getElementById('d-adsoyad').textContent = 'Yükleniyor…';
     document.getElementById('d-kadi').textContent    = '';
     document.getElementById('d-dept').textContent    = '';
+    await profilYukle(id, secilenPeriod);
+  }
 
+  async function profilYukle(id, period) {
     try {
-      const res  = await fetch(`/yonetim/api/personel-360/profil/${id}`);
+      const res  = await fetch(`/yonetim/api/personel-360/profil/${id}?period=${period}`);
       const data = await res.json();
       if (!data.ok) throw new Error(data.hata || 'API hatası');
       detayGoster(data);
     } catch (e) {
-      document.getElementById('d-adsoyad').textContent =
-        '⚠ Yüklenemedi: ' + e.message;
+      document.getElementById('d-adsoyad').textContent = '⚠ Yüklenemedi: ' + e.message;
     }
   }
+
+  // ── Dönem buton click handler ────────────────────────────────
+  document.getElementById('uretim-period-bar').addEventListener('click', async function (e) {
+    const btn = e.target.closest('.uretim-pd-btn');
+    if (!btn || !secilenId) return;
+    secilenPeriod = btn.dataset.period;
+    document.querySelectorAll('.uretim-pd-btn').forEach(b => b.classList.remove('uretim-pd-aktif'));
+    btn.classList.add('uretim-pd-aktif');
+    await profilYukle(secilenId, secilenPeriod);
+  });
 
   // ── Detay render ────────────────────────────────────────────
   function detayGoster(data) {
@@ -555,17 +596,43 @@
     // Yetkinlik formu doldur (FAZ2C-5B)
     yetkinlikFormDoldur();
 
-    // Üretim sekmesi (FAZ2D-2 readonly)
+    // Üretim sekmesi (FAZ2E-3A dönemsel)
     const oz      = data.uretim_ozet      || {};
+    const kar     = data.uretim_kariyer   || {};
     const prList  = data.uretim_prosesler || [];
     const suList  = data.son_uretimler    || [];
     const ozetEl  = document.getElementById('d-uretim-ozet');
     const prEl    = document.getElementById('d-uretim-prosesler');
     const sonEl   = document.getElementById('d-uretim-son');
 
-    if (!oz.toplam_kayit) {
+    // Kariyer banner
+    const PERIOD_ETIKET = {
+      son_90_gun: 'Son 90 Gün', bu_ay: 'Bu Ay',
+      son_30_gun: 'Son 30 Gün', bu_yil: 'Bu Yıl', bugun: 'Bugün'
+    };
+    const periodAd = PERIOD_ETIKET[data.uretim_period || secilenPeriod] || secilenPeriod;
+    const pdEtiketEl = document.getElementById('d-uretim-period-etiket');
+    if (pdEtiketEl) pdEtiketEl.textContent = periodAd;
+
+    document.getElementById('d-kariyer-miktar').textContent =
+      kar.toplam_miktar ? kar.toplam_miktar.toLocaleString() + ' adet' : '—';
+    document.getElementById('d-kariyer-onayli').textContent =
+      kar.onayli_miktar ? '✓ ' + kar.onayli_miktar.toLocaleString() + ' onaylı' : '';
+    document.getElementById('d-kariyer-son').textContent =
+      kar.son_is_tarihi ? 'Son: ' + kar.son_is_tarihi : '';
+
+    // Dönem buton senkron
+    document.querySelectorAll('.uretim-pd-btn').forEach(b => {
+      b.classList.toggle('uretim-pd-aktif', b.dataset.period === (data.uretim_period || secilenPeriod));
+    });
+
+    if (!kar.toplam_kayit) {
       const bosMsg = '<div class="p360-bos-mesaj">Üretim kaydı bulunamadı.<br><small style="color:var(--text3);">Bu profil için üretim verisi takip edilmemektedir.</small></div>';
       ozetEl.innerHTML = bosMsg;
+      prEl.innerHTML   = '';
+      sonEl.innerHTML  = '';
+    } else if (!oz.toplam_kayit) {
+      ozetEl.innerHTML = `<div class="p360-bos-mesaj">${periodAd} döneminde üretim kaydı yok.</div>`;
       prEl.innerHTML   = '';
       sonEl.innerHTML  = '';
     } else {

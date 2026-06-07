@@ -2569,35 +2569,61 @@ def personel_360_profil(profil_id):
         except Exception:
             yetkinlikler = []
 
-        # FAZ2D-1: readonly üretim özeti
+        # FAZ2E-3A: dönemsel üretim özeti
+        _PERIOD_FILTRELER = {
+            "bugun":      "tarih = date('now')",
+            "bu_ay":      "tarih >= date('now','start of month')",
+            "son_30_gun": "tarih >= date('now','-30 days')",
+            "son_90_gun": "tarih >= date('now','-90 days')",
+            "bu_yil":     "tarih >= date('now','start of year')",
+        }
+        _DEFAULT_PERIOD = "son_90_gun"
+        _raw_period = request.args.get("period", _DEFAULT_PERIOD)
+        uretim_period = _raw_period if _raw_period in _PERIOD_FILTRELER else _DEFAULT_PERIOD
+        _period_where = _PERIOD_FILTRELER[uretim_period]
+
         _BOSH_OZET = {
             "toplam_kayit": 0, "toplam_miktar": 0,
             "onayli_kayit": 0, "onayli_miktar": 0,
-            "son_30_gun_miktar": 0, "son_90_gun_miktar": 0,
             "son_is_tarihi": None, "farkli_proses_sayisi": 0,
         }
-        uretim_ozet     = dict(_BOSH_OZET)
+        uretim_ozet      = dict(_BOSH_OZET)
+        uretim_kariyer   = {"toplam_kayit": 0, "toplam_miktar": 0,
+                            "onayli_miktar": 0, "son_is_tarihi": None}
         uretim_prosesler = []
-        son_uretimler   = []
+        son_uretimler    = []
 
         pk_id = kp["kaynak_id"] if kp["kaynak"] == "personel_kullanici" else None
         if pk_id is not None:
             try:
-                oz = con.execute("""
-                    SELECT
-                        COUNT(*)                                                        AS toplam_kayit,
-                        COALESCE(SUM(miktar), 0)                                        AS toplam_miktar,
-                        COUNT(CASE WHEN onay_durum='onaylandi' THEN 1 END)              AS onayli_kayit,
-                        COALESCE(SUM(CASE WHEN onay_durum='onaylandi'
-                                         THEN miktar ELSE 0 END), 0)                    AS onayli_miktar,
-                        COALESCE(SUM(CASE WHEN tarih >= date('now','-30 days')
-                                         THEN miktar ELSE 0 END), 0)                    AS son_30_gun_miktar,
-                        COALESCE(SUM(CASE WHEN tarih >= date('now','-90 days')
-                                         THEN miktar ELSE 0 END), 0)                    AS son_90_gun_miktar,
-                        MAX(tarih)                                                       AS son_is_tarihi,
-                        COUNT(DISTINCT proses_kodu)                                     AS farkli_proses_sayisi
+                # Kariyer özeti — tüm zamanlar (period bağımsız)
+                kar = con.execute("""
+                    SELECT COUNT(*)                                              AS toplam_kayit,
+                           COALESCE(SUM(miktar), 0)                              AS toplam_miktar,
+                           COALESCE(SUM(CASE WHEN onay_durum='onaylandi'
+                                            THEN miktar ELSE 0 END), 0)          AS onayli_miktar,
+                           MAX(tarih)                                            AS son_is_tarihi
+                    FROM uretim_kayit WHERE personel_id = ?
+                """, (pk_id,)).fetchone()
+                if kar:
+                    uretim_kariyer = {
+                        "toplam_kayit":  kar["toplam_kayit"],
+                        "toplam_miktar": kar["toplam_miktar"],
+                        "onayli_miktar": kar["onayli_miktar"],
+                        "son_is_tarihi": kar["son_is_tarihi"],
+                    }
+
+                # Dönem filtreli özet
+                oz = con.execute(f"""
+                    SELECT COUNT(*)                                              AS toplam_kayit,
+                           COALESCE(SUM(miktar), 0)                              AS toplam_miktar,
+                           COUNT(CASE WHEN onay_durum='onaylandi' THEN 1 END)    AS onayli_kayit,
+                           COALESCE(SUM(CASE WHEN onay_durum='onaylandi'
+                                            THEN miktar ELSE 0 END), 0)          AS onayli_miktar,
+                           MAX(tarih)                                            AS son_is_tarihi,
+                           COUNT(DISTINCT proses_kodu)                           AS farkli_proses_sayisi
                     FROM uretim_kayit
-                    WHERE personel_id = ?
+                    WHERE personel_id = ? AND {_period_where}
                 """, (pk_id,)).fetchone()
                 if oz:
                     uretim_ozet = {
@@ -2605,21 +2631,20 @@ def personel_360_profil(profil_id):
                         "toplam_miktar":        oz["toplam_miktar"],
                         "onayli_kayit":         oz["onayli_kayit"],
                         "onayli_miktar":        oz["onayli_miktar"],
-                        "son_30_gun_miktar":    oz["son_30_gun_miktar"],
-                        "son_90_gun_miktar":    oz["son_90_gun_miktar"],
                         "son_is_tarihi":        oz["son_is_tarihi"],
                         "farkli_proses_sayisi": oz["farkli_proses_sayisi"],
                     }
 
-                pr_rows = con.execute("""
+                # Dönem filtreli proses dağılımı
+                pr_rows = con.execute(f"""
                     SELECT proses_kodu, proses_adi,
-                           COUNT(*)                                                     AS kayit_sayisi,
-                           COALESCE(SUM(miktar), 0)                                     AS toplam_miktar,
+                           COUNT(*)                                              AS kayit_sayisi,
+                           COALESCE(SUM(miktar), 0)                              AS toplam_miktar,
                            COALESCE(SUM(CASE WHEN onay_durum='onaylandi'
-                                            THEN miktar ELSE 0 END), 0)                 AS onayli_miktar,
-                           MAX(tarih)                                                    AS son_tarih
+                                            THEN miktar ELSE 0 END), 0)          AS onayli_miktar,
+                           MAX(tarih)                                            AS son_tarih
                     FROM uretim_kayit
-                    WHERE personel_id = ?
+                    WHERE personel_id = ? AND {_period_where}
                     GROUP BY proses_kodu, proses_adi
                     ORDER BY toplam_miktar DESC
                 """, (pk_id,)).fetchall()
@@ -2635,11 +2660,12 @@ def personel_360_profil(profil_id):
                     for r in pr_rows
                 ]
 
-                su_rows = con.execute("""
+                # Dönem filtreli son üretimler
+                su_rows = con.execute(f"""
                     SELECT tarih, saat, proses_adi, proses_kodu,
                            miktar, onay_durum, usta_ad, onay_tarihi
                     FROM uretim_kayit
-                    WHERE personel_id = ?
+                    WHERE personel_id = ? AND {_period_where}
                     ORDER BY tarih DESC, saat DESC
                     LIMIT 10
                 """, (pk_id,)).fetchall()
@@ -2658,6 +2684,8 @@ def personel_360_profil(profil_id):
                 ]
             except Exception:
                 uretim_ozet      = dict(_BOSH_OZET)
+                uretim_kariyer   = {"toplam_kayit": 0, "toplam_miktar": 0,
+                                    "onayli_miktar": 0, "son_is_tarihi": None}
                 uretim_prosesler = []
                 son_uretimler    = []
 
@@ -2701,6 +2729,8 @@ def personel_360_profil(profil_id):
         "usta_bilgi":        usta_bilgi,
         "personel_listesi":  personel_listesi,
         "yetkinlikler":      yetkinlikler,
+        "uretim_period":     uretim_period,
+        "uretim_kariyer":    uretim_kariyer,
         "uretim_ozet":       uretim_ozet,
         "uretim_prosesler":  uretim_prosesler,
         "son_uretimler":     son_uretimler,
