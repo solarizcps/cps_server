@@ -2665,6 +2665,11 @@ def personel_360_profil(profil_id):
         son_uretimler    = []
 
         pk_id = kp["kaynak_id"] if kp["kaynak"] == "personel_kullanici" else None
+
+        # FAZ2G-2: İK ve maaş defaults — pk_id yoksa veya yetki yoksa None kalır
+        maas_ozet = None
+        ik_ozet   = None
+
         if pk_id is not None:
             try:
                 # Kariyer özeti — tüm zamanlar (period bağımsız)
@@ -2760,6 +2765,148 @@ def personel_360_profil(profil_id):
                 uretim_prosesler = []
                 son_uretimler    = []
 
+        # FAZ2G-2: Maaş özeti — sadece has_maas=True ve pk_id varsa sorgu çalışır
+        if has_maas and pk_id:
+            try:
+                _aktif = con.execute("""
+                    SELECT tutar, para_birimi, gecerlilik_bas, tip, aciklama
+                    FROM personel_maas_gecmis
+                    WHERE personel_pk_id = ? AND gecerlilik_bit IS NULL
+                    ORDER BY gecerlilik_bas DESC LIMIT 1
+                """, (pk_id,)).fetchone()
+
+                _gecmis_rows = con.execute("""
+                    SELECT tutar, para_birimi, gecerlilik_bas, gecerlilik_bit, tip, aciklama
+                    FROM personel_maas_gecmis
+                    WHERE personel_pk_id = ?
+                    ORDER BY gecerlilik_bas DESC LIMIT 5
+                """, (pk_id,)).fetchall()
+
+                _toplam_kayit = con.execute(
+                    "SELECT COUNT(*) FROM personel_maas_gecmis WHERE personel_pk_id=?",
+                    (pk_id,)
+                ).fetchone()[0]
+
+                maas_ozet = {
+                    "aktif_maas": {
+                        "tutar":          _aktif["tutar"]          if _aktif else None,
+                        "para_birimi":    _aktif["para_birimi"]    if _aktif else "TL",
+                        "gecerlilik_bas": _aktif["gecerlilik_bas"] if _aktif else None,
+                        "tip":            _aktif["tip"]            if _aktif else None,
+                        "aciklama":       _aktif["aciklama"]       if _aktif else None,
+                    } if _aktif else None,
+                    "gecmis": [
+                        {
+                            "tutar":          r["tutar"],
+                            "para_birimi":    r["para_birimi"],
+                            "gecerlilik_bas": r["gecerlilik_bas"],
+                            "gecerlilik_bit": r["gecerlilik_bit"],
+                            "tip":            r["tip"],
+                            "aciklama":       r["aciklama"],
+                        }
+                        for r in _gecmis_rows
+                    ],
+                    "gecmis_kayit_sayisi": _toplam_kayit,
+                }
+            except Exception:
+                maas_ozet = {"aktif_maas": None, "gecmis": [], "gecmis_kayit_sayisi": 0}
+
+        # FAZ2G-2: İK özeti — sadece has_ik=True ve pk_id varsa sorgu çalışır
+        if has_ik and pk_id:
+            try:
+                # Devam özeti (bu yıl)
+                _dev = con.execute("""
+                    SELECT
+                        COUNT(*) AS toplam_kayit,
+                        COALESCE(SUM(CASE WHEN durum='geldi'    THEN 1 ELSE 0 END), 0) AS geldi_gun,
+                        COALESCE(SUM(CASE WHEN durum='gelmedi'  THEN 1 ELSE 0 END), 0) AS gelmedi_gun,
+                        COALESCE(SUM(CASE WHEN durum='izinli'   THEN 1 ELSE 0 END), 0) AS izinli_gun,
+                        MAX(tarih) AS son_kayit_tarihi
+                    FROM personel_devam
+                    WHERE personel_pk_id = ?
+                      AND tarih >= date('now','start of year')
+                """, (pk_id,)).fetchone()
+
+                _dev_toplam = _dev["toplam_kayit"] if _dev else 0
+                _dev_geldi  = _dev["geldi_gun"]    if _dev else 0
+                _devam_yuzde = round((_dev_geldi / _dev_toplam * 100), 1) if _dev_toplam > 0 else None
+
+                # İzin özeti (bu yıl)
+                _izin = con.execute("""
+                    SELECT
+                        COALESCE(SUM(hak_gun), 0)       AS toplam_hak,
+                        COALESCE(SUM(kullanilan_gun), 0) AS kullanilan,
+                        COALESCE(SUM(hak_gun - kullanilan_gun), 0) AS kalan,
+                        COUNT(*) AS kayit_sayisi
+                    FROM personel_izin
+                    WHERE personel_pk_id = ?
+                      AND yil = CAST(strftime('%Y','now') AS INTEGER)
+                """, (pk_id,)).fetchone()
+
+                # IK not özeti (tüm zamanlar)
+                _not_ozet = con.execute("""
+                    SELECT
+                        COUNT(*) AS toplam_not,
+                        MAX(tarih) AS son_not_tarihi,
+                        COALESCE(SUM(CASE WHEN not_tipi='uyari'   THEN 1 ELSE 0 END), 0) AS uyari_sayisi,
+                        COALESCE(SUM(CASE WHEN not_tipi='olumlu'  THEN 1 ELSE 0 END), 0) AS olumlu_sayisi,
+                        COALESCE(SUM(CASE WHEN not_tipi='gorusme' THEN 1 ELSE 0 END), 0) AS gorusme_sayisi
+                    FROM personel_ik_not
+                    WHERE personel_pk_id = ?
+                """, (pk_id,)).fetchone()
+
+                # Son 5 IK notu (içeriğiyle birlikte)
+                _notlar = con.execute("""
+                    SELECT id, tarih, not_tipi, icerik, gizli, giren_kullanici, created_at
+                    FROM personel_ik_not
+                    WHERE personel_pk_id = ?
+                    ORDER BY tarih DESC, id DESC LIMIT 5
+                """, (pk_id,)).fetchall()
+
+                ik_ozet = {
+                    "devam": {
+                        "toplam_kayit":    _dev_toplam,
+                        "geldi_gun":       _dev["geldi_gun"]   if _dev else 0,
+                        "gelmedi_gun":     _dev["gelmedi_gun"] if _dev else 0,
+                        "izinli_gun":      _dev["izinli_gun"]  if _dev else 0,
+                        "devam_yuzdesi":   _devam_yuzde,
+                        "son_kayit_tarihi": _dev["son_kayit_tarihi"] if _dev else None,
+                    },
+                    "izin": {
+                        "toplam_hak":    _izin["toplam_hak"]  if _izin else 0,
+                        "kullanilan":    _izin["kullanilan"]  if _izin else 0,
+                        "kalan":         _izin["kalan"]       if _izin else 0,
+                        "kayit_sayisi":  _izin["kayit_sayisi"] if _izin else 0,
+                        "yil":           int(__import__('datetime').datetime.now().year),
+                    },
+                    "notlar": {
+                        "toplam_not":     _not_ozet["toplam_not"]     if _not_ozet else 0,
+                        "son_not_tarihi": _not_ozet["son_not_tarihi"] if _not_ozet else None,
+                        "uyari_sayisi":   _not_ozet["uyari_sayisi"]   if _not_ozet else 0,
+                        "olumlu_sayisi":  _not_ozet["olumlu_sayisi"]  if _not_ozet else 0,
+                        "gorusme_sayisi": _not_ozet["gorusme_sayisi"] if _not_ozet else 0,
+                        "son_notlar": [
+                            {
+                                "id":              r["id"],
+                                "tarih":           r["tarih"],
+                                "not_tipi":        r["not_tipi"],
+                                "icerik":          r["icerik"],
+                                "gizli":           bool(r["gizli"]),
+                                "giren_kullanici": r["giren_kullanici"],
+                            }
+                            for r in _notlar
+                        ],
+                    },
+                }
+            except Exception:
+                ik_ozet = {
+                    "devam":  {"toplam_kayit": 0, "geldi_gun": 0, "gelmedi_gun": 0,
+                               "izinli_gun": 0, "devam_yuzdesi": None, "son_kayit_tarihi": None},
+                    "izin":   {"toplam_hak": 0, "kullanilan": 0, "kalan": 0, "kayit_sayisi": 0, "yil": 0},
+                    "notlar": {"toplam_not": 0, "son_not_tarihi": None, "uyari_sayisi": 0,
+                               "olumlu_sayisi": 0, "gorusme_sayisi": 0, "son_notlar": []},
+                }
+
     finally:
         con.close()
 
@@ -2805,6 +2952,8 @@ def personel_360_profil(profil_id):
         "uretim_ozet":       uretim_ozet,
         "uretim_prosesler":  uretim_prosesler,
         "son_uretimler":     son_uretimler,
+        "maas_ozet":         maas_ozet,
+        "ik_ozet":           ik_ozet,
         "_caps": {
             "ik":      has_ik,
             "maas":    has_maas,
