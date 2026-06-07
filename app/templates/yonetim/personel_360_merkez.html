@@ -1,0 +1,400 @@
+{% extends "base.html" %}
+{% block title %}Personel 360 Merkezi — Solariz CPS{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Personel 360 Merkezi</div>
+    <div class="page-sub">Personel profili görüntüleme — organizasyon / ekip / proses</div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <a href="/yonetim/core-organizasyon" class="btn-secondary" style="font-size:12px;padding:6px 12px;text-decoration:none;">
+      ← Core Organizasyon
+    </a>
+    <a href="/yonetim/" class="btn-secondary" style="font-size:12px;padding:6px 12px;text-decoration:none;">
+      Yönetim Paneli
+    </a>
+  </div>
+</div>
+
+<!-- Bilgi bandı -->
+<div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:10px 16px;margin-bottom:18px;font-size:13px;color:#713f12;">
+  <strong>📖 Sadece Görüntüleme:</strong> Bu sayfa personel profillerini okur, hiçbir değişiklik yapmaz.
+  Organizasyon güncellemeleri ilerleyen fazda (FAZ2B-2B) eklenecektir.
+</div>
+
+<!-- İki kolonlu layout: sol = liste, sağ = detay -->
+<div style="display:grid;grid-template-columns:320px 1fr;gap:16px;align-items:start;">
+
+  <!-- ── Sol: profil listesi ── -->
+  <div class="oz-card" style="position:sticky;top:72px;">
+    <div class="oz-hdr">
+      <span class="oz-hdr-t">Personel Listesi</span>
+      <span id="p360-sayi" style="font-size:11px;color:var(--text3);"></span>
+    </div>
+    <div style="padding:10px 12px 6px;">
+      <input id="p360-arama" type="text" placeholder="Ad, usta, departman ara..."
+             style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--border);
+                    border-radius:6px;font-size:13px;color:var(--text1);background:var(--bg2);">
+    </div>
+    <!-- Departman filtre -->
+    <div style="padding:4px 12px 10px;">
+      <select id="p360-dept-filter"
+              style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid var(--border);
+                     border-radius:6px;font-size:12px;color:var(--text2);background:var(--bg2);">
+        <option value="">— Tüm departmanlar —</option>
+      </select>
+    </div>
+    <div id="p360-liste" style="overflow-y:auto;max-height:calc(100vh - 300px);border-top:1px solid var(--border);">
+      <div style="padding:24px;text-align:center;color:var(--text3);font-size:13px;">Yükleniyor…</div>
+    </div>
+  </div>
+
+  <!-- ── Sağ: profil detayı ── -->
+  <div id="p360-detay-panel">
+    <!-- Başlangıç boş durumu -->
+    <div class="oz-card" id="p360-bos"
+         style="padding:60px 24px;text-align:center;color:var(--text3);">
+      <div style="font-size:40px;margin-bottom:12px;">👤</div>
+      <div style="font-size:15px;font-weight:600;margin-bottom:6px;">Personel Seç</div>
+      <div style="font-size:13px;">Soldan bir kişi seçerek 360° profil görüntüleyin.</div>
+    </div>
+
+    <!-- Detay kartı (başta gizli) -->
+    <div id="p360-detay" style="display:none;">
+
+      <!-- Profil başlık -->
+      <div class="oz-card" style="margin-bottom:14px;">
+        <div style="padding:18px 20px;display:flex;align-items:center;gap:16px;">
+          <div id="d-avatar"
+               style="width:52px;height:52px;border-radius:50%;background:var(--sol-dark);
+                      display:flex;align-items:center;justify-content:center;
+                      font-size:22px;color:#fff;font-weight:700;flex-shrink:0;">
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:17px;font-weight:700;color:var(--text1);" id="d-adsoyad"></div>
+            <div style="font-size:12px;color:var(--text3);margin-top:2px;" id="d-kadi"></div>
+          </div>
+          <div style="text-align:right;">
+            <span id="d-tip-badge" class="badge" style="font-size:11px;"></span>
+            <div style="font-size:11px;color:var(--text3);margin-top:4px;" id="d-aktif-badge"></div>
+          </div>
+        </div>
+        <!-- Departman satırı -->
+        <div style="padding:10px 20px 14px;border-top:1px solid var(--border);
+                    display:flex;gap:8px;align-items:center;font-size:13px;">
+          <span style="color:var(--text3);">🏢 Departman:</span>
+          <strong id="d-dept"></strong>
+          <span id="d-dept-kod" style="font-family:var(--mono);font-size:11px;
+                color:var(--text3);background:var(--bg2);padding:1px 6px;border-radius:4px;"></span>
+        </div>
+      </div>
+
+      <!-- Sekme navigasyonu -->
+      <div style="display:flex;gap:6px;margin-bottom:12px;" id="p360-sekmeler">
+        <button class="p360-sekme p360-sekme-aktif" data-sekme="ekip">👥 Ekip</button>
+        <button class="p360-sekme" data-sekme="proses">⚙️ Proses</button>
+        <button class="p360-sekme" data-sekme="usta">🔗 Usta İlişkisi</button>
+      </div>
+
+      <!-- SEKME: Ekip -->
+      <div id="sekme-ekip" class="p360-sekme-icerik">
+        <div class="oz-card">
+          <div class="oz-hdr"><span class="oz-hdr-t">Ekip Üyelikleri</span></div>
+          <div id="d-ekip-liste" class="oz-body" style="padding:0;"></div>
+        </div>
+      </div>
+
+      <!-- SEKME: Proses -->
+      <div id="sekme-proses" class="p360-sekme-icerik" style="display:none;">
+        <div class="oz-card">
+          <div class="oz-hdr"><span class="oz-hdr-t">Proses Bağlantıları</span></div>
+          <div id="d-proses-liste" class="oz-body" style="padding:0;"></div>
+        </div>
+      </div>
+
+      <!-- SEKME: Usta İlişkisi -->
+      <div id="sekme-usta" class="p360-sekme-icerik" style="display:none;">
+        <div class="oz-card">
+          <div class="oz-hdr"><span class="oz-hdr-t">Usta / Personel İlişkisi</span></div>
+          <div id="d-usta-icerik" class="oz-body"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ── Stil ─────────────────────────────────────────────────── -->
+<style>
+.p360-satir {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  border-bottom: 0.5px solid var(--border);
+  cursor: pointer;
+  transition: background 0.12s;
+  font-size: 13px;
+}
+.p360-satir:hover { background: var(--bg2); }
+.p360-satir.secili { background: #dbeafe; border-left: 3px solid #2563eb; padding-left: 11px; }
+.p360-satir .ps-ikon {
+  width: 32px; height: 32px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; color: #fff; flex-shrink: 0;
+}
+.p360-satir .ps-ad { font-weight: 600; color: var(--text1); line-height: 1.3; }
+.p360-satir .ps-sub { font-size: 11px; color: var(--text3); }
+
+.p360-sekme {
+  padding: 7px 16px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg2); color: var(--text2); font-size: 12px;
+  cursor: pointer; transition: all 0.15s;
+}
+.p360-sekme:hover { background: #ede9fe; color: #6d28d9; border-color: #c4b5fd; }
+.p360-sekme.p360-sekme-aktif {
+  background: #2563eb; color: #fff; border-color: #2563eb;
+}
+
+.p360-satir-detay {
+  display: flex; gap: 10px; padding: 11px 16px;
+  border-bottom: 0.5px solid var(--border);
+  font-size: 13px; align-items: flex-start;
+}
+.p360-satir-detay .pd-etiket {
+  min-width: 110px; color: var(--text3); font-size: 12px;
+}
+.p360-bos-mesaj {
+  padding: 28px; text-align: center; color: var(--text3); font-size: 13px;
+}
+</style>
+
+<!-- ── JavaScript ───────────────────────────────────────────── -->
+<script>
+(function () {
+  'use strict';
+
+  const TIPLER = {
+    SAHA_USTASI:   { renk: '#166534', bg: '#dcfce7', etiket: '🔧 Usta'     },
+    USTA:          { renk: '#166534', bg: '#dcfce7', etiket: '🔧 Usta'     },
+    SAHA_PERSONEL: { renk: '#92400e', bg: '#fef3c7', etiket: '👷 Saha'     },
+    calisan:       { renk: '#78350f', bg: '#fef9c3', etiket: '👷 Çalışan'  },
+    ofis:          { renk: '#1e3a8a', bg: '#dbeafe', etiket: '🖥 Ofis'     },
+    OFIS:          { renk: '#1e3a8a', bg: '#dbeafe', etiket: '🖥 Ofis'     },
+    yonetim:       { renk: '#4c1d95', bg: '#ede9fe', etiket: '🏛 Yönetim'  },
+    sistem:        { renk: '#374151', bg: '#f3f4f6', etiket: '⚙ Sistem'   },
+    SISTEM:        { renk: '#374151', bg: '#f3f4f6', etiket: '⚙ Sistem'   },
+  };
+
+  let tumProfiller = [];
+  let secilenId    = null;
+
+  // ── Sayfa yükle ────────────────────────────────────────────
+  async function yukle() {
+    try {
+      const res  = await fetch('/yonetim/api/personel-360/secenekler');
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.hata || 'API hatası');
+
+      tumProfiller = data.profiller;
+      deptFilterDoldur(data.departmanlar);
+      listeGoster(tumProfiller);
+    } catch (e) {
+      document.getElementById('p360-liste').innerHTML =
+        `<div class="p360-bos-mesaj" style="color:#dc2626;">⚠ Yüklenemedi: ${e.message}</div>`;
+    }
+  }
+
+  // ── Departman filtre dropdown ───────────────────────────────
+  function deptFilterDoldur(departmanlar) {
+    const sel = document.getElementById('p360-dept-filter');
+    departmanlar.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d.ad || '';
+      opt.textContent = d.ad + (d.kod ? ` (${d.kod})` : '');
+      sel.appendChild(opt);
+    });
+  }
+
+  // ── Liste render ────────────────────────────────────────────
+  function listeGoster(liste) {
+    const kap = document.getElementById('p360-liste');
+    document.getElementById('p360-sayi').textContent = liste.length + ' kişi';
+    if (!liste.length) {
+      kap.innerHTML = '<div class="p360-bos-mesaj">Eşleşen profil yok.</div>';
+      return;
+    }
+    kap.innerHTML = liste.map(p => {
+      const tip    = TIPLER[p.profil_tipi] || TIPLER.SISTEM;
+      const harf   = (p.ad_soyad || '?')[0].toUpperCase();
+      const secili = p.id === secilenId ? ' secili' : '';
+      return `
+        <div class="p360-satir${secili}" data-id="${p.id}">
+          <div class="ps-ikon" style="background:${tip.renk};">${harf}</div>
+          <div style="flex:1;min-width:0;">
+            <div class="ps-ad">${p.ad_soyad || '—'}</div>
+            <div class="ps-sub">${p.departman || '—'} · <span style="background:${tip.bg};color:${tip.renk};padding:1px 5px;border-radius:3px;font-size:10px;">${tip.etiket}</span></div>
+          </div>
+        </div>`;
+    }).join('');
+
+    kap.querySelectorAll('.p360-satir').forEach(el => {
+      el.addEventListener('click', () => profilSec(parseInt(el.dataset.id)));
+    });
+  }
+
+  // ── Filtre ──────────────────────────────────────────────────
+  function filtrele() {
+    const q    = (document.getElementById('p360-arama').value || '').toLowerCase();
+    const dept = document.getElementById('p360-dept-filter').value;
+    let liste  = tumProfiller;
+    if (q)    liste = liste.filter(p =>
+      (p.ad_soyad       || '').toLowerCase().includes(q) ||
+      (p.kullanici_adi  || '').toLowerCase().includes(q) ||
+      (p.departman      || '').toLowerCase().includes(q) ||
+      (p.profil_tipi    || '').toLowerCase().includes(q)
+    );
+    if (dept) liste = liste.filter(p => (p.departman || '') === dept);
+    listeGoster(liste);
+  }
+
+  document.getElementById('p360-arama').addEventListener('input', filtrele);
+  document.getElementById('p360-dept-filter').addEventListener('change', filtrele);
+
+  // ── Profil seç ──────────────────────────────────────────────
+  async function profilSec(id) {
+    secilenId = id;
+    filtrele();
+
+    document.getElementById('p360-bos').style.display    = 'none';
+    document.getElementById('p360-detay').style.display  = 'block';
+
+    // Yükleniyor göster
+    document.getElementById('d-adsoyad').textContent = 'Yükleniyor…';
+    document.getElementById('d-kadi').textContent    = '';
+    document.getElementById('d-dept').textContent    = '';
+
+    try {
+      const res  = await fetch(`/yonetim/api/personel-360/profil/${id}`);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.hata || 'API hatası');
+      detayGoster(data);
+    } catch (e) {
+      document.getElementById('d-adsoyad').textContent =
+        '⚠ Yüklenemedi: ' + e.message;
+    }
+  }
+
+  // ── Detay render ────────────────────────────────────────────
+  function detayGoster(data) {
+    const p   = data.profil;
+    const tip = TIPLER[p.profil_tipi] || TIPLER.SISTEM;
+
+    // Başlık
+    document.getElementById('d-avatar').textContent    = (p.ad_soyad || '?')[0].toUpperCase();
+    document.getElementById('d-avatar').style.background = tip.renk;
+    document.getElementById('d-adsoyad').textContent   = p.ad_soyad || '—';
+    document.getElementById('d-kadi').textContent      = '@' + (p.kullanici_adi || '?');
+    document.getElementById('d-tip-badge').textContent = tip.etiket;
+    document.getElementById('d-tip-badge').style.cssText =
+      `background:${tip.bg};color:${tip.renk};`;
+    document.getElementById('d-aktif-badge').textContent = p.aktif ? '✔ Aktif' : '✖ Pasif';
+    document.getElementById('d-aktif-badge').style.color = p.aktif ? '#166534' : '#dc2626';
+    document.getElementById('d-dept').textContent      = p.departman || 'Atanmamış';
+    document.getElementById('d-dept-kod').textContent  = p.departman_kod || '';
+
+    // Ekip
+    const ekipEl = document.getElementById('d-ekip-liste');
+    if (data.ekipler && data.ekipler.length) {
+      ekipEl.innerHTML = data.ekipler.map(e =>
+        `<div class="p360-satir-detay">
+          <div class="pd-etiket">📌 ${e.ad}</div>
+          <div>
+            <span style="font-family:var(--mono);font-size:11px;background:var(--bg2);
+                         padding:1px 5px;border-radius:3px;">${e.kod || ''}</span>
+            ${e.rol ? `<span style="margin-left:6px;font-size:12px;color:var(--text2);">${e.rol}</span>` : ''}
+            ${e.ekip_tipi ? `<span style="margin-left:6px;font-size:11px;color:var(--text3);">(${e.ekip_tipi})</span>` : ''}
+          </div>
+        </div>`
+      ).join('');
+    } else {
+      ekipEl.innerHTML = '<div class="p360-bos-mesaj">Ekip üyeliği yok.</div>';
+    }
+
+    // Proses
+    const prosesEl = document.getElementById('d-proses-liste');
+    if (data.prosesler && data.prosesler.length) {
+      prosesEl.innerHTML = data.prosesler.map(pr =>
+        `<div class="p360-satir-detay">
+          <div class="pd-etiket">⚙ ${pr.ad}</div>
+          <div>
+            <span style="font-family:var(--mono);font-size:11px;background:var(--bg2);
+                         padding:1px 5px;border-radius:3px;">${pr.kod || ''}</span>
+            ${pr.kategori ? `<span style="margin-left:6px;font-size:11px;color:var(--text3);">${pr.kategori}</span>` : ''}
+            ${pr.iliski_tipi ? `<span style="margin-left:6px;font-size:11px;color:#2563eb;">${pr.iliski_tipi}</span>` : ''}
+          </div>
+        </div>`
+      ).join('');
+    } else {
+      prosesEl.innerHTML = '<div class="p360-bos-mesaj">Proses bağlantısı yok.</div>';
+    }
+
+    // Usta ilişkisi sekmesi
+    const ustaEl = document.getElementById('d-usta-icerik');
+    if (p.profil_tipi === 'USTA' || p.profil_tipi === 'SAHA_USTASI') {
+      const pList = data.personel_listesi || [];
+      if (pList.length) {
+        ustaEl.innerHTML = `
+          <div style="padding:10px 16px 6px;font-size:12px;color:var(--text3);">
+            Bu ustanın sorumluluğundaki ${pList.length} personel:
+          </div>` +
+          pList.map(per =>
+            `<div class="p360-satir-detay">
+              <div class="pd-etiket">👷 ${per.ad_soyad}</div>
+              <div style="font-size:12px;color:var(--text2);">
+                @${per.kullanici_adi || '?'} · ${per.departman || '—'}
+              </div>
+            </div>`
+          ).join('');
+      } else {
+        ustaEl.innerHTML = '<div class="p360-bos-mesaj">Bağlı personel yok.</div>';
+      }
+    } else if (p.profil_tipi === 'SAHA_PERSONEL') {
+      const ub = data.usta_bilgi;
+      if (ub) {
+        ustaEl.innerHTML = `
+          <div class="p360-satir-detay">
+            <div class="pd-etiket">🔧 Bağlı Usta</div>
+            <div>
+              <strong>${ub.usta_ad}</strong>
+              <span style="font-size:12px;color:var(--text3);margin-left:6px;">@${ub.usta_kadi}</span>
+            </div>
+          </div>`;
+      } else {
+        ustaEl.innerHTML = '<div class="p360-bos-mesaj">Bağlı usta atanmamış.</div>';
+      }
+    } else {
+      ustaEl.innerHTML = `
+        <div class="p360-bos-mesaj" style="color:var(--text3);">
+          Bu profil tipi için usta/personel ilişkisi geçerli değil.
+        </div>`;
+    }
+  }
+
+  // ── Sekme yönetimi ──────────────────────────────────────────
+  document.getElementById('p360-sekmeler').addEventListener('click', function (e) {
+    const btn = e.target.closest('.p360-sekme');
+    if (!btn) return;
+    document.querySelectorAll('.p360-sekme').forEach(b => b.classList.remove('p360-sekme-aktif'));
+    document.querySelectorAll('.p360-sekme-icerik').forEach(c => c.style.display = 'none');
+    btn.classList.add('p360-sekme-aktif');
+    document.getElementById('sekme-' + btn.dataset.sekme).style.display = 'block';
+  });
+
+  // ── Başlat ──────────────────────────────────────────────────
+  yukle();
+})();
+</script>
+
+{% endblock %}

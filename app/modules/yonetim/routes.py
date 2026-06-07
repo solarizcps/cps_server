@@ -2366,3 +2366,212 @@ def api_canli_akis():
 
 # END CANLI_OPERASYON
 # ════════════════════════════════════════════════════════════════
+
+
+# ════════════════════════════════════════════════════════════════
+# PERSONEL 360 MERKEZI — FAZ2B-2A (readonly)
+# BEGIN PERSONEL_360
+# ════════════════════════════════════════════════════════════════
+
+@yonetim_bp.route('/personel-360', methods=['GET'])
+@yetki_gerekli('yonetim', 'can_view')
+def personel_360():
+    return render_template('yonetim/personel_360_merkez.html')
+
+
+@yonetim_bp.route('/api/personel-360/secenekler', methods=['GET'])
+@yetki_gerekli('yonetim', 'can_view')
+def personel_360_secenekler():
+    """
+    Personel 360 formu için dropdown seçenekleri: profiller, departmanlar, ekipler, prosesler.
+    Sadece okuma — DB yazma yok.
+    """
+    con = _get_conn()
+    try:
+        profiller = con.execute("""
+            SELECT kp.id, kp.gercek_ad, kp.kullanici_adi, kp.profil_tipi, kp.aktif,
+                   dm.ad AS departman, dm.kod AS departman_kod
+            FROM kullanici_profil kp
+            LEFT JOIN departman_master dm ON dm.id = kp.departman_id
+            WHERE kp.aktif = 1
+            ORDER BY dm.sira, kp.gercek_ad
+        """).fetchall()
+
+        departmanlar = con.execute("""
+            SELECT id, ad, kod, tur
+            FROM departman_master
+            WHERE aktif = 1
+            ORDER BY sira, ad
+        """).fetchall()
+
+        ekipler = con.execute("""
+            SELECT em.id, em.ad, em.kod, em.ekip_tipi,
+                   dm.ad AS departman
+            FROM ekip_master em
+            LEFT JOIN departman_master dm ON dm.id = em.departman_id
+            WHERE em.aktif = 1
+            ORDER BY dm.sira, em.ad
+        """).fetchall()
+
+        prosesler = con.execute("""
+            SELECT id, ad, kod, kategori
+            FROM proses_master_ref
+            WHERE aktif = 1
+            ORDER BY sira, ad
+        """).fetchall()
+
+    finally:
+        con.close()
+
+    return jsonify({
+        "ok": True,
+        "profiller": [
+            {
+                "id":            r["id"],
+                "ad_soyad":      r["gercek_ad"],
+                "kullanici_adi": r["kullanici_adi"],
+                "profil_tipi":   r["profil_tipi"],
+                "departman":     r["departman"],
+                "departman_kod": r["departman_kod"],
+            }
+            for r in profiller
+        ],
+        "departmanlar": [
+            {"id": r["id"], "ad": r["ad"], "kod": r["kod"], "tur": r["tur"]}
+            for r in departmanlar
+        ],
+        "ekipler": [
+            {"id": r["id"], "ad": r["ad"], "kod": r["kod"],
+             "ekip_tipi": r["ekip_tipi"], "departman": r["departman"]}
+            for r in ekipler
+        ],
+        "prosesler": [
+            {"id": r["id"], "ad": r["ad"], "kod": r["kod"], "kategori": r["kategori"]}
+            for r in prosesler
+        ],
+    })
+
+
+@yonetim_bp.route('/api/personel-360/profil/<int:profil_id>', methods=['GET'])
+@yetki_gerekli('yonetim', 'can_view')
+def personel_360_profil(profil_id):
+    """
+    Tek personelin 360 görünümü: temel bilgi, departman, ekip, proses, usta ilişkisi.
+    Sadece okuma — DB yazma yok.
+    """
+    con = _get_conn()
+    try:
+        kp = con.execute("""
+            SELECT kp.id, kp.gercek_ad, kp.kullanici_adi, kp.profil_tipi, kp.aktif,
+                   dm.id AS dept_id, dm.ad AS dept_ad, dm.kod AS dept_kod
+            FROM kullanici_profil kp
+            LEFT JOIN departman_master dm ON dm.id = kp.departman_id
+            WHERE kp.id = ?
+        """, (profil_id,)).fetchone()
+
+        if not kp:
+            return jsonify({"ok": False, "hata": "Profil bulunamadı"}), 404
+
+        ekipler = con.execute("""
+            SELECT em.id, em.ad, em.kod, ke.rol, em.ekip_tipi,
+                   dm.ad AS dept_ad
+            FROM kullanici_ekip ke
+            JOIN ekip_master em ON em.id = ke.ekip_id
+            LEFT JOIN departman_master dm ON dm.id = em.departman_id
+            WHERE ke.kullanici_profil_id = ? AND ke.aktif = 1
+            ORDER BY em.ad
+        """, (profil_id,)).fetchall()
+
+        prosesler = con.execute("""
+            SELECT pm.id, pm.ad, pm.kod, pm.kategori, kup.iliski_tipi, kup.kaynak
+            FROM kullanici_proses kup
+            JOIN proses_master_ref pm ON pm.id = kup.proses_id
+            WHERE kup.kullanici_profil_id = ? AND kup.aktif = 1
+            ORDER BY pm.sira
+        """, (profil_id,)).fetchall()
+
+        # Usta-personel ilişkisi
+        usta_bilgi = None
+        personel_listesi = []
+        if kp["profil_tipi"] in ("USTA", "SAHA_USTASI"):
+            personel_listesi_rows = con.execute("""
+                SELECT kp2.id, kp2.gercek_ad, kp2.kullanici_adi, kp2.profil_tipi,
+                       dm.ad AS dept_ad, upi.id AS iliski_id
+                FROM usta_personel_iliskisi upi
+                JOIN kullanici_profil kp2 ON kp2.id = upi.personel_profil_id
+                LEFT JOIN departman_master dm ON dm.id = kp2.departman_id
+                WHERE upi.usta_profil_id = ? AND upi.aktif = 1
+                ORDER BY kp2.gercek_ad
+            """, (profil_id,)).fetchall()
+            personel_listesi = [
+                {
+                    "id":            r["id"],
+                    "ad_soyad":      r["gercek_ad"],
+                    "kullanici_adi": r["kullanici_adi"],
+                    "profil_tipi":   r["profil_tipi"],
+                    "departman":     r["dept_ad"],
+                    "iliski_id":     r["iliski_id"],
+                }
+                for r in personel_listesi_rows
+            ]
+
+        elif kp["profil_tipi"] == "SAHA_PERSONEL":
+            upi_row = con.execute("""
+                SELECT upi.id AS iliski_id, u.id AS usta_id, u.gercek_ad AS usta_ad,
+                       u.kullanici_adi AS usta_kadi
+                FROM usta_personel_iliskisi upi
+                JOIN kullanici_profil u ON u.id = upi.usta_profil_id
+                WHERE upi.personel_profil_id = ? AND upi.aktif = 1
+                ORDER BY upi.id DESC LIMIT 1
+            """, (profil_id,)).fetchone()
+            if upi_row:
+                usta_bilgi = {
+                    "usta_id":      upi_row["usta_id"],
+                    "usta_ad":      upi_row["usta_ad"],
+                    "usta_kadi":    upi_row["usta_kadi"],
+                    "iliski_id":    upi_row["iliski_id"],
+                }
+
+    finally:
+        con.close()
+
+    return jsonify({
+        "ok": True,
+        "profil": {
+            "id":            kp["id"],
+            "ad_soyad":      kp["gercek_ad"],
+            "kullanici_adi": kp["kullanici_adi"],
+            "profil_tipi":   kp["profil_tipi"],
+            "aktif":         kp["aktif"],
+            "dept_id":       kp["dept_id"],
+            "departman":     kp["dept_ad"],
+            "departman_kod": kp["dept_kod"],
+        },
+        "ekipler": [
+            {
+                "id":        r["id"],
+                "ad":        r["ad"],
+                "kod":       r["kod"],
+                "rol":       r["rol"],
+                "ekip_tipi": r["ekip_tipi"],
+                "departman": r["dept_ad"],
+            }
+            for r in ekipler
+        ],
+        "prosesler": [
+            {
+                "id":          r["id"],
+                "ad":          r["ad"],
+                "kod":         r["kod"],
+                "kategori":    r["kategori"],
+                "iliski_tipi": r["iliski_tipi"],
+                "kaynak":      r["kaynak"],
+            }
+            for r in prosesler
+        ],
+        "usta_bilgi":       usta_bilgi,
+        "personel_listesi": personel_listesi,
+    })
+
+# END PERSONEL_360
+# ════════════════════════════════════════════════════════════════
