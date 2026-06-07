@@ -96,6 +96,7 @@
         <button class="p360-sekme" data-sekme="proses">⚙️ Proses</button>
         <button class="p360-sekme" data-sekme="usta">🔗 Usta İlişkisi</button>
         <button class="p360-sekme" data-sekme="yetkinlik">⭐ Yetkinlik</button>
+        <button class="p360-sekme" data-sekme="uretim">📊 Üretim</button>
         <button class="p360-sekme" data-sekme="org" style="margin-left:auto;border-color:#2563eb;color:#2563eb;">✏️ Organizasyon</button>
       </div>
 
@@ -185,6 +186,27 @@
               <div id="yk-mesaj" style="font-size:13px;"></div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- SEKME: Üretim (FAZ2D-2 readonly) -->
+      <div id="sekme-uretim" class="p360-sekme-icerik" style="display:none;">
+        <!-- Özet kartlar -->
+        <div class="oz-card" style="margin-bottom:14px;">
+          <div class="oz-hdr"><span class="oz-hdr-t">Üretim Özeti</span></div>
+          <div id="d-uretim-ozet" class="oz-body"></div>
+        </div>
+        <!-- Proses dağılımı -->
+        <div class="oz-card" style="margin-bottom:14px;">
+          <div class="oz-hdr"><span class="oz-hdr-t">Proses Dağılımı</span></div>
+          <div id="d-uretim-prosesler" class="oz-body" style="padding:0;"></div>
+        </div>
+        <!-- Son üretimler -->
+        <div class="oz-card">
+          <div class="oz-hdr"><span class="oz-hdr-t">Son Üretimler</span>
+            <span style="font-size:11px;color:var(--text3);">son 10 kayıt</span>
+          </div>
+          <div id="d-uretim-son" class="oz-body" style="padding:0;"></div>
         </div>
       </div>
 
@@ -532,6 +554,92 @@
 
     // Yetkinlik formu doldur (FAZ2C-5B)
     yetkinlikFormDoldur();
+
+    // Üretim sekmesi (FAZ2D-2 readonly)
+    const oz      = data.uretim_ozet      || {};
+    const prList  = data.uretim_prosesler || [];
+    const suList  = data.son_uretimler    || [];
+    const ozetEl  = document.getElementById('d-uretim-ozet');
+    const prEl    = document.getElementById('d-uretim-prosesler');
+    const sonEl   = document.getElementById('d-uretim-son');
+
+    if (!oz.toplam_kayit) {
+      const bosMsg = '<div class="p360-bos-mesaj">Üretim kaydı bulunamadı.<br><small style="color:var(--text3);">Bu profil için üretim verisi takip edilmemektedir.</small></div>';
+      ozetEl.innerHTML = bosMsg;
+      prEl.innerHTML   = '';
+      sonEl.innerHTML  = '';
+    } else {
+      // A) Özet metrik kartlar
+      const onayOran = oz.toplam_miktar > 0
+        ? Math.round(oz.onayli_miktar / oz.toplam_miktar * 100)
+        : 0;
+      ozetEl.innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:14px 16px;">
+          <div style="background:var(--bg2);border-radius:8px;padding:12px;text-align:center;">
+            <div style="font-size:22px;font-weight:700;color:#2563eb;">${(oz.toplam_miktar||0).toLocaleString()}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:3px;">Toplam Üretim</div>
+          </div>
+          <div style="background:var(--bg2);border-radius:8px;padding:12px;text-align:center;">
+            <div style="font-size:22px;font-weight:700;color:#059669;">${(oz.onayli_miktar||0).toLocaleString()}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:3px;">Onaylı · %${onayOran}</div>
+          </div>
+          <div style="background:var(--bg2);border-radius:8px;padding:12px;text-align:center;">
+            <div style="font-size:22px;font-weight:700;color:#7c3aed;">${(oz.son_30_gun_miktar||0).toLocaleString()}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:3px;">Son 30 Gün</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:0 16px 14px;">
+          <div style="font-size:12px;color:var(--text2);">
+            <span style="color:var(--text3);">Toplam Kayıt:</span> <strong>${oz.toplam_kayit||0}</strong>
+          </div>
+          <div style="font-size:12px;color:var(--text2);">
+            <span style="color:var(--text3);">Farklı Proses:</span> <strong>${oz.farkli_proses_sayisi||0}</strong>
+          </div>
+          <div style="font-size:12px;color:var(--text2);">
+            <span style="color:var(--text3);">Son İş:</span> <strong>${oz.son_is_tarihi||'—'}</strong>
+          </div>
+        </div>`;
+
+      // B) Proses dağılımı
+      prEl.innerHTML = prList.map(pr => {
+        const oran = pr.toplam_miktar > 0
+          ? Math.round(pr.onayli_miktar / pr.toplam_miktar * 100)
+          : 0;
+        return `<div class="p360-satir-detay">
+          <div class="pd-etiket" style="font-size:12px;">⚙ ${pr.proses_adi || pr.proses_kodu || '—'}</div>
+          <div style="flex:1;">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <span style="font-size:13px;font-weight:600;">${(pr.toplam_miktar||0).toLocaleString()} adet</span>
+              <span style="font-size:11px;color:#059669;">✓ ${(pr.onayli_miktar||0).toLocaleString()} (%${oran})</span>
+              <span style="font-size:11px;color:var(--text3);">${pr.kayit_sayisi} kayıt</span>
+              <span style="font-size:11px;font-family:var(--mono);color:var(--text3);">${pr.son_tarih||''}</span>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+
+      // C) Son üretimler
+      const ONAY_STIL = {
+        onaylandi: { renk: '#166534', bg: '#dcfce7', etiket: '✔ Onaylı' },
+        bekliyor:  { renk: '#92400e', bg: '#fef3c7', etiket: '⏳ Bekliyor' },
+        reddedildi:{ renk: '#991b1b', bg: '#fee2e2', etiket: '✖ Reddedildi' },
+      };
+      sonEl.innerHTML = suList.map(su => {
+        const os2 = ONAY_STIL[su.onay_durum] || { renk: '#374151', bg: '#f3f4f6', etiket: su.onay_durum||'?' };
+        return `<div class="p360-satir-detay" style="font-size:12px;">
+          <div class="pd-etiket" style="font-family:var(--mono);font-size:11px;color:var(--text3);">${su.tarih||''} ${su.saat||''}</div>
+          <div style="flex:1;">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <span style="font-weight:600;">${su.proses_adi||su.proses_kodu||'—'}</span>
+              <span style="font-size:13px;color:#2563eb;font-weight:600;">${(su.miktar||0).toLocaleString()} adet</span>
+              <span style="font-size:11px;font-weight:600;color:${os2.renk};background:${os2.bg};
+                           padding:1px 6px;border-radius:4px;">${os2.etiket}</span>
+              ${su.usta_ad ? `<span style="font-size:11px;color:var(--text3);">👷 ${su.usta_ad}</span>` : ''}
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+    }
 
     // Organizasyon formu doldur
     orgFormDoldur(data);
