@@ -2385,17 +2385,51 @@ def personel_360_secenekler():
     """
     Personel 360 formu için dropdown seçenekleri: profiller, departmanlar, ekipler, prosesler.
     Sadece okuma — DB yazma yok.
+    FAZ2F-1C: Usta rolündeki kullanıcı yalnızca bağlı personelini görür.
     """
+    # FAZ2F-1C: Usta filtre flag — SuperAdmin veya Yönetim rolündeyse filtre uygulanmaz
+    _u_sec = session.get('kullanici')
+    _rol_id_sec = (_u_sec or {}).get('RolId')
+    _is_yonetim_sec = False
+    if _rol_id_sec:
+        from db import qone as _qone_sec
+        _sr_sec = _qone_sec("SELECT SuperAdmin FROM sistem_rol WHERE Id=? AND Aktif=1", (_rol_id_sec,))
+        _is_yonetim_sec = bool(_sr_sec and _sr_sec.get('SuperAdmin') == 1)
+    _is_usta_sec = (
+        yetki_var('personel_360.usta', 'can_view')
+        and not is_superadmin(_u_sec)
+        and not _is_yonetim_sec
+    )
+
     con = _get_conn()
     try:
-        profiller = con.execute("""
-            SELECT kp.id, kp.gercek_ad, kp.kullanici_adi, kp.profil_tipi, kp.aktif,
-                   dm.ad AS departman, dm.kod AS departman_kod
-            FROM kullanici_profil kp
-            LEFT JOIN departman_master dm ON dm.id = kp.departman_id
-            WHERE kp.aktif = 1
-            ORDER BY dm.sira, kp.gercek_ad
-        """).fetchall()
+        if _is_usta_sec:
+            # Usta bridge: KullaniciAdi → kullanici_profil.id → usta_personel_iliskisi
+            _usta_kadi = _u_sec.get('KullaniciAdi', '')
+            _usta_kp = con.execute(
+                "SELECT id FROM kullanici_profil WHERE kullanici_adi=?", (_usta_kadi,)
+            ).fetchone()
+            if _usta_kp:
+                profiller = con.execute("""
+                    SELECT kp.id, kp.gercek_ad, kp.kullanici_adi, kp.profil_tipi, kp.aktif,
+                           dm.ad AS departman, dm.kod AS departman_kod
+                    FROM kullanici_profil kp
+                    JOIN usta_personel_iliskisi upi ON kp.id = upi.personel_profil_id
+                    LEFT JOIN departman_master dm ON dm.id = kp.departman_id
+                    WHERE upi.usta_profil_id = ? AND upi.aktif = 1
+                    ORDER BY kp.gercek_ad
+                """, (_usta_kp['id'],)).fetchall()
+            else:
+                profiller = []
+        else:
+            profiller = con.execute("""
+                SELECT kp.id, kp.gercek_ad, kp.kullanici_adi, kp.profil_tipi, kp.aktif,
+                       dm.ad AS departman, dm.kod AS departman_kod
+                FROM kullanici_profil kp
+                LEFT JOIN departman_master dm ON dm.id = kp.departman_id
+                WHERE kp.aktif = 1
+                ORDER BY dm.sira, kp.gercek_ad
+            """).fetchall()
 
         departmanlar = con.execute("""
             SELECT id, ad, kod, tur
@@ -2459,14 +2493,45 @@ def personel_360_profil(profil_id):
     Tek personelin 360 görünümü: temel bilgi, departman, ekip, proses, usta ilişkisi.
     Sadece okuma — DB yazma yok.
     """
-    # FAZ2F-1B: Hassas alan capability flag'leri
+    # FAZ2F-1B/1C: Hassas alan capability flag'leri
     _u_sess = session.get('kullanici')
-    has_ik      = is_superadmin(_u_sess) or yetki_var('personel_360.ik',  'can_view')
-    has_maas    = is_superadmin(_u_sess) or yetki_var('personel_maas',    'can_view')
-    has_maliyet = is_superadmin(_u_sess) or yetki_var('personel_maas',    'can_view')
+    has_ik      = is_superadmin(_u_sess) or yetki_var('personel_360.ik',    'can_view')
+    has_maas    = is_superadmin(_u_sess) or yetki_var('personel_maas',      'can_view')
+    has_maliyet = is_superadmin(_u_sess) or yetki_var('personel_maas',      'can_view')
+    # FAZ2F-1C: Usta filtreli görünüm
+    # Koşul: personel_360.usta yetkisi VAR ve Yönetim/SuperAdmin rolünde DEĞİL
+    # Not: is_superadmin Tip='sistem' kontrolü yapar; Tip='usta' olanlar için
+    # RolId'den SuperAdmin flag'i ayrıca kontrol edilir.
+    _rol_id = (_u_sess or {}).get('RolId')
+    _is_yonetim_rol = False
+    if _rol_id:
+        from db import qone as _qone_auth
+        _sr = _qone_auth("SELECT SuperAdmin FROM sistem_rol WHERE Id=? AND Aktif=1", (_rol_id,))
+        _is_yonetim_rol = bool(_sr and _sr.get('SuperAdmin') == 1)
+    is_usta_view = (
+        yetki_var('personel_360.usta', 'can_view')
+        and not is_superadmin(_u_sess)
+        and not _is_yonetim_rol
+    )
 
     con = _get_conn()
     try:
+        # FAZ2F-1C: Usta erişim kontrolü — sadece bağlı personeline erişebilir
+        if is_usta_view:
+            _usta_kadi = _u_sess.get('KullaniciAdi', '')
+            _usta_kp_row = con.execute(
+                "SELECT id FROM kullanici_profil WHERE kullanici_adi=?", (_usta_kadi,)
+            ).fetchone()
+            if _usta_kp_row:
+                _izin = con.execute("""
+                    SELECT 1 FROM usta_personel_iliskisi
+                    WHERE usta_profil_id=? AND personel_profil_id=? AND aktif=1
+                """, (_usta_kp_row['id'], profil_id)).fetchone()
+                if not _izin:
+                    return jsonify({"ok": False, "hata": "Bu profile erişim yetkiniz yok"}), 403
+            else:
+                return jsonify({"ok": False, "hata": "Usta profili bulunamadı"}), 403
+
         kp = con.execute("""
             SELECT kp.id, kp.gercek_ad, kp.kullanici_adi, kp.profil_tipi, kp.aktif,
                    kp.kaynak, kp.kaynak_id,
@@ -2744,7 +2809,7 @@ def personel_360_profil(profil_id):
             "ik":      has_ik,
             "maas":    has_maas,
             "maliyet": has_maliyet,
-            "usta":    False,
+            "usta":    is_usta_view,
         },
     })
 
