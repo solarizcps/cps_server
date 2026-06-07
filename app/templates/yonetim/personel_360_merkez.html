@@ -106,6 +106,8 @@
         <button class="p360-sekme" data-sekme="usta">🔗 Usta İlişkisi</button>
         <button class="p360-sekme" data-sekme="yetkinlik">⭐ Yetkinlik</button>
         <button class="p360-sekme" data-sekme="uretim">📊 Üretim</button>
+        <button class="p360-sekme" data-sekme="ik"   id="btn-sekme-ik"   style="display:none;">🧾 İK</button>
+        <button class="p360-sekme" data-sekme="maas" id="btn-sekme-maas" style="display:none;">💰 Maaş</button>
         <button class="p360-sekme" data-sekme="org" style="margin-left:auto;border-color:#2563eb;color:#2563eb;">✏️ Organizasyon</button>
       </div>
 
@@ -240,6 +242,39 @@
         </div>
       </div>
 
+      <!-- SEKME: İK (FAZ2G-3 readonly) -->
+      <div id="sekme-ik" class="p360-sekme-icerik" style="display:none;">
+        <!-- Devam -->
+        <div class="oz-card" style="margin-bottom:14px;">
+          <div class="oz-hdr"><span class="oz-hdr-t">Devam Durumu (Bu Yıl)</span></div>
+          <div id="d-ik-devam" class="oz-body"></div>
+        </div>
+        <!-- İzin -->
+        <div class="oz-card" style="margin-bottom:14px;">
+          <div class="oz-hdr"><span class="oz-hdr-t">İzin Durumu</span></div>
+          <div id="d-ik-izin" class="oz-body"></div>
+        </div>
+        <!-- Notlar -->
+        <div class="oz-card">
+          <div class="oz-hdr"><span class="oz-hdr-t">İK Notları</span></div>
+          <div id="d-ik-notlar" class="oz-body" style="padding:0;"></div>
+        </div>
+      </div>
+
+      <!-- SEKME: Maaş (FAZ2G-3 readonly) -->
+      <div id="sekme-maas" class="p360-sekme-icerik" style="display:none;">
+        <!-- Aktif maaş -->
+        <div class="oz-card" style="margin-bottom:14px;">
+          <div class="oz-hdr"><span class="oz-hdr-t">Güncel Maaş</span></div>
+          <div id="d-maas-aktif" class="oz-body"></div>
+        </div>
+        <!-- Geçmiş -->
+        <div class="oz-card">
+          <div class="oz-hdr"><span class="oz-hdr-t">Maaş Geçmişi</span></div>
+          <div id="d-maas-gecmis" class="oz-body" style="padding:0;"></div>
+        </div>
+      </div>
+
       <!-- SEKME: Organizasyon Güncelleme -->
       <div id="sekme-org" class="p360-sekme-icerik" style="display:none;">
         <div class="oz-card">
@@ -310,6 +345,20 @@
 }
 .p360-satir .ps-ad { font-weight: 600; color: var(--text1); line-height: 1.3; }
 .p360-satir .ps-sub { font-size: 11px; color: var(--text3); }
+
+/* FAZ2G-3: İK chip'leri */
+.p360-ik-chip {
+  display:flex; flex-direction:column; align-items:center; gap:2px;
+  padding:8px 14px; border-radius:8px; background:var(--bg2);
+  font-size:11px; color:var(--text3); min-width:72px;
+}
+.p360-ik-chip strong { font-size:14px; font-weight:700; color:var(--text1); }
+.p360-ik-chip.p360-ik-yesil  { background:#dcfce7; color:#166534; }
+.p360-ik-chip.p360-ik-yesil strong { color:#166534; }
+.p360-ik-chip.p360-ik-kirmizi { background:#fee2e2; color:#991b1b; }
+.p360-ik-chip.p360-ik-kirmizi strong { color:#991b1b; }
+.p360-ik-chip.p360-ik-sari  { background:#fef9c3; color:#854d0e; }
+.p360-ik-chip.p360-ik-sari strong { color:#854d0e; }
 
 .p360-sekme {
   padding: 7px 16px; border: 1px solid var(--border); border-radius: 6px;
@@ -495,8 +544,30 @@
 
   // ── Detay render ────────────────────────────────────────────
   function detayGoster(data) {
-    const p   = data.profil;
-    const tip = TIPLER[p.profil_tipi] || TIPLER.SISTEM;
+    const p    = data.profil;
+    const tip  = TIPLER[p.profil_tipi] || TIPLER.SISTEM;
+    const caps = data._caps || {};
+
+    // FAZ2G-3: _caps'e göre İK / Maaş sekme butonlarını göster/gizle
+    const btnIk   = document.getElementById('btn-sekme-ik');
+    const btnMaas = document.getElementById('btn-sekme-maas');
+    if (btnIk)   btnIk.style.display   = caps.ik   ? '' : 'none';
+    if (btnMaas) btnMaas.style.display = caps.maas ? '' : 'none';
+
+    // Eğer aktif sekme yetki sebebiyle gizlendiyse Ekip'e dön
+    const aktifBtn = document.querySelector('.p360-sekme.p360-sekme-aktif');
+    if (aktifBtn) {
+      const aktifSekme = aktifBtn.dataset.sekme;
+      const gizlendi = (aktifSekme === 'ik' && !caps.ik) || (aktifSekme === 'maas' && !caps.maas);
+      if (gizlendi) {
+        document.querySelectorAll('.p360-sekme').forEach(b => b.classList.remove('p360-sekme-aktif'));
+        document.querySelectorAll('.p360-sekme-icerik').forEach(c => c.style.display = 'none');
+        const ekipBtn = document.querySelector('[data-sekme="ekip"]');
+        if (ekipBtn) ekipBtn.classList.add('p360-sekme-aktif');
+        const ekipPanel = document.getElementById('sekme-ekip');
+        if (ekipPanel) ekipPanel.style.display = 'block';
+      }
+    }
 
     // Başlık
     document.getElementById('d-avatar').textContent    = (p.ad_soyad || '?')[0].toUpperCase();
@@ -776,8 +847,142 @@
       }).join('');
     }
 
+    // FAZ2G-3: İK ve Maaş sekme render (caps'e bağlı)
+    if (caps.ik)   renderIk(data.ik_ozet);
+    if (caps.maas) renderMaas(data.maas_ozet);
+
     // Organizasyon formu doldur
     orgFormDoldur(data);
+  }
+
+  // ── FAZ2G-3: İK sekmesi render ──────────────────────────────
+  function renderIk(ik) {
+    const _BOS = '<div class="p360-bos-mesaj">Veri bağlantısı yok.<br><small style="color:var(--text3);">Bu profil personel_kullanici kaydıyla eşleştirilmemiş.</small></div>';
+
+    // Devam
+    const devamEl = document.getElementById('d-ik-devam');
+    if (devamEl) {
+      if (!ik || !ik.devam) { devamEl.innerHTML = _BOS; }
+      else {
+        const d = ik.devam;
+        const yuzde = d.devam_yuzdesi != null ? `<span style="font-weight:700;color:${d.devam_yuzdesi>=90?'#166534':d.devam_yuzdesi>=75?'#92400e':'#991b1b'};">%${d.devam_yuzdesi}</span>` : '—';
+        devamEl.innerHTML = `
+          <div style="display:flex;gap:16px;flex-wrap:wrap;padding:10px 16px;">
+            <div class="p360-ik-chip p360-ik-yesil">🟢 Geldi<strong>${d.geldi_gun||0} gün</strong></div>
+            <div class="p360-ik-chip p360-ik-kirmizi">🔴 Gelmedi<strong>${d.gelmedi_gun||0} gün</strong></div>
+            <div class="p360-ik-chip p360-ik-sari">🟡 İzinli<strong>${d.izinli_gun||0} gün</strong></div>
+            <div class="p360-ik-chip">📊 Devam<strong>${yuzde}</strong></div>
+          </div>
+          ${d.son_kayit_tarihi ? `<div style="padding:0 16px 10px;font-size:11px;color:var(--text3);">Son kayıt: ${d.son_kayit_tarihi}</div>` : ''}
+          ${d.toplam_kayit===0 ? '<div style="padding:0 16px 10px;font-size:12px;color:var(--text3);">Henüz devam kaydı girilmemiş.</div>' : ''}`;
+      }
+    }
+
+    // İzin
+    const izinEl = document.getElementById('d-ik-izin');
+    if (izinEl) {
+      if (!ik || !ik.izin) { izinEl.innerHTML = _BOS; }
+      else {
+        const z = ik.izin;
+        izinEl.innerHTML = z.kayit_sayisi === 0
+          ? '<div class="p360-bos-mesaj">Henüz izin kaydı girilmemiş.</div>'
+          : `<div style="display:flex;gap:16px;flex-wrap:wrap;padding:10px 16px;">
+               <div class="p360-ik-chip">📋 Hak<strong>${z.toplam_hak} gün</strong></div>
+               <div class="p360-ik-chip p360-ik-sari">📤 Kullanılan<strong>${z.kullanilan} gün</strong></div>
+               <div class="p360-ik-chip p360-ik-yesil">📥 Kalan<strong>${z.kalan} gün</strong></div>
+               <div style="padding:0 16px;font-size:11px;color:var(--text3);">${z.yil} yılı</div>
+             </div>`;
+      }
+    }
+
+    // Notlar
+    const notlarEl = document.getElementById('d-ik-notlar');
+    if (notlarEl) {
+      if (!ik || !ik.notlar) { notlarEl.innerHTML = _BOS; return; }
+      const n = ik.notlar;
+      if (n.toplam_not === 0) {
+        notlarEl.innerHTML = '<div class="p360-bos-mesaj">İK notu girilmemiş.</div>';
+        return;
+      }
+      const ozet = `<div style="display:flex;gap:10px;flex-wrap:wrap;padding:10px 16px 6px;font-size:12px;">
+        <span>Toplam: <strong>${n.toplam_not}</strong></span>
+        ${n.uyari_sayisi   ? `<span style="color:#991b1b;">⚠ Uyarı: ${n.uyari_sayisi}</span>` : ''}
+        ${n.olumlu_sayisi  ? `<span style="color:#166534;">✔ Olumlu: ${n.olumlu_sayisi}</span>` : ''}
+        ${n.gorusme_sayisi ? `<span style="color:#1d4ed8;">💬 Görüşme: ${n.gorusme_sayisi}</span>` : ''}
+        ${n.son_not_tarihi ? `<span style="color:var(--text3);">Son: ${n.son_not_tarihi}</span>` : ''}
+      </div>`;
+      const NOT_TIP = {
+        uyari:      { renk:'#991b1b', bg:'#fee2e2', ikon:'⚠' },
+        olumlu:     { renk:'#166534', bg:'#dcfce7', ikon:'✔' },
+        gorusme:    { renk:'#1d4ed8', bg:'#dbeafe', ikon:'💬' },
+        performans: { renk:'#92400e', bg:'#fef3c7', ikon:'📈' },
+        genel:      { renk:'#374151', bg:'#f3f4f6', ikon:'📝' },
+      };
+      const satirlar = (n.son_notlar || []).map(not => {
+        const st = NOT_TIP[not.not_tipi] || NOT_TIP.genel;
+        return `<div class="p360-satir-detay" style="font-size:12px;">
+          <div class="pd-etiket" style="font-family:var(--mono);font-size:11px;color:var(--text3);min-width:90px;">${not.tarih||''}${not.gizli?'&nbsp;🔒':''}</div>
+          <div style="flex:1;">
+            <span style="font-size:11px;font-weight:600;color:${st.renk};background:${st.bg};
+                         padding:1px 6px;border-radius:4px;">${st.ikon} ${not.not_tipi}</span>
+            <span style="margin-left:8px;color:var(--text1);">${not.icerik||''}</span>
+          </div>
+        </div>`;
+      }).join('');
+      notlarEl.innerHTML = ozet + satirlar;
+    }
+  }
+
+  // ── FAZ2G-3: Maaş sekmesi render ────────────────────────────
+  function renderMaas(maas) {
+    const _BOS_PK = '<div class="p360-bos-mesaj">Veri bağlantısı yok.<br><small style="color:var(--text3);">Bu profil personel_kullanici kaydıyla eşleştirilmemiş.</small></div>';
+    const _BOS_VERI = '<div class="p360-bos-mesaj">Henüz maaş bilgisi girilmemiş.</div>';
+
+    // Aktif maaş
+    const aktifEl = document.getElementById('d-maas-aktif');
+    if (aktifEl) {
+      if (!maas) { aktifEl.innerHTML = _BOS_PK; }
+      else if (!maas.aktif_maas) { aktifEl.innerHTML = _BOS_VERI; }
+      else {
+        const m = maas.aktif_maas;
+        aktifEl.innerHTML = `
+          <div style="padding:14px 16px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
+            <span style="font-size:26px;font-weight:700;color:#166534;">${(m.tutar||0).toLocaleString('tr-TR')}</span>
+            <span style="font-size:14px;color:var(--text2);">${m.para_birimi||'TL'}</span>
+            <span style="font-size:12px;color:var(--text3);">Geçerlilik: ${m.gecerlilik_bas||'—'} →</span>
+            ${m.aciklama ? `<span style="font-size:12px;color:var(--text3);">(${m.aciklama})</span>` : ''}
+          </div>`;
+      }
+    }
+
+    // Geçmiş
+    const gecmisEl = document.getElementById('d-maas-gecmis');
+    if (gecmisEl) {
+      if (!maas) { gecmisEl.innerHTML = _BOS_PK; return; }
+      if (!maas.gecmis || maas.gecmis.length === 0) {
+        gecmisEl.innerHTML = _BOS_VERI; return;
+      }
+      const TIP_STIL = {
+        maas:       { renk:'#1d4ed8', bg:'#dbeafe', etiket:'maaş' },
+        zam:        { renk:'#166534', bg:'#dcfce7', etiket:'zam'  },
+        prim_ekstra:{ renk:'#92400e', bg:'#fef3c7', etiket:'prim' },
+        duzeltme:   { renk:'#6b7280', bg:'#f3f4f6', etiket:'düzeltme' },
+      };
+      gecmisEl.innerHTML = maas.gecmis.map(g => {
+        const st = TIP_STIL[g.tip] || TIP_STIL.maas;
+        const bit = g.gecerlilik_bit || 'şimdi';
+        return `<div class="p360-satir-detay" style="font-size:12px;">
+          <div class="pd-etiket" style="font-family:var(--mono);font-size:11px;color:var(--text3);min-width:100px;">
+            ${g.gecerlilik_bas||'?'} → ${bit}
+          </div>
+          <div style="flex:1;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span style="font-weight:700;">${(g.tutar||0).toLocaleString('tr-TR')} ${g.para_birimi||'TL'}</span>
+            <span style="font-size:11px;font-weight:600;color:${st.renk};background:${st.bg};padding:1px 6px;border-radius:4px;">${st.etiket}</span>
+            ${g.aciklama ? `<span style="font-size:11px;color:var(--text3);">${g.aciklama}</span>` : ''}
+          </div>
+        </div>`;
+      }).join('');
+    }
   }
 
   // ── Yetkinlik formu ─────────────────────────────────────────
