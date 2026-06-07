@@ -2843,5 +2843,111 @@ def personel_360_org_guncelle(profil_id):
         'yeni_iliski_id':    yeni_iliski_id,
     })
 
+@yonetim_bp.route('/api/personel-360/profil/<int:profil_id>/yetkinlik', methods=['POST'])
+@yetki_gerekli('yonetim', 'can_update')
+def personel_360_yetkinlik_ata(profil_id):
+    """
+    FAZ2C-5A: Personel 360 yetkinlik atama / güncelleme.
+    Eski aktif kayıt ASLA silinmez: aktif=0, bitis_tarihi doldurulur.
+    Yeni kayıt aktif=1 olarak açılır.
+    kaynak sabit 'faz2c5_panel'. onaylayan_profil_id ilk fazda NULL.
+    """
+    IZINLI_SEVIYE = {'aday', 'temel', 'orta', 'iyi', 'usta'}
+    IZINLI_DURUM  = {'onerilen', 'onayli', 'pasif'}
+
+    data = request.get_json(silent=True) or {}
+
+    # ── Zorunlu not ────────────────────────────────────────────────
+    notu = (data.get('guncelleme_notu') or '').strip()
+    if not notu:
+        return jsonify({'ok': False, 'hata': 'guncelleme_notu zorunlu'}), 400
+
+    # ── yetkinlik_id ───────────────────────────────────────────────
+    try:
+        yetkinlik_id = int(data['yetkinlik_id'])
+    except (KeyError, TypeError, ValueError):
+        return jsonify({'ok': False, 'hata': 'yetkinlik_id zorunlu ve sayısal olmalı'}), 400
+
+    # ── seviye ─────────────────────────────────────────────────────
+    seviye = (data.get('seviye') or '').strip()
+    if seviye not in IZINLI_SEVIYE:
+        return jsonify({'ok': False, 'hata': f'seviye geçersiz: {seviye!r}. İzinliler: {sorted(IZINLI_SEVIYE)}'}), 422
+
+    # ── durum ──────────────────────────────────────────────────────
+    durum = (data.get('durum') or 'onerilen').strip()
+    if durum not in IZINLI_DURUM:
+        return jsonify({'ok': False, 'hata': f'durum geçersiz: {durum!r}. İzinliler: {sorted(IZINLI_DURUM)}'}), 422
+
+    # ── puan ───────────────────────────────────────────────────────
+    puan_raw = data.get('puan')
+    if puan_raw is not None and str(puan_raw).strip() not in ('', 'null', 'None'):
+        try:
+            puan = int(puan_raw)
+        except (TypeError, ValueError):
+            return jsonify({'ok': False, 'hata': 'puan sayısal ya da null olmalı'}), 422
+    else:
+        puan = None
+
+    con = _get_conn()
+    try:
+        # ── Profil kontrolü ────────────────────────────────────────
+        kp = con.execute(
+            "SELECT id, gercek_ad FROM kullanici_profil WHERE id=?", (profil_id,)
+        ).fetchone()
+        if not kp:
+            return jsonify({'ok': False, 'hata': 'Profil bulunamadı'}), 404
+
+        # ── Yetkinlik master kontrolü ──────────────────────────────
+        ym = con.execute(
+            "SELECT id, ad FROM yetkinlik_master WHERE id=? AND aktif=1", (yetkinlik_id,)
+        ).fetchone()
+        if not ym:
+            return jsonify({'ok': False, 'hata': f'yetkinlik_id={yetkinlik_id} bulunamadı veya pasif'}), 422
+
+        # ── Transaction: eski kapat → yeni aç ──────────────────────
+        eski_id = None
+        eski_row = con.execute("""
+            SELECT id FROM kullanici_yetkinlik
+            WHERE kullanici_profil_id=? AND yetkinlik_id=? AND aktif=1
+        """, (profil_id, yetkinlik_id)).fetchone()
+
+        if eski_row:
+            eski_id = eski_row['id']
+            con.execute("""
+                UPDATE kullanici_yetkinlik
+                SET aktif=0, bitis_tarihi=date('now'), updated_at=datetime('now')
+                WHERE id=?
+            """, (eski_id,))
+
+        con.execute("""
+            INSERT INTO kullanici_yetkinlik
+                (kullanici_profil_id, yetkinlik_id, seviye, puan, durum,
+                 kaynak, guncelleme_notu, baslangic_tarihi, aktif)
+            VALUES (?,?,?,?,?,?,?,date('now'),1)
+        """, (profil_id, yetkinlik_id, seviye, puan, durum,
+              'faz2c5_panel', notu))
+
+        yeni_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+        con.commit()
+
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': f'DB hatası: {e}'}), 500
+    finally:
+        con.close()
+
+    return jsonify({
+        'ok':            True,
+        'profil_id':     profil_id,
+        'profil_ad':     kp['gercek_ad'],
+        'yetkinlik_ad':  ym['ad'],
+        'yetkinlik_id':  yetkinlik_id,
+        'seviye':        seviye,
+        'durum':         durum,
+        'kaynak':        'faz2c5_panel',
+        'yeni_kayit_id': yeni_id,
+        'kapanan_id':    eski_id,
+    })
+
 # END PERSONEL_360
 # ════════════════════════════════════════════════════════════════
