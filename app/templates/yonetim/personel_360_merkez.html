@@ -123,11 +123,68 @@
         </div>
       </div>
 
-      <!-- SEKME: Yetkinlik (FAZ2C-4 readonly) -->
+      <!-- SEKME: Yetkinlik (FAZ2C-4 readonly + FAZ2C-5B form) -->
       <div id="sekme-yetkinlik" class="p360-sekme-icerik" style="display:none;">
-        <div class="oz-card">
+        <!-- Mevcut yetkinlik listesi -->
+        <div class="oz-card" style="margin-bottom:14px;">
           <div class="oz-hdr"><span class="oz-hdr-t">Yetkinlikler</span></div>
           <div id="d-yetkinlik-liste" class="oz-body" style="padding:0;"></div>
+        </div>
+        <!-- Yetkinlik atama formu (FAZ2C-5B) -->
+        <div class="oz-card">
+          <div class="oz-hdr">
+            <span class="oz-hdr-t">Yetkinlik Ata / Güncelle</span>
+            <span style="font-size:11px;color:var(--text3);">FAZ2C-5B</span>
+          </div>
+          <div class="oz-body">
+            <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:6px;
+                        padding:8px 12px;margin-bottom:14px;font-size:12px;color:#166534;">
+              Aynı yetkinlik için mevcut aktif kayıt kapatılır, yeni kayıt açılır. Geçmiş silinmez.
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div>
+                <label class="org-label">Yetkinlik <span style="color:#dc2626;">*</span></label>
+                <select id="yk-yetkinlik-id" class="org-sel">
+                  <option value="">— Yükleniyor… —</option>
+                </select>
+              </div>
+              <div>
+                <label class="org-label">Seviye <span style="color:#dc2626;">*</span></label>
+                <select id="yk-seviye" class="org-sel">
+                  <option value="aday">Aday</option>
+                  <option value="temel">Temel</option>
+                  <option value="orta">Orta</option>
+                  <option value="iyi">İyi</option>
+                  <option value="usta">Usta</option>
+                </select>
+              </div>
+              <div>
+                <label class="org-label">Durum</label>
+                <select id="yk-durum" class="org-sel">
+                  <option value="onerilen">Önerilen</option>
+                  <option value="onayli">Onaylı</option>
+                </select>
+              </div>
+            </div>
+            <div style="margin-top:12px;">
+              <label class="org-label">Not <span style="color:#dc2626;">*</span></label>
+              <textarea id="yk-notu" rows="2"
+                        placeholder="Atama sebebini yazın (zorunlu)..."
+                        style="width:100%;box-sizing:border-box;padding:8px 10px;
+                               border:1px solid var(--border);border-radius:6px;
+                               font-size:13px;resize:vertical;color:var(--text1);
+                               background:var(--bg2);font-family:inherit;"></textarea>
+            </div>
+            <div style="margin-top:12px;display:flex;gap:10px;align-items:center;">
+              <button id="yk-kaydet-btn"
+                      onclick="yetkinlikKaydet()"
+                      style="padding:9px 22px;background:#059669;color:#fff;border:none;
+                             border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+                Ata / Güncelle
+              </button>
+              <div id="yk-mesaj" style="font-size:13px;"></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -473,8 +530,105 @@
       yetkinlikEl.innerHTML = '<div class="p360-bos-mesaj">Yetkinlik kaydı yok.</div>';
     }
 
+    // Yetkinlik formu doldur (FAZ2C-5B)
+    yetkinlikFormDoldur();
+
     // Organizasyon formu doldur
     orgFormDoldur(data);
+  }
+
+  // ── Yetkinlik formu (FAZ2C-5B) ──────────────────────────────
+  let _yetkinlikSecenekler = null;  // cache
+
+  async function yetkinlikFormDoldur() {
+    const sel = document.getElementById('yk-yetkinlik-id');
+    if (!sel) return;
+
+    // Notu ve mesajı sıfırla
+    const nEl = document.getElementById('yk-notu');
+    const mEl = document.getElementById('yk-mesaj');
+    if (nEl) nEl.value = '';
+    if (mEl) mEl.textContent = '';
+
+    if (_yetkinlikSecenekler) {
+      _yetkinlikDropdownDoldur(sel, _yetkinlikSecenekler);
+      return;
+    }
+    sel.innerHTML = '<option value="">— Yükleniyor… —</option>';
+    try {
+      const res  = await fetch('/yonetim/api/personel-360/yetkinlik-secenekler');
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.hata || 'API hatası');
+      _yetkinlikSecenekler = data.yetkinlikler;
+      _yetkinlikDropdownDoldur(sel, _yetkinlikSecenekler);
+    } catch (e) {
+      sel.innerHTML = `<option value="">⚠ Yüklenemedi: ${e.message}</option>`;
+    }
+  }
+
+  function _yetkinlikDropdownDoldur(sel, liste) {
+    sel.innerHTML = '<option value="">— Seçin —</option>' +
+      liste.map(y => `<option value="${y.id}">${y.ad}</option>`).join('');
+  }
+
+  async function yetkinlikKaydet() {
+    const mesajEl = document.getElementById('yk-mesaj');
+    const btnEl   = document.getElementById('yk-kaydet-btn');
+    if (!secilenId) {
+      mesajEl.style.color = '#dc2626';
+      mesajEl.textContent = 'Önce bir personel seçin.';
+      return;
+    }
+    const yetkinlikId = document.getElementById('yk-yetkinlik-id').value;
+    const seviye      = document.getElementById('yk-seviye').value;
+    const durum       = document.getElementById('yk-durum').value;
+    const notu        = (document.getElementById('yk-notu').value || '').trim();
+
+    if (!yetkinlikId) {
+      mesajEl.style.color = '#dc2626';
+      mesajEl.textContent = 'Yetkinlik seçilmedi.';
+      return;
+    }
+    if (!notu) {
+      mesajEl.style.color = '#dc2626';
+      mesajEl.textContent = 'Not zorunludur.';
+      return;
+    }
+
+    btnEl.disabled = true;
+    btnEl.textContent = 'Kaydediliyor…';
+    mesajEl.textContent = '';
+
+    try {
+      const res = await fetch(`/yonetim/api/personel-360/profil/${secilenId}/yetkinlik`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          yetkinlik_id:   parseInt(yetkinlikId),
+          seviye:         seviye,
+          durum:          durum,
+          guncelleme_notu: notu,
+        }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.hata || 'Sunucu hatası');
+
+      mesajEl.style.color = '#166534';
+      mesajEl.textContent = `✔ ${data.yetkinlik_ad} — ${data.seviye} kaydedildi.`;
+
+      // Notu temizle, listeyi yenile
+      document.getElementById('yk-notu').value = '';
+      const profRes  = await fetch(`/yonetim/api/personel-360/profil/${secilenId}`);
+      const profData = await profRes.json();
+      if (profData.ok) detayGoster(profData);
+
+    } catch (e) {
+      mesajEl.style.color = '#dc2626';
+      mesajEl.textContent = '⚠ ' + e.message;
+    } finally {
+      btnEl.disabled = false;
+      btnEl.textContent = 'Ata / Güncelle';
+    }
   }
 
   // ── Organizasyon formu doldur ────────────────────────────────

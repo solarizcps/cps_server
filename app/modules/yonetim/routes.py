@@ -2843,6 +2843,31 @@ def personel_360_org_guncelle(profil_id):
         'yeni_iliski_id':    yeni_iliski_id,
     })
 
+@yonetim_bp.route('/api/personel-360/yetkinlik-secenekler', methods=['GET'])
+@yetki_gerekli('yonetim', 'can_view')
+def personel_360_yetkinlik_secenekler():
+    """FAZ2C-5B: aktif yetkinlik_master listesi — UI dropdown için."""
+    con = _get_conn()
+    try:
+        rows = con.execute("""
+            SELECT id, kod, ad, kategori
+            FROM yetkinlik_master
+            WHERE aktif = 1
+            ORDER BY sira, ad
+        """).fetchall()
+        return jsonify({
+            'ok': True,
+            'yetkinlikler': [
+                {'id': r['id'], 'kod': r['kod'], 'ad': r['ad'], 'kategori': r['kategori']}
+                for r in rows
+            ],
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
 @yonetim_bp.route('/api/personel-360/profil/<int:profil_id>/yetkinlik', methods=['POST'])
 @yetki_gerekli('yonetim', 'can_update')
 def personel_360_yetkinlik_ata(profil_id):
