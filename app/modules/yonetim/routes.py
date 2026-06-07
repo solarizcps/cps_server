@@ -2532,6 +2532,42 @@ def personel_360_profil(profil_id):
                     "iliski_id":    upi_row["iliski_id"],
                 }
 
+        # FAZ2C-3: readonly yetkinlik listesi
+        yetkinlikler = []
+        try:
+            ky_rows = con.execute("""
+                SELECT ky.id, ym.kod AS yetkinlik_kod, ym.ad,
+                       ym.kategori, ky.seviye, ky.puan, ky.durum,
+                       ky.kaynak, ky.baslangic_tarihi, ky.updated_at,
+                       onaylayan.gercek_ad AS onaylayan_ad
+                FROM kullanici_yetkinlik ky
+                JOIN yetkinlik_master ym ON ym.id = ky.yetkinlik_id
+                LEFT JOIN kullanici_profil onaylayan
+                       ON onaylayan.id = ky.onaylayan_profil_id
+                WHERE ky.kullanici_profil_id = ?
+                  AND ky.aktif = 1
+                  AND ym.aktif = 1
+                ORDER BY ym.sira, ym.ad
+            """, (profil_id,)).fetchall()
+            yetkinlikler = [
+                {
+                    "id":               r["id"],
+                    "yetkinlik_kod":    r["yetkinlik_kod"],
+                    "ad":               r["ad"],
+                    "kategori":         r["kategori"],
+                    "seviye":           r["seviye"],
+                    "puan":             r["puan"],
+                    "durum":            r["durum"],
+                    "kaynak":           r["kaynak"],
+                    "onaylayan_ad":     r["onaylayan_ad"],
+                    "baslangic_tarihi": r["baslangic_tarihi"],
+                    "updated_at":       r["updated_at"],
+                }
+                for r in ky_rows
+            ]
+        except Exception:
+            yetkinlikler = []
+
     finally:
         con.close()
 
@@ -2571,6 +2607,7 @@ def personel_360_profil(profil_id):
         ],
         "usta_bilgi":       usta_bilgi,
         "personel_listesi": personel_listesi,
+        "yetkinlikler":     yetkinlikler,
     })
 
 @yonetim_bp.route('/api/personel-360/profil/<int:profil_id>/organizasyon', methods=['POST'])
