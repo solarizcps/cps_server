@@ -3196,7 +3196,7 @@ def personel_360_org_guncelle(profil_id):
     })
 
 @yonetim_bp.route('/api/personel-360/yetkinlik-secenekler', methods=['GET'])
-@yetki_gerekli('yonetim', 'can_view')
+@yetki_gerekli('personel_360', 'can_view')
 def personel_360_yetkinlik_secenekler():
     """FAZ2C-5B: aktif yetkinlik_master listesi — UI dropdown için."""
     con = _get_conn()
