@@ -3326,5 +3326,425 @@ def personel_360_yetkinlik_ata(profil_id):
         'kapanan_id':    eski_id,
     })
 
+# ════════════════════════════════════════════════════════════════
+# FAZ2G-4A — Personel 360 İK / Maaş Write Endpoints
+# BEGIN PERSONEL_360_IK_WRITE
+# ════════════════════════════════════════════════════════════════
+
+def _p360_ik_profil_ve_pkid(con, profil_id):
+    """
+    Ortak yardımcı: profil_id → (kp row, pk_id).
+    pk_id yoksa (kaynak != personel_kullanici) ValueError fırlatır.
+    """
+    kp = con.execute(
+        "SELECT id, gercek_ad, kaynak, kaynak_id FROM kullanici_profil WHERE id=?",
+        (profil_id,)
+    ).fetchone()
+    if not kp:
+        raise LookupError("Profil bulunamadı")
+    if kp["kaynak"] != "personel_kullanici" or not kp["kaynak_id"]:
+        raise ValueError("Bu profil personel_kullanici kaydıyla eşleştirilmemiş; İK verisi girilemez.")
+    return kp, kp["kaynak_id"]
+
+
+# ── 1) Maaş Ekle / Güncelle ──────────────────────────────────────────
+@yonetim_bp.route('/api/personel-360/profil/<int:profil_id>/maas', methods=['POST'])
+@yetki_gerekli('personel_maas.duzenle', 'can_create')
+def personel_360_maas_ekle(profil_id):
+    """
+    FAZ2G-4A: Maaş ekleme — soft-history pattern.
+    Mevcut aktif kayıt (gecerlilik_bit IS NULL) kapatılır,
+    yeni kayıt açılır. DELETE yok.
+    """
+    IZINLI_TIP = {'maas', 'zam', 'prim_ekstra', 'duzeltme'}
+    IZINLI_PB  = {'TL', 'USD', 'EUR'}
+
+    data = request.get_json(silent=True) or {}
+
+    # Validasyon
+    try:
+        tutar = float(data['tutar'])
+        if tutar <= 0:
+            raise ValueError("tutar sıfırdan büyük olmalı")
+    except (KeyError, TypeError, ValueError) as e:
+        return jsonify({'ok': False, 'hata': f'tutar geçersiz: {e}'}), 400
+
+    gecerlilik_bas = (data.get('gecerlilik_bas') or '').strip()
+    if not gecerlilik_bas:
+        return jsonify({'ok': False, 'hata': 'gecerlilik_bas zorunlu (YYYY-MM-DD)'}), 400
+
+    para_birimi = (data.get('para_birimi') or 'TL').strip().upper()
+    if para_birimi not in IZINLI_PB:
+        return jsonify({'ok': False, 'hata': f'para_birimi geçersiz: {para_birimi}'}), 422
+
+    tip = (data.get('tip') or 'maas').strip()
+    if tip not in IZINLI_TIP:
+        return jsonify({'ok': False, 'hata': f'tip geçersiz: {tip!r}. İzinliler: {sorted(IZINLI_TIP)}'}), 422
+
+    aciklama = (data.get('aciklama') or '').strip() or None
+
+    con = _get_conn()
+    try:
+        kp, pk_id = _p360_ik_profil_ve_pkid(con, profil_id)
+    except LookupError as e:
+        con.close()
+        return jsonify({'ok': False, 'hata': str(e)}), 404
+    except ValueError as e:
+        con.close()
+        return jsonify({'ok': False, 'hata': str(e)}), 422
+
+    try:
+        # Aktif maaş kaydı var mı?
+        aktif = con.execute("""
+            SELECT id, tutar, gecerlilik_bas FROM personel_maas_gecmis
+            WHERE personel_pk_id=? AND gecerlilik_bit IS NULL
+            ORDER BY gecerlilik_bas DESC LIMIT 1
+        """, (pk_id,)).fetchone()
+
+        kapanan_id  = None
+        kapama_biti = None
+        if aktif:
+            # Yeni başlangıç tarihi - 1 gün → eski kayıt kapanış
+            import datetime
+            try:
+                bas_dt   = datetime.date.fromisoformat(gecerlilik_bas)
+                kapat_dt = bas_dt - datetime.timedelta(days=1)
+                kapama_biti = str(kapat_dt)
+            except ValueError:
+                con.close()
+                return jsonify({'ok': False, 'hata': 'gecerlilik_bas geçersiz tarih formatı (YYYY-MM-DD)'}), 400
+
+            con.execute("""
+                UPDATE personel_maas_gecmis
+                SET gecerlilik_bit=? WHERE id=?
+            """, (kapama_biti, aktif['id']))
+            kapanan_id = aktif['id']
+
+        # Yeni maaş kaydı
+        con.execute("""
+            INSERT INTO personel_maas_gecmis
+              (personel_pk_id, tutar, para_birimi, gecerlilik_bas, gecerlilik_bit,
+               tip, aciklama, giren_kullanici)
+            VALUES (?,?,?,?,NULL,?,?,?)
+        """, (pk_id, tutar, para_birimi, gecerlilik_bas, tip, aciklama, _u()))
+        yeni_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+        # Cache: personel_kullanici.Maas güncelle
+        con.execute("""
+            UPDATE personel_kullanici
+            SET Maas=?, MaasParaBirimi=?, MaasGuncellemeTarih=date('now')
+            WHERE id=?
+        """, (tutar, para_birimi, pk_id))
+
+        con.commit()
+
+        # Audit
+        if kapanan_id:
+            audit.log(_u(), 'DUZENLE', 'personel_maas_gecmis', kapanan_id,
+                      alan='gecerlilik_bit', eski=None, yeni=kapama_biti,
+                      aciklama=f"P360 maas: eski kayıt kapandı pk_id={pk_id}",
+                      modul='yonetim', alt_modul='personel_360')
+        audit.log(_u(), 'EKLE', 'personel_maas_gecmis', yeni_id,
+                  alan='tutar', eski=str(aktif['tutar']) if aktif else None, yeni=str(tutar),
+                  aciklama=f"P360 maas: yeni kayıt pk_id={pk_id} tip={tip}",
+                  modul='yonetim', alt_modul='personel_360')
+
+    except Exception as e:
+        con.rollback()
+        con.close()
+        import traceback
+        return jsonify({'ok': False, 'hata': str(e), 'tb': traceback.format_exc()}), 500
+    finally:
+        con.close()
+
+    return jsonify({
+        'ok':           True,
+        'profil_id':    profil_id,
+        'profil_ad':    kp['gercek_ad'],
+        'pk_id':        pk_id,
+        'yeni_id':      yeni_id,
+        'kapanan_id':   kapanan_id,
+        'tutar':        tutar,
+        'para_birimi':  para_birimi,
+        'gecerlilik_bas': gecerlilik_bas,
+        'tip':          tip,
+    })
+
+
+# ── 2) İzin Kaydı Ekle ───────────────────────────────────────────────
+@yonetim_bp.route('/api/personel-360/profil/<int:profil_id>/izin', methods=['POST'])
+@yetki_gerekli('personel_izin', 'can_create')
+def personel_360_izin_ekle(profil_id):
+    """
+    FAZ2G-4A: İzin kaydı ekleme. Her giriş yeni satır — DELETE yok.
+    """
+    IZINLI_TIP   = {'yillik','ucretsiz','dogum','olum','hastalik','resmi_tatil'}
+    IZINLI_DURUM = {'taslak','onay_bekliyor','onaylandi','reddedildi','iptal'}
+
+    data = request.get_json(silent=True) or {}
+
+    try:
+        yil = int(data.get('yil') or 0)
+        if yil < 2020 or yil > 2100:
+            raise ValueError("yil geçersiz")
+    except (TypeError, ValueError) as e:
+        return jsonify({'ok': False, 'hata': f'yil geçersiz: {e}'}), 400
+
+    try:
+        hak_gun       = float(data.get('hak_gun', 14))
+        kullanilan_gun = float(data.get('kullanilan_gun', 0))
+    except (TypeError, ValueError) as e:
+        return jsonify({'ok': False, 'hata': f'gun değerleri geçersiz: {e}'}), 400
+
+    izin_tipi = (data.get('izin_tipi') or 'yillik').strip()
+    if izin_tipi not in IZINLI_TIP:
+        return jsonify({'ok': False, 'hata': f'izin_tipi geçersiz: {izin_tipi!r}'}), 422
+
+    durum = (data.get('durum') or 'taslak').strip()
+    if durum not in IZINLI_DURUM:
+        return jsonify({'ok': False, 'hata': f'durum geçersiz: {durum!r}'}), 422
+
+    bas       = (data.get('baslangic_tarihi') or '').strip() or None
+    bit       = (data.get('bitis_tarihi')     or '').strip() or None
+    gun_sayisi = data.get('gun_sayisi')
+    if gun_sayisi is not None:
+        try:
+            gun_sayisi = float(gun_sayisi)
+        except (TypeError, ValueError):
+            gun_sayisi = None
+    notlar  = (data.get('notlar') or '').strip() or None
+    onaylayan = (data.get('onaylayan') or '').strip() or None
+
+    con = _get_conn()
+    try:
+        kp, pk_id = _p360_ik_profil_ve_pkid(con, profil_id)
+    except LookupError as e:
+        con.close()
+        return jsonify({'ok': False, 'hata': str(e)}), 404
+    except ValueError as e:
+        con.close()
+        return jsonify({'ok': False, 'hata': str(e)}), 422
+
+    try:
+        con.execute("""
+            INSERT INTO personel_izin
+              (personel_pk_id, yil, hak_gun, kullanilan_gun, izin_tipi,
+               baslangic_tarihi, bitis_tarihi, gun_sayisi, durum,
+               onaylayan, notlar, giren_kullanici)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+        """, (pk_id, yil, hak_gun, kullanilan_gun, izin_tipi,
+              bas, bit, gun_sayisi, durum, onaylayan, notlar, _u()))
+        yeni_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+        con.commit()
+
+        audit.log(_u(), 'EKLE', 'personel_izin', yeni_id,
+                  alan='gun_sayisi', eski=None, yeni=str(gun_sayisi),
+                  aciklama=f"P360 izin: pk_id={pk_id} yil={yil} tip={izin_tipi} durum={durum}",
+                  modul='yonetim', alt_modul='personel_360')
+
+    except Exception as e:
+        con.rollback()
+        con.close()
+        import traceback
+        return jsonify({'ok': False, 'hata': str(e), 'tb': traceback.format_exc()}), 500
+    finally:
+        con.close()
+
+    return jsonify({
+        'ok':        True,
+        'profil_id': profil_id,
+        'profil_ad': kp['gercek_ad'],
+        'pk_id':     pk_id,
+        'yeni_id':   yeni_id,
+        'yil':       yil,
+        'izin_tipi': izin_tipi,
+        'gun_sayisi': gun_sayisi,
+        'durum':     durum,
+    })
+
+
+# ── 3) Devam Kaydı Ekle / Güncelle ───────────────────────────────────
+@yonetim_bp.route('/api/personel-360/profil/<int:profil_id>/devam', methods=['POST'])
+@yetki_gerekli('personel_devam', 'can_create')
+def personel_360_devam_ekle(profil_id):
+    """
+    FAZ2G-4A: Devam kaydı. UNIQUE(personel_pk_id, tarih) — aynı gün varsa günceller.
+    DELETE yok.
+    """
+    IZINLI_DURUM  = {'geldi','gelmedi','izinli','resmi_tatil','yarim_gun','erken_cikis','gec_giris'}
+    IZINLI_KAYNAK = {'manuel','pdks','ik_giris','toplu_giris'}
+
+    data = request.get_json(silent=True) or {}
+
+    tarih = (data.get('tarih') or '').strip()
+    if not tarih:
+        return jsonify({'ok': False, 'hata': 'tarih zorunlu (YYYY-MM-DD)'}), 400
+
+    durum = (data.get('durum') or 'geldi').strip()
+    if durum not in IZINLI_DURUM:
+        return jsonify({'ok': False, 'hata': f'durum geçersiz: {durum!r}'}), 422
+
+    kaynak     = (data.get('kaynak') or 'manuel').strip()
+    if kaynak not in IZINLI_KAYNAK:
+        kaynak = 'manuel'
+
+    giris_saati  = (data.get('giris_saati')  or '').strip() or None
+    cikis_saati  = (data.get('cikis_saati')  or '').strip() or None
+    aciklama     = (data.get('aciklama')     or '').strip() or None
+
+    # calisma_dakika hesapla (varsa)
+    calisma_dakika = None
+    if giris_saati and cikis_saati:
+        try:
+            import datetime
+            fmt = '%H:%M'
+            g = datetime.datetime.strptime(giris_saati, fmt)
+            c = datetime.datetime.strptime(cikis_saati, fmt)
+            diff = int((c - g).total_seconds() / 60)
+            if diff > 0:
+                calisma_dakika = diff
+        except Exception:
+            pass
+
+    con = _get_conn()
+    try:
+        kp, pk_id = _p360_ik_profil_ve_pkid(con, profil_id)
+    except LookupError as e:
+        con.close()
+        return jsonify({'ok': False, 'hata': str(e)}), 404
+    except ValueError as e:
+        con.close()
+        return jsonify({'ok': False, 'hata': str(e)}), 422
+
+    try:
+        mevcut = con.execute(
+            "SELECT id, durum FROM personel_devam WHERE personel_pk_id=? AND tarih=?",
+            (pk_id, tarih)
+        ).fetchone()
+
+        if mevcut:
+            con.execute("""
+                UPDATE personel_devam
+                SET durum=?, giris_saati=?, cikis_saati=?, calisma_dakika=?,
+                    kaynak=?, aciklama=?, giren_kullanici=?,
+                    updated_at=datetime('now')
+                WHERE personel_pk_id=? AND tarih=?
+            """, (durum, giris_saati, cikis_saati, calisma_dakika,
+                  kaynak, aciklama, _u(), pk_id, tarih))
+            islem = 'DUZENLE'
+            kayit_id = mevcut['id']
+            eski_durum = mevcut['durum']
+        else:
+            con.execute("""
+                INSERT INTO personel_devam
+                  (personel_pk_id, tarih, durum, giris_saati, cikis_saati,
+                   calisma_dakika, kaynak, aciklama, giren_kullanici)
+                VALUES (?,?,?,?,?,?,?,?,?)
+            """, (pk_id, tarih, durum, giris_saati, cikis_saati,
+                  calisma_dakika, kaynak, aciklama, _u()))
+            islem = 'EKLE'
+            kayit_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+            eski_durum = None
+
+        con.commit()
+
+        audit.log(_u(), islem, 'personel_devam', kayit_id,
+                  alan='durum', eski=eski_durum, yeni=durum,
+                  aciklama=f"P360 devam: pk_id={pk_id} tarih={tarih} durum={durum}",
+                  modul='yonetim', alt_modul='personel_360')
+
+    except Exception as e:
+        con.rollback()
+        con.close()
+        import traceback
+        return jsonify({'ok': False, 'hata': str(e), 'tb': traceback.format_exc()}), 500
+    finally:
+        con.close()
+
+    return jsonify({
+        'ok':              True,
+        'profil_id':       profil_id,
+        'profil_ad':       kp['gercek_ad'],
+        'pk_id':           pk_id,
+        'kayit_id':        kayit_id,
+        'islem':           islem,
+        'tarih':           tarih,
+        'durum':           durum,
+        'calisma_dakika':  calisma_dakika,
+    })
+
+
+# ── 4) İK Not Ekle ───────────────────────────────────────────────────
+@yonetim_bp.route('/api/personel-360/profil/<int:profil_id>/ik-not', methods=['POST'])
+@yetki_gerekli('personel_ik_not', 'can_create')
+def personel_360_ik_not_ekle(profil_id):
+    """
+    FAZ2G-4A: İK not ekleme. Her giriş yeni satır — güncelleme/silme yok.
+    """
+    IZINLI_TIP = {'gorusme','uyari','performans','issizlik','istifa','olumlu','genel'}
+
+    data = request.get_json(silent=True) or {}
+
+    icerik = (data.get('icerik') or '').strip()
+    if not icerik:
+        return jsonify({'ok': False, 'hata': 'icerik zorunlu'}), 400
+
+    not_tipi = (data.get('not_tipi') or 'genel').strip()
+    if not_tipi not in IZINLI_TIP:
+        return jsonify({'ok': False, 'hata': f'not_tipi geçersiz: {not_tipi!r}. İzinliler: {sorted(IZINLI_TIP)}'}), 422
+
+    tarih = (data.get('tarih') or '').strip()
+    if not tarih:
+        import datetime
+        tarih = str(datetime.date.today())
+
+    gizli_raw = data.get('gizli', 1)
+    gizli = 1 if str(gizli_raw) not in ('0', 'false', 'False') else 0
+
+    con = _get_conn()
+    try:
+        kp, pk_id = _p360_ik_profil_ve_pkid(con, profil_id)
+    except LookupError as e:
+        con.close()
+        return jsonify({'ok': False, 'hata': str(e)}), 404
+    except ValueError as e:
+        con.close()
+        return jsonify({'ok': False, 'hata': str(e)}), 422
+
+    try:
+        con.execute("""
+            INSERT INTO personel_ik_not
+              (personel_pk_id, tarih, not_tipi, icerik, gizli, giren_kullanici)
+            VALUES (?,?,?,?,?,?)
+        """, (pk_id, tarih, not_tipi, icerik, gizli, _u()))
+        yeni_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+        con.commit()
+
+        audit.log(_u(), 'EKLE', 'personel_ik_not', yeni_id,
+                  alan='not_tipi', eski=None, yeni=not_tipi,
+                  aciklama=f"P360 ik_not: pk_id={pk_id} tip={not_tipi} gizli={gizli}",
+                  modul='yonetim', alt_modul='personel_360')
+
+    except Exception as e:
+        con.rollback()
+        con.close()
+        import traceback
+        return jsonify({'ok': False, 'hata': str(e), 'tb': traceback.format_exc()}), 500
+    finally:
+        con.close()
+
+    return jsonify({
+        'ok':        True,
+        'profil_id': profil_id,
+        'profil_ad': kp['gercek_ad'],
+        'pk_id':     pk_id,
+        'yeni_id':   yeni_id,
+        'not_tipi':  not_tipi,
+        'tarih':     tarih,
+        'gizli':     bool(gizli),
+    })
+
+# END PERSONEL_360_IK_WRITE
+# ════════════════════════════════════════════════════════════════
 # END PERSONEL_360
 # ════════════════════════════════════════════════════════════════
