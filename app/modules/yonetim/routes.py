@@ -2666,6 +2666,67 @@ def personel_360_profil(profil_id):
 
         pk_id = kp["kaynak_id"] if kp["kaynak"] == "personel_kullanici" else None
 
+        # FAZ2G-6C: legacy_id + kisi_adi ile güvenli üretim köprüsü.
+        # uretim_kayit'te aynı personel_id altında farklı kişilerin kayıtları
+        # (legacy import kirliliği) bulunabiliyor. Güvenli yöntem:
+        #   CPS_CANLI  → personel_id = pk_id  (doğrudan, ad filtresi gerekmez)
+        #   LEGACY_5055 → personel_id = legacy_id AND personel_ad = kişi adı (tam eşleşme)
+        _legacy_id  = None
+        _kisi_adi   = None          # DB'deki yazımla birebir (küçük harf, Türkçe dahil)
+        _has_legacy = False
+        uretim_legacy_uyari = False
+
+        if pk_id is not None:
+            _pk_row = con.execute(
+                "SELECT legacy_id, kullanici_adi, COALESCE(AdSoyad,ad) as ad "
+                "FROM personel_kullanici WHERE id=?", (pk_id,)
+            ).fetchone()
+            if _pk_row and _pk_row["legacy_id"]:
+                _legacy_id  = _pk_row["legacy_id"]
+                # DB'deki personel_ad yazımını kullan — LOWER() Türkçe İ'yi bozar,
+                # bu yüzden gerçek veriyi doğrudan çekip karşılaştırıyoruz
+                _kisi_adi_row = con.execute(
+                    "SELECT personel_ad FROM uretim_kayit "
+                    "WHERE personel_id=? AND kaynak='CPS_CANLI' LIMIT 1", (pk_id,)
+                ).fetchone()
+                if _kisi_adi_row:
+                    _kisi_adi = _kisi_adi_row["personel_ad"]
+                else:
+                    # CPS_CANLI kaydı henüz yok — profil adını küçük harf kullan
+                    _raw_ad = (_pk_row["kullanici_adi"] or _pk_row["ad"] or "").strip()
+                    _kisi_adi = _raw_ad.lower()
+                _has_legacy = True
+                uretim_legacy_uyari = True
+
+        # Üretim WHERE koşulunu oluşturan yardımcı:
+        # legacy_id varsa: CPS_CANLI (pk_id) UNION ALL LEGACY_5055 (legacy_id + ad)
+        # yoksa: düz personel_id = pk_id
+        def _uretim_where_params(extra_where=""):
+            """
+            extra_where: ek tarih filtresi (period), boş string ise uygulanmaz.
+            Döner: (sql_fragment, params_tuple)
+            sql_fragment, FROM uretim_kayit WHERE ... kısmında kullanılır.
+            Aslında UNION ALL yapısı için CTE kullanıyoruz.
+            """
+            period_clause = f"AND {extra_where}" if extra_where else ""
+            if _has_legacy and _legacy_id and _kisi_adi:
+                sql = f"""
+                    (SELECT * FROM uretim_kayit
+                     WHERE personel_id = ? AND kaynak = 'CPS_CANLI' {period_clause})
+                    UNION ALL
+                    (SELECT * FROM uretim_kayit
+                     WHERE personel_id = ? AND kaynak = 'LEGACY_5055'
+                       AND personel_ad = ? {period_clause})
+                """
+                params = (pk_id, _legacy_id, _kisi_adi)
+            else:
+                sql = f"""
+                    (SELECT * FROM uretim_kayit
+                     WHERE personel_id = ? {period_clause})
+                """
+                params = (pk_id,)
+            return sql, params
+
         # FAZ2G-2: İK ve maaş defaults — pk_id yoksa veya yetki yoksa None kalır
         maas_ozet = None
         ik_ozet   = None
@@ -2673,14 +2734,15 @@ def personel_360_profil(profil_id):
         if pk_id is not None:
             try:
                 # Kariyer özeti — tüm zamanlar (period bağımsız)
-                kar = con.execute("""
+                _kar_sub, _kar_p = _uretim_where_params("")
+                kar = con.execute(f"""
                     SELECT COUNT(*)                                              AS toplam_kayit,
                            COALESCE(SUM(miktar), 0)                              AS toplam_miktar,
                            COALESCE(SUM(CASE WHEN onay_durum='onaylandi'
                                             THEN miktar ELSE 0 END), 0)          AS onayli_miktar,
                            MAX(tarih)                                            AS son_is_tarihi
-                    FROM uretim_kayit WHERE personel_id = ?
-                """, (pk_id,)).fetchone()
+                    FROM ({_kar_sub})
+                """, _kar_p).fetchone()
                 if kar:
                     uretim_kariyer = {
                         "toplam_kayit":  kar["toplam_kayit"],
@@ -2690,6 +2752,7 @@ def personel_360_profil(profil_id):
                     }
 
                 # Dönem filtreli özet
+                _oz_sub, _oz_p = _uretim_where_params(_period_where)
                 oz = con.execute(f"""
                     SELECT COUNT(*)                                              AS toplam_kayit,
                            COALESCE(SUM(miktar), 0)                              AS toplam_miktar,
@@ -2698,9 +2761,8 @@ def personel_360_profil(profil_id):
                                             THEN miktar ELSE 0 END), 0)          AS onayli_miktar,
                            MAX(tarih)                                            AS son_is_tarihi,
                            COUNT(DISTINCT proses_kodu)                           AS farkli_proses_sayisi
-                    FROM uretim_kayit
-                    WHERE personel_id = ? AND {_period_where}
-                """, (pk_id,)).fetchone()
+                    FROM ({_oz_sub})
+                """, _oz_p).fetchone()
                 if oz:
                     uretim_ozet = {
                         "toplam_kayit":         oz["toplam_kayit"],
@@ -2712,6 +2774,7 @@ def personel_360_profil(profil_id):
                     }
 
                 # Dönem filtreli proses dağılımı
+                _pr_sub, _pr_p = _uretim_where_params(_period_where)
                 pr_rows = con.execute(f"""
                     SELECT proses_kodu, proses_adi,
                            COUNT(*)                                              AS kayit_sayisi,
@@ -2719,11 +2782,10 @@ def personel_360_profil(profil_id):
                            COALESCE(SUM(CASE WHEN onay_durum='onaylandi'
                                             THEN miktar ELSE 0 END), 0)          AS onayli_miktar,
                            MAX(tarih)                                            AS son_tarih
-                    FROM uretim_kayit
-                    WHERE personel_id = ? AND {_period_where}
+                    FROM ({_pr_sub})
                     GROUP BY proses_kodu, proses_adi
                     ORDER BY toplam_miktar DESC
-                """, (pk_id,)).fetchall()
+                """, _pr_p).fetchall()
                 uretim_prosesler = [
                     {
                         "proses_kodu":   r["proses_kodu"],
@@ -2737,14 +2799,14 @@ def personel_360_profil(profil_id):
                 ]
 
                 # Dönem filtreli son üretimler
+                _su_sub, _su_p = _uretim_where_params(_period_where)
                 su_rows = con.execute(f"""
                     SELECT tarih, saat, proses_adi, proses_kodu,
                            miktar, onay_durum, usta_ad, onay_tarihi
-                    FROM uretim_kayit
-                    WHERE personel_id = ? AND {_period_where}
+                    FROM ({_su_sub})
                     ORDER BY tarih DESC, saat DESC
                     LIMIT 10
-                """, (pk_id,)).fetchall()
+                """, _su_p).fetchall()
                 son_uretimler = [
                     {
                         "tarih":        r["tarih"],
@@ -2947,13 +3009,14 @@ def personel_360_profil(profil_id):
         "usta_bilgi":        usta_bilgi,
         "personel_listesi":  personel_listesi,
         "yetkinlikler":      yetkinlikler,
-        "uretim_period":     uretim_period,
-        "uretim_kariyer":    uretim_kariyer,
-        "uretim_ozet":       uretim_ozet,
-        "uretim_prosesler":  uretim_prosesler,
-        "son_uretimler":     son_uretimler,
-        "maas_ozet":         maas_ozet,
-        "ik_ozet":           ik_ozet,
+        "uretim_period":        uretim_period,
+        "uretim_legacy_uyari":  uretim_legacy_uyari,
+        "uretim_kariyer":       uretim_kariyer,
+        "uretim_ozet":          uretim_ozet,
+        "uretim_prosesler":     uretim_prosesler,
+        "son_uretimler":        son_uretimler,
+        "maas_ozet":            maas_ozet,
+        "ik_ozet":              ik_ozet,
         "_caps": {
             "ik":      has_ik,
             "maas":    has_maas,
