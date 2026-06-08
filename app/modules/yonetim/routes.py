@@ -2705,24 +2705,25 @@ def personel_360_profil(profil_id):
             """
             extra_where: ek tarih filtresi (period), boş string ise uygulanmaz.
             Döner: (sql_fragment, params_tuple)
-            sql_fragment, FROM uretim_kayit WHERE ... kısmında kullanılır.
-            Aslında UNION ALL yapısı için CTE kullanıyoruz.
+            sql_fragment, FROM (...) içinde subquery olarak kullanılır.
+            FAZ2G-9C: SQLite 3.x'te (SELECT...) UNION ALL (SELECT...) syntax hatası
+            verdiği için parantezler kaldırıldı — düz UNION ALL formatı kullanılır.
             """
             period_clause = f"AND {extra_where}" if extra_where else ""
             if _has_legacy and _legacy_id and _kisi_adi:
                 sql = f"""
-                    (SELECT * FROM uretim_kayit
-                     WHERE personel_id = ? AND kaynak = 'CPS_CANLI' {period_clause})
+                    SELECT * FROM uretim_kayit
+                    WHERE personel_id = ? AND kaynak = 'CPS_CANLI' {period_clause}
                     UNION ALL
-                    (SELECT * FROM uretim_kayit
-                     WHERE personel_id = ? AND kaynak = 'LEGACY_5055'
-                       AND personel_ad = ? {period_clause})
+                    SELECT * FROM uretim_kayit
+                    WHERE personel_id = ? AND kaynak = 'LEGACY_5055'
+                      AND personel_ad = ? {period_clause}
                 """
                 params = (pk_id, _legacy_id, _kisi_adi)
             else:
                 sql = f"""
-                    (SELECT * FROM uretim_kayit
-                     WHERE personel_id = ? {period_clause})
+                    SELECT * FROM uretim_kayit
+                    WHERE personel_id = ? {period_clause}
                 """
                 params = (pk_id,)
             return sql, params
