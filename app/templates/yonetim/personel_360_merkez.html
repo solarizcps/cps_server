@@ -32,6 +32,134 @@
       <span class="oz-hdr-t">Personel Listesi</span>
       <span id="p360-sayi" style="font-size:11px;color:var(--text3);"></span>
     </div>
+
+    <!-- FAZ2G-8B: + Personel Ekle butonu (sadece can_create yetkisi olanlar görür) -->
+    {% if yetki('personel_360', 'can_create') %}
+    <div style="padding:8px 12px 4px;">
+      <button id="btn-personel-ekle"
+              onclick="personelEkleAcKapat()"
+              style="width:100%;padding:7px 12px;background:var(--sol-dark);color:#fff;
+                     border:none;border-radius:6px;font-size:12px;font-weight:600;
+                     cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
+        <span>＋</span><span>Personel Ekle</span>
+      </button>
+    </div>
+    {% endif %}
+
+    <!-- FAZ2G-8B: Inline personel ekleme formu (başta gizli, sadece can_create görür) -->
+    {% if yetki('personel_360', 'can_create') %}
+    <div id="panel-personel-ekle" style="display:none;padding:10px 12px 8px;
+         border-bottom:2px solid var(--sol-dark);background:var(--bg2);">
+      <div style="font-size:12px;font-weight:700;color:var(--sol-dark);margin-bottom:8px;">
+        Yeni Personel Ekle
+      </div>
+
+      <!-- Ad Soyad -->
+      <div style="margin-bottom:6px;">
+        <label style="font-size:11px;color:var(--text2);">Ad Soyad *</label>
+        <input id="ekle-ad" type="text" placeholder="Mehmet Yılmaz"
+               style="width:100%;box-sizing:border-box;padding:6px 8px;margin-top:2px;
+                      border:1px solid var(--border);border-radius:5px;font-size:12px;
+                      color:var(--text1);background:#fff;">
+      </div>
+
+      <!-- Kullanıcı Adı -->
+      <div style="margin-bottom:6px;">
+        <label style="font-size:11px;color:var(--text2);">Kullanıcı Adı *</label>
+        <input id="ekle-kadi" type="text" placeholder="mehmet.yilmaz"
+               style="width:100%;box-sizing:border-box;padding:6px 8px;margin-top:2px;
+                      border:1px solid var(--border);border-radius:5px;font-size:12px;
+                      color:var(--text1);background:#fff;">
+      </div>
+
+      <!-- Profil Tipi -->
+      <div style="margin-bottom:6px;">
+        <label style="font-size:11px;color:var(--text2);">Profil Tipi</label>
+        <select id="ekle-tip"
+                style="width:100%;box-sizing:border-box;padding:6px 8px;margin-top:2px;
+                       border:1px solid var(--border);border-radius:5px;font-size:12px;
+                       color:var(--text1);background:#fff;">
+          <option value="SAHA_PERSONEL">👷 Saha Personeli</option>
+          <option value="SAHA_USTASI">🔧 Saha Ustası</option>
+          <option value="calisan">Çalışan</option>
+          <option value="ofis">Ofis</option>
+        </select>
+      </div>
+
+      <!-- Departman -->
+      <div style="margin-bottom:6px;">
+        <label style="font-size:11px;color:var(--text2);">Departman</label>
+        <input id="ekle-dept" type="text" placeholder="Üretim"
+               list="ekle-dept-list"
+               style="width:100%;box-sizing:border-box;padding:6px 8px;margin-top:2px;
+                      border:1px solid var(--border);border-radius:5px;font-size:12px;
+                      color:var(--text1);background:#fff;">
+        <datalist id="ekle-dept-list">
+          <option value="Üretim">
+          <option value="Grafik">
+          <option value="Kalite">
+          <option value="Yönetim">
+          <option value="Muhasebe">
+          <option value="Planlama">
+          <option value="İdari İşler">
+        </datalist>
+      </div>
+
+      <!-- Ünvan -->
+      <div style="margin-bottom:6px;">
+        <label style="font-size:11px;color:var(--text2);">Ünvan / Pozisyon</label>
+        <input id="ekle-unvan" type="text" placeholder="Operatör"
+               style="width:100%;box-sizing:border-box;padding:6px 8px;margin-top:2px;
+                      border:1px solid var(--border);border-radius:5px;font-size:12px;
+                      color:var(--text1);background:#fff;">
+      </div>
+
+      <!-- İşe Başlama -->
+      <div style="margin-bottom:6px;">
+        <label style="font-size:11px;color:var(--text2);">İşe Başlama</label>
+        <input id="ekle-ise-bas" type="date"
+               style="width:100%;box-sizing:border-box;padding:6px 8px;margin-top:2px;
+                      border:1px solid var(--border);border-radius:5px;font-size:12px;
+                      color:var(--text1);background:#fff;">
+      </div>
+
+      <!-- Usta Seçimi -->
+      <div style="margin-bottom:6px;">
+        <label style="font-size:11px;color:var(--text2);">Bağlı Usta (opsiyonel)</label>
+        <select id="ekle-usta"
+                style="width:100%;box-sizing:border-box;padding:6px 8px;margin-top:2px;
+                       border:1px solid var(--border);border-radius:5px;font-size:12px;
+                       color:var(--text1);background:#fff;">
+          <option value="">— Usta bağlama —</option>
+        </select>
+      </div>
+
+      <!-- Aktif -->
+      <div style="margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+        <input id="ekle-aktif" type="checkbox" checked style="cursor:pointer;">
+        <label for="ekle-aktif" style="font-size:12px;color:var(--text2);cursor:pointer;">Aktif</label>
+      </div>
+
+      <!-- Mesaj alanı -->
+      <div id="ekle-mesaj" style="font-size:12px;min-height:16px;margin-bottom:6px;"></div>
+
+      <!-- Butonlar -->
+      <div style="display:flex;gap:6px;">
+        <button id="ekle-kaydet-btn"
+                onclick="personelEkleKaydet()"
+                style="flex:1;padding:7px;background:var(--sol-dark);color:#fff;
+                       border:none;border-radius:5px;font-size:12px;font-weight:600;cursor:pointer;">
+          Kaydet
+        </button>
+        <button onclick="personelEkleAcKapat()"
+                style="padding:7px 12px;background:var(--border);color:var(--text2);
+                       border:none;border-radius:5px;font-size:12px;cursor:pointer;">
+          İptal
+        </button>
+      </div>
+    </div>
+    {% endif %}
+
     <div style="padding:10px 12px 6px;">
       <input id="p360-arama" type="text" placeholder="Ad, usta, departman ara..."
              style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--border);
@@ -1622,6 +1750,113 @@
     if (yilEl) yilEl.value = new Date().getFullYear();
   })();
 
+  // ── FAZ2G-8B: Personel Ekle form aç/kapat ─────────────────────
+  function personelEkleAcKapat() {
+    const panel = document.getElementById('panel-personel-ekle');
+    const acik  = panel.style.display !== 'none';
+    panel.style.display = acik ? 'none' : 'block';
+    if (!acik) {
+      // Panel açıldığında usta dropdown'u doldur (tumProfiller'dan)
+      const sel = document.getElementById('ekle-usta');
+      while (sel.options.length > 1) sel.remove(1);
+      (tumProfiller || [])
+        .filter(p => p.profil_tipi === 'SAHA_USTASI' || p.profil_tipi === 'USTA')
+        .forEach(u => {
+          const opt = document.createElement('option');
+          opt.value = u.id;
+          opt.textContent = u.ad_soyad;
+          sel.appendChild(opt);
+        });
+      document.getElementById('ekle-mesaj').textContent = '';
+      document.getElementById('ekle-mesaj').style.color = '';
+    }
+  }
+
+  // ── FAZ2G-8B: Personel Ekle kaydet ────────────────────────────
+  async function personelEkleKaydet() {
+    const ad      = (document.getElementById('ekle-ad').value || '').trim();
+    const kadi    = (document.getElementById('ekle-kadi').value || '').trim();
+    const mesajEl = document.getElementById('ekle-mesaj');
+
+    if (!ad) {
+      mesajEl.style.color = '#dc2626';
+      mesajEl.textContent = 'Ad Soyad zorunludur.';
+      return;
+    }
+    if (!kadi) {
+      mesajEl.style.color = '#dc2626';
+      mesajEl.textContent = 'Kullanıcı adı zorunludur.';
+      return;
+    }
+
+    const tip    = document.getElementById('ekle-tip').value;
+    const dept   = (document.getElementById('ekle-dept').value || '').trim() || null;
+    const unvan  = (document.getElementById('ekle-unvan').value || '').trim() || null;
+    const isBas  = document.getElementById('ekle-ise-bas').value || null;
+    const ustaEl = document.getElementById('ekle-usta').value;
+    const aktif  = document.getElementById('ekle-aktif').checked ? 1 : 0;
+
+    const btn = document.getElementById('ekle-kaydet-btn');
+    btn.disabled = true;
+    btn.textContent = 'Kaydediliyor…';
+    mesajEl.textContent = '';
+
+    try {
+      const res = await fetch('/yonetim/api/personel-360/personel-ekle', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          ad_soyad:       ad,
+          kullanici_adi:  kadi,
+          profil_tipi:    tip,
+          departman:      dept,
+          unvan:          unvan,
+          ise_baslama:    isBas,
+          usta_profil_id: ustaEl ? parseInt(ustaEl) : null,
+          aktif:          aktif,
+        }),
+      });
+      const data = await res.json();
+
+      if (!data.ok) {
+        mesajEl.style.color = '#dc2626';
+        if (res.status === 409) {
+          mesajEl.textContent = `⚠ Kullanıcı adı zaten mevcut: "${kadi}"`;
+        } else {
+          mesajEl.textContent = data.hata || 'Bir hata oluştu.';
+        }
+        return;
+      }
+
+      // Başarı
+      mesajEl.style.color = '#16a34a';
+      const uyariEk = data.uyari ? ` — Uyarı: ${data.uyari}` : '';
+      mesajEl.textContent = `✓ ${ad} eklendi (kp_id=${data.kp_id})${uyariEk}`;
+
+      // Formu temizle
+      ['ekle-ad','ekle-kadi','ekle-unvan'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      document.getElementById('ekle-usta').value = '';
+
+      // Listeyi yenile — yeni kişi seçilebilsin
+      await yukle();
+      // Yeni eklenen kişiyi otomatik seç
+      if (data.kp_id) {
+        profilSec(data.kp_id);
+        document.getElementById('panel-personel-ekle').style.display = 'none';
+      }
+
+    } catch (e) {
+      mesajEl.style.color = '#dc2626';
+      mesajEl.textContent = 'Ağ hatası: ' + e.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Kaydet';
+    }
+  }
+
   yukle();
 
   // FAZ2G-7: onclick HTML attribute'larının erişebilmesi için global scope'a expose et
@@ -1631,6 +1866,9 @@
   window.maasKaydet      = maasKaydet;
   window.yetkinlikKaydet = yetkinlikKaydet;
   window.orgKaydet       = orgKaydet;
+  // FAZ2G-8B: personel ekleme fonksiyonları
+  window.personelEkleKaydet  = personelEkleKaydet;
+  window.personelEkleAcKapat = personelEkleAcKapat;
 
 })();
 </script>
