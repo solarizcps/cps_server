@@ -3808,6 +3808,162 @@ def personel_360_ik_not_ekle(profil_id):
     })
 
 # END PERSONEL_360_IK_WRITE
+
+# ────────────────────────────────────────────────────────────────
+# FAZ2G-8A: Yeni personel ekleme
+# ────────────────────────────────────────────────────────────────
+
+@yonetim_bp.route('/api/personel-360/personel-ekle', methods=['POST'])
+@yetki_gerekli('personel_360', 'can_create')
+def personel_360_personel_ekle():
+    """
+    FAZ2G-8A: Yeni saha personeli oluşturur.
+    personel_kullanici + kullanici_profil atomik INSERT.
+    sistem_kullanici oluşturulmaz (login açılmaz).
+    Opsiyonel usta_personel_iliskisi bağlantısı.
+    """
+    import datetime
+
+    data = request.get_json(silent=True) or {}
+
+    # ── Zorunlu alanlar ─────────────────────────────────────────
+    ad_soyad     = (data.get('ad_soyad') or '').strip()
+    kullanici_adi = (data.get('kullanici_adi') or '').strip()
+    if not ad_soyad:
+        return jsonify({'ok': False, 'hata': 'ad_soyad zorunludur'}), 400
+    if not kullanici_adi:
+        return jsonify({'ok': False, 'hata': 'kullanici_adi zorunludur'}), 400
+
+    # ── Opsiyonel alanlar ───────────────────────────────────────
+    profil_tipi   = (data.get('profil_tipi') or 'SAHA_PERSONEL').strip()
+    departman     = (data.get('departman') or '').strip() or None
+    unvan         = (data.get('unvan') or '').strip() or None
+    ise_baslama   = (data.get('ise_baslama') or '').strip() or None
+    usta_profil_id = data.get('usta_profil_id')
+    aktif         = 1 if str(data.get('aktif', 1)) not in ('0', 'false', 'False') else 0
+
+    if usta_profil_id is not None:
+        try:
+            usta_profil_id = int(usta_profil_id)
+        except (TypeError, ValueError):
+            return jsonify({'ok': False, 'hata': 'usta_profil_id geçersiz'}), 422
+
+    IZINLI_PROFIL_TIP = {
+        'SAHA_PERSONEL', 'SAHA_USTASI', 'calisan', 'ofis', 'yonetim'
+    }
+    if profil_tipi not in IZINLI_PROFIL_TIP:
+        profil_tipi = 'SAHA_PERSONEL'
+
+    con = _get_conn()
+    uyari = None
+
+    try:
+        # ── 1) kullanici_adi unique kontrolü ────────────────────
+        mevcut_kadi = con.execute(
+            "SELECT id FROM personel_kullanici WHERE kullanici_adi = ?",
+            (kullanici_adi,)
+        ).fetchone()
+        if mevcut_kadi:
+            con.close()
+            return jsonify({
+                'ok':   False,
+                'hata': f"Bu kullanici_adi zaten mevcut: '{kullanici_adi}'",
+                'kod':  'KULLANICI_ADI_MEVCUT',
+            }), 409
+
+        # ── 2) Benzer ad_soyad kontrolü (soft warning) ──────────
+        norm_yeni = ad_soyad.strip().lower()
+        benzerler = con.execute("""
+            SELECT id, COALESCE(AdSoyad, ad, kullanici_adi) as ad
+            FROM personel_kullanici
+            WHERE LOWER(TRIM(COALESCE(AdSoyad, ad, kullanici_adi))) = ?
+        """, (norm_yeni,)).fetchall()
+        if benzerler:
+            uyari = "Benzer isimde kayıt mevcut: " + ", ".join(
+                f"id={r['id']} '{r['ad']}'" for r in benzerler
+            )
+
+        # ── 3) personel_kullanici INSERT ─────────────────────────
+        # sifre='!' → login yapılamaz (geçersiz hash sentinel)
+        con.execute("""
+            INSERT INTO personel_kullanici
+              (ad, kullanici_adi, sifre, AdSoyad, Pozisyon, IseBaslamaTarih,
+               aktif, kaynak)
+            VALUES (?, ?, '!', ?, ?, ?, ?, 'CPS_CANLI')
+        """, (
+            kullanici_adi,          # ad = kullanici_adi (kısa ad)
+            kullanici_adi,
+            ad_soyad,               # AdSoyad = tam ad
+            unvan,                  # Pozisyon = unvan
+            ise_baslama,
+            aktif,
+        ))
+        pk_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+        # ── 4) kullanici_profil INSERT ───────────────────────────
+        con.execute("""
+            INSERT INTO kullanici_profil
+              (gercek_ad, kullanici_adi, departman, unvan,
+               profil_tipi, aktif, kaynak, kaynak_id)
+            VALUES (?, ?, ?, ?, ?, ?, 'personel_kullanici', ?)
+        """, (
+            ad_soyad,
+            kullanici_adi,
+            departman,
+            unvan,
+            profil_tipi,
+            aktif,
+            pk_id,
+        ))
+        kp_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+        # ── 5) Usta ilişkisi opsiyonel ───────────────────────────
+        usta_iliski_id = None
+        if usta_profil_id:
+            # Usta profili var mı kontrol
+            usta_ok = con.execute(
+                "SELECT id FROM kullanici_profil WHERE id=? AND profil_tipi IN ('SAHA_USTASI','USTA')",
+                (usta_profil_id,)
+            ).fetchone()
+            if usta_ok:
+                bas = ise_baslama or str(datetime.date.today())
+                con.execute("""
+                    INSERT INTO usta_personel_iliskisi
+                      (usta_profil_id, personel_profil_id, baslangic_tarihi,
+                       aktif, kaynak)
+                    VALUES (?, ?, ?, 1, 'p360_personel_ekle')
+                """, (usta_profil_id, kp_id, bas))
+                usta_iliski_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+            else:
+                uyari = (uyari or '') + f" Usta profili bulunamadı (id={usta_profil_id}), ilişki oluşturulmadı."
+
+        con.commit()
+
+        # ── 6) Audit log ─────────────────────────────────────────
+        audit.log(_u(), 'EKLE', 'personel_kullanici', pk_id,
+                  alan='ad_soyad', eski=None, yeni=ad_soyad,
+                  aciklama=f"P360 yeni personel: kp_id={kp_id} tip={profil_tipi}",
+                  modul='yonetim', alt_modul='personel_360')
+
+    except Exception as e:
+        con.rollback()
+        con.close()
+        import traceback
+        return jsonify({'ok': False, 'hata': str(e), 'tb': traceback.format_exc()}), 500
+    finally:
+        con.close()
+
+    return jsonify({
+        'ok':             True,
+        'pk_id':          pk_id,
+        'kp_id':          kp_id,
+        'ad_soyad':       ad_soyad,
+        'kullanici_adi':  kullanici_adi,
+        'profil_tipi':    profil_tipi,
+        'usta_iliski_id': usta_iliski_id,
+        'uyari':          uyari,
+    })
+
 # ════════════════════════════════════════════════════════════════
 # END PERSONEL_360
 # ════════════════════════════════════════════════════════════════
