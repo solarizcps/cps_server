@@ -367,6 +367,7 @@ window.__cpsRootMap = function(pathname) {
 
 
       {% if active == 'yonetim' %}{% set aktif_grup = 'yonetim' %}{% endif %}
+      {% if active == 'yonetim' and '/personel-360' in rp %}{% set aktif_grup = 'ik_personel' %}{% endif %}
 
 
       {% if active == 'planlama' %}{% set aktif_grup = 'planlama' %}{% endif %}
@@ -1089,6 +1090,38 @@ window.__cpsRootMap = function(pathname) {
 
 
       {% endif %}
+
+      <!-- ============ IK / PERSONEL ============ -->
+      {% if yetki('personel_360') %}
+
+      <div class="sn-sec sn-toggle{% if aktif_grup == 'ik_personel' %} acik{% endif %}" data-grup="ik_personel">
+        <span class="sn-arrow">{% if aktif_grup == 'ik_personel' %}▼{% else %}►{% endif %}</span>
+        <svg class="sn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
+        <span class="sn-baslik">İK / Personel</span>
+        <span class="sn-count">1</span>
+      </div>
+
+      <div class="sn-grup{% if aktif_grup != 'ik_personel' %} kapali{% endif %}" data-grup="ik_personel">
+
+        <a href="{{ url_for('yonetim.personel_360') }}"
+           class="si {% if '/yonetim/personel-360' in rp %}active{% endif %}"
+           title="Personel 360 — İK / Maaş / Yetkinlik">
+          <span class="si-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+          </span>
+          <span class="sl">Personel 360</span>
+        </a>
+
+      </div>
+
+      {% endif %}
+      <!-- ============ /IK PERSONEL ============ -->
+
 
 
 
