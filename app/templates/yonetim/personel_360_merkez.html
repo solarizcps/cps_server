@@ -862,21 +862,29 @@
       return;
     }
     kap.innerHTML = liste.map(p => {
-      const tip    = TIPLER[p.profil_tipi] || TIPLER.SISTEM;
-      const harf   = (p.ad_soyad || '?')[0].toUpperCase();
-      const secili = p.id === secilenId ? ' secili' : '';
+      const tip      = TIPLER[p.profil_tipi] || TIPLER.SISTEM;
+      const harf     = (p.ad_soyad || '?')[0].toUpperCase();
+      const secili   = (p.id && p.id === secilenId) ? ' secili' : '';
+      const profilYok = !p.id;
       return `
-        <div class="p360-satir${secili}" data-id="${p.id}">
+        <div class="p360-satir${secili}${profilYok ? ' p360-profil-yok' : ''}" data-id="${p.id || ''}" data-personel-id="${p.personel_id || ''}">
           <div class="ps-ikon" style="background:${tip.renk};">${harf}</div>
           <div style="flex:1;min-width:0;">
             <div class="ps-ad">${p.ad_soyad || '—'}</div>
-            <div class="ps-sub">${p.departman || '—'} · <span style="background:${tip.bg};color:${tip.renk};padding:1px 5px;border-radius:3px;font-size:10px;">${tip.etiket}</span></div>
+            <div class="ps-sub">${p.departman || '—'} · <span style="background:${tip.bg};color:${tip.renk};padding:1px 5px;border-radius:3px;font-size:10px;">${tip.etiket}</span>${profilYok ? ' <span style="color:#e74c3c;font-size:10px;">[profil eksik]</span>' : ''}</div>
           </div>
         </div>`;
     }).join('');
 
     kap.querySelectorAll('.p360-satir').forEach(el => {
-      el.addEventListener('click', () => profilSec(parseInt(el.dataset.id)));
+      el.addEventListener('click', () => {
+        const profilId = parseInt(el.dataset.id);
+        if (!profilId) {
+          alert('Bu personelin profil kaydı henüz oluşturulmamış. Lütfen yönetici ile iletişime geçin.');
+          return;
+        }
+        profilSec(profilId);
+      });
     });
   }
 
