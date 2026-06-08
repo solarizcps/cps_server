@@ -114,6 +114,42 @@
                       color:var(--text1);background:#fff;">
       </div>
 
+      <!-- Telefon -->
+      <div style="margin-bottom:6px;">
+        <label style="font-size:11px;color:var(--text2);">Telefon</label>
+        <input id="ekle-telefon" type="tel" placeholder="0532 000 00 00"
+               style="width:100%;box-sizing:border-box;padding:6px 8px;margin-top:2px;
+                      border:1px solid var(--border);border-radius:5px;font-size:12px;
+                      color:var(--text1);background:#fff;">
+      </div>
+
+      <!-- Email -->
+      <div style="margin-bottom:6px;">
+        <label style="font-size:11px;color:var(--text2);">E-posta</label>
+        <input id="ekle-email" type="email" placeholder="ad.soyad@solariz.com"
+               style="width:100%;box-sizing:border-box;padding:6px 8px;margin-top:2px;
+                      border:1px solid var(--border);border-radius:5px;font-size:12px;
+                      color:var(--text1);background:#fff;">
+      </div>
+
+      <!-- Adres -->
+      <div style="margin-bottom:6px;">
+        <label style="font-size:11px;color:var(--text2);">Adres</label>
+        <input id="ekle-adres" type="text" placeholder="Mahalle, İlçe, İl"
+               style="width:100%;box-sizing:border-box;padding:6px 8px;margin-top:2px;
+                      border:1px solid var(--border);border-radius:5px;font-size:12px;
+                      color:var(--text1);background:#fff;">
+      </div>
+
+      <!-- Acil İletişim -->
+      <div style="margin-bottom:6px;">
+        <label style="font-size:11px;color:var(--text2);">Acil İletişim</label>
+        <input id="ekle-acil" type="text" placeholder="Ad Soyad — 0532 000 00 00"
+               style="width:100%;box-sizing:border-box;padding:6px 8px;margin-top:2px;
+                      border:1px solid var(--border);border-radius:5px;font-size:12px;
+                      color:var(--text1);background:#fff;">
+      </div>
+
       <!-- İşe Başlama -->
       <div style="margin-bottom:6px;">
         <label style="font-size:11px;color:var(--text2);">İşe Başlama</label>
@@ -1792,6 +1828,10 @@
     const tip    = document.getElementById('ekle-tip').value;
     const dept   = (document.getElementById('ekle-dept').value || '').trim() || null;
     const unvan  = (document.getElementById('ekle-unvan').value || '').trim() || null;
+    const telefon = (document.getElementById('ekle-telefon').value || '').trim() || null;
+    const email  = (document.getElementById('ekle-email').value || '').trim() || null;
+    const adres  = (document.getElementById('ekle-adres').value || '').trim() || null;
+    const acil   = (document.getElementById('ekle-acil').value || '').trim() || null;
     const isBas  = document.getElementById('ekle-ise-bas').value || null;
     const ustaEl = document.getElementById('ekle-usta').value;
     const aktif  = document.getElementById('ekle-aktif').checked ? 1 : 0;
@@ -1811,6 +1851,10 @@
           profil_tipi:    tip,
           departman:      dept,
           unvan:          unvan,
+          telefon:        telefon,
+          email:          email,
+          adres:          adres,
+          acil_iletisim:  acil,
           ise_baslama:    isBas,
           usta_profil_id: ustaEl ? parseInt(ustaEl) : null,
           aktif:          aktif,
@@ -1834,7 +1878,7 @@
       mesajEl.textContent = `✓ ${ad} eklendi (kp_id=${data.kp_id})${uyariEk}`;
 
       // Formu temizle
-      ['ekle-ad','ekle-kadi','ekle-unvan'].forEach(id => {
+      ['ekle-ad','ekle-kadi','ekle-unvan','ekle-telefon','ekle-email','ekle-adres','ekle-acil'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
       });

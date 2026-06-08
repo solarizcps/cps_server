@@ -3835,12 +3835,17 @@ def personel_360_personel_ekle():
         return jsonify({'ok': False, 'hata': 'kullanici_adi zorunludur'}), 400
 
     # ── Opsiyonel alanlar ───────────────────────────────────────
-    profil_tipi   = (data.get('profil_tipi') or 'SAHA_PERSONEL').strip()
-    departman     = (data.get('departman') or '').strip() or None
-    unvan         = (data.get('unvan') or '').strip() or None
-    ise_baslama   = (data.get('ise_baslama') or '').strip() or None
+    profil_tipi    = (data.get('profil_tipi') or 'SAHA_PERSONEL').strip()
+    departman      = (data.get('departman') or '').strip() or None
+    unvan          = (data.get('unvan') or '').strip() or None
+    ise_baslama    = (data.get('ise_baslama') or '').strip() or None
     usta_profil_id = data.get('usta_profil_id')
-    aktif         = 1 if str(data.get('aktif', 1)) not in ('0', 'false', 'False') else 0
+    aktif          = 1 if str(data.get('aktif', 1)) not in ('0', 'false', 'False') else 0
+    # FAZ2G-8C: iletişim alanları
+    telefon        = (data.get('telefon') or '').strip() or None
+    email          = (data.get('email') or '').strip() or None
+    adres          = (data.get('adres') or '').strip() or None
+    acil_iletisim  = (data.get('acil_iletisim') or '').strip() or None
 
     if usta_profil_id is not None:
         try:
@@ -3888,14 +3893,19 @@ def personel_360_personel_ekle():
         con.execute("""
             INSERT INTO personel_kullanici
               (ad, kullanici_adi, sifre, AdSoyad, Pozisyon, IseBaslamaTarih,
+               Telefon, Email, Adres, AcilIletisim,
                aktif, kaynak)
-            VALUES (?, ?, '!', ?, ?, ?, ?, 'CPS_CANLI')
+            VALUES (?, ?, '!', ?, ?, ?, ?, ?, ?, ?, ?, 'CPS_CANLI')
         """, (
             kullanici_adi,          # ad = kullanici_adi (kısa ad)
             kullanici_adi,
             ad_soyad,               # AdSoyad = tam ad
             unvan,                  # Pozisyon = unvan
             ise_baslama,
+            telefon,
+            email,
+            adres,
+            acil_iletisim,
             aktif,
         ))
         pk_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
