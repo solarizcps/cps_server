@@ -242,7 +242,7 @@
         </div>
       </div>
 
-      <!-- SEKME: İK (FAZ2G-3 readonly) -->
+      <!-- SEKME: İK (FAZ2G-3 readonly + FAZ2G-4B write) -->
       <div id="sekme-ik" class="p360-sekme-icerik" style="display:none;">
         <!-- Devam -->
         <div class="oz-card" style="margin-bottom:14px;">
@@ -255,13 +255,184 @@
           <div id="d-ik-izin" class="oz-body"></div>
         </div>
         <!-- Notlar -->
-        <div class="oz-card">
+        <div class="oz-card" style="margin-bottom:14px;">
           <div class="oz-hdr"><span class="oz-hdr-t">İK Notları</span></div>
           <div id="d-ik-notlar" class="oz-body" style="padding:0;"></div>
         </div>
+
+        <!-- FAZ2G-4B: İK Yazma Formları (caps.ik=true ise görünür) -->
+        <div id="ik-form-panel" style="display:none;">
+
+          <!-- Form A: Devam Girişi -->
+          <div class="oz-card" style="margin-bottom:14px;">
+            <div class="oz-hdr"><span class="oz-hdr-t">✏️ Devam Kaydı Gir</span></div>
+            <div class="oz-body">
+              <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:6px;
+                          padding:8px 12px;margin-bottom:14px;font-size:12px;color:#166534;">
+                Aynı tarih için kayıt varsa güncellenir. Silme yapılmaz.
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div>
+                  <label class="org-label">Tarih <span style="color:#dc2626;">*</span></label>
+                  <input type="date" id="ik-devam-tarih" class="org-sel">
+                </div>
+                <div>
+                  <label class="org-label">Durum <span style="color:#dc2626;">*</span></label>
+                  <select id="ik-devam-durum" class="org-sel">
+                    <option value="geldi">Geldi</option>
+                    <option value="gelmedi">Gelmedi</option>
+                    <option value="izinli">İzinli</option>
+                    <option value="resmi_tatil">Resmi Tatil</option>
+                    <option value="yarim_gun">Yarım Gün</option>
+                    <option value="erken_cikis">Erken Çıkış</option>
+                    <option value="gec_giris">Geç Giriş</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="org-label">Giriş Saati</label>
+                  <input type="time" id="ik-devam-giris" class="org-sel">
+                </div>
+                <div>
+                  <label class="org-label">Çıkış Saati</label>
+                  <input type="time" id="ik-devam-cikis" class="org-sel">
+                </div>
+              </div>
+              <div style="margin-top:10px;">
+                <label class="org-label">Açıklama</label>
+                <input type="text" id="ik-devam-aciklama" class="org-sel" placeholder="opsiyonel...">
+              </div>
+              <div style="margin-top:12px;display:flex;gap:10px;align-items:center;">
+                <button id="ik-devam-btn" onclick="ikDevamKaydet()"
+                        style="padding:9px 22px;background:#059669;color:#fff;border:none;
+                               border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+                  Kaydet
+                </button>
+                <div id="ik-devam-mesaj" style="font-size:13px;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Form B: İzin Girişi -->
+          <div class="oz-card" style="margin-bottom:14px;">
+            <div class="oz-hdr"><span class="oz-hdr-t">✏️ İzin Kaydı Gir</span></div>
+            <div class="oz-body">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div>
+                  <label class="org-label">Yıl <span style="color:#dc2626;">*</span></label>
+                  <input type="number" id="ik-izin-yil" class="org-sel" min="2020" max="2100">
+                </div>
+                <div>
+                  <label class="org-label">İzin Tipi</label>
+                  <select id="ik-izin-tip" class="org-sel">
+                    <option value="yillik">Yıllık</option>
+                    <option value="ucretsiz">Ücretsiz</option>
+                    <option value="dogum">Doğum</option>
+                    <option value="olum">Ölüm</option>
+                    <option value="hastalik">Hastalık</option>
+                    <option value="resmi_tatil">Resmi Tatil</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="org-label">Hak Gün</label>
+                  <input type="number" id="ik-izin-hak" class="org-sel" min="0" step="0.5" value="14">
+                </div>
+                <div>
+                  <label class="org-label">Kullanılan Gün</label>
+                  <input type="number" id="ik-izin-kullanilan" class="org-sel" min="0" step="0.5" value="0">
+                </div>
+                <div>
+                  <label class="org-label">Başlangıç</label>
+                  <input type="date" id="ik-izin-bas" class="org-sel" onchange="ikIzinGunHesapla()">
+                </div>
+                <div>
+                  <label class="org-label">Bitiş</label>
+                  <input type="date" id="ik-izin-bit" class="org-sel" onchange="ikIzinGunHesapla()">
+                </div>
+                <div>
+                  <label class="org-label">Gün Sayısı</label>
+                  <input type="number" id="ik-izin-gun" class="org-sel" min="0" step="0.5" placeholder="otomatik">
+                </div>
+                <div>
+                  <label class="org-label">Durum</label>
+                  <select id="ik-izin-durum" class="org-sel">
+                    <option value="taslak">Taslak</option>
+                    <option value="onay_bekliyor">Onay Bekliyor</option>
+                    <option value="onaylandi">Onaylandı</option>
+                    <option value="reddedildi">Reddedildi</option>
+                    <option value="iptal">İptal</option>
+                  </select>
+                </div>
+              </div>
+              <div style="margin-top:10px;">
+                <label class="org-label">Notlar</label>
+                <textarea id="ik-izin-notlar" rows="2" class="org-sel"
+                          style="resize:vertical;font-family:inherit;"
+                          placeholder="opsiyonel..."></textarea>
+              </div>
+              <div style="margin-top:12px;display:flex;gap:10px;align-items:center;">
+                <button id="ik-izin-btn" onclick="ikIzinKaydet()"
+                        style="padding:9px 22px;background:#059669;color:#fff;border:none;
+                               border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+                  Kaydet
+                </button>
+                <div id="ik-izin-mesaj" style="font-size:13px;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Form C: İK Not Ekleme -->
+          <div class="oz-card">
+            <div class="oz-hdr"><span class="oz-hdr-t">✏️ İK Notu Ekle</span></div>
+            <div class="oz-body">
+              <div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;
+                          padding:8px 12px;margin-bottom:14px;font-size:12px;color:#92400e;">
+                Notlar eklenebilir, düzenlenemez veya silinemez. Gizli notlar yalnızca İK/Yönetim tarafından görülür.
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div>
+                  <label class="org-label">Tarih <span style="color:#dc2626;">*</span></label>
+                  <input type="date" id="ik-not-tarih" class="org-sel">
+                </div>
+                <div>
+                  <label class="org-label">Not Tipi</label>
+                  <select id="ik-not-tip" class="org-sel">
+                    <option value="gorusme">Görüşme</option>
+                    <option value="uyari">Uyarı</option>
+                    <option value="performans">Performans</option>
+                    <option value="olumlu">Olumlu</option>
+                    <option value="issizlik">İşsizlik</option>
+                    <option value="istifa">İstifa</option>
+                    <option value="genel">Genel</option>
+                  </select>
+                </div>
+              </div>
+              <div style="margin-top:10px;">
+                <label class="org-label">İçerik <span style="color:#dc2626;">*</span></label>
+                <textarea id="ik-not-icerik" rows="3" class="org-sel"
+                          style="resize:vertical;font-family:inherit;"
+                          placeholder="Not içeriğini yazın..."></textarea>
+              </div>
+              <div style="margin-top:8px;display:flex;align-items:center;gap:8px;">
+                <input type="checkbox" id="ik-not-gizli" checked style="width:16px;height:16px;">
+                <label for="ik-not-gizli" style="font-size:13px;color:var(--text2);cursor:pointer;">
+                  🔒 Gizli (sadece İK / Yönetim görebilir)
+                </label>
+              </div>
+              <div style="margin-top:12px;display:flex;gap:10px;align-items:center;">
+                <button id="ik-not-btn" onclick="ikNotEkle()"
+                        style="padding:9px 22px;background:#7c3aed;color:#fff;border:none;
+                               border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+                  Not Ekle
+                </button>
+                <div id="ik-not-mesaj" style="font-size:13px;"></div>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /ik-form-panel -->
       </div>
 
-      <!-- SEKME: Maaş (FAZ2G-3 readonly) -->
+      <!-- SEKME: Maaş (FAZ2G-3 readonly + FAZ2G-4B write) -->
       <div id="sekme-maas" class="p360-sekme-icerik" style="display:none;">
         <!-- Aktif maaş -->
         <div class="oz-card" style="margin-bottom:14px;">
@@ -269,10 +440,64 @@
           <div id="d-maas-aktif" class="oz-body"></div>
         </div>
         <!-- Geçmiş -->
-        <div class="oz-card">
+        <div class="oz-card" style="margin-bottom:14px;">
           <div class="oz-hdr"><span class="oz-hdr-t">Maaş Geçmişi</span></div>
           <div id="d-maas-gecmis" class="oz-body" style="padding:0;"></div>
         </div>
+
+        <!-- FAZ2G-4B: Maaş Yazma Formu (caps.maas=true ise görünür) -->
+        <div id="maas-form-panel" style="display:none;">
+          <div class="oz-card">
+            <div class="oz-hdr"><span class="oz-hdr-t">✏️ Maaş / Zam Girişi</span></div>
+            <div class="oz-body">
+              <div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;
+                          padding:8px 12px;margin-bottom:14px;font-size:12px;color:#92400e;">
+                ⚠ Aktif maaş kaydı varsa otomatik olarak kapatılır ve yeni kayıt açılır. Silme yapılmaz.
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div>
+                  <label class="org-label">Tutar <span style="color:#dc2626;">*</span></label>
+                  <input type="number" id="maas-tutar" class="org-sel" min="1" step="0.01"
+                         placeholder="örn: 25000">
+                </div>
+                <div>
+                  <label class="org-label">Para Birimi</label>
+                  <select id="maas-pb" class="org-sel">
+                    <option value="TL">TL</option>
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="org-label">Geçerlilik Başlangıcı <span style="color:#dc2626;">*</span></label>
+                  <input type="date" id="maas-bas" class="org-sel">
+                </div>
+                <div>
+                  <label class="org-label">Tip</label>
+                  <select id="maas-tip" class="org-sel">
+                    <option value="maas">Maaş</option>
+                    <option value="zam">Zam</option>
+                    <option value="prim_ekstra">Prim / Ekstra</option>
+                    <option value="duzeltme">Düzeltme</option>
+                  </select>
+                </div>
+              </div>
+              <div style="margin-top:10px;">
+                <label class="org-label">Açıklama</label>
+                <input type="text" id="maas-aciklama" class="org-sel"
+                       placeholder="opsiyonel — örn: yıllık enflasyon zammı">
+              </div>
+              <div style="margin-top:12px;display:flex;gap:10px;align-items:center;">
+                <button id="maas-kaydet-btn" onclick="maasKaydet()"
+                        style="padding:9px 22px;background:#2563eb;color:#fff;border:none;
+                               border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+                  Kaydet
+                </button>
+                <div id="maas-mesaj" style="font-size:13px;"></div>
+              </div>
+            </div>
+          </div>
+        </div><!-- /maas-form-panel -->
       </div>
 
       <!-- SEKME: Organizasyon Güncelleme -->
@@ -553,6 +778,12 @@
     const btnMaas = document.getElementById('btn-sekme-maas');
     if (btnIk)   btnIk.style.display   = caps.ik   ? '' : 'none';
     if (btnMaas) btnMaas.style.display = caps.maas ? '' : 'none';
+
+    // FAZ2G-4B: _caps'e göre yazma form panellerini göster/gizle
+    const ikFormPanel   = document.getElementById('ik-form-panel');
+    const maasFormPanel = document.getElementById('maas-form-panel');
+    if (ikFormPanel)   ikFormPanel.style.display   = caps.ik   ? '' : 'none';
+    if (maasFormPanel) maasFormPanel.style.display = caps.maas ? '' : 'none';
 
     // Eğer aktif sekme yetki sebebiyle gizlendiyse Ekip'e dön
     const aktifBtn = document.querySelector('.p360-sekme.p360-sekme-aktif');
@@ -985,6 +1216,139 @@
     }
   }
 
+  // ── FAZ2G-4B: İK / Maaş yazma fonksiyonları ────────────────
+
+  // Yardımcı: POST gönder, başarıda profili yenile
+  async function _ikPost(path, body, mesajElId, btnEl, btnText) {
+    if (!secilenId) {
+      const mel = document.getElementById(mesajElId);
+      if (mel) { mel.style.color = '#dc2626'; mel.textContent = 'Önce bir personel seçin.'; }
+      return;
+    }
+    const mesajEl = document.getElementById(mesajElId);
+    if (mesajEl) mesajEl.textContent = '';
+    if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Kaydediliyor…'; }
+
+    try {
+      const res  = await fetch(`/yonetim/api/personel-360/profil/${secilenId}/${path}`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.hata || `HTTP ${res.status}`);
+
+      if (mesajEl) {
+        mesajEl.style.color = '#166534';
+        mesajEl.textContent = '✔ Kaydedildi' + (data.islem === 'DUZENLE' ? ' (güncellendi)' : '');
+      }
+      // Profili yenile
+      await profilYukle(secilenId, secilenPeriod);
+
+    } catch (e) {
+      if (mesajEl) { mesajEl.style.color = '#dc2626'; mesajEl.textContent = '⚠ ' + e.message; }
+    } finally {
+      if (btnEl) { btnEl.disabled = false; btnEl.textContent = btnText; }
+    }
+  }
+
+  // ── İzin gün sayısı otomatik hesapla
+  function ikIzinGunHesapla() {
+    const bas = document.getElementById('ik-izin-bas').value;
+    const bit = document.getElementById('ik-izin-bit').value;
+    if (!bas || !bit) return;
+    try {
+      const diff = (new Date(bit) - new Date(bas)) / 86400000 + 1;
+      if (diff > 0) document.getElementById('ik-izin-gun').value = diff;
+    } catch (_) {}
+  }
+
+  // ── İK Devam Kaydet
+  async function ikDevamKaydet() {
+    const tarih   = (document.getElementById('ik-devam-tarih').value || '').trim();
+    if (!tarih) {
+      const mel = document.getElementById('ik-devam-mesaj');
+      mel.style.color = '#dc2626'; mel.textContent = 'Tarih zorunludur.'; return;
+    }
+    const body = {
+      tarih:       tarih,
+      durum:       document.getElementById('ik-devam-durum').value,
+      giris_saati: document.getElementById('ik-devam-giris').value || null,
+      cikis_saati: document.getElementById('ik-devam-cikis').value || null,
+      aciklama:    (document.getElementById('ik-devam-aciklama').value || '').trim() || null,
+      kaynak:      'ik_giris',
+    };
+    await _ikPost('devam', body, 'ik-devam-mesaj',
+      document.getElementById('ik-devam-btn'), 'Kaydet');
+  }
+
+  // ── İK İzin Kaydet
+  async function ikIzinKaydet() {
+    const yilRaw = document.getElementById('ik-izin-yil').value;
+    if (!yilRaw) {
+      const mel = document.getElementById('ik-izin-mesaj');
+      mel.style.color = '#dc2626'; mel.textContent = 'Yıl zorunludur.'; return;
+    }
+    const gunEl  = document.getElementById('ik-izin-gun').value;
+    const body = {
+      yil:              parseInt(yilRaw),
+      izin_tipi:        document.getElementById('ik-izin-tip').value,
+      hak_gun:          parseFloat(document.getElementById('ik-izin-hak').value || '14'),
+      kullanilan_gun:   parseFloat(document.getElementById('ik-izin-kullanilan').value || '0'),
+      baslangic_tarihi: document.getElementById('ik-izin-bas').value || null,
+      bitis_tarihi:     document.getElementById('ik-izin-bit').value || null,
+      gun_sayisi:       gunEl ? parseFloat(gunEl) : null,
+      durum:            document.getElementById('ik-izin-durum').value,
+      notlar:           (document.getElementById('ik-izin-notlar').value || '').trim() || null,
+    };
+    await _ikPost('izin', body, 'ik-izin-mesaj',
+      document.getElementById('ik-izin-btn'), 'Kaydet');
+  }
+
+  // ── İK Not Ekle
+  async function ikNotEkle() {
+    const tarih  = (document.getElementById('ik-not-tarih').value || '').trim();
+    const icerik = (document.getElementById('ik-not-icerik').value || '').trim();
+    if (!icerik) {
+      const mel = document.getElementById('ik-not-mesaj');
+      mel.style.color = '#dc2626'; mel.textContent = 'İçerik zorunludur.'; return;
+    }
+    const body = {
+      tarih:    tarih || null,
+      not_tipi: document.getElementById('ik-not-tip').value,
+      icerik:   icerik,
+      gizli:    document.getElementById('ik-not-gizli').checked ? 1 : 0,
+    };
+    await _ikPost('ik-not', body, 'ik-not-mesaj',
+      document.getElementById('ik-not-btn'), 'Not Ekle');
+    // Başarı sonrası içerik temizle (not tekrarlanmaz)
+    if (document.getElementById('ik-not-icerik'))
+      document.getElementById('ik-not-icerik').value = '';
+  }
+
+  // ── Maaş Kaydet
+  async function maasKaydet() {
+    const tutarRaw = document.getElementById('maas-tutar').value;
+    const basRaw   = (document.getElementById('maas-bas').value || '').trim();
+    const mesajEl  = document.getElementById('maas-mesaj');
+
+    if (!tutarRaw || parseFloat(tutarRaw) <= 0) {
+      mesajEl.style.color = '#dc2626'; mesajEl.textContent = 'Geçerli bir tutar girin.'; return;
+    }
+    if (!basRaw) {
+      mesajEl.style.color = '#dc2626'; mesajEl.textContent = 'Geçerlilik başlangıcı zorunludur.'; return;
+    }
+    const body = {
+      tutar:           parseFloat(tutarRaw),
+      para_birimi:     document.getElementById('maas-pb').value,
+      gecerlilik_bas:  basRaw,
+      tip:             document.getElementById('maas-tip').value,
+      aciklama:        (document.getElementById('maas-aciklama').value || '').trim() || null,
+    };
+    await _ikPost('maas', body, 'maas-mesaj',
+      document.getElementById('maas-kaydet-btn'), 'Kaydet');
+  }
+
   // ── Yetkinlik formu ─────────────────────────────────────────
   let _yetkinlikSecenekler = null;  // cache
 
@@ -1247,6 +1611,17 @@
   });
 
   // ── Başlat ──────────────────────────────────────────────────
+  // Tarih alanlarına bugünün tarihini varsayılan olarak yaz
+  (function initTarihAlanlari() {
+    const bugun = new Date().toISOString().slice(0, 10);
+    ['ik-devam-tarih', 'ik-not-tarih', 'maas-bas'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = bugun;
+    });
+    const yilEl = document.getElementById('ik-izin-yil');
+    if (yilEl) yilEl.value = new Date().getFullYear();
+  })();
+
   yukle();
 })();
 </script>
