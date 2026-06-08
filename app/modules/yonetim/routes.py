@@ -2422,13 +2422,24 @@ def personel_360_secenekler():
             else:
                 profiller = []
         else:
+            # FAZ2G-10: Ana kaynak personel_kullanici (gerçek üretim personeli).
+            # kullanici_profil LEFT JOIN ile bağlanır; profili olmayan kişi de listede görünür.
+            # kp.id NULL ise o kişi için profil detayı açılamaz — ama 027 migration
+            # tüm aktif personeller için profil seed ettiğinden bu durum beklenmez.
             profiller = con.execute("""
-                SELECT kp.id, kp.gercek_ad, kp.kullanici_adi, kp.profil_tipi, kp.aktif,
-                       dm.ad AS departman, dm.kod AS departman_kod
-                FROM kullanici_profil kp
+                SELECT kp.id,
+                       COALESCE(kp.gercek_ad, pk.AdSoyad, pk.kullanici_adi) AS gercek_ad,
+                       pk.kullanici_adi,
+                       COALESCE(kp.profil_tipi, 'SAHA_PERSONEL')            AS profil_tipi,
+                       pk.aktif,
+                       dm.ad  AS departman,
+                       dm.kod AS departman_kod
+                FROM personel_kullanici pk
+                LEFT JOIN kullanici_profil kp
+                       ON kp.kaynak = 'personel_kullanici' AND kp.kaynak_id = pk.id
                 LEFT JOIN departman_master dm ON dm.id = kp.departman_id
-                WHERE kp.aktif = 1
-                ORDER BY dm.sira, kp.gercek_ad
+                WHERE pk.aktif = 1
+                ORDER BY dm.sira, gercek_ad
             """).fetchall()
 
         departmanlar = con.execute("""
