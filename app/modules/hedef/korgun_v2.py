@@ -656,8 +656,14 @@ def _korgun_baglan():
     """Korgun MSSQL baglantisi."""
     import pytds
     from config import Config
+    host = getattr(Config, 'KORGUN_HOST', '') or ''
+    if not host:
+        raise RuntimeError(
+            "Korgun SQL Server IP tanimli degil. "
+            "config.py icinde KORGUN_HOST veya CPS_KORGUN_HOST env var set edilmeli."
+        )
     return pytds.connect(
-        server=getattr(Config, 'KORGUN_HOST', '25.7.184.221'),
+        server=host,
         database=getattr(Config, 'KORGUN_DB', 'Solariz22'),
         user=getattr(Config, 'KORGUN_USER', 'claude'),
         password=getattr(Config, 'KORGUN_PASS', '104099'),

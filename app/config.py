@@ -15,16 +15,16 @@ class Config:
     MOCK_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'mock_data.db')
 
     # ===================== PROD (MSSQL) =====================
-    # 🔥 HAMACHI IP KULLANILIYOR
-    MSSQL_HOST     = '25.7.184.221'
-    MSSQL_DATABASE = 'Solariz22'
-    MSSQL_USER     = 'claude'
-    MSSQL_PASSWORD = '104099'
-    MSSQL_PORT     = 1433
+    # LAN IP — Korgun SQL Server
+    MSSQL_HOST     = os.environ.get('CPS_MSSQL_HOST', '192.168.1.35')
+    MSSQL_DATABASE = os.environ.get('CPS_MSSQL_DB', 'Solariz22')
+    MSSQL_USER     = os.environ.get('CPS_MSSQL_USER', 'claude')
+    MSSQL_PASSWORD = os.environ.get('CPS_MSSQL_PASS', '104099')
+    MSSQL_PORT     = int(os.environ.get('CPS_MSSQL_PORT', '1433'))
 
     # ===================== REMOTE MES API =====================
-    MES_API_URL = "http://25.7.184.221:5056"
-    USE_REMOTE_API = False   # 🔥 ŞİMDİ DB KULLANACAĞIZ
+    MES_API_URL = os.environ.get('CPS_MES_API_URL', 'http://192.168.1.35:5056')
+    USE_REMOTE_API = False
 
     # ===================== SERVER =====================
     HOST  = '0.0.0.0'
@@ -32,11 +32,12 @@ class Config:
     MAX_UPLOAD_MB = 50
     ALLOWED_EXT   = {'jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf', 'docx', 'xlsx', 'doc', 'xls'}
     UPLOAD_ROOT   = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
-    KORGUN_HOST = "25.7.184.221"
-    KORGUN_DB = "Solariz22"
-    KORGUN_USER = "claude"
-    KORGUN_PASS = "104099"
-    KORGUN_PORT = 1433
+    # Korgun SQL Server — LAN IP
+    KORGUN_HOST = os.environ.get('CPS_KORGUN_HOST', '192.168.1.35')
+    KORGUN_DB   = os.environ.get('CPS_KORGUN_DB', 'Solariz22')
+    KORGUN_USER = os.environ.get('CPS_KORGUN_USER', 'claude')
+    KORGUN_PASS = os.environ.get('CPS_KORGUN_PASS', '104099')
+    KORGUN_PORT = int(os.environ.get('CPS_KORGUN_PORT', '1433'))
     DEBUG = True
 
     # ===================== SESSION =====================

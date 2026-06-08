@@ -1,12 +1,32 @@
 import pyodbc
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+try:
+    from config import Config
+    _KORGUN_HOST = getattr(Config, 'KORGUN_HOST', '') or ''
+    _KORGUN_DB   = getattr(Config, 'KORGUN_DB', 'Solariz22')
+    _KORGUN_USER = getattr(Config, 'KORGUN_USER', 'claude')
+    _KORGUN_PASS = getattr(Config, 'KORGUN_PASS', '104099')
+except Exception:
+    _KORGUN_HOST = os.environ.get('CPS_KORGUN_HOST', '')
+    _KORGUN_DB   = os.environ.get('CPS_KORGUN_DB', 'Solariz22')
+    _KORGUN_USER = os.environ.get('CPS_KORGUN_USER', 'claude')
+    _KORGUN_PASS = os.environ.get('CPS_KORGUN_PASS', '104099')
+
 
 def get_conn():
+    if not _KORGUN_HOST:
+        raise RuntimeError(
+            "Korgun SQL Server IP tanimli degil. "
+            "config.py icinde KORGUN_HOST veya CPS_KORGUN_HOST env var set edilmeli."
+        )
     return pyodbc.connect(
         "DRIVER={ODBC Driver 18 for SQL Server};"
-        "SERVER=25.7.184.221;"
-        "DATABASE=Solariz22;"
-        "UID=claude;"
-        "PWD=104099;"
+        f"SERVER={_KORGUN_HOST};"
+        f"DATABASE={_KORGUN_DB};"
+        f"UID={_KORGUN_USER};"
+        f"PWD={_KORGUN_PASS};"
         "TrustServerCertificate=yes;"
     )
 
