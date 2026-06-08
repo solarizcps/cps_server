@@ -2422,10 +2422,12 @@ def personel_360_secenekler():
             else:
                 profiller = []
         else:
-            # FAZ2G-10: Ana kaynak personel_kullanici (gerçek üretim personeli).
-            # kullanici_profil LEFT JOIN ile bağlanır; profili olmayan kişi de listede görünür.
-            # FAZ2G-12: id = kp.id (profil endpoint için), personel_id = pk.id (üretim bağlantısı için).
-            # kp.id NULL ise frontend detay açmaz (027 migration seed ettiğinden normalde NULL gelmez).
+            # FAZ2G-14: Tüm şirket personeli — üretim + idari/ofis/yönetim.
+            # Blok A: personel_kullanici kaynaklı üretim personeli (öncelikli).
+            # Blok B: kullanici_profil'daki diğer profiller (idari, ofis, yönetim).
+            #         Blok A'da zaten gelen kp.id'ler hariç tutularak duplicate engellenir.
+            # id her zaman kullanici_profil.id (profil endpoint için).
+            # personel_id yalnızca Blok A'da dolu (üretim bağlantısı için).
             profiller = con.execute("""
                 SELECT kp.id,
                        pk.id                                                  AS personel_id,
@@ -2434,13 +2436,38 @@ def personel_360_secenekler():
                        COALESCE(kp.profil_tipi, 'SAHA_PERSONEL')            AS profil_tipi,
                        pk.aktif,
                        dm.ad  AS departman,
-                       dm.kod AS departman_kod
+                       dm.kod AS departman_kod,
+                       'personel_kullanici'                                   AS kaynak
                 FROM personel_kullanici pk
                 LEFT JOIN kullanici_profil kp
                        ON kp.kaynak = 'personel_kullanici' AND kp.kaynak_id = pk.id
                 LEFT JOIN departman_master dm ON dm.id = kp.departman_id
                 WHERE pk.aktif = 1
-                ORDER BY dm.sira, gercek_ad
+
+                UNION ALL
+
+                SELECT kp.id,
+                       NULL                                                    AS personel_id,
+                       kp.gercek_ad,
+                       kp.kullanici_adi,
+                       kp.profil_tipi,
+                       kp.aktif,
+                       dm.ad  AS departman,
+                       dm.kod AS departman_kod,
+                       kp.kaynak                                               AS kaynak
+                FROM kullanici_profil kp
+                LEFT JOIN departman_master dm ON dm.id = kp.departman_id
+                WHERE kp.aktif = 1
+                  AND kp.kaynak != 'personel_kullanici'
+                  AND kp.id NOT IN (
+                      SELECT kp2.id
+                      FROM personel_kullanici pk2
+                      JOIN kullanici_profil kp2
+                             ON kp2.kaynak = 'personel_kullanici' AND kp2.kaynak_id = pk2.id
+                      WHERE pk2.aktif = 1
+                  )
+
+                ORDER BY departman_kod, gercek_ad
             """).fetchall()
 
         departmanlar = con.execute("""
@@ -2475,6 +2502,7 @@ def personel_360_secenekler():
             {
                 "id":            r["id"],
                 "personel_id":   r["personel_id"] if "personel_id" in r.keys() else None,
+                "kaynak":        r["kaynak"] if "kaynak" in r.keys() else None,
                 "ad_soyad":      r["gercek_ad"],
                 "kullanici_adi": r["kullanici_adi"],
                 "profil_tipi":   r["profil_tipi"],
