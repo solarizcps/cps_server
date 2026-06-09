@@ -49,10 +49,14 @@
     }
 
     /* ── Top Bar ── */
+    /* Tüm sticky header tek blok — aralarında çizgi çıkmasın */
+    #mob-header {
+      position: sticky; top: 0; z-index: 50;
+      background: var(--acc-dk);   /* en alttaki renk (filter-bar) */
+    }
     #top-bar {
       background: var(--acc);
       padding: 12px 10px 0;
-      position: sticky; top: 0; z-index: 50;
     }
     .top-row {
       display: flex; align-items: center; justify-content: space-between;
@@ -82,7 +86,6 @@
     .scan-wrap {
       background: var(--acc-dk);
       padding: 0 10px 12px;
-      position: sticky; top: 62px; z-index: 49;
     }
     .scan-input-row {
       display: flex; align-items: center; gap: 8px;
@@ -114,7 +117,6 @@
       padding: 0 10px 12px;
       display: flex; gap: 7px; overflow-x: auto;
       scrollbar-width: none;
-      position: sticky; top: 120px; z-index: 48;
     }
     .filter-bar::-webkit-scrollbar { display: none; }
     .fchip {
@@ -305,42 +307,45 @@
 <body>
 <div id="app">
 
-  <!-- ── Top Bar ── -->
-  <div id="top-bar">
-    <div class="top-row">
-      <div class="top-brand">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
-        CPS <top-brand-dot style="color:var(--acc);font-weight:900;">·</top-brand-dot> Depo Toplama
-      </div>
-      <div class="top-stat">
-        <span class="top-badge" id="top-count">{{ toplam }} sipariş</span>
-        <a href="/online-eticaret/mobil/" class="top-reload">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
-          Yenile
-        </a>
+  <!-- ── Sticky Header (tek blok — gap çizgisi yok) ── -->
+  <div id="mob-header">
+
+    <div id="top-bar">
+      <div class="top-row">
+        <div class="top-brand">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+          CPS <top-brand-dot style="color:var(--acc);font-weight:900;">·</top-brand-dot> Depo Toplama
+        </div>
+        <div class="top-stat">
+          <span class="top-badge" id="top-count">{{ toplam }} sipariş</span>
+          {% if cache_yasi_sn is not none %}<span style="font-size:10px;color:#888;margin-right:4px;">{{ cache_yasi_sn }}sn</span>{% endif %}
+          <a href="/online-eticaret/mobil/?refresh=1" class="top-reload">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+            Yenile
+          </a>
+        </div>
       </div>
     </div>
-  </div>
 
-  <!-- ── Scan / Arama alanı ── -->
-  <div class="scan-wrap">
-    <div class="scan-input-row">
-      <svg class="scan-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 7h.01M7 12h.01M7 17h.01M12 7h.01M12 12h.01M12 17h.01M17 7h.01M17 12h.01M17 17h.01"/></svg>
-      <input id="scan-input" type="search" inputmode="text"
-             placeholder="Sipariş no veya barkod ara…"
-             autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
-      <button id="scan-clear" style="display:none">✕ Temizle</button>
+    <div class="scan-wrap">
+      <div class="scan-input-row">
+        <svg class="scan-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 7h.01M7 12h.01M7 17h.01M12 7h.01M12 12h.01M12 17h.01M17 7h.01M17 12h.01M17 17h.01"/></svg>
+        <input id="scan-input" type="search" inputmode="text"
+               placeholder="Sipariş no veya barkod ara…"
+               autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
+        <button id="scan-clear" style="display:none">✕ Temizle</button>
+      </div>
     </div>
-  </div>
 
-  <!-- ── Filtre Chips ── -->
-  <div class="filter-bar">
-    <button class="fchip active" data-f="all">Tümü <span class="badge" id="cnt-all">0</span></button>
-    <button class="fchip" data-f="Solariz">Solariz <span class="badge" id="cnt-sol">0</span></button>
-    <button class="fchip" data-f="Epona">Epona <span class="badge" id="cnt-ep">0</span></button>
-    <button class="fchip" data-f="geciken">🔴 Geciken <span class="badge" id="cnt-gec">0</span></button>
-    <button class="fchip" data-f="bugun">⚡ Bugün <span class="badge" id="cnt-bug">0</span></button>
-  </div>
+    <div class="filter-bar">
+      <button class="fchip active" data-f="all">Tümü <span class="badge" id="cnt-all">0</span></button>
+      <button class="fchip" data-f="Solariz">Solariz <span class="badge" id="cnt-sol">0</span></button>
+      <button class="fchip" data-f="Epona">Epona <span class="badge" id="cnt-ep">0</span></button>
+      <button class="fchip" data-f="geciken">🔴 Geciken <span class="badge" id="cnt-gec">0</span></button>
+      <button class="fchip" data-f="bugun">⚡ Bugün <span class="badge" id="cnt-bug">0</span></button>
+    </div>
+
+  </div><!-- #mob-header -->
 
   <!-- ── Hata banner ── -->
   {% if api_hata and not operasyon_listesi %}

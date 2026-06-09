@@ -30,6 +30,12 @@ FETCH_STATUSES = ['Picking', 'Created']
 FETCH_DAYS     = 3
 SIPARIS_LIMIT  = 25       # KPI kartı altındaki özet tablo limiti
 
+# ── Sipariş önbelleği (in-memory, process seviyesi) ───────────────────────
+# { store_name: (cached_at_ts, orders, image_map) }
+# Ürün cache'e dokunulmaz — trendyol_client._PRODUCT_CACHE zaten 10 dk.
+_ORDER_CACHE     = {}
+_ORDER_CACHE_TTL = 5 * 60   # 5 dakika
+
 # FAZ0-B korunan (çoklu statü dağılımı FAZ2-B'de yapılacak)
 MOCK_DAGITIM = [
     {'durum': 'Yeni',              'kod': 'YENI',             'adet': 0, 'renk': '#1e3a8a'},
@@ -142,14 +148,26 @@ def _build_operasyon_listesi(rows_by_store, image_map_global):
     return result
 
 
-def _cek_magaza(store_name, start_ms, end_ms):
+def _cek_magaza(store_name, start_ms, end_ms, force_refresh=False):
     """
     Döner: (siparisler, model_map, image_map, hata_mesaji_veya_None)
+
+    Sipariş sonuçları 5 dk memory cache'te tutulur.
+    force_refresh=True (veya cache süresi dolmuşsa) Trendyol'dan taze çeker.
     API key/secret ASLA loglanmaz.
     """
     if not is_store_configured(store_name):
         return [], {}, {}, f"{store_name}: API bilgileri eksik"
 
+    # ── Cache kontrolü ──────────────────────────────────────────────────
+    cached = _ORDER_CACHE.get(store_name)
+    if cached and not force_refresh:
+        cached_at, c_orders, c_image_map = cached
+        if (time.time() - cached_at) < _ORDER_CACHE_TTL:
+            model_map = {}   # model_map orders_to_rows içinde yeniden üretilir
+            return c_orders, model_map, c_image_map, None
+
+    # ── Taze çekme ──────────────────────────────────────────────────────
     cfg        = get_store(store_name)
     seller_id  = cfg['sellerId']
     api_key    = cfg['apiKey']
@@ -175,6 +193,9 @@ def _cek_magaza(store_name, start_ms, end_ms):
     except Exception:
         pass   # görsel opsiyonel
 
+    # Cache'e yaz
+    _ORDER_CACHE[store_name] = (time.time(), tum_siparisler, image_map)
+
     return tum_siparisler, model_map, image_map, None
 
 
@@ -186,11 +207,10 @@ def _is_mobile_ua(req):
     return any(k in ua for k in ('mobile', 'android', 'iphone', 'ipad', 'tablet'))
 
 
-def _fetch_operasyon_listesi():
+def _fetch_operasyon_listesi(force_refresh=False):
     """
     Mobil route için sadece operasyon listesini çeker.
-    _cek_magaza ve _build_operasyon_listesi'ni yeniden kullanır.
-    Web (index) koduna dokunmaz.
+    force_refresh=True → cache bypass, Trendyol'dan taze çeker.
     """
     now_ms           = int(time.time() * 1000)
     start_ms, end_ms = _ms_aralik(FETCH_DAYS)
@@ -199,7 +219,9 @@ def _fetch_operasyon_listesi():
     image_map_global = {}
 
     for store_name in STORE_NAMES:
-        orders, model_map, image_map, hata = _cek_magaza(store_name, start_ms, end_ms)
+        orders, model_map, image_map, hata = _cek_magaza(
+            store_name, start_ms, end_ms, force_refresh=force_refresh
+        )
         if hata:
             hatalar.append(hata)
         else:
@@ -223,6 +245,7 @@ def index():
     if not session.get('kullanici'):
         return redirect(url_for('auth.login', next='/online-eticaret/'))
 
+    force_refresh    = request.args.get('refresh') == '1'
     now_ms           = int(time.time() * 1000)
     start_ms, end_ms = _ms_aralik(FETCH_DAYS)
     hatalar          = []
@@ -232,7 +255,9 @@ def index():
     rows_by_store    = {}
 
     for store_name in STORE_NAMES:
-        orders, model_map, image_map, hata = _cek_magaza(store_name, start_ms, end_ms)
+        orders, model_map, image_map, hata = _cek_magaza(
+            store_name, start_ms, end_ms, force_refresh=force_refresh
+        )
         if hata:
             hatalar.append(hata)
         else:
@@ -285,6 +310,14 @@ def index():
     siparisler        = _rows_to_siparis(tum_rows)
     operasyon_listesi = _build_operasyon_listesi(rows_by_store, image_map_global)
 
+    # Cache yaşı bilgisi (en eski store cache'in yaşı gösterilir)
+    cache_yasi_sn = None
+    for sn in STORE_NAMES:
+        entry = _ORDER_CACHE.get(sn)
+        if entry:
+            age = int(time.time() - entry[0])
+            cache_yasi_sn = age if cache_yasi_sn is None else max(cache_yasi_sn, age)
+
     return render_template(
         'online_eticaret/index.html',
         api_hata=bool(hatalar),
@@ -295,6 +328,7 @@ def index():
         siparisler=siparisler,
         operasyon=MOCK_OPERASYON,
         operasyon_listesi=operasyon_listesi,
+        cache_yasi_sn=cache_yasi_sn,
     )
 
 
@@ -313,11 +347,23 @@ def mobil():
     if request.args.get('force') == 'web':
         return redirect('/online-eticaret/')
 
-    operasyon_listesi, api_hata, hatalar = _fetch_operasyon_listesi()
+    force_refresh = request.args.get('refresh') == '1'
+    operasyon_listesi, api_hata, hatalar = _fetch_operasyon_listesi(
+        force_refresh=force_refresh
+    )
+
+    cache_yasi_sn = None
+    for sn in STORE_NAMES:
+        entry = _ORDER_CACHE.get(sn)
+        if entry:
+            age = int(time.time() - entry[0])
+            cache_yasi_sn = age if cache_yasi_sn is None else max(cache_yasi_sn, age)
+
     return render_template(
         'online_eticaret/mobil.html',
         operasyon_listesi=operasyon_listesi,
         api_hata=api_hata,
         hata_mesajlari=hatalar,
         toplam=len(operasyon_listesi),
+        cache_yasi_sn=cache_yasi_sn,
     )
