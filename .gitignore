@@ -75,6 +75,12 @@ __pycache__/
 app/uploads/
 
 
+# Credentials / secrets — git'e GİRMEZ
+.env
+.env.*
+*.credentials.json
+.trendyol-kargo/
+
 # CPS old patch / AI temp
 app/patch_*
 app/setup_*

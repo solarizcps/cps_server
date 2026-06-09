@@ -49,6 +49,7 @@ window.__cpsRootMap = function(pathname) {
   if (_h('/ithalat'))          return {key:'/finans',  title:'Finans',        href:'/finans/'};
   if (_h('/maliyet'))          return {key:'/finans',  title:'Finans',        href:'/finans/'};
   if (_h('/finans'))           return {key:'/finans',  title:'Finans',        href:'/finans/'};
+  if (_h('/online-eticaret'))  return {key:'/online-eticaret', title:'E-Ticaret', href:'/online-eticaret/'};
   if (_h('/kullanicilar'))     return {key:'/yonetim', title:'Y\u00f6netim',  href:'/yonetim/'};
   if (_h('/sistem'))           return {key:'/yonetim', title:'Y\u00f6netim',  href:'/yonetim/'};
   if (_h('/yonetim'))          return {key:'/yonetim', title:'Y\u00f6netim',  href:'/yonetim/'};
@@ -361,6 +362,7 @@ window.__cpsRootMap = function(pathname) {
       {% if active == 'hedef' %}{% set aktif_grup = 'uretim' %}{% endif %}
       {# MENU_FIX_V1 (05.06.2026): enjeksiyon sayfasinda uretim grubu acik #}
       {% if active == 'enjeksiyon' %}{% set aktif_grup = 'uretim' %}{% endif %}
+      {% if active == 'online-eticaret' %}{% set aktif_grup = 'ticaret' %}{% endif %}
 
 
       {% if active == 'grafik' and aktif_grup != 'finans' and aktif_grup != 'ticaret' %}{% set aktif_grup = 'kalite' %}{% endif %}
@@ -601,7 +603,7 @@ window.__cpsRootMap = function(pathname) {
         <span class="sn-baslik">Ticaret</span>
 
 
-        <span class="sn-count">3</span>
+        <span class="sn-count">4</span>
 
 
       </div>
@@ -648,6 +650,12 @@ window.__cpsRootMap = function(pathname) {
 
 
 
+
+        {# OET_FAZ0: Online E-Ticaret linki #}
+        <a href="/online-eticaret/" class="si {% if active == 'online-eticaret' %}active{% endif %}" title="Online E-Ticaret">
+          <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span>
+          <span class="sl">Online E-Ticaret</span>
+        </a>
 
         {% if yetki('grafik.tedarikci') %}
 
