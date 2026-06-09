@@ -416,10 +416,16 @@ def get_alt_emirler(ana_emir_no):
                     e.ModelKod,
                     ISNULL(m.Tanim, e.ModelKod) AS ModelAdi,
                     UPPER(LTRIM(RTRIM(ISNULL(e.Tip,'')))) AS Tip,
-                    LTRIM(RTRIM(ISNULL(e.Location,''))) AS Location
+                    LTRIM(RTRIM(ISNULL(e.Location,''))) AS Location,
+                    ISNULL(g.toplam_giren, e.YazSay) AS EmirMiktari
                 FROM Urt_Em2Em em2em
                 INNER JOIN Urt_Emir e ON e.EmirNo = em2em.EmirNo_YM
                 LEFT JOIN Model_M m ON m.ModelKod = e.ModelKod
+                LEFT JOIN (
+                    SELECT EmirNo, SUM(Giren) AS toplam_giren
+                    FROM Urt_Em_gch WITH(NOLOCK)
+                    GROUP BY EmirNo
+                ) g ON g.EmirNo = e.EmirNo
                 WHERE em2em.EmirNo = %s
                   AND UPPER(LTRIM(RTRIM(ISNULL(e.Tip,'')))) = 'Y'
                 ORDER BY e.EmirNo
@@ -427,12 +433,14 @@ def get_alt_emirler(ana_emir_no):
             rows = cur.fetchall()
             alt = []
             for r in rows:
+                miktar = r[5]
                 alt.append({
                     'emir_no': int(r[0]),
                     'model_kod': r[1] or '',
                     'model_adi': r[2] or '',
                     'tip': r[3] or 'Y',
                     'location': r[4] or '',
+                    'EmirMiktari': float(miktar) if miktar is not None else None,
                 })
             return {'ok': True, 'alt_emirler': alt}
         finally:

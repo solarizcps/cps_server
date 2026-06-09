@@ -983,31 +983,34 @@ def _kategori_alt_emir(model_kod, model_adi):
 
 def _resolve_target_emir(ana_emir_no, sablon_adi):
     """Sablon hangi emire uygulanmali?
-    Donen: (gercek_emir_no_str, sebep_str)
+    Donen: (gercek_emir_no_str, sebep_str, emir_miktar_float_or_None)
+    emir_miktar: alt emirin EmirMiktari (varsa), yoksa None (caller ana emirden alir).
     """
     kategori = _kategori_sablon_adi(sablon_adi)
     if not kategori:
-        return (str(ana_emir_no), 'ana:sablon_belirsiz')
+        return (str(ana_emir_no), 'ana:sablon_belirsiz', None)
 
     try:
         from modules.common import korgun as _kk
         sonuc = _kk.get_alt_emirler(ana_emir_no)
     except Exception as e:
-        return (str(ana_emir_no), 'ana:helper_hata:' + str(e)[:60])
+        return (str(ana_emir_no), 'ana:helper_hata:' + str(e)[:60], None)
 
     if not sonuc.get('ok'):
-        return (str(ana_emir_no), 'ana:korgun_hata')
+        return (str(ana_emir_no), 'ana:korgun_hata', None)
 
     alt_list = sonuc.get('alt_emirler') or []
     if not alt_list:
-        return (str(ana_emir_no), 'ana:alt_yok')
+        return (str(ana_emir_no), 'ana:alt_yok', None)
 
     for alt in alt_list:
         alt_kat = _kategori_alt_emir(alt.get('model_kod'), alt.get('model_adi'))
         if alt_kat == kategori:
-            return (str(alt['emir_no']), 'alt:' + kategori + ':' + str(alt['emir_no']))
+            return (str(alt['emir_no']),
+                    'alt:' + kategori + ':' + str(alt['emir_no']),
+                    alt.get('EmirMiktari'))
 
-    return (str(ana_emir_no), 'ana:eslesme_yok')
+    return (str(ana_emir_no), 'ana:eslesme_yok', None)
 
 
 # --- 7) Sablon uygula (emir -> emir_alt_proses) ---
@@ -2759,14 +2762,29 @@ def _sablon_uygula_internal(emir_no, sablon_id, kaynak_prefix='sablon',
 
         kaynak = kaynak_prefix + ':' + sablon['sablon_adi']
 
-        gercek_emir_no, routing_sebep = _resolve_target_emir(emir_no, sablon['sablon_adi'])
+        gercek_emir_no, routing_sebep, alt_emir_miktar = _resolve_target_emir(emir_no, sablon['sablon_adi'])
         try:
             from flask import current_app
             current_app.logger.info(
-                f'sablon_uygula routing: ana={emir_no} -> hedef={gercek_emir_no} ({routing_sebep})'
+                f'sablon_uygula routing: ana={emir_no} -> hedef={gercek_emir_no} ({routing_sebep}) miktar={alt_emir_miktar}'
             )
         except Exception:
             pass
+
+        # hedef_adet hesapla: alt emir miktari > ana emir miktari > 0
+        hedef_adet = 0
+        if alt_emir_miktar is not None and alt_emir_miktar > 0:
+            hedef_adet = int(alt_emir_miktar)
+        else:
+            # alt emirde miktar yok — ana emirden al (tek seferlik Korgun okuma)
+            try:
+                from modules.common import korgun as _kk_m
+                ozet = _kk_m.get_emir_ozet(emir_no)
+                if ozet.get('ok'):
+                    _ha = ozet.get('hedef_adet') or 0
+                    hedef_adet = int(_ha) if _ha else 0
+            except Exception:
+                hedef_adet = 0
 
         max_row = conn.execute(
             "SELECT COALESCE(MAX(siralama), 0) FROM emir_alt_proses WHERE emir_no=?",
@@ -2789,14 +2807,15 @@ def _sablon_uygula_internal(emir_no, sablon_id, kaynak_prefix='sablon',
             cur = conn.execute("""
                 INSERT INTO emir_alt_proses
                     (emir_no, proses_adi, siralama, aktif, kaynak,
-                     olusturan_id, olusturan_ad, sablon_id)
-                VALUES (?, ?, ?, 1, ?, ?, ?, ?)
-            """, (gercek_emir_no, pa, max_sira, kaynak, uid, uad, sablon_id))
+                     olusturan_id, olusturan_ad, sablon_id, hedef_adet)
+                VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?)
+            """, (gercek_emir_no, pa, max_sira, kaynak, uid, uad, sablon_id, hedef_adet))
             eklenen.append({
                 'id': cur.lastrowid,
                 'proses_adi': pa,
                 'siralama': max_sira,
                 'emir_no': gercek_emir_no,
+                'hedef_adet': hedef_adet,
             })
 
         conn.commit()
@@ -2898,7 +2917,7 @@ def hedef_sablon_trigger_test(emir_no):
         conn.row_factory = sqlite3.Row
 
         # Routing: ATKI/GOVDE alt emire yonlendir
-        gercek_emir_no, routing_sebep = _resolve_target_emir(emir_no, eslesme['sablon_adi'])
+        gercek_emir_no, routing_sebep, _alt_miktar = _resolve_target_emir(emir_no, eslesme['sablon_adi'])
 
         # Sablon prosesleri
         prs = conn.execute("""
