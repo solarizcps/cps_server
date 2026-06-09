@@ -588,7 +588,7 @@ window.__cpsRootMap = function(pathname) {
       <!-- ============ TICARET ============ -->
 
 
-      {% if yetki('finans') or yetki('grafik.tedarikci') %}
+      {% if yetki('finans') or yetki('grafik.tedarikci') or yetki('online_eticaret') %}
 
 
       <div class="sn-sec sn-toggle sn-secondary{% if aktif_grup == 'ticaret' %} acik{% endif %}" data-grup="ticaret">
@@ -651,11 +651,13 @@ window.__cpsRootMap = function(pathname) {
 
 
 
-        {# OET_FAZ0: Online E-Ticaret linki #}
+        {# OET_FAZ0: Online E-Ticaret linki — yetki korumalı #}
+        {% if yetki('online_eticaret') %}
         <a href="/online-eticaret/" class="si {% if active == 'online-eticaret' %}active{% endif %}" title="Online E-Ticaret">
           <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span>
           <span class="sl">Online E-Ticaret</span>
         </a>
+        {% endif %}
 
         {% if yetki('grafik.tedarikci') %}
 

@@ -256,6 +256,9 @@ def login():
                 # FERHAT_LOGIN_REDIRECT_V1 (15.05.2026): Enjeksiyon rolu direkt saha
                 elif u.get('RolAd') == 'Enjeksiyon':
                     nxt = '/enjeksiyon/'
+                # OET_LOGIN_REDIRECT_V1 (09.06.2026): Online E-Ticaret rolu direkt OET
+                elif u.get('RolAd') == 'Online E-Ticaret':
+                    nxt = '/online-eticaret/'
                 else:
                     nxt = '/'
             return redirect(nxt)

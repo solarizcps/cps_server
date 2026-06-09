@@ -9,6 +9,7 @@ FAZ2-A : Sipariş Operasyon Listesi — görsel, pagination, filtre, arama.
 import time
 
 from flask import Blueprint, render_template, session, redirect, url_for
+from modules.auth import login_gerekli
 
 from modules.online_eticaret.config_store import get_store, is_store_configured, STORE_NAMES
 from modules.online_eticaret.trendyol_client import (
@@ -181,6 +182,7 @@ def _cek_magaza(store_name, start_ms, end_ms):
 
 @online_eticaret_bp.route('/')
 @online_eticaret_bp.route('')
+@login_gerekli
 def index():
     if not session.get('kullanici'):
         return redirect(url_for('auth.login', next='/online-eticaret/'))
