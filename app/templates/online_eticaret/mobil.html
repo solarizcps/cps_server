@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#f6c343">
+  <title>Depo Toplama | CPS</title>
+  <style>
+    :root {
+      --acc:     #f6c343;
+      --acc-dk:  #f5b82e;
+      --acc-lt:  #fef9c3;
+      --green:   #22c55e;
+      --green-dk:#16a34a;
+      --red:     #ef4444;
+      --bg:      #f7f8fb;
+      --card:    #ffffff;
+      --text:    #1c1917;
+      --text2:   #44403c;
+      --text3:   #a8a29e;
+      --border:  #e7e5e4;
+      --radius:  14px;
+      --safe-b:  env(safe-area-inset-bottom, 16px);
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box; margin: 0; padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    html, body {
+      height: auto; min-height: 100%;
+      overflow-x: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 15px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ══════════════════════════════════
+       APP SHELL
+    ══════════════════════════════════ */
+    #app {
+      display: block;
+      min-height: 100dvh;
+      background: var(--bg);
+    }
+
+    /* ── Top Bar ── */
+    #top-bar {
+      background: var(--acc);
+      padding: 12px 10px 0;
+      position: sticky; top: 0; z-index: 50;
+    }
+    .top-row {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .top-brand {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 15px; font-weight: 800; color: var(--text); letter-spacing: .2px;
+    }
+    .top-brand-dot { color: var(--text); opacity: .5; }
+    .top-stat {
+      display: flex; align-items: center; gap: 6px;
+    }
+    .top-badge {
+      background: rgba(0,0,0,.1); color: var(--text);
+      border-radius: 20px; padding: 4px 12px;
+      font-size: 12px; font-weight: 700;
+    }
+    .top-reload {
+      background: rgba(0,0,0,.08); color: var(--text);
+      border: none; border-radius: 8px; padding: 6px 10px;
+      font-size: 11px; font-weight: 700; cursor: pointer; text-decoration: none;
+      display: flex; align-items: center; gap: 4px;
+    }
+
+    /* ── Scan Bar ── */
+    .scan-wrap {
+      background: var(--acc-dk);
+      padding: 0 10px 12px;
+      position: sticky; top: 62px; z-index: 49;
+    }
+    .scan-input-row {
+      display: flex; align-items: center; gap: 8px;
+      background: rgba(255,255,255,.85);
+      border: 2px solid transparent;
+      border-radius: 12px; padding: 4px 4px 4px 14px;
+      transition: border-color .15s, background .15s;
+    }
+    .scan-input-row:focus-within {
+      border-color: var(--text);
+      background: #ffffff;
+    }
+    .scan-ico { color: rgba(0,0,0,.45); flex-shrink: 0; }
+    #scan-input {
+      flex: 1; background: transparent; border: none; outline: none;
+      color: var(--text); font-size: 16px; font-weight: 500;
+      padding: 8px 0;
+    }
+    #scan-input::placeholder { color: rgba(0,0,0,.38); font-size: 15px; }
+    #scan-clear {
+      background: rgba(0,0,0,.08); border: none; border-radius: 8px;
+      color: var(--text); padding: 8px 10px; cursor: pointer;
+      font-size: 12px; font-weight: 700; flex-shrink: 0;
+    }
+
+    /* ── Filter Chips ── */
+    .filter-bar {
+      background: var(--acc-dk);
+      padding: 0 10px 12px;
+      display: flex; gap: 7px; overflow-x: auto;
+      scrollbar-width: none;
+      position: sticky; top: 120px; z-index: 48;
+    }
+    .filter-bar::-webkit-scrollbar { display: none; }
+    .fchip {
+      padding: 7px 16px; border-radius: 20px; white-space: nowrap;
+      border: 1.5px solid rgba(0,0,0,.18); flex-shrink: 0;
+      font-size: 13px; font-weight: 700; color: rgba(0,0,0,.6);
+      background: rgba(255,255,255,.35); cursor: pointer;
+      transition: background .12s, color .12s, border-color .12s;
+    }
+    .fchip.active {
+      background: var(--text); border-color: var(--text); color: var(--acc);
+    }
+    .fchip .badge {
+      background: rgba(0,0,0,.12); border-radius: 10px;
+      padding: 1px 6px; font-size: 10px; margin-left: 4px;
+    }
+    .fchip.active .badge { background: rgba(255,255,255,.15); color: #fff; }
+
+    /* ── Card Liste ── */
+    #card-list {
+      display: block;
+      height: auto;
+      overflow: visible;
+      padding: 10px 8px calc(var(--safe-b) + 80px);
+    }
+
+    /* ── Sipariş Kartı ── */
+    .ocard {
+      background: var(--card);
+      border-radius: var(--radius);
+      border: 1.5px solid var(--border);
+      box-shadow: 0 2px 8px rgba(0,0,0,.07);
+      overflow: hidden;
+      transition: border-color .2s, opacity .25s;
+      margin-bottom: 10px;
+    }
+    .ocard.done {
+      border-color: var(--green);
+      opacity: .65;
+    }
+    /* Sol aciliyet çizgisi */
+    .ocard.ac-0 { border-left: 4px solid var(--red); }
+    .ocard.ac-1 { border-left: 4px solid var(--acc); }
+    .ocard.ac-2 { border-left: 4px solid #38bdf8; }
+    .ocard.done { border-left-color: var(--green) !important; }
+
+    /* Kart: üst bilgi şeridi */
+    .ocard-top {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 9px 14px 0;
+      gap: 6px;
+    }
+    .ocard-no {
+      font-family: 'Courier New', monospace; font-size: 13px; font-weight: 700;
+      color: var(--text2); flex: 1; overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap;
+    }
+    .ocard-badges { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+    .badge-sol { background: #fef9c3; color: #854d0e; border-radius: 5px; padding: 3px 8px; font-size: 10px; font-weight: 800; border: 1px solid #f5b82e; }
+    .badge-ep  { background: #fce7f3; color: #9d174d; border-radius: 5px; padding: 3px 8px; font-size: 10px; font-weight: 800; }
+    .badge-gec { background: #fee2e2; color: #991b1b; border-radius: 5px; padding: 3px 8px; font-size: 10px; font-weight: 800; }
+    .badge-bug { background: #fef3c7; color: #92400e; border-radius: 5px; padding: 3px 8px; font-size: 10px; font-weight: 800; }
+
+    /* Kart: ana gövde (görsel + bilgi) */
+    .ocard-body {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 10px 14px 10px;
+    }
+
+    .ocard-img {
+      width: 108px; height: 108px; flex-shrink: 0;
+      border-radius: 10px; object-fit: contain;
+      background: #f8fafc; border: 1px solid var(--border);
+    }
+    .ocard-img-ph {
+      width: 108px; height: 108px; flex-shrink: 0;
+      border-radius: 10px; background: #f1f5f9; border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 38px;
+    }
+    img.ocard-img-err {
+      display: flex; align-items: center; justify-content: center;
+      background: #f1f5f9; border: 1px solid var(--border);
+    }
+    img.ocard-img-err::after { content: '📦'; font-size: 34px; }
+
+    .ocard-info { flex: 1; min-width: 0; }
+    .ocard-urun {
+      font-size: 14px; font-weight: 700; color: var(--text);
+      line-height: 1.35; margin-bottom: 8px;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      overflow: hidden; max-height: calc(1.35em * 2);
+    }
+
+    /* Varyant satırı (beden, renk, adet) */
+    .ocard-variant {
+      display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+      margin-bottom: 8px;
+    }
+    .vchip {
+      display: flex; align-items: center; gap: 4px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; padding: 4px 9px;
+      font-size: 12px;
+    }
+    .vchip-lbl { color: var(--text3); font-size: 10px; font-weight: 600; }
+    .vchip-val { color: var(--text); font-weight: 800; }
+    .vchip-adet {
+      background: var(--acc-lt); border-color: var(--acc);
+    }
+    .vchip-adet .vchip-val { color: var(--acc-dk); font-size: 15px; }
+
+    .ocard-barkod {
+      font-family: 'Courier New', monospace; font-size: 11px; font-weight: 700;
+      color: var(--text2); background: var(--bg);
+      border-radius: 4px; padding: 3px 6px; display: inline-block;
+      margin-top: 4px; letter-spacing: .3px;
+    }
+
+    /* Kart: aksiyonlar */
+    .ocard-actions {
+      padding: 0 12px 12px;
+      display: flex; gap: 8px;
+    }
+    .btn-topla {
+      flex: 3; padding: 18px 10px; border-radius: 10px;
+      border: 2px solid var(--acc); background: var(--acc);
+      color: #1a1000; font-size: 16px; font-weight: 900;
+      letter-spacing: .3px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 7px;
+      transition: background .15s, border-color .15s, transform .08s;
+      -webkit-user-select: none; user-select: none;
+    }
+    .btn-topla:active { transform: scale(.96); }
+    .btn-topla.done {
+      background: var(--green); border-color: var(--green-dk); color: #fff;
+    }
+    .btn-topla svg { flex-shrink: 0; }
+
+    .btn-sec {
+      flex: 1; padding: 10px 4px; border-radius: 10px;
+      border: 1.5px solid var(--border); background: #f8fafc;
+      color: var(--text3); font-size: 11px; font-weight: 600;
+      cursor: not-allowed; opacity: .45;
+    }
+
+    /* ── Boş durum ── */
+    .empty-state {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; height: 100%; gap: 14px; padding: 40px 20px;
+      color: var(--text3); text-align: center;
+    }
+    .empty-ico { font-size: 52px; }
+    .empty-title { font-size: 16px; font-weight: 700; color: var(--text2); }
+    .empty-sub  { font-size: 13px; }
+
+    /* ── Hata banner ── */
+    .hata-bar {
+      margin: 0 12px 6px; padding: 10px 14px; border-radius: 10px;
+      background: #fee2e2; border: 1px solid #fca5a5; color: #991b1b;
+      font-size: 12px; font-weight: 600;
+    }
+
+    /* ── Daha Fazla butonu ── */
+    .btn-load-more {
+      display: block; width: 100%;
+      padding: 16px; margin-bottom: 12px;
+      border-radius: 12px; border: 2px dashed var(--acc-dk);
+      background: var(--acc-lt); color: var(--text); font-size: 15px; font-weight: 800;
+      cursor: pointer; text-align: center;
+      transition: background .15s;
+    }
+    .btn-load-more:active { background: var(--acc); }
+
+    /* ── Footer ── */
+    #mob-footer {
+      background: var(--acc); text-align: center;
+      padding: 10px 16px calc(var(--safe-b) + 8px);
+      font-size: 11px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-top: 1px solid rgba(0,0,0,.1);
+      position: sticky; bottom: 0; z-index: 50;
+    }
+    #mob-footer a { color: var(--text); text-decoration: none; font-weight: 800; }
+    #mob-footer span { color: rgba(0,0,0,.4); }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ── Top Bar ── -->
+  <div id="top-bar">
+    <div class="top-row">
+      <div class="top-brand">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+        CPS <top-brand-dot style="color:var(--acc);font-weight:900;">·</top-brand-dot> Depo Toplama
+      </div>
+      <div class="top-stat">
+        <span class="top-badge" id="top-count">{{ toplam }} sipariş</span>
+        <a href="/online-eticaret/mobil/" class="top-reload">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+          Yenile
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Scan / Arama alanı ── -->
+  <div class="scan-wrap">
+    <div class="scan-input-row">
+      <svg class="scan-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 7h.01M7 12h.01M7 17h.01M12 7h.01M12 12h.01M12 17h.01M17 7h.01M17 12h.01M17 17h.01"/></svg>
+      <input id="scan-input" type="search" inputmode="text"
+             placeholder="Sipariş no veya barkod ara…"
+             autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
+      <button id="scan-clear" style="display:none">✕ Temizle</button>
+    </div>
+  </div>
+
+  <!-- ── Filtre Chips ── -->
+  <div class="filter-bar">
+    <button class="fchip active" data-f="all">Tümü <span class="badge" id="cnt-all">0</span></button>
+    <button class="fchip" data-f="Solariz">Solariz <span class="badge" id="cnt-sol">0</span></button>
+    <button class="fchip" data-f="Epona">Epona <span class="badge" id="cnt-ep">0</span></button>
+    <button class="fchip" data-f="geciken">🔴 Geciken <span class="badge" id="cnt-gec">0</span></button>
+    <button class="fchip" data-f="bugun">⚡ Bugün <span class="badge" id="cnt-bug">0</span></button>
+  </div>
+
+  <!-- ── Hata banner ── -->
+  {% if api_hata and not operasyon_listesi %}
+  <div class="hata-bar">⛔ Trendyol bağlantı hatası — veriler alınamadı.</div>
+  {% endif %}
+
+  <!-- ── Kart Listesi (Jinja2 server-side render) ── -->
+  <div id="card-list">
+    <div id="empty-msg" class="empty-state" style="display:none">
+      <div class="empty-ico">🔍</div>
+      <div class="empty-title">Kayıt bulunamadı</div>
+      <div class="empty-sub">Arama veya filtre değiştirin</div>
+    </div>
+    {% if not operasyon_listesi %}
+    <div class="empty-state">
+      <div class="empty-ico">📭</div>
+      <div class="empty-title">Sipariş bulunamadı</div>
+    </div>
+    {% endif %}
+    {% for r in operasyon_listesi %}
+    <div class="ocard ac-{{ r.aciliyet }}" id="oc{{ loop.index0 }}"
+         data-magaza="{{ r.magaza }}" data-ac="{{ r.aciliyet }}" data-idx="{{ loop.index0 }}">
+      <div class="ocard-top">
+        <span class="ocard-no">#{{ r.no }}</span>
+        <div class="ocard-badges">
+          {% if r.magaza == 'Solariz' %}<span class="badge-sol">Solariz</span>
+          {% elif r.magaza == 'Epona' %}<span class="badge-ep">Epona</span>
+          {% else %}<span>{{ r.magaza }}</span>{% endif %}
+          {% if r.aciliyet == 0 %}<span class="badge-gec">GECİKTİ</span>
+          {% elif r.aciliyet == 1 %}<span class="badge-bug">BUGÜN</span>{% endif %}
+        </div>
+      </div>
+      <div class="ocard-body">
+        {% if r.gorsel %}
+        <img class="ocard-img" src="{{ r.gorsel }}" alt="" loading="lazy"
+             onerror="this.className='ocard-img-ph';this.removeAttribute('src')">
+        {% else %}
+        <div class="ocard-img-ph">📦</div>
+        {% endif %}
+        <div class="ocard-info">
+          <div class="ocard-urun">{{ r.urun }}</div>
+          <div class="ocard-variant">
+            {% if r.beden %}<span class="vchip"><span class="vchip-lbl">BEDEN</span><span class="vchip-val">{{ r.beden }}</span></span>{% endif %}
+            {% if r.renk_urun %}<span class="vchip"><span class="vchip-lbl">RENK</span><span class="vchip-val">{{ r.renk_urun }}</span></span>{% endif %}
+            {% if r.adet %}<span class="vchip vchip-adet"><span class="vchip-lbl">ADET</span><span class="vchip-val">{{ r.adet }}</span></span>{% endif %}
+          </div>
+          <div class="ocard-barkod">{{ r.barkod }}</div>
+        </div>
+      </div>
+      <div class="ocard-actions">
+        <button class="btn-topla" onclick="topla(this,{{ loop.index0 }})">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          TOPLADIM
+        </button>
+        <button class="btn-sec" disabled>Yazdır</button>
+        <button class="btn-sec" disabled>Sevk</button>
+      </div>
+    </div>
+    {% endfor %}
+
+    <button id="load-more" style="display:none"
+            onclick="loadMore()"
+            class="btn-load-more">
+      Daha Fazla Göster
+    </button>
+  </div>
+
+  <!-- ── Footer ── -->
+  <div id="mob-footer">
+    <a href="/online-eticaret/?force=desktop">🖥 Masaüstü</a>
+    <span>CPS Depo FAZ3 · Sadece görüntüleme</span>
+  </div>
+
+</div><!-- #app -->
+
+<!-- ── Veri + JS ── -->
+<script>
+(function () {
+  'use strict';
+
+  /* ALL: sayaçlar + metin arama için */
+  var ALL      = {{ operasyon_listesi | tojson }};
+  var actF     = 'all';
+  var srchQ    = '';
+  var visLimit = 30;   /* başlangıçta görünür kart sayısı */
+  var PAGE_STEP = 30;
+
+  /* ── Sayaçlar (ALL'dan — filtreden bağımsız toplam) ── */
+  function updateCounts() {
+    function cnt(fn) { return ALL.filter(fn).length; }
+    document.getElementById('cnt-all').textContent = ALL.length;
+    document.getElementById('cnt-sol').textContent = cnt(function(r){ return r.magaza === 'Solariz'; });
+    document.getElementById('cnt-ep') .textContent = cnt(function(r){ return r.magaza === 'Epona'; });
+    document.getElementById('cnt-gec').textContent = cnt(function(r){ return r.aciliyet === 0; });
+    document.getElementById('cnt-bug').textContent = cnt(function(r){ return r.aciliyet === 1; });
+  }
+
+  /* ── Render: göster/gizle — innerHTML YOK ── */
+  function render() {
+    var q       = srchQ.toLowerCase().trim();
+    var cards   = document.querySelectorAll('#card-list .ocard');
+    var matched = 0;   /* filtre+arama eşleşen toplam */
+    var shown   = 0;   /* gerçekten görünen */
+    /* Arama aktifse tümünü göster, değilse visLimit uygula */
+    var noLimit = q.length > 0;
+
+    cards.forEach(function (card) {
+      var magaza = card.dataset.magaza;
+      var ac     = parseInt(card.dataset.ac, 10);
+      var idx    = parseInt(card.dataset.idx, 10);
+      var hits   = true;
+
+      if (actF === 'Solariz' && magaza !== 'Solariz') hits = false;
+      if (actF === 'Epona'   && magaza !== 'Epona')   hits = false;
+      if (actF === 'geciken' && ac !== 0)              hits = false;
+      if (actF === 'bugun'   && ac !== 1)              hits = false;
+
+      if (q && hits) {
+        var r   = ALL[idx];
+        var hay = [r.no, r.barkod, r.urun, r.model]
+                    .map(function(v){ return String(v || '').trim(); })
+                    .join(' ').toLowerCase();
+        if (hay.indexOf(q) === -1) hits = false;
+      }
+
+      if (hits) {
+        matched++;
+        if (noLimit || shown < visLimit) {
+          card.style.display = '';
+          shown++;
+        } else {
+          card.style.display = 'none';
+        }
+      } else {
+        card.style.display = 'none';
+      }
+    });
+
+    /* Topbar sayacı → eşleşen toplam */
+    var tc = document.getElementById('top-count');
+    if (tc) tc.textContent = matched + ' sipariş';
+
+    /* Boş durum */
+    var em = document.getElementById('empty-msg');
+    if (em) em.style.display = (matched === 0 && cards.length > 0) ? 'flex' : 'none';
+
+    /* Daha Fazla butonu */
+    var lb = document.getElementById('load-more');
+    if (lb) {
+      var kalan = matched - shown;
+      if (!noLimit && kalan > 0) {
+        lb.style.display = 'block';
+        lb.textContent = 'Daha Fazla Göster (' + kalan + ' sipariş kaldı)';
+      } else {
+        lb.style.display = 'none';
+      }
+    }
+  }
+
+  /* ── Daha Fazla ── */
+  window.loadMore = function () {
+    visLimit += PAGE_STEP;
+    render();
+  };
+
+  /* ── Topladım toggle (client-side) ── */
+  window.topla = function (btn, idx) {
+    var card = document.getElementById('oc' + idx);
+    if (!card) return;
+    var done = card.classList.toggle('done');
+    btn.classList.toggle('done', done);
+    btn.innerHTML = done
+      ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> TOPLANDII ✓'
+      : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> TOPLADIM';
+  };
+
+  /* ── Chip filtresi ── */
+  document.querySelectorAll('.fchip').forEach(function (c) {
+    c.addEventListener('click', function () {
+      document.querySelectorAll('.fchip').forEach(function (x) { x.classList.remove('active'); });
+      this.classList.add('active');
+      actF = this.dataset.f;
+      visLimit = 30;   /* filtre değişince başa dön */
+      render();
+    });
+  });
+
+  /* ── Arama ── */
+  var scanIn  = document.getElementById('scan-input');
+  var scanClr = document.getElementById('scan-clear');
+  scanIn.addEventListener('input', function () {
+    srchQ = this.value;
+    scanClr.style.display = this.value ? 'block' : 'none';
+    render();
+  });
+  scanClr.addEventListener('click', function () {
+    scanIn.value = ''; srchQ = '';
+    visLimit = 30;   /* arama temizlenince başa dön */
+    this.style.display = 'none';
+    scanIn.focus();
+    render();
+  });
+
+  /* ── İlk yükleme ── */
+  updateCounts();
+  render();
+
+})();
+</script>
+</body>
+</html>

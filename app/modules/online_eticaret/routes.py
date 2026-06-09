@@ -8,7 +8,7 @@ FAZ2-A : Sipariş Operasyon Listesi — görsel, pagination, filtre, arama.
 """
 import time
 
-from flask import Blueprint, render_template, session, redirect, url_for
+from flask import Blueprint, render_template, session, redirect, url_for, request
 from modules.auth import login_gerekli
 
 from modules.online_eticaret.config_store import get_store, is_store_configured, STORE_NAMES
@@ -178,12 +178,48 @@ def _cek_magaza(store_name, start_ms, end_ms):
     return tum_siparisler, model_map, image_map, None
 
 
+# ── Mobil yardımcıları ────────────────────────────────────────────────────
+
+def _is_mobile_ua(req):
+    """User-Agent telefon/tablet ise True döner."""
+    ua = req.headers.get('User-Agent', '').lower()
+    return any(k in ua for k in ('mobile', 'android', 'iphone', 'ipad', 'tablet'))
+
+
+def _fetch_operasyon_listesi():
+    """
+    Mobil route için sadece operasyon listesini çeker.
+    _cek_magaza ve _build_operasyon_listesi'ni yeniden kullanır.
+    Web (index) koduna dokunmaz.
+    """
+    now_ms           = int(time.time() * 1000)
+    start_ms, end_ms = _ms_aralik(FETCH_DAYS)
+    hatalar          = []
+    rows_by_store    = {}
+    image_map_global = {}
+
+    for store_name in STORE_NAMES:
+        orders, model_map, image_map, hata = _cek_magaza(store_name, start_ms, end_ms)
+        if hata:
+            hatalar.append(hata)
+        else:
+            image_map_global.update(image_map)
+            rows_by_store[store_name] = orders_to_rows(orders, store_name, model_map, now_ms)
+
+    operasyon_listesi = _build_operasyon_listesi(rows_by_store, image_map_global)
+    return operasyon_listesi, bool(hatalar), hatalar
+
+
 # ── Route ─────────────────────────────────────────────────────────────────
 
 @online_eticaret_bp.route('/')
 @online_eticaret_bp.route('')
 @login_gerekli
 def index():
+    # Mobil UA → mobil ekrana yönlendir (force=desktop ile geçilebilir)
+    if _is_mobile_ua(request) and request.args.get('force') != 'desktop':
+        return redirect('/online-eticaret/mobil/')
+
     if not session.get('kullanici'):
         return redirect(url_for('auth.login', next='/online-eticaret/'))
 
@@ -259,4 +295,29 @@ def index():
         siparisler=siparisler,
         operasyon=MOCK_OPERASYON,
         operasyon_listesi=operasyon_listesi,
+    )
+
+
+# ── Mobil Route ────────────────────────────────────────────────────────────
+
+@online_eticaret_bp.route('/mobil/')
+@online_eticaret_bp.route('/mobil')
+@login_gerekli
+def mobil():
+    """
+    FAZ3: Mobil depo operasyon ekranı.
+    Sadece GET — Trendyol POST yok, Korgun yok, stok yok, DB yok.
+    Toplandı butonu client-side only.
+    """
+    # force=web parametresiyle masaüstüne dönülebilir
+    if request.args.get('force') == 'web':
+        return redirect('/online-eticaret/')
+
+    operasyon_listesi, api_hata, hatalar = _fetch_operasyon_listesi()
+    return render_template(
+        'online_eticaret/mobil.html',
+        operasyon_listesi=operasyon_listesi,
+        api_hata=api_hata,
+        hata_mesajlari=hatalar,
+        toplam=len(operasyon_listesi),
     )
