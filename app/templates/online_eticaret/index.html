@@ -208,6 +208,18 @@
   .oet-main       { grid-template-columns:1fr; }
   .oet-action-row { grid-template-columns:1fr; }
 }
+
+/* ── Kolon Filtreleri ── */
+.oet-tbl thead tr:first-child th   { position:sticky; top:0; z-index:3; }
+.oet-tbl thead tr.oet-frow th      { position:sticky; top:38px; z-index:2;
+                                     background:var(--bg3); padding:3px 5px !important; }
+.cf-sel {
+  border:1px solid var(--border); border-radius:3px;
+  padding:2px 3px; font-size:10px; background:var(--bg); color:var(--text);
+  width:100%; outline:none; cursor:pointer; min-width:0;
+}
+.cf-sel:focus  { border-color:var(--accent); }
+.cf-sel.active { border-color:var(--accent); background:rgba(234,179,8,.12); color:var(--text); font-weight:700; }
 </style>
 {% endblock %}
 
@@ -420,6 +432,23 @@
               <th class="oet-col-dur">Durum</th>
               <th class="oet-col-aks">İşlem</th>
             </tr>
+            <!-- Kolon filtre satırı -->
+            <tr class="oet-frow">
+              <th class="oet-col-ac"></th>
+              <th class="oet-col-img"></th>
+              <th class="oet-col-no"></th>
+              <th class="oet-col-mag"><select class="cf-sel" id="cf-mag"><option value="">Tümü</option></select></th>
+              <th class="oet-col-urun"></th>
+              <th class="oet-col-mdl"><select class="cf-sel" id="cf-mdl"><option value="">Tümü</option></select></th>
+              <th class="oet-col-renk"><select class="cf-sel" id="cf-renk"><option value="">Tümü</option></select></th>
+              <th class="oet-col-bed"><select class="cf-sel" id="cf-bed"><option value="">Tümü</option></select></th>
+              <th class="oet-col-adt"></th>
+              <th class="oet-col-bkd"></th>
+              <th class="oet-col-krg"><select class="cf-sel" id="cf-krg"><option value="">Tümü</option></select></th>
+              <th class="oet-col-kln"></th>
+              <th class="oet-col-dur"><select class="cf-sel" id="cf-dur"><option value="">Tümü</option></select></th>
+              <th class="oet-col-aks"></th>
+            </tr>
           </thead>
           <tbody id="oet-tbody">
             <tr><td colspan="14" class="oet-tbl-empty">Veriler yükleniyor…</td></tr>
@@ -452,13 +481,16 @@
   let currentPage  = 1;
   let filtered     = [];
 
+  /* ── Kolon filtre durumu ── */
+  const colFilters = { mag:'', mdl:'', renk:'', bed:'', krg:'', dur:'' };
+
   /* ── Yardımcılar ── */
   function esc(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
   function magChip(m) {
-    if (m === 'Solariz') return '<span class="oet-mag-sol">Solariz</span>';
-    if (m === 'Epona')   return '<span class="oet-mag-ep">Epona</span>';
+    if (m === 'Solariz') return '<span class="oet-mag-sol">SOL</span>';
+    if (m === 'Epona')   return '<span class="oet-mag-ep">EP</span>';
     return '<span>' + esc(m) + '</span>';
   }
   function acDot(a) {
@@ -477,11 +509,18 @@
   function applyFilter() {
     const q = searchQ.toLowerCase().trim();
     filtered = ALL_ROWS.filter(function(r) {
-      // mağaza / aciliyet filtresi
+      // pill filtresi (üst bar)
       if (activeFilter === 'Solariz' && r.magaza !== 'Solariz') return false;
       if (activeFilter === 'Epona'   && r.magaza !== 'Epona')   return false;
       if (activeFilter === 'geciken' && r.aciliyet !== 0)        return false;
       if (activeFilter === 'bugun'   && r.aciliyet !== 1)        return false;
+      // kolon filtreleri
+      if (colFilters.mag  && r.magaza    !== colFilters.mag)    return false;
+      if (colFilters.mdl  && r.model     !== colFilters.mdl)    return false;
+      if (colFilters.renk && r.renk_urun !== colFilters.renk)   return false;
+      if (colFilters.bed  && r.beden     !== colFilters.bed)    return false;
+      if (colFilters.krg  && r.kargo     !== colFilters.krg)    return false;
+      if (colFilters.dur  && r.durum     !== colFilters.dur)    return false;
       // arama
       if (q) {
         const hay = (r.no + ' ' + r.barkod + ' ' + r.urun).toLowerCase();
@@ -491,6 +530,42 @@
     });
     currentPage = 1;
     render();
+  }
+
+  /* ── Kolon filtre dropdown dolumu ── */
+  function populateColFilters() {
+    function uniq(key) {
+      const seen = {};
+      ALL_ROWS.forEach(function(r) { if (r[key]) seen[r[key]] = 1; });
+      return Object.keys(seen).sort();
+    }
+    function fill(id, vals, labelFn) {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      vals.forEach(function(v) {
+        const opt = document.createElement('option');
+        opt.value = v;
+        opt.textContent = labelFn ? labelFn(v) : v;
+        sel.appendChild(opt);
+      });
+    }
+    fill('cf-mag',  uniq('magaza'),    function(v){ return v === 'Solariz' ? 'SOL' : 'EP'; });
+    fill('cf-mdl',  uniq('model'));
+    fill('cf-renk', uniq('renk_urun'));
+    fill('cf-bed',  uniq('beden'));
+    fill('cf-krg',  uniq('kargo'));
+    fill('cf-dur',  uniq('durum'));
+
+    ['cf-mag','cf-mdl','cf-renk','cf-bed','cf-krg','cf-dur'].forEach(function(id) {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      const key = id.replace('cf-', '');
+      sel.addEventListener('change', function() {
+        colFilters[key] = this.value;
+        this.classList.toggle('active', !!this.value);
+        applyFilter();
+      });
+    });
   }
 
   /* ── Tablo render ── */
@@ -599,6 +674,7 @@
 
   /* ── İlk yükleme ── */
   updateCounts();
+  populateColFilters();
   applyFilter();
 
 })();
