@@ -2771,18 +2771,34 @@ def _sablon_uygula_internal(emir_no, sablon_id, kaynak_prefix='sablon',
         except Exception:
             pass
 
-        # hedef_adet hesapla: alt emir miktari > ana emir miktari > 0
+        # hedef_adet hesapla — öncelik sırası:
+        # 1. alt_emir_miktar > 0: _resolve_target_emir'den gelen alt Y emrin
+        #    EmirMiktari (= SUM(Giren) veya YazSay, get_alt_emirler SQL'i)
+        # 2. Urt_Em_gch SUM(Giren) dogrudan sorgu: gercek_emir_no icin Korgun
+        #    uretim hareket toplamı — kanit: 111191 YazSay=1, SUM(Giren)=480
+        # 3. Hicbiri yoksa 0 (hedef bilinmiyor).
+        # KULLANILMAZ: get_emir_ozet().hedef_adet  → Siparis_Har toplamı (6600)
+        # KULLANILMAZ: get_emir_ozet().yaz_say     → Urt_Emir.YazSay (yanlis olabilir)
         hedef_adet = 0
         if alt_emir_miktar is not None and alt_emir_miktar > 0:
             hedef_adet = int(alt_emir_miktar)
         else:
-            # alt emirde miktar yok — ana emirden al (tek seferlik Korgun okuma)
+            # Dogrudan Urt_Em_gch SUM(Giren) sorgusu
             try:
                 from modules.common import korgun as _kk_m
-                ozet = _kk_m.get_emir_ozet(emir_no)
-                if ozet.get('ok'):
-                    _ha = ozet.get('hedef_adet') or 0
-                    hedef_adet = int(_ha) if _ha else 0
+                _con_gch = _kk_m._baglan()
+                try:
+                    _cur_gch = _con_gch.cursor()
+                    _cur_gch.execute(
+                        "SELECT COALESCE(SUM(Giren), 0) FROM Urt_Em_gch WHERE EmirNo = %s",
+                        (int(gercek_emir_no),)
+                    )
+                    _gch_row = _cur_gch.fetchone()
+                    _gch_sum = float(_gch_row[0]) if _gch_row and _gch_row[0] else 0.0
+                    if _gch_sum > 0:
+                        hedef_adet = int(_gch_sum)
+                finally:
+                    _con_gch.close()
             except Exception:
                 hedef_adet = 0
 
