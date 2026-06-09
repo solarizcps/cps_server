@@ -31,40 +31,40 @@
 
 /* Tablo sarmalayıcı — sabit yükseklik, iç scroll */
 .oet-tbl-wrap   { border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
-.oet-tbl-scroll { overflow-x:auto; overflow-y:auto; max-height:560px; }
+.oet-tbl-scroll { overflow-x:auto; overflow-y:auto; max-height:640px; }
 .oet-tbl-scroll::-webkit-scrollbar       { width:6px; height:6px; }
 .oet-tbl-scroll::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
 
 /* Tablo */
-.oet-tbl        { width:100%; border-collapse:collapse; font-size:12px; min-width:960px; }
+.oet-tbl        { width:100%; border-collapse:collapse; font-size:12px; table-layout:fixed; }
 .oet-tbl thead th { position:sticky; top:0; z-index:2; background:var(--bg2); padding:9px 10px; text-align:left; font-size:11px; font-weight:700; color:var(--text2); border-bottom:1px solid var(--border); white-space:nowrap; }
 .oet-tbl tbody tr { border-bottom:1px solid var(--border); transition:background .1s; }
 .oet-tbl tbody tr:hover { background:var(--bg2); }
-.oet-tbl tbody td { padding:8px 10px; vertical-align:middle; color:var(--text); }
+.oet-tbl tbody td { padding:8px 10px; vertical-align:middle; color:var(--text); height:120px; }
 
-/* Sütun genişlikleri */
-.oet-col-ac   { width:28px;  text-align:center; }
-.oet-col-img  { width:44px;  text-align:center; }
-.oet-col-no   { width:110px; font-family:monospace; font-size:11px; white-space:nowrap; }
-.oet-col-mag  { width:72px;  }
-.oet-col-urun { min-width:160px; max-width:220px; }
-.oet-col-mdl  { width:90px;  font-size:11px; }
-.oet-col-renk { width:70px;  }
-.oet-col-bed  { width:48px;  text-align:center; }
-.oet-col-adt  { width:40px;  text-align:center; font-weight:700; }
-.oet-col-bkd  { width:100px; font-size:11px; font-family:monospace; }
-.oet-col-krg  { width:90px;  font-size:11px; }
-.oet-col-kln  { width:100px; font-size:11px; }
-.oet-col-dur  { width:100px; }
-.oet-col-aks  { width:148px; white-space:nowrap; }
+/* Sütun genişlikleri — toplam sabit ~930px, urun kalan boşluğu alır */
+.oet-col-ac   { width:22px;  text-align:center; }
+.oet-col-img  { width:120px; text-align:center; }
+.oet-col-no   { width:88px;  font-family:monospace; font-size:11px; overflow:hidden; }
+.oet-col-mag  { width:78px;  }
+.oet-col-urun { overflow:hidden; }
+.oet-col-mdl  { width:82px;  font-size:11px; overflow:hidden; }
+.oet-col-renk { width:65px;  overflow:hidden; }
+.oet-col-bed  { width:40px;  text-align:center; }
+.oet-col-adt  { width:34px;  text-align:center; font-weight:700; }
+.oet-col-bkd  { width:78px;  font-size:10px; font-family:monospace; overflow:hidden; }
+.oet-col-krg  { width:76px;  font-size:11px; overflow:hidden; }
+.oet-col-kln  { width:78px;  font-size:11px; }
+.oet-col-dur  { width:82px;  }
+.oet-col-aks  { width:90px;  }
 
 /* Ürün adı iki satır + ellipsis */
 .oet-urun-txt { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.4; }
 
 /* Ürün görseli */
-.oet-thumb-wrap { width:36px; height:36px; border-radius:6px; overflow:hidden; background:var(--bg3); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; margin:0 auto; }
-.oet-thumb-wrap img { width:36px; height:36px; object-fit:cover; display:block; }
-.oet-thumb-ph   { font-size:16px; color:var(--text3); }
+.oet-thumb-wrap { width:108px; height:108px; border-radius:8px; overflow:hidden; background:#fff; border:1px solid var(--border); display:flex; align-items:center; justify-content:center; margin:0 auto; flex-shrink:0; }
+.oet-thumb-wrap img { width:108px; height:108px; object-fit:contain; display:block; }
+.oet-thumb-ph   { font-size:32px; color:var(--text3); }
 
 /* Durum badge */
 .oet-badge    { display:inline-flex; align-items:center; padding:3px 8px; border-radius:10px; font-size:10px; font-weight:700; white-space:nowrap; }
@@ -73,11 +73,12 @@
 .oet-ac-dot   { width:8px; height:8px; border-radius:50%; display:inline-block; }
 
 /* Aksiyon butonları — pasif */
-.oet-act-btn  { padding:3px 8px; border-radius:4px; font-size:10px; font-weight:700; border:1px solid var(--border); background:var(--bg3); color:var(--text2); cursor:not-allowed; opacity:.6; margin-right:2px; }
+.oet-act-btn  { display:block; width:100%; padding:6px 4px; border-radius:4px; font-size:11px; font-weight:700; border:1px solid var(--border); background:var(--bg3); color:var(--text2); cursor:not-allowed; opacity:.65; margin-bottom:4px; text-align:center; }
+.oet-act-btn:last-child { margin-bottom:0; }
 
 /* Mağaza chip */
-.oet-mag-sol { background:#dbeafe; color:#1e40af; border-radius:4px; padding:2px 7px; font-size:10px; font-weight:700; }
-.oet-mag-ep  { background:#fce7f3; color:#9d174d; border-radius:4px; padding:2px 7px; font-size:10px; font-weight:700; }
+.oet-mag-sol { display:inline-block; background:#dbeafe; color:#1e40af; border-radius:4px; padding:3px 6px; font-size:10px; font-weight:700; white-space:nowrap; }
+.oet-mag-ep  { display:inline-block; background:#fce7f3; color:#9d174d; border-radius:4px; padding:3px 6px; font-size:10px; font-weight:700; white-space:nowrap; }
 
 /* Pagination */
 .oet-pager      { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-top:1px solid var(--border); background:var(--bg2); }
@@ -209,17 +210,23 @@
   .oet-action-row { grid-template-columns:1fr; }
 }
 
-/* ── Kolon Filtreleri ── */
-.oet-tbl thead tr:first-child th   { position:sticky; top:0; z-index:3; }
-.oet-tbl thead tr.oet-frow th      { position:sticky; top:38px; z-index:2;
-                                     background:var(--bg3); padding:3px 5px !important; }
-.cf-sel {
-  border:1px solid var(--border); border-radius:3px;
-  padding:2px 3px; font-size:10px; background:var(--bg); color:var(--text);
-  width:100%; outline:none; cursor:pointer; min-width:0;
+/* ── Kolon Filtreleri (header dropdown) ── */
+.oet-tbl thead th               { position:sticky; top:0; z-index:3; }
+.oet-cf-hdr                     { cursor:pointer; user-select:none; position:relative; }
+.oet-cf-hdr:hover               { background:rgba(234,179,8,.08); }
+.oet-cf-hdr.cf-active           { color:var(--accent); }
+.oet-cf-arr                     { font-size:8px; opacity:.5; margin-left:3px; }
+.oet-cf-hdr.cf-active .oet-cf-arr { opacity:1; }
+.oet-cf-drop {
+  display:none; position:absolute; top:100%; left:0; min-width:130px;
+  background:var(--bg); border:1px solid var(--border); border-radius:4px;
+  box-shadow:0 4px 14px rgba(0,0,0,.18); z-index:200;
+  max-height:220px; overflow-y:auto;
 }
-.cf-sel:focus  { border-color:var(--accent); }
-.cf-sel.active { border-color:var(--accent); background:rgba(234,179,8,.12); color:var(--text); font-weight:700; }
+.oet-cf-drop.open               { display:block; }
+.oet-cf-item                    { padding:5px 10px; font-size:11px; cursor:pointer; white-space:nowrap; }
+.oet-cf-item:hover              { background:var(--bg3); }
+.oet-cf-item.selected           { color:var(--accent); font-weight:700; }
 </style>
 {% endblock %}
 
@@ -420,35 +427,17 @@
               <th class="oet-col-ac"  title="Aciliyet"></th>
               <th class="oet-col-img"></th>
               <th class="oet-col-no">Sipariş No</th>
-              <th class="oet-col-mag">Mağaza</th>
+              <th class="oet-col-mag oet-cf-hdr" data-cf="mag">Mağaza <span class="oet-cf-arr">▼</span><div class="oet-cf-drop" id="drop-mag"></div></th>
               <th class="oet-col-urun">Ürün Adı</th>
-              <th class="oet-col-mdl">Model Kodu</th>
-              <th class="oet-col-renk">Renk</th>
-              <th class="oet-col-bed">Beden</th>
+              <th class="oet-col-mdl oet-cf-hdr" data-cf="mdl">Model <span class="oet-cf-arr">▼</span><div class="oet-cf-drop" id="drop-mdl"></div></th>
+              <th class="oet-col-renk oet-cf-hdr" data-cf="renk">Renk <span class="oet-cf-arr">▼</span><div class="oet-cf-drop" id="drop-renk"></div></th>
+              <th class="oet-col-bed oet-cf-hdr" data-cf="bed">Beden <span class="oet-cf-arr">▼</span><div class="oet-cf-drop" id="drop-bed"></div></th>
               <th class="oet-col-adt">Adet</th>
               <th class="oet-col-bkd">Barkod</th>
-              <th class="oet-col-krg">Kargo</th>
+              <th class="oet-col-krg oet-cf-hdr" data-cf="krg">Kargo <span class="oet-cf-arr">▼</span><div class="oet-cf-drop" id="drop-krg"></div></th>
               <th class="oet-col-kln">Kalan Süre</th>
-              <th class="oet-col-dur">Durum</th>
+              <th class="oet-col-dur oet-cf-hdr" data-cf="dur">Durum <span class="oet-cf-arr">▼</span><div class="oet-cf-drop" id="drop-dur"></div></th>
               <th class="oet-col-aks">İşlem</th>
-            </tr>
-            <!-- Kolon filtre satırı -->
-            <tr class="oet-frow">
-              <th class="oet-col-ac"></th>
-              <th class="oet-col-img"></th>
-              <th class="oet-col-no"></th>
-              <th class="oet-col-mag"><select class="cf-sel" id="cf-mag"><option value="">Tümü</option></select></th>
-              <th class="oet-col-urun"></th>
-              <th class="oet-col-mdl"><select class="cf-sel" id="cf-mdl"><option value="">Tümü</option></select></th>
-              <th class="oet-col-renk"><select class="cf-sel" id="cf-renk"><option value="">Tümü</option></select></th>
-              <th class="oet-col-bed"><select class="cf-sel" id="cf-bed"><option value="">Tümü</option></select></th>
-              <th class="oet-col-adt"></th>
-              <th class="oet-col-bkd"></th>
-              <th class="oet-col-krg"><select class="cf-sel" id="cf-krg"><option value="">Tümü</option></select></th>
-              <th class="oet-col-kln"></th>
-              <th class="oet-col-dur"><select class="cf-sel" id="cf-dur"><option value="">Tümü</option></select></th>
-              <th class="oet-col-aks"></th>
-            </tr>
           </thead>
           <tbody id="oet-tbody">
             <tr><td colspan="14" class="oet-tbl-empty">Veriler yükleniyor…</td></tr>
@@ -489,8 +478,8 @@
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
   function magChip(m) {
-    if (m === 'Solariz') return '<span class="oet-mag-sol">SOL</span>';
-    if (m === 'Epona')   return '<span class="oet-mag-ep">EP</span>';
+    if (m === 'Solariz') return '<span class="oet-mag-sol">Solariz</span>';
+    if (m === 'Epona')   return '<span class="oet-mag-ep">Epona</span>';
     return '<span>' + esc(m) + '</span>';
   }
   function acDot(a) {
@@ -523,7 +512,9 @@
       if (colFilters.dur  && r.durum     !== colFilters.dur)    return false;
       // arama
       if (q) {
-        const hay = (r.no + ' ' + r.barkod + ' ' + r.urun).toLowerCase();
+        const hay = [r.no, r.barkod, r.urun, r.model]
+          .map(function(v){ return String(v || '').trim(); })
+          .join(' ').toLowerCase();
         if (hay.indexOf(q) === -1) return false;
       }
       return true;
@@ -534,37 +525,63 @@
 
   /* ── Kolon filtre dropdown dolumu ── */
   function populateColFilters() {
-    function uniq(key) {
+    function uniq(field) {
       const seen = {};
-      ALL_ROWS.forEach(function(r) { if (r[key]) seen[r[key]] = 1; });
+      ALL_ROWS.forEach(function(r) { if (r[field]) seen[r[field]] = 1; });
       return Object.keys(seen).sort();
     }
-    function fill(id, vals, labelFn) {
-      const sel = document.getElementById(id);
-      if (!sel) return;
-      vals.forEach(function(v) {
-        const opt = document.createElement('option');
-        opt.value = v;
-        opt.textContent = labelFn ? labelFn(v) : v;
-        sel.appendChild(opt);
-      });
-    }
-    fill('cf-mag',  uniq('magaza'),    function(v){ return v === 'Solariz' ? 'SOL' : 'EP'; });
-    fill('cf-mdl',  uniq('model'));
-    fill('cf-renk', uniq('renk_urun'));
-    fill('cf-bed',  uniq('beden'));
-    fill('cf-krg',  uniq('kargo'));
-    fill('cf-dur',  uniq('durum'));
 
-    ['cf-mag','cf-mdl','cf-renk','cf-bed','cf-krg','cf-dur'].forEach(function(id) {
-      const sel = document.getElementById(id);
-      if (!sel) return;
-      const key = id.replace('cf-', '');
-      sel.addEventListener('change', function() {
-        colFilters[key] = this.value;
-        this.classList.toggle('active', !!this.value);
-        applyFilter();
+    const defs = [
+      { id:'drop-mag',  key:'mag',  field:'magaza' },
+      { id:'drop-mdl',  key:'mdl',  field:'model' },
+      { id:'drop-renk', key:'renk', field:'renk_urun' },
+      { id:'drop-bed',  key:'bed',  field:'beden' },
+      { id:'drop-krg',  key:'krg',  field:'kargo' },
+      { id:'drop-dur',  key:'dur',  field:'durum' },
+    ];
+
+    defs.forEach(function(def) {
+      const drop = document.getElementById(def.id);
+      if (!drop) return;
+      const vals = uniq(def.field);
+      const items = [{ val:'', label:'Tümü' }].concat(vals.map(function(v) {
+        return { val: v, label: def.labelFn ? def.labelFn(v) : v };
+      }));
+      drop.innerHTML = items.map(function(item) {
+        const sel = item.val === '' ? ' selected' : '';
+        return '<div class="oet-cf-item' + sel + '" data-val="' + esc(item.val) + '">' + esc(item.label) + '</div>';
+      }).join('');
+
+      drop.querySelectorAll('.oet-cf-item').forEach(function(el) {
+        el.addEventListener('click', function(e) {
+          e.stopPropagation();
+          colFilters[def.key] = this.dataset.val;
+          drop.querySelectorAll('.oet-cf-item').forEach(function(x){ x.classList.remove('selected'); });
+          this.classList.add('selected');
+          const hdr = drop.closest('.oet-cf-hdr');
+          if (hdr) hdr.classList.toggle('cf-active', !!this.dataset.val);
+          drop.classList.remove('open');
+          applyFilter();
+        });
       });
+    });
+
+    /* Başlık tıklama → dropdown aç/kapat */
+    document.querySelectorAll('.oet-cf-hdr').forEach(function(hdr) {
+      hdr.addEventListener('click', function(e) {
+        if (e.target.closest('.oet-cf-drop')) return;
+        const drop = this.querySelector('.oet-cf-drop');
+        if (!drop) return;
+        const wasOpen = drop.classList.contains('open');
+        document.querySelectorAll('.oet-cf-drop.open').forEach(function(d){ d.classList.remove('open'); });
+        if (!wasOpen) drop.classList.add('open');
+        e.stopPropagation();
+      });
+    });
+
+    /* Dışarı tıklayınca kapat */
+    document.addEventListener('click', function() {
+      document.querySelectorAll('.oet-cf-drop.open').forEach(function(d){ d.classList.remove('open'); });
     });
   }
 
