@@ -2,12 +2,9 @@
 """
 CPS - Online E-Ticaret Routes
 ===============================
-FAZ0-B : Mock verili operasyon paneli.
-FAZ1-A : trendyol_client + excel_export motorları taşındı.
-FAZ1-B : config_store credential okuma hazırlandı.
-FAZ1-C : Gerçek Trendyol GET verisi — sadece okuma, yazma YOK.
-         Trendyol API: sadece GET. PUT/POST yok. Korgun yok.
-         Stok düşme yok. DB yazma yok. Barkod yazdırma yok.
+FAZ1-C : Gerçek Trendyol GET verisi.
+FAZ2-A : Sipariş Operasyon Listesi — görsel, pagination, filtre, arama.
+         Sadece görüntüleme. PUT/POST yok. Korgun yok. Stok yok. DB yok.
 """
 import time
 
@@ -15,7 +12,7 @@ from flask import Blueprint, render_template, session, redirect, url_for
 
 from modules.online_eticaret.config_store import get_store, is_store_configured, STORE_NAMES
 from modules.online_eticaret.trendyol_client import (
-    fetch_orders, fetch_product_model_map, TrendyolError,
+    fetch_orders, fetch_product_info, TrendyolError,
 )
 from modules.online_eticaret.excel_export import (
     dashboard_stats, orders_to_rows, HEADERS,
@@ -28,11 +25,11 @@ online_eticaret_bp = Blueprint(
 )
 
 # ── Sabitler ──────────────────────────────────────────────────────────────
-FETCH_STATUSES = ['Picking', 'Created']   # Sadece GET — durum değiştirme yok
-FETCH_DAYS     = 3                         # Son 3 gün
-SIPARIS_LIMIT  = 25                        # Tabloda gösterilecek max satır
+FETCH_STATUSES = ['Picking', 'Created']
+FETCH_DAYS     = 3
+SIPARIS_LIMIT  = 25       # KPI kartı altındaki özet tablo limiti
 
-# FAZ0-B'den korunan — çoklu statü dağılımı FAZ2'ye bırakıldı
+# FAZ0-B korunan (çoklu statü dağılımı FAZ2-B'de yapılacak)
 MOCK_DAGITIM = [
     {'durum': 'Yeni',              'kod': 'YENI',             'adet': 0, 'renk': '#1e3a8a'},
     {'durum': 'Toplanıyor',        'kod': 'TOPLANIYOR',       'adet': 0, 'renk': '#b45309'},
@@ -50,28 +47,43 @@ MOCK_OPERASYON = {
     'son_siparis': '—',
 }
 
-# ── Yardımcı indeksler (modül yüklenince hesapla) ─────────────────────────
+# ── HEADERS indeksleri ────────────────────────────────────────────────────
 _IDX_MAGAZA  = HEADERS.index('Mağaza')
 _IDX_GECIKME = HEADERS.index('Gecikme Durumu')
 _IDX_NO      = HEADERS.index('Sipariş No')
 _IDX_URUN    = HEADERS.index('Ürün Adı')
 _IDX_ADET    = HEADERS.index('Adet')
+_IDX_MODEL   = HEADERS.index('Model Kodu')
+_IDX_RENK    = HEADERS.index('Renk')
+_IDX_BEDEN   = HEADERS.index('Beden')
+_IDX_BARKOD  = HEADERS.index('Barkod')
+_IDX_KARGO   = HEADERS.index('Kargo Firması')
 
 
-# ── Servis katmanı ────────────────────────────────────────────────────────
+# ── Servis fonksiyonları ──────────────────────────────────────────────────
 
 def _ms_aralik(gun):
-    """Son N günün milisaniye epoch aralığını döndürür."""
     now_ms   = int(time.time() * 1000)
     start_ms = now_ms - gun * 24 * 60 * 60 * 1000
     return start_ms, now_ms
 
 
+def _aciliyet(gecikme_str):
+    """
+    0 = gecikmiş   (GECİKTİ)
+    1 = bugün çıkacak  (Kalan: saat bazında — gün yok)
+    2 = yakın (Kalan: X gün)
+    3 = yeni / belirsiz
+    """
+    s = str(gecikme_str or '')
+    if s.startswith('GECİKTİ'):
+        return 0
+    if s.startswith('Kalan:'):
+        return 1 if 'gün' not in s else 2
+    return 3
+
+
 def _renk_ve_durum(gecikme_str):
-    """
-    Gecikme metninden (orders_to_rows çıktısı) template için
-    (durum_kodu, renk_hex, kalan_metin) üçlüsü üretir.
-    """
     s = str(gecikme_str or '')
     if s.startswith('GECİKTİ'):
         return 'GECİKTİ', '#b91c1c', s
@@ -81,10 +93,7 @@ def _renk_ve_durum(gecikme_str):
 
 
 def _rows_to_siparis(tum_rows, limit=SIPARIS_LIMIT):
-    """
-    orders_to_rows() listesini template dict'lerine çevirir.
-    API key/secret bu fonksiyona hiç girmez.
-    """
+    """Özet KPI tablosu için (üst panel)."""
     result = []
     for row in tum_rows[:limit]:
         durum, renk, kalan = _renk_ve_durum(row[_IDX_GECIKME])
@@ -100,14 +109,45 @@ def _rows_to_siparis(tum_rows, limit=SIPARIS_LIMIT):
     return result
 
 
+def _build_operasyon_listesi(rows_by_store, image_map_global):
+    """
+    Tam operasyon listesi (tüm satırlar, görsel URL dahil).
+    Template'e JSON olarak gömülür; JS tarafında filtre/arama/pagination yapılır.
+    API key/secret bu fonksiyona girmez.
+    """
+    result = []
+    for store_name, rows in rows_by_store.items():
+        for row in rows:
+            barkod  = str(row[_IDX_BARKOD] or '')
+            gecikme = row[_IDX_GECIKME]
+            durum, durum_renk, kalan = _renk_ve_durum(gecikme)
+            result.append({
+                'magaza':     str(row[_IDX_MAGAZA] or ''),
+                'aciliyet':   _aciliyet(gecikme),
+                'gorsel':     image_map_global.get(barkod, ''),
+                'no':         str(row[_IDX_NO]    or ''),
+                'urun':       str(row[_IDX_URUN]  or ''),
+                'model':      str(row[_IDX_MODEL] or ''),
+                'renk_urun':  str(row[_IDX_RENK]  or ''),
+                'beden':      str(row[_IDX_BEDEN] or ''),
+                'adet':       row[_IDX_ADET]      or 0,
+                'barkod':     barkod,
+                'kargo':      str(row[_IDX_KARGO] or ''),
+                'kalan':      kalan,
+                'durum':      durum,
+                'durum_renk': durum_renk,
+            })
+    result.sort(key=lambda x: x['aciliyet'])
+    return result
+
+
 def _cek_magaza(store_name, start_ms, end_ms):
     """
-    Bir mağazanın FETCH_STATUSES siparişlerini çeker.
-    Döner: (siparisler, model_map, hata_mesaji_veya_None)
-    API key/secret ASLA loglanmaz; hata mesajlarına eklenmez.
+    Döner: (siparisler, model_map, image_map, hata_mesaji_veya_None)
+    API key/secret ASLA loglanmaz.
     """
     if not is_store_configured(store_name):
-        return [], {}, f"{store_name}: API bilgileri eksik"
+        return [], {}, {}, f"{store_name}: API bilgileri eksik"
 
     cfg        = get_store(store_name)
     seller_id  = cfg['sellerId']
@@ -123,14 +163,18 @@ def _cek_magaza(store_name, start_ms, end_ms):
             )
             tum_siparisler.extend(orders)
         except TrendyolError as exc:
-            return [], {}, f"{store_name} API hatası: {exc}"
+            return [], {}, {}, f"{store_name} API hatası: {exc}"
 
+    model_map = {}
+    image_map = {}
     try:
-        model_map = fetch_product_model_map(seller_id, api_key, api_secret)
+        info      = fetch_product_info(seller_id, api_key, api_secret)
+        model_map = {bc: v['model'] for bc, v in info.items() if v.get('model')}
+        image_map = {bc: v['image'] for bc, v in info.items() if v.get('image')}
     except Exception:
-        model_map = {}   # model haritası opsiyonel — yoksa ad'dan tahmin edilir
+        pass   # görsel opsiyonel
 
-    return tum_siparisler, model_map, None
+    return tum_siparisler, model_map, image_map, None
 
 
 # ── Route ─────────────────────────────────────────────────────────────────
@@ -141,22 +185,23 @@ def index():
     if not session.get('kullanici'):
         return redirect(url_for('auth.login', next='/online-eticaret/'))
 
-    now_ms               = int(time.time() * 1000)
-    start_ms, end_ms     = _ms_aralik(FETCH_DAYS)
-    hatalar              = []
-    magaza_orders        = {}
-    magaza_maps          = {}
+    now_ms           = int(time.time() * 1000)
+    start_ms, end_ms = _ms_aralik(FETCH_DAYS)
+    hatalar          = []
+    magaza_orders    = {}
+    magaza_maps      = {}
+    image_map_global = {}
+    rows_by_store    = {}
 
-    # Her mağaza için bağımsız çek — bir mağaza hata verse diğeri çalışmaya devam eder
     for store_name in STORE_NAMES:
-        orders, model_map, hata = _cek_magaza(store_name, start_ms, end_ms)
+        orders, model_map, image_map, hata = _cek_magaza(store_name, start_ms, end_ms)
         if hata:
             hatalar.append(hata)
         else:
             magaza_orders[store_name] = orders
             magaza_maps[store_name]   = model_map
+            image_map_global.update(image_map)
 
-    # Tüm mağazalar başarısız → hata ekranı
     if not magaza_orders:
         return render_template(
             'online_eticaret/index.html',
@@ -165,14 +210,12 @@ def index():
             kpi={}, magaza={},
             dagitim=MOCK_DAGITIM, siparisler=[],
             operasyon=MOCK_OPERASYON,
+            operasyon_listesi=[],
         )
 
-    # KPI ve per-mağaza istatistikleri
-    kpi = {
-        'toplam_siparis': 0, 'urun_adedi': 0,
-        'geciken': 0, 'bugun_cikacak': 0,
-        'esleme_eksik': 0, 'paketlenen': 0,
-    }
+    kpi          = {'toplam_siparis': 0, 'urun_adedi': 0,
+                    'geciken': 0, 'bugun_cikacak': 0,
+                    'esleme_eksik': 0, 'paketlenen': 0}
     magaza_stats = {}
     tum_rows     = []
 
@@ -191,9 +234,9 @@ def index():
             'adet':    stats['total_qty'],
             'geciken': stats['delayed_orders'],
         }
+        rows_by_store[store_name] = rows
         tum_rows.extend(rows)
 
-    # Aciliyet sırası: gecikmiş → kalan var → tarihsiz
     def _siralama_key(row):
         g = str(row[_IDX_GECIKME] or '')
         if g.startswith('GECİKTİ'): return 0
@@ -201,7 +244,8 @@ def index():
         return 2
 
     tum_rows.sort(key=_siralama_key)
-    siparisler = _rows_to_siparis(tum_rows)
+    siparisler        = _rows_to_siparis(tum_rows)
+    operasyon_listesi = _build_operasyon_listesi(rows_by_store, image_map_global)
 
     return render_template(
         'online_eticaret/index.html',
@@ -212,4 +256,5 @@ def index():
         dagitim=MOCK_DAGITIM,
         siparisler=siparisler,
         operasyon=MOCK_OPERASYON,
+        operasyon_listesi=operasyon_listesi,
     )

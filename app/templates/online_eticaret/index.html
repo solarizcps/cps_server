@@ -3,6 +3,95 @@
 
 {% block head %}
 <style>
+/* ── Online E-Ticaret FAZ2-A ── */
+
+/* ── Operasyon Listesi bölümü ── */
+.oet-oplist          { margin-top:28px; }
+.oet-oplist-head     { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:14px; }
+.oet-oplist-head h3  { font-size:15px; font-weight:800; color:var(--text); margin:0; }
+.oet-oplist-toolbar  { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+
+/* Filtre butonları */
+.oet-fl-group  { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.oet-fl        { padding:5px 12px; border:1px solid var(--border); border-radius:20px; font-size:12px; font-weight:600; background:var(--bg3); color:var(--text2); cursor:pointer; transition:.14s; display:inline-flex; align-items:center; gap:5px; }
+.oet-fl:hover  { border-color:var(--accent); color:var(--accent); }
+.oet-fl.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+.oet-fl.geciken.active  { background:#dc2626; border-color:#dc2626; }
+.oet-fl.geciken:not(.active):hover { border-color:#dc2626; color:#dc2626; }
+.oet-fl.bugun.active    { background:#b45309; border-color:#b45309; }
+.oet-fl.bugun:not(.active):hover   { border-color:#b45309; color:#b45309; }
+.oet-fl-cnt    { background:rgba(255,255,255,.25); border-radius:8px; padding:0 5px; font-size:11px; min-width:18px; text-align:center; }
+.oet-fl:not(.active) .oet-fl-cnt { background:var(--border); color:var(--text2); }
+
+/* Arama */
+.oet-search-box { position:relative; }
+.oet-search-box svg { position:absolute; left:9px; top:50%; transform:translateY(-50%); color:var(--text3); pointer-events:none; }
+.oet-search     { border:1px solid var(--border); border-radius:6px; padding:6px 10px 6px 30px; font-size:12px; background:var(--bg3); color:var(--text); outline:none; width:220px; }
+.oet-search:focus { border-color:var(--accent); }
+
+/* Tablo sarmalayıcı — sabit yükseklik, iç scroll */
+.oet-tbl-wrap   { border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+.oet-tbl-scroll { overflow-x:auto; overflow-y:auto; max-height:560px; }
+.oet-tbl-scroll::-webkit-scrollbar       { width:6px; height:6px; }
+.oet-tbl-scroll::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+
+/* Tablo */
+.oet-tbl        { width:100%; border-collapse:collapse; font-size:12px; min-width:960px; }
+.oet-tbl thead th { position:sticky; top:0; z-index:2; background:var(--bg2); padding:9px 10px; text-align:left; font-size:11px; font-weight:700; color:var(--text2); border-bottom:1px solid var(--border); white-space:nowrap; }
+.oet-tbl tbody tr { border-bottom:1px solid var(--border); transition:background .1s; }
+.oet-tbl tbody tr:hover { background:var(--bg2); }
+.oet-tbl tbody td { padding:8px 10px; vertical-align:middle; color:var(--text); }
+
+/* Sütun genişlikleri */
+.oet-col-ac   { width:28px;  text-align:center; }
+.oet-col-img  { width:44px;  text-align:center; }
+.oet-col-no   { width:110px; font-family:monospace; font-size:11px; white-space:nowrap; }
+.oet-col-mag  { width:72px;  }
+.oet-col-urun { min-width:160px; max-width:220px; }
+.oet-col-mdl  { width:90px;  font-size:11px; }
+.oet-col-renk { width:70px;  }
+.oet-col-bed  { width:48px;  text-align:center; }
+.oet-col-adt  { width:40px;  text-align:center; font-weight:700; }
+.oet-col-bkd  { width:100px; font-size:11px; font-family:monospace; }
+.oet-col-krg  { width:90px;  font-size:11px; }
+.oet-col-kln  { width:100px; font-size:11px; }
+.oet-col-dur  { width:100px; }
+.oet-col-aks  { width:110px; white-space:nowrap; }
+
+/* Ürün adı iki satır + ellipsis */
+.oet-urun-txt { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.4; }
+
+/* Ürün görseli */
+.oet-thumb-wrap { width:36px; height:36px; border-radius:6px; overflow:hidden; background:var(--bg3); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; margin:0 auto; }
+.oet-thumb-wrap img { width:36px; height:36px; object-fit:cover; display:block; }
+.oet-thumb-ph   { font-size:16px; color:var(--text3); }
+
+/* Durum badge */
+.oet-badge    { display:inline-flex; align-items:center; padding:3px 8px; border-radius:10px; font-size:10px; font-weight:700; white-space:nowrap; }
+
+/* Aciliyet göstergesi */
+.oet-ac-dot   { width:8px; height:8px; border-radius:50%; display:inline-block; }
+
+/* Aksiyon butonları — pasif */
+.oet-act-btn  { padding:3px 8px; border-radius:4px; font-size:10px; font-weight:700; border:1px solid var(--border); background:var(--bg3); color:var(--text2); cursor:not-allowed; opacity:.6; margin-right:2px; }
+
+/* Mağaza chip */
+.oet-mag-sol { background:#dbeafe; color:#1e40af; border-radius:4px; padding:2px 7px; font-size:10px; font-weight:700; }
+.oet-mag-ep  { background:#fce7f3; color:#9d174d; border-radius:4px; padding:2px 7px; font-size:10px; font-weight:700; }
+
+/* Pagination */
+.oet-pager      { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-top:1px solid var(--border); background:var(--bg2); }
+.oet-pager-info { font-size:11px; color:var(--text3); }
+.oet-pager-btns { display:flex; align-items:center; gap:4px; }
+.oet-pg         { padding:4px 10px; border:1px solid var(--border); border-radius:5px; font-size:12px; font-weight:600; background:var(--bg3); color:var(--text2); cursor:pointer; transition:.12s; min-width:32px; text-align:center; }
+.oet-pg:hover   { border-color:var(--accent); color:var(--accent); }
+.oet-pg.active  { background:var(--accent); border-color:var(--accent); color:#fff; cursor:default; }
+.oet-pg.dots    { border:none; background:none; cursor:default; color:var(--text3); }
+.oet-pg:disabled{ opacity:.4; cursor:not-allowed; }
+
+/* Boş durum */
+.oet-tbl-empty  { text-align:center; padding:40px; color:var(--text3); font-size:13px; }
+
 /* ── Online E-Ticaret FAZ1-C ── */
 .oet-alert      { border-radius:var(--radius); padding:12px 16px; margin-bottom:16px; display:flex; align-items:flex-start; gap:10px; font-size:13px; }
 .oet-alert.warn { background:#fef3c7; border:1px solid #fcd34d; color:#92400e; }
@@ -384,5 +473,246 @@
     </div><!-- /oet-right -->
   </div><!-- /oet-main -->
 
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- FAZ2-A: Sipariş Operasyon Listesi                                   -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <div class="oet-oplist">
+
+    <!-- Başlık + araçlar -->
+    <div class="oet-oplist-head">
+      <h3>Sipariş Operasyon Listesi</h3>
+      <div class="oet-oplist-toolbar">
+
+        <!-- Filtre butonları -->
+        <div class="oet-fl-group">
+          <button class="oet-fl active" data-filter="all">
+            Tümü <span class="oet-fl-cnt" id="cnt-all">0</span>
+          </button>
+          <button class="oet-fl" data-filter="Solariz">
+            Solariz <span class="oet-fl-cnt" id="cnt-sol">0</span>
+          </button>
+          <button class="oet-fl" data-filter="Epona">
+            Epona <span class="oet-fl-cnt" id="cnt-ep">0</span>
+          </button>
+          <button class="oet-fl geciken" data-filter="geciken">
+            Geciken <span class="oet-fl-cnt" id="cnt-gec">0</span>
+          </button>
+          <button class="oet-fl bugun" data-filter="bugun">
+            Bugün Çıkacak <span class="oet-fl-cnt" id="cnt-bug">0</span>
+          </button>
+        </div>
+
+        <!-- Arama -->
+        <div class="oet-search-box">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" class="oet-search" id="oet-search"
+                 placeholder="Sipariş No / Barkod / Ürün adı…">
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Tablo -->
+    <div class="oet-tbl-wrap">
+      <div class="oet-tbl-scroll">
+        <table class="oet-tbl">
+          <thead>
+            <tr>
+              <th class="oet-col-ac"  title="Aciliyet"></th>
+              <th class="oet-col-img"></th>
+              <th class="oet-col-no">Sipariş No</th>
+              <th class="oet-col-mag">Mağaza</th>
+              <th class="oet-col-urun">Ürün Adı</th>
+              <th class="oet-col-mdl">Model Kodu</th>
+              <th class="oet-col-renk">Renk</th>
+              <th class="oet-col-bed">Beden</th>
+              <th class="oet-col-adt">Adet</th>
+              <th class="oet-col-bkd">Barkod</th>
+              <th class="oet-col-krg">Kargo</th>
+              <th class="oet-col-kln">Kalan Süre</th>
+              <th class="oet-col-dur">Durum</th>
+              <th class="oet-col-aks">İşlem</th>
+            </tr>
+          </thead>
+          <tbody id="oet-tbody">
+            <tr><td colspan="14" class="oet-tbl-empty">Veriler yükleniyor…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      <div class="oet-pager">
+        <span class="oet-pager-info" id="oet-pager-info"></span>
+        <div class="oet-pager-btns" id="oet-pager-btns"></div>
+      </div>
+    </div>
+
+  </div><!-- /oet-oplist -->
+
 </div><!-- /oet-wrap -->
+
+<!-- ── FAZ2-A: Operasyon Listesi JS ─────────────────────────────────── -->
+<script>
+(function () {
+  'use strict';
+
+  /* ── Veri ── */
+  const ALL_ROWS = {{ operasyon_listesi | tojson }};
+  const PAGE_SIZE = 50;
+
+  let activeFilter = 'all';
+  let searchQ      = '';
+  let currentPage  = 1;
+  let filtered     = [];
+
+  /* ── Yardımcılar ── */
+  function esc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function magChip(m) {
+    if (m === 'Solariz') return '<span class="oet-mag-sol">Solariz</span>';
+    if (m === 'Epona')   return '<span class="oet-mag-ep">Epona</span>';
+    return '<span>' + esc(m) + '</span>';
+  }
+  function acDot(a) {
+    const c = a === 0 ? '#dc2626' : a === 1 ? '#b45309' : a === 2 ? '#3b82f6' : '#9ca3af';
+    const t = a === 0 ? 'Gecikmiş' : a === 1 ? 'Bugün çıkacak' : a === 2 ? 'Yakın' : 'Normal';
+    return '<span class="oet-ac-dot" style="background:' + c + '" title="' + t + '"></span>';
+  }
+  function thumbHtml(url, urun) {
+    if (url) {
+      return '<div class="oet-thumb-wrap"><img src="' + esc(url) + '" alt="' + esc(urun).slice(0,30) + '" loading="lazy" onerror="this.parentNode.innerHTML=\'<span class=oet-thumb-ph>📦</span>\'"></div>';
+    }
+    return '<div class="oet-thumb-wrap"><span class="oet-thumb-ph">📦</span></div>';
+  }
+
+  /* ── Filtre + arama ── */
+  function applyFilter() {
+    const q = searchQ.toLowerCase().trim();
+    filtered = ALL_ROWS.filter(function(r) {
+      // mağaza / aciliyet filtresi
+      if (activeFilter === 'Solariz' && r.magaza !== 'Solariz') return false;
+      if (activeFilter === 'Epona'   && r.magaza !== 'Epona')   return false;
+      if (activeFilter === 'geciken' && r.aciliyet !== 0)        return false;
+      if (activeFilter === 'bugun'   && r.aciliyet !== 1)        return false;
+      // arama
+      if (q) {
+        const hay = (r.no + ' ' + r.barkod + ' ' + r.urun).toLowerCase();
+        if (hay.indexOf(q) === -1) return false;
+      }
+      return true;
+    });
+    currentPage = 1;
+    render();
+  }
+
+  /* ── Tablo render ── */
+  function render() {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    const end   = start + PAGE_SIZE;
+    const slice = filtered.slice(start, end);
+    const tbody = document.getElementById('oet-tbody');
+
+    if (slice.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="14" class="oet-tbl-empty">Kayıt bulunamadı</td></tr>';
+    } else {
+      tbody.innerHTML = slice.map(function(r) {
+        return '<tr>' +
+          '<td class="oet-col-ac">' + acDot(r.aciliyet) + '</td>' +
+          '<td class="oet-col-img">' + thumbHtml(r.gorsel, r.urun) + '</td>' +
+          '<td class="oet-col-no">' + esc(r.no) + '</td>' +
+          '<td class="oet-col-mag">' + magChip(r.magaza) + '</td>' +
+          '<td class="oet-col-urun"><div class="oet-urun-txt" title="' + esc(r.urun) + '">' + esc(r.urun) + '</div></td>' +
+          '<td class="oet-col-mdl">' + esc(r.model) + '</td>' +
+          '<td class="oet-col-renk">' + esc(r.renk_urun) + '</td>' +
+          '<td class="oet-col-bed">' + esc(r.beden) + '</td>' +
+          '<td class="oet-col-adt">' + esc(r.adet) + '</td>' +
+          '<td class="oet-col-bkd">' + esc(r.barkod) + '</td>' +
+          '<td class="oet-col-krg">' + esc(r.kargo) + '</td>' +
+          '<td class="oet-col-kln" style="color:' + esc(r.durum_renk) + ';font-size:11px">' + esc(r.kalan) + '</td>' +
+          '<td class="oet-col-dur"><span class="oet-badge" style="background:' + esc(r.durum_renk) + '20;color:' + esc(r.durum_renk) + '">' + esc(r.durum) + '</span></td>' +
+          '<td class="oet-col-aks">' +
+            '<button class="oet-act-btn" disabled title="FAZ3\'te aktif olacak">Topla</button>' +
+            '<button class="oet-act-btn" disabled title="FAZ3\'te aktif olacak">Sevk</button>' +
+          '</td>' +
+        '</tr>';
+      }).join('');
+    }
+
+    renderPager();
+    updatePagerInfo(start, end);
+  }
+
+  /* ── Pagination ── */
+  function renderPager() {
+    const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+    const btns = document.getElementById('oet-pager-btns');
+    if (totalPages <= 1) { btns.innerHTML = ''; return; }
+
+    const pages = buildPageRange(currentPage, totalPages);
+    btns.innerHTML = pages.map(function(p) {
+      if (p === '...') return '<span class="oet-pg dots">…</span>';
+      const active = p === currentPage ? ' active' : '';
+      return '<button class="oet-pg' + active + '" data-page="' + p + '">' + p + '</button>';
+    }).join('');
+
+    btns.querySelectorAll('[data-page]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        currentPage = parseInt(this.dataset.page);
+        render();
+        document.querySelector('.oet-tbl-scroll').scrollTop = 0;
+      });
+    });
+  }
+
+  function buildPageRange(cur, total) {
+    if (total <= 7) return Array.from({length: total}, function(_, i){ return i + 1; });
+    const pages = [];
+    pages.push(1);
+    if (cur > 3) pages.push('...');
+    for (let p = Math.max(2, cur - 1); p <= Math.min(total - 1, cur + 1); p++) pages.push(p);
+    if (cur < total - 2) pages.push('...');
+    pages.push(total);
+    return pages;
+  }
+
+  function updatePagerInfo(start, end) {
+    const info = document.getElementById('oet-pager-info');
+    const showing = Math.min(end, filtered.length) - start;
+    info.textContent = filtered.length > 0
+      ? (start + 1) + '–' + Math.min(end, filtered.length) + ' / ' + filtered.length + ' kayıt'
+      : '0 kayıt';
+  }
+
+  /* ── Sayaçlar ── */
+  function updateCounts() {
+    function cnt(fn) { return ALL_ROWS.filter(fn).length; }
+    document.getElementById('cnt-all').textContent = ALL_ROWS.length;
+    document.getElementById('cnt-sol').textContent = cnt(function(r){ return r.magaza === 'Solariz'; });
+    document.getElementById('cnt-ep') .textContent = cnt(function(r){ return r.magaza === 'Epona'; });
+    document.getElementById('cnt-gec').textContent = cnt(function(r){ return r.aciliyet === 0; });
+    document.getElementById('cnt-bug').textContent = cnt(function(r){ return r.aciliyet === 1; });
+  }
+
+  /* ── Event listeners ── */
+  document.querySelectorAll('.oet-fl').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.oet-fl').forEach(function(b){ b.classList.remove('active'); });
+      this.classList.add('active');
+      activeFilter = this.dataset.filter;
+      applyFilter();
+    });
+  });
+
+  document.getElementById('oet-search').addEventListener('input', function() {
+    searchQ = this.value;
+    applyFilter();
+  });
+
+  /* ── İlk yükleme ── */
+  updateCounts();
+  applyFilter();
+
+})();
+</script>
 {% endblock %}
