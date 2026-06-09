@@ -35,36 +35,38 @@
 .oet-tbl-scroll::-webkit-scrollbar       { width:6px; height:6px; }
 .oet-tbl-scroll::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
 
-/* Tablo */
+/* Tablo — width:100% + table-layout:fixed → container'a tam yayılır, yatay scroll olmaz */
 .oet-tbl        { width:100%; border-collapse:collapse; font-size:12px; table-layout:fixed; }
-.oet-tbl thead th { position:sticky; top:0; z-index:2; background:var(--bg2); padding:9px 10px; text-align:left; font-size:11px; font-weight:700; color:var(--text2); border-bottom:1px solid var(--border); white-space:nowrap; }
+.oet-tbl thead th { position:sticky; top:0; z-index:2; background:var(--bg2); padding:7px 10px; text-align:left; font-size:12px; font-weight:600; font-family:inherit; letter-spacing:0; text-transform:none; color:var(--text2); border-bottom:1px solid var(--border); white-space:nowrap; overflow:hidden; }
 .oet-tbl tbody tr { border-bottom:1px solid var(--border); transition:background .1s; }
 .oet-tbl tbody tr:hover { background:var(--bg2); }
-.oet-tbl tbody td { padding:8px 10px; vertical-align:middle; color:var(--text); height:120px; }
+.oet-tbl tbody td { padding:8px 10px; vertical-align:middle; color:var(--text); height:110px; }
+/* Kolon ayraç çizgisi — sadece header'da, satırlarda yok */
+.oet-tbl thead th + th { border-left:1px solid rgba(0,0,0,.06); }
 
-/* Sütun genişlikleri — toplam sabit ~930px, urun kalan boşluğu alır */
-.oet-col-ac   { width:22px;  text-align:center; }
-.oet-col-img  { width:120px; text-align:center; }
-.oet-col-no   { width:88px;  font-family:monospace; font-size:11px; overflow:hidden; }
-.oet-col-mag  { width:78px;  }
-.oet-col-urun { overflow:hidden; }
-.oet-col-mdl  { width:82px;  font-size:11px; overflow:hidden; }
-.oet-col-renk { width:65px;  overflow:hidden; }
-.oet-col-bed  { width:40px;  text-align:center; }
-.oet-col-adt  { width:34px;  text-align:center; font-weight:700; }
-.oet-col-bkd  { width:78px;  font-size:10px; font-family:monospace; overflow:hidden; }
-.oet-col-krg  { width:76px;  font-size:11px; overflow:hidden; }
-.oet-col-kln  { width:78px;  font-size:11px; }
-.oet-col-dur  { width:82px;  }
-.oet-col-aks  { width:90px;  }
+/* Sütun genişlikleri — sabit kolonlar toplamı ~970px, ürün adı kalan alanı alır */
+.oet-col-ac   { width:20px;  text-align:center; }
+.oet-col-img  { width:96px;  text-align:center; }
+.oet-col-no   { width:95px;  font-family:monospace; font-size:11px; overflow:hidden; }
+.oet-col-mag  { width:70px;  }
+.oet-col-urun { min-width:120px; overflow:hidden; }
+.oet-col-mdl  { width:105px; font-size:11px; overflow:hidden; }
+.oet-col-renk { width:80px;  overflow:hidden; }
+.oet-col-bed  { width:50px;  text-align:center; }
+.oet-col-adt  { width:46px;  text-align:center; font-weight:700; }
+.oet-col-bkd  { width:90px;  font-size:10px; font-family:monospace; overflow:hidden; }
+.oet-col-krg  { width:88px;  font-size:11px; overflow:hidden; }
+.oet-col-kln  { width:90px;  font-size:11px; }
+.oet-col-dur  { width:80px;  }
+.oet-col-aks  { width:82px;  }
 
 /* Ürün adı iki satır + ellipsis */
 .oet-urun-txt { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.4; }
 
-/* Ürün görseli */
-.oet-thumb-wrap { width:108px; height:108px; border-radius:8px; overflow:hidden; background:#fff; border:1px solid var(--border); display:flex; align-items:center; justify-content:center; margin:0 auto; flex-shrink:0; }
-.oet-thumb-wrap img { width:108px; height:108px; object-fit:contain; display:block; }
-.oet-thumb-ph   { font-size:32px; color:var(--text3); }
+/* Ürün görseli — 90×90 */
+.oet-thumb-wrap { width:90px; height:90px; border-radius:8px; overflow:hidden; background:#fff; border:1px solid var(--border); display:flex; align-items:center; justify-content:center; margin:0 auto; flex-shrink:0; }
+.oet-thumb-wrap img { width:90px; height:90px; object-fit:contain; display:block; }
+.oet-thumb-ph   { font-size:26px; color:var(--text3); }
 
 /* Durum badge */
 .oet-badge    { display:inline-flex; align-items:center; padding:3px 8px; border-radius:10px; font-size:10px; font-weight:700; white-space:nowrap; }
@@ -211,17 +213,16 @@
 }
 
 /* ── Kolon Filtreleri (header dropdown) ── */
-.oet-tbl thead th               { position:sticky; top:0; z-index:3; }
 .oet-cf-hdr                     { cursor:pointer; user-select:none; position:relative; }
 .oet-cf-hdr:hover               { background:rgba(234,179,8,.08); }
 .oet-cf-hdr.cf-active           { color:var(--accent); }
 .oet-cf-arr                     { font-size:8px; opacity:.5; margin-left:3px; }
 .oet-cf-hdr.cf-active .oet-cf-arr { opacity:1; }
 .oet-cf-drop {
-  display:none; position:absolute; top:100%; left:0; min-width:130px;
+  display:none; position:fixed; min-width:140px;
   background:var(--bg); border:1px solid var(--border); border-radius:4px;
-  box-shadow:0 4px 14px rgba(0,0,0,.18); z-index:200;
-  max-height:220px; overflow-y:auto;
+  box-shadow:0 4px 14px rgba(0,0,0,.22); z-index:9999;
+  max-height:240px; overflow-y:auto;
 }
 .oet-cf-drop.open               { display:block; }
 .oet-cf-item                    { padding:5px 10px; font-size:11px; cursor:pointer; white-space:nowrap; }
@@ -566,23 +567,35 @@
       });
     });
 
-    /* Başlık tıklama → dropdown aç/kapat */
+    /* Başlık tıklama → dropdown aç/kapat — position:fixed ile scroll container dışına taşır */
+    function closeAllDrops() {
+      document.querySelectorAll('.oet-cf-drop.open').forEach(function(d){ d.classList.remove('open'); });
+    }
     document.querySelectorAll('.oet-cf-hdr').forEach(function(hdr) {
       hdr.addEventListener('click', function(e) {
         if (e.target.closest('.oet-cf-drop')) return;
         const drop = this.querySelector('.oet-cf-drop');
         if (!drop) return;
         const wasOpen = drop.classList.contains('open');
-        document.querySelectorAll('.oet-cf-drop.open').forEach(function(d){ d.classList.remove('open'); });
-        if (!wasOpen) drop.classList.add('open');
+        closeAllDrops();
+        if (!wasOpen) {
+          const rect = this.getBoundingClientRect();
+          const dropW = 140;
+          let left = rect.left;
+          if (left + dropW > window.innerWidth) left = rect.right - dropW;
+          drop.style.top  = rect.bottom + 'px';
+          drop.style.left = Math.max(0, left) + 'px';
+          drop.classList.add('open');
+        }
         e.stopPropagation();
       });
     });
 
-    /* Dışarı tıklayınca kapat */
-    document.addEventListener('click', function() {
-      document.querySelectorAll('.oet-cf-drop.open').forEach(function(d){ d.classList.remove('open'); });
-    });
+    /* Dışarı tık veya scroll → kapat */
+    document.addEventListener('click', closeAllDrops);
+    var _scrollEl = document.querySelector('.oet-tbl-scroll');
+    if (_scrollEl) _scrollEl.addEventListener('scroll', closeAllDrops);
+    window.addEventListener('scroll', closeAllDrops);
   }
 
   /* ── Tablo render ── */
