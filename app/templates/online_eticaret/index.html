@@ -6,7 +6,7 @@
 /* ── Online E-Ticaret FAZ2-A ── */
 
 /* ── Operasyon Listesi bölümü ── */
-.oet-oplist          { margin-top:28px; }
+.oet-oplist          { margin-top:20px; }
 .oet-oplist-head     { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:14px; }
 .oet-oplist-head h3  { font-size:15px; font-weight:800; color:var(--text); margin:0; }
 .oet-oplist-toolbar  { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
@@ -56,7 +56,7 @@
 .oet-col-krg  { width:90px;  font-size:11px; }
 .oet-col-kln  { width:100px; font-size:11px; }
 .oet-col-dur  { width:100px; }
-.oet-col-aks  { width:110px; white-space:nowrap; }
+.oet-col-aks  { width:148px; white-space:nowrap; }
 
 /* Ürün adı iki satır + ellipsis */
 .oet-urun-txt { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.4; }
@@ -99,7 +99,7 @@
 .oet-alert-ico  { font-size:16px; flex-shrink:0; margin-top:1px; }
 .oet-alert ul   { margin:4px 0 0 16px; padding:0; }
 .oet-alert li   { margin-bottom:2px; }
-.oet-wrap        { padding:20px 24px; max-width:1400px; }
+.oet-wrap        { padding:20px 24px; max-width:1400px; margin:0 auto; }
 .oet-topbar      { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px; }
 .oet-title       { font-size:20px; font-weight:800; color:var(--text); line-height:1.2; }
 .oet-title small { display:block; font-size:12px; font-weight:400; color:var(--text3); margin-top:3px; letter-spacing:.2px; }
@@ -170,13 +170,13 @@
 .oet-card       { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow-sm); }
 .oet-card-head  { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid var(--border); }
 .oet-card-head h3 { font-size:14px; font-weight:700; color:var(--text); }
-.oet-tbl        { width:100%; border-collapse:collapse; font-size:13px; }
-.oet-tbl th     { padding:9px 14px; text-align:left; font-size:11px; font-weight:600; color:var(--text3); letter-spacing:.4px; text-transform:uppercase; background:var(--bg3); border-bottom:1px solid var(--border); }
-.oet-tbl td     { padding:10px 14px; border-bottom:1px solid var(--border); color:var(--text2); vertical-align:middle; }
-.oet-tbl tr:last-child td { border-bottom:none; }
-.oet-tbl tr:hover td { background:var(--bg3); }
-.oet-tbl .no    { font-weight:600; color:var(--text); font-family:monospace; font-size:12px; }
-.oet-tbl .gecik { color:var(--red); font-weight:700; }
+.oet-card .oet-tbl        { width:100%; border-collapse:collapse; font-size:13px; }
+.oet-card .oet-tbl th     { padding:9px 14px; text-align:left; font-size:11px; font-weight:600; color:var(--text3); letter-spacing:.4px; text-transform:uppercase; background:var(--bg3); border-bottom:1px solid var(--border); }
+.oet-card .oet-tbl td     { padding:10px 14px; border-bottom:1px solid var(--border); color:var(--text2); vertical-align:middle; }
+.oet-card .oet-tbl tr:last-child td { border-bottom:none; }
+.oet-card .oet-tbl tr:hover td { background:var(--bg3); }
+.oet-card .oet-tbl .no    { font-weight:600; color:var(--text); font-family:monospace; font-size:12px; }
+.oet-card .oet-tbl .gecik { color:var(--red); font-weight:700; }
 
 /* Durum badge */
 .durum-badge    { display:inline-block; padding:3px 9px; border-radius:12px; font-size:10px; font-weight:700; letter-spacing:.5px; white-space:nowrap; }
@@ -245,7 +245,7 @@
         <small>Solariz &amp; Epona Sipariş Yönetimi</small>
       </div>
     </div>
-    <span class="oet-mock-badge">MOCK — FAZ0-B</span>
+    <span class="oet-mock-badge" style="background:#dcfce7;color:#15803d;border-color:#86efac;">FAZ2-A • CANLI</span>
   </div>
 
   <!-- Filtreler -->
@@ -359,119 +359,6 @@
       </button>
     </div>
   </div>
-
-  <!-- Ana İçerik -->
-  <div class="oet-main">
-
-    <!-- Sol: Sipariş Tablosu -->
-    <div class="oet-card">
-      <div class="oet-card-head">
-        <h3>🔥 Acil Çıkacak Siparişler</h3>
-        <span style="font-size:11px; color:var(--text3)">{{ siparisler|length }} sipariş</span>
-      </div>
-      <table class="oet-tbl">
-        <thead>
-          <tr>
-            <th>Sipariş No</th>
-            <th>Mağaza</th>
-            <th>Ürün</th>
-            <th>Adet</th>
-            <th>Kalan Süre</th>
-            <th>Durum</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for s in siparisler %}
-          <tr>
-            <td class="no">{{ s.no }}</td>
-            <td>
-              <span style="display:inline-flex;align-items:center;gap:5px;">
-                <span style="width:7px;height:7px;border-radius:50%;background:{% if s.magaza == 'Solariz' %}var(--accent){% else %}#0369a1{% endif %};display:inline-block;"></span>
-                {{ s.magaza }}
-              </span>
-            </td>
-            <td>{{ s.urun }}</td>
-            <td><strong>{{ s.adet }}</strong></td>
-            <td class="{% if s.kalan == 'GECİKTİ' %}gecik{% endif %}">{{ s.kalan }}</td>
-            <td>
-              <span class="durum-badge" style="background:{{ s.renk }}20; color:{{ s.renk }}; border:1px solid {{ s.renk }}40;">
-                {{ s.durum }}
-              </span>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Sağ Panel -->
-    <div class="oet-right">
-
-      <!-- Mağaza Durumu -->
-      <div class="oet-magaza-card">
-        <div class="oet-magaza-head">Mağaza Durumu</div>
-        {% for ad, m in magaza.items() %}
-        <div class="oet-magaza-row">
-          <div class="oet-magaza-name">
-            <span class="oet-m-dot" style="background:{% if ad == 'Solariz' %}var(--accent){% else %}#0369a1{% endif %}"></span>
-            {{ ad }}
-          </div>
-          <div class="oet-m-stats">
-            <div class="oet-m-stat">
-              <span class="oet-m-stat-val">{{ m.siparis }}</span>
-              <span class="oet-m-stat-lbl">Sipariş</span>
-            </div>
-            <div class="oet-m-stat">
-              <span class="oet-m-stat-val">{{ m.adet }}</span>
-              <span class="oet-m-stat-lbl">Adet</span>
-            </div>
-            <div class="oet-m-stat {% if m.geciken > 0 %}warn{% endif %}">
-              <span class="oet-m-stat-val">{{ m.geciken }}</span>
-              <span class="oet-m-stat-lbl">Geciken</span>
-            </div>
-          </div>
-        </div>
-        {% endfor %}
-      </div>
-
-      <!-- Durum Dağılımı -->
-      <div class="oet-card">
-        <div class="oet-card-head">
-          <h3>Durum Dağılımı</h3>
-        </div>
-        {% for d in dagitim %}
-        <div class="oet-dag-row">
-          <div class="oet-dag-label">
-            <span class="oet-dag-dot" style="background:{{ d.renk }}"></span>
-            {{ d.durum }}
-          </div>
-          <span class="oet-dag-val">{{ d.adet }}</span>
-        </div>
-        {% endfor %}
-      </div>
-
-      <!-- Bugünkü Operasyon -->
-      <div class="oet-ops-card">
-        <div class="oet-ops-head">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          Bugünkü Operasyon
-        </div>
-        <div class="oet-ops-row">
-          <span class="oet-ops-lbl">Toplayan</span>
-          <span class="oet-ops-val">{{ operasyon.toplayan }}</span>
-        </div>
-        <div class="oet-ops-row">
-          <span class="oet-ops-lbl">Paketleyen</span>
-          <span class="oet-ops-val">{{ operasyon.paketleyen }}</span>
-        </div>
-        <div class="oet-ops-row">
-          <span class="oet-ops-lbl">Son Sipariş</span>
-          <span class="oet-ops-mono">{{ operasyon.son_siparis }}</span>
-        </div>
-      </div>
-
-    </div><!-- /oet-right -->
-  </div><!-- /oet-main -->
 
   <!-- ═══════════════════════════════════════════════════════════════════ -->
   <!-- FAZ2-A: Sipariş Operasyon Listesi                                   -->
@@ -633,6 +520,7 @@
           '<td class="oet-col-dur"><span class="oet-badge" style="background:' + esc(r.durum_renk) + '20;color:' + esc(r.durum_renk) + '">' + esc(r.durum) + '</span></td>' +
           '<td class="oet-col-aks">' +
             '<button class="oet-act-btn" disabled title="FAZ3\'te aktif olacak">Topla</button>' +
+            '<button class="oet-act-btn" disabled title="FAZ3\'te aktif olacak">Yazdır</button>' +
             '<button class="oet-act-btn" disabled title="FAZ3\'te aktif olacak">Sevk</button>' +
           '</td>' +
         '</tr>';
