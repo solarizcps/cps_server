@@ -444,13 +444,15 @@
           <div class="oz-hdr"><span class="oz-hdr-t">Proses Dağılımı</span></div>
           <div id="d-uretim-prosesler" class="oz-body" style="padding:0;"></div>
         </div>
-        <!-- Son üretimler -->
-        <div class="oz-card">
+        <!-- Son üretimler — P5A: 20 kayıt, emir/model sütunları -->
+        <div class="oz-card" style="margin-bottom:14px;">
           <div class="oz-hdr"><span class="oz-hdr-t">Son Üretimler</span>
-            <span style="font-size:11px;color:var(--text3);">dönem içi son 10 kayıt</span>
+            <span style="font-size:11px;color:var(--text3);">dönem içi son 20 kayıt</span>
           </div>
           <div id="d-uretim-son" class="oz-body" style="padding:0;"></div>
         </div>
+        <!-- P5A: Usta ekip üretim özeti (sadece SAHA_USTASI profillerinde görünür) -->
+        <div id="d-ekip-uretim-ozeti" class="oz-card" style="display:none;border-left:3px solid #2563eb;"></div>
       </div>
 
       <!-- SEKME: İK (FAZ2G-3 readonly + FAZ2G-4B write) -->
@@ -1454,8 +1456,13 @@
 
     document.getElementById('d-kariyer-miktar').textContent =
       kar.toplam_miktar ? kar.toplam_miktar.toLocaleString() + ' adet' : '—';
-    document.getElementById('d-kariyer-onayli').textContent =
-      kar.onayli_miktar ? '✓ ' + kar.onayli_miktar.toLocaleString() + ' onaylı' : '';
+    // P5A: onaylı + bekleyen + reddedilen kariyer özeti
+    { const parts = [];
+      if (kar.onayli_miktar)     parts.push('✓ ' + kar.onayli_miktar.toLocaleString() + ' onaylı');
+      if (kar.bekleyen_miktar)   parts.push('⏳ ' + kar.bekleyen_miktar.toLocaleString() + ' bekliyor');
+      if (kar.reddedilen_miktar) parts.push('✖ ' + kar.reddedilen_miktar.toLocaleString() + ' reddedildi');
+      document.getElementById('d-kariyer-onayli').textContent = parts.join('  ');
+    }
     document.getElementById('d-kariyer-son').textContent =
       kar.son_is_tarihi ? 'Son: ' + kar.son_is_tarihi : '';
 
@@ -1463,6 +1470,13 @@
     document.querySelectorAll('.uretim-pd-btn').forEach(b => {
       b.classList.toggle('uretim-pd-aktif', b.dataset.period === (data.uretim_period || secilenPeriod));
     });
+
+    // P5A: onay_durum renk/rozet tablosu (beklemede = API değeri)
+    const ONAY_STIL = {
+      onaylandi:  { renk: '#166534', bg: '#dcfce7', etiket: '✔ Onaylı' },
+      beklemede:  { renk: '#92400e', bg: '#fef3c7', etiket: '⏳ Bekliyor' },
+      reddedildi: { renk: '#991b1b', bg: '#fee2e2', etiket: '✖ Reddedildi' },
+    };
 
     if (!kar.toplam_kayit) {
       const bosMsg = '<div class="p360-bos-mesaj">Üretim kaydı bulunamadı.<br><small style="color:var(--text3);">Bu profil için üretim verisi takip edilmemektedir.</small></div>';
@@ -1474,23 +1488,27 @@
       prEl.innerHTML   = '';
       sonEl.innerHTML  = '';
     } else {
-      // A) Özet metrik kartlar
+      // A) Özet metrik kartlar — P5A: bekleyen + reddedilen eklendi
       const onayOran = oz.toplam_miktar > 0
         ? Math.round(oz.onayli_miktar / oz.toplam_miktar * 100)
         : 0;
       ozetEl.innerHTML = `
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:14px 16px;">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:14px 16px;">
           <div style="background:var(--bg2);border-radius:8px;padding:12px;text-align:center;">
-            <div style="font-size:22px;font-weight:700;color:#2563eb;">${(oz.toplam_miktar||0).toLocaleString()}</div>
-            <div style="font-size:11px;color:var(--text3);margin-top:3px;">Toplam Üretim</div>
+            <div style="font-size:20px;font-weight:700;color:#2563eb;">${(oz.toplam_miktar||0).toLocaleString()}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:3px;">Toplam (${periodAd})</div>
           </div>
           <div style="background:var(--bg2);border-radius:8px;padding:12px;text-align:center;">
-            <div style="font-size:22px;font-weight:700;color:#059669;">${(oz.onayli_miktar||0).toLocaleString()}</div>
+            <div style="font-size:20px;font-weight:700;color:#059669;">${(oz.onayli_miktar||0).toLocaleString()}</div>
             <div style="font-size:11px;color:var(--text3);margin-top:3px;">Onaylı · %${onayOran}</div>
           </div>
           <div style="background:var(--bg2);border-radius:8px;padding:12px;text-align:center;">
-            <div style="font-size:22px;font-weight:700;color:#7c3aed;">${(oz.son_30_gun_miktar||0).toLocaleString()}</div>
-            <div style="font-size:11px;color:var(--text3);margin-top:3px;">Son 30 Gün</div>
+            <div style="font-size:20px;font-weight:700;color:#d97706;">${(oz.bekleyen_miktar||0).toLocaleString()}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:3px;">Beklemede</div>
+          </div>
+          <div style="background:var(--bg2);border-radius:8px;padding:12px;text-align:center;">
+            <div style="font-size:20px;font-weight:700;color:#dc2626;">${(oz.reddedilen_miktar||0).toLocaleString()}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:3px;">Reddedildi</div>
           </div>
         </div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:0 16px 14px;">
@@ -1505,13 +1523,15 @@
           </div>
         </div>`;
 
-      // B) Proses dağılımı
+      // B) Proses dağılımı (P5A: direkt proses_kodu/proses_adi)
       prEl.innerHTML = prList.map(pr => {
         const oran = pr.toplam_miktar > 0
           ? Math.round(pr.onayli_miktar / pr.toplam_miktar * 100)
           : 0;
         return `<div class="p360-satir-detay">
-          <div class="pd-etiket" style="font-size:12px;">⚙ ${pr.proses_adi || pr.proses_kodu || '—'}</div>
+          <div class="pd-etiket" style="font-size:12px;">⚙ ${pr.proses_adi || pr.proses_kodu || '—'}
+            <span style="font-size:10px;color:var(--text3);display:block;">#${pr.proses_kodu||''}</span>
+          </div>
           <div style="flex:1;">
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               <span style="font-size:13px;font-weight:600;">${(pr.toplam_miktar||0).toLocaleString()} adet</span>
@@ -1523,27 +1543,94 @@
         </div>`;
       }).join('');
 
-      // C) Son üretimler
-      const ONAY_STIL = {
-        onaylandi: { renk: '#166534', bg: '#dcfce7', etiket: '✔ Onaylı' },
-        bekliyor:  { renk: '#92400e', bg: '#fef3c7', etiket: '⏳ Bekliyor' },
-        reddedildi:{ renk: '#991b1b', bg: '#fee2e2', etiket: '✖ Reddedildi' },
-      };
-      sonEl.innerHTML = suList.map(su => {
-        const os2 = ONAY_STIL[su.onay_durum] || { renk: '#374151', bg: '#f3f4f6', etiket: su.onay_durum||'?' };
-        return `<div class="p360-satir-detay" style="font-size:12px;">
-          <div class="pd-etiket" style="font-family:var(--mono);font-size:11px;color:var(--text3);">${su.tarih||''} ${su.saat||''}</div>
-          <div style="flex:1;">
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-              <span style="font-weight:600;">${su.proses_adi||su.proses_kodu||'—'}</span>
-              <span style="font-size:13px;color:#2563eb;font-weight:600;">${(su.miktar||0).toLocaleString()} adet</span>
-              <span style="font-size:11px;font-weight:600;color:${os2.renk};background:${os2.bg};
-                           padding:1px 6px;border-radius:4px;">${os2.etiket}</span>
-              ${su.usta_ad ? `<span style="font-size:11px;color:var(--text3);">👷 ${su.usta_ad}</span>` : ''}
+      // C) Son 20 üretim tablosu — P5A: emir_no + model_adi + onay rozeti
+      if (suList.length) {
+        sonEl.innerHTML = `
+          <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:12px;">
+            <thead>
+              <tr style="background:var(--bg2);color:var(--text3);">
+                <th style="padding:6px 8px;text-align:left;font-weight:600;">Tarih / Saat</th>
+                <th style="padding:6px 8px;text-align:left;font-weight:600;">Proses</th>
+                <th style="padding:6px 8px;text-align:left;font-weight:600;">Emir / Model</th>
+                <th style="padding:6px 8px;text-align:right;font-weight:600;">Miktar</th>
+                <th style="padding:6px 8px;text-align:center;font-weight:600;">Durum</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${suList.map((su, i) => {
+                const os2 = ONAY_STIL[su.onay_durum] || { renk: '#374151', bg: '#f3f4f6', etiket: su.onay_durum||'?' };
+                const modelBilgi = [su.emir_no ? '#'+su.emir_no : null, su.model_adi || su.model_kod].filter(Boolean).join(' · ');
+                return `<tr style="border-bottom:1px solid var(--border);${i%2===0?'background:var(--bg1);':''}">
+                  <td style="padding:5px 8px;font-family:var(--mono);color:var(--text3);">${su.tarih||''}<br>${su.saat||''}</td>
+                  <td style="padding:5px 8px;font-weight:600;">${su.proses_adi||su.proses_kodu||'—'}</td>
+                  <td style="padding:5px 8px;color:var(--text2);font-size:11px;">${modelBilgi||'—'}</td>
+                  <td style="padding:5px 8px;text-align:right;font-weight:700;color:#2563eb;">${(su.miktar||0).toLocaleString()}</td>
+                  <td style="padding:5px 8px;text-align:center;">
+                    <span style="font-size:10px;font-weight:600;color:${os2.renk};background:${os2.bg};
+                                 padding:2px 7px;border-radius:4px;">${os2.etiket}</span>
+                  </td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+          </div>`;
+      } else {
+        sonEl.innerHTML = '<div class="p360-bos-mesaj" style="font-size:12px;">Son üretim kaydı yok.</div>';
+      }
+    }
+
+    // P5A: Usta ekip üretim özeti (sadece SAHA_USTASI)
+    const ekipUretimEl = document.getElementById('d-ekip-uretim-ozeti');
+    if (ekipUretimEl) {
+      const eo = data.ekip_uretim_ozeti;
+      if (eo && eo.ekip_toplam_personel > 0) {
+        const ekipOnayOran = eo.ekip_uretim_toplam_miktar > 0
+          ? Math.round(eo.ekip_onaylanan_miktar / eo.ekip_uretim_toplam_miktar * 100)
+          : 0;
+        ekipUretimEl.innerHTML = `
+          <div style="padding:14px 16px;">
+            <div style="font-size:13px;font-weight:700;color:var(--text1);margin-bottom:10px;">
+              👷 Ekip Üretim Özeti (${eo.ekip_toplam_personel} personel)
             </div>
-          </div>
-        </div>`;
-      }).join('');
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;">
+              <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center;">
+                <div style="font-size:18px;font-weight:700;color:#2563eb;">${(eo.ekip_uretim_toplam_miktar||0).toLocaleString()}</div>
+                <div style="font-size:10px;color:var(--text3);">Ekip Toplam</div>
+              </div>
+              <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center;">
+                <div style="font-size:18px;font-weight:700;color:#059669;">${(eo.ekip_onaylanan_miktar||0).toLocaleString()}</div>
+                <div style="font-size:10px;color:var(--text3);">Onaylı · %${ekipOnayOran}</div>
+              </div>
+              <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center;">
+                <div style="font-size:18px;font-weight:700;color:#d97706;">${(eo.ekip_bekleyen_miktar||0).toLocaleString()}</div>
+                <div style="font-size:10px;color:var(--text3);">Beklemede</div>
+              </div>
+              <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center;">
+                <div style="font-size:18px;font-weight:700;color:#dc2626;">${(eo.ekip_reddedilen_miktar||0).toLocaleString()}</div>
+                <div style="font-size:10px;color:var(--text3);">Reddedildi</div>
+              </div>
+            </div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">
+              Son üretim: <strong>${eo.ekip_son_uretim_tarihi||'—'}</strong>
+            </div>
+            ${(eo.ekip_personel_ozet||[]).map(p => `
+              <div class="p360-satir-detay" style="font-size:12px;">
+                <div class="pd-etiket" style="font-size:12px;">👤 ${p.ad_soyad||'—'}</div>
+                <div style="flex:1;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                  <span style="font-weight:600;color:#2563eb;">${(p.toplam_miktar||0).toLocaleString()} adet</span>
+                  <span style="font-size:11px;color:#059669;">✓ ${(p.onaylanan_miktar||0).toLocaleString()}</span>
+                  <span style="font-size:11px;color:var(--text3);">${p.son_uretim_tarihi||'—'}</span>
+                </div>
+              </div>`).join('')}
+          </div>`;
+        ekipUretimEl.style.display = 'block';
+      } else if (eo) {
+        ekipUretimEl.innerHTML = '<div class="p360-bos-mesaj" style="font-size:12px;">Bağlı aktif personel bulunamadı.</div>';
+        ekipUretimEl.style.display = 'block';
+      } else {
+        ekipUretimEl.style.display = 'none';
+      }
     }
 
     // FAZ2G-3: İK ve Maaş sekme render (caps'e bağlı)
