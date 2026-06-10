@@ -2703,11 +2703,15 @@ def personel_360_profil(profil_id):
         _BOSH_OZET = {
             "toplam_kayit": 0, "toplam_miktar": 0,
             "onayli_kayit": 0, "onayli_miktar": 0,
+            # P5A: bekleyen + reddedilen
+            "bekleyen_miktar":    0,
+            "reddedilen_miktar":  0,
             "son_is_tarihi": None, "farkli_proses_sayisi": 0,
         }
         uretim_ozet      = dict(_BOSH_OZET)
         uretim_kariyer   = {"toplam_kayit": 0, "toplam_miktar": 0,
-                            "onayli_miktar": 0, "son_is_tarihi": None}
+                            "onayli_miktar": 0, "bekleyen_miktar": 0,
+                            "reddedilen_miktar": 0, "son_is_tarihi": None}
         uretim_prosesler = []
         son_uretimler    = []
 
@@ -2821,15 +2825,21 @@ def personel_360_profil(profil_id):
                            COALESCE(SUM(miktar), 0)                              AS toplam_miktar,
                            COALESCE(SUM(CASE WHEN onay_durum='onaylandi'
                                             THEN miktar ELSE 0 END), 0)          AS onayli_miktar,
+                           COALESCE(SUM(CASE WHEN onay_durum='beklemede'
+                                            THEN miktar ELSE 0 END), 0)          AS bekleyen_miktar,
+                           COALESCE(SUM(CASE WHEN onay_durum='reddedildi'
+                                            THEN miktar ELSE 0 END), 0)          AS reddedilen_miktar,
                            MAX(tarih)                                            AS son_is_tarihi
                     FROM ({_kar_sub})
                 """, _kar_p).fetchone()
                 if kar:
                     uretim_kariyer = {
-                        "toplam_kayit":  kar["toplam_kayit"],
-                        "toplam_miktar": kar["toplam_miktar"],
-                        "onayli_miktar": kar["onayli_miktar"],
-                        "son_is_tarihi": kar["son_is_tarihi"],
+                        "toplam_kayit":      kar["toplam_kayit"],
+                        "toplam_miktar":     kar["toplam_miktar"],
+                        "onayli_miktar":     kar["onayli_miktar"],
+                        "bekleyen_miktar":   kar["bekleyen_miktar"],
+                        "reddedilen_miktar": kar["reddedilen_miktar"],
+                        "son_is_tarihi":     kar["son_is_tarihi"],
                     }
 
                 # Dönem filtreli özet
@@ -2840,6 +2850,10 @@ def personel_360_profil(profil_id):
                            COUNT(CASE WHEN onay_durum='onaylandi' THEN 1 END)    AS onayli_kayit,
                            COALESCE(SUM(CASE WHEN onay_durum='onaylandi'
                                             THEN miktar ELSE 0 END), 0)          AS onayli_miktar,
+                           COALESCE(SUM(CASE WHEN onay_durum='beklemede'
+                                            THEN miktar ELSE 0 END), 0)          AS bekleyen_miktar,
+                           COALESCE(SUM(CASE WHEN onay_durum='reddedildi'
+                                            THEN miktar ELSE 0 END), 0)          AS reddedilen_miktar,
                            MAX(tarih)                                            AS son_is_tarihi,
                            COUNT(DISTINCT proses_kodu)                           AS farkli_proses_sayisi
                     FROM ({_oz_sub})
@@ -2850,6 +2864,8 @@ def personel_360_profil(profil_id):
                         "toplam_miktar":        oz["toplam_miktar"],
                         "onayli_kayit":         oz["onayli_kayit"],
                         "onayli_miktar":        oz["onayli_miktar"],
+                        "bekleyen_miktar":      oz["bekleyen_miktar"],
+                        "reddedilen_miktar":    oz["reddedilen_miktar"],
                         "son_is_tarihi":        oz["son_is_tarihi"],
                         "farkli_proses_sayisi": oz["farkli_proses_sayisi"],
                     }
@@ -2879,14 +2895,15 @@ def personel_360_profil(profil_id):
                     for r in pr_rows
                 ]
 
-                # Dönem filtreli son üretimler
+                # P5A: son üretimler — LIMIT 20, emir_no + model_kod + model_adi
                 _su_sub, _su_p = _uretim_where_params(_period_where)
                 su_rows = con.execute(f"""
                     SELECT tarih, saat, proses_adi, proses_kodu,
-                           miktar, onay_durum, usta_ad, onay_tarihi
+                           miktar, onay_durum, usta_ad, onay_tarihi,
+                           emir_no, model_kod, model_adi
                     FROM ({_su_sub})
                     ORDER BY tarih DESC, saat DESC
-                    LIMIT 10
+                    LIMIT 20
                 """, _su_p).fetchall()
                 son_uretimler = [
                     {
@@ -2898,13 +2915,18 @@ def personel_360_profil(profil_id):
                         "onay_durum":   r["onay_durum"],
                         "usta_ad":      r["usta_ad"],
                         "onay_tarihi":  r["onay_tarihi"],
+                        # P5A: üretim bağlamı
+                        "emir_no":      r["emir_no"],
+                        "model_kod":    r["model_kod"],
+                        "model_adi":    r["model_adi"],
                     }
                     for r in su_rows
                 ]
             except Exception:
                 uretim_ozet      = dict(_BOSH_OZET)
                 uretim_kariyer   = {"toplam_kayit": 0, "toplam_miktar": 0,
-                                    "onayli_miktar": 0, "son_is_tarihi": None}
+                                    "onayli_miktar": 0, "bekleyen_miktar": 0,
+                                    "reddedilen_miktar": 0, "son_is_tarihi": None}
                 uretim_prosesler = []
                 son_uretimler    = []
 
@@ -3053,6 +3075,130 @@ def personel_360_profil(profil_id):
                                "olumlu_sayisi": 0, "gorusme_sayisi": 0, "son_notlar": []},
                 }
 
+        # P5A: Usta profili ekip üretim özeti
+        # Sadece profil_tipi=SAHA_USTASI ise çalışır.
+        # usta_personel_iliskisi → personel profil_id → personel_kullanici.id / legacy_id → uretim_kayit
+        ekip_uretim_ozeti = None
+        try:
+            if kp and kp["profil_tipi"] == "SAHA_USTASI":
+                _upi_rows = con.execute("""
+                    SELECT upi.personel_profil_id,
+                           kp2.gercek_ad      AS ad_soyad,
+                           kp2.kaynak         AS p_kaynak,
+                           kp2.kaynak_id      AS p_kaynak_id
+                    FROM usta_personel_iliskisi upi
+                    JOIN kullanici_profil kp2 ON kp2.id = upi.personel_profil_id
+                    WHERE upi.usta_profil_id = ? AND upi.aktif = 1
+                """, (kp["id"],)).fetchall()
+
+                ekip_personel_ozet = []
+                ekip_toplam_personel  = len(_upi_rows)
+                ekip_uretim_toplam    = 0
+                ekip_onaylanan        = 0
+                ekip_bekleyen         = 0
+                ekip_reddedilen       = 0
+                ekip_son_tarih        = None
+
+                for _upi in _upi_rows:
+                    _p_profil_id = _upi["personel_profil_id"]
+                    _p_pk_id     = _upi["p_kaynak_id"] if _upi["p_kaynak"] == "personel_kullanici" else None
+                    if _p_pk_id is None:
+                        # sistem_kullanici vs. — üretim kaydı yok
+                        ekip_personel_ozet.append({
+                            "personel_profil_id": _p_profil_id,
+                            "ad_soyad":           _upi["ad_soyad"],
+                            "toplam_miktar":      0,
+                            "onaylanan_miktar":   0,
+                            "son_uretim_tarihi":  None,
+                        })
+                        continue
+
+                    # legacy_id köprüsü
+                    _pk_leg = con.execute(
+                        "SELECT legacy_id FROM personel_kullanici WHERE id=?", (_p_pk_id,)
+                    ).fetchone()
+                    _p_legacy_id = _pk_leg["legacy_id"] if _pk_leg and _pk_leg["legacy_id"] else None
+
+                    # CPS_CANLI sorgu
+                    _poz = con.execute("""
+                        SELECT COALESCE(SUM(miktar),0) AS top,
+                               COALESCE(SUM(CASE WHEN onay_durum='onaylandi' THEN miktar ELSE 0 END),0) AS onay,
+                               COALESCE(SUM(CASE WHEN onay_durum='beklemede' THEN miktar ELSE 0 END),0) AS bek,
+                               COALESCE(SUM(CASE WHEN onay_durum='reddedildi' THEN miktar ELSE 0 END),0) AS red,
+                               MAX(tarih) AS son_t
+                        FROM uretim_kayit
+                        WHERE personel_id = ? AND kaynak = 'CPS_CANLI'
+                    """, (_p_pk_id,)).fetchone()
+
+                    _p_top  = _poz["top"]  if _poz else 0
+                    _p_onay = _poz["onay"] if _poz else 0
+                    _p_bek  = _poz["bek"]  if _poz else 0
+                    _p_red  = _poz["red"]  if _poz else 0
+                    _p_son  = _poz["son_t"] if _poz else None
+
+                    # LEGACY_5055 ekleme (kisi_adi ile güvenli)
+                    if _p_legacy_id:
+                        # Gerçek personel_ad değerini bul
+                        _leg_ad_row = con.execute(
+                            "SELECT personel_ad FROM uretim_kayit "
+                            "WHERE personel_id=? AND kaynak='CPS_CANLI' LIMIT 1",
+                            (_p_pk_id,)
+                        ).fetchone()
+                        if not _leg_ad_row:
+                            _pk_name = con.execute(
+                                "SELECT COALESCE(AdSoyad, kullanici_adi) as nm FROM personel_kullanici WHERE id=?",
+                                (_p_pk_id,)
+                            ).fetchone()
+                            _leg_ad = (_pk_name["nm"] or "").lower() if _pk_name else ""
+                        else:
+                            _leg_ad = _leg_ad_row["personel_ad"]
+
+                        if _leg_ad:
+                            _pleg = con.execute("""
+                                SELECT COALESCE(SUM(miktar),0) AS top,
+                                       COALESCE(SUM(CASE WHEN onay_durum='onaylandi' THEN miktar ELSE 0 END),0) AS onay,
+                                       COALESCE(SUM(CASE WHEN onay_durum='beklemede' THEN miktar ELSE 0 END),0) AS bek,
+                                       COALESCE(SUM(CASE WHEN onay_durum='reddedildi' THEN miktar ELSE 0 END),0) AS red,
+                                       MAX(tarih) AS son_t
+                                FROM uretim_kayit
+                                WHERE personel_id = ? AND kaynak = 'LEGACY_5055'
+                                  AND personel_ad = ?
+                            """, (_p_legacy_id, _leg_ad)).fetchone()
+                            if _pleg:
+                                _p_top  += _pleg["top"]
+                                _p_onay += _pleg["onay"]
+                                _p_bek  += _pleg["bek"]
+                                _p_red  += _pleg["red"]
+                                if _pleg["son_t"] and (_p_son is None or _pleg["son_t"] > _p_son):
+                                    _p_son = _pleg["son_t"]
+
+                    ekip_uretim_toplam += _p_top
+                    ekip_onaylanan     += _p_onay
+                    ekip_bekleyen      += _p_bek
+                    ekip_reddedilen    += _p_red
+                    if _p_son and (ekip_son_tarih is None or _p_son > ekip_son_tarih):
+                        ekip_son_tarih = _p_son
+
+                    ekip_personel_ozet.append({
+                        "personel_profil_id": _p_profil_id,
+                        "ad_soyad":           _upi["ad_soyad"],
+                        "toplam_miktar":      _p_top,
+                        "onaylanan_miktar":   _p_onay,
+                        "son_uretim_tarihi":  _p_son,
+                    })
+
+                ekip_uretim_ozeti = {
+                    "ekip_toplam_personel":     ekip_toplam_personel,
+                    "ekip_uretim_toplam_miktar": ekip_uretim_toplam,
+                    "ekip_onaylanan_miktar":     ekip_onaylanan,
+                    "ekip_bekleyen_miktar":      ekip_bekleyen,
+                    "ekip_reddedilen_miktar":    ekip_reddedilen,
+                    "ekip_son_uretim_tarihi":    ekip_son_tarih,
+                    "ekip_personel_ozet":        ekip_personel_ozet,
+                }
+        except Exception:
+            ekip_uretim_ozeti = None
+
     finally:
         con.close()
 
@@ -3108,6 +3254,8 @@ def personel_360_profil(profil_id):
         "pk_bilgi":             pk_bilgi,
         "maas_ozet":            maas_ozet,
         "ik_ozet":              ik_ozet,
+        # P5A: Usta ekip üretim özeti (sadece SAHA_USTASI profilleri için dolu gelir)
+        "ekip_uretim_ozeti":    ekip_uretim_ozeti,
         "_caps": {
             "ik":      has_ik,
             "maas":    has_maas,
@@ -3117,7 +3265,7 @@ def personel_360_profil(profil_id):
     })
 
 @yonetim_bp.route('/api/personel-360/profil/<int:profil_id>/organizasyon', methods=['POST'])
-@yetki_gerekli('yonetim', 'can_update')
+@yetki_gerekli('personel_360.ik.duzenle', 'can_update')
 def personel_360_org_guncelle(profil_id):
     """
     FAZ2B-2B: Personel 360 organizasyon güncelleme.
