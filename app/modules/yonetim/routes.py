@@ -2912,11 +2912,13 @@ def personel_360_profil(profil_id):
                     ORDER BY gecerlilik_bas DESC LIMIT 1
                 """, (pk_id,)).fetchone()
 
+                # P4D: LIMIT 5 → 20, giren_kullanici + tip eklendi
                 _gecmis_rows = con.execute("""
-                    SELECT tutar, para_birimi, gecerlilik_bas, gecerlilik_bit, tip, aciklama
+                    SELECT tutar, para_birimi, gecerlilik_bas, gecerlilik_bit,
+                           tip, aciklama, giren_kullanici
                     FROM personel_maas_gecmis
                     WHERE personel_pk_id = ?
-                    ORDER BY gecerlilik_bas DESC LIMIT 5
+                    ORDER BY gecerlilik_bas DESC LIMIT 20
                 """, (pk_id,)).fetchall()
 
                 _toplam_kayit = con.execute(
@@ -2934,12 +2936,13 @@ def personel_360_profil(profil_id):
                     } if _aktif else None,
                     "gecmis": [
                         {
-                            "tutar":          r["tutar"],
-                            "para_birimi":    r["para_birimi"],
-                            "gecerlilik_bas": r["gecerlilik_bas"],
-                            "gecerlilik_bit": r["gecerlilik_bit"],
-                            "tip":            r["tip"],
-                            "aciklama":       r["aciklama"],
+                            "tutar":           r["tutar"],
+                            "para_birimi":     r["para_birimi"],
+                            "gecerlilik_bas":  r["gecerlilik_bas"],
+                            "gecerlilik_bit":  r["gecerlilik_bit"],
+                            "tip":             r["tip"],
+                            "aciklama":        r["aciklama"],
+                            "giren_kullanici": r["giren_kullanici"],
                         }
                         for r in _gecmis_rows
                     ],

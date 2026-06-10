@@ -1755,71 +1755,109 @@
     }
   }
 
-  // ── FAZ2G-3: Maaş sekmesi render ────────────────────────────
+  // ── FAZ2G-3 / P4D: Maaş sekmesi render ─────────────────────
   function renderMaas(maas, pk, caps) {
-    const _BOS_PK = '<div class="p360-bos-mesaj">Veri bağlantısı yok.<br><small style="color:var(--text3);">Bu profil personel_kullanici kaydıyla eşleştirilmemiş.</small></div>';
+    const _BOS_PK   = '<div class="p360-bos-mesaj">Veri bağlantısı yok.<br><small style="color:var(--text3);">Bu profil personel_kullanici kaydıyla eşleştirilmemiş.</small></div>';
     const _BOS_VERI = '<div class="p360-bos-mesaj">Henüz maaş bilgisi girilmemiş.</div>';
 
-    // Aktif maaş
+    // P4D: tip rozet tanımları (aktif maaş + geçmiş için ortak)
+    const TIP_STIL = {
+      maas:        { renk:'#1d4ed8', bg:'#dbeafe', etiket:'Maaş'      },
+      zam:         { renk:'#166534', bg:'#dcfce7', etiket:'Zam'       },
+      prim_ekstra: { renk:'#92400e', bg:'#fef3c7', etiket:'Prim'      },
+      duzeltme:    { renk:'#6b7280', bg:'#f3f4f6', etiket:'Düzeltme'  },
+    };
+    const tipRozet = function(tip) {
+      var st = TIP_STIL[tip] || { renk:'#374151', bg:'#f3f4f6', etiket: tip || '—' };
+      return `<span style="font-size:11px;font-weight:600;color:${st.renk};background:${st.bg};
+                           padding:1px 7px;border-radius:4px;white-space:nowrap;">${st.etiket}</span>`;
+    };
+
+    // ── Aktif maaş ──────────────────────────────────────────────
     const aktifEl = document.getElementById('d-maas-aktif');
     if (aktifEl) {
-      if (!maas) { aktifEl.innerHTML = _BOS_PK; }
-      else if (!maas.aktif_maas) {
-        // P4B: pk_bilgi.maas varsa göster (personel_kullanici doğrudan alanı)
+      if (!maas) {
+        aktifEl.innerHTML = _BOS_PK;
+      } else if (!maas.aktif_maas) {
+        // P4B fallback: personel_kullanici.Maas doğrudan
         if (pk && pk.maas) {
           aktifEl.innerHTML = `
             <div style="padding:14px 16px;">
               <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
-                <span style="font-size:26px;font-weight:700;color:#166534;">${Number(pk.maas).toLocaleString('tr-TR')}</span>
-                <span style="font-size:14px;color:var(--text2);">${pk.maas_para_birimi||'TL'}</span>
-                ${pk.maas_guncelleme ? `<span style="font-size:12px;color:var(--text3);">Son güncelleme: ${pk.maas_guncelleme}</span>` : ''}
+                <span style="font-size:28px;font-weight:800;color:#166534;letter-spacing:-1px;">
+                  ${Number(pk.maas).toLocaleString('tr-TR')}
+                </span>
+                <span style="font-size:15px;font-weight:600;color:var(--text2);">${pk.maas_para_birimi||'TL'}</span>
+                ${pk.maas_guncelleme
+                  ? `<span style="font-size:12px;color:var(--text3);">Son güncelleme: ${pk.maas_guncelleme}</span>`
+                  : ''}
               </div>
               <div style="font-size:11px;color:var(--text3);margin-top:4px;">Kaynak: personel_kullanici (maas_gecmis kaydı yok)</div>
             </div>`;
-        } else { aktifEl.innerHTML = _BOS_VERI; }
-      }
-      else {
+        } else {
+          aktifEl.innerHTML = _BOS_VERI;
+        }
+      } else {
         const m = maas.aktif_maas;
         aktifEl.innerHTML = `
           <div style="padding:14px 16px;">
-            <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
-              <span style="font-size:26px;font-weight:700;color:#166534;">${(m.tutar||0).toLocaleString('tr-TR')}</span>
-              <span style="font-size:14px;color:var(--text2);">${m.para_birimi||'TL'}</span>
-              <span style="font-size:12px;color:var(--text3);">Geçerlilik: ${m.gecerlilik_bas||'—'} →</span>
-              ${m.aciklama ? `<span style="font-size:12px;color:var(--text3);">(${m.aciklama})</span>` : ''}
+            <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
+              <span style="font-size:28px;font-weight:800;color:#166534;letter-spacing:-1px;">
+                ${(m.tutar||0).toLocaleString('tr-TR')}
+              </span>
+              <span style="font-size:15px;font-weight:600;color:var(--text2);">${m.para_birimi||'TL'}</span>
+              ${tipRozet(m.tip)}
             </div>
-            ${pk && pk.maas_guncelleme ? `<div style="font-size:11px;color:var(--text3);margin-top:4px;">Son güncelleme: ${pk.maas_guncelleme}</div>` : ''}
+            <div style="display:flex;flex-wrap:wrap;gap:16px;font-size:12px;color:var(--text3);">
+              <span>Geçerlilik: <strong>${m.gecerlilik_bas||'—'}</strong> → <em>devam ediyor</em></span>
+              ${m.aciklama ? `<span>📝 ${m.aciklama}</span>` : ''}
+              ${pk && pk.maas_guncelleme ? `<span>Son güncelleme: ${pk.maas_guncelleme}</span>` : ''}
+            </div>
           </div>`;
       }
     }
 
-    // Geçmiş
+    // ── Maaş geçmişi ────────────────────────────────────────────
     const gecmisEl = document.getElementById('d-maas-gecmis');
     if (gecmisEl) {
       if (!maas) { gecmisEl.innerHTML = _BOS_PK; return; }
       if (!maas.gecmis || maas.gecmis.length === 0) {
         gecmisEl.innerHTML = _BOS_VERI; return;
       }
-      const TIP_STIL = {
-        maas:       { renk:'#1d4ed8', bg:'#dbeafe', etiket:'maaş' },
-        zam:        { renk:'#166534', bg:'#dcfce7', etiket:'zam'  },
-        prim_ekstra:{ renk:'#92400e', bg:'#fef3c7', etiket:'prim' },
-        duzeltme:   { renk:'#6b7280', bg:'#f3f4f6', etiket:'düzeltme' },
-      };
-      gecmisEl.innerHTML = maas.gecmis.map(g => {
-        const st = TIP_STIL[g.tip] || TIP_STIL.maas;
-        const bit = g.gecerlilik_bit || 'şimdi';
+
+      var satirlar = maas.gecmis.map(function(g) {
+        var bit     = g.gecerlilik_bit
+                        ? g.gecerlilik_bit
+                        : '<span style="color:#166534;font-weight:600;">aktif</span>';
+        var girenTx = g.giren_kullanici
+                        ? `<span style="color:var(--text3);">👤 ${g.giren_kullanici}</span>`
+                        : '';
         return `<div class="p360-satir-detay" style="font-size:12px;">
-          <div class="pd-etiket" style="font-family:var(--mono);font-size:11px;color:var(--text3);min-width:100px;">
+          <div class="pd-etiket" style="font-family:var(--mono);font-size:11px;color:var(--text3);
+                                         min-width:120px;flex-shrink:0;">
             ${g.gecerlilik_bas||'?'} → ${bit}
           </div>
           <div style="flex:1;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <span style="font-weight:700;">${(g.tutar||0).toLocaleString('tr-TR')} ${g.para_birimi||'TL'}</span>
-            <span style="font-size:11px;font-weight:600;color:${st.renk};background:${st.bg};padding:1px 6px;border-radius:4px;">${st.etiket}</span>
+            <span style="font-weight:700;font-size:13px;">
+              ${(g.tutar||0).toLocaleString('tr-TR')} ${g.para_birimi||'TL'}
+            </span>
+            ${tipRozet(g.tip)}
             ${g.aciklama ? `<span style="font-size:11px;color:var(--text3);">${g.aciklama}</span>` : ''}
+            ${girenTx}
           </div>
         </div>`;
       }).join('');
+
+      // P4D: toplam > gösterilen ise not ekle
+      var toplamNot = '';
+      if (maas.gecmis_kayit_sayisi && maas.gecmis_kayit_sayisi > maas.gecmis.length) {
+        toplamNot = `<div style="padding:8px 16px;font-size:11px;color:var(--text3);
+                                  border-top:1px solid var(--border);">
+          Son ${maas.gecmis.length} kayıt gösteriliyor — toplam ${maas.gecmis_kayit_sayisi} kayıt.
+        </div>`;
+      }
+
+      gecmisEl.innerHTML = satirlar + toplamNot;
     }
   }
 
