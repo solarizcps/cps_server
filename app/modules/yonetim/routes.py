@@ -1624,7 +1624,7 @@ def core_usta_personel_bagla():
 # ════════════════════════════════════════════════════════════════
 
 @yonetim_bp.route('/api/core/usta-personel/ustalar', methods=['GET'])
-@yetki_gerekli('yonetim', 'can_view')
+@yetki_gerekli('personel_360', 'can_view')
 def core_usta_personel_ustalar():
     """
     Aktif SAHA_USTASI listesini ve her birinin bağlı personel sayısını döner.
@@ -3523,7 +3523,7 @@ def personel_360_yetkinlik_secenekler():
 
 
 @yonetim_bp.route('/api/personel-360/profil/<int:profil_id>/yetkinlik', methods=['POST'])
-@yetki_gerekli('yonetim', 'can_update')
+@yetki_gerekli('personel_360.ik.duzenle', 'can_update')
 def personel_360_yetkinlik_ata(profil_id):
     """
     FAZ2C-5A: Personel 360 yetkinlik atama / güncelleme.
