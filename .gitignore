@@ -102,3 +102,7 @@ app/*.BOZUK*
 # temporary txt
 app/*.txt
 
+# P4E: Profil fotoğrafları — binary dosyalar git'e alınmaz, .gitkeep hariç
+app/static/img/personel/*
+!app/static/img/personel/.gitkeep
+

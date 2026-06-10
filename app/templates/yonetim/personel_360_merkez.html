@@ -258,11 +258,29 @@
       <!-- Profil başlık -->
       <div class="oz-card" style="margin-bottom:14px;">
         <div style="padding:18px 20px;display:flex;align-items:center;gap:16px;">
-          <div id="d-avatar"
-               style="width:52px;height:52px;border-radius:50%;background:var(--sol-dark);
-                      display:flex;align-items:center;justify-content:center;
-                      font-size:22px;color:#fff;font-weight:700;flex-shrink:0;">
+          <!-- P4E: Avatar wrapper (foto veya harf) -->
+          <div style="position:relative;flex-shrink:0;">
+            <div id="d-avatar"
+                 style="width:52px;height:52px;border-radius:50%;background:var(--sol-dark);
+                        display:flex;align-items:center;justify-content:center;
+                        font-size:22px;color:#fff;font-weight:700;overflow:hidden;">
+            </div>
+            <!-- Fotoğraf yükle butonu — sadece İK/Admin görür (JS kontrol) -->
+            <button id="p4e-resim-btn"
+                    onclick="p4eResimSec()"
+                    title="Fotoğraf Değiştir"
+                    style="display:none;position:absolute;bottom:-2px;right:-2px;
+                           width:20px;height:20px;border-radius:50%;border:none;
+                           background:#1d4ed8;color:#fff;font-size:11px;cursor:pointer;
+                           line-height:1;padding:0;box-shadow:0 1px 3px rgba(0,0,0,.3);">
+              📷
+            </button>
           </div>
+          <!-- P4E: Gizli file input + upload mesaj -->
+          <input id="p4e-resim-input" type="file" accept=".jpg,.jpeg,.png,.webp"
+                 style="display:none;" onchange="p4eResimYukle(this)">
+          <span id="p4e-resim-mesaj" style="display:none;font-size:11px;color:var(--text3);
+                                             position:absolute;bottom:4px;left:90px;"></span>
           <div style="flex:1;">
             <div style="font-size:17px;font-weight:700;color:var(--text1);" id="d-adsoyad"></div>
             <div style="font-size:12px;color:var(--text3);margin-top:2px;" id="d-kadi"></div>
@@ -1116,8 +1134,14 @@
         }
       }
 
-      return '<div class="p360-satir' + secili + (profilYok ? ' p360-profil-yok' : '') + '" data-id="' + (p.id || '') + '" data-personel-id="' + (p.personel_id || '') + '">'
-        + '<div class="ps-ikon" style="background:' + tip.renk + ';">' + harf + '</div>'
+      // P4E: sol liste avatar — foto varsa img, yoksa harf
+      var ikonHtml = p.profil_resim_url
+        ? '<img src="' + p.profil_resim_url + '" alt="" style="width:36px;height:36px;border-radius:50%;object-fit:cover;display:block;">'
+        : harf;
+      var ikonBg = p.profil_resim_url ? 'transparent' : tip.renk;
+
+      return '<div class="p360-satir' + secili + (profilYok ? ' p360-profil-yok' : '') + '" data-id="' + (p.id || '') + '" data-personel-id="' + (p.personel_id || '') + '" data-resim-url="' + (p.profil_resim_url || '') + '">'
+        + '<div class="ps-ikon" style="background:' + ikonBg + ';padding:' + (p.profil_resim_url ? '0' : '') + ';">' + ikonHtml + '</div>'
         + '<div style="flex:1;min-width:0;">'
           + '<div class="ps-ad" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">'
             + (p.ad_soyad || '—')
@@ -1229,9 +1253,24 @@
       }
     }
 
-    // Başlık
-    document.getElementById('d-avatar').textContent    = (p.ad_soyad || '?')[0].toUpperCase();
-    document.getElementById('d-avatar').style.background = tip.renk;
+    // P4E: Profil başlık avatar (foto varsa img, yoksa harf)
+    var avatarEl = document.getElementById('d-avatar');
+    if (p.profil_resim_url) {
+      avatarEl.innerHTML = `<img src="${p.profil_resim_url}" alt="${p.ad_soyad || ''}"
+        style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;">`;
+      avatarEl.style.background = 'transparent';
+      avatarEl.style.padding = '0';
+    } else {
+      avatarEl.innerHTML = '';
+      avatarEl.textContent    = (p.ad_soyad || '?')[0].toUpperCase();
+      avatarEl.style.background = tip.renk;
+    }
+    // P4E: Fotoğraf yükle butonu (sadece İK/Admin, usta değil)
+    var resimBtn = document.getElementById('p4e-resim-btn');
+    if (resimBtn) {
+      resimBtn.style.display = (caps && caps.ik && !caps.usta) ? '' : 'none';
+      resimBtn.dataset.profilId = p.id;
+    }
     document.getElementById('d-adsoyad').textContent   = p.ad_soyad || '—';
     document.getElementById('d-kadi').textContent      = '@' + (p.kullanici_adi || '?');
     document.getElementById('d-tip-badge').textContent = tip.etiket;
@@ -1752,6 +1791,71 @@
         </div>`;
       }).join('');
       notlarEl.innerHTML = ozet + satirlar;
+    }
+  }
+
+  // ── P4E: Profil Fotoğrafı Yükle ─────────────────────────────
+  function p4eResimSec() {
+    var inp = document.getElementById('p4e-resim-input');
+    if (inp) inp.click();
+  }
+
+  async function p4eResimYukle(inp) {
+    if (!inp.files || !inp.files[0]) return;
+    var dosya = inp.files[0];
+    var mesajEl = document.getElementById('p4e-resim-mesaj');
+    var btn = document.getElementById('p4e-resim-btn');
+    var profilId = btn ? btn.dataset.profilId : null;
+    if (!profilId) return;
+
+    // Boyut ön kontrolü (2 MB)
+    if (dosya.size > 2 * 1024 * 1024) {
+      var mb = (dosya.size / 1024 / 1024).toFixed(1);
+      if (mesajEl) { mesajEl.textContent = 'Dosya çok büyük (' + mb + ' MB). Max 2 MB.'; mesajEl.style.color='#dc2626'; mesajEl.style.display=''; }
+      inp.value = '';
+      return;
+    }
+
+    if (mesajEl) { mesajEl.textContent = '⏳ Yükleniyor...'; mesajEl.style.color='var(--text3)'; mesajEl.style.display=''; }
+    if (btn) btn.disabled = true;
+
+    var fd = new FormData();
+    fd.append('resim', dosya);
+
+    try {
+      var r = await fetch('/yonetim/api/personel-360/profil/' + profilId + '/resim', {
+        method: 'POST',
+        credentials: 'same-origin',
+        body: fd
+      });
+      var d = await r.json();
+      if (d.ok) {
+        if (mesajEl) { mesajEl.textContent = '✓ Yüklendi'; mesajEl.style.color='#166534'; }
+        // Avatar hemen güncelle
+        var avatarEl = document.getElementById('d-avatar');
+        if (avatarEl && d.url) {
+          avatarEl.innerHTML = '<img src="' + d.url + '?t=' + Date.now() + '" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;">';
+          avatarEl.style.background = 'transparent';
+        }
+        // Sol listede de güncelle
+        var satirEl = document.querySelector('.p360-satir.secili');
+        if (satirEl && d.url) {
+          var ikonEl = satirEl.querySelector('.ps-ikon');
+          if (ikonEl) {
+            ikonEl.innerHTML = '<img src="' + d.url + '?t=' + Date.now() + '" style="width:36px;height:36px;border-radius:50%;object-fit:cover;display:block;">';
+            ikonEl.style.background = 'transparent';
+            ikonEl.style.padding = '0';
+          }
+        }
+        setTimeout(function() { if (mesajEl) mesajEl.style.display = 'none'; }, 3000);
+      } else {
+        if (mesajEl) { mesajEl.textContent = '✗ ' + (d.hata || 'Hata'); mesajEl.style.color='#dc2626'; }
+      }
+    } catch(e) {
+      if (mesajEl) { mesajEl.textContent = '✗ Bağlantı hatası'; mesajEl.style.color='#dc2626'; }
+    } finally {
+      if (btn) btn.disabled = false;
+      inp.value = '';
     }
   }
 

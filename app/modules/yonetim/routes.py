@@ -2412,7 +2412,7 @@ def personel_360_secenekler():
             if _usta_kp:
                 profiller = con.execute("""
                     SELECT kp.id, kp.gercek_ad, kp.kullanici_adi, kp.profil_tipi, kp.aktif,
-                           dm.ad AS departman, dm.kod AS departman_kod
+                           dm.ad AS departman, dm.kod AS departman_kod, kp.profil_resim
                     FROM kullanici_profil kp
                     JOIN usta_personel_iliskisi upi ON kp.id = upi.personel_profil_id
                     LEFT JOIN departman_master dm ON dm.id = kp.departman_id
@@ -2437,7 +2437,8 @@ def personel_360_secenekler():
                        pk.aktif,
                        dm.ad  AS departman,
                        dm.kod AS departman_kod,
-                       'personel_kullanici'                                   AS kaynak
+                       'personel_kullanici'                                   AS kaynak,
+                       kp.profil_resim
                 FROM personel_kullanici pk
                 LEFT JOIN kullanici_profil kp
                        ON kp.kaynak = 'personel_kullanici' AND kp.kaynak_id = pk.id
@@ -2454,7 +2455,8 @@ def personel_360_secenekler():
                        kp.aktif,
                        dm.ad  AS departman,
                        dm.kod AS departman_kod,
-                       kp.kaynak                                               AS kaynak
+                       kp.kaynak                                               AS kaynak,
+                       kp.profil_resim
                 FROM kullanici_profil kp
                 LEFT JOIN departman_master dm ON dm.id = kp.departman_id
                 WHERE kp.aktif = 1
@@ -2500,14 +2502,18 @@ def personel_360_secenekler():
         "ok": True,
         "profiller": [
             {
-                "id":            r["id"],
-                "personel_id":   r["personel_id"] if "personel_id" in r.keys() else None,
-                "kaynak":        r["kaynak"] if "kaynak" in r.keys() else None,
-                "ad_soyad":      r["gercek_ad"],
-                "kullanici_adi": r["kullanici_adi"],
-                "profil_tipi":   r["profil_tipi"],
-                "departman":     r["departman"],
-                "departman_kod": r["departman_kod"],
+                "id":               r["id"],
+                "personel_id":      r["personel_id"] if "personel_id" in r.keys() else None,
+                "kaynak":           r["kaynak"] if "kaynak" in r.keys() else None,
+                "ad_soyad":         r["gercek_ad"],
+                "kullanici_adi":    r["kullanici_adi"],
+                "profil_tipi":      r["profil_tipi"],
+                "departman":        r["departman"],
+                "departman_kod":    r["departman_kod"],
+                # P4E: profil resim
+                "profil_resim":     r["profil_resim"] if "profil_resim" in r.keys() else None,
+                "profil_resim_url": (f'/static/img/personel/{r["profil_resim"]}' if r["profil_resim"] else None)
+                                    if "profil_resim" in r.keys() else None,
             }
             for r in profiller
         ],
@@ -2575,7 +2581,7 @@ def personel_360_profil(profil_id):
 
         kp = con.execute("""
             SELECT kp.id, kp.gercek_ad, kp.kullanici_adi, kp.profil_tipi, kp.aktif,
-                   kp.kaynak, kp.kaynak_id,
+                   kp.kaynak, kp.kaynak_id, kp.profil_resim,
                    dm.id AS dept_id, dm.ad AS dept_ad, dm.kod AS dept_kod
             FROM kullanici_profil kp
             LEFT JOIN departman_master dm ON dm.id = kp.departman_id
@@ -3050,17 +3056,23 @@ def personel_360_profil(profil_id):
     finally:
         con.close()
 
+    # P4E: profil_resim URL hesapla
+    _pr_dosya = kp["profil_resim"] if kp["profil_resim"] else None
+    _pr_url   = f'/static/img/personel/{_pr_dosya}' if _pr_dosya else None
+
     return jsonify({
         "ok": True,
         "profil": {
-            "id":            kp["id"],
-            "ad_soyad":      kp["gercek_ad"],
-            "kullanici_adi": kp["kullanici_adi"],
-            "profil_tipi":   kp["profil_tipi"],
-            "aktif":         kp["aktif"],
-            "dept_id":       kp["dept_id"],
-            "departman":     kp["dept_ad"],
-            "departman_kod": kp["dept_kod"],
+            "id":               kp["id"],
+            "ad_soyad":         kp["gercek_ad"],
+            "kullanici_adi":    kp["kullanici_adi"],
+            "profil_tipi":      kp["profil_tipi"],
+            "aktif":            kp["aktif"],
+            "dept_id":          kp["dept_id"],
+            "departman":        kp["dept_ad"],
+            "departman_kod":    kp["dept_kod"],
+            "profil_resim":     _pr_dosya,
+            "profil_resim_url": _pr_url,
         },
         "ekipler": [
             {
@@ -4052,6 +4064,122 @@ def personel_360_personel_ekle():
         'usta_iliski_id': usta_iliski_id,
         'uyari':          uyari,
     })
+
+# ════════════════════════════════════════════════════════════════
+# P4E — PERSONEL PROFİL FOTOĞRAFI YÜKLEME (10.06.2026)
+# kullanici_profil.profil_resim — her iki kaynak tipi desteklenir.
+# Yükleme: İK/Admin. Usta yükleyemez.
+# ════════════════════════════════════════════════════════════════
+import os as _p4e_os
+import re as _p4e_re
+import datetime as _p4e_dt
+from werkzeug.utils import secure_filename as _p4e_sec
+
+_P4E_RESIM_DIR  = None
+_P4E_MAX_BYTES  = 2 * 1024 * 1024   # 2 MB
+_P4E_IZINLI_EXT = {'jpg', 'jpeg', 'png', 'webp'}
+
+
+def _p4e_resim_dir():
+    global _P4E_RESIM_DIR
+    if _P4E_RESIM_DIR is None:
+        base = _p4e_os.path.dirname(
+            _p4e_os.path.dirname(_p4e_os.path.dirname(_p4e_os.path.abspath(__file__)))
+        )
+        _P4E_RESIM_DIR = _p4e_os.path.join(base, 'static', 'img', 'personel')
+        _p4e_os.makedirs(_P4E_RESIM_DIR, exist_ok=True)
+    return _P4E_RESIM_DIR
+
+
+@yonetim_bp.route('/api/personel-360/profil/<int:profil_id>/resim', methods=['POST'])
+@yetki_gerekli('personel_360.ik', 'can_view')
+def personel_360_resim_yukle(profil_id):
+    """P4E: Profil fotoğrafı yükle. İK/Admin yetkisi gerekli, Usta yükleyemez."""
+    _u_sess = session.get('kullanici')
+    _is_admin = is_superadmin(_u_sess)
+
+    # Usta engeli
+    if not _is_admin and yetki_var('personel_360.usta', 'can_view'):
+        return jsonify({'ok': False, 'hata': 'Usta fotoğraf yükleyemez'}), 403
+
+    # Dosya kontrolü
+    f = request.files.get('resim')
+    if not f or not f.filename:
+        return jsonify({'ok': False, 'hata': 'Dosya seçilmedi (alan adı: resim)'}), 400
+
+    ext = (f.filename.rsplit('.', 1)[-1] if '.' in f.filename else '').lower()
+    if ext not in _P4E_IZINLI_EXT:
+        return jsonify({'ok': False, 'hata': 'Sadece jpg/jpeg/png/webp yüklenebilir'}), 400
+
+    # Boyut kontrolü (seek ile gerçek boyut)
+    f.seek(0, 2)
+    boyut = f.tell()
+    f.seek(0)
+    if boyut > _P4E_MAX_BYTES:
+        mb = round(boyut / 1024 / 1024, 1)
+        return jsonify({'ok': False, 'hata': f'Dosya çok büyük ({mb} MB). Maksimum 2 MB.'}), 400
+    if boyut == 0:
+        return jsonify({'ok': False, 'hata': 'Dosya boş'}), 400
+
+    con = _get_conn()
+    try:
+        kp = con.execute(
+            "SELECT id, gercek_ad, profil_resim FROM kullanici_profil WHERE id=?",
+            (profil_id,)
+        ).fetchone()
+        if not kp:
+            return jsonify({'ok': False, 'hata': 'Profil bulunamadı'}), 404
+
+        # Yeni dosya adı: profil_<id>_<ts>.<ext>
+        ts  = _p4e_dt.datetime.now().strftime('%Y%m%d_%H%M%S')
+        yeni_ad = f'profil_{profil_id}_{ts}.{ext}'
+
+        klasor   = _p4e_resim_dir()
+        tam_yol  = _p4e_os.path.join(klasor, yeni_ad)
+        f.save(tam_yol)
+
+        # Eski dosyayı sil (disk temizliği)
+        eski_ad = kp['profil_resim']
+        if eski_ad:
+            eski_yol = _p4e_os.path.join(klasor, eski_ad)
+            try:
+                if _p4e_os.path.isfile(eski_yol):
+                    _p4e_os.remove(eski_yol)
+            except Exception:
+                pass  # Disk hatası upload'ı bloklamamalı
+
+        # DB güncelle
+        con.execute(
+            "UPDATE kullanici_profil SET profil_resim=?, updated_at=datetime('now') WHERE id=?",
+            (yeni_ad, profil_id)
+        )
+        con.commit()
+
+        # Audit log
+        try:
+            from modules import audit as _aud
+            _aud.log(
+                modul='personel_360',
+                islem='profil_resim_yukle',
+                detay=f'profil_id={profil_id} dosya={yeni_ad}',
+                kullanici_adi=(_u_sess or {}).get('KullaniciAdi', 'bilinmiyor')
+            )
+        except Exception:
+            pass
+
+        yeni_url = f'/static/img/personel/{yeni_ad}'
+        return jsonify({
+            'ok':       True,
+            'dosya':    yeni_ad,
+            'url':      yeni_url,
+            'eski_ad':  eski_ad,
+        })
+
+    except Exception as e:
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
 
 # ════════════════════════════════════════════════════════════════
 # P4C — PERSONEL KULLANICI BİLGİ GÜNCELLEME (10.06.2026)
