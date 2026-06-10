@@ -4017,5 +4017,324 @@ def personel_360_personel_ekle():
     })
 
 # ════════════════════════════════════════════════════════════════
+# P3A — PERSONEL 360 AKTİVİTE AKIŞI OKUMA KATMANI (10.06.2026)
+# Salt okuma — DB yazma yok, mevcut tablolara FK ekleme yok.
+# Her kaynak izole try/except içinde; bir kaynak hata verirse
+# diğerleri çalışmaya devam eder.
+# Ortak event format: {zaman, kaynak, tip, ozet, ref_tablo, ref_id, detay}
+# ════════════════════════════════════════════════════════════════
+
+def _aktivite_uretim(con, profil_id, kp, limit=100):
+    """
+    Kaynak 1: uretim_kayit
+    Köprü: kullanici_profil.kaynak='personel_kullanici' → kaynak_id = personel_id
+    Sadece 'personel_kullanici' kaynakli profillerde çalışır.
+    """
+    events = []
+    try:
+        if kp.get('kaynak') != 'personel_kullanici' or not kp.get('kaynak_id'):
+            return events
+        pk_id = kp['kaynak_id']
+
+        # Legacy 5055 kontrolü
+        pk_row = con.execute(
+            "SELECT id, ad, kullanici_adi, kaynak, legacy_id FROM personel_kullanici WHERE id=? LIMIT 1",
+            (pk_id,)
+        ).fetchone()
+        if not pk_row:
+            return events
+
+        pk_kaynak = (pk_row['kaynak'] or '').upper()
+        pk_ad     = pk_row['ad'] or ''
+
+        if pk_kaynak == 'LEGACY_5055' and pk_row['legacy_id']:
+            # Legacy: personel_id = legacy_id AND personel_ad eşleşmesi
+            rows = con.execute("""
+                SELECT id, tarih, saat, proses_adi, miktar, onay_durum,
+                       personel_ad, emir_no
+                FROM uretim_kayit
+                WHERE personel_id=? AND LOWER(personel_ad)=LOWER(?)
+                ORDER BY tarih DESC, saat DESC
+                LIMIT ?
+            """, (pk_row['legacy_id'], pk_ad, limit)).fetchall()
+        else:
+            rows = con.execute("""
+                SELECT id, tarih, saat, proses_adi, miktar, onay_durum,
+                       personel_ad, emir_no
+                FROM uretim_kayit
+                WHERE personel_id=?
+                ORDER BY tarih DESC, saat DESC
+                LIMIT ?
+            """, (pk_id, limit)).fetchall()
+
+        for r in rows:
+            tarih_str = (r['tarih'] or '') + ' ' + (r['saat'] or '00:00')
+            onay      = r['onay_durum'] or 'bekliyor'
+            events.append({
+                'zaman':     tarih_str.strip(),
+                'kaynak':    'uretim_kayit',
+                'tip':       'uretim_giris',
+                'ozet':      f"{r['proses_adi'] or '-'} — {r['miktar'] or 0} adet [{onay}]",
+                'ref_tablo': 'uretim_kayit',
+                'ref_id':    r['id'],
+                'detay': {
+                    'emir_no':    r['emir_no'],
+                    'proses_adi': r['proses_adi'],
+                    'miktar':     r['miktar'],
+                    'onay_durum': onay,
+                },
+            })
+    except Exception as e:
+        events.append({
+            'zaman': '', 'kaynak': 'uretim_kayit', 'tip': '_hata',
+            'ozet': f'Üretim verisi okunamadı: {str(e)[:100]}',
+            'ref_tablo': None, 'ref_id': None, 'detay': {},
+        })
+    return events
+
+
+def _aktivite_tasks(con, kadi, limit=50):
+    """
+    Kaynak 2: tasks (gorev_olustur)
+    Köprü: tasks.created_by = kullanici_profil.kullanici_adi
+    """
+    events = []
+    try:
+        rows = con.execute("""
+            SELECT t.id, t.title, t.status, t.task_type, t.priority,
+                   t.created_at, t.assigned_to, t.department
+            FROM tasks t
+            WHERE LOWER(t.created_by) = LOWER(?)
+            ORDER BY t.created_at DESC
+            LIMIT ?
+        """, (kadi, limit)).fetchall()
+        for r in rows:
+            events.append({
+                'zaman':     r['created_at'] or '',
+                'kaynak':    'tasks',
+                'tip':       'gorev_olustur',
+                'ozet':      f"Görev oluşturuldu: {r['title'] or '-'} [{r['status'] or '-'}]",
+                'ref_tablo': 'tasks',
+                'ref_id':    r['id'],
+                'detay': {
+                    'title':       r['title'],
+                    'status':      r['status'],
+                    'task_type':   r['task_type'],
+                    'priority':    r['priority'],
+                    'assigned_to': r['assigned_to'],
+                    'department':  r['department'],
+                },
+            })
+    except Exception as e:
+        events.append({
+            'zaman': '', 'kaynak': 'tasks', 'tip': '_hata',
+            'ozet': f'Görev verisi okunamadı: {str(e)[:100]}',
+            'ref_tablo': None, 'ref_id': None, 'detay': {},
+        })
+    return events
+
+
+def _aktivite_task_logs(con, kadi, limit=50):
+    """
+    Kaynak 3: task_logs (gorev_durum / gorev_log)
+    Köprü: task_logs.user_id = kullanici_profil.kullanici_adi
+    """
+    events = []
+    try:
+        rows = con.execute("""
+            SELECT tl.id, tl.task_id, tl.action, tl.old_status, tl.new_status,
+                   tl.note, tl.created_at,
+                   t.title AS task_title
+            FROM task_logs tl
+            LEFT JOIN tasks t ON t.id = tl.task_id
+            WHERE LOWER(tl.user_id) = LOWER(?)
+            ORDER BY tl.created_at DESC
+            LIMIT ?
+        """, (kadi, limit)).fetchall()
+        for r in rows:
+            tip  = 'gorev_durum' if r['action'] == 'status_changed' else 'gorev_log'
+            _task_label = r['task_title'] or ('Gorev #' + str(r['task_id']))
+            if r['action'] == 'status_changed':
+                ozet = (f"Gorev durumu: {r['old_status'] or '?'} -> {r['new_status'] or '?'}"
+                        f" | {_task_label}")
+            else:
+                ozet = f"{r['action'] or 'log'}: {_task_label}"
+            events.append({
+                'zaman':     r['created_at'] or '',
+                'kaynak':    'task_logs',
+                'tip':       tip,
+                'ozet':      ozet,
+                'ref_tablo': 'tasks',
+                'ref_id':    r['task_id'],
+                'detay': {
+                    'action':     r['action'],
+                    'old_status': r['old_status'],
+                    'new_status': r['new_status'],
+                    'note':       r['note'],
+                    'task_title': r['task_title'],
+                },
+            })
+    except Exception as e:
+        events.append({
+            'zaman': '', 'kaynak': 'task_logs', 'tip': '_hata',
+            'ozet': f'Görev log verisi okunamadı: {str(e)[:100]}',
+            'ref_tablo': None, 'ref_id': None, 'detay': {},
+        })
+    return events
+
+
+def _aktivite_audit(con, kadi, limit=50):
+    """
+    Kaynak 4: sistem_audit
+    Köprü: sistem_audit.KullaniciAdi = kullanici_profil.kullanici_adi
+    Güvenli modüller: yonetim, hedef, grafik, ithalat, tasks
+    Finans hariç.
+    """
+    events = []
+    try:
+        rows = con.execute("""
+            SELECT Id, Tarih, Islem, TabloAdi, KayitId,
+                   Aciklama, Modul, AltModul
+            FROM sistem_audit
+            WHERE LOWER(KullaniciAdi) = LOWER(?)
+              AND (Modul IS NULL OR Modul IN ('yonetim','hedef','grafik','ithalat','tasks'))
+            ORDER BY Tarih DESC
+            LIMIT ?
+        """, (kadi, limit)).fetchall()
+        for r in rows:
+            modul  = r['Modul'] or 'sistem'
+            islem  = r['Islem'] or 'islem'
+            acikl  = r['Aciklama'] or f"{islem} — {r['TabloAdi'] or '-'}"
+            events.append({
+                'zaman':     r['Tarih'] or '',
+                'kaynak':    'sistem_audit',
+                'tip':       f"audit_{islem.lower()}",
+                'ozet':      f"[{modul}] {acikl}",
+                'ref_tablo': r['TabloAdi'],
+                'ref_id':    r['KayitId'],
+                'detay': {
+                    'islem':      islem,
+                    'tablo':      r['TabloAdi'],
+                    'kayit_id':   r['KayitId'],
+                    'modul':      modul,
+                    'alt_modul':  r['AltModul'],
+                    'aciklama':   r['Aciklama'],
+                },
+            })
+    except Exception as e:
+        events.append({
+            'zaman': '', 'kaynak': 'sistem_audit', 'tip': '_hata',
+            'ozet': f'Audit verisi okunamadı: {str(e)[:100]}',
+            'ref_tablo': None, 'ref_id': None, 'detay': {},
+        })
+    return events
+
+
+@yonetim_bp.route('/api/personel-360/profil/<int:profil_id>/aktivite', methods=['GET'])
+@yetki_gerekli('personel_360', 'can_view')
+def personel_360_aktivite(profil_id):
+    """
+    P3A — Personel 360 aktivite akışı okuma katmanı.
+    Salt okuma. DB yazma yok. Schema değişikliği yok.
+    Mevcut personel_360_profil() endpoint'ine dokunulmadı.
+
+    Query params:
+        limit  (int, default=50, max=200)
+        offset (int, default=0)
+        kaynak (str, tekrar edilebilir): uretim_kayit|tasks|task_logs|sistem_audit
+               boş ise tüm kaynaklar aktif.
+
+    Response:
+        {ok, aktiviteler: [event], toplam, gosterilen, kaynaklar_aktif, kaynak_hatalari}
+    """
+    try:
+        limit  = min(int(request.args.get('limit',  50)), 200)
+        offset = max(int(request.args.get('offset',  0)),   0)
+    except (ValueError, TypeError):
+        limit, offset = 50, 0
+
+    # Kaynak filtresi: boşsa hepsi aktif
+    _TUM_KAYNAKLAR = {'uretim_kayit', 'tasks', 'task_logs', 'sistem_audit'}
+    kaynak_filtre = set(request.args.getlist('kaynak')) & _TUM_KAYNAKLAR
+    if not kaynak_filtre:
+        kaynak_filtre = _TUM_KAYNAKLAR
+
+    import sqlite3 as _sqlite3
+    from config import Config as _Cfg
+
+    con = _sqlite3.connect(_Cfg.MOCK_DB_PATH, timeout=10)
+    con.row_factory = _sqlite3.Row
+    try:
+        # Profil bilgisi
+        kp = con.execute(
+            "SELECT id, kullanici_adi, gercek_ad, kaynak, kaynak_id "
+            "FROM kullanici_profil WHERE id=? LIMIT 1",
+            (profil_id,)
+        ).fetchone()
+        if not kp:
+            return jsonify({'ok': False, 'hata': 'Profil bulunamadı'}), 404
+
+        kp = dict(kp)
+        kadi = kp.get('kullanici_adi') or ''
+
+        # Her kaynaktan event topla
+        tum_events     = []
+        kaynak_hatalari = []
+
+        if 'uretim_kayit' in kaynak_filtre:
+            evs = _aktivite_uretim(con, profil_id, kp, limit=200)
+            hata = [e for e in evs if e['tip'] == '_hata']
+            kaynak_hatalari.extend(hata)
+            tum_events.extend([e for e in evs if e['tip'] != '_hata'])
+
+        if 'tasks' in kaynak_filtre and kadi:
+            evs = _aktivite_tasks(con, kadi, limit=100)
+            hata = [e for e in evs if e['tip'] == '_hata']
+            kaynak_hatalari.extend(hata)
+            tum_events.extend([e for e in evs if e['tip'] != '_hata'])
+
+        if 'task_logs' in kaynak_filtre and kadi:
+            evs = _aktivite_task_logs(con, kadi, limit=100)
+            hata = [e for e in evs if e['tip'] == '_hata']
+            kaynak_hatalari.extend(hata)
+            tum_events.extend([e for e in evs if e['tip'] != '_hata'])
+
+        if 'sistem_audit' in kaynak_filtre and kadi:
+            evs = _aktivite_audit(con, kadi, limit=100)
+            hata = [e for e in evs if e['tip'] == '_hata']
+            kaynak_hatalari.extend(hata)
+            tum_events.extend([e for e in evs if e['tip'] != '_hata'])
+
+        # Tarihe göre yeniden eskiye sırala (boş zaman en sona)
+        tum_events.sort(key=lambda e: e.get('zaman') or '', reverse=True)
+
+        toplam    = len(tum_events)
+        sayfa     = tum_events[offset: offset + limit]
+
+        return jsonify({
+            'ok':              True,
+            'profil_id':       profil_id,
+            'kullanici_adi':   kadi,
+            'aktiviteler':     sayfa,
+            'toplam':          toplam,
+            'gosterilen':      len(sayfa),
+            'offset':          offset,
+            'limit':           limit,
+            'kaynaklar_aktif': sorted(kaynak_filtre),
+            'kaynak_hatalari': kaynak_hatalari,
+        })
+
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'ok':    False,
+            'hata':  str(e)[:300],
+            'tb':    traceback.format_exc(),
+        }), 500
+    finally:
+        con.close()
+
+
+# ════════════════════════════════════════════════════════════════
 # END PERSONEL_360
 # ════════════════════════════════════════════════════════════════

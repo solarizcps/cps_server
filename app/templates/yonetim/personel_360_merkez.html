@@ -272,6 +272,7 @@
         <button class="p360-sekme" data-sekme="uretim">📊 Üretim</button>
         <button class="p360-sekme" data-sekme="ik"   id="btn-sekme-ik"   style="display:none;">🧾 İK</button>
         <button class="p360-sekme" data-sekme="maas" id="btn-sekme-maas" style="display:none;">💰 Maaş</button>
+        <button class="p360-sekme" data-sekme="aktivite" id="btn-sekme-aktivite">📋 Son Hareketler</button>
         <button class="p360-sekme" data-sekme="org" style="margin-left:auto;border-color:#2563eb;color:#2563eb;">✏️ Organizasyon</button>
       </div>
 
@@ -662,6 +663,51 @@
             </div>
           </div>
         </div><!-- /maas-form-panel -->
+      </div>
+
+      <!-- SEKME: Son Hareketler (P3A) -->
+      <div id="sekme-aktivite" class="p360-sekme-icerik" style="display:none;">
+        <div class="oz-card">
+          <div class="oz-hdr" style="justify-content:space-between;">
+            <span class="oz-hdr-t">Son Hareketler</span>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <!-- Kaynak filtre butonları -->
+              <button class="akt-filtre akt-filtre-aktif" data-kaynak="uretim_kayit"
+                      onclick="aktiviteFiltreDegistir(this)"
+                      style="font-size:11px;padding:3px 8px;border-radius:12px;border:1px solid #16a34a;
+                             background:#dcfce7;color:#166534;cursor:pointer;">🏭 Üretim</button>
+              <button class="akt-filtre akt-filtre-aktif" data-kaynak="tasks"
+                      onclick="aktiviteFiltreDegistir(this)"
+                      style="font-size:11px;padding:3px 8px;border-radius:12px;border:1px solid #2563eb;
+                             background:#dbeafe;color:#1e40af;cursor:pointer;">📋 Görevler</button>
+              <button class="akt-filtre akt-filtre-aktif" data-kaynak="task_logs"
+                      onclick="aktiviteFiltreDegistir(this)"
+                      style="font-size:11px;padding:3px 8px;border-radius:12px;border:1px solid #7c3aed;
+                             background:#ede9fe;color:#4c1d95;cursor:pointer;">🔄 Görev Log</button>
+              <button class="akt-filtre akt-filtre-aktif" data-kaynak="sistem_audit"
+                      onclick="aktiviteFiltreDegistir(this)"
+                      style="font-size:11px;padding:3px 8px;border-radius:12px;border:1px solid #6b7280;
+                             background:#f3f4f6;color:#374151;cursor:pointer;">📝 Sistem</button>
+            </div>
+          </div>
+          <div class="oz-body" style="padding:0;">
+            <div id="aktivite-yukleniyor" style="padding:24px;text-align:center;color:var(--text3);font-size:13px;display:none;">
+              Yükleniyor…
+            </div>
+            <div id="aktivite-bos" style="padding:24px;text-align:center;color:var(--text3);font-size:13px;display:none;">
+              Bu profil için kayıtlı aktivite bulunamadı.
+            </div>
+            <div id="aktivite-hata" style="padding:12px 16px;background:#fee2e2;color:#991b1b;font-size:12px;border-radius:6px;margin:8px;display:none;"></div>
+            <div id="aktivite-liste"></div>
+            <div id="aktivite-daha-btn-wrap" style="padding:12px 16px;text-align:center;display:none;">
+              <button onclick="aktiviteDahaFazla()"
+                      style="padding:7px 20px;border:1px solid var(--border);border-radius:6px;
+                             font-size:12px;color:var(--text2);background:var(--bg2);cursor:pointer;">
+                Daha Fazla Yükle
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- SEKME: Organizasyon Güncelleme -->
@@ -1921,6 +1967,138 @@
   // FAZ2G-8B: personel ekleme fonksiyonları
   window.personelEkleKaydet  = personelEkleKaydet;
   window.personelEkleAcKapat = personelEkleAcKapat;
+
+  // ─────────────────────────────────────────────────────────
+  // P3A — Son Hareketler (Aktivite Akisi Okuma Katmani)
+  // ─────────────────────────────────────────────────────────
+  let _aktProfilId   = null;
+  let _aktOffset     = 0;
+  const _aktLimit    = 50;
+  let _aktYukleniyor = false;
+  let _aktFiltreler  = new Set(['uretim_kayit','tasks','task_logs','sistem_audit']);
+
+  const _AKT_ROZET = {
+    uretim_kayit: { bg:'#dcfce7', color:'#166534', etiket:'Uretim'  },
+    tasks:        { bg:'#dbeafe', color:'#1e40af', etiket:'Gorev'   },
+    task_logs:    { bg:'#ede9fe', color:'#4c1d95', etiket:'G.Log'   },
+    sistem_audit: { bg:'#f3f4f6', color:'#374151', etiket:'Sistem'  },
+  };
+
+  function aktiviteFiltreDegistir(btn) {
+    const kaynak = btn.dataset.kaynak;
+    if (_aktFiltreler.has(kaynak)) {
+      if (_aktFiltreler.size > 1) {
+        _aktFiltreler.delete(kaynak);
+        btn.classList.remove('akt-filtre-aktif');
+        btn.style.opacity = '0.4';
+      }
+    } else {
+      _aktFiltreler.add(kaynak);
+      btn.classList.add('akt-filtre-aktif');
+      btn.style.opacity = '1';
+    }
+    _aktOffset = 0;
+    document.getElementById('aktivite-liste').innerHTML = '';
+    aktiviteYukle();
+  }
+  window.aktiviteFiltreDegistir = aktiviteFiltreDegistir;
+
+  async function aktiviteYukle(append) {
+    if (!_aktProfilId || _aktYukleniyor) return;
+    _aktYukleniyor = true;
+    const ykEl    = document.getElementById('aktivite-yukleniyor');
+    const bosEl   = document.getElementById('aktivite-bos');
+    const htEl    = document.getElementById('aktivite-hata');
+    const listeEl = document.getElementById('aktivite-liste');
+    const dahaEl  = document.getElementById('aktivite-daha-btn-wrap');
+    ykEl.style.display = 'block';
+    htEl.style.display = 'none';
+    if (!append) { bosEl.style.display = 'none'; dahaEl.style.display = 'none'; }
+    try {
+      const params = new URLSearchParams({ limit: _aktLimit, offset: _aktOffset });
+      _aktFiltreler.forEach(k => params.append('kaynak', k));
+      const r = await fetch(
+        '/yonetim/api/personel-360/profil/' + _aktProfilId + '/aktivite?' + params,
+        { credentials: 'same-origin' }
+      );
+      const data = await r.json();
+      if (!data.ok) {
+        htEl.textContent = 'Hata: ' + (data.hata || 'bilinmeyen');
+        htEl.style.display = 'block';
+        return;
+      }
+      const events = data.aktiviteler || [];
+      if (!append) listeEl.innerHTML = '';
+      if (events.length === 0 && !append) {
+        bosEl.style.display = 'block';
+        dahaEl.style.display = 'none';
+        return;
+      }
+      events.forEach(function(ev) {
+        const rz = _AKT_ROZET[ev.kaynak] || { bg:'#f3f4f6', color:'#374151', etiket: ev.kaynak };
+        const zaman = (ev.zaman || '-').substring(0, 16).replace('T', ' ');
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);font-size:13px;';
+        row.innerHTML =
+          '<div style="flex-shrink:0;margin-top:2px;">' +
+            '<span style="display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600;background:' + rz.bg + ';color:' + rz.color + ';">' +
+              rz.etiket +
+            '</span>' +
+          '</div>' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div style="color:var(--text1);line-height:1.4;">' + (ev.ozet || '-') + '</div>' +
+            '<div style="font-size:11px;color:var(--text3);margin-top:2px;">' + zaman + '</div>' +
+          '</div>';
+        listeEl.appendChild(row);
+      });
+      if (data.kaynak_hatalari && data.kaynak_hatalari.length > 0) {
+        htEl.textContent = 'Bazi kaynaklar okunamadi: ' + data.kaynak_hatalari.map(function(e){ return e.ozet; }).join(' | ');
+        htEl.style.display = 'block';
+      }
+      const toplamYuklendi = _aktOffset + events.length;
+      if (toplamYuklendi < data.toplam && events.length >= _aktLimit) {
+        _aktOffset += events.length;
+        dahaEl.style.display = 'block';
+      } else {
+        dahaEl.style.display = 'none';
+      }
+    } catch(e) {
+      htEl.textContent = 'Ag hatasi: ' + e.message;
+      htEl.style.display = 'block';
+    } finally {
+      _aktYukleniyor = false;
+      ykEl.style.display = 'none';
+    }
+  }
+
+  function aktiviteDahaFazla() { aktiviteYukle(true); }
+  window.aktiviteDahaFazla = aktiviteDahaFazla;
+
+  // Sekme degisiminde lazy load tetikle (capture:true - mevcut handler'lardan once)
+  document.getElementById('p360-sekmeler').addEventListener('click', function(e) {
+    var btn = e.target.closest('.p360-sekme');
+    if (btn && btn.dataset.sekme === 'aktivite' && _aktProfilId) {
+      _aktOffset = 0;
+      document.getElementById('aktivite-liste').innerHTML = '';
+      aktiviteYukle(false);
+    }
+  }, true);
+
+  // profilSec sarmalayici - secim degisince aktivite state sifirla
+  var _origProfilSec = window.profilSec;
+  window.profilSec = function(profilId) {
+    _aktProfilId = profilId;
+    _aktOffset   = 0;
+    var listeEl = document.getElementById('aktivite-liste');
+    if (listeEl) listeEl.innerHTML = '';
+    var bosEl = document.getElementById('aktivite-bos');
+    if (bosEl) bosEl.style.display = 'none';
+    var htEl = document.getElementById('aktivite-hata');
+    if (htEl) htEl.style.display = 'none';
+    var dahaEl = document.getElementById('aktivite-daha-btn-wrap');
+    if (dahaEl) dahaEl.style.display = 'none';
+    if (typeof _origProfilSec === 'function') _origProfilSec(profilId);
+  };
 
 })();
 </script>
