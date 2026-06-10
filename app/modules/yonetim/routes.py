@@ -2473,7 +2473,7 @@ def personel_360_secenekler():
             """).fetchall()
 
         departmanlar = con.execute("""
-            SELECT id, ad, kod, tur
+            SELECT id, ad, kod, tur, parent_id
             FROM departman_master
             WHERE aktif = 1
             ORDER BY sira, ad
@@ -2518,7 +2518,8 @@ def personel_360_secenekler():
             for r in profiller
         ],
         "departmanlar": [
-            {"id": r["id"], "ad": r["ad"], "kod": r["kod"], "tur": r["tur"]}
+            {"id": r["id"], "ad": r["ad"], "kod": r["kod"], "tur": r["tur"],
+             "parent_id": r["parent_id"]}
             for r in departmanlar
         ],
         "ekipler": [
@@ -3331,10 +3332,17 @@ def personel_360_org_guncelle(profil_id):
         # ── Departman kontrolü ───────────────────────────────────
         if yeni_dept_id is not None:
             dept_var = con.execute(
-                "SELECT id FROM departman_master WHERE id=? AND aktif=1", (yeni_dept_id,)
+                "SELECT id, parent_id FROM departman_master WHERE id=? AND aktif=1", (yeni_dept_id,)
             ).fetchone()
             if not dept_var:
                 return jsonify({'ok': False, 'hata': f'departman_id={yeni_dept_id} bulunamadı veya pasif'}), 422
+            # P5B: SAHA profilleri sadece alt birime (parent_id dolu) atanabilir
+            _hedef_tip = yeni_tip or kp['profil_tipi']
+            if _hedef_tip in ('SAHA_PERSONEL', 'SAHA_USTASI') and dept_var['parent_id'] is None:
+                return jsonify({
+                    'ok': False,
+                    'hata': 'Personel ana departmana değil, alt birime atanmalıdır.'
+                }), 422
 
         # ── Saha sahibi kontrolü ─────────────────────────────────
         if yeni_sahip_id is not None:

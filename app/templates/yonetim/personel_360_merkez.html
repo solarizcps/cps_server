@@ -2314,9 +2314,24 @@
     const ustalar = (sec.profiller || []).filter(x => x.profil_tipi === 'SAHA_USTASI' && x.id !== p.id);
     const TIPLER_LIST = ['SAHA_USTASI', 'SAHA_PERSONEL', 'yonetim', 'ofis', 'sistem', 'calisan'];
 
-    const deptOpts = depts.map(d =>
-      `<option value="${d.id}" ${d.id === p.dept_id ? 'selected' : ''}>${d.ad} (${d.kod || ''})</option>`
-    ).join('');
+    // P5B: hiyerarşik dropdown — parent_id NULL olanlar gruplama başlığı, dolu olanlar seçilebilir
+    const deptAnalar  = depts.filter(d => d.parent_id == null);
+    const deptAltlar  = depts.filter(d => d.parent_id != null);
+    let deptOpts = '';
+    // Önce alt birimi olan ana departmanları groupla
+    deptAnalar.forEach(ana => {
+      const altlar = deptAltlar.filter(a => a.parent_id === ana.id);
+      if (altlar.length > 0) {
+        deptOpts += `<optgroup label="${ana.ad}">`;
+        altlar.forEach(alt => {
+          deptOpts += `<option value="${alt.id}" ${alt.id === p.dept_id ? 'selected' : ''}>${alt.ad}</option>`;
+        });
+        deptOpts += `</optgroup>`;
+      } else {
+        // Alt birimi olmayan ana departmanlar düz seçenek olarak
+        deptOpts += `<option value="${ana.id}" ${ana.id === p.dept_id ? 'selected' : ''}>${ana.ad} (${ana.kod || ''})</option>`;
+      }
+    });
 
     const tipOpts = TIPLER_LIST.map(t =>
       `<option value="${t}" ${t === p.profil_tipi ? 'selected' : ''}>${t}</option>`
