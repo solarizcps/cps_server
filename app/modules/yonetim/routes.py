@@ -3663,22 +3663,30 @@ def personel_360_usta_ata(profil_id):
             WHERE personel_profil_id=? AND usta_profil_id=? AND aktif=1
         """, (profil_id, yeni_usta_id)).fetchone()
         if ayni:
-            return jsonify({'ok': False, 'hata': 'Bu usta zaten aktif olarak atanmış'}), 409
+            return jsonify({
+                'ok': False,
+                'hata': (
+                    f"Bu personel zaten {yeni_usta['gercek_ad']} ustasına bağlı. "
+                    "Değişiklik için farklı bir usta seçin."
+                )
+            }), 409
 
+        # Mevcut TÜM aktif ilişkileri kapat (birden fazla aktif kalıntı olabilir)
         kapanan_id = None
-        # Mevcut aktif ilişkiyi kapat
-        eski = con.execute("""
+        eski_rows = con.execute("""
             SELECT id FROM usta_personel_iliskisi
             WHERE personel_profil_id=? AND aktif=1
-            ORDER BY id DESC LIMIT 1
-        """, (profil_id,)).fetchone()
-        if eski:
-            kapanan_id = eski['id']
-            con.execute("""
-                UPDATE usta_personel_iliskisi
-                SET aktif=0, bitis_tarihi=?, updated_at=?, guncelleme_notu=?
-                WHERE id=?
-            """, (today, now_str, notu, kapanan_id))
+        """, (profil_id,)).fetchall()
+        if eski_rows:
+            kapanan_id = eski_rows[0]['id']  # audit için ilk id yeterli
+            ids = [r['id'] for r in eski_rows]
+            placeholders = ','.join('?' * len(ids))
+            con.execute(
+                f"UPDATE usta_personel_iliskisi "
+                f"SET aktif=0, bitis_tarihi=?, updated_at=?, guncelleme_notu=? "
+                f"WHERE id IN ({placeholders})",
+                [today, now_str, notu] + ids
+            )
 
         # Yeni ilişki aç
         con.execute("""

@@ -2442,7 +2442,7 @@
     mesaj.innerHTML = '<span style="color:#6b7280;">Kaydediliyor…</span>';
 
     try {
-      const resp = await fetch(`/yonetim/api/personel-360/profil/${secilenProfilId}/usta-ata`, {
+      const resp = await fetch(`/yonetim/api/personel-360/profil/${secilenId}/usta-ata`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
@@ -2457,7 +2457,7 @@
         document.getElementById('ua-not').value = '';
         _ustaSecenekler = null;  // cache sıfırla
         // Profili yenile
-        setTimeout(() => profilYukle(secilenProfilId), 900);
+        setTimeout(() => profilYukle(secilenId), 900);
       } else {
         mesaj.innerHTML = `<span style="color:#dc2626;">${d.hata || 'Hata oluştu.'}</span>`;
       }
