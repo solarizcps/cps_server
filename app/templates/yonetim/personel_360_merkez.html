@@ -23,6 +23,34 @@
   <strong>✏️ Organizasyon</strong> sekmesinden departman, profil tipi ve sorumlu usta güncellenebilir.
 </div>
 
+<!-- P3B: Aktivite Kontrol Bandı -->
+<div id="p3b-kontrol-bandi"
+     style="display:none;margin-bottom:14px;background:var(--bg2);border:1px solid var(--border);
+            border-radius:8px;padding:10px 16px;">
+  <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
+    <span style="font-size:12px;font-weight:600;color:var(--text2);margin-right:4px;">Aktivite Özeti:</span>
+    <span class="p3b-kart" id="p3b-k-toplam" style="background:#f3f4f6;color:#374151;">
+      <strong id="p3b-n-toplam">—</strong> Toplam
+    </span>
+    <span class="p3b-kart" id="p3b-k-bugun" style="background:#dcfce7;color:#166534;">
+      <strong id="p3b-n-bugun">—</strong> Bugün Aktif
+    </span>
+    <span class="p3b-kart" id="p3b-k-3gun" style="background:#d1fae5;color:#065f46;">
+      <strong id="p3b-n-3gun">—</strong> ≤3 Gün
+    </span>
+    <span class="p3b-kart" id="p3b-k-7gun" style="background:#fef3c7;color:#92400e;">
+      <strong id="p3b-n-7gun">—</strong> ≤7 Gün
+    </span>
+    <span class="p3b-kart" id="p3b-k-hareketsiz" style="background:#fee2e2;color:#991b1b;">
+      <strong id="p3b-n-hareketsiz">—</strong> Hareketsiz
+    </span>
+    <span class="p3b-kart" id="p3b-k-kayityok" style="background:#f3f4f6;color:#6b7280;">
+      <strong id="p3b-n-kayityok">—</strong> Kayıt Yok
+    </span>
+    <span id="p3b-yukleniyor" style="font-size:11px;color:var(--text3);margin-left:4px;display:none;">Yükleniyor…</span>
+  </div>
+</div>
+
 <!-- İki kolonlu layout: sol = liste, sağ = detay -->
 <div style="display:grid;grid-template-columns:320px 1fr;gap:16px;align-items:start;">
 
@@ -781,6 +809,26 @@
 .p360-satir .ps-ad { font-weight: 600; color: var(--text1); line-height: 1.3; }
 .p360-satir .ps-sub { font-size: 11px; color: var(--text3); }
 
+/* P3B: Kontrol bandı kart */
+.p3b-kart {
+  display:inline-flex; align-items:center; gap:4px;
+  padding:4px 10px; border-radius:12px; font-size:12px;
+  font-weight:500; white-space:nowrap;
+}
+.p3b-kart strong { font-size:14px; font-weight:700; margin-right:2px; }
+
+/* P3B: Liste satırı aktivite rozeti */
+.p3b-rozet {
+  display:inline-block; padding:1px 6px; border-radius:8px;
+  font-size:9px; font-weight:700; text-transform:uppercase;
+  line-height:1.4; margin-left:4px; flex-shrink:0;
+}
+.p3b-rozet-aktif      { background:#dcfce7; color:#166534; }
+.p3b-rozet-yakin      { background:#d1fae5; color:#065f46; }
+.p3b-rozet-uzak       { background:#fef3c7; color:#92400e; }
+.p3b-rozet-hareketsiz { background:#fee2e2; color:#991b1b; }
+.p3b-rozet-kayit_yok  { background:#f3f4f6; color:#6b7280; }
+
 /* FAZ2G-3: İK chip'leri */
 .p360-ik-chip {
   display:flex; flex-direction:column; align-items:center; gap:2px;
@@ -872,6 +920,9 @@
   let secilenId     = null;
   let secilenPeriod = 'son_90_gun';
 
+  // P3B: aktivite ozet verisini tutar (profil_id → {durum, son_aktivite, gun_once})
+  let _p3bOzet = {};
+
   // ── Sayfa yükle ────────────────────────────────────────────
   async function yukle() {
     try {
@@ -882,9 +933,48 @@
       tumProfiller = data.profiller;
       deptFilterDoldur(data.departmanlar);
       listeGoster(tumProfiller);
+
+      // P3B: aktivite özeti paralel çek (bekleme yok - liste zaten gösterildi)
+      p3bOzetYukle();
     } catch (e) {
       document.getElementById('p360-liste').innerHTML =
-        `<div class="p360-bos-mesaj" style="color:#dc2626;">⚠ Yüklenemedi: ${e.message}</div>`;
+        `<div class="p360-bos-mesaj" style="color:#dc2626;">Yuklenemedi: ${e.message}</div>`;
+    }
+  }
+
+  // P3B: Aktivite özeti çek ve bandı + listeyi güncelle
+  async function p3bOzetYukle() {
+    const bandi  = document.getElementById('p3b-kontrol-bandi');
+    const ykEl   = document.getElementById('p3b-yukleniyor');
+    if (ykEl) ykEl.style.display = 'inline';
+    try {
+      const r = await fetch('/yonetim/api/personel-360/aktivite-ozet', { credentials: 'same-origin' });
+      const d = await r.json();
+      if (!d.ok) return;
+
+      // Profil map'ini doldur
+      _p3bOzet = {};
+      (d.profiller || []).forEach(function(p) {
+        _p3bOzet[p.profil_id] = p;
+      });
+
+      // Kontrol bandını doldur
+      var oz = d.ozet || {};
+      document.getElementById('p3b-n-toplam').textContent      = oz.toplam      || 0;
+      document.getElementById('p3b-n-bugun').textContent       = oz.bugun       || 0;
+      document.getElementById('p3b-n-3gun').textContent        = oz.son_3_gun   || 0;
+      document.getElementById('p3b-n-7gun').textContent        = oz.son_7_gun   || 0;
+      document.getElementById('p3b-n-hareketsiz').textContent  = oz.hareketsiz  || 0;
+      document.getElementById('p3b-n-kayityok').textContent    = oz.kayit_yok   || 0;
+      if (bandi) bandi.style.display = 'block';
+
+      // Listeyi rozet ile yeniden render et
+      listeGoster(tumProfiller);
+
+    } catch(e) {
+      // Aktivite özeti hata verirse ana liste bozulmasın
+    } finally {
+      if (ykEl) ykEl.style.display = 'none';
     }
   }
 
@@ -907,19 +997,51 @@
       kap.innerHTML = '<div class="p360-bos-mesaj">Eşleşen profil yok.</div>';
       return;
     }
+    // P3B: aktivite durum rozet etiketleri
+    const _P3B_DURUM = {
+      aktif:       { cls:'p3b-rozet-aktif',      etiket:'Aktif'       },
+      yakin:       { cls:'p3b-rozet-yakin',       etiket:'Yakın'       },
+      uzak:        { cls:'p3b-rozet-uzak',        etiket:'7 Gün'       },
+      hareketsiz:  { cls:'p3b-rozet-hareketsiz',  etiket:'Hareketsiz'  },
+      kayit_yok:   { cls:'p3b-rozet-kayit_yok',   etiket:'Kayıt Yok'   },
+    };
+
     kap.innerHTML = liste.map(p => {
       const tip      = TIPLER[p.profil_tipi] || TIPLER.SISTEM;
       const harf     = (p.ad_soyad || '?')[0].toUpperCase();
       const secili   = (p.id && p.id === secilenId) ? ' secili' : '';
       const profilYok = !p.id;
-      return `
-        <div class="p360-satir${secili}${profilYok ? ' p360-profil-yok' : ''}" data-id="${p.id || ''}" data-personel-id="${p.personel_id || ''}">
-          <div class="ps-ikon" style="background:${tip.renk};">${harf}</div>
-          <div style="flex:1;min-width:0;">
-            <div class="ps-ad">${p.ad_soyad || '—'}</div>
-            <div class="ps-sub">${p.departman || '—'} · <span style="background:${tip.bg};color:${tip.renk};padding:1px 5px;border-radius:3px;font-size:10px;">${tip.etiket}</span>${profilYok ? ' <span style="color:#e74c3c;font-size:10px;">[profil eksik]</span>' : ''}</div>
-          </div>
-        </div>`;
+
+      // P3B rozet
+      var rozetHtml = '';
+      var tarihHtml = '';
+      if (p.id && _p3bOzet[p.id]) {
+        var oz = _p3bOzet[p.id];
+        var dr = _P3B_DURUM[oz.durum];
+        if (dr) {
+          rozetHtml = '<span class="p3b-rozet ' + dr.cls + '">' + dr.etiket + '</span>';
+        }
+        if (oz.son_aktivite) {
+          var tarihKisa = (oz.son_aktivite || '').substring(0, 10);
+          tarihHtml = '<span style="font-size:10px;color:var(--text3);margin-left:4px;">' + tarihKisa + '</span>';
+        }
+      }
+
+      return '<div class="p360-satir' + secili + (profilYok ? ' p360-profil-yok' : '') + '" data-id="' + (p.id || '') + '" data-personel-id="' + (p.personel_id || '') + '">'
+        + '<div class="ps-ikon" style="background:' + tip.renk + ';">' + harf + '</div>'
+        + '<div style="flex:1;min-width:0;">'
+          + '<div class="ps-ad" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">'
+            + (p.ad_soyad || '—')
+            + rozetHtml
+          + '</div>'
+          + '<div class="ps-sub">'
+            + (p.departman || '—') + ' · '
+            + '<span style="background:' + tip.bg + ';color:' + tip.renk + ';padding:1px 5px;border-radius:3px;font-size:10px;">' + tip.etiket + '</span>'
+            + (profilYok ? ' <span style="color:#e74c3c;font-size:10px;">[profil eksik]</span>' : '')
+            + tarihHtml
+          + '</div>'
+        + '</div>'
+      + '</div>';
     }).join('');
 
     kap.querySelectorAll('.p360-satir').forEach(el => {

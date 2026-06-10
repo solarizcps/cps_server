@@ -4262,9 +4262,41 @@ def personel_360_aktivite(profil_id):
     import sqlite3 as _sqlite3
     from config import Config as _Cfg
 
+    # P3B güvenlik fix: usta erişim kontrolü (personel_360_profil ile aynı mantık)
+    _u_sess_akt = session.get('kullanici')
+    _rol_id_akt = (_u_sess_akt or {}).get('RolId')
+    _is_yonetim_akt = False
+    if _rol_id_akt:
+        from db import qone as _qone_akt
+        _sr_akt = _qone_akt("SELECT SuperAdmin FROM sistem_rol WHERE Id=? AND Aktif=1", (_rol_id_akt,))
+        _is_yonetim_akt = bool(_sr_akt and _sr_akt.get('SuperAdmin') == 1)
+    _is_usta_view_akt = (
+        yetki_var('personel_360.usta', 'can_view')
+        and not is_superadmin(_u_sess_akt)
+        and not _is_yonetim_akt
+    )
+
     con = _sqlite3.connect(_Cfg.MOCK_DB_PATH, timeout=10)
     con.row_factory = _sqlite3.Row
     try:
+        # Usta erişim kontrolü: sadece bağlı personelin aktivitesine erişebilir
+        if _is_usta_view_akt:
+            _usta_kadi = (_u_sess_akt or {}).get('KullaniciAdi', '')
+            _usta_kp = con.execute(
+                "SELECT id FROM kullanici_profil WHERE kullanici_adi=? LIMIT 1",
+                (_usta_kadi,)
+            ).fetchone()
+            if not _usta_kp:
+                con.close()
+                return jsonify({'ok': False, 'hata': 'Usta profili bulunamadi'}), 403
+            _izin = con.execute("""
+                SELECT 1 FROM usta_personel_iliskisi
+                WHERE usta_profil_id=? AND personel_profil_id=? AND aktif=1
+            """, (_usta_kp['id'], profil_id)).fetchone()
+            if not _izin:
+                con.close()
+                return jsonify({'ok': False, 'hata': 'Bu profile erisim yetkiniz yok'}), 403
+
         # Profil bilgisi
         kp = con.execute(
             "SELECT id, kullanici_adi, gercek_ad, kaynak, kaynak_id "
@@ -4330,6 +4362,284 @@ def personel_360_aktivite(profil_id):
             'ok':    False,
             'hata':  str(e)[:300],
             'tb':    traceback.format_exc(),
+        }), 500
+    finally:
+        con.close()
+
+
+# ════════════════════════════════════════════════════════════════
+# P3B — TOPLU PERSONEL AKTİVİTE ÖZET ENDPOINT (10.06.2026)
+# Salt okuma. Yeni tablo yok. Schema değişikliği yok.
+# 4 toplu GROUP BY sorgusu → Python merge → profil_id bazlı özet.
+# Profil başına sorgu yapılmaz (performans için).
+# ════════════════════════════════════════════════════════════════
+
+@yonetim_bp.route('/api/personel-360/aktivite-ozet', methods=['GET'])
+@yetki_gerekli('personel_360', 'can_view')
+def personel_360_aktivite_ozet():
+    """
+    P3B — Tüm personel için toplu aktivite özeti.
+    Usta görünümünde sadece bağlı personel dahil edilir.
+    İK/Yönetim tüm personeli görür.
+    Finans audit'i hariç.
+
+    Response:
+        {ok, ozet:{toplam,bugun,son_3_gun,son_7_gun,hareketsiz,kayit_yok},
+         profiller:[{profil_id, ad_soyad, departman, profil_tipi,
+                     son_aktivite, son_kaynak, gun_once, durum,
+                     kaynaklar:{uretim_kayit,tasks,task_logs,sistem_audit}}]}
+    """
+    import sqlite3 as _sqlite3
+    from config import Config as _Cfg
+    from datetime import datetime, date
+
+    # Usta erişim kontrolü
+    _u_sess = session.get('kullanici')
+    _rol_id = (_u_sess or {}).get('RolId')
+    _is_yonetim = False
+    if _rol_id:
+        from db import qone as _qone_oz
+        _sr = _qone_oz("SELECT SuperAdmin FROM sistem_rol WHERE Id=? AND Aktif=1", (_rol_id,))
+        _is_yonetim = bool(_sr and _sr.get('SuperAdmin') == 1)
+    _is_usta = (
+        yetki_var('personel_360.usta', 'can_view')
+        and not is_superadmin(_u_sess)
+        and not _is_yonetim
+    )
+
+    con = _sqlite3.connect(_Cfg.MOCK_DB_PATH, timeout=15)
+    con.row_factory = _sqlite3.Row
+    try:
+        # ── 1) Profil listesi (usta filtreli) ─────────────────────
+        if _is_usta:
+            _usta_kadi = (_u_sess or {}).get('KullaniciAdi', '')
+            _usta_kp = con.execute(
+                "SELECT id FROM kullanici_profil WHERE kullanici_adi=? LIMIT 1",
+                (_usta_kadi,)
+            ).fetchone()
+            if not _usta_kp:
+                return jsonify({'ok': False, 'hata': 'Usta profili bulunamadı'}), 403
+            _usta_pid = _usta_kp['id']
+            profil_rows = con.execute("""
+                SELECT kp.id, kp.kullanici_adi, kp.gercek_ad, kp.profil_tipi,
+                       kp.kaynak, kp.kaynak_id,
+                       dm.ad AS departman, pk.legacy_id, pk.kaynak AS pk_kaynak
+                FROM usta_personel_iliskisi upi
+                JOIN kullanici_profil kp ON kp.id = upi.personel_profil_id
+                LEFT JOIN departman_master dm ON dm.id = kp.departman_id
+                LEFT JOIN personel_kullanici pk
+                       ON kp.kaynak='personel_kullanici' AND kp.kaynak_id = pk.id
+                WHERE upi.usta_profil_id = ? AND upi.aktif = 1 AND kp.aktif = 1
+                ORDER BY kp.gercek_ad
+            """, (_usta_pid,)).fetchall()
+        else:
+            profil_rows = con.execute("""
+                SELECT kp.id, kp.kullanici_adi, kp.gercek_ad, kp.profil_tipi,
+                       kp.kaynak, kp.kaynak_id,
+                       dm.ad AS departman, pk.legacy_id, pk.kaynak AS pk_kaynak
+                FROM kullanici_profil kp
+                LEFT JOIN departman_master dm ON dm.id = kp.departman_id
+                LEFT JOIN personel_kullanici pk
+                       ON kp.kaynak='personel_kullanici' AND kp.kaynak_id = pk.id
+                WHERE kp.aktif = 1
+                ORDER BY kp.gercek_ad
+            """).fetchall()
+
+        # profil id listesi ve look-up map'leri
+        profil_map = {}   # profil_id → row dict
+        kadi_to_pid = {}  # kullanici_adi (lower) → profil_id
+
+        for row in profil_rows:
+            pid  = row['id']
+            kadi = (row['kullanici_adi'] or '').lower()
+            d = dict(row)
+            profil_map[pid] = d
+            if kadi:
+                kadi_to_pid[kadi] = pid
+
+        # ── 2) Toplu GROUP BY sorguları (profil başına değil!) ────
+
+        # Kaynak A: uretim_kayit — personel_id FK bazlı son tarih
+        # CPS_CANLI: personel_id = kaynak_id
+        # LEGACY_5055: personel_id = legacy_id
+        uretim_son = {}   # kaynak_id (veya legacy_id) → son tarih str
+
+        try:
+            rows_u = con.execute("""
+                SELECT personel_id, kaynak AS uk_kaynak, MAX(tarih) AS son_tarih
+                FROM uretim_kayit
+                WHERE tarih IS NOT NULL AND tarih != ''
+                GROUP BY personel_id, kaynak
+            """).fetchall()
+            for r in rows_u:
+                key = (r['personel_id'], r['uk_kaynak'])
+                uretim_son[key] = r['son_tarih']
+        except Exception:
+            pass
+
+        # Kaynak B: tasks.created_by
+        tasks_son = {}    # kadi (lower) → son tarih str
+        try:
+            rows_t = con.execute("""
+                SELECT LOWER(created_by) AS kadi, MAX(created_at) AS son_tarih
+                FROM tasks
+                WHERE created_at IS NOT NULL AND created_at != ''
+                GROUP BY LOWER(created_by)
+            """).fetchall()
+            for r in rows_t:
+                tasks_son[r['kadi']] = r['son_tarih']
+        except Exception:
+            pass
+
+        # Kaynak C: task_logs.user_id
+        tlog_son = {}     # kadi (lower) → son tarih str
+        try:
+            rows_tl = con.execute("""
+                SELECT LOWER(user_id) AS kadi, MAX(created_at) AS son_tarih
+                FROM task_logs
+                WHERE created_at IS NOT NULL AND created_at != ''
+                GROUP BY LOWER(user_id)
+            """).fetchall()
+            for r in rows_tl:
+                tlog_son[r['kadi']] = r['son_tarih']
+        except Exception:
+            pass
+
+        # Kaynak D: sistem_audit (finans hariç)
+        audit_son = {}    # kadi (lower) → son tarih str
+        try:
+            rows_a = con.execute("""
+                SELECT LOWER(KullaniciAdi) AS kadi, MAX(Tarih) AS son_tarih
+                FROM sistem_audit
+                WHERE (Modul IS NULL OR Modul IN ('yonetim','hedef','grafik','ithalat','tasks'))
+                  AND Tarih IS NOT NULL AND Tarih != ''
+                GROUP BY LOWER(KullaniciAdi)
+            """).fetchall()
+            for r in rows_a:
+                audit_son[r['kadi']] = r['son_tarih']
+        except Exception:
+            pass
+
+        # ── 3) Her profil için merge ───────────────────────────────
+        bugun = date.today().isoformat()
+
+        def _gun_farki(tarih_str):
+            """Verilen tarih string'i ile bugün arasındaki gün farkı."""
+            if not tarih_str:
+                return None
+            try:
+                t = tarih_str[:10]  # YYYY-MM-DD
+                d = date.fromisoformat(t)
+                return (date.today() - d).days
+            except Exception:
+                return None
+
+        def _durum(gun):
+            if gun is None:
+                return 'kayit_yok'
+            if gun <= 1:
+                return 'aktif'
+            if gun <= 3:
+                return 'yakin'
+            if gun <= 7:
+                return 'uzak'
+            return 'hareketsiz'
+
+        sonuc_profiller = []
+        ozet = {'toplam': 0, 'bugun': 0, 'son_3_gun': 0, 'son_7_gun': 0,
+                'hareketsiz': 0, 'kayit_yok': 0}
+
+        for pid, row in profil_map.items():
+            kadi_lower = (row.get('kullanici_adi') or '').lower()
+            kaynak_id  = row.get('kaynak_id')
+            legacy_id  = row.get('legacy_id')
+            pk_kaynak  = (row.get('pk_kaynak') or '').upper()
+
+            # Üretim tarihi: CPS_CANLI → kaynak_id, LEGACY_5055 → legacy_id
+            son_uretim = None
+            if kaynak_id:
+                son_uretim = (
+                    uretim_son.get((kaynak_id, 'CPS_CANLI'))
+                    or uretim_son.get((kaynak_id, None))
+                )
+            if not son_uretim and legacy_id and pk_kaynak == 'LEGACY_5055':
+                son_uretim = (
+                    uretim_son.get((legacy_id, 'LEGACY_5055'))
+                    or uretim_son.get((legacy_id, None))
+                )
+
+            son_task   = tasks_son.get(kadi_lower)
+            son_tlog   = tlog_son.get(kadi_lower)
+            son_audit  = audit_son.get(kadi_lower)
+
+            # En güncel tarih
+            tarih_secenekler = {
+                'uretim_kayit': son_uretim,
+                'tasks':        son_task,
+                'task_logs':    son_tlog,
+                'sistem_audit': son_audit,
+            }
+            gecerli = {k: v for k, v in tarih_secenekler.items() if v}
+            if gecerli:
+                son_kaynak  = max(gecerli, key=lambda k: gecerli[k])
+                son_aktivite = gecerli[son_kaynak]
+            else:
+                son_kaynak   = None
+                son_aktivite = None
+
+            gun_once = _gun_farki(son_aktivite)
+            durum    = _durum(gun_once)
+
+            # Özet sayaçları
+            ozet['toplam'] += 1
+            if durum == 'aktif':
+                ozet['bugun'] += 1
+                ozet['son_3_gun'] += 1
+                ozet['son_7_gun'] += 1
+            elif durum == 'yakin':
+                ozet['son_3_gun'] += 1
+                ozet['son_7_gun'] += 1
+            elif durum == 'uzak':
+                ozet['son_7_gun'] += 1
+            elif durum == 'hareketsiz':
+                ozet['hareketsiz'] += 1
+            else:
+                ozet['kayit_yok'] += 1
+
+            sonuc_profiller.append({
+                'profil_id':    pid,
+                'ad_soyad':     row.get('gercek_ad') or '',
+                'departman':    row.get('departman') or '',
+                'profil_tipi':  row.get('profil_tipi') or '',
+                'son_aktivite': son_aktivite,
+                'son_kaynak':   son_kaynak,
+                'gun_once':     gun_once,
+                'durum':        durum,
+                'kaynaklar': {
+                    'uretim_kayit': son_uretim,
+                    'tasks':        son_task,
+                    'task_logs':    son_tlog,
+                    'sistem_audit': son_audit,
+                },
+            })
+
+        # En eski aktivite üstte (İK kontrol modu)
+        sonuc_profiller.sort(
+            key=lambda p: p['son_aktivite'] or '0000-00-00'
+        )
+
+        return jsonify({
+            'ok':       True,
+            'ozet':     ozet,
+            'profiller': sonuc_profiller,
+        })
+
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'ok':   False,
+            'hata': str(e)[:300],
+            'tb':   traceback.format_exc(),
         }), 500
     finally:
         con.close()
