@@ -8,7 +8,7 @@ from flask import (Blueprint, render_template, redirect, url_for,
                    request, session, abort, jsonify)
 from functools import wraps
 from modules.auth import yetki_gerekli, yetki_var, is_superadmin
-from db import q, qexec
+from db import q, qexec, get_conn
 
 hedef_bp = Blueprint('hedef', __name__, url_prefix='/hedef')
 
@@ -2293,36 +2293,47 @@ def personel_ekle():
                     'mevcut': dict(mevcut_ad[0])
                 }), 409
 
-        # INSERT
-        qexec(
-            """INSERT INTO personel_kullanici 
-               (ad, kullanici_adi, sifre, aktif, kaynak) 
-               VALUES (?, ?, ?, 1, 'CPS_CANLI')""",
-            (ad, kadi, sifre)
-        )
+        # Atomik transaction: personel_kullanici + kullanici_profil aynı connection üzerinde.
+        # Profil INSERT başarısız olursa ana kayıt rollback edilir.
+        from modules.yonetim.queries import ensure_kullanici_profil
+        from datetime import datetime as _dt
 
-        # Yeni id
-        yeni_id_row = q("SELECT last_insert_rowid() as id")
-        yeni_id = yeni_id_row[0]['id'] if yeni_id_row else None
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            # 1) personel_kullanici INSERT
+            cur.execute(
+                """INSERT INTO personel_kullanici
+                   (ad, kullanici_adi, sifre, aktif, kaynak)
+                   VALUES (?, ?, ?, 1, 'CPS_CANLI')""",
+                (ad, kadi, sifre)
+            )
+            yeni_id = cur.lastrowid
 
-        # P1B: Atomik kullanici_profil oluştur (Personel 360 merkezi)
-        # personel_kullanici → kullanici_profil köprüsü: kaynak='personel_kullanici', kaynak_id=yeni_id
-        # Mevcut profil varsa INSERT OR IGNORE ile dokunma.
-        if yeni_id:
+            # 2) kullanici_profil INSERT (same transaction)
+            ensure_kullanici_profil(
+                'personel_kullanici', yeni_id,
+                gercek_ad=ad,
+                kullanici_adi=kadi,
+                profil_tipi='SAHA_PERSONEL',
+                aktif=1,
+                conn=conn,
+            )
+
+            conn.commit()
+        except Exception:
             try:
-                qexec("""
-                    INSERT OR IGNORE INTO kullanici_profil
-                      (gercek_ad, kullanici_adi, profil_tipi, aktif, kaynak, kaynak_id)
-                    VALUES (?, ?, 'SAHA_PERSONEL', 1, 'personel_kullanici', ?)
-                """, (ad, kadi, yeni_id))
+                conn.rollback()
             except Exception:
-                pass  # Profil oluşturulamazsa personel_ekle yine de basarili sayilir
+                pass
+            conn.close()
+            raise
+        conn.close()
 
         # Audit log (stdout)
         try:
-            from datetime import datetime
             ekleyen = session.get('kullanici', {}).get('KullaniciAdi', 'bilinmiyor')
-            ts_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            ts_str = _dt.now().strftime('%Y-%m-%d %H:%M:%S')
             print(
                 f"[{ts_str}] PERSONEL_EKLE | modul=hedef | alt=personel | "
                 f"tablo=personel_kullanici | kayit_id={yeni_id} | "

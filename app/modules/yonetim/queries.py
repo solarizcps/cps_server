@@ -1,8 +1,93 @@
 # -*- coding: utf-8 -*-
 """CPS DEV - Yönetim Queries (routes.py ile uyumlu)"""
+import logging
 from datetime import date, datetime
 from db import q, qone, qscalar, qexec, get_conn
 from modules import audit
+
+_log = logging.getLogger(__name__)
+
+
+# ============================================================
+# KULLANICI_PROFİL KÖPRÜ HELPER
+# ============================================================
+
+def ensure_kullanici_profil(
+    kaynak,
+    kaynak_id,
+    *,
+    gercek_ad,
+    kullanici_adi=None,
+    profil_tipi='SAHA_PERSONEL',
+    aktif=1,
+    departman=None,
+    departman_id=None,
+    unvan=None,
+    conn=None,
+):
+    """
+    Idempotent kullanici_profil oluşturucu / köprü.
+
+    Önce (kaynak, kaynak_id) ile mevcut profili arar:
+      - Varsa: mevcut profil id'sini döndürür (dokunmaz).
+      - Yoksa: INSERT yapar ve yeni id'yi döndürür.
+
+    conn parametresi:
+      - None  → kendi bağlantısını açar ve commit eder (standalone kullanım).
+      - conn  → caller'ın transaction'ını kullanır; commit YAPILMAZ (atomik kullanım).
+
+    Hata olursa RuntimeError fırlatır (sessiz yutulmaz).
+    """
+    _own_conn = conn is None
+    c = get_conn() if _own_conn else conn
+    try:
+        # Mevcut profil var mı?
+        cur = c.cursor()
+        cur.execute(
+            "SELECT id FROM kullanici_profil WHERE kaynak=? AND kaynak_id=?",
+            (kaynak, kaynak_id)
+        )
+        row = cur.fetchone()
+        if row:
+            return row[0] if not hasattr(row, 'keys') else row['id']
+
+        # Yeni profil ekle
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        cur.execute("""
+            INSERT INTO kullanici_profil
+              (gercek_ad, kullanici_adi, departman, departman_id, unvan,
+               profil_tipi, aktif, kaynak, kaynak_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            gercek_ad,
+            kullanici_adi,
+            departman,
+            departman_id,
+            unvan,
+            profil_tipi,
+            aktif,
+            kaynak,
+            kaynak_id,
+            now,
+            now,
+        ))
+        kp_id = cur.lastrowid
+        if _own_conn:
+            c.commit()
+        _log.info("ensure_kullanici_profil: yeni profil oluşturuldu kp_id=%s kaynak=%s kaynak_id=%s",
+                  kp_id, kaynak, kaynak_id)
+        return kp_id
+    except Exception as exc:
+        if _own_conn:
+            try:
+                c.rollback()
+            except Exception:
+                pass
+        _log.error("ensure_kullanici_profil HATA kaynak=%s kaynak_id=%s: %s", kaynak, kaynak_id, exc)
+        raise RuntimeError(f"kullanici_profil oluşturulamadı ({kaynak}/{kaynak_id}): {exc}") from exc
+    finally:
+        if _own_conn:
+            c.close()
 
 
 # ============================================================
@@ -56,36 +141,47 @@ def kullanici_ekle(veri, kullanici):
     if rol_id:
         rol_ad = qscalar("SELECT Ad FROM sistem_rol WHERE Id = ?", (rol_id,))
 
-    uid = qexec("""
-        INSERT INTO sistem_kullanici
-          (KullaniciAdi, AdSoyad, Email, Sifre, RolId, Rol,
-           Aktif, ZorunluSifreDegistir, OlusturmaTarih, OlusturanKullanici)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-    """, (kadi, veri.get('AdSoyad'), veri.get('Email'), veri.get('Sifre') or '1234',
-          rol_id, rol_ad,
-          1 if veri.get('Aktif', 1) else 0,
-          datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-          kullanici))
+    # Atomik transaction: sistem_kullanici + kullanici_profil aynı connection üzerinde.
+    # Profil INSERT başarısız olursa tüm işlem rollback edilir.
+    aktif = 1 if veri.get('Aktif', 1) else 0
+    ad_soyad = veri.get('AdSoyad') or kadi
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-    # P1A: Atomik kullanici_profil oluştur (Personel 360 merkezi)
-    # sistem_kullanici → kullanici_profil köprüsü: kaynak='sistem_kullanici', kaynak_id=uid
-    # Mevcut profil varsa INSERT OR IGNORE ile dokunma.
+    conn = get_conn()
     try:
-        qexec("""
-            INSERT OR IGNORE INTO kullanici_profil
-              (gercek_ad, kullanici_adi, profil_tipi, aktif, kaynak, kaynak_id)
-            VALUES (?, ?, 'sistem', ?, 'sistem_kullanici', ?)
-        """, (
-            veri.get('AdSoyad') or kadi,
-            kadi,
-            1 if veri.get('Aktif', 1) else 0,
-            uid,
-        ))
+        cur = conn.cursor()
+        # 1) sistem_kullanici INSERT
+        cur.execute("""
+            INSERT INTO sistem_kullanici
+              (KullaniciAdi, AdSoyad, Email, Sifre, RolId, Rol,
+               Aktif, ZorunluSifreDegistir, OlusturmaTarih, OlusturanKullanici)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+        """, (kadi, ad_soyad, veri.get('Email'), veri.get('Sifre') or '1234',
+              rol_id, rol_ad, aktif, now, kullanici))
+        uid = cur.lastrowid
+
+        # 2) kullanici_profil INSERT (same transaction)
+        ensure_kullanici_profil(
+            'sistem_kullanici', uid,
+            gercek_ad=ad_soyad,
+            kullanici_adi=kadi,
+            profil_tipi='sistem',
+            aktif=aktif,
+            conn=conn,
+        )
+
+        conn.commit()
     except Exception:
-        pass  # Profil oluşturulamazsa kullanici_ekle yine de basarili sayilir
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        conn.close()
+        raise
+    conn.close()
 
     audit.log_ekle(kullanici, 'sistem_kullanici', uid,
-                   aciklama=f"Kullanıcı eklendi: {kadi} ({veri.get('AdSoyad') or '-'})",
+                   aciklama=f"Kullanıcı eklendi: {kadi} ({ad_soyad})",
                    modul='yonetim', alt_modul='kullanici')
     return uid
 

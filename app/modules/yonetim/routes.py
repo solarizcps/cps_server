@@ -55,7 +55,7 @@ def kullanici_yeni():
         }
         qr.kullanici_ekle(veri, kullanici=_u())
         flash('Kullanıcı eklendi.', 'ok')
-    except ValueError as e:
+    except (ValueError, RuntimeError) as e:
         flash(str(e), 'hata')
     return redirect(url_for('yonetim.kullanici_liste'))
 
