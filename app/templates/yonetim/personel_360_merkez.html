@@ -114,23 +114,25 @@
         </select>
       </div>
 
-      <!-- Departman -->
+      <!-- Departman — 2 seviyeli -->
       <div style="margin-bottom:6px;">
-        <label style="font-size:11px;color:var(--text2);">Departman</label>
-        <input id="ekle-dept" type="text" placeholder="Üretim"
-               list="ekle-dept-list"
-               style="width:100%;box-sizing:border-box;padding:6px 8px;margin-top:2px;
-                      border:1px solid var(--border);border-radius:5px;font-size:12px;
-                      color:var(--text1);background:#fff;">
-        <datalist id="ekle-dept-list">
-          <option value="Üretim">
-          <option value="Grafik">
-          <option value="Kalite">
-          <option value="Yönetim">
-          <option value="Muhasebe">
-          <option value="Planlama">
-          <option value="İdari İşler">
-        </datalist>
+        <label style="font-size:11px;color:var(--text2);">Ana Departman</label>
+        <select id="ekle-dept-ana"
+                style="width:100%;box-sizing:border-box;padding:6px 8px;margin-top:2px;
+                       border:1px solid var(--border);border-radius:5px;font-size:12px;
+                       color:var(--text1);background:#fff;"
+                onchange="_ekleDeptAltDoldur(this.value)">
+          <option value="">— Departman seç —</option>
+        </select>
+      </div>
+      <div id="ekle-dept-alt-wrap" style="margin-bottom:6px;display:none;">
+        <label style="font-size:11px;color:var(--text2);">Alt Birim</label>
+        <select id="ekle-dept-alt"
+                style="width:100%;box-sizing:border-box;padding:6px 8px;margin-top:2px;
+                       border:1px solid var(--border);border-radius:5px;font-size:12px;
+                       color:var(--text1);background:#fff;">
+          <option value="">— Alt birim seç —</option>
+        </select>
       </div>
 
       <!-- Ünvan -->
@@ -229,12 +231,19 @@
              style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--border);
                     border-radius:6px;font-size:13px;color:var(--text1);background:var(--bg2);">
     </div>
-    <!-- Departman filtre -->
-    <div style="padding:4px 12px 10px;">
-      <select id="p360-dept-filter"
+    <!-- Departman filtre — 2 seviyeli -->
+    <div style="padding:4px 12px 6px;">
+      <select id="p360-dept-ana"
               style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid var(--border);
                      border-radius:6px;font-size:12px;color:var(--text2);background:var(--bg2);">
         <option value="">— Tüm departmanlar —</option>
+      </select>
+    </div>
+    <div id="p360-dept-alt-wrap" style="padding:0 12px 10px;display:none;">
+      <select id="p360-dept-alt"
+              style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid var(--border);
+                     border-radius:6px;font-size:12px;color:var(--text2);background:var(--bg2);">
+        <option value="">— Tüm alt birimler —</option>
       </select>
     </div>
     <div id="p360-liste" style="overflow-y:auto;max-height:calc(100vh - 300px);border-top:1px solid var(--border);">
@@ -1041,6 +1050,7 @@
 
       tumProfiller = data.profiller;
       deptFilterDoldur(data.departmanlar);
+      _ekleDeptAnaDoldur(data.departmanlar);
       listeGoster(tumProfiller);
 
       // P3B: aktivite özeti paralel çek (bekleme yok - liste zaten gösterildi)
@@ -1087,15 +1097,61 @@
     }
   }
 
-  // ── Departman filtre dropdown ───────────────────────────────
+  // ── Departman filtre dropdown — 2 seviyeli ─────────────────
+  let _deptTumu = [];  // tüm departman listesi (API'den)
+
   function deptFilterDoldur(departmanlar) {
-    const sel = document.getElementById('p360-dept-filter');
-    departmanlar.forEach(d => {
+    _deptTumu = departmanlar || [];
+    const anaSel = document.getElementById('p360-dept-ana');
+    anaSel.innerHTML = '<option value="">— Tüm departmanlar —</option>';
+    _deptTumu.filter(d => d.parent_id == null).forEach(d => {
       const opt = document.createElement('option');
-      opt.value = d.ad || '';
+      opt.value = d.id;
       opt.textContent = d.ad + (d.kod ? ` (${d.kod})` : '');
+      anaSel.appendChild(opt);
+    });
+  }
+
+  function _altBirimleriDoldur(anaId) {
+    const altSel  = document.getElementById('p360-dept-alt');
+    const altWrap = document.getElementById('p360-dept-alt-wrap');
+    const altlar = _deptTumu.filter(d => d.parent_id == anaId);
+    altSel.innerHTML = '<option value="">— Tüm alt birimler —</option>';
+    if (altlar.length > 0) {
+      altlar.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.id;
+        opt.textContent = d.ad;
+        altSel.appendChild(opt);
+      });
+      altWrap.style.display = '';
+    } else {
+      altWrap.style.display = 'none';
+    }
+  }
+
+  // ── Personel ekleme formu — departman dropdown ───────────────
+  function _ekleDeptAnaDoldur(departmanlar) {
+    const sel = document.getElementById('ekle-dept-ana');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— Departman seç —</option>';
+    (departmanlar || _deptTumu).filter(d => d.parent_id == null).forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d.id;
+      opt.textContent = d.ad;
       sel.appendChild(opt);
     });
+  }
+
+  function _ekleDeptAltDoldur(anaIdStr) {
+    const altSel  = document.getElementById('ekle-dept-alt');
+    const altWrap = document.getElementById('ekle-dept-alt-wrap');
+    const anaId   = parseInt(anaIdStr) || null;
+    const altlar  = anaId ? _deptTumu.filter(d => d.parent_id === anaId) : [];
+    altSel.innerHTML = '<option value="">— Alt birim seç —</option>' +
+      altlar.map(d => `<option value="${d.id}">${d.ad}</option>`).join('');
+    altWrap.style.display = altlar.length > 0 ? '' : 'none';
+    if (altlar.length === 0) altSel.value = '';
   }
 
   // ── Liste render ────────────────────────────────────────────
@@ -1171,23 +1227,44 @@
     });
   }
 
-  // ── Filtre ──────────────────────────────────────────────────
+  // ── Filtre — dept_id bazlı, 2 seviyeli ─────────────────────
   function filtrele() {
-    const q    = (document.getElementById('p360-arama').value || '').toLowerCase();
-    const dept = document.getElementById('p360-dept-filter').value;
-    let liste  = tumProfiller;
-    if (q)    liste = liste.filter(p =>
-      (p.ad_soyad       || '').toLowerCase().includes(q) ||
-      (p.kullanici_adi  || '').toLowerCase().includes(q) ||
-      (p.departman      || '').toLowerCase().includes(q) ||
-      (p.profil_tipi    || '').toLowerCase().includes(q)
+    const q       = (document.getElementById('p360-arama').value || '').toLowerCase();
+    const anaId   = parseInt(document.getElementById('p360-dept-ana').value) || null;
+    const altId   = parseInt(document.getElementById('p360-dept-alt').value) || null;
+    let liste = tumProfiller;
+
+    if (q) liste = liste.filter(p =>
+      (p.ad_soyad      || '').toLowerCase().includes(q) ||
+      (p.kullanici_adi || '').toLowerCase().includes(q) ||
+      (p.departman     || '').toLowerCase().includes(q) ||
+      (p.profil_tipi   || '').toLowerCase().includes(q)
     );
-    if (dept) liste = liste.filter(p => (p.departman || '') === dept);
+
+    if (altId) {
+      // Alt birim seçiliyse sadece o alt birim
+      liste = liste.filter(p => p.dept_id === altId);
+    } else if (anaId) {
+      // Ana departman seçili, alt birim yok: ana dept + tüm çocukları
+      const cocukIds = _deptTumu.filter(d => d.parent_id === anaId).map(d => d.id);
+      liste = liste.filter(p => p.dept_id === anaId || cocukIds.includes(p.dept_id));
+    }
+
     listeGoster(liste);
   }
 
   document.getElementById('p360-arama').addEventListener('input', filtrele);
-  document.getElementById('p360-dept-filter').addEventListener('change', filtrele);
+  document.getElementById('p360-dept-ana').addEventListener('change', function() {
+    const anaId = parseInt(this.value) || null;
+    if (anaId) {
+      _altBirimleriDoldur(anaId);
+    } else {
+      document.getElementById('p360-dept-alt').innerHTML = '<option value="">— Tüm alt birimler —</option>';
+      document.getElementById('p360-dept-alt-wrap').style.display = 'none';
+    }
+    filtrele();
+  });
+  document.getElementById('p360-dept-alt').addEventListener('change', filtrele);
 
   // ── Profil seç ──────────────────────────────────────────────
   async function profilSec(id) {
@@ -2310,28 +2387,41 @@
   }
 
   function _orgFormCiz(kap, p, sec) {
-    const depts  = sec.departmanlar || [];
+    const depts   = sec.departmanlar || [];
     const ustalar = (sec.profiller || []).filter(x => x.profil_tipi === 'SAHA_USTASI' && x.id !== p.id);
     const TIPLER_LIST = ['SAHA_USTASI', 'SAHA_PERSONEL', 'yonetim', 'ofis', 'sistem', 'calisan'];
 
-    // P5B: hiyerarşik dropdown — parent_id NULL olanlar gruplama başlığı, dolu olanlar seçilebilir
-    const deptAnalar  = depts.filter(d => d.parent_id == null);
-    const deptAltlar  = depts.filter(d => d.parent_id != null);
-    let deptOpts = '';
-    // Önce alt birimi olan ana departmanları groupla
-    deptAnalar.forEach(ana => {
-      const altlar = deptAltlar.filter(a => a.parent_id === ana.id);
-      if (altlar.length > 0) {
-        deptOpts += `<optgroup label="${ana.ad}">`;
-        altlar.forEach(alt => {
-          deptOpts += `<option value="${alt.id}" ${alt.id === p.dept_id ? 'selected' : ''}>${alt.ad}</option>`;
-        });
-        deptOpts += `</optgroup>`;
-      } else {
-        // Alt birimi olmayan ana departmanlar düz seçenek olarak
-        deptOpts += `<option value="${ana.id}" ${ana.id === p.dept_id ? 'selected' : ''}>${ana.ad} (${ana.kod || ''})</option>`;
+    // P5B: 2 ayrı dropdown — Ana departman + Alt birim
+    const deptAnalar = depts.filter(d => d.parent_id == null);
+    const deptAltlar = depts.filter(d => d.parent_id != null);
+
+    // Mevcut profil hangi ana + alt birimi?
+    let mevcutAnaId = null;
+    let mevcutAltId = null;
+    if (p.dept_id) {
+      const mevcutDept = depts.find(d => d.id === p.dept_id);
+      if (mevcutDept) {
+        if (mevcutDept.parent_id == null) {
+          mevcutAnaId = mevcutDept.id;
+        } else {
+          mevcutAltId = mevcutDept.id;
+          mevcutAnaId = mevcutDept.parent_id;
+        }
       }
-    });
+    }
+
+    const anaOpts = '<option value="">— Değiştirme —</option>' +
+      deptAnalar.map(d =>
+        `<option value="${d.id}" ${d.id === mevcutAnaId ? 'selected' : ''}>${d.ad}</option>`
+      ).join('');
+
+    // Alt birim seçenekleri: mevcut ana id'ye göre başlangıç yüklenir
+    const baslangicAltlar = mevcutAnaId ? deptAltlar.filter(d => d.parent_id === mevcutAnaId) : [];
+    const altOpts = '<option value="">— Alt birim yok / değiştirme —</option>' +
+      baslangicAltlar.map(d =>
+        `<option value="${d.id}" ${d.id === mevcutAltId ? 'selected' : ''}>${d.ad}</option>`
+      ).join('');
+    const altGoster = baslangicAltlar.length > 0 ? '' : 'display:none;';
 
     const tipOpts = TIPLER_LIST.map(t =>
       `<option value="${t}" ${t === p.profil_tipi ? 'selected' : ''}>${t}</option>`
@@ -2353,10 +2443,16 @@
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
 
         <div>
-          <label class="org-label">Departman</label>
-          <select id="org-dept-id" class="org-sel">
-            <option value="">— Değiştirme —</option>
-            ${deptOpts}
+          <label class="org-label">Ana Departman</label>
+          <select id="org-dept-ana" class="org-sel" onchange="_orgAltDoldur(this.value)">
+            ${anaOpts}
+          </select>
+        </div>
+
+        <div id="org-dept-alt-wrap" style="${altGoster}">
+          <label class="org-label">Alt Birim</label>
+          <select id="org-dept-alt" class="org-sel">
+            ${altOpts}
           </select>
         </div>
 
@@ -2382,6 +2478,17 @@
         </div>
 
       </div>`;
+
+    // Alt birim doldurma yardımcısı (org formu içi, _deptTumu kullanır)
+    window._orgAltDoldur = function(anaIdStr) {
+      const altWrap = document.getElementById('org-dept-alt-wrap');
+      const altSel  = document.getElementById('org-dept-alt');
+      const anaId   = parseInt(anaIdStr) || null;
+      const altlar  = anaId ? (_deptTumu || depts).filter(d => d.parent_id === anaId) : [];
+      altSel.innerHTML = '<option value="">— Alt birim yok / değiştirme —</option>' +
+        altlar.map(d => `<option value="${d.id}">${d.ad}</option>`).join('');
+      altWrap.style.display = altlar.length > 0 ? '' : 'none';
+    };
   }
 
   function orgTipDegisti() {
@@ -2407,13 +2514,19 @@
       return;
     }
 
-    const deptEl   = document.getElementById('org-dept-id');
-    const tipEl    = document.getElementById('org-profil-tipi');
-    const aktifEl  = document.getElementById('org-aktif');
-    const sahipEl  = document.getElementById('org-sahip-id');
+    const deptAnaEl = document.getElementById('org-dept-ana');
+    const deptAltEl = document.getElementById('org-dept-alt');
+    const tipEl     = document.getElementById('org-profil-tipi');
+    const aktifEl   = document.getElementById('org-aktif');
+    const sahipEl   = document.getElementById('org-sahip-id');
+
+    // Alt birim seçiliyse onu, yoksa ana departmanı gönder
+    const deptId = (deptAltEl && deptAltEl.value)
+      ? parseInt(deptAltEl.value)
+      : (deptAnaEl && deptAnaEl.value ? parseInt(deptAnaEl.value) : null);
 
     const body = { guncelleme_notu: notu };
-    if (deptEl  && deptEl.value)  body.departman_id = parseInt(deptEl.value);
+    if (deptId)  body.departman_id = deptId;
     if (tipEl   && tipEl.value)   body.profil_tipi  = tipEl.value;
     if (aktifEl && aktifEl.value !== '') body.aktif = parseInt(aktifEl.value);
     if (sahipEl && sahipEl.value) body.saha_organizasyon_sahibi_id = parseInt(sahipEl.value);
@@ -2512,8 +2625,11 @@
       return;
     }
 
-    const tip    = document.getElementById('ekle-tip').value;
-    const dept   = (document.getElementById('ekle-dept').value || '').trim() || null;
+    const tip       = document.getElementById('ekle-tip').value;
+    // P5B: alt birim varsa onu, yoksa ana departmanı dept_id olarak gönder
+    const ekleDeptAna = parseInt(document.getElementById('ekle-dept-ana').value) || null;
+    const ekleDeptAlt = parseInt((document.getElementById('ekle-dept-alt') || {}).value) || null;
+    const deptIdGonder = ekleDeptAlt || ekleDeptAna || null;
     const unvan  = (document.getElementById('ekle-unvan').value || '').trim() || null;
     const telefon = (document.getElementById('ekle-telefon').value || '').trim() || null;
     const email  = (document.getElementById('ekle-email').value || '').trim() || null;
@@ -2536,7 +2652,7 @@
           ad_soyad:       ad,
           kullanici_adi:  kadi,
           profil_tipi:    tip,
-          departman:      dept,
+          departman_id:   deptIdGonder,
           unvan:          unvan,
           telefon:        telefon,
           email:          email,
@@ -2570,6 +2686,9 @@
         if (el) el.value = '';
       });
       document.getElementById('ekle-usta').value = '';
+      const ekleDeptAnaEl = document.getElementById('ekle-dept-ana');
+      if (ekleDeptAnaEl) ekleDeptAnaEl.value = '';
+      _ekleDeptAltDoldur('');  // alt birimi gizle
 
       // Listeyi yenile — yeni kişi seçilebilsin
       await yukle();

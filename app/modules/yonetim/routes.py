@@ -2412,7 +2412,8 @@ def personel_360_secenekler():
             if _usta_kp:
                 profiller = con.execute("""
                     SELECT kp.id, kp.gercek_ad, kp.kullanici_adi, kp.profil_tipi, kp.aktif,
-                           dm.ad AS departman, dm.kod AS departman_kod, kp.profil_resim
+                           dm.ad AS departman, dm.kod AS departman_kod, kp.profil_resim,
+                           kp.departman_id AS dept_id
                     FROM kullanici_profil kp
                     JOIN usta_personel_iliskisi upi ON kp.id = upi.personel_profil_id
                     LEFT JOIN departman_master dm ON dm.id = kp.departman_id
@@ -2438,7 +2439,8 @@ def personel_360_secenekler():
                        dm.ad  AS departman,
                        dm.kod AS departman_kod,
                        'personel_kullanici'                                   AS kaynak,
-                       kp.profil_resim
+                       kp.profil_resim,
+                       kp.departman_id                                        AS dept_id
                 FROM personel_kullanici pk
                 LEFT JOIN kullanici_profil kp
                        ON kp.kaynak = 'personel_kullanici' AND kp.kaynak_id = pk.id
@@ -2456,7 +2458,8 @@ def personel_360_secenekler():
                        dm.ad  AS departman,
                        dm.kod AS departman_kod,
                        kp.kaynak                                               AS kaynak,
-                       kp.profil_resim
+                       kp.profil_resim,
+                       kp.departman_id                                         AS dept_id
                 FROM kullanici_profil kp
                 LEFT JOIN departman_master dm ON dm.id = kp.departman_id
                 WHERE kp.aktif = 1
@@ -2510,6 +2513,8 @@ def personel_360_secenekler():
                 "profil_tipi":      r["profil_tipi"],
                 "departman":        r["departman"],
                 "departman_kod":    r["departman_kod"],
+                # P5B: dept_id filtre için
+                "dept_id":          r["dept_id"] if "dept_id" in r.keys() else None,
                 # P4E: profil resim
                 "profil_resim":     r["profil_resim"] if "profil_resim" in r.keys() else None,
                 "profil_resim_url": (f'/static/img/personel/{r["profil_resim"]}' if r["profil_resim"] else None)
@@ -4088,6 +4093,12 @@ def personel_360_personel_ekle():
     ise_baslama    = (data.get('ise_baslama') or '').strip() or None
     usta_profil_id = data.get('usta_profil_id')
     aktif          = 1 if str(data.get('aktif', 1)) not in ('0', 'false', 'False') else 0
+    # P5B: departman_id (int veya None)
+    departman_id_raw = data.get('departman_id')
+    try:
+        departman_id = int(departman_id_raw) if departman_id_raw not in (None, '', 'null') else None
+    except (TypeError, ValueError):
+        departman_id = None
     # FAZ2G-8C: iletişim alanları
     telefon        = (data.get('telefon') or '').strip() or None
     email          = (data.get('email') or '').strip() or None
@@ -4158,15 +4169,24 @@ def personel_360_personel_ekle():
         pk_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
 
         # ── 4) kullanici_profil INSERT ───────────────────────────
+        # P5B: departman_id yoksa departman text alanı kullanılır; varsa ikisi de yazılır.
+        # Eğer departman_id verilmiş ama departman text boşsa, dept adını DB'den çek.
+        if departman_id is not None and departman is None:
+            _dm = con.execute(
+                "SELECT ad FROM departman_master WHERE id=? AND aktif=1", (departman_id,)
+            ).fetchone()
+            if _dm:
+                departman = _dm['ad']
         con.execute("""
             INSERT INTO kullanici_profil
-              (gercek_ad, kullanici_adi, departman, unvan,
+              (gercek_ad, kullanici_adi, departman, departman_id, unvan,
                profil_tipi, aktif, kaynak, kaynak_id)
-            VALUES (?, ?, ?, ?, ?, ?, 'personel_kullanici', ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'personel_kullanici', ?)
         """, (
             ad_soyad,
             kullanici_adi,
             departman,
+            departman_id,
             unvan,
             profil_tipi,
             aktif,
