@@ -3205,6 +3205,48 @@ def personel_360_profil(profil_id):
         except Exception:
             ekip_uretim_ozeti = None
 
+        # P5C-1: ENJ üretim özeti (sadece SAHA_USTASI + kaynak=sistem_kullanici)
+        # Sadece SELECT — ENJ tablolarına yazma yok.
+        enj_ozet = None
+        try:
+            if (kp and kp["profil_tipi"] == "SAHA_USTASI"
+                    and kp["kaynak"] == "sistem_kullanici"
+                    and kp["kaynak_id"] is not None):
+                _sk_id = kp["kaynak_id"]
+                _enj_row = con.execute("""
+                    SELECT
+                        COUNT(DISTINCT egr.id)                   AS rapor_sayisi,
+                        COUNT(DISTINCT egr.tarih)                AS calisma_gun,
+                        COALESCE(SUM(egr.toplam_tur), 0)         AS toplam_tur,
+                        COALESCE(SUM(egr.toplam_fire_cift), 0)   AS toplam_fire_cift,
+                        SUM(egr.net_cikan_cift)                  AS net_cikan_cift,
+                        MIN(egr.tarih)                           AS ilk_rapor_tarihi,
+                        MAX(egr.tarih)                           AS son_rapor_tarihi
+                    FROM enj_gunluk_rapor egr
+                    WHERE egr.kullanici_id = ?
+                """, (_sk_id,)).fetchone()
+
+                _eslessmeyen = con.execute(
+                    "SELECT COUNT(*) AS cnt FROM enj_gunluk_rapor WHERE kullanici_id IS NULL"
+                ).fetchone()
+
+                if _enj_row and _enj_row["rapor_sayisi"] > 0:
+                    _net = _enj_row["net_cikan_cift"]
+                    enj_ozet = {
+                        "rapor_sayisi":             _enj_row["rapor_sayisi"],
+                        "calisma_gun":              _enj_row["calisma_gun"],
+                        "toplam_tur":               _enj_row["toplam_tur"],
+                        "toplam_fire_cift":         _enj_row["toplam_fire_cift"],
+                        "net_cikan_cift":           _net,
+                        "net_veri_yok":             (_net is None),
+                        "ilk_rapor_tarihi":         _enj_row["ilk_rapor_tarihi"],
+                        "son_rapor_tarihi":         _enj_row["son_rapor_tarihi"],
+                        "eslessmeyen_rapor_sayisi": (_eslessmeyen["cnt"] if _eslessmeyen else 0),
+                        "baglanma_kaynagi":         "sistem_kullanici",
+                    }
+        except Exception:
+            enj_ozet = None
+
     finally:
         con.close()
 
@@ -3262,6 +3304,8 @@ def personel_360_profil(profil_id):
         "ik_ozet":              ik_ozet,
         # P5A: Usta ekip üretim özeti (sadece SAHA_USTASI profilleri için dolu gelir)
         "ekip_uretim_ozeti":    ekip_uretim_ozeti,
+        # P5C-1: ENJ üretim özeti (sadece SAHA_USTASI + kaynak=sistem_kullanici)
+        "enj_ozet":             enj_ozet,
         "_caps": {
             "ik":      has_ik,
             "maas":    has_maas,

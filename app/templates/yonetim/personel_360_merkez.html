@@ -462,6 +462,8 @@
         </div>
         <!-- P5A: Usta ekip üretim özeti (sadece SAHA_USTASI profillerinde görünür) -->
         <div id="d-ekip-uretim-ozeti" class="oz-card" style="display:none;border-left:3px solid #2563eb;"></div>
+        <!-- P5C-1: ENJ üretim özeti (sadece SAHA_USTASI + kaynak=sistem_kullanici) -->
+        <div id="d-enj-ozet" class="oz-card" style="display:none;border-left:3px solid #0891b2;margin-top:10px;"></div>
       </div>
 
       <!-- SEKME: İK (FAZ2G-3 readonly + FAZ2G-4B write) -->
@@ -1710,6 +1712,9 @@
       }
     }
 
+    // P5C-1: ENJ üretim özeti kartı
+    renderEnjOzet(data.enj_ozet);
+
     // FAZ2G-3: İK ve Maaş sekme render (caps'e bağlı)
     // P4B: pk_bilgi ekle (personel_kullanici genişletilmiş alanları)
     if (caps.ik)   renderIk(data.ik_ozet, data.pk_bilgi || null, caps);
@@ -1717,6 +1722,57 @@
 
     // Organizasyon formu doldur
     orgFormDoldur(data);
+  }
+
+  // ── P5C-1: ENJ üretim özeti kartı render ────────────────────
+  function renderEnjOzet(eo) {
+    const el = document.getElementById('d-enj-ozet');
+    if (!el) return;
+    if (!eo) { el.style.display = 'none'; return; }
+
+    const netHtml = eo.net_veri_yok
+      ? '<span style="color:#6b7280;font-style:italic;">veri yok (rapor kapatılmamış)</span>'
+      : `<span style="font-weight:700;color:#0891b2;">${(eo.net_cikan_cift||0).toLocaleString()} çift</span>`;
+
+    const eslessUyari = eo.eslessmeyen_rapor_sayisi > 0
+      ? `<div style="font-size:11px;color:#92400e;background:#fef3c7;border-radius:4px;
+                     padding:4px 8px;margin-top:8px;">
+           ⚠️ ${eo.eslessmeyen_rapor_sayisi} raporda usta eşleşmesi yok (kullanıcı boş) — bu rapora dahil değil
+         </div>`
+      : '';
+
+    el.innerHTML = `
+      <div style="padding:14px 16px;">
+        <div style="font-size:13px;font-weight:700;color:var(--text1);margin-bottom:10px;">
+          🏭 ENJ Üretim Özeti
+          <span style="font-size:11px;font-weight:400;color:var(--text3);margin-left:6px;">
+            ${eo.ilk_rapor_tarihi||'—'} – ${eo.son_rapor_tarihi||'—'}
+          </span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;">
+          <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center;">
+            <div style="font-size:18px;font-weight:700;color:#0891b2;">${eo.rapor_sayisi||0}</div>
+            <div style="font-size:10px;color:var(--text3);">ENJ Rapor</div>
+          </div>
+          <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center;">
+            <div style="font-size:18px;font-weight:700;color:#0891b2;">${eo.calisma_gun||0}</div>
+            <div style="font-size:10px;color:var(--text3);">Çalışma Günü</div>
+          </div>
+          <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center;">
+            <div style="font-size:18px;font-weight:700;color:#475569;">${(eo.toplam_tur||0).toLocaleString()}</div>
+            <div style="font-size:10px;color:var(--text3);">Toplam Tur</div>
+          </div>
+          <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center;">
+            <div style="font-size:18px;font-weight:700;color:#dc2626;">${(eo.toplam_fire_cift||0).toLocaleString()}</div>
+            <div style="font-size:10px;color:var(--text3);">Fire (çift)</div>
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:4px;">
+          Net Üretim: ${netHtml}
+        </div>
+        ${eslessUyari}
+      </div>`;
+    el.style.display = 'block';
   }
 
   // ── P4B: Çalışma Bilgileri kartı render ─────────────────────
