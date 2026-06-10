@@ -2305,6 +2305,19 @@ def personel_ekle():
         yeni_id_row = q("SELECT last_insert_rowid() as id")
         yeni_id = yeni_id_row[0]['id'] if yeni_id_row else None
 
+        # P1B: Atomik kullanici_profil oluştur (Personel 360 merkezi)
+        # personel_kullanici → kullanici_profil köprüsü: kaynak='personel_kullanici', kaynak_id=yeni_id
+        # Mevcut profil varsa INSERT OR IGNORE ile dokunma.
+        if yeni_id:
+            try:
+                qexec("""
+                    INSERT OR IGNORE INTO kullanici_profil
+                      (gercek_ad, kullanici_adi, profil_tipi, aktif, kaynak, kaynak_id)
+                    VALUES (?, ?, 'SAHA_PERSONEL', 1, 'personel_kullanici', ?)
+                """, (ad, kadi, yeni_id))
+            except Exception:
+                pass  # Profil oluşturulamazsa personel_ekle yine de basarili sayilir
+
         # Audit log (stdout)
         try:
             from datetime import datetime

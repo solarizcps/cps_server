@@ -67,6 +67,23 @@ def kullanici_ekle(veri, kullanici):
           datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
           kullanici))
 
+    # P1A: Atomik kullanici_profil oluştur (Personel 360 merkezi)
+    # sistem_kullanici → kullanici_profil köprüsü: kaynak='sistem_kullanici', kaynak_id=uid
+    # Mevcut profil varsa INSERT OR IGNORE ile dokunma.
+    try:
+        qexec("""
+            INSERT OR IGNORE INTO kullanici_profil
+              (gercek_ad, kullanici_adi, profil_tipi, aktif, kaynak, kaynak_id)
+            VALUES (?, ?, 'sistem', ?, 'sistem_kullanici', ?)
+        """, (
+            veri.get('AdSoyad') or kadi,
+            kadi,
+            1 if veri.get('Aktif', 1) else 0,
+            uid,
+        ))
+    except Exception:
+        pass  # Profil oluşturulamazsa kullanici_ekle yine de basarili sayilir
+
     audit.log_ekle(kullanici, 'sistem_kullanici', uid,
                    aciklama=f"Kullanıcı eklendi: {kadi} ({veri.get('AdSoyad') or '-'})",
                    modul='yonetim', alt_modul='kullanici')
