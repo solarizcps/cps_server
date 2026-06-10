@@ -263,6 +263,59 @@
       cursor: not-allowed; opacity: .45;
     }
 
+    /* ── Çok kalemli paket göstergesi ── */
+    .ocard-paket-hdr {
+      display: flex; align-items: center; gap: 7px;
+      padding: 7px 14px 5px;
+      background: #fef9ec; border-bottom: 1px solid #f5d877;
+      flex-wrap: wrap;
+    }
+    .paket-lbl {
+      background: #f5b82e; color: #1c1917;
+      font-size: 10px; font-weight: 800; padding: 2px 8px;
+      border-radius: 10px; letter-spacing: .3px;
+    }
+    .paket-kalem-no {
+      font-size: 11px; color: #78716c; font-weight: 600;
+    }
+    .ocard-items-list {
+      border-top: 1px solid #f0ede8;
+    }
+    .ocard-item-row {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 10px 14px;
+      border-bottom: 1px solid #f5f3f0;
+    }
+    .ocard-item-row:last-child { border-bottom: none; }
+    .ocard-item-sira {
+      font-size: 10px; font-weight: 700; color: #a8a29e;
+      background: #f5f5f4; border-radius: 5px;
+      padding: 2px 6px; margin-top: 4px; white-space: nowrap;
+    }
+    .ocard-item-img {
+      width: 80px; height: 80px; flex-shrink: 0;
+      border-radius: 8px; object-fit: contain;
+      background: #f8fafc; border: 1px solid var(--border);
+    }
+    .ocard-item-img-ph {
+      width: 80px; height: 80px; flex-shrink: 0;
+      border-radius: 8px; background: #f1f5f9; border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center; font-size: 28px;
+    }
+    .ocard-item-info { flex: 1; min-width: 0; }
+    .ocard-item-urun {
+      font-size: 13px; font-weight: 700; color: var(--text);
+      line-height: 1.35; margin-bottom: 6px;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .ocard-item-barkod {
+      font-family: 'Courier New', monospace; font-size: 10px; font-weight: 700;
+      color: var(--text2); background: var(--bg);
+      border-radius: 4px; padding: 2px 5px; display: inline-block;
+      margin-top: 3px; letter-spacing: .3px;
+    }
+
     /* ── Boş durum ── */
     .empty-state {
       display: flex; flex-direction: column; align-items: center;
@@ -359,42 +412,88 @@
       <div class="empty-title">Kayıt bulunamadı</div>
       <div class="empty-sub">Arama veya filtre değiştirin</div>
     </div>
-    {% if not operasyon_listesi %}
+    {% if not paketler %}
     <div class="empty-state">
       <div class="empty-ico">📭</div>
       <div class="empty-title">Sipariş bulunamadı</div>
     </div>
     {% endif %}
-    {% for r in operasyon_listesi %}
-    <div class="ocard ac-{{ r.aciliyet }}" id="oc{{ loop.index0 }}"
-         data-magaza="{{ r.magaza }}" data-ac="{{ r.aciliyet }}" data-idx="{{ loop.index0 }}">
+
+    {% for pkg in paketler %}
+    {# Kart data-no ile tanımlanır; JS bu değeri arama/filtre için kullanır #}
+    <div class="ocard ac-{{ pkg.aciliyet }}" id="oc{{ loop.index0 }}"
+         data-magaza="{{ pkg.magaza }}" data-ac="{{ pkg.aciliyet }}" data-idx="{{ loop.index0 }}">
+
+      {# ── Üst şerit: Paket ID (primer) + Sipariş No (referans) + mağaza + aciliyet ── #}
       <div class="ocard-top">
-        <span class="ocard-no">#{{ r.no }}</span>
+        <div style="flex:1;min-width:0;overflow:hidden;">
+          <div class="ocard-no">#{{ pkg.pkg_id or pkg.no }}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:1px;">Sip: #{{ pkg.siparis_no or pkg.no }}</div>
+        </div>
         <div class="ocard-badges">
-          {% if r.magaza == 'Solariz' %}<span class="badge-sol">Solariz</span>
-          {% elif r.magaza == 'Epona' %}<span class="badge-ep">Epona</span>
-          {% else %}<span>{{ r.magaza }}</span>{% endif %}
-          {% if r.aciliyet == 0 %}<span class="badge-gec">GECİKTİ</span>
-          {% elif r.aciliyet == 1 %}<span class="badge-bug">BUGÜN</span>{% endif %}
+          {% if pkg.magaza == 'Solariz' %}<span class="badge-sol">Solariz</span>
+          {% elif pkg.magaza == 'Epona' %}<span class="badge-ep">Epona</span>
+          {% else %}<span>{{ pkg.magaza }}</span>{% endif %}
+          {% if pkg.kalem > 1 %}<span class="paket-lbl">{{ pkg.kalem }} ürünlü paket</span>{% endif %}
+          {% if pkg.aciliyet == 0 %}<span class="badge-gec">GECİKTİ</span>
+          {% elif pkg.aciliyet == 1 %}<span class="badge-bug">BUGÜN</span>{% endif %}
         </div>
       </div>
-      <div class="ocard-body">
-        {% if r.gorsel %}
-        <img class="ocard-img" src="{{ r.gorsel }}" alt="" loading="lazy"
-             onerror="this.className='ocard-img-ph';this.removeAttribute('src')">
-        {% else %}
-        <div class="ocard-img-ph">📦</div>
-        {% endif %}
-        <div class="ocard-info">
-          <div class="ocard-urun">{{ r.urun }}</div>
-          <div class="ocard-variant">
-            {% if r.beden %}<span class="vchip"><span class="vchip-lbl">BEDEN</span><span class="vchip-val">{{ r.beden }}</span></span>{% endif %}
-            {% if r.renk_urun %}<span class="vchip"><span class="vchip-lbl">RENK</span><span class="vchip-val">{{ r.renk_urun }}</span></span>{% endif %}
-            {% if r.adet %}<span class="vchip vchip-adet"><span class="vchip-lbl">ADET</span><span class="vchip-val">{{ r.adet }}</span></span>{% endif %}
+      {# Kargo barkodu — depocu için referans #}
+      {% if pkg.kargo_barkod %}
+      <div style="padding:3px 14px 0;font-size:10px;color:var(--text3);font-family:monospace;">
+        🚚 {{ pkg.kargo }} · Kargo: {{ pkg.kargo_barkod }}
+      </div>
+      {% endif %}
+
+      {% if pkg.kalem == 1 %}
+        {# ── TEK KALEMLİ: mevcut kart tasarımı ── #}
+        {% set r = pkg.urunler[0] %}
+        <div class="ocard-body">
+          {% if r.gorsel %}
+          <img class="ocard-img" src="{{ r.gorsel }}" alt="" loading="lazy"
+               onerror="this.className='ocard-img-ph';this.removeAttribute('src')">
+          {% else %}
+          <div class="ocard-img-ph">📦</div>
+          {% endif %}
+          <div class="ocard-info">
+            <div class="ocard-urun">{{ r.urun }}</div>
+            <div class="ocard-variant">
+              {% if r.beden %}<span class="vchip"><span class="vchip-lbl">BEDEN</span><span class="vchip-val">{{ r.beden }}</span></span>{% endif %}
+              {% if r.renk_urun %}<span class="vchip"><span class="vchip-lbl">RENK</span><span class="vchip-val">{{ r.renk_urun }}</span></span>{% endif %}
+              {% if r.adet %}<span class="vchip vchip-adet"><span class="vchip-lbl">ADET</span><span class="vchip-val">{{ r.adet }}</span></span>{% endif %}
+            </div>
+            <div class="ocard-barkod">{{ r.barkod }}</div>
           </div>
-          <div class="ocard-barkod">{{ r.barkod }}</div>
         </div>
-      </div>
+
+      {% else %}
+        {# ── ÇOK KALEMLİ: her kalem ayrı satır ── #}
+        <div class="ocard-items-list">
+          {% for r in pkg.urunler %}
+          <div class="ocard-item-row">
+            <span class="ocard-item-sira">{{ loop.index }}/{{ pkg.kalem }}</span>
+            {% if r.gorsel %}
+            <img class="ocard-item-img" src="{{ r.gorsel }}" alt="" loading="lazy"
+                 onerror="this.className='ocard-item-img-ph';this.removeAttribute('src')">
+            {% else %}
+            <div class="ocard-item-img-ph">📦</div>
+            {% endif %}
+            <div class="ocard-item-info">
+              <div class="ocard-item-urun">{{ r.urun }}</div>
+              <div class="ocard-variant" style="margin-bottom:4px;">
+                {% if r.beden %}<span class="vchip"><span class="vchip-lbl">BEDEN</span><span class="vchip-val">{{ r.beden }}</span></span>{% endif %}
+                {% if r.renk_urun %}<span class="vchip"><span class="vchip-lbl">RENK</span><span class="vchip-val">{{ r.renk_urun }}</span></span>{% endif %}
+                {% if r.adet %}<span class="vchip vchip-adet"><span class="vchip-lbl">ADET</span><span class="vchip-val">{{ r.adet }}</span></span>{% endif %}
+              </div>
+              <div class="ocard-item-barkod">{{ r.barkod }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      {# ── Aksiyon butonları (paket bazlı) ── #}
       <div class="ocard-actions">
         <button class="btn-topla" onclick="topla(this,{{ loop.index0 }})">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -426,31 +525,51 @@
 (function () {
   'use strict';
 
-  /* ALL: sayaçlar + metin arama için */
-  var ALL      = {{ operasyon_listesi | tojson }};
-  var actF     = 'all';
-  var srchQ    = '';
-  var visLimit = 30;   /* başlangıçta görünür kart sayısı */
+  /*
+   * ALL_PKG: paket bazlı dizi.
+   * Her paket: { no, magaza, aciliyet, kalem, urunler:[{no,barkod,urun,model,...}] }
+   * Filtre + arama paketin TÜM kalemlerinde çalışır.
+   */
+  var ALL_PKG   = {{ paketler | tojson }};
+  var actF      = 'all';
+  var srchQ     = '';
+  var visLimit  = 30;
   var PAGE_STEP = 30;
 
-  /* ── Sayaçlar (ALL'dan — filtreden bağımsız toplam) ── */
+  /* ── Sayaçlar: paket bazlı ── */
   function updateCounts() {
-    function cnt(fn) { return ALL.filter(fn).length; }
-    document.getElementById('cnt-all').textContent = ALL.length;
-    document.getElementById('cnt-sol').textContent = cnt(function(r){ return r.magaza === 'Solariz'; });
-    document.getElementById('cnt-ep') .textContent = cnt(function(r){ return r.magaza === 'Epona'; });
-    document.getElementById('cnt-gec').textContent = cnt(function(r){ return r.aciliyet === 0; });
-    document.getElementById('cnt-bug').textContent = cnt(function(r){ return r.aciliyet === 1; });
+    function cnt(fn) { return ALL_PKG.filter(fn).length; }
+    document.getElementById('cnt-all').textContent = ALL_PKG.length;
+    document.getElementById('cnt-sol').textContent = cnt(function(p){ return p.magaza === 'Solariz'; });
+    document.getElementById('cnt-ep') .textContent = cnt(function(p){ return p.magaza === 'Epona'; });
+    document.getElementById('cnt-gec').textContent = cnt(function(p){ return p.aciliyet === 0; });
+    document.getElementById('cnt-bug').textContent = cnt(function(p){ return p.aciliyet === 1; });
+  }
+
+  /* ── Paket için arama metni: pkg_id, siparis_no ve TÜM kalemler ── */
+  function pkgHaystack(pkg) {
+    var parts = [
+      String(pkg.pkg_id   || ''),
+      String(pkg.siparis_no || pkg.no || ''),
+      String(pkg.kargo_barkod || ''),
+    ];
+    pkg.urunler.forEach(function(r) {
+      parts.push(
+        String(r.pkg_id || ''), String(r.no || ''),
+        String(r.barkod || ''), String(r.kargo_barkod || ''),
+        String(r.urun   || ''), String(r.model || '')
+      );
+    });
+    return parts.map(function(v){ return v.trim(); }).join(' ').toLowerCase();
   }
 
   /* ── Render: göster/gizle — innerHTML YOK ── */
   function render() {
     var q       = srchQ.toLowerCase().trim();
     var cards   = document.querySelectorAll('#card-list .ocard');
-    var matched = 0;   /* filtre+arama eşleşen toplam */
-    var shown   = 0;   /* gerçekten görünen */
-    /* Arama aktifse tümünü göster, değilse visLimit uygula */
-    var noLimit = q.length > 0;
+    var matched = 0;
+    var shown   = 0;
+    var noLimit = q.length > 0;   /* arama aktifse limit yok */
 
     cards.forEach(function (card) {
       var magaza = card.dataset.magaza;
@@ -463,12 +582,10 @@
       if (actF === 'geciken' && ac !== 0)              hits = false;
       if (actF === 'bugun'   && ac !== 1)              hits = false;
 
+      /* Arama: paketteki tüm ürün alanlarını tara */
       if (q && hits) {
-        var r   = ALL[idx];
-        var hay = [r.no, r.barkod, r.urun, r.model]
-                    .map(function(v){ return String(v || '').trim(); })
-                    .join(' ').toLowerCase();
-        if (hay.indexOf(q) === -1) hits = false;
+        var pkg = ALL_PKG[idx];
+        if (!pkg || pkgHaystack(pkg).indexOf(q) === -1) hits = false;
       }
 
       if (hits) {
@@ -484,21 +601,18 @@
       }
     });
 
-    /* Topbar sayacı → eşleşen toplam */
     var tc = document.getElementById('top-count');
-    if (tc) tc.textContent = matched + ' sipariş';
+    if (tc) tc.textContent = matched + ' paket';
 
-    /* Boş durum */
     var em = document.getElementById('empty-msg');
     if (em) em.style.display = (matched === 0 && cards.length > 0) ? 'flex' : 'none';
 
-    /* Daha Fazla butonu */
     var lb = document.getElementById('load-more');
     if (lb) {
       var kalan = matched - shown;
       if (!noLimit && kalan > 0) {
         lb.style.display = 'block';
-        lb.textContent = 'Daha Fazla Göster (' + kalan + ' sipariş kaldı)';
+        lb.textContent = 'Daha Fazla Göster (' + kalan + ' paket kaldı)';
       } else {
         lb.style.display = 'none';
       }
@@ -528,7 +642,7 @@
       document.querySelectorAll('.fchip').forEach(function (x) { x.classList.remove('active'); });
       this.classList.add('active');
       actF = this.dataset.f;
-      visLimit = 30;   /* filtre değişince başa dön */
+      visLimit = 30;
       render();
     });
   });
@@ -543,7 +657,7 @@
   });
   scanClr.addEventListener('click', function () {
     scanIn.value = ''; srchQ = '';
-    visLimit = 30;   /* arama temizlenince başa dön */
+    visLimit = 30;
     this.style.display = 'none';
     scanIn.focus();
     render();

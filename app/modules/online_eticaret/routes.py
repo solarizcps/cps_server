@@ -27,7 +27,7 @@ online_eticaret_bp = Blueprint(
 
 # ── Sabitler ──────────────────────────────────────────────────────────────
 FETCH_STATUSES = ['Picking', 'Created']
-FETCH_DAYS     = 3
+FETCH_DAYS     = 7
 SIPARIS_LIMIT  = 25       # KPI kartı altındaki özet tablo limiti
 
 # ── Sipariş önbelleği (in-memory, process seviyesi) ───────────────────────
@@ -55,16 +55,18 @@ MOCK_OPERASYON = {
 }
 
 # ── HEADERS indeksleri ────────────────────────────────────────────────────
-_IDX_MAGAZA  = HEADERS.index('Mağaza')
-_IDX_GECIKME = HEADERS.index('Gecikme Durumu')
-_IDX_NO      = HEADERS.index('Sipariş No')
-_IDX_URUN    = HEADERS.index('Ürün Adı')
-_IDX_ADET    = HEADERS.index('Adet')
-_IDX_MODEL   = HEADERS.index('Model Kodu')
-_IDX_RENK    = HEADERS.index('Renk')
-_IDX_BEDEN   = HEADERS.index('Beden')
-_IDX_BARKOD  = HEADERS.index('Barkod')
-_IDX_KARGO   = HEADERS.index('Kargo Firması')
+_IDX_MAGAZA    = HEADERS.index('Mağaza')
+_IDX_GECIKME   = HEADERS.index('Gecikme Durumu')
+_IDX_NO        = HEADERS.index('Sipariş No')          # orderNumber
+_IDX_PKG_ID    = HEADERS.index('Paket/Teslimat No')   # id = shipmentPackageId
+_IDX_URUN      = HEADERS.index('Ürün Adı')
+_IDX_ADET      = HEADERS.index('Adet')
+_IDX_MODEL     = HEADERS.index('Model Kodu')
+_IDX_RENK      = HEADERS.index('Renk')
+_IDX_BEDEN     = HEADERS.index('Beden')
+_IDX_BARKOD    = HEADERS.index('Barkod')
+_IDX_KARGO     = HEADERS.index('Kargo Firması')
+_IDX_KARGO_NO  = HEADERS.index('Kargo Takip No')      # cargoTrackingNumber
 
 
 # ── Servis fonksiyonları ──────────────────────────────────────────────────
@@ -129,23 +131,71 @@ def _build_operasyon_listesi(rows_by_store, image_map_global):
             gecikme = row[_IDX_GECIKME]
             durum, durum_renk, kalan = _renk_ve_durum(gecikme)
             result.append({
-                'magaza':     str(row[_IDX_MAGAZA] or ''),
-                'aciliyet':   _aciliyet(gecikme),
-                'gorsel':     image_map_global.get(barkod, ''),
-                'no':         str(row[_IDX_NO]    or ''),
-                'urun':       str(row[_IDX_URUN]  or ''),
-                'model':      str(row[_IDX_MODEL] or ''),
-                'renk_urun':  str(row[_IDX_RENK]  or ''),
-                'beden':      str(row[_IDX_BEDEN] or ''),
-                'adet':       row[_IDX_ADET]      or 0,
-                'barkod':     barkod,
-                'kargo':      str(row[_IDX_KARGO] or ''),
-                'kalan':      kalan,
-                'durum':      durum,
-                'durum_renk': durum_renk,
+                'magaza':       str(row[_IDX_MAGAZA]   or ''),
+                'aciliyet':     _aciliyet(gecikme),
+                'gorsel':       image_map_global.get(barkod, ''),
+                'no':           str(row[_IDX_NO]       or ''),   # orderNumber (referans)
+                'pkg_id':       str(row[_IDX_PKG_ID]   or ''),   # shipmentPackageId (ana kimlik)
+                'kargo_barkod': str(row[_IDX_KARGO_NO] or ''),   # cargoTrackingNumber
+                'urun':         str(row[_IDX_URUN]     or ''),
+                'model':        str(row[_IDX_MODEL]    or ''),
+                'renk_urun':    str(row[_IDX_RENK]     or ''),
+                'beden':        str(row[_IDX_BEDEN]    or ''),
+                'adet':         row[_IDX_ADET]         or 0,
+                'barkod':       barkod,
+                'kargo':        str(row[_IDX_KARGO]    or ''),
+                'kalan':        kalan,
+                'durum':        durum,
+                'durum_renk':   durum_renk,
             })
     result.sort(key=lambda x: x['aciliyet'])
     return result
+
+
+def _group_paketler(operasyon_listesi):
+    """
+    Flat operasyon_listesi'ni shipmentPackageId bazında paket gruplarına çevirir.
+
+    Gruplama birimi: pkg_id (= id = shipmentPackageId) — fiziksel koli.
+    Aynı orderNumber ama farklı pkg_id → ayrı paket (bölünmüş sipariş).
+    orderNumber sadece referans olarak saklanır.
+
+    Döner:
+      [{ pkg_id, siparis_no, no (=siparis_no compat), magaza,
+         aciliyet, kalan, durum, durum_renk, kargo, kargo_barkod,
+         kalem, urunler: [item, ...] }]
+    """
+    groups = {}   # pkg_id -> pkg
+    order  = []   # insertion order (sıra bozulmasın)
+    for item in operasyon_listesi:
+        pkg_id = item['pkg_id'] or item['no']   # fallback: no pkg_id → orderNumber
+        if pkg_id not in groups:
+            pkg = {
+                'pkg_id':       pkg_id,
+                'siparis_no':   item['no'],           # orderNumber (referans)
+                'no':           item['no'],            # geriye dönük uyumluluk
+                'magaza':       item['magaza'],
+                'aciliyet':     item['aciliyet'],
+                'kalan':        item['kalan'],
+                'durum':        item['durum'],
+                'durum_renk':   item['durum_renk'],
+                'kargo':        item['kargo'],
+                'kargo_barkod': item['kargo_barkod'],
+                'urunler':      [],
+            }
+            groups[pkg_id] = pkg
+            order.append(pkg)
+        pkg = groups[pkg_id]
+        # En kötü aciliyeti pakete yansıt
+        if item['aciliyet'] < pkg['aciliyet']:
+            pkg['aciliyet']   = item['aciliyet']
+            pkg['kalan']      = item['kalan']
+            pkg['durum']      = item['durum']
+            pkg['durum_renk'] = item['durum_renk']
+        pkg['urunler'].append(item)
+    for pkg in order:
+        pkg['kalem'] = len(pkg['urunler'])
+    return order
 
 
 def _cek_magaza(store_name, start_ms, end_ms, force_refresh=False):
@@ -162,10 +212,12 @@ def _cek_magaza(store_name, start_ms, end_ms, force_refresh=False):
     # ── Cache kontrolü ──────────────────────────────────────────────────
     cached = _ORDER_CACHE.get(store_name)
     if cached and not force_refresh:
-        cached_at, c_orders, c_image_map = cached
-        if (time.time() - cached_at) < _ORDER_CACHE_TTL:
-            model_map = {}   # model_map orders_to_rows içinde yeniden üretilir
-            return c_orders, model_map, c_image_map, None
+        try:
+            cached_at, c_orders, c_model_map, c_image_map = cached
+            if (time.time() - cached_at) < _ORDER_CACHE_TTL:
+                return c_orders, c_model_map, c_image_map, None
+        except (ValueError, TypeError):
+            pass   # eski format (3-tuple) → taze çek
 
     # ── Taze çekme ──────────────────────────────────────────────────────
     cfg        = get_store(store_name)
@@ -193,8 +245,8 @@ def _cek_magaza(store_name, start_ms, end_ms, force_refresh=False):
     except Exception:
         pass   # görsel opsiyonel
 
-    # Cache'e yaz
-    _ORDER_CACHE[store_name] = (time.time(), tum_siparisler, image_map)
+    # Cache'e yaz (model_map dahil — cache hit'te model kodu kaybolmasın)
+    _ORDER_CACHE[store_name] = (time.time(), tum_siparisler, model_map, image_map)
 
     return tum_siparisler, model_map, image_map, None
 
@@ -309,6 +361,7 @@ def index():
     tum_rows.sort(key=_siralama_key)
     siparisler        = _rows_to_siparis(tum_rows)
     operasyon_listesi = _build_operasyon_listesi(rows_by_store, image_map_global)
+    paketler          = _group_paketler(operasyon_listesi)
 
     # Cache yaşı bilgisi (en eski store cache'in yaşı gösterilir)
     cache_yasi_sn = None
@@ -328,6 +381,7 @@ def index():
         siparisler=siparisler,
         operasyon=MOCK_OPERASYON,
         operasyon_listesi=operasyon_listesi,
+        paketler=paketler,
         cache_yasi_sn=cache_yasi_sn,
     )
 
@@ -351,6 +405,7 @@ def mobil():
     operasyon_listesi, api_hata, hatalar = _fetch_operasyon_listesi(
         force_refresh=force_refresh
     )
+    paketler = _group_paketler(operasyon_listesi)
 
     cache_yasi_sn = None
     for sn in STORE_NAMES:
@@ -362,8 +417,9 @@ def mobil():
     return render_template(
         'online_eticaret/mobil.html',
         operasyon_listesi=operasyon_listesi,
+        paketler=paketler,
         api_hata=api_hata,
         hata_mesajlari=hatalar,
-        toplam=len(operasyon_listesi),
+        toplam=len(paketler),
         cache_yasi_sn=cache_yasi_sn,
     )

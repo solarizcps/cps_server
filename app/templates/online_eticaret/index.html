@@ -180,6 +180,16 @@
 .oet-card .oet-tbl tr:hover td { background:var(--bg3); }
 .oet-card .oet-tbl .no    { font-weight:600; color:var(--text); font-family:monospace; font-size:12px; }
 .oet-card .oet-tbl .gecik { color:var(--red); font-weight:700; }
+/* Paket gruplama satırları */
+.oet-tbl .pkg-hdr td  { background:#fef9ec; border-bottom:none; border-top:2px solid #f5b82e; padding:7px 14px; }
+.oet-tbl .pkg-hdr .pkg-info { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.oet-tbl .pkg-hdr .pkg-no   { font-family:monospace; font-weight:700; font-size:13px; color:#1c1917; }
+.oet-tbl .pkg-hdr .pkg-badge { background:#f5b82e; color:#1c1917; font-size:10px; font-weight:700; padding:2px 7px; border-radius:10px; letter-spacing:.3px; }
+.oet-tbl .pkg-hdr .pkg-kalem { font-size:11px; color:#78716c; }
+.oet-tbl .pkg-item td { background:#fffdf5; padding:8px 14px; }
+.oet-tbl .pkg-item td:first-child { border-left:3px solid #f5b82e; }
+.oet-tbl .pkg-item-sira { font-size:10px; font-weight:600; color:#a8a29e; font-family:monospace; white-space:nowrap; }
+.oet-tbl .pkg-last td { border-bottom:2px solid #f5b82e !important; }
 
 /* Durum badge */
 .durum-badge    { display:inline-block; padding:3px 9px; border-radius:12px; font-size:10px; font-weight:700; letter-spacing:.5px; white-space:nowrap; }
@@ -518,7 +528,7 @@
       if (colFilters.dur  && r.durum     !== colFilters.dur)    return false;
       // arama
       if (q) {
-        const hay = [r.no, r.barkod, r.urun, r.model]
+        const hay = [r.pkg_id, r.no, r.barkod, r.kargo_barkod, r.urun, r.model]
           .map(function(v){ return String(v || '').trim(); })
           .join(' ').toLowerCase();
         if (hay.indexOf(q) === -1) return false;
@@ -603,47 +613,127 @@
     window.addEventListener('scroll', closeAllDrops);
   }
 
-  /* ── Tablo render ── */
-  function render() {
-    const start = (currentPage - 1) * PAGE_SIZE;
-    const end   = start + PAGE_SIZE;
-    const slice = filtered.slice(start, end);
-    const tbody = document.getElementById('oet-tbody');
+  /* ── Paket ID bazında gruplama (shipmentPackageId) ── */
+  function groupByNo(rows) {
+    var map = {}, order = [];
+    rows.forEach(function(r) {
+      var key = r.pkg_id || r.no;   // pkg_id primer, fallback no
+      if (!map[key]) {
+        var pkg = {
+          pkg_id: r.pkg_id, no: r.no, magaza: r.magaza,
+          aciliyet: r.aciliyet, kalan: r.kalan,
+          durum: r.durum, durum_renk: r.durum_renk,
+          kargo: r.kargo, items: []
+        };
+        map[key] = pkg;
+        order.push(pkg);
+      }
+      var p = map[key];
+      if (r.aciliyet < p.aciliyet) {
+        p.aciliyet = r.aciliyet; p.kalan = r.kalan;
+        p.durum = r.durum; p.durum_renk = r.durum_renk;
+      }
+      p.items.push(r);
+    });
+    order.forEach(function(p){ p.kalem = p.items.length; });
+    return order;
+  }
 
-    if (slice.length === 0) {
+  /* Sipariş No hücre içeriği: Paket ID (primer) + Sipariş No (referans) */
+  function noCell(r) {
+    return '<div style="line-height:1.3">' +
+      '<div style="font-family:monospace;font-weight:700;font-size:12px;color:#1c1917">' + esc(r.pkg_id || r.no) + '</div>' +
+      '<div style="font-size:10px;color:#a8a29e">Sip: ' + esc(r.no) + '</div>' +
+    '</div>';
+  }
+
+  /* Tek kalemli sipariş satırı */
+  function singleRow(r) {
+    return '<tr>' +
+      '<td class="oet-col-ac">' + acDot(r.aciliyet) + '</td>' +
+      '<td class="oet-col-img">' + thumbHtml(r.gorsel, r.urun) + '</td>' +
+      '<td class="oet-col-no">' + noCell(r) + '</td>' +
+      '<td class="oet-col-mag">' + magChip(r.magaza) + '</td>' +
+      '<td class="oet-col-urun"><div class="oet-urun-txt" title="' + esc(r.urun) + '">' + esc(r.urun) + '</div></td>' +
+      '<td class="oet-col-mdl">' + esc(r.model) + '</td>' +
+      '<td class="oet-col-renk">' + esc(r.renk_urun) + '</td>' +
+      '<td class="oet-col-bed">' + esc(r.beden) + '</td>' +
+      '<td class="oet-col-adt">' + esc(r.adet) + '</td>' +
+      '<td class="oet-col-bkd">' + esc(r.barkod) + '</td>' +
+      '<td class="oet-col-krg">' + esc(r.kargo) + '</td>' +
+      '<td class="oet-col-kln" style="color:' + esc(r.durum_renk) + ';font-size:11px">' + esc(r.kalan) + '</td>' +
+      '<td class="oet-col-dur"><span class="oet-badge" style="background:' + esc(r.durum_renk) + '20;color:' + esc(r.durum_renk) + '">' + esc(r.durum) + '</span></td>' +
+      '<td class="oet-col-aks">' +
+        '<button class="oet-act-btn" disabled>Topla</button>' +
+        '<button class="oet-act-btn" disabled>Yazdır</button>' +
+        '<button class="oet-act-btn" disabled>Sevk</button>' +
+      '</td></tr>';
+  }
+
+  /* Çok kalemli paket bloğu: header + alt satırlar */
+  function packageBlock(pkg) {
+    var firstR = pkg.items[0];
+    var hdr = '<tr class="pkg-hdr">' +
+      '<td class="oet-col-ac">' + acDot(pkg.aciliyet) + '</td>' +
+      '<td colspan="12"><div class="pkg-info">' +
+        '<span class="pkg-badge">' + pkg.kalem + ' ürünlü paket</span>' +
+        '<span class="pkg-no">Paket: ' + esc(pkg.pkg_id || pkg.no) + '</span>' +
+        '<span style="font-size:11px;color:#78716c">Sip: ' + esc(pkg.no) + '</span>' +
+        magChip(pkg.magaza) +
+        (firstR && firstR.kargo_barkod ? '<span style="font-size:10px;font-family:monospace;color:#a8a29e">Kargo: ' + esc(firstR.kargo_barkod) + '</span>' : '') +
+        '<span style="font-size:11px;color:' + esc(pkg.durum_renk) + '">' + esc(pkg.kalan) + '</span>' +
+      '</div></td>' +
+      '<td class="oet-col-aks">' +
+        '<button class="oet-act-btn" disabled>Topla</button>' +
+        '<button class="oet-act-btn" disabled>Yazdır</button>' +
+        '<button class="oet-act-btn" disabled>Sevk</button>' +
+      '</td></tr>';
+
+    var rows = pkg.items.map(function(r, i) {
+      var isLast = (i === pkg.items.length - 1);
+      return '<tr class="pkg-item' + (isLast ? ' pkg-last' : '') + '">' +
+        '<td class="oet-col-ac"></td>' +
+        '<td class="oet-col-img">' + thumbHtml(r.gorsel, r.urun) + '</td>' +
+        '<td class="oet-col-no pkg-item-sira">' + (i+1) + '/' + pkg.kalem + '</td>' +
+        '<td class="oet-col-mag"></td>' +
+        '<td class="oet-col-urun"><div class="oet-urun-txt" title="' + esc(r.urun) + '">' + esc(r.urun) + '</div></td>' +
+        '<td class="oet-col-mdl">' + esc(r.model) + '</td>' +
+        '<td class="oet-col-renk">' + esc(r.renk_urun) + '</td>' +
+        '<td class="oet-col-bed">' + esc(r.beden) + '</td>' +
+        '<td class="oet-col-adt">' + esc(r.adet) + '</td>' +
+        '<td class="oet-col-bkd">' + esc(r.barkod) + '</td>' +
+        '<td class="oet-col-krg">' + esc(r.kargo) + '</td>' +
+        '<td class="oet-col-kln"></td>' +
+        '<td class="oet-col-dur"><span class="oet-badge" style="background:' + esc(r.durum_renk) + '20;color:' + esc(r.durum_renk) + '">' + esc(r.durum) + '</span></td>' +
+        '<td class="oet-col-aks"></td>' +
+      '</tr>';
+    });
+    return hdr + rows.join('');
+  }
+
+  /* ── Tablo render (paket bazlı) ── */
+  function render() {
+    const packages  = groupByNo(filtered);
+    const start     = (currentPage - 1) * PAGE_SIZE;
+    const end       = start + PAGE_SIZE;
+    const slicePkgs = packages.slice(start, end);
+    const tbody     = document.getElementById('oet-tbody');
+
+    if (slicePkgs.length === 0) {
       tbody.innerHTML = '<tr><td colspan="14" class="oet-tbl-empty">Kayıt bulunamadı</td></tr>';
     } else {
-      tbody.innerHTML = slice.map(function(r) {
-        return '<tr>' +
-          '<td class="oet-col-ac">' + acDot(r.aciliyet) + '</td>' +
-          '<td class="oet-col-img">' + thumbHtml(r.gorsel, r.urun) + '</td>' +
-          '<td class="oet-col-no">' + esc(r.no) + '</td>' +
-          '<td class="oet-col-mag">' + magChip(r.magaza) + '</td>' +
-          '<td class="oet-col-urun"><div class="oet-urun-txt" title="' + esc(r.urun) + '">' + esc(r.urun) + '</div></td>' +
-          '<td class="oet-col-mdl">' + esc(r.model) + '</td>' +
-          '<td class="oet-col-renk">' + esc(r.renk_urun) + '</td>' +
-          '<td class="oet-col-bed">' + esc(r.beden) + '</td>' +
-          '<td class="oet-col-adt">' + esc(r.adet) + '</td>' +
-          '<td class="oet-col-bkd">' + esc(r.barkod) + '</td>' +
-          '<td class="oet-col-krg">' + esc(r.kargo) + '</td>' +
-          '<td class="oet-col-kln" style="color:' + esc(r.durum_renk) + ';font-size:11px">' + esc(r.kalan) + '</td>' +
-          '<td class="oet-col-dur"><span class="oet-badge" style="background:' + esc(r.durum_renk) + '20;color:' + esc(r.durum_renk) + '">' + esc(r.durum) + '</span></td>' +
-          '<td class="oet-col-aks">' +
-            '<button class="oet-act-btn" disabled title="FAZ3\'te aktif olacak">Topla</button>' +
-            '<button class="oet-act-btn" disabled title="FAZ3\'te aktif olacak">Yazdır</button>' +
-            '<button class="oet-act-btn" disabled title="FAZ3\'te aktif olacak">Sevk</button>' +
-          '</td>' +
-        '</tr>';
+      tbody.innerHTML = slicePkgs.map(function(pkg) {
+        return pkg.kalem === 1 ? singleRow(pkg.items[0]) : packageBlock(pkg);
       }).join('');
     }
 
-    renderPager();
-    updatePagerInfo(start, end);
+    renderPager(packages.length);
+    updatePagerInfo(start, end, packages.length);
   }
 
   /* ── Pagination ── */
-  function renderPager() {
-    const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  function renderPager(totalPkgs) {
+    const totalPages = Math.ceil(totalPkgs / PAGE_SIZE);
     const btns = document.getElementById('oet-pager-btns');
     if (totalPages <= 1) { btns.innerHTML = ''; return; }
 
@@ -674,12 +764,11 @@
     return pages;
   }
 
-  function updatePagerInfo(start, end) {
+  function updatePagerInfo(start, end, totalPkgs) {
     const info = document.getElementById('oet-pager-info');
-    const showing = Math.min(end, filtered.length) - start;
-    info.textContent = filtered.length > 0
-      ? (start + 1) + '–' + Math.min(end, filtered.length) + ' / ' + filtered.length + ' kayıt'
-      : '0 kayıt';
+    info.textContent = totalPkgs > 0
+      ? (start + 1) + '–' + Math.min(end, totalPkgs) + ' / ' + totalPkgs + ' paket'
+      : '0 paket';
   }
 
   /* ── Sayaçlar ── */
