@@ -437,6 +437,11 @@
 
       <!-- SEKME: İK (FAZ2G-3 readonly + FAZ2G-4B write) -->
       <div id="sekme-ik" class="p360-sekme-icerik" style="display:none;">
+        <!-- P4B: Çalışma Bilgileri (personel_kullanici genişletilmiş) -->
+        <div class="oz-card" style="margin-bottom:14px;">
+          <div class="oz-hdr"><span class="oz-hdr-t">Çalışma Bilgileri</span></div>
+          <div id="d-ik-calisma" class="oz-body"></div>
+        </div>
         <!-- Devam -->
         <div class="oz-card" style="margin-bottom:14px;">
           <div class="oz-hdr"><span class="oz-hdr-t">Devam Durumu (Bu Yıl)</span></div>
@@ -1419,15 +1424,73 @@
     }
 
     // FAZ2G-3: İK ve Maaş sekme render (caps'e bağlı)
-    if (caps.ik)   renderIk(data.ik_ozet);
-    if (caps.maas) renderMaas(data.maas_ozet);
+    // P4B: pk_bilgi ekle (personel_kullanici genişletilmiş alanları)
+    if (caps.ik)   renderIk(data.ik_ozet, data.pk_bilgi || null, caps);
+    if (caps.maas) renderMaas(data.maas_ozet, data.pk_bilgi || null, caps);
 
     // Organizasyon formu doldur
     orgFormDoldur(data);
   }
 
+  // ── P4B: Çalışma Bilgileri kartı render ─────────────────────
+  function renderCalisma(pk, caps) {
+    const el = document.getElementById('d-ik-calisma');
+    if (!el) return;
+    if (!pk) {
+      el.innerHTML = '<div class="p360-bos-mesaj" style="font-size:12px;">Bu profil için genişletilmiş bilgi yok.<br><small style="color:var(--text3);">Sadece personel_kullanici kaydı olan profillerde görünür.</small></div>';
+      return;
+    }
+    // Güven skoru rengi
+    var gs = pk.guven_skoru;
+    var gsRenk = gs == null ? '#6b7280' : (gs >= 80 ? '#166534' : gs >= 50 ? '#92400e' : '#991b1b');
+    var gsBg   = gs == null ? '#f3f4f6' : (gs >= 80 ? '#dcfce7' : gs >= 50 ? '#fef3c7' : '#fee2e2');
+    // Aktif/pasif
+    var aktifBadge = pk.aktif == null ? '' :
+      (pk.aktif
+        ? '<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;">AKTİF</span>'
+        : '<span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;">PASİF</span>');
+    // Kıdem yılı
+    var kidem = pk.kidem_yili != null ? pk.kidem_yili + ' yıl' : null;
+    if (!kidem && pk.ise_baslama) {
+      var bas = new Date(pk.ise_baslama);
+      var now = new Date();
+      var yil = Math.floor((now - bas) / (365.25 * 24 * 3600 * 1000));
+      if (!isNaN(yil) && yil >= 0) kidem = yil + ' yıl';
+    }
+
+    var satirlar = [
+      ['İşe Giriş',    pk.ise_baslama  || '—'],
+      ['Kıdem',        kidem           || '—'],
+      ['Pozisyon',     pk.pozisyon     || '—'],
+      ['Personel Tipi',pk.personel_tipi|| '—'],
+      ['Durum',        aktifBadge || (pk.aktif == null ? '—' : '')],
+    ];
+    if (pk.acil_iletisim) satirlar.push(['Acil İletişim', pk.acil_iletisim]);
+    if (pk.notlar)        satirlar.push(['Genel Not', pk.notlar]);
+
+    var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;padding:12px 16px;">';
+    satirlar.forEach(function(s) {
+      html += '<div style="display:flex;flex-direction:column;gap:2px;">'
+        + '<span style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;">' + s[0] + '</span>'
+        + '<span style="font-size:13px;color:var(--text1);">' + s[1] + '</span>'
+        + '</div>';
+    });
+    // Güven skoru ayrı
+    if (gs != null) {
+      html += '<div style="display:flex;flex-direction:column;gap:2px;">'
+        + '<span style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;">Güven Skoru</span>'
+        + '<span style="font-size:13px;font-weight:700;color:' + gsRenk + ';background:' + gsBg + ';padding:2px 8px;border-radius:8px;display:inline-block;">' + gs + '</span>'
+        + '</div>';
+    }
+    html += '</div>';
+    el.innerHTML = html;
+  }
+
   // ── FAZ2G-3: İK sekmesi render ──────────────────────────────
-  function renderIk(ik) {
+  function renderIk(ik, pk, caps) {
+    // P4B: Çalışma bilgileri kartı
+    renderCalisma(pk, caps);
+
     const _BOS = '<div class="p360-bos-mesaj">Veri bağlantısı yok.<br><small style="color:var(--text3);">Bu profil personel_kullanici kaydıyla eşleştirilmemiş.</small></div>';
 
     // Devam
@@ -1483,19 +1546,27 @@
         ${n.son_not_tarihi ? `<span style="color:var(--text3);">Son: ${n.son_not_tarihi}</span>` : ''}
       </div>`;
       const NOT_TIP = {
-        uyari:      { renk:'#991b1b', bg:'#fee2e2', ikon:'⚠' },
-        olumlu:     { renk:'#166534', bg:'#dcfce7', ikon:'✔' },
-        gorusme:    { renk:'#1d4ed8', bg:'#dbeafe', ikon:'💬' },
-        performans: { renk:'#92400e', bg:'#fef3c7', ikon:'📈' },
-        genel:      { renk:'#374151', bg:'#f3f4f6', ikon:'📝' },
+        uyari:      { renk:'#991b1b', bg:'#fee2e2', ikon:'⚠',  etiket:'Uyarı'       },
+        olumlu:     { renk:'#166534', bg:'#dcfce7', ikon:'✔',  etiket:'Olumlu'      },
+        gorusme:    { renk:'#1d4ed8', bg:'#dbeafe', ikon:'💬', etiket:'Görüşme'     },
+        performans: { renk:'#92400e', bg:'#fef3c7', ikon:'📈', etiket:'Performans'  },
+        issizlik:   { renk:'#4b5563', bg:'#f3f4f6', ikon:'📋', etiket:'İşsizlik'   },
+        istifa:     { renk:'#7c3aed', bg:'#ede9fe', ikon:'🚪', etiket:'İstifa'      },
+        genel:      { renk:'#374151', bg:'#f3f4f6', ikon:'📝', etiket:'Genel'       },
       };
-      const satirlar = (n.son_notlar || []).map(not => {
+      // P4B: Usta gizli notları görmemeli
+      const gorunen_notlar = (n.son_notlar || []).filter(not => !(caps && caps.usta && not.gizli));
+      if (gorunen_notlar.length === 0) {
+        notlarEl.innerHTML = '<div class="p360-bos-mesaj">Görüntülenebilir not yok.</div>';
+        return;
+      }
+      const satirlar = gorunen_notlar.map(not => {
         const st = NOT_TIP[not.not_tipi] || NOT_TIP.genel;
         return `<div class="p360-satir-detay" style="font-size:12px;">
           <div class="pd-etiket" style="font-family:var(--mono);font-size:11px;color:var(--text3);min-width:90px;">${not.tarih||''}${not.gizli?'&nbsp;🔒':''}</div>
           <div style="flex:1;">
             <span style="font-size:11px;font-weight:600;color:${st.renk};background:${st.bg};
-                         padding:1px 6px;border-radius:4px;">${st.ikon} ${not.not_tipi}</span>
+                         padding:1px 6px;border-radius:4px;white-space:nowrap;">${st.ikon} ${st.etiket||not.not_tipi}</span>
             <span style="margin-left:8px;color:var(--text1);">${not.icerik||''}</span>
           </div>
         </div>`;
@@ -1505,7 +1576,7 @@
   }
 
   // ── FAZ2G-3: Maaş sekmesi render ────────────────────────────
-  function renderMaas(maas) {
+  function renderMaas(maas, pk, caps) {
     const _BOS_PK = '<div class="p360-bos-mesaj">Veri bağlantısı yok.<br><small style="color:var(--text3);">Bu profil personel_kullanici kaydıyla eşleştirilmemiş.</small></div>';
     const _BOS_VERI = '<div class="p360-bos-mesaj">Henüz maaş bilgisi girilmemiş.</div>';
 
@@ -1513,15 +1584,31 @@
     const aktifEl = document.getElementById('d-maas-aktif');
     if (aktifEl) {
       if (!maas) { aktifEl.innerHTML = _BOS_PK; }
-      else if (!maas.aktif_maas) { aktifEl.innerHTML = _BOS_VERI; }
+      else if (!maas.aktif_maas) {
+        // P4B: pk_bilgi.maas varsa göster (personel_kullanici doğrudan alanı)
+        if (pk && pk.maas) {
+          aktifEl.innerHTML = `
+            <div style="padding:14px 16px;">
+              <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
+                <span style="font-size:26px;font-weight:700;color:#166534;">${Number(pk.maas).toLocaleString('tr-TR')}</span>
+                <span style="font-size:14px;color:var(--text2);">${pk.maas_para_birimi||'TL'}</span>
+                ${pk.maas_guncelleme ? `<span style="font-size:12px;color:var(--text3);">Son güncelleme: ${pk.maas_guncelleme}</span>` : ''}
+              </div>
+              <div style="font-size:11px;color:var(--text3);margin-top:4px;">Kaynak: personel_kullanici (maas_gecmis kaydı yok)</div>
+            </div>`;
+        } else { aktifEl.innerHTML = _BOS_VERI; }
+      }
       else {
         const m = maas.aktif_maas;
         aktifEl.innerHTML = `
-          <div style="padding:14px 16px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
-            <span style="font-size:26px;font-weight:700;color:#166534;">${(m.tutar||0).toLocaleString('tr-TR')}</span>
-            <span style="font-size:14px;color:var(--text2);">${m.para_birimi||'TL'}</span>
-            <span style="font-size:12px;color:var(--text3);">Geçerlilik: ${m.gecerlilik_bas||'—'} →</span>
-            ${m.aciklama ? `<span style="font-size:12px;color:var(--text3);">(${m.aciklama})</span>` : ''}
+          <div style="padding:14px 16px;">
+            <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
+              <span style="font-size:26px;font-weight:700;color:#166534;">${(m.tutar||0).toLocaleString('tr-TR')}</span>
+              <span style="font-size:14px;color:var(--text2);">${m.para_birimi||'TL'}</span>
+              <span style="font-size:12px;color:var(--text3);">Geçerlilik: ${m.gecerlilik_bas||'—'} →</span>
+              ${m.aciklama ? `<span style="font-size:12px;color:var(--text3);">(${m.aciklama})</span>` : ''}
+            </div>
+            ${pk && pk.maas_guncelleme ? `<div style="font-size:11px;color:var(--text3);margin-top:4px;">Son güncelleme: ${pk.maas_guncelleme}</div>` : ''}
           </div>`;
       }
     }

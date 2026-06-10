@@ -2769,6 +2769,34 @@ def personel_360_profil(profil_id):
                 params = (pk_id,)
             return sql, params
 
+        # P4B: personel_kullanici genişletilmiş alanları (pk_id varsa doldur, yoksa None)
+        pk_bilgi = None
+        if pk_id is not None:
+            try:
+                _pkb = con.execute("""
+                    SELECT IseBaslamaTarih, KidemYili, Pozisyon, PersonelTipi,
+                           aktif, AcilIletisim, GuvenSkoru, Notlar,
+                           Maas, MaasParaBirimi, MaasGuncellemeTarih
+                    FROM personel_kullanici WHERE id=?
+                """, (pk_id,)).fetchone()
+                if _pkb:
+                    pk_bilgi = {
+                        "ise_baslama":        _pkb["IseBaslamaTarih"],
+                        "kidem_yili":         _pkb["KidemYili"],
+                        "pozisyon":           _pkb["Pozisyon"],
+                        "personel_tipi":      _pkb["PersonelTipi"],
+                        "aktif":              bool(_pkb["aktif"]) if _pkb["aktif"] is not None else None,
+                        "acil_iletisim":      _pkb["AcilIletisim"],
+                        "guven_skoru":        _pkb["GuvenSkoru"],
+                        "notlar":             _pkb["Notlar"],
+                        # Maaş — frontend has_maas kontrolüyle gösterilir
+                        "maas":               _pkb["Maas"],
+                        "maas_para_birimi":   _pkb["MaasParaBirimi"],
+                        "maas_guncelleme":    _pkb["MaasGuncellemeTarih"],
+                    }
+            except Exception:
+                pk_bilgi = None
+
         # FAZ2G-2: İK ve maaş defaults — pk_id yoksa veya yetki yoksa None kalır
         maas_ozet = None
         ik_ozet   = None
@@ -3057,6 +3085,7 @@ def personel_360_profil(profil_id):
         "uretim_ozet":          uretim_ozet,
         "uretim_prosesler":     uretim_prosesler,
         "son_uretimler":        son_uretimler,
+        "pk_bilgi":             pk_bilgi,
         "maas_ozet":            maas_ozet,
         "ik_ozet":              ik_ozet,
         "_caps": {
