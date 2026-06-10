@@ -2776,6 +2776,7 @@ def personel_360_profil(profil_id):
                 _pkb = con.execute("""
                     SELECT IseBaslamaTarih, KidemYili, Pozisyon, PersonelTipi,
                            aktif, AcilIletisim, GuvenSkoru, Notlar,
+                           Telefon, Email, Adres,
                            Maas, MaasParaBirimi, MaasGuncellemeTarih
                     FROM personel_kullanici WHERE id=?
                 """, (pk_id,)).fetchone()
@@ -2789,6 +2790,10 @@ def personel_360_profil(profil_id):
                         "acil_iletisim":      _pkb["AcilIletisim"],
                         "guven_skoru":        _pkb["GuvenSkoru"],
                         "notlar":             _pkb["Notlar"],
+                        # P4C: iletişim alanları (form doldurma için)
+                        "telefon":            _pkb["Telefon"],
+                        "email":              _pkb["Email"],
+                        "adres":              _pkb["Adres"],
                         # Maaş — frontend has_maas kontrolüyle gösterilir
                         "maas":               _pkb["Maas"],
                         "maas_para_birimi":   _pkb["MaasParaBirimi"],
@@ -4044,6 +4049,158 @@ def personel_360_personel_ekle():
         'usta_iliski_id': usta_iliski_id,
         'uyari':          uyari,
     })
+
+# ════════════════════════════════════════════════════════════════
+# P4C — PERSONEL KULLANICI BİLGİ GÜNCELLEME (10.06.2026)
+# Sadece personel_kullanici kaynakli profiller.
+# Maas/kimlik alanlari korunur — whitelist yaklasimi.
+# ════════════════════════════════════════════════════════════════
+
+@yonetim_bp.route('/api/personel-360/profil/<int:profil_id>/pk-guncelle', methods=['PUT'])
+@yetki_gerekli('personel_360.ik', 'can_view')
+def personel_360_pk_guncelle(profil_id):
+    """
+    P4C: personel_kullanici tablosundaki HR alanlarini gunceller.
+    Sadece kaynak='personel_kullanici' profiller icin calisir.
+    Usta kullanicilari guncelleyemez.
+    Maas/kimlik alanlari korunur — whitelist yaklasimi.
+    """
+    _u_sess = session.get('kullanici')
+
+    # Usta engeli
+    _rol_id_p4c = (_u_sess or {}).get('RolId')
+    _is_yon_p4c = False
+    if _rol_id_p4c:
+        from db import qone as _qone_p4c
+        _sr_p4c = _qone_p4c(
+            "SELECT SuperAdmin FROM sistem_rol WHERE Id=? AND Aktif=1",
+            (_rol_id_p4c,)
+        )
+        _is_yon_p4c = bool(_sr_p4c and _sr_p4c.get('SuperAdmin') == 1)
+
+    _is_usta_p4c = (
+        yetki_var('personel_360.usta', 'can_view')
+        and not is_superadmin(_u_sess)
+        and not _is_yon_p4c
+    )
+    if _is_usta_p4c:
+        return jsonify({'ok': False, 'hata': 'Usta kullanicilari profil bilgisi guncelleyemez'}), 403
+
+    data = request.get_json(silent=True) or {}
+
+    con = _get_conn()
+    try:
+        # Profil var mi ve kaynak dogru mu?
+        kp = con.execute(
+            "SELECT id, kaynak, kaynak_id, gercek_ad FROM kullanici_profil WHERE id=?",
+            (profil_id,)
+        ).fetchone()
+        if not kp:
+            return jsonify({'ok': False, 'hata': 'Profil bulunamadi'}), 404
+        if kp['kaynak'] != 'personel_kullanici' or not kp['kaynak_id']:
+            return jsonify({
+                'ok':   False,
+                'hata': 'Bu profil personel_kullanici kaynakli degil, guncellenemez',
+                'kod':  'KAYNAK_UYUMSUZ',
+            }), 400
+
+        pk_id = kp['kaynak_id']
+
+        pk_row = con.execute(
+            "SELECT id FROM personel_kullanici WHERE id=?", (pk_id,)
+        ).fetchone()
+        if not pk_row:
+            return jsonify({'ok': False, 'hata': 'personel_kullanici kaydi bulunamadi'}), 404
+
+        # Whitelist: izin verilen alanlar
+        IZINLI = {
+            'IseBaslamaTarih', 'KidemYili', 'Pozisyon', 'PersonelTipi',
+            'Telefon', 'Email', 'Adres', 'AcilIletisim',
+            'GuvenSkoru', 'Notlar', 'aktif',
+        }
+        YASAK = {
+            'ad', 'kullanici_adi', 'sifre', 'Maas', 'MaasParaBirimi',
+            'MaasGuncellemeTarih', 'kaynak', 'legacy_id', 'legacy_db', 'id',
+        }
+
+        set_parts = []
+        params    = []
+        hatalar   = []
+
+        for alan, deger in data.items():
+            if alan in YASAK:
+                hatalar.append(f"'{alan}' alani guncellenemez")
+                continue
+            if alan not in IZINLI:
+                continue
+
+            if alan == 'GuvenSkoru':
+                if deger is None or deger == '':
+                    deger = None
+                else:
+                    try:
+                        deger = int(deger)
+                        if not (0 <= deger <= 100):
+                            hatalar.append('GuvenSkoru 0-100 arasi olmalidir')
+                            continue
+                    except (TypeError, ValueError):
+                        hatalar.append('GuvenSkoru sayisal olmalidir')
+                        continue
+
+            elif alan == 'aktif':
+                try:
+                    deger = int(deger)
+                    if deger not in (0, 1):
+                        hatalar.append('aktif sadece 0 veya 1 olabilir')
+                        continue
+                except (TypeError, ValueError):
+                    hatalar.append('aktif sayisal olmalidir')
+                    continue
+
+            elif alan == 'KidemYili':
+                if deger is None or deger == '':
+                    deger = None
+                else:
+                    try:
+                        deger = float(deger)
+                    except (TypeError, ValueError):
+                        hatalar.append('KidemYili sayisal olmalidir')
+                        continue
+            else:
+                if isinstance(deger, str):
+                    deger = deger.strip() or None
+
+            set_parts.append(f"{alan}=?")
+            params.append(deger)
+
+        if hatalar:
+            return jsonify({'ok': False, 'hata': '; '.join(hatalar)}), 422
+
+        if not set_parts:
+            return jsonify({'ok': False, 'hata': 'Guncellenecek gecerli alan bulunamadi'}), 400
+
+        set_parts.append("GuncellemeTarih=datetime('now')")
+        params.append(pk_id)
+
+        con.execute(
+            f"UPDATE personel_kullanici SET {', '.join(set_parts)} WHERE id=?",
+            params
+        )
+        con.commit()
+
+    except Exception as e:
+        return jsonify({'ok': False, 'hata': f'Guncelleme hatasi: {e}'}), 500
+    finally:
+        con.close()
+
+    return jsonify({
+        'ok':                 True,
+        'profil_id':          profil_id,
+        'pk_id':              pk_id,
+        'profil_ad':          kp['gercek_ad'],
+        'guncellenen_alanlar': list(data.keys()),
+    })
+
 
 # ════════════════════════════════════════════════════════════════
 # P3A — PERSONEL 360 AKTİVİTE AKIŞI OKUMA KATMANI (10.06.2026)

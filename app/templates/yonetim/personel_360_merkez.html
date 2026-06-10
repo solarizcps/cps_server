@@ -437,10 +437,94 @@
 
       <!-- SEKME: İK (FAZ2G-3 readonly + FAZ2G-4B write) -->
       <div id="sekme-ik" class="p360-sekme-icerik" style="display:none;">
-        <!-- P4B: Çalışma Bilgileri (personel_kullanici genişletilmiş) -->
+        <!-- P4B/P4C: Çalışma Bilgileri (personel_kullanici genişletilmiş) -->
         <div class="oz-card" style="margin-bottom:14px;">
-          <div class="oz-hdr"><span class="oz-hdr-t">Çalışma Bilgileri</span></div>
+          <div class="oz-hdr">
+            <span class="oz-hdr-t">Çalışma Bilgileri</span>
+            <!-- P4C: Düzenle butonu — sadece İK/Yönetim görsün (JS ile kontrol) -->
+            <button id="calisma-duzenle-btn" onclick="calismaDuzenleAcKapat()"
+                    style="display:none;font-size:11px;padding:3px 10px;border-radius:4px;
+                           background:#1d4ed8;color:#fff;border:none;cursor:pointer;font-weight:600;">
+              ✏️ Düzenle
+            </button>
+          </div>
           <div id="d-ik-calisma" class="oz-body"></div>
+          <!-- P4C: Inline düzenleme formu (başta gizli) -->
+          <div id="calisma-form-panel" style="display:none;border-top:1px solid var(--border);padding:14px 16px;">
+            <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;
+                        padding:8px 12px;margin-bottom:14px;font-size:12px;color:#1d4ed8;">
+              Maaş bilgisi bu formdan değiştirilemez. Yalnızca HR/çalışma alanları güncellenir.
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div>
+                <label class="org-label">İşe Giriş Tarihi</label>
+                <input id="pk-ise-bas" type="date" class="org-sel">
+              </div>
+              <div>
+                <label class="org-label">Kıdem Yılı</label>
+                <input id="pk-kidem" type="number" step="0.1" min="0" max="50"
+                       class="org-sel" placeholder="örn: 3.5">
+              </div>
+              <div>
+                <label class="org-label">Pozisyon</label>
+                <input id="pk-pozisyon" type="text" class="org-sel" placeholder="Operatör">
+              </div>
+              <div>
+                <label class="org-label">Personel Tipi</label>
+                <select id="pk-personel-tipi" class="org-sel">
+                  <option value="">— Seç —</option>
+                  <option value="saha">Saha</option>
+                  <option value="ofis">Ofis</option>
+                  <option value="yonetim">Yönetim</option>
+                  <option value="part_time">Part-Time</option>
+                  <option value="stajyer">Stajyer</option>
+                  <option value="taeron">Taeron</option>
+                </select>
+              </div>
+              <div>
+                <label class="org-label">Telefon</label>
+                <input id="pk-telefon" type="tel" class="org-sel" placeholder="0532 000 00 00">
+              </div>
+              <div>
+                <label class="org-label">E-posta</label>
+                <input id="pk-email" type="email" class="org-sel" placeholder="ad@solariz.com">
+              </div>
+              <div style="grid-column:1/-1;">
+                <label class="org-label">Adres</label>
+                <input id="pk-adres" type="text" class="org-sel" placeholder="Mahalle, İlçe, İl">
+              </div>
+              <div style="grid-column:1/-1;">
+                <label class="org-label">Acil İletişim</label>
+                <input id="pk-acil" type="text" class="org-sel" placeholder="Ad Soyad - 0532 000 00 00">
+              </div>
+              <div>
+                <label class="org-label">Güven Skoru (0–100)</label>
+                <input id="pk-guven" type="number" min="0" max="100" class="org-sel" placeholder="100">
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;padding-top:20px;">
+                <input id="pk-aktif" type="checkbox">
+                <label for="pk-aktif" style="font-size:13px;cursor:pointer;">Aktif</label>
+              </div>
+              <div style="grid-column:1/-1;">
+                <label class="org-label">Genel Not</label>
+                <textarea id="pk-notlar" rows="3" class="org-sel"
+                          placeholder="Personel hakkında genel notlar..."></textarea>
+              </div>
+            </div>
+            <div style="margin-top:14px;display:flex;gap:10px;align-items:center;">
+              <button id="pk-kaydet-btn" onclick="pkGuncelleKaydet()"
+                      style="background:#1d4ed8;color:#fff;border:none;padding:7px 18px;
+                             border-radius:5px;font-size:13px;font-weight:600;cursor:pointer;">
+                Kaydet
+              </button>
+              <button onclick="calismaDuzenleAcKapat()"
+                      style="background:#f3f4f6;color:#374151;border:1px solid #d1d5db;
+                             padding:7px 14px;border-radius:5px;font-size:13px;cursor:pointer;">
+                İptal
+              </button>
+              <span id="pk-form-mesaj" style="font-size:12px;margin-left:4px;"></span>
+            </div>
+          </div>
         </div>
         <!-- Devam -->
         <div class="oz-card" style="margin-bottom:14px;">
@@ -1484,6 +1568,102 @@
     }
     html += '</div>';
     el.innerHTML = html;
+
+    // P4C: Düzenle butonu görünürlüğü — sadece İK/Yönetim, Usta değil
+    var duzenleBtn = document.getElementById('calisma-duzenle-btn');
+    if (duzenleBtn) {
+      duzenleBtn.style.display = (pk && caps && caps.ik && !caps.usta) ? '' : 'none';
+    }
+    // P4C: pk verisini forma yükle (form kapalıyken de hazır olsun)
+    if (pk) pkFormDoldur(pk);
+  }
+
+  // ── P4C: Form doldur / aç-kapat / kaydet ────────────────────
+  function pkFormDoldur(pk) {
+    var set = function(id, val) { var el = document.getElementById(id); if (el) el.value = val != null ? val : ''; };
+    set('pk-ise-bas',       pk.ise_baslama   || '');
+    set('pk-kidem',         pk.kidem_yili    != null ? pk.kidem_yili : '');
+    set('pk-pozisyon',      pk.pozisyon      || '');
+    set('pk-personel-tipi', pk.personel_tipi || '');
+    set('pk-telefon',       pk.telefon       || '');
+    set('pk-email',         pk.email         || '');
+    set('pk-adres',         pk.adres         || '');
+    set('pk-acil',          pk.acil_iletisim || '');
+    set('pk-guven',         pk.guven_skoru   != null ? pk.guven_skoru : '');
+    set('pk-notlar',        pk.notlar        || '');
+    var aktifEl = document.getElementById('pk-aktif');
+    if (aktifEl) aktifEl.checked = pk.aktif !== false && pk.aktif !== 0;
+    var mesajEl = document.getElementById('pk-form-mesaj');
+    if (mesajEl) mesajEl.textContent = '';
+  }
+
+  function calismaDuzenleAcKapat() {
+    var panel = document.getElementById('calisma-form-panel');
+    var btn   = document.getElementById('calisma-duzenle-btn');
+    if (!panel) return;
+    var acik = panel.style.display !== 'none';
+    panel.style.display = acik ? 'none' : '';
+    if (btn) btn.textContent = acik ? '✏️ Düzenle' : '✖ Kapat';
+  }
+
+  async function pkGuncelleKaydet() {
+    var mesajEl = document.getElementById('pk-form-mesaj');
+    var btn     = document.getElementById('pk-kaydet-btn');
+    if (!mesajEl || !btn) return;
+
+    // Seçili profil id (profilSec ile set edilen global)
+    var profilId = (typeof secilenId !== 'undefined') ? secilenId : null;
+    if (!profilId) {
+      mesajEl.style.color = '#dc2626';
+      mesajEl.textContent = 'Profil seçili değil.';
+      return;
+    }
+
+    var payload = {
+      IseBaslamaTarih: document.getElementById('pk-ise-bas').value      || null,
+      KidemYili:       document.getElementById('pk-kidem').value         || null,
+      Pozisyon:        document.getElementById('pk-pozisyon').value      || null,
+      PersonelTipi:    document.getElementById('pk-personel-tipi').value || null,
+      Telefon:         document.getElementById('pk-telefon').value       || null,
+      Email:           document.getElementById('pk-email').value         || null,
+      Adres:           document.getElementById('pk-adres').value         || null,
+      AcilIletisim:    document.getElementById('pk-acil').value          || null,
+      GuvenSkoru:      document.getElementById('pk-guven').value !== ''
+                         ? parseInt(document.getElementById('pk-guven').value) : null,
+      Notlar:          document.getElementById('pk-notlar').value        || null,
+      aktif:           document.getElementById('pk-aktif').checked ? 1 : 0,
+    };
+
+    btn.disabled    = true;
+    btn.textContent = 'Kaydediliyor…';
+    mesajEl.textContent = '';
+
+    try {
+      var res = await fetch(`/yonetim/api/personel-360/profil/${profilId}/pk-guncelle`, {
+        method:  'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body:    JSON.stringify(payload),
+      });
+      var data = await res.json();
+      if (data.ok) {
+        mesajEl.style.color = '#166534';
+        mesajEl.textContent = '✓ Kaydedildi. Yenileniyor…';
+        // Formu kapat ve profili yeniden yükle
+        setTimeout(function() {
+          calismaDuzenleAcKapat();
+          profilSec(profilId);
+        }, 800);
+      } else {
+        mesajEl.style.color = '#dc2626';
+        mesajEl.textContent = data.hata || 'Bir hata oluştu.';
+      }
+    } catch (e) {
+      mesajEl.style.color = '#dc2626';
+      mesajEl.textContent = 'Bağlantı hatası: ' + e.message;
+    } finally {
+      btn.disabled    = false;
+      btn.textContent = 'Kaydet';
+    }
   }
 
   // ── FAZ2G-3: İK sekmesi render ──────────────────────────────
@@ -2176,6 +2356,10 @@
   // FAZ2G-8B: personel ekleme fonksiyonları
   window.personelEkleKaydet  = personelEkleKaydet;
   window.personelEkleAcKapat = personelEkleAcKapat;
+
+  // P4C: Çalışma Bilgileri düzenleme
+  window.calismaDuzenleAcKapat = calismaDuzenleAcKapat;
+  window.pkGuncelleKaydet      = pkGuncelleKaydet;
 
   // ─────────────────────────────────────────────────────────
   // P3A — Son Hareketler (Aktivite Akisi Okuma Katmani)
