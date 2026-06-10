@@ -8,9 +8,6 @@
     <div class="page-sub">Personel profili görüntüleme — organizasyon / ekip / proses</div>
   </div>
   <div style="display:flex;gap:8px;align-items:center;">
-    <a href="/yonetim/core-organizasyon" class="btn-secondary" style="font-size:12px;padding:6px 12px;text-decoration:none;">
-      ← Core Organizasyon
-    </a>
     <a href="/yonetim/" class="btn-secondary" style="font-size:12px;padding:6px 12px;text-decoration:none;">
       Yönetim Paneli
     </a>
@@ -349,10 +346,63 @@
 
       <!-- SEKME: Usta İlişkisi -->
       <div id="sekme-usta" class="p360-sekme-icerik" style="display:none;">
-        <div class="oz-card">
+
+        <!-- Mevcut ilişki / personel listesi (readonly) -->
+        <div class="oz-card" style="margin-bottom:14px;">
           <div class="oz-hdr"><span class="oz-hdr-t">Usta / Personel İlişkisi</span></div>
           <div id="d-usta-icerik" class="oz-body"></div>
         </div>
+
+        <!-- P6A: Usta atama formu — sadece SAHA_PERSONEL + can_update yetkisi -->
+        <div id="d-usta-ata-form" class="oz-card" style="display:none;margin-bottom:14px;border-left:3px solid #2563eb;">
+          <div class="oz-hdr">
+            <span class="oz-hdr-t">Usta Ata / Değiştir</span>
+          </div>
+          <div class="oz-body">
+            <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;
+                        padding:8px 12px;margin-bottom:14px;font-size:12px;color:#1e40af;">
+              Eski ilişki silinmez — bitiş tarihi doldurularak pasife alınır. Yeni ilişki aktif açılır.
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div>
+                <label class="org-label">Bağlı Usta <span style="color:#dc2626;">*</span></label>
+                <select id="ua-usta-id" class="org-sel">
+                  <option value="">— Yükleniyor… —</option>
+                </select>
+              </div>
+              <div>
+                <label class="org-label">Başlangıç Tarihi <span style="color:#dc2626;">*</span></label>
+                <input type="date" id="ua-baslangic" class="org-sel"
+                       style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;
+                              font-size:13px;background:var(--bg2);color:var(--text1);" />
+              </div>
+            </div>
+            <div style="margin-top:12px;">
+              <label class="org-label">Not <span style="color:#dc2626;">*</span></label>
+              <textarea id="ua-not" rows="2"
+                        placeholder="Atama/değişiklik sebebini yazın (zorunlu)..."
+                        style="width:100%;box-sizing:border-box;padding:8px 10px;
+                               border:1px solid var(--border);border-radius:6px;
+                               font-size:13px;resize:vertical;color:var(--text1);
+                               background:var(--bg2);font-family:inherit;"></textarea>
+            </div>
+            <div style="margin-top:12px;display:flex;gap:10px;align-items:center;">
+              <button id="ua-kaydet-btn" onclick="ustaAtaKaydet()"
+                      style="padding:9px 22px;background:#2563eb;color:#fff;border:none;
+                             border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+                Ata / Değiştir
+              </button>
+              <div id="ua-mesaj" style="font-size:13px;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- P6A: İlişki geçmişi tablosu -->
+        <div id="d-usta-gecmis-kart" class="oz-card" style="display:none;">
+          <div class="oz-hdr"><span class="oz-hdr-t">İlişki Geçmişi</span></div>
+          <div id="d-usta-gecmis" class="oz-body" style="padding:0;overflow-x:auto;"></div>
+        </div>
+
       </div>
 
       <!-- SEKME: Yetkinlik -->
@@ -1448,6 +1498,9 @@
 
     // Usta ilişkisi sekmesi
     const ustaEl = document.getElementById('d-usta-icerik');
+    const ustaAtaForm  = document.getElementById('d-usta-ata-form');
+    const ustaGecmisKart = document.getElementById('d-usta-gecmis-kart');
+
     if (p.profil_tipi === 'USTA' || p.profil_tipi === 'SAHA_USTASI') {
       const pList = data.personel_listesi || [];
       if (pList.length) {
@@ -1466,6 +1519,9 @@
       } else {
         ustaEl.innerHTML = '<div class="p360-bos-mesaj">Bağlı personel yok.</div>';
       }
+      if (ustaAtaForm)    ustaAtaForm.style.display    = 'none';
+      if (ustaGecmisKart) ustaGecmisKart.style.display = 'none';
+
     } else if (p.profil_tipi === 'SAHA_PERSONEL') {
       const ub = data.usta_bilgi;
       if (ub) {
@@ -1480,11 +1536,30 @@
       } else {
         ustaEl.innerHTML = '<div class="p360-bos-mesaj">Bağlı usta atanmamış.</div>';
       }
+
+      // P6A: Usta atama formu — sadece can_update yetkisi varsa göster
+      // caps._usta_ata_izin flag'i backend tarafından gönderilir
+      if (data._caps && data._caps.usta_ata && ustaAtaForm) {
+        ustaAtaForm.style.display = 'block';
+        // Bugünün tarihini default yap
+        const uaBas = document.getElementById('ua-baslangic');
+        if (uaBas && !uaBas.value) {
+          uaBas.value = new Date().toISOString().split('T')[0];
+        }
+        // Usta dropdown'ı doldur
+        ustaListesiDoldur();
+      }
+
+      // P6A: İlişki geçmişi
+      renderUstaGecmis(data.usta_gecmis || []);
+
     } else {
       ustaEl.innerHTML = `
         <div class="p360-bos-mesaj" style="color:var(--text3);">
           Bu profil tipi için usta/personel ilişkisi geçerli değil.
         </div>`;
+      if (ustaAtaForm)    ustaAtaForm.style.display    = 'none';
+      if (ustaGecmisKart) ustaGecmisKart.style.display = 'none';
     }
 
     // Yetkinlik sekmesi (FAZ2C-4 readonly)
@@ -2316,6 +2391,124 @@
     };
     await _ikPost('maas', body, 'maas-mesaj',
       document.getElementById('maas-kaydet-btn'), 'Kaydet');
+  }
+
+  // ── P6A: Usta Atama ─────────────────────────────────────────
+
+  let _ustaSecenekler = null;  // cache
+
+  async function ustaListesiDoldur() {
+    const sel = document.getElementById('ua-usta-id');
+    if (!sel) return;
+    if (_ustaSecenekler) {
+      _renderUstaSel(sel, _ustaSecenekler);
+      return;
+    }
+    try {
+      const r = await fetch('/yonetim/api/core/usta-personel/ustalar');
+      const d = await r.json();
+      if (d.ok) {
+        _ustaSecenekler = d.ustalar || [];
+        _renderUstaSel(sel, _ustaSecenekler);
+      } else {
+        sel.innerHTML = '<option value="">— Yüklenemedi —</option>';
+      }
+    } catch(e) {
+      sel.innerHTML = '<option value="">— Hata —</option>';
+    }
+  }
+
+  function _renderUstaSel(sel, list) {
+    sel.innerHTML = '<option value="">— Usta seçin —</option>' +
+      list.map(u =>
+        `<option value="${u.id}">${u.ad_soyad}` +
+        (u.bagli_personel_sayisi ? ` (${u.bagli_personel_sayisi} personel)` : '') +
+        `</option>`
+      ).join('');
+  }
+
+  async function ustaAtaKaydet() {
+    const btn   = document.getElementById('ua-kaydet-btn');
+    const mesaj = document.getElementById('ua-mesaj');
+    const ustaId = document.getElementById('ua-usta-id').value;
+    const bas    = document.getElementById('ua-baslangic').value;
+    const not_   = (document.getElementById('ua-not').value || '').trim();
+
+    if (!ustaId) { mesaj.innerHTML = '<span style="color:#dc2626;">Usta seçin.</span>'; return; }
+    if (!bas)    { mesaj.innerHTML = '<span style="color:#dc2626;">Başlangıç tarihi girin.</span>'; return; }
+    if (!not_)   { mesaj.innerHTML = '<span style="color:#dc2626;">Not zorunlu.</span>'; return; }
+
+    btn.disabled = true;
+    mesaj.innerHTML = '<span style="color:#6b7280;">Kaydediliyor…</span>';
+
+    try {
+      const resp = await fetch(`/yonetim/api/personel-360/profil/${secilenProfilId}/usta-ata`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          usta_profil_id:   parseInt(ustaId),
+          baslangic_tarihi: bas,
+          guncelleme_notu:  not_,
+        })
+      });
+      const d = await resp.json();
+      if (d.ok) {
+        mesaj.innerHTML = `<span style="color:#059669;">✓ ${d.usta_ad} atandı — ${d.olusturan_ad} tarafından.</span>`;
+        document.getElementById('ua-not').value = '';
+        _ustaSecenekler = null;  // cache sıfırla
+        // Profili yenile
+        setTimeout(() => profilYukle(secilenProfilId), 900);
+      } else {
+        mesaj.innerHTML = `<span style="color:#dc2626;">${d.hata || 'Hata oluştu.'}</span>`;
+      }
+    } catch(e) {
+      mesaj.innerHTML = `<span style="color:#dc2626;">Bağlantı hatası.</span>`;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function renderUstaGecmis(gecmis) {
+    const kart = document.getElementById('d-usta-gecmis-kart');
+    const el   = document.getElementById('d-usta-gecmis');
+    if (!kart || !el) return;
+    if (!gecmis || !gecmis.length) {
+      kart.style.display = 'none';
+      return;
+    }
+    kart.style.display = 'block';
+    el.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead>
+          <tr style="background:var(--bg2);color:var(--text3);font-size:11px;">
+            <th style="padding:8px 12px;text-align:left;font-weight:600;">Usta</th>
+            <th style="padding:8px 10px;text-align:left;font-weight:600;">Başlangıç</th>
+            <th style="padding:8px 10px;text-align:left;font-weight:600;">Bitiş</th>
+            <th style="padding:8px 10px;text-align:center;font-weight:600;">Durum</th>
+            <th style="padding:8px 10px;text-align:left;font-weight:600;">Not</th>
+            <th style="padding:8px 10px;text-align:left;font-weight:600;">İşlemi Yapan</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${gecmis.map((g, i) => `
+            <tr style="border-top:1px solid var(--border);background:${i%2===0?'var(--bg1)':'var(--bg2)'};">
+              <td style="padding:8px 12px;">
+                <strong>${g.usta_ad || '—'}</strong>
+                <span style="font-size:11px;color:var(--text3);margin-left:4px;">@${g.usta_kadi || ''}</span>
+              </td>
+              <td style="padding:8px 10px;color:var(--text2);">${g.baslangic_tarihi || '—'}</td>
+              <td style="padding:8px 10px;color:var(--text2);">${g.bitis_tarihi || '—'}</td>
+              <td style="padding:8px 10px;text-align:center;">
+                ${g.aktif
+                  ? '<span style="font-size:11px;font-weight:700;color:#059669;background:#dcfce7;padding:2px 8px;border-radius:10px;">Aktif</span>'
+                  : '<span style="font-size:11px;color:#6b7280;background:var(--bg2);padding:2px 8px;border-radius:10px;">Pasif</span>'}
+              </td>
+              <td style="padding:8px 10px;color:var(--text2);max-width:180px;word-break:break-word;">${g.not_ || '—'}</td>
+              <td style="padding:8px 10px;color:var(--text3);">${g.olusturan_ad || '—'}</td>
+            </tr>`
+          ).join('')}
+        </tbody>
+      </table>`;
   }
 
   // ── Yetkinlik formu ─────────────────────────────────────────

@@ -2551,6 +2551,8 @@ def personel_360_profil(profil_id):
     has_ik      = is_superadmin(_u_sess) or yetki_var('personel_360.ik',    'can_view')
     has_maas    = is_superadmin(_u_sess) or yetki_var('personel_maas',      'can_view')
     has_maliyet = is_superadmin(_u_sess) or yetki_var('personel_maas',      'can_view')
+    # P6A: Usta atama yetkisi (İlknur/İbrahim gibi personel_360.ik.duzenle:can_update olanlar)
+    has_usta_ata = is_superadmin(_u_sess) or yetki_var('personel_360.ik.duzenle', 'can_update')
     # FAZ2F-1C: Usta filtreli görünüm
     # Koşul: personel_360.usta yetkisi VAR ve Yönetim/SuperAdmin rolünde DEĞİL
     # Not: is_superadmin Tip='sistem' kontrolü yapar; Tip='usta' olanlar için
@@ -2618,6 +2620,7 @@ def personel_360_profil(profil_id):
         # Usta-personel ilişkisi
         usta_bilgi = None
         personel_listesi = []
+        usta_gecmis = []
         if kp["profil_tipi"] in ("USTA", "SAHA_USTASI"):
             personel_listesi_rows = con.execute("""
                 SELECT kp2.id, kp2.gercek_ad, kp2.kullanici_adi, kp2.profil_tipi,
@@ -2656,6 +2659,38 @@ def personel_360_profil(profil_id):
                     "usta_kadi":    upi_row["usta_kadi"],
                     "iliski_id":    upi_row["iliski_id"],
                 }
+
+            # P6A: İlişki geçmişi — hem aktif hem pasif kayıtlar
+            try:
+                gecmis_rows = con.execute("""
+                    SELECT upi.id, upi.aktif,
+                           u.gercek_ad AS usta_ad, u.kullanici_adi AS usta_kadi,
+                           upi.baslangic_tarihi, upi.bitis_tarihi,
+                           upi.guncelleme_notu,
+                           sk.AdSoyad AS olusturan_ad,
+                           upi.kaynak, upi.created_at
+                    FROM usta_personel_iliskisi upi
+                    JOIN kullanici_profil u ON u.id = upi.usta_profil_id
+                    LEFT JOIN sistem_kullanici sk ON sk.Id = upi.olusturan_id
+                    WHERE upi.personel_profil_id = ?
+                    ORDER BY upi.id DESC
+                """, (profil_id,)).fetchall()
+                usta_gecmis = [
+                    {
+                        "id":               r["id"],
+                        "aktif":            r["aktif"],
+                        "usta_ad":          r["usta_ad"],
+                        "usta_kadi":        r["usta_kadi"],
+                        "baslangic_tarihi": r["baslangic_tarihi"],
+                        "bitis_tarihi":     r["bitis_tarihi"],
+                        "not_":             r["guncelleme_notu"],
+                        "olusturan_ad":     r["olusturan_ad"] or r["kaynak"] or "sistem",
+                        "created_at":       r["created_at"],
+                    }
+                    for r in gecmis_rows
+                ]
+            except Exception:
+                usta_gecmis = []
 
         # FAZ2C-3: readonly yetkinlik listesi
         yetkinlikler = []
@@ -3292,6 +3327,7 @@ def personel_360_profil(profil_id):
         ],
         "usta_bilgi":        usta_bilgi,
         "personel_listesi":  personel_listesi,
+        "usta_gecmis":       usta_gecmis,
         "yetkinlikler":      yetkinlikler,
         "uretim_period":        uretim_period,
         "uretim_legacy_uyari":  uretim_legacy_uyari,
@@ -3307,10 +3343,11 @@ def personel_360_profil(profil_id):
         # P5C-1: ENJ üretim özeti (sadece SAHA_USTASI + kaynak=sistem_kullanici)
         "enj_ozet":             enj_ozet,
         "_caps": {
-            "ik":      has_ik,
-            "maas":    has_maas,
-            "maliyet": has_maliyet,
-            "usta":    is_usta_view,
+            "ik":       has_ik,
+            "maas":     has_maas,
+            "maliyet":  has_maliyet,
+            "usta":     is_usta_view,
+            "usta_ata": has_usta_ata,
         },
     })
 
@@ -3553,6 +3590,140 @@ def personel_360_org_guncelle(profil_id):
         'kapanan_iliski_id': kapanan_iliski_id,
         'yeni_iliski_id':    yeni_iliski_id,
     })
+
+# ════════════════════════════════════════════════════════════════
+# P6A — Personel 360 Usta Atama
+# BEGIN PERSONEL_360_USTA_ATA
+# ════════════════════════════════════════════════════════════════
+
+@yonetim_bp.route('/api/personel-360/profil/<int:profil_id>/usta-ata', methods=['POST'])
+@yetki_gerekli('personel_360.ik.duzenle', 'can_update')
+def personel_360_usta_ata(profil_id):
+    """
+    P6A: Personel 360 içinden usta atama.
+    - Eski aktif ilişki silinmez: aktif=0, bitis_tarihi doldurulur.
+    - Yeni ilişki aktif=1 açılır.
+    - kaynak = 'personel_360_usta_ata'
+    - olusturan_id = session kullanıcısı
+    Body (JSON):
+      usta_profil_id   int   zorunlu
+      baslangic_tarihi str   zorunlu  (YYYY-MM-DD)
+      guncelleme_notu  str   zorunlu
+    """
+    import datetime as _dt
+
+    data = request.get_json(silent=True) or {}
+
+    # — zorunlu alanlar
+    notu = (data.get('guncelleme_notu') or '').strip()
+    if not notu:
+        return jsonify({'ok': False, 'hata': 'guncelleme_notu zorunlu'}), 400
+
+    try:
+        yeni_usta_id = int(data['usta_profil_id'])
+    except (KeyError, TypeError, ValueError):
+        return jsonify({'ok': False, 'hata': 'usta_profil_id zorunlu ve sayısal olmalı'}), 400
+
+    bas_raw = (data.get('baslangic_tarihi') or '').strip()
+    try:
+        _dt.date.fromisoformat(bas_raw)
+        baslangic = bas_raw
+    except ValueError:
+        return jsonify({'ok': False, 'hata': 'baslangic_tarihi YYYY-MM-DD formatında olmalı'}), 400
+
+    olusturan_id = (session.get('kullanici') or {}).get('Id')
+    now_str = _dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    today   = _dt.date.today().isoformat()
+
+    con = _get_conn()
+    try:
+        # Hedef profil kontrolü — sadece SAHA_PERSONEL için
+        kp = con.execute(
+            "SELECT id, gercek_ad, profil_tipi FROM kullanici_profil WHERE id=? AND aktif=1",
+            (profil_id,)
+        ).fetchone()
+        if not kp:
+            return jsonify({'ok': False, 'hata': 'Profil bulunamadı'}), 404
+        if kp['profil_tipi'] != 'SAHA_PERSONEL':
+            return jsonify({'ok': False, 'hata': 'Sadece SAHA_PERSONEL profiline usta atanabilir'}), 422
+
+        # Yeni usta kontrolü
+        yeni_usta = con.execute(
+            "SELECT id, gercek_ad, profil_tipi FROM kullanici_profil WHERE id=? AND aktif=1",
+            (yeni_usta_id,)
+        ).fetchone()
+        if not yeni_usta:
+            return jsonify({'ok': False, 'hata': f'usta_profil_id={yeni_usta_id} bulunamadı'}), 404
+        if yeni_usta['profil_tipi'] != 'SAHA_USTASI':
+            return jsonify({'ok': False, 'hata': f"'{yeni_usta['gercek_ad']}' SAHA_USTASI değil"}), 422
+
+        # Zaten aynı usta aktif mi?
+        ayni = con.execute("""
+            SELECT id FROM usta_personel_iliskisi
+            WHERE personel_profil_id=? AND usta_profil_id=? AND aktif=1
+        """, (profil_id, yeni_usta_id)).fetchone()
+        if ayni:
+            return jsonify({'ok': False, 'hata': 'Bu usta zaten aktif olarak atanmış'}), 409
+
+        kapanan_id = None
+        # Mevcut aktif ilişkiyi kapat
+        eski = con.execute("""
+            SELECT id FROM usta_personel_iliskisi
+            WHERE personel_profil_id=? AND aktif=1
+            ORDER BY id DESC LIMIT 1
+        """, (profil_id,)).fetchone()
+        if eski:
+            kapanan_id = eski['id']
+            con.execute("""
+                UPDATE usta_personel_iliskisi
+                SET aktif=0, bitis_tarihi=?, updated_at=?, guncelleme_notu=?
+                WHERE id=?
+            """, (today, now_str, notu, kapanan_id))
+
+        # Yeni ilişki aç
+        con.execute("""
+            INSERT INTO usta_personel_iliskisi
+              (usta_profil_id, personel_profil_id, aktif, kaynak,
+               olusturan_id, guncelleme_notu, baslangic_tarihi)
+            VALUES (?, ?, 1, 'personel_360_usta_ata', ?, ?, ?)
+        """, (yeni_usta_id, profil_id, olusturan_id, notu, baslangic))
+        con.commit()
+        yeni_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+    except Exception as e:
+        import traceback
+        try:
+            con.rollback()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'hata': str(e), 'tb': traceback.format_exc()}), 500
+    finally:
+        con.close()
+
+    audit.log(
+        _u(), 'EKLE', 'usta_personel_iliskisi', yeni_id,
+        aciklama=f"P6A usta-ata: {kp['gercek_ad']} → {yeni_usta['gercek_ad']} | not: {notu}",
+        modul='yonetim', alt_modul='personel_360'
+    )
+    if kapanan_id:
+        audit.log(
+            _u(), 'DUZENLE', 'usta_personel_iliskisi', kapanan_id,
+            alan='aktif', eski=1, yeni=0,
+            aciklama=f"P6A usta-ata: eski ilişki kapatıldı | not: {notu}",
+            modul='yonetim', alt_modul='personel_360'
+        )
+
+    olusturan_ad = (session.get('kullanici') or {}).get('AdSoyad') or _u()
+    return jsonify({
+        'ok':            True,
+        'yeni_iliski_id': yeni_id,
+        'kapanan_id':    kapanan_id,
+        'usta_ad':       yeni_usta['gercek_ad'],
+        'olusturan_ad':  olusturan_ad,
+    }), 201
+
+# END PERSONEL_360_USTA_ATA
+# ════════════════════════════════════════════════════════════════
 
 @yonetim_bp.route('/api/personel-360/yetkinlik-secenekler', methods=['GET'])
 @yetki_gerekli('personel_360', 'can_view')
