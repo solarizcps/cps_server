@@ -203,6 +203,59 @@
         <label for="ekle-aktif" style="font-size:12px;color:var(--text2);cursor:pointer;">Aktif</label>
       </div>
 
+      <!-- P6B-2r: Telefon Uygulama Şifresi (zorunlu) -->
+      <div style="margin-bottom:6px;">
+        <label style="font-size:11px;color:var(--text2);">
+          Telefon Uygulama Şifresi <span style="color:#dc2626;">*</span>
+        </label>
+        <input id="ekle-tel-sifre" type="text" placeholder="6 haneli sayı (örn: 123456)"
+               maxlength="6" inputmode="numeric"
+               style="width:100%;box-sizing:border-box;padding:6px 8px;margin-top:2px;
+                      border:1px solid var(--border);border-radius:5px;font-size:12px;
+                      color:var(--text1);background:#fff;">
+        <div style="font-size:10px;color:var(--text3);margin-top:2px;">
+          Personelin telefon uygulamasına giriş şifresi. 6 haneli sayı olmalıdır.
+        </div>
+      </div>
+
+      <!-- P6B-2: CPS Web Girişi Opsiyonu -->
+      <div style="border-top:1px solid var(--border);margin:8px 0 6px;padding-top:8px;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+          <input id="ekle-sk-ac" type="checkbox" style="cursor:pointer;"
+                 onchange="_ekleSkToggle(this.checked)">
+          <label for="ekle-sk-ac" style="font-size:12px;font-weight:600;color:var(--sol-dark);cursor:pointer;">
+            CPS web giriş hesabı açılsın
+          </label>
+        </div>
+
+        <div id="ekle-sk-panel" style="display:none;padding:6px 8px;background:#f0fdf4;
+             border:1px solid #bbf7d0;border-radius:5px;margin-top:4px;">
+          <!-- Kullanıcı Adı (CPS) -->
+          <div style="margin-bottom:5px;">
+            <label style="font-size:11px;color:var(--text2);">CPS Kullanıcı Adı *</label>
+            <input id="ekle-sk-kadi" type="text" placeholder="ad.soyad"
+                   style="width:100%;box-sizing:border-box;padding:5px 8px;margin-top:2px;
+                          border:1px solid var(--border);border-radius:5px;font-size:12px;
+                          color:var(--text1);background:#fff;">
+          </div>
+          <!-- Rol -->
+          <div style="margin-bottom:5px;">
+            <label style="font-size:11px;color:var(--text2);">Rol *</label>
+            <select id="ekle-sk-rol"
+                    style="width:100%;box-sizing:border-box;padding:5px 8px;margin-top:2px;
+                           border:1px solid var(--border);border-radius:5px;font-size:12px;
+                           color:var(--text1);background:#fff;">
+              <option value="">— Rol seç —</option>
+            </select>
+          </div>
+          <!-- Bilgi notu -->
+          <div style="font-size:11px;color:#15803d;padding:4px 6px;background:#dcfce7;
+                      border-radius:4px;">
+            İlk şifre: <strong>solariz2026</strong> — kullanıcı ilk girişte şifre değiştirecek.
+          </div>
+        </div>
+      </div>
+
       <!-- Mesaj alanı -->
       <div id="ekle-mesaj" style="font-size:12px;min-height:16px;margin-bottom:6px;"></div>
 
@@ -1103,6 +1156,8 @@
       tumProfiller = data.profiller;
       deptFilterDoldur(data.departmanlar);
       _ekleDeptAnaDoldur(data.departmanlar);
+      // P6B-2: sistem_roller dropdown doldur
+      _ekleSkRolDoldur(data.sistem_roller || []);
       listeGoster(tumProfiller);
 
       // P3B: aktivite özeti paralel çek (bekleme yok - liste zaten gösterildi)
@@ -1205,6 +1260,15 @@
     altWrap.style.display = altlar.length > 0 ? '' : 'none';
     if (altlar.length === 0) altSel.value = '';
   }
+
+  // P6B-2: CPS giriş rol dropdown
+  function _ekleSkRolDoldur(roller) {
+    const sel = document.getElementById('ekle-sk-rol');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— Rol seç —</option>' +
+      roller.map(r => `<option value="${r.id}">${r.ad}</option>`).join('');
+  }
+  window._ekleSkRolDoldur = _ekleSkRolDoldur;
 
   // ── Liste render ────────────────────────────────────────────
   function listeGoster(liste) {
@@ -2867,6 +2931,23 @@
     }
   }
 
+  // ── P6B-2: CPS giriş paneli toggle ─────────────────────────────
+  function _ekleSkToggle(acik) {
+    document.getElementById('ekle-sk-panel').style.display = acik ? 'block' : 'none';
+    if (acik) {
+      // Kullanıcı adını ad soyaddan otomatik türet
+      const adVal = (document.getElementById('ekle-ad').value || '').trim();
+      const skKadiEl = document.getElementById('ekle-sk-kadi');
+      if (adVal && !skKadiEl.value) {
+        skKadiEl.value = adVal.toLowerCase()
+          .replace(/ç/g,'c').replace(/ğ/g,'g').replace(/ı/g,'i')
+          .replace(/ö/g,'o').replace(/ş/g,'s').replace(/ü/g,'u')
+          .replace(/[^a-z0-9]/g,'.');
+      }
+    }
+  }
+  window._ekleSkToggle = _ekleSkToggle;
+
   // ── FAZ2G-8B: Personel Ekle kaydet ────────────────────────────
   async function personelEkleKaydet() {
     const ad      = (document.getElementById('ekle-ad').value || '').trim();
@@ -2884,6 +2965,21 @@
       return;
     }
 
+    // P6B-2r: telefon şifre validasyonu
+    const telSifre = (document.getElementById('ekle-tel-sifre').value || '').trim();
+    if (!telSifre) {
+      mesajEl.style.color = '#dc2626';
+      mesajEl.textContent = 'Telefon uygulama şifresi zorunludur.';
+      document.getElementById('ekle-tel-sifre').focus();
+      return;
+    }
+    if (!/^\d{6}$/.test(telSifre)) {
+      mesajEl.style.color = '#dc2626';
+      mesajEl.textContent = 'Telefon şifresi tam 6 haneli sayı olmalıdır.';
+      document.getElementById('ekle-tel-sifre').focus();
+      return;
+    }
+
     const tip       = document.getElementById('ekle-tip').value;
     // P5B: alt birim varsa onu, yoksa ana departmanı dept_id olarak gönder
     const ekleDeptAna = parseInt(document.getElementById('ekle-dept-ana').value) || null;
@@ -2898,6 +2994,24 @@
     const ustaEl = document.getElementById('ekle-usta').value;
     const aktif  = document.getElementById('ekle-aktif').checked ? 1 : 0;
 
+    // P6B-2: CPS giriş opsiyonu
+    const skAc   = document.getElementById('ekle-sk-ac').checked;
+    const skKadi = skAc ? (document.getElementById('ekle-sk-kadi').value || '').trim() : null;
+    const skRolEl = document.getElementById('ekle-sk-rol');
+    const skRolId = skAc ? (parseInt(skRolEl.value) || null) : null;
+    if (skAc) {
+      if (!skKadi) {
+        mesajEl.style.color = '#dc2626';
+        mesajEl.textContent = 'CPS kullanıcı adı zorunludur.';
+        return;
+      }
+      if (!skRolId) {
+        mesajEl.style.color = '#dc2626';
+        mesajEl.textContent = 'CPS giriş için rol seçimi zorunludur.';
+        return;
+      }
+    }
+
     const btn = document.getElementById('ekle-kaydet-btn');
     btn.disabled = true;
     btn.textContent = 'Kaydediliyor…';
@@ -2908,18 +3022,22 @@
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
-          ad_soyad:       ad,
-          kullanici_adi:  kadi,
-          profil_tipi:    tip,
-          departman_id:   deptIdGonder,
-          unvan:          unvan,
-          telefon:        telefon,
-          email:          email,
-          adres:          adres,
-          acil_iletisim:  acil,
-          ise_baslama:    isBas,
-          usta_profil_id: ustaEl ? parseInt(ustaEl) : null,
-          aktif:          aktif,
+          ad_soyad:        ad,
+          kullanici_adi:   kadi,
+          profil_tipi:     tip,
+          departman_id:    deptIdGonder,
+          unvan:           unvan,
+          telefon:         telefon,
+          email:           email,
+          adres:           adres,
+          acil_iletisim:   acil,
+          ise_baslama:     isBas,
+          usta_profil_id:  ustaEl ? parseInt(ustaEl) : null,
+          aktif:           aktif,
+          telefon_sifre:   telSifre,
+          sistem_giris_ac: skAc,
+          sk_kullanici_adi: skKadi,
+          sk_rol_id:       skRolId,
         }),
       });
       const data = await res.json();
@@ -2927,7 +3045,7 @@
       if (!data.ok) {
         mesajEl.style.color = '#dc2626';
         if (res.status === 409) {
-          mesajEl.textContent = `⚠ Kullanıcı adı zaten mevcut: "${kadi}"`;
+          mesajEl.textContent = data.hata || `⚠ Kullanıcı adı zaten mevcut: "${kadi}"`;
         } else {
           mesajEl.textContent = data.hata || 'Bir hata oluştu.';
         }
@@ -2937,14 +3055,23 @@
       // Başarı
       mesajEl.style.color = '#16a34a';
       const uyariEk = data.uyari ? ` — Uyarı: ${data.uyari}` : '';
-      mesajEl.textContent = `✓ ${ad} eklendi (kp_id=${data.kp_id})${uyariEk}`;
+      let basariMesaj = `✓ ${ad} eklendi (kp_id=${data.kp_id})`;
+      if (data.sistem_kullanici_id) {
+        basariMesaj += ` | CPS hesabı açıldı (sk_id=${data.sistem_kullanici_id}, ilk şifre: solariz2026)`;
+      }
+      mesajEl.textContent = basariMesaj + uyariEk;
 
       // Formu temizle
-      ['ekle-ad','ekle-kadi','ekle-unvan','ekle-telefon','ekle-email','ekle-adres','ekle-acil'].forEach(id => {
+      ['ekle-ad','ekle-kadi','ekle-unvan','ekle-telefon','ekle-email','ekle-adres','ekle-acil',
+       'ekle-tel-sifre','ekle-sk-kadi'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
       });
       document.getElementById('ekle-usta').value = '';
+      document.getElementById('ekle-sk-ac').checked = false;
+      _ekleSkToggle(false);
+      const skRolReset = document.getElementById('ekle-sk-rol');
+      if (skRolReset) skRolReset.value = '';
       const ekleDeptAnaEl = document.getElementById('ekle-dept-ana');
       if (ekleDeptAnaEl) ekleDeptAnaEl.value = '';
       _ekleDeptAltDoldur('');  // alt birimi gizle

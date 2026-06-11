@@ -2498,6 +2498,11 @@ def personel_360_secenekler():
             ORDER BY sira, ad
         """).fetchall()
 
+        # P6B-2: sistem_roller — personel ekle formunda CPS giriş hesabı açmak için
+        sistem_roller = con.execute(
+            "SELECT Id as id, Ad as ad FROM sistem_rol WHERE Aktif=1 AND SuperAdmin=0 ORDER BY Ad"
+        ).fetchall()
+
     finally:
         con.close()
 
@@ -2535,6 +2540,10 @@ def personel_360_secenekler():
         "prosesler": [
             {"id": r["id"], "ad": r["ad"], "kod": r["kod"], "kategori": r["kategori"]}
             for r in prosesler
+        ],
+        "sistem_roller": [
+            {"id": r["id"], "ad": r["ad"]}
+            for r in sistem_roller
         ],
     })
 
@@ -4294,10 +4303,11 @@ def personel_360_personel_ekle():
     """
     FAZ2G-8A: Yeni saha personeli oluşturur.
     personel_kullanici + kullanici_profil atomik INSERT.
-    sistem_kullanici oluşturulmaz (login açılmaz).
+    P6B-2: opsiyonel sistem_kullanici (CPS web girişi) açma.
     Opsiyonel usta_personel_iliskisi bağlantısı.
     """
     import datetime
+    from modules.yonetim import queries as _qr
 
     data = request.get_json(silent=True) or {}
 
@@ -4328,6 +4338,29 @@ def personel_360_personel_ekle():
     adres          = (data.get('adres') or '').strip() or None
     acil_iletisim  = (data.get('acil_iletisim') or '').strip() or None
 
+    # P6B-2r: telefon uygulama şifresi (zorunlu, 6 haneli sayısal)
+    telefon_sifre = (data.get('telefon_sifre') or '').strip()
+    if not telefon_sifre:
+        return jsonify({'ok': False, 'hata': 'telefon_sifre zorunludur'}), 400
+    import re as _re
+    if not _re.fullmatch(r'\d{6}', telefon_sifre):
+        return jsonify({'ok': False, 'hata': 'telefon_sifre tam 6 haneli sayı olmalıdır'}), 400
+
+    # P6B-2: opsiyonel CPS web girişi
+    sistem_giris_ac  = bool(data.get('sistem_giris_ac', False))
+    sk_kullanici_adi = (data.get('sk_kullanici_adi') or '').strip().lower() or None
+    sk_rol_id_raw    = data.get('sk_rol_id')
+    sk_rol_id        = None
+    if sistem_giris_ac:
+        if not sk_kullanici_adi:
+            return jsonify({'ok': False, 'hata': 'CPS giriş için kullanıcı adı zorunludur'}), 400
+        try:
+            sk_rol_id = int(sk_rol_id_raw) if sk_rol_id_raw not in (None, '', 'null') else None
+        except (TypeError, ValueError):
+            sk_rol_id = None
+        if not sk_rol_id:
+            return jsonify({'ok': False, 'hata': 'CPS giriş için rol seçimi zorunludur'}), 400
+
     if usta_profil_id is not None:
         try:
             usta_profil_id = int(usta_profil_id)
@@ -4342,6 +4375,7 @@ def personel_360_personel_ekle():
 
     con = _get_conn()
     uyari = None
+    sk_id = None
 
     try:
         # ── 1) kullanici_adi unique kontrolü ────────────────────
@@ -4357,6 +4391,20 @@ def personel_360_personel_ekle():
                 'kod':  'KULLANICI_ADI_MEVCUT',
             }), 409
 
+        # P6B-2: sistem_kullanici unique ön-kontrol (hızlı fail)
+        if sistem_giris_ac:
+            mevcut_sk = con.execute(
+                "SELECT Id FROM sistem_kullanici WHERE KullaniciAdi = ?",
+                (sk_kullanici_adi,)
+            ).fetchone()
+            if mevcut_sk:
+                con.close()
+                return jsonify({
+                    'ok':   False,
+                    'hata': f"CPS kullanıcı adı zaten mevcut: '{sk_kullanici_adi}'",
+                    'kod':  'SK_KULLANICI_ADI_MEVCUT',
+                }), 409
+
         # ── 2) Benzer ad_soyad kontrolü (soft warning) ──────────
         norm_yeni = ad_soyad.strip().lower()
         benzerler = con.execute("""
@@ -4370,16 +4418,17 @@ def personel_360_personel_ekle():
             )
 
         # ── 3) personel_kullanici INSERT ─────────────────────────
-        # sifre='!' → login yapılamaz (geçersiz hash sentinel)
+        # P6B-2r: telefon_sifre ile gir, '!' sentinel kullanılmaz
         con.execute("""
             INSERT INTO personel_kullanici
               (ad, kullanici_adi, sifre, AdSoyad, Pozisyon, IseBaslamaTarih,
                Telefon, Email, Adres, AcilIletisim,
                aktif, kaynak)
-            VALUES (?, ?, '!', ?, ?, ?, ?, ?, ?, ?, ?, 'CPS_CANLI')
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'CPS_CANLI')
         """, (
             kullanici_adi,          # ad = kullanici_adi (kısa ad)
             kullanici_adi,
+            telefon_sifre,          # P6B-2r: gerçek telefon şifresi
             ad_soyad,               # AdSoyad = tam ad
             unvan,                  # Pozisyon = unvan
             ise_baslama,
@@ -4445,6 +4494,36 @@ def personel_360_personel_ekle():
                   aciklama=f"P360 yeni personel: kp_id={kp_id} tip={profil_tipi}",
                   modul='yonetim', alt_modul='personel_360')
 
+        # ── 7) P6B-2: opsiyonel CPS web girişi ──────────────────
+        # kullanici_ekle() kendi connection'ını açar ve commit eder.
+        # personel_kullanici + kullanici_profil adımları commit edildiğinden
+        # sistem_kullanici başarısız olursa sadece bu adım rollback olur.
+        # personel_kullanici kaydı tutulur, SistemKullaniciId güncellenmez.
+        if sistem_giris_ac:
+            try:
+                sk_id = _qr.kullanici_ekle({
+                    'KullaniciAdi': sk_kullanici_adi,
+                    'AdSoyad':      ad_soyad,
+                    'Email':        email,
+                    'Sifre':        'solariz2026',
+                    'RolId':        sk_rol_id,
+                    'Aktif':        1,
+                }, kullanici=_u())
+                # Bridge: personel_kullanici.SistemKullaniciId güncelle
+                bridge_con = _get_conn()
+                try:
+                    bridge_con.execute(
+                        "UPDATE personel_kullanici SET SistemKullaniciId=? WHERE id=?",
+                        (sk_id, pk_id)
+                    )
+                    bridge_con.commit()
+                finally:
+                    bridge_con.close()
+            except ValueError as ve:
+                # Duplicate KullaniciAdi — personel kaydı korunur, sadece uyarı
+                uyari = (uyari or '') + f" CPS hesabı açılamadı: {ve}"
+                sk_id = None
+
     except Exception as e:
         con.rollback()
         con.close()
@@ -4454,14 +4533,17 @@ def personel_360_personel_ekle():
         con.close()
 
     return jsonify({
-        'ok':             True,
-        'pk_id':          pk_id,
-        'kp_id':          kp_id,
-        'ad_soyad':       ad_soyad,
-        'kullanici_adi':  kullanici_adi,
-        'profil_tipi':    profil_tipi,
-        'usta_iliski_id': usta_iliski_id,
-        'uyari':          uyari,
+        'ok':                    True,
+        'pk_id':                 pk_id,
+        'kp_id':                 kp_id,
+        'ad_soyad':              ad_soyad,
+        'kullanici_adi':         kullanici_adi,
+        'profil_tipi':           profil_tipi,
+        'usta_iliski_id':        usta_iliski_id,
+        'sistem_kullanici_id':   sk_id,
+        'ilk_sifre':             'solariz2026' if sk_id else None,
+        'zorunlu_sifre_degistir': True if sk_id else None,
+        'uyari':                 uyari,
     })
 
 # ════════════════════════════════════════════════════════════════
