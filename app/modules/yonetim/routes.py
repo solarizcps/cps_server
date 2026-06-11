@@ -2875,7 +2875,7 @@ def personel_360_profil(profil_id):
                            COALESCE(SUM(miktar), 0)                              AS toplam_miktar,
                            COALESCE(SUM(CASE WHEN onay_durum='onaylandi'
                                             THEN miktar ELSE 0 END), 0)          AS onayli_miktar,
-                           COALESCE(SUM(CASE WHEN onay_durum='beklemede'
+                           COALESCE(SUM(CASE WHEN onay_durum='bekliyor'
                                             THEN miktar ELSE 0 END), 0)          AS bekleyen_miktar,
                            COALESCE(SUM(CASE WHEN onay_durum='reddedildi'
                                             THEN miktar ELSE 0 END), 0)          AS reddedilen_miktar,
@@ -2900,7 +2900,7 @@ def personel_360_profil(profil_id):
                            COUNT(CASE WHEN onay_durum='onaylandi' THEN 1 END)    AS onayli_kayit,
                            COALESCE(SUM(CASE WHEN onay_durum='onaylandi'
                                             THEN miktar ELSE 0 END), 0)          AS onayli_miktar,
-                           COALESCE(SUM(CASE WHEN onay_durum='beklemede'
+                           COALESCE(SUM(CASE WHEN onay_durum='bekliyor'
                                             THEN miktar ELSE 0 END), 0)          AS bekleyen_miktar,
                            COALESCE(SUM(CASE WHEN onay_durum='reddedildi'
                                             THEN miktar ELSE 0 END), 0)          AS reddedilen_miktar,
@@ -3173,7 +3173,7 @@ def personel_360_profil(profil_id):
                     _poz = con.execute("""
                         SELECT COALESCE(SUM(miktar),0) AS top,
                                COALESCE(SUM(CASE WHEN onay_durum='onaylandi' THEN miktar ELSE 0 END),0) AS onay,
-                               COALESCE(SUM(CASE WHEN onay_durum='beklemede' THEN miktar ELSE 0 END),0) AS bek,
+                               COALESCE(SUM(CASE WHEN onay_durum='bekliyor' THEN miktar ELSE 0 END),0) AS bek,
                                COALESCE(SUM(CASE WHEN onay_durum='reddedildi' THEN miktar ELSE 0 END),0) AS red,
                                MAX(tarih) AS son_t
                         FROM uretim_kayit
@@ -3207,7 +3207,7 @@ def personel_360_profil(profil_id):
                             _pleg = con.execute("""
                                 SELECT COALESCE(SUM(miktar),0) AS top,
                                        COALESCE(SUM(CASE WHEN onay_durum='onaylandi' THEN miktar ELSE 0 END),0) AS onay,
-                                       COALESCE(SUM(CASE WHEN onay_durum='beklemede' THEN miktar ELSE 0 END),0) AS bek,
+                                       COALESCE(SUM(CASE WHEN onay_durum='bekliyor' THEN miktar ELSE 0 END),0) AS bek,
                                        COALESCE(SUM(CASE WHEN onay_durum='reddedildi' THEN miktar ELSE 0 END),0) AS red,
                                        MAX(tarih) AS son_t
                                 FROM uretim_kayit
