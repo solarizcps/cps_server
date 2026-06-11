@@ -1694,15 +1694,19 @@
       b.classList.toggle('uretim-pd-aktif', b.dataset.period === (data.uretim_period || secilenPeriod));
     });
 
-    // P5A: onay_durum renk/rozet tablosu (beklemede = API değeri)
+    // P5A: onay_durum renk/rozet tablosu (DB degeri: bekliyor)
     const ONAY_STIL = {
       onaylandi:  { renk: '#166534', bg: '#dcfce7', etiket: '✔ Onaylı' },
-      beklemede:  { renk: '#92400e', bg: '#fef3c7', etiket: '⏳ Bekliyor' },
+      bekliyor:   { renk: '#92400e', bg: '#fef3c7', etiket: '⏳ Bekliyor' },
       reddedildi: { renk: '#991b1b', bg: '#fee2e2', etiket: '✖ Reddedildi' },
     };
 
     if (!kar.toplam_kayit) {
-      const bosMsg = '<div class="p360-bos-mesaj">Üretim kaydı bulunamadı.<br><small style="color:var(--text3);">Bu profil için üretim verisi takip edilmemektedir.</small></div>';
+      const eo0 = data.ekip_uretim_ozeti;
+      const ekipVar = isUsta && eo0 && eo0.ekip_toplam_personel > 0;
+      const bosMsg = ekipVar
+        ? '<div class="p360-bos-mesaj">Bu kişi doğrudan üretim girişi yapmamış.<br><small style="color:var(--text3);">Ekibinin üretim özeti aşağıda gösterilmektedir.</small></div>'
+        : '<div class="p360-bos-mesaj">Üretim kaydı bulunamadı.<br><small style="color:var(--text3);">Bu profil için üretim verisi takip edilmemektedir.</small></div>';
       ozetEl.innerHTML = bosMsg;
       prEl.innerHTML   = '';
       sonEl.innerHTML  = '';
