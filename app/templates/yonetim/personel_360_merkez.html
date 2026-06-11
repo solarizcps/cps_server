@@ -1331,6 +1331,7 @@
   }
 
   async function profilYukle(id, period) {
+    secilenId = id;   // P6A-fix2: secilenId her zaman yüklenen profille senkron
     try {
       const res  = await fetch(`/yonetim/api/personel-360/profil/${id}?period=${period}`);
       const data = await res.json();
@@ -1539,6 +1540,10 @@
 
       // P6A: Usta atama formu — sadece can_update yetkisi varsa göster
       // caps._usta_ata_izin flag'i backend tarafından gönderilir
+      if (ustaAtaForm) {
+        // P6A-fix2: form her zaman aktif profil id'sini taşır
+        ustaAtaForm.dataset.profilId = p.id;
+      }
       if (data._caps && data._caps.usta_ata && ustaAtaForm) {
         ustaAtaForm.style.display = 'block';
         // Bugünün tarihini default yap
@@ -2434,6 +2439,11 @@
     const bas    = document.getElementById('ua-baslangic').value;
     const not_   = (document.getElementById('ua-not').value || '').trim();
 
+    // P6A-fix2: form dataset'indeki profil id'yi öncelikle kullan
+    const formEl = document.getElementById('d-usta-ata-form');
+    const hedefProfilId = parseInt((formEl && formEl.dataset.profilId) || secilenId);
+
+    if (!hedefProfilId) { mesaj.innerHTML = '<span style="color:#dc2626;">Profil seçilmemiş. Lütfen listeden bir personel seçin.</span>'; return; }
     if (!ustaId) { mesaj.innerHTML = '<span style="color:#dc2626;">Usta seçin.</span>'; return; }
     if (!bas)    { mesaj.innerHTML = '<span style="color:#dc2626;">Başlangıç tarihi girin.</span>'; return; }
     if (!not_)   { mesaj.innerHTML = '<span style="color:#dc2626;">Not zorunlu.</span>'; return; }
@@ -2442,7 +2452,7 @@
     mesaj.innerHTML = '<span style="color:#6b7280;">Kaydediliyor…</span>';
 
     try {
-      const resp = await fetch(`/yonetim/api/personel-360/profil/${secilenId}/usta-ata`, {
+      const resp = await fetch(`/yonetim/api/personel-360/profil/${hedefProfilId}/usta-ata`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
@@ -2456,8 +2466,8 @@
         mesaj.innerHTML = `<span style="color:#059669;">✓ ${d.usta_ad} atandı — ${d.olusturan_ad} tarafından.</span>`;
         document.getElementById('ua-not').value = '';
         _ustaSecenekler = null;  // cache sıfırla
-        // Profili yenile
-        setTimeout(() => profilYukle(secilenId), 900);
+        // Profili yenile — form dataset'indeki id ile
+        setTimeout(() => profilYukle(hedefProfilId), 900);
       } else {
         mesaj.innerHTML = `<span style="color:#dc2626;">${d.hata || 'Hata oluştu.'}</span>`;
       }
