@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+{% block title %}Firmalar — Fuar CRM{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <div class="page-title">Firma Listesi</div>
+    <div class="page-sub">Fuar CRM — Kayıtlı Firmalar</div>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+    <a href="{{ url_for('fuar_crm.firma_ekle') }}" class="btn-crm">+ Yeni Firma</a>
+    <a href="{{ url_for('fuar_crm.urun_katalogu') }}" class="btn-crm btn-crm-purple">Ürün Kataloğu</a>
+    <a href="{{ url_for('fuar_crm.dashboard') }}" class="btn-crm btn-crm-ghost">Dashboard</a>
+  </div>
+</div>
+
+<!-- Arama / Filtre -->
+<div class="oz-card" style="margin-bottom:14px;">
+  <div class="oz-body" style="padding:12px 16px;">
+    <form method="get" action="{{ url_for('fuar_crm.firma_liste') }}" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+      <div style="flex:2;min-width:200px;">
+        <label class="fl">Arama</label>
+        <input type="text" name="q" value="{{ arama }}" placeholder="Firma adı, yetkili, e-posta, marka..."
+               class="fc" style="width:100%;">
+      </div>
+      <div style="min-width:150px;">
+        <label class="fl">Ülke</label>
+        <select name="ulke" class="fc">
+          <option value="">— Tümü —</option>
+          {% for u in ulke_listesi %}
+          <option value="{{ u }}" {% if u == ulke_filtre %}selected{% endif %}>{{ u }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div style="display:flex;gap:8px;padding-bottom:1px;">
+        <button type="submit" class="btn-crm">Filtrele</button>
+        {% if arama or ulke_filtre %}
+        <a href="{{ url_for('fuar_crm.firma_liste') }}" class="btn-crm btn-crm-ghost">Temizle</a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Firma Tablosu -->
+<div class="oz-card">
+  <div class="oz-hdr">
+    <span class="oz-hdr-t">
+      Firmalar
+      <span class="sayi-badge" style="margin-left:6px;">{{ firmalar|length }}</span>
+    </span>
+    {% if arama or ulke_filtre %}
+    <span style="font-size:11px;color:#888;">
+      Filtre:
+      {% if arama %}<strong>{{ arama }}</strong>{% endif %}
+      {% if ulke_filtre %} / <strong>{{ ulke_filtre }}</strong>{% endif %}
+    </span>
+    {% endif %}
+  </div>
+  <div class="oz-body" style="padding:0;">
+    {% if firmalar %}
+    <div style="overflow-x:auto;">
+      <table class="crm-tbl">
+        <thead>
+          <tr>
+            <th>Firma</th>
+            <th>Yetkili</th>
+            <th>Ülke / Şehir</th>
+            <th>Marka İlgisi</th>
+            <th>Telefon / WA</th>
+            <th>Görüşme</th>
+            <th>Son Durum</th>
+            <th>Son Görüşme</th>
+            <th>Takip</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for f in firmalar %}
+          <tr class="{% if f.bugun_gorusme and f.bugun_gorusme > 0 %}row-bugun{% endif %}">
+            <td>
+              <a href="{{ url_for('fuar_crm.firma_detay', firma_id=f.id) }}" class="crm-link">{{ f.firma_adi }}</a>
+              {% if f.firma_tipi %}<div style="font-size:10px;color:#aaa;">{{ f.firma_tipi }}</div>{% endif %}
+              {% if f.email %}<div style="font-size:10px;color:#aaa;">{{ f.email }}</div>{% endif %}
+              {% if f.bugun_gorusme and f.bugun_gorusme > 0 %}
+              <span class="bugun-pill">● Bugün görüşüldü</span>
+              {% endif %}
+            </td>
+            <td style="font-size:12px;white-space:nowrap;">{{ f.yetkili or '—' }}</td>
+            <td style="font-size:12px;">
+              {% if f.ulke %}<span style="font-weight:600;">{{ f.ulke }}</span>{% else %}—{% endif %}
+              {% if f.sehir %}<div style="color:#aaa;font-size:11px;">{{ f.sehir }}</div>{% endif %}
+            </td>
+            <td style="font-size:12px;max-width:130px;white-space:normal;">{{ f.marka_ilgisi or '—' }}</td>
+            <td style="font-size:12px;white-space:nowrap;">
+              {% if f.telefon %}<div>{{ f.telefon }}</div>{% endif %}
+              {% if f.whatsapp %}
+              <div><a href="https://wa.me/{{ f.whatsapp|replace(' ','')|replace('+','')|replace('-','') }}"
+                      target="_blank" style="color:#25d366;font-weight:600;text-decoration:none;">WA {{ f.whatsapp }}</a></div>
+              {% endif %}
+              {% if not f.telefon and not f.whatsapp %}—{% endif %}
+            </td>
+            <td style="text-align:center;">
+              <span class="sayi-badge {% if f.gorusme_sayisi > 0 %}sayi-badge-ok{% endif %}" title="{{ f.gorusme_sayisi }} görüşme">
+                {{ f.gorusme_sayisi }}
+              </span>
+              {% if f.urun_sayisi and f.urun_sayisi > 0 %}
+              <div style="margin-top:3px;">
+                <span class="sayi-badge" style="background:#ede9fe;color:#6d28d9;" title="{{ f.urun_sayisi }} ürün ilgisi">
+                  {{ f.urun_sayisi }} ürün
+                </span>
+              </div>
+              {% endif %}
+            </td>
+            <td>
+              {% if f.son_durum %}
+              <span class="durum-pill durum-{{ f.son_durum }}">{{ f.son_durum | replace('_',' ') }}</span>
+              {% else %}<span style="color:#ddd;font-size:11px;">—</span>{% endif %}
+            </td>
+            <td style="font-size:11px;color:#888;white-space:nowrap;">
+              {{ f.son_gorusme_tarihi[:10] if f.son_gorusme_tarihi else '—' }}
+            </td>
+            <td style="font-size:11px;white-space:nowrap;">
+              {% if f.son_takip_tarihi %}
+              <span style="font-weight:600;color:#dc2626;">{{ f.son_takip_tarihi }}</span>
+              {% else %}<span style="color:#ddd;">—</span>{% endif %}
+            </td>
+            <td style="white-space:nowrap;">
+              <a href="{{ url_for('fuar_crm.firma_detay', firma_id=f.id) }}" class="btn-crm btn-crm-xs">Detay</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div style="text-align:center;padding:50px;color:#aaa;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48"
+           style="opacity:.2;display:block;margin:0 auto 16px;">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+      {% if arama or ulke_filtre %}
+      <p>Arama kriterlerine uyan firma bulunamadı.</p>
+      <a href="{{ url_for('fuar_crm.firma_liste') }}" class="btn-crm btn-crm-ghost">Filtreyi Temizle</a>
+      {% else %}
+      <p>Henüz firma kaydı yok.</p>
+      <a href="{{ url_for('fuar_crm.firma_ekle') }}" class="btn-crm">İlk Firmayı Ekle</a>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<style>
+.btn-crm { display:inline-flex; align-items:center; gap:5px; padding:7px 14px; background:var(--sol); color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; text-decoration:none; white-space:nowrap; }
+.btn-crm:hover { opacity:.88; }
+.btn-crm-xs { padding:3px 9px; font-size:11px; }
+.btn-crm-ghost { background:transparent; border:1px solid var(--brd); color:var(--txt); }
+.btn-crm-ghost:hover { background:var(--bg2); opacity:1; }
+.btn-crm-purple { background:#7c3aed; }
+.btn-crm-purple:hover { background:#6d28d9; opacity:1; }
+.crm-tbl { width:100%; border-collapse:collapse; font-size:13px; }
+.crm-tbl th { padding:9px 12px; text-align:left; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:#999; border-bottom:2px solid var(--brd); background:var(--bg2); }
+.crm-tbl td { padding:9px 12px; border-bottom:1px solid var(--brd); vertical-align:middle; }
+.crm-tbl tr:last-child td { border-bottom:none; }
+.crm-tbl tr:hover td { background:var(--bg2); }
+.crm-link { color:var(--sol-dark); font-weight:600; text-decoration:none; }
+.crm-link:hover { text-decoration:underline; }
+.sayi-badge { display:inline-block; background:var(--sol-light); color:var(--sol-dark); font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px; }
+.sayi-badge-ok { background:#d1fae5; color:#065f46; }
+.durum-pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:11px; font-weight:600; }
+.durum-beklemede   { background:#fef3c7; color:#92400e; }
+.durum-takip_bekliyor { background:#fee2e2; color:#991b1b; }
+.durum-teklif_verildi { background:#dbeafe; color:#1e40af; }
+.durum-olumlu      { background:#d1fae5; color:#065f46; }
+.durum-olumsuz     { background:#f3f4f6; color:#6b7280; }
+.durum-kapandi     { background:#e5e7eb; color:#374151; }
+.fl  { display:block; font-size:10px; font-weight:700; color:#999; text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px; }
+.fc  { padding:7px 10px; border:1px solid var(--brd); border-radius:6px; font-size:13px; background:var(--bg); color:var(--txt); outline:none; }
+.fc:focus { border-color:var(--sol); box-shadow:0 0 0 2px var(--sol-light); }
+/* Bugun gorusme vurgusu */
+.row-bugun td { background:#fffbeb !important; }
+.row-bugun:hover td { background:#fef3c7 !important; }
+.bugun-pill { display:inline-block; font-size:10px; font-weight:700; color:#b45309; background:#fde68a; padding:1px 6px; border-radius:999px; margin-top:3px; }
+</style>
+
+{% endblock %}

@@ -1,0 +1,786 @@
+{% extends "base.html" %}
+{% block title %}{{ firma.firma_adi }} — Fuar CRM{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">{{ firma.firma_adi }}</div>
+    <div class="page-sub">
+      Fuar CRM — Firma Detay
+      {% if firma.firma_tipi %}<span class="tip-pill">{{ firma.firma_tipi }}</span>{% endif %}
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+    {% if firma.whatsapp %}
+    <a href="https://wa.me/{{ firma.whatsapp|replace(' ','')|replace('+','')|replace('-','') }}"
+       target="_blank" class="btn-crm" style="background:#25d366;">
+      <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.118.553 4.107 1.52 5.833L0 24l6.335-1.48A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.8 9.8 0 0 1-5.001-1.37l-.36-.213-3.76.878.892-3.667-.234-.374A9.793 9.793 0 0 1 2.182 12C2.182 6.57 6.57 2.182 12 2.182c5.43 0 9.818 4.388 9.818 9.818 0 5.43-4.388 9.818-9.818 9.818z"/></svg>
+      WA
+    </a>
+    {% endif %}
+    {% if firma.email %}
+    <a href="mailto:{{ firma.email }}" class="btn-crm btn-crm-out">✉</a>
+    {% endif %}
+    <a href="{{ url_for('fuar_crm.firma_liste') }}" class="btn-crm btn-crm-ghost">← Liste</a>
+  </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+{% for category, message in messages %}
+<div class="flash flash-{{ category }}">{{ message }}</div>
+{% endfor %}
+{% endif %}
+{% endwith %}
+
+<!-- SEKMELER -->
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="showTab('bilgi',this)">Firma Bilgisi</button>
+  <button class="tab-btn" onclick="showTab('bugun',this)">
+    Bugünkü Görüşme
+    <span class="tab-badge" style="background:#f59e0b;color:#fff;">YENİ</span>
+  </button>
+  <button class="tab-btn" onclick="showTab('gecmis',this)" id="btn-gecmis">
+    Görüşme Geçmişi
+    {% if gorusmeler %}<span class="tab-badge">{{ gorusmeler|length }}</span>{% endif %}
+  </button>
+  <button class="tab-btn" onclick="showTab('urunler',this)">
+    İlgilendiği Ürünler
+    <span class="tab-badge" style="background:#6366f1;color:#fff;">{{ toplam_urun }}</span>
+  </button>
+  <button class="tab-btn" onclick="showTab('dosyalar',this)">
+    Kartvizit / Dosyalar
+    {% if dosyalar %}<span class="tab-badge">{{ dosyalar|length }}</span>{% endif %}
+  </button>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SEKME 1: FİRMA BİLGİSİ
+═══════════════════════════════════════════════════════════ -->
+<div id="tab-bilgi" class="tab-panel active">
+  <div class="oz-card">
+    <div class="oz-hdr"><span class="oz-hdr-t">Firma Bilgileri</span></div>
+    <div class="oz-body" style="padding:0;">
+      <table class="detay-tbl">
+        <tr><th>Yetkili</th><td>{{ firma.yetkili or '—' }}</td></tr>
+        <tr><th>Ülke / Şehir</th><td>{{ firma.ulke or '—' }}{% if firma.sehir %} / {{ firma.sehir }}{% endif %}</td></tr>
+        <tr><th>Telefon</th>
+          <td>{% if firma.telefon %}<a href="tel:{{ firma.telefon }}" style="color:var(--txt);">{{ firma.telefon }}</a>{% else %}—{% endif %}</td>
+        </tr>
+        <tr><th>WhatsApp</th>
+          <td>{% if firma.whatsapp %}
+            <a href="https://wa.me/{{ firma.whatsapp|replace(' ','')|replace('+','')|replace('-','') }}"
+               target="_blank" style="color:#25d366;font-weight:600;">{{ firma.whatsapp }}</a>
+          {% else %}—{% endif %}</td>
+        </tr>
+        <tr><th>E-posta</th>
+          <td>{% if firma.email %}<a href="mailto:{{ firma.email }}" style="color:var(--sol-dark);">{{ firma.email }}</a>{% else %}—{% endif %}</td>
+        </tr>
+        <tr><th>Marka İlgisi</th><td style="white-space:normal;">{{ firma.marka_ilgisi or '—' }}</td></tr>
+        <tr><th>ERP Kodu</th><td style="font-size:12px;color:#888;">{{ firma.erp_cari_kodu or '—' }}</td></tr>
+        <tr><th>Kaynak</th><td>{{ firma.kaynak or '—' }}</td></tr>
+        <tr><th>Eklenme</th><td style="font-size:11px;color:#aaa;">{{ firma.created_at[:16] if firma.created_at else '—' }}</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SEKME 2: BUGÜNKÜ GÖRÜŞME
+═══════════════════════════════════════════════════════════ -->
+<div id="tab-bugun" class="tab-panel">
+  <div class="oz-card">
+    <div class="oz-hdr"><span class="oz-hdr-t">Yeni Görüşme Notu</span></div>
+    <div class="oz-body">
+      <form method="post" action="{{ url_for('fuar_crm.gorusme_ekle', firma_id=firma.id) }}" id="gorusme-form">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+
+          <div class="fg">
+            <label class="fl">Fuar Adı</label>
+            <input type="text" name="fuar_adi" class="fc" value="Garda 2026" placeholder="Garda 2026...">
+          </div>
+          <div class="fg">
+            <label class="fl">Görüşen</label>
+            <input type="text" name="gorusen" class="fc" placeholder="Görüşen kişi adı">
+          </div>
+
+          <div class="fg" style="grid-column:1/-1;">
+            <label class="fl">Görüşme Notu</label>
+            <textarea name="not_text" class="fc" rows="3" placeholder="Görüşme detayları, özel notlar..."></textarea>
+          </div>
+
+          <div class="fg" style="grid-column:1/-1;">
+            <label class="fl">Genel Ürün İlgisi (serbest metin)</label>
+            <input type="text" name="urun_ilgisi" class="fc" placeholder="Ürün kategorileri, markalar...">
+          </div>
+
+          <div class="fg">
+            <label class="fl">Takip Tarihi</label>
+            <input type="date" name="takip_tarihi" class="fc">
+          </div>
+          <div class="fg">
+            <label class="fl">Durum</label>
+            <select name="durum" class="fc">
+              <option value="beklemede">Beklemede</option>
+              <option value="takip_bekliyor">Takip Bekliyor</option>
+              <option value="teklif_verildi">Teklif Verildi</option>
+              <option value="olumlu">Olumlu</option>
+              <option value="olumsuz">Olumsuz</option>
+              <option value="kapandi">Kapandı</option>
+            </select>
+          </div>
+
+          <div style="grid-column:1/-1;display:flex;gap:20px;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+              <input type="checkbox" name="numune" value="1"> Numune istedi
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+              <input type="checkbox" name="fiyat_verildi" value="1"> Fiyat verildi
+            </label>
+          </div>
+        </div>
+
+        <!-- Ürün Seçimi -->
+        <div style="margin-top:18px;border-top:1px solid var(--brd);padding-top:16px;">
+          <div style="font-size:12px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">
+            Görüşülen Ürünler
+            <span style="font-weight:400;color:#aaa;font-size:11px;margin-left:6px;">(isteğe bağlı — aşağıdan seçin)</span>
+          </div>
+
+          <!-- Arama kutusu -->
+          <div style="display:flex;gap:8px;margin-bottom:10px;">
+            <input type="text" id="urun-ara-input" class="fc" placeholder="Model no, kategori, tip, ürün cinsi ile ara..."
+                   style="flex:1;" oninput="urunAra(this.value)">
+            <button type="button" class="btn-crm btn-crm-ghost btn-crm-sm" onclick="urunAra('')">Tümü</button>
+          </div>
+
+          <!-- Sonuç tablosu -->
+          <div id="urun-ara-sonuc" style="max-height:300px;overflow-y:auto;border:1px solid var(--brd);border-radius:6px;display:none;">
+            <table class="crm-tbl" style="font-size:12px;">
+              <thead>
+                <tr>
+                  <th style="width:32px;"></th>
+                  <th style="width:44px;">Görsel</th>
+                  <th>Model No</th><th>Kategori</th><th>Tip</th>
+                  <th>Ürün Cinsi</th><th>Asorti</th><th>Birim Fiyat</th>
+                </tr>
+              </thead>
+              <tbody id="urun-ara-tbody"></tbody>
+            </table>
+          </div>
+
+          <!-- Seçilen ürünler -->
+          <div id="secilen-urunler" style="margin-top:10px;display:flex;flex-direction:column;gap:8px;"></div>
+        </div>
+
+        <div style="margin-top:18px;border-top:1px solid var(--brd);padding-top:14px;text-align:right;">
+          <button type="submit" class="btn-crm">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Görüşme Kaydet
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SEKME 3: GÖRÜŞME GEÇMİŞİ
+═══════════════════════════════════════════════════════════ -->
+<div id="tab-gecmis" class="tab-panel">
+  {% if gorusmeler %}
+    {% for g in gorusmeler %}
+    <div class="oz-card" style="margin-bottom:12px;{% if g.bugun %}border-left:3px solid var(--sol);{% endif %}">
+      <div class="oz-hdr" style="{% if g.bugun %}background:var(--sol-light);{% endif %}">
+        <span class="oz-hdr-t">
+          {% if g.bugun %}<span style="color:var(--sol-dark);font-weight:700;">● BUGÜN — </span>{% endif %}
+          {{ g.fuar_adi or 'Fuar Görüşmesi' }}
+          <span class="sayi-badge" style="margin-left:6px;">{{ g.created_at[:10] if g.created_at else '?' }}</span>
+        </span>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span class="durum-pill durum-{{ g.durum }}">{{ g.durum|replace('_',' ') }}</span>
+          {% if g.numune %}<span class="sayi-badge" style="background:#d1fae5;color:#065f46;">Numune ✓</span>{% endif %}
+          {% if g.fiyat_verildi %}<span class="sayi-badge" style="background:#dbeafe;color:#1e40af;">Fiyat ✓</span>{% endif %}
+          {% if g.takip_tarihi %}<span style="font-size:11px;color:#888;">Takip: {{ g.takip_tarihi }}</span>{% endif %}
+        </div>
+      </div>
+      <div class="oz-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px;">
+          {% if g.gorusen %}<div><span style="color:#aaa;font-size:11px;">Görüşen:</span> {{ g.gorusen }}</div>{% endif %}
+          {% if g.urun_ilgisi %}<div style="grid-column:1/-1;"><span style="color:#aaa;font-size:11px;">Ürün İlgisi:</span> {{ g.urun_ilgisi }}</div>{% endif %}
+          {% if g.not_text %}<div style="grid-column:1/-1;white-space:pre-wrap;background:var(--bg2);padding:8px 10px;border-radius:6px;font-size:12px;line-height:1.5;">{{ g.not_text }}</div>{% endif %}
+        </div>
+
+        {% if g.urunler %}
+        <div style="margin-top:12px;">
+          <div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Görüşülen Ürünler</div>
+          <div style="overflow-x:auto;">
+          <table class="crm-tbl" style="font-size:12px;">
+            <thead><tr>
+              <th style="width:52px;">Görsel</th>
+              <th>Model No</th>
+              <th>Liste / Verilen Fiyat</th>
+              <th>Renk / Adet</th>
+              <th>Numune</th>
+              <th>Durum</th>
+              <th>Not</th>
+            </tr></thead>
+            <tbody>
+              {% for u in g.urunler %}
+              <tr>
+                <td style="text-align:center;padding:4px 8px;">
+                  {% if u.gorsel_yolu %}
+                  <img src="{{ url_for('static', filename=u.gorsel_yolu) }}"
+                       style="width:44px;height:44px;object-fit:cover;border-radius:5px;border:1px solid var(--brd);"
+                       loading="lazy">
+                  {% else %}—{% endif %}
+                </td>
+                <td>
+                  <div style="font-weight:700;color:var(--sol-dark);">{{ u.model_no }}</div>
+                  <div style="font-size:10px;color:#aaa;">{{ u.kategori or '' }}{% if u.tip %} / {{ u.tip }}{% endif %}{% if u.urun_cinsi %} / {{ u.urun_cinsi }}{% endif %}</div>
+                </td>
+                <td style="white-space:nowrap;">
+                  {% if u.birim_fiyat %}
+                  <div style="font-size:11px;color:#aaa;text-decoration:line-through;">{{ '%.2f'|format(u.birim_fiyat) }} USD</div>
+                  {% endif %}
+                  {% if u.verilen_fiyat %}
+                  <div style="font-weight:700;color:#059669;">{{ '%.2f'|format(u.verilen_fiyat) }} {{ u.para_birimi or 'USD' }}</div>
+                  {% else %}
+                  <span style="color:#ccc;font-size:11px;">—</span>
+                  {% endif %}
+                </td>
+                <td style="font-size:12px;">
+                  {% if u.istenen_renk %}<div>🎨 {{ u.istenen_renk }}</div>{% endif %}
+                  {% if u.renk_basi_adet %}<div style="font-size:11px;color:#888;">{{ u.renk_basi_adet }} çift/renk</div>{% endif %}
+                  {% if u.toplam_adet %}<div style="font-size:11px;color:#666;font-weight:600;">Toplam: {{ u.toplam_adet }}</div>{% endif %}
+                  {% if not u.istenen_renk and not u.renk_basi_adet and not u.toplam_adet %}—{% endif %}
+                </td>
+                <td style="font-size:12px;">
+                  {% if u.numune_istendi %}
+                  <span style="color:#059669;font-weight:700;">✓</span>
+                  {% if u.numune_adet %}<div style="font-size:11px;">{{ u.numune_adet }} adet</div>{% endif %}
+                  {% if u.numune_beden %}<div style="font-size:11px;">Beden: {{ u.numune_beden }}</div>{% endif %}
+                  {% else %}—{% endif %}
+                </td>
+                <td>
+                  {% if u.fiyat_konusuldu %}<span class="sayi-badge" style="background:#dbeafe;color:#1e40af;font-size:10px;">Fiyat ✓</span>{% endif %}
+                  {% if u.numune_istendi %}<span class="sayi-badge" style="background:#d1fae5;color:#065f46;font-size:10px;margin-left:2px;">Numune ✓</span>{% endif %}
+                </td>
+                <td style="font-size:11px;color:#666;max-width:160px;white-space:normal;">
+                  {{ u.urun_notu or u.not_text or '—' }}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+  <div class="oz-card">
+    <div class="oz-body" style="text-align:center;padding:40px;color:#aaa;">
+      Henüz görüşme notu eklenmedi.
+      <br><button class="btn-crm" style="margin-top:12px;" onclick="showTab('bugun',null)">+ Görüşme Ekle</button>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SEKME 4: İLGİLENDİĞİ ÜRÜNLER (CRM URUN LİSTESİ)
+═══════════════════════════════════════════════════════════ -->
+<div id="tab-urunler" class="tab-panel">
+
+  <!-- BÖLÜM 1: Bu firmanın ilgilendiği ürünler (görüşmelerden) -->
+  {% set firma_urunler = [] %}
+  {% for g in gorusmeler %}{% for u in g.urunler %}{% if firma_urunler.append(u) %}{% endif %}{% endfor %}{% endfor %}
+
+  <div class="oz-card" style="margin-bottom:14px;">
+    <div class="oz-hdr" style="background:linear-gradient(135deg,#fffbeb,var(--bg2));">
+      <span class="oz-hdr-t" style="color:#b45309;">
+        Bu Firmanın İlgilendiği Ürünler
+        <span class="sayi-badge" style="background:#fde68a;color:#92400e;margin-left:6px;">{{ firma_urunler|length }}</span>
+      </span>
+    </div>
+    <div class="oz-body" style="padding:0;">
+      {% if firma_urunler %}
+      <div style="overflow-x:auto;">
+      <table class="crm-tbl" style="font-size:12px;">
+        <thead><tr>
+          <th>Model No</th><th>Kategori</th><th>Tip</th><th>Ürün Cinsi</th>
+          <th>Liste Fiyat</th><th>Verilen Fiyat</th>
+          <th>Renk / Adet</th><th>Numune</th><th>Not</th>
+        </tr></thead>
+        <tbody>
+          {% for u in firma_urunler %}
+          <tr>
+            <td style="font-weight:700;color:var(--sol-dark);">{{ u.model_no }}</td>
+            <td>{{ u.kategori or '—' }}</td>
+            <td>{{ u.tip or '—' }}</td>
+            <td>{{ u.urun_cinsi or '—' }}</td>
+            <td style="white-space:nowrap;font-size:11px;color:#aaa;">
+              {% if u.birim_fiyat %}{{ '%.2f'|format(u.birim_fiyat) }} USD{% else %}—{% endif %}
+            </td>
+            <td style="white-space:nowrap;font-weight:600;color:#059669;">
+              {% if u.verilen_fiyat %}{{ '%.2f'|format(u.verilen_fiyat) }} {{ u.para_birimi or 'USD' }}{% else %}—{% endif %}
+            </td>
+            <td style="font-size:11px;">
+              {% if u.istenen_renk %}{{ u.istenen_renk }}{% endif %}
+              {% if u.toplam_adet %}<div style="color:#888;">{{ u.toplam_adet }} çift</div>{% endif %}
+              {% if not u.istenen_renk and not u.toplam_adet %}—{% endif %}
+            </td>
+            <td style="text-align:center;">
+              {% if u.numune_istendi %}<span style="color:#059669;font-weight:700;">✓</span>
+              {% if u.numune_beden %}<div style="font-size:10px;">{{ u.numune_beden }}</div>{% endif %}
+              {% else %}—{% endif %}
+            </td>
+            <td style="font-size:11px;color:#888;max-width:140px;white-space:normal;">{{ u.urun_notu or u.not_text or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      </div>
+      {% else %}
+      <div style="text-align:center;padding:24px;color:#aaa;font-size:13px;">
+        Henüz görüşmede ürün seçilmedi.
+        <br><button class="btn-crm btn-crm-sm" style="margin-top:10px;" onclick="showTab('bugun',null)">+ Görüşme Notu Ekle</button>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- BÖLÜM 2: Tüm Garda Ürün Kataloğu (canlı arama) -->
+  <div class="oz-card">
+    <div class="oz-hdr">
+      <span class="oz-hdr-t">
+        Tüm Garda 2026 Ürün Kataloğu
+        <span class="sayi-badge" style="background:#ede9fe;color:#6d28d9;margin-left:6px;">{{ toplam_urun }}</span>
+      </span>
+      <a href="{{ url_for('fuar_crm.urun_katalogu') }}" class="btn-crm btn-crm-purple btn-crm-sm">Tam Sayfa Aç →</a>
+    </div>
+    <div class="oz-body">
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <input type="text" id="katalog-ara" class="fc" placeholder="Model no, kategori, tip, ürün cinsi..."
+               style="flex:1;" oninput="katalogAra(this.value)">
+        <button type="button" class="btn-crm btn-crm-ghost btn-crm-sm" onclick="katalogAra('')">Tümü</button>
+      </div>
+      <div id="katalog-tbl-wrap" style="overflow-x:auto;max-height:400px;overflow-y:auto;">
+        <table class="crm-tbl" style="font-size:12px;" id="katalog-tbl">
+          <thead>
+            <tr>
+              <th style="width:56px;">Görsel</th>
+              <th>Model No</th><th>Kategori</th><th>Tip</th><th>Ürün Cinsi</th>
+              <th>Asorti</th><th>Birim Fiyat</th><th>Maliyet</th><th>Malzeme</th>
+            </tr>
+          </thead>
+          <tbody id="katalog-tbody">
+            <tr><td colspan="9" style="text-align:center;color:#aaa;padding:20px;">Yükleniyor...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SEKME 5: KARTVİZİT / DOSYALAR
+═══════════════════════════════════════════════════════════ -->
+<div id="tab-dosyalar" class="tab-panel">
+  <div class="oz-card">
+    <div class="oz-hdr">
+      <span class="oz-hdr-t">
+        Kartvizit / Görseller
+        {% if dosyalar %}<span class="sayi-badge" style="margin-left:6px;">{{ dosyalar|length }}</span>{% endif %}
+      </span>
+    </div>
+    <div class="oz-body">
+      <form method="post" action="{{ url_for('fuar_crm.dosya_yukle', firma_id=firma.id) }}"
+            enctype="multipart/form-data" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;">
+        <div class="fg" style="flex:1;min-width:200px;">
+          <label class="fl">Dosya Seç (jpg, png, pdf — max 10 MB)</label>
+          <input type="file" name="dosya" class="fc" accept=".jpg,.jpeg,.png,.webp,.gif,.pdf" required>
+        </div>
+        <div class="fg" style="min-width:140px;">
+          <label class="fl">Tip</label>
+          <select name="tip" class="fc">
+            <option value="kartvizit">Kartvizit</option>
+            <option value="katalog">Katalog</option>
+            <option value="sozlesme">Sözleşme</option>
+            <option value="gorsel">Görsel</option>
+            <option value="diger">Diğer</option>
+          </select>
+        </div>
+        <div class="fg" style="flex:1;min-width:160px;">
+          <label class="fl">Açıklama</label>
+          <input type="text" name="aciklama" class="fc" placeholder="Hannover 2026 kartvizit...">
+        </div>
+        <button type="submit" class="btn-crm btn-crm-sm">↑ Yükle</button>
+      </form>
+
+      {% if dosyalar %}
+      <div class="dosya-grid">
+        {% for d in dosyalar %}
+        <div class="dosya-kart">
+          {% if d.is_image %}
+          <a href="{{ url_for('static', filename=d.dosya_yolu) }}" target="_blank" class="dosya-thumb-wrap">
+            <img src="{{ url_for('static', filename=d.dosya_yolu) }}" alt="Görsel" class="dosya-thumb">
+          </a>
+          {% else %}
+          <a href="{{ url_for('static', filename=d.dosya_yolu) }}" target="_blank" class="dosya-thumb-wrap dosya-pdf-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="36" height="36" style="color:#dc2626;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <span class="dosya-pdf-lbl">PDF</span>
+          </a>
+          {% endif %}
+          <div class="dosya-meta">
+            <span class="dosya-tip">{{ d.tip or 'dosya' }}</span>
+            {% if d.aciklama %}<div class="dosya-aciklama">{{ d.aciklama }}</div>{% endif %}
+            <div class="dosya-tarih">{{ d.created_at[:10] if d.created_at else '' }}</div>
+            <form method="post" action="{{ url_for('fuar_crm.dosya_sil', firma_id=firma.id, dosya_id=d.id) }}"
+                  onsubmit="return confirm('Silinsin mi?');" style="margin-top:6px;">
+              <button type="submit" class="btn-crm btn-crm-xs btn-crm-red">Sil</button>
+            </form>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p style="color:#aaa;font-size:12px;margin:0;">Henüz dosya yüklenmedi.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ CSS ═══════════════ -->
+<style>
+/* Sekmeler */
+.tab-bar { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:14px; border-bottom:2px solid var(--brd); padding-bottom:0; }
+.tab-btn { padding:8px 16px; border:none; background:none; font-size:13px; font-weight:600; color:#888; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; border-radius:6px 6px 0 0; transition:color .15s; display:flex; align-items:center; gap:5px; }
+.tab-btn:hover { color:var(--sol-dark); background:var(--bg2); }
+.tab-btn.active { color:var(--sol-dark); border-bottom-color:var(--sol); background:var(--bg2); }
+.tab-badge { display:inline-block; background:var(--sol-light); color:var(--sol-dark); font-size:10px; font-weight:700; padding:1px 6px; border-radius:999px; }
+.tab-panel { display:none; }
+.tab-panel.active { display:block; }
+/* Butonlar */
+.btn-crm { display:inline-flex; align-items:center; gap:5px; padding:7px 14px; background:var(--sol); color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; text-decoration:none; white-space:nowrap; }
+.btn-crm:hover { opacity:.88; }
+.btn-crm-sm  { padding:5px 11px; font-size:12px; }
+.btn-crm-xs  { padding:3px 8px; font-size:11px; }
+.btn-crm-out { background:transparent; border:1.5px solid var(--sol); color:var(--sol-dark); }
+.btn-crm-out:hover { background:var(--sol-light); opacity:1; }
+.btn-crm-ghost { background:transparent; border:1px solid var(--brd); color:var(--txt); }
+.btn-crm-ghost:hover { background:var(--bg2); opacity:1; }
+.btn-crm-red { background:#ef4444; }
+.btn-crm-red:hover { background:#dc2626; opacity:1; }
+.btn-crm-purple { background:#7c3aed; }
+.btn-crm-purple:hover { background:#6d28d9; opacity:1; }
+/* Tablolar */
+.crm-tbl { width:100%; border-collapse:collapse; font-size:13px; }
+.crm-tbl th { padding:8px 10px; text-align:left; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:#999; border-bottom:2px solid var(--brd); background:var(--bg2); white-space:nowrap; }
+.crm-tbl td { padding:8px 10px; border-bottom:1px solid var(--brd); vertical-align:middle; }
+.crm-tbl tr:last-child td { border-bottom:none; }
+.crm-tbl tr:hover td { background:var(--bg2); }
+.crm-tbl .sel-row td { background:var(--sol-light) !important; }
+.detay-tbl { width:100%; border-collapse:collapse; font-size:13px; }
+.detay-tbl th { width:110px; padding:8px 14px; font-size:11px; font-weight:600; color:#888; border-bottom:1px solid var(--brd); text-align:left; vertical-align:top; }
+.detay-tbl td { padding:8px 14px; border-bottom:1px solid var(--brd); }
+.detay-tbl tr:last-child th, .detay-tbl tr:last-child td { border-bottom:none; }
+/* Form */
+.fg  { display:flex; flex-direction:column; }
+.fl  { font-size:10px; font-weight:700; color:#999; text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px; }
+.fc  { padding:7px 10px; border:1px solid var(--brd); border-radius:6px; font-size:13px; background:var(--bg); color:var(--txt); outline:none; }
+.fc:focus { border-color:var(--sol); box-shadow:0 0 0 2px var(--sol-light); }
+/* Durum */
+.durum-pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:11px; font-weight:600; }
+.durum-beklemede   { background:#fef3c7; color:#92400e; }
+.durum-takip_bekliyor { background:#fee2e2; color:#991b1b; }
+.durum-teklif_verildi { background:#dbeafe; color:#1e40af; }
+.durum-olumlu      { background:#d1fae5; color:#065f46; }
+.durum-olumsuz     { background:#f3f4f6; color:#6b7280; }
+.durum-kapandi     { background:#e5e7eb; color:#374151; }
+/* Diğer */
+.sayi-badge { display:inline-block; background:var(--sol-light); color:var(--sol-dark); font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px; }
+.tip-pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; background:#e5e7eb; color:#374151; margin-left:6px; }
+.flash { padding:10px 14px; border-radius:6px; font-size:13px; font-weight:500; margin-bottom:10px; }
+.flash-basari { background:#d1fae5; color:#065f46; border:1px solid #a7f3d0; }
+.flash-hata   { background:#fee2e2; color:#991b1b; border:1px solid #fecaca; }
+/* Dosya */
+.dosya-grid { display:flex; flex-wrap:wrap; gap:12px; }
+.dosya-kart { border:1px solid var(--brd); border-radius:8px; overflow:hidden; background:var(--bg); width:140px; flex-shrink:0; }
+.dosya-thumb-wrap { display:block; width:140px; height:110px; overflow:hidden; background:var(--bg2); }
+.dosya-thumb { width:100%; height:100%; object-fit:cover; display:block; transition:transform .2s; }
+.dosya-thumb:hover { transform:scale(1.05); }
+.dosya-pdf-wrap { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; }
+.dosya-pdf-lbl { font-size:11px; font-weight:700; color:#dc2626; }
+.dosya-meta { padding:8px 10px; }
+.dosya-tip  { display:inline-block; font-size:10px; font-weight:700; text-transform:uppercase; color:var(--sol-dark); background:var(--sol-light); padding:1px 6px; border-radius:4px; }
+.dosya-aciklama { font-size:11px; color:#666; margin-top:3px; }
+.dosya-tarih { font-size:10px; color:#aaa; margin-top:2px; }
+/* Secilen urun karti */
+.secilen-kart { display:flex; align-items:flex-start; gap:10px; padding:10px 12px; background:var(--bg2); border:1px solid var(--brd); border-radius:6px; }
+.secilen-kart-info { flex:1; font-size:12px; }
+.secilen-kart-model { font-weight:700; font-size:13px; }
+.secilen-kart-sub { color:#888; }
+</style>
+
+<!-- ═══════════════ JS ═══════════════ -->
+<script>
+// Sekme mantigi
+function showTab(name, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  if (btn) {
+    btn.classList.add('active');
+  } else {
+    // buton referansi yoksa, data-tab ile bul
+    document.querySelectorAll('.tab-btn').forEach(b => {
+      if (b.getAttribute('onclick') && b.getAttribute('onclick').includes("'" + name + "'")) {
+        b.classList.add('active');
+      }
+    });
+  }
+  // Katalog sekmesi acilirsa otomatik ara
+  if (name === 'urunler') { katalogAra(''); }
+}
+
+// Hash ile sekme acma (#gecmis, #bugun vb.)
+window.addEventListener('DOMContentLoaded', function() {
+  var hash = window.location.hash.replace('#', '');
+  var gecerli = ['bilgi','bugun','gecmis','urunler','dosyalar'];
+  if (hash && gecerli.indexOf(hash) >= 0) {
+    showTab(hash, null);
+  }
+  // Urunler sekmesi aktifse otomatik yukle
+  if (document.getElementById('tab-urunler').classList.contains('active')) {
+    katalogAra('');
+  }
+});
+
+// ── Gorüşme formu: ürün arama ────────────────────────────────────────────────
+var secilenUrunler = {}; // id -> urun obj
+
+function urunAra(q) {
+  if (!q && q !== '') return;
+  var url = '{{ url_for("fuar_crm.urun_ara") }}?q=' + encodeURIComponent(q) + '&limit=50';
+  fetch(url)
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      var tbody = document.getElementById('urun-ara-tbody');
+      var wrap  = document.getElementById('urun-ara-sonuc');
+      tbody.innerHTML = '';
+      if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#aaa;padding:14px;">Sonuç bulunamadı</td></tr>';
+      } else {
+        data.forEach(function(u) {
+          var seçili = !!secilenUrunler[u.id];
+          var fiyat  = u.birim_fiyat ? parseFloat(u.birim_fiyat).toFixed(2) : '—';
+          var thumb  = u.gorsel_yolu
+            ? '<img src="/static/' + u.gorsel_yolu + '" style="width:32px;height:32px;object-fit:cover;border-radius:3px;vertical-align:middle;" loading="lazy">'
+            : '';
+          var btnHtml = '<button type="button" '
+            + 'data-uid="' + u.id + '" '
+            + 'style="width:24px;height:24px;border-radius:50%;border:none;cursor:pointer;font-size:14px;font-weight:700;line-height:1;'
+            + (seçili ? 'background:#d1fae5;color:#059669;' : 'background:var(--sol);color:#fff;')
+            + '" '
+            + 'onclick="urunToggle(' + u.id + ', this)">'
+            + (seçili ? '✓' : '+')
+            + '</button>';
+          var tr = document.createElement('tr');
+          if (seçili) tr.classList.add('sel-row');
+          tr.setAttribute('data-uid', u.id);
+          tr.innerHTML =
+            '<td style="text-align:center;padding:4px 8px;">' + btnHtml + '</td>' +
+            '<td style="text-align:center;padding:4px 6px;">' + thumb + '</td>' +
+            '<td style="font-weight:600;color:var(--sol-dark);">' + (u.model_no||'') + '</td>' +
+            '<td>' + (u.kategori||'—') + '</td>' +
+            '<td>' + (u.tip||'—') + '</td>' +
+            '<td>' + (u.urun_cinsi||'—') + '</td>' +
+            '<td>' + (u.asorti||'—') + '</td>' +
+            '<td style="white-space:nowrap;">' + fiyat + '</td>';
+          tr._urunData = u;  // data'yi satira bagla
+          tbody.appendChild(tr);
+        });
+      }
+      wrap.style.display = 'block';
+    })
+    .catch(function(e){ console.error(e); });
+}
+
+function urunToggle(uid, btnEl) {
+  // Butonu olan satiri bul
+  var tbody = document.getElementById('urun-ara-tbody');
+  var tr = tbody ? tbody.querySelector('tr[data-uid="' + uid + '"]') : null;
+  var u  = tr ? tr._urunData : null;
+
+  if (secilenUrunler[uid]) {
+    // Kaldir
+    delete secilenUrunler[uid];
+    if (btnEl) { btnEl.textContent = '+'; btnEl.style.background = 'var(--sol)'; btnEl.style.color = '#fff'; }
+    if (tr) tr.classList.remove('sel-row');
+    var el = document.getElementById('secilen-' + uid);
+    if (el) el.remove();
+  } else {
+    // Ekle — u yoksa (farkli sorgudan btn) hafizadan al
+    if (!u) u = { id: uid, model_no: '', kategori: '', tip: '', urun_cinsi: '', asorti: '', birim_fiyat: null, maliyet: null, gorsel_yolu: null };
+    if (tr && tr._urunData) u = tr._urunData;
+    secilenUrunler[uid] = u;
+    if (btnEl) { btnEl.textContent = '✓'; btnEl.style.background = '#d1fae5'; btnEl.style.color = '#059669'; }
+    if (tr) tr.classList.add('sel-row');
+    renderSecilenUrun(u);
+  }
+}
+
+function renderSecilenUrun(u) {
+  var listeFiyat = u.birim_fiyat ? parseFloat(u.birim_fiyat).toFixed(2) : '';
+  var maliyet    = u.maliyet     ? parseFloat(u.maliyet).toFixed(2)     : '';
+  var thumb      = u.gorsel_yolu
+    ? '<img src="/static/' + u.gorsel_yolu + '" style="width:60px;height:60px;object-fit:cover;border-radius:7px;border:1px solid var(--brd);flex-shrink:0;" loading="lazy">'
+    : '<div style="width:60px;height:60px;border-radius:7px;background:var(--bg2);border:1px solid var(--brd);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;color:#ccc;">Görsel yok</div>';
+  var wrap = document.getElementById('secilen-urunler');
+  var div  = document.createElement('div');
+  div.className = 'secilen-kart';
+  div.id = 'secilen-' + u.id;
+  div.innerHTML =
+    '<input type="hidden" name="urun_ids[]" value="' + u.id + '">' +
+    /* Görsel */
+    '<div style="flex-shrink:0;">' + thumb + '</div>' +
+    /* İçerik */
+    '<div style="flex:1;min-width:0;">' +
+      /* Başlık + kaldır */
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;">' +
+        '<div>' +
+          '<div style="font-weight:700;font-size:13px;color:var(--txt);">' + (u.model_no||'') + '</div>' +
+          '<div style="font-size:11px;color:#888;">'
+            + (u.kategori||'') + (u.tip ? ' / ' + u.tip : '') + (u.urun_cinsi ? ' / ' + u.urun_cinsi : '')
+            + (listeFiyat ? ' &nbsp;·&nbsp; Liste: <strong>' + listeFiyat + ' USD</strong>' : '')
+            + (maliyet    ? ' &nbsp;·&nbsp; Maliyet: ' + maliyet : '')
+          + '</div>' +
+        '</div>' +
+        '<button type="button" onclick="urunKaldir(' + u.id + ')" '
+          + 'style="background:none;border:none;color:#dc2626;font-size:18px;cursor:pointer;padding:2px 4px;line-height:1;flex-shrink:0;" title="Kaldır">×</button>' +
+      '</div>' +
+      /* Ticari detaylar - 2 sütun grid */
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;">' +
+        /* Verilen fiyat */
+        '<div>' +
+          '<label style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:2px;">Verilen Fiyat</label>' +
+          '<div style="display:flex;gap:4px;">' +
+            '<input type="number" step="0.01" min="0" name="verilen_fiyat_' + u.id + '" '
+              + 'value="' + listeFiyat + '" placeholder="0.00" '
+              + 'style="flex:1;padding:5px 7px;border:1px solid var(--brd);border-radius:5px;font-size:12px;background:var(--bg);color:var(--txt);">' +
+            '<select name="para_birimi_' + u.id + '" '
+              + 'style="padding:5px 4px;border:1px solid var(--brd);border-radius:5px;font-size:12px;background:var(--bg);color:var(--txt);">' +
+              '<option value="USD" selected>USD</option>' +
+              '<option value="EUR">EUR</option>' +
+              '<option value="TL">TL</option>' +
+            '</select>' +
+          '</div>' +
+        '</div>' +
+        /* Renk */
+        '<div>' +
+          '<label style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:2px;">İstenen Renk</label>' +
+          '<input type="text" name="istenen_renk_' + u.id + '" placeholder="Siyah, Beyaz..." '
+            + 'style="width:100%;padding:5px 7px;border:1px solid var(--brd);border-radius:5px;font-size:12px;background:var(--bg);color:var(--txt);">' +
+        '</div>' +
+        /* Renk başı adet */
+        '<div>' +
+          '<label style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:2px;">Renk Başı Adet</label>' +
+          '<input type="number" min="0" name="renk_basi_adet_' + u.id + '" placeholder="1000" '
+            + 'style="width:100%;padding:5px 7px;border:1px solid var(--brd);border-radius:5px;font-size:12px;background:var(--bg);color:var(--txt);">' +
+        '</div>' +
+        /* Toplam adet */
+        '<div>' +
+          '<label style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:2px;">Toplam Adet</label>' +
+          '<input type="number" min="0" name="toplam_adet_' + u.id + '" placeholder="3000" '
+            + 'style="width:100%;padding:5px 7px;border:1px solid var(--brd);border-radius:5px;font-size:12px;background:var(--bg);color:var(--txt);">' +
+        '</div>' +
+      '</div>' +
+      /* Numune satırı */
+      '<div style="display:flex;align-items:center;gap:12px;margin-top:7px;flex-wrap:wrap;">' +
+        '<label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;font-weight:600;">' +
+          '<input type="checkbox" name="numune_' + u.id + '" value="1" '
+            + 'onchange="toggleNumune(' + u.id + ', this.checked)"> Numune istendi' +
+        '</label>' +
+        '<div id="nm_' + u.id + '" style="display:none;align-items:center;gap:6px;">' +
+          '<input type="number" min="1" max="99" name="numune_adet_' + u.id + '" placeholder="Adet" '
+            + 'style="width:60px;padding:4px 6px;border:1px solid var(--brd);border-radius:5px;font-size:12px;background:var(--bg);color:var(--txt);">' +
+          '<input type="text" name="numune_beden_' + u.id + '" placeholder="Beden (41-42)" '
+            + 'style="width:100px;padding:4px 6px;border:1px solid var(--brd);border-radius:5px;font-size:12px;background:var(--bg);color:var(--txt);">' +
+        '</div>' +
+        '<label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;">' +
+          '<input type="checkbox" name="fiyat_' + u.id + '" value="1"> Fiyat konuşuldu' +
+        '</label>' +
+      '</div>' +
+      /* Ürün notu */
+      '<div style="margin-top:6px;">' +
+        '<input type="text" name="urun_notu_' + u.id + '" placeholder="Ürüne özel not (yumuşak EVA, renk önerisi...)" '
+          + 'style="width:100%;padding:5px 7px;border:1px solid var(--brd);border-radius:5px;font-size:12px;background:var(--bg);color:var(--txt);">' +
+      '</div>' +
+    '</div>';
+  wrap.appendChild(div);
+}
+
+function toggleNumune(uid, checked) {
+  var el = document.getElementById('nm_' + uid);
+  if (el) el.style.display = checked ? 'flex' : 'none';
+}
+
+function urunKaldir(id) {
+  delete secilenUrunler[id];
+  var el = document.getElementById('secilen-' + id);
+  if (el) el.remove();
+  // Arama tablosundaki buton durumunu guncelle
+  var tbody = document.getElementById('urun-ara-tbody');
+  if (tbody) {
+    var tr = tbody.querySelector('tr[data-uid="' + id + '"]');
+    if (tr) {
+      tr.classList.remove('sel-row');
+      var btn = tr.querySelector('button[data-uid="' + id + '"]');
+      if (btn) { btn.textContent = '+'; btn.style.background = 'var(--sol)'; btn.style.color = '#fff'; }
+    }
+  }
+}
+
+// ── Katalog sekmesi arama ─────────────────────────────────────────────────────
+var katalogTimeout = null;
+function katalogAra(q) {
+  clearTimeout(katalogTimeout);
+  katalogTimeout = setTimeout(function() {
+    var url = '{{ url_for("fuar_crm.urun_ara") }}?q=' + encodeURIComponent(q) + '&limit=100';
+    fetch(url)
+      .then(function(r){ return r.json(); })
+      .then(function(data) {
+        var tbody = document.getElementById('katalog-tbody');
+        tbody.innerHTML = '';
+        if (data.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#aaa;padding:20px;">Sonuç bulunamadı</td></tr>';
+        } else {
+          data.forEach(function(u) {
+            var fiyat = u.birim_fiyat ? u.birim_fiyat.toFixed(2) : '—';
+            var maliyet = u.maliyet ? u.maliyet.toFixed(2) : '—';
+            var thumb = u.gorsel_yolu
+              ? '<img src="/static/' + u.gorsel_yolu + '" style="width:40px;height:40px;object-fit:cover;border-radius:4px;border:1px solid var(--brd);cursor:pointer;" loading="lazy" onclick="var s=this.style;s.width=s.width==\'110px\'?\'40px\':\'110px\';s.height=s.height==\'110px\'?\'40px\':\'110px\'">'
+              : '<span style="font-size:9px;color:#ccc;">—</span>';
+            tbody.innerHTML +=
+              '<tr>' +
+              '<td style="text-align:center;padding:4px 8px;">' + thumb + '</td>' +
+              '<td style="font-weight:600;color:var(--sol-dark);">' + (u.model_no||'') + '</td>' +
+              '<td>' + (u.kategori||'—') + '</td>' +
+              '<td>' + (u.tip||'—') + '</td>' +
+              '<td>' + (u.urun_cinsi||'—') + '</td>' +
+              '<td>' + (u.asorti||'—') + '</td>' +
+              '<td style="white-space:nowrap;">' + fiyat + '</td>' +
+              '<td style="white-space:nowrap;">' + maliyet + '</td>' +
+              '<td style="font-size:11px;max-width:180px;white-space:normal;">' + (u.malzeme_bilgisi||'—') + '</td>' +
+              '</tr>';
+          });
+        }
+      });
+  }, 200);
+}
+</script>
+
+{% endblock %}

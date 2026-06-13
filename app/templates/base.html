@@ -50,6 +50,7 @@ window.__cpsRootMap = function(pathname) {
   if (_h('/maliyet'))          return {key:'/finans',  title:'Finans',        href:'/finans/'};
   if (_h('/finans'))           return {key:'/finans',  title:'Finans',        href:'/finans/'};
   if (_h('/online-eticaret'))  return {key:'/online-eticaret', title:'E-Ticaret', href:'/online-eticaret/'};
+  if (_h('/fuar-crm'))         return {key:'/fuar-crm',        title:'Fuar CRM',  href:'/fuar-crm/'};
   if (_h('/kullanicilar'))     return {key:'/yonetim', title:'Y\u00f6netim',  href:'/yonetim/'};
   if (_h('/sistem'))           return {key:'/yonetim', title:'Y\u00f6netim',  href:'/yonetim/'};
   if (_h('/yonetim'))          return {key:'/yonetim', title:'Y\u00f6netim',  href:'/yonetim/'};
@@ -373,6 +374,7 @@ window.__cpsRootMap = function(pathname) {
 
 
       {% if active == 'planlama' %}{% set aktif_grup = 'planlama' %}{% endif %}
+      {% if '/fuar-crm' in rp %}{% set aktif_grup = 'fuar_crm' %}{% endif %}
 
 
 
@@ -1132,7 +1134,27 @@ window.__cpsRootMap = function(pathname) {
       {% endif %}
       <!-- ============ /IK PERSONEL ============ -->
 
-
+      <!-- ============ FUAR CRM ============ -->
+      {% if session.get('kullanici') and (session.kullanici.get('KullaniciAdi') == 'admin' or session.kullanici.get('RolAd') in ('Yönetim','Yonetim','Muhasebe','Finans') or yetki('fuar_crm')) %}
+      {% set fuar_aktif = '/fuar-crm' in rp %}
+      <div class="sn-sec sn-toggle{% if fuar_aktif %} acik{% endif %}" data-grup="fuar_crm">
+        <span class="sn-arrow">{% if fuar_aktif %}▼{% else %}►{% endif %}</span>
+        <svg class="sn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span class="sn-baslik">Fuar CRM</span>
+        <span class="sn-count">2</span>
+      </div>
+      <div class="sn-grup{% if not fuar_aktif %} kapali{% endif %}" data-grup="fuar_crm">
+        <a href="/fuar-crm/" class="si {% if rp == '/fuar-crm/' or rp == '/fuar-crm' %}active{% endif %}" title="CRM Dashboard">
+          <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></span>
+          <span class="sl">Dashboard</span>
+        </a>
+        <a href="/fuar-crm/firma" class="si {% if '/fuar-crm/firma' in rp %}active{% endif %}" title="Firma Listesi">
+          <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+          <span class="sl">Firmalar</span>
+        </a>
+      </div>
+      {% endif %}
+      <!-- ============ /FUAR CRM ============ -->
 
 
 

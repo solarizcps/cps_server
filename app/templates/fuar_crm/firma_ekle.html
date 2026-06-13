@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Yeni Firma — Fuar CRM{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <div class="page-title">Yeni Firma Ekle</div>
+    <div class="page-sub">Fuar CRM — Cari Kart</div>
+  </div>
+  <a href="{{ url_for('fuar_crm.firma_liste') }}" class="btn-sol btn-outline">
+    ← Geri
+  </a>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+{% for category, message in messages %}
+<div class="flash flash-{{ category }}" style="margin-bottom:12px;">{{ message }}</div>
+{% endfor %}
+{% endif %}
+{% endwith %}
+
+<div class="oz-card">
+  <div class="oz-hdr"><span class="oz-hdr-t">Firma Bilgileri</span></div>
+  <div class="oz-body">
+    <form method="post" action="{{ url_for('fuar_crm.firma_ekle') }}">
+
+      <div class="form-grid">
+        <!-- Firma Adı -->
+        <div class="form-grup form-tam">
+          <label class="form-lbl">Firma Adı <span class="zorunlu">*</span></label>
+          <input type="text" name="firma_adi" class="form-ctrl" placeholder="Örn: ABC Tekstil Ltd." required autofocus>
+        </div>
+
+        <!-- Yetkili -->
+        <div class="form-grup">
+          <label class="form-lbl">Yetkili Kişi</label>
+          <input type="text" name="yetkili" class="form-ctrl" placeholder="Ad Soyad / Ünvan">
+        </div>
+
+        <!-- Firma Tipi -->
+        <div class="form-grup">
+          <label class="form-lbl">Firma Tipi</label>
+          <select name="firma_tipi" class="form-ctrl">
+            <option value="">— Seç —</option>
+            <option value="Distribütör">Distribütör</option>
+            <option value="Toptancı">Toptancı</option>
+            <option value="Perakendeci">Perakendeci</option>
+            <option value="İmalatçı">İmalatçı</option>
+            <option value="İhracatçı">İhracatçı</option>
+            <option value="Marka">Marka</option>
+            <option value="Diğer">Diğer</option>
+          </select>
+        </div>
+
+        <!-- Ülke -->
+        <div class="form-grup">
+          <label class="form-lbl">Ülke</label>
+          <input type="text" name="ulke" class="form-ctrl" placeholder="Türkiye, Almanya, BAE...">
+        </div>
+
+        <!-- Şehir -->
+        <div class="form-grup">
+          <label class="form-lbl">Şehir</label>
+          <input type="text" name="sehir" class="form-ctrl" placeholder="İstanbul, Frankfurt...">
+        </div>
+
+        <!-- Telefon -->
+        <div class="form-grup">
+          <label class="form-lbl">Telefon</label>
+          <input type="text" name="telefon" class="form-ctrl" placeholder="+90 5xx xxx xx xx">
+        </div>
+
+        <!-- WhatsApp -->
+        <div class="form-grup">
+          <label class="form-lbl">WhatsApp</label>
+          <input type="text" name="whatsapp" class="form-ctrl" placeholder="+90 5xx xxx xx xx">
+        </div>
+
+        <!-- E-posta -->
+        <div class="form-grup">
+          <label class="form-lbl">E-posta</label>
+          <input type="email" name="email" class="form-ctrl" placeholder="info@firma.com">
+        </div>
+
+        <!-- Marka İlgisi -->
+        <div class="form-grup form-tam">
+          <label class="form-lbl">Marka / Ürün İlgisi</label>
+          <input type="text" name="marka_ilgisi" class="form-ctrl" placeholder="Hangi markalar / ürün grupları ile ilgileniyor?">
+        </div>
+
+        <!-- ERP Cari Kodu -->
+        <div class="form-grup">
+          <label class="form-lbl">ERP Cari Kodu</label>
+          <input type="text" name="erp_cari_kodu" class="form-ctrl" placeholder="Mevcut ERP kodu (varsa)">
+        </div>
+
+        <!-- Kaynak -->
+        <div class="form-grup">
+          <label class="form-lbl">Kaynak</label>
+          <select name="kaynak" class="form-ctrl">
+            <option value="">— Seç —</option>
+            <option value="Fuar">Fuar</option>
+            <option value="Referans">Referans</option>
+            <option value="Soğuk Arama">Soğuk Arama</option>
+            <option value="Web">Web</option>
+            <option value="LinkedIn">LinkedIn</option>
+            <option value="Diğer">Diğer</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-top:24px; display:flex; gap:10px; justify-content:flex-end;">
+        <a href="{{ url_for('fuar_crm.firma_liste') }}" class="btn-sol btn-outline">İptal</a>
+        <button type="submit" class="btn-sol">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          Kaydet
+        </button>
+      </div>
+
+    </form>
+  </div>
+</div>
+
+<style>
+.form-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.form-tam { grid-column:1 / -1; }
+.form-grup { display:flex; flex-direction:column; }
+.form-lbl { font-size:11px; font-weight:600; color:#888; text-transform:uppercase; letter-spacing:.5px; margin-bottom:5px; }
+.zorunlu { color:#ef4444; }
+.form-ctrl { padding:8px 12px; border:1px solid var(--brd); border-radius:6px; font-size:13px; background:var(--bg); color:var(--txt); outline:none; transition:border .15s; }
+.form-ctrl:focus { border-color:var(--sol); box-shadow:0 0 0 2px var(--sol-light); }
+.btn-sol { display:inline-flex; align-items:center; gap:6px; padding:8px 16px; background:var(--sol); color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; text-decoration:none; }
+.btn-sol:hover { opacity:.9; }
+.btn-sol.btn-outline { background:transparent; border:1px solid var(--sol); color:var(--sol-dark); }
+.btn-sol.btn-outline:hover { background:var(--sol-light); }
+.flash { padding:10px 14px; border-radius:6px; font-size:13px; font-weight:500; }
+.flash-basari { background:#d1fae5; color:#065f46; border:1px solid #a7f3d0; }
+.flash-hata { background:#fee2e2; color:#991b1b; border:1px solid #fecaca; }
+@media (max-width:600px) { .form-grid { grid-template-columns:1fr; } .form-tam { grid-column:1; } }
+</style>
+
+{% endblock %}

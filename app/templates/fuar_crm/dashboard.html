@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+{% block title %}Fuar CRM — Solariz CPS{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <div class="page-title">Fuar CRM</div>
+    <div class="page-sub">Fuar / Cari Yönetimi — Dashboard</div>
+  </div>
+  <div style="display:flex; gap:8px; flex-wrap:wrap;">
+    <a href="{{ url_for('fuar_crm.firma_ekle') }}" class="btn-crm">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Yeni Firma
+    </a>
+    <a href="{{ url_for('fuar_crm.urun_katalogu') }}" class="btn-crm btn-crm-purple">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/></svg>
+      Ürün Kataloğu
+    </a>
+    <a href="{{ url_for('fuar_crm.firma_liste') }}" class="btn-crm btn-crm-out">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      Tüm Firmalar
+    </a>
+  </div>
+</div>
+
+<!-- ── 7'li İstatistik (6 mevcut + ürün kataloğu) ──────────────────────── -->
+<div class="crm-stat-grid">
+  <div class="crm-stat">
+    <div class="crm-stat-icon" style="background:#fef3c7; color:#d97706;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+    </div>
+    <div>
+      <div class="crm-stat-sayi">{{ toplam_firma }}</div>
+      <div class="crm-stat-lbl">Aktif Firma</div>
+    </div>
+  </div>
+  <div class="crm-stat">
+    <div class="crm-stat-icon" style="background:#dbeafe; color:#2563eb;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    </div>
+    <div>
+      <div class="crm-stat-sayi">{{ toplam_gorusme }}</div>
+      <div class="crm-stat-lbl">Toplam Görüşme</div>
+    </div>
+  </div>
+  <div class="crm-stat" style="border-color:#fbbf24; background:linear-gradient(135deg,#fffbeb,var(--bg));">
+    <div class="crm-stat-icon" style="background:#fde68a; color:#b45309;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    </div>
+    <div>
+      <div class="crm-stat-sayi" style="color:#b45309;">{{ bugun_gorusme }}</div>
+      <div class="crm-stat-lbl">Bugünkü Görüşme</div>
+    </div>
+  </div>
+  <div class="crm-stat">
+    <div class="crm-stat-icon" style="background:#fee2e2; color:#dc2626;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+    </div>
+    <div>
+      <div class="crm-stat-sayi">{{ takip_bekleyen }}</div>
+      <div class="crm-stat-lbl">Takip Bekliyor</div>
+    </div>
+  </div>
+  <div class="crm-stat">
+    <div class="crm-stat-icon" style="background:#f0fdf4; color:#15803d;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+    </div>
+    <div>
+      <div class="crm-stat-sayi">{{ numune_isteyen }}</div>
+      <div class="crm-stat-lbl">Numune İstedi</div>
+    </div>
+  </div>
+  <div class="crm-stat">
+    <div class="crm-stat-icon" style="background:#faf5ff; color:#7c3aed;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+    </div>
+    <div>
+      <div class="crm-stat-sayi">{{ fiyat_verilecek }}</div>
+      <div class="crm-stat-lbl">Fiyat Verilecek</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Ürün Kataloğu Kartı ─────────────────────────────────────────────────── -->
+<a href="{{ url_for('fuar_crm.urun_katalogu') }}" class="urun-katalog-kart">
+  <div class="urun-katalog-ikon">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="28" height="28"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+  </div>
+  <div style="flex:1;">
+    <div class="urun-katalog-sayi">{{ toplam_urun }}</div>
+    <div class="urun-katalog-lbl">Garda 2026 Ürün Kataloğu</div>
+    <div style="font-size:11px;color:#6d28d9;margin-top:2px;">Tüm ürünleri görüntüle →</div>
+  </div>
+  {% if en_cok_urun %}
+  <div class="urun-katalog-list">
+    <div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">En Çok İlgi</div>
+    {% for u in en_cok_urun[:3] %}
+    <div style="font-size:12px;color:#4c1d95;"><span style="font-weight:700;">{{ u.model_no }}</span> — {{ u.ilgi_sayisi }} görüşme</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</a>
+
+<div style="display:grid; grid-template-columns:1fr 320px; gap:16px; margin-bottom:16px;">
+
+  <!-- Son Eklenen Firmalar -->
+  <div class="oz-card">
+    <div class="oz-hdr">
+      <span class="oz-hdr-t">Son Eklenen Firmalar</span>
+      <a href="{{ url_for('fuar_crm.firma_liste') }}" style="font-size:12px; color:var(--sol-dark); text-decoration:none;">Tümünü gör →</a>
+    </div>
+    <div class="oz-body" style="padding:0;">
+      {% if son_firmalar %}
+      <table class="crm-tbl">
+        <thead>
+          <tr>
+            <th>Firma</th>
+            <th>Yetkili</th>
+            <th>Ülke</th>
+            <th>Durum</th>
+            <th>Görüşme</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for f in son_firmalar %}
+          <tr>
+            <td>
+              <a href="{{ url_for('fuar_crm.firma_detay', firma_id=f.id) }}" class="crm-link">{{ f.firma_adi }}</a>
+              {% if f.firma_tipi %}<div style="font-size:10px;color:#aaa;">{{ f.firma_tipi }}</div>{% endif %}
+            </td>
+            <td style="font-size:12px;">{{ f.yetkili or '—' }}</td>
+            <td style="font-size:12px;">{{ f.ulke or '—' }}</td>
+            <td>
+              {% if f.son_durum %}
+              <span class="durum-pill durum-{{ f.son_durum }}">{{ f.son_durum | replace('_',' ') }}</span>
+              {% else %}<span style="color:#ccc;font-size:11px;">—</span>{% endif %}
+            </td>
+            <td><span class="sayi-badge {% if f.gorusme_sayisi > 0 %}sayi-badge-ok{% endif %}">{{ f.gorusme_sayisi }}</span></td>
+            <td><a href="{{ url_for('fuar_crm.firma_detay', firma_id=f.id) }}" class="btn-crm btn-crm-xs">Detay</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div style="text-align:center;padding:40px;color:#aaa;">
+        <p>Henüz firma kaydı yok.</p>
+        <a href="{{ url_for('fuar_crm.firma_ekle') }}" class="btn-crm">İlk Firmayı Ekle</a>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Ülke Dağılımı -->
+  <div class="oz-card">
+    <div class="oz-hdr"><span class="oz-hdr-t">Ülke Dağılımı</span></div>
+    <div class="oz-body">
+      {% if ulke_dagilim %}
+      {% set max_cnt = ulke_dagilim[0].cnt if ulke_dagilim else 1 %}
+      {% for u in ulke_dagilim %}
+      <div style="margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;">
+          <span style="font-weight:600;">{{ u.ulke }}</span>
+          <span style="color:#888;">{{ u.cnt }}</span>
+        </div>
+        <div style="height:5px;background:var(--brd);border-radius:99px;overflow:hidden;">
+          <div style="height:100%;width:{{ (u.cnt / max_cnt * 100)|round|int }}%;background:var(--sol);border-radius:99px;"></div>
+        </div>
+      </div>
+      {% endfor %}
+      {% else %}
+      <p style="color:#aaa;font-size:12px;text-align:center;padding:20px 0;">Veri yok</p>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+<!-- Yaklaşan Takipler -->
+{% if yaklasan_takip %}
+<div class="oz-card">
+  <div class="oz-hdr">
+    <span class="oz-hdr-t">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="vertical-align:middle;margin-right:4px;color:#dc2626;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      Yaklaşan Takipler (7 gün)
+    </span>
+    <span class="sayi-badge" style="background:#fee2e2;color:#dc2626;">{{ yaklasan_takip|length }}</span>
+  </div>
+  <div class="oz-body" style="padding:0;">
+    <table class="crm-tbl">
+      <thead>
+        <tr><th>Takip Tarihi</th><th>Firma</th><th>Yetkili</th><th>Ürün İlgisi</th><th>Durum</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for t in yaklasan_takip %}
+        <tr>
+          <td style="font-weight:600; color:#dc2626; font-size:12px;">{{ t.takip_tarihi }}</td>
+          <td><a href="{{ url_for('fuar_crm.firma_detay', firma_id=t.firma_id) }}" class="crm-link">{{ t.firma_adi }}</a></td>
+          <td style="font-size:12px;">{{ t.yetkili or '—' }}</td>
+          <td style="font-size:12px;max-width:160px;white-space:normal;">{{ t.urun_ilgisi or '—' }}</td>
+          <td><span class="durum-pill durum-{{ t.durum }}">{{ t.durum | replace('_',' ') }}</span></td>
+          <td><a href="{{ url_for('fuar_crm.firma_detay', firma_id=t.firma_id) }}" class="btn-crm btn-crm-xs">Git</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<style>
+.crm-stat-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:12px; margin-bottom:12px; }
+@media(max-width:900px){ .crm-stat-grid{ grid-template-columns:repeat(3,1fr); } }
+@media(max-width:500px){ .crm-stat-grid{ grid-template-columns:repeat(2,1fr); } }
+.crm-stat { background:var(--bg); border:1px solid var(--brd); border-radius:10px; padding:14px 16px; display:flex; gap:12px; align-items:center; }
+.crm-stat-icon { width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.crm-stat-sayi { font-size:24px; font-weight:700; color:var(--txt); line-height:1; }
+.crm-stat-lbl  { font-size:11px; color:#888; margin-top:2px; }
+/* Urun katalogu kart */
+.urun-katalog-kart { display:flex; align-items:center; gap:16px; background:linear-gradient(135deg,#ede9fe,#f5f3ff); border:1.5px solid #c4b5fd; border-radius:12px; padding:16px 20px; margin-bottom:14px; text-decoration:none; transition:box-shadow .15s; cursor:pointer; }
+.urun-katalog-kart:hover { box-shadow:0 4px 16px rgba(109,40,217,.15); border-color:#7c3aed; }
+.urun-katalog-ikon { width:52px; height:52px; background:#7c3aed; color:#fff; border-radius:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.urun-katalog-sayi { font-size:32px; font-weight:800; color:#4c1d95; line-height:1; }
+.urun-katalog-lbl  { font-size:13px; font-weight:600; color:#6d28d9; margin-top:2px; }
+.urun-katalog-list { border-left:2px solid #c4b5fd; padding-left:14px; min-width:160px; }
+/* Tablolar */
+.crm-tbl { width:100%; border-collapse:collapse; font-size:13px; }
+.crm-tbl th { padding:9px 12px; text-align:left; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:#999; border-bottom:2px solid var(--brd); background:var(--bg2); }
+.crm-tbl td { padding:9px 12px; border-bottom:1px solid var(--brd); vertical-align:middle; }
+.crm-tbl tr:last-child td { border-bottom:none; }
+.crm-tbl tr:hover td { background:var(--bg2); }
+.crm-link { color:var(--sol-dark); font-weight:600; text-decoration:none; }
+.crm-link:hover { text-decoration:underline; }
+.sayi-badge { display:inline-block; background:var(--sol-light); color:var(--sol-dark); font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px; }
+.sayi-badge-ok { background:#d1fae5; color:#065f46; }
+.durum-pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:11px; font-weight:600; }
+.durum-beklemede { background:#fef3c7; color:#92400e; }
+.durum-takip_bekliyor { background:#fee2e2; color:#991b1b; }
+.durum-teklif_verildi { background:#dbeafe; color:#1e40af; }
+.durum-olumlu { background:#d1fae5; color:#065f46; }
+.durum-olumsuz { background:#f3f4f6; color:#6b7280; }
+.durum-kapandi { background:#e5e7eb; color:#374151; }
+.btn-crm { display:inline-flex; align-items:center; gap:5px; padding:7px 14px; background:var(--sol); color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; text-decoration:none; white-space:nowrap; }
+.btn-crm:hover { opacity:.88; }
+.btn-crm-out { background:transparent; border:1.5px solid var(--sol); color:var(--sol-dark); }
+.btn-crm-out:hover { background:var(--sol-light); opacity:1; }
+.btn-crm-purple { background:#7c3aed; }
+.btn-crm-purple:hover { background:#6d28d9; opacity:1; }
+.btn-crm-xs { padding:3px 9px; font-size:11px; }
+.btn-crm-sm { padding:5px 11px; font-size:12px; }
+.btn-crm-ghost { background:transparent; border:1px solid var(--brd); color:var(--txt); }
+.btn-crm-ghost:hover { background:var(--bg2); opacity:1; }
+.btn-crm-red { background:#ef4444; }
+.btn-crm-red:hover { background:#dc2626; opacity:1; }
+</style>
+
+{% endblock %}

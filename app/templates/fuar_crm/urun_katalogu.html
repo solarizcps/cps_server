@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}Ürün Kataloğu — Fuar CRM{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Garda 2026 Ürün Kataloğu</div>
+    <div class="page-sub">Fuar CRM — <span style="font-weight:700;color:#7c3aed;">{{ toplam_urun }}</span> ürün</div>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+    <a href="{{ url_for('fuar_crm.dashboard') }}" class="btn-crm btn-crm-ghost">← Dashboard</a>
+    <a href="{{ url_for('fuar_crm.firma_liste') }}" class="btn-crm btn-crm-out">Firmalar</a>
+  </div>
+</div>
+
+<!-- Filtre -->
+<div class="oz-card" style="margin-bottom:14px;">
+  <div class="oz-body" style="padding:12px 16px;">
+    <form method="get" action="{{ url_for('fuar_crm.urun_katalogu') }}"
+          style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+      <div style="flex:3;min-width:200px;">
+        <label class="fl">Arama (model, kategori, tip, ürün cinsi, malzeme)</label>
+        <input type="text" name="q" value="{{ q_str }}" class="fc" style="width:100%;"
+               placeholder="BRZ, Terlik, Eva, Kadın, Poli...">
+      </div>
+      <div style="min-width:140px;">
+        <label class="fl">Kategori</label>
+        <select name="kategori" class="fc">
+          <option value="">— Tümü —</option>
+          {% for k in kategoriler %}
+          <option value="{{ k }}" {% if k == kat_filt %}selected{% endif %}>{{ k }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div style="min-width:130px;">
+        <label class="fl">Tip</label>
+        <select name="tip" class="fc">
+          <option value="">— Tümü —</option>
+          {% for t in tipler %}
+          <option value="{{ t }}" {% if t == tip_filt %}selected{% endif %}>{{ t }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div style="display:flex;gap:8px;padding-bottom:1px;">
+        <button type="submit" class="btn-crm">Filtrele</button>
+        {% if q_str or kat_filt or tip_filt %}
+        <a href="{{ url_for('fuar_crm.urun_katalogu') }}" class="btn-crm btn-crm-ghost">Temizle</a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Ürün Tablosu -->
+<div class="oz-card">
+  <div class="oz-hdr">
+    <span class="oz-hdr-t">
+      Ürünler
+      <span class="sayi-badge" style="margin-left:6px;background:#ede9fe;color:#6d28d9;">{{ urunler|length }}</span>
+      {% if urunler|length < toplam_urun %}
+      <span style="font-size:11px;color:#aaa;margin-left:6px;">/ {{ toplam_urun }} toplam</span>
+      {% endif %}
+    </span>
+    {% if q_str or kat_filt or tip_filt %}
+    <span style="font-size:11px;color:#888;">
+      Filtre:
+      {% if q_str %}<strong>{{ q_str }}</strong>{% endif %}
+      {% if kat_filt %} / <strong>{{ kat_filt }}</strong>{% endif %}
+      {% if tip_filt %} / <strong>{{ tip_filt }}</strong>{% endif %}
+    </span>
+    {% endif %}
+  </div>
+  <div class="oz-body" style="padding:0;">
+    {% if urunler %}
+    <div style="overflow-x:auto;">
+      <table class="crm-tbl" style="font-size:12px;">
+        <thead>
+          <tr>
+            <th style="width:70px;">Görsel</th>
+            <th>#</th>
+            <th>Model No</th>
+            <th>Kategori</th>
+            <th>Tip</th>
+            <th>Ürün Cinsi</th>
+            <th>Asorti</th>
+            <th>Birim Fiyat</th>
+            <th>Maliyet</th>
+            <th>Malzeme</th>
+            <th>Sheet</th>
+            <th>Satır</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in urunler %}
+          <tr>
+            <td style="text-align:center;padding:4px 8px;">
+              {% if u.gorsel_yolu %}
+              <img src="{{ url_for('static', filename=u.gorsel_yolu) }}"
+                   alt="{{ u.model_no }}"
+                   class="urun-thumb"
+                   loading="lazy"
+                   onclick="this.classList.toggle('urun-thumb-zoom')">
+              {% else %}
+              <span class="gorsel-yok">Görsel<br>yok</span>
+              {% endif %}
+            </td>
+            <td style="color:#ccc;font-size:10px;">{{ loop.index }}</td>
+            <td style="font-weight:700;color:var(--sol-dark);white-space:nowrap;">{{ u.model_no }}</td>
+            <td>
+              {% if u.kategori %}
+              <span class="kat-pill">{{ u.kategori }}</span>
+              {% else %}—{% endif %}
+            </td>
+            <td style="white-space:nowrap;">{{ u.tip or '—' }}</td>
+            <td style="white-space:nowrap;">{{ u.urun_cinsi or '—' }}</td>
+            <td style="white-space:nowrap;font-size:11px;color:#666;">{{ u.asorti or '—' }}</td>
+            <td style="white-space:nowrap;font-weight:600;color:{% if u.birim_fiyat %}#059669{% else %}#ccc{% endif %};">
+              {% if u.birim_fiyat %}{{ '%.2f'|format(u.birim_fiyat) }} USD{% else %}—{% endif %}
+            </td>
+            <td style="white-space:nowrap;font-size:11px;color:#888;">
+              {% if u.maliyet %}{{ '%.2f'|format(u.maliyet) }}{% else %}—{% endif %}
+            </td>
+            <td style="max-width:200px;white-space:normal;font-size:11px;color:#666;">{{ u.malzeme_bilgisi or '—' }}</td>
+            <td style="font-size:10px;color:#aaa;white-space:nowrap;">{{ u.sheet_adi or '' }}</td>
+            <td style="font-size:10px;color:#ccc;">{{ u.excel_satir_no }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div style="text-align:center;padding:50px;color:#aaa;">
+      {% if q_str or kat_filt or tip_filt %}
+      <p>Arama kriterlerine uyan ürün bulunamadı.</p>
+      <a href="{{ url_for('fuar_crm.urun_katalogu') }}" class="btn-crm btn-crm-ghost">Filtreyi Temizle</a>
+      {% else %}
+      <p>Henüz ürün kataloğu yüklenmedi.</p>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<style>
+.btn-crm { display:inline-flex; align-items:center; gap:5px; padding:7px 14px; background:var(--sol); color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; text-decoration:none; white-space:nowrap; }
+.btn-crm:hover { opacity:.88; }
+.btn-crm-out { background:transparent; border:1.5px solid var(--sol); color:var(--sol-dark); }
+.btn-crm-out:hover { background:var(--sol-light); opacity:1; }
+.btn-crm-ghost { background:transparent; border:1px solid var(--brd); color:var(--txt); }
+.btn-crm-ghost:hover { background:var(--bg2); opacity:1; }
+.crm-tbl { width:100%; border-collapse:collapse; font-size:13px; }
+.crm-tbl th { padding:8px 10px; text-align:left; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:#999; border-bottom:2px solid var(--brd); background:var(--bg2); white-space:nowrap; }
+.crm-tbl td { padding:8px 10px; border-bottom:1px solid var(--brd); vertical-align:middle; }
+.crm-tbl tr:last-child td { border-bottom:none; }
+.crm-tbl tr:hover td { background:var(--bg2); }
+.sayi-badge { display:inline-block; background:var(--sol-light); color:var(--sol-dark); font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px; }
+.kat-pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; background:#ede9fe; color:#6d28d9; }
+.fl { display:block; font-size:10px; font-weight:700; color:#999; text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px; }
+.fc { padding:7px 10px; border:1px solid var(--brd); border-radius:6px; font-size:13px; background:var(--bg); color:var(--txt); outline:none; }
+.fc:focus { border-color:var(--sol); box-shadow:0 0 0 2px var(--sol-light); }
+/* Thumbnail */
+.urun-thumb { width:56px; height:56px; object-fit:cover; border-radius:6px; border:1px solid var(--brd); cursor:pointer; transition:transform .15s; display:block; margin:0 auto; }
+.urun-thumb:hover { transform:scale(1.08); }
+.urun-thumb-zoom { width:160px; height:160px; position:relative; z-index:10; box-shadow:0 8px 24px rgba(0,0,0,.18); }
+.gorsel-yok { display:inline-block; font-size:9px; color:#ccc; text-align:center; line-height:1.3; }
+</style>
+
+{% endblock %}
