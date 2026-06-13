@@ -370,9 +370,9 @@ def gorusme_ekle(firma_id):
         for uid in urun_ids:
             try:
                 uid_int = int(uid)
-                fiyat_k      = 1 if request.form.get(f'fiyat_{uid}') == '1' else 0
+                fiyat_k      = 1 if request.form.get(f'fiyat_konusuldu_{uid}') == '1' else 0
                 numune_i     = 1 if request.form.get(f'numune_{uid}') == '1' else 0
-                urun_not     = request.form.get(f'urun_not_{uid}', '').strip() or None
+                urun_not     = request.form.get(f'urun_notu_{uid}', '').strip() or None
 
                 def _float_f(key):
                     v = request.form.get(key, '').strip()
@@ -412,6 +412,71 @@ def gorusme_ekle(firma_id):
 
         conn.commit()
         flash('Gorusme notu eklendi.', 'basari')
+    except Exception as exc:
+        conn.rollback()
+        flash(f'Hata: {exc}', 'hata')
+    finally:
+        conn.close()
+
+    return redirect(url_for('fuar_crm.firma_detay', firma_id=firma_id) + '#gecmis')
+
+
+# ── GORUSME DUZENLE -----------------------------------------------------------
+
+@fuar_crm_bp.route('/firma/<int:firma_id>/gorusme/<int:gorusme_id>/duzenle', methods=['POST'])
+@login_gerekli
+def gorusme_duzenle(firma_id, gorusme_id):
+    g = _qone("SELECT id, firma_id FROM crm_gorusme WHERE id=? AND firma_id=?",
+              (gorusme_id, firma_id))
+    if not g:
+        abort(404)
+
+    not_text      = request.form.get('not_text', '').strip() or None
+    durum         = request.form.get('durum', 'beklemede').strip()
+    takip_tarihi  = request.form.get('takip_tarihi', '').strip() or None
+    gorusen       = request.form.get('gorusen', '').strip() or None
+    urun_ilgisi   = request.form.get('urun_ilgisi', '').strip() or None
+    numune        = 1 if request.form.get('numune') == '1' else 0
+    fiyat_verildi = 1 if request.form.get('fiyat_verildi') == '1' else 0
+
+    conn = _get_conn()
+    try:
+        conn.execute("""
+            UPDATE crm_gorusme
+            SET not_text=?, durum=?, takip_tarihi=?,
+                gorusen=?, urun_ilgisi=?, numune=?, fiyat_verildi=?
+            WHERE id=?
+        """, (not_text, durum, takip_tarihi,
+              gorusen, urun_ilgisi, numune, fiyat_verildi,
+              gorusme_id))
+        conn.commit()
+        flash('Görüşme güncellendi.', 'basari')
+    except Exception as exc:
+        conn.rollback()
+        flash(f'Hata: {exc}', 'hata')
+    finally:
+        conn.close()
+
+    return redirect(url_for('fuar_crm.firma_detay', firma_id=firma_id) + '#gecmis')
+
+
+# ── GORUSME SIL ---------------------------------------------------------------
+
+@fuar_crm_bp.route('/firma/<int:firma_id>/gorusme/<int:gorusme_id>/sil', methods=['POST'])
+@login_gerekli
+def gorusme_sil(firma_id, gorusme_id):
+    g = _qone("SELECT id, firma_id FROM crm_gorusme WHERE id=? AND firma_id=?",
+              (gorusme_id, firma_id))
+    if not g:
+        abort(404)
+
+    conn = _get_conn()
+    try:
+        # Once urun iliskileri sil, sonra gorusmeyi sil
+        conn.execute("DELETE FROM crm_gorusme_urun WHERE gorusme_id=?", (gorusme_id,))
+        conn.execute("DELETE FROM crm_gorusme WHERE id=?", (gorusme_id,))
+        conn.commit()
+        flash('Görüşme silindi.', 'basari')
     except Exception as exc:
         conn.rollback()
         flash(f'Hata: {exc}', 'hata')
@@ -511,6 +576,70 @@ def urun_ara():
     """, params) or []
 
     return jsonify(rows)
+
+
+# ── GORUSME URUN SIL ----------------------------------------------------------
+
+# ── GORUSME URUN GUNCELLE -----------------------------------------------------
+
+@fuar_crm_bp.route('/gorusme-urun/<int:gu_id>/guncelle', methods=['POST'])
+@login_gerekli
+def gorusme_urun_guncelle(gu_id):
+    gu = _qone("SELECT gorusme_id FROM crm_gorusme_urun WHERE id=?", (gu_id,))
+    if not gu:
+        abort(404)
+    gorusme_id = gu['gorusme_id']
+    firma = _qone("SELECT g.firma_id FROM crm_gorusme g WHERE g.id=?", (gorusme_id,))
+    firma_id = firma['firma_id'] if firma else None
+
+    def _f(key):
+        v = request.form.get(key, '').strip()
+        try: return float(v) if v else None
+        except ValueError: return None
+
+    def _i(key):
+        v = request.form.get(key, '').strip()
+        try: return int(v) if v else None
+        except ValueError: return None
+
+    verilen_fiyat  = _f('verilen_fiyat')
+    para_birimi    = request.form.get('para_birimi', 'USD').strip() or 'USD'
+    fiyat_konusuldu= 1 if request.form.get('fiyat_konusuldu') == '1' else 0
+    istenen_renk   = request.form.get('istenen_renk', '').strip() or None
+    renk_basi_adet = _i('renk_basi_adet')
+    toplam_adet    = _i('toplam_adet')
+    numune_istendi = 1 if request.form.get('numune_istendi') == '1' else 0
+    numune_adet    = _i('numune_adet')
+    numune_beden   = request.form.get('numune_beden', '').strip() or None
+    urun_notu      = request.form.get('urun_notu', '').strip() or None
+    teslim_notu    = request.form.get('teslim_notu', '').strip() or None
+    indirim_notu   = request.form.get('indirim_notu', '').strip() or None
+
+    conn = _get_conn()
+    try:
+        conn.execute("""
+            UPDATE crm_gorusme_urun
+            SET verilen_fiyat=?, para_birimi=?, fiyat_konusuldu=?,
+                istenen_renk=?, renk_basi_adet=?, toplam_adet=?,
+                numune_istendi=?, numune_adet=?, numune_beden=?,
+                urun_notu=?, teslim_notu=?, indirim_notu=?
+            WHERE id=?
+        """, (verilen_fiyat, para_birimi, fiyat_konusuldu,
+              istenen_renk, renk_basi_adet, toplam_adet,
+              numune_istendi, numune_adet, numune_beden,
+              urun_notu, teslim_notu, indirim_notu,
+              gu_id))
+        conn.commit()
+        flash('Ürün bilgisi güncellendi.', 'basari')
+    except Exception as exc:
+        conn.rollback()
+        flash(f'Hata: {exc}', 'hata')
+    finally:
+        conn.close()
+
+    if firma_id:
+        return redirect(url_for('fuar_crm.firma_detay', firma_id=firma_id) + '#gecmis')
+    return redirect(url_for('fuar_crm.firma_liste'))
 
 
 # ── GORUSME URUN SIL ----------------------------------------------------------
