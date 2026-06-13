@@ -779,3 +779,273 @@ def dosya_sil(firma_id, dosya_id):
 @login_gerekli
 def uploaded_file(filename):
     return send_from_directory(UPLOAD_DIR, filename)
+
+
+# ── PDF EXPORT ----------------------------------------------------------------
+
+@fuar_crm_bp.route('/firma/<int:firma_id>/gorusme/<int:gorusme_id>/pdf')
+@login_gerekli
+def gorusme_pdf(firma_id, gorusme_id):
+    """Bir görüşmenin PDF çıktısını üretip indirir. DB'ye dokunmaz."""
+    from flask import make_response
+    import io
+
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib import colors
+        from reportlab.lib.units import cm
+        from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer,
+                                        Table, TableStyle, Image as RLImage,
+                                        HRFlowable)
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.enums import TA_LEFT, TA_CENTER
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+    except ImportError:
+        abort(500, 'reportlab kurulu değil')
+
+    # ── Veri çek ──────────────────────────────────────────────────────────────
+    firma = _qone(
+        "SELECT * FROM crm_firma WHERE id=?", (firma_id,)
+    )
+    if not firma:
+        abort(404)
+
+    gorusme = _qone(
+        "SELECT * FROM crm_gorusme WHERE id=? AND firma_id=?",
+        (gorusme_id, firma_id)
+    )
+    if not gorusme:
+        abort(404)
+
+    urunler = _q("""
+        SELECT gu.*, u.model_no, u.kategori, u.tip, u.urun_cinsi, u.asorti,
+               u.birim_fiyat as liste_fiyat, u.malzeme_bilgisi,
+               g.dosya_yolu as gorsel_yolu
+        FROM crm_gorusme_urun gu
+        JOIN crm_urun u ON gu.urun_id = u.id
+        LEFT JOIN crm_urun_gorsel g ON g.urun_id = u.id
+        WHERE gu.gorusme_id = ?
+        ORDER BY gu.id
+    """, (gorusme_id,))
+
+    # ── Türkçe font desteği için DejaVu ───────────────────────────────────────
+    # Sisteminizde DejaVu yoksa reportlab varsayılan Helvetica kullanır
+    APP_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    font_registered = False
+    for font_path in [
+        os.path.join(APP_DIR, 'static', 'fonts', 'DejaVuSans.ttf'),
+        'C:/Windows/Fonts/arial.ttf',
+        'C:/Windows/Fonts/tahoma.ttf',
+    ]:
+        if os.path.exists(font_path):
+            try:
+                font_name = os.path.splitext(os.path.basename(font_path))[0]
+                pdfmetrics.registerFont(TTFont(font_name, font_path))
+                font_registered = True
+                break
+            except Exception:
+                continue
+
+    BASE_FONT = font_name if font_registered else 'Helvetica'
+    SOL_COLOR = colors.HexColor('#1E6B45')
+
+    # ── Stiller ───────────────────────────────────────────────────────────────
+    styles = getSampleStyleSheet()
+    def _style(name, parent='Normal', **kw):
+        s = ParagraphStyle(name, parent=styles[parent], fontName=BASE_FONT, **kw)
+        return s
+
+    s_title   = _style('PDFTitle',   fontSize=16, textColor=SOL_COLOR, spaceAfter=2, leading=20)
+    s_sub     = _style('PDFSub',     fontSize=10, textColor=colors.grey, spaceAfter=6)
+    s_heading = _style('PDFHead',    fontSize=11, textColor=SOL_COLOR, spaceBefore=8, spaceAfter=3, fontName=BASE_FONT)
+    s_normal  = _style('PDFNormal',  fontSize=9,  leading=13)
+    s_small   = _style('PDFSmall',   fontSize=8,  textColor=colors.grey)
+    s_bold    = _style('PDFBold',    fontSize=9,  leading=13)
+    s_price   = _style('PDFPrice',   fontSize=11, textColor=colors.HexColor('#059669'), leading=14)
+    s_strike  = _style('PDFStrike',  fontSize=9,  textColor=colors.grey)
+    s_center  = _style('PDFCenter',  fontSize=9,  alignment=TA_CENTER)
+
+    def P(text, style=None):
+        return Paragraph(str(text or '—'), style or s_normal)
+
+    # ── PDF belgesi ───────────────────────────────────────────────────────────
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4,
+        leftMargin=1.5*cm, rightMargin=1.5*cm,
+        topMargin=1.5*cm, bottomMargin=1.5*cm
+    )
+
+    story = []
+
+    # Başlık
+    story.append(P('SOLARIZ — GARDA 2026 FUARI', s_title))
+    story.append(P('Müşteri Görüşme Özeti', s_sub))
+    story.append(HRFlowable(width='100%', thickness=1.5, color=SOL_COLOR, spaceAfter=8))
+
+    # Firma bilgisi
+    story.append(P('FİRMA BİLGİSİ', s_heading))
+    firma_data = [
+        ['Firma Adı:', firma.get('firma_adi','') or '—'],
+        ['Yetkili:', firma.get('yetkili','') or '—'],
+        ['Telefon:', firma.get('telefon','') or '—'],
+        ['WhatsApp:', firma.get('whatsapp','') or '—'],
+        ['E-Posta:', firma.get('email','') or '—'],
+        ['Ülke / Şehir:', (firma.get('ulke','') or '') + (' / ' + firma.get('sehir','') if firma.get('sehir') else '')],
+    ]
+    firma_tbl = Table(
+        [[P(r[0], s_bold), P(r[1], s_normal)] for r in firma_data],
+        colWidths=[3.5*cm, None]
+    )
+    firma_tbl.setStyle(TableStyle([
+        ('VALIGN',    (0,0), (-1,-1), 'TOP'),
+        ('ROWBACKGROUNDS', (0,0), (-1,-1), [colors.whitesmoke, colors.white]),
+        ('LEFTPADDING',  (0,0), (-1,-1), 6),
+        ('RIGHTPADDING', (0,0), (-1,-1), 6),
+        ('TOPPADDING',   (0,0), (-1,-1), 3),
+        ('BOTTOMPADDING',(0,0), (-1,-1), 3),
+    ]))
+    story.append(firma_tbl)
+    story.append(Spacer(1, 8))
+
+    # Görüşme bilgisi
+    story.append(P('GÖRÜŞME BİLGİSİ', s_heading))
+    tarih_str = ''
+    if gorusme.get('tarih'):
+        try:
+            tarih_str = str(gorusme['tarih'])[:10]
+        except Exception:
+            tarih_str = str(gorusme.get('tarih',''))
+
+    gor_data = [
+        ['Tarih:', tarih_str or '—'],
+        ['Görüşen:', gorusme.get('gorusen','') or '—'],
+        ['Durum:', gorusme.get('durum','') or '—'],
+        ['Takip Tarihi:', str(gorusme.get('takip_tarihi','') or '—')],
+        ['Not:', gorusme.get('not_text','') or '—'],
+    ]
+    gor_tbl = Table(
+        [[P(r[0], s_bold), P(r[1], s_normal)] for r in gor_data],
+        colWidths=[3.5*cm, None]
+    )
+    gor_tbl.setStyle(TableStyle([
+        ('VALIGN',    (0,0), (-1,-1), 'TOP'),
+        ('ROWBACKGROUNDS', (0,0), (-1,-1), [colors.whitesmoke, colors.white]),
+        ('LEFTPADDING',  (0,0), (-1,-1), 6),
+        ('RIGHTPADDING', (0,0), (-1,-1), 6),
+        ('TOPPADDING',   (0,0), (-1,-1), 3),
+        ('BOTTOMPADDING',(0,0), (-1,-1), 3),
+    ]))
+    story.append(gor_tbl)
+    story.append(Spacer(1, 10))
+
+    # Ürünler
+    if urunler:
+        story.append(P(f'GÖRÜŞÜLEN ÜRÜNLER ({len(urunler)} adet)', s_heading))
+        story.append(HRFlowable(width='100%', thickness=0.5, color=colors.lightgrey, spaceAfter=6))
+
+        STATIC_DIR = os.path.join(APP_DIR, 'static')
+
+        for idx, u in enumerate(urunler, 1):
+            # Görsel
+            gorsel_cell = Spacer(1.8*cm, 1.8*cm)
+            if u.get('gorsel_yolu'):
+                img_path = os.path.join(STATIC_DIR, u['gorsel_yolu'].lstrip('/').replace('/', os.sep))
+                if os.path.exists(img_path):
+                    try:
+                        gorsel_cell = RLImage(img_path, width=1.8*cm, height=1.8*cm)
+                    except Exception:
+                        pass
+
+            # Ürün bilgi sütunu
+            urun_info = []
+            urun_info.append(P(f"#{idx}  {u.get('model_no','')}", s_bold))
+            cat_parts = [x for x in [u.get('kategori'), u.get('tip'), u.get('urun_cinsi')] if x]
+            if cat_parts:
+                urun_info.append(P(' / '.join(cat_parts), s_small))
+            if u.get('asorti'):
+                urun_info.append(P(f"Asorti: {u['asorti']}", s_small))
+            if u.get('malzeme_bilgisi'):
+                urun_info.append(P(f"Malzeme: {u['malzeme_bilgisi']}", s_small))
+
+            # Fiyat sütunu
+            fiyat_info = []
+            if u.get('liste_fiyat'):
+                fiyat_info.append(P(f"Liste: {u['liste_fiyat']:.2f} USD", s_strike))
+            if u.get('verilen_fiyat'):
+                pb = u.get('para_birimi') or 'USD'
+                fiyat_info.append(P(f"Verilen: {u['verilen_fiyat']:.2f} {pb}", s_price))
+            if u.get('fiyat_konusuldu'):
+                fiyat_info.append(P('✓ Fiyat konuşuldu', s_small))
+            if u.get('indirim_notu'):
+                fiyat_info.append(P(f"İndirim: {u['indirim_notu']}", s_small))
+            if not fiyat_info:
+                fiyat_info.append(P('—', s_small))
+
+            # Sipariş/talep sütunu
+            siparis_info = []
+            if u.get('istenen_renk'):
+                siparis_info.append(P(f"Renk: {u['istenen_renk']}", s_normal))
+            if u.get('renk_basi_adet'):
+                siparis_info.append(P(f"Renk başı: {u['renk_basi_adet']}", s_small))
+            if u.get('toplam_adet'):
+                siparis_info.append(P(f"Toplam: {u['toplam_adet']}", s_small))
+            if u.get('teslim_notu'):
+                siparis_info.append(P(f"Teslim: {u['teslim_notu']}", s_small))
+            if not siparis_info:
+                siparis_info.append(P('—', s_small))
+
+            # Numune sütunu
+            numune_info = []
+            if u.get('numune_istendi'):
+                numune_info.append(P('✓ Numune istendi', s_bold))
+                if u.get('numune_adet'):
+                    numune_info.append(P(f"Adet: {u['numune_adet']}", s_small))
+                if u.get('numune_beden'):
+                    numune_info.append(P(f"Beden: {u['numune_beden']}", s_small))
+            else:
+                numune_info.append(P('Numune yok', s_small))
+
+            if u.get('urun_notu'):
+                numune_info.append(Spacer(1, 3))
+                numune_info.append(P(f"Not: {u['urun_notu']}", s_small))
+
+            urun_row = Table(
+                [[gorsel_cell, urun_info, fiyat_info, siparis_info, numune_info]],
+                colWidths=[2*cm, 5.5*cm, 4*cm, 3.5*cm, 3*cm]
+            )
+            urun_row.setStyle(TableStyle([
+                ('VALIGN',    (0,0), (-1,-1), 'TOP'),
+                ('LEFTPADDING',  (0,0), (-1,-1), 4),
+                ('RIGHTPADDING', (0,0), (-1,-1), 4),
+                ('TOPPADDING',   (0,0), (-1,-1), 4),
+                ('BOTTOMPADDING',(0,0), (-1,-1), 4),
+                ('BOX', (0,0), (-1,-1), 0.5, colors.lightgrey),
+                ('ROWBACKGROUNDS', (0,0), (-1,-1), [colors.white]),
+            ]))
+            story.append(urun_row)
+            story.append(Spacer(1, 4))
+    else:
+        story.append(P('Bu görüşmeye ürün eklenmemiş.', s_small))
+
+    # Alt bilgi
+    story.append(Spacer(1, 12))
+    story.append(HRFlowable(width='100%', thickness=0.5, color=colors.lightgrey))
+    story.append(Spacer(1, 4))
+    now_str = datetime.datetime.now().strftime('%d.%m.%Y %H:%M')
+    story.append(P(f'Oluşturulma: {now_str}  |  Solariz CPS — Garda 2026 Fuar CRM', s_small))
+
+    # ── PDF oluştur ────────────────────────────────────────────────────────────
+    doc.build(story)
+    buffer.seek(0)
+
+    # Dosya adı
+    firma_adi_safe = (firma.get('firma_adi') or 'Firma').replace(' ', '_')[:30]
+    tarih_safe     = (tarih_str or datetime.date.today().isoformat()).replace('-','')
+    filename       = f"{firma_adi_safe}_Garda2026_{tarih_safe}.pdf"
+
+    response = make_response(buffer.read())
+    response.headers['Content-Type'] = 'application/pdf'
+    response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response

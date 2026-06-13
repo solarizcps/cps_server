@@ -208,6 +208,11 @@
             style="margin-left:8px;padding:3px 10px;font-size:11px;border:1px solid var(--brd);border-radius:5px;background:var(--bg);color:var(--txt);cursor:pointer;">
             ✏️ Düzenle
           </button>
+          <a href="{{ url_for('fuar_crm.gorusme_pdf', firma_id=firma.id, gorusme_id=g.id) }}"
+            target="_blank"
+            style="padding:3px 10px;font-size:11px;border:1px solid #bfdbfe;border-radius:5px;background:#eff6ff;color:#1d4ed8;cursor:pointer;text-decoration:none;display:inline-block;">
+            📄 PDF Al
+          </a>
           <form method="POST"
             action="{{ url_for('fuar_crm.gorusme_sil', firma_id=firma.id, gorusme_id=g.id) }}"
             style="display:inline;"
