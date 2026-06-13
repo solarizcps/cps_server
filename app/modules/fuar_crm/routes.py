@@ -858,7 +858,7 @@ def gorusme_pdf(firma_id, gorusme_id):
 
     s_title   = _style('PDFTitle',   fontSize=16, textColor=SOL_COLOR, spaceAfter=2, leading=20)
     s_sub     = _style('PDFSub',     fontSize=10, textColor=colors.grey, spaceAfter=6)
-    s_heading = _style('PDFHead',    fontSize=11, textColor=SOL_COLOR, spaceBefore=8, spaceAfter=3, fontName=BASE_FONT)
+    s_heading = _style('PDFHead',    fontSize=11, textColor=SOL_COLOR, spaceBefore=8, spaceAfter=3)
     s_normal  = _style('PDFNormal',  fontSize=9,  leading=13)
     s_small   = _style('PDFSmall',   fontSize=8,  textColor=colors.grey)
     s_bold    = _style('PDFBold',    fontSize=9,  leading=13)
