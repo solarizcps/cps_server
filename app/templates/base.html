@@ -1141,7 +1141,7 @@ window.__cpsRootMap = function(pathname) {
         <span class="sn-arrow">{% if fuar_aktif %}▼{% else %}►{% endif %}</span>
         <svg class="sn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         <span class="sn-baslik">Fuar CRM</span>
-        <span class="sn-count">2</span>
+        <span class="sn-count">3</span>
       </div>
       <div class="sn-grup{% if not fuar_aktif %} kapali{% endif %}" data-grup="fuar_crm">
         <a href="/fuar-crm/" class="si {% if rp == '/fuar-crm/' or rp == '/fuar-crm' %}active{% endif %}" title="CRM Dashboard">
@@ -1151,6 +1151,10 @@ window.__cpsRootMap = function(pathname) {
         <a href="/fuar-crm/firma" class="si {% if '/fuar-crm/firma' in rp %}active{% endif %}" title="Firma Listesi">
           <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
           <span class="sl">Firmalar</span>
+        </a>
+        <a href="/fuar-crm/kataloglar" class="si {% if '/fuar-crm/katalog' in rp %}active{% endif %}" title="Katalog Yönetimi">
+          <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span>
+          <span class="sl">Kataloglar</span>
         </a>
       </div>
       {% endif %}

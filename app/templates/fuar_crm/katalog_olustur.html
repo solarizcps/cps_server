@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Yeni Katalog — Fuar CRM{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <div class="page-title">Yeni Katalog Oluştur</div>
+    <div class="page-sub">Yeni bir ürün katalogu tanımla — Excel yükleme bir sonraki adımda</div>
+  </div>
+  <a href="{{ url_for('fuar_crm.katalog_listesi') }}" class="btn-crm btn-crm-ghost">
+    ← Katalog Listesi
+  </a>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+  <div class="flash-msg flash-{{ cat }}" style="margin-bottom:12px;">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+<div class="oz-card" style="max-width:520px;">
+  <div class="oz-hdr"><span class="oz-hdr-t">Katalog Bilgileri</span></div>
+  <div class="oz-body">
+    <form method="post" action="{{ url_for('fuar_crm.katalog_olustur') }}">
+      <div style="margin-bottom:16px;">
+        <label class="frm-lbl">Katalog Adı <span style="color:#ef4444;">*</span></label>
+        <input type="text" name="ad" class="frm-inp" placeholder="örn: Garda 2027" required
+               style="width:100%; box-sizing:border-box;">
+        <div style="font-size:11px; color:#aaa; margin-top:4px;">Kısa ve anlamlı bir isim girin.</div>
+      </div>
+      <div style="margin-bottom:16px;">
+        <label class="frm-lbl">Fuar Adı</label>
+        <input type="text" name="fuar_adi" class="frm-inp" placeholder="örn: Garda Fuarı 2027"
+               style="width:100%; box-sizing:border-box;">
+      </div>
+      <div style="margin-bottom:20px;">
+        <label class="frm-lbl">Açıklama</label>
+        <textarea name="aciklama" class="frm-inp" rows="3"
+                  placeholder="Bu katalog hakkında kısa not..."
+                  style="width:100%; box-sizing:border-box; resize:vertical;"></textarea>
+      </div>
+      <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:12px 14px; margin-bottom:20px; font-size:12px; color:#15803d;">
+        <strong>Not:</strong> Yeni katalog <em>pasif</em> olarak oluşturulur.
+        Ürünleri Excel ile yükledikten sonra "Aktif Yap" butonuyla aktifleştirebilirsiniz.
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button type="submit" class="btn-crm">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Katalog Oluştur
+        </button>
+        <a href="{{ url_for('fuar_crm.katalog_listesi') }}" class="btn-crm btn-crm-ghost">İptal</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

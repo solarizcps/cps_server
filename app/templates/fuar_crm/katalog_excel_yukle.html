@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block title %}Excel Yükle — {{ katalog.ad }} — Fuar CRM{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <div class="page-title">Excel Yükle</div>
+    <div class="page-sub">
+      Katalog: <strong>{{ katalog.ad }}</strong>
+      {% if katalog.aktif %}
+      <span class="durum-pill" style="background:#d1fae5; color:#065f46; font-size:11px; margin-left:8px;">Aktif</span>
+      {% else %}
+      <span class="durum-pill" style="background:#f3f4f6; color:#9ca3af; font-size:11px; margin-left:8px;">Pasif</span>
+      {% endif %}
+    </div>
+  </div>
+  <div style="display:flex; gap:8px;">
+    <a href="{{ url_for('fuar_crm.ornek_excel_indir') }}" class="btn-crm btn-crm-out">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Örnek Excel
+    </a>
+    <a href="{{ url_for('fuar_crm.katalog_listesi') }}" class="btn-crm btn-crm-ghost">
+      ← Katalog Listesi
+    </a>
+  </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+  <div class="flash-msg flash-{{ cat }}" style="margin-bottom:12px;">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+<!-- Kolon Yapısı Bilgisi -->
+<div style="background:#f5f3ff; border:1px solid #c4b5fd; border-radius:10px; padding:16px 18px; margin-bottom:18px;">
+  <div style="font-weight:700; color:#4c1d95; font-size:13px; margin-bottom:10px;">
+    Excel Kolon Yapısı (import_urun.py ile aynı)
+  </div>
+  <div style="display:flex; flex-wrap:wrap; gap:6px;">
+    {% set kolonlar = [
+      ('C', 'Model No', '#7c3aed', '#ede9fe'),
+      ('D', 'Kategori', '#1d4ed8', '#dbeafe'),
+      ('E', 'Tip', '#1d4ed8', '#dbeafe'),
+      ('F', 'Ürün Cinsi', '#1d4ed8', '#dbeafe'),
+      ('G', 'Asorti', '#065f46', '#d1fae5'),
+      ('H', 'Asorti Dağılımı', '#065f46', '#d1fae5'),
+      ('T', 'Birim Fiyat', '#92400e', '#fef3c7'),
+      ('U', 'Malzeme Bilgisi', '#374151', '#f3f4f6'),
+      ('V', 'Sarfiyat', '#374151', '#f3f4f6'),
+      ('AD', 'Maliyet', '#92400e', '#fef3c7'),
+      ('AF', 'Kur', '#374151', '#f3f4f6'),
+      ('AI', 'Marj', '#374151', '#f3f4f6'),
+    ] %}
+    {% for harf, baslik, renk, bg in kolonlar %}
+    <div style="display:inline-flex; align-items:center; gap:5px; background:{{ bg }}; border-radius:6px; padding:4px 10px; font-size:12px;">
+      <span style="font-weight:700; color:{{ renk }}; font-family:monospace;">{{ harf }}</span>
+      <span style="color:#555;">{{ baslik }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  <div style="margin-top:10px; font-size:11px; color:#6d28d9;">
+    1. satır başlık, 2. satırdan itibaren ürün verisi. Boş Model No satırları atlanır.
+    Aynı katalog + sheet + satır numarası tekrar import edilmez (duplicate koruması).
+  </div>
+</div>
+
+<!-- Upload Formu -->
+<div class="oz-card" style="max-width:560px;">
+  <div class="oz-hdr"><span class="oz-hdr-t">Excel Dosyası Yükle</span></div>
+  <div class="oz-body">
+    <form method="post" enctype="multipart/form-data"
+          action="{{ url_for('fuar_crm.katalog_excel_yukle', katalog_id=katalog.id) }}"
+          id="yukle-form">
+      <div style="margin-bottom:18px;">
+        <label class="frm-lbl">Excel Dosyası (.xlsx) <span style="color:#ef4444;">*</span></label>
+        <div id="drop-area" style="border:2px dashed #c4b5fd; border-radius:10px; padding:28px; text-align:center; cursor:pointer; transition:border-color .2s; background:#faf5ff;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="36" height="36" style="color:#7c3aed; margin-bottom:8px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <div style="font-size:13px; color:#6d28d9; font-weight:600; margin-bottom:4px;">Dosyayı buraya sürükleyin veya tıklayın</div>
+          <div style="font-size:11px; color:#aaa;" id="dosya-adi">Sadece .xlsx formatı kabul edilir</div>
+          <input type="file" name="excel_dosya" id="excel-input" accept=".xlsx"
+                 style="position:absolute; opacity:0; width:0; height:0;" required>
+        </div>
+      </div>
+
+      <div style="background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:12px 14px; margin-bottom:20px; font-size:12px; color:#92400e;">
+        <strong>Önemli:</strong>
+        Bu kataloga (<strong>{{ katalog.ad }}</strong>) ait ürünler eklenecek.
+        Mevcut ürünler ve geçmiş görüşmeler etkilenmez.
+        Duplicate satırlar atlanır.
+      </div>
+
+      <div style="display:flex; gap:10px; align-items:center;">
+        <button type="submit" class="btn-crm" id="yukle-btn" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <span id="yukle-btn-txt">Excel Yükle</span>
+        </button>
+        <a href="{{ url_for('fuar_crm.katalog_listesi') }}" class="btn-crm btn-crm-ghost">İptal</a>
+        <span id="yukleniyor" style="display:none; font-size:12px; color:#7c3aed;">Yükleniyor...</span>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function() {
+  var dropArea = document.getElementById('drop-area');
+  var fileInput = document.getElementById('excel-input');
+  var dosyaAdi  = document.getElementById('dosya-adi');
+  var yukleBtn  = document.getElementById('yukle-btn');
+  var yukleniyor = document.getElementById('yukleniyor');
+
+  dropArea.addEventListener('click', function() { fileInput.click(); });
+
+  dropArea.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    dropArea.style.borderColor = '#7c3aed';
+    dropArea.style.background  = '#ede9fe';
+  });
+  dropArea.addEventListener('dragleave', function() {
+    dropArea.style.borderColor = '#c4b5fd';
+    dropArea.style.background  = '#faf5ff';
+  });
+  dropArea.addEventListener('drop', function(e) {
+    e.preventDefault();
+    dropArea.style.borderColor = '#c4b5fd';
+    dropArea.style.background  = '#faf5ff';
+    var files = e.dataTransfer.files;
+    if (files.length > 0) {
+      fileInput.files = files;
+      dosyaAdi.textContent = files[0].name;
+      dosyaAdi.style.color = '#4c1d95';
+      yukleBtn.disabled = false;
+    }
+  });
+
+  fileInput.addEventListener('change', function() {
+    if (fileInput.files.length > 0) {
+      dosyaAdi.textContent = fileInput.files[0].name;
+      dosyaAdi.style.color = '#4c1d95';
+      yukleBtn.disabled = false;
+    }
+  });
+
+  document.getElementById('yukle-form').addEventListener('submit', function() {
+    yukleBtn.disabled = true;
+    document.getElementById('yukle-btn-txt').textContent = 'Yükleniyor...';
+    yukleniyor.style.display = 'inline';
+  });
+})();
+</script>
+
+{% endblock %}

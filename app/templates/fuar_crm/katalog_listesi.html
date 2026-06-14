@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Katalog Yönetimi — Fuar CRM{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <div class="page-title">Katalog Yönetimi</div>
+    <div class="page-sub">Fuar ürün kataloglarını yönet — aktif katalog seçimi, Excel yükleme</div>
+  </div>
+  <div style="display:flex; gap:8px; flex-wrap:wrap;">
+    <a href="{{ url_for('fuar_crm.katalog_olustur') }}" class="btn-crm">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Yeni Katalog
+    </a>
+    <a href="{{ url_for('fuar_crm.ornek_excel_indir') }}" class="btn-crm btn-crm-out">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Örnek Excel İndir
+    </a>
+    <a href="{{ url_for('fuar_crm.dashboard') }}" class="btn-crm btn-crm-ghost">
+      ← Dashboard
+    </a>
+  </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+  <div class="flash-msg flash-{{ cat }}" style="margin-bottom:12px;">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+<!-- Bilgi kartı -->
+<div style="background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:14px 18px; margin-bottom:18px; font-size:13px; color:#92400e; display:flex; gap:10px; align-items:flex-start;">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" style="flex-shrink:0; margin-top:1px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+  <div>
+    <strong>Katalog Kuralları:</strong>
+    Aktif katalog değişince sadece <em>yeni ürün seçim ekranı</em> etkilenir.
+    Geçmiş görüşmeler kendi bağlı ürünlerini göstermeye devam eder.
+    Eski katalog silinemez.
+  </div>
+</div>
+
+<!-- Katalog Tablosu -->
+<div class="oz-card" style="padding:0;">
+  {% if kataloglar %}
+  <table class="crm-tbl">
+    <thead>
+      <tr>
+        <th style="width:40px;">#</th>
+        <th>Katalog Adı</th>
+        <th>Fuar</th>
+        <th>Açıklama</th>
+        <th style="text-align:center;">Ürün Sayısı</th>
+        <th style="text-align:center;">Durum</th>
+        <th>Oluşturulma</th>
+        <th style="text-align:right;">İşlemler</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for k in kataloglar %}
+      <tr class="{% if k.aktif %}katalog-aktif-row{% endif %}">
+        <td style="color:#aaa; font-size:11px;">{{ k.id }}</td>
+        <td>
+          <span style="font-weight:{% if k.aktif %}700{% else %}500{% endif %}; color:{% if k.aktif %}#4c1d95{% else %}var(--txt){% endif %};">
+            {{ k.ad }}
+          </span>
+        </td>
+        <td style="font-size:12px; color:#888;">{{ k.fuar_adi or '—' }}</td>
+        <td style="font-size:12px; color:#666; max-width:200px; white-space:normal;">{{ k.aciklama or '—' }}</td>
+        <td style="text-align:center;">
+          <span class="sayi-badge {% if k.urun_sayisi > 0 %}sayi-badge-ok{% endif %}">
+            {{ k.urun_sayisi }}
+          </span>
+        </td>
+        <td style="text-align:center;">
+          {% if k.aktif %}
+          <span class="durum-pill" style="background:#d1fae5; color:#065f46; font-size:12px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="11" height="11" style="vertical-align:middle;margin-right:2px;"><polyline points="20 6 9 17 4 12"/></svg>
+            Aktif
+          </span>
+          {% else %}
+          <span class="durum-pill" style="background:#f3f4f6; color:#9ca3af; font-size:12px;">Pasif</span>
+          {% endif %}
+        </td>
+        <td style="font-size:11px; color:#aaa;">
+          {{ k.created_at[:16] if k.created_at else '—' }}
+        </td>
+        <td style="text-align:right;">
+          <div style="display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap;">
+            {% if not k.aktif %}
+            <form method="post" action="{{ url_for('fuar_crm.katalog_aktif_yap', katalog_id=k.id) }}"
+                  onsubmit="return confirm('{{ k.ad }} kataloğunu aktif yapmak istediğinizden emin misiniz?');"
+                  style="display:inline;">
+              <button type="submit" class="btn-crm btn-crm-xs" style="background:#7c3aed;">
+                Aktif Yap
+              </button>
+            </form>
+            {% else %}
+            <span style="font-size:11px; color:#6d28d9; font-weight:600; padding:3px 9px;">
+              ✓ Kullanımda
+            </span>
+            {% endif %}
+            <a href="{{ url_for('fuar_crm.katalog_excel_yukle', katalog_id=k.id) }}"
+               class="btn-crm btn-crm-xs btn-crm-out">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Excel Yükle
+            </a>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div style="text-align:center; padding:60px; color:#aaa;">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48" style="opacity:.3; margin-bottom:16px;"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/></svg>
+    <p style="margin:0; font-size:14px;">Henüz katalog yok.</p>
+    <a href="{{ url_for('fuar_crm.katalog_olustur') }}" class="btn-crm" style="margin-top:14px; display:inline-flex;">
+      İlk Kataloğu Oluştur
+    </a>
+  </div>
+  {% endif %}
+</div>
+
+<style>
+.katalog-aktif-row { background: linear-gradient(90deg, #f5f3ff 0%, var(--bg) 100%); }
+.katalog-aktif-row td { border-left: 3px solid #7c3aed; }
+.katalog-aktif-row td:not(:first-child) { border-left: none; }
+</style>
+
+{% endblock %}

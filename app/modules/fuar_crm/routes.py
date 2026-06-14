@@ -167,6 +167,7 @@ def dashboard():
         ulke_dagilim=ulke_dagilim,
         son_firmalar=son_firmalar,
         yaklasan_takip=yaklasan_takip,
+        aktif_katalog=_qone("SELECT id, ad FROM crm_katalog WHERE aktif=1 LIMIT 1"),
     )
 
 
@@ -1260,3 +1261,267 @@ def gorusme_pdf(firma_id, gorusme_id):
     response.headers['Content-Type'] = 'application/pdf'
     response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
+
+
+# ── KATALOG YÖNETİMİ ----------------------------------------------------------
+
+@fuar_crm_bp.route('/kataloglar')
+@login_gerekli
+def katalog_listesi():
+    if not _crm_erisim():
+        abort(403)
+    kataloglar = _q("""
+        SELECT k.id, k.ad, k.fuar_adi, k.aciklama, k.aktif, k.created_at,
+               COUNT(u.id) AS urun_sayisi
+        FROM crm_katalog k
+        LEFT JOIN crm_urun u ON u.katalog_id = k.id AND u.aktif = 1
+        GROUP BY k.id
+        ORDER BY k.id DESC
+    """) or []
+    return render_template('fuar_crm/katalog_listesi.html', kataloglar=kataloglar)
+
+
+@fuar_crm_bp.route('/katalog/olustur', methods=['GET', 'POST'])
+@login_gerekli
+def katalog_olustur():
+    if not _crm_erisim():
+        abort(403)
+    if request.method == 'POST':
+        ad       = (request.form.get('ad') or '').strip()
+        fuar_adi = (request.form.get('fuar_adi') or '').strip()
+        aciklama = (request.form.get('aciklama') or '').strip()
+        if not ad:
+            flash('Katalog adi zorunlu.', 'warning')
+            return redirect(url_for('fuar_crm.katalog_olustur'))
+        conn = _get_conn()
+        conn.execute(
+            "INSERT INTO crm_katalog (ad, fuar_adi, aciklama, aktif) VALUES (?,?,?,0)",
+            (ad, fuar_adi or ad, aciklama or None)
+        )
+        conn.commit()
+        flash(f'Katalog olusturuldu: {ad}', 'success')
+        return redirect(url_for('fuar_crm.katalog_listesi'))
+    return render_template('fuar_crm/katalog_olustur.html')
+
+
+@fuar_crm_bp.route('/katalog/<int:katalog_id>/aktif-yap', methods=['POST'])
+@login_gerekli
+def katalog_aktif_yap(katalog_id):
+    if not _crm_erisim():
+        abort(403)
+    katalog = _qone("SELECT id, ad FROM crm_katalog WHERE id = ?", (katalog_id,))
+    if not katalog:
+        abort(404)
+    conn = _get_conn()
+    conn.execute("UPDATE crm_katalog SET aktif = 0")
+    conn.execute("UPDATE crm_katalog SET aktif = 1 WHERE id = ?", (katalog_id,))
+    conn.commit()
+    flash(f'Aktif katalog degistirildi: {katalog["ad"]}', 'success')
+    return redirect(url_for('fuar_crm.katalog_listesi'))
+
+
+@fuar_crm_bp.route('/katalog/ornek-excel')
+@login_gerekli
+def ornek_excel_indir():
+    if not _crm_erisim():
+        abort(403)
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment
+        import io as _io
+    except ImportError:
+        flash('openpyxl yuklu degil.', 'danger')
+        return redirect(url_for('fuar_crm.katalog_listesi'))
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = '2026 Katalog'
+
+    basliklar = {
+        1:  'Urun Fotograf',
+        2:  'Taban',
+        3:  'Model No',
+        4:  'Kategori',
+        5:  'Tip',
+        6:  'urun cinsi',
+        7:  'Asorti',
+        8:  'Asorti Dagilimi',
+        20: 'Birim Fiyat',
+        21: 'Malzeme Bilgisi',
+        22: 'Sarfiyat',
+        29: 'Maliyet',
+        32: 'Kur',
+        35: 'Marj',
+    }
+    hdr_fill = PatternFill('solid', fgColor='7C3AED')
+    hdr_font = Font(bold=True, color='FFFFFF', size=10)
+    for col, title in basliklar.items():
+        cell = ws.cell(row=1, column=col, value=title)
+        cell.fill = hdr_fill
+        cell.font = hdr_font
+        cell.alignment = Alignment(horizontal='center')
+
+    ornekler = [
+        ('BRZ-9000', 'Terlik',   'Karbot', 'Kadin',  '36/40', '36:2/37:2/38:2/39:2/40:2', 4.95, 'EVA + Tekstil', 2.5, 3.96, 'USD', '1.25'),
+        ('CRP-8100', 'Sandalet', 'Poli',   'COCUK',  '22/33', '22:2/24:2/26:2', 3.95, 'PVC + Eva', 1.8, 3.16, 'USD', '1.25'),
+        ('Z107141',  'Terlik',   'Poli',   'ERKEK',  '36/41', '36:2/37:2/38:2/39:2/40:2/41:2', 6.50, 'Poli + Eva', 3.0, 5.20, 'USD', '1.25'),
+    ]
+    for row_idx, o in enumerate(ornekler, start=2):
+        model_no, kat, tip, cinsi, asorti, asorti_dag, fiyat, malzeme, sarfiyat, maliyet, kur, marj = o
+        ws.cell(row=row_idx, column=3,  value=model_no)
+        ws.cell(row=row_idx, column=4,  value=kat)
+        ws.cell(row=row_idx, column=5,  value=tip)
+        ws.cell(row=row_idx, column=6,  value=cinsi)
+        ws.cell(row=row_idx, column=7,  value=asorti)
+        ws.cell(row=row_idx, column=8,  value=asorti_dag)
+        ws.cell(row=row_idx, column=20, value=fiyat)
+        ws.cell(row=row_idx, column=21, value=malzeme)
+        ws.cell(row=row_idx, column=22, value=sarfiyat)
+        ws.cell(row=row_idx, column=29, value=maliyet)
+        ws.cell(row=row_idx, column=32, value=kur)
+        ws.cell(row=row_idx, column=35, value=marj)
+
+    ws.column_dimensions['C'].width = 14
+    ws.column_dimensions['D'].width = 12
+    ws.column_dimensions['E'].width = 10
+    ws.column_dimensions['F'].width = 10
+    ws.column_dimensions['G'].width = 10
+    ws.column_dimensions['U'].width = 22
+
+    buf = _io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    resp = make_response(buf.read())
+    resp.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    resp.headers['Content-Disposition'] = 'attachment; filename="katalog_ornek.xlsx"'
+    return resp
+
+
+@fuar_crm_bp.route('/katalog/<int:katalog_id>/excel-yukle', methods=['GET', 'POST'])
+@login_gerekli
+def katalog_excel_yukle(katalog_id):
+    if not _crm_erisim():
+        abort(403)
+    katalog = _qone("SELECT * FROM crm_katalog WHERE id = ?", (katalog_id,))
+    if not katalog:
+        abort(404)
+
+    if request.method == 'GET':
+        return render_template('fuar_crm/katalog_excel_yukle.html', katalog=katalog)
+
+    dosya = request.files.get('excel_dosya')
+    if not dosya or not dosya.filename:
+        flash('Excel dosyasi secilmedi.', 'warning')
+        return redirect(url_for('fuar_crm.katalog_excel_yukle', katalog_id=katalog_id))
+    if not dosya.filename.lower().endswith('.xlsx'):
+        flash('Sadece .xlsx dosyasi kabul edilir.', 'warning')
+        return redirect(url_for('fuar_crm.katalog_excel_yukle', katalog_id=katalog_id))
+
+    try:
+        import openpyxl
+        import io as _io
+    except ImportError:
+        flash('openpyxl yuklu degil.', 'danger')
+        return redirect(url_for('fuar_crm.katalog_excel_yukle', katalog_id=katalog_id))
+
+    try:
+        wb = openpyxl.load_workbook(_io.BytesIO(dosya.read()), data_only=True)
+    except Exception as e:
+        flash(f'Excel acilamadi: {e}', 'danger')
+        return redirect(url_for('fuar_crm.katalog_excel_yukle', katalog_id=katalog_id))
+
+    COL_MODEL_NO        = 2
+    COL_KATEGORI        = 3
+    COL_TIP             = 4
+    COL_URUN_CINSI      = 5
+    COL_ASORTI          = 6
+    COL_ASORTI_DAGILIMI = 7
+    COL_BIRIM_FIYAT     = 19
+    COL_MALZEME_BILGISI = 20
+    COL_SARFIYAT        = 21
+    COL_MALIYET         = 28
+    COL_KUR             = 31
+    COL_MARJ            = 34
+
+    def _c(row, idx):
+        cells = list(row)
+        if idx < len(cells):
+            v = cells[idx].value
+            if v is None:
+                return None
+            return v.strip() if isinstance(v, str) else v
+        return None
+
+    def _cs(row, idx):
+        v = _c(row, idx)
+        if v is None:
+            return None
+        s = str(v).replace('\n', ' / ').strip()
+        return s if s else None
+
+    def _fl(v):
+        if v is None:
+            return None
+        try:
+            return float(str(v).replace(',', '.').strip())
+        except (ValueError, TypeError):
+            return None
+
+    def _st(v):
+        if v is None:
+            return None
+        s = str(v).strip()
+        return s if s else None
+
+    fuar_adi = katalog['fuar_adi'] or katalog['ad']
+    eklenen = atlanan = bos_model = 0
+    hatalar = []
+    conn = _get_conn()
+
+    for sheet_adi in wb.sheetnames:
+        ws = wb[sheet_adi]
+        for row_idx, row in enumerate(ws.iter_rows(min_row=2), start=2):
+            model_no = _st(_c(row, COL_MODEL_NO))
+            if not model_no:
+                bos_model += 1
+                continue
+            mevcut = conn.execute(
+                "SELECT id FROM crm_urun WHERE katalog_id=? AND sheet_adi=? AND excel_satir_no=?",
+                (katalog_id, sheet_adi, row_idx)
+            ).fetchone()
+            if mevcut:
+                atlanan += 1
+                continue
+            try:
+                conn.execute("""
+                    INSERT INTO crm_urun
+                        (fuar_adi, sheet_adi, excel_satir_no, model_no, kategori, tip,
+                         urun_cinsi, asorti, asorti_dagilimi, birim_fiyat, malzeme_bilgisi,
+                         sarfiyat, maliyet, kur, marj, aktif, katalog_id)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?)
+                """, (
+                    fuar_adi, sheet_adi, row_idx, model_no,
+                    _st(_c(row, COL_KATEGORI)),
+                    _st(_c(row, COL_TIP)),
+                    _st(_c(row, COL_URUN_CINSI)),
+                    _st(_c(row, COL_ASORTI)),
+                    _cs(row, COL_ASORTI_DAGILIMI),
+                    _fl(_c(row, COL_BIRIM_FIYAT)),
+                    _st(_c(row, COL_MALZEME_BILGISI)),
+                    _fl(_c(row, COL_SARFIYAT)),
+                    _fl(_c(row, COL_MALIYET)),
+                    _st(_c(row, COL_KUR)),
+                    _st(_c(row, COL_MARJ)),
+                    katalog_id,
+                ))
+                eklenen += 1
+            except Exception as e:
+                hatalar.append(f'Satir {row_idx}: {e}')
+
+    conn.commit()
+    ozet = f'{eklenen} urun eklendi, {atlanan} atlanda (duplicate), {bos_model} bos model atlanda.'
+    if hatalar:
+        ozet += f' {len(hatalar)} hata olustu.'
+    flash(ozet, 'success' if not hatalar else 'warning')
+    return redirect(url_for('fuar_crm.katalog_listesi'))
