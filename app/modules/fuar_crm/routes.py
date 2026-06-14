@@ -40,6 +40,12 @@ def _u():
     return k['KullaniciAdi'] if k else 'sistem'
 
 
+def _aktif_katalog_id():
+    """Aktif katalog ID'sini döndürür. Yoksa None (tüm ürünler listelenir)."""
+    row = _qone("SELECT id FROM crm_katalog WHERE aktif = 1 ORDER BY id DESC LIMIT 1")
+    return row['id'] if row else None
+
+
 def _crm_erisim():
     u = session.get('kullanici')
     if not u:
@@ -601,18 +607,24 @@ def urun_katalogu():
     kat_filt = request.args.get('kategori', '').strip()
     tip_filt = request.args.get('tip', '').strip()
 
-    params = ["aktif = 1"]
+    params = ["u.aktif = 1"]
     vals   = []
+
+    # Aktif katalog filtresi
+    aktif_katalog = _aktif_katalog_id()
+    if aktif_katalog is not None:
+        params.append("u.katalog_id = ?")
+        vals.append(aktif_katalog)
 
     if q_str:
         like = f"%{q_str}%"
-        params.append("(model_no LIKE ? OR kategori LIKE ? OR tip LIKE ? OR urun_cinsi LIKE ? OR malzeme_bilgisi LIKE ?)")
+        params.append("(u.model_no LIKE ? OR u.kategori LIKE ? OR u.tip LIKE ? OR u.urun_cinsi LIKE ? OR u.malzeme_bilgisi LIKE ?)")
         vals += [like, like, like, like, like]
     if kat_filt:
-        params.append("kategori = ?")
+        params.append("u.kategori = ?")
         vals.append(kat_filt)
     if tip_filt:
-        params.append("tip = ?")
+        params.append("u.tip = ?")
         vals.append(tip_filt)
 
     where_sql = " AND ".join(params)
@@ -649,6 +661,7 @@ def urun_katalogu():
                 'ilk_gorsel':  u['gorsel_yolu'],
                 'min_fiyat':   u['birim_fiyat'],
                 'max_fiyat':   u['birim_fiyat'],
+                'asortiler':   [],
                 'variants':    [],
             }
         g = gruplar[mn]
@@ -660,6 +673,9 @@ def urun_katalogu():
                 g['max_fiyat'] = u['birim_fiyat']
         if g['ilk_gorsel'] is None and u['gorsel_yolu']:
             g['ilk_gorsel'] = u['gorsel_yolu']
+        # benzersiz asorti listesi
+        if u['asorti'] and u['asorti'] not in g['asortiler']:
+            g['asortiler'].append(u['asorti'])
         g['variants'].append(u)
 
     return render_template(
@@ -686,6 +702,12 @@ def urun_ara():
 
     params = []
     where  = ["u.aktif = 1"]
+
+    # Aktif katalog filtresi — sadece aktif katalog ürünleri listelenir
+    aktif_katalog = _aktif_katalog_id()
+    if aktif_katalog is not None:
+        where.append("u.katalog_id = ?")
+        params.append(aktif_katalog)
 
     if q_str:
         like = f"%{q_str}%"
@@ -723,14 +745,18 @@ def urun_ara():
         result = []
         for g in grup_rows:
             varyant_params = [g['model_no']]
-            varyants = _q("""
+            varyant_where  = "u.aktif = 1 AND u.model_no = ?"
+            if aktif_katalog is not None:
+                varyant_where += " AND u.katalog_id = ?"
+                varyant_params.append(aktif_katalog)
+            varyants = _q(f"""
                 SELECT u.id, u.model_no, u.kategori, u.tip, u.urun_cinsi,
                        u.asorti, u.birim_fiyat, u.maliyet, u.malzeme_bilgisi,
                        u.sheet_adi, u.excel_satir_no,
                        gr.dosya_yolu AS gorsel_yolu
                 FROM crm_urun u
                 LEFT JOIN crm_urun_gorsel gr ON gr.urun_id = u.id
-                WHERE u.aktif = 1 AND u.model_no = ?
+                WHERE {varyant_where}
                 ORDER BY u.birim_fiyat, u.id
             """, varyant_params) or []
 

@@ -56,10 +56,8 @@
   <div class="oz-hdr">
     <span class="oz-hdr-t">
       Ürünler
-      <span class="sayi-badge" style="margin-left:6px;background:#ede9fe;color:#6d28d9;">{{ urunler|length }}</span>
-      {% if urunler|length < toplam_urun %}
-      <span style="font-size:11px;color:#aaa;margin-left:6px;">/ {{ toplam_urun }} toplam</span>
-      {% endif %}
+      <span class="sayi-badge" style="margin-left:6px;background:#ede9fe;color:#6d28d9;">{{ gruplar|length }} model</span>
+      <span style="font-size:11px;color:#aaa;margin-left:6px;">/ {{ urunler|length }} varyant</span>
     </span>
     {% if q_str or kat_filt or tip_filt %}
     <span style="font-size:11px;color:#888;">
@@ -71,13 +69,13 @@
     {% endif %}
   </div>
   <div class="oz-body" style="padding:0;">
-    {% if urunler %}
+    {% if gruplar %}
     <div style="overflow-x:auto;">
       <table class="crm-tbl" style="font-size:12px;">
         <thead>
           <tr>
-            <th style="width:70px;">Görsel</th>
-            <th>#</th>
+            <th style="width:64px;">Görsel</th>
+            <th style="width:28px;">#</th>
             <th>Model No</th>
             <th>Kategori</th>
             <th>Tip</th>
@@ -86,90 +84,95 @@
             <th>Birim Fiyat</th>
             <th>Maliyet</th>
             <th>Malzeme</th>
-            <th>Sheet</th>
-            <th>Satır</th>
           </tr>
         </thead>
         <tbody>
           {% for grup in gruplar %}
-          {% set g_id = 'grp_' ~ grup.model_no | replace('-','_') | replace('/','_') | replace(' ','_') %}
+          {# ID güvenli oluştur: sadece harf/rakam/alt çizgi #}
+          {% set g_id = 'grp_' ~ loop.index %}
           {% set tek = grup.variants | length == 1 %}
           <!-- GRUP SATIRI -->
-          <tr style="background:var(--bg2);border-top:2px solid var(--brd);cursor:pointer;"
-              {% if not tek %}onclick="toggleKatalogGrup('{{ g_id }}', this)"{% endif %}>
+          <tr class="grup-satir{% if not tek %} acilabilir{% endif %}"
+              {% if not tek %}onclick="toggleKatalogGrup('{{ g_id }}', this)"{% endif %}
+              title="{% if not tek %}Varyantları göster/gizle{% endif %}">
             <td style="text-align:center;padding:5px 8px;">
               {% if grup.ilk_gorsel %}
               <img src="{{ url_for('static', filename=grup.ilk_gorsel) }}"
                    alt="{{ grup.model_no }}"
-                   style="width:36px;height:36px;object-fit:cover;border-radius:4px;"
+                   class="urun-thumb-sm"
                    loading="lazy">
               {% else %}
-              <span style="font-size:9px;color:#ccc;">—</span>
+              <span class="gorsel-yok">—</span>
               {% endif %}
             </td>
-            <td style="color:#ccc;font-size:10px;">{{ loop.index }}</td>
-            <td style="font-weight:700;color:var(--sol-dark);white-space:nowrap;font-size:13px;">
-              {{ grup.model_no }}
+            <td style="color:#bbb;font-size:10px;text-align:center;">{{ loop.index }}</td>
+            <td>
+              <span style="font-weight:700;color:var(--sol-dark);font-size:13px;">{{ grup.model_no }}</span>
               {% if not tek %}
-              <span style="font-size:10px;font-weight:400;color:#888;margin-left:6px;" id="{{ g_id }}_lbl">▼ {{ grup.variants|length }} varyant</span>
+              <span class="varyant-badge" id="{{ g_id }}_lbl">▶ {{ grup.variants|length }}</span>
               {% endif %}
             </td>
             <td>
-              {% if grup.kategori %}
-              <span class="kat-pill">{{ grup.kategori }}</span>
+              {% if grup.kategori %}<span class="kat-pill">{{ grup.kategori }}</span>{% else %}—{% endif %}
+            </td>
+            <td style="white-space:nowrap;font-size:12px;">{{ grup.tip or '—' }}</td>
+            <td style="white-space:nowrap;font-size:12px;">{{ grup.urun_cinsi or '—' }}</td>
+            <td style="font-size:11px;color:#888;">
+              {# Asorti özeti - route'tan gelen hazır liste #}
+              {% if grup.asortiler | length == 1 %}
+                {{ grup.asortiler[0] }}
+              {% elif grup.asortiler | length > 1 %}
+                <span style="color:#bbb;">{{ grup.asortiler | length }} asorti</span>
               {% else %}—{% endif %}
             </td>
-            <td style="white-space:nowrap;">{{ grup.tip or '—' }}</td>
-            <td style="white-space:nowrap;">{{ grup.urun_cinsi or '—' }}</td>
-            <td style="white-space:nowrap;font-size:11px;color:#666;">—</td>
-            <td style="white-space:nowrap;font-weight:600;color:#059669;">
+            <td style="white-space:nowrap;font-weight:600;color:#059669;font-size:12px;">
               {% if grup.min_fiyat %}
                 {% if grup.min_fiyat == grup.max_fiyat %}
                   {{ '%.2f'|format(grup.min_fiyat) }} USD
                 {% else %}
-                  {{ '%.2f'|format(grup.min_fiyat) }} – {{ '%.2f'|format(grup.max_fiyat) }} USD
+                  {{ '%.2f'|format(grup.min_fiyat) }}–{{ '%.2f'|format(grup.max_fiyat) }} USD
                 {% endif %}
-              {% else %}—{% endif %}
+              {% else %}<span style="color:#ccc;">—</span>{% endif %}
             </td>
-            <td>—</td>
-            <td>—</td>
-            <td>—</td>
-            <td>—</td>
+            <td style="font-size:11px;color:#888;">—</td>
+            <td style="font-size:11px;color:#888;">—</td>
           </tr>
-          <!-- VARYANT SATIRLARI -->
+          <!-- VARYANT SATIRLARI (başlangıçta gizli, tek ise görünür) -->
           {% for u in grup.variants %}
           <tr class="katalog-varyant {{ g_id }}"
               style="display:{% if tek %}table-row{% else %}none{% endif %};">
-            <td style="text-align:center;padding:4px 8px;">
+            <td style="text-align:center;padding:4px 8px 4px 14px;">
               {% if u.gorsel_yolu %}
               <img src="{{ url_for('static', filename=u.gorsel_yolu) }}"
                    alt="{{ u.model_no }}"
                    class="urun-thumb"
                    loading="lazy"
-                   onclick="this.classList.toggle('urun-thumb-zoom')">
+                   onclick="buyutGorsel(this)">
               {% else %}
               <span class="gorsel-yok">Görsel<br>yok</span>
               {% endif %}
             </td>
-            <td style="color:#ccc;font-size:10px;">{{ u.excel_satir_no }}</td>
-            <td style="font-size:11px;color:#aaa;padding-left:16px;">↳ {{ u.model_no }}</td>
-            <td>
-              {% if u.kategori %}
-              <span class="kat-pill">{{ u.kategori }}</span>
-              {% else %}—{% endif %}
+            <td style="color:#ddd;font-size:10px;text-align:center;">{{ u.excel_satir_no }}</td>
+            <td style="padding-left:20px;">
+              <span style="color:#bbb;font-size:10px;">↳</span>
+              <span style="font-size:12px;color:#555;">{{ u.model_no }}</span>
             </td>
-            <td style="white-space:nowrap;font-size:11px;">{{ u.tip or '—' }}</td>
-            <td style="white-space:nowrap;font-size:11px;">{{ u.urun_cinsi or '—' }}</td>
-            <td style="white-space:nowrap;font-size:11px;color:#666;">{{ u.asorti or '—' }}</td>
-            <td style="white-space:nowrap;font-weight:600;color:{% if u.birim_fiyat %}#059669{% else %}#ccc{% endif %};font-size:11px;">
+            <td>
+              {% if u.kategori %}<span class="kat-pill" style="font-size:10px;padding:1px 6px;">{{ u.kategori }}</span>{% else %}—{% endif %}
+            </td>
+            <td style="white-space:nowrap;font-size:11px;color:#666;">{{ u.tip or '—' }}</td>
+            <td style="white-space:nowrap;font-size:11px;color:#666;">{{ u.urun_cinsi or '—' }}</td>
+            <td style="white-space:nowrap;font-size:11px;color:#555;font-weight:600;">{{ u.asorti or '—' }}</td>
+            <td style="white-space:nowrap;font-weight:600;font-size:11px;
+                       color:{% if u.birim_fiyat %}#059669{% else %}#ccc{% endif %};">
               {% if u.birim_fiyat %}{{ '%.2f'|format(u.birim_fiyat) }} USD{% else %}—{% endif %}
             </td>
             <td style="white-space:nowrap;font-size:11px;color:#888;">
               {% if u.maliyet %}{{ '%.2f'|format(u.maliyet) }}{% else %}—{% endif %}
             </td>
-            <td style="max-width:180px;white-space:normal;font-size:10px;color:#666;">{{ u.malzeme_bilgisi or '—' }}</td>
-            <td style="font-size:10px;color:#aaa;white-space:nowrap;">{{ u.sheet_adi or '' }}</td>
-            <td style="font-size:10px;color:#ccc;">{{ u.excel_satir_no }}</td>
+            <td style="max-width:200px;white-space:normal;font-size:10px;color:#777;line-height:1.4;">
+              {{ u.malzeme_bilgisi or '—' }}
+            </td>
           </tr>
           {% endfor %}
           {% endfor %}
@@ -189,6 +192,11 @@
   </div>
 </div>
 
+<!-- Görsel Büyütme Overlay -->
+<div id="gorsel-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:9999;cursor:zoom-out;align-items:center;justify-content:center;">
+  <img id="gorsel-buyuk" src="" style="max-width:90vw;max-height:90vh;border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.5);">
+</div>
+
 <style>
 .btn-crm { display:inline-flex; align-items:center; gap:5px; padding:7px 14px; background:var(--sol); color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; text-decoration:none; white-space:nowrap; }
 .btn-crm:hover { opacity:.88; }
@@ -198,29 +206,53 @@
 .btn-crm-ghost:hover { background:var(--bg2); opacity:1; }
 .crm-tbl { width:100%; border-collapse:collapse; font-size:13px; }
 .crm-tbl th { padding:8px 10px; text-align:left; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:#999; border-bottom:2px solid var(--brd); background:var(--bg2); white-space:nowrap; }
-.crm-tbl td { padding:8px 10px; border-bottom:1px solid var(--brd); vertical-align:middle; }
+.crm-tbl td { padding:7px 10px; border-bottom:1px solid var(--brd); vertical-align:middle; }
 .crm-tbl tr:last-child td { border-bottom:none; }
-.crm-tbl tr:hover td { background:var(--bg2); }
 .sayi-badge { display:inline-block; background:var(--sol-light); color:var(--sol-dark); font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px; }
 .kat-pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; background:#ede9fe; color:#6d28d9; }
 .fl { display:block; font-size:10px; font-weight:700; color:#999; text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px; }
 .fc { padding:7px 10px; border:1px solid var(--brd); border-radius:6px; font-size:13px; background:var(--bg); color:var(--txt); outline:none; }
 .fc:focus { border-color:var(--sol); box-shadow:0 0 0 2px var(--sol-light); }
+/* Grup satırı */
+.grup-satir { background:var(--bg2); border-top:2px solid var(--brd); }
+.grup-satir.acilabilir { cursor:pointer; }
+.grup-satir.acilabilir:hover td { background:#f0eeff; }
+.grup-satir.acik { background:#ede9fe22; }
+/* Varyant rozeti */
+.varyant-badge { display:inline-block; margin-left:7px; padding:1px 7px; border-radius:999px; font-size:10px; font-weight:700; background:#e0e7ff; color:#4338ca; transition:background .15s; }
+.grup-satir.acik .varyant-badge { background:#c7d2fe; }
+/* Varyant satırları */
+.katalog-varyant td { background:#fafaff; }
+.katalog-varyant:hover td { background:#f3f0ff !important; }
 /* Thumbnail */
-.urun-thumb { width:56px; height:56px; object-fit:cover; border-radius:6px; border:1px solid var(--brd); cursor:pointer; transition:transform .15s; display:block; margin:0 auto; }
-.urun-thumb:hover { transform:scale(1.08); }
-.urun-thumb-zoom { width:160px; height:160px; position:relative; z-index:10; box-shadow:0 8px 24px rgba(0,0,0,.18); }
-.gorsel-yok { display:inline-block; font-size:9px; color:#ccc; text-align:center; line-height:1.3; }
+.urun-thumb-sm { width:40px; height:40px; object-fit:cover; border-radius:5px; border:1px solid var(--brd); display:block; margin:0 auto; }
+.urun-thumb { width:52px; height:52px; object-fit:cover; border-radius:6px; border:1px solid var(--brd); cursor:zoom-in; display:block; margin:0 auto; transition:opacity .15s; }
+.urun-thumb:hover { opacity:.82; }
+.gorsel-yok { display:inline-block; font-size:9px; color:#ddd; text-align:center; line-height:1.3; }
 </style>
 <script>
 function toggleKatalogGrup(grupId, trEl) {
-  var rows = document.querySelectorAll('tr.katalog-varyant.' + grupId);
-  var lbl  = document.getElementById(grupId + '_lbl');
-  var cnt  = rows.length;
+  var rows    = document.querySelectorAll('tr.katalog-varyant.' + grupId);
+  var lbl     = document.getElementById(grupId + '_lbl');
+  var cnt     = rows.length;
   var visible = rows.length > 0 && rows[0].style.display !== 'none';
   rows.forEach(function(r){ r.style.display = visible ? 'none' : ''; });
-  if (lbl) lbl.textContent = visible ? ('▼ ' + cnt + ' varyant') : ('▲ ' + cnt + ' varyant');
+  if (lbl) lbl.textContent = visible ? ('▶ ' + cnt) : ('▼ ' + cnt);
+  if (trEl) trEl.classList.toggle('acik', !visible);
 }
+
+function buyutGorsel(imgEl) {
+  var ov = document.getElementById('gorsel-overlay');
+  var bk = document.getElementById('gorsel-buyuk');
+  bk.src = imgEl.src;
+  ov.style.display = 'flex';
+}
+document.getElementById('gorsel-overlay').addEventListener('click', function(){
+  this.style.display = 'none';
+});
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Escape') document.getElementById('gorsel-overlay').style.display = 'none';
+});
 </script>
 
 {% endblock %}
