@@ -29,7 +29,7 @@ class Config:
     # ===================== SERVER =====================
     HOST  = '0.0.0.0'
     PORT  = 8080
-    MAX_UPLOAD_MB = 50
+    MAX_UPLOAD_MB = 100
     ALLOWED_EXT   = {'jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf', 'docx', 'xlsx', 'doc', 'xls'}
     UPLOAD_ROOT   = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
     # Korgun SQL Server — LAN IP

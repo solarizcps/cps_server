@@ -233,6 +233,22 @@ def format_boyut(b):
 # ============================================================
 # HATA SAYFALARI
 # ============================================================
+@app.errorhandler(413)
+def hata_413(e):
+    ref = request.referrer
+    if ref and request.host in ref:
+        try:
+            from urllib.parse import urlparse
+            if urlparse(ref).path != request.path:
+                flash('⚠ Yüklenen dosya çok büyük. Lütfen daha küçük bir dosya seçin.', 'hata')
+                return redirect(ref)
+        except Exception:
+            pass
+    return render_template('hata.html',
+                           kod=413, baslik='Dosya Çok Büyük',
+                           mesaj='Yüklenen dosya boyut limitini aşıyor.'), 413
+
+
 @app.errorhandler(403)
 def hata_403(e):
     return render_template('hata.html',

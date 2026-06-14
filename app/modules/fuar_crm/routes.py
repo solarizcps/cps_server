@@ -1335,58 +1335,56 @@ def ornek_excel_indir():
 
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = '2026 Katalog'
+    ws.title = 'Katalog'
 
-    basliklar = {
-        1:  'Urun Fotograf',
-        2:  'Taban',
-        3:  'Model No',
-        4:  'Kategori',
-        5:  'Tip',
-        6:  'urun cinsi',
-        7:  'Asorti',
-        8:  'Asorti Dagilimi',
-        20: 'Birim Fiyat',
-        21: 'Malzeme Bilgisi',
-        22: 'Sarfiyat',
-        29: 'Maliyet',
-        32: 'Kur',
-        35: 'Marj',
-    }
-    hdr_fill = PatternFill('solid', fgColor='7C3AED')
+    # Standart ardışık kolon yapısı — başlık adına göre import çalışır
+    basliklar = [
+        'Ürün Fotoğraf',    # Kol 1  — görsel (import sırasında atlanır)
+        'Model No',          # Kol 2  — ZORUNLU
+        'Kategori',          # Kol 3
+        'Tip',               # Kol 4
+        'ürün cinsi',        # Kol 5
+        'Asorti',            # Kol 6
+        'Asorti Dağılımı',  # Kol 7
+        'Birim Fiyat',       # Kol 8
+        'Malzeme Bilgisi',   # Kol 9
+        'Maliyet',           # Kol 10
+    ]
+    hdr_fill = PatternFill('solid', fgColor='059669')
     hdr_font = Font(bold=True, color='FFFFFF', size=10)
-    for col, title in basliklar.items():
-        cell = ws.cell(row=1, column=col, value=title)
+    for col_idx, title in enumerate(basliklar, start=1):
+        cell = ws.cell(row=1, column=col_idx, value=title)
         cell.fill = hdr_fill
         cell.font = hdr_font
         cell.alignment = Alignment(horizontal='center')
 
+    # Kol 1 açıklama notu
+    ws.cell(row=1, column=1).comment = None  # görsel kolonu boş bırakılır
+
     ornekler = [
-        ('BRZ-9000', 'Terlik',   'Karbot', 'Kadin',  '36/40', '36:2/37:2/38:2/39:2/40:2', 4.95, 'EVA + Tekstil', 2.5, 3.96, 'USD', '1.25'),
-        ('CRP-8100', 'Sandalet', 'Poli',   'COCUK',  '22/33', '22:2/24:2/26:2', 3.95, 'PVC + Eva', 1.8, 3.16, 'USD', '1.25'),
-        ('Z107141',  'Terlik',   'Poli',   'ERKEK',  '36/41', '36:2/37:2/38:2/39:2/40:2/41:2', 6.50, 'Poli + Eva', 3.0, 5.20, 'USD', '1.25'),
+        # model_no,  kategori,   tip,      urun_cinsi, asorti,  asorti_dag,            birim_fiyat, malzeme,        maliyet
+        ('BRZ-9000', 'Terlik',   'Eva',    'Kadın',    '36/40', '36:2/37:2/38:2/39:2/40:2', 4.95, 'EVA + Tekstil', 3.96),
+        ('CRP-8100', 'Sandalet', 'Poli',   'ÇOCUK',    '22/33', '22:2/24:2/26:2/28:2/30:2', 3.95, 'PVC + Eva',     3.16),
+        ('Z107141',  'Terlik',   'Poli',   'ERKEK',    '36/41', '36:2/37:2/38:2/39:2/40:2/41:2', 6.50, 'Poli + Eva', 5.20),
     ]
     for row_idx, o in enumerate(ornekler, start=2):
-        model_no, kat, tip, cinsi, asorti, asorti_dag, fiyat, malzeme, sarfiyat, maliyet, kur, marj = o
-        ws.cell(row=row_idx, column=3,  value=model_no)
-        ws.cell(row=row_idx, column=4,  value=kat)
-        ws.cell(row=row_idx, column=5,  value=tip)
-        ws.cell(row=row_idx, column=6,  value=cinsi)
-        ws.cell(row=row_idx, column=7,  value=asorti)
-        ws.cell(row=row_idx, column=8,  value=asorti_dag)
-        ws.cell(row=row_idx, column=20, value=fiyat)
-        ws.cell(row=row_idx, column=21, value=malzeme)
-        ws.cell(row=row_idx, column=22, value=sarfiyat)
-        ws.cell(row=row_idx, column=29, value=maliyet)
-        ws.cell(row=row_idx, column=32, value=kur)
-        ws.cell(row=row_idx, column=35, value=marj)
+        model_no, kat, tip, cinsi, asorti, asorti_dag, fiyat, malzeme, maliyet = o
+        # Kol 1 boş (görsel)
+        ws.cell(row=row_idx, column=2,  value=model_no)
+        ws.cell(row=row_idx, column=3,  value=kat)
+        ws.cell(row=row_idx, column=4,  value=tip)
+        ws.cell(row=row_idx, column=5,  value=cinsi)
+        ws.cell(row=row_idx, column=6,  value=asorti)
+        ws.cell(row=row_idx, column=7,  value=asorti_dag)
+        ws.cell(row=row_idx, column=8,  value=fiyat)
+        ws.cell(row=row_idx, column=9,  value=malzeme)
+        ws.cell(row=row_idx, column=10, value=maliyet)
 
-    ws.column_dimensions['C'].width = 14
-    ws.column_dimensions['D'].width = 12
-    ws.column_dimensions['E'].width = 10
-    ws.column_dimensions['F'].width = 10
-    ws.column_dimensions['G'].width = 10
-    ws.column_dimensions['U'].width = 22
+    # Kolon genişlikleri
+    genislikler = {1: 8, 2: 14, 3: 12, 4: 10, 5: 10, 6: 10, 7: 22, 8: 10, 9: 22, 10: 10}
+    from openpyxl.utils import get_column_letter
+    for col_no, width in genislikler.items():
+        ws.column_dimensions[get_column_letter(col_no)].width = width
 
     buf = _io.BytesIO()
     wb.save(buf)
@@ -1412,37 +1410,76 @@ def katalog_excel_yukle(katalog_id):
 
     dosya = request.files.get('excel_dosya')
     if not dosya or not dosya.filename:
-        flash('Excel dosyasi secilmedi.', 'warning')
+        flash('Excel dosyası seçilmedi.', 'warning')
         return redirect(url_for('fuar_crm.katalog_excel_yukle', katalog_id=katalog_id))
     if not dosya.filename.lower().endswith('.xlsx'):
-        flash('Sadece .xlsx dosyasi kabul edilir.', 'warning')
+        flash('Sadece .xlsx dosyası kabul edilir.', 'warning')
         return redirect(url_for('fuar_crm.katalog_excel_yukle', katalog_id=katalog_id))
+
+    # Boyut kontrolü (resimli Excel büyük olabilir — limit config'den gelir)
+    try:
+        from flask import current_app as _app
+        max_bytes = _app.config.get('MAX_CONTENT_LENGTH', 100 * 1024 * 1024)
+        cl = request.content_length
+        if cl and cl > max_bytes:
+            flash(f'Excel dosyası çok büyük. Maksimum: {max_bytes // (1024*1024)} MB.', 'hata')
+            return redirect(url_for('fuar_crm.katalog_excel_yukle', katalog_id=katalog_id))
+    except Exception:
+        pass
 
     try:
         import openpyxl
         import io as _io
     except ImportError:
-        flash('openpyxl yuklu degil.', 'danger')
+        flash('openpyxl yüklü değil.', 'danger')
         return redirect(url_for('fuar_crm.katalog_excel_yukle', katalog_id=katalog_id))
 
     try:
         wb = openpyxl.load_workbook(_io.BytesIO(dosya.read()), data_only=True)
     except Exception as e:
-        flash(f'Excel acilamadi: {e}', 'danger')
+        flash(f'Excel açılamadı: {e}', 'danger')
         return redirect(url_for('fuar_crm.katalog_excel_yukle', katalog_id=katalog_id))
 
-    COL_MODEL_NO        = 2
-    COL_KATEGORI        = 3
-    COL_TIP             = 4
-    COL_URUN_CINSI      = 5
-    COL_ASORTI          = 6
-    COL_ASORTI_DAGILIMI = 7
-    COL_BIRIM_FIYAT     = 19
-    COL_MALZEME_BILGISI = 20
-    COL_SARFIYAT        = 21
-    COL_MALIYET         = 28
-    COL_KUR             = 31
-    COL_MARJ            = 34
+    # Başlık bazlı kolon haritası — sabit index kullanılmaz
+    # Normalize: strip + lower + Türkçe karakter düzeltmesi
+    def _norm(s):
+        if s is None:
+            return ''
+        return (str(s).strip().lower()
+                .replace('ü', 'u').replace('ğ', 'g').replace('ş', 's')
+                .replace('ı', 'i').replace('ö', 'o').replace('ç', 'c')
+                .replace('İ', 'i').replace('Ü', 'u').replace('Ğ', 'g')
+                .replace('Ş', 's').replace('Ö', 'o').replace('Ç', 'c'))
+
+    # Başlık adı (normalize) → DB alan adı eşlemesi
+    ALAN_ESLESME = {
+        'model no':          'model_no',       # ZORUNLU
+        'kategori':          'kategori',
+        'tip':               'tip',
+        'urun cinsi':        'urun_cinsi',      # ürün cinsi normalize
+        'asorti':            'asorti',
+        'asorti dagilimi':   'asorti_dagilimi',
+        'birim fiyat':       'birim_fiyat',
+        'malzeme bilgisi':   'malzeme_bilgisi',
+        'sarfiyat':          'sarfiyat',
+        'maliyet':           'maliyet',
+        'kur':               'kur',
+        'marj':              'marj',
+    }
+    ZORUNLU = {'model_no'}
+
+    def _kolon_haritasi_kur(ws):
+        """Satır 1'i okuyup {db_alan: 0-bazlı-index} haritası döndür."""
+        harita = {}
+        for cell in next(ws.iter_rows(min_row=1, max_row=1)):
+            try:
+                baslik_norm = _norm(cell.value)
+                if baslik_norm in ALAN_ESLESME:
+                    db_alan = ALAN_ESLESME[baslik_norm]
+                    harita[db_alan] = cell.column - 1  # 0-bazlı index
+            except AttributeError:
+                pass
+        return harita
 
     def _c(row, idx):
         cells = list(row)
@@ -1481,8 +1518,21 @@ def katalog_excel_yukle(katalog_id):
 
     for sheet_adi in wb.sheetnames:
         ws = wb[sheet_adi]
+
+        # Her sheet için başlık haritasını ayrı kur
+        harita = _kolon_haritasi_kur(ws)
+
+        # Zorunlu kolon kontrolü
+        eksik = ZORUNLU - set(harita.keys())
+        if eksik:
+            hatalar.append(
+                f"Sheet '{sheet_adi}': Zorunlu kolon eksik: {', '.join(eksik)}. "
+                f"Bu sheet atlandı. Lütfen Örnek Excel formatını kullanın."
+            )
+            continue
+
         for row_idx, row in enumerate(ws.iter_rows(min_row=2), start=2):
-            model_no = _st(_c(row, COL_MODEL_NO))
+            model_no = _st(_c(row, harita['model_no']))
             if not model_no:
                 bos_model += 1
                 continue
@@ -1502,26 +1552,26 @@ def katalog_excel_yukle(katalog_id):
                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?)
                 """, (
                     fuar_adi, sheet_adi, row_idx, model_no,
-                    _st(_c(row, COL_KATEGORI)),
-                    _st(_c(row, COL_TIP)),
-                    _st(_c(row, COL_URUN_CINSI)),
-                    _st(_c(row, COL_ASORTI)),
-                    _cs(row, COL_ASORTI_DAGILIMI),
-                    _fl(_c(row, COL_BIRIM_FIYAT)),
-                    _st(_c(row, COL_MALZEME_BILGISI)),
-                    _fl(_c(row, COL_SARFIYAT)),
-                    _fl(_c(row, COL_MALIYET)),
-                    _st(_c(row, COL_KUR)),
-                    _st(_c(row, COL_MARJ)),
+                    _st(_c(row, harita.get('kategori', -1))),
+                    _st(_c(row, harita.get('tip', -1))),
+                    _st(_c(row, harita.get('urun_cinsi', -1))),
+                    _st(_c(row, harita.get('asorti', -1))),
+                    _cs(row, harita.get('asorti_dagilimi', -1)),
+                    _fl(_c(row, harita.get('birim_fiyat', -1))),
+                    _st(_c(row, harita.get('malzeme_bilgisi', -1))),
+                    _fl(_c(row, harita.get('sarfiyat', -1))),
+                    _fl(_c(row, harita.get('maliyet', -1))),
+                    _st(_c(row, harita.get('kur', -1))),
+                    _st(_c(row, harita.get('marj', -1))),
                     katalog_id,
                 ))
                 eklenen += 1
             except Exception as e:
-                hatalar.append(f'Satir {row_idx}: {e}')
+                hatalar.append(f'Satır {row_idx}: {e}')
 
     conn.commit()
-    ozet = f'{eklenen} urun eklendi, {atlanan} atlanda (duplicate), {bos_model} bos model atlanda.'
+    ozet = f'{eklenen} ürün eklendi, {atlanan} atlandı (duplicate), {bos_model} boş model atlandı.'
     if hatalar:
-        ozet += f' {len(hatalar)} hata olustu.'
+        ozet += f' {len(hatalar)} sorun oluştu: ' + ' | '.join(hatalar[:3])
     flash(ozet, 'success' if not hatalar else 'warning')
     return redirect(url_for('fuar_crm.katalog_listesi'))
