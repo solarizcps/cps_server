@@ -749,7 +749,7 @@ var secilenUrunler = {}; // id -> urun obj
 
 function urunAra(q) {
   if (!q && q !== '') return;
-  var url = '{{ url_for("fuar_crm.urun_ara") }}?q=' + encodeURIComponent(q) + '&limit=50';
+  var url = '{{ url_for("fuar_crm.urun_ara") }}?q=' + encodeURIComponent(q) + '&limit=100&gruplu=1';
   fetch(url)
     .then(function(r){ return r.json(); })
     .then(function(data) {
@@ -759,34 +759,66 @@ function urunAra(q) {
       if (data.length === 0) {
         tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#aaa;padding:14px;">Sonuç bulunamadı</td></tr>';
       } else {
-        data.forEach(function(u) {
-          var seçili = !!secilenUrunler[u.id];
-          var fiyat  = u.birim_fiyat ? parseFloat(u.birim_fiyat).toFixed(2) : '—';
-          var thumb  = u.gorsel_yolu
-            ? '<img src="/static/' + u.gorsel_yolu + '" style="width:32px;height:32px;object-fit:cover;border-radius:3px;vertical-align:middle;" loading="lazy">'
-            : '';
-          var btnHtml = '<button type="button" '
-            + 'data-uid="' + u.id + '" '
-            + 'style="width:24px;height:24px;border-radius:50%;border:none;cursor:pointer;font-size:14px;font-weight:700;line-height:1;'
-            + (seçili ? 'background:#d1fae5;color:#059669;' : 'background:var(--sol);color:#fff;')
-            + '" '
-            + 'onclick="urunToggle(' + u.id + ', this)">'
-            + (seçili ? '✓' : '+')
-            + '</button>';
-          var tr = document.createElement('tr');
-          if (seçili) tr.classList.add('sel-row');
-          tr.setAttribute('data-uid', u.id);
-          tr.innerHTML =
-            '<td style="text-align:center;padding:4px 8px;">' + btnHtml + '</td>' +
-            '<td style="text-align:center;padding:4px 6px;">' + thumb + '</td>' +
-            '<td style="font-weight:600;color:var(--sol-dark);">' + (u.model_no||'') + '</td>' +
-            '<td>' + (u.kategori||'—') + '</td>' +
-            '<td>' + (u.tip||'—') + '</td>' +
-            '<td>' + (u.urun_cinsi||'—') + '</td>' +
-            '<td>' + (u.asorti||'—') + '</td>' +
-            '<td style="white-space:nowrap;">' + fiyat + '</td>';
-          tr._urunData = u;  // data'yi satira bagla
-          tbody.appendChild(tr);
+        data.forEach(function(grup) {
+          var ilkGorsel = grup.ilk_gorsel
+            ? '<img src="/static/' + grup.ilk_gorsel + '" style="width:32px;height:32px;object-fit:cover;border-radius:3px;vertical-align:middle;" loading="lazy">'
+            : '<div style="width:32px;height:32px;border-radius:3px;background:var(--bg2);display:inline-block;"></div>';
+          var minF = grup.min_fiyat ? parseFloat(grup.min_fiyat).toFixed(2) : '—';
+          var maxF = grup.max_fiyat ? parseFloat(grup.max_fiyat).toFixed(2) : '—';
+          var fiyatStr = (minF === maxF) ? minF + ' USD' : minF + ' – ' + maxF + ' USD';
+          var grupId = 'grup-' + grup.model_no.replace(/[^a-zA-Z0-9]/g,'_');
+          var tekVaryant = grup.varyant_sayisi === 1;
+
+          // Grup satırı
+          var trGrup = document.createElement('tr');
+          trGrup.style.cssText = 'background:var(--bg2);cursor:pointer;border-top:2px solid var(--brd);';
+          trGrup.innerHTML =
+            '<td style="padding:6px 8px;text-align:center;" colspan="2">' + ilkGorsel + '</td>' +
+            '<td style="font-weight:700;color:var(--sol-dark);font-size:13px;">' + (grup.model_no||'') + '</td>' +
+            '<td style="font-size:11px;color:#888;">' + (grup.kategori||'—') + ' / ' + (grup.tip||'—') + '</td>' +
+            '<td style="font-size:11px;color:#888;">' + (grup.urun_cinsi||'—') + '</td>' +
+            '<td colspan="2" style="font-size:11px;color:#059669;font-weight:600;">' + fiyatStr + '</td>' +
+            '<td style="text-align:center;">' +
+              (tekVaryant
+                ? '<span style="font-size:10px;color:#888;">Tek varyant</span>'
+                : '<button type="button" style="font-size:10px;padding:2px 8px;border:1px solid var(--brd);border-radius:4px;background:var(--bg);cursor:pointer;" onclick="toggleVaryant(\'' + grupId + '\', this)">' +
+                  '▼ ' + grup.varyant_sayisi + ' varyant</button>') +
+            '</td>';
+          tbody.appendChild(trGrup);
+
+          // Varyant satırları (başta gizli, tekse görünür)
+          grup.variants.forEach(function(u) {
+            var seçili = !!secilenUrunler[u.id];
+            var fiyat  = u.birim_fiyat ? parseFloat(u.birim_fiyat).toFixed(2) : '—';
+            var thumb  = u.gorsel_yolu
+              ? '<img src="/static/' + u.gorsel_yolu + '" style="width:28px;height:28px;object-fit:cover;border-radius:3px;vertical-align:middle;" loading="lazy">'
+              : '';
+            var btnHtml = '<button type="button" '
+              + 'data-uid="' + u.id + '" '
+              + 'style="width:24px;height:24px;border-radius:50%;border:none;cursor:pointer;font-size:14px;font-weight:700;line-height:1;'
+              + (seçili ? 'background:#d1fae5;color:#059669;' : 'background:var(--sol);color:#fff;')
+              + '" '
+              + 'onclick="urunToggle(' + u.id + ', this)">'
+              + (seçili ? '✓' : '+')
+              + '</button>';
+            var trVar = document.createElement('tr');
+            trVar.className = 'varyant-row ' + grupId;
+            trVar.style.display = tekVaryant ? '' : 'none';
+            trVar.style.background = seçili ? '#f0fdf4' : '';
+            if (seçili) trVar.classList.add('sel-row');
+            trVar.setAttribute('data-uid', u.id);
+            trVar.innerHTML =
+              '<td style="text-align:center;padding:3px 8px;">' + btnHtml + '</td>' +
+              '<td style="text-align:center;padding:3px 6px;">' + thumb + '</td>' +
+              '<td style="font-size:11px;color:#aaa;padding-left:16px;">↳ ' + (u.model_no||'') + '</td>' +
+              '<td style="font-size:11px;">' + (u.kategori||'—') + '</td>' +
+              '<td style="font-size:11px;">' + (u.tip||'—') + '</td>' +
+              '<td style="font-size:11px;">' + (u.urun_cinsi||'—') + '</td>' +
+              '<td style="font-size:11px;">' + (u.asorti||'—') + '</td>' +
+              '<td style="font-size:11px;white-space:nowrap;">' + fiyat + ' USD</td>';
+            trVar._urunData = u;
+            tbody.appendChild(trVar);
+          });
         });
       }
       wrap.style.display = 'block';
@@ -794,8 +826,15 @@ function urunAra(q) {
     .catch(function(e){ console.error(e); });
 }
 
+function toggleVaryant(grupId, btn) {
+  var rows = document.querySelectorAll('tr.varyant-row.' + grupId);
+  var visible = rows.length > 0 && rows[0].style.display !== 'none';
+  rows.forEach(function(r){ r.style.display = visible ? 'none' : ''; });
+  if (btn) btn.textContent = visible ? ('▼ ' + rows.length + ' varyant') : ('▲ ' + rows.length + ' varyant');
+}
+
 function urunToggle(uid, btnEl) {
-  // Butonu olan satiri bul
+  // Butonu olan satiri bul — varyant-row veya normal satir
   var tbody = document.getElementById('urun-ara-tbody');
   var tr = tbody ? tbody.querySelector('tr[data-uid="' + uid + '"]') : null;
   var u  = tr ? tr._urunData : null;

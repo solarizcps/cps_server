@@ -1,16 +1,17 @@
 {% extends "base.html" %}
-{% block title %}Yeni Firma — Fuar CRM{% endblock %}
+{% block title %}Firma Düzenle — {{ firma.firma_adi }}{% endblock %}
 
 {% block content %}
 
 <div class="page-header">
   <div>
-    <div class="page-title">Yeni Firma Ekle</div>
-    <div class="page-sub">Fuar CRM — Cari Kart</div>
+    <div class="page-title">Firma Düzenle</div>
+    <div class="page-sub">{{ firma.firma_adi }}</div>
   </div>
-  <a href="{{ url_for('fuar_crm.firma_liste') }}" class="btn-sol btn-outline">
-    ← Geri
-  </a>
+  <div style="display:flex;gap:8px;">
+    <a href="{{ url_for('fuar_crm.firma_detay', firma_id=firma.id) }}" class="btn-sol btn-outline">← Detay</a>
+    <a href="{{ url_for('fuar_crm.firma_liste') }}" class="btn-sol btn-outline">Liste</a>
+  </div>
 </div>
 
 {% with messages = get_flashed_messages(with_categories=true) %}
@@ -19,103 +20,102 @@
 {% endfor %}{% endif %}{% endwith %}
 
 <div class="oz-card">
-  <div class="oz-hdr"><span class="oz-hdr-t">Firma Bilgileri</span></div>
+  <div class="oz-hdr"><span class="oz-hdr-t">Firma Bilgileri — Güncelle</span></div>
   <div class="oz-body">
-    <form method="post" action="{{ url_for('fuar_crm.firma_ekle') }}">
-      {% if dup_uyari %}
-      <input type="hidden" name="force_ekle" value="1">
-      {% endif %}
+    <form method="post" action="{{ url_for('fuar_crm.firma_duzenle', firma_id=firma.id) }}">
 
       <div class="form-grid">
-        <!-- Firma Adı -->
         <div class="form-grup form-tam">
           <label class="form-lbl">Firma Adı <span class="zorunlu">*</span></label>
-          <input type="text" name="firma_adi" class="form-ctrl" placeholder="Örn: ABC Tekstil Ltd." required autofocus>
+          <input type="text" name="firma_adi" class="form-ctrl"
+            value="{{ firma.firma_adi or '' }}" required autofocus>
         </div>
 
-        <!-- Yetkili -->
         <div class="form-grup">
           <label class="form-lbl">Yetkili Kişi</label>
-          <input type="text" name="yetkili" class="form-ctrl" placeholder="Ad Soyad / Ünvan">
+          <input type="text" name="yetkili" class="form-ctrl"
+            value="{{ firma.yetkili or '' }}" placeholder="Ad Soyad / Ünvan">
         </div>
 
-        <!-- Firma Tipi -->
         <div class="form-grup">
           <label class="form-lbl">Firma Tipi</label>
           <select name="firma_tipi" class="form-ctrl">
             <option value="">— Seç —</option>
-            <option value="Distribütör">Distribütör</option>
-            <option value="Toptancı">Toptancı</option>
-            <option value="Perakendeci">Perakendeci</option>
-            <option value="İmalatçı">İmalatçı</option>
-            <option value="İhracatçı">İhracatçı</option>
-            <option value="Marka">Marka</option>
-            <option value="Diğer">Diğer</option>
+            {% for tip in ['Distribütör','Toptancı','Perakendeci','İmalatçı','İhracatçı','Marka','Diğer'] %}
+            <option value="{{ tip }}" {% if firma.firma_tipi == tip %}selected{% endif %}>{{ tip }}</option>
+            {% endfor %}
           </select>
         </div>
 
-        <!-- Ülke -->
         <div class="form-grup">
           <label class="form-lbl">Ülke</label>
-          <input type="text" name="ulke" class="form-ctrl" placeholder="Türkiye, Almanya, BAE...">
+          <input type="text" name="ulke" class="form-ctrl"
+            value="{{ firma.ulke or '' }}" placeholder="Türkiye, Almanya, BAE...">
         </div>
 
-        <!-- Şehir -->
         <div class="form-grup">
           <label class="form-lbl">Şehir</label>
-          <input type="text" name="sehir" class="form-ctrl" placeholder="İstanbul, Frankfurt...">
+          <input type="text" name="sehir" class="form-ctrl"
+            value="{{ firma.sehir or '' }}" placeholder="İstanbul, Frankfurt...">
         </div>
 
-        <!-- Telefon -->
         <div class="form-grup">
           <label class="form-lbl">Telefon</label>
-          <input type="text" name="telefon" class="form-ctrl" placeholder="+90 5xx xxx xx xx">
+          <input type="text" name="telefon" class="form-ctrl"
+            value="{{ firma.telefon or '' }}" placeholder="+90 5xx xxx xx xx">
         </div>
 
-        <!-- WhatsApp -->
         <div class="form-grup">
           <label class="form-lbl">WhatsApp</label>
-          <input type="text" name="whatsapp" class="form-ctrl" placeholder="+90 5xx xxx xx xx">
+          <input type="text" name="whatsapp" class="form-ctrl"
+            value="{{ firma.whatsapp or '' }}" placeholder="+90 5xx xxx xx xx">
         </div>
 
-        <!-- E-posta -->
         <div class="form-grup">
           <label class="form-lbl">E-posta</label>
-          <input type="email" name="email" class="form-ctrl" placeholder="info@firma.com">
+          <input type="email" name="email" class="form-ctrl"
+            value="{{ firma.email or '' }}" placeholder="info@firma.com">
         </div>
 
-        <!-- Marka İlgisi -->
         <div class="form-grup form-tam">
           <label class="form-lbl">Marka / Ürün İlgisi</label>
-          <input type="text" name="marka_ilgisi" class="form-ctrl" placeholder="Hangi markalar / ürün grupları ile ilgileniyor?">
+          <input type="text" name="marka_ilgisi" class="form-ctrl"
+            value="{{ firma.marka_ilgisi or '' }}"
+            placeholder="Hangi markalar / ürün grupları ile ilgileniyor?">
         </div>
 
-        <!-- ERP Cari Kodu -->
         <div class="form-grup">
           <label class="form-lbl">ERP Cari Kodu</label>
-          <input type="text" name="erp_cari_kodu" class="form-ctrl" placeholder="Mevcut ERP kodu (varsa)">
+          <input type="text" name="erp_cari_kodu" class="form-ctrl"
+            value="{{ firma.erp_cari_kodu or '' }}" placeholder="Mevcut ERP kodu (varsa)">
         </div>
 
-        <!-- Kaynak -->
         <div class="form-grup">
           <label class="form-lbl">Kaynak</label>
           <select name="kaynak" class="form-ctrl">
             <option value="">— Seç —</option>
-            <option value="Fuar">Fuar</option>
-            <option value="Referans">Referans</option>
-            <option value="Soğuk Arama">Soğuk Arama</option>
-            <option value="Web">Web</option>
-            <option value="LinkedIn">LinkedIn</option>
-            <option value="Diğer">Diğer</option>
+            {% for k in ['Fuar','Referans','Soğuk Arama','Web','LinkedIn','Diğer'] %}
+            <option value="{{ k }}" {% if firma.kaynak == k %}selected{% endif %}>{{ k }}</option>
+            {% endfor %}
           </select>
+        </div>
+
+        <div class="form-grup form-tam">
+          <label class="form-lbl">Notlar</label>
+          <textarea name="notlar" class="form-ctrl" rows="3"
+            placeholder="Özel notlar...">{{ firma.notlar or '' }}</textarea>
         </div>
       </div>
 
       <div style="margin-top:24px; display:flex; gap:10px; justify-content:flex-end;">
-        <a href="{{ url_for('fuar_crm.firma_liste') }}" class="btn-sol btn-outline">İptal</a>
+        <a href="{{ url_for('fuar_crm.firma_detay', firma_id=firma.id) }}" class="btn-sol btn-outline">İptal</a>
         <button type="submit" class="btn-sol">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-          Kaydet
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+            <polyline points="17 21 17 13 7 13 7 21"/>
+            <polyline points="7 3 7 8 15 8"/>
+          </svg>
+          Güncelle
         </button>
       </div>
 
@@ -131,6 +131,7 @@
 .zorunlu { color:#ef4444; }
 .form-ctrl { padding:8px 12px; border:1px solid var(--brd); border-radius:6px; font-size:13px; background:var(--bg); color:var(--txt); outline:none; transition:border .15s; }
 .form-ctrl:focus { border-color:var(--sol); box-shadow:0 0 0 2px var(--sol-light); }
+textarea.form-ctrl { resize:vertical; }
 .btn-sol { display:inline-flex; align-items:center; gap:6px; padding:8px 16px; background:var(--sol); color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; text-decoration:none; }
 .btn-sol:hover { opacity:.9; }
 .btn-sol.btn-outline { background:transparent; border:1px solid var(--sol); color:var(--sol-dark); }
@@ -138,6 +139,7 @@
 .flash { padding:10px 14px; border-radius:6px; font-size:13px; font-weight:500; }
 .flash-basari { background:#d1fae5; color:#065f46; border:1px solid #a7f3d0; }
 .flash-hata { background:#fee2e2; color:#991b1b; border:1px solid #fecaca; }
+.flash-uyari { background:#fef3c7; color:#92400e; border:1px solid #fde68a; }
 @media (max-width:600px) { .form-grid { grid-template-columns:1fr; } .form-tam { grid-column:1; } }
 </style>
 

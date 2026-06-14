@@ -91,8 +91,55 @@
           </tr>
         </thead>
         <tbody>
-          {% for u in urunler %}
-          <tr>
+          {% for grup in gruplar %}
+          {% set g_id = 'grp_' ~ grup.model_no | replace('-','_') | replace('/','_') | replace(' ','_') %}
+          {% set tek = grup.variants | length == 1 %}
+          <!-- GRUP SATIRI -->
+          <tr style="background:var(--bg2);border-top:2px solid var(--brd);cursor:pointer;"
+              {% if not tek %}onclick="toggleKatalogGrup('{{ g_id }}', this)"{% endif %}>
+            <td style="text-align:center;padding:5px 8px;">
+              {% if grup.ilk_gorsel %}
+              <img src="{{ url_for('static', filename=grup.ilk_gorsel) }}"
+                   alt="{{ grup.model_no }}"
+                   style="width:36px;height:36px;object-fit:cover;border-radius:4px;"
+                   loading="lazy">
+              {% else %}
+              <span style="font-size:9px;color:#ccc;">—</span>
+              {% endif %}
+            </td>
+            <td style="color:#ccc;font-size:10px;">{{ loop.index }}</td>
+            <td style="font-weight:700;color:var(--sol-dark);white-space:nowrap;font-size:13px;">
+              {{ grup.model_no }}
+              {% if not tek %}
+              <span style="font-size:10px;font-weight:400;color:#888;margin-left:6px;" id="{{ g_id }}_lbl">▼ {{ grup.variants|length }} varyant</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if grup.kategori %}
+              <span class="kat-pill">{{ grup.kategori }}</span>
+              {% else %}—{% endif %}
+            </td>
+            <td style="white-space:nowrap;">{{ grup.tip or '—' }}</td>
+            <td style="white-space:nowrap;">{{ grup.urun_cinsi or '—' }}</td>
+            <td style="white-space:nowrap;font-size:11px;color:#666;">—</td>
+            <td style="white-space:nowrap;font-weight:600;color:#059669;">
+              {% if grup.min_fiyat %}
+                {% if grup.min_fiyat == grup.max_fiyat %}
+                  {{ '%.2f'|format(grup.min_fiyat) }} USD
+                {% else %}
+                  {{ '%.2f'|format(grup.min_fiyat) }} – {{ '%.2f'|format(grup.max_fiyat) }} USD
+                {% endif %}
+              {% else %}—{% endif %}
+            </td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+          <!-- VARYANT SATIRLARI -->
+          {% for u in grup.variants %}
+          <tr class="katalog-varyant {{ g_id }}"
+              style="display:{% if tek %}table-row{% else %}none{% endif %};">
             <td style="text-align:center;padding:4px 8px;">
               {% if u.gorsel_yolu %}
               <img src="{{ url_for('static', filename=u.gorsel_yolu) }}"
@@ -104,26 +151,27 @@
               <span class="gorsel-yok">Görsel<br>yok</span>
               {% endif %}
             </td>
-            <td style="color:#ccc;font-size:10px;">{{ loop.index }}</td>
-            <td style="font-weight:700;color:var(--sol-dark);white-space:nowrap;">{{ u.model_no }}</td>
+            <td style="color:#ccc;font-size:10px;">{{ u.excel_satir_no }}</td>
+            <td style="font-size:11px;color:#aaa;padding-left:16px;">↳ {{ u.model_no }}</td>
             <td>
               {% if u.kategori %}
               <span class="kat-pill">{{ u.kategori }}</span>
               {% else %}—{% endif %}
             </td>
-            <td style="white-space:nowrap;">{{ u.tip or '—' }}</td>
-            <td style="white-space:nowrap;">{{ u.urun_cinsi or '—' }}</td>
+            <td style="white-space:nowrap;font-size:11px;">{{ u.tip or '—' }}</td>
+            <td style="white-space:nowrap;font-size:11px;">{{ u.urun_cinsi or '—' }}</td>
             <td style="white-space:nowrap;font-size:11px;color:#666;">{{ u.asorti or '—' }}</td>
-            <td style="white-space:nowrap;font-weight:600;color:{% if u.birim_fiyat %}#059669{% else %}#ccc{% endif %};">
+            <td style="white-space:nowrap;font-weight:600;color:{% if u.birim_fiyat %}#059669{% else %}#ccc{% endif %};font-size:11px;">
               {% if u.birim_fiyat %}{{ '%.2f'|format(u.birim_fiyat) }} USD{% else %}—{% endif %}
             </td>
             <td style="white-space:nowrap;font-size:11px;color:#888;">
               {% if u.maliyet %}{{ '%.2f'|format(u.maliyet) }}{% else %}—{% endif %}
             </td>
-            <td style="max-width:200px;white-space:normal;font-size:11px;color:#666;">{{ u.malzeme_bilgisi or '—' }}</td>
+            <td style="max-width:180px;white-space:normal;font-size:10px;color:#666;">{{ u.malzeme_bilgisi or '—' }}</td>
             <td style="font-size:10px;color:#aaa;white-space:nowrap;">{{ u.sheet_adi or '' }}</td>
             <td style="font-size:10px;color:#ccc;">{{ u.excel_satir_no }}</td>
           </tr>
+          {% endfor %}
           {% endfor %}
         </tbody>
       </table>
@@ -164,5 +212,15 @@
 .urun-thumb-zoom { width:160px; height:160px; position:relative; z-index:10; box-shadow:0 8px 24px rgba(0,0,0,.18); }
 .gorsel-yok { display:inline-block; font-size:9px; color:#ccc; text-align:center; line-height:1.3; }
 </style>
+<script>
+function toggleKatalogGrup(grupId, trEl) {
+  var rows = document.querySelectorAll('tr.katalog-varyant.' + grupId);
+  var lbl  = document.getElementById(grupId + '_lbl');
+  var cnt  = rows.length;
+  var visible = rows.length > 0 && rows[0].style.display !== 'none';
+  rows.forEach(function(r){ r.style.display = visible ? 'none' : ''; });
+  if (lbl) lbl.textContent = visible ? ('▼ ' + cnt + ' varyant') : ('▲ ' + cnt + ' varyant');
+}
+</script>
 
 {% endblock %}

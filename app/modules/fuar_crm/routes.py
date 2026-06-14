@@ -247,6 +247,21 @@ def firma_ekle():
         conn = _get_conn()
         try:
             cur = conn.cursor()
+
+            # Duplicate uyarisi: ayni firma_adi + ulke/sehir kombine
+            ulke_check = fields.get('ulke') or ''
+            sehir_check = fields.get('sehir') or ''
+            force_ekle = request.form.get('force_ekle') == '1'
+            dup = cur.execute(
+                "SELECT id FROM crm_firma WHERE LOWER(firma_adi)=LOWER(?) LIMIT 1",
+                (firma_adi,)
+            ).fetchone()
+            if dup and not force_ekle:
+                flash(f'UYARI: "{firma_adi}" adinda benzer bir firma zaten var (id={dup[0]}). '
+                      'Yine de eklemek istiyorsaniz formu tekrar gonderin.', 'uyari')
+                return render_template('fuar_crm/firma_ekle.html',
+                                       dup_uyari=True, form_data=request.form)
+
             cur.execute("""
                 INSERT INTO crm_firma
                     (firma_adi, yetkili, telefon, whatsapp, email,
@@ -269,6 +284,97 @@ def firma_ekle():
             conn.close()
 
     return render_template('fuar_crm/firma_ekle.html')
+
+
+# ── FIRMA DUZENLE -------------------------------------------------------------
+
+@fuar_crm_bp.route('/firma/<int:firma_id>/duzenle', methods=['GET', 'POST'])
+@login_gerekli
+def firma_duzenle(firma_id):
+    firma = _qone("SELECT * FROM crm_firma WHERE id=?", (firma_id,))
+    if not firma:
+        abort(404)
+
+    if request.method == 'POST':
+        firma_adi = request.form.get('firma_adi', '').strip()
+        if not firma_adi:
+            flash('Firma adi zorunludur.', 'hata')
+            return redirect(url_for('fuar_crm.firma_duzenle', firma_id=firma_id))
+
+        fields = {
+            'yetkili':       request.form.get('yetkili', '').strip() or None,
+            'telefon':       request.form.get('telefon', '').strip() or None,
+            'whatsapp':      request.form.get('whatsapp', '').strip() or None,
+            'email':         request.form.get('email', '').strip() or None,
+            'ulke':          request.form.get('ulke', '').strip() or None,
+            'sehir':         request.form.get('sehir', '').strip() or None,
+            'firma_tipi':    request.form.get('firma_tipi', '').strip() or None,
+            'marka_ilgisi':  request.form.get('marka_ilgisi', '').strip() or None,
+            'erp_cari_kodu': request.form.get('erp_cari_kodu', '').strip() or None,
+            'kaynak':        request.form.get('kaynak', '').strip() or None,
+            'notlar':        request.form.get('notlar', '').strip() or None,
+        }
+
+        conn = _get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                UPDATE crm_firma SET
+                    firma_adi=?, yetkili=?, telefon=?, whatsapp=?, email=?,
+                    ulke=?, sehir=?, firma_tipi=?, marka_ilgisi=?,
+                    erp_cari_kodu=?, kaynak=?, notlar=?
+                WHERE id=?
+            """, (firma_adi,
+                  fields['yetkili'], fields['telefon'], fields['whatsapp'],
+                  fields['email'], fields['ulke'], fields['sehir'],
+                  fields['firma_tipi'], fields['marka_ilgisi'],
+                  fields['erp_cari_kodu'], fields['kaynak'], fields['notlar'],
+                  firma_id))
+            conn.commit()
+            flash(f'"{firma_adi}" guncellendi.', 'basari')
+            return redirect(url_for('fuar_crm.firma_detay', firma_id=firma_id))
+        except Exception as exc:
+            conn.rollback()
+            flash(f'Guncelleme hatasi: {exc}', 'hata')
+        finally:
+            conn.close()
+
+    return render_template('fuar_crm/firma_duzenle.html', firma=firma)
+
+
+# ── FIRMA SIL -----------------------------------------------------------------
+
+@fuar_crm_bp.route('/firma/<int:firma_id>/sil', methods=['POST'])
+@login_gerekli
+def firma_sil(firma_id):
+    firma = _qone("SELECT * FROM crm_firma WHERE id=?", (firma_id,))
+    if not firma:
+        abort(404)
+
+    # Gorusme sayisi kontrolu
+    gorusme_sayisi = _qone(
+        "SELECT COUNT(*) as cnt FROM crm_gorusme WHERE firma_id=?", (firma_id,)
+    )
+    cnt = gorusme_sayisi['cnt'] if gorusme_sayisi else 0
+
+    if cnt > 0:
+        flash(f'"{firma["firma_adi"]}" firmasina bagli {cnt} gorusme kaydi var. '
+              'Silme engellendi. Once gorusmeleri kontrol edin.', 'hata')
+        return redirect(url_for('fuar_crm.firma_liste'))
+
+    conn = _get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM crm_firma WHERE id=?", (firma_id,))
+        conn.commit()
+        flash(f'"{firma["firma_adi"]}" silindi.', 'basari')
+    except Exception as exc:
+        conn.rollback()
+        flash(f'Silme hatasi: {exc}', 'hata')
+    finally:
+        conn.close()
+
+    return redirect(url_for('fuar_crm.firma_liste'))
 
 
 # ── FIRMA DETAY ---------------------------------------------------------------
@@ -529,9 +635,37 @@ def urun_katalogu():
 
     toplam_urun = (_qone("SELECT COUNT(*) AS c FROM crm_urun WHERE aktif=1") or {}).get('c', 0)
 
+    # Gruplu görünüm için: model bazlı gruplayarak template'e gönder
+    from collections import OrderedDict
+    gruplar = OrderedDict()
+    for u in urunler:
+        mn = u['model_no'] or '?'
+        if mn not in gruplar:
+            gruplar[mn] = {
+                'model_no':    mn,
+                'kategori':    u['kategori'],
+                'tip':         u['tip'],
+                'urun_cinsi':  u['urun_cinsi'],
+                'ilk_gorsel':  u['gorsel_yolu'],
+                'min_fiyat':   u['birim_fiyat'],
+                'max_fiyat':   u['birim_fiyat'],
+                'variants':    [],
+            }
+        g = gruplar[mn]
+        # min/max fiyat güncelle
+        if u['birim_fiyat'] is not None:
+            if g['min_fiyat'] is None or u['birim_fiyat'] < g['min_fiyat']:
+                g['min_fiyat'] = u['birim_fiyat']
+            if g['max_fiyat'] is None or u['birim_fiyat'] > g['max_fiyat']:
+                g['max_fiyat'] = u['birim_fiyat']
+        if g['ilk_gorsel'] is None and u['gorsel_yolu']:
+            g['ilk_gorsel'] = u['gorsel_yolu']
+        g['variants'].append(u)
+
     return render_template(
         'fuar_crm/urun_katalogu.html',
         urunler=urunler,
+        gruplar=list(gruplar.values()),
         q_str=q_str,
         kat_filt=kat_filt,
         tip_filt=tip_filt,
@@ -547,22 +681,73 @@ def urun_katalogu():
 @login_gerekli
 def urun_ara():
     q_str   = request.args.get('q', '').strip()
-    limit   = min(int(request.args.get('limit', 30)), 100)
+    limit   = min(int(request.args.get('limit', 30)), 200)
+    gruplu  = request.args.get('gruplu', '0') == '1'
 
     params = []
-    where  = ["aktif = 1"]
+    where  = ["u.aktif = 1"]
 
     if q_str:
         like = f"%{q_str}%"
         where.append("""(
-            model_no        LIKE ? OR
-            kategori        LIKE ? OR
-            tip             LIKE ? OR
-            urun_cinsi      LIKE ?
+            u.model_no   LIKE ? OR
+            u.kategori   LIKE ? OR
+            u.tip        LIKE ? OR
+            u.urun_cinsi LIKE ?
         )""")
         params += [like, like, like, like]
 
     where_sql = " AND ".join(where)
+
+    if gruplu:
+        # Model bazlı grup: her modelin tüm varyantlarını döndür
+        # Önce grupları bul (min/max fiyat, sayı, ilk görsel)
+        grup_rows = _q(f"""
+            SELECT u.model_no,
+                   u.kategori, u.tip, u.urun_cinsi,
+                   COUNT(*) AS varyant_sayisi,
+                   MIN(u.birim_fiyat) AS min_fiyat,
+                   MAX(u.birim_fiyat) AS max_fiyat,
+                   (SELECT g2.dosya_yolu FROM crm_urun u2
+                    LEFT JOIN crm_urun_gorsel g2 ON g2.urun_id = u2.id
+                    WHERE u2.model_no = u.model_no AND g2.dosya_yolu IS NOT NULL
+                    LIMIT 1) AS ilk_gorsel
+            FROM crm_urun u
+            WHERE {where_sql}
+            GROUP BY u.model_no, u.kategori, u.tip, u.urun_cinsi
+            ORDER BY u.model_no
+            LIMIT {limit}
+        """, params) or []
+
+        # Her grup için varyantları al
+        result = []
+        for g in grup_rows:
+            varyant_params = [g['model_no']]
+            varyants = _q("""
+                SELECT u.id, u.model_no, u.kategori, u.tip, u.urun_cinsi,
+                       u.asorti, u.birim_fiyat, u.maliyet, u.malzeme_bilgisi,
+                       u.sheet_adi, u.excel_satir_no,
+                       gr.dosya_yolu AS gorsel_yolu
+                FROM crm_urun u
+                LEFT JOIN crm_urun_gorsel gr ON gr.urun_id = u.id
+                WHERE u.aktif = 1 AND u.model_no = ?
+                ORDER BY u.birim_fiyat, u.id
+            """, varyant_params) or []
+
+            result.append({
+                'model_no':      g['model_no'],
+                'kategori':      g['kategori'],
+                'tip':           g['tip'],
+                'urun_cinsi':    g['urun_cinsi'],
+                'varyant_sayisi': g['varyant_sayisi'],
+                'min_fiyat':     g['min_fiyat'],
+                'max_fiyat':     g['max_fiyat'],
+                'ilk_gorsel':    g['ilk_gorsel'],
+                'variants':      [dict(v) for v in varyants],
+            })
+        return jsonify(result)
+
+    # Eski düz liste (gruplu=0, geriye dönük uyumluluk)
     rows = _q(f"""
         SELECT u.id, u.model_no, u.kategori, u.tip, u.urun_cinsi,
                u.asorti, u.birim_fiyat, u.maliyet, u.malzeme_bilgisi,
