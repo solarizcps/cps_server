@@ -155,14 +155,30 @@
           </div>
 
           <!-- Sonuç tablosu -->
-          <div id="urun-ara-sonuc" style="max-height:300px;overflow-y:auto;border:1px solid var(--brd);border-radius:6px;display:none;">
-            <table class="crm-tbl" style="font-size:12px;">
-              <thead>
+          <div id="urun-ara-sonuc" style="max-height:460px;overflow-y:auto;border:1px solid var(--brd);border-radius:6px;display:none;">
+            <table class="crm-tbl" style="font-size:12px;table-layout:fixed;width:100%;">
+              <colgroup>
+                <col style="width:36px;"><!-- + butonu -->
+                <col style="width:48px;"><!-- görsel -->
+                <col style="width:110px;"><!-- model no -->
+                <col style="min-width:80px;"><!-- kategori -->
+                <col style="min-width:70px;"><!-- tip -->
+                <col style="min-width:80px;"><!-- ürün cinsi -->
+                <col style="min-width:60px;"><!-- asorti -->
+                <col style="width:90px;"><!-- birim fiyat -->
+                <col style="width:80px;"><!-- maliyet -->
+              </colgroup>
+              <thead style="position:sticky;top:0;z-index:2;background:var(--bg2);">
                 <tr>
-                  <th style="width:32px;"></th>
-                  <th style="width:44px;">Görsel</th>
-                  <th>Model No</th><th>Kategori</th><th>Tip</th>
-                  <th>Ürün Cinsi</th><th>Asorti</th><th>Birim Fiyat</th>
+                  <th style="padding:6px 4px;"></th>
+                  <th style="padding:6px 4px;">Görsel</th>
+                  <th style="padding:6px 4px;">Model No</th>
+                  <th style="padding:6px 4px;">Kategori</th>
+                  <th style="padding:6px 4px;">Tip</th>
+                  <th style="padding:6px 4px;">Ürün Cinsi</th>
+                  <th style="padding:6px 4px;">Asorti</th>
+                  <th style="padding:6px 4px;color:#059669;">Fiyat</th>
+                  <th style="padding:6px 4px;color:#dc2626;">Maliyet</th>
                 </tr>
               </thead>
               <tbody id="urun-ara-tbody"></tbody>
@@ -757,45 +773,48 @@ function urunAra(q) {
       var wrap  = document.getElementById('urun-ara-sonuc');
       tbody.innerHTML = '';
       if (data.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#aaa;padding:14px;">Sonuç bulunamadı</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#aaa;padding:14px;">Sonuç bulunamadı</td></tr>';
       } else {
         data.forEach(function(grup) {
-          var ilkGorsel = grup.ilk_gorsel
-            ? '<img src="/static/' + grup.ilk_gorsel + '" style="width:32px;height:32px;object-fit:cover;border-radius:3px;vertical-align:middle;" loading="lazy">'
-            : '<div style="width:32px;height:32px;border-radius:3px;background:var(--bg2);display:inline-block;"></div>';
           var minF = grup.min_fiyat ? parseFloat(grup.min_fiyat).toFixed(2) : '—';
           var maxF = grup.max_fiyat ? parseFloat(grup.max_fiyat).toFixed(2) : '—';
-          var fiyatStr = (minF === maxF) ? minF + ' USD' : minF + ' – ' + maxF + ' USD';
+          var fiyatStr = (minF === maxF) ? minF + ' $' : minF + ' – ' + maxF + ' $';
           var grupId = 'grup-' + grup.model_no.replace(/[^a-zA-Z0-9]/g,'_');
           var tekVaryant = grup.varyant_sayisi === 1;
 
           // Grup satırı
           var trGrup = document.createElement('tr');
           trGrup.style.cssText = 'background:var(--bg2);cursor:pointer;border-top:2px solid var(--brd);';
+          var grupThumb = grup.ilk_gorsel
+            ? '<img src="/static/' + grup.ilk_gorsel + '" style="width:40px;height:40px;object-fit:cover;border-radius:4px;vertical-align:middle;" loading="lazy">'
+            : '<div style="width:40px;height:40px;border-radius:4px;background:var(--bg);display:inline-block;"></div>';
           trGrup.innerHTML =
-            '<td style="padding:6px 8px;text-align:center;" colspan="2">' + ilkGorsel + '</td>' +
-            '<td style="font-weight:700;color:var(--sol-dark);font-size:13px;">' + (grup.model_no||'') + '</td>' +
-            '<td style="font-size:11px;color:#888;">' + (grup.kategori||'—') + ' / ' + (grup.tip||'—') + '</td>' +
-            '<td style="font-size:11px;color:#888;">' + (grup.urun_cinsi||'—') + '</td>' +
-            '<td colspan="2" style="font-size:11px;color:#059669;font-weight:600;">' + fiyatStr + '</td>' +
-            '<td style="text-align:center;">' +
+            '<td style="padding:8px 4px;text-align:center;">' + grupThumb + '</td>' +
+            '<td style="padding:8px 4px;text-align:center;color:#aaa;font-size:10px;">↕</td>' +
+            '<td style="font-weight:700;color:var(--sol-dark);font-size:13px;padding:8px 4px;">' + (grup.model_no||'') + '</td>' +
+            '<td style="font-size:11px;color:#888;padding:8px 4px;">' + (grup.kategori||'—') + '</td>' +
+            '<td style="font-size:11px;color:#888;padding:8px 4px;">' + (grup.tip||'—') + '</td>' +
+            '<td style="font-size:11px;color:#888;padding:8px 4px;">' + (grup.urun_cinsi||'—') + '</td>' +
+            '<td style="font-size:11px;color:#888;padding:8px 4px;">' + (grup.varyant_sayisi > 1 ? grup.varyant_sayisi + ' varyant' : '') + '</td>' +
+            '<td colspan="2" style="padding:8px 4px;text-align:center;">' +
               (tekVaryant
-                ? '<span style="font-size:10px;color:#888;">Tek varyant</span>'
-                : '<button type="button" style="font-size:10px;padding:2px 8px;border:1px solid var(--brd);border-radius:4px;background:var(--bg);cursor:pointer;" onclick="toggleVaryant(\'' + grupId + '\', this)">' +
-                  '▼ ' + grup.varyant_sayisi + ' varyant</button>') +
+                ? '<span style="font-size:10px;color:#888;">Tek</span>'
+                : '<button type="button" style="font-size:11px;padding:4px 10px;border:1px solid var(--brd);border-radius:4px;background:var(--bg);cursor:pointer;" onclick="toggleVaryant(\'' + grupId + '\', this)">' +
+                  '▼ Göster</button>') +
             '</td>';
           tbody.appendChild(trGrup);
 
           // Varyant satırları (başta gizli, tekse görünür)
           grup.variants.forEach(function(u) {
             var seçili = !!secilenUrunler[u.id];
-            var fiyat  = u.birim_fiyat ? parseFloat(u.birim_fiyat).toFixed(2) : '—';
+            var fiyat    = u.birim_fiyat ? parseFloat(u.birim_fiyat).toFixed(2) : '—';
+            var maliyet  = u.maliyet     ? parseFloat(u.maliyet).toFixed(2)     : '—';
             var thumb  = u.gorsel_yolu
-              ? '<img src="/static/' + u.gorsel_yolu + '" style="width:28px;height:28px;object-fit:cover;border-radius:3px;vertical-align:middle;" loading="lazy">'
-              : '';
+              ? '<img src="/static/' + u.gorsel_yolu + '" style="width:38px;height:38px;object-fit:cover;border-radius:4px;vertical-align:middle;" loading="lazy">'
+              : '<div style="width:38px;height:38px;border-radius:4px;background:var(--bg2);display:inline-block;"></div>';
             var btnHtml = '<button type="button" '
               + 'data-uid="' + u.id + '" '
-              + 'style="width:24px;height:24px;border-radius:50%;border:none;cursor:pointer;font-size:14px;font-weight:700;line-height:1;'
+              + 'style="width:30px;height:30px;border-radius:50%;border:none;cursor:pointer;font-size:16px;font-weight:700;line-height:1;'
               + (seçili ? 'background:#d1fae5;color:#059669;' : 'background:var(--sol);color:#fff;')
               + '" '
               + 'onclick="urunToggle(' + u.id + ', this)">'
@@ -808,14 +827,15 @@ function urunAra(q) {
             if (seçili) trVar.classList.add('sel-row');
             trVar.setAttribute('data-uid', u.id);
             trVar.innerHTML =
-              '<td style="text-align:center;padding:3px 8px;">' + btnHtml + '</td>' +
-              '<td style="text-align:center;padding:3px 6px;">' + thumb + '</td>' +
-              '<td style="font-size:11px;color:#aaa;padding-left:16px;">↳ ' + (u.model_no||'') + '</td>' +
+              '<td style="text-align:center;padding:5px 4px;">' + btnHtml + '</td>' +
+              '<td style="text-align:center;padding:5px 4px;">' + thumb + '</td>' +
+              '<td style="font-size:11px;color:#aaa;padding-left:14px;white-space:nowrap;">↳ ' + (u.model_no||'') + '</td>' +
               '<td style="font-size:11px;">' + (u.kategori||'—') + '</td>' +
               '<td style="font-size:11px;">' + (u.tip||'—') + '</td>' +
               '<td style="font-size:11px;">' + (u.urun_cinsi||'—') + '</td>' +
               '<td style="font-size:11px;">' + (u.asorti||'—') + '</td>' +
-              '<td style="font-size:11px;white-space:nowrap;">' + fiyat + ' USD</td>';
+              '<td style="font-size:12px;font-weight:600;color:#059669;white-space:nowrap;">' + fiyat + ' $</td>' +
+              '<td style="font-size:12px;font-weight:600;color:#dc2626;white-space:nowrap;">' + maliyet + '</td>';
             trVar._urunData = u;
             tbody.appendChild(trVar);
           });
