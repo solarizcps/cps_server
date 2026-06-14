@@ -13,7 +13,7 @@ Ekranlar:
 """
 from flask import (Blueprint, render_template, request, redirect,
                    url_for, session, abort, flash, send_from_directory,
-                   jsonify)
+                   jsonify, make_response)
 from db import q as _q, qone as _qone, get_conn as _get_conn
 from modules.auth import login_gerekli
 import os, datetime, uuid, mimetypes
@@ -1299,7 +1299,7 @@ def katalog_olustur():
             (ad, fuar_adi or ad, aciklama or None)
         )
         conn.commit()
-        flash(f'Katalog olusturuldu: {ad}', 'success')
+        flash(f'Katalog oluşturuldu: {ad}', 'success')
         return redirect(url_for('fuar_crm.katalog_listesi'))
     return render_template('fuar_crm/katalog_olustur.html')
 
@@ -1316,7 +1316,7 @@ def katalog_aktif_yap(katalog_id):
     conn.execute("UPDATE crm_katalog SET aktif = 0")
     conn.execute("UPDATE crm_katalog SET aktif = 1 WHERE id = ?", (katalog_id,))
     conn.commit()
-    flash(f'Aktif katalog degistirildi: {katalog["ad"]}', 'success')
+    flash(f'Kullanımdaki katalog değiştirildi: {katalog["ad"]}', 'success')
     return redirect(url_for('fuar_crm.katalog_listesi'))
 
 
