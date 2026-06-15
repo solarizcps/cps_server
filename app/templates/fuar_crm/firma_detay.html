@@ -226,7 +226,13 @@
             Tümünü Temizle
           </button>
         </div>
-        <div id="secilen-liste"></div>
+        <!-- Canlı özet şeridi -->
+        <div id="sb-ozet-serit" style="padding:6px 14px;background:#f0fdf4;border-bottom:1px solid #d1fae5;font-size:11px;font-weight:600;color:#065f46;display:none;">
+          <span id="sb-ozet-text"></span>
+        </div>
+        <div id="secilen-liste">
+          <div id="sb-bos" style="padding:20px;text-align:center;color:#aaa;font-size:12px;">Henüz ürün seçilmedi.</div>
+        </div>
         <div id="urun-ozet">
           <div class="oz-satir"><span style="color:#888;">Toplam Miktar</span><span id="oz-miktar">—</span></div>
           <div class="oz-satir"><span style="color:#888;">Toplam Satış</span><span id="oz-satis" style="color:#059669;font-weight:700;">—</span></div>
@@ -898,7 +904,28 @@
   flex-shrink:0;
 }
 .uk-ekle-btn:hover { background:var(--sol-dark); }
+.uk-ekle-btn.secili { background:#059669; }
 .uk.secili .uk-ekle-btn { background:#059669; }
+/* Çok varyantlı kart alt buton bloku */
+.uk-alt-butonlar {
+  display:flex; flex-direction:column; gap:0; flex-shrink:0;
+}
+.uk-varyant-ac-btn {
+  width:100%; padding:9px 10px;
+  background:var(--bg2); color:var(--sol);
+  border:none; border-top:1px solid var(--brd);
+  font-size:12px; font-weight:600;
+  cursor:pointer; transition:background .15s;
+  text-align:center;
+}
+.uk-varyant-ac-btn:hover { background:var(--brd); }
+.uk-secim-badge {
+  display:none; padding:6px 10px;
+  background:#dcfce7; color:#059669;
+  font-size:12px; font-weight:700;
+  text-align:center; border-top:1px solid #bbf7d0;
+}
+.uk-secim-badge.gorunur { display:block; }
 /* Varyant listesi (kart altı, açılır) */
 .uk-varyant-liste {
   display:none;
@@ -1172,7 +1199,7 @@ function kartlariRenderEt() {
     var tekVaryant = grup.varyant_sayisi === 1;
     var ilkUrun   = grup.variants && grup.variants[0];
     var grupId    = 'uk-' + (grup.model_no||'').replace(/[^a-zA-Z0-9]/g,'_');
-    var secimiVar = grup.variants && grup.variants.some(function(u){ return !!secilenUrunler[u.id]; });
+    var secimiVar = grup.variants && grup.variants.some(function(u){ return !!secilenUrunler[String(u.id)]; });
 
     var minF = grup.min_fiyat ? parseFloat(grup.min_fiyat).toFixed(2) : '—';
     var maxF = grup.max_fiyat ? parseFloat(grup.max_fiyat).toFixed(2) : '—';
@@ -1188,15 +1215,39 @@ function kartlariRenderEt() {
     var cinsiRozet = grup.urun_cinsi
       ? '<div class="uk-cinsi-rozet">' + grup.urun_cinsi + '</div>' : '';
 
-    // Kart ekle butonu mantığı
+    // Tek varyant: 1 buton (seçim). Çok varyant: 2 ayrı buton (varyant aç + seçim)
     var ekleBtnText = secimiVar ? '✓ Seçildi' : '+ Ürün Ekle';
     var ekleOnclick = tekVaryant && ilkUrun
       ? 'urunToggleKart(' + ilkUrun.id + ', this)'
-      : 'varyantListeToggle(\'' + grupId + '\', this)';
+      : null; // çok varyant: seçim yok (varyant satırından seçilir)
 
     var div = document.createElement('div');
     div.className = 'uk' + (secimiVar ? ' secili' : '');
     div.id = grupId;
+
+    // Alt buton bloku: tek varyant → 1 buton; çok varyant → varyant toggle + ayrı seçim sayacı
+    var altButonHtml;
+    if (tekVaryant && ilkUrun) {
+      altButonHtml =
+        '<button type="button" class="uk-ekle-btn' + (secimiVar ? ' secili' : '') + '" ' +
+          'onclick="urunToggleKart(' + ilkUrun.id + ', this)">' +
+          ekleBtnText +
+        '</button>';
+    } else {
+      // Çok varyant: varyant açma butonu + seçim durumu badge
+      altButonHtml =
+        '<div class="uk-alt-butonlar">' +
+          '<button type="button" class="uk-varyant-ac-btn" ' +
+            'data-varyant-sayisi="' + grup.varyant_sayisi + '" ' +
+            'onclick="varyantListeToggle(\'' + grupId + '\', this)">' +
+            '▼ ' + grup.varyant_sayisi + ' Varyant' +
+          '</button>' +
+          '<span class="uk-secim-badge' + (secimiVar ? ' gorunur' : '') + '">' +
+            (secimiVar ? '✓ Seçildi' : '') +
+          '</span>' +
+        '</div>';
+    }
+
     div.innerHTML =
       '<div class="uk-gorsel-wrap">' +
         gorselHtml +
@@ -1213,12 +1264,12 @@ function kartlariRenderEt() {
         '<span class="uk-fiyat">' + fiyatStr + '</span>' +
         '<span class="uk-maliyet' + (!maliyetGoster ? ' gizli' : '') + '">Mlt: ' + malStr + '</span>' +
       '</div>' +
-      '<button type="button" class="uk-ekle-btn" onclick="' + ekleOnclick + '">' + ekleBtnText + '</button>' +
+      altButonHtml +
       /* Varyant listesi */
       (!tekVaryant ? (function() {
         var html = '<div class="uk-varyant-liste" id="vl-' + grupId + '">';
         if (grup.variants) grup.variants.forEach(function(u) {
-          var sel = !!secilenUrunler[u.id];
+          var sel = !!secilenUrunler[String(u.id)];
           var vf = u.birim_fiyat ? parseFloat(u.birim_fiyat).toFixed(2) + ' $' : '—';
           var vm = u.maliyet ? parseFloat(u.maliyet).toFixed(2) : '—';
           var vthumb = u.gorsel_yolu
@@ -1264,7 +1315,9 @@ function varyantListeToggle(grupId, btn) {
   var el = document.getElementById('vl-' + grupId);
   if (!el) return;
   el.classList.toggle('acik');
-  if (btn) btn.textContent = el.classList.contains('acik') ? '▲ Kapat' : '+ Ürün Ekle';
+  if (btn) btn.textContent = el.classList.contains('acik')
+    ? '▲ Varyant Gizle'
+    : '▼ ' + (btn.dataset.varyantSayisi || '') + ' Varyant';
 }
 
 function urunToggleKart(uid, btnEl) {
@@ -1283,13 +1336,13 @@ function urunToggleKart(uid, btnEl) {
   }
   if (!u) u = { id: uid, model_no: '?', kategori: '', tip: '', urun_cinsi: '', asorti: '', birim_fiyat: null, maliyet: null, gorsel_yolu: null };
 
-  if (secilenUrunler[uid]) {
+  if (secilenUrunler[String(uid)]) {
     // Kaldır
-    delete secilenUrunler[uid];
+    delete secilenUrunler[String(uid)];
     _kartSecimGuncelle(uid, false);
   } else {
     // Ekle
-    secilenUrunler[uid] = u;
+    secilenUrunler[String(uid)] = u;
     _kartSecimGuncelle(uid, true);
     sidebarUrunRender(u);
   }
@@ -1297,7 +1350,7 @@ function urunToggleKart(uid, btnEl) {
 }
 
 function _kartSecimGuncelle(uid, secili) {
-  // Varyant satırı butonu
+  // Varyant satırı butonu (çok varyantlı karttaki + butonu)
   var vsBtn = document.querySelector('.uk-varyant-ekle[data-uid="' + uid + '"]');
   if (vsBtn) {
     vsBtn.textContent = secili ? '✓' : '+';
@@ -1305,15 +1358,17 @@ function _kartSecimGuncelle(uid, secili) {
     var satir = document.getElementById('vs-' + uid);
     if (satir) satir.classList.toggle('secili', secili);
   }
-  // Tek varyant kart butonu
+  // Tek varyant kart: uk-ekle-btn güncelle
   if (vsBtn === null) {
-    // Kart bul
     var kartlar = document.querySelectorAll('#urun-kart-alan .uk');
     kartlar.forEach(function(k){
-      if (k._variants && k._variants.length === 1 && k._variants[0].id == uid) {
+      if (k._variants && k._variants.length === 1 && String(k._variants[0].id) === String(uid)) {
         k.classList.toggle('secili', secili);
         var ekleBtn = k.querySelector('.uk-ekle-btn');
-        if (ekleBtn) ekleBtn.textContent = secili ? '✓ Seçildi' : '+ Ürün Ekle';
+        if (ekleBtn) {
+          ekleBtn.textContent = secili ? '✓ Seçildi' : '+ Ürün Ekle';
+          ekleBtn.classList.toggle('secili', secili);
+        }
       }
     });
   }
@@ -1321,25 +1376,46 @@ function _kartSecimGuncelle(uid, secili) {
   if (!secili) {
     var el = document.getElementById('sk-' + uid);
     if (el) el.remove();
-    // Seçili yoksa boş mesaj
+    // Seçili yoksa boş mesaj ekle
     if (Object.keys(secilenUrunler).length === 0) {
-      document.getElementById('secilen-liste').innerHTML = '<div style="padding:20px;text-align:center;color:#aaa;font-size:12px;">Henüz ürün seçilmedi.</div>';
+      var liste = document.getElementById('secilen-liste');
+      if (!document.getElementById('sb-bos')) {
+        var bosMesaj = document.createElement('div');
+        bosMesaj.id = 'sb-bos';
+        bosMesaj.style.cssText = 'padding:20px;text-align:center;color:#aaa;font-size:12px;';
+        bosMesaj.textContent = 'Henüz ürün seçilmedi.';
+        liste.appendChild(bosMesaj);
+      }
     }
   }
-  // Kart çevresi güncelle (çok varyantlı kart)
+  // Çok varyantlı kart: secili sınıfı + badge güncelle
   var kartlar2 = document.querySelectorAll('#urun-kart-alan .uk');
   kartlar2.forEach(function(k){
     if (!k._variants) return;
-    var birSecili = k._variants.some(function(u){ return !!secilenUrunler[u.id]; });
+    var birSecili = k._variants.some(function(u){ return !!secilenUrunler[String(u.id)]; });
     k.classList.toggle('secili', birSecili);
+    // Badge güncelle (çok varyantlı kartlarda .uk-secim-badge)
+    var badge = k.querySelector('.uk-secim-badge');
+    if (badge) {
+      if (birSecili) {
+        var seciliSayi = k._variants.filter(function(u){ return !!secilenUrunler[String(u.id)]; }).length;
+        badge.textContent = '✓ ' + seciliSayi + ' seçildi';
+        badge.classList.add('gorunur');
+      } else {
+        badge.textContent = '';
+        badge.classList.remove('gorunur');
+      }
+    }
   });
 }
 
 function sidebarUrunRender(u) {
   var liste = document.getElementById('secilen-liste');
-  // Boş mesajı temizle
-  var bos = liste.querySelector('div[style*="Henüz"]');
+  // Boş durum mesajını kaldır (id ile güvenli)
+  var bos = document.getElementById('sb-bos');
   if (bos) bos.remove();
+  // Zaten varsa tekrar ekleme (duplicate koruması)
+  if (document.getElementById('sk-' + u.id)) return;
 
   var listeFiyat = u.birim_fiyat ? parseFloat(u.birim_fiyat).toFixed(2) : '';
   var maliyet    = u.maliyet     ? parseFloat(u.maliyet).toFixed(2)     : '';
@@ -1434,13 +1510,43 @@ function ozeti_guncelle() {
   el = document.getElementById('oz-maliyet');if(el) el.textContent = topMaliyet? fmt(topMaliyet) + ' $' : '—';
   el = document.getElementById('oz-kar');    if(el) el.textContent = (topSatis||topMaliyet) ? fmt(kar) + ' $' : '—';
   el = document.getElementById('secilen-sayi'); if(el) el.textContent = ids.length;
+  // Özet şerit güncelle
+  var serit = document.getElementById('sb-ozet-serit');
+  var seritTxt = document.getElementById('sb-ozet-text');
+  if (serit && seritTxt) {
+    if (ids.length > 0) {
+      seritTxt.textContent = ids.length + ' ürün seçildi' + (topMiktar ? ' \u2022 Toplam ' + topMiktar.toLocaleString('tr-TR') + ' çift' : '');
+      serit.style.display = 'block';
+    } else {
+      serit.style.display = 'none';
+    }
+  }
 }
 
 function tumunuTemizle() {
   if (!confirm('Tüm seçimler temizlenecek. Emin misiniz?')) return;
-  Object.keys(secilenUrunler).forEach(function(uid){ urunToggleKart(parseInt(uid), null); });
+  Object.keys(secilenUrunler).forEach(function(uid){ delete secilenUrunler[uid]; });
   secilenUrunler = {};
-  document.getElementById('secilen-liste').innerHTML = '<div style="padding:20px;text-align:center;color:#aaa;font-size:12px;">Henüz ürün seçilmedi.</div>';
+  // Tüm kart seçimlerini kaldır
+  document.querySelectorAll('#urun-kart-alan .uk').forEach(function(k){
+    k.classList.remove('secili');
+    // Tek varyant butonu sıfırla
+    var btn = k.querySelector('.uk-ekle-btn');
+    if (btn) { btn.textContent = '+ Ürün Ekle'; btn.classList.remove('secili'); }
+    // Varyant satır butonları sıfırla
+    k.querySelectorAll('.uk-varyant-ekle').forEach(function(b){ b.textContent='+'; b.classList.remove('secili'); });
+    k.querySelectorAll('.uk-varyant-satir').forEach(function(s){ s.classList.remove('secili'); });
+    // Çok varyant badge sıfırla
+    var badge = k.querySelector('.uk-secim-badge');
+    if (badge) { badge.textContent = ''; badge.classList.remove('gorunur'); }
+  });
+  var liste = document.getElementById('secilen-liste');
+  liste.innerHTML = '';
+  var bosMesaj = document.createElement('div');
+  bosMesaj.id = 'sb-bos';
+  bosMesaj.style.cssText = 'padding:20px;text-align:center;color:#aaa;font-size:12px;';
+  bosMesaj.textContent = 'Henüz ürün seçilmedi.';
+  liste.appendChild(bosMesaj);
   ozeti_guncelle();
 }
 
