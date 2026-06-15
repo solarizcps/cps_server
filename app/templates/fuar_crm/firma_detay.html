@@ -235,9 +235,9 @@
         </div>
         <div id="urun-ozet">
           <div class="oz-satir"><span style="color:#888;">Toplam Miktar</span><span id="oz-miktar">—</span></div>
-          <div class="oz-satir"><span style="color:#888;">Toplam Satış</span><span id="oz-satis" style="color:#059669;font-weight:700;">—</span></div>
-          <div class="oz-satir sb-maliyet"><span style="color:#888;">Toplam Maliyet</span><span id="oz-maliyet" style="color:#dc2626;font-weight:700;">—</span></div>
-          <div class="oz-satir toplam sb-maliyet"><span>Tahmini Kâr</span><span id="oz-kar" style="color:#059669;font-weight:700;">—</span></div>
+          <div id="oz-satis-wrap"></div>
+          <div id="oz-maliyet-wrap" class="sb-maliyet"></div>
+          <div id="oz-kar-wrap" class="sb-maliyet"></div>
         </div>
         <button type="button" id="urun-kaydet-btn" onclick="urunleriKaydetVeKapat()">
           ✅ GÖRÜŞME KAYDET
@@ -949,12 +949,12 @@
   display:flex; align-items:center; justify-content:center;
 }
 .uk-varyant-ekle.secili { background:#059669; }
-/* Sağ Sidebar */
+/* ── Sağ Sidebar ────────────────────────────────────────────────────────── */
 #urun-sidebar {
-  width:300px; flex-shrink:0;
+  width:310px; flex-shrink:0;
   border-left:1px solid var(--brd);
   display:flex; flex-direction:column;
-  overflow:hidden;
+  overflow:hidden; background:var(--bg2);
 }
 #urun-sidebar-baslik {
   padding:12px 14px; border-bottom:1px solid var(--brd);
@@ -962,37 +962,107 @@
   display:flex; justify-content:space-between; align-items:center;
 }
 #secilen-liste {
-  flex:1; overflow-y:auto; padding:10px 10px 0;
-  display:flex; flex-direction:column; gap:6px;
+  flex:1; overflow-y:auto; padding:8px 8px 4px;
+  display:flex; flex-direction:column; gap:8px;
 }
+/* ── Kart ── */
 .sb-kart {
-  border:1px solid var(--brd); border-radius:8px; overflow:hidden;
+  border:1px solid var(--brd); border-radius:10px; overflow:hidden;
   background:var(--bg); flex-shrink:0;
+  box-shadow:0 1px 3px rgba(0,0,0,.05);
 }
 .sb-kart-ust {
   display:flex; align-items:center; gap:8px; padding:8px 10px;
+  cursor:pointer; user-select:none; transition:background .12s;
 }
+.sb-kart-ust:hover { background:#f8fafc; }
 .sb-kart-gorsel {
-  width:48px; height:48px; object-fit:cover; border-radius:5px;
-  flex-shrink:0; border:1px solid var(--brd);
+  width:44px; height:44px; object-fit:contain; border-radius:6px;
+  flex-shrink:0; border:1px solid #e5e7eb; background:#f9fafb;
 }
 .sb-kart-info { flex:1; min-width:0; }
-.sb-kart-model { font-weight:700; font-size:12px; color:var(--sol-dark); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.sb-kart-sub { font-size:10px; color:#888; }
-.sb-kart-sil { background:none; border:none; color:#dc2626; font-size:16px; cursor:pointer; padding:2px 4px; flex-shrink:0; }
-.sb-kart-inputs { padding:0 10px 8px; display:flex; flex-direction:column; gap:4px; }
-.sb-kart-row { display:flex; align-items:center; gap:6px; font-size:11px; }
-.sb-kart-row label { color:#888; min-width:60px; flex-shrink:0; }
-.sb-kart-row input[type=number] {
-  width:80px; padding:4px 6px;
-  border:1px solid var(--brd); border-radius:4px;
-  font-size:12px; background:var(--bg2); color:var(--txt);
+.sb-kart-model { font-weight:700; font-size:13px; color:#dc2626; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sb-kart-sub   { font-size:11px; color:#888; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sb-kart-ozet  { display:flex; flex-direction:column; align-items:flex-end; gap:2px; flex-shrink:0; }
+.sb-kart-ozet-fiyat { color:#059669; font-weight:700; font-size:13px; white-space:nowrap; }
+.sb-kart-ozet-adet  { color:#aaa; font-size:11px; white-space:nowrap; }
+.sb-kart-ok  { flex-shrink:0; font-size:11px; color:#bbb; transition:transform .2s; margin-left:4px; }
+.sb-kart.acik .sb-kart-ok { transform:rotate(180deg); }
+.sb-kart-sil { background:none; border:none; color:#dc2626; font-size:16px; cursor:pointer; padding:0 4px; flex-shrink:0; line-height:1; }
+/* ── Detay alanı ── */
+.sb-kart-inputs {
+  display:none; flex-direction:column; gap:0;
+  border-top:1px solid #e5e7eb;
 }
-.sb-fiyat { color:#059669; font-weight:700; }
-.sb-maliyet { color:#dc2626; font-weight:700; }
+.sb-kart.acik .sb-kart-inputs { display:flex; }
+/* ── Bloklar ── */
+.sd-blok { padding:10px 12px 8px; border-bottom:1px solid #f1f5f9; }
+.sd-blok:last-child { border-bottom:none; }
+.sd-baslik { font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; }
+/* Fiyat + Çift 2-kolon grid */
+.sd-fiyat-cift-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.sd-alan-label { font-size:10px; color:#94a3b8; margin-bottom:4px; font-weight:600; text-transform:uppercase; letter-spacing:.3px; }
+.sd-inp {
+  width:100%; padding:6px 8px; border:1px solid #e2e8f0; border-radius:6px;
+  font-size:13px; font-weight:600; background:#fff; color:var(--txt);
+  box-sizing:border-box;
+}
+.sd-inp:focus { outline:none; border-color:var(--sol); }
+.sd-para-wrap { display:flex; gap:4px; }
+.sd-para-wrap .sd-inp { flex:1; }
+.sd-para-sel {
+  padding:6px 4px; border:1px solid #e2e8f0; border-radius:6px;
+  font-size:12px; background:#f8fafc; color:var(--txt); flex-shrink:0;
+}
+.sd-cift-wrap { display:flex; align-items:center; gap:6px; }
+.sd-cift-wrap .sd-inp { flex:1; }
+.sd-cift-birim { font-size:12px; color:#888; flex-shrink:0; }
+/* Renk Dağılımı widget */
+.rw-wrap { display:flex; flex-direction:column; gap:4px; }
+.rw-baslik { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+.rw-baslik span { font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:.5px; }
+.rw-ekle-btn { padding:3px 10px; border-radius:5px; border:1px solid var(--sol); background:none; color:var(--sol); font-size:11px; cursor:pointer; font-weight:600; }
+.rw-ekle-btn:hover { background:var(--sol); color:#fff; }
+.rw-satirlar { display:flex; flex-direction:column; gap:4px; }
+.rw-satir { display:flex; gap:6px; align-items:center; }
+.rw-satir .rw-renk-inp { flex:1; min-width:0; padding:5px 8px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; background:#fff; color:var(--txt); }
+.rw-satir .rw-cift-inp  { width:60px; flex-shrink:0; padding:5px 8px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; background:#fff; color:var(--txt); text-align:right; }
+.rw-satir .rw-cift-lbl  { font-size:11px; color:#888; flex-shrink:0; }
+.rw-sil { background:none; border:none; color:#dc2626; font-size:14px; cursor:pointer; padding:0 2px; flex-shrink:0; }
+.rw-durum { font-size:11px; padding:5px 10px; border-radius:6px; margin-top:4px; font-weight:600; display:flex; align-items:center; justify-content:space-between; }
+.rw-durum.tamam { background:#f0fdf4; color:#166534; border:1px solid #bbf7d0; }
+.rw-durum.eksik { background:#fefce8; color:#854d0e; border:1px solid #fef08a; }
+.rw-durum.fazla { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; }
+/* Numune talebi */
+.nm-cb-row { display:flex; align-items:center; gap:6px; font-size:12px; color:#555; cursor:pointer; }
+.nm-cb-row input[type=checkbox] { width:14px; height:14px; cursor:pointer; accent-color:var(--sol); }
+.nm-detay { display:none; flex-direction:column; gap:6px; background:#f8fafc; border-radius:8px; padding:8px 10px; margin-top:8px; border:1px solid #e2e8f0; }
+.nm-detay.acik { display:flex; }
+.nm-satir { display:flex; align-items:center; gap:6px; }
+.nm-satir label { font-size:10px; color:#94a3b8; min-width:46px; flex-shrink:0; font-weight:600; text-transform:uppercase; }
+.nm-satir input { flex:1; padding:5px 7px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; background:#fff; color:var(--txt); }
+.nm-satir select { padding:5px 6px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; background:#fff; color:var(--txt); }
+/* Fiyat Konuşuldu satırı */
+.sd-fk-satir { display:flex; align-items:center; gap:6px; font-size:12px; color:#555; }
+.sd-fk-satir input[type=checkbox] { width:14px; height:14px; cursor:pointer; accent-color:var(--sol); }
+/* Ürün özet 3-kolon */
+.sb-prod-ozet { display:grid; grid-template-columns:1fr 1fr 1fr; gap:0; background:#f8fafc; border-radius:8px; overflow:hidden; border:1px solid #e2e8f0; }
+.sb-prod-ozet-kolon { padding:8px 6px 10px; text-align:center; }
+.sb-prod-ozet-kolon:not(:last-child) { border-right:1px solid #e2e8f0; }
+.sb-prod-ozet-kolon .spok-label { font-size:9px; color:#94a3b8; margin-bottom:3px; font-weight:600; text-transform:uppercase; }
+.sb-prod-ozet-kolon .spok-deger { font-size:11px; font-weight:700; }
+.sb-prod-ozet-kolon.spok-maliyet .spok-deger { color:#dc2626; }
+.sb-prod-ozet-kolon.spok-satis   .spok-deger { color:#059669; }
+.sb-prod-ozet-kolon.spok-kar     .spok-deger { color:#059669; }
+.sb-prod-ozet.maliyet-gizli .spok-maliyet,
+.sb-prod-ozet.maliyet-gizli .spok-kar { display:none; }
+.sb-fiyat  { color:#059669; font-weight:700; }
+.sb-maliyet{ color:#dc2626; font-weight:700; }
 .sb-maliyet.gizli { display:none !important; }
+/* Not alanı */
+.sd-not-inp { width:100%; padding:6px 8px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; background:#fff; color:var(--txt); box-sizing:border-box; resize:none; }
 #urun-ozet {
-  border-top:1px solid var(--brd); padding:12px 14px;
+  border-top:1px solid var(--brd); padding:10px 12px 8px;
   background:var(--bg2); flex-shrink:0; font-size:12px;
 }
 #urun-ozet .oz-satir {
@@ -1001,18 +1071,18 @@
 }
 #urun-ozet .oz-satir.toplam { font-weight:700; font-size:13px; border-top:1px solid var(--brd); padding-top:6px; margin-top:4px; }
 #urun-kaydet-btn {
-  margin:10px 14px 14px;
+  margin:8px 12px 10px;
   padding:12px; border:none; border-radius:8px;
   background:#059669; color:#fff;
   font-size:14px; font-weight:700; cursor:pointer;
-  transition:background .15s;
+  transition:background .15s; width:calc(100% - 24px); display:block;
 }
 #urun-kaydet-btn:hover { background:#047857; }
 #urun-iptal-btn {
-  margin:0 14px 10px;
+  margin:0 12px 10px;
   padding:8px; border:1px solid var(--brd); border-radius:8px;
   background:var(--bg2); color:var(--txt);
-  font-size:13px; cursor:pointer;
+  font-size:13px; cursor:pointer; width:calc(100% - 24px); display:block;
 }
 /* Maliyet toggle */
 #maliyet-toggle-wrap {
@@ -1041,6 +1111,40 @@
   grid-column:1/-1; text-align:center;
   padding:40px; color:#aaa; font-size:14px;
 }
+/* ── Kompakt görünüm ──────────────────────────────────────────────────────── */
+#urun-kart-alan.compact-view {
+  grid-template-columns: repeat(5, 1fr) !important;
+  gap:8px !important;
+  padding:10px 12px !important;
+}
+#urun-kart-alan.compact-view .uk {
+  min-height:0 !important;
+  border-radius:8px !important;
+}
+#urun-kart-alan.compact-view .uk-gorsel-wrap {
+  height:72px !important;
+}
+#urun-kart-alan.compact-view .uk-gorsel {
+  height:72px !important;
+}
+#urun-kart-alan.compact-view .uk-gorsel-yok {
+  height:72px !important;
+}
+#urun-kart-alan.compact-view .uk-body { padding:6px 8px 4px !important; }
+#urun-kart-alan.compact-view .uk-model { font-size:12px !important; margin-bottom:1px !important; }
+#urun-kart-alan.compact-view .uk-cat { display:none !important; }
+#urun-kart-alan.compact-view .uk-asorti { font-size:10px !important; margin-bottom:1px !important; }
+#urun-kart-alan.compact-view .uk-varyant { font-size:10px !important; }
+#urun-kart-alan.compact-view .uk-fiyat-blok { padding:4px 8px !important; gap:4px !important; }
+#urun-kart-alan.compact-view .uk-fiyat { font-size:12px !important; }
+#urun-kart-alan.compact-view .uk-maliyet { font-size:11px !important; }
+#urun-kart-alan.compact-view .uk-ekle-btn { padding:6px !important; font-size:11px !important; }
+#urun-kart-alan.compact-view .uk-varyant-ac-btn { padding:6px 8px !important; font-size:11px !important; }
+#urun-kart-alan.compact-view .uk-secim-badge { padding:4px 8px !important; font-size:11px !important; }
+#urun-kart-alan.compact-view .uk-cinsi-rozet { font-size:9px !important; padding:1px 5px !important; }
+#urun-kart-alan.compact-view .uk-secili-check { width:20px !important; height:20px !important; font-size:11px !important; }
+@media(max-width:1100px) { #urun-kart-alan.compact-view { grid-template-columns: repeat(4, 1fr) !important; } }
+@media(max-width:700px)  { #urun-kart-alan.compact-view { grid-template-columns: repeat(3, 1fr) !important; } }
 /* Responsive */
 @media(max-width:1100px) {
   #urun-sidebar { width:260px; }
@@ -1094,6 +1198,7 @@ window.addEventListener('DOMContentLoaded', function() {
 
 // ── Gorüşme formu: ürün arama ────────────────────────────────────────────────
 var secilenUrunler = {}; // id -> urun obj
+var secilenVeri    = {}; // id -> {miktar, fiyat, paraBirimi, maliyet} - state
 var tumUrunler    = []; // cache
 var aktifFiltreCinsi = '';
 var aktifSiralama    = 'model';
@@ -1129,6 +1234,18 @@ function maliyetToggle(goster) {
   document.querySelectorAll('.sb-maliyet').forEach(function(el){
     el.classList.toggle('gizli', !goster);
   });
+  document.querySelectorAll('.sb-prod-ozet').forEach(function(el){
+    el.classList.toggle('maliyet-gizli', !goster);
+  });
+}
+
+var kompaktGorunum = false;
+function gorunumToggle() {
+  var alan = document.getElementById('urun-kart-alan');
+  var btn  = document.getElementById('gorunum-toggle-btn');
+  kompaktGorunum = !kompaktGorunum;
+  alan.classList.toggle('compact-view', kompaktGorunum);
+  if (btn) btn.textContent = kompaktGorunum ? '⊟ Geniş' : '⊞ Kompakt';
 }
 
 // ── Filtre & sıralama ─────────────────────────────────────────────────────────
@@ -1352,6 +1469,7 @@ function urunToggleKart(uid, btnEl) {
   if (secilenUrunler[String(uid)]) {
     // Kaldır
     delete secilenUrunler[String(uid)];
+    delete secilenVeri[String(uid)];
     _kartSecimGuncelle(uid, false);
   } else {
     // Ekle
@@ -1422,109 +1540,357 @@ function _kartSecimGuncelle(uid, secili) {
   });
 }
 
+function sbAkordeonToggle(uid) {
+  var hedef = document.getElementById('sk-' + uid);
+  if (!hedef) return;
+  var zatenAcik = hedef.classList.contains('acik');
+  document.querySelectorAll('#secilen-liste .sb-kart').forEach(function(k){ k.classList.remove('acik'); });
+  if (!zatenAcik) hedef.classList.add('acik');
+}
+
+function sbOzetGuncelle(uid) {
+  uid = String(uid);
+  var sv = secilenVeri[uid] || {};
+  var ozAdet = document.getElementById('sk-adet-' + uid);
+  if (ozAdet) ozAdet.textContent = sv.miktar ? sv.miktar.toLocaleString('tr-TR') + ' çift' : '— çift';
+}
+
+function svGuncelle(uid, field, value) {
+  uid = String(uid);
+  if (!secilenVeri[uid]) {
+    var u = secilenUrunler[uid] || {};
+    secilenVeri[uid] = { miktar: 0, fiyat: u.birim_fiyat ? parseFloat(u.birim_fiyat) : 0, paraBirimi: 'USD', maliyet: u.maliyet ? parseFloat(u.maliyet) : 0 };
+  }
+  secilenVeri[uid][field] = value;
+  sbOzetGuncelle(uid);
+  sbProdOzetGuncelle(uid);
+  ozeti_guncelle();
+}
+
+function sbProdOzetGuncelle(uid) {
+  uid = String(uid);
+  var sv = secilenVeri[uid];
+  if (!sv) return;
+  var miktar  = sv.miktar  || 0;
+  var fiyat   = sv.fiyat   || 0;
+  var maliyet = sv.maliyet || 0;
+  var satis   = miktar * fiyat;
+  var kar     = satis - (miktar * maliyet);
+  var fmt = function(n) { return n.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+  var kur = (sv.paraBirimi || 'USD');
+  var elSat = document.getElementById('sp-sat-' + uid);
+  var elMal = document.getElementById('sp-mal-' + uid);
+  var elKar = document.getElementById('sp-kar-' + uid);
+  if (elSat) elSat.textContent = satis  > 0 ? fmt(satis)  + ' ' + kur : '—';
+  if (elMal && maliyet > 0) elMal.textContent = fmt(miktar * maliyet) + ' ' + kur;
+  if (elKar) elKar.textContent = satis  > 0 ? fmt(kar)    + ' ' + kur : '—';
+}
+
+// ── Çoklu renk widget ─────────────────────────────────────────────────────────
+function rwRenkEkle(uid) {
+  var wrap = document.getElementById('rw-' + uid);
+  if (!wrap) return;
+  var satirId = 'rws-' + uid + '-' + Date.now();
+  var satir = document.createElement('div');
+  satir.className = 'rw-satir';
+  satir.id = satirId;
+  satir.innerHTML =
+    '<input type="text" class="rw-renk-inp" placeholder="Renk (Siyah...)" ' +
+      'oninput="rwGuncelle(\'' + uid + '\')">' +
+    '<input type="number" class="rw-cift-inp" min="0" placeholder="500" ' +
+      'oninput="rwGuncelle(\'' + uid + '\')">' +
+    '<span class="rw-cift-lbl">çift</span>' +
+    '<button type="button" class="rw-sil" onclick="rwSil(\'' + satirId + '\',\'' + uid + '\')">×</button>';
+  wrap.querySelector('.rw-satirlar').appendChild(satir);
+  rwGuncelle(uid);
+}
+
+function rwSil(satirId, uid) {
+  var el = document.getElementById(satirId);
+  if (el) el.remove();
+  rwGuncelle(uid);
+}
+
+function rwGuncelle(uid) {
+  uid = String(uid);
+  var wrap = document.getElementById('rw-' + uid);
+  if (!wrap) return;
+
+  var satirlar = wrap.querySelectorAll('.rw-satirlar .rw-satir');
+  var parcalar = [];
+  var renkToplamCift = 0;
+  satirlar.forEach(function(s) {
+    var renkInp = s.querySelector('.rw-renk-inp');
+    var ciftInp  = s.querySelector('.rw-cift-inp');
+    var renk = renkInp ? renkInp.value.trim() : '';
+    var cift = ciftInp && ciftInp.value !== '' ? parseInt(ciftInp.value) || 0 : 0;
+    if (renk || cift > 0) {
+      parcalar.push((renk || '?') + (cift > 0 ? ' ' + cift + ' çift' : ''));
+      renkToplamCift += cift;
+    }
+  });
+
+  // hidden input güncelle
+  var hidden = wrap.querySelector('input[type=hidden]');
+  if (hidden) hidden.value = parcalar.join(' / ');
+
+  // durum göstergesi
+  var durum = wrap.querySelector('.rw-durum');
+  var sv = secilenVeri[uid] || {};
+  var toplamCift = sv.miktar || 0;
+  if (!durum) return;
+
+  if (parcalar.length === 0) {
+    durum.textContent = '';
+    durum.className = 'rw-durum';
+  } else if (toplamCift > 0) {
+    if (renkToplamCift === toplamCift) {
+      durum.textContent = '✓ Renk dağılımı tamamlandı ' + renkToplamCift.toLocaleString('tr-TR') + ' / ' + toplamCift.toLocaleString('tr-TR') + ' çift';
+      durum.className = 'rw-durum tamam';
+    } else if (renkToplamCift > toplamCift) {
+      durum.textContent = '⚠ Fazla! ' + renkToplamCift.toLocaleString('tr-TR') + ' / ' + toplamCift.toLocaleString('tr-TR') + ' çift';
+      durum.className = 'rw-durum fazla';
+    } else {
+      durum.textContent = 'Renk dağılımı ' + renkToplamCift.toLocaleString('tr-TR') + ' / ' + toplamCift.toLocaleString('tr-TR') + ' çift';
+      durum.className = 'rw-durum eksik';
+    }
+  } else {
+    // Çift girilmemiş ama renkler var — sadece özeti göster
+    durum.textContent = parcalar.join(' / ');
+    durum.className = 'rw-durum eksik';
+  }
+}
+
+function rwDurumGuncelle(uid) {
+  rwGuncelle(String(uid));
+}
+
 function sidebarUrunRender(u) {
   var liste = document.getElementById('secilen-liste');
-  // Boş durum mesajını kaldır (id ile güvenli)
   var bos = document.getElementById('sb-bos');
   if (bos) bos.remove();
-  // Zaten varsa tekrar ekleme (duplicate koruması)
   if (document.getElementById('sk-' + u.id)) return;
+
+  var uid = String(u.id);
+  if (!secilenVeri[uid]) {
+    secilenVeri[uid] = { miktar: 0, fiyat: u.birim_fiyat ? parseFloat(u.birim_fiyat) : 0, paraBirimi: 'USD', maliyet: u.maliyet ? parseFloat(u.maliyet) : 0 };
+  }
 
   var listeFiyat = u.birim_fiyat ? parseFloat(u.birim_fiyat).toFixed(2) : '';
   var maliyet    = u.maliyet     ? parseFloat(u.maliyet).toFixed(2)     : '';
-  var thumb = u.gorsel_yolu
-    ? '<img class="sb-kart-gorsel" src="/static/' + u.gorsel_yolu + '" loading="lazy">'
-    : '<div class="sb-kart-gorsel" style="background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:9px;color:#ccc;"></div>';
+  // gorsel_yolu yoksa secilenUrunler cache'inden veya DOM kartından al
+  var gorselSrc = u.gorsel_yolu || u.ilk_gorsel || null;
+  if (!gorselSrc) {
+    // DOM'daki sol kartta görsel varsa onu kullan
+    var solKart = document.getElementById('uk-' + (u.model_no||'').replace(/[^a-zA-Z0-9]/g,'_'));
+    if (solKart) {
+      var solImg = solKart.querySelector('.uk-gorsel');
+      if (solImg && solImg.src && !solImg.src.endsWith('/')) gorselSrc = solImg.getAttribute('src').replace('/static/','');
+    }
+  }
+  var thumb = gorselSrc
+    ? '<img class="sb-kart-gorsel" src="/static/' + gorselSrc + '" loading="lazy" onerror="this.style.opacity=\'0\'">'
+    : '<div class="sb-kart-gorsel" style="display:flex;align-items:center;justify-content:center;color:#ccc;font-size:18px;">📦</div>';
 
   var div = document.createElement('div');
   div.className = 'sb-kart';
   div.id = 'sk-' + u.id;
   div._urunData = u;
+  var maliyetSayi = maliyet ? parseFloat(maliyet) : 0;
+
   div.innerHTML =
-    /* Form hidden inputs (forma eklenecek) */
     '<input type="hidden" name="urun_ids[]" value="' + u.id + '">' +
-    '<div class="sb-kart-ust">' +
-      '<div>' + thumb + '</div>' +
+    /* ── Kompakt başlık ── */
+    '<div class="sb-kart-ust" onclick="sbAkordeonToggle(' + u.id + ')">' +
+      thumb +
       '<div class="sb-kart-info">' +
         '<div class="sb-kart-model">' + (u.model_no||'') + '</div>' +
-        '<div class="sb-kart-sub">' + (u.urun_cinsi||'') + (u.asorti ? ' · ' + u.asorti : '') + '</div>' +
-        (listeFiyat ? '<div class="sb-fiyat" style="font-size:12px;">Satış: ' + listeFiyat + ' $</div>' : '') +
-        (maliyet ? '<div class="sb-maliyet' + (!maliyetGoster?' gizli':'') + '" style="font-size:11px;">Mlt: ' + maliyet + '</div>' : '') +
+        '<div class="sb-kart-sub">' + [u.kategori, u.asorti].filter(Boolean).join(' · ') + '</div>' +
       '</div>' +
-      '<button type="button" class="sb-kart-sil" onclick="urunToggleKart(' + u.id + ', this)">×</button>' +
+      '<div class="sb-kart-ozet">' +
+        (listeFiyat ? '<span class="sb-kart-ozet-fiyat">' + listeFiyat + ' $</span>' : '') +
+        '<span class="sb-kart-ozet-adet" id="sk-adet-' + u.id + '">— çift</span>' +
+      '</div>' +
+      '<span class="sb-kart-ok">▲</span>' +
+      '<button type="button" class="sb-kart-sil" onclick="event.stopPropagation();urunToggleKart(' + u.id + ', this)" title="Kaldır">×</button>' +
     '</div>' +
+
+    /* ── Detay alanı ── */
     '<div class="sb-kart-inputs">' +
-      /* Verilen fiyat */
-      '<div class="sb-kart-row">' +
-        '<label>Verilen Fiyat</label>' +
-        '<input type="number" step="0.01" min="0" name="verilen_fiyat_' + u.id + '" ' +
-          'placeholder="' + (listeFiyat||'0.00') + '" ' +
-          'style="width:80px;" oninput="ozeti_guncelle()">' +
-        '<select name="para_birimi_' + u.id + '" style="padding:4px 5px;border:1px solid var(--brd);border-radius:4px;font-size:11px;background:var(--bg2);color:var(--txt);">' +
-          '<option value="USD">USD</option><option value="EUR">EUR</option><option value="TL">TL</option>' +
-        '</select>' +
-      '</div>' +
-      /* Miktar */
-      '<div class="sb-kart-row">' +
-        '<label>Toplam Adet</label>' +
-        '<input type="number" min="0" name="toplam_adet_' + u.id + '" placeholder="3000" oninput="ozeti_guncelle()">' +
-      '</div>' +
-      /* Renk */
-      '<div class="sb-kart-row">' +
-        '<label>Renk</label>' +
-        '<input type="text" name="istenen_renk_' + u.id + '" placeholder="Siyah, Beyaz..." ' +
-          'style="flex:1;padding:4px 6px;border:1px solid var(--brd);border-radius:4px;font-size:12px;background:var(--bg2);color:var(--txt);">' +
-      '</div>' +
-      /* Numune */
-      '<div class="sb-kart-row">' +
-        '<label style="display:flex;align-items:center;gap:4px;cursor:pointer;">' +
-          '<input type="checkbox" name="numune_' + u.id + '" value="1" onchange="toggleNumune(' + u.id + ', this.checked)"> Numune' +
-        '</label>' +
-        '<div id="nm_' + u.id + '" style="display:none;gap:4px;align-items:center;">' +
-          '<input type="number" min="1" max="99" name="numune_adet_' + u.id + '" placeholder="Adet" style="width:50px;padding:4px;border:1px solid var(--brd);border-radius:4px;font-size:11px;background:var(--bg2);color:var(--txt);">' +
-          '<input type="text" name="numune_beden_' + u.id + '" placeholder="Beden" style="width:60px;padding:4px;border:1px solid var(--brd);border-radius:4px;font-size:11px;background:var(--bg2);color:var(--txt);">' +
+
+      /* Blok A: Fiyat + Ürün Çifti (2 kolon) */
+      '<div class="sd-blok">' +
+        '<div class="sd-fiyat-cift-grid">' +
+          '<div>' +
+            '<div class="sd-alan-label">Fiyat</div>' +
+            '<div class="sd-para-wrap">' +
+              '<input class="sd-inp" type="number" step="0.01" min="0" ' +
+                'name="verilen_fiyat_' + u.id + '" data-uid="' + u.id + '" ' +
+                'placeholder="' + (listeFiyat||'0.00') + '" ' +
+                'oninput="svGuncelle(this.dataset.uid,\'fiyat\',parseFloat(this.value)||0)">' +
+              '<select class="sd-para-sel" name="para_birimi_' + u.id + '" data-uid="' + u.id + '" ' +
+                'onchange="svGuncelle(this.dataset.uid,\'paraBirimi\',this.value)">' +
+                '<option value="USD">USD</option>' +
+                '<option value="EUR">EUR</option>' +
+                '<option value="TL">TL</option>' +
+              '</select>' +
+            '</div>' +
+          '</div>' +
+          '<div>' +
+            '<div class="sd-alan-label">Ürün Çifti</div>' +
+            '<div class="sd-cift-wrap">' +
+              '<input class="sd-inp" type="number" min="0" ' +
+                'name="toplam_adet_' + u.id + '" placeholder="1000" ' +
+                'data-uid="' + u.id + '" ' +
+                'oninput="svGuncelle(this.dataset.uid,\'miktar\',parseFloat(this.value)||0);rwDurumGuncelle(this.dataset.uid)">' +
+              '<span class="sd-cift-birim">çift</span>' +
+            '</div>' +
+          '</div>' +
         '</div>' +
       '</div>' +
-      /* Fiyat konuşuldu */
-      '<div class="sb-kart-row">' +
-        '<label style="display:flex;align-items:center;gap:4px;cursor:pointer;">' +
-          '<input type="checkbox" name="fiyat_konusuldu_' + u.id + '" value="1"> Fiyat konuşuldu' +
+
+      /* Blok B: Renk Dağılımı */
+      '<div class="sd-blok">' +
+        '<div class="rw-wrap" id="rw-' + u.id + '">' +
+          '<div class="rw-baslik">' +
+            '<span>Renk Dağılımı</span>' +
+            '<button type="button" class="rw-ekle-btn" onclick="rwRenkEkle(\'' + u.id + '\')">+ Renk Ekle</button>' +
+          '</div>' +
+          '<input type="hidden" name="istened_renk_' + u.id + '" value="">' +
+          '<div class="rw-satirlar"></div>' +
+          '<div class="rw-durum"></div>' +
+        '</div>' +
+      '</div>' +
+
+      /* Blok C: Numune Talebi */
+      '<div class="sd-blok">' +
+        '<label class="nm-cb-row">' +
+          '<input type="checkbox" name="numune_' + u.id + '" value="1" ' +
+            'onchange="toggleNumune(' + u.id + ', this.checked)">' +
+          '<span>Numune İsteniyor</span>' +
         '</label>' +
+        '<div class="nm-detay" id="nm_' + u.id + '">' +
+          '<div class="nm-satir">' +
+            '<label>Miktar</label>' +
+            '<input type="number" min="1" name="numune_adet_' + u.id + '" placeholder="1">' +
+            '<select name="numune_birim_' + u.id + '">' +
+              '<option value="tek">tek</option>' +
+              '<option value="çift">çift</option>' +
+            '</select>' +
+          '</div>' +
+          '<div class="nm-satir">' +
+            '<label>Beden</label>' +
+            '<input type="text" name="numune_beden_' + u.id + '" placeholder="42">' +
+          '</div>' +
+          '<div class="nm-satir">' +
+            '<label>Not</label>' +
+            '<input type="text" name="numune_notu_' + u.id + '" placeholder="Opsiyonel">' +
+          '</div>' +
+        '</div>' +
       '</div>' +
-      /* Not */
-      '<div class="sb-kart-row">' +
-        '<label>Not</label>' +
-        '<input type="text" name="urun_notu_' + u.id + '" placeholder="Özel not..." ' +
-          'style="flex:1;padding:4px 6px;border:1px solid var(--brd);border-radius:4px;font-size:12px;background:var(--bg2);color:var(--txt);">' +
+
+      /* Blok D: Fiyat Konuşuldu + Beden */
+      '<div class="sd-blok">' +
+        '<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;">' +
+          '<label class="sd-fk-satir">' +
+            '<input type="checkbox" name="fiyat_konusuldu_' + u.id + '" value="1">' +
+            '<span style="font-size:12px;color:#555;">Fiyat konuşuldu</span>' +
+          '</label>' +
+          '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:120px;">' +
+            '<span style="font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;white-space:nowrap;">Beden</span>' +
+            '<input class="sd-inp" type="text" name="numune_beden_' + u.id + '" placeholder="36/40" style="max-width:80px;font-weight:400;">' +
+          '</div>' +
+        '</div>' +
+        '<div style="margin-top:8px;">' +
+          '<span style="font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Not</span>' +
+          '<input class="sd-not-inp" type="text" name="urun_notu_' + u.id + '" placeholder="Ek not..." style="margin-top:4px;">' +
+        '</div>' +
       '</div>' +
+
+      /* Blok E: Özet 3-kolon (Maliyet / Toplam Satış / Tahmini Kâr) */
+      '<div class="sd-blok">' +
+        '<div class="sb-prod-ozet' + (!maliyetGoster?' maliyet-gizli':'') + '" id="sp-ozet-' + u.id + '">' +
+          '<div class="sb-prod-ozet-kolon spok-maliyet sb-maliyet' + (!maliyetGoster?' gizli':'') + '">' +
+            '<div class="spok-label">Maliyet</div>' +
+            '<div class="spok-deger" id="sp-mal-' + u.id + '">' + (maliyet ? maliyet + ' $' : '—') + '</div>' +
+          '</div>' +
+          '<div class="sb-prod-ozet-kolon spok-satis">' +
+            '<div class="spok-label">Toplam Satış</div>' +
+            '<div class="spok-deger" id="sp-sat-' + u.id + '">—</div>' +
+          '</div>' +
+          '<div class="sb-prod-ozet-kolon spok-kar sb-maliyet' + (!maliyetGoster?' gizli':'') + '">' +
+            '<div class="spok-label">Tahmini Kâr</div>' +
+            '<div class="spok-deger" id="sp-kar-' + u.id + '">—</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+
     '</div>';
+
+  // Diğerleri kapat, yeni eklenen açık gelsin
+  document.querySelectorAll('#secilen-liste .sb-kart').forEach(function(k){ k.classList.remove('acik'); });
+  div.classList.add('acik');
   liste.appendChild(div);
 }
 
 function ozeti_guncelle() {
-  var topMiktar = 0, topSatis = 0, topMaliyet = 0;
   var ids = Object.keys(secilenUrunler);
+  var topMiktar = 0;
+  // currency -> {satis, maliyet}
+  var kurlar = {};
+
   ids.forEach(function(uid) {
-    var u = secilenUrunler[uid];
-    var miktarEl = document.querySelector('input[name="toplam_adet_' + uid + '"]');
-    var fiyatEl  = document.querySelector('input[name="verilen_fiyat_' + uid + '"]');
-    var miktar = miktarEl && miktarEl.value ? parseFloat(miktarEl.value) : 0;
-    var fiyat  = fiyatEl  && fiyatEl.value  ? parseFloat(fiyatEl.value)  : (u.birim_fiyat ? parseFloat(u.birim_fiyat) : 0);
-    var mlt    = u.maliyet ? parseFloat(u.maliyet) : 0;
-    topMiktar  += miktar;
-    topSatis   += miktar * fiyat;
-    topMaliyet += miktar * mlt;
+    var sv = secilenVeri[uid];
+    var u  = secilenUrunler[uid];
+    if (!sv || !u) return;
+    var miktar = sv.miktar || 0;
+    var fiyat  = sv.fiyat  || (u.birim_fiyat ? parseFloat(u.birim_fiyat) : 0);
+    var kur    = sv.paraBirimi || 'USD';
+    var mlt    = sv.maliyet || (u.maliyet ? parseFloat(u.maliyet) : 0);
+    topMiktar += miktar;
+    if (!kurlar[kur]) kurlar[kur] = { satis: 0, maliyet: 0 };
+    kurlar[kur].satis   += miktar * fiyat;
+    kurlar[kur].maliyet += miktar * mlt;
   });
-  var kar = topSatis - topMaliyet;
-  var fmt = function(n){ return n ? n.toLocaleString('tr-TR', {minimumFractionDigits:2,maximumFractionDigits:2}) : '—'; };
+
+  var fmt = function(n) { return n.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
   var el;
-  el = document.getElementById('oz-miktar'); if(el) el.textContent = topMiktar ? topMiktar.toLocaleString('tr-TR') + ' çft' : '—';
-  el = document.getElementById('oz-satis');  if(el) el.textContent = topSatis  ? fmt(topSatis) + ' $' : '—';
-  el = document.getElementById('oz-maliyet');if(el) el.textContent = topMaliyet? fmt(topMaliyet) + ' $' : '—';
-  el = document.getElementById('oz-kar');    if(el) el.textContent = (topSatis||topMaliyet) ? fmt(kar) + ' $' : '—';
-  el = document.getElementById('secilen-sayi'); if(el) el.textContent = ids.length;
-  // Özet şerit güncelle
-  var serit = document.getElementById('sb-ozet-serit');
+
+  // Toplam miktar
+  el = document.getElementById('oz-miktar');
+  if (el) el.textContent = topMiktar ? topMiktar.toLocaleString('tr-TR') + ' çift' : '—';
+
+  // Satış, maliyet, kâr — currency bazlı
+  var satisWrap    = document.getElementById('oz-satis-wrap');
+  var maliyetWrap  = document.getElementById('oz-maliyet-wrap');
+  var karWrap      = document.getElementById('oz-kar-wrap');
+  if (satisWrap)   satisWrap.innerHTML   = '';
+  if (maliyetWrap) maliyetWrap.innerHTML = '';
+  if (karWrap)     karWrap.innerHTML     = '';
+
+  var kurListesi = Object.keys(kurlar);
+  if (kurListesi.length === 0) {
+    if (satisWrap) satisWrap.innerHTML = '<div class="oz-satir"><span style="color:#888;">Toplam Satış</span><span>—</span></div>';
+    if (maliyetWrap) maliyetWrap.innerHTML = '<div class="oz-satir"><span style="color:#888;">Toplam Maliyet</span><span>—</span></div>';
+    if (karWrap) karWrap.innerHTML = '<div class="oz-satir toplam"><span>Tahmini Kâr</span><span>—</span></div>';
+  } else {
+    kurListesi.forEach(function(kur) {
+      var s = kurlar[kur].satis;
+      var m = kurlar[kur].maliyet;
+      var k = s - m;
+      var label = kurListesi.length > 1 ? ' (' + kur + ')' : '';
+      if (satisWrap)   satisWrap.innerHTML   += '<div class="oz-satir"><span style="color:#888;">Toplam Satış' + label + '</span><span style="color:#059669;font-weight:700;">' + fmt(s) + ' ' + kur + '</span></div>';
+      if (maliyetWrap) maliyetWrap.innerHTML += '<div class="oz-satir"><span style="color:#888;">Toplam Maliyet' + label + '</span><span style="color:#dc2626;font-weight:700;">' + fmt(m) + ' ' + kur + '</span></div>';
+      if (karWrap)     karWrap.innerHTML     += '<div class="oz-satir toplam"><span>Tahmini Kâr' + label + '</span><span style="color:' + (k >= 0 ? '#059669' : '#dc2626') + ';font-weight:700;">' + fmt(k) + ' ' + kur + '</span></div>';
+    });
+  }
+
+  // Başlık sayacı
+  el = document.getElementById('secilen-sayi');
+  if (el) el.textContent = ids.length;
+
+  // Özet şerit
+  var serit    = document.getElementById('sb-ozet-serit');
   var seritTxt = document.getElementById('sb-ozet-text');
   if (serit && seritTxt) {
     if (ids.length > 0) {
@@ -1536,10 +1902,12 @@ function ozeti_guncelle() {
   }
 }
 
+
 function tumunuTemizle() {
   if (!confirm('Tüm seçimler temizlenecek. Emin misiniz?')) return;
   Object.keys(secilenUrunler).forEach(function(uid){ delete secilenUrunler[uid]; });
   secilenUrunler = {};
+  secilenVeri = {};
   // Tüm kart seçimlerini kaldır
   document.querySelectorAll('#urun-kart-alan .uk').forEach(function(k){
     k.classList.remove('secili');
@@ -1611,7 +1979,7 @@ function urunKaldir(id) { urunToggleKart(id, null); }
 
 function toggleNumune(uid, checked) {
   var el = document.getElementById('nm_' + uid);
-  if (el) el.style.display = checked ? 'flex' : 'none';
+  if (el) el.classList.toggle('acik', checked);
 }
 function toggleGorusmeDuzenle(gid) {
   var el = document.getElementById('duzenle-form-' + gid);
