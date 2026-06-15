@@ -1196,17 +1196,37 @@ function kartlariRenderEt() {
   }
   alan.innerHTML = '';
   liste.forEach(function(grup) {
-    var tekVaryant = grup.varyant_sayisi === 1;
-    var ilkUrun   = grup.variants && grup.variants[0];
-    var grupId    = 'uk-' + (grup.model_no||'').replace(/[^a-zA-Z0-9]/g,'_');
+    var grupId = 'uk-' + (grup.model_no||'').replace(/[^a-zA-Z0-9]/g,'_');
+
+    // ── Asorti normalizasyonu ──────────────────────────────────────────────────
+    // API'den gelen variants içinde aynı asorti birden fazla kayıt olabilir.
+    // Her benzersiz asorti için sadece 1 temsilci kaydı tut.
+    var gorulmusAsorti = {};
+    var benzersizVariants = [];
+    if (grup.variants) {
+      grup.variants.forEach(function(u) {
+        var asortiKey = (u.asorti || '').trim().toUpperCase() || '__BOŞ__';
+        if (!gorulmusAsorti[asortiKey]) {
+          gorulmusAsorti[asortiKey] = true;
+          benzersizVariants.push(u);
+        }
+      });
+    }
+    var benzersizAsortiSayisi = benzersizVariants.length;
+    var tekAsorti = benzersizAsortiSayisi <= 1;  // 0 ya da 1 benzersiz asorti → tek ürün gibi
+    var ilkUrun   = benzersizVariants[0] || null;
+
     var secimiVar = grup.variants && grup.variants.some(function(u){ return !!secilenUrunler[String(u.id)]; });
 
-    var minF = grup.min_fiyat ? parseFloat(grup.min_fiyat).toFixed(2) : '—';
-    var maxF = grup.max_fiyat ? parseFloat(grup.max_fiyat).toFixed(2) : '—';
+    // Fiyat aralığı: benzersiz varyantlardan hesapla
+    var fiyatlar = benzersizVariants.map(function(u){ return u.birim_fiyat ? parseFloat(u.birim_fiyat) : null; }).filter(function(f){ return f !== null; });
+    var minF = fiyatlar.length ? Math.min.apply(null, fiyatlar).toFixed(2) : '—';
+    var maxF = fiyatlar.length ? Math.max.apply(null, fiyatlar).toFixed(2) : '—';
     var fiyatStr = (minF === maxF) ? minF + ' $' : minF + '–' + maxF + ' $';
-    // Ortalama maliyet
+
+    // Ortalama maliyet: benzersiz varyantlardan
     var maliyetToplam = 0, maliyetSayi = 0;
-    if (grup.variants) grup.variants.forEach(function(u){ if(u.maliyet){ maliyetToplam+=parseFloat(u.maliyet); maliyetSayi++; } });
+    benzersizVariants.forEach(function(u){ if(u.maliyet){ maliyetToplam+=parseFloat(u.maliyet); maliyetSayi++; } });
     var malStr = maliyetSayi ? (maliyetToplam/maliyetSayi).toFixed(2) : '—';
 
     var gorselHtml = grup.ilk_gorsel
@@ -1215,32 +1235,29 @@ function kartlariRenderEt() {
     var cinsiRozet = grup.urun_cinsi
       ? '<div class="uk-cinsi-rozet">' + grup.urun_cinsi + '</div>' : '';
 
-    // Tek varyant: 1 buton (seçim). Çok varyant: 2 ayrı buton (varyant aç + seçim)
     var ekleBtnText = secimiVar ? '✓ Seçildi' : '+ Ürün Ekle';
-    var ekleOnclick = tekVaryant && ilkUrun
-      ? 'urunToggleKart(' + ilkUrun.id + ', this)'
-      : null; // çok varyant: seçim yok (varyant satırından seçilir)
 
     var div = document.createElement('div');
     div.className = 'uk' + (secimiVar ? ' secili' : '');
     div.id = grupId;
 
-    // Alt buton bloku: tek varyant → 1 buton; çok varyant → varyant toggle + ayrı seçim sayacı
+    // Alt buton bloku
     var altButonHtml;
-    if (tekVaryant && ilkUrun) {
+    if (tekAsorti && ilkUrun) {
+      // Tek asorti (ya da asorti yok) → direkt seçim butonu
       altButonHtml =
         '<button type="button" class="uk-ekle-btn' + (secimiVar ? ' secili' : '') + '" ' +
           'onclick="urunToggleKart(' + ilkUrun.id + ', this)">' +
           ekleBtnText +
         '</button>';
     } else {
-      // Çok varyant: varyant açma butonu + seçim durumu badge
+      // Birden fazla benzersiz asorti → asorti listesi aç + seçim badge
       altButonHtml =
         '<div class="uk-alt-butonlar">' +
           '<button type="button" class="uk-varyant-ac-btn" ' +
-            'data-varyant-sayisi="' + grup.varyant_sayisi + '" ' +
+            'data-varyant-sayisi="' + benzersizAsortiSayisi + '" ' +
             'onclick="varyantListeToggle(\'' + grupId + '\', this)">' +
-            '▼ ' + grup.varyant_sayisi + ' Varyant' +
+            '▼ ' + benzersizAsortiSayisi + ' Asorti Göster' +
           '</button>' +
           '<span class="uk-secim-badge' + (secimiVar ? ' gorunur' : '') + '">' +
             (secimiVar ? '✓ Seçildi' : '') +
@@ -1258,17 +1275,17 @@ function kartlariRenderEt() {
         '<div class="uk-model">' + (grup.model_no||'') + '</div>' +
         '<div class="uk-cat">' + (grup.kategori||'') + (grup.tip ? ' · ' + grup.tip : '') + '</div>' +
         '<div class="uk-asorti">' + (ilkUrun && ilkUrun.asorti ? 'Asorti: ' + ilkUrun.asorti : '') + '</div>' +
-        (!tekVaryant ? '<div class="uk-varyant">' + grup.varyant_sayisi + ' Varyant</div>' : '') +
+        (!tekAsorti ? '<div class="uk-varyant">' + benzersizAsortiSayisi + ' Asorti</div>' : '') +
       '</div>' +
       '<div class="uk-fiyat-blok">' +
         '<span class="uk-fiyat">' + fiyatStr + '</span>' +
         '<span class="uk-maliyet' + (!maliyetGoster ? ' gizli' : '') + '">Mlt: ' + malStr + '</span>' +
       '</div>' +
       altButonHtml +
-      /* Varyant listesi */
-      (!tekVaryant ? (function() {
+      /* Asorti listesi (sadece birden fazla benzersiz asorti varsa) */
+      (!tekAsorti ? (function() {
         var html = '<div class="uk-varyant-liste" id="vl-' + grupId + '">';
-        if (grup.variants) grup.variants.forEach(function(u) {
+        benzersizVariants.forEach(function(u) {
           var sel = !!secilenUrunler[String(u.id)];
           var vf = u.birim_fiyat ? parseFloat(u.birim_fiyat).toFixed(2) + ' $' : '—';
           var vm = u.maliyet ? parseFloat(u.maliyet).toFixed(2) : '—';
@@ -1296,16 +1313,11 @@ function kartlariRenderEt() {
         return html;
       })() : '');
 
-    // _urunData tek varyant için
-    if (tekVaryant && ilkUrun) {
-      div._urunData = {};
-      div._urunData[ilkUrun.id] = ilkUrun;
-    } else if (grup.variants) {
-      div._urunData = {};
-      grup.variants.forEach(function(u){ div._urunData[u.id] = u; });
-    }
-    // Store variants data on the element for JS access
-    div._variants = grup.variants || [];
+    // _urunData ve _variants benzersiz asortilere göre (tekrar kayıtlar hariç)
+    div._urunData = {};
+    benzersizVariants.forEach(function(u){ div._urunData[u.id] = u; });
+    // _variants: urunToggleKart veri araması için benzersiz liste
+    div._variants = benzersizVariants;
 
     alan.appendChild(div);
   });
@@ -1315,9 +1327,10 @@ function varyantListeToggle(grupId, btn) {
   var el = document.getElementById('vl-' + grupId);
   if (!el) return;
   el.classList.toggle('acik');
+  var sayisi = (btn && btn.dataset.varyantSayisi) ? btn.dataset.varyantSayisi : '';
   if (btn) btn.textContent = el.classList.contains('acik')
-    ? '▲ Varyant Gizle'
-    : '▼ ' + (btn.dataset.varyantSayisi || '') + ' Varyant';
+    ? '▲ Asorti Gizle'
+    : '▼ ' + sayisi + ' Asorti Göster';
 }
 
 function urunToggleKart(uid, btnEl) {
