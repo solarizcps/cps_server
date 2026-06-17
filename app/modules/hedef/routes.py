@@ -476,16 +476,20 @@ def hedef_plan_proses():
 # === KORGUN PLAN ENDPOINT (FAZ 1) ===
 # Acik siparis/emir + Urt_con_gch proses kirilimi — Excel mantigi.
 
-def _korgun_plan_durum(verilen, devam_eden, biten):
-    v = int(verilen or 0)
-    d = int(devam_eden or 0)
-    b = int(biten or 0)
-    if d > 0:
-        return 'DEVAM'
-    if v > 0:
-        return 'BEKLİYOR'
-    if b > 0 and v == 0:
+def _korgun_plan_kalan(verilen, biten):
+    return max(0, int(verilen or 0) - int(biten or 0))
+
+
+def _korgun_plan_durum_emir(emir_no, em_giren, emirs_with_proses, emir_biten_sum):
+    """FAZ2A durum: BAŞLANMADI / DEVAM EDİYOR / BİTTİ."""
+    v = int(em_giren.get(emir_no, 0) or 0)
+    b = int(emir_biten_sum or 0)
+    if emir_no in emirs_with_proses:
+        return 'DEVAM EDİYOR'
+    if v > 0 and b >= v:
         return 'BİTTİ'
+    if v > 0:
+        return 'BAŞLANMADI'
     return '-'
 
 
@@ -513,6 +517,24 @@ def _korgun_plan_alt_proses(alt_kod, alt_adi):
     return kod or '-'
 
 
+def _korgun_plan_siparis_hedef(sips, sip_hedef_map):
+    if not sips:
+        return 0
+    return sum(int(sip_hedef_map.get(str(s), 0) or 0) for s in sips)
+
+
+def _korgun_plan_satir_ekstra(meta, en, emir_tip_map, parent_emir_map, sip_hedef_map):
+    emir_tip = (emir_tip_map.get(en) or '').strip().upper() or '-'
+    parent = parent_emir_map.get(en)
+    return {
+        'musteri_adi': meta.get('musteri_adi') or '-',
+        'cari_kod': meta.get('cari_kod') or '-',
+        'siparis_hedef_miktar': _korgun_plan_siparis_hedef(meta.get('sips'), sip_hedef_map),
+        'emir_tip': emir_tip,
+        'parent_emir_no': str(parent) if parent else '-',
+    }
+
+
 def _korgun_plan_satirlar_olustur(con):
     """Korgun acik siparis/emir satirlarini olustur (FAZ1 mantigi)."""
     from collections import defaultdict
@@ -523,6 +545,8 @@ def _korgun_plan_satirlar_olustur(con):
             SELECT
                 CONVERT(VARCHAR(10), sk.SipTar, 120) AS siparis_tarihi,
                 CAST(sk.SipNo AS VARCHAR(20)) AS sip_no,
+                LTRIM(RTRIM(ISNULL(sk.CariKod, ''))) AS cari_kod,
+                LTRIM(RTRIM(ISNULL(ck.CName, ''))) AS musteri_adi,
                 e.EmirNo,
                 e.ModelKod AS stok_kod,
                 ISNULL(m.Tanim, e.ModelKod) AS stok_tanim,
@@ -533,10 +557,12 @@ def _korgun_plan_satirlar_olustur(con):
             INNER JOIN Siparis_Har sh ON sh.SipNo = sk.SipNo
             INNER JOIN Urt_Em_gch g ON g.FisNo = sh.SipNo
             INNER JOIN Urt_Emir e ON e.EmirNo = g.EmirNo
+            LEFT JOIN Cari_Kart ck ON ck.CKod = sk.CariKod
             LEFT JOIN Model_M m ON m.ModelKod = e.ModelKod
             LEFT OUTER JOIN dbo.P_RNK_Tip rn ON rn.RENK_KOD = g.RKOD
             WHERE LTRIM(RTRIM(ISNULL(sh.Durum, ''))) = ''
-            GROUP BY sk.SipTar, sk.SipNo, e.EmirNo, e.ModelKod, m.Tanim
+            GROUP BY sk.SipTar, sk.SipNo, sk.CariKod, ck.CName,
+                     e.EmirNo, e.ModelKod, m.Tanim
             ORDER BY sk.SipNo DESC, e.EmirNo DESC
         """)
         cols = [d[0] for d in cur.description]
@@ -552,6 +578,8 @@ def _korgun_plan_satirlar_olustur(con):
                 emir_meta[en] = {
                     'siparis_tarihi': row.get('siparis_tarihi') or '',
                     'sips': set(),
+                    'cari_kod': row.get('cari_kod') or '',
+                    'musteri_adi': row.get('musteri_adi') or '',
                     'stok_kod': row.get('stok_kod') or '',
                     'stok_tanim': row.get('stok_tanim') or '',
                     'rkod': row.get('rkod'),
@@ -561,6 +589,10 @@ def _korgun_plan_satirlar_olustur(con):
             emir_meta[en]['sips'].add(str(row['sip_no']))
             if row.get('siparis_tarihi'):
                 emir_meta[en]['siparis_tarihi'] = row['siparis_tarihi']
+            if row.get('cari_kod'):
+                emir_meta[en]['cari_kod'] = row['cari_kod']
+            if row.get('musteri_adi'):
+                emir_meta[en]['musteri_adi'] = row['musteri_adi']
             if row.get('rkod'):
                 emir_meta[en]['rkod'] = row['rkod']
             if row.get('renk_tanim'):
@@ -570,6 +602,30 @@ def _korgun_plan_satirlar_olustur(con):
 
         emir_nos = sorted(emir_meta.keys(), reverse=True)
         ph = ','.join(['%s'] * len(emir_nos))
+
+        cur.execute("""
+            SELECT CAST(sh.SipNo AS VARCHAR(20)) AS sip_no,
+                   COALESCE(SUM(ISNULL(sh.Miktar, 0)), 0) AS hedef_miktar
+            FROM Siparis_Har sh
+            WHERE LTRIM(RTRIM(ISNULL(sh.Durum, ''))) = ''
+            GROUP BY sh.SipNo
+        """)
+        sip_hedef_map = {str(r[0]): int(float(r[1] or 0)) for r in cur.fetchall()}
+
+        cur.execute(f"""
+            SELECT e.EmirNo,
+                   UPPER(LTRIM(RTRIM(ISNULL(e.Tip, '')))) AS emir_tip
+            FROM Urt_Emir e
+            WHERE e.EmirNo IN ({ph})
+        """, tuple(emir_nos))
+        emir_tip_map = {int(r[0]): str(r[1] or '') for r in cur.fetchall()}
+
+        cur.execute(f"""
+            SELECT em2.EmirNo_YM, em2.EmirNo
+            FROM Urt_Em2Em em2
+            WHERE em2.EmirNo_YM IN ({ph})
+        """, tuple(emir_nos))
+        parent_emir_map = {int(r[0]): int(r[1]) for r in cur.fetchall()}
 
         cur.execute(f"""
             SELECT EmirNo, COALESCE(SUM(Giren), 0) AS giren
@@ -636,6 +692,9 @@ def _korgun_plan_satirlar_olustur(con):
             con_by_emir[int(r[0])].append(dict(zip(pcols, r)))
 
         emirs_with_proses = set(wait_by_emir.keys()) | set(con_by_emir.keys())
+        emir_biten_sum = {}
+        for en, rows in con_by_emir.items():
+            emir_biten_sum[en] = sum(int(float(r.get('biten') or 0)) for r in rows)
         fallback_by_emir = {}
         fallback_emirs = [en for en in emir_nos if en not in emirs_with_proses]
         if fallback_emirs:
@@ -676,6 +735,10 @@ def _korgun_plan_satirlar_olustur(con):
             renk_tanim = (meta.get('renk_tanim') or '').strip()
             renk = renk_tanim if renk_tanim else (str(int(rkod)) if rkod else '')
             renk_kod = str(int(rkod)) if rkod else ''
+            emir_durum = _korgun_plan_durum_emir(
+                en, em_giren, emirs_with_proses, emir_biten_sum.get(en, 0))
+            ekstra = _korgun_plan_satir_ekstra(
+                meta, en, emir_tip_map, parent_emir_map, sip_hedef_map)
             prosesler = wait_by_emir.get(en, []) + con_by_emir.get(en, [])
             if not prosesler and en in fallback_by_emir:
                 prosesler = [fallback_by_emir[en]]
@@ -713,8 +776,10 @@ def _korgun_plan_satirlar_olustur(con):
                         'verilen': verilen,
                         'devam_eden': devam,
                         'biten': biten,
+                        'kalan': _korgun_plan_kalan(verilen, biten),
                         'birim': birim or '-',
-                        'durum': _korgun_plan_durum(verilen, devam, biten),
+                        'durum': emir_durum,
+                        **ekstra,
                     })
             else:
                 verilen = em_giren.get(en, 0)
@@ -731,8 +796,10 @@ def _korgun_plan_satirlar_olustur(con):
                     'verilen': verilen,
                     'devam_eden': 0,
                     'biten': 0,
+                    'kalan': _korgun_plan_kalan(verilen, 0),
                     'birim': meta.get('birim') or '-',
-                    'durum': _korgun_plan_durum(verilen, 0, 0),
+                    'durum': emir_durum,
+                    **ekstra,
                 })
 
         return satirlar
@@ -772,10 +839,14 @@ def hedef_korgun_plan():
     if ara:
         filtre = []
         for s in satirlar:
-            sip = str(s.get('coklu_siparis_no') or '').lower()
-            emir = str(s.get('emir_no') or '').lower()
-            stok = str(s.get('stok_kod') or '').lower()
-            if ara in sip or ara in emir or ara in stok:
+            if (ara in str(s.get('coklu_siparis_no') or '').lower()
+                    or ara in str(s.get('emir_no') or '').lower()
+                    or ara in str(s.get('stok_kod') or '').lower()
+                    or ara in str(s.get('stok_tanim') or '').lower()
+                    or ara in str(s.get('musteri_adi') or '').lower()
+                    or ara in str(s.get('cari_kod') or '').lower()
+                    or ara in str(s.get('renk') or '').lower()
+                    or ara in str(s.get('proses_tezgah') or '').lower()):
                 filtre.append(s)
         satirlar = filtre
 
