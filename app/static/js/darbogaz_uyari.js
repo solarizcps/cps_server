@@ -74,7 +74,7 @@
     // =====================================================
     function planTablosunaKolonEkle() {
         var tablo = document.getElementById('planTable');
-        if (!tablo) return;
+        if (!tablo || tablo.getAttribute('data-plan-mode') === 'korgun') return;
         
         // Header'a "DARBOĞAZ" ekle (yoksa)
         var thead = tablo.querySelector('thead tr');

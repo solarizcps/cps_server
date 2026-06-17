@@ -34,94 +34,166 @@ function showPlanError(message) {
     box.appendChild(div);
 }
 
+/* === PLAN KORGUN FAZ1B — sayfali + arama ===
+   Kaynak: GET /hedef/korgun-plan?sayfa=&limit=&ara=
+*/
+var _planState = { sayfa: 1, limit: 20, ara: '', toplam: 0, sayfaSayisi: 1 };
+function _pk(v) {
+    if (v === null || v === undefined || v === '') return '-';
+    return String(v);
+}
+function _pkN(v) {
+    if (v === null || v === undefined || v === '') return '-';
+    var n = Number(v);
+    return isNaN(n) ? String(v) : n.toLocaleString('tr-TR');
+}
+
+function _planTemizleDarbogazKolon() {
+    var tablo = document.getElementById('planTable');
+    if (!tablo || tablo.getAttribute('data-plan-mode') !== 'korgun') return;
+    var th = tablo.querySelector('thead .th-darbogaz');
+    if (th) th.remove();
+    tablo.querySelectorAll('tbody .td-darbogaz').forEach(function(td) { td.remove(); });
+}
+
+function _planSayfalamaGuncelle(data) {
+    _planState.toplam = data.toplam || 0;
+    _planState.sayfa = data.sayfa || 1;
+    _planState.sayfaSayisi = data.sayfa_sayisi || 1;
+    var info = document.getElementById('planInfo');
+    var sayfaInfo = document.getElementById('planSayfaInfo');
+    var onceki = document.getElementById('planOnceki');
+    var sonraki = document.getElementById('planSonraki');
+    if (info) {
+        var satirSay = (data.satirlar || []).length;
+        info.textContent = 'Toplam ' + _planState.toplam.toLocaleString('tr-TR') +
+            ' satır — gösterilen ' + satirSay;
+    }
+    if (sayfaInfo) {
+        sayfaInfo.textContent = 'Sayfa ' + _planState.sayfa + ' / ' + _planState.sayfaSayisi;
+    }
+    if (onceki) onceki.disabled = _planState.sayfa <= 1;
+    if (sonraki) sonraki.disabled = _planState.sayfa >= _planState.sayfaSayisi;
+}
+
 function renderPlanRows(rows) {
+    _planTemizleDarbogazKolon();
     var body = document.getElementById("planBody");
     if (!body) return;
     body.innerHTML = "";
     if (!rows || rows.length === 0) {
-        var tr = document.createElement("tr");
-        tr.className = "h-row-empty";
-        var td = document.createElement("td");
-        td.colSpan = 7;
-        td.textContent = "Henuz hedef plan yok.";
-        tr.appendChild(td);
-        body.appendChild(tr);
+        body.innerHTML = '<tr class="h-row-empty"><td colspan="13">Henüz plan verisi yok.</td></tr>';
         return;
     }
-    rows.forEach(function (row) {
+    rows.forEach(function(r) {
         var tr = document.createElement("tr");
-        var idVal     = row.id          || row.plan_id      || "-";
-        var emirVal   = row.emir_no     || row.EmirNo       || "-";
-        var siparisVal = row.siparis_no || row.SiparisNo || "-";
-        var prosesVal = row.proses_kodu || row.proses       || "-";
-        var hedefVal  = (row.hedef_adet !== undefined && row.hedef_adet !== null) ? row.hedef_adet : "-";
-        var tarihVal  = row.tarih       || row.plan_tarihi  || "-";
-        var durumVal  = row.durum       || "ACIK";
-        var vals = [idVal, emirVal, siparisVal, prosesVal, hedefVal, tarihVal, durumVal];
-        vals.forEach(function (v) {
+        var vals = [
+            _pk(r.siparis_tarihi),
+            _pk(r.coklu_siparis_no),
+            _pk(r.emir_no),
+            _pk(r.proses_tezgah),
+            _pk(r.alt_proses),
+            _pk(r.stok_kod),
+            _pk(r.stok_tanim),
+            _pk(r.renk),
+            _pkN(r.verilen),
+            _pkN(r.devam_eden),
+            _pkN(r.biten),
+            _pk(r.birim),
+            _pk(r.durum)
+        ];
+        vals.forEach(function(v) {
             var td = document.createElement("td");
-            td.textContent = String(v);
+            td.textContent = v;
             tr.appendChild(td);
         });
         body.appendChild(tr);
     });
 }
 
-async function planlariYukle() {
-    var body = document.getElementById("planBody");
+function planlariYukle(opts) {
+    opts = opts || {};
+    if (opts.sayfa !== undefined) _planState.sayfa = opts.sayfa;
+    if (opts.ara !== undefined) _planState.ara = opts.ara;
+    if (opts.sayfa === undefined && opts.ara !== undefined) _planState.sayfa = 1;
+
+    var body   = document.getElementById("planBody");
     var errBox = document.getElementById("planError");
     if (errBox) errBox.innerHTML = "";
     if (body) {
-        body.innerHTML = "<tr class=\"h-row-loading\"><td colspan=\"7\"><span class=\"h-loading\">Yukleniyor...</span></td></tr>";
+        body.innerHTML = '<tr class="h-row-loading"><td colspan="13"><span class="h-loading">Yükleniyor...</span></td></tr>';
     }
-    var resp;
-    var data;
-    try {
-        resp = await fetch(MES_BASE + "/api/v2/hedef/liste", {
-            method: "GET",
-            headers: {
-                "Authorization": "Bearer " + DEV_TOKEN,
-                "Content-Type": "application/json"
-            }
+    var url = '/hedef/korgun-plan?sayfa=' + encodeURIComponent(_planState.sayfa) +
+        '&limit=' + encodeURIComponent(_planState.limit);
+    if (_planState.ara) {
+        url += '&ara=' + encodeURIComponent(_planState.ara);
+    }
+    fetch(url, {
+        method: 'GET',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(function(resp) {
+        return resp.text().then(function(t) {
+            var data;
+            try { data = JSON.parse(t); } catch(_) { data = null; }
+            return { status: resp.status, data: data };
         });
-        var text = await resp.text();
-        try { data = JSON.parse(text); }
-        catch (e) { data = { ok: false, mesaj: text.slice(0, 200) }; }
-    } catch (e) {
-        console.error("FETCH:", e);
-        if (body) body.innerHTML = "";
-        showPlanError("Sunucuya ulasilamadi: " + e.message);
-        return;
-    }
-    console.log("PLAN_LISTE", resp.status, data);
-    if (resp.status === 401) {
-        if (body) body.innerHTML = "";
-        showPlanError("Token gecersiz veya suresi dolmus (401).");
-        return;
-    }
-    if (resp.status >= 400) {
-        if (body) body.innerHTML = "";
-        var msg = (data && (data.mesaj || data.hata)) || ("HTTP " + resp.status);
-        showPlanError(msg);
-        return;
-    }
-    if (data && data.ok === false) {
-        if (body) body.innerHTML = "";
-        showPlanError(data.mesaj || data.hata || "Bilinmeyen hata");
-        return;
-    }
-    var rows = [];
-    if (Array.isArray(data))               rows = data;
-    else if (Array.isArray(data.hedefler)) rows = data.hedefler;
-    else if (Array.isArray(data.data))     rows = data.data;
-    else if (Array.isArray(data.kayitlar)) rows = data.kayitlar;
-    renderPlanRows(rows);
+    })
+    .then(function(r) {
+        if (r.status === 401) { showPlanError('Oturum süresi dolmuş (401).'); return; }
+        if (r.status >= 400 || !r.data) { showPlanError('Plan yüklenemedi (HTTP ' + r.status + ').'); return; }
+        if (r.data.ok === false) { showPlanError(r.data.mesaj || r.data.hata || 'Bilinmeyen hata'); return; }
+        var satirlar = r.data.satirlar || [];
+        if (!Array.isArray(satirlar)) satirlar = [];
+        renderPlanRows(satirlar);
+        _planSayfalamaGuncelle(r.data);
+        console.log('[CPS] PLAN Korgun FAZ1B — sayfa', r.data.sayfa, '/', r.data.sayfa_sayisi, '—', satirlar.length, 'satır');
+    })
+    .catch(function(err) {
+        console.error('[CPS] korgun-plan fetch hata:', err);
+        showPlanError('Sunucuya ulaşılamadı: ' + err.message);
+    });
 }
 
 document.addEventListener("DOMContentLoaded", function () {
     setupTabs();
     planlariYukle();
+
+    var araInput = document.getElementById('planAra');
+    var araBtn = document.getElementById('planAraBtn');
+    var araTemizle = document.getElementById('planAraTemizle');
+    var onceki = document.getElementById('planOnceki');
+    var sonraki = document.getElementById('planSonraki');
+
+    if (araBtn && araInput) {
+        araBtn.addEventListener('click', function () {
+            planlariYukle({ ara: (araInput.value || '').trim(), sayfa: 1 });
+        });
+        araInput.addEventListener('keydown', function (ev) {
+            if (ev.key === 'Enter') {
+                planlariYukle({ ara: (araInput.value || '').trim(), sayfa: 1 });
+            }
+        });
+    }
+    if (araTemizle && araInput) {
+        araTemizle.addEventListener('click', function () {
+            araInput.value = '';
+            planlariYukle({ ara: '', sayfa: 1 });
+        });
+    }
+    if (onceki) {
+        onceki.addEventListener('click', function () {
+            if (_planState.sayfa > 1) planlariYukle({ sayfa: _planState.sayfa - 1 });
+        });
+    }
+    if (sonraki) {
+        sonraki.addEventListener('click', function () {
+            if (_planState.sayfa < _planState.sayfaSayisi) planlariYukle({ sayfa: _planState.sayfa + 1 });
+        });
+    }
 });
+/* === /PLAN KORGUN FAZ1B === */
 
 // =====================================================================
 // FAZ 3.5 - RAPOR sekmesi (uretim_kayit + hedef_plan hibrit)
@@ -947,8 +1019,8 @@ function guncelleOnayBadge() {
     }
 
     // Override globals
-    window.planlariYukle = _planlariYukleV2;
-    window.renderPlanRows = _renderPlanV2;
+    window.planlariYukle = planlariYukle;
+    window.renderPlanRows = renderPlanRows;
 
     console.log('[CPS LOCAL] /hedef/ PLAN endpoint override yuklendi.');
 })();
@@ -1049,8 +1121,8 @@ function guncelleOnayBadge() {
     }
 
     // v2'nin uzerine yaz
-    window.planlariYukle = _planlariYukleV3;
-    window.renderPlanRows = _renderPlanV3;
+    window.planlariYukle = planlariYukle;
+    window.renderPlanRows = renderPlanRows;
 
     console.log('[CPS LOCAL] PLAN v3 - siparisler kolonu yuklendi.');
 })();
@@ -1168,8 +1240,8 @@ function guncelleOnayBadge() {
             });
     }
 
-    window.planlariYukle = _planlariYukleV4;
-    window.renderPlanRows = _renderPlanV4;
+    window.planlariYukle = planlariYukle;
+    window.renderPlanRows = renderPlanRows;
 
     console.log('[CPS LOCAL] PLAN v4 - hizalama (class-based) yuklendi.');
 })();
@@ -3516,8 +3588,8 @@ function guncelleOnayBadge() {
     }
 
     // v4 uzerine yaz
-    window.planlariYukle = _planlariYukleV5;
-    window.renderPlanRows = _renderPlanV5;
+    window.planlariYukle = planlariYukle;
+    window.renderPlanRows = renderPlanRows;
 
     console.log('[CPS LOCAL] PLAN zengin v1 yuklendi');
 })();

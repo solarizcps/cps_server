@@ -389,6 +389,413 @@ def hedef_plan():
 
 
 
+# === PLAN-PROSES ENDPOINT ===
+# emir_no + proses_adi bazlı gruplama; Korgun varsa model/musteri/hedef eklenir.
+
+@hedef_bp.route('/plan-proses', methods=['GET'])
+@yetki_gerekli('hedef', 'can_view')
+def hedef_plan_proses():
+    """GET /hedef/plan-proses
+    uretim_kayit GROUP BY (emir_no, proses_adi) + Korgun emir ozeti.
+    """
+    import sqlite3
+    db_path = _hedef_db_path()
+
+    # 1) CPS: emir+proses bazlı gruplama
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute("""
+            SELECT
+                emir_no,
+                COALESCE(NULLIF(TRIM(proses_adi),''), 'Bilinmeyen') AS proses_adi,
+                SUM(CASE WHEN onay_durum='onaylandi' THEN miktar ELSE 0 END) AS yapilan,
+                SUM(CASE WHEN onay_durum='bekliyor'  THEN miktar ELSE 0 END) AS bekleyen,
+                COUNT(DISTINCT personel_id) AS personel_sayisi,
+                MAX(COALESCE(onay_tarihi, olusturma)) AS son_islem_tarihi,
+                MAX(COALESCE(NULLIF(model_kod,''), NULLIF(model_adi,''))) AS model_local
+            FROM uretim_kayit
+            GROUP BY emir_no, proses_adi
+            ORDER BY emir_no DESC, proses_adi ASC
+        """).fetchall()
+        conn.close()
+    except Exception as e:
+        return jsonify({'ok': False, 'mesaj': 'CPS DB: ' + str(e), 'satirlar': []}), 500
+
+    # 2) Korgun: emir başına bir kez ozet çek — model/musteri/hedef
+    korgun_cache = {}
+    try:
+        from modules.common import korgun as _kk
+        for row in rows:
+            en = int(row['emir_no'])
+            if en not in korgun_cache:
+                try:
+                    ozet = _kk.get_emir_ozet(en) or {}
+                    korgun_cache[en] = ozet if ozet.get('ok') else {}
+                except Exception:
+                    korgun_cache[en] = {}
+    except Exception:
+        pass  # Korgun yoksa boş cache
+
+    # 3) Birleştir
+    satirlar = []
+    for row in rows:
+        en = int(row['emir_no'])
+        oz = korgun_cache.get(en, {})
+        yapilan = int(row['yapilan'] or 0)
+        bekleyen = int(row['bekleyen'] or 0)
+        hedef    = int(oz.get('hedef_adet') or 0)
+        kalan    = max(0, hedef - yapilan) if hedef > 0 else None
+
+        if hedef > 0 and yapilan >= hedef:
+            durum = 'Tamamlandı'
+        elif yapilan > 0:
+            durum = 'Devam'
+        elif bekleyen > 0:
+            durum = 'Bekliyor'
+        else:
+            durum = '-'
+
+        satirlar.append({
+            'emir_no':          str(en),
+            'proses_adi':       row['proses_adi'],
+            'model':            oz.get('model_kod') or oz.get('model_adi') or row['model_local'] or '',
+            'musteri':          oz.get('cari_adi') or '',
+            'hedef':            hedef or '',
+            'yapilan':          yapilan,
+            'bekleyen':         bekleyen,
+            'kalan':            kalan if kalan is not None else '',
+            'durum':            durum,
+            'personel_sayisi':  int(row['personel_sayisi'] or 0),
+            'son_islem_tarihi': (row['son_islem_tarihi'] or '')[:10],
+        })
+
+    return jsonify({'ok': True, 'toplam': len(satirlar), 'satirlar': satirlar})
+
+
+# === KORGUN PLAN ENDPOINT (FAZ 1) ===
+# Acik siparis/emir + Urt_con_gch proses kirilimi — Excel mantigi.
+
+def _korgun_plan_durum(verilen, devam_eden, biten):
+    v = int(verilen or 0)
+    d = int(devam_eden or 0)
+    b = int(biten or 0)
+    if d > 0:
+        return 'DEVAM'
+    if v > 0:
+        return 'BEKLİYOR'
+    if b > 0 and v == 0:
+        return 'BİTTİ'
+    return '-'
+
+
+def _korgun_plan_proses_label(proses, proses_adi, tezgah):
+    kod = str(proses or '').strip()
+    adi = str(proses_adi or '').strip().rstrip('-').strip()
+    if kod and adi and adi != kod:
+        label = kod + ' / ' + adi
+    elif adi:
+        label = adi
+    elif kod:
+        label = kod
+    else:
+        label = '-'
+    if tezgah is not None and int(tezgah or 0) > 0:
+        label = label + ' / ' + str(int(tezgah))
+    return label
+
+
+def _korgun_plan_alt_proses(alt_kod, alt_adi):
+    adi = str(alt_adi or '').strip()
+    if adi:
+        return adi
+    kod = str(alt_kod or '').strip()
+    return kod or '-'
+
+
+def _korgun_plan_satirlar_olustur(con):
+    """Korgun acik siparis/emir satirlarini olustur (FAZ1 mantigi)."""
+    from collections import defaultdict
+
+    cur = con.cursor()
+    try:
+        cur.execute("""
+            SELECT
+                CONVERT(VARCHAR(10), sk.SipTar, 120) AS siparis_tarihi,
+                CAST(sk.SipNo AS VARCHAR(20)) AS sip_no,
+                e.EmirNo,
+                e.ModelKod AS stok_kod,
+                ISNULL(m.Tanim, e.ModelKod) AS stok_tanim,
+                MAX(CASE WHEN g.RKOD IS NOT NULL AND g.RKOD > 0 THEN g.RKOD END) AS rkod,
+                MAX(rn.Tanim) AS renk_tanim,
+                MAX(g.Birim) AS birim
+            FROM Siparis_Kay sk
+            INNER JOIN Siparis_Har sh ON sh.SipNo = sk.SipNo
+            INNER JOIN Urt_Em_gch g ON g.FisNo = sh.SipNo
+            INNER JOIN Urt_Emir e ON e.EmirNo = g.EmirNo
+            LEFT JOIN Model_M m ON m.ModelKod = e.ModelKod
+            LEFT OUTER JOIN dbo.P_RNK_Tip rn ON rn.RENK_KOD = g.RKOD
+            WHERE LTRIM(RTRIM(ISNULL(sh.Durum, ''))) = ''
+            GROUP BY sk.SipTar, sk.SipNo, e.EmirNo, e.ModelKod, m.Tanim
+            ORDER BY sk.SipNo DESC, e.EmirNo DESC
+        """)
+        cols = [d[0] for d in cur.description]
+        emir_base = [dict(zip(cols, r)) for r in cur.fetchall()]
+
+        if not emir_base:
+            return []
+
+        emir_meta = {}
+        for row in emir_base:
+            en = int(row['EmirNo'])
+            if en not in emir_meta:
+                emir_meta[en] = {
+                    'siparis_tarihi': row.get('siparis_tarihi') or '',
+                    'sips': set(),
+                    'stok_kod': row.get('stok_kod') or '',
+                    'stok_tanim': row.get('stok_tanim') or '',
+                    'rkod': row.get('rkod'),
+                    'renk_tanim': row.get('renk_tanim'),
+                    'birim': row.get('birim') or '',
+                }
+            emir_meta[en]['sips'].add(str(row['sip_no']))
+            if row.get('siparis_tarihi'):
+                emir_meta[en]['siparis_tarihi'] = row['siparis_tarihi']
+            if row.get('rkod'):
+                emir_meta[en]['rkod'] = row['rkod']
+            if row.get('renk_tanim'):
+                emir_meta[en]['renk_tanim'] = row['renk_tanim']
+            if row.get('birim'):
+                emir_meta[en]['birim'] = row['birim']
+
+        emir_nos = sorted(emir_meta.keys(), reverse=True)
+        ph = ','.join(['%s'] * len(emir_nos))
+
+        cur.execute(f"""
+            SELECT EmirNo, COALESCE(SUM(Giren), 0) AS giren
+            FROM Urt_Em_gch
+            WHERE EmirNo IN ({ph})
+            GROUP BY EmirNo
+        """, tuple(emir_nos))
+        em_giren = {int(r[0]): int(float(r[1] or 0)) for r in cur.fetchall()}
+
+        cur.execute(f"""
+            SELECT
+                g.EmirNo,
+                g.Proses,
+                ISNULL(pm.Tanim, CAST(g.Proses AS VARCHAR(20))) AS proses_adi,
+                LTRIM(RTRIM(ISNULL(g.AltProses, ''))) AS alt_proses_kod,
+                ISNULL(pd.Tanim, LTRIM(RTRIM(ISNULL(g.AltProses, '')))) AS alt_proses_adi,
+                g.WMakNum AS tezgah,
+                COALESCE(SUM(ISNULL(g.Giren, 0) - ISNULL(g.Cikan, 0)), 0) AS baslayacak,
+                CAST(0 AS DECIMAL(18, 4)) AS verilen,
+                CAST(0 AS DECIMAL(18, 4)) AS devam_eden,
+                CAST(0 AS DECIMAL(18, 4)) AS biten,
+                MAX(g.Birim) AS birim,
+                'wait' AS kaynak
+            FROM Urt_Wait_gch g
+            LEFT JOIN Proses_M pm ON pm.Pro = g.Proses
+            LEFT JOIN Proses_D pd ON pd.Pro = g.Proses AND pd.AltPro = g.AltProses
+            WHERE g.EmirNo IN ({ph})
+            GROUP BY g.EmirNo, g.Proses, pm.Tanim, g.AltProses, pd.Tanim, g.WMakNum
+            HAVING COALESCE(SUM(ISNULL(g.Giren, 0) - ISNULL(g.Cikan, 0)), 0) > 0
+        """, tuple(emir_nos))
+        wcols = [d[0] for d in cur.description]
+        wait_by_emir = defaultdict(list)
+        for r in cur.fetchall():
+            wait_by_emir[int(r[0])].append(dict(zip(wcols, r)))
+
+        cur.execute(f"""
+            SELECT
+                g.EmirNo,
+                g.Proses,
+                ISNULL(pm.Tanim, CAST(g.Proses AS VARCHAR(20))) AS proses_adi,
+                LTRIM(RTRIM(ISNULL(g.AltProses, ''))) AS alt_proses_kod,
+                ISNULL(pd.Tanim, LTRIM(RTRIM(ISNULL(g.AltProses, '')))) AS alt_proses_adi,
+                g.WMakNum AS tezgah,
+                CAST(0 AS DECIMAL(18, 4)) AS baslayacak,
+                COALESCE(SUM(ISNULL(g.Giren, 0)), 0) AS verilen,
+                COALESCE(SUM(
+                    ISNULL(g.Giren, 0) - ISNULL(g.Cikan, 0) - ISNULL(g.Fire, 0)
+                ), 0) AS devam_eden,
+                COALESCE(SUM(ISNULL(g.Cikan, 0)), 0) AS biten,
+                MAX(g.Birim) AS birim,
+                'con' AS kaynak
+            FROM Urt_con_gch g
+            LEFT JOIN Proses_M pm ON pm.Pro = g.Proses
+            LEFT JOIN Proses_D pd ON pd.Pro = g.Proses AND pd.AltPro = g.AltProses
+            WHERE g.EmirNo IN ({ph})
+            GROUP BY g.EmirNo, g.Proses, pm.Tanim, g.AltProses, pd.Tanim, g.WMakNum
+            HAVING COALESCE(SUM(ISNULL(g.Giren, 0)), 0) > 0
+                OR COALESCE(SUM(ISNULL(g.Giren, 0) - ISNULL(g.Cikan, 0)), 0) > 0
+                OR COALESCE(SUM(ISNULL(g.Cikan, 0)), 0) > 0
+        """, tuple(emir_nos))
+        pcols = [d[0] for d in cur.description]
+        con_by_emir = defaultdict(list)
+        for r in cur.fetchall():
+            con_by_emir[int(r[0])].append(dict(zip(pcols, r)))
+
+        emirs_with_proses = set(wait_by_emir.keys()) | set(con_by_emir.keys())
+        fallback_by_emir = {}
+        fallback_emirs = [en for en in emir_nos if en not in emirs_with_proses]
+        if fallback_emirs:
+            ph_fb = ','.join(['%s'] * len(fallback_emirs))
+            cur.execute(f"""
+                SELECT
+                    e.EmirNo,
+                    fn.Proses,
+                    ISNULL(pm.Tanim, CAST(fn.Proses AS VARCHAR(20))) AS proses_adi,
+                    '' AS alt_proses_kod,
+                    '' AS alt_proses_adi,
+                    CAST(0 AS INT) AS tezgah,
+                    COALESCE(SUM(ISNULL(eg.Giren, 0) - ISNULL(eg.Cikan, 0)), 0) AS baslayacak,
+                    COALESCE(SUM(ISNULL(eg.Giren, 0)), 0) AS verilen,
+                    CAST(0 AS DECIMAL(18, 4)) AS devam_eden,
+                    CAST(0 AS DECIMAL(18, 4)) AS biten,
+                    MAX(eg.Birim) AS birim,
+                    'fallback' AS kaynak
+                FROM (
+                    SELECT DISTINCT EmirNo FROM Urt_Emir WHERE EmirNo IN ({ph_fb})
+                ) e
+                CROSS APPLY (
+                    SELECT dbo.kg_fn_GetProses(e.EmirNo, '', 'f') AS Proses
+                ) fn
+                LEFT JOIN Proses_M pm ON pm.Pro = fn.Proses
+                LEFT JOIN Urt_Em_gch eg ON eg.EmirNo = e.EmirNo
+                GROUP BY e.EmirNo, fn.Proses, pm.Tanim
+            """, tuple(fallback_emirs))
+            fcols = [d[0] for d in cur.description]
+            for r in cur.fetchall():
+                fallback_by_emir[int(r[0])] = dict(zip(fcols, r))
+
+        satirlar = []
+        for en in emir_nos:
+            meta = emir_meta[en]
+            coklu_sip = ', '.join(sorted(meta['sips'], key=lambda x: int(x) if x.isdigit() else x, reverse=True))
+            rkod = meta.get('rkod')
+            renk_tanim = (meta.get('renk_tanim') or '').strip()
+            renk = renk_tanim if renk_tanim else (str(int(rkod)) if rkod else '')
+            renk_kod = str(int(rkod)) if rkod else ''
+            prosesler = wait_by_emir.get(en, []) + con_by_emir.get(en, [])
+            if not prosesler and en in fallback_by_emir:
+                prosesler = [fallback_by_emir[en]]
+
+            if prosesler:
+                for p in prosesler:
+                    kaynak = p.get('kaynak') or 'con'
+                    baslayacak = int(float(p.get('baslayacak') or 0))
+                    verilen = int(float(p.get('verilen') or 0))
+                    devam = int(float(p.get('devam_eden') or 0))
+                    biten = int(float(p.get('biten') or 0))
+                    if kaynak == 'wait':
+                        verilen = baslayacak
+                        devam = 0
+                        biten = 0
+                    elif kaynak == 'fallback':
+                        verilen = int(float(p.get('verilen') or 0)) or em_giren.get(en, 0)
+                        devam = 0
+                        biten = 0
+                    proses_tezgah = _korgun_plan_proses_label(
+                        p.get('Proses'), p.get('proses_adi'), p.get('tezgah'))
+                    alt_proses = _korgun_plan_alt_proses(
+                        p.get('alt_proses_kod'), p.get('alt_proses_adi'))
+                    birim = str(p.get('birim') or meta.get('birim') or '')
+                    satirlar.append({
+                        'siparis_tarihi': meta['siparis_tarihi'],
+                        'coklu_siparis_no': coklu_sip,
+                        'emir_no': str(en),
+                        'proses_tezgah': proses_tezgah,
+                        'alt_proses': alt_proses,
+                        'stok_kod': meta['stok_kod'],
+                        'stok_tanim': meta['stok_tanim'],
+                        'renk_kod': renk_kod or '-',
+                        'renk': renk or '-',
+                        'verilen': verilen,
+                        'devam_eden': devam,
+                        'biten': biten,
+                        'birim': birim or '-',
+                        'durum': _korgun_plan_durum(verilen, devam, biten),
+                    })
+            else:
+                verilen = em_giren.get(en, 0)
+                satirlar.append({
+                    'siparis_tarihi': meta['siparis_tarihi'],
+                    'coklu_siparis_no': coklu_sip,
+                    'emir_no': str(en),
+                    'proses_tezgah': '-',
+                    'alt_proses': '-',
+                    'stok_kod': meta['stok_kod'],
+                    'stok_tanim': meta['stok_tanim'],
+                    'renk_kod': renk_kod or '-',
+                    'renk': renk or '-',
+                    'verilen': verilen,
+                    'devam_eden': 0,
+                    'biten': 0,
+                    'birim': meta.get('birim') or '-',
+                    'durum': _korgun_plan_durum(verilen, 0, 0),
+                })
+
+        return satirlar
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+
+
+@hedef_bp.route('/korgun-plan', methods=['GET'])
+@yetki_gerekli('hedef', 'can_view')
+def hedef_korgun_plan():
+    """GET /hedef/korgun-plan — Korgun acik siparis/emir Excel satirlari (sayfali)."""
+    from flask import jsonify, request
+
+    sayfa = max(1, int(request.args.get('sayfa', 1) or 1))
+    limit = min(100, max(1, int(request.args.get('limit', 20) or 20)))
+    ara = (request.args.get('ara') or '').strip().lower()
+
+    try:
+        from modules.common import korgun as _kk
+        con = _kk._baglan()
+    except Exception as e:
+        return jsonify({'ok': False, 'mesaj': 'Korgun baglanti: ' + str(e), 'satirlar': []}), 500
+
+    try:
+        satirlar = _korgun_plan_satirlar_olustur(con)
+        con.close()
+    except Exception as e:
+        try:
+            con.close()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'mesaj': str(e)[:300], 'satirlar': []}), 500
+
+    if ara:
+        filtre = []
+        for s in satirlar:
+            sip = str(s.get('coklu_siparis_no') or '').lower()
+            emir = str(s.get('emir_no') or '').lower()
+            stok = str(s.get('stok_kod') or '').lower()
+            if ara in sip or ara in emir or ara in stok:
+                filtre.append(s)
+        satirlar = filtre
+
+    toplam = len(satirlar)
+    sayfa_sayisi = max(1, (toplam + limit - 1) // limit) if toplam else 1
+    if sayfa > sayfa_sayisi:
+        sayfa = sayfa_sayisi
+    baslangic = (sayfa - 1) * limit
+    sayfa_satirlar = satirlar[baslangic:baslangic + limit]
+
+    return jsonify({
+        'ok': True,
+        'toplam': toplam,
+        'sayfa': sayfa,
+        'sayfa_boyutu': limit,
+        'sayfa_sayisi': sayfa_sayisi,
+        'satirlar': sayfa_satirlar,
+    })
+
+
 # === CPS LOCAL HEDEF RAPOR ENDPOINT ===
 # Tarih araligina gore onaylanmis CPS uretim kayitlari (3 blok ozet)
 

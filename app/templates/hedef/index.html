@@ -40,26 +40,39 @@
 
 <div class="h-pane active" id="pane-plan">
   <div id="planError"></div>
+  <div class="plan-filtre" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px;">
+    <input type="text" id="planAra" placeholder="Sipariş No / Emir No / Stok Kod" style="padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:12.5px; min-width:220px;">
+    <button id="planAraBtn" style="background:var(--sol-dark); color:#fff; border:none; border-radius:6px; padding:6px 14px; font-size:12.5px; font-weight:600; cursor:pointer;">Ara</button>
+    <button id="planAraTemizle" style="background:#fff; color:var(--text2); border:1px solid var(--border); border-radius:6px; padding:6px 12px; font-size:12.5px; cursor:pointer;">Temizle</button>
+    <span id="planInfo" style="font-size:11.5px; color:var(--text3); margin-left:4px;"></span>
+    <div style="margin-left:auto; display:flex; gap:6px; align-items:center;">
+      <button id="planOnceki" style="background:#fff; color:var(--text2); border:1px solid var(--border); border-radius:6px; padding:6px 12px; font-size:12.5px; cursor:pointer;">Önceki</button>
+      <span id="planSayfaInfo" style="font-size:12px; color:var(--text2); min-width:90px; text-align:center;">Sayfa 1</span>
+      <button id="planSonraki" style="background:#fff; color:var(--text2); border:1px solid var(--border); border-radius:6px; padding:6px 12px; font-size:12.5px; cursor:pointer;">Sonraki</button>
+    </div>
+  </div>
   <div class="tbl-wrap">
-    <table id="planTable">
-      <!-- PLAN_ZENGIN_V1_THEAD -->
+    <table id="planTable" data-plan-mode="korgun">
+      <!-- PLAN_KORGUN_FAZ1 -->
       <thead>
         <tr>
-          <th class="text" style="width:54px;">G&#214;RSEL</th>
-          <th class="text">EM&#304;R</th>
-          <th class="text">S&#304;PAR&#304;&#350;</th>
-          <th class="text">M&#220;&#350;TER&#304;</th>
-          <th class="text">MODEL</th>
-          <th class="num">HEDEF</th>
-          <th class="num">YAPILAN</th>
-          <th class="num">KALAN</th>
-          <th class="text">TERM&#304;N</th>
-          <th class="text">SON PROSES</th>
-          <th class="num">%</th>
+          <th>SİPARİŞ TARİHİ</th>
+          <th>ÇOKLU SİP. NO</th>
+          <th>EMİR NO</th>
+          <th>PROSES / TEZGAH</th>
+          <th>ALT PROSES</th>
+          <th>STOK KOD</th>
+          <th>STOK TANIM</th>
+          <th>RENK</th>
+          <th class="num">VERİLEN</th>
+          <th class="num">DEVAM</th>
+          <th class="num">BİTEN</th>
+          <th>BİRİM</th>
+          <th>DURUM</th>
         </tr>
       </thead>
       <tbody id="planBody">
-        <tr class="h-row-loading"><td colspan="11">Yükleniyor...</td></tr>
+        <tr class="h-row-loading"><td colspan="13">Yükleniyor...</td></tr>
       </tbody>
     </table>
   </div>
