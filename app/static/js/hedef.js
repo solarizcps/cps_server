@@ -1576,9 +1576,16 @@ function siparisTakipYukle(opts) {
     if (errBox) errBox.innerHTML = '';
     var tree = document.getElementById('stTree');
     if (tree) tree.innerHTML = '<div class="st3-tree-empty">Yükleniyor...</div>';
-    var url = '/hedef/siparis-takip?sipno=' + encodeURIComponent(_stState.ara);
+    // korgun-plan endpoint kullanılıyor (siparis-takip route kaldırıldı)
+    var url = '/hedef/korgun-plan?limit=100&ara=' + encodeURIComponent(_stState.ara);
     fetch(url, { credentials: 'same-origin', cache: 'no-store' })
-        .then(function (r) { return r.json().then(function (d) { return { status: r.status, data: d }; }); })
+        .then(function (r) {
+            if (!r.ok && r.status !== 200) {
+                // 404/500 gibi HTTP hata — JSON değil HTML dönebilir
+                throw new Error('HTTP ' + r.status);
+            }
+            return r.json().then(function (d) { return { status: r.status, data: d }; });
+        })
         .then(function (r) {
             if (r.status === 401) { showStError('Oturum süresi dolmuş (401).'); return; }
             if (r.status >= 400 || !r.data || r.data.ok === false) {
@@ -1589,17 +1596,39 @@ function siparisTakipYukle(opts) {
                 renderStTree([]);
                 return;
             }
-            _stState.satirlar = r.data.satirlar || [];
-            _stState.harModeller = r.data.har_modeller || [];
-            _stState.ozet = r.data.ozet || null;
-            _stState.acikNodes = {};
-            _stState.seciliKey = null;
-            _stState.mesaj = r.data.mesaj || '';
-            if (!_stState.harModeller.length && _stState.ozet && _stState.ozet.siparis_miktari && /^\d+$/.test(String(_stState.ara || ''))) {
-                console.warn('[CPS] har_modeller bos — API guncel degil veya sunucu yeniden baslatilmali');
-                _stState.mesaj = (_stState.mesaj ? _stState.mesaj + ' ' : '') +
-                    'Uyarı: Sipariş satır ağacı yüklenemedi (har_modeller). Sunucuyu yeniden başlatın.';
+            var satirlar = r.data.satirlar || [];
+
+            // korgun-plan ozet alanı yok — satirlardan basit ozet üret
+            var ozet = r.data.ozet || null;
+            if (!ozet && satirlar.length) {
+                var toplam_verilen = 0, toplam_biten = 0, toplam_devam = 0;
+                var sipNo = _stState.ara;
+                var musteri = '', stok_tanim = '';
+                satirlar.forEach(function (s) {
+                    toplam_verilen += parseInt(s.verilen  || 0, 10);
+                    toplam_biten   += parseInt(s.biten    || 0, 10);
+                    toplam_devam   += parseInt(s.devam_eden || 0, 10);
+                    if (!musteri && s.musteri_adi) musteri = s.musteri_adi;
+                    if (!stok_tanim && s.stok_tanim) stok_tanim = s.stok_tanim;
+                });
+                ozet = {
+                    siparis_no:      sipNo,
+                    musteri_adi:     musteri,
+                    stok_tanim:      stok_tanim,
+                    siparis_miktari: toplam_verilen,
+                    toplam_biten:    toplam_biten,
+                    toplam_devam:    toplam_devam,
+                    toplam_kalan:    toplam_verilen - toplam_biten,
+                };
             }
+
+            _stState.satirlar    = satirlar;
+            _stState.harModeller = r.data.har_modeller || [];
+            _stState.ozet        = ozet;
+            _stState.acikNodes   = {};
+            _stState.seciliKey   = null;
+            _stState.mesaj       = r.data.mesaj || '';
+
             showStInfo(_stState.mesaj);
             _stBuildRowMap(_stState.satirlar);
             _stState.treeNodes = _stBuildTreeNodes(_stState.satirlar);
@@ -1607,8 +1636,8 @@ function siparisTakipYukle(opts) {
             renderStFisKart(_stState.ozet);
             renderStKpiBand(_stState.ozet);
             renderStTree(_stState.satirlar, _stState.mesaj);
-            console.log('[CPS] SİPARİŞ TAKİP ST-3B-2 —', _stState.ara,
-                '— har', _stState.harModeller.length, 'satır', _stState.satirlar.length);
+            console.log('[CPS] SİPARİŞ TAKİP (korgun-plan) —', _stState.ara,
+                '— satirlar', satirlar.length, 'toplam', r.data.toplam);
         })
         .catch(function (err) {
             console.error('[CPS] siparis-takip fetch hata:', err);
