@@ -14,6 +14,9 @@ Endpoint'ler:
     GET  /usta/api/personel-listesi     - CPS personel (ekip secimi icin)
     POST /usta/api/uretim-kayit         - CPS DB'ye uretim hareketi yaz
 
+    GET  /usta/api/emir-sorgula         - FAZ 2C-2: Korgun emir durum sorgusu
+    POST /usta/api/emir-ilerlet         - FAZ 2C-5A: Proses ilerletme (test modu)
+
 Yetki:
     Login yapmis herhangi bir kullanici.
 """
@@ -275,6 +278,210 @@ def personel_listesi():
         return jsonify({'ok': False, 'hata': str(e)[:200], 'personeller': []}), 500
 
 
+@usta_bp.route('/api/emir-sorgula', methods=['GET'])
+@usta_yetkili
+def emir_sorgula():
+    """
+    FAZ 2C-2: Korgun emir durumu sorgulama.
+
+    GET /usta/api/emir-sorgula?emir_no=111631
+
+    Sadece SELECT. Korgun'a hicbir yazma yapilmaz.
+
+    Donus:
+        {
+            ok: true,
+            emir: {emir_no, model_kod, model_adi, tip, durum, uretim_yeri, emir_tarihi},
+            prosesler: [
+                {
+                    proses_kodu, proses_adi, fis_no, fis_harinx,
+                    durum: 'bekliyor'|'tamamlandi',
+                    toplam_giren, toplam_bekleyen,
+                    bedenler: [{bed_kod, giren, cikan, bekleyen}, ...]
+                }
+            ],
+            tamamlanan_prosesler: [
+                {proses_kodu, proses_adi, toplam_giren, toplam_cikan, kayit_sayisi}
+            ],
+            cps_bekleyen: bool
+        }
+    """
+    from db import get_conn
+    try:
+        from modules.common.korgun import _baglan as _korgun_baglan
+    except Exception as e:
+        return jsonify({'ok': False, 'hata': f'Korgun baglanti hatasi: {e}'}), 500
+
+    emir_no_str = (_flask_request.args.get('emir_no') or '').strip()
+    if not emir_no_str or not emir_no_str.isdigit():
+        return jsonify({'ok': False, 'hata': 'emir_no eksik veya gecersiz'}), 400
+    emir_no = int(emir_no_str)
+
+    try:
+        k_con = _korgun_baglan()
+    except Exception as e:
+        return jsonify({'ok': False, 'hata': f'Korgun baglanti hatasi: {type(e).__name__}: {str(e)[:200]}'}), 500
+
+    try:
+        k_cur = k_con.cursor()
+
+        # ── 1) Urt_Emir bilgisi ──────────────────────────────────────────
+        k_cur.execute("""
+            SELECT e.EmirNo,
+                   e.ModelKod,
+                   ISNULL(m.Tanim, e.ModelKod)          AS ModelAdi,
+                   LTRIM(RTRIM(ISNULL(e.Tip,'')))        AS Tip,
+                   LTRIM(RTRIM(ISNULL(e.Durum,'')))      AS Durum,
+                   ISNULL(e.Location,'')                 AS Location,
+                   CONVERT(VARCHAR(10), e.EmirTarihi, 120) AS EmirTarihi
+            FROM Urt_Emir e WITH(NOLOCK)
+            LEFT JOIN Model_M m ON m.ModelKod = e.ModelKod
+            WHERE e.EmirNo = %s
+        """, (emir_no,))
+        emir_row = k_cur.fetchone()
+
+        if not emir_row:
+            k_cur.close()
+            k_con.close()
+            return jsonify({'ok': False, 'hata': 'emir_bulunamadi',
+                            'emir_no': emir_no}), 404
+
+        emir_cols = [d[0] for d in k_cur.description]
+        emir_d    = dict(zip(emir_cols, emir_row))
+
+        emir_bilgi = {
+            'emir_no'    : int(emir_d.get('EmirNo') or emir_no),
+            'model_kod'  : str(emir_d.get('ModelKod') or '').strip(),
+            'model_adi'  : str(emir_d.get('ModelAdi') or '').strip(),
+            'tip'        : str(emir_d.get('Tip') or '').strip(),
+            'durum'      : str(emir_d.get('Durum') or '').strip(),
+            'uretim_yeri': str(emir_d.get('Location') or '').strip(),
+            'emir_tarihi': str(emir_d.get('EmirTarihi') or ''),
+        }
+
+        # ── 2) Acik Wait satirlari (proses + beden kirilimi) ─────────────
+        k_cur.execute("""
+            SELECT w.Proses,
+                   ISNULL(p.Tanim, w.Proses)             AS ProsesAdi,
+                   w.FisNo, w.FisHarinx,
+                   w.RKOD, w.BedKod,
+                   w.Giren, w.Cikan,
+                   ISNULL(w.Giren,0) - ISNULL(w.Cikan,0) AS Bekleyen
+            FROM Urt_Wait_gch w WITH(NOLOCK)
+            LEFT JOIN Proses_M p ON p.Pro = w.Proses
+            WHERE w.EmirNo = %s
+            ORDER BY w.Proses, w.BedKod
+        """, (emir_no,))
+        wait_rows = k_cur.fetchall()
+        wait_cols = [d[0] for d in k_cur.description]
+
+        # Proses bazinda grupla
+        proses_map = {}
+        for wr in wait_rows:
+            wd = dict(zip(wait_cols, wr))
+            p_kodu = str(wd.get('Proses') or '').strip()
+            if p_kodu not in proses_map:
+                proses_map[p_kodu] = {
+                    'proses_kodu'   : p_kodu,
+                    'proses_adi'    : str(wd.get('ProsesAdi') or p_kodu).strip(),
+                    'fis_no'        : int(wd.get('FisNo') or 0),
+                    'fis_harinx'    : int(wd.get('FisHarinx') or 0),
+                    'toplam_giren'  : 0,
+                    'toplam_bekleyen': 0,
+                    'bedenler'      : [],
+                }
+            giren    = int(wd.get('Giren')   or 0)
+            cikan    = int(wd.get('Cikan')   or 0)
+            bekleyen = int(wd.get('Bekleyen') or 0)
+            proses_map[p_kodu]['toplam_giren']   += giren
+            proses_map[p_kodu]['toplam_bekleyen'] += bekleyen
+            proses_map[p_kodu]['bedenler'].append({
+                'bed_kod' : int(wd.get('BedKod') or 0),
+                'giren'   : giren,
+                'cikan'   : cikan,
+                'bekleyen': bekleyen,
+            })
+
+        prosesler = []
+        for p_kodu in sorted(proses_map.keys()):
+            pm = proses_map[p_kodu]
+            toplam_giren   = pm['toplam_giren']
+            toplam_bekleyen = pm['toplam_bekleyen']
+            toplam_cikan   = toplam_giren - toplam_bekleyen
+            # 3-degerli durum: Korgun Wait tarafina gore
+            if toplam_cikan <= 0:
+                pm['durum'] = 'baslanmadi'
+            elif toplam_cikan < toplam_giren:
+                pm['durum'] = 'devam_ediyor'
+            else:
+                pm['durum'] = 'tamamlandi'
+            pm['aktif_ilerletilebilir'] = toplam_bekleyen > 0
+            prosesler.append(pm)
+
+        # ── 3) Tamamlanmis Con kayitlari ozeti ───────────────────────────
+        k_cur.execute("""
+            SELECT c.Proses,
+                   ISNULL(p.Tanim, c.Proses) AS ProsesAdi,
+                   COUNT(*)                  AS KayitSayisi,
+                   SUM(c.Giren)              AS TopGiren,
+                   SUM(c.Cikan)              AS TopCikan
+            FROM Urt_con_gch c WITH(NOLOCK)
+            LEFT JOIN Proses_M p ON p.Pro = c.Proses
+            WHERE c.EmirNo = %s
+            GROUP BY c.Proses, p.Tanim
+            ORDER BY c.Proses
+        """, (emir_no,))
+        con_rows = k_cur.fetchall()
+        con_cols = [d[0] for d in k_cur.description]
+
+        tamamlanan = []
+        for cr in con_rows:
+            cd = dict(zip(con_cols, cr))
+            tamamlanan.append({
+                'proses_kodu' : str(cd.get('Proses') or '').strip(),
+                'proses_adi'  : str(cd.get('ProsesAdi') or '').strip(),
+                'kayit_sayisi': int(cd.get('KayitSayisi') or 0),
+                'toplam_giren': int(cd.get('TopGiren') or 0),
+                'toplam_cikan': int(cd.get('TopCikan') or 0),
+            })
+
+        k_cur.close()
+        k_con.close()
+
+        # ── 4) CPS bekleyen kayit var mi ─────────────────────────────────
+        cps_bekleyen = False
+        try:
+            cps_conn = get_conn()
+            row_cps = cps_conn.execute(
+                """
+                SELECT COUNT(*) FROM uretim_kayit
+                WHERE emir_no = ?
+                  AND (korgun_yazildi IS NULL OR korgun_yazildi = 0)
+                """,
+                (emir_no,)
+            ).fetchone()
+            cps_bekleyen = bool(row_cps and row_cps[0] > 0)
+            cps_conn.close()
+        except Exception:
+            pass
+
+        return jsonify({
+            'ok'                   : True,
+            'emir'                 : emir_bilgi,
+            'prosesler'            : prosesler,
+            'tamamlanan_prosesler' : tamamlanan,
+            'cps_bekleyen'         : cps_bekleyen,
+        })
+
+    except Exception as e:
+        try:
+            k_con.close()
+        except Exception:
+            pass
+        return jsonify({'ok': False,
+                        'hata': f'{type(e).__name__}: {str(e)[:300]}'}), 500
+
+
 @usta_bp.route('/api/uretim-kayit', methods=['POST'])
 @usta_yetkili
 def uretim_kayit_yaz():
@@ -411,3 +618,42 @@ def uretim_kayit_yaz():
             conn.close()
         except Exception:
             pass
+
+
+# ─────────────────────────────────────────────────────────────────
+# FAZ 2C-5A: POST /usta/api/emir-ilerlet
+# ─────────────────────────────────────────────────────────────────
+@usta_bp.route('/api/emir-ilerlet', methods=['POST'])
+def emir_ilerlet():
+    """FAZ 2C-5A - Test modu: Korgun'a yazma YOK.
+
+    Body (JSON):
+        emir_no   : str  – üretim emir numarası
+        proses_no : str  – proses kodu (örn. "02")
+        kalan     : int  – bekleyen miktar
+    """
+    from flask import session
+    if not session.get('kullanici'):
+        return jsonify({'success': False, 'message': 'Oturum gerekli.'}), 401
+
+    data = {}
+    try:
+        import flask
+        data = flask.request.get_json(force=True, silent=True) or {}
+    except Exception:
+        pass
+
+    emir_no   = str(data.get('emir_no',   '')).strip()
+    proses_no = str(data.get('proses_no', '')).strip()
+    kalan     = data.get('kalan', 0)
+
+    if not emir_no or not proses_no:
+        return jsonify({'success': False, 'message': 'emir_no ve proses_no zorunlu.'}), 400
+
+    # FAZ 2C-5A: Korgun'a yazma KAPALI — sadece test yanıtı döner
+    return jsonify({
+        'success': True,
+        'message': f'Test ilerletme hazır — Emir {emir_no} / Proses {proses_no} / Kalan {kalan}',
+        'test_modu': True,
+        'korgun_yazildi': False,
+    })

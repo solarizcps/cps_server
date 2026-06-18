@@ -29,8 +29,9 @@
 
 <div class="h-tabs" role="tablist">
   <button class="h-tab active" data-tab="plan">PLAN</button>
+  <button class="h-tab" data-tab="siparis-takip">SİPARİŞ TAKİP</button>
   <button class="h-tab" data-tab="sablon">ŞABLON</button>
-  <button class="h-tab" data-tab="sapma">SAPMA</button>
+  <button class="h-tab" data-tab="emir">EMİR</button>
   <button class="h-tab" data-tab="ozet">ÖZET</button>
   <button class="h-tab" data-tab="rapor">RAPOR</button>
   <button class="h-tab" data-tab="onay">ONAYLAR <span id="onayBadge" class="h-badge"></span></button>
@@ -78,11 +79,82 @@
   </div>
 </div>
 
+<div class="h-pane" id="pane-siparis-takip">
+  <div id="stError"></div>
+  <div class="st-filtre" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px;">
+    <input type="text" id="stAra" placeholder="Sipariş No / Emir No / Stok Kod / Müşteri" style="padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:12.5px; min-width:280px;">
+    <button id="stGetirBtn" style="background:var(--sol-dark); color:#fff; border:none; border-radius:6px; padding:6px 14px; font-size:12.5px; font-weight:600; cursor:pointer;">Getir</button>
+    <button id="stTemizleBtn" style="background:#fff; color:var(--text2); border:1px solid var(--border); border-radius:6px; padding:6px 12px; font-size:12.5px; cursor:pointer;">Temizle</button>
+    <span id="stInfo" style="font-size:11.5px; color:var(--text3); margin-left:4px;"></span>
+  </div>
+  <div class="st3-ust">
+    <div id="stFisKart" class="st3-fis"></div>
+    <div id="stKpiBand" class="st3-kpi-band"></div>
+  </div>
+  <div class="st3-alt">
+    <div class="st3-sol">
+      <div class="st3-panel-baslik">
+        MODEL / EMİR AĞACI
+        <span class="st3-agac-ctrl">
+          <button class="st3-agac-btn" onclick="_stHepsiniAc()" title="Tüm ağacı aç">Hepsini Aç</button>
+          <button class="st3-agac-btn" onclick="_stHepsiniKapat()" title="Sadece modeller kalır">Hepsini Kapat</button>
+        </span>
+      </div>
+      <div id="stTree" class="st3-tree">
+        <div class="st3-tree-empty">Sipariş no girin ve Getir'e basın.</div>
+      </div>
+    </div>
+    <div class="st3-sag">
+      <div id="stDetail" class="st3-detail">
+        <div class="st3-detail-empty">Sol ağaçtan model, renk veya emir seçin.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="h-pane" id="pane-sablon">
   <div class="h-empty">Şablonlar UI.3 aşamasında eklenecek.</div>
 </div>
-<div class="h-pane" id="pane-sapma">
-  <div class="h-empty">Sapma analizi UI.4 aşamasında eklenecek.</div>
+<div class="h-pane" id="pane-emir">
+  <div id="hEmirError" class="h-error" style="display:none;"></div>
+
+  <div class="he-arama-wrap">
+    <div class="he-arama-satir">
+      <input type="text" id="hEmirNoInput" class="he-input"
+             placeholder="Emir No veya Barkod"
+             inputmode="numeric" autocomplete="off" maxlength="12">
+      <button id="hEmirSorguBtn" class="h-btn-yeni he-sorgu-btn">Sorgula</button>
+    </div>
+  </div>
+
+  <div id="hEmirYukleniyor" class="he-yukleniyor" style="display:none;">Sorgulanıyor...</div>
+
+  <div id="hEmirSonuc" style="display:none;">
+
+    <div class="he-kart">
+      <div class="he-kart-baslik">
+        <span class="he-emir-no" id="heEmiNo">—</span>
+        <span class="he-durum-badge" id="heDurum">—</span>
+      </div>
+      <div class="he-model-adi" id="heModelAdi">—</div>
+      <div class="he-kart-meta">
+        <span><span class="he-lbl">Tip:</span> <span id="heTip">—</span></span>
+        <span><span class="he-lbl">Yer:</span> <span id="heYer">—</span></span>
+        <span><span class="he-lbl">Tarih:</span> <span id="heTarih">—</span></span>
+      </div>
+    </div>
+
+    <div class="he-bolum-baslik">Proses Akışı</div>
+    <div id="heAcikProses" class="he-proses-liste"></div>
+
+    <div class="he-bolum-baslik">Aktif İş</div>
+    <div id="heTamamProses" class="he-proses-liste"></div>
+
+    <div id="heCpsBekleyen" class="he-uyari" style="display:none;">
+      ⚠️ CPS'te bu emire ait bekleyen kayıt var.
+    </div>
+
+  </div>
 </div>
 <div class="h-pane" id="pane-ozet">
   <div class="h-empty">Özet ekranı UI.5 aşamasında eklenecek.</div>
@@ -281,6 +353,31 @@
     </div>
   </div>
 </div>
+{# FAZ 2C-5A — Proses İlerlet Onay Modali #}
+<div id="emirIlerletModal" class="h-modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="eilModalBaslik">
+  <div class="h-modal-icin eil-modal-icin">
+    <div class="h-modal-header eil-header">
+      <h3 id="eilModalBaslik" style="margin:0;">PROSES İLERLET</h3>
+    </div>
+    <div class="h-modal-body eil-body">
+      <div class="eil-proses-adi" id="eilProsesAdi">—</div>
+      <p class="eil-soru">Bu prosesi tamamlamak istiyor musunuz?</p>
+      <div class="eil-kontrol-listesi">
+        <div class="eil-kontrol-satir"><span class="eil-ok">✓</span> Giren: <strong id="eilGiren">—</strong></div>
+        <div class="eil-kontrol-satir"><span class="eil-ok">✓</span> Yapılan: <strong id="eilYapilan">—</strong></div>
+        <div class="eil-kontrol-satir"><span class="eil-ok">✓</span> Kalan: <strong id="eilKalan">—</strong></div>
+        <div class="eil-kontrol-satir"><span class="eil-ok">✓</span> Beden dağılımı kontrol edildi</div>
+      </div>
+      <p class="eil-bilgi">Bu işlemden sonra sonraki proses aktif olacaktır.</p>
+      <div id="eilHataMesaj" class="eil-hata" style="display:none;"></div>
+    </div>
+    <div class="h-modal-footer eil-footer">
+      <button id="eilIptalBtn" class="h-btn eil-btn-iptal">İPTAL</button>
+      <button id="eilIlerletBtn" class="h-btn eil-btn-ilerlet">İLERLET</button>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}

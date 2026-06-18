@@ -402,9 +402,15 @@ function _hedefEmirEscHtml(s) {
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function hedefEmirSorgula() {
+function hedefEmirSorgula(emirNoParam) {
+    // Önce hata alanını explicit temizle
+    var errEl = document.getElementById('hEmirError');
+    if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
+
     var input  = document.getElementById('hEmirNoInput');
-    var emirNo = (input ? input.value : '').trim();
+    var emirNo = (emirNoParam != null)
+        ? String(emirNoParam).trim()
+        : (input ? String(input.value || '').trim() : '');
 
     _hedefEmirTemizle();
 
@@ -524,11 +530,13 @@ function hedefEmirSorgula() {
                     var giren    = p.toplam_giren   || 0;
                     var bekleyen = p.toplam_bekleyen || 0;
                     var yapilan  = giren - bekleyen;
+                    var emnNo    = _hedefEmirEscHtml(emir.emir_no);
+                    var pKod     = _hedefEmirEscHtml(p.proses_kodu);
                     return '<div class="heak-panel">' +
                         '<div class="heak-baslik">▶ AKTİF İŞ</div>' +
                         '<table class="heak-tablo">' +
                             '<tr><td class="heak-lbl">Proses</td>' +
-                                '<td class="heak-val"><strong>' + _hedefEmirEscHtml(p.proses_kodu) + '</strong> ' + _hedefEmirEscHtml(p.proses_adi) + '</td></tr>' +
+                                '<td class="heak-val"><strong>' + pKod + '</strong> ' + _hedefEmirEscHtml(p.proses_adi) + '</td></tr>' +
                             '<tr><td class="heak-lbl">Ürün</td>' +
                                 '<td class="heak-val">' + _hedefEmirEscHtml(emir.model_adi || emir.model_kod || '—') + '</td></tr>' +
                             '<tr><td class="heak-lbl">Giren</td>' +
@@ -538,8 +546,29 @@ function hedefEmirSorgula() {
                             '<tr><td class="heak-lbl">Kalan</td>' +
                                 '<td class="heak-val heak-kalan-vurgu">' + bekleyen + '</td></tr>' +
                         '</table>' +
+                        '<button class="heak-ilerlet-btn"' +
+                            ' data-emir-no="'   + emnNo  + '"' +
+                            ' data-proses-no="' + pKod   + '"' +
+                            ' data-giren="'     + giren  + '"' +
+                            ' data-yapilan="'   + yapilan + '"' +
+                            ' data-kalan="'     + bekleyen + '"' +
+                            ' data-proses-adi="' + _hedefEmirEscHtml(p.proses_adi) + '"' +
+                        '>İLERLET</button>' +
                     '</div>';
                 }).join('');
+                // Butonlara event ekle
+                aktifEl.querySelectorAll('.heak-ilerlet-btn').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        _hedefEilModalAc({
+                            emirNo:    btn.dataset.emirNo,
+                            prosesNo:  btn.dataset.prosesNo,
+                            prosesAdi: btn.dataset.prosesAdi,
+                            giren:     parseInt(btn.dataset.giren,   10) || 0,
+                            yapilan:   parseInt(btn.dataset.yapilan,  10) || 0,
+                            kalan:     parseInt(btn.dataset.kalan,    10) || 0
+                        });
+                    });
+                });
             }
         }
 
@@ -564,6 +593,95 @@ function setupHedefEmirSorgula() {
     input.addEventListener('keydown', function (ev) {
         if (ev.key === 'Enter') hedefEmirSorgula();
     });
+    // Input değişince eski hata mesajını temizle
+    input.addEventListener('input', function () {
+        var err = document.getElementById('hEmirError');
+        if (err && err.style.display !== 'none') {
+            err.textContent = '';
+            err.style.display = 'none';
+        }
+    });
+}
+/* ====== FAZ 2C-5A: İlerlet Modal ====== */
+
+var _eilAktifVeri = null;  // modal açıkken tutulan veri
+
+function _hedefEilModalAc(veri) {
+    _eilAktifVeri = veri;
+    var suf = function (n) { return n + ' çift'; };
+    var _s  = function (id, txt) {
+        var el = document.getElementById(id);
+        if (el) el.textContent = txt;
+    };
+    _s('eilProsesAdi', veri.prosesNo + ' ' + veri.prosesAdi);
+    _s('eilGiren',     suf(veri.giren));
+    _s('eilYapilan',   suf(veri.yapilan));
+    _s('eilKalan',     suf(veri.kalan));
+
+    var hataEl = document.getElementById('eilHataMesaj');
+    if (hataEl) { hataEl.style.display = 'none'; hataEl.textContent = ''; }
+
+    var ilerletBtn = document.getElementById('eilIlerletBtn');
+    if (ilerletBtn) ilerletBtn.disabled = false;
+
+    var modal = document.getElementById('emirIlerletModal');
+    if (modal) modal.style.display = 'flex';
+}
+
+function _hedefEilModalKapat() {
+    var modal = document.getElementById('emirIlerletModal');
+    if (modal) modal.style.display = 'none';
+    _eilAktifVeri = null;
+}
+
+function _hedefEilIlerlet() {
+    if (!_eilAktifVeri) return;
+    var btn = document.getElementById('eilIlerletBtn');
+    if (btn) btn.disabled = true;
+
+    var hataEl = document.getElementById('eilHataMesaj');
+    if (hataEl) { hataEl.style.display = 'none'; hataEl.textContent = ''; }
+
+    fetch('/usta/api/emir-ilerlet', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        body:    JSON.stringify({
+            emir_no:   _eilAktifVeri.emirNo,
+            proses_no: _eilAktifVeri.prosesNo,
+            kalan:     _eilAktifVeri.kalan
+        })
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+        if (d && d.success) {
+            _hedefEilModalKapat();
+            // Sorguyu yenile
+            hedefEmirSorgula(_eilAktifVeri && _eilAktifVeri.emirNo);
+        } else {
+            var msg = (d && d.message) ? d.message : 'Bilinmeyen hata.';
+            if (hataEl) { hataEl.textContent = msg; hataEl.style.display = 'block'; }
+            if (btn) btn.disabled = false;
+        }
+    })
+    .catch(function (err) {
+        console.error('[CPS] emir-ilerlet hata:', err);
+        if (hataEl) { hataEl.textContent = 'Sunucuya ulaşılamadı: ' + err.message; hataEl.style.display = 'block'; }
+        if (btn) btn.disabled = false;
+    });
+}
+
+function setupHedefEilModal() {
+    var iptalBtn   = document.getElementById('eilIptalBtn');
+    var ilerletBtn = document.getElementById('eilIlerletBtn');
+    var modal      = document.getElementById('emirIlerletModal');
+    if (iptalBtn)   iptalBtn.addEventListener('click',   _hedefEilModalKapat);
+    if (ilerletBtn) ilerletBtn.addEventListener('click',  _hedefEilIlerlet);
+    // Overlay tıklama ile kapat
+    if (modal) {
+        modal.addEventListener('click', function (ev) {
+            if (ev.target === modal) _hedefEilModalKapat();
+        });
+    }
 }
 /* ====== FAZ 2C-4 sonu ====== */
 
@@ -571,6 +689,7 @@ document.addEventListener("DOMContentLoaded", function () {
     setupTabs();
     planlariYukle();
     setupHedefEmirSorgula();
+    setupHedefEilModal();
 
     var araInput = document.getElementById('planAra');
     var araBtn = document.getElementById('planAraBtn');

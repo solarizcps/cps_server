@@ -1575,4 +1575,119 @@
   font-size: 1rem;
   color: #1d4ed8;
 }
+/* ── FAZ 2C-5A: İlerlet butonu + Onay Modali ── */
+
+/* Aktif iş paneli — İlerlet butonu */
+.heak-ilerlet-btn {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  padding: 10px 0;
+  background: #1d4ed8;
+  color: #fff;
+  font-size: .9rem;
+  font-weight: 700;
+  letter-spacing: .05em;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background .15s, box-shadow .15s;
+}
+.heak-ilerlet-btn:hover  { background: #1e40af; box-shadow: 0 2px 8px rgba(29,78,216,.35); }
+.heak-ilerlet-btn:active { background: #1e3a8a; }
+.heak-ilerlet-btn:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Modal genel katman — mevcut .h-modal zaten var, sadece ek stil */
+.eil-modal-icin {
+  max-width: 440px;
+  width: 94vw;
+}
+.eil-header {
+  background: #1e293b;
+  color: #fff;
+  border-radius: 10px 10px 0 0;
+  padding: 14px 18px;
+}
+.eil-header h3 { font-size: .95rem; letter-spacing: .08em; }
+.eil-body { padding: 20px 18px 8px; }
+
+.eil-proses-adi {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 6px;
+}
+.eil-soru {
+  font-size: .9rem;
+  color: #475569;
+  margin: 0 0 14px;
+}
+.eil-kontrol-listesi {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 7px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+}
+.eil-kontrol-satir {
+  font-size: .84rem;
+  color: #1e293b;
+  padding: 3px 0;
+}
+.eil-ok {
+  color: #16a34a;
+  font-weight: 700;
+  margin-right: 6px;
+}
+.eil-bilgi {
+  font-size: .8rem;
+  color: #64748b;
+  margin: 0 0 4px;
+  font-style: italic;
+}
+.eil-hata {
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  color: #b91c1c;
+  font-size: .84rem;
+  padding: 8px 12px;
+  margin-top: 10px;
+}
+.eil-footer {
+  display: flex;
+  gap: 10px;
+  padding: 12px 18px 16px;
+  justify-content: flex-end;
+}
+.eil-btn-iptal {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  padding: 8px 20px;
+  border-radius: 7px;
+  font-size: .88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .12s;
+}
+.eil-btn-iptal:hover { background: #e2e8f0; }
+.eil-btn-ilerlet {
+  background: #1d4ed8;
+  color: #fff;
+  border: none;
+  padding: 8px 24px;
+  border-radius: 7px;
+  font-size: .88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .12s, box-shadow .12s;
+}
+.eil-btn-ilerlet:hover    { background: #1e40af; box-shadow: 0 2px 8px rgba(29,78,216,.3); }
+.eil-btn-ilerlet:disabled { background: #94a3b8; cursor: not-allowed; box-shadow: none; }
+
 /* ============ /FAZ 2C-4 ============ */
