@@ -7123,3 +7123,187 @@ def pdks_profil_eksik_analiz(profil_id):
             'kullanici_proses',
         ],
     })
+
+
+# ── FAZ-5A: Personel 360 Organizasyon Tamamlama Analizi ──────────────────────
+
+@yonetim_bp.route('/api/personel-360/<int:profil_id>/organizasyon-analiz', methods=['GET'])
+@yetki_gerekli('yonetim', 'can_read')
+def personel_360_organizasyon_analiz(profil_id):
+    """GET /yonetim/api/personel-360/<profil_id>/organizasyon-analiz
+
+    Personel 360 profilinin operasyonel tamamlık analizini döner.
+    Eksik bağlantılar ve ekip/görev önerileri içerir.
+
+    Kontrol edilen alanlar:
+    - Kişi temel bilgisi (ad, bölüm, görev)
+    - PDKS bağlantısı
+    - Üretim bağlantıları: usta, ekip, proses, yetkinlik
+    - Yetki bağlantıları: personel_kullanici, sistem_kullanici
+
+    DB yazma yok — sadece SELECT.
+    """
+    db = get_db()
+
+    # ── 1) kullanici_profil ───────────────────────────────────────────────────
+    kp = db.execute("SELECT * FROM kullanici_profil WHERE id = ?", (profil_id,)).fetchone()
+    if not kp:
+        return jsonify({'ok': False, 'hata': 'PROFIL_BULUNAMADI', 'profil_id': profil_id}), 404
+
+    eksikler = []
+    oneriler = []
+
+    # ── 2) PDKS bağlantısı + org bilgisi ─────────────────────────────────────
+    pdks_bagli    = bool(kp['pdks_personel_id'])
+    pdks_bolum    = None
+    pdks_gorev    = None
+    pdks_grup     = None
+
+    if pdks_bagli:
+        try:
+            from modules.common.pdks import get_connection as pdks_get_conn
+            pdks_con = pdks_get_conn()
+            with pdks_con.cursor() as cur:
+                cur.execute("""
+                    SELECT b.ad AS bolum_ad, g.ad AS gorev_ad, gr.ad AS grup_ad
+                    FROM   personel p
+                    LEFT JOIN bolum b  ON b.id  = p.bolumid
+                    LEFT JOIN gorev g  ON g.id  = p.gorevid
+                    LEFT JOIN grup  gr ON gr.id = p.grupid
+                    WHERE  p.id = %s LIMIT 1
+                """, (kp['pdks_personel_id'],))
+                pr = cur.fetchone()
+                if pr:
+                    pdks_bolum = pr.get('bolum_ad')
+                    pdks_gorev = pr.get('gorev_ad')
+                    pdks_grup  = pr.get('grup_ad')
+            pdks_con.close()
+        except Exception:
+            pass
+    else:
+        eksikler.append('PDKS bağlantısı yok')
+
+    # CPS departman bilgisi
+    departman_adi = kp['departman'] if kp['departman'] else None
+    if not kp['departman_id']:
+        eksikler.append('CPS departman/bölüm atanmamış')
+        if pdks_bolum:
+            oneriler.append(f'PDKS bölüm "{pdks_bolum}" → CPS departman önerisi: manuel eşleştirme gerekli')
+
+    # ── 3) Üretim bağlantıları ────────────────────────────────────────────────
+    # 3a) Usta ilişkisi
+    usta_row = db.execute(
+        "SELECT id, usta_profil_id FROM usta_personel_iliskisi "
+        "WHERE personel_profil_id = ? AND aktif = 1 LIMIT 1",
+        (profil_id,)
+    ).fetchone()
+    usta_bagli = bool(usta_row)
+    if not usta_bagli:
+        eksikler.append('Usta atanmalı')
+        if pdks_gorev:
+            oneriler.append(f'PDKS görev "{pdks_gorev}" → ilgili usta Personel 360 → Usta ekranından atanmalı')
+
+    # 3b) Ekip üyeliği
+    ekip_row = db.execute(
+        "SELECT ke.id, em.ad AS ekip_adi FROM kullanici_ekip ke "
+        "LEFT JOIN ekip_master em ON em.id = ke.ekip_id "
+        "WHERE ke.kullanici_profil_id = ? AND ke.aktif = 1 LIMIT 1",
+        (profil_id,)
+    ).fetchone()
+    ekip_bagli = bool(ekip_row)
+    ekip_adi   = ekip_row['ekip_adi'] if ekip_bagli else None
+    if not ekip_bagli:
+        eksikler.append('Ekip seçilmeli')
+        # Ekip önerisi: PDKS bölüm/görev'e göre
+        if pdks_gorev:
+            oneriler.append(f'PDKS görev "{pdks_gorev}" → benzer isimli ekip önerilebilir')
+        elif pdks_bolum:
+            oneriler.append(f'PDKS bölüm "{pdks_bolum}" → benzer ekip önerilebilir')
+
+    # 3c) Proses yetkisi
+    proses_sayi = db.execute(
+        "SELECT COUNT(*) FROM kullanici_proses WHERE kullanici_profil_id = ? AND aktif = 1",
+        (profil_id,)
+    ).fetchone()[0]
+    proses_bagli = proses_sayi > 0
+    if not proses_bagli:
+        eksikler.append('Proses atanmalı')
+
+    # 3d) Yetkinlik
+    yetkinlik_sayi = db.execute(
+        "SELECT COUNT(*) FROM kullanici_yetkinlik WHERE kullanici_profil_id = ? AND aktif = 1",
+        (profil_id,)
+    ).fetchone()[0]
+    yetkinlik_bagli = yetkinlik_sayi > 0
+    if not yetkinlik_bagli:
+        eksikler.append('Yetkinlik kaydı eklenmeli')
+
+    # ── 4) Yetki bağlantıları ─────────────────────────────────────────────────
+    # 4a) personel_kullanici (telefon/tablet girişi)
+    pk_row = None
+    if kp['kullanici_adi']:
+        pk_row = db.execute(
+            "SELECT id, sifre FROM personel_kullanici WHERE kullanici_adi = ? AND aktif = 1 LIMIT 1",
+            (kp['kullanici_adi'],)
+        ).fetchone()
+    if not pk_row and kp['pdks_personel_id']:
+        pk_row = db.execute(
+            "SELECT id, sifre FROM personel_kullanici WHERE PdksPersonelId = ? AND aktif = 1 LIMIT 1",
+            (kp['pdks_personel_id'],)
+        ).fetchone()
+    telefon_bagli = bool(pk_row)
+    if not telefon_bagli:
+        eksikler.append('Telefon/tablet girişi tanımlanmamış')
+
+    # 4b) sistem_kullanici (CPS web girişi)
+    sk_row = None
+    if kp['kullanici_adi']:
+        sk_row = db.execute(
+            "SELECT Id FROM sistem_kullanici WHERE KullaniciAdi = ? AND Aktif = 1 LIMIT 1",
+            (kp['kullanici_adi'],)
+        ).fetchone()
+    web_bagli = bool(sk_row)
+    if not web_bagli:
+        eksikler.append('CPS web girişi tanımlanmamış')
+
+    # ── Operasyon hazır mı? ───────────────────────────────────────────────────
+    # Minimum: usta + ekip + proses + telefon
+    operasyon_hazir = usta_bagli and ekip_bagli and proses_bagli and telefon_bagli
+
+    # ── Durum özeti ───────────────────────────────────────────────────────────
+    durum = {
+        'pdks'      : pdks_bagli,
+        'departman' : bool(kp['departman_id']),
+        'usta'      : usta_bagli,
+        'ekip'      : ekip_bagli,
+        'proses'    : proses_bagli,
+        'yetkinlik' : yetkinlik_bagli,
+        'telefon'   : telefon_bagli,
+        'web_giris' : web_bagli,
+    }
+
+    tamamlanan = sum(1 for v in durum.values() if v)
+    tamamlik   = round(tamamlanan / len(durum) * 100)
+
+    return jsonify({
+        'ok'             : True,
+        'profil_id'      : profil_id,
+        'profil'         : kp['gercek_ad'],
+        'kullanici_adi'  : kp['kullanici_adi'],
+        'pdks_personel_id': kp['pdks_personel_id'],
+        'pdks_org'       : {
+            'bolum': pdks_bolum,
+            'gorev': pdks_gorev,
+            'grup' : pdks_grup,
+        },
+        'cps_org'        : {
+            'departman'   : departman_adi,
+            'departman_id': kp['departman_id'],
+            'ekip'        : ekip_adi,
+        },
+        'durum'          : durum,
+        'tamamlik_puan'  : tamamlik,
+        'operasyon_hazir': operasyon_hazir,
+        'eksikler'       : eksikler,
+        'oneriler'       : oneriler,
+    })
