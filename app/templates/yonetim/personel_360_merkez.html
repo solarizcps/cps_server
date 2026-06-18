@@ -573,6 +573,98 @@
       <!-- SEKME: İK (FAZ2G-3 readonly + FAZ2G-4B write) -->
       <div id="sekme-ik" class="p360-sekme-icerik" style="display:none;">
 
+        <!-- FAZ-4B: PDKS Yeni Personel Havuzu Paneli -->
+        <div id="pdks-havuz-panel" style="margin-bottom:14px;">
+          <div class="oz-card" style="border-left:4px solid #16a34a;">
+
+            <!-- Başlık + Yenile -->
+            <div class="oz-hdr" style="justify-content:space-between;align-items:center;cursor:pointer;"
+                 onclick="pdksHavuzToggle()">
+              <span class="oz-hdr-t" style="color:#166534;">🟢 PDKS Yeni Personel Havuzu</span>
+              <div style="display:flex;gap:8px;align-items:center;" onclick="event.stopPropagation()">
+                <button onclick="pdksHavuzYukle()"
+                        style="font-size:11px;padding:3px 10px;border:1px solid #16a34a;border-radius:5px;
+                               background:#dcfce7;color:#166534;cursor:pointer;">↺ Yenile</button>
+                <span id="pdks-havuz-ok" style="font-size:11px;color:#166534;">▼</span>
+              </div>
+            </div>
+
+            <div id="pdks-havuz-icerik" style="padding:0 16px 16px;">
+
+              <!-- Özet kartlar -->
+              <div id="pdks-havuz-ozet" style="display:none;
+                   display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));
+                   gap:8px;margin:10px 0 14px 0;">
+                <div class="phk-kart" id="phk-toplam">
+                  <div class="phk-sayi" id="phk-toplam-sayi">—</div>
+                  <div class="phk-etiket">Toplam PDKS</div>
+                </div>
+                <div class="phk-kart phk-mavi" id="phk-bagli">
+                  <div class="phk-sayi" id="phk-bagli-sayi">—</div>
+                  <div class="phk-etiket">Bağlı</div>
+                </div>
+                <div class="phk-kart phk-yesil" id="phk-yeni">
+                  <div class="phk-sayi" id="phk-yeni-sayi">—</div>
+                  <div class="phk-etiket">Yeni Aday</div>
+                </div>
+                <div class="phk-kart phk-sari" id="phk-dup">
+                  <div class="phk-sayi" id="phk-dup-sayi">—</div>
+                  <div class="phk-etiket">Çift Kayıt</div>
+                </div>
+              </div>
+
+              <!-- Filtre + Arama -->
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;"
+                   id="pdks-havuz-filtre-bar" style="display:none;">
+                <button class="phk-filtre phk-filtre-aktif" data-filtre="hepsi"
+                        onclick="pdksHavuzFiltre(this)">Tümü</button>
+                <button class="phk-filtre" data-filtre="YENI_ADAY"
+                        onclick="pdksHavuzFiltre(this)">🟢 Yeni Aday</button>
+                <button class="phk-filtre" data-filtre="DUPLICATE_PDKS_ADAY"
+                        onclick="pdksHavuzFiltre(this)">🟡 Çift Kayıt</button>
+                <input id="pdks-havuz-ara" type="text" placeholder="Ad soyad ara…"
+                       oninput="pdksHavuzAra()"
+                       style="font-size:12px;padding:4px 8px;border:1px solid var(--border);
+                              border-radius:5px;flex:1;min-width:140px;background:var(--bg2);color:var(--text1);">
+              </div>
+
+              <!-- Yükleniyor / Hata -->
+              <div id="pdks-havuz-yukl" style="padding:16px;text-align:center;color:var(--text3);font-size:13px;">
+                Yükleniyor…
+              </div>
+              <div id="pdks-havuz-hata" style="display:none;padding:10px 12px;background:#fee2e2;
+                   color:#991b1b;font-size:12px;border-radius:6px;"></div>
+
+              <!-- Tablo -->
+              <div id="pdks-havuz-tablo-kap" style="display:none;overflow-x:auto;">
+                <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                  <thead>
+                    <tr style="background:var(--bg2);position:sticky;top:0;">
+                      <th style="padding:7px 10px;text-align:left;color:var(--text3);font-weight:600;
+                                 border-bottom:2px solid var(--border);min-width:160px;">Ad Soyad</th>
+                      <th style="padding:7px 10px;text-align:left;color:var(--text3);font-weight:600;
+                                 border-bottom:2px solid var(--border);">Sicil</th>
+                      <th style="padding:7px 10px;text-align:left;color:var(--text3);font-weight:600;
+                                 border-bottom:2px solid var(--border);">Bölüm</th>
+                      <th style="padding:7px 10px;text-align:left;color:var(--text3);font-weight:600;
+                                 border-bottom:2px solid var(--border);">Görev</th>
+                      <th style="padding:7px 10px;text-align:left;color:var(--text3);font-weight:600;
+                                 border-bottom:2px solid var(--border);">Grup</th>
+                      <th style="padding:7px 10px;text-align:center;color:var(--text3);font-weight:600;
+                                 border-bottom:2px solid var(--border);">Durum</th>
+                    </tr>
+                  </thead>
+                  <tbody id="pdks-havuz-tbody"></tbody>
+                </table>
+                <div id="pdks-havuz-bos" style="display:none;padding:20px;text-align:center;
+                     color:var(--text3);font-size:13px;">Sonuç bulunamadı.</div>
+              </div>
+
+            </div><!-- /pdks-havuz-icerik -->
+          </div>
+        </div>
+        <!-- /FAZ-4B: PDKS Yeni Personel Havuzu Paneli -->
+
         <!-- Eksik Profil Uyarı Paneli -->
         <div id="eksik-hr-panel" style="display:none;margin-bottom:14px;">
           <div class="oz-card" style="border-left:4px solid #f59e0b;">
@@ -1172,6 +1264,34 @@
 .p360-sekme.p360-sekme-aktif {
   background: #2563eb; color: #fff; border-color: #2563eb;
 }
+
+/* FAZ-4B: PDKS Havuz kartları */
+.phk-kart {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 12px; text-align: center;
+}
+.phk-kart.phk-mavi  { background: #dbeafe; border-color: #93c5fd; }
+.phk-kart.phk-yesil { background: #dcfce7; border-color: #86efac; }
+.phk-kart.phk-sari  { background: #fef9c3; border-color: #fde047; }
+.phk-sayi { font-size: 22px; font-weight: 700; color: var(--text1); line-height: 1.1; }
+.phk-etiket { font-size: 10px; color: var(--text3); text-transform: uppercase;
+              letter-spacing: .5px; margin-top: 2px; }
+.phk-filtre {
+  font-size: 11px; padding: 3px 10px; border-radius: 12px;
+  border: 1px solid var(--border); background: var(--bg2);
+  color: var(--text2); cursor: pointer; white-space: nowrap;
+}
+.phk-filtre.phk-filtre-aktif {
+  background: #2563eb; color: #fff; border-color: #2563eb;
+}
+.phk-satir { border-top: 1px solid var(--border); }
+.phk-satir:hover { background: var(--bg2); }
+.phk-badge {
+  display: inline-block; font-size: 10px; font-weight: 600;
+  padding: 2px 7px; border-radius: 10px; white-space: nowrap;
+}
+.phk-badge-yeni { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+.phk-badge-dup  { background: #fef9c3; color: #854d0e; border: 1px solid #fde047; }
 
 .p360-satir-detay {
   display: flex; gap: 10px; padding: 11px 16px;
@@ -2170,6 +2290,142 @@
   }
 
   // ── Eksik HR paneli ─────────────────────────────────────────
+  // ── FAZ-4B: PDKS Yeni Personel Havuzu ───────────────────────────────────────
+
+  var _pdksHavuzData    = null;   // ham API yanıtı
+  var _pdksHavuzFiltre  = 'hepsi'; // aktif filtre
+  var _pdksHavuzYuklendi = false;
+
+  async function pdksHavuzYukle() {
+    var yukl  = document.getElementById('pdks-havuz-yukl');
+    var hata  = document.getElementById('pdks-havuz-hata');
+    var kap   = document.getElementById('pdks-havuz-tablo-kap');
+    var ozet  = document.getElementById('pdks-havuz-ozet');
+    var filtr = document.getElementById('pdks-havuz-filtre-bar');
+
+    if (yukl)  yukl.style.display  = 'block';
+    if (hata)  hata.style.display  = 'none';
+    if (kap)   kap.style.display   = 'none';
+    if (ozet)  ozet.style.display  = 'none';
+    if (filtr) filtr.style.display = 'none';
+
+    try {
+      var resp = await fetch('/yonetim/api/pdks/yeni-personel-havuzu',
+                             { credentials: 'same-origin' });
+      var data = await resp.json();
+    } catch (err) {
+      if (yukl) yukl.style.display = 'none';
+      if (hata) { hata.textContent = 'Bağlantı hatası: ' + err.message; hata.style.display = 'block'; }
+      return;
+    }
+
+    if (yukl) yukl.style.display = 'none';
+
+    if (!data.ok) {
+      if (hata) { hata.textContent = 'Hata: ' + (data.hata || 'bilinmiyor'); hata.style.display = 'block'; }
+      return;
+    }
+
+    _pdksHavuzData   = data;
+    _pdksHavuzYuklendi = true;
+
+    // Özet kartları doldur
+    var setText = function(id, val) { var el = document.getElementById(id); if (el) el.textContent = val; };
+    setText('phk-toplam-sayi', data.toplam_pdks   || 0);
+    setText('phk-bagli-sayi',  data.zaten_eslesmis || 0);
+    setText('phk-yeni-sayi',   data.yeni_aday      || 0);
+    setText('phk-dup-sayi',    data.duplicate_pdks_aday || 0);
+
+    if (ozet)  ozet.style.display  = 'grid';
+    if (filtr) filtr.style.display = 'flex';
+
+    pdksHavuzRender();
+  }
+
+  function pdksHavuzTumKisiler() {
+    if (!_pdksHavuzData) return [];
+    var liste = (_pdksHavuzData.kisiler || []).concat(
+                _pdksHavuzData.duplicate_pdks_kisiler || []).concat(
+                _pdksHavuzData.kontrol_gerekli_kisiler || []);
+    return liste;
+  }
+
+  function pdksHavuzRender() {
+    var tbody = document.getElementById('pdks-havuz-tbody');
+    var kap   = document.getElementById('pdks-havuz-tablo-kap');
+    var bos   = document.getElementById('pdks-havuz-bos');
+    var ara   = (document.getElementById('pdks-havuz-ara') || {}).value || '';
+    ara = ara.trim().toLowerCase();
+
+    if (!tbody) return;
+
+    var kisiler = pdksHavuzTumKisiler();
+
+    // Filtre
+    if (_pdksHavuzFiltre !== 'hepsi') {
+      kisiler = kisiler.filter(function(k) { return k.durum === _pdksHavuzFiltre; });
+    }
+    // Arama
+    if (ara) {
+      kisiler = kisiler.filter(function(k) {
+        return (k.tam_ad || '').toLowerCase().indexOf(ara) !== -1;
+      });
+    }
+
+    if (kap) kap.style.display = kisiler.length > 0 ? 'block' : 'none';
+    if (bos) bos.style.display = kisiler.length === 0 ? 'block' : 'none';
+
+    var durumBadge = {
+      'YENI_ADAY'          : '<span class="phk-badge phk-badge-yeni">🟢 Yeni Aday</span>',
+      'DUPLICATE_PDKS_ADAY': '<span class="phk-badge phk-badge-dup">🟡 Çift Kayıt</span>',
+      'KONTROL_GEREKLI'    : '<span class="phk-badge" style="background:#fce7f3;color:#9d174d;border:1px solid #f9a8d4;">🔴 Kontrol</span>',
+    };
+
+    tbody.innerHTML = kisiler.map(function(k, i) {
+      var bg = i % 2 === 0 ? '' : 'background:var(--bg2);';
+      return '<tr class="phk-satir" style="' + bg + '">' +
+        '<td style="padding:7px 10px;font-weight:500;color:var(--text1);">' + _esc(k.tam_ad) + '</td>' +
+        '<td style="padding:7px 10px;color:var(--text3);font-size:11px;">' + _esc(k.sicilno || '—') + '</td>' +
+        '<td style="padding:7px 10px;color:var(--text2);">' + _esc(k.pdks_bolum || '—') + '</td>' +
+        '<td style="padding:7px 10px;color:var(--text2);">' + _esc(k.pdks_gorev || '—') + '</td>' +
+        '<td style="padding:7px 10px;color:var(--text2);">' + _esc(k.pdks_grup || '—') + '</td>' +
+        '<td style="padding:7px 10px;text-align:center;">' + (durumBadge[k.durum] || k.durum) + '</td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function _esc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function pdksHavuzFiltre(btn) {
+    document.querySelectorAll('.phk-filtre').forEach(function(b) {
+      b.classList.remove('phk-filtre-aktif');
+    });
+    btn.classList.add('phk-filtre-aktif');
+    _pdksHavuzFiltre = btn.dataset.filtre;
+    pdksHavuzRender();
+  }
+
+  function pdksHavuzAra() {
+    pdksHavuzRender();
+  }
+
+  function pdksHavuzToggle() {
+    var ic = document.getElementById('pdks-havuz-icerik');
+    var ok = document.getElementById('pdks-havuz-ok');
+    if (!ic) return;
+    var acik = ic.style.display !== 'none';
+    ic.style.display = acik ? 'none' : 'block';
+    if (ok) ok.textContent = acik ? '▶' : '▼';
+  }
+
+  window.pdksHavuzYukle   = pdksHavuzYukle;
+  window.pdksHavuzFiltre  = pdksHavuzFiltre;
+  window.pdksHavuzAra     = pdksHavuzAra;
+  window.pdksHavuzToggle  = pdksHavuzToggle;
+
+  // ── Eksik HR Paneli ──────────────────────────────────────────
   var _eksikHrYuklendi = false;
 
   function eksikHrPanelYukle() {
@@ -2246,6 +2502,7 @@
   // ── İK genel panel sarmalayıcı (profil seçimi gerektirmez) ──
   var _ikGenelYuklendi = false;
   function ikGenelPanellerYukle() {
+    pdksHavuzYukle();
     eksikHrPanelYukle();
     topluDevamPanelGoster();
     _ikGenelYuklendi = true;
