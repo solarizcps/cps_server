@@ -44,57 +44,92 @@
 
   <!-- ============ VERİ GİRİŞ SEKMESİ ============ -->
   <section class="u-pane" id="pane-giris">
-    <div class="u-pane-header">
-      <h2>Veri Girişi</h2>
+
+    <!-- ADIM 1: Hat Seçimi -->
+    <div id="adim-hat" class="u-adim">
+      <div class="u-pane-header">
+        <h2>Hangi Bölüm?</h2>
+      </div>
+      <div id="hatListeError" class="u-error" style="display:none;"></div>
+      <div id="hatListeWrap" class="u-hat-liste">
+        <div class="u-empty">Yükleniyor...</div>
+      </div>
     </div>
-    <div id="girisError" class="u-error" style="display:none;"></div>
-    <div id="girisSuccess" class="u-success" style="display:none;"></div>
 
-    <form id="girisForm" class="u-form" onsubmit="return false;">
-      <div class="u-field">
-        <label for="emirNo">Emir No <span class="u-zorunlu">*</span></label>
-        <input type="number" id="emirNo" name="emir_no" required autocomplete="off" inputmode="numeric">
+    <!-- ADIM 2: Önümdeki İşler -->
+    <div id="adim-isler" class="u-adim" style="display:none;">
+      <div class="u-pane-header">
+        <button class="u-geri-btn" id="islerGeriBtn">← Geri</button>
+        <h2 id="seciliHatBaslik">Bölüm</h2>
+        <button class="u-yenile" id="onumdekiYenileBtn" title="Yenile">↻</button>
+      </div>
+      <div id="onumdekiError" class="u-error" style="display:none;"></div>
+      <div id="onumdekiList" class="u-card-list">
+        <div class="u-empty">Yükleniyor...</div>
+      </div>
+    </div>
+
+    <!-- ADIM 3: Kayıt Formu (Başlat / Bitir) -->
+    <div id="adim-form" class="u-adim" style="display:none;">
+      <div class="u-pane-header">
+        <button class="u-geri-btn" id="formGeriBtn">← Geri</button>
+        <h2>Üretim Kaydı</h2>
       </div>
 
-      <div class="u-field">
-        <label for="modelAdi">Model</label>
-        <input type="text" id="modelAdi" name="model_adi" autocomplete="off" placeholder="(opsiyonel)">
-      </div>
+      <!-- Seçilen iş özeti -->
+      <div id="formEmirozet" class="u-emir-ozet"></div>
 
-      <div class="u-field">
-        <label for="prosesKodu">Proses Kodu <span class="u-zorunlu">*</span></label>
-        <select id="prosesKodu" name="proses_kodu" required>
-          <option value="">— Seçiniz —</option>
-          <option value="MONTA">Monta</option>
-          <option value="KESIM">Kesim</option>
-          <option value="SAYA">Saya</option>
-          <option value="ENJEKSIYON">Enjeksiyon</option>
-          <option value="TEMIZLEME">Temizleme</option>
-          <option value="PAKETLEME">Paketleme</option>
-          <option value="DIGER">Diğer</option>
-        </select>
-      </div>
+      <div id="formError" class="u-error" style="display:none;"></div>
+      <div id="formSuccess" class="u-success" style="display:none;"></div>
 
-      <div class="u-field">
-        <label for="prosesAdi">Proses Adı <span class="u-zorunlu">*</span></label>
-        <input type="text" id="prosesAdi" name="proses_adi" required autocomplete="off" placeholder="örn. Monta">
-      </div>
+      <form id="uretimForm" onsubmit="return false;">
 
-      <div class="u-field">
-        <label for="miktar">Miktar (çift) <span class="u-zorunlu">*</span></label>
-        <input type="number" id="miktar" name="miktar" required min="1" autocomplete="off" inputmode="numeric">
-      </div>
+        <div class="u-field">
+          <label>Toplam Miktar (çift) <span class="u-zorunlu">*</span></label>
+          <input type="number" id="fToplamMiktar" min="1" inputmode="numeric"
+                 placeholder="Üretilen çift sayısı">
+        </div>
 
-      <div class="u-field">
-        <label for="girisNot">Not</label>
-        <textarea id="girisNot" name="not" rows="2" placeholder="(opsiyonel)"></textarea>
-      </div>
+        <div class="u-field">
+          <label>Başlangıç Saati</label>
+          <input type="time" id="fBaslangicSaat">
+        </div>
 
-      <div class="u-actions">
-        <button type="button" class="u-btn u-btn-primary" id="girisKaydetBtn">KAYDET</button>
-        <button type="button" class="u-btn u-btn-ghost" id="girisIptalBtn">Temizle</button>
-      </div>
-    </form>
+        <div class="u-field">
+          <label>Bitiş Saati</label>
+          <input type="time" id="fBitisSaat">
+        </div>
+
+        <!-- Ekip Girişi -->
+        <div class="u-field-group">
+          <label class="u-field-group-baslik">Kim Yaptı? <span class="u-aciklama">(kişi bazında dağılım)</span></label>
+          <div id="ekipSatirlar">
+            <!-- JS ile dinamik eklenir -->
+          </div>
+          <button type="button" class="u-btn u-btn-ghost u-btn-sm" id="ekipEkleBtn">+ Kişi Ekle</button>
+        </div>
+
+        <div class="u-field">
+          <label>Not</label>
+          <textarea id="fNot" rows="2" placeholder="(opsiyonel)"></textarea>
+        </div>
+
+        <!-- Kapatan (oturum sahibi) -->
+        <div class="u-kapatan-satir">
+          <span class="u-kapatan-label">Kapatan:</span>
+          <span id="fKapatan" class="u-kapatan-ad">—</span>
+        </div>
+
+        <div class="u-actions">
+          <button type="button" class="u-btn u-btn-primary u-btn-lg" id="formKaydetBtn">
+            ✓ KAYDET
+          </button>
+          <button type="button" class="u-btn u-btn-ghost" id="formIptalBtn">Temizle</button>
+        </div>
+
+      </form>
+    </div>
+
   </section>
 
   <!-- ============ ONAY SEKMESİ ============ -->

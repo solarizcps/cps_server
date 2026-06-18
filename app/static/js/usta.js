@@ -325,22 +325,378 @@
     guncelleBadgeAtandi(n);
   }
 
-  // ============== GIRIS SEKMESI - YAKINDA ==============
-  function girisSekmesiBilgilendir() {
-    // GIRIS sekmesinin formuna submit edilirse mesaj goster
-    var btn = $("girisKaydetBtn");
-    if (btn) {
-      btn.addEventListener("click", function () {
-        showError("girisError", "Bu ozellik daha sonra aktif edilecek.");
-      });
+  // ============== GİRİŞ SEKMESİ — FAZ 2 ÜRETİM KAYIT ==============
+  // State
+  var _girisState = {
+    hatlar:        [],
+    seciliHat:     null,   // {kod, ad, proses}
+    isler:         [],
+    seciliIs:      null,   // {emir_no, skod, proses_kodu, proses_adi, bekleyen_miktar, ...}
+    personeller:   [],
+    ekipSayac:     0,
+    kapalanAd:     '',
+  };
+
+  function girisAdimGoster(adimId) {
+    var adimlar = ['adim-hat', 'adim-isler', 'adim-form'];
+    adimlar.forEach(function (a) {
+      var el = $(a);
+      if (el) el.style.display = (a === adimId) ? '' : 'none';
+    });
+  }
+
+  // ---- ADIM 1: Hat yükleme ----
+  async function hatlarYukle() {
+    try {
+      var r = await apiFetch('/usta/api/hat-listesi');
+      if (r.status >= 400 || !r.data.ok) { return; }
+      _girisState.hatlar = r.data.hatlar || [];
+      renderHatListe();
+    } catch (e) {
+      console.warn('[GIRIS] hat listesi hatasi:', e.message);
     }
-    var iptalBtn = $("girisIptalBtn");
-    if (iptalBtn) {
-      iptalBtn.addEventListener("click", function () {
-        var f = $("girisForm");
-        if (f) f.reset();
+  }
+
+  function renderHatListe() {
+    var wrap = $('hatListeWrap');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    _girisState.hatlar.forEach(function (h) {
+      var btn = document.createElement('button');
+      btn.className = 'u-hat-btn';
+      btn.textContent = h.ad;
+      btn.addEventListener('click', function () {
+        _girisState.seciliHat = h;
+        hatSecilenGuncelle(h);
       });
+      wrap.appendChild(btn);
+    });
+  }
+
+  async function hatSecilenGuncelle(hat) {
+    var baslik = $('seciliHatBaslik');
+    if (baslik) baslik.textContent = hat.ad;
+    girisAdimGoster('adim-isler');
+
+    var liste = $('onumdekiList');
+    if (liste) liste.innerHTML = '<div class="u-empty">Yükleniyor...</div>';
+
+    try {
+      var url = '/usta/api/onumdeki-isler?hat_kodu=' + encodeURIComponent(hat.kod);
+      var r = await apiFetch(url);
+      if (r.status >= 400 || !r.data.ok) {
+        showError('onumdekiError',
+          (r.data && r.data.hata) ? r.data.hata : ('HTTP ' + r.status));
+        if (liste) liste.innerHTML = '<div class="u-empty">Yuklenemedi.</div>';
+        return;
+      }
+      _girisState.isler = r.data.isler || [];
+      renderOnumdekiIsler(_girisState.isler);
+    } catch (e) {
+      console.warn('[GIRIS] onumdeki isler hatasi:', e.message);
+      var ll = $('onumdekiList');
+      if (ll) ll.innerHTML = '<div class="u-empty">Bağlantı hatası.</div>';
     }
+  }
+
+  function renderOnumdekiIsler(isler) {
+    var liste = $('onumdekiList');
+    if (!liste) return;
+    liste.innerHTML = '';
+
+    if (!isler || isler.length === 0) {
+      liste.innerHTML = '<div class="u-empty">Bu bölümde bekleyen iş yok.</div>';
+      return;
+    }
+
+    isler.forEach(function (is) {
+      var card = document.createElement('div');
+      card.className = 'u-card u-card-is';
+
+      var miktar = is.bekleyen_miktar || 0;
+      card.innerHTML =
+        '<div class="u-card-header">' +
+          '<div class="u-card-emir">Sip ' + escapeHtml(String(is.sip_no || '-')) + ' / Emir ' + escapeHtml(String(is.emir_no)) + '</div>' +
+          '<div class="u-card-durum bekliyor">' + escapeHtml(is.proses_adi || is.proses_kodu || '-') + '</div>' +
+        '</div>' +
+        '<div class="u-card-model">' + escapeHtml(is.skod || '-') + '</div>' +
+        '<div class="u-card-info">' +
+          '<span><span class="lbl">Müşteri:</span> ' + escapeHtml(is.musteri_adi || '-') + '</span>' +
+          '<span><span class="lbl">Bekleyen:</span> <strong>' + miktar + ' ' + escapeHtml(is.birim || 'ÇIFT') + '</strong></span>' +
+        '</div>' +
+        '<div class="u-card-actions">' +
+          '<button class="u-btn u-btn-primary">Kayıt Gir</button>' +
+        '</div>';
+
+      card.querySelector('.u-btn-primary').addEventListener('click', function () {
+        isSecildi(is);
+      });
+      liste.appendChild(card);
+    });
+  }
+
+  // ---- ADIM 3: Form (kayıt girişi) ----
+  async function isSecildi(is) {
+    _girisState.seciliIs = is;
+
+    // Özet bandı
+    var ozet = $('formEmirozet');
+    if (ozet) {
+      ozet.innerHTML =
+        '<div class="u-emir-ozet-satir">' +
+          '<span class="u-emir-ozet-emir">Sip ' + escapeHtml(String(is.sip_no || '-')) +
+          ' / Emir <strong>' + escapeHtml(String(is.emir_no)) + '</strong>' +
+          ' — ' + escapeHtml(is.proses_adi || is.proses_kodu) + '</span>' +
+        '</div>' +
+        '<div class="u-emir-ozet-satir">' +
+          '<span>' + escapeHtml(is.skod) + '</span>' +
+          '<span class="u-emir-ozet-musteri">' + escapeHtml(is.musteri_adi || '') + '</span>' +
+        '</div>' +
+        '<div class="u-emir-ozet-satir">' +
+          '<span class="u-emir-ozet-lbl">Bekleyen:</span>' +
+          '<strong>' + (is.bekleyen_miktar || 0) + ' ' + escapeHtml(is.birim || 'ÇIFT') + '</strong>' +
+          ((_girisState.seciliHat) ? ' <span class="u-hat-badge">' + escapeHtml(_girisState.seciliHat.ad) + '</span>' : '') +
+        '</div>';
+    }
+
+    // Şimdiki saati bitiş saat alanına doldur
+    var now = new Date();
+    var hh = String(now.getHours()).padStart(2, '0');
+    var mm = String(now.getMinutes()).padStart(2, '0');
+    var fBitis = $('fBitisSaat');
+    if (fBitis && !fBitis.value) fBitis.value = hh + ':' + mm;
+
+    // Miktar alanına bekleyen miktarı doldur
+    var fMiktar = $('fToplamMiktar');
+    if (fMiktar && !fMiktar.value && is.bekleyen_miktar > 0) {
+      fMiktar.value = is.bekleyen_miktar;
+    }
+
+    // Kapatan adı
+    var kapatanEl = $('fKapatan');
+    if (kapatanEl) kapatanEl.textContent = _girisState.kapalanAd || '—';
+
+    // Personel listesini yükle (ekip seçimi için)
+    await personelListesiYukle();
+
+    // İlk ekip satırı
+    ekipSifirlaDoldur();
+
+    girisAdimGoster('adim-form');
+
+    // Hata/başarı mesajlarını temizle
+    var fe = $('formError');
+    var fs = $('formSuccess');
+    if (fe) fe.style.display = 'none';
+    if (fs) fs.style.display = 'none';
+  }
+
+  async function personelListesiYukle() {
+    if (_girisState.personeller.length > 0) return; // cached
+    try {
+      var r = await apiFetch('/usta/api/personel-listesi');
+      if (r.data && r.data.ok && r.data.personeller) {
+        _girisState.personeller = r.data.personeller;
+      }
+    } catch (e) {
+      console.warn('[GIRIS] personel listesi hatasi:', e.message);
+    }
+  }
+
+  function ekipSifirla() {
+    var wrap = $('ekipSatirlar');
+    if (wrap) wrap.innerHTML = '';
+    _girisState.ekipSayac = 0;
+  }
+
+  function ekipSifirlaDoldur() {
+    ekipSifirla();
+    // Bir boş satır ekle
+    ekipSatirEkle();
+  }
+
+  function ekipSatirEkle() {
+    var wrap = $('ekipSatirlar');
+    if (!wrap) return;
+    var idx = _girisState.ekipSayac++;
+    var div = document.createElement('div');
+    div.className = 'u-ekip-satir';
+    div.id = 'ekip-satir-' + idx;
+
+    // Personel seçimi (select veya text)
+    var personelHtml = '';
+    if (_girisState.personeller.length > 0) {
+      personelHtml = '<select class="u-ekip-ad" data-idx="' + idx + '">' +
+        '<option value="">— Kişi Seç —</option>';
+      _girisState.personeller.forEach(function (p) {
+        personelHtml += '<option value="' + p.id + '" data-ad="' + escapeHtml(p.ad) + '">' +
+          escapeHtml(p.ad) + '</option>';
+      });
+      personelHtml += '</select>';
+    } else {
+      personelHtml = '<input type="text" class="u-ekip-ad" placeholder="İsim" data-idx="' + idx + '">';
+    }
+
+    div.innerHTML =
+      personelHtml +
+      '<input type="number" class="u-ekip-miktar" placeholder="Miktar" min="0" inputmode="numeric" data-idx="' + idx + '">' +
+      '<button type="button" class="u-ekip-sil" data-idx="' + idx + '">✕</button>';
+
+    div.querySelector('.u-ekip-sil').addEventListener('click', function () {
+      var el = $('ekip-satir-' + idx);
+      if (el) el.remove();
+    });
+    wrap.appendChild(div);
+  }
+
+  function ekipOku() {
+    var ekip = [];
+    var satirlar = document.querySelectorAll('.u-ekip-satir');
+    satirlar.forEach(function (satir) {
+      var adEl = satir.querySelector('.u-ekip-ad');
+      var miktarEl = satir.querySelector('.u-ekip-miktar');
+      if (!adEl || !miktarEl) return;
+
+      var adVal = adEl.value ? adEl.value.trim() : '';
+      var miktar = parseInt(miktarEl.value, 10) || 0;
+      if (!adVal) return;
+
+      var pId = null;
+      var pAd = adVal;
+
+      // select ise value = id, data-ad = ad
+      if (adEl.tagName === 'SELECT') {
+        var sel = adEl.options[adEl.selectedIndex];
+        if (!sel || !sel.value) return;
+        pId = parseInt(sel.value, 10);
+        pAd = sel.getAttribute('data-ad') || sel.text;
+      }
+
+      ekip.push({ personel_id: pId, personel_ad: pAd, miktar: miktar });
+    });
+    return ekip;
+  }
+
+  async function formKaydet() {
+    var btn = $('formKaydetBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Kaydediliyor...'; }
+
+    try {
+      var is = _girisState.seciliIs;
+      if (!is) {
+        showError('formError', 'İş seçilmemiş.');
+        return;
+      }
+
+      var miktarEl = $('fToplamMiktar');
+      var toplam = parseInt((miktarEl && miktarEl.value) || '0', 10);
+      if (toplam <= 0) {
+        showError('formError', 'Miktar girilmedi veya geçersiz.');
+        if (btn) { btn.disabled = false; btn.textContent = '✓ KAYDET'; }
+        return;
+      }
+
+      var ekip = ekipOku();
+
+      var payload = {
+        emir_no:         is.emir_no,
+        skod:            is.skod,
+        proses_kodu:     is.proses_kodu,
+        proses_adi:      is.proses_adi,
+        hat_adi:         _girisState.seciliHat ? _girisState.seciliHat.ad : '',
+        toplam_miktar:   toplam,
+        baslangic_saat:  ($('fBaslangicSaat') && $('fBaslangicSaat').value) || null,
+        bitis_saat:      ($('fBitisSaat') && $('fBitisSaat').value) || null,
+        sip_no:          is.sip_no || null,
+        ekip:            ekip,
+        not_metin:       ($('fNot') && $('fNot').value.trim()) || null,
+      };
+
+      var r = await apiFetch('/usta/api/uretim-kayit', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      if (r.status >= 400 || !r.data.ok) {
+        var msg = (r.data && (r.data.mesaj || r.data.hata)) || ('HTTP ' + r.status);
+        showError('formError', msg);
+        return;
+      }
+
+      // Başarı
+      var kayitId = r.data.kayit_id || '?';
+      showSuccess('formSuccess',
+        'Kayıt oluşturuldu! #' + kayitId + '  (' + toplam + ' çift)');
+
+      // Formu sıfırla, işler listesine geri dön
+      setTimeout(function () {
+        formTemizle();
+        girisAdimGoster('adim-isler');
+        // İşler listesini yenile
+        if (_girisState.seciliHat) {
+          hatSecilenGuncelle(_girisState.seciliHat);
+        }
+      }, 1500);
+
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '✓ KAYDET'; }
+    }
+  }
+
+  function formTemizle() {
+    var miktarEl = $('fToplamMiktar');
+    var notEl = $('fNot');
+    var basEl = $('fBaslangicSaat');
+    var bitEl = $('fBitisSaat');
+    if (miktarEl) miktarEl.value = '';
+    if (notEl) notEl.value = '';
+    if (basEl) basEl.value = '';
+    if (bitEl) bitEl.value = '';
+    ekipSifirlaDoldur();
+    _girisState.seciliIs = null;
+  }
+
+  function setupGirisAkis() {
+    // Geri butonları
+    var islerGeri = $('islerGeriBtn');
+    if (islerGeri) islerGeri.addEventListener('click', function () {
+      girisAdimGoster('adim-hat');
+    });
+    var formGeri = $('formGeriBtn');
+    if (formGeri) formGeri.addEventListener('click', function () {
+      girisAdimGoster('adim-isler');
+    });
+
+    // Yenile
+    var onumdekiYenile = $('onumdekiYenileBtn');
+    if (onumdekiYenile) onumdekiYenile.addEventListener('click', function () {
+      if (_girisState.seciliHat) {
+        hatSecilenGuncelle(_girisState.seciliHat);
+      }
+    });
+
+    // Ekip ekle
+    var ekipEkle = $('ekipEkleBtn');
+    if (ekipEkle) ekipEkle.addEventListener('click', ekipSatirEkle);
+
+    // Kaydet
+    var formKaydetBtn = $('formKaydetBtn');
+    if (formKaydetBtn) formKaydetBtn.addEventListener('click', formKaydet);
+
+    // Temizle
+    var formIptal = $('formIptalBtn');
+    if (formIptal) formIptal.addEventListener('click', function () {
+      formTemizle();
+    });
+
+    // Kullanıcı adını oku (kapatan)
+    var ustaAdEl = $('ustaAd');
+    if (ustaAdEl) {
+      _girisState.kapalanAd = ustaAdEl.textContent.trim();
+    }
+
+    // Hat listesini yükle
+    hatlarYukle();
   }
 
   // ============== STARTUP ==============
@@ -359,7 +715,7 @@
       tamamlananlariYukle();
     });
 
-    girisSekmesiBilgilendir();
+    setupGirisAkis();
 
     // Ilk yukleme - sadece ISLER (tab default active)
     acikIsleriYukle();
