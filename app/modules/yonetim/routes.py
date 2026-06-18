@@ -6254,3 +6254,73 @@ def pdks_profil_eslestir():
         'satirlar'         : uygulanabilir,
         'cakismalar'       : profil_cakisma_listesi,
     })
+
+
+# ── FAZ-3A: Personel 360 PDKS Devam API ──────────────────────────────────────
+
+@yonetim_bp.route('/api/personel-360/<int:profil_id>/pdks-devam', methods=['GET'])
+@yetki_gerekli('personel_360', 'can_view')
+def personel_360_pdks_devam(profil_id):
+    """GET /yonetim/api/personel-360/<profil_id>/pdks-devam
+
+    Personel 360 profilinin bugünkü (veya ?tarih=YYYY-MM-DD) PDKS devam durumunu döner.
+    PDKS DB'ye sadece SELECT yapılır.
+
+    Query params:
+        tarih : YYYY-MM-DD (opsiyonel, default bugün)
+
+    Returns (eşleşme varsa):
+        {ok: true, profil_id, pdks_personel_id, tarih, devam: {...}}
+
+    Returns (eşleşme yoksa):
+        {ok: false, hata: "pdks_eslesme_yok"}
+    """
+    import datetime as _dt
+    from modules.common.pdks import get_profil_bugun_devam
+
+    tarih = request.args.get('tarih')
+    if tarih:
+        try:
+            _dt.datetime.strptime(tarih, '%Y-%m-%d')
+        except ValueError:
+            return jsonify({'ok': False, 'hata': 'gecersiz_tarih_formati', 'mesaj': 'YYYY-MM-DD bekleniyor'}), 400
+    else:
+        tarih = _dt.date.today().strftime('%Y-%m-%d')
+
+    db = get_db()
+
+    profil = db.execute(
+        "SELECT id, kullanici_adi, pdks_personel_id, pdks_eslesme_durumu "
+        "FROM kullanici_profil WHERE id = ?",
+        (profil_id,)
+    ).fetchone()
+
+    if profil is None:
+        return jsonify({'ok': False, 'hata': 'profil_bulunamadi'}), 404
+
+    pdks_id = profil['pdks_personel_id']
+    if not pdks_id:
+        return jsonify({
+            'ok'        : False,
+            'hata'      : 'pdks_eslesme_yok',
+            'profil_id' : profil_id,
+        })
+
+    try:
+        devam = get_profil_bugun_devam(pdks_personel_id=pdks_id, tarih=tarih)
+    except Exception as e:
+        return jsonify({
+            'ok'    : False,
+            'hata'  : 'pdks_baglanti_hatasi',
+            'mesaj' : str(e),
+        }), 503
+
+    return jsonify({
+        'ok'               : True,
+        'profil_id'        : profil_id,
+        'kullanici_adi'    : profil['kullanici_adi'],
+        'pdks_personel_id' : pdks_id,
+        'pdks_eslesme'     : profil['pdks_eslesme_durumu'],
+        'tarih'            : tarih,
+        'devam'            : devam,
+    })
