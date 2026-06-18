@@ -300,3 +300,179 @@ def get_pdks_giris_cikis(personelid, con=None, limit=30):
     finally:
         if kapat:
             con.close()
+
+
+# ── FAZ-5B: Aylık/Yıllık Devam Geçmişi ───────────────────────────────────────
+
+# TODO: Geç kalma eşiği ileriki fazda vardiya/çalışma parametresine bağlanacak.
+_GEC_KALMA_ESIGI_SAAT = 7
+_GEC_KALMA_ESIGI_DK   = 0
+
+
+def _timedelta_to_saat_str(td):
+    """timedelta → 'HH:MM', None → None."""
+    if td is None:
+        return None
+    if isinstance(td, __import__("datetime").timedelta):
+        toplam_sn = int(td.total_seconds())
+        return f'{toplam_sn // 3600:02d}:{(toplam_sn % 3600) // 60:02d}'
+    return str(td)[:5] if td else None
+
+
+def _gun_durum(giris_td, cikis_td, izin_tipi):
+    """Gün durumunu hesapla. Dönüş: (durum_str, gec_mi)"""
+    import datetime as _dt
+    if izin_tipi and str(izin_tipi).strip():
+        return 'izin', False
+    if giris_td is None:
+        return 'gelmedi', False
+    giris_sn = int(giris_td.total_seconds()) if isinstance(giris_td, _dt.timedelta) else 0
+    giris_s  = giris_sn // 3600
+    giris_dk = (giris_sn % 3600) // 60
+    gec_mi   = (giris_s > _GEC_KALMA_ESIGI_SAAT) or \
+               (giris_s == _GEC_KALMA_ESIGI_SAAT and giris_dk > _GEC_KALMA_ESIGI_DK)
+    if cikis_td is None:
+        return 'cikis_yok', gec_mi
+    return ('gec' if gec_mi else 'geldi'), gec_mi
+
+
+def get_profil_devam_gecmisi(pdks_personel_id, ay=None, yil=None, con=None):
+    """PDKS'ten aylık gün-gün devam geçmişi + aylık/yıllık özet döner.
+
+    Parametreler:
+        pdks_personel_id : int  — PDKS personel.id
+        ay               : str  — 'YYYY-MM' formatı (None → bugünün ayı)
+        yil              : int  — özet yılı (None → ay'ın yılı)
+        con              : mevcut bağlantı (None → yeni açılır, kapatılır)
+
+    PDKS DB'ye yazma yapılmaz — sadece SELECT.
+    """
+    import datetime as _dt
+    kapat = con is None
+    if con is None:
+        con = get_connection()
+    try:
+        bugun     = _dt.date.today()
+        hedef_ay  = ay if ay else bugun.strftime('%Y-%m')
+        try:
+            ay_yil = int(hedef_ay.split('-')[0])
+            ay_ay  = int(hedef_ay.split('-')[1])
+        except Exception:
+            ay_yil = bugun.year
+            ay_ay  = bugun.month
+        hedef_yil = int(yil) if yil else ay_yil
+
+        ay_bas = _dt.date(ay_yil, ay_ay, 1)
+        if ay_ay == 12:
+            ay_bit = _dt.date(ay_yil + 1, 1, 1) - _dt.timedelta(days=1)
+        else:
+            ay_bit = _dt.date(ay_yil, ay_ay + 1, 1) - _dt.timedelta(days=1)
+        yil_bas = _dt.date(hedef_yil, 1, 1)
+        yil_bit = _dt.date(hedef_yil, 12, 31)
+
+        with con.cursor() as cur:
+            cur.execute("""
+                SELECT giristarihi, girissaati, cikistarihi, cikissaati,
+                       izintipi, aciklama
+                FROM pts_giriscikis
+                WHERE personelid=%s AND giristarihi BETWEEN %s AND %s
+                ORDER BY giristarihi ASC
+            """, (pdks_personel_id, ay_bas, ay_bit))
+            gc_rows = cur.fetchall()
+
+            cur.execute("""
+                SELECT giristarihi, cikistarihi, izintipi, izinsure, aciklama
+                FROM pts_izin
+                WHERE personelid=%s AND giristarihi BETWEEN %s AND %s
+                ORDER BY giristarihi ASC
+            """, (pdks_personel_id, ay_bas, ay_bit))
+            izin_rows = cur.fetchall()
+
+            cur.execute("""
+                SELECT tarih, saat, isaat, aciklama
+                FROM pts_mesai
+                WHERE personelid=%s AND tarih BETWEEN %s AND %s
+                ORDER BY tarih ASC
+            """, (pdks_personel_id, ay_bas, ay_bit))
+            mesai_rows = cur.fetchall()
+
+            cur.execute("""
+                SELECT girissaati, cikissaati, izintipi
+                FROM pts_giriscikis
+                WHERE personelid=%s AND giristarihi BETWEEN %s AND %s
+            """, (pdks_personel_id, yil_bas, yil_bit))
+            yil_gc_rows = cur.fetchall()
+
+        gunler = []
+        for r in gc_rows:
+            durum, gec_mi = _gun_durum(r.get('girissaati'), r.get('cikissaati'), r.get('izintipi'))
+            gunler.append({
+                'tarih'    : str(r.get('giristarihi')),
+                'giris'    : _timedelta_to_saat_str(r.get('girissaati')),
+                'cikis'    : _timedelta_to_saat_str(r.get('cikissaati')),
+                'durum'    : durum,
+                'gec_mi'   : gec_mi,
+                'izin_tipi': r.get('izintipi'),
+                'not'      : r.get('aciklama') or None,
+            })
+
+        def _ozet(glist):
+            o = {'calistigi_gun': 0, 'gec_kalma_gun': 0, 'gelmedi_gun': 0,
+                 'izin_gun': 0, 'cikis_yok_gun': 0, 'toplam_kayit': len(glist)}
+            for g in glist:
+                d = g['durum']
+                if d in ('geldi', 'gec', 'cikis_yok'):
+                    o['calistigi_gun'] += 1
+                if g['gec_mi']:
+                    o['gec_kalma_gun'] += 1
+                if d == 'gelmedi':
+                    o['gelmedi_gun'] += 1
+                if d == 'izin':
+                    o['izin_gun'] += 1
+                if d == 'cikis_yok':
+                    o['cikis_yok_gun'] += 1
+            return o
+
+        ozet = _ozet(gunler)
+
+        yil_gunler = []
+        for r in yil_gc_rows:
+            durum, gec_mi = _gun_durum(r.get('girissaati'), r.get('cikissaati'), r.get('izintipi'))
+            yil_gunler.append({'durum': durum, 'gec_mi': gec_mi})
+
+        yil_ozet = {
+            'calistigi_gun': sum(1 for g in yil_gunler if g['durum'] in ('geldi','gec','cikis_yok')),
+            'gec_kalma_gun': sum(1 for g in yil_gunler if g['gec_mi']),
+            'gelmedi_gun'  : sum(1 for g in yil_gunler if g['durum'] == 'gelmedi'),
+            'izin_gun'     : sum(1 for g in yil_gunler if g['durum'] == 'izin'),
+            'cikis_yok_gun': sum(1 for g in yil_gunler if g['durum'] == 'cikis_yok'),
+        }
+
+        izinler = [{
+            'tarih'    : str(r.get('giristarihi')),
+            'bitis'    : str(r.get('cikistarihi')),
+            'izin_tipi': r.get('izintipi'),
+            'sure'     : r.get('izinsure'),
+            'not'      : r.get('aciklama') or None,
+        } for r in izin_rows]
+
+        mesailer = [{
+            'tarih': str(r.get('tarih')),
+            'saat' : _timedelta_to_saat_str(r.get('saat')),
+            'sure' : r.get('isaat'),
+            'not'  : r.get('aciklama') or None,
+        } for r in mesai_rows]
+
+        return {
+            'ay'      : hedef_ay,
+            'yil'     : hedef_yil,
+            'gunler'  : gunler,
+            'ozet'    : ozet,
+            'yil_ozet': yil_ozet,
+            'izinler' : izinler,
+            'mesailer': mesailer,
+        }
+
+    finally:
+        if kapat:
+            con.close()

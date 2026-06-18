@@ -7307,3 +7307,58 @@ def personel_360_organizasyon_analiz(profil_id):
         'eksikler'       : eksikler,
         'oneriler'       : oneriler,
     })
+
+
+# ── FAZ-5B: Personel 360 Aylık/Yıllık Devam Geçmişi ─────────────────────────
+
+@yonetim_bp.route('/api/personel-360/<int:profil_id>/pdks-devam-gecmisi', methods=['GET'])
+@yetki_gerekli('yonetim', 'can_read')
+def personel_360_pdks_devam_gecmisi(profil_id):
+    """GET /yonetim/api/personel-360/<profil_id>/pdks-devam-gecmisi?ay=2026-06
+
+    Personel 360 profilinin PDKS aylık gün-gün devam geçmişini ve
+    aylık/yıllık özetlerini döner.
+
+    Query parametreleri:
+        ay  : 'YYYY-MM' (varsayılan: bugünün ayı)
+
+    Dönüş:
+        { ok, profil_id, pdks_personel_id, ay, yil,
+          ozet, yil_ozet, gunler, izinler, mesailer }
+
+    Hata:
+        { ok:false, hata:'pdks_eslesme_yok' }
+
+    PDKS ve CPS DB'ye yazma yapılmaz.
+    """
+    db = get_db()
+    kp = db.execute("SELECT id, gercek_ad, pdks_personel_id FROM kullanici_profil WHERE id=?",
+                    (profil_id,)).fetchone()
+    if not kp:
+        return jsonify({'ok': False, 'hata': 'PROFIL_BULUNAMADI', 'profil_id': profil_id}), 404
+
+    if not kp['pdks_personel_id']:
+        return jsonify({'ok': False, 'hata': 'pdks_eslesme_yok',
+                        'profil_id': profil_id, 'gercek_ad': kp['gercek_ad']})
+
+    ay = request.args.get('ay', None)
+
+    try:
+        from modules.common.pdks import get_profil_devam_gecmisi
+        veri = get_profil_devam_gecmisi(kp['pdks_personel_id'], ay=ay)
+    except Exception as e:
+        return jsonify({'ok': False, 'hata': 'PDKS_BAGLANTI: ' + str(e)[:200]}), 503
+
+    return jsonify({
+        'ok'             : True,
+        'profil_id'      : profil_id,
+        'gercek_ad'      : kp['gercek_ad'],
+        'pdks_personel_id': kp['pdks_personel_id'],
+        'ay'             : veri['ay'],
+        'yil'            : veri['yil'],
+        'ozet'           : veri['ozet'],
+        'yil_ozet'       : veri['yil_ozet'],
+        'gunler'         : veri['gunler'],
+        'izinler'        : veri['izinler'],
+        'mesailer'       : veri['mesailer'],
+    })
