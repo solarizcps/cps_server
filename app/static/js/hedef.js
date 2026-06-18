@@ -48,6 +48,219 @@ function _pkN(v) {
     return isNaN(n) ? String(v) : n.toLocaleString('tr-TR');
 }
 
+var _planAktifTr = null;
+var _planKolonSayisi = 13;
+
+function _planKorgunMode() {
+    var t = document.getElementById('planTable');
+    return !!(t && t.getAttribute('data-plan-mode') === 'korgun');
+}
+
+function _planDetayKapat() {
+    var det = document.querySelector('#planBody tr.plan-detay-korgun');
+    if (det) det.remove();
+    if (_planAktifTr) {
+        _planAktifTr.classList.remove('plan-row-acik');
+        _planAktifTr = null;
+    }
+}
+
+function _planDetayAciklama(r) {
+    var parts = [];
+    var tip = String(r.emir_tip || '').toUpperCase();
+    var parent = r.parent_emir_no;
+    if (tip === 'M') {
+        parts.push('Mamul emir.');
+    } else if (tip === 'Y') {
+        if (parent && parent !== '-') {
+            parts.push('Yarı mamul alt emir — bağlı ana emir: ' + parent);
+        } else {
+            parts.push('Yarı mamul alt emir.');
+        }
+    }
+    var durum = String(r.durum || '');
+    if (durum === 'BAŞLANMADI') {
+        parts.push('Emir üretim planında, proses hareketi henüz başlamadı.');
+    } else if (durum === 'DEVAM EDİYOR') {
+        parts.push('Bu emir/proseste üretim hareketi var.');
+    } else if (durum === 'BİTTİ') {
+        parts.push('Bu emir/proses tamamlanmış.');
+    }
+    return parts.join(' ');
+}
+
+function _planMiktar(n, birim) {
+    var s = _pkN(n);
+    var b = (birim && birim !== '-') ? String(birim).trim() : '';
+    return b ? (s + ' ' + b) : s;
+}
+
+function _planEmirBaslik(r) {
+    var tip = String(r.emir_tip || '').toUpperCase();
+    var etiket = tip === 'Y' ? 'Yarı Mamul' : (tip === 'M' ? 'Mamul' : '');
+    var no = _pk(r.emir_no);
+    return etiket ? (no + ' — ' + etiket) : no;
+}
+
+function _planRenkGoster(r) {
+    var renk = String(r.renk || '').trim();
+    if (renk && renk !== '-') return renk;
+    var kod = String(r.renk_kod || '').trim();
+    if (kod && kod !== '-') return kod;
+    return '-';
+}
+
+function _planDetayItem(label, value) {
+    return '<div class="pkd-item"><span class="pkd-lbl">' + label + '</span>' +
+        '<span class="pkd-val">' + value + '</span></div>';
+}
+
+function _planDurumSinifi(durum) {
+    var d = String(durum || '').toUpperCase();
+    if (d === 'BİTTİ') return 'bitti';
+    if (d === 'DEVAM EDİYOR') return 'devam';
+    if (d === 'BAŞLANMADI') return 'baslamadi';
+    return 'neutral';
+}
+
+function _planMetrikKutu(label, value, sinif) {
+    return '<div class="pkd-metrik pkd-metrik-' + sinif + '">' +
+        '<span class="pkd-metrik-lbl">' + label + '</span>' +
+        '<span class="pkd-metrik-val">' + value + '</span></div>';
+}
+
+function _planTimelineHtml(durum) {
+    var sinif = _planDurumSinifi(durum);
+    var activeIdx = sinif === 'bitti' ? 2 : (sinif === 'devam' ? 1 : 0);
+    var steps = [
+        { label: 'Başlanmadı' },
+        { label: 'Devam Ediyor' },
+        { label: 'Bitti' }
+    ];
+    var html = '<div class="pkd-timeline">';
+    steps.forEach(function(s, i) {
+        var active = i === activeIdx ? ' pkd-tl-active' : '';
+        var done = i < activeIdx ? ' pkd-tl-done' : '';
+        html += '<div class="pkd-tl-step' + active + done + '">' +
+            '<span class="pkd-tl-dot"></span>' +
+            '<span class="pkd-tl-lbl">' + s.label + '</span></div>';
+        if (i < steps.length - 1) {
+            html += '<span class="pkd-tl-line"></span>';
+        }
+    });
+    html += '</div>';
+    return html;
+}
+
+function _planBarkodDekor(emirNo) {
+    var no = String(emirNo || '').replace(/\D/g, '') || '0';
+    var bars = '';
+    for (var i = 0; i < 28; i++) {
+        var w = (parseInt(no.charAt(i % no.length), 10) % 3) + 1;
+        bars += '<span class="pkd-bar" style="width:' + w + 'px"></span>';
+    }
+    return '<div class="pkd-barcode">' + bars + '</div>' +
+        '<div class="pkd-barcode-no">' + _pk(emirNo) + '</div>';
+}
+
+function _planAltProsesBlok(altProses) {
+    var ap = String(altProses || '').trim();
+    if (ap && ap !== '-') {
+        return '<div class="pkd-akis-list"><span class="pkd-akis-chip">' + _pk(ap) + '</span></div>';
+    }
+    return '<div class="pkd-akis-empty">Alt proses hareketi bu fazda bağlanmadı.</div>';
+}
+
+function _planDetayHtml(r) {
+    var kalan = r.kalan;
+    if (kalan === null || kalan === undefined || kalan === '') {
+        kalan = Math.max(0, Number(r.verilen || 0) - Number(r.biten || 0));
+    }
+    var birim = r.birim;
+    var parent = r.parent_emir_no;
+    var durum = _pk(r.durum);
+    var durumSinif = _planDurumSinifi(r.durum);
+
+    var html = '<div class="plan-korgun-detay pkd-v2">';
+
+    html += '<div class="pkd-card pkd-belge">';
+    html += '<div class="pkd-belge-main">';
+    html += '<div class="pkd-head"><span class="pkd-head-icon" aria-hidden="true">📋</span> Belge Bilgileri</div>';
+    html += '<div class="pkd-belge-grid">';
+    html += _planDetayItem('Sipariş No', _pk(r.coklu_siparis_no));
+    html += _planDetayItem('Müşteri', _pk(r.musteri_adi));
+    html += _planDetayItem('Sipariş Tarihi', _pk(r.siparis_tarihi));
+    html += _planDetayItem('Hedef', _planMiktar(r.siparis_hedef_miktar, birim));
+    html += _planDetayItem('Emir No', _planEmirBaslik(r));
+    if (parent && parent !== '-') {
+        html += _planDetayItem('Ana Emir', _pk(parent));
+    }
+    html += _planDetayItem('Stok Kod', _pk(r.stok_kod));
+    html += _planDetayItem('Stok Tanım', _pk(r.stok_tanim));
+    html += _planDetayItem('Renk', _planRenkGoster(r));
+    html += '</div></div>';
+    html += '<div class="pkd-belge-barcode">' + _planBarkodDekor(r.emir_no) + '</div>';
+    html += '</div>';
+
+    html += '<div class="pkd-card pkd-uretim">';
+    html += '<div class="pkd-head">Üretim Durumu</div>';
+    html += '<div class="pkd-uretim-body">';
+    html += '<div class="pkd-uretim-left">';
+    html += _planDetayItem('Proses / Tezgah', _pk(r.proses_tezgah));
+    html += _planDetayItem('Alt Proses', _pk(r.alt_proses));
+    html += '</div>';
+    html += '<div class="pkd-uretim-metrics">';
+    html += _planMetrikKutu('Verilen', _planMiktar(r.verilen, birim), 'verilen');
+    html += _planMetrikKutu('Devam', _planMiktar(r.devam_eden, birim), 'devam');
+    html += _planMetrikKutu('Biten', _planMiktar(r.biten, birim), 'biten');
+    html += _planMetrikKutu('Kalan', _planMiktar(kalan, birim), 'kalan');
+    html += '<div class="pkd-metrik pkd-metrik-durum pkd-metrik-durum-' + durumSinif + '">' +
+        '<span class="pkd-metrik-lbl">Durum</span>' +
+        '<span class="pkd-metrik-val pkd-durum-rozet">' + durum + '</span></div>';
+    html += '</div></div>';
+    html += _planTimelineHtml(r.durum);
+    html += '</div>';
+
+    html += '<div class="pkd-card pkd-akis">';
+    html += '<div class="pkd-head">Operasyon Akışı (Alt Prosesler)</div>';
+    html += _planAltProsesBlok(r.alt_proses);
+    html += '</div>';
+
+    var note = _planDetayAciklama(r);
+    if (note) {
+        html += '<div class="pkd-note">' + _pk(note) + '</div>';
+    }
+    html += '</div>';
+    return html;
+}
+
+function _planDetayAc(tr, r) {
+    if (_planAktifTr === tr) {
+        _planDetayKapat();
+        return;
+    }
+    _planDetayKapat();
+    _planAktifTr = tr;
+    tr.classList.add('plan-row-acik');
+    var detTr = document.createElement('tr');
+    detTr.className = 'plan-detay-korgun';
+    detTr.innerHTML = '<td colspan="' + _planKolonSayisi + '">' + _planDetayHtml(r) + '</td>';
+    tr.parentNode.insertBefore(detTr, tr.nextSibling);
+}
+
+function _planBodyClick(ev) {
+    if (!_planKorgunMode()) return;
+    if (ev.target.closest('button, a, input, select')) return;
+    if (ev.target.closest('#planBody tr.plan-detay-korgun')) {
+        _planDetayKapat();
+        return;
+    }
+    var tr = ev.target.closest('#planBody tr.plan-row');
+    if (!tr || !tr._planRowData) return;
+    ev.stopPropagation();
+    _planDetayAc(tr, tr._planRowData);
+}
+
 function _planTemizleDarbogazKolon() {
     var tablo = document.getElementById('planTable');
     if (!tablo || tablo.getAttribute('data-plan-mode') !== 'korgun') return;
@@ -78,6 +291,7 @@ function _planSayfalamaGuncelle(data) {
 
 function renderPlanRows(rows) {
     _planTemizleDarbogazKolon();
+    _planDetayKapat();
     var body = document.getElementById("planBody");
     if (!body) return;
     body.innerHTML = "";
@@ -87,6 +301,8 @@ function renderPlanRows(rows) {
     }
     rows.forEach(function(r) {
         var tr = document.createElement("tr");
+        tr.className = 'plan-row';
+        tr._planRowData = r;
         var vals = [
             _pk(r.siparis_tarihi),
             _pk(r.coklu_siparis_no),
@@ -156,9 +372,205 @@ function planlariYukle(opts) {
     });
 }
 
+/* ======================================================
+   FAZ 2C-4 — EMİR SORGULAMA (hedef ekranı EMİR sekmesi)
+   Endpoint: GET /usta/api/emir-sorgula?emir_no=...
+   Sadece SELECT. Korgun'a yazma yok. POST yok.
+   ====================================================== */
+function _hedefEmirTemizle() {
+    var ids = ['heEmiNo','heDurum','heModelAdi','heTip','heYer','heTarih'];
+    ids.forEach(function (id) { var el = document.getElementById(id); if (el) el.textContent = '—'; });
+    var acik  = document.getElementById('heAcikProses');  if (acik)  acik.innerHTML  = '';
+    var tamam = document.getElementById('heTamamProses'); if (tamam) tamam.innerHTML = '';
+    var uyari = document.getElementById('heCpsBekleyen'); if (uyari) uyari.style.display = 'none';
+    var sonuc = document.getElementById('hEmirSonuc');    if (sonuc) sonuc.style.display  = 'none';
+    var yukl  = document.getElementById('hEmirYukleniyor'); if (yukl) yukl.style.display  = 'none';
+    var err   = document.getElementById('hEmirError');
+    if (err) { err.textContent = ''; err.style.display = 'none'; }
+}
+
+function _hedefEmirHata(mesaj) {
+    var err = document.getElementById('hEmirError');
+    if (err) { err.textContent = mesaj; err.style.display = 'block'; }
+    var yukl = document.getElementById('hEmirYukleniyor'); if (yukl) yukl.style.display = 'none';
+    var sonuc = document.getElementById('hEmirSonuc');     if (sonuc) sonuc.style.display = 'none';
+}
+
+function _hedefEmirEscHtml(s) {
+    return String(s || '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function hedefEmirSorgula() {
+    var input  = document.getElementById('hEmirNoInput');
+    var emirNo = (input ? input.value : '').trim();
+
+    _hedefEmirTemizle();
+
+    if (!emirNo) {
+        _hedefEmirHata('Emir no giriniz.');
+        return;
+    }
+    if (!/^\d+$/.test(emirNo)) {
+        _hedefEmirHata('Geçersiz emir no — sadece rakam giriniz.');
+        return;
+    }
+
+    var yukl = document.getElementById('hEmirYukleniyor');
+    if (yukl) yukl.style.display = 'block';
+
+    fetch('/usta/api/emir-sorgula?emir_no=' + encodeURIComponent(emirNo), {
+        method: 'GET',
+        credentials: 'same-origin'
+    })
+    .then(function (resp) {
+        return resp.text().then(function (t) {
+            var data;
+            try { data = JSON.parse(t); } catch (_) { data = null; }
+            return { status: resp.status, data: data };
+        });
+    })
+    .then(function (r) {
+        var yukl2 = document.getElementById('hEmirYukleniyor');
+        if (yukl2) yukl2.style.display = 'none';
+
+        if (r.status === 404 || (r.data && r.data.hata === 'emir_bulunamadi')) {
+            _hedefEmirHata('Emir bulunamadı: ' + emirNo);
+            return;
+        }
+        if (r.status !== 200 || !r.data || !r.data.ok) {
+            var msg = (r.data && (r.data.hata || r.data.mesaj)) || ('HTTP ' + r.status);
+            _hedefEmirHata('Hata: ' + msg);
+            return;
+        }
+
+        var d    = r.data;
+        var emir = d.emir || {};
+
+        var setTxt = function (id, val) {
+            var el = document.getElementById(id);
+            if (el) el.textContent = val || '—';
+        };
+        setTxt('heEmiNo',    emir.emir_no);
+        setTxt('heDurum',    emir.durum);
+        setTxt('heModelAdi', emir.model_adi || emir.model_kod);
+        setTxt('heTip',      emir.tip);
+        setTxt('heYer',      emir.uretim_yeri);
+        setTxt('heTarih',    emir.emir_tarihi);
+
+        // ── PROSES AKIŞI (tüm prosesler, kart tasarımı) ──
+        var akisEl    = document.getElementById('heAcikProses');
+        var prosesler = d.prosesler || [];
+
+        var _durum_meta = function (durum) {
+            if (durum === 'tamamlandi')
+                return { ikon: '✓', etiket: 'TAMAMLANDI', cls: 'he-durum-tamam', ikonCls: 'he-ikon-tamam' };
+            if (durum === 'devam_ediyor')
+                return { ikon: '◑', etiket: 'DEVAM EDİYOR', cls: 'he-durum-devam', ikonCls: 'he-ikon-devam' };
+            return { ikon: '○', etiket: 'BAŞLANMADI', cls: 'he-durum-bekliyor', ikonCls: 'he-ikon-bekliyor' };
+        };
+
+        var _proses_kart = function (p) {
+            var dm       = _durum_meta(p.durum);
+            var giren    = p.toplam_giren   || 0;
+            var bekleyen = p.toplam_bekleyen || 0;
+            var cikan    = giren - bekleyen;
+            var devam    = bekleyen;   // bekleyen = aktif devam eden
+            var beden_html = (p.bedenler || []).map(function (b) {
+                var tum_bitti = b.bekleyen <= 0;
+                return '<div class="hek-beden-satir' + (tum_bitti ? '' : ' hek-beden-aktif') + '">' +
+                    '<span class="hek-beden-no">' + _hedefEmirEscHtml(b.bed_kod) + '</span>' +
+                    '<span class="hek-beden-adet">' +
+                        _hedefEmirEscHtml(b.giren) + ' / ' + _hedefEmirEscHtml(b.cikan) +
+                    '</span>' +
+                    (tum_bitti ? '<span class="hek-beden-ok">✓</span>' :
+                                 '<span class="hek-beden-kalan">' + _hedefEmirEscHtml(b.bekleyen) + ' kalan</span>') +
+                '</div>';
+            }).join('');
+
+            return '<div class="hek-kart ' + dm.cls + '">' +
+                '<div class="hek-baslik">' +
+                    '<span class="hek-ikon ' + dm.ikonCls + '">' + dm.ikon + '</span>' +
+                    '<span class="hek-proses-no">' + _hedefEmirEscHtml(p.proses_kodu) + '</span>' +
+                    '<span class="hek-proses-adi">' + _hedefEmirEscHtml(p.proses_adi)  + '</span>' +
+                    '<span class="hek-durum-etiket ' + dm.cls + '">' + dm.etiket + '</span>' +
+                '</div>' +
+                '<div class="hek-istatistik">' +
+                    '<div class="hek-stat"><span class="hek-stat-lbl">Başlanan</span><span class="hek-stat-val">' + giren + '</span></div>' +
+                    '<div class="hek-stat"><span class="hek-stat-lbl">Devam Eden</span><span class="hek-stat-val' + (devam > 0 ? ' hek-devam-vurgu' : '') + '">' + devam + '</span></div>' +
+                    '<div class="hek-stat"><span class="hek-stat-lbl">Biten</span><span class="hek-stat-val' + (cikan === giren && giren > 0 ? ' hek-tamam-vurgu' : '') + '">' + cikan + '</span></div>' +
+                '</div>' +
+                (beden_html ? '<div class="hek-beden-blok"><div class="hek-beden-baslik">Beden Dağılımı</div>' + beden_html + '</div>' : '') +
+            '</div>';
+        };
+
+        if (akisEl) {
+            if (!prosesler.length) {
+                akisEl.innerHTML = '<div class="he-bos">Proses kaydı yok.</div>';
+            } else {
+                akisEl.innerHTML = prosesler.map(_proses_kart).join('');
+            }
+        }
+
+        // ── AKTİF İŞ (sadece aktif_ilerletilebilir=true, panel tasarımı) ──
+        var aktifEl  = document.getElementById('heTamamProses');
+        var aktifler = prosesler.filter(function (p) { return p.aktif_ilerletilebilir; });
+        if (aktifEl) {
+            if (!aktifler.length) {
+                aktifEl.innerHTML = '<div class="he-bos he-bos-tamam">✓ Aktif ilerletilecek iş yok.</div>';
+            } else {
+                aktifEl.innerHTML = aktifler.map(function (p) {
+                    var giren    = p.toplam_giren   || 0;
+                    var bekleyen = p.toplam_bekleyen || 0;
+                    var yapilan  = giren - bekleyen;
+                    return '<div class="heak-panel">' +
+                        '<div class="heak-baslik">▶ AKTİF İŞ</div>' +
+                        '<table class="heak-tablo">' +
+                            '<tr><td class="heak-lbl">Proses</td>' +
+                                '<td class="heak-val"><strong>' + _hedefEmirEscHtml(p.proses_kodu) + '</strong> ' + _hedefEmirEscHtml(p.proses_adi) + '</td></tr>' +
+                            '<tr><td class="heak-lbl">Ürün</td>' +
+                                '<td class="heak-val">' + _hedefEmirEscHtml(emir.model_adi || emir.model_kod || '—') + '</td></tr>' +
+                            '<tr><td class="heak-lbl">Giren</td>' +
+                                '<td class="heak-val">' + giren + '</td></tr>' +
+                            '<tr><td class="heak-lbl">Yapılan</td>' +
+                                '<td class="heak-val">' + yapilan + '</td></tr>' +
+                            '<tr><td class="heak-lbl">Kalan</td>' +
+                                '<td class="heak-val heak-kalan-vurgu">' + bekleyen + '</td></tr>' +
+                        '</table>' +
+                    '</div>';
+                }).join('');
+            }
+        }
+
+        // CPS bekleyen uyarı
+        var uyariEl = document.getElementById('heCpsBekleyen');
+        if (uyariEl) uyariEl.style.display = d.cps_bekleyen ? 'block' : 'none';
+
+        var sonucEl = document.getElementById('hEmirSonuc');
+        if (sonucEl) sonucEl.style.display = 'block';
+    })
+    .catch(function (err) {
+        console.error('[CPS] hedef emir-sorgula hata:', err);
+        _hedefEmirHata('Sunucuya ulaşılamadı: ' + err.message);
+    });
+}
+
+function setupHedefEmirSorgula() {
+    var btn   = document.getElementById('hEmirSorguBtn');
+    var input = document.getElementById('hEmirNoInput');
+    if (!btn || !input) return;
+    btn.addEventListener('click', hedefEmirSorgula);
+    input.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter') hedefEmirSorgula();
+    });
+}
+/* ====== FAZ 2C-4 sonu ====== */
+
 document.addEventListener("DOMContentLoaded", function () {
     setupTabs();
     planlariYukle();
+    setupHedefEmirSorgula();
 
     var araInput = document.getElementById('planAra');
     var araBtn = document.getElementById('planAraBtn');
@@ -192,7 +604,811 @@ document.addEventListener("DOMContentLoaded", function () {
             if (_planState.sayfa < _planState.sayfaSayisi) planlariYukle({ sayfa: _planState.sayfa + 1 });
         });
     }
+
+    /* SİPARİŞ TAKİP ST-3 */
+    var stAra = document.getElementById('stAra');
+    var stGetir = document.getElementById('stGetirBtn');
+    var stTemizle = document.getElementById('stTemizleBtn');
+    var stTree = document.getElementById('stTree');
+    if (stGetir && stAra) {
+        stGetir.addEventListener('click', function () {
+            siparisTakipYukle({ ara: (stAra.value || '').trim() });
+        });
+        stAra.addEventListener('keydown', function (ev) {
+            if (ev.key === 'Enter') siparisTakipYukle({ ara: (stAra.value || '').trim() });
+        });
+    }
+    if (stTemizle && stAra) {
+        stTemizle.addEventListener('click', function () {
+            stAra.value = '';
+            siparisTakipYukle({ ara: '' });
+        });
+    }
+    if (stTree) {
+        stTree.addEventListener('click', _stTreeClick);
+    }
+    var planBody = document.getElementById('planBody');
+    if (planBody && !window._planKorgunDetayBound) {
+        window._planKorgunDetayBound = true;
+        planBody.addEventListener('click', _planBodyClick);
+    }
 });
+
+/* === SİPARİŞ TAKİP ST-3A === */
+var _stState = {
+    ara: '', satirlar: [], harModeller: [], ozet: null, acikNodes: {}, mesaj: '',
+    rowByKey: {}, treeNodes: [], seciliKey: null
+};
+
+function _stDurumSinif(d) {
+    var u = String(d || '').toUpperCase();
+    if (u === 'BİTTİ' || u === 'KAPALI') return 'st-durum-bitti';
+    if (u === 'DEVAM EDİYOR' || u === 'KARMA') return 'st-durum-devam';
+    if (u === 'BAŞLANMADI' || u === 'EMİR YOK' || u === 'ÜRETİME AÇILMAMIŞ') return 'st-durum-baslamadi';
+    return '';
+}
+
+function _stMiktar(n, birim) {
+    var s = _pkN(n);
+    var b = (birim && birim !== '-') ? String(birim).trim() : '';
+    return b ? (s + ' ' + b) : s;
+}
+
+function _stRowKey(r) {
+    return r.row_key || (r.satir_tipi + '-' + r.emir_no);
+}
+
+function _stSafeKey(s) {
+    return String(s || '-').replace(/[^a-zA-Z0-9]+/g, '_').slice(0, 48);
+}
+
+function _stEmirToplam(r) {
+    return (r.baslayacak || 0) + (r.devam_eden || 0) + (r.biten || 0) + (r.kalan || 0);
+}
+
+function _stBuildRowMap(satirlar) {
+    var map = {};
+    (satirlar || []).forEach(function (r) {
+        map[_stRowKey(r)] = r;
+    });
+    _stState.rowByKey = map;
+}
+
+function _stChainOpen(parentKey) {
+    if (!parentKey) return true;
+    if (!_stState.acikNodes[parentKey]) return false;
+    var pr = _stState.treeNodes.find(function (n) { return n.key === parentKey; });
+    if (pr && pr.parentKey) return _stChainOpen(pr.parentKey);
+    return true;
+}
+
+function _stTreeNodeGizli(node) {
+    if (node.tip === 'model') return false;
+    if (!node.parentKey) return false;
+    return !_stChainOpen(node.parentKey);
+}
+
+function _stMamulAgg(mamuls) {
+    var bas = 0, dev = 0, bit = 0, kal = 0, top = 0, birim = '-';
+    (mamuls || []).forEach(function (m) {
+        bas += m.baslayacak || 0;
+        dev += m.devam_eden || 0;
+        bit += m.biten || 0;
+        kal += m.kalan || 0;
+        top += _stEmirToplam(m);
+        if (m.birim && m.birim !== '-') birim = m.birim;
+    });
+    return { bas: bas, dev: dev, bit: bit, kal: kal, top: top, birim: birim, count: (mamuls || []).length };
+}
+
+function _stRenkAdi(m) {
+    var r = (m && m.renk) ? String(m.renk).trim() : '';
+    return (r && r !== '-') ? r : 'Belirtilmemiş';
+}
+
+function _stBuildTreeNodes(satirlar) {
+    var nodes = [];
+    var harList = _stState.harModeller || [];
+    var mamuls = (satirlar || []).filter(function (r) { return r.satir_tipi === 'mamul'; });
+    var mamulBySkod = {};
+    mamuls.forEach(function (m) {
+        var sk = m.stok_kod || '-';
+        if (!mamulBySkod[sk]) mamulBySkod[sk] = [];
+        mamulBySkod[sk].push(m);
+    });
+
+    function _emirSirala(list) {
+        return list.slice().sort(function (a, b) {
+            var ea = parseInt(a.emir_no, 10), eb = parseInt(b.emir_no, 10);
+            if (!isNaN(ea) && !isNaN(eb)) return eb - ea;
+            return String(b.emir_no).localeCompare(String(a.emir_no));
+        });
+    }
+
+    function _addEmirChildren(m, parentKey, baseDepth) {
+        var rk = _stRowKey(m);
+        nodes.push({
+            key: rk,
+            tip: 'mamul',
+            katlanabilir: !!m.katlanabilir,
+            parentKey: parentKey,
+            depth: baseDepth,
+            label: 'Emir ' + m.emir_no,
+            sublabel: _stMiktar(_stEmirToplam(m), m.birim),
+            row: m
+        });
+
+        var prosesList = satirlar.filter(function (r) {
+            return r.satir_tipi === 'proses' && r.parent_key === rk;
+        });
+        var yariList = satirlar.filter(function (r) {
+            return r.satir_tipi === 'yari' && r.parent_key === rk;
+        });
+
+        prosesList.forEach(function (p) {
+            var pk = _stRowKey(p);
+            var statusLbl = (p.baslayacak > 0) ? 'Başlayacak' : _pk(p.durum);
+            nodes.push({
+                key: pk,
+                tip: 'proses',
+                katlanabilir: false,
+                parentKey: rk,
+                depth: baseDepth + 1,
+                label: _pk(p.proses_tezgah),
+                sublabel: statusLbl,
+                row: p
+            });
+        });
+
+        if (yariList.length) {
+            var altKey = 'alt-' + rk;
+            nodes.push({
+                key: altKey,
+                tip: 'alt-emirler',
+                katlanabilir: true,
+                parentKey: rk,
+                depth: baseDepth + 1,
+                label: 'Alt Emirler',
+                sublabel: yariList.length + ' emir',
+                row: null
+            });
+            yariList.forEach(function (y) {
+                var yk = _stRowKey(y);
+                var ySub = (y.model_stok && y.model_stok !== '-') ? y.model_stok : _pk(y.stok_kod);
+                nodes.push({
+                    key: yk,
+                    tip: 'yari',
+                    katlanabilir: !!y.katlanabilir,
+                    parentKey: altKey,
+                    depth: baseDepth + 2,
+                    label: y.emir_no + ' Yarı Mamul',
+                    sublabel: ySub,
+                    row: y
+                });
+                satirlar.filter(function (r) {
+                    return r.satir_tipi === 'proses' && r.parent_key === yk;
+                }).forEach(function (p) {
+                    var pk = _stRowKey(p);
+                    var statusLbl = (p.baslayacak > 0) ? 'Başlayacak' : _pk(p.durum);
+                    nodes.push({
+                        key: pk,
+                        tip: 'proses',
+                        katlanabilir: false,
+                        parentKey: yk,
+                        depth: baseDepth + 3,
+                        label: _pk(p.proses_tezgah),
+                        sublabel: statusLbl,
+                        row: p
+                    });
+                });
+            });
+        }
+    }
+
+    function _addRenkEmirler(har, mKey, mk, modelMamuls, baseDepth) {
+        var renkGroups = {};
+        modelMamuls.forEach(function (m) {
+            var rn = _stRenkAdi(m);
+            if (!renkGroups[rn]) {
+                renkGroups[rn] = { renk: rn, mamuls: [], birim: har.birim || m.birim || '-' };
+            }
+            renkGroups[rn].mamuls.push(m);
+        });
+        var renkNames = Object.keys(renkGroups).sort();
+        renkNames.forEach(function (renkName) {
+            var rg = renkGroups[renkName];
+            var rKey = 'rnk-' + _stSafeKey(har.skod) + '-' + _stSafeKey(renkName);
+            var renkSublabel = renkNames.length === 1
+                ? _stMiktar(har.toplam_miktar, har.birim)
+                : _stMiktar(_stMamulAgg(rg.mamuls).top, rg.birim);
+            nodes.push({
+                key: rKey,
+                tip: 'renk',
+                katlanabilir: true,
+                parentKey: mKey,
+                depth: baseDepth,
+                label: renkName,
+                sublabel: renkSublabel,
+                modelLabel: mk,
+                mamulKeys: rg.mamuls.map(function (m) { return _stRowKey(m); }),
+                harMeta: har
+            });
+            _emirSirala(rg.mamuls).forEach(function (m) {
+                _addEmirChildren(m, rKey, baseDepth + 1);
+            });
+        });
+    }
+
+    if (harList.length) {
+        harList.forEach(function (har) {
+            var mk = har.model_stok || har.skod;
+            var mKey = 'mdl-' + _stSafeKey(har.skod);
+            var modelMamuls = mamulBySkod[har.skod] || [];
+            nodes.push({
+                key: mKey,
+                tip: 'model',
+                katlanabilir: true,
+                parentKey: null,
+                depth: 0,
+                label: mk,
+                sublabel: _stMiktar(har.toplam_miktar, har.birim),
+                mamulKeys: modelMamuls.map(function (m) { return _stRowKey(m); }),
+                harMeta: har
+            });
+            if (!modelMamuls.length) {
+                var renkKey = 'rnk-' + _stSafeKey(har.skod) + '-bos';
+                var bosDurum = (har.kapali_miktar > 0 && har.acik_miktar <= 0) ? 'KAPALI' : 'EMİR YOK';
+                nodes.push({
+                    key: renkKey,
+                    tip: 'renk',
+                    katlanabilir: true,
+                    parentKey: mKey,
+                    depth: 1,
+                    label: 'Belirtilmemiş',
+                    sublabel: _stMiktar(har.toplam_miktar, har.birim),
+                    modelLabel: mk,
+                    mamulKeys: [],
+                    harMeta: har
+                });
+                nodes.push({
+                    key: 'har-bos-' + _stSafeKey(har.skod),
+                    tip: 'har-bos',
+                    katlanabilir: false,
+                    parentKey: renkKey,
+                    depth: 2,
+                    label: (bosDurum === 'KAPALI') ? 'Sipariş satırı kapalı' : 'Üretime açılmamış',
+                    sublabel: _stMiktar(har.toplam_miktar, har.birim),
+                    durumEtiket: bosDurum,
+                    harMeta: har,
+                    row: null
+                });
+                return;
+            }
+            _addRenkEmirler(har, mKey, mk, modelMamuls, 1);
+        });
+        return nodes;
+    }
+
+    var modelGroups = {};
+    mamuls.forEach(function (m) {
+        var mk = m.model_stok || m.stok_kod || '-';
+        if (!modelGroups[mk]) {
+            modelGroups[mk] = { mk: mk, mamuls: [], birim: m.birim || '-' };
+        }
+        modelGroups[mk].mamuls.push(m);
+    });
+
+    Object.keys(modelGroups).sort().forEach(function (mk) {
+        var g = modelGroups[mk];
+        var mKey = 'mdl-' + _stSafeKey(mk);
+        var modelAgg = _stMamulAgg(g.mamuls);
+        nodes.push({
+            key: mKey,
+            tip: 'model',
+            katlanabilir: true,
+            parentKey: null,
+            depth: 0,
+            label: mk,
+            sublabel: _stMiktar(modelAgg.top, g.birim),
+            mamulKeys: g.mamuls.map(function (m) { return _stRowKey(m); })
+        });
+
+        var renkGroups = {};
+        g.mamuls.forEach(function (m) {
+            var rn = _stRenkAdi(m);
+            if (!renkGroups[rn]) {
+                renkGroups[rn] = { renk: rn, mamuls: [], birim: g.birim };
+            }
+            renkGroups[rn].mamuls.push(m);
+        });
+
+        Object.keys(renkGroups).sort().forEach(function (renkName) {
+            var rg = renkGroups[renkName];
+            var rKey = 'rnk-' + _stSafeKey(mk) + '-' + _stSafeKey(renkName);
+            var renkAgg = _stMamulAgg(rg.mamuls);
+            nodes.push({
+                key: rKey,
+                tip: 'renk',
+                katlanabilir: true,
+                parentKey: mKey,
+                depth: 1,
+                label: renkName,
+                sublabel: _stMiktar(renkAgg.top, rg.birim),
+                modelLabel: mk,
+                mamulKeys: rg.mamuls.map(function (m) { return _stRowKey(m); })
+            });
+
+            _emirSirala(rg.mamuls).forEach(function (m) {
+                _addEmirChildren(m, rKey, 2);
+            });
+        });
+    });
+    return nodes;
+}
+
+function _stProsesKodInt(p) {
+    var k = p.proses_kod || '';
+    var n = parseInt(k, 10);
+    return isNaN(n) ? 9999 : n;
+}
+
+function _stProsesDurumTablosu(emirKey, highlightKey) {
+    var prosesler = _stState.satirlar.filter(function (r) {
+        return r.satir_tipi === 'proses' && r.parent_key === emirKey;
+    });
+    if (!prosesler.length) {
+        return '<div class="st3-det-empty-mini">Bu emir için proses satırı yok.</div>';
+    }
+    prosesler = prosesler.slice().sort(function (a, b) {
+        return _stProsesKodInt(a) - _stProsesKodInt(b);
+    });
+    var rows = prosesler.map(function (p) {
+        var pk = _stRowKey(p);
+        var hl = (pk === highlightKey) ? ' st3-proc-hl' : '';
+        return '<tr class="' + hl + '">' +
+            '<td>' + _pk(p.proses_tezgah) + '</td>' +
+            '<td class="num">' + _pkN(p.baslayacak) + '</td>' +
+            '<td class="num">' + _pkN(p.devam_eden) + '</td>' +
+            '<td class="num">' + _pkN(p.biten) + '</td>' +
+            '<td><span class="st-durum ' + _stDurumSinif(p.durum) + '">' + _pk(p.durum) + '</span></td>' +
+            '</tr>';
+    }).join('');
+    return '<table class="st3-proc-table"><thead><tr>' +
+        '<th>Proses</th><th class="num">Başlayacak</th><th class="num">Devam</th><th class="num">Biten</th><th>Durum</th>' +
+        '</tr></thead><tbody>' + rows + '</tbody></table>';
+}
+
+function _stDetGrid(items) {
+    return '<div class="st3-det-grid">' + items.map(function (it) {
+        return '<div class="st3-det-item"><span class="st3-det-lbl">' + it[0] +
+            '</span><span class="st3-det-val">' + _pk(it[1]) + '</span></div>';
+    }).join('') + '</div>';
+}
+
+function _stModelOzet(node) {
+    var har = node.harMeta || {};
+    var mamuls = (node.mamulKeys || []).map(function (k) { return _stState.rowByKey[k]; }).filter(Boolean);
+    var pro = _stMamulAgg(mamuls);
+    return {
+        sip_toplam: har.toplam_miktar != null ? har.toplam_miktar : pro.top,
+        sip_kapali: har.kapali_miktar || 0,
+        sip_acik: har.acik_miktar != null ? har.acik_miktar : pro.kal,
+        emir_count: mamuls.length,
+        bas: pro.bas,
+        dev: pro.dev,
+        bit: pro.bit,
+        birim: har.birim || pro.birim || '-',
+        mamul_emir_toplam: har.mamul_emir_toplam != null ? har.mamul_emir_toplam : null,
+        uretime_acilmamis: har.uretime_acilmamis != null ? har.uretime_acilmamis : null,
+        durum_etiket: har.durum_etiket || ''
+    };
+}
+
+function _stRenkOzet(node) {
+    var har = node.harMeta || {};
+    var mamuls = (node.mamulKeys || []).map(function (k) { return _stState.rowByKey[k]; }).filter(Boolean);
+    var pro = _stMamulAgg(mamuls);
+    return {
+        modelLabel: node.modelLabel || '-',
+        renk: node.label || '-',
+        sip_toplam: har.toplam_miktar != null ? har.toplam_miktar : pro.top,
+        sip_kapali: har.kapali_miktar || 0,
+        sip_acik: har.acik_miktar != null ? har.acik_miktar : pro.kal,
+        emir_count: mamuls.length,
+        bas: pro.bas,
+        dev: pro.dev,
+        bit: pro.bit,
+        birim: har.birim || pro.birim || '-',
+        mamul_emir_toplam: har.mamul_emir_toplam != null ? har.mamul_emir_toplam : null,
+        uretime_acilmamis: har.uretime_acilmamis != null ? har.uretime_acilmamis : null,
+        durum_etiket: har.durum_etiket || ''
+    };
+}
+
+function _stHarOzet(har) {
+    har = har || {};
+    return {
+        sip_toplam: har.toplam_miktar || 0,
+        sip_kapali: har.kapali_miktar || 0,
+        sip_acik: har.acik_miktar || 0,
+        emir_count: 0,
+        bas: 0,
+        dev: 0,
+        bit: 0,
+        birim: har.birim || '-'
+    };
+}
+
+function renderStDetail() {
+    var box = document.getElementById('stDetail');
+    if (!box) return;
+    var key = _stState.seciliKey;
+    if (!key) {
+        box.innerHTML = '<div class="st3-detail-empty">Sol ağaçtan model, renk veya emir seçin.</div>';
+        return;
+    }
+    var node = _stState.treeNodes.find(function (n) { return n.key === key; });
+    if (!node) {
+        box.innerHTML = '<div class="st3-detail-empty">Seçim bulunamadı.</div>';
+        return;
+    }
+
+    if (node.tip === 'model') {
+        var mo = _stModelOzet(node);
+        var moGrid = [
+            ['Model', node.label],
+            ['Sipariş Toplam', _stMiktar(mo.sip_toplam, mo.birim)],
+            ['Biten/Kapalı', _stMiktar(mo.sip_kapali, mo.birim)],
+            ['Açık Kalan', _stMiktar(mo.sip_acik, mo.birim)]
+        ];
+        if (mo.mamul_emir_toplam != null) {
+            moGrid.push(['Mamul Emir Açılan', _stMiktar(mo.mamul_emir_toplam, mo.birim)]);
+        }
+        if (mo.uretime_acilmamis != null) {
+            moGrid.push(['Üretime Açılmamış', _stMiktar(mo.uretime_acilmamis, mo.birim)]);
+        }
+        moGrid.push(['Kaç Emir', mo.emir_count]);
+        moGrid.push(['Başlayacak Proses *', _stMiktar(mo.bas, mo.birim)]);
+        moGrid.push(['Devam Eden Proses *', _stMiktar(mo.dev, mo.birim)]);
+        moGrid.push(['Biten Proses *', _stMiktar(mo.bit, mo.birim)]);
+        box.innerHTML =
+            '<div class="st3-det-section"><h4 class="st3-det-title">MODEL ÖZET</h4>' +
+            _stDetGrid(moGrid) +
+            '<p class="st3-det-note">* Proses sayıları sipariş miktarı değildir. Aynı ürün birden fazla prosesten geçer; toplamlar katlanır.</p>' +
+            '</div>';
+        return;
+    }
+
+    if (node.tip === 'renk') {
+        var ro = _stRenkOzet(node);
+        var roGrid = [
+            ['Model', ro.modelLabel],
+            ['Renk', ro.renk],
+            ['Sipariş Toplam', _stMiktar(ro.sip_toplam, ro.birim)],
+            ['Biten/Kapalı', _stMiktar(ro.sip_kapali, ro.birim)],
+            ['Açık Kalan', _stMiktar(ro.sip_acik, ro.birim)]
+        ];
+        if (ro.mamul_emir_toplam != null) {
+            roGrid.push(['Mamul Emir Açılan', _stMiktar(ro.mamul_emir_toplam, ro.birim)]);
+        }
+        if (ro.uretime_acilmamis != null) {
+            roGrid.push(['Üretime Açılmamış', _stMiktar(ro.uretime_acilmamis, ro.birim)]);
+        }
+        roGrid.push(['Kaç Emir', ro.emir_count]);
+        roGrid.push(['Başlayacak Proses *', _stMiktar(ro.bas, ro.birim)]);
+        roGrid.push(['Devam Eden Proses *', _stMiktar(ro.dev, ro.birim)]);
+        roGrid.push(['Biten Proses *', _stMiktar(ro.bit, ro.birim)]);
+        box.innerHTML =
+            '<div class="st3-det-section"><h4 class="st3-det-title">RENK ÖZET</h4>' +
+            _stDetGrid(roGrid) +
+            '<p class="st3-det-note">* Proses sayıları sipariş miktarı değildir. Aynı ürün birden fazla prosesten geçer; toplamlar katlanır.</p>' +
+            '</div>';
+        return;
+    }
+
+    if (node.tip === 'har-bos') {
+        var ho = _stHarOzet(node.harMeta);
+        var durumLbl = node.durumEtiket || 'EMİR YOK';
+        box.innerHTML =
+            '<div class="st3-det-section"><h4 class="st3-det-title">SİPARİŞ SATIRI</h4>' +
+            _stDetGrid([
+                ['Model', node.harMeta ? (node.harMeta.model_stok || node.harMeta.skod) : node.label],
+                ['Durum', durumLbl],
+                ['Sipariş Toplam', _stMiktar(ho.sip_toplam, ho.birim)],
+                ['Biten/Kapalı', _stMiktar(ho.sip_kapali, ho.birim)],
+                ['Açık Kalan', _stMiktar(ho.sip_acik, ho.birim)],
+                ['Kaç Emir', '0'],
+                ['Başlayacak Proses', '0'],
+                ['Devam Eden Proses', '0'],
+                ['Biten Proses', '0']
+            ]) + '</div>';
+        return;
+    }
+
+    if (node.tip === 'alt-emirler') {
+        box.innerHTML =
+            '<div class="st3-det-section"><h4 class="st3-det-title">ALT EMİRLER</h4>' +
+            '<p class="st3-det-note">Bu mamul emrine bağlı ' + _pk(node.sublabel) + '. Detay için alt emir satırını seçin.</p></div>';
+        return;
+    }
+
+    var r = node.row;
+    if (!r) {
+        box.innerHTML = '<div class="st3-detail-empty">Detay yok.</div>';
+        return;
+    }
+
+    var emirKey = (node.tip === 'proses') ? r.parent_key : key;
+    var hlKey = (node.tip === 'proses') ? key : null;
+
+    var emirRow = (node.tip === 'proses') ? (_stState.rowByKey[r.parent_key] || r) : r;
+    var eBas = emirRow.baslayacak || 0;
+    var eDev = emirRow.devam_eden || 0;
+    var eBit = emirRow.biten || 0;
+    var eBirim = emirRow.birim || r.birim || '-';
+
+    box.innerHTML =
+        '<div class="st3-det-section"><h4 class="st3-det-title">EMİR BİLGİSİ</h4>' +
+        _stDetGrid([
+            ['Emir No', r.emir_no],
+            ['Tip', r.tip || (node.tip === 'yari' ? 'Yarı Mamul' : 'Mamul')],
+            ['Ana Emir', r.ana_emir],
+            ['Renk', r.renk],
+            ['Stok Kod', r.stok_kod || r.model_stok],
+            ['Miktar', _stMiktar(_stEmirToplam(r), r.birim)]
+        ]) +
+        '<div class="st3-emir-durum-band">' +
+        '<div class="st3-edb st3-edb-bas"><span class="st3-edb-lbl">Başlayacak</span><span class="st3-edb-val">' + _stMiktar(eBas, eBirim) + '</span></div>' +
+        '<div class="st3-edb st3-edb-dev"><span class="st3-edb-lbl">Devam Eden</span><span class="st3-edb-val">' + _stMiktar(eDev, eBirim) + '</span></div>' +
+        '<div class="st3-edb st3-edb-bit"><span class="st3-edb-lbl">Biten</span><span class="st3-edb-val">' + _stMiktar(eBit, eBirim) + '</span></div>' +
+        '</div>' +
+        '</div>' +
+        '<div class="st3-det-section"><h4 class="st3-det-title">PROSES DURUMU</h4>' +
+        _stProsesDurumTablosu(emirKey, hlKey) + '</div>';
+}
+
+function renderStFisKart(ozet) {
+    var box = document.getElementById('stFisKart');
+    if (!box) return;
+    if (!ozet) { box.innerHTML = ''; return; }
+    var sm = ozet.siparis_miktari != null ? ozet.siparis_miktari : ozet.toplam_siparis_miktari;
+    var kapali = ozet.siparis_kapali != null ? ozet.siparis_kapali : ozet.siparis_biten;
+    var acik = ozet.siparis_acik != null ? ozet.siparis_acik : ozet.siparis_kalan;
+    box.innerHTML =
+        '<div class="st3-fis-baslik">Sipariş Fişi</div>' +
+        '<div class="st3-fis-grid">' +
+        '<div class="st3-fis-item"><span>Sipariş No</span><strong>' + _pk(ozet.siparis_no) + '</strong></div>' +
+        '<div class="st3-fis-item"><span>Müşteri</span><strong>' + _pk(ozet.musteri) + '</strong></div>' +
+        '<div class="st3-fis-item"><span>Sipariş Tarihi</span><strong>' + _pk(ozet.siparis_tarihi) + '</strong></div>' +
+        '<div class="st3-fis-item"><span>Termin</span><strong>' + _pk(ozet.termin) + '</strong></div>' +
+        '<div class="st3-fis-item st3-fis-miktar"><span>Sipariş Toplam</span><strong>' + _stMiktar(sm, ozet.birim) + '</strong></div>' +
+        '<div class="st3-fis-item st3-fis-kapali"><span>Biten/Kapalı</span><strong>' + _stMiktar(kapali, ozet.birim) + '</strong></div>' +
+        '<div class="st3-fis-item st3-fis-acik"><span>Açık Kalan</span><strong>' + _stMiktar(acik, ozet.birim) + '</strong></div>' +
+        '</div>';
+}
+
+function renderStKpiBand(ozet) {
+    var box = document.getElementById('stKpiBand');
+    if (!box) return;
+    if (!ozet) { box.innerHTML = ''; return; }
+    var row1 = [
+        ['Toplam Model', _pkN(ozet.toplam_model)],
+        ['Toplam Emir',  _pkN(ozet.toplam_emir)]
+    ];
+    var row2 = [
+        ['Başlayacak', _stMiktar(ozet.proses_hareket_baslayacak, ozet.birim)],
+        ['Devam Eden',  _stMiktar(ozet.proses_hareket_devam,      ozet.birim)],
+        ['Biten',       _stMiktar(ozet.proses_hareket_biten,      ozet.birim)]
+    ];
+    function kpiHtml(it, extra) {
+        return '<div class="st3-kpi' + (extra ? ' ' + extra : '') + '">' +
+            '<span class="st3-kpi-lbl">' + it[0] + '</span>' +
+            '<span class="st3-kpi-val">' + _pk(it[1]) + '</span></div>';
+    }
+    box.innerHTML =
+        '<div class="st3-kpi-row st3-kpi-row-meta">' +
+        row1.map(function (it) { return kpiHtml(it); }).join('') +
+        '</div>' +
+        '<div class="st3-kpi-row st3-kpi-row-durum">' +
+        kpiHtml(row2[0], 'st3-kpi-bas') +
+        kpiHtml(row2[1], 'st3-kpi-dev') +
+        kpiHtml(row2[2], 'st3-kpi-bit') +
+        '</div>';
+}
+
+function renderStTree(satirlar, bilgiMesaj) {
+    var tree = document.getElementById('stTree');
+    var info = document.getElementById('stInfo');
+    if (!tree) return;
+    _stBuildRowMap(satirlar);
+    _stState.treeNodes = _stBuildTreeNodes(satirlar || []);
+
+    if (!satirlar || !satirlar.length) {
+        var msg = bilgiMesaj || 'Kayıt bulunamadı.';
+        if (_stState.harModeller && _stState.harModeller.length) {
+            msg = bilgiMesaj || 'Sipariş satırları listelendi; üretim emri/proses henüz yok.';
+        }
+        if (!_stState.treeNodes.length) {
+            tree.innerHTML = '<div class="st3-tree-empty">' + _pk(msg) + '</div>';
+            if (info) info.textContent = '';
+            renderStDetail();
+            return;
+        }
+    }
+
+    var mamulToplam = satirlar.filter(function (r) { return r.satir_tipi === 'mamul'; }).length;
+    var modelToplam = (_stState.harModeller || []).length;
+    if (info) {
+        if (modelToplam) {
+            info.textContent = modelToplam + ' sipariş modeli · ' + mamulToplam +
+                ' mamul emir · Ağaçtan model/emir seçerek detay görün';
+        } else {
+            info.textContent = mamulToplam + ' mamul emir · Ağaçtan emir seçerek detay görün';
+        }
+    }
+
+    var html = '';
+    _stState.treeNodes.forEach(function (node) {
+        if (_stTreeNodeGizli(node)) return;
+        var open = !!_stState.acikNodes[node.key];
+        var sel = (_stState.seciliKey === node.key) ? ' st3-tree-secili' : '';
+        var kapaliCls = '';
+        if (node.tip === 'model' && node.harMeta && node.harMeta.durum_etiket === 'KAPALI') {
+            kapaliCls = ' st3-model-kapali';
+        }
+        var toggle = node.katlanabilir
+            ? ('<span class="st3-tree-toggle" data-key="' + node.key + '">' + (open ? '▾' : '▸') + '</span>')
+            : '<span class="st3-tree-leaf">├</span>';
+        var badge = '';
+        if (node.tip === 'renk') badge = '<span class="st3-tree-badge st3-badge-renk">Renk</span>';
+        else if (node.tip === 'mamul') badge = '<span class="st3-tree-badge st3-badge-mamul">Mamul</span>';
+        else if (node.tip === 'yari') badge = '<span class="st3-tree-badge st3-badge-yari">Yarı Mamul</span>';
+        else if (node.tip === 'proses') badge = '<span class="st3-tree-badge st3-badge-proses">' + _pk(node.sublabel) + '</span>';
+        else if (node.tip === 'har-bos') {
+            badge = '<span class="st3-tree-badge st3-badge-emir-yok">' + _pk(node.durumEtiket || 'EMİR YOK') + '</span>';
+        } else if (node.tip === 'model' && node.harMeta) {
+            if (node.harMeta.durum_etiket === 'KAPALI') {
+                badge = '<span class="st3-tree-badge st3-badge-kapali">KAPALI</span>';
+            } else if (node.harMeta.durum_etiket === 'KARMA') {
+                badge = '<span class="st3-tree-badge st3-badge-kapali">KARMA</span>';
+            }
+        }
+
+        html += '<div class="st3-tree-node st3-tree-' + node.tip + sel + kapaliCls + '" data-key="' + node.key +
+            '" style="padding-left:' + (8 + node.depth * 16) + 'px">' +
+            toggle +
+            '<span class="st3-tree-label">' + _pk(node.label) + '</span>' +
+            badge +
+            (node.sublabel && node.tip !== 'proses' ? ('<span class="st3-tree-sub">' + _pk(node.sublabel) + '</span>') : '') +
+            '</div>';
+    });
+    tree.innerHTML = html || '<div class="st3-tree-empty">Gösterilecek kayıt yok.</div>';
+    renderStDetail();
+}
+
+function showStInfo(message) {
+    var box = document.getElementById('stError');
+    if (!box) return;
+    if (!message) { box.innerHTML = ''; return; }
+    box.innerHTML = '<div class="st-info">' + _pk(message) + '</div>';
+}
+
+function showStKontrol(ozet) {
+    var box = document.getElementById('stError');
+    if (!box || !ozet) return;
+    var fark = ozet.agac_fis_fark;
+    if (fark === 0 || fark === '0' || fark == null) return;
+    var absFark = Math.abs(Number(fark) || 0);
+    var birim = ozet.birim || '';
+    var msg = 'Kontrol: Sipariş toplamı ' + _stMiktar(ozet.siparis_miktari, birim) +
+        ' · Ağaç toplamı ' + _stMiktar(ozet.agac_toplam_miktar, birim) +
+        ' · Fark ' + _stMiktar(absFark, birim);
+    var prev = box.innerHTML || '';
+    box.innerHTML = prev + '<div class="st-info st-kontrol-uyari">' + _pk(msg) + '</div>';
+}
+
+function showStError(message) {
+    var box = document.getElementById('stError');
+    if (!box) return;
+    box.innerHTML = '<div class="h-error"><strong>Hata:</strong> ' + _pk(message) + '</div>';
+}
+
+function siparisTakipYukle(opts) {
+    if (opts && opts.ara !== undefined) _stState.ara = opts.ara;
+    var errBox = document.getElementById('stError');
+    if (!_stState.ara) {
+        if (errBox) errBox.innerHTML = '';
+        _stState.ozet = null;
+        _stState.satirlar = [];
+        _stState.harModeller = [];
+        _stState.acikNodes = {};
+        _stState.seciliKey = null;
+        renderStFisKart(null);
+        renderStKpiBand(null);
+        renderStTree([]);
+        var tree = document.getElementById('stTree');
+        if (tree) tree.innerHTML = '<div class="st3-tree-empty">Sipariş no girin ve Getir\'e basın.</div>';
+        return;
+    }
+    if (errBox) errBox.innerHTML = '';
+    var tree = document.getElementById('stTree');
+    if (tree) tree.innerHTML = '<div class="st3-tree-empty">Yükleniyor...</div>';
+    var url = '/hedef/siparis-takip?sipno=' + encodeURIComponent(_stState.ara);
+    fetch(url, { credentials: 'same-origin', cache: 'no-store' })
+        .then(function (r) { return r.json().then(function (d) { return { status: r.status, data: d }; }); })
+        .then(function (r) {
+            if (r.status === 401) { showStError('Oturum süresi dolmuş (401).'); return; }
+            if (r.status >= 400 || !r.data || r.data.ok === false) {
+                showStError((r.data && r.data.mesaj) || 'Veri alınamadı');
+                _stState.ozet = null;
+                renderStFisKart(null);
+                renderStKpiBand(null);
+                renderStTree([]);
+                return;
+            }
+            _stState.satirlar = r.data.satirlar || [];
+            _stState.harModeller = r.data.har_modeller || [];
+            _stState.ozet = r.data.ozet || null;
+            _stState.acikNodes = {};
+            _stState.seciliKey = null;
+            _stState.mesaj = r.data.mesaj || '';
+            if (!_stState.harModeller.length && _stState.ozet && _stState.ozet.siparis_miktari && /^\d+$/.test(String(_stState.ara || ''))) {
+                console.warn('[CPS] har_modeller bos — API guncel degil veya sunucu yeniden baslatilmali');
+                _stState.mesaj = (_stState.mesaj ? _stState.mesaj + ' ' : '') +
+                    'Uyarı: Sipariş satır ağacı yüklenemedi (har_modeller). Sunucuyu yeniden başlatın.';
+            }
+            showStInfo(_stState.mesaj);
+            _stBuildRowMap(_stState.satirlar);
+            _stState.treeNodes = _stBuildTreeNodes(_stState.satirlar);
+            showStKontrol(_stState.ozet);
+            renderStFisKart(_stState.ozet);
+            renderStKpiBand(_stState.ozet);
+            renderStTree(_stState.satirlar, _stState.mesaj);
+            console.log('[CPS] SİPARİŞ TAKİP ST-3B-2 —', _stState.ara,
+                '— har', _stState.harModeller.length, 'satır', _stState.satirlar.length);
+        })
+        .catch(function (err) {
+            console.error('[CPS] siparis-takip fetch hata:', err);
+            showStError('Sunucuya ulaşılamadı: ' + err.message);
+        });
+}
+
+function _stHepsiniAc() {
+    _stState.treeNodes.forEach(function (n) {
+        if (n.katlanabilir) _stState.acikNodes[n.key] = true;
+    });
+    renderStTree(_stState.satirlar, _stState.mesaj);
+}
+
+function _stHepsiniKapat() {
+    _stState.acikNodes = {};
+    renderStTree(_stState.satirlar, _stState.mesaj);
+}
+
+function _stTreeClick(ev) {
+    var toggle = ev.target.closest('.st3-tree-toggle');
+    if (toggle) {
+        var tk = toggle.dataset.key;
+        if (tk) {
+            _stState.acikNodes[tk] = !_stState.acikNodes[tk];
+            renderStTree(_stState.satirlar, _stState.mesaj);
+        }
+        ev.stopPropagation();
+        return;
+    }
+    var nodeEl = ev.target.closest('.st3-tree-node');
+    if (!nodeEl) return;
+    var key = nodeEl.dataset.key;
+    if (!key) return;
+    var node = _stState.treeNodes.find(function (n) { return n.key === key; });
+    _stState.seciliKey = key;
+    if (node && node.katlanabilir && !_stState.acikNodes[key]) {
+        _stState.acikNodes[key] = true;
+    }
+    renderStTree(_stState.satirlar, _stState.mesaj);
+}
+/* === /SİPARİŞ TAKİP ST-3A === */
+
 /* === /PLAN KORGUN FAZ1B === */
 
 // =====================================================================
@@ -1904,6 +3120,9 @@ function guncelleOnayBadge() {
    ==================================================================== */
 (function () {
     'use strict';
+
+    /* FAZ 2B: Veri dogrulama bandi gecici kapali — sonraki faz */
+    return;
 
     var _state = { sonuc: null };
 
@@ -3977,6 +5196,8 @@ function guncelleOnayBadge() {
 
     // Click delegation - PLAN tablosu satirlarina (data-emir-no veya tr)
     document.addEventListener('click', function (ev) {
+        if (document.getElementById('planTable') &&
+            document.getElementById('planTable').getAttribute('data-plan-mode') === 'korgun') return;
         // Etkilesim icindeki elementlere izin verme
         if (ev.target.closest('button, a, input, select, .tab-x')) return;
         var tr = ev.target.closest('#planBody tr');
@@ -4369,6 +5590,8 @@ function guncelleOnayBadge() {
 
     // Click delegation
     document.addEventListener('click', function (ev) {
+        if (document.getElementById('planTable') &&
+            document.getElementById('planTable').getAttribute('data-plan-mode') === 'korgun') return;
         if (ev.target.closest('button, a, input, select, .tab-x')) return;
         // Detay row icine tiklandiysa kapatma
         if (ev.target.closest('#planBody tr.plan-detay-row')) return;
@@ -4959,6 +6182,8 @@ function guncelleOnayBadge() {
 
     // Click delegation - PLAN tablosu
     document.addEventListener('click', function (ev) {
+        if (document.getElementById('planTable') &&
+            document.getElementById('planTable').getAttribute('data-plan-mode') === 'korgun') return;
         if (ev.target.closest('button, a, input, select, .tab-x')) return;
         if (ev.target.closest('#planBody tr.plan-detay-row')) return;
         var tr = ev.target.closest('#planBody tr');
@@ -5214,6 +6439,8 @@ function guncelleOnayBadge() {
     }
 
     function _onPlanClick(ev) {
+        if (document.getElementById('planTable') &&
+            document.getElementById('planTable').getAttribute('data-plan-mode') === 'korgun') return;
         // Detay satirlarinin kendine tiklanirsa kapat
         if (ev.target.closest('#planBody tr.' + DETAY_TR_CLASS)) {
             _kapatTumDetay();
@@ -5283,6 +6510,9 @@ function guncelleOnayBadge() {
 (function () {
     if (window._planDarbogazF22Yuklendi) return;
     window._planDarbogazF22Yuklendi = true;
+
+    /* FAZ 2B: plan-darbogaz lazy load gecici kapali — sonraki faz */
+    return;
 
     function _f22Fmt(n) {
         if (n === null || n === undefined || n === "") return "0";
