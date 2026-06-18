@@ -6918,3 +6918,208 @@ def pdks_cps_personel_olustur():
         'pdks_eslesme_tarihi': simdi,
         'mesaj'           : 'kullanici_profil olusturuldu',
     })
+
+
+# ── FAZ-4F: Yeni Profil Eksik Alan Analizi ───────────────────────────────────
+
+@yonetim_bp.route('/api/pdks/profil-eksik-analiz/<int:profil_id>', methods=['GET'])
+@yetki_gerekli('yonetim', 'can_read')
+def pdks_profil_eksik_analiz(profil_id):
+    """GET /yonetim/api/pdks/profil-eksik-analiz/<profil_id>
+
+    kullanici_profil kaydını ve ilgili tüm bağlantı tablolarını kontrol eder.
+    Eksik alanları ve önerileri döner.
+
+    Kontrol edilen tablolar:
+    - kullanici_profil (temel alanlar, pdks bağlantısı, departman)
+    - personel_kullanici (üretim/tablet girişi)
+    - sistem_kullanici (sistem erişimi)
+    - usta_personel_iliskisi (usta bağlantısı)
+    - kullanici_ekip (ekip üyeliği)
+    - kullanici_yetkinlik (yetkinlik kayıtları)
+    - kullanici_proses (proses yetkileri)
+
+    DB yazma yok — sadece SELECT.
+    """
+    db = get_db()
+
+    # ── 1) kullanici_profil ───────────────────────────────────────────────────
+    kp = db.execute(
+        "SELECT * FROM kullanici_profil WHERE id = ?", (profil_id,)
+    ).fetchone()
+
+    if not kp:
+        return jsonify({'ok': False, 'hata': 'PROFIL_BULUNAMADI',
+                        'profil_id': profil_id}), 404
+
+    eksikler  = []
+    oneriler  = []
+    kontroller = {}
+
+    # Temel alanlar
+    kontroller['aktif']          = bool(kp['aktif'])
+    kontroller['gercek_ad']      = bool(kp['gercek_ad'])
+    kontroller['kullanici_adi']  = bool(kp['kullanici_adi'])
+    kontroller['pdks_baglantisi'] = bool(kp['pdks_personel_id'])
+    kontroller['pdks_sicilno']   = bool(kp['pdks_sicilno'])
+    kontroller['departman_id']   = bool(kp['departman_id'])
+
+    if not kp['aktif']:
+        eksikler.append('profil_pasif')
+    if not kp['gercek_ad']:
+        eksikler.append('gercek_ad_yok')
+    if not kp['kullanici_adi']:
+        eksikler.append('kullanici_adi_yok')
+    if not kp['pdks_personel_id']:
+        eksikler.append('pdks_baglantisi_yok')
+    if not kp['pdks_sicilno']:
+        eksikler.append('pdks_sicilno_yok')
+    if not kp['departman_id']:
+        eksikler.append('cps_org_map_yok')
+        oneriler.append('CPS departman ataması yapılmamış — Yönetim → Organizasyon ekranından atanmalı')
+
+    # ── 2) personel_kullanici (üretim/tablet girişi) ──────────────────────────
+    pk_row = None
+    if kp['kullanici_adi']:
+        pk_row = db.execute(
+            "SELECT id, kullanici_adi, sifre, aktif FROM personel_kullanici "
+            "WHERE kullanici_adi = ? AND aktif = 1 LIMIT 1",
+            (kp['kullanici_adi'],)
+        ).fetchone()
+    if not pk_row and kp['pdks_personel_id']:
+        pk_row = db.execute(
+            "SELECT id, kullanici_adi, sifre, aktif FROM personel_kullanici "
+            "WHERE PdksPersonelId = ? AND aktif = 1 LIMIT 1",
+            (kp['pdks_personel_id'],)
+        ).fetchone()
+
+    kontroller['personel_kullanici'] = bool(pk_row)
+    if not pk_row:
+        eksikler.append('personel_kullanici_yok')
+        eksikler.append('telefon_giris_yok')
+        oneriler.append('Üretim/tablet girişi için personel_kullanici kaydı oluşturulmalı')
+    else:
+        sifre_ok = bool(pk_row['sifre'] and len(str(pk_row['sifre'])) >= 4)
+        kontroller['telefon_sifresi'] = sifre_ok
+        if not sifre_ok:
+            eksikler.append('telefon_sifresi_yok')
+            oneriler.append('Telefon/tablet şifresi atanmamış')
+
+    # ── 3) sistem_kullanici (panel erişimi) ───────────────────────────────────
+    sk_row = None
+    if kp['kullanici_adi']:
+        sk_row = db.execute(
+            "SELECT Id, KullaniciAdi, Aktif FROM sistem_kullanici "
+            "WHERE KullaniciAdi = ? AND Aktif = 1 LIMIT 1",
+            (kp['kullanici_adi'],)
+        ).fetchone()
+
+    kontroller['sistem_kullanici'] = bool(sk_row)
+    if not sk_row:
+        eksikler.append('sistem_kullanici_yok')
+        oneriler.append('CPS panel girişi için sistem_kullanici kaydı ve rol ataması gerekli')
+
+    # ── 4) usta_personel_iliskisi ─────────────────────────────────────────────
+    usta_row = db.execute(
+        "SELECT id, usta_profil_id FROM usta_personel_iliskisi "
+        "WHERE personel_profil_id = ? AND aktif = 1 LIMIT 1",
+        (profil_id,)
+    ).fetchone()
+
+    kontroller['usta_iliskisi'] = bool(usta_row)
+    if not usta_row:
+        eksikler.append('usta_iliskisi_yok')
+        oneriler.append('Üretim ustası atanmamış — Personel 360 → Usta İlişkileri ekranından atanmalı')
+
+    # ── 5) kullanici_ekip ─────────────────────────────────────────────────────
+    ekip_row = db.execute(
+        "SELECT id, ekip_id FROM kullanici_ekip "
+        "WHERE kullanici_profil_id = ? AND aktif = 1 LIMIT 1",
+        (profil_id,)
+    ).fetchone()
+
+    kontroller['ekip_uyeligı'] = bool(ekip_row)
+    if not ekip_row:
+        eksikler.append('ekip_uyeligı_yok')
+        oneriler.append('Ekip ataması yok — Personel 360 → Ekip ekranından atanmalı')
+
+    # ── 6) kullanici_yetkinlik ────────────────────────────────────────────────
+    yetkinlik_sayi = db.execute(
+        "SELECT COUNT(*) FROM kullanici_yetkinlik "
+        "WHERE kullanici_profil_id = ? AND aktif = 1",
+        (profil_id,)
+    ).fetchone()[0]
+
+    kontroller['yetkinlik_kaydi'] = yetkinlik_sayi > 0
+    if yetkinlik_sayi == 0:
+        eksikler.append('yetkinlik_yok')
+        oneriler.append('Yetkinlik kaydı yok — Personel 360 → Yetkinlikler ekranından eklenebilir')
+
+    # ── 7) kullanici_proses ───────────────────────────────────────────────────
+    proses_sayi = db.execute(
+        "SELECT COUNT(*) FROM kullanici_proses "
+        "WHERE kullanici_profil_id = ? AND aktif = 1",
+        (profil_id,)
+    ).fetchone()[0]
+
+    kontroller['proses_yetkisi'] = proses_sayi > 0
+    if proses_sayi == 0:
+        eksikler.append('proses_yetkisi_yok')
+        oneriler.append('Proses yetkisi atanmamış — isteğe bağlı')
+
+    # ── PDKS org önerileri ────────────────────────────────────────────────────
+    pdks_bolum = None
+    pdks_gorev = None
+    if kp['pdks_personel_id'] and not kp['departman_id']:
+        try:
+            from modules.common.pdks import get_connection as pdks_get_conn
+            pdks_con = pdks_get_conn()
+            with pdks_con.cursor() as cur:
+                cur.execute("""
+                    SELECT b.ad AS bolum_ad, g.ad AS gorev_ad
+                    FROM   personel p
+                    LEFT JOIN bolum b ON b.id = p.bolumid
+                    LEFT JOIN gorev g ON g.id = p.gorevid
+                    WHERE  p.id = %s LIMIT 1
+                """, (kp['pdks_personel_id'],))
+                pr = cur.fetchone()
+                if pr:
+                    pdks_bolum = pr.get('bolum_ad')
+                    pdks_gorev = pr.get('gorev_ad')
+            pdks_con.close()
+        except Exception:
+            pass
+
+        if pdks_bolum:
+            oneriler.append(f'PDKS bölüm: "{pdks_bolum}" → CPS departman önerisi: manuel eşleştirme gerekli')
+        if pdks_gorev:
+            oneriler.append(f'PDKS görev: "{pdks_gorev}" → CPS görev/unvan önerisi: manuel eşleştirme gerekli')
+
+    # ── Tamamlık puanı ────────────────────────────────────────────────────────
+    toplam_kontrol = len(kontroller)
+    tamamlanan     = sum(1 for v in kontroller.values() if v)
+    tamamlik_puan  = round(tamamlanan / toplam_kontrol * 100) if toplam_kontrol else 0
+
+    return jsonify({
+        'ok'               : True,
+        'profil_id'        : profil_id,
+        'gercek_ad'        : kp['gercek_ad'],
+        'kullanici_adi'    : kp['kullanici_adi'],
+        'pdks_personel_id' : kp['pdks_personel_id'],
+        'pdks_sicilno'     : kp['pdks_sicilno'],
+        'pdks_eslesme_durumu': kp['pdks_eslesme_durumu'],
+        'tamamlik_puan'    : tamamlik_puan,
+        'eksik_sayi'       : len(eksikler),
+        'eksikler'         : eksikler,
+        'oneriler'         : oneriler,
+        'kontroller'       : kontroller,
+        'kontrol_edilen_tablolar': [
+            'kullanici_profil',
+            'personel_kullanici',
+            'sistem_kullanici',
+            'usta_personel_iliskisi',
+            'kullanici_ekip',
+            'kullanici_yetkinlik',
+            'kullanici_proses',
+        ],
+    })
