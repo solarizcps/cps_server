@@ -2548,6 +2548,62 @@ def personel_360_secenekler():
     })
 
 
+@yonetim_bp.route('/api/personel-360/eksik-hr-alanlari', methods=['GET'])
+@yetki_gerekli('personel_360', 'can_view')
+def personel_360_eksik_hr():
+    """
+    Eksik HR alanı olan personelleri döndürür.
+    Kontrol edilen: IseBaslamaTarih, Maas, Pozisyon, KidemYili
+    """
+    from db import get_conn as _gc
+    conn = _gc()
+    try:
+        rows = conn.execute("""
+            SELECT
+                kp.id           AS profil_id,
+                kp.gercek_ad    AS ad_soyad,
+                kp.departman    AS departman,
+                pk.IseBaslamaTarih,
+                pk.Maas,
+                pk.Pozisyon,
+                pk.KidemYili
+            FROM kullanici_profil kp
+            JOIN personel_kullanici pk ON pk.id = kp.kaynak_id
+            WHERE kp.kaynak = 'personel_kullanici'
+              AND kp.aktif = 1
+              AND (
+                pk.IseBaslamaTarih IS NULL OR
+                pk.Maas            IS NULL OR
+                pk.Pozisyon        IS NULL OR
+                pk.KidemYili       IS NULL
+              )
+            ORDER BY kp.gercek_ad
+        """).fetchall()
+    finally:
+        conn.close()
+
+    personeller = []
+    for r in rows:
+        eksikler = []
+        if not r['IseBaslamaTarih']:
+            eksikler.append('IseBaslamaTarih')
+        if not r['Maas']:
+            eksikler.append('Maas')
+        if not r['Pozisyon']:
+            eksikler.append('Pozisyon')
+        if not r['KidemYili']:
+            eksikler.append('KidemYili')
+        if eksikler:
+            personeller.append({
+                'profil_id': r['profil_id'],
+                'ad_soyad':  r['ad_soyad'] or '—',
+                'departman': r['departman'] or '—',
+                'eksikler':  eksikler,
+            })
+
+    return jsonify({'ok': True, 'toplam': len(personeller), 'personeller': personeller})
+
+
 @yonetim_bp.route('/api/personel-360/profil/<int:profil_id>', methods=['GET'])
 @yetki_gerekli('personel_360', 'can_view')
 def personel_360_profil(profil_id):
@@ -4221,6 +4277,136 @@ def personel_360_devam_ekle(profil_id):
     })
 
 
+# ── Toplu Devam Girişi ───────────────────────────────────────────────────
+@yonetim_bp.route('/api/personel-360/toplu-devam', methods=['POST'])
+@yetki_gerekli('personel_devam', 'can_create')
+def personel_360_toplu_devam():
+    """
+    Birden fazla personel için aynı güne toplu devam kaydı.
+    Aynı profil_id + tarih varsa günceller, yoksa ekler.
+    kaynak = 'toplu_giris'
+    """
+    import datetime as _dt
+
+    IZINLI_DURUM = {'geldi', 'gelmedi', 'izin', 'rapor', 'gec'}
+
+    data = request.get_json(silent=True) or {}
+
+    tarih = (data.get('tarih') or '').strip()
+    if not tarih:
+        return jsonify({'ok': False, 'hata': 'tarih zorunlu (YYYY-MM-DD)'}), 400
+
+    kayitlar = data.get('kayitlar')
+    if not isinstance(kayitlar, list) or len(kayitlar) == 0:
+        return jsonify({'ok': False, 'hata': 'kayitlar listesi boş olamaz'}), 400
+
+    con = _get_conn()
+    sonuclar = []
+    hatalar  = []
+
+    try:
+        for item in kayitlar:
+            profil_id  = item.get('profil_id')
+            durum      = (item.get('durum') or 'geldi').strip()
+            giris_s    = (item.get('giris_saati') or '').strip() or None
+            cikis_s    = (item.get('cikis_saati') or '').strip() or None
+            aciklama   = (item.get('not') or '').strip() or None
+
+            if not profil_id:
+                hatalar.append({'profil_id': profil_id, 'hata': 'profil_id eksik'})
+                continue
+
+            # durum normalize et (izinli → izin gibi kısa gelebilir)
+            if durum not in IZINLI_DURUM:
+                durum = 'geldi'
+
+            # durum uyumu: tek endpoint izinli/resmi_tatil bekliyor;
+            # burada kullanıcı arayüzü kısa kod gönderiyor, genişletelim
+            _durum_map = {'izin': 'izinli', 'gec': 'gec_giris', 'rapor': 'yarim_gun'}
+            durum_db = _durum_map.get(durum, durum)
+
+            # calisma_dakika
+            calisma_dakika = None
+            if giris_s and cikis_s:
+                try:
+                    g = _dt.datetime.strptime(giris_s, '%H:%M')
+                    c = _dt.datetime.strptime(cikis_s, '%H:%M')
+                    diff = int((c - g).total_seconds() / 60)
+                    if diff > 0:
+                        calisma_dakika = diff
+                except Exception:
+                    pass
+
+            try:
+                kp, pk_id = _p360_ik_profil_ve_pkid(con, profil_id)
+            except (LookupError, ValueError) as e:
+                hatalar.append({'profil_id': profil_id, 'hata': str(e)})
+                continue
+
+            mevcut = con.execute(
+                "SELECT id, durum FROM personel_devam WHERE personel_pk_id=? AND tarih=?",
+                (pk_id, tarih)
+            ).fetchone()
+
+            if mevcut:
+                con.execute("""
+                    UPDATE personel_devam
+                    SET durum=?, giris_saati=?, cikis_saati=?, calisma_dakika=?,
+                        kaynak='toplu_giris', aciklama=?, giren_kullanici=?,
+                        updated_at=datetime('now')
+                    WHERE personel_pk_id=? AND tarih=?
+                """, (durum_db, giris_s, cikis_s, calisma_dakika,
+                      aciklama, _u(), pk_id, tarih))
+                islem    = 'DUZENLE'
+                kayit_id = mevcut['id']
+            else:
+                con.execute("""
+                    INSERT INTO personel_devam
+                      (personel_pk_id, kullanici_profil_id, tarih, durum,
+                       giris_saati, cikis_saati, calisma_dakika,
+                       kaynak, aciklama, giren_kullanici)
+                    VALUES (?,?,?,?,?,?,?,?,?,?)
+                """, (pk_id, profil_id, tarih, durum_db,
+                      giris_s, cikis_s, calisma_dakika,
+                      'toplu_giris', aciklama, _u()))
+                islem    = 'EKLE'
+                kayit_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+            try:
+                audit.log(_u(), islem, 'personel_devam', kayit_id,
+                          alan='durum', eski=mevcut['durum'] if mevcut else None,
+                          yeni=durum_db,
+                          aciklama=f"Toplu devam: pk_id={pk_id} tarih={tarih} durum={durum_db}",
+                          modul='yonetim', alt_modul='personel_360')
+            except Exception:
+                pass
+
+            sonuclar.append({
+                'profil_id': profil_id,
+                'islem':     islem,
+                'kayit_id':  kayit_id,
+            })
+
+        con.commit()
+
+    except Exception as e:
+        con.rollback()
+        con.close()
+        import traceback
+        return jsonify({'ok': False, 'hata': str(e), 'tb': traceback.format_exc()}), 500
+    finally:
+        con.close()
+
+    return jsonify({
+        'ok':       True,
+        'tarih':    tarih,
+        'kaydedilen': len(sonuclar),
+        'hatali':   len(hatalar),
+        'sonuclar': sonuclar,
+        'hatalar':  hatalar,
+    })
+
+
 # ── 4) İK Not Ekle ───────────────────────────────────────────────────
 @yonetim_bp.route('/api/personel-360/profil/<int:profil_id>/ik-not', methods=['POST'])
 @yetki_gerekli('personel_ik_not', 'can_create')
@@ -5446,3 +5632,625 @@ def personel_360_aktivite_ozet():
 # ════════════════════════════════════════════════════════════════
 # END PERSONEL_360
 # ════════════════════════════════════════════════════════════════
+
+
+# ════════════════════════════════════════════════════════════════
+# İK PDKS FAZ-1 — Test endpoint
+# ════════════════════════════════════════════════════════════════
+
+@yonetim_bp.route('/api/pdks-test', methods=['GET'])
+@yonetim_bp.route('/api/pdks/test',  methods=['GET'])
+@yetki_gerekli('yonetim', 'can_view')
+def pdks_test():
+    """GET /yonetim/api/pdks/test — PDKS MySQL bağlantı ve veri testi.
+
+    Dönüş:
+        {ok, personel_sayisi, ornek_personeller, son_hareketler, hata?}
+    """
+    from flask import jsonify
+    try:
+        from modules.common.pdks import (
+            get_connection, get_pdks_personeller, get_son_giris_cikis
+        )
+    except ImportError as e:
+        return jsonify({'ok': False, 'hata': 'pdks module yuklenemedi: ' + str(e)}), 500
+
+    con = None
+    try:
+        con = get_connection()
+        personeller    = get_pdks_personeller(con=con, limit=500)
+        son_hareketler = get_son_giris_cikis(con=con, limit=20)
+        return jsonify({
+            'ok'               : True,
+            'personel_sayisi'  : len(personeller),
+            'ornek_personeller': personeller[:5],   # ilk 5 örnek
+            'son_hareketler'   : son_hareketler,
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'ok'  : False,
+            'hata': str(e)[:400],
+            'tb'  : traceback.format_exc()[-800:],
+        }), 500
+    finally:
+        if con:
+            try:
+                con.close()
+            except Exception:
+                pass
+
+
+@yonetim_bp.route('/api/pdks/eslestirme-onizleme', methods=['GET'])
+@yetki_gerekli('yonetim', 'can_view')
+def pdks_eslestirme_onizleme():
+    """GET /yonetim/api/pdks/eslestirme-onizleme
+
+    PDKS personel listesini CPS personelleriyle karşılaştırır.
+    Hiçbir kayıt oluşturmaz / değiştirmez — sadece ön izleme raporu döner.
+
+    Eşleşme statüleri:
+      ESLESMIS      : personel_kullanici.PdksPersonelId == PDKS id
+      SICIL_ESLESME : personel_kullanici.sicil == PDKS sicilno
+      AD_SOYAD_ADAY : ad+soyad normalize eşleşmesi (otomatik bağlanmaz)
+      COKLU_ADAY    : birden fazla CPS adayı bulundu
+      YENI_ADAY     : hiç eşleşme yok
+    """
+    from flask import jsonify
+    import unicodedata
+
+    def _norm(s):
+        """Türkçe dahil normalize: küçük harf, aksan kaldır, trim."""
+        if not s:
+            return ''
+        s = str(s).strip().lower()
+        # Türkçe özel karakter dönüşümü
+        tr_map = str.maketrans('çğıöşüÇĞİÖŞÜ', 'cgiosucgiosu')
+        s = s.translate(tr_map)
+        # Unicode normalize (NFD → ASCII'ye yaklaştır)
+        s = unicodedata.normalize('NFKD', s)
+        s = ''.join(c for c in s if not unicodedata.combining(c))
+        return s.strip()
+
+    # ── PDKS personel listesini çek ──────────────────────────────────────────
+    try:
+        from modules.common.pdks import get_connection as pdks_get_conn, get_pdks_personeller
+    except ImportError as e:
+        return jsonify({'ok': False, 'hata': 'pdks module: ' + str(e)}), 500
+
+    pdks_con = None
+    try:
+        pdks_con = pdks_get_conn()
+        pdks_personeller = get_pdks_personeller(con=pdks_con, limit=1000)
+    except Exception as e:
+        return jsonify({'ok': False, 'hata': 'PDKS baglanti: ' + str(e)[:300]}), 500
+    finally:
+        if pdks_con:
+            try:
+                pdks_con.close()
+            except Exception:
+                pass
+
+    # ── CPS personel_kullanici tablosunu çek ─────────────────────────────────
+    try:
+        from db import get_conn as cps_get_conn
+        cps_con = cps_get_conn()
+        cps_rows = cps_con.execute("""
+            SELECT id, ad, kullanici_adi, sicil, PdksPersonelId, aktif
+            FROM   personel_kullanici
+        """).fetchall()
+        cps_con.close()
+    except Exception as e:
+        return jsonify({'ok': False, 'hata': 'CPS DB: ' + str(e)[:300]}), 500
+
+    # CPS lookup yapıları
+    cps_pdks_id_map = {}   # PdksPersonelId → cps satır
+    cps_sicil_map   = {}   # sicilno (normalize) → cps satır listesi
+    cps_adsoyad_map = {}   # norm_ad_soyad → cps satır listesi
+
+    for row in cps_rows:
+        cps_id, ad, kadi, sicil, pdks_pid, aktif = row
+        entry = {
+            'profil_id'  : cps_id,
+            'ad'         : ad or '',
+            'kullanici'  : kadi or '',
+            'kaynak'     : 'personel_kullanici',
+        }
+        # PdksPersonelId index
+        if pdks_pid:
+            cps_pdks_id_map[str(pdks_pid)] = entry
+        # sicil index
+        if sicil:
+            k = _norm(str(sicil))
+            cps_sicil_map.setdefault(k, []).append(entry)
+        # ad soyad index (birleşik)
+        if ad:
+            k = _norm(ad)
+            cps_adsoyad_map.setdefault(k, []).append(entry)
+
+    # kullanici_profil de ekle — gercek_ad üzerinden
+    try:
+        cps_con2 = cps_get_conn()
+        kp_rows = cps_con2.execute(
+            "SELECT id, gercek_ad, kullanici_adi, profil_tipi FROM kullanici_profil WHERE aktif=1"
+        ).fetchall()
+        cps_con2.close()
+    except Exception:
+        kp_rows = []
+
+    for row in kp_rows:
+        kp_id, gercek_ad, kadi, ptipi = row
+        if not gercek_ad:
+            continue
+        entry = {
+            'profil_id': kp_id,
+            'ad'       : gercek_ad,
+            'kullanici': kadi or '',
+            'kaynak'   : 'kullanici_profil',
+        }
+        k = _norm(gercek_ad)
+        cps_adsoyad_map.setdefault(k, []).append(entry)
+
+    # ── Her PDKS personeli için eşleştirme ───────────────────────────────────
+    satirlar = []
+    sayac = {'ESLESMIS': 0, 'SICIL_ESLESME': 0, 'AD_SOYAD_ADAY': 0,
+             'COKLU_ADAY': 0, 'YENI_ADAY': 0}
+
+    for p in pdks_personeller:
+        pid      = str(p['id'])
+        sicilno  = str(p.get('sicilno') or '')
+        ad       = str(p.get('ad')      or '')
+        soyad    = str(p.get('soyad')   or '')
+        tam_ad   = (ad + ' ' + soyad).strip()
+
+        durum     = None
+        adaylar   = []
+        not_metin = ''
+
+        # 1) ESLESMIS — PdksPersonelId zaten bağlı
+        if pid in cps_pdks_id_map:
+            durum = 'ESLESMIS'
+            adaylar = [cps_pdks_id_map[pid]]
+            not_metin = 'PdksPersonelId ile doğrudan eşleşti'
+
+        # 2) SICIL_ESLESME
+        elif _norm(sicilno) in cps_sicil_map:
+            eşler = cps_sicil_map[_norm(sicilno)]
+            durum = 'SICIL_ESLESME'
+            adaylar = eşler
+            not_metin = f'Sicil no eşleşti ({sicilno})'
+
+        # 3) AD_SOYAD_ADAY
+        else:
+            norm_tam = _norm(tam_ad)
+            esler = cps_adsoyad_map.get(norm_tam, [])
+            if len(esler) == 1:
+                durum = 'AD_SOYAD_ADAY'
+                adaylar = esler
+                not_metin = 'Ad soyad ile aday bulundu, otomatik bağlanmadı'
+            elif len(esler) > 1:
+                durum = 'COKLU_ADAY'
+                adaylar = esler
+                not_metin = f'{len(esler)} CPS kaydı eşleşti — manuel doğrulama gerekli'
+            else:
+                durum = 'YENI_ADAY'
+                adaylar = []
+                not_metin = 'CPS\'te eşleşme bulunamadı — yeni kayıt adayı'
+
+        sayac[durum] += 1
+        satirlar.append({
+            'pdks_personel_id': p['id'],
+            'sicilno'         : sicilno,
+            'ad'              : ad,
+            'soyad'           : soyad,
+            'durum'           : durum,
+            'cps_adaylari'    : adaylar,
+            'not'             : not_metin,
+        })
+
+    return jsonify({
+        'ok'            : True,
+        'toplam_pdks'   : len(pdks_personeller),
+        'eslesmis'      : sayac['ESLESMIS'],
+        'sicil_eslesme' : sayac['SICIL_ESLESME'],
+        'ad_soyad_aday' : sayac['AD_SOYAD_ADAY'],
+        'coklu_aday'    : sayac['COKLU_ADAY'],
+        'yeni_aday'     : sayac['YENI_ADAY'],
+        'satirlar'      : satirlar,
+    })
+
+
+@yonetim_bp.route('/api/pdks/guvenli-eslestir', methods=['POST'])
+@yetki_gerekli('yonetim', 'can_update')
+def pdks_guvenli_eslestir():
+    """POST /yonetim/api/pdks/guvenli-eslestir[?dry_run=1]
+
+    Sadece AD_SOYAD_ADAY + tek aday + kaynak=personel_kullanici olan kayıtlara
+    personel_kullanici.PdksPersonelId ve .sicil yazar.
+
+    Güvenlik kuralları:
+      - Sadece PdksPersonelId boş olan satırlara yazar
+      - Sadece sicil boş olan satırlara yazar
+      - Sadece tek aday varsa yazar
+      - COKLU_ADAY, YENI_ADAY, ESLESMIS'e dokunmaz
+      - kullanici_profil kaynağına şimdilik yazmaz
+
+    dry_run=1 ile sadece plan döner, hiçbir UPDATE yapılmaz.
+    """
+    from flask import jsonify, request
+    import unicodedata
+
+    dry_run = request.args.get('dry_run', '0').strip() == '1'
+
+    def _norm(s):
+        if not s:
+            return ''
+        s = str(s).strip().lower()
+        tr_map = str.maketrans('çğıöşüÇĞİÖŞÜ', 'cgiosucgiosu')
+        s = s.translate(tr_map)
+        s = unicodedata.normalize('NFKD', s)
+        s = ''.join(c for c in s if not unicodedata.combining(c))
+        return s.strip()
+
+    # ── PDKS personel listesi ─────────────────────────────────────────────────
+    try:
+        from modules.common.pdks import get_connection as pdks_get_conn, get_pdks_personeller
+    except ImportError as e:
+        return jsonify({'ok': False, 'hata': 'pdks module: ' + str(e)}), 500
+
+    pdks_con = None
+    try:
+        pdks_con = pdks_get_conn()
+        pdks_personeller = get_pdks_personeller(con=pdks_con, limit=1000)
+    except Exception as e:
+        return jsonify({'ok': False, 'hata': 'PDKS: ' + str(e)[:300]}), 500
+    finally:
+        if pdks_con:
+            try:
+                pdks_con.close()
+            except Exception:
+                pass
+
+    # ── CPS personel_kullanici tablosu ────────────────────────────────────────
+    try:
+        from db import get_conn as cps_get_conn
+        cps_con = cps_get_conn()
+        cps_rows = cps_con.execute(
+            "SELECT id, ad, sicil, PdksPersonelId FROM personel_kullanici"
+        ).fetchall()
+        cps_con.close()
+    except Exception as e:
+        return jsonify({'ok': False, 'hata': 'CPS DB: ' + str(e)[:300]}), 500
+
+    # ── kullanici_profil (sadece lookup, yazmak için değil) ───────────────────
+    try:
+        cps_con2 = cps_get_conn()
+        kp_rows = cps_con2.execute(
+            "SELECT id, gercek_ad, kullanici_adi FROM kullanici_profil WHERE aktif=1"
+        ).fetchall()
+        cps_con2.close()
+    except Exception:
+        kp_rows = []
+
+    # Lookup: ad_soyad → satır
+    cps_pk_adsoyad = {}   # norm_adsoyad → {id, ad, sicil, pdks_pid}  (personel_kullanici)
+    cps_kp_adsoyad = {}   # norm_adsoyad → {id, ad}                   (kullanici_profil)
+
+    for row in cps_rows:
+        cps_id, ad, sicil, pdks_pid = row
+        if ad:
+            cps_pk_adsoyad.setdefault(_norm(ad), []).append({
+                'cps_pk_id'  : cps_id,
+                'ad'         : ad,
+                'sicil_bos'  : not sicil,
+                'pdks_id_bos': not pdks_pid,
+            })
+
+    for row in kp_rows:
+        kp_id, gercek_ad, kadi = row
+        if gercek_ad:
+            cps_kp_adsoyad.setdefault(_norm(gercek_ad), []).append({
+                'kp_id': kp_id,
+                'ad'   : gercek_ad,
+                'kadi' : kadi or '',
+            })
+
+    # ── Eşleştirme planı ─────────────────────────────────────────────────────
+    uygulanacak          = []   # gerçekten UPDATE yapılacak
+    profil_adayi_bekliyor = []   # kullanici_profil aday — şimdilik bekleniyor
+    atlanan_coklu        = 0
+    atlanan_yeni         = 0
+    atlanan_dolu         = 0    # PdksPersonelId zaten dolu
+
+    for p in pdks_personeller:
+        pid    = p['id']
+        sicilno = str(p.get('sicilno') or '')
+        tam_ad  = (str(p.get('ad') or '') + ' ' + str(p.get('soyad') or '')).strip()
+        norm_ad = _norm(tam_ad)
+
+        pk_esler = cps_pk_adsoyad.get(norm_ad, [])
+        kp_esler = cps_kp_adsoyad.get(norm_ad, [])
+        toplam   = len(pk_esler) + len(kp_esler)
+
+        if toplam == 0:
+            atlanan_yeni += 1
+            continue
+        if toplam > 1:
+            atlanan_coklu += 1
+            continue
+
+        # Tek eşleşme
+        if len(pk_esler) == 1 and len(kp_esler) == 0:
+            esl = pk_esler[0]
+            # Zaten dolu mu?
+            if not esl['pdks_id_bos']:
+                atlanan_dolu += 1
+                continue
+            uygulanacak.append({
+                'pdks_id'   : pid,
+                'sicilno'   : sicilno,
+                'pdks_ad'   : tam_ad,
+                'cps_pk_id' : esl['cps_pk_id'],
+                'cps_ad'    : esl['ad'],
+                'islem'     : f"UPDATE personel_kullanici SET PdksPersonelId={pid}, sicil='{sicilno}' WHERE id={esl['cps_pk_id']} AND (PdksPersonelId IS NULL OR PdksPersonelId='') AND (sicil IS NULL OR sicil='')",
+            })
+
+        elif len(kp_esler) == 1 and len(pk_esler) == 0:
+            # kullanici_profil aday — şimdilik yazma
+            profil_adayi_bekliyor.append({
+                'pdks_id' : pid,
+                'sicilno' : sicilno,
+                'pdks_ad' : tam_ad,
+                'kp_id'   : kp_esler[0]['kp_id'],
+                'kp_ad'   : kp_esler[0]['ad'],
+                'not'     : 'kullanici_profil kaynağı — personel_kullanici ile ilişki netleşince uygulanacak',
+            })
+
+    # ── Gerçek UPDATE (sadece dry_run=False ise) ──────────────────────────────
+    guncellenen = []
+    if not dry_run and uygulanacak:
+        try:
+            cps_con3 = cps_get_conn()
+            for item in uygulanacak:
+                rows_affected = cps_con3.execute(
+                    """UPDATE personel_kullanici
+                       SET    PdksPersonelId = ?,
+                              sicil          = ?
+                       WHERE  id             = ?
+                         AND  (PdksPersonelId IS NULL OR PdksPersonelId = '')
+                         AND  (sicil IS NULL OR sicil = '')""",
+                    (item['pdks_id'], item['sicilno'], item['cps_pk_id'])
+                ).rowcount
+                if rows_affected > 0:
+                    guncellenen.append(item)
+            cps_con3.commit()
+            cps_con3.close()
+        except Exception as e:
+            return jsonify({'ok': False, 'hata': 'UPDATE hatasi: ' + str(e)[:400]}), 500
+
+    return jsonify({
+        'ok'                     : True,
+        'dry_run'                : dry_run,
+        'uygulanacak'            : len(uygulanacak),
+        'profil_adayi_bekliyor'  : len(profil_adayi_bekliyor),
+        'atlanan_coklu'          : atlanan_coklu,
+        'atlanan_yeni'           : atlanan_yeni,
+        'atlanan_dolu'           : atlanan_dolu,
+        'guncellenen'            : len(guncellenen) if not dry_run else 0,
+        'plan'                   : uygulanacak,
+        'profil_bekleyen'        : profil_adayi_bekliyor,
+    })
+
+
+@yonetim_bp.route('/api/pdks/profil-eslestir', methods=['POST'])
+@yetki_gerekli('yonetim', 'can_update')
+def pdks_profil_eslestir():
+    """POST /yonetim/api/pdks/profil-eslestir[?dry_run=1]
+
+    PDKS personellerini kullanici_profil.pdks_personel_id alanına güvenli yazar.
+
+    Güvenlik katmanları (FAZ-2C):
+      1. Tek eşleşme — birden fazla PDKS adayı varsa ATLANDI_COKLU
+      2. Çakışma temizleme — aynı profil_id birden fazla PDKS kaydıyla eşleşirse PROFIL_CAKISMA
+      3. pdks_personel_id benzersizliği — aynı pdks_id birden fazla profile gidiyorsa PDKS_CAKISMA
+      4. pdks_personel_id boş koşulu — dolu ise ZATEN_ESLESMIS
+      5. Gerçek UPDATE'te WHERE pdks_personel_id IS NULL koruması
+
+    dry_run=1 (varsayılan): Hiçbir UPDATE yapmaz, sadece plan döner.
+    dry_run=0: Güvenli UPDATE uygular.
+    """
+    from flask import jsonify, request
+    import unicodedata
+    from datetime import datetime
+
+    dry_run = request.args.get('dry_run', '1').strip() == '1'
+
+    def _norm(s):
+        if not s:
+            return ''
+        s = str(s).strip().lower()
+        tr_map = str.maketrans('çğıöşüÇĞİÖŞÜ', 'cgiosucgiosu')
+        s = s.translate(tr_map)
+        s = unicodedata.normalize('NFKD', s)
+        s = ''.join(c for c in s if not unicodedata.combining(c))
+        return s.strip()
+
+    # ── PDKS personel listesi ─────────────────────────────────────────────────
+    try:
+        from modules.common.pdks import get_connection as pdks_get_conn, get_pdks_personeller
+    except ImportError as e:
+        return jsonify({'ok': False, 'hata': 'pdks module: ' + str(e)}), 500
+
+    pdks_con = None
+    try:
+        pdks_con = pdks_get_conn()
+        pdks_list = get_pdks_personeller(con=pdks_con, limit=1000)
+    except Exception as e:
+        return jsonify({'ok': False, 'hata': 'PDKS: ' + str(e)[:300]}), 500
+    finally:
+        if pdks_con:
+            try:
+                pdks_con.close()
+            except Exception:
+                pass
+
+    # ── kullanici_profil ─────────────────────────────────────────────────────
+    try:
+        from db import get_conn as cps_get_conn
+        cps_con = cps_get_conn()
+        kp_rows = cps_con.execute(
+            """SELECT id, gercek_ad, kullanici_adi, pdks_personel_id
+               FROM   kullanici_profil
+               WHERE  aktif = 1"""
+        ).fetchall()
+        cps_con.close()
+    except Exception as e:
+        return jsonify({'ok': False, 'hata': 'CPS DB: ' + str(e)[:300]}), 500
+
+    # ad_norm → profil listesi
+    kp_map = {}
+    for row in kp_rows:
+        kp_id, gercek_ad, kadi, pdks_pid = row
+        if not gercek_ad:
+            continue
+        kp_map.setdefault(_norm(gercek_ad), []).append({
+            'profil_id'   : kp_id,
+            'ad'          : gercek_ad,
+            'kullanici'   : kadi or '',
+            'pdks_pid_bos': (pdks_pid is None or str(pdks_pid).strip() == ''),
+        })
+
+    # ── ADIM 1: Ham eşleşme listesi ──────────────────────────────────────────
+    # Her PDKS kaydı için tek profil adayı varsa ham listeye al.
+    ham_eslesme = []   # [{pdks, profil_entry}]
+    atlanan_coklu_kp = 0
+    atlanan_yeni     = 0
+    zaten_eslesmis   = 0
+
+    for p in pdks_list:
+        pid    = p['id']
+        sicilno = str(p.get('sicilno') or '')
+        ad     = str(p.get('ad')      or '')
+        soyad  = str(p.get('soyad')   or '')
+        tam_ad = (ad + ' ' + soyad).strip()
+        norm   = _norm(tam_ad)
+        esler  = kp_map.get(norm, [])
+
+        if len(esler) == 0:
+            atlanan_yeni += 1
+            continue
+        if len(esler) > 1:
+            atlanan_coklu_kp += 1
+            continue
+
+        e = esler[0]
+        if not e['pdks_pid_bos']:
+            zaten_eslesmis += 1
+            continue
+
+        ham_eslesme.append({
+            'pdks_id'  : pid,
+            'sicilno'  : sicilno,
+            'pdks_ad'  : tam_ad,
+            'profil_id': e['profil_id'],
+            'cps_ad'   : e['ad'],
+        })
+
+    # ── ADIM 2: Çakışma tespiti ──────────────────────────────────────────────
+    # 2a) Aynı profil_id birden fazla PDKS kaydıyla → PROFIL_CAKISMA
+    from collections import defaultdict
+    profil_kac_pdks = defaultdict(list)
+    for h in ham_eslesme:
+        profil_kac_pdks[h['profil_id']].append(h['pdks_id'])
+
+    cakisan_profil_idler = {
+        profil_id for profil_id, pdks_ler in profil_kac_pdks.items()
+        if len(pdks_ler) > 1
+    }
+
+    # 2b) Aynı pdks_id birden fazla profile → PDKS_CAKISMA (güvenlik)
+    pdks_kac_profil = defaultdict(list)
+    for h in ham_eslesme:
+        pdks_kac_profil[h['pdks_id']].append(h['profil_id'])
+
+    cakisan_pdks_idler = {
+        pdks_id for pdks_id, profiller in pdks_kac_profil.items()
+        if len(profiller) > 1
+    }
+
+    # ── ADIM 3: Temiz ve çakışmalı listeleri ayır ────────────────────────────
+    uygulanabilir = []
+    profil_cakisma_listesi = []
+
+    for h in ham_eslesme:
+        p_cakisma = h['profil_id'] in cakisan_profil_idler
+        d_cakisma = h['pdks_id']   in cakisan_pdks_idler
+
+        if p_cakisma or d_cakisma:
+            neden = []
+            if p_cakisma:
+                neden.append(
+                    f"profil_id={h['profil_id']} birden fazla PDKS kaydıyla eşleşti "
+                    f"(pdks_idler: {profil_kac_pdks[h['profil_id']]})"
+                )
+            if d_cakisma:
+                neden.append(
+                    f"pdks_id={h['pdks_id']} birden fazla profile eşleşti "
+                    f"(profil_idler: {pdks_kac_profil[h['pdks_id']]})"
+                )
+            profil_cakisma_listesi.append({
+                'pdks_id'  : h['pdks_id'],
+                'sicilno'  : h['sicilno'],
+                'pdks_ad'  : h['pdks_ad'],
+                'profil_id': h['profil_id'],
+                'cps_ad'   : h['cps_ad'],
+                'durum'    : 'PROFIL_CAKISMA',
+                'neden'    : ' | '.join(neden),
+            })
+        else:
+            uygulanabilir.append({
+                'profil_id'       : h['profil_id'],
+                'pdks_personel_id': h['pdks_id'],
+                'pdks_sicilno'    : h['sicilno'],
+                'pdks_ad'         : h['pdks_ad'],
+                'cps_ad'          : h['cps_ad'],
+                'durum'           : 'UYGULANABILIR',
+            })
+
+    # ── ADIM 4: Gerçek UPDATE (sadece dry_run=False) ──────────────────────────
+    guncellenen = []
+    if not dry_run and uygulanabilir:
+        try:
+            eslesme_tarihi = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            cps_con2 = cps_get_conn()
+            for item in uygulanabilir:
+                rc = cps_con2.execute(
+                    """UPDATE kullanici_profil
+                       SET    pdks_personel_id    = ?,
+                              pdks_sicilno        = ?,
+                              pdks_eslesme_durumu = 'AD_SOYAD_ADAY',
+                              pdks_eslesme_tarihi = ?
+                       WHERE  id = ?
+                         AND  (pdks_personel_id IS NULL OR pdks_personel_id = '')""",
+                    (item['pdks_personel_id'], item['pdks_sicilno'],
+                     eslesme_tarihi, item['profil_id'])
+                ).rowcount
+                if rc > 0:
+                    guncellenen.append(item['profil_id'])
+            cps_con2.commit()
+            cps_con2.close()
+        except Exception as e:
+            return jsonify({'ok': False, 'hata': 'UPDATE hatasi: ' + str(e)[:400]}), 500
+
+    return jsonify({
+        'ok'               : True,
+        'dry_run'          : dry_run,
+        'uygulanabilir'    : len(uygulanabilir),
+        'profil_cakisma'   : len(profil_cakisma_listesi),
+        'zaten_eslesmis'   : zaten_eslesmis,
+        'atlanan_coklu_kp' : atlanan_coklu_kp,
+        'atlanan_yeni'     : atlanan_yeni,
+        'guncellenen'      : len(guncellenen) if not dry_run else 0,
+        'satirlar'         : uygulanabilir,
+        'cakismalar'       : profil_cakisma_listesi,
+    })
