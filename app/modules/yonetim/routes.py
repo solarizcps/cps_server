@@ -6334,16 +6334,22 @@ def pdks_yeni_personel_havuzu():
     """GET /yonetim/api/pdks/yeni-personel-havuzu
 
     PDKS'te olup CPS kullanici_profil'de hiç eşleşmemiş personeli listeler.
+    Org bilgisi (bolum/gorev/grup) JOIN ile zenginleştirilir.
+    PDKS içi aynı ad+soyad tekrarları DUPLICATE_PDKS_ADAY olarak sınıflanır.
 
     SADECE SELECT — PDKS ve CPS DB'ye yazma yapılmaz.
 
     Dönüş:
         {
             ok: true,
-            toplam: int,          # yeni aday sayısı
-            kontrol_gerekli: int, # isim çakışması olanlar
-            kisiler: [...],       # YENI_ADAY listesi
-            cakisanlar: [...]     # KONTROL_GEREKLI listesi
+            toplam_pdks: int,
+            zaten_eslesmis: int,
+            yeni_aday: int,
+            kontrol_gerekli: int,
+            duplicate_pdks_aday: int,
+            kisiler: [...],               # YENI_ADAY
+            kontrol_gerekli_kisiler: [...],  # KONTROL_GEREKLI
+            duplicate_pdks_kisiler: [...]    # DUPLICATE_PDKS_ADAY
         }
     """
     import unicodedata
@@ -6358,16 +6364,35 @@ def pdks_yeni_personel_havuzu():
         s = ''.join(c for c in s if not unicodedata.combining(c))
         return s.strip()
 
-    # ── PDKS personel listesi (SELECT only) ──────────────────────────────────
+    # ── PDKS: org JOIN ile personel listesi (SELECT only) ────────────────────
     try:
-        from modules.common.pdks import get_connection as pdks_get_conn, get_pdks_personeller
+        from modules.common.pdks import get_connection as pdks_get_conn
     except ImportError as e:
         return jsonify({'ok': False, 'hata': 'pdks module: ' + str(e)}), 500
 
     pdks_con = None
     try:
         pdks_con = pdks_get_conn()
-        pdks_list = get_pdks_personeller(con=pdks_con, limit=2000)
+        with pdks_con.cursor() as cur:
+            cur.execute("""
+                SELECT
+                    p.id,
+                    p.sicilno,
+                    p.ad,
+                    p.soyad,
+                    p.bolumid,
+                    p.gorevid,
+                    p.grupid,
+                    b.ad  AS bolum_ad,
+                    g.ad  AS gorev_ad,
+                    gr.ad AS grup_ad
+                FROM personel p
+                LEFT JOIN bolum b  ON b.id  = p.bolumid
+                LEFT JOIN gorev g  ON g.id  = p.gorevid
+                LEFT JOIN grup  gr ON gr.id = p.grupid
+                LIMIT 2000
+            """)
+            pdks_list = cur.fetchall()
     except Exception as e:
         return jsonify({'ok': False, 'hata': 'PDKS baglanti: ' + str(e)[:300]}), 503
     finally:
@@ -6388,81 +6413,110 @@ def pdks_yeni_personel_havuzu():
     except Exception as e:
         return jsonify({'ok': False, 'hata': 'CPS DB: ' + str(e)[:300]}), 500
 
-    # Zaten eşleşmiş PDKS id seti
     eslesmis_pdks_ids = set()
     for row in kp_rows:
         if row['pdks_personel_id']:
             eslesmis_pdks_ids.add(int(row['pdks_personel_id']))
 
-    # CPS ad → profil id haritası (çakışma tespiti için)
     cps_ad_map = {}
     for row in kp_rows:
         gercek_ad = row['gercek_ad'] or ''
         if gercek_ad:
             cps_ad_map.setdefault(_norm(gercek_ad), []).append(row['id'])
 
-    # ── Sınıflama ──────────────────────────────────────────────────────────────
-    yeni_adaylar   = []   # CPS'te hiç eşleşmemiş, isim de yok
-    cakisanlar     = []   # İsim CPS'te var ama pdks_pid dolu / çoklu eşleşme
+    # ── ADIM 1: PDKS içi duplicate tespiti (eşleşmemişler arasında) ──────────
+    # norm_ad → [pdks_id listesi]
+    pdks_norm_map = {}
+    for p in pdks_list:
+        pid   = p.get('id')
+        ad    = str(p.get('ad')    or '').strip()
+        soyad = str(p.get('soyad') or '').strip()
+        norm  = _norm(ad + ' ' + soyad)
+        if pid not in eslesmis_pdks_ids:
+            pdks_norm_map.setdefault(norm, []).append(pid)
+
+    # Birden fazla PDKS kaydına sahip normlar → duplicate seti
+    duplicate_norms = {n for n, ids in pdks_norm_map.items() if len(ids) > 1}
+
+    # ── ADIM 2: Sınıflama ────────────────────────────────────────────────────
+    yeni_adaylar      = []
+    cakisanlar        = []
+    duplicate_kisiler = []
 
     for p in pdks_list:
-        pid    = p.get('id')
+        pid     = p.get('id')
         sicilno = str(p.get('sicilno') or '')
-        ad     = str(p.get('ad')      or '').strip()
-        soyad  = str(p.get('soyad')   or '').strip()
-        tam_ad = (ad + ' ' + soyad).strip()
-        norm   = _norm(tam_ad)
+        ad      = str(p.get('ad')      or '').strip()
+        soyad   = str(p.get('soyad')   or '').strip()
+        tam_ad  = (ad + ' ' + soyad).strip()
+        norm    = _norm(tam_ad)
+
+        # Org bilgileri
+        org = {
+            'pdks_bolum_id' : p.get('bolumid'),
+            'pdks_bolum'    : p.get('bolum_ad') or None,
+            'pdks_gorev_id' : p.get('gorevid'),
+            'pdks_gorev'    : p.get('gorev_ad') or None,
+            'pdks_grup_id'  : p.get('grupid'),
+            'pdks_grup'     : p.get('grup_ad') or None,
+        }
+
+        temel = {
+            'pdks_personel_id' : pid,
+            'sicilno'          : sicilno,
+            'ad'               : ad,
+            'soyad'            : soyad,
+            'tam_ad'           : tam_ad,
+        }
+        temel.update(org)
 
         # Zaten eşleşmiş → atla
         if pid in eslesmis_pdks_ids:
             continue
 
-        # İsim CPS'te var mı bak
+        # PDKS içi duplicate → ayrı gruba al
+        if norm in duplicate_norms:
+            duplicate_kisiler.append({
+                **temel,
+                'durum' : 'DUPLICATE_PDKS_ADAY',
+                'sebep' : 'PDKS icinde ayni ad soyad birden fazla kayit',
+            })
+            continue
+
+        # CPS'te bu isim var mı?
         cps_profiller = cps_ad_map.get(norm, [])
 
         if len(cps_profiller) == 0:
-            # Gerçek yeni aday
-            yeni_adaylar.append({
-                'pdks_personel_id' : pid,
-                'sicilno'          : sicilno,
-                'ad'               : ad,
-                'soyad'            : soyad,
-                'tam_ad'           : tam_ad,
-                'durum'            : 'YENI_ADAY',
-            })
+            yeni_adaylar.append({**temel, 'durum': 'YENI_ADAY'})
         elif len(cps_profiller) == 1:
-            # İsim eşleşiyor ama pdks_pid boş değil ya da başka neden
             cakisanlar.append({
-                'pdks_personel_id' : pid,
-                'sicilno'          : sicilno,
-                'ad'               : ad,
-                'soyad'            : soyad,
-                'tam_ad'           : tam_ad,
-                'durum'            : 'KONTROL_GEREKLI',
-                'sebep'            : 'isim_eslesme_pdks_bos_degil',
-                'cps_profil_id'    : cps_profiller[0],
+                **temel,
+                'durum'         : 'KONTROL_GEREKLI',
+                'sebep'         : 'isim_eslesme_pdks_bos_degil',
+                'cps_profil_id' : cps_profiller[0],
             })
         else:
-            # Birden fazla CPS profili eşleşiyor
             cakisanlar.append({
-                'pdks_personel_id' : pid,
-                'sicilno'          : sicilno,
-                'ad'               : ad,
-                'soyad'            : soyad,
-                'tam_ad'           : tam_ad,
-                'durum'            : 'KONTROL_GEREKLI',
-                'sebep'            : 'coklu_cps_profil',
-                'cps_profil_ids'   : cps_profiller,
+                **temel,
+                'durum'          : 'KONTROL_GEREKLI',
+                'sebep'          : 'coklu_cps_profil',
+                'cps_profil_ids' : cps_profiller,
             })
 
-    # Ada göre sırala
-    yeni_adaylar.sort(key=lambda x: (_norm(x['soyad']), _norm(x['ad'])))
-    cakisanlar.sort(key=lambda x: (_norm(x['soyad']), _norm(x['ad'])))
+    # Sırala
+    sort_key = lambda x: (_norm(x['soyad']), _norm(x['ad']))
+    yeni_adaylar.sort(key=sort_key)
+    cakisanlar.sort(key=sort_key)
+    duplicate_kisiler.sort(key=sort_key)
 
     return jsonify({
-        'ok'              : True,
-        'toplam'          : len(yeni_adaylar),
-        'kontrol_gerekli' : len(cakisanlar),
-        'kisiler'         : yeni_adaylar,
-        'cakisanlar'      : cakisanlar,
+        'ok'                     : True,
+        'toplam_pdks'            : len(pdks_list),
+        'zaten_eslesmis'         : len(eslesmis_pdks_ids),
+        'yeni_aday'              : len(yeni_adaylar),
+        'kontrol_gerekli'        : len(cakisanlar),
+        'duplicate_pdks_aday'    : len(duplicate_kisiler),
+        'kisiler'                : yeni_adaylar,
+        'kontrol_gerekli_kisiler': cakisanlar,
+        'duplicate_pdks_kisiler' : duplicate_kisiler,
     })
