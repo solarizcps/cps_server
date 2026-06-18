@@ -6520,3 +6520,197 @@ def pdks_yeni_personel_havuzu():
         'kontrol_gerekli_kisiler': cakisanlar,
         'duplicate_pdks_kisiler' : duplicate_kisiler,
     })
+
+
+# ── FAZ-4C: CPS'e Alma Önizleme (Dry-Run) ────────────────────────────────────
+
+@yonetim_bp.route('/api/pdks/cps-alma-onizleme', methods=['POST'])
+@yetki_gerekli('yonetim', 'can_update')
+def pdks_cps_alma_onizleme():
+    """POST /yonetim/api/pdks/cps-alma-onizleme
+
+    PDKS'teki bir YENI_ADAY kişinin CPS'e alınması durumunda
+    oluşturulacak profil taslağını döner.
+
+    SADECE DRY-RUN — CPS ve PDKS DB'ye yazma yapılmaz.
+
+    Body: { "pdks_personel_id": int }
+
+    Dönüş (başarılı):
+        {
+            ok: true, dry_run: true,
+            pdks_personel_id: int,
+            taslak: { gercek_ad, kullanici_adi, pdks_sicilno,
+                      pdks_bolum, pdks_gorev, pdks_grup, aktif, kaynak },
+            uyarilar: [...]
+        }
+
+    Dönüş (hata):
+        { ok: false, hata: "ZATEN_ESLESMIS" | "DUPLICATE_PDKS_ADAY" | "UYGUN_DEGIL" | ... }
+    """
+    import unicodedata
+    import re as _re
+
+    data = request.get_json(silent=True) or {}
+    pdks_pid = data.get('pdks_personel_id')
+    if not pdks_pid:
+        return jsonify({'ok': False, 'hata': 'pdks_personel_id gerekli'}), 400
+    try:
+        pdks_pid = int(pdks_pid)
+    except (ValueError, TypeError):
+        return jsonify({'ok': False, 'hata': 'pdks_personel_id tamsayi olmali'}), 400
+
+    def _norm(s):
+        if not s:
+            return ''
+        s = str(s).strip().lower()
+        tr_map = str.maketrans('çğıöşüÇĞİÖŞÜ', 'cgiosucgiosu')
+        s = s.translate(tr_map)
+        s = unicodedata.normalize('NFKD', s)
+        s = ''.join(c for c in s if not unicodedata.combining(c))
+        return s.strip()
+
+    def _kullanici_adi_olustur(tam_ad, mevcut_kadilar):
+        """Ad soyaddan kullanıcı adı üret; çakışırsa _2, _3 ekle."""
+        base = _norm(tam_ad).replace(' ', '_')
+        base = _re.sub(r'[^a-z0-9_]', '', base)
+        base = _re.sub(r'_+', '_', base).strip('_')
+        if not base:
+            base = 'personel'
+        kadi = base
+        sayac = 2
+        while kadi in mevcut_kadilar:
+            kadi = base + '_' + str(sayac)
+            sayac += 1
+        return kadi
+
+    # ── PDKS: kişiyi org JOIN ile çek (SELECT only) ───────────────────────────
+    try:
+        from modules.common.pdks import get_connection as pdks_get_conn
+    except ImportError as e:
+        return jsonify({'ok': False, 'hata': 'pdks module: ' + str(e)}), 500
+
+    pdks_con = None
+    try:
+        pdks_con = pdks_get_conn()
+        with pdks_con.cursor() as cur:
+            cur.execute("""
+                SELECT p.id, p.sicilno, p.ad, p.soyad,
+                       b.ad AS bolum_ad, g.ad AS gorev_ad, gr.ad AS grup_ad
+                FROM   personel p
+                LEFT JOIN bolum b  ON b.id  = p.bolumid
+                LEFT JOIN gorev g  ON g.id  = p.gorevid
+                LEFT JOIN grup  gr ON gr.id = p.grupid
+                WHERE  p.id = %s
+                LIMIT 1
+            """, (pdks_pid,))
+            pdks_row = cur.fetchone()
+    except Exception as e:
+        return jsonify({'ok': False, 'hata': 'PDKS baglanti: ' + str(e)[:300]}), 503
+    finally:
+        if pdks_con:
+            try:
+                pdks_con.close()
+            except Exception:
+                pass
+
+    if not pdks_row:
+        return jsonify({'ok': False, 'hata': 'PDKS_PERSONEL_BULUNAMADI',
+                        'pdks_personel_id': pdks_pid})
+
+    ad    = str(pdks_row.get('ad')    or '').strip()
+    soyad = str(pdks_row.get('soyad') or '').strip()
+    tam_ad  = (ad + ' ' + soyad).strip()
+    sicilno = str(pdks_row.get('sicilno') or '')
+    bolum   = pdks_row.get('bolum_ad') or None
+    gorev   = pdks_row.get('gorev_ad') or None
+    grup    = pdks_row.get('grup_ad')  or None
+
+    # ── CPS: mevcut profil durumunu kontrol et ────────────────────────────────
+    try:
+        db = get_db()
+        kp_rows = db.execute(
+            """SELECT id, gercek_ad, kullanici_adi, pdks_personel_id
+               FROM   kullanici_profil WHERE aktif = 1"""
+        ).fetchall()
+    except Exception as e:
+        return jsonify({'ok': False, 'hata': 'CPS DB: ' + str(e)[:300]}), 500
+
+    # Zaten eşleşmiş mi?
+    eslesmis_ids = set()
+    for row in kp_rows:
+        if row['pdks_personel_id']:
+            eslesmis_ids.add(int(row['pdks_personel_id']))
+
+    if pdks_pid in eslesmis_ids:
+        return jsonify({'ok': False, 'hata': 'ZATEN_ESLESMIS',
+                        'pdks_personel_id': pdks_pid, 'tam_ad': tam_ad})
+
+    # PDKS içi duplicate mi? (aynı normda başka PDKS kaydı var mı)
+    norm_hedef = _norm(tam_ad)
+    try:
+        pdks_con2 = pdks_get_conn()
+        with pdks_con2.cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(*) AS cnt FROM personel WHERE LOWER(TRIM(ad)) = %s AND LOWER(TRIM(soyad)) = %s",
+                (ad.lower().strip(), soyad.lower().strip())
+            )
+            dup_cnt = cur.fetchone().get('cnt', 0)
+        pdks_con2.close()
+    except Exception:
+        dup_cnt = 1
+
+    if dup_cnt > 1:
+        return jsonify({'ok': False, 'hata': 'DUPLICATE_PDKS_ADAY',
+                        'pdks_personel_id': pdks_pid, 'tam_ad': tam_ad,
+                        'pdks_eslesme_sayisi': dup_cnt})
+
+    # CPS'te bu isim zaten var mı?
+    cps_ad_map = {}
+    mevcut_kadilar = set()
+    for row in kp_rows:
+        ga = row['gercek_ad'] or ''
+        if ga:
+            cps_ad_map.setdefault(_norm(ga), []).append(row['id'])
+        if row['kullanici_adi']:
+            mevcut_kadilar.add(row['kullanici_adi'])
+
+    if norm_hedef in cps_ad_map:
+        return jsonify({'ok': False, 'hata': 'UYGUN_DEGIL',
+                        'sebep': 'cps_de_ayni_isim_mevcut',
+                        'pdks_personel_id': pdks_pid, 'tam_ad': tam_ad,
+                        'cps_profil_ids': cps_ad_map[norm_hedef]})
+
+    # ── Taslak oluştur ────────────────────────────────────────────────────────
+    kadi = _kullanici_adi_olustur(tam_ad, mevcut_kadilar)
+
+    uyarilar = []
+    if not sicilno:
+        uyarilar.append('Sicil no boş — TC kimlik no girilmeli')
+    if not bolum:
+        uyarilar.append('Bölüm bilgisi PDKS\'te yok')
+    if not gorev:
+        uyarilar.append('Görev bilgisi PDKS\'te yok')
+    uyarilar.append('Usta eşleşmesi yok — ileriki adımda yapılacak')
+    uyarilar.append('Telefon/şifre oluşturulmadı — kayıt sonrası atanacak')
+    uyarilar.append('Bölüm/görev CPS organizasyona henüz map edilmedi')
+
+    taslak = {
+        'gercek_ad'    : tam_ad,
+        'kullanici_adi': kadi,
+        'pdks_sicilno' : sicilno or None,
+        'pdks_bolum'   : bolum,
+        'pdks_gorev'   : gorev,
+        'pdks_grup'    : grup,
+        'aktif'        : 1,
+        'kaynak'       : 'PDKS',
+    }
+
+    return jsonify({
+        'ok'              : True,
+        'dry_run'         : True,
+        'pdks_personel_id': pdks_pid,
+        'tam_ad'          : tam_ad,
+        'taslak'          : taslak,
+        'uyarilar'        : uyarilar,
+    })
