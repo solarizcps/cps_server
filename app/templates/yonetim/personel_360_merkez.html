@@ -375,8 +375,9 @@
         <button class="p360-sekme" data-sekme="usta">🔗 Usta İlişkisi</button>
         <button class="p360-sekme" data-sekme="yetkinlik">⭐ Yetkinlik</button>
         <button class="p360-sekme" data-sekme="uretim">📊 Üretim</button>
-        <button class="p360-sekme" data-sekme="ik"   id="btn-sekme-ik"   style="display:none;">🧾 İK</button>
+        <button class="p360-sekme" data-sekme="ik"   id="btn-sekme-ik">🧾 İK</button>
         <button class="p360-sekme" data-sekme="maas" id="btn-sekme-maas" style="display:none;">💰 Maaş</button>
+        <button class="p360-sekme" data-sekme="devam" id="btn-sekme-devam">📅 Devam</button>
         <button class="p360-sekme" data-sekme="aktivite" id="btn-sekme-aktivite">📋 Son Hareketler</button>
         <button class="p360-sekme" data-sekme="org" style="margin-left:auto;border-color:#2563eb;color:#2563eb;">✏️ Organizasyon</button>
       </div>
@@ -571,6 +572,81 @@
 
       <!-- SEKME: İK (FAZ2G-3 readonly + FAZ2G-4B write) -->
       <div id="sekme-ik" class="p360-sekme-icerik" style="display:none;">
+
+        <!-- Eksik Profil Uyarı Paneli -->
+        <div id="eksik-hr-panel" style="display:none;margin-bottom:14px;">
+          <div class="oz-card" style="border-left:4px solid #f59e0b;">
+            <div class="oz-hdr" style="cursor:pointer;" onclick="eksikHrToggle()">
+              <span class="oz-hdr-t" style="color:#b45309;">
+                ⚠️ Eksik Profil Bilgileri
+              </span>
+              <span id="eksik-hr-sayac" style="font-size:12px;color:#92400e;font-weight:700;"></span>
+              <span id="eksik-hr-ok" style="font-size:11px;color:#92400e;margin-left:auto;">▼</span>
+            </div>
+            <div id="eksik-hr-liste" style="display:none;padding:0 16px 12px;">
+              <div id="eksik-hr-yukleniyor" style="color:#888;font-size:12px;padding:8px 0;">Yükleniyor...</div>
+              <table id="eksik-hr-tablo" style="display:none;width:100%;border-collapse:collapse;font-size:12px;">
+                <thead>
+                  <tr style="background:#fef3c7;color:#92400e;">
+                    <th style="padding:6px 8px;text-align:left;font-weight:700;">Ad Soyad</th>
+                    <th style="padding:6px 8px;text-align:left;font-weight:700;">Departman</th>
+                    <th style="padding:6px 8px;text-align:left;font-weight:700;">Eksik Alanlar</th>
+                    <th style="padding:6px 8px;text-align:center;font-weight:700;"></th>
+                  </tr>
+                </thead>
+                <tbody id="eksik-hr-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Toplu Devam Girişi Paneli -->
+        <div id="toplu-devam-panel" style="display:none;margin-bottom:14px;">
+          <div class="oz-card" style="border-left:4px solid #0ea5e9;">
+            <div class="oz-hdr" style="cursor:pointer;" onclick="topluDevamToggle()">
+              <span class="oz-hdr-t" style="color:#0369a1;">📋 Toplu Devam Girişi</span>
+              <span id="toplu-devam-ok" style="font-size:11px;color:#0369a1;margin-left:auto;">▼</span>
+            </div>
+            <div id="toplu-devam-icerik" style="display:none;padding:0 16px 16px;">
+              <!-- Tarih seçici -->
+              <div style="display:flex;align-items:center;gap:10px;margin:10px 0 12px 0;">
+                <label style="font-size:12px;font-weight:700;color:#0369a1;white-space:nowrap;">Tarih:</label>
+                <input id="td-tarih" type="date" style="font-size:13px;padding:4px 8px;border:1px solid #bae6fd;border-radius:4px;">
+                <button onclick="topluDevamListeYukle()"
+                        style="font-size:12px;padding:4px 12px;border-radius:4px;background:#0ea5e9;color:#fff;border:none;cursor:pointer;font-weight:600;">
+                  Listeyi Yükle
+                </button>
+              </div>
+              <!-- Tablo -->
+              <div id="td-tablo-kap" style="display:none;">
+                <div style="overflow-x:auto;">
+                  <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                    <thead>
+                      <tr style="background:#e0f2fe;color:#0369a1;">
+                        <th style="padding:6px 8px;text-align:left;">Ad Soyad</th>
+                        <th style="padding:6px 8px;text-align:left;">Departman</th>
+                        <th style="padding:6px 8px;text-align:center;min-width:100px;">Durum</th>
+                        <th style="padding:6px 8px;text-align:center;min-width:80px;">Giriş</th>
+                        <th style="padding:6px 8px;text-align:center;min-width:80px;">Çıkış</th>
+                        <th style="padding:6px 8px;text-align:left;min-width:100px;">Not</th>
+                      </tr>
+                    </thead>
+                    <tbody id="td-tbody"></tbody>
+                  </table>
+                </div>
+                <div style="margin-top:12px;display:flex;align-items:center;gap:10px;">
+                  <button onclick="topluDevamKaydet()"
+                          style="font-size:13px;padding:6px 20px;border-radius:5px;background:#0ea5e9;color:#fff;border:none;cursor:pointer;font-weight:700;">
+                    💾 Toplu Kaydet
+                  </button>
+                  <span id="td-sonuc" style="font-size:12px;color:#16a34a;"></span>
+                </div>
+              </div>
+              <div id="td-yukl" style="font-size:12px;color:#888;padding:6px 0;display:none;">Yükleniyor...</div>
+            </div>
+          </div>
+        </div>
+
         <!-- P4B/P4C: Çalışma Bilgileri (personel_kullanici genişletilmiş) -->
         <div class="oz-card" style="margin-bottom:14px;">
           <div class="oz-hdr">
@@ -956,6 +1032,27 @@
                              font-size:12px;color:var(--text2);background:var(--bg2);cursor:pointer;">
                 Daha Fazla Yükle
               </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SEKME: Devam (FAZ-3B) -->
+      <div id="sekme-devam" class="p360-sekme-icerik" style="display:none;">
+        <div class="oz-card">
+          <div class="oz-hdr" style="justify-content:space-between;align-items:center;">
+            <span class="oz-hdr-t">PDKS Devam</span>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <input type="date" id="devam-tarih-input"
+                     style="font-size:12px;padding:3px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text1);">
+              <button onclick="pdksDevamYukle()"
+                      style="font-size:12px;padding:4px 12px;border:1px solid #2563eb;border-radius:6px;
+                             background:#dbeafe;color:#1e40af;cursor:pointer;">↺ Yenile</button>
+            </div>
+          </div>
+          <div class="oz-body" id="devam-icerik">
+            <div style="padding:24px;text-align:center;color:var(--text3);font-size:13px;">
+              Profil seçin veya sekmeye tıklayın.
             </div>
           </div>
         </div>
@@ -1422,13 +1519,12 @@
     const tip  = TIPLER[p.profil_tipi] || TIPLER.SISTEM;
     const caps = data._caps || {};
 
-    // FAZ2G-3: _caps'e göre İK / Maaş sekme butonlarını göster/gizle
-    const btnIk   = document.getElementById('btn-sekme-ik');
+    // FAZ2G-3: İK butonu artık her zaman görünür — caps.ik sadece bireysel detay/formu etkiler
+    // const btnIk — buton sabit görünür, display kontrolü kaldırıldı
     const btnMaas = document.getElementById('btn-sekme-maas');
-    if (btnIk)   btnIk.style.display   = caps.ik   ? '' : 'none';
     if (btnMaas) btnMaas.style.display = caps.maas ? '' : 'none';
 
-    // FAZ2G-4B: _caps'e göre yazma form panellerini göster/gizle
+    // FAZ2G-4B: _caps'e göre yazma form panellerini göster/gizle (bireysel detay yetkisi)
     const ikFormPanel   = document.getElementById('ik-form-panel');
     const maasFormPanel = document.getElementById('maas-form-panel');
     if (ikFormPanel)   ikFormPanel.style.display   = caps.ik   ? '' : 'none';
@@ -1865,7 +1961,7 @@
 
     // FAZ2G-3: İK ve Maaş sekme render (caps'e bağlı)
     // P4B: pk_bilgi ekle (personel_kullanici genişletilmiş alanları)
-    if (caps.ik)   renderIk(data.ik_ozet, data.pk_bilgi || null, caps);
+    if (caps.ik)   { renderIk(data.ik_ozet, data.pk_bilgi || null, caps); }
     if (caps.maas) renderMaas(data.maas_ozet, data.pk_bilgi || null, caps);
 
     // Organizasyon formu doldur
@@ -2071,6 +2167,209 @@
       btn.disabled    = false;
       btn.textContent = 'Kaydet';
     }
+  }
+
+  // ── Eksik HR paneli ─────────────────────────────────────────
+  var _eksikHrYuklendi = false;
+
+  function eksikHrPanelYukle() {
+    var panel = document.getElementById('eksik-hr-panel');
+    if (!panel) return;
+    panel.style.display = 'block';
+    if (_eksikHrYuklendi) return;
+    _eksikHrYuklendi = true;
+    fetch('/yonetim/api/personel-360/eksik-hr-alanlari', { credentials: 'same-origin' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var sayacEl = document.getElementById('eksik-hr-sayac');
+        var yukEl   = document.getElementById('eksik-hr-yukleniyor');
+        var tablo   = document.getElementById('eksik-hr-tablo');
+        var tbody   = document.getElementById('eksik-hr-tbody');
+        if (!data.ok || data.toplam === 0) {
+          if (sayacEl) sayacEl.textContent = '— Tüm profiller eksiksiz ✓';
+          if (yukEl)   yukEl.textContent = 'Eksik profil yok.';
+          return;
+        }
+        if (sayacEl) sayacEl.textContent = data.toplam + ' personelde eksik bilgi var';
+        if (yukEl)   yukEl.style.display = 'none';
+        if (tablo)   tablo.style.display = 'table';
+        var html = '';
+        data.personeller.forEach(function(p) {
+          var eksikStr = p.eksikler.map(function(e) {
+            var etiket = {
+              'IseBaslamaTarih': 'İşe Giriş',
+              'Maas':            'Maaş',
+              'Pozisyon':        'Pozisyon',
+              'KidemYili':       'Kıdem'
+            }[e] || e;
+            return '<span style="background:#fee2e2;color:#b91c1c;border-radius:3px;padding:1px 5px;margin-right:3px;font-size:11px;">' + etiket + '</span>';
+          }).join('');
+          html +=
+            '<tr style="border-bottom:1px solid #fde68a;">' +
+              '<td style="padding:5px 8px;font-weight:600;">' + (p.ad_soyad || '—') + '</td>' +
+              '<td style="padding:5px 8px;color:#666;">' + (p.departman || '—') + '</td>' +
+              '<td style="padding:5px 8px;">' + eksikStr + '</td>' +
+              '<td style="padding:5px 8px;text-align:center;">' +
+                '<button onclick="profilAc(' + p.profil_id + ')" ' +
+                  'style="font-size:11px;padding:2px 8px;border-radius:4px;background:#1d4ed8;color:#fff;border:none;cursor:pointer;">Aç</button>' +
+              '</td>' +
+            '</tr>';
+        });
+        if (tbody) tbody.innerHTML = html;
+      })
+      .catch(function(err) {
+        var yukEl = document.getElementById('eksik-hr-yukleniyor');
+        if (yukEl) yukEl.textContent = 'Yüklenemedi: ' + err.message;
+      });
+  }
+
+  function eksikHrToggle() {
+    var liste = document.getElementById('eksik-hr-liste');
+    var ok    = document.getElementById('eksik-hr-ok');
+    if (!liste) return;
+    var acik = liste.style.display !== 'none';
+    liste.style.display = acik ? 'none' : 'block';
+    if (ok) ok.textContent = acik ? '▼' : '▲';
+  }
+
+  // profilAc: sol listeden profil seçimini tetikle
+  function profilAc(profilId) {
+    var el = document.querySelector('.p360-satir[data-id="' + profilId + '"]');
+    if (el) {
+      el.click();
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } else {
+      profilSec(profilId);
+    }
+  }
+
+  // ── İK genel panel sarmalayıcı (profil seçimi gerektirmez) ──
+  var _ikGenelYuklendi = false;
+  function ikGenelPanellerYukle() {
+    eksikHrPanelYukle();
+    topluDevamPanelGoster();
+    _ikGenelYuklendi = true;
+  }
+
+  // ── Toplu Devam paneli ──────────────────────────────────────
+  var _tdPersoneller = []; // önbellek: tüm aktif personel listesi
+
+  function topluDevamPanelGoster() {
+    var panel = document.getElementById('toplu-devam-panel');
+    if (!panel) return;
+    panel.style.display = 'block';
+    // Bugünün tarihini varsayılan olarak koy
+    var tInput = document.getElementById('td-tarih');
+    if (tInput && !tInput.value) {
+      var now = new Date();
+      var y = now.getFullYear();
+      var m = String(now.getMonth()+1).padStart(2,'0');
+      var d = String(now.getDate()).padStart(2,'0');
+      tInput.value = y + '-' + m + '-' + d;
+    }
+  }
+
+  function topluDevamToggle() {
+    var ic  = document.getElementById('toplu-devam-icerik');
+    var ok  = document.getElementById('toplu-devam-ok');
+    if (!ic) return;
+    var acik = ic.style.display !== 'none';
+    ic.style.display = acik ? 'none' : 'block';
+    if (ok) ok.textContent = acik ? '▼' : '▲';
+  }
+
+  function topluDevamListeYukle() {
+    var kap  = document.getElementById('td-tablo-kap');
+    var yukl = document.getElementById('td-yukl');
+    var tBody = document.getElementById('td-tbody');
+    if (!kap || !tBody) return;
+    kap.style.display  = 'none';
+    if (yukl) yukl.style.display = 'block';
+    // Tüm aktif personeli getir (secenekler endpoint'i kullan)
+    fetch('/yonetim/api/personel-360/secenekler', { credentials: 'same-origin' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (yukl) yukl.style.display = 'none';
+        var personeller = (data.profiller || []).filter(function(p) { return p.aktif !== false; });
+        _tdPersoneller = personeller;
+        var html = '';
+        personeller.forEach(function(p, idx) {
+          var adSoyad   = p.ad_soyad || '—';
+          var departman = p.departman || '—';
+          var pid       = p.id;
+          html +=
+            '<tr style="border-bottom:1px solid #e0f2fe;" data-td-idx="' + idx + '">' +
+              '<td style="padding:4px 8px;font-weight:600;">' + adSoyad + '</td>' +
+              '<td style="padding:4px 8px;color:#555;font-size:11px;">' + departman + '</td>' +
+              '<td style="padding:3px 8px;text-align:center;">' +
+                '<select name="td_durum_' + idx + '" style="font-size:11px;padding:2px 4px;border:1px solid #bae6fd;border-radius:3px;">' +
+                  '<option value="geldi">Geldi</option>' +
+                  '<option value="gelmedi">Gelmedi</option>' +
+                  '<option value="izin">İzin</option>' +
+                  '<option value="rapor">Rapor</option>' +
+                  '<option value="gec">Geç</option>' +
+                '</select>' +
+              '</td>' +
+              '<td style="padding:3px 8px;text-align:center;">' +
+                '<input name="td_giris_' + idx + '" type="time" value="08:30" style="font-size:11px;padding:2px 4px;border:1px solid #bae6fd;border-radius:3px;width:72px;">' +
+              '</td>' +
+              '<td style="padding:3px 8px;text-align:center;">' +
+                '<input name="td_cikis_' + idx + '" type="time" value="18:00" style="font-size:11px;padding:2px 4px;border:1px solid #bae6fd;border-radius:3px;width:72px;">' +
+              '</td>' +
+              '<td style="padding:3px 8px;">' +
+                '<input name="td_not_' + idx + '" type="text" placeholder="opsiyonel" style="font-size:11px;padding:2px 5px;border:1px solid #bae6fd;border-radius:3px;width:100%;">' +
+              '</td>' +
+            '</tr>';
+        });
+        tBody.innerHTML = html || '<tr><td colspan="6" style="text-align:center;color:#888;padding:10px;">Personel bulunamadı.</td></tr>';
+        kap.style.display = 'block';
+        var sonuc = document.getElementById('td-sonuc');
+        if (sonuc) sonuc.textContent = '';
+      })
+      .catch(function(err) {
+        if (yukl) yukl.textContent = 'Yüklenemedi: ' + err.message;
+      });
+  }
+
+  function topluDevamKaydet() {
+    var tarihEl = document.getElementById('td-tarih');
+    var tarih   = tarihEl ? tarihEl.value : '';
+    if (!tarih) { alert('Lütfen tarih seçin.'); return; }
+    if (_tdPersoneller.length === 0) { alert('Önce listeyi yükleyin.'); return; }
+
+    var kayitlar = [];
+    _tdPersoneller.forEach(function(p, idx) {
+      var durum  = (document.querySelector('[name="td_durum_' + idx + '"]') || {}).value || 'geldi';
+      var giris  = (document.querySelector('[name="td_giris_' + idx + '"]') || {}).value || '';
+      var cikis  = (document.querySelector('[name="td_cikis_' + idx + '"]') || {}).value || '';
+      var not_   = (document.querySelector('[name="td_not_'   + idx + '"]') || {}).value || '';
+      kayitlar.push({ profil_id: p.id, durum: durum, giris_saati: giris, cikis_saati: cikis, not: not_ });
+    });
+
+    var btn = document.querySelector('[onclick="topluDevamKaydet()"]');
+    if (btn) btn.disabled = true;
+
+    fetch('/yonetim/api/personel-360/toplu-devam', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ tarih: tarih, kayitlar: kayitlar })
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (btn) btn.disabled = false;
+        var sonuc = document.getElementById('td-sonuc');
+        if (data.ok) {
+          if (sonuc) sonuc.textContent = '✓ ' + data.kaydedilen + ' kayıt kaydedildi' + (data.hatali > 0 ? ' (' + data.hatali + ' hata)' : '');
+        } else {
+          if (sonuc) { sonuc.textContent = '✗ Hata: ' + (data.hata || 'bilinmiyor'); sonuc.style.color = '#dc2626'; }
+        }
+      })
+      .catch(function(err) {
+        if (btn) btn.disabled = false;
+        var sonuc = document.getElementById('td-sonuc');
+        if (sonuc) { sonuc.textContent = '✗ ' + err.message; sonuc.style.color = '#dc2626'; }
+      });
   }
 
   // ── FAZ2G-3: İK sekmesi render ──────────────────────────────
@@ -2899,6 +3198,14 @@
     document.querySelectorAll('.p360-sekme-icerik').forEach(c => c.style.display = 'none');
     btn.classList.add('p360-sekme-aktif');
     document.getElementById('sekme-' + btn.dataset.sekme).style.display = 'block';
+    // İK sekmesine geçilince genel panelleri yükle (profil seçimi gerektirmez)
+    if (btn.dataset.sekme === 'ik') {
+      ikGenelPanellerYukle();
+    }
+    // Devam sekmesine geçilince PDKS devam yükle
+    if (btn.dataset.sekme === 'devam') {
+      pdksDevamYukle();
+    }
   });
 
   // ── Başlat ──────────────────────────────────────────────────
@@ -3229,6 +3536,135 @@
   function aktiviteDahaFazla() { aktiviteYukle(true); }
   window.aktiviteDahaFazla = aktiviteDahaFazla;
 
+  // ── FAZ-3B: PDKS Devam Sekmesi ──────────────────────────────────────────────
+
+  async function pdksDevamYukle() {
+    var el = document.getElementById('devam-icerik');
+    if (!el) return;
+
+    // Aktif profil id'yi bul (mevcut sistemden)
+    var profilId = (typeof _aktProfilId !== 'undefined' && _aktProfilId)
+                   ? _aktProfilId
+                   : (window._aktifProfilId || null);
+
+    if (!profilId) {
+      el.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3);font-size:13px;">Önce bir profil seçin.</div>';
+      return;
+    }
+
+    // Tarih al (input boşsa bugün)
+    var tarihInput = document.getElementById('devam-tarih-input');
+    var tarih = (tarihInput && tarihInput.value) ? tarihInput.value : new Date().toISOString().slice(0, 10);
+    if (tarihInput && !tarihInput.value) tarihInput.value = tarih;
+
+    el.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3);font-size:13px;">Yükleniyor…</div>';
+
+    try {
+      var resp = await fetch('/yonetim/api/personel-360/' + profilId + '/pdks-devam?tarih=' + tarih);
+      var data = await resp.json();
+    } catch (err) {
+      el.innerHTML = '<div style="padding:12px 16px;background:#fee2e2;color:#991b1b;font-size:13px;border-radius:6px;">Bağlantı hatası: ' + err.message + '</div>';
+      return;
+    }
+
+    if (!data.ok) {
+      if (data.hata === 'pdks_eslesme_yok') {
+        el.innerHTML = [
+          '<div style="padding:24px;text-align:center;">',
+          '  <div style="font-size:32px;margin-bottom:8px;">🔗</div>',
+          '  <div style="font-size:14px;font-weight:600;color:var(--text2);margin-bottom:4px;">PDKS eşleşmesi yapılmamış</div>',
+          '  <div style="font-size:12px;color:var(--text3);">Bu profil henüz bir PDKS personeli ile eşleştirilmemiş.</div>',
+          '</div>'
+        ].join('');
+      } else {
+        el.innerHTML = '<div style="padding:12px 16px;background:#fee2e2;color:#991b1b;font-size:13px;border-radius:6px;">Hata: ' + (data.mesaj || data.hata) + '</div>';
+      }
+      return;
+    }
+
+    var d = data.devam;
+    var durumRenk  = { geldi:'#16a34a', gelmedi:'#dc2626', gec:'#d97706', cikis_yok:'#2563eb' };
+    var durumSimge = { geldi:'🟢', gelmedi:'🔴', gec:'🟡', cikis_yok:'🔵' };
+    var durumEtiket = { geldi:'Geldi', gelmedi:'Gelmedi', gec:'Geç Geldi', cikis_yok:'Çıkış Kaydı Yok' };
+    var renk   = durumRenk[d.durum]   || '#6b7280';
+    var simge  = durumSimge[d.durum]  || '⚪';
+    var etiket = durumEtiket[d.durum] || d.durum;
+
+    var kartHtml = [
+      '<div style="padding:16px 20px;">',
+
+      // Durum badge
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;',
+      '            padding:12px 16px;border-radius:8px;',
+      '            background:' + renk + '18;border:1px solid ' + renk + '44;">',
+      '  <span style="font-size:24px;">' + simge + '</span>',
+      '  <div>',
+      '    <div style="font-size:16px;font-weight:700;color:' + renk + ';">' + etiket + '</div>',
+      '    <div style="font-size:11px;color:var(--text3);">' + tarih + '</div>',
+      '  </div>',
+      '</div>',
+
+      // Detay satırları
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px;">',
+
+      _devamKartSatir('Giriş', d.giris ? d.giris : '—'),
+      _devamKartSatir('Çıkış', d.cikis ? d.cikis : '—'),
+      _devamKartSatir('PDKS ID', data.pdks_personel_id),
+      _devamKartSatir('Eşleşme', data.pdks_eslesme || '—'),
+
+      '</div>',
+
+      // Kayıt listesi
+      (d.kayitlar && d.kayitlar.length > 0) ? _devamKayitlariHtml(d.kayitlar) : '',
+
+      '</div>'
+    ].join('');
+
+    el.innerHTML = kartHtml;
+  }
+
+  function _devamKartSatir(baslik, deger) {
+    return [
+      '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;">',
+      '  <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">' + baslik + '</div>',
+      '  <div style="font-size:14px;font-weight:600;color:var(--text1);">' + deger + '</div>',
+      '</div>'
+    ].join('');
+  }
+
+  function _devamKayitlariHtml(kayitlar) {
+    var satirlar = kayitlar.map(function(k) {
+      return '<tr style="border-top:1px solid var(--border);">' +
+        '<td style="padding:6px 10px;font-size:12px;color:var(--text2);">' + (k.giristarihi || '') + '</td>' +
+        '<td style="padding:6px 10px;font-size:13px;font-weight:600;color:#16a34a;">' + (k.girissaati || '—') + '</td>' +
+        '<td style="padding:6px 10px;font-size:13px;color:#dc2626;">' + (k.cikissaati || '—') + '</td>' +
+      '</tr>';
+    }).join('');
+    return [
+      '<div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Kayıtlar</div>',
+      '<table style="width:100%;border-collapse:collapse;border:1px solid var(--border);border-radius:6px;overflow:hidden;">',
+      '<thead><tr style="background:var(--bg2);">',
+      '<th style="padding:6px 10px;font-size:11px;color:var(--text3);text-align:left;font-weight:500;">Tarih</th>',
+      '<th style="padding:6px 10px;font-size:11px;color:var(--text3);text-align:left;font-weight:500;">Giriş</th>',
+      '<th style="padding:6px 10px;font-size:11px;color:var(--text3);text-align:left;font-weight:500;">Çıkış</th>',
+      '</tr></thead>',
+      '<tbody>' + satirlar + '</tbody>',
+      '</table>'
+    ].join('');
+  }
+
+  window.pdksDevamYukle = pdksDevamYukle;
+
+  // Devam sekmesine lazy load (capture önce)
+  document.getElementById('p360-sekmeler').addEventListener('click', function(e) {
+    var btn = e.target.closest('.p360-sekme');
+    if (btn && btn.dataset.sekme === 'devam') {
+      pdksDevamYukle();
+    }
+  }, true);
+
+  // ── Aktivite lazy load ────────────────────────────────────────────────────
+
   // Sekme degisiminde lazy load tetikle (capture:true - mevcut handler'lardan once)
   document.getElementById('p360-sekmeler').addEventListener('click', function(e) {
     var btn = e.target.closest('.p360-sekme');
@@ -3239,7 +3675,7 @@
     }
   }, true);
 
-  // profilSec sarmalayici - secim degisince aktivite state sifirla
+  // profilSec sarmalayici - secim degisince aktivite + devam state sifirla
   var _origProfilSec = window.profilSec;
   window.profilSec = function(profilId) {
     _aktProfilId = profilId;
@@ -3252,6 +3688,9 @@
     if (htEl) htEl.style.display = 'none';
     var dahaEl = document.getElementById('aktivite-daha-btn-wrap');
     if (dahaEl) dahaEl.style.display = 'none';
+    // Devam sekmesi yüklüyse sıfırla
+    var devamEl = document.getElementById('devam-icerik');
+    if (devamEl) devamEl.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3);font-size:13px;">Yükleniyor…</div>';
     if (typeof _origProfilSec === 'function') _origProfilSec(profilId);
   };
 
