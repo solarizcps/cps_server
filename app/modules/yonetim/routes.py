@@ -6324,3 +6324,145 @@ def personel_360_pdks_devam(profil_id):
         'tarih'            : tarih,
         'devam'            : devam,
     })
+
+
+# ── FAZ-4A: PDKS Yeni Personel Havuzu (Ön İzleme) ───────────────────────────
+
+@yonetim_bp.route('/api/pdks/yeni-personel-havuzu', methods=['GET'])
+@yetki_gerekli('yonetim', 'can_view')
+def pdks_yeni_personel_havuzu():
+    """GET /yonetim/api/pdks/yeni-personel-havuzu
+
+    PDKS'te olup CPS kullanici_profil'de hiç eşleşmemiş personeli listeler.
+
+    SADECE SELECT — PDKS ve CPS DB'ye yazma yapılmaz.
+
+    Dönüş:
+        {
+            ok: true,
+            toplam: int,          # yeni aday sayısı
+            kontrol_gerekli: int, # isim çakışması olanlar
+            kisiler: [...],       # YENI_ADAY listesi
+            cakisanlar: [...]     # KONTROL_GEREKLI listesi
+        }
+    """
+    import unicodedata
+
+    def _norm(s):
+        if not s:
+            return ''
+        s = str(s).strip().lower()
+        tr_map = str.maketrans('çğıöşüÇĞİÖŞÜ', 'cgiosucgiosu')
+        s = s.translate(tr_map)
+        s = unicodedata.normalize('NFKD', s)
+        s = ''.join(c for c in s if not unicodedata.combining(c))
+        return s.strip()
+
+    # ── PDKS personel listesi (SELECT only) ──────────────────────────────────
+    try:
+        from modules.common.pdks import get_connection as pdks_get_conn, get_pdks_personeller
+    except ImportError as e:
+        return jsonify({'ok': False, 'hata': 'pdks module: ' + str(e)}), 500
+
+    pdks_con = None
+    try:
+        pdks_con = pdks_get_conn()
+        pdks_list = get_pdks_personeller(con=pdks_con, limit=2000)
+    except Exception as e:
+        return jsonify({'ok': False, 'hata': 'PDKS baglanti: ' + str(e)[:300]}), 503
+    finally:
+        if pdks_con:
+            try:
+                pdks_con.close()
+            except Exception:
+                pass
+
+    # ── CPS: zaten eşleşmiş pdks_personel_id'ler ─────────────────────────────
+    try:
+        db = get_db()
+        kp_rows = db.execute(
+            """SELECT id, gercek_ad, kullanici_adi, pdks_personel_id
+               FROM   kullanici_profil
+               WHERE  aktif = 1"""
+        ).fetchall()
+    except Exception as e:
+        return jsonify({'ok': False, 'hata': 'CPS DB: ' + str(e)[:300]}), 500
+
+    # Zaten eşleşmiş PDKS id seti
+    eslesmis_pdks_ids = set()
+    for row in kp_rows:
+        if row['pdks_personel_id']:
+            eslesmis_pdks_ids.add(int(row['pdks_personel_id']))
+
+    # CPS ad → profil id haritası (çakışma tespiti için)
+    cps_ad_map = {}
+    for row in kp_rows:
+        gercek_ad = row['gercek_ad'] or ''
+        if gercek_ad:
+            cps_ad_map.setdefault(_norm(gercek_ad), []).append(row['id'])
+
+    # ── Sınıflama ──────────────────────────────────────────────────────────────
+    yeni_adaylar   = []   # CPS'te hiç eşleşmemiş, isim de yok
+    cakisanlar     = []   # İsim CPS'te var ama pdks_pid dolu / çoklu eşleşme
+
+    for p in pdks_list:
+        pid    = p.get('id')
+        sicilno = str(p.get('sicilno') or '')
+        ad     = str(p.get('ad')      or '').strip()
+        soyad  = str(p.get('soyad')   or '').strip()
+        tam_ad = (ad + ' ' + soyad).strip()
+        norm   = _norm(tam_ad)
+
+        # Zaten eşleşmiş → atla
+        if pid in eslesmis_pdks_ids:
+            continue
+
+        # İsim CPS'te var mı bak
+        cps_profiller = cps_ad_map.get(norm, [])
+
+        if len(cps_profiller) == 0:
+            # Gerçek yeni aday
+            yeni_adaylar.append({
+                'pdks_personel_id' : pid,
+                'sicilno'          : sicilno,
+                'ad'               : ad,
+                'soyad'            : soyad,
+                'tam_ad'           : tam_ad,
+                'durum'            : 'YENI_ADAY',
+            })
+        elif len(cps_profiller) == 1:
+            # İsim eşleşiyor ama pdks_pid boş değil ya da başka neden
+            cakisanlar.append({
+                'pdks_personel_id' : pid,
+                'sicilno'          : sicilno,
+                'ad'               : ad,
+                'soyad'            : soyad,
+                'tam_ad'           : tam_ad,
+                'durum'            : 'KONTROL_GEREKLI',
+                'sebep'            : 'isim_eslesme_pdks_bos_degil',
+                'cps_profil_id'    : cps_profiller[0],
+            })
+        else:
+            # Birden fazla CPS profili eşleşiyor
+            cakisanlar.append({
+                'pdks_personel_id' : pid,
+                'sicilno'          : sicilno,
+                'ad'               : ad,
+                'soyad'            : soyad,
+                'tam_ad'           : tam_ad,
+                'durum'            : 'KONTROL_GEREKLI',
+                'sebep'            : 'coklu_cps_profil',
+                'cps_profil_ids'   : cps_profiller,
+            })
+
+    # Ada göre sırala
+    yeni_adaylar.sort(key=lambda x: (_norm(x['soyad']), _norm(x['ad'])))
+    cakisanlar.sort(key=lambda x: (_norm(x['soyad']), _norm(x['ad'])))
+
+    return jsonify({
+        'ok'              : True,
+        'toplam'          : len(yeni_adaylar),
+        'kontrol_gerekli' : len(cakisanlar),
+        'kisiler'         : yeni_adaylar,
+        'cakisanlar'      : cakisanlar,
+    })
