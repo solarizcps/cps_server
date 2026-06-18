@@ -378,7 +378,7 @@ function planlariYukle(opts) {
    Sadece SELECT. Korgun'a yazma yok. POST yok.
    ====================================================== */
 function _hedefEmirTemizle() {
-    var ids = ['heEmiNo','heDurum','heModelAdi','heTip','heYer','heTarih'];
+    var ids = ['heEmiNo','heDurum','heModelAdi','heTip','heYer','heTarih','heSipMiktar'];
     ids.forEach(function (id) { var el = document.getElementById(id); if (el) el.textContent = '—'; });
     var acik  = document.getElementById('heAcikProses');  if (acik)  acik.innerHTML  = '';
     var tamam = document.getElementById('heTamamProses'); if (tamam) tamam.innerHTML = '';
@@ -403,22 +403,37 @@ function _hedefEmirEscHtml(s) {
 }
 
 function hedefEmirSorgula(emirNoParam) {
-    // Önce hata alanını explicit temizle
-    var errEl = document.getElementById('hEmirError');
-    if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
+    // Event objesi gelirse yoksay — sadece sayısal değer veya null kabul et
+    if (emirNoParam && typeof emirNoParam === 'object') {
+        if (typeof emirNoParam.preventDefault === 'function') {
+            emirNoParam.preventDefault();
+        }
+        emirNoParam = null;
+    }
 
-    var input  = document.getElementById('hEmirNoInput');
-    var emirNo = (emirNoParam != null)
-        ? String(emirNoParam).trim()
-        : (input ? String(input.value || '').trim() : '');
-
+    // Tüm ekranı temizle (hata alanı dahil)
     _hedefEmirTemizle();
 
+    // Emir no kaynağı: parametre > input değeri
+    var input      = document.getElementById('hEmirNoInput');
+    var rawEmirNo  = (emirNoParam != null)
+        ? String(emirNoParam)
+        : (input ? String(input.value || '') : '');
+
+    // Görünmez unicode karakterleri ve boşlukları temizle
+    var emirNo = rawEmirNo
+        .replace(/[\u200B-\u200D\uFEFF\u00A0]/g, '')
+        .trim();
+
+    // Temizlenmiş değeri input'a geri yaz
+    if (input) input.value = emirNo;
+
+    // TEK validate noktası
     if (!emirNo) {
         _hedefEmirHata('Emir no giriniz.');
         return;
     }
-    if (!/^\d+$/.test(emirNo)) {
+    if (!/^[0-9]+$/.test(emirNo)) {
         _hedefEmirHata('Geçersiz emir no — sadece rakam giriniz.');
         return;
     }
@@ -458,104 +473,178 @@ function hedefEmirSorgula(emirNoParam) {
             var el = document.getElementById(id);
             if (el) el.textContent = val || '—';
         };
-        setTxt('heEmiNo',    emir.emir_no);
-        setTxt('heDurum',    emir.durum);
-        setTxt('heModelAdi', emir.model_adi || emir.model_kod);
-        setTxt('heTip',      emir.tip);
-        setTxt('heYer',      emir.uretim_yeri);
-        setTxt('heTarih',    emir.emir_tarihi);
+        setTxt('heEmiNo',     emir.emir_no);
+        setTxt('heDurum',     emir.durum);
+        setTxt('heModelAdi',  emir.model_adi || emir.model_kod);
+        setTxt('heTip',       emir.tip);
+        setTxt('heYer',       emir.uretim_yeri);
+        setTxt('heTarih',     emir.emir_tarihi);
+        // Sipariş miktarı: API'de doğrudan alan yok — proses toplamından hesapla
+        var _sipMiktar = (function() {
+            if (emir.toplam_adet != null) return emir.toplam_adet + ' çift';
+            if (emir.sip_miktar)          return emir.sip_miktar  + ' çift';
+            var prosesler0 = d.prosesler || [];
+            if (prosesler0.length) {
+                var max_giren = Math.max.apply(null, prosesler0.map(function(p){ return p.toplam_giren || 0; }));
+                if (max_giren > 0) return max_giren + ' çift';
+            }
+            return '—';
+        })();
+        setTxt('heSipMiktar', _sipMiktar);
 
-        // ── PROSES AKIŞI (tüm prosesler, kart tasarımı) ──
+        // ── SOL: ÜRETİM AKIŞI — accordion kart listesi ──
         var akisEl    = document.getElementById('heAcikProses');
         var prosesler = d.prosesler || [];
 
         var _durum_meta = function (durum) {
             if (durum === 'tamamlandi')
-                return { ikon: '✓', etiket: 'TAMAMLANDI', cls: 'he-durum-tamam', ikonCls: 'he-ikon-tamam' };
+                return { ikon: '🟢', etiket: 'TAMAMLANDI', rowCls: 'hpk-tamam', rozetCls: 'hpt-rozet-tamam' };
             if (durum === 'devam_ediyor')
-                return { ikon: '◑', etiket: 'DEVAM EDİYOR', cls: 'he-durum-devam', ikonCls: 'he-ikon-devam' };
-            return { ikon: '○', etiket: 'BAŞLANMADI', cls: 'he-durum-bekliyor', ikonCls: 'he-ikon-bekliyor' };
-        };
-
-        var _proses_kart = function (p) {
-            var dm       = _durum_meta(p.durum);
-            var giren    = p.toplam_giren   || 0;
-            var bekleyen = p.toplam_bekleyen || 0;
-            var cikan    = giren - bekleyen;
-            var devam    = bekleyen;   // bekleyen = aktif devam eden
-            var beden_html = (p.bedenler || []).map(function (b) {
-                var tum_bitti = b.bekleyen <= 0;
-                return '<div class="hek-beden-satir' + (tum_bitti ? '' : ' hek-beden-aktif') + '">' +
-                    '<span class="hek-beden-no">' + _hedefEmirEscHtml(b.bed_kod) + '</span>' +
-                    '<span class="hek-beden-adet">' +
-                        _hedefEmirEscHtml(b.giren) + ' / ' + _hedefEmirEscHtml(b.cikan) +
-                    '</span>' +
-                    (tum_bitti ? '<span class="hek-beden-ok">✓</span>' :
-                                 '<span class="hek-beden-kalan">' + _hedefEmirEscHtml(b.bekleyen) + ' kalan</span>') +
-                '</div>';
-            }).join('');
-
-            return '<div class="hek-kart ' + dm.cls + '">' +
-                '<div class="hek-baslik">' +
-                    '<span class="hek-ikon ' + dm.ikonCls + '">' + dm.ikon + '</span>' +
-                    '<span class="hek-proses-no">' + _hedefEmirEscHtml(p.proses_kodu) + '</span>' +
-                    '<span class="hek-proses-adi">' + _hedefEmirEscHtml(p.proses_adi)  + '</span>' +
-                    '<span class="hek-durum-etiket ' + dm.cls + '">' + dm.etiket + '</span>' +
-                '</div>' +
-                '<div class="hek-istatistik">' +
-                    '<div class="hek-stat"><span class="hek-stat-lbl">Başlanan</span><span class="hek-stat-val">' + giren + '</span></div>' +
-                    '<div class="hek-stat"><span class="hek-stat-lbl">Devam Eden</span><span class="hek-stat-val' + (devam > 0 ? ' hek-devam-vurgu' : '') + '">' + devam + '</span></div>' +
-                    '<div class="hek-stat"><span class="hek-stat-lbl">Biten</span><span class="hek-stat-val' + (cikan === giren && giren > 0 ? ' hek-tamam-vurgu' : '') + '">' + cikan + '</span></div>' +
-                '</div>' +
-                (beden_html ? '<div class="hek-beden-blok"><div class="hek-beden-baslik">Beden Dağılımı</div>' + beden_html + '</div>' : '') +
-            '</div>';
+                return { ikon: '🟠', etiket: 'DEVAM EDİYOR', rowCls: 'hpk-devam', rozetCls: 'hpt-rozet-devam' };
+            return { ikon: '⚪', etiket: 'BEKLİYOR', rowCls: 'hpk-bekliyor', rozetCls: 'hpt-rozet-bekliyor' };
         };
 
         if (akisEl) {
             if (!prosesler.length) {
                 akisEl.innerHTML = '<div class="he-bos">Proses kaydı yok.</div>';
             } else {
-                akisEl.innerHTML = prosesler.map(_proses_kart).join('');
+                var html = '<div class="hpk-liste">';
+                prosesler.forEach(function (p, idx) {
+                    var dm       = _durum_meta(p.durum);
+                    var giren    = p.toplam_giren    || 0;
+                    var bekleyen = p.toplam_bekleyen || 0;
+                    var cikan    = giren - bekleyen;
+                    var pct      = giren > 0 ? Math.round(cikan / giren * 100) : 0;
+                    var uid      = 'hpk-acc-' + idx;
+                    var bedenler = p.bedenler || [];
+
+                    // Beden satırları
+                    var beden_html = bedenler.map(function (b) {
+                        var bitti = b.bekleyen <= 0;
+                        var kIsmi = b.giren > 0 && b.cikan > 0 && b.cikan < b.giren;
+                        var ikon  = bitti ? '✓' : (kIsmi ? '◑' : '○');
+                        var cls   = bitti ? '' : (kIsmi ? ' hpk-beden-parcali' : ' hpk-beden-bekliyor');
+                        return '<div class="hpk-beden-satir-item' + cls + '">' +
+                            '<span class="hpk-beden-no">'  + _hedefEmirEscHtml(b.bed_kod) + '</span>' +
+                            '<span class="hpk-beden-sayi">' + _hedefEmirEscHtml(b.giren) + '/' + _hedefEmirEscHtml(b.cikan) + '</span>' +
+                            '<span class="hpk-beden-ikon">' + ikon + '</span>' +
+                        '</div>';
+                    }).join('');
+
+                    // Miktar (sağ kolon)
+                    var miktar_sayi = '';
+                    var miktar_pct  = '';
+                    if (p.durum === 'tamamlandi') {
+                        miktar_sayi = giren + ' / ' + giren + ' çift';
+                        miktar_pct  = '%100';
+                    } else if (p.durum === 'devam_ediyor') {
+                        miktar_sayi = cikan + ' / ' + giren + ' çift';
+                        miktar_pct  = '%' + pct;
+                    }
+
+                    // İlerleme çubuğu
+                    var bar_html = '';
+                    if (p.durum !== 'baslanmadi') {
+                        var barCls = p.durum === 'devam_ediyor' ? ' hpk-bar-fill-devam' : '';
+                        bar_html = '<div class="hpk-bar"><div class="hpk-bar-fill' + barCls + '" style="width:' + pct + '%"></div></div>';
+                    }
+
+                    // Başlık satırı (her zaman görünür, tıklanamaz)
+                    var baslik = '<div class="hpk-satir ' + dm.rowCls + '">' +
+                        // Sol: sira + ad + rozet (dikey yığın)
+                        '<div class="hpk-satir-sol">' +
+                            '<span class="hpk-sira">' + (('0' + (idx + 1)).slice(-2)) + '</span>' +
+                            '<div class="hpk-sol-icerik">' +
+                                '<span class="hpk-adi">' + _hedefEmirEscHtml(p.proses_adi).toUpperCase() + '</span>' +
+                                '<span class="hpt-rozet ' + dm.rozetCls + ' hpk-durum-rozet">' + dm.ikon + '\u00A0' + dm.etiket + '</span>' +
+                            '</div>' +
+                        '</div>' +
+                        // Sağ: miktar + yüzde
+                        '<div class="hpk-satir-sag">' +
+                            (miktar_sayi ? '<div class="hpk-sag-icerik">' +
+                                '<span class="hpk-miktar-sayi">' + miktar_sayi + '</span>' +
+                                (miktar_pct ? '<span class="hpk-miktar-pct">' + miktar_pct + '</span>' : '') +
+                            '</div>' : '') +
+                        '</div>' +
+                    '</div>' +
+                    bar_html;
+
+                    // Accordion — sadece asorti butonu tetikler
+                    var icerik = '';
+                    if (bedenler.length) {
+                        icerik = '<button class="hpk-asorti-btn" data-acc="' + uid + '">ASORTİ GÖSTER\u00A0▾</button>' +
+                            '<div class="hpk-icerik" id="' + uid + '" style="display:none;">' +
+                                '<div class="hpk-asorti-lbl">ASORTİ / BEDEN</div>' +
+                                '<div class="hpk-beden-grid">' + beden_html + '</div>' +
+                            '</div>';
+                    }
+
+                    html += '<div class="hpk-grup">' + baslik + icerik + '</div>';
+                });
+                html += '</div>';
+                akisEl.innerHTML = html;
+
+                // Accordion toggle — sadece "ASORTİ GÖSTER" butonu
+                akisEl.querySelectorAll('.hpk-asorti-btn').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        var accId = btn.getAttribute('data-acc');
+                        var panel = document.getElementById(accId);
+                        if (!panel) return;
+                        var open = panel.style.display !== 'none';
+                        panel.style.display = open ? 'none' : 'block';
+                        btn.textContent = open ? 'ASORTİ GÖSTER\u00A0▾' : 'ASORTİ GİZLE\u00A0▴';
+                    });
+                });
             }
         }
 
-        // ── AKTİF İŞ (sadece aktif_ilerletilebilir=true, panel tasarımı) ──
+        // ── SAĞ: ŞU ANKİ İŞ ──
         var aktifEl  = document.getElementById('heTamamProses');
         var aktifler = prosesler.filter(function (p) { return p.aktif_ilerletilebilir; });
         if (aktifEl) {
             if (!aktifler.length) {
-                aktifEl.innerHTML = '<div class="he-bos he-bos-tamam">✓ Aktif ilerletilecek iş yok.</div>';
+                var sonTamam = prosesler.filter(function(p){ return p.durum === 'tamamlandi'; }).pop();
+                aktifEl.innerHTML =
+                    '<div class="hsai-bos">' +
+                        '<div class="hsai-bos-ikon">✅</div>' +
+                        '<div class="hsai-bos-txt">Bekleyen işlem yok</div>' +
+                        (sonTamam ? '<div class="hsai-bos-son">Son tamamlanan:<br><strong>' +
+                            _hedefEmirEscHtml(sonTamam.proses_kodu) + ' ' +
+                            _hedefEmirEscHtml(sonTamam.proses_adi) +
+                        '</strong></div>' : '') +
+                    '</div>';
             } else {
-                aktifEl.innerHTML = aktifler.map(function (p) {
-                    var giren    = p.toplam_giren   || 0;
+                var aktifHtml = '';
+                aktifler.forEach(function (p) {
+                    var giren    = p.toplam_giren    || 0;
                     var bekleyen = p.toplam_bekleyen || 0;
                     var yapilan  = giren - bekleyen;
                     var emnNo    = _hedefEmirEscHtml(emir.emir_no);
                     var pKod     = _hedefEmirEscHtml(p.proses_kodu);
-                    return '<div class="heak-panel">' +
-                        '<div class="heak-baslik">▶ AKTİF İŞ</div>' +
-                        '<table class="heak-tablo">' +
-                            '<tr><td class="heak-lbl">Proses</td>' +
-                                '<td class="heak-val"><strong>' + pKod + '</strong> ' + _hedefEmirEscHtml(p.proses_adi) + '</td></tr>' +
-                            '<tr><td class="heak-lbl">Ürün</td>' +
-                                '<td class="heak-val">' + _hedefEmirEscHtml(emir.model_adi || emir.model_kod || '—') + '</td></tr>' +
-                            '<tr><td class="heak-lbl">Giren</td>' +
-                                '<td class="heak-val">' + giren + '</td></tr>' +
-                            '<tr><td class="heak-lbl">Yapılan</td>' +
-                                '<td class="heak-val">' + yapilan + '</td></tr>' +
-                            '<tr><td class="heak-lbl">Kalan</td>' +
-                                '<td class="heak-val heak-kalan-vurgu">' + bekleyen + '</td></tr>' +
-                        '</table>' +
-                        '<button class="heak-ilerlet-btn"' +
-                            ' data-emir-no="'   + emnNo  + '"' +
-                            ' data-proses-no="' + pKod   + '"' +
-                            ' data-giren="'     + giren  + '"' +
-                            ' data-yapilan="'   + yapilan + '"' +
-                            ' data-kalan="'     + bekleyen + '"' +
-                            ' data-proses-adi="' + _hedefEmirEscHtml(p.proses_adi) + '"' +
-                        '>İLERLET</button>' +
-                    '</div>';
-                }).join('');
+                    aktifHtml +=
+                        '<div class="hsai-kart">' +
+                            '<div class="hsai-baslik">⚡ ŞU ANKİ İŞ</div>' +
+                            '<div class="hsai-proses-adi">' + _hedefEmirEscHtml(p.proses_adi).toUpperCase() + '</div>' +
+                            '<div class="hsai-kalan-blok">' +
+                                '<span class="hsai-kalan-lbl">Kalan</span>' +
+                                '<span class="hsai-kalan-sayi">' + bekleyen + '</span>' +
+                                '<span class="hsai-kalan-birim">ÇİFT</span>' +
+                            '</div>' +
+                            '<div class="hsai-stat-grid">' +
+                                '<div class="hsai-stat"><span class="hsai-stat-lbl">Giren</span><span class="hsai-stat-val">' + giren + '</span></div>' +
+                                '<div class="hsai-stat"><span class="hsai-stat-lbl">Yapılan</span><span class="hsai-stat-val">' + yapilan + '</span></div>' +
+                            '</div>' +
+                            '<button class="hsai-ilerlet-btn heak-ilerlet-btn"' +
+                                ' data-emir-no="'    + emnNo                             + '"' +
+                                ' data-proses-no="'  + pKod                              + '"' +
+                                ' data-giren="'      + giren                             + '"' +
+                                ' data-yapilan="'    + yapilan                           + '"' +
+                                ' data-kalan="'      + bekleyen                          + '"' +
+                                ' data-proses-adi="' + _hedefEmirEscHtml(p.proses_adi)   + '"' +
+                            '>İLERLET →</button>' +
+                        '</div>';
+                });
+                aktifEl.innerHTML = aktifHtml;
                 // Butonlara event ekle
                 aktifEl.querySelectorAll('.heak-ilerlet-btn').forEach(function (btn) {
                     btn.addEventListener('click', function () {
@@ -589,9 +678,15 @@ function setupHedefEmirSorgula() {
     var btn   = document.getElementById('hEmirSorguBtn');
     var input = document.getElementById('hEmirNoInput');
     if (!btn || !input) return;
-    btn.addEventListener('click', hedefEmirSorgula);
-    input.addEventListener('keydown', function (ev) {
-        if (ev.key === 'Enter') hedefEmirSorgula();
+    btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        hedefEmirSorgula();
+    });
+    input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            hedefEmirSorgula();
+        }
     });
     // Input değişince eski hata mesajını temizle
     input.addEventListener('input', function () {
@@ -654,9 +749,10 @@ function _hedefEilIlerlet() {
     .then(function (r) { return r.json(); })
     .then(function (d) {
         if (d && d.success) {
+            var emirNo = _eilAktifVeri ? _eilAktifVeri.emirNo : null;
             _hedefEilModalKapat();
-            // Sorguyu yenile
-            hedefEmirSorgula(_eilAktifVeri && _eilAktifVeri.emirNo);
+            _hedefIlerletBasari(d);
+            hedefEmirSorgula(emirNo);
         } else {
             var msg = (d && d.message) ? d.message : 'Bilinmeyen hata.';
             if (hataEl) { hataEl.textContent = msg; hataEl.style.display = 'block'; }
@@ -682,6 +778,34 @@ function setupHedefEilModal() {
             if (ev.target === modal) _hedefEilModalKapat();
         });
     }
+}
+/* ====== FAZ 2C-5B: Başarı bildirimi ====== */
+function _hedefIlerletBasari(d) {
+    var bolum = document.getElementById('heTamamProses');
+    if (!bolum) return;
+    var prosesAdi = (d.proses_adi || d.proses_no || '');
+    var miktar    = d.toplam_miktar || 0;
+    var waitSayi  = d.wait_sayi    || 0;
+    var conSayi   = d.con_sayi     || 0;
+    var insUn     = d.ins_un || d.upd_un || 'CPS_Halil';
+    var banner = document.createElement('div');
+    banner.className = 'heak-basari-banner';
+    banner.innerHTML =
+        '<span class="heak-basari-ikon">✓</span>' +
+        '<div class="heak-basari-icerik">' +
+            '<strong>' + _hedefEmirEscHtml(prosesAdi) + '</strong> aktarıldı.' +
+            '<div class="heak-basari-detay">' +
+                miktar + ' çift · ' +
+                waitSayi + ' Wait kapatıldı · ' +
+                conSayi + ' Con oluştu · ' +
+                'Kullanıcı: ' + _hedefEmirEscHtml(insUn) +
+            '</div>' +
+        '</div>';
+    // Ekrana ekle, 6 saniye sonra kaldır
+    bolum.insertBefore(banner, bolum.firstChild);
+    setTimeout(function () {
+        if (banner.parentNode) banner.parentNode.removeChild(banner);
+    }, 6000);
 }
 /* ====== FAZ 2C-4 sonu ====== */
 

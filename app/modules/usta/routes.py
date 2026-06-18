@@ -621,39 +621,207 @@ def uretim_kayit_yaz():
 
 
 # ─────────────────────────────────────────────────────────────────
-# FAZ 2C-5A: POST /usta/api/emir-ilerlet
+# FAZ 2C-5B: POST /usta/api/emir-ilerlet
 # ─────────────────────────────────────────────────────────────────
 @usta_bp.route('/api/emir-ilerlet', methods=['POST'])
 def emir_ilerlet():
-    """FAZ 2C-5A - Test modu: Korgun'a yazma YOK.
+    """FAZ 2C-5B — Gerçek Korgun aktarımı.
+
+    Akış:
+      1) Korgun'dan emir + proses bilgisi sorgula
+      2) aktif_ilerletilebilir kontrolü
+      3) CPS uretim_kayit INSERT
+      4) korgun_aktar(kayit_id, dry_run=False)
 
     Body (JSON):
-        emir_no   : str  – üretim emir numarası
-        proses_no : str  – proses kodu (örn. "02")
-        kalan     : int  – bekleyen miktar
+        emir_no   : str/int  – üretim emir numarası
+        proses_no : str      – proses kodu (örn. "02")
+        kalan     : int      – bekleyen miktar (kontrol için)
     """
     from flask import session
     if not session.get('kullanici'):
         return jsonify({'success': False, 'message': 'Oturum gerekli.'}), 401
 
-    data = {}
+    data = _flask_request.get_json(force=True, silent=True) or {}
+    kullanici = session.get('kullanici', {})
+    usta_ad = (kullanici.get('AdSoyad') or kullanici.get('KullaniciAdi') or 'bilinmiyor')
+
+    emir_no_str = str(data.get('emir_no',   '')).strip()
+    proses_no   = str(data.get('proses_no', '')).strip()
+    kalan_beklenen = int(data.get('kalan', 0) or 0)
+
+    if not emir_no_str or not emir_no_str.isdigit():
+        return jsonify({'success': False, 'message': 'emir_no geçersiz.'}), 400
+    if not proses_no:
+        return jsonify({'success': False, 'message': 'proses_no zorunlu.'}), 400
+
+    emir_no = int(emir_no_str)
+
+    # ── ADIM 1: Korgun'dan emir + proses bilgisi sorgula ──────────
     try:
-        import flask
-        data = flask.request.get_json(force=True, silent=True) or {}
-    except Exception:
-        pass
+        from modules.common.korgun import _baglan as _korgun_baglan
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Korgun bağlantı hatası: {e}'}), 500
 
-    emir_no   = str(data.get('emir_no',   '')).strip()
-    proses_no = str(data.get('proses_no', '')).strip()
-    kalan     = data.get('kalan', 0)
+    try:
+        k_con = _korgun_baglan()
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Korgun bağlanamadı: {type(e).__name__}: {str(e)[:150]}'}), 500
 
-    if not emir_no or not proses_no:
-        return jsonify({'success': False, 'message': 'emir_no ve proses_no zorunlu.'}), 400
+    try:
+        k_cur = k_con.cursor()
 
-    # FAZ 2C-5A: Korgun'a yazma KAPALI — sadece test yanıtı döner
+        # Emir bilgisi
+        k_cur.execute("""
+            SELECT e.EmirNo, e.ModelKod,
+                   ISNULL(m.Tanim, e.ModelKod) AS ModelAdi
+            FROM Urt_Emir e WITH(NOLOCK)
+            LEFT JOIN Model_M m ON m.ModelKod = e.ModelKod
+            WHERE e.EmirNo = %s
+        """, (emir_no,))
+        emir_row = k_cur.fetchone()
+        if not emir_row:
+            return jsonify({'success': False, 'message': f'Emir bulunamadı: {emir_no}'}), 404
+
+        emir_cols = [d[0] for d in k_cur.description]
+        emir_d    = dict(zip(emir_cols, emir_row))
+        model_kod = str(emir_d.get('ModelKod') or '').strip()
+        model_adi = str(emir_d.get('ModelAdi') or model_kod).strip()
+
+        # Wait satirlari — proses filtreli
+        k_cur.execute("""
+            SELECT w.Proses,
+                   ISNULL(p.Tanim, w.Proses) AS ProsesAdi,
+                   w.FisNo, w.FisHarinx,
+                   ISNULL(w.Giren,0)                               AS Giren,
+                   ISNULL(w.Cikan,0)                               AS Cikan,
+                   ISNULL(w.Giren,0) - ISNULL(w.Cikan,0)          AS Bekleyen
+            FROM Urt_Wait_gch w WITH(NOLOCK)
+            LEFT JOIN Proses_M p ON p.Pro = w.Proses
+            WHERE w.EmirNo = %s AND w.Proses = %s
+        """, (emir_no, proses_no))
+        wait_rows = k_cur.fetchall()
+        wait_cols = [d[0] for d in k_cur.description]
+        k_cur.close()
+        k_con.close()
+    except Exception as e:
+        try: k_con.close()
+        except Exception: pass
+        return jsonify({'success': False, 'message': f'Korgun sorgu hatası: {type(e).__name__}: {str(e)[:200]}'}), 500
+
+    if not wait_rows:
+        return jsonify({'success': False, 'message': f'Proses {proses_no} için açık Wait kaydı yok (zaten tamamlanmış olabilir).'}), 400
+
+    # Toplam bekleyen hesapla
+    toplam_giren    = 0
+    toplam_bekleyen = 0
+    fis_no          = 0
+    fis_harinx      = 0
+    proses_adi      = proses_no
+    for wr in wait_rows:
+        wd = dict(zip(wait_cols, wr))
+        toplam_giren    += int(wd.get('Giren', 0))
+        toplam_bekleyen += int(wd.get('Bekleyen', 0))
+        if not fis_no:
+            fis_no     = int(wd.get('FisNo', 0))
+            fis_harinx = int(wd.get('FisHarinx', 0))
+        if wd.get('ProsesAdi'):
+            proses_adi = str(wd['ProsesAdi']).strip()
+
+    # ── ADIM 2: aktif_ilerletilebilir kontrolü ────────────────────
+    aktif_ilerletilebilir = toplam_bekleyen > 0
+    if not aktif_ilerletilebilir:
+        return jsonify({
+            'success': False,
+            'message': f'Proses {proses_no} zaten tamamlanmış — bekleyen miktar: {toplam_bekleyen}',
+        }), 400
+
+    # ── ADIM 3: CPS uretim_kayit INSERT ───────────────────────────
+    from db import get_conn
+    from datetime import datetime
+    simdi      = datetime.now()
+    tarih_str  = simdi.strftime('%Y-%m-%d')
+    saat_str   = simdi.strftime('%H:%M')
+
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO uretim_kayit
+              (emir_no, model_kod, model_adi, miktar, proses_kodu, proses_adi,
+               personel_id, personel_ad, tarih, saat, not_metin, onay_durum,
+               usta_id, usta_ad, kaynak,
+               hat_adi, baslangic_saat, bitis_saat,
+               korgun_yazildi, korgun_emir_no, korgun_proses_kodu,
+               korgun_fis_no, korgun_fis_harinx)
+            VALUES
+              (?, ?, ?, ?, ?, ?,
+               ?, ?, ?, ?, ?, ?,
+               ?, ?, ?,
+               ?, ?, ?,
+               ?, ?, ?,
+               ?, ?)
+        """, (
+            emir_no, model_kod, model_adi, toplam_bekleyen, proses_no, proses_adi,
+            None, None, tarih_str, saat_str, None, 'bekliyor',
+            None, usta_ad, 'CPS_HEDEF',
+            None, None, saat_str,
+            0, str(emir_no), proses_no,
+            str(fis_no) if fis_no else None,
+            str(fis_harinx) if fis_harinx else None,
+        ))
+        kayit_id = cur.lastrowid
+        conn.commit()
+        cur.close()
+    except Exception as e:
+        try: conn.rollback()
+        except Exception: pass
+        try: conn.close()
+        except Exception: pass
+        return jsonify({'success': False, 'message': f'CPS kayıt hatası: {type(e).__name__}: {str(e)[:200]}'}), 500
+    finally:
+        try: conn.close()
+        except Exception: pass
+
+    # ── ADIM 4: korgun_aktar(dry_run=False) ───────────────────────
+    try:
+        from modules.common.korgun_uretim import korgun_aktar
+        sonuc = korgun_aktar(kayit_id, dry_run=False)
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'korgun_aktar hatası: {type(e).__name__}: {str(e)[:200]}',
+            'kayit_id': kayit_id,
+            'korgun_yazildi': False,
+        }), 500
+
+    if not sonuc.get('ok'):
+        return jsonify({
+            'success': False,
+            'message': sonuc.get('hata') or f'Korgun aktarım başarısız: {sonuc.get("sebep","?")}',
+            'kayit_id': kayit_id,
+            'korgun_yazildi': False,
+            'sebep': sonuc.get('sebep'),
+        }), 500
+
+    ozet = sonuc.get('ozet', {})
     return jsonify({
-        'success': True,
-        'message': f'Test ilerletme hazır — Emir {emir_no} / Proses {proses_no} / Kalan {kalan}',
-        'test_modu': True,
-        'korgun_yazildi': False,
+        'success':       True,
+        'message':       'Korgun aktarımı tamamlandı.',
+        'korgun_yazildi': True,
+        'test_modu':     False,
+        'kayit_id':      kayit_id,
+        'emir_no':       emir_no,
+        'proses_no':     proses_no,
+        'proses_adi':    proses_adi,
+        'model_kod':     model_kod,
+        'toplam_miktar': toplam_bekleyen,
+        'fis_no':        fis_no,
+        'fis_harinx':    fis_harinx,
+        'wait_sayi':     ozet.get('wait_sayi', 0),
+        'con_sayi':      ozet.get('con_sayi', 0),
+        'personel':      ozet.get('personel', ''),
+        'ins_un':        'CPS_Halil',
+        'upd_un':        'CPS_Halil',
+        'usta_ad':       usta_ad,
     })

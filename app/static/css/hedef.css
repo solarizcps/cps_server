@@ -1321,14 +1321,24 @@
   color: var(--text2);
 }
 .he-bolum-baslik {
-  font-size: .75rem;
+  font-size: .72rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .06em;
   color: var(--text3);
-  margin: 14px 0 6px;
+  margin: 10px 0 6px;
   border-bottom: 1px solid var(--border);
   padding-bottom: 4px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.he-bolum-alt {
+  font-size: .68rem;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: #b0bec5;
 }
 .he-proses-liste {
   margin-bottom: 4px;
@@ -1401,65 +1411,74 @@
   font-size: .83rem;
   padding: 4px 0;
 }
-/* --- FAZ 2C-4B revize — PROSES KARTI + AKTİF İŞ PANELİ --- */
+/* --- FAZ 2C-5B Polish: Üst kart modernleme --- */
 
-/* --- Temel durum renk sınıfları (JS'de hâlâ kullanılıyor) --- */
-.he-ikon-tamam    { color: #16a34a; }
-.he-ikon-devam    { color: #d97706; }
-.he-ikon-bekliyor { color: #9ca3af; }
-.he-bos-tamam     { color: #16a34a; font-weight: 500; }
+/* Üst Emir Kartı */
+/* Eski üst kart sınıfları — uyumluluk için bırakıldı */
+.heu-kart, .heu-kart-ust, .heu-emir-baslik, .heu-kart-bilgiler,
+.heu-durum-badge, .heu-bilgi-chip { /* eski — artık kullanılmıyor */ }
+.heu-emir-ikon, .heu-emir-etiket, .heu-emir-no,
+.heu-model-adi, .heu-bilgi-ikon, .heu-bilgi-lbl, .heu-bilgi-val { /* eski */ }
 
-/* ── Proses Kartı ── */
-.hek-kart {
-  border: 1px solid var(--border, #e2e8f0);
-  border-radius: 8px;
-  padding: 12px 14px;
-  margin-bottom: 10px;
-  background: #fff;
-  transition: box-shadow .15s;
-}
-.hek-kart:hover { box-shadow: 0 2px 8px rgba(0,0,0,.08); }
-
-.hek-kart.he-durum-tamam {
-  background: #f0fdf4;
-  border-color: #86efac;
-}
-.hek-kart.he-durum-devam {
-  background: #fffbeb;
-  border-color: #fcd34d;
-}
-.hek-kart.he-durum-bekliyor {
-  background: #f8fafc;
-  border-color: #cbd5e1;
-  opacity: .82;
-}
-
-/* Kart başlık satırı */
-.hek-baslik {
+/* ── Üst emir kartı v2 — kompakt şerit ── */
+.heu-kart-v2 {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 9px 14px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
 }
-.hek-ikon {
-  font-size: 1.1rem;
-  flex-shrink: 0;
-  width: 20px;
-  text-align: center;
-}
-.hek-proses-no {
-  font-size: .8rem;
-  font-weight: 700;
-  color: #64748b;
-  white-space: nowrap;
-}
-.hek-proses-adi {
-  font-size: .9rem;
-  font-weight: 600;
-  color: #1e293b;
+.heu-v2-sol {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
   flex: 1;
 }
-.hek-durum-etiket {
+.heu-v2-no {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #1e293b;
+  line-height: 1.2;
+}
+.heu-v2-model {
+  font-size: .82rem;
+  font-weight: 500;
+  color: #475569;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.heu-v2-chiplar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.heu-v2-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 5px;
+  padding: 3px 8px;
+  font-size: .78rem;
+  font-weight: 600;
+  color: #334155;
+  white-space: nowrap;
+}
+.heu-v2-chip span:first-child { font-size: .82rem; }
+
+/* ── Proses tablosu: rozet + asorti ── */
+.hpt-rozet {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: .72rem;
   font-weight: 700;
   letter-spacing: .04em;
@@ -1467,114 +1486,466 @@
   border-radius: 20px;
   white-space: nowrap;
 }
-.hek-durum-etiket.he-durum-tamam {
-  background: #dcfce7;
-  color: #166534;
-}
-.hek-durum-etiket.he-durum-devam {
-  background: #fef9c3;
-  color: #854d0e;
-}
-.hek-durum-etiket.he-durum-bekliyor {
-  background: #f1f5f9;
-  color: #64748b;
-}
+.hpt-rozet-tamam    { background: #dcfce7; color: #166534; }
+.hpt-rozet-devam    { background: #fef9c3; color: #854d0e; }
+.hpt-rozet-bekliyor { background: #f1f5f9; color: #64748b; }
 
-/* İstatistik kutuları */
-.hek-istatistik {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-.hek-stat {
-  flex: 1;
-  background: rgba(0,0,0,.04);
-  border-radius: 6px;
-  padding: 6px 8px;
-  text-align: center;
-}
-.hek-stat-lbl {
-  display: block;
-  font-size: .68rem;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: .05em;
-  margin-bottom: 2px;
-}
-.hek-stat-val {
-  display: block;
-  font-size: 1.1rem;
+.hpt-asorti-lbl {
+  font-size: .66rem;
   font-weight: 700;
-  color: #1e293b;
-}
-.hek-devam-vurgu { color: #d97706; }
-.hek-tamam-vurgu { color: #16a34a; }
-
-/* Beden dağılımı */
-.hek-beden-blok {
-  border-top: 1px solid rgba(0,0,0,.07);
-  padding-top: 8px;
-}
-.hek-beden-baslik {
-  font-size: .72rem;
-  font-weight: 600;
   color: #94a3b8;
   text-transform: uppercase;
   letter-spacing: .05em;
-  margin-bottom: 4px;
+  margin: 5px 0 3px;
 }
-.hek-beden-satir {
+.hpt-bar-devam { background: #f59e0b; }
+
+/* ── Aktif İş: başlık + boş durum küçük ── */
+.heak-k2-baslik {
+  font-size: .72rem;
+  font-weight: 700;
+  color: #1d4ed8;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.heak-bos-ikon { font-size: 1.4rem; margin-bottom: 6px; }
+.heak-bos-son  {
+  font-size: .76rem;
+  color: #64748b;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e2e8f0;
+  line-height: 1.5;
+}
+.heak-bos-son strong { color: #334155; }
+
+/* --- FAZ 2C-5B: İki kolon layout + proses tablosu + sağ kart --- */
+
+/* Temel durum renk değişkenleri */
+.he-ikon-tamam    { color: #16a34a; }
+.he-ikon-devam    { color: #d97706; }
+.he-ikon-bekliyor { color: #9ca3af; }
+.he-bos-tamam     { color: #16a34a; font-weight: 500; }
+
+/* ── İki kolon grid layout ── */
+.he-emir-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 0.9fr);
+  gap: 20px;
+  align-items: start;
+  margin-top: 4px;
+}
+.he-emir-left  { min-width: 0; }
+.he-emir-right { position: sticky; top: 90px; }
+
+@media (max-width: 800px) {
+  .he-emir-layout { grid-template-columns: 1fr; }
+  .he-emir-right  { position: static; }
+}
+
+/* ── PROSES KART AKIŞI (sol kolon) ── */
+/* ── ÜRETİM AKIŞI — Accordion kart listesi ── */
+.hpk-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.hpk-grup {
+  border-radius: 0;
+  overflow: hidden;
+}
+.hpk-grup:first-child .hpk-satir { border-radius: 10px 10px 0 0; }
+.hpk-grup:last-child  .hpk-satir { border-radius: 0 0 10px 10px; border-bottom: 1px solid #e2e8f0; }
+.hpk-grup:only-child  .hpk-satir { border-radius: 10px; }
+
+/* Başlık satırı */
+.hpk-satir {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: .8rem;
-  padding: 2px 0;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-bottom: none;
+  transition: background .12s;
+  user-select: none;
+}
+.hpk-satir:hover { background: #f8fafc; }
+
+/* Durum renkleri — sol kenara ince çizgi */
+.hpk-tamam    { border-left: 4px solid #22c55e !important; background: #f6fef9 !important; }
+.hpk-devam    { border-left: 4px solid #f59e0b !important; background: #fffcf0 !important; }
+.hpk-bekliyor { border-left: 4px solid #cbd5e1 !important; opacity: .85; }
+
+.hpk-satir-sol {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+.hpk-satir-sag {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  text-align: right;
+}
+.hpk-sira {
+  font-size: .72rem;
+  font-weight: 800;
+  color: #94a3b8;
+  width: 20px;
+  flex-shrink: 0;
+  text-align: center;
+}
+/* Sol içerik: ad + rozet dikey */
+.hpk-sol-icerik {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.hpk-ikon { display: none; } /* ikon rozet içinde gösteriliyor */
+.hpk-adi {
+  font-size: .92rem;
+  font-weight: 700;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+.hpk-durum-rozet {
+  align-self: flex-start;
+}
+/* Sağ içerik: miktar + yüzde dikey */
+.hpk-sag-icerik {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+.hpk-miktar-sayi {
+  font-size: .82rem;
+  font-weight: 600;
+  color: #1e293b;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.hpk-miktar-pct {
+  font-size: .72rem;
+  font-weight: 700;
+  color: #64748b;
+}
+.hpk-acc-ok {
+  font-size: .72rem;
+  color: #94a3b8;
+  transition: transform .15s;
+  flex-shrink: 0;
+}
+
+/* İlerleme çubuğu */
+.hpk-bar {
+  height: 4px;
+  background: #e2e8f0;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.hpk-bar-fill {
+  height: 100%;
+  background: #22c55e;
+  transition: width .4s ease;
+}
+.hpk-bar-fill-devam { background: #f59e0b; }
+.hpk-bar-pct {
+  position: absolute;
+  right: 6px;
+  font-size: .66rem;
+  color: #94a3b8;
+  font-weight: 600;
+  background: transparent;
+}
+
+/* ASORTİ GÖSTER butonu */
+.hpk-asorti-btn {
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
+  border-top: 1px solid #f1f5f9;
+  border-left: 1px solid #e2e8f0;
+  border-right: 1px solid #e2e8f0;
+  padding: 5px 12px;
+  font-size: .72rem;
+  font-weight: 600;
+  color: #64748b;
+  text-align: left;
+  cursor: pointer;
+  letter-spacing: .03em;
+  transition: background .1s;
+}
+.hpk-asorti-btn:hover { background: #f8fafc; color: #334155; }
+
+/* Accordion içerik paneli */
+.hpk-icerik {
+  padding: 8px 12px 10px;
+  background: #fafafa;
+  border: 1px solid #e2e8f0;
+  border-top: none;
+}
+.hpk-asorti-lbl {
+  font-size: .67rem;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: 6px;
+  display: block;
+}
+.hpk-beden-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+  gap: 4px;
+}
+.hpk-beden-satir-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: .76rem;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 5px;
+  padding: 3px 6px;
+  font-variant-numeric: tabular-nums;
   color: #475569;
 }
-.hek-beden-satir.hek-beden-aktif { color: #b45309; }
-.hek-beden-no   { width: 36px; font-weight: 600; }
-.hek-beden-adet { flex: 1; font-variant-numeric: tabular-nums; }
-.hek-beden-ok   { color: #16a34a; font-size: .85rem; }
-.hek-beden-kalan { color: #d97706; font-weight: 600; font-size: .78rem; }
+.hpk-beden-satir-item.hpk-beden-parcali {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+}
+.hpk-beden-satir-item.hpk-beden-bekliyor {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #94a3b8;
+}
+.hpk-beden-no   { font-weight: 700; min-width: 24px; }
+.hpk-beden-sayi { flex: 1; }
+.hpk-beden-ikon { font-size: .72rem; flex-shrink: 0; }
 
-/* ── Aktif İş Paneli ── */
-.heak-panel {
-  border: 1.5px solid #93c5fd;
-  border-radius: 8px;
-  background: #eff6ff;
-  padding: 14px 16px;
-  margin-bottom: 10px;
-}
-.heak-baslik {
-  font-size: .8rem;
+/* Eski sınıflar — artık kullanılmıyor */
+.hpk-kart, .hpk-ust, .hpk-proses-kimlik,
+.hpk-no, .hpk-miktar, .hpk-m-tamam, .hpk-m-devam,
+.hpk-ozet, .hpk-ozet-tamam, .hpk-ozet-devam, .hpk-ozet-val,
+.hpk-val-kalan, .hpk-ozet-lbl, .hpk-asorti,
+.hpt-row-tamam, .hpt-row-devam, .hpt-row-bekliyor { /* preserved for compat */ }
+
+/* Rozet — paylaşılan */
+.hpt-rozet {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: .72rem;
   font-weight: 700;
-  color: #1d4ed8;
-  letter-spacing: .06em;
-  margin-bottom: 10px;
-}
-.heak-tablo {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: .86rem;
-}
-.heak-tablo tr + tr td { border-top: 1px solid rgba(147,197,253,.4); }
-.heak-lbl {
-  padding: 5px 10px 5px 0;
-  color: #64748b;
-  font-size: .8rem;
-  font-weight: 600;
+  letter-spacing: .04em;
+  padding: 2px 8px;
+  border-radius: 20px;
   white-space: nowrap;
-  width: 90px;
+  flex-shrink: 0;
 }
-.heak-val {
-  padding: 5px 0;
+.hpt-rozet-tamam    { background: #dcfce7; color: #166534; }
+.hpt-rozet-devam    { background: #fef9c3; color: #854d0e; }
+.hpt-rozet-bekliyor { background: #f1f5f9; color: #64748b; }
+
+/* Eski tablo sınıfları — gizli (uyumluluk) */
+.hpt-tablo, .hpt-head, .hpt-asorti-lbl { display: none; }
+
+/* ── ŞU ANKİ İŞ KARTI (sağ kolon) — yeni ── */
+.hsai-bos {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 28px 16px;
+  text-align: center;
+}
+.hsai-bos-ikon { font-size: 1.8rem; margin-bottom: 6px; }
+.hsai-bos-txt  { font-size: .86rem; color: #64748b; }
+.hsai-bos-son  { font-size: .78rem; color: #94a3b8; margin-top: 8px; line-height: 1.5; }
+
+.hsai-kart {
+  border: 2px solid #3b82f6;
+  border-radius: 12px;
+  background: #fff;
+  padding: 0;
+  overflow: hidden;
+}
+.hsai-baslik {
+  background: #1e40af;
+  color: #fff;
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+  padding: 6px 14px;
+}
+.hsai-proses-adi {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #1e293b;
+  padding: 12px 14px 4px;
+  letter-spacing: .02em;
+}
+.hsai-kalan-blok {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 14px 10px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.hsai-kalan-lbl  { font-size: .72rem; color: #94a3b8; font-weight: 600; text-transform: uppercase; }
+.hsai-kalan-sayi { font-size: 2.6rem; font-weight: 900; color: #1d4ed8; line-height: 1; }
+.hsai-kalan-birim{ font-size: .78rem; font-weight: 700; color: #64748b; align-self: flex-end; padding-bottom: 4px; }
+
+.hsai-stat-grid {
+  display: flex;
+  gap: 0;
+  padding: 8px 14px 12px;
+}
+.hsai-stat {
+  flex: 1;
+  text-align: center;
+  padding: 6px 0;
+}
+.hsai-stat + .hsai-stat {
+  border-left: 1px solid #e2e8f0;
+}
+.hsai-stat-lbl { display: block; font-size: .68rem; color: #94a3b8; font-weight: 600; text-transform: uppercase; margin-bottom: 3px; }
+.hsai-stat-val { display: block; font-size: 1.3rem; font-weight: 800; color: #1e293b; }
+
+.hsai-ilerlet-btn {
+  display: block;
+  width: calc(100% - 28px);
+  margin: 0 14px 14px;
+  padding: 12px;
+  background: #f97316;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: .92rem;
+  font-weight: 800;
+  letter-spacing: .05em;
+  cursor: pointer;
+  transition: background .15s, transform .1s;
+  text-align: center;
+}
+.hsai-ilerlet-btn:hover  { background: #ea580c; }
+.hsai-ilerlet-btn:active { transform: scale(.98); }
+
+/* ── AKTİF İŞ KARTI (sağ kolon) ── */
+.heak-bos-kart {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 24px 16px;
+  text-align: center;
+  color: #64748b;
+}
+.heak-bos-txt {
+  font-size: .86rem;
+  color: #64748b;
+  margin-top: 8px;
+  line-height: 1.5;
+}
+.heak-kart2 {
+  border: 1.5px solid #93c5fd;
+  border-radius: 10px;
+  background: #eff6ff;
+  padding: 16px 16px 14px;
+  margin-bottom: 12px;
+}
+.heak-k2-proses {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.heak-k2-no {
+  font-size: .78rem;
+  font-weight: 700;
+  color: #64748b;
+}
+.heak-k2-adi {
+  font-size: 1rem;
+  font-weight: 700;
   color: #1e293b;
 }
-.heak-kalan-vurgu {
+.heak-k2-badge {
+  display: inline-block;
+  font-size: .68rem;
   font-weight: 700;
-  font-size: 1rem;
-  color: #1d4ed8;
+  letter-spacing: .05em;
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: #fef9c3;
+  color: #854d0e;
+  margin-bottom: 8px;
 }
+.heak-k2-urun {
+  font-size: .8rem;
+  color: #475569;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+.heak-k2-istatlar {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.heak-k2-stat {
+  background: rgba(255,255,255,.7);
+  border: 1px solid rgba(147,197,253,.5);
+  border-radius: 7px;
+  padding: 6px 4px;
+  text-align: center;
+}
+.heak-k2-kalan {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+.heak-k2-lbl {
+  display: block;
+  font-size: .66rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-bottom: 2px;
+}
+.heak-k2-val {
+  display: block;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+.heak-k2-kalan .heak-k2-val { color: #1d4ed8; font-size: 1.5rem; }
+.heak-k2-birim {
+  display: block;
+  font-size: .68rem;
+  color: #94a3b8;
+  font-weight: 500;
+  margin-top: 1px;
+}
+.heak-k2-proses {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.heak-k2-val { font-size: 1.3rem; }
 /* ── FAZ 2C-5A: İlerlet butonu + Onay Modali ── */
 
 /* Aktif iş paneli — İlerlet butonu */
@@ -1690,4 +2061,35 @@
 .eil-btn-ilerlet:hover    { background: #1e40af; box-shadow: 0 2px 8px rgba(29,78,216,.3); }
 .eil-btn-ilerlet:disabled { background: #94a3b8; cursor: not-allowed; box-shadow: none; }
 
+/* ── FAZ 2C-5B: Başarı banner ── */
+.heak-basari-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: #f0fdf4;
+  border: 1.5px solid #86efac;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  animation: heak-fade-in .3s ease;
+}
+@keyframes heak-fade-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.heak-basari-ikon {
+  font-size: 1.3rem;
+  color: #16a34a;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.heak-basari-icerik {
+  font-size: .88rem;
+  color: #14532d;
+}
+.heak-basari-detay {
+  font-size: .78rem;
+  color: #15803d;
+  margin-top: 3px;
+}
 /* ============ /FAZ 2C-4 ============ */

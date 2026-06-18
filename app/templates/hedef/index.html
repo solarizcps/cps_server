@@ -131,24 +131,28 @@
 
   <div id="hEmirSonuc" style="display:none;">
 
-    <div class="he-kart">
-      <div class="he-kart-baslik">
-        <span class="he-emir-no" id="heEmiNo">—</span>
-        <span class="he-durum-badge" id="heDurum">—</span>
+    <div class="heu-kart-v2">
+      <div class="heu-v2-sol">
+        <span class="heu-v2-no" id="heEmiNo">—</span>
+        <span class="heu-v2-model" id="heModelAdi">—</span>
       </div>
-      <div class="he-model-adi" id="heModelAdi">—</div>
-      <div class="he-kart-meta">
-        <span><span class="he-lbl">Tip:</span> <span id="heTip">—</span></span>
-        <span><span class="he-lbl">Yer:</span> <span id="heYer">—</span></span>
-        <span><span class="he-lbl">Tarih:</span> <span id="heTarih">—</span></span>
+      <div class="heu-v2-chiplar">
+        <div class="heu-v2-chip"><span>📦</span><span id="heSipMiktar">—</span></div>
+        <div class="heu-v2-chip"><span>🏷</span><span id="heTip">—</span></div>
+        <div class="heu-v2-chip"><span>📍</span><span id="heYer">—</span></div>
+        <div class="heu-v2-chip"><span>📅</span><span id="heTarih">—</span></div>
       </div>
     </div>
 
-    <div class="he-bolum-baslik">Proses Akışı</div>
-    <div id="heAcikProses" class="he-proses-liste"></div>
-
-    <div class="he-bolum-baslik">Aktif İş</div>
-    <div id="heTamamProses" class="he-proses-liste"></div>
+    <div class="he-emir-layout">
+      <div class="he-emir-left">
+        <div class="he-bolum-baslik">ÜRETİM AKIŞI <span class="he-bolum-alt">üretim adımları ve durumları</span></div>
+        <div id="heAcikProses" class="he-proses-liste"></div>
+      </div>
+      <div class="he-emir-right">
+        <div id="heTamamProses"></div>
+      </div>
+    </div>
 
     <div id="heCpsBekleyen" class="he-uyari" style="display:none;">
       ⚠️ CPS'te bu emire ait bekleyen kayıt var.
