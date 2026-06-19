@@ -794,6 +794,14 @@
           </div>
         </div>
 
+        <!-- FAZ-7A: PDKS Bağlantı Durumu (readonly) -->
+        <div class="oz-card" style="margin-bottom:14px;border-left:4px solid #16a34a;">
+          <div class="oz-hdr">
+            <span class="oz-hdr-t" style="color:#166534;">🟢 PDKS Bağlantısı</span>
+          </div>
+          <div id="d-pdks-durum" class="oz-body"></div>
+        </div>
+
         <!-- P4B/P4C: Çalışma Bilgileri (personel_kullanici genişletilmiş) -->
         <div class="oz-card" style="margin-bottom:14px;">
           <div class="oz-hdr">
@@ -2158,7 +2166,8 @@
 
     // FAZ2G-3: İK ve Maaş sekme render (caps'e bağlı)
     // P4B: pk_bilgi ekle (personel_kullanici genişletilmiş alanları)
-    if (caps.ik)   { renderIk(data.ik_ozet, data.pk_bilgi || null, caps); }
+    // FAZ-7A: data.profil eklendi (PDKS durum satırı için)
+    if (caps.ik)   { renderIk(data.ik_ozet, data.pk_bilgi || null, caps, data.profil || null); }
     if (caps.maas) renderMaas(data.maas_ozet, data.pk_bilgi || null, caps);
 
     // Organizasyon formu doldur
@@ -2217,6 +2226,42 @@
   }
 
   // ── P4B: Çalışma Bilgileri kartı render ─────────────────────
+  // FAZ-7A: PDKS bağlantı durumu (readonly)
+  function renderPdksDurum(profil) {
+    var el = document.getElementById('d-pdks-durum');
+    if (!el) return;
+    if (!profil || !profil.pdks_personel_id) {
+      el.innerHTML = '<div style="padding:10px 16px;font-size:12px;color:var(--text3);">'
+        + '⚪ PDKS eşleşmesi yok — <a href="/yonetim/pdks-aktarim-merkezi" '
+        + 'style="color:#2563eb;text-decoration:none;font-size:12px;">Aktarım Merkezi</a>'
+        + '</div>';
+      return;
+    }
+    var durumRenk = {
+      'ESLESMIS':       { bg:'#dcfce7', renk:'#166534', ikon:'✅' },
+      'AUTO_AD_SOYAD':  { bg:'#dcfce7', renk:'#166534', ikon:'🟢' },
+      'AD_SOYAD_ADAY':  { bg:'#fef9c3', renk:'#92400e', ikon:'🟡' },
+      'MANUEL':         { bg:'#dbeafe', renk:'#1e40af', ikon:'🔵' },
+    };
+    var d = durumRenk[profil.pdks_eslesme_durumu] || { bg:'var(--bg2)', renk:'var(--text2)', ikon:'⚪' };
+    el.innerHTML = '<div style="display:flex;gap:16px;flex-wrap:wrap;padding:10px 16px;align-items:center;">'
+      + '<div style="display:flex;flex-direction:column;gap:2px;">'
+      + '  <span style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;">PDKS Durum</span>'
+      + '  <span style="font-size:13px;font-weight:700;background:' + d.bg + ';color:' + d.renk + ';padding:2px 10px;border-radius:8px;">'
+      + d.ikon + ' ' + (profil.pdks_eslesme_durumu || '—')
+      + '  </span>'
+      + '</div>'
+      + '<div style="display:flex;flex-direction:column;gap:2px;">'
+      + '  <span style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;">PDKS ID</span>'
+      + '  <span style="font-size:13px;color:var(--text1);font-family:var(--mono);">' + profil.pdks_personel_id + '</span>'
+      + '</div>'
+      + (profil.pdks_sicilno ? '<div style="display:flex;flex-direction:column;gap:2px;">'
+      + '  <span style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;">Sicil No</span>'
+      + '  <span style="font-size:13px;color:var(--text1);font-family:var(--mono);">' + profil.pdks_sicilno + '</span>'
+      + '</div>' : '')
+      + '</div>';
+  }
+
   function renderCalisma(pk, caps) {
     const el = document.getElementById('d-ik-calisma');
     if (!el) return;
@@ -2786,7 +2831,9 @@
   }
 
   // ── FAZ2G-3: İK sekmesi render ──────────────────────────────
-  function renderIk(ik, pk, caps) {
+  function renderIk(ik, pk, caps, profil) {
+    // FAZ-7A: PDKS durum satırı (readonly)
+    renderPdksDurum(profil);
     // P4B: Çalışma bilgileri kartı
     renderCalisma(pk, caps);
 

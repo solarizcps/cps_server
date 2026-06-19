@@ -2662,6 +2662,7 @@ def personel_360_profil(profil_id):
         kp = con.execute("""
             SELECT kp.id, kp.gercek_ad, kp.kullanici_adi, kp.profil_tipi, kp.aktif,
                    kp.kaynak, kp.kaynak_id, kp.profil_resim,
+                   kp.pdks_personel_id, kp.pdks_sicilno, kp.pdks_eslesme_durumu,
                    dm.id AS dept_id, dm.ad AS dept_ad, dm.kod AS dept_kod
             FROM kullanici_profil kp
             LEFT JOIN departman_master dm ON dm.id = kp.departman_id
@@ -3092,37 +3093,75 @@ def personel_360_profil(profil_id):
             except Exception:
                 maas_ozet = {"aktif_maas": None, "gecmis": [], "gecmis_kayit_sayisi": 0}
 
-        # FAZ2G-2: İK özeti — sadece has_ik=True ve pk_id varsa sorgu çalışır
-        if has_ik and pk_id:
+        # FAZ2G-2: İK özeti — pk_id varsa pk_id, yoksa kullanici_profil_id ile sorgula
+        # FAZ-7A: kullanici_profil_id fallback — PDKS aktarılan kayıtlar için
+        if has_ik and (pk_id or profil_id):
             try:
                 # Devam özeti (bu yıl)
-                _dev = con.execute("""
-                    SELECT
-                        COUNT(*) AS toplam_kayit,
-                        COALESCE(SUM(CASE WHEN durum='geldi'    THEN 1 ELSE 0 END), 0) AS geldi_gun,
-                        COALESCE(SUM(CASE WHEN durum='gelmedi'  THEN 1 ELSE 0 END), 0) AS gelmedi_gun,
-                        COALESCE(SUM(CASE WHEN durum='izinli'   THEN 1 ELSE 0 END), 0) AS izinli_gun,
-                        MAX(tarih) AS son_kayit_tarihi
-                    FROM personel_devam
-                    WHERE personel_pk_id = ?
-                      AND tarih >= date('now','start of year')
-                """, (pk_id,)).fetchone()
+                # Önce pk_id ile dene; sonuç boşsa (veya pk_id yoksa) profil_id ile fallback
+                if pk_id:
+                    _dev = con.execute("""
+                        SELECT
+                            COUNT(*) AS toplam_kayit,
+                            COALESCE(SUM(CASE WHEN durum='geldi'    THEN 1 ELSE 0 END), 0) AS geldi_gun,
+                            COALESCE(SUM(CASE WHEN durum='gelmedi'  THEN 1 ELSE 0 END), 0) AS gelmedi_gun,
+                            COALESCE(SUM(CASE WHEN durum='izinli'   THEN 1 ELSE 0 END), 0) AS izinli_gun,
+                            MAX(tarih) AS son_kayit_tarihi
+                        FROM personel_devam
+                        WHERE personel_pk_id = ?
+                          AND tarih >= date('now','start of year')
+                    """, (pk_id,)).fetchone()
+                else:
+                    _dev = None
+
+                # pk_id sonuç vermediyse (veya yoksa) kullanici_profil_id ile dene
+                if not _dev or _dev["toplam_kayit"] == 0:
+                    _dev_kp = con.execute("""
+                        SELECT
+                            COUNT(*) AS toplam_kayit,
+                            COALESCE(SUM(CASE WHEN durum='geldi'    THEN 1 ELSE 0 END), 0) AS geldi_gun,
+                            COALESCE(SUM(CASE WHEN durum='gelmedi'  THEN 1 ELSE 0 END), 0) AS gelmedi_gun,
+                            COALESCE(SUM(CASE WHEN durum='izinli'   THEN 1 ELSE 0 END), 0) AS izinli_gun,
+                            MAX(tarih) AS son_kayit_tarihi
+                        FROM personel_devam
+                        WHERE kullanici_profil_id = ?
+                          AND tarih >= date('now','start of year')
+                    """, (profil_id,)).fetchone()
+                    if _dev_kp and _dev_kp["toplam_kayit"] > 0:
+                        _dev = _dev_kp
 
                 _dev_toplam = _dev["toplam_kayit"] if _dev else 0
                 _dev_geldi  = _dev["geldi_gun"]    if _dev else 0
                 _devam_yuzde = round((_dev_geldi / _dev_toplam * 100), 1) if _dev_toplam > 0 else None
 
-                # İzin özeti (bu yıl)
-                _izin = con.execute("""
-                    SELECT
-                        COALESCE(SUM(hak_gun), 0)       AS toplam_hak,
-                        COALESCE(SUM(kullanilan_gun), 0) AS kullanilan,
-                        COALESCE(SUM(hak_gun - kullanilan_gun), 0) AS kalan,
-                        COUNT(*) AS kayit_sayisi
-                    FROM personel_izin
-                    WHERE personel_pk_id = ?
-                      AND yil = CAST(strftime('%Y','now') AS INTEGER)
-                """, (pk_id,)).fetchone()
+                # İzin özeti (bu yıl) — aynı fallback mantığı
+                if pk_id:
+                    _izin = con.execute("""
+                        SELECT
+                            COALESCE(SUM(hak_gun), 0)       AS toplam_hak,
+                            COALESCE(SUM(kullanilan_gun), 0) AS kullanilan,
+                            COALESCE(SUM(hak_gun - kullanilan_gun), 0) AS kalan,
+                            COUNT(*) AS kayit_sayisi
+                        FROM personel_izin
+                        WHERE personel_pk_id = ?
+                          AND yil = CAST(strftime('%Y','now') AS INTEGER)
+                    """, (pk_id,)).fetchone()
+                else:
+                    _izin = None
+
+                if not _izin or _izin["kayit_sayisi"] == 0:
+                    _izin_kp = con.execute("""
+                        SELECT
+                            COALESCE(SUM(hak_gun), 0)       AS toplam_hak,
+                            COALESCE(SUM(kullanilan_gun), 0) AS kullanilan,
+                            COALESCE(SUM(hak_gun - kullanilan_gun), 0) AS kalan,
+                            COUNT(*) AS kayit_sayisi
+                        FROM personel_izin
+                        WHERE kullanici_profil_id = ?
+                          AND yil = CAST(strftime('%Y','now') AS INTEGER)
+                    """, (profil_id,)).fetchone()
+                    if _izin_kp and _izin_kp["kayit_sayisi"] > 0:
+                        _izin = _izin_kp
 
                 # IK not özeti (tüm zamanlar)
                 _not_ozet = con.execute("""
@@ -3364,16 +3403,20 @@ def personel_360_profil(profil_id):
     return jsonify({
         "ok": True,
         "profil": {
-            "id":               kp["id"],
-            "ad_soyad":         kp["gercek_ad"],
-            "kullanici_adi":    kp["kullanici_adi"],
-            "profil_tipi":      kp["profil_tipi"],
-            "aktif":            kp["aktif"],
-            "dept_id":          kp["dept_id"],
-            "departman":        kp["dept_ad"],
-            "departman_kod":    kp["dept_kod"],
-            "profil_resim":     _pr_dosya,
-            "profil_resim_url": _pr_url,
+            "id":                   kp["id"],
+            "ad_soyad":             kp["gercek_ad"],
+            "kullanici_adi":        kp["kullanici_adi"],
+            "profil_tipi":          kp["profil_tipi"],
+            "aktif":                kp["aktif"],
+            "dept_id":              kp["dept_id"],
+            "departman":            kp["dept_ad"],
+            "departman_kod":        kp["dept_kod"],
+            "profil_resim":         _pr_dosya,
+            "profil_resim_url":     _pr_url,
+            # FAZ-7A: PDKS eşleşme bilgisi
+            "pdks_personel_id":     kp["pdks_personel_id"],
+            "pdks_sicilno":         kp["pdks_sicilno"],
+            "pdks_eslesme_durumu":  kp["pdks_eslesme_durumu"],
         },
         "ekipler": [
             {
