@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """CPS DEV - Yönetim Routes"""
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    session, abort, send_file, flash, jsonify)
@@ -6287,7 +6287,7 @@ def personel_360_pdks_devam(profil_id):
     else:
         tarih = _dt.date.today().strftime('%Y-%m-%d')
 
-    db = get_db()
+    db = _get_conn()
 
     profil = db.execute(
         "SELECT id, kullanici_adi, pdks_personel_id, pdks_eslesme_durumu "
@@ -6404,7 +6404,7 @@ def pdks_yeni_personel_havuzu():
 
     # ── CPS: zaten eşleşmiş pdks_personel_id'ler ─────────────────────────────
     try:
-        db = get_db()
+        db = _get_conn()
         kp_rows = db.execute(
             """SELECT id, gercek_ad, kullanici_adi, pdks_personel_id
                FROM   kullanici_profil
@@ -6628,7 +6628,7 @@ def pdks_cps_alma_onizleme():
 
     # ── CPS: mevcut profil durumunu kontrol et ────────────────────────────────
     try:
-        db = get_db()
+        db = _get_conn()
         kp_rows = db.execute(
             """SELECT id, gercek_ad, kullanici_adi, pdks_personel_id
                FROM   kullanici_profil WHERE aktif = 1"""
@@ -6821,7 +6821,7 @@ def pdks_cps_personel_olustur():
 
     # ── CPS: çakışma kontrolleri ──────────────────────────────────────────────
     try:
-        db = get_db()
+        db = _get_conn()
         kp_rows = db.execute(
             """SELECT id, gercek_ad, kullanici_adi, pdks_personel_id
                FROM   kullanici_profil WHERE aktif = 1"""
@@ -6883,7 +6883,7 @@ def pdks_cps_personel_olustur():
     kadi    = _kullanici_adi_olustur(tam_ad, mevcut_kadilar)
     simdi   = _dt.now().strftime('%Y-%m-%d %H:%M:%S')
 
-    raw_db = get_db()
+    raw_db = _get_conn()
     try:
         raw_db.execute('BEGIN')
         cur_ins = raw_db.execute(
@@ -6941,7 +6941,7 @@ def pdks_profil_eksik_analiz(profil_id):
 
     DB yazma yok — sadece SELECT.
     """
-    db = get_db()
+    db = _get_conn()
 
     # ── 1) kullanici_profil ───────────────────────────────────────────────────
     kp = db.execute(
@@ -7143,7 +7143,7 @@ def personel_360_organizasyon_analiz(profil_id):
 
     DB yazma yok — sadece SELECT.
     """
-    db = get_db()
+    db = _get_conn()
 
     # ── 1) kullanici_profil ───────────────────────────────────────────────────
     kp = db.execute("SELECT * FROM kullanici_profil WHERE id = ?", (profil_id,)).fetchone()
@@ -7331,7 +7331,7 @@ def personel_360_pdks_devam_gecmisi(profil_id):
 
     PDKS ve CPS DB'ye yazma yapılmaz.
     """
-    db = get_db()
+    db = _get_conn()
     kp = db.execute("SELECT id, gercek_ad, pdks_personel_id FROM kullanici_profil WHERE id=?",
                     (profil_id,)).fetchone()
     if not kp:
