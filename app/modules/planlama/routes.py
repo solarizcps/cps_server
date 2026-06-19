@@ -2250,47 +2250,71 @@ def _km_ozet(satirlar):
 
 
 
-def _km_gercek_satirlar(limit=120):
-    """FAZ-P0: Korgun'dan açık sipariş emirlerini çekip Karar Masası formatına dönüştür.
+def _km_gercek_satirlar(limit=100):
+    """FAZ-P0-FIX: Korgun'dan açık sipariş emirlerini çekip Karar Masası formatına dönüştür.
 
-    Hata durumunda boş liste döner (çağıran mock'a fallback yapar).
+    SQL hedef/routes.py _korgun_plan_satirlar_olustur() referans alınarak düzeltildi.
+    Doğru kolonlar: sk.SipNo, ck.CName, sh.SKOD, m.Tanim, e.TerTarih, sh.Miktar.
+    Hata durumunda boş liste döner + hata loglanır (çağıran MOCK'a fallback yapar).
     """
+    import traceback as _tb
     from datetime import date as _date
+
+    # Bağlantı
     try:
         from modules.common import korgun as _kk
         con = _kk._baglan()
-    except Exception:
+    except Exception as _e:
+        import logging
+        logging.getLogger(__name__).warning("KM_GERCEK: Korgun baglanti hatasi: %s", _e)
         return []
 
+    rows = []
     try:
-        _bugun_str = _date.today().strftime("%Y-%m-%d")
-
-        # Korgun: açık HAR emirleri — Siparis_Har + Siparis_Kay + emir join
+        # FAZ-P0-FIX: Referans → hedef/routes.py satır 568-591
+        # Doğru tablo: Siparis_Kay.SipNo (SiparisNo DEĞİL)
+        # Doğru müşteri: Cari_Kart.CName (CariAd DEĞİL)
+        # Doğru model: Model_M.Tanim (StokTanim DEĞİL)
+        # Doğru renk: P_RNK_Tip.Tanim (sh.Renk DEĞİL)
+        # Termin: e.TerTarih (TeslimTarihi DEĞİL)
+        # Kalan: SUM açık sh.Miktar (KalanMiktar kolonu YOK)
         sql = """
-            SELECT TOP (?)
-                sh.SiparisNo        AS siparis_no,
-                sk.CariAd           AS musteri,
-                sh.StokKod          AS stok_kod,
-                sh.StokTanim        AS stok_tanim,
-                sh.Renk             AS renk,
-                sh.Miktar           AS toplam_adet,
-                sh.KalanMiktar      AS kalan_miktar,
-                sh.TeslimTarihi     AS termin,
-                sh.Durum            AS har_durum,
-                e.EmirNo            AS emir_no,
-                e.UretimMiktar      AS emir_miktar,
-                e.BitmisAdet        AS bitmis_adet
-            FROM Siparis_Har sh
-            JOIN Siparis_Kay sk ON sk.SiparisNo = sh.SiparisNo
-            LEFT JOIN Urt_Emir e ON e.SiparisHarNo = sh.HarNo
-            WHERE sh.Durum = ''
-              AND sh.KalanMiktar > 0
-            ORDER BY sh.TeslimTarihi ASC
-        """
+            SELECT TOP ({limit})
+                CAST(sk.SipNo AS VARCHAR(20))                          AS sip_no,
+                CONVERT(VARCHAR(10), sk.SipTar, 120)                   AS siparis_tarihi,
+                LTRIM(RTRIM(ISNULL(ck.CName, '')))                     AS musteri,
+                e.EmirNo                                               AS EmirNo,
+                e.ModelKod                                             AS stok_kod,
+                ISNULL(m.Tanim, e.ModelKod)                            AS stok_tanim,
+                MAX(rn.Tanim)                                          AS renk,
+                CONVERT(VARCHAR(10), e.TerTarih, 120)                  AS termin,
+                COALESCE(SUM(ISNULL(sh.Miktar, 0)), 0)                 AS toplam_miktar,
+                COALESCE(SUM(
+                    CASE WHEN LTRIM(RTRIM(ISNULL(sh.Durum, ''))) = ''
+                         THEN ISNULL(sh.Miktar, 0) ELSE 0 END
+                ), 0)                                                  AS acik_miktar
+            FROM Siparis_Kay sk
+            INNER JOIN Siparis_Har sh   ON sh.SipNo     = sk.SipNo
+            INNER JOIN Urt_Em_gch  g    ON g.FisNo      = sh.SipNo
+            INNER JOIN Urt_Emir    e    ON e.EmirNo      = g.EmirNo
+            LEFT  JOIN Cari_Kart   ck   ON ck.CKod       = sk.CariKod
+            LEFT  JOIN Model_M     m    ON m.ModelKod     = e.ModelKod
+            LEFT  JOIN dbo.P_RNK_Tip rn ON rn.RENK_KOD  = g.RKOD
+            WHERE LTRIM(RTRIM(ISNULL(sh.Durum, ''))) = ''
+            GROUP BY sk.SipNo, sk.SipTar, ck.CName,
+                     e.EmirNo, e.ModelKod, m.Tanim, e.TerTarih
+            ORDER BY e.TerTarih ASC, sk.SipNo DESC
+        """.format(limit=int(limit))
+
         with con.cursor() as cur:
-            cur.execute(sql, (limit,))
-            rows = cur.fetchall()
-    except Exception:
+            cur.execute(sql)
+            cols = [d[0] for d in cur.description]
+            rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+
+    except Exception as _e:
+        import logging
+        logging.getLogger(__name__).error(
+            "KM_GERCEK: SQL hatasi: %s\n%s", _e, _tb.format_exc())
         return []
     finally:
         try:
@@ -2298,23 +2322,24 @@ def _km_gercek_satirlar(limit=120):
         except Exception:
             pass
 
-    _bugun_str_km = _date.today().strftime("%Y-%m-%d")
+    _bugun_str = _date.today().strftime("%Y-%m-%d")
     satirlar = []
+
     for r in rows:
         try:
-            sip_no   = str(r.get('siparis_no') or r.get('SiparisNo') or '')
-            musteri  = str(r.get('musteri')    or r.get('CariAd')     or '—')
-            stok_kod = str(r.get('stok_kod')   or r.get('StokKod')    or '')
-            model    = str(r.get('stok_tanim') or r.get('StokTanim')  or stok_kod)
-            renk     = str(r.get('renk')       or r.get('Renk')       or '—')
-            emir_no  = str(r.get('emir_no')    or r.get('EmirNo')     or '')
-            toplam   = int(r.get('toplam_adet') or r.get('Miktar') or 0)
-            kalan    = int(r.get('kalan_miktar') or r.get('KalanMiktar') or toplam)
+            sip_no   = str(r.get('sip_no')     or '').strip()
+            musteri  = str(r.get('musteri')     or '—').strip()
+            stok_kod = str(r.get('stok_kod')    or '').strip()
+            model    = str(r.get('stok_tanim')  or stok_kod).strip()
+            renk     = str(r.get('renk')        or '—').strip()
+            emir_no  = str(r.get('EmirNo')      or '').strip()
+            toplam   = int(float(r.get('toplam_miktar') or 0))
+            kalan    = int(float(r.get('acik_miktar')   or 0))
             yapilan  = max(0, toplam - kalan)
 
             # Termin
-            termin_raw = r.get('termin') or r.get('TeslimTarihi')
-            if termin_raw:
+            termin_raw = r.get('termin')
+            if termin_raw and str(termin_raw).strip() not in ('', '-', 'None'):
                 if hasattr(termin_raw, 'strftime'):
                     termin_str = termin_raw.strftime("%Y-%m-%d")
                 else:
@@ -2322,50 +2347,49 @@ def _km_gercek_satirlar(limit=120):
             else:
                 termin_str = "2099-12-31"
 
-            # Termin durum
-            termin_durum, kalan_gun = _km_termin_durum(termin_str, _bugun_str_km)
-
-            # Üretilebilirlik — Korgun'da bloke bilgisi yok, basit mantık
+            termin_durum, kalan_gun = _km_termin_durum(termin_str, _bugun_str)
             yuzde = (yapilan / toplam * 100) if toplam > 0 else 0
-            if kalan == 0:
+
+            # Üretilebilirlik: Korgun'da bloke bilgisi yok → HAZIR veya TAMAM
+            if kalan <= 0:
                 uretilebilirlik = "TAMAM"
-            elif termin_durum == "gecti":
-                uretilebilirlik = "HAZIR"   # gecikmiş ama fiziksel engel yok
             else:
                 uretilebilirlik = "HAZIR"
 
             satir = {
-                "musteri"          : musteri,
+                "musteri"           : musteri,
                 "musteri_etiketleri": [],
-                "etiketler"        : [],
-                "sip"              : sip_no,
-                "siparis_no"       : sip_no,
-                "emir"             : emir_no,
-                "emir_no"          : emir_no,
-                "model"            : model,
-                "stok_kod"         : stok_kod,
-                "renk"             : renk,
-                "beden"            : "—",
-                "adet"             : toplam,
-                "toplam_adet"      : toplam,
-                "yapilan"          : yapilan,
-                "kalan"            : kalan,
-                "yuzde"            : round(yuzde, 1),
-                "termin"           : termin_str,
-                "termin_durumu"    : termin_durum,
-                "kalan_gun"        : kalan_gun,
-                "oncelik"          : "GECIKTI" if termin_durum == "gecti" else "NORMAL",
-                "uretilebilirlik"  : uretilebilirlik,
-                "bloke_sebebi"     : None,
-                "bant"             : None,
-                "darbogaz"         : {"var": False},
-                "not"              : "",
-                "talimat"          : "",
+                "etiketler"         : [],
+                "sip"               : sip_no,
+                "siparis_no"        : sip_no,
+                "emir"              : emir_no,
+                "emir_no"           : emir_no,
+                "model"             : model,
+                "stok_kod"          : stok_kod,
+                "renk"              : renk,
+                "beden"             : "—",
+                "adet"              : toplam,
+                "toplam_adet"       : toplam,
+                "yapilan"           : yapilan,
+                "kalan"             : kalan,
+                "yuzde"             : round(yuzde, 1),
+                "termin"            : termin_str,
+                "termin_durumu"     : termin_durum,
+                "kalan_gun"         : kalan_gun,
+                "oncelik"           : "GECIKTI" if termin_durum == "gecti" else "NORMAL",
+                "uretilebilirlik"   : uretilebilirlik,
+                "bloke_sebebi"      : None,
+                "bant"              : None,
+                "darbogaz"          : {"var": False},
+                "not"               : "",
+                "talimat"           : "",
             }
-            # satir_rengi ve skor hesapla
             satir["satir_rengi"] = _km_satir_rengi(satir)
             satirlar.append(satir)
-        except Exception:
+
+        except Exception as _row_e:
+            import logging
+            logging.getLogger(__name__).debug("KM_GERCEK: satir isleme hatasi: %s", _row_e)
             continue
 
     return satirlar
