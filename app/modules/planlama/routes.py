@@ -1025,8 +1025,10 @@ def kok():
 
 
 def karar_masasi():
-
-
+    # FAZ-P1B-FIX: Önceki sayfalardan birikmiş "Sayfa bulunamadı" flash mesajlarını
+    # bu sayfaya taşımadan tüket. KM kendi flash'ını template içinde üretmez.
+    from flask import get_flashed_messages as _gfm
+    _gfm(with_categories=True)   # tüket → discard
 
     return render_template('planlama/karar_masasi.html')
 

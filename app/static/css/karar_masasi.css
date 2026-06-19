@@ -1,11 +1,12 @@
 /* v6_BUYUT_20260506_182648 */
 /* KARAR MASASI v6 — FAZ-P1B tablet layout + proses rozetleri */
 
-/* FAZ-P1B: Yatay kayma önlemi — sayfa genişliği viewport'u aşmasın */
+/* FAZ-P1B-FIX: Sayfa tam genişlik, yatay kaymayı önle */
 .km-sayfa {
   padding: 22px 28px;
   background: #f6f7f9;
   min-height: 100vh;
+  width: 100%;
   max-width: 100%;
   box-sizing: border-box;
   overflow-x: hidden;
@@ -40,7 +41,7 @@
 .km-altbaslik { font-size: 13px; color: #6b7280; margin-bottom: 18px; margin-left: 32px; }
 
 /* === KPI === */
-.km-kpi { display: flex; gap: 12px; margin-bottom: 16px; }
+.km-kpi { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; width: 100%; box-sizing: border-box; }
 .km-kpi-hucre {
   flex: 1; min-width: 0;
   background: #fff; border: 1px solid rgba(17,24,39,0.06);
@@ -151,6 +152,7 @@
   border: 1px solid rgba(17,24,39,0.06);
   border-radius: 12px; margin-bottom: 14px;
   box-shadow: 0 2px 6px rgba(15,23,42,0.025);
+  width: 100%; box-sizing: border-box;
 }
 .km-sira-bar-sol { display: flex; align-items: center; gap: 12px; font-size: 14px; }
 .km-sira-baslik { color: #111827; font-weight: 600; }
@@ -215,17 +217,19 @@ body.km-manuel-aktif .km-filtre-cubuk {
 }
 
 /* === TABLO === */
-/* FAZ-P1B: overflow sadece tablo çerçevesinde, tüm sayfa değil */
+/* FAZ-P1B-FIX: Tablo çerçevesi tam genişlik, kendi içinde scroll */
 .km-tablo-cerceve {
   background: #fff; border: 1px solid rgba(17,24,39,0.06);
   border-radius: 14px; overflow-x: auto;
   box-shadow: 0 4px 16px rgba(15,23,42,0.04);
-  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
 }
 .km-tablo {
-  width: 100%; min-width: 800px;
+  width: 100%; min-width: 760px;
   border-collapse: separate; border-spacing: 0;
   font-size: 14px; color: #111827; font-family: inherit;
+  table-layout: auto;
 }
 .km-tablo thead tr { height: 48px; }
 .km-tablo th {
