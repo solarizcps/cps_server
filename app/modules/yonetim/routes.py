@@ -7362,3 +7362,1641 @@ def personel_360_pdks_devam_gecmisi(profil_id):
         'izinler'        : veri['izinler'],
         'mesailer'       : veri['mesailer'],
     })
+
+
+# ── FAZ-6A: PDKS Historical Sync Dry-Run ─────────────────────────────────────
+
+@yonetim_bp.route('/api/pdks/faz6a-dryrun', methods=['GET'])
+@yetki_gerekli('yonetim', 'can_read')
+def pdks_faz6a_dryrun():
+    """GET /yonetim/api/pdks/faz6a-dryrun
+
+    FAZ-6A PDKS Historical Sync Dry-Run.
+    2025-01-01 --> 2025-12-31 arasi pts_giriscikis ve pts_izin verilerini analiz eder.
+    DB'ye HICBIR YAZMA YAPILMAZ.
+
+    Rapor:
+      A) eslesmis_profil_sayisi
+      B) pdks_giris_cikis_2025
+      C) pdks_izin_2025
+      D) cps_devam_mevcut / cps_izin_mevcut
+      E) yazilabilir_devam / yazilabilir_izin
+      F) riskler
+      G) mapping_onerisi
+    """
+    import datetime as _dt
+
+    TARIH_BAS = _dt.date(2025, 1, 1)
+    TARIH_BIT = _dt.date(2025, 12, 31)
+    GEC_ESIGI_SN = 7 * 3600
+
+    IZIN_TIP_MAP = {
+        0: 'yillik', 1: 'yillik', 2: 'ucretsiz',
+        3: 'dogum',  4: 'olum',   5: 'hastalik',
+        6: 'resmi_tatil',
+    }
+
+    def _td_sn(td):
+        if td is None:
+            return None
+        if isinstance(td, _dt.timedelta):
+            return int(td.total_seconds())
+        return int(td)
+
+    def _td_hhmm(td):
+        sn = _td_sn(td)
+        if sn is None:
+            return None
+        return f"{sn // 3600:02d}:{(sn % 3600) // 60:02d}"
+
+    def _durum(giris, cikis, izintipi):
+        if izintipi is not None and str(izintipi).strip() not in ('0', '', 'None'):
+            return 'izinli'
+        sn = _td_sn(giris)
+        if sn is None:
+            return 'gelmedi'
+        return 'gec_giris' if sn > GEC_ESIGI_SN else 'geldi'
+
+    def _dakika(giris, cikis):
+        g = _td_sn(giris)
+        c = _td_sn(cikis)
+        if g is None or c is None:
+            return None
+        dk = (c - g) // 60
+        return dk if dk >= 0 else None
+
+    def _izin_tip(pdks_tip):
+        try:
+            k = int(pdks_tip) if pdks_tip is not None else None
+        except (ValueError, TypeError):
+            k = None
+        return IZIN_TIP_MAP.get(k, 'yillik')
+
+    # ── A) Eslesik personel ───────────────────────────────────────────────────
+    db = _get_conn()
+    eslesik_rows = db.execute("""
+        SELECT kp.id AS profil_id, kp.gercek_ad, kp.pdks_personel_id,
+               pk.id AS pk_id
+        FROM   kullanici_profil kp
+        LEFT JOIN personel_kullanici pk
+               ON kp.kaynak = 'personel_kullanici' AND kp.kaynak_id = pk.id
+        WHERE  kp.pdks_personel_id IS NOT NULL AND kp.aktif = 1
+        ORDER  BY kp.id
+    """).fetchall()
+
+    eslesik_map = {}
+    pk_eksik    = []
+
+    for r in eslesik_rows:
+        pdks_id = int(r['pdks_personel_id'])
+        pk_id   = r['pk_id']
+        if pk_id is None:
+            alt = db.execute(
+                "SELECT id FROM personel_kullanici WHERE PdksPersonelId=? LIMIT 1",
+                (pdks_id,)
+            ).fetchone()
+            pk_id = alt['id'] if alt else None
+        if pk_id is None:
+            pk_eksik.append({'profil_id': r['profil_id'], 'ad': r['gercek_ad'], 'pdks_id': pdks_id})
+        eslesik_map[pdks_id] = {
+            'profil_id': r['profil_id'],
+            'pk_id'    : pk_id,
+            'ad'       : r['gercek_ad'],
+        }
+
+    pdks_id_listesi = list(eslesik_map.keys())
+    if not pdks_id_listesi:
+        return jsonify({'ok': True, 'uyari': 'Eslesik personel bulunamadi.', 'eslesmis_profil_sayisi': 0})
+
+    # ── PDKS baglantisi ───────────────────────────────────────────────────────
+    try:
+        from modules.common.pdks import get_connection as _pdks_conn
+        pdks = _pdks_conn()
+    except Exception as e:
+        return jsonify({'ok': False, 'hata': 'PDKS baglantisi: ' + str(e)[:200]}), 503
+
+    try:
+        ph = ','.join(['%s'] * len(pdks_id_listesi))
+        params_gc = pdks_id_listesi + [TARIH_BAS, TARIH_BIT]
+
+        # ── B) pts_giriscikis sayim ───────────────────────────────────────────
+        with pdks.cursor() as cur:
+            cur.execute(f"""
+                SELECT COUNT(*) as n FROM pts_giriscikis
+                WHERE personelid IN ({ph}) AND giristarihi >= %s AND giristarihi <= %s
+            """, params_gc)
+            toplam_gc = cur.fetchone()['n']
+
+        with pdks.cursor() as cur:
+            cur.execute(f"""
+                SELECT personelid, giristarihi, girissaati, cikissaati, izintipi, aciklama
+                FROM pts_giriscikis
+                WHERE personelid IN ({ph}) AND giristarihi >= %s AND giristarihi <= %s
+                ORDER BY personelid, giristarihi
+            """, params_gc)
+            gc_rows = cur.fetchall()
+
+        durum_sayac = {'geldi': 0, 'gec_giris': 0, 'izinli': 0, 'gelmedi': 0}
+        cikis_yok = 0
+        for r in gc_rows:
+            d = _durum(r.get('girissaati'), r.get('cikissaati'), r.get('izintipi'))
+            durum_sayac[d] = durum_sayac.get(d, 0) + 1
+            if r.get('girissaati') is not None and r.get('cikissaati') is None:
+                cikis_yok += 1
+
+        # Kisi bazinda giris/cikis
+        gc_kisi = {}
+        for r in gc_rows:
+            gc_kisi[r['personelid']] = gc_kisi.get(r['personelid'], 0) + 1
+
+        # ── C) pts_izin sayim ─────────────────────────────────────────────────
+        toplam_izin = 0
+        izin_rows   = []
+        tip_sayac   = {}
+        try:
+            with pdks.cursor() as cur:
+                cur.execute(f"""
+                    SELECT COUNT(*) as n FROM pts_izin
+                    WHERE personelid IN ({ph}) AND giristarihi >= %s AND giristarihi <= %s
+                """, params_gc)
+                toplam_izin = cur.fetchone()['n']
+            with pdks.cursor() as cur:
+                cur.execute(f"""
+                    SELECT personelid, giristarihi, cikistarihi, izintipi, izinsure, aciklama
+                    FROM pts_izin
+                    WHERE personelid IN ({ph}) AND giristarihi >= %s AND giristarihi <= %s
+                    ORDER BY personelid, giristarihi
+                """, params_gc)
+                izin_rows = cur.fetchall()
+            for r in izin_rows:
+                tip = str(r.get('izintipi') or 'bos')
+                tip_sayac[tip] = tip_sayac.get(tip, 0) + 1
+        except Exception as ie:
+            tip_sayac = {'hata': str(ie)[:200]}
+
+    finally:
+        try:
+            pdks.close()
+        except Exception:
+            pass
+
+    # ── D) CPS mevcut kayitlar ────────────────────────────────────────────────
+    profil_id_listesi = [v['profil_id'] for v in eslesik_map.values() if v['profil_id']]
+    ph_cps = ','.join(['?'] * len(profil_id_listesi)) if profil_id_listesi else 'NULL'
+
+    cps_devam_toplam = db.execute("SELECT COUNT(*) FROM personel_devam").fetchone()[0]
+    cps_devam_pdks   = db.execute("SELECT COUNT(*) FROM personel_devam WHERE kaynak='pdks'").fetchone()[0]
+    cps_devam_2025   = 0
+    cps_izin_2025    = 0
+    if profil_id_listesi:
+        cps_devam_2025 = db.execute(f"""
+            SELECT COUNT(*) FROM personel_devam
+            WHERE kullanici_profil_id IN ({ph_cps})
+              AND tarih >= '2025-01-01' AND tarih <= '2025-12-31'
+        """, profil_id_listesi).fetchone()[0]
+        cps_izin_2025 = db.execute(f"""
+            SELECT COUNT(*) FROM personel_izin
+            WHERE kullanici_profil_id IN ({ph_cps}) AND yil = 2025
+        """, profil_id_listesi).fetchone()[0]
+
+    # ── E) Yazilabilecek yeni kayitlar ────────────────────────────────────────
+    mevcut_devam = set()
+    if profil_id_listesi:
+        for r in db.execute(f"""
+            SELECT kullanici_profil_id, tarih FROM personel_devam
+            WHERE kullanici_profil_id IN ({ph_cps})
+        """, profil_id_listesi).fetchall():
+            mevcut_devam.add((r[0], str(r[1])))
+
+    mevcut_izin = set()
+    if profil_id_listesi:
+        for r in db.execute(f"""
+            SELECT kullanici_profil_id, baslangic_tarihi, bitis_tarihi FROM personel_izin
+            WHERE kullanici_profil_id IN ({ph_cps})
+        """, profil_id_listesi).fetchall():
+            mevcut_izin.add((r[0], str(r[1]), str(r[2])))
+
+    yazilabilir_devam = cakisan_devam = profil_id_yok_gc = 0
+    for r in gc_rows:
+        info = eslesik_map.get(r['personelid'])
+        if not info or not info['profil_id']:
+            profil_id_yok_gc += 1
+            continue
+        if (info['profil_id'], str(r['giristarihi'])) in mevcut_devam:
+            cakisan_devam += 1
+        else:
+            yazilabilir_devam += 1
+
+    yazilabilir_izin = cakisan_izin = 0
+    for r in izin_rows:
+        info = eslesik_map.get(r['personelid'])
+        if not info or not info['profil_id']:
+            continue
+        k = (info['profil_id'], str(r.get('giristarihi') or ''), str(r.get('cikistarihi') or ''))
+        if k in mevcut_izin:
+            cakisan_izin += 1
+        else:
+            yazilabilir_izin += 1
+
+    # ── F) Riskler ────────────────────────────────────────────────────────────
+    riskler = []
+    if pk_eksik:
+        riskler.append({
+            'tip': 'PK_EKSIK',
+            'adet': len(pk_eksik),
+            'aciklama': 'personel_kullanici eslesmesi yok; personel_pk_id NULL kalacak',
+            'detay': [{'profil_id': p['profil_id'], 'ad': p['ad'], 'pdks_id': p['pdks_id']} for p in pk_eksik],
+        })
+
+    gc_tekrar = {}
+    for r in gc_rows:
+        k = (r['personelid'], str(r['giristarihi']))
+        gc_tekrar[k] = gc_tekrar.get(k, 0) + 1
+    mujkerrer = [(k, v) for k, v in gc_tekrar.items() if v > 1]
+    if mujkerrer:
+        riskler.append({
+            'tip': 'MUJKERRER_GUN',
+            'adet': len(mujkerrer),
+            'aciklama': 'Ayni (pdks_id, tarih) birden fazla PDKS satiri',
+            'detay': [{'pdks_id': k[0], 'tarih': str(k[1]), 'sayi': v} for k, v in mujkerrer[:10]],
+        })
+
+    negatif = sum(
+        1 for r in gc_rows
+        if _dakika(r.get('girissaati'), r.get('cikissaati')) is not None
+        and _dakika(r.get('girissaati'), r.get('cikissaati')) < 0
+    )
+    if negatif:
+        riskler.append({'tip': 'NEGATIF_SURE', 'adet': negatif,
+                        'aciklama': 'cikis < giris (gece mesaisi olabilir)'})
+
+    anormal_giris = sum(
+        1 for r in gc_rows
+        if r.get('girissaati') is not None and (_td_sn(r['girissaati']) or 0) / 3600 < 4
+    )
+    if anormal_giris:
+        riskler.append({'tip': 'ANORMAL_GIRIS', 'adet': anormal_giris,
+                        'aciklama': 'giris saati 04:00 oncesi'})
+
+    anormal_izin = 0
+    for r in izin_rows:
+        bas = r.get('giristarihi')
+        bit = r.get('cikistarihi')
+        sure = r.get('izinsure')
+        try:
+            gun = float(sure) if sure is not None else None
+        except (ValueError, TypeError):
+            gun = None
+        if gun is None and bas and bit:
+            gun = float((bit - bas).days + 1)
+        if gun is not None and gun <= 0:
+            anormal_izin += 1
+    if anormal_izin:
+        riskler.append({'tip': 'ANORMAL_IZIN', 'adet': anormal_izin,
+                        'aciklama': 'izin gun_sayisi <= 0'})
+
+    if profil_id_yok_gc:
+        riskler.append({'tip': 'PROFIL_ID_YOK', 'adet': profil_id_yok_gc,
+                        'aciklama': 'profil_id eslesmesi olmadan atlanacak PDKS satiri'})
+
+    # ── G) Mapping onerisi ────────────────────────────────────────────────────
+    mapping = {
+        'pts_giriscikis_to_personel_devam': [
+            {'pdks_kolon': 'personelid',   'cps_kolon': 'personel_pk_id',       'donusum': 'personel_kullanici WHERE PdksPersonelId=?'},
+            {'pdks_kolon': '(kopru)',       'cps_kolon': 'kullanici_profil_id',  'donusum': 'kullanici_profil WHERE pdks_personel_id=?'},
+            {'pdks_kolon': 'giristarihi',   'cps_kolon': 'tarih',                'donusum': 'str(date) YYYY-MM-DD'},
+            {'pdks_kolon': 'girissaati',    'cps_kolon': 'giris_saati',          'donusum': 'timedelta -> HH:MM'},
+            {'pdks_kolon': 'cikissaati',    'cps_kolon': 'cikis_saati',          'donusum': 'timedelta -> HH:MM (None kabul)'},
+            {'pdks_kolon': '(hesap)',       'cps_kolon': 'durum',                'donusum': 'geldi/gec_giris/izinli/gelmedi'},
+            {'pdks_kolon': '(hesap)',       'cps_kolon': 'calisma_dakika',       'donusum': '(cikis-giris) dk'},
+            {'pdks_kolon': "'pdks'",        'cps_kolon': 'kaynak',               'donusum': 'sabit deger'},
+            {'pdks_kolon': 'aciklama',      'cps_kolon': 'aciklama',             'donusum': 'direkt'},
+            {'pdks_kolon': "'pdks_faz6a'",  'cps_kolon': 'giren_kullanici',      'donusum': 'sabit deger'},
+        ],
+        'pts_izin_to_personel_izin': [
+            {'pdks_kolon': 'personelid',    'cps_kolon': 'personel_pk_id',       'donusum': 'kopru'},
+            {'pdks_kolon': '(kopru)',        'cps_kolon': 'kullanici_profil_id',  'donusum': 'kopru'},
+            {'pdks_kolon': 'YEAR(giristarihi)', 'cps_kolon': 'yil',              'donusum': 'int'},
+            {'pdks_kolon': 'izintipi',      'cps_kolon': 'izin_tipi',            'donusum': 'IZIN_TIP_MAP normalize'},
+            {'pdks_kolon': 'giristarihi',   'cps_kolon': 'baslangic_tarihi',     'donusum': 'str(date)'},
+            {'pdks_kolon': 'cikistarihi',   'cps_kolon': 'bitis_tarihi',         'donusum': 'str(date)'},
+            {'pdks_kolon': 'izinsure',      'cps_kolon': 'gun_sayisi',           'donusum': 'float, yoksa tarih farki'},
+            {'pdks_kolon': '14.0',          'cps_kolon': 'hak_gun',              'donusum': 'varsayilan (PDKS\'te yok)'},
+            {'pdks_kolon': 'izinsure',      'cps_kolon': 'kullanilan_gun',       'donusum': '= gun_sayisi'},
+            {'pdks_kolon': "'onaylandi'",    'cps_kolon': 'durum',               'donusum': 'PDKS\'te onaylanmis kabul'},
+            {'pdks_kolon': 'aciklama',      'cps_kolon': 'notlar',               'donusum': 'direkt'},
+        ],
+        'idempotent_kural': {
+            'personel_devam': 'INSERT OR IGNORE ON (kullanici_profil_id, tarih)',
+            'personel_izin' : '(kullanici_profil_id, baslangic_tarihi, bitis_tarihi) cifte kontrol',
+        }
+    }
+
+    # Kisi bazinda ozet
+    kisi_ozeti = []
+    for pdks_id, info in sorted(eslesik_map.items()):
+        kisi_ozeti.append({
+            'pdks_id'  : pdks_id,
+            'profil_id': info['profil_id'],
+            'pk_id'    : info['pk_id'],
+            'ad'       : info['ad'],
+            'gc_adet'  : gc_kisi.get(pdks_id, 0),
+        })
+
+    return jsonify({
+        'ok'  : True,
+        'faz' : 'FAZ-6A PDKS Historical Sync Dry-Run',
+        'tarih_araligi': f'{TARIH_BAS} --> {TARIH_BIT}',
+        'A_eslesmis_profil': {
+            'toplam'  : len(eslesik_map),
+            'pk_id_bulunan': len(eslesik_map) - len(pk_eksik),
+            'pk_id_eksik'  : len(pk_eksik),
+            'pk_eksik_detay': [{'profil_id': p['profil_id'], 'ad': p['ad'], 'pdks_id': p['pdks_id']} for p in pk_eksik],
+            'kisi_listesi' : kisi_ozeti,
+        },
+        'B_pdks_giris_cikis_2025': {
+            'toplam'        : toplam_gc,
+            'kaydi_olan_kisi': len(gc_kisi),
+            'durum_dagilimi': durum_sayac,
+            'cikis_yok_cnt' : cikis_yok,
+        },
+        'C_pdks_izin_2025': {
+            'toplam'        : toplam_izin,
+            'tip_dagilimi'  : {t: {'pdks_ham': t, 'cps_norm': _izin_tip(t if t != 'bos' else None), 'adet': n}
+                               for t, n in tip_sayac.items()},
+        },
+        'D_cps_mevcut': {
+            'devam_toplam'  : cps_devam_toplam,
+            'devam_pdks'    : cps_devam_pdks,
+            'devam_2025_eslesik': cps_devam_2025,
+            'izin_2025_eslesik' : cps_izin_2025,
+        },
+        'E_yazilabilecek': {
+            'devam'         : yazilabilir_devam,
+            'izin'          : yazilabilir_izin,
+            'devam_cakisan' : cakisan_devam,
+            'izin_cakisan'  : cakisan_izin,
+        },
+        'F_riskler'     : riskler,
+        'G_mapping'     : mapping,
+        'not'           : 'DB yazma yapilmadi. Gercek aktarim icin FAZ-6B gereklidir.',
+    })
+
+
+# ── FAZ-6B: PDKS 2025 Tarihsel Aktarim (dry-run + apply) ─────────────────────
+
+@yonetim_bp.route('/api/pdks/faz6b-sync', methods=['POST'])
+@yetki_gerekli('yonetim', 'can_create')
+def pdks_faz6b_sync():
+    """POST /yonetim/api/pdks/faz6b-sync
+
+    Body JSON:
+      { "year": 2025, "dry_run": true }   -> preview raporu, DB yazma yok
+      { "year": 2025, "dry_run": false }  -> gercek aktarim
+
+    KURALLAR:
+      - PDKS sadece SELECT.
+      - CPS'e sadece personel_devam ve personel_izin yazilir.
+      - Hedef modulu dokunulmaz.
+      - Idempotent: ayni (profil_id, tarih, kaynak='pdks') tekrar yazilmaz.
+      - Mukerrer gunler (ayni pdks_id+tarih birden fazla PDKS satiri) skip edilir.
+    """
+    import datetime as _dt
+    import sys as _sys
+    import os as _os
+
+    data     = request.get_json(silent=True) or {}
+    year     = int(data.get('year', 2025))
+    dry_run  = bool(data.get('dry_run', True))
+
+    TARIH_BAS   = _dt.date(year, 1, 1)
+    TARIH_BIT   = _dt.date(year, 12, 31)
+    GEC_ESIGI   = 7 * 3600
+    GIREN_KUL_  = 'pdks_faz6b'
+
+    IZIN_TIP_MAP_ = {
+        'gunluk': 'yillik', 'yillik': 'yillik', 'ucretsiz': 'ucretsiz',
+        'dogum': 'dogum', 'olum': 'olum', 'hastalik': 'hastalik',
+        'resmi': 'resmi_tatil', 'resmi_tatil': 'resmi_tatil',
+        '0': 'yillik', '1': 'yillik', '2': 'ucretsiz',
+        '3': 'dogum', '4': 'olum', '5': 'hastalik', '6': 'resmi_tatil',
+    }
+
+    def _sn_(td):
+        if td is None: return None
+        return int(td.total_seconds()) if isinstance(td, _dt.timedelta) else int(td)
+
+    def _hhmm_(td):
+        s = _sn_(td)
+        return None if s is None else f"{s//3600:02d}:{(s%3600)//60:02d}"
+
+    def _durum_(g, c, iz):
+        if iz is not None and str(iz).strip() not in ('0','','None','null'):
+            return 'izinli'
+        s = _sn_(g)
+        if s is None: return 'gelmedi'
+        return 'gec_giris' if s > GEC_ESIGI else 'geldi'
+
+    def _dk_(g, c):
+        gg, cc = _sn_(g), _sn_(c)
+        if gg is None or cc is None: return None
+        return (cc - gg) // 60 if (cc - gg) // 60 >= 0 else None
+
+    def _iztip_(t):
+        return IZIN_TIP_MAP_.get(str(t or '').strip().lower(), 'yillik')
+
+    def _gunsayisi_(bas, bit, sure):
+        if sure is not None:
+            try: return float(sure)
+            except: pass
+        if bas and bit:
+            try:
+                b1 = _dt.date.fromisoformat(str(bas)[:10])
+                b2 = _dt.date.fromisoformat(str(bit)[:10])
+                return float((b2 - b1).days + 1)
+            except: pass
+        return None
+
+    # Baglanti
+    db = _get_conn()
+    try:
+        from modules.common.pdks import get_connection as _pdks_conn
+        pdks = _pdks_conn()
+    except Exception as e:
+        return jsonify({'ok': False, 'hata': 'PDKS baglantisi: ' + str(e)[:200]}), 503
+
+    try:
+        # Eslesmis personel
+        rows = db.execute("""
+            SELECT kp.id AS profil_id, kp.gercek_ad, kp.pdks_personel_id,
+                   pk.id AS pk_id
+            FROM   kullanici_profil kp
+            LEFT JOIN personel_kullanici pk
+                   ON kp.kaynak='personel_kullanici' AND kp.kaynak_id=pk.id
+            WHERE  kp.pdks_personel_id IS NOT NULL AND kp.aktif=1
+            ORDER  BY kp.id
+        """).fetchall()
+
+        eslesik = {}
+        for r in rows:
+            pid = int(r['pdks_personel_id'])
+            pk  = r['pk_id']
+            if pk is None:
+                alt = db.execute("SELECT id FROM personel_kullanici WHERE PdksPersonelId=? LIMIT 1",(pid,)).fetchone()
+                pk  = alt['id'] if alt else None
+            eslesik[pid] = {'profil_id': r['profil_id'], 'pk_id': pk, 'ad': r['gercek_ad']}
+
+        pids       = list(eslesik.keys())
+        profil_ids = [v['profil_id'] for v in eslesik.values()]
+        if not pids:
+            return jsonify({'ok': True, 'uyari': 'Eslesik personel yok.', 'pids': []})
+
+        ph = ','.join(['%s'] * len(pids))
+        p2 = pids + [TARIH_BAS, TARIH_BIT]
+
+        # PDKS cek
+        with pdks.cursor() as cur:
+            cur.execute(f"""
+                SELECT personelid, giristarihi, girissaati, cikissaati, izintipi, aciklama
+                FROM pts_giriscikis
+                WHERE personelid IN ({ph}) AND giristarihi>=%s AND giristarihi<=%s
+                ORDER BY personelid, giristarihi
+            """, p2)
+            gc_rows = cur.fetchall()
+
+        izin_rows = []
+        try:
+            with pdks.cursor() as cur:
+                cur.execute(f"""
+                    SELECT personelid, giristarihi, cikistarihi, izintipi, izinsure, aciklama
+                    FROM pts_izin
+                    WHERE personelid IN ({ph}) AND giristarihi>=%s AND giristarihi<=%s
+                    ORDER BY personelid, giristarihi
+                """, p2)
+                izin_rows = cur.fetchall()
+        except Exception:
+            pass
+
+        # Mukerrer
+        gc_sayac = {}
+        for r in gc_rows:
+            k = (r['personelid'], str(r['giristarihi']))
+            gc_sayac[k] = gc_sayac.get(k, 0) + 1
+        mukerrer = {k for k, v in gc_sayac.items() if v > 1}
+
+        # Mevcut CPS
+        ph_c = ','.join(['?']*len(profil_ids)) if profil_ids else 'NULL'
+        mev_dev = set()
+        mev_iz  = set()
+        if profil_ids:
+            for r in db.execute(f"SELECT kullanici_profil_id, tarih FROM personel_devam WHERE kullanici_profil_id IN ({ph_c})", profil_ids).fetchall():
+                mev_dev.add((r[0], str(r[1])))
+            for r in db.execute(f"SELECT kullanici_profil_id, baslangic_tarihi, bitis_tarihi FROM personel_izin WHERE kullanici_profil_id IN ({ph_c})", profil_ids).fetchall():
+                mev_iz.add((r[0], str(r[1]), str(r[2])))
+
+        # Hazirla
+        devam_yazilacak = []
+        dev_skip_cak = dev_skip_muk = dev_skip_pid = 0
+        izin_yazilacak = []
+        iz_skip_cak = iz_skip_pid = 0
+
+        for r in gc_rows:
+            inf = eslesik.get(r['personelid'])
+            if not inf or not inf['profil_id']:
+                dev_skip_pid += 1; continue
+            t_str = str(r['giristarihi'])
+            if (r['personelid'], t_str) in mukerrer:
+                dev_skip_muk += 1; continue
+            if (inf['profil_id'], t_str) in mev_dev:
+                dev_skip_cak += 1; continue
+            devam_yazilacak.append((
+                inf['pk_id'], inf['profil_id'], t_str,
+                _durum_(r.get('girissaati'), r.get('cikissaati'), r.get('izintipi')),
+                _hhmm_(r.get('girissaati')), _hhmm_(r.get('cikissaati')),
+                _dk_(r.get('girissaati'), r.get('cikissaati')),
+                'pdks', r.get('aciklama'), GIREN_KUL_,
+            ))
+
+        for r in izin_rows:
+            inf = eslesik.get(r['personelid'])
+            if not inf or not inf['profil_id']:
+                iz_skip_pid += 1; continue
+            bas = str(r.get('giristarihi') or '')
+            bit = str(r.get('cikistarihi') or '')
+            if (inf['profil_id'], bas, bit) in mev_iz:
+                iz_skip_cak += 1; continue
+            tip  = _iztip_(r.get('izintipi'))
+            gun  = _gunsayisi_(r.get('giristarihi'), r.get('cikistarihi'), r.get('izinsure'))
+            yil_ = int(bas[:4]) if bas else year
+            notlar = f"pdks_izintipi={r.get('izintipi')}"
+            if r.get('aciklama'):
+                notlar += '  ' + str(r['aciklama'])
+            izin_yazilacak.append((
+                inf['pk_id'], inf['profil_id'], yil_, 14.0,
+                gun or 1.0, tip, bas, bit, gun,
+                'onaylandi', notlar, GIREN_KUL_,
+            ))
+
+        # Dry-run
+        if dry_run:
+            return jsonify({
+                'ok'      : True,
+                'mod'     : 'dry_run',
+                'year'    : year,
+                'eslesik' : len(eslesik),
+                'pdks_gc' : len(gc_rows),
+                'pdks_iz' : len(izin_rows),
+                'devam_yazilacak'   : len(devam_yazilacak),
+                'devam_skip_cakisan': dev_skip_cak,
+                'devam_skip_mukerrer': dev_skip_muk,
+                'izin_yazilacak'    : len(izin_yazilacak),
+                'izin_skip_cakisan' : iz_skip_cak,
+                'mukerrer_liste'    : [
+                    {'pdks_id': k[0], 'tarih': str(k[1]),
+                     'ad': eslesik.get(k[0], {}).get('ad', '?')}
+                    for k in sorted(mukerrer)
+                ],
+            })
+
+        # Gercek yaz
+        cur = db.cursor()
+
+        DEVAM_SQL = """
+            INSERT OR IGNORE INTO personel_devam
+                (personel_pk_id, kullanici_profil_id, tarih, durum,
+                 giris_saati, cikis_saati, calisma_dakika,
+                 kaynak, aciklama, giren_kullanici)
+            VALUES (?,?,?,?,?,?,?,?,?,?)
+        """
+        IZIN_SQL = """
+            INSERT OR IGNORE INTO personel_izin
+                (personel_pk_id, kullanici_profil_id, yil, hak_gun,
+                 kullanilan_gun, izin_tipi, baslangic_tarihi, bitis_tarihi,
+                 gun_sayisi, durum, notlar, giren_kullanici)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+        """
+
+        yaz_dev = 0
+        for tpl in devam_yazilacak:
+            cur.execute(DEVAM_SQL, tpl)
+            yaz_dev += cur.rowcount
+        db.commit()
+
+        yaz_iz = 0
+        for tpl in izin_yazilacak:
+            cur.execute(IZIN_SQL, tpl)
+            yaz_iz += cur.rowcount
+        db.commit()
+
+        # Rapor metrikleri
+        dev_pdks_top = db.execute("SELECT COUNT(*) FROM personel_devam WHERE kaynak='pdks'").fetchone()[0]
+        iz_yil_top   = db.execute(f"""
+            SELECT COUNT(*) FROM personel_izin
+            WHERE kullanici_profil_id IN ({ph_c}) AND yil=?
+        """, profil_ids + [year]).fetchone()[0]
+
+        profil12_mart = db.execute("""
+            SELECT tarih, durum, giris_saati, cikis_saati, calisma_dakika
+            FROM personel_devam
+            WHERE kullanici_profil_id=12
+              AND tarih>='2025-03-01' AND tarih<='2025-03-31'
+            ORDER BY tarih
+        """).fetchall()
+
+        profil7_mart = db.execute("""
+            SELECT tarih, durum, giris_saati, cikis_saati, calisma_dakika
+            FROM personel_devam
+            WHERE kullanici_profil_id=7
+              AND tarih>='2025-03-01' AND tarih<='2025-03-31'
+            ORDER BY tarih
+        """).fetchall()
+
+        return jsonify({
+            'ok'  : True,
+            'mod' : 'apply',
+            'year': year,
+            'A_yazilan_devam'      : yaz_dev,
+            'B_skip_mukerrer'      : dev_skip_muk,
+            'C_yazilan_izin'       : yaz_iz,
+            'D_skip_mevcut_cps'    : dev_skip_cak + iz_skip_cak,
+            'E_devam_pdks_toplam'  : dev_pdks_top,
+            'F_izin_yil_toplam'    : iz_yil_top,
+            'G_profil12_mart_2025' : [dict(r) for r in profil12_mart[:10]],
+            'G_profil12_mart_cnt'  : len(profil12_mart),
+            'H_profil7_mart_2025'  : [dict(r) for r in profil7_mart[:10]],
+            'H_profil7_mart_cnt'   : len(profil7_mart),
+            'mukerrer_liste'       : [
+                {'pdks_id': k[0], 'tarih': str(k[1]),
+                 'ad': eslesik.get(k[0], {}).get('ad', '?')}
+                for k in sorted(mukerrer)
+            ],
+            'not': 'Aktarim tamamlandi. Commit/push oncesi raporu kontrol et.',
+        })
+
+    finally:
+        try:
+            pdks.close()
+        except Exception:
+            pass
+
+
+# ── FAZ-6B GET endpoints (browser URL ile cagrilabilir) ──────────────────────
+
+@yonetim_bp.route('/api/pdks/faz6b-preview', methods=['GET'])
+@yetki_gerekli('yonetim', 'can_read')
+def pdks_faz6b_preview():
+    """GET /yonetim/api/pdks/faz6b-preview?year=2025  --  DRY-RUN, DB'ye yazma yok."""
+    import datetime as _dt
+
+    year      = int(request.args.get('year', 2025))
+    TARIH_BAS = _dt.date(year, 1, 1)
+    TARIH_BIT = _dt.date(year, 12, 31)
+    GEC_SN    = 7 * 3600
+    IMAP      = {'gunluk':'yillik','yillik':'yillik','ucretsiz':'ucretsiz',
+                 'dogum':'dogum','olum':'olum','hastalik':'hastalik',
+                 'resmi':'resmi_tatil','resmi_tatil':'resmi_tatil',
+                 '0':'yillik','1':'yillik','2':'ucretsiz','3':'dogum',
+                 '4':'olum','5':'hastalik','6':'resmi_tatil'}
+
+    def _sn(td):
+        if td is None: return None
+        return int(td.total_seconds()) if isinstance(td, _dt.timedelta) else int(td)
+
+    def _dur(g, c, iz):
+        if iz is not None and str(iz).strip() not in ('0','','None','null'):
+            return 'izinli'
+        s = _sn(g)
+        return 'gelmedi' if s is None else ('gec_giris' if s > GEC_SN else 'geldi')
+
+    def _iztip(t):
+        return IMAP.get(str(t or '').strip().lower(), 'yillik')
+
+    db = _get_conn()
+    try:
+        from modules.common.pdks import get_connection as _gc
+        pdks = _gc()
+    except Exception as e:
+        return jsonify({'ok': False, 'hata': 'PDKS: ' + str(e)[:200]}), 503
+
+    try:
+        rows = db.execute(
+            "SELECT kp.id AS profil_id, kp.gercek_ad, kp.pdks_personel_id, pk.id AS pk_id "
+            "FROM kullanici_profil kp "
+            "LEFT JOIN personel_kullanici pk "
+            "  ON kp.kaynak='personel_kullanici' AND kp.kaynak_id=pk.id "
+            "WHERE kp.pdks_personel_id IS NOT NULL AND kp.aktif=1 "
+            "ORDER BY kp.id"
+        ).fetchall()
+
+        eslesik = {}
+        for r in rows:
+            pid = int(r['pdks_personel_id'])
+            pk  = r['pk_id']
+            if pk is None:
+                alt = db.execute("SELECT id FROM personel_kullanici WHERE PdksPersonelId=? LIMIT 1", (pid,)).fetchone()
+                pk  = alt['id'] if alt else None
+            eslesik[pid] = {'profil_id': r['profil_id'], 'pk_id': pk, 'ad': r['gercek_ad']}
+
+        pids       = list(eslesik.keys())
+        profil_ids = [v['profil_id'] for v in eslesik.values()]
+        if not pids:
+            return jsonify({'ok': True, 'uyari': 'Eslesik yok.'})
+
+        ph = ','.join(['%s'] * len(pids))
+        p2 = pids + [TARIH_BAS, TARIH_BIT]
+
+        with pdks.cursor() as cur:
+            cur.execute(
+                f"SELECT personelid,giristarihi,girissaati,cikissaati,izintipi "
+                f"FROM pts_giriscikis WHERE personelid IN ({ph}) "
+                f"AND giristarihi>=%s AND giristarihi<=%s "
+                f"ORDER BY personelid,giristarihi", p2)
+            gc_rows = cur.fetchall()
+
+        izin_rows = []
+        try:
+            with pdks.cursor() as cur:
+                cur.execute(
+                    f"SELECT personelid,giristarihi,cikistarihi,izintipi,izinsure "
+                    f"FROM pts_izin WHERE personelid IN ({ph}) "
+                    f"AND giristarihi>=%s AND giristarihi<=%s", p2)
+                izin_rows = cur.fetchall()
+        except Exception:
+            pass
+
+        # Mukerrer
+        gc_sayac = {}
+        for r in gc_rows:
+            k = (r['personelid'], str(r['giristarihi']))
+            gc_sayac[k] = gc_sayac.get(k, 0) + 1
+        mukerrer = {k for k, v in gc_sayac.items() if v > 1}
+
+        # Mevcut CPS
+        ph_c = ','.join(['?'] * len(profil_ids)) if profil_ids else 'NULL'
+        mev_dev = set()
+        mev_iz  = set()
+        if profil_ids:
+            for r in db.execute(
+                f"SELECT kullanici_profil_id,tarih FROM personel_devam "
+                f"WHERE kullanici_profil_id IN ({ph_c})", profil_ids
+            ).fetchall():
+                mev_dev.add((r[0], str(r[1])))
+            for r in db.execute(
+                f"SELECT kullanici_profil_id,baslangic_tarihi,bitis_tarihi FROM personel_izin "
+                f"WHERE kullanici_profil_id IN ({ph_c})", profil_ids
+            ).fetchall():
+                mev_iz.add((r[0], str(r[1]), str(r[2])))
+
+        dev_yaz = dev_muk = dev_cak = dev_pid = 0
+        for r in gc_rows:
+            inf = eslesik.get(r['personelid'])
+            if not inf or not inf['profil_id']:
+                dev_pid += 1; continue
+            t = str(r['giristarihi'])
+            if (r['personelid'], t) in mukerrer:
+                dev_muk += 1; continue
+            if (inf['profil_id'], t) in mev_dev:
+                dev_cak += 1; continue
+            dev_yaz += 1
+
+        iz_yaz = iz_cak = iz_pid = 0
+        for r in izin_rows:
+            inf = eslesik.get(r['personelid'])
+            if not inf or not inf['profil_id']:
+                iz_pid += 1; continue
+            bas = str(r.get('giristarihi') or '')
+            bit = str(r.get('cikistarihi') or '')
+            if (inf['profil_id'], bas, bit) in mev_iz:
+                iz_cak += 1; continue
+            iz_yaz += 1
+
+        return jsonify({
+            'ok'                 : True,
+            'mod'                : 'dry_run',
+            'year'               : year,
+            'eslesik_profil'     : len(eslesik),
+            'pdks_gc_toplam'     : len(gc_rows),
+            'pdks_iz_toplam'     : len(izin_rows),
+            'devam_yazilacak'    : dev_yaz,
+            'devam_skip_mukerrer': dev_muk,
+            'devam_skip_cakisan' : dev_cak,
+            'izin_yazilacak'     : iz_yaz,
+            'izin_skip_cakisan'  : iz_cak,
+            'mukerrer_liste'     : [
+                {'pdks_id': k[0], 'tarih': str(k[1]),
+                 'ad': eslesik.get(k[0], {}).get('ad', '?')}
+                for k in sorted(mukerrer)
+            ],
+            'not': 'DRY-RUN tamamlandi. DB yazilmadi.',
+        })
+    finally:
+        try:
+            pdks.close()
+        except Exception:
+            pass
+
+
+@yonetim_bp.route('/api/pdks/faz6b-apply', methods=['GET'])
+@yetki_gerekli('yonetim', 'can_create')
+def pdks_faz6b_apply():
+    """GET /yonetim/api/pdks/faz6b-apply?year=2025  --  GERCEK AKTARIM.
+    Once backup alir, sonra yazar. Idempotent. Mukerrer skip.
+    """
+    import datetime as _dt
+    import shutil   as _shutil
+    import os       as _os
+
+    year      = int(request.args.get('year', 2025))
+    TARIH_BAS = _dt.date(year, 1, 1)
+    TARIH_BIT = _dt.date(year, 12, 31)
+    GEC_SN    = 7 * 3600
+    GIREN     = 'pdks_faz6b'
+    IMAP      = {'gunluk':'yillik','yillik':'yillik','ucretsiz':'ucretsiz',
+                 'dogum':'dogum','olum':'olum','hastalik':'hastalik',
+                 'resmi':'resmi_tatil','resmi_tatil':'resmi_tatil',
+                 '0':'yillik','1':'yillik','2':'ucretsiz','3':'dogum',
+                 '4':'olum','5':'hastalik','6':'resmi_tatil'}
+
+    def _sn(td):
+        if td is None: return None
+        return int(td.total_seconds()) if isinstance(td, _dt.timedelta) else int(td)
+
+    def _hhmm(td):
+        s = _sn(td)
+        return None if s is None else f"{s // 3600:02d}:{(s % 3600) // 60:02d}"
+
+    def _dur(g, c, iz):
+        if iz is not None and str(iz).strip() not in ('0','','None','null'):
+            return 'izinli'
+        s = _sn(g)
+        return 'gelmedi' if s is None else ('gec_giris' if s > GEC_SN else 'geldi')
+
+    def _dk(g, c):
+        gg, cc = _sn(g), _sn(c)
+        if gg is None or cc is None: return None
+        d = (cc - gg) // 60
+        return d if d >= 0 else None
+
+    def _iztip(t):
+        return IMAP.get(str(t or '').strip().lower(), 'yillik')
+
+    def _gun(bas, bit, sure):
+        if sure is not None:
+            try: return float(sure)
+            except: pass
+        if bas and bit:
+            try:
+                b1 = _dt.date.fromisoformat(str(bas)[:10])
+                b2 = _dt.date.fromisoformat(str(bit)[:10])
+                return float((b2 - b1).days + 1)
+            except: pass
+        return None
+
+    # Backup
+    _app_dir  = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+    _root_dir = _os.path.dirname(_app_dir)
+    _bak_base = _os.path.join(_root_dir, '_backups')
+    _os.makedirs(_bak_base, exist_ok=True)
+    _ts  = _dt.datetime.now().strftime('%Y%m%d_%H%M%S')
+    _bak = _os.path.join(_bak_base, f'faz6b_{_ts}')
+    _os.makedirs(_bak, exist_ok=True)
+    _shutil.copy2(_os.path.join(_app_dir, 'mock_data.db'), _os.path.join(_bak, 'mock_data.db'))
+
+    db = _get_conn()
+    try:
+        from modules.common.pdks import get_connection as _gc
+        pdks = _gc()
+    except Exception as e:
+        return jsonify({'ok': False, 'hata': 'PDKS: ' + str(e)[:200]}), 503
+
+    try:
+        rows = db.execute(
+            "SELECT kp.id AS profil_id, kp.gercek_ad, kp.pdks_personel_id, pk.id AS pk_id "
+            "FROM kullanici_profil kp "
+            "LEFT JOIN personel_kullanici pk "
+            "  ON kp.kaynak='personel_kullanici' AND kp.kaynak_id=pk.id "
+            "WHERE kp.pdks_personel_id IS NOT NULL AND kp.aktif=1 "
+            "ORDER BY kp.id"
+        ).fetchall()
+
+        eslesik = {}
+        for r in rows:
+            pid = int(r['pdks_personel_id'])
+            pk  = r['pk_id']
+            if pk is None:
+                alt = db.execute("SELECT id FROM personel_kullanici WHERE PdksPersonelId=? LIMIT 1", (pid,)).fetchone()
+                pk  = alt['id'] if alt else None
+            eslesik[pid] = {'profil_id': r['profil_id'], 'pk_id': pk, 'ad': r['gercek_ad']}
+
+        pids       = list(eslesik.keys())
+        profil_ids = [v['profil_id'] for v in eslesik.values()]
+        if not pids:
+            return jsonify({'ok': True, 'uyari': 'Eslesik yok.'})
+
+        ph = ','.join(['%s'] * len(pids))
+        p2 = pids + [TARIH_BAS, TARIH_BIT]
+
+        with pdks.cursor() as cur:
+            cur.execute(
+                f"SELECT personelid,giristarihi,girissaati,cikissaati,izintipi,aciklama "
+                f"FROM pts_giriscikis WHERE personelid IN ({ph}) "
+                f"AND giristarihi>=%s AND giristarihi<=%s "
+                f"ORDER BY personelid,giristarihi", p2)
+            gc_rows = cur.fetchall()
+
+        izin_rows = []
+        try:
+            with pdks.cursor() as cur:
+                cur.execute(
+                    f"SELECT personelid,giristarihi,cikistarihi,izintipi,izinsure,aciklama "
+                    f"FROM pts_izin WHERE personelid IN ({ph}) "
+                    f"AND giristarihi>=%s AND giristarihi<=%s "
+                    f"ORDER BY personelid,giristarihi", p2)
+                izin_rows = cur.fetchall()
+        except Exception:
+            pass
+
+        # Mukerrer
+        gc_sayac = {}
+        for r in gc_rows:
+            k = (r['personelid'], str(r['giristarihi']))
+            gc_sayac[k] = gc_sayac.get(k, 0) + 1
+        mukerrer = {k for k, v in gc_sayac.items() if v > 1}
+
+        # Mevcut CPS
+        ph_c = ','.join(['?'] * len(profil_ids)) if profil_ids else 'NULL'
+        mev_dev = set()
+        mev_iz  = set()
+        if profil_ids:
+            for r in db.execute(
+                f"SELECT kullanici_profil_id,tarih FROM personel_devam "
+                f"WHERE kullanici_profil_id IN ({ph_c})", profil_ids
+            ).fetchall():
+                mev_dev.add((r[0], str(r[1])))
+            for r in db.execute(
+                f"SELECT kullanici_profil_id,baslangic_tarihi,bitis_tarihi FROM personel_izin "
+                f"WHERE kullanici_profil_id IN ({ph_c})", profil_ids
+            ).fetchall():
+                mev_iz.add((r[0], str(r[1]), str(r[2])))
+
+        devam_list = []
+        dev_muk = dev_cak = dev_pid = 0
+        for r in gc_rows:
+            inf = eslesik.get(r['personelid'])
+            if not inf or not inf['profil_id']:
+                dev_pid += 1; continue
+            t = str(r['giristarihi'])
+            if (r['personelid'], t) in mukerrer:
+                dev_muk += 1; continue
+            if (inf['profil_id'], t) in mev_dev:
+                dev_cak += 1; continue
+            devam_list.append((
+                inf['pk_id'], inf['profil_id'], t,
+                _dur(r.get('girissaati'), r.get('cikissaati'), r.get('izintipi')),
+                _hhmm(r.get('girissaati')), _hhmm(r.get('cikissaati')),
+                _dk(r.get('girissaati'), r.get('cikissaati')),
+                'pdks', r.get('aciklama'), GIREN,
+            ))
+
+        izin_list = []
+        iz_cak = iz_pid = 0
+        for r in izin_rows:
+            inf = eslesik.get(r['personelid'])
+            if not inf or not inf['profil_id']:
+                iz_pid += 1; continue
+            bas = str(r.get('giristarihi') or '')
+            bit = str(r.get('cikistarihi') or '')
+            if (inf['profil_id'], bas, bit) in mev_iz:
+                iz_cak += 1; continue
+            tip    = _iztip(r.get('izintipi'))
+            gun_   = _gun(r.get('giristarihi'), r.get('cikistarihi'), r.get('izinsure'))
+            yil_   = int(bas[:4]) if bas else year
+            notlar = f"pdks_izintipi={r.get('izintipi')}"
+            if r.get('aciklama'):
+                notlar += '  ' + str(r['aciklama'])
+            izin_list.append((
+                inf['pk_id'], inf['profil_id'], yil_, 14.0,
+                gun_ or 1.0, tip, bas, bit, gun_,
+                'onaylandi', notlar, GIREN,
+            ))
+
+        # Yaz
+        cur2 = db.cursor()
+        DEVAM_SQL = (
+            "INSERT OR IGNORE INTO personel_devam "
+            "(personel_pk_id,kullanici_profil_id,tarih,durum,"
+            " giris_saati,cikis_saati,calisma_dakika,kaynak,aciklama,giren_kullanici) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?)"
+        )
+        IZIN_SQL = (
+            "INSERT OR IGNORE INTO personel_izin "
+            "(personel_pk_id,kullanici_profil_id,yil,hak_gun,"
+            " kullanilan_gun,izin_tipi,baslangic_tarihi,bitis_tarihi,"
+            " gun_sayisi,durum,notlar,giren_kullanici) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)"
+        )
+
+        yaz_dev = 0
+        for tpl in devam_list:
+            cur2.execute(DEVAM_SQL, tpl)
+            yaz_dev += cur2.rowcount
+        db.commit()
+
+        yaz_iz = 0
+        for tpl in izin_list:
+            cur2.execute(IZIN_SQL, tpl)
+            yaz_iz += cur2.rowcount
+        db.commit()
+
+        # Rapor metrikleri
+        dev_pdks_top = db.execute("SELECT COUNT(*) FROM personel_devam WHERE kaynak='pdks'").fetchone()[0]
+        iz_yil_top   = db.execute(
+            f"SELECT COUNT(*) FROM personel_izin "
+            f"WHERE kullanici_profil_id IN ({ph_c}) AND yil=?",
+            profil_ids + [year]
+        ).fetchone()[0]
+
+        profil12 = db.execute(
+            "SELECT tarih,durum,giris_saati,cikis_saati,calisma_dakika "
+            "FROM personel_devam WHERE kullanici_profil_id=12 "
+            "AND tarih>='2025-03-01' AND tarih<='2025-03-31' ORDER BY tarih"
+        ).fetchall()
+        profil7 = db.execute(
+            "SELECT tarih,durum,giris_saati,cikis_saati,calisma_dakika "
+            "FROM personel_devam WHERE kullanici_profil_id=7 "
+            "AND tarih>='2025-03-01' AND tarih<='2025-03-31' ORDER BY tarih"
+        ).fetchall()
+
+        return jsonify({
+            'ok'                  : True,
+            'mod'                 : 'apply',
+            'year'                : year,
+            'backup_dizin'        : _bak,
+            'A_yazilan_devam'     : yaz_dev,
+            'B_skip_mukerrer'     : dev_muk,
+            'C_yazilan_izin'      : yaz_iz,
+            'D_skip_mevcut_cps'   : dev_cak + iz_cak,
+            'E_devam_pdks_toplam' : dev_pdks_top,
+            'F_izin_yil_toplam'   : iz_yil_top,
+            'G_profil12_mart_cnt' : len(profil12),
+            'G_profil12_mart_ilk5': [dict(r) for r in profil12[:5]],
+            'H_profil7_mart_cnt'  : len(profil7),
+            'H_profil7_mart_ilk5' : [dict(r) for r in profil7[:5]],
+            'mukerrer_liste'      : [
+                {'pdks_id': k[0], 'tarih': str(k[1]),
+                 'ad': eslesik.get(k[0], {}).get('ad', '?')}
+                for k in sorted(mukerrer)
+            ],
+            'not': 'Aktarim tamamlandi. Commit/push oncesi raporu kontrol et.',
+        })
+    finally:
+        try:
+            pdks.close()
+        except Exception:
+            pass
+
+
+# ── FAZ-6B TUTARSIZLIK ANALİZİ ────────────────────────────────────────────────
+
+@yonetim_bp.route('/api/pdks/faz6b-analiz', methods=['GET'])
+@yetki_gerekli('yonetim', 'can_read')
+def pdks_faz6b_analiz():
+    """GET /yonetim/api/pdks/faz6b-analiz?year=2025
+    Neden dry-run 1173 ama apply 1057 yazdı sorusunu cevaplar.
+    116 yazılmayan kaydın detaylı raporu.  DB'ye YAZMA YOK.
+    """
+    import datetime as _dt
+
+    year      = int(request.args.get('year', 2025))
+    TARIH_BAS = _dt.date(year, 1, 1)
+    TARIH_BIT = _dt.date(year, 12, 31)
+    GEC_SN    = 7 * 3600
+    IMAP      = {'gunluk':'yillik','yillik':'yillik','ucretsiz':'ucretsiz',
+                 'dogum':'dogum','olum':'olum','hastalik':'hastalik',
+                 'resmi':'resmi_tatil','resmi_tatil':'resmi_tatil',
+                 '0':'yillik','1':'yillik','2':'ucretsiz','3':'dogum',
+                 '4':'olum','5':'hastalik','6':'resmi_tatil'}
+
+    def _sn(td):
+        if td is None: return None
+        return int(td.total_seconds()) if isinstance(td, _dt.timedelta) else int(td)
+    def _hhmm(td):
+        s = _sn(td)
+        return None if s is None else f"{s//3600:02d}:{(s%3600)//60:02d}"
+    def _durum(g, c, iz):
+        if iz is not None and str(iz).strip() not in ('0','','None','null'): return 'izinli'
+        s = _sn(g)
+        return 'gelmedi' if s is None else ('gec_giris' if s>GEC_SN else 'geldi')
+    def _dk(g, c):
+        gg,cc = _sn(g),_sn(c)
+        if gg is None or cc is None: return None
+        d=(cc-gg)//60; return d if d>=0 else None
+    def _iztip(t): return IMAP.get(str(t or '').strip().lower(),'yillik')
+
+    db = _get_conn()
+
+    # ── 1) PRAGMA: personel_devam şeması ──────────────────────────────────────
+    pragma_cols  = [dict(r) for r in db.execute("PRAGMA table_info(personel_devam)").fetchall()]
+    pragma_idx   = [dict(r) for r in db.execute("PRAGMA index_list(personel_devam)").fetchall()]
+    idx_details  = []
+    for idx in pragma_idx:
+        detail = [dict(r) for r in db.execute(f"PRAGMA index_info({idx['name']})").fetchall()]
+        idx_details.append({'index': idx, 'columns': detail})
+
+    # NOT NULL sütunlar
+    notnull_cols = [c['name'] for c in pragma_cols if c['notnull']]
+
+    # ── 2) CPS'e yazılmış kayıtlar ────────────────────────────────────────────
+    devam_pdks_cnt = db.execute(
+        "SELECT COUNT(*) FROM personel_devam WHERE kaynak='pdks'"
+    ).fetchone()[0]
+
+    devam_sample = db.execute(
+        "SELECT kullanici_profil_id, tarih, personel_pk_id, durum, giris_saati "
+        "FROM personel_devam WHERE kaynak='pdks' "
+        "ORDER BY id LIMIT 5"
+    ).fetchall()
+
+    # ── 3) PDKS bağlantısı ────────────────────────────────────────────────────
+    try:
+        from modules.common.pdks import get_connection as _gc
+        pdks = _gc()
+    except Exception as e:
+        return jsonify({'ok':False,'hata':'PDKS: '+str(e)[:200]}), 503
+
+    try:
+        rows = db.execute(
+            "SELECT kp.id AS profil_id, kp.gercek_ad, kp.pdks_personel_id, pk.id AS pk_id "
+            "FROM kullanici_profil kp "
+            "LEFT JOIN personel_kullanici pk ON kp.kaynak='personel_kullanici' AND kp.kaynak_id=pk.id "
+            "WHERE kp.pdks_personel_id IS NOT NULL AND kp.aktif=1 ORDER BY kp.id"
+        ).fetchall()
+        eslesik = {}
+        for r in rows:
+            pid = int(r['pdks_personel_id']); pk = r['pk_id']
+            if pk is None:
+                alt = db.execute("SELECT id FROM personel_kullanici WHERE PdksPersonelId=? LIMIT 1",(pid,)).fetchone()
+                pk  = alt['id'] if alt else None
+            eslesik[pid] = {'profil_id':r['profil_id'],'pk_id':pk,'ad':r['gercek_ad']}
+
+        pids = list(eslesik.keys())
+        profil_ids = [v['profil_id'] for v in eslesik.values()]
+        if not pids:
+            return jsonify({'ok':True,'uyari':'Eslesik yok.'})
+
+        ph = ','.join(['%s']*len(pids))
+        p2 = pids + [TARIH_BAS, TARIH_BIT]
+
+        with pdks.cursor() as cur:
+            cur.execute(
+                f"SELECT personelid,giristarihi,girissaati,cikissaati,izintipi,aciklama "
+                f"FROM pts_giriscikis WHERE personelid IN ({ph}) "
+                f"AND giristarihi>=%s AND giristarihi<=%s ORDER BY personelid,giristarihi", p2)
+            gc_rows = cur.fetchall()
+
+        # ── 4) Mükerrer tespiti ───────────────────────────────────────────────
+        gc_sayac = {}
+        for r in gc_rows:
+            k = (r['personelid'], str(r['giristarihi']))
+            gc_sayac[k] = gc_sayac.get(k,0)+1
+        mukerrer = {k for k,v in gc_sayac.items() if v>1}
+
+        # ── 5) Mevcut CPS seti (kullanici_profil_id + tarih) ──────────────────
+        ph_c = ','.join(['?']*len(profil_ids)) if profil_ids else 'NULL'
+        mev_dev_set = set()
+        if profil_ids:
+            for r in db.execute(
+                f"SELECT kullanici_profil_id,tarih FROM personel_devam "
+                f"WHERE kullanici_profil_id IN ({ph_c})", profil_ids
+            ).fetchall():
+                mev_dev_set.add((r[0], str(r[1])))
+
+        # ── 6) Ayrıca personel_pk_id + tarih seti (orijinal UNIQUE constraint) ─
+        mev_dev_pk_set = set()
+        pk_ids = [v['pk_id'] for v in eslesik.values() if v['pk_id'] is not None]
+        if pk_ids:
+            ph_pk = ','.join(['?']*len(pk_ids))
+            for r in db.execute(
+                f"SELECT personel_pk_id,tarih FROM personel_devam "
+                f"WHERE personel_pk_id IN ({ph_pk})", pk_ids
+            ).fetchall():
+                mev_dev_pk_set.add((r[0], str(r[1])))
+
+        # ── 7) Tüm kayıtları sınıflandır ─────────────────────────────────────
+        yazilacak = []      # dry-run'da "yaz" diyenler
+        skip_muk  = []
+        skip_cak_profil = []  # (profil_id, tarih) zaten var
+        skip_pid  = []
+
+        # Apply'da "yazıldı" sayılanlar -- INSERT OR IGNORE sonucu rowcount=0
+        # olanlar = DB'deki gerçek çakışma nedenine göre ayrıştır
+        gercek_cakisma_pkid   = []  # personel_pk_id + tarih unique çakışması
+        gercek_cakisma_profil = []  # kullanici_profil_id + tarih partial unique çakışması
+        yazilacak_temiz       = []  # ne profil ne pk çakışması var -> gerçekten yazılmalı
+
+        for r in gc_rows:
+            inf = eslesik.get(r['personelid'])
+            if not inf or not inf['profil_id']:
+                skip_pid.append({'pdks_id':r['personelid'],'tarih':str(r['giristarihi'])})
+                continue
+            t = str(r['giristarihi'])
+            pdks_key = (r['personelid'], t)
+            if pdks_key in mukerrer:
+                skip_muk.append({'pdks_id':r['personelid'],'ad':inf['ad'],'tarih':t})
+                continue
+            cps_key_profil = (inf['profil_id'], t)
+            if cps_key_profil in mev_dev_set:
+                skip_cak_profil.append({'pdks_id':r['personelid'],'ad':inf['ad'],
+                    'profil_id':inf['profil_id'],'tarih':t,'sebep':'profil_id+tarih mevcut'})
+                continue
+            # Bu noktada dry-run "yazilacak" der. Şimdi apply'ın neden yazmadığını sınıflandır:
+            tpl_dev = (
+                inf['pk_id'], inf['profil_id'], t,
+                _durum(r.get('girissaati'),r.get('cikissaati'),r.get('izintipi')),
+                _hhmm(r.get('girissaati')), _hhmm(r.get('cikissaati')),
+                _dk(r.get('girissaati'),r.get('cikissaati')),
+                'pdks', r.get('aciklama'), 'pdks_faz6b',
+            )
+            yazilacak.append(tpl_dev)
+
+            pk_id = inf['pk_id']
+            cps_key_pk = (pk_id, t) if pk_id is not None else None
+
+            if pk_id is not None and cps_key_pk in mev_dev_pk_set:
+                gercek_cakisma_pkid.append({
+                    'pdks_id'  : r['personelid'],
+                    'ad'       : inf['ad'],
+                    'profil_id': inf['profil_id'],
+                    'pk_id'    : pk_id,
+                    'tarih'    : t,
+                    'giris'    : _hhmm(r.get('girissaati')),
+                    'cikis'    : _hhmm(r.get('cikissaati')),
+                    'durum'    : _durum(r.get('girissaati'),r.get('cikissaati'),r.get('izintipi')),
+                    'sebep'    : 'personel_pk_id+tarih UNIQUE çakışması (026 constraint)',
+                })
+            else:
+                yazilacak_temiz.append({
+                    'pdks_id'  : r['personelid'],
+                    'ad'       : inf['ad'],
+                    'profil_id': inf['profil_id'],
+                    'pk_id'    : pk_id,
+                    'tarih'    : t,
+                    'giris'    : _hhmm(r.get('girissaati')),
+                    'cikis'    : _hhmm(r.get('cikissaati')),
+                    'durum'    : _durum(r.get('girissaati'),r.get('cikissaati'),r.get('izintipi')),
+                })
+
+        # ── 8) profil_id=12 ve profil_id=7 özel analizi ───────────────────────
+        profil12_devam = db.execute(
+            "SELECT COUNT(*) FROM personel_devam "
+            "WHERE kullanici_profil_id=12 AND tarih>='2025-03-01' AND tarih<='2025-03-31'"
+        ).fetchone()[0]
+        profil12_pkid = db.execute(
+            "SELECT pdks_personel_id, kaynak_id FROM kullanici_profil WHERE id=12"
+        ).fetchone()
+        profil12_pk = None
+        if profil12_pkid:
+            profil12_pk = db.execute(
+                "SELECT id FROM personel_kullanici WHERE id=?",
+                (profil12_pkid['kaynak_id'],)
+            ).fetchone()
+
+        # profil_id=12 kaynak pdks_personel_id -> bul
+        profil12_pdks_id = profil12_pkid['pdks_personel_id'] if profil12_pkid else None
+        profil12_pdks_mart_cnt = 0
+        profil12_pdks_mart_sample = []
+        if profil12_pdks_id:
+            for r in gc_rows:
+                if r['personelid'] == int(profil12_pdks_id):
+                    t = str(r['giristarihi'])
+                    if '2025-03-01' <= t <= '2025-03-31':
+                        profil12_pdks_mart_cnt += 1
+                        if len(profil12_pdks_mart_sample) < 3:
+                            profil12_pdks_mart_sample.append({
+                                'tarih':t, 'giris':_hhmm(r.get('girissaati')),
+                                'cikis':_hhmm(r.get('cikissaati'))
+                            })
+
+        # profil 7
+        profil7_devam = db.execute(
+            "SELECT COUNT(*) FROM personel_devam "
+            "WHERE kullanici_profil_id=7 AND tarih>='2025-03-01' AND tarih<='2025-03-31'"
+        ).fetchone()[0]
+        profil7_pkid  = db.execute(
+            "SELECT pdks_personel_id, kaynak_id FROM kullanici_profil WHERE id=7"
+        ).fetchone()
+        profil7_pdks_id = profil7_pkid['pdks_personel_id'] if profil7_pkid else None
+        profil7_pdks_mart_cnt = 0
+        if profil7_pdks_id:
+            for r in gc_rows:
+                if r['personelid'] == int(profil7_pdks_id):
+                    t = str(r['giristarihi'])
+                    if '2025-03-01' <= t <= '2025-03-31':
+                        profil7_pdks_mart_cnt += 1
+
+        # profil 12 pk_id ile CPS mevcut devam
+        profil12_pk_id_int = profil12_pk['id'] if profil12_pk else None
+        profil12_pkid_devam = db.execute(
+            "SELECT COUNT(*) FROM personel_devam "
+            "WHERE personel_pk_id=? AND tarih>='2025-03-01' AND tarih<='2025-03-31'",
+            (profil12_pk_id_int,)
+        ).fetchone()[0] if profil12_pk_id_int else 0
+
+        profil7_pk_id_int = profil7_pkid['kaynak_id'] if profil7_pkid else None
+        profil7_pkid_devam = db.execute(
+            "SELECT COUNT(*) FROM personel_devam "
+            "WHERE personel_pk_id=? AND tarih>='2025-03-01' AND tarih<='2025-03-31'",
+            (profil7_pk_id_int,)
+        ).fetchone()[0] if profil7_pk_id_int else 0
+
+        # ── 9) rowcount teorisi: INSERT OR IGNORE davranışı ───────────────────
+        # SQLite INSERT OR IGNORE: constraint ihlalinde rowcount=0 (satır yazılmadı)
+        # Bu davranışı test edelim -- doğrulama için
+        rowcount_teorisi = {
+            'not': (
+                'INSERT OR IGNORE ile constraint ihlali olduğunda cursor.rowcount = 0 döner. '
+                'Bu nedenle yazılan_devam sayısı küçük çıkar. '
+                'Asıl soru: hangi constraint tetiklendi?'
+            ),
+            'personel_devam_constraints': [
+                'UNIQUE(personel_pk_id, tarih)  -- 026 migration, her pk_id+tarih için 1 satır',
+                'UNIQUE(kullanici_profil_id, tarih) WHERE kullanici_profil_id IS NOT NULL  -- 032 migration, partial index',
+                'NOT NULL: personel_pk_id  -- 026 migration, pk_id NULL olamaz!',
+            ],
+            'kritik_bulgu': (
+                '026 migration: personel_pk_id INTEGER NOT NULL. '
+                'FAZ-6B kararı: pk_id eksik profiller aktarılacak, personel_pk_id=NULL olabilir. '
+                'Ama 026 şemasında personel_pk_id NOT NULL! '
+                'Bu NOT NULL constraint INSERT OR IGNORE ile IGNORE edilir -- kayıt yazılmaz!'
+            ),
+        }
+
+        # NOT NULL check: pk_id=NULL olan hangi kayıtlar gönderildi?
+        pk_null_list = [r for r in yazilacak if r[0] is None]  # tuple[0] = personel_pk_id
+
+        return jsonify({
+            'ok': True,
+            'analiz_amaci': '116 kayıt neden yazılmadı?',
+
+            '1_schema': {
+                'pragma_cols' : pragma_cols,
+                'notnull_cols': notnull_cols,
+                'indexes'     : idx_details,
+                'kritik': 'personel_pk_id NOT NULL constraint var mı?',
+                'personel_pk_id_notnull': 'personel_pk_id' in notnull_cols,
+            },
+
+            '2_cps_mevcut': {
+                'devam_pdks_toplam'   : devam_pdks_cnt,
+                'devam_sample_5'      : [dict(r) for r in devam_sample],
+                'profil12_mart_profil_id_sorgu': profil12_devam,
+                'profil12_mart_pkid_sorgu'     : profil12_pkid_devam,
+                'profil7_mart_profil_id_sorgu' : profil7_devam,
+                'profil7_mart_pkid_sorgu'      : profil7_pkid_devam,
+            },
+
+            '3_pdks_verisi': {
+                'gc_rows_toplam': len(gc_rows),
+                'mukerrer_cifti': len(mukerrer),
+                'profil12_pdks_id'     : profil12_pdks_id,
+                'profil12_pdks_mart_cnt': profil12_pdks_mart_cnt,
+                'profil12_pdks_mart_sample': profil12_pdks_mart_sample,
+                'profil7_pdks_id'      : profil7_pdks_id,
+                'profil7_pdks_mart_cnt': profil7_pdks_mart_cnt,
+            },
+
+            '4_siniflandirma': {
+                'yazilacak_toplam'      : len(yazilacak),
+                'pk_null_kayit_sayisi'  : len(pk_null_list),
+                'pk_null_ornekler'      : [
+                    {'profil_id': r[1], 'tarih': r[2], 'durum': r[3]}
+                    for r in pk_null_list[:10]
+                ],
+                'pkid_constraint_cakisan': len(gercek_cakisma_pkid),
+                'pkid_cakisma_detay'    : gercek_cakisma_pkid[:20],
+                'profil_constraint_skip': len(skip_cak_profil),
+                'yazilabilir_temiz'     : len(yazilacak_temiz),
+                'yazilabilir_ornekler'  : yazilacak_temiz[:5],
+            },
+
+            '5_rowcount_analizi': rowcount_teorisi,
+
+            '6_idempotency_anahtar_karsilastirma': {
+                'dry_run_kontrol_eden'  : '(kullanici_profil_id, tarih) -- mevcut CPS seti',
+                'apply_ignore_eden_constraints': [
+                    'UNIQUE(personel_pk_id, tarih)  -- bu varsa bile dry-run GORMEZ',
+                    'UNIQUE(kullanici_profil_id, tarih) partial  -- dry-run bu ile kontrol ediyor, tutarlı',
+                    'NOT NULL personel_pk_id  -- pk_id=NULL olan kayıtlar IGNORE edilir, dry-run saymaz!',
+                ],
+                'tutarsizlik_kaynagi': (
+                    'Dry-run profil_id+tarih bakıyor, '
+                    'apply ise personel_pk_id NOT NULL + UNIQUE(pk_id,tarih) ile IGNORE oluyor. '
+                    'pk_id=NULL olan veya pk_id çakışan kayıtlar dry-run\'da sayılır ama apply\'da yazılmaz!'
+                ),
+            },
+
+            '7_cozum_oneri': {
+                'A_script_duzeltme': {
+                    'aciklama': 'personel_pk_id NOT NULL sorununu çöz',
+                    'secenekler': [
+                        'Migration 026\'da personel_pk_id INTEGER NOT NULL → INTEGER (NULL izin ver)',
+                        'Script: pk_id=NULL olan kayıtları farklı SQL ile yaz (DEFAULT 0 veya sahte pk_id)',
+                        'Migration 043: personel_devam.personel_pk_id kolonunu NULL yapan ALTER',
+                    ],
+                },
+                'B_1057_geri_alma': {
+                    'aciklama': '1057 kayıt temiz, geri almaya gerek yok. Doğru yazıldı.',
+                    'risk': 'Geri alma gerekmiyor.',
+                },
+                'C_116_neden_kaldi': {
+                    'olasi_sebep_1': f'pk_id=NULL olan {len(pk_null_list)} kayıt -- personel_pk_id NOT NULL constraint',
+                    'olasi_sebep_2': f'pk_id+tarih çakışan {len(gercek_cakisma_pkid)} kayıt -- UNIQUE(026) ihlali',
+                    'toplam': len(pk_null_list) + len(gercek_cakisma_pkid),
+                    'dogrulama': f'Bu toplam 116\'ya eşit mi: {len(pk_null_list) + len(gercek_cakisma_pkid) == 116}',
+                },
+            },
+        })
+
+    finally:
+        try:
+            pdks.close()
+        except Exception:
+            pass
+
+
+# ── Migration 044: personel_pk_id NOT NULL kaldır ────────────────────────────
+
+@yonetim_bp.route('/api/migration/044-dryrun', methods=['GET'])
+@yetki_gerekli('yonetim', 'can_read')
+def migration_044_dryrun():
+    """GET /yonetim/api/migration/044-dryrun — DB'ye yazma yok."""
+    db = _get_conn()
+
+    def _notnull(tablo, kolon):
+        for r in db.execute(f"PRAGMA table_info({tablo})").fetchall():
+            if r["name"] == kolon:
+                return bool(r["notnull"])
+        return False
+
+    pragma_cols = [dict(r) for r in db.execute("PRAGMA table_info(personel_devam)").fetchall()]
+    pragma_idx  = []
+    for r in db.execute("PRAGMA index_list(personel_devam)").fetchall():
+        cols = [dict(c) for c in db.execute(f"PRAGMA index_info({r['name']})").fetchall()]
+        pragma_idx.append({'index': dict(r), 'columns': cols})
+
+    pk_notnull = _notnull("personel_devam", "personel_pk_id")
+    toplam     = db.execute("SELECT COUNT(*) FROM personel_devam").fetchone()[0]
+    pdks_cnt   = db.execute("SELECT COUNT(*) FROM personel_devam WHERE kaynak='pdks'").fetchone()[0]
+    null_pk    = db.execute("SELECT COUNT(*) FROM personel_devam WHERE personel_pk_id IS NULL").fetchone()[0]
+    mig044     = db.execute("SELECT version FROM schema_migrations WHERE version='044'").fetchone()
+
+    return jsonify({
+        'ok'                    : True,
+        'personel_pk_id_notnull': pk_notnull,
+        'migration_044_gerekli' : pk_notnull,
+        'personel_devam_toplam' : toplam,
+        'pdks_kayit_sayisi'     : pdks_cnt,
+        'pk_id_null_mevcut'     : null_pk,
+        'schema_migrations_044' : 'kayitli' if mig044 else 'yok',
+        'pragma_cols'           : pragma_cols,
+        'pragma_indexes'        : pragma_idx,
+        'not'                   : 'DRY-RUN. DB yazilmadi.',
+    })
+
+
+@yonetim_bp.route('/api/migration/044-apply', methods=['GET'])
+@yetki_gerekli('yonetim', 'can_create')
+def migration_044_apply():
+    """GET /yonetim/api/migration/044-apply
+    Migration 044 APPLY: personel_pk_id NOT NULL kaldır.
+    Önce backup alır. 1057 PDKS kaydını korur.
+    """
+    import shutil as _shutil, os as _os, datetime as _dt, sqlite3 as _sqlite3
+    from config import Config as _Cfg
+
+    _db_src   = _Cfg.MOCK_DB_PATH                          # kesin doğru yol
+    _app_dir  = _os.path.dirname(_db_src)                  # app/
+    _root_dir = _os.path.dirname(_app_dir)                 # proje kökü
+    _bak_base = _os.path.join(_root_dir, '_backups')
+    _os.makedirs(_bak_base, exist_ok=True)
+    _ts  = _dt.datetime.now().strftime('%Y%m%d_%H%M%S')
+    _bak = _os.path.join(_bak_base, f'mig044_{_ts}')
+    _os.makedirs(_bak, exist_ok=True)
+    _shutil.copy2(_db_src, _os.path.join(_bak, 'mock_data.db'))
+
+    db_raw = _sqlite3.connect(_db_src)
+    db_raw.row_factory = _sqlite3.Row
+    cur = db_raw.cursor()
+
+    def _notnull_raw(tablo, kolon):
+        for r in db_raw.execute(f"PRAGMA table_info({tablo})").fetchall():
+            if r["name"] == kolon:
+                return bool(r["notnull"])
+        return False
+
+    try:
+        pk_notnull_once = _notnull_raw("personel_devam", "personel_pk_id")
+        toplam_once     = db_raw.execute("SELECT COUNT(*) FROM personel_devam").fetchone()[0]
+        pdks_once       = db_raw.execute("SELECT COUNT(*) FROM personel_devam WHERE kaynak='pdks'").fetchone()[0]
+
+        if not pk_notnull_once:
+            cur.execute(
+                "INSERT OR IGNORE INTO schema_migrations (version, aciklama) VALUES (?,?)",
+                ("044", "personel_devam.personel_pk_id NOT NULL kaldirildi — P360 nullable pk_id")
+            )
+            db_raw.commit()
+            db_raw.close()
+            return jsonify({
+                'ok': True, 'mod': 'skip',
+                'mesaj': 'personel_pk_id zaten NULL kabul ediyor.',
+                'toplam': toplam_once, 'pdks': pdks_once,
+            })
+
+        cur.execute("PRAGMA foreign_keys = OFF")
+        cur.execute("DROP TABLE IF EXISTS personel_devam_new")
+        cur.execute("""
+            CREATE TABLE personel_devam_new (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                personel_pk_id      INTEGER,
+                kullanici_profil_id INTEGER,
+                tarih               TEXT    NOT NULL,
+                durum               TEXT    NOT NULL DEFAULT 'geldi',
+                giris_saati         TEXT,
+                cikis_saati         TEXT,
+                calisma_dakika      INTEGER,
+                kaynak              TEXT    NOT NULL DEFAULT 'manuel',
+                aciklama            TEXT,
+                giren_kullanici     TEXT,
+                created_at          TEXT    NOT NULL DEFAULT (datetime('now')),
+                updated_at          TEXT    NOT NULL DEFAULT (datetime('now')),
+                UNIQUE (personel_pk_id, tarih)
+            )
+        """)
+
+        cur.execute("""
+            INSERT INTO personel_devam_new
+                (id, personel_pk_id, kullanici_profil_id, tarih, durum,
+                 giris_saati, cikis_saati, calisma_dakika, kaynak,
+                 aciklama, giren_kullanici, created_at, updated_at)
+            SELECT
+                 id, personel_pk_id, kullanici_profil_id, tarih, durum,
+                 giris_saati, cikis_saati, calisma_dakika, kaynak,
+                 aciklama, giren_kullanici, created_at, updated_at
+            FROM personel_devam
+        """)
+        kopyalanan = cur.rowcount
+
+        cur.execute("DROP TABLE personel_devam")
+        cur.execute("ALTER TABLE personel_devam_new RENAME TO personel_devam")
+
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_pdevam_personel_tarih ON personel_devam (personel_pk_id, tarih)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_pdevam_tarih_durum ON personel_devam (tarih, durum)")
+        cur.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS udx_devam_kullanici_profil_tarih
+            ON personel_devam(kullanici_profil_id, tarih)
+            WHERE kullanici_profil_id IS NOT NULL
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_pdevam_profil_tarih
+            ON personel_devam (kullanici_profil_id, tarih)
+            WHERE kullanici_profil_id IS NOT NULL
+        """)
+
+        cur.execute("PRAGMA foreign_keys = ON")
+        cur.execute(
+            "INSERT OR IGNORE INTO schema_migrations (version, aciklama) VALUES (?,?)",
+            ("044", "personel_devam.personel_pk_id NOT NULL kaldirildi — P360 nullable pk_id")
+        )
+        db_raw.commit()
+
+        toplam_sonra = db_raw.execute("SELECT COUNT(*) FROM personel_devam").fetchone()[0]
+        pdks_sonra   = db_raw.execute("SELECT COUNT(*) FROM personel_devam WHERE kaynak='pdks'").fetchone()[0]
+        pk_notnull_s = _notnull_raw("personel_devam", "personel_pk_id")
+        pragma_cols  = [dict(r) for r in db_raw.execute("PRAGMA table_info(personel_devam)").fetchall()]
+        db_raw.close()
+
+        return jsonify({
+            'ok'                    : True,
+            'mod'                   : 'apply',
+            'backup_dizin'          : _bak,
+            'once_toplam'           : toplam_once,
+            'once_pdks'             : pdks_once,
+            'kopyalanan'            : kopyalanan,
+            'sonra_toplam'          : toplam_sonra,
+            'sonra_pdks'            : pdks_sonra,
+            'kayit_korundu'         : toplam_once == toplam_sonra,
+            'pdks_korundu'          : pdks_once == pdks_sonra,
+            'personel_pk_id_notnull': pk_notnull_s,
+            'verify_notnull_ok'     : not pk_notnull_s,
+            'pragma_cols'           : pragma_cols,
+            'not': 'Mig044 tamamlandi. Simdiki adim: faz6b-preview ile 116 kayit dogrula.',
+        })
+
+    except Exception as e:
+        db_raw.rollback()
+        try:
+            db_raw.close()
+        except Exception:
+            pass
+        import traceback
+        return jsonify({'ok': False, 'hata': str(e), 'trace': traceback.format_exc()[:1500]}), 500

@@ -48,6 +48,9 @@ app/uploads/
 *.YEDEK*
 *.STABLE_*
 
+# FAZ-6B backups klasörü
+_backups/
+
 
 # CPS temporary scripts
 app/debug_*
