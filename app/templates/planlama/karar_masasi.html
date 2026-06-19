@@ -10,8 +10,9 @@
       <span class="km-baslik-metin">Planlama / Karar Masası</span>
     </div>
     <div class="km-baslik-sag">
-      <span class="km-rozet-mock">MOCK</span>
-      <span class="km-rozet-kolon">10 kolon <i class="ti ti-chevron-down"></i></span>
+      <!-- FAZ-P1B: kaynak rozeti JS tarafından güncellenir -->
+      <span id="km-kaynak-rozet" class="km-rozet-mock">MOCK</span>
+      <span class="km-rozet-kolon">8 kolon <i class="ti ti-chevron-down"></i></span>
       <span class="km-akilli-sira-rozet">Akıllı sıra <span class="km-as-on">ON</span></span>
     </div>
   </div>
@@ -132,6 +133,7 @@
 
   <div class="km-tablo-cerceve">
     <table class="km-tablo" id="km-tablo">
+      <!-- FAZ-P1B: BANT / TALİMAT gizlenebilir (tablet), PROSES kolonu eklendi -->
       <thead>
         <tr>
           <th class="km-th-no">#</th>
@@ -139,10 +141,10 @@
           <th>MODEL</th>
           <th class="km-th-num">KALAN</th>
           <th>TERMİN</th>
-          <th>ÜRETİLEBİLİR</th>
-          <th>DARBOĞAZ</th>
-          <th class="km-th-mid">BANT</th>
-          <th>USTA TALİMATI</th>
+          <th>DURUM</th>
+          <th class="km-col-proses">PROSES</th>
+          <th class="km-th-mid km-col-bant">BANT</th>
+          <th class="km-col-talimat">USTA TALİMATI</th>
           <th class="km-th-aksiyon">⋮</th>
         </tr>
       </thead>

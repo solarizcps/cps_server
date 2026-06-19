@@ -1,7 +1,15 @@
 /* v6_BUYUT_20260506_182648 */
-/* KARAR MASASI v6 — MOCKUP BIREBIR */
+/* KARAR MASASI v6 — FAZ-P1B tablet layout + proses rozetleri */
 
-.km-sayfa { padding: 22px 28px; background: #f6f7f9; min-height: 100vh; }
+/* FAZ-P1B: Yatay kayma önlemi — sayfa genişliği viewport'u aşmasın */
+.km-sayfa {
+  padding: 22px 28px;
+  background: #f6f7f9;
+  min-height: 100vh;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
 
 .km-baslik-blok { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
 .km-baslik { display: flex; align-items: center; gap: 10px; }
@@ -87,12 +95,14 @@
 .km-kpi-progress-bar.kirmizi { background: #e24b4a; }
 
 /* === FILTRE === */
+/* FAZ-P1B: wrap izin ver — dar ekranda alt satıra geçsin, kaymasın */
 .km-filtre-cubuk {
-  display: flex; gap: 12px; align-items: center;
-  margin-bottom: 14px; flex-wrap: nowrap;
+  display: flex; gap: 10px; align-items: center;
+  margin-bottom: 14px; flex-wrap: wrap;
   background: #fff; border: 1px solid rgba(17,24,39,0.06);
   border-radius: 14px; padding: 12px 16px;
   box-shadow: 0 2px 8px rgba(15,23,42,0.025);
+  max-width: 100%; box-sizing: border-box;
 }
 .km-tab-grup { display: flex; gap: 0; background: #f3f4f6; border-radius: 10px; padding: 4px; align-items: center; }
 .km-tab {
@@ -205,14 +215,17 @@ body.km-manuel-aktif .km-filtre-cubuk {
 }
 
 /* === TABLO === */
+/* FAZ-P1B: overflow sadece tablo çerçevesinde, tüm sayfa değil */
 .km-tablo-cerceve {
   background: #fff; border: 1px solid rgba(17,24,39,0.06);
-  border-radius: 14px; overflow: hidden;
+  border-radius: 14px; overflow-x: auto;
   box-shadow: 0 4px 16px rgba(15,23,42,0.04);
+  max-width: 100%;
 }
 .km-tablo {
-  width: 100%; border-collapse: separate; border-spacing: 0;
-  font-size: 14.5px; color: #111827; font-family: inherit;
+  width: 100%; min-width: 800px;
+  border-collapse: separate; border-spacing: 0;
+  font-size: 14px; color: #111827; font-family: inherit;
 }
 .km-tablo thead tr { height: 48px; }
 .km-tablo th {
@@ -372,3 +385,61 @@ body.km-manuel-aktif .km-filtre-cubuk {
 /* ── FAZ43 Sprint 5 — Görev Modal ── */
 #km-gh-modal-wrap { position:fixed; z-index:9100; }
 /* ── END Modal CSS ── */
+
+/* ── FAZ-P1B: Proses Rozet Stilleri ── */
+.km-proses-zincir {
+  display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;
+}
+.km-proses-rozet {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 10.5px; font-weight: 600;
+  padding: 2px 7px; border-radius: 999px;
+  white-space: nowrap; line-height: 1.4;
+}
+.km-proses-rozet-bitti {
+  background: #dcfce7; color: #166534;
+}
+.km-proses-rozet-devam {
+  background: #fef3c7; color: #92400e;
+}
+.km-proses-rozet-bekliyor {
+  background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0;
+}
+/* Aktif proses — koyu vurgu */
+.km-proses-hucre {
+  min-width: 140px; max-width: 220px;
+}
+.km-proses-aktif-satir {
+  font-size: 11px; color: #6b7280; margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ── FAZ-P1B: Kaynak rozeti (GERCEK/MOCK) ── */
+.km-rozet-gercek {
+  font-size: 11px; padding: 4px 10px; border-radius: 999px;
+  background: #dcfce7; color: #166534; border: 1px solid #86efac;
+  font-weight: 700; letter-spacing: 0.5px;
+}
+.km-rozet-mock {
+  font-size: 11px; padding: 4px 10px; border-radius: 999px;
+  background: #fff; color: #7e3f98; border: 1px solid #e9d5ff;
+  font-weight: 700; letter-spacing: 0.5px;
+}
+
+/* ── FAZ-P1B: Tablet responsive — Bant / Talimat gizle ── */
+@media (max-width: 1100px) {
+  .km-tablo .km-col-bant,
+  .km-tablo .km-col-talimat {
+    display: none;
+  }
+  .km-kpi { flex-wrap: wrap; }
+  .km-kpi-hucre { min-width: calc(33% - 12px); }
+  .km-filtre-cubuk .km-fil-arama-wrap { min-width: 160px; }
+}
+@media (max-width: 800px) {
+  .km-sayfa { padding: 14px 10px; }
+  .km-kpi-hucre { min-width: calc(50% - 12px); }
+  .km-tablo { font-size: 12.5px; }
+  .km-tablo td, .km-tablo th { padding: 10px 8px; }
+}
+/* ── END FAZ-P1B ── */
