@@ -2556,7 +2556,7 @@ def personel_360_secenekler():
 
 
 @yonetim_bp.route('/api/personel-360/eksik-hr-alanlari', methods=['GET'])
-@yetki_gerekli('personel_360', 'can_view')
+@yetki_gerekli('personel_360.ik', 'can_view')  # FAZ-7C-2: maaş içeriyor → IK yetkisi zorunlu
 def personel_360_eksik_hr():
     """
     Eksik HR alanı olan personelleri döndürür.
@@ -7070,7 +7070,7 @@ def pdks_cps_personel_olustur():
 # ── FAZ-4F: Yeni Profil Eksik Alan Analizi ───────────────────────────────────
 
 @yonetim_bp.route('/api/pdks/profil-eksik-analiz/<int:profil_id>', methods=['GET'])
-@yetki_gerekli('yonetim', 'can_read')
+@yetki_gerekli('yonetim', 'can_view')  # FAZ-7C-2: can_read→can_view (can_read tanımsız action)
 def pdks_profil_eksik_analiz(profil_id):
     """GET /yonetim/api/pdks/profil-eksik-analiz/<profil_id>
 
@@ -7275,7 +7275,7 @@ def pdks_profil_eksik_analiz(profil_id):
 # ── FAZ-5A: Personel 360 Organizasyon Tamamlama Analizi ──────────────────────
 
 @yonetim_bp.route('/api/personel-360/<int:profil_id>/organizasyon-analiz', methods=['GET'])
-@yetki_gerekli('yonetim', 'can_read')
+@yetki_gerekli('yonetim', 'can_view')  # FAZ-7C-2: can_read→can_view (admin-only analiz)
 def personel_360_organizasyon_analiz(profil_id):
     """GET /yonetim/api/personel-360/<profil_id>/organizasyon-analiz
 
@@ -7459,7 +7459,7 @@ def personel_360_organizasyon_analiz(profil_id):
 # ── FAZ-5B: Personel 360 Aylık/Yıllık Devam Geçmişi ─────────────────────────
 
 @yonetim_bp.route('/api/personel-360/<int:profil_id>/pdks-devam-gecmisi', methods=['GET'])
-@yetki_gerekli('yonetim', 'can_read')
+@yetki_gerekli('personel_360', 'can_view')  # FAZ-7C-2: yonetim:can_read→personel_360:can_view (usta da görmeli)
 def personel_360_pdks_devam_gecmisi(profil_id):
     """GET /yonetim/api/personel-360/<profil_id>/pdks-devam-gecmisi?ay=2026-06
 
@@ -7514,7 +7514,7 @@ def personel_360_pdks_devam_gecmisi(profil_id):
 # ── FAZ-6A: PDKS Historical Sync Dry-Run ─────────────────────────────────────
 
 @yonetim_bp.route('/api/pdks/faz6a-dryrun', methods=['GET'])
-@yetki_gerekli('yonetim', 'can_read')
+@yetki_gerekli('yonetim', 'can_view')  # FAZ-7C-2: can_read→can_view (teknik admin endpoint)
 def pdks_faz6a_dryrun():
     """GET /yonetim/api/pdks/faz6a-dryrun
 
@@ -8190,7 +8190,7 @@ def pdks_faz6b_sync():
 # ── FAZ-6B GET endpoints (browser URL ile cagrilabilir) ──────────────────────
 
 @yonetim_bp.route('/api/pdks/faz6b-preview', methods=['GET'])
-@yetki_gerekli('yonetim', 'can_read')
+@yetki_gerekli('yonetim', 'can_view')  # FAZ-7C-2: can_read→can_view
 def pdks_faz6b_preview():
     """GET /yonetim/api/pdks/faz6b-preview?year=2025  --  DRY-RUN, DB'ye yazma yok."""
     import datetime as _dt
@@ -8606,7 +8606,7 @@ def pdks_faz6b_apply():
 # ── FAZ-6B TUTARSIZLIK ANALİZİ ────────────────────────────────────────────────
 
 @yonetim_bp.route('/api/pdks/faz6b-analiz', methods=['GET'])
-@yetki_gerekli('yonetim', 'can_read')
+@yetki_gerekli('yonetim', 'can_view')  # FAZ-7C-2: can_read→can_view
 def pdks_faz6b_analiz():
     """GET /yonetim/api/pdks/faz6b-analiz?year=2025
     Neden dry-run 1173 ama apply 1057 yazdı sorusunu cevaplar.
@@ -8974,7 +8974,7 @@ def pdks_faz6b_analiz():
 # ── Migration 044: personel_pk_id NOT NULL kaldır ────────────────────────────
 
 @yonetim_bp.route('/api/migration/044-dryrun', methods=['GET'])
-@yetki_gerekli('yonetim', 'can_read')
+@yetki_gerekli('yonetim', 'can_view')  # FAZ-7C-2: can_read→can_view (teknik endpoint)
 def migration_044_dryrun():
     """GET /yonetim/api/migration/044-dryrun — DB'ye yazma yok."""
     db = _get_conn()
