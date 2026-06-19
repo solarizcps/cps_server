@@ -97,31 +97,31 @@
        color:var(--text3);font-size:13px;">Sonuç bulunamadı.</div>
 </div>
 
-<!-- CPS'e Al Modal -->
+<!-- CPS'e Al Modal — FAZ-7C-3: overlay solid, iç kutu opacity:1 -->
 <div id="pam-modal" style="display:none;position:fixed;inset:0;z-index:9999;
-     background:rgba(0,0,0,0.45);align-items:center;justify-content:center;">
-  <div style="background:var(--bg1);border-radius:10px;
-              box-shadow:0 8px 32px rgba(0,0,0,0.22);
-              padding:28px 32px;max-width:420px;width:90%;position:relative;">
+     background:rgba(0,0,0,0.55);align-items:center;justify-content:center;">
+  <div style="background:#ffffff;border-radius:10px;opacity:1;
+              box-shadow:0 8px 40px rgba(0,0,0,0.32);
+              padding:28px 32px;max-width:420px;width:90%;position:relative;z-index:10000;">
     <h3 style="margin:0 0 16px;font-size:15px;color:#166534;">
       👤 CPS Personel Oluşturulacak
     </h3>
     <table style="width:100%;font-size:13px;border-collapse:collapse;margin-bottom:18px;">
       <tr>
-        <td style="color:var(--text3);padding:5px 0;width:90px;">Ad Soyad</td>
-        <td style="font-weight:600;color:var(--text1);" id="pam-modal-ad">—</td>
+        <td style="color:#6b7280;padding:5px 0;width:90px;">Ad Soyad</td>
+        <td style="font-weight:600;color:#111827;" id="pam-modal-ad">—</td>
       </tr>
       <tr>
-        <td style="color:var(--text3);padding:5px 0;">PDKS Görev</td>
-        <td style="color:var(--text2);" id="pam-modal-gorev">—</td>
+        <td style="color:#6b7280;padding:5px 0;">PDKS Görev</td>
+        <td style="color:#374151;" id="pam-modal-gorev">—</td>
       </tr>
       <tr>
-        <td style="color:var(--text3);padding:5px 0;">PDKS Bölüm</td>
-        <td style="color:var(--text2);" id="pam-modal-bolum">—</td>
+        <td style="color:#6b7280;padding:5px 0;">PDKS Bölüm</td>
+        <td style="color:#374151;" id="pam-modal-bolum">—</td>
       </tr>
     </table>
-    <p style="font-size:12px;color:var(--text3);margin:0 0 18px;
-              border-top:1px solid var(--border);padding-top:12px;">
+    <p style="font-size:12px;color:#6b7280;margin:0 0 18px;
+              border-top:1px solid #e5e7eb;padding-top:12px;">
       Devam bağlantısı kurulacak. Profil oluşturulacak ama oturum açılamaz —
       ileriki adımda şifre atanacak.
     </p>
@@ -129,8 +129,8 @@
          color:#dc2626;border-radius:6px;font-size:12px;margin-bottom:12px;"></div>
     <div style="display:flex;gap:10px;justify-content:flex-end;">
       <button onclick="pamModalKapat()"
-        style="padding:7px 18px;border-radius:6px;border:1px solid var(--border);
-               background:var(--bg2);cursor:pointer;font-size:13px;color:var(--text1);">
+        style="padding:7px 18px;border-radius:6px;border:1px solid #d1d5db;
+               background:#f9fafb;cursor:pointer;font-size:13px;color:#374151;">
         İptal
       </button>
       <button id="pam-modal-onay-btn" onclick="pamOnayla()"
