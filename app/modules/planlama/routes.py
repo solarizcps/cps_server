@@ -2250,6 +2250,190 @@ def _km_ozet(satirlar):
 
 
 
+def _km_proses_yukle(con, emir_nos):
+    """FAZ-P1A: Emir listesi için Korgun proses zincirini batch olarak yükle.
+
+    Referans: hedef/routes.py satır 654-716 (_korgun_plan_satirlar_olustur içi).
+    Döndürür: {emir_no (int): [proses_dict, ...]}
+    Hata durumunda boş dict döner — çağıran satır bu olmadan da çalışmaya devam eder.
+    """
+    import logging as _log
+    from collections import defaultdict
+
+    if not emir_nos:
+        return {}
+
+    _logger = _log.getLogger(__name__)
+    ph = ','.join(['%s'] * len(emir_nos))
+    emir_nos_t = tuple(int(e) for e in emir_nos)
+
+    # --- 1) em_giren: Urt_Em_gch SUM(Giren) — emir başına toplam girilen adet ---
+    em_giren = {}
+    try:
+        with con.cursor() as cur:
+            cur.execute(f"""
+                SELECT EmirNo, COALESCE(SUM(Giren), 0) AS giren
+                FROM Urt_Em_gch
+                WHERE EmirNo IN ({ph})
+                GROUP BY EmirNo
+            """, emir_nos_t)
+            em_giren = {int(r[0]): int(float(r[1] or 0)) for r in cur.fetchall()}
+    except Exception as _e:
+        _logger.warning("KM_PROSES: em_giren sorgu hatasi: %s", _e)
+
+    # --- 2) wait_by_emir: Urt_Wait_gch — bekleyen (henüz başlanmamış) prosesler ---
+    wait_by_emir = defaultdict(list)
+    try:
+        with con.cursor() as cur:
+            cur.execute(f"""
+                SELECT
+                    g.EmirNo,
+                    g.Proses,
+                    ISNULL(pm.Tanim, CAST(g.Proses AS VARCHAR(20))) AS proses_adi,
+                    COALESCE(SUM(ISNULL(g.Giren, 0) - ISNULL(g.Cikan, 0)), 0) AS baslayacak
+                FROM Urt_Wait_gch g
+                LEFT JOIN Proses_M pm ON pm.Pro = g.Proses
+                WHERE g.EmirNo IN ({ph})
+                GROUP BY g.EmirNo, g.Proses, pm.Tanim
+                HAVING COALESCE(SUM(ISNULL(g.Giren, 0) - ISNULL(g.Cikan, 0)), 0) > 0
+            """, emir_nos_t)
+            wcols = [d[0] for d in cur.description]
+            for r in cur.fetchall():
+                rd = dict(zip(wcols, r))
+                wait_by_emir[int(rd['EmirNo'])].append(rd)
+    except Exception as _e:
+        _logger.warning("KM_PROSES: wait_by_emir sorgu hatasi: %s", _e)
+
+    # --- 3) con_by_emir: Urt_con_gch — gerçekleşen prosesler (verilen/biten/devam) ---
+    con_by_emir = defaultdict(list)
+    try:
+        with con.cursor() as cur:
+            cur.execute(f"""
+                SELECT
+                    g.EmirNo,
+                    g.Proses,
+                    ISNULL(pm.Tanim, CAST(g.Proses AS VARCHAR(20))) AS proses_adi,
+                    COALESCE(SUM(ISNULL(g.Giren, 0)), 0)                                     AS verilen,
+                    COALESCE(SUM(ISNULL(g.Giren,0)-ISNULL(g.Cikan,0)-ISNULL(g.Fire,0)), 0)  AS devam_eden,
+                    COALESCE(SUM(ISNULL(g.Cikan, 0)), 0)                                     AS biten
+                FROM Urt_con_gch g
+                LEFT JOIN Proses_M pm ON pm.Pro = g.Proses
+                WHERE g.EmirNo IN ({ph})
+                GROUP BY g.EmirNo, g.Proses, pm.Tanim
+                HAVING COALESCE(SUM(ISNULL(g.Giren, 0)), 0) > 0
+                    OR COALESCE(SUM(ISNULL(g.Cikan, 0)), 0) > 0
+            """, emir_nos_t)
+            ccols = [d[0] for d in cur.description]
+            for r in cur.fetchall():
+                rd = dict(zip(ccols, r))
+                con_by_emir[int(rd['EmirNo'])].append(rd)
+    except Exception as _e:
+        _logger.warning("KM_PROSES: con_by_emir sorgu hatasi: %s", _e)
+
+    # --- 4) Birleştir: her emir için proses listesi üret ---
+    result = {}
+    for en in emir_nos_t:
+        prosesler = []
+
+        # con kayıtları: gerçekleşen
+        for p in con_by_emir.get(en, []):
+            verilen  = int(float(p.get('verilen')    or 0))
+            biten    = int(float(p.get('biten')      or 0))
+            devam    = int(float(p.get('devam_eden') or 0))
+            kalan    = max(0, verilen - biten)
+            if verilen <= 0 and biten <= 0:
+                continue
+            if kalan <= 0 and devam <= 0:
+                durum = "BITTI"
+            elif devam > 0 or biten < verilen:
+                durum = "DEVAM"
+            else:
+                durum = "BITTI"
+            prosesler.append({
+                "proses_kod" : p.get('Proses'),
+                "ad"         : str(p.get('proses_adi') or p.get('Proses') or '—'),
+                "giren"      : em_giren.get(en, 0),
+                "verilen"    : verilen,
+                "yapilan"    : biten,
+                "devam_eden" : devam,
+                "kalan"      : kalan,
+                "durum"      : durum,
+                "kaynak"     : "con",
+            })
+
+        # wait kayıtları: bekleyen
+        for p in wait_by_emir.get(en, []):
+            baslayacak = int(float(p.get('baslayacak') or 0))
+            if baslayacak <= 0:
+                continue
+            prosesler.append({
+                "proses_kod" : p.get('Proses'),
+                "ad"         : str(p.get('proses_adi') or p.get('Proses') or '—'),
+                "giren"      : em_giren.get(en, 0),
+                "verilen"    : baslayacak,
+                "yapilan"    : 0,
+                "devam_eden" : 0,
+                "kalan"      : baslayacak,
+                "durum"      : "BEKLIYOR",
+                "kaynak"     : "wait",
+            })
+
+        # Proses kodu ile sırala (küçük → büyük = üretim sırası)
+        prosesler.sort(key=lambda x: (int(x['proses_kod'] or 0) if x['proses_kod'] else 0))
+        result[en] = prosesler
+
+    return result
+
+
+def _km_aktif_proses(prosesler):
+    """FAZ-P1A: Proses listesinden aktif (en ileri, yapılan > 0) proses adını döndür.
+
+    Mantık: en yüksek proses kodunda yapilan>0 olanı bul.
+    Referans: hedef/korgun_v2.py hesapla_uretim_asamasi()
+    """
+    if not prosesler:
+        return None
+    en_yuksek_kod = -1
+    aktif_ad = None
+    for p in prosesler:
+        try:
+            kod = int(p.get('proses_kod') or 0)
+        except Exception:
+            continue
+        yp = int(p.get('yapilan') or 0)
+        if yp > 0 and kod > en_yuksek_kod:
+            en_yuksek_kod = kod
+            aktif_ad = p.get('ad')
+    if aktif_ad:
+        return aktif_ad
+    # Yapılan yoksa ilk BEKLIYOR proses
+    for p in prosesler:
+        if p.get('durum') == 'BEKLIYOR':
+            return p.get('ad')
+    # Hepsi bittiyse
+    if all(p.get('durum') == 'BITTI' for p in prosesler):
+        return 'BITTI'
+    return None
+
+
+def _km_darbogaz_proses(prosesler):
+    """FAZ-P1A: En fazla kalan miktarı olan aktif prosesi darboğaz olarak işaretle.
+
+    İlk versiyon: DEVAM durumunda kalan en yüksek → yoksa ilk BEKLIYOR → yoksa None.
+    """
+    if not prosesler:
+        return None
+    # DEVAM olanlar arasında en yüksek kalan
+    devam_prosesler = [p for p in prosesler if p.get('durum') == 'DEVAM']
+    if devam_prosesler:
+        return max(devam_prosesler, key=lambda p: int(p.get('kalan') or 0)).get('ad')
+    # BEKLIYOR olanlar arasında ilk
+    for p in prosesler:
+        if p.get('durum') == 'BEKLIYOR':
+            return p.get('ad')
+    return None
+
+
 def _km_gercek_satirlar(limit=100):
     """FAZ-P0-FIX: Korgun'dan açık sipariş emirlerini çekip Karar Masası formatına dönüştür.
 
@@ -2311,6 +2495,17 @@ def _km_gercek_satirlar(limit=100):
             cols = [d[0] for d in cur.description]
             rows = [dict(zip(cols, r)) for r in cur.fetchall()]
 
+        # FAZ-P1A: proses zinciri — bağlantı hâlâ açık, batch olarak yükle
+        proses_map = {}
+        if rows:
+            emir_nos_list = [int(r['EmirNo']) for r in rows if r.get('EmirNo')]
+            try:
+                proses_map = _km_proses_yukle(con, emir_nos_list)
+            except Exception as _pe:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "KM_GERCEK: proses yukle hatasi (satirlar proses'siz donecek): %s", _pe)
+
     except Exception as _e:
         import logging
         logging.getLogger(__name__).error(
@@ -2333,6 +2528,7 @@ def _km_gercek_satirlar(limit=100):
             model    = str(r.get('stok_tanim')  or stok_kod).strip()
             renk     = str(r.get('renk')        or '—').strip()
             emir_no  = str(r.get('EmirNo')      or '').strip()
+            emir_no_int = int(emir_no) if emir_no.isdigit() else 0
             toplam   = int(float(r.get('toplam_miktar') or 0))
             kalan    = int(float(r.get('acik_miktar')   or 0))
             yapilan  = max(0, toplam - kalan)
@@ -2355,6 +2551,14 @@ def _km_gercek_satirlar(limit=100):
                 uretilebilirlik = "TAMAM"
             else:
                 uretilebilirlik = "HAZIR"
+
+            # FAZ-P1A: proses zinciri
+            prosesler     = proses_map.get(emir_no_int, [])
+            aktif_proses  = _km_aktif_proses(prosesler)
+            darb_proses   = _km_darbogaz_proses(prosesler)
+            em_giren_adet = next(
+                (p.get('giren', 0) for p in prosesler if p.get('giren')), 0
+            ) if prosesler else 0
 
             satir = {
                 "musteri"           : musteri,
@@ -2380,9 +2584,14 @@ def _km_gercek_satirlar(limit=100):
                 "uretilebilirlik"   : uretilebilirlik,
                 "bloke_sebebi"      : None,
                 "bant"              : None,
-                "darbogaz"          : {"var": False},
+                "darbogaz"          : {"var": darb_proses is not None, "proses": darb_proses},
                 "not"               : "",
                 "talimat"           : "",
+                # FAZ-P1A: proses zinciri alanları
+                "prosesler"         : prosesler,
+                "aktif_proses"      : aktif_proses,
+                "darbogaz_proses"   : darb_proses,
+                "em_giren"          : em_giren_adet,
             }
             satir["satir_rengi"] = _km_satir_rengi(satir)
             satirlar.append(satir)
