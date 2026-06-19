@@ -97,31 +97,113 @@
        color:var(--text3);font-size:13px;">Sonuç bulunamadı.</div>
 </div>
 
-<!-- CPS'e Al Modal — FAZ-7C-3: overlay solid, iç kutu opacity:1 -->
+<!-- CPS'e Al Modal — FAZ-7C-3: overlay solid | FAZ-7C-4: sınıflandırma alanları -->
 <div id="pam-modal" style="display:none;position:fixed;inset:0;z-index:9999;
      background:rgba(0,0,0,0.55);align-items:center;justify-content:center;">
   <div style="background:#ffffff;border-radius:10px;opacity:1;
               box-shadow:0 8px 40px rgba(0,0,0,0.32);
-              padding:28px 32px;max-width:420px;width:90%;position:relative;z-index:10000;">
-    <h3 style="margin:0 0 16px;font-size:15px;color:#166534;">
+              padding:28px 32px;max-width:480px;width:92%;position:relative;z-index:10000;
+              max-height:90vh;overflow-y:auto;">
+    <h3 style="margin:0 0 14px;font-size:15px;color:#166534;">
       👤 CPS Personel Oluşturulacak
     </h3>
-    <table style="width:100%;font-size:13px;border-collapse:collapse;margin-bottom:18px;">
-      <tr>
-        <td style="color:#6b7280;padding:5px 0;width:90px;">Ad Soyad</td>
-        <td style="font-weight:600;color:#111827;" id="pam-modal-ad">—</td>
-      </tr>
-      <tr>
-        <td style="color:#6b7280;padding:5px 0;">PDKS Görev</td>
-        <td style="color:#374151;" id="pam-modal-gorev">—</td>
-      </tr>
-      <tr>
-        <td style="color:#6b7280;padding:5px 0;">PDKS Bölüm</td>
-        <td style="color:#374151;" id="pam-modal-bolum">—</td>
-      </tr>
-    </table>
-    <p style="font-size:12px;color:#6b7280;margin:0 0 18px;
-              border-top:1px solid #e5e7eb;padding-top:12px;">
+
+    <!-- PDKS kaynaklı — readonly bilgiler -->
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:7px;
+                padding:10px 14px;margin-bottom:14px;font-size:13px;">
+      <div style="font-size:11px;font-weight:600;color:#166534;margin-bottom:7px;
+                  text-transform:uppercase;letter-spacing:.04em;">PDKS'ten Gelen Bilgi</div>
+      <table style="width:100%;border-collapse:collapse;">
+        <tr>
+          <td style="color:#6b7280;padding:3px 0;width:90px;font-size:12px;">Ad Soyad</td>
+          <td style="font-weight:600;color:#111827;font-size:13px;" id="pam-modal-ad">—</td>
+        </tr>
+        <tr>
+          <td style="color:#6b7280;padding:3px 0;font-size:12px;">PDKS Görev</td>
+          <td style="color:#374151;font-size:12px;" id="pam-modal-gorev">—</td>
+        </tr>
+        <tr>
+          <td style="color:#6b7280;padding:3px 0;font-size:12px;">PDKS Bölüm</td>
+          <td style="color:#374151;font-size:12px;" id="pam-modal-bolum">—</td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- CPS sınıflandırma alanları — kullanıcı seçer -->
+    <div style="margin-bottom:14px;">
+      <div style="font-size:11px;font-weight:600;color:#374151;margin-bottom:8px;
+                  text-transform:uppercase;letter-spacing:.04em;">CPS Sınıflandırması <span style="color:#dc2626;">*</span></div>
+
+      <!-- Personel Tipi -->
+      <div style="margin-bottom:10px;">
+        <label style="display:block;font-size:12px;color:#374151;font-weight:600;margin-bottom:4px;">
+          Personel Tipi <span style="color:#dc2626;">*</span>
+        </label>
+        <div style="display:flex;gap:8px;">
+          <label style="flex:1;display:flex;align-items:center;gap:6px;cursor:pointer;
+                        border:2px solid #e5e7eb;border-radius:6px;padding:7px 10px;
+                        font-size:13px;color:#374151;transition:border-color .15s;"
+                 id="pam-tip-uretim-lbl">
+            <input type="radio" name="pam-personel-tipi" value="Üretim Personeli"
+                   id="pam-tip-uretim" style="accent-color:#166534;">
+            🔧 Üretim
+          </label>
+          <label style="flex:1;display:flex;align-items:center;gap:6px;cursor:pointer;
+                        border:2px solid #e5e7eb;border-radius:6px;padding:7px 10px;
+                        font-size:13px;color:#374151;transition:border-color .15s;"
+                 id="pam-tip-idari-lbl">
+            <input type="radio" name="pam-personel-tipi" value="İdari Personel"
+                   id="pam-tip-idari" style="accent-color:#166534;">
+            🏢 İdari
+          </label>
+        </div>
+      </div>
+
+      <!-- Departman -->
+      <div style="margin-bottom:10px;">
+        <label for="pam-departman"
+               style="display:block;font-size:12px;color:#374151;font-weight:600;margin-bottom:4px;">
+          Departman / Birim <span style="color:#dc2626;">*</span>
+        </label>
+        <select id="pam-departman"
+                style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;
+                       font-size:13px;color:#374151;background:#fff;appearance:auto;">
+          <option value="">— Seçin —</option>
+          <optgroup label="Üretim">
+            <option value="Enjeksiyon">Enjeksiyon</option>
+            <option value="Montaj">Montaj</option>
+            <option value="Temizleme">Temizleme</option>
+            <option value="Paketleme">Paketleme</option>
+            <option value="Depo">Depo</option>
+            <option value="Kalite">Kalite</option>
+          </optgroup>
+          <optgroup label="İdari">
+            <option value="Planlama">Planlama</option>
+            <option value="Muhasebe">Muhasebe</option>
+            <option value="İnsan Kaynakları">İnsan Kaynakları</option>
+            <option value="Grafik">Grafik</option>
+            <option value="E-Ticaret">E-Ticaret</option>
+            <option value="İdari">İdari</option>
+          </optgroup>
+        </select>
+      </div>
+
+      <!-- Pozisyon -->
+      <div style="margin-bottom:4px;">
+        <label for="pam-pozisyon"
+               style="display:block;font-size:12px;color:#374151;font-weight:600;margin-bottom:4px;">
+          Pozisyon / Görev
+          <span style="font-weight:400;color:#9ca3af;">(PDKS görevi öneri, değiştirilebilir)</span>
+        </label>
+        <input type="text" id="pam-pozisyon" placeholder="Örn: Enjeksiyon Operatörü"
+               style="width:100%;box-sizing:border-box;padding:7px 10px;
+                      border:1px solid #d1d5db;border-radius:6px;
+                      font-size:13px;color:#374151;background:#fff;">
+      </div>
+    </div>
+
+    <p style="font-size:12px;color:#6b7280;margin:0 0 14px;
+              border-top:1px solid #e5e7eb;padding-top:10px;">
       Devam bağlantısı kurulacak. Profil oluşturulacak ama oturum açılamaz —
       ileriki adımda şifre atanacak.
     </p>
@@ -298,12 +380,35 @@
     document.getElementById('pam-modal-ad').textContent    = tamAd  || '—';
     document.getElementById('pam-modal-gorev').textContent = gorev  || '—';
     document.getElementById('pam-modal-bolum').textContent = bolum  || '—';
+
+    /* FAZ-7C-4: sınıflandırma alanlarını sıfırla + pozisyon öneri */
+    var radios = document.querySelectorAll('input[name="pam-personel-tipi"]');
+    radios.forEach(function(r) { r.checked = false; });
+    document.querySelectorAll('#pam-tip-uretim-lbl,#pam-tip-idari-lbl').forEach(function(l) {
+      l.style.borderColor = '#e5e7eb';
+    });
+    var dept = document.getElementById('pam-departman');
+    if (dept) dept.value = '';
+    var poz = document.getElementById('pam-pozisyon');
+    if (poz) poz.value = gorev || '';   /* PDKS görevi öneri olarak doldur */
+
     var hataDiv = document.getElementById('pam-modal-hata');
     if (hataDiv) { hataDiv.style.display = 'none'; hataDiv.textContent = ''; }
     var btn = document.getElementById('pam-modal-onay-btn');
     if (btn) { btn.disabled = false; btn.textContent = 'Onayla & Oluştur'; }
     if (modal) modal.style.display = 'flex';
   }
+
+  /* FAZ-7C-4: radio seçiminde kenarlık vurgulama */
+  document.addEventListener('change', function(e) {
+    if (e.target && e.target.name === 'pam-personel-tipi') {
+      document.querySelectorAll('#pam-tip-uretim-lbl,#pam-tip-idari-lbl').forEach(function(l) {
+        l.style.borderColor = '#e5e7eb';
+      });
+      var lbl = e.target.closest('label');
+      if (lbl) lbl.style.borderColor = '#16a34a';
+    }
+  });
 
   function pamModalKapat() {
     var modal = document.getElementById('pam-modal');
@@ -315,6 +420,21 @@
     if (!_hedefId) return;
     var btn     = document.getElementById('pam-modal-onay-btn');
     var hataDiv = document.getElementById('pam-modal-hata');
+
+    /* FAZ-7C-4: sınıflandırma validasyonu */
+    var secilenTip = document.querySelector('input[name="pam-personel-tipi"]:checked');
+    var secilenDept = (document.getElementById('pam-departman') || {}).value || '';
+    var secilenPoz  = ((document.getElementById('pam-pozisyon') || {}).value || '').trim();
+
+    if (!secilenTip) {
+      if (hataDiv) { hataDiv.textContent = 'Personel tipi seçiniz (Üretim / İdari).'; hataDiv.style.display = 'block'; }
+      return;
+    }
+    if (!secilenDept) {
+      if (hataDiv) { hataDiv.textContent = 'Departman / Birim seçiniz.'; hataDiv.style.display = 'block'; }
+      return;
+    }
+
     if (btn) { btn.disabled = true; btn.textContent = 'İşleniyor…'; }
     if (hataDiv) { hataDiv.style.display = 'none'; hataDiv.textContent = ''; }
 
@@ -322,7 +442,13 @@
       var resp = await fetch('/yonetim/api/pdks/cps-personel-olustur', {
         method : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body   : JSON.stringify({ pdks_personel_id: _hedefId, onay: true })
+        body   : JSON.stringify({
+          pdks_personel_id: _hedefId,
+          onay            : true,
+          personel_tipi   : secilenTip.value,
+          departman       : secilenDept,
+          pozisyon        : secilenPoz || null
+        })
       });
       var d = await resp.json();
 

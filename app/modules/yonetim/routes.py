@@ -6901,6 +6901,23 @@ def pdks_cps_personel_olustur():
     except (ValueError, TypeError):
         return jsonify({'ok': False, 'hata': 'pdks_personel_id tamsayi olmali'}), 400
 
+    # FAZ-7C-4: sınıflandırma alanları
+    _GECERLI_TIPLER = {'Üretim Personeli', 'İdari Personel'}
+    _GECERLI_DEPARTMANLAR = {
+        'Enjeksiyon', 'Montaj', 'Temizleme', 'Paketleme', 'Depo', 'Kalite',
+        'Planlama', 'Muhasebe', 'İnsan Kaynakları', 'Grafik', 'E-Ticaret', 'İdari'
+    }
+    personel_tipi = (data.get('personel_tipi') or '').strip() or None
+    departman     = (data.get('departman')     or '').strip() or None
+    pozisyon      = (data.get('pozisyon')      or '').strip() or None
+
+    if personel_tipi and personel_tipi not in _GECERLI_TIPLER:
+        return jsonify({'ok': False, 'hata': 'GECERSIZ_PERSONEL_TIPI',
+                        'gecerli': sorted(_GECERLI_TIPLER)}), 400
+    if departman and departman not in _GECERLI_DEPARTMANLAR:
+        return jsonify({'ok': False, 'hata': 'GECERSIZ_DEPARTMAN',
+                        'gecerli': sorted(_GECERLI_DEPARTMANLAR)}), 400
+
     # ── Yardımcı fonksiyonlar ─────────────────────────────────────────────────
     def _norm(s):
         if not s:
@@ -7038,10 +7055,13 @@ def pdks_cps_personel_olustur():
                (gercek_ad, kullanici_adi, aktif, kaynak,
                 pdks_personel_id, pdks_sicilno,
                 pdks_eslesme_durumu, pdks_eslesme_tarihi,
+                personel_tipi, departman, pozisyon,
                 created_at, updated_at)
-               VALUES (?,?,1,'PDKS',?,?,?,?,?,?)""",
+               VALUES (?,?,1,'PDKS',?,?,?,?,?,?,?,?,?)""",
             (tam_ad, kadi, pdks_pid, sicilno or None,
-             'PDKS_CREATED', simdi, simdi, simdi)
+             'PDKS_CREATED', simdi,
+             personel_tipi, departman, pozisyon,
+             simdi, simdi)
         )
         yeni_id = cur_ins.lastrowid
         raw_db.execute('COMMIT')
@@ -7061,6 +7081,9 @@ def pdks_cps_personel_olustur():
         'pdks_sicilno'    : sicilno or None,
         'pdks_bolum'      : bolum,
         'pdks_gorev'      : gorev,
+        'personel_tipi'   : personel_tipi,
+        'departman'       : departman,
+        'pozisyon'        : pozisyon,
         'pdks_eslesme_durumu': 'PDKS_CREATED',
         'pdks_eslesme_tarihi': simdi,
         'mesaj'           : 'kullanici_profil olusturuldu',
