@@ -1576,13 +1576,14 @@ function siparisTakipYukle(opts) {
     if (errBox) errBox.innerHTML = '';
     var tree = document.getElementById('stTree');
     if (tree) tree.innerHTML = '<div class="st3-tree-empty">Yükleniyor...</div>';
-    // korgun-plan endpoint kullanılıyor (siparis-takip route kaldırıldı)
-    var url = '/hedef/korgun-plan?limit=100&ara=' + encodeURIComponent(_stState.ara);
+    var url = '/hedef/siparis-takip?sipno=' + encodeURIComponent(_stState.ara);
     fetch(url, { credentials: 'same-origin', cache: 'no-store' })
         .then(function (r) {
-            if (!r.ok && r.status !== 200) {
-                // 404/500 gibi HTTP hata — JSON değil HTML dönebilir
-                throw new Error('HTTP ' + r.status);
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            var ct = r.headers.get('content-type') || '';
+            if (ct.indexOf('json') === -1) {
+                // login redirect HTML — oturum süresi dolmuş
+                throw new Error('SESSION_EXPIRED');
             }
             return r.json().then(function (d) { return { status: r.status, data: d }; });
         })
@@ -1598,7 +1599,6 @@ function siparisTakipYukle(opts) {
             }
             var satirlar = r.data.satirlar || [];
 
-            // korgun-plan ozet alanı yok — satirlardan basit ozet üret
             var ozet = r.data.ozet || null;
             if (!ozet && satirlar.length) {
                 var toplam_verilen = 0, toplam_biten = 0, toplam_devam = 0;
@@ -1636,12 +1636,16 @@ function siparisTakipYukle(opts) {
             renderStFisKart(_stState.ozet);
             renderStKpiBand(_stState.ozet);
             renderStTree(_stState.satirlar, _stState.mesaj);
-            console.log('[CPS] SİPARİŞ TAKİP (korgun-plan) —', _stState.ara,
-                '— satirlar', satirlar.length, 'toplam', r.data.toplam);
+            console.log('[CPS] SİPARİŞ TAKİP —', _stState.ara,
+                '— satirlar', satirlar.length);
         })
         .catch(function (err) {
             console.error('[CPS] siparis-takip fetch hata:', err);
-            showStError('Sunucuya ulaşılamadı: ' + err.message);
+            if (err.message === 'SESSION_EXPIRED') {
+                showStError('Oturum süresi dolmuş. Sayfayı yenileyip tekrar giriş yapın.');
+            } else {
+                showStError('Sunucuya ulaşılamadı: ' + err.message);
+            }
         });
 }
 

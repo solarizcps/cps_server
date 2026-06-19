@@ -535,13 +535,37 @@ def _korgun_plan_satir_ekstra(meta, en, emir_tip_map, parent_emir_map, sip_hedef
     }
 
 
-def _korgun_plan_satirlar_olustur(con):
-    """Korgun acik siparis/emir satirlarini olustur (FAZ1 mantigi)."""
+def _korgun_plan_satirlar_olustur(con, har_acik_filtre=True, sip_no=None, emir_no=None):
+    """Korgun siparis/emir satirlarini olustur (FAZ1 mantigi).
+
+    har_acik_filtre=True  -> PLAN: yalnizca acik Siparis_Har (Durum='')
+    har_acik_filtre=False -> Siparis Takip: tum Siparis_Har satirlari (sip_no ile sinirli)
+    sip_no / emir_no      -> sorgu kapsamini daraltir (2100 param limiti icin)
+    """
     from collections import defaultdict
+
+    har_sql = "AND LTRIM(RTRIM(ISNULL(sh.Durum, ''))) = ''" if har_acik_filtre else ""
+    scope_sql = ""
+    scope_params = []
+    if sip_no:
+        scope_sql += " AND CAST(sk.SipNo AS VARCHAR(20)) = %s"
+        scope_params.append(str(sip_no))
+    if emir_no:
+        scope_sql += " AND e.EmirNo = %s"
+        scope_params.append(int(emir_no))
+
+    hedef_where = []
+    hedef_params = []
+    if har_acik_filtre:
+        hedef_where.append("LTRIM(RTRIM(ISNULL(sh.Durum, ''))) = ''")
+    if sip_no:
+        hedef_where.append("CAST(sh.SipNo AS VARCHAR(20)) = %s")
+        hedef_params.append(str(sip_no))
+    har_sql_hedef = ("WHERE " + " AND ".join(hedef_where)) if hedef_where else ""
 
     cur = con.cursor()
     try:
-        cur.execute("""
+        cur.execute(f"""
             SELECT
                 CONVERT(VARCHAR(10), sk.SipTar, 120) AS siparis_tarihi,
                 CAST(sk.SipNo AS VARCHAR(20)) AS sip_no,
@@ -560,11 +584,11 @@ def _korgun_plan_satirlar_olustur(con):
             LEFT JOIN Cari_Kart ck ON ck.CKod = sk.CariKod
             LEFT JOIN Model_M m ON m.ModelKod = e.ModelKod
             LEFT OUTER JOIN dbo.P_RNK_Tip rn ON rn.RENK_KOD = g.RKOD
-            WHERE LTRIM(RTRIM(ISNULL(sh.Durum, ''))) = ''
+            WHERE 1=1 {har_sql}{scope_sql}
             GROUP BY sk.SipTar, sk.SipNo, sk.CariKod, ck.CName,
                      e.EmirNo, e.ModelKod, m.Tanim
             ORDER BY sk.SipNo DESC, e.EmirNo DESC
-        """)
+        """, tuple(scope_params) if scope_params else None)
         cols = [d[0] for d in cur.description]
         emir_base = [dict(zip(cols, r)) for r in cur.fetchall()]
 
@@ -603,13 +627,13 @@ def _korgun_plan_satirlar_olustur(con):
         emir_nos = sorted(emir_meta.keys(), reverse=True)
         ph = ','.join(['%s'] * len(emir_nos))
 
-        cur.execute("""
+        cur.execute(f"""
             SELECT CAST(sh.SipNo AS VARCHAR(20)) AS sip_no,
                    COALESCE(SUM(ISNULL(sh.Miktar, 0)), 0) AS hedef_miktar
             FROM Siparis_Har sh
-            WHERE LTRIM(RTRIM(ISNULL(sh.Durum, ''))) = ''
+            {har_sql_hedef}
             GROUP BY sh.SipNo
-        """)
+        """, tuple(hedef_params) if hedef_params else None)
         sip_hedef_map = {str(r[0]): int(float(r[1] or 0)) for r in cur.fetchall()}
 
         cur.execute(f"""
@@ -754,10 +778,14 @@ def _korgun_plan_satirlar_olustur(con):
                         verilen = baslayacak
                         devam = 0
                         biten = 0
+                        baslayacak_val = baslayacak
                     elif kaynak == 'fallback':
                         verilen = int(float(p.get('verilen') or 0)) or em_giren.get(en, 0)
                         devam = 0
                         biten = 0
+                        baslayacak_val = 0
+                    else:
+                        baslayacak_val = 0
                     proses_tezgah = _korgun_plan_proses_label(
                         p.get('Proses'), p.get('proses_adi'), p.get('tezgah'))
                     alt_proses = _korgun_plan_alt_proses(
@@ -773,6 +801,8 @@ def _korgun_plan_satirlar_olustur(con):
                         'stok_tanim': meta['stok_tanim'],
                         'renk_kod': renk_kod or '-',
                         'renk': renk or '-',
+                        'baslayacak': baslayacak_val,
+                        'kaynak': kaynak,
                         'verilen': verilen,
                         'devam_eden': devam,
                         'biten': biten,
@@ -793,6 +823,8 @@ def _korgun_plan_satirlar_olustur(con):
                     'stok_tanim': meta['stok_tanim'],
                     'renk_kod': renk_kod or '-',
                     'renk': renk or '-',
+                    'baslayacak': 0,
+                    'kaynak': 'fallback',
                     'verilen': verilen,
                     'devam_eden': 0,
                     'biten': 0,
@@ -864,6 +896,633 @@ def hedef_korgun_plan():
         'sayfa_boyutu': limit,
         'sayfa_sayisi': sayfa_sayisi,
         'satirlar': sayfa_satirlar,
+    })
+
+
+def _siparis_no_eslesir(coklu_sip, hedef):
+    if not hedef:
+        return False
+    h = str(hedef).strip()
+    if not h:
+        return False
+    coklu = str(coklu_sip or '')
+    if h == coklu:
+        return True
+    for p in coklu.split(','):
+        if p.strip() == h:
+            return True
+    return h in coklu
+
+
+def _plan_satir_baslayacak(r):
+    devam = int(r.get('devam_eden') or 0)
+    biten = int(r.get('biten') or 0)
+    verilen = int(r.get('verilen') or 0)
+    if devam == 0 and biten == 0 and verilen > 0:
+        return verilen
+    return 0
+
+
+def _siparis_takip_baslayacak(r):
+    """Siparis Takip: baslayacak degerini dondur.
+    Enrich sonrasi 'baslayacak' alani her zaman dolu; fallback icin de verilen'den doldurulur.
+    """
+    if r.get('baslayacak') is not None:
+        return int(r.get('baslayacak') or 0)
+    if str(r.get('kaynak') or '') == 'wait':
+        return int(r.get('verilen') or 0)
+    return 0
+
+
+def _siparis_takip_durum_proses(r):
+    """Proses satiri durumu: BAŞLANMADI / DEVAM EDİYOR / BİTTİ."""
+    bas = _siparis_takip_baslayacak(r)
+    devam = int(r.get('devam_eden') or 0)
+    biten = int(r.get('biten') or 0)
+    kalan = int(r.get('kalan') or 0)
+    verilen = int(r.get('verilen') or 0)
+    miktar = verilen if verilen > 0 else (bas + devam + biten + kalan)
+
+    if devam > 0:
+        return 'DEVAM EDİYOR'
+    if bas > 0 and biten == 0:
+        return 'BAŞLANMADI'
+    if miktar > 0 and biten >= miktar:
+        return 'BİTTİ'
+    if bas == 0 and devam == 0 and biten > 0 and kalan == 0:
+        return 'BİTTİ'
+    if biten > 0 and kalan > 0:
+        return 'DEVAM EDİYOR'
+    if bas == 0 and devam == 0 and biten == 0 and kalan > 0:
+        return 'BAŞLANMADI'
+    return '-'
+
+
+def _siparis_takip_durum_emir(proses_rows):
+    """Emir durumunu alt proses durumlarindan turet."""
+    if not proses_rows:
+        return '-'
+    durums = [_siparis_takip_durum_proses(r) for r in proses_rows]
+    if all(d == 'BİTTİ' for d in durums):
+        return 'BİTTİ'
+    if any(d == 'DEVAM EDİYOR' for d in durums):
+        return 'DEVAM EDİYOR'
+    if any(d == 'BİTTİ' for d in durums) and any(d == 'BAŞLANMADI' for d in durums):
+        return 'DEVAM EDİYOR'
+    if any(d == 'BAŞLANMADI' for d in durums):
+        return 'BAŞLANMADI'
+    return durums[0] if durums else '-'
+
+
+def _siparis_takip_enrich_rows(plan_satirlar):
+    """Siparis Takip icin proses durum/baslayacak alanlarini netlestir."""
+    out = []
+    for r in plan_satirlar:
+        row = dict(r)
+        kaynak = str(row.get('kaynak') or 'con')
+        if kaynak == 'wait':
+            row['baslayacak'] = int(row.get('baslayacak') or row.get('verilen') or 0)
+        elif kaynak == 'fallback':
+            devam = int(row.get('devam_eden') or 0)
+            biten = int(row.get('biten') or 0)
+            if devam == 0 and biten == 0:
+                row['baslayacak'] = int(row.get('verilen') or 0)
+            else:
+                row['baslayacak'] = 0
+        else:
+            row['baslayacak'] = 0
+        row['durum'] = _siparis_takip_durum_proses(row)
+        out.append(row)
+    return out
+
+
+def _siparis_takip_aggregate(proses_rows):
+    if not proses_rows:
+        return 0, 0, 0, 0, '-'
+    bas = sum(_siparis_takip_baslayacak(r) for r in proses_rows)
+    devam = sum(int(r.get('devam_eden') or 0) for r in proses_rows)
+    biten = sum(int(r.get('biten') or 0) for r in proses_rows)
+    kalan = sum(int(r.get('kalan') or 0) for r in proses_rows)
+    durum = _siparis_takip_durum_emir(proses_rows)
+    return bas, devam, biten, kalan, durum
+
+
+def _siparis_takip_proses_satir(r, seviye, emir_grup, parent_key, proses_idx):
+    bas = _siparis_takip_baslayacak(r)
+    tip = str(r.get('emir_tip') or '').upper()
+    tip_label = 'Mamul' if tip == 'M' else ('Yarı Mamul' if tip == 'Y' else tip or '-')
+    pk = parent_key + '-p-' + str(proses_idx)
+    proses_kod = str(r.get('Proses') or r.get('proses_kod') or '').strip()
+    return {
+        'satir_tipi': 'proses',
+        'seviye': seviye,
+        'katlanabilir': False,
+        'row_key': pk,
+        'parent_key': parent_key,
+        'emir_grup': emir_grup,
+        'model_stok': r.get('stok_tanim') or r.get('stok_kod') or '-',
+        'stok_kod': r.get('stok_kod') or '-',
+        'emir_no': r.get('emir_no') or '-',
+        'tip': tip_label,
+        'ana_emir': r.get('parent_emir_no') or '-',
+        'proses_tezgah': r.get('proses_tezgah') or '-',
+        'proses_kod': proses_kod,
+        'alt_proses': r.get('alt_proses') or '-',
+        'renk': r.get('renk') or '-',
+        'baslayacak': bas,
+        'devam_eden': int(r.get('devam_eden') or 0),
+        'biten': int(r.get('biten') or 0),
+        'kalan': int(r.get('kalan') or 0),
+        'birim': r.get('birim') or '-',
+        'durum': r.get('durum') or '-',
+    }
+
+
+def _siparis_takip_hierarchy(plan_satirlar):
+    from collections import defaultdict
+
+    by_emir = defaultdict(list)
+    emir_meta = {}
+    for r in plan_satirlar:
+        en = str(r.get('emir_no'))
+        by_emir[en].append(r)
+        if en not in emir_meta:
+            emir_meta[en] = r
+
+    y_by_parent = defaultdict(set)
+    m_emirs = []
+    for en, meta in emir_meta.items():
+        tip = str(meta.get('emir_tip') or '').upper()
+        parent = str(meta.get('parent_emir_no') or '-')
+        if tip == 'Y' and parent != '-':
+            y_by_parent[parent].add(en)
+        elif tip == 'M':
+            m_emirs.append(en)
+
+    satirlar = []
+    processed = set()
+
+    def _add_emir_block(en, seviye, satir_tipi, parent_key=None):
+        if en in processed:
+            return
+        processed.add(en)
+        proses_rows = by_emir.get(en, [])
+        meta = emir_meta.get(en) or (proses_rows[0] if proses_rows else {})
+        bas, devam, biten, kalan, durum = _siparis_takip_aggregate(proses_rows)
+        tip = str(meta.get('emir_tip') or '').upper()
+        tip_label = 'Mamul' if tip == 'M' else ('Yarı Mamul' if tip == 'Y' else tip or '-')
+        row_key = ('m-' if satir_tipi == 'mamul' else 'y-') + str(en)
+        y_children = sorted(y_by_parent.get(en, []), key=lambda x: int(x) if x.isdigit() else 0, reverse=True)
+        katlanabilir = bool(proses_rows) or bool(y_children)
+        satirlar.append({
+            'satir_tipi': satir_tipi,
+            'seviye': seviye,
+            'katlanabilir': katlanabilir,
+            'row_key': row_key,
+            'parent_key': parent_key,
+            'emir_grup': en,
+            'model_stok': meta.get('stok_tanim') or meta.get('stok_kod') or '-',
+            'stok_kod': meta.get('stok_kod') or '-',
+            'emir_no': en,
+            'tip': tip_label,
+            'ana_emir': meta.get('parent_emir_no') or '-',
+            'proses_tezgah': '-',
+            'alt_proses': '-',
+            'renk': meta.get('renk') or '-',
+            'baslayacak': bas,
+            'devam_eden': devam,
+            'biten': biten,
+            'kalan': kalan,
+            'birim': meta.get('birim') or '-',
+            'durum': durum,
+        })
+        child_seviye = seviye + 1
+        proses_rows_sirali = sorted(
+            proses_rows,
+            key=lambda p: (int(p['Proses']) if str(p.get('Proses') or '').isdigit() else 9999)
+        )
+        for i, p in enumerate(proses_rows_sirali):
+            satirlar.append(_siparis_takip_proses_satir(p, child_seviye, en, row_key, i))
+        for yen in y_children:
+            _add_emir_block(yen, child_seviye, 'yari', parent_key=row_key)
+
+    for men in sorted(set(m_emirs), key=lambda x: int(x) if x.isdigit() else 0, reverse=True):
+        _add_emir_block(men, 0, 'mamul', parent_key=None)
+
+    for en in sorted(emir_meta.keys(), key=lambda x: int(x) if x.isdigit() else 0, reverse=True):
+        if en not in processed:
+            tip = str(emir_meta[en].get('emir_tip') or '').upper()
+            st = 'mamul' if tip == 'M' else 'yari'
+            _add_emir_block(en, 0, st, parent_key=None)
+
+    return satirlar
+
+
+def _siparis_takip_termin_guvenilir(termin, siparis_tarihi):
+    """TerTarih eski/yalnitsi ise '-' dondur."""
+    t = str(termin or '').strip()
+    if not t or t == '-':
+        return '-'
+    st = str(siparis_tarihi or '').strip()[:10]
+    if st and len(t) >= 10 and t[:10] < st:
+        return '-'
+    return t[:10] if len(t) >= 10 else t
+
+
+def _siparis_takip_by_emir(plan_satirlar, tip=None):
+    from collections import defaultdict
+    by = defaultdict(list)
+    for r in plan_satirlar:
+        t = str(r.get('emir_tip') or '').upper()
+        if tip and t != tip:
+            continue
+        by[str(r.get('emir_no'))].append(r)
+    return by
+
+
+def _siparis_takip_tip_ozet(by_emir):
+    bas = devam = biten = kalan = verilen = 0
+    for rows in by_emir.values():
+        b, d, bi, k, _ = _siparis_takip_aggregate(rows)
+        bas += b
+        devam += d
+        biten += bi
+        kalan += k
+        v = max(int(x.get('verilen') or 0) for x in rows) if rows else 0
+        if v <= 0:
+            v = b + d + bi
+        verilen += v
+    return {
+        'emir_sayisi': len(by_emir),
+        'baslayacak': bas,
+        'devam_eden': devam,
+        'biten': biten,
+        'kalan': kalan,
+        'verilen': verilen,
+    }
+
+
+def _siparis_takip_ozet_from_header(header, ara='', har_modeller=None):
+    termin = _siparis_takip_termin_guvenilir(
+        header.get('termin'), header.get('siparis_tarihi'))
+    sm = int(header.get('toplam_miktar') or 0)
+    acik = int(header.get('acik_miktar') or 0)
+    kapali = int(header.get('kapali_miktar') or 0)
+    if not acik and sm:
+        acik = max(0, sm - kapali)
+    agac_top, agac_fark = _siparis_takip_har_kontrol(sm, har_modeller)
+    model_cnt = len(har_modeller) if har_modeller else 0
+    return {
+        'siparis_no': header.get('siparis_no') or ara,
+        'musteri': header.get('musteri') or '-',
+        'siparis_tarihi': header.get('siparis_tarihi') or '-',
+        'termin': termin,
+        'siparis_miktari': sm,
+        'siparis_kapali': kapali,
+        'siparis_acik': acik,
+        'siparis_biten': kapali,
+        'siparis_kalan': acik,
+        'siparis_devam': 0,
+        'toplam_emir': 0,
+        'toplam_model': model_cnt,
+        'toplam_m_emir': 0,
+        'toplam_m_emir_verilen': 0,
+        'toplam_y_emir_verilen': 0,
+        'proses_hareket_baslayacak': 0,
+        'proses_hareket_devam': 0,
+        'proses_hareket_biten': 0,
+        'proses_hareket_toplami': 0,
+        'agac_toplam_miktar': agac_top,
+        'agac_fis_fark': agac_fark,
+        'birim': header.get('birim') or '-',
+    }
+
+
+def _siparis_takip_ozet(plan_satirlar, sip_header, har_modeller=None):
+    m_by = _siparis_takip_by_emir(plan_satirlar, 'M')
+    y_by = _siparis_takip_by_emir(plan_satirlar, 'Y')
+    all_by = _siparis_takip_by_emir(plan_satirlar, None)
+    m = _siparis_takip_tip_ozet(m_by)
+    y = _siparis_takip_tip_ozet(y_by)
+
+    p_bas = sum(_siparis_takip_baslayacak(r) for r in plan_satirlar)
+    p_dev = sum(int(r.get('devam_eden') or 0) for r in plan_satirlar)
+    p_bit = sum(int(r.get('biten') or 0) for r in plan_satirlar)
+
+    siparis_miktari = int(sip_header.get('toplam_miktar') or 0) if sip_header else 0
+    siparis_acik = int(sip_header.get('acik_miktar') or 0) if sip_header else 0
+    siparis_kapali = int(sip_header.get('kapali_miktar') or 0) if sip_header else 0
+    if sip_header and not siparis_miktari:
+        siparis_miktari = siparis_acik + siparis_kapali
+    if not siparis_miktari:
+        hedefler = set()
+        for r in plan_satirlar:
+            hm = r.get('siparis_hedef_miktar')
+            if hm:
+                hedefler.add(int(hm))
+        if len(hedefler) == 1:
+            siparis_miktari = hedefler.pop()
+            if not siparis_acik:
+                siparis_acik = siparis_miktari
+
+    siparis_devam = m['devam_eden']
+    siparis_kalan = siparis_acik if sip_header else m['kalan']
+
+    models = set()
+    birim = '-'
+    for r in plan_satirlar:
+        sk = str(r.get('stok_kod') or '')
+        if sk and sk != '-':
+            models.add(sk)
+        if r.get('birim') and r.get('birim') != '-':
+            birim = r.get('birim')
+
+    if har_modeller:
+        for hm in har_modeller:
+            if hm.get('birim') and hm.get('birim') != '-':
+                birim = hm.get('birim')
+
+    agac_top, agac_fark = _siparis_takip_har_kontrol(siparis_miktari, har_modeller)
+    model_cnt = len(har_modeller) if har_modeller else len(models)
+
+    termin = _siparis_takip_termin_guvenilir(
+        (sip_header or {}).get('termin'),
+        (sip_header or {}).get('siparis_tarihi'))
+
+    return {
+        'siparis_no': (sip_header or {}).get('siparis_no') or '-',
+        'musteri': (sip_header or {}).get('musteri') or '-',
+        'siparis_tarihi': (sip_header or {}).get('siparis_tarihi') or '-',
+        'termin': termin,
+        'siparis_miktari': siparis_miktari,
+        'siparis_kapali': siparis_kapali,
+        'siparis_acik': siparis_acik,
+        'siparis_biten': siparis_kapali,
+        'siparis_kalan': siparis_kalan,
+        'siparis_devam': siparis_devam,
+        'toplam_emir': len(all_by),
+        'toplam_model': model_cnt,
+        'toplam_m_emir': m['emir_sayisi'],
+        'toplam_m_emir_verilen': m['verilen'],
+        'toplam_y_emir_verilen': y['verilen'],
+        'proses_hareket_baslayacak': p_bas,
+        'proses_hareket_devam': p_dev,
+        'proses_hareket_biten': p_bit,
+        'proses_hareket_toplami': p_dev + p_bit,
+        'agac_toplam_miktar': agac_top,
+        'agac_fis_fark': agac_fark,
+        'birim': birim,
+    }
+
+
+def _siparis_takip_har_durum_etiket(acik, kapali):
+    acik = int(acik or 0)
+    kapali = int(kapali or 0)
+    if kapali > 0 and acik <= 0:
+        return 'KAPALI'
+    if kapali > 0 and acik > 0:
+        return 'KARMA'
+    return 'AÇIK'
+
+
+def _siparis_takip_har_modeller(con, sip_no):
+    """Siparis_Har satirlarindan model (SKOD) bazli agac kokleri."""
+    cur = con.cursor()
+    try:
+        cur.execute("""
+            SELECT
+                LTRIM(RTRIM(ISNULL(sh.SKOD, ''))) AS skod,
+                ISNULL(m.Tanim, sh.SKOD) AS model_tanim,
+                LTRIM(RTRIM(ISNULL(CAST(sh.Durum AS VARCHAR(20)), ''))) AS durum,
+                COALESCE(SUM(ISNULL(sh.Miktar, 0)), 0) AS miktar,
+                MAX(NULLIF(LTRIM(RTRIM(ISNULL(sh.Birim, ''))), '')) AS birim
+            FROM Siparis_Har sh
+            LEFT JOIN Model_M m ON m.ModelKod = sh.SKOD
+            WHERE CAST(sh.SipNo AS VARCHAR(20)) = %s
+              AND LTRIM(RTRIM(ISNULL(sh.SKOD, ''))) <> ''
+            GROUP BY sh.SKOD, m.Tanim, sh.Durum
+            ORDER BY sh.SKOD, sh.Durum
+        """, (str(sip_no),))
+        cols = [d[0] for d in cur.description]
+        raw = [dict(zip(cols, r)) for r in cur.fetchall()]
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+
+    by_skod = {}
+    for row in raw:
+        skod = str(row.get('skod') or '').strip()
+        if not skod:
+            continue
+        mik = int(float(row.get('miktar') or 0))
+        durum = str(row.get('durum') or '').strip()
+        birim = str(row.get('birim') or '').strip() or 'CIFT'
+        if skod not in by_skod:
+            by_skod[skod] = {
+                'skod': skod,
+                'model_stok': str(row.get('model_tanim') or skod).strip(),
+                'toplam_miktar': 0,
+                'acik_miktar': 0,
+                'kapali_miktar': 0,
+                'birim': birim,
+            }
+        by_skod[skod]['toplam_miktar'] += mik
+        if not durum:
+            by_skod[skod]['acik_miktar'] += mik
+        else:
+            by_skod[skod]['kapali_miktar'] += mik
+        if birim and birim != '-':
+            by_skod[skod]['birim'] = birim
+
+    out = []
+    for skod in sorted(by_skod.keys()):
+        m = by_skod[skod]
+        m['durum_etiket'] = _siparis_takip_har_durum_etiket(
+            m['acik_miktar'], m['kapali_miktar'])
+        if m['durum_etiket'] == 'KAPALI':
+            m['durum'] = 'KAPALI'
+        elif m['durum_etiket'] == 'KARMA':
+            m['durum'] = 'KARMA'
+        else:
+            m['durum'] = 'AÇIK'
+        out.append(m)
+    return out
+
+
+def _siparis_takip_har_kontrol(siparis_miktari, har_modeller):
+    agac = sum(int(m.get('toplam_miktar') or 0) for m in (har_modeller or []))
+    sm = int(siparis_miktari or 0)
+    return agac, sm - agac
+
+
+def _siparis_takip_header(con, sipno):
+    cur = con.cursor()
+    try:
+        cur.execute("""
+            SELECT
+                CAST(sk.SipNo AS VARCHAR(20)) AS sip_no,
+                CONVERT(VARCHAR(10), sk.SipTar, 120) AS siparis_tarihi,
+                LTRIM(RTRIM(ISNULL(ck.CName, ''))) AS musteri,
+                COALESCE(
+                    (SELECT MIN(CONVERT(VARCHAR(10), e.TerTarih, 120))
+                     FROM Siparis_Har sh2
+                     INNER JOIN Urt_Emir e ON e.ModelKod = sh2.SKOD
+                     WHERE sh2.SipNo = sk.SipNo
+                       AND LTRIM(RTRIM(ISNULL(sh2.Durum,''))) = ''
+                       AND e.TerTarih IS NOT NULL),
+                    '-'
+                ) AS termin,
+                COALESCE(SUM(ISNULL(sh.Miktar, 0)), 0) AS toplam_miktar,
+                COALESCE(SUM(CASE WHEN LTRIM(RTRIM(ISNULL(sh.Durum, ''))) = ''
+                    THEN ISNULL(sh.Miktar, 0) ELSE 0 END), 0) AS acik_miktar,
+                COALESCE(SUM(CASE WHEN LTRIM(RTRIM(ISNULL(sh.Durum, ''))) <> ''
+                    THEN ISNULL(sh.Miktar, 0) ELSE 0 END), 0) AS kapali_miktar,
+                MAX(NULLIF(LTRIM(RTRIM(ISNULL(sh.Birim, ''))), '')) AS birim
+            FROM Siparis_Kay sk
+            LEFT JOIN Cari_Kart ck ON ck.CKod = sk.CariKod
+            LEFT JOIN Siparis_Har sh ON sh.SipNo = sk.SipNo
+            WHERE CAST(sk.SipNo AS VARCHAR(20)) = %s
+            GROUP BY sk.SipNo, sk.SipTar, ck.CName
+        """, (str(sipno),))
+        row = cur.fetchone()
+        if not row:
+            return None
+        cols = [d[0] for d in cur.description]
+        d = dict(zip(cols, row))
+        termin = _siparis_takip_termin_guvenilir(
+            d.get('termin'), d.get('siparis_tarihi'))
+        return {
+            'siparis_no': d.get('sip_no') or sipno,
+            'musteri': d.get('musteri') or '-',
+            'siparis_tarihi': d.get('siparis_tarihi') or '-',
+            'termin': termin,
+            'toplam_miktar': int(float(d.get('toplam_miktar') or 0)),
+            'acik_miktar': int(float(d.get('acik_miktar') or 0)),
+            'kapali_miktar': int(float(d.get('kapali_miktar') or 0)),
+            'birim': d.get('birim') or '-',
+        }
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+
+
+@hedef_bp.route('/siparis-takip', methods=['GET'])
+@yetki_gerekli('hedef', 'can_view')
+def hedef_siparis_takip():
+    """GET /hedef/siparis-takip?sipno=33789 — siparis bazli emir/proses takip (Har agac)."""
+    from flask import jsonify, request
+
+    ara = (request.args.get('sipno') or request.args.get('ara') or '').strip()
+    if not ara:
+        return jsonify({'ok': False, 'mesaj': 'Sipariş no giriniz', 'ozet': None, 'satirlar': []}), 400
+
+    try:
+        from modules.common import korgun as _kk
+        con = _kk._baglan()
+    except Exception as e:
+        return jsonify({'ok': False, 'mesaj': 'Korgun baglanti: ' + str(e), 'ozet': None, 'satirlar': []}), 500
+
+    try:
+        ara_lower = ara.lower()
+        header = None
+        sip_scope = None
+        emir_scope = None
+        if ara.isdigit():
+            header = _siparis_takip_header(con, ara)
+            if header:
+                sip_scope = ara
+            else:
+                emir_scope = int(ara)
+
+        if sip_scope:
+            all_rows = _korgun_plan_satirlar_olustur(
+                con, har_acik_filtre=False, sip_no=sip_scope)
+            filtered = all_rows
+        elif emir_scope:
+            all_rows = _korgun_plan_satirlar_olustur(
+                con, har_acik_filtre=False, emir_no=emir_scope)
+            filtered = all_rows
+        else:
+            all_rows = _korgun_plan_satirlar_olustur(con, har_acik_filtre=True)
+            filtered = []
+            for s in all_rows:
+                if (_siparis_no_eslesir(s.get('coklu_siparis_no'), ara)
+                        or ara == str(s.get('emir_no'))
+                        or ara_lower in str(s.get('stok_kod') or '').lower()
+                        or ara_lower in str(s.get('stok_tanim') or '').lower()
+                        or ara_lower in str(s.get('musteri_adi') or '').lower()):
+                    filtered.append(s)
+
+        if not header and filtered:
+            coklu = filtered[0].get('coklu_siparis_no') or ''
+            first_sip = coklu.split(',')[0].strip() if coklu else ara
+            if first_sip:
+                header = _siparis_takip_header(con, first_sip)
+            if not header:
+                header = {
+                    'siparis_no': first_sip or ara,
+                    'musteri': filtered[0].get('musteri_adi') or '-',
+                    'siparis_tarihi': filtered[0].get('siparis_tarihi') or '-',
+                    'termin': '-',
+                    'toplam_miktar': int(filtered[0].get('siparis_hedef_miktar') or 0),
+                }
+        har_modeller = []
+        if sip_scope:
+            har_modeller = _siparis_takip_har_modeller(con, sip_scope)
+        con.close()
+    except Exception as e:
+        try:
+            con.close()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'mesaj': str(e)[:300], 'ozet': None, 'satirlar': []}), 500
+
+    if not filtered:
+        ozet_bos = _siparis_takip_ozet_from_header(header, ara, har_modeller) if header else None
+        if header:
+            mesaj = (
+                'Bu sipariş için üretim emri/proses bulunamadı. '
+                'Sipariş satırları ağaçta listelenir; üretim henüz açılmamış olabilir.'
+            )
+        else:
+            mesaj = 'Bu arama için sipariş kaydı veya açık üretim/emir bulunamadı.'
+        return jsonify({
+            'ok': True,
+            'mesaj': mesaj,
+            'ozet': ozet_bos,
+            'har_modeller': har_modeller,
+            'satirlar': [],
+        })
+
+    filtered = _siparis_takip_enrich_rows(filtered)
+    ozet = _siparis_takip_ozet(filtered, header, har_modeller)
+    satirlar = _siparis_takip_hierarchy(filtered)
+
+    # Har modeller -> mamul emir miktarı eşleştirmesi
+    if har_modeller:
+        mamul_by_skod = {}
+        for s in filtered:
+            if s.get('satir_tipi') == 'mamul':
+                sk = str(s.get('stok_kod') or '').strip()
+                if sk:
+                    toplam = (s.get('baslayacak') or 0) + (s.get('devam_eden') or 0) + \
+                             (s.get('biten') or 0) + (s.get('kalan') or 0)
+                    mamul_by_skod[sk] = mamul_by_skod.get(sk, 0) + int(toplam)
+        for hm in har_modeller:
+            sk = hm.get('skod', '')
+            mamul_top = mamul_by_skod.get(sk, 0)
+            hm['mamul_emir_toplam'] = mamul_top
+            hm['uretime_acilmamis'] = max(0, int(hm.get('acik_miktar') or 0) - mamul_top)
+
+    return jsonify({
+        'ok': True,
+        'ozet': ozet,
+        'har_modeller': har_modeller,
+        'satirlar': satirlar,
     })
 
 
