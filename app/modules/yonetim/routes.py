@@ -2379,6 +2379,13 @@ def personel_360():
     return render_template('yonetim/personel_360_merkez.html')
 
 
+@yonetim_bp.route('/pdks-aktarim-merkezi', methods=['GET'])
+@yetki_gerekli('personel_360', 'can_view')
+def pdks_aktarim_merkezi():
+    """FAZ-6C: Bağımsız PDKS Aktarım Merkezi ekranı."""
+    return render_template('yonetim/pdks_aktarim_merkezi.html')
+
+
 @yonetim_bp.route('/api/personel-360/secenekler', methods=['GET'])
 @yetki_gerekli('personel_360', 'can_view')
 def personel_360_secenekler():

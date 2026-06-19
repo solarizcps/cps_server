@@ -573,8 +573,22 @@
       <!-- SEKME: İK (FAZ2G-3 readonly + FAZ2G-4B write) -->
       <div id="sekme-ik" class="p360-sekme-icerik" style="display:none;">
 
-        <!-- FAZ-4B: PDKS Yeni Personel Havuzu Paneli -->
-        <div id="pdks-havuz-panel" style="margin-bottom:14px;">
+        <!-- FAZ-6C: PDKS Aktarım Merkezi Linki -->
+        <div style="margin-bottom:14px;">
+          <a href="/yonetim/pdks-aktarim-merkezi"
+             style="display:inline-flex;align-items:center;gap:8px;
+                    padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;
+                    background:#dcfce7;color:#166534;border:1px solid #86efac;
+                    text-decoration:none;">
+            🟢 PDKS Aktarım Merkezi →
+          </a>
+          <span style="font-size:12px;color:var(--text3);margin-left:10px;">
+            Yeni personel adayları ve CPS'e aktarım işlemleri
+          </span>
+        </div>
+
+        <!-- FAZ-4B: PDKS Yeni Personel Havuzu Paneli — FAZ-6C: Taşındı → /yonetim/pdks-aktarim-merkezi -->
+        <div id="pdks-havuz-panel" style="display:none;margin-bottom:14px;">
           <div class="oz-card" style="border-left:4px solid #16a34a;">
 
             <!-- Başlık + Yenile -->
@@ -667,7 +681,7 @@
         </div>
         <!-- /FAZ-4B: PDKS Yeni Personel Havuzu Paneli -->
 
-        <!-- FAZ-4E: CPS'e Al Modal -->
+        <!-- FAZ-4E: CPS'e Al Modal — FAZ-6C: Taşındı → /yonetim/pdks-aktarim-merkezi -->
         <div id="pdks-cps-al-modal" style="display:none;position:fixed;inset:0;z-index:9999;
              background:rgba(0,0,0,0.45);align-items:center;justify-content:center;">
           <div style="background:#fff;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.22);
