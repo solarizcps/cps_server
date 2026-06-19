@@ -102,8 +102,11 @@
      background:rgba(0,0,0,0.55);align-items:center;justify-content:center;">
   <div style="background:#ffffff;border-radius:10px;opacity:1;
               box-shadow:0 8px 40px rgba(0,0,0,0.32);
-              padding:28px 32px;max-width:480px;width:92%;position:relative;z-index:10000;
-              max-height:90vh;overflow-y:auto;">
+              max-width:480px;width:92%;position:relative;z-index:10000;
+              max-height:90vh;display:flex;flex-direction:column;overflow:hidden;">
+    <!-- scroll edilebilir içerik alanı — buton sticky kalır -->
+    <div style="padding:28px 32px 0;overflow-y:auto;flex:1 1 auto;">
+
     <h3 style="margin:0 0 14px;font-size:15px;color:#166534;">
       👤 CPS Personel Oluşturulacak
     </h3>
@@ -202,20 +205,26 @@
       </div>
     </div>
 
-    <p style="font-size:12px;color:#6b7280;margin:0 0 14px;
+    <p style="font-size:12px;color:#6b7280;margin:0 0 10px;
               border-top:1px solid #e5e7eb;padding-top:10px;">
       Devam bağlantısı kurulacak. Profil oluşturulacak ama oturum açılamaz —
       ileriki adımda şifre atanacak.
     </p>
     <div id="pam-modal-hata" style="display:none;padding:8px 12px;background:#fee2e2;
-         color:#dc2626;border-radius:6px;font-size:12px;margin-bottom:12px;"></div>
-    <div style="display:flex;gap:10px;justify-content:flex-end;">
-      <button onclick="pamModalKapat()"
+         color:#dc2626;border-radius:6px;font-size:12px;margin-bottom:10px;"></div>
+
+    </div><!-- /scroll alanı sonu -->
+
+    <!-- buton satırı — scroll dışında, her zaman görünür -->
+    <div style="padding:14px 32px 20px;border-top:1px solid #e5e7eb;
+                background:#fff;flex:0 0 auto;
+                display:flex;gap:10px;justify-content:flex-end;">
+      <button onclick="window.pamModalKapat()"
         style="padding:7px 18px;border-radius:6px;border:1px solid #d1d5db;
                background:#f9fafb;cursor:pointer;font-size:13px;color:#374151;">
         İptal
       </button>
-      <button id="pam-modal-onay-btn" onclick="pamOnayla()"
+      <button id="pam-modal-onay-btn" onclick="window.pamOnayla()"
         style="padding:7px 18px;border-radius:6px;border:none;
                background:#166534;color:#fff;cursor:pointer;font-weight:600;font-size:13px;">
         Onayla &amp; Oluştur
@@ -260,6 +269,11 @@
 
   function _esc(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  /* onclick attr'leri içinde kullanılacak güvenli JS string kaçırma */
+  function _jsq(s) {
+    return String(s || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\r?\n/g,' ');
   }
 
   async function pamYukle() {
@@ -341,10 +355,10 @@
       var bg = i % 2 === 0 ? '' : 'background:var(--bg2);';
       var islem;
       if (k.durum === 'YENI_ADAY') {
-        islem = '<button onclick="pamCpsAl('
-          + k.pdks_id + ',\'' + _esc(k.tam_ad) + '\','
-          + '\'' + _esc(k.pdks_bolum || '') + '\','
-          + '\'' + _esc(k.pdks_gorev || '') + '\')" '
+        islem = '<button onclick="window.pamCpsAl('
+          + k.pdks_id + ',\'' + _jsq(k.tam_ad) + '\','
+          + '\'' + _jsq(k.pdks_bolum || '') + '\','
+          + '\'' + _jsq(k.pdks_gorev || '') + '\')" '
           + 'style="padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;'
           + 'border-radius:6px;background:#166534;color:#fff;border:none;">👤 CPS\'e Al</button>';
       } else {
@@ -417,21 +431,31 @@
   }
 
   async function pamOnayla() {
-    if (!_hedefId) return;
+    if (_hedefId === null || _hedefId === undefined) return;
     var btn     = document.getElementById('pam-modal-onay-btn');
     var hataDiv = document.getElementById('pam-modal-hata');
 
-    /* FAZ-7C-4: sınıflandırma validasyonu */
-    var secilenTip = document.querySelector('input[name="pam-personel-tipi"]:checked');
-    var secilenDept = (document.getElementById('pam-departman') || {}).value || '';
-    var secilenPoz  = ((document.getElementById('pam-pozisyon') || {}).value || '').trim();
+    function _gosterHata(mesaj) {
+      if (hataDiv) {
+        hataDiv.textContent = mesaj;
+        hataDiv.style.display = 'block';
+        hataDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+
+    /* sınıflandırma validasyonu */
+    var secilenTip  = document.querySelector('input[name="pam-personel-tipi"]:checked');
+    var deptEl      = document.getElementById('pam-departman');
+    var pozEl       = document.getElementById('pam-pozisyon');
+    var secilenDept = deptEl  ? deptEl.value.trim()  : '';
+    var secilenPoz  = pozEl   ? pozEl.value.trim()   : '';
 
     if (!secilenTip) {
-      if (hataDiv) { hataDiv.textContent = 'Personel tipi seçiniz (Üretim / İdari).'; hataDiv.style.display = 'block'; }
+      _gosterHata('Personel tipi seçiniz (Üretim / İdari).');
       return;
     }
     if (!secilenDept) {
-      if (hataDiv) { hataDiv.textContent = 'Departman / Birim seçiniz.'; hataDiv.style.display = 'block'; }
+      _gosterHata('Departman / Birim seçiniz.');
       return;
     }
 
@@ -454,26 +478,33 @@
 
       if (d.ok) {
         pamModalKapat();
+        var bilgi = d.gercek_ad || '';
+        if (d.departman)   bilgi += ' · ' + d.departman;
+        if (d.personel_tipi) bilgi += ' · ' + d.personel_tipi;
         var uyari = document.createElement('div');
-        uyari.textContent = '✅ CPS profili oluşturuldu: ' + (d.gercek_ad || '');
-        uyari.style.cssText = 'position:fixed;bottom:28px;right:28px;z-index:10000;'
+        uyari.textContent = '✅ CPS profili oluşturuldu: ' + bilgi;
+        uyari.style.cssText = 'position:fixed;bottom:28px;right:28px;z-index:10001;'
           + 'background:#166534;color:#fff;padding:12px 20px;border-radius:8px;'
-          + 'font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,0.18);';
+          + 'font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,0.18);'
+          + 'max-width:360px;line-height:1.4;';
         document.body.appendChild(uyari);
-        setTimeout(function() { uyari.remove(); }, 4000);
+        setTimeout(function() { uyari.remove(); }, 5000);
         pamYukle();
       } else {
         var mesajMap = {
-          'ZATEN_ESLESMIS'     : 'Bu kişi zaten CPS\'e bağlı.',
-          'DUPLICATE_PDKS_ADAY': 'Çift kayıt — önce PDKS\'te kontrol edin.',
-          'UYGUN_DEGIL'        : 'Bu kişi uygun değil (CPS\'te aynı isim mevcut).',
+          'ZATEN_ESLESMIS'      : 'Bu kişi zaten CPS\'e bağlı.',
+          'DUPLICATE_PDKS_ADAY' : 'Çift kayıt — önce PDKS\'te kontrol edin.',
+          'UYGUN_DEGIL'         : 'Bu kişi uygun değil (CPS\'te aynı isim mevcut).',
+          'GECERSIZ_PERSONEL_TIPI': 'Geçersiz personel tipi seçildi.',
+          'GECERSIZ_DEPARTMAN'  : 'Geçersiz departman seçildi.',
+          'INSERT_HATASI'       : 'Kayıt sırasında hata oluştu — tekrar deneyin.',
         };
         var mesaj = mesajMap[d.hata] || ('Hata: ' + (d.hata || 'bilinmiyor'));
-        if (hataDiv) { hataDiv.textContent = mesaj; hataDiv.style.display = 'block'; }
+        _gosterHata(mesaj);
         if (btn) { btn.disabled = false; btn.textContent = 'Onayla & Oluştur'; }
       }
     } catch (e) {
-      if (hataDiv) { hataDiv.textContent = 'Sunucuya ulaşılamadı.'; hataDiv.style.display = 'block'; }
+      _gosterHata('Sunucuya ulaşılamadı: ' + (e.message || ''));
       if (btn) { btn.disabled = false; btn.textContent = 'Onayla & Oluştur'; }
     }
   }
