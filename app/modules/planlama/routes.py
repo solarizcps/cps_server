@@ -2250,6 +2250,127 @@ def _km_ozet(satirlar):
 
 
 
+def _km_gercek_satirlar(limit=120):
+    """FAZ-P0: Korgun'dan açık sipariş emirlerini çekip Karar Masası formatına dönüştür.
+
+    Hata durumunda boş liste döner (çağıran mock'a fallback yapar).
+    """
+    from datetime import date as _date
+    try:
+        from modules.common import korgun as _kk
+        con = _kk._baglan()
+    except Exception:
+        return []
+
+    try:
+        _bugun_str = _date.today().strftime("%Y-%m-%d")
+
+        # Korgun: açık HAR emirleri — Siparis_Har + Siparis_Kay + emir join
+        sql = """
+            SELECT TOP (?)
+                sh.SiparisNo        AS siparis_no,
+                sk.CariAd           AS musteri,
+                sh.StokKod          AS stok_kod,
+                sh.StokTanim        AS stok_tanim,
+                sh.Renk             AS renk,
+                sh.Miktar           AS toplam_adet,
+                sh.KalanMiktar      AS kalan_miktar,
+                sh.TeslimTarihi     AS termin,
+                sh.Durum            AS har_durum,
+                e.EmirNo            AS emir_no,
+                e.UretimMiktar      AS emir_miktar,
+                e.BitmisAdet        AS bitmis_adet
+            FROM Siparis_Har sh
+            JOIN Siparis_Kay sk ON sk.SiparisNo = sh.SiparisNo
+            LEFT JOIN Urt_Emir e ON e.SiparisHarNo = sh.HarNo
+            WHERE sh.Durum = ''
+              AND sh.KalanMiktar > 0
+            ORDER BY sh.TeslimTarihi ASC
+        """
+        with con.cursor() as cur:
+            cur.execute(sql, (limit,))
+            rows = cur.fetchall()
+    except Exception:
+        return []
+    finally:
+        try:
+            con.close()
+        except Exception:
+            pass
+
+    _bugun_str_km = _date.today().strftime("%Y-%m-%d")
+    satirlar = []
+    for r in rows:
+        try:
+            sip_no   = str(r.get('siparis_no') or r.get('SiparisNo') or '')
+            musteri  = str(r.get('musteri')    or r.get('CariAd')     or '—')
+            stok_kod = str(r.get('stok_kod')   or r.get('StokKod')    or '')
+            model    = str(r.get('stok_tanim') or r.get('StokTanim')  or stok_kod)
+            renk     = str(r.get('renk')       or r.get('Renk')       or '—')
+            emir_no  = str(r.get('emir_no')    or r.get('EmirNo')     or '')
+            toplam   = int(r.get('toplam_adet') or r.get('Miktar') or 0)
+            kalan    = int(r.get('kalan_miktar') or r.get('KalanMiktar') or toplam)
+            yapilan  = max(0, toplam - kalan)
+
+            # Termin
+            termin_raw = r.get('termin') or r.get('TeslimTarihi')
+            if termin_raw:
+                if hasattr(termin_raw, 'strftime'):
+                    termin_str = termin_raw.strftime("%Y-%m-%d")
+                else:
+                    termin_str = str(termin_raw)[:10]
+            else:
+                termin_str = "2099-12-31"
+
+            # Termin durum
+            termin_durum, kalan_gun = _km_termin_durum(termin_str, _bugun_str_km)
+
+            # Üretilebilirlik — Korgun'da bloke bilgisi yok, basit mantık
+            yuzde = (yapilan / toplam * 100) if toplam > 0 else 0
+            if kalan == 0:
+                uretilebilirlik = "TAMAM"
+            elif termin_durum == "gecti":
+                uretilebilirlik = "HAZIR"   # gecikmiş ama fiziksel engel yok
+            else:
+                uretilebilirlik = "HAZIR"
+
+            satir = {
+                "musteri"          : musteri,
+                "musteri_etiketleri": [],
+                "etiketler"        : [],
+                "sip"              : sip_no,
+                "siparis_no"       : sip_no,
+                "emir"             : emir_no,
+                "emir_no"          : emir_no,
+                "model"            : model,
+                "stok_kod"         : stok_kod,
+                "renk"             : renk,
+                "beden"            : "—",
+                "adet"             : toplam,
+                "toplam_adet"      : toplam,
+                "yapilan"          : yapilan,
+                "kalan"            : kalan,
+                "yuzde"            : round(yuzde, 1),
+                "termin"           : termin_str,
+                "termin_durumu"    : termin_durum,
+                "kalan_gun"        : kalan_gun,
+                "oncelik"          : "GECIKTI" if termin_durum == "gecti" else "NORMAL",
+                "uretilebilirlik"  : uretilebilirlik,
+                "bloke_sebebi"     : None,
+                "bant"             : None,
+                "darbogaz"         : {"var": False},
+                "not"              : "",
+                "talimat"          : "",
+            }
+            # satir_rengi ve skor hesapla
+            satir["satir_rengi"] = _km_satir_rengi(satir)
+            satirlar.append(satir)
+        except Exception:
+            continue
+
+    return satirlar
+
+
 @planlama_bp.route('/karar-masasi/data', methods=['GET'])
 
 @yetki_gerekli('planlama.karar_masasi', 'can_view')
@@ -2260,23 +2381,33 @@ def karar_masasi_data():
 
     _km_org_cache = {}  # her istekte önbelleği sıfırla
 
+    import traceback as _tb
+
     try:
+        # FAZ-P0: Korgun gerçek verisi — hata olursa MOCK'a düş
+        kaynak = "GERCEK"
+        satirlar = _km_gercek_satirlar(limit=100)
 
-        satirlar = _km_mock_satirlar()
+        if not satirlar:
+            # Korgun bağlanamadı veya sonuç boş — MOCK'a fallback
+            kaynak = "MOCK"
+            satirlar = _km_mock_satirlar()
 
-        ozet = _km_ozet(satirlar)
+        # _km_ozet termin alanını zorunlu tutuyor; eksik varsa güvenli filtrele
+        satirlar_gecerli = [s for s in satirlar if s.get("termin")]
+        ozet = _km_ozet(satirlar_gecerli)
 
         return jsonify({
 
             "ok": True,
 
-            "kaynak": "MOCK",
+            "kaynak": kaynak,
 
-            "satir_sayisi": len(satirlar),
+            "satir_sayisi": len(satirlar_gecerli),
 
-            "uretim_tarihi": KM_BUGUN_STR,
+            "uretim_tarihi": datetime.today().strftime("%Y-%m-%d"),
 
-            "satirlar": satirlar,
+            "satirlar": satirlar_gecerli,
 
             "ozet": ozet,
 
@@ -2286,15 +2417,13 @@ def karar_masasi_data():
 
     except Exception as e:
 
-        import traceback
-
         return jsonify({
 
             "ok": False,
 
             "hata": str(e),
 
-            "traceback": traceback.format_exc()
+            "traceback": _tb.format_exc()
 
         }), 500
 

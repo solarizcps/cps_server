@@ -7,7 +7,11 @@
 
 (function () {
     'use strict';
-    
+
+    /* FAZ-P0: Darboğaz bandı aktif edildi — sadece #darbogaz-band elementi olan sayfalarda çalışır.
+       Karar Masası ve Hedef sayfasına özgü; diğer sayfalarda eleman yoksa sessizce çıkar. */
+    if (!document.getElementById('darbogaz-band')) return;
+
     window._darbogazCache = window._darbogazCache || {};
     
     // =====================================================
