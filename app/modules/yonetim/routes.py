@@ -2663,6 +2663,9 @@ def personel_360_profil(profil_id):
             SELECT kp.id, kp.gercek_ad, kp.kullanici_adi, kp.profil_tipi, kp.aktif,
                    kp.kaynak, kp.kaynak_id, kp.profil_resim,
                    kp.pdks_personel_id, kp.pdks_sicilno, kp.pdks_eslesme_durumu,
+                   kp.ise_baslama_tarihi, kp.personel_tipi, kp.pozisyon,
+                   kp.ayrilma_tarihi, kp.calisma_durumu, kp.guven_skoru,
+                   kp.telefon, kp.email, kp.genel_not,
                    dm.id AS dept_id, dm.ad AS dept_ad, dm.kod AS dept_kod
             FROM kullanici_profil kp
             LEFT JOIN departman_master dm ON dm.id = kp.departman_id
@@ -3417,6 +3420,16 @@ def personel_360_profil(profil_id):
             "pdks_personel_id":     kp["pdks_personel_id"],
             "pdks_sicilno":         kp["pdks_sicilno"],
             "pdks_eslesme_durumu":  kp["pdks_eslesme_durumu"],
+            # FAZ-7B: İK profil alanları (kullanici_profil merkezli)
+            "ise_baslama_tarihi":   kp["ise_baslama_tarihi"],
+            "personel_tipi":        kp["personel_tipi"],
+            "pozisyon":             kp["pozisyon"],
+            "ayrilma_tarihi":       kp["ayrilma_tarihi"],
+            "calisma_durumu":       kp["calisma_durumu"],
+            "guven_skoru":          kp["guven_skoru"],
+            "telefon":              kp["telefon"],
+            "email":                kp["email"],
+            "genel_not":            kp["genel_not"],
         },
         "ekipler": [
             {
@@ -3986,8 +3999,10 @@ def personel_360_yetkinlik_ata(profil_id):
 
 def _p360_ik_profil_ve_pkid(con, profil_id):
     """
-    Ortak yardımcı: profil_id → (kp row, pk_id).
-    pk_id yoksa (kaynak != personel_kullanici) ValueError fırlatır.
+    FAZ-7B: Ortak yardımcı: profil_id → (kp row, pk_id).
+
+    pk_id opsiyonel: kaynak 'personel_kullanici' değilse pk_id=None döner,
+    ValueError fırlatmaz. Çağıran endpoint pk_id=None durumunu desteklemeli.
     """
     kp = con.execute(
         "SELECT id, gercek_ad, kaynak, kaynak_id FROM kullanici_profil WHERE id=?",
@@ -3995,9 +4010,8 @@ def _p360_ik_profil_ve_pkid(con, profil_id):
     ).fetchone()
     if not kp:
         raise LookupError("Profil bulunamadı")
-    if kp["kaynak"] != "personel_kullanici" or not kp["kaynak_id"]:
-        raise ValueError("Bu profil personel_kullanici kaydıyla eşleştirilmemiş; İK verisi girilemez.")
-    return kp, kp["kaynak_id"]
+    pk_id = kp["kaynak_id"] if kp["kaynak"] == "personel_kullanici" else None
+    return kp, pk_id
 
 
 # ── 1) Maaş Ekle / Güncelle ──────────────────────────────────────────
@@ -4042,17 +4056,22 @@ def personel_360_maas_ekle(profil_id):
     except LookupError as e:
         con.close()
         return jsonify({'ok': False, 'hata': str(e)}), 404
-    except ValueError as e:
-        con.close()
-        return jsonify({'ok': False, 'hata': str(e)}), 422
 
     try:
-        # Aktif maaş kaydı var mı?
-        aktif = con.execute("""
-            SELECT id, tutar, gecerlilik_bas FROM personel_maas_gecmis
-            WHERE personel_pk_id=? AND gecerlilik_bit IS NULL
-            ORDER BY gecerlilik_bas DESC LIMIT 1
-        """, (pk_id,)).fetchone()
+        # FAZ-7B: Aktif maaş: pk_id varsa pk_id, yoksa kullanici_profil_id ile ara
+        if pk_id is not None:
+            aktif = con.execute("""
+                SELECT id, tutar, gecerlilik_bas FROM personel_maas_gecmis
+                WHERE personel_pk_id=? AND gecerlilik_bit IS NULL
+                ORDER BY gecerlilik_bas DESC LIMIT 1
+            """, (pk_id,)).fetchone()
+        else:
+            aktif = con.execute("""
+                SELECT id, tutar, gecerlilik_bas FROM personel_maas_gecmis
+                WHERE kullanici_profil_id=? AND personel_pk_id IS NULL
+                  AND gecerlilik_bit IS NULL
+                ORDER BY gecerlilik_bas DESC LIMIT 1
+            """, (profil_id,)).fetchone()
 
         kapanan_id  = None
         kapama_biti = None
@@ -4073,21 +4092,22 @@ def personel_360_maas_ekle(profil_id):
             """, (kapama_biti, aktif['id']))
             kapanan_id = aktif['id']
 
-        # Yeni maaş kaydı
+        # FAZ-7B: Yeni maaş kaydı — pk_id varsa pk_id, yoksa profil_id
         con.execute("""
             INSERT INTO personel_maas_gecmis
-              (personel_pk_id, tutar, para_birimi, gecerlilik_bas, gecerlilik_bit,
-               tip, aciklama, giren_kullanici)
-            VALUES (?,?,?,?,NULL,?,?,?)
-        """, (pk_id, tutar, para_birimi, gecerlilik_bas, tip, aciklama, _u()))
+              (personel_pk_id, kullanici_profil_id, tutar, para_birimi,
+               gecerlilik_bas, gecerlilik_bit, tip, aciklama, giren_kullanici)
+            VALUES (?,?,?,?,?,NULL,?,?,?)
+        """, (pk_id, profil_id, tutar, para_birimi, gecerlilik_bas, tip, aciklama, _u()))
         yeni_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
 
-        # Cache: personel_kullanici.Maas güncelle
-        con.execute("""
-            UPDATE personel_kullanici
-            SET Maas=?, MaasParaBirimi=?, MaasGuncellemeTarih=date('now')
-            WHERE id=?
-        """, (tutar, para_birimi, pk_id))
+        # Cache: personel_kullanici.Maas güncelle (sadece pk_id varsa)
+        if pk_id is not None:
+            con.execute("""
+                UPDATE personel_kullanici
+                SET Maas=?, MaasParaBirimi=?, MaasGuncellemeTarih=date('now')
+                WHERE id=?
+            """, (tutar, para_birimi, pk_id))
 
         con.commit()
 
@@ -4099,7 +4119,7 @@ def personel_360_maas_ekle(profil_id):
                       modul='yonetim', alt_modul='personel_360')
         audit.log(_u(), 'EKLE', 'personel_maas_gecmis', yeni_id,
                   alan='tutar', eski=str(aktif['tutar']) if aktif else None, yeni=str(tutar),
-                  aciklama=f"P360 maas: yeni kayıt pk_id={pk_id} tip={tip}",
+                  aciklama=f"P360 maas: yeni kayıt profil_id={profil_id} pk_id={pk_id} tip={tip}",
                   modul='yonetim', alt_modul='personel_360')
 
     except Exception as e:
@@ -4174,25 +4194,23 @@ def personel_360_izin_ekle(profil_id):
     except LookupError as e:
         con.close()
         return jsonify({'ok': False, 'hata': str(e)}), 404
-    except ValueError as e:
-        con.close()
-        return jsonify({'ok': False, 'hata': str(e)}), 422
 
     try:
+        # FAZ-7B: pk_id yoksa kullanici_profil_id ile kayıt
         con.execute("""
             INSERT INTO personel_izin
-              (personel_pk_id, yil, hak_gun, kullanilan_gun, izin_tipi,
+              (personel_pk_id, kullanici_profil_id, yil, hak_gun, kullanilan_gun, izin_tipi,
                baslangic_tarihi, bitis_tarihi, gun_sayisi, durum,
                onaylayan, notlar, giren_kullanici)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
-        """, (pk_id, yil, hak_gun, kullanilan_gun, izin_tipi,
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, (pk_id, profil_id, yil, hak_gun, kullanilan_gun, izin_tipi,
               bas, bit, gun_sayisi, durum, onaylayan, notlar, _u()))
         yeni_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
         con.commit()
 
         audit.log(_u(), 'EKLE', 'personel_izin', yeni_id,
                   alan='gun_sayisi', eski=None, yeni=str(gun_sayisi),
-                  aciklama=f"P360 izin: pk_id={pk_id} yil={yil} tip={izin_tipi} durum={durum}",
+                  aciklama=f"P360 izin: profil_id={profil_id} pk_id={pk_id} yil={yil} tip={izin_tipi}",
                   modul='yonetim', alt_modul='personel_360')
 
     except Exception as e:
@@ -4265,35 +4283,50 @@ def personel_360_devam_ekle(profil_id):
     except LookupError as e:
         con.close()
         return jsonify({'ok': False, 'hata': str(e)}), 404
-    except ValueError as e:
-        con.close()
-        return jsonify({'ok': False, 'hata': str(e)}), 422
 
     try:
-        mevcut = con.execute(
-            "SELECT id, durum FROM personel_devam WHERE personel_pk_id=? AND tarih=?",
-            (pk_id, tarih)
-        ).fetchone()
+        # FAZ-7B: pk_id varsa pk_id üzerinden, yoksa kullanici_profil_id üzerinden
+        if pk_id is not None:
+            mevcut = con.execute(
+                "SELECT id, durum FROM personel_devam WHERE personel_pk_id=? AND tarih=?",
+                (pk_id, tarih)
+            ).fetchone()
+        else:
+            mevcut = con.execute(
+                "SELECT id, durum FROM personel_devam "
+                "WHERE kullanici_profil_id=? AND personel_pk_id IS NULL AND tarih=?",
+                (profil_id, tarih)
+            ).fetchone()
 
         if mevcut:
-            con.execute("""
-                UPDATE personel_devam
-                SET durum=?, giris_saati=?, cikis_saati=?, calisma_dakika=?,
-                    kaynak=?, aciklama=?, giren_kullanici=?,
-                    updated_at=datetime('now')
-                WHERE personel_pk_id=? AND tarih=?
-            """, (durum, giris_saati, cikis_saati, calisma_dakika,
-                  kaynak, aciklama, _u(), pk_id, tarih))
+            if pk_id is not None:
+                con.execute("""
+                    UPDATE personel_devam
+                    SET durum=?, giris_saati=?, cikis_saati=?, calisma_dakika=?,
+                        kaynak=?, aciklama=?, giren_kullanici=?,
+                        updated_at=datetime('now')
+                    WHERE personel_pk_id=? AND tarih=?
+                """, (durum, giris_saati, cikis_saati, calisma_dakika,
+                      kaynak, aciklama, _u(), pk_id, tarih))
+            else:
+                con.execute("""
+                    UPDATE personel_devam
+                    SET durum=?, giris_saati=?, cikis_saati=?, calisma_dakika=?,
+                        kaynak=?, aciklama=?, giren_kullanici=?,
+                        updated_at=datetime('now')
+                    WHERE kullanici_profil_id=? AND personel_pk_id IS NULL AND tarih=?
+                """, (durum, giris_saati, cikis_saati, calisma_dakika,
+                      kaynak, aciklama, _u(), profil_id, tarih))
             islem = 'DUZENLE'
             kayit_id = mevcut['id']
             eski_durum = mevcut['durum']
         else:
             con.execute("""
                 INSERT INTO personel_devam
-                  (personel_pk_id, tarih, durum, giris_saati, cikis_saati,
+                  (personel_pk_id, kullanici_profil_id, tarih, durum, giris_saati, cikis_saati,
                    calisma_dakika, kaynak, aciklama, giren_kullanici)
-                VALUES (?,?,?,?,?,?,?,?,?)
-            """, (pk_id, tarih, durum, giris_saati, cikis_saati,
+                VALUES (?,?,?,?,?,?,?,?,?,?)
+            """, (pk_id, profil_id, tarih, durum, giris_saati, cikis_saati,
                   calisma_dakika, kaynak, aciklama, _u()))
             islem = 'EKLE'
             kayit_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
@@ -4303,7 +4336,7 @@ def personel_360_devam_ekle(profil_id):
 
         audit.log(_u(), islem, 'personel_devam', kayit_id,
                   alan='durum', eski=eski_durum, yeni=durum,
-                  aciklama=f"P360 devam: pk_id={pk_id} tarih={tarih} durum={durum}",
+                  aciklama=f"P360 devam: profil_id={profil_id} pk_id={pk_id} tarih={tarih}",
                   modul='yonetim', alt_modul='personel_360')
 
     except Exception as e:
@@ -4490,22 +4523,20 @@ def personel_360_ik_not_ekle(profil_id):
     except LookupError as e:
         con.close()
         return jsonify({'ok': False, 'hata': str(e)}), 404
-    except ValueError as e:
-        con.close()
-        return jsonify({'ok': False, 'hata': str(e)}), 422
 
     try:
+        # FAZ-7B: pk_id yoksa kullanici_profil_id ile kayıt
         con.execute("""
             INSERT INTO personel_ik_not
-              (personel_pk_id, tarih, not_tipi, icerik, gizli, giren_kullanici)
-            VALUES (?,?,?,?,?,?)
-        """, (pk_id, tarih, not_tipi, icerik, gizli, _u()))
+              (personel_pk_id, kullanici_profil_id, tarih, not_tipi, icerik, gizli, giren_kullanici)
+            VALUES (?,?,?,?,?,?,?)
+        """, (pk_id, profil_id, tarih, not_tipi, icerik, gizli, _u()))
         yeni_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
         con.commit()
 
         audit.log(_u(), 'EKLE', 'personel_ik_not', yeni_id,
                   alan='not_tipi', eski=None, yeni=not_tipi,
-                  aciklama=f"P360 ik_not: pk_id={pk_id} tip={not_tipi} gizli={gizli}",
+                  aciklama=f"P360 ik_not: profil_id={profil_id} pk_id={pk_id} tip={not_tipi}",
                   modul='yonetim', alt_modul='personel_360')
 
     except Exception as e:
@@ -4938,42 +4969,47 @@ def personel_360_pk_guncelle(profil_id):
 
     con = _get_conn()
     try:
-        # Profil var mi ve kaynak dogru mu?
         kp = con.execute(
             "SELECT id, kaynak, kaynak_id, gercek_ad FROM kullanici_profil WHERE id=?",
             (profil_id,)
         ).fetchone()
         if not kp:
             return jsonify({'ok': False, 'hata': 'Profil bulunamadi'}), 404
-        if kp['kaynak'] != 'personel_kullanici' or not kp['kaynak_id']:
-            return jsonify({
-                'ok':   False,
-                'hata': 'Bu profil personel_kullanici kaynakli degil, guncellenemez',
-                'kod':  'KAYNAK_UYUMSUZ',
-            }), 400
 
-        pk_id = kp['kaynak_id']
+        pk_id = kp['kaynak_id'] if kp['kaynak'] == 'personel_kullanici' else None
 
-        pk_row = con.execute(
-            "SELECT id FROM personel_kullanici WHERE id=?", (pk_id,)
-        ).fetchone()
-        if not pk_row:
-            return jsonify({'ok': False, 'hata': 'personel_kullanici kaydi bulunamadi'}), 404
+        # FAZ-7B: Her iki durumda da alanların bir bölümünü kullanici_profil'a yaz
+        # kullanici_profil kolonları: ise_baslama_tarihi, personel_tipi, pozisyon,
+        #   ayrilma_tarihi, calisma_durumu, guven_skoru, telefon, email, genel_not
+        KP_ALAN_MAP = {
+            'IseBaslamaTarih': 'ise_baslama_tarihi',
+            'PersonelTipi':    'personel_tipi',
+            'Pozisyon':        'pozisyon',
+            'AyrilmaTarihi':   'ayrilma_tarihi',
+            'CalismaDurumu':   'calisma_durumu',
+            'GuvenSkoru':      'guven_skoru',
+            'Telefon':         'telefon',
+            'Email':           'email',
+            'Notlar':          'genel_not',
+        }
 
-        # Whitelist: izin verilen alanlar
+        # Whitelist: izin verilen alanlar (hem personel_kullanici hem kullanici_profil için)
         IZINLI = {
             'IseBaslamaTarih', 'KidemYili', 'Pozisyon', 'PersonelTipi',
             'Telefon', 'Email', 'Adres', 'AcilIletisim',
             'GuvenSkoru', 'Notlar', 'aktif',
+            'AyrilmaTarihi', 'CalismaDurumu',
         }
         YASAK = {
             'ad', 'kullanici_adi', 'sifre', 'Maas', 'MaasParaBirimi',
             'MaasGuncellemeTarih', 'kaynak', 'legacy_id', 'legacy_db', 'id',
         }
 
-        set_parts = []
-        params    = []
-        hatalar   = []
+        pk_set_parts = []
+        pk_params    = []
+        kp_set_parts = []
+        kp_params    = []
+        hatalar      = []
 
         for alan, deger in data.items():
             if alan in YASAK:
@@ -5018,22 +5054,41 @@ def personel_360_pk_guncelle(profil_id):
                 if isinstance(deger, str):
                     deger = deger.strip() or None
 
-            set_parts.append(f"{alan}=?")
-            params.append(deger)
+            # kullanici_profil hedef kolonu
+            kp_kolon = KP_ALAN_MAP.get(alan)
+            if kp_kolon:
+                kp_set_parts.append(f"{kp_kolon}=?")
+                kp_params.append(deger)
+
+            # personel_kullanici (pk_id varsa)
+            if pk_id is not None:
+                pk_set_parts.append(f"{alan}=?")
+                pk_params.append(deger)
 
         if hatalar:
             return jsonify({'ok': False, 'hata': '; '.join(hatalar)}), 422
 
-        if not set_parts:
+        if not pk_set_parts and not kp_set_parts:
             return jsonify({'ok': False, 'hata': 'Guncellenecek gecerli alan bulunamadi'}), 400
 
-        set_parts.append("GuncellemeTarih=datetime('now')")
-        params.append(pk_id)
+        # 1) kullanici_profil güncelle (her zaman)
+        if kp_set_parts:
+            kp_set_parts.append("updated_at=datetime('now')")
+            kp_params.append(profil_id)
+            con.execute(
+                f"UPDATE kullanici_profil SET {', '.join(kp_set_parts)} WHERE id=?",
+                kp_params
+            )
 
-        con.execute(
-            f"UPDATE personel_kullanici SET {', '.join(set_parts)} WHERE id=?",
-            params
-        )
+        # 2) personel_kullanici güncelle (pk_id varsa)
+        if pk_id is not None and pk_set_parts:
+            pk_set_parts.append("GuncellemeTarih=datetime('now')")
+            pk_params.append(pk_id)
+            con.execute(
+                f"UPDATE personel_kullanici SET {', '.join(pk_set_parts)} WHERE id=?",
+                pk_params
+            )
+
         con.commit()
 
     except Exception as e:

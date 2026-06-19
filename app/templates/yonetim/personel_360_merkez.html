@@ -2262,42 +2262,77 @@
       + '</div>';
   }
 
-  function renderCalisma(pk, caps) {
+  // FAZ-7B: renderCalisma artık pk_bilgi olmayan profiller için profil objesinden okur
+  function renderCalisma(pk, caps, profil) {
     const el = document.getElementById('d-ik-calisma');
     if (!el) return;
-    if (!pk) {
-      el.innerHTML = '<div class="p360-bos-mesaj" style="font-size:12px;">Bu profil için genişletilmiş bilgi yok.<br><small style="color:var(--text3);">Sadece personel_kullanici kaydı olan profillerde görünür.</small></div>';
+
+    // FAZ-7B: pk_bilgi yoksa profil'deki İK alanlarından sanal bir pk objesi oluştur
+    var kaynak = pk;
+    if (!kaynak && profil) {
+      kaynak = {
+        ise_baslama:   profil.ise_baslama_tarihi || null,
+        kidem_yili:    null,
+        pozisyon:      profil.pozisyon      || null,
+        personel_tipi: profil.personel_tipi || null,
+        aktif:         profil.aktif,
+        telefon:       profil.telefon       || null,
+        email:         profil.email         || null,
+        adres:         null,
+        acil_iletisim: null,
+        guven_skoru:   profil.guven_skoru   != null ? profil.guven_skoru : null,
+        notlar:        profil.genel_not     || null,
+        calisma_durumu: profil.calisma_durumu || null,
+        _from_profil:  true,  // kaynak göstergesi
+      };
+    }
+
+    if (!kaynak) {
+      el.innerHTML = '<div class="p360-bos-mesaj" style="font-size:12px;">Bu profil için çalışma bilgisi henüz girilmemiş.<br><small style="color:var(--text3);">Düzenle butonuyla ekleyebilirsiniz.</small></div>';
+      // Düzenle butonu göster (İK yetkisi varsa)
+      var duzenleBtn0 = document.getElementById('calisma-duzenle-btn');
+      if (duzenleBtn0) duzenleBtn0.style.display = (caps && caps.ik && !caps.usta) ? '' : 'none';
       return;
     }
+
     // Güven skoru rengi
-    var gs = pk.guven_skoru;
+    var gs = kaynak.guven_skoru;
     var gsRenk = gs == null ? '#6b7280' : (gs >= 80 ? '#166534' : gs >= 50 ? '#92400e' : '#991b1b');
     var gsBg   = gs == null ? '#f3f4f6' : (gs >= 80 ? '#dcfce7' : gs >= 50 ? '#fef3c7' : '#fee2e2');
     // Aktif/pasif
-    var aktifBadge = pk.aktif == null ? '' :
-      (pk.aktif
+    var aktifDeger = kaynak.aktif;
+    var aktifBadge = aktifDeger == null ? '' :
+      (aktifDeger
         ? '<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;">AKTİF</span>'
         : '<span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;">PASİF</span>');
     // Kıdem yılı
-    var kidem = pk.kidem_yili != null ? pk.kidem_yili + ' yıl' : null;
-    if (!kidem && pk.ise_baslama) {
-      var bas = new Date(pk.ise_baslama);
+    var kidem = kaynak.kidem_yili != null ? kaynak.kidem_yili + ' yıl' : null;
+    if (!kidem && kaynak.ise_baslama) {
+      var bas = new Date(kaynak.ise_baslama);
       var now = new Date();
       var yil = Math.floor((now - bas) / (365.25 * 24 * 3600 * 1000));
       if (!isNaN(yil) && yil >= 0) kidem = yil + ' yıl';
     }
 
     var satirlar = [
-      ['İşe Giriş',    pk.ise_baslama  || '—'],
-      ['Kıdem',        kidem           || '—'],
-      ['Pozisyon',     pk.pozisyon     || '—'],
-      ['Personel Tipi',pk.personel_tipi|| '—'],
-      ['Durum',        aktifBadge || (pk.aktif == null ? '—' : '')],
+      ['İşe Giriş',    kaynak.ise_baslama   || '—'],
+      ['Kıdem',        kidem                || '—'],
+      ['Pozisyon',     kaynak.pozisyon      || '—'],
+      ['Personel Tipi',kaynak.personel_tipi || '—'],
+      ['Durum',        aktifBadge || (aktifDeger == null ? '—' : '')],
     ];
-    if (pk.acil_iletisim) satirlar.push(['Acil İletişim', pk.acil_iletisim]);
-    if (pk.notlar)        satirlar.push(['Genel Not', pk.notlar]);
+    if (kaynak.calisma_durumu) satirlar.push(['Çalışma Durumu', kaynak.calisma_durumu]);
+    if (kaynak.telefon)        satirlar.push(['Telefon',        kaynak.telefon]);
+    if (kaynak.email)          satirlar.push(['E-posta',        kaynak.email]);
+    if (kaynak.acil_iletisim)  satirlar.push(['Acil İletişim',  kaynak.acil_iletisim]);
+    if (kaynak.notlar)         satirlar.push(['Genel Not',      kaynak.notlar]);
 
-    var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;padding:12px 16px;">';
+    // Kaynak göstergesi
+    var kaynakBadge = kaynak._from_profil
+      ? '<div style="padding:4px 16px 0;font-size:10px;color:var(--text3);">📋 Kaynak: kullanici_profil</div>'
+      : '<div style="padding:4px 16px 0;font-size:10px;color:var(--text3);">📋 Kaynak: personel_kullanici</div>';
+
+    var html = kaynakBadge + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;padding:12px 16px;">';
     satirlar.forEach(function(s) {
       html += '<div style="display:flex;flex-direction:column;gap:2px;">'
         + '<span style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;">' + s[0] + '</span>'
@@ -2314,13 +2349,14 @@
     html += '</div>';
     el.innerHTML = html;
 
-    // P4C: Düzenle butonu görünürlüğü — sadece İK/Yönetim, Usta değil
+    // Düzenle butonu görünürlüğü — sadece İK/Yönetim, Usta değil
     var duzenleBtn = document.getElementById('calisma-duzenle-btn');
     if (duzenleBtn) {
-      duzenleBtn.style.display = (pk && caps && caps.ik && !caps.usta) ? '' : 'none';
+      duzenleBtn.style.display = (caps && caps.ik && !caps.usta) ? '' : 'none';
     }
-    // P4C: pk verisini forma yükle (form kapalıyken de hazır olsun)
+    // pk verisini forma yükle
     if (pk) pkFormDoldur(pk);
+    else if (profil) pkFormDoldurProfil(profil);
   }
 
   // ── P4C: Form doldur / aç-kapat / kaydet ────────────────────
@@ -2338,6 +2374,25 @@
     set('pk-notlar',        pk.notlar        || '');
     var aktifEl = document.getElementById('pk-aktif');
     if (aktifEl) aktifEl.checked = pk.aktif !== false && pk.aktif !== 0;
+    var mesajEl = document.getElementById('pk-form-mesaj');
+    if (mesajEl) mesajEl.textContent = '';
+  }
+
+  // FAZ-7B: profil objesinden (kullanici_profil) form doldur
+  function pkFormDoldurProfil(profil) {
+    var set = function(id, val) { var el = document.getElementById(id); if (el) el.value = val != null ? val : ''; };
+    set('pk-ise-bas',       profil.ise_baslama_tarihi || '');
+    set('pk-kidem',         '');
+    set('pk-pozisyon',      profil.pozisyon      || '');
+    set('pk-personel-tipi', profil.personel_tipi || '');
+    set('pk-telefon',       profil.telefon       || '');
+    set('pk-email',         profil.email         || '');
+    set('pk-adres',         '');
+    set('pk-acil',          '');
+    set('pk-guven',         profil.guven_skoru   != null ? profil.guven_skoru : '');
+    set('pk-notlar',        profil.genel_not     || '');
+    var aktifEl = document.getElementById('pk-aktif');
+    if (aktifEl) aktifEl.checked = profil.aktif !== false && profil.aktif !== 0;
     var mesajEl = document.getElementById('pk-form-mesaj');
     if (mesajEl) mesajEl.textContent = '';
   }
@@ -2834,8 +2889,8 @@
   function renderIk(ik, pk, caps, profil) {
     // FAZ-7A: PDKS durum satırı (readonly)
     renderPdksDurum(profil);
-    // P4B: Çalışma bilgileri kartı
-    renderCalisma(pk, caps);
+    // FAZ-7B: Çalışma bilgileri kartı — pk yoksa profil'den besle
+    renderCalisma(pk, caps, profil);
 
     const _BOS = '<div class="p360-bos-mesaj">Veri bağlantısı yok.<br><small style="color:var(--text3);">Bu profil personel_kullanici kaydıyla eşleştirilmemiş.</small></div>';
 
