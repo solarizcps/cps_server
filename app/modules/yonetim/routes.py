@@ -3047,29 +3047,52 @@ def personel_360_profil(profil_id):
                 uretim_prosesler = []
                 son_uretimler    = []
 
-        # FAZ2G-2: Maaş özeti — sadece has_maas=True ve pk_id varsa sorgu çalışır
-        if has_maas and pk_id:
+        # FAZ-7C-1: Maaş özeti — has_maas=True ise çalışır; pk_id varsa pk_id, yoksa profil_id
+        if has_maas and (pk_id or profil_id):
             try:
-                _aktif = con.execute("""
-                    SELECT tutar, para_birimi, gecerlilik_bas, tip, aciklama
-                    FROM personel_maas_gecmis
-                    WHERE personel_pk_id = ? AND gecerlilik_bit IS NULL
-                    ORDER BY gecerlilik_bas DESC LIMIT 1
-                """, (pk_id,)).fetchone()
+                if pk_id:
+                    _aktif = con.execute("""
+                        SELECT tutar, para_birimi, gecerlilik_bas, tip, aciklama
+                        FROM personel_maas_gecmis
+                        WHERE personel_pk_id = ? AND gecerlilik_bit IS NULL
+                        ORDER BY gecerlilik_bas DESC LIMIT 1
+                    """, (pk_id,)).fetchone()
 
-                # P4D: LIMIT 5 → 20, giren_kullanici + tip eklendi
-                _gecmis_rows = con.execute("""
-                    SELECT tutar, para_birimi, gecerlilik_bas, gecerlilik_bit,
-                           tip, aciklama, giren_kullanici
-                    FROM personel_maas_gecmis
-                    WHERE personel_pk_id = ?
-                    ORDER BY gecerlilik_bas DESC LIMIT 20
-                """, (pk_id,)).fetchall()
+                    _gecmis_rows = con.execute("""
+                        SELECT tutar, para_birimi, gecerlilik_bas, gecerlilik_bit,
+                               tip, aciklama, giren_kullanici
+                        FROM personel_maas_gecmis
+                        WHERE personel_pk_id = ?
+                        ORDER BY gecerlilik_bas DESC LIMIT 20
+                    """, (pk_id,)).fetchall()
 
-                _toplam_kayit = con.execute(
-                    "SELECT COUNT(*) FROM personel_maas_gecmis WHERE personel_pk_id=?",
-                    (pk_id,)
-                ).fetchone()[0]
+                    _toplam_kayit = con.execute(
+                        "SELECT COUNT(*) FROM personel_maas_gecmis WHERE personel_pk_id=?",
+                        (pk_id,)
+                    ).fetchone()[0]
+                else:
+                    # FAZ-7C-1: pk_id yoksa kullanici_profil_id ile oku
+                    _aktif = con.execute("""
+                        SELECT tutar, para_birimi, gecerlilik_bas, tip, aciklama
+                        FROM personel_maas_gecmis
+                        WHERE kullanici_profil_id = ? AND personel_pk_id IS NULL
+                          AND gecerlilik_bit IS NULL
+                        ORDER BY gecerlilik_bas DESC LIMIT 1
+                    """, (profil_id,)).fetchone()
+
+                    _gecmis_rows = con.execute("""
+                        SELECT tutar, para_birimi, gecerlilik_bas, gecerlilik_bit,
+                               tip, aciklama, giren_kullanici
+                        FROM personel_maas_gecmis
+                        WHERE kullanici_profil_id = ? AND personel_pk_id IS NULL
+                        ORDER BY gecerlilik_bas DESC LIMIT 20
+                    """, (profil_id,)).fetchall()
+
+                    _toplam_kayit = con.execute(
+                        "SELECT COUNT(*) FROM personel_maas_gecmis "
+                        "WHERE kullanici_profil_id=? AND personel_pk_id IS NULL",
+                        (profil_id,)
+                    ).fetchone()[0]
 
                 maas_ozet = {
                     "aktif_maas": {
@@ -3166,25 +3189,44 @@ def personel_360_profil(profil_id):
                     if _izin_kp and _izin_kp["kayit_sayisi"] > 0:
                         _izin = _izin_kp
 
-                # IK not özeti (tüm zamanlar)
-                _not_ozet = con.execute("""
-                    SELECT
-                        COUNT(*) AS toplam_not,
-                        MAX(tarih) AS son_not_tarihi,
-                        COALESCE(SUM(CASE WHEN not_tipi='uyari'   THEN 1 ELSE 0 END), 0) AS uyari_sayisi,
-                        COALESCE(SUM(CASE WHEN not_tipi='olumlu'  THEN 1 ELSE 0 END), 0) AS olumlu_sayisi,
-                        COALESCE(SUM(CASE WHEN not_tipi='gorusme' THEN 1 ELSE 0 END), 0) AS gorusme_sayisi
-                    FROM personel_ik_not
-                    WHERE personel_pk_id = ?
-                """, (pk_id,)).fetchone()
+                # FAZ-7C-1: IK not özeti — pk_id varsa pk_id, yoksa kullanici_profil_id
+                if pk_id:
+                    _not_ozet = con.execute("""
+                        SELECT
+                            COUNT(*) AS toplam_not,
+                            MAX(tarih) AS son_not_tarihi,
+                            COALESCE(SUM(CASE WHEN not_tipi='uyari'   THEN 1 ELSE 0 END), 0) AS uyari_sayisi,
+                            COALESCE(SUM(CASE WHEN not_tipi='olumlu'  THEN 1 ELSE 0 END), 0) AS olumlu_sayisi,
+                            COALESCE(SUM(CASE WHEN not_tipi='gorusme' THEN 1 ELSE 0 END), 0) AS gorusme_sayisi
+                        FROM personel_ik_not
+                        WHERE personel_pk_id = ?
+                    """, (pk_id,)).fetchone()
 
-                # Son 5 IK notu (içeriğiyle birlikte)
-                _notlar = con.execute("""
-                    SELECT id, tarih, not_tipi, icerik, gizli, giren_kullanici, created_at
-                    FROM personel_ik_not
-                    WHERE personel_pk_id = ?
-                    ORDER BY tarih DESC, id DESC LIMIT 5
-                """, (pk_id,)).fetchall()
+                    _notlar = con.execute("""
+                        SELECT id, tarih, not_tipi, icerik, gizli, giren_kullanici, created_at
+                        FROM personel_ik_not
+                        WHERE personel_pk_id = ?
+                        ORDER BY tarih DESC, id DESC LIMIT 5
+                    """, (pk_id,)).fetchall()
+                else:
+                    # pk_id yoksa kullanici_profil_id ile oku
+                    _not_ozet = con.execute("""
+                        SELECT
+                            COUNT(*) AS toplam_not,
+                            MAX(tarih) AS son_not_tarihi,
+                            COALESCE(SUM(CASE WHEN not_tipi='uyari'   THEN 1 ELSE 0 END), 0) AS uyari_sayisi,
+                            COALESCE(SUM(CASE WHEN not_tipi='olumlu'  THEN 1 ELSE 0 END), 0) AS olumlu_sayisi,
+                            COALESCE(SUM(CASE WHEN not_tipi='gorusme' THEN 1 ELSE 0 END), 0) AS gorusme_sayisi
+                        FROM personel_ik_not
+                        WHERE kullanici_profil_id = ? AND personel_pk_id IS NULL
+                    """, (profil_id,)).fetchone()
+
+                    _notlar = con.execute("""
+                        SELECT id, tarih, not_tipi, icerik, gizli, giren_kullanici, created_at
+                        FROM personel_ik_not
+                        WHERE kullanici_profil_id = ? AND personel_pk_id IS NULL
+                        ORDER BY tarih DESC, id DESC LIMIT 5
+                    """, (profil_id,)).fetchall()
 
                 ik_ozet = {
                     "devam": {
@@ -4936,11 +4978,11 @@ def personel_360_resim_yukle(profil_id):
 # ════════════════════════════════════════════════════════════════
 
 @yonetim_bp.route('/api/personel-360/profil/<int:profil_id>/pk-guncelle', methods=['PUT'])
-@yetki_gerekli('personel_360.ik', 'can_view')
+@yetki_gerekli('personel_360.ik.duzenle', 'can_update')  # FAZ-7C-1: can_view → can_update
 def personel_360_pk_guncelle(profil_id):
     """
-    P4C: personel_kullanici tablosundaki HR alanlarini gunceller.
-    Sadece kaynak='personel_kullanici' profiller icin calisir.
+    FAZ-7B/7C: İK alanları güncelleme — kullanici_profil + personel_kullanici (varsa).
+    Yetki: personel_360.ik.duzenle:can_update (düzeltildi — eski: personel_360.ik:can_view)
     Usta kullanicilari guncelleyemez.
     Maas/kimlik alanlari korunur — whitelist yaklasimi.
     """
