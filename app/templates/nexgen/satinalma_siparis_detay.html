@@ -1,0 +1,316 @@
+{% extends "base.html" %}
+{% set page_title = "Sipariş Detay — " ~ siparis.siparis_no %}
+
+{% block content %}
+<div class="ng-sayfa">
+
+  {# ── Başlık ──────────────────────────────────────────────── #}
+  <div class="ng-baslik-blok">
+    <div class="ng-baslik">
+      <a href="/nexgen/" class="ng-bc-link">NexGen</a>
+      <span class="ng-bc-sep">›</span>
+      <a href="/nexgen/satinalma" class="ng-bc-link">Satın Alma</a>
+      <span class="ng-bc-sep">›</span>
+      <span class="ng-baslik-metin">{{ siparis.siparis_no }}</span>
+    </div>
+    <div class="ng-baslik-aciklama">Satın alma sipariş detayı. Stok hareketi bu ekranda oluşmaz.</div>
+  </div>
+
+  {# ── Durum Bandı ──────────────────────────────────────────── #}
+  <div class="ngsd-durum-bant ngsd-bant-{{ siparis.onay_durumu|lower|replace('_','-') }}">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <span class="ngsd-durum-etiket">Onay Durumu:</span>
+      <span class="ngsa-rozet ngsa-rozet-{{ siparis.onay_durumu|lower|replace('_','-') }} ngsd-rozet-buyuk">
+        {% if siparis.onay_durumu == 'TASLAK' %}Taslak
+        {% elif siparis.onay_durumu == 'ONAY_BEKLIYOR' %}Onay Bekliyor
+        {% elif siparis.onay_durumu == 'ONAYLANDI' %}Onaylandı
+        {% elif siparis.onay_durumu == 'REDDEDILDI' %}Reddedildi
+        {% else %}{{ siparis.onay_durumu }}{% endif %}
+      </span>
+      <span class="ngsd-durum-etiket">Sipariş Durumu:</span>
+      <span class="ngsa-rozet ngsa-rozet-{{ siparis.durum|lower|replace('_','-') }} ngsd-rozet-buyuk">
+        {% if siparis.durum == 'BEKLIYOR' %}Bekliyor
+        {% elif siparis.durum == 'KISMI_TESLIM' %}Kısmi Teslim
+        {% elif siparis.durum == 'TAMAMLANDI' %}Tamamlandı
+        {% elif siparis.durum == 'IPTAL' %}İptal Edildi
+        {% else %}{{ siparis.durum }}{% endif %}
+      </span>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      {% if siparis.onay_durumu in ('TASLAK', 'REDDEDILDI') and can_manage %}
+      <button class="ngsd-eylem-btn ngsd-btn-onaya" onclick="ngsdEylem('ONAYA_GONDER')">Onaya Gönder</button>
+      {% endif %}
+      {% if siparis.onay_durumu == 'ONAY_BEKLIYOR' and can_approve %}
+      <button class="ngsd-eylem-btn ngsd-btn-onayla" onclick="ngsdEylem('ONAYLA')">Onayla</button>
+      <button class="ngsd-eylem-btn ngsd-btn-reddet" onclick="ngsdEylem('REDDET')">Reddet</button>
+      {% endif %}
+      {% if siparis.durum != 'TAMAMLANDI' and siparis.durum != 'IPTAL' and can_manage %}
+      <button class="ngsd-eylem-btn ngsd-btn-iptal" onclick="ngsdEylem('IPTAL')">İptal Et</button>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Bilgi Grid ───────────────────────────────────────────── #}
+  <div class="ngsd-grid">
+
+    {# Sol: Tedarikçi + Hammadde #}
+    <div class="ngsd-kart">
+      <div class="ngsd-kart-baslik">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+        </svg>
+        Tedarikçi
+      </div>
+      <div class="ngsd-kart-icerik">
+        <div class="ngsd-satir"><span>Kod</span><strong>{{ siparis.tedarikci_kod }}</strong></div>
+        <div class="ngsd-satir"><span>Ad</span><strong>{{ siparis.tedarikci_ad }}</strong></div>
+        <div class="ngsd-satir"><span>Ülke</span><span>{{ siparis.ulke or '—' }}</span></div>
+        {% if siparis.iletisim_email %}
+        <div class="ngsd-satir"><span>E-posta</span><span>{{ siparis.iletisim_email }}</span></div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Orta: Hammadde #}
+    <div class="ngsd-kart">
+      <div class="ngsd-kart-baslik">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+          <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+        </svg>
+        Hammadde
+      </div>
+      <div class="ngsd-kart-icerik">
+        <div class="ngsd-satir"><span>Kod</span><span class="ngsk-kod-rozet">{{ siparis.stok_kod }}</span></div>
+        <div class="ngsd-satir"><span>Ad</span><strong>{{ siparis.stok_ad }}</strong></div>
+        <div class="ngsd-satir"><span>Kategori</span><span>{{ siparis.stok_kategori }}</span></div>
+        <div class="ngsd-satir ngsd-miktar-vurgu">
+          <span>Sipariş Miktarı</span>
+          <strong>{{ '{:,.0f}'.format(siparis.siparis_miktari_kg) }} KG</strong>
+        </div>
+      </div>
+    </div>
+
+    {# Sağ: Fiyat (yetkiye göre) #}
+    <div class="ngsd-kart">
+      <div class="ngsd-kart-baslik">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+          <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 1 0 0 7h5a3.5 3.5 0 1 1 0 7H6"/>
+        </svg>
+        Fiyat & Vade
+      </div>
+      <div class="ngsd-kart-icerik">
+        {% if can_fiyat %}
+        <div class="ngsd-satir">
+          <span>Birim Fiyat</span>
+          <strong>
+            {% if siparis.birim_fiyat %}
+              {{ '{:,.4f}'.format(siparis.birim_fiyat) }} {{ siparis.para_birimi }}
+            {% else %}—{% endif %}
+          </strong>
+        </div>
+        {% if siparis.para_birimi != 'TRY' and siparis.kur %}
+        <div class="ngsd-satir">
+          <span>Kur</span>
+          <span>{{ siparis.para_birimi }} = {{ '{:,.4f}'.format(siparis.kur) }} ₺</span>
+        </div>
+        <div class="ngsd-satir">
+          <span>Birim (TRY)</span>
+          <span>{{ '{:,.4f}'.format(siparis.birim_fiyat_try) if siparis.birim_fiyat_try else '—' }} ₺</span>
+        </div>
+        {% endif %}
+        <div class="ngsd-satir ngsd-toplam-vurgu">
+          <span>Toplam Tutar</span>
+          <strong>
+            {% if siparis.toplam_tutar_try %}
+              {{ '{:,.2f}'.format(siparis.toplam_tutar_try) }} ₺
+            {% else %}—{% endif %}
+          </strong>
+        </div>
+        {% else %}
+        <div style="color:#9ca3af;font-size:13px;padding:8px 0">
+          <em>Fiyat bilgisi görüntüleme yetkiniz yok.</em>
+        </div>
+        {% endif %}
+        <div class="ngsd-satir">
+          <span>Vade</span>
+          <span>{% if siparis.vade_gun %}{{ siparis.vade_gun }} gün{% else %}—{% endif %}</span>
+        </div>
+        <div class="ngsd-satir">
+          <span>Vade Tarihi</span>
+          <span>{{ siparis.vade_tarihi[:10] if siparis.vade_tarihi else '—' }}</span>
+        </div>
+      </div>
+    </div>
+
+  </div>{# /ngsd-grid #}
+
+  {# ── Tarih & Onay Bilgileri ───────────────────────────────── #}
+  <div class="ngsd-kart" style="margin-top:0">
+    <div class="ngsd-kart-baslik">Tarih Bilgileri</div>
+    <div style="display:flex;gap:32px;flex-wrap:wrap;padding:12px 16px">
+      <div>
+        <div style="font-size:11px;color:#9ca3af">Sipariş Tarihi</div>
+        <div style="font-size:14px;font-weight:600">{{ siparis.siparis_tarihi[:10] if siparis.siparis_tarihi else '—' }}</div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:#9ca3af">Beklenen Teslim</div>
+        <div style="font-size:14px;font-weight:600">{{ siparis.beklenen_teslim[:10] if siparis.beklenen_teslim else '—' }}</div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:#9ca3af">Oluşturan</div>
+        <div style="font-size:14px">{{ siparis.olusturan_ad or '—' }}</div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:#9ca3af">Oluşturma</div>
+        <div style="font-size:14px">{{ (siparis.olusturma_tarihi or '')[:16] }}</div>
+      </div>
+      {% if siparis.onaylayan_ad %}
+      <div>
+        <div style="font-size:11px;color:#9ca3af">Onaylayan</div>
+        <div style="font-size:14px">{{ siparis.onaylayan_ad }}</div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:#9ca3af">Onay Tarihi</div>
+        <div style="font-size:14px">{{ (siparis.onay_tarihi or '')[:16] }}</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if siparis.aciklama %}
+  <div class="ngsd-kart">
+    <div class="ngsd-kart-baslik">Açıklama</div>
+    <div style="padding:12px 16px;font-size:13px;color:#374151">{{ siparis.aciklama }}</div>
+  </div>
+  {% endif %}
+
+  {# ── FAZ-3 Bilgi Notu ─────────────────────────────────────── #}
+  <div class="ng-info-bant" style="margin-top:16px">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+      <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
+      <line x1="12" y1="16" x2="12.01" y2="16"/>
+    </svg>
+    <span>Stok hareketi bu ekranda oluşmaz. Mal teslim alındığında Depo Merkezi (FAZ-3) üzerinden girilecektir.</span>
+  </div>
+
+</div>{# /ng-sayfa #}
+
+<div id="ngsdMesaj" style="display:none;position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:8px;font-size:13px;font-weight:600;z-index:9999"></div>
+
+<style>
+/* NexGen temel layout */
+.ng-sayfa { padding: 22px 28px; background: #f6f7f9; min-height: 100vh; width: 100%; box-sizing: border-box; }
+.ng-baslik-blok { margin-bottom: 16px; }
+.ng-baslik { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.ng-bc-link { color: #f59e0b; text-decoration: none; font-size: 13px; font-weight: 500; }
+.ng-bc-link:hover { text-decoration: underline; }
+.ng-bc-sep { color: #9ca3af; font-size: 13px; }
+.ng-baslik-metin { font-size: 20px; font-weight: 700; color: #111827; }
+.ng-baslik-aciklama { font-size: 13px; color: #6b7280; }
+.ng-info-bant { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; font-size: 13px; color: #1d4ed8; }
+.ngsk-kod-rozet { display: inline-block; padding: 1px 7px; border-radius: 5px; font-size: 11.5px; background: #eff6ff; color: #1d4ed8; font-weight: 700; }
+
+.ngsd-durum-bant {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+  padding: 12px 16px; border-radius: 8px; margin-bottom: 16px;
+  border: 1px solid #e5e7eb; background: #f9fafb;
+}
+.ngsd-bant-taslak        { background: #f9fafb; border-color: #e5e7eb; }
+.ngsd-bant-onay-bekliyor { background: #fffbeb; border-color: #fde68a; }
+.ngsd-bant-onaylandi     { background: #f0fdf4; border-color: #bbf7d0; }
+.ngsd-bant-reddedildi    { background: #fef2f2; border-color: #fecaca; }
+.ngsd-durum-etiket       { font-size: 12px; color: #6b7280; }
+.ngsd-rozet-buyuk        { font-size: 12px; padding: 4px 12px; }
+
+.ngsd-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px; margin-bottom: 12px;
+}
+.ngsd-kart {
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
+  overflow: hidden; margin-bottom: 12px;
+}
+.ngsd-kart-baslik {
+  display: flex; align-items: center; gap: 6px;
+  padding: 10px 16px; background: #f8fafc; border-bottom: 1px solid #e5e7eb;
+  font-size: 12px; font-weight: 700; color: #374151; text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.ngsd-kart-icerik { padding: 4px 0; }
+.ngsd-satir {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 16px; font-size: 13px; border-bottom: 1px solid #f3f4f6;
+}
+.ngsd-satir:last-child { border-bottom: none; }
+.ngsd-satir span:first-child { color: #9ca3af; font-size: 12px; }
+.ngsd-miktar-vurgu { background: #eff6ff; }
+.ngsd-miktar-vurgu strong { color: #2563eb; font-size: 15px; }
+.ngsd-toplam-vurgu { background: #f0fdf4; }
+.ngsd-toplam-vurgu strong { color: #15803d; font-size: 15px; }
+
+.ngsd-eylem-btn {
+  padding: 7px 14px; border: none; border-radius: 6px;
+  font-size: 12px; font-weight: 600; cursor: pointer; transition: opacity .15s;
+}
+.ngsd-eylem-btn:hover { opacity: 0.85; }
+.ngsd-btn-onaya  { background: #6366f1; color: #fff; }
+.ngsd-btn-onayla { background: #16a34a; color: #fff; }
+.ngsd-btn-reddet { background: #dc2626; color: #fff; }
+.ngsd-btn-iptal  { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; }
+
+/* rozet import (aynı tanımlar satinalma_index'te de var) */
+.ngsa-rozet            { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+.ngsa-rozet-taslak     { background: #f3f4f6; color: #6b7280; border: 1px solid #e5e7eb; }
+.ngsa-rozet-onay-bekliyor { background: #fef3c7; color: #d97706; border: 1px solid #fde68a; }
+.ngsa-rozet-onaylandi  { background: #d1fae5; color: #059669; border: 1px solid #a7f3d0; }
+.ngsa-rozet-reddedildi { background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; }
+.ngsa-rozet-bekliyor   { background: #eff6ff; color: #3b82f6; border: 1px solid #bfdbfe; }
+.ngsa-rozet-tamamlandi { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+.ngsa-rozet-iptal      { background: #fafafa; color: #9ca3af; border: 1px solid #e5e7eb; }
+</style>
+
+<script>
+async function ngsdEylem(eylem) {
+  const etiketler = {
+    ONAYLA: 'Siparişi onaylamak istediğinize emin misiniz?',
+    REDDET: 'Siparişi reddetmek istediğinize emin misiniz?',
+    IPTAL: 'Siparişi iptal etmek istediğinize emin misiniz?',
+    ONAYA_GONDER: 'Sipariş onaya gönderilecek. Devam edilsin mi?',
+  };
+  if (!confirm(etiketler[eylem] || 'Devam edilsin mi?')) return;
+
+  try {
+    const r = await fetch('/nexgen/api/satinalma/siparis-durum', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({id: {{ siparis.id }}, eylem})
+    });
+    const d = await r.json();
+    if (d.ok) {
+      ngsdMesajGoster('İşlem başarılı.', '#16a34a');
+      setTimeout(() => location.reload(), 800);
+    } else {
+      ngsdMesajGoster(d.hata || 'Hata oluştu.', '#dc2626');
+    }
+  } catch(e) {
+    ngsdMesajGoster('Sunucu bağlantı hatası.', '#dc2626');
+  }
+}
+
+function ngsdMesajGoster(msg, renk) {
+  const el = document.getElementById('ngsdMesaj');
+  el.textContent = msg;
+  el.style.background = renk;
+  el.style.color = '#fff';
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 3000);
+}
+</script>
+{% endblock %}

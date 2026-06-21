@@ -1,0 +1,361 @@
+{% extends "base.html" %}
+{% set page_title = "Tedarikçiler — NexGen" %}
+
+{% block content %}
+<div class="ng-sayfa">
+
+  {# ── Başlık ──────────────────────────────────────────────── #}
+  <div class="ng-baslik-blok">
+    <div class="ng-baslik">
+      <a href="/nexgen/" class="ng-bc-link">NexGen</a>
+      <span class="ng-bc-sep">›</span>
+      <a href="/nexgen/satinalma" class="ng-bc-link">Satın Alma</a>
+      <span class="ng-bc-sep">›</span>
+      <span class="ng-baslik-metin">Tedarikçiler</span>
+    </div>
+    <div class="ng-baslik-aciklama">Hammadde tedarikçi master listesi. Fiyat bilgisi tedarikçide değil, siparişte tutulur.</div>
+  </div>
+
+  {# ── Toolbar ─────────────────────────────────────────────── #}
+  <div class="ngsk-toolbar">
+    <div class="ngsk-ara-wrap">
+      <svg class="ngsk-ara-ikon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <input type="text" id="ngtd-arama" class="ngsk-ara-input" placeholder="Kod veya ad ara…" autocomplete="off">
+    </div>
+    {% if can_manage %}
+    <button class="ngsk-btn-yeni" onclick="ngtdModalAc()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+           stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>
+      Yeni Tedarikçi
+    </button>
+    {% endif %}
+  </div>
+
+  {# ── Tablo ────────────────────────────────────────────────── #}
+  {% if tedarikciler %}
+  <div class="ngsk-tablo-wrap">
+    <table class="ngsk-tablo" id="ngtd-tablo">
+      <thead>
+        <tr>
+          <th>Kod</th>
+          <th>Ad</th>
+          <th>Ülke</th>
+          <th>Para Birimi</th>
+          <th>Varsayılan Vade</th>
+          <th>Sipariş Sayısı</th>
+          <th>Durum</th>
+          {% if can_manage %}<th></th>{% endif %}
+        </tr>
+      </thead>
+      <tbody id="ngtd-tbody">
+        {% for t in tedarikciler %}
+        <tr class="ngtd-satir {% if not t.aktif %}ngtd-pasif{% endif %}"
+            data-ara="{{ t.kod|lower }} {{ t.ad|lower }}">
+          <td><span class="ngsk-kod-rozet">{{ t.kod }}</span></td>
+          <td>
+            <strong>{{ t.ad }}</strong>
+            {% if t.iletisim_email %}
+            <div style="font-size:11px;color:#9ca3af">{{ t.iletisim_email }}</div>
+            {% endif %}
+          </td>
+          <td>{{ t.ulke }}</td>
+          <td>
+            <span class="ngtd-pb-rozet ngtd-pb-{{ t.para_birimi|lower }}">{{ t.para_birimi }}</span>
+          </td>
+          <td>{{ t.varsayilan_vade }} gün</td>
+          <td>
+            {% if t.siparis_sayisi > 0 %}
+              <a href="/nexgen/satinalma?tedarikci_id={{ t.id }}"
+                 style="color:#6366f1;font-weight:600;text-decoration:none">
+                {{ t.siparis_sayisi }} sipariş
+              </a>
+            {% else %}
+              <span style="color:#9ca3af">0</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if t.aktif %}
+            <span class="ngsa-rozet ngsa-rozet-onaylandi">Aktif</span>
+            {% else %}
+            <span class="ngsa-rozet ngsa-rozet-iptal">Pasif</span>
+            {% endif %}
+          </td>
+          {% if can_manage %}
+          <td>
+            <button class="ngsa-detay-btn" style="border:1px solid #e5e7eb;background:#f9fafb;color:#374151"
+                    onclick="ngtdDuzenle({{ t.id }}, '{{ t.ad|e }}', '{{ t.ulke }}', '{{ t.para_birimi }}', {{ t.varsayilan_vade }}, '{{ (t.iletisim_ad or '')|e }}', '{{ (t.iletisim_tel or '')|e }}', '{{ (t.iletisim_email or '')|e }}', '{{ (t.notlar or '')|e }}')">
+              Düzenle
+            </button>
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="ngsk-bos-durum">
+    <p>Henüz tedarikçi tanımlanmamış.</p>
+    {% if can_manage %}
+    <button class="ngsk-btn-yeni" onclick="ngtdModalAc()">Yeni Tedarikçi Ekle</button>
+    {% endif %}
+  </div>
+  {% endif %}
+
+</div>{# /ng-sayfa #}
+
+
+{# ════════════════════════════════════════════════════════════ #}
+{# Tedarikçi Modalı (Ekle / Düzenle)                          #}
+{# ════════════════════════════════════════════════════════════ #}
+{% if can_manage %}
+<div id="ngtdModal" class="ngsk-modal-overlay" style="display:none" onclick="ngtdModalKapat(event)">
+  <div class="ngsk-modal-kutu" onclick="event.stopPropagation()">
+    <div class="ngsk-modal-baslik">
+      <span id="ngtdModalBaslik">Yeni Tedarikçi</span>
+      <button class="ngsk-modal-kapat" onclick="ngtdModalKapat()">✕</button>
+    </div>
+    <div class="ngsk-modal-govde">
+
+      <input type="hidden" id="ngtdId" value="">
+
+      <div id="ngtdKodGrup" class="ngsk-form-grup">
+        <label>Kod <span class="ngsk-zorunlu">*</span></label>
+        <input type="text" id="ngtdKod" class="ngsk-input" placeholder="ör: ABCKIMYA" style="text-transform:uppercase">
+        <div style="font-size:11px;color:#9ca3af;margin-top:4px">Kod sonradan değiştirilemez.</div>
+      </div>
+
+      <div class="ngsk-form-grup">
+        <label>Ad <span class="ngsk-zorunlu">*</span></label>
+        <input type="text" id="ngtdAd" class="ngsk-input" placeholder="ör: ABC Kimya A.Ş.">
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+        <div class="ngsk-form-grup">
+          <label>Ülke</label>
+          <select id="ngtdUlke" class="ngsk-input">
+            <option value="TR">TR — Türkiye</option>
+            <option value="DE">DE — Almanya</option>
+            <option value="CN">CN — Çin</option>
+            <option value="US">US — ABD</option>
+            <option value="GB">GB — İngiltere</option>
+            <option value="FR">FR — Fransa</option>
+            <option value="IT">IT — İtalya</option>
+            <option value="KR">KR — Güney Kore</option>
+            <option value="JP">JP — Japonya</option>
+          </select>
+        </div>
+        <div class="ngsk-form-grup">
+          <label>Para Birimi</label>
+          <select id="ngtdPB" class="ngsk-input">
+            <option value="TRY">TRY ₺</option>
+            <option value="USD">USD $</option>
+            <option value="EUR">EUR €</option>
+            <option value="GBP">GBP £</option>
+            <option value="CNY">CNY ¥</option>
+          </select>
+        </div>
+        <div class="ngsk-form-grup">
+          <label>Varsayılan Vade (Gün)</label>
+          <input type="number" id="ngtdVade" class="ngsk-input" value="30" min="0" step="1">
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="ngsk-form-grup">
+          <label>İletişim Adı</label>
+          <input type="text" id="ngtdIletisimAd" class="ngsk-input" placeholder="İsteğe bağlı">
+        </div>
+        <div class="ngsk-form-grup">
+          <label>Telefon</label>
+          <input type="text" id="ngtdTel" class="ngsk-input" placeholder="İsteğe bağlı">
+        </div>
+      </div>
+
+      <div class="ngsk-form-grup">
+        <label>E-posta</label>
+        <input type="email" id="ngtdEmail" class="ngsk-input" placeholder="İsteğe bağlı">
+      </div>
+
+      <div class="ngsk-form-grup">
+        <label>Notlar</label>
+        <textarea id="ngtdNotlar" class="ngsk-input" rows="2" placeholder="İsteğe bağlı…"></textarea>
+      </div>
+
+      <div id="ngtdHata" class="ngsk-form-hata" style="display:none"></div>
+
+    </div>
+    <div class="ngsk-modal-footer">
+      <button class="ngsk-btn-iptal" onclick="ngtdModalKapat()">Vazgeç</button>
+      <button class="ngsk-btn-kaydet" onclick="ngtdKaydet()">Kaydet</button>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<style>
+/* ── NexGen ortak layout (satinalma_index'ten miras) ── */
+.ng-sayfa { padding: 22px 28px; background: #f6f7f9; min-height: 100vh; width: 100%; box-sizing: border-box; }
+.ng-baslik-blok { margin-bottom: 16px; }
+.ng-baslik { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.ng-bc-link { color: #f59e0b; text-decoration: none; font-size: 13px; font-weight: 500; }
+.ng-bc-link:hover { text-decoration: underline; }
+.ng-bc-sep { color: #9ca3af; font-size: 13px; }
+.ng-baslik-metin { font-size: 20px; font-weight: 700; color: #111827; }
+.ng-baslik-aciklama { font-size: 13px; color: #6b7280; }
+.ngsk-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+.ngsk-ara-wrap { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 6px 12px; flex: 1; min-width: 160px; max-width: 300px; }
+.ngsk-ara-ikon { color: #9ca3af; flex-shrink: 0; }
+.ngsk-ara-input { border: none; outline: none; font-size: 13.5px; color: #374151; background: transparent; width: 100%; }
+.ngsk-btn-yeni { display: flex; align-items: center; gap: 6px; background: #f59e0b; color: #fff; border: none; border-radius: 8px; padding: 7px 16px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.12s; white-space: nowrap; text-decoration: none; }
+.ngsk-btn-yeni:hover { background: #d97706; }
+.ngsk-tablo-cerceve { background: #fff; border: 1px solid rgba(17,24,39,0.06); border-radius: 12px; overflow-x: auto; box-shadow: 0 2px 8px rgba(15,23,42,0.04); }
+.ngsk-tablo { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13.5px; color: #111827; }
+.ngsk-tablo thead th { background: #f9fafb; padding: 10px 14px; font-size: 11.5px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 1px solid #f0f1f3; white-space: nowrap; }
+.ngsk-tablo tbody tr { border-bottom: 1px solid #f3f4f6; transition: background 0.1s; }
+.ngsk-tablo tbody tr:last-child { border-bottom: none; }
+.ngsk-tablo tbody tr:hover { background: #fffbeb; }
+.ngsk-tablo td { padding: 9px 14px; vertical-align: middle; }
+.ngsk-bos { padding: 48px 24px; text-align: center; color: #9ca3af; font-size: 14px; }
+
+/* Modal */
+.ngsk-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000; align-items: center; justify-content: center; }
+.ngsk-modal-kutu { background: #fff; border-radius: 14px; width: 520px; max-width: 95vw; max-height: 88vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.18); }
+.ngsk-modal-baslik { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #f0f1f3; font-size: 16px; font-weight: 700; color: #111827; position: sticky; top: 0; background: #fff; z-index: 1; }
+.ngsk-modal-kapat { background: none; border: none; cursor: pointer; font-size: 20px; color: #9ca3af; line-height: 1; padding: 0 4px; }
+.ngsk-modal-kapat:hover { color: #374151; }
+.ngsk-modal-govde { padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; }
+.ngsk-modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 20px; border-top: 1px solid #f0f1f3; position: sticky; bottom: 0; background: #fff; }
+.ngsk-form-grup { display: flex; flex-direction: column; gap: 4px; }
+.ngsk-form-grup label { font-size: 12.5px; font-weight: 600; color: #374151; }
+.ngsk-input { border: 1px solid #e5e7eb; border-radius: 7px; padding: 7px 10px; font-size: 13.5px; color: #111827; outline: none; transition: border-color 0.1s; width: 100%; box-sizing: border-box; }
+.ngsk-input:focus { border-color: #f59e0b; }
+.ngsk-zorunlu { color: #ef4444; }
+.ngsk-form-hata { padding: 8px 12px; border-radius: 7px; background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; font-size: 13px; }
+.ngsk-btn-iptal { background: #f3f4f6; color: #374151; border: none; border-radius: 8px; padding: 8px 18px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.ngsk-btn-iptal:hover { background: #e5e7eb; }
+.ngsk-btn-kaydet { background: #f59e0b; color: #fff; border: none; border-radius: 8px; padding: 8px 20px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.12s; }
+.ngsk-btn-kaydet:hover { background: #d97706; }
+.ngsk-kod-rozet { display: inline-block; padding: 1px 7px; border-radius: 5px; font-size: 11.5px; background: #eff6ff; color: #1d4ed8; font-weight: 700; }
+
+/* ── Tedarikçi özel ── */
+.ngtd-pasif { opacity: 0.55; }
+.ngtd-pb-rozet { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 700; font-family: monospace; }
+.ngtd-pb-try { background: #dcfce7; color: #15803d; }
+.ngtd-pb-usd { background: #dbeafe; color: #1d4ed8; }
+.ngtd-pb-eur { background: #ede9fe; color: #7c3aed; }
+.ngtd-pb-gbp { background: #fee2e2; color: #b91c1c; }
+.ngtd-pb-cny { background: #fef3c7; color: #b45309; }
+.ngsa-rozet { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; border: 1px solid transparent; }
+.ngsa-rozet-onaylandi { background: #d1fae5; color: #059669; border-color: #a7f3d0; }
+.ngsa-rozet-iptal { background: #fafafa; color: #9ca3af; border-color: #e5e7eb; }
+.ngsa-detay-btn { display: inline-block; padding: 3px 10px; font-size: 11px; font-weight: 600; border-radius: 4px; cursor: pointer; }
+</style>
+
+<script>
+// ── Arama ─────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const araInput = document.getElementById('ngtd-arama');
+  if (!araInput) return;
+  araInput.addEventListener('input', () => {
+    const q = araInput.value.toLowerCase();
+    document.querySelectorAll('.ngtd-satir').forEach(tr => {
+      tr.style.display = tr.dataset.ara.includes(q) ? '' : 'none';
+    });
+  });
+});
+
+// ── Modal ─────────────────────────────────────────────────────
+function ngtdModalAc() {
+  document.getElementById('ngtdModalBaslik').textContent = 'Yeni Tedarikçi';
+  document.getElementById('ngtdId').value = '';
+  document.getElementById('ngtdKod').value = '';
+  document.getElementById('ngtdAd').value = '';
+  document.getElementById('ngtdUlke').value = 'TR';
+  document.getElementById('ngtdPB').value = 'TRY';
+  document.getElementById('ngtdVade').value = '30';
+  document.getElementById('ngtdIletisimAd').value = '';
+  document.getElementById('ngtdTel').value = '';
+  document.getElementById('ngtdEmail').value = '';
+  document.getElementById('ngtdNotlar').value = '';
+  document.getElementById('ngtdKodGrup').style.display = '';
+  document.getElementById('ngtdHata').style.display = 'none';
+  document.getElementById('ngtdModal').style.display = 'flex';
+}
+
+function ngtdDuzenle(id, ad, ulke, pb, vade, iletisimAd, tel, email, notlar) {
+  document.getElementById('ngtdModalBaslik').textContent = 'Tedarikçi Düzenle';
+  document.getElementById('ngtdId').value = id;
+  document.getElementById('ngtdAd').value = ad;
+  document.getElementById('ngtdUlke').value = ulke;
+  document.getElementById('ngtdPB').value = pb;
+  document.getElementById('ngtdVade').value = vade;
+  document.getElementById('ngtdIletisimAd').value = iletisimAd;
+  document.getElementById('ngtdTel').value = tel;
+  document.getElementById('ngtdEmail').value = email;
+  document.getElementById('ngtdNotlar').value = notlar;
+  document.getElementById('ngtdKodGrup').style.display = 'none';
+  document.getElementById('ngtdHata').style.display = 'none';
+  document.getElementById('ngtdModal').style.display = 'flex';
+}
+
+function ngtdModalKapat(ev) {
+  if (ev && ev.target !== document.getElementById('ngtdModal')) return;
+  document.getElementById('ngtdModal').style.display = 'none';
+}
+
+async function ngtdKaydet() {
+  const hataEl = document.getElementById('ngtdHata');
+  hataEl.style.display = 'none';
+
+  const id = document.getElementById('ngtdId').value;
+  const ad = document.getElementById('ngtdAd').value.trim();
+  const ulke = document.getElementById('ngtdUlke').value;
+  const para_birimi = document.getElementById('ngtdPB').value;
+  const varsayilan_vade = parseInt(document.getElementById('ngtdVade').value) || 30;
+  const iletisim_ad = document.getElementById('ngtdIletisimAd').value.trim() || null;
+  const iletisim_tel = document.getElementById('ngtdTel').value.trim() || null;
+  const iletisim_email = document.getElementById('ngtdEmail').value.trim() || null;
+  const notlar = document.getElementById('ngtdNotlar').value.trim() || null;
+
+  if (!ad) { hataEl.textContent = 'Ad zorunludur.'; hataEl.style.display = ''; return; }
+
+  let url, payload;
+  if (id) {
+    url = '/nexgen/api/satinalma/tedarikci-guncelle';
+    payload = {id: parseInt(id), ad, ulke, para_birimi, varsayilan_vade,
+               iletisim_ad, iletisim_tel, iletisim_email, notlar};
+  } else {
+    const kod = document.getElementById('ngtdKod').value.trim().toUpperCase();
+    if (!kod) { hataEl.textContent = 'Kod zorunludur.'; hataEl.style.display = ''; return; }
+    url = '/nexgen/api/satinalma/tedarikci-ekle';
+    payload = {kod, ad, ulke, para_birimi, varsayilan_vade,
+               iletisim_ad, iletisim_tel, iletisim_email, notlar};
+  }
+
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      document.getElementById('ngtdModal').style.display = 'none';
+      location.reload();
+    } else {
+      hataEl.textContent = d.hata || 'Hata oluştu.';
+      hataEl.style.display = '';
+    }
+  } catch(e) {
+    hataEl.textContent = 'Sunucu bağlantı hatası.';
+    hataEl.style.display = '';
+  }
+}
+</script>
+{% endblock %}

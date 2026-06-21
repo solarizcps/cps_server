@@ -4,11 +4,20 @@ SOLARIZ CPS — NexGen Hammadde Yönetimi
 =======================================
 FAZ-1A : Modül iskeleti, menü, yetki
 FAZ-1B : Stok Kart Master + Hareket Motoru altyapısı
+FAZ-2  : Satın Alma Merkezi — Tedarikçi CRUD + Sipariş akışı
 
 Yetki kodları:
-  nexgen.view         — modül geneli görüntüleme
-  nexgen.stok.view    — stok kartları görüntüleme
-  nexgen.stok.manage  — stok kartı ekleme/düzenleme
+  nexgen.view                — modül geneli görüntüleme
+  nexgen.stok.view           — stok kartları görüntüleme
+  nexgen.stok.manage         — stok kartı ekleme/düzenleme
+  nexgen.satinalma.view      — satın alma sipariş görüntüleme
+  nexgen.satinalma.manage    — yeni sipariş oluşturma/düzenleme
+  nexgen.satinalma.approve   — sipariş onaylama (sadece Yönetim)
+  nexgen.satinalma.fiyat     — fiyat/kur/maliyet görüntüleme
+  nexgen.tedarikci.view      — tedarikçi listesi görüntüleme
+  nexgen.tedarikci.manage    — tedarikçi ekleme/düzenleme
+
+FAZ-2 KURAL: Bu modül nexgen_stok_hareket tablosuna HİÇBİR ZAMAN INSERT yapmaz.
 """
 
 import sqlite3
@@ -422,18 +431,17 @@ def api_stok_kart_durum():
 
 
 # ─────────────────────────────────────────────────────────────
-# Placeholder Alt Sayfalar (stok-kartlari hariç)
+# Placeholder Alt Sayfalar (satinalma ve stok-kartlari hariç)
 # ─────────────────────────────────────────────────────────────
 _SAYFALAR = {
-    'depo':          ('Depo & Stok',        'Hammadde depo ve stok takip ekranı.'),
-    'satinalma':     ('Satın Alma',          'Hammadde satın alma siparişleri ve tedarikçi yönetimi.'),
-    'formuller':     ('Formüller',           'Ürün başına hammadde formül tanımları.'),
-    'uretim':        ('Üretim Tablet',       'Üretim sürecinde kullanılan hammadde giriş/çıkış ekranı.'),
-    'recycle':       ('Recycle',             'Geri dönüşüm ve fire takip ekranı.'),
-    'deneme':        ('Deneme',              'Deneme/prototip üretim kayıt ekranı.'),
-    'sevk':          ('Sevk & Barkod',       'Ürün sevkiyat ve barkod yönetim ekranı.'),
-    'maliyet':       ('Maliyet & Rapor',     'Hammadde maliyet analizi ve raporlama ekranı.'),
-    'raporlar':      ('Raporlar',            'NexGen genel raporlar merkezi.'),
+    'depo':      ('Depo & Stok',    'Hammadde depo ve stok takip ekranı.'),
+    'formuller': ('Formüller',       'Ürün başına hammadde formül tanımları.'),
+    'uretim':    ('Üretim Tablet',   'Üretim sürecinde kullanılan hammadde giriş/çıkış ekranı.'),
+    'recycle':   ('Recycle',         'Geri dönüşüm ve fire takip ekranı.'),
+    'deneme':    ('Deneme',          'Deneme/prototip üretim kayıt ekranı.'),
+    'sevk':      ('Sevk & Barkod',   'Ürün sevkiyat ve barkod yönetim ekranı.'),
+    'maliyet':   ('Maliyet & Rapor', 'Hammadde maliyet analizi ve raporlama ekranı.'),
+    'raporlar':  ('Raporlar',        'NexGen genel raporlar merkezi.'),
 }
 
 
@@ -450,3 +458,529 @@ def alt_sayfa(sayfa):
         sayfa_aciklama=aciklama,
         sayfa_slug=sayfa,
     )
+
+
+# ═════════════════════════════════════════════════════════════
+# FAZ-2: SATIN ALMA MERKEZİ
+# ─────────────────────────────────────────────────────────────
+# KURAL: Bu bölümde nexgen_stok_hareket INSERT YAPILMAZ.
+# ═════════════════════════════════════════════════════════════
+
+def _siparis_no_uret(con):
+    """SP-YYYY-NNNN formatında benzersiz sipariş numarası üretir."""
+    from datetime import datetime
+    yil = datetime.now().strftime('%Y')
+    row = con.execute("""
+        SELECT MAX(CAST(SUBSTR(siparis_no, -4) AS INTEGER)) AS son
+        FROM nexgen_satin_siparis
+        WHERE siparis_no LIKE ?
+    """, (f'SP-{yil}-%',)).fetchone()
+    son = row['son'] if row and row['son'] else 0
+    return f'SP-{yil}-{son + 1:04d}'
+
+
+def _tedarikci_veya_404(con, tedarikci_id):
+    t = con.execute(
+        "SELECT * FROM nexgen_tedarikci WHERE id=? AND aktif=1", (tedarikci_id,)
+    ).fetchone()
+    if not t:
+        abort(404)
+    return t
+
+
+# ─────────────────────────────────────────────────────────────
+# Satın Alma Ana Sayfa
+# ─────────────────────────────────────────────────────────────
+@nexgen_bp.route('/satinalma')
+@yetki_gerekli('nexgen.satinalma.view', 'can_view')
+def satinalma_index():
+    con = _db()
+    try:
+        durum_filtre = request.args.get('durum', '')
+        tedarikci_filtre = request.args.get('tedarikci_id', '')
+
+        sorgu = """
+            SELECT s.id, s.siparis_no, s.siparis_tarihi, s.beklenen_teslim,
+                   s.siparis_miktari_kg, s.para_birimi, s.durum, s.onay_durumu,
+                   s.birim_fiyat, s.birim_fiyat_try, s.toplam_tutar_try,
+                   s.vade_tarihi, s.aciklama,
+                   t.ad AS tedarikci_ad, t.id AS tedarikci_id,
+                   k.kod AS stok_kod, k.ad AS stok_ad
+            FROM nexgen_satin_siparis s
+            JOIN nexgen_tedarikci t ON t.id = s.tedarikci_id
+            JOIN nexgen_stok_kart k ON k.id = s.stok_kart_id
+            WHERE 1=1
+        """
+        params = []
+        if durum_filtre:
+            sorgu += " AND s.durum = ?"
+            params.append(durum_filtre)
+        if tedarikci_filtre:
+            sorgu += " AND s.tedarikci_id = ?"
+            params.append(tedarikci_filtre)
+        sorgu += " ORDER BY s.id DESC"
+
+        siparisler_raw = con.execute(sorgu, params).fetchall()
+        tedarikciler   = con.execute(
+            "SELECT id, ad FROM nexgen_tedarikci WHERE aktif=1 ORDER BY ad"
+        ).fetchall()
+
+    finally:
+        con.close()
+
+    can_manage     = yetki_var('nexgen.satinalma.manage', 'can_create')
+    can_approve    = yetki_var('nexgen.satinalma.approve', 'can_approve')
+    can_fiyat      = yetki_var('nexgen.satinalma.fiyat', 'can_view')
+    # Tedarikçi yönetimi: sadece Yönetim rolü — Satın Alma sadece görüntüler
+    can_ted_manage = yetki_var('nexgen.tedarikci.manage', 'can_create')
+
+    siparisler = [dict(s) for s in siparisler_raw]
+
+    return render_template(
+        'nexgen/satinalma_index.html',
+        active='nexgen',
+        siparisler=siparisler,
+        tedarikciler=[dict(t) for t in tedarikciler],
+        durum_filtre=durum_filtre,
+        tedarikci_filtre=tedarikci_filtre,
+        can_manage=can_manage,
+        can_approve=can_approve,
+        can_fiyat=can_fiyat,
+        can_ted_manage=can_ted_manage,
+    )
+
+
+# ─────────────────────────────────────────────────────────────
+# Sipariş Detay
+# ─────────────────────────────────────────────────────────────
+@nexgen_bp.route('/satinalma/siparis/<int:siparis_id>')
+@yetki_gerekli('nexgen.satinalma.view', 'can_view')
+def satinalma_siparis_detay(siparis_id):
+    con = _db()
+    try:
+        siparis = con.execute("""
+            SELECT s.*,
+                   t.ad AS tedarikci_ad, t.kod AS tedarikci_kod,
+                   t.ulke, t.iletisim_email,
+                   k.kod AS stok_kod, k.ad AS stok_ad, k.kategori AS stok_kategori,
+                   oc.KullaniciAdi AS olusturan_ad,
+                   ap.KullaniciAdi AS onaylayan_ad
+            FROM nexgen_satin_siparis s
+            JOIN nexgen_tedarikci t ON t.id = s.tedarikci_id
+            JOIN nexgen_stok_kart k ON k.id = s.stok_kart_id
+            LEFT JOIN sistem_kullanici oc ON oc.Id = s.olusturan_id
+            LEFT JOIN sistem_kullanici ap ON ap.Id = s.onaylayan_id
+            WHERE s.id = ?
+        """, (siparis_id,)).fetchone()
+        if not siparis:
+            abort(404)
+    finally:
+        con.close()
+
+    can_approve = yetki_var('nexgen.satinalma.approve', 'can_approve')
+    can_manage  = yetki_var('nexgen.satinalma.manage', 'can_update')
+    can_fiyat   = yetki_var('nexgen.satinalma.fiyat', 'can_view')
+
+    return render_template(
+        'nexgen/satinalma_siparis_detay.html',
+        active='nexgen',
+        siparis=dict(siparis),
+        can_approve=can_approve,
+        can_manage=can_manage,
+        can_fiyat=can_fiyat,
+    )
+
+
+# ─────────────────────────────────────────────────────────────
+# Tedarikçi Listesi
+# ─────────────────────────────────────────────────────────────
+@nexgen_bp.route('/satinalma/tedarikci')
+@yetki_gerekli('nexgen.tedarikci.view', 'can_view')
+def satinalma_tedarikci():
+    con = _db()
+    try:
+        tedarikciler = con.execute("""
+            SELECT t.*,
+                   COUNT(s.id) AS siparis_sayisi
+            FROM nexgen_tedarikci t
+            LEFT JOIN nexgen_satin_siparis s ON s.tedarikci_id = t.id
+            GROUP BY t.id
+            ORDER BY t.aktif DESC, t.ad
+        """).fetchall()
+    finally:
+        con.close()
+
+    can_manage = yetki_var('nexgen.tedarikci.manage', 'can_create')
+
+    return render_template(
+        'nexgen/satinalma_tedarikci.html',
+        active='nexgen',
+        tedarikciler=[dict(t) for t in tedarikciler],
+        can_manage=can_manage,
+    )
+
+
+# ─────────────────────────────────────────────────────────────
+# API — Yeni Sipariş Oluştur
+# POST /nexgen/api/satinalma/siparis-ekle
+# ─────────────────────────────────────────────────────────────
+@nexgen_bp.route('/api/satinalma/siparis-ekle', methods=['POST'])
+@yetki_gerekli('nexgen.satinalma.manage', 'can_create')
+def api_satinalma_siparis_ekle():
+    data = request.get_json(silent=True) or {}
+
+    tedarikci_id  = data.get('tedarikci_id')
+    stok_kart_id  = data.get('stok_kart_id')
+    siparis_tarihi = (data.get('siparis_tarihi') or '').strip()
+    beklenen_teslim = (data.get('beklenen_teslim') or '').strip() or None
+    aciklama = (data.get('aciklama') or '').strip() or None
+    para_birimi = (data.get('para_birimi') or 'TRY').strip().upper()
+    onay_durumu = 'TASLAK' if data.get('taslak') else 'ONAY_BEKLIYOR'
+
+    try:
+        miktar = float(data.get('siparis_miktari_kg') or 0)
+        if miktar <= 0:
+            return jsonify({"ok": False, "hata": "Sipariş miktarı sıfırdan büyük olmalı."}), 400
+    except (ValueError, TypeError):
+        return jsonify({"ok": False, "hata": "Geçersiz sipariş miktarı."}), 400
+
+    birim_fiyat = None
+    kur = None
+    birim_fiyat_try = None
+    toplam_tutar_try = None
+    vade_gun = None
+    vade_tarihi = None
+
+    try:
+        if data.get('birim_fiyat') not in (None, ''):
+            birim_fiyat = float(data['birim_fiyat'])
+            if birim_fiyat < 0:
+                return jsonify({"ok": False, "hata": "Birim fiyat negatif olamaz."}), 400
+    except (ValueError, TypeError):
+        return jsonify({"ok": False, "hata": "Geçersiz birim fiyat."}), 400
+
+    try:
+        if data.get('kur') not in (None, ''):
+            kur = float(data['kur'])
+            if kur <= 0:
+                return jsonify({"ok": False, "hata": "Kur sıfırdan büyük olmalı."}), 400
+    except (ValueError, TypeError):
+        return jsonify({"ok": False, "hata": "Geçersiz kur değeri."}), 400
+
+    if birim_fiyat is not None:
+        k = kur if (kur and para_birimi != 'TRY') else 1.0
+        birim_fiyat_try = round(birim_fiyat * k, 4)
+        toplam_tutar_try = round(birim_fiyat_try * miktar, 2)
+
+    try:
+        if data.get('vade_gun') not in (None, ''):
+            vade_gun = int(data['vade_gun'])
+            if siparis_tarihi and vade_gun >= 0:
+                from datetime import date, timedelta
+                base = date.fromisoformat(siparis_tarihi)
+                vade_tarihi = (base + timedelta(days=vade_gun)).isoformat()
+    except (ValueError, TypeError):
+        return jsonify({"ok": False, "hata": "Geçersiz vade değeri."}), 400
+
+    GECERLI_PARA = {'TRY', 'USD', 'EUR', 'GBP', 'CNY'}
+    if para_birimi not in GECERLI_PARA:
+        return jsonify({"ok": False, "hata": f"Geçersiz para birimi: {para_birimi}"}), 400
+
+    if not tedarikci_id:
+        return jsonify({"ok": False, "hata": "tedarikci_id zorunludur."}), 400
+    if not stok_kart_id:
+        return jsonify({"ok": False, "hata": "stok_kart_id zorunludur."}), 400
+    if not siparis_tarihi:
+        return jsonify({"ok": False, "hata": "siparis_tarihi zorunludur."}), 400
+
+    con = _db()
+    try:
+        ted = con.execute(
+            "SELECT id FROM nexgen_tedarikci WHERE id=? AND aktif=1", (tedarikci_id,)
+        ).fetchone()
+        if not ted:
+            return jsonify({"ok": False, "hata": "Tedarikçi bulunamadı veya pasif."}), 404
+
+        kart = con.execute(
+            "SELECT id FROM nexgen_stok_kart WHERE id=? AND aktif=1", (stok_kart_id,)
+        ).fetchone()
+        if not kart:
+            return jsonify({"ok": False, "hata": "Stok kartı bulunamadı veya pasif."}), 404
+
+        siparis_no = _siparis_no_uret(con)
+
+        con.execute("""
+            INSERT INTO nexgen_satin_siparis
+              (siparis_no, tedarikci_id, stok_kart_id,
+               siparis_tarihi, beklenen_teslim,
+               siparis_miktari_kg, birim_fiyat, para_birimi, kur,
+               birim_fiyat_try, toplam_tutar_try,
+               vade_gun, vade_tarihi,
+               durum, onay_durumu, aciklama,
+               olusturan_id, olusturma_tarihi)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'BEKLIYOR', ?, ?, ?, datetime('now'))
+        """, (
+            siparis_no, tedarikci_id, stok_kart_id,
+            siparis_tarihi, beklenen_teslim,
+            miktar, birim_fiyat, para_birimi, kur,
+            birim_fiyat_try, toplam_tutar_try,
+            vade_gun, vade_tarihi,
+            onay_durumu, aciklama,
+            _kullanici_id(),
+        ))
+        yeni_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+        con.commit()
+    except Exception as e:
+        con.rollback()
+        return jsonify({"ok": False, "hata": str(e)}), 500
+    finally:
+        con.close()
+
+    return jsonify({"ok": True, "id": yeni_id, "siparis_no": siparis_no})
+
+
+# ─────────────────────────────────────────────────────────────
+# API — Sipariş Onay/Red/İptal
+# POST /nexgen/api/satinalma/siparis-durum
+# ─────────────────────────────────────────────────────────────
+@nexgen_bp.route('/api/satinalma/siparis-durum', methods=['POST'])
+@yetki_gerekli('nexgen.satinalma.view', 'can_view')
+def api_satinalma_siparis_durum():
+    data = request.get_json(silent=True) or {}
+    siparis_id = data.get('id')
+    eylem = (data.get('eylem') or '').strip().upper()
+
+    if not siparis_id:
+        return jsonify({"ok": False, "hata": "id zorunludur."}), 400
+
+    EYLEMLER = {'ONAYLA', 'REDDET', 'IPTAL', 'ONAYA_GONDER'}
+    if eylem not in EYLEMLER:
+        return jsonify({"ok": False, "hata": f"Geçersiz eylem: {eylem}"}), 400
+
+    # Onay eylemi sadece approve yetkisiyle
+    if eylem in ('ONAYLA', 'REDDET'):
+        if not yetki_var('nexgen.satinalma.approve', 'can_approve'):
+            return jsonify({"ok": False, "hata": "Onay/red yetkisi yok."}), 403
+
+    # İptal: manage yetkisi yeterli
+    if eylem == 'IPTAL':
+        if not yetki_var('nexgen.satinalma.manage', 'can_update'):
+            return jsonify({"ok": False, "hata": "İptal yetkisi yok."}), 403
+
+    con = _db()
+    try:
+        siparis = con.execute(
+            "SELECT id, onay_durumu, durum FROM nexgen_satin_siparis WHERE id=?",
+            (siparis_id,)
+        ).fetchone()
+        if not siparis:
+            return jsonify({"ok": False, "hata": "Sipariş bulunamadı."}), 404
+
+        mevcut_onay = siparis['onay_durumu']
+        mevcut_durum = siparis['durum']
+
+        # Durum geçiş kuralları
+        if eylem == 'ONAYA_GONDER':
+            if mevcut_onay not in ('TASLAK', 'REDDEDILDI'):
+                return jsonify({"ok": False, "hata": "Sadece Taslak veya Reddedilmiş sipariş onaya gönderilebilir."}), 400
+            con.execute("""
+                UPDATE nexgen_satin_siparis
+                SET onay_durumu='ONAY_BEKLIYOR',
+                    guncelleyen_id=?, guncelleme_tarihi=datetime('now')
+                WHERE id=?
+            """, (_kullanici_id(), siparis_id))
+
+        elif eylem == 'ONAYLA':
+            if mevcut_onay != 'ONAY_BEKLIYOR':
+                return jsonify({"ok": False, "hata": "Sadece Onay Bekleyen sipariş onaylanabilir."}), 400
+            con.execute("""
+                UPDATE nexgen_satin_siparis
+                SET onay_durumu='ONAYLANDI',
+                    onaylayan_id=?, onay_tarihi=datetime('now'),
+                    guncelleyen_id=?, guncelleme_tarihi=datetime('now')
+                WHERE id=?
+            """, (_kullanici_id(), _kullanici_id(), siparis_id))
+
+        elif eylem == 'REDDET':
+            if mevcut_onay != 'ONAY_BEKLIYOR':
+                return jsonify({"ok": False, "hata": "Sadece Onay Bekleyen sipariş reddedilebilir."}), 400
+            con.execute("""
+                UPDATE nexgen_satin_siparis
+                SET onay_durumu='REDDEDILDI',
+                    onaylayan_id=?, onay_tarihi=datetime('now'),
+                    guncelleyen_id=?, guncelleme_tarihi=datetime('now')
+                WHERE id=?
+            """, (_kullanici_id(), _kullanici_id(), siparis_id))
+
+        elif eylem == 'IPTAL':
+            if mevcut_durum == 'TAMAMLANDI':
+                return jsonify({"ok": False, "hata": "Tamamlanmış sipariş iptal edilemez."}), 400
+            con.execute("""
+                UPDATE nexgen_satin_siparis
+                SET durum='IPTAL',
+                    guncelleyen_id=?, guncelleme_tarihi=datetime('now')
+                WHERE id=?
+            """, (_kullanici_id(), siparis_id))
+
+        con.commit()
+    except Exception as e:
+        con.rollback()
+        return jsonify({"ok": False, "hata": str(e)}), 500
+    finally:
+        con.close()
+
+    return jsonify({"ok": True, "eylem": eylem})
+
+
+# ─────────────────────────────────────────────────────────────
+# API — Tedarikçi Ekle
+# POST /nexgen/api/satinalma/tedarikci-ekle
+# ─────────────────────────────────────────────────────────────
+@nexgen_bp.route('/api/satinalma/tedarikci-ekle', methods=['POST'])
+@yetki_gerekli('nexgen.tedarikci.manage', 'can_create')
+def api_tedarikci_ekle():
+    data = request.get_json(silent=True) or {}
+    kod   = (data.get('kod') or '').strip().upper()
+    ad    = (data.get('ad') or '').strip()
+    ulke  = (data.get('ulke') or 'TR').strip().upper()
+    pb    = (data.get('para_birimi') or 'TRY').strip().upper()
+    notlar = (data.get('notlar') or '').strip() or None
+    iletisim_ad    = (data.get('iletisim_ad') or '').strip() or None
+    iletisim_tel   = (data.get('iletisim_tel') or '').strip() or None
+    iletisim_email = (data.get('iletisim_email') or '').strip() or None
+
+    try:
+        vade = int(data.get('varsayilan_vade') or 30)
+    except (ValueError, TypeError):
+        return jsonify({"ok": False, "hata": "Geçersiz vade değeri."}), 400
+
+    if not kod:
+        return jsonify({"ok": False, "hata": "Kod zorunludur."}), 400
+    if not ad:
+        return jsonify({"ok": False, "hata": "Ad zorunludur."}), 400
+
+    GECERLI_PARA = {'TRY', 'USD', 'EUR', 'GBP', 'CNY'}
+    if pb not in GECERLI_PARA:
+        return jsonify({"ok": False, "hata": f"Geçersiz para birimi: {pb}"}), 400
+
+    con = _db()
+    try:
+        mevcut = con.execute(
+            "SELECT id FROM nexgen_tedarikci WHERE kod=?", (kod,)
+        ).fetchone()
+        if mevcut:
+            return jsonify({"ok": False, "hata": f"'{kod}' kodu zaten mevcut."}), 409
+
+        con.execute("""
+            INSERT INTO nexgen_tedarikci
+              (kod, ad, ulke, para_birimi, varsayilan_vade,
+               iletisim_ad, iletisim_tel, iletisim_email, notlar,
+               aktif, olusturan_id, olusturma_tarihi)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, datetime('now'))
+        """, (kod, ad, ulke, pb, vade,
+              iletisim_ad, iletisim_tel, iletisim_email, notlar,
+              _kullanici_id()))
+        yeni_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+        con.commit()
+    except Exception as e:
+        con.rollback()
+        return jsonify({"ok": False, "hata": str(e)}), 500
+    finally:
+        con.close()
+
+    return jsonify({"ok": True, "id": yeni_id, "kod": kod, "ad": ad})
+
+
+# ─────────────────────────────────────────────────────────────
+# API — Tedarikçi Düzenle
+# POST /nexgen/api/satinalma/tedarikci-guncelle
+# ─────────────────────────────────────────────────────────────
+@nexgen_bp.route('/api/satinalma/tedarikci-guncelle', methods=['POST'])
+@yetki_gerekli('nexgen.tedarikci.manage', 'can_update')
+def api_tedarikci_guncelle():
+    data = request.get_json(silent=True) or {}
+    tid  = data.get('id')
+    if not tid:
+        return jsonify({"ok": False, "hata": "id zorunludur."}), 400
+
+    ad    = (data.get('ad') or '').strip()
+    ulke  = (data.get('ulke') or 'TR').strip().upper()
+    pb    = (data.get('para_birimi') or 'TRY').strip().upper()
+    notlar = (data.get('notlar') or '').strip() or None
+    iletisim_ad    = (data.get('iletisim_ad') or '').strip() or None
+    iletisim_tel   = (data.get('iletisim_tel') or '').strip() or None
+    iletisim_email = (data.get('iletisim_email') or '').strip() or None
+
+    try:
+        vade = int(data.get('varsayilan_vade') or 30)
+    except (ValueError, TypeError):
+        return jsonify({"ok": False, "hata": "Geçersiz vade değeri."}), 400
+
+    if not ad:
+        return jsonify({"ok": False, "hata": "Ad zorunludur."}), 400
+
+    con = _db()
+    try:
+        mevcut = con.execute(
+            "SELECT id FROM nexgen_tedarikci WHERE id=?", (tid,)
+        ).fetchone()
+        if not mevcut:
+            return jsonify({"ok": False, "hata": "Tedarikçi bulunamadı."}), 404
+
+        con.execute("""
+            UPDATE nexgen_tedarikci
+            SET ad=?, ulke=?, para_birimi=?, varsayilan_vade=?,
+                iletisim_ad=?, iletisim_tel=?, iletisim_email=?, notlar=?,
+                guncelleyen_id=?, guncelleme_tarihi=datetime('now')
+            WHERE id=?
+        """, (ad, ulke, pb, vade,
+              iletisim_ad, iletisim_tel, iletisim_email, notlar,
+              _kullanici_id(), tid))
+        con.commit()
+    except Exception as e:
+        con.rollback()
+        return jsonify({"ok": False, "hata": str(e)}), 500
+    finally:
+        con.close()
+
+    return jsonify({"ok": True})
+
+
+# ─────────────────────────────────────────────────────────────
+# API — Stok Kartları (satın alma formu için dropdown)
+# GET /nexgen/api/satinalma/stok-listesi
+# ─────────────────────────────────────────────────────────────
+@nexgen_bp.route('/api/satinalma/stok-listesi')
+@yetki_gerekli('nexgen.satinalma.manage', 'can_create')
+def api_satinalma_stok_listesi():
+    con = _db()
+    try:
+        kartlar = con.execute("""
+            SELECT id, kod, ad, kategori, birim
+            FROM nexgen_stok_kart
+            WHERE aktif=1
+            ORDER BY kategori, ad
+        """).fetchall()
+    finally:
+        con.close()
+    return jsonify({"ok": True, "kartlar": [dict(k) for k in kartlar]})
+
+
+# ─────────────────────────────────────────────────────────────
+# API — Tedarikçi Listesi (satın alma formu için dropdown)
+# GET /nexgen/api/satinalma/tedarikci-listesi
+# ─────────────────────────────────────────────────────────────
+@nexgen_bp.route('/api/satinalma/tedarikci-listesi')
+@yetki_gerekli('nexgen.satinalma.manage', 'can_create')
+def api_satinalma_tedarikci_listesi():
+    con = _db()
+    try:
+        tedarikciler = con.execute("""
+            SELECT id, kod, ad, para_birimi, varsayilan_vade
+            FROM nexgen_tedarikci
+            WHERE aktif=1
+            ORDER BY ad
+        """).fetchall()
+    finally:
+        con.close()
+    return jsonify({"ok": True, "tedarikciler": [dict(t) for t in tedarikciler]})
