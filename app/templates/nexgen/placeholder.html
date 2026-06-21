@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% set page_title = sayfa_baslik + " — NexGen" %}
+
+{% block content %}
+<div class="ng-sayfa">
+
+  {# ── Breadcrumb ─────────────────────────────────────────── #}
+  <div class="ng-breadcrumb">
+    <a href="/nexgen/">NexGen</a>
+    <span class="ng-bc-sep">›</span>
+    <span>{{ sayfa_baslik }}</span>
+  </div>
+
+  {# ── Başlık ─────────────────────────────────────────────── #}
+  <div class="ng-baslik-blok">
+    <div class="ng-baslik">
+      <span class="ng-baslik-metin">{{ sayfa_baslik }}</span>
+      <span class="ng-rozet-yeni">YAKINDA</span>
+    </div>
+    <div class="ng-baslik-aciklama">{{ sayfa_aciklama }}</div>
+  </div>
+
+  {# ── Placeholder Alan ───────────────────────────────────── #}
+  <div class="ng-ph-kutu">
+    <div class="ng-ph-ikon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+           stroke-linecap="round" stroke-linejoin="round" width="48" height="48">
+        <rect x="3" y="3" width="18" height="18" rx="3"/>
+        <path d="M9 9h6M9 12h6M9 15h4"/>
+      </svg>
+    </div>
+    <div class="ng-ph-baslik">Bu ekran FAZ ilerledikçe aktif edilecek</div>
+    <div class="ng-ph-metin">
+      <strong>{{ sayfa_baslik }}</strong> ekranı NexGen modülünün ileri fazlarında geliştirilecektir.<br>
+      Şu an için bu alan rezerve edilmiştir.
+    </div>
+    <a href="/nexgen/" class="ng-ph-geri">← NexGen Ana Sayfaya Dön</a>
+  </div>
+
+</div>
+
+<style>
+/* placeholder sayfası için ek stiller — ana ng-sayfa stilleri index.html'de */
+.ng-sayfa {
+  padding: 22px 28px;
+  background: #f6f7f9;
+  min-height: 100vh;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.ng-breadcrumb {
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 14px;
+}
+.ng-breadcrumb a { color: #f59e0b; text-decoration: none; font-weight: 500; }
+.ng-breadcrumb a:hover { text-decoration: underline; }
+.ng-bc-sep { margin: 0 6px; }
+.ng-baslik-blok { margin-bottom: 18px; }
+.ng-baslik { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.ng-baslik-metin { font-size: 20px; font-weight: 700; color: #111827; }
+.ng-rozet-yeni {
+  background: #f59e0b; color: #fff;
+  font-size: 10px; font-weight: 700;
+  padding: 2px 7px; border-radius: 10px; letter-spacing: 0.5px;
+}
+.ng-baslik-aciklama { font-size: 13px; color: #6b7280; }
+
+.ng-ph-kutu {
+  background: #fff;
+  border: 1px dashed rgba(17,24,39,0.15);
+  border-radius: 14px;
+  padding: 48px 32px;
+  text-align: center;
+  max-width: 520px;
+  margin: 0 auto;
+}
+.ng-ph-ikon { color: #d1d5db; margin-bottom: 18px; }
+.ng-ph-baslik {
+  font-size: 17px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 10px;
+}
+.ng-ph-metin {
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.6;
+  margin-bottom: 24px;
+}
+.ng-ph-geri {
+  display: inline-block;
+  background: #f59e0b;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 20px;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: background 0.12s;
+}
+.ng-ph-geri:hover { background: #d97706; }
+@media (max-width: 600px) {
+  .ng-sayfa { padding: 14px 12px; }
+  .ng-ph-kutu { padding: 32px 16px; }
+}
+</style>
+{% endblock %}

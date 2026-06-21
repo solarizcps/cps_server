@@ -1,0 +1,388 @@
+{% extends "base.html" %}
+{% set page_title = "NexGen Hammadde Yönetimi" %}
+
+{% block content %}
+<div class="ng-sayfa">
+
+  {# ── Başlık Bloğu ─────────────────────────────────────────── #}
+  <div class="ng-baslik-blok">
+    <div class="ng-baslik">
+      <span class="ng-baslik-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" width="22" height="22">
+          <path d="M3 3h7v7H3z"/><path d="M14 3h7v7h-7z"/>
+          <path d="M14 14h7v7h-7z"/><path d="M3 14h7v7H3z"/>
+        </svg>
+      </span>
+      <span class="ng-baslik-metin">NexGen Hammadde Yönetimi</span>
+      <span class="ng-rozet-yeni">YENİ</span>
+    </div>
+    <div class="ng-baslik-aciklama">
+      Hammadde stok, satın alma, formül, üretim, sevk ve maliyet takip merkezi.
+    </div>
+  </div>
+
+  {# ── Uyarı Bandı ──────────────────────────────────────────── #}
+  <div class="ng-info-bant">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+      <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
+      <line x1="12" y1="16" x2="12.01" y2="16"/>
+    </svg>
+    <span>NexGen modülü aktif geliştirme fazındadır. Ekranlar FAZ ilerledikçe açılacaktır.</span>
+  </div>
+
+  {# ── Kart Grid ────────────────────────────────────────────── #}
+  <div class="ng-kart-grid">
+
+    {# 1 — Depo & Stok #}
+    <div class="ng-kart">
+      <div class="ng-kart-ikon ng-ikon-mavi">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" width="28" height="28">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+          <polyline points="9 22 9 12 15 12 15 22"/>
+        </svg>
+      </div>
+      <div class="ng-kart-icerik">
+        <div class="ng-kart-baslik">Depo & Stok</div>
+        <div class="ng-kart-aciklama">Hammadde depolarını ve anlık stok seviyelerini takip edin.</div>
+        <div class="ng-kart-alt">
+          <span class="ng-yakinda">Yakında</span>
+          <a href="/nexgen/depo" class="ng-btn ng-btn-pasif">Aç</a>
+        </div>
+      </div>
+    </div>
+
+    {# 2 — Satın Alma #}
+    <div class="ng-kart">
+      <div class="ng-kart-ikon ng-ikon-turuncu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" width="28" height="28">
+          <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <path d="M16 10a4 4 0 0 1-8 0"/>
+        </svg>
+      </div>
+      <div class="ng-kart-icerik">
+        <div class="ng-kart-baslik">Satın Alma</div>
+        <div class="ng-kart-aciklama">Hammadde siparişleri ve tedarikçi süreçlerini yönetin.</div>
+        <div class="ng-kart-alt">
+          <span class="ng-yakinda">Yakında</span>
+          <a href="/nexgen/satinalma" class="ng-btn ng-btn-pasif">Aç</a>
+        </div>
+      </div>
+    </div>
+
+    {# 3 — Formüller #}
+    <div class="ng-kart">
+      <div class="ng-kart-ikon ng-ikon-mor">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" width="28" height="28">
+          <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0 0h18"/>
+        </svg>
+      </div>
+      <div class="ng-kart-icerik">
+        <div class="ng-kart-baslik">Formüller</div>
+        <div class="ng-kart-aciklama">Ürün başına hammadde bileşim ve reçete tanımları.</div>
+        <div class="ng-kart-alt">
+          <span class="ng-yakinda">Yakında</span>
+          <a href="/nexgen/formuller" class="ng-btn ng-btn-pasif">Aç</a>
+        </div>
+      </div>
+    </div>
+
+    {# 4 — Üretim Tablet #}
+    <div class="ng-kart">
+      <div class="ng-kart-ikon ng-ikon-yesil">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" width="28" height="28">
+          <rect x="4" y="2" width="16" height="20" rx="2"/>
+          <line x1="8" y1="6" x2="16" y2="6"/>
+          <line x1="8" y1="10" x2="16" y2="10"/>
+          <line x1="8" y1="14" x2="12" y2="14"/>
+        </svg>
+      </div>
+      <div class="ng-kart-icerik">
+        <div class="ng-kart-baslik">Üretim Tablet</div>
+        <div class="ng-kart-aciklama">Üretim sürecinde hammadde giriş/çıkış kayıt ekranı.</div>
+        <div class="ng-kart-alt">
+          <span class="ng-yakinda">Yakında</span>
+          <a href="/nexgen/uretim" class="ng-btn ng-btn-pasif">Aç</a>
+        </div>
+      </div>
+    </div>
+
+    {# 5 — Sevk & Barkod #}
+    <div class="ng-kart">
+      <div class="ng-kart-ikon ng-ikon-sari">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" width="28" height="28">
+          <rect x="1" y="3" width="15" height="13" rx="1"/>
+          <path d="M16 8h4l3 3v5h-7V8z"/>
+          <circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
+        </svg>
+      </div>
+      <div class="ng-kart-icerik">
+        <div class="ng-kart-baslik">Sevk & Barkod</div>
+        <div class="ng-kart-aciklama">Ürün sevkiyat süreçleri ve barkod yönetim merkezi.</div>
+        <div class="ng-kart-alt">
+          <span class="ng-yakinda">Yakında</span>
+          <a href="/nexgen/sevk" class="ng-btn ng-btn-pasif">Aç</a>
+        </div>
+      </div>
+    </div>
+
+    {# 6 — Maliyet & Rapor #}
+    <div class="ng-kart">
+      <div class="ng-kart-ikon ng-ikon-kirmizi">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" width="28" height="28">
+          <line x1="18" y1="20" x2="18" y2="10"/>
+          <line x1="12" y1="20" x2="12" y2="4"/>
+          <line x1="6" y1="20" x2="6" y2="14"/>
+          <line x1="2" y1="20" x2="22" y2="20"/>
+        </svg>
+      </div>
+      <div class="ng-kart-icerik">
+        <div class="ng-kart-baslik">Maliyet & Rapor</div>
+        <div class="ng-kart-aciklama">Hammadde maliyet analizi, trend ve operasyon raporları.</div>
+        <div class="ng-kart-alt">
+          <span class="ng-yakinda">Yakında</span>
+          <a href="/nexgen/maliyet" class="ng-btn ng-btn-pasif">Aç</a>
+        </div>
+      </div>
+    </div>
+
+  </div>{# /.ng-kart-grid #}
+
+  {# ── Diğer Alt Modüller ───────────────────────────────────── #}
+  <div class="ng-diger-baslik">Diğer Modüller</div>
+  <div class="ng-diger-list">
+    <a href="/nexgen/stok-kartlari" class="ng-diger-item ng-diger-aktif">
+      <span>Stok Kartları</span><span class="ng-aktif-kucuk">Aktif ›</span>
+    </a>
+    <a href="/nexgen/recycle" class="ng-diger-item">
+      <span>Recycle</span><span class="ng-yakinda-kucuk">Yakında</span>
+    </a>
+    <a href="/nexgen/deneme" class="ng-diger-item">
+      <span>Deneme</span><span class="ng-yakinda-kucuk">Yakında</span>
+    </a>
+    <a href="/nexgen/raporlar" class="ng-diger-item">
+      <span>Raporlar</span><span class="ng-yakinda-kucuk">Yakında</span>
+    </a>
+  </div>
+
+</div>{# /.ng-sayfa #}
+
+<style>
+/* ═══════════════════════════════════════════════════════════
+   NexGen FAZ-1A — Sayfa CSS (CPS tasarım diline uyumlu)
+   ═══════════════════════════════════════════════════════════ */
+.ng-sayfa {
+  padding: 22px 28px;
+  background: #f6f7f9;
+  min-height: 100vh;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* ── Başlık ── */
+.ng-baslik-blok { margin-bottom: 18px; }
+.ng-baslik {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.ng-baslik-icon svg { color: #f59e0b; }
+.ng-baslik-metin {
+  font-size: 20px;
+  font-weight: 700;
+  color: #111827;
+}
+.ng-rozet-yeni {
+  background: #f59e0b;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 10px;
+  letter-spacing: 0.5px;
+}
+.ng-baslik-aciklama {
+  font-size: 13px;
+  color: #6b7280;
+  margin-left: 32px;
+}
+
+/* ── Info Bandı ── */
+.ng-info-bant {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #1d4ed8;
+  margin-bottom: 22px;
+}
+.ng-info-bant svg { color: #3b82f6; flex-shrink: 0; }
+
+/* ── Kart Grid ── */
+.ng-kart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-bottom: 28px;
+}
+.ng-kart {
+  background: #fff;
+  border: 1px solid rgba(17,24,39,0.07);
+  border-radius: 12px;
+  padding: 18px;
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  box-shadow: 0 2px 8px rgba(15,23,42,0.04);
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.ng-kart:hover {
+  box-shadow: 0 4px 16px rgba(15,23,42,0.08);
+  border-color: rgba(17,24,39,0.13);
+}
+.ng-kart-ikon {
+  width: 48px; height: 48px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.ng-ikon-mavi   { background: #eff6ff; color: #3b82f6; }
+.ng-ikon-turuncu { background: #fff7ed; color: #f97316; }
+.ng-ikon-mor    { background: #f5f3ff; color: #8b5cf6; }
+.ng-ikon-yesil  { background: #f0fdf4; color: #22c55e; }
+.ng-ikon-sari   { background: #fefce8; color: #eab308; }
+.ng-ikon-kirmizi { background: #fef2f2; color: #ef4444; }
+
+.ng-kart-icerik { flex: 1; }
+.ng-kart-baslik {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 4px;
+}
+.ng-kart-aciklama {
+  font-size: 12.5px;
+  color: #6b7280;
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+.ng-kart-alt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ng-yakinda {
+  background: #f3f4f6;
+  color: #9ca3af;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 10px;
+  letter-spacing: 0.3px;
+}
+.ng-btn {
+  padding: 5px 14px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.12s;
+}
+.ng-btn-pasif {
+  background: #f3f4f6;
+  color: #9ca3af;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* ── Diğer Modüller ── */
+.ng-diger-baslik {
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
+.ng-diger-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.ng-diger-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid rgba(17,24,39,0.07);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  color: #374151;
+  text-decoration: none;
+  font-weight: 500;
+  transition: border-color 0.12s;
+}
+.ng-diger-item:hover { border-color: #f59e0b; color: #111827; }
+.ng-yakinda-kucuk {
+  background: #f3f4f6;
+  color: #9ca3af;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 8px;
+}
+.ng-aktif-kucuk {
+  background: #fef9c3;
+  color: #92400e;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 8px;
+}
+.ng-diger-aktif {
+  border-color: #f59e0b !important;
+  color: #92400e !important;
+  font-weight: 600;
+}
+.ng-aktif-etiket {
+  background: #fef9c3;
+  color: #92400e;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 10px;
+}
+.ng-btn-aktif {
+  background: #f59e0b;
+  color: #fff;
+  padding: 5px 14px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.12s;
+}
+.ng-btn-aktif:hover { background: #d97706; }
+
+/* ── Responsive ── */
+@media (max-width: 600px) {
+  .ng-sayfa { padding: 14px 12px; }
+  .ng-kart-grid { grid-template-columns: 1fr; }
+}
+</style>
+{% endblock %}

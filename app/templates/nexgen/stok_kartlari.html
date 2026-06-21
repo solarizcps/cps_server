@@ -1,0 +1,1027 @@
+{% extends "base.html" %}
+{% set page_title = "Stok Kartları — NexGen" %}
+
+{% block content %}
+<div class="ng-sayfa">
+
+  {# ── Başlık ──────────────────────────────────────────────── #}
+  <div class="ng-baslik-blok">
+    <div class="ng-baslik">
+      <a href="/nexgen/" class="ng-bc-link">NexGen</a>
+      <span class="ng-bc-sep">›</span>
+      <span class="ng-baslik-metin">Stok Kartları</span>
+    </div>
+    <div class="ng-baslik-aciklama">Hammadde, katkı, boya, recycle ve mamul stok kart master listesi.</div>
+  </div>
+
+  {# ── Toolbar ─────────────────────────────────────────────── #}
+  <div class="ngsk-toolbar">
+    <div class="ngsk-ara-wrap">
+      <svg class="ngsk-ara-ikon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <input type="text" id="ngsk-arama" class="ngsk-ara-input" placeholder="Kod veya ad ara…" autocomplete="off">
+    </div>
+    <div class="ngsk-filtre-wrap">
+      <select id="ngsk-kat-filtre" class="ngsk-select">
+        <option value="">Tüm Kategoriler</option>
+        <option value="HAMMADDE">Hammadde</option>
+        <option value="MAMUL_COMPOUND">Mamul Compound</option>
+        <option value="RECYCLE">Recycle</option>
+        <option value="KATKI">Katkı</option>
+        <option value="BOYA">Boya</option>
+        <option value="DIGER">Diğer</option>
+      </select>
+    </div>
+    {% if can_manage %}
+    <button class="ngsk-btn-yeni" onclick="ngskModalAc()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+           stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>
+      Yeni Stok Kartı
+    </button>
+    {% endif %}
+  </div>
+
+  {# ── Özet KPI'lar ──────────────────────────────────────────── #}
+  <div class="ngsk-kpi-bar">
+    <div class="ngsk-kpi">
+      <span class="ngsk-kpi-deger" id="kpi-toplam">{{ kartlar|length }}</span>
+      <span class="ngsk-kpi-etiket">Toplam Kart</span>
+    </div>
+    <div class="ngsk-kpi">
+      <span class="ngsk-kpi-deger ngsk-kpi-yesil" id="kpi-normal">
+        {{ kartlar | selectattr('durum', 'equalto', 'normal') | list | length }}
+      </span>
+      <span class="ngsk-kpi-etiket">Normal Stok</span>
+    </div>
+    <div class="ngsk-kpi">
+      <span class="ngsk-kpi-deger ngsk-kpi-sari" id="kpi-uyari">
+        {{ kartlar | selectattr('durum', 'equalto', 'uyari') | list | length }}
+      </span>
+      <span class="ngsk-kpi-etiket">Minimum Altı</span>
+    </div>
+    <div class="ngsk-kpi">
+      <span class="ngsk-kpi-deger ngsk-kpi-kirmizi" id="kpi-kritik">
+        {{ kartlar | selectattr('durum', 'equalto', 'kritik') | list | length }}
+      </span>
+      <span class="ngsk-kpi-etiket">Kritik</span>
+    </div>
+  </div>
+
+  {# ── Ana Alan: Tablo + Sağ Panel ─────────────────────────── #}
+  <div class="ngsk-ana-alan" id="ngsk-ana-alan">
+
+    {# ── Tablo ── #}
+    <div class="ngsk-tablo-cerceve" id="ngsk-tablo-cerceve">
+      {% if kartlar %}
+      <table class="ngsk-tablo" id="ngsk-tablo">
+        <thead>
+          <tr>
+            <th>Kod</th>
+            <th>Ad</th>
+            <th>Kategori</th>
+            <th class="ngsk-th-r">Mevcut Stok</th>
+            <th>Durum</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="ngsk-tbody">
+          {% for k in kartlar %}
+          <tr class="ngsk-satir{% if not k.aktif %} ngsk-pasif{% endif %}"
+              data-id="{{ k.id }}"
+              data-kod="{{ k.kod }}"
+              data-ad="{{ k.ad }}"
+              data-kat="{{ k.kategori }}"
+              onclick="ngskHizliAc({{ k.id }})"
+              style="cursor:pointer">
+            <td class="ngsk-td-kod">{{ k.kod }}</td>
+            <td>
+              <div class="ngsk-ad-satir">{{ k.ad }}</div>
+              {% if not k.aktif %}
+                <div class="ngsk-alt-bilgi">Pasif</div>
+              {% endif %}
+            </td>
+            <td>
+              <span class="ngsk-kat-rozet ngsk-kat-{{ k.kategori | lower | replace('_', '-') }}">
+                {{ k.kategori | replace('_', ' ') }}
+              </span>
+            </td>
+            <td class="ngsk-td-r ngsk-stok-miktar">
+              <span class="ngsk-miktar-deger ngsk-stok-{{ k.durum }}">{{ "%.1f"|format(k.mevcut_stok) }}</span>
+              <span class="ngsk-birim">{{ k.birim }}</span>
+              <div class="ngsk-alt-bilgi ngsk-alt-r">
+                Min: {{ "%.0f"|format(k.minimum_stok) }} / Kritik: {{ "%.0f"|format(k.kritik_stok) }}
+              </div>
+            </td>
+            <td>
+              {% if k.durum == 'normal' %}
+                <span class="ngsk-durum ngsk-dur-normal">● Normal</span>
+              {% elif k.durum == 'uyari' %}
+                <span class="ngsk-durum ngsk-dur-uyari">▲ Min Altı</span>
+              {% else %}
+                <span class="ngsk-durum ngsk-dur-kritik">▼ Kritik</span>
+              {% endif %}
+            </td>
+            <td class="ngsk-td-butonlar" onclick="event.stopPropagation()">
+              <button class="ngsk-btn-hizli" onclick="ngskHizliAc({{ k.id }})" title="Hızlı Bak">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" width="13" height="13">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              </button>
+              <a href="/nexgen/stok-kartlari/{{ k.id }}" class="ngsk-btn-detay" title="Tam Detay">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" width="13" height="13">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                  <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                </svg>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div id="ngsk-bos-mesaj" class="ngsk-bos" style="display:none">
+        Arama kriterine uygun kart bulunamadı.
+      </div>
+      {% else %}
+      <div class="ngsk-bos">
+        Henüz stok kartı eklenmemiş.
+        {% if can_manage %}
+        <br><br>
+        <button class="ngsk-btn-yeni" onclick="ngskModalAc()">+ İlk Kartı Ekle</button>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+
+    {# ── Sağ Hızlı Detay Paneli ────────────────────────────── #}
+    <div class="ngsk-panel" id="ngsk-panel">
+      <div class="ngsk-panel-icerik" id="ngsk-panel-icerik">
+        <div class="ngsk-panel-yukleniyor" id="ngsk-panel-yukleniyor">
+          <div class="ngsk-spinner"></div>
+          <span>Yükleniyor…</span>
+        </div>
+        <div id="ngsk-panel-veri" style="display:none">
+          {# JS tarafından doldurulur #}
+        </div>
+      </div>
+    </div>
+
+  </div>{# /.ngsk-ana-alan #}
+
+</div>{# /.ng-sayfa #}
+
+{# ─────────────────────────────────────────────────────────────
+   Yeni Stok Kartı Modal (sadece yetkililer)
+──────────────────────────────────────────────────────────────── #}
+{% if can_manage %}
+<div id="ngsk-overlay" class="ngsk-overlay" onclick="ngskModalKapat(event)">
+  <div class="ngsk-modal" id="ngsk-modal" onclick="event.stopPropagation()">
+    <div class="ngsk-modal-baslik">
+      <span>Yeni Stok Kartı</span>
+      <button class="ngsk-modal-kapat" onclick="ngskModalKapat()">&times;</button>
+    </div>
+
+    <div id="ngsk-hata-alan" class="ngsk-hata-alan" style="display:none"></div>
+    <div id="ngsk-basari-alan" class="ngsk-basari-alan" style="display:none"></div>
+
+    <form id="ngsk-form" onsubmit="return false;">
+
+      {# ── Bölüm 1: Temel Bilgi ── #}
+      <div class="ngsk-bolum-baslik">
+        <span>Temel Bilgi</span>
+      </div>
+      <div class="ngsk-form-grid">
+        <div class="ngsk-fg">
+          <label>Kod <span class="ngsk-zorunlu">*</span></label>
+          <input type="text" id="nf-kod" placeholder="Örn: EVA18" autocomplete="off"
+                 style="text-transform:uppercase" maxlength="30">
+          <small>Benzersiz kısa kod (büyük harf)</small>
+        </div>
+        <div class="ngsk-fg">
+          <label>Ad <span class="ngsk-zorunlu">*</span></label>
+          <input type="text" id="nf-ad" placeholder="Örn: EVA 18" autocomplete="off" maxlength="100">
+        </div>
+        <div class="ngsk-fg">
+          <label>Kategori <span class="ngsk-zorunlu">*</span></label>
+          <select id="nf-kategori" onchange="ngskKategoriDegisti()">
+            <option value="HAMMADDE">Hammadde</option>
+            <option value="MAMUL_COMPOUND">Mamul Compound</option>
+            <option value="RECYCLE">Recycle</option>
+            <option value="KATKI">Katkı</option>
+            <option value="BOYA">Boya</option>
+            <option value="DIGER">Diğer</option>
+          </select>
+        </div>
+        <div class="ngsk-fg">
+          <label>Birim</label>
+          <select id="nf-birim">
+            <option value="KG">KG</option>
+            <option value="ADET">ADET</option>
+            <option value="LT">LT</option>
+          </select>
+        </div>
+        <div class="ngsk-fg">
+          <label>Minimum Stok</label>
+          <input type="number" id="nf-min" value="0" min="0" step="0.1">
+          <small>Bu altına düşünce sarı uyarı</small>
+        </div>
+        <div class="ngsk-fg">
+          <label>Kritik Stok</label>
+          <input type="number" id="nf-kritik" value="0" min="0" step="0.1">
+          <small>Bu altına düşünce kırmızı kritik</small>
+        </div>
+      </div>
+
+      {# ── Bölüm 2: Opsiyonel Özellikler ── #}
+      <button type="button" class="ngsk-opsiyonel-toggle" id="ngsk-ops-toggle"
+              onclick="ngskOpsiyonelToggle()">
+        <svg id="ngsk-ops-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"
+             style="transition:transform 0.2s">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+        Opsiyonel Özellikler
+        <span class="ngsk-ops-ipucu" id="ngsk-ops-ipucu">(Recycle ve özel kartlar için)</span>
+      </button>
+
+      <div id="ngsk-opsiyonel-bolum" style="display:none">
+        <div class="ngsk-form-grid">
+          <div class="ngsk-fg">
+            <label>Renk / Özellik</label>
+            <input type="text" id="nf-renk" placeholder="Örn: SİYAH, KARISIK" maxlength="80" autocomplete="off">
+            <small>Özellikle RECYCLE için; hammaddede genelde boş</small>
+          </div>
+          <div class="ngsk-fg">
+            <label>Alt Kategori</label>
+            <input type="text" id="nf-alt-kategori" placeholder="Örn: BASE, ÜSTKAP" maxlength="80" autocomplete="off">
+          </div>
+          <div class="ngsk-fg">
+            <label>Kalite Sınıfı</label>
+            <select id="nf-kalite">
+              <option value="">— Seçiniz —</option>
+              <option value="STANDART">Standart</option>
+              <option value="TEMIZ">Temiz</option>
+              <option value="KARISIK">Karışık</option>
+              <option value="KIRLI">Kirli</option>
+              <option value="DENEME">Deneme</option>
+              <option value="DIGER">Diğer</option>
+            </select>
+          </div>
+          <div class="ngsk-fg">
+            <label>Shore Değeri</label>
+            <input type="text" id="nf-shore" placeholder="Örn: 45A, 55C" maxlength="20" autocomplete="off">
+            <small>Mamul compound / test için</small>
+          </div>
+          <div class="ngsk-fg ngsk-fg-genis">
+            <label>Notlar</label>
+            <input type="text" id="nf-notlar" placeholder="Serbest açıklama…" maxlength="200" autocomplete="off">
+          </div>
+        </div>
+      </div>
+
+      <div class="ngsk-modal-footer">
+        <button type="button" class="ngsk-btn-iptal" onclick="ngskModalKapat()">İptal</button>
+        <button type="button" class="ngsk-btn-kaydet" id="ngsk-kaydet-btn" onclick="ngskKaydet()">
+          Kaydet
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<style>
+/* ═══════════════════════════════════════════════════════════
+   NexGen Stok Kartları — CSS (FAZ-1D)
+   ═══════════════════════════════════════════════════════════ */
+.ng-sayfa {
+  padding: 22px 28px;
+  background: #f6f7f9;
+  min-height: 100vh;
+  width: 100%;
+  box-sizing: border-box;
+}
+.ng-baslik-blok { margin-bottom: 16px; }
+.ng-baslik { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.ng-bc-link { color: #f59e0b; text-decoration: none; font-size: 13px; font-weight: 500; }
+.ng-bc-link:hover { text-decoration: underline; }
+.ng-bc-sep { color: #9ca3af; font-size: 13px; }
+.ng-baslik-metin { font-size: 20px; font-weight: 700; color: #111827; }
+.ng-baslik-aciklama { font-size: 13px; color: #6b7280; }
+
+/* ── Toolbar ── */
+.ngsk-toolbar {
+  display: flex; gap: 10px; align-items: center;
+  flex-wrap: wrap; margin-bottom: 14px;
+  width: 100%; box-sizing: border-box;
+}
+.ngsk-ara-wrap {
+  display: flex; align-items: center; gap: 8px;
+  background: #fff; border: 1px solid #e5e7eb;
+  border-radius: 8px; padding: 6px 12px;
+  flex: 1; min-width: 160px; max-width: 300px;
+}
+.ngsk-ara-ikon { color: #9ca3af; flex-shrink: 0; }
+.ngsk-ara-input {
+  border: none; outline: none; font-size: 13.5px;
+  color: #374151; background: transparent; width: 100%;
+}
+.ngsk-select {
+  background: #fff; border: 1px solid #e5e7eb;
+  border-radius: 8px; padding: 7px 28px 7px 10px;
+  font-size: 13px; color: #374151; outline: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 8px center;
+}
+.ngsk-btn-yeni {
+  display: flex; align-items: center; gap: 6px;
+  background: #f59e0b; color: #fff;
+  border: none; border-radius: 8px;
+  padding: 7px 16px; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: background 0.12s; white-space: nowrap;
+}
+.ngsk-btn-yeni:hover { background: #d97706; }
+
+/* ── KPI Bar ── */
+.ngsk-kpi-bar {
+  display: flex; gap: 12px; flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.ngsk-kpi {
+  background: #fff; border: 1px solid rgba(17,24,39,0.07);
+  border-radius: 10px; padding: 10px 18px;
+  display: flex; flex-direction: column; align-items: center;
+  min-width: 90px;
+}
+.ngsk-kpi-deger { font-size: 22px; font-weight: 700; color: #111827; }
+.ngsk-kpi-etiket { font-size: 11px; color: #6b7280; margin-top: 2px; }
+.ngsk-kpi-yesil { color: #16a34a; }
+.ngsk-kpi-sari  { color: #d97706; }
+.ngsk-kpi-kirmizi { color: #dc2626; }
+
+/* ── Ana Alan: tablo + panel yan yana ── */
+.ngsk-ana-alan {
+  display: flex;
+  gap: 0;
+  align-items: flex-start;
+  min-height: 300px;
+}
+.ngsk-tablo-cerceve {
+  flex: 1;
+  background: #fff; border: 1px solid rgba(17,24,39,0.06);
+  border-radius: 12px; overflow-x: auto;
+  box-shadow: 0 2px 8px rgba(15,23,42,0.04);
+  min-width: 0;
+  transition: flex 0.25s ease;
+}
+
+/* ── Tablo ── */
+.ngsk-tablo {
+  width: 100%;
+  border-collapse: separate; border-spacing: 0;
+  font-size: 13.5px; color: #111827;
+}
+.ngsk-tablo thead th {
+  background: #f9fafb; padding: 10px 14px;
+  font-size: 11.5px; font-weight: 600; color: #6b7280;
+  text-transform: uppercase; letter-spacing: 0.4px;
+  border-bottom: 1px solid #f0f1f3; white-space: nowrap;
+}
+.ngsk-th-r { text-align: right; }
+.ngsk-tablo tbody tr {
+  border-bottom: 1px solid #f3f4f6;
+  transition: background 0.1s;
+}
+.ngsk-tablo tbody tr:last-child { border-bottom: none; }
+.ngsk-tablo tbody tr:hover { background: #fffbeb; }
+.ngsk-tablo tbody tr.ngsk-aktif-satir { background: #fef9e7; }
+.ngsk-pasif { opacity: 0.5; }
+.ngsk-tablo td { padding: 9px 14px; vertical-align: middle; }
+.ngsk-td-kod { font-weight: 700; font-size: 13px; color: #374151; white-space: nowrap; }
+.ngsk-td-r { text-align: right; }
+.ngsk-ad-satir { font-size: 13.5px; color: #111827; }
+.ngsk-alt-bilgi { font-size: 11px; color: #9ca3af; margin-top: 1px; }
+.ngsk-alt-r { text-align: right; }
+
+/* Kategori rozetleri */
+.ngsk-kat-rozet {
+  display: inline-block; padding: 2px 8px; border-radius: 8px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+.ngsk-kat-hammadde       { background: #eff6ff; color: #1d4ed8; }
+.ngsk-kat-mamul-compound { background: #f0fdf4; color: #15803d; }
+.ngsk-kat-recycle        { background: #f5f3ff; color: #6d28d9; }
+.ngsk-kat-katk\u0131     { background: #fff7ed; color: #c2410c; }
+.ngsk-kat-boya           { background: #fdf2f8; color: #9d174d; }
+.ngsk-kat-diger          { background: #f3f4f6; color: #374151; }
+
+/* Stok gösterimi */
+.ngsk-stok-miktar { white-space: nowrap; }
+.ngsk-miktar-deger { font-weight: 700; font-size: 14px; }
+.ngsk-stok-normal  { color: #16a34a; }
+.ngsk-stok-uyari   { color: #d97706; }
+.ngsk-stok-kritik  { color: #dc2626; }
+.ngsk-birim { font-size: 11px; color: #9ca3af; margin-left: 2px; }
+
+/* Durum etiketleri */
+.ngsk-durum { font-size: 12px; font-weight: 600; white-space: nowrap; }
+.ngsk-dur-normal  { color: #16a34a; }
+.ngsk-dur-uyari   { color: #d97706; }
+.ngsk-dur-kritik  { color: #dc2626; }
+
+/* Aksiyon butonları */
+.ngsk-td-butonlar { white-space: nowrap; width: 64px; }
+.ngsk-btn-hizli {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #f3f4f6; color: #374151;
+  border: none; border-radius: 6px;
+  width: 28px; height: 28px;
+  cursor: pointer; transition: background 0.1s;
+  vertical-align: middle;
+}
+.ngsk-btn-hizli:hover { background: #fef3c7; color: #92400e; }
+.ngsk-btn-detay {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #f3f4f6; color: #374151;
+  border-radius: 6px;
+  width: 28px; height: 28px;
+  text-decoration: none;
+  transition: background 0.1s;
+  vertical-align: middle;
+}
+.ngsk-btn-detay:hover { background: #dbeafe; color: #1d4ed8; }
+
+/* Boş mesaj */
+.ngsk-bos {
+  padding: 48px 24px; text-align: center;
+  color: #9ca3af; font-size: 14px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SAĞ HIZLI DETAY PANELİ (FAZ-1D)
+   ═══════════════════════════════════════════════════════════ */
+.ngsk-panel {
+  width: 0; overflow: hidden;
+  transition: width 0.25s ease, margin-left 0.25s ease;
+  flex-shrink: 0;
+}
+.ngsk-panel.acik {
+  width: 340px;
+  margin-left: 12px;
+}
+.ngsk-panel-icerik {
+  width: 340px;
+  background: #fff;
+  border: 1px solid rgba(17,24,39,0.07);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(15,23,42,0.08);
+  overflow: hidden;
+}
+.ngsk-panel-yukleniyor {
+  display: flex; align-items: center; gap: 10px;
+  padding: 32px 20px; color: #9ca3af; font-size: 13px;
+}
+.ngsk-spinner {
+  width: 18px; height: 18px;
+  border: 2px solid #e5e7eb;
+  border-top-color: #f59e0b;
+  border-radius: 50%;
+  animation: ngsk-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes ngsk-spin { to { transform: rotate(360deg); } }
+
+/* Panel içi bölümler */
+.ngsp-baslik-alan {
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid #f0f1f3;
+  display: flex; justify-content: space-between; align-items: flex-start;
+  background: #fafafa;
+}
+.ngsp-kart-adi {
+  font-size: 16px; font-weight: 700; color: #111827;
+  line-height: 1.3; margin-bottom: 2px;
+}
+.ngsp-kart-alt {
+  font-size: 11.5px; color: #6b7280;
+}
+.ngsp-kapat-btn {
+  background: none; border: none; cursor: pointer;
+  font-size: 18px; color: #9ca3af; line-height: 1;
+  padding: 2px 4px; flex-shrink: 0;
+}
+.ngsp-kapat-btn:hover { color: #374151; }
+
+.ngsp-stok-kart-row {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px; padding: 12px 16px;
+  border-bottom: 1px solid #f0f1f3;
+}
+.ngsp-stok-kutu {
+  background: #f9fafb; border-radius: 8px;
+  padding: 8px 10px; text-align: center;
+}
+.ngsp-stok-deger {
+  font-size: 15px; font-weight: 700;
+  display: block; line-height: 1.2;
+}
+.ngsp-stok-etiket {
+  font-size: 10px; color: #9ca3af; font-weight: 600;
+  text-transform: uppercase; margin-top: 2px;
+  display: block;
+}
+.ngsp-stok-normal { color: #16a34a; }
+.ngsp-stok-uyari  { color: #d97706; }
+.ngsp-stok-kritik { color: #dc2626; }
+
+.ngsp-seksiyon {
+  padding: 10px 16px;
+  border-bottom: 1px solid #f0f1f3;
+}
+.ngsp-seksiyon:last-child { border-bottom: none; }
+.ngsp-seksiyon-baslik {
+  font-size: 10.5px; font-weight: 700; color: #9ca3af;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  margin-bottom: 7px;
+}
+
+/* Ek özellikler grid */
+.ngsp-ek-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 5px 12px;
+}
+.ngsp-ek-satir { display: flex; flex-direction: column; gap: 1px; }
+.ngsp-ek-satir-genis { grid-column: 1 / -1; }
+.ngsp-ek-label { font-size: 10.5px; color: #9ca3af; }
+.ngsp-ek-val { font-size: 12.5px; color: #374151; font-weight: 500; }
+
+/* Hareket listesi */
+.ngsp-hrt-satir {
+  display: flex; align-items: flex-start;
+  gap: 8px; padding: 5px 0;
+  border-bottom: 1px solid #f9fafb;
+}
+.ngsp-hrt-satir:last-child { border-bottom: none; }
+.ngsp-hrt-tip {
+  font-size: 10px; font-weight: 700;
+  padding: 2px 6px; border-radius: 4px;
+  white-space: nowrap; flex-shrink: 0;
+}
+.ngsp-tip-giris       { background: #f0fdf4; color: #15803d; }
+.ngsp-tip-cikis       { background: #fef2f2; color: #dc2626; }
+.ngsp-tip-sayim       { background: #fffbeb; color: #92400e; }
+.ngsp-tip-diger       { background: #f3f4f6; color: #374151; }
+.ngsp-hrt-bilgi { flex: 1; min-width: 0; }
+.ngsp-hrt-miktar {
+  font-size: 12px; font-weight: 700;
+  white-space: nowrap;
+}
+.ngsp-hrt-miktar.pos { color: #16a34a; }
+.ngsp-hrt-miktar.neg { color: #dc2626; }
+.ngsp-hrt-aciklama { font-size: 11px; color: #6b7280; }
+.ngsp-hrt-meta { font-size: 10.5px; color: #9ca3af; margin-top: 1px; }
+
+/* Panel butonlar */
+.ngsp-butonlar {
+  display: flex; gap: 8px; padding: 12px 16px;
+  border-top: 1px solid #f0f1f3;
+  flex-wrap: wrap;
+}
+.ngsp-btn-tam {
+  flex: 1; text-align: center;
+  background: #f59e0b; color: #fff;
+  border: none; border-radius: 7px;
+  padding: 8px 12px; font-size: 12.5px; font-weight: 600;
+  text-decoration: none; cursor: pointer;
+  transition: background 0.12s; white-space: nowrap;
+}
+.ngsp-btn-tam:hover { background: #d97706; }
+.ngsp-btn-kapat {
+  background: #f3f4f6; color: #374151;
+  border: none; border-radius: 7px;
+  padding: 8px 14px; font-size: 12.5px; font-weight: 600;
+  cursor: pointer; transition: background 0.12s; white-space: nowrap;
+}
+.ngsp-btn-kapat:hover { background: #e5e7eb; }
+.ngsp-btn-hareket {
+  width: 100%;
+  background: #fff; color: #374151;
+  border: 1px solid #e5e7eb; border-radius: 7px;
+  padding: 7px 12px; font-size: 12px; font-weight: 500;
+  cursor: pointer; transition: background 0.12s; white-space: nowrap;
+}
+.ngsp-btn-hareket:hover { background: #f9fafb; }
+
+/* ═══════════════════════════════════════════════════════════
+   YENİ STOK KARTI MODAL
+   ═══════════════════════════════════════════════════════════ */
+.ngsk-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.45); z-index: 1000;
+  align-items: center; justify-content: center;
+}
+.ngsk-overlay.acik { display: flex; }
+.ngsk-modal {
+  background: #fff; border-radius: 14px;
+  width: 560px; max-width: 95vw;
+  max-height: 88vh; overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.18);
+}
+.ngsk-modal-baslik {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 16px 20px; border-bottom: 1px solid #f0f1f3;
+  font-size: 16px; font-weight: 700; color: #111827;
+  position: sticky; top: 0; background: #fff; z-index: 1;
+}
+.ngsk-modal-kapat {
+  background: none; border: none; cursor: pointer;
+  font-size: 20px; color: #9ca3af; line-height: 1;
+  padding: 0 4px;
+}
+.ngsk-modal-kapat:hover { color: #374151; }
+.ngsk-hata-alan, .ngsk-basari-alan {
+  margin: 12px 20px 0; padding: 10px 14px;
+  border-radius: 8px; font-size: 13px;
+}
+.ngsk-hata-alan  { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+.ngsk-basari-alan { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+
+/* Bölüm başlığı */
+.ngsk-bolum-baslik {
+  display: flex; align-items: center;
+  padding: 12px 20px 4px;
+  font-size: 11px; font-weight: 700; color: #6b7280;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+/* Opsiyonel toggle butonu */
+.ngsk-opsiyonel-toggle {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; background: #f9fafb;
+  border: none; border-top: 1px solid #f0f1f3;
+  padding: 11px 20px; font-size: 12.5px; font-weight: 600;
+  color: #374151; cursor: pointer; text-align: left;
+  transition: background 0.1s;
+}
+.ngsk-opsiyonel-toggle:hover { background: #f0f1f3; }
+.ngsk-ops-ipucu { font-size: 11px; color: #9ca3af; font-weight: 400; }
+
+.ngsk-form-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 14px; padding: 12px 20px;
+}
+.ngsk-fg { display: flex; flex-direction: column; gap: 4px; }
+.ngsk-fg label { font-size: 12.5px; font-weight: 600; color: #374151; }
+.ngsk-fg input, .ngsk-fg select {
+  border: 1px solid #e5e7eb; border-radius: 7px;
+  padding: 7px 10px; font-size: 13.5px; color: #111827; outline: none;
+  transition: border-color 0.1s;
+}
+.ngsk-fg input:focus, .ngsk-fg select:focus { border-color: #f59e0b; }
+.ngsk-fg small { font-size: 11px; color: #9ca3af; }
+.ngsk-zorunlu { color: #ef4444; }
+.ngsk-fg-genis { grid-column: 1 / -1; }
+
+.ngsk-modal-footer {
+  display: flex; justify-content: flex-end; gap: 10px;
+  padding: 14px 20px; border-top: 1px solid #f0f1f3;
+  position: sticky; bottom: 0; background: #fff;
+}
+.ngsk-btn-iptal {
+  background: #f3f4f6; color: #374151; border: none;
+  border-radius: 8px; padding: 8px 18px; font-size: 13px;
+  font-weight: 600; cursor: pointer;
+}
+.ngsk-btn-iptal:hover { background: #e5e7eb; }
+.ngsk-btn-kaydet {
+  background: #f59e0b; color: #fff; border: none;
+  border-radius: 8px; padding: 8px 20px; font-size: 13px;
+  font-weight: 600; cursor: pointer; transition: background 0.12s;
+}
+.ngsk-btn-kaydet:hover { background: #d97706; }
+.ngsk-btn-kaydet:disabled { background: #d1d5db; cursor: not-allowed; }
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+  .ngsk-panel.acik {
+    position: fixed; top: 0; right: 0;
+    width: 100% !important; max-width: 380px;
+    height: 100vh; z-index: 500;
+    margin-left: 0;
+    display: flex; flex-direction: column;
+  }
+  .ngsk-panel-icerik {
+    width: 100%; height: 100%; border-radius: 0;
+    overflow-y: auto;
+  }
+}
+@media (max-width: 600px) {
+  .ng-sayfa { padding: 14px 10px; }
+  .ngsk-form-grid { grid-template-columns: 1fr; }
+  .ngsk-panel.acik { max-width: 100%; }
+}
+</style>
+
+<script>
+/* ══════════════════════════════════════════════════════════
+   HIZLI PANEL
+   ══════════════════════════════════════════════════════════ */
+let _aktifKartId = null;
+
+function ngskHizliAc(kartId) {
+  if (_aktifKartId === kartId) {
+    ngskPanelKapat();
+    return;
+  }
+  _aktifKartId = kartId;
+
+  // Panel aç
+  const panel = document.getElementById('ngsk-panel');
+  panel.classList.add('acik');
+
+  // Aktif satır vurgusu
+  document.querySelectorAll('#ngsk-tbody tr').forEach(tr => tr.classList.remove('ngsk-aktif-satir'));
+  const aktifTr = document.querySelector(`#ngsk-tbody tr[data-id="${kartId}"]`);
+  if (aktifTr) aktifTr.classList.add('ngsk-aktif-satir');
+
+  // Yükleniyor göster
+  document.getElementById('ngsk-panel-yukleniyor').style.display = 'flex';
+  document.getElementById('ngsk-panel-veri').style.display = 'none';
+
+  fetch(`/nexgen/api/stok-kart/${kartId}/ozet`)
+    .then(r => {
+      if (!r.ok && r.status === 403) { _panelHata('Bu karta erişim yetkiniz yok. (403)'); return null; }
+      if (!r.ok && r.status === 404) { _panelHata('Kart bulunamadı. (404)'); return null; }
+      return r.json();
+    })
+    .then(d => {
+      if (!d) return;
+      if (!d.ok) { _panelHata(d.hata || 'API hatası.'); return; }
+      _panelDoldur(d);
+    })
+    .catch(err => _panelHata('İstek başarısız: ' + (err.message || 'Bilinmeyen hata.')));
+}
+
+function ngskPanelKapat() {
+  _aktifKartId = null;
+  document.getElementById('ngsk-panel').classList.remove('acik');
+  document.querySelectorAll('#ngsk-tbody tr').forEach(tr => tr.classList.remove('ngsk-aktif-satir'));
+}
+
+function _panelHata(msg) {
+  document.getElementById('ngsk-panel-yukleniyor').style.display = 'none';
+  const veri = document.getElementById('ngsk-panel-veri');
+  veri.innerHTML = `<div style="padding:24px 16px;color:#dc2626;font-size:13px;">⚠ ${msg}</div>`;
+  veri.style.display = 'block';
+}
+
+function _durumCss(durum) {
+  return durum === 'normal' ? 'ngsp-stok-normal' : (durum === 'uyari' ? 'ngsp-stok-uyari' : 'ngsp-stok-kritik');
+}
+function _durumMetin(durum) {
+  return durum === 'normal' ? '● Normal' : (durum === 'uyari' ? '▲ Min Altı' : '▼ Kritik');
+}
+function _tipCss(tip) {
+  if (tip === 'GIRIS' || tip === 'URETIM_CIKTI') return 'ngsp-tip-giris';
+  if (tip === 'CIKIS' || tip === 'URETIM_TUKETIM' || tip === 'SEVK') return 'ngsp-tip-cikis';
+  if (tip === 'SAYIM_DUZELTME') return 'ngsp-tip-sayim';
+  return 'ngsp-tip-diger';
+}
+function _fmt(n) {
+  const v = parseFloat(n);
+  return isNaN(v) ? '—' : (v >= 0 ? '+' + v.toFixed(1) : v.toFixed(1));
+}
+
+function _panelDoldur(d) {
+  const k = d.kart;
+  const ms = d.mevcut_stok;
+  const dur = d.durum;
+  const canManage = {{ 'true' if can_manage else 'false' }};
+
+  // Ek özellikler satırları
+  const ekSatirlar = [
+    ['Renk', k.renk],
+    ['Alt Kategori', k.alt_kategori],
+    ['Kalite', k.kalite_sinifi],
+    ['Shore', k.shore_degeri],
+  ].filter(([, v]) => v);
+  const ekHtml = ekSatirlar.length > 0 ? `
+    <div class="ngsp-seksiyon">
+      <div class="ngsp-seksiyon-baslik">Ek Özellikler</div>
+      <div class="ngsp-ek-grid">
+        ${ekSatirlar.map(([l, v]) => `
+          <div class="ngsp-ek-satir">
+            <span class="ngsp-ek-label">${l}</span>
+            <span class="ngsp-ek-val">${v}</span>
+          </div>`).join('')}
+        ${k.notlar ? `<div class="ngsp-ek-satir ngsp-ek-satir-genis">
+            <span class="ngsp-ek-label">Notlar</span>
+            <span class="ngsp-ek-val">${k.notlar}</span>
+          </div>` : ''}
+      </div>
+    </div>` : '';
+
+  // Hareketler
+  const hrtHtml = d.hareketler.length > 0
+    ? d.hareketler.map(h => {
+        const pozMu = h.miktar >= 0;
+        return `<div class="ngsp-hrt-satir">
+          <span class="ngsp-hrt-tip ${_tipCss(h.tip)}">${h.tip.replace('_',' ')}</span>
+          <div class="ngsp-hrt-bilgi">
+            <div class="ngsp-hrt-miktar ${pozMu ? 'pos' : 'neg'}">${_fmt(h.miktar)} ${k.birim}</div>
+            ${h.aciklama ? `<div class="ngsp-hrt-aciklama">${h.aciklama}</div>` : ''}
+            <div class="ngsp-hrt-meta">${h.tarih || ''} · ${h.yapan || '—'}</div>
+          </div>
+        </div>`;
+      }).join('')
+    : '<div style="font-size:12px;color:#9ca3af;padding:4px 0;">Henüz hareket yok.</div>';
+
+  // Manuel hareket butonu
+  const hrtBtn = canManage
+    ? `<button class="ngsp-btn-hareket" onclick="ngspHareketiAc(${k.id})">
+         + Manuel Hareket Ekle
+       </button>`
+    : '';
+
+  const html = `
+    <div class="ngsp-baslik-alan">
+      <div>
+        <div class="ngsp-kart-adi">${k.ad}</div>
+        <div class="ngsp-kart-alt">${k.kategori.replace('_',' ')} · ${k.kod}</div>
+      </div>
+      <button class="ngsp-kapat-btn" onclick="ngskPanelKapat()" title="Kapat">&times;</button>
+    </div>
+
+    <div class="ngsp-stok-kart-row">
+      <div class="ngsp-stok-kutu">
+        <span class="ngsp-stok-deger ${_durumCss(dur)}">${parseFloat(ms).toFixed(1)}</span>
+        <span class="ngsp-stok-etiket">Mevcut ${k.birim}</span>
+      </div>
+      <div class="ngsp-stok-kutu">
+        <span class="ngsp-stok-deger" style="color:#374151;">${parseFloat(k.minimum_stok).toFixed(0)}</span>
+        <span class="ngsp-stok-etiket">Minimum</span>
+      </div>
+      <div class="ngsp-stok-kutu">
+        <span class="ngsp-stok-deger" style="color:#374151;">${parseFloat(k.kritik_stok).toFixed(0)}</span>
+        <span class="ngsp-stok-etiket">Kritik</span>
+      </div>
+    </div>
+    <div style="padding:4px 16px 8px; font-size:12px; font-weight:600;" class="${_durumCss(dur)}">
+      ${_durumMetin(dur)}
+    </div>
+
+    ${ekHtml}
+
+    <div class="ngsp-seksiyon">
+      <div class="ngsp-seksiyon-baslik">Son Hareketler (5)</div>
+      ${hrtHtml}
+    </div>
+
+    <div class="ngsp-butonlar">
+      <a href="/nexgen/stok-kartlari/${k.id}" class="ngsp-btn-tam">Tam Detay</a>
+      <button class="ngsp-btn-kapat" onclick="ngskPanelKapat()">Kapat</button>
+    </div>
+    ${hrtBtn ? `<div style="padding: 0 16px 12px;">${hrtBtn}</div>` : ''}
+  `;
+
+  document.getElementById('ngsk-panel-yukleniyor').style.display = 'none';
+  const veri = document.getElementById('ngsk-panel-veri');
+  veri.innerHTML = html;
+  veri.style.display = 'block';
+}
+
+// Manuel hareket modalını panelden aç (mevcut detay sayfasına yönlendir)
+function ngspHareketiAc(kartId) {
+  window.location.href = `/nexgen/stok-kartlari/${kartId}`;
+}
+
+// Escape ile panel kapat
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') ngskPanelKapat();
+});
+
+/* ══════════════════════════════════════════════════════════
+   YENİ STOK KARTI MODAL
+   ══════════════════════════════════════════════════════════ */
+let _opsiyonelAcik = false;
+
+function ngskModalAc() {
+  document.getElementById('ngsk-overlay').classList.add('acik');
+  document.getElementById('nf-kod').focus();
+}
+function ngskModalKapat(e) {
+  if (e && e.target !== document.getElementById('ngsk-overlay')) return;
+  document.getElementById('ngsk-overlay').classList.remove('acik');
+  document.getElementById('ngsk-hata-alan').style.display = 'none';
+  document.getElementById('ngsk-basari-alan').style.display = 'none';
+  document.getElementById('ngsk-form').reset();
+  document.getElementById('ngsk-kaydet-btn').disabled = false;
+  // Opsiyonel bölümü kapat
+  if (_opsiyonelAcik) ngskOpsiyonelToggle();
+}
+
+function ngskOpsiyonelToggle() {
+  _opsiyonelAcik = !_opsiyonelAcik;
+  document.getElementById('ngsk-opsiyonel-bolum').style.display = _opsiyonelAcik ? 'block' : 'none';
+  document.getElementById('ngsk-ops-ok').style.transform = _opsiyonelAcik ? 'rotate(180deg)' : '';
+  document.getElementById('ngsk-ops-ipucu').style.display = _opsiyonelAcik ? 'none' : '';
+}
+
+// Kategori RECYCLE seçilince opsiyonel bölümü otomatik aç
+function ngskKategoriDegisti() {
+  const kat = document.getElementById('nf-kategori').value;
+  if (kat === 'RECYCLE' && !_opsiyonelAcik) ngskOpsiyonelToggle();
+}
+
+/* ── Kaydet ── */
+function ngskKaydet() {
+  const btn = document.getElementById('ngsk-kaydet-btn');
+  const hataDiv = document.getElementById('ngsk-hata-alan');
+  const basariDiv = document.getElementById('ngsk-basari-alan');
+  hataDiv.style.display = 'none';
+  basariDiv.style.display = 'none';
+
+  const kod   = document.getElementById('nf-kod').value.trim().toUpperCase();
+  const ad    = document.getElementById('nf-ad').value.trim();
+  const kat   = document.getElementById('nf-kategori').value;
+  const birim = document.getElementById('nf-birim').value;
+  const min   = parseFloat(document.getElementById('nf-min').value || 0);
+  const krit  = parseFloat(document.getElementById('nf-kritik').value || 0);
+  // Opsiyonel
+  const renk        = document.getElementById('nf-renk').value.trim();
+  const altKategori = document.getElementById('nf-alt-kategori').value.trim();
+  const kalite      = document.getElementById('nf-kalite').value;
+  const shore       = document.getElementById('nf-shore').value.trim();
+  const notlar      = document.getElementById('nf-notlar').value.trim();
+
+  if (!kod) { return _hata('Kod zorunludur.'); }
+  if (!ad)  { return _hata('Ad zorunludur.'); }
+
+  btn.disabled = true;
+  btn.textContent = 'Kaydediliyor…';
+
+  fetch('/nexgen/api/stok-kart-ekle', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      kod, ad, kategori: kat, birim,
+      minimum_stok: min, kritik_stok: krit,
+      renk: renk || null,
+      alt_kategori: altKategori || null,
+      kalite_sinifi: kalite || null,
+      shore_degeri: shore || null,
+      notlar: notlar || null,
+    })
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.ok) {
+      basariDiv.textContent = `✓ "${d.ad}" (${d.kod}) başarıyla eklendi. Sayfa yenileniyor…`;
+      basariDiv.style.display = 'block';
+      setTimeout(() => location.reload(), 1200);
+    } else {
+      _hata(d.hata || 'Bilinmeyen hata.');
+    }
+  })
+  .catch(() => _hata('Sunucuya bağlanılamadı.'))
+  .finally(() => {
+    btn.textContent = 'Kaydet';
+    btn.disabled = false;
+  });
+
+  function _hata(msg) {
+    hataDiv.textContent = msg;
+    hataDiv.style.display = 'block';
+    btn.textContent = 'Kaydet';
+    btn.disabled = false;
+  }
+}
+
+/* ── Arama + Filtre ── */
+function ngskFiltrele() {
+  const q   = document.getElementById('ngsk-arama').value.toLowerCase();
+  const kat = document.getElementById('ngsk-kat-filtre').value;
+  const satirlar = document.querySelectorAll('#ngsk-tbody .ngsk-satir');
+  let gorunen = 0;
+  satirlar.forEach(tr => {
+    const kod = tr.dataset.kod.toLowerCase();
+    const ad  = tr.dataset.ad.toLowerCase();
+    const k   = tr.dataset.kat;
+    const eslesti = (kod.includes(q) || ad.includes(q)) && (!kat || k === kat);
+    tr.style.display = eslesti ? '' : 'none';
+    if (eslesti) gorunen++;
+  });
+  const bosMsg = document.getElementById('ngsk-bos-mesaj');
+  if (bosMsg) bosMsg.style.display = (gorunen === 0) ? 'block' : 'none';
+}
+document.getElementById('ngsk-arama').addEventListener('input', ngskFiltrele);
+document.getElementById('ngsk-kat-filtre').addEventListener('change', ngskFiltrele);
+</script>
+{% endblock %}

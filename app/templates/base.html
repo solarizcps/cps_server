@@ -35,6 +35,7 @@ window.__cpsRootMap = function(pathname) {
   if (p.length > 1 && p.charAt(p.length-1) === '/') p = p.substring(0, p.length-1);
   if (!p) p = '/';
   function _h(prefix) { return p === prefix || p.indexOf(prefix + '/') === 0; }
+  if (_h('/nexgen'))            return {key:'/uretim',  title:'\u00dcretim',   href:'/hedef/'};
   if (_h('/uretim-yonetim'))   return {key:'/uretim',  title:'\u00dcretim',   href:'/hedef/'};
   if (_h('/uretim'))           return {key:'/uretim',  title:'\u00dcretim',   href:'/hedef/'};
   if (_h('/hedef'))            return {key:'/uretim',  title:'\u00dcretim',   href:'/hedef/'};
@@ -363,6 +364,8 @@ window.__cpsRootMap = function(pathname) {
       {% if active == 'hedef' %}{% set aktif_grup = 'uretim' %}{% endif %}
       {# MENU_FIX_V1 (05.06.2026): enjeksiyon sayfasinda uretim grubu acik #}
       {% if active == 'enjeksiyon' %}{% set aktif_grup = 'uretim' %}{% endif %}
+      {# NEXGEN_FAZ1A: nexgen sayfasinda uretim grubu acik #}
+      {% if active == 'nexgen' %}{% set aktif_grup = 'uretim' %}{% endif %}
       {% if active == 'online-eticaret' %}{% set aktif_grup = 'ticaret' %}{% endif %}
 
 
@@ -777,6 +780,14 @@ window.__cpsRootMap = function(pathname) {
 
         </a>
 
+        {# NEXGEN_FAZ1A: Sadece nexgen.view yetkisi olanlar görür #}
+        {% if yetki('nexgen.view') %}
+        <a href="/nexgen/" class="si {% if active == 'nexgen' %}active{% endif %}" title="NexGen Hammadde">
+          <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h7v7H3z"/><path d="M14 3h7v7h-7z"/><path d="M14 14h7v7h-7z"/><path d="M3 14h7v7H3z"/></svg></span>
+          <span class="sl">NexGen</span>
+          <span style="background:#f59e0b;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;margin-left:4px;line-height:1.4;">YENİ</span>
+        </a>
+        {% endif %}
 
       </div>
 
