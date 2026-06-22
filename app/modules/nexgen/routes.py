@@ -85,9 +85,11 @@ def _mevcut_stok(con, kart_id):
 def index():
     can_yonetim = yetki_var('nexgen.yonetim.manage', 'can_view')
     can_depo    = yetki_var('nexgen.depo.view', 'can_view')
+    can_recete  = yetki_var('nexgen.recete.view', 'can_view')
     return render_template('nexgen/index.html', active='nexgen',
                            can_yonetim=can_yonetim,
-                           can_depo=can_depo)
+                           can_depo=can_depo,
+                           can_recete=can_recete)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -568,7 +570,129 @@ def alt_sayfa(sayfa):
 
 
 # ═════════════════════════════════════════════════════════════
-# FAZ-2: SATIN ALMA MERKEZİ
+# FAZ-4B: REÇETE / FORMÜL MERKEZİ
+# ─────────────────────────────────────────────────────────────
+# KURAL: Bu bölümde nexgen_stok_hareket INSERT YAPILMAZ.
+#        nexgen_hammadde_fiyat dokunulmaz.
+#        Sadece okuma + reçete master veri.
+# ─────────────────────────────────────────────────────────────
+
+@nexgen_bp.route('/recete/')
+@yetki_gerekli('nexgen.recete.view', 'can_view')
+def recete_liste():
+    con = _db()
+    try:
+        formuller_raw = con.execute("""
+            SELECT
+                f.id, f.kod, f.ad, f.durum, f.onay_durumu,
+                f.olusturma_tarihi, f.notlar,
+                ku.KullaniciAdi AS olusturan_ad,
+                COUNT(DISTINCT rv.id)  AS renk_say,
+                COUNT(DISTINCT uv.id)  AS uretim_say,
+                COUNT(DISTINCT rk.id)  AS kalem_say
+            FROM nexgen_formul f
+            LEFT JOIN sistem_kullanici ku ON ku.Id = f.olusturan_id
+            LEFT JOIN nexgen_renk_varyant rv ON rv.formul_id = f.id AND rv.aktif = 1
+            LEFT JOIN nexgen_uretim_varyant uv ON uv.renk_varyant_id = rv.id AND uv.aktif = 1
+            LEFT JOIN nexgen_recete_kalem rk ON rk.uretim_varyant_id = uv.id AND rk.aktif = 1
+            GROUP BY f.id
+            ORDER BY f.id DESC
+        """).fetchall()
+    finally:
+        con.close()
+
+    formuller = [dict(r) for r in formuller_raw]
+
+    can_create  = yetki_var('nexgen.recete.create',  'can_create')
+    can_approve = yetki_var('nexgen.recete.approve', 'can_approve')
+    can_manage  = yetki_var('nexgen.recete.manage',  'can_manage')
+
+    return render_template(
+        'nexgen/recete_liste.html',
+        active='nexgen',
+        formuller=formuller,
+        can_create=can_create,
+        can_approve=can_approve,
+        can_manage=can_manage,
+    )
+
+
+@nexgen_bp.route('/recete/<int:formul_id>')
+@yetki_gerekli('nexgen.recete.view', 'can_view')
+def recete_detay(formul_id):
+    con = _db()
+    try:
+        formul = con.execute("""
+            SELECT f.*,
+                   ku.KullaniciAdi AS olusturan_ad,
+                   on_ku.KullaniciAdi AS onaylayan_ad
+            FROM nexgen_formul f
+            LEFT JOIN sistem_kullanici ku    ON ku.Id    = f.olusturan_id
+            LEFT JOIN sistem_kullanici on_ku ON on_ku.Id = f.onaylayan_id
+            WHERE f.id = ?
+        """, (formul_id,)).fetchone()
+        if not formul:
+            abort(404)
+
+        # Tüm renk varyantları
+        renk_raw = con.execute("""
+            SELECT rv.*
+            FROM nexgen_renk_varyant rv
+            WHERE rv.formul_id = ? AND rv.aktif = 1
+            ORDER BY rv.id
+        """, (formul_id,)).fetchall()
+
+        # Her renk için üretim varyantları + kalemleri
+        agac = []
+        for rv in renk_raw:
+            uretim_raw = con.execute("""
+                SELECT uv.*,
+                       ku.KullaniciAdi AS onaylayan_ad
+                FROM nexgen_uretim_varyant uv
+                LEFT JOIN sistem_kullanici ku ON ku.Id = uv.onaylayan_id
+                WHERE uv.renk_varyant_id = ? AND uv.aktif = 1
+                ORDER BY uv.boyut
+            """, (rv['id'],)).fetchall()
+
+            uretim_listesi = []
+            for uv in uretim_raw:
+                kalemler = con.execute("""
+                    SELECT rk.*, sk.kod AS stok_kod, sk.ad AS stok_ad,
+                           sk.kategori, sk.birim
+                    FROM nexgen_recete_kalem rk
+                    JOIN nexgen_stok_kart sk ON sk.id = rk.stok_kart_id
+                    WHERE rk.uretim_varyant_id = ? AND rk.aktif = 1
+                    ORDER BY rk.sira, rk.id
+                """, (uv['id'],)).fetchall()
+
+                toplam_kg = sum(k['miktar_kg'] for k in kalemler)
+                uretim_listesi.append({
+                    **dict(uv),
+                    'kalemler': [dict(k) for k in kalemler],
+                    'toplam_kg': round(toplam_kg, 3),
+                })
+
+            agac.append({
+                **dict(rv),
+                'uretim_listesi': uretim_listesi,
+            })
+
+    finally:
+        con.close()
+
+    can_create  = yetki_var('nexgen.recete.create',  'can_create')
+    can_approve = yetki_var('nexgen.recete.approve', 'can_approve')
+    can_manage  = yetki_var('nexgen.recete.manage',  'can_manage')
+
+    return render_template(
+        'nexgen/recete_detay.html',
+        active='nexgen',
+        formul=dict(formul),
+        agac=agac,
+        can_create=can_create,
+        can_approve=can_approve,
+        can_manage=can_manage,
+    )
 # ─────────────────────────────────────────────────────────────
 # KURAL: Bu bölümde nexgen_stok_hareket INSERT YAPILMAZ.
 # ═════════════════════════════════════════════════════════════

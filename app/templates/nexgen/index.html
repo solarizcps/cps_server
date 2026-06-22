@@ -189,6 +189,11 @@
     <a href="/nexgen/stok-kartlari" class="ng-diger-item ng-diger-aktif">
       <span>Stok Kartları</span><span class="ng-aktif-kucuk">Aktif ›</span>
     </a>
+    {% if can_recete %}
+    <a href="/nexgen/recete/" class="ng-diger-item ng-diger-aktif">
+      <span>Reçete Merkezi</span><span class="ng-aktif-kucuk">Aktif ›</span>
+    </a>
+    {% endif %}
     <a href="/nexgen/recycle" class="ng-diger-item">
       <span>Recycle</span><span class="ng-yakinda-kucuk">Yakında</span>
     </a>

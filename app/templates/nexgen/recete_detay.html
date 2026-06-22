@@ -1,0 +1,639 @@
+{% extends "base.html" %}
+{% set page_title = formul.kod ~ " — " ~ formul.ad ~ " — NexGen Reçete" %}
+
+{% block content %}
+<div class="ng-sayfa">
+
+  {# ── Breadcrumb ──────────────────────────────────────────── #}
+  <div class="ng-baslik-blok">
+    <div class="ng-baslik">
+      <a href="/nexgen/" class="ng-bc-link">NexGen</a>
+      <span class="ng-bc-sep">›</span>
+      <a href="/nexgen/recete/" class="ng-bc-link">Reçete Merkezi</a>
+      <span class="ng-bc-sep">›</span>
+      <span class="ngrc-kod-baslik">{{ formul.kod }}</span>
+      <span class="ng-baslik-metin">{{ formul.ad }}</span>
+    </div>
+    <div class="ng-baslik-aciklama">
+      {{ formul.aciklama or 'Formül detayı, renk/boyut varyantları ve reçete kalemleri.' }}
+    </div>
+  </div>
+
+  {# ── Sekme Bar ───────────────────────────────────────────── #}
+  <div class="ngsd-sekme-bar">
+    <button class="ngsd-sekme-btn" data-sekme="genel"  onclick="rcSekme('genel')">Genel Bilgi</button>
+    <button class="ngsd-sekme-btn" data-sekme="recete" onclick="rcSekme('recete')">Reçete Ağacı</button>
+    <button class="ngsd-sekme-btn" data-sekme="hesap"  onclick="rcSekme('hesap')">Deneme Hesabı</button>
+  </div>
+
+  {# ═══════════════════════════════════════════════════════════ #}
+  {# SEKME 1 — GENEL BİLGİ                                       #}
+  {# ═══════════════════════════════════════════════════════════ #}
+  <div id="rc-sekme-genel" class="ngsd-sekme-icerik">
+    <div class="ngrc-genel-grid">
+
+      <div class="ngrc-bilgi-kart">
+        <div class="ngrc-bilgi-baslik">Formül Kimliği</div>
+        <div class="ngrc-bilgi-satirlar">
+          <div class="ngrc-bilgi-satir">
+            <span class="ngrc-bilgi-etiket">Kod</span>
+            <span class="ngrc-kod">{{ formul.kod }}</span>
+          </div>
+          <div class="ngrc-bilgi-satir">
+            <span class="ngrc-bilgi-etiket">Ad</span>
+            <span>{{ formul.ad }}</span>
+          </div>
+          <div class="ngrc-bilgi-satir">
+            <span class="ngrc-bilgi-etiket">Açıklama</span>
+            <span>{{ formul.aciklama or '—' }}</span>
+          </div>
+          <div class="ngrc-bilgi-satir">
+            <span class="ngrc-bilgi-etiket">Notlar</span>
+            <span>{{ formul.notlar or '—' }}</span>
+          </div>
+          <div class="ngrc-bilgi-satir">
+            <span class="ngrc-bilgi-etiket">Oluşturan</span>
+            <span>{{ formul.olusturan_ad or '—' }}</span>
+          </div>
+          <div class="ngrc-bilgi-satir">
+            <span class="ngrc-bilgi-etiket">Oluşturma</span>
+            <span>{{ (formul.olusturma_tarihi or '')[:16] }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ngrc-bilgi-kart">
+        <div class="ngrc-bilgi-baslik">Durum & Onay</div>
+        <div class="ngrc-bilgi-satirlar">
+          <div class="ngrc-bilgi-satir">
+            <span class="ngrc-bilgi-etiket">Durum</span>
+            <span class="ngrc-rozet-durum ngrc-d-{{ formul.durum|lower }}">
+              {% if formul.durum == 'TASLAK' %}Taslak
+              {% elif formul.durum == 'AKTIF' %}Aktif
+              {% elif formul.durum == 'ARSIV' %}Arşiv
+              {% else %}{{ formul.durum }}{% endif %}
+            </span>
+          </div>
+          <div class="ngrc-bilgi-satir">
+            <span class="ngrc-bilgi-etiket">Onay</span>
+            <span class="ngrc-rozet-onay ngrc-o-{{ formul.onay_durumu|lower|replace('_','-') }}">
+              {% if formul.onay_durumu == 'BEKLIYOR' %}Bekliyor
+              {% elif formul.onay_durumu == 'ONAY_BEKLIYOR' %}Onay Bekliyor
+              {% elif formul.onay_durumu == 'ONAYLANDI' %}Onaylandı
+              {% elif formul.onay_durumu == 'REDDEDILDI' %}Reddedildi
+              {% else %}{{ formul.onay_durumu }}{% endif %}
+            </span>
+          </div>
+          {% if formul.onaylayan_ad %}
+          <div class="ngrc-bilgi-satir">
+            <span class="ngrc-bilgi-etiket">Onaylayan</span>
+            <span>{{ formul.onaylayan_ad }}</span>
+          </div>
+          {% endif %}
+          {% if formul.onay_tarihi %}
+          <div class="ngrc-bilgi-satir">
+            <span class="ngrc-bilgi-etiket">Onay Tarihi</span>
+            <span>{{ formul.onay_tarihi[:16] }}</span>
+          </div>
+          {% endif %}
+          {% if formul.onay_notu %}
+          <div class="ngrc-bilgi-satir">
+            <span class="ngrc-bilgi-etiket">Onay Notu</span>
+            <span>{{ formul.onay_notu }}</span>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  {# ═══════════════════════════════════════════════════════════ #}
+  {# SEKME 2 — REÇETE AĞACI                                      #}
+  {# ═══════════════════════════════════════════════════════════ #}
+  <div id="rc-sekme-recete" class="ngsd-sekme-icerik" style="display:none">
+
+    {% if not agac %}
+    <div class="ngsd-placeholder-kart">
+      <div class="ngsd-placeholder-ikon">📋</div>
+      <div class="ngsd-placeholder-baslik">Varyant Yok</div>
+      <div class="ngsd-placeholder-aciklama">
+        Bu formüle henüz renk varyantı eklenmemiş.
+      </div>
+    </div>
+    {% else %}
+
+    <div class="ngrc-agac">
+      {# ── Renk Seçici Tabs ── #}
+      <div class="ngrc-renk-bar">
+        {% for rv in agac %}
+        <button class="ngrc-renk-btn" data-renk="{{ rv.id }}"
+                onclick="rcRenkSec({{ rv.id }})">
+          <span class="ngrc-renk-bant ngrc-renk-{{ rv.renk|lower }}"></span>
+          {{ rv.ad }}
+        </button>
+        {% endfor %}
+      </div>
+
+      {# ── Her Renk Varyantının Paneli ── #}
+      {% for rv in agac %}
+      <div id="ngrc-panel-{{ rv.id }}" class="ngrc-renk-panel" style="display:none">
+
+        {% if not rv.uretim_listesi %}
+        <div class="ngsd-placeholder-kart" style="padding:24px">
+          <div class="ngsd-placeholder-aciklama">Bu renk varyantına üretim boyutu eklenmemiş.</div>
+        </div>
+        {% else %}
+
+        {# ── Boyut Tabları ── #}
+        <div class="ngrc-boyut-bar">
+          {% for uv in rv.uretim_listesi %}
+          <button class="ngrc-boyut-btn" data-renk="{{ rv.id }}" data-boyut="{{ uv.id }}"
+                  onclick="rcBoyutSec({{ rv.id }}, {{ uv.id }})">
+            {{ uv.boyut }}
+            <span class="ngrc-kalem-say">{{ uv.kalemler|length }} kalem</span>
+          </button>
+          {% endfor %}
+        </div>
+
+        {# ── Her Boyutun Kalem Tablosu ── #}
+        {% for uv in rv.uretim_listesi %}
+        <div id="ngrc-boyut-{{ rv.id }}-{{ uv.id }}" class="ngrc-boyut-panel" style="display:none">
+
+          {% if not uv.kalemler %}
+          <div class="ngsd-placeholder-aciklama" style="padding:20px;text-align:center;color:#9ca3af">
+            Bu boyut varyantına henüz reçete kalemi eklenmemiş.
+          </div>
+          {% else %}
+          <div class="ngrc-kalem-cerceve">
+            <table class="ngrc-kalem-tablo" id="tbl-{{ rv.id }}-{{ uv.id }}">
+              <thead>
+                <tr>
+                  <th style="width:36px">#</th>
+                  <th>Hammadde</th>
+                  <th>Kategori</th>
+                  <th class="ngsk-th-r">100 KG Baz (KG)</th>
+                  <th class="ngsk-th-r">%</th>
+                  <th>Açıklama</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for k in uv.kalemler %}
+                <tr>
+                  <td class="ngrc-sira">{{ k.sira }}</td>
+                  <td>
+                    <span class="ngrc-kod">{{ k.stok_kod }}</span>
+                    <span class="ngrc-stok-ad">{{ k.stok_ad }}</span>
+                  </td>
+                  <td>
+                    <span class="ngrc-kat-rozet ngrc-kat-{{ k.kategori|lower }}">
+                      {{ k.kategori }}
+                    </span>
+                  </td>
+                  <td class="ngsk-td-r ngrc-baz-kg"
+                      data-kg="{{ k.miktar_kg }}">
+                    <strong>{{ '{:,.3f}'.format(k.miktar_kg) }}</strong>
+                    <span class="ngsk-birim">KG</span>
+                  </td>
+                  <td class="ngsk-td-r ngrc-yuzde">
+                    {% if uv.toplam_kg > 0 %}
+                      {{ '{:.1f}'.format(k.miktar_kg / uv.toplam_kg * 100) }}%
+                    {% else %}—{% endif %}
+                  </td>
+                  <td class="ngsk-alt-bilgi">{{ k.aciklama or '—' }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+              <tfoot>
+                <tr class="ngrc-toplam-satir">
+                  <td colspan="3">Toplam</td>
+                  <td class="ngsk-td-r">
+                    <strong>{{ '{:,.3f}'.format(uv.toplam_kg) }}</strong>
+                    <span class="ngsk-birim">KG</span>
+                  </td>
+                  <td class="ngsk-td-r">
+                    {% if uv.toplam_kg > 0 %}100.0%{% else %}—{% endif %}
+                  </td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          {% endif %}
+
+        </div>
+        {% endfor %}
+
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+
+    {% endif %}
+  </div>
+
+  {# ═══════════════════════════════════════════════════════════ #}
+  {# SEKME 3 — DENEME HESABI                                     #}
+  {# KURAL: Sadece görüntüleme — DB'ye yazma YOK                 #}
+  {# ═══════════════════════════════════════════════════════════ #}
+  <div id="rc-sekme-hesap" class="ngsd-sekme-icerik" style="display:none">
+
+    {% if not agac %}
+    <div class="ngsd-placeholder-kart">
+      <div class="ngsd-placeholder-ikon">🧮</div>
+      <div class="ngsd-placeholder-baslik">Varyant Gerekli</div>
+      <div class="ngsd-placeholder-aciklama">Hesap için önce reçete ağacı oluşturulmalı.</div>
+    </div>
+    {% else %}
+
+    <div class="ngrc-hesap-kart">
+      <div class="ngrc-hesap-baslik">Hammadde Hesap Paneli</div>
+      <div class="ngrc-hesap-aciklama">
+        Reçete kalemleri 100 KG compound bazında tutulur. Hedef KG girerek gerekli miktarları hesaplayın.
+        <strong>Bu panel yalnızca hesaplama yapar — stok veya üretim kaydı oluşturmaz.</strong>
+      </div>
+
+      <div class="ngrc-hesap-kontrol">
+        <div class="ngsk-fg">
+          <label>Renk Varyantı</label>
+          <select id="hs-renk" onchange="hsVaryantSec()">
+            <option value="">— Seçin —</option>
+            {% for rv in agac %}
+            <option value="{{ rv.id }}">{{ rv.ad }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="ngsk-fg">
+          <label>Boyut</label>
+          <select id="hs-boyut" onchange="hsHesapla()">
+            <option value="">— Önce renk seçin —</option>
+          </select>
+        </div>
+        <div class="ngsk-fg">
+          <label>Hedef KG</label>
+          <input type="number" id="hs-hedef-kg" value="8.5"
+                 min="0.1" step="0.1" oninput="hsHesapla()">
+        </div>
+        <div class="ngrc-hesap-kisa-butonlar">
+          <button class="ngrc-hzl-btn" onclick="hsHizliSec(8.5)" title="Küçük makina (~7.5L)">
+            8.5 KG
+            <span class="ngrc-hzl-alt">Küçük Makina</span>
+          </button>
+          <button class="ngrc-hzl-btn" onclick="hsHizliSec(85)" title="Büyük makina (~75L)">
+            85 KG
+            <span class="ngrc-hzl-alt">Büyük Makina</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="hs-sonuc-alan" style="display:none">
+        <div class="ngrc-hesap-ozet">
+          Hedef: <strong id="hs-hedef-goster">—</strong> KG
+          &nbsp;|&nbsp; Çarpan: <strong id="hs-carpan-goster">—</strong>
+          &nbsp;|&nbsp; Baz: 100 KG
+        </div>
+        <div class="ngrc-kalem-cerceve">
+          <table class="ngrc-kalem-tablo">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Hammadde</th>
+                <th class="ngsk-th-r">100 KG Baz</th>
+                <th class="ngsk-th-r">Hesaplanan KG</th>
+              </tr>
+            </thead>
+            <tbody id="hs-tablo-body">
+            </tbody>
+            <tfoot>
+              <tr class="ngrc-toplam-satir">
+                <td colspan="2">Toplam</td>
+                <td class="ngsk-td-r"><span id="hs-baz-toplam">—</span> KG</td>
+                <td class="ngsk-td-r"><strong><span id="hs-hesap-toplam">—</span> KG</strong></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      <div id="hs-bos-mesaj" class="ngsd-placeholder-aciklama" style="text-align:center;padding:32px">
+        Renk ve boyut varyantını seçerek hesaplamayı başlatın.
+      </div>
+
+    </div>
+    {% endif %}
+
+  </div>
+
+</div>{# /.ng-sayfa #}
+
+{# JS verisi — Jinja'dan reçete kalemlerini aktarıyoruz #}
+<script>
+const RC_AGAC = {{ agac | tojson }};
+</script>
+
+<style>
+/* ── Genel breadcrumb ── */
+.ngrc-kod-baslik {
+  font-family:'Courier New',monospace; font-size:13px; color:#0891b2; font-weight:700;
+}
+
+/* ── Genel bilgi grid ── */
+.ngrc-genel-grid {
+  display:grid; grid-template-columns:1fr 1fr; gap:16px;
+}
+@media(max-width:640px){ .ngrc-genel-grid { grid-template-columns:1fr; } }
+
+.ngrc-bilgi-kart {
+  background:#f9fafb; border:1px solid #e5e7eb; border-radius:10px; padding:16px;
+}
+.ngrc-bilgi-baslik {
+  font-size:12px; font-weight:700; color:#374151;
+  text-transform:uppercase; letter-spacing:.5px;
+  border-bottom:1px solid #e5e7eb; padding-bottom:8px; margin-bottom:10px;
+}
+.ngrc-bilgi-satir {
+  display:flex; justify-content:space-between; align-items:flex-start;
+  padding:5px 0; font-size:13px; border-bottom:1px solid #f3f4f6;
+}
+.ngrc-bilgi-satir:last-child { border-bottom:none; }
+.ngrc-bilgi-etiket { color:#6b7280; font-size:12px; font-weight:600; min-width:90px; }
+
+/* ── Rozet stilleri (ortak) ── */
+.ngrc-rozet-durum, .ngrc-rozet-onay {
+  display:inline-block; padding:2px 8px; border-radius:7px;
+  font-size:11px; font-weight:700; border:1px solid transparent;
+}
+.ngrc-d-taslak        { background:#f1f5f9; color:#64748b; border-color:#e2e8f0; }
+.ngrc-d-aktif         { background:#f0fdf4; color:#15803d; border-color:#bbf7d0; }
+.ngrc-d-arsiv         { background:#f9fafb; color:#9ca3af; border-color:#e5e7eb; }
+.ngrc-o-bekliyor      { background:#f1f5f9; color:#64748b; border-color:#e2e8f0; }
+.ngrc-o-onay-bekliyor { background:#fef3c7; color:#92400e; border-color:#fde68a; }
+.ngrc-o-onaylandi     { background:#d1fae5; color:#059669; border-color:#a7f3d0; }
+.ngrc-o-reddedildi    { background:#fee2e2; color:#dc2626; border-color:#fecaca; }
+
+/* ── Reçete ağacı ── */
+.ngrc-agac { display:flex; flex-direction:column; gap:0; }
+
+.ngrc-renk-bar {
+  display:flex; gap:4px; flex-wrap:wrap;
+  border-bottom:2px solid #f0f1f3; padding-bottom:0; margin-bottom:0;
+}
+.ngrc-renk-btn {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:9px 16px; border:none; border-radius:8px 8px 0 0;
+  background:#f9fafb; color:#6b7280; font-size:13px; font-weight:500;
+  cursor:pointer; border-bottom:2px solid transparent;
+  transition:background .1s, color .1s;
+}
+.ngrc-renk-btn:hover { background:#f0fdf4; color:#374151; }
+.ngrc-renk-btn.aktif {
+  background:#fff; color:#111827; font-weight:700;
+  border-bottom:2px solid #f59e0b;
+}
+.ngrc-renk-bant {
+  width:10px; height:10px; border-radius:50%; display:inline-block;
+}
+.ngrc-renk-beyaz { background:#e5e7eb; border:1px solid #d1d5db; }
+.ngrc-renk-siyah { background:#374151; }
+.ngrc-renk-sari  { background:#fde68a; border:1px solid #fbbf24; }
+.ngrc-renk-ham   { background:#d1fae5; border:1px solid #6ee7b7; }
+.ngrc-renk-diger { background:#ede9fe; border:1px solid #a78bfa; }
+
+.ngrc-renk-panel {
+  background:#fff; border:1px solid rgba(17,24,39,.06);
+  border-top:none; border-radius:0 0 10px 10px;
+  padding:16px; min-height:60px;
+}
+
+/* ── Boyut tabs ── */
+.ngrc-boyut-bar {
+  display:flex; gap:4px; flex-wrap:wrap; margin-bottom:14px;
+}
+.ngrc-boyut-btn {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:6px 14px; border:1px solid #e5e7eb; border-radius:7px;
+  background:#f9fafb; color:#6b7280; font-size:12px; font-weight:500;
+  cursor:pointer; transition:background .1s;
+}
+.ngrc-boyut-btn:hover { background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; }
+.ngrc-boyut-btn.aktif {
+  background:#eff6ff; color:#1d4ed8; border-color:#3b82f6; font-weight:700;
+}
+.ngrc-kalem-say {
+  font-size:10px; font-weight:700; background:#f1f5f9; color:#475569;
+  padding:1px 5px; border-radius:6px;
+}
+
+/* ── Kalem tablo ── */
+.ngrc-kalem-cerceve {
+  border:1px solid rgba(17,24,39,.06); border-radius:10px; overflow-x:auto;
+}
+.ngrc-kalem-tablo {
+  width:100%; min-width:500px; border-collapse:separate; border-spacing:0;
+  font-size:13px;
+}
+.ngrc-kalem-tablo thead th {
+  background:#f9fafb; padding:8px 12px; font-size:11px; font-weight:600;
+  color:#6b7280; text-transform:uppercase; letter-spacing:.4px;
+  border-bottom:1px solid #f0f1f3; white-space:nowrap;
+}
+.ngrc-kalem-tablo tbody tr { border-bottom:1px solid #f3f4f6; }
+.ngrc-kalem-tablo tbody tr:last-child { border-bottom:none; }
+.ngrc-kalem-tablo tbody tr:hover { background:#fafafa; }
+.ngrc-kalem-tablo td { padding:8px 12px; vertical-align:middle; }
+.ngrc-kalem-tablo tfoot td {
+  padding:9px 12px; font-size:12px; font-weight:700;
+  background:#f9fafb; border-top:2px solid #e5e7eb;
+}
+.ngrc-toplam-satir { background:#f9fafb; }
+
+.ngrc-sira { color:#9ca3af; font-size:11px; width:32px; text-align:center; }
+.ngrc-kod  { font-family:'Courier New',monospace; font-size:11px; color:#0891b2; font-weight:600; }
+.ngrc-stok-ad { margin-left:6px; color:#111827; }
+
+.ngrc-kat-rozet {
+  display:inline-block; padding:1px 6px; border-radius:5px;
+  font-size:10px; font-weight:600;
+}
+.ngrc-kat-hammadde { background:#dbeafe; color:#1d4ed8; }
+.ngrc-kat-katki    { background:#d1fae5; color:#065f46; }
+.ngrc-kat-boya     { background:#fae8ff; color:#7e22ce; }
+.ngrc-kat-recycle  { background:#ecfccb; color:#3f6212; }
+.ngrc-kat-diger    { background:#f1f5f9; color:#475569; }
+
+/* ── Hesap paneli ── */
+.ngrc-hesap-kart {
+  background:#fff; border:1px solid rgba(17,24,39,.06);
+  border-radius:12px; padding:20px;
+  box-shadow:0 2px 8px rgba(15,23,42,.04);
+}
+.ngrc-hesap-baslik {
+  font-size:15px; font-weight:700; color:#111827; margin-bottom:6px;
+}
+.ngrc-hesap-aciklama {
+  font-size:13px; color:#6b7280; margin-bottom:18px; line-height:1.6;
+}
+.ngrc-hesap-kontrol {
+  display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;
+  background:#f9fafb; border:1px solid #e5e7eb; border-radius:10px;
+  padding:16px; margin-bottom:18px;
+}
+.ngrc-hesap-kisa-butonlar {
+  display:flex; gap:6px; align-items:flex-end;
+}
+.ngrc-hzl-btn {
+  display:flex; flex-direction:column; align-items:center;
+  padding:6px 14px; border:1px solid #e5e7eb; border-radius:8px;
+  background:#fff; color:#374151; font-size:13px; font-weight:700;
+  cursor:pointer; line-height:1.3; transition:background .1s;
+}
+.ngrc-hzl-btn:hover { background:#f0fdf4; border-color:#16a34a; color:#15803d; }
+.ngrc-hzl-alt { font-size:10px; color:#9ca3af; font-weight:400; }
+.ngrc-hesap-ozet {
+  font-size:13px; color:#374151; background:#f0fdf4;
+  border:1px solid #bbf7d0; border-radius:8px;
+  padding:8px 14px; margin-bottom:12px;
+}
+</style>
+
+<script>
+// ── Sekme geçişi ──────────────────────────────────────────────
+const RC_SEKMELER = ['genel', 'recete', 'hesap'];
+function rcSekme(hedef) {
+  RC_SEKMELER.forEach(function(s) {
+    const el = document.getElementById('rc-sekme-' + s);
+    if (el) el.style.display = (s === hedef ? 'block' : 'none');
+  });
+  document.querySelectorAll('.ngsd-sekme-btn').forEach(function(btn) {
+    btn.classList.toggle('aktif', btn.dataset.sekme === hedef);
+  });
+  try { history.replaceState(null, '', '#' + hedef); } catch(e){}
+}
+(function(){
+  const hash = (location.hash||'#genel').replace('#','');
+  const h = RC_SEKMELER.indexOf(hash) >= 0 ? hash : 'genel';
+  rcSekme(h);
+})();
+
+// ── Renk varyantı seçimi ─────────────────────────────────────
+let _aktifRenk = null;
+function rcRenkSec(renkId) {
+  document.querySelectorAll('.ngrc-renk-btn').forEach(function(b){
+    b.classList.toggle('aktif', parseInt(b.dataset.renk) === renkId);
+  });
+  document.querySelectorAll('.ngrc-renk-panel').forEach(function(p){
+    p.style.display = (p.id === 'ngrc-panel-' + renkId) ? 'block' : 'none';
+  });
+  _aktifRenk = renkId;
+  // İlk boyutu otomatik seç
+  const panel = document.getElementById('ngrc-panel-' + renkId);
+  if (panel) {
+    const ilkBoyut = panel.querySelector('.ngrc-boyut-btn');
+    if (ilkBoyut) {
+      rcBoyutSec(renkId, parseInt(ilkBoyut.dataset.boyut));
+    }
+  }
+}
+// İlk rengi otomatik aç
+(function(){
+  const ilkRenk = document.querySelector('.ngrc-renk-btn');
+  if (ilkRenk) rcRenkSec(parseInt(ilkRenk.dataset.renk));
+})();
+
+// ── Boyut seçimi ──────────────────────────────────────────────
+function rcBoyutSec(renkId, boyutId) {
+  document.querySelectorAll('[data-renk="' + renkId + '"].ngrc-boyut-btn').forEach(function(b){
+    b.classList.toggle('aktif', parseInt(b.dataset.boyut) === boyutId);
+  });
+  // Tüm boyut panellerini kapat, seçileni aç
+  const panel = document.getElementById('ngrc-panel-' + renkId);
+  if (!panel) return;
+  panel.querySelectorAll('.ngrc-boyut-panel').forEach(function(p){
+    p.style.display = 'none';
+  });
+  const hedef = document.getElementById('ngrc-boyut-' + renkId + '-' + boyutId);
+  if (hedef) hedef.style.display = 'block';
+}
+
+// ── Deneme hesap paneli ───────────────────────────────────────
+// RC_AGAC: [{id, ad, renk, uretim_listesi:[{id, boyut, kalemler:[{stok_kod, stok_ad, miktar_kg}]}]}]
+
+function hsVaryantSec() {
+  const renkId = parseInt(document.getElementById('hs-renk').value) || 0;
+  const boyutSel = document.getElementById('hs-boyut');
+  boyutSel.innerHTML = '<option value="">— Seçin —</option>';
+
+  const rv = RC_AGAC.find(function(r){ return r.id === renkId; });
+  if (rv) {
+    rv.uretim_listesi.forEach(function(uv) {
+      const opt = document.createElement('option');
+      opt.value = uv.id;
+      opt.textContent = uv.boyut + ' (' + uv.kalemler.length + ' kalem)';
+      boyutSel.appendChild(opt);
+    });
+    if (rv.uretim_listesi.length === 1) {
+      boyutSel.value = rv.uretim_listesi[0].id;
+    }
+  }
+  hsHesapla();
+}
+
+function hsHizliSec(kg) {
+  document.getElementById('hs-hedef-kg').value = kg;
+  hsHesapla();
+}
+
+function hsHesapla() {
+  const renkId  = parseInt(document.getElementById('hs-renk').value) || 0;
+  const boyutId = parseInt(document.getElementById('hs-boyut').value) || 0;
+  const hedefKg = parseFloat(document.getElementById('hs-hedef-kg').value) || 0;
+
+  const sonucAlan = document.getElementById('hs-sonuc-alan');
+  const bosMsg    = document.getElementById('hs-bos-mesaj');
+
+  if (!renkId || !boyutId || hedefKg <= 0) {
+    sonucAlan.style.display = 'none';
+    bosMsg.style.display = 'block';
+    return;
+  }
+
+  const rv = RC_AGAC.find(function(r){ return r.id === renkId; });
+  if (!rv) return;
+  const uv = rv.uretim_listesi.find(function(u){ return u.id === boyutId; });
+  if (!uv || !uv.kalemler.length) {
+    sonucAlan.style.display = 'none';
+    bosMsg.style.display = 'block';
+    return;
+  }
+
+  const carpan = hedefKg / 100;
+  document.getElementById('hs-hedef-goster').textContent = hedefKg.toFixed(3);
+  document.getElementById('hs-carpan-goster').textContent = carpan.toFixed(5);
+
+  const tbody = document.getElementById('hs-tablo-body');
+  tbody.innerHTML = '';
+  let bazToplam = 0, hesapToplam = 0;
+
+  uv.kalemler.forEach(function(k, idx) {
+    const hesaplanan = k.miktar_kg * carpan;
+    bazToplam   += k.miktar_kg;
+    hesapToplam += hesaplanan;
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="ngrc-sira">' + (idx+1) + '</td>' +
+      '<td><span class="ngrc-kod">' + k.stok_kod + '</span>' +
+           '<span class="ngrc-stok-ad"> ' + k.stok_ad + '</span></td>' +
+      '<td class="ngsk-td-r">' + k.miktar_kg.toFixed(3) + '</td>' +
+      '<td class="ngsk-td-r"><strong>' + hesaplanan.toFixed(3) + '</strong>' +
+           '<span class="ngsk-birim"> KG</span></td>';
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('hs-baz-toplam').textContent   = bazToplam.toFixed(3);
+  document.getElementById('hs-hesap-toplam').textContent = hesapToplam.toFixed(3);
+
+  sonucAlan.style.display = 'block';
+  bosMsg.style.display    = 'none';
+}
+</script>
+{% endblock %}
