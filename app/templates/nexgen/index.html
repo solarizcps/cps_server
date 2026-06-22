@@ -45,11 +45,16 @@
         </svg>
       </div>
       <div class="ng-kart-icerik">
-        <div class="ng-kart-baslik">Depo & Stok</div>
-        <div class="ng-kart-aciklama">Hammadde depolarını ve anlık stok seviyelerini takip edin.</div>
+        <div class="ng-kart-baslik">Depo — Mal Kabul</div>
+        <div class="ng-kart-aciklama">Gelen hammaddeleri teslim alın, stok girişi oluşturun.</div>
         <div class="ng-kart-alt">
-          <span class="ng-yakinda">Yakında</span>
-          <a href="/nexgen/depo" class="ng-btn ng-btn-pasif">Aç</a>
+          {% if can_depo %}
+            <span class="ng-rozet-aktif">FAZ-3A Aktif</span>
+            <a href="/nexgen/depo/" class="ng-btn ng-btn-aktif">Aç</a>
+          {% else %}
+            <span class="ng-yakinda">Yetki Gerekli</span>
+            <a href="/nexgen/depo/" class="ng-btn ng-btn-pasif">Aç</a>
+          {% endif %}
         </div>
       </div>
     </div>
@@ -178,9 +183,7 @@
       <a href="/nexgen/yonetim/" class="ng-btn ng-btn-aktif ng-yonetim-btn">Aç</a>
     </div>
   </div>
-  {% endif %}
-
-  {# ── Diğer Alt Modüller ───────────────────────────────────── #}
+  {% endif %}  {# ── Diğer Alt Modüller ───────────────────────────────────── #}
   <div class="ng-diger-baslik">Diğer Modüller</div>
   <div class="ng-diger-list">
     <a href="/nexgen/stok-kartlari" class="ng-diger-item ng-diger-aktif">

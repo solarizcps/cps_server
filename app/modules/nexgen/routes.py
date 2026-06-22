@@ -6,6 +6,7 @@ FAZ-1A : Modül iskeleti, menü, yetki
 FAZ-1B : Stok Kart Master + Hareket Motoru altyapısı
 FAZ-2  : Satın Alma Merkezi — Tedarikçi CRUD + Sipariş akışı
 FAZ-2.6: Haftalık Fiyat Geçmişi — Excel import, preview/onay akışı
+FAZ-3A : Depo Mal Kabul — GIRIS hareketi Depo yetkisiyle
 
 Yetki kodları:
   nexgen.view                — modül geneli görüntüleme
@@ -21,8 +22,11 @@ Yetki kodları:
   nexgen.fiyat.manage        — fiyat girişi (manuel + Excel)
   nexgen.fiyat.approve       — batch onaylama
   nexgen.fiyat.admin         — fiyat pasife alma (sadece Yönetim)
+  nexgen.depo.view           — depo ekranı görüntüleme
+  nexgen.depo.giris          — mal kabul + GIRIS hareketi oluşturma
 
-KURAL: Bu modül nexgen_stok_hareket tablosuna HİÇBİR ZAMAN INSERT yapmaz.
+KURAL: nexgen_stok_hareket INSERT SADECE Depo mal kabulünde yapılır (FAZ-3A+).
+       Satın Alma, Fiyat, Yönetim ekranları stok hareketi oluşturmaz.
 """
 
 import sqlite3
@@ -80,8 +84,10 @@ def _mevcut_stok(con, kart_id):
 @yetki_gerekli('nexgen.view', 'can_view')
 def index():
     can_yonetim = yetki_var('nexgen.yonetim.manage', 'can_view')
+    can_depo    = yetki_var('nexgen.depo.view', 'can_view')
     return render_template('nexgen/index.html', active='nexgen',
-                           can_yonetim=can_yonetim)
+                           can_yonetim=can_yonetim,
+                           can_depo=can_depo)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -1857,4 +1863,263 @@ def api_yonetim_eslestirme_kaldir():
         con.close()
 
     return jsonify({"ok": True})
+
+
+# =============================================================
+# FAZ-3A — NexGen Depo Mal Kabul
+# =============================================================
+
+# ─────────────────────────────────────────────────────────────
+# Depo Ana Sayfa
+# GET /nexgen/depo/
+# Yetki: nexgen.depo.view can_view
+# ─────────────────────────────────────────────────────────────
+@nexgen_bp.route('/depo/')
+@yetki_gerekli('nexgen.depo.view', 'can_view')
+def depo():
+    can_giris = yetki_var('nexgen.depo.giris', 'can_create')
+    con = _db()
+    try:
+        # Bekleyen / kısmi siparişler
+        bekleyen_raw = con.execute("""
+            SELECT
+                ss.id           AS siparis_id,
+                ss.siparis_no,
+                ss.siparis_miktari_kg    AS siparis_kg,
+                ss.durum,
+                ss.beklenen_teslim,
+                ss.olusturma_tarihi,
+                t.id            AS tedarikci_id,
+                t.kod           AS ted_kod,
+                t.ad            AS ted_ad,
+                sk.id           AS stok_kart_id,
+                sk.kod          AS stok_kod,
+                sk.ad           AS stok_ad,
+                sk.birim,
+                COALESCE(
+                    (SELECT SUM(mk.miktar_kg)
+                     FROM nexgen_mal_kabul mk
+                     WHERE mk.satin_siparis_id = ss.id), 0
+                ) AS gelen_kg
+            FROM nexgen_satin_siparis ss
+            JOIN nexgen_tedarikci  t  ON t.id  = ss.tedarikci_id
+            JOIN nexgen_stok_kart  sk ON sk.id = ss.stok_kart_id
+            WHERE ss.durum IN ('BEKLIYOR', 'KISMI_TESLIM')
+              AND ss.onay_durumu = 'ONAYLANDI'
+            ORDER BY ss.beklenen_teslim ASC NULLS LAST, ss.id DESC
+        """).fetchall()
+
+        # Giriş geçmişi (son 100)
+        gecmis_raw = con.execute("""
+            SELECT
+                mk.id,
+                mk.miktar_kg,
+                mk.irsaliye_no,
+                mk.lot_no,
+                mk.kabul_tarihi,
+                mk.aciklama,
+                mk.satin_siparis_id,
+                ss.siparis_no,
+                t.kod  AS ted_kod,
+                t.ad   AS ted_ad,
+                sk.kod AS stok_kod,
+                sk.ad  AS stok_ad,
+                ku.KullaniciAdi AS kabul_eden_ad
+            FROM nexgen_mal_kabul mk
+            JOIN nexgen_tedarikci  t  ON t.id  = mk.tedarikci_id
+            JOIN nexgen_stok_kart  sk ON sk.id = mk.stok_kart_id
+            LEFT JOIN nexgen_satin_siparis ss ON ss.id = mk.satin_siparis_id
+            LEFT JOIN sistem_kullanici ku ON ku.Id = mk.kabul_eden_id
+            ORDER BY mk.kabul_tarihi DESC, mk.id DESC
+            LIMIT 100
+        """).fetchall()
+
+        # Tedarikçi ve stok listesi (direkt giriş modalı için)
+        tedarikciler_raw = con.execute(
+            "SELECT id, kod, ad FROM nexgen_tedarikci WHERE aktif=1 ORDER BY ad"
+        ).fetchall()
+        kartlar_raw = con.execute(
+            "SELECT id, kod, ad, birim FROM nexgen_stok_kart WHERE aktif=1 ORDER BY kod"
+        ).fetchall()
+
+        # KPI
+        bugun_giren_kg = con.execute("""
+            SELECT COALESCE(SUM(miktar_kg), 0)
+            FROM nexgen_mal_kabul
+            WHERE date(kabul_tarihi) = date('now')
+        """).fetchone()[0]
+        bu_hafta_kabul_say = con.execute("""
+            SELECT COUNT(*) FROM nexgen_mal_kabul
+            WHERE kabul_tarihi >= datetime('now', '-7 days')
+        """).fetchone()[0]
+
+    finally:
+        con.close()
+
+    bekleyen = []
+    for r in bekleyen_raw:
+        d = dict(r)
+        d['kalan_kg'] = round(d['siparis_kg'] - d['gelen_kg'], 3)
+        bekleyen.append(d)
+
+    return render_template(
+        'nexgen/depo.html',
+        active='nexgen',
+        can_giris=can_giris,
+        bekleyen=bekleyen,
+        gecmis=[dict(g) for g in gecmis_raw],
+        tedarikciler=[dict(t) for t in tedarikciler_raw],
+        kartlar=[dict(k) for k in kartlar_raw],
+        bugun_giren_kg=round(bugun_giren_kg, 1),
+        bu_hafta_kabul_say=bu_hafta_kabul_say,
+        bekleyen_say=len(bekleyen),
+    )
+
+
+# ─────────────────────────────────────────────────────────────
+# API — Mal Kabul
+# POST /nexgen/api/depo/mal-kabul
+# Yetki: nexgen.depo.giris can_create
+#
+# Kurallar:
+#   1) nexgen_mal_kabul INSERT (belge)
+#   2) nexgen_stok_hareket INSERT hareket_tipi=GIRIS
+#   3) Siparişe bağlıysa sipariş durum güncelle
+#   4) Fiyat tablolarına dokunulmaz
+# ─────────────────────────────────────────────────────────────
+@nexgen_bp.route('/api/depo/mal-kabul', methods=['POST'])
+@yetki_gerekli('nexgen.depo.giris', 'can_create')
+def api_depo_mal_kabul():
+    d = request.get_json(silent=True) or {}
+
+    tedarikci_id   = d.get('tedarikci_id')
+    stok_kart_id   = d.get('stok_kart_id')
+    miktar_kg      = d.get('miktar_kg')
+    irsaliye_no    = d.get('irsaliye_no', '').strip() or None
+    lot_no         = d.get('lot_no', '').strip() or None
+    aciklama       = d.get('aciklama', '').strip() or None
+    siparis_id     = d.get('satin_siparis_id') or None  # None → direkt giriş
+
+    # Zorunlu alan kontrolü
+    if not tedarikci_id or not stok_kart_id or not miktar_kg:
+        return jsonify({"ok": False, "hata": "tedarikci_id, stok_kart_id ve miktar_kg zorunlu"}), 400
+    try:
+        miktar_kg = float(miktar_kg)
+        if miktar_kg <= 0:
+            raise ValueError
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "hata": "miktar_kg sıfırdan büyük olmalı"}), 400
+
+    kullanici_id = _kullanici_id()
+    con = _db()
+    try:
+        # Tedarikçi ve stok kartı var mı?
+        ted = con.execute("SELECT id FROM nexgen_tedarikci WHERE id=?", (tedarikci_id,)).fetchone()
+        if not ted:
+            return jsonify({"ok": False, "hata": "Tedarikçi bulunamadı"}), 404
+        kart = con.execute("SELECT id, ad FROM nexgen_stok_kart WHERE id=?", (stok_kart_id,)).fetchone()
+        if not kart:
+            return jsonify({"ok": False, "hata": "Stok kartı bulunamadı"}), 404
+
+        # Siparişe bağlıysa kontrol
+        siparis = None
+        if siparis_id:
+            siparis = con.execute(
+                "SELECT id, siparis_miktari_kg, durum, stok_kart_id, tedarikci_id FROM nexgen_satin_siparis WHERE id=?",
+                (siparis_id,)
+            ).fetchone()
+            if not siparis:
+                return jsonify({"ok": False, "hata": "Sipariş bulunamadı"}), 404
+            if siparis['durum'] in ('TAMAMLANDI', 'IPTAL'):
+                return jsonify({"ok": False, "hata": f"Sipariş durumu {siparis['durum']}, mal kabul yapılamaz"}), 400
+
+        # ── Stok mevcut durumu ─────────────────────────────────
+        onceki_stok = _mevcut_stok(con, stok_kart_id)
+        sonraki_stok = round(onceki_stok + miktar_kg, 3)
+
+        # ── referans_tip belirle ───────────────────────────────
+        if siparis_id:
+            referans_tip = 'SATIN_ALMA_SIPARIS'
+            ref_id = siparis_id
+        else:
+            referans_tip = 'DIREKT_GIRIS'
+            ref_id = None  # mal_kabul INSERT sonrası doldurulacak
+
+        # ── nexgen_stok_hareket INSERT ─────────────────────────
+        aciklama_hareket = aciklama or (
+            f"Mal kabul — "
+            + (f"Sipariş #{siparis_id}" if siparis_id else "Direkt giriş")
+            + (f" İrsaliye:{irsaliye_no}" if irsaliye_no else "")
+        )
+        con.execute("""
+            INSERT INTO nexgen_stok_hareket
+              (stok_kart_id, hareket_tipi, miktar_kg,
+               onceki_stok, sonraki_stok,
+               aciklama, referans_tip, referans_id,
+               olusturan_id, olusturma_tarihi)
+            VALUES (?, 'GIRIS', ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        """, (stok_kart_id, miktar_kg, onceki_stok, sonraki_stok,
+              aciklama_hareket, referans_tip, ref_id, kullanici_id))
+        hareket_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+        # ── nexgen_mal_kabul INSERT ────────────────────────────
+        con.execute("""
+            INSERT INTO nexgen_mal_kabul
+              (satin_siparis_id, tedarikci_id, stok_kart_id,
+               miktar_kg, irsaliye_no, lot_no,
+               kabul_eden_id, kabul_tarihi, aciklama, stok_hareket_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?)
+        """, (siparis_id, tedarikci_id, stok_kart_id,
+              miktar_kg, irsaliye_no, lot_no,
+              kullanici_id, aciklama, hareket_id))
+        mal_kabul_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+        # Direkt girişte referans_id = mal_kabul_id
+        if not siparis_id:
+            con.execute(
+                "UPDATE nexgen_stok_hareket SET referans_id=? WHERE id=?",
+                (mal_kabul_id, hareket_id)
+            )
+
+        # ── Sipariş durumunu güncelle ──────────────────────────
+        yeni_durum = None
+        toplam_gelen = None
+        if siparis and siparis_id:
+            toplam_gelen_row = con.execute(
+                "SELECT COALESCE(SUM(miktar_kg), 0) FROM nexgen_mal_kabul WHERE satin_siparis_id=?",
+                (siparis_id,)
+            ).fetchone()[0]
+            toplam_gelen = round(toplam_gelen_row, 3)
+
+            if toplam_gelen >= siparis['siparis_miktari_kg']:
+                yeni_durum = 'TAMAMLANDI'
+            else:
+                yeni_durum = 'KISMI_TESLIM'
+
+            con.execute(
+                "UPDATE nexgen_satin_siparis SET durum=? WHERE id=?",
+                (yeni_durum, siparis_id)
+            )
+
+        con.commit()
+
+    except Exception as e:
+        con.close()
+        return jsonify({"ok": False, "hata": str(e)}), 500
+    finally:
+        con.close()
+
+    sonuc = {
+        "ok": True,
+        "mal_kabul_id": mal_kabul_id,
+        "hareket_id": hareket_id,
+        "onceki_stok": onceki_stok,
+        "sonraki_stok": sonraki_stok,
+        "miktar_kg": miktar_kg,
+    }
+    if yeni_durum:
+        sonuc["siparis_yeni_durum"] = yeni_durum
+        sonuc["toplam_gelen_kg"] = toplam_gelen
+    return jsonify(sonuc)
+
 

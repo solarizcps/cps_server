@@ -1,0 +1,649 @@
+{% extends "base.html" %}
+{% set page_title = "NexGen Depo — Mal Kabul" %}
+
+{% block content %}
+<div class="ng-sayfa">
+
+  {# ── Breadcrumb ─────────────────────────────────────────── #}
+  <div class="ng-baslik-blok">
+    <div class="ng-baslik">
+      <a href="/nexgen/" class="ng-bc-link">NexGen</a>
+      <span class="ng-bc-sep">›</span>
+      <span class="ng-baslik-metin">Depo — Mal Kabul</span>
+      <span class="ngdp-rozet-depo">Depo</span>
+    </div>
+    <div class="ngdp-baslik-aciklama">
+      Gelen hammaddeleri teslim alın. Mal kabul yapıldığında stok hareketi otomatik oluşur.
+    </div>
+  </div>
+
+  {# ── KPI Kartları ─────────────────────────────────────────── #}
+  <div class="ngdp-kpi-grid">
+    <div class="ngdp-kpi">
+      <div class="ngdp-kpi-deger">{{ bekleyen_say }}</div>
+      <div class="ngdp-kpi-etiket">Bekleyen Sipariş</div>
+    </div>
+    <div class="ngdp-kpi ngdp-kpi-yesil">
+      <div class="ngdp-kpi-deger">{{ "%.0f"|format(bugun_giren_kg) }} KG</div>
+      <div class="ngdp-kpi-etiket">Bugün Giren</div>
+    </div>
+    <div class="ngdp-kpi">
+      <div class="ngdp-kpi-deger">{{ bu_hafta_kabul_say }}</div>
+      <div class="ngdp-kpi-etiket">Bu Hafta Kabul</div>
+    </div>
+  </div>
+
+  {# ── Sekme Navigasyon ─────────────────────────────────────── #}
+  <div class="ngsd-sekme-bar">
+    <button class="ngsd-sekme-btn" data-sekme="bekleyen" onclick="sekmeGec('bekleyen')">
+      Bekleyen Siparişler
+      {% if bekleyen_say %}
+      <span class="ngsd-sekme-sayac ngsd-sayac-turuncu">{{ bekleyen_say }}</span>
+      {% endif %}
+    </button>
+    <button class="ngsd-sekme-btn" data-sekme="direkt" onclick="sekmeGec('direkt')">
+      Direkt Giriş
+    </button>
+    <button class="ngsd-sekme-btn" data-sekme="gecmis" onclick="sekmeGec('gecmis')">
+      Giriş Geçmişi
+      <span class="ngsd-sekme-sayac">{{ gecmis|length }}</span>
+    </button>
+  </div>
+
+  {# ═══════════════════════════════════════════════════════════ #}
+  {# SEKME 1 — BEKLEYen SİPARİŞLER                              #}
+  {# ═══════════════════════════════════════════════════════════ #}
+  <div id="ngsd-sekme-bekleyen" class="ngsd-sekme-icerik">
+
+    {% if not bekleyen %}
+    <div class="ngsd-placeholder-kart">
+      <div class="ngsd-placeholder-ikon">📦</div>
+      <div class="ngsd-placeholder-baslik">Bekleyen Sipariş Yok</div>
+      <div class="ngsd-placeholder-aciklama">
+        Onaylanmış ve teslim bekleyen sipariş bulunmuyor.<br>
+        Onaylı siparişler burada listelenir.
+      </div>
+    </div>
+    {% else %}
+    <div class="ngsd-hrt-cerceve">
+      <table class="ngsd-hrt-tablo" id="bekleyenTablo">
+        <thead>
+          <tr>
+            <th>Sipariş No</th>
+            <th>Tedarikçi</th>
+            <th>Hammadde</th>
+            <th class="ngsd-th-r">Sipariş KG</th>
+            <th class="ngsd-th-r">Gelen KG</th>
+            <th class="ngsd-th-r">Kalan KG</th>
+            <th>Durum</th>
+            <th>Beklenen Teslim</th>
+            {% if can_giris %}<th>İşlem</th>{% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in bekleyen %}
+          <tr>
+            <td class="ngsd-mono ngsd-td-tarih">{{ s.siparis_no or s.siparis_id }}</td>
+            <td>{{ s.ted_ad }}</td>
+            <td>
+              <span class="ngsd-mono" style="font-size:11px;color:#0891b2;">{{ s.stok_kod }}</span>
+              <span>{{ s.stok_ad }}</span>
+            </td>
+            <td class="ngsd-td-r ngsd-sayi">
+              {{ "%.0f"|format(s.siparis_kg) }}
+              <span class="ngsd-birim-kucuk">{{ s.birim }}</span>
+            </td>
+            <td class="ngsd-td-r ngsd-sayi ngdp-gelen">
+              {{ "%.0f"|format(s.gelen_kg) }}
+              <span class="ngsd-birim-kucuk">{{ s.birim }}</span>
+            </td>
+            <td class="ngsd-td-r ngsd-sayi {% if s.kalan_kg > 0 %}ngdp-kalan{% endif %}">
+              {{ "%.0f"|format(s.kalan_kg) }}
+              <span class="ngsd-birim-kucuk">{{ s.birim }}</span>
+            </td>
+            <td>
+              {% if s.durum == 'BEKLIYOR' %}
+                <span class="ngdp-durum ngdp-durum-bekliyor">Bekliyor</span>
+              {% elif s.durum == 'KISMI_TESLIM' %}
+                <span class="ngdp-durum ngdp-durum-kismi">Kısmi Teslim</span>
+              {% else %}
+                <span class="ngdp-durum">{{ s.durum }}</span>
+              {% endif %}
+            </td>
+            <td class="ngsd-td-tarih">
+              {{ s.beklenen_teslim[:10] if s.beklenen_teslim else '—' }}
+            </td>
+            {% if can_giris %}
+            <td>
+              <button class="ngdp-btn-kabul"
+                onclick='malKabulModalAc({{ s | tojson }})'>
+                Mal Kabul
+              </button>
+            </td>
+            {% endif %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+
+  {# ═══════════════════════════════════════════════════════════ #}
+  {# SEKME 2 — DİREKT GİRİŞ                                     #}
+  {# ═══════════════════════════════════════════════════════════ #}
+  <div id="ngsd-sekme-direkt" class="ngsd-sekme-icerik" style="display:none;">
+
+    {% if not can_giris %}
+    <div class="ngsd-placeholder-kart">
+      <div class="ngsd-placeholder-ikon">🔒</div>
+      <div class="ngsd-placeholder-baslik">Yetki Gerekli</div>
+      <div class="ngsd-placeholder-aciklama">Direkt giriş yapmak için depo mal kabul yetkisi gerekir.</div>
+    </div>
+    {% else %}
+    <div class="ngdp-direkt-form-kart">
+      <div class="ngdp-form-baslik">Sipariş Olmadan Direkt Mal Girişi</div>
+      <div id="direkt-hata"   class="ngsk-hata-alan"   style="display:none"></div>
+      <div id="direkt-basari" class="ngsk-basari-alan"  style="display:none"></div>
+
+      <div class="ngym-form-grid">
+        <div class="ngsk-fg">
+          <label>Tedarikçi <span class="ngsk-zorunlu">*</span></label>
+          <select id="dk-tedarikci">
+            <option value="">— Seçin —</option>
+            {% for t in tedarikciler %}
+            <option value="{{ t.id }}">{{ t.kod }} – {{ t.ad }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="ngsk-fg">
+          <label>Hammadde <span class="ngsk-zorunlu">*</span></label>
+          <select id="dk-stok">
+            <option value="">— Seçin —</option>
+            {% for k in kartlar %}
+            <option value="{{ k.id }}">{{ k.kod }} – {{ k.ad }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="ngsk-fg">
+          <label>Gelen KG <span class="ngsk-zorunlu">*</span></label>
+          <input type="number" id="dk-kg" min="0.001" step="0.001" placeholder="0.000">
+        </div>
+        <div class="ngsk-fg">
+          <label>İrsaliye No</label>
+          <input type="text" id="dk-irsaliye" placeholder="Örn: IRS-2024-001">
+        </div>
+        <div class="ngsk-fg">
+          <label>Lot No</label>
+          <input type="text" id="dk-lot" placeholder="Opsiyonel">
+        </div>
+        <div class="ngsk-fg ngym-fg-genis">
+          <label>Açıklama</label>
+          <input type="text" id="dk-aciklama" placeholder="Opsiyonel not">
+        </div>
+      </div>
+
+      <div style="padding:0 0 20px 0;display:flex;justify-content:flex-end;">
+        <button class="ngsk-btn-kaydet" id="dk-kaydet-btn" onclick="direktGirisKaydet()">
+          Girişi Kaydet
+        </button>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  {# ═══════════════════════════════════════════════════════════ #}
+  {# SEKME 3 — GİRİŞ GEÇMİŞİ                                    #}
+  {# ═══════════════════════════════════════════════════════════ #}
+  <div id="ngsd-sekme-gecmis" class="ngsd-sekme-icerik" style="display:none;">
+
+    {% if not gecmis %}
+    <div class="ngsd-placeholder-kart">
+      <div class="ngsd-placeholder-ikon">📋</div>
+      <div class="ngsd-placeholder-baslik">Giriş Geçmişi Boş</div>
+      <div class="ngsd-placeholder-aciklama">Henüz mal kabul yapılmamış.</div>
+    </div>
+    {% else %}
+    <div class="ngsd-hrt-cerceve">
+      <table class="ngsd-hrt-tablo">
+        <thead>
+          <tr>
+            <th>Tarih</th>
+            <th>Tedarikçi</th>
+            <th>Hammadde</th>
+            <th class="ngsd-th-r">KG</th>
+            <th>İrsaliye</th>
+            <th>Lot</th>
+            <th>Kabul Eden</th>
+            <th>Sipariş</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for g in gecmis %}
+          <tr>
+            <td class="ngsd-td-tarih">{{ g.kabul_tarihi[:16] if g.kabul_tarihi else '—' }}</td>
+            <td>{{ g.ted_ad }}</td>
+            <td>
+              <span class="ngsd-mono" style="font-size:11px;color:#0891b2;">{{ g.stok_kod }}</span>
+              {{ g.stok_ad }}
+            </td>
+            <td class="ngsd-td-r ngsd-sayi ngdp-gelen">+{{ "%.1f"|format(g.miktar_kg) }}</td>
+            <td class="ngsd-td-tarih">{{ g.irsaliye_no or '—' }}</td>
+            <td class="ngsd-td-tarih">{{ g.lot_no or '—' }}</td>
+            <td>{{ g.kabul_eden_ad or '—' }}</td>
+            <td>
+              {% if g.satin_siparis_id %}
+                <a href="/nexgen/satinalma/siparis/{{ g.satin_siparis_id }}"
+                   class="ngdp-sip-link">{{ g.siparis_no or g.satin_siparis_id }}</a>
+              {% else %}
+                <span style="color:#9ca3af;font-size:11px;">Direkt</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+
+</div>{# /.ng-sayfa #}
+
+{# ═══════════════════════════════════════════════════════════ #}
+{# MODAL — SİPARİŞE BAĞLI MAL KABUL                            #}
+{# ═══════════════════════════════════════════════════════════ #}
+<div id="ngdp-kabul-overlay" class="ngsk-overlay" onclick="ngdpKapat(event)">
+  <div class="ngsk-modal" onclick="event.stopPropagation()">
+    <div class="ngsk-modal-baslik">
+      <span id="kabul-modal-baslik">Mal Kabul</span>
+      <button class="ngsk-modal-kapat" onclick="ngdpKapat()">&times;</button>
+    </div>
+    <div id="kabul-modal-hata"   class="ngsk-hata-alan"   style="display:none"></div>
+    <div id="kabul-modal-basari" class="ngsk-basari-alan"  style="display:none"></div>
+
+    {# Sipariş özeti #}
+    <div id="kabul-siparis-ozet" class="ngdp-siparis-ozet">
+      <div class="ngdp-ozet-satir">
+        <span class="ngdp-ozet-label">Tedarikçi</span>
+        <span id="km-ted-ad">—</span>
+      </div>
+      <div class="ngdp-ozet-satir">
+        <span class="ngdp-ozet-label">Hammadde</span>
+        <span id="km-stok-ad">—</span>
+      </div>
+      <div class="ngdp-ozet-satir">
+        <span class="ngdp-ozet-label">Sipariş KG</span>
+        <span id="km-siparis-kg">—</span>
+      </div>
+      <div class="ngdp-ozet-satir">
+        <span class="ngdp-ozet-label">Gelen KG</span>
+        <span id="km-gelen-kg" style="color:#16a34a;font-weight:700;">—</span>
+      </div>
+      <div class="ngdp-ozet-satir">
+        <span class="ngdp-ozet-label">Kalan KG</span>
+        <span id="km-kalan-kg" style="color:#dc2626;font-weight:700;">—</span>
+      </div>
+    </div>
+
+    <input type="hidden" id="km-siparis-id">
+    <input type="hidden" id="km-tedarikci-id">
+    <input type="hidden" id="km-stok-kart-id">
+
+    <div style="padding:16px 20px;display:flex;flex-direction:column;gap:14px;">
+      <div class="ngsk-fg">
+        <label>Gelen KG <span class="ngsk-zorunlu">*</span></label>
+        <input type="number" id="km-kg" min="0.001" step="0.001" placeholder="0.000"
+               oninput="kalanHesapla()">
+        <small id="km-kg-uyari" style="color:#dc2626;display:none;"></small>
+      </div>
+      <div class="ngsk-fg">
+        <label>İrsaliye No</label>
+        <input type="text" id="km-irsaliye" placeholder="Örn: IRS-2024-001">
+      </div>
+      <div class="ngsk-fg">
+        <label>Lot No</label>
+        <input type="text" id="km-lot" placeholder="Opsiyonel">
+      </div>
+      <div class="ngsk-fg">
+        <label>Açıklama</label>
+        <input type="text" id="km-aciklama" placeholder="Opsiyonel not">
+      </div>
+    </div>
+
+    <div class="ngsk-modal-footer">
+      <button class="ngsk-btn-iptal" onclick="ngdpKapat()">İptal</button>
+      <button class="ngsk-btn-kaydet ngdp-btn-kabul-kaydet" id="km-kaydet-btn"
+              onclick="malKabulKaydet()">Teslim Al</button>
+    </div>
+  </div>
+</div>
+
+<style>
+/* ── Genel ── */
+.ng-sayfa { padding:22px 28px; background:#f6f7f9; min-height:100vh; box-sizing:border-box; }
+.ng-baslik-blok { margin-bottom:16px; }
+.ng-baslik { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.ng-bc-link { color:#f59e0b; text-decoration:none; font-size:13px; font-weight:500; }
+.ng-bc-link:hover { text-decoration:underline; }
+.ng-bc-sep { color:#9ca3af; font-size:13px; }
+.ng-baslik-metin { font-size:20px; font-weight:700; color:#111827; }
+.ngdp-rozet-depo {
+  display:inline-block; padding:2px 10px; border-radius:10px;
+  font-size:11px; font-weight:700;
+  background:#f0fdf4; color:#15803d;
+}
+.ngdp-baslik-aciklama { font-size:13px; color:#6b7280; margin-top:4px; }
+
+/* ── KPI ── */
+.ngdp-kpi-grid {
+  display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px;
+}
+.ngdp-kpi {
+  flex:1; min-width:140px;
+  background:#fff; border:1px solid rgba(17,24,39,0.07);
+  border-radius:10px; padding:14px 18px;
+  box-shadow:0 1px 4px rgba(15,23,42,0.04);
+}
+.ngdp-kpi-yesil { border-left:3px solid #16a34a; }
+.ngdp-kpi-deger { font-size:22px; font-weight:800; color:#111827; }
+.ngdp-kpi-etiket { font-size:12px; color:#6b7280; margin-top:2px; }
+
+/* ── Sekme bar ── */
+.ngsd-sekme-bar {
+  display:flex; gap:2px; flex-wrap:wrap;
+  background:#fff; border:1px solid rgba(17,24,39,0.07);
+  border-radius:10px 10px 0 0; padding:6px 8px; margin-bottom:0;
+  box-shadow:0 1px 4px rgba(15,23,42,0.04);
+}
+.ngsd-sekme-btn {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:8px 16px; border:none; border-radius:7px;
+  background:transparent; color:#6b7280;
+  font-size:13px; font-weight:500; cursor:pointer;
+  transition:background .12s, color .12s; white-space:nowrap;
+}
+.ngsd-sekme-btn:hover { background:#f9fafb; color:#374151; }
+.ngsd-sekme-btn.aktif { background:#f0fdf4; color:#15803d; font-weight:700; }
+.ngsd-sekme-sayac {
+  display:inline-block; font-size:10px; font-weight:700;
+  background:#f1f5f9; color:#475569;
+  padding:1px 6px; border-radius:8px; min-width:18px; text-align:center;
+}
+.ngsd-sayac-turuncu { background:#fef3c7; color:#92400e; }
+.ngsd-sekme-icerik {
+  background:#fff; border:1px solid rgba(17,24,39,0.07);
+  border-top:none; border-radius:0 0 12px 12px;
+  padding:20px; margin-bottom:16px;
+  box-shadow:0 2px 8px rgba(15,23,42,0.04);
+}
+
+/* ── Tablo ── */
+.ngsd-hrt-cerceve {
+  background:#fff; border:1px solid rgba(17,24,39,0.06);
+  border-radius:10px; overflow-x:auto;
+  box-shadow:0 1px 4px rgba(15,23,42,0.03);
+}
+.ngsd-hrt-tablo {
+  width:100%; min-width:640px;
+  border-collapse:separate; border-spacing:0;
+  font-size:13px; color:#111827;
+}
+.ngsd-hrt-tablo thead th {
+  background:#f9fafb; padding:9px 14px;
+  font-size:11px; font-weight:600; color:#6b7280;
+  text-transform:uppercase; letter-spacing:0.4px;
+  border-bottom:1px solid #f0f1f3; white-space:nowrap;
+}
+.ngsd-th-r { text-align:right; }
+.ngsd-hrt-tablo tbody tr { border-bottom:1px solid #f3f4f6; }
+.ngsd-hrt-tablo tbody tr:last-child { border-bottom:none; }
+.ngsd-hrt-tablo tbody tr:hover { background:#fafafa; }
+.ngsd-hrt-tablo td { padding:9px 14px; vertical-align:middle; }
+.ngsd-td-r { text-align:right; white-space:nowrap; }
+.ngsd-td-tarih { font-size:12px; color:#6b7280; white-space:nowrap; }
+.ngsd-mono { font-family:'Courier New',monospace; color:#0891b2; font-size:12px; }
+.ngsd-sayi { text-align:right; }
+.ngsd-birim-kucuk { font-size:11px; color:#9ca3af; margin-left:2px; }
+.ngdp-gelen { color:#16a34a; font-weight:600; }
+.ngdp-kalan { color:#dc2626; font-weight:600; }
+
+/* Durum rozetleri */
+.ngdp-durum {
+  display:inline-block; padding:3px 9px; border-radius:8px;
+  font-size:11px; font-weight:700;
+}
+.ngdp-durum-bekliyor { background:#fef3c7; color:#92400e; }
+.ngdp-durum-kismi    { background:#dbeafe; color:#1d4ed8; }
+.ngdp-durum-tamam    { background:#f0fdf4; color:#15803d; }
+
+/* Kabul butonu */
+.ngdp-btn-kabul {
+  background:#16a34a; color:#fff; border:none; border-radius:7px;
+  padding:5px 12px; font-size:12px; font-weight:600; cursor:pointer;
+  white-space:nowrap;
+}
+.ngdp-btn-kabul:hover { background:#15803d; }
+
+/* Sipariş linki */
+.ngdp-sip-link { color:#0891b2; text-decoration:none; font-size:12px; }
+.ngdp-sip-link:hover { text-decoration:underline; }
+
+/* ── Direkt giriş formu ── */
+.ngdp-direkt-form-kart {
+  background:#f9fafb; border:1px solid #e5e7eb;
+  border-radius:12px; max-width:680px;
+}
+.ngdp-form-baslik {
+  padding:14px 20px; font-size:14px; font-weight:700;
+  color:#374151; border-bottom:1px solid #e5e7eb;
+}
+
+/* ── Modal ── */
+.ngsk-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1000; align-items:center; justify-content:center; }
+.ngsk-overlay.acik { display:flex; }
+.ngsk-modal { background:#fff; border-radius:14px; width:480px; max-width:95vw; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.18); }
+.ngsk-modal-baslik { display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid #f0f1f3; font-size:16px; font-weight:700; color:#111827; position:sticky; top:0; background:#fff; z-index:1; }
+.ngsk-modal-kapat { background:none; border:none; cursor:pointer; font-size:20px; color:#9ca3af; }
+.ngsk-hata-alan   { margin:12px 20px 0; padding:10px 14px; border-radius:8px; font-size:13px; background:#fef2f2; color:#dc2626; border:1px solid #fecaca; }
+.ngsk-basari-alan { margin:12px 20px 0; padding:10px 14px; border-radius:8px; font-size:13px; background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
+.ngsk-modal-footer { display:flex; justify-content:flex-end; gap:10px; padding:14px 20px; border-top:1px solid #f0f1f3; }
+.ngsk-btn-iptal  { background:#f3f4f6; color:#374151; border:none; border-radius:8px; padding:8px 18px; font-size:13px; font-weight:600; cursor:pointer; }
+.ngsk-btn-kaydet { background:#f59e0b; color:#fff; border:none; border-radius:8px; padding:8px 20px; font-size:13px; font-weight:600; cursor:pointer; }
+.ngsk-btn-kaydet:hover { background:#d97706; }
+.ngsk-btn-kaydet:disabled { background:#d1d5db; cursor:not-allowed; }
+.ngdp-btn-kabul-kaydet { background:#16a34a; }
+.ngdp-btn-kabul-kaydet:hover { background:#15803d; }
+
+/* Sipariş özeti kutusu */
+.ngdp-siparis-ozet {
+  margin:14px 20px 0; padding:12px 14px;
+  background:#f9fafb; border:1px solid #e5e7eb; border-radius:10px;
+}
+.ngdp-ozet-satir {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:4px 0; font-size:13px; border-bottom:1px solid #f0f1f3;
+}
+.ngdp-ozet-satir:last-child { border-bottom:none; }
+.ngdp-ozet-label { color:#6b7280; font-size:12px; font-weight:600; }
+
+/* Form */
+.ngym-form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px 16px; padding:20px; }
+.ngym-fg-genis  { grid-column:1/-1; }
+.ngsk-fg { display:flex; flex-direction:column; gap:4px; }
+.ngsk-fg label { font-size:12.5px; font-weight:600; color:#374151; }
+.ngsk-fg input, .ngsk-fg select { border:1px solid #e5e7eb; border-radius:7px; padding:7px 10px; font-size:13.5px; color:#111827; outline:none; background:#fff; }
+.ngsk-fg input:focus, .ngsk-fg select:focus { border-color:#16a34a; }
+.ngsk-zorunlu { color:#ef4444; }
+
+/* Placeholder */
+.ngsd-placeholder-kart { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:48px 24px; text-align:center; }
+.ngsd-placeholder-ikon     { font-size:36px; margin-bottom:10px; }
+.ngsd-placeholder-baslik   { font-size:16px; font-weight:700; color:#374151; margin-bottom:8px; }
+.ngsd-placeholder-aciklama { font-size:13px; color:#9ca3af; line-height:1.6; }
+
+@media (max-width:640px) {
+  .ng-sayfa { padding:14px 10px; }
+  .ngdp-kpi-grid { flex-direction:column; }
+  .ngym-form-grid { grid-template-columns:1fr; }
+}
+</style>
+
+<script>
+const SEKMELER_DP = ['bekleyen', 'direkt', 'gecmis'];
+
+function sekmeGec(hedef) {
+  SEKMELER_DP.forEach(function(s) {
+    const el = document.getElementById('ngsd-sekme-' + s);
+    if (el) el.style.display = (s === hedef ? 'block' : 'none');
+  });
+  document.querySelectorAll('.ngsd-sekme-btn').forEach(function(btn) {
+    btn.classList.toggle('aktif', btn.dataset.sekme === hedef);
+  });
+  try { history.replaceState(null, '', '#' + hedef); } catch(e) {}
+}
+(function() {
+  const hash = (location.hash || '#bekleyen').replace('#', '');
+  const gecerli = SEKMELER_DP.indexOf(hash) >= 0 ? hash : 'bekleyen';
+  sekmeGec(gecerli);
+})();
+
+// Modal
+let _kmData = {};
+
+function malKabulModalAc(siparis) {
+  _kmData = siparis;
+  document.getElementById('kabul-modal-baslik').textContent =
+    'Mal Kabul — ' + (siparis.siparis_no || 'Sipariş #' + siparis.siparis_id);
+  document.getElementById('km-ted-ad').textContent   = siparis.ted_ad;
+  document.getElementById('km-stok-ad').textContent  = siparis.stok_kod + ' ' + siparis.stok_ad;
+  document.getElementById('km-siparis-kg').textContent = formatKg(siparis.siparis_kg) + ' KG';
+  document.getElementById('km-gelen-kg').textContent  = formatKg(siparis.gelen_kg)   + ' KG';
+  document.getElementById('km-kalan-kg').textContent  = formatKg(siparis.kalan_kg)   + ' KG';
+  document.getElementById('km-siparis-id').value    = siparis.siparis_id;
+  document.getElementById('km-tedarikci-id').value  = siparis.tedarikci_id;
+  document.getElementById('km-stok-kart-id').value  = siparis.stok_kart_id;
+  document.getElementById('km-kg').value      = '';
+  document.getElementById('km-irsaliye').value = '';
+  document.getElementById('km-lot').value      = '';
+  document.getElementById('km-aciklama').value = '';
+  document.getElementById('kabul-modal-hata').style.display   = 'none';
+  document.getElementById('kabul-modal-basari').style.display = 'none';
+  document.getElementById('km-kg-uyari').style.display = 'none';
+  document.getElementById('ngdp-kabul-overlay').classList.add('acik');
+}
+
+function ngdpKapat(e) {
+  if (e && e.target !== document.getElementById('ngdp-kabul-overlay')) return;
+  document.getElementById('ngdp-kabul-overlay').classList.remove('acik');
+}
+
+function kalanHesapla() {
+  const girilecek = parseFloat(document.getElementById('km-kg').value) || 0;
+  const kalan     = _kmData.kalan_kg || 0;
+  const uyari     = document.getElementById('km-kg-uyari');
+  if (girilecek > kalan + 0.001) {
+    uyari.textContent = 'Girilen KG kalan miktardan (' + formatKg(kalan) + ') fazla — fazla teslim kaydedilecek.';
+    uyari.style.display = 'block';
+  } else {
+    uyari.style.display = 'none';
+  }
+}
+
+function malKabulKaydet() {
+  const btn      = document.getElementById('km-kaydet-btn');
+  const hataDiv  = document.getElementById('kabul-modal-hata');
+  const basariDiv = document.getElementById('kabul-modal-basari');
+  hataDiv.style.display = 'none';
+  basariDiv.style.display = 'none';
+
+  const kg = parseFloat(document.getElementById('km-kg').value);
+  if (!kg || kg <= 0) { hataDiv.textContent = 'KG giriniz.'; hataDiv.style.display='block'; return; }
+
+  btn.disabled = true; btn.textContent = 'Kaydediliyor…';
+  fetch('/nexgen/api/depo/mal-kabul', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      satin_siparis_id: parseInt(document.getElementById('km-siparis-id').value),
+      tedarikci_id:     parseInt(document.getElementById('km-tedarikci-id').value),
+      stok_kart_id:     parseInt(document.getElementById('km-stok-kart-id').value),
+      miktar_kg:        kg,
+      irsaliye_no:      document.getElementById('km-irsaliye').value.trim(),
+      lot_no:           document.getElementById('km-lot').value.trim(),
+      aciklama:         document.getElementById('km-aciklama').value.trim(),
+    })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.ok) {
+      basariDiv.textContent = '✓ Teslim alındı. '
+        + formatKg(d.miktar_kg) + ' KG eklendi. '
+        + 'Yeni stok: ' + formatKg(d.sonraki_stok) + ' KG'
+        + (d.siparis_yeni_durum ? ' · Sipariş: ' + d.siparis_yeni_durum : '');
+      basariDiv.style.display = 'block';
+      setTimeout(function() { location.reload(); }, 1500);
+    } else {
+      hataDiv.textContent = d.hata || 'Hata.';
+      hataDiv.style.display = 'block';
+    }
+  })
+  .catch(function() { hataDiv.textContent = 'Bağlantı hatası.'; hataDiv.style.display = 'block'; })
+  .finally(function() { btn.textContent = 'Teslim Al'; btn.disabled = false; });
+}
+
+// Direkt giriş
+function direktGirisKaydet() {
+  const btn       = document.getElementById('dk-kaydet-btn');
+  const hataDiv   = document.getElementById('direkt-hata');
+  const basariDiv = document.getElementById('direkt-basari');
+  hataDiv.style.display   = 'none';
+  basariDiv.style.display = 'none';
+
+  const tedId  = parseInt(document.getElementById('dk-tedarikci').value);
+  const stokId = parseInt(document.getElementById('dk-stok').value);
+  const kg     = parseFloat(document.getElementById('dk-kg').value);
+
+  if (!tedId)  { hataDiv.textContent = 'Tedarikçi seçin.'; hataDiv.style.display='block'; return; }
+  if (!stokId) { hataDiv.textContent = 'Hammadde seçin.'; hataDiv.style.display='block'; return; }
+  if (!kg || kg <= 0) { hataDiv.textContent = 'KG giriniz.'; hataDiv.style.display='block'; return; }
+
+  btn.disabled = true; btn.textContent = 'Kaydediliyor…';
+  fetch('/nexgen/api/depo/mal-kabul', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      tedarikci_id:  tedId,
+      stok_kart_id:  stokId,
+      miktar_kg:     kg,
+      irsaliye_no:   document.getElementById('dk-irsaliye').value.trim(),
+      lot_no:        document.getElementById('dk-lot').value.trim(),
+      aciklama:      document.getElementById('dk-aciklama').value.trim(),
+    })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.ok) {
+      basariDiv.textContent = '✓ Giriş kaydedildi. '
+        + formatKg(d.miktar_kg) + ' KG. Yeni stok: ' + formatKg(d.sonraki_stok) + ' KG';
+      basariDiv.style.display = 'block';
+      ['dk-kg','dk-irsaliye','dk-lot','dk-aciklama'].forEach(function(id) {
+        document.getElementById(id).value = '';
+      });
+      document.getElementById('dk-tedarikci').value = '';
+      document.getElementById('dk-stok').value = '';
+      setTimeout(function() { location.reload(); }, 1500);
+    } else {
+      hataDiv.textContent = d.hata || 'Hata.';
+      hataDiv.style.display = 'block';
+    }
+  })
+  .catch(function() { hataDiv.textContent = 'Bağlantı hatası.'; hataDiv.style.display = 'block'; })
+  .finally(function() { btn.textContent = 'Girişi Kaydet'; btn.disabled = false; });
+}
+
+function formatKg(v) {
+  if (v === null || v === undefined) return '0';
+  return parseFloat(v).toLocaleString('tr-TR', { maximumFractionDigits: 1 });
+}
+</script>
+{% endblock %}
