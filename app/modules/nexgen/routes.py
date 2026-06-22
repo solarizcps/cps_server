@@ -589,7 +589,12 @@ def satinalma_index():
                    s.birim_fiyat, s.birim_fiyat_try, s.toplam_tutar_try,
                    s.vade_tarihi, s.aciklama,
                    t.ad AS tedarikci_ad, t.id AS tedarikci_id,
-                   k.kod AS stok_kod, k.ad AS stok_ad
+                   k.kod AS stok_kod, k.ad AS stok_ad,
+                   COALESCE(
+                       (SELECT SUM(mk.miktar_kg)
+                        FROM nexgen_mal_kabul mk
+                        WHERE mk.satin_siparis_id = s.id), 0
+                   ) AS gelen_kg
             FROM nexgen_satin_siparis s
             JOIN nexgen_tedarikci t ON t.id = s.tedarikci_id
             JOIN nexgen_stok_kart k ON k.id = s.stok_kart_id
@@ -619,7 +624,22 @@ def satinalma_index():
     can_ted_manage = yetki_var('nexgen.tedarikci.manage', 'can_create')
     can_fiyat_view = yetki_var('nexgen.fiyat.view', 'can_view')
 
-    siparisler = [dict(s) for s in siparisler_raw]
+    siparisler = []
+    for s in siparisler_raw:
+        row = dict(s)
+        siparis_kg = row.get('siparis_miktari_kg') or 0
+        gelen_kg   = row.get('gelen_kg') or 0
+        row['gelen_kg']  = round(gelen_kg, 3)
+        row['kalan_kg']  = round(siparis_kg - gelen_kg, 3)
+        # Teslim durumu DB'deki durum alanından okunur (depo mal kabul sonrası güncellendi)
+        # Görsel etiket için ayrıca hesapla
+        if gelen_kg <= 0:
+            row['teslim_durum'] = 'BEKLIYOR'
+        elif gelen_kg >= siparis_kg:
+            row['teslim_durum'] = 'TAMAMLANDI'
+        else:
+            row['teslim_durum'] = 'KISMI_TESLIM'
+        siparisler.append(row)
 
     return render_template(
         'nexgen/satinalma_index.html',

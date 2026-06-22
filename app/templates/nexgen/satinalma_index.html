@@ -125,9 +125,11 @@
           <th>Sipariş No</th>
           <th>Tedarikçi</th>
           <th>Hammadde</th>
-          <th class="ngsk-th-r">Miktar (KG)</th>
+          <th class="ngsk-th-r">Sipariş KG</th>
+          <th class="ngsk-th-r">Gelen KG</th>
+          <th class="ngsk-th-r">Kalan KG</th>
           <th>Onay</th>
-          <th>Durum</th>
+          <th>Teslim Durumu</th>
           <th>Teslim Tarihi</th>
           <th></th>
         </tr>
@@ -149,6 +151,22 @@
             <span class="ngsa-miktar">{{ '{:,.0f}'.format(s.siparis_miktari_kg) }}</span>
             <span class="ngsk-birim">KG</span>
           </td>
+          <td class="ngsk-td-r ngsa-gelen-hucre">
+            {% if s.gelen_kg > 0 %}
+              <span class="ngsa-gelen">{{ '{:,.0f}'.format(s.gelen_kg) }}</span>
+              <span class="ngsk-birim">KG</span>
+            {% else %}
+              <span class="ngsk-alt-bilgi">—</span>
+            {% endif %}
+          </td>
+          <td class="ngsk-td-r ngsa-kalan-hucre">
+            {% if s.durum in ('BEKLIYOR', 'KISMI_TESLIM') %}
+              <span class="ngsa-kalan-var">{{ '{:,.0f}'.format(s.kalan_kg) }}</span>
+              <span class="ngsk-birim">KG</span>
+            {% else %}
+              <span class="ngsk-alt-bilgi">—</span>
+            {% endif %}
+          </td>
           <td>
             <span class="ngsa-rozet ngsa-rozet-{{ s.onay_durumu|lower|replace('_','-') }}">
               {% if s.onay_durumu == 'TASLAK' %}Taslak
@@ -159,12 +177,11 @@
             </span>
           </td>
           <td>
-            <span class="ngsa-rozet ngsa-rozet-{{ s.durum|lower|replace('_','-') }}">
-              {% if s.durum == 'BEKLIYOR' %}Bekliyor
-              {% elif s.durum == 'KISMI_TESLIM' %}Kısmi
-              {% elif s.durum == 'TAMAMLANDI' %}Tamam
-              {% elif s.durum == 'IPTAL' %}İptal
-              {% else %}{{ s.durum }}{% endif %}
+            <span class="ngsa-rozet ngsa-rozet-{{ s.teslim_durum|lower|replace('_','-') }}">
+              {% if s.teslim_durum == 'BEKLIYOR' %}Bekliyor
+              {% elif s.teslim_durum == 'KISMI_TESLIM' %}Kısmi Teslim
+              {% elif s.teslim_durum == 'TAMAMLANDI' %}Tamamlandı
+              {% else %}{{ s.teslim_durum }}{% endif %}
             </span>
           </td>
           <td>
@@ -577,6 +594,12 @@
 .ngsa-rozet-kismi-teslim  { background:#fff7ed; color:#f97316; border-color:#fed7aa; }
 .ngsa-rozet-tamamlandi    { background:#f0fdf4; color:#16a34a; border-color:#bbf7d0; }
 .ngsa-rozet-iptal         { background:#f9fafb; color:#9ca3af; border-color:#e5e7eb; }
+
+/* Gelen / Kalan KG renkleri */
+.ngsa-gelen      { font-weight: 700; color: #16a34a; font-size: 13.5px; }
+.ngsa-kalan-var  { font-weight: 700; color: #f97316; font-size: 13.5px; }
+.ngsa-gelen-hucre  { min-width: 80px; }
+.ngsa-kalan-hucre  { min-width: 80px; }
 
 /* Toolbar ikinci buton (mor) */
 .ngsa-btn-mor {
