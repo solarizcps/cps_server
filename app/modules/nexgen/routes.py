@@ -156,8 +156,32 @@ def stok_detay(kart_id):
             LEFT JOIN sistem_kullanici sk ON sk.Id = h.olusturan_id
             WHERE h.stok_kart_id = ?
             ORDER BY h.id DESC
-            LIMIT 50
+            LIMIT 200
         """, (kart_id,)).fetchall()
+
+        # FAZ-2.7: Fiyat geçmişi — sadece nexgen.fiyat.admin yetkisiyle
+        # Yönetim / Adem / Alpay / Altan görür; Satın Alma / Depo / Üretim görmez
+        can_fiyat_admin = yetki_var('nexgen.fiyat.admin', 'can_view') or \
+                          yetki_var('nexgen.fiyat.admin', 'can_manage')
+        fiyat_gecmisi_raw = []
+        if can_fiyat_admin:
+            # nexgen_hammadde_fiyat tablosu FAZ-2.6'da oluşturuldu
+            try:
+                fiyat_gecmisi_raw = con.execute("""
+                    SELECT hf.id, hf.fiyat, hf.para_birimi, hf.kur, hf.fiyat_try,
+                           hf.vade_gun, hf.fiyat_tarihi, hf.kaynak, hf.aktif,
+                           hf.notlar, hf.olusturma_tarihi,
+                           t.ad  AS tedarikci_ad,  t.kod AS tedarikci_kod,
+                           sk.KullaniciAdi AS olusturan_ad
+                    FROM nexgen_hammadde_fiyat hf
+                    LEFT JOIN nexgen_tedarikci  t  ON t.id  = hf.tedarikci_id
+                    LEFT JOIN sistem_kullanici  sk ON sk.Id = hf.olusturan_id
+                    WHERE hf.stok_kart_id = ?
+                    ORDER BY hf.fiyat_tarihi DESC, hf.id DESC
+                    LIMIT 100
+                """, (kart_id,)).fetchall()
+            except Exception:
+                fiyat_gecmisi_raw = []
 
     finally:
         con.close()
@@ -173,7 +197,48 @@ def stok_detay(kart_id):
         durum = "normal"
 
     hareketler = [dict(h) for h in hareketler_raw]
-    can_manage = yetki_var('nexgen.stok.manage', 'can_manage') or yetki_var('nexgen.stok.manage', 'can_create')
+    can_manage  = yetki_var('nexgen.stok.manage', 'can_manage') or \
+                  yetki_var('nexgen.stok.manage', 'can_create')
+
+    # Hareket listelerini sekmelere göre ayır
+    GIRIS_TIPLERI = {'ACILIS_DEVIR', 'GIRIS', 'URETIM_CIKTI'}
+    CIKIS_TIPLERI = {'CIKIS', 'URETIM_TUKETIM', 'SEVK'}
+
+    girişler  = []
+    cikislar  = []
+    for h in hareketler:
+        tip = h.get('hareket_tipi', '')
+        kg  = h.get('miktar_kg', 0) or 0
+        if tip in GIRIS_TIPLERI or (tip == 'SAYIM_DUZELTME' and kg >= 0):
+            girişler.append(h)
+        elif tip in CIKIS_TIPLERI or (tip == 'SAYIM_DUZELTME' and kg < 0):
+            cikislar.append(h)
+        else:
+            girişler.append(h)  # bilinmeyen tipler giriş tarafında göster
+
+    # Fiyat geçmişi — önceki AKTİF fiyata göre fark/yüzde hesapla
+    # Pasif (aktif=0) kayıtlar fark hesabından atlanır; geçmişte görünür ama
+    # referans alınmaz ve kendileri için de fark gösterilmez.
+    fiyat_gecmisi = [dict(f) for f in fiyat_gecmisi_raw]
+    for i, f in enumerate(fiyat_gecmisi):
+        # Pasif kayıt — fark gösterme
+        if not f.get('aktif', 1):
+            f['fark'] = f['yuzde'] = None
+            continue
+        # Sonraki kayıtlar arasında ilk aktif olanı bul
+        onceki_fiyat = None
+        for j in range(i + 1, len(fiyat_gecmisi)):
+            kandidat = fiyat_gecmisi[j]
+            if kandidat.get('aktif', 1):
+                onceki_fiyat = kandidat.get('fiyat')
+                break
+        if onceki_fiyat:
+            fark   = round(f['fiyat'] - onceki_fiyat, 4)
+            yuzde  = round((fark / onceki_fiyat) * 100, 2)
+            f['fark']  = fark
+            f['yuzde'] = yuzde
+        else:
+            f['fark'] = f['yuzde'] = None
 
     return render_template(
         'nexgen/stok_detay.html',
@@ -182,7 +247,11 @@ def stok_detay(kart_id):
         mevcut_stok=ms,
         durum=durum,
         hareketler=hareketler,
+        girişler=girişler,
+        cikislar=cikislar,
         can_manage=can_manage,
+        can_fiyat_admin=can_fiyat_admin,
+        fiyat_gecmisi=fiyat_gecmisi,
     )
 
 

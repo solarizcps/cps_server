@@ -15,9 +15,8 @@
     </div>
   </div>
 
-  {# ── Kart Özet ────────────────────────────────────────────── #}
+  {# ── Kart Özet KPI Bar ─────────────────────────────────── #}
   <div class="ngsd-ozet-bar">
-
     <div class="ngsd-ozet-kart ngsd-stok-kart">
       <div class="ngsd-ozet-etiket">Mevcut Stok</div>
       <div class="ngsd-ozet-deger ngsd-stok-{{ durum }}">
@@ -60,7 +59,7 @@
 
     <div class="ngsd-ozet-kart">
       <div class="ngsd-ozet-etiket">Kod</div>
-      <div class="ngsd-ozet-deger ngsd-ozet-kucuk">{{ kart.kod }}</div>
+      <div class="ngsd-ozet-deger ngsd-ozet-kucuk ngsd-mono">{{ kart.kod }}</div>
     </div>
 
     <div class="ngsd-ozet-kart">
@@ -73,10 +72,9 @@
         {% endif %}
       </div>
     </div>
+  </div>
 
-  </div>{# /.ngsd-ozet-bar #}
-
-  {# ── Stok Bar (görsel) ─────────────────────────────────────── #}
+  {# ── Stok Bar ─────────────────────────────────────────────── #}
   {% if kart.minimum_stok > 0 %}
   <div class="ngsd-bar-wrap">
     {% set pct = [(mevcut_stok / (kart.minimum_stok * 2) * 100), 100] | min %}
@@ -92,124 +90,368 @@
   </div>
   {% endif %}
 
-  {# ── Ek Özellikler (FAZ-1C) ─────────────────────────────────── #}
-  {% set ek_var = kart.renk or kart.alt_kategori or kart.kalite_sinifi or kart.shore_degeri or kart.notlar %}
-  <div class="ngsd-ek-ozellik-kart">
-    <div class="ngsd-ek-baslik">Ek Özellikler</div>
-    <div class="ngsd-ek-grid">
-      <div class="ngsd-ek-satir">
-        <span class="ngsd-ek-etiket">Renk / Özellik</span>
-        <span class="ngsd-ek-deger">{{ kart.renk or '—' }}</span>
-      </div>
-      <div class="ngsd-ek-satir">
-        <span class="ngsd-ek-etiket">Alt Kategori</span>
-        <span class="ngsd-ek-deger">{{ kart.alt_kategori or '—' }}</span>
-      </div>
-      <div class="ngsd-ek-satir">
-        <span class="ngsd-ek-etiket">Kalite Sınıfı</span>
-        <span class="ngsd-ek-deger">{{ kart.kalite_sinifi or '—' }}</span>
-      </div>
-      <div class="ngsd-ek-satir">
-        <span class="ngsd-ek-etiket">Shore Değeri</span>
-        <span class="ngsd-ek-deger">{{ kart.shore_degeri or '—' }}</span>
-      </div>
-      <div class="ngsd-ek-satir ngsd-ek-satir-genis">
-        <span class="ngsd-ek-etiket">Notlar</span>
-        <span class="ngsd-ek-deger">{{ kart.notlar or '—' }}</span>
-      </div>
-    </div>
-  </div>
-
-  {# ── Manuel hareket sayfada uyarı notu (can_manage ise) ───── #}
-  {% if can_manage %}
-  <div class="ngsd-gecici-uyari ngsd-uyari-sayfa">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-         stroke-linecap="round" stroke-linejoin="round" width="15" height="15">
-      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-      <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-    </svg>
-    <span>Manuel hareket geçici altyapı işlemidir. Normal kullanımda giriş/çıkış <strong>fişleri</strong> kullanılacaktır.</span>
-  </div>
-  {% endif %}
-
-  {# ── Hareket Geçmişi Başlığı ───────────────────────────────── #}
-  <div class="ngsd-hrt-baslik-satir">
-    <div class="ngsd-hrt-baslik">Son Hareketler</div>
-    {% if can_manage %}
-    <button class="ngsk-btn-yeni" onclick="ngsdHrtModalAc()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-           stroke-linecap="round" stroke-linejoin="round" width="13" height="13">
-        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-      </svg>
-      Hareket Ekle
+  {# ── Sekme Navigasyon ─────────────────────────────────────── #}
+  <div class="ngsd-sekme-bar">
+    <button class="ngsd-sekme-btn" data-sekme="ozet" onclick="sekmeGec('ozet')">
+      Özet
+    </button>
+    <button class="ngsd-sekme-btn" data-sekme="girişler" onclick="sekmeGec('girişler')">
+      Girişler
+      <span class="ngsd-sekme-sayac">{{ girişler|length }}</span>
+    </button>
+    <button class="ngsd-sekme-btn" data-sekme="çıkışlar" onclick="sekmeGec('çıkışlar')">
+      Çıkışlar
+      <span class="ngsd-sekme-sayac ngsd-sayac-kirmizi">{{ cikislar|length }}</span>
+    </button>
+    {% if can_fiyat_admin %}
+    <button class="ngsd-sekme-btn" data-sekme="fiyat" onclick="sekmeGec('fiyat')">
+      Fiyat Geçmişi
+      <span class="ngsd-sekme-sayac ngsd-sayac-mavi">{{ fiyat_gecmisi|length }}</span>
     </button>
     {% endif %}
+    <button class="ngsd-sekme-btn" data-sekme="recete" onclick="sekmeGec('recete')">
+      Reçete Kullanımı
+      <span class="ngsd-sekme-soon">Yakında</span>
+    </button>
   </div>
 
-  {# ── Hareket Listesi ──────────────────────────────────────── #}
-  <div class="ngsd-hrt-cerceve">
-    {% if hareketler %}
-    <table class="ngsd-hrt-tablo">
-      <thead>
-        <tr>
-          <th>Tarih</th>
-          <th>Tip</th>
-          <th class="ngsd-th-r">Miktar</th>
-          <th class="ngsd-th-r">Sonraki Stok</th>
-          <th>Açıklama</th>
-          <th>Yapan</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for h in hareketler %}
-        <tr>
-          <td class="ngsd-td-tarih">
-            {{ h.olusturma_tarihi[:16] if h.olusturma_tarihi else '—' }}
-          </td>
-          <td>
-            <span class="ngsd-tip-rozet ngsd-tip-{{ h.hareket_tipi | lower | replace('_', '-') }}">
-              {{ h.hareket_tipi }}
-            </span>
-          </td>
-          <td class="ngsd-td-r">
-            {% if h.miktar_kg >= 0 %}
-              <span class="ngsd-miktar-artı">+{{ "%.1f"|format(h.miktar_kg) }}</span>
-            {% else %}
-              <span class="ngsd-miktar-eksi">{{ "%.1f"|format(h.miktar_kg) }}</span>
-            {% endif %}
-            <span class="ngsd-birim-kucuk">{{ kart.birim }}</span>
-          </td>
-          <td class="ngsd-td-r">
-            <span class="ngsd-sonraki">{{ "%.1f"|format(h.sonraki_stok) }}</span>
-            <span class="ngsd-birim-kucuk">{{ kart.birim }}</span>
-          </td>
-          <td class="ngsd-td-aciklama">{{ h.aciklama or '—' }}</td>
-          <td class="ngsd-td-yapan">{{ h.olusturan_ad or '—' }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    {% else %}
-    <div class="ngsk-bos">Henüz hareket kaydı yok.</div>
-    {% endif %}
+  {# ═══════════════════════════════════════════════════════════ #}
+  {# SEKME: ÖZET                                                 #}
+  {# ═══════════════════════════════════════════════════════════ #}
+  <div id="ngsd-sekme-ozet" class="ngsd-sekme-icerik">
+
+    {# Ek Özellikler #}
+    <div class="ngsd-ek-ozellik-kart">
+      <div class="ngsd-ek-baslik">Ek Özellikler</div>
+      <div class="ngsd-ek-grid">
+        <div class="ngsd-ek-satir">
+          <span class="ngsd-ek-etiket">Renk / Özellik</span>
+          <span class="ngsd-ek-deger">{{ kart.renk or '—' }}</span>
+        </div>
+        <div class="ngsd-ek-satir">
+          <span class="ngsd-ek-etiket">Alt Kategori</span>
+          <span class="ngsd-ek-deger">{{ kart.alt_kategori or '—' }}</span>
+        </div>
+        <div class="ngsd-ek-satir">
+          <span class="ngsd-ek-etiket">Kalite Sınıfı</span>
+          <span class="ngsd-ek-deger">{{ kart.kalite_sinifi or '—' }}</span>
+        </div>
+        <div class="ngsd-ek-satir">
+          <span class="ngsd-ek-etiket">Shore Değeri</span>
+          <span class="ngsd-ek-deger">{{ kart.shore_degeri or '—' }}</span>
+        </div>
+        <div class="ngsd-ek-satir ngsd-ek-satir-genis">
+          <span class="ngsd-ek-etiket">Notlar</span>
+          <span class="ngsd-ek-deger">{{ kart.notlar or '—' }}</span>
+        </div>
+      </div>
+    </div>
+
+    {# Son 3 Hareket #}
+    <div class="ngsd-hrt-baslik-satir">
+      <div class="ngsd-hrt-baslik">Son Hareketler</div>
+      {% if can_manage %}
+      <button class="ngsk-btn-yeni" onclick="ngsdHrtModalAc()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+             stroke-linecap="round" stroke-linejoin="round" width="13" height="13">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        Stok Düzeltme
+      </button>
+      {% endif %}
+    </div>
+    <div class="ngsd-hrt-cerceve">
+      {% set son3 = hareketler[:3] %}
+      {% if son3 %}
+      <table class="ngsd-hrt-tablo">
+        <thead>
+          <tr>
+            <th>Tarih</th><th>Tip</th>
+            <th class="ngsd-th-r">Miktar</th>
+            <th class="ngsd-th-r">Sonraki Stok</th>
+            <th>Açıklama</th><th>Yapan</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for h in son3 %}
+          <tr>
+            <td class="ngsd-td-tarih">{{ h.olusturma_tarihi[:16] if h.olusturma_tarihi else '—' }}</td>
+            <td>
+              <span class="ngsd-tip-rozet ngsd-tip-{{ h.hareket_tipi | lower | replace('_', '-') }}">
+                {{ h.hareket_tipi }}
+              </span>
+            </td>
+            <td class="ngsd-td-r">
+              {% if h.miktar_kg >= 0 %}
+                <span class="ngsd-miktar-artı">+{{ "%.1f"|format(h.miktar_kg) }}</span>
+              {% else %}
+                <span class="ngsd-miktar-eksi">{{ "%.1f"|format(h.miktar_kg) }}</span>
+              {% endif %}
+              <span class="ngsd-birim-kucuk">{{ kart.birim }}</span>
+            </td>
+            <td class="ngsd-td-r">
+              <span class="ngsd-sonraki">{{ "%.1f"|format(h.sonraki_stok) }}</span>
+              <span class="ngsd-birim-kucuk">{{ kart.birim }}</span>
+            </td>
+            <td class="ngsd-td-aciklama">{{ h.aciklama or '—' }}</td>
+            <td class="ngsd-td-yapan">{{ h.olusturan_ad or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if hareketler|length > 3 %}
+      <div class="ngsd-devami">
+        <a href="#" onclick="sekmeGec('girişler');return false;">
+          Tüm girişleri gör →
+        </a>
+        &nbsp;·&nbsp;
+        <a href="#" onclick="sekmeGec('çıkışlar');return false;">
+          Tüm çıkışları gör →
+        </a>
+      </div>
+      {% endif %}
+      {% else %}
+      <div class="ngsk-bos">Henüz hareket kaydı yok.</div>
+      {% endif %}
+    </div>
+
+  </div>{# /özet #}
+
+  {# ═══════════════════════════════════════════════════════════ #}
+  {# SEKME: GİRİŞLER                                            #}
+  {# ═══════════════════════════════════════════════════════════ #}
+  <div id="ngsd-sekme-girişler" class="ngsd-sekme-icerik" style="display:none;">
+
+    <div class="ngsd-hrt-baslik-satir">
+      <div class="ngsd-hrt-baslik">Girişler — {{ girişler|length }} kayıt</div>
+    </div>
+    <div class="ngsd-hrt-cerceve">
+      {% if girişler %}
+      <table class="ngsd-hrt-tablo">
+        <thead>
+          <tr>
+            <th>Tarih</th><th>Tip</th>
+            <th class="ngsd-th-r">+Miktar</th>
+            <th class="ngsd-th-r">Stok (Sonra)</th>
+            <th>Kaynak / Açıklama</th><th>Yapan</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for h in girişler %}
+          <tr>
+            <td class="ngsd-td-tarih">{{ h.olusturma_tarihi[:16] if h.olusturma_tarihi else '—' }}</td>
+            <td>
+              <span class="ngsd-tip-rozet ngsd-tip-{{ h.hareket_tipi | lower | replace('_', '-') }}">
+                {{ h.hareket_tipi }}
+              </span>
+            </td>
+            <td class="ngsd-td-r">
+              <span class="ngsd-miktar-artı">+{{ "%.1f"|format(h.miktar_kg|abs) }}</span>
+              <span class="ngsd-birim-kucuk">{{ kart.birim }}</span>
+            </td>
+            <td class="ngsd-td-r">
+              <span class="ngsd-sonraki">{{ "%.1f"|format(h.sonraki_stok) }}</span>
+              <span class="ngsd-birim-kucuk">{{ kart.birim }}</span>
+            </td>
+            <td class="ngsd-td-aciklama">
+              {{ h.aciklama or '—' }}
+              {% if h.referans_tip %}
+                <div class="ngsd-ref-bilgi">Ref: {{ h.referans_tip }}{% if h.referans_id %} #{{ h.referans_id }}{% endif %}</div>
+              {% endif %}
+            </td>
+            <td class="ngsd-td-yapan">{{ h.olusturan_ad or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="ngsk-bos">Henüz giriş hareketi yok.</div>
+      {% endif %}
+    </div>
+
+  </div>{# /girişler #}
+
+  {# ═══════════════════════════════════════════════════════════ #}
+  {# SEKME: ÇIKIŞLAR                                            #}
+  {# ═══════════════════════════════════════════════════════════ #}
+  <div id="ngsd-sekme-çıkışlar" class="ngsd-sekme-icerik" style="display:none;">
+
+    <div class="ngsd-hrt-baslik-satir">
+      <div class="ngsd-hrt-baslik">Çıkışlar — {{ cikislar|length }} kayıt</div>
+    </div>
+    <div class="ngsd-hrt-cerceve">
+      {% if cikislar %}
+      <table class="ngsd-hrt-tablo">
+        <thead>
+          <tr>
+            <th>Tarih</th><th>Tip</th>
+            <th class="ngsd-th-r">−Miktar</th>
+            <th class="ngsd-th-r">Stok (Sonra)</th>
+            <th>Kaynak / Açıklama</th><th>Yapan</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for h in cikislar %}
+          <tr>
+            <td class="ngsd-td-tarih">{{ h.olusturma_tarihi[:16] if h.olusturma_tarihi else '—' }}</td>
+            <td>
+              <span class="ngsd-tip-rozet ngsd-tip-{{ h.hareket_tipi | lower | replace('_', '-') }}">
+                {{ h.hareket_tipi }}
+              </span>
+            </td>
+            <td class="ngsd-td-r">
+              <span class="ngsd-miktar-eksi">{{ "%.1f"|format(h.miktar_kg|abs) }}</span>
+              <span class="ngsd-birim-kucuk">{{ kart.birim }}</span>
+            </td>
+            <td class="ngsd-td-r">
+              <span class="ngsd-sonraki">{{ "%.1f"|format(h.sonraki_stok) }}</span>
+              <span class="ngsd-birim-kucuk">{{ kart.birim }}</span>
+            </td>
+            <td class="ngsd-td-aciklama">
+              {{ h.aciklama or '—' }}
+              {% if h.referans_tip %}
+                <div class="ngsd-ref-bilgi">Ref: {{ h.referans_tip }}{% if h.referans_id %} #{{ h.referans_id }}{% endif %}</div>
+              {% endif %}
+            </td>
+            <td class="ngsd-td-yapan">{{ h.olusturan_ad or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="ngsk-bos">Henüz çıkış hareketi yok.</div>
+      {% endif %}
+    </div>
+
+  </div>{# /çıkışlar #}
+
+  {# ═══════════════════════════════════════════════════════════ #}
+  {# SEKME: FİYAT GEÇMİŞİ — sadece can_fiyat_admin             #}
+  {# ═══════════════════════════════════════════════════════════ #}
+  {% if can_fiyat_admin %}
+  <div id="ngsd-sekme-fiyat" class="ngsd-sekme-icerik" style="display:none;">
+
+    <div class="ngsd-hrt-baslik-satir">
+      <div class="ngsd-hrt-baslik">Fiyat Geçmişi — {{ fiyat_gecmisi|length }} kayıt</div>
+      <span class="ngsd-fiyat-uyari">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" width="12" height="12">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+        Yönetim görünümü
+      </span>
+    </div>
+
+    <div class="ngsd-hrt-cerceve">
+      {% if fiyat_gecmisi %}
+      <table class="ngsd-hrt-tablo ngsd-fiyat-tablo">
+        <thead>
+          <tr>
+            <th>Tarih</th>
+            <th>Tedarikçi</th>
+            <th class="ngsd-th-r">Fiyat</th>
+            <th class="ngsd-th-r">Kur</th>
+            <th class="ngsd-th-r">TRY</th>
+            <th>Vade</th>
+            <th class="ngsd-th-r">Fark</th>
+            <th class="ngsd-th-r">% Değ.</th>
+            <th>Kaynak</th>
+            <th>Durum</th>
+            <th>Giren</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for f in fiyat_gecmisi %}
+          {% set artis = f.fark is not none and f.fark > 0 %}
+          {% set dusu  = f.fark is not none and f.fark < 0 %}
+          <tr class="{% if not f.aktif %}ngsd-pasif-satir{% endif %}">
+            <td class="ngsd-td-tarih">{{ f.fiyat_tarihi or '—' }}</td>
+            <td>
+              <div class="ngsd-ted-satir">
+                <span class="ngfiy-ted-kod">{{ f.tedarikci_kod or '?' }}</span>
+                <span class="ngsd-ted-ad">{{ f.tedarikci_ad or '—' }}</span>
+              </div>
+            </td>
+            <td class="ngsd-td-r ngsd-fiyat-hucre">
+              <strong>{{ f.fiyat }}</strong>
+              <span class="ngsd-birim-kucuk">{{ f.para_birimi }}</span>
+            </td>
+            <td class="ngsd-td-r ngsd-sayi">{{ f.kur or '—' }}</td>
+            <td class="ngsd-td-r ngsd-sayi">
+              {% if f.fiyat_try %}
+                {{ "%.2f"|format(f.fiyat_try) }}
+                <span class="ngsd-birim-kucuk">₺</span>
+              {% else %}—{% endif %}
+            </td>
+            <td class="ngsd-sayi">{{ f.vade_gun or '—' }}{% if f.vade_gun %} g{% endif %}</td>
+            <td class="ngsd-td-r ngsd-fark-hucre {% if artis %}ngpv-artis{% elif dusu %}ngpv-dusu{% endif %}">
+              {% if f.fark is not none %}
+                {% if f.fark > 0 %}+{% endif %}{{ f.fark }}
+              {% else %}—{% endif %}
+            </td>
+            <td class="ngsd-td-r ngsd-fark-hucre {% if artis %}ngpv-artis{% elif dusu %}ngpv-dusu{% endif %}">
+              {% if f.yuzde is not none %}
+                {% if f.yuzde > 0 %}+{% endif %}{{ f.yuzde }}%
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              {% if f.kaynak == 'EXCEL_IMPORT' %}
+                <span class="ngfiy-badge ngfiy-badge-excel">Excel</span>
+              {% else %}
+                <span class="ngfiy-badge ngfiy-badge-manuel">Manuel</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if f.aktif %}
+                <span class="ngfiy-badge ngfiy-badge-aktif">Aktif</span>
+              {% else %}
+                <span class="ngfiy-badge ngfiy-badge-pasif">Pasif</span>
+              {% endif %}
+            </td>
+            <td class="ngsd-td-yapan">{{ f.olusturan_ad or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="ngsk-bos">Bu stok kartı için henüz fiyat kaydı yok.</div>
+      {% endif %}
+    </div>
+
+  </div>{# /fiyat #}
+  {% endif %}
+
+  {# ═══════════════════════════════════════════════════════════ #}
+  {# SEKME: REÇETE KULLANIMI — placeholder                      #}
+  {# ═══════════════════════════════════════════════════════════ #}
+  <div id="ngsd-sekme-recete" class="ngsd-sekme-icerik" style="display:none;">
+    <div class="ngsd-placeholder-kart">
+      <div class="ngsd-placeholder-ikon">⚗</div>
+      <div class="ngsd-placeholder-baslik">Reçete Kullanımı</div>
+      <div class="ngsd-placeholder-aciklama">
+        Bu sekme ilerleyen fazlarda aktif olacak.<br>
+        Bu hammaddenin hangi reçetelerde / formüllerde kullanıldığı burada görünecek.
+      </div>
+      <span class="ngsd-placeholder-etiket">FAZ-3 / Formül Motoru</span>
+    </div>
   </div>
 
 </div>{# /.ng-sayfa #}
 
-{# ── Hareket Ekleme Modal ─────────────────────────────────── #}
+{# ── Hareket Ekleme Modal (can_manage ise) ────────────────── #}
 {% if can_manage %}
 <div id="ngsd-hrt-overlay" class="ngsk-overlay" onclick="ngsdHrtKapat(event)">
   <div class="ngsk-modal" onclick="event.stopPropagation()">
     <div class="ngsk-modal-baslik">
-      <span>Hareket Ekle — {{ kart.ad }}</span>
+      <span>Stok Düzeltme — {{ kart.ad }}</span>
       <button class="ngsk-modal-kapat" onclick="ngsdHrtKapat()">&times;</button>
     </div>
 
     <div id="ngsd-hrt-hata" class="ngsk-hata-alan" style="display:none"></div>
     <div id="ngsd-hrt-basari" class="ngsk-basari-alan" style="display:none"></div>
 
-    {# ── Geçici altyapı uyarısı ── #}
-    <div class="ngsd-gecici-uyari">
+    <div class="ngsd-gecici-uyari" style="margin:12px 20px 0;">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
            stroke-linecap="round" stroke-linejoin="round" width="15" height="15">
         <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
@@ -219,7 +461,6 @@
     </div>
 
     <div style="padding:20px; display:flex; flex-direction:column; gap:14px;">
-
       <div class="ngsk-fg">
         <label>Hareket Tipi <span class="ngsk-zorunlu">*</span></label>
         <select id="hrt-tip">
@@ -228,18 +469,15 @@
           <option value="CIKIS">ÇIKIŞ — Genel çıkış</option>
         </select>
       </div>
-
       <div class="ngsk-fg">
         <label>Miktar ({{ kart.birim }}) <span class="ngsk-zorunlu">*</span></label>
         <input type="number" id="hrt-miktar" min="0.001" step="0.001" placeholder="Örn: 500">
         <small>Pozitif değer girin. Çıkış tipleri otomatik negatife çevrilir.</small>
       </div>
-
       <div class="ngsk-fg">
         <label>Açıklama</label>
         <input type="text" id="hrt-aciklama" placeholder="Örn: Tedarikçi XYZ, İrsaliye #123">
       </div>
-
     </div>
 
     <div class="ngsk-modal-footer">
@@ -251,117 +489,215 @@
 {% endif %}
 
 <style>
-/* ── Özet Bar ── */
-.ng-sayfa {
-  padding: 22px 28px; background: #f6f7f9;
-  min-height: 100vh; width: 100%; box-sizing: border-box;
-}
-.ng-baslik-blok { margin-bottom: 16px; }
-.ng-baslik { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.ng-bc-link { color: #f59e0b; text-decoration: none; font-size: 13px; font-weight: 500; }
-.ng-bc-link:hover { text-decoration: underline; }
-.ng-bc-sep { color: #9ca3af; font-size: 13px; }
-.ng-baslik-metin { font-size: 20px; font-weight: 700; color: #111827; }
+/* ── Genel sayfa ── */
+.ng-sayfa { padding:22px 28px; background:#f6f7f9; min-height:100vh; width:100%; box-sizing:border-box; }
+.ng-baslik-blok { margin-bottom:16px; }
+.ng-baslik { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.ng-bc-link { color:#f59e0b; text-decoration:none; font-size:13px; font-weight:500; }
+.ng-bc-link:hover { text-decoration:underline; }
+.ng-bc-sep { color:#9ca3af; font-size:13px; }
+.ng-baslik-metin { font-size:20px; font-weight:700; color:#111827; }
 
-.ngsd-ozet-bar {
-  display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;
-}
+/* ── Özet KPI bar ── */
+.ngsd-ozet-bar { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
 .ngsd-ozet-kart {
+  background:#fff; border:1px solid rgba(17,24,39,0.07);
+  border-radius:10px; padding:12px 18px; min-width:110px;
+  box-shadow:0 1px 4px rgba(15,23,42,0.04);
+}
+.ngsd-ozet-etiket { font-size:11px; color:#6b7280; font-weight:500; text-transform:uppercase; letter-spacing:0.3px; margin-bottom:4px; }
+.ngsd-ozet-deger { font-size:22px; font-weight:700; color:#111827; }
+.ngsd-ozet-kucuk { font-size:15px !important; }
+.ngsd-mono { font-family:'Courier New',monospace; font-size:14px !important; color:#0891b2 !important; }
+.ngsd-birim { font-size:12px; color:#9ca3af; margin-left:3px; }
+.ngsd-stok-normal { color:#16a34a; }
+.ngsd-stok-uyari  { color:#d97706; }
+.ngsd-stok-kritik { color:#dc2626; }
+.ngsd-krit { color:#dc2626; }
+.ngsd-stok-durum-etiket { margin-top:4px; }
+
+/* ── Stok bar ── */
+.ngsd-bar-wrap { margin-bottom:18px; }
+.ngsd-bar-bg { background:#f3f4f6; border-radius:6px; height:10px; overflow:hidden; margin-bottom:4px; }
+.ngsd-bar-fill { height:100%; border-radius:6px; transition:width 0.4s ease; }
+.ngsd-bar-normal { background:#22c55e; }
+.ngsd-bar-uyari  { background:#f59e0b; }
+.ngsd-bar-kritik { background:#ef4444; }
+.ngsd-bar-etiketler { display:flex; justify-content:space-between; font-size:11px; color:#9ca3af; }
+
+/* ── Sekme navigasyon ── */
+.ngsd-sekme-bar {
+  display: flex; gap: 2px; flex-wrap: wrap;
   background: #fff; border: 1px solid rgba(17,24,39,0.07);
-  border-radius: 10px; padding: 12px 18px; min-width: 110px;
+  border-radius: 10px 10px 0 0;
+  padding: 6px 8px;
+  margin-bottom: 0;
   box-shadow: 0 1px 4px rgba(15,23,42,0.04);
 }
-.ngsd-ozet-etiket { font-size: 11px; color: #6b7280; font-weight: 500; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 4px; }
-.ngsd-ozet-deger { font-size: 22px; font-weight: 700; color: #111827; }
-.ngsd-ozet-kucuk { font-size: 15px !important; }
-.ngsd-birim { font-size: 12px; color: #9ca3af; margin-left: 3px; }
-.ngsd-stok-normal  { color: #16a34a; }
-.ngsd-stok-uyari   { color: #d97706; }
-.ngsd-stok-kritik  { color: #dc2626; }
-.ngsd-krit { color: #dc2626; }
-.ngsd-stok-durum-etiket { margin-top: 4px; }
-
-/* stok bar */
-.ngsd-bar-wrap { margin-bottom: 18px; }
-.ngsd-bar-bg {
-  background: #f3f4f6; border-radius: 6px; height: 10px;
-  overflow: hidden; margin-bottom: 4px;
-}
-.ngsd-bar-fill {
-  height: 100%; border-radius: 6px;
-  transition: width 0.4s ease;
-}
-.ngsd-bar-normal  { background: #22c55e; }
-.ngsd-bar-uyari   { background: #f59e0b; }
-.ngsd-bar-kritik  { background: #ef4444; }
-.ngsd-bar-etiketler {
-  display: flex; justify-content: space-between;
-  font-size: 11px; color: #9ca3af;
-}
-
-/* hareket başlık satırı */
-.ngsd-hrt-baslik-satir {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 10px; flex-wrap: wrap; gap: 8px;
-}
-.ngsd-hrt-baslik { font-size: 15px; font-weight: 600; color: #111827; }
-
-/* hareket tablosu */
-.ngsd-hrt-cerceve {
-  background: #fff; border: 1px solid rgba(17,24,39,0.06);
-  border-radius: 12px; overflow-x: auto;
-  box-shadow: 0 2px 8px rgba(15,23,42,0.04);
-}
-.ngsd-hrt-tablo {
-  width: 100%; min-width: 620px;
-  border-collapse: separate; border-spacing: 0;
-  font-size: 13px; color: #111827;
-}
-.ngsd-hrt-tablo thead th {
-  background: #f9fafb; padding: 9px 14px;
-  font-size: 11px; font-weight: 600; color: #6b7280;
-  text-transform: uppercase; letter-spacing: 0.4px;
-  border-bottom: 1px solid #f0f1f3;
-}
-.ngsd-th-r { text-align: right; }
-.ngsd-hrt-tablo tbody tr { border-bottom: 1px solid #f3f4f6; }
-.ngsd-hrt-tablo tbody tr:last-child { border-bottom: none; }
-.ngsd-hrt-tablo tbody tr:hover { background: #fafafa; }
-.ngsd-hrt-tablo td { padding: 9px 14px; vertical-align: middle; }
-.ngsd-td-r { text-align: right; white-space: nowrap; }
-.ngsd-td-tarih { font-size: 12px; color: #6b7280; white-space: nowrap; }
-.ngsd-td-aciklama { font-size: 12.5px; max-width: 200px; }
-.ngsd-td-yapan { font-size: 12px; color: #6b7280; }
-
-/* hareket tipi rozetleri */
-.ngsd-tip-rozet {
-  display: inline-block; padding: 2px 7px; border-radius: 7px;
-  font-size: 10.5px; font-weight: 700; letter-spacing: 0.3px;
+.ngsd-sekme-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px; border: none; border-radius: 7px;
+  background: transparent; color: #6b7280;
+  font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: background .12s, color .12s;
   white-space: nowrap;
 }
-.ngsd-tip-giris            { background: #f0fdf4; color: #15803d; }
-.ngsd-tip-cikis            { background: #fef2f2; color: #dc2626; }
-.ngsd-tip-uretim-tuketim   { background: #fff7ed; color: #c2410c; }
-.ngsd-tip-uretim-cikti     { background: #f0fdf4; color: #166534; }
-.ngsd-tip-sayim-duzeltme   { background: #eff6ff; color: #1d4ed8; }
-.ngsd-tip-sevk             { background: #f5f3ff; color: #6d28d9; }
+.ngsd-sekme-btn:hover { background: #f9fafb; color: #374151; }
+.ngsd-sekme-btn.aktif {
+  background: #fef3c7; color: #92400e; font-weight: 700;
+}
+.ngsd-sekme-sayac {
+  display: inline-block; font-size: 10px; font-weight: 700;
+  background: #f1f5f9; color: #475569;
+  padding: 1px 6px; border-radius: 8px; min-width: 18px; text-align: center;
+}
+.ngsd-sayac-kirmizi { background: #fee2e2; color: #dc2626; }
+.ngsd-sayac-mavi    { background: #dbeafe; color: #1d4ed8; }
+.ngsd-sekme-soon {
+  font-size: 9px; font-weight: 700;
+  background: #f3f4f6; color: #9ca3af;
+  padding: 1px 5px; border-radius: 6px;
+}
 
-/* miktar renkleri */
-.ngsd-miktar-artı { color: #16a34a; font-weight: 700; }
-.ngsd-miktar-eksi { color: #dc2626; font-weight: 700; }
-.ngsd-sonraki { font-weight: 600; }
-.ngsd-birim-kucuk { font-size: 11px; color: #9ca3af; margin-left: 2px; }
+/* ── Sekme içerik alanı ── */
+.ngsd-sekme-icerik {
+  background: #fff; border: 1px solid rgba(17,24,39,0.07);
+  border-top: none; border-radius: 0 0 12px 12px;
+  padding: 20px; margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(15,23,42,0.04);
+}
 
-/* reused modal styles from stok_kartlari */
+/* ── Hareket başlık satırı ── */
+.ngsd-hrt-baslik-satir {
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:10px; flex-wrap:wrap; gap:8px;
+}
+.ngsd-hrt-baslik { font-size:15px; font-weight:600; color:#111827; }
+
+/* ── Hareket çerçeve + tablo ── */
+.ngsd-hrt-cerceve {
+  background:#fff; border:1px solid rgba(17,24,39,0.06);
+  border-radius:10px; overflow-x:auto;
+  box-shadow:0 1px 4px rgba(15,23,42,0.03);
+}
+.ngsd-hrt-tablo {
+  width:100%; min-width:580px;
+  border-collapse:separate; border-spacing:0;
+  font-size:13px; color:#111827;
+}
+.ngsd-hrt-tablo thead th {
+  background:#f9fafb; padding:9px 14px;
+  font-size:11px; font-weight:600; color:#6b7280;
+  text-transform:uppercase; letter-spacing:0.4px;
+  border-bottom:1px solid #f0f1f3; white-space:nowrap;
+}
+.ngsd-th-r { text-align:right; }
+.ngsd-hrt-tablo tbody tr { border-bottom:1px solid #f3f4f6; }
+.ngsd-hrt-tablo tbody tr:last-child { border-bottom:none; }
+.ngsd-hrt-tablo tbody tr:hover { background:#fafafa; }
+.ngsd-hrt-tablo td { padding:9px 14px; vertical-align:middle; }
+.ngsd-td-r       { text-align:right; white-space:nowrap; }
+.ngsd-td-tarih   { font-size:12px; color:#6b7280; white-space:nowrap; }
+.ngsd-td-aciklama{ font-size:12.5px; max-width:200px; }
+.ngsd-td-yapan   { font-size:12px; color:#6b7280; }
+.ngsd-sayi       { font-size:13px; color:#374151; text-align:right; }
+
+/* Hareket tipi rozetleri */
+.ngsd-tip-rozet {
+  display:inline-block; padding:2px 7px; border-radius:7px;
+  font-size:10.5px; font-weight:700; letter-spacing:0.3px; white-space:nowrap;
+}
+.ngsd-tip-giris            { background:#f0fdf4; color:#15803d; }
+.ngsd-tip-cikis            { background:#fef2f2; color:#dc2626; }
+.ngsd-tip-uretim-tuketim   { background:#fff7ed; color:#c2410c; }
+.ngsd-tip-uretim-cikti     { background:#f0fdf4; color:#166534; }
+.ngsd-tip-sayim-duzeltme   { background:#eff6ff; color:#1d4ed8; }
+.ngsd-tip-sevk             { background:#f5f3ff; color:#6d28d9; }
+.ngsd-tip-acilis-devir     { background:#fdf4ff; color:#7e22ce; }
+
+/* Miktar renkleri */
+.ngsd-miktar-artı { color:#16a34a; font-weight:700; }
+.ngsd-miktar-eksi { color:#dc2626; font-weight:700; }
+.ngsd-sonraki     { font-weight:600; }
+.ngsd-birim-kucuk { font-size:11px; color:#9ca3af; margin-left:2px; }
+.ngsd-pasif-satir { opacity:.4; }
+.ngsd-ref-bilgi   { font-size:10px; color:#94a3b8; margin-top:2px; }
+
+/* Devamı linki */
+.ngsd-devami {
+  padding:8px 14px; font-size:12px; border-top:1px solid #f0f1f3;
+  color:#64748b; text-align:center;
+}
+.ngsd-devami a { color:#0891b2; text-decoration:none; }
+.ngsd-devami a:hover { text-decoration:underline; }
+
+/* Fiyat sekmesi özel */
+.ngsd-fiyat-uyari {
+  display:inline-flex; align-items:center; gap:4px;
+  font-size:11px; color:#6b7280; font-style:italic;
+}
+.ngsd-fiyat-tablo { min-width:820px; }
+.ngsd-fiyat-hucre { font-size:14px; }
+.ngsd-fark-hucre  { font-size:13px; font-weight:600; }
+.ngpv-artis { color:#dc2626; }
+.ngpv-dusu  { color:#16a34a; }
+.ngsd-ted-satir { display:flex; align-items:center; gap:5px; flex-wrap:wrap; }
+.ngsd-ted-ad    { font-size:12px; color:#374151; }
+
+/* Fiyat badge */
+.ngfiy-badge {
+  display:inline-block; font-size:11px; font-weight:600;
+  padding:2px 8px; border-radius:10px;
+}
+.ngfiy-badge-excel  { background:#dbeafe; color:#1d4ed8; }
+.ngfiy-badge-manuel { background:#f1f5f9; color:#475569; }
+.ngfiy-badge-aktif  { background:#d1fae5; color:#065f46; }
+.ngfiy-badge-pasif  { background:#fee2e2; color:#991b1b; }
+.ngfiy-ted-kod {
+  font-size:10px; font-weight:700; color:#475569;
+  background:#f1f5f9; padding:1px 5px; border-radius:3px;
+}
+
+/* Reçete placeholder */
+.ngsd-placeholder-kart {
+  display:flex; flex-direction:column; align-items:center;
+  justify-content:center; padding:48px 24px; text-align:center;
+}
+.ngsd-placeholder-ikon    { font-size:36px; margin-bottom:10px; }
+.ngsd-placeholder-baslik  { font-size:16px; font-weight:700; color:#374151; margin-bottom:8px; }
+.ngsd-placeholder-aciklama{ font-size:13px; color:#9ca3af; line-height:1.6; }
+.ngsd-placeholder-etiket  {
+  margin-top:14px; display:inline-block; padding:4px 12px;
+  background:#f1f5f9; color:#64748b;
+  border-radius:8px; font-size:11px; font-weight:600;
+}
+
+/* Ek özellikler kartı */
+.ngsd-ek-ozellik-kart {
+  background:#fff; border:1px solid #e5e7eb;
+  border-radius:10px; padding:14px 18px; margin-bottom:16px;
+}
+.ngsd-ek-baslik {
+  font-size:12px; font-weight:700; color:#6b7280;
+  text-transform:uppercase; letter-spacing:.04em;
+  margin-bottom:10px; padding-bottom:6px; border-bottom:1px solid #f0f1f3;
+}
+.ngsd-ek-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:8px 20px; }
+.ngsd-ek-satir { display:flex; flex-direction:column; gap:2px; }
+.ngsd-ek-satir-genis { grid-column:1/-1; }
+.ngsd-ek-etiket { font-size:11px; color:#9ca3af; font-weight:600; text-transform:uppercase; letter-spacing:.03em; }
+.ngsd-ek-deger  { font-size:13.5px; color:#374151; font-weight:500; }
+
+/* Modal/overlay */
 .ngsk-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1000; align-items:center; justify-content:center; }
 .ngsk-overlay.acik { display:flex; }
 .ngsk-modal { background:#fff; border-radius:14px; width:480px; max-width:95vw; max-height:88vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.18); }
 .ngsk-modal-baslik { display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid #f0f1f3; font-size:16px; font-weight:700; color:#111827; position:sticky; top:0; background:#fff; z-index:1; }
-.ngsk-modal-kapat { background:none; border:none; cursor:pointer; font-size:20px; color:#9ca3af; line-height:1; padding:0 4px; }
+.ngsk-modal-kapat { background:none; border:none; cursor:pointer; font-size:20px; color:#9ca3af; }
 .ngsk-modal-kapat:hover { color:#374151; }
 .ngsk-hata-alan, .ngsk-basari-alan { margin:12px 20px 0; padding:10px 14px; border-radius:8px; font-size:13px; }
 .ngsk-hata-alan  { background:#fef2f2; color:#dc2626; border:1px solid #fecaca; }
-.ngsk-basari-alan { background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
+.ngsk-basari-alan{ background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
 .ngsk-fg { display:flex; flex-direction:column; gap:4px; }
 .ngsk-fg label { font-size:12.5px; font-weight:600; color:#374151; }
 .ngsk-fg input, .ngsk-fg select { border:1px solid #e5e7eb; border-radius:7px; padding:7px 10px; font-size:13.5px; color:#111827; outline:none; }
@@ -369,8 +705,8 @@
 .ngsk-fg small { font-size:11px; color:#9ca3af; }
 .ngsk-zorunlu { color:#ef4444; }
 .ngsk-modal-footer { display:flex; justify-content:flex-end; gap:10px; padding:14px 20px; border-top:1px solid #f0f1f3; }
-.ngsk-btn-iptal { background:#f3f4f6; color:#374151; border:none; border-radius:8px; padding:8px 18px; font-size:13px; font-weight:600; cursor:pointer; }
-.ngsk-btn-iptal:hover { background:#e5e7eb; }
+.ngsk-btn-iptal  { background:#f3f4f6; color:#374151; border:none; border-radius:8px; padding:8px 18px; font-size:13px; font-weight:600; cursor:pointer; }
+.ngsk-btn-iptal:hover  { background:#e5e7eb; }
 .ngsk-btn-kaydet { background:#f59e0b; color:#fff; border:none; border-radius:8px; padding:8px 20px; font-size:13px; font-weight:600; cursor:pointer; }
 .ngsk-btn-kaydet:hover { background:#d97706; }
 .ngsk-btn-kaydet:disabled { background:#d1d5db; cursor:not-allowed; }
@@ -378,90 +714,57 @@
 .ngsk-btn-yeni:hover { background:#d97706; }
 .ngsk-aktif-etiket { display:inline-block; padding:2px 8px; border-radius:8px; font-size:11px; font-weight:600; }
 .ngsk-aktif-evet { background:#f0fdf4; color:#16a34a; }
-.ngsk-aktif-hayir { background:#fef2f2; color:#dc2626; }
+.ngsk-aktif-hayir{ background:#fef2f2; color:#dc2626; }
 .ngsk-kat-rozet { display:inline-block; padding:2px 8px; border-radius:8px; font-size:11px; font-weight:600; }
 .ngsk-kat-hammadde { background:#eff6ff; color:#1d4ed8; }
 .ngsk-kat-mamul-compound { background:#f0fdf4; color:#15803d; }
 .ngsk-kat-recycle { background:#f5f3ff; color:#6d28d9; }
 .ngsk-kat-katk\u0131 { background:#fff7ed; color:#c2410c; }
-.ngsk-kat-boya { background:#fdf2f8; color:#9d174d; }
+.ngsk-kat-boya  { background:#fdf2f8; color:#9d174d; }
 .ngsk-kat-diger { background:#f3f4f6; color:#374151; }
-.ngsk-durum { font-size:12px; font-weight:600; }
-.ngsk-dur-normal { color:#16a34a; }
-.ngsk-dur-uyari  { color:#d97706; }
-.ngsk-dur-kritik { color:#dc2626; }
+.ngsk-durum     { font-size:12px; font-weight:600; }
+.ngsk-dur-normal{ color:#16a34a; }
+.ngsk-dur-uyari { color:#d97706; }
+.ngsk-dur-kritik{ color:#dc2626; }
 .ngsk-bos { padding:40px 24px; text-align:center; color:#9ca3af; font-size:14px; }
-
-/* Manuel hareket uyarısı */
 .ngsd-gecici-uyari {
-  display: flex; align-items: flex-start; gap: 9px;
-  margin: 12px 20px 0;
-  padding: 10px 14px;
-  background: #fffbeb;
-  border: 1px solid #fde68a;
-  border-radius: 8px;
-  font-size: 12.5px;
-  color: #92400e;
-  line-height: 1.5;
+  display:flex; align-items:flex-start; gap:9px;
+  padding:10px 14px; background:#fffbeb; border:1px solid #fde68a;
+  border-radius:8px; font-size:12.5px; color:#92400e; line-height:1.5;
 }
-.ngsd-gecici-uyari svg { color: #d97706; flex-shrink: 0; margin-top: 1px; }
-/* Sayfa üzerinde gösterilen uyarı (modal dışı) */
-.ngsd-uyari-sayfa {
-  margin: 0 0 14px 0;
-}
+.ngsd-gecici-uyari svg { color:#d97706; flex-shrink:0; margin-top:1px; }
 
-/* ── Ek Özellikler kartı (FAZ-1C) ── */
-.ngsd-ek-ozellik-kart {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 16px 20px;
-  margin-bottom: 16px;
-}
-.ngsd-ek-baslik {
-  font-size: 13px;
-  font-weight: 700;
-  color: #6b7280;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #f0f1f3;
-}
-.ngsd-ek-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 8px 20px;
-}
-.ngsd-ek-satir {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.ngsd-ek-satir-genis {
-  grid-column: 1 / -1;
-}
-.ngsd-ek-etiket {
-  font-size: 11px;
-  color: #9ca3af;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-.ngsd-ek-deger {
-  font-size: 13.5px;
-  color: #374151;
-  font-weight: 500;
-}
-
-@media (max-width: 600px) {
+@media (max-width:600px) {
   .ng-sayfa { padding:14px 10px; }
   .ngsd-ozet-bar { gap:8px; }
-  .ngsd-ek-grid { grid-template-columns: 1fr 1fr; }
+  .ngsd-sekme-btn { padding:7px 10px; font-size:12px; }
+  .ngsd-ek-grid { grid-template-columns:1fr 1fr; }
 }
 </style>
 
 <script>
+const SEKMELER = ['ozet', 'girişler', 'çıkışlar', 'fiyat', 'recete'];
+
+function sekmeGec(hedef) {
+  SEKMELER.forEach(function(s) {
+    const el = document.getElementById('ngsd-sekme-' + s);
+    if (el) el.style.display = (s === hedef ? 'block' : 'none');
+  });
+  document.querySelectorAll('.ngsd-sekme-btn').forEach(function(btn) {
+    btn.classList.toggle('aktif', btn.dataset.sekme === hedef);
+  });
+  // URL hash güncelle
+  try { history.replaceState(null, '', '#' + hedef); } catch(e) {}
+}
+
+// Sayfa yüklenince hash varsa o sekmeyi aç, yoksa özet
+(function() {
+  const hash = (location.hash || '#ozet').replace('#', '');
+  const gecerli = SEKMELER.indexOf(hash) >= 0 ? hash : 'ozet';
+  sekmeGec(gecerli);
+})();
+
+// ── Modal ──
 function ngsdHrtModalAc() {
   document.getElementById('ngsd-hrt-overlay').classList.add('acik');
 }
@@ -475,15 +778,15 @@ function ngsdHrtKapat(e) {
 }
 
 function ngsdHrtKaydet() {
-  const btn = document.getElementById('hrt-kaydet-btn');
-  const hataDiv = document.getElementById('ngsd-hrt-hata');
-  const basariDiv = document.getElementById('ngsd-hrt-basari');
+  const btn      = document.getElementById('hrt-kaydet-btn');
+  const hataDiv  = document.getElementById('ngsd-hrt-hata');
+  const basariDiv= document.getElementById('ngsd-hrt-basari');
   hataDiv.style.display = 'none';
   basariDiv.style.display = 'none';
 
   const tip     = document.getElementById('hrt-tip').value;
   const miktar  = parseFloat(document.getElementById('hrt-miktar').value || 0);
-  const aciklama = document.getElementById('hrt-aciklama').value.trim();
+  const aciklama= document.getElementById('hrt-aciklama').value.trim();
 
   if (!miktar || miktar <= 0) {
     hataDiv.textContent = 'Miktar sıfırdan büyük olmalıdır.';
@@ -504,22 +807,22 @@ function ngsdHrtKaydet() {
       aciklama: aciklama
     })
   })
-  .then(r => r.json())
-  .then(d => {
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
     if (d.ok) {
-      basariDiv.textContent = `✓ Hareket eklendi. Yeni stok: ${d.sonraki_stok} {{ kart.birim }}. Yenileniyor…`;
+      basariDiv.textContent = '✓ Hareket eklendi. Yeni stok: ' + d.sonraki_stok + ' {{ kart.birim }}. Yenileniyor…';
       basariDiv.style.display = 'block';
-      setTimeout(() => location.reload(), 1400);
+      setTimeout(function() { location.reload(); }, 1400);
     } else {
       hataDiv.textContent = d.hata || 'Bilinmeyen hata.';
       hataDiv.style.display = 'block';
     }
   })
-  .catch(() => {
+  .catch(function() {
     hataDiv.textContent = 'Sunucuya bağlanılamadı.';
     hataDiv.style.display = 'block';
   })
-  .finally(() => {
+  .finally(function() {
     btn.textContent = 'Kaydet';
     btn.disabled = false;
   });
