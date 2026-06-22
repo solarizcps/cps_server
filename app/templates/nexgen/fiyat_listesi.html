@@ -1,0 +1,553 @@
+{% extends "base.html" %}
+{% set page_title = "Fiyat Yönetimi — NexGen" %}
+
+{% block content %}
+<div class="ng-sayfa">
+
+  {# ── Başlık ──────────────────────────────────────────────── #}
+  <div class="ng-baslik-blok">
+    <div class="ng-baslik">
+      <a href="/nexgen/" class="ng-bc-link">NexGen</a>
+      <span class="ng-bc-sep">›</span>
+      <a href="/nexgen/satinalma" class="ng-bc-link">Satın Alma</a>
+      <span class="ng-bc-sep">›</span>
+      <span class="ng-baslik-metin">Fiyat Yönetimi</span>
+    </div>
+    <div class="ng-baslik-aciklama">Hammadde fiyat geçmişi. Her giriş yeni satır — eski fiyatlar silinmez.</div>
+  </div>
+
+  {# ── KPI Bar ─────────────────────────────────────────────── #}
+  <div class="ngsk-kpi-bar">
+    <div class="ngsk-kpi">
+      <span class="ngsk-kpi-deger">{{ fiyatlar|length }}</span>
+      <span class="ngsk-kpi-etiket">Toplam Fiyat Kaydı</span>
+    </div>
+    <div class="ngsk-kpi">
+      <span class="ngsk-kpi-deger ngsk-kpi-yesil">
+        {{ fiyatlar | selectattr('aktif', 'equalto', 1) | list | length }}
+      </span>
+      <span class="ngsk-kpi-etiket">Aktif Kayıt</span>
+    </div>
+    <div class="ngsk-kpi">
+      <span class="ngsk-kpi-deger ngsk-kpi-sari">
+        {{ fiyatlar | selectattr('kaynak', 'equalto', 'EXCEL_IMPORT') | list | length }}
+      </span>
+      <span class="ngsk-kpi-etiket">Excel Import</span>
+    </div>
+    <div class="ngsk-kpi">
+      <span class="ngsk-kpi-deger">
+        {{ fiyatlar | selectattr('kaynak', 'equalto', 'MANUEL') | list | length }}
+      </span>
+      <span class="ngsk-kpi-etiket">Manuel Giriş</span>
+    </div>
+    {% if son_batch %}
+      {% for b in son_batch %}
+        {% if b['durum'] == 'ONAY_BEKLIYOR' %}
+        <div class="ngsk-kpi ngfiy-kpi-bekliyor">
+          <span class="ngsk-kpi-deger ngsk-kpi-sari">{{ b['gecerli_satir'] }}</span>
+          <span class="ngsk-kpi-etiket">{{ b['hafta_kodu'] }} — Onay Bekliyor</span>
+          <a href="/nexgen/satinalma/fiyat-preview/{{ b['id'] }}" class="ngfiy-kpi-devam">Önizle →</a>
+        </div>
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+  </div>
+
+  {# ── Toolbar ─────────────────────────────────────────────── #}
+  <div class="ngsa-toolbar">
+    <div class="ngsa-toolbar-sol">
+      <select class="ngsk-select" id="filtreTed" onchange="filtrele()">
+        <option value="">Tüm Tedarikçiler</option>
+        {% for t in tedarikciler %}
+        <option value="{{ t['id'] }}" {% if filtre_tedarikci == t['id'] %}selected{% endif %}>{{ t['ad'] }}</option>
+        {% endfor %}
+      </select>
+      <select class="ngsk-select" id="filtreStok" onchange="filtrele()">
+        <option value="">Tüm Hammaddeler</option>
+        {% for k in stok_kartlari %}
+        <option value="{{ k['id'] }}" {% if filtre_stok == k['id'] %}selected{% endif %}>{{ k['kod'] }} — {{ k['ad'] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="ngsa-toolbar-sag">
+      {% if can_manage %}
+      <a href="/nexgen/satinalma/fiyat-sablonu-indir" class="ngsk-btn-yeni ngfiy-btn-indir">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+             stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Şablon İndir
+      </a>
+      <label class="ngsk-btn-yeni ngfiy-btn-yukle" style="cursor:pointer;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+             stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        Fiyat Yükle
+        <form id="yukleForm" action="/nexgen/satinalma/fiyat-yukle" method="post"
+              enctype="multipart/form-data" style="display:none;">
+          <input type="file" name="dosya" id="dosyaInput" accept=".xlsx"
+                 onchange="document.getElementById('yukleForm').submit()">
+        </form>
+      </label>
+      {% endif %}
+      <button class="ngsk-btn-ikincil" onclick="ngManuelModalAc()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+             stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        Manuel Fiyat
+      </button>
+    </div>
+  </div>
+
+  {# ── Onay bekleyen batch banner ──────────────────────────── #}
+  {% if son_batch %}
+    {% for b in son_batch %}
+      {% if b['durum'] == 'ONAY_BEKLIYOR' %}
+      <div class="ngfiy-batch-banner">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" width="15" height="15">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <span>
+          <strong>{{ b['hafta_kodu'] }}</strong> için yüklenen
+          <strong>{{ b['gecerli_satir'] }}</strong> fiyat onay bekliyor.
+        </span>
+        <a href="/nexgen/satinalma/fiyat-preview/{{ b['id'] }}" class="ngfiy-batch-banner-btn">
+          Önizleme ve Onay →
+        </a>
+      </div>
+      {% endif %}
+    {% endfor %}
+  {% endif %}
+
+  {# ── Fiyat Tablosu ───────────────────────────────────────── #}
+  <div class="ngsk-tablo-cerceve">
+    {% if fiyatlar %}
+    <table class="ngsk-tablo">
+      <thead>
+        <tr>
+          <th>Tedarikçi</th>
+          <th>Hammadde</th>
+          <th class="ngsk-th-r">Fiyat</th>
+          <th class="ngsk-th-r">Kur</th>
+          <th class="ngsk-th-r">TRY Karşılığı</th>
+          <th class="ngsk-th-r">Vade</th>
+          <th>Fiyat Tarihi</th>
+          <th>Kaynak</th>
+          <th>Durum</th>
+          {% if can_admin %}<th></th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in fiyatlar %}
+        <tr class="{% if not f['aktif'] %}ngfiy-pasif-satir{% endif %}">
+          <td>
+            <div class="ngfiy-ted-satir">
+              <span class="ngfiy-ted-kod">{{ f['tedarikci_kodu'] }}</span>
+              <span class="ngfiy-ted-ad">{{ f['tedarikci_ad'] }}</span>
+            </div>
+          </td>
+          <td>
+            <span class="ngfiy-stok-kod">{{ f['stok_kodu'] }}</span>
+            <div class="ngsk-alt-bilgi">{{ f['stok_ad'] }}</div>
+          </td>
+          <td class="ngsk-td-r">
+            <strong class="ngfiy-fiyat-rakam">{{ f['fiyat'] }}</strong>
+            <span class="ngfiy-pb">{{ f['para_birimi'] }}</span>
+          </td>
+          <td class="ngsk-td-r ngfiy-sayi">{{ f['kur'] or '—' }}</td>
+          <td class="ngsk-td-r ngfiy-sayi">
+            {% if f['fiyat_try'] %}
+              <strong>{{ "%.2f"|format(f['fiyat_try']) }}</strong>
+              <span class="ngfiy-pb">₺</span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="ngsk-td-r ngfiy-sayi">
+            {{ f['vade_gun'] or '—' }}{% if f['vade_gun'] %} gün{% endif %}
+          </td>
+          <td class="ngfiy-tarih">{{ f['fiyat_tarihi'] }}</td>
+          <td>
+            {% if f['kaynak'] == 'EXCEL_IMPORT' %}
+              <span class="ngsk-kat-rozet ngfiy-rozet-excel">Excel</span>
+            {% else %}
+              <span class="ngsk-kat-rozet ngfiy-rozet-manuel">Manuel</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if f['aktif'] %}
+              <span class="ngsk-kat-rozet ngfiy-rozet-aktif">Aktif</span>
+            {% else %}
+              <span class="ngsk-kat-rozet ngfiy-rozet-pasif">Pasif</span>
+            {% endif %}
+          </td>
+          {% if can_admin %}
+          <td>
+            {% if f['aktif'] %}
+            <button class="ngsk-btn-detay ngfiy-btn-pasife"
+                    onclick="pasifAl({{ f['id'] }})">Pasife Al</button>
+            {% endif %}
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="ngsk-bos-durum">
+      <div class="ngsk-bos-ikon">₺</div>
+      <div class="ngsk-bos-baslik">Henüz fiyat girişi yok</div>
+      <div class="ngsk-bos-aciklama">Şablonu indirip doldurun, ardından <strong>Fiyat Yükle</strong> ile yükleyin.</div>
+    </div>
+    {% endif %}
+  </div>
+
+</div>{# /ng-sayfa #}
+
+{# ── Manuel Fiyat Modal ──────────────────────────────────── #}
+<div id="ngManuelModal" class="ngsk-modal-bg" style="display:none;">
+  <div class="ngsk-modal" style="max-width:500px;">
+    <div class="ngsk-modal-baslik">
+      <span>Manuel Fiyat Girişi</span>
+      <button class="ngsk-modal-kapat" onclick="ngManuelModalKapat()">✕</button>
+    </div>
+    <div class="ngsk-modal-govde">
+      <div class="ngsk-form-grup">
+        <label>Tedarikçi <span style="color:#ef4444">*</span></label>
+        <select id="mTed" class="ngsk-input" required>
+          <option value="">— Seçin —</option>
+          {% for t in tedarikciler %}
+          <option value="{{ t['id'] }}">{{ t['ad'] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="ngsk-form-grup">
+        <label>Hammadde <span style="color:#ef4444">*</span></label>
+        <select id="mStok" class="ngsk-input" required>
+          <option value="">— Seçin —</option>
+          {% for k in stok_kartlari %}
+          <option value="{{ k['id'] }}">{{ k['kod'] }} — {{ k['ad'] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div style="display:flex;gap:10px;">
+        <div class="ngsk-form-grup" style="flex:2;">
+          <label>Fiyat <span style="color:#ef4444">*</span></label>
+          <input type="number" id="mFiyat" class="ngsk-input" step="0.0001" min="0.0001" placeholder="0.0000" required>
+        </div>
+        <div class="ngsk-form-grup" style="flex:1;">
+          <label>Para Birimi</label>
+          <select id="mPb" class="ngsk-input">
+            <option value="USD">USD</option>
+            <option value="EUR">EUR</option>
+            <option value="TRY">TRY</option>
+            <option value="GBP">GBP</option>
+            <option value="CNY">CNY</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;">
+        <div class="ngsk-form-grup" style="flex:1;">
+          <label>Kur (₺)</label>
+          <input type="number" id="mKur" class="ngsk-input" step="0.01" placeholder="Opsiyonel">
+        </div>
+        <div class="ngsk-form-grup" style="flex:1;">
+          <label>Vade (gün)</label>
+          <input type="number" id="mVade" class="ngsk-input" min="0" placeholder="30">
+        </div>
+      </div>
+      <div class="ngsk-form-grup">
+        <label>Fiyat Tarihi <span style="color:#ef4444">*</span></label>
+        <input type="date" id="mTarih" class="ngsk-input" required value="">
+        <script>document.getElementById('mTarih').value = new Date().toISOString().slice(0,10);</script>
+      </div>
+      <div class="ngsk-form-grup">
+        <label>Not</label>
+        <input type="text" id="mNot" class="ngsk-input" placeholder="Opsiyonel not">
+      </div>
+    </div>
+    <div class="ngsk-modal-alt">
+      <button class="ngsk-btn-iptal" onclick="ngManuelModalKapat()">İptal</button>
+      <button class="ngsk-btn-kaydet" onclick="manuelKaydet()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<style>
+/* ── KPI — ngsk-kpi-bar ve ngsk-kpi stok_kartlari.html'dan birebir ── */
+.ngsk-kpi-bar {
+  display: flex; gap: 12px; flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.ngsk-kpi {
+  background: #fff; border: 1px solid rgba(17,24,39,0.07);
+  border-radius: 10px; padding: 10px 18px;
+  display: flex; flex-direction: column; align-items: center;
+  min-width: 90px;
+}
+.ngsk-kpi-deger  { font-size: 22px; font-weight: 700; color: #111827; }
+.ngsk-kpi-etiket { font-size: 11px; color: #6b7280; margin-top: 2px; text-align: center; }
+.ngsk-kpi-yesil  { color: #16a34a; }
+.ngsk-kpi-sari   { color: #d97706; }
+.ngsk-kpi-kirmizi{ color: #dc2626; }
+
+/* ── KPI onay bekliyor özel ── */
+.ngfiy-kpi-bekliyor { border-top: 3px solid #f59e0b; }
+.ngfiy-kpi-devam {
+  display: block; margin-top: 4px;
+  font-size: 11px; font-weight: 600;
+  color: #0891b2; text-decoration: none;
+}
+.ngfiy-kpi-devam:hover { text-decoration: underline; }
+
+/* ── Toolbar — ngsa-toolbar satinalma_index.html'dan birebir ── */
+.ngsa-toolbar {
+  display: flex; flex-direction: column;
+  gap: 8px; margin-bottom: 14px;
+  width: 100%; box-sizing: border-box;
+}
+.ngsa-toolbar-sol {
+  display: flex; align-items: center;
+  gap: 8px; flex-wrap: wrap; width: 100%;
+}
+.ngsa-toolbar-sag {
+  display: flex; align-items: center;
+  gap: 8px; flex-wrap: wrap;
+}
+.ngsk-select {
+  background: #fff; border: 1px solid #e5e7eb;
+  border-radius: 8px; padding: 7px 28px 7px 10px;
+  font-size: 13px; color: #374151; outline: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 8px center;
+}
+.ngsk-btn-yeni {
+  display: flex; align-items: center; gap: 6px;
+  background: #f59e0b; color: #fff;
+  border: none; border-radius: 8px;
+  padding: 7px 16px; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: background 0.12s;
+  white-space: nowrap; text-decoration: none;
+}
+.ngsk-btn-yeni:hover { background: #d97706; }
+.ngsk-btn-ikincil {
+  display: flex; align-items: center; gap: 6px;
+  background: #f8fafc; color: #374151;
+  border: 1px solid #d1d5db; border-radius: 8px;
+  padding: 7px 16px; font-size: 13px; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+}
+.ngsk-btn-ikincil:hover { background: #f1f5f9; }
+.ngfiy-btn-indir { background: #0891b2; }
+.ngfiy-btn-indir:hover { background: #0e7490; }
+.ngfiy-btn-yukle { background: #10b981; }
+.ngfiy-btn-yukle:hover { background: #059669; }
+
+/* ── Banner ── */
+.ngfiy-batch-banner {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: #fffbeb; border: 1px solid #fde68a;
+  border-left: 4px solid #f59e0b;
+  border-radius: 8px; padding: 10px 14px;
+  font-size: 13px; color: #92400e;
+  margin-bottom: 12px;
+}
+.ngfiy-batch-banner-btn {
+  margin-left: auto; padding: 5px 12px;
+  background: #f59e0b; color: #fff;
+  border-radius: 6px; font-size: 12px; font-weight: 600;
+  text-decoration: none; white-space: nowrap;
+}
+.ngfiy-batch-banner-btn:hover { background: #d97706; }
+
+/* ── Tablo — ngsk-tablo-cerceve ve ngsk-tablo stok_kartlari.html'dan ── */
+.ngsk-tablo-cerceve {
+  background: #fff; border: 1px solid rgba(17,24,39,0.06);
+  border-radius: 12px; overflow-x: auto;
+  box-shadow: 0 2px 8px rgba(15,23,42,0.04);
+}
+.ngsk-tablo {
+  width: 100%; border-collapse: separate; border-spacing: 0;
+  font-size: 13.5px; color: #111827;
+}
+.ngsk-tablo thead th {
+  background: #f9fafb; padding: 10px 14px;
+  font-size: 11.5px; font-weight: 600; color: #6b7280;
+  text-transform: uppercase; letter-spacing: 0.4px;
+  border-bottom: 1px solid #f0f1f3; white-space: nowrap;
+}
+.ngsk-th-r  { text-align: right; }
+.ngsk-tablo tbody tr { border-bottom: 1px solid #f0f1f3; }
+.ngsk-tablo tbody tr:last-child { border-bottom: none; }
+.ngsk-tablo tbody tr:hover { background: #fffbeb; }
+.ngsk-tablo td { padding: 9px 14px; vertical-align: middle; }
+.ngsk-td-r { text-align: right; }
+.ngsk-alt-bilgi { font-size: 11px; color: #9ca3af; margin-top: 1px; }
+.ngsk-btn-detay {
+  font-size: 11px; padding: 4px 10px; border-radius: 6px;
+  border: 1px solid #e2e8f0; background: #f8fafc; color: #374151;
+  cursor: pointer; white-space: nowrap;
+}
+.ngsk-btn-detay:hover { background: #e2e8f0; }
+
+/* ── Fiyat alanı içi ── */
+.ngfiy-pasif-satir { opacity: .4; }
+.ngfiy-ted-satir   { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ngfiy-ted-kod {
+  font-size: 11px; font-weight: 700; color: #475569;
+  background: #f1f5f9; padding: 1px 6px; border-radius: 4px;
+}
+.ngfiy-ted-ad  { font-size: 13px; color: #1e293b; }
+.ngfiy-stok-kod {
+  font-size: 11px; font-weight: 700; color: #0891b2;
+  font-family: 'Courier New', monospace;
+}
+.ngfiy-fiyat-rakam { font-size: 14px; font-weight: 700; color: #111827; }
+.ngfiy-pb      { font-size: 11px; color: #64748b; margin-left: 2px; }
+.ngfiy-sayi    { font-size: 13px; color: #374151; }
+.ngfiy-tarih   { font-size: 12px; color: #64748b; white-space: nowrap; }
+
+/* ── Rozetler (ngsk-kat-rozet üzerine özel renk) ── */
+.ngsk-kat-rozet {
+  display: inline-block; font-size: 11px; font-weight: 600;
+  padding: 2px 8px; border-radius: 10px;
+}
+.ngfiy-rozet-excel  { background: #dbeafe; color: #1d4ed8; }
+.ngfiy-rozet-manuel { background: #f1f5f9; color: #475569; }
+.ngfiy-rozet-aktif  { background: #d1fae5; color: #065f46; }
+.ngfiy-rozet-pasif  { background: #fee2e2; color: #991b1b; }
+.ngfiy-btn-pasife {
+  font-size: 11px; padding: 3px 8px; border-radius: 6px;
+  border: 1px solid #fca5a5; background: #fff1f2; color: #dc2626;
+  cursor: pointer;
+}
+.ngfiy-btn-pasife:hover { background: #fee2e2; }
+
+/* ── Boş durum ── */
+.ngsk-bos-durum {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; padding: 48px 24px; text-align: center;
+}
+.ngsk-bos-ikon    { font-size: 32px; margin-bottom: 8px; color: #d1d5db; }
+.ngsk-bos-baslik  { font-size: 15px; font-weight: 600; color: #6b7280; }
+.ngsk-bos-aciklama{ font-size: 13px; color: #9ca3af; margin-top: 4px; }
+
+/* ── Modal ── */
+.ngsk-modal-bg {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+  display: flex; align-items: center; justify-content: center; z-index: 999;
+}
+.ngsk-modal {
+  background: #fff; border-radius: 12px; width: 90%; max-height: 90vh;
+  overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.18);
+}
+.ngsk-modal-baslik {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 16px 20px; border-bottom: 1px solid #f0f1f3;
+  font-size: 15px; font-weight: 700; color: #1e293b;
+}
+.ngsk-modal-kapat {
+  background: none; border: none; font-size: 18px;
+  color: #9ca3af; cursor: pointer; padding: 2px 6px;
+}
+.ngsk-modal-kapat:hover { color: #374151; }
+.ngsk-modal-govde { padding: 20px; }
+.ngsk-modal-alt {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 14px 20px; border-top: 1px solid #f0f1f3;
+}
+.ngsk-form-grup { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+.ngsk-form-grup label { font-size: 12px; font-weight: 600; color: #374151; }
+.ngsk-input {
+  border: 1px solid #e5e7eb; border-radius: 8px;
+  padding: 8px 10px; font-size: 13.5px; color: #1e293b;
+  outline: none; background: #fff; width: 100%; box-sizing: border-box;
+}
+.ngsk-input:focus { border-color: #f59e0b; box-shadow: 0 0 0 3px rgba(245,158,11,0.1); }
+.ngsk-btn-iptal {
+  padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  background: #f3f4f6; color: #374151; border: none; cursor: pointer;
+}
+.ngsk-btn-iptal:hover { background: #e5e7eb; }
+.ngsk-btn-kaydet {
+  padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  background: #f59e0b; color: #fff; border: none; cursor: pointer;
+}
+.ngsk-btn-kaydet:hover { background: #d97706; }
+
+@media (max-width: 700px) {
+  .ngsa-toolbar { flex-direction: column; align-items: stretch; }
+  .ngsa-toolbar-sol { flex-direction: column; align-items: stretch; }
+  .ngsa-toolbar-sag { justify-content: flex-end; }
+}
+</style>
+
+<script>
+function filtrele() {
+  const t = document.getElementById('filtreTed').value;
+  const s = document.getElementById('filtreStok').value;
+  let url = '/nexgen/satinalma/fiyat?';
+  if (t) url += 'tedarikci_id=' + t + '&';
+  if (s) url += 'stok_kart_id=' + s;
+  window.location = url;
+}
+
+function ngManuelModalAc() {
+  document.getElementById('ngManuelModal').style.display = 'flex';
+  const t = document.getElementById('mTarih');
+  if (!t.value) t.value = new Date().toISOString().slice(0,10);
+}
+function ngManuelModalKapat() {
+  document.getElementById('ngManuelModal').style.display = 'none';
+}
+
+function manuelKaydet() {
+  const data = {
+    tedarikci_id: parseInt(document.getElementById('mTed').value),
+    stok_kart_id: parseInt(document.getElementById('mStok').value),
+    fiyat:        parseFloat(document.getElementById('mFiyat').value),
+    para_birimi:  document.getElementById('mPb').value,
+    kur:          parseFloat(document.getElementById('mKur').value) || null,
+    vade_gun:     parseInt(document.getElementById('mVade').value) || null,
+    fiyat_tarihi: document.getElementById('mTarih').value,
+    notlar:       document.getElementById('mNot').value || null,
+  };
+  if (!data.tedarikci_id || !data.stok_kart_id || !data.fiyat || !data.fiyat_tarihi) {
+    alert('Tedarikçi, hammadde, fiyat ve tarih zorunludur.');
+    return;
+  }
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = 'Kaydediliyor…';
+  fetch('/nexgen/api/satinalma/fiyat-manuel', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(data)
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.ok) { location.reload(); }
+    else { alert('Hata: ' + d.hata); btn.disabled = false; btn.textContent = 'Kaydet'; }
+  })
+  .catch(() => { btn.disabled = false; btn.textContent = 'Kaydet'; });
+}
+
+function pasifAl(fiyatId) {
+  const sebep = prompt('Pasife alma sebebi (opsiyonel):');
+  if (sebep === null) return;
+  fetch('/nexgen/api/satinalma/fiyat-pasife-al/' + fiyatId, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({sebep: sebep})
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.ok) { location.reload(); }
+    else { alert('Hata: ' + d.hata); }
+  });
+}
+</script>
+{% endblock %}

@@ -5,6 +5,7 @@ SOLARIZ CPS — NexGen Hammadde Yönetimi
 FAZ-1A : Modül iskeleti, menü, yetki
 FAZ-1B : Stok Kart Master + Hareket Motoru altyapısı
 FAZ-2  : Satın Alma Merkezi — Tedarikçi CRUD + Sipariş akışı
+FAZ-2.6: Haftalık Fiyat Geçmişi — Excel import, preview/onay akışı
 
 Yetki kodları:
   nexgen.view                — modül geneli görüntüleme
@@ -16,17 +17,23 @@ Yetki kodları:
   nexgen.satinalma.fiyat     — fiyat/kur/maliyet görüntüleme
   nexgen.tedarikci.view      — tedarikçi listesi görüntüleme
   nexgen.tedarikci.manage    — tedarikçi ekleme/düzenleme
+  nexgen.fiyat.view          — fiyat geçmişini görüntüleme
+  nexgen.fiyat.manage        — fiyat girişi (manuel + Excel)
+  nexgen.fiyat.approve       — batch onaylama
+  nexgen.fiyat.admin         — fiyat pasife alma (sadece Yönetim)
 
-FAZ-2 KURAL: Bu modül nexgen_stok_hareket tablosuna HİÇBİR ZAMAN INSERT yapmaz.
+KURAL: Bu modül nexgen_stok_hareket tablosuna HİÇBİR ZAMAN INSERT yapmaz.
 """
 
 import sqlite3
 import os
-from datetime import datetime
+import io
+from datetime import datetime, date
 
 from flask import (
     Blueprint, render_template, abort,
-    request, jsonify, session, g
+    request, jsonify, session, g,
+    Response, redirect, url_for, flash
 )
 from modules.auth import yetki_gerekli, yetki_var
 
@@ -533,6 +540,7 @@ def satinalma_index():
     can_fiyat      = yetki_var('nexgen.satinalma.fiyat', 'can_view')
     # Tedarikçi yönetimi: sadece Yönetim rolü — Satın Alma sadece görüntüler
     can_ted_manage = yetki_var('nexgen.tedarikci.manage', 'can_create')
+    can_fiyat_view = yetki_var('nexgen.fiyat.view', 'can_view')
 
     siparisler = [dict(s) for s in siparisler_raw]
 
@@ -547,6 +555,7 @@ def satinalma_index():
         can_approve=can_approve,
         can_fiyat=can_fiyat,
         can_ted_manage=can_ted_manage,
+        can_fiyat_view=can_fiyat_view,
     )
 
 
@@ -984,3 +993,567 @@ def api_satinalma_tedarikci_listesi():
     finally:
         con.close()
     return jsonify({"ok": True, "tedarikciler": [dict(t) for t in tedarikciler]})
+
+
+# ═════════════════════════════════════════════════════════════
+# FAZ-2.6 — HAFTALlK FİYAT YÖNETİMİ
+# ═════════════════════════════════════════════════════════════
+# KURAL: Bu bölümde nexgen_stok_hareket INSERT YAPILMAZ.
+# Fiyat geçmişi ≠ stok hareketi.
+# ─────────────────────────────────────────────────────────────
+
+
+def _isoweek():
+    """Geçerli ISO hafta kodu: '2026-W26'"""
+    today = date.today()
+    iso = today.isocalendar()
+    return f"{iso[0]}-W{iso[1]:02d}"
+
+
+def _son_fiyat(con, tedarikci_id, stok_kart_id):
+    """
+    Son aktif fiyat kaydını döndür.
+    Kural: aktif=1 AND ORDER BY fiyat_tarihi DESC, id DESC LIMIT 1
+    """
+    return con.execute("""
+        SELECT nhf.*, t.ad AS tedarikci_ad, sk.ad AS stok_ad,
+               sk.kod AS stok_kod
+        FROM nexgen_hammadde_fiyat nhf
+        JOIN nexgen_tedarikci t ON t.id = nhf.tedarikci_id
+        JOIN nexgen_stok_kart sk ON sk.id = nhf.stok_kart_id
+        WHERE nhf.tedarikci_id = ?
+          AND nhf.stok_kart_id = ?
+          AND nhf.aktif = 1
+        ORDER BY nhf.fiyat_tarihi DESC, nhf.id DESC
+        LIMIT 1
+    """, (tedarikci_id, stok_kart_id)).fetchone()
+
+
+def _fiyat_farki(eski_fiyat, eski_pb, yeni_fiyat, yeni_pb):
+    """Aynı para birimi varsa fark ve yüzde hesapla."""
+    if eski_fiyat is None or yeni_fiyat is None:
+        return None, None
+    if eski_pb != yeni_pb:
+        return None, None
+    fark = yeni_fiyat - eski_fiyat
+    yuzde = (fark / eski_fiyat * 100) if eski_fiyat != 0 else None
+    return round(fark, 4), round(yuzde, 2) if yuzde is not None else None
+
+
+# ─────────────────────────────────────────────────────────────
+# Fiyat Listesi — GET /nexgen/satinalma/fiyat
+# ─────────────────────────────────────────────────────────────
+@nexgen_bp.route('/satinalma/fiyat')
+@yetki_gerekli('nexgen.fiyat.view', 'can_view')
+def fiyat_listesi():
+    con = _db()
+    try:
+        tedarikci_id = request.args.get('tedarikci_id', type=int)
+        stok_kart_id = request.args.get('stok_kart_id', type=int)
+
+        q = """
+            SELECT nhf.id, nhf.fiyat, nhf.para_birimi, nhf.kur, nhf.fiyat_try,
+                   nhf.vade_gun, nhf.fiyat_tarihi, nhf.kaynak, nhf.notlar,
+                   nhf.aktif, nhf.batch_id,
+                   t.kod AS tedarikci_kodu, t.ad AS tedarikci_ad,
+                   sk.kod AS stok_kodu, sk.ad AS stok_ad
+            FROM nexgen_hammadde_fiyat nhf
+            JOIN nexgen_tedarikci t ON t.id = nhf.tedarikci_id
+            JOIN nexgen_stok_kart sk ON sk.id = nhf.stok_kart_id
+            WHERE 1=1
+        """
+        params = []
+        if tedarikci_id:
+            q += " AND nhf.tedarikci_id = ?"
+            params.append(tedarikci_id)
+        if stok_kart_id:
+            q += " AND nhf.stok_kart_id = ?"
+            params.append(stok_kart_id)
+        q += " ORDER BY nhf.fiyat_tarihi DESC, nhf.id DESC LIMIT 200"
+
+        fiyatlar = con.execute(q, params).fetchall()
+        tedarikciler = con.execute(
+            "SELECT id, kod, ad FROM nexgen_tedarikci WHERE aktif=1 ORDER BY ad"
+        ).fetchall()
+        stok_kartlari = con.execute(
+            "SELECT id, kod, ad FROM nexgen_stok_kart WHERE aktif=1 ORDER BY kod"
+        ).fetchall()
+        son_batch = con.execute(
+            "SELECT * FROM nexgen_fiyat_batch ORDER BY id DESC LIMIT 5"
+        ).fetchall()
+
+        can_manage = yetki_var('nexgen.fiyat.manage', 'can_create')
+        can_admin  = yetki_var('nexgen.fiyat.admin', 'can_manage')
+    finally:
+        con.close()
+
+    return render_template(
+        'nexgen/fiyat_listesi.html',
+        fiyatlar=fiyatlar,
+        tedarikciler=tedarikciler,
+        stok_kartlari=stok_kartlari,
+        son_batch=son_batch,
+        filtre_tedarikci=tedarikci_id,
+        filtre_stok=stok_kart_id,
+        can_manage=can_manage,
+        can_admin=can_admin,
+        active='nexgen'
+    )
+
+
+# ─────────────────────────────────────────────────────────────
+# Excel Şablon İndir — GET /nexgen/satinalma/fiyat-sablonu-indir
+# ─────────────────────────────────────────────────────────────
+@nexgen_bp.route('/satinalma/fiyat-sablonu-indir')
+@yetki_gerekli('nexgen.fiyat.manage', 'can_create')
+def fiyat_sablonu_indir():
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    except ImportError:
+        return jsonify({"ok": False, "hata": "openpyxl yüklü değil"}), 500
+
+    con = _db()
+    try:
+        eslesmeler = con.execute("""
+            SELECT ts.id, t.kod AS t_kod, t.ad AS t_ad, t.varsayilan_vade,
+                   sk.kod AS s_kod, sk.ad AS s_ad,
+                   t.id AS tedarikci_id, sk.id AS stok_kart_id
+            FROM nexgen_tedarikci_stok ts
+            JOIN nexgen_tedarikci t ON t.id = ts.tedarikci_id
+            JOIN nexgen_stok_kart sk ON sk.id = ts.stok_kart_id
+            WHERE ts.aktif = 1 AND t.aktif = 1 AND sk.aktif = 1
+            ORDER BY t.kod, sk.kod
+        """).fetchall()
+
+        son_fiyatlar = {}
+        for e in eslesmeler:
+            sf = _son_fiyat(con, e['tedarikci_id'], e['stok_kart_id'])
+            son_fiyatlar[(e['tedarikci_id'], e['stok_kart_id'])] = sf
+    finally:
+        con.close()
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Fiyat Girişi"
+
+    bugun = date.today().isoformat()
+    hafta = _isoweek()
+
+    baslik_font = Font(bold=True, color="FFFFFF")
+    baslik_dolu = PatternFill("solid", fgColor="2C3E50")
+    kilitli_dolu = PatternFill("solid", fgColor="ECF0F1")
+    orta = Alignment(horizontal="center")
+
+    basliklar = [
+        "tedarikci_kodu", "tedarikci_adi", "stok_kodu", "stok_adi",
+        "fiyat", "para_birimi", "kur", "vade_gun",
+        "fiyat_tarihi", "gecerlilik_bas", "gecerlilik_bitis", "not",
+        "son_fiyat_bilgi"
+    ]
+    ws.append(basliklar)
+    for col, hdr in enumerate(basliklar, 1):
+        cell = ws.cell(row=1, column=col)
+        cell.font = baslik_font
+        cell.fill = baslik_dolu
+        cell.alignment = orta
+
+    for e in eslesmeler:
+        sf = son_fiyatlar.get((e['tedarikci_id'], e['stok_kart_id']))
+        son_fiyat_bilgi = ""
+        if sf:
+            son_fiyat_bilgi = f"{sf['fiyat']} {sf['para_birimi']} ({sf['fiyat_tarihi']})"
+
+        row = [
+            e['t_kod'], e['t_ad'], e['s_kod'], e['s_ad'],
+            None, "USD", None, e['varsayilan_vade'],
+            bugun, bugun, None, None,
+            son_fiyat_bilgi
+        ]
+        ws.append(row)
+
+        r_idx = ws.max_row
+        for col in [1, 2, 3, 4, 13]:
+            ws.cell(row=r_idx, column=col).fill = kilitli_dolu
+
+    for col_idx, width in zip(range(1, 14), [14, 22, 14, 28, 10, 12, 10, 10, 13, 13, 14, 20, 25]):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(col_idx)].width = width
+
+    ws.freeze_panes = "E2"
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    dosya_adi = f"NexGen_Fiyat_Sablonu_{hafta}.xlsx"
+    return Response(
+        buf.getvalue(),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={dosya_adi}"}
+    )
+
+
+# ─────────────────────────────────────────────────────────────
+# Excel Yükle + Preview — POST /nexgen/satinalma/fiyat-yukle
+# ─────────────────────────────────────────────────────────────
+@nexgen_bp.route('/satinalma/fiyat-yukle', methods=['POST'])
+@yetki_gerekli('nexgen.fiyat.manage', 'can_create')
+def fiyat_yukle():
+    try:
+        import openpyxl
+    except ImportError:
+        return jsonify({"ok": False, "hata": "openpyxl yüklü değil"}), 500
+
+    f = request.files.get('dosya')
+    if not f or not f.filename.endswith('.xlsx'):
+        return jsonify({"ok": False, "hata": "Geçerli bir .xlsx dosyası seçin"}), 400
+
+    kullanici_id = _kullanici_id()
+    hafta = _isoweek()
+
+    con = _db()
+    try:
+        # Batch kaydı oluştur
+        con.execute("""
+            INSERT INTO nexgen_fiyat_batch
+              (hafta_kodu, dosya_adi, durum, yukleyen_id)
+            VALUES (?, ?, 'ONAY_BEKLIYOR', ?)
+        """, (hafta, f.filename, kullanici_id))
+        con.commit()
+        batch_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+        # Excel parse
+        wb = openpyxl.load_workbook(f, data_only=True)
+        ws = wb.active
+
+        tedarikci_map = {r[0]: r[1] for r in con.execute(
+            "SELECT kod, id FROM nexgen_tedarikci"
+        ).fetchall()}
+        stok_map = {r[0]: r[1] for r in con.execute(
+            "SELECT kod, id FROM nexgen_stok_kart"
+        ).fetchall()}
+
+        toplam = gecerli = hatali = 0
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            if not any(row):
+                continue
+            t_kod = str(row[0]).strip() if row[0] else None
+            s_kod = str(row[2]).strip() if row[2] else None
+            fiyat_raw = row[4]
+            pb = str(row[5]).strip().upper() if row[5] else 'USD'
+            kur = row[6]
+            vade = row[7]
+            f_tarih = str(row[8]).strip() if row[8] else date.today().isoformat()
+            g_bas = str(row[9]).strip() if row[9] else None
+            g_bit = str(row[10]).strip() if row[10] else None
+            notlar = str(row[11]).strip() if row[11] else None
+
+            toplam += 1
+
+            if fiyat_raw is None or str(fiyat_raw).strip() == '':
+                continue
+
+            hata = None
+            t_id = s_id = None
+            try:
+                fiyat = float(fiyat_raw)
+                if fiyat <= 0:
+                    hata = "Fiyat sıfır veya negatif olamaz"
+            except (ValueError, TypeError):
+                hata = f"Geçersiz fiyat: {fiyat_raw}"
+                fiyat = None
+
+            if t_kod not in tedarikci_map:
+                hata = f"Tedarikçi kodu bulunamadı: {t_kod}"
+            else:
+                t_id = tedarikci_map[t_kod]
+
+            if s_kod not in stok_map:
+                hata = (hata + " | " if hata else "") + f"Stok kodu bulunamadı: {s_kod}"
+            else:
+                s_id = stok_map[s_kod]
+
+            onceki = None
+            fark = yuzde = None
+            if t_id and s_id:
+                onceki = _son_fiyat(con, t_id, s_id)
+            if onceki and fiyat and not hata:
+                fark, yuzde = _fiyat_farki(
+                    onceki['fiyat'], onceki['para_birimi'], fiyat, pb
+                )
+
+            fiyat_try = None
+            if fiyat and kur:
+                try:
+                    fiyat_try = round(float(fiyat) * float(kur), 4)
+                except Exception:
+                    pass
+
+            gecerli_mi = 0 if hata else 1
+            if gecerli_mi:
+                gecerli += 1
+            else:
+                hatali += 1
+
+            con.execute("""
+                INSERT INTO nexgen_fiyat_batch_detay
+                  (batch_id, tedarikci_kodu, stok_kodu, tedarikci_id, stok_kart_id,
+                   fiyat, para_birimi, kur, fiyat_try, vade_gun,
+                   fiyat_tarihi, gecerlilik_bas, gecerlilik_bitis, notlar,
+                   onceki_fiyat, onceki_pb, onceki_tarih, fark, yuzde_degisim,
+                   gecerli_mi, hata_sebebi)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """, (
+                batch_id, t_kod, s_kod, t_id, s_id,
+                fiyat, pb, kur, fiyat_try, vade,
+                f_tarih, g_bas, g_bit, notlar,
+                onceki['fiyat'] if onceki else None,
+                onceki['para_birimi'] if onceki else None,
+                onceki['fiyat_tarihi'] if onceki else None,
+                fark, yuzde,
+                gecerli_mi, hata
+            ))
+
+        con.execute("""
+            UPDATE nexgen_fiyat_batch
+            SET toplam_satir=?, gecerli_satir=?, hatali_satir=?
+            WHERE id=?
+        """, (toplam, gecerli, hatali, batch_id))
+        con.commit()
+    finally:
+        con.close()
+
+    return redirect(url_for('nexgen.fiyat_preview', batch_id=batch_id))
+
+
+# ─────────────────────────────────────────────────────────────
+# Preview — GET /nexgen/satinalma/fiyat-preview/<batch_id>
+# ─────────────────────────────────────────────────────────────
+@nexgen_bp.route('/satinalma/fiyat-preview/<int:batch_id>')
+@yetki_gerekli('nexgen.fiyat.manage', 'can_create')
+def fiyat_preview(batch_id):
+    con = _db()
+    try:
+        batch = con.execute(
+            "SELECT * FROM nexgen_fiyat_batch WHERE id=?", (batch_id,)
+        ).fetchone()
+        if not batch:
+            abort(404)
+
+        if batch['durum'] != 'ONAY_BEKLIYOR':
+            flash(f"Bu batch artık işlenemez: durum={batch['durum']}", "warning")
+            return redirect(url_for('nexgen.fiyat_listesi'))
+
+        detaylar = con.execute("""
+            SELECT * FROM nexgen_fiyat_batch_detay
+            WHERE batch_id=?
+            ORDER BY tedarikci_kodu, stok_kodu
+        """, (batch_id,)).fetchall()
+
+        can_approve = yetki_var('nexgen.fiyat.approve', 'can_approve')
+    finally:
+        con.close()
+
+    return render_template(
+        'nexgen/fiyat_preview.html',
+        batch=batch,
+        detaylar=detaylar,
+        can_approve=can_approve,
+        active='nexgen'
+    )
+
+
+# ─────────────────────────────────────────────────────────────
+# Onayla — POST /nexgen/satinalma/fiyat-onayla/<batch_id>
+# ─────────────────────────────────────────────────────────────
+@nexgen_bp.route('/satinalma/fiyat-onayla/<int:batch_id>', methods=['POST'])
+@yetki_gerekli('nexgen.fiyat.approve', 'can_approve')
+def fiyat_onayla(batch_id):
+    kullanici_id = _kullanici_id()
+    con = _db()
+    try:
+        batch = con.execute(
+            "SELECT * FROM nexgen_fiyat_batch WHERE id=?", (batch_id,)
+        ).fetchone()
+        if not batch or batch['durum'] != 'ONAY_BEKLIYOR':
+            return jsonify({"ok": False, "hata": "Geçersiz veya işlenmiş batch"}), 400
+
+        detaylar = con.execute("""
+            SELECT * FROM nexgen_fiyat_batch_detay
+            WHERE batch_id=? AND gecerli_mi=1
+              AND tedarikci_id IS NOT NULL AND stok_kart_id IS NOT NULL
+              AND fiyat IS NOT NULL
+        """, (batch_id,)).fetchall()
+
+        eklendi = 0
+        for d in detaylar:
+            con.execute("""
+                INSERT INTO nexgen_hammadde_fiyat
+                  (tedarikci_id, stok_kart_id, fiyat, para_birimi, kur, fiyat_try,
+                   vade_gun, fiyat_tarihi, gecerlilik_bas, gecerlilik_bitis,
+                   kaynak, batch_id, notlar, aktif, olusturan_id)
+                VALUES (?,?,?,?,?,?,?,?,?,?,'EXCEL_IMPORT',?,?,1,?)
+            """, (
+                d['tedarikci_id'], d['stok_kart_id'],
+                d['fiyat'], d['para_birimi'], d['kur'], d['fiyat_try'],
+                d['vade_gun'], d['fiyat_tarihi'], d['gecerlilik_bas'], d['gecerlilik_bitis'],
+                batch_id, d['notlar'], kullanici_id
+            ))
+            eklendi += 1
+
+        con.execute("""
+            UPDATE nexgen_fiyat_batch
+            SET durum='ONAYLANDI', onaylayan_id=?, onay_tarihi=datetime('now')
+            WHERE id=?
+        """, (kullanici_id, batch_id))
+        con.commit()
+    finally:
+        con.close()
+
+    return jsonify({"ok": True, "eklendi": eklendi})
+
+
+# ─────────────────────────────────────────────────────────────
+# İptal — POST /nexgen/satinalma/fiyat-iptal/<batch_id>
+# ─────────────────────────────────────────────────────────────
+@nexgen_bp.route('/satinalma/fiyat-iptal/<int:batch_id>', methods=['POST'])
+@yetki_gerekli('nexgen.fiyat.manage', 'can_create')
+def fiyat_iptal(batch_id):
+    con = _db()
+    try:
+        batch = con.execute(
+            "SELECT * FROM nexgen_fiyat_batch WHERE id=?", (batch_id,)
+        ).fetchone()
+        if not batch or batch['durum'] != 'ONAY_BEKLIYOR':
+            return jsonify({"ok": False, "hata": "Geçersiz veya işlenmiş batch"}), 400
+
+        con.execute("DELETE FROM nexgen_fiyat_batch_detay WHERE batch_id=?", (batch_id,))
+        con.execute(
+            "UPDATE nexgen_fiyat_batch SET durum='IPTAL' WHERE id=?", (batch_id,)
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    return jsonify({"ok": True})
+
+
+# ─────────────────────────────────────────────────────────────
+# API — Manuel Tekil Fiyat Girişi
+# POST /nexgen/api/satinalma/fiyat-manuel
+# ─────────────────────────────────────────────────────────────
+@nexgen_bp.route('/api/satinalma/fiyat-manuel', methods=['POST'])
+@yetki_gerekli('nexgen.fiyat.manage', 'can_create')
+def api_fiyat_manuel():
+    if not request.is_json:
+        return jsonify({"ok": False, "hata": "JSON bekleniyor"}), 400
+    d = request.json
+    tedarikci_id = d.get('tedarikci_id')
+    stok_kart_id = d.get('stok_kart_id')
+    fiyat        = d.get('fiyat')
+    para_birimi  = d.get('para_birimi', 'USD')
+    kur          = d.get('kur')
+    vade_gun     = d.get('vade_gun')
+    fiyat_tarihi = d.get('fiyat_tarihi')
+    notlar       = d.get('notlar')
+
+    if not all([tedarikci_id, stok_kart_id, fiyat, fiyat_tarihi]):
+        return jsonify({"ok": False, "hata": "Zorunlu alanlar eksik"}), 400
+    if para_birimi not in ('USD', 'EUR', 'TRY', 'GBP', 'CNY'):
+        return jsonify({"ok": False, "hata": f"Geçersiz para birimi: {para_birimi}"}), 400
+
+    fiyat_try = None
+    if kur:
+        try:
+            fiyat_try = round(float(fiyat) * float(kur), 4)
+        except Exception:
+            pass
+
+    kullanici_id = _kullanici_id()
+    con = _db()
+    try:
+        ted  = con.execute("SELECT id FROM nexgen_tedarikci WHERE id=?", (tedarikci_id,)).fetchone()
+        stok = con.execute("SELECT id FROM nexgen_stok_kart WHERE id=?", (stok_kart_id,)).fetchone()
+        if not ted:
+            return jsonify({"ok": False, "hata": "Tedarikçi bulunamadı"}), 400
+        if not stok:
+            return jsonify({"ok": False, "hata": "Stok kartı bulunamadı"}), 400
+
+        con.execute("""
+            INSERT INTO nexgen_hammadde_fiyat
+              (tedarikci_id, stok_kart_id, fiyat, para_birimi, kur, fiyat_try,
+               vade_gun, fiyat_tarihi, kaynak, aktif, olusturan_id)
+            VALUES (?,?,?,?,?,?,?,?,'MANUEL',1,?)
+        """, (tedarikci_id, stok_kart_id, fiyat, para_birimi, kur, fiyat_try,
+              vade_gun, fiyat_tarihi, kullanici_id))
+        con.commit()
+        fiyat_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+    finally:
+        con.close()
+
+    return jsonify({"ok": True, "id": fiyat_id})
+
+
+# ─────────────────────────────────────────────────────────────
+# API — Son Fiyat Öner (sipariş formu pre-fill)
+# GET /nexgen/api/satinalma/son-fiyat?tedarikci_id=X&stok_kart_id=Y
+# ─────────────────────────────────────────────────────────────
+@nexgen_bp.route('/api/satinalma/son-fiyat')
+@yetki_gerekli('nexgen.satinalma.manage', 'can_create')
+def api_son_fiyat():
+    tedarikci_id = request.args.get('tedarikci_id', type=int)
+    stok_kart_id = request.args.get('stok_kart_id', type=int)
+    if not tedarikci_id or not stok_kart_id:
+        return jsonify({"ok": False, "hata": "tedarikci_id ve stok_kart_id gerekli"}), 400
+
+    con = _db()
+    try:
+        sf = _son_fiyat(con, tedarikci_id, stok_kart_id)
+    finally:
+        con.close()
+
+    if not sf:
+        return jsonify({"ok": True, "fiyat": None})
+
+    return jsonify({
+        "ok": True,
+        "fiyat": {
+            "id": sf['id'],
+            "fiyat": sf['fiyat'],
+            "para_birimi": sf['para_birimi'],
+            "kur": sf['kur'],
+            "vade_gun": sf['vade_gun'],
+            "fiyat_tarihi": sf['fiyat_tarihi'],
+        }
+    })
+
+
+# ─────────────────────────────────────────────────────────────
+# API — Fiyat Pasife Al (sadece Yönetim)
+# POST /nexgen/api/satinalma/fiyat-pasife-al/<fiyat_id>
+# ─────────────────────────────────────────────────────────────
+@nexgen_bp.route('/api/satinalma/fiyat-pasife-al/<int:fiyat_id>', methods=['POST'])
+@yetki_gerekli('nexgen.fiyat.admin', 'can_manage')
+def api_fiyat_pasife_al(fiyat_id):
+    sebep = request.json.get('sebep', '') if request.is_json else ''
+    kullanici_id = _kullanici_id()
+    con = _db()
+    try:
+        kayit = con.execute(
+            "SELECT id, aktif FROM nexgen_hammadde_fiyat WHERE id=?", (fiyat_id,)
+        ).fetchone()
+        if not kayit:
+            return jsonify({"ok": False, "hata": "Kayıt bulunamadı"}), 404
+        if not kayit['aktif']:
+            return jsonify({"ok": False, "hata": "Zaten pasif"}), 400
+
+        con.execute("""
+            UPDATE nexgen_hammadde_fiyat
+            SET aktif=0, iptal_sebebi=?, iptal_eden_id=?, iptal_tarihi=datetime('now')
+            WHERE id=?
+        """, (sebep, kullanici_id, fiyat_id))
+        con.commit()
+    finally:
+        con.close()
+
+    return jsonify({"ok": True})

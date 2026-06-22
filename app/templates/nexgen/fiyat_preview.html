@@ -1,0 +1,302 @@
+{% extends "base.html" %}
+{% set page_title = "Fiyat Önizleme — NexGen" %}
+
+{% block content %}
+<div class="ng-sayfa">
+
+  {# ── Başlık ──────────────────────────────────────────────── #}
+  <div class="ng-baslik-blok">
+    <div class="ng-baslik">
+      <a href="/nexgen/" class="ng-bc-link">NexGen</a>
+      <span class="ng-bc-sep">›</span>
+      <a href="/nexgen/satinalma" class="ng-bc-link">Satın Alma</a>
+      <span class="ng-bc-sep">›</span>
+      <a href="/nexgen/satinalma/fiyat" class="ng-bc-link">Fiyat Yönetimi</a>
+      <span class="ng-bc-sep">›</span>
+      <span class="ng-baslik-metin">Önizleme & Onay</span>
+    </div>
+    <div class="ng-baslik-aciklama">
+      Onaylamadan önce kontrol edin. Onay verilmeden fiyat geçmişine hiçbir kayıt yazılmaz.
+    </div>
+  </div>
+
+  {# ── Batch Özet KPI ───────────────────────────────────────── #}
+  <div class="ngsk-kpi-bar ngpv-ozet-bar">
+    <div class="ngsk-kpi">
+      <span class="ngsk-kpi-deger">{{ batch['hafta_kodu'] }}</span>
+      <span class="ngsk-kpi-etiket">Hafta</span>
+    </div>
+    <div class="ngsk-kpi">
+      <span class="ngsk-kpi-deger">{{ batch['toplam_satir'] }}</span>
+      <span class="ngsk-kpi-etiket">Toplam Satır</span>
+    </div>
+    <div class="ngsk-kpi">
+      <span class="ngsk-kpi-deger ngsk-kpi-yesil">{{ batch['gecerli_satir'] }}</span>
+      <span class="ngsk-kpi-etiket">Geçerli</span>
+    </div>
+    <div class="ngsk-kpi">
+      <span class="ngsk-kpi-deger ngsk-kpi-kirmizi">{{ batch['hatali_satir'] }}</span>
+      <span class="ngsk-kpi-etiket">Hatalı</span>
+    </div>
+    {% if batch['dosya_adi'] %}
+    <div class="ngsk-kpi ngpv-kpi-dosya">
+      <span class="ngsk-kpi-deger" style="font-size:13px;word-break:break-all;">{{ batch['dosya_adi'] }}</span>
+      <span class="ngsk-kpi-etiket">Dosya</span>
+    </div>
+    {% endif %}
+  </div>
+
+  {# ── Hata Satırları ───────────────────────────────────────── #}
+  {% set hatalilar = detaylar | selectattr('gecerli_mi', 'equalto', 0) | list %}
+  {% if hatalilar %}
+  <div class="ngpv-hata-blok">
+    <div class="ngpv-hata-baslik">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" width="15" height="15">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+        <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+      {{ hatalilar|length }} hatalı satır — bunlar kaydedilmeyecek
+    </div>
+    <table class="ngpv-hata-tablo">
+      <thead>
+        <tr><th>Tedarikçi Kodu</th><th>Stok Kodu</th><th>Hata Sebebi</th></tr>
+      </thead>
+      <tbody>
+        {% for d in hatalilar %}
+        <tr>
+          <td>{{ d['tedarikci_kodu'] or '—' }}</td>
+          <td>{{ d['stok_kodu'] or '—' }}</td>
+          <td class="ngpv-hata-sebep">{{ d['hata_sebebi'] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {# ── Geçerli Satırlar Tablosu ─────────────────────────────── #}
+  {% set gecerliler = detaylar | selectattr('gecerli_mi', 'equalto', 1) | list %}
+  {% if gecerliler %}
+  <div class="ngsk-tablo-cerceve ngpv-tablo-wrap">
+    <div class="ngpv-tablo-header">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>
+      {{ gecerliler|length }} geçerli satır — onaylanırsa fiyat geçmişine eklenecek
+    </div>
+    <table class="ngsk-tablo">
+      <thead>
+        <tr>
+          <th>Tedarikçi</th>
+          <th>Hammadde</th>
+          <th class="ngpv-th-r">Son Fiyat</th>
+          <th class="ngpv-th-r">Yeni Fiyat</th>
+          <th class="ngpv-th-r">Fark</th>
+          <th class="ngpv-th-r">% Değ.</th>
+          <th>Vade</th>
+          <th>Tarih</th>
+          <th>Not</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in gecerliler %}
+        {% set artis = d['fark'] is not none and d['fark'] > 0 %}
+        {% set dusu  = d['fark'] is not none and d['fark'] < 0 %}
+        <tr>
+          <td>
+            <span class="ngfiy-ted-kod">{{ d['tedarikci_kodu'] }}</span>
+          </td>
+          <td>
+            <span class="ngfiy-stok-kod">{{ d['stok_kodu'] }}</span>
+            <div class="ngfiy-stok-ad">{{ d['stok_ad'] if d['stok_ad'] is defined else '' }}</div>
+          </td>
+          <td class="ngpv-td-r ngpv-fiyat-eski">
+            {% if d['onceki_fiyat'] is not none %}
+              <span class="ngpv-eski-rakam">{{ d['onceki_fiyat'] }}</span>
+              <span class="ngfiy-pb">{{ d['onceki_pb'] }}</span>
+              {% if d['onceki_tarih'] %}
+              <div class="ngpv-eski-tarih">{{ d['onceki_tarih'] }}</div>
+              {% endif %}
+            {% else %}
+              <span class="ngpv-ilk-giris">İlk giriş</span>
+            {% endif %}
+          </td>
+          <td class="ngpv-td-r ngpv-fiyat-yeni">
+            <strong class="ngpv-yeni-rakam">{{ d['fiyat'] }}</strong>
+            <span class="ngfiy-pb">{{ d['para_birimi'] }}</span>
+            {% if d['kur'] %}
+            <div class="ngpv-kur-bilgi">kur: {{ d['kur'] }}</div>
+            {% endif %}
+          </td>
+          <td class="ngpv-td-r ngpv-fark-cell {% if artis %}ngpv-artis{% elif dusu %}ngpv-dusu{% endif %}">
+            {% if d['fark'] is not none %}
+              {% if d['fark'] > 0 %}+{% endif %}{{ d['fark'] }}
+              <span class="ngfiy-pb">{{ d['para_birimi'] }}</span>
+            {% else %}
+              <span class="ngpv-yok">—</span>
+            {% endif %}
+          </td>
+          <td class="ngpv-td-r ngpv-yuzde-cell {% if artis %}ngpv-artis{% elif dusu %}ngpv-dusu{% endif %}">
+            {% if d['yuzde_degisim'] is not none %}
+              {% if d['yuzde_degisim'] > 0 %}+{% endif %}{{ d['yuzde_degisim'] }}%
+            {% else %}
+              <span class="ngpv-yok">—</span>
+            {% endif %}
+          </td>
+          <td style="white-space:nowrap;font-size:12px;">{{ d['vade_gun'] or '—' }}{% if d['vade_gun'] %} gün{% endif %}</td>
+          <td style="white-space:nowrap;font-size:12px;color:#64748b;">{{ d['fiyat_tarihi'] }}</td>
+          <td style="font-size:11px;color:#94a3b8;max-width:140px;">{{ d['notlar'] or '' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="ngsk-bos-durum" style="margin-top:16px;">
+    <div class="ngsk-bos-baslik">Geçerli satır yok</div>
+    <div class="ngsk-bos-aciklama">Tüm satırlar hatalı veya boş. Excel'i kontrol edip tekrar yükleyin.</div>
+  </div>
+  {% endif %}
+
+  {# ── Aksiyon Butonları ─────────────────────────────────────── #}
+  <div class="ngpv-aksiyon-bar">
+    <button class="ngpv-btn-iptal" onclick="batchIptal({{ batch['id'] }})">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+           stroke-linecap="round" stroke-linejoin="round" width="13" height="13">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+      İptal Et
+    </button>
+    {% if can_approve and gecerliler %}
+    <button class="ngpv-btn-onayla" onclick="batchOnayla({{ batch['id'] }})">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+           stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>
+      Onayla ve Kaydet — {{ batch['gecerli_satir'] }} satır
+    </button>
+    {% elif not can_approve %}
+    <div class="ngpv-yetki-uyari">Bu batch'i onaylama yetkiniz yok.</div>
+    {% endif %}
+  </div>
+
+</div>{# /ng-sayfa #}
+
+<style>
+/* ── Özet KPI bar ────────────────────────────────────────── */
+.ngpv-ozet-bar { margin-bottom: 16px; }
+.ngpv-kpi-dosya .ngsk-kpi-deger { max-width: 240px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; font-size: 12px !important; }
+
+/* ── Hata blok ───────────────────────────────────────────── */
+.ngpv-hata-blok {
+  background: #fff8f8; border: 1px solid #fecaca;
+  border-left: 4px solid #ef4444;
+  border-radius: 10px; padding: 16px; margin-bottom: 14px;
+}
+.ngpv-hata-baslik {
+  display: flex; align-items: center; gap: 8px;
+  font-weight: 700; color: #dc2626; margin-bottom: 12px; font-size: 13px;
+}
+.ngpv-hata-tablo { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ngpv-hata-tablo th {
+  padding: 6px 10px; background: #fef2f2;
+  color: #991b1b; text-align: left; font-weight: 600;
+}
+.ngpv-hata-tablo td { padding: 6px 10px; border-top: 1px solid #fee2e2; }
+.ngpv-hata-sebep { color: #dc2626; font-weight: 500; }
+
+/* ── Tablo header ────────────────────────────────────────── */
+.ngpv-tablo-wrap  { margin-top: 0; }
+.ngpv-tablo-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 16px; font-size: 13px; font-weight: 700;
+  color: #065f46; background: #ecfdf5; border-bottom: 1px solid #d1fae5;
+}
+
+/* ── Tablo hizalama ──────────────────────────────────────── */
+.ngpv-th-r { text-align: right; }
+.ngpv-td-r { text-align: right; }
+
+/* ── Fiyat hücreleri ─────────────────────────────────────── */
+.ngpv-fiyat-eski { color: #64748b; font-size: 12px; }
+.ngpv-eski-rakam { font-size: 13px; font-weight: 600; }
+.ngpv-eski-tarih { font-size: 10px; color: #94a3b8; margin-top: 2px; }
+.ngpv-ilk-giris  { font-size: 11px; color: #94a3b8; font-style: italic; }
+
+.ngpv-fiyat-yeni { }
+.ngpv-yeni-rakam { font-size: 15px; font-weight: 700; color: #111827; }
+.ngpv-kur-bilgi  { font-size: 10px; color: #64748b; margin-top: 2px; }
+
+/* ── Fark / % renk ───────────────────────────────────────── */
+.ngpv-fark-cell,
+.ngpv-yuzde-cell { font-size: 13px; font-weight: 600; }
+.ngpv-artis { color: #dc2626; }
+.ngpv-dusu  { color: #16a34a; }
+.ngpv-yok   { color: #94a3b8; font-weight: 400; }
+
+/* Kodlar (stok/ted) */
+.ngfiy-ted-kod {
+  display: inline-block;
+  font-size: 11px; font-weight: 700; color: #475569;
+  background: #f1f5f9; padding: 1px 6px; border-radius: 4px;
+}
+.ngfiy-stok-kod {
+  font-size: 11px; font-weight: 700; color: #0891b2;
+  font-family: 'Courier New', monospace;
+}
+.ngfiy-stok-ad  { font-size: 11px; color: #94a3b8; margin-top: 1px; }
+.ngfiy-pb       { font-size: 11px; color: #64748b; margin-left: 2px; }
+
+/* ── Aksiyon bar ─────────────────────────────────────────── */
+.ngpv-aksiyon-bar {
+  display: flex; justify-content: flex-end; align-items: center;
+  gap: 12px; margin-top: 24px; padding-top: 16px;
+  border-top: 1px solid #f1f5f9;
+}
+.ngpv-btn-iptal {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 10px 20px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  border: 1px solid #fca5a5; background: #fff1f2; color: #dc2626; cursor: pointer;
+}
+.ngpv-btn-iptal:hover { background: #fee2e2; }
+.ngpv-btn-onayla {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 24px; border-radius: 8px; font-size: 14px; font-weight: 700;
+  background: #10b981; color: #fff; border: none; cursor: pointer;
+  box-shadow: 0 2px 8px rgba(16,185,129,.3);
+}
+.ngpv-btn-onayla:hover { background: #059669; }
+.ngpv-yetki-uyari { font-size: 12px; color: #64748b; font-style: italic; }
+</style>
+
+<script>
+function batchOnayla(batchId) {
+  if (!confirm('{{ batch["gecerli_satir"] }} geçerli fiyat kaydedilecek. Devam edilsin mi?')) return;
+  const btn = document.querySelector('.ngpv-btn-onayla');
+  if (btn) { btn.disabled = true; btn.textContent = 'Kaydediliyor…'; }
+  fetch('/nexgen/satinalma/fiyat-onayla/' + batchId, { method: 'POST' })
+  .then(r => r.json())
+  .then(d => {
+    if (d.ok) {
+      window.location = '/nexgen/satinalma/fiyat';
+    } else {
+      alert('Hata: ' + d.hata);
+      if (btn) { btn.disabled = false; btn.textContent = 'Onayla ve Kaydet'; }
+    }
+  });
+}
+
+function batchIptal(batchId) {
+  if (!confirm('Bu yükleme iptal edilecek. Hiçbir fiyat kaydedilmeyecek. Devam edilsin mi?')) return;
+  fetch('/nexgen/satinalma/fiyat-iptal/' + batchId, { method: 'POST' })
+  .then(r => r.json())
+  .then(d => {
+    if (d.ok) { window.location = '/nexgen/satinalma/fiyat'; }
+    else { alert('Hata: ' + d.hata); }
+  });
+}
+</script>
+{% endblock %}

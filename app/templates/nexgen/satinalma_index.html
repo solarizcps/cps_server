@@ -81,6 +81,16 @@
 
     {# Sağ grup: aksiyon butonları — asla gizlenmez #}
     <div class="ngsa-toolbar-sag">
+      {% if can_fiyat_view %}
+      <a href="/nexgen/satinalma/fiyat" class="ngsk-btn-yeni ngsa-btn-fiyat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+             stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+          <line x1="12" y1="1" x2="12" y2="23"/>
+          <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+        </svg>
+        Fiyat Yönetimi
+      </a>
+      {% endif %}
       {% if can_ted_manage %}
       <a href="/nexgen/satinalma/tedarikci" class="ngsk-btn-yeni ngsa-btn-mor">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
@@ -573,6 +583,10 @@
   background: #6366f1; text-decoration: none;
 }
 .ngsa-btn-mor:hover { background: #4f46e5; }
+.ngsa-btn-fiyat {
+  background: #0891b2; text-decoration: none;
+}
+.ngsa-btn-fiyat:hover { background: #0e7490; }
 
 /* Empty state */
 .ngsa-empty {
