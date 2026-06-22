@@ -79,7 +79,9 @@ def _mevcut_stok(con, kart_id):
 @nexgen_bp.route('/')
 @yetki_gerekli('nexgen.view', 'can_view')
 def index():
-    return render_template('nexgen/index.html', active='nexgen')
+    can_yonetim = yetki_var('nexgen.yonetim.manage', 'can_view')
+    return render_template('nexgen/index.html', active='nexgen',
+                           can_yonetim=can_yonetim)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -1626,3 +1628,233 @@ def api_fiyat_pasife_al(fiyat_id):
         con.close()
 
     return jsonify({"ok": True})
+
+
+# =============================================================
+# FAZ-2.8 — NexGen Yönetim Merkezi
+# =============================================================
+
+# ─────────────────────────────────────────────────────────────
+# Yönetim Merkezi Ana Sayfa
+# GET /nexgen/yonetim/
+# Yetki: nexgen.yonetim.manage can_view
+# ─────────────────────────────────────────────────────────────
+@nexgen_bp.route('/yonetim/')
+@yetki_gerekli('nexgen.yonetim.manage', 'can_view')
+def yonetim_merkezi():
+    con = _db()
+    try:
+        # Stok kartları — aile adıyla birlikte
+        kartlar_raw = con.execute("""
+            SELECT k.id, k.kod, k.ad, k.kategori, k.birim,
+                   k.minimum_stok, k.kritik_stok, k.aktif,
+                   k.renk, k.alt_kategori, k.kalite_sinifi,
+                   k.shore_degeri, k.notlar, k.aile_id,
+                   a.ad AS aile_ad, a.aa_kodu AS aile_aa,
+                   COALESCE(SUM(h.miktar_kg), 0) AS mevcut_stok
+            FROM nexgen_stok_kart k
+            LEFT JOIN nexgen_stok_aile a ON a.id = k.aile_id
+            LEFT JOIN nexgen_stok_hareket h ON h.stok_kart_id = k.id
+            GROUP BY k.id
+            ORDER BY a.sira NULLS LAST, k.kod
+        """).fetchall()
+
+        # Tedarikçiler — bağlı hammadde sayısıyla
+        tedarikciler_raw = con.execute("""
+            SELECT t.id, t.kod, t.ad, t.ulke, t.para_birimi,
+                   t.varsayilan_vade, t.iletisim_ad, t.iletisim_tel,
+                   t.iletisim_email, t.notlar, t.aktif,
+                   COUNT(ts.id) AS esleme_sayisi
+            FROM nexgen_tedarikci t
+            LEFT JOIN nexgen_tedarikci_stok ts ON ts.tedarikci_id = t.id AND ts.aktif=1
+            GROUP BY t.id
+            ORDER BY t.aktif DESC, t.ad
+        """).fetchall()
+
+        # Eşleştirmeler — tümü
+        eslesme_raw = con.execute("""
+            SELECT ts.id, ts.tedarikci_id, ts.stok_kart_id,
+                   ts.tercih_sirasi, ts.aktif, ts.notlar,
+                   t.kod  AS ted_kod,  t.ad  AS ted_ad,
+                   sk.kod AS stok_kod, sk.ad AS stok_ad
+            FROM nexgen_tedarikci_stok ts
+            JOIN nexgen_tedarikci  t  ON t.id  = ts.tedarikci_id
+            JOIN nexgen_stok_kart  sk ON sk.id = ts.stok_kart_id
+            ORDER BY t.ad, ts.tercih_sirasi, sk.kod
+        """).fetchall()
+
+        # Stok aile listesi (yeni kart modalında dropdown için)
+        aileler_raw = con.execute(
+            "SELECT id, aa_kodu, ad FROM nexgen_stok_aile WHERE aktif=1 ORDER BY sira"
+        ).fetchall()
+
+    finally:
+        con.close()
+
+    return render_template(
+        'nexgen/yonetim.html',
+        active='nexgen',
+        kartlar=[dict(k) for k in kartlar_raw],
+        tedarikciler=[dict(t) for t in tedarikciler_raw],
+        eslesme_listesi=[dict(e) for e in eslesme_raw],
+        aileler=[dict(a) for a in aileler_raw],
+    )
+
+
+# ─────────────────────────────────────────────────────────────
+# API — Stok Kartı Güncelle (Yönetim)
+# POST /nexgen/api/yonetim/stok-kart-guncelle
+# Yetki: nexgen.yonetim.manage can_update
+# ─────────────────────────────────────────────────────────────
+@nexgen_bp.route('/api/yonetim/stok-kart-guncelle', methods=['POST'])
+@yetki_gerekli('nexgen.yonetim.manage', 'can_update')
+def api_yonetim_stok_kart_guncelle():
+    d = request.get_json(silent=True) or {}
+    kart_id = d.get('id')
+    if not kart_id:
+        return jsonify({"ok": False, "hata": "id gerekli"}), 400
+
+    guncellenecek = {}
+    for alan in ('ad', 'kategori', 'birim', 'minimum_stok', 'kritik_stok',
+                 'renk', 'alt_kategori', 'kalite_sinifi', 'shore_degeri',
+                 'notlar', 'aile_id'):
+        if alan in d:
+            guncellenecek[alan] = d[alan] if d[alan] != '' else None
+
+    if not guncellenecek:
+        return jsonify({"ok": False, "hata": "Güncellenecek alan yok"}), 400
+
+    kullanici_id = _kullanici_id()
+    set_clause = ', '.join(f"{k}=?" for k in guncellenecek)
+    vals = list(guncellenecek.values()) + [kullanici_id, kart_id]
+
+    con = _db()
+    try:
+        mev = con.execute("SELECT id FROM nexgen_stok_kart WHERE id=?", (kart_id,)).fetchone()
+        if not mev:
+            return jsonify({"ok": False, "hata": "Stok kartı bulunamadı"}), 404
+        con.execute(
+            f"UPDATE nexgen_stok_kart SET {set_clause}, "
+            f"guncelleyen_id=?, guncelleme_tarihi=datetime('now') WHERE id=?",
+            vals
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    return jsonify({"ok": True})
+
+
+# ─────────────────────────────────────────────────────────────
+# API — Stok Kartı Aktif/Pasif (Yönetim)
+# POST /nexgen/api/yonetim/stok-kart-durum
+# Yetki: nexgen.yonetim.manage can_update
+# ─────────────────────────────────────────────────────────────
+@nexgen_bp.route('/api/yonetim/stok-kart-durum', methods=['POST'])
+@yetki_gerekli('nexgen.yonetim.manage', 'can_update')
+def api_yonetim_stok_kart_durum():
+    d = request.get_json(silent=True) or {}
+    kart_id = d.get('id')
+    yeni_aktif = d.get('aktif')
+    if kart_id is None or yeni_aktif is None:
+        return jsonify({"ok": False, "hata": "id ve aktif gerekli"}), 400
+
+    con = _db()
+    try:
+        con.execute(
+            "UPDATE nexgen_stok_kart SET aktif=?, guncelleyen_id=?, "
+            "guncelleme_tarihi=datetime('now') WHERE id=?",
+            (1 if yeni_aktif else 0, _kullanici_id(), kart_id)
+        )
+        con.commit()
+    finally:
+        con.close()
+    return jsonify({"ok": True})
+
+
+# ─────────────────────────────────────────────────────────────
+# API — Tedarikçi Güncelle (Yönetim) — mevcut endpoint wrapper
+# POST /nexgen/api/yonetim/tedarikci-guncelle
+# Yetki: nexgen.yonetim.manage can_update
+# Not: Mevcut /api/satinalma/tedarikci-guncelle zaten nexgen.tedarikci.manage
+#      gerektiriyor; Yönetim SuperAdmin olduğundan geçer.
+#      Yönetim ekranından doğrudan mevcut endpoint çağrılacak (JS'te URL değişir).
+# ─────────────────────────────────────────────────────────────
+
+
+# ─────────────────────────────────────────────────────────────
+# API — Eşleştirme Ekle (Yönetim)
+# POST /nexgen/api/yonetim/eslestirme-ekle
+# Yetki: nexgen.yonetim.manage can_create
+# ─────────────────────────────────────────────────────────────
+@nexgen_bp.route('/api/yonetim/eslestirme-ekle', methods=['POST'])
+@yetki_gerekli('nexgen.yonetim.manage', 'can_create')
+def api_yonetim_eslestirme_ekle():
+    d = request.get_json(silent=True) or {}
+    tedarikci_id = d.get('tedarikci_id')
+    stok_kart_id = d.get('stok_kart_id')
+    tercih_sirasi = d.get('tercih_sirasi', 1)
+    notlar = d.get('notlar', '')
+
+    if not tedarikci_id or not stok_kart_id:
+        return jsonify({"ok": False, "hata": "tedarikci_id ve stok_kart_id gerekli"}), 400
+
+    con = _db()
+    try:
+        # Çift kayıt kontrolü
+        mev = con.execute(
+            "SELECT id FROM nexgen_tedarikci_stok WHERE tedarikci_id=? AND stok_kart_id=?",
+            (tedarikci_id, stok_kart_id)
+        ).fetchone()
+        if mev:
+            # Pasifse reaktive et
+            con.execute(
+                "UPDATE nexgen_tedarikci_stok SET aktif=1, tercih_sirasi=?, notlar=? WHERE id=?",
+                (tercih_sirasi, notlar, mev['id'])
+            )
+            con.commit()
+            return jsonify({"ok": True, "yeni": False, "id": mev['id']})
+
+        con.execute("""
+            INSERT INTO nexgen_tedarikci_stok
+              (tedarikci_id, stok_kart_id, tercih_sirasi, aktif, notlar)
+            VALUES (?, ?, ?, 1, ?)
+        """, (tedarikci_id, stok_kart_id, tercih_sirasi, notlar))
+        yeni_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+        con.commit()
+    finally:
+        con.close()
+
+    return jsonify({"ok": True, "yeni": True, "id": yeni_id})
+
+
+# ─────────────────────────────────────────────────────────────
+# API — Eşleştirme Kaldır (Yönetim)
+# POST /nexgen/api/yonetim/eslestirme-kaldir
+# Yetki: nexgen.yonetim.manage can_delete
+# ─────────────────────────────────────────────────────────────
+@nexgen_bp.route('/api/yonetim/eslestirme-kaldir', methods=['POST'])
+@yetki_gerekli('nexgen.yonetim.manage', 'can_delete')
+def api_yonetim_eslestirme_kaldir():
+    d = request.get_json(silent=True) or {}
+    eslesme_id = d.get('id')
+    if not eslesme_id:
+        return jsonify({"ok": False, "hata": "id gerekli"}), 400
+
+    con = _db()
+    try:
+        kayit = con.execute(
+            "SELECT id FROM nexgen_tedarikci_stok WHERE id=?", (eslesme_id,)
+        ).fetchone()
+        if not kayit:
+            return jsonify({"ok": False, "hata": "Kayıt bulunamadı"}), 404
+        # Silmek yerine pasife al — geçmişi koru
+        con.execute(
+            "UPDATE nexgen_tedarikci_stok SET aktif=0 WHERE id=?", (eslesme_id,)
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    return jsonify({"ok": True})
+

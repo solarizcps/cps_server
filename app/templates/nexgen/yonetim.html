@@ -1,0 +1,1012 @@
+{% extends "base.html" %}
+{% set page_title = "NexGen Yönetim Merkezi" %}
+
+{% block content %}
+<div class="ng-sayfa">
+
+  {# ── Breadcrumb ─────────────────────────────────────────── #}
+  <div class="ng-baslik-blok">
+    <div class="ng-baslik">
+      <a href="/nexgen/" class="ng-bc-link">NexGen</a>
+      <span class="ng-bc-sep">›</span>
+      <span class="ng-baslik-metin">Yönetim Merkezi</span>
+      <span class="ngym-rozet-yonetim">Yönetim</span>
+    </div>
+    <div class="ngym-baslik-aciklama">
+      Master veri yönetimi — Stok kartları, tedarikçiler ve eşleştirmeler.
+      Sadece yetkili kullanıcılar erişebilir.
+    </div>
+  </div>
+
+  {# ── Sekme Navigasyon ─────────────────────────────────────── #}
+  <div class="ngsd-sekme-bar">
+    <button class="ngsd-sekme-btn" data-sekme="stok" onclick="sekmeGec('stok')">
+      Stok Kartları
+      <span class="ngsd-sekme-sayac">{{ kartlar|length }}</span>
+    </button>
+    <button class="ngsd-sekme-btn" data-sekme="tedarikci" onclick="sekmeGec('tedarikci')">
+      Tedarikçiler
+      <span class="ngsd-sekme-sayac">{{ tedarikciler|length }}</span>
+    </button>
+    <button class="ngsd-sekme-btn" data-sekme="eslestirme" onclick="sekmeGec('eslestirme')">
+      Eşleştirme
+      <span class="ngsd-sekme-sayac ngsd-sayac-mavi">{{ eslesme_listesi|selectattr('aktif','eq',1)|list|length }}</span>
+    </button>
+    <button class="ngsd-sekme-btn" data-sekme="import" onclick="sekmeGec('import')">
+      Excel Import
+      <span class="ngsd-sekme-soon">Yakında</span>
+    </button>
+  </div>
+
+  {# ═══════════════════════════════════════════════════════════ #}
+  {# SEKME: STOK KARTLARI                                        #}
+  {# ═══════════════════════════════════════════════════════════ #}
+  <div id="ngsd-sekme-stok" class="ngsd-sekme-icerik">
+
+    <div class="ngym-toolbar">
+      <div class="ngym-toolbar-sol">
+        <input type="text" id="stokAra" placeholder="Kod veya ad ara..."
+               class="ngym-ara" oninput="stokFiltrele()">
+        <select id="aileFiltre" class="ngym-select" onchange="stokFiltrele()">
+          <option value="">Tüm Aileler</option>
+          {% for a in aileler %}
+          <option value="{{ a.aa_kodu }}">{{ a.aa_kodu }} – {{ a.ad }}</option>
+          {% endfor %}
+        </select>
+        <select id="kategoriFiltre" class="ngym-select" onchange="stokFiltrele()">
+          <option value="">Tüm Kategoriler</option>
+          <option value="HAMMADDE">HAMMADDE</option>
+          <option value="MAMUL_COMPOUND">MAMUL_COMPOUND</option>
+          <option value="RECYCLE">RECYCLE</option>
+          <option value="KATKI">KATKI</option>
+          <option value="BOYA">BOYA</option>
+          <option value="DIGER">DİĞER</option>
+        </select>
+      </div>
+      <div class="ngym-toolbar-sag">
+        <button class="ngsk-btn-yeni" onclick="stokYeniModalAc()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+               stroke-linecap="round" stroke-linejoin="round" width="13" height="13">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          Yeni Stok Kartı
+        </button>
+      </div>
+    </div>
+
+    <div class="ngsd-hrt-cerceve">
+      <table class="ngsd-hrt-tablo" id="stokTablo">
+        <thead>
+          <tr>
+            <th>Kod</th><th>Ad</th><th>Aile</th><th>Kategori</th>
+            <th class="ngsd-th-r">Mevcut</th>
+            <th class="ngsd-th-r">Min/Kritik</th>
+            <th>Durum</th><th>İşlem</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for k in kartlar %}
+          <tr class="stok-satir" data-kod="{{ k.kod }}" data-ad="{{ k.ad }}"
+              data-aile="{{ k.aile_aa or '' }}" data-kategori="{{ k.kategori }}">
+            <td class="ngsd-mono ngsd-td-tarih">{{ k.kod }}</td>
+            <td>
+              <strong>{{ k.ad }}</strong>
+              {% if k.renk %}<span class="ngym-alt-bilgi">{{ k.renk }}</span>{% endif %}
+            </td>
+            <td>
+              {% if k.aile_ad %}
+                <span class="ngym-aile-rozet">{{ k.aile_aa }} {{ k.aile_ad }}</span>
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              <span class="ngsk-kat-rozet ngsk-kat-{{ k.kategori | lower | replace('_','-') }}">
+                {{ k.kategori }}
+              </span>
+            </td>
+            <td class="ngsd-td-r ngsd-sayi">
+              {{ "%.0f"|format(k.mevcut_stok) }}
+              <span class="ngsd-birim-kucuk">{{ k.birim }}</span>
+            </td>
+            <td class="ngsd-td-r ngsd-sayi ngym-minkrit">
+              {{ "%.0f"|format(k.minimum_stok) }} /
+              <span class="ngsd-krit">{{ "%.0f"|format(k.kritik_stok) }}</span>
+            </td>
+            <td>
+              {% if k.aktif %}
+                <span class="ngsk-aktif-etiket ngsk-aktif-evet">Aktif</span>
+              {% else %}
+                <span class="ngsk-aktif-etiket ngsk-aktif-hayir">Pasif</span>
+              {% endif %}
+            </td>
+            <td class="ngym-islem-hucre">
+              <button class="ngym-btn-duzenle"
+                onclick='stokDuzenleModalAc({{ k | tojson }})'>Düzenle</button>
+              <button class="ngym-btn-durum {% if k.aktif %}ngym-btn-pasifle{% else %}ngym-btn-aktifle{% endif %}"
+                onclick="stokDurumDegistir({{ k.id }}, {{ 0 if k.aktif else 1 }}, this)">
+                {{ "Pasifle" if k.aktif else "Aktifle" }}
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if not kartlar %}
+      <div class="ngsk-bos">Stok kartı bulunamadı.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ═══════════════════════════════════════════════════════════ #}
+  {# SEKME: TEDARİKÇİLER                                         #}
+  {# ═══════════════════════════════════════════════════════════ #}
+  <div id="ngsd-sekme-tedarikci" class="ngsd-sekme-icerik" style="display:none;">
+
+    <div class="ngym-toolbar">
+      <div class="ngym-toolbar-sol">
+        <input type="text" id="tedAra" placeholder="Kod veya ad ara..."
+               class="ngym-ara" oninput="tedFiltrele()">
+      </div>
+      <div class="ngym-toolbar-sag">
+        <button class="ngsk-btn-yeni" onclick="tedYeniModalAc()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+               stroke-linecap="round" stroke-linejoin="round" width="13" height="13">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          Yeni Tedarikçi
+        </button>
+      </div>
+    </div>
+
+    <div class="ngsd-hrt-cerceve">
+      <table class="ngsd-hrt-tablo" id="tedTablo">
+        <thead>
+          <tr>
+            <th>Kod</th><th>Ad</th><th>Ülke</th><th>P.Birimi</th>
+            <th class="ngsd-th-r">Vade</th>
+            <th class="ngsd-th-r">Hammadde</th>
+            <th>Durum</th><th>İşlem</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in tedarikciler %}
+          <tr class="ted-satir" data-kod="{{ t.kod }}" data-ad="{{ t.ad }}">
+            <td class="ngsd-mono ngsd-td-tarih">{{ t.kod }}</td>
+            <td><strong>{{ t.ad }}</strong></td>
+            <td>{{ t.ulke or '—' }}</td>
+            <td>{{ t.para_birimi or '—' }}</td>
+            <td class="ngsd-td-r ngsd-sayi">
+              {{ t.varsayilan_vade or '—' }}{% if t.varsayilan_vade %} g{% endif %}
+            </td>
+            <td class="ngsd-td-r ngsd-sayi">{{ t.esleme_sayisi }}</td>
+            <td>
+              {% if t.aktif %}
+                <span class="ngsk-aktif-etiket ngsk-aktif-evet">Aktif</span>
+              {% else %}
+                <span class="ngsk-aktif-etiket ngsk-aktif-hayir">Pasif</span>
+              {% endif %}
+            </td>
+            <td class="ngym-islem-hucre">
+              <button class="ngym-btn-duzenle"
+                onclick='tedDuzenleModalAc({{ t | tojson }})'>Düzenle</button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if not tedarikciler %}
+      <div class="ngsk-bos">Tedarikçi bulunamadı.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ═══════════════════════════════════════════════════════════ #}
+  {# SEKME: EŞLEŞTİRME                                           #}
+  {# ═══════════════════════════════════════════════════════════ #}
+  <div id="ngsd-sekme-eslestirme" class="ngsd-sekme-icerik" style="display:none;">
+
+    <div class="ngym-eslesme-layout">
+
+      {# Sol panel: tedarikçi seç #}
+      <div class="ngym-eslesme-sol">
+        <div class="ngym-panel-baslik">Tedarikçi Seç</div>
+        <div class="ngym-ted-liste" id="tedSecListe">
+          {% for t in tedarikciler %}
+          <div class="ngym-ted-sec-kart {% if loop.first %}ngym-ted-sec-aktif{% endif %}"
+               data-ted-id="{{ t.id }}" onclick="tedSec({{ t.id }})">
+            <div class="ngym-ted-sec-kod">{{ t.kod }}</div>
+            <div class="ngym-ted-sec-ad">{{ t.ad }}</div>
+            <div class="ngym-ted-sec-cnt">{{ t.esleme_sayisi }} hammadde</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      {# Sağ panel: seçili tedarikçinin eşleşmeleri #}
+      <div class="ngym-eslesme-sag">
+        <div class="ngym-panel-baslik-satir">
+          <div class="ngym-panel-baslik" id="eslesme-panel-baslik">Eşleştirmeler</div>
+          <button class="ngsk-btn-yeni ngym-eslesme-ekle-btn"
+                  onclick="eslesmeEkleModalAc()" id="eslesmeEkleBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                 stroke-linecap="round" stroke-linejoin="round" width="13" height="13">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            Eşleştirme Ekle
+          </button>
+        </div>
+        <div id="eslesme-listesi-alan">
+          {# JavaScript ile dinamik dolacak #}
+        </div>
+      </div>
+    </div>
+
+    {# Eşleştirme verisi — JS'e JSON olarak geç #}
+    <script>
+    const ESL_DATA = {{ eslesme_listesi | tojson }};
+    const STOK_LIST = {{ kartlar | tojson }};
+    var aktifTedId = {{ tedarikciler[0].id if tedarikciler else 'null' }};
+    </script>
+  </div>
+
+  {# ═══════════════════════════════════════════════════════════ #}
+  {# SEKME: EXCEL IMPORT (PLACEHOLDER)                           #}
+  {# ═══════════════════════════════════════════════════════════ #}
+  <div id="ngsd-sekme-import" class="ngsd-sekme-icerik" style="display:none;">
+    <div class="ngsd-placeholder-kart">
+      <div class="ngsd-placeholder-ikon">📥</div>
+      <div class="ngsd-placeholder-baslik">Excel Toplu Import</div>
+      <div class="ngsd-placeholder-aciklama">
+        Bu sekme ilerleyen fazlarda aktif olacak.<br>
+        Tedarikçi, stok kartı ve tedarikçi-hammadde eşleşmelerini Excel ile toplu yükleyebileceksiniz.
+      </div>
+      <span class="ngsd-placeholder-etiket">FAZ-3 / Import Motoru</span>
+    </div>
+  </div>
+
+</div>{# /.ng-sayfa #}
+
+{# ═══════════════════════════════════════════════════════════ #}
+{# MODAL: STOK KARTI YENİ / DÜZENLE                            #}
+{# ═══════════════════════════════════════════════════════════ #}
+<div id="ngym-stok-overlay" class="ngsk-overlay" onclick="ngymKapat('stok',event)">
+  <div class="ngsk-modal ngym-modal-genis" onclick="event.stopPropagation()">
+    <div class="ngsk-modal-baslik">
+      <span id="stok-modal-baslik">Stok Kartı</span>
+      <button class="ngsk-modal-kapat" onclick="ngymKapat('stok')">&times;</button>
+    </div>
+    <div id="stok-modal-hata"   class="ngsk-hata-alan"   style="display:none"></div>
+    <div id="stok-modal-basari" class="ngsk-basari-alan"  style="display:none"></div>
+
+    <div class="ngym-form-grid">
+      <input type="hidden" id="sm-id">
+      <div class="ngsk-fg ngym-fg-genis">
+        <label>Ad <span class="ngsk-zorunlu">*</span></label>
+        <input type="text" id="sm-ad" placeholder="Örn: EVA 18">
+      </div>
+      <div class="ngsk-fg">
+        <label>Aile <span class="ngsk-zorunlu">*</span></label>
+        <select id="sm-aile-id">
+          <option value="">— Aile seçin —</option>
+          {% for a in aileler %}
+          <option value="{{ a.id }}">{{ a.aa_kodu }} – {{ a.ad }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="ngsk-fg">
+        <label>Kategori <span class="ngsk-zorunlu">*</span></label>
+        <select id="sm-kategori">
+          <option value="HAMMADDE">HAMMADDE</option>
+          <option value="MAMUL_COMPOUND">MAMUL_COMPOUND</option>
+          <option value="RECYCLE">RECYCLE</option>
+          <option value="KATKI">KATKI</option>
+          <option value="BOYA">BOYA</option>
+          <option value="DIGER">DİĞER</option>
+        </select>
+      </div>
+      <div class="ngsk-fg">
+        <label>Birim</label>
+        <select id="sm-birim">
+          <option value="KG">KG</option>
+          <option value="ADET">ADET</option>
+          <option value="LT">LT</option>
+        </select>
+      </div>
+      <div class="ngsk-fg">
+        <label>Minimum Stok (KG)</label>
+        <input type="number" id="sm-min-stok" value="0" min="0" step="100">
+      </div>
+      <div class="ngsk-fg">
+        <label>Kritik Stok (KG)</label>
+        <input type="number" id="sm-kritik-stok" value="0" min="0" step="100">
+      </div>
+      <div class="ngsk-fg">
+        <label>Renk / Özellik</label>
+        <input type="text" id="sm-renk" placeholder="Örn: Siyah, Şeffaf">
+      </div>
+      <div class="ngsk-fg">
+        <label>Alt Kategori</label>
+        <input type="text" id="sm-alt-kategori" placeholder="Örn: EVA, SBS, Kalsit">
+      </div>
+      <div class="ngsk-fg">
+        <label>Kalite Sınıfı</label>
+        <input type="text" id="sm-kalite-sinifi">
+      </div>
+      <div class="ngsk-fg">
+        <label>Shore Değeri</label>
+        <input type="text" id="sm-shore-degeri">
+      </div>
+      <div class="ngsk-fg ngym-fg-genis">
+        <label>Notlar</label>
+        <input type="text" id="sm-notlar" placeholder="Tedarikçi notu, kalite vb.">
+      </div>
+    </div>
+
+    <div class="ngsk-modal-footer">
+      <button class="ngsk-btn-iptal" onclick="ngymKapat('stok')">İptal</button>
+      <button class="ngsk-btn-kaydet" id="stok-kaydet-btn" onclick="stokKaydet()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+{# ═══════════════════════════════════════════════════════════ #}
+{# MODAL: TEDARİKÇİ YENİ / DÜZENLE                             #}
+{# ═══════════════════════════════════════════════════════════ #}
+<div id="ngym-ted-overlay" class="ngsk-overlay" onclick="ngymKapat('ted',event)">
+  <div class="ngsk-modal ngym-modal-genis" onclick="event.stopPropagation()">
+    <div class="ngsk-modal-baslik">
+      <span id="ted-modal-baslik">Tedarikçi</span>
+      <button class="ngsk-modal-kapat" onclick="ngymKapat('ted')">&times;</button>
+    </div>
+    <div id="ted-modal-hata"   class="ngsk-hata-alan"   style="display:none"></div>
+    <div id="ted-modal-basari" class="ngsk-basari-alan"  style="display:none"></div>
+
+    <div class="ngym-form-grid">
+      <input type="hidden" id="tm-id">
+      <div class="ngsk-fg">
+        <label>Kod <span class="ngsk-zorunlu">*</span></label>
+        <input type="text" id="tm-kod" placeholder="Örn: DERKIM" style="text-transform:uppercase">
+        <small id="tm-kod-not" style="display:none;color:#9ca3af">Düzenlemede kod değiştirilemez</small>
+      </div>
+      <div class="ngsk-fg">
+        <label>Ad <span class="ngsk-zorunlu">*</span></label>
+        <input type="text" id="tm-ad" placeholder="Örn: Derkim Kimya">
+      </div>
+      <div class="ngsk-fg">
+        <label>Ülke</label>
+        <input type="text" id="tm-ulke" placeholder="Türkiye">
+      </div>
+      <div class="ngsk-fg">
+        <label>Para Birimi</label>
+        <select id="tm-para-birimi">
+          <option value="USD">USD</option>
+          <option value="EUR">EUR</option>
+          <option value="TRY">TRY</option>
+          <option value="GBP">GBP</option>
+          <option value="CNY">CNY</option>
+        </select>
+      </div>
+      <div class="ngsk-fg">
+        <label>Varsayılan Vade (gün)</label>
+        <input type="number" id="tm-vade" value="30" min="0" step="15">
+      </div>
+      <div class="ngsk-fg">
+        <label>İletişim Adı</label>
+        <input type="text" id="tm-iletisim-ad">
+      </div>
+      <div class="ngsk-fg">
+        <label>Telefon</label>
+        <input type="text" id="tm-iletisim-tel">
+      </div>
+      <div class="ngsk-fg">
+        <label>E-posta</label>
+        <input type="text" id="tm-iletisim-email">
+      </div>
+      <div class="ngsk-fg ngym-fg-genis">
+        <label>Notlar</label>
+        <input type="text" id="tm-notlar">
+      </div>
+    </div>
+
+    <div class="ngsk-modal-footer">
+      <button class="ngsk-btn-iptal" onclick="ngymKapat('ted')">İptal</button>
+      <button class="ngsk-btn-kaydet" id="ted-kaydet-btn" onclick="tedKaydet()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+{# ═══════════════════════════════════════════════════════════ #}
+{# MODAL: EŞLEŞTİRME EKLE                                      #}
+{# ═══════════════════════════════════════════════════════════ #}
+<div id="ngym-esl-overlay" class="ngsk-overlay" onclick="ngymKapat('esl',event)">
+  <div class="ngsk-modal" onclick="event.stopPropagation()">
+    <div class="ngsk-modal-baslik">
+      <span>Eşleştirme Ekle</span>
+      <button class="ngsk-modal-kapat" onclick="ngymKapat('esl')">&times;</button>
+    </div>
+    <div id="esl-modal-hata"   class="ngsk-hata-alan"   style="display:none"></div>
+    <div id="esl-modal-basari" class="ngsk-basari-alan"  style="display:none"></div>
+
+    <div style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+      <div class="ngsk-fg">
+        <label>Tedarikçi</label>
+        <div id="esl-ted-ad" class="ngym-sec-goster">—</div>
+      </div>
+      <div class="ngsk-fg">
+        <label>Hammadde <span class="ngsk-zorunlu">*</span></label>
+        <select id="esl-stok-id">
+          <option value="">— Seçin —</option>
+          {% for k in kartlar %}
+          <option value="{{ k.id }}">{{ k.kod }} – {{ k.ad }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="ngsk-fg">
+        <label>Tercih Sırası</label>
+        <input type="number" id="esl-tercih" value="1" min="1" max="9">
+      </div>
+      <div class="ngsk-fg">
+        <label>Not</label>
+        <input type="text" id="esl-notlar" placeholder="Opsiyonel not">
+      </div>
+    </div>
+
+    <div class="ngsk-modal-footer">
+      <button class="ngsk-btn-iptal" onclick="ngymKapat('esl')">İptal</button>
+      <button class="ngsk-btn-kaydet" id="esl-kaydet-btn" onclick="eslKaydet()">Ekle</button>
+    </div>
+  </div>
+</div>
+
+<style>
+/* ── Genel sayfa ── */
+.ng-sayfa { padding:22px 28px; background:#f6f7f9; min-height:100vh; box-sizing:border-box; }
+.ng-baslik-blok { margin-bottom:16px; }
+.ng-baslik { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.ng-bc-link { color:#f59e0b; text-decoration:none; font-size:13px; font-weight:500; }
+.ng-bc-link:hover { text-decoration:underline; }
+.ng-bc-sep { color:#9ca3af; font-size:13px; }
+.ng-baslik-metin { font-size:20px; font-weight:700; color:#111827; }
+.ngym-rozet-yonetim {
+  display:inline-block; padding:2px 10px; border-radius:10px;
+  font-size:11px; font-weight:700;
+  background:#fef3c7; color:#92400e;
+}
+.ngym-baslik-aciklama { font-size:13px; color:#6b7280; margin-top:4px; }
+
+/* ── Sekme bar (stok_detay ile aynı) ── */
+.ngsd-sekme-bar {
+  display:flex; gap:2px; flex-wrap:wrap;
+  background:#fff; border:1px solid rgba(17,24,39,0.07);
+  border-radius:10px 10px 0 0; padding:6px 8px; margin-bottom:0;
+  box-shadow:0 1px 4px rgba(15,23,42,0.04);
+}
+.ngsd-sekme-btn {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:8px 16px; border:none; border-radius:7px;
+  background:transparent; color:#6b7280;
+  font-size:13px; font-weight:500; cursor:pointer;
+  transition:background .12s, color .12s; white-space:nowrap;
+}
+.ngsd-sekme-btn:hover { background:#f9fafb; color:#374151; }
+.ngsd-sekme-btn.aktif { background:#fef3c7; color:#92400e; font-weight:700; }
+.ngsd-sekme-sayac {
+  display:inline-block; font-size:10px; font-weight:700;
+  background:#f1f5f9; color:#475569;
+  padding:1px 6px; border-radius:8px; min-width:18px; text-align:center;
+}
+.ngsd-sayac-mavi { background:#dbeafe; color:#1d4ed8; }
+.ngsd-sekme-soon {
+  font-size:9px; font-weight:700;
+  background:#f3f4f6; color:#9ca3af;
+  padding:1px 5px; border-radius:6px;
+}
+.ngsd-sekme-icerik {
+  background:#fff; border:1px solid rgba(17,24,39,0.07);
+  border-top:none; border-radius:0 0 12px 12px;
+  padding:20px; margin-bottom:16px;
+  box-shadow:0 2px 8px rgba(15,23,42,0.04);
+}
+
+/* ── Toolbar ── */
+.ngym-toolbar {
+  display:flex; justify-content:space-between; align-items:center;
+  gap:10px; flex-wrap:wrap; margin-bottom:14px;
+}
+.ngym-toolbar-sol { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.ngym-toolbar-sag { display:flex; gap:8px; align-items:center; }
+.ngym-ara {
+  border:1px solid #e5e7eb; border-radius:8px; padding:7px 12px;
+  font-size:13px; color:#111827; outline:none; min-width:180px;
+}
+.ngym-ara:focus { border-color:#f59e0b; }
+.ngym-select {
+  border:1px solid #e5e7eb; border-radius:8px; padding:7px 10px;
+  font-size:13px; color:#111827; outline:none; background:#fff;
+}
+.ngym-select:focus { border-color:#f59e0b; }
+
+/* ── Tablo ── */
+.ngsd-hrt-cerceve {
+  background:#fff; border:1px solid rgba(17,24,39,0.06);
+  border-radius:10px; overflow-x:auto;
+  box-shadow:0 1px 4px rgba(15,23,42,0.03);
+}
+.ngsd-hrt-tablo {
+  width:100%; min-width:640px;
+  border-collapse:separate; border-spacing:0;
+  font-size:13px; color:#111827;
+}
+.ngsd-hrt-tablo thead th {
+  background:#f9fafb; padding:9px 14px;
+  font-size:11px; font-weight:600; color:#6b7280;
+  text-transform:uppercase; letter-spacing:0.4px;
+  border-bottom:1px solid #f0f1f3; white-space:nowrap;
+}
+.ngsd-th-r { text-align:right; }
+.ngsd-hrt-tablo tbody tr { border-bottom:1px solid #f3f4f6; }
+.ngsd-hrt-tablo tbody tr:last-child { border-bottom:none; }
+.ngsd-hrt-tablo tbody tr:hover { background:#fafafa; }
+.ngsd-hrt-tablo td { padding:9px 14px; vertical-align:middle; }
+.ngsd-td-r { text-align:right; white-space:nowrap; }
+.ngsd-td-tarih { font-size:12px; color:#6b7280; white-space:nowrap; }
+.ngsd-mono { font-family:'Courier New',monospace; color:#0891b2; font-size:12px; }
+.ngsd-sayi { text-align:right; }
+.ngsd-birim-kucuk { font-size:11px; color:#9ca3af; margin-left:2px; }
+.ngsd-krit { color:#dc2626; }
+.ngsk-bos { padding:40px 24px; text-align:center; color:#9ca3af; font-size:14px; }
+.ngym-alt-bilgi { font-size:11px; color:#9ca3af; display:block; }
+.ngym-aile-rozet {
+  display:inline-block; padding:2px 7px; border-radius:6px;
+  font-size:11px; font-weight:600;
+  background:#f0fdf4; color:#15803d;
+}
+.ngym-minkrit { color:#6b7280; }
+
+/* Kategori rozetleri */
+.ngsk-kat-rozet {
+  display:inline-block; padding:2px 8px; border-radius:8px;
+  font-size:11px; font-weight:600;
+}
+.ngsk-kat-hammadde { background:#eff6ff; color:#1d4ed8; }
+.ngsk-kat-mamul-compound { background:#f0fdf4; color:#15803d; }
+.ngsk-kat-recycle { background:#f5f3ff; color:#6d28d9; }
+.ngsk-kat-katk\u0131 { background:#fff7ed; color:#c2410c; }
+.ngsk-kat-boya { background:#fdf2f8; color:#9d174d; }
+.ngsk-kat-diger { background:#f3f4f6; color:#374151; }
+
+/* Aktif/pasif etiket */
+.ngsk-aktif-etiket { display:inline-block; padding:2px 8px; border-radius:8px; font-size:11px; font-weight:600; }
+.ngsk-aktif-evet { background:#f0fdf4; color:#16a34a; }
+.ngsk-aktif-hayir { background:#fef2f2; color:#dc2626; }
+
+/* İşlem hücresi */
+.ngym-islem-hucre { white-space:nowrap; }
+.ngym-btn-duzenle {
+  background:#f1f5f9; color:#374151; border:none; border-radius:6px;
+  padding:4px 10px; font-size:12px; cursor:pointer; margin-right:4px;
+}
+.ngym-btn-duzenle:hover { background:#e2e8f0; }
+.ngym-btn-pasifle {
+  background:#fef2f2; color:#dc2626; border:none; border-radius:6px;
+  padding:4px 10px; font-size:12px; cursor:pointer;
+}
+.ngym-btn-pasifle:hover { background:#fee2e2; }
+.ngym-btn-aktifle {
+  background:#f0fdf4; color:#16a34a; border:none; border-radius:6px;
+  padding:4px 10px; font-size:12px; cursor:pointer;
+}
+.ngym-btn-aktifle:hover { background:#dcfce7; }
+
+/* Eşleştirme layout */
+.ngym-eslesme-layout { display:flex; gap:16px; min-height:400px; }
+.ngym-eslesme-sol {
+  width:220px; flex-shrink:0;
+  background:#f9fafb; border:1px solid #f0f1f3;
+  border-radius:10px; overflow-y:auto; max-height:60vh;
+}
+.ngym-eslesme-sag { flex:1; }
+.ngym-panel-baslik {
+  padding:10px 14px; font-size:12px; font-weight:700;
+  color:#6b7280; text-transform:uppercase; letter-spacing:0.04em;
+  border-bottom:1px solid #f0f1f3;
+}
+.ngym-panel-baslik-satir {
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:10px; flex-wrap:wrap; gap:8px;
+}
+.ngym-ted-sec-kart {
+  padding:10px 14px; cursor:pointer; border-bottom:1px solid #f0f1f3;
+  transition:background .1s;
+}
+.ngym-ted-sec-kart:hover { background:#f0fdf4; }
+.ngym-ted-sec-aktif { background:#fef3c7 !important; }
+.ngym-ted-sec-kod { font-size:11px; font-weight:700; color:#0891b2; font-family:'Courier New',monospace; }
+.ngym-ted-sec-ad { font-size:13px; font-weight:600; color:#111827; margin-top:1px; }
+.ngym-ted-sec-cnt { font-size:11px; color:#9ca3af; margin-top:2px; }
+.ngym-eslesme-ekle-btn { font-size:12px; padding:5px 12px; }
+.ngym-eslesme-satir {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:8px 12px; border-bottom:1px solid #f3f4f6; font-size:13px;
+}
+.ngym-eslesme-satir:hover { background:#fafafa; }
+.ngym-eslesme-satir:last-child { border-bottom:none; }
+.ngym-esl-stok-kod { font-family:'Courier New',monospace; color:#0891b2; font-size:11px; margin-right:6px; }
+.ngym-esl-kaldir {
+  background:none; border:none; color:#dc2626; cursor:pointer;
+  font-size:16px; padding:0 4px; line-height:1;
+}
+.ngym-esl-kaldir:hover { color:#991b1b; }
+.ngym-esl-bos { padding:30px; text-align:center; color:#9ca3af; font-size:13px; }
+.ngym-sec-goster {
+  padding:8px 10px; background:#f9fafb; border:1px solid #e5e7eb;
+  border-radius:7px; font-size:13px; color:#374151; font-weight:600;
+}
+
+/* Modal */
+.ngsk-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1000; align-items:center; justify-content:center; }
+.ngsk-overlay.acik { display:flex; }
+.ngsk-modal { background:#fff; border-radius:14px; width:480px; max-width:95vw; max-height:88vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.18); }
+.ngym-modal-genis { width:620px; }
+.ngsk-modal-baslik { display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid #f0f1f3; font-size:16px; font-weight:700; color:#111827; position:sticky; top:0; background:#fff; z-index:1; }
+.ngsk-modal-kapat { background:none; border:none; cursor:pointer; font-size:20px; color:#9ca3af; }
+.ngsk-modal-kapat:hover { color:#374151; }
+.ngsk-hata-alan  { margin:12px 20px 0; padding:10px 14px; border-radius:8px; font-size:13px; background:#fef2f2; color:#dc2626; border:1px solid #fecaca; }
+.ngsk-basari-alan{ margin:12px 20px 0; padding:10px 14px; border-radius:8px; font-size:13px; background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
+.ngym-form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px 16px; padding:20px; }
+.ngym-fg-genis { grid-column:1/-1; }
+.ngsk-fg { display:flex; flex-direction:column; gap:4px; }
+.ngsk-fg label { font-size:12.5px; font-weight:600; color:#374151; }
+.ngsk-fg input, .ngsk-fg select { border:1px solid #e5e7eb; border-radius:7px; padding:7px 10px; font-size:13.5px; color:#111827; outline:none; }
+.ngsk-fg input:focus, .ngsk-fg select:focus { border-color:#f59e0b; }
+.ngsk-fg small { font-size:11px; color:#9ca3af; }
+.ngsk-zorunlu { color:#ef4444; }
+.ngsk-modal-footer { display:flex; justify-content:flex-end; gap:10px; padding:14px 20px; border-top:1px solid #f0f1f3; }
+.ngsk-btn-iptal  { background:#f3f4f6; color:#374151; border:none; border-radius:8px; padding:8px 18px; font-size:13px; font-weight:600; cursor:pointer; }
+.ngsk-btn-iptal:hover { background:#e5e7eb; }
+.ngsk-btn-kaydet { background:#f59e0b; color:#fff; border:none; border-radius:8px; padding:8px 20px; font-size:13px; font-weight:600; cursor:pointer; }
+.ngsk-btn-kaydet:hover { background:#d97706; }
+.ngsk-btn-kaydet:disabled { background:#d1d5db; cursor:not-allowed; }
+.ngsk-btn-yeni { display:flex; align-items:center; gap:6px; background:#f59e0b; color:#fff; border:none; border-radius:8px; padding:7px 16px; font-size:13px; font-weight:600; cursor:pointer; }
+.ngsk-btn-yeni:hover { background:#d97706; }
+/* Placeholder */
+.ngsd-placeholder-kart { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:48px 24px; text-align:center; }
+.ngsd-placeholder-ikon    { font-size:36px; margin-bottom:10px; }
+.ngsd-placeholder-baslik  { font-size:16px; font-weight:700; color:#374151; margin-bottom:8px; }
+.ngsd-placeholder-aciklama{ font-size:13px; color:#9ca3af; line-height:1.6; }
+.ngsd-placeholder-etiket  { margin-top:14px; display:inline-block; padding:4px 12px; background:#f1f5f9; color:#64748b; border-radius:8px; font-size:11px; font-weight:600; }
+
+@media (max-width:640px) {
+  .ng-sayfa { padding:14px 10px; }
+  .ngym-eslesme-layout { flex-direction:column; }
+  .ngym-eslesme-sol { width:100%; max-height:200px; }
+  .ngym-form-grid { grid-template-columns:1fr; }
+}
+</style>
+
+<script>
+const SEKMELER_YM = ['stok', 'tedarikci', 'eslestirme', 'import'];
+
+function sekmeGec(hedef) {
+  SEKMELER_YM.forEach(function(s) {
+    const el = document.getElementById('ngsd-sekme-' + s);
+    if (el) el.style.display = (s === hedef ? 'block' : 'none');
+  });
+  document.querySelectorAll('.ngsd-sekme-btn').forEach(function(btn) {
+    btn.classList.toggle('aktif', btn.dataset.sekme === hedef);
+  });
+  try { history.replaceState(null, '', '#' + hedef); } catch(e) {}
+  if (hedef === 'eslestirme') eslGoster(aktifTedId);
+}
+(function() {
+  const hash = (location.hash || '#stok').replace('#', '');
+  const gecerli = SEKMELER_YM.indexOf(hash) >= 0 ? hash : 'stok';
+  sekmeGec(gecerli);
+})();
+
+// ── Stok filtreleme ──
+function stokFiltrele() {
+  const ara = document.getElementById('stokAra').value.toLowerCase();
+  const aile = document.getElementById('aileFiltre').value.toLowerCase();
+  const kat  = document.getElementById('kategoriFiltre').value.toLowerCase();
+  document.querySelectorAll('.stok-satir').forEach(function(tr) {
+    const kod = (tr.dataset.kod || '').toLowerCase();
+    const ad  = (tr.dataset.ad  || '').toLowerCase();
+    const aileD = (tr.dataset.aile || '').toLowerCase();
+    const katD  = (tr.dataset.kategori || '').toLowerCase();
+    const gorunsun = (!ara || kod.includes(ara) || ad.includes(ara)) &&
+                     (!aile || aileD.includes(aile)) &&
+                     (!kat  || katD === kat);
+    tr.style.display = gorunsun ? '' : 'none';
+  });
+}
+
+// ── Tedarikçi filtreleme ──
+function tedFiltrele() {
+  const ara = document.getElementById('tedAra').value.toLowerCase();
+  document.querySelectorAll('.ted-satir').forEach(function(tr) {
+    const kod = (tr.dataset.kod || '').toLowerCase();
+    const ad  = (tr.dataset.ad  || '').toLowerCase();
+    tr.style.display = (!ara || kod.includes(ara) || ad.includes(ara)) ? '' : 'none';
+  });
+}
+
+// ── Modal yardımcıları ──
+function ngymKapat(tip, e) {
+  if (e && e.target !== document.getElementById('ngym-' + tip + '-overlay')) return;
+  document.getElementById('ngym-' + tip + '-overlay').classList.remove('acik');
+}
+function ngymHataTemizle(tip) {
+  document.getElementById(tip + '-modal-hata').style.display = 'none';
+  document.getElementById(tip + '-modal-basari').style.display = 'none';
+}
+
+// ── Stok Kartı Modalı ──
+function stokYeniModalAc() {
+  document.getElementById('stok-modal-baslik').textContent = 'Yeni Stok Kartı';
+  document.getElementById('sm-id').value = '';
+  ['sm-ad','sm-renk','sm-alt-kategori','sm-kalite-sinifi','sm-shore-degeri','sm-notlar']
+    .forEach(function(id) { document.getElementById(id).value = ''; });
+  document.getElementById('sm-aile-id').value = '';
+  document.getElementById('sm-kategori').value = 'HAMMADDE';
+  document.getElementById('sm-birim').value = 'KG';
+  document.getElementById('sm-min-stok').value = '0';
+  document.getElementById('sm-kritik-stok').value = '0';
+  ngymHataTemizle('stok');
+  document.getElementById('ngym-stok-overlay').classList.add('acik');
+}
+
+function stokDuzenleModalAc(k) {
+  document.getElementById('stok-modal-baslik').textContent = 'Stok Kartı Düzenle — ' + k.kod;
+  document.getElementById('sm-id').value = k.id;
+  document.getElementById('sm-ad').value = k.ad || '';
+  document.getElementById('sm-aile-id').value = k.aile_id || '';
+  document.getElementById('sm-kategori').value = k.kategori || 'HAMMADDE';
+  document.getElementById('sm-birim').value = k.birim || 'KG';
+  document.getElementById('sm-min-stok').value = k.minimum_stok || 0;
+  document.getElementById('sm-kritik-stok').value = k.kritik_stok || 0;
+  document.getElementById('sm-renk').value = k.renk || '';
+  document.getElementById('sm-alt-kategori').value = k.alt_kategori || '';
+  document.getElementById('sm-kalite-sinifi').value = k.kalite_sinifi || '';
+  document.getElementById('sm-shore-degeri').value = k.shore_degeri || '';
+  document.getElementById('sm-notlar').value = k.notlar || '';
+  ngymHataTemizle('stok');
+  document.getElementById('ngym-stok-overlay').classList.add('acik');
+}
+
+function stokKaydet() {
+  const btn = document.getElementById('stok-kaydet-btn');
+  const hataDiv = document.getElementById('stok-modal-hata');
+  const basariDiv = document.getElementById('stok-modal-basari');
+  ngymHataTemizle('stok');
+
+  const id  = document.getElementById('sm-id').value;
+  const ad  = document.getElementById('sm-ad').value.trim();
+  const aileId = document.getElementById('sm-aile-id').value;
+  if (!ad) { hataDiv.textContent = 'Ad zorunlu.'; hataDiv.style.display='block'; return; }
+
+  const payload = {
+    ad: ad,
+    aile_id: aileId ? parseInt(aileId) : null,
+    kategori: document.getElementById('sm-kategori').value,
+    birim: document.getElementById('sm-birim').value,
+    minimum_stok: parseFloat(document.getElementById('sm-min-stok').value) || 0,
+    kritik_stok:  parseFloat(document.getElementById('sm-kritik-stok').value) || 0,
+    renk: document.getElementById('sm-renk').value.trim() || null,
+    alt_kategori: document.getElementById('sm-alt-kategori').value.trim() || null,
+    kalite_sinifi: document.getElementById('sm-kalite-sinifi').value.trim() || null,
+    shore_degeri:  document.getElementById('sm-shore-degeri').value.trim() || null,
+    notlar: document.getElementById('sm-notlar').value.trim() || null,
+  };
+
+  let url;
+  if (id) {
+    payload.id = parseInt(id);
+    url = '/nexgen/api/yonetim/stok-kart-guncelle';
+  } else {
+    url = '/nexgen/api/stok-kart-ekle';
+  }
+
+  btn.disabled = true; btn.textContent = 'Kaydediliyor…';
+  fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      if (d.ok) {
+        basariDiv.textContent = id ? '✓ Güncellendi.' : ('✓ Yeni kart oluşturuldu. Kod: ' + (d.kod || ''));
+        basariDiv.style.display = 'block';
+        setTimeout(function(){ location.reload(); }, 1200);
+      } else {
+        hataDiv.textContent = d.hata || 'Hata.';
+        hataDiv.style.display = 'block';
+      }
+    })
+    .catch(function(){ hataDiv.textContent='Bağlantı hatası.'; hataDiv.style.display='block'; })
+    .finally(function(){ btn.textContent='Kaydet'; btn.disabled=false; });
+}
+
+function stokDurumDegistir(id, yeniAktif, btnEl) {
+  if (!confirm(yeniAktif ? 'Kartı aktifleştir?' : 'Kartı pasifle?')) return;
+  fetch('/nexgen/api/yonetim/stok-kart-durum', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({id: id, aktif: yeniAktif})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){ if (d.ok) location.reload(); else alert(d.hata||'Hata'); })
+  .catch(function(){ alert('Bağlantı hatası'); });
+}
+
+// ── Tedarikçi Modalı ──
+function tedYeniModalAc() {
+  document.getElementById('ted-modal-baslik').textContent = 'Yeni Tedarikçi';
+  document.getElementById('tm-id').value = '';
+  ['tm-kod','tm-ad','tm-ulke','tm-iletisim-ad','tm-iletisim-tel','tm-iletisim-email','tm-notlar']
+    .forEach(function(id){ document.getElementById(id).value=''; });
+  document.getElementById('tm-para-birimi').value = 'USD';
+  document.getElementById('tm-vade').value = '30';
+  document.getElementById('tm-kod').disabled = false;
+  document.getElementById('tm-kod-not').style.display = 'none';
+  ngymHataTemizle('ted');
+  document.getElementById('ngym-ted-overlay').classList.add('acik');
+}
+
+function tedDuzenleModalAc(t) {
+  document.getElementById('ted-modal-baslik').textContent = 'Tedarikçi Düzenle — ' + t.kod;
+  document.getElementById('tm-id').value = t.id;
+  document.getElementById('tm-kod').value = t.kod || '';
+  document.getElementById('tm-kod').disabled = true;
+  document.getElementById('tm-kod-not').style.display = 'block';
+  document.getElementById('tm-ad').value = t.ad || '';
+  document.getElementById('tm-ulke').value = t.ulke || '';
+  document.getElementById('tm-para-birimi').value = t.para_birimi || 'USD';
+  document.getElementById('tm-vade').value = t.varsayilan_vade || 30;
+  document.getElementById('tm-iletisim-ad').value = t.iletisim_ad || '';
+  document.getElementById('tm-iletisim-tel').value = t.iletisim_tel || '';
+  document.getElementById('tm-iletisim-email').value = t.iletisim_email || '';
+  document.getElementById('tm-notlar').value = t.notlar || '';
+  ngymHataTemizle('ted');
+  document.getElementById('ngym-ted-overlay').classList.add('acik');
+}
+
+function tedKaydet() {
+  const btn = document.getElementById('ted-kaydet-btn');
+  const hataDiv = document.getElementById('ted-modal-hata');
+  const basariDiv = document.getElementById('ted-modal-basari');
+  ngymHataTemizle('ted');
+
+  const id  = document.getElementById('tm-id').value;
+  const kod = document.getElementById('tm-kod').value.trim().toUpperCase();
+  const ad  = document.getElementById('tm-ad').value.trim();
+  if (!ad) { hataDiv.textContent='Ad zorunlu.'; hataDiv.style.display='block'; return; }
+  if (!id && !kod) { hataDiv.textContent='Kod zorunlu.'; hataDiv.style.display='block'; return; }
+
+  const payload = {
+    kod: kod, ad: ad,
+    ulke: document.getElementById('tm-ulke').value.trim() || null,
+    para_birimi: document.getElementById('tm-para-birimi').value,
+    varsayilan_vade: parseInt(document.getElementById('tm-vade').value) || 30,
+    iletisim_ad: document.getElementById('tm-iletisim-ad').value.trim() || null,
+    iletisim_tel: document.getElementById('tm-iletisim-tel').value.trim() || null,
+    iletisim_email: document.getElementById('tm-iletisim-email').value.trim() || null,
+    notlar: document.getElementById('tm-notlar').value.trim() || null,
+  };
+
+  let url;
+  if (id) { payload.id = parseInt(id); url = '/nexgen/api/satinalma/tedarikci-guncelle'; }
+  else     { url = '/nexgen/api/satinalma/tedarikci-ekle'; }
+
+  btn.disabled=true; btn.textContent='Kaydediliyor…';
+  fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      if (d.ok) {
+        basariDiv.textContent = id ? '✓ Güncellendi.' : '✓ Tedarikçi eklendi.';
+        basariDiv.style.display = 'block';
+        setTimeout(function(){ location.reload(); }, 1200);
+      } else {
+        hataDiv.textContent = d.hata || 'Hata.';
+        hataDiv.style.display = 'block';
+      }
+    })
+    .catch(function(){ hataDiv.textContent='Bağlantı hatası.'; hataDiv.style.display='block'; })
+    .finally(function(){ btn.textContent='Kaydet'; btn.disabled=false; });
+}
+
+// ── Eşleştirme ──
+function tedSec(tedId) {
+  aktifTedId = tedId;
+  document.querySelectorAll('.ngym-ted-sec-kart').forEach(function(el) {
+    el.classList.toggle('ngym-ted-sec-aktif', parseInt(el.dataset.tedId) === tedId);
+  });
+  eslGoster(tedId);
+}
+
+function eslGoster(tedId) {
+  const alan = document.getElementById('eslesme-listesi-alan');
+  const satinalma = ESL_DATA.filter(function(e){ return e.tedarikci_id === tedId && e.aktif; });
+  const ted = document.querySelector('.ngym-ted-sec-kart[data-ted-id="' + tedId + '"]');
+  const tedAd = ted ? ted.querySelector('.ngym-ted-sec-ad').textContent : '';
+  document.getElementById('eslesme-panel-baslik').textContent =
+    tedAd ? (tedAd + ' — Eşleştirmeler') : 'Eşleştirmeler';
+
+  if (!satinalma.length) {
+    alan.innerHTML = '<div class="ngym-esl-bos">Bu tedarikçiye bağlı hammadde yok.</div>';
+    return;
+  }
+  const cerceve = document.createElement('div');
+  cerceve.className = 'ngsd-hrt-cerceve';
+  satinalma.forEach(function(e) {
+    const satir = document.createElement('div');
+    satir.className = 'ngym-eslesme-satir';
+    satir.innerHTML =
+      '<span>' +
+        '<span class="ngym-esl-stok-kod">' + e.stok_kod + '</span>' +
+        '<strong>' + e.stok_ad + '</strong>' +
+        (e.notlar ? ' <span style="color:#9ca3af;font-size:11px;">— ' + e.notlar + '</span>' : '') +
+      '</span>' +
+      '<span style="display:flex;align-items:center;gap:8px;">' +
+        '<span style="font-size:11px;color:#9ca3af;">Sıra: ' + (e.tercih_sirasi||1) + '</span>' +
+        '<button class="ngym-esl-kaldir" onclick="eslKaldir(' + e.id + ', this)" title="Kaldır">×</button>' +
+      '</span>';
+    cerceve.appendChild(satir);
+  });
+  alan.innerHTML = '';
+  alan.appendChild(cerceve);
+}
+
+function eslesmeEkleModalAc() {
+  if (!aktifTedId) { alert('Önce tedarikçi seçin.'); return; }
+  const ted = document.querySelector('.ngym-ted-sec-kart[data-ted-id="' + aktifTedId + '"]');
+  const tedAd = ted ? ted.querySelector('.ngym-ted-sec-ad').textContent : ('Id:' + aktifTedId);
+  document.getElementById('esl-ted-ad').textContent = tedAd;
+  document.getElementById('esl-stok-id').value = '';
+  document.getElementById('esl-tercih').value = '1';
+  document.getElementById('esl-notlar').value = '';
+  ngymHataTemizle('esl');
+  document.getElementById('ngym-esl-overlay').classList.add('acik');
+}
+
+function eslKaydet() {
+  const btn = document.getElementById('esl-kaydet-btn');
+  const hataDiv = document.getElementById('esl-modal-hata');
+  const basariDiv = document.getElementById('esl-modal-basari');
+  ngymHataTemizle('esl');
+
+  const stokId = parseInt(document.getElementById('esl-stok-id').value);
+  if (!stokId) { hataDiv.textContent='Hammadde seçin.'; hataDiv.style.display='block'; return; }
+
+  btn.disabled=true; btn.textContent='Ekleniyor…';
+  fetch('/nexgen/api/yonetim/eslestirme-ekle', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      tedarikci_id: aktifTedId,
+      stok_kart_id: stokId,
+      tercih_sirasi: parseInt(document.getElementById('esl-tercih').value)||1,
+      notlar: document.getElementById('esl-notlar').value.trim()
+    })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d) {
+    if (d.ok) {
+      basariDiv.textContent = '✓ Eşleştirme eklendi.';
+      basariDiv.style.display = 'block';
+      setTimeout(function(){ location.reload(); }, 1000);
+    } else {
+      hataDiv.textContent = d.hata||'Hata.';
+      hataDiv.style.display = 'block';
+    }
+  })
+  .catch(function(){ hataDiv.textContent='Bağlantı hatası.'; hataDiv.style.display='block'; })
+  .finally(function(){ btn.textContent='Ekle'; btn.disabled=false; });
+}
+
+function eslKaldir(eslId, btnEl) {
+  if (!confirm('Bu eşleştirmeyi kaldır?')) return;
+  fetch('/nexgen/api/yonetim/eslestirme-kaldir', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({id: eslId})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){ if (d.ok) location.reload(); else alert(d.hata||'Hata'); })
+  .catch(function(){ alert('Bağlantı hatası'); });
+}
+</script>
+{% endblock %}

@@ -156,6 +156,30 @@
 
   </div>{# /.ng-kart-grid #}
 
+  {# ── Yönetim Merkezi — sadece nexgen.yonetim.manage ─────── #}
+  {% if can_yonetim %}
+  <div class="ng-yonetim-banner">
+    <div class="ng-yonetim-banner-icerik">
+      <div class="ng-yonetim-banner-sol">
+        <span class="ng-yonetim-ikon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+               stroke-linecap="round" stroke-linejoin="round" width="22" height="22">
+            <circle cx="12" cy="8" r="4"/>
+            <path d="M6 20v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
+            <line x1="19" y1="8" x2="21" y2="8"/><line x1="3" y1="8" x2="5" y2="8"/>
+            <line x1="12" y1="3" x2="12" y2="5"/><line x1="12" y1="11" x2="12" y2="13"/>
+          </svg>
+        </span>
+        <div>
+          <div class="ng-yonetim-baslik">Yönetim Merkezi</div>
+          <div class="ng-yonetim-aciklama">Stok kartı, tedarikçi ve eşleştirme master veri yönetimi.</div>
+        </div>
+      </div>
+      <a href="/nexgen/yonetim/" class="ng-btn ng-btn-aktif ng-yonetim-btn">Aç</a>
+    </div>
+  </div>
+  {% endif %}
+
   {# ── Diğer Alt Modüller ───────────────────────────────────── #}
   <div class="ng-diger-baslik">Diğer Modüller</div>
   <div class="ng-diger-list">
@@ -231,6 +255,56 @@
   margin-bottom: 22px;
 }
 .ng-info-bant svg { color: #3b82f6; flex-shrink: 0; }
+
+/* ── Yönetim Merkezi Banner ── */
+.ng-yonetim-banner {
+  margin-top: 16px;
+  background: linear-gradient(135deg, #1e3a5f 0%, #1d4ed8 100%);
+  border-radius: 12px;
+  padding: 2px;
+  box-shadow: 0 4px 16px rgba(29,78,216,0.18);
+}
+.ng-yonetim-banner-icerik {
+  background: #fff;
+  border-radius: 10px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.ng-yonetim-banner-sol {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.ng-yonetim-ikon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background: #eff6ff;
+  border-radius: 10px;
+  color: #1d4ed8;
+  flex-shrink: 0;
+}
+.ng-yonetim-baslik {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+}
+.ng-yonetim-aciklama {
+  font-size: 12.5px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+.ng-yonetim-btn {
+  white-space: nowrap;
+  padding: 8px 20px;
+  font-size: 13px;
+}
 
 /* ── Kart Grid ── */
 .ng-kart-grid {
