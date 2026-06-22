@@ -44,8 +44,13 @@
     <button class="ngsd-sekme-btn" data-sekme="direkt" onclick="sekmeGec('direkt')">
       Direkt Giriş
     </button>
+    {% if can_giris %}
+    <button class="ngsd-sekme-btn ngsd-sekme-btn-cikis" data-sekme="cikis" onclick="sekmeGec('cikis')">
+      Çıkış Yap
+    </button>
+    {% endif %}
     <button class="ngsd-sekme-btn" data-sekme="gecmis" onclick="sekmeGec('gecmis')">
-      Giriş Geçmişi
+      Giriş/Çıkış Geçmişi
       <span class="ngsd-sekme-sayac">{{ gecmis|length }}</span>
     </button>
   </div>
@@ -193,15 +198,75 @@
   </div>
 
   {# ═══════════════════════════════════════════════════════════ #}
-  {# SEKME 3 — GİRİŞ GEÇMİŞİ                                    #}
+  {# SEKME 3 — ÇIKIŞ YAP                                         #}
+  {# ═══════════════════════════════════════════════════════════ #}
+  <div id="ngsd-sekme-cikis" class="ngsd-sekme-icerik" style="display:none;">
+
+    {% if not can_giris %}
+    <div class="ngsd-placeholder-kart">
+      <div class="ngsd-placeholder-ikon">🔒</div>
+      <div class="ngsd-placeholder-baslik">Yetki Gerekli</div>
+      <div class="ngsd-placeholder-aciklama">Çıkış yapmak için depo mal kabul yetkisi gerekir.</div>
+    </div>
+    {% else %}
+    <div class="ngdp-direkt-form-kart">
+      <div class="ngdp-form-baslik ngdp-form-baslik-cikis">Stoktan Çıkış</div>
+      <div id="cikis-hata"   class="ngsk-hata-alan"   style="display:none"></div>
+      <div id="cikis-basari" class="ngsk-basari-alan"  style="display:none"></div>
+
+      <div class="ngym-form-grid">
+        <div class="ngsk-fg">
+          <label>Hammadde <span class="ngsk-zorunlu">*</span></label>
+          <select id="cx-stok" onchange="cxStokSec()">
+            <option value="">— Seçin —</option>
+            {% for k in kartlar %}
+            <option value="{{ k.id }}" data-birim="{{ k.birim }}">{{ k.kod }} – {{ k.ad }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="ngsk-fg">
+          <label>Çıkış Tipi <span class="ngsk-zorunlu">*</span></label>
+          <select id="cx-tip">
+            <option value="">— Seçin —</option>
+            <option value="URETIM_TUKETIM">Üretim Tüketimi</option>
+            <option value="ARGE_DENEME">Ar-Ge / Deneme</option>
+            <option value="FIRE_ZAYI">Fire / Zayi</option>
+            <option value="SAYIM_DUZELTME">Sayım Düzeltme</option>
+          </select>
+        </div>
+        <div class="ngsk-fg">
+          <label>Mevcut Stok</label>
+          <div id="cx-mevcut-stok" class="ngdp-stok-goster">—</div>
+        </div>
+        <div class="ngsk-fg">
+          <label>Çıkış KG <span class="ngsk-zorunlu">*</span></label>
+          <input type="number" id="cx-kg" min="0.001" step="0.001" placeholder="0.000">
+        </div>
+        <div class="ngsk-fg ngym-fg-genis">
+          <label>Açıklama</label>
+          <input type="text" id="cx-aciklama" placeholder="Çıkış nedeni, lot, referans vb.">
+        </div>
+      </div>
+
+      <div style="padding:0 0 20px 0;display:flex;justify-content:flex-end;">
+        <button class="ngsk-btn-kaydet ngdp-btn-cikis" id="cx-kaydet-btn" onclick="cikisKaydet()">
+          Çıkışı Kaydet
+        </button>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  {# ═══════════════════════════════════════════════════════════ #}
+  {# SEKME 4 — GİRİŞ/ÇIKIŞ GEÇMİŞİ                              #}
   {# ═══════════════════════════════════════════════════════════ #}
   <div id="ngsd-sekme-gecmis" class="ngsd-sekme-icerik" style="display:none;">
 
     {% if not gecmis %}
     <div class="ngsd-placeholder-kart">
       <div class="ngsd-placeholder-ikon">📋</div>
-      <div class="ngsd-placeholder-baslik">Giriş Geçmişi Boş</div>
-      <div class="ngsd-placeholder-aciklama">Henüz mal kabul yapılmamış.</div>
+      <div class="ngsd-placeholder-baslik">Geçmiş Boş</div>
+      <div class="ngsd-placeholder-aciklama">Henüz giriş veya çıkış hareketi yapılmamış.</div>
     </div>
     {% else %}
     <div class="ngsd-hrt-cerceve">
@@ -209,36 +274,39 @@
         <thead>
           <tr>
             <th>Tarih</th>
-            <th>Tedarikçi</th>
             <th>Hammadde</th>
+            <th>Tip</th>
             <th class="ngsd-th-r">KG</th>
-            <th>İrsaliye</th>
-            <th>Lot</th>
-            <th>Kabul Eden</th>
-            <th>Sipariş</th>
+            <th>Açıklama</th>
+            <th>Kullanıcı</th>
           </tr>
         </thead>
         <tbody>
           {% for g in gecmis %}
-          <tr>
-            <td class="ngsd-td-tarih">{{ g.kabul_tarihi[:16] if g.kabul_tarihi else '—' }}</td>
-            <td>{{ g.ted_ad }}</td>
+          {% set is_giris = g.miktar_kg >= 0 %}
+          <tr class="{% if is_giris %}ngdp-satir-giris{% else %}ngdp-satir-cikis{% endif %}">
+            <td class="ngsd-td-tarih">{{ (g.hareket_tarihi or '')[:16] }}</td>
             <td>
               <span class="ngsd-mono" style="font-size:11px;color:#0891b2;">{{ g.stok_kod }}</span>
               {{ g.stok_ad }}
             </td>
-            <td class="ngsd-td-r ngsd-sayi ngdp-gelen">+{{ "%.1f"|format(g.miktar_kg) }}</td>
-            <td class="ngsd-td-tarih">{{ g.irsaliye_no or '—' }}</td>
-            <td class="ngsd-td-tarih">{{ g.lot_no or '—' }}</td>
-            <td>{{ g.kabul_eden_ad or '—' }}</td>
             <td>
-              {% if g.satin_siparis_id %}
-                <a href="/nexgen/satinalma/siparis/{{ g.satin_siparis_id }}"
-                   class="ngdp-sip-link">{{ g.siparis_no or g.satin_siparis_id }}</a>
-              {% else %}
-                <span style="color:#9ca3af;font-size:11px;">Direkt</span>
-              {% endif %}
+              <span class="ngdp-tip-rozet ngdp-tip-{{ g.hareket_tipi|lower|replace('_','-') }}">
+                {% if g.hareket_tipi == 'GIRIS' %}Mal Kabul
+                {% elif g.hareket_tipi == 'URETIM_TUKETIM' %}Üretim
+                {% elif g.hareket_tipi == 'ARGE_DENEME' %}Ar-Ge
+                {% elif g.hareket_tipi == 'FIRE_ZAYI' %}Fire/Zayi
+                {% elif g.hareket_tipi == 'SAYIM_DUZELTME' %}Sayım Dzt.
+                {% else %}{{ g.hareket_tipi }}{% endif %}
+              </span>
             </td>
+            <td class="ngsd-td-r ngsd-sayi {% if is_giris %}ngdp-gelen{% else %}ngdp-cikis-kg{% endif %}">
+              {% if is_giris %}+{% endif %}{{ "%.1f"|format(g.miktar_kg) }}
+            </td>
+            <td class="ngsd-td-tarih" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ g.aciklama or '' }}">
+              {{ g.aciklama or '—' }}
+            </td>
+            <td>{{ g.islem_yapan_ad or '—' }}</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -424,6 +492,38 @@
 }
 .ngdp-btn-kabul:hover { background:#15803d; }
 
+/* Çıkış butonu */
+.ngdp-btn-cikis { background:#dc2626; }
+.ngdp-btn-cikis:hover { background:#b91c1c; }
+
+/* Çıkış sekme butonu */
+.ngsd-sekme-btn-cikis.aktif { background:#fef2f2; color:#dc2626; font-weight:700; }
+
+/* Form başlık çıkış varyantı */
+.ngdp-form-baslik-cikis { border-left:3px solid #dc2626; color:#dc2626; }
+
+/* Mevcut stok gösterimi */
+.ngdp-stok-goster {
+  border:1px solid #e5e7eb; border-radius:7px; padding:7px 10px;
+  font-size:13.5px; font-weight:700; color:#111827; background:#f9fafb;
+}
+
+/* Geçmiş tablo satır renkleri */
+.ngdp-satir-giris { }
+.ngdp-satir-cikis { background:#fff9f9; }
+.ngdp-cikis-kg { color:#dc2626; font-weight:600; }
+
+/* Hareket tipi rozetleri */
+.ngdp-tip-rozet {
+  display:inline-block; padding:2px 7px; border-radius:6px;
+  font-size:11px; font-weight:600;
+}
+.ngdp-tip-giris           { background:#f0fdf4; color:#15803d; }
+.ngdp-tip-uretim-tuketim  { background:#eff6ff; color:#1d4ed8; }
+.ngdp-tip-arge-deneme     { background:#f5f3ff; color:#6d28d9; }
+.ngdp-tip-fire-zayi       { background:#fef2f2; color:#dc2626; }
+.ngdp-tip-sayim-duzeltme  { background:#f0fdf4; color:#065f46; }
+
 /* Sipariş linki */
 .ngdp-sip-link { color:#0891b2; text-decoration:none; font-size:12px; }
 .ngdp-sip-link:hover { text-decoration:underline; }
@@ -489,7 +589,7 @@
 </style>
 
 <script>
-const SEKMELER_DP = ['bekleyen', 'direkt', 'gecmis'];
+const SEKMELER_DP = ['bekleyen', 'direkt', 'cikis', 'gecmis'];
 
 function sekmeGec(hedef) {
   SEKMELER_DP.forEach(function(s) {
@@ -639,6 +739,84 @@ function direktGirisKaydet() {
   })
   .catch(function() { hataDiv.textContent = 'Bağlantı hatası.'; hataDiv.style.display = 'block'; })
   .finally(function() { btn.textContent = 'Girişi Kaydet'; btn.disabled = false; });
+}
+
+// ── Çıkış formu ──────────────────────────────────────────────
+let _cxStoklar = {};
+(function() {
+  // Stok kartlarını JS'e aktar
+  {% for k in kartlar %}
+  _cxStoklar[{{ k.id }}] = { kod: {{ k.kod|tojson }}, ad: {{ k.ad|tojson }}, birim: {{ k.birim|tojson }} };
+  {% endfor %}
+})();
+
+function cxStokSec() {
+  const sel = document.getElementById('cx-stok');
+  const id  = parseInt(sel.value);
+  if (!id) {
+    document.getElementById('cx-mevcut-stok').textContent = '—';
+    return;
+  }
+  fetch('/nexgen/api/stok-detay-minimal?id=' + id)
+    .then(function(r) { return r.json(); })
+    .catch(function() { return {}; })
+    .then(function(d) {
+      const el = document.getElementById('cx-mevcut-stok');
+      if (d && d.mevcut_stok !== undefined) {
+        el.textContent = formatKg(d.mevcut_stok) + ' KG';
+        el.style.color = d.mevcut_stok > 0 ? '#15803d' : '#dc2626';
+      } else {
+        el.textContent = '—';
+      }
+    });
+}
+
+function cikisKaydet() {
+  const btn       = document.getElementById('cx-kaydet-btn');
+  const hataDiv   = document.getElementById('cikis-hata');
+  const basariDiv = document.getElementById('cikis-basari');
+  hataDiv.style.display   = 'none';
+  basariDiv.style.display = 'none';
+
+  const stokId = parseInt(document.getElementById('cx-stok').value);
+  const tip    = document.getElementById('cx-tip').value;
+  const kg     = parseFloat(document.getElementById('cx-kg').value);
+
+  if (!stokId) { hataDiv.textContent = 'Hammadde seçin.';  hataDiv.style.display='block'; return; }
+  if (!tip)    { hataDiv.textContent = 'Çıkış tipi seçin.'; hataDiv.style.display='block'; return; }
+  if (!kg || kg <= 0) { hataDiv.textContent = 'KG giriniz.'; hataDiv.style.display='block'; return; }
+
+  btn.disabled = true; btn.textContent = 'Kaydediliyor…';
+  fetch('/nexgen/api/depo/cikis', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      stok_kart_id:  stokId,
+      hareket_tipi:  tip,
+      miktar_kg:     kg,
+      aciklama:      document.getElementById('cx-aciklama').value.trim(),
+    })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.ok) {
+      basariDiv.textContent = '✓ Çıkış kaydedildi. '
+        + formatKg(d.miktar_kg) + ' KG çıktı. '
+        + 'Yeni stok: ' + formatKg(d.sonraki_stok) + ' KG';
+      basariDiv.style.display = 'block';
+      document.getElementById('cx-stok').value = '';
+      document.getElementById('cx-tip').value  = '';
+      document.getElementById('cx-kg').value   = '';
+      document.getElementById('cx-aciklama').value = '';
+      document.getElementById('cx-mevcut-stok').textContent = '—';
+      setTimeout(function() { location.reload(); }, 1500);
+    } else {
+      hataDiv.textContent = d.hata || 'Hata.';
+      hataDiv.style.display = 'block';
+    }
+  })
+  .catch(function() { hataDiv.textContent = 'Bağlantı hatası.'; hataDiv.style.display='block'; })
+  .finally(function() { btn.textContent = 'Çıkışı Kaydet'; btn.disabled = false; });
 }
 
 function formatKg(v) {

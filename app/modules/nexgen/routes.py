@@ -479,6 +479,29 @@ def api_stok_hareket_ekle():
 
 
 # ─────────────────────────────────────────────────────────────
+# API — Stok minimal detay (çıkış formu canlı stok gösterimi)
+# GET /nexgen/api/stok-detay-minimal?id=<kart_id>
+# ─────────────────────────────────────────────────────────────
+@nexgen_bp.route('/api/stok-detay-minimal', methods=['GET'])
+@yetki_gerekli('nexgen.depo.view', 'can_view')
+def api_stok_detay_minimal():
+    kart_id = request.args.get('id', type=int)
+    if not kart_id:
+        return jsonify({"ok": False, "hata": "id zorunlu"}), 400
+    con = _db()
+    try:
+        kart = con.execute(
+            "SELECT id, kod, ad FROM nexgen_stok_kart WHERE id=? AND aktif=1", (kart_id,)
+        ).fetchone()
+        if not kart:
+            return jsonify({"ok": False, "hata": "Bulunamadı"}), 404
+        mevcut = _mevcut_stok(con, kart_id)
+    finally:
+        con.close()
+    return jsonify({"ok": True, "mevcut_stok": mevcut, "kod": kart["kod"], "ad": kart["ad"]})
+
+
+# ─────────────────────────────────────────────────────────────
 # API — Kart pasif/aktif yap (silme yok)
 # ─────────────────────────────────────────────────────────────
 @nexgen_bp.route('/api/stok-kart-durum', methods=['POST'])
@@ -1929,28 +1952,36 @@ def depo():
             ORDER BY ss.beklenen_teslim ASC NULLS LAST, ss.id DESC
         """).fetchall()
 
-        # Giriş geçmişi (son 100)
+        # Giriş/Çıkış geçmişi (son 100 hareket — hem giriş hem çıkış)
         gecmis_raw = con.execute("""
             SELECT
-                mk.id,
-                mk.miktar_kg,
+                h.id,
+                h.hareket_tipi,
+                h.miktar_kg,
+                h.onceki_stok,
+                h.sonraki_stok,
+                h.aciklama,
+                h.olusturma_tarihi AS hareket_tarihi,
+                h.referans_tip,
+                sk.kod  AS stok_kod,
+                sk.ad   AS stok_ad,
+                ku.KullaniciAdi AS islem_yapan_ad,
+                -- Mal kabule ait detaylar (sadece GİRİŞ'lerde dolu)
                 mk.irsaliye_no,
                 mk.lot_no,
-                mk.kabul_tarihi,
-                mk.aciklama,
                 mk.satin_siparis_id,
                 ss.siparis_no,
-                t.kod  AS ted_kod,
-                t.ad   AS ted_ad,
-                sk.kod AS stok_kod,
-                sk.ad  AS stok_ad,
-                ku.KullaniciAdi AS kabul_eden_ad
-            FROM nexgen_mal_kabul mk
-            JOIN nexgen_tedarikci  t  ON t.id  = mk.tedarikci_id
-            JOIN nexgen_stok_kart  sk ON sk.id = mk.stok_kart_id
+                t.ad    AS ted_ad
+            FROM nexgen_stok_hareket h
+            JOIN nexgen_stok_kart  sk ON sk.id = h.stok_kart_id
+            LEFT JOIN sistem_kullanici ku ON ku.Id = h.olusturan_id
+            LEFT JOIN nexgen_mal_kabul  mk ON mk.stok_hareket_id = h.id
+            LEFT JOIN nexgen_tedarikci  t  ON t.id  = mk.tedarikci_id
             LEFT JOIN nexgen_satin_siparis ss ON ss.id = mk.satin_siparis_id
-            LEFT JOIN sistem_kullanici ku ON ku.Id = mk.kabul_eden_id
-            ORDER BY mk.kabul_tarihi DESC, mk.id DESC
+            WHERE h.hareket_tipi IN ('GIRIS', 'URETIM_TUKETIM', 'ARGE_DENEME',
+                                     'FIRE_ZAYI', 'SAYIM_DUZELTME', 'DIREKT_GIRIS')
+               OR h.referans_tip = 'DEPO_CIKIS'
+            ORDER BY h.olusturma_tarihi DESC, h.id DESC
             LIMIT 100
         """).fetchall()
 
@@ -2141,5 +2172,92 @@ def api_depo_mal_kabul():
         sonuc["siparis_yeni_durum"] = yeni_durum
         sonuc["toplam_gelen_kg"] = toplam_gelen
     return jsonify(sonuc)
+
+
+# ─────────────────────────────────────────────────────────────
+# API — Depo Çıkış
+# POST /nexgen/api/depo/cikis
+# Yetki: nexgen.depo.giris can_create
+#
+# Kurallar:
+#   1) Stok yeterliliği kontrol et
+#   2) nexgen_stok_hareket INSERT hareket_tipi = seçilen tip, miktar_kg NEGATİF
+#   3) nexgen_stok_kart'a dokunulmuyor
+#   4) Fiyat tablolarına dokunulmuyor
+# ─────────────────────────────────────────────────────────────
+CIKIS_TIPLERI = {'URETIM_TUKETIM', 'ARGE_DENEME', 'FIRE_ZAYI', 'SAYIM_DUZELTME'}
+
+@nexgen_bp.route('/api/depo/cikis', methods=['POST'])
+@yetki_gerekli('nexgen.depo.giris', 'can_create')
+def api_depo_cikis():
+    d = request.get_json(silent=True) or {}
+
+    stok_kart_id  = d.get('stok_kart_id')
+    miktar_kg     = d.get('miktar_kg')
+    hareket_tipi  = (d.get('hareket_tipi') or '').strip().upper()
+    aciklama      = (d.get('aciklama') or '').strip() or None
+
+    if not stok_kart_id or not miktar_kg or not hareket_tipi:
+        return jsonify({"ok": False, "hata": "stok_kart_id, miktar_kg ve hareket_tipi zorunlu"}), 400
+
+    if hareket_tipi not in CIKIS_TIPLERI:
+        return jsonify({"ok": False,
+                        "hata": f"Geçersiz hareket tipi. Geçerli: {', '.join(sorted(CIKIS_TIPLERI))}"}), 400
+
+    try:
+        miktar_kg = float(miktar_kg)
+        if miktar_kg <= 0:
+            raise ValueError
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "hata": "miktar_kg sıfırdan büyük olmalı"}), 400
+
+    kullanici_id = _kullanici_id()
+    con = _db()
+    try:
+        kart = con.execute(
+            "SELECT id, ad FROM nexgen_stok_kart WHERE id=? AND aktif=1", (stok_kart_id,)
+        ).fetchone()
+        if not kart:
+            return jsonify({"ok": False, "hata": "Stok kartı bulunamadı veya pasif"}), 404
+
+        onceki_stok = _mevcut_stok(con, stok_kart_id)
+        if onceki_stok < miktar_kg:
+            return jsonify({
+                "ok": False,
+                "hata": f"Yetersiz stok. Mevcut: {onceki_stok:.3f} KG, İstenen: {miktar_kg:.3f} KG"
+            }), 400
+
+        miktar_negatif = -round(miktar_kg, 3)
+        sonraki_stok   = round(onceki_stok + miktar_negatif, 3)
+
+        aciklama_hareket = aciklama or f"Depo çıkış — {hareket_tipi}"
+
+        con.execute("""
+            INSERT INTO nexgen_stok_hareket
+              (stok_kart_id, hareket_tipi, miktar_kg,
+               onceki_stok, sonraki_stok,
+               aciklama, referans_tip,
+               olusturan_id, olusturma_tarihi)
+            VALUES (?, ?, ?, ?, ?, ?, 'DEPO_CIKIS', ?, datetime('now'))
+        """, (stok_kart_id, hareket_tipi, miktar_negatif,
+              onceki_stok, sonraki_stok,
+              aciklama_hareket, kullanici_id))
+        hareket_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+        con.commit()
+
+    except Exception as e:
+        con.rollback()
+        return jsonify({"ok": False, "hata": str(e)}), 500
+    finally:
+        con.close()
+
+    return jsonify({
+        "ok": True,
+        "hareket_id":   hareket_id,
+        "hareket_tipi": hareket_tipi,
+        "onceki_stok":  onceki_stok,
+        "sonraki_stok": sonraki_stok,
+        "miktar_kg":    miktar_kg,
+    })
 
 
