@@ -69,6 +69,14 @@
       </span>
       <span class="ngsk-kpi-etiket">Kritik</span>
     </div>
+    <div class="ngsk-kpi ngsk-kpi-ayrac">
+      <span class="ngsk-kpi-deger ngsk-kpi-mor" id="kpi-toplam-kg">
+        {% set toplam_kg = namespace(v=0) %}
+        {% for k in kartlar %}{% if k.aktif %}{% set toplam_kg.v = toplam_kg.v + k.mevcut_stok %}{% endif %}{% endfor %}
+        {{ '{:,.0f}'.format(toplam_kg.v) }}
+      </span>
+      <span class="ngsk-kpi-etiket">Toplam Stok KG</span>
+    </div>
   </div>
 
   {# ── Ana Alan: Tablo + Sağ Panel ─────────────────────────── #}
@@ -365,6 +373,8 @@
 .ngsk-kpi-yesil { color: #16a34a; }
 .ngsk-kpi-sari  { color: #d97706; }
 .ngsk-kpi-kirmizi { color: #dc2626; }
+.ngsk-kpi-mor   { color: #7c3aed; }
+.ngsk-kpi-ayrac { border-left: 2px solid #e5e7eb; padding-left: 18px; margin-left: 6px; }
 
 /* ── Ana Alan: tablo + panel yan yana ── */
 .ngsk-ana-alan {
