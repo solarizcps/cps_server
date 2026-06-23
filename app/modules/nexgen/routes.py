@@ -838,12 +838,26 @@ def recete_detay(formul_id):
                 'uretim_listesi': uretim_listesi,
             })
 
+        # FAZ-4F: her varyant için recycle izinleri (con kapanmadan önce)
+        for rv in agac:
+            for uv in rv['uretim_listesi']:
+                uv['recycle_izinleri'] = _uretim_varyant_recycle_izinleri(con, uv['id'])
+
+        # FAZ-4F: modal için hammadde listesi (tüm aktif stok kartları — RECYCLE dışı)
+        tum_hammaddeler = con.execute("""
+            SELECT id, ad, kod, kategori FROM nexgen_stok_kart
+            WHERE aktif=1 AND kategori != 'RECYCLE'
+            ORDER BY ad
+        """).fetchall()
+        tum_hammaddeler = [dict(h) for h in tum_hammaddeler]
+
     finally:
         con.close()
 
-    can_create  = yetki_var('nexgen.recete.create',  'can_create')
-    can_approve = yetki_var('nexgen.recete.approve', 'can_approve')
-    can_manage  = yetki_var('nexgen.recete.manage',  'can_manage')
+    can_create       = yetki_var('nexgen.recete.create',   'can_create')
+    can_approve      = yetki_var('nexgen.recete.approve',  'can_approve')
+    can_manage       = yetki_var('nexgen.recete.manage',   'can_manage')
+    can_recycle_mgr  = yetki_var('nexgen.recycle.manage',  'can_recycle_mgr')
 
     return render_template(
         'nexgen/recete_detay.html',
@@ -853,6 +867,8 @@ def recete_detay(formul_id):
         can_create=can_create,
         can_approve=can_approve,
         can_manage=can_manage,
+        can_recycle_mgr=can_recycle_mgr,
+        tum_hammaddeler=tum_hammaddeler,
     )
 
 # ─────────────────────────────────────────────────────────────
@@ -3675,4 +3691,157 @@ def tablet_arge_kod_goster(test_no):
         test=test,
         kod_tipi='ARGE',
     )
+
+
+# ─────────────────────────────────────────────────────────────
+# NEXGEN FAZ-4F — RECYCLE İZİN ALTYAPISI
+# KURAL: Stok hareketi yapılmaz. Sadece izin CRUD + okuma.
+# ─────────────────────────────────────────────────────────────
+
+def _uretim_varyant_recycle_izinleri(con, uretim_varyant_id):
+    """Bir üretim varyantına tanımlı recycle izinlerini + mevcut stok KG ile döner.
+
+    Returns: list of dict:
+        id, recycle_kart_id, recycle_kart_ad, recycle_kart_kod,
+        mevcut_stok_kg, yerine_kart_id, yerine_kart_ad,
+        max_oran_pct, aktif, notlar, created_at
+    """
+    izinler_raw = con.execute("""
+        SELECT ri.id, ri.recycle_stok_kart_id, ri.yerine_stok_kart_id,
+               ri.max_oran_pct, ri.aktif, ri.notlar, ri.created_at,
+               sk_rc.ad  AS recycle_kart_ad,
+               sk_rc.kod AS recycle_kart_kod,
+               sk_yc.ad  AS yerine_kart_ad
+        FROM nexgen_recete_recycle_izin ri
+        JOIN nexgen_stok_kart sk_rc ON sk_rc.id = ri.recycle_stok_kart_id
+        LEFT JOIN nexgen_stok_kart sk_yc ON sk_yc.id = ri.yerine_stok_kart_id
+        WHERE ri.uretim_varyant_id = ?
+        ORDER BY ri.id
+    """, (uretim_varyant_id,)).fetchall()
+
+    sonuc = []
+    for iz in izinler_raw:
+        mevcut = float(con.execute(
+            "SELECT COALESCE(SUM(miktar_kg),0) FROM nexgen_stok_hareket WHERE stok_kart_id=?",
+            (iz['recycle_stok_kart_id'],)
+        ).fetchone()[0])
+        sonuc.append({
+            'id':                iz['id'],
+            'recycle_kart_id':   iz['recycle_stok_kart_id'],
+            'recycle_kart_ad':   iz['recycle_kart_ad'],
+            'recycle_kart_kod':  iz['recycle_kart_kod'],
+            'mevcut_stok_kg':    mevcut,
+            'yerine_kart_id':    iz['yerine_stok_kart_id'],
+            'yerine_kart_ad':    iz['yerine_kart_ad'],
+            'max_oran_pct':      iz['max_oran_pct'],
+            'aktif':             iz['aktif'],
+            'notlar':            iz['notlar'],
+            'created_at':        iz['created_at'],
+        })
+    return sonuc
+
+
+@nexgen_bp.route('/api/recycle-izin/ekle', methods=['POST'])
+@yetki_gerekli('nexgen.recycle.manage', 'can_manage')
+def api_recycle_izin_ekle():
+    """Bir üretim varyantına recycle izni ekle.
+    POST JSON:
+        uretim_varyant_id    : int
+        recycle_stok_kart_id : int
+        yerine_stok_kart_id  : int | null
+        max_oran_pct         : float (default 10)
+        notlar               : str
+    Stok hareketi YAZMAZ.
+    """
+    d = request.get_json(silent=True) or {}
+    uv_id    = d.get('uretim_varyant_id')
+    rc_id    = d.get('recycle_stok_kart_id')
+    yc_id    = d.get('yerine_stok_kart_id') or None
+    oran     = float(d.get('max_oran_pct', 10))
+    notlar   = (d.get('notlar') or '').strip()
+
+    if not uv_id or not rc_id:
+        return jsonify({'ok': False, 'hata': 'uretim_varyant_id ve recycle_stok_kart_id zorunlu'}), 400
+
+    con = _db()
+    try:
+        # Recycle kategorisi kontrolü
+        rc_kart = con.execute(
+            "SELECT id, ad, kategori FROM nexgen_stok_kart WHERE id=? AND aktif=1",
+            (rc_id,)
+        ).fetchone()
+        if not rc_kart:
+            return jsonify({'ok': False, 'hata': 'Recycle stok kartı bulunamadı'}), 404
+        if rc_kart['kategori'] != 'RECYCLE':
+            return jsonify({'ok': False, 'hata': 'Sadece RECYCLE kategorisi seçilebilir'}), 400
+
+        # Varyant kontrolü
+        uv = con.execute(
+            "SELECT id, ad FROM nexgen_uretim_varyant WHERE id=? AND aktif=1", (uv_id,)
+        ).fetchone()
+        if not uv:
+            return jsonify({'ok': False, 'hata': 'Üretim varyantı bulunamadı'}), 404
+
+        # Duplicate kontrolü
+        mev = con.execute(
+            "SELECT id FROM nexgen_recete_recycle_izin WHERE uretim_varyant_id=? AND recycle_stok_kart_id=?",
+            (uv_id, rc_id)
+        ).fetchone()
+        if mev:
+            return jsonify({'ok': False, 'hata': 'Bu recycle izni zaten tanımlı'}), 409
+
+        con.execute("""
+            INSERT INTO nexgen_recete_recycle_izin
+                (uretim_varyant_id, recycle_stok_kart_id, yerine_stok_kart_id,
+                 max_oran_pct, aktif, notlar, created_at, created_by)
+            VALUES (?,?,?,?,1,?,datetime('now','localtime'),?)
+        """, (uv_id, rc_id, yc_id, oran, notlar or None,
+              session.get('user_id')))
+        con.commit()
+        new_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+    finally:
+        con.close()
+
+    return jsonify({'ok': True, 'id': new_id})
+
+
+@nexgen_bp.route('/api/recycle-izin/<int:izin_id>/toggle', methods=['POST'])
+@yetki_gerekli('nexgen.recycle.manage', 'can_manage')
+def api_recycle_izin_toggle(izin_id):
+    """Recycle iznini aktif/pasif yap. Stok hareketi YAZMAZ."""
+    con = _db()
+    try:
+        izin = con.execute(
+            "SELECT id, aktif FROM nexgen_recete_recycle_izin WHERE id=?", (izin_id,)
+        ).fetchone()
+        if not izin:
+            return jsonify({'ok': False, 'hata': 'İzin bulunamadı'}), 404
+        yeni = 0 if izin['aktif'] else 1
+        con.execute(
+            "UPDATE nexgen_recete_recycle_izin SET aktif=? WHERE id=?", (yeni, izin_id)
+        )
+        con.commit()
+    finally:
+        con.close()
+    return jsonify({'ok': True, 'aktif': yeni})
+
+
+@nexgen_bp.route('/api/recycle-izin/stok-kartlari')
+@yetki_gerekli('nexgen.recycle.manage', 'can_manage')
+def api_recycle_stok_kartlari():
+    """Sadece RECYCLE kategorisindeki aktif stok kartlarını döner (modal dropdown için)."""
+    con = _db()
+    try:
+        kartlar = con.execute("""
+            SELECT sk.id, sk.kod, sk.ad, sk.alt_kategori,
+                   COALESCE(SUM(sh.miktar_kg), 0) AS mevcut_kg
+            FROM nexgen_stok_kart sk
+            LEFT JOIN nexgen_stok_hareket sh ON sh.stok_kart_id = sk.id
+            WHERE sk.kategori = 'RECYCLE' AND sk.aktif = 1
+            GROUP BY sk.id
+            ORDER BY sk.ad
+        """).fetchall()
+    finally:
+        con.close()
+    return jsonify([dict(k) for k in kartlar])
 

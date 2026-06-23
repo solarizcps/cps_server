@@ -129,6 +129,14 @@
       </svg>
       AR-GE Testleri
     </button>
+    <button class="rd-sekme-btn" data-sekme="recycle" onclick="rcSekme('recycle')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+        <polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/>
+        <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/>
+      </svg>
+      Recycle İzinleri
+    </button>
   </div>
 
   {# ═══════════════════════════════════════════════════════════ #}
@@ -629,6 +637,145 @@
     </div>
     {% endif %}
 
+  </div>
+  {% endif %}
+
+  {# ═══════════════════════════════════════════════════════════ #}
+  {# SEKME 6 — RECYCLE İZİNLERİ (FAZ-4F)                        #}
+  {# KURAL: Stok hareketi oluşturulmaz.                          #}
+  {# ═══════════════════════════════════════════════════════════ #}
+  <div id="rc-sekme-recycle" class="rd-sekme-icerik" style="display:none">
+
+    {% if not agac %}
+    <div class="ngsd-placeholder-kart">
+      <div style="font-size:32px;margin-bottom:8px">&#9851;</div>
+      <div class="ngsd-placeholder-baslik">Varyant Yok</div>
+      <div class="ngsd-placeholder-aciklama">Önce reçete varyantı oluşturun.</div>
+    </div>
+    {% else %}
+
+    {% for rv in agac %}
+      {% for uv in rv.uretim_listesi %}
+      <div class="rcl-varyant-blok">
+        <div class="rcl-varyant-baslik">
+          <span class="rcl-varyant-ad">{{ uv.ad or (rv.ad ~ ' ' ~ uv.boyut) }}</span>
+          <span class="rcl-varyant-boyut">{{ uv.boyut }}</span>
+          {% if can_recycle_mgr %}
+          <button class="rcl-izin-ekle-btn"
+                  onclick="rclModalAc({{ uv.id }}, '{{ uv.ad|e }}')"
+                  title="Recycle izni ekle">+ Recycle İzni Ekle</button>
+          {% endif %}
+        </div>
+
+        {% if uv.recycle_izinleri %}
+        <table class="rcl-izin-tablo">
+          <thead>
+            <tr>
+              <th>Recycle Kartı</th>
+              <th>Mevcut Stok (KG)</th>
+              <th>Yerine Geçtiği</th>
+              <th>Maks %</th>
+              <th>Durum</th>
+              <th>Not</th>
+              {% if can_recycle_mgr %}<th></th>{% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for iz in uv.recycle_izinleri %}
+            <tr class="{{ 'rcl-satir-pasif' if not iz.aktif else '' }}">
+              <td class="rcl-kart-ad">
+                <span class="rcl-recycle-dot"></span>
+                {{ iz.recycle_kart_ad }}
+                <small class="rcl-kart-kod">{{ iz.recycle_kart_kod }}</small>
+              </td>
+              <td class="{{ 'rcl-stok-var' if iz.mevcut_stok_kg > 0 else 'rcl-stok-yok' }}">
+                {{ '%.1f'|format(iz.mevcut_stok_kg) }} KG
+              </td>
+              <td>{{ iz.yerine_kart_ad or '—' }}</td>
+              <td class="rcl-oran">%{{ iz.max_oran_pct|int }}</td>
+              <td>
+                {% if iz.aktif %}
+                  <span class="rcl-badge rcl-badge-aktif">AKTİF</span>
+                {% else %}
+                  <span class="rcl-badge rcl-badge-pasif">PASİF</span>
+                {% endif %}
+              </td>
+              <td class="rcl-not">{{ iz.notlar or '—' }}</td>
+              {% if can_recycle_mgr %}
+              <td>
+                <button class="rcl-toggle-btn"
+                        onclick="rclToggle({{ iz.id }}, this)"
+                        data-aktif="{{ iz.aktif }}">
+                  {{ 'Pasif Yap' if iz.aktif else 'Aktif Yap' }}
+                </button>
+              </td>
+              {% endif %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="rcl-bos-mesaj">
+          Bu varyant için henüz recycle izni tanımlanmamış.
+          {% if can_recycle_mgr %}
+          <button class="rcl-izin-ekle-btn rcl-inline-btn"
+                  onclick="rclModalAc({{ uv.id }}, '{{ uv.ad|e }}')">+ İlk izni ekle</button>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    {% endfor %}
+
+    {% endif %}
+  </div>{# /rc-sekme-recycle #}
+
+  {# RECYCLE İZİN EKLEME MODAL #}
+  {% if can_recycle_mgr %}
+  <div id="rcl-modal-overlay" class="rcl-modal-overlay" style="display:none" onclick="rclModalKapat(event)">
+    <div class="rcl-modal" onclick="event.stopPropagation()">
+      <div class="rcl-modal-baslik">
+        <span>Recycle İzni Ekle</span>
+        <button class="rcl-modal-kapat" onclick="rclModalKapat()">&#10005;</button>
+      </div>
+      <div class="rcl-modal-govde">
+        <input type="hidden" id="rcl-uv-id" value="">
+        <div class="rcl-form-grup">
+          <label>Varyant</label>
+          <div id="rcl-varyant-ad-goster" class="rcl-varyant-etiket">—</div>
+        </div>
+        <div class="rcl-form-grup">
+          <label for="rcl-rc-kart">Recycle Stok Kartı <span class="rcl-zorunlu">*</span></label>
+          <select id="rcl-rc-kart" class="rcl-select">
+            <option value="">Yükleniyor...</option>
+          </select>
+        </div>
+        <div class="rcl-form-grup">
+          <label for="rcl-yc-kart">Yerine Geçtiği Hammadde</label>
+          <select id="rcl-yc-kart" class="rcl-select">
+            <option value="">— Seçiniz —</option>
+            {% for h in tum_hammaddeler %}
+            <option value="{{ h.id }}">{{ h.ad }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="rcl-form-grup">
+          <label for="rcl-max-oran">Maksimum Kullanım Oranı (%)</label>
+          <input type="number" id="rcl-max-oran" class="rcl-input" min="1" max="100" step="1" value="10">
+        </div>
+        <div class="rcl-form-grup">
+          <label for="rcl-notlar">Not</label>
+          <input type="text" id="rcl-notlar" class="rcl-input" placeholder="İsteğe bağlı not">
+        </div>
+        <div class="rcl-form-grup">
+          <label><input type="checkbox" id="rcl-aktif" checked> Aktif</label>
+        </div>
+      </div>
+      <div class="rcl-modal-footer">
+        <button class="rcl-btn-iptal" onclick="rclModalKapat()">İptal</button>
+        <button class="rcl-btn-kaydet" onclick="rclKaydet()">Kaydet</button>
+      </div>
+    </div>
   </div>
   {% endif %}
 
@@ -1260,7 +1407,7 @@ const RC_CAN_MANAGE = {{ 'true' if can_manage else 'false' }};
 
 <script>
 // ── Sekme geçişi ──────────────────────────────────────────────
-const RC_SEKMELER = ['recete', 'genel', 'hesap', 'durum', 'klon', 'arge'];
+const RC_SEKMELER = ['recete', 'genel', 'hesap', 'durum', 'klon', 'recycle', 'arge'];
 function rcSekme(hedef) {
   RC_SEKMELER.forEach(function(s) {
     const el = document.getElementById('rc-sekme-' + s);
@@ -1846,4 +1993,233 @@ function agKaydet() {
   });
 })();
 </script>
+
+<style>
+/* ── FAZ-4F: Recycle İzinleri Sekmesi ─────────────────────────── */
+.rcl-varyant-blok {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  margin-bottom: 18px;
+  overflow: hidden;
+}
+.rcl-varyant-baslik {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e5e7eb;
+}
+.rcl-varyant-ad   { font-weight: 600; font-size: 14px; color: #1e293b; }
+.rcl-varyant-boyut {
+  font-size: 11px; font-weight: 600;
+  padding: 2px 7px; border-radius: 4px;
+  background: #dbeafe; color: #1d4ed8;
+  text-transform: uppercase;
+}
+.rcl-izin-ekle-btn {
+  margin-left: auto;
+  padding: 5px 12px;
+  background: #16a34a; color: #fff;
+  border: none; border-radius: 6px;
+  font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: background .15s;
+}
+.rcl-izin-ekle-btn:hover { background: #15803d; }
+.rcl-inline-btn { margin-left: 8px; font-size: 12px; }
+
+.rcl-izin-tablo { width: 100%; border-collapse: collapse; font-size: 13px; }
+.rcl-izin-tablo th {
+  padding: 8px 14px;
+  background: #f1f5f9; color: #64748b;
+  font-size: 11px; font-weight: 600;
+  text-align: left; border-bottom: 1px solid #e2e8f0;
+}
+.rcl-izin-tablo td {
+  padding: 10px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+.rcl-izin-tablo tr:last-child td { border-bottom: none; }
+.rcl-satir-pasif td { opacity: 0.5; }
+
+.rcl-recycle-dot {
+  display: inline-block; width: 8px; height: 8px;
+  background: #22c55e; border-radius: 50%; margin-right: 6px;
+}
+.rcl-kart-kod { font-size: 11px; color: #94a3b8; margin-left: 6px; }
+.rcl-stok-var { color: #16a34a; font-weight: 600; }
+.rcl-stok-yok { color: #9ca3af; }
+.rcl-oran     { font-weight: 600; color: #0369a1; }
+.rcl-not      { font-size: 11px; color: #6b7280; max-width: 200px; }
+
+.rcl-badge {
+  display: inline-block; padding: 2px 8px;
+  border-radius: 4px; font-size: 10px; font-weight: 700;
+}
+.rcl-badge-aktif { background: #dcfce7; color: #15803d; }
+.rcl-badge-pasif { background: #f1f5f9; color: #9ca3af; }
+
+.rcl-toggle-btn {
+  padding: 3px 8px; font-size: 11px; font-weight: 600;
+  border: 1px solid #cbd5e1; border-radius: 4px;
+  background: #fff; color: #475569; cursor: pointer;
+}
+.rcl-toggle-btn:hover { background: #f8fafc; }
+
+.rcl-bos-mesaj {
+  padding: 20px 18px;
+  font-size: 13px; color: #94a3b8;
+  display: flex; align-items: center; gap: 8px;
+}
+
+/* Modal */
+.rcl-modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(15,23,42,.45);
+  z-index: 1500;
+  display: flex; align-items: center; justify-content: center;
+}
+.rcl-modal {
+  background: #fff; border-radius: 12px;
+  width: 440px; max-width: 96vw;
+  box-shadow: 0 20px 60px rgba(0,0,0,.18);
+}
+.rcl-modal-baslik {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid #e5e7eb;
+  font-weight: 700; font-size: 15px; color: #1e293b;
+}
+.rcl-modal-kapat {
+  background: none; border: none; font-size: 18px;
+  color: #94a3b8; cursor: pointer; line-height: 1;
+}
+.rcl-modal-kapat:hover { color: #1e293b; }
+.rcl-modal-govde { padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
+.rcl-modal-footer {
+  padding: 14px 20px; border-top: 1px solid #e5e7eb;
+  display: flex; justify-content: flex-end; gap: 8px;
+}
+.rcl-form-grup { display: flex; flex-direction: column; gap: 4px; }
+.rcl-form-grup label { font-size: 12px; font-weight: 600; color: #374151; }
+.rcl-varyant-etiket {
+  font-size: 13px; font-weight: 600; color: #1e293b;
+  padding: 7px 10px; background: #f1f5f9; border-radius: 6px;
+}
+.rcl-zorunlu { color: #dc2626; }
+.rcl-select, .rcl-input {
+  padding: 8px 10px; border: 1px solid #d1d5db;
+  border-radius: 6px; font-size: 13px; width: 100%;
+  box-sizing: border-box;
+}
+.rcl-select:focus, .rcl-input:focus {
+  outline: none; border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59,130,246,.15);
+}
+.rcl-btn-iptal {
+  padding: 8px 16px; background: #f1f5f9; color: #475569;
+  border: 1px solid #cbd5e1; border-radius: 6px;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.rcl-btn-iptal:hover { background: #e2e8f0; }
+.rcl-btn-kaydet {
+  padding: 8px 18px; background: #16a34a; color: #fff;
+  border: none; border-radius: 6px;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.rcl-btn-kaydet:hover { background: #15803d; }
+</style>
+
+<script>
+// ── FAZ-4F: Recycle İzinleri ──────────────────────────────────
+(function() {
+  var _rclKartlarCache = null;
+
+  window.rclModalAc = function(uvId, uvAd) {
+    document.getElementById('rcl-uv-id').value = uvId;
+    document.getElementById('rcl-varyant-ad-goster').textContent = uvAd;
+    document.getElementById('rcl-max-oran').value = 10;
+    document.getElementById('rcl-notlar').value = '';
+    document.getElementById('rcl-aktif').checked = true;
+
+    var overlay = document.getElementById('rcl-modal-overlay');
+    overlay.style.display = 'flex';
+
+    var sel = document.getElementById('rcl-rc-kart');
+    if (_rclKartlarCache) {
+      _rclDoldurSelect(sel, _rclKartlarCache);
+    } else {
+      sel.innerHTML = '<option value="">Yükleniyor...</option>';
+      fetch('/nexgen/api/recycle-izin/stok-kartlari')
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+          _rclKartlarCache = data;
+          _rclDoldurSelect(sel, data);
+        }).catch(function(){
+          sel.innerHTML = '<option value="">Yüklenemedi</option>';
+        });
+    }
+  };
+
+  function _rclDoldurSelect(sel, kartlar) {
+    sel.innerHTML = '<option value="">— Seçiniz —</option>';
+    kartlar.forEach(function(k) {
+      var opt = document.createElement('option');
+      opt.value = k.id;
+      opt.textContent = k.ad + ' (' + k.mevcut_kg.toFixed(1) + ' KG)';
+      sel.appendChild(opt);
+    });
+  }
+
+  window.rclModalKapat = function(evt) {
+    if (evt && evt.target !== document.getElementById('rcl-modal-overlay')) return;
+    document.getElementById('rcl-modal-overlay').style.display = 'none';
+  };
+
+  window.rclKaydet = function() {
+    var uvId    = document.getElementById('rcl-uv-id').value;
+    var rcKart  = document.getElementById('rcl-rc-kart').value;
+    var ycKart  = document.getElementById('rcl-yc-kart').value || null;
+    var oran    = parseFloat(document.getElementById('rcl-max-oran').value) || 10;
+    var notlar  = document.getElementById('rcl-notlar').value.trim();
+    var aktif   = document.getElementById('rcl-aktif').checked;
+
+    if (!rcKart) { alert('Recycle kartı seçmelisiniz.'); return; }
+
+    fetch('/nexgen/api/recycle-izin/ekle', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        uretim_varyant_id: parseInt(uvId),
+        recycle_stok_kart_id: parseInt(rcKart),
+        yerine_stok_kart_id: ycKart ? parseInt(ycKart) : null,
+        max_oran_pct: oran,
+        notlar: notlar
+      })
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.ok) {
+        document.getElementById('rcl-modal-overlay').style.display = 'none';
+        location.reload();
+      } else {
+        alert('Hata: ' + (d.hata || 'Bilinmeyen hata'));
+      }
+    }).catch(function(){
+      alert('Sunucu hatası.');
+    });
+  };
+
+  window.rclToggle = function(izinId, btn) {
+    fetch('/nexgen/api/recycle-izin/' + izinId + '/toggle', { method: 'POST' })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (d.ok) { location.reload(); }
+        else { alert('Hata: ' + (d.hata || '?')); }
+      });
+  };
+})();
+</script>
+
 {% endblock %}
