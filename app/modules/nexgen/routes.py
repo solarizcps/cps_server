@@ -3449,6 +3449,113 @@ def tablet_arge():
     )
 
 
+@nexgen_bp.route('/api/tablet/uretim-onizleme', methods=['POST'])
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def api_tablet_uretim_onizleme():
+    """Planlanan KG için reçete ölçekler, stok yeterliliğini döner.
+    Stok hareketi YAZMAZ — sadece hesap ve okuma.
+
+    POST JSON:
+        uretim_varyant_id : int
+        planlanan_kg      : float
+    """
+    d = request.get_json(silent=True) or {}
+    uv_id     = d.get('uretim_varyant_id')
+    planlanan = d.get('planlanan_kg')
+
+    if not uv_id or not planlanan:
+        return jsonify({"ok": False, "hata": "uretim_varyant_id ve planlanan_kg zorunlu"}), 400
+    try:
+        planlanan = float(planlanan)
+        if planlanan <= 0:
+            return jsonify({"ok": False, "hata": "planlanan_kg sıfırdan büyük olmalı"}), 400
+    except Exception:
+        return jsonify({"ok": False, "hata": "Geçersiz planlanan_kg"}), 400
+
+    con = _db()
+    try:
+        uv = con.execute(
+            "SELECT uv.id, uv.boyut, uv.recete_durum, uv.ad AS uv_ad,"
+            " rv.ad AS renk_ad, f.ad AS formul_ad, f.kod AS formul_kod"
+            " FROM nexgen_uretim_varyant uv"
+            " JOIN nexgen_renk_varyant rv ON rv.id=uv.renk_varyant_id"
+            " JOIN nexgen_formul f ON f.id=rv.formul_id"
+            " WHERE uv.id=? AND uv.aktif=1",
+            (uv_id,)
+        ).fetchone()
+        if not uv:
+            return jsonify({"ok": False, "hata": "Üretim varyantı bulunamadı"}), 404
+        if uv['recete_durum'] != 'URETIME_ACIK':
+            return jsonify({
+                "ok": False,
+                "hata": f"Sadece URETIME_ACIK reçeteler kullanılabilir. Mevcut: {uv['recete_durum']}"
+            }), 400
+
+        # Reçete kalemleri
+        kalemler_db = con.execute("""
+            SELECT rk.id, rk.stok_kart_id, rk.miktar_kg, rk.sira,
+                   sk.ad AS stok_ad, sk.birim, sk.kod AS stok_kod
+            FROM nexgen_recete_kalem rk
+            JOIN nexgen_stok_kart sk ON sk.id = rk.stok_kart_id
+            WHERE rk.uretim_varyant_id = ? AND rk.aktif = 1
+            ORDER BY rk.sira
+        """, (uv_id,)).fetchall()
+
+        if not kalemler_db:
+            return jsonify({"ok": False, "hata": "Bu varyanta ait aktif reçete kalemi bulunamadı"}), 400
+
+        # Batch KG = kalem miktarları toplamı
+        batch_kg = round(sum(float(k['miktar_kg']) for k in kalemler_db), 3)
+        if batch_kg <= 0:
+            return jsonify({"ok": False, "hata": "Reçete batch KG sıfır olamaz"}), 400
+
+        carpan = round(planlanan / batch_kg, 6)
+
+        # Her kalem için ölçekle ve stok kontrol et
+        tum_yeterli = True
+        kalemler_sonuc = []
+        for k in kalemler_db:
+            recete_kg  = round(float(k['miktar_kg']), 3)
+            gerekli_kg = round(recete_kg * carpan, 3)
+            mevcut_kg  = _mevcut_stok(con, k['stok_kart_id'])
+            fark_kg    = round(mevcut_kg - gerekli_kg, 3)
+            yeterli    = mevcut_kg >= gerekli_kg
+
+            if not yeterli:
+                tum_yeterli = False
+
+            kalemler_sonuc.append({
+                "stok_kart_id":    k['stok_kart_id'],
+                "stok_kod":        k['stok_kod'] or '',
+                "hammadde_adi":    k['stok_ad'],
+                "birim":           k['birim'] or 'KG',
+                "recete_miktar_kg": recete_kg,
+                "gerekli_kg":      gerekli_kg,
+                "mevcut_stok_kg":  mevcut_kg,
+                "fark_kg":         fark_kg,
+                "yeterli":         yeterli,
+                "durum":           "YETERLİ" if yeterli else "EKSİK",
+            })
+
+        return jsonify({
+            "ok":          True,
+            "uv_id":       uv_id,
+            "formul_ad":   uv['formul_ad'],
+            "renk_ad":     uv['renk_ad'],
+            "boyut":       uv['boyut'],
+            "batch_kg":    batch_kg,
+            "planlanan_kg": round(planlanan, 3),
+            "carpan":      carpan,
+            "toplam_kalem": len(kalemler_sonuc),
+            "yeterli_mi":  tum_yeterli,
+            "kalemler":    kalemler_sonuc,
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "hata": str(e)}), 500
+    finally:
+        con.close()
+
+
 @nexgen_bp.route('/api/tablet/uretim-kodu-olustur', methods=['POST'])
 @yetki_gerekli('nexgen.tablet.uretim', 'can_uretim')
 def api_tablet_uretim_kodu():
