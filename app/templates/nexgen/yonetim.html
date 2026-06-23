@@ -290,6 +290,12 @@
 
     <div class="ngsd-hrt-cerceve">
       <table class="ngsd-hrt-tablo" id="cariTablo">
+        <colgroup>
+          <col class="col-kod">
+          <col class="col-unvan">
+          <col class="col-durum">
+          <col class="col-islem">
+        </colgroup>
         <thead>
           <tr>
             <th>Cari Kod</th>
@@ -315,7 +321,7 @@
               {% endif %}
             </td>
             <td style="text-align:right">
-              <div style="display:flex;gap:6px;justify-content:flex-end;">
+              <div class="ngym-islem-grup">
                 <button class="ngym-islem-btn"
                         onclick="cariDuzenleModalAc({{ c.id }}, '{{ c.cari_kod }}', '{{ c.unvan|replace("'","\\'")|e }}')">
                   Düzenle
@@ -344,24 +350,33 @@
 <div id="ngym-cari-overlay" class="ngsk-overlay" onclick="ngymKapat('cari',event)">
   <div class="ngsk-modal" onclick="event.stopPropagation()" style="max-width:480px">
     <div class="ngsk-modal-baslik">
-      <span id="cari-modal-baslik">Cari</span>
+      <span id="cari-modal-baslik">Yeni Cari</span>
       <button class="ngsk-modal-kapat" onclick="ngymKapat('cari')">&times;</button>
     </div>
     <div id="cari-modal-hata"   class="ngsk-hata-alan"   style="display:none"></div>
     <div id="cari-modal-basari" class="ngsk-basari-alan"  style="display:none"></div>
     <input type="hidden" id="cari-modal-id">
-    <div style="padding:18px;display:flex;flex-direction:column;gap:14px;">
+    <div style="padding:20px 24px;display:flex;flex-direction:column;gap:16px;">
       <div class="ngsk-fg">
-        <label>Cari Kod <span class="ngsk-zorunlu">*</span></label>
-        <input type="text" id="cari-modal-kod" class="ngsk-inp" placeholder="120.NX.XXX">
+        <label style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;">
+          Cari Kod
+        </label>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input type="text" id="cari-modal-kod" class="ngsk-inp ngsk-inp-readonly"
+                 readonly style="flex:1;background:#f8fafc;color:#374151;font-family:monospace;font-weight:700;">
+          <span id="cari-kod-yukleniyor" style="font-size:12px;color:#9ca3af;display:none;">yükleniyor...</span>
+        </div>
+        <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">Otomatik üretilir, değiştirilemez.</p>
       </div>
       <div class="ngsk-fg">
-        <label>Unvan <span class="ngsk-zorunlu">*</span></label>
+        <label style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;">
+          Unvan <span class="ngsk-zorunlu">*</span>
+        </label>
         <input type="text" id="cari-modal-unvan" class="ngsk-inp"
-               placeholder="Firma Adı San.Tic.Ltd.Şti.">
+               placeholder="Firma Adı San.Tic.Ltd.Şti." autocomplete="off">
       </div>
     </div>
-    <div class="ngsk-modal-alt">
+    <div class="ngsk-modal-footer">
       <button class="ngsk-btn-iptal" onclick="ngymKapat('cari')">İptal</button>
       <button class="ngsk-btn-kaydet" id="cari-kaydet-btn" onclick="cariKaydet()">Kaydet</button>
     </div>
@@ -649,7 +664,14 @@
 .ngsd-hrt-tablo tbody tr { border-bottom:1px solid #f3f4f6; }
 .ngsd-hrt-tablo tbody tr:last-child { border-bottom:none; }
 .ngsd-hrt-tablo tbody tr:hover { background:#fafafa; }
-.ngsd-hrt-tablo td { padding:9px 14px; vertical-align:middle; }
+.ngsd-hrt-tablo td { padding:11px 14px; vertical-align:middle; }
+/* Cari tablo: kod sütunu dar, unvan geniş */
+#cariTablo col.col-kod   { width:140px; }
+#cariTablo col.col-unvan { width:auto; }
+#cariTablo col.col-durum { width:80px; }
+#cariTablo col.col-islem { width:160px; }
+/* İşlem buton grubu */
+.ngym-islem-grup { display:flex; gap:8px; justify-content:flex-end; flex-wrap:nowrap; }
 .ngsd-td-r { text-align:right; white-space:nowrap; }
 .ngsd-td-tarih { font-size:12px; color:#6b7280; white-space:nowrap; }
 .ngsd-mono { font-family:'Courier New',monospace; color:#0891b2; font-size:12px; }
@@ -790,6 +812,8 @@
 .ngsd-kod-rozet   { font-size:11px; font-weight:800; font-family:monospace; background:#f1f5f9; color:#374151; padding:3px 7px; border-radius:4px; }
 .ngym-islem-btn   { padding:5px 10px; border:1.5px solid #e2e8f0; border-radius:6px; background:#f8fafc; font-size:12px; font-weight:700; cursor:pointer; color:#374151; }
 .ngym-islem-btn:hover { background:#e0f2fe; border-color:#93c5fd; }
+.ngsk-inp-readonly { background:#f8fafc !important; cursor:default; color:#374151 !important; }
+.ngsk-inp-readonly:focus { outline:none; border-color:#e2e8f0; box-shadow:none; }
 .ngym-btn-pasif   { border-color:#fca5a5 !important; color:#dc2626 !important; }
 .ngym-btn-pasif:hover { background:#fef2f2 !important; }
 .ngym-btn-aktif   { border-color:#86efac !important; color:#15803d !important; }
@@ -1135,23 +1159,49 @@ function eslKaldir(eslId, btnEl) {
 
 // ── Cari ──
 function cariYeniModalAc() {
+  var kodInp  = document.getElementById('cari-modal-kod');
+  var yukl    = document.getElementById('cari-kod-yukleniyor');
   document.getElementById('cari-modal-id').value = '';
-  document.getElementById('cari-modal-kod').value = '';
   document.getElementById('cari-modal-unvan').value = '';
-  document.getElementById('cari-modal-kod').disabled = false;
+  kodInp.value = '';
+  kodInp.readOnly = true;
   document.getElementById('cari-modal-baslik').textContent = 'Yeni Cari';
   ngymHataTemizle('cari');
+  /* Otomatik kodu çek */
+  if (yukl) yukl.style.display = 'inline';
+  document.getElementById('cari-kaydet-btn').disabled = true;
+  fetch('/nexgen/api/yonetim/cari-sonraki-kod')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (yukl) yukl.style.display = 'none';
+      if (d.ok) {
+        kodInp.value = d.kod;
+      } else {
+        kodInp.value = '120.NX.???';
+      }
+      document.getElementById('cari-kaydet-btn').disabled = false;
+    })
+    .catch(function(){
+      if (yukl) yukl.style.display = 'none';
+      kodInp.value = '120.NX.???';
+      document.getElementById('cari-kaydet-btn').disabled = false;
+    });
   document.getElementById('ngym-cari-overlay').classList.add('acik');
+  setTimeout(function(){ document.getElementById('cari-modal-unvan').focus(); }, 200);
 }
 
 function cariDuzenleModalAc(id, kod, unvan) {
+  var kodInp = document.getElementById('cari-modal-kod');
   document.getElementById('cari-modal-id').value = id;
-  document.getElementById('cari-modal-kod').value = kod;
+  kodInp.value = kod;
+  kodInp.readOnly = true;
   document.getElementById('cari-modal-unvan').value = unvan;
-  document.getElementById('cari-modal-kod').disabled = true;
   document.getElementById('cari-modal-baslik').textContent = 'Cari Düzenle';
+  document.getElementById('cari-kod-yukleniyor').style.display = 'none';
+  document.getElementById('cari-kaydet-btn').disabled = false;
   ngymHataTemizle('cari');
   document.getElementById('ngym-cari-overlay').classList.add('acik');
+  setTimeout(function(){ document.getElementById('cari-modal-unvan').focus(); }, 200);
 }
 
 function cariKaydet() {
@@ -1165,7 +1215,7 @@ function cariKaydet() {
   var unvan = document.getElementById('cari-modal-unvan').value.trim();
 
   if (!unvan) { hataDiv.textContent='Unvan zorunlu.'; hataDiv.style.display='block'; return; }
-  if (!id && !kod) { hataDiv.textContent='Cari kodu zorunlu.'; hataDiv.style.display='block'; return; }
+  if (!id && !kod) { hataDiv.textContent='Cari kodu üretilemedi, sayfayı yenileyin.'; hataDiv.style.display='block'; return; }
 
   var url  = id ? '/nexgen/api/yonetim/cari-guncelle' : '/nexgen/api/yonetim/cari-ekle';
   var body = id ? {id: parseInt(id), unvan: unvan} : {cari_kod: kod, unvan: unvan};

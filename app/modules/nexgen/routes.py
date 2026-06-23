@@ -3008,6 +3008,31 @@ def api_yonetim_eslestirme_kaldir():
 # CARİ MASTER API — FAZ-5E-3
 # ─────────────────────────────────────────────────────────────
 
+@nexgen_bp.route('/api/yonetim/cari-sonraki-kod', methods=['GET'])
+@yetki_gerekli('nexgen.yonetim.manage', 'can_create')
+def api_cari_sonraki_kod():
+    """Standart formattaki (120.NX.XXX) mevcut en büyük numarayı bulur, +1 verir."""
+    import re
+    con = _db()
+    try:
+        rows = con.execute("SELECT cari_kod FROM nexgen_cari").fetchall()
+        maks = 0
+        pat = re.compile(r'^120\.NX\.(\d+)$')
+        for row in rows:
+            m = pat.match((row[0] or '').strip())
+            if m:
+                n = int(m.group(1))
+                if n > maks:
+                    maks = n
+        yeni_no = maks + 1
+        yeni_kod = f"120.NX.{yeni_no:03d}"
+        return jsonify({'ok': True, 'kod': yeni_kod})
+    except Exception as e:
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
 @nexgen_bp.route('/api/yonetim/cari-ekle', methods=['POST'])
 @yetki_gerekli('nexgen.yonetim.manage', 'can_create')
 def api_cari_ekle():
