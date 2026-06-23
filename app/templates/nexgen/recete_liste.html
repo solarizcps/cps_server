@@ -4,7 +4,7 @@
 {% block content %}
 <div class="ng-sayfa">
 
-  {# ── Breadcrumb ──────────────────────────────────────────── #}
+  {# ── Breadcrumb ── #}
   <div class="ng-baslik-blok">
     <div class="ng-baslik">
       <a href="/nexgen/" class="ng-bc-link">NexGen</a>
@@ -12,11 +12,11 @@
       <span class="ng-baslik-metin">Reçete Merkezi</span>
     </div>
     <div class="ng-baslik-aciklama">
-      Formül ve renk varyantı bazında hammadde reçeteleri — Small / Large üretim boyutları
+      Formül ve renk bazında hammadde reçeteleri
     </div>
   </div>
 
-  {# ── KPI Bar ─────────────────────────────────────────────── #}
+  {# ── KPI Bar ── #}
   <div class="rl-kpi-bar">
     <div class="rl-kpi">
       <span class="rl-kpi-deger">{{ formuller|length }}</span>
@@ -44,7 +44,7 @@
     </div>
   </div>
 
-  {# ── Toolbar ─────────────────────────────────────────────── #}
+  {# ── Toolbar ── #}
   <div class="rl-toolbar">
     <div class="ngsk-ara-wrap" style="flex:1;max-width:320px">
       <svg class="ngsk-ara-ikon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -73,7 +73,7 @@
     {% endif %}
   </div>
 
-  {# ── Formül Kartları ──────────────────────────────────────── #}
+  {# ── Formül Kartları ── #}
   {% if formuller %}
   <div class="rl-kart-grid" id="rl-kart-grid">
 
@@ -92,74 +92,107 @@
           {% endif %}
         </div>
         <div class="rl-kart-hdr-sag">
-          {% if f.recete_durum_ozet %}
-          <span class="ngrc-rd-rozet ngrc-rd-{{ f.recete_durum_ozet|lower|replace('_','-') }}">
-            {{ f.recete_durum_ozet.replace('_',' ') }}
-          </span>
+          <div class="rl-formul-sayilar">
+            <span class="rl-fs-sayi">{{ f.renk_say }}</span>
+            <span class="rl-fs-etiket">Renk</span>
+          </div>
+          <div class="rl-formul-sayilar">
+            <span class="rl-fs-sayi">{{ f.uretim_say }}</span>
+            <span class="rl-fs-etiket">Varyant</span>
+          </div>
+          {% if f.liste_kg_maliyet > 0 %}
+          <div class="rl-formul-sayilar">
+            <span class="rl-fs-sayi rl-kpi-yesil">{{ '{:,.0f}'.format(f.liste_kg_maliyet) }} ₺</span>
+            <span class="rl-fs-etiket">Ort. ₺/KG</span>
+          </div>
           {% endif %}
-          <a href="/nexgen/recete/{{ f.id }}" class="rl-detay-btn">
-            Detay
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-                 stroke-linecap="round" stroke-linejoin="round" width="12" height="12">
-              <polyline points="9 18 15 12 9 6"/>
-            </svg>
-          </a>
         </div>
       </div>
 
-      {# ── Formül KPI Mini Bar ── #}
-      <div class="rl-mini-kpi-bar">
-        <div class="rl-mini-kpi">
-          <span class="rl-mini-kpi-deger">{{ f.renk_say }}</span>
-          <span class="rl-mini-kpi-etiket">Renk</span>
-        </div>
-        <div class="rl-mini-kpi">
-          <span class="rl-mini-kpi-deger">{{ f.uretim_say }}</span>
-          <span class="rl-mini-kpi-etiket">Varyant</span>
-        </div>
-        <div class="rl-mini-kpi">
-          <span class="rl-mini-kpi-deger">{{ f.kalem_say }}</span>
-          <span class="rl-mini-kpi-etiket">Kalem</span>
-        </div>
-        {% if f.liste_kg_maliyet > 0 %}
-        <div class="rl-mini-kpi">
-          <span class="rl-mini-kpi-deger rl-kpi-yesil">{{ '{:,.2f}'.format(f.liste_kg_maliyet) }} ₺</span>
-          <span class="rl-mini-kpi-etiket">Ort. KG Maliyet</span>
-        </div>
-        {% endif %}
-      </div>
-
-      {# ── Renk / Varyant Ağaç Özeti ── #}
+      {# ── Renk Blokları ── #}
       {% if f.rv_ozet %}
-      <div class="rl-agac">
+      <div class="rl-renkler">
         {% for rv in f.rv_ozet %}
         <div class="rl-renk-blok">
-          <div class="rl-renk-baslik">
-            <span class="rl-renk-bant"></span>
+
+          {# Renk başlığı #}
+          <div class="rl-renk-hdr">
+            <span class="rl-renk-daire"></span>
             <span class="rl-renk-ad">{{ rv.ad }}</span>
           </div>
-          <div class="rl-varyant-listesi">
+
+          {# Varyant (boyut) kartları #}
+          <div class="rl-boyut-kartlar">
             {% for uv in rv.varyantlar %}
-            <div class="rl-varyant-satir">
-              <span class="rl-boyut-rozet rl-boyut-{{ uv.boyut|lower }}">{{ uv.boyut }}</span>
-              {% if uv.toplam_kg > 0 %}
-              <span class="rl-varyant-kg">{{ '{:,.1f}'.format(uv.toplam_kg) }} KG</span>
+            {% set boyut_label = 'BÜYÜK BOY' if uv.boyut == 'LARGE' else ('KÜÇÜK BOY' if uv.boyut == 'SMALL' else uv.boyut) %}
+            {% set uretime_acik_mi = uv.recete_durum == 'URETIME_ACIK' %}
+            <div class="rl-boyut-kart rl-boyut-kart-{{ 'acik' if uretime_acik_mi else 'kapali' }}">
+
+              {# Boyut etiketi #}
+              <div class="rl-boyut-hdr">
+                <span class="rl-boyut-label rl-boyut-{{ uv.boyut|lower }}">{{ boyut_label }}</span>
+                <span class="rl-durum-rozet rl-d-{{ uv.recete_durum|lower|replace('_','-') }}">
+                  {%- if uv.recete_durum == 'URETIME_ACIK' -%}ÜRETİME AÇIK
+                  {%- elif uv.recete_durum == 'ONAYLI' -%}ONAYLI
+                  {%- elif uv.recete_durum == 'DENEME' -%}DENEME
+                  {%- elif uv.recete_durum == 'TASLAK' -%}TASLAK
+                  {%- elif uv.recete_durum == 'PASIF' -%}PASİF
+                  {%- else -%}{{ uv.recete_durum }}{%- endif -%}
+                </span>
+              </div>
+
+              {# Sayılar #}
+              <div class="rl-boyut-veri">
+                {% if uv.toplam_kg > 0 %}
+                <div class="rl-boyut-veri-kpi">
+                  <span class="rl-boyut-veri-sayi">{{ '{:,.1f}'.format(uv.toplam_kg) }} KG</span>
+                  <span class="rl-boyut-veri-etiket">Batch KG</span>
+                </div>
+                {% endif %}
+                {% if uv.kg_maliyet > 0 %}
+                <div class="rl-boyut-veri-kpi">
+                  <span class="rl-boyut-veri-sayi rl-kpi-yesil">{{ '{:,.0f}'.format(uv.kg_maliyet) }} ₺</span>
+                  <span class="rl-boyut-veri-etiket">1 KG Maliyet</span>
+                </div>
+                {% else %}
+                <div class="rl-boyut-veri-kpi">
+                  <span class="rl-boyut-veri-sayi" style="color:#9ca3af">—</span>
+                  <span class="rl-boyut-veri-etiket">Fiyat Yok</span>
+                </div>
+                {% endif %}
+              </div>
+
+              {# Uyarı — üretime açık değilse #}
+              {% if not uretime_acik_mi %}
+              <div class="rl-boyut-uyari">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                     width="13" height="13">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="8" x2="12" y2="12"/>
+                  <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                Henüz üretimde kullanılmaz
+              </div>
               {% endif %}
-              {% if uv.kg_maliyet > 0 %}
-              <span class="rl-varyant-maliyet">{{ '{:,.2f}'.format(uv.kg_maliyet) }} ₺/KG</span>
-              {% else %}
-              <span class="rl-varyant-maliyet rl-fiyat-yok">—</span>
-              {% endif %}
-              <span class="ngrc-rd-rozet ngrc-rd-{{ uv.recete_durum|lower|replace('_','-') }}" style="font-size:10px">
-                {{ uv.recete_durum.replace('_',' ') }}
-              </span>
-              <a href="/nexgen/recete/{{ f.id }}" class="rl-var-link" title="Detaya Git">›</a>
+
+              {# Kontrol Et Butonu #}
+              <a href="/nexgen/recete/{{ f.id }}" class="rl-kontrol-btn rl-kontrol-{{ 'acik' if uretime_acik_mi else 'kapali' }}">
+                KONTROL ET
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                     stroke-linecap="round" stroke-linejoin="round" width="13" height="13">
+                  <polyline points="9 18 15 12 9 6"/>
+                </svg>
+              </a>
+
             </div>
             {% endfor %}
           </div>
+
         </div>
         {% endfor %}
       </div>
+
       {% else %}
       <div class="rl-bos-agac">Henüz reçete kalemi yok</div>
       {% endif %}
@@ -194,150 +227,193 @@
 </div>
 
 <style>
+* { box-sizing: border-box; }
+
 /* ── KPI Bar ── */
 .rl-kpi-bar {
-  display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;
+  display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px;
 }
 .rl-kpi {
-  flex:1; min-width:110px; background:#fff;
-  border:1px solid rgba(17,24,39,.07); border-radius:10px;
-  padding:12px 16px; box-shadow:0 1px 4px rgba(15,23,42,.04);
+  flex: 1; min-width: 110px; background: #fff;
+  border: 1px solid rgba(17,24,39,.07); border-radius: 10px;
+  padding: 12px 16px; box-shadow: 0 1px 4px rgba(15,23,42,.04);
 }
-.rl-kpi-deger  { display:block; font-size:22px; font-weight:700; color:#111827; }
-.rl-kpi-etiket { display:block; font-size:11px; color:#6b7280; margin-top:2px; }
-.rl-kpi-yesil  { color:#059669; }
-.rl-kpi-mavi   { color:#1d4ed8; }
-.rl-kpi-gri    { color:#9ca3af; }
+.rl-kpi-deger  { display: block; font-size: 22px; font-weight: 700; color: #111827; }
+.rl-kpi-etiket { display: block; font-size: 11px; color: #6b7280; margin-top: 2px; }
+.rl-kpi-yesil  { color: #059669; }
+.rl-kpi-mavi   { color: #1d4ed8; }
+.rl-kpi-gri    { color: #9ca3af; }
 
 /* ── Toolbar ── */
 .rl-toolbar {
-  display:flex; gap:10px; flex-wrap:wrap; align-items:center;
-  margin-bottom:14px;
+  display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+  margin-bottom: 14px;
 }
 
 /* ── Kart Grid ── */
 .rl-kart-grid {
-  display:flex; flex-direction:column; gap:12px;
+  display: flex; flex-direction: column; gap: 14px;
 }
 
 /* ── Formül Kartı ── */
 .rl-kart {
-  background:#fff; border:1px solid rgba(17,24,39,.07);
-  border-radius:14px; overflow:hidden;
-  box-shadow:0 2px 8px rgba(15,23,42,.04);
-  transition:box-shadow .15s;
+  background: #fff; border: 1px solid rgba(17,24,39,.07);
+  border-radius: 16px; overflow: hidden;
+  box-shadow: 0 2px 8px rgba(15,23,42,.04);
+  transition: box-shadow .15s;
 }
-.rl-kart:hover { box-shadow:0 4px 16px rgba(15,23,42,.08); }
+.rl-kart:hover { box-shadow: 0 4px 18px rgba(15,23,42,.09); }
 
+/* ── Kart Başlık ── */
 .rl-kart-hdr {
-  display:flex; align-items:flex-start; justify-content:space-between;
-  gap:12px; padding:16px 18px 12px; border-bottom:1px solid #f3f4f6;
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 12px; padding: 16px 20px 14px;
+  border-bottom: 1px solid #f3f4f6;
 }
-.rl-kart-hdr-sol { flex:1; }
-.rl-kart-hdr-sag { display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
-
+.rl-kart-hdr-sol { flex: 1; }
+.rl-kart-hdr-sag {
+  display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap;
+}
 .rl-formul-kod {
-  font-family:'Courier New',monospace; font-size:11px; font-weight:700;
-  color:#0891b2; letter-spacing:.5px; display:block; margin-bottom:3px;
+  font-family: 'Courier New', monospace; font-size: 11px; font-weight: 700;
+  color: #9ca3af; letter-spacing: .5px; display: block; margin-bottom: 3px;
 }
 .rl-formul-ad {
-  margin:0; font-size:15px; font-weight:700; color:#111827;
+  margin: 0; font-size: 18px; font-weight: 800; color: #111827; line-height: 1.3;
 }
 .rl-formul-notlar {
-  font-size:12px; color:#6b7280; margin-top:4px; line-height:1.5;
+  font-size: 12px; color: #6b7280; margin-top: 5px; line-height: 1.5;
+}
+.rl-formul-sayilar {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  min-width: 52px;
+}
+.rl-fs-sayi   { font-size: 15px; font-weight: 800; color: #111827; }
+.rl-fs-etiket { font-size: 10px; color: #9ca3af; text-transform: uppercase; letter-spacing: .3px; }
+
+/* ── Renk Blokları ── */
+.rl-renkler {
+  padding: 14px 20px 16px;
+  display: flex; flex-direction: column; gap: 16px;
 }
 
-.rl-detay-btn {
-  display:inline-flex; align-items:center; gap:4px;
-  padding:5px 12px; border-radius:7px;
-  background:#f6c343; color:#111827; text-decoration:none;
-  font-size:12px; font-weight:700; transition:background .12s;
-}
-.rl-detay-btn:hover { background:#f5b82e; }
+.rl-renk-blok { }
 
-/* ── Mini KPI Bar ── */
-.rl-mini-kpi-bar {
-  display:flex; gap:0; padding:8px 18px;
-  border-bottom:1px solid #f3f4f6; background:#fafafa;
+.rl-renk-hdr {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
 }
-.rl-mini-kpi {
-  display:flex; flex-direction:column; padding:4px 16px 4px 0;
-  border-right:1px solid #f3f4f6; margin-right:16px;
-}
-.rl-mini-kpi:last-child { border-right:none; }
-.rl-mini-kpi-deger  { font-size:14px; font-weight:700; color:#111827; }
-.rl-mini-kpi-etiket { font-size:10px; color:#9ca3af; text-transform:uppercase; letter-spacing:.3px; }
-
-/* ── Ağaç Özeti ── */
-.rl-agac { padding:12px 18px 14px; }
-.rl-renk-blok { margin-bottom:10px; }
-.rl-renk-blok:last-child { margin-bottom:0; }
-.rl-renk-baslik {
-  display:flex; align-items:center; gap:8px;
-  margin-bottom:6px;
-}
-.rl-renk-bant {
-  display:inline-block; width:10px; height:10px; border-radius:50%;
-  background:#6b7280; flex-shrink:0;
+.rl-renk-daire {
+  display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+  background: #6b7280; flex-shrink: 0;
 }
 .rl-renk-ad {
-  font-size:12px; font-weight:700; color:#374151;
-  text-transform:uppercase; letter-spacing:.4px;
+  font-size: 15px; font-weight: 800; color: #111827;
+  text-transform: uppercase; letter-spacing: .6px;
 }
 
-.rl-varyant-listesi { display:flex; flex-direction:column; gap:4px; padding-left:18px; }
-.rl-varyant-satir {
-  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
-  padding:4px 8px; border-radius:6px; background:#f9fafb;
-  border:1px solid #f3f4f6;
+/* ── Boyut Kartları ── */
+.rl-boyut-kartlar {
+  display: flex; gap: 10px; flex-wrap: wrap;
 }
-.rl-boyut-rozet {
-  font-size:11px; font-weight:700; padding:1px 7px;
-  border-radius:5px; letter-spacing:.3px;
-}
-.rl-boyut-large   { background:#dbeafe; color:#1d4ed8; }
-.rl-boyut-small   { background:#fef3c7; color:#92400e; }
-.rl-boyut-standart{ background:#f1f5f9; color:#64748b; }
 
-.rl-varyant-kg { font-size:12px; font-weight:700; color:#111827; }
-.rl-varyant-maliyet { font-size:12px; color:#059669; font-weight:600; }
-.rl-fiyat-yok { color:#9ca3af; font-weight:400; }
-.rl-var-link {
-  margin-left:auto; color:#9ca3af; text-decoration:none;
-  font-size:16px; font-weight:700; padding:0 4px;
-  transition:color .1s;
+.rl-boyut-kart {
+  flex: 1; min-width: 200px; max-width: 340px;
+  border-radius: 12px; padding: 14px 16px;
+  border: 2px solid transparent;
+  display: flex; flex-direction: column; gap: 10px;
 }
-.rl-var-link:hover { color:#0891b2; }
+.rl-boyut-kart-acik {
+  background: #f0fdf4; border-color: #bbf7d0;
+}
+.rl-boyut-kart-kapali {
+  background: #f9fafb; border-color: #e5e7eb;
+}
 
+/* ── Boyut Başlık ── */
+.rl-boyut-hdr {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.rl-boyut-label {
+  font-size: 14px; font-weight: 900; letter-spacing: .5px;
+  padding: 4px 10px; border-radius: 7px;
+}
+.rl-boyut-large   { background: #dbeafe; color: #1d4ed8; }
+.rl-boyut-small   { background: #fef3c7; color: #92400e; }
+.rl-boyut-standart{ background: #f1f5f9; color: #64748b; }
+
+/* ── Durum Rozetleri ── */
+.rl-durum-rozet {
+  font-size: 10px; font-weight: 800; padding: 3px 9px;
+  border-radius: 6px; white-space: nowrap; letter-spacing: .3px;
+}
+.rl-d-uretime-acik { background: #dbeafe; color: #1d4ed8; border: 1px solid #bfdbfe; }
+.rl-d-onayli       { background: #d1fae5; color: #059669; border: 1px solid #a7f3d0; }
+.rl-d-deneme       { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+.rl-d-taslak       { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
+.rl-d-pasif        { background: #f9fafb; color: #9ca3af; border: 1px solid #e5e7eb; }
+
+/* ── Boyut Veri ── */
+.rl-boyut-veri {
+  display: flex; gap: 14px; flex-wrap: wrap;
+}
+.rl-boyut-veri-kpi {
+  display: flex; flex-direction: column; gap: 2px;
+}
+.rl-boyut-veri-sayi   { font-size: 16px; font-weight: 800; color: #111827; }
+.rl-boyut-veri-etiket {
+  font-size: 10px; color: #9ca3af; text-transform: uppercase; letter-spacing: .3px; font-weight: 700;
+}
+
+/* ── Uyarı ── */
+.rl-boyut-uyari {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600; color: #92400e;
+  background: #fffbeb; border: 1px solid #fde68a;
+  border-radius: 7px; padding: 6px 10px;
+}
+
+/* ── Kontrol Et Butonu ── */
+.rl-kontrol-btn {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 11px 16px; border-radius: 9px;
+  font-size: 13px; font-weight: 800; text-decoration: none;
+  letter-spacing: .5px; transition: all .12s;
+}
+.rl-kontrol-acik {
+  background: #f6c343; color: #111827;
+}
+.rl-kontrol-acik:hover { background: #f5b82e; transform: translateY(-1px); }
+.rl-kontrol-kapali {
+  background: #f3f4f6; color: #6b7280; border: 1px solid #e5e7eb;
+}
+.rl-kontrol-kapali:hover { background: #e5e7eb; }
+
+/* ── Boş ── */
 .rl-bos-agac {
-  padding:10px 18px 14px; font-size:12px; color:#9ca3af; font-style:italic;
+  padding: 14px 20px; font-size: 13px; color: #9ca3af; font-style: italic;
 }
-
-/* ── Boş durumlar ── */
 .rl-bos-sonuc {
-  text-align:center; padding:32px; color:#9ca3af;
-  font-size:13px; background:#fff;
-  border:1px solid rgba(17,24,39,.06); border-radius:12px;
+  text-align: center; padding: 32px; color: #9ca3af;
+  font-size: 13px; background: #fff;
+  border: 1px solid rgba(17,24,39,.06); border-radius: 12px;
 }
 .rl-bos-tam {
-  display:flex; flex-direction:column; align-items:center;
-  padding:64px 24px; text-align:center; background:#fff;
-  border:1px solid rgba(17,24,39,.06); border-radius:14px;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 64px 24px; text-align: center; background: #fff;
+  border: 1px solid rgba(17,24,39,.06); border-radius: 14px;
 }
-.rl-bos-ikon { margin-bottom:14px; }
-.rl-bos-baslik { font-size:17px; font-weight:700; color:#374151; margin-bottom:8px; }
-.rl-bos-aciklama { font-size:13px; color:#9ca3af; line-height:1.7; }
+.rl-bos-ikon { margin-bottom: 14px; }
+.rl-bos-baslik { font-size: 17px; font-weight: 700; color: #374151; margin-bottom: 8px; }
+.rl-bos-aciklama { font-size: 13px; color: #9ca3af; line-height: 1.7; }
 
-/* ── Reçete durum rozetleri ── */
-.ngrc-rd-rozet {
-  display:inline-block; padding:2px 8px; border-radius:7px;
-  font-size:11px; font-weight:700; border:1px solid transparent; white-space:nowrap;
+/* ── Tablet / Mobil ── */
+@media (max-width: 600px) {
+  .rl-kart-hdr { flex-direction: column; gap: 8px; }
+  .rl-kart-hdr-sag { flex-direction: row; align-items: center; }
+  .rl-boyut-kart { min-width: 100%; max-width: 100%; }
+  .rl-formul-ad { font-size: 16px; }
+  .rl-renkler { padding: 12px 14px 14px; }
 }
-.ngrc-rd-taslak        { background:#f1f5f9; color:#64748b; border-color:#e2e8f0; }
-.ngrc-rd-deneme        { background:#fef3c7; color:#92400e; border-color:#fde68a; }
-.ngrc-rd-onayli        { background:#d1fae5; color:#059669; border-color:#a7f3d0; }
-.ngrc-rd-uretime-acik  { background:#dbeafe; color:#1d4ed8; border-color:#bfdbfe; }
-.ngrc-rd-pasif         { background:#f9fafb; color:#9ca3af; border-color:#e5e7eb; }
 </style>
 
 <script>
