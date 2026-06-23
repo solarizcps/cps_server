@@ -4181,7 +4181,180 @@ def tablet_etiket_arge(test_no):
 
 
 # ─────────────────────────────────────────────────────────────
-# NEXGEN FAZ-4F — RECYCLE İZİN ALTYAPISI
+# NEXGEN FAZ-5C-2 — TSPL BARKOD ETİKET KOMUT ÇIKTISI
+# KURAL: Stok hareketi yok. Sadece TSPL metin çıktısı.
+# Desteklenen cihazlar: TSC, Xprinter, Godex (TSPL/TSPL2)
+# Etiket boyutu: 100×60 mm
+# ─────────────────────────────────────────────────────────────
+
+def _tspl_uretim(b, operator_ad):
+    """100×60 mm TSPL komutu üretir — üretim LOT etiketi.
+
+    b: dict ile batch + join alanları (formul_ad, renk_ad, boyut,
+       lot_kodu, batch_kodu, planlanan_kg, olusturma_tarihi)
+    """
+    from datetime import date as _date
+    bugun = _date.today().strftime('%d.%m.%Y')
+    lot    = b.get('lot_kodu') or b.get('batch_kodu') or '—'
+    batch  = b.get('batch_kodu') or '—'
+    formul = (b.get('formul_ad') or '').upper()[:24]
+    renk   = (b.get('renk_ad') or '').upper()[:24]
+    boyut_raw = b.get('boyut') or ''
+    boyut  = 'BUYUK BOY' if boyut_raw == 'LARGE' else ('KUCUK BOY' if boyut_raw == 'SMALL' else boyut_raw.upper())
+    kg     = str(int(b.get('planlanan_kg') or 0)) + ' KG'
+    op     = (operator_ad or '').upper()[:20]
+
+    lines = [
+        "SIZE 100 mm,60 mm",
+        "GAP 3 mm,0 mm",
+        "DIRECTION 0",
+        "REFERENCE 0,0",
+        "OFFSET 0 mm",
+        "SET PEEL OFF",
+        "SET TEAR ON",
+        "CLS",
+        # ── Başlık bandı (siyah dolgu) ──
+        "BAR 0,0,800,40",
+        f'REVERSE 10,6,780,30,"ARIAL.TTF",0,8,8,"SOLARIZ NEXGEN - URETIM ETIKETI"',
+        # ── LOT kodu (büyük font) ──
+        f'TEXT 10,48,"ARIAL.TTF",0,16,16,"{lot}"',
+        # ── Barkod (Code128) ──
+        f'BARCODE 10,100,"128",70,1,0,3,3,"{lot}"',
+        # ── Bilgi satırları ──
+        f'TEXT 10,182,"ARIAL.TTF",0,7,7,"FORMUL: {formul}"',
+        f'TEXT 10,196,"ARIAL.TTF",0,7,7,"RENK  : {renk}"',
+        f'TEXT 10,210,"ARIAL.TTF",0,7,7,"BOYUT : {boyut}    KG: {kg}"',
+        f'TEXT 10,224,"ARIAL.TTF",0,7,7,"BATCH : {batch}"',
+        # ── Alt şerit ──
+        "BAR 0,238,800,2",
+        f'TEXT 10,244,"ARIAL.TTF",0,6,6,"Tarih: {bugun}    Op: {op}"',
+        "PRINT 1,1",
+    ]
+    return "\r\n".join(lines)
+
+
+def _tspl_arge(t, operator_ad):
+    """100×60 mm TSPL komutu üretir — AR-GE test etiketi."""
+    from datetime import date as _date
+    bugun    = _date.today().strftime('%d.%m.%Y')
+    test_no  = t.get('test_no') or '—'
+    formul   = (t.get('formul_ad') or '').upper()[:24]
+    renk     = (t.get('renk_ad') or '').upper()[:20]
+    yeni_renk = (t.get('yeni_renk_adi') or '—').upper()[:20]
+    kg       = str(t.get('test_kg') or '—') + ' KG'
+    makina   = (t.get('makina') or '—').upper()[:20]
+    op       = (operator_ad or '').upper()[:20]
+
+    lines = [
+        "SIZE 100 mm,60 mm",
+        "GAP 3 mm,0 mm",
+        "DIRECTION 0",
+        "REFERENCE 0,0",
+        "OFFSET 0 mm",
+        "SET PEEL OFF",
+        "SET TEAR ON",
+        "CLS",
+        # ── Başlık bandı (mor/lacivert) ──
+        "BAR 0,0,800,40",
+        f'REVERSE 10,6,780,30,"ARIAL.TTF",0,8,8,"SOLARIZ NEXGEN - AR-GE TEST"',
+        # ── Test kodu ──
+        f'TEXT 10,48,"ARIAL.TTF",0,14,14,"{test_no}"',
+        # ── Barkod ──
+        f'BARCODE 10,96,"128",65,1,0,3,3,"{test_no}"',
+        # ── Bilgi satırları ──
+        f'TEXT 10,174,"ARIAL.TTF",0,7,7,"FORMUL    : {formul}"',
+        f'TEXT 10,188,"ARIAL.TTF",0,7,7,"YENİ RENK : {yeni_renk}   KG: {kg}"',
+        f'TEXT 10,202,"ARIAL.TTF",0,7,7,"MAKİNA    : {makina}"',
+        # ── Alt şerit ──
+        "BAR 0,218,800,2",
+        f'TEXT 10,224,"ARIAL.TTF",0,6,6,"Tarih: {bugun}    Hazirlayan: {op}"',
+        "PRINT 1,1",
+    ]
+    return "\r\n".join(lines)
+
+
+@nexgen_bp.route('/api/etiket/uretim/<batch_kodu>/tspl')
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def api_etiket_uretim_tspl(batch_kodu):
+    """100×60 mm TSPL komut dosyası üretir — TSC/Xprinter/Godex için.
+
+    Stok hareketi yapılmaz. Sadece metin çıktısı.
+    Content-Type: text/plain; charset=utf-8
+    Content-Disposition: attachment; filename=etiket_<batch_kodu>.tspl
+    """
+    con = _db()
+    try:
+        batch = con.execute("""
+            SELECT nb.batch_kodu, nb.lot_kodu, nb.planlanan_kg, nb.olusturma_tarihi,
+                   uv.boyut,
+                   rv.ad AS renk_ad,
+                   f.ad AS formul_ad,
+                   ku.KullaniciAdi AS olusturan_ad
+            FROM nexgen_uretim_batch nb
+            JOIN nexgen_uretim_varyant uv ON uv.id = nb.uretim_varyant_id
+            JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+            JOIN nexgen_formul f          ON f.id  = rv.formul_id
+            LEFT JOIN sistem_kullanici ku ON ku.Id  = nb.olusturan_id
+            WHERE nb.batch_kodu = ?
+        """, (batch_kodu,)).fetchone()
+        if not batch:
+            abort(404)
+        b = dict(batch)
+    finally:
+        con.close()
+
+    operator_ad = session.get('kullanici_ad') or session.get('ad') or b.get('olusturan_ad') or '—'
+    tspl = _tspl_uretim(b, operator_ad)
+
+    return Response(
+        tspl,
+        mimetype='text/plain',
+        headers={
+            'Content-Disposition': f'attachment; filename="etiket_{batch_kodu}.tspl"',
+            'Content-Type': 'text/plain; charset=utf-8',
+        }
+    )
+
+
+@nexgen_bp.route('/api/etiket/arge/<test_no>/tspl')
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def api_etiket_arge_tspl(test_no):
+    """100×60 mm TSPL komut dosyası üretir — AR-GE etiketi.
+
+    Stok hareketi yapılmaz. Sadece metin çıktısı.
+    """
+    con = _db()
+    try:
+        test = con.execute("""
+            SELECT at.test_no, at.test_kg, at.makina,
+                   at.yeni_renk_adi, at.durum, at.olusturma_tarihi,
+                   rv.ad AS renk_ad,
+                   f.ad AS formul_ad,
+                   ku.KullaniciAdi AS olusturan_ad
+            FROM nexgen_arge_test at
+            JOIN nexgen_uretim_varyant uv ON uv.id = at.kaynak_uv_id
+            JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+            JOIN nexgen_formul f          ON f.id  = rv.formul_id
+            LEFT JOIN sistem_kullanici ku ON ku.Id  = at.olusturan_id
+            WHERE at.test_no = ?
+        """, (test_no,)).fetchone()
+        if not test:
+            abort(404)
+        t = dict(test)
+    finally:
+        con.close()
+
+    operator_ad = session.get('kullanici_ad') or session.get('ad') or t.get('olusturan_ad') or '—'
+    tspl = _tspl_arge(t, operator_ad)
+
+    return Response(
+        tspl,
+        mimetype='text/plain',
+        headers={
+            'Content-Disposition': f'attachment; filename="etiket_{test_no}.tspl"',
+            'Content-Type': 'text/plain; charset=utf-8',
+        }
+    )
 # KURAL: Stok hareketi yapılmaz. Sadece izin CRUD + okuma.
 # ─────────────────────────────────────────────────────────────
 

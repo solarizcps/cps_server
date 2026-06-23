@@ -167,6 +167,22 @@
     <a href="/nexgen/tablet" class="ean-btn ean-btn-sec">Ana Ekran</a>
   </div>
 
+  {# ── TSPL İndirme ── #}
+  <div class="etiket-tspl-panel no-print">
+    <div class="etsp-baslik">Yazıcı Entegrasyonu</div>
+    <div class="etsp-aciklama">
+      TSC · Xprinter · Godex ve diğer TSPL destekli cihazlar için
+      komut dosyası indirin.
+    </div>
+    <a href="/nexgen/api/etiket/uretim/{{ batch.batch_kodu }}/tspl"
+       class="etsp-btn" download>
+      ⬇ TSPL Komut Dosyası İndir
+    </a>
+    <div class="etsp-not">
+      <code>etiket_{{ batch.batch_kodu }}.tspl</code> — 100×60 mm
+    </div>
+  </div>
+
 </div>
 
 {# ══ STYLE ════════════════════════════════════════════════════════════ #}
@@ -336,6 +352,32 @@
 .ean-btn-ana:hover  { background: #e9b020; }
 .ean-btn-sec  { background: #f1f5f9; color: #374151; border: 1px solid #e5e7eb; }
 .ean-btn-sec:hover  { background: #e2e8f0; }
+
+/* ── TSPL panel ── */
+.etiket-tspl-panel {
+  max-width: 400px; width: 100%;
+  margin: 6px auto 28px;
+  background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 12px;
+  padding: 14px 16px;
+}
+.etsp-baslik {
+  font-size: 11px; font-weight: 800; color: #15803d;
+  letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 6px;
+}
+.etsp-aciklama {
+  font-size: 12px; color: #374151; line-height: 1.5; margin-bottom: 10px;
+}
+.etsp-btn {
+  display: block; text-align: center; padding: 12px 16px;
+  background: #16a34a; color: #fff; border-radius: 10px;
+  font-size: 14px; font-weight: 800; text-decoration: none;
+  transition: background .12s; margin-bottom: 8px;
+}
+.etsp-btn:hover { background: #15803d; }
+.etsp-not {
+  font-size: 11px; color: #6b7280; text-align: center;
+}
+.etsp-not code { font-family: monospace; background: #e5e7eb; padding: 1px 4px; border-radius: 3px; }
 
 /* ══ YAZICI CSS ══════════════════════════════════════════════════════ */
 @media print {
