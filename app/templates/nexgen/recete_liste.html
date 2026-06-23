@@ -87,6 +87,7 @@
           <th class="ngsk-th-r">Batch KG</th>
           <th class="ngsk-th-r">KG Maliyet</th>
           <th>Durum</th>
+          <th>Reçete Durumu</th>
           <th>Onay</th>
           <th>Oluşturan</th>
           <th></th>
@@ -136,6 +137,13 @@
               {% elif f.durum == 'ARSIV' %}Arşiv
               {% else %}{{ f.durum }}{% endif %}
             </span>
+          </td>
+          <td>
+            {% if f.recete_durum_ozet %}
+            <span class="ngrc-rd-rozet ngrc-rd-{{ f.recete_durum_ozet|lower|replace('_','-') }}">
+              {{ f.recete_durum_ozet.replace('_',' ') }}
+            </span>
+            {% else %}—{% endif %}
           </td>
           <td>
             <span class="ngrc-rozet-onay ngrc-o-{{ f.onay_durumu|lower|replace('_','-') }}">
@@ -223,6 +231,17 @@
 .ngrc-ad { font-weight:600; font-size:13px; color:#111827; }
 .ngrc-sayac { font-size:13px; font-weight:700; color:#374151; }
 .ngrc-fiyat-yok { color:#9ca3af; font-weight:400; font-size:12px; }
+
+/* ── Reçete durum rozetleri (recete_durum) ── */
+.ngrc-rd-rozet {
+  display:inline-block; padding:2px 8px; border-radius:7px;
+  font-size:11px; font-weight:700; border:1px solid transparent;
+}
+.ngrc-rd-taslak       { background:#f1f5f9; color:#64748b; border-color:#e2e8f0; }
+.ngrc-rd-deneme       { background:#fef3c7; color:#92400e; border-color:#fde68a; }
+.ngrc-rd-onayli       { background:#d1fae5; color:#059669; border-color:#a7f3d0; }
+.ngrc-rd-uretime-acik { background:#dbeafe; color:#1d4ed8; border-color:#bfdbfe; }
+.ngrc-rd-pasif        { background:#f9fafb; color:#9ca3af; border-color:#e5e7eb; }
 
 /* ── Durum rozetleri ── */
 .ngrc-rozet-durum, .ngrc-rozet-onay {

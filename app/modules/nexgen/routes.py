@@ -638,6 +638,26 @@ def recete_liste():
             else:
                 f_dict['liste_toplam_kg']  = 0.0
                 f_dict['liste_kg_maliyet'] = 0.0
+
+            # recete_durum özeti: üretime açık varyant var mı?
+            durum_rows = con.execute("""
+                SELECT uv.recete_durum
+                FROM nexgen_uretim_varyant uv
+                JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
+                WHERE rv.formul_id = ? AND rv.aktif = 1 AND uv.aktif = 1
+            """, (f_dict['id'],)).fetchall()
+            durumlar = [r['recete_durum'] or 'TASLAK' for r in durum_rows]
+            if 'URETIME_ACIK' in durumlar:
+                f_dict['recete_durum_ozet'] = 'URETIME_ACIK'
+            elif 'ONAYLI' in durumlar:
+                f_dict['recete_durum_ozet'] = 'ONAYLI'
+            elif 'DENEME' in durumlar:
+                f_dict['recete_durum_ozet'] = 'DENEME'
+            elif durumlar:
+                f_dict['recete_durum_ozet'] = 'TASLAK'
+            else:
+                f_dict['recete_durum_ozet'] = None
+
             formuller.append(f_dict)
 
     finally:
@@ -724,7 +744,6 @@ def recete_detay(formul_id):
                     WHERE rk.uretim_varyant_id = ? AND rk.aktif = 1
                     ORDER BY rk.sira, rk.id
                 """, (uv['id'],)).fetchall()
-
                 kalemler = []
                 toplam_kg    = 0.0
                 toplam_maliyet = 0.0
@@ -772,6 +791,244 @@ def recete_detay(formul_id):
         can_approve=can_approve,
         can_manage=can_manage,
     )
+
+# ─────────────────────────────────────────────────────────────
+# FAZ-4C-2: REÇETE KLONLAMA + DURUM
+# KURAL: nexgen_stok_hareket / nexgen_hammadde_fiyat dokunulmaz.
+# ─────────────────────────────────────────────────────────────
+
+# Geçerli recete_durum değerleri
+RECETE_DURUM_GECERLI = {'TASLAK', 'DENEME', 'ONAYLI', 'URETIME_ACIK', 'PASIF'}
+
+
+def _uretime_acik_receteler(con):
+    """FAZ-5 hazırlık: üretime açık üretim varyantlarını döner.
+    recete_durum = 'URETIME_ACIK' olan aktif varyantlar.
+    """
+    return con.execute("""
+        SELECT uv.id, uv.boyut, uv.ad, uv.recete_durum,
+               rv.ad AS renk_ad, rv.renk,
+               f.id AS formul_id, f.kod AS formul_kod, f.ad AS formul_ad,
+               COUNT(rk.id) AS kalem_say
+        FROM nexgen_uretim_varyant uv
+        JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
+        JOIN nexgen_formul f        ON f.id  = rv.formul_id
+        LEFT JOIN nexgen_recete_kalem rk
+               ON rk.uretim_varyant_id = uv.id AND rk.aktif = 1
+        WHERE uv.aktif = 1 AND rv.aktif = 1 AND f.aktif = 1
+          AND uv.recete_durum = 'URETIME_ACIK'
+        GROUP BY uv.id
+        ORDER BY f.kod, rv.ad, uv.boyut
+    """).fetchall()
+
+
+@nexgen_bp.route('/api/recete/klon', methods=['POST'])
+@yetki_gerekli('nexgen.recete.create', 'can_create')
+def api_recete_klon():
+    """Bir üretim varyantının reçete kalemlerini başka bir üretim varyantına kopyalar.
+
+    POST JSON:
+        kaynak_uv_id : int   — kopyalanacak kaynak üretim varyantı
+        hedef_uv_id  : int   — hedef üretim varyantı
+        notlar       : str   — opsiyonel
+    """
+    data = request.get_json(silent=True) or {}
+    kaynak_uv_id = data.get('kaynak_uv_id')
+    hedef_uv_id  = data.get('hedef_uv_id')
+    notlar       = (data.get('notlar') or '').strip() or None
+
+    if not kaynak_uv_id or not hedef_uv_id:
+        return jsonify({"ok": False, "hata": "kaynak_uv_id ve hedef_uv_id zorunludur."}), 400
+    if kaynak_uv_id == hedef_uv_id:
+        return jsonify({"ok": False, "hata": "Kaynak ve hedef aynı olamaz."}), 400
+
+    kullanici_id = _kullanici_id()
+    con = _db()
+    try:
+        # Kaynak varyant var mı?
+        kaynak = con.execute(
+            "SELECT id, ad FROM nexgen_uretim_varyant WHERE id=? AND aktif=1",
+            (kaynak_uv_id,)
+        ).fetchone()
+        if not kaynak:
+            return jsonify({"ok": False, "hata": "Kaynak üretim varyantı bulunamadı."}), 404
+
+        # Hedef varyant var mı?
+        hedef = con.execute(
+            "SELECT id, ad, renk_varyant_id FROM nexgen_uretim_varyant WHERE id=? AND aktif=1",
+            (hedef_uv_id,)
+        ).fetchone()
+        if not hedef:
+            return jsonify({"ok": False, "hata": "Hedef üretim varyantı bulunamadı."}), 404
+
+        # Güvenlik: hedefte zaten aktif kalem var mı?
+        mevcut_kalem = con.execute(
+            "SELECT COUNT(*) AS say FROM nexgen_recete_kalem WHERE uretim_varyant_id=? AND aktif=1",
+            (hedef_uv_id,)
+        ).fetchone()['say']
+        if mevcut_kalem > 0:
+            return jsonify({
+                "ok": False,
+                "hata": f"Hedef varyantta zaten {mevcut_kalem} aktif reçete kalemi var. "
+                        "Önce temizleyin veya farklı hedef seçin."
+            }), 409
+
+        # Kaynak kalemleri al
+        kalemler = con.execute("""
+            SELECT stok_kart_id, sira, miktar_kg, aciklama
+            FROM nexgen_recete_kalem
+            WHERE uretim_varyant_id = ? AND aktif = 1
+            ORDER BY sira, id
+        """, (kaynak_uv_id,)).fetchall()
+
+        if not kalemler:
+            return jsonify({"ok": False, "hata": "Kaynak varyantta kopyalanacak reçete kalemi yok."}), 400
+
+        # Kalemleri hedefe kopyala — miktar_kg REAL olarak aynen
+        for k in kalemler:
+            con.execute("""
+                INSERT INTO nexgen_recete_kalem
+                    (uretim_varyant_id, stok_kart_id, sira, miktar_kg, aciklama,
+                     aktif, olusturma_tarihi)
+                VALUES (?, ?, ?, ?, ?, 1, datetime('now'))
+            """, (hedef_uv_id, k['stok_kart_id'], k['sira'],
+                  float(k['miktar_kg']),  # REAL korunuyor
+                  k['aciklama']))
+
+        # Hedef varyantı TASLAK olarak işaretle (yeni klon)
+        con.execute(
+            "UPDATE nexgen_uretim_varyant SET recete_durum='TASLAK' WHERE id=?",
+            (hedef_uv_id,)
+        )
+
+        # Audit log
+        con.execute("""
+            INSERT INTO nexgen_recete_klon_log
+                (kaynak_uv_id, hedef_uv_id, kalem_sayisi, yapan_id, notlar)
+            VALUES (?, ?, ?, ?, ?)
+        """, (kaynak_uv_id, hedef_uv_id, len(kalemler), kullanici_id, notlar))
+
+        con.commit()
+
+        # Hedef formül id'sini bul (redirect için)
+        hedef_formul = con.execute("""
+            SELECT rv.formul_id
+            FROM nexgen_uretim_varyant uv
+            JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
+            WHERE uv.id = ?
+        """, (hedef_uv_id,)).fetchone()
+        hedef_formul_id = hedef_formul['formul_id'] if hedef_formul else None
+
+    except Exception as e:
+        con.rollback()
+        return jsonify({"ok": False, "hata": str(e)}), 500
+    finally:
+        con.close()
+
+    return jsonify({
+        "ok": True,
+        "kalem_sayisi": len(kalemler),
+        "hedef_uv_id":  hedef_uv_id,
+        "hedef_formul_id": hedef_formul_id,
+        "mesaj": f"{len(kalemler)} reçete kalemi '{kaynak['ad']}' → '{hedef['ad']}' kopyalandı.",
+    })
+
+
+@nexgen_bp.route('/api/recete/durum-guncelle', methods=['POST'])
+@yetki_gerekli('nexgen.recete.manage', 'can_manage')
+def api_recete_durum_guncelle():
+    """Üretim varyantının recete_durum alanını günceller.
+    Sadece nexgen.recete.manage yetkisi gerekir.
+
+    POST JSON:
+        uv_id        : int
+        yeni_durum   : str  (TASLAK / DENEME / ONAYLI / URETIME_ACIK / PASIF)
+        notlar       : str  opsiyonel
+    """
+    data = request.get_json(silent=True) or {}
+    uv_id      = data.get('uv_id')
+    yeni_durum = (data.get('yeni_durum') or '').strip().upper()
+    notlar     = (data.get('notlar') or '').strip() or None
+
+    if not uv_id:
+        return jsonify({"ok": False, "hata": "uv_id zorunludur."}), 400
+    if yeni_durum not in RECETE_DURUM_GECERLI:
+        return jsonify({
+            "ok": False,
+            "hata": f"Geçersiz durum. Geçerliler: {', '.join(sorted(RECETE_DURUM_GECERLI))}"
+        }), 400
+
+    con = _db()
+    try:
+        uv = con.execute(
+            "SELECT id, ad, recete_durum FROM nexgen_uretim_varyant WHERE id=? AND aktif=1",
+            (uv_id,)
+        ).fetchone()
+        if not uv:
+            return jsonify({"ok": False, "hata": "Üretim varyantı bulunamadı."}), 404
+
+        eski_durum = uv['recete_durum'] or 'TASLAK'
+        con.execute(
+            "UPDATE nexgen_uretim_varyant SET recete_durum=? WHERE id=?",
+            (yeni_durum, uv_id)
+        )
+
+        # Not: notlar parametresi ileride audit_log tablosuna yazılabilir
+        # Şimdilik uv.notlar alanına ekle (mevcut notların üstüne yazmadan)
+        if notlar:
+            mevcut_not = uv['ad']  # sadece isim referans, notlar alanı güncellenmez bu versiyonda
+
+        con.commit()
+
+    except Exception as e:
+        con.rollback()
+        return jsonify({"ok": False, "hata": str(e)}), 500
+    finally:
+        con.close()
+
+    return jsonify({
+        "ok": True,
+        "uv_id":      uv_id,
+        "eski_durum": eski_durum,
+        "yeni_durum": yeni_durum,
+        "mesaj":      f"'{uv['ad']}' durumu {eski_durum} → {yeni_durum} olarak güncellendi.",
+    })
+
+
+@nexgen_bp.route('/api/recete/hedef-varyantlar', methods=['GET'])
+@yetki_gerekli('nexgen.recete.view', 'can_view')
+def api_recete_hedef_varyantlar():
+    """Klonlama modalı için: tüm aktif üretim varyantlarını listeler.
+    Opsiyonel: formul_id filtresi.
+    """
+    formul_id = request.args.get('formul_id', type=int)
+    con = _db()
+    try:
+        where = "WHERE uv.aktif=1 AND rv.aktif=1 AND f.aktif=1"
+        params = []
+        if formul_id:
+            where += " AND f.id=?"
+            params.append(formul_id)
+
+        rows = con.execute(f"""
+            SELECT uv.id, uv.boyut, uv.ad, uv.recete_durum,
+                   rv.id AS renk_id, rv.ad AS renk_ad,
+                   f.id AS formul_id, f.kod AS formul_kod, f.ad AS formul_ad,
+                   COUNT(rk.id) AS kalem_say
+            FROM nexgen_uretim_varyant uv
+            JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
+            JOIN nexgen_formul f        ON f.id  = rv.formul_id
+            LEFT JOIN nexgen_recete_kalem rk
+                   ON rk.uretim_varyant_id = uv.id AND rk.aktif = 1
+            {where}
+            GROUP BY uv.id
+            ORDER BY f.kod, rv.ad, uv.boyut
+        """, params).fetchall()
+    finally:
+        con.close()
+
+    return jsonify([dict(r) for r in rows])
+
 # ─────────────────────────────────────────────────────────────
 # KURAL: Bu bölümde nexgen_stok_hareket INSERT YAPILMAZ.
 # ═════════════════════════════════════════════════════════════

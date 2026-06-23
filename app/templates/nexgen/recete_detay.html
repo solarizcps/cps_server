@@ -24,6 +24,9 @@
     <button class="ngsd-sekme-btn" data-sekme="genel"  onclick="rcSekme('genel')">Genel Bilgi</button>
     <button class="ngsd-sekme-btn" data-sekme="recete" onclick="rcSekme('recete')">Reçete Ağacı</button>
     <button class="ngsd-sekme-btn" data-sekme="hesap"  onclick="rcSekme('hesap')">Deneme Hesabı</button>
+    {% if can_create %}
+    <button class="ngsd-sekme-btn" data-sekme="klon"   onclick="rcSekme('klon')">Klonla</button>
+    {% endif %}
   </div>
 
   {# ═══════════════════════════════════════════════════════════ #}
@@ -106,6 +109,44 @@
       </div>
 
     </div>
+
+    {# ── Üretim Varyantı Durum Yönetimi ── #}
+    {% if agac %}
+    <div class="ngrc-durum-panel">
+      <div class="ngrc-bilgi-baslik" style="margin-bottom:10px">Üretim Varyantı Durumları</div>
+      {% for rv in agac %}
+        {% for uv in rv.uretim_listesi %}
+        <div class="ngrc-durum-satir" id="durum-satir-{{ uv.id }}">
+          <div class="ngrc-durum-sol">
+            <span class="ngrc-kod">{{ rv.ad }}</span>
+            <span class="ngrc-durum-boyut"> / {{ uv.boyut }}</span>
+          </div>
+          <div class="ngrc-durum-orta">
+            <span class="ngrc-rd-rozet ngrc-rd-{{ (uv.recete_durum or 'taslak')|lower|replace('_','-') }}"
+                  id="durum-rozet-{{ uv.id }}">
+              {{ uv.recete_durum or 'TASLAK' }}
+            </span>
+          </div>
+          {% if can_manage %}
+          <div class="ngrc-durum-sag">
+            <select class="ngrc-durum-sel" id="durum-sel-{{ uv.id }}">
+              {% for d in ['TASLAK','DENEME','ONAYLI','URETIME_ACIK','PASIF'] %}
+              <option value="{{ d }}" {% if (uv.recete_durum or 'TASLAK') == d %}selected{% endif %}>
+                {{ d.replace('_',' ') }}
+              </option>
+              {% endfor %}
+            </select>
+            <button class="ngrc-durum-kaydet-btn"
+                    onclick="rcDurumKaydet({{ uv.id }})">Kaydet</button>
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      {% endfor %}
+      <div id="durum-mesaj" class="ngrc-durum-mesaj" style="display:none"></div>
+    </div>
+    {% endif %}
+
   </div>
 
   {# ═══════════════════════════════════════════════════════════ #}
@@ -378,11 +419,102 @@
 
   </div>
 
+  {# ═══════════════════════════════════════════════════════════ #}
+  {# SEKME 4 — KLONLAMA                                          #}
+  {# KURAL: Sadece reçete kalemleri kopyalanır.                  #}
+  {#        Fiyat/stok/üretim kaydı oluşturulmaz.               #}
+  {# ═══════════════════════════════════════════════════════════ #}
+  {% if can_create %}
+  <div id="rc-sekme-klon" class="ngsd-sekme-icerik" style="display:none">
+
+    {% if not agac %}
+    <div class="ngsd-placeholder-kart">
+      <div class="ngsd-placeholder-ikon">📋</div>
+      <div class="ngsd-placeholder-baslik">Varyant Gerekli</div>
+      <div class="ngsd-placeholder-aciklama">Klonlama için önce reçete ağacı oluşturulmalı.</div>
+    </div>
+    {% else %}
+
+    <div class="ngrc-klon-kart">
+      <div class="ngrc-hesap-baslik">Reçete Klonlama Paneli</div>
+      <div class="ngrc-hesap-aciklama">
+        Seçili üretim varyantının reçete kalemleri (miktar_kg dahil) hedef varyanta kopyalanır.
+        <strong>Fiyat geçmişi, stok hareketi veya üretim kaydı oluşturulmaz.</strong><br>
+        Hedefte mevcut kalem varsa klonlama engellenir — önce temizlenmesi gerekir.
+      </div>
+
+      {# ── Kaynak seçimi ── #}
+      <div class="ngrc-klon-form">
+        <div class="ngrc-klon-blok">
+          <div class="ngrc-bilgi-baslik">Kaynak (Bu Formül)</div>
+          <div class="ngsk-fg">
+            <label>Renk Varyantı</label>
+            <select id="kl-kaynak-renk" onchange="klKaynakRenkSec()">
+              <option value="">— Seçin —</option>
+              {% for rv in agac %}
+              <option value="{{ rv.id }}">{{ rv.ad }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="ngsk-fg">
+            <label>Üretim Boyutu</label>
+            <select id="kl-kaynak-uv">
+              <option value="">— Önce renk seçin —</option>
+            </select>
+          </div>
+          <div id="kl-kaynak-bilgi" class="ngrc-klon-bilgi" style="display:none">
+            <span id="kl-kaynak-kalem-say"></span> kalem kopyalanacak
+          </div>
+        </div>
+
+        <div class="ngrc-klon-ok">→</div>
+
+        <div class="ngrc-klon-blok">
+          <div class="ngrc-bilgi-baslik">Hedef (Tüm Varyantlar)</div>
+          <div class="ngsk-fg">
+            <label>Hedef Formül</label>
+            <select id="kl-hedef-formul" onchange="klHedefFormulSec()">
+              <option value="">— Yükleniyor… —</option>
+            </select>
+          </div>
+          <div class="ngsk-fg">
+            <label>Hedef Renk / Boyut</label>
+            <select id="kl-hedef-uv">
+              <option value="">— Önce formül seçin —</option>
+            </select>
+          </div>
+          <div id="kl-hedef-bilgi" class="ngrc-klon-bilgi" style="display:none">
+            <span id="kl-hedef-kalem-say"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ngsk-fg" style="max-width:420px">
+        <label>Not (opsiyonel)</label>
+        <input type="text" id="kl-notlar" placeholder="Klonlama sebebi…" maxlength="200">
+      </div>
+
+      <div style="margin-top:16px;display:flex;gap:10px;align-items:center">
+        <button class="ngsk-btn-yeni" id="kl-kaydet-btn" onclick="klKaydet()" disabled>
+          Klonla →
+        </button>
+        <div id="kl-hata"   class="ngrc-klon-hata"   style="display:none"></div>
+        <div id="kl-basari" class="ngrc-klon-basari"  style="display:none"></div>
+      </div>
+
+    </div>
+    {% endif %}
+
+  </div>
+  {% endif %}
+
 </div>{# /.ng-sayfa #}
 
 {# JS verisi — Jinja'dan reçete kalemlerini aktarıyoruz #}
 <script>
 const RC_AGAC = {{ agac | tojson }};
+const RC_FORMUL_ID = {{ formul.id }};
+const RC_CAN_MANAGE = {{ 'true' if can_manage else 'false' }};
 </script>
 
 <style>
@@ -570,11 +702,79 @@ const RC_AGAC = {{ agac | tojson }};
   border:1px solid #bbf7d0; border-radius:8px;
   padding:8px 14px; margin-bottom:12px;
 }
+
+/* ── Durum yönetim paneli ── */
+.ngrc-durum-panel {
+  background:#f9fafb; border:1px solid #e5e7eb; border-radius:10px;
+  padding:16px; margin-top:16px;
+}
+.ngrc-durum-satir {
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  padding:8px 0; border-bottom:1px solid #f3f4f6;
+}
+.ngrc-durum-satir:last-of-type { border-bottom:none; }
+.ngrc-durum-sol  { flex:1; min-width:120px; font-size:13px; }
+.ngrc-durum-orta { min-width:120px; }
+.ngrc-durum-sag  { display:flex; gap:6px; align-items:center; }
+.ngrc-durum-boyut { color:#6b7280; font-size:12px; }
+.ngrc-durum-sel {
+  font-size:12px; padding:4px 8px; border:1px solid #e5e7eb;
+  border-radius:6px; background:#fff; color:#374151;
+}
+.ngrc-durum-kaydet-btn {
+  font-size:12px; padding:4px 12px; border:1px solid #e5e7eb;
+  border-radius:6px; background:#fff; color:#374151; cursor:pointer;
+  transition:background .1s;
+}
+.ngrc-durum-kaydet-btn:hover { background:#f0fdf4; border-color:#16a34a; color:#15803d; }
+.ngrc-durum-mesaj {
+  font-size:12px; padding:6px 12px; border-radius:6px; margin-top:8px;
+  background:#d1fae5; color:#059669; border:1px solid #a7f3d0;
+}
+/* recete_durum rozeti */
+.ngrc-rd-rozet {
+  display:inline-block; padding:2px 8px; border-radius:7px;
+  font-size:11px; font-weight:700; border:1px solid transparent;
+}
+.ngrc-rd-taslak        { background:#f1f5f9; color:#64748b; border-color:#e2e8f0; }
+.ngrc-rd-deneme        { background:#fef3c7; color:#92400e; border-color:#fde68a; }
+.ngrc-rd-onayli        { background:#d1fae5; color:#059669; border-color:#a7f3d0; }
+.ngrc-rd-uretime-acik  { background:#dbeafe; color:#1d4ed8; border-color:#bfdbfe; }
+.ngrc-rd-pasif         { background:#f9fafb; color:#9ca3af; border-color:#e5e7eb; }
+
+/* ── Klonlama paneli ── */
+.ngrc-klon-kart {
+  background:#fff; border:1px solid rgba(17,24,39,.06);
+  border-radius:12px; padding:20px;
+  box-shadow:0 2px 8px rgba(15,23,42,.04);
+}
+.ngrc-klon-form {
+  display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap;
+  background:#f9fafb; border:1px solid #e5e7eb; border-radius:10px;
+  padding:16px; margin-bottom:16px;
+}
+.ngrc-klon-blok { flex:1; min-width:200px; }
+.ngrc-klon-ok {
+  font-size:28px; color:#9ca3af; display:flex;
+  align-items:center; padding-top:24px;
+}
+.ngrc-klon-bilgi {
+  font-size:12px; color:#6b7280; margin-top:6px; padding:4px 8px;
+  background:#fff; border:1px solid #e5e7eb; border-radius:6px;
+}
+.ngrc-klon-hata {
+  font-size:13px; color:#dc2626; background:#fee2e2;
+  border:1px solid #fecaca; border-radius:6px; padding:6px 12px;
+}
+.ngrc-klon-basari {
+  font-size:13px; color:#059669; background:#d1fae5;
+  border:1px solid #a7f3d0; border-radius:6px; padding:6px 12px;
+}
 </style>
 
 <script>
 // ── Sekme geçişi ──────────────────────────────────────────────
-const RC_SEKMELER = ['genel', 'recete', 'hesap'];
+const RC_SEKMELER = ['genel', 'recete', 'hesap', 'klon'];
 function rcSekme(hedef) {
   RC_SEKMELER.forEach(function(s) {
     const el = document.getElementById('rc-sekme-' + s);
@@ -713,6 +913,243 @@ function hsHesapla() {
 
   sonucAlan.style.display = 'block';
   bosMsg.style.display    = 'none';
+}
+
+// ══════════════════════════════════════════════════════════════
+// FAZ-4C-2: DURUM YÖNETİMİ
+// ══════════════════════════════════════════════════════════════
+
+function rcDurumKaydet(uvId) {
+  const sel = document.getElementById('durum-sel-' + uvId);
+  const yeniDurum = sel ? sel.value : '';
+  if (!yeniDurum) return;
+
+  fetch('/nexgen/api/recete/durum-guncelle', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ uv_id: uvId, yeni_durum: yeniDurum })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    const mesajEl = document.getElementById('durum-mesaj');
+    const rozetEl = document.getElementById('durum-rozet-' + uvId);
+    if (d.ok) {
+      // Rozeti güncelle
+      if (rozetEl) {
+        const snf = ['taslak','deneme','onayli','uretime-acik','pasif'];
+        rozetEl.className = 'ngrc-rd-rozet ngrc-rd-' + yeniDurum.toLowerCase().replace('_','-');
+        rozetEl.textContent = yeniDurum.replace('_',' ');
+      }
+      if (mesajEl) {
+        mesajEl.textContent = d.mesaj;
+        mesajEl.style.display = 'block';
+        mesajEl.style.background = '#d1fae5';
+        mesajEl.style.color = '#059669';
+        mesajEl.style.borderColor = '#a7f3d0';
+        setTimeout(function(){ mesajEl.style.display = 'none'; }, 3000);
+      }
+    } else {
+      if (mesajEl) {
+        mesajEl.textContent = d.hata || 'Hata.';
+        mesajEl.style.display = 'block';
+        mesajEl.style.background = '#fee2e2';
+        mesajEl.style.color = '#dc2626';
+        mesajEl.style.borderColor = '#fecaca';
+        setTimeout(function(){ mesajEl.style.display = 'none'; }, 4000);
+      }
+    }
+  })
+  .catch(function() {
+    alert('Bağlantı hatası.');
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+// FAZ-4C-2: KLONLAMA
+// ══════════════════════════════════════════════════════════════
+
+// Hedef formül + varyant listesi (API'den yüklenir)
+var KL_HEDEF_VARYANTLAR = [];
+
+function klKaynakRenkSec() {
+  const renkId = parseInt(document.getElementById('kl-kaynak-renk').value) || 0;
+  const uvSel  = document.getElementById('kl-kaynak-uv');
+  uvSel.innerHTML = '<option value="">— Seçin —</option>';
+  document.getElementById('kl-kaynak-bilgi').style.display = 'none';
+
+  const rv = RC_AGAC.find(function(r){ return r.id === renkId; });
+  if (rv) {
+    rv.uretim_listesi.forEach(function(uv) {
+      const opt = document.createElement('option');
+      opt.value = uv.id;
+      opt.textContent = uv.boyut + ' — ' + uv.kalemler.length + ' kalem';
+      opt.dataset.kalemSay = uv.kalemler.length;
+      uvSel.appendChild(opt);
+    });
+    if (rv.uretim_listesi.length === 1) uvSel.value = rv.uretim_listesi[0].id;
+  }
+  klKaynakUvDegisti();
+  klBtnGuncelle();
+}
+
+function klKaynakUvDegisti() {
+  const uvSel = document.getElementById('kl-kaynak-uv');
+  const opt   = uvSel.options[uvSel.selectedIndex];
+  const bilgi = document.getElementById('kl-kaynak-bilgi');
+  if (opt && opt.value) {
+    document.getElementById('kl-kaynak-kalem-say').textContent = opt.dataset.kalemSay || '?';
+    bilgi.style.display = 'block';
+  } else {
+    bilgi.style.display = 'none';
+  }
+  klBtnGuncelle();
+}
+
+// Formül listesini API'den yükle
+(function klFormullerYukle() {
+  fetch('/nexgen/api/recete/hedef-varyantlar')
+  .then(function(r) { return r.json(); })
+  .then(function(list) {
+    KL_HEDEF_VARYANTLAR = list;
+    const sel = document.getElementById('kl-hedef-formul');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— Seçin —</option>';
+    // Formülleri grupla
+    var formuller = {};
+    list.forEach(function(uv) {
+      var fid = uv.formul_id;
+      if (!formuller[fid]) formuller[fid] = { id: fid, kod: uv.formul_kod, ad: uv.formul_ad };
+    });
+    Object.values(formuller).forEach(function(f) {
+      var opt = document.createElement('option');
+      opt.value = f.id;
+      opt.textContent = f.kod + ' — ' + f.ad;
+      sel.appendChild(opt);
+    });
+    // Mevcut formülü seçili getir
+    sel.value = RC_FORMUL_ID;
+    klHedefFormulSec();
+  })
+  .catch(function() {
+    var sel = document.getElementById('kl-hedef-formul');
+    if (sel) sel.innerHTML = '<option value="">Yüklenemedi</option>';
+  });
+})();
+
+function klHedefFormulSec() {
+  const formulId = parseInt(document.getElementById('kl-hedef-formul').value) || 0;
+  const uvSel    = document.getElementById('kl-hedef-uv');
+  uvSel.innerHTML = '<option value="">— Seçin —</option>';
+  document.getElementById('kl-hedef-bilgi').style.display = 'none';
+
+  const uvler = KL_HEDEF_VARYANTLAR.filter(function(uv){ return uv.formul_id === formulId; });
+  uvler.forEach(function(uv) {
+    var opt = document.createElement('option');
+    opt.value = uv.id;
+    opt.textContent = uv.renk_ad + ' / ' + uv.boyut +
+      (uv.kalem_say > 0 ? ' (' + uv.kalem_say + ' kalem ⚠)' : ' (boş)');
+    opt.dataset.kalemSay = uv.kalem_say;
+    uvSel.appendChild(opt);
+  });
+  klHedefUvDegisti();
+  klBtnGuncelle();
+}
+
+function klHedefUvDegisti() {
+  const uvSel = document.getElementById('kl-hedef-uv');
+  const opt   = uvSel.options[uvSel.selectedIndex];
+  const bilgi = document.getElementById('kl-hedef-bilgi');
+  if (opt && opt.value) {
+    const say = parseInt(opt.dataset.kalemSay) || 0;
+    const el  = document.getElementById('kl-hedef-kalem-say');
+    if (say > 0) {
+      el.textContent = '⚠ Hedefte ' + say + ' aktif kalem var — klonlama engellenecek!';
+      bilgi.style.color = '#dc2626';
+    } else {
+      el.textContent = '✓ Hedef boş, klonlamaya hazır';
+      bilgi.style.color = '#059669';
+    }
+    bilgi.style.display = 'block';
+  } else {
+    bilgi.style.display = 'none';
+  }
+  klBtnGuncelle();
+}
+
+// Hedef select'e event
+(function() {
+  var sel = document.getElementById('kl-hedef-uv');
+  if (sel) sel.addEventListener('change', klHedefUvDegisti);
+  var kaySel = document.getElementById('kl-kaynak-uv');
+  if (kaySel) kaySel.addEventListener('change', klKaynakUvDegisti);
+})();
+
+function klBtnGuncelle() {
+  const btn = document.getElementById('kl-kaydet-btn');
+  if (!btn) return;
+  const kaynakUvId = parseInt(document.getElementById('kl-kaynak-uv').value) || 0;
+  const hedefUvId  = parseInt(document.getElementById('kl-hedef-uv').value)  || 0;
+  btn.disabled = !(kaynakUvId > 0 && hedefUvId > 0 && kaynakUvId !== hedefUvId);
+}
+
+function klKaydet() {
+  const btn = document.getElementById('kl-kaydet-btn');
+  const hataDiv   = document.getElementById('kl-hata');
+  const basariDiv = document.getElementById('kl-basari');
+  hataDiv.style.display   = 'none';
+  basariDiv.style.display = 'none';
+
+  const kaynakUvId = parseInt(document.getElementById('kl-kaynak-uv').value) || 0;
+  const hedefUvId  = parseInt(document.getElementById('kl-hedef-uv').value)  || 0;
+  const notlar     = document.getElementById('kl-notlar').value.trim();
+
+  if (!kaynakUvId || !hedefUvId) {
+    hataDiv.textContent = 'Kaynak ve hedef üretim varyantı seçin.';
+    hataDiv.style.display = 'block';
+    return;
+  }
+  if (kaynakUvId === hedefUvId) {
+    hataDiv.textContent = 'Kaynak ve hedef aynı olamaz.';
+    hataDiv.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Kopyalanıyor…';
+
+  fetch('/nexgen/api/recete/klon', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      kaynak_uv_id: kaynakUvId,
+      hedef_uv_id:  hedefUvId,
+      notlar:       notlar || null
+    })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.ok) {
+      basariDiv.textContent = '✓ ' + d.mesaj;
+      basariDiv.style.display = 'block';
+      btn.textContent = 'Klonlandı ✓';
+      if (d.hedef_formul_id) {
+        setTimeout(function() {
+          window.location.href = '/nexgen/recete/' + d.hedef_formul_id;
+        }, 1800);
+      }
+    } else {
+      hataDiv.textContent = d.hata || 'Klonlama başarısız.';
+      hataDiv.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Klonla →';
+    }
+  })
+  .catch(function() {
+    hataDiv.textContent = 'Bağlantı hatası.';
+    hataDiv.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Klonla →';
+  });
 }
 </script>
 {% endblock %}
