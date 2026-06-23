@@ -1029,6 +1029,290 @@ def api_recete_hedef_varyantlar():
 
     return jsonify([dict(r) for r in rows])
 
+# ═════════════════════════════════════════════════════════════
+# FAZ-4C-3: ARGE RENK TEST MERKEZİ
+# ─────────────────────────────────────────────────────────────
+# KURAL: nexgen_stok_hareket / nexgen_hammadde_fiyat dokunulmaz.
+#        Ana reçete kalemleri (nexgen_recete_kalem) değişmez.
+#        Sadece nexgen_arge_test + nexgen_arge_test_kalem yazılır.
+# ─────────────────────────────────────────────────────────────
+
+def _arge_test_no_uret(con):
+    """AT-YYYY-NNNN formatında benzersiz test numarası üretir."""
+    from datetime import datetime
+    yil = datetime.now().strftime('%Y')
+    row = con.execute(
+        "SELECT MAX(CAST(SUBSTR(test_no, -4) AS INTEGER)) AS son "
+        "FROM nexgen_arge_test WHERE test_no LIKE ?",
+        (f'AT-{yil}-%',)
+    ).fetchone()
+    son = row['son'] if row and row['son'] else 0
+    return f'AT-{yil}-{son + 1:04d}'
+
+
+@nexgen_bp.route('/api/arge/test-olustur', methods=['POST'])
+@yetki_gerekli('nexgen.recete.create', 'can_create')
+def api_arge_test_olustur():
+    """Kaynak üretim varyantından AR-GE test kaydı oluşturur.
+    Ana reçete (nexgen_recete_kalem) YAZILMAZ — sadece ARGE tabloları.
+
+    POST JSON:
+        kaynak_uv_id   : int
+        test_tipi      : RENK_TEST | FORMUL_TEST
+        makina         : str  (default: "7.5 LT")
+        test_batch_kg  : float
+        yeni_renk_adi  : str  opsiyonel
+        notlar         : str  opsiyonel
+    """
+    data = request.get_json(silent=True) or {}
+    kaynak_uv_id  = data.get('kaynak_uv_id')
+    test_tipi     = (data.get('test_tipi') or 'RENK_TEST').strip().upper()
+    makina        = (data.get('makina') or '7.5 LT').strip()
+    yeni_renk_adi = (data.get('yeni_renk_adi') or '').strip() or None
+    notlar        = (data.get('notlar') or '').strip() or None
+
+    try:
+        test_batch_kg = float(data.get('test_batch_kg') or 0)
+    except (ValueError, TypeError):
+        return jsonify({"ok": False, "hata": "test_batch_kg geçersiz."}), 400
+
+    if not kaynak_uv_id:
+        return jsonify({"ok": False, "hata": "kaynak_uv_id zorunludur."}), 400
+    if test_tipi not in {'RENK_TEST', 'FORMUL_TEST'}:
+        return jsonify({"ok": False, "hata": "test_tipi: RENK_TEST veya FORMUL_TEST"}), 400
+    if test_batch_kg <= 0:
+        return jsonify({"ok": False, "hata": "test_batch_kg sıfırdan büyük olmalı."}), 400
+
+    kullanici_id = _kullanici_id()
+    con = _db()
+    try:
+        # Kaynak varyant var mı?
+        uv = con.execute(
+            "SELECT id, ad FROM nexgen_uretim_varyant WHERE id=? AND aktif=1",
+            (kaynak_uv_id,)
+        ).fetchone()
+        if not uv:
+            return jsonify({"ok": False, "hata": "Kaynak üretim varyantı bulunamadı."}), 404
+
+        # Kaynak reçete kalemleri
+        kalemler = con.execute("""
+            SELECT rk.stok_kart_id, rk.sira, rk.miktar_kg, rk.aciklama,
+                   sk.kod AS stok_kod, sk.ad AS stok_ad
+            FROM nexgen_recete_kalem rk
+            JOIN nexgen_stok_kart sk ON sk.id = rk.stok_kart_id
+            WHERE rk.uretim_varyant_id = ? AND rk.aktif = 1
+            ORDER BY rk.sira, rk.id
+        """, (kaynak_uv_id,)).fetchall()
+
+        if not kalemler:
+            return jsonify({"ok": False, "hata": "Kaynak varyantta reçete kalemi yok."}), 400
+
+        # Kaynak batch KG = kalem toplamı
+        kaynak_batch_kg = round(sum(float(k['miktar_kg']) for k in kalemler), 3)
+        if kaynak_batch_kg <= 0:
+            return jsonify({"ok": False, "hata": "Kaynak batch KG sıfır — reçete geçersiz."}), 400
+
+        # Ölçekleme çarpanı
+        carpan = test_batch_kg / kaynak_batch_kg
+
+        # Test no üret
+        test_no = _arge_test_no_uret(con)
+
+        # Ana test kaydı
+        con.execute("""
+            INSERT INTO nexgen_arge_test
+                (kaynak_uretim_varyant_id, test_no, test_tipi,
+                 makina, test_batch_kg, kaynak_batch_kg,
+                 yeni_renk_adi, notlar, durum,
+                 olusturan_id, olusturma_tarihi)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'TASLAK', ?, datetime('now'))
+        """, (kaynak_uv_id, test_no, test_tipi,
+              makina, test_batch_kg, kaynak_batch_kg,
+              yeni_renk_adi, notlar, kullanici_id))
+        test_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+        # Test kalemleri — REAL hassasiyet, round(x, 4) yeterli
+        test_kalemler = []
+        for k in kalemler:
+            orj_kg  = float(k['miktar_kg'])
+            test_kg = round(orj_kg * carpan, 4)
+            con.execute("""
+                INSERT INTO nexgen_arge_test_kalem
+                    (test_id, stok_kart_id, sira,
+                     orjinal_miktar_kg, test_miktar_kg, aciklama)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (test_id, k['stok_kart_id'], k['sira'],
+                  orj_kg, test_kg, k['aciklama']))
+            test_kalemler.append({
+                'stok_kod':        k['stok_kod'],
+                'stok_ad':         k['stok_ad'],
+                'orjinal_kg':      orj_kg,
+                'test_kg':         test_kg,
+            })
+
+        con.commit()
+
+    except Exception as e:
+        con.rollback()
+        return jsonify({"ok": False, "hata": str(e)}), 500
+    finally:
+        con.close()
+
+    return jsonify({
+        "ok":              True,
+        "test_id":         test_id,
+        "test_no":         test_no,
+        "kaynak_batch_kg": kaynak_batch_kg,
+        "test_batch_kg":   test_batch_kg,
+        "carpan":          round(carpan, 6),
+        "kalem_sayisi":    len(test_kalemler),
+        "kalemler":        test_kalemler,
+        "mesaj":           f"{test_no} oluşturuldu. {len(test_kalemler)} kalem ölçeklendi.",
+    })
+
+
+@nexgen_bp.route('/arge/test/<int:test_id>')
+@yetki_gerekli('nexgen.recete.view', 'can_view')
+def arge_test_detay(test_id):
+    """AR-GE test detay sayfası."""
+    con = _db()
+    try:
+        test = con.execute("""
+            SELECT t.*,
+                   uv.ad AS uv_ad, uv.boyut,
+                   rv.ad AS renk_ad,
+                   f.id  AS formul_id, f.kod AS formul_kod, f.ad AS formul_ad,
+                   ku.KullaniciAdi AS olusturan_ad,
+                   on_ku.KullaniciAdi AS onaylayan_ad
+            FROM nexgen_arge_test t
+            JOIN nexgen_uretim_varyant uv ON uv.id = t.kaynak_uretim_varyant_id
+            JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+            JOIN nexgen_formul f          ON f.id  = rv.formul_id
+            LEFT JOIN sistem_kullanici ku    ON ku.Id    = t.olusturan_id
+            LEFT JOIN sistem_kullanici on_ku ON on_ku.Id = t.onaylayan_id
+            WHERE t.id = ? AND t.aktif = 1
+        """, (test_id,)).fetchone()
+        if not test:
+            abort(404)
+
+        kalemler = con.execute("""
+            SELECT tk.sira, tk.orjinal_miktar_kg, tk.test_miktar_kg, tk.aciklama,
+                   sk.kod AS stok_kod, sk.ad AS stok_ad, sk.kategori
+            FROM nexgen_arge_test_kalem tk
+            JOIN nexgen_stok_kart sk ON sk.id = tk.stok_kart_id
+            WHERE tk.test_id = ?
+            ORDER BY tk.sira
+        """, (test_id,)).fetchall()
+
+    finally:
+        con.close()
+
+    can_manage = yetki_var('nexgen.recete.manage', 'can_manage')
+
+    return render_template(
+        'nexgen/arge_test_detay.html',
+        active='nexgen',
+        test=dict(test),
+        kalemler=[dict(k) for k in kalemler],
+        can_manage=can_manage,
+    )
+
+
+@nexgen_bp.route('/api/arge/sonuc-kaydet', methods=['POST'])
+@yetki_gerekli('nexgen.recete.create', 'can_create')
+def api_arge_sonuc_kaydet():
+    """Test sonucunu ve durum değişikliğini kaydeder.
+    Ana reçeteye dokunulmaz.
+
+    POST JSON:
+        test_id           : int
+        durum             : TEST_EDILDI | BASARILI | BASARISIZ | ONAYA_GONDERILDI
+        renk_tuttu        : 1/0  opsiyonel
+        shore_degeri      : float opsiyonel
+        kopurme_notu      : str opsiyonel
+        cekme_problemi    : 1/0 opsiyonel
+        genel_aciklama    : str opsiyonel
+        sonuc_notu        : str opsiyonel
+    """
+    data = request.get_json(silent=True) or {}
+    test_id = data.get('test_id')
+    durum   = (data.get('durum') or '').strip().upper()
+
+    GECERLI_DURUM = {
+        'TEST_EDILDI', 'BASARILI', 'BASARISIZ',
+        'ONAYA_GONDERILDI', 'ONAYLANDI', 'REDDEDILDI'
+    }
+    if not test_id:
+        return jsonify({"ok": False, "hata": "test_id zorunludur."}), 400
+    if durum not in GECERLI_DURUM:
+        return jsonify({"ok": False,
+                        "hata": f"Geçerli durumlar: {', '.join(sorted(GECERLI_DURUM))}"}), 400
+
+    renk_tuttu       = data.get('renk_tuttu')
+    shore_degeri     = data.get('shore_degeri')
+    kopurme_notu     = (data.get('kopurme_notu') or '').strip() or None
+    cekme_problemi   = data.get('cekme_problemi')
+    genel_aciklama   = (data.get('genel_aciklama') or '').strip() or None
+    sonuc_notu       = (data.get('sonuc_notu') or '').strip() or None
+
+    try:
+        if shore_degeri is not None:
+            shore_degeri = float(shore_degeri)
+    except (ValueError, TypeError):
+        shore_degeri = None
+
+    con = _db()
+    try:
+        test = con.execute(
+            "SELECT id, durum FROM nexgen_arge_test WHERE id=? AND aktif=1",
+            (test_id,)
+        ).fetchone()
+        if not test:
+            return jsonify({"ok": False, "hata": "Test kaydı bulunamadı."}), 404
+
+        con.execute("""
+            UPDATE nexgen_arge_test
+            SET durum=?, renk_tuttu=?, shore_degeri=?,
+                kopurme_notu=?, cekme_problemi=?,
+                genel_aciklama=?, sonuc_notu=?
+            WHERE id=?
+        """, (durum,
+              int(renk_tuttu) if renk_tuttu is not None else None,
+              shore_degeri, kopurme_notu,
+              int(cekme_problemi) if cekme_problemi is not None else None,
+              genel_aciklama, sonuc_notu,
+              test_id))
+        con.commit()
+    except Exception as e:
+        con.rollback()
+        return jsonify({"ok": False, "hata": str(e)}), 500
+    finally:
+        con.close()
+
+    return jsonify({"ok": True, "test_id": test_id, "yeni_durum": durum})
+
+
+@nexgen_bp.route('/api/arge/gecmis/<int:uv_id>', methods=['GET'])
+@yetki_gerekli('nexgen.recete.view', 'can_view')
+def api_arge_gecmis(uv_id):
+    """Belirli bir üretim varyantının ARGE test geçmişini döner."""
+    con = _db()
+    try:
+        rows = con.execute("""
+            SELECT t.id, t.test_no, t.test_tipi, t.makina,
+                   t.test_batch_kg, t.kaynak_batch_kg,
+                   t.yeni_renk_adi, t.durum,
+                   t.olusturma_tarihi, t.onay_tarihi,
+                   ku.KullaniciAdi AS olusturan_ad
+            FROM nexgen_arge_test t
+            LEFT JOIN sistem_kullanici ku ON ku.Id = t.olusturan_id
+            WHERE t.kaynak_uretim_varyant_id = ? AND t.aktif = 1
+            ORDER BY t.id DESC
+        """, (uv_id,)).fetchall()
+    finally:
+        con.close()
+    return jsonify([dict(r) for r in rows])
+
 # ─────────────────────────────────────────────────────────────
 # KURAL: Bu bölümde nexgen_stok_hareket INSERT YAPILMAZ.
 # ═════════════════════════════════════════════════════════════

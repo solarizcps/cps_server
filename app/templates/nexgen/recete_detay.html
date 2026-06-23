@@ -27,6 +27,7 @@
     {% if can_create %}
     <button class="ngsd-sekme-btn" data-sekme="klon"   onclick="rcSekme('klon')">Klonla</button>
     {% endif %}
+    <button class="ngsd-sekme-btn" data-sekme="arge"   onclick="rcSekme('arge')">AR-GE Test</button>
   </div>
 
   {# ═══════════════════════════════════════════════════════════ #}
@@ -508,6 +509,147 @@
   </div>
   {% endif %}
 
+  {# ═══════════════════════════════════════════════════════════ #}
+  {# SEKME 5 — AR-GE TEST MERKEZİ                                #}
+  {# KURAL: Ana reçete değişmez. Stok hareketi oluşturulmaz.    #}
+  {# ═══════════════════════════════════════════════════════════ #}
+  <div id="rc-sekme-arge" class="ngsd-sekme-icerik" style="display:none">
+
+    {% if not agac %}
+    <div class="ngsd-placeholder-kart">
+      <div class="ngsd-placeholder-ikon">🔬</div>
+      <div class="ngsd-placeholder-baslik">Reçete Gerekli</div>
+      <div class="ngsd-placeholder-aciklama">AR-GE testi için önce reçete ağacı oluşturulmalı.</div>
+    </div>
+    {% else %}
+
+    {# ── Test Oluşturma Formu ── #}
+    <div class="ngrc-arge-kart">
+      <div class="ngrc-hesap-baslik">7.5 LT Test Makina Oluştur</div>
+      <div class="ngrc-hesap-aciklama">
+        Seçilen üretim varyantı orantılanır. Ana reçete değişmez. Stok veya üretim kaydı oluşturulmaz.
+      </div>
+
+      <div class="ngrc-arge-form">
+        <div class="ngsk-fg">
+          <label>Kaynak Renk / Boyut</label>
+          <select id="ag-renk-boyut">
+            <option value="">— Seçin —</option>
+            {% for rv in agac %}
+              {% for uv in rv.uretim_listesi %}
+              <option value="{{ uv.id }}"
+                      data-batch="{{ uv.toplam_kg }}"
+                      data-renk="{{ rv.ad }}"
+                      data-boyut="{{ uv.boyut }}">
+                {{ rv.ad }} / {{ uv.boyut }}
+                ({{ '{:,.1f}'.format(uv.toplam_kg) }} KG)
+              </option>
+              {% endfor %}
+            {% endfor %}
+          </select>
+        </div>
+        <div class="ngsk-fg" style="max-width:160px">
+          <label>Test KG</label>
+          <input type="number" id="ag-test-kg" value="7.5"
+                 min="0.001" step="0.001" oninput="agCarpanHesapla()">
+        </div>
+        <div class="ngsk-fg" style="max-width:160px">
+          <label>Makina</label>
+          <input type="text" id="ag-makina" value="7.5 LT" maxlength="30">
+        </div>
+        <div class="ngsk-fg">
+          <label>Test Tipi</label>
+          <select id="ag-test-tipi">
+            <option value="RENK_TEST">Renk Test</option>
+            <option value="FORMUL_TEST">Formül Test</option>
+          </select>
+        </div>
+        <div class="ngsk-fg">
+          <label>Yeni Renk Adı (opsiyonel)</label>
+          <input type="text" id="ag-yeni-renk" placeholder="örn: MAVİ TEST #1" maxlength="100">
+        </div>
+        <div class="ngsk-fg" style="flex:2">
+          <label>Açıklama</label>
+          <input type="text" id="ag-notlar" placeholder="Test amacı…" maxlength="200">
+        </div>
+      </div>
+
+      <div id="ag-onizleme" class="ngrc-arge-onizleme" style="display:none">
+        <div class="ngrc-arge-ozet-band">
+          <div class="ngrc-batch-item">
+            <span class="ngrc-batch-etiket">Kaynak Batch</span>
+            <span class="ngrc-batch-deger" id="ag-kaynak-kg-goster">—</span>
+          </div>
+          <div class="ngrc-batch-item">
+            <span class="ngrc-batch-etiket">Test KG</span>
+            <span class="ngrc-batch-deger" id="ag-test-kg-goster">—</span>
+          </div>
+          <div class="ngrc-batch-item">
+            <span class="ngrc-batch-etiket">Çarpan</span>
+            <span class="ngrc-batch-deger ngrc-batch-ana" id="ag-carpan-goster">—</span>
+          </div>
+        </div>
+        <div class="ngrc-kalem-cerceve">
+          <table class="ngrc-kalem-tablo">
+            <thead>
+              <tr>
+                <th>#</th><th>Hammadde</th>
+                <th class="ngsk-th-r">Orijinal KG</th>
+                <th class="ngsk-th-r">Test KG</th>
+              </tr>
+            </thead>
+            <tbody id="ag-onizleme-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="ag-bos-mesaj" class="ngrc-hesap-aciklama" style="text-align:center;padding:20px;color:#9ca3af">
+        Kaynak varyantı seçerek önizlemeyi başlatın.
+      </div>
+
+      <div style="margin-top:14px;display:flex;gap:10px;align-items:center">
+        <button class="ngsk-btn-yeni" id="ag-kaydet-btn" onclick="agKaydet()" disabled>
+          Testi Oluştur
+        </button>
+        <div id="ag-hata"   class="ngrc-klon-hata"   style="display:none"></div>
+        <div id="ag-basari" class="ngrc-klon-basari"  style="display:none"></div>
+      </div>
+    </div>
+
+    {# ── ARGE Geçmişi ── #}
+    <div class="ngrc-arge-gecmis-kart" id="ag-gecmis-kart">
+      <div class="ngrc-bilgi-baslik" style="margin-bottom:12px">AR-GE Test Geçmişi</div>
+      <div id="ag-gecmis-yukleniyor" class="ngrc-hesap-aciklama" style="color:#9ca3af">
+        Yükleniyor…
+      </div>
+      <div id="ag-gecmis-tablo-wrap" style="display:none">
+        <div class="ngrc-kalem-cerceve">
+          <table class="ngrc-kalem-tablo" id="ag-gecmis-tablo">
+            <thead>
+              <tr>
+                <th>Test No</th>
+                <th>Tip</th>
+                <th>Kaynak / Boyut</th>
+                <th>Renk</th>
+                <th class="ngsk-th-r">KG</th>
+                <th>Durum</th>
+                <th>Tarih</th>
+                <th>Yapan</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="ag-gecmis-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="ag-gecmis-bos" class="ngrc-hesap-aciklama" style="display:none;color:#9ca3af;text-align:center;padding:20px">
+        Bu formül için henüz AR-GE testi yok.
+      </div>
+    </div>
+
+    {% endif %}
+  </div>
+
 </div>{# /.ng-sayfa #}
 
 {# JS verisi — Jinja'dan reçete kalemlerini aktarıyoruz #}
@@ -770,11 +912,36 @@ const RC_CAN_MANAGE = {{ 'true' if can_manage else 'false' }};
   font-size:13px; color:#059669; background:#d1fae5;
   border:1px solid #a7f3d0; border-radius:6px; padding:6px 12px;
 }
+
+/* ── AR-GE Test paneli ── */
+.ngrc-arge-kart {
+  background:#fff; border:1px solid rgba(17,24,39,.06);
+  border-radius:12px; padding:20px; margin-bottom:20px;
+  box-shadow:0 2px 8px rgba(15,23,42,.04);
+}
+.ngrc-arge-form {
+  display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;
+  background:#f9fafb; border:1px solid #e5e7eb; border-radius:10px;
+  padding:14px; margin-bottom:14px;
+}
+.ngrc-arge-onizleme {
+  margin-bottom:16px;
+}
+.ngrc-arge-ozet-band {
+  display:flex; gap:0; flex-wrap:wrap;
+  background:#fef3c7; border:1px solid #fde68a; border-radius:10px;
+  margin-bottom:12px; overflow:hidden;
+}
+.ngrc-arge-gecmis-kart {
+  background:#fff; border:1px solid rgba(17,24,39,.06);
+  border-radius:12px; padding:20px;
+  box-shadow:0 2px 8px rgba(15,23,42,.04);
+}
 </style>
 
 <script>
 // ── Sekme geçişi ──────────────────────────────────────────────
-const RC_SEKMELER = ['genel', 'recete', 'hesap', 'klon'];
+const RC_SEKMELER = ['genel', 'recete', 'hesap', 'klon', 'arge'];
 function rcSekme(hedef) {
   RC_SEKMELER.forEach(function(s) {
     const el = document.getElementById('rc-sekme-' + s);
@@ -1151,5 +1318,211 @@ function klKaydet() {
     btn.textContent = 'Klonla →';
   });
 }
+// ══════════════════════════════════════════════════════════════
+// FAZ-4C-3: AR-GE TEST
+// ══════════════════════════════════════════════════════════════
+
+var AG_SEL_UV = null;  // {id, batch_kg, renk, boyut, kalemler[]}
+
+function agVaryantSec() {
+  var sel  = document.getElementById('ag-renk-boyut');
+  var opt  = sel.options[sel.selectedIndex];
+  var uvId = parseInt(opt.value) || 0;
+  AG_SEL_UV = null;
+
+  if (!uvId) {
+    document.getElementById('ag-onizleme').style.display = 'none';
+    document.getElementById('ag-bos-mesaj').style.display = 'block';
+    document.getElementById('ag-kaydet-btn').disabled = true;
+    return;
+  }
+
+  // RC_AGAC'dan kalem bilgilerini al
+  var kalemler = [];
+  for (var i = 0; i < RC_AGAC.length; i++) {
+    var rv = RC_AGAC[i];
+    for (var j = 0; j < rv.uretim_listesi.length; j++) {
+      if (rv.uretim_listesi[j].id === uvId) {
+        kalemler = rv.uretim_listesi[j].kalemler;
+        break;
+      }
+    }
+  }
+
+  AG_SEL_UV = {
+    id:       uvId,
+    batch_kg: parseFloat(opt.dataset.batch) || 0,
+    renk:     opt.dataset.renk,
+    boyut:    opt.dataset.boyut,
+    kalemler: kalemler
+  };
+
+  agCarpanHesapla();
+}
+
+function agCarpanHesapla() {
+  if (!AG_SEL_UV) return;
+  var testKg   = parseFloat(document.getElementById('ag-test-kg').value) || 0;
+  var kaynakKg = AG_SEL_UV.batch_kg;
+  var carpan   = (kaynakKg > 0 && testKg > 0) ? testKg / kaynakKg : 0;
+
+  var onizleme = document.getElementById('ag-onizleme');
+  var bosMsg   = document.getElementById('ag-bos-mesaj');
+  var btn      = document.getElementById('ag-kaydet-btn');
+
+  if (!carpan) {
+    onizleme.style.display = 'none';
+    bosMsg.style.display   = 'block';
+    btn.disabled = true;
+    return;
+  }
+
+  document.getElementById('ag-kaynak-kg-goster').textContent = kaynakKg.toFixed(3) + ' KG';
+  document.getElementById('ag-test-kg-goster').textContent   = testKg.toFixed(3) + ' KG';
+  document.getElementById('ag-carpan-goster').textContent    = carpan.toFixed(6);
+
+  var tbody = document.getElementById('ag-onizleme-body');
+  tbody.innerHTML = '';
+  AG_SEL_UV.kalemler.forEach(function(k, idx) {
+    var testM = k.miktar_kg * carpan;
+    var tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="ngrc-sira">' + (idx+1) + '</td>' +
+      '<td><span class="ngrc-kod">' + k.stok_kod + '</span> ' + k.stok_ad + '</td>' +
+      '<td class="ngsk-td-r">' + k.miktar_kg.toFixed(3) + '</td>' +
+      '<td class="ngsk-td-r"><strong>' + testM.toFixed(4) + '</strong></td>';
+    tbody.appendChild(tr);
+  });
+
+  onizleme.style.display = 'block';
+  bosMsg.style.display   = 'none';
+  btn.disabled = false;
+}
+
+// Seçim değişince hesapla
+(function() {
+  var sel = document.getElementById('ag-renk-boyut');
+  if (sel) sel.addEventListener('change', agVaryantSec);
+})();
+
+function agKaydet() {
+  var btn      = document.getElementById('ag-kaydet-btn');
+  var hataDiv  = document.getElementById('ag-hata');
+  var basariDiv = document.getElementById('ag-basari');
+  hataDiv.style.display   = 'none';
+  basariDiv.style.display = 'none';
+
+  if (!AG_SEL_UV) {
+    hataDiv.textContent = 'Kaynak varyant seçin.';
+    hataDiv.style.display = 'block';
+    return;
+  }
+  var testKg = parseFloat(document.getElementById('ag-test-kg').value) || 0;
+  if (testKg <= 0) {
+    hataDiv.textContent = 'Test KG giriniz.';
+    hataDiv.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Oluşturuluyor…';
+
+  fetch('/nexgen/api/arge/test-olustur', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      kaynak_uv_id:  AG_SEL_UV.id,
+      test_tipi:     document.getElementById('ag-test-tipi').value,
+      makina:        document.getElementById('ag-makina').value.trim() || '7.5 LT',
+      test_batch_kg: testKg,
+      yeni_renk_adi: document.getElementById('ag-yeni-renk').value.trim() || null,
+      notlar:        document.getElementById('ag-notlar').value.trim() || null
+    })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d) {
+    if (d.ok) {
+      basariDiv.textContent = '✓ ' + d.mesaj + ' Detay sayfasına yönlendiriliyorsunuz…';
+      basariDiv.style.display = 'block';
+      btn.textContent = 'Oluşturuldu ✓';
+      setTimeout(function() {
+        window.location.href = '/nexgen/arge/test/' + d.test_id;
+      }, 1600);
+    } else {
+      hataDiv.textContent = d.hata || 'Hata.';
+      hataDiv.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Testi Oluştur';
+    }
+  })
+  .catch(function() {
+    hataDiv.textContent = 'Bağlantı hatası.';
+    hataDiv.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Testi Oluştur';
+  });
+}
+
+// ── ARGE Geçmişi yükle ───────────────────────────────────────
+(function agGecmisYukle() {
+  if (!RC_AGAC || RC_AGAC.length === 0) return;
+  // Tüm uv_id'leri topla
+  var uvIds = [];
+  RC_AGAC.forEach(function(rv) {
+    rv.uretim_listesi.forEach(function(uv) { uvIds.push(uv.id); });
+  });
+  if (!uvIds.length) return;
+
+  // Her uv_id için geçmiş yükle (formül bazında birleşik)
+  var promises = uvIds.map(function(id) {
+    return fetch('/nexgen/api/arge/gecmis/' + id).then(function(r){ return r.json(); });
+  });
+  Promise.all(promises).then(function(results) {
+    var tumGecmis = [];
+    results.forEach(function(r) { tumGecmis = tumGecmis.concat(r); });
+    tumGecmis.sort(function(a,b){ return b.id - a.id; });
+
+    var tbody = document.getElementById('ag-gecmis-tbody');
+    var wrap  = document.getElementById('ag-gecmis-tablo-wrap');
+    var bos   = document.getElementById('ag-gecmis-bos');
+    var load  = document.getElementById('ag-gecmis-yukleniyor');
+    if (load) load.style.display = 'none';
+
+    if (!tumGecmis.length) {
+      if (bos) bos.style.display = 'block';
+      return;
+    }
+    if (wrap)  wrap.style.display = 'block';
+    if (!tbody) return;
+
+    var DURUM_CSS = {
+      'TASLAK':'ngrc-rd-taslak','TEST_EDILDI':'ngrc-rd-deneme',
+      'BASARILI':'ngrc-rd-onayli','BASARISIZ':'ngrc-rd-pasif',
+      'ONAYA_GONDERILDI':'ngrc-rd-deneme','ONAYLANDI':'ngrc-rd-uretime-acik',
+      'REDDEDILDI':'ngrc-rd-pasif'
+    };
+
+    tumGecmis.forEach(function(t) {
+      var css = DURUM_CSS[t.durum] || 'ngrc-rd-taslak';
+      var tr  = document.createElement('tr');
+      tr.innerHTML =
+        '<td><a href="/nexgen/arge/test/' + t.id + '" class="ngsk-link" style="font-family:monospace;font-size:12px">' + (t.test_no||'—') + '</a></td>' +
+        '<td><span style="font-size:11px;color:#6b7280">' + (t.test_tipi||'—') + '</span></td>' +
+        '<td><span style="font-size:12px;color:#374151">' + (t.makina||'—') + '</span></td>' +
+        '<td>' + (t.yeni_renk_adi || '<span style="color:#9ca3af">—</span>') + '</td>' +
+        '<td class="ngsk-td-r" style="font-size:12px">' + (t.test_batch_kg||0).toFixed(3) + '</td>' +
+        '<td><span class="ngrc-rd-rozet ' + css + '">' + t.durum + '</span></td>' +
+        '<td style="font-size:11px;color:#9ca3af">' + (t.olusturma_tarihi||'').slice(0,16) + '</td>' +
+        '<td style="font-size:12px">' + (t.olusturan_ad||'—') + '</td>' +
+        '<td><a href="/nexgen/arge/test/' + t.id + '" class="ngsk-btn-detay" title="Detay">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>' +
+        '</a></td>';
+      tbody.appendChild(tr);
+    });
+  }).catch(function(){
+    var load = document.getElementById('ag-gecmis-yukleniyor');
+    if (load) load.textContent = 'Geçmiş yüklenemedi.';
+  });
+})();
 </script>
 {% endblock %}
