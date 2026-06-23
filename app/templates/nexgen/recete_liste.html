@@ -10,34 +10,60 @@
       <a href="/nexgen/" class="ng-bc-link">NexGen</a>
       <span class="ng-bc-sep">›</span>
       <span class="ng-baslik-metin">Reçete Merkezi</span>
-      <span class="ngrc-rozet">FAZ-4</span>
     </div>
     <div class="ng-baslik-aciklama">
-      Formül, renk varyantı ve üretim boyutu (Small/Large) bazında hammadde reçeteleri.
+      Formül ve renk varyantı bazında hammadde reçeteleri — Small / Large üretim boyutları
+    </div>
+  </div>
+
+  {# ── KPI Bar ─────────────────────────────────────────────── #}
+  <div class="rl-kpi-bar">
+    <div class="rl-kpi">
+      <span class="rl-kpi-deger">{{ formuller|length }}</span>
+      <span class="rl-kpi-etiket">Toplam Formül</span>
+    </div>
+    {% set uretime_acik = namespace(n=0) %}
+    {% set onayli_n = namespace(n=0) %}
+    {% set taslak_n = namespace(n=0) %}
+    {% for f in formuller %}
+      {% if f.recete_durum_ozet == 'URETIME_ACIK' %}{% set uretime_acik.n = uretime_acik.n + 1 %}{% endif %}
+      {% if f.recete_durum_ozet == 'ONAYLI' %}{% set onayli_n.n = onayli_n.n + 1 %}{% endif %}
+      {% if f.recete_durum_ozet == 'TASLAK' or not f.recete_durum_ozet %}{% set taslak_n.n = taslak_n.n + 1 %}{% endif %}
+    {% endfor %}
+    <div class="rl-kpi">
+      <span class="rl-kpi-deger rl-kpi-yesil">{{ uretime_acik.n }}</span>
+      <span class="rl-kpi-etiket">Üretime Açık</span>
+    </div>
+    <div class="rl-kpi">
+      <span class="rl-kpi-deger rl-kpi-mavi">{{ onayli_n.n }}</span>
+      <span class="rl-kpi-etiket">Onaylı</span>
+    </div>
+    <div class="rl-kpi">
+      <span class="rl-kpi-deger rl-kpi-gri">{{ taslak_n.n }}</span>
+      <span class="rl-kpi-etiket">Taslak</span>
     </div>
   </div>
 
   {# ── Toolbar ─────────────────────────────────────────────── #}
-  <div class="ngrc-toolbar">
-    <div class="ngsk-ara-wrap">
+  <div class="rl-toolbar">
+    <div class="ngsk-ara-wrap" style="flex:1;max-width:320px">
       <svg class="ngsk-ara-ikon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15">
         <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
       </svg>
-      <input type="text" id="ngrc-arama" class="ngsk-ara-input"
-             placeholder="Kod veya formül adı ara…" autocomplete="off">
+      <input type="text" id="rl-arama" class="ngsk-ara-input"
+             placeholder="Kod veya formül adı ara…" autocomplete="off"
+             oninput="rlFiltrele()">
     </div>
-    <div class="ngsk-filtre-wrap">
-      <select id="ngrc-durum-filtre" class="ngsk-select" onchange="ngrcFiltrele()">
-        <option value="">Tüm Durumlar</option>
-        <option value="TASLAK">Taslak</option>
-        <option value="ONAY_BEKLIYOR">Onay Bekliyor</option>
-        <option value="AKTIF">Aktif</option>
-        <option value="ARSIV">Arşiv</option>
-      </select>
-    </div>
+    <select id="rl-durum-filtre" class="ngsk-select" onchange="rlFiltrele()">
+      <option value="">Tüm Durumlar</option>
+      <option value="URETIME_ACIK">Üretime Açık</option>
+      <option value="ONAYLI">Onaylı</option>
+      <option value="DENEME">Deneme</option>
+      <option value="TASLAK">Taslak</option>
+    </select>
     {% if can_create %}
-    <button class="ngsk-btn-yeni" onclick="alert('Formül oluşturma FAZ-4C\'de eklenecek.')">
+    <button class="ngsk-btn-yeni" onclick="alert('Yeni formül FAZ-4E\'de eklenecek.')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
            stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
         <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -47,136 +73,109 @@
     {% endif %}
   </div>
 
-  {# ── KPI Bar ─────────────────────────────────────────────── #}
-  <div class="ngsk-kpi-bar">
-    <div class="ngsk-kpi">
-      <span class="ngsk-kpi-deger" id="kpi-toplam">{{ formuller|length }}</span>
-      <span class="ngsk-kpi-etiket">Toplam Formül</span>
+  {# ── Formül Kartları ──────────────────────────────────────── #}
+  {% if formuller %}
+  <div class="rl-kart-grid" id="rl-kart-grid">
+
+    {% for f in formuller %}
+    <div class="rl-kart"
+         data-ara="{{ (f.kod ~ ' ' ~ f.ad)|lower }}"
+         data-durum="{{ f.recete_durum_ozet or 'TASLAK' }}">
+
+      {# ── Kart Başlığı ── #}
+      <div class="rl-kart-hdr">
+        <div class="rl-kart-hdr-sol">
+          <span class="rl-formul-kod">{{ f.kod }}</span>
+          <h3 class="rl-formul-ad">{{ f.ad }}</h3>
+          {% if f.notlar %}
+          <div class="rl-formul-notlar">{{ f.notlar }}</div>
+          {% endif %}
+        </div>
+        <div class="rl-kart-hdr-sag">
+          {% if f.recete_durum_ozet %}
+          <span class="ngrc-rd-rozet ngrc-rd-{{ f.recete_durum_ozet|lower|replace('_','-') }}">
+            {{ f.recete_durum_ozet.replace('_',' ') }}
+          </span>
+          {% endif %}
+          <a href="/nexgen/recete/{{ f.id }}" class="rl-detay-btn">
+            Detay
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                 stroke-linecap="round" stroke-linejoin="round" width="12" height="12">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </a>
+        </div>
+      </div>
+
+      {# ── Formül KPI Mini Bar ── #}
+      <div class="rl-mini-kpi-bar">
+        <div class="rl-mini-kpi">
+          <span class="rl-mini-kpi-deger">{{ f.renk_say }}</span>
+          <span class="rl-mini-kpi-etiket">Renk</span>
+        </div>
+        <div class="rl-mini-kpi">
+          <span class="rl-mini-kpi-deger">{{ f.uretim_say }}</span>
+          <span class="rl-mini-kpi-etiket">Varyant</span>
+        </div>
+        <div class="rl-mini-kpi">
+          <span class="rl-mini-kpi-deger">{{ f.kalem_say }}</span>
+          <span class="rl-mini-kpi-etiket">Kalem</span>
+        </div>
+        {% if f.liste_kg_maliyet > 0 %}
+        <div class="rl-mini-kpi">
+          <span class="rl-mini-kpi-deger rl-kpi-yesil">{{ '{:,.2f}'.format(f.liste_kg_maliyet) }} ₺</span>
+          <span class="rl-mini-kpi-etiket">Ort. KG Maliyet</span>
+        </div>
+        {% endif %}
+      </div>
+
+      {# ── Renk / Varyant Ağaç Özeti ── #}
+      {% if f.rv_ozet %}
+      <div class="rl-agac">
+        {% for rv in f.rv_ozet %}
+        <div class="rl-renk-blok">
+          <div class="rl-renk-baslik">
+            <span class="rl-renk-bant"></span>
+            <span class="rl-renk-ad">{{ rv.ad }}</span>
+          </div>
+          <div class="rl-varyant-listesi">
+            {% for uv in rv.varyantlar %}
+            <div class="rl-varyant-satir">
+              <span class="rl-boyut-rozet rl-boyut-{{ uv.boyut|lower }}">{{ uv.boyut }}</span>
+              {% if uv.toplam_kg > 0 %}
+              <span class="rl-varyant-kg">{{ '{:,.1f}'.format(uv.toplam_kg) }} KG</span>
+              {% endif %}
+              {% if uv.kg_maliyet > 0 %}
+              <span class="rl-varyant-maliyet">{{ '{:,.2f}'.format(uv.kg_maliyet) }} ₺/KG</span>
+              {% else %}
+              <span class="rl-varyant-maliyet rl-fiyat-yok">—</span>
+              {% endif %}
+              <span class="ngrc-rd-rozet ngrc-rd-{{ uv.recete_durum|lower|replace('_','-') }}" style="font-size:10px">
+                {{ uv.recete_durum.replace('_',' ') }}
+              </span>
+              <a href="/nexgen/recete/{{ f.id }}" class="rl-var-link" title="Detaya Git">›</a>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="rl-bos-agac">Henüz reçete kalemi yok</div>
+      {% endif %}
+
     </div>
-    <div class="ngsk-kpi">
-      <span class="ngsk-kpi-deger ngsk-kpi-yesil" id="kpi-aktif">
-        {{ formuller | selectattr('durum', 'equalto', 'AKTIF') | list | length }}
-      </span>
-      <span class="ngsk-kpi-etiket">Aktif</span>
-    </div>
-    <div class="ngsk-kpi">
-      <span class="ngsk-kpi-deger" id="kpi-taslak">
-        {{ formuller | selectattr('durum', 'equalto', 'TASLAK') | list | length }}
-      </span>
-      <span class="ngsk-kpi-etiket">Taslak</span>
-    </div>
-    <div class="ngsk-kpi">
-      <span class="ngsk-kpi-deger ngsk-kpi-sari" id="kpi-onay">
-        {{ formuller | selectattr('onay_durumu', 'equalto', 'ONAY_BEKLIYOR') | list | length }}
-      </span>
-      <span class="ngsk-kpi-etiket">Onay Bekleyen</span>
-    </div>
+    {% endfor %}
+
   </div>
 
-  {# ── Tablo ───────────────────────────────────────────────── #}
-  {% if formuller %}
-  <div class="ngrc-tablo-cerceve">
-    <table class="ngsk-tablo" id="ngrc-tablo">
-      <thead>
-        <tr>
-          <th>Kod</th>
-          <th>Formül Adı</th>
-          <th class="ngsk-th-r">Renk Var.</th>
-          <th class="ngsk-th-r">Boyut Var.</th>
-          <th class="ngsk-th-r">Kalem</th>
-          <th class="ngsk-th-r">Batch KG</th>
-          <th class="ngsk-th-r">KG Maliyet</th>
-          <th>Durum</th>
-          <th>Reçete Durumu</th>
-          <th>Onay</th>
-          <th>Oluşturan</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody id="ngrc-tbody">
-        {% for f in formuller %}
-        <tr class="ngsk-satir ngrc-satir"
-            data-ara="{{ (f.kod ~ ' ' ~ f.ad)|lower }}"
-            data-durum="{{ f.durum }}">
-          <td>
-            <span class="ngrc-kod">{{ f.kod }}</span>
-          </td>
-          <td>
-            <span class="ngrc-ad">{{ f.ad }}</span>
-            {% if f.notlar %}
-            <div class="ngsk-alt-bilgi" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ f.notlar }}</div>
-            {% endif %}
-          </td>
-          <td class="ngsk-td-r">
-            <span class="ngrc-sayac">{{ f.renk_say }}</span>
-          </td>
-          <td class="ngsk-td-r">
-            <span class="ngrc-sayac">{{ f.uretim_say }}</span>
-          </td>
-          <td class="ngsk-td-r">
-            <span class="ngrc-sayac">{{ f.kalem_say }}</span>
-          </td>
-          <td class="ngsk-td-r">
-            {% if f.liste_toplam_kg > 0 %}
-              <span class="ngrc-sayac">{{ '{:,.1f}'.format(f.liste_toplam_kg) }}</span>
-              <span class="ngsk-birim"> KG</span>
-            {% else %}—{% endif %}
-          </td>
-          <td class="ngsk-td-r">
-            {% if f.liste_kg_maliyet > 0 %}
-              <span style="color:#059669;font-weight:700">{{ '{:,.2f}'.format(f.liste_kg_maliyet) }}</span>
-              <span class="ngsk-birim"> ₺</span>
-            {% else %}
-              <span class="ngrc-fiyat-yok">—</span>
-            {% endif %}
-          </td>
-          <td>
-            <span class="ngrc-rozet-durum ngrc-d-{{ f.durum|lower }}">
-              {% if f.durum == 'TASLAK' %}Taslak
-              {% elif f.durum == 'AKTIF' %}Aktif
-              {% elif f.durum == 'ARSIV' %}Arşiv
-              {% else %}{{ f.durum }}{% endif %}
-            </span>
-          </td>
-          <td>
-            {% if f.recete_durum_ozet %}
-            <span class="ngrc-rd-rozet ngrc-rd-{{ f.recete_durum_ozet|lower|replace('_','-') }}">
-              {{ f.recete_durum_ozet.replace('_',' ') }}
-            </span>
-            {% else %}—{% endif %}
-          </td>
-          <td>
-            <span class="ngrc-rozet-onay ngrc-o-{{ f.onay_durumu|lower|replace('_','-') }}">
-              {% if f.onay_durumu == 'BEKLIYOR' %}Bekliyor
-              {% elif f.onay_durumu == 'ONAY_BEKLIYOR' %}Onay Bkl.
-              {% elif f.onay_durumu == 'ONAYLANDI' %}Onaylandı
-              {% elif f.onay_durumu == 'REDDEDILDI' %}Reddedildi
-              {% else %}{{ f.onay_durumu }}{% endif %}
-            </span>
-          </td>
-          <td class="ngsk-alt-bilgi">{{ f.olusturan_ad or '—' }}</td>
-          <td class="ngsk-td-butonlar">
-            <a href="/nexgen/recete/{{ f.id }}" class="ngsk-btn-detay" title="Detay">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                   stroke-linecap="round" stroke-linejoin="round" width="13" height="13">
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
-              </svg>
-            </a>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    <div id="ngrc-bos-mesaj" class="ngsk-bos" style="display:none">
-      Arama kriterine uygun formül bulunamadı.
-    </div>
+  <div id="rl-bos-mesaj" class="rl-bos-sonuc" style="display:none">
+    Arama kriterine uygun formül bulunamadı.
   </div>
 
   {% else %}
-  {# ── Boş Durum ─────────────────────────────────────────── #}
-  <div class="ngrc-bos-kart">
-    <div class="ngrc-bos-ikon">
+  <div class="rl-bos-tam">
+    <div class="rl-bos-ikon">
       <svg viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.2"
            stroke-linecap="round" stroke-linejoin="round" width="52" height="52">
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -185,115 +184,177 @@
         <line x1="9" y1="17" x2="12" y2="17"/>
       </svg>
     </div>
-    <div class="ngrc-bos-baslik">Henüz Formül Yok</div>
-    <div class="ngrc-bos-aciklama">
-      İlk reçeteyi oluşturmak için "Yeni Formül" butonunu kullanın.<br>
-      Taslak formül Yönetim onayından sonra aktif hale gelir.
+    <div class="rl-bos-baslik">Henüz Formül Yok</div>
+    <div class="rl-bos-aciklama">
+      İlk reçeteyi oluşturmak için Yeni Formül butonunu kullanın.
     </div>
-    {% if can_create %}
-    <button class="ngsk-btn-yeni ngrc-bos-btn" onclick="alert('Formül oluşturma FAZ-4C\'de eklenecek.')">
-      Yeni Formül Oluştur
-    </button>
-    {% endif %}
   </div>
   {% endif %}
 
 </div>
 
 <style>
+/* ── KPI Bar ── */
+.rl-kpi-bar {
+  display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;
+}
+.rl-kpi {
+  flex:1; min-width:110px; background:#fff;
+  border:1px solid rgba(17,24,39,.07); border-radius:10px;
+  padding:12px 16px; box-shadow:0 1px 4px rgba(15,23,42,.04);
+}
+.rl-kpi-deger  { display:block; font-size:22px; font-weight:700; color:#111827; }
+.rl-kpi-etiket { display:block; font-size:11px; color:#6b7280; margin-top:2px; }
+.rl-kpi-yesil  { color:#059669; }
+.rl-kpi-mavi   { color:#1d4ed8; }
+.rl-kpi-gri    { color:#9ca3af; }
+
 /* ── Toolbar ── */
-.ngrc-toolbar {
+.rl-toolbar {
   display:flex; gap:10px; flex-wrap:wrap; align-items:center;
-  margin-bottom:12px;
+  margin-bottom:14px;
 }
 
-/* ── KPI (stok_kartlari ile aynı dil) ── */
-.ngsk-kpi-bar  { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
-.ngsk-kpi      { flex:1; min-width:120px; background:#fff; border:1px solid rgba(17,24,39,.07);
-                 border-radius:10px; padding:12px 16px; box-shadow:0 1px 4px rgba(15,23,42,.04); }
-.ngsk-kpi-deger  { display:block; font-size:22px; font-weight:700; color:#111827; }
-.ngsk-kpi-etiket { display:block; font-size:11px; color:#6b7280; margin-top:2px; }
-.ngsk-kpi-yesil  { color:#16a34a; }
-.ngsk-kpi-sari   { color:#d97706; }
+/* ── Kart Grid ── */
+.rl-kart-grid {
+  display:flex; flex-direction:column; gap:12px;
+}
 
-/* ── Tablo ── */
-.ngrc-tablo-cerceve {
-  background:#fff; border:1px solid rgba(17,24,39,.06);
-  border-radius:12px; overflow-x:auto;
+/* ── Formül Kartı ── */
+.rl-kart {
+  background:#fff; border:1px solid rgba(17,24,39,.07);
+  border-radius:14px; overflow:hidden;
   box-shadow:0 2px 8px rgba(15,23,42,.04);
+  transition:box-shadow .15s;
+}
+.rl-kart:hover { box-shadow:0 4px 16px rgba(15,23,42,.08); }
+
+.rl-kart-hdr {
+  display:flex; align-items:flex-start; justify-content:space-between;
+  gap:12px; padding:16px 18px 12px; border-bottom:1px solid #f3f4f6;
+}
+.rl-kart-hdr-sol { flex:1; }
+.rl-kart-hdr-sag { display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
+
+.rl-formul-kod {
+  font-family:'Courier New',monospace; font-size:11px; font-weight:700;
+  color:#0891b2; letter-spacing:.5px; display:block; margin-bottom:3px;
+}
+.rl-formul-ad {
+  margin:0; font-size:15px; font-weight:700; color:#111827;
+}
+.rl-formul-notlar {
+  font-size:12px; color:#6b7280; margin-top:4px; line-height:1.5;
 }
 
-/* ── Kod / Ad ── */
-.ngrc-kod {
-  font-family:'Courier New',monospace; font-size:12px;
-  color:#0891b2; font-weight:600;
+.rl-detay-btn {
+  display:inline-flex; align-items:center; gap:4px;
+  padding:5px 12px; border-radius:7px;
+  background:#f6c343; color:#111827; text-decoration:none;
+  font-size:12px; font-weight:700; transition:background .12s;
 }
-.ngrc-ad { font-weight:600; font-size:13px; color:#111827; }
-.ngrc-sayac { font-size:13px; font-weight:700; color:#374151; }
-.ngrc-fiyat-yok { color:#9ca3af; font-weight:400; font-size:12px; }
+.rl-detay-btn:hover { background:#f5b82e; }
 
-/* ── Reçete durum rozetleri (recete_durum) ── */
+/* ── Mini KPI Bar ── */
+.rl-mini-kpi-bar {
+  display:flex; gap:0; padding:8px 18px;
+  border-bottom:1px solid #f3f4f6; background:#fafafa;
+}
+.rl-mini-kpi {
+  display:flex; flex-direction:column; padding:4px 16px 4px 0;
+  border-right:1px solid #f3f4f6; margin-right:16px;
+}
+.rl-mini-kpi:last-child { border-right:none; }
+.rl-mini-kpi-deger  { font-size:14px; font-weight:700; color:#111827; }
+.rl-mini-kpi-etiket { font-size:10px; color:#9ca3af; text-transform:uppercase; letter-spacing:.3px; }
+
+/* ── Ağaç Özeti ── */
+.rl-agac { padding:12px 18px 14px; }
+.rl-renk-blok { margin-bottom:10px; }
+.rl-renk-blok:last-child { margin-bottom:0; }
+.rl-renk-baslik {
+  display:flex; align-items:center; gap:8px;
+  margin-bottom:6px;
+}
+.rl-renk-bant {
+  display:inline-block; width:10px; height:10px; border-radius:50%;
+  background:#6b7280; flex-shrink:0;
+}
+.rl-renk-ad {
+  font-size:12px; font-weight:700; color:#374151;
+  text-transform:uppercase; letter-spacing:.4px;
+}
+
+.rl-varyant-listesi { display:flex; flex-direction:column; gap:4px; padding-left:18px; }
+.rl-varyant-satir {
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  padding:4px 8px; border-radius:6px; background:#f9fafb;
+  border:1px solid #f3f4f6;
+}
+.rl-boyut-rozet {
+  font-size:11px; font-weight:700; padding:1px 7px;
+  border-radius:5px; letter-spacing:.3px;
+}
+.rl-boyut-large   { background:#dbeafe; color:#1d4ed8; }
+.rl-boyut-small   { background:#fef3c7; color:#92400e; }
+.rl-boyut-standart{ background:#f1f5f9; color:#64748b; }
+
+.rl-varyant-kg { font-size:12px; font-weight:700; color:#111827; }
+.rl-varyant-maliyet { font-size:12px; color:#059669; font-weight:600; }
+.rl-fiyat-yok { color:#9ca3af; font-weight:400; }
+.rl-var-link {
+  margin-left:auto; color:#9ca3af; text-decoration:none;
+  font-size:16px; font-weight:700; padding:0 4px;
+  transition:color .1s;
+}
+.rl-var-link:hover { color:#0891b2; }
+
+.rl-bos-agac {
+  padding:10px 18px 14px; font-size:12px; color:#9ca3af; font-style:italic;
+}
+
+/* ── Boş durumlar ── */
+.rl-bos-sonuc {
+  text-align:center; padding:32px; color:#9ca3af;
+  font-size:13px; background:#fff;
+  border:1px solid rgba(17,24,39,.06); border-radius:12px;
+}
+.rl-bos-tam {
+  display:flex; flex-direction:column; align-items:center;
+  padding:64px 24px; text-align:center; background:#fff;
+  border:1px solid rgba(17,24,39,.06); border-radius:14px;
+}
+.rl-bos-ikon { margin-bottom:14px; }
+.rl-bos-baslik { font-size:17px; font-weight:700; color:#374151; margin-bottom:8px; }
+.rl-bos-aciklama { font-size:13px; color:#9ca3af; line-height:1.7; }
+
+/* ── Reçete durum rozetleri ── */
 .ngrc-rd-rozet {
   display:inline-block; padding:2px 8px; border-radius:7px;
-  font-size:11px; font-weight:700; border:1px solid transparent;
+  font-size:11px; font-weight:700; border:1px solid transparent; white-space:nowrap;
 }
-.ngrc-rd-taslak       { background:#f1f5f9; color:#64748b; border-color:#e2e8f0; }
-.ngrc-rd-deneme       { background:#fef3c7; color:#92400e; border-color:#fde68a; }
-.ngrc-rd-onayli       { background:#d1fae5; color:#059669; border-color:#a7f3d0; }
-.ngrc-rd-uretime-acik { background:#dbeafe; color:#1d4ed8; border-color:#bfdbfe; }
-.ngrc-rd-pasif        { background:#f9fafb; color:#9ca3af; border-color:#e5e7eb; }
-
-/* ── Durum rozetleri ── */
-.ngrc-rozet-durum, .ngrc-rozet-onay {
-  display:inline-block; padding:2px 8px; border-radius:7px;
-  font-size:11px; font-weight:700; border:1px solid transparent;
-}
-.ngrc-d-taslak   { background:#f1f5f9; color:#64748b; border-color:#e2e8f0; }
-.ngrc-d-aktif    { background:#f0fdf4; color:#15803d; border-color:#bbf7d0; }
-.ngrc-d-arsiv    { background:#f9fafb; color:#9ca3af; border-color:#e5e7eb; }
-
-.ngrc-o-bekliyor       { background:#f1f5f9; color:#64748b; border-color:#e2e8f0; }
-.ngrc-o-onay-bekliyor  { background:#fef3c7; color:#92400e; border-color:#fde68a; }
-.ngrc-o-onaylandi      { background:#d1fae5; color:#059669; border-color:#a7f3d0; }
-.ngrc-o-reddedildi     { background:#fee2e2; color:#dc2626; border-color:#fecaca; }
-
-/* ── Rozet (üst) ── */
-.ngrc-rozet {
-  display:inline-block; padding:2px 10px; border-radius:10px;
-  font-size:11px; font-weight:700; background:#fef3c7; color:#92400e;
-}
-
-/* ── Boş durum ── */
-.ngrc-bos-kart {
-  display:flex; flex-direction:column; align-items:center;
-  padding:64px 24px; text-align:center;
-  background:#fff; border:1px solid rgba(17,24,39,.06);
-  border-radius:12px;
-}
-.ngrc-bos-ikon { margin-bottom:14px; }
-.ngrc-bos-baslik { font-size:17px; font-weight:700; color:#374151; margin-bottom:8px; }
-.ngrc-bos-aciklama { font-size:13px; color:#9ca3af; line-height:1.7; margin-bottom:20px; }
-.ngrc-bos-btn { margin-top:4px; }
+.ngrc-rd-taslak        { background:#f1f5f9; color:#64748b; border-color:#e2e8f0; }
+.ngrc-rd-deneme        { background:#fef3c7; color:#92400e; border-color:#fde68a; }
+.ngrc-rd-onayli        { background:#d1fae5; color:#059669; border-color:#a7f3d0; }
+.ngrc-rd-uretime-acik  { background:#dbeafe; color:#1d4ed8; border-color:#bfdbfe; }
+.ngrc-rd-pasif         { background:#f9fafb; color:#9ca3af; border-color:#e5e7eb; }
 </style>
 
 <script>
-// Arama + durum filtresi
-document.getElementById('ngrc-arama').addEventListener('input', ngrcFiltrele);
-
-function ngrcFiltrele() {
-  const ara    = (document.getElementById('ngrc-arama').value || '').toLowerCase();
-  const durum  = document.getElementById('ngrc-durum-filtre').value;
-  const satirlar = document.querySelectorAll('.ngrc-satir');
-  let goster = 0;
-  satirlar.forEach(function(tr) {
-    const araUy   = !ara   || (tr.dataset.ara   || '').includes(ara);
-    const durumUy = !durum || tr.dataset.durum === durum;
-    const gorunur = araUy && durumUy;
-    tr.style.display = gorunur ? '' : 'none';
-    if (gorunur) goster++;
+function rlFiltrele() {
+  var ara   = (document.getElementById('rl-arama').value || '').toLowerCase();
+  var durum = document.getElementById('rl-durum-filtre').value;
+  var kartlar = document.querySelectorAll('.rl-kart');
+  var goster = 0;
+  kartlar.forEach(function(k) {
+    var araUy   = !ara   || (k.dataset.ara   || '').includes(ara);
+    var durumUy = !durum || k.dataset.durum === durum;
+    var ok = araUy && durumUy;
+    k.style.display = ok ? '' : 'none';
+    if (ok) goster++;
   });
-  const bosMsg = document.getElementById('ngrc-bos-mesaj');
-  if (bosMsg) bosMsg.style.display = goster === 0 ? 'block' : 'none';
+  var bos = document.getElementById('rl-bos-mesaj');
+  if (bos) bos.style.display = goster === 0 ? 'block' : 'none';
 }
 </script>
 {% endblock %}

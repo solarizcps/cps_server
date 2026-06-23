@@ -660,6 +660,67 @@ def recete_liste():
 
             formuller.append(f_dict)
 
+        # Her formül için renk/varyant özet listesi (liste kartı için)
+        for f_dict in formuller:
+            rv_ozet = con.execute("""
+                SELECT rv.id AS rv_id, rv.ad AS rv_ad, rv.renk,
+                       uv.id AS uv_id, uv.boyut, uv.recete_durum,
+                       COUNT(rk.id) AS kalem_say,
+                       SUM(rk.miktar_kg) AS toplam_kg
+                FROM nexgen_renk_varyant rv
+                JOIN nexgen_uretim_varyant uv ON uv.renk_varyant_id = rv.id AND uv.aktif = 1
+                LEFT JOIN nexgen_recete_kalem rk ON rk.uretim_varyant_id = uv.id AND rk.aktif = 1
+                WHERE rv.formul_id = ? AND rv.aktif = 1
+                GROUP BY uv.id
+                ORDER BY rv.id, uv.id
+            """, (f_dict['id'],)).fetchall()
+
+            # Renk bazında grupla
+            rv_gruplar = {}
+            for row in rv_ozet:
+                rv_id = row['rv_id']
+                if rv_id not in rv_gruplar:
+                    rv_gruplar[rv_id] = {'ad': row['rv_ad'], 'renk': row['renk'], 'varyantlar': []}
+                rv_gruplar[rv_id]['varyantlar'].append({
+                    'uv_id':        row['uv_id'],
+                    'boyut':        row['boyut'],
+                    'recete_durum': row['recete_durum'] or 'TASLAK',
+                    'kalem_say':    row['kalem_say'] or 0,
+                    'toplam_kg':    round(float(row['toplam_kg'] or 0), 3),
+                })
+            f_dict['rv_ozet'] = list(rv_gruplar.values())
+
+            # Her varyant için KG maliyet ekle
+            for rv_g in f_dict['rv_ozet']:
+                for uv in rv_g['varyantlar']:
+                    if uv['toplam_kg'] > 0:
+                        uv_kalemler = con.execute("""
+                            SELECT rk.miktar_kg, rk.stok_kart_id
+                            FROM nexgen_recete_kalem rk
+                            WHERE rk.uretim_varyant_id = ? AND rk.aktif = 1
+                        """, (uv['uv_id'],)).fetchall()
+                        mal = 0.0
+                        for k in uv_kalemler:
+                            fr = con.execute("""
+                                SELECT fiyat, para_birimi, kur, fiyat_try
+                                FROM nexgen_hammadde_fiyat
+                                WHERE stok_kart_id = ? AND aktif = 1
+                                ORDER BY fiyat_tarihi DESC, id DESC LIMIT 1
+                            """, (k['stok_kart_id'],)).fetchone()
+                            if fr:
+                                if fr['fiyat_try'] and fr['fiyat_try'] > 0:
+                                    bp = float(fr['fiyat_try'])
+                                elif fr['para_birimi'] == 'TRY':
+                                    bp = float(fr['fiyat'] or 0)
+                                elif fr['kur'] and fr['kur'] > 0:
+                                    bp = float(fr['fiyat'] or 0) * float(fr['kur'])
+                                else:
+                                    bp = 0.0
+                                mal += float(k['miktar_kg']) * bp
+                        uv['kg_maliyet'] = round(mal / uv['toplam_kg'], 2) if uv['toplam_kg'] > 0 else 0.0
+                    else:
+                        uv['kg_maliyet'] = 0.0
+
     finally:
         con.close()
 

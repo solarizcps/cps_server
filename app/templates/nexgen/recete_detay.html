@@ -19,21 +19,300 @@
     </div>
   </div>
 
-  {# ── Sekme Bar ───────────────────────────────────────────── #}
-  <div class="ngsd-sekme-bar">
-    <button class="ngsd-sekme-btn" data-sekme="genel"  onclick="rcSekme('genel')">Genel Bilgi</button>
-    <button class="ngsd-sekme-btn" data-sekme="recete" onclick="rcSekme('recete')">Reçete Ağacı</button>
-    <button class="ngsd-sekme-btn" data-sekme="hesap"  onclick="rcSekme('hesap')">Deneme Hesabı</button>
+  {# ── Üst KPI Özet Bandı ───────────────────────────────────── #}
+  {% set toplam_uretim_acik = namespace(n=0) %}
+  {% set toplam_deneme = namespace(n=0) %}
+  {% set toplam_onayli = namespace(n=0) %}
+  {% set toplam_batch = namespace(v=0.0) %}
+  {% for rv in agac %}
+    {% for uv in rv.uretim_listesi %}
+      {% if uv.recete_durum == 'URETIME_ACIK' %}{% set toplam_uretim_acik.n = toplam_uretim_acik.n + 1 %}{% endif %}
+      {% if uv.recete_durum in ['DENEME','ONAYA_GONDERILDI'] %}{% set toplam_deneme.n = toplam_deneme.n + 1 %}{% endif %}
+      {% if uv.recete_durum == 'ONAYLI' %}{% set toplam_onayli.n = toplam_onayli.n + 1 %}{% endif %}
+      {% if uv.toplam_kg > 0 %}{% set toplam_batch.v = toplam_batch.v + uv.toplam_kg %}{% endif %}
+    {% endfor %}
+  {% endfor %}
+
+  <div class="rd-ozet-band">
+    <div class="rd-ozet-sol">
+      <div class="rd-ozet-formul-kod">{{ formul.kod }}</div>
+      <div class="rd-ozet-formul-ad">{{ formul.ad }}</div>
+      {% if formul.aciklama %}
+      <div class="rd-ozet-formul-aciklama">{{ formul.aciklama }}</div>
+      {% endif %}
+      <div class="rd-ozet-meta">
+        <span>{{ agac|length }} renk</span>
+        <span class="rd-ozet-sep">·</span>
+        <span>
+          {% set tv = namespace(n=0) %}
+          {% for rv in agac %}{% for uv in rv.uretim_listesi %}{% set tv.n = tv.n + 1 %}{% endfor %}{% endfor %}
+          {{ tv.n }} varyant
+        </span>
+        {% if formul.olusturan_ad %}
+        <span class="rd-ozet-sep">·</span>
+        <span>{{ formul.olusturan_ad }}</span>
+        {% endif %}
+      </div>
+    </div>
+    <div class="rd-ozet-kpi-wrap">
+      <div class="rd-kpi">
+        <span class="rd-kpi-deger">
+          {% if toplam_batch.v > 0 %}{{ '{:,.1f}'.format(toplam_batch.v) }}{% else %}—{% endif %}
+        </span>
+        <span class="rd-kpi-etiket">Toplam Batch KG</span>
+      </div>
+      <div class="rd-kpi">
+        <span class="rd-kpi-deger rd-kpi-yesil">{{ toplam_uretim_acik.n }}</span>
+        <span class="rd-kpi-etiket">Üretime Açık</span>
+      </div>
+      <div class="rd-kpi">
+        <span class="rd-kpi-deger rd-kpi-mavi">{{ toplam_onayli.n }}</span>
+        <span class="rd-kpi-etiket">Onaylı</span>
+      </div>
+      <div class="rd-kpi">
+        <span class="rd-kpi-deger rd-kpi-sari">{{ toplam_deneme.n }}</span>
+        <span class="rd-kpi-etiket">Deneme</span>
+      </div>
+    </div>
+  </div>
+
+  {# ── Modern Sekme Bar ─────────────────────────────────────── #}
+  <div class="rd-sekme-bar">
+    <button class="rd-sekme-btn aktif" data-sekme="recete"  onclick="rcSekme('recete')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+      </svg>
+      Reçete Ağacı
+    </button>
+    <button class="rd-sekme-btn" data-sekme="genel" onclick="rcSekme('genel')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      Genel Bilgi
+    </button>
+    <button class="rd-sekme-btn" data-sekme="hesap" onclick="rcSekme('hesap')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+        <rect x="4" y="2" width="16" height="20" rx="2"/>
+        <line x1="8" y1="6" x2="16" y2="6"/>
+        <line x1="8" y1="10" x2="16" y2="10"/>
+        <line x1="8" y1="14" x2="12" y2="14"/>
+      </svg>
+      Hesap Paneli
+    </button>
+    <button class="rd-sekme-btn" data-sekme="durum" onclick="rcSekme('durum')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+        <polyline points="9 11 12 14 22 4"/>
+        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+      </svg>
+      Durum & Onay
+    </button>
     {% if can_create %}
-    <button class="ngsd-sekme-btn" data-sekme="klon"   onclick="rcSekme('klon')">Klonla</button>
+    <button class="rd-sekme-btn" data-sekme="klon" onclick="rcSekme('klon')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+        <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+      </svg>
+      Klonla
+    </button>
     {% endif %}
-    <button class="ngsd-sekme-btn" data-sekme="arge"   onclick="rcSekme('arge')">AR-GE Test</button>
+    <button class="rd-sekme-btn" data-sekme="arge" onclick="rcSekme('arge')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+        <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v11m0 0H5m4 0h6m-6 0a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2m0 0h4a2 2 0 0 0 2-2V9"/>
+      </svg>
+      AR-GE Testleri
+    </button>
   </div>
 
   {# ═══════════════════════════════════════════════════════════ #}
-  {# SEKME 1 — GENEL BİLGİ                                       #}
+  {# SEKME 1 — REÇETE AĞACI (varsayılan)                         #}
   {# ═══════════════════════════════════════════════════════════ #}
-  <div id="rc-sekme-genel" class="ngsd-sekme-icerik">
+  <div id="rc-sekme-recete" class="rd-sekme-icerik">
+
+    {% if not agac %}
+    <div class="ngsd-placeholder-kart">
+      <div class="ngsd-placeholder-ikon">📋</div>
+      <div class="ngsd-placeholder-baslik">Varyant Yok</div>
+      <div class="ngsd-placeholder-aciklama">Bu formüle henüz renk varyantı eklenmemiş.</div>
+    </div>
+    {% else %}
+
+    <div class="rd-agac-wrap">
+      {# ── Renk Seçici ── #}
+      <div class="rd-renk-bar">
+        {% for rv in agac %}
+        <button class="rd-renk-btn" data-renk="{{ rv.id }}" onclick="rcRenkSec({{ rv.id }})">
+          <span class="rd-renk-nokta"></span>
+          {{ rv.ad }}
+        </button>
+        {% endfor %}
+      </div>
+
+      {# ── Renk Panelleri ── #}
+      {% for rv in agac %}
+      <div id="ngrc-panel-{{ rv.id }}" class="rd-renk-panel" style="display:none">
+
+        {% if not rv.uretim_listesi %}
+        <div class="ngsd-placeholder-kart" style="padding:24px">
+          <div class="ngsd-placeholder-aciklama">Bu renk varyantına üretim boyutu eklenmemiş.</div>
+        </div>
+        {% else %}
+
+        {# ── Boyut Tabları ── #}
+        <div class="rd-boyut-bar">
+          {% for uv in rv.uretim_listesi %}
+          <button class="rd-boyut-btn" data-renk="{{ rv.id }}" data-boyut="{{ uv.id }}"
+                  onclick="rcBoyutSec({{ rv.id }}, {{ uv.id }})">
+            <span class="rd-boyut-etiket">{{ uv.boyut }}</span>
+            <span class="rd-boyut-kalem">{{ uv.kalemler|length }} kalem</span>
+            <span class="ngrc-rd-rozet ngrc-rd-{{ (uv.recete_durum or 'taslak')|lower|replace('_','-') }}" style="font-size:10px">
+              {{ (uv.recete_durum or 'TASLAK').replace('_',' ') }}
+            </span>
+          </button>
+          {% endfor %}
+        </div>
+
+        {# ── Kalem Panelleri ── #}
+        {% for uv in rv.uretim_listesi %}
+        <div id="ngrc-boyut-{{ rv.id }}-{{ uv.id }}" class="rd-kalem-panel" style="display:none">
+
+          {# KPI Bandı #}
+          <div class="rd-uv-kpi-band">
+            <div class="rd-uv-kpi">
+              <span class="rd-uv-kpi-label">Batch KG</span>
+              <span class="rd-uv-kpi-val">{{ '{:,.3f}'.format(uv.toplam_kg) }} KG</span>
+            </div>
+            <div class="rd-uv-kpi">
+              <span class="rd-uv-kpi-label">Toplam Maliyet</span>
+              <span class="rd-uv-kpi-val">
+                {% if uv.toplam_maliyet > 0 %}{{ '{:,.2f}'.format(uv.toplam_maliyet) }} ₺
+                {% else %}<span style="color:#9ca3af">Fiyat Yok</span>{% endif %}
+              </span>
+            </div>
+            <div class="rd-uv-kpi">
+              <span class="rd-uv-kpi-label">1 KG Maliyet</span>
+              <span class="rd-uv-kpi-val rd-kpi-gold">
+                {% if uv.kg_maliyet > 0 %}{{ '{:,.2f}'.format(uv.kg_maliyet) }} ₺/KG
+                {% else %}<span style="color:#9ca3af">—</span>{% endif %}
+              </span>
+            </div>
+            <div class="rd-uv-kpi">
+              <span class="rd-uv-kpi-label">Kalem</span>
+              <span class="rd-uv-kpi-val">{{ uv.kalemler|length }}</span>
+            </div>
+            <div class="rd-uv-kpi">
+              <span class="rd-uv-kpi-label">Durum</span>
+              <span class="ngrc-rd-rozet ngrc-rd-{{ (uv.recete_durum or 'taslak')|lower|replace('_','-') }}">
+                {{ (uv.recete_durum or 'TASLAK').replace('_',' ') }}
+              </span>
+            </div>
+          </div>
+
+          {% if not uv.kalemler %}
+          <div style="padding:20px;text-align:center;color:#9ca3af;font-size:13px">
+            Bu boyut varyantına henüz reçete kalemi eklenmemiş.
+          </div>
+          {% else %}
+          <div class="ngrc-kalem-cerceve">
+            <table class="rd-kalem-tablo" id="tbl-{{ rv.id }}-{{ uv.id }}">
+              <thead>
+                <tr>
+                  <th style="width:32px">#</th>
+                  <th>Hammadde</th>
+                  <th style="width:90px">Kategori</th>
+                  <th class="ngsk-th-r">Miktar KG</th>
+                  <th class="ngsk-th-r" style="width:64px">%</th>
+                  <th class="ngsk-th-r">₺/KG</th>
+                  <th class="ngsk-th-r">Satır ₺</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for k in uv.kalemler %}
+                <tr class="rd-kalem-satir">
+                  <td class="ngrc-sira">{{ k.sira }}</td>
+                  <td>
+                    <div class="rd-hammadde-hucre">
+                      <span class="ngrc-kod">{{ k.stok_kod }}</span>
+                      <span class="rd-stok-ad">{{ k.stok_ad }}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="ngrc-kat-rozet ngrc-kat-{{ k.kategori|lower }}">{{ k.kategori }}</span>
+                  </td>
+                  <td class="ngsk-td-r ngrc-baz-kg" data-kg="{{ k.miktar_kg }}">
+                    <span class="rd-kg-val">{{ '{:,.3f}'.format(k.miktar_kg) }}</span>
+                    <span class="ngsk-birim"> KG</span>
+                  </td>
+                  <td class="ngsk-td-r rd-yuzde-hucre">
+                    {% if uv.toplam_kg > 0 %}
+                    <span class="rd-yuzde-bar-wrap">
+                      {% set yuzde = (k.miktar_kg / uv.toplam_kg * 100)|round(1) %}
+                      <span class="rd-yuzde-bar" style="width:{{ [yuzde,100]|min }}%"></span>
+                    </span>
+                    {{ '{:.1f}'.format(yuzde) }}%
+                    {% else %}—{% endif %}
+                  </td>
+                  <td class="ngsk-td-r">
+                    {% if k.birim_fiyat_try and k.birim_fiyat_try > 0 %}
+                      <span style="font-size:12px">{{ '{:,.4f}'.format(k.birim_fiyat_try) }}</span>
+                    {% else %}<span class="ngrc-fiyat-yok">—</span>{% endif %}
+                  </td>
+                  <td class="ngsk-td-r">
+                    {% if k.satir_maliyet and k.satir_maliyet > 0 %}
+                      <span style="font-size:12px;font-weight:600">{{ '{:,.2f}'.format(k.satir_maliyet) }}</span>
+                    {% else %}<span class="ngrc-fiyat-yok">0,00</span>{% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+              <tfoot>
+                <tr class="ngrc-toplam-satir">
+                  <td colspan="3" style="font-weight:700;color:#374151">Toplam</td>
+                  <td class="ngsk-td-r">
+                    <strong>{{ '{:,.3f}'.format(uv.toplam_kg) }}</strong>
+                    <span class="ngsk-birim"> KG</span>
+                  </td>
+                  <td class="ngsk-td-r" style="color:#9ca3af">100%</td>
+                  <td class="ngsk-td-r">
+                    {% if uv.kg_maliyet > 0 %}
+                    <span style="font-size:11px;color:#059669;font-weight:700">
+                      1KG={{ '{:,.2f}'.format(uv.kg_maliyet) }}₺
+                    </span>
+                    {% else %}—{% endif %}
+                  </td>
+                  <td class="ngsk-td-r">
+                    {% if uv.toplam_maliyet > 0 %}
+                    <strong style="color:#111827">{{ '{:,.2f}'.format(uv.toplam_maliyet) }} ₺</strong>
+                    {% else %}—{% endif %}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          {% endif %}
+
+        </div>
+        {% endfor %}
+
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+
+    {% endif %}
+  </div>
+
+  {# ═══════════════════════════════════════════════════════════ #}
+  {# SEKME 2 — GENEL BİLGİ                                       #}
+  {# ═══════════════════════════════════════════════════════════ #}
+  <div id="rc-sekme-genel" class="rd-sekme-icerik" style="display:none">
     <div class="ngrc-genel-grid">
 
       <div class="ngrc-bilgi-kart">
@@ -94,245 +373,89 @@
             <span>{{ formul.onaylayan_ad }}</span>
           </div>
           {% endif %}
-          {% if formul.onay_tarihi %}
-          <div class="ngrc-bilgi-satir">
-            <span class="ngrc-bilgi-etiket">Onay Tarihi</span>
-            <span>{{ formul.onay_tarihi[:16] }}</span>
-          </div>
-          {% endif %}
-          {% if formul.onay_notu %}
-          <div class="ngrc-bilgi-satir">
-            <span class="ngrc-bilgi-etiket">Onay Notu</span>
-            <span>{{ formul.onay_notu }}</span>
-          </div>
-          {% endif %}
         </div>
       </div>
 
     </div>
+  </div>
 
-    {# ── Üretim Varyantı Durum Yönetimi ── #}
-    {% if agac %}
-    <div class="ngrc-durum-panel">
-      <div class="ngrc-bilgi-baslik" style="margin-bottom:10px">Üretim Varyantı Durumları</div>
+  {# ═══════════════════════════════════════════════════════════ #}
+  {# ═══════════════════════════════════════════════════════════ #}
+  {# SEKME 3 — DURUM & ONAY (adım görselleştirmesi)              #}
+  {# ═══════════════════════════════════════════════════════════ #}
+  <div id="rc-sekme-durum" class="rd-sekme-icerik" style="display:none">
+
+    {% if not agac %}
+    <div class="ngsd-placeholder-kart">
+      <div class="ngsd-placeholder-aciklama">Durum yönetimi için önce reçete varyantı gerekli.</div>
+    </div>
+    {% else %}
+
+    <div class="rd-durum-grid">
       {% for rv in agac %}
         {% for uv in rv.uretim_listesi %}
-        <div class="ngrc-durum-satir" id="durum-satir-{{ uv.id }}">
-          <div class="ngrc-durum-sol">
-            <span class="ngrc-kod">{{ rv.ad }}</span>
-            <span class="ngrc-durum-boyut"> / {{ uv.boyut }}</span>
-          </div>
-          <div class="ngrc-durum-orta">
-            <span class="ngrc-rd-rozet ngrc-rd-{{ (uv.recete_durum or 'taslak')|lower|replace('_','-') }}"
+        {% set d = uv.recete_durum or 'TASLAK' %}
+        <div class="rd-durum-kart" id="durum-satir-{{ uv.id }}">
+          <div class="rd-durum-kart-hdr">
+            <div>
+              <span class="rd-durum-renk-ad">{{ rv.ad }}</span>
+              <span class="rd-durum-sep">/</span>
+              <span class="rd-durum-boyut">{{ uv.boyut }}</span>
+            </div>
+            <span class="ngrc-rd-rozet ngrc-rd-{{ d|lower|replace('_','-') }}"
                   id="durum-rozet-{{ uv.id }}">
-              {{ uv.recete_durum or 'TASLAK' }}
+              {{ d.replace('_',' ') }}
             </span>
           </div>
+          {% if uv.toplam_kg > 0 %}
+          <div class="rd-durum-kart-kpi">
+            <span>{{ '{:,.1f}'.format(uv.toplam_kg) }} KG</span>
+            {% if uv.kg_maliyet > 0 %}
+            <span>{{ '{:,.2f}'.format(uv.kg_maliyet) }} ₺/KG</span>
+            {% endif %}
+          </div>
+          {% endif %}
+
+          {# Adım göstergesi #}
+          <div class="rd-durum-adimlar">
+            {% for adim in [('TASLAK','Taslak'),('DENEME','Deneme'),('ONAYLI','Onaylı'),('URETIME_ACIK','Üretime Açık'),('PASIF','Pasif')] %}
+            {% set aktif_idx = ['TASLAK','DENEME','ONAYLI','URETIME_ACIK','PASIF'].index(d) if d in ['TASLAK','DENEME','ONAYLI','URETIME_ACIK','PASIF'] else 0 %}
+            {% set bu_idx = loop.index0 %}
+            <div class="rd-durum-adim {{ 'rd-adim-aktif' if adim[0] == d else ('rd-adim-gecildi' if bu_idx < aktif_idx else '') }}">
+              <div class="rd-adim-daire">{{ loop.index }}</div>
+              <div class="rd-adim-etiket">{{ adim[1] }}</div>
+            </div>
+            {% if not loop.last %}<div class="rd-adim-cizgi {{ 'rd-cizgi-aktif' if bu_idx < aktif_idx else '' }}"></div>{% endif %}
+            {% endfor %}
+          </div>
+
           {% if can_manage %}
-          <div class="ngrc-durum-sag">
+          <div class="rd-durum-degistir">
             <select class="ngrc-durum-sel" id="durum-sel-{{ uv.id }}">
-              {% for d in ['TASLAK','DENEME','ONAYLI','URETIME_ACIK','PASIF'] %}
-              <option value="{{ d }}" {% if (uv.recete_durum or 'TASLAK') == d %}selected{% endif %}>
-                {{ d.replace('_',' ') }}
+              {% for adim_d in ['TASLAK','DENEME','ONAYLI','URETIME_ACIK','PASIF'] %}
+              <option value="{{ adim_d }}" {% if d == adim_d %}selected{% endif %}>
+                {{ adim_d.replace('_',' ') }}
               </option>
               {% endfor %}
             </select>
-            <button class="ngrc-durum-kaydet-btn"
+            <button class="ngsk-btn-yeni" style="font-size:12px;padding:6px 14px"
                     onclick="rcDurumKaydet({{ uv.id }})">Kaydet</button>
           </div>
           {% endif %}
         </div>
         {% endfor %}
       {% endfor %}
-      <div id="durum-mesaj" class="ngrc-durum-mesaj" style="display:none"></div>
     </div>
-    {% endif %}
-
-  </div>
-
-  {# ═══════════════════════════════════════════════════════════ #}
-  {# SEKME 2 — REÇETE AĞACI                                      #}
-  {# ═══════════════════════════════════════════════════════════ #}
-  <div id="rc-sekme-recete" class="ngsd-sekme-icerik" style="display:none">
-
-    {% if not agac %}
-    <div class="ngsd-placeholder-kart">
-      <div class="ngsd-placeholder-ikon">📋</div>
-      <div class="ngsd-placeholder-baslik">Varyant Yok</div>
-      <div class="ngsd-placeholder-aciklama">
-        Bu formüle henüz renk varyantı eklenmemiş.
-      </div>
-    </div>
-    {% else %}
-
-    <div class="ngrc-agac">
-      {# ── Renk Seçici Tabs ── #}
-      <div class="ngrc-renk-bar">
-        {% for rv in agac %}
-        <button class="ngrc-renk-btn" data-renk="{{ rv.id }}"
-                onclick="rcRenkSec({{ rv.id }})">
-          <span class="ngrc-renk-bant ngrc-renk-{{ rv.renk|lower }}"></span>
-          {{ rv.ad }}
-        </button>
-        {% endfor %}
-      </div>
-
-      {# ── Her Renk Varyantının Paneli ── #}
-      {% for rv in agac %}
-      <div id="ngrc-panel-{{ rv.id }}" class="ngrc-renk-panel" style="display:none">
-
-        {% if not rv.uretim_listesi %}
-        <div class="ngsd-placeholder-kart" style="padding:24px">
-          <div class="ngsd-placeholder-aciklama">Bu renk varyantına üretim boyutu eklenmemiş.</div>
-        </div>
-        {% else %}
-
-        {# ── Boyut Tabları ── #}
-        <div class="ngrc-boyut-bar">
-          {% for uv in rv.uretim_listesi %}
-          <button class="ngrc-boyut-btn" data-renk="{{ rv.id }}" data-boyut="{{ uv.id }}"
-                  onclick="rcBoyutSec({{ rv.id }}, {{ uv.id }})">
-            {{ uv.boyut }}
-            <span class="ngrc-kalem-say">{{ uv.kalemler|length }} kalem</span>
-          </button>
-          {% endfor %}
-        </div>
-
-        {# ── Kalem Tablosu ── #}
-        {% for uv in rv.uretim_listesi %}
-        <div id="ngrc-boyut-{{ rv.id }}-{{ uv.id }}" class="ngrc-boyut-panel" style="display:none">
-
-          {# Batch KG + Maliyet Özet Bandı #}
-          <div class="ngrc-batch-ozet">
-            <div class="ngrc-batch-item">
-              <span class="ngrc-batch-etiket">Toplam Batch KG</span>
-              <span class="ngrc-batch-deger">{{ '{:,.3f}'.format(uv.toplam_kg) }} KG</span>
-            </div>
-            <div class="ngrc-batch-item">
-              <span class="ngrc-batch-etiket">Toplam Reçete Maliyeti</span>
-              <span class="ngrc-batch-deger">
-                {% if uv.toplam_maliyet > 0 %}
-                  {{ '{:,.2f}'.format(uv.toplam_maliyet) }} ₺
-                {% else %}
-                  <span class="ngrc-fiyat-yok">Fiyat Yok</span>
-                {% endif %}
-              </span>
-            </div>
-            <div class="ngrc-batch-item">
-              <span class="ngrc-batch-etiket">1 KG Compound Maliyeti</span>
-              <span class="ngrc-batch-deger ngrc-batch-ana">
-                {% if uv.kg_maliyet > 0 %}
-                  {{ '{:,.4f}'.format(uv.kg_maliyet) }} ₺/KG
-                {% else %}
-                  <span class="ngrc-fiyat-yok">—</span>
-                {% endif %}
-              </span>
-            </div>
-          </div>
-
-          {% if not uv.kalemler %}
-          <div class="ngsd-placeholder-aciklama" style="padding:20px;text-align:center;color:#9ca3af">
-            Bu boyut varyantına henüz reçete kalemi eklenmemiş.
-          </div>
-          {% else %}
-          <div class="ngrc-kalem-cerceve">
-            <table class="ngrc-kalem-tablo" id="tbl-{{ rv.id }}-{{ uv.id }}">
-              <thead>
-                <tr>
-                  <th style="width:36px">#</th>
-                  <th>Hammadde</th>
-                  <th>Kategori</th>
-                  <th class="ngsk-th-r">Miktar KG</th>
-                  <th class="ngsk-th-r">%</th>
-                  <th class="ngsk-th-r">Birim Fiyat (₺/KG)</th>
-                  <th class="ngsk-th-r">Satır Maliyeti (₺)</th>
-                  <th>Açıklama</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for k in uv.kalemler %}
-                <tr>
-                  <td class="ngrc-sira">{{ k.sira }}</td>
-                  <td>
-                    <span class="ngrc-kod">{{ k.stok_kod }}</span>
-                    <span class="ngrc-stok-ad">{{ k.stok_ad }}</span>
-                  </td>
-                  <td>
-                    <span class="ngrc-kat-rozet ngrc-kat-{{ k.kategori|lower }}">
-                      {{ k.kategori }}
-                    </span>
-                  </td>
-                  <td class="ngsk-td-r ngrc-baz-kg"
-                      data-kg="{{ k.miktar_kg }}">
-                    <strong>{{ '{:,.3f}'.format(k.miktar_kg) }}</strong>
-                    <span class="ngsk-birim">KG</span>
-                  </td>
-                  <td class="ngsk-td-r ngrc-yuzde">
-                    {% if uv.toplam_kg > 0 %}
-                      {{ '{:.1f}'.format(k.miktar_kg / uv.toplam_kg * 100) }}%
-                    {% else %}—{% endif %}
-                  </td>
-                  <td class="ngsk-td-r">
-                    {% if k.birim_fiyat_try and k.birim_fiyat_try > 0 %}
-                      {{ '{:,.4f}'.format(k.birim_fiyat_try) }}
-                    {% else %}
-                      <span class="ngrc-fiyat-yok">—</span>
-                    {% endif %}
-                  </td>
-                  <td class="ngsk-td-r">
-                    {% if k.satir_maliyet and k.satir_maliyet > 0 %}
-                      {{ '{:,.2f}'.format(k.satir_maliyet) }}
-                    {% else %}
-                      <span class="ngrc-fiyat-yok">0,00</span>
-                    {% endif %}
-                  </td>
-                  <td class="ngsk-alt-bilgi">{{ k.aciklama or '—' }}</td>
-                </tr>
-                {% endfor %}
-              </tbody>
-              <tfoot>
-                <tr class="ngrc-toplam-satir">
-                  <td colspan="3">Toplam</td>
-                  <td class="ngsk-td-r">
-                    <strong>{{ '{:,.3f}'.format(uv.toplam_kg) }}</strong>
-                    <span class="ngsk-birim">KG</span>
-                  </td>
-                  <td class="ngsk-td-r">
-                    {% if uv.toplam_kg > 0 %}100.0%{% else %}—{% endif %}
-                  </td>
-                  <td class="ngsk-td-r">
-                    {% if uv.kg_maliyet > 0 %}
-                      <span style="color:#059669;font-size:11px">1 KG = {{ '{:,.2f}'.format(uv.kg_maliyet) }} ₺</span>
-                    {% else %}—{% endif %}
-                  </td>
-                  <td class="ngsk-td-r">
-                    {% if uv.toplam_maliyet > 0 %}
-                      <strong>{{ '{:,.2f}'.format(uv.toplam_maliyet) }} ₺</strong>
-                    {% else %}—{% endif %}
-                  </td>
-                  <td></td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-          {% endif %}
-
-        </div>
-        {% endfor %}
-
-        {% endif %}
-      </div>
-      {% endfor %}
-    </div>
+    <div id="durum-mesaj" class="ngrc-durum-mesaj" style="display:none;margin-top:10px"></div>
 
     {% endif %}
   </div>
 
   {# ═══════════════════════════════════════════════════════════ #}
-  {# SEKME 3 — DENEME HESABI                                     #}
+  {# SEKME 4 — DENEME HESABI                                     #}
   {# KURAL: Sadece görüntüleme — DB'ye yazma YOK                 #}
   {# ═══════════════════════════════════════════════════════════ #}
-  <div id="rc-sekme-hesap" class="ngsd-sekme-icerik" style="display:none">
+  <div id="rc-sekme-hesap" class="rd-sekme-icerik" style="display:none">
 
     {% if not agac %}
     <div class="ngsd-placeholder-kart">
@@ -426,7 +549,7 @@
   {#        Fiyat/stok/üretim kaydı oluşturulmaz.               #}
   {# ═══════════════════════════════════════════════════════════ #}
   {% if can_create %}
-  <div id="rc-sekme-klon" class="ngsd-sekme-icerik" style="display:none">
+  <div id="rc-sekme-klon" class="rd-sekme-icerik" style="display:none">
 
     {% if not agac %}
     <div class="ngsd-placeholder-kart">
@@ -513,7 +636,7 @@
   {# SEKME 5 — AR-GE TEST MERKEZİ                                #}
   {# KURAL: Ana reçete değişmez. Stok hareketi oluşturulmaz.    #}
   {# ═══════════════════════════════════════════════════════════ #}
-  <div id="rc-sekme-arge" class="ngsd-sekme-icerik" style="display:none">
+  <div id="rc-sekme-arge" class="rd-sekme-icerik" style="display:none">
 
     {% if not agac %}
     <div class="ngsd-placeholder-kart">
@@ -608,8 +731,8 @@
       </div>
 
       <div style="margin-top:14px;display:flex;gap:10px;align-items:center">
-        <button class="ngsk-btn-yeni" id="ag-kaydet-btn" onclick="agKaydet()" disabled>
-          Testi Oluştur
+        <button class="rd-arge-test-btn" id="ag-kaydet-btn" onclick="agKaydet()" disabled>
+          🔬 7.5 LT Test Oluştur
         </button>
         <div id="ag-hata"   class="ngrc-klon-hata"   style="display:none"></div>
         <div id="ag-basari" class="ngrc-klon-basari"  style="display:none"></div>
@@ -622,26 +745,7 @@
       <div id="ag-gecmis-yukleniyor" class="ngrc-hesap-aciklama" style="color:#9ca3af">
         Yükleniyor…
       </div>
-      <div id="ag-gecmis-tablo-wrap" style="display:none">
-        <div class="ngrc-kalem-cerceve">
-          <table class="ngrc-kalem-tablo" id="ag-gecmis-tablo">
-            <thead>
-              <tr>
-                <th>Test No</th>
-                <th>Tip</th>
-                <th>Kaynak / Boyut</th>
-                <th>Renk</th>
-                <th class="ngsk-th-r">KG</th>
-                <th>Durum</th>
-                <th>Tarih</th>
-                <th>Yapan</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="ag-gecmis-tbody"></tbody>
-          </table>
-        </div>
-      </div>
+      <div id="ag-gecmis-kartlar" class="rd-arge-kart-grid" style="display:none"></div>
       <div id="ag-gecmis-bos" class="ngrc-hesap-aciklama" style="display:none;color:#9ca3af;text-align:center;padding:20px">
         Bu formül için henüz AR-GE testi yok.
       </div>
@@ -937,34 +1041,249 @@ const RC_CAN_MANAGE = {{ 'true' if can_manage else 'false' }};
   border-radius:12px; padding:20px;
   box-shadow:0 2px 8px rgba(15,23,42,.04);
 }
+
+/* ── Üst Özet Bandı (FAZ-4D) ── */
+.rd-ozet-band {
+  display:flex; align-items:flex-start; justify-content:space-between; gap:16px;
+  background:#fff; border:1px solid rgba(17,24,39,.07); border-radius:14px;
+  padding:18px 22px; margin-bottom:14px;
+  box-shadow:0 2px 8px rgba(15,23,42,.04);
+  flex-wrap:wrap;
+}
+.rd-ozet-sol { flex:1; min-width:200px; }
+.rd-ozet-formul-kod {
+  font-family:'Courier New',monospace; font-size:11px; font-weight:700;
+  color:#0891b2; letter-spacing:.5px; display:block; margin-bottom:4px;
+}
+.rd-ozet-formul-ad {
+  font-size:18px; font-weight:800; color:#111827; margin:0 0 4px;
+}
+.rd-ozet-formul-aciklama { font-size:13px; color:#6b7280; margin-bottom:6px; }
+.rd-ozet-meta { font-size:12px; color:#9ca3af; display:flex; gap:6px; flex-wrap:wrap; }
+.rd-ozet-sep  { color:#e5e7eb; }
+
+.rd-ozet-kpi-wrap {
+  display:flex; gap:0; flex-wrap:wrap; align-items:stretch;
+}
+.rd-kpi {
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  padding:10px 18px; border-left:1px solid #f3f4f6; text-align:center; min-width:90px;
+}
+.rd-kpi:first-child { border-left:none; }
+.rd-kpi-deger  { font-size:18px; font-weight:800; color:#111827; }
+.rd-kpi-etiket { font-size:10px; color:#9ca3af; text-transform:uppercase; letter-spacing:.3px; margin-top:2px; }
+.rd-kpi-yesil  { color:#059669; }
+.rd-kpi-mavi   { color:#1d4ed8; }
+.rd-kpi-sari   { color:#d97706; }
+.rd-kpi-gold   { color:#f5b82e; }
+
+/* ── Modern Sekme Bar (FAZ-4D) ── */
+.rd-sekme-bar {
+  display:flex; gap:0; flex-wrap:nowrap; overflow-x:auto;
+  background:#fff; border:1px solid rgba(17,24,39,.07);
+  border-radius:12px; margin-bottom:14px; padding:4px;
+  box-shadow:0 1px 4px rgba(15,23,42,.04);
+  scrollbar-width:none;
+}
+.rd-sekme-bar::-webkit-scrollbar { display:none; }
+.rd-sekme-btn {
+  display:flex; align-items:center; gap:6px; white-space:nowrap;
+  padding:8px 16px; border-radius:8px; border:none; background:none;
+  font-size:13px; font-weight:600; color:#6b7280; cursor:pointer;
+  transition:all .15s; position:relative; flex-shrink:0;
+}
+.rd-sekme-btn:hover { color:#111827; background:#f9fafb; }
+.rd-sekme-btn.aktif {
+  background:#fef9e7; color:#111827;
+  box-shadow:inset 0 -2px 0 #f6c343;
+}
+.rd-sekme-btn.aktif::after {
+  content:''; position:absolute; bottom:0; left:8px; right:8px;
+  height:2px; background:#f6c343; border-radius:1px;
+}
+
+/* ── Sekme İçeriği ── */
+.rd-sekme-icerik {
+  background:#fff; border:1px solid rgba(17,24,39,.07); border-radius:12px;
+  padding:20px; box-shadow:0 2px 8px rgba(15,23,42,.04);
+}
+
+/* ── Reçete Ağacı (FAZ-4D) ── */
+.rd-agac-wrap { display:flex; flex-direction:column; gap:0; }
+.rd-renk-bar {
+  display:flex; gap:6px; flex-wrap:wrap; padding-bottom:12px;
+  border-bottom:1px solid #f3f4f6; margin-bottom:12px;
+}
+.rd-renk-btn {
+  display:flex; align-items:center; gap:6px;
+  padding:7px 14px; border-radius:8px; border:1px solid #e5e7eb;
+  background:#f9fafb; color:#374151; font-size:13px; font-weight:600;
+  cursor:pointer; transition:all .12s;
+}
+.rd-renk-btn:hover { background:#f0f9ff; border-color:#7dd3fc; }
+.rd-renk-btn.aktif { background:#e0f2fe; border-color:#0ea5e9; color:#0369a1; }
+.rd-renk-nokta {
+  width:8px; height:8px; border-radius:50%; background:#9ca3af; flex-shrink:0;
+}
+
+.rd-renk-panel { padding-top:4px; }
+.rd-boyut-bar {
+  display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;
+}
+.rd-boyut-btn {
+  display:flex; align-items:center; gap:8px;
+  padding:8px 16px; border-radius:10px; border:1px solid #e5e7eb;
+  background:#f9fafb; cursor:pointer; transition:all .12s;
+}
+.rd-boyut-btn:hover { background:#f0fdf4; border-color:#86efac; }
+.rd-boyut-btn.aktif { background:#dcfce7; border-color:#22c55e; }
+.rd-boyut-etiket {
+  font-size:13px; font-weight:800; color:#111827; letter-spacing:.3px;
+}
+.rd-boyut-kalem { font-size:11px; color:#9ca3af; }
+
+.rd-kalem-panel { animation:rdFadeIn .15s ease; }
+@keyframes rdFadeIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
+
+.rd-uv-kpi-band {
+  display:flex; gap:0; flex-wrap:wrap;
+  background:#f9fafb; border:1px solid #f3f4f6; border-radius:10px;
+  margin-bottom:12px; overflow:hidden;
+}
+.rd-uv-kpi {
+  display:flex; flex-direction:column; padding:10px 16px;
+  border-right:1px solid #f3f4f6; flex:1; min-width:120px;
+}
+.rd-uv-kpi:last-child { border-right:none; }
+.rd-uv-kpi-label { font-size:10px; color:#9ca3af; text-transform:uppercase; letter-spacing:.3px; margin-bottom:3px; }
+.rd-uv-kpi-val { font-size:14px; font-weight:700; color:#111827; }
+
+.rd-kalem-tablo { width:100%; border-collapse:collapse; }
+.rd-kalem-tablo th {
+  padding:8px 10px; text-align:left; font-size:11px; font-weight:700;
+  color:#9ca3af; text-transform:uppercase; letter-spacing:.3px;
+  border-bottom:1px solid #f3f4f6; background:#fafafa;
+}
+.rd-kalem-satir:hover { background:#f9fafb; }
+.rd-kalem-satir td { padding:8px 10px; border-bottom:1px solid #f9fafb; vertical-align:middle; }
+.rd-hammadde-hucre { display:flex; flex-direction:column; gap:1px; }
+.rd-stok-ad { font-size:13px; font-weight:600; color:#111827; }
+.rd-kg-val { font-weight:700; font-size:13px; }
+.rd-yuzde-hucre { position:relative; min-width:80px; }
+.rd-yuzde-bar-wrap {
+  display:inline-block; width:40px; height:6px; background:#e5e7eb;
+  border-radius:3px; margin-right:6px; vertical-align:middle; overflow:hidden;
+}
+.rd-yuzde-bar {
+  display:block; height:100%; background:#f6c343; border-radius:3px; transition:width .3s;
+}
+
+/* ── Durum & Onay sekmesi (FAZ-4D) ── */
+.rd-durum-grid {
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(300px,1fr)); gap:12px;
+}
+.rd-durum-kart {
+  border:1px solid rgba(17,24,39,.07); border-radius:12px; padding:16px;
+  background:#fafafa;
+}
+.rd-durum-kart-hdr {
+  display:flex; justify-content:space-between; align-items:center;
+  margin-bottom:10px;
+}
+.rd-durum-renk-ad { font-weight:700; font-size:14px; color:#111827; }
+.rd-durum-sep { color:#d1d5db; margin:0 4px; }
+.rd-durum-boyut { font-size:13px; font-weight:700; color:#374151; }
+.rd-durum-kart-kpi { font-size:12px; color:#6b7280; margin-bottom:12px; display:flex; gap:12px; }
+
+.rd-durum-adimlar {
+  display:flex; align-items:center; gap:0; margin-bottom:14px; flex-wrap:nowrap; overflow-x:auto;
+}
+.rd-durum-adim {
+  display:flex; flex-direction:column; align-items:center; gap:3px; flex-shrink:0;
+}
+.rd-adim-daire {
+  width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  font-size:11px; font-weight:700; background:#e5e7eb; color:#9ca3af; border:2px solid #e5e7eb;
+  transition:all .2s;
+}
+.rd-adim-etiket { font-size:9px; color:#9ca3af; white-space:nowrap; font-weight:600; }
+.rd-adim-cizgi {
+  flex:1; height:2px; background:#e5e7eb; min-width:16px; margin:0 4px; margin-bottom:14px;
+  transition:background .2s;
+}
+.rd-adim-gecildi .rd-adim-daire { background:#f0fdf4; color:#059669; border-color:#86efac; }
+.rd-adim-gecildi .rd-adim-etiket { color:#059669; }
+.rd-cizgi-aktif { background:#22c55e; }
+.rd-adim-aktif .rd-adim-daire { background:#f6c343; color:#111827; border-color:#f5b82e; }
+.rd-adim-aktif .rd-adim-etiket { color:#111827; font-weight:800; }
+
+.rd-durum-degistir { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+
+/* ── AR-GE Kart Grid ── */
+.rd-arge-kart-grid {
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:10px;
+  margin-top:12px;
+}
+.rd-arge-kart {
+  border:1px solid rgba(17,24,39,.07); border-radius:10px; padding:12px;
+  background:#fafafa; display:flex; flex-direction:column; gap:6px;
+  transition:box-shadow .15s;
+}
+.rd-arge-kart:hover { box-shadow:0 2px 8px rgba(15,23,42,.08); }
+.rd-arge-kart-hdr { display:flex; justify-content:space-between; align-items:center; }
+.rd-arge-test-no {
+  font-family:'Courier New',monospace; font-size:12px; font-weight:700;
+  color:#0891b2; text-decoration:none;
+}
+.rd-arge-test-no:hover { text-decoration:underline; }
+.rd-arge-kart-renk { font-size:13px; font-weight:700; color:#111827; }
+.rd-arge-kart-meta { display:flex; gap:10px; font-size:11px; color:#6b7280; }
+.rd-arge-kart-alt {
+  display:flex; align-items:center; gap:8px; justify-content:space-between; margin-top:4px;
+}
+.rd-arge-detay-btn {
+  font-size:11px; color:#0891b2; text-decoration:none; font-weight:700;
+  padding:2px 8px; border:1px solid #bae6fd; border-radius:5px; background:#f0f9ff;
+  transition:background .1s;
+}
+.rd-arge-detay-btn:hover { background:#e0f2fe; }
+
+/* 7.5 LT Test Oluştur butonu belirgin */
+.rd-arge-test-btn {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:9px 18px; border-radius:9px;
+  background:#fef3c7; border:1px solid #fde68a; color:#92400e;
+  font-size:13px; font-weight:700; cursor:pointer; transition:all .12s;
+}
+.rd-arge-test-btn:hover { background:#fde68a; }
 </style>
 
 <script>
 // ── Sekme geçişi ──────────────────────────────────────────────
-const RC_SEKMELER = ['genel', 'recete', 'hesap', 'klon', 'arge'];
+const RC_SEKMELER = ['recete', 'genel', 'hesap', 'durum', 'klon', 'arge'];
 function rcSekme(hedef) {
   RC_SEKMELER.forEach(function(s) {
     const el = document.getElementById('rc-sekme-' + s);
     if (el) el.style.display = (s === hedef ? 'block' : 'none');
   });
-  document.querySelectorAll('.ngsd-sekme-btn').forEach(function(btn) {
+  document.querySelectorAll('.rd-sekme-btn').forEach(function(btn) {
     btn.classList.toggle('aktif', btn.dataset.sekme === hedef);
   });
   try { history.replaceState(null, '', '#' + hedef); } catch(e){}
 }
 (function(){
-  const hash = (location.hash||'#genel').replace('#','');
-  const h = RC_SEKMELER.indexOf(hash) >= 0 ? hash : 'genel';
+  const hash = (location.hash||'#recete').replace('#','');
+  const h = RC_SEKMELER.indexOf(hash) >= 0 ? hash : 'recete';
   rcSekme(h);
 })();
 
 // ── Renk varyantı seçimi ─────────────────────────────────────
 let _aktifRenk = null;
 function rcRenkSec(renkId) {
-  document.querySelectorAll('.ngrc-renk-btn').forEach(function(b){
+  document.querySelectorAll('.rd-renk-btn').forEach(function(b){
     b.classList.toggle('aktif', parseInt(b.dataset.renk) === renkId);
   });
-  document.querySelectorAll('.ngrc-renk-panel').forEach(function(p){
+  document.querySelectorAll('.rd-renk-panel').forEach(function(p){
     p.style.display = (p.id === 'ngrc-panel-' + renkId) ? 'block' : 'none';
   });
   _aktifRenk = renkId;
@@ -985,13 +1304,12 @@ function rcRenkSec(renkId) {
 
 // ── Boyut seçimi ──────────────────────────────────────────────
 function rcBoyutSec(renkId, boyutId) {
-  document.querySelectorAll('[data-renk="' + renkId + '"].ngrc-boyut-btn').forEach(function(b){
+  document.querySelectorAll('[data-renk="' + renkId + '"].rd-boyut-btn').forEach(function(b){
     b.classList.toggle('aktif', parseInt(b.dataset.boyut) === boyutId);
   });
-  // Tüm boyut panellerini kapat, seçileni aç
   const panel = document.getElementById('ngrc-panel-' + renkId);
   if (!panel) return;
-  panel.querySelectorAll('.ngrc-boyut-panel').forEach(function(p){
+  panel.querySelectorAll('.rd-kalem-panel').forEach(function(p){
     p.style.display = 'none';
   });
   const hedef = document.getElementById('ngrc-boyut-' + renkId + '-' + boyutId);
@@ -1482,18 +1800,17 @@ function agKaydet() {
     results.forEach(function(r) { tumGecmis = tumGecmis.concat(r); });
     tumGecmis.sort(function(a,b){ return b.id - a.id; });
 
-    var tbody = document.getElementById('ag-gecmis-tbody');
-    var wrap  = document.getElementById('ag-gecmis-tablo-wrap');
-    var bos   = document.getElementById('ag-gecmis-bos');
     var load  = document.getElementById('ag-gecmis-yukleniyor');
+    var bos   = document.getElementById('ag-gecmis-bos');
+    var kartWrap = document.getElementById('ag-gecmis-kartlar');
     if (load) load.style.display = 'none';
 
     if (!tumGecmis.length) {
       if (bos) bos.style.display = 'block';
       return;
     }
-    if (wrap)  wrap.style.display = 'block';
-    if (!tbody) return;
+    if (!kartWrap) return;
+    kartWrap.style.display = 'grid';
 
     var DURUM_CSS = {
       'TASLAK':'ngrc-rd-taslak','TEST_EDILDI':'ngrc-rd-deneme',
@@ -1503,21 +1820,25 @@ function agKaydet() {
     };
 
     tumGecmis.forEach(function(t) {
-      var css = DURUM_CSS[t.durum] || 'ngrc-rd-taslak';
-      var tr  = document.createElement('tr');
-      tr.innerHTML =
-        '<td><a href="/nexgen/arge/test/' + t.id + '" class="ngsk-link" style="font-family:monospace;font-size:12px">' + (t.test_no||'—') + '</a></td>' +
-        '<td><span style="font-size:11px;color:#6b7280">' + (t.test_tipi||'—') + '</span></td>' +
-        '<td><span style="font-size:12px;color:#374151">' + (t.makina||'—') + '</span></td>' +
-        '<td>' + (t.yeni_renk_adi || '<span style="color:#9ca3af">—</span>') + '</td>' +
-        '<td class="ngsk-td-r" style="font-size:12px">' + (t.test_batch_kg||0).toFixed(3) + '</td>' +
-        '<td><span class="ngrc-rd-rozet ' + css + '">' + t.durum + '</span></td>' +
-        '<td style="font-size:11px;color:#9ca3af">' + (t.olusturma_tarihi||'').slice(0,16) + '</td>' +
-        '<td style="font-size:12px">' + (t.olusturan_ad||'—') + '</td>' +
-        '<td><a href="/nexgen/arge/test/' + t.id + '" class="ngsk-btn-detay" title="Detay">' +
-          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>' +
-        '</a></td>';
-      tbody.appendChild(tr);
+      var css  = DURUM_CSS[t.durum] || 'ngrc-rd-taslak';
+      var kart = document.createElement('div');
+      kart.className = 'rd-arge-kart';
+      kart.innerHTML =
+        '<div class="rd-arge-kart-hdr">' +
+          '<a href="/nexgen/arge/test/' + t.id + '" class="rd-arge-test-no">' + (t.test_no||'?') + '</a>' +
+          '<span class="ngrc-rd-rozet ' + css + '">' + (t.durum||'—') + '</span>' +
+        '</div>' +
+        '<div class="rd-arge-kart-renk">' + (t.yeni_renk_adi || '<span style="color:#9ca3af">Renk Yok</span>') + '</div>' +
+        '<div class="rd-arge-kart-meta">' +
+          '<span>' + (t.makina||'—') + '</span>' +
+          '<span>' + (t.test_batch_kg||0).toFixed(3) + ' KG</span>' +
+        '</div>' +
+        '<div class="rd-arge-kart-alt">' +
+          '<span style="font-size:11px;color:#9ca3af">' + (t.olusturma_tarihi||'').slice(0,10) + '</span>' +
+          '<span style="font-size:11px;color:#6b7280">' + (t.olusturan_ad||'') + '</span>' +
+          '<a href="/nexgen/arge/test/' + t.id + '" class="rd-arge-detay-btn">Detay →</a>' +
+        '</div>';
+      kartWrap.appendChild(kart);
     });
   }).catch(function(){
     var load = document.getElementById('ag-gecmis-yukleniyor');
