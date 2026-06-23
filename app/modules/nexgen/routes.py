@@ -3391,6 +3391,9 @@ def _lot_kodu_uret(con):
     else:
         son_no = 0
     return f"NG-LOT-{yil}-{son_no + 1:05d}"
+
+
+@nexgen_bp.route('/tablet')
 @yetki_gerekli('nexgen.tablet.view', 'can_view')
 def tablet_ana():
     con = _db()
@@ -3543,6 +3546,178 @@ def api_tablet_geri_donusum_kaydet():
         con.close()
 
     return jsonify({'ok': True, 'eklenen': eklenen})
+
+
+# ─────────────────────────────────────────────────────────────
+# NEXGEN FAZ-5C-1 — BARKOD OKUTMA + KAYIT AÇMA
+# KURAL: Stok hareketi yok. Sadece kod tanıma + yönlendirme.
+# ─────────────────────────────────────────────────────────────
+
+@nexgen_bp.route('/tablet/barkod')
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def tablet_barkod():
+    """Barkod / LOT kodu okutma giriş ekranı."""
+    return render_template('nexgen/tablet_barkod.html', active='nexgen')
+
+
+@nexgen_bp.route('/tablet/barkod/sonuc')
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def tablet_barkod_sonuc():
+    """Barkod sorgu sonucu ekranı (GET ile, ?kod= parametresiyle)."""
+    kod = (request.args.get('kod') or '').strip().upper()
+    if not kod:
+        return render_template('nexgen/tablet_barkod.html', active='nexgen', hata='Kod boş olamaz.')
+
+    con = _db()
+    try:
+        # 1) NG-LOT-YYYY-NNNNN — üretim lot kodu
+        if kod.startswith('NG-LOT-'):
+            batch = con.execute("""
+                SELECT nb.id, nb.batch_kodu, nb.lot_kodu, nb.planlanan_kg, nb.durum,
+                       nb.olusturma_tarihi, nb.notlar,
+                       uv.boyut,
+                       rv.ad AS renk_ad,
+                       f.ad AS formul_ad
+                FROM nexgen_uretim_batch nb
+                JOIN nexgen_uretim_varyant uv ON uv.id = nb.uretim_varyant_id
+                JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+                JOIN nexgen_formul f          ON f.id  = rv.formul_id
+                WHERE nb.lot_kodu = ?
+            """, (kod,)).fetchone()
+            if batch:
+                return render_template(
+                    'nexgen/tablet_barkod_sonuc.html', active='nexgen',
+                    tip='URETIM_LOT', kayit=dict(batch), aranan_kod=kod,
+                )
+
+        # 2) NG-PRD-YYYY-NNNNN — üretim batch kodu
+        if kod.startswith('NG-PRD-'):
+            batch = con.execute("""
+                SELECT nb.id, nb.batch_kodu, nb.lot_kodu, nb.planlanan_kg, nb.durum,
+                       nb.olusturma_tarihi, nb.notlar,
+                       uv.boyut,
+                       rv.ad AS renk_ad,
+                       f.ad AS formul_ad
+                FROM nexgen_uretim_batch nb
+                JOIN nexgen_uretim_varyant uv ON uv.id = nb.uretim_varyant_id
+                JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+                JOIN nexgen_formul f          ON f.id  = rv.formul_id
+                WHERE nb.batch_kodu = ?
+            """, (kod,)).fetchone()
+            if batch:
+                return render_template(
+                    'nexgen/tablet_barkod_sonuc.html', active='nexgen',
+                    tip='URETIM_BATCH', kayit=dict(batch), aranan_kod=kod,
+                )
+
+        # 3) AT-YYYY-NNNNN — AR-GE test kodu
+        if kod.startswith('AT-'):
+            test = con.execute("""
+                SELECT at.id, at.test_no, at.test_kg, at.makina,
+                       at.yeni_renk_adi, at.durum, at.olusturma_tarihi,
+                       uv.boyut,
+                       rv.ad AS renk_ad,
+                       f.ad AS formul_ad
+                FROM nexgen_arge_test at
+                JOIN nexgen_uretim_varyant uv ON uv.id = at.kaynak_uv_id
+                JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+                JOIN nexgen_formul f          ON f.id  = rv.formul_id
+                WHERE at.test_no = ?
+            """, (kod,)).fetchone()
+            if test:
+                return render_template(
+                    'nexgen/tablet_barkod_sonuc.html', active='nexgen',
+                    tip='ARGE', kayit=dict(test), aranan_kod=kod,
+                )
+
+        # Hiçbiri bulunamadı
+        return render_template(
+            'nexgen/tablet_barkod.html', active='nexgen',
+            hata=f'"{kod}" kodu bulunamadı. Kontrol edin.',
+            son_kod=kod,
+        )
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/tablet/barkod-bul', methods=['POST'])
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def api_tablet_barkod_bul():
+    """Barkod / LOT kodu arama API.
+
+    POST JSON: { "kod": "NG-LOT-2026-00001" }
+    Response:
+        { ok: true, tip: "URETIM_LOT"|"URETIM_BATCH"|"ARGE",
+          redirect_url: "...", ozet: {...} }
+    """
+    d = request.get_json(silent=True) or {}
+    kod = (d.get('kod') or '').strip().upper()
+    if not kod:
+        return jsonify({'ok': False, 'hata': 'Kod boş olamaz'}), 400
+
+    con = _db()
+    try:
+        # NG-LOT
+        if kod.startswith('NG-LOT-'):
+            row = con.execute(
+                "SELECT nb.batch_kodu, nb.lot_kodu, nb.planlanan_kg, nb.durum, "
+                "uv.boyut, rv.ad AS renk_ad, f.ad AS formul_ad "
+                "FROM nexgen_uretim_batch nb "
+                "JOIN nexgen_uretim_varyant uv ON uv.id=nb.uretim_varyant_id "
+                "JOIN nexgen_renk_varyant rv ON rv.id=uv.renk_varyant_id "
+                "JOIN nexgen_formul f ON f.id=rv.formul_id "
+                "WHERE nb.lot_kodu=?", (kod,)
+            ).fetchone()
+            if row:
+                r = dict(row)
+                return jsonify({
+                    'ok': True, 'tip': 'URETIM_LOT',
+                    'redirect_url': f'/nexgen/tablet/barkod/sonuc?kod={kod}',
+                    'ozet': r,
+                })
+
+        # NG-PRD
+        if kod.startswith('NG-PRD-'):
+            row = con.execute(
+                "SELECT nb.batch_kodu, nb.lot_kodu, nb.planlanan_kg, nb.durum, "
+                "uv.boyut, rv.ad AS renk_ad, f.ad AS formul_ad "
+                "FROM nexgen_uretim_batch nb "
+                "JOIN nexgen_uretim_varyant uv ON uv.id=nb.uretim_varyant_id "
+                "JOIN nexgen_renk_varyant rv ON rv.id=uv.renk_varyant_id "
+                "JOIN nexgen_formul f ON f.id=rv.formul_id "
+                "WHERE nb.batch_kodu=?", (kod,)
+            ).fetchone()
+            if row:
+                r = dict(row)
+                return jsonify({
+                    'ok': True, 'tip': 'URETIM_BATCH',
+                    'redirect_url': f'/nexgen/tablet/barkod/sonuc?kod={kod}',
+                    'ozet': r,
+                })
+
+        # AT-
+        if kod.startswith('AT-'):
+            row = con.execute(
+                "SELECT at.test_no, at.test_kg, at.makina, "
+                "at.yeni_renk_adi, at.durum, "
+                "rv.ad AS renk_ad, f.ad AS formul_ad "
+                "FROM nexgen_arge_test at "
+                "JOIN nexgen_uretim_varyant uv ON uv.id=at.kaynak_uv_id "
+                "JOIN nexgen_renk_varyant rv ON rv.id=uv.renk_varyant_id "
+                "JOIN nexgen_formul f ON f.id=rv.formul_id "
+                "WHERE at.test_no=?", (kod,)
+            ).fetchone()
+            if row:
+                r = dict(row)
+                return jsonify({
+                    'ok': True, 'tip': 'ARGE',
+                    'redirect_url': f'/nexgen/tablet/barkod/sonuc?kod={kod}',
+                    'ozet': r,
+                })
+
+        return jsonify({'ok': False, 'hata': f'"{kod}" kodu bulunamadı'}), 404
+    finally:
+        con.close()
 
 
 @nexgen_bp.route('/tablet/uretim')

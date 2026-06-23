@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% set page_title = "Barkod Okut — NexGen Tablet" %}
+
+{% block content %}
+<div class="tbark-sayfa">
+
+  {# ── Üst Bar ── #}
+  <div class="tbark-topbar">
+    <div class="tbark-topbar-ic">
+      <a href="/nexgen/tablet" class="tbark-geri">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+             stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+      </a>
+      <div>
+        <div class="tbark-topbar-kucuk">NEXGEN TABLET</div>
+        <div class="tbark-topbar-buyuk">BARKOD OKUT</div>
+      </div>
+    </div>
+  </div>
+
+  {# ── Ana kart ── #}
+  <div class="tbark-ic">
+
+    {# Büyük barkod simgesi #}
+    <div class="tbark-ikon">
+      <svg viewBox="0 0 64 48" fill="none" xmlns="http://www.w3.org/2000/svg" width="120" height="90">
+        {# Basit barkod çizgisi grubu #}
+        <rect x="4"  y="4" width="3"  height="40" fill="#1e293b"/>
+        <rect x="9"  y="4" width="1"  height="40" fill="#1e293b"/>
+        <rect x="12" y="4" width="4"  height="40" fill="#1e293b"/>
+        <rect x="18" y="4" width="2"  height="40" fill="#1e293b"/>
+        <rect x="22" y="4" width="1"  height="40" fill="#1e293b"/>
+        <rect x="25" y="4" width="3"  height="40" fill="#1e293b"/>
+        <rect x="30" y="4" width="2"  height="40" fill="#1e293b"/>
+        <rect x="34" y="4" width="1"  height="40" fill="#1e293b"/>
+        <rect x="37" y="4" width="4"  height="40" fill="#1e293b"/>
+        <rect x="43" y="4" width="2"  height="40" fill="#1e293b"/>
+        <rect x="47" y="4" width="3"  height="40" fill="#1e293b"/>
+        <rect x="52" y="4" width="1"  height="40" fill="#1e293b"/>
+        <rect x="55" y="4" width="4"  height="40" fill="#1e293b"/>
+      </svg>
+    </div>
+
+    {# Hata mesajı #}
+    {% if hata %}
+    <div class="tbark-hata" id="tbark-hata">
+      <div class="tbark-hata-ikon">✕</div>
+      <div class="tbark-hata-metin">{{ hata }}</div>
+    </div>
+    {% endif %}
+
+    {# Form #}
+    <form method="GET" action="/nexgen/tablet/barkod/sonuc" class="tbark-form" id="tbark-form">
+      <label class="tbark-label">Barkod / Kod Giriniz</label>
+      <div class="tbark-input-grup">
+        <input
+          type="text"
+          name="kod"
+          id="tbark-input"
+          class="tbark-input"
+          placeholder="NG-LOT-2026-00001"
+          value="{{ son_kod or '' }}"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="characters"
+          spellcheck="false"
+          autofocus
+        >
+        <button type="submit" class="tbark-arat-btn">
+          AÇ
+        </button>
+      </div>
+    </form>
+
+    {# Format ipucu #}
+    <div class="tbark-ipucu-baslik">Desteklenen Kod Formatları</div>
+    <div class="tbark-ipucu-grid">
+      <div class="tbark-ipucu-kart tbark-uretim">
+        <div class="tbark-ipucu-tip">ÜRETİM LOT</div>
+        <div class="tbark-ipucu-format">NG-LOT-2026-00001</div>
+      </div>
+      <div class="tbark-ipucu-kart tbark-batch">
+        <div class="tbark-ipucu-tip">ÜRETİM BATCH</div>
+        <div class="tbark-ipucu-format">NG-PRD-2026-00001</div>
+      </div>
+      <div class="tbark-ipucu-kart tbark-arge">
+        <div class="tbark-ipucu-tip">AR-GE TEST</div>
+        <div class="tbark-ipucu-format">AT-2026-00001</div>
+      </div>
+    </div>
+
+  </div>{# /tbark-ic #}
+
+</div>
+
+<style>
+* { box-sizing: border-box; }
+
+.tbark-sayfa {
+  min-height: 100vh; background: #f0f4f8;
+}
+
+/* ── Topbar ── */
+.tbark-topbar {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border-bottom: 3px solid #f6c343;
+}
+.tbark-topbar-ic {
+  max-width: 860px; margin: 0 auto;
+  display: flex; align-items: center; gap: 14px; padding: 14px 20px;
+}
+.tbark-geri {
+  width: 44px; height: 44px; border-radius: 12px;
+  background: rgba(246,195,67,.15); border: none;
+  display: flex; align-items: center; justify-content: center;
+  color: #f6c343; text-decoration: none; cursor: pointer; flex-shrink: 0;
+}
+.tbark-geri:hover { background: rgba(246,195,67,.28); }
+.tbark-topbar-kucuk { font-size: 10px; font-weight: 800; color: rgba(255,255,255,.35); letter-spacing: 3px; text-transform: uppercase; }
+.tbark-topbar-buyuk { font-size: 18px; font-weight: 900; color: #fff; }
+
+/* ── İç kapsayıcı ── */
+.tbark-ic {
+  max-width: 540px; margin: 0 auto; padding: 28px 20px 40px;
+  display: flex; flex-direction: column; align-items: center; gap: 22px;
+}
+
+/* ── İkon ── */
+.tbark-ikon {
+  opacity: .18;
+  margin-bottom: -8px;
+}
+
+/* ── Hata ── */
+.tbark-hata {
+  width: 100%; background: #fef2f2; border: 2px solid #fca5a5;
+  border-radius: 14px; padding: 16px 20px;
+  display: flex; align-items: center; gap: 12px;
+}
+.tbark-hata-ikon {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: #ef4444; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 900; flex-shrink: 0;
+}
+.tbark-hata-metin {
+  font-size: 16px; font-weight: 700; color: #dc2626; line-height: 1.4;
+}
+
+/* ── Form ── */
+.tbark-form { width: 100%; }
+.tbark-label {
+  display: block; font-size: 12px; font-weight: 800;
+  color: #64748b; letter-spacing: 1.5px; text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.tbark-input-grup {
+  display: flex; gap: 10px;
+}
+.tbark-input {
+  flex: 1;
+  font-size: 22px; font-weight: 800; font-family: 'Courier New', monospace;
+  letter-spacing: 2px; color: #1e293b;
+  border: 3px solid #cbd5e1; border-radius: 14px;
+  padding: 16px 20px; background: #fff;
+  outline: none; transition: border-color .15s;
+  text-transform: uppercase;
+}
+.tbark-input:focus { border-color: #f6c343; box-shadow: 0 0 0 3px rgba(246,195,67,.2); }
+.tbark-arat-btn {
+  padding: 16px 28px; background: #f6c343; color: #1a1a1a;
+  border: none; border-radius: 14px; font-size: 20px; font-weight: 900;
+  cursor: pointer; white-space: nowrap;
+  transition: background .12s;
+}
+.tbark-arat-btn:hover { background: #e9b020; }
+.tbark-arat-btn:active { transform: scale(.97); }
+
+/* ── İpucu ── */
+.tbark-ipucu-baslik {
+  font-size: 11px; font-weight: 800; color: #94a3b8;
+  letter-spacing: 2px; text-transform: uppercase;
+  width: 100%; text-align: left;
+}
+.tbark-ipucu-grid {
+  width: 100%; display: flex; gap: 8px;
+}
+.tbark-ipucu-kart {
+  flex: 1; border-radius: 12px; padding: 12px 10px; text-align: center;
+  border: 1.5px solid;
+}
+.tbark-uretim { background: #fef9c3; border-color: #fde047; }
+.tbark-batch  { background: #dbeafe; border-color: #93c5fd; }
+.tbark-arge   { background: #ede9fe; border-color: #c4b5fd; }
+.tbark-ipucu-tip {
+  font-size: 9px; font-weight: 800; letter-spacing: 1px;
+  text-transform: uppercase; color: #64748b; margin-bottom: 4px;
+}
+.tbark-ipucu-format {
+  font-size: 11px; font-weight: 800; font-family: 'Courier New', monospace;
+  color: #1e293b; word-break: break-all;
+}
+
+@media (max-width: 480px) {
+  .tbark-input { font-size: 17px; padding: 14px 14px; }
+  .tbark-arat-btn { font-size: 17px; padding: 14px 18px; }
+  .tbark-ipucu-grid { flex-direction: column; }
+}
+</style>
+
+<script>
+/* Barkod okuyucu Enter gönderir — formu otomatik submit et */
+document.getElementById('tbark-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    document.getElementById('tbark-form').submit();
+  }
+});
+/* Sayfa yüklenince inputa odaklan */
+window.addEventListener('load', function() {
+  document.getElementById('tbark-input').focus();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,316 @@
+{% extends "base.html" %}
+{% if tip == 'ARGE' %}
+  {% set page_title = "AR-GE — " ~ kayit.test_no ~ " — NexGen" %}
+{% else %}
+  {% set page_title = "Kayıt Bulundu — " ~ aranan_kod ~ " — NexGen" %}
+{% endif %}
+
+{% block content %}
+<div class="tbsn-sayfa">
+
+  {# ── Üst Bar ── #}
+  {% if tip == 'ARGE' %}
+  <div class="tbsn-topbar tbsn-topbar-arge">
+  {% else %}
+  <div class="tbsn-topbar tbsn-topbar-uretim">
+  {% endif %}
+    <div class="tbsn-topbar-ic">
+      <a href="/nexgen/tablet/barkod" class="tbsn-geri">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+             stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+      </a>
+      <div>
+        <div class="tbsn-topbar-kucuk">BARKOD SONUCU</div>
+        {% if tip == 'ARGE' %}
+        <div class="tbsn-topbar-buyuk">AR-GE TEST</div>
+        {% else %}
+        <div class="tbsn-topbar-buyuk">ÜRETİM KAYDI</div>
+        {% endif %}
+      </div>
+      {% if tip != 'ARGE' %}
+      <div class="tbsn-durum-rozet tbsn-d-{{ kayit.durum|lower }}">
+        {{ kayit.durum }}
+      </div>
+      {% else %}
+      <div class="tbsn-durum-rozet tbsn-d-{{ kayit.durum|lower }}">
+        {{ kayit.durum }}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="tbsn-ic">
+
+    {# ── Bulunan kod bandı ── #}
+    <div class="tbsn-bulundu-bant">
+      <div class="tbsn-bulundu-ikon">✓</div>
+      <div>
+        <div class="tbsn-bulundu-etiket">BULUNAN KOD</div>
+        <div class="tbsn-bulundu-kod">{{ aranan_kod }}</div>
+      </div>
+    </div>
+
+    {# ══ ÜRETİM (LOT veya BATCH) ══ #}
+    {% if tip in ('URETIM_LOT', 'URETIM_BATCH') %}
+
+    {# LOT ve Batch kodları #}
+    <div class="tbsn-kod-karsilastir">
+      <div class="tbsn-kod-blok tbsn-lot-blok">
+        <div class="tbsn-kb-etiket">LOT KODU</div>
+        <div class="tbsn-kb-deger tbsn-lot-renk">
+          {{ kayit.lot_kodu or '—' }}
+        </div>
+      </div>
+      <div class="tbsn-kod-blok">
+        <div class="tbsn-kb-etiket">BATCH KODU</div>
+        <div class="tbsn-kb-deger">{{ kayit.batch_kodu }}</div>
+      </div>
+    </div>
+
+    {# Detay kartı #}
+    <div class="tbsn-detay-kart">
+      <div class="tbsn-satir">
+        <span class="tbsn-etiket">Formül</span>
+        <span class="tbsn-deger">{{ kayit.formul_ad }}</span>
+      </div>
+      <div class="tbsn-satir">
+        <span class="tbsn-etiket">Renk</span>
+        <span class="tbsn-deger">{{ kayit.renk_ad }}</span>
+      </div>
+      <div class="tbsn-satir">
+        <span class="tbsn-etiket">Boyut</span>
+        <span class="tbsn-deger">
+          {% if kayit.boyut == 'LARGE' %}BÜYÜK BOY
+          {% elif kayit.boyut == 'SMALL' %}KÜÇÜK BOY
+          {% else %}{{ kayit.boyut }}{% endif %}
+        </span>
+      </div>
+      <div class="tbsn-satir">
+        <span class="tbsn-etiket">Planlanan KG</span>
+        <span class="tbsn-deger tbsn-kg">{{ kayit.planlanan_kg | int }} KG</span>
+      </div>
+      <div class="tbsn-satir">
+        <span class="tbsn-etiket">Durum</span>
+        <span class="tbsn-deger">
+          <span class="tbsn-d-rozet tbsn-d-{{ kayit.durum|lower }}">{{ kayit.durum }}</span>
+        </span>
+      </div>
+      {% if kayit.notlar %}
+      <div class="tbsn-satir">
+        <span class="tbsn-etiket">Hat / Vardiya</span>
+        <span class="tbsn-deger">{{ kayit.notlar }}</span>
+      </div>
+      {% endif %}
+      <div class="tbsn-satir">
+        <span class="tbsn-etiket">Tarih</span>
+        <span class="tbsn-deger">{{ kayit.olusturma_tarihi }}</span>
+      </div>
+    </div>
+
+    {# Aksiyon butonları #}
+    <div class="tbsn-butonlar">
+      <a href="/nexgen/tablet/uretim" class="tbsn-btn tbsn-btn-ana">
+        ▶ Üretime Devam Et
+      </a>
+      <a href="/nexgen/tablet/etiket/uretim/{{ kayit.batch_kodu }}" class="tbsn-btn tbsn-btn-etiket">
+        🖨 Etiket Yazdır
+      </a>
+      <a href="/nexgen/tablet" class="tbsn-btn tbsn-btn-sec">
+        ⌂ Ana Ekran
+      </a>
+      <a href="/nexgen/tablet/barkod" class="tbsn-btn tbsn-btn-sec">
+        ← Yeni Barkod
+      </a>
+    </div>
+
+    {# ══ AR-GE ══ #}
+    {% elif tip == 'ARGE' %}
+
+    {# AR-GE kodu #}
+    <div class="tbsn-arge-kod-blok">
+      <div class="tbsn-kb-etiket">AR-GE KODU</div>
+      <div class="tbsn-kb-deger tbsn-arge-renk">{{ kayit.test_no }}</div>
+    </div>
+
+    {# Detay kartı #}
+    <div class="tbsn-detay-kart">
+      <div class="tbsn-satir">
+        <span class="tbsn-etiket">Ana Formül</span>
+        <span class="tbsn-deger">{{ kayit.formul_ad }}</span>
+      </div>
+      <div class="tbsn-satir">
+        <span class="tbsn-etiket">Kaynak Renk</span>
+        <span class="tbsn-deger">{{ kayit.renk_ad }}</span>
+      </div>
+      {% if kayit.yeni_renk_adi %}
+      <div class="tbsn-satir">
+        <span class="tbsn-etiket">Yeni Renk</span>
+        <span class="tbsn-deger tbsn-arge-renk">{{ kayit.yeni_renk_adi }}</span>
+      </div>
+      {% endif %}
+      <div class="tbsn-satir">
+        <span class="tbsn-etiket">Test KG</span>
+        <span class="tbsn-deger tbsn-kg">{{ kayit.test_kg }} KG</span>
+      </div>
+      <div class="tbsn-satir">
+        <span class="tbsn-etiket">Makina</span>
+        <span class="tbsn-deger">{{ kayit.makina or '—' }}</span>
+      </div>
+      <div class="tbsn-satir">
+        <span class="tbsn-etiket">Durum</span>
+        <span class="tbsn-deger">
+          <span class="tbsn-d-rozet tbsn-d-{{ kayit.durum|lower }}">{{ kayit.durum }}</span>
+        </span>
+      </div>
+      <div class="tbsn-satir">
+        <span class="tbsn-etiket">Tarih</span>
+        <span class="tbsn-deger">{{ kayit.olusturma_tarihi }}</span>
+      </div>
+    </div>
+
+    {# Aksiyon butonları #}
+    <div class="tbsn-butonlar">
+      <a href="/nexgen/tablet/arge" class="tbsn-btn tbsn-btn-arge">
+        ▶ AR-GE Detay
+      </a>
+      <a href="/nexgen/tablet/etiket/arge/{{ kayit.test_no }}" class="tbsn-btn tbsn-btn-etiket">
+        🖨 Etiket Yazdır
+      </a>
+      <a href="/nexgen/tablet" class="tbsn-btn tbsn-btn-sec">
+        ⌂ Ana Ekran
+      </a>
+      <a href="/nexgen/tablet/barkod" class="tbsn-btn tbsn-btn-sec">
+        ← Yeni Barkod
+      </a>
+    </div>
+
+    {% endif %}
+
+  </div>{# /tbsn-ic #}
+
+</div>
+
+<style>
+* { box-sizing: border-box; }
+.tbsn-sayfa { min-height: 100vh; background: #f0f4f8; }
+
+/* ── Topbar ── */
+.tbsn-topbar { border-bottom: 3px solid; }
+.tbsn-topbar-uretim {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border-color: #f6c343;
+}
+.tbsn-topbar-arge {
+  background: linear-gradient(135deg, #3b0764 0%, #5b21b6 100%);
+  border-color: #c4b5fd;
+}
+.tbsn-topbar-ic {
+  max-width: 640px; margin: 0 auto;
+  display: flex; align-items: center; gap: 14px; padding: 14px 20px;
+}
+.tbsn-geri {
+  width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
+  background: rgba(255,255,255,.12); border: none;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; text-decoration: none;
+}
+.tbsn-geri:hover { background: rgba(255,255,255,.22); }
+.tbsn-topbar-kucuk { font-size: 10px; font-weight: 800; color: rgba(255,255,255,.4); letter-spacing: 3px; text-transform: uppercase; }
+.tbsn-topbar-buyuk { font-size: 18px; font-weight: 900; color: #fff; }
+.tbsn-durum-rozet {
+  margin-left: auto; font-size: 11px; font-weight: 800;
+  padding: 5px 12px; border-radius: 20px;
+  white-space: nowrap;
+}
+
+/* ── İç kapsayıcı ── */
+.tbsn-ic {
+  max-width: 640px; margin: 0 auto; padding: 24px 20px 48px;
+  display: flex; flex-direction: column; gap: 16px;
+}
+
+/* ── Bulundu bandı ── */
+.tbsn-bulundu-bant {
+  background: #dcfce7; border: 2px solid #86efac; border-radius: 14px;
+  padding: 14px 18px; display: flex; align-items: center; gap: 14px;
+}
+.tbsn-bulundu-ikon {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: #22c55e; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; font-weight: 900; flex-shrink: 0;
+}
+.tbsn-bulundu-etiket { font-size: 10px; font-weight: 800; color: #15803d; letter-spacing: 1.5px; text-transform: uppercase; }
+.tbsn-bulundu-kod { font-size: 20px; font-weight: 900; font-family: 'Courier New', monospace; color: #14532d; letter-spacing: 2px; }
+
+/* ── Kod karşılaştırma ── */
+.tbsn-kod-karsilastir {
+  display: flex; gap: 10px;
+}
+.tbsn-kod-blok {
+  flex: 1; background: #fff; border-radius: 12px;
+  padding: 14px 16px; border: 1px solid #e5e7eb;
+  text-align: center;
+}
+.tbsn-lot-blok { border-color: #fde047; background: #fefce8; }
+.tbsn-arge-kod-blok {
+  background: #ede9fe; border: 2px solid #c4b5fd; border-radius: 12px;
+  padding: 18px; text-align: center;
+}
+.tbsn-kb-etiket { font-size: 10px; font-weight: 800; color: #9ca3af; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 6px; }
+.tbsn-kb-deger { font-size: 18px; font-weight: 900; font-family: 'Courier New', monospace; color: #1e293b; word-break: break-all; }
+.tbsn-lot-renk  { color: #854d0e; }
+.tbsn-arge-renk { color: #5b21b6; font-size: 22px; }
+
+/* ── Detay kartı ── */
+.tbsn-detay-kart {
+  background: #fff; border-radius: 16px; border: 1px solid #e5e7eb;
+  padding: 4px 18px;
+}
+.tbsn-satir {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 13px 0; border-bottom: 1px solid #f8fafc; font-size: 15px;
+}
+.tbsn-satir:last-child { border-bottom: none; }
+.tbsn-etiket { font-weight: 700; color: #64748b; }
+.tbsn-deger  { font-weight: 800; color: #1e293b; text-align: right; max-width: 60%; word-break: break-word; }
+.tbsn-kg     { color: #f59e0b; font-size: 17px; }
+
+/* ── Durum rozetleri ── */
+.tbsn-d-rozet { font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 6px; }
+.tbsn-d-taslak    { background: #f1f5f9; color: #475569; }
+.tbsn-d-hazir     { background: #dcfce7; color: #15803d; }
+.tbsn-d-basladi   { background: #dbeafe; color: #1d4ed8; }
+.tbsn-d-tamamlandi { background: #e0f2fe; color: #0369a1; }
+.tbsn-d-aktif     { background: #d1fae5; color: #059669; }
+/* Topbar rozetleri de aynı renk skalası */
+.tbsn-topbar-ic .tbsn-durum-rozet.tbsn-d-taslak { background: rgba(255,255,255,.15); color: rgba(255,255,255,.8); }
+.tbsn-topbar-ic .tbsn-durum-rozet.tbsn-d-hazir  { background: #22c55e; color: #fff; }
+.tbsn-topbar-ic .tbsn-durum-rozet.tbsn-d-basladi { background: #3b82f6; color: #fff; }
+
+/* ── Butonlar ── */
+.tbsn-butonlar {
+  display: flex; flex-direction: column; gap: 10px;
+}
+.tbsn-btn {
+  display: block; text-align: center; padding: 17px;
+  border-radius: 14px; font-size: 17px; font-weight: 800;
+  text-decoration: none; transition: all .12s;
+}
+.tbsn-btn-ana    { background: #f6c343; color: #1a1a1a; }
+.tbsn-btn-ana:hover { background: #e9b020; }
+.tbsn-btn-arge   { background: #7c3aed; color: #fff; }
+.tbsn-btn-arge:hover { background: #6d28d9; }
+.tbsn-btn-etiket { background: #f0fdf4; color: #15803d; border: 2px solid #86efac; }
+.tbsn-btn-etiket:hover { background: #dcfce7; }
+.tbsn-btn-sec    { background: #f1f5f9; color: #374151; border: 1px solid #e5e7eb; }
+.tbsn-btn-sec:hover { background: #e2e8f0; }
+
+@media (max-width: 480px) {
+  .tbsn-kod-karsilastir { flex-direction: column; }
+  .tbsn-bulundu-kod { font-size: 16px; }
+}
+</style>
+{% endblock %}
