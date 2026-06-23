@@ -1,0 +1,353 @@
+{% extends "base.html" %}
+{% set page_title = "Geri Dönüşüm Günlük Girişi — NexGen Tablet" %}
+
+{% block content %}
+<div class="tgd-sayfa">
+
+  {# ── Üst Bar ────────────────────────────────────────────────── #}
+  <div class="tgd-ust">
+    <a href="/nexgen/tablet" class="tgd-geri">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+           stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+        <polyline points="15 18 9 12 15 6"/>
+      </svg>
+    </a>
+    <div class="tgd-baslik-blok">
+      <div class="tgd-ust-etiket">NEXGEN TABLET</div>
+      <div class="tgd-ust-baslik">GERİ DÖNÜŞÜM GÜNLÜK GİRİŞİ</div>
+    </div>
+  </div>
+
+  {# ── Bilgi Bandı ────────────────────────────────────────────── #}
+  <div class="tgd-bilgi-band">
+    <div class="tgd-bilgi-ikon">&#9851;</div>
+    <div class="tgd-bilgi-metin">
+      Bu ekran <strong>üretim kaydı değildir.</strong>
+      Günlük recycle kazanımlarını girin. Stok olarak işlenir.
+    </div>
+  </div>
+
+  {# ── Form Kartı ─────────────────────────────────────────────── #}
+  <div class="tgd-form-kart">
+
+    {# Tarih + Vardiya satırı #}
+    <div class="tgd-ust-satirlar">
+      <div class="tgd-alan">
+        <label class="tgd-label">Tarih</label>
+        <input type="date" id="tgd-tarih" class="tgd-input">
+      </div>
+      <div class="tgd-alan">
+        <label class="tgd-label">Personel (isteğe bağlı)</label>
+        <input type="text" id="tgd-personel" class="tgd-input" placeholder="Ad Soyad">
+      </div>
+      <div class="tgd-alan">
+        <label class="tgd-label">Vardiya</label>
+        <select id="tgd-vardiya" class="tgd-input">
+          <option value="">— Seçiniz —</option>
+          <option value="1. Vardiya">1. Vardiya</option>
+          <option value="2. Vardiya">2. Vardiya</option>
+          <option value="3. Vardiya">3. Vardiya</option>
+          <option value="Gündüz">Gündüz</option>
+        </select>
+      </div>
+    </div>
+
+    {# Recycle Kalemleri ─────────────────────────── #}
+    <div class="tgd-kalemler-baslik">
+      <span>Recycle Kalemleri</span>
+      <small class="tgd-ipucu">Sadece kullandığınız kartları doldurun</small>
+    </div>
+
+    <div id="tgd-kalemler-wrap">
+      {% for k in recycle_kartlar %}
+      <div class="tgd-kalem-satir" data-kart-id="{{ k.id }}">
+        <div class="tgd-kalem-sol">
+          <div class="tgd-kalem-ad">{{ k.ad }}</div>
+          <div class="tgd-kalem-kod">{{ k.kod }}
+            {% if k.toplam_kg > 0 %}
+            <span class="tgd-kalem-mevcut">Mevcut: {{ '%.1f'|format(k.toplam_kg) }} KG</span>
+            {% else %}
+            <span class="tgd-kalem-sifir">Stok: 0 KG</span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="tgd-kalem-sag">
+          <input type="number" class="tgd-kg-input" id="kg-{{ k.id }}"
+                 min="0" step="0.001" placeholder="0"
+                 data-kart-id="{{ k.id }}">
+          <span class="tgd-kg-birim">KG</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    {# Toplam Özet #}
+    <div class="tgd-toplam-satir">
+      <span class="tgd-toplam-etiket">Toplam Kaydedilecek:</span>
+      <span class="tgd-toplam-deger" id="tgd-toplam">0 KG</span>
+    </div>
+
+    {# Kaydet Butonu #}
+    <div class="tgd-buton-satir">
+      <button class="tgd-btn-iptal" onclick="history.back()">İptal</button>
+      <button class="tgd-btn-kaydet" id="tgd-kaydet-btn" onclick="tgdKaydet()">
+        &#10003; KAYDET
+      </button>
+    </div>
+
+    {# Sonuç mesajı #}
+    <div id="tgd-sonuc" class="tgd-sonuc" style="display:none"></div>
+
+  </div>
+
+</div>
+
+<style>
+* { box-sizing: border-box; }
+
+.tgd-sayfa {
+  min-height: calc(100vh - 56px);
+  background: #f1f5f9;
+  padding: 0 0 40px;
+}
+
+/* Üst bar */
+.tgd-ust {
+  display: flex; align-items: center; gap: 14px;
+  padding: 16px 20px 12px;
+  background: #fff; border-bottom: 2px solid #f1f5f9;
+}
+.tgd-geri {
+  width: 44px; height: 44px; border-radius: 10px;
+  background: #f1f5f9; border: none;
+  display: flex; align-items: center; justify-content: center;
+  color: #374151; text-decoration: none; flex-shrink: 0;
+  transition: background .1s;
+}
+.tgd-geri:hover { background: #e2e8f0; }
+.tgd-ust-etiket {
+  font-size: 10px; color: #9ca3af;
+  letter-spacing: 2px; font-weight: 700; text-transform: uppercase;
+}
+.tgd-ust-baslik {
+  font-size: 18px; font-weight: 900; color: #111827;
+}
+
+/* Bilgi bandı */
+.tgd-bilgi-band {
+  background: #fff7ed; border-left: 4px solid #f97316;
+  margin: 16px 20px 0; border-radius: 0 10px 10px 0;
+  padding: 12px 16px;
+  display: flex; align-items: flex-start; gap: 10px;
+  font-size: 13px; color: #374151;
+}
+.tgd-bilgi-ikon {
+  font-size: 20px; flex-shrink: 0; margin-top: 1px;
+}
+
+/* Form kartı */
+.tgd-form-kart {
+  max-width: 720px; margin: 16px 20px 0;
+  background: #fff; border-radius: 16px;
+  border: 1px solid #e5e7eb;
+  padding: 20px 20px 16px;
+}
+
+/* Üst satırlar */
+.tgd-ust-satirlar {
+  display: flex; gap: 14px; margin-bottom: 20px; flex-wrap: wrap;
+}
+.tgd-alan { flex: 1; min-width: 160px; display: flex; flex-direction: column; gap: 5px; }
+.tgd-label {
+  font-size: 11px; font-weight: 700; color: #374151;
+  text-transform: uppercase; letter-spacing: .5px;
+}
+.tgd-input {
+  padding: 11px 12px; border: 2px solid #e5e7eb;
+  border-radius: 10px; font-size: 14px; color: #1e293b;
+  background: #fff; width: 100%;
+}
+.tgd-input:focus {
+  outline: none; border-color: #f97316;
+  box-shadow: 0 0 0 3px rgba(249,115,22,.12);
+}
+
+/* Kalemler */
+.tgd-kalemler-baslik {
+  font-size: 12px; font-weight: 700; color: #6b7280;
+  letter-spacing: 1px; text-transform: uppercase;
+  margin-bottom: 10px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.tgd-ipucu { font-size: 11px; color: #9ca3af; text-transform: none; letter-spacing: 0; font-weight: 400; }
+
+.tgd-kalem-satir {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 12px; border-radius: 10px;
+  border: 1px solid #e5e7eb; margin-bottom: 6px;
+  transition: border-color .12s, background .12s;
+}
+.tgd-kalem-satir:has(input:not([value=""]):not([value="0"])) {
+  border-color: #f97316; background: #fff7ed;
+}
+.tgd-kalem-sol { flex: 1; }
+.tgd-kalem-ad {
+  font-size: 14px; font-weight: 600; color: #1e293b;
+}
+.tgd-kalem-kod {
+  font-size: 11px; color: #9ca3af; margin-top: 2px;
+  display: flex; align-items: center; gap: 8px;
+}
+.tgd-kalem-mevcut { color: #16a34a; font-weight: 600; }
+.tgd-kalem-sifir   { color: #9ca3af; }
+
+.tgd-kalem-sag {
+  display: flex; align-items: center; gap: 6px;
+}
+.tgd-kg-input {
+  width: 90px; padding: 9px 10px; text-align: right;
+  border: 2px solid #e5e7eb; border-radius: 8px;
+  font-size: 15px; font-weight: 700; color: #1e293b;
+}
+.tgd-kg-input:focus {
+  outline: none; border-color: #f97316;
+}
+.tgd-kg-birim {
+  font-size: 12px; font-weight: 700; color: #6b7280; min-width: 20px;
+}
+
+/* Toplam */
+.tgd-toplam-satir {
+  display: flex; justify-content: flex-end; align-items: center;
+  gap: 12px; padding: 14px 12px 0;
+  border-top: 1px solid #f1f5f9; margin-top: 10px;
+  font-size: 14px;
+}
+.tgd-toplam-etiket { color: #6b7280; font-weight: 600; }
+.tgd-toplam-deger  { font-size: 20px; font-weight: 800; color: #f97316; }
+
+/* Butonlar */
+.tgd-buton-satir {
+  display: flex; gap: 10px; justify-content: flex-end;
+  margin-top: 16px;
+}
+.tgd-btn-iptal {
+  padding: 12px 22px; background: #f1f5f9; color: #6b7280;
+  border: 1px solid #e5e7eb; border-radius: 10px;
+  font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.tgd-btn-iptal:hover { background: #e2e8f0; }
+.tgd-btn-kaydet {
+  padding: 12px 28px; background: #f97316; color: #fff;
+  border: none; border-radius: 10px;
+  font-size: 15px; font-weight: 800; cursor: pointer;
+  transition: background .12s;
+}
+.tgd-btn-kaydet:hover { background: #ea580c; }
+.tgd-btn-kaydet:disabled { background: #cbd5e1; cursor: not-allowed; }
+
+/* Sonuç */
+.tgd-sonuc {
+  margin-top: 14px; padding: 14px 16px;
+  border-radius: 10px; font-size: 14px; font-weight: 600;
+}
+.tgd-sonuc.basarili { background: #dcfce7; color: #15803d; }
+.tgd-sonuc.hata     { background: #fee2e2; color: #dc2626; }
+
+/* Responsive */
+@media (max-width: 560px) {
+  .tgd-form-kart { margin: 12px 12px 0; padding: 14px; }
+  .tgd-bilgi-band { margin: 12px 12px 0; }
+  .tgd-ust-satirlar { flex-direction: column; }
+  .tgd-kg-input { width: 80px; }
+}
+</style>
+
+<script>
+// Bugünün tarihini set et
+(function(){
+  var d = new Date();
+  var p = function(n){ return n < 10 ? '0'+n : n; };
+  document.getElementById('tgd-tarih').value =
+    d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate());
+})();
+
+// Toplam hesapla
+document.querySelectorAll('.tgd-kg-input').forEach(function(inp) {
+  inp.addEventListener('input', function() {
+    var toplam = 0;
+    document.querySelectorAll('.tgd-kg-input').forEach(function(i) {
+      toplam += parseFloat(i.value || 0);
+    });
+    document.getElementById('tgd-toplam').textContent =
+      toplam > 0 ? toplam.toFixed(3) + ' KG' : '0 KG';
+  });
+});
+
+function tgdKaydet() {
+  var tarih   = document.getElementById('tgd-tarih').value;
+  var personel = document.getElementById('tgd-personel').value.trim();
+  var vardiya = document.getElementById('tgd-vardiya').value;
+
+  if (!tarih) { alert('Tarih seçiniz.'); return; }
+
+  var kalemler = [];
+  document.querySelectorAll('.tgd-kg-input').forEach(function(inp) {
+    var kg = parseFloat(inp.value || 0);
+    if (kg > 0) {
+      kalemler.push({
+        stok_kart_id: parseInt(inp.getAttribute('data-kart-id')),
+        miktar_kg: parseFloat(kg.toFixed(3))
+      });
+    }
+  });
+
+  if (kalemler.length === 0) {
+    alert('En az bir kalem giriniz.');
+    return;
+  }
+
+  var btn = document.getElementById('tgd-kaydet-btn');
+  btn.disabled = true;
+  btn.textContent = 'Kaydediliyor…';
+
+  fetch('/nexgen/api/tablet/geri-donusum-kaydet', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      tarih: tarih,
+      personel: personel,
+      vardiya: vardiya,
+      kalemler: kalemler
+    })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d) {
+    var sonuc = document.getElementById('tgd-sonuc');
+    sonuc.style.display = 'block';
+    if (d.ok) {
+      sonuc.className = 'tgd-sonuc basarili';
+      sonuc.textContent = '✓ ' + d.eklenen + ' kalem başarıyla kaydedildi.';
+      btn.textContent = '✓ KAYDEDILDI';
+      // Formu sıfırla
+      document.querySelectorAll('.tgd-kg-input').forEach(function(i){ i.value = ''; });
+      document.getElementById('tgd-toplam').textContent = '0 KG';
+      setTimeout(function(){ btn.disabled = false; btn.textContent = '✓ KAYDET'; }, 3000);
+    } else {
+      sonuc.className = 'tgd-sonuc hata';
+      sonuc.textContent = '✗ Hata: ' + (d.hata || 'Bilinmeyen hata');
+      btn.disabled = false;
+      btn.textContent = '✓ KAYDET';
+    }
+  })
+  .catch(function() {
+    var sonuc = document.getElementById('tgd-sonuc');
+    sonuc.style.display = 'block';
+    sonuc.className = 'tgd-sonuc hata';
+    sonuc.textContent = '✗ Bağlantı hatası. Tekrar deneyin.';
+    btn.disabled = false;
+    btn.textContent = '✓ KAYDET';
+  });
+}
+</script>
+{% endblock %}

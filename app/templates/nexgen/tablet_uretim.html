@@ -78,7 +78,7 @@
     {% endif %}
   </div>
 
-  {# ═══ ADIM 2: KG Girişi ═══ #}
+  {# ═══ ADIM 2: KG Girişi + Hat + Vardiya ═══ #}
   <div id="tbu-panel-2" class="tbu-panel" style="display:none">
     <div class="tbu-panel-baslik">Ne kadar üretilecek?</div>
 
@@ -97,6 +97,30 @@
       <button class="tbu-hizli-btn" onclick="tbuHizliKg(85)">85 KG</button>
       <button class="tbu-hizli-btn" onclick="tbuHizliKg(170)">170 KG</button>
       <button class="tbu-hizli-btn" onclick="tbuHizliKg(500)">500 KG</button>
+    </div>
+
+    {# Hat + Vardiya satırı #}
+    <div class="tbu-ek-bilgi-satir">
+      <div class="tbu-ek-alan">
+        <label class="tbu-ek-label">Hat</label>
+        <select id="tbu-hat-sec" class="tbu-ek-select">
+          <option value="">— Seçiniz —</option>
+          <option value="Hat 1">Hat 1</option>
+          <option value="Hat 2">Hat 2</option>
+          <option value="Hat 3">Hat 3</option>
+          <option value="Quinlee">Quinlee</option>
+        </select>
+      </div>
+      <div class="tbu-ek-alan">
+        <label class="tbu-ek-label">Vardiya</label>
+        <select id="tbu-vardiya-sec" class="tbu-ek-select">
+          <option value="">— Seçiniz —</option>
+          <option value="1. Vardiya">1. Vardiya</option>
+          <option value="2. Vardiya">2. Vardiya</option>
+          <option value="3. Vardiya">3. Vardiya</option>
+          <option value="Gündüz">Gündüz</option>
+        </select>
+      </div>
     </div>
 
     <div class="tbu-maliyet-onizleme" id="tbu-maliyet-onizleme" style="display:none">
@@ -260,6 +284,31 @@ body { background: #f1f5f9; }
   cursor: pointer; transition: all .12s;
 }
 .tbu-hizli-btn:hover { background: #f0fdf4; border-color: #86efac; color: #15803d; }
+
+/* Hat + Vardiya */
+.tbu-ek-bilgi-satir {
+  display: flex; gap: 14px; margin-bottom: 16px;
+}
+.tbu-ek-alan {
+  flex: 1; display: flex; flex-direction: column; gap: 5px;
+}
+.tbu-ek-label {
+  font-size: 12px; font-weight: 700; color: #374151;
+  text-transform: uppercase; letter-spacing: .5px;
+}
+.tbu-ek-select {
+  padding: 12px 14px; border: 2px solid #e5e7eb;
+  border-radius: 10px; font-size: 15px; font-weight: 600;
+  background: #fff; color: #1e293b; cursor: pointer;
+  appearance: none; width: 100%;
+}
+.tbu-ek-select:focus {
+  outline: none; border-color: #f6c343;
+  box-shadow: 0 0 0 3px rgba(246,195,67,.2);
+}
+@media (max-width: 480px) {
+  .tbu-ek-bilgi-satir { flex-direction: column; }
+}
 
 .tbu-maliyet-onizleme {
   background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px;
@@ -623,6 +672,10 @@ function tbuKodOlustur() {
   var kg = parseFloat(document.getElementById('tbu-kg-input').value || 0);
   if (kg <= 0 || !_seciliUv) return;
 
+  var hat     = (document.getElementById('tbu-hat-sec')?.value || '').trim();
+  var vardiya = (document.getElementById('tbu-vardiya-sec')?.value || '').trim();
+  var notlar  = [hat, vardiya].filter(Boolean).join(' — ') || null;
+
   document.getElementById('tbu-ileri-3').disabled = true;
   document.getElementById('tbu-yukleniyor-kod').style.display = 'block';
 
@@ -632,6 +685,7 @@ function tbuKodOlustur() {
     body: JSON.stringify({
       uretim_varyant_id: _seciliUv.id,
       planlanan_kg: parseFloat(kg.toFixed(3)),
+      notlar: notlar,
     })
   })
   .then(function(r) { return r.json(); })

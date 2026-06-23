@@ -3375,11 +3375,156 @@ def _batch_kodu_uret(con):
 @nexgen_bp.route('/tablet')
 @yetki_gerekli('nexgen.tablet.view', 'can_view')
 def tablet_ana():
+    con = _db()
+    try:
+        devam_eden = con.execute("""
+            SELECT nb.batch_kodu, nb.planlanan_kg, nb.durum,
+                   nb.olusturma_tarihi,
+                   uv.ad AS uv_ad, uv.boyut
+            FROM nexgen_uretim_batch nb
+            JOIN nexgen_uretim_varyant uv ON uv.id = nb.uretim_varyant_id
+            WHERE nb.durum IN ('TASLAK','HAZIR')
+            ORDER BY nb.id DESC
+            LIMIT 20
+        """).fetchall()
+        devam_eden = [dict(d) for d in devam_eden]
+    finally:
+        con.close()
+
     return render_template(
         'nexgen/tablet.html',
         active='nexgen',
         can_uretim=yetki_var('nexgen.tablet.uretim', 'can_uretim'),
+        devam_eden_batches=devam_eden,
     )
+
+
+@nexgen_bp.route('/tablet/devam-edenler')
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def tablet_devam_edenler():
+    """Tüm TASLAK/HAZIR batch listesi."""
+    con = _db()
+    try:
+        batches = con.execute("""
+            SELECT nb.id, nb.batch_kodu, nb.planlanan_kg, nb.durum,
+                   nb.olusturma_tarihi, nb.notlar,
+                   uv.ad AS uv_ad, uv.boyut,
+                   rv.ad AS renk_ad,
+                   f.ad AS formul_ad, f.kod AS formul_kod,
+                   ku.KullaniciAdi AS olusturan_ad
+            FROM nexgen_uretim_batch nb
+            JOIN nexgen_uretim_varyant uv ON uv.id = nb.uretim_varyant_id
+            JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+            JOIN nexgen_formul f          ON f.id  = rv.formul_id
+            LEFT JOIN sistem_kullanici ku ON ku.Id  = nb.olusturan_id
+            WHERE nb.durum IN ('TASLAK','HAZIR')
+            ORDER BY nb.id DESC
+        """).fetchall()
+        batches = [dict(b) for b in batches]
+    finally:
+        con.close()
+
+    return render_template(
+        'nexgen/tablet_devam_edenler.html',
+        active='nexgen',
+        batches=batches,
+    )
+
+
+@nexgen_bp.route('/tablet/geri-donusum')
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def tablet_geri_donusum():
+    """Geri Dönüşüm Günlük Girişi — RECYCLE kategorisi kartlarını listele."""
+    con = _db()
+    try:
+        recycle_kartlar = con.execute("""
+            SELECT sk.id, sk.kod, sk.ad, sk.alt_kategori,
+                   COALESCE(SUM(sh.miktar_kg), 0) AS toplam_kg
+            FROM nexgen_stok_kart sk
+            LEFT JOIN nexgen_stok_hareket sh ON sh.stok_kart_id = sk.id
+            WHERE sk.kategori = 'RECYCLE' AND sk.aktif = 1
+            GROUP BY sk.id
+            ORDER BY sk.ad
+        """).fetchall()
+        recycle_kartlar = [dict(k) for k in recycle_kartlar]
+    finally:
+        con.close()
+
+    return render_template(
+        'nexgen/tablet_geri_donusum.html',
+        active='nexgen',
+        recycle_kartlar=recycle_kartlar,
+    )
+
+
+@nexgen_bp.route('/api/tablet/geri-donusum-kaydet', methods=['POST'])
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def api_tablet_geri_donusum_kaydet():
+    """Geri dönüşüm günlük girişlerini stok hareketi olarak kaydet.
+
+    POST JSON:
+        tarih      : str (YYYY-MM-DD)
+        vardiya    : str
+        personel   : str
+        kalemler   : [{stok_kart_id: int, miktar_kg: float}]
+
+    Hareket tipi: GERI_DONUSUM_DEVIR
+    Stok ARTAR (pozitif miktar).
+    """
+    d = request.get_json(silent=True) or {}
+    tarih    = (d.get('tarih') or '').strip()
+    vardiya  = (d.get('vardiya') or '').strip()
+    personel = (d.get('personel') or '').strip()
+    kalemler = d.get('kalemler') or []
+
+    if not tarih:
+        return jsonify({'ok': False, 'hata': 'Tarih zorunlu'}), 400
+    if not kalemler:
+        return jsonify({'ok': False, 'hata': 'En az bir kalem giriniz'}), 400
+
+    # Sıfır veya negatif kalemleri filtrele
+    kalemler_gecerli = [
+        k for k in kalemler
+        if k.get('stok_kart_id') and float(k.get('miktar_kg') or 0) > 0
+    ]
+    if not kalemler_gecerli:
+        return jsonify({'ok': False, 'hata': 'Geçerli miktar bulunamadı'}), 400
+
+    aciklama = f'Geri dönüşüm günlük girişi — {tarih}'
+    if vardiya:
+        aciklama += f' — Vardiya: {vardiya}'
+    if personel:
+        aciklama += f' — Personel: {personel}'
+
+    olusturan = session.get('user_id')
+    now_str   = __import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    con = _db()
+    try:
+        eklenen = 0
+        for k in kalemler_gecerli:
+            kart_id  = int(k['stok_kart_id'])
+            miktar   = round(float(k['miktar_kg']), 3)
+            # Kart RECYCLE kategorisi kontrolü
+            kart = con.execute(
+                "SELECT id, kategori FROM nexgen_stok_kart WHERE id=? AND aktif=1",
+                (kart_id,)
+            ).fetchone()
+            if not kart or kart['kategori'] != 'RECYCLE':
+                continue
+            con.execute("""
+                INSERT INTO nexgen_stok_hareket
+                    (stok_kart_id, hareket_tipi, miktar_kg, aciklama,
+                     referans_no, olusturan_id, olusturma_tarihi)
+                VALUES (?,?,?,?,?,?,?)
+            """, (kart_id, 'GERI_DONUSUM_DEVIR', miktar, aciklama,
+                  tarih, olusturan, now_str))
+            eklenen += 1
+        con.commit()
+    finally:
+        con.close()
+
+    return jsonify({'ok': True, 'eklenen': eklenen})
 
 
 @nexgen_bp.route('/tablet/uretim')
