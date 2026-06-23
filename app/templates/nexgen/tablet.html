@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% set page_title = "NexGen Tablet" %}
+
+{% block content %}
+<div class="tb-sayfa">
+
+  <div class="tb-ust">
+    <div class="tb-logo-metin">NexGen</div>
+    <div class="tb-alt-metin">TABLET OPERATÖR PANELİ</div>
+  </div>
+
+  <div class="tb-kart-wrap">
+
+    <a href="/nexgen/tablet/uretim" class="tb-kart tb-kart-uretim">
+      <div class="tb-kart-ikon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
+             width="64" height="64">
+          <path d="M2 20h.01M7 20v-4a2 2 0 0 0-2-2H3a1 1 0 0 0-1 1v5"/>
+          <path d="M22 20H12V8l-4-4V3a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v1l-4 4v12"/>
+          <path d="M17 20v-9"/>
+          <path d="M22 15h-5"/>
+          <path d="M22 11h-5"/>
+        </svg>
+      </div>
+      <div class="tb-kart-baslik">ÜRETİM YAP</div>
+      <div class="tb-kart-aciklama">Onaylı formülle compound üretimi</div>
+    </a>
+
+    <a href="/nexgen/tablet/arge" class="tb-kart tb-kart-arge">
+      <div class="tb-kart-ikon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
+             width="64" height="64">
+          <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v11m0 0H5a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2a2 2 0 0 0-2-2H9z"/>
+        </svg>
+      </div>
+      <div class="tb-kart-baslik">AR-GE DENEME</div>
+      <div class="tb-kart-aciklama">Renk / formül test üretimi</div>
+    </a>
+
+  </div>
+
+  <div class="tb-alt">
+    <a href="/nexgen/" class="tb-geri-btn">← Ana Sayfa</a>
+  </div>
+
+</div>
+
+<style>
+* { box-sizing: border-box; }
+body { background: #f1f5f9; }
+.tb-sayfa {
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 24px; gap: 32px;
+}
+.tb-ust { text-align: center; }
+.tb-logo-metin {
+  font-size: 32px; font-weight: 900; color: #111827;
+  letter-spacing: 2px; text-transform: uppercase;
+}
+.tb-alt-metin {
+  font-size: 14px; font-weight: 700; color: #6b7280;
+  letter-spacing: 3px; text-transform: uppercase; margin-top: 4px;
+}
+
+.tb-kart-wrap {
+  display: flex; gap: 24px; flex-wrap: wrap; justify-content: center;
+  width: 100%; max-width: 800px;
+}
+
+.tb-kart {
+  flex: 1; min-width: 260px; max-width: 340px;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 40px 24px; border-radius: 20px;
+  text-decoration: none; cursor: pointer;
+  transition: transform .15s, box-shadow .15s;
+  border: 3px solid transparent;
+  box-shadow: 0 8px 24px rgba(15,23,42,.10);
+}
+.tb-kart:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 40px rgba(15,23,42,.16);
+}
+.tb-kart:active { transform: scale(.97); }
+
+.tb-kart-uretim {
+  background: #f6c343;
+  border-color: #f5b82e;
+}
+.tb-kart-arge {
+  background: #fff;
+  border-color: #e5e7eb;
+}
+
+.tb-kart-ikon {
+  margin-bottom: 20px;
+  opacity: .85;
+}
+.tb-kart-uretim .tb-kart-ikon { color: #111827; }
+.tb-kart-arge  .tb-kart-ikon { color: #0891b2; }
+
+.tb-kart-baslik {
+  font-size: 26px; font-weight: 900; letter-spacing: 1px;
+  margin-bottom: 10px;
+}
+.tb-kart-uretim .tb-kart-baslik { color: #111827; }
+.tb-kart-arge  .tb-kart-baslik { color: #0891b2; }
+
+.tb-kart-aciklama {
+  font-size: 15px; font-weight: 500; text-align: center;
+  line-height: 1.5;
+}
+.tb-kart-uretim .tb-kart-aciklama { color: #374151; }
+.tb-kart-arge  .tb-kart-aciklama { color: #6b7280; }
+
+.tb-alt { margin-top: 8px; }
+.tb-geri-btn {
+  font-size: 14px; color: #9ca3af; text-decoration: none;
+  padding: 8px 16px; border-radius: 8px;
+  transition: color .1s;
+}
+.tb-geri-btn:hover { color: #374151; }
+
+@media (max-width: 480px) {
+  .tb-kart { min-width: 100%; max-width: 100%; padding: 32px 20px; }
+  .tb-kart-baslik { font-size: 22px; }
+  .tb-kart-ikon svg { width: 52px; height: 52px; }
+}
+</style>
+{% endblock %}

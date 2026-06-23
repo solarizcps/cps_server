@@ -1,0 +1,365 @@
+{% extends "base.html" %}
+{% set page_title = "Üretim — NexGen Tablet" %}
+
+{% block content %}
+<div class="tbu-sayfa">
+
+  {# ── Üst Bar ── #}
+  <div class="tbu-ust">
+    <a href="/nexgen/tablet" class="tbu-geri">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+           stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+        <polyline points="15 18 9 12 15 6"/>
+      </svg>
+    </a>
+    <div class="tbu-baslik-blok">
+      <div class="tbu-ust-etiket">NEXGEN TABLET</div>
+      <div class="tbu-ust-baslik">ÜRETİM YAP</div>
+    </div>
+  </div>
+
+  {# ── Adım Göstergesi ── #}
+  <div class="tbu-adim-bar" id="tbu-adim-bar">
+    <div class="tbu-adim aktif" id="adim-1">1. Reçete Seç</div>
+    <div class="tbu-adim-ok">›</div>
+    <div class="tbu-adim" id="adim-2">2. KG Gir</div>
+    <div class="tbu-adim-ok">›</div>
+    <div class="tbu-adim" id="adim-3">3. Kodu Al</div>
+  </div>
+
+  {# ═══ ADIM 1: Reçete Seçimi ═══ #}
+  <div id="tbu-panel-1" class="tbu-panel">
+
+    {% if not varyantlar %}
+    <div class="tbu-uyari">
+      <div class="tbu-uyari-ikon">⚠️</div>
+      <div class="tbu-uyari-metin">
+        Üretime açık reçete bulunamadı.<br>
+        Reçete Merkezinden önce bir varyantı <strong>URETIME_ACIK</strong> yapın.
+      </div>
+      <a href="/nexgen/recete/" class="tbu-btn tbu-btn-sekonder">Reçete Merkezine Git</a>
+    </div>
+
+    {% else %}
+    <div class="tbu-panel-baslik">Hangi reçeteyle üretim yapacaksınız?</div>
+    <div class="tbu-kart-grid" id="tbu-recete-kartlar">
+      {% for uv in varyantlar %}
+      <div class="tbu-recete-kart" id="rv-{{ uv.id }}"
+           data-id="{{ uv.id }}"
+           data-formul="{{ uv.formul_ad }}"
+           data-renk="{{ uv.renk_ad }}"
+           data-boyut="{{ uv.boyut }}"
+           data-batch="{{ '{:.1f}'.format(uv.toplam_kg) }}"
+           data-maliyet="{{ '{:.2f}'.format(uv.kg_maliyet) if uv.kg_maliyet > 0 else '' }}"
+           onclick="tbuSecimYap(this)">
+        <div class="tbu-rv-formul">{{ uv.formul_ad }}</div>
+        <div class="tbu-rv-renk">{{ uv.renk_ad }}</div>
+        <div class="tbu-rv-boyut-row">
+          <span class="tbu-boyut-rozet tbu-boyut-{{ uv.boyut|lower }}">{{ uv.boyut }}</span>
+          {% if uv.toplam_kg > 0 %}
+          <span class="tbu-rv-kg">{{ '{:.1f}'.format(uv.toplam_kg) }} KG batch</span>
+          {% endif %}
+          {% if uv.kg_maliyet > 0 %}
+          <span class="tbu-rv-maliyet">{{ '{:.0f}'.format(uv.kg_maliyet) }} ₺/KG</span>
+          {% endif %}
+        </div>
+        <div class="tbu-secim-gostergesi">✓ SEÇİLDİ</div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="tbu-buton-satir">
+      <button class="tbu-btn tbu-btn-ana" id="tbu-ileri-1"
+              onclick="tbuAdim(2)" disabled>
+        İLERİ →
+      </button>
+    </div>
+    {% endif %}
+  </div>
+
+  {# ═══ ADIM 2: KG Girişi ═══ #}
+  <div id="tbu-panel-2" class="tbu-panel" style="display:none">
+    <div class="tbu-panel-baslik">Ne kadar üretilecek?</div>
+
+    <div class="tbu-secilen-ozet" id="tbu-secilen-ozet"></div>
+
+    <div class="tbu-kg-blok">
+      <label class="tbu-kg-label">Üretilecek KG</label>
+      <input type="number" id="tbu-kg-input" class="tbu-kg-input"
+             min="0.001" step="0.001" placeholder="0.000"
+             oninput="tbuKgGuncelle()">
+      <div class="tbu-kg-birim">KG</div>
+    </div>
+
+    <div class="tbu-hizli-butonlar">
+      <button class="tbu-hizli-btn" onclick="tbuHizliKg(8.5)">8.5 KG</button>
+      <button class="tbu-hizli-btn" onclick="tbuHizliKg(85)">85 KG</button>
+      <button class="tbu-hizli-btn" onclick="tbuHizliKg(170)">170 KG</button>
+    </div>
+
+    <div class="tbu-maliyet-onizleme" id="tbu-maliyet-onizleme" style="display:none">
+      Tahmini Maliyet: <strong id="tbu-tahmini-maliyet">—</strong>
+    </div>
+
+    <div class="tbu-buton-satir">
+      <button class="tbu-btn tbu-btn-sekonder" onclick="tbuAdim(1)">← Geri</button>
+      <button class="tbu-btn tbu-btn-ana" id="tbu-ileri-2"
+              onclick="tbuKodOlustur()" disabled>
+        KOD OLUŞTUR
+      </button>
+    </div>
+
+    <div id="tbu-yukleniyor" style="display:none;text-align:center;padding:20px;color:#9ca3af;font-size:16px">
+      Kod oluşturuluyor…
+    </div>
+  </div>
+
+</div>
+
+<style>
+* { box-sizing: border-box; }
+body { background: #f1f5f9; }
+
+.tbu-sayfa {
+  min-height: 100vh; padding: 16px;
+  max-width: 900px; margin: 0 auto;
+}
+
+/* ── Üst ── */
+.tbu-ust {
+  display: flex; align-items: center; gap: 12px;
+  padding: 16px 0 20px;
+}
+.tbu-geri {
+  width: 44px; height: 44px; border-radius: 10px;
+  background: #fff; border: 1px solid #e5e7eb;
+  display: flex; align-items: center; justify-content: center;
+  color: #374151; text-decoration: none;
+  flex-shrink: 0; transition: background .1s;
+}
+.tbu-geri:hover { background: #f3f4f6; }
+.tbu-ust-etiket { font-size: 11px; color: #9ca3af; letter-spacing: 2px; font-weight: 700; }
+.tbu-ust-baslik { font-size: 22px; font-weight: 900; color: #111827; letter-spacing: 1px; }
+
+/* ── Adım bar ── */
+.tbu-adim-bar {
+  display: flex; align-items: center; gap: 6px;
+  background: #fff; border-radius: 12px; padding: 12px 16px;
+  margin-bottom: 20px; border: 1px solid #e5e7eb;
+  font-size: 13px; flex-wrap: wrap;
+}
+.tbu-adim {
+  padding: 6px 14px; border-radius: 8px;
+  font-weight: 700; color: #9ca3af; background: #f9fafb;
+  transition: all .2s;
+}
+.tbu-adim.aktif { background: #f6c343; color: #111827; }
+.tbu-adim.tamamlandi { background: #dcfce7; color: #059669; }
+.tbu-adim-ok { color: #d1d5db; font-size: 18px; font-weight: 700; }
+
+/* ── Panel ── */
+.tbu-panel {
+  background: #fff; border-radius: 16px; padding: 24px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 4px 16px rgba(15,23,42,.06);
+}
+.tbu-panel-baslik {
+  font-size: 18px; font-weight: 700; color: #111827;
+  margin-bottom: 20px;
+}
+
+/* ── Reçete kartları ── */
+.tbu-kart-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px; margin-bottom: 20px;
+}
+.tbu-recete-kart {
+  border: 3px solid #e5e7eb; border-radius: 14px;
+  padding: 16px; cursor: pointer; background: #fafafa;
+  transition: all .15s; position: relative;
+}
+.tbu-recete-kart:hover { background: #f0f9ff; border-color: #7dd3fc; }
+.tbu-recete-kart.secili { background: #fef9e7; border-color: #f6c343; }
+.tbu-rv-formul { font-size: 13px; color: #6b7280; font-weight: 600; margin-bottom: 3px; }
+.tbu-rv-renk { font-size: 20px; font-weight: 800; color: #111827; margin-bottom: 8px; }
+.tbu-rv-boyut-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.tbu-boyut-rozet {
+  font-size: 12px; font-weight: 800; padding: 3px 10px;
+  border-radius: 6px; letter-spacing: .5px;
+}
+.tbu-boyut-large   { background: #dbeafe; color: #1d4ed8; }
+.tbu-boyut-small   { background: #fef3c7; color: #92400e; }
+.tbu-boyut-standart{ background: #f1f5f9; color: #64748b; }
+.tbu-rv-kg      { font-size: 13px; font-weight: 700; color: #374151; }
+.tbu-rv-maliyet { font-size: 13px; color: #059669; font-weight: 700; }
+.tbu-secim-gostergesi {
+  display: none; position: absolute; top: 8px; right: 8px;
+  background: #f6c343; color: #111827; font-size: 10px; font-weight: 800;
+  padding: 2px 8px; border-radius: 6px;
+}
+.tbu-recete-kart.secili .tbu-secim-gostergesi { display: block; }
+
+/* ── KG girişi ── */
+.tbu-secilen-ozet {
+  background: #fef9e7; border: 1px solid #fde68a; border-radius: 12px;
+  padding: 14px 18px; margin-bottom: 20px;
+  font-size: 16px; font-weight: 700; color: #92400e;
+}
+.tbu-kg-blok {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 16px;
+}
+.tbu-kg-label { font-size: 16px; font-weight: 700; color: #374151; min-width: 140px; }
+.tbu-kg-input {
+  flex: 1; font-size: 32px; font-weight: 800; text-align: center;
+  padding: 16px; border: 3px solid #e5e7eb; border-radius: 12px;
+  color: #111827; background: #fff; max-width: 220px;
+  transition: border-color .15s;
+}
+.tbu-kg-input:focus { outline: none; border-color: #f6c343; }
+.tbu-kg-birim { font-size: 24px; font-weight: 700; color: #9ca3af; }
+
+.tbu-hizli-butonlar {
+  display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px;
+}
+.tbu-hizli-btn {
+  padding: 10px 20px; border-radius: 10px; border: 2px solid #e5e7eb;
+  background: #fff; font-size: 15px; font-weight: 700; color: #374151;
+  cursor: pointer; transition: all .12s;
+}
+.tbu-hizli-btn:hover { background: #f0fdf4; border-color: #86efac; color: #15803d; }
+
+.tbu-maliyet-onizleme {
+  background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px;
+  padding: 12px 16px; font-size: 16px; color: #374151;
+  margin-bottom: 16px;
+}
+
+/* ── Butonlar ── */
+.tbu-buton-satir {
+  display: flex; gap: 12px; justify-content: flex-end; flex-wrap: wrap;
+  margin-top: 8px;
+}
+.tbu-btn {
+  padding: 14px 28px; font-size: 17px; font-weight: 800;
+  border-radius: 12px; border: none; cursor: pointer;
+  transition: all .12s; min-width: 140px;
+}
+.tbu-btn-ana {
+  background: #f6c343; color: #111827;
+}
+.tbu-btn-ana:hover:not(:disabled) { background: #f5b82e; transform: translateY(-1px); }
+.tbu-btn-ana:disabled { background: #e5e7eb; color: #9ca3af; cursor: not-allowed; }
+.tbu-btn-sekonder {
+  background: #f9fafb; color: #374151; border: 2px solid #e5e7eb;
+}
+.tbu-btn-sekonder:hover { background: #f3f4f6; }
+
+/* ── Uyarı ── */
+.tbu-uyari {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 40px 24px; gap: 16px; text-align: center;
+}
+.tbu-uyari-ikon { font-size: 48px; }
+.tbu-uyari-metin { font-size: 16px; color: #374151; line-height: 1.7; }
+
+@media (max-width: 480px) {
+  .tbu-kart-grid { grid-template-columns: 1fr; }
+  .tbu-kg-input { font-size: 26px; }
+  .tbu-btn { font-size: 15px; padding: 12px 20px; }
+}
+</style>
+
+<script>
+var _seciliUv = null;
+
+function tbuSecimYap(el) {
+  document.querySelectorAll('.tbu-recete-kart').forEach(function(k) {
+    k.classList.remove('secili');
+  });
+  el.classList.add('secili');
+  _seciliUv = {
+    id:      parseInt(el.dataset.id),
+    formul:  el.dataset.formul,
+    renk:    el.dataset.renk,
+    boyut:   el.dataset.boyut,
+    batch:   parseFloat(el.dataset.batch || 0),
+    maliyet: parseFloat(el.dataset.maliyet || 0),
+  };
+  document.getElementById('tbu-ileri-1').disabled = false;
+}
+
+function tbuAdim(hedef) {
+  document.getElementById('tbu-panel-1').style.display = hedef === 1 ? 'block' : 'none';
+  document.getElementById('tbu-panel-2').style.display = hedef === 2 ? 'block' : 'none';
+
+  ['adim-1','adim-2','adim-3'].forEach(function(id, i) {
+    var el = document.getElementById(id);
+    el.classList.remove('aktif','tamamlandi');
+    if (i + 1 < hedef)  el.classList.add('tamamlandi');
+    if (i + 1 === hedef) el.classList.add('aktif');
+  });
+
+  if (hedef === 2 && _seciliUv) {
+    var ozet = document.getElementById('tbu-secilen-ozet');
+    ozet.innerHTML = '<strong>' + _seciliUv.renk + '</strong> — ' + _seciliUv.boyut +
+                     ' &nbsp;|&nbsp; ' + _seciliUv.formul +
+                     (_seciliUv.batch > 0 ? '&nbsp;&nbsp;<span style="color:#9ca3af;font-size:13px">Standart batch: ' + _seciliUv.batch + ' KG</span>' : '');
+    document.getElementById('tbu-kg-input').value = '';
+    document.getElementById('tbu-ileri-2').disabled = true;
+    document.getElementById('tbu-maliyet-onizleme').style.display = 'none';
+  }
+}
+
+function tbuHizliKg(kg) {
+  document.getElementById('tbu-kg-input').value = kg;
+  tbuKgGuncelle();
+}
+
+function tbuKgGuncelle() {
+  var val = parseFloat(document.getElementById('tbu-kg-input').value || 0);
+  var btn = document.getElementById('tbu-ileri-2');
+  btn.disabled = !(val > 0);
+
+  var onizleme = document.getElementById('tbu-maliyet-onizleme');
+  if (val > 0 && _seciliUv && _seciliUv.maliyet > 0) {
+    var toplam = (val * _seciliUv.maliyet).toFixed(2);
+    document.getElementById('tbu-tahmini-maliyet').textContent =
+      toplam.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' ₺';
+    onizleme.style.display = 'block';
+  } else {
+    onizleme.style.display = 'none';
+  }
+}
+
+function tbuKodOlustur() {
+  var kg = parseFloat(document.getElementById('tbu-kg-input').value || 0);
+  if (kg <= 0 || !_seciliUv) return;
+
+  document.getElementById('tbu-ileri-2').disabled = true;
+  document.getElementById('tbu-yukleniyor').style.display = 'block';
+
+  fetch('/nexgen/api/tablet/uretim-kodu-olustur', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      uretim_varyant_id: _seciliUv.id,
+      planlanan_kg: parseFloat(kg.toFixed(3)),
+    })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    document.getElementById('tbu-yukleniyor').style.display = 'none';
+    if (d.ok) {
+      window.location.href = '/nexgen/tablet/kod/' + encodeURIComponent(d.batch_kodu);
+    } else {
+      alert('Hata: ' + (d.hata || 'Bilinmeyen hata'));
+      document.getElementById('tbu-ileri-2').disabled = false;
+    }
+  })
+  .catch(function() {
+    document.getElementById('tbu-yukleniyor').style.display = 'none';
+    alert('Bağlantı hatası. Lütfen tekrar deneyin.');
+    document.getElementById('tbu-ileri-2').disabled = false;
+  });
+}
+</script>
+{% endblock %}

@@ -86,10 +86,12 @@ def index():
     can_yonetim = yetki_var('nexgen.yonetim.manage', 'can_view')
     can_depo    = yetki_var('nexgen.depo.view', 'can_view')
     can_recete  = yetki_var('nexgen.recete.view', 'can_view')
+    can_tablet  = yetki_var('nexgen.tablet.view', 'can_view')
     return render_template('nexgen/index.html', active='nexgen',
                            can_yonetim=can_yonetim,
                            can_depo=can_depo,
-                           can_recete=can_recete)
+                           can_recete=can_recete,
+                           can_tablet=can_tablet)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -3328,4 +3330,242 @@ def api_depo_cikis():
         "miktar_kg":    miktar_kg,
     })
 
+
+# ═══════════════════════════════════════════════════════════════
+# NEXGEN FAZ-5A — TABLET EKRANI
+# Stok hareketi yapılmaz. Sadece batch kodu üretimi + AR-GE testi.
+# ═══════════════════════════════════════════════════════════════
+
+def _batch_kodu_uret(con):
+    """NG-PRD-YYYY-NNNN formatında benzersiz üretim batch kodu üretir."""
+    import datetime
+    yil = datetime.datetime.now().year
+    son = con.execute(
+        "SELECT batch_kodu FROM nexgen_uretim_batch "
+        "WHERE batch_kodu LIKE ? ORDER BY id DESC LIMIT 1",
+        (f"NG-PRD-{yil}-%",)
+    ).fetchone()
+    if son:
+        try:
+            son_no = int(son['batch_kodu'].split('-')[-1])
+        except Exception:
+            son_no = 0
+    else:
+        son_no = 0
+    yeni_no = son_no + 1
+    return f"NG-PRD-{yil}-{yeni_no:05d}"
+
+
+@nexgen_bp.route('/tablet')
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def tablet_ana():
+    return render_template(
+        'nexgen/tablet.html',
+        active='nexgen',
+        can_uretim=yetki_var('nexgen.tablet.uretim', 'can_uretim'),
+    )
+
+
+@nexgen_bp.route('/tablet/uretim')
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def tablet_uretim():
+    con = _db()
+    try:
+        varyantlar = _uretime_acik_receteler(con)
+        # Her varyant için batch KG ve kg_maliyet ekle
+        liste = []
+        for uv in varyantlar:
+            uv_dict = dict(uv)
+            kalemler = con.execute("""
+                SELECT rk.miktar_kg, rk.stok_kart_id
+                FROM nexgen_recete_kalem rk
+                WHERE rk.uretim_varyant_id = ? AND rk.aktif = 1
+            """, (uv_dict['id'],)).fetchall()
+            toplam_kg = round(sum(k['miktar_kg'] for k in kalemler), 3) if kalemler else 0.0
+            toplam_mal = 0.0
+            for k in kalemler:
+                fr = con.execute("""
+                    SELECT fiyat, para_birimi, kur, fiyat_try
+                    FROM nexgen_hammadde_fiyat
+                    WHERE stok_kart_id=? AND aktif=1
+                    ORDER BY fiyat_tarihi DESC, id DESC LIMIT 1
+                """, (k['stok_kart_id'],)).fetchone()
+                if fr:
+                    if fr['fiyat_try'] and fr['fiyat_try'] > 0:
+                        bp = float(fr['fiyat_try'])
+                    elif fr['para_birimi'] == 'TRY':
+                        bp = float(fr['fiyat'] or 0)
+                    elif fr['kur'] and fr['kur'] > 0:
+                        bp = float(fr['fiyat'] or 0) * float(fr['kur'])
+                    else:
+                        bp = 0.0
+                    toplam_mal += float(k['miktar_kg']) * bp
+            uv_dict['toplam_kg'] = toplam_kg
+            uv_dict['kg_maliyet'] = round(toplam_mal / toplam_kg, 2) if toplam_kg > 0 else 0.0
+            liste.append(uv_dict)
+    finally:
+        con.close()
+
+    return render_template(
+        'nexgen/tablet_uretim.html',
+        active='nexgen',
+        varyantlar=liste,
+    )
+
+
+@nexgen_bp.route('/tablet/arge')
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def tablet_arge():
+    con = _db()
+    try:
+        # Tüm aktif formüller ve varyantları (AR-GE için herhangi bir ONAYLI/TASLAK/DENEME da olabilir)
+        varyantlar = con.execute("""
+            SELECT uv.id, uv.boyut, uv.ad, uv.recete_durum,
+                   rv.ad AS renk_ad,
+                   f.id AS formul_id, f.kod AS formul_kod, f.ad AS formul_ad,
+                   COUNT(rk.id) AS kalem_say,
+                   SUM(rk.miktar_kg) AS toplam_kg
+            FROM nexgen_uretim_varyant uv
+            JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
+            JOIN nexgen_formul f        ON f.id  = rv.formul_id
+            LEFT JOIN nexgen_recete_kalem rk
+                   ON rk.uretim_varyant_id = uv.id AND rk.aktif = 1
+            WHERE uv.aktif = 1 AND rv.aktif = 1 AND f.aktif = 1
+              AND uv.recete_durum IN ('URETIME_ACIK','ONAYLI','DENEME')
+              AND rk.id IS NOT NULL
+            GROUP BY uv.id
+            ORDER BY f.kod, rv.ad, uv.boyut
+        """).fetchall()
+        varyantlar = [dict(v) for v in varyantlar]
+        for v in varyantlar:
+            v['toplam_kg'] = round(float(v['toplam_kg'] or 0), 3)
+    finally:
+        con.close()
+
+    return render_template(
+        'nexgen/tablet_arge.html',
+        active='nexgen',
+        varyantlar=varyantlar,
+    )
+
+
+@nexgen_bp.route('/api/tablet/uretim-kodu-olustur', methods=['POST'])
+@yetki_gerekli('nexgen.tablet.uretim', 'can_uretim')
+def api_tablet_uretim_kodu():
+    """Üretim batch kodu oluşturur. Stok hareketi yapmaz."""
+    d = request.get_json(silent=True) or {}
+    uv_id      = d.get('uretim_varyant_id')
+    planlanan  = d.get('planlanan_kg')
+    notlar     = (d.get('notlar') or '').strip() or None
+
+    if not uv_id or not planlanan:
+        return jsonify({"ok": False, "hata": "uretim_varyant_id ve planlanan_kg zorunlu"}), 400
+    try:
+        planlanan = float(planlanan)
+        if planlanan <= 0:
+            return jsonify({"ok": False, "hata": "Planlanan KG sıfırdan büyük olmalı"}), 400
+    except Exception:
+        return jsonify({"ok": False, "hata": "Geçersiz planlanan_kg"}), 400
+
+    con = _db()
+    try:
+        uv = con.execute(
+            "SELECT uv.id, uv.boyut, uv.recete_durum, rv.ad AS renk_ad, f.ad AS formul_ad "
+            "FROM nexgen_uretim_varyant uv "
+            "JOIN nexgen_renk_varyant rv ON rv.id=uv.renk_varyant_id "
+            "JOIN nexgen_formul f ON f.id=rv.formul_id "
+            "WHERE uv.id=? AND uv.aktif=1",
+            (uv_id,)
+        ).fetchone()
+        if not uv:
+            return jsonify({"ok": False, "hata": "Üretim varyantı bulunamadı"}), 404
+        if uv['recete_durum'] != 'URETIME_ACIK':
+            return jsonify({"ok": False, "hata": f"Sadece URETIME_ACIK reçeteler kullanılabilir. Mevcut: {uv['recete_durum']}"}), 400
+
+        batch_kodu = _batch_kodu_uret(con)
+        uid = _kullanici_id()
+        con.execute(
+            "INSERT INTO nexgen_uretim_batch(batch_kodu, uretim_varyant_id, planlanan_kg, durum, olusturan_id, notlar) "
+            "VALUES(?,?,?,'HAZIR',?,?)",
+            (batch_kodu, uv_id, round(planlanan, 3), uid, notlar)
+        )
+        con.commit()
+        return jsonify({
+            "ok": True,
+            "batch_kodu":  batch_kodu,
+            "formul_ad":   uv['formul_ad'],
+            "renk_ad":     uv['renk_ad'],
+            "boyut":       uv['boyut'],
+            "planlanan_kg": round(planlanan, 3),
+        })
+    except Exception as e:
+        con.rollback()
+        return jsonify({"ok": False, "hata": str(e)}), 500
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/tablet/kod/<batch_kodu>')
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def tablet_kod_goster(batch_kodu):
+    """Oluşturulan batch kodunu büyük ekranda göster."""
+    con = _db()
+    try:
+        batch = con.execute("""
+            SELECT nb.*, uv.boyut,
+                   rv.ad AS renk_ad,
+                   f.ad AS formul_ad, f.kod AS formul_kod
+            FROM nexgen_uretim_batch nb
+            JOIN nexgen_uretim_varyant uv ON uv.id = nb.uretim_varyant_id
+            JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+            JOIN nexgen_formul f          ON f.id  = rv.formul_id
+            WHERE nb.batch_kodu = ?
+        """, (batch_kodu,)).fetchone()
+        if not batch:
+            from flask import abort
+            abort(404)
+        batch = dict(batch)
+    finally:
+        con.close()
+
+    return render_template(
+        'nexgen/tablet_kod.html',
+        active='nexgen',
+        batch=batch,
+        kod_tipi='URETIM',
+    )
+
+
+@nexgen_bp.route('/tablet/arge-kod/<test_no>')
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def tablet_arge_kod_goster(test_no):
+    """AR-GE test kodunu büyük ekranda göster."""
+    con = _db()
+    try:
+        test = con.execute("""
+            SELECT at.*, uv.boyut,
+                   rv.ad AS renk_ad,
+                   f.ad AS formul_ad, f.kod AS formul_kod,
+                   ku.KullaniciAdi AS olusturan_ad
+            FROM nexgen_arge_test at
+            JOIN nexgen_uretim_varyant uv ON uv.id = at.kaynak_uv_id
+            JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+            JOIN nexgen_formul f          ON f.id  = rv.formul_id
+            LEFT JOIN sistem_kullanici ku ON ku.Id  = at.olusturan_id
+            WHERE at.test_no = ?
+        """, (test_no,)).fetchone()
+        if not test:
+            from flask import abort
+            abort(404)
+        test = dict(test)
+    finally:
+        con.close()
+
+    return render_template(
+        'nexgen/tablet_kod.html',
+        active='nexgen',
+        batch=None,
+        test=test,
+        kod_tipi='ARGE',
+    )
 

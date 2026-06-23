@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+{% if kod_tipi == 'URETIM' %}
+  {% set page_title = batch.batch_kodu ~ " — NexGen Tablet" %}
+{% else %}
+  {% set page_title = test.test_no ~ " — AR-GE Kod — NexGen Tablet" %}
+{% endif %}
+
+{% block content %}
+<div class="tkod-sayfa">
+
+  {# ── Tip rozeti ── #}
+  {% if kod_tipi == 'URETIM' %}
+  <div class="tkod-tip-bant tkod-uretim-bant">ÜRETİM BATCH KODU</div>
+  {% else %}
+  <div class="tkod-tip-bant tkod-arge-bant">AR-GE TEST KODU</div>
+  {% endif %}
+
+  {# ── Ana Kod ── #}
+  {% if kod_tipi == 'URETIM' %}
+    {% set ana_kod = batch.batch_kodu %}
+  {% else %}
+    {% set ana_kod = test.test_no %}
+  {% endif %}
+
+  <div class="tkod-ana-blok">
+    <div class="tkod-ana-kod" id="ana-kod-metin">{{ ana_kod }}</div>
+  </div>
+
+  {# ── Talimat ── #}
+  <div class="tkod-talimat">
+    {% if kod_tipi == 'URETIM' %}
+    BU KODU ÜRÜNE YAZ
+    {% else %}
+    BU KODU NUMUNEYE YAZ
+    {% endif %}
+  </div>
+
+  {# ── Detay Kartı ── #}
+  <div class="tkod-detay-kart">
+    {% if kod_tipi == 'URETIM' %}
+    <div class="tkod-detay-satir">
+      <span class="tkod-detay-etiket">Formül</span>
+      <span class="tkod-detay-deger">{{ batch.formul_ad }}</span>
+    </div>
+    <div class="tkod-detay-satir">
+      <span class="tkod-detay-etiket">Renk</span>
+      <span class="tkod-detay-deger">{{ batch.renk_ad }}</span>
+    </div>
+    <div class="tkod-detay-satir">
+      <span class="tkod-detay-etiket">Boyut</span>
+      <span class="tkod-detay-deger">{{ batch.boyut }}</span>
+    </div>
+    <div class="tkod-detay-satir">
+      <span class="tkod-detay-etiket">Planlanan KG</span>
+      <span class="tkod-detay-deger tkod-kg-deger">{{ '{:.3f}'.format(batch.planlanan_kg) }} KG</span>
+    </div>
+    <div class="tkod-detay-satir">
+      <span class="tkod-detay-etiket">Durum</span>
+      <span class="tkod-detay-deger">
+        <span class="tkod-durum-rozet tkod-hazir">{{ batch.durum }}</span>
+      </span>
+    </div>
+    <div class="tkod-detay-satir">
+      <span class="tkod-detay-etiket">Tarih</span>
+      <span class="tkod-detay-deger">{{ batch.olusturma_tarihi }}</span>
+    </div>
+    {% if batch.notlar %}
+    <div class="tkod-detay-satir">
+      <span class="tkod-detay-etiket">Notlar</span>
+      <span class="tkod-detay-deger">{{ batch.notlar }}</span>
+    </div>
+    {% endif %}
+
+    {% else %}{# ARGE #}
+    <div class="tkod-detay-satir">
+      <span class="tkod-detay-etiket">Formül</span>
+      <span class="tkod-detay-deger">{{ test.formul_ad }}</span>
+    </div>
+    <div class="tkod-detay-satir">
+      <span class="tkod-detay-etiket">Kaynak Renk</span>
+      <span class="tkod-detay-deger">{{ test.renk_ad }}</span>
+    </div>
+    <div class="tkod-detay-satir">
+      <span class="tkod-detay-etiket">Boyut</span>
+      <span class="tkod-detay-deger">{{ test.boyut }}</span>
+    </div>
+    {% if test.yeni_renk_adi %}
+    <div class="tkod-detay-satir">
+      <span class="tkod-detay-etiket">Yeni Renk</span>
+      <span class="tkod-detay-deger">{{ test.yeni_renk_adi }}</span>
+    </div>
+    {% endif %}
+    <div class="tkod-detay-satir">
+      <span class="tkod-detay-etiket">Test KG</span>
+      <span class="tkod-detay-deger tkod-kg-deger">{{ '{:.3f}'.format(test.test_kg) }} KG</span>
+    </div>
+    <div class="tkod-detay-satir">
+      <span class="tkod-detay-etiket">Makina</span>
+      <span class="tkod-detay-deger">{{ test.makina or '—' }}</span>
+    </div>
+    <div class="tkod-detay-satir">
+      <span class="tkod-detay-etiket">Durum</span>
+      <span class="tkod-detay-deger">
+        <span class="tkod-durum-rozet tkod-taslak">{{ test.durum }}</span>
+      </span>
+    </div>
+    <div class="tkod-detay-satir">
+      <span class="tkod-detay-etiket">Test No</span>
+      <span class="tkod-detay-deger">{{ test.test_no }}</span>
+    </div>
+    {% endif %}
+  </div>
+
+  {# ── Aksiyon Butonlar ── #}
+  <div class="tkod-buton-satir">
+    {% if kod_tipi == 'URETIM' %}
+    <a href="/nexgen/tablet/uretim" class="tkod-btn tkod-btn-ana">
+      + Yeni Üretim
+    </a>
+    {% else %}
+    <a href="/nexgen/tablet/arge" class="tkod-btn tkod-btn-arge">
+      + Yeni AR-GE
+    </a>
+    {% endif %}
+    <a href="/nexgen/tablet" class="tkod-btn tkod-btn-sekonder">
+      ⌂ Ana Ekran
+    </a>
+  </div>
+
+  {# ── Gelecek ── #}
+  <div class="tkod-gelecek-not">
+    <span>[ Etiket Yazdır ]</span> — Sonraki fazda eklenecek
+  </div>
+
+</div>
+
+<style>
+* { box-sizing: border-box; }
+body { background: #0f172a; }
+
+.tkod-sayfa {
+  min-height: 100vh; display: flex; flex-direction: column;
+  align-items: center; padding: 32px 16px; gap: 20px;
+}
+
+/* ── Tip Bant ── */
+.tkod-tip-bant {
+  font-size: 13px; font-weight: 800; letter-spacing: 3px;
+  padding: 6px 20px; border-radius: 20px;
+  text-transform: uppercase;
+}
+.tkod-uretim-bant { background: #fef9e7; color: #92400e; }
+.tkod-arge-bant   { background: #e0f2fe; color: #0369a1; }
+
+/* ── Ana Kod ── */
+.tkod-ana-blok {
+  display: flex; flex-direction: column; align-items: center;
+  background: #1e293b; border-radius: 20px; padding: 40px 48px;
+  border: 3px solid #f6c343; width: 100%; max-width: 640px;
+}
+.tkod-ana-kod {
+  font-size: clamp(28px, 6vw, 52px);
+  font-weight: 900; color: #f6c343;
+  letter-spacing: 4px; text-align: center;
+  font-family: 'Courier New', monospace;
+  word-break: break-all;
+}
+
+/* ── Talimat ── */
+.tkod-talimat {
+  font-size: clamp(18px, 4vw, 28px);
+  font-weight: 800; color: #e2e8f0;
+  letter-spacing: 2px; text-align: center;
+  text-transform: uppercase;
+}
+
+/* ── Detay Kartı ── */
+.tkod-detay-kart {
+  background: #1e293b; border-radius: 16px; padding: 20px 24px;
+  border: 1px solid #334155; width: 100%; max-width: 640px;
+  display: flex; flex-direction: column; gap: 0;
+}
+.tkod-detay-satir {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 0; border-bottom: 1px solid #2d3748;
+  font-size: 15px;
+}
+.tkod-detay-satir:last-child { border-bottom: none; }
+.tkod-detay-etiket { color: #94a3b8; font-weight: 600; }
+.tkod-detay-deger  { color: #e2e8f0; font-weight: 700; text-align: right; }
+.tkod-kg-deger { color: #f6c343; font-size: 18px; }
+
+.tkod-durum-rozet { font-size: 12px; font-weight: 800; padding: 3px 10px; border-radius: 6px; }
+.tkod-hazir   { background: #d1fae5; color: #059669; }
+.tkod-taslak  { background: #f1f5f9; color: #64748b; }
+
+/* ── Aksiyon Butonlar ── */
+.tkod-buton-satir {
+  display: flex; gap: 14px; flex-wrap: wrap;
+  justify-content: center; width: 100%; max-width: 640px;
+}
+.tkod-btn {
+  flex: 1; min-width: 160px;
+  padding: 16px 24px; border-radius: 14px;
+  font-size: 17px; font-weight: 800;
+  text-decoration: none; text-align: center;
+  transition: all .12s;
+}
+.tkod-btn-ana {
+  background: #f6c343; color: #111827;
+}
+.tkod-btn-ana:hover { background: #f5b82e; transform: translateY(-1px); }
+.tkod-btn-arge {
+  background: #0891b2; color: #fff;
+}
+.tkod-btn-arge:hover { background: #0e7490; transform: translateY(-1px); }
+.tkod-btn-sekonder {
+  background: #1e293b; color: #94a3b8;
+  border: 2px solid #334155;
+}
+.tkod-btn-sekonder:hover { color: #e2e8f0; border-color: #4b5563; }
+
+/* ── Gelecek Not ── */
+.tkod-gelecek-not {
+  font-size: 13px; color: #475569; text-align: center;
+}
+.tkod-gelecek-not span {
+  background: #1e293b; padding: 3px 10px; border-radius: 6px;
+  border: 1px dashed #334155;
+}
+
+@media(max-width:480px) {
+  .tkod-ana-blok { padding: 24px 20px; }
+  .tkod-btn { font-size: 15px; padding: 14px 18px; }
+}
+</style>
+{% endblock %}

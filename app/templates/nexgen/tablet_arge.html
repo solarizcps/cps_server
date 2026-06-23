@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+{% set page_title = "AR-GE Deneme — NexGen Tablet" %}
+
+{% block content %}
+<div class="tba-sayfa">
+
+  {# ── Üst Bar ── #}
+  <div class="tbu-ust">
+    <a href="/nexgen/tablet" class="tbu-geri">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+           stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+        <polyline points="15 18 9 12 15 6"/>
+      </svg>
+    </a>
+    <div class="tbu-baslik-blok">
+      <div class="tbu-ust-etiket">NEXGEN TABLET</div>
+      <div class="tbu-ust-baslik" style="color:#0891b2">AR-GE DENEME</div>
+    </div>
+  </div>
+
+  {# ── Adım Bar ── #}
+  <div class="tbu-adim-bar">
+    <div class="tbu-adim aktif" id="adim-1">1. Reçete Seç</div>
+    <div class="tbu-adim-ok">›</div>
+    <div class="tbu-adim" id="adim-2">2. Detaylar</div>
+    <div class="tbu-adim-ok">›</div>
+    <div class="tbu-adim" id="adim-3">3. Kodu Al</div>
+  </div>
+
+  {# ═══ ADIM 1: Kaynak Reçete ═══ #}
+  <div id="tba-panel-1" class="tbu-panel">
+    <div class="tbu-panel-baslik">Hangi reçeteden test yapılacak?</div>
+    <div class="tba-bilgi-kutu">
+      Seçilen reçete otomatik olarak 7.5 KG test makina boyutuna ölçeklenir.
+      Stok düşmez.
+    </div>
+
+    {% if not varyantlar %}
+    <div class="tbu-uyari">
+      <div class="tbu-uyari-ikon">📋</div>
+      <div class="tbu-uyari-metin">
+        Kalemli reçete bulunamadı.<br>Önce Reçete Merkezinde formül oluşturun.
+      </div>
+      <a href="/nexgen/recete/" class="tbu-btn tbu-btn-sekonder">Reçete Merkezine Git</a>
+    </div>
+    {% else %}
+    <div class="tbu-kart-grid" id="tba-recete-kartlar">
+      {% for uv in varyantlar %}
+      <div class="tbu-recete-kart" id="rv-{{ uv.id }}"
+           data-id="{{ uv.id }}"
+           data-formul="{{ uv.formul_ad }}"
+           data-renk="{{ uv.renk_ad }}"
+           data-boyut="{{ uv.boyut }}"
+           data-batch="{{ '{:.3f}'.format(uv.toplam_kg) }}"
+           data-durum="{{ uv.recete_durum }}"
+           onclick="tbaSecimYap(this)">
+        <div class="tbu-rv-formul">{{ uv.formul_ad }}</div>
+        <div class="tbu-rv-renk">{{ uv.renk_ad }}</div>
+        <div class="tbu-rv-boyut-row">
+          <span class="tbu-boyut-rozet tbu-boyut-{{ uv.boyut|lower }}">{{ uv.boyut }}</span>
+          {% if uv.toplam_kg > 0 %}
+          <span class="tbu-rv-kg">{{ '{:.1f}'.format(uv.toplam_kg) }} KG</span>
+          {% endif %}
+          <span class="tba-durum-rozet tba-d-{{ uv.recete_durum|lower|replace('_','-') }}">
+            {{ uv.recete_durum.replace('_',' ') }}
+          </span>
+        </div>
+        <div class="tbu-secim-gostergesi">✓ SEÇİLDİ</div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="tbu-buton-satir">
+      <button class="tbu-btn tbu-btn-ana" id="tba-ileri-1"
+              onclick="tbaAdim(2)" disabled style="background:#0891b2;color:#fff">
+        İLERİ →
+      </button>
+    </div>
+    {% endif %}
+  </div>
+
+  {# ═══ ADIM 2: Test Detayları ═══ #}
+  <div id="tba-panel-2" class="tbu-panel" style="display:none">
+    <div class="tbu-panel-baslik">Test detayları</div>
+    <div class="tbu-secilen-ozet" id="tba-secilen-ozet"></div>
+
+    <div class="tba-form">
+      <div class="tba-fg">
+        <label class="tba-label">Test KG <span class="tba-zorunlu">*</span></label>
+        <div style="display:flex;align-items:center;gap:10px">
+          <input type="number" id="tba-test-kg" class="tbu-kg-input" style="max-width:160px;font-size:26px"
+                 min="0.001" step="0.001" value="7.5"
+                 oninput="tbaHesapla()">
+          <span class="tbu-kg-birim">KG</span>
+        </div>
+        <div class="tba-hizli-butonlar">
+          <button class="tbu-hizli-btn" onclick="document.getElementById('tba-test-kg').value=7.5;tbaHesapla()">7.5 KG</button>
+          <button class="tbu-hizli-btn" onclick="document.getElementById('tba-test-kg').value=15;tbaHesapla()">15 KG</button>
+        </div>
+      </div>
+
+      <div class="tba-fg">
+        <label class="tba-label">Renk Adı (opsiyonel)</label>
+        <input type="text" id="tba-renk-adi" class="tba-input"
+               placeholder="örn: MAVİ TEST #1" maxlength="100">
+      </div>
+
+      <div class="tba-fg">
+        <label class="tba-label">Makina</label>
+        <select id="tba-makina" class="tba-input">
+          <option value="7.5 LT">7.5 LT (Küçük)</option>
+          <option value="20 LT">20 LT</option>
+          <option value="Diğer">Diğer</option>
+        </select>
+      </div>
+
+      <div class="tba-fg">
+        <label class="tba-label">Notlar</label>
+        <input type="text" id="tba-notlar" class="tba-input"
+               placeholder="Test amacı…" maxlength="200">
+      </div>
+    </div>
+
+    <div class="tba-olcek-onizleme" id="tba-olcek-onizleme" style="display:none">
+      <div class="tba-olcek-baslik">Ölçeklenen Miktarlar</div>
+      <div id="tba-olcek-icerik" class="tba-olcek-liste"></div>
+    </div>
+
+    <div class="tbu-buton-satir">
+      <button class="tbu-btn tbu-btn-sekonder" onclick="tbaAdim(1)">← Geri</button>
+      <button class="tbu-btn tbu-btn-ana" id="tba-ileri-2"
+              onclick="tbaTestOlustur()" style="background:#0891b2;color:#fff">
+        TEST OLUŞTUR
+      </button>
+    </div>
+    <div id="tba-yukleniyor" style="display:none;text-align:center;padding:20px;color:#9ca3af;font-size:16px">
+      Test oluşturuluyor…
+    </div>
+  </div>
+
+</div>
+
+<style>
+* { box-sizing: border-box; }
+body { background: #f1f5f9; }
+.tba-sayfa {
+  min-height: 100vh; padding: 16px;
+  max-width: 900px; margin: 0 auto;
+}
+.tba-bilgi-kutu {
+  background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 10px;
+  padding: 12px 16px; font-size: 14px; color: #0369a1;
+  margin-bottom: 16px; line-height: 1.6;
+}
+.tba-durum-rozet {
+  font-size: 10px; font-weight: 700; padding: 2px 8px;
+  border-radius: 5px; white-space: nowrap;
+}
+.tba-d-uretime-acik { background:#dbeafe;color:#1d4ed8; }
+.tba-d-onayli       { background:#d1fae5;color:#059669; }
+.tba-d-deneme       { background:#fef3c7;color:#92400e; }
+.tba-d-taslak       { background:#f1f5f9;color:#64748b; }
+
+.tba-form { display:flex; flex-direction:column; gap:16px; margin-bottom:16px; }
+.tba-fg { display:flex; flex-direction:column; gap:6px; }
+.tba-label { font-size:15px; font-weight:700; color:#374151; }
+.tba-zorunlu { color:#dc2626; }
+.tba-input {
+  padding: 12px 14px; border: 2px solid #e5e7eb; border-radius: 10px;
+  font-size: 16px; color: #111827; background: #fff;
+  transition: border-color .15s;
+}
+.tba-input:focus { outline: none; border-color: #0891b2; }
+.tba-hizli-butonlar { display:flex; gap:8px; flex-wrap:wrap; }
+
+.tba-olcek-onizleme {
+  background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px;
+  padding: 14px; margin-bottom: 16px;
+}
+.tba-olcek-baslik { font-size:13px; font-weight:700; color:#374151; margin-bottom:10px; text-transform:uppercase; letter-spacing:.3px; }
+.tba-olcek-liste { display:flex; flex-direction:column; gap:6px; }
+.tba-olcek-satir {
+  display:flex; justify-content:space-between; align-items:center;
+  font-size:14px; padding:6px 0; border-bottom:1px solid #f3f4f6;
+}
+.tba-olcek-satir:last-child { border-bottom:none; }
+.tba-olcek-stok { color:#374151; font-weight:600; }
+.tba-olcek-kg { color:#059669; font-weight:800; font-size:15px; }
+
+@media(max-width:480px){
+  .tba-form { gap:12px; }
+  .tbu-btn { font-size:15px; padding:12px 20px; }
+}
+</style>
+
+<script>
+var _seciliUv2 = null;
+const TBA_AGAC = {{ varyantlar | tojson }};
+
+function tbaSecimYap(el) {
+  document.querySelectorAll('.tbu-recete-kart').forEach(function(k){ k.classList.remove('secili'); });
+  el.classList.add('secili');
+  _seciliUv2 = {
+    id:     parseInt(el.dataset.id),
+    formul: el.dataset.formul,
+    renk:   el.dataset.renk,
+    boyut:  el.dataset.boyut,
+    batch:  parseFloat(el.dataset.batch || 0),
+  };
+  document.getElementById('tba-ileri-1').disabled = false;
+}
+
+function tbaAdim(hedef) {
+  document.getElementById('tba-panel-1').style.display = hedef === 1 ? 'block' : 'none';
+  document.getElementById('tba-panel-2').style.display = hedef === 2 ? 'block' : 'none';
+  ['adim-1','adim-2','adim-3'].forEach(function(id, i) {
+    var el = document.getElementById(id);
+    el.classList.remove('aktif','tamamlandi');
+    if (i + 1 < hedef)  el.classList.add('tamamlandi');
+    if (i + 1 === hedef) el.classList.add('aktif');
+  });
+  if (hedef === 2 && _seciliUv2) {
+    var ozet = document.getElementById('tba-secilen-ozet');
+    ozet.innerHTML = '<strong>' + _seciliUv2.renk + '</strong> — ' + _seciliUv2.boyut +
+                     ' &nbsp;|&nbsp; ' + _seciliUv2.formul +
+                     (_seciliUv2.batch > 0 ? ' &nbsp;<span style="color:#9ca3af;font-size:13px">(Orijinal batch: ' + _seciliUv2.batch + ' KG)</span>' : '');
+    tbaHesapla();
+  }
+}
+
+function tbaHesapla() {
+  if (!_seciliUv2) return;
+  var testKg = parseFloat(document.getElementById('tba-test-kg').value || 0);
+  if (testKg <= 0 || _seciliUv2.batch <= 0) {
+    document.getElementById('tba-olcek-onizleme').style.display = 'none';
+    return;
+  }
+  var carpan = testKg / _seciliUv2.batch;
+  // TBA_AGAC'dan kalemler bul
+  var uv = TBA_AGAC.find(function(v){ return v.id === _seciliUv2.id; });
+  // Kalemler backend'den gelmiyor, sadece ölçek göster
+  var onizleme = document.getElementById('tba-olcek-onizleme');
+  var icerik = document.getElementById('tba-olcek-icerik');
+  icerik.innerHTML =
+    '<div class="tba-olcek-satir">' +
+      '<span class="tba-olcek-stok">Ölçekleme faktörü</span>' +
+      '<span class="tba-olcek-kg">× ' + carpan.toFixed(4) + '</span>' +
+    '</div>' +
+    '<div class="tba-olcek-satir">' +
+      '<span class="tba-olcek-stok">Orijinal batch</span>' +
+      '<span class="tba-olcek-kg">' + _seciliUv2.batch.toFixed(3) + ' KG</span>' +
+    '</div>' +
+    '<div class="tba-olcek-satir">' +
+      '<span class="tba-olcek-stok">Test KG</span>' +
+      '<span class="tba-olcek-kg">' + testKg.toFixed(3) + ' KG</span>' +
+    '</div>';
+  onizleme.style.display = 'block';
+}
+
+function tbaTestOlustur() {
+  if (!_seciliUv2) return;
+  var testKg = parseFloat(document.getElementById('tba-test-kg').value || 0);
+  if (testKg <= 0) { alert('Test KG giriniz.'); return; }
+
+  var renkAdi  = (document.getElementById('tba-renk-adi').value || '').trim();
+  var makina   = document.getElementById('tba-makina').value;
+  var notlar   = (document.getElementById('tba-notlar').value || '').trim();
+
+  document.getElementById('tba-ileri-2').disabled = true;
+  document.getElementById('tba-yukleniyor').style.display = 'block';
+
+  fetch('/nexgen/api/arge/test-olustur', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      kaynak_uv_id:    _seciliUv2.id,
+      test_kg:         parseFloat(testKg.toFixed(3)),
+      yeni_renk_adi:   renkAdi || null,
+      makina:          makina,
+      test_tipi:       'RENK_TEST',
+      aciklama:        notlar || null,
+    })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    document.getElementById('tba-yukleniyor').style.display = 'none';
+    if (d.ok || d.test_id) {
+      var testNo = d.test_no || ('AT-' + d.test_id);
+      window.location.href = '/nexgen/tablet/arge-kod/' + encodeURIComponent(testNo);
+    } else {
+      alert('Hata: ' + (d.hata || 'Bilinmeyen hata'));
+      document.getElementById('tba-ileri-2').disabled = false;
+    }
+  })
+  .catch(function(){
+    document.getElementById('tba-yukleniyor').style.display = 'none';
+    alert('Bağlantı hatası. Lütfen tekrar deneyin.');
+    document.getElementById('tba-ileri-2').disabled = false;
+  });
+}
+</script>
+{% endblock %}

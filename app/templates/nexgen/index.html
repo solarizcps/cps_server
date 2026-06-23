@@ -109,11 +109,16 @@
         </svg>
       </div>
       <div class="ng-kart-icerik">
-        <div class="ng-kart-baslik">Üretim Tablet</div>
-        <div class="ng-kart-aciklama">Üretim sürecinde hammadde giriş/çıkış kayıt ekranı.</div>
+        <div class="ng-kart-baslik">Operatör Tablet</div>
+        <div class="ng-kart-aciklama">Üretim ve AR-GE deneme başlatma, batch kodu üretme.</div>
         <div class="ng-kart-alt">
-          <span class="ng-yakinda">Yakında</span>
-          <a href="/nexgen/uretim" class="ng-btn ng-btn-pasif">Aç</a>
+          {% if can_tablet %}
+            <span class="ng-rozet-aktif">FAZ-5A Aktif</span>
+            <a href="/nexgen/tablet" class="ng-btn ng-btn-aktif">Aç</a>
+          {% else %}
+            <span class="ng-yakinda">Yetki Gerekli</span>
+            <a href="/nexgen/tablet" class="ng-btn ng-btn-pasif">Aç</a>
+          {% endif %}
         </div>
       </div>
     </div>
