@@ -84,6 +84,8 @@
           <th class="ngsk-th-r">Renk Var.</th>
           <th class="ngsk-th-r">Boyut Var.</th>
           <th class="ngsk-th-r">Kalem</th>
+          <th class="ngsk-th-r">Batch KG</th>
+          <th class="ngsk-th-r">KG Maliyet</th>
           <th>Durum</th>
           <th>Onay</th>
           <th>Oluşturan</th>
@@ -112,6 +114,20 @@
           </td>
           <td class="ngsk-td-r">
             <span class="ngrc-sayac">{{ f.kalem_say }}</span>
+          </td>
+          <td class="ngsk-td-r">
+            {% if f.liste_toplam_kg > 0 %}
+              <span class="ngrc-sayac">{{ '{:,.1f}'.format(f.liste_toplam_kg) }}</span>
+              <span class="ngsk-birim"> KG</span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="ngsk-td-r">
+            {% if f.liste_kg_maliyet > 0 %}
+              <span style="color:#059669;font-weight:700">{{ '{:,.2f}'.format(f.liste_kg_maliyet) }}</span>
+              <span class="ngsk-birim"> ₺</span>
+            {% else %}
+              <span class="ngrc-fiyat-yok">—</span>
+            {% endif %}
           </td>
           <td>
             <span class="ngrc-rozet-durum ngrc-d-{{ f.durum|lower }}">
@@ -206,6 +222,7 @@
 }
 .ngrc-ad { font-weight:600; font-size:13px; color:#111827; }
 .ngrc-sayac { font-size:13px; font-weight:700; color:#374151; }
+.ngrc-fiyat-yok { color:#9ca3af; font-weight:400; font-size:12px; }
 
 /* ── Durum rozetleri ── */
 .ngrc-rozet-durum, .ngrc-rozet-onay {

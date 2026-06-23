@@ -598,10 +598,50 @@ def recete_liste():
             GROUP BY f.id
             ORDER BY f.id DESC
         """).fetchall()
+
+        # Her formül için toplam batch KG ve KG maliyet (ilk üretim varyantı bazında özet)
+        formuller = []
+        for f in formuller_raw:
+            f_dict = dict(f)
+            # Tüm aktif kalemler ve fiyatları
+            kalemler = con.execute("""
+                SELECT rk.miktar_kg, rk.stok_kart_id
+                FROM nexgen_recete_kalem rk
+                JOIN nexgen_uretim_varyant uv ON uv.id = rk.uretim_varyant_id
+                JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+                WHERE rv.formul_id = ? AND rv.aktif = 1
+                  AND uv.aktif = 1 AND rk.aktif = 1
+            """, (f_dict['id'],)).fetchall()
+
+            if kalemler:
+                toplam_kg = round(sum(k['miktar_kg'] for k in kalemler), 3)
+                toplam_maliyet = 0.0
+                for k in kalemler:
+                    fiyat_row = con.execute("""
+                        SELECT fiyat, para_birimi, kur, fiyat_try
+                        FROM nexgen_hammadde_fiyat
+                        WHERE stok_kart_id = ? AND aktif = 1
+                        ORDER BY fiyat_tarihi DESC, id DESC LIMIT 1
+                    """, (k['stok_kart_id'],)).fetchone()
+                    if fiyat_row:
+                        if fiyat_row['fiyat_try'] and fiyat_row['fiyat_try'] > 0:
+                            birim_fiyat = float(fiyat_row['fiyat_try'])
+                        elif fiyat_row['para_birimi'] == 'TRY':
+                            birim_fiyat = float(fiyat_row['fiyat'] or 0)
+                        elif fiyat_row['kur'] and fiyat_row['kur'] > 0:
+                            birim_fiyat = float(fiyat_row['fiyat'] or 0) * float(fiyat_row['kur'])
+                        else:
+                            birim_fiyat = float(fiyat_row['fiyat'] or 0)
+                        toplam_maliyet += float(k['miktar_kg']) * birim_fiyat
+                f_dict['liste_toplam_kg']  = toplam_kg
+                f_dict['liste_kg_maliyet'] = round(toplam_maliyet / toplam_kg, 2) if toplam_kg > 0 else 0.0
+            else:
+                f_dict['liste_toplam_kg']  = 0.0
+                f_dict['liste_kg_maliyet'] = 0.0
+            formuller.append(f_dict)
+
     finally:
         con.close()
-
-    formuller = [dict(r) for r in formuller_raw]
 
     can_create  = yetki_var('nexgen.recete.create',  'can_create')
     can_approve = yetki_var('nexgen.recete.approve', 'can_approve')
@@ -642,7 +682,27 @@ def recete_detay(formul_id):
             ORDER BY rv.id
         """, (formul_id,)).fetchall()
 
-        # Her renk için üretim varyantları + kalemleri
+        # Stok kartı bazında son aktif TRY fiyatı (fiyat yoksa 0)
+        # Öncelik: fiyat_try varsa → kullan; yoksa fiyat*kur; yoksa 0
+        def _son_fiyat_try(stok_kart_id):
+            row = con.execute("""
+                SELECT fiyat, para_birimi, kur, fiyat_try
+                FROM nexgen_hammadde_fiyat
+                WHERE stok_kart_id = ? AND aktif = 1
+                ORDER BY fiyat_tarihi DESC, id DESC
+                LIMIT 1
+            """, (stok_kart_id,)).fetchone()
+            if not row:
+                return 0.0
+            if row['fiyat_try'] and row['fiyat_try'] > 0:
+                return float(row['fiyat_try'])
+            if row['para_birimi'] == 'TRY':
+                return float(row['fiyat'] or 0)
+            if row['kur'] and row['kur'] > 0:
+                return round(float(row['fiyat'] or 0) * float(row['kur']), 4)
+            return float(row['fiyat'] or 0)
+
+        # Her renk için üretim varyantları + kalemleri + maliyet
         agac = []
         for rv in renk_raw:
             uretim_raw = con.execute("""
@@ -656,7 +716,7 @@ def recete_detay(formul_id):
 
             uretim_listesi = []
             for uv in uretim_raw:
-                kalemler = con.execute("""
+                kalemler_raw = con.execute("""
                     SELECT rk.*, sk.kod AS stok_kod, sk.ad AS stok_ad,
                            sk.kategori, sk.birim
                     FROM nexgen_recete_kalem rk
@@ -665,11 +725,30 @@ def recete_detay(formul_id):
                     ORDER BY rk.sira, rk.id
                 """, (uv['id'],)).fetchall()
 
-                toplam_kg = sum(k['miktar_kg'] for k in kalemler)
+                kalemler = []
+                toplam_kg    = 0.0
+                toplam_maliyet = 0.0
+                for k in kalemler_raw:
+                    k_dict = dict(k)
+                    miktar = float(k_dict.get('miktar_kg') or 0)
+                    birim_fiyat = _son_fiyat_try(k_dict['stok_kart_id'])
+                    satir_maliyet = round(miktar * birim_fiyat, 4)
+                    k_dict['birim_fiyat_try'] = birim_fiyat
+                    k_dict['satir_maliyet']   = satir_maliyet
+                    toplam_kg      += miktar
+                    toplam_maliyet += satir_maliyet
+                    kalemler.append(k_dict)
+
+                toplam_kg      = round(toplam_kg, 3)
+                toplam_maliyet = round(toplam_maliyet, 4)
+                kg_maliyet = round(toplam_maliyet / toplam_kg, 4) if toplam_kg > 0 else 0.0
+
                 uretim_listesi.append({
                     **dict(uv),
-                    'kalemler': [dict(k) for k in kalemler],
-                    'toplam_kg': round(toplam_kg, 3),
+                    'kalemler':       kalemler,
+                    'toplam_kg':      toplam_kg,
+                    'toplam_maliyet': toplam_maliyet,
+                    'kg_maliyet':     kg_maliyet,
                 })
 
             agac.append({

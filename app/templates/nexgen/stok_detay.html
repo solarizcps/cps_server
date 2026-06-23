@@ -20,7 +20,7 @@
     <div class="ngsd-ozet-kart ngsd-stok-kart">
       <div class="ngsd-ozet-etiket">Mevcut Stok</div>
       <div class="ngsd-ozet-deger ngsd-stok-{{ durum }}">
-        {{ "%.1f"|format(mevcut_stok) }}
+        {{ "%.3g"|format(mevcut_stok) }}
         <span class="ngsd-birim">{{ kart.birim }}</span>
       </div>
       <div class="ngsd-stok-durum-etiket">
@@ -183,14 +183,14 @@
             </td>
             <td class="ngsd-td-r">
               {% if h.miktar_kg >= 0 %}
-                <span class="ngsd-miktar-artı">+{{ "%.1f"|format(h.miktar_kg) }}</span>
+                <span class="ngsd-miktar-artı">+{{ "%.3g"|format(h.miktar_kg) }}</span>
               {% else %}
-                <span class="ngsd-miktar-eksi">{{ "%.1f"|format(h.miktar_kg) }}</span>
+                <span class="ngsd-miktar-eksi">{{ "%.3g"|format(h.miktar_kg) }}</span>
               {% endif %}
               <span class="ngsd-birim-kucuk">{{ kart.birim }}</span>
             </td>
             <td class="ngsd-td-r">
-              <span class="ngsd-sonraki">{{ "%.1f"|format(h.sonraki_stok) }}</span>
+              <span class="ngsd-sonraki">{{ "%.3g"|format(h.sonraki_stok) }}</span>
               <span class="ngsd-birim-kucuk">{{ kart.birim }}</span>
             </td>
             <td class="ngsd-td-aciklama">{{ h.aciklama or '—' }}</td>
@@ -246,11 +246,11 @@
               </span>
             </td>
             <td class="ngsd-td-r">
-              <span class="ngsd-miktar-artı">+{{ "%.1f"|format(h.miktar_kg|abs) }}</span>
+              <span class="ngsd-miktar-artı">+{{ "%.3g"|format(h.miktar_kg|abs) }}</span>
               <span class="ngsd-birim-kucuk">{{ kart.birim }}</span>
             </td>
             <td class="ngsd-td-r">
-              <span class="ngsd-sonraki">{{ "%.1f"|format(h.sonraki_stok) }}</span>
+              <span class="ngsd-sonraki">{{ "%.3g"|format(h.sonraki_stok) }}</span>
               <span class="ngsd-birim-kucuk">{{ kart.birim }}</span>
             </td>
             <td class="ngsd-td-aciklama">
@@ -300,11 +300,11 @@
               </span>
             </td>
             <td class="ngsd-td-r">
-              <span class="ngsd-miktar-eksi">{{ "%.1f"|format(h.miktar_kg|abs) }}</span>
+              <span class="ngsd-miktar-eksi">{{ "%.3g"|format(h.miktar_kg|abs) }}</span>
               <span class="ngsd-birim-kucuk">{{ kart.birim }}</span>
             </td>
             <td class="ngsd-td-r">
-              <span class="ngsd-sonraki">{{ "%.1f"|format(h.sonraki_stok) }}</span>
+              <span class="ngsd-sonraki">{{ "%.3g"|format(h.sonraki_stok) }}</span>
               <span class="ngsd-birim-kucuk">{{ kart.birim }}</span>
             </td>
             <td class="ngsd-td-aciklama">

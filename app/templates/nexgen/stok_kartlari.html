@@ -118,7 +118,7 @@
               </span>
             </td>
             <td class="ngsk-td-r ngsk-stok-miktar">
-              <span class="ngsk-miktar-deger ngsk-stok-{{ k.durum }}">{{ "%.1f"|format(k.mevcut_stok) }}</span>
+              <span class="ngsk-miktar-deger ngsk-stok-{{ k.durum }}">{{ "%.3g"|format(k.mevcut_stok) }}</span>
               <span class="ngsk-birim">{{ k.birim }}</span>
               <div class="ngsk-alt-bilgi ngsk-alt-r">
                 Min: {{ "%.0f"|format(k.minimum_stok) }} / Kritik: {{ "%.0f"|format(k.kritik_stok) }}
@@ -814,7 +814,11 @@ function _tipCss(tip) {
 }
 function _fmt(n) {
   const v = parseFloat(n);
-  return isNaN(v) ? '—' : (v >= 0 ? '+' + v.toFixed(1) : v.toFixed(1));
+  if (isNaN(v)) return '—';
+  const abs = Math.abs(v);
+  // max 3 ondalık, trailing zero olmadan
+  const s = abs.toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+  return v >= 0 ? '+' + s : '-' + s;
 }
 
 function _panelDoldur(d) {
@@ -882,7 +886,7 @@ function _panelDoldur(d) {
 
     <div class="ngsp-stok-kart-row">
       <div class="ngsp-stok-kutu">
-        <span class="ngsp-stok-deger ${_durumCss(dur)}">${parseFloat(ms).toFixed(1)}</span>
+        <span class="ngsp-stok-deger ${_durumCss(dur)}">${parseFloat(ms).toLocaleString('tr-TR', {minimumFractionDigits: 0, maximumFractionDigits: 3})}</span>
         <span class="ngsp-stok-etiket">Mevcut ${k.birim}</span>
       </div>
       <div class="ngsp-stok-kutu">

@@ -156,9 +156,37 @@
           {% endfor %}
         </div>
 
-        {# ── Her Boyutun Kalem Tablosu ── #}
+        {# ── Kalem Tablosu ── #}
         {% for uv in rv.uretim_listesi %}
         <div id="ngrc-boyut-{{ rv.id }}-{{ uv.id }}" class="ngrc-boyut-panel" style="display:none">
+
+          {# Batch KG + Maliyet Özet Bandı #}
+          <div class="ngrc-batch-ozet">
+            <div class="ngrc-batch-item">
+              <span class="ngrc-batch-etiket">Toplam Batch KG</span>
+              <span class="ngrc-batch-deger">{{ '{:,.3f}'.format(uv.toplam_kg) }} KG</span>
+            </div>
+            <div class="ngrc-batch-item">
+              <span class="ngrc-batch-etiket">Toplam Reçete Maliyeti</span>
+              <span class="ngrc-batch-deger">
+                {% if uv.toplam_maliyet > 0 %}
+                  {{ '{:,.2f}'.format(uv.toplam_maliyet) }} ₺
+                {% else %}
+                  <span class="ngrc-fiyat-yok">Fiyat Yok</span>
+                {% endif %}
+              </span>
+            </div>
+            <div class="ngrc-batch-item">
+              <span class="ngrc-batch-etiket">1 KG Compound Maliyeti</span>
+              <span class="ngrc-batch-deger ngrc-batch-ana">
+                {% if uv.kg_maliyet > 0 %}
+                  {{ '{:,.4f}'.format(uv.kg_maliyet) }} ₺/KG
+                {% else %}
+                  <span class="ngrc-fiyat-yok">—</span>
+                {% endif %}
+              </span>
+            </div>
+          </div>
 
           {% if not uv.kalemler %}
           <div class="ngsd-placeholder-aciklama" style="padding:20px;text-align:center;color:#9ca3af">
@@ -172,8 +200,10 @@
                   <th style="width:36px">#</th>
                   <th>Hammadde</th>
                   <th>Kategori</th>
-                  <th class="ngsk-th-r">100 KG Baz (KG)</th>
+                  <th class="ngsk-th-r">Miktar KG</th>
                   <th class="ngsk-th-r">%</th>
+                  <th class="ngsk-th-r">Birim Fiyat (₺/KG)</th>
+                  <th class="ngsk-th-r">Satır Maliyeti (₺)</th>
                   <th>Açıklama</th>
                 </tr>
               </thead>
@@ -200,6 +230,20 @@
                       {{ '{:.1f}'.format(k.miktar_kg / uv.toplam_kg * 100) }}%
                     {% else %}—{% endif %}
                   </td>
+                  <td class="ngsk-td-r">
+                    {% if k.birim_fiyat_try and k.birim_fiyat_try > 0 %}
+                      {{ '{:,.4f}'.format(k.birim_fiyat_try) }}
+                    {% else %}
+                      <span class="ngrc-fiyat-yok">—</span>
+                    {% endif %}
+                  </td>
+                  <td class="ngsk-td-r">
+                    {% if k.satir_maliyet and k.satir_maliyet > 0 %}
+                      {{ '{:,.2f}'.format(k.satir_maliyet) }}
+                    {% else %}
+                      <span class="ngrc-fiyat-yok">0,00</span>
+                    {% endif %}
+                  </td>
                   <td class="ngsk-alt-bilgi">{{ k.aciklama or '—' }}</td>
                 </tr>
                 {% endfor %}
@@ -213,6 +257,16 @@
                   </td>
                   <td class="ngsk-td-r">
                     {% if uv.toplam_kg > 0 %}100.0%{% else %}—{% endif %}
+                  </td>
+                  <td class="ngsk-td-r">
+                    {% if uv.kg_maliyet > 0 %}
+                      <span style="color:#059669;font-size:11px">1 KG = {{ '{:,.2f}'.format(uv.kg_maliyet) }} ₺</span>
+                    {% else %}—{% endif %}
+                  </td>
+                  <td class="ngsk-td-r">
+                    {% if uv.toplam_maliyet > 0 %}
+                      <strong>{{ '{:,.2f}'.format(uv.toplam_maliyet) }} ₺</strong>
+                    {% else %}—{% endif %}
                   </td>
                   <td></td>
                 </tr>
@@ -249,7 +303,7 @@
     <div class="ngrc-hesap-kart">
       <div class="ngrc-hesap-baslik">Hammadde Hesap Paneli</div>
       <div class="ngrc-hesap-aciklama">
-        Reçete kalemleri 100 KG compound bazında tutulur. Hedef KG girerek gerekli miktarları hesaplayın.
+        Reçete kalemleri gerçek batch KG ile hesaplanır. Hedef KG girerek gerekli miktarları orantılı hesaplayın.
         <strong>Bu panel yalnızca hesaplama yapar — stok veya üretim kaydı oluşturmaz.</strong>
       </div>
 
@@ -288,9 +342,9 @@
 
       <div id="hs-sonuc-alan" style="display:none">
         <div class="ngrc-hesap-ozet">
-          Hedef: <strong id="hs-hedef-goster">—</strong> KG
+          Baz Batch: <strong id="hs-baz-goster">—</strong> KG
+          &nbsp;|&nbsp; Hedef: <strong id="hs-hedef-goster">—</strong> KG
           &nbsp;|&nbsp; Çarpan: <strong id="hs-carpan-goster">—</strong>
-          &nbsp;|&nbsp; Baz: 100 KG
         </div>
         <div class="ngrc-kalem-cerceve">
           <table class="ngrc-kalem-tablo">
@@ -423,6 +477,28 @@ const RC_AGAC = {{ agac | tojson }};
   font-size:10px; font-weight:700; background:#f1f5f9; color:#475569;
   padding:1px 5px; border-radius:6px;
 }
+
+/* ── Batch Özet Bandı ── */
+.ngrc-batch-ozet {
+  display:flex; gap:0; flex-wrap:wrap;
+  background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px;
+  margin-bottom:14px; overflow:hidden;
+}
+.ngrc-batch-item {
+  display:flex; flex-direction:column; gap:2px;
+  padding:10px 18px; flex:1; min-width:160px;
+  border-right:1px solid #d1fae5;
+}
+.ngrc-batch-item:last-child { border-right:none; }
+.ngrc-batch-etiket {
+  font-size:10px; font-weight:700; color:#065f46;
+  text-transform:uppercase; letter-spacing:.4px;
+}
+.ngrc-batch-deger {
+  font-size:14px; font-weight:700; color:#111827;
+}
+.ngrc-batch-ana { font-size:16px; color:#059669; }
+.ngrc-fiyat-yok { color:#9ca3af; font-weight:400; font-size:12px; }
 
 /* ── Kalem tablo ── */
 .ngrc-kalem-cerceve {
@@ -606,17 +682,20 @@ function hsHesapla() {
     return;
   }
 
-  const carpan = hedefKg / 100;
-  document.getElementById('hs-hedef-goster').textContent = hedefKg.toFixed(3);
+  // Gerçek batch KG (100 KG sabit değil)
+  const bazKg = uv.toplam_kg || uv.kalemler.reduce(function(s,k){ return s + k.miktar_kg; }, 0);
+  const carpan = bazKg > 0 ? hedefKg / bazKg : 0;
+
+  document.getElementById('hs-baz-goster').textContent    = bazKg.toFixed(3);
+  document.getElementById('hs-hedef-goster').textContent  = hedefKg.toFixed(3);
   document.getElementById('hs-carpan-goster').textContent = carpan.toFixed(5);
 
   const tbody = document.getElementById('hs-tablo-body');
   tbody.innerHTML = '';
-  let bazToplam = 0, hesapToplam = 0;
+  let hesapToplam = 0;
 
   uv.kalemler.forEach(function(k, idx) {
     const hesaplanan = k.miktar_kg * carpan;
-    bazToplam   += k.miktar_kg;
     hesapToplam += hesaplanan;
     const tr = document.createElement('tr');
     tr.innerHTML =
@@ -629,7 +708,7 @@ function hsHesapla() {
     tbody.appendChild(tr);
   });
 
-  document.getElementById('hs-baz-toplam').textContent   = bazToplam.toFixed(3);
+  document.getElementById('hs-baz-toplam').textContent   = bazKg.toFixed(3);
   document.getElementById('hs-hesap-toplam').textContent = hesapToplam.toFixed(3);
 
   sonucAlan.style.display = 'block';
