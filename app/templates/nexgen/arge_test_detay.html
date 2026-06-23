@@ -58,6 +58,24 @@
         {{ test.durum or 'TASLAK' }}
       </span>
     </div>
+    {% if can_manage and test.durum == 'ONAYLANDI' and not olusan_uv %}
+    <div class="ngat-bilgi-item" style="justify-content:center">
+      <button class="ngsk-btn-yeni" style="white-space:nowrap" onclick="urAcModal()">
+        ↑ Üretim Reçetesi Oluştur
+      </button>
+    </div>
+    {% endif %}
+    {% if olusan_uv %}
+    <div class="ngat-bilgi-item ngat-baglanti-item">
+      <span class="ngrc-batch-etiket">Oluşan Reçete</span>
+      <a href="/nexgen/recete/{{ olusan_uv.formul_id }}" class="ngsk-link" title="Reçete Detayı">
+        {{ olusan_uv.formul_kod }} / {{ olusan_uv.renk_ad }} / {{ olusan_uv.boyut }}
+        <span class="ngrc-rd-rozet ngrc-rd-{{ olusan_uv.recete_durum|lower|replace('_','-') }}" style="margin-left:6px">
+          {{ olusan_uv.recete_durum }}
+        </span>
+      </a>
+    </div>
+    {% endif %}
   </div>
 
   {# ── Sekme Bar ──────────────────────────────────────────────#}
@@ -245,6 +263,90 @@
 
 </div>{# /.ng-sayfa #}
 
+{# ═══════════════════════════════════════════════════════════ #}
+{# MODAL: ÜRETİM REÇETESİ OLUŞTUR                              #}
+{# FAZ-4C-4 — sadece ONAYLANDI testlerde görünür               #}
+{# KURAL: nexgen_stok_hareket YAZILMAZ                         #}
+{# ═══════════════════════════════════════════════════════════ #}
+{% if can_manage and test.durum == 'ONAYLANDI' and not olusan_uv %}
+<div id="ur-modal-bg" class="ngat-aktarim-modal-bg" style="display:none" onclick="urModalBgClick(event)">
+  <div class="ngat-aktarim-modal">
+    <div class="ngat-aktarim-modal-hdr">
+      <h3>Üretim Reçetesi Oluştur</h3>
+      <button class="ngat-aktarim-modal-kapat" onclick="urKapat()">✕</button>
+    </div>
+    <div class="ngat-aktarim-modal-body">
+
+      <div style="font-size:12px;color:#6b7280;margin-bottom:14px">
+        Test: <strong>{{ test.test_no }}</strong> —
+        Kaynak: {{ test.formul_kod }} / {{ test.renk_ad }} / {{ test.boyut }}
+        ({{ '{:,.3f}'.format(test.kaynak_batch_kg) }} KG)
+        <br>
+        Test kalemleri <strong>geri ölçeklenerek</strong> {{ '{:,.3f}'.format(test.kaynak_batch_kg) }} KG üretim reçetesi oluşturulacak.
+      </div>
+
+      <div class="ngrc-arge-form">
+        <div class="ngsk-fg" style="width:100%">
+          <label>Hedef Formül</label>
+          <select id="ur-formul" onchange="urFormulSec()">
+            <option value="">Yükleniyor…</option>
+          </select>
+        </div>
+        <div class="ngsk-fg" style="width:100%">
+          <label>Renk Varyantı</label>
+          <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">
+            <div style="flex:1;min-width:160px">
+              <select id="ur-mevcut-renk" style="width:100%" onchange="urRenkSec()">
+                <option value="">— Yeni renk oluştur —</option>
+              </select>
+              <div style="font-size:11px;color:#9ca3af;margin-top:3px">Mevcut renk seç (opsiyonel)</div>
+            </div>
+            <div style="flex:1;min-width:160px">
+              <input type="text" id="ur-yeni-renk" placeholder="Yeni renk adı (örn: MAVİ)"
+                     maxlength="80" oninput="urOnizle()">
+              <div style="font-size:11px;color:#9ca3af;margin-top:3px" id="ur-renk-yorum">Yeni renk oluşturulacak</div>
+            </div>
+          </div>
+        </div>
+        <div class="ngsk-fg" style="max-width:160px">
+          <label>Üretim Tipi</label>
+          <select id="ur-boyut" onchange="urOnizle()">
+            <option value="LARGE">LARGE</option>
+            <option value="SMALL">SMALL</option>
+            <option value="STANDART">STANDART</option>
+          </select>
+        </div>
+        <div class="ngsk-fg" style="max-width:200px">
+          <label>Reçete Durumu</label>
+          <select id="ur-recete-durum">
+            <option value="ONAYLI">ONAYLI</option>
+            <option value="URETIME_ACIK">URETIME_ACIK</option>
+          </select>
+        </div>
+        <div class="ngsk-fg" style="width:100%">
+          <label>Notlar</label>
+          <input type="text" id="ur-notlar" placeholder="Aktarım notu…" maxlength="200">
+        </div>
+      </div>
+
+      {# Önizleme #}
+      <div id="ur-onizleme" class="ngat-onizleme-band" style="display:none">
+        <div id="ur-onizleme-text"></div>
+      </div>
+
+    </div>
+    <div class="ngat-aktarim-modal-ftr">
+      <button class="ngsk-btn-yeni" id="ur-kaydet-btn" onclick="urKaydet()" disabled>
+        Üretim Reçetesi Oluştur
+      </button>
+      <button class="ngsk-btn-iptal" onclick="urKapat()">Vazgeç</button>
+      <div id="ur-hata"   class="ngrc-klon-hata"   style="display:none;flex:1"></div>
+      <div id="ur-basari" class="ngrc-klon-basari"  style="display:none;flex:1"></div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <style>
 /* ── AR-GE Test Detay ── */
 .ngat-bilgi-band {
@@ -314,11 +416,49 @@
   background:#f9fafb; border:1px solid #e5e7eb; border-radius:10px;
   padding:14px; margin-bottom:14px;
 }
+.ngat-baglanti-item {
+  background:#ecfdf5; border-left:3px solid #059669;
+}
+.ngat-aktarim-modal-bg {
+  position:fixed; inset:0; background:rgba(15,23,42,.45);
+  display:flex; align-items:center; justify-content:center;
+  z-index:9999; padding:16px;
+}
+.ngat-aktarim-modal {
+  background:#fff; border-radius:16px; width:100%; max-width:540px;
+  box-shadow:0 20px 60px rgba(15,23,42,.18);
+  display:flex; flex-direction:column; max-height:90vh;
+  overflow:hidden;
+}
+.ngat-aktarim-modal-hdr {
+  padding:18px 22px 14px; border-bottom:1px solid #f3f4f6;
+  display:flex; align-items:center; justify-content:space-between;
+}
+.ngat-aktarim-modal-hdr h3 {
+  margin:0; font-size:15px; font-weight:700; color:#111827;
+}
+.ngat-aktarim-modal-kapat {
+  background:none; border:none; cursor:pointer; color:#9ca3af;
+  font-size:20px; line-height:1; padding:2px;
+}
+.ngat-aktarim-modal-body {
+  padding:20px 22px; overflow-y:auto; flex:1;
+}
+.ngat-aktarim-modal-ftr {
+  padding:14px 22px; border-top:1px solid #f3f4f6;
+  display:flex; gap:10px; align-items:center;
+}
+.ngat-onizleme-band {
+  background:#f0fdf4; border:1px solid #a7f3d0; border-radius:8px;
+  padding:10px 14px; margin-bottom:14px; font-size:13px;
+}
 </style>
 
 <script>
 const AT_TEST_ID = {{ test.id }};
 const AT_DURUM   = '{{ test.durum or "TASLAK" }}';
+const AT_KAYNAK_BATCH = {{ test.kaynak_batch_kg }};
+const AT_TEST_BATCH   = {{ test.test_batch_kg }};
 
 const AT_SEKMELER = ['karsilastirma', 'sonuc'];
 function atSekme(hedef) {
@@ -392,6 +532,164 @@ function atSonucKaydet() {
     hataDiv.textContent = 'Bağlantı hatası.';
     hataDiv.style.display = 'block';
     if (btn) { btn.disabled = false; btn.textContent = 'Sonucu Kaydet'; }
+  });
+}
+// ══════════════════════════════════════════════════════════════
+// FAZ-4C-4: ÜRETİM REÇETESİ OLUŞTUR
+// ══════════════════════════════════════════════════════════════
+
+var UR_FORMULLER = [];
+var UR_RENKLER   = [];
+
+function urAcModal() {
+  document.getElementById('ur-modal-bg').style.display = 'flex';
+  if (!UR_FORMULLER.length) urYukle();
+}
+function urKapat() {
+  document.getElementById('ur-modal-bg').style.display = 'none';
+}
+function urModalBgClick(e) {
+  if (e.target === document.getElementById('ur-modal-bg')) urKapat();
+}
+
+function urYukle() {
+  fetch('/nexgen/api/arge/hedef-formuller')
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      UR_FORMULLER = d.formuller || [];
+      UR_RENKLER   = d.renkler || [];
+
+      var sel = document.getElementById('ur-formul');
+      sel.innerHTML = '<option value="">— Formül seçin —</option>';
+      UR_FORMULLER.forEach(function(f) {
+        var opt = document.createElement('option');
+        opt.value = f.id;
+        opt.textContent = f.kod + ' — ' + f.ad;
+        sel.appendChild(opt);
+      });
+    })
+    .catch(function() {
+      var sel = document.getElementById('ur-formul');
+      sel.innerHTML = '<option value="">Yüklenemedi</option>';
+    });
+}
+
+function urFormulSec() {
+  var formul_id = parseInt(document.getElementById('ur-formul').value) || 0;
+  var renk_sel  = document.getElementById('ur-mevcut-renk');
+  renk_sel.innerHTML = '<option value="">— Yeni renk oluştur —</option>';
+
+  if (formul_id) {
+    var renkler = UR_RENKLER.filter(function(r){ return r.formul_id === formul_id; });
+    renkler.forEach(function(r) {
+      var opt = document.createElement('option');
+      opt.value = r.id;
+      opt.textContent = r.ad + (r.boyutlar ? ' (' + r.boyutlar + ')' : '');
+      renk_sel.appendChild(opt);
+    });
+  }
+  urOnizle();
+}
+
+function urRenkSec() {
+  var renkId = parseInt(document.getElementById('ur-mevcut-renk').value) || 0;
+  var yeniInput = document.getElementById('ur-yeni-renk');
+  var yorum     = document.getElementById('ur-renk-yorum');
+  if (renkId) {
+    yeniInput.disabled = true;
+    yorum.textContent  = 'Mevcut renk kullanılacak';
+    yorum.style.color  = '#059669';
+  } else {
+    yeniInput.disabled = false;
+    yorum.textContent  = 'Yeni renk oluşturulacak';
+    yorum.style.color  = '#9ca3af';
+  }
+  urOnizle();
+}
+
+function urOnizle() {
+  var formul_id  = parseInt(document.getElementById('ur-formul').value) || 0;
+  var mevcutRenk = parseInt(document.getElementById('ur-mevcut-renk').value) || 0;
+  var yeniRenk   = document.getElementById('ur-yeni-renk').value.trim();
+  var boyut      = document.getElementById('ur-boyut').value;
+  var btn        = document.getElementById('ur-kaydet-btn');
+  var onizleme   = document.getElementById('ur-onizleme');
+  var onizTxt    = document.getElementById('ur-onizleme-text');
+
+  var gecerli = formul_id && (mevcutRenk || yeniRenk) && boyut;
+  btn.disabled = !gecerli;
+
+  if (gecerli) {
+    var renkAd = mevcutRenk
+      ? (UR_RENKLER.find(function(r){ return r.id === mevcutRenk; }) || {ad:'?'}).ad
+      : yeniRenk;
+    var geriCarpan = AT_KAYNAK_BATCH / AT_TEST_BATCH;
+    onizTxt.innerHTML =
+      '↑ Geri çarpan: <strong>' + geriCarpan.toFixed(4) + '</strong> ' +
+      '(test_batch=' + AT_TEST_BATCH.toFixed(3) + ' KG → kaynak=' + AT_KAYNAK_BATCH.toFixed(3) + ' KG)' +
+      '<br>Oluşacak reçete: <strong>' + renkAd + ' / ' + boyut + '</strong> · ~' +
+      AT_KAYNAK_BATCH.toFixed(1) + ' KG batch';
+    onizleme.style.display = 'block';
+  } else {
+    onizleme.style.display = 'none';
+  }
+}
+
+function urKaydet() {
+  var btn      = document.getElementById('ur-kaydet-btn');
+  var hataDiv  = document.getElementById('ur-hata');
+  var basariDiv = document.getElementById('ur-basari');
+  hataDiv.style.display   = 'none';
+  basariDiv.style.display = 'none';
+
+  var formul_id  = parseInt(document.getElementById('ur-formul').value) || 0;
+  var mevcutRenk = parseInt(document.getElementById('ur-mevcut-renk').value) || 0;
+  var yeniRenk   = document.getElementById('ur-yeni-renk').value.trim();
+  var boyut      = document.getElementById('ur-boyut').value;
+
+  if (!formul_id) {
+    hataDiv.textContent = 'Formül seçin.';
+    hataDiv.style.display = 'block'; return;
+  }
+  if (!mevcutRenk && !yeniRenk) {
+    hataDiv.textContent = 'Renk adı girin veya mevcut renk seçin.';
+    hataDiv.style.display = 'block'; return;
+  }
+
+  btn.disabled = true; btn.textContent = 'Oluşturuluyor…';
+
+  fetch('/nexgen/api/arge/uretim-recetesi-olustur', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      test_id:         AT_TEST_ID,
+      hedef_formul_id: formul_id,
+      yeni_renk_adi:   yeniRenk || null,
+      mevcut_renk_id:  mevcutRenk || null,
+      boyut:           boyut,
+      recete_durum:    document.getElementById('ur-recete-durum').value,
+      notlar:          document.getElementById('ur-notlar').value.trim() || null
+    })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d) {
+    if (d.ok) {
+      basariDiv.textContent = '✓ ' + d.mesaj + ' Reçete sayfasına yönlendiriliyorsunuz…';
+      basariDiv.style.display = 'block';
+      btn.textContent = 'Oluşturuldu ✓';
+      setTimeout(function() {
+        window.location.href = '/nexgen/recete/' + (d.yeni_renk_varyant_id ? '' : '') + '?uv=' + d.yeni_uv_id;
+      }, 2000);
+    } else {
+      hataDiv.textContent = d.hata || 'Hata.';
+      hataDiv.style.display = 'block';
+      btn.disabled = false; btn.textContent = 'Üretim Reçetesi Oluştur';
+    }
+  })
+  .catch(function() {
+    hataDiv.textContent = 'Bağlantı hatası.';
+    hataDiv.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Üretim Reçetesi Oluştur';
   });
 }
 </script>

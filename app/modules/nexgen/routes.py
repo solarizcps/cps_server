@@ -1204,6 +1204,21 @@ def arge_test_detay(test_id):
             ORDER BY tk.sira
         """, (test_id,)).fetchall()
 
+        # Bağlantılı üretim varyantı bilgisi (FAZ-4C-4)
+        olusan_uv = None
+        test_d = dict(test)
+        if test_d.get('olusan_uretim_varyant_id'):
+            row = con.execute("""
+                SELECT uv.id, uv.ad, uv.boyut, uv.recete_durum,
+                       rv.ad AS renk_ad, f.kod AS formul_kod, f.id AS formul_id
+                FROM nexgen_uretim_varyant uv
+                JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
+                JOIN nexgen_formul f        ON f.id  = rv.formul_id
+                WHERE uv.id = ?
+            """, (test_d['olusan_uretim_varyant_id'],)).fetchone()
+            if row:
+                olusan_uv = dict(row)
+
     finally:
         con.close()
 
@@ -1212,9 +1227,10 @@ def arge_test_detay(test_id):
     return render_template(
         'nexgen/arge_test_detay.html',
         active='nexgen',
-        test=dict(test),
+        test=test_d,
         kalemler=[dict(k) for k in kalemler],
         can_manage=can_manage,
+        olusan_uv=olusan_uv,
     )
 
 
@@ -1312,6 +1328,253 @@ def api_arge_gecmis(uv_id):
     finally:
         con.close()
     return jsonify([dict(r) for r in rows])
+
+# ═════════════════════════════════════════════════════════════
+# FAZ-4C-4: ARGE TESTTEN ÜRETİM REÇETESİNE AKTARIM
+# ─────────────────────────────────────────────────────────────
+# KURAL: Sadece ONAYLANDI durumdaki testler aktarılabilir.
+#        nexgen_stok_hareket YAZILMAZ.
+#        Kaynak renk_varyant / uretim_varyant kalemleri değişmez.
+#        Geri ölçekleme: uretim_kg = test_kg / test_batch * kaynak_batch
+# ─────────────────────────────────────────────────────────────
+
+@nexgen_bp.route('/api/arge/hedef-formuller', methods=['GET'])
+@yetki_gerekli('nexgen.recete.view', 'can_view')
+def api_arge_hedef_formuller():
+    """Modal için: aktif formüller + her formülün mevcut renk varyantları."""
+    con = _db()
+    try:
+        formuller = con.execute(
+            "SELECT id, kod, ad FROM nexgen_formul WHERE aktif=1 ORDER BY kod"
+        ).fetchall()
+        renkler = con.execute("""
+            SELECT rv.id, rv.formul_id, rv.ad, rv.kod AS rv_kod,
+                   GROUP_CONCAT(uv.boyut) AS boyutlar
+            FROM nexgen_renk_varyant rv
+            LEFT JOIN nexgen_uretim_varyant uv ON uv.renk_varyant_id=rv.id AND uv.aktif=1
+            WHERE rv.aktif=1
+            GROUP BY rv.id
+            ORDER BY rv.formul_id, rv.id
+        """).fetchall()
+    finally:
+        con.close()
+
+    return jsonify({
+        "formuller": [dict(f) for f in formuller],
+        "renkler":   [dict(r) for r in renkler],
+    })
+
+
+@nexgen_bp.route('/api/arge/uretim-recetesi-olustur', methods=['POST'])
+@yetki_gerekli('nexgen.recete.manage', 'can_manage')
+def api_arge_uretim_recetesi_olustur():
+    """Onaylı ARGE testinden üretim reçetesi oluşturur.
+
+    Adımlar:
+    1) Test ONAYLANDI mı kontrol et.
+    2) Test kalemlerini geri ölçekle (test_kg / test_batch * kaynak_batch).
+    3) Renk varyantı: varsa mevcut seç, yoksa yeni oluştur.
+    4) Üretim varyantı oluştur (recete_durum=ONAYLI veya URETIME_ACIK).
+    5) Reçete kalemlerini nexgen_recete_kalem'e yaz.
+    6) nexgen_arge_test.olusan_uretim_varyant_id güncelle.
+
+    KURAL: nexgen_stok_hareket YAZILMAZ.
+           Kaynak reçete kalemleri DEĞİŞMEZ.
+
+    POST JSON:
+        test_id         : int
+        hedef_formul_id : int
+        yeni_renk_adi   : str   (yeni renk adı veya mevcut renk adı)
+        mevcut_renk_id  : int   opsiyonel — varsa bu renke ekle
+        boyut           : SMALL | LARGE | STANDART
+        recete_durum    : ONAYLI | URETIME_ACIK  (default: ONAYLI)
+        notlar          : str opsiyonel
+    """
+    data = request.get_json(silent=True) or {}
+
+    test_id         = data.get('test_id')
+    hedef_formul_id = data.get('hedef_formul_id')
+    yeni_renk_adi   = (data.get('yeni_renk_adi') or '').strip()
+    mevcut_renk_id  = data.get('mevcut_renk_id')   # opsiyonel
+    boyut           = (data.get('boyut') or 'LARGE').strip().upper()
+    recete_durum    = (data.get('recete_durum') or 'ONAYLI').strip().upper()
+    notlar          = (data.get('notlar') or '').strip() or None
+
+    GECERLI_BOYUT  = {'SMALL', 'LARGE', 'STANDART'}
+    GECERLI_DURUM  = {'ONAYLI', 'URETIME_ACIK'}
+
+    if not test_id:
+        return jsonify({"ok": False, "hata": "test_id zorunludur."}), 400
+    if not hedef_formul_id:
+        return jsonify({"ok": False, "hata": "hedef_formul_id zorunludur."}), 400
+    if not yeni_renk_adi and not mevcut_renk_id:
+        return jsonify({"ok": False, "hata": "yeni_renk_adi veya mevcut_renk_id gerekli."}), 400
+    if boyut not in GECERLI_BOYUT:
+        return jsonify({"ok": False, "hata": f"boyut: {', '.join(GECERLI_BOYUT)}"}), 400
+    if recete_durum not in GECERLI_DURUM:
+        return jsonify({"ok": False, "hata": f"recete_durum: {', '.join(GECERLI_DURUM)}"}), 400
+
+    kullanici_id = _kullanici_id()
+    con = _db()
+    try:
+        # ── 1) Test kaydı ve ONAYLANDI kontrolü ──────────────
+        test = con.execute(
+            "SELECT * FROM nexgen_arge_test WHERE id=? AND aktif=1",
+            (test_id,)
+        ).fetchone()
+        if not test:
+            return jsonify({"ok": False, "hata": "Test kaydı bulunamadı."}), 404
+        if test['durum'] != 'ONAYLANDI':
+            return jsonify({
+                "ok":   False,
+                "hata": f"Sadece ONAYLANDI testler aktarılabilir. Mevcut durum: {test['durum']}"
+            }), 400
+        if test['olusan_uretim_varyant_id']:
+            return jsonify({
+                "ok":   False,
+                "hata": f"Bu test zaten aktarıldı. Oluşan varyant id={test['olusan_uretim_varyant_id']}"
+            }), 409
+
+        # ── 2) Hedef formül var mı? ───────────────────────────
+        formul = con.execute(
+            "SELECT id, kod, ad FROM nexgen_formul WHERE id=? AND aktif=1",
+            (hedef_formul_id,)
+        ).fetchone()
+        if not formul:
+            return jsonify({"ok": False, "hata": "Hedef formül bulunamadı."}), 404
+
+        # ── 3) Test kalemleri ─────────────────────────────────
+        test_kalemler = con.execute("""
+            SELECT tk.stok_kart_id, tk.sira, tk.orjinal_miktar_kg, tk.test_miktar_kg, tk.aciklama
+            FROM nexgen_arge_test_kalem tk
+            WHERE tk.test_id = ?
+            ORDER BY tk.sira
+        """, (test_id,)).fetchall()
+        if not test_kalemler:
+            return jsonify({"ok": False, "hata": "Test kalemlerinde veri yok."}), 400
+
+        test_batch_kg   = float(test['test_batch_kg'])
+        kaynak_batch_kg = float(test['kaynak_batch_kg'])
+        if test_batch_kg <= 0 or kaynak_batch_kg <= 0:
+            return jsonify({"ok": False, "hata": "test_batch_kg veya kaynak_batch_kg sıfır."}), 400
+
+        # Geri ölçekleme: uretim_kg = test_kg / test_batch * kaynak_batch
+        geri_carpan = kaynak_batch_kg / test_batch_kg
+
+        uretim_kalemleri = []
+        for k in test_kalemler:
+            uretim_kg = round(float(k['test_miktar_kg']) * geri_carpan, 3)
+            uretim_kalemleri.append({
+                'stok_kart_id': k['stok_kart_id'],
+                'sira':         k['sira'],
+                'uretim_kg':    uretim_kg,
+                'aciklama':     k['aciklama'],
+            })
+
+        toplam_uretim_kg = round(sum(x['uretim_kg'] for x in uretim_kalemleri), 3)
+
+        # ── 4) Renk varyantı: mevcut veya yeni ───────────────
+        renk_varyant_id = None
+        renk_yeni_mi    = False
+
+        if mevcut_renk_id:
+            rv = con.execute(
+                "SELECT id FROM nexgen_renk_varyant WHERE id=? AND formul_id=? AND aktif=1",
+                (mevcut_renk_id, hedef_formul_id)
+            ).fetchone()
+            if not rv:
+                return jsonify({"ok": False, "hata": "Seçilen renk varyantı bu formüle ait değil."}), 400
+            renk_varyant_id = rv['id']
+        else:
+            # Aynı ad + formül kombinasyonu var mı?
+            mevcut = con.execute(
+                "SELECT id FROM nexgen_renk_varyant WHERE formul_id=? AND ad=? AND aktif=1",
+                (hedef_formul_id, yeni_renk_adi)
+            ).fetchone()
+            if mevcut:
+                renk_varyant_id = mevcut['id']
+            else:
+                # Yeni renk varyantı oluştur
+                rv_kod = f"RV-{hedef_formul_id}-{yeni_renk_adi[:8].upper().replace(' ','')}"
+                con.execute("""
+                    INSERT INTO nexgen_renk_varyant
+                        (formul_id, kod, ad, renk, notlar, aktif, olusturma_tarihi)
+                    VALUES (?, ?, ?, ?, ?, 1, datetime('now'))
+                """, (hedef_formul_id, rv_kod, yeni_renk_adi,
+                      yeni_renk_adi, notlar))
+                renk_varyant_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+                renk_yeni_mi = True
+
+        # ── 5) Üretim varyantı: aynı renk+boyut var mı? ──────
+        mevcut_uv = con.execute(
+            "SELECT id FROM nexgen_uretim_varyant WHERE renk_varyant_id=? AND boyut=? AND aktif=1",
+            (renk_varyant_id, boyut)
+        ).fetchone()
+        if mevcut_uv:
+            # Zaten var — bu varyantın kalemlerine dokunma, hata dön
+            return jsonify({
+                "ok":   False,
+                "hata": f"Bu renk / boyut kombinasyonu zaten mevcut (uv_id={mevcut_uv['id']}). "
+                         "Mevcut reçeteyi klonlayın veya farklı boyut seçin."
+            }), 409
+
+        uv_ad = f"{formul['ad']} {yeni_renk_adi or 'Yeni Renk'}"
+        con.execute("""
+            INSERT INTO nexgen_uretim_varyant
+                (renk_varyant_id, boyut, ad, onay_durumu,
+                 kaynak_varyant_id, notlar, aktif,
+                 olusturma_tarihi, recete_durum)
+            VALUES (?, ?, ?, 'TASLAK', ?, ?, 1, datetime('now'), ?)
+        """, (renk_varyant_id, boyut, uv_ad,
+              test['kaynak_uretim_varyant_id'],
+              f"ARGE test {test['test_no']}'den aktarıldı. {notlar or ''}".strip(),
+              recete_durum))
+        yeni_uv_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+        # ── 6) Reçete kalemleri yaz ───────────────────────────
+        for k in uretim_kalemleri:
+            con.execute("""
+                INSERT INTO nexgen_recete_kalem
+                    (uretim_varyant_id, stok_kart_id, sira,
+                     miktar_kg, aciklama, aktif, olusturma_tarihi)
+                VALUES (?, ?, ?, ?, ?, 1, datetime('now'))
+            """, (yeni_uv_id, k['stok_kart_id'], k['sira'],
+                  k['uretim_kg'], k['aciklama']))
+
+        # ── 7) ARGE test bağlantı güncelle ───────────────────
+        con.execute("""
+            UPDATE nexgen_arge_test
+            SET olusan_uretim_varyant_id=?,
+                olusan_renk_varyant_id=?,
+                onaylayan_id=?,
+                onay_tarihi=datetime('now')
+            WHERE id=?
+        """, (yeni_uv_id, renk_varyant_id, kullanici_id, test_id))
+
+        con.commit()
+
+    except Exception as e:
+        con.rollback()
+        return jsonify({"ok": False, "hata": str(e)}), 500
+    finally:
+        con.close()
+
+    return jsonify({
+        "ok":                True,
+        "yeni_uv_id":        yeni_uv_id,
+        "yeni_renk_varyant_id": renk_varyant_id,
+        "renk_yeni_mi":      renk_yeni_mi,
+        "boyut":             boyut,
+        "recete_durum":      recete_durum,
+        "toplam_uretim_kg":  toplam_uretim_kg,
+        "kalem_sayisi":      len(uretim_kalemleri),
+        "geri_carpan":       round(geri_carpan, 6),
+        "mesaj": (
+            f"{'Yeni renk oluşturuldu: ' + yeni_renk_adi + '. ' if renk_yeni_mi else ''}"
+            f"Üretim reçetesi oluşturuldu. "
+            f"Toplam: {toplam_uretim_kg} KG, {len(uretim_kalemleri)} kalem."
+        ),
+    })
 
 # ─────────────────────────────────────────────────────────────
 # KURAL: Bu bölümde nexgen_stok_hareket INSERT YAPILMAZ.
