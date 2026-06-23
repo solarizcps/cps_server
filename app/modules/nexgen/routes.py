@@ -3401,14 +3401,35 @@ def tablet_ana():
         devam_eden = con.execute("""
             SELECT nb.batch_kodu, nb.planlanan_kg, nb.durum,
                    nb.olusturma_tarihi,
-                   uv.ad AS uv_ad, uv.boyut
+                   uv.ad AS uv_ad, uv.boyut,
+                   rv.ad AS renk_ad, f.ad AS formul_ad
             FROM nexgen_uretim_batch nb
             JOIN nexgen_uretim_varyant uv ON uv.id = nb.uretim_varyant_id
+            JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+            JOIN nexgen_formul f          ON f.id  = rv.formul_id
             WHERE nb.durum IN ('TASLAK','HAZIR')
             ORDER BY nb.id DESC
             LIMIT 20
         """).fetchall()
         devam_eden = [dict(d) for d in devam_eden]
+
+        from datetime import date as _date
+        bugun = _date.today().isoformat()
+        plan_isler = con.execute("""
+            SELECT np.id AS plan_id, np.plan_kodu, np.planlanan_kg,
+                   np.durum AS plan_durum, np.oncelik_sira, np.notlar,
+                   np.musteri_adi,
+                   uv.id AS uv_id, uv.boyut,
+                   rv.ad AS renk_ad, f.ad AS formul_ad
+            FROM nexgen_uretim_plan np
+            JOIN nexgen_uretim_varyant uv ON uv.id = np.uretim_varyant_id
+            JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+            JOIN nexgen_formul f          ON f.id  = rv.formul_id
+            WHERE np.durum = 'PLANLANDI' AND np.plan_tarihi <= ?
+            ORDER BY np.oncelik_sira ASC, np.id ASC
+            LIMIT 20
+        """, (bugun,)).fetchall()
+        plan_isler = [dict(p) for p in plan_isler]
     finally:
         con.close()
 
@@ -3417,6 +3438,7 @@ def tablet_ana():
         active='nexgen',
         can_uretim=yetki_var('nexgen.tablet.uretim', 'can_uretim'),
         devam_eden_batches=devam_eden,
+        plan_isler=plan_isler,
     )
 
 
@@ -4448,25 +4470,53 @@ def uretim_plan_liste():
     con = _db()
     try:
         planlar = [dict(p) for p in _plan_liste_sorgu(con)]
-        # Plan formunda tüm aktif varyantları göster (durum fark etmeksizin)
-        varyantlar = con.execute("""
-            SELECT uv.id, uv.boyut, uv.recete_durum,
-                   rv.ad AS renk_ad,
-                   f.ad AS formul_ad, f.kod AS formul_kod
+
+        # Aktif varyantları formül > renk > boyut hiyerarşisinde grupla
+        # Yapı: [{formul_id, formul_ad, renkler: [{renk_id, renk_ad,
+        #          large_uv_id, small_uv_id}]}]
+        varyant_rows = con.execute("""
+            SELECT uv.id AS uv_id, uv.boyut, uv.recete_durum,
+                   rv.id AS renk_id, rv.ad AS renk_ad,
+                   f.id  AS formul_id, f.ad AS formul_ad
             FROM nexgen_uretim_varyant uv
             JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
             JOIN nexgen_formul f        ON f.id  = rv.formul_id
             WHERE uv.aktif = 1
             ORDER BY f.ad, rv.ad, uv.boyut
         """).fetchall()
-        varyantlar = [dict(v) for v in varyantlar]
+
+        # Hiyerarşik dict oluştur
+        formul_map = {}
+        for r in varyant_rows:
+            fid = r['formul_id']
+            if fid not in formul_map:
+                formul_map[fid] = {'formul_id': fid, 'formul_ad': r['formul_ad'], 'renkler': {}}
+            rid = r['renk_id']
+            if rid not in formul_map[fid]['renkler']:
+                formul_map[fid]['renkler'][rid] = {
+                    'renk_id': rid, 'renk_ad': r['renk_ad'],
+                    'large_uv_id': None, 'small_uv_id': None,
+                }
+            if r['boyut'] == 'LARGE':
+                formul_map[fid]['renkler'][rid]['large_uv_id'] = r['uv_id']
+            elif r['boyut'] == 'SMALL':
+                formul_map[fid]['renkler'][rid]['small_uv_id'] = r['uv_id']
+
+        formuller = []
+        for f in formul_map.values():
+            formuller.append({
+                'formul_id': f['formul_id'],
+                'formul_ad': f['formul_ad'],
+                'renkler': list(f['renkler'].values()),
+            })
+
     finally:
         con.close()
     return render_template(
         'nexgen/uretim_plan.html',
         active='nexgen',
         planlar=planlar,
-        varyantlar=varyantlar,
+        formuller=formuller,
         can_manage=yetki_var('nexgen.plan.manage', 'can_manage'),
     )
 

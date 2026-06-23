@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% set page_title = "Üretim Planı — NexGen" %}
+{% set page_title = "Üretim Siparişleri — NexGen" %}
 
 {% block content %}
 <div class="up-sayfa">
@@ -9,12 +9,12 @@
     <div class="up-topbar-ic">
       <div>
         <div class="up-topbar-kucuk">NEXGEN</div>
-        <div class="up-topbar-buyuk">ÜRETİM PLANI</div>
+        <div class="up-topbar-buyuk">ÜRETİM SİPARİŞLERİ</div>
       </div>
       <div class="up-topbar-sag">
         <a href="/nexgen/" class="up-geri-btn">← Geri</a>
         {% if can_manage %}
-        <button class="up-yeni-btn" onclick="modalAc()">+ Yeni Plan</button>
+        <button class="up-yeni-btn" onclick="modalAc()">+ Yeni Sipariş</button>
         {% endif %}
       </div>
     </div>
@@ -32,7 +32,7 @@
       </div>
       <div class="up-ozet-kart up-ozet-basladi">
         <div class="up-ozet-sayi">{{ basladi | length }}</div>
-        <div class="up-ozet-etiket">BASLADI</div>
+        <div class="up-ozet-etiket">BAŞLADI</div>
       </div>
       <div class="up-ozet-kart up-ozet-bitti">
         <div class="up-ozet-sayi">{{ bitti | length }}</div>
@@ -51,9 +51,9 @@
     {% if not planlar %}
     <div class="up-bos">
       <div class="up-bos-ikon">📋</div>
-      <div class="up-bos-metin">Henüz üretim planı yok.</div>
+      <div class="up-bos-metin">Henüz üretim siparişi yok.</div>
       {% if can_manage %}
-      <button class="up-yeni-btn" onclick="modalAc()">+ İlk Planı Oluştur</button>
+      <button class="up-yeni-btn" onclick="modalAc()">+ İlk Siparişi Oluştur</button>
       {% endif %}
     </div>
     {% endif %}
@@ -61,42 +61,36 @@
     {% for p in planlar %}
     <div class="up-kart up-kart-{{ p.durum|lower }}" id="plan-{{ p.id }}">
 
-      {# Öncelik rozeti #}
       <div class="up-oncelik" title="Öncelik">{{ p.oncelik_sira }}</div>
 
-      {# Sol: Sıra + Bilgi #}
       <div class="up-kart-sol">
-        <div class="up-formul-ad">{{ p.formul_ad }}</div>
-        <div class="up-renk-boyut">
-          {{ p.renk_ad }}
-          <span class="up-boyut-rozet">
-            {% if p.boyut == 'LARGE' %}BÜYÜK BOY
-            {% elif p.boyut == 'SMALL' %}KÜÇÜK BOY
-            {% else %}{{ p.boyut }}{% endif %}
-          </span>
+        <div class="up-kart-ust">
+          {% if p.musteri_adi %}
+          <span class="up-cari-tag">{{ p.musteri_adi }}</span>
+          {% endif %}
+          <span class="up-formul-ad">{{ p.formul_ad }}</span>
+          <span class="up-renk-ad">{{ p.renk_ad }}</span>
+          <span class="up-boyut-rozet up-boyut-{{ p.boyut|lower }}">{{ p.boyut }}</span>
         </div>
         <div class="up-alt-bilgi">
           <span class="up-plan-kodu">{{ p.plan_kodu }}</span>
-          {% if p.siparis_no %}<span class="up-siparis">Sipariş: {{ p.siparis_no }}</span>{% endif %}
-          {% if p.musteri_adi %}<span class="up-musteri">{{ p.musteri_adi }}</span>{% endif %}
+          {% if p.siparis_no %}<span class="up-siparis">{{ p.siparis_no }}</span>{% endif %}
           <span class="up-tarih">{{ p.plan_tarihi }}</span>
+          {% if p.notlar %}<span class="up-not">{{ p.notlar }}</span>{% endif %}
         </div>
       </div>
 
-      {# Orta: KG #}
       <div class="up-kart-orta">
         <div class="up-kg">{{ p.planlanan_kg | int }}</div>
         <div class="up-kg-etiket">KG</div>
       </div>
 
-      {# Sağ: Durum + Aksiyonlar #}
       <div class="up-kart-sag">
         <span class="up-durum up-d-{{ p.durum|lower }}">{{ p.durum }}</span>
-
         {% if p.durum == 'PLANLANDI' and can_manage %}
         <div class="up-aksiyon-grubu">
           <button class="up-basla-btn"
-                  onclick="planBasla({{ p.id }}, '{{ p.plan_kodu }}', '{{ p.formul_ad }} {{ p.renk_ad }}')">
+                  onclick="planBasla({{ p.id }}, '{{ p.plan_kodu }}', '{{ p.formul_ad }} {{ p.renk_ad }} {{ p.boyut }}')">
             ▶ BAŞLA
           </button>
           <button class="up-iptal-btn" onclick="planIptal({{ p.id }})">✕</button>
@@ -109,110 +103,120 @@
     </div>
     {% endfor %}
 
-  </div>{# /liste-kapsayici #}
+  </div>
 
-</div>{# /up-sayfa #}
+</div>
 
-{# ══ MODAL — Yeni Plan ══════════════════════════════════════════════ #}
+{# ══ MODAL — Yeni Sipariş ══════════════════════════════════════════════ #}
 {% if can_manage %}
+
+{# Formül verisi JS'e aktar #}
+<script>
+var _formuller = {{ formuller | tojson }};
+</script>
+
 <div class="up-modal-arka" id="up-modal-arka" onclick="modalKapat(event)" style="display:none">
   <div class="up-modal" onclick="event.stopPropagation()">
+
     <div class="up-modal-baslik">
-      <span>Yeni Üretim Planı</span>
+      <span>Yeni Üretim Siparişi</span>
       <button class="up-modal-kapat" onclick="modalKapat()">✕</button>
     </div>
 
     <div class="up-modal-govde">
 
-      {# Formül / Varyant seçimi #}
+      {# 1) Cari #}
       <div class="up-form-grup">
-        <label class="up-form-etiket">Formül / Varyant</label>
-        <select id="uv-secim" class="up-form-select" onchange="varyantSec(this.value)">
+        <label class="up-form-etiket">Cari</label>
+        <input type="text" id="plan-cari" class="up-form-input" value="SOLARIZ"
+               placeholder="SOLARIZ veya müşteri adı">
+      </div>
+
+      {# 2) Formül #}
+      <div class="up-form-grup">
+        <label class="up-form-etiket">Formül</label>
+        <select id="plan-formul" class="up-form-select" onchange="formulSec(this.value)">
           <option value="">— Seçiniz —</option>
-          {% set onceki_formul = '' %}
-          {% for v in varyantlar %}
-          {% if v.formul_ad != onceki_formul %}
-          {% if onceki_formul %}
-          </optgroup>
-          {% endif %}
-          <optgroup label="{{ v.formul_ad }}">
-          {% set onceki_formul = v.formul_ad %}
-          {% endif %}
-          <option value="{{ v.id }}"
-                  data-formul="{{ v.formul_ad }}"
-                  data-renk="{{ v.renk_ad }}"
-                  data-boyut="{{ v.boyut }}">
-            {{ v.renk_ad }} —
-            {% if v.boyut == 'LARGE' %}BÜYÜK BOY
-            {% elif v.boyut == 'SMALL' %}KÜÇÜK BOY
-            {% else %}{{ v.boyut }}{% endif %}
-          </option>
+          {% for f in formuller %}
+          <option value="{{ f.formul_id }}">{{ f.formul_ad }}</option>
           {% endfor %}
-          {% if varyantlar %}</optgroup>{% endif %}
         </select>
       </div>
 
-      {# Önizleme #}
-      <div id="uv-onizleme" class="up-uv-onizleme" style="display:none">
-        <span id="uv-ov-formul"></span>
-        <span id="uv-ov-renk"></span>
-        <span id="uv-ov-boyut" class="up-boyut-rozet"></span>
+      {# 3) Renk — JS ile doldurulur #}
+      <div class="up-form-grup" id="renk-grup" style="display:none">
+        <label class="up-form-etiket">Renk</label>
+        <div id="renk-butonlar" class="up-renk-grid"></div>
       </div>
 
-      {# KG #}
-      <div class="up-form-grup">
-        <label class="up-form-etiket">Planlanan KG</label>
+      {# Seçim önizleme #}
+      <div id="up-onizleme" class="up-secim-onizleme" style="display:none"></div>
+
+      {# 4) Toplam KG #}
+      <div class="up-form-grup" id="kg-grup" style="display:none">
+        <label class="up-form-etiket">Toplam KG</label>
         <div class="up-kg-input-grup">
           <input type="number" id="plan-kg" class="up-form-input" min="1" step="1"
-                 placeholder="500">
+                 placeholder="5000" oninput="kgGuncelle()">
           <span class="up-kg-birim">KG</span>
         </div>
         <div class="up-hizli-kg">
-          <button type="button" onclick="hizliKg(500)">500</button>
           <button type="button" onclick="hizliKg(1000)">1000</button>
-          <button type="button" onclick="hizliKg(2000)">2000</button>
+          <button type="button" onclick="hizliKg(2500)">2500</button>
+          <button type="button" onclick="hizliKg(5000)">5000</button>
+          <button type="button" onclick="hizliKg(10000)">10000</button>
         </div>
       </div>
 
-      {# Öncelik #}
-      <div class="up-form-iki-sutun">
-        <div class="up-form-grup">
-          <label class="up-form-etiket">Öncelik Sırası</label>
-          <input type="number" id="plan-oncelik" class="up-form-input" min="1" value="10">
-        </div>
-        <div class="up-form-grup">
-          <label class="up-form-etiket">Plan Tarihi</label>
-          <input type="date" id="plan-tarihi" class="up-form-input" value="{{ '' }}">
+      {# 5) Dağılım #}
+      <div class="up-form-grup" id="dagitim-grup" style="display:none">
+        <label class="up-form-etiket">Dağılım</label>
+        <div class="up-dagitim-grid" id="dagitim-butonlar">
+          <button type="button" class="up-dag-btn" id="dag-esit"
+                  onclick="dagSec('ESIT')">LARGE + SMALL<br><small>Eşit Dağıt</small></button>
+          <button type="button" class="up-dag-btn" id="dag-large"
+                  onclick="dagSec('LARGE')">Sadece<br><strong>LARGE</strong></button>
+          <button type="button" class="up-dag-btn" id="dag-small"
+                  onclick="dagSec('SMALL')">Sadece<br><strong>SMALL</strong></button>
+          <button type="button" class="up-dag-btn" id="dag-manuel"
+                  onclick="dagSec('MANUEL')">Manuel<br><small>KG gir</small></button>
         </div>
       </div>
 
-      {# Sipariş (opsiyonel) #}
-      <div class="up-form-iki-sutun">
+      {# Manuel KG girişi #}
+      <div id="manuel-grup" class="up-form-iki-sutun" style="display:none">
         <div class="up-form-grup">
-          <label class="up-form-etiket">Sipariş No <span class="up-opsiyonel">(opsiyonel)</span></label>
-          <input type="text" id="plan-siparis" class="up-form-input" placeholder="SIP-2026-001">
+          <label class="up-form-etiket">LARGE KG</label>
+          <input type="number" id="plan-large-kg" class="up-form-input" min="0" step="1"
+                 placeholder="0">
         </div>
         <div class="up-form-grup">
-          <label class="up-form-etiket">Müşteri <span class="up-opsiyonel">(opsiyonel)</span></label>
-          <input type="text" id="plan-musteri" class="up-form-input" placeholder="Firma Adı">
+          <label class="up-form-etiket">SMALL KG</label>
+          <input type="number" id="plan-small-kg" class="up-form-input" min="0" step="1"
+                 placeholder="0">
         </div>
       </div>
+
+      {# Özet önizleme #}
+      <div id="plan-ozet" class="up-plan-ozet" style="display:none"></div>
 
       {# Notlar #}
       <div class="up-form-grup">
         <label class="up-form-etiket">Notlar <span class="up-opsiyonel">(opsiyonel)</span></label>
-        <input type="text" id="plan-notlar" class="up-form-input" placeholder="Hat 1, Gündüz vardiyası...">
+        <input type="text" id="plan-notlar" class="up-form-input"
+               placeholder="Hat 1, Gündüz vardiyası...">
       </div>
 
-      {# Hata #}
       <div id="up-form-hata" class="up-form-hata" style="display:none"></div>
 
-    </div>{# /modal-govde #}
+    </div>
 
     <div class="up-modal-alt">
       <button class="up-modal-iptal-btn" onclick="modalKapat()">İptal</button>
-      <button class="up-modal-kaydet-btn" id="up-kaydet-btn" onclick="planKaydet()">Kaydet</button>
+      <button class="up-modal-kaydet-btn" id="up-kaydet-btn"
+              onclick="planKaydet()" disabled>Kaydet</button>
     </div>
+
   </div>
 </div>
 {% endif %}
@@ -243,7 +247,7 @@
 .up-yeni-btn {
   padding: 10px 20px; background: #f6c343; color: #1a1a1a;
   border: none; border-radius: 10px; font-size: 15px; font-weight: 800;
-  cursor: pointer; transition: background .12s;
+  cursor: pointer;
 }
 .up-yeni-btn:hover { background: #e9b020; }
 
@@ -253,9 +257,7 @@
   max-width: 1180px; margin: 0 auto; padding: 14px 20px;
   display: flex; gap: 12px;
 }
-.up-ozet-kart {
-  flex: 1; border-radius: 10px; padding: 12px 16px; text-align: center;
-}
+.up-ozet-kart { flex: 1; border-radius: 10px; padding: 12px 16px; text-align: center; }
 .up-ozet-sayi { font-size: 28px; font-weight: 900; }
 .up-ozet-etiket { font-size: 10px; font-weight: 800; letter-spacing: 1.5px; color: #6b7280; text-transform: uppercase; }
 .up-ozet-planlandi { background: #fefce8; border: 1.5px solid #fde047; }
@@ -273,7 +275,7 @@
   display: flex; flex-direction: column; gap: 10px;
 }
 
-/* ── Boş durum ── */
+/* ── Boş ── */
 .up-bos {
   text-align: center; padding: 60px 20px;
   background: #fff; border-radius: 16px; border: 1px solid #e5e7eb;
@@ -294,35 +296,42 @@
 .up-kart-bitti     { border-left: 4px solid #4ade80; opacity: .7; }
 .up-kart-iptal     { border-left: 4px solid #d1d5db; opacity: .45; }
 
-/* Öncelik rozeti */
 .up-oncelik {
   width: 34px; height: 34px; border-radius: 50%;
   background: #f1f5f9; border: 1.5px solid #e2e8f0;
   display: flex; align-items: center; justify-content: center;
-  font-size: 14px; font-weight: 900; color: #374151;
-  flex-shrink: 0;
+  font-size: 14px; font-weight: 900; color: #374151; flex-shrink: 0;
 }
 
-/* Sol */
+/* Kart sol */
 .up-kart-sol { flex: 1; min-width: 0; }
-.up-formul-ad { font-size: 16px; font-weight: 800; color: #1e293b; }
-.up-renk-boyut { font-size: 14px; color: #64748b; margin-top: 2px; display: flex; align-items: center; gap: 6px; }
-.up-boyut-rozet {
-  font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 4px;
-  background: #e0f2fe; color: #0369a1;
+.up-kart-ust {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+  margin-bottom: 6px;
 }
-.up-alt-bilgi { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.up-cari-tag {
+  font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 4px;
+  background: #1e293b; color: #f6c343; letter-spacing: .5px;
+}
+.up-formul-ad { font-size: 16px; font-weight: 800; color: #1e293b; }
+.up-renk-ad { font-size: 14px; color: #64748b; font-weight: 600; }
+.up-boyut-rozet {
+  font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 5px;
+}
+.up-boyut-large { background: #dbeafe; color: #1d4ed8; }
+.up-boyut-small { background: #fef9c3; color: #854d0e; }
+.up-alt-bilgi { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .up-plan-kodu { font-size: 11px; font-weight: 800; color: #94a3b8; font-family: monospace; }
 .up-siparis { font-size: 11px; color: #6b7280; background: #f8fafc; padding: 1px 6px; border-radius: 4px; }
-.up-musteri { font-size: 11px; color: #374151; font-weight: 700; }
 .up-tarih { font-size: 11px; color: #9ca3af; }
+.up-not { font-size: 11px; color: #64748b; font-style: italic; }
 
-/* Orta */
+/* Kart orta */
 .up-kart-orta { text-align: center; flex-shrink: 0; min-width: 60px; }
 .up-kg { font-size: 24px; font-weight: 900; color: #f59e0b; }
 .up-kg-etiket { font-size: 10px; font-weight: 800; color: #9ca3af; letter-spacing: 1px; }
 
-/* Sağ */
+/* Kart sağ */
 .up-kart-sag {
   display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
   flex-shrink: 0;
@@ -363,49 +372,86 @@
 }
 .up-modal {
   background: #fff; border-radius: 20px; width: 100%; max-width: 560px;
-  max-height: 90vh; overflow-y: auto;
+  max-height: 92vh; overflow-y: auto;
   box-shadow: 0 20px 60px rgba(0,0,0,.25);
 }
 .up-modal-baslik {
   display: flex; align-items: center; justify-content: space-between;
   padding: 18px 22px; border-bottom: 1px solid #f1f5f9;
   font-size: 17px; font-weight: 800; color: #1e293b;
+  position: sticky; top: 0; background: #fff; z-index: 1;
 }
 .up-modal-kapat {
   width: 32px; height: 32px; border-radius: 8px;
   background: #f1f5f9; border: none; cursor: pointer;
   font-size: 16px; color: #64748b;
 }
-.up-modal-govde { padding: 18px 22px; display: flex; flex-direction: column; gap: 14px; }
+.up-modal-govde { padding: 18px 22px; display: flex; flex-direction: column; gap: 16px; }
 
 .up-form-grup { display: flex; flex-direction: column; gap: 6px; }
-.up-form-etiket { font-size: 12px; font-weight: 800; color: #64748b; letter-spacing: .5px; text-transform: uppercase; }
+.up-form-etiket { font-size: 11px; font-weight: 800; color: #64748b; letter-spacing: .5px; text-transform: uppercase; }
 .up-opsiyonel { font-weight: 400; text-transform: none; color: #9ca3af; }
 .up-form-select, .up-form-input {
   padding: 11px 14px; border: 1.5px solid #e2e8f0; border-radius: 10px;
   font-size: 15px; color: #1e293b; outline: none; width: 100%;
-  transition: border-color .12s;
 }
 .up-form-select:focus, .up-form-input:focus { border-color: #f6c343; }
+.up-form-iki-sutun { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* Renk grid */
+.up-renk-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.up-renk-btn {
+  padding: 8px 16px; border: 2px solid #e2e8f0; border-radius: 8px;
+  background: #f8fafc; font-size: 14px; font-weight: 700; cursor: pointer;
+  color: #374151; transition: all .12s;
+}
+.up-renk-btn:hover { border-color: #f6c343; background: #fefce8; }
+.up-renk-btn.aktif { border-color: #f6c343; background: #fef9c3; color: #1a1a1a; }
+
+/* Seçim önizleme */
+.up-secim-onizleme {
+  background: #f8fafc; border-radius: 8px; padding: 10px 14px;
+  font-size: 14px; font-weight: 700; color: #1e293b;
+  display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+}
+
+/* KG */
 .up-kg-input-grup { display: flex; align-items: center; gap: 8px; }
 .up-kg-birim { font-size: 15px; font-weight: 800; color: #6b7280; }
-.up-hizli-kg { display: flex; gap: 6px; margin-top: 4px; }
+.up-hizli-kg { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
 .up-hizli-kg button {
   padding: 5px 12px; border: 1.5px solid #e2e8f0; border-radius: 6px;
   background: #f8fafc; font-size: 13px; font-weight: 700; cursor: pointer; color: #374151;
 }
 .up-hizli-kg button:hover { background: #fef9c3; border-color: #fde047; }
-.up-form-iki-sutun { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.up-uv-onizleme {
-  background: #f8fafc; border-radius: 8px; padding: 10px 14px;
-  font-size: 14px; font-weight: 700; color: #1e293b; display: flex; gap: 8px; align-items: center;
+
+/* Dağılım */
+.up-dagitim-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
 }
+.up-dag-btn {
+  padding: 12px 8px; border: 2px solid #e2e8f0; border-radius: 10px;
+  background: #f8fafc; font-size: 12px; font-weight: 700; cursor: pointer;
+  color: #374151; text-align: center; line-height: 1.4; transition: all .12s;
+}
+.up-dag-btn:hover:not(:disabled) { border-color: #f6c343; background: #fefce8; }
+.up-dag-btn.aktif { border-color: #f6c343; background: #fef9c3; color: #1a1a1a; }
+.up-dag-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+/* Plan özet */
+.up-plan-ozet {
+  background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 10px;
+  padding: 12px 16px; font-size: 13px; color: #15803d; font-weight: 700;
+  line-height: 1.8;
+}
+
 .up-form-hata {
   background: #fef2f2; border: 1.5px solid #fca5a5; border-radius: 8px;
   padding: 10px 14px; font-size: 14px; color: #dc2626; font-weight: 700;
 }
 .up-modal-alt {
   display: flex; gap: 10px; padding: 14px 22px; border-top: 1px solid #f1f5f9;
+  position: sticky; bottom: 0; background: #fff;
 }
 .up-modal-iptal-btn {
   flex: 1; padding: 12px; border: 1.5px solid #e2e8f0; background: #f8fafc;
@@ -415,102 +461,279 @@
   flex: 2; padding: 12px; background: #f6c343; color: #1a1a1a;
   border: none; border-radius: 10px; font-size: 15px; font-weight: 800; cursor: pointer;
 }
-.up-modal-kaydet-btn:hover { background: #e9b020; }
+.up-modal-kaydet-btn:hover:not(:disabled) { background: #e9b020; }
 .up-modal-kaydet-btn:disabled { background: #e5e7eb; color: #9ca3af; cursor: not-allowed; }
 
 @media (max-width: 600px) {
   .up-ozet-ic { flex-wrap: wrap; }
   .up-ozet-kart { min-width: calc(50% - 6px); }
-  .up-form-iki-sutun { grid-template-columns: 1fr; }
   .up-kart { flex-wrap: wrap; }
+  .up-dagitim-grid { grid-template-columns: repeat(2, 1fr); }
 }
 </style>
 
 {# ══ SCRIPT ════════════════════════════════════════════════════════════ #}
 <script>
-/* Modal aç / kapat */
+/* ─── State ─── */
+var _secili = {
+  formul_id: null, formul_ad: null,
+  renk_id: null,   renk_ad: null,
+  large_uv_id: null, small_uv_id: null,
+  dagitim: null,    /* ESIT | LARGE | SMALL | MANUEL */
+};
+
+/* ─── Modal ─── */
 function modalAc() {
   document.getElementById('up-modal-arka').style.display = 'flex';
-  /* Plan tarihi bugün */
-  var today = new Date().toISOString().split('T')[0];
-  document.getElementById('plan-tarihi').value = today;
+  modalSifirla();
 }
 function modalKapat(e) {
   if (e && e.target !== document.getElementById('up-modal-arka')) return;
   document.getElementById('up-modal-arka').style.display = 'none';
+}
+function modalSifirla() {
+  _secili = { formul_id:null, formul_ad:null, renk_id:null, renk_ad:null,
+              large_uv_id:null, small_uv_id:null, dagitim:null };
+  document.getElementById('plan-formul').value = '';
+  document.getElementById('plan-cari').value = 'SOLARIZ';
+  document.getElementById('plan-kg').value = '';
+  document.getElementById('plan-large-kg').value = '';
+  document.getElementById('plan-small-kg').value = '';
+  document.getElementById('plan-notlar').value = '';
+  document.getElementById('renk-grup').style.display = 'none';
+  document.getElementById('kg-grup').style.display = 'none';
+  document.getElementById('dagitim-grup').style.display = 'none';
+  document.getElementById('manuel-grup').style.display = 'none';
+  document.getElementById('plan-ozet').style.display = 'none';
+  document.getElementById('up-onizleme').style.display = 'none';
   document.getElementById('up-form-hata').style.display = 'none';
+  document.getElementById('up-kaydet-btn').disabled = true;
+  /* Tüm aktif sınıfları temizle */
+  document.querySelectorAll('.up-renk-btn').forEach(function(b){ b.classList.remove('aktif'); });
+  document.querySelectorAll('.up-dag-btn').forEach(function(b){ b.classList.remove('aktif'); });
 }
 
-/* Varyant seçilince önizleme */
-function varyantSec(uvId) {
-  var sel = document.getElementById('uv-secim');
-  var opt = sel.options[sel.selectedIndex];
-  var ov = document.getElementById('uv-onizleme');
-  if (!uvId) { ov.style.display = 'none'; return; }
-  var boyutRaw = opt.getAttribute('data-boyut');
-  var boyutYazi = boyutRaw === 'LARGE' ? 'BÜYÜK BOY' : boyutRaw === 'SMALL' ? 'KÜÇÜK BOY' : boyutRaw;
-  document.getElementById('uv-ov-formul').textContent = opt.getAttribute('data-formul');
-  document.getElementById('uv-ov-renk').textContent   = opt.getAttribute('data-renk');
-  document.getElementById('uv-ov-boyut').textContent  = boyutYazi;
+/* ─── Formül seç ─── */
+function formulSec(fid) {
+  if (!fid) return;
+  fid = parseInt(fid);
+  var f = _formuller.find(function(x){ return x.formul_id === fid; });
+  if (!f) return;
+  _secili.formul_id = fid;
+  _secili.formul_ad = f.formul_ad;
+  _secili.renk_id = null; _secili.renk_ad = null;
+  _secili.large_uv_id = null; _secili.small_uv_id = null;
+  _secili.dagitim = null;
+
+  /* Renk butonlarını doldur */
+  var konteyner = document.getElementById('renk-butonlar');
+  konteyner.innerHTML = '';
+  f.renkler.forEach(function(r) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'up-renk-btn';
+    btn.textContent = r.renk_ad;
+    btn.dataset.renkId = r.renk_id;
+    btn.dataset.renkAd = r.renk_ad;
+    btn.dataset.largeUvId = r.large_uv_id || '';
+    btn.dataset.smallUvId = r.small_uv_id || '';
+    btn.onclick = function() { renkSec(this); };
+    konteyner.appendChild(btn);
+  });
+
+  document.getElementById('renk-grup').style.display = 'block';
+  document.getElementById('kg-grup').style.display = 'none';
+  document.getElementById('dagitim-grup').style.display = 'none';
+  document.getElementById('manuel-grup').style.display = 'none';
+  document.getElementById('plan-ozet').style.display = 'none';
+  document.getElementById('up-onizleme').style.display = 'none';
+  document.querySelectorAll('.up-renk-btn').forEach(function(b){ b.classList.remove('aktif'); });
+  document.querySelectorAll('.up-dag-btn').forEach(function(b){ b.classList.remove('aktif'); });
+  document.getElementById('up-kaydet-btn').disabled = true;
+}
+
+/* ─── Renk seç ─── */
+function renkSec(btn) {
+  document.querySelectorAll('.up-renk-btn').forEach(function(b){ b.classList.remove('aktif'); });
+  btn.classList.add('aktif');
+
+  _secili.renk_id    = parseInt(btn.dataset.renkId);
+  _secili.renk_ad    = btn.dataset.renkAd;
+  _secili.large_uv_id = btn.dataset.largeUvId ? parseInt(btn.dataset.largeUvId) : null;
+  _secili.small_uv_id = btn.dataset.smallUvId ? parseInt(btn.dataset.smallUvId) : null;
+  _secili.dagitim    = null;
+
+  /* Önizleme */
+  var ov = document.getElementById('up-onizleme');
+  ov.textContent = _secili.formul_ad + '  ·  ' + _secili.renk_ad;
   ov.style.display = 'flex';
+
+  /* KG ve dağılım alanlarını göster */
+  document.getElementById('kg-grup').style.display = 'block';
+  document.getElementById('dagitim-grup').style.display = 'block';
+  document.getElementById('manuel-grup').style.display = 'none';
+  document.getElementById('plan-ozet').style.display = 'none';
+
+  /* Dağılım buton durumları */
+  var hasL = !!_secili.large_uv_id;
+  var hasS = !!_secili.small_uv_id;
+  document.getElementById('dag-esit').disabled   = !(hasL && hasS);
+  document.getElementById('dag-large').disabled  = !hasL;
+  document.getElementById('dag-small').disabled  = !hasS;
+  document.getElementById('dag-manuel').disabled = !(hasL || hasS);
+
+  document.querySelectorAll('.up-dag-btn').forEach(function(b){ b.classList.remove('aktif'); });
+  document.getElementById('up-kaydet-btn').disabled = true;
 }
 
-function hizliKg(v) { document.getElementById('plan-kg').value = v; }
+/* ─── KG güncelle ─── */
+function kgGuncelle() { ozetGuncelle(); }
 
-/* Kaydet */
+function hizliKg(v) {
+  document.getElementById('plan-kg').value = v;
+  ozetGuncelle();
+}
+
+/* ─── Dağılım seç ─── */
+function dagSec(tip) {
+  document.querySelectorAll('.up-dag-btn').forEach(function(b){ b.classList.remove('aktif'); });
+  var idMap = { ESIT:'dag-esit', LARGE:'dag-large', SMALL:'dag-small', MANUEL:'dag-manuel' };
+  document.getElementById(idMap[tip]).classList.add('aktif');
+  _secili.dagitim = tip;
+
+  var manuelGrup = document.getElementById('manuel-grup');
+  manuelGrup.style.display = tip === 'MANUEL' ? 'grid' : 'none';
+
+  ozetGuncelle();
+}
+
+/* ─── Özet önizleme ─── */
+function ozetGuncelle() {
+  var kg = parseFloat(document.getElementById('plan-kg').value || 0);
+  var dag = _secili.dagitim;
+  var ozet = document.getElementById('plan-ozet');
+  var kaydetBtn = document.getElementById('up-kaydet-btn');
+  ozet.style.display = 'none';
+  kaydetBtn.disabled = true;
+
+  if (!_secili.renk_id || !dag) return;
+  if (kg <= 0 && dag !== 'MANUEL') return;
+
+  var satirlar = [];
+  if (dag === 'ESIT') {
+    var yari = Math.round(kg / 2);
+    satirlar.push('LARGE: ' + yari + ' KG');
+    satirlar.push('SMALL: ' + yari + ' KG');
+    kaydetBtn.disabled = false;
+  } else if (dag === 'LARGE') {
+    if (kg <= 0) return;
+    satirlar.push('LARGE: ' + kg + ' KG');
+    kaydetBtn.disabled = false;
+  } else if (dag === 'SMALL') {
+    if (kg <= 0) return;
+    satirlar.push('SMALL: ' + kg + ' KG');
+    kaydetBtn.disabled = false;
+  } else if (dag === 'MANUEL') {
+    var lkg = parseFloat(document.getElementById('plan-large-kg').value || 0);
+    var skg = parseFloat(document.getElementById('plan-small-kg').value || 0);
+    if (lkg <= 0 && skg <= 0) return;
+    if (lkg > 0) satirlar.push('LARGE: ' + lkg + ' KG');
+    if (skg > 0) satirlar.push('SMALL: ' + skg + ' KG');
+    kaydetBtn.disabled = false;
+  }
+
+  ozet.innerHTML = '<strong>' + _secili.formul_ad + ' · ' + _secili.renk_ad + '</strong><br>' + satirlar.join('<br>');
+  ozet.style.display = 'block';
+}
+
+/* ─── Kaydet ─── */
 async function planKaydet() {
   var btn = document.getElementById('up-kaydet-btn');
   var hataDiv = document.getElementById('up-form-hata');
   hataDiv.style.display = 'none';
 
-  var uvId  = document.getElementById('uv-secim').value;
-  var kg    = parseFloat(document.getElementById('plan-kg').value);
-  var oncelik = parseInt(document.getElementById('plan-oncelik').value) || 10;
-  var tarih   = document.getElementById('plan-tarihi').value;
-  var siparis = document.getElementById('plan-siparis').value.trim();
-  var musteri = document.getElementById('plan-musteri').value.trim();
-  var notlar  = document.getElementById('plan-notlar').value.trim();
+  var cari    = document.getElementById('plan-cari').value.trim() || 'SOLARIZ';
+  var kg      = parseFloat(document.getElementById('plan-kg').value || 0);
+  var notlar  = document.getElementById('plan-notlar').value.trim() || null;
+  var dag     = _secili.dagitim;
 
-  if (!uvId) { hataDiv.textContent = 'Lütfen formül/varyant seçiniz.'; hataDiv.style.display = 'block'; return; }
-  if (!kg || kg <= 0) { hataDiv.textContent = 'Geçerli KG giriniz.'; hataDiv.style.display = 'block'; return; }
+  if (!_secili.renk_id || !dag) {
+    hataDiv.textContent = 'Formül, renk ve dağılım seçiniz.';
+    hataDiv.style.display = 'block'; return;
+  }
 
-  btn.disabled = true; btn.textContent = 'Kaydediliyor...';
-  try {
-    var r = await fetch('/nexgen/api/plan/ekle', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        uretim_varyant_id: parseInt(uvId),
-        planlanan_kg: kg,
-        oncelik_sira: oncelik,
-        plan_tarihi: tarih,
-        siparis_no: siparis || null,
-        musteri_adi: musteri || null,
-        notlar: notlar || null,
-      })
-    });
-    var j = await r.json();
-    if (j.ok) {
-      location.reload();
-    } else {
-      hataDiv.textContent = j.hata || 'Hata oluştu.';
-      hataDiv.style.display = 'block';
-      btn.disabled = false; btn.textContent = 'Kaydet';
+  /* Plan edilecek kayıtlar: [{uv_id, kg}] */
+  var kayitlar = [];
+  if (dag === 'ESIT') {
+    if (kg <= 0) { hataErr('Toplam KG giriniz.'); return; }
+    var yari = Math.round(kg / 2);
+    kayitlar.push({ uv_id: _secili.large_uv_id, kg: yari });
+    kayitlar.push({ uv_id: _secili.small_uv_id, kg: yari });
+  } else if (dag === 'LARGE') {
+    if (kg <= 0) { hataErr('KG giriniz.'); return; }
+    kayitlar.push({ uv_id: _secili.large_uv_id, kg: kg });
+  } else if (dag === 'SMALL') {
+    if (kg <= 0) { hataErr('KG giriniz.'); return; }
+    kayitlar.push({ uv_id: _secili.small_uv_id, kg: kg });
+  } else if (dag === 'MANUEL') {
+    var lkg = parseFloat(document.getElementById('plan-large-kg').value || 0);
+    var skg = parseFloat(document.getElementById('plan-small-kg').value || 0);
+    if (lkg <= 0 && skg <= 0) { hataErr('En az bir KG değeri giriniz.'); return; }
+    if (lkg > 0) kayitlar.push({ uv_id: _secili.large_uv_id, kg: lkg });
+    if (skg > 0) kayitlar.push({ uv_id: _secili.small_uv_id, kg: skg });
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Kaydediliyor...';
+
+  var today = new Date().toISOString().split('T')[0];
+  var hatalar = [];
+
+  for (var i = 0; i < kayitlar.length; i++) {
+    var k = kayitlar[i];
+    if (!k.uv_id) { hatalar.push('Varyant bulunamadı'); continue; }
+    try {
+      var r = await fetch('/nexgen/api/plan/ekle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uretim_varyant_id: k.uv_id,
+          planlanan_kg: k.kg,
+          musteri_adi: cari,
+          plan_tarihi: today,
+          notlar: notlar,
+          oncelik_sira: 10,
+        })
+      });
+      var j = await r.json();
+      if (!j.ok) hatalar.push(j.hata || 'Hata');
+    } catch(e) {
+      hatalar.push('Sunucu hatası');
     }
-  } catch(e) {
-    hataDiv.textContent = 'Sunucu hatası.';
-    hataDiv.style.display = 'block';
-    btn.disabled = false; btn.textContent = 'Kaydet';
+  }
+
+  if (hatalar.length > 0) {
+    hataErr(hatalar.join(' | '));
+    btn.disabled = false;
+    btn.textContent = 'Kaydet';
+  } else {
+    location.reload();
   }
 }
 
-/* Plan Başla */
+function hataErr(msg) {
+  var d = document.getElementById('up-form-hata');
+  d.textContent = msg;
+  d.style.display = 'block';
+}
+
+/* ─── Plan Başla ─── */
 async function planBasla(planId, planKodu, ad) {
   if (!confirm(ad + '\n\nBu plan için üretim batch kodu oluşturulsun mu?')) return;
   try {
     var r = await fetch('/nexgen/api/plan/' + planId + '/basla', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({})
     });
     var j = await r.json();
@@ -520,26 +743,22 @@ async function planBasla(planId, planKodu, ad) {
     } else {
       alert('HATA: ' + (j.hata || 'Bilinmeyen hata'));
     }
-  } catch(e) {
-    alert('Sunucu hatası.');
-  }
+  } catch(e) { alert('Sunucu hatası.'); }
 }
 
-/* Plan İptal */
+/* ─── Plan İptal ─── */
 async function planIptal(planId) {
   if (!confirm('Bu planı iptal etmek istediğinize emin misiniz?')) return;
   try {
     var r = await fetch('/nexgen/api/plan/' + planId + '/iptal', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({})
     });
     var j = await r.json();
     if (j.ok) { location.reload(); }
     else { alert('HATA: ' + (j.hata || 'Bilinmeyen hata')); }
-  } catch(e) {
-    alert('Sunucu hatası.');
-  }
+  } catch(e) { alert('Sunucu hatası.'); }
 }
 </script>
 {% endblock %}
