@@ -2823,6 +2823,15 @@ def yonetim_merkezi():
             "SELECT id, aa_kodu, ad FROM nexgen_stok_aile WHERE aktif=1 ORDER BY sira"
         ).fetchall()
 
+        # Cari listesi
+        try:
+            cariler_raw = con.execute(
+                "SELECT id, cari_kod, unvan, aktif FROM nexgen_cari ORDER BY aktif DESC, cari_kod"
+            ).fetchall()
+            cariler = [dict(c) for c in cariler_raw]
+        except Exception:
+            cariler = []
+
     finally:
         con.close()
 
@@ -2833,6 +2842,7 @@ def yonetim_merkezi():
         tedarikciler=[dict(t) for t in tedarikciler_raw],
         eslesme_listesi=[dict(e) for e in eslesme_raw],
         aileler=[dict(a) for a in aileler_raw],
+        cariler=cariler,
     )
 
 
@@ -2992,6 +3002,92 @@ def api_yonetim_eslestirme_kaldir():
         con.close()
 
     return jsonify({"ok": True})
+
+
+# ─────────────────────────────────────────────────────────────
+# CARİ MASTER API — FAZ-5E-3
+# ─────────────────────────────────────────────────────────────
+
+@nexgen_bp.route('/api/yonetim/cari-ekle', methods=['POST'])
+@yetki_gerekli('nexgen.yonetim.manage', 'can_create')
+def api_cari_ekle():
+    """Yeni cari ekle."""
+    d = request.get_json(silent=True) or {}
+    kod   = (d.get('cari_kod') or '').strip()
+    unvan = (d.get('unvan') or '').strip()
+    if not kod or not unvan:
+        return jsonify({'ok': False, 'hata': 'cari_kod ve unvan zorunlu'}), 400
+    con = _db()
+    try:
+        mev = con.execute("SELECT id FROM nexgen_cari WHERE cari_kod=?", (kod,)).fetchone()
+        if mev:
+            return jsonify({'ok': False, 'hata': f"'{kod}' kodu zaten mevcut"}), 400
+        con.execute(
+            "INSERT INTO nexgen_cari(cari_kod, unvan, aktif) VALUES(?,?,1)",
+            (kod, unvan)
+        )
+        con.commit()
+        yeni_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+        return jsonify({'ok': True, 'id': yeni_id})
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/yonetim/cari-guncelle', methods=['POST'])
+@yetki_gerekli('nexgen.yonetim.manage', 'can_update')
+def api_cari_guncelle():
+    """Cari unvan güncelle."""
+    d = request.get_json(silent=True) or {}
+    cari_id = d.get('id')
+    unvan   = (d.get('unvan') or '').strip()
+    if not cari_id or not unvan:
+        return jsonify({'ok': False, 'hata': 'id ve unvan zorunlu'}), 400
+    con = _db()
+    try:
+        kayit = con.execute("SELECT id FROM nexgen_cari WHERE id=?", (cari_id,)).fetchone()
+        if not kayit:
+            return jsonify({'ok': False, 'hata': 'Cari bulunamadı'}), 404
+        con.execute(
+            "UPDATE nexgen_cari SET unvan=?, updated_at=datetime('now','localtime') WHERE id=?",
+            (unvan, cari_id)
+        )
+        con.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/yonetim/cari-durum', methods=['POST'])
+@yetki_gerekli('nexgen.yonetim.manage', 'can_update')
+def api_cari_durum():
+    """Cari aktif/pasif toggle."""
+    d = request.get_json(silent=True) or {}
+    cari_id = d.get('id')
+    if not cari_id:
+        return jsonify({'ok': False, 'hata': 'id zorunlu'}), 400
+    con = _db()
+    try:
+        kayit = con.execute("SELECT id, aktif FROM nexgen_cari WHERE id=?", (cari_id,)).fetchone()
+        if not kayit:
+            return jsonify({'ok': False, 'hata': 'Cari bulunamadı'}), 404
+        yeni = 0 if kayit['aktif'] else 1
+        con.execute(
+            "UPDATE nexgen_cari SET aktif=?, updated_at=datetime('now','localtime') WHERE id=?",
+            (yeni, cari_id)
+        )
+        con.commit()
+        return jsonify({'ok': True, 'aktif': yeni})
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
 
 
 # =============================================================
@@ -4510,6 +4606,15 @@ def uretim_plan_liste():
                 'renkler': list(f['renkler'].values()),
             })
 
+        # Aktif cariler — dropdown için
+        try:
+            cari_rows = con.execute(
+                "SELECT id, cari_kod, unvan FROM nexgen_cari WHERE aktif=1 ORDER BY cari_kod"
+            ).fetchall()
+            cariler = [dict(c) for c in cari_rows]
+        except Exception:
+            cariler = []
+
     finally:
         con.close()
     return render_template(
@@ -4517,6 +4622,7 @@ def uretim_plan_liste():
         active='nexgen',
         planlar=planlar,
         formuller=formuller,
+        cariler=cariler,
         can_manage=yetki_var('nexgen.plan.manage', 'can_manage'),
     )
 

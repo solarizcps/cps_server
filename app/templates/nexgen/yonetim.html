@@ -36,6 +36,10 @@
       Excel Import
       <span class="ngsd-sekme-soon">Yakında</span>
     </button>
+    <button class="ngsd-sekme-btn" data-sekme="cari" onclick="sekmeGec('cari')">
+      Cariler
+      <span class="ngsd-sekme-sayac">{{ cariler|selectattr('aktif','eq',1)|list|length }}</span>
+    </button>
   </div>
 
   {# ═══════════════════════════════════════════════════════════ #}
@@ -263,7 +267,106 @@
     </div>
   </div>
 
+  {# ═══════════════════════════════════════════════════════════ #}
+  {# SEKME: CARİLER                                              #}
+  {# ═══════════════════════════════════════════════════════════ #}
+  <div id="ngsd-sekme-cari" class="ngsd-sekme-icerik" style="display:none;">
+
+    <div class="ngym-toolbar">
+      <div class="ngym-toolbar-sol">
+        <input type="text" id="cariAra" placeholder="Kod veya unvan ara..."
+               class="ngym-ara" oninput="cariFiltrele()">
+      </div>
+      <div class="ngym-toolbar-sag">
+        <button class="ngsk-btn-yeni" onclick="cariYeniModalAc()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+               stroke-linecap="round" stroke-linejoin="round" width="13" height="13">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          Yeni Cari
+        </button>
+      </div>
+    </div>
+
+    <div class="ngsd-hrt-cerceve">
+      <table class="ngsd-hrt-tablo" id="cariTablo">
+        <thead>
+          <tr>
+            <th>Cari Kod</th>
+            <th>Unvan</th>
+            <th style="text-align:center">Durum</th>
+            <th style="text-align:right">İşlem</th>
+          </tr>
+        </thead>
+        <tbody id="cariTbody">
+          {% for c in cariler %}
+          <tr class="ngsd-hrt-satir cari-satir {{ '' if c.aktif else 'pasif-satir' }}"
+              data-kod="{{ c.cari_kod|lower }}"
+              data-unvan="{{ c.unvan|lower }}">
+            <td>
+              <span class="ngsd-kod-rozet">{{ c.cari_kod }}</span>
+            </td>
+            <td>{{ c.unvan }}</td>
+            <td style="text-align:center">
+              {% if c.aktif %}
+              <span class="ngsd-durum-yesil">AKTİF</span>
+              {% else %}
+              <span class="ngsd-durum-gri">PASİF</span>
+              {% endif %}
+            </td>
+            <td style="text-align:right">
+              <div style="display:flex;gap:6px;justify-content:flex-end;">
+                <button class="ngym-islem-btn"
+                        onclick="cariDuzenleModalAc({{ c.id }}, '{{ c.cari_kod }}', '{{ c.unvan|replace("'","\\'")|e }}')">
+                  Düzenle
+                </button>
+                <button class="ngym-islem-btn {{ 'ngym-btn-pasif' if c.aktif else 'ngym-btn-aktif' }}"
+                        onclick="cariDurumToggle({{ c.id }}, this)">
+                  {{ 'Pasif Yap' if c.aktif else 'Aktif Yap' }}
+                </button>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" style="text-align:center;color:#9ca3af;padding:24px;">
+            Henüz cari kaydı yok. Migration çalıştırıldı mı?
+          </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
 </div>{# /.ng-sayfa #}
+
+{# ── Cari Modal ── #}
+<div id="ngym-cari-overlay" class="ngsk-overlay" onclick="ngymKapat('cari',event)">
+  <div class="ngsk-modal" onclick="event.stopPropagation()" style="max-width:480px">
+    <div class="ngsk-modal-baslik">
+      <span id="cari-modal-baslik">Cari</span>
+      <button class="ngsk-modal-kapat" onclick="ngymKapat('cari')">&times;</button>
+    </div>
+    <div id="cari-modal-hata"   class="ngsk-hata-alan"   style="display:none"></div>
+    <div id="cari-modal-basari" class="ngsk-basari-alan"  style="display:none"></div>
+    <input type="hidden" id="cari-modal-id">
+    <div style="padding:18px;display:flex;flex-direction:column;gap:14px;">
+      <div class="ngsk-fg">
+        <label>Cari Kod <span class="ngsk-zorunlu">*</span></label>
+        <input type="text" id="cari-modal-kod" class="ngsk-inp" placeholder="120.NX.XXX">
+      </div>
+      <div class="ngsk-fg">
+        <label>Unvan <span class="ngsk-zorunlu">*</span></label>
+        <input type="text" id="cari-modal-unvan" class="ngsk-inp"
+               placeholder="Firma Adı San.Tic.Ltd.Şti.">
+      </div>
+    </div>
+    <div class="ngsk-modal-alt">
+      <button class="ngsk-btn-iptal" onclick="ngymKapat('cari')">İptal</button>
+      <button class="ngsk-btn-kaydet" id="cari-kaydet-btn" onclick="cariKaydet()">Kaydet</button>
+    </div>
+  </div>
+</div>
 
 {# ═══════════════════════════════════════════════════════════ #}
 {# MODAL: STOK KARTI YENİ / DÜZENLE                            #}
@@ -681,10 +784,21 @@
   .ngym-eslesme-sol { width:100%; max-height:200px; }
   .ngym-form-grid { grid-template-columns:1fr; }
 }
+/* ── Cari sekmesi ── */
+.ngsd-durum-yesil { font-size:11px; font-weight:800; color:#15803d; background:#dcfce7; padding:3px 8px; border-radius:5px; }
+.ngsd-durum-gri   { font-size:11px; font-weight:800; color:#9ca3af; background:#f1f5f9; padding:3px 8px; border-radius:5px; }
+.ngsd-kod-rozet   { font-size:11px; font-weight:800; font-family:monospace; background:#f1f5f9; color:#374151; padding:3px 7px; border-radius:4px; }
+.ngym-islem-btn   { padding:5px 10px; border:1.5px solid #e2e8f0; border-radius:6px; background:#f8fafc; font-size:12px; font-weight:700; cursor:pointer; color:#374151; }
+.ngym-islem-btn:hover { background:#e0f2fe; border-color:#93c5fd; }
+.ngym-btn-pasif   { border-color:#fca5a5 !important; color:#dc2626 !important; }
+.ngym-btn-pasif:hover { background:#fef2f2 !important; }
+.ngym-btn-aktif   { border-color:#86efac !important; color:#15803d !important; }
+.ngym-btn-aktif:hover { background:#dcfce7 !important; }
+.pasif-satir      { opacity:.5; }
 </style>
 
 <script>
-const SEKMELER_YM = ['stok', 'tedarikci', 'eslestirme', 'import'];
+const SEKMELER_YM = ['stok', 'tedarikci', 'eslestirme', 'import', 'cari'];
 
 function sekmeGec(hedef) {
   SEKMELER_YM.forEach(function(s) {
@@ -738,6 +852,16 @@ function ngymKapat(tip, e) {
 function ngymHataTemizle(tip) {
   document.getElementById(tip + '-modal-hata').style.display = 'none';
   document.getElementById(tip + '-modal-basari').style.display = 'none';
+}
+
+// ── Cari Filtre ──
+function cariFiltrele() {
+  var q = document.getElementById('cariAra').value.toLowerCase();
+  document.querySelectorAll('.cari-satir').forEach(function(row) {
+    var kod   = row.dataset.kod   || '';
+    var unvan = row.dataset.unvan || '';
+    row.style.display = (kod.includes(q) || unvan.includes(q)) ? '' : 'none';
+  });
 }
 
 // ── Stok Kartı Modalı ──
@@ -1003,6 +1127,70 @@ function eslKaldir(eslId, btnEl) {
   fetch('/nexgen/api/yonetim/eslestirme-kaldir', {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({id: eslId})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){ if (d.ok) location.reload(); else alert(d.hata||'Hata'); })
+  .catch(function(){ alert('Bağlantı hatası'); });
+}
+
+// ── Cari ──
+function cariYeniModalAc() {
+  document.getElementById('cari-modal-id').value = '';
+  document.getElementById('cari-modal-kod').value = '';
+  document.getElementById('cari-modal-unvan').value = '';
+  document.getElementById('cari-modal-kod').disabled = false;
+  document.getElementById('cari-modal-baslik').textContent = 'Yeni Cari';
+  ngymHataTemizle('cari');
+  document.getElementById('ngym-cari-overlay').classList.add('acik');
+}
+
+function cariDuzenleModalAc(id, kod, unvan) {
+  document.getElementById('cari-modal-id').value = id;
+  document.getElementById('cari-modal-kod').value = kod;
+  document.getElementById('cari-modal-unvan').value = unvan;
+  document.getElementById('cari-modal-kod').disabled = true;
+  document.getElementById('cari-modal-baslik').textContent = 'Cari Düzenle';
+  ngymHataTemizle('cari');
+  document.getElementById('ngym-cari-overlay').classList.add('acik');
+}
+
+function cariKaydet() {
+  var btn = document.getElementById('cari-kaydet-btn');
+  var hataDiv = document.getElementById('cari-modal-hata');
+  var basariDiv = document.getElementById('cari-modal-basari');
+  ngymHataTemizle('cari');
+
+  var id    = document.getElementById('cari-modal-id').value;
+  var kod   = document.getElementById('cari-modal-kod').value.trim();
+  var unvan = document.getElementById('cari-modal-unvan').value.trim();
+
+  if (!unvan) { hataDiv.textContent='Unvan zorunlu.'; hataDiv.style.display='block'; return; }
+  if (!id && !kod) { hataDiv.textContent='Cari kodu zorunlu.'; hataDiv.style.display='block'; return; }
+
+  var url  = id ? '/nexgen/api/yonetim/cari-guncelle' : '/nexgen/api/yonetim/cari-ekle';
+  var body = id ? {id: parseInt(id), unvan: unvan} : {cari_kod: kod, unvan: unvan};
+
+  btn.disabled = true; btn.textContent = 'Kaydediliyor…';
+  fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)})
+  .then(function(r){ return r.json(); })
+  .then(function(d) {
+    if (d.ok) {
+      basariDiv.textContent = id ? '✓ Güncellendi.' : '✓ Cari eklendi.';
+      basariDiv.style.display = 'block';
+      setTimeout(function(){ location.reload(); }, 1000);
+    } else {
+      hataDiv.textContent = d.hata || 'Hata oluştu.';
+      hataDiv.style.display = 'block';
+    }
+  })
+  .catch(function(){ hataDiv.textContent='Bağlantı hatası.'; hataDiv.style.display='block'; })
+  .finally(function(){ btn.textContent='Kaydet'; btn.disabled=false; });
+}
+
+function cariDurumToggle(id, btn) {
+  fetch('/nexgen/api/yonetim/cari-durum', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({id: id})
   })
   .then(function(r){ return r.json(); })
   .then(function(d){ if (d.ok) location.reload(); else alert(d.hata||'Hata'); })
