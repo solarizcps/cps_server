@@ -117,9 +117,15 @@
     <a href="/nexgen/tablet/uretim" class="tkod-btn tkod-btn-ana">
       + Yeni Üretim
     </a>
+    <a href="/nexgen/tablet/etiket/uretim/{{ batch.batch_kodu }}" class="tkod-btn tkod-btn-etiket">
+      🖨 Etiket Yazdır
+    </a>
     {% else %}
     <a href="/nexgen/tablet/arge" class="tkod-btn tkod-btn-arge">
       + Yeni AR-GE
+    </a>
+    <a href="/nexgen/tablet/etiket/arge/{{ test.test_no }}" class="tkod-btn tkod-btn-etiket">
+      🖨 Etiket Yazdır
     </a>
     {% endif %}
     <a href="/nexgen/tablet" class="tkod-btn tkod-btn-sekonder">
@@ -129,7 +135,7 @@
 
   {# ── Gelecek ── #}
   <div class="tkod-gelecek-not">
-    <span>[ Etiket Yazdır ]</span> — Sonraki fazda eklenecek
+    ZPL/TSPL yazıcı entegrasyonu bir sonraki fazda eklenecek.
   </div>
 
 </div>
@@ -214,6 +220,10 @@ body { background: #0f172a; }
   background: #0891b2; color: #fff;
 }
 .tkod-btn-arge:hover { background: #0e7490; transform: translateY(-1px); }
+.tkod-btn-etiket {
+  background: #4ade80; color: #14532d;
+}
+.tkod-btn-etiket:hover { background: #22c55e; transform: translateY(-1px); }
 .tkod-btn-sekonder {
   background: #1e293b; color: #94a3b8;
   border: 2px solid #334155;

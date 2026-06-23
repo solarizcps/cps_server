@@ -3372,7 +3372,25 @@ def _batch_kodu_uret(con):
     return f"NG-PRD-{yil}-{yeni_no:05d}"
 
 
-@nexgen_bp.route('/tablet')
+def _lot_kodu_uret(con):
+    """NG-LOT-YYYY-NNNNN formatında benzersiz fiziksel LOT kodu üretir.
+    batch_kodu = işlem kaydı; lot_kodu = fiziksel ürün/compound takip kodu.
+    """
+    import datetime
+    yil = datetime.datetime.now().year
+    son = con.execute(
+        "SELECT lot_kodu FROM nexgen_uretim_batch "
+        "WHERE lot_kodu LIKE ? ORDER BY id DESC LIMIT 1",
+        (f"NG-LOT-{yil}-%",)
+    ).fetchone()
+    if son and son['lot_kodu']:
+        try:
+            son_no = int(son['lot_kodu'].split('-')[-1])
+        except Exception:
+            son_no = 0
+    else:
+        son_no = 0
+    return f"NG-LOT-{yil}-{son_no + 1:05d}"
 @yetki_gerekli('nexgen.tablet.view', 'can_view')
 def tablet_ana():
     con = _db()
@@ -3533,7 +3551,6 @@ def tablet_uretim():
     con = _db()
     try:
         varyantlar = _uretime_acik_receteler(con)
-        # Her varyant için batch KG ve kg_maliyet ekle
         liste = []
         for uv in varyantlar:
             uv_dict = dict(uv)
@@ -3561,9 +3578,45 @@ def tablet_uretim():
                     else:
                         bp = 0.0
                     toplam_mal += float(k['miktar_kg']) * bp
-            uv_dict['toplam_kg'] = toplam_kg
-            uv_dict['kg_maliyet'] = round(toplam_mal / toplam_kg, 2) if toplam_kg > 0 else 0.0
+            uv_dict['toplam_kg']   = toplam_kg
+            uv_dict['kg_maliyet']  = round(toplam_mal / toplam_kg, 2) if toplam_kg > 0 else 0.0
             liste.append(uv_dict)
+
+        # Açık TASLAK batch'lerden "bugünkü işler" — planlanan KG → kazan sayısı
+        bugun = date.today().isoformat()
+        acik_isler = con.execute("""
+            SELECT nb.id, nb.batch_kodu, nb.planlanan_kg, nb.durum,
+                   nb.olusturma_tarihi, nb.notlar,
+                   uv.id AS uv_id, uv.boyut, uv.ad AS uv_ad,
+                   rv.ad AS renk_ad,
+                   f.ad AS formul_ad, f.kod AS formul_kod
+            FROM nexgen_uretim_batch nb
+            JOIN nexgen_uretim_varyant uv ON uv.id = nb.uretim_varyant_id
+            JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+            JOIN nexgen_formul f          ON f.id  = rv.formul_id
+            WHERE nb.durum IN ('TASLAK','HAZIR')
+              AND substr(nb.olusturma_tarihi,1,10) = ?
+            ORDER BY nb.id ASC
+        """, (bugun,)).fetchall()
+
+        # Her iş için batch_kg (reçeteden) ve kazan sayısı hesapla
+        acik_isler_liste = []
+        for is_ in acik_isler:
+            is_dict = dict(is_)
+            # Reçete batch KG
+            kalemler2 = con.execute("""
+                SELECT SUM(miktar_kg) as toplam
+                FROM nexgen_recete_kalem
+                WHERE uretim_varyant_id=? AND aktif=1
+            """, (is_dict['uv_id'],)).fetchone()
+            batch_kg = round(float(kalemler2['toplam'] or 0), 3) if kalemler2 else 0.0
+            is_dict['batch_kg'] = batch_kg
+            if batch_kg > 0 and is_dict['planlanan_kg'] > 0:
+                q = is_dict['planlanan_kg'] / batch_kg
+                is_dict['kazan_sayisi'] = int(q) if q == int(q) else int(q) + 1
+            else:
+                is_dict['kazan_sayisi'] = 0
+            acik_isler_liste.append(is_dict)
     finally:
         con.close()
 
@@ -3571,6 +3624,7 @@ def tablet_uretim():
         'nexgen/tablet_uretim.html',
         active='nexgen',
         varyantlar=liste,
+        acik_isler=acik_isler_liste,
     )
 
 
@@ -3751,16 +3805,18 @@ def api_tablet_uretim_kodu():
             return jsonify({"ok": False, "hata": f"Sadece URETIME_ACIK reçeteler kullanılabilir. Mevcut: {uv['recete_durum']}"}), 400
 
         batch_kodu = _batch_kodu_uret(con)
+        lot_kodu   = _lot_kodu_uret(con)
         uid = _kullanici_id()
         con.execute(
-            "INSERT INTO nexgen_uretim_batch(batch_kodu, uretim_varyant_id, planlanan_kg, durum, olusturan_id, notlar) "
-            "VALUES(?,?,?,'HAZIR',?,?)",
-            (batch_kodu, uv_id, round(planlanan, 3), uid, notlar)
+            "INSERT INTO nexgen_uretim_batch(batch_kodu, lot_kodu, uretim_varyant_id, planlanan_kg, durum, olusturan_id, notlar) "
+            "VALUES(?,?,?,?,'HAZIR',?,?)",
+            (batch_kodu, lot_kodu, uv_id, round(planlanan, 3), uid, notlar)
         )
         con.commit()
         return jsonify({
             "ok": True,
             "batch_kodu":  batch_kodu,
+            "lot_kodu":    lot_kodu,
             "formul_ad":   uv['formul_ad'],
             "renk_ad":     uv['renk_ad'],
             "boyut":       uv['boyut'],
@@ -3835,6 +3891,117 @@ def tablet_arge_kod_goster(test_no):
         batch=None,
         test=test,
         kod_tipi='ARGE',
+    )
+
+
+# ─────────────────────────────────────────────────────────────
+# NEXGEN FAZ-5C-0 — LOT / BARKOD ETİKET SAYFALARI
+# KURAL: Stok hareketi yok. Sadece etiket görüntüleme + yazdırma.
+# ─────────────────────────────────────────────────────────────
+
+@nexgen_bp.route('/tablet/etiket/uretim/<batch_kodu>')
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def tablet_etiket_uretim(batch_kodu):
+    """Üretim batch için LOT / barkod etiket önizleme sayfası."""
+    con = _db()
+    try:
+        batch = con.execute("""
+            SELECT nb.id, nb.batch_kodu, nb.lot_kodu, nb.planlanan_kg,
+                   nb.durum, nb.olusturma_tarihi, nb.notlar,
+                   uv.boyut,
+                   rv.ad AS renk_ad,
+                   f.ad AS formul_ad,
+                   ku.KullaniciAdi AS olusturan_ad
+            FROM nexgen_uretim_batch nb
+            JOIN nexgen_uretim_varyant uv ON uv.id = nb.uretim_varyant_id
+            JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+            JOIN nexgen_formul f          ON f.id  = rv.formul_id
+            LEFT JOIN sistem_kullanici ku ON ku.Id  = nb.olusturan_id
+            WHERE nb.batch_kodu = ?
+        """, (batch_kodu,)).fetchone()
+        if not batch:
+            from flask import abort
+            abort(404)
+        batch = dict(batch)
+
+        # lot_kodu yoksa (eski kayıt) — anında oluştur ve kaydet
+        if not batch.get('lot_kodu'):
+            yeni_lot = _lot_kodu_uret(con)
+            con.execute(
+                "UPDATE nexgen_uretim_batch SET lot_kodu=? WHERE batch_kodu=?",
+                (yeni_lot, batch_kodu)
+            )
+            con.commit()
+            batch['lot_kodu'] = yeni_lot
+
+        # Kazan hesabı
+        kalemler = con.execute(
+            "SELECT SUM(miktar_kg) AS toplam FROM nexgen_recete_kalem "
+            "WHERE uretim_varyant_id=("
+            "  SELECT uretim_varyant_id FROM nexgen_uretim_batch WHERE batch_kodu=?"
+            ") AND aktif=1",
+            (batch_kodu,)
+        ).fetchone()
+        batch_kg = float((kalemler['toplam'] or 0) if kalemler else 0)
+        if batch_kg > 0 and batch['planlanan_kg'] > 0:
+            q = batch['planlanan_kg'] / batch_kg
+            batch['kazan_sayisi'] = int(q) if q == int(q) else int(q) + 1
+            batch['batch_kg']     = round(batch_kg, 3)
+        else:
+            batch['kazan_sayisi'] = 0
+            batch['batch_kg']     = batch_kg
+
+    finally:
+        con.close()
+
+    from flask import session as _session
+    operator_ad = _session.get('kullanici_ad') or _session.get('ad') or '—'
+    from datetime import date as _date
+    return render_template(
+        'nexgen/tablet_etiket_uretim.html',
+        active='nexgen',
+        batch=batch,
+        operator_ad=operator_ad,
+        bugun=_date.today().isoformat(),
+    )
+
+
+@nexgen_bp.route('/tablet/etiket/arge/<test_no>')
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def tablet_etiket_arge(test_no):
+    """AR-GE testi için barkod etiket önizleme sayfası."""
+    con = _db()
+    try:
+        test = con.execute("""
+            SELECT at.id, at.test_no, at.test_kg, at.makina,
+                   at.yeni_renk_adi, at.durum, at.olusturma_tarihi,
+                   uv.boyut,
+                   rv.ad AS renk_ad,
+                   f.ad AS formul_ad,
+                   ku.KullaniciAdi AS olusturan_ad
+            FROM nexgen_arge_test at
+            JOIN nexgen_uretim_varyant uv ON uv.id = at.kaynak_uv_id
+            JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+            JOIN nexgen_formul f          ON f.id  = rv.formul_id
+            LEFT JOIN sistem_kullanici ku ON ku.Id  = at.olusturan_id
+            WHERE at.test_no = ?
+        """, (test_no,)).fetchone()
+        if not test:
+            from flask import abort
+            abort(404)
+        test = dict(test)
+    finally:
+        con.close()
+
+    from flask import session as _session
+    operator_ad = _session.get('kullanici_ad') or _session.get('ad') or '—'
+    from datetime import date as _date
+    return render_template(
+        'nexgen/tablet_etiket_arge.html',
+        active='nexgen',
+        test=test,
+        operator_ad=operator_ad,
+        bugun=_date.today().isoformat(),
     )
 
 

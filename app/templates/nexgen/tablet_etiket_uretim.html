@@ -1,0 +1,419 @@
+{% extends "base.html" %}
+{% set page_title = "Etiket: " ~ batch.lot_kodu ~ " — NexGen" %}
+
+{% block content %}
+<div class="etiket-sayfa">
+
+  {# ── Üst Bar ── #}
+  <div class="etiket-topbar no-print">
+    <div class="etiket-topbar-ic">
+      <a href="/nexgen/tablet/kod/{{ batch.batch_kodu }}" class="etiket-geri">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+             stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+      </a>
+      <div>
+        <div class="etiket-topbar-kucuk">NEXGEN TABLET</div>
+        <div class="etiket-topbar-buyuk">BARKOD ETİKET</div>
+      </div>
+      <div class="etiket-topbar-sag">
+        <button class="etiket-yazdir-btn" onclick="window.print()">
+          🖨 YAZDIR
+        </button>
+      </div>
+    </div>
+  </div>
+
+  {# ══ ETİKET ALANI (yazdırılacak) ══════════════════════════════════ #}
+  <div class="etiket-kapsayici">
+
+    {# ── Birincil Etiket (100×60 mm) ── #}
+    <div class="etiket-kart etiket-uretim" id="etiket-ana">
+
+      {# Üst şerit #}
+      <div class="et-ust-serit">
+        <span class="et-sirket">SOLARIZ</span>
+        <span class="et-modul">NEXGEN</span>
+        <span class="et-tip-rozet">ÜRETİM</span>
+      </div>
+
+      {# LOT kodu — en büyük eleman #}
+      <div class="et-lot-blok">
+        <div class="et-lot-etiket">LOT</div>
+        <div class="et-lot-kod">{{ batch.lot_kodu }}</div>
+      </div>
+
+      {# Barkod görsel (CSS ile simüle) #}
+      <div class="et-barkod" title="{{ batch.lot_kodu }}">
+        <div class="et-barkod-cubuklar" id="et-cubuklar"></div>
+        <div class="et-barkod-metin">{{ batch.lot_kodu }}</div>
+      </div>
+
+      {# Ana bilgi satırları #}
+      <div class="et-bilgi-grid">
+        <div class="et-bilgi-satir">
+          <span class="et-etiket">FORMÜL</span>
+          <span class="et-deger">{{ batch.formul_ad }}</span>
+        </div>
+        <div class="et-bilgi-satir">
+          <span class="et-etiket">RENK</span>
+          <span class="et-deger">{{ batch.renk_ad }}</span>
+        </div>
+        <div class="et-bilgi-satir">
+          <span class="et-etiket">BOYUT</span>
+          <span class="et-deger">{{ 'BÜYÜK BOY' if batch.boyut == 'LARGE' else 'KÜÇÜK BOY' if batch.boyut == 'SMALL' else batch.boyut }}</span>
+        </div>
+        <div class="et-bilgi-satir">
+          <span class="et-etiket">MİKTAR</span>
+          <span class="et-deger et-kg">{{ batch.planlanan_kg | int }} KG</span>
+        </div>
+        {% if batch.notlar %}
+        <div class="et-bilgi-satir">
+          <span class="et-etiket">HAT/VARDİYA</span>
+          <span class="et-deger">{{ batch.notlar }}</span>
+        </div>
+        {% endif %}
+      </div>
+
+      {# Alt şerit #}
+      <div class="et-alt-serit">
+        <span class="et-batch-kod">{{ batch.batch_kodu }}</span>
+        <span class="et-tarih">{{ bugun }}</span>
+        <span class="et-operator">{{ operator_ad }}</span>
+      </div>
+
+    </div>{# /etiket-kart #}
+
+    {# ── Kazan etiketi (her kazan için ayrı, loop) ── #}
+    {% if batch.kazan_sayisi and batch.kazan_sayisi > 1 %}
+    <div class="no-print etiket-kazan-bilgi">
+      <div class="ekb-baslik">KAZAN ETİKETLERİ</div>
+      <div class="ekb-aciklama">
+        Toplam {{ batch.kazan_sayisi }} kazan × ~{{ batch.batch_kg | round(0) | int }} KG
+      </div>
+      <div class="ekb-butonlar">
+        {% for k in range(1, batch.kazan_sayisi + 1) %}
+        <button class="ekb-btn" onclick="etiketKazanGoster({{ k }}, {{ batch.kazan_sayisi }})">
+          Kazan {{ k }}
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="etiket-kart etiket-kazan print-only" id="etiket-kazan" style="display:none">
+      <div class="et-ust-serit">
+        <span class="et-sirket">SOLARIZ</span>
+        <span class="et-modul">NEXGEN</span>
+        <span class="et-tip-rozet et-rozet-kazan">KAZAN</span>
+      </div>
+      <div class="et-lot-blok">
+        <div class="et-lot-etiket">LOT</div>
+        <div class="et-lot-kod">{{ batch.lot_kodu }}</div>
+      </div>
+      <div class="et-kazan-no-blok">
+        <span class="et-kazan-etiket">KAZAN</span>
+        <span class="et-kazan-no" id="kazan-no-goster">— / {{ batch.kazan_sayisi }}</span>
+      </div>
+      <div class="et-bilgi-grid">
+        <div class="et-bilgi-satir">
+          <span class="et-etiket">FORMÜL</span>
+          <span class="et-deger">{{ batch.formul_ad }}</span>
+        </div>
+        <div class="et-bilgi-satir">
+          <span class="et-etiket">RENK</span>
+          <span class="et-deger">{{ batch.renk_ad }}</span>
+        </div>
+        <div class="et-bilgi-satir">
+          <span class="et-etiket">KG / KAZAN</span>
+          <span class="et-deger et-kg">~{{ batch.batch_kg | round(0) | int }} KG</span>
+        </div>
+      </div>
+      <div class="et-alt-serit">
+        <span class="et-batch-kod">{{ batch.batch_kodu }}</span>
+        <span class="et-tarih">{{ bugun }}</span>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>{# /etiket-kapsayici #}
+
+  {# ── Ekran bilgisi (no-print) ── #}
+  <div class="etiket-ekran-bilgi no-print">
+    <div class="eeb-satir">
+      <span class="eeb-etiket">Batch Kodu</span>
+      <span class="eeb-deger">{{ batch.batch_kodu }}</span>
+    </div>
+    <div class="eeb-satir">
+      <span class="eeb-etiket">LOT Kodu</span>
+      <span class="eeb-deger eeb-lot">{{ batch.lot_kodu }}</span>
+    </div>
+    {% if batch.kazan_sayisi %}
+    <div class="eeb-satir">
+      <span class="eeb-etiket">Kazan Sayısı</span>
+      <span class="eeb-deger">{{ batch.kazan_sayisi }}</span>
+    </div>
+    {% endif %}
+    <div class="eeb-not">
+      <strong>Yazıcı Entegrasyonu:</strong> ZPL/TSPL sonraki fazda.<br>
+      Şu an: <strong>window.print()</strong> — tarayıcı yazdırma diyaloğu açılır.
+    </div>
+  </div>
+
+  {# ── Alt Navigasyon ── #}
+  <div class="etiket-alt-nav no-print">
+    <a href="/nexgen/tablet/uretim" class="ean-btn ean-btn-ana">+ Yeni Üretim</a>
+    <a href="/nexgen/tablet/devam-edenler" class="ean-btn ean-btn-sec">Devam Edenler</a>
+    <a href="/nexgen/tablet" class="ean-btn ean-btn-sec">Ana Ekran</a>
+  </div>
+
+</div>
+
+{# ══ STYLE ════════════════════════════════════════════════════════════ #}
+<style>
+* { box-sizing: border-box; }
+
+/* ── Topbar ── */
+.etiket-topbar {
+  background: linear-gradient(135deg, #f6c343 0%, #f5b82e 100%);
+  border-bottom: 3px solid #e9a910;
+}
+.etiket-topbar-ic {
+  max-width: 1180px; margin: 0 auto;
+  display: flex; align-items: center; gap: 14px; padding: 14px 20px;
+}
+.etiket-geri {
+  width: 44px; height: 44px; border-radius: 12px;
+  background: rgba(0,0,0,.12); border: none;
+  display: flex; align-items: center; justify-content: center;
+  color: #1a1a1a; text-decoration: none; cursor: pointer; flex-shrink: 0;
+}
+.etiket-geri:hover { background: rgba(0,0,0,.2); }
+.etiket-topbar-kucuk { font-size: 10px; font-weight: 800; color: rgba(0,0,0,.45); letter-spacing: 3px; text-transform: uppercase; }
+.etiket-topbar-buyuk { font-size: 18px; font-weight: 900; color: #1a1a1a; }
+.etiket-topbar-sag { margin-left: auto; }
+.etiket-yazdir-btn {
+  padding: 11px 22px; background: #1e293b; color: #f6c343;
+  border: none; border-radius: 10px; font-size: 16px; font-weight: 800;
+  cursor: pointer; transition: background .12s;
+}
+.etiket-yazdir-btn:hover { background: #0f172a; }
+
+/* ── Kapsayıcı ── */
+.etiket-kapsayici {
+  max-width: 860px; margin: 24px auto 0;
+  padding: 0 20px;
+  display: flex; flex-direction: column; align-items: center; gap: 20px;
+}
+
+/* ── Etiket kartı — 100×60 mm oranı ── */
+.etiket-kart {
+  width: 100%; max-width: 400px;
+  background: #fff;
+  border: 2px solid #1e293b;
+  border-radius: 10px;
+  overflow: hidden;
+  font-family: 'Courier New', monospace;
+  box-shadow: 0 4px 20px rgba(15,23,42,.15);
+}
+
+/* ── Üst şerit ── */
+.et-ust-serit {
+  background: #1e293b; color: #f6c343;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 14px;
+  font-size: 11px; font-weight: 800; letter-spacing: 1.5px;
+}
+.et-sirket { font-size: 13px; }
+.et-tip-rozet {
+  background: #f6c343; color: #1a1a1a;
+  font-size: 9px; font-weight: 900; padding: 2px 8px; border-radius: 3px;
+}
+.et-rozet-kazan { background: #86efac; color: #14532d; }
+.et-rozet-arge  { background: #c4b5fd; color: #3b0764; }
+
+/* ── LOT kodu ── */
+.et-lot-blok {
+  padding: 14px 14px 8px;
+  text-align: center;
+}
+.et-lot-etiket {
+  font-size: 10px; letter-spacing: 2px; color: #9ca3af; margin-bottom: 4px;
+}
+.et-lot-kod {
+  font-size: clamp(20px, 5vw, 28px);
+  font-weight: 900; color: #1e293b;
+  letter-spacing: 3px;
+}
+
+/* ── Barkod simülasyonu ── */
+.et-barkod {
+  margin: 6px 14px 10px;
+  text-align: center;
+}
+.et-barkod-cubuklar {
+  height: 40px; display: flex; align-items: stretch; gap: 1px;
+  justify-content: center; margin-bottom: 4px;
+}
+.et-barkod-metin {
+  font-size: 9px; letter-spacing: 2px; color: #374151; font-family: monospace;
+}
+
+/* ── Bilgi grid ── */
+.et-bilgi-grid {
+  padding: 0 14px 10px;
+  display: flex; flex-direction: column; gap: 3px;
+}
+.et-bilgi-satir {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 11px; padding: 3px 0; border-bottom: 1px solid #f1f5f9;
+}
+.et-bilgi-satir:last-child { border-bottom: none; }
+.et-etiket { color: #9ca3af; font-weight: 700; letter-spacing: .5px; font-size: 10px; }
+.et-deger  { color: #1e293b; font-weight: 800; text-align: right; }
+.et-kg     { color: #f59e0b; font-size: 13px; }
+
+/* ── Kazan numarası ── */
+.et-kazan-no-blok {
+  background: #1e293b; color: #f6c343;
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  padding: 12px; font-size: 22px; font-weight: 900;
+}
+.et-kazan-etiket { font-size: 11px; color: #94a3b8; }
+
+/* ── Alt şerit ── */
+.et-alt-serit {
+  background: #f8fafc; border-top: 1px solid #e5e7eb;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 14px; font-size: 9px; color: #6b7280;
+}
+
+/* ── Kazan bilgi paneli ── */
+.etiket-kazan-bilgi {
+  width: 100%; max-width: 400px;
+  background: #fff; border-radius: 12px; border: 1px solid #e5e7eb;
+  padding: 16px 18px;
+}
+.ekb-baslik { font-size: 11px; font-weight: 800; color: #9ca3af; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 4px; }
+.ekb-aciklama { font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 12px; }
+.ekb-butonlar { display: flex; gap: 8px; flex-wrap: wrap; }
+.ekb-btn {
+  padding: 8px 14px; border: 2px solid #e5e7eb; border-radius: 8px;
+  background: #f8fafc; font-size: 13px; font-weight: 700; color: #374151; cursor: pointer;
+}
+.ekb-btn:hover { background: #fef9c3; border-color: #f6c343; }
+
+/* ── Ekran bilgisi ── */
+.etiket-ekran-bilgi {
+  max-width: 400px; width: 100%;
+  margin: 4px auto 0;
+  background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; padding: 14px 16px;
+}
+.eeb-satir {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 13px; padding: 7px 0; border-bottom: 1px solid #f8fafc;
+}
+.eeb-etiket { font-weight: 700; color: #6b7280; }
+.eeb-deger  { font-weight: 800; color: #1e293b; font-family: monospace; }
+.eeb-lot    { color: #1d4ed8; font-size: 14px; }
+.eeb-not {
+  margin-top: 10px; font-size: 11px; color: #9ca3af; line-height: 1.6;
+  background: #f8fafc; padding: 8px 10px; border-radius: 6px;
+}
+
+/* ── Alt nav ── */
+.etiket-alt-nav {
+  max-width: 400px; width: 100%;
+  margin: 16px auto 40px;
+  display: flex; gap: 10px;
+}
+.ean-btn {
+  flex: 1; text-align: center; padding: 14px;
+  border-radius: 12px; font-size: 14px; font-weight: 800;
+  text-decoration: none; transition: all .12s;
+}
+.ean-btn-ana  { background: #f6c343; color: #1a1a1a; }
+.ean-btn-ana:hover  { background: #e9b020; }
+.ean-btn-sec  { background: #f1f5f9; color: #374151; border: 1px solid #e5e7eb; }
+.ean-btn-sec:hover  { background: #e2e8f0; }
+
+/* ══ YAZICI CSS ══════════════════════════════════════════════════════ */
+@media print {
+  /* Sayfayı tam etiket boyutuna sıkıştır */
+  @page {
+    size: 100mm 60mm;
+    margin: 0;
+  }
+
+  body, .tb-ana, .etiket-sayfa {
+    background: #fff !important;
+    margin: 0; padding: 0;
+  }
+
+  /* Yazdırmada gizle */
+  .no-print,
+  .etiket-topbar,
+  .etiket-kazan-bilgi,
+  .etiket-ekran-bilgi,
+  .etiket-alt-nav {
+    display: none !important;
+  }
+
+  /* Yazdırmada sadece etiket kartını göster */
+  .etiket-kapsayici {
+    margin: 0; padding: 0;
+  }
+
+  /* Ana etiket */
+  .etiket-kart {
+    width: 100mm;
+    max-width: 100mm;
+    border: 1px solid #000 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    page-break-after: always;
+  }
+
+  /* Kazan etiketi yazdır (print-only) */
+  .print-only {
+    display: block !important;
+  }
+
+  /* Barkod çubukları yazdırmada görünsün */
+  .et-barkod-cubuklar .bar {
+    background: #000 !important;
+  }
+}
+</style>
+
+{# ══ SCRIPT ══════════════════════════════════════════════════════════ #}
+<script>
+/* Barkod simülasyonu — LOT kodundan deterministik çubuk genişlikleri */
+(function() {
+  var kod = '{{ batch.lot_kodu }}';
+  var kap = document.getElementById('et-cubuklar');
+  if (!kap) return;
+  /* Kod karakterleri → çubuk kalınlık (1-4px) */
+  for (var i = 0; i < kod.length * 2; i++) {
+    var kalnlik = ((kod.charCodeAt(i % kod.length) % 4) + 1);
+    var bar = document.createElement('div');
+    bar.className = 'bar';
+    bar.style.cssText =
+      'width:' + kalnlik + 'px;background:#1e293b;height:100%;border-radius:1px;';
+    kap.appendChild(bar);
+    /* Boşluk */
+    if (i % 3 !== 0) {
+      var bos = document.createElement('div');
+      bos.style.cssText = 'width:' + (kalnlik > 2 ? 2 : 1) + 'px;';
+      kap.appendChild(bos);
+    }
+  }
+})();
+
+function etiketKazanGoster(no, toplam) {
+  document.getElementById('kazan-no-goster').textContent = no + ' / ' + toplam;
+  document.getElementById('etiket-kazan').style.display = 'block';
+  document.getElementById('etiket-kazan').scrollIntoView({behavior:'smooth'});
+}
+</script>
+{% endblock %}

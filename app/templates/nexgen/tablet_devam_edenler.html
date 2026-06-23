@@ -69,8 +69,11 @@
           <div class="tde2-tarih">{{ b.olusturma_tarihi[:10] if b.olusturma_tarihi else '' }}</div>
         </div>
 
-        {# Devam Et #}
-        <a href="/nexgen/tablet/uretim" class="tde2-devam-btn">DEVAM ET →</a>
+        {# Devam Et + Etiket #}
+        <div class="tde2-kart-butonlar">
+          <a href="/nexgen/tablet/uretim" class="tde2-devam-btn">DEVAM ET →</a>
+          <a href="/nexgen/tablet/etiket/uretim/{{ b.batch_kodu }}" class="tde2-etiket-btn">🖨 Etiket</a>
+        </div>
 
       </div>
       {% endfor %}
@@ -209,14 +212,24 @@
 }
 .tde2-tarih { font-size: 11px; color: #9ca3af; margin-left: auto; }
 
+.tde2-kart-butonlar {
+  display: flex; gap: 8px; margin-top: 6px;
+}
 .tde2-devam-btn {
-  display: block; text-align: center; margin-top: 6px;
+  flex: 1; display: block; text-align: center;
   padding: 14px; background: #f6c343; color: #1a1a1a;
   border-radius: 12px; font-size: 16px; font-weight: 900;
   text-decoration: none; letter-spacing: .5px;
   transition: background .12s;
 }
 .tde2-devam-btn:hover { background: #e9b020; }
+.tde2-etiket-btn {
+  padding: 14px 16px; background: #f0fdf4; color: #15803d;
+  border: 2px solid #86efac; border-radius: 12px;
+  font-size: 13px; font-weight: 800; text-decoration: none;
+  white-space: nowrap; transition: all .12s;
+}
+.tde2-etiket-btn:hover { background: #dcfce7; }
 
 /* Footer */
 .tde2-footer { margin-top: 4px; }

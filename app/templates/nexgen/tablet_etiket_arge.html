@@ -1,0 +1,313 @@
+{% extends "base.html" %}
+{% set page_title = "Etiket: " ~ test.test_no ~ " — NexGen AR-GE" %}
+
+{% block content %}
+<div class="arge-et-sayfa">
+
+  {# ── Üst Bar ── #}
+  <div class="arge-et-topbar no-print">
+    <div class="arge-et-topbar-ic">
+      <a href="/nexgen/tablet/arge-kod/{{ test.test_no }}" class="arge-et-geri">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+             stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+      </a>
+      <div>
+        <div class="arge-et-topbar-kucuk">NEXGEN TABLET</div>
+        <div class="arge-et-topbar-buyuk">AR-GE ETİKET</div>
+      </div>
+      <div class="arge-et-topbar-sag">
+        <button class="arge-et-yazdir-btn" onclick="window.print()">
+          🖨 YAZDIR
+        </button>
+      </div>
+    </div>
+  </div>
+
+  {# ══ ETİKET ALANI ══════════════════════════════════════════════════ #}
+  <div class="arge-et-kapsayici">
+
+    <div class="arge-et-kart" id="arge-et-ana">
+
+      {# Üst şerit ─ mor #}
+      <div class="aet-ust-serit">
+        <span class="aet-sirket">SOLARIZ</span>
+        <span class="aet-modul">NEXGEN</span>
+        <span class="aet-tip-rozet">AR-GE TEST</span>
+      </div>
+
+      {# Test kodu ── ana görsel öge #}
+      <div class="aet-kod-blok">
+        <div class="aet-kod-etiket">AR-GE KODU</div>
+        <div class="aet-kod">{{ test.test_no }}</div>
+      </div>
+
+      {# Barkod simülasyonu #}
+      <div class="aet-barkod">
+        <div class="aet-barkod-cubuklar" id="aet-cubuklar"></div>
+        <div class="aet-barkod-metin">{{ test.test_no }}</div>
+      </div>
+
+      {# Bilgi grid #}
+      <div class="aet-bilgi-grid">
+        <div class="aet-bilgi-satir">
+          <span class="aet-etiket">ANA FORMÜL</span>
+          <span class="aet-deger">{{ test.formul_ad }}</span>
+        </div>
+        <div class="aet-bilgi-satir">
+          <span class="aet-etiket">KAYNAK RENK</span>
+          <span class="aet-deger">{{ test.renk_ad }}</span>
+        </div>
+        {% if test.yeni_renk_adi %}
+        <div class="aet-bilgi-satir">
+          <span class="aet-etiket">YENİ RENK</span>
+          <span class="aet-deger aet-yeni-renk">{{ test.yeni_renk_adi }}</span>
+        </div>
+        {% endif %}
+        <div class="aet-bilgi-satir">
+          <span class="aet-etiket">TEST KG</span>
+          <span class="aet-deger aet-kg">{{ test.test_kg }} KG</span>
+        </div>
+        <div class="aet-bilgi-satir">
+          <span class="aet-etiket">MAKİNA</span>
+          <span class="aet-deger">{{ test.makina or '—' }}</span>
+        </div>
+      </div>
+
+      {# Alt şerit #}
+      <div class="aet-alt-serit">
+        <span class="aet-durum aet-d-{{ test.durum|lower }}">{{ test.durum }}</span>
+        <span class="aet-tarih">{{ bugun }}</span>
+        <span class="aet-operator">{{ operator_ad }}</span>
+      </div>
+
+    </div>{# /arge-et-kart #}
+
+  </div>{# /kapsayici #}
+
+  {# ── Ekran bilgisi ── #}
+  <div class="arge-et-ekran-bilgi no-print">
+    <div class="aee-satir">
+      <span class="aee-etiket">Test No</span>
+      <span class="aee-deger aee-kod">{{ test.test_no }}</span>
+    </div>
+    <div class="aee-satir">
+      <span class="aee-etiket">Ana Formül</span>
+      <span class="aee-deger">{{ test.formul_ad }}</span>
+    </div>
+    {% if test.yeni_renk_adi %}
+    <div class="aee-satir">
+      <span class="aee-etiket">Yeni Renk</span>
+      <span class="aee-deger">{{ test.yeni_renk_adi }}</span>
+    </div>
+    {% endif %}
+    <div class="aee-satir">
+      <span class="aee-etiket">Test KG</span>
+      <span class="aee-deger">{{ test.test_kg }} KG</span>
+    </div>
+    <div class="aee-satir">
+      <span class="aee-etiket">Durum</span>
+      <span class="aee-deger">{{ test.durum }}</span>
+    </div>
+    <div class="aee-not">
+      <strong>ZPL/TSPL yazıcı entegrasyonu</strong> bir sonraki fazda eklenecek.<br>
+      Şu an: <strong>window.print()</strong> — tarayıcı yazdırma diyaloğu.
+    </div>
+  </div>
+
+  {# ── Alt Nav ── #}
+  <div class="arge-et-alt-nav no-print">
+    <a href="/nexgen/tablet/arge" class="ean-btn ean-btn-mor">+ Yeni AR-GE</a>
+    <a href="/nexgen/tablet" class="ean-btn ean-btn-sec">Ana Ekran</a>
+  </div>
+
+</div>
+
+<style>
+* { box-sizing: border-box; }
+
+/* ── Topbar ── */
+.arge-et-topbar {
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+  border-bottom: 3px solid #5b21b6;
+}
+.arge-et-topbar-ic {
+  max-width: 1180px; margin: 0 auto;
+  display: flex; align-items: center; gap: 14px; padding: 14px 20px;
+}
+.arge-et-geri {
+  width: 44px; height: 44px; border-radius: 12px;
+  background: rgba(255,255,255,.2); border: none;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; text-decoration: none; cursor: pointer; flex-shrink: 0;
+}
+.arge-et-geri:hover { background: rgba(255,255,255,.3); }
+.arge-et-topbar-kucuk { font-size: 10px; font-weight: 800; color: rgba(255,255,255,.5); letter-spacing: 3px; text-transform: uppercase; }
+.arge-et-topbar-buyuk { font-size: 18px; font-weight: 900; color: #fff; }
+.arge-et-topbar-sag { margin-left: auto; }
+.arge-et-yazdir-btn {
+  padding: 11px 22px; background: #fff; color: #6d28d9;
+  border: none; border-radius: 10px; font-size: 16px; font-weight: 800;
+  cursor: pointer; transition: background .12s;
+}
+.arge-et-yazdir-btn:hover { background: #ede9fe; }
+
+/* ── Kapsayıcı ── */
+.arge-et-kapsayici {
+  max-width: 860px; margin: 24px auto 0;
+  padding: 0 20px;
+  display: flex; flex-direction: column; align-items: center;
+}
+
+/* ── Etiket kartı ── */
+.arge-et-kart {
+  width: 100%; max-width: 400px;
+  background: #fff;
+  border: 2px solid #5b21b6;
+  border-radius: 10px;
+  overflow: hidden;
+  font-family: 'Courier New', monospace;
+  box-shadow: 0 4px 20px rgba(91,33,182,.2);
+}
+
+/* Üst şerit */
+.aet-ust-serit {
+  background: #5b21b6; color: #e9d5ff;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 14px;
+  font-size: 11px; font-weight: 800; letter-spacing: 1.5px;
+}
+.aet-sirket { font-size: 13px; color: #fff; }
+.aet-tip-rozet {
+  background: #c4b5fd; color: #3b0764;
+  font-size: 9px; font-weight: 900; padding: 2px 8px; border-radius: 3px;
+}
+
+/* AR-GE kodu */
+.aet-kod-blok {
+  padding: 14px 14px 8px; text-align: center;
+}
+.aet-kod-etiket { font-size: 10px; letter-spacing: 2px; color: #9ca3af; margin-bottom: 4px; }
+.aet-kod {
+  font-size: clamp(20px, 5vw, 28px);
+  font-weight: 900; color: #5b21b6;
+  letter-spacing: 3px;
+}
+
+/* Barkod */
+.aet-barkod {
+  margin: 6px 14px 10px; text-align: center;
+}
+.aet-barkod-cubuklar {
+  height: 36px; display: flex; align-items: stretch; gap: 1px;
+  justify-content: center; margin-bottom: 4px;
+}
+.aet-barkod-metin {
+  font-size: 9px; letter-spacing: 2px; color: #374151;
+}
+
+/* Bilgi grid */
+.aet-bilgi-grid {
+  padding: 0 14px 10px;
+  display: flex; flex-direction: column; gap: 3px;
+}
+.aet-bilgi-satir {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 11px; padding: 3px 0; border-bottom: 1px solid #f1f5f9;
+}
+.aet-bilgi-satir:last-child { border-bottom: none; }
+.aet-etiket { color: #9ca3af; font-weight: 700; font-size: 10px; letter-spacing: .5px; }
+.aet-deger  { color: #1e293b; font-weight: 800; text-align: right; }
+.aet-yeni-renk { color: #6d28d9; font-size: 12px; }
+.aet-kg { color: #059669; font-size: 13px; }
+
+/* Alt şerit */
+.aet-alt-serit {
+  background: #faf5ff; border-top: 1px solid #e9d5ff;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 14px; font-size: 9px; color: #6b7280;
+}
+.aet-durum {
+  font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 3px;
+}
+.aet-d-taslak   { background: #fef9c3; color: #854d0e; }
+.aet-d-aktif    { background: #dcfce7; color: #15803d; }
+.aet-d-tamamlandi { background: #dbeafe; color: #1d4ed8; }
+
+/* ── Ekran bilgisi ── */
+.arge-et-ekran-bilgi {
+  max-width: 400px; width: 100%;
+  margin: 16px auto 0;
+  background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; padding: 14px 16px;
+}
+.aee-satir {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 13px; padding: 7px 0; border-bottom: 1px solid #f8fafc;
+}
+.aee-etiket { font-weight: 700; color: #6b7280; }
+.aee-deger  { font-weight: 800; color: #1e293b; font-family: monospace; }
+.aee-kod    { color: #6d28d9; font-size: 14px; }
+.aee-not {
+  margin-top: 10px; font-size: 11px; color: #9ca3af; line-height: 1.6;
+  background: #f8fafc; padding: 8px 10px; border-radius: 6px;
+}
+
+/* ── Alt nav ── */
+.arge-et-alt-nav {
+  max-width: 400px; width: 100%;
+  margin: 14px auto 40px;
+  display: flex; gap: 10px;
+}
+.ean-btn {
+  flex: 1; text-align: center; padding: 14px;
+  border-radius: 12px; font-size: 14px; font-weight: 800;
+  text-decoration: none; transition: all .12s;
+}
+.ean-btn-mor { background: #7c3aed; color: #fff; }
+.ean-btn-mor:hover { background: #6d28d9; }
+.ean-btn-sec { background: #f1f5f9; color: #374151; border: 1px solid #e5e7eb; }
+.ean-btn-sec:hover { background: #e2e8f0; }
+
+/* ══ YAZICI CSS ══════════════════════════════════════════════════════ */
+@media print {
+  @page {
+    size: 100mm 60mm;
+    margin: 0;
+  }
+  body { background: #fff !important; margin: 0; padding: 0; }
+  .no-print,
+  .arge-et-topbar,
+  .arge-et-ekran-bilgi,
+  .arge-et-alt-nav { display: none !important; }
+  .arge-et-kapsayici { margin: 0; padding: 0; }
+  .arge-et-kart {
+    width: 100mm; max-width: 100mm;
+    border: 1px solid #000 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+  .aet-barkod-cubuklar .abar { background: #000 !important; }
+}
+</style>
+
+<script>
+(function() {
+  var kod = '{{ test.test_no }}';
+  var kap = document.getElementById('aet-cubuklar');
+  if (!kap) return;
+  for (var i = 0; i < kod.length * 2; i++) {
+    var kalnlik = ((kod.charCodeAt(i % kod.length) % 4) + 1);
+    var bar = document.createElement('div');
+    bar.className = 'abar';
+    bar.style.cssText = 'width:' + kalnlik + 'px;background:#5b21b6;height:100%;border-radius:1px;';
+    kap.appendChild(bar);
+    if (i % 3 !== 0) {
+      var bos = document.createElement('div');
+      bos.style.cssText = 'width:' + (kalnlik > 2 ? 2 : 1) + 'px;';
+      kap.appendChild(bos);
+    }
+  }
+})();
+</script>
+{% endblock %}
