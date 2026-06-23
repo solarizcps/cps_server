@@ -3774,10 +3774,28 @@ def tablet_uretim():
             ORDER BY nb.id ASC
         """, (bugun,)).fetchall()
 
+        # Üretim planından PLANLANDI kayıtlarını da ekle (bugünkü + tarih uygun olanlar)
+        plan_isler = con.execute("""
+            SELECT np.id AS plan_id, np.plan_kodu, np.planlanan_kg,
+                   np.durum AS plan_durum, np.plan_tarihi, np.notlar,
+                   np.oncelik_sira,
+                   uv.id AS uv_id, uv.boyut, uv.ad AS uv_ad,
+                   rv.ad AS renk_ad,
+                   f.ad AS formul_ad, f.kod AS formul_kod
+            FROM nexgen_uretim_plan np
+            JOIN nexgen_uretim_varyant uv ON uv.id = np.uretim_varyant_id
+            JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+            JOIN nexgen_formul f          ON f.id  = rv.formul_id
+            WHERE np.durum = 'PLANLANDI'
+              AND np.plan_tarihi <= ?
+            ORDER BY np.oncelik_sira ASC, np.id ASC
+        """, (bugun,)).fetchall()
+
         # Her iş için batch_kg (reçeteden) ve kazan sayısı hesapla
         acik_isler_liste = []
         for is_ in acik_isler:
             is_dict = dict(is_)
+            is_dict['kaynak'] = 'BATCH'
             # Reçete batch KG
             kalemler2 = con.execute("""
                 SELECT SUM(miktar_kg) as toplam
@@ -3792,6 +3810,26 @@ def tablet_uretim():
             else:
                 is_dict['kazan_sayisi'] = 0
             acik_isler_liste.append(is_dict)
+
+        # Plan kayıtlarını da ekle (PLANLANDI + tarih uygun)
+        for p_ in plan_isler:
+            p_dict = dict(p_)
+            p_dict['kaynak'] = 'PLAN'
+            p_dict['batch_kodu'] = None
+            p_dict['durum'] = p_dict.get('plan_durum', 'PLANLANDI')
+            kalemler3 = con.execute("""
+                SELECT SUM(miktar_kg) as toplam
+                FROM nexgen_recete_kalem
+                WHERE uretim_varyant_id=? AND aktif=1
+            """, (p_dict['uv_id'],)).fetchone()
+            batch_kg = round(float(kalemler3['toplam'] or 0), 3) if kalemler3 else 0.0
+            p_dict['batch_kg'] = batch_kg
+            if batch_kg > 0 and p_dict['planlanan_kg'] > 0:
+                q = p_dict['planlanan_kg'] / batch_kg
+                p_dict['kazan_sayisi'] = int(q) if q == int(q) else int(q) + 1
+            else:
+                p_dict['kazan_sayisi'] = 0
+            acik_isler_liste.append(p_dict)
     finally:
         con.close()
 
@@ -4355,8 +4393,239 @@ def api_etiket_arge_tspl(test_no):
             'Content-Type': 'text/plain; charset=utf-8',
         }
     )
-# KURAL: Stok hareketi yapılmaz. Sadece izin CRUD + okuma.
+
+
 # ─────────────────────────────────────────────────────────────
+# NEXGEN FAZ-5D — ÜRETİM PLAN / İŞ KUYRUĞU
+# KURAL: Ana Planlama modülüne dokunma. Korgun bağlantısı yok.
+#        Stok hareketi yok. Sadece plan CRUD + tablet bağlantısı.
+# ─────────────────────────────────────────────────────────────
+
+def _plan_kodu_uret(con):
+    """NP-YYYY-NNNNN formatında benzersiz plan kodu üretir."""
+    import datetime
+    yil = datetime.datetime.now().year
+    son = con.execute(
+        "SELECT plan_kodu FROM nexgen_uretim_plan "
+        "WHERE plan_kodu LIKE ? ORDER BY id DESC LIMIT 1",
+        (f"NP-{yil}-%",)
+    ).fetchone()
+    if son:
+        try:
+            son_no = int(son['plan_kodu'].split('-')[-1])
+        except Exception:
+            son_no = 0
+    else:
+        son_no = 0
+    return f"NP-{yil}-{son_no + 1:05d}"
+
+
+def _plan_liste_sorgu(con, sadece_aktif=False):
+    """Plan listesini join'li şekilde döner."""
+    where = "WHERE np.durum NOT IN ('BITTI','IPTAL')" if sadece_aktif else ""
+    return con.execute(f"""
+        SELECT np.id, np.plan_kodu, np.kaynak, np.siparis_no, np.musteri_adi,
+               np.planlanan_kg, np.oncelik_sira, np.plan_tarihi,
+               np.durum, np.notlar, np.created_at,
+               uv.id AS uv_id, uv.boyut,
+               rv.ad AS renk_ad,
+               f.ad AS formul_ad, f.kod AS formul_kod,
+               ku.KullaniciAdi AS olusturan_ad
+        FROM nexgen_uretim_plan np
+        JOIN nexgen_uretim_varyant uv ON uv.id = np.uretim_varyant_id
+        JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+        JOIN nexgen_formul f          ON f.id  = rv.formul_id
+        LEFT JOIN sistem_kullanici ku ON ku.Id  = np.created_by
+        {where}
+        ORDER BY np.durum ASC, np.oncelik_sira ASC, np.id ASC
+    """).fetchall()
+
+
+@nexgen_bp.route('/uretim-plan')
+@yetki_gerekli('nexgen.plan.view', 'can_view')
+def uretim_plan_liste():
+    """Üretim plan listesi."""
+    con = _db()
+    try:
+        planlar = [dict(p) for p in _plan_liste_sorgu(con)]
+        # Plan formunda tüm aktif varyantları göster (durum fark etmeksizin)
+        varyantlar = con.execute("""
+            SELECT uv.id, uv.boyut, uv.recete_durum,
+                   rv.ad AS renk_ad,
+                   f.ad AS formul_ad, f.kod AS formul_kod
+            FROM nexgen_uretim_varyant uv
+            JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
+            JOIN nexgen_formul f        ON f.id  = rv.formul_id
+            WHERE uv.aktif = 1
+            ORDER BY f.ad, rv.ad, uv.boyut
+        """).fetchall()
+        varyantlar = [dict(v) for v in varyantlar]
+    finally:
+        con.close()
+    return render_template(
+        'nexgen/uretim_plan.html',
+        active='nexgen',
+        planlar=planlar,
+        varyantlar=varyantlar,
+        can_manage=yetki_var('nexgen.plan.manage', 'can_manage'),
+    )
+
+
+@nexgen_bp.route('/api/plan/ekle', methods=['POST'])
+@yetki_gerekli('nexgen.plan.manage', 'can_manage')
+def api_plan_ekle():
+    """Yeni üretim planı oluştur. Stok hareketi yapılmaz."""
+    d = request.get_json(silent=True) or {}
+    uv_id      = d.get('uretim_varyant_id')
+    kg         = d.get('planlanan_kg')
+    oncelik    = d.get('oncelik_sira', 10)
+    plan_tarihi = (d.get('plan_tarihi') or '').strip()
+    notlar     = (d.get('notlar') or '').strip() or None
+    siparis_no  = (d.get('siparis_no') or '').strip() or None
+    musteri_adi = (d.get('musteri_adi') or '').strip() or None
+
+    if not uv_id or not kg:
+        return jsonify({'ok': False, 'hata': 'uretim_varyant_id ve planlanan_kg zorunlu'}), 400
+    try:
+        kg = float(kg)
+        if kg <= 0:
+            return jsonify({'ok': False, 'hata': 'KG sıfırdan büyük olmalı'}), 400
+    except Exception:
+        return jsonify({'ok': False, 'hata': 'Geçersiz planlanan_kg'}), 400
+
+    if not plan_tarihi:
+        from datetime import date as _date
+        plan_tarihi = _date.today().isoformat()
+
+    con = _db()
+    try:
+        uv = con.execute(
+            "SELECT uv.id, uv.boyut, rv.ad AS renk_ad, f.ad AS formul_ad "
+            "FROM nexgen_uretim_varyant uv "
+            "JOIN nexgen_renk_varyant rv ON rv.id=uv.renk_varyant_id "
+            "JOIN nexgen_formul f ON f.id=rv.formul_id "
+            "WHERE uv.id=? AND uv.aktif=1",
+            (uv_id,)
+        ).fetchone()
+        if not uv:
+            return jsonify({'ok': False, 'hata': 'Üretim varyantı bulunamadı'}), 404
+
+        plan_kodu = _plan_kodu_uret(con)
+        uid = _kullanici_id()
+        con.execute(
+            "INSERT INTO nexgen_uretim_plan"
+            "(plan_kodu, kaynak, siparis_no, musteri_adi, uretim_varyant_id,"
+            " planlanan_kg, oncelik_sira, plan_tarihi, durum, notlar, created_by)"
+            " VALUES(?,?,?,?,?,?,?,?,'PLANLANDI',?,?)",
+            (plan_kodu, 'MANUEL', siparis_no, musteri_adi, uv_id,
+             round(kg, 3), int(oncelik), plan_tarihi, notlar, uid)
+        )
+        con.commit()
+        return jsonify({
+            'ok': True,
+            'plan_kodu': plan_kodu,
+            'formul_ad': uv['formul_ad'],
+            'renk_ad': uv['renk_ad'],
+            'boyut': uv['boyut'],
+            'planlanan_kg': round(kg, 3),
+        })
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/plan/<int:plan_id>/iptal', methods=['POST'])
+@yetki_gerekli('nexgen.plan.manage', 'can_manage')
+def api_plan_iptal(plan_id):
+    """Planı IPTAL durumuna çeker."""
+    con = _db()
+    try:
+        p = con.execute(
+            "SELECT id, durum FROM nexgen_uretim_plan WHERE id=?", (plan_id,)
+        ).fetchone()
+        if not p:
+            return jsonify({'ok': False, 'hata': 'Plan bulunamadı'}), 404
+        if p['durum'] == 'BITTI':
+            return jsonify({'ok': False, 'hata': 'Tamamlanan plan iptal edilemez'}), 400
+        con.execute(
+            "UPDATE nexgen_uretim_plan SET durum='IPTAL' WHERE id=?", (plan_id,)
+        )
+        con.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/plan/<int:plan_id>/basla', methods=['POST'])
+@yetki_gerekli('nexgen.tablet.uretim', 'can_uretim')
+def api_plan_basla(plan_id):
+    """Plandan üretim batch kodu oluştur. Plan durumu BASLADI olur.
+
+    Stok hareketi yapılmaz.
+    Mevcut nexgen_uretim_batch + LOT mekanizmasını kullanır.
+    """
+    d = request.get_json(silent=True) or {}
+    notlar = (d.get('notlar') or '').strip() or None
+
+    con = _db()
+    try:
+        p = con.execute("""
+            SELECT np.id, np.plan_kodu, np.uretim_varyant_id,
+                   np.planlanan_kg, np.durum, np.notlar,
+                   uv.recete_durum,
+                   uv.boyut, rv.ad AS renk_ad, f.ad AS formul_ad
+            FROM nexgen_uretim_plan np
+            JOIN nexgen_uretim_varyant uv ON uv.id = np.uretim_varyant_id
+            JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+            JOIN nexgen_formul f          ON f.id  = rv.formul_id
+            WHERE np.id = ?
+        """, (plan_id,)).fetchone()
+        if not p:
+            return jsonify({'ok': False, 'hata': 'Plan bulunamadı'}), 404
+        if p['durum'] not in ('PLANLANDI',):
+            return jsonify({'ok': False, 'hata': f'Plan durumu uygun değil: {p["durum"]}'}), 400
+
+        batch_kodu = _batch_kodu_uret(con)
+        lot_kodu   = _lot_kodu_uret(con)
+        uid = _kullanici_id()
+        batch_notlar = notlar or p['notlar']
+
+        con.execute(
+            "INSERT INTO nexgen_uretim_batch"
+            "(batch_kodu, lot_kodu, uretim_varyant_id, planlanan_kg,"
+            " durum, olusturan_id, notlar)"
+            " VALUES(?,?,?,?,'HAZIR',?,?)",
+            (batch_kodu, lot_kodu, p['uretim_varyant_id'],
+             round(p['planlanan_kg'], 3), uid, batch_notlar)
+        )
+        con.execute(
+            "UPDATE nexgen_uretim_plan SET durum='BASLADI' WHERE id=?", (plan_id,)
+        )
+        con.commit()
+
+        return jsonify({
+            'ok': True,
+            'batch_kodu': batch_kodu,
+            'lot_kodu': lot_kodu,
+            'formul_ad': p['formul_ad'],
+            'renk_ad': p['renk_ad'],
+            'boyut': p['boyut'],
+            'planlanan_kg': round(p['planlanan_kg'], 3),
+        })
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+# ─────────────────────────────────────────────────────────────
+# NEXGEN FAZ-4F — RECYCLE İZİN ALTYAPISI
 
 def _uretim_varyant_recycle_izinleri(con, uretim_varyant_id):
     """Bir üretim varyantına tanımlı recycle izinlerini + mevcut stok KG ile döner.

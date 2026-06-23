@@ -57,6 +57,39 @@
       {% if acik_isler %}
       <div class="tu-bolum-etiket">BUGÜNKÜ İŞLER</div>
       {% for is in acik_isler %}
+      {% if is.kaynak == 'PLAN' %}
+      {# Plan kaynağı — BAŞLA butonu #}
+      <div class="tu-is-kart tu-is-plan"
+           data-plan-id="{{ is.plan_id }}"
+           data-uv-id="{{ is.uv_id }}"
+           data-formul="{{ is.formul_ad }}"
+           data-renk="{{ is.renk_ad }}"
+           data-boyut="{{ is.boyut }}"
+           data-planlanan="{{ is.planlanan_kg }}"
+           data-batch-kg="{{ is.batch_kg }}"
+           data-kazan="{{ is.kazan_sayisi }}">
+        <div class="tu-is-kart-sol">
+          <div class="tu-plan-rozet">PLAN</div>
+          <div class="tu-is-formul">{{ is.formul_ad }}</div>
+          <div class="tu-is-varyant">
+            {{ is.renk_ad }}
+            <span class="tu-boyut-tag">{{ 'BÜYÜK BOY' if is.boyut == 'LARGE' else 'KÜÇÜK BOY' if is.boyut == 'SMALL' else is.boyut }}</span>
+          </div>
+          {% if is.notlar %}<div class="tu-is-not">{{ is.notlar }}</div>{% endif %}
+        </div>
+        <div class="tu-is-kart-sag">
+          <div class="tu-is-kg">{{ is.planlanan_kg | int }} KG</div>
+          {% if is.kazan_sayisi > 0 %}
+          <div class="tu-is-kazan">{{ is.kazan_sayisi }} kazan</div>
+          {% endif %}
+          <button class="tu-basla-btn"
+                  onclick="planBaslaTablet({{ is.plan_id }}, '{{ is.formul_ad }} {{ is.renk_ad }}', event)">
+            BAŞLA ▶
+          </button>
+        </div>
+      </div>
+      {% else %}
+      {# Mevcut batch kaynağı — DEVAM ET #}
       <div class="tu-is-kart"
            data-batch="{{ is.batch_kodu }}"
            data-uv-id="{{ is.uv_id }}"
@@ -85,6 +118,7 @@
           <div class="tu-devam-btn">DEVAM ET →</div>
         </div>
       </div>
+      {% endif %}
       {% endfor %}
       <div class="tu-ayrac">veya yeni iş başlat</div>
       {% endif %}
@@ -354,6 +388,22 @@
   padding: 6px 14px; border-radius: 8px;
 }
 .tu-is-kart:hover .tu-devam-btn { background: #e9b020; }
+/* Plan kartı */
+.tu-is-plan { border-color: #fde047; background: #fefce8; }
+.tu-is-plan:hover { border-color: #f6c343; }
+.tu-plan-rozet {
+  display: inline-block; font-size: 9px; font-weight: 800;
+  background: #f59e0b; color: #fff; padding: 2px 7px; border-radius: 4px;
+  letter-spacing: 1px; margin-bottom: 4px;
+}
+.tu-basla-btn {
+  display: inline-block; margin-top: 8px;
+  background: #f6c343; color: #1a1a1a;
+  border: none; cursor: pointer;
+  font-size: 13px; font-weight: 900; padding: 8px 14px;
+  border-radius: 8px; white-space: nowrap;
+}
+.tu-basla-btn:hover { background: #e9b020; }
 
 /* Ayraç */
 .tu-ayrac {
@@ -570,6 +620,28 @@ function tuIsDevam(el) {
     batch_kodu: el.dataset.batch,
   };
   tuStokKontrolDirekt(_tuSecili.planlanan);
+}
+
+// ── Plan'dan BAŞLA (tablet iş kuyruğu) ─────────────────────────
+async function planBaslaTablet(planId, ad, e) {
+  if (e) e.stopPropagation();
+  if (!confirm(ad + '\n\nBu plan için üretim batch kodu oluşturulsun mu?')) return;
+  try {
+    var r = await fetch('/nexgen/api/plan/' + planId + '/basla', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({})
+    });
+    var j = await r.json();
+    if (j.ok) {
+      // Kod ekranına yönlendir
+      window.location.href = '/nexgen/tablet/kod/' + j.batch_kodu;
+    } else {
+      alert('HATA: ' + (j.hata || 'Bilinmeyen hata'));
+    }
+  } catch(ex) {
+    alert('Sunucu hatası.');
+  }
 }
 
 // ── Yeni iş: varyant seçimi ──────────────────────────────────
