@@ -1,300 +1,469 @@
 {% extends "base.html" %}
-{% set page_title = "AR-GE Deneme — NexGen Tablet" %}
+{% set page_title = "AR-GE Renk Çalışması — NexGen Tablet" %}
 
 {% block content %}
-<div class="tba-sayfa">
+<div class="ta-ana">
 
-  {# ── Üst Bar ── #}
-  <div class="tbu-ust">
-    <a href="/nexgen/tablet" class="tbu-geri">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-           stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
-        <polyline points="15 18 9 12 15 6"/>
-      </svg>
-    </a>
-    <div class="tbu-baslik-blok">
-      <div class="tbu-ust-etiket">NEXGEN TABLET</div>
-      <div class="tbu-ust-baslik" style="color:#0891b2">AR-GE DENEME</div>
+  {# ══ ÜST BAR ════════════════════════════════════════════════════════ #}
+  <div class="ta-topbar">
+    <div class="ta-topbar-ic">
+      <a href="/nexgen/tablet" class="ta-geri-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+             stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+      </a>
+      <div>
+        <div class="ta-topbar-kucuk">NEXGEN TABLET</div>
+        <div class="ta-topbar-buyuk">AR-GE RENK ÇALIŞMASI</div>
+      </div>
+      <div class="ta-topbar-sag">
+        <a href="/nexgen/tablet" class="ta-topbar-link">Ana Ekran</a>
+      </div>
     </div>
   </div>
 
-  {# ── Adım Bar ── #}
-  <div class="tbu-adim-bar">
-    <div class="tbu-adim aktif" id="adim-1">1. Reçete Seç</div>
-    <div class="tbu-adim-ok">›</div>
-    <div class="tbu-adim" id="adim-2">2. Detaylar</div>
-    <div class="tbu-adim-ok">›</div>
-    <div class="tbu-adim" id="adim-3">3. Kodu Al</div>
-  </div>
-
-  {# ═══ ADIM 1: Kaynak Reçete ═══ #}
-  <div id="tba-panel-1" class="tbu-panel">
-    <div class="tbu-panel-baslik">Hangi reçeteden test yapılacak?</div>
-    <div class="tba-bilgi-kutu">
-      Seçilen reçete otomatik olarak 7.5 KG test makina boyutuna ölçeklenir.
-      Stok düşmez.
-    </div>
+  <div class="ta-icerik">
 
     {% if not varyantlar %}
-    <div class="tbu-uyari">
-      <div class="tbu-uyari-ikon">📋</div>
-      <div class="tbu-uyari-metin">
-        Kalemli reçete bulunamadı.<br>Önce Reçete Merkezinde formül oluşturun.
-      </div>
-      <a href="/nexgen/recete/" class="tbu-btn tbu-btn-sekonder">Reçete Merkezine Git</a>
+    {# ── Formül yok durumu ── #}
+    <div class="ta-bos-kart">
+      <div class="ta-bos-ikon">🧪</div>
+      <div class="ta-bos-baslik">Üretime açık formül seçilmelidir</div>
+      <div class="ta-bos-metin">Önce reçete merkezinde bir formül üretime açılmalıdır.</div>
+      <a href="/nexgen/recete/" class="ta-formul-git-btn">FORMÜL MERKEZİNE GİT →</a>
     </div>
+
     {% else %}
-    <div class="tbu-kart-grid" id="tba-recete-kartlar">
-      {% for uv in varyantlar %}
-      <div class="tbu-recete-kart" id="rv-{{ uv.id }}"
-           data-id="{{ uv.id }}"
-           data-formul="{{ uv.formul_ad }}"
-           data-renk="{{ uv.renk_ad }}"
-           data-boyut="{{ uv.boyut }}"
-           data-batch="{{ '{:.3f}'.format(uv.toplam_kg) }}"
-           data-durum="{{ uv.recete_durum }}"
-           onclick="tbaSecimYap(this)">
-        <div class="tbu-rv-formul">{{ uv.formul_ad }}</div>
-        <div class="tbu-rv-renk">{{ uv.renk_ad }}</div>
-        <div class="tbu-rv-boyut-row">
-          <span class="tbu-boyut-rozet tbu-boyut-{{ uv.boyut|lower }}">{{ uv.boyut }}</span>
-          {% if uv.toplam_kg > 0 %}
-          <span class="tbu-rv-kg">{{ '{:.1f}'.format(uv.toplam_kg) }} KG</span>
+
+    {# ══ 3 KART DÜZENI ═══════════════════════════════════════════════ #}
+    <div class="ta-uc-kart">
+
+      {# ── KART 1: Ana Formül ── #}
+      <div class="ta-kart ta-kart-1">
+        <div class="ta-kart-no">1</div>
+        <div class="ta-kart-baslik">ANA FORMÜL SEÇ</div>
+
+        <div class="ta-formul-listesi" id="ta-formul-listesi">
+          {% set gorulen_formuller = [] %}
+          {% for uv in varyantlar %}
+          {% if uv.formul_ad not in gorulen_formuller %}
+          {% if gorulen_formuller.append(uv.formul_ad) %}{% endif %}
+          <button class="ta-formul-btn"
+                  data-formul-id="{{ uv.formul_id }}"
+                  data-formul-ad="{{ uv.formul_ad }}"
+                  onclick="taFormulSec(this)">
+            {{ uv.formul_ad }}
+          </button>
           {% endif %}
-          <span class="tba-durum-rozet tba-d-{{ uv.recete_durum|lower|replace('_','-') }}">
-            {{ uv.recete_durum.replace('_',' ') }}
-          </span>
+          {% endfor %}
         </div>
-        <div class="tbu-secim-gostergesi">✓ SEÇİLDİ</div>
+
+        {# Seçilen formülün varyantları #}
+        <div id="ta-varyant-blok" style="display:none">
+          <div class="ta-kart-alt-baslik">Varyant seç</div>
+          <div id="ta-varyant-listesi" class="ta-varyant-listesi"></div>
+        </div>
+
+        <div id="ta-secili-formul-rozet" class="ta-secili-rozet" style="display:none"></div>
       </div>
-      {% endfor %}
+
+      {# ── KART 2: Yeni Renk ── #}
+      <div class="ta-kart ta-kart-2">
+        <div class="ta-kart-no">2</div>
+        <div class="ta-kart-baslik">YENİ RENK</div>
+
+        <div class="ta-renk-giris-blok">
+          <label class="ta-inp-etiket">Renk Adı</label>
+          <input type="text" id="ta-renk-adi"
+                 class="ta-buyuk-input" maxlength="80"
+                 placeholder="AÇIK GRİ, BEBE MAVİ…"
+                 oninput="taKontrol()">
+        </div>
+
+        <div class="ta-renk-hizli">
+          <div class="ta-inp-etiket">Hızlı Seç</div>
+          <div class="ta-renk-kisayol">
+            <button onclick="taRenkSec('BEYAZ')">BEYAZ</button>
+            <button onclick="taRenkSec('SİYAH')">SİYAH</button>
+            <button onclick="taRenkSec('GRİ')">GRİ</button>
+            <button onclick="taRenkSec('EKRİ')">EKRİ</button>
+            <button onclick="taRenkSec('KREM')">KREM</button>
+          </div>
+        </div>
+      </div>
+
+      {# ── KART 3: Test Boyutu ── #}
+      <div class="ta-kart ta-kart-3">
+        <div class="ta-kart-no">3</div>
+        <div class="ta-kart-baslik">TEST</div>
+
+        <div class="ta-test-butonlar">
+          <button class="ta-test-btn ta-test-aktif" data-kg="7.5" onclick="taTestSec(this)">
+            <div class="ta-test-sayi">7.5</div>
+            <div class="ta-test-birim">KG</div>
+            <div class="ta-test-etiket">Küçük Kazan</div>
+          </button>
+          <button class="ta-test-btn" data-kg="15" onclick="taTestSec(this)">
+            <div class="ta-test-sayi">15</div>
+            <div class="ta-test-birim">KG</div>
+            <div class="ta-test-etiket">Büyük</div>
+          </button>
+        </div>
+
+        <div class="ta-not-blok">
+          <div class="ta-inp-etiket">Not (opsiyonel)</div>
+          <input type="text" id="ta-not" class="ta-not-input"
+                 placeholder="Pigment oranı, viskozite…" maxlength="150">
+        </div>
+      </div>
+
+    </div>{# /ta-uc-kart #}
+
+    {# ══ ÖZET + BAŞLAT ════════════════════════════════════════════════ #}
+    <div id="ta-ozet-blok" class="ta-ozet-blok" style="display:none">
+      <div id="ta-ozet-ic"></div>
     </div>
-    <div class="tbu-buton-satir">
-      <button class="tbu-btn tbu-btn-ana" id="tba-ileri-1"
-              onclick="tbaAdim(2)" disabled style="background:#0891b2;color:#fff">
-        İLERİ →
-      </button>
+
+    <button class="ta-baslat-btn" id="ta-baslat-btn"
+            onclick="taBaslat()" disabled>
+      ▶ AR-GE TEST BAŞLAT
+    </button>
+
+    <div id="ta-yukleniyor" style="display:none" class="ta-yukleniyor">
+      <div class="ta-spin"></div>
+      Kaydediliyor…
     </div>
+
     {% endif %}
-  </div>
 
-  {# ═══ ADIM 2: Test Detayları ═══ #}
-  <div id="tba-panel-2" class="tbu-panel" style="display:none">
-    <div class="tbu-panel-baslik">Test detayları</div>
-    <div class="tbu-secilen-ozet" id="tba-secilen-ozet"></div>
-
-    <div class="tba-form">
-      <div class="tba-fg">
-        <label class="tba-label">Test KG <span class="tba-zorunlu">*</span></label>
-        <div style="display:flex;align-items:center;gap:10px">
-          <input type="number" id="tba-test-kg" class="tbu-kg-input" style="max-width:160px;font-size:26px"
-                 min="0.001" step="0.001" value="7.5"
-                 oninput="tbaHesapla()">
-          <span class="tbu-kg-birim">KG</span>
-        </div>
-        <div class="tba-hizli-butonlar">
-          <button class="tbu-hizli-btn" onclick="document.getElementById('tba-test-kg').value=7.5;tbaHesapla()">7.5 KG</button>
-          <button class="tbu-hizli-btn" onclick="document.getElementById('tba-test-kg').value=15;tbaHesapla()">15 KG</button>
-        </div>
-      </div>
-
-      <div class="tba-fg">
-        <label class="tba-label">Renk Adı (opsiyonel)</label>
-        <input type="text" id="tba-renk-adi" class="tba-input"
-               placeholder="örn: MAVİ TEST #1" maxlength="100">
-      </div>
-
-      <div class="tba-fg">
-        <label class="tba-label">Makina</label>
-        <select id="tba-makina" class="tba-input">
-          <option value="7.5 LT">7.5 LT (Küçük)</option>
-          <option value="20 LT">20 LT</option>
-          <option value="Diğer">Diğer</option>
-        </select>
-      </div>
-
-      <div class="tba-fg">
-        <label class="tba-label">Notlar</label>
-        <input type="text" id="tba-notlar" class="tba-input"
-               placeholder="Test amacı…" maxlength="200">
-      </div>
-    </div>
-
-    <div class="tba-olcek-onizleme" id="tba-olcek-onizleme" style="display:none">
-      <div class="tba-olcek-baslik">Ölçeklenen Miktarlar</div>
-      <div id="tba-olcek-icerik" class="tba-olcek-liste"></div>
-    </div>
-
-    <div class="tbu-buton-satir">
-      <button class="tbu-btn tbu-btn-sekonder" onclick="tbaAdim(1)">← Geri</button>
-      <button class="tbu-btn tbu-btn-ana" id="tba-ileri-2"
-              onclick="tbaTestOlustur()" style="background:#0891b2;color:#fff">
-        TEST OLUŞTUR
-      </button>
-    </div>
-    <div id="tba-yukleniyor" style="display:none;text-align:center;padding:20px;color:#9ca3af;font-size:16px">
-      Test oluşturuluyor…
-    </div>
-  </div>
-
+  </div>{# /ta-icerik #}
 </div>
 
 <style>
 * { box-sizing: border-box; }
-body { background: #f1f5f9; }
-.tba-sayfa {
-  min-height: 100vh; padding: 16px;
-  max-width: 900px; margin: 0 auto;
-}
-.tba-bilgi-kutu {
-  background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 10px;
-  padding: 12px 16px; font-size: 14px; color: #0369a1;
-  margin-bottom: 16px; line-height: 1.6;
-}
-.tba-durum-rozet {
-  font-size: 10px; font-weight: 700; padding: 2px 8px;
-  border-radius: 5px; white-space: nowrap;
-}
-.tba-d-uretime-acik { background:#dbeafe;color:#1d4ed8; }
-.tba-d-onayli       { background:#d1fae5;color:#059669; }
-.tba-d-deneme       { background:#fef3c7;color:#92400e; }
-.tba-d-taslak       { background:#f1f5f9;color:#64748b; }
 
-.tba-form { display:flex; flex-direction:column; gap:16px; margin-bottom:16px; }
-.tba-fg { display:flex; flex-direction:column; gap:6px; }
-.tba-label { font-size:15px; font-weight:700; color:#374151; }
-.tba-zorunlu { color:#dc2626; }
-.tba-input {
-  padding: 12px 14px; border: 2px solid #e5e7eb; border-radius: 10px;
-  font-size: 16px; color: #111827; background: #fff;
-  transition: border-color .15s;
+.ta-ana {
+  min-height: calc(100vh - 56px);
+  background: #eef2f6;
 }
-.tba-input:focus { outline: none; border-color: #0891b2; }
-.tba-hizli-butonlar { display:flex; gap:8px; flex-wrap:wrap; }
 
-.tba-olcek-onizleme {
-  background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px;
-  padding: 14px; margin-bottom: 16px;
+/* Topbar — mor tonlu */
+.ta-topbar {
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+  border-bottom: 3px solid #5b21b6;
 }
-.tba-olcek-baslik { font-size:13px; font-weight:700; color:#374151; margin-bottom:10px; text-transform:uppercase; letter-spacing:.3px; }
-.tba-olcek-liste { display:flex; flex-direction:column; gap:6px; }
-.tba-olcek-satir {
-  display:flex; justify-content:space-between; align-items:center;
-  font-size:14px; padding:6px 0; border-bottom:1px solid #f3f4f6;
+.ta-topbar-ic {
+  max-width: 1180px; margin: 0 auto;
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 20px;
 }
-.tba-olcek-satir:last-child { border-bottom:none; }
-.tba-olcek-stok { color:#374151; font-weight:600; }
-.tba-olcek-kg { color:#059669; font-weight:800; font-size:15px; }
+.ta-geri-btn {
+  width: 44px; height: 44px; border-radius: 12px;
+  background: rgba(255,255,255,.2); border: none;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; text-decoration: none; cursor: pointer; flex-shrink: 0;
+}
+.ta-geri-btn:hover { background: rgba(255,255,255,.3); }
+.ta-topbar-kucuk { font-size: 10px; font-weight: 800; color: rgba(255,255,255,.5); letter-spacing: 3px; text-transform: uppercase; }
+.ta-topbar-buyuk { font-size: 18px; font-weight: 900; color: #fff; }
+.ta-topbar-sag { margin-left: auto; }
+.ta-topbar-link {
+  font-size: 13px; font-weight: 700; color: rgba(255,255,255,.8);
+  text-decoration: none; padding: 8px 14px;
+  background: rgba(255,255,255,.15); border-radius: 9px;
+}
+.ta-topbar-link:hover { background: rgba(255,255,255,.25); }
 
-@media(max-width:480px){
-  .tba-form { gap:12px; }
-  .tbu-btn { font-size:15px; padding:12px 20px; }
+.ta-icerik {
+  max-width: 1180px; margin: 0 auto;
+  padding: 24px 20px 40px;
+}
+
+/* Boş durum */
+.ta-bos-kart {
+  background: #fff; border-radius: 18px; padding: 40px 30px;
+  text-align: center; border: 1px solid #e5e7eb;
+  box-shadow: 0 2px 8px rgba(15,23,42,.06);
+  max-width: 500px; margin: 0 auto;
+}
+.ta-bos-ikon    { font-size: 48px; margin-bottom: 12px; }
+.ta-bos-baslik  { font-size: 18px; font-weight: 800; color: #1e293b; margin-bottom: 6px; }
+.ta-bos-metin   { font-size: 14px; color: #6b7280; margin-bottom: 20px; line-height: 1.6; }
+.ta-formul-git-btn {
+  display: inline-block; padding: 14px 28px;
+  background: #7c3aed; color: #fff;
+  border-radius: 12px; font-size: 15px; font-weight: 800;
+  text-decoration: none; transition: background .12s;
+}
+.ta-formul-git-btn:hover { background: #6d28d9; }
+
+/* 3 kart grid */
+.ta-uc-kart {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.ta-kart {
+  background: #fff; border-radius: 18px;
+  border: 2px solid #e5e7eb;
+  padding: 20px 18px;
+  box-shadow: 0 2px 8px rgba(15,23,42,.05);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.ta-kart-1 { border-color: #ddd6fe; }
+.ta-kart-2 { border-color: #ddd6fe; }
+.ta-kart-3 { border-color: #ddd6fe; }
+
+.ta-kart-no {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: #7c3aed; color: #fff;
+  font-size: 15px; font-weight: 900;
+  display: flex; align-items: center; justify-content: center;
+}
+.ta-kart-baslik {
+  font-size: 11px; font-weight: 800; color: #6d28d9;
+  letter-spacing: 1.5px; text-transform: uppercase;
+}
+.ta-kart-alt-baslik {
+  font-size: 10px; font-weight: 700; color: #9ca3af;
+  letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px;
+}
+
+/* Formül listesi */
+.ta-formul-listesi {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.ta-formul-btn {
+  padding: 14px 16px; border-radius: 12px;
+  border: 2px solid #e5e7eb; background: #f8fafc;
+  font-size: 15px; font-weight: 800; color: #1e293b;
+  cursor: pointer; text-align: left; width: 100%;
+  transition: all .12s;
+}
+.ta-formul-btn:hover   { border-color: #7c3aed; background: #ede9fe; }
+.ta-formul-btn.secili  { border-color: #7c3aed; background: #ede9fe; color: #6d28d9; }
+
+.ta-varyant-listesi { display: flex; flex-direction: column; gap: 6px; }
+.ta-varyant-btn {
+  padding: 10px 14px; border-radius: 10px;
+  border: 2px solid #e5e7eb; background: #fff;
+  font-size: 13px; font-weight: 700; color: #374151;
+  cursor: pointer; text-align: left; width: 100%;
+}
+.ta-varyant-btn:hover  { border-color: #7c3aed; }
+.ta-varyant-btn.secili { border-color: #7c3aed; background: #ede9fe; color: #6d28d9; }
+
+.ta-secili-rozet {
+  background: #f3e8ff; border-radius: 8px; padding: 8px 12px;
+  font-size: 12px; font-weight: 700; color: #6d28d9;
+}
+
+/* Renk girişi */
+.ta-renk-giris-blok { display: flex; flex-direction: column; gap: 6px; }
+.ta-inp-etiket {
+  font-size: 10px; font-weight: 800; color: #9ca3af;
+  letter-spacing: 1px; text-transform: uppercase;
+}
+.ta-buyuk-input {
+  width: 100%; padding: 14px 14px;
+  border: 2px solid #e5e7eb; border-radius: 12px;
+  font-size: 18px; font-weight: 800; color: #1e293b;
+  text-transform: uppercase; letter-spacing: 1px;
+}
+.ta-buyuk-input:focus {
+  outline: none; border-color: #7c3aed;
+}
+.ta-buyuk-input::placeholder { color: #d1d5db; font-size: 14px; font-weight: 500; text-transform: none; }
+
+.ta-renk-hizli { display: flex; flex-direction: column; gap: 6px; }
+.ta-renk-kisayol { display: flex; flex-wrap: wrap; gap: 6px; }
+.ta-renk-kisayol button {
+  padding: 7px 12px; border: 2px solid #e5e7eb; border-radius: 8px;
+  background: #f8fafc; font-size: 12px; font-weight: 700; color: #374151; cursor: pointer;
+}
+.ta-renk-kisayol button:hover { background: #ede9fe; border-color: #7c3aed; color: #6d28d9; }
+
+/* Test butonları */
+.ta-test-butonlar {
+  display: flex; gap: 10px;
+}
+.ta-test-btn {
+  flex: 1; padding: 16px 10px; border-radius: 14px;
+  border: 3px solid #e5e7eb; background: #f8fafc;
+  cursor: pointer; text-align: center;
+  transition: all .12s;
+}
+.ta-test-btn:hover    { border-color: #7c3aed; background: #ede9fe; }
+.ta-test-aktif        { border-color: #7c3aed; background: #ede9fe; }
+.ta-test-sayi { font-size: 28px; font-weight: 900; color: #7c3aed; line-height: 1; }
+.ta-test-birim { font-size: 13px; font-weight: 700; color: #7c3aed; }
+.ta-test-etiket { font-size: 10px; color: #9ca3af; margin-top: 4px; }
+
+.ta-not-blok { display: flex; flex-direction: column; gap: 6px; }
+.ta-not-input {
+  width: 100%; padding: 12px 12px; border: 2px solid #e5e7eb; border-radius: 10px;
+  font-size: 14px; color: #1e293b; background: #fff;
+}
+.ta-not-input:focus { outline: none; border-color: #7c3aed; }
+
+/* Özet */
+.ta-ozet-blok {
+  background: #1e293b; border-radius: 14px; padding: 14px 18px;
+  color: #f6c343; font-size: 15px; font-weight: 700;
+  margin-bottom: 14px;
+}
+
+/* Başlat butonu */
+.ta-baslat-btn {
+  display: block; width: 100%; padding: 20px;
+  background: #7c3aed; color: #fff;
+  border: none; border-radius: 16px;
+  font-size: 20px; font-weight: 900; cursor: pointer;
+  letter-spacing: 1px; transition: background .12s;
+}
+.ta-baslat-btn:hover:not(:disabled) { background: #6d28d9; }
+.ta-baslat-btn:disabled { background: #e5e7eb; color: #9ca3af; cursor: not-allowed; }
+
+.ta-yukleniyor {
+  display: flex; align-items: center; gap: 12px; justify-content: center;
+  padding: 20px; font-size: 15px; font-weight: 700; color: #6b7280;
+}
+.ta-spin {
+  width: 24px; height: 24px; border-radius: 50%;
+  border: 3px solid #e5e7eb; border-top-color: #7c3aed;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Responsive */
+@media (max-width: 700px) {
+  .ta-uc-kart { grid-template-columns: 1fr; }
+}
+@media (min-width: 701px) and (max-width: 900px) {
+  .ta-uc-kart { grid-template-columns: repeat(2, 1fr); }
+  .ta-kart-3  { grid-column: span 2; }
 }
 </style>
 
 <script>
-var _seciliUv2 = null;
-const TBA_AGAC = {{ varyantlar | tojson }};
+var _taUvId   = null;
+var _taTestKg = 7.5;
+const TA_VARYANTLAR = {{ varyantlar | tojson }};
 
-function tbaSecimYap(el) {
-  document.querySelectorAll('.tbu-recete-kart').forEach(function(k){ k.classList.remove('secili'); });
-  el.classList.add('secili');
-  _seciliUv2 = {
-    id:     parseInt(el.dataset.id),
-    formul: el.dataset.formul,
-    renk:   el.dataset.renk,
-    boyut:  el.dataset.boyut,
-    batch:  parseFloat(el.dataset.batch || 0),
-  };
-  document.getElementById('tba-ileri-1').disabled = false;
+function taFormulSec(btn) {
+  document.querySelectorAll('.ta-formul-btn').forEach(function(b){ b.classList.remove('secili'); });
+  btn.classList.add('secili');
+  var formulId = parseInt(btn.dataset.formulId);
+
+  var uygunlar = TA_VARYANTLAR.filter(function(v){ return v.formul_id === formulId; });
+  var blok = document.getElementById('ta-varyant-blok');
+  var wrap = document.getElementById('ta-varyant-listesi');
+  wrap.innerHTML = '';
+  _taUvId = null;
+
+  if (uygunlar.length === 1) {
+    _taUvId = uygunlar[0].id;
+    blok.style.display = 'none';
+    document.getElementById('ta-secili-formul-rozet').style.display = 'block';
+    document.getElementById('ta-secili-formul-rozet').textContent =
+      '✓ ' + btn.dataset.formulAd + ' — ' + uygunlar[0].renk_ad;
+  } else {
+    blok.style.display = 'block';
+    document.getElementById('ta-secili-formul-rozet').style.display = 'none';
+    uygunlar.forEach(function(uv) {
+      var b = document.createElement('button');
+      b.className = 'ta-varyant-btn';
+      b.dataset.uvId = uv.id;
+      var boyut = uv.boyut === 'LARGE' ? 'Büyük Boy' : uv.boyut === 'SMALL' ? 'Küçük Boy' : uv.boyut;
+      b.textContent = uv.renk_ad + ' · ' + boyut;
+      b.onclick = function() {
+        document.querySelectorAll('.ta-varyant-btn').forEach(function(x){ x.classList.remove('secili'); });
+        b.classList.add('secili');
+        _taUvId = parseInt(b.dataset.uvId);
+        document.getElementById('ta-secili-formul-rozet').style.display = 'block';
+        document.getElementById('ta-secili-formul-rozet').textContent =
+          '✓ ' + btn.dataset.formulAd + ' — ' + uv.renk_ad;
+        taKontrol();
+      };
+      wrap.appendChild(b);
+    });
+  }
+  taKontrol();
 }
 
-function tbaAdim(hedef) {
-  document.getElementById('tba-panel-1').style.display = hedef === 1 ? 'block' : 'none';
-  document.getElementById('tba-panel-2').style.display = hedef === 2 ? 'block' : 'none';
-  ['adim-1','adim-2','adim-3'].forEach(function(id, i) {
-    var el = document.getElementById(id);
-    el.classList.remove('aktif','tamamlandi');
-    if (i + 1 < hedef)  el.classList.add('tamamlandi');
-    if (i + 1 === hedef) el.classList.add('aktif');
-  });
-  if (hedef === 2 && _seciliUv2) {
-    var ozet = document.getElementById('tba-secilen-ozet');
-    ozet.innerHTML = '<strong>' + _seciliUv2.renk + '</strong> — ' + _seciliUv2.boyut +
-                     ' &nbsp;|&nbsp; ' + _seciliUv2.formul +
-                     (_seciliUv2.batch > 0 ? ' &nbsp;<span style="color:#9ca3af;font-size:13px">(Orijinal batch: ' + _seciliUv2.batch + ' KG)</span>' : '');
-    tbaHesapla();
+function taRenkSec(renk) {
+  document.getElementById('ta-renk-adi').value = renk;
+  taKontrol();
+}
+
+function taTestSec(btn) {
+  document.querySelectorAll('.ta-test-btn').forEach(function(b){ b.classList.remove('ta-test-aktif'); });
+  btn.classList.add('ta-test-aktif');
+  _taTestKg = parseFloat(btn.dataset.kg);
+  taKontrol();
+}
+
+function taKontrol() {
+  var renk = document.getElementById('ta-renk-adi').value.trim();
+  var hazir = _taUvId && renk.length > 0;
+  var btn = document.getElementById('ta-baslat-btn');
+  btn.disabled = !hazir;
+
+  var ozet = document.getElementById('ta-ozet-blok');
+  var ozetIc = document.getElementById('ta-ozet-ic');
+  if (hazir) {
+    var uv = TA_VARYANTLAR.find(function(v){ return v.id === _taUvId; });
+    ozet.style.display = 'block';
+    ozetIc.innerHTML =
+      (uv ? uv.formul_ad + ' — ' + uv.renk_ad + '<br>' : '') +
+      '<strong>Yeni Renk:</strong> ' + renk.toUpperCase() +
+      '  &nbsp;·&nbsp;  ' + _taTestKg + ' KG Test';
+    btn.textContent = '▶ ' + _taTestKg + ' KG — ' + renk.toUpperCase() + ' TEST BAŞLAT';
+  } else {
+    ozet.style.display = 'none';
+    btn.textContent = '▶ AR-GE TEST BAŞLAT';
   }
 }
 
-function tbaHesapla() {
-  if (!_seciliUv2) return;
-  var testKg = parseFloat(document.getElementById('tba-test-kg').value || 0);
-  if (testKg <= 0 || _seciliUv2.batch <= 0) {
-    document.getElementById('tba-olcek-onizleme').style.display = 'none';
-    return;
-  }
-  var carpan = testKg / _seciliUv2.batch;
-  // TBA_AGAC'dan kalemler bul
-  var uv = TBA_AGAC.find(function(v){ return v.id === _seciliUv2.id; });
-  // Kalemler backend'den gelmiyor, sadece ölçek göster
-  var onizleme = document.getElementById('tba-olcek-onizleme');
-  var icerik = document.getElementById('tba-olcek-icerik');
-  icerik.innerHTML =
-    '<div class="tba-olcek-satir">' +
-      '<span class="tba-olcek-stok">Ölçekleme faktörü</span>' +
-      '<span class="tba-olcek-kg">× ' + carpan.toFixed(4) + '</span>' +
-    '</div>' +
-    '<div class="tba-olcek-satir">' +
-      '<span class="tba-olcek-stok">Orijinal batch</span>' +
-      '<span class="tba-olcek-kg">' + _seciliUv2.batch.toFixed(3) + ' KG</span>' +
-    '</div>' +
-    '<div class="tba-olcek-satir">' +
-      '<span class="tba-olcek-stok">Test KG</span>' +
-      '<span class="tba-olcek-kg">' + testKg.toFixed(3) + ' KG</span>' +
-    '</div>';
-  onizleme.style.display = 'block';
-}
+function taBaslat() {
+  if (!_taUvId) return;
+  var renk = document.getElementById('ta-renk-adi').value.trim();
+  if (!renk) { alert('Renk adı yazınız.'); return; }
+  var not = (document.getElementById('ta-not').value || '').trim();
 
-function tbaTestOlustur() {
-  if (!_seciliUv2) return;
-  var testKg = parseFloat(document.getElementById('tba-test-kg').value || 0);
-  if (testKg <= 0) { alert('Test KG giriniz.'); return; }
-
-  var renkAdi  = (document.getElementById('tba-renk-adi').value || '').trim();
-  var makina   = document.getElementById('tba-makina').value;
-  var notlar   = (document.getElementById('tba-notlar').value || '').trim();
-
-  document.getElementById('tba-ileri-2').disabled = true;
-  document.getElementById('tba-yukleniyor').style.display = 'block';
+  document.getElementById('ta-baslat-btn').disabled = true;
+  document.getElementById('ta-yukleniyor').style.display = 'flex';
 
   fetch('/nexgen/api/arge/test-olustur', {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
+    headers: {'Content-Type':'application/json'},
     body: JSON.stringify({
-      kaynak_uv_id:    _seciliUv2.id,
-      test_kg:         parseFloat(testKg.toFixed(3)),
-      yeni_renk_adi:   renkAdi || null,
-      makina:          makina,
-      test_tipi:       'RENK_TEST',
-      aciklama:        notlar || null,
+      kaynak_uv_id:  _taUvId,
+      test_kg:       parseFloat(_taTestKg.toFixed(3)),
+      yeni_renk_adi: renk.toUpperCase(),
+      makina:        _taTestKg + ' LT',
+      test_tipi:     'RENK_TEST',
+      aciklama:      not || null,
     })
   })
   .then(function(r){ return r.json(); })
-  .then(function(d){
-    document.getElementById('tba-yukleniyor').style.display = 'none';
+  .then(function(d) {
+    document.getElementById('ta-yukleniyor').style.display = 'none';
     if (d.ok || d.test_id) {
       var testNo = d.test_no || ('AT-' + d.test_id);
       window.location.href = '/nexgen/tablet/arge-kod/' + encodeURIComponent(testNo);
     } else {
       alert('Hata: ' + (d.hata || 'Bilinmeyen hata'));
-      document.getElementById('tba-ileri-2').disabled = false;
+      document.getElementById('ta-baslat-btn').disabled = false;
     }
   })
   .catch(function(){
-    document.getElementById('tba-yukleniyor').style.display = 'none';
-    alert('Bağlantı hatası. Lütfen tekrar deneyin.');
-    document.getElementById('tba-ileri-2').disabled = false;
+    document.getElementById('ta-yukleniyor').style.display = 'none';
+    alert('Bağlantı hatası.');
+    document.getElementById('ta-baslat-btn').disabled = false;
   });
 }
 </script>
