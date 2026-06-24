@@ -6288,10 +6288,13 @@ def _plan_liste_sorgu(con, sadece_aktif=False):
         "PRAGMA table_info(nexgen_uretim_batch)"
     ).fetchall()]
     batch_join = ""
-    batch_select = "NULL AS batch_kodu"
+    batch_select = "NULL AS batch_kodu, NULL AS batch_durum"
     if 'plan_id' in _bcols:
-        batch_join = "LEFT JOIN nexgen_uretim_batch nb ON nb.plan_id = np.id AND nb.durum NOT IN ('BITTI')"
-        batch_select = "nb.batch_kodu"
+        batch_join = (
+            "LEFT JOIN nexgen_uretim_batch nb "
+            "ON nb.plan_id = np.id AND nb.durum NOT IN ('BITTI')"
+        )
+        batch_select = "nb.batch_kodu, nb.durum AS batch_durum"
     return con.execute(f"""
         SELECT np.id, np.plan_kodu, np.kaynak, np.siparis_no, np.musteri_adi,
                np.planlanan_kg, np.oncelik_sira, np.plan_tarihi,

@@ -36,8 +36,8 @@
         </svg>
       </div>
       <div class="up-ozet-ic-metin">
-        <div class="up-ozet-sayi" id="up-ozet-toplam">{{ planlar | map(attribute='siparis_no') | unique | list | length }}</div>
-        <div class="up-ozet-etiket">Toplam Sipariş</div>
+        <div class="up-ozet-sayi" id="up-ozet-toplam">{{ planlar | length }}</div>
+        <div class="up-ozet-etiket">Toplam Plan</div>
       </div>
     </div>
 
@@ -118,10 +118,11 @@
 
       <select class="up-filtre-sel" id="f-durum" onchange="tabloFiltrele()">
         <option value="">Durum: Tümü</option>
-        <option value="PLANLANDI">PLANLANDI</option>
-        <option value="BASLADI">BAŞLADI</option>
+        <option value="PLANLANDI">Taslak / PLANLANDI</option>
+        <option value="BASLADI">Başladı / BASLADI</option>
+        <option value="HAZIR">Hazır / HAZIR (batch)</option>
         <option value="KISMI_URETIM">KISMİ ÜRETİM</option>
-        <option value="BITTI">BİTTİ</option>
+        <option value="BITTI">Bitti / BİTTİ</option>
         <option value="IPTAL">İPTAL</option>
       </select>
 
@@ -189,7 +190,8 @@
         <thead>
           <tr>
             <th class="ut-th ut-th-sira">#</th>
-            <th class="ut-th ut-th-sipno">Sipariş No</th>
+            <th class="ut-th ut-th-sipno">Plan / Sipariş No</th>
+            <th class="ut-th ut-th-batch">Batch</th>
             <th class="ut-th ut-th-cari">Cari</th>
             <th class="ut-th ut-th-urun">Ürün</th>
             <th class="ut-th ut-th-varyant">Varyant / KG</th>
@@ -711,34 +713,28 @@ function durumEtiket(d) {
   return map[d] || '<span class="ut-durum">' + d + '</span>';
 }
 
-/* Planları siparis_no bazında grupla */
+/* Planları plan satırı bazında grupla (her NP-xxx ayrı satır) */
 function veriGrupla() {
   var harita = {};
   var sira   = [];
 
   (_PLANLAR || []).forEach(function(p) {
-    /* Sipariş no yoksa plan_kodu'nu anahtar yap */
-    var key = p.siparis_no || ('_pk_' + p.plan_kodu);
+    var key = '_plan_' + p.id;
     if (!harita[key]) {
       harita[key] = {
         key:         key,
+        plan_kodu:   p.plan_kodu || ('PLAN-' + p.id),
         siparis_no:  p.siparis_no || p.plan_kodu,
         musteri_adi: cariTemizle(p.musteri_adi || '—'),
         formul_ad:   p.formul_ad  || '—',
         renk_ad:     p.renk_ad    || '—',
         plan_tarihi: p.plan_tarihi || '',
         varyantlar:  [],
-        /* Genel durum: en "aktif" varyanttan alınır */
         durum: p.durum,
       };
       sira.push(key);
     }
     var g = harita[key];
-    /* Genel durum: BASLADI > KISMI_URETIM > PLANLANDI > BITTI > IPTAL */
-    var oncelik = { 'BASLADI': 5, 'KISMI_URETIM': 4, 'PLANLANDI': 3, 'BITTI': 2, 'IPTAL': 1 };
-    if ((oncelik[p.durum] || 0) > (oncelik[g.durum] || 0)) {
-      g.durum = p.durum;
-    }
     g.varyantlar.push({
       id:            p.id,
       plan_kodu:     p.plan_kodu,
@@ -749,6 +745,7 @@ function veriGrupla() {
       kontrol_durum: p.kontrol_durum || null,
       durum:         p.durum,
       batch_kodu:    p.batch_kodu || null,
+      batch_durum:   p.batch_durum || null,
       toplam_alt_emir: p.toplam_alt_emir || 0,
       biten_alt_emir:  p.biten_alt_emir  || 0,
     });
@@ -782,8 +779,20 @@ function grupSatirHtml(g, idx) {
   var varyantHtml = g.varyantlar.map(function(v) {
     var kg = v.planlanan_kg ? Math.round(v.planlanan_kg).toLocaleString('tr-TR') + ' KG' : '—';
     return '<div class="ut-varyant-satir">' +
-           '<span class="ut-boyut ut-boyut-' + v.boyut.toLowerCase() + '">' + v.boyut + '</span>' +
+           '<span class="ut-boyut ut-boyut-' + (v.boyut || 'std').toLowerCase() + '">' + (v.boyut || '—') + '</span>' +
            '<span class="ut-varyant-kg">' + kg + '</span>' +
+           '</div>';
+  }).join('');
+
+  /* ── Batch ozeti ── */
+  var batchHtml = g.varyantlar.map(function(v) {
+    if (!v.batch_kodu) {
+      return '<div class="ut-batch-satir"><span class="ut-batch-yok">Batch yok</span></div>';
+    }
+    var bd = (v.batch_durum || '—').toLowerCase();
+    return '<div class="ut-batch-satir">' +
+           '<span class="ut-batch-kod">' + v.batch_kodu + '</span>' +
+           '<span class="ut-batch-durum ut-batch-d-' + bd + '">' + (v.batch_durum || '—') + '</span>' +
            '</div>';
   }).join('');
 
@@ -830,12 +839,17 @@ function grupSatirHtml(g, idx) {
   }
 
   /* ── data attributes — filtre için ── */
-  var dataAra   = (g.musteri_adi + ' ' + g.siparis_no + ' ' + g.formul_ad).toLowerCase();
+  var dataAra   = (g.musteri_adi + ' ' + g.siparis_no + ' ' + g.plan_kodu + ' ' + g.formul_ad).toLowerCase();
+  g.varyantlar.forEach(function(v) {
+    dataAra += ' ' + (v.plan_kodu || '') + ' ' + (v.batch_kodu || '');
+  });
   var dataBoyut = g.varyantlar.map(function(v) { return v.boyut; }).join(' ');
+  var dataBatchDurum = g.varyantlar.map(function(v) { return v.batch_durum || ''; }).join(' ');
 
   return '<tr class="ut-tr ut-tr-' + g.durum.toLowerCase() + '"' +
     ' data-ara="'    + dataAra           + '"' +
     ' data-durum="'  + g.durum           + '"' +
+    ' data-batch-durum="' + dataBatchDurum + '"' +
     ' data-formul="' + g.formul_ad       + '"' +
     ' data-renk="'   + g.renk_ad         + '"' +
     ' data-boyut="'  + dataBoyut         + '"' +
@@ -844,8 +858,15 @@ function grupSatirHtml(g, idx) {
     /* # */
     '<td class="ut-td ut-td-sira">' + (idx + 1) + '</td>' +
 
-    /* Sipariş No — tek satır, sabit genişlik */
-    '<td class="ut-td ut-td-sipno"><span class="ut-sip-no">' + g.siparis_no + '</span></td>' +
+    /* Plan kodu + siparis no */
+    '<td class="ut-td ut-td-sipno">' +
+      '<span class="ut-plan-kodu">' + (g.plan_kodu || '—') + '</span>' +
+      (g.siparis_no && g.siparis_no !== g.plan_kodu
+        ? '<div class="ut-sip-no-alt">' + g.siparis_no + '</div>' : '') +
+    '</td>' +
+
+    /* Batch */
+    '<td class="ut-td ut-td-batch">' + batchHtml + '</td>' +
 
     /* Cari */
     '<td class="ut-td ut-td-cari"><span class="ut-cari-metin">' + g.musteri_adi + '</span></td>' +
@@ -966,14 +987,20 @@ function tabloFiltrele() {
 
   /* Gruplara filtre uygula */
   var filtreli = _gruplar.filter(function(g) {
-    var tara    = (g.musteri_adi + ' ' + g.siparis_no + ' ' + g.formul_ad).toLowerCase();
+    var tara    = (g.musteri_adi + ' ' + g.siparis_no + ' ' + g.plan_kodu + ' ' + g.formul_ad).toLowerCase();
+    g.varyantlar.forEach(function(v) {
+      tara += ' ' + (v.plan_kodu || '') + ' ' + (v.batch_kodu || '');
+    });
     var tdurum  = g.durum;
     var tformul = g.formul_ad;
     var trenk   = g.renk_ad;
     var tboyut  = g.varyantlar.map(function(v) { return v.boyut; }).join(' ');
     var ttarih  = g.plan_tarihi || '';
+    var batchHazir = g.varyantlar.some(function(v) { return v.batch_durum === 'HAZIR'; });
+    var durumOk = !durum
+      || (durum === 'HAZIR' ? batchHazir : tdurum === durum);
     return (!ara      || tara.includes(ara))        &&
-           (!durum    || tdurum === durum)           &&
+           durumOk                                    &&
            (!formul   || tformul === formul)         &&
            (!renk     || trenk === renk)             &&
            (!boyut    || tboyut.includes(boyut))     &&
@@ -1774,6 +1801,17 @@ async function planIptal(planId) {
 .ut-td-bos     { color: #d1d5db; font-size: 13px; }
 
 /* Plan No / Sipariş No */
+.ut-plan-kodu  { font-size: 13px; font-weight: 800; color: #0f172a; font-family: monospace; display: block; }
+.ut-sip-no-alt { font-size: 10px; color: #64748b; margin-top: 2px; font-family: monospace; }
+.ut-td-batch   { min-width: 150px; }
+.ut-batch-satir { display: flex; flex-direction: column; gap: 2px; margin-bottom: 4px; }
+.ut-batch-kod  { font-size: 11px; font-weight: 700; color: #334155; font-family: monospace; }
+.ut-batch-durum { font-size: 10px; font-weight: 800; letter-spacing: .3px; }
+.ut-batch-d-hazir  { color: #15803d; }
+.ut-batch-d-devam  { color: #1d4ed8; }
+.ut-batch-d-bekleme { color: #b45309; }
+.ut-batch-d-taslak { color: #64748b; }
+.ut-batch-yok  { font-size: 11px; color: #94a3b8; font-style: italic; }
 .ut-sip-no    { font-size: 13px; font-weight: 600; color: #1e293b; font-family: monospace; }
 .ut-plan-kodu { font-size: 11px; font-weight: 400; color: #9ca3af; font-family: monospace; margin-top: 1px; }
 

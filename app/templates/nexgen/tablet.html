@@ -454,7 +454,11 @@ function filtrele() {
     var fPas = (_aktifFiltre === 'tumu') || gd === _aktifFiltre ||
                (_aktifFiltre === 'devam' && gd === 'devam') ||
                (_aktifFiltre === 'hazir' && (gd === 'hazir' || gd === 'planli'));
-    var aPas = !arama || cari.includes(arama) || sipNo.includes(arama) || urun.includes(arama);
+    var batchKod = sip.boyutlar.map(function(by) {
+      return (by.batch_kodu || '').toLowerCase();
+    }).join(' ');
+    var aPas = !arama || cari.includes(arama) || sipNo.includes(arama) ||
+               urun.includes(arama) || batchKod.includes(arama);
     return fPas && aPas;
   });
 }
