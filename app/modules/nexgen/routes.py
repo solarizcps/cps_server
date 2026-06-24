@@ -1629,10 +1629,24 @@ def arge_test_detay(test_id):
             WHERE tk.test_id = ?
             ORDER BY tk.sira
         """, (test_id,)).fetchall()
+        kalem_list = [dict(k) for k in kalemler]
+        boya_kalemler = [k for k in kalem_list if k.get('kategori') == 'BOYA']
+        boya_stok_secenekleri = []
+        test_row = dict(test)
+        if (test_row.get('durum') == 'TASLAK'
+                and test_row.get('test_tipi') == 'RENK_TEST'):
+            boya_stok_secenekleri = [
+                dict(r) for r in con.execute("""
+                    SELECT id, kod, ad, kategori
+                    FROM nexgen_stok_kart
+                    WHERE aktif = 1 AND kategori = 'BOYA'
+                    ORDER BY kod
+                """).fetchall()
+            ]
 
         # Bağlantılı üretim varyantı bilgisi (FAZ-4C-4)
         olusan_uv = None
-        test_d = dict(test)
+        test_d = test_row
         if test_d.get('olusan_uretim_varyant_id'):
             row = con.execute("""
                 SELECT uv.id, uv.ad, uv.boyut, uv.recete_durum,
@@ -1656,7 +1670,9 @@ def arge_test_detay(test_id):
         'nexgen/arge_test_detay.html',
         active='nexgen',
         test=test_d,
-        kalemler=[dict(k) for k in kalemler],
+        kalemler=kalem_list,
+        boya_kalemler=boya_kalemler,
+        boya_stok_secenekleri=boya_stok_secenekleri,
         can_manage=can_manage,
         can_create=can_create,
         can_approve=can_approve,

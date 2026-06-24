@@ -620,8 +620,9 @@
 const AT_TEST_ID = {{ test.id }};
 const AT_KAYNAK_BATCH = {{ test.kaynak_batch_kg }};
 const AT_TEST_BATCH   = {{ test.test_batch_kg }};
-const AT_BOYA_EDIT    = {{ 'true' if boya_editable else 'false' }};
-const AT_BOYA_INIT    = {{ kalemler | selectattr('kategori', 'equalto', 'BOYA') | list | tojson }};
+const AT_BOYA_EDIT        = {{ boya_editable | tojson }};
+const AT_BOYA_INIT        = {{ boya_kalemler | tojson }};
+const AD_STOK_BOYA_INIT   = {{ boya_stok_secenekleri | tojson }};
 
 var AD_STOK_BOYA = [];
 
@@ -662,27 +663,47 @@ function adBoyaSatirSil(btn){
   btn.closest('tr').remove();
 }
 
+function adBoyaPanelRender(){
+  var tbody = document.getElementById('ad-boya-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  var init = AT_BOYA_INIT || [];
+  if (init.length) {
+    init.forEach(function(k){
+      adBoyaSatirEkle(k.stok_kart_id, k.test_miktar_kg);
+    });
+  } else {
+    adBoyaSatirEkle('', '');
+  }
+}
+
+function adBoyaStokSelectleriYenile(){
+  document.querySelectorAll('.ad-boya-stok').forEach(function(sel){
+    var cur = sel.value;
+    sel.innerHTML = adBoyaStokOptions(cur);
+  });
+}
+
 function adBoyaPanelInit(){
-  if (AT_BOYA_EDIT !== 'true') return;
+  if (!AT_BOYA_EDIT) return;
+  AD_STOK_BOYA = (AD_STOK_BOYA_INIT || []).slice();
+  adBoyaPanelRender();
   fetch('/nexgen/api/arge/renk-stok-secenekleri')
-    .then(function(r){ return r.json(); })
+    .then(function(r){
+      if (!r.ok) throw new Error('stok listesi ' + r.status);
+      return r.json();
+    })
     .then(function(list){
-      AD_STOK_BOYA = list || [];
-      var tbody = document.getElementById('ad-boya-tbody');
-      if (!tbody) return;
-      tbody.innerHTML = '';
-      var init = AT_BOYA_INIT || [];
-      if (init.length) {
-        init.forEach(function(k){
-          adBoyaSatirEkle(k.stok_kart_id, k.test_miktar_kg);
-        });
-      } else {
-        adBoyaSatirEkle('', '');
+      if (list && list.length) {
+        AD_STOK_BOYA = list;
+        adBoyaStokSelectleriYenile();
       }
     })
     .catch(function(){
-      var h = document.getElementById('ad-boya-hata');
-      if (h) { h.textContent = 'Boya stok listesi yüklenemedi.'; h.style.display = 'block'; }
+      if (!AD_STOK_BOYA.length) {
+        var h = document.getElementById('ad-boya-hata');
+        if (h) { h.textContent = 'Boya stok listesi yüklenemedi.'; h.style.display = 'block'; }
+      }
     });
 }
 
@@ -746,7 +767,7 @@ function adBoyaKaydet(){
   });
 }
 
-if (AT_BOYA_EDIT === 'true') {
+if (AT_BOYA_EDIT) {
   document.addEventListener('DOMContentLoaded', adBoyaPanelInit);
 }
 
