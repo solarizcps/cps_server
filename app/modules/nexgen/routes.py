@@ -1214,6 +1214,16 @@ def _arge_test_no_uret(con):
     return f'AT-{yil}-{son + 1:04d}'
 
 
+def _rf_kod_uret(con):
+    """RF-NNN formatinda benzersiz RF renk kodu uretir."""
+    row = con.execute(
+        "SELECT MAX(CAST(SUBSTR(rf_kod, 4) AS INTEGER)) AS son "
+        "FROM nexgen_rf_renk WHERE rf_kod LIKE 'RF-%'"
+    ).fetchone()
+    son = row['son'] if row and row['son'] else 0
+    return f'RF-{son + 1:03d}'
+
+
 @nexgen_bp.route('/api/arge/test-olustur', methods=['POST'])
 @yetki_gerekli('nexgen.recete.create', 'can_create')
 def api_arge_test_olustur():
@@ -1628,6 +1638,139 @@ def api_arge_onay_islem():
         con.close()
 
     return jsonify({"ok": True, "test_id": test_id, "yeni_durum": yeni_durum})
+
+
+@nexgen_bp.route('/api/arge/rf-olustur', methods=['POST'])
+@yetki_gerekli('nexgen.recete.manage', 'can_manage')
+def api_arge_rf_olustur():
+    """Onayli AR-GE testinden global RF renk + formul uygunluk olusturur.
+    nexgen_recete_kalem / uretim_varyant DOKUNULMAZ.
+
+    POST JSON:
+        test_id : int
+    """
+    data = request.get_json(silent=True) or {}
+    test_id = data.get('test_id')
+    if not test_id:
+        return jsonify({"ok": False, "hata": "test_id zorunludur."}), 400
+
+    con = _db()
+    try:
+        test = con.execute("""
+            SELECT t.*,
+                   rv.ad AS kaynak_renk_ad,
+                   f.id AS formul_id, f.kod AS formul_kod, f.ad AS formul_ad
+            FROM nexgen_arge_test t
+            JOIN nexgen_uretim_varyant uv ON uv.id = t.kaynak_uretim_varyant_id
+            JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+            JOIN nexgen_formul f          ON f.id  = rv.formul_id
+            WHERE t.id = ? AND t.aktif = 1
+        """, (test_id,)).fetchone()
+        if not test:
+            return jsonify({"ok": False, "hata": "Test kaydi bulunamadi."}), 404
+
+        if test['durum'] != 'ONAYLANDI':
+            return jsonify({
+                "ok": False,
+                "hata": f"Sadece ONAYLANDI testlerden RF olusturulabilir. Mevcut: {test['durum']}"
+            }), 400
+
+        if test['rf_renk_id']:
+            return jsonify({
+                "ok": False,
+                "hata": f"Bu test icin RF zaten olusturulmus (rf_renk_id={test['rf_renk_id']})."
+            }), 409
+
+        mevcut_rf = con.execute(
+            "SELECT id, rf_kod FROM nexgen_rf_renk WHERE kaynak_arge_test_id=?",
+            (test_id,)
+        ).fetchone()
+        if mevcut_rf:
+            return jsonify({
+                "ok": False,
+                "hata": f"Bu test icin RF zaten kayitli ({mevcut_rf['rf_kod']})."
+            }), 409
+
+        test_batch_kg   = float(test['test_batch_kg'])
+        kaynak_batch_kg = float(test['kaynak_batch_kg'])
+        if test_batch_kg <= 0 or kaynak_batch_kg <= 0:
+            return jsonify({
+                "ok": False,
+                "hata": "test_batch_kg veya kaynak_batch_kg sifir — RF olusturulamaz."
+            }), 400
+
+        boya_kalemler = con.execute("""
+            SELECT tk.stok_kart_id, tk.sira, tk.test_miktar_kg, tk.aciklama
+            FROM nexgen_arge_test_kalem tk
+            JOIN nexgen_stok_kart sk ON sk.id = tk.stok_kart_id
+            WHERE tk.test_id = ?
+              AND sk.kategori = 'BOYA'
+              AND sk.aktif = 1
+            ORDER BY tk.sira
+        """, (test_id,)).fetchall()
+        if not boya_kalemler:
+            return jsonify({
+                "ok": False,
+                "hata": "BOYA kategorisinde kalem bulunamadi — RF olusturulamaz."
+            }), 400
+
+        rf_ad = (test['yeni_renk_adi'] or test['kaynak_renk_ad'] or '').strip()
+        if not rf_ad:
+            return jsonify({"ok": False, "hata": "RF renk adi belirlenemedi."}), 400
+
+        rf_kod = _rf_kod_uret(con)
+        carpan = kaynak_batch_kg / test_batch_kg
+        aciklama = (test['genel_aciklama'] or test['sonuc_notu'] or '').strip() or None
+
+        con.execute("""
+            INSERT INTO nexgen_rf_renk
+                (rf_kod, ad, durum, kaynak_arge_test_id, ilk_talep_cari_id,
+                 aciklama, olusturan_id, onaylayan_id, onay_tarihi, aktif)
+            VALUES (?, ?, 'ONAYLI', ?, ?, ?, ?, ?, ?, 1)
+        """, (rf_kod, rf_ad, test_id, test['cari_id'], aciklama,
+              test['olusturan_id'], test['onaylayan_id'], test['onay_tarihi']))
+        rf_renk_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+        for k in boya_kalemler:
+            miktar_kg = round(float(k['test_miktar_kg']) * carpan, 4)
+            con.execute("""
+                INSERT INTO nexgen_rf_kalem
+                    (rf_renk_id, stok_kart_id, miktar_kg, sira, aciklama, aktif)
+                VALUES (?, ?, ?, ?, ?, 1)
+            """, (rf_renk_id, k['stok_kart_id'], miktar_kg, k['sira'], k['aciklama']))
+
+        con.execute("""
+            INSERT INTO nexgen_rf_formul_uygunluk
+                (rf_renk_id, formul_id, kaynak_arge_test_id, durum,
+                 ilk_talep_cari_id, shore_hedef, shore_sonuc,
+                 renk_sonucu, numune_sonucu, onay_tarihi, aktif)
+            VALUES (?, ?, ?, 'ONAYLI', ?, ?, ?, ?, ?, ?, 1)
+        """, (rf_renk_id, test['formul_id'], test_id, test['cari_id'],
+              test['shore_hedef'], test['shore_degeri'],
+              test['renk_tuttu'], test['cekme_problemi'], test['onay_tarihi']))
+
+        con.execute(
+            "UPDATE nexgen_arge_test SET rf_renk_id=? WHERE id=?",
+            (rf_renk_id, test_id)
+        )
+        con.commit()
+
+    except Exception as e:
+        con.rollback()
+        return jsonify({"ok": False, "hata": str(e)}), 500
+    finally:
+        con.close()
+
+    return jsonify({
+        "ok":               True,
+        "test_id":          test_id,
+        "rf_renk_id":       rf_renk_id,
+        "rf_kod":           rf_kod,
+        "rf_ad":            rf_ad,
+        "formul_id":        test['formul_id'],
+        "formul_ad":        test['formul_ad'],
+        "boya_kalem_sayisi": len(boya_kalemler),
+    })
 
 
 @nexgen_bp.route('/api/arge/gecmis/<int:uv_id>', methods=['GET'])
