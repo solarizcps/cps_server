@@ -2429,17 +2429,34 @@ def _batch_uretim_kontrol(con, batch_kodu):
     return d
 
 
-def _batch_kg_rf_enrich(con, b_dict):
-    """KG gosterim alanlarini rf_kullanim tek kaynagindan doldurur."""
+def _batch_kg_rf_enrich(con, b_dict, liste_modu=False):
+    """KG gosterim alanlarini rf_kullanim tek kaynagindan doldurur.
+
+    liste_modu=True: batch kartlari (L/S) — uretilen = batch rf SUM, hedef = batch planlanan_kg
+    liste_modu=False: siparis ozeti — plan master + siparis rf SUM
+    """
     k = _batch_uretim_kontrol(con, b_dict.get('batch_kodu'))
     if not k:
         return b_dict
     b_dict['siparis_toplam_kg'] = k['siparis_toplam_kg']
-    b_dict['uretilen_kg'] = k['uretilen_kg']
-    b_dict['kalan_kg'] = k['kalan_kg']
     b_dict['kontrol_durum'] = k.get('kontrol_durum')
     b_dict['kontrol_uyari'] = k.get('uyari')
     b_dict['kontrol_mesaj'] = k.get('mesaj')
+    if liste_modu:
+        batch_ur = 0.0
+        if _rf_kullanim_tablosu_var(con) and b_dict.get('batch_kodu'):
+            row = con.execute("""
+                SELECT ROUND(COALESCE(SUM(miktar_kg), 0), 3) AS kg
+                FROM nexgen_rf_kullanim
+                WHERE aktif = 1 AND tablet_session_id = ?
+            """, (b_dict['batch_kodu'],)).fetchone()
+            batch_ur = float(row['kg'] or 0) if row else 0.0
+        bpl = float(b_dict.get('planlanan_kg') or 0)
+        b_dict['uretilen_kg'] = round(batch_ur, 3)
+        b_dict['kalan_kg'] = round(max(0.0, bpl - batch_ur), 3)
+    else:
+        b_dict['uretilen_kg'] = k['uretilen_kg']
+        b_dict['kalan_kg'] = k['kalan_kg']
     return b_dict
 
 
@@ -4882,14 +4899,14 @@ def tablet_ana():
                 """, (bk,)).fetchone()
                 b['toplam_alt_emir'] = sayac['toplam'] or 0
                 b['biten_alt_emir']  = sayac['biten']  or 0
-                _batch_kg_rf_enrich(con, b)
+                _batch_kg_rf_enrich(con, b, liste_modu=True)
         else:
             for b in devam_eden:
                 b['toplam_alt_emir'] = None
                 b['biten_alt_emir']  = None
                 b['uretilen_kg']     = 0.0
                 b['kalan_kg']        = float(b['planlanan_kg'])
-                _batch_kg_rf_enrich(con, b)
+                _batch_kg_rf_enrich(con, b, liste_modu=True)
 
         from datetime import date as _date
         bugun = _date.today().isoformat()
@@ -4988,14 +5005,14 @@ def tablet_devam_edenler():
                 b['hazir_alt_emir']  = sayac['hazir']  or 0
                 b['devam_alt_emir']  = sayac['devam']  or 0
                 b['bekleme_alt_emir']= sayac['bekleme']or 0
-                _batch_kg_rf_enrich(con, b)
+                _batch_kg_rf_enrich(con, b, liste_modu=True)
         else:
             for b in batches_raw:
                 b['toplam_alt_emir'] = b['biten_alt_emir'] = 0
                 b['hazir_alt_emir']  = b['devam_alt_emir'] = b['bekleme_alt_emir'] = 0
                 b['uretilen_kg']     = 0.0
                 b['kalan_kg']        = float(b['planlanan_kg'])
-                _batch_kg_rf_enrich(con, b)
+                _batch_kg_rf_enrich(con, b, liste_modu=True)
 
         # Sipariş bazında gruplama:
         # siparis_no varsa → gruplama anahtarı siparis_no
@@ -5022,6 +5039,7 @@ def tablet_devam_edenler():
                 'lot_kodu':       b.get('lot_kodu'),
                 'durum':          b['durum'],
                 'planlanan_kg':   b['planlanan_kg'],
+                'siparis_toplam_kg': b.get('siparis_toplam_kg'),
                 'uretilen_kg':    b['uretilen_kg'],
                 'kalan_kg':       b['kalan_kg'],
                 'toplam_alt_emir':b['toplam_alt_emir'],
