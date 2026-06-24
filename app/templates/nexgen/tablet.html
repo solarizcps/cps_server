@@ -310,7 +310,7 @@ function genelDurum(sip) {
 /* ═══════════════════════════════════════════════════════════
    3. KART HTML ÜRET
 ═══════════════════════════════════════════════════════════ */
-function kartHtml(sip) {
+function kartHtml(sip, kartIdx) {
   var gd  = genelDurum(sip);
   var tek = sip.boyutlar.length === 1;
   var by0 = sip.boyutlar[0];
@@ -384,7 +384,12 @@ function kartHtml(sip) {
     }
     butonHtml += '<a href="/nexgen/tablet/etiket/uretim/' + esc(by0.batch_kodu || '') + '" class="nxt-btn-ikincil">&#128424; Etiket</a>';
   } else {
-    butonHtml = '<button class="nxt-btn-ana" onclick="lsModalAc(' + JSON.stringify(sip.boyutlar) + ')">&#9654; Devam Et</button>';
+    butonHtml = '<button type="button" class="nxt-btn-ana" onclick="lsModalAc(' + kartIdx + ')">&#9654; Devam Et</button>';
+    butonHtml += '<div id="nxt-ls-data-' + kartIdx + '" style="display:none">';
+    sip.boyutlar.forEach(function(by) {
+      butonHtml += '<span data-boyut="' + esc(by.boyut) + '" data-batch="' + esc(by.batch_kodu || '') + '"></span>';
+    });
+    butonHtml += '</div>';
     butonHtml += '<a href="/nexgen/tablet/etiket/uretim/' + esc(by0.batch_kodu || '') + '" class="nxt-btn-ikincil">&#128424; Etiket</a>';
   }
 
@@ -510,7 +515,7 @@ function render() {
   var baslangic = (sayfa - 1) * bsz;
   var gosterilen = liste.slice(baslangic, baslangic + bsz);
 
-  kl.innerHTML = gosterilen.map(kartHtml).join('');
+  kl.innerHTML = gosterilen.map(function(sip, i) { return kartHtml(sip, i); }).join('');
 
   // Sayfalama UI
   sayfalamaRender(liste.length, sayfa, bsz);
@@ -584,15 +589,18 @@ function tumunuGoster() {
 /* ═══════════════════════════════════════════════════════════
    5. L/S MODAL
 ═══════════════════════════════════════════════════════════ */
-function lsModalAc(boyutlar) {
+function lsModalAc(idx) {
+  var data = document.getElementById('nxt-ls-data-' + idx);
+  if (!data) return;
   var butonlar = document.getElementById('nxt-modal-butonlar');
   butonlar.innerHTML = '';
-  boyutlar.forEach(function(by) {
-    if (!by.batch_kodu) return;
+  data.querySelectorAll('span[data-boyut]').forEach(function(s) {
+    var batch = s.dataset.batch;
+    if (!batch) return;
     var a = document.createElement('a');
-    a.href = '/nexgen/tablet/uretim-islem/' + by.batch_kodu;
+    a.href = '/nexgen/tablet/uretim-islem/' + batch;
     a.className = 'nxt-modal-boyut-btn';
-    a.textContent = '▶ ' + by.boyut + ' — Devam Et';
+    a.textContent = '▶ ' + s.dataset.boyut + ' — Devam Et';
     butonlar.appendChild(a);
   });
   document.getElementById('nxt-ls-modal').style.display = 'flex';
