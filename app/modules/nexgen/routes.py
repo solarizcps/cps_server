@@ -4059,13 +4059,13 @@ def tablet_barkod_sonuc():
         # 3) AT-YYYY-NNNNN — AR-GE test kodu
         if kod.startswith('AT-'):
             test = con.execute("""
-                SELECT at.id, at.test_no, at.test_kg, at.makina,
+                SELECT at.id, at.test_no, at.test_batch_kg, at.makina,
                        at.yeni_renk_adi, at.durum, at.olusturma_tarihi,
                        uv.boyut,
                        rv.ad AS renk_ad,
                        f.ad AS formul_ad
                 FROM nexgen_arge_test at
-                JOIN nexgen_uretim_varyant uv ON uv.id = at.kaynak_uv_id
+                JOIN nexgen_uretim_varyant uv ON uv.id = at.kaynak_uretim_varyant_id
                 JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
                 JOIN nexgen_formul f          ON f.id  = rv.formul_id
                 WHERE at.test_no = ?
@@ -4144,11 +4144,11 @@ def api_tablet_barkod_bul():
         # AT-
         if kod.startswith('AT-'):
             row = con.execute(
-                "SELECT at.test_no, at.test_kg, at.makina, "
+                "SELECT at.test_no, at.test_batch_kg, at.makina, "
                 "at.yeni_renk_adi, at.durum, "
                 "rv.ad AS renk_ad, f.ad AS formul_ad "
                 "FROM nexgen_arge_test at "
-                "JOIN nexgen_uretim_varyant uv ON uv.id=at.kaynak_uv_id "
+                "JOIN nexgen_uretim_varyant uv ON uv.id=at.kaynak_uretim_varyant_id "
                 "JOIN nexgen_renk_varyant rv ON rv.id=uv.renk_varyant_id "
                 "JOIN nexgen_formul f ON f.id=rv.formul_id "
                 "WHERE at.test_no=?", (kod,)
@@ -4569,7 +4569,7 @@ def tablet_arge_kod_goster(test_no):
                    f.ad AS formul_ad, f.kod AS formul_kod,
                    ku.KullaniciAdi AS olusturan_ad
             FROM nexgen_arge_test at
-            JOIN nexgen_uretim_varyant uv ON uv.id = at.kaynak_uv_id
+            JOIN nexgen_uretim_varyant uv ON uv.id = at.kaynak_uretim_varyant_id
             JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
             JOIN nexgen_formul f          ON f.id  = rv.formul_id
             LEFT JOIN sistem_kullanici ku ON ku.Id  = at.olusturan_id
@@ -4692,14 +4692,14 @@ def tablet_etiket_arge(test_no):
     con = _db()
     try:
         test = con.execute("""
-            SELECT at.id, at.test_no, at.test_kg, at.makina,
+            SELECT at.id, at.test_no, at.test_batch_kg, at.makina,
                    at.yeni_renk_adi, at.durum, at.olusturma_tarihi,
                    uv.boyut,
                    rv.ad AS renk_ad,
                    f.ad AS formul_ad,
                    ku.KullaniciAdi AS olusturan_ad
             FROM nexgen_arge_test at
-            JOIN nexgen_uretim_varyant uv ON uv.id = at.kaynak_uv_id
+            JOIN nexgen_uretim_varyant uv ON uv.id = at.kaynak_uretim_varyant_id
             JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
             JOIN nexgen_formul f          ON f.id  = rv.formul_id
             LEFT JOIN sistem_kullanici ku ON ku.Id  = at.olusturan_id
@@ -4785,7 +4785,7 @@ def _tspl_arge(t, operator_ad):
     formul   = (t.get('formul_ad') or '').upper()[:24]
     renk     = (t.get('renk_ad') or '').upper()[:20]
     yeni_renk = (t.get('yeni_renk_adi') or '—').upper()[:20]
-    kg       = str(t.get('test_kg') or '—') + ' KG'
+    kg       = str(t.get('test_batch_kg') or '—') + ' KG'
     makina   = (t.get('makina') or '—').upper()[:20]
     op       = (operator_ad or '').upper()[:20]
 
@@ -4870,13 +4870,13 @@ def api_etiket_arge_tspl(test_no):
     con = _db()
     try:
         test = con.execute("""
-            SELECT at.test_no, at.test_kg, at.makina,
+            SELECT at.test_no, at.test_batch_kg, at.makina,
                    at.yeni_renk_adi, at.durum, at.olusturma_tarihi,
                    rv.ad AS renk_ad,
                    f.ad AS formul_ad,
                    ku.KullaniciAdi AS olusturan_ad
             FROM nexgen_arge_test at
-            JOIN nexgen_uretim_varyant uv ON uv.id = at.kaynak_uv_id
+            JOIN nexgen_uretim_varyant uv ON uv.id = at.kaynak_uretim_varyant_id
             JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
             JOIN nexgen_formul f          ON f.id  = rv.formul_id
             LEFT JOIN sistem_kullanici ku ON ku.Id  = at.olusturan_id
