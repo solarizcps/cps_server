@@ -1315,7 +1315,7 @@ def _rf_kod_uret(con):
 
 
 @nexgen_bp.route('/api/arge/test-olustur', methods=['POST'])
-@yetki_gerekli('nexgen.recete.create', 'can_create')
+@login_gerekli
 def api_arge_test_olustur():
     """Kaynak üretim varyantından AR-GE test kaydı oluşturur.
     Ana reçete (nexgen_recete_kalem) YAZILMAZ — sadece ARGE tabloları.
@@ -1331,13 +1331,19 @@ def api_arge_test_olustur():
         shore_hedef     : float opsiyonel — hedef shore değeri
         lot_no          : str   opsiyonel — otomatik üretilir (ARGE-LOT-YYYY-NNNNN)
         talep_referansi : str   opsiyonel — müşteri talebi / referans notu
+
+    Yetki: nexgen.recete.create VEYA nexgen.tablet.view (tablet hızlı başlatma).
     """
+    if not (yetki_var('nexgen.recete.create', 'can_create')
+            or yetki_var('nexgen.tablet.view', 'can_view')):
+        abort(403)
+
     data = request.get_json(silent=True) or {}
     kaynak_uv_id    = data.get('kaynak_uv_id')
     test_tipi       = (data.get('test_tipi') or 'RENK_TEST').strip().upper()
     makina          = (data.get('makina') or '7.5 LT').strip()
     yeni_renk_adi   = (data.get('yeni_renk_adi') or '').strip() or None
-    notlar          = (data.get('notlar') or '').strip() or None
+    notlar          = (data.get('notlar') or data.get('aciklama') or '').strip() or None
     cari_id         = data.get('cari_id') or None
     talep_referansi = (data.get('talep_referansi') or '').strip() or None
     lot_no_giris    = (data.get('lot_no') or '').strip() or None
@@ -1348,7 +1354,7 @@ def api_arge_test_olustur():
         shore_hedef = None
 
     try:
-        test_batch_kg = float(data.get('test_batch_kg') or 0)
+        test_batch_kg = float(data.get('test_batch_kg') or data.get('test_kg') or 0)
     except (ValueError, TypeError):
         return jsonify({"ok": False, "hata": "test_batch_kg geçersiz."}), 400
 
@@ -5627,7 +5633,7 @@ def tablet_uretim():
 def tablet_arge():
     con = _db()
     try:
-        # Tüm aktif formüller ve varyantları (AR-GE için herhangi bir ONAYLI/TASLAK/DENEME da olabilir)
+        # Kaynak reçetesi olan tüm aktif varyantlar (TASLAK dahil — AR-GE kaynak seçimi)
         varyantlar = con.execute("""
             SELECT uv.id, uv.boyut, uv.ad, uv.recete_durum,
                    rv.ad AS renk_ad,
@@ -5637,12 +5643,12 @@ def tablet_arge():
             FROM nexgen_uretim_varyant uv
             JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
             JOIN nexgen_formul f        ON f.id  = rv.formul_id
-            LEFT JOIN nexgen_recete_kalem rk
+            JOIN nexgen_recete_kalem rk
                    ON rk.uretim_varyant_id = uv.id AND rk.aktif = 1
             WHERE uv.aktif = 1 AND rv.aktif = 1 AND f.aktif = 1
-              AND uv.recete_durum IN ('URETIME_ACIK','ONAYLI','DENEME')
-              AND rk.id IS NOT NULL
+              AND uv.recete_durum != 'PASIF'
             GROUP BY uv.id
+            HAVING kalem_say > 0
             ORDER BY f.kod, rv.ad, uv.boyut
         """).fetchall()
         varyantlar = [dict(v) for v in varyantlar]

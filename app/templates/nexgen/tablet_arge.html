@@ -25,12 +25,17 @@
 
   <div class="ta-icerik">
 
+    <div class="ta-amac-banner">
+      Bu ekran tablet üzerinden hızlı AR-GE denemesi başlatmak içindir.
+      Yönetici takibi <a href="/nexgen/arge">ARGE Merkezi</a> ekranındadır.
+    </div>
+
     {% if not varyantlar %}
     {# ── Formül yok durumu ── #}
     <div class="ta-bos-kart">
       <div class="ta-bos-ikon">🧪</div>
-      <div class="ta-bos-baslik">Üretime açık formül seçilmelidir</div>
-      <div class="ta-bos-metin">Önce reçete merkezinde bir formül üretime açılmalıdır.</div>
+      <div class="ta-bos-baslik">AR-GE için formül seçilmelidir</div>
+      <div class="ta-bos-metin">Henüz kullanılabilir formül eklenmemiş.<br>Planlama ekibiyle görüşün veya Formül Merkezine gidin.</div>
       <a href="/nexgen/recete/" class="ta-formul-git-btn">FORMÜL MERKEZİNE GİT →</a>
     </div>
 
@@ -179,6 +184,14 @@
   max-width: 1180px; margin: 0 auto;
   padding: 24px 20px 40px;
 }
+
+.ta-amac-banner {
+  background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 12px;
+  padding: 12px 16px; margin-bottom: 16px;
+  font-size: 14px; color: #4c1d95; line-height: 1.5;
+}
+.ta-amac-banner a { color: #6d28d9; font-weight: 700; text-decoration: none; }
+.ta-amac-banner a:hover { text-decoration: underline; }
 
 /* Boş durum */
 .ta-bos-kart {
@@ -442,14 +455,19 @@ function taBaslat() {
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({
       kaynak_uv_id:  _taUvId,
-      test_kg:       parseFloat(_taTestKg.toFixed(3)),
+      test_batch_kg: parseFloat(_taTestKg.toFixed(3)),
       yeni_renk_adi: renk.toUpperCase(),
       makina:        _taTestKg + ' LT',
       test_tipi:     'RENK_TEST',
-      aciklama:      not || null,
+      notlar:        not || null,
     })
   })
-  .then(function(r){ return r.json(); })
+  .then(function(r){
+    if (r.status === 403) {
+      throw new Error('Yetki yok — tablet veya AR-GE oluşturma izni gerekli.');
+    }
+    return r.json();
+  })
   .then(function(d) {
     document.getElementById('ta-yukleniyor').style.display = 'none';
     if (d.ok || d.test_id) {
@@ -460,9 +478,9 @@ function taBaslat() {
       document.getElementById('ta-baslat-btn').disabled = false;
     }
   })
-  .catch(function(){
+  .catch(function(err){
     document.getElementById('ta-yukleniyor').style.display = 'none';
-    alert('Bağlantı hatası.');
+    alert(err && err.message ? err.message : 'Bağlantı hatası.');
     document.getElementById('ta-baslat-btn').disabled = false;
   });
 }
