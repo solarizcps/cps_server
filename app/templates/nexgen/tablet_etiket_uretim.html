@@ -7,7 +7,7 @@
   {# ── Üst Bar ── #}
   <div class="etiket-topbar no-print">
     <div class="etiket-topbar-ic">
-      <a href="/nexgen/tablet/kod/{{ batch.batch_kodu }}" class="etiket-geri">
+      <a href="/nexgen/tablet/uretim-islem/{{ batch.batch_kodu }}" class="etiket-geri">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
              stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
           <polyline points="15 18 9 12 15 6"/>
@@ -52,6 +52,19 @@
 
       {# Ana bilgi satırları #}
       <div class="et-bilgi-grid">
+        {% if batch.musteri_adi %}
+        {% set _et_cad = batch.musteri_adi %}{% if ' - ' in _et_cad %}{% set _et_pfx = _et_cad.split(' - ', 1)[0] %}{% if '.' in _et_pfx and ' ' not in _et_pfx %}{% set _et_cad = _et_cad.split(' - ', 1)[1] %}{% endif %}{% endif %}
+        <div class="et-bilgi-satir et-bilgi-cari">
+          <span class="et-etiket">CARİ</span>
+          <span class="et-deger">{{ _et_cad }}</span>
+        </div>
+        {% endif %}
+        {% if batch.siparis_no %}
+        <div class="et-bilgi-satir">
+          <span class="et-etiket">SİPARİŞ</span>
+          <span class="et-deger">{{ batch.siparis_no }}</span>
+        </div>
+        {% endif %}
         <div class="et-bilgi-satir">
           <span class="et-etiket">FORMÜL</span>
           <span class="et-deger">{{ batch.formul_ad }}</span>
@@ -62,7 +75,7 @@
         </div>
         <div class="et-bilgi-satir">
           <span class="et-etiket">BOYUT</span>
-          <span class="et-deger">{{ 'BÜYÜK BOY' if batch.boyut == 'LARGE' else 'KÜÇÜK BOY' if batch.boyut == 'SMALL' else batch.boyut }}</span>
+          <span class="et-deger">{{ batch.boyut }}</span>
         </div>
         <div class="et-bilgi-satir">
           <span class="et-etiket">MİKTAR</span>
@@ -139,6 +152,9 @@
   </div>{# /etiket-kapsayici #}
 
   {# ── Ekran bilgisi (no-print) ── #}
+  {# Alt emir görüntü prefix: LARGE→L, SMALL→S #}
+  {% set _ae_prefix = 'L' if batch.boyut == 'LARGE' else ('S' if batch.boyut == 'SMALL' else '') %}
+
   <div class="etiket-ekran-bilgi no-print">
     <div class="eeb-satir">
       <span class="eeb-etiket">Batch Kodu</span>
@@ -148,6 +164,20 @@
       <span class="eeb-etiket">LOT Kodu</span>
       <span class="eeb-deger eeb-lot">{{ batch.lot_kodu }}</span>
     </div>
+    {% if batch.boyut %}
+    <div class="eeb-satir">
+      <span class="eeb-etiket">Boyut</span>
+      <span class="eeb-deger">{{ batch.boyut }}</span>
+    </div>
+    {% endif %}
+    {% if batch.siparis_no and _ae_prefix %}
+    <div class="eeb-satir">
+      <span class="eeb-etiket">Alt Emir Prefix</span>
+      <span class="eeb-deger" style="font-family:monospace;color:#0f172a">
+        {{ batch.siparis_no }}-{{ _ae_prefix }}1001 … {{ _ae_prefix }}xxxx
+      </span>
+    </div>
+    {% endif %}
     {% if batch.kazan_sayisi %}
     <div class="eeb-satir">
       <span class="eeb-etiket">Kazan Sayısı</span>
@@ -162,8 +192,8 @@
 
   {# ── Alt Navigasyon ── #}
   <div class="etiket-alt-nav no-print">
-    <a href="/nexgen/tablet/uretim" class="ean-btn ean-btn-ana">+ Yeni Üretim</a>
-    <a href="/nexgen/tablet/devam-edenler" class="ean-btn ean-btn-sec">Devam Edenler</a>
+    <a href="/nexgen/tablet" class="ean-btn ean-btn-ana">← Sipariş Listesi</a>
+    <a href="/nexgen/tablet" class="ean-btn ean-btn-sec">Operatör Ekranı</a>
     <a href="/nexgen/tablet" class="ean-btn ean-btn-sec">Ana Ekran</a>
   </div>
 

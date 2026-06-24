@@ -1,473 +1,1037 @@
 {% extends "base.html" %}
-{% set page_title = "NexGen Tablet — Operatör Paneli" %}
-
+{% set page_title = "NexGen Tablet — Operatör Ekranı" %}
+<!-- NEXGEN TABLET V5 ACTIVE -->
 {% block content %}
-<div class="tb-ana">
 
-  {# ══ SARI ÜST BAR ════════════════════════════════════════════════ #}
-  <div class="tb-topbar">
-    <div class="tb-topbar-ic">
-      <div class="tb-topbar-sol">
-        <div class="tb-logo-kutu">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-               stroke-linecap="round" stroke-linejoin="round" width="22" height="22">
-            <rect x="2" y="3" width="20" height="14" rx="2"/>
-            <path d="M8 21h8M12 17v4"/>
+{# ── Tüm batch verisini JSON olarak JS'e aktar ─────────────────── #}
+<script>
+var _BATCHLER = {{ devam_eden_batches | tojson | safe }};
+var _PLAN_ISLER = {{ plan_isler | tojson | safe }};
+var _PARCA_VAR = {% if devam_eden_batches and devam_eden_batches[0]['toplam_alt_emir'] is not none %}true{% else %}false{% endif %};
+</script>
+
+<div class="nxt-ana">
+
+  {# ══ ÜST BAR ════════════════════════════════════════════════════ #}
+  <div class="nxt-topbar">
+    <div class="nxt-topbar-ic">
+
+      {# Sol: NexGen logo + başlık #}
+      <div class="nxt-tb-sol">
+        <div class="nxt-logo-yazi">
+          <div class="nxt-logo-nexgen">NEX<span>GEN</span><span class="nxt-logo-r">®</span></div>
+          <div class="nxt-logo-slogan">YENİ NESİL KİMYA</div>
+        </div>
+        <div class="nxt-logo-ayrac"></div>
+        <div class="nxt-tb-baslik-blok">
+          <div class="nxt-tb-buyuk">NEXGEN TABLET — OPERATÖR EKRANI</div>
+        </div>
+      </div>
+
+      {# Sağ: Aktif iş + Ana Ekran + Saat #}
+      <div class="nxt-tb-sag">
+        <div class="nxt-aktif-rozet" id="nxt-aktif-rozet" style="display:none">
+          <span class="nxt-rozet-nokta"></span>
+          <span id="nxt-aktif-sayi">0</span> Aktif İş
+        </div>
+        <a href="/nexgen/" class="nxt-tb-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               width="14" height="14">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
           </svg>
-        </div>
-        <div>
-          <div class="tb-topbar-kucuk">NEXGEN</div>
-          <div class="tb-topbar-buyuk">OPERATÖR PANELİ</div>
-        </div>
-      </div>
-      <div class="tb-topbar-sag">
-        {% if devam_eden_batches %}
-        <span class="tb-aktif-rozet">
-          <span class="tb-rozet-nokta"></span>
-          {{ devam_eden_batches|length }} Aktif
-        </span>
-        {% endif %}
-        <a href="/nexgen/" class="tb-topbar-btn">Ana Sayfa</a>
-        <div class="tb-saat-blok" id="tb-saat"></div>
-      </div>
-    </div>
-  </div>
-
-  {# ══ ANA İÇERİK ═══════════════════════════════════════════════════ #}
-  <div class="tb-icerik">
-
-    {# ════════════════════════════════════════════════════════════════
-       BÖLÜM 1 — BUGÜNKÜ İŞLER (Plan'dan gelenler)
-    ══════════════════════════════════════════════════════════════════ #}
-    {% if plan_isler %}
-    <div class="tb-bolum-baslik">
-      <span class="tb-bolum-nokta"></span>
-      BUGÜNKÜ İŞLER
-      <span class="tb-bolum-sayi">{{ plan_isler|length }}</span>
-    </div>
-
-    <div class="tb-is-listesi">
-      {% for p in plan_isler %}
-      <div class="tb-is-kart">
-        <div class="tb-is-sira">{{ loop.index }}</div>
-        <div class="tb-is-bilgi">
-          {% if p.musteri_adi %}
-          <div class="tb-is-cari">{{ p.musteri_adi }}</div>
-          {% endif %}
-          <div class="tb-is-formul">{{ p.formul_ad }}</div>
-          <div class="tb-is-varyant">
-            {{ p.renk_ad }}
-            <span class="tb-is-boyut">
-              {{ p.boyut }}
-            </span>
-          </div>
-          {% if p.notlar %}<div class="tb-is-not">{{ p.notlar }}</div>{% endif %}
-        </div>
-        <div class="tb-is-sag">
-          <div class="tb-is-kg">{{ p.planlanan_kg | int }}<span class="tb-is-kg-birim">KG</span></div>
-          <button class="tb-is-basla-btn"
-                  onclick="planBasla({{ p.plan_id }}, '{{ p.formul_ad }} {{ p.renk_ad }}')"
-                  data-plan-id="{{ p.plan_id }}">
-            BAŞLA ▶
-          </button>
+          Ana Ekran
+        </a>
+        <div class="nxt-saat-blok">
+          <div class="nxt-saat" id="nxt-saat-val">--:--</div>
+          <div class="nxt-tarih" id="nxt-tarih-val">--.--.----</div>
         </div>
       </div>
-      {% endfor %}
-    </div>
-    {% endif %}
 
-    {# ════════════════════════════════════════════════════════════════
-       BÖLÜM 2 — DEVAM EDEN ÜRETİMLER (Aktif batch'ler)
-    ══════════════════════════════════════════════════════════════════ #}
-    {% if devam_eden_batches %}
-    <div class="tb-bolum-baslik tb-bolum-devam">
-      <span class="tb-bolum-nokta tb-nokta-yesil"></span>
-      DEVAM EDEN ÜRETİMLER
-      <a href="/nexgen/tablet/devam-edenler" class="tb-bolum-link">Tümünü Gör →</a>
     </div>
-    <div class="tb-devam-panel">
-      {% for b in devam_eden_batches[:3] %}
-      <div class="tb-devam-satir">
-        <div class="tb-devam-sol">
-          <div class="tb-devam-ad">{{ b.formul_ad or '—' }}</div>
-          <div class="tb-devam-detay">
-            {{ b.renk_ad or '' }}{% if b.boyut %} · {{ b.boyut }}{% endif %}
-          </div>
-        </div>
-        <div class="tb-devam-sag">
-          <div class="tb-devam-kg">{{ b.planlanan_kg | int }} KG</div>
-          <span class="tb-devam-durum {{ 'tb-d-hazir' if b.durum == 'HAZIR' else 'tb-d-taslak' }}">{{ b.durum }}</span>
-        </div>
-        <a href="/nexgen/tablet/kod/{{ b.batch_kodu }}" class="tb-devam-devam-btn">›</a>
-      </div>
-      {% endfor %}
-      {% if devam_eden_batches|length > 3 %}
-      <div class="tb-devam-daha">
-        <a href="/nexgen/tablet/devam-edenler">+ {{ devam_eden_batches|length - 3 }} daha</a>
-      </div>
-      {% endif %}
-    </div>
-    {% endif %}
 
-    {# ════════════════════════════════════════════════════════════════
-       BÖLÜM 3 — AKSİYON BUTONLARI (alt)
-    ══════════════════════════════════════════════════════════════════ #}
-    <div class="tb-bolum-baslik tb-bolum-aksiyonlar">
-      <span class="tb-bolum-nokta tb-nokta-gri"></span>
-      DİĞER İŞLEMLER
-    </div>
-    <div class="tb-aksiyon-grid">
-
-      {# Manuel Üretim #}
-      {% if can_uretim %}
-      <a href="/nexgen/tablet/uretim" class="tb-aksiyon-kart tb-ak-uretim">
-        <div class="tb-ak-ikon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-               stroke-linecap="round" stroke-linejoin="round" width="26" height="26">
-            <path d="M2 20h.01M7 20v-4a2 2 0 0 0-2-2H3a1 1 0 0 0-1 1v5"/>
-            <path d="M22 20H12V8l-4-4V3a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v1l-4 4v12"/>
-            <path d="M17 20v-9M22 15h-5M22 11h-5"/>
+    {# Alt menü #}
+    <div class="nxt-alt-menu">
+      <div class="nxt-alt-menu-ic">
+        <a class="nxt-amenu-item nxt-amenu-aktif" href="/nexgen/tablet">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               width="13" height="13">
+            <rect x="3" y="3" width="7" height="7" rx="1"/>
+            <rect x="14" y="3" width="7" height="7" rx="1"/>
+            <rect x="3" y="14" width="7" height="7" rx="1"/>
+            <rect x="14" y="14" width="7" height="7" rx="1"/>
           </svg>
-        </div>
-        <div class="tb-ak-ic">
-          <div class="tb-ak-baslik">Manuel Üretim</div>
-          <div class="tb-ak-alt">Formül seç · Batch başlat</div>
-        </div>
-        <div class="tb-ak-ok">›</div>
-      </a>
-      {% endif %}
-
-      {# Geri Dönüşüm #}
-      <a href="/nexgen/tablet/geri-donusum" class="tb-aksiyon-kart tb-ak-recycle">
-        <div class="tb-ak-ikon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-               stroke-linecap="round" stroke-linejoin="round" width="26" height="26">
+          Siparişler
+        </a>
+        <a class="nxt-amenu-item" href="/nexgen/tablet/geri-donusum">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               width="13" height="13">
             <polyline points="1 4 1 10 7 10"/>
             <polyline points="23 20 23 14 17 14"/>
             <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/>
           </svg>
-        </div>
-        <div class="tb-ak-ic">
-          <div class="tb-ak-baslik">Geri Dönüşüm</div>
-          <div class="tb-ak-alt">Günlük kazanım gir</div>
-        </div>
-        <div class="tb-ak-ok">›</div>
-      </a>
-
-      {# AR-GE #}
-      <a href="/nexgen/tablet/arge" class="tb-aksiyon-kart tb-ak-arge">
-        <div class="tb-ak-ikon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-               stroke-linecap="round" stroke-linejoin="round" width="26" height="26">
-            <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v11m0 0H5a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2a2 2 0 0 0-2-2H9z"/>
+          Geri Dönüşüm
+        </a>
+        <a class="nxt-amenu-item" href="/nexgen/tablet/uretim">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               width="13" height="13">
+            <path d="M10 2v8L4.72 20.55A1 1 0 0 0 5.68 22h12.64a1 1 0 0 0 .96-1.45L14 10V2"/>
+            <path d="M8.5 2h7"/>
           </svg>
-        </div>
-        <div class="tb-ak-ic">
-          <div class="tb-ak-baslik">AR-GE</div>
-          <div class="tb-ak-alt">Yeni renk denemesi</div>
-        </div>
-        <div class="tb-ak-ok">›</div>
-      </a>
-
-      {# Barkod Okut #}
-      <a href="/nexgen/tablet/barkod" class="tb-aksiyon-kart tb-ak-barkod">
-        <div class="tb-ak-ikon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-               stroke-linecap="round" stroke-linejoin="round" width="26" height="26">
-            <path d="M3 5h2M3 10h2M3 15h2M3 20h2M19 5h2M19 10h2M19 15h2M19 20h2"/>
-            <rect x="7" y="3" width="2" height="18" rx="1"/>
-            <rect x="11" y="3" width="3" height="18" rx="1"/>
-            <rect x="16" y="3" width="2" height="18" rx="1"/>
+          Ar-Ge
+        </a>
+        <a class="nxt-amenu-item" href="/nexgen/">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               width="13" height="13">
+            <path d="M18 20V10M12 20V4M6 20v-6"/>
           </svg>
-        </div>
-        <div class="tb-ak-ic">
-          <div class="tb-ak-baslik">Barkod Okut</div>
-          <div class="tb-ak-alt">LOT / batch sorgula</div>
-        </div>
-        <div class="tb-ak-ok">›</div>
-      </a>
-
-      {# Formül İncele #}
-      <a href="/nexgen/recete/" class="tb-aksiyon-kart tb-ak-formul">
-        <div class="tb-ak-ikon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-               stroke-linecap="round" stroke-linejoin="round" width="26" height="26">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-            <line x1="16" y1="13" x2="8" y2="13"/>
-            <line x1="16" y1="17" x2="8" y2="17"/>
+          Raporlar
+        </a>
+        <a class="nxt-amenu-item" href="/nexgen/">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               width="13" height="13">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
           </svg>
-        </div>
-        <div class="tb-ak-ic">
-          <div class="tb-ak-baslik">Formül İncele</div>
-          <div class="tb-ak-alt">Reçete listesi</div>
-        </div>
-        <div class="tb-ak-ok">›</div>
-      </a>
-
-    </div>{# /tb-aksiyon-grid #}
-
-    {# Hiçbir iş yoksa büyük çağrı bloğu #}
-    {% if not plan_isler and not devam_eden_batches %}
-    <div class="tb-bos-blok">
-      <div class="tb-bos-ikon">📋</div>
-      <div class="tb-bos-baslik">Bugün için iş yok</div>
-      <div class="tb-bos-alt">Planlama ekibinin iş oluşturmasını bekleyin<br>veya manuel üretim başlatın.</div>
-      {% if can_uretim %}
-      <a href="/nexgen/tablet/uretim" class="tb-bos-btn">Manuel Üretim Başlat</a>
-      {% endif %}
+          Ayarlar
+        </a>
+        {% if can_uretim %}
+        <a class="nxt-amenu-item nxt-amenu-yeni" href="/nexgen/tablet/uretim">
+          + Yeni Üretim
+        </a>
+        {% endif %}
+      </div>
     </div>
-    {% endif %}
 
-  </div>{# /tb-icerik #}
+  </div>{# /topbar #}
 
-</div>{# /tb-ana #}
+  {# ══ FİLTRE + ARAMA ═════════════════════════════════════════════ #}
+  <div class="nxt-filtre-bar">
+    <div class="nxt-filtre-ic">
+      <div class="nxt-filtre-sekmeler">
+        <button class="nxt-fsekme nxt-fsekme-aktif" data-filtre="tumu" onclick="filtreUygula('tumu',this)">
+          Tümü <span class="nxt-fsayi" id="fs-tumu">0</span>
+        </button>
+        <button class="nxt-fsekme" data-filtre="hazir" onclick="filtreUygula('hazir',this)">
+          Hazır <span class="nxt-fsayi" id="fs-hazir">0</span>
+        </button>
+        <button class="nxt-fsekme" data-filtre="devam" onclick="filtreUygula('devam',this)">
+          Üretimde <span class="nxt-fsayi" id="fs-devam">0</span>
+        </button>
+        <button class="nxt-fsekme" data-filtre="bekleme" onclick="filtreUygula('bekleme',this)">
+          Beklemede <span class="nxt-fsayi" id="fs-bekleme">0</span>
+        </button>
+        <button class="nxt-fsekme" data-filtre="bitti" onclick="filtreUygula('bitti',this)">
+          Bitti <span class="nxt-fsayi" id="fs-bitti">0</span>
+        </button>
+      </div>
+      <div class="nxt-arama-wrap">
+        <svg class="nxt-arama-ikon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" width="13" height="13">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input type="text" id="nxt-arama" class="nxt-arama"
+               placeholder="Sipariş No, Cari, Ürün ara..."
+               oninput="aramaUygula(this.value)">
+        <svg class="nxt-filtre-ikon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" width="14" height="14">
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+        </svg>
+      </div>
+    </div>
+  </div>
 
-<style>
-* { box-sizing: border-box; }
+  {# ══ ANA İÇERİK ═════════════════════════════════════════════════ #}
+  <div class="nxt-icerik">
 
-.tb-ana {
-  min-height: calc(100vh - 56px);
-  background: #eef2f6;
-}
+    {# Kart listesi — JS tarafından doldurulur #}
+    <div id="nxt-kart-liste" class="nxt-kart-liste"></div>
 
-/* ── Üst bar ── */
-.tb-topbar {
-  background: linear-gradient(135deg, #f6c343 0%, #f5b82e 100%);
-  border-bottom: 3px solid #e9a910;
-}
-.tb-topbar-ic {
-  max-width: 1180px; margin: 0 auto;
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 20px;
-}
-.tb-topbar-sol { display: flex; align-items: center; gap: 12px; }
-.tb-logo-kutu {
-  width: 44px; height: 44px; border-radius: 12px;
-  background: rgba(0,0,0,.15);
-  display: flex; align-items: center; justify-content: center;
-  color: #1a1a1a;
-}
-.tb-topbar-kucuk { font-size: 10px; font-weight: 800; color: rgba(0,0,0,.5); letter-spacing: 3px; text-transform: uppercase; }
-.tb-topbar-buyuk { font-size: 18px; font-weight: 900; color: #1a1a1a; }
-.tb-topbar-sag { display: flex; align-items: center; gap: 10px; }
-.tb-aktif-rozet {
-  display: flex; align-items: center; gap: 6px;
-  background: #dc2626; color: #fff;
-  font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 20px;
-}
-.tb-rozet-nokta {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: #fca5a5; animation: blink 1.2s infinite;
-}
-@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.4} }
-.tb-topbar-btn {
-  font-size: 13px; font-weight: 700; color: rgba(0,0,0,.7);
-  text-decoration: none; padding: 8px 16px;
-  background: rgba(255,255,255,.5); border-radius: 10px;
-}
-.tb-topbar-btn:hover { background: rgba(255,255,255,.75); }
-.tb-saat-blok { font-size: 13px; font-weight: 700; color: rgba(0,0,0,.55); font-variant-numeric: tabular-nums; min-width: 74px; text-align: right; }
+    {# Boş durum #}
+    <div id="nxt-bos" class="nxt-bos" style="display:none">
+      <div class="nxt-bos-ikon">📋</div>
+      <div class="nxt-bos-baslik">Şu an aktif sipariş yok</div>
+      <div class="nxt-bos-alt">Planlama ekibinin iş oluşturmasını bekleyin.</div>
+    </div>
 
-/* ── İçerik ── */
-.tb-icerik {
-  max-width: 860px; margin: 0 auto;
-  padding: 20px 16px 48px;
-}
+    {# Arama bulunamadı #}
+    <div id="nxt-bos-arama" class="nxt-bos nxt-bos-arama" style="display:none">
+      <div class="nxt-bos-ikon">🔍</div>
+      <div class="nxt-bos-baslik">Sonuç bulunamadı.</div>
+    </div>
 
-/* ── Bölüm başlıkları ── */
-.tb-bolum-baslik {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 11px; font-weight: 800; color: #64748b;
-  letter-spacing: 2px; text-transform: uppercase;
-  margin: 0 0 10px 0;
-}
-.tb-bolum-sayi {
-  background: #f59e0b; color: #fff;
-  font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 10px;
-}
-.tb-bolum-link { margin-left: auto; font-size: 11px; color: #3b82f6; text-decoration: none; font-weight: 600; }
-.tb-bolum-devam { margin-top: 20px; }
-.tb-bolum-aksiyonlar { margin-top: 24px; }
-.tb-bolum-nokta { width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; flex-shrink: 0; }
-.tb-nokta-yesil { background: #22c55e; }
-.tb-nokta-gri   { background: #94a3b8; }
+    {# Sayfalama #}
+    <div id="nxt-sayfalama" class="nxt-sayfalama" style="display:none">
+      <div class="nxt-sp-sol">
+        <button class="nxt-sp-tumunu" id="nxt-sp-tumunu" onclick="tumunuGoster()">Tümünü Göster</button>
+        <span class="nxt-sp-toplam" id="nxt-sp-toplam"></span>
+      </div>
+      <div class="nxt-sp-sayfalar" id="nxt-sp-sayfalar"></div>
+      <div class="nxt-sp-sag">
+        Sayfa başına:
+        <select class="nxt-sp-select" onchange="sayfaBoyutu(this.value)">
+          <option value="10" selected>10</option>
+          <option value="5">5</option>
+          <option value="20">20</option>
+          <option value="50">50</option>
+        </select>
+      </div>
+    </div>
 
-/* ════════════════════════════════════════════════════════════
-   BUGÜNKÜ İŞLER — Plan kartları
-══════════════════════════════════════════════════════════════ */
-.tb-is-listesi {
-  display: flex; flex-direction: column; gap: 10px;
-  margin-bottom: 4px;
-}
-.tb-is-kart {
-  background: #fff; border: 2px solid #fde047;
-  border-radius: 16px; padding: 16px 18px;
-  display: flex; align-items: center; gap: 14px;
-  box-shadow: 0 2px 12px rgba(246,195,67,.15);
-  transition: box-shadow .12s;
-}
-.tb-is-kart:hover { box-shadow: 0 4px 20px rgba(246,195,67,.3); }
+  </div>{# /icerik #}
 
-.tb-is-sira {
-  width: 36px; height: 36px; border-radius: 50%;
-  background: #fef9c3; border: 2px solid #fde047;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 16px; font-weight: 900; color: #854d0e;
-  flex-shrink: 0;
-}
-.tb-is-bilgi { flex: 1; min-width: 0; }
-.tb-is-cari { font-size: 10px; font-weight: 800; color: #f6c343; background: #1e293b; display: inline-block; padding: 2px 7px; border-radius: 4px; letter-spacing: .5px; margin-bottom: 3px; }
-.tb-is-formul { font-size: 18px; font-weight: 900; color: #1e293b; }
-.tb-is-varyant {
-  font-size: 13px; color: #64748b; margin-top: 3px;
-  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-}
-.tb-is-boyut {
-  font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 4px;
-  background: #e0f2fe; color: #0369a1;
-}
-.tb-is-not { font-size: 11px; color: #94a3b8; margin-top: 4px; }
+</div>{# /ana #}
 
-.tb-is-sag { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex-shrink: 0; }
-.tb-is-kg {
-  font-size: 26px; font-weight: 900; color: #f59e0b;
-  line-height: 1; white-space: nowrap;
-}
-.tb-is-kg-birim { font-size: 13px; font-weight: 700; color: #d97706; margin-left: 3px; }
-
-.tb-is-basla-btn {
-  padding: 11px 22px; background: #f6c343; color: #1a1a1a;
-  border: none; border-radius: 12px;
-  font-size: 15px; font-weight: 900; letter-spacing: .5px;
-  cursor: pointer; white-space: nowrap;
-  transition: background .12s, transform .1s;
-  box-shadow: 0 2px 8px rgba(246,195,67,.4);
-}
-.tb-is-basla-btn:hover { background: #e9b020; transform: scale(1.03); }
-.tb-is-basla-btn:active { transform: scale(.97); }
-
-/* ════════════════════════════════════════════════════════════
-   DEVAM EDEN ÜRETİMLER
-══════════════════════════════════════════════════════════════ */
-.tb-devam-panel {
-  background: #fff; border: 1px solid #e5e7eb; border-radius: 14px;
-  overflow: hidden; margin-bottom: 4px;
-}
-.tb-devam-satir {
-  display: flex; align-items: center; gap: 10px;
-  padding: 13px 16px; border-bottom: 1px solid #f8fafc;
-}
-.tb-devam-satir:last-child { border-bottom: none; }
-.tb-devam-sol { flex: 1; }
-.tb-devam-ad { font-size: 14px; font-weight: 700; color: #1e293b; }
-.tb-devam-detay { font-size: 11px; color: #94a3b8; margin-top: 1px; }
-.tb-devam-sag { text-align: right; }
-.tb-devam-kg { font-size: 15px; font-weight: 800; color: #f59e0b; }
-.tb-devam-durum { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; display: inline-block; }
-.tb-d-hazir  { background: #dcfce7; color: #15803d; }
-.tb-d-taslak { background: #fef9c3; color: #854d0e; }
-.tb-devam-devam-btn {
-  width: 36px; height: 36px; border-radius: 10px;
-  background: #f8fafc; border: 1.5px solid #e5e7eb;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 20px; color: #64748b; text-decoration: none;
-  flex-shrink: 0;
-}
-.tb-devam-devam-btn:hover { background: #f6c343; border-color: #f6c343; color: #1a1a1a; }
-.tb-devam-daha { padding: 10px 16px; text-align: center; }
-.tb-devam-daha a { font-size: 12px; color: #3b82f6; text-decoration: none; font-weight: 600; }
-
-/* ════════════════════════════════════════════════════════════
-   AKSİYON GRID
-══════════════════════════════════════════════════════════════ */
-.tb-aksiyon-grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
-}
-.tb-aksiyon-kart {
-  display: flex; align-items: center; gap: 12px;
-  background: #fff; border: 2px solid #e5e7eb; border-radius: 14px;
-  padding: 15px 14px; text-decoration: none;
-  transition: all .12s;
-}
-.tb-aksiyon-kart:hover { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(15,23,42,.08); }
-.tb-ak-ikon {
-  width: 46px; height: 46px; border-radius: 12px;
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-}
-.tb-ak-ic { flex: 1; min-width: 0; }
-.tb-ak-baslik { font-size: 14px; font-weight: 800; color: #1e293b; }
-.tb-ak-alt { font-size: 11px; color: #9ca3af; margin-top: 1px; }
-.tb-ak-ok { font-size: 18px; color: #94a3b8; font-weight: 700; flex-shrink: 0; }
-
-/* Renk kodları */
-.tb-ak-uretim  .tb-ak-ikon { background: #fef9c3; color: #d97706; }
-.tb-ak-uretim  { border-color: #fde047; }
-.tb-ak-recycle .tb-ak-ikon { background: #ffedd5; color: #ea580c; }
-.tb-ak-arge    .tb-ak-ikon { background: #ede9fe; color: #7c3aed; }
-.tb-ak-barkod  .tb-ak-ikon { background: #dcfce7; color: #16a34a; }
-.tb-ak-formul  .tb-ak-ikon { background: #dbeafe; color: #1d4ed8; }
-
-/* ── Boş durum ── */
-.tb-bos-blok {
-  text-align: center; padding: 48px 24px 32px;
-  background: #fff; border-radius: 18px; border: 1.5px dashed #e2e8f0;
-  margin-top: 8px;
-}
-.tb-bos-ikon { font-size: 52px; margin-bottom: 12px; }
-.tb-bos-baslik { font-size: 20px; font-weight: 900; color: #1e293b; margin-bottom: 8px; }
-.tb-bos-alt { font-size: 14px; color: #94a3b8; line-height: 1.6; margin-bottom: 20px; }
-.tb-bos-btn {
-  display: inline-block; padding: 14px 32px;
-  background: #f6c343; color: #1a1a1a; border-radius: 14px;
-  font-size: 16px; font-weight: 800; text-decoration: none;
-}
-
-/* Responsive */
-@media (max-width: 600px) {
-  .tb-icerik { padding: 14px 12px 40px; }
-  .tb-aksiyon-grid { grid-template-columns: 1fr; }
-  .tb-is-kart { flex-wrap: wrap; }
-  .tb-is-sag { flex-direction: row; align-items: center; gap: 12px; width: 100%; justify-content: space-between; }
-  .tb-topbar-buyuk { font-size: 15px; }
-  .tb-saat-blok { display: none; }
-}
-</style>
+{# ══ L/S SEÇİM MODALI ═══════════════════════════════════════════ #}
+<div class="nxt-modal-overlay" id="nxt-ls-modal" style="display:none" onclick="lsModalKapat(event)">
+  <div class="nxt-modal">
+    <div class="nxt-modal-baslik">Hangi boyuta devam edeceksiniz?</div>
+    <div class="nxt-modal-altyazi">Aynı sipariş için LARGE ve SMALL üretimleri ayrı takip edilir.</div>
+    <div class="nxt-modal-butonlar" id="nxt-modal-butonlar"></div>
+    <button class="nxt-modal-iptal" onclick="document.getElementById('nxt-ls-modal').style.display='none'">İptal</button>
+  </div>
+</div>
 
 <script>
-(function(){
-  function guncelle(){
-    var d = new Date();
-    var p = function(n){ return n < 10 ? '0'+n : n; };
-    var el = document.getElementById('tb-saat');
-    if (el) el.textContent = p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
-  }
-  guncelle();
-  setInterval(guncelle, 1000);
-})();
+/* ═══════════════════════════════════════════════════════════
+   DURUM
+═══════════════════════════════════════════════════════════ */
+var _aktifFiltre = 'tumu';
+var _aktifArama  = '';
+var _aktifSayfa  = 1;
+var _sayfaBoyutu = 10;
+var _gruplar     = [];   // sipariş bazlı gruplar
+var _tumGoster   = false;
 
+/* ═══════════════════════════════════════════════════════════
+   1. VERİ GRUPLAMA — siparis_no veya formul+renk bazlı
+═══════════════════════════════════════════════════════════ */
+function veriGrupla() {
+  var harita = {};
+  var sira   = [];
+
+  // a) Batch olan işler
+  _BATCHLER.forEach(function(b) {
+    var key = b.siparis_no || ('_b_' + b.batch_kodu);
+    if (!harita[key]) {
+      harita[key] = {
+        key:        key,
+        siparis_no: b.siparis_no || b.batch_kodu,
+        musteri_adi: b.musteri_adi || '—',
+        formul_ad:  b.formul_ad || '—',
+        renk_ad:    b.renk_ad || '',
+        plan_tarihi: b.olusturma_tarihi || '',
+        boyutlar:   [],
+        tip:        'batch'
+      };
+      sira.push(key);
+    }
+    // cari temizle
+    var cad = harita[key].musteri_adi;
+    if (cad.indexOf(' - ') !== -1) {
+      var pfx = cad.split(' - ')[0];
+      if (pfx.indexOf('.') !== -1 && pfx.indexOf(' ') === -1) {
+        harita[key].musteri_adi = cad.split(' - ').slice(1).join(' - ');
+      }
+    }
+
+    // Emir sayıları
+    var toplam  = b.toplam_alt_emir || 0;
+    var biten   = b.biten_alt_emir  || 0;
+    var devamda = 0; // batch bazlı devamda sayısı: durum DEVAM ise 1 varsay
+    if (b.durum === 'DEVAM' && biten < toplam) devamda = 1;
+    var kalan   = Math.max(0, toplam - biten - devamda);
+
+    harita[key].boyutlar.push({
+      boyut:      b.boyut || 'STD',
+      batch_kodu: b.batch_kodu,
+      durum:      b.durum,
+      planlanan_kg:  parseFloat(b.planlanan_kg) || 0,
+      uretilen_kg:   parseFloat(b.uretilen_kg || 0),
+      toplam_alt_emir: toplam,
+      biten_alt_emir:  biten,
+      devam_alt_emir:  devamda,
+      hazir_alt_emir:  kalan
+    });
+  });
+
+  // b) Sadece plan var, batch yok
+  _PLAN_ISLER.forEach(function(p) {
+    var key = 'plan_' + p.plan_id;
+    if (!harita[key]) {
+      var cad = p.musteri_adi || '—';
+      if (cad.indexOf(' - ') !== -1) {
+        var pfx = cad.split(' - ')[0];
+        if (pfx.indexOf('.') !== -1 && pfx.indexOf(' ') === -1) {
+          cad = cad.split(' - ').slice(1).join(' - ');
+        }
+      }
+      harita[key] = {
+        key:        key,
+        siparis_no: p.plan_kodu,
+        musteri_adi: cad,
+        formul_ad:  p.formul_ad || '—',
+        renk_ad:    p.renk_ad || '',
+        plan_tarihi: '',
+        boyutlar: [{
+          boyut:      p.boyut || 'STD',
+          batch_kodu: null,
+          plan_id:    p.plan_id,
+          durum:      'PLANLI',
+          planlanan_kg:  parseFloat(p.planlanan_kg) || 0,
+          uretilen_kg:   0,
+          toplam_alt_emir: 0,
+          biten_alt_emir:  0,
+          devam_alt_emir:  0,
+          hazir_alt_emir:  0
+        }],
+        tip: 'plan'
+      };
+      sira.push(key);
+    }
+  });
+
+  _gruplar = sira.map(function(k) { return harita[k]; });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   2. GENEL DURUM HESAPLA
+═══════════════════════════════════════════════════════════ */
+function genelDurum(sip) {
+  var d = 'HAZIR';
+  sip.boyutlar.forEach(function(by) {
+    if (by.durum === 'DEVAM')   d = 'DEVAM';
+    if (by.durum === 'BEKLEME' && d !== 'DEVAM') d = 'BEKLEME';
+    if (by.durum === 'BITTI'   && d === 'HAZIR')  d = 'BITTI';
+    if (by.durum === 'PLANLI'  && d === 'HAZIR')  d = 'PLANLI';
+  });
+  return d;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   3. KART HTML ÜRET
+═══════════════════════════════════════════════════════════ */
+function kartHtml(sip) {
+  var gd  = genelDurum(sip);
+  var tek = sip.boyutlar.length === 1;
+  var by0 = sip.boyutlar[0];
+
+  // Durum renk sınıfı
+  var durumCls = {
+    'HAZIR':  'nxt-d-hazir',
+    'DEVAM':  'nxt-d-devam',
+    'BEKLEME':'nxt-d-bekleme',
+    'BITTI':  'nxt-d-bitti',
+    'PLANLI': 'nxt-d-planli'
+  }[gd] || 'nxt-d-taslak';
+  var solCls = {
+    'HAZIR':  'nxt-sol-hazir',
+    'DEVAM':  'nxt-sol-devam',
+    'BEKLEME':'nxt-sol-bekleme',
+    'BITTI':  'nxt-sol-bitti',
+    'PLANLI': 'nxt-sol-planli'
+  }[gd] || 'nxt-sol-taslak';
+
+  // Tarih
+  var tarih = sip.plan_tarihi ? sip.plan_tarihi.substring(0,10) : '';
+
+  // Boyut rozetleri
+  var boyutRozetler = sip.boyutlar.map(function(by) {
+    return '<span class="nxt-boyut-rozet">' + esc(by.boyut) + '</span>';
+  }).join('');
+
+  // Emir + KG kolonları
+  var emirKgHtml = '';
+  sip.boyutlar.forEach(function(by) {
+    var yuzde = by.planlanan_kg > 0
+      ? Math.min(100, Math.round((by.uretilen_kg / by.planlanan_kg) * 100))
+      : 0;
+    var lsRozet = !tek
+      ? '<span class="nxt-ls-rozet">' + esc(by.boyut) + '</span>' : '';
+
+    emirKgHtml += '<div class="nxt-emir-kg-blok' + (!tek ? ' nxt-emir-kg-ls' : '') + '">';
+    emirKgHtml += lsRozet;
+    if (_PARCA_VAR && by.toplam_alt_emir > 0) {
+      emirKgHtml +=
+        '<div class="nxt-emir-satirlar">' +
+          '<div class="nxt-emir-satir nxt-es-biten"><span class="nxt-es-sayi">' + by.biten_alt_emir + '</span><span class="nxt-es-yazi">Emir Bitti</span></div>' +
+          '<div class="nxt-emir-satir nxt-es-devam"><span class="nxt-es-sayi">' + by.devam_alt_emir + '</span><span class="nxt-es-yazi">Emir Üretimde</span></div>' +
+          '<div class="nxt-emir-satir nxt-es-kalan"><span class="nxt-es-sayi">' + by.hazir_alt_emir + '</span><span class="nxt-es-yazi">Emir Kaldı</span></div>' +
+        '</div>' +
+        '<div class="nxt-kg-satir">' +
+          '<span class="nxt-kg-uretilen">' + fmt(by.uretilen_kg) + '</span>' +
+          '<span class="nxt-kg-sep"> / </span>' +
+          '<span class="nxt-kg-plan">' + fmt(by.planlanan_kg) + ' KG</span>' +
+        '</div>' +
+        '<div class="nxt-progress-bar"><div class="nxt-progress-dolu" style="width:' + yuzde + '%"></div></div>';
+    } else {
+      emirKgHtml +=
+        '<div class="nxt-kg-satir" style="margin-top:6px">' +
+          '<span class="nxt-kg-plan" style="font-size:13px;font-weight:700;color:#374151">' + fmt(by.planlanan_kg) + ' KG</span>' +
+        '</div>' +
+        '<div class="nxt-progress-bar" style="margin-top:6px"><div class="nxt-progress-dolu" style="width:0%"></div></div>';
+    }
+    emirKgHtml += '</div>';
+  });
+
+  // Aksiyon butonu
+  var butonHtml = '';
+  if (tek) {
+    if (by0.batch_kodu) {
+      var bYazi = (by0.durum === 'DEVAM') ? 'Devam Et' : (by0.durum === 'BITTI' ? 'Detay' : 'Başlat');
+      butonHtml = '<a href="/nexgen/tablet/uretim-islem/' + esc(by0.batch_kodu) + '" class="nxt-btn-ana">&#9654; ' + bYazi + '</a>';
+    } else {
+      butonHtml = '<button class="nxt-btn-ana" onclick="planBasla(' + by0.plan_id + ',\'' + esc(sip.formul_ad) + '\')">&#9654; Başlat</button>';
+    }
+    butonHtml += '<a href="/nexgen/tablet/etiket/uretim/' + esc(by0.batch_kodu || '') + '" class="nxt-btn-ikincil">&#128424; Etiket</a>';
+  } else {
+    butonHtml = '<button class="nxt-btn-ana" onclick="lsModalAc(' + JSON.stringify(sip.boyutlar) + ')">&#9654; Devam Et</button>';
+    butonHtml += '<a href="/nexgen/tablet/etiket/uretim/' + esc(by0.batch_kodu || '') + '" class="nxt-btn-ikincil">&#128424; Etiket</a>';
+  }
+
+  return '<div class="nxt-kart ' + solCls + '" ' +
+    'data-durum="' + gd.toLowerCase() + '" ' +
+    'data-cari="' + esc(sip.musteri_adi.toLowerCase()) + '" ' +
+    'data-sip="' + esc((sip.siparis_no||'').toLowerCase()) + '" ' +
+    'data-urun="' + esc(sip.formul_ad.toLowerCase()) + '">' +
+
+    // Üst satır
+    '<div class="nxt-kart-ust">' +
+      '<div class="nxt-ust-cari">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12" style="flex-shrink:0;color:#94a3b8;margin-right:4px"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>' +
+        '<span class="nxt-ust-cari-ad">' + esc(sip.musteri_adi) + '</span>' +
+      '</div>' +
+      '<div class="nxt-ust-sip-no">' + esc(sip.siparis_no) + '</div>' +
+      (tarih ? '<div class="nxt-ust-tarih">&#128197; ' + tarih + '</div>' : '') +
+      '<div class="nxt-durum-rozet ' + durumCls + '">' + gd + '</div>' +
+    '</div>' +
+
+    // Gövde: 4 kolon
+    '<div class="nxt-kart-govde">' +
+
+      // Kolon 1 — Ürün
+      '<div class="nxt-gov-kolon nxt-gov-urun">' +
+        '<div class="nxt-gov-et">FORMÜL</div>' +
+        '<div class="nxt-gov-formul">' + esc(sip.formul_ad) + '</div>' +
+        (sip.renk_ad ? '<div class="nxt-gov-et" style="margin-top:6px">RENK</div><div class="nxt-gov-renk">' + esc(sip.renk_ad) + '</div>' : '') +
+        '<div class="nxt-gov-et" style="margin-top:6px">BOYUT</div>' +
+        '<div class="nxt-gov-boyutlar">' + boyutRozetler + '</div>' +
+      '</div>' +
+
+      // Kolon 2+3 — Emir + KG (birleşik)
+      '<div class="nxt-gov-kolon nxt-gov-emirkg">' +
+        '<div class="nxt-emirkg-ust">' +
+          '<div class="nxt-gov-et">ÜRETİM EMİRLERİ</div>' +
+          '<div class="nxt-gov-et" style="text-align:right">ÜRETİM (KG)</div>' +
+        '</div>' +
+        emirKgHtml +
+      '</div>' +
+
+      // Kolon 4 — Aksiyon
+      '<div class="nxt-gov-aksiyon">' +
+        butonHtml +
+      '</div>' +
+
+    '</div>' + // /govde
+  '</div>';   // /kart
+}
+
+/* ═══════════════════════════════════════════════════════════
+   4. FİLTRE + ARAMA + SAYFALAMA
+═══════════════════════════════════════════════════════════ */
+function filtrele() {
+  return _gruplar.filter(function(sip) {
+    var gd    = genelDurum(sip).toLowerCase();
+    var cari  = sip.musteri_adi.toLowerCase();
+    var sipNo = (sip.siparis_no||'').toLowerCase();
+    var urun  = sip.formul_ad.toLowerCase();
+    var arama = _aktifArama.toLowerCase();
+
+    var fPas = (_aktifFiltre === 'tumu') || gd === _aktifFiltre ||
+               (_aktifFiltre === 'devam' && gd === 'devam') ||
+               (_aktifFiltre === 'hazir' && (gd === 'hazir' || gd === 'planli'));
+    var aPas = !arama || cari.includes(arama) || sipNo.includes(arama) || urun.includes(arama);
+    return fPas && aPas;
+  });
+}
+
+function sayacGuncelle() {
+  var sayac = { tumu:0, hazir:0, devam:0, bekleme:0, bitti:0 };
+  _gruplar.forEach(function(sip) {
+    var gd = genelDurum(sip).toLowerCase();
+    sayac.tumu++;
+    if (gd === 'hazir' || gd === 'planli') sayac.hazir++;
+    else if (gd === 'devam')   sayac.devam++;
+    else if (gd === 'bekleme') sayac.bekleme++;
+    else if (gd === 'bitti')   sayac.bitti++;
+  });
+  document.getElementById('fs-tumu').textContent    = sayac.tumu;
+  document.getElementById('fs-hazir').textContent   = sayac.hazir;
+  document.getElementById('fs-devam').textContent   = sayac.devam;
+  document.getElementById('fs-bekleme').textContent = sayac.bekleme;
+  document.getElementById('fs-bitti').textContent   = sayac.bitti;
+
+  // Aktif rozet
+  var aktifRozet = document.getElementById('nxt-aktif-rozet');
+  var aktifSayi  = document.getElementById('nxt-aktif-sayi');
+  if (aktifRozet && aktifSayi) {
+    aktifSayi.textContent = sayac.devam + sayac.hazir;
+    aktifRozet.style.display = (sayac.devam + sayac.hazir) > 0 ? 'flex' : 'none';
+  }
+}
+
+function render() {
+  var liste = filtrele();
+  var kl    = document.getElementById('nxt-kart-liste');
+  var bos   = document.getElementById('nxt-bos');
+  var bosA  = document.getElementById('nxt-bos-arama');
+  var spDiv = document.getElementById('nxt-sayfalama');
+
+  // Boş kontroller
+  if (_gruplar.length === 0) {
+    kl.innerHTML = '';
+    bos.style.display   = '';
+    bosA.style.display  = 'none';
+    spDiv.style.display = 'none';
+    return;
+  }
+  bos.style.display = 'none';
+
+  if (liste.length === 0) {
+    kl.innerHTML = '';
+    bosA.style.display  = '';
+    spDiv.style.display = 'none';
+    return;
+  }
+  bosA.style.display = 'none';
+
+  // Sayfalama
+  var sayfa = _tumGoster ? 1 : _aktifSayfa;
+  var bsz   = _tumGoster ? liste.length : _sayfaBoyutu;
+  var baslangic = (sayfa - 1) * bsz;
+  var gosterilen = liste.slice(baslangic, baslangic + bsz);
+
+  kl.innerHTML = gosterilen.map(kartHtml).join('');
+
+  // Sayfalama UI
+  sayfalamaRender(liste.length, sayfa, bsz);
+}
+
+function sayfalamaRender(toplam, sayfa, bsz) {
+  var spDiv = document.getElementById('nxt-sayfalama');
+  var spToplamEl = document.getElementById('nxt-sp-toplam');
+  var spSayfalar = document.getElementById('nxt-sp-sayfalar');
+
+  if (toplam === 0) { spDiv.style.display = 'none'; return; }
+  spDiv.style.display = 'flex';
+
+  spToplamEl.textContent = 'Toplam ' + toplam + ' kayıt';
+
+  if (_tumGoster) {
+    spSayfalar.innerHTML = '';
+    document.getElementById('nxt-sp-tumunu').textContent = 'Sayfalı Göster';
+    return;
+  }
+  document.getElementById('nxt-sp-tumunu').textContent = 'Tümünü Göster';
+
+  var toplamSayfa = Math.ceil(toplam / bsz);
+  var html = '';
+  html += '<button class="nxt-sp-btn" onclick="sayfaGit(' + Math.max(1, sayfa-1) + ')" '+(sayfa<=1?'disabled':'')+'>‹</button>';
+
+  for (var i = 1; i <= toplamSayfa; i++) {
+    if (i === 1 || i === toplamSayfa || (i >= sayfa-1 && i <= sayfa+1)) {
+      html += '<button class="nxt-sp-btn' + (i===sayfa?' nxt-sp-aktif':'') + '" onclick="sayfaGit('+i+')">'+i+'</button>';
+    } else if (i === sayfa-2 || i === sayfa+2) {
+      html += '<span class="nxt-sp-nokta">…</span>';
+    }
+  }
+  html += '<button class="nxt-sp-btn" onclick="sayfaGit(' + Math.min(toplamSayfa, sayfa+1) + ')" '+(sayfa>=toplamSayfa?'disabled':'')+'>›</button>';
+
+  spSayfalar.innerHTML = html;
+}
+
+function filtreUygula(filtre, btn) {
+  _aktifFiltre = filtre;
+  _aktifSayfa  = 1;
+  document.querySelectorAll('.nxt-fsekme').forEach(function(b) { b.classList.remove('nxt-fsekme-aktif'); });
+  if (btn) btn.classList.add('nxt-fsekme-aktif');
+  render();
+}
+
+function aramaUygula(val) {
+  _aktifArama = val;
+  _aktifSayfa = 1;
+  render();
+}
+
+function sayfaGit(n) {
+  _aktifSayfa = n;
+  render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function sayfaBoyutu(v) {
+  _sayfaBoyutu = parseInt(v);
+  _aktifSayfa  = 1;
+  render();
+}
+
+function tumunuGoster() {
+  _tumGoster = !_tumGoster;
+  _aktifSayfa = 1;
+  render();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   5. L/S MODAL
+═══════════════════════════════════════════════════════════ */
+function lsModalAc(boyutlar) {
+  var butonlar = document.getElementById('nxt-modal-butonlar');
+  butonlar.innerHTML = '';
+  boyutlar.forEach(function(by) {
+    if (!by.batch_kodu) return;
+    var a = document.createElement('a');
+    a.href = '/nexgen/tablet/uretim-islem/' + by.batch_kodu;
+    a.className = 'nxt-modal-boyut-btn';
+    a.textContent = '▶ ' + by.boyut + ' — Devam Et';
+    butonlar.appendChild(a);
+  });
+  document.getElementById('nxt-ls-modal').style.display = 'flex';
+}
+
+function lsModalKapat(e) {
+  if (!e || e.target === document.getElementById('nxt-ls-modal')) {
+    document.getElementById('nxt-ls-modal').style.display = 'none';
+  }
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') document.getElementById('nxt-ls-modal').style.display = 'none';
+});
+
+/* ═══════════════════════════════════════════════════════════
+   6. PLAN BAŞLAT
+═══════════════════════════════════════════════════════════ */
 async function planBasla(planId, ad) {
   if (!confirm(ad + '\n\nBu iş için üretim kodu oluşturulsun mu?')) return;
-  var btn = document.querySelector('[data-plan-id="' + planId + '"]');
-  if (btn) { btn.disabled = true; btn.textContent = '...'; }
   try {
     var r = await fetch('/nexgen/api/plan/' + planId + '/basla', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({})
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({})
     });
     var j = await r.json();
     if (j.ok) {
-      window.location.href = '/nexgen/tablet/kod/' + j.batch_kodu;
+      window.location.href = '/nexgen/tablet/uretim-islem/' + j.batch_kodu;
     } else {
       alert('HATA: ' + (j.hata || 'Bilinmeyen hata'));
-      if (btn) { btn.disabled = false; btn.textContent = 'BAŞLA ▶'; }
     }
-  } catch(e) {
-    alert('Sunucu hatası.');
-    if (btn) { btn.disabled = false; btn.textContent = 'BAŞLA ▶'; }
-  }
+  } catch(e) { alert('Sunucu hatası.'); }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   7. YARDIMCILAR
+═══════════════════════════════════════════════════════════ */
+function esc(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function fmt(n) {
+  return Math.round(n).toLocaleString('tr-TR');
+}
+
+/* Saat */
+(function(){
+  function pad(n){ return n < 10 ? '0'+n : n; }
+  function guncelle(){
+    var d = new Date();
+    var sv = document.getElementById('nxt-saat-val');
+    var tv = document.getElementById('nxt-tarih-val');
+    if(sv) sv.textContent = pad(d.getHours())+':'+pad(d.getMinutes());
+    if(tv) tv.textContent = d.getDate()+'.'+pad(d.getMonth()+1)+'.'+d.getFullYear();
+  }
+  guncelle(); setInterval(guncelle, 5000);
+})();
+
+/* ═══════════════════════════════════════════════════════════
+   8. BAŞLAT
+═══════════════════════════════════════════════════════════ */
+veriGrupla();
+sayacGuncelle();
+render();
 </script>
+
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, -apple-system, sans-serif; background: #f3f6fa; }
+
+/* ─── SAYFA ──────────────────────────────────────────────── */
+.nxt-ana { min-height: 100vh; background: #f3f6fa; }
+
+/* ─── TOPBAR ─────────────────────────────────────────────── */
+.nxt-topbar {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  position: sticky; top: 0; z-index: 30;
+}
+.nxt-topbar-ic {
+  max-width: 1400px; margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px; height: 52px; gap: 16px;
+}
+.nxt-tb-sol { display: flex; align-items: center; gap: 14px; }
+.nxt-logo-yazi { display: flex; flex-direction: column; gap: 0; }
+.nxt-logo-nexgen {
+  font-family: 'Arial Black', Arial, sans-serif;
+  font-size: 20px; font-weight: 900; color: #fff; line-height: 1;
+}
+.nxt-logo-nexgen span { color: #f6c343; }
+.nxt-logo-r { font-size: 10px; vertical-align: super; color: #f6c343; }
+.nxt-logo-slogan { font-size: 7px; font-weight: 700; color: #64748b; letter-spacing: 2px; }
+.nxt-logo-ayrac { width: 1px; height: 32px; background: rgba(255,255,255,.15); flex-shrink: 0; }
+.nxt-tb-baslik-blok {}
+.nxt-tb-buyuk { font-size: 15px; font-weight: 900; color: #fff; line-height: 1; }
+
+.nxt-tb-sag { display: flex; align-items: center; gap: 8px; }
+.nxt-aktif-rozet {
+  display: flex; align-items: center; gap: 5px;
+  background: rgba(34,197,94,.15); border: 1px solid rgba(34,197,94,.4);
+  color: #86efac; font-size: 12px; font-weight: 700;
+  padding: 5px 10px; border-radius: 20px;
+}
+.nxt-rozet-nokta {
+  width: 6px; height: 6px; border-radius: 50%; background: #22c55e;
+  animation: nxt-blink 1.4s infinite;
+}
+@keyframes nxt-blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+.nxt-tb-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; font-weight: 700; color: #e2e8f0;
+  text-decoration: none; padding: 6px 12px;
+  background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.12);
+  border-radius: 8px; white-space: nowrap;
+}
+.nxt-tb-btn:hover { background: rgba(255,255,255,.18); color: #fff; }
+.nxt-saat-blok {
+  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12);
+  border-radius: 8px; padding: 5px 10px; text-align: center; min-width: 68px;
+}
+.nxt-saat  { font-size: 15px; font-weight: 900; color: #f6c343; font-variant-numeric: tabular-nums; }
+.nxt-tarih { font-size: 9px; color: #64748b; font-weight: 600; }
+
+/* Alt menü */
+.nxt-alt-menu {
+  border-top: 1px solid rgba(255,255,255,.08);
+  border-bottom: 3px solid #f6c343;
+}
+.nxt-alt-menu-ic {
+  max-width: 1400px; margin: 0 auto;
+  display: flex; align-items: center; gap: 0;
+  padding: 0 20px;
+  overflow-x: auto;
+}
+.nxt-amenu-item {
+  display: flex; align-items: center; gap: 5px;
+  padding: 8px 14px; font-size: 12px; font-weight: 600;
+  color: rgba(255,255,255,.6); text-decoration: none;
+  white-space: nowrap; border-bottom: 2px solid transparent;
+  margin-bottom: -3px; transition: color .12s, border-color .12s;
+}
+.nxt-amenu-item:hover { color: rgba(255,255,255,.9); border-bottom-color: rgba(255,255,255,.3); }
+.nxt-amenu-aktif { color: #f6c343 !important; border-bottom-color: #f6c343 !important; font-weight: 800; }
+.nxt-amenu-yeni {
+  margin-left: auto;
+  color: #f6c343 !important; font-weight: 800;
+  border: 1px solid rgba(246,195,67,.4); border-radius: 6px;
+  padding: 4px 10px; margin-bottom: 4px; margin-top: 4px;
+  border-bottom: 1px solid rgba(246,195,67,.4) !important;
+}
+.nxt-amenu-yeni:hover { background: rgba(246,195,67,.15); }
+
+/* ─── FİLTRE BAR ─────────────────────────────────────────── */
+.nxt-filtre-bar {
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+  position: sticky; top: 82px; z-index: 20;
+}
+.nxt-filtre-ic {
+  max-width: 1400px; margin: 0 auto;
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 20px; flex-wrap: wrap;
+}
+.nxt-filtre-sekmeler { display: flex; gap: 4px; flex-wrap: wrap; }
+.nxt-fsekme {
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 10px; border-radius: 6px;
+  border: 1px solid #e5e7eb; background: #f9fafb;
+  color: #6b7280; font-size: 12px; font-weight: 600;
+  cursor: pointer; white-space: nowrap; transition: all .12s;
+}
+.nxt-fsekme:hover { background: #f3f4f6; color: #374151; }
+.nxt-fsekme-aktif { background: #0f172a; border-color: #0f172a; color: #f6c343; }
+.nxt-fsekme-aktif:hover { background: #1e293b; }
+.nxt-fsayi {
+  background: rgba(0,0,0,.08); font-size: 10px; font-weight: 800;
+  padding: 1px 5px; border-radius: 8px; min-width: 18px; text-align: center;
+}
+.nxt-fsekme-aktif .nxt-fsayi { background: rgba(246,195,67,.3); color: #f6c343; }
+
+.nxt-arama-wrap {
+  margin-left: auto; display: flex; align-items: center; gap: 8px; position: relative;
+}
+.nxt-arama-ikon { position: absolute; left: 10px; color: #9ca3af; pointer-events: none; }
+.nxt-filtre-ikon { color: #6b7280; cursor: pointer; flex-shrink: 0; }
+.nxt-arama {
+  padding: 6px 10px 6px 28px;
+  border: 1px solid #e5e7eb; border-radius: 7px;
+  font-size: 12px; color: #374151; background: #f9fafb;
+  outline: none; width: 230px; transition: border-color .15s;
+}
+.nxt-arama:focus { border-color: #f6c343; background: #fff; }
+.nxt-arama::placeholder { color: #9ca3af; }
+
+/* ─── İÇERİK ─────────────────────────────────────────────── */
+.nxt-icerik {
+  max-width: 1400px; margin: 0 auto;
+  padding: 14px 20px 48px;
+}
+
+/* ─── KART LİSTESİ ───────────────────────────────────────── */
+.nxt-kart-liste { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+
+/* ─── KART ───────────────────────────────────────────────── */
+.nxt-kart {
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  border-left: 4px solid #e5e7eb;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,.05);
+  transition: box-shadow .15s;
+}
+.nxt-kart:hover { box-shadow: 0 3px 10px rgba(0,0,0,.08); }
+.nxt-sol-hazir   { border-left-color: #16a34a; }
+.nxt-sol-devam   { border-left-color: #f6c343; }
+.nxt-sol-bekleme { border-left-color: #f97316; }
+.nxt-sol-bitti   { border-left-color: #9ca3af; opacity: .85; }
+.nxt-sol-planli  { border-left-color: #d1d5db; }
+.nxt-sol-taslak  { border-left-color: #d1d5db; }
+
+/* Üst satır */
+.nxt-kart-ust {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 14px 7px;
+  border-bottom: 1px solid #f3f4f6;
+  min-height: 34px;
+}
+.nxt-ust-cari { display: flex; align-items: center; flex: 1; min-width: 0; }
+.nxt-ust-cari-ad {
+  font-size: 13px; font-weight: 800; color: #111827;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.nxt-ust-sip-no {
+  font-size: 11px; font-weight: 700; color: #374151; font-family: monospace;
+  background: #f3f6fa; padding: 2px 8px; border-radius: 4px;
+  border: 1px solid #e5e7eb; white-space: nowrap; flex-shrink: 0;
+}
+.nxt-ust-tarih { font-size: 11px; color: #9ca3af; white-space: nowrap; flex-shrink: 0; }
+
+/* Durum rozeti */
+.nxt-durum-rozet {
+  font-size: 9px; font-weight: 700;
+  padding: 2px 8px; border-radius: 4px;
+  letter-spacing: .4px; white-space: nowrap; flex-shrink: 0;
+}
+.nxt-d-hazir   { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+.nxt-d-devam   { background: #fefce8; color: #854d0e; border: 1px solid #fde68a; }
+.nxt-d-bekleme { background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; }
+.nxt-d-bitti   { background: #dcfce7; color: #14532d; border: 1px solid #4ade80; }
+.nxt-d-planli  { background: #f3f4f6; color: #6b7280; border: 1px solid #e5e7eb; }
+.nxt-d-taslak  { background: #f9fafb; color: #9ca3af; border: 1px solid #e5e7eb; }
+
+/* Gövde: 3 kolon */
+.nxt-kart-govde {
+  display: grid;
+  grid-template-columns: 210px 1fr auto;
+  gap: 0;
+  align-items: stretch;
+}
+.nxt-gov-kolon {
+  padding: 10px 14px;
+  display: flex; flex-direction: column; gap: 3px;
+  min-width: 0;
+}
+.nxt-gov-kolon + .nxt-gov-kolon { border-left: 1px solid #f3f4f6; }
+.nxt-gov-et {
+  font-size: 9px; font-weight: 700; color: #9ca3af;
+  letter-spacing: .6px; text-transform: uppercase;
+}
+.nxt-gov-formul { font-size: 14px; font-weight: 900; color: #111827; line-height: 1.2; }
+.nxt-gov-renk   { font-size: 12px; font-weight: 600; color: #475569; }
+.nxt-gov-boyutlar { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
+.nxt-boyut-rozet {
+  font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 3px;
+  background: #f1f5f9; color: #374151; border: 1px solid #e2e8f0; letter-spacing: .3px;
+}
+
+/* Emir + KG kolon */
+.nxt-gov-emirkg { flex-direction: column; }
+.nxt-emirkg-ust {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 0; margin-bottom: 4px;
+}
+.nxt-emir-kg-blok {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 0 16px; align-items: start;
+  padding: 0;
+}
+.nxt-emir-kg-ls {
+  border-bottom: 1px solid #f3f4f6;
+  padding-bottom: 6px; margin-bottom: 4px;
+}
+.nxt-emir-kg-ls:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+.nxt-ls-rozet {
+  font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 3px;
+  background: #f1f5f9; color: #374151; border: 1px solid #e2e8f0;
+  display: inline-block; margin-bottom: 4px;
+  grid-column: 1 / -1;
+}
+.nxt-emir-satirlar { display: flex; flex-direction: column; gap: 0; }
+.nxt-emir-satir {
+  display: flex; align-items: baseline; gap: 4px;
+}
+.nxt-es-sayi {
+  font-size: 18px; font-weight: 900; min-width: 24px; text-align: right; line-height: 1.1;
+}
+.nxt-es-yazi { font-size: 11px; color: #6b7280; font-weight: 500; }
+.nxt-es-biten  .nxt-es-sayi { color: #15803d; }
+.nxt-es-devam  .nxt-es-sayi { color: #d97706; }
+.nxt-es-kalan  .nxt-es-sayi { color: #374151; }
+
+.nxt-kg-satir {
+  display: flex; align-items: baseline; gap: 2px;
+}
+.nxt-kg-uretilen { font-size: 18px; font-weight: 900; color: #16a34a; }
+.nxt-kg-sep { font-size: 11px; color: #9ca3af; }
+.nxt-kg-plan { font-size: 11px; font-weight: 600; color: #6b7280; }
+.nxt-progress-bar {
+  height: 5px; background: #f3f4f6; border-radius: 3px; overflow: hidden;
+  border: 1px solid #e5e7eb; margin-top: 4px;
+}
+.nxt-progress-dolu {
+  height: 100%; background: linear-gradient(90deg, #16a34a, #22c55e);
+  border-radius: 3px; min-width: 2px;
+}
+
+/* Aksiyon kolon */
+.nxt-gov-aksiyon {
+  display: flex; flex-direction: column; align-items: stretch;
+  gap: 6px; padding: 10px 14px; justify-content: center;
+  min-width: 120px; border-left: 1px solid #f3f4f6;
+}
+.nxt-btn-ana {
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  padding: 9px 14px; border-radius: 8px; border: none;
+  background: #f6c343; color: #1a1a1a;
+  font-size: 13px; font-weight: 800;
+  text-decoration: none; cursor: pointer;
+  box-shadow: 0 1px 4px rgba(246,195,67,.35);
+  white-space: nowrap; transition: background .12s;
+}
+.nxt-btn-ana:hover { background: #e9b020; }
+.nxt-btn-ikincil {
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  padding: 6px 10px; border-radius: 7px;
+  background: #f9fafb; color: #374151;
+  border: 1px solid #e5e7eb;
+  font-size: 12px; font-weight: 600;
+  text-decoration: none; cursor: pointer;
+  white-space: nowrap; transition: background .12s;
+}
+.nxt-btn-ikincil:hover { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
+
+/* ─── BOŞ DURUM ──────────────────────────────────────────── */
+.nxt-bos {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 10px; padding: 50px 20px; text-align: center;
+  background: #fff; border-radius: 12px;
+  border: 1.5px dashed #e2e8f0;
+}
+.nxt-bos-arama { border-style: solid; }
+.nxt-bos-ikon   { font-size: 44px; }
+.nxt-bos-baslik { font-size: 16px; font-weight: 800; color: #374151; }
+.nxt-bos-alt    { font-size: 13px; color: #94a3b8; }
+
+/* ─── SAYFALAMA ───────────────────────────────────────────── */
+.nxt-sayfalama {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 10px;
+  padding: 10px 0; margin-top: 4px;
+}
+.nxt-sp-sol { display: flex; align-items: center; gap: 10px; }
+.nxt-sp-tumunu {
+  padding: 5px 12px; border-radius: 6px;
+  border: 1px solid #e5e7eb; background: #f9fafb;
+  color: #374151; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.nxt-sp-tumunu:hover { background: #f3f4f6; }
+.nxt-sp-toplam { font-size: 12px; color: #9ca3af; }
+.nxt-sp-sayfalar { display: flex; align-items: center; gap: 3px; }
+.nxt-sp-btn {
+  width: 30px; height: 30px; border-radius: 6px;
+  border: 1px solid #e5e7eb; background: #fff;
+  color: #374151; font-size: 12px; font-weight: 600; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.nxt-sp-btn:hover:not(:disabled) { background: #f3f4f6; }
+.nxt-sp-btn:disabled { opacity: .4; cursor: default; }
+.nxt-sp-aktif { background: #0f172a !important; color: #f6c343 !important; border-color: #0f172a !important; }
+.nxt-sp-nokta { font-size: 12px; color: #9ca3af; padding: 0 4px; }
+.nxt-sp-sag { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #9ca3af; }
+.nxt-sp-select {
+  padding: 4px 8px; border-radius: 6px; border: 1px solid #e5e7eb;
+  font-size: 12px; color: #374151; background: #fff; cursor: pointer;
+}
+
+/* ─── L/S MODAL ──────────────────────────────────────────── */
+.nxt-modal-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(15,23,42,.5); backdrop-filter: blur(2px);
+  display: flex; align-items: center; justify-content: center;
+}
+.nxt-modal {
+  background: #fff; border-radius: 14px;
+  padding: 28px 24px; min-width: 300px; max-width: 400px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.25);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.nxt-modal-baslik { font-size: 16px; font-weight: 900; color: #111827; }
+.nxt-modal-altyazi { font-size: 12px; color: #6b7280; margin-top: -6px; }
+.nxt-modal-butonlar { display: flex; flex-direction: column; gap: 8px; }
+.nxt-modal-boyut-btn {
+  display: block; padding: 12px 16px;
+  background: #f6c343; color: #1a1a1a;
+  border-radius: 9px; font-size: 14px; font-weight: 800;
+  text-decoration: none; text-align: center;
+}
+.nxt-modal-boyut-btn:hover { background: #e9b020; }
+.nxt-modal-iptal {
+  background: none; border: 1px solid #e5e7eb;
+  border-radius: 8px; padding: 8px;
+  font-size: 12px; color: #6b7280; cursor: pointer;
+}
+.nxt-modal-iptal:hover { background: #f9fafb; }
+
+/* ─── RESPONSIVE ─────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .nxt-kart-govde { grid-template-columns: 180px 1fr auto; }
+  .nxt-arama { width: 170px; }
+}
+@media (max-width: 680px) {
+  .nxt-kart-govde { grid-template-columns: 1fr; }
+  .nxt-gov-kolon { border-left: none; border-top: 1px solid #f3f4f6; }
+  .nxt-gov-kolon:first-child { border-top: none; }
+  .nxt-gov-aksiyon { flex-direction: row; }
+  .nxt-saat-blok { display: none; }
+  .nxt-tb-buyuk  { font-size: 12px; }
+  .nxt-emir-kg-blok { grid-template-columns: 1fr; }
+  .nxt-sayfalama { flex-direction: column; align-items: flex-start; }
+}
+</style>
 {% endblock %}

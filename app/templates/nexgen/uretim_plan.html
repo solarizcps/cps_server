@@ -1,111 +1,324 @@
 {% extends "base.html" %}
-{% set page_title = "Üretim Siparişleri — NexGen" %}
+{% set page_title = "Üretim Planı — NexGen" %}
 
 {% block content %}
+
+{# ── Sayfa İskelet ──────────────────────────────────────────────────── #}
 <div class="up-sayfa">
 
-  {# ── Üst Bar ── #}
-  <div class="up-topbar">
-    <div class="up-topbar-ic">
-      <div>
-        <div class="up-topbar-kucuk">NEXGEN</div>
-        <div class="up-topbar-buyuk">ÜRETİM SİPARİŞLERİ</div>
+  {# ── Başlık satırı ── #}
+  <div class="up-header-bar">
+    <div class="up-header-ic">
+      <div class="up-header-sol">
+        <h1 class="up-header-baslik">Üretim Planı</h1>
+        <p class="up-header-alt">Siparişleri planla, üretime gönder ve alt emirleri takip et.</p>
       </div>
-      <div class="up-topbar-sag">
-        <a href="/nexgen/" class="up-geri-btn">← Geri</a>
-        {% if can_manage %}
-        <button class="up-yeni-btn" onclick="modalAc()">+ Yeni Sipariş</button>
-        {% endif %}
+      {% if can_manage %}
+      <button class="up-yeni-btn" onclick="modalAc()">+ Sipariş Oluştur</button>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Özet Kartları ── #}
+  <div class="up-ozet-satir">
+    {% set toplam      = planlar | length %}
+    {% set planlandi   = planlar | selectattr('durum','equalto','PLANLANDI')     | list | length %}
+    {% set basladi     = planlar | selectattr('durum','equalto','BASLADI')       | list | length %}
+    {% set kismi       = planlar | selectattr('durum','equalto','KISMI_URETIM')  | list | length %}
+    {% set bitti       = planlar | selectattr('durum','equalto','BITTI')         | list | length %}
+    {% set iptal       = planlar | selectattr('durum','equalto','IPTAL')         | list | length %}
+
+    <div class="up-ozet-kart">
+      <div class="up-ozet-ikon up-oi-toplam">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+          <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+          <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+        </svg>
+      </div>
+      <div class="up-ozet-ic-metin">
+        <div class="up-ozet-sayi">{{ toplam }}</div>
+        <div class="up-ozet-etiket">Toplam Sipariş</div>
+      </div>
+    </div>
+
+    <div class="up-ozet-kart">
+      <div class="up-ozet-ikon up-oi-bekleme">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+          <circle cx="12" cy="12" r="9"/><polyline points="12 6 12 12 16 14"/>
+        </svg>
+      </div>
+      <div class="up-ozet-ic-metin">
+        <div class="up-ozet-sayi">{{ planlandi }}</div>
+        <div class="up-ozet-etiket">Bekleyen / Planlandı</div>
+      </div>
+    </div>
+
+    <div class="up-ozet-kart">
+      <div class="up-ozet-ikon up-oi-basladi">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+          <polygon points="5 3 19 12 5 21 5 3"/>
+        </svg>
+      </div>
+      <div class="up-ozet-ic-metin">
+        <div class="up-ozet-sayi">{{ basladi }}</div>
+        <div class="up-ozet-etiket">Başlayan</div>
+      </div>
+    </div>
+
+    <div class="up-ozet-kart">
+      <div class="up-ozet-ikon up-oi-kismi">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+          <path d="M12 2 L12 12 L20 7"/><circle cx="12" cy="12" r="9"/>
+        </svg>
+      </div>
+      <div class="up-ozet-ic-metin">
+        <div class="up-ozet-sayi">{{ kismi }}</div>
+        <div class="up-ozet-etiket">Kısmi Üretimde</div>
+      </div>
+    </div>
+
+    <div class="up-ozet-kart">
+      <div class="up-ozet-ikon up-oi-bitti">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>
+      <div class="up-ozet-ic-metin">
+        <div class="up-ozet-sayi">{{ bitti }}</div>
+        <div class="up-ozet-etiket">Biten</div>
+      </div>
+    </div>
+
+    <div class="up-ozet-kart">
+      <div class="up-ozet-ikon up-oi-iptal">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </div>
+      <div class="up-ozet-ic-metin">
+        <div class="up-ozet-sayi">{{ iptal }}</div>
+        <div class="up-ozet-etiket">İptal</div>
       </div>
     </div>
   </div>
 
-  {# ── Özet band ── #}
-  <div class="up-ozet-band">
-    <div class="up-ozet-ic">
-      {% set planlandi = planlar | selectattr('durum','equalto','PLANLANDI') | list %}
-      {% set basladi   = planlar | selectattr('durum','equalto','BASLADI')   | list %}
-      {% set bitti     = planlar | selectattr('durum','equalto','BITTI')     | list %}
-      <div class="up-ozet-kart up-ozet-planlandi">
-        <div class="up-ozet-sayi">{{ planlandi | length }}</div>
-        <div class="up-ozet-etiket">PLANLANDI</div>
+  {# ── Filtre + Tablo Kapsayıcı ── #}
+  <div class="up-govde">
+
+    {# Filtre satırı #}
+    <div class="up-filtre-bar">
+      <div class="up-filtre-ara-kap">
+        <svg class="up-filtre-ara-ikon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" width="15" height="15">
+          <circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="22" y2="22"/>
+        </svg>
+        <input type="text" class="up-filtre-inp" id="f-ara"
+               placeholder="Ara..." oninput="tabloFiltrele()">
       </div>
-      <div class="up-ozet-kart up-ozet-basladi">
-        <div class="up-ozet-sayi">{{ basladi | length }}</div>
-        <div class="up-ozet-etiket">BAŞLADI</div>
+
+      <select class="up-filtre-sel" id="f-durum" onchange="tabloFiltrele()">
+        <option value="">Durum: Tümü</option>
+        <option value="PLANLANDI">PLANLANDI</option>
+        <option value="BASLADI">BAŞLADI</option>
+        <option value="KISMI_URETIM">KISMİ ÜRETİM</option>
+        <option value="BITTI">BİTTİ</option>
+        <option value="IPTAL">İPTAL</option>
+      </select>
+
+      <select class="up-filtre-sel" id="f-formul" onchange="tabloFiltrele()">
+        <option value="">Formül: Tümü</option>
+        {% for f in formuller | groupby('formul_ad') %}
+        <option value="{{ f.grouper }}">{{ f.grouper }}</option>
+        {% endfor %}
+      </select>
+
+      <select class="up-filtre-sel" id="f-renk" onchange="tabloFiltrele()">
+        <option value="">Renk: Tümü</option>
+        {% set renk_listesi = [] %}
+        {% for p in planlar %}
+          {% if p.renk_ad and p.renk_ad not in renk_listesi %}
+            {% set _ = renk_listesi.append(p.renk_ad) %}
+            <option value="{{ p.renk_ad }}">{{ p.renk_ad }}</option>
+          {% endif %}
+        {% endfor %}
+      </select>
+
+      <select class="up-filtre-sel" id="f-boyut" onchange="tabloFiltrele()">
+        <option value="">Boyut: Tümü</option>
+        <option value="LARGE">LARGE</option>
+        <option value="SMALL">SMALL</option>
+      </select>
+
+      <div class="up-filtre-tarih-kap">
+        <input type="date" class="up-filtre-tarih" id="f-tarih-bas" onchange="tabloFiltrele()"
+               value="{{ tarih_baslangic if tarih_baslangic else '' }}">
+        <span class="up-filtre-tarih-ayrac">–</span>
+        <input type="date" class="up-filtre-tarih" id="f-tarih-bit" onchange="tabloFiltrele()"
+               value="{{ tarih_bitis if tarih_bitis else '' }}">
       </div>
-      <div class="up-ozet-kart up-ozet-bitti">
-        <div class="up-ozet-sayi">{{ bitti | length }}</div>
-        <div class="up-ozet-etiket">BİTTİ</div>
-      </div>
-      <div class="up-ozet-kart up-ozet-toplam">
-        <div class="up-ozet-sayi">{{ planlar | length }}</div>
-        <div class="up-ozet-etiket">TOPLAM</div>
-      </div>
+
+      <button class="up-filtre-reset-btn" onclick="filtreTemizle()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+             width="14" height="14">
+          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+          <path d="M10 11v6"/><path d="M14 11v6"/>
+        </svg>
+        Filtrele
+      </button>
     </div>
-  </div>
 
-  {# ── Plan Listesi ── #}
-  <div class="up-liste-kapsayici">
-
+    {# Tablo #}
     {% if not planlar %}
     <div class="up-bos">
       <div class="up-bos-ikon">📋</div>
       <div class="up-bos-metin">Henüz üretim siparişi yok.</div>
       {% if can_manage %}
-      <button class="up-yeni-btn" onclick="modalAc()">+ İlk Siparişi Oluştur</button>
+      <button class="up-yeni-btn" style="margin-top:14px" onclick="modalAc()">+ İlk Siparişi Oluştur</button>
       {% endif %}
     </div>
+    {% else %}
+
+    <div class="up-tablo-kap">
+      <table class="up-tablo" id="up-tablo">
+        <thead>
+          <tr>
+            <th class="ut-th ut-th-sira">#</th>
+            <th class="ut-th">Plan No / Sipariş No</th>
+            <th class="ut-th">Cari</th>
+            <th class="ut-th">Formül</th>
+            <th class="ut-th">Renk</th>
+            <th class="ut-th">Boyut</th>
+            <th class="ut-th ut-th-r">Plan KG</th>
+            <th class="ut-th ut-th-c">Alt Emir</th>
+            <th class="ut-th">Durum</th>
+            <th class="ut-th">Tarih</th>
+            <th class="ut-th ut-th-islem">İşlem</th>
+          </tr>
+        </thead>
+        <tbody id="up-tablo-body">
+        {% for p in planlar %}
+        <tr class="ut-tr ut-tr-{{ p.durum|lower }}" id="plan-{{ p.id }}"
+            data-ara="{{ ((p.musteri_adi or '') ~ ' ' ~ (p.siparis_no or '') ~ ' ' ~ (p.plan_kodu or '') ~ ' ' ~ (p.formul_ad or ''))|lower }}"
+            data-cari="{{ p.musteri_adi|lower if p.musteri_adi else '' }}"
+            data-formul="{{ p.formul_ad if p.formul_ad else '' }}"
+            data-renk="{{ p.renk_ad if p.renk_ad else '' }}"
+            data-boyut="{{ p.boyut if p.boyut else '' }}"
+            data-tarih="{{ p.plan_tarihi if p.plan_tarihi else '' }}"
+            data-durum="{{ p.durum }}">
+
+          <td class="ut-td ut-td-sira">{{ loop.index }}</td>
+
+          <td class="ut-td">
+            {% if p.siparis_no %}
+            <div class="ut-sip-no">{{ p.siparis_no }}</div>
+            {% endif %}
+            <div class="ut-plan-kodu">{{ p.plan_kodu }}</div>
+          </td>
+
+          <td class="ut-td ut-td-cari">
+            {% if p.musteri_adi %}
+            {% set _cari = p.musteri_adi %}
+            {% if ' - ' in _cari %}{% set _prefix = _cari.split(' - ', 1)[0] %}{% if '.' in _prefix and ' ' not in _prefix %}{% set _cari = _cari.split(' - ', 1)[1] %}{% endif %}{% endif %}
+            <span class="ut-cari-metin">{{ _cari }}</span>
+            {% else %}<span class="ut-td-bos">—</span>{% endif %}
+          </td>
+
+          <td class="ut-td ut-td-formul">{{ p.formul_ad or '—' }}</td>
+
+          <td class="ut-td ut-td-renk">{{ p.renk_ad or '—' }}</td>
+
+          <td class="ut-td">
+            {% if p.boyut %}
+            <span class="ut-boyut ut-boyut-{{ p.boyut|lower }}">{{ p.boyut }}</span>
+            {% else %}<span class="ut-td-bos">—</span>{% endif %}
+          </td>
+
+          <td class="ut-td ut-td-kg">{{ p.planlanan_kg | int }}</td>
+
+          <td class="ut-td ut-td-altemir">
+            {% if p.get('toplam_alt_emir') and p.toplam_alt_emir > 0 %}
+            <span class="ut-altemir-sayi">{{ p.biten_alt_emir or 0 }} / {{ p.toplam_alt_emir }}</span>
+            {% else %}
+            <span class="ut-altemir-yok">Oluşmadı</span>
+            {% endif %}
+          </td>
+
+          <td class="ut-td">
+            {% if p.durum == 'PLANLANDI' %}
+            <span class="ut-durum ut-d-planlandi">PLANLANDI</span>
+            {% elif p.durum == 'BASLADI' %}
+            <span class="ut-durum ut-d-basladi">BAŞLADI</span>
+            {% elif p.durum == 'KISMI_URETIM' %}
+            <span class="ut-durum ut-d-kismi">KISMİ ÜRETİM</span>
+            {% elif p.durum == 'BITTI' %}
+            <span class="ut-durum ut-d-bitti">BİTTİ</span>
+            {% elif p.durum == 'IPTAL' %}
+            <span class="ut-durum ut-d-iptal">İPTAL</span>
+            {% else %}
+            <span class="ut-durum ut-d-diger">{{ p.durum }}</span>
+            {% endif %}
+          </td>
+
+          <td class="ut-td ut-td-tarih">{{ p.plan_tarihi or '—' }}</td>
+
+          <td class="ut-td ut-td-islem">
+            {% if p.durum == 'PLANLANDI' and can_manage %}
+            <div class="ut-islem-grup">
+              <button class="ut-btn-gonder"
+                      onclick="planGonder({{ p.id }}, '{{ p.plan_kodu }}', '{{ p.formul_ad }} {{ p.renk_ad }} {{ p.boyut }}')">
+                Üretime Gönder
+              </button>
+              <button class="ut-btn-kucuk ut-btn-iptal" onclick="planIptal({{ p.id }})" title="İptal">✕</button>
+            </div>
+            {% elif p.durum in ('BASLADI', 'KISMI_URETIM') %}
+            <div class="ut-islem-grup">
+              {% if p.batch_kodu %}
+              <a href="/nexgen/tablet/uretim-islem/{{ p.batch_kodu }}" class="ut-btn-devam">Devam →</a>
+              {% else %}
+              <a href="/nexgen/tablet" class="ut-btn-devam">Devam →</a>
+              {% endif %}
+            </div>
+            {% elif p.durum == 'BITTI' %}
+            <span class="ut-islem-bitti">✓ Tamamlandı</span>
+            {% elif p.durum == 'IPTAL' %}
+            <span class="ut-islem-pasif">Pasif</span>
+            {% else %}
+            <span class="ut-td-bos">—</span>
+            {% endif %}
+          </td>
+
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {# Alt sayfa: toplam + pagination #}
+    <div class="up-alt-bar">
+      <div class="up-alt-toplam" id="up-toplam-metin">
+        Toplam {{ planlar | length }} kayıt
+      </div>
+      <div class="up-sayfalama" id="up-sayfalama"></div>
+      <div class="up-sayfa-basi">
+        <span>Sayfa başına</span>
+        <select id="up-sayfa-basi-sel" onchange="sayfaBasiDegis(this.value)">
+          <option value="25" selected>25</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+      </div>
+    </div>
+
     {% endif %}
 
-    {% for p in planlar %}
-    <div class="up-kart up-kart-{{ p.durum|lower }}" id="plan-{{ p.id }}">
-
-      <div class="up-oncelik" title="Öncelik">{{ p.oncelik_sira }}</div>
-
-      <div class="up-kart-sol">
-        <div class="up-kart-ust">
-          {% if p.musteri_adi %}
-          <span class="up-cari-tag">{{ p.musteri_adi }}</span>
-          {% endif %}
-          <span class="up-formul-ad">{{ p.formul_ad }}</span>
-          <span class="up-renk-ad">{{ p.renk_ad }}</span>
-          <span class="up-boyut-rozet up-boyut-{{ p.boyut|lower }}">{{ p.boyut }}</span>
-        </div>
-        <div class="up-alt-bilgi">
-          <span class="up-plan-kodu">{{ p.plan_kodu }}</span>
-          {% if p.siparis_no %}<span class="up-siparis">{{ p.siparis_no }}</span>{% endif %}
-          <span class="up-tarih">{{ p.plan_tarihi }}</span>
-          {% if p.notlar %}<span class="up-not">{{ p.notlar }}</span>{% endif %}
-        </div>
-      </div>
-
-      <div class="up-kart-orta">
-        <div class="up-kg">{{ p.planlanan_kg | int }}</div>
-        <div class="up-kg-etiket">KG</div>
-      </div>
-
-      <div class="up-kart-sag">
-        <span class="up-durum up-d-{{ p.durum|lower }}">{{ p.durum }}</span>
-        {% if p.durum == 'PLANLANDI' and can_manage %}
-        <div class="up-aksiyon-grubu">
-          <button class="up-basla-btn"
-                  onclick="planBasla({{ p.id }}, '{{ p.plan_kodu }}', '{{ p.formul_ad }} {{ p.renk_ad }} {{ p.boyut }}')">
-            ▶ BAŞLA
-          </button>
-          <button class="up-iptal-btn" onclick="planIptal({{ p.id }})">✕</button>
-        </div>
-        {% elif p.durum == 'BASLADI' %}
-        <a href="/nexgen/tablet/devam-edenler" class="up-devam-link">Devam →</a>
-        {% endif %}
-      </div>
-
+    <div id="up-filtre-bos"
+         style="display:none;text-align:center;padding:40px;color:#9ca3af;font-size:14px;background:#fff;border-radius:0 0 12px 12px;">
+      Filtreyle eşleşen kayıt yok.
     </div>
-    {% endfor %}
 
-  </div>
+  </div>{# /up-govde #}
 
-</div>
+</div>{# /up-sayfa #}
 
 {# ══ MODAL — Yeni Sipariş ══════════════════════════════════════════════ #}
 {% if can_manage %}
@@ -118,105 +331,179 @@ var _formuller = {{ formuller | tojson }};
 <div class="up-modal-arka" id="up-modal-arka" onclick="modalKapat(event)" style="display:none">
   <div class="up-modal" onclick="event.stopPropagation()">
 
+    {# ── Başlık ── #}
     <div class="up-modal-baslik">
-      <span>Yeni Üretim Siparişi</span>
-      <button class="up-modal-kapat" onclick="modalKapat()">✕</button>
+      <div class="up-modal-baslik-ic">
+        <div class="up-modal-baslik-yazi">Yeni Üretim Siparişi</div>
+        <div class="up-modal-aciklama">Cari, formül ve üretim miktarını seçin.</div>
+      </div>
+      <div class="up-modal-baslik-sag">
+        <div class="up-sip-no-kutu">
+          <span class="up-sip-no-etiket">Sipariş No</span>
+          <span class="up-sip-no-deger">Otomatik oluşturulur</span>
+        </div>
+        <button class="up-modal-kapat" onclick="modalKapat()">✕</button>
+      </div>
     </div>
 
+    {# ── Gövde ── #}
     <div class="up-modal-govde">
 
-      {# 1) Cari — zorunlu dropdown #}
+      <input type="hidden" id="plan-siparis-no" value="">
+
+      {# Satır 1: Cari (tam genişlik) #}
       <div class="up-form-grup">
-        <label class="up-form-etiket">Cari <span style="color:#ef4444">*</span></label>
-        <select id="plan-cari" class="up-form-select">
-          <option value="">— Cari Seçiniz —</option>
+        <label class="up-form-etiket">Cari <span class="up-zorunlu">*</span></label>
+        <input type="hidden" id="plan-cari" value="">
+        <div class="up-cdrop" id="up-cdrop" onclick="cdropToggle()">
+          <span id="up-cdrop-label" class="up-cdrop-placeholder">— Cari Seçiniz —</span>
+          <svg class="up-cdrop-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" width="14" height="14">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </div>
+        <div class="up-cdrop-liste" id="up-cdrop-liste" style="display:none">
+          <input type="text" class="up-cdrop-ara" id="up-cdrop-ara"
+                 placeholder="Ara..." oninput="cdropFiltrele(this.value)"
+                 onclick="event.stopPropagation()">
           {% for c in cariler %}
-          <option value="{{ c.cari_kod }} - {{ c.unvan }}">
-            {{ c.cari_kod }} — {{ c.unvan }}
-          </option>
+          <div class="up-cdrop-item"
+               data-value="{{ c.cari_kod }} - {{ c.unvan }}"
+               data-unvan="{{ c.unvan }}"
+               data-kod="{{ c.cari_kod }}"
+               onclick="event.stopPropagation(); cdropSec(this)">
+            <span class="up-cdrop-ad">{{ c.unvan }}</span>
+          </div>
           {% endfor %}
-        </select>
+        </div>
+        <div id="up-cari-secili" class="up-cari-secili" style="display:none">
+          <span class="up-cs-etiket">Seçili:</span>
+          <span id="up-cari-secili-metin"></span>
+        </div>
       </div>
 
-      {# 2) Formül #}
-      <div class="up-form-grup">
-        <label class="up-form-etiket">Formül</label>
-        <select id="plan-formul" class="up-form-select" onchange="formulSec(this.value)">
-          <option value="">— Seçiniz —</option>
-          {% for f in formuller %}
-          <option value="{{ f.formul_id }}">{{ f.formul_ad }}</option>
-          {% endfor %}
-        </select>
-      </div>
+      {# Satır 2: Formül + Renk yan yana #}
+      <div class="up-form-grid-2" id="formul-renk-satir">
 
-      {# 3) Renk — JS ile doldurulur #}
-      <div class="up-form-grup" id="renk-grup" style="display:none">
-        <label class="up-form-etiket">Renk</label>
-        <div id="renk-butonlar" class="up-renk-grid"></div>
-      </div>
+        <div class="up-form-grup">
+          <label class="up-form-etiket">Formül <span class="up-zorunlu">*</span></label>
+          <input type="hidden" id="plan-formul" value="">
+          {% if formuller %}
+          <div class="up-cdrop" id="up-fdrop" onclick="fdropToggle()">
+            <span id="up-fdrop-label" class="up-cdrop-placeholder">— Seçiniz —</span>
+            <svg class="up-cdrop-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" width="14" height="14">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </div>
+          <div class="up-cdrop-liste" id="up-fdrop-liste" style="display:none">
+            <input type="text" class="up-cdrop-ara" id="up-fdrop-ara"
+                   placeholder="Ara..." oninput="fdropFiltrele(this.value)"
+                   onclick="event.stopPropagation()">
+            {% for f in formuller %}
+            <div class="up-cdrop-item"
+                 data-value="{{ f.formul_id }}"
+                 data-ad="{{ f.formul_ad }}"
+                 onclick="event.stopPropagation(); fdropSec(this)">
+              <span class="up-cdrop-ad">{{ f.formul_ad }}</span>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="up-recete-uyari">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 width="16" height="16" style="flex-shrink:0;color:#b45309">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            <div>
+              <div class="up-recete-uyari-baslik">Üretime açık formül yok.</div>
+              <a href="/nexgen/recete/" class="up-recete-uyari-btn">Reçeteyi Aç →</a>
+            </div>
+          </div>
+          {% endif %}
+        </div>
 
-      {# Seçim önizleme #}
+        <div class="up-form-grup" id="renk-grup" style="display:none">
+          <label class="up-form-etiket">Renk</label>
+          <div id="renk-butonlar" class="up-renk-grid"></div>
+        </div>
+
+      </div>{# /satır 2 #}
+
+      {# Seçim özet kartı — formül seçilince gösterilir #}
       <div id="up-onizleme" class="up-secim-onizleme" style="display:none"></div>
 
-      {# 4) Toplam KG #}
+      {# Satır 3: Toplam KG #}
       <div class="up-form-grup" id="kg-grup" style="display:none">
-        <label class="up-form-etiket">Toplam KG</label>
-        <div class="up-kg-input-grup">
-          <input type="number" id="plan-kg" class="up-form-input" min="1" step="1"
-                 placeholder="5000" oninput="kgGuncelle()">
+        <label class="up-form-etiket">Toplam KG <span class="up-zorunlu">*</span></label>
+        <div class="up-kg-satir">
+          <input type="number" id="plan-kg" class="up-form-input up-kg-input" min="1" step="1"
+                 placeholder="0" oninput="kgGuncelle()">
           <span class="up-kg-birim">KG</span>
-        </div>
-        <div class="up-hizli-kg">
-          <button type="button" onclick="hizliKg(1000)">1000</button>
-          <button type="button" onclick="hizliKg(2500)">2500</button>
-          <button type="button" onclick="hizliKg(5000)">5000</button>
-          <button type="button" onclick="hizliKg(10000)">10000</button>
+          <div class="up-hizli-kg">
+            <button type="button" onclick="hizliKg(1000)">1.000</button>
+            <button type="button" onclick="hizliKg(2500)">2.500</button>
+            <button type="button" onclick="hizliKg(5000)">5.000</button>
+            <button type="button" onclick="hizliKg(10000)">10.000</button>
+          </div>
         </div>
       </div>
 
-      {# 5) Dağılım #}
+      {# Satır 4: Dağılım #}
       <div class="up-form-grup" id="dagitim-grup" style="display:none">
         <label class="up-form-etiket">Dağılım</label>
         <div class="up-dagitim-grid" id="dagitim-butonlar">
           <button type="button" class="up-dag-btn" id="dag-esit"
-                  onclick="dagSec('ESIT')">LARGE + SMALL<br><small>Eşit Dağıt</small></button>
+                  onclick="dagSec('ESIT')">
+            <span class="up-dag-ust">LARGE + SMALL</span>
+            <span class="up-dag-alt">Eşit Dağıt</span>
+          </button>
           <button type="button" class="up-dag-btn" id="dag-large"
-                  onclick="dagSec('LARGE')">Sadece<br><strong>LARGE</strong></button>
+                  onclick="dagSec('LARGE')">
+            <span class="up-dag-ust">Sadece</span>
+            <span class="up-dag-ana">LARGE</span>
+          </button>
           <button type="button" class="up-dag-btn" id="dag-small"
-                  onclick="dagSec('SMALL')">Sadece<br><strong>SMALL</strong></button>
+                  onclick="dagSec('SMALL')">
+            <span class="up-dag-ust">Sadece</span>
+            <span class="up-dag-ana">SMALL</span>
+          </button>
           <button type="button" class="up-dag-btn" id="dag-manuel"
-                  onclick="dagSec('MANUEL')">Manuel<br><small>KG gir</small></button>
+                  onclick="dagSec('MANUEL')">
+            <span class="up-dag-ust">Manuel</span>
+            <span class="up-dag-alt">KG gir</span>
+          </button>
         </div>
       </div>
 
       {# Manuel KG girişi #}
-      <div id="manuel-grup" class="up-form-iki-sutun" style="display:none">
+      <div id="manuel-grup" class="up-form-grid-2" style="display:none">
         <div class="up-form-grup">
           <label class="up-form-etiket">LARGE KG</label>
-          <input type="number" id="plan-large-kg" class="up-form-input" min="0" step="1"
-                 placeholder="0">
+          <input type="number" id="plan-large-kg" class="up-form-input" min="0" step="1" placeholder="0">
         </div>
         <div class="up-form-grup">
           <label class="up-form-etiket">SMALL KG</label>
-          <input type="number" id="plan-small-kg" class="up-form-input" min="0" step="1"
-                 placeholder="0">
+          <input type="number" id="plan-small-kg" class="up-form-input" min="0" step="1" placeholder="0">
         </div>
       </div>
 
-      {# Özet önizleme #}
+      {# Özet satırı #}
       <div id="plan-ozet" class="up-plan-ozet" style="display:none"></div>
 
       {# Notlar #}
       <div class="up-form-grup">
         <label class="up-form-etiket">Notlar <span class="up-opsiyonel">(opsiyonel)</span></label>
         <input type="text" id="plan-notlar" class="up-form-input"
-               placeholder="Hat 1, ek not...">
+               placeholder="Hat, vardiya, ek not...">
       </div>
 
       <div id="up-form-hata" class="up-form-hata" style="display:none"></div>
 
-    </div>
+    </div>{# /govde #}
 
+    {# ── Footer ── #}
     <div class="up-modal-alt">
       <button class="up-modal-iptal-btn" onclick="modalKapat()">İptal</button>
       <button class="up-modal-kaydet-btn" id="up-kaydet-btn"
@@ -230,251 +517,247 @@ var _formuller = {{ formuller | tojson }};
 {# ══ STYLE ════════════════════════════════════════════════════════════ #}
 <style>
 * { box-sizing: border-box; }
-.up-sayfa { min-height: 100vh; background: #f0f4f8; }
 
-/* ── Topbar ── */
-.up-topbar {
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-  border-bottom: 3px solid #f6c343;
-}
-.up-topbar-ic {
-  max-width: 1180px; margin: 0 auto;
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 20px;
-}
-.up-topbar-kucuk { font-size: 10px; font-weight: 800; color: rgba(255,255,255,.35); letter-spacing: 3px; text-transform: uppercase; }
-.up-topbar-buyuk { font-size: 20px; font-weight: 900; color: #fff; }
-.up-topbar-sag { display: flex; align-items: center; gap: 10px; }
-.up-geri-btn {
-  padding: 8px 16px; background: rgba(255,255,255,.1); color: #fff;
-  border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 700;
-}
-.up-geri-btn:hover { background: rgba(255,255,255,.18); }
-.up-yeni-btn {
-  padding: 10px 20px; background: #f6c343; color: #1a1a1a;
-  border: none; border-radius: 10px; font-size: 15px; font-weight: 800;
-  cursor: pointer;
-}
-.up-yeni-btn:hover { background: #e9b020; }
+/* ══════════════════════════════════════════════
+   MODAL — Yeni Üretim Siparişi
+   ══════════════════════════════════════════════ */
 
-/* ── Özet band ── */
-.up-ozet-band { background: #fff; border-bottom: 1px solid #e5e7eb; }
-.up-ozet-ic {
-  max-width: 1180px; margin: 0 auto; padding: 14px 20px;
-  display: flex; gap: 12px;
-}
-.up-ozet-kart { flex: 1; border-radius: 10px; padding: 12px 16px; text-align: center; }
-.up-ozet-sayi { font-size: 28px; font-weight: 900; }
-.up-ozet-etiket { font-size: 10px; font-weight: 800; letter-spacing: 1.5px; color: #6b7280; text-transform: uppercase; }
-.up-ozet-planlandi { background: #fefce8; border: 1.5px solid #fde047; }
-.up-ozet-planlandi .up-ozet-sayi { color: #854d0e; }
-.up-ozet-basladi { background: #dbeafe; border: 1.5px solid #93c5fd; }
-.up-ozet-basladi .up-ozet-sayi { color: #1d4ed8; }
-.up-ozet-bitti { background: #dcfce7; border: 1.5px solid #86efac; }
-.up-ozet-bitti .up-ozet-sayi { color: #15803d; }
-.up-ozet-toplam { background: #f1f5f9; border: 1.5px solid #e2e8f0; }
-.up-ozet-toplam .up-ozet-sayi { color: #374151; }
-
-/* ── Liste ── */
-.up-liste-kapsayici {
-  max-width: 1180px; margin: 20px auto; padding: 0 20px 48px;
-  display: flex; flex-direction: column; gap: 10px;
-}
-
-/* ── Boş ── */
-.up-bos {
-  text-align: center; padding: 60px 20px;
-  background: #fff; border-radius: 16px; border: 1px solid #e5e7eb;
-}
-.up-bos-ikon { font-size: 48px; margin-bottom: 12px; }
-.up-bos-metin { font-size: 16px; color: #6b7280; margin-bottom: 16px; }
-
-/* ── Plan kartı ── */
-.up-kart {
-  background: #fff; border-radius: 14px; border: 1px solid #e5e7eb;
-  padding: 14px 18px;
-  display: flex; align-items: center; gap: 14px;
-  position: relative; transition: box-shadow .12s;
-}
-.up-kart:hover { box-shadow: 0 4px 16px rgba(15,23,42,.08); }
-.up-kart-planlandi { border-left: 4px solid #fde047; }
-.up-kart-basladi   { border-left: 4px solid #60a5fa; }
-.up-kart-bitti     { border-left: 4px solid #4ade80; opacity: .7; }
-.up-kart-iptal     { border-left: 4px solid #d1d5db; opacity: .45; }
-
-.up-oncelik {
-  width: 34px; height: 34px; border-radius: 50%;
-  background: #f1f5f9; border: 1.5px solid #e2e8f0;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 14px; font-weight: 900; color: #374151; flex-shrink: 0;
-}
-
-/* Kart sol */
-.up-kart-sol { flex: 1; min-width: 0; }
-.up-kart-ust {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
-  margin-bottom: 6px;
-}
-.up-cari-tag {
-  font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 4px;
-  background: #1e293b; color: #f6c343; letter-spacing: .5px;
-}
-.up-formul-ad { font-size: 16px; font-weight: 800; color: #1e293b; }
-.up-renk-ad { font-size: 14px; color: #64748b; font-weight: 600; }
-.up-boyut-rozet {
-  font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 5px;
-}
-.up-boyut-large { background: #dbeafe; color: #1d4ed8; }
-.up-boyut-small { background: #fef9c3; color: #854d0e; }
-.up-alt-bilgi { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.up-plan-kodu { font-size: 11px; font-weight: 800; color: #94a3b8; font-family: monospace; }
-.up-siparis { font-size: 11px; color: #6b7280; background: #f8fafc; padding: 1px 6px; border-radius: 4px; }
-.up-tarih { font-size: 11px; color: #9ca3af; }
-.up-not { font-size: 11px; color: #64748b; font-style: italic; }
-
-/* Kart orta */
-.up-kart-orta { text-align: center; flex-shrink: 0; min-width: 60px; }
-.up-kg { font-size: 24px; font-weight: 900; color: #f59e0b; }
-.up-kg-etiket { font-size: 10px; font-weight: 800; color: #9ca3af; letter-spacing: 1px; }
-
-/* Kart sağ */
-.up-kart-sag {
-  display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
-  flex-shrink: 0;
-}
-.up-durum {
-  font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 6px;
-  text-transform: uppercase; letter-spacing: .5px;
-}
-.up-d-planlandi { background: #fefce8; color: #854d0e; }
-.up-d-basladi   { background: #dbeafe; color: #1d4ed8; }
-.up-d-bitti     { background: #dcfce7; color: #15803d; }
-.up-d-iptal     { background: #f1f5f9; color: #9ca3af; }
-
-.up-aksiyon-grubu { display: flex; gap: 6px; }
-.up-basla-btn {
-  padding: 8px 14px; background: #f6c343; color: #1a1a1a;
-  border: none; border-radius: 8px; font-size: 13px; font-weight: 800;
-  cursor: pointer; white-space: nowrap;
-}
-.up-basla-btn:hover { background: #e9b020; }
-.up-iptal-btn {
-  width: 34px; height: 34px; background: #fef2f2; color: #ef4444;
-  border: 1.5px solid #fca5a5; border-radius: 8px; cursor: pointer;
-  font-size: 14px; font-weight: 800;
-}
-.up-iptal-btn:hover { background: #fee2e2; }
-.up-devam-link {
-  font-size: 13px; font-weight: 800; color: #1d4ed8; text-decoration: none;
-  padding: 6px 12px; background: #dbeafe; border-radius: 8px;
-}
-.up-devam-link:hover { background: #bfdbfe; }
-
-/* ── Modal ── */
 .up-modal-arka {
-  position: fixed; inset: 0; background: rgba(15,23,42,.5);
-  z-index: 1000; display: flex; align-items: center; justify-content: center;
-  padding: 20px;
+  position: fixed; inset: 0;
+  background: rgba(15,23,42,.52);
+  z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px;
 }
+
 .up-modal {
-  background: #fff; border-radius: 20px; width: 100%; max-width: 560px;
-  max-height: 92vh; overflow-y: auto;
-  box-shadow: 0 20px 60px rgba(0,0,0,.25);
+  background: #fff;
+  border-radius: 12px;
+  width: 100%; max-width: 880px;
+  max-height: 94vh; overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0,0,0,.16);
+  border: 1px solid #dde3ed;
 }
+
+/* ── Başlık ── */
 .up-modal-baslik {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 18px 22px; border-bottom: 1px solid #f1f5f9;
-  font-size: 17px; font-weight: 800; color: #1e293b;
-  position: sticky; top: 0; background: #fff; z-index: 1;
+  padding: 14px 20px;
+  border-bottom: 1px solid #f0f2f5;
+  position: sticky; top: 0; background: #fff; z-index: 2;
 }
+.up-modal-baslik-ic { display: flex; flex-direction: column; gap: 2px; }
+.up-modal-baslik-yazi { font-size: 15px; font-weight: 800; color: #111827; }
+.up-modal-aciklama   { font-size: 11px; color: #94a3b8; }
+.up-modal-baslik-sag { display: flex; align-items: center; gap: 12px; }
+
+/* Sipariş no kutusu — sağ üst */
+.up-sip-no-kutu {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 1px;
+  padding: 4px 10px; background: #f8fafc;
+  border: 1px solid #e5e9f0; border-radius: 6px;
+}
+.up-sip-no-etiket { font-size: 9px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: .5px; }
+.up-sip-no-deger  { font-size: 11px; font-weight: 600; color: #475569; font-family: monospace; }
+
 .up-modal-kapat {
-  width: 32px; height: 32px; border-radius: 8px;
+  width: 28px; height: 28px; border-radius: 6px;
   background: #f1f5f9; border: none; cursor: pointer;
-  font-size: 16px; color: #64748b;
+  font-size: 14px; color: #64748b; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
 }
-.up-modal-govde { padding: 18px 22px; display: flex; flex-direction: column; gap: 16px; }
+.up-modal-kapat:hover { background: #e2e8f0; }
 
-.up-form-grup { display: flex; flex-direction: column; gap: 6px; }
-.up-form-etiket { font-size: 11px; font-weight: 800; color: #64748b; letter-spacing: .5px; text-transform: uppercase; }
+/* ── Gövde ── */
+.up-modal-govde {
+  padding: 18px 20px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+
+/* ── Form temel ── */
+.up-form-grup { display: flex; flex-direction: column; gap: 5px; position: relative; }
+.up-form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+.up-form-etiket {
+  font-size: 10px; font-weight: 700; color: #64748b;
+  text-transform: uppercase; letter-spacing: .5px;
+}
+.up-zorunlu  { color: #ef4444; margin-left: 1px; }
 .up-opsiyonel { font-weight: 400; text-transform: none; color: #9ca3af; }
-.up-form-select, .up-form-input {
-  padding: 11px 14px; border: 1.5px solid #e2e8f0; border-radius: 10px;
-  font-size: 15px; color: #1e293b; outline: none; width: 100%;
-}
-.up-form-select:focus, .up-form-input:focus { border-color: #f6c343; }
-.up-form-iki-sutun { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
-/* Renk grid */
-.up-renk-grid { display: flex; flex-wrap: wrap; gap: 8px; }
-.up-renk-btn {
-  padding: 8px 16px; border: 2px solid #e2e8f0; border-radius: 8px;
-  background: #f8fafc; font-size: 14px; font-weight: 700; cursor: pointer;
-  color: #374151; transition: all .12s;
+.up-form-input {
+  padding: 8px 11px; border: 1px solid #dde3ed; border-radius: 7px;
+  font-size: 13px; color: #111827; outline: none; width: 100%;
+  background: #fff;
 }
-.up-renk-btn:hover { border-color: #f6c343; background: #fefce8; }
-.up-renk-btn.aktif { border-color: #f6c343; background: #fef9c3; color: #1a1a1a; }
+.up-form-input:focus { border-color: #f6c343; box-shadow: 0 0 0 2px rgba(246,195,67,.15); }
 
-/* Seçim önizleme */
-.up-secim-onizleme {
-  background: #f8fafc; border-radius: 8px; padding: 10px 14px;
-  font-size: 14px; font-weight: 700; color: #1e293b;
+/* ── Cari dropdown ── */
+.up-cdrop {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 11px; border: 1px solid #dde3ed; border-radius: 7px;
+  background: #fff; cursor: pointer; user-select: none;
+  transition: border-color .1s; min-height: 38px;
+}
+.up-cdrop:hover { border-color: #b0bec5; }
+.up-cdrop.acik  { border-color: #f6c343; box-shadow: 0 0 0 2px rgba(246,195,67,.15); }
+.up-cdrop-placeholder { font-size: 13px; color: #adb5bd; }
+.up-cdrop-label-ic  { display: flex; flex-direction: column; gap: 1px; }
+.up-cdrop-label-kod { font-size: 10px; font-weight: 700; color: #64748b; font-family: monospace; }
+.up-cdrop-label-ad  { font-size: 13px; font-weight: 600; color: #111827; }
+.up-cdrop-ok { flex-shrink: 0; color: #94a3b8; }
+
+.up-cdrop-liste {
+  position: absolute; z-index: 200;
+  top: 100%; left: 0; right: 0;
+  background: #fff; border: 1px solid #dde3ed; border-radius: 7px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.10);
+  max-height: 220px; overflow-y: auto;
+  margin-top: 3px;
+}
+.up-cdrop-ara {
+  width: 100%; padding: 8px 11px;
+  border: none; border-bottom: 1px solid #f0f2f5;
+  font-size: 12px; outline: none;
+  background: #f8fafc; border-radius: 7px 7px 0 0;
+}
+.up-cdrop-item {
+  padding: 7px 11px; cursor: pointer;
+  display: flex; align-items: baseline; gap: 8px;
+  border-bottom: 1px solid #f8fafc;
+  transition: background .06s;
+}
+.up-cdrop-item:hover { background: #fffde7; }
+.up-cdrop-item.aktif { background: #fef9c3; }
+.up-cdrop-kod { font-size: 10px; font-weight: 700; color: #64748b; font-family: monospace; white-space: nowrap; }
+.up-cdrop-ad  { font-size: 13px; color: #1e293b; }
+
+/* Seçili cari bandı */
+.up-cari-secili {
+  background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px;
+  padding: 4px 10px; font-size: 12px; color: #15803d;
   display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
 }
+.up-cs-etiket { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; }
 
-/* KG */
-.up-kg-input-grup { display: flex; align-items: center; gap: 8px; }
-.up-kg-birim { font-size: 15px; font-weight: 800; color: #6b7280; }
-.up-hizli-kg { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
-.up-hizli-kg button {
-  padding: 5px 12px; border: 1.5px solid #e2e8f0; border-radius: 6px;
-  background: #f8fafc; font-size: 13px; font-weight: 700; cursor: pointer; color: #374151;
+/* ── Renk grid ── */
+.up-renk-grid { display: flex; flex-wrap: wrap; gap: 5px; }
+.up-renk-btn {
+  padding: 5px 12px; border: 1px solid #dde3ed; border-radius: 6px;
+  background: #f8fafc; font-size: 12px; font-weight: 600; cursor: pointer;
+  color: #374151; transition: all .08s;
 }
-.up-hizli-kg button:hover { background: #fef9c3; border-color: #fde047; }
+.up-renk-btn:hover { border-color: #f6c343; background: #fefce8; }
+.up-renk-btn.aktif { border-color: #f6c343; background: #fef9c3; color: #111827; font-weight: 700; }
 
-/* Dağılım */
+/* ── Seçim özet kartı ── */
+.up-secim-onizleme {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: #fffdf0; border: 1px solid #f6e58d;
+  border-left: 3px solid #f6c343;
+  border-radius: 7px; padding: 9px 14px;
+  font-size: 13px; font-weight: 700; color: #1e293b;
+}
+
+/* ── KG satırı ── */
+.up-kg-satir {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.up-kg-input { flex: 0 0 120px !important; width: 120px !important; }
+.up-kg-birim { font-size: 13px; font-weight: 700; color: #64748b; }
+.up-hizli-kg { display: flex; gap: 5px; flex-wrap: wrap; }
+.up-hizli-kg button {
+  padding: 5px 10px; border: 1px solid #dde3ed; border-radius: 5px;
+  background: #f8fafc; font-size: 12px; font-weight: 600; cursor: pointer; color: #374151;
+  transition: all .08s;
+}
+.up-hizli-kg button:hover { background: #fef9c3; border-color: #f6c343; }
+.up-hizli-kg button.aktif-kg { background: #fef9c3; border-color: #f6c343; color: #111827; font-weight: 700; }
+
+/* ── Dağılım kartları ── */
 .up-dagitim-grid {
   display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
 }
 .up-dag-btn {
-  padding: 12px 8px; border: 2px solid #e2e8f0; border-radius: 10px;
-  background: #f8fafc; font-size: 12px; font-weight: 700; cursor: pointer;
-  color: #374151; text-align: center; line-height: 1.4; transition: all .12s;
+  padding: 10px 8px;
+  border: 1px solid #dde3ed; border-radius: 8px;
+  background: #f8fafc; cursor: pointer; text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  transition: all .08s;
 }
-.up-dag-btn:hover:not(:disabled) { border-color: #f6c343; background: #fefce8; }
-.up-dag-btn.aktif { border-color: #f6c343; background: #fef9c3; color: #1a1a1a; }
-.up-dag-btn:disabled { opacity: .35; cursor: not-allowed; }
+.up-dag-btn:hover:not(:disabled) { border-color: #f6c343; background: #fffde7; }
+.up-dag-btn.aktif {
+  border-color: #f6c343; background: #fef9c3;
+  box-shadow: 0 0 0 2px rgba(246,195,67,.2);
+}
+.up-dag-btn:disabled { opacity: .4; cursor: not-allowed; }
+.up-dag-ust { font-size: 11px; font-weight: 600; color: #475569; }
+.up-dag-ana { font-size: 14px; font-weight: 800; color: #111827; }
+.up-dag-alt { font-size: 11px; font-weight: 500; color: #64748b; }
+.up-dag-btn.aktif .up-dag-ust,
+.up-dag-btn.aktif .up-dag-alt { color: #78350f; }
+.up-dag-btn.aktif .up-dag-ana { color: #111827; }
 
-/* Plan özet */
+/* ── Plan özet ── */
 .up-plan-ozet {
-  background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 10px;
-  padding: 12px 16px; font-size: 13px; color: #15803d; font-weight: 700;
-  line-height: 1.8;
+  background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 7px;
+  padding: 10px 14px; font-size: 12px; color: #15803d; font-weight: 600;
+  line-height: 1.9;
 }
 
+/* ── Form hata ── */
 .up-form-hata {
-  background: #fef2f2; border: 1.5px solid #fca5a5; border-radius: 8px;
-  padding: 10px 14px; font-size: 14px; color: #dc2626; font-weight: 700;
+  background: #fef2f2; border: 1px solid #fca5a5; border-radius: 7px;
+  padding: 10px 14px; font-size: 12px; color: #dc2626; font-weight: 600;
+  display: flex; align-items: flex-start; gap: 7px;
 }
+.up-form-hata::before { content: "⚠"; font-size: 13px; flex-shrink: 0; }
+
+/* ── Reçete uyarı ── */
+.up-recete-uyari {
+  display: flex; gap: 8px; align-items: flex-start;
+  background: #fffbeb; border: 1px solid #fcd34d; border-radius: 7px;
+  padding: 9px 12px;
+}
+.up-recete-uyari-baslik { font-size: 12px; font-weight: 700; color: #92400e; margin-bottom: 4px; }
+.up-recete-uyari-btn {
+  display: inline-block; padding: 4px 10px;
+  background: #f59e0b; color: #fff; border-radius: 5px;
+  font-size: 11px; font-weight: 700; text-decoration: none;
+}
+.up-recete-uyari-btn:hover { background: #d97706; }
+
+/* ── Footer ── */
 .up-modal-alt {
-  display: flex; gap: 10px; padding: 14px 22px; border-top: 1px solid #f1f5f9;
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 20px; border-top: 1px solid #f0f2f5;
   position: sticky; bottom: 0; background: #fff;
 }
 .up-modal-iptal-btn {
-  flex: 1; padding: 12px; border: 1.5px solid #e2e8f0; background: #f8fafc;
-  border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; color: #374151;
+  padding: 8px 20px; border: 1px solid #dde3ed; background: #fff;
+  border-radius: 7px; font-size: 13px; font-weight: 600; cursor: pointer; color: #374151;
+  transition: background .08s;
 }
+.up-modal-iptal-btn:hover { background: #f8fafc; }
 .up-modal-kaydet-btn {
-  flex: 2; padding: 12px; background: #f6c343; color: #1a1a1a;
-  border: none; border-radius: 10px; font-size: 15px; font-weight: 800; cursor: pointer;
+  flex: 1; padding: 9px 24px; background: #f6c343; color: #111827;
+  border: none; border-radius: 7px; font-size: 13px; font-weight: 700;
+  cursor: pointer; transition: background .08s;
 }
-.up-modal-kaydet-btn:hover:not(:disabled) { background: #e9b020; }
+.up-modal-kaydet-btn:hover:not(:disabled) { background: #f5b82e; }
 .up-modal-kaydet-btn:disabled { background: #e5e7eb; color: #9ca3af; cursor: not-allowed; }
 
+/* ── Responsive ── */
+@media (max-width: 640px) {
+  .up-form-grid-2    { grid-template-columns: 1fr; }
+  .up-dagitim-grid   { grid-template-columns: repeat(2, 1fr); }
+  .up-kg-satir       { flex-direction: column; align-items: flex-start; }
+  .up-kg-input       { width: 100% !important; flex: none !important; }
+}
 @media (max-width: 600px) {
   .up-ozet-ic { flex-wrap: wrap; }
   .up-ozet-kart { min-width: calc(50% - 6px); }
   .up-kart { flex-wrap: wrap; }
-  .up-dagitim-grid { grid-template-columns: repeat(2, 1fr); }
 }
 </style>
 
@@ -488,6 +771,110 @@ var _secili = {
   dagitim: null,    /* ESIT | LARGE | SMALL | MANUEL */
 };
 
+/* ─── Tablo Filtrele + Pagination ─── */
+var _sayfa_basi   = 25;
+var _aktif_sayfa  = 1;
+var _gorulen_trler = [];
+
+function filtreTemizle() {
+  ['f-ara','f-tarih-bas','f-tarih-bit'].forEach(function(id){
+    var el = document.getElementById(id); if(el) el.value='';
+  });
+  ['f-durum','f-formul','f-renk','f-boyut'].forEach(function(id){
+    var el = document.getElementById(id); if(el) el.selectedIndex=0;
+  });
+  tabloFiltrele();
+}
+
+function sayfaBasiDegis(val) {
+  _sayfa_basi  = parseInt(val) || 25;
+  _aktif_sayfa = 1;
+  sayfaGoster();
+}
+
+function tabloFiltrele() {
+  var ara    = (document.getElementById('f-ara')   ? document.getElementById('f-ara').value   : '').toLowerCase();
+  var durum  = (document.getElementById('f-durum') ? document.getElementById('f-durum').value  : '');
+  var formul = (document.getElementById('f-formul')? document.getElementById('f-formul').value : '');
+  var renk   = (document.getElementById('f-renk')  ? document.getElementById('f-renk').value   : '');
+  var boyut  = (document.getElementById('f-boyut') ? document.getElementById('f-boyut').value   : '');
+  var tarihBas = (document.getElementById('f-tarih-bas')? document.getElementById('f-tarih-bas').value : '');
+  var tarihBit = (document.getElementById('f-tarih-bit')? document.getElementById('f-tarih-bit').value : '');
+
+  var satirlar = document.querySelectorAll('#up-tablo-body .ut-tr');
+  _gorulen_trler = [];
+  satirlar.forEach(function(tr) {
+    var tara   = (tr.dataset.ara    || '');
+    var tdurum  = (tr.dataset.durum  || '');
+    var tformul = (tr.dataset.formul || '');
+    var trenk   = (tr.dataset.renk   || '');
+    var tboyut  = (tr.dataset.boyut  || '');
+    var ttarih  = (tr.dataset.tarih  || '');
+    var eslesir = (!ara    || tara.includes(ara))                  &&
+                  (!durum  || tdurum === durum)                    &&
+                  (!formul || tformul === formul)                  &&
+                  (!renk   || trenk === renk)                      &&
+                  (!boyut  || tboyut === boyut)                    &&
+                  (!tarihBas || ttarih >= tarihBas)                &&
+                  (!tarihBit || ttarih <= tarihBit);
+    tr.style.display = 'none';  /* pagination açar */
+    if (eslesir) _gorulen_trler.push(tr);
+  });
+  _aktif_sayfa = 1;
+  sayfaGoster();
+}
+
+function sayfaGoster() {
+  var bas = (_aktif_sayfa - 1) * _sayfa_basi;
+  var bit = bas + _sayfa_basi;
+  _gorulen_trler.forEach(function(tr, i) {
+    tr.style.display = (i >= bas && i < bit) ? '' : 'none';
+  });
+  var toplam = _gorulen_trler.length;
+  var sayfa_sayisi = Math.max(1, Math.ceil(toplam / _sayfa_basi));
+
+  /* Toplam metin */
+  var tm = document.getElementById('up-toplam-metin');
+  if (tm) tm.textContent = 'Toplam ' + toplam + ' kayıt';
+
+  /* Boş mesaj */
+  var bosDiv = document.getElementById('up-filtre-bos');
+  if (bosDiv) bosDiv.style.display = (toplam === 0) ? 'block' : 'none';
+
+  /* Pagination */
+  var pag = document.getElementById('up-sayfalama');
+  if (!pag) return;
+  pag.innerHTML = '';
+
+  function pagBtn(label, sayfa, aktif, disabled) {
+    var b = document.createElement('button');
+    b.className = 'up-pag-btn' + (aktif ? ' aktif' : '');
+    b.disabled = disabled;
+    b.textContent = label;
+    b.onclick = function() { _aktif_sayfa = sayfa; sayfaGoster(); };
+    return b;
+  }
+
+  pag.appendChild(pagBtn('«', 1, false, _aktif_sayfa === 1));
+  pag.appendChild(pagBtn('‹', _aktif_sayfa - 1, false, _aktif_sayfa === 1));
+
+  var baslangic = Math.max(1, _aktif_sayfa - 2);
+  var bitis     = Math.min(sayfa_sayisi, baslangic + 4);
+  for (var i = baslangic; i <= bitis; i++) {
+    pag.appendChild(pagBtn(String(i), i, i === _aktif_sayfa, false));
+  }
+
+  pag.appendChild(pagBtn('›', _aktif_sayfa + 1, false, _aktif_sayfa === sayfa_sayisi));
+  pag.appendChild(pagBtn('»', sayfa_sayisi, false, _aktif_sayfa === sayfa_sayisi));
+}
+
+/* İlk yükleme: tüm satırlar görünür olsun */
+document.addEventListener('DOMContentLoaded', function() {
+  var satirlar = document.querySelectorAll('#up-tablo-body .ut-tr');
+  satirlar.forEach(function(tr) { _gorulen_trler.push(tr); });
+  sayfaGoster();
+});
+
 /* ─── Modal ─── */
 function modalAc() {
   document.getElementById('up-modal-arka').style.display = 'flex';
@@ -500,30 +887,144 @@ function modalKapat(e) {
 function modalSifirla() {
   _secili = { formul_id:null, formul_ad:null, renk_id:null, renk_ad:null,
               large_uv_id:null, small_uv_id:null, dagitim:null };
-  document.getElementById('plan-formul').value = '';
+  var sipEl = document.getElementById('plan-siparis-no');
+  if (sipEl) sipEl.value = '';
   document.getElementById('plan-cari').value = '';
+  var lbl = document.getElementById('up-cdrop-label');
+  if (lbl) { lbl.className = 'up-cdrop-placeholder'; lbl.innerHTML = '— Cari Seçiniz —'; }
+  document.querySelectorAll('#up-cdrop-liste .up-cdrop-item').forEach(function(i){ i.classList.remove('aktif'); });
+  document.getElementById('plan-formul').value = '';
+  var flbl = document.getElementById('up-fdrop-label');
+  if (flbl) { flbl.className = 'up-cdrop-placeholder'; flbl.style.color = ''; flbl.textContent = '— Seçiniz —'; }
+  document.querySelectorAll('#up-fdrop-liste .up-cdrop-item').forEach(function(i){ i.classList.remove('aktif'); });
   document.getElementById('plan-kg').value = '';
   document.getElementById('plan-large-kg').value = '';
   document.getElementById('plan-small-kg').value = '';
   document.getElementById('plan-notlar').value = '';
   document.getElementById('renk-grup').style.display = 'none';
+  document.getElementById('formul-renk-satir').style.gridTemplateColumns = '1fr';
   document.getElementById('kg-grup').style.display = 'none';
   document.getElementById('dagitim-grup').style.display = 'none';
   document.getElementById('manuel-grup').style.display = 'none';
   document.getElementById('plan-ozet').style.display = 'none';
   document.getElementById('up-onizleme').style.display = 'none';
   document.getElementById('up-form-hata').style.display = 'none';
+  document.getElementById('up-cari-secili').style.display = 'none';
   document.getElementById('up-kaydet-btn').disabled = true;
-  /* Tüm aktif sınıfları temizle */
   document.querySelectorAll('.up-renk-btn').forEach(function(b){ b.classList.remove('aktif'); });
   document.querySelectorAll('.up-dag-btn').forEach(function(b){ b.classList.remove('aktif'); });
+}
+
+/* ─── Custom Cari Dropdown ─── */
+function cdropToggle() {
+  var liste = document.getElementById('up-cdrop-liste');
+  var drop  = document.getElementById('up-cdrop');
+  var acik  = liste.style.display !== 'none';
+  if (acik) {
+    liste.style.display = 'none';
+    drop.classList.remove('acik');
+  } else {
+    liste.style.display = 'block';
+    drop.classList.add('acik');
+    var ara = document.getElementById('up-cdrop-ara');
+    if (ara) { ara.value = ''; cdropFiltrele(''); setTimeout(function(){ ara.focus(); }, 50); }
+  }
+}
+
+function cdropFiltrele(q) {
+  q = (q || '').toLowerCase();
+  document.querySelectorAll('.up-cdrop-item').forEach(function(el) {
+    var kod   = (el.dataset.kod   || '').toLowerCase();
+    var unvan = (el.dataset.unvan || '').toLowerCase();
+    el.style.display = (!q || kod.includes(q) || unvan.includes(q)) ? '' : 'none';
+  });
+}
+
+function cdropSec(el) {
+  var unvan = el.dataset.unvan;
+  /* Hidden input'a sadece unvan yaz — kod gösterilmez, backend'e unvan gider */
+  document.getElementById('plan-cari').value = unvan;
+  /* Dropdown label — sadece unvan */
+  var label = document.getElementById('up-cdrop-label');
+  label.className = 'up-cdrop-label-ic';
+  label.innerHTML = '<span class="up-cdrop-label-ad">' + unvan + '</span>';
+  /* Aktif işaretle */
+  document.querySelectorAll('.up-cdrop-item').forEach(function(i){ i.classList.remove('aktif'); });
+  el.classList.add('aktif');
+  /* Kapat */
+  document.getElementById('up-cdrop-liste').style.display = 'none';
+  document.getElementById('up-cdrop').classList.remove('acik');
+  document.getElementById('up-cari-secili').style.display = 'none';
+}
+
+/* Dropdown dışına tıklayınca kapat */
+document.addEventListener('click', function(e) {
+  /* Cari dropdown kapat */
+  var cdrop = document.getElementById('up-cdrop');
+  if (cdrop && !cdrop.contains(e.target)) {
+    var cl = document.getElementById('up-cdrop-liste');
+    if (cl && !cl.contains(e.target)) {
+      cl.style.display = 'none';
+      cdrop.classList.remove('acik');
+    }
+  }
+  /* Formül dropdown kapat */
+  var fdrop = document.getElementById('up-fdrop');
+  if (fdrop && !fdrop.contains(e.target)) {
+    var fl = document.getElementById('up-fdrop-liste');
+    if (fl && !fl.contains(e.target)) {
+      fl.style.display = 'none';
+      fdrop.classList.remove('acik');
+    }
+  }
+});
+
+/* ─── Custom Formül Dropdown ─── */
+function fdropToggle() {
+  var liste = document.getElementById('up-fdrop-liste');
+  var drop  = document.getElementById('up-fdrop');
+  var acik  = liste.style.display !== 'none';
+  if (acik) {
+    liste.style.display = 'none';
+    drop.classList.remove('acik');
+  } else {
+    liste.style.display = 'block';
+    drop.classList.add('acik');
+    var ara = document.getElementById('up-fdrop-ara');
+    if (ara) { ara.value = ''; fdropFiltrele(''); setTimeout(function(){ ara.focus(); }, 50); }
+  }
+}
+
+function fdropFiltrele(q) {
+  q = (q || '').toLowerCase();
+  document.querySelectorAll('#up-fdrop-liste .up-cdrop-item').forEach(function(el) {
+    var ad = (el.dataset.ad || '').toLowerCase();
+    el.style.display = (!q || ad.includes(q)) ? '' : 'none';
+  });
+}
+
+function fdropSec(el) {
+  if (event) event.stopPropagation();
+  var val = el.dataset.value;
+  var ad  = el.dataset.ad;
+  document.getElementById('plan-formul').value = val;
+  var label = document.getElementById('up-fdrop-label');
+  label.className = 'up-cdrop-label-ad';
+  label.style.color = '#1e293b';
+  label.textContent = ad;
+  document.querySelectorAll('#up-fdrop-liste .up-cdrop-item').forEach(function(i){ i.classList.remove('aktif'); });
+  el.classList.add('aktif');
+  document.getElementById('up-fdrop-liste').style.display = 'none';
+  document.getElementById('up-fdrop').classList.remove('acik');
+  /* Asıl formulSec mantığını çalıştır */
+  formulSec(val);
 }
 
 /* ─── Formül seç ─── */
 function formulSec(fid) {
   if (!fid) return;
   fid = parseInt(fid);
-  var f = _formuller.find(function(x){ return x.formul_id === fid; });
+  var f = _formuller.find(function(x){ return x.formul_id == fid; }); /* == intentional: int/string safe */
   if (!f) return;
   _secili.formul_id = fid;
   _secili.formul_ad = f.formul_ad;
@@ -531,7 +1032,6 @@ function formulSec(fid) {
   _secili.large_uv_id = null; _secili.small_uv_id = null;
   _secili.dagitim = null;
 
-  /* Renk butonlarını doldur */
   var konteyner = document.getElementById('renk-butonlar');
   konteyner.innerHTML = '';
   f.renkler.forEach(function(r) {
@@ -548,6 +1048,7 @@ function formulSec(fid) {
   });
 
   document.getElementById('renk-grup').style.display = 'block';
+  document.getElementById('formul-renk-satir').style.gridTemplateColumns = '1fr 1fr';
   document.getElementById('kg-grup').style.display = 'none';
   document.getElementById('dagitim-grup').style.display = 'none';
   document.getElementById('manuel-grup').style.display = 'none';
@@ -697,6 +1198,8 @@ async function planKaydet() {
   btn.textContent = 'Kaydediliyor...';
 
   var today = new Date().toISOString().split('T')[0];
+  // Kullanıcı girdiyse kullan, boşsa null gönder — backend otomatik üretir
+  var siparis_no = (document.getElementById('plan-siparis-no').value || '').trim() || null;
   var hatalar = [];
 
   for (var i = 0; i < kayitlar.length; i++) {
@@ -710,13 +1213,19 @@ async function planKaydet() {
           uretim_varyant_id: k.uv_id,
           planlanan_kg: k.kg,
           musteri_adi: cari,
+          siparis_no: siparis_no,
           plan_tarihi: today,
           notlar: notlar,
           oncelik_sira: 10,
         })
       });
       var j = await r.json();
-      if (!j.ok) hatalar.push(j.hata || 'Hata');
+      if (!j.ok) {
+        hatalar.push(j.hata || 'Hata');
+      } else if (j.siparis_no && !siparis_no) {
+        // İlk kayıttan dönen sipariş no'yu sonraki LARGE/SMALL kayıtına aktar
+        siparis_no = j.siparis_no;
+      }
     } catch(e) {
       hatalar.push('Sunucu hatası');
     }
@@ -734,10 +1243,11 @@ async function planKaydet() {
 function hataErr(msg) {
   var d = document.getElementById('up-form-hata');
   d.textContent = msg;
-  d.style.display = 'block';
+  d.style.display = 'flex';
+  d.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-/* ─── Plan Başla ─── */
+/* ─── Plan Başla (tablet flow) ─── */
 async function planBasla(planId, planKodu, ad) {
   if (!confirm(ad + '\n\nBu plan için üretim batch kodu oluşturulsun mu?')) return;
   try {
@@ -756,6 +1266,102 @@ async function planBasla(planId, planKodu, ad) {
   } catch(e) { alert('Sunucu hatası.'); }
 }
 
+/* ─── Üretime Gönder (PC planlama) ─── */
+/* ─── Üretime Gönder — Önizleme Modal ─────────────────── */
+var _aktifGonderBtn = null;
+var _aktifGonderPlanId = null;
+
+async function planGonder(planId, planKodu, ad) {
+  _aktifGonderBtn    = event.currentTarget;
+  _aktifGonderPlanId = planId;
+
+  var modal = document.getElementById('up-onizleme-modal');
+  var icerik = document.getElementById('up-onizleme-icerik');
+  var hataEl = document.getElementById('up-onizleme-hata');
+
+  hataEl.style.display = 'none';
+  icerik.innerHTML = '<div class="up-onizleme-yukleniyor">Hesaplanıyor...</div>';
+  modal.style.display = 'flex';
+
+  try {
+    var r = await fetch('/nexgen/api/plan/' + planId + '/alt-emir-onizle');
+    var j = await r.json();
+    if (!j.ok) {
+      icerik.innerHTML = '';
+      hataEl.textContent = j.hata || 'Hata oluştu';
+      hataEl.style.display = 'block';
+      return;
+    }
+    var satirlar = [
+      ['Formül', (j.formul_ad || '—') + (j.renk_ad ? ' · ' + j.renk_ad : '') + (j.boyut ? ' (' + j.boyut + ')' : '')],
+      ['Sipariş KG', (j.planlanan_kg || 0).toLocaleString('tr-TR') + ' KG'],
+      ['Formül KG / Alt Emir', (j.formul_batch_kg || 0).toLocaleString('tr-TR') + ' KG'],
+      ['Oluşacak Alt Emir', '<strong>' + (j.alt_emir_sayisi || 0) + ' adet</strong>'],
+      ['Toplam Üretilecek', '<strong>' + (j.toplam_uretim_kg || 0).toLocaleString('tr-TR') + ' KG</strong>'],
+      ['Fazla Üretim', (j.fazla_kg > 0 ? '+' + j.fazla_kg.toLocaleString('tr-TR') + ' KG' : '—')],
+    ];
+    var html = '<table class="up-onizleme-tablo">';
+    satirlar.forEach(function(s) {
+      html += '<tr><td class="up-onizleme-et">' + s[0] + '</td><td class="up-onizleme-val">' + s[1] + '</td></tr>';
+    });
+    html += '</table>';
+    if (j.uyari) {
+      html += '<div class="up-onizleme-uyari">⚠ ' + j.uyari + '</div>';
+    }
+    icerik.innerHTML = html;
+
+    /* Onay butonu durumu */
+    var onayBtn = document.getElementById('up-onizleme-onayla');
+    onayBtn.disabled = (j.alt_emir_sayisi <= 0);
+  } catch(e) {
+    icerik.innerHTML = '';
+    hataEl.textContent = 'Sunucu bağlantı hatası.';
+    hataEl.style.display = 'block';
+  }
+}
+
+function planGonderModalKapat() {
+  document.getElementById('up-onizleme-modal').style.display = 'none';
+  _aktifGonderBtn    = null;
+  _aktifGonderPlanId = null;
+}
+
+async function planGonderOnayla() {
+  if (!_aktifGonderPlanId) return;
+  var btn    = document.getElementById('up-onizleme-onayla');
+  var hataEl = document.getElementById('up-onizleme-hata');
+  btn.disabled    = true;
+  btn.textContent = 'Gönderiliyor...';
+  hataEl.style.display = 'none';
+
+  try {
+    var r = await fetch('/nexgen/api/plan/' + _aktifGonderPlanId + '/basla', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    var j = await r.json();
+    if (j.ok) {
+      planGonderModalKapat();
+      location.reload();
+    } else {
+      hataEl.textContent = j.hata || 'Bilinmeyen hata';
+      hataEl.style.display = 'block';
+      btn.disabled    = false;
+      btn.textContent = 'Onayla ve Gönder';
+    }
+  } catch(e) {
+    hataEl.textContent = 'Sunucu hatası.';
+    hataEl.style.display = 'block';
+    btn.disabled    = false;
+    btn.textContent = 'Onayla ve Gönder';
+  }
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') planGonderModalKapat();
+});
+
 /* ─── Plan İptal ─── */
 async function planIptal(planId) {
   if (!confirm('Bu planı iptal etmek istediğinize emin misiniz?')) return;
@@ -771,4 +1377,393 @@ async function planIptal(planId) {
   } catch(e) { alert('Sunucu hatası.'); }
 }
 </script>
+
+<style>
+/* Sipariş No tablo */
+.up-sip-kodu {
+  font-size: 12px; font-weight: 800; color: #7c3aed;
+  background: #ede9fe; padding: 2px 7px; border-radius: 4px;
+  font-family: monospace; display: inline-block; margin-bottom: 2px;
+}
+.up-plan-kodu-alt {
+  font-size: 10px; color: #94a3b8; font-family: monospace;
+}
+/* Bitti tag */
+.up-durum-bitti-tag {
+  font-size: 11px; font-weight: 700; color: #7c3aed;
+}
+/* Sipariş no modal input */
+.up-form-input {
+  width: 100%; padding: 10px 12px;
+  border: 1.5px solid #e2e8f0; border-radius: 8px;
+  font-size: 14px; color: #1e293b;
+  outline: none; transition: border-color .15s;
+}
+.up-form-input:focus { border-color: #f6c343; }
+/* ── Ek durum eşlemeleri (eski) ── */
+.up-d-bitti   { background: #ede9fe; color: #6d28d9; }
+.up-d-iptal   { background: #fee2e2; color: #991b1b; }
+.up-tr-bitti  { opacity: .75; }
+.up-tr-iptal  { opacity: .55; }
+
+/* ════════════════════════════════════════════════════
+   YENİ TASARIM — up-sayfa v2 (Üretim Planı)
+════════════════════════════════════════════════════ */
+
+/* Sayfa zemini */
+.up-sayfa { background: #f0f4f8; min-height: 100vh; }
+
+/* ── Header Bar ── */
+.up-header-bar {
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0 28px;
+}
+.up-header-ic {
+  max-width: 1400px; margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 0;          /* 20px → 14px: daha sıkı */
+  min-height: 0;
+}
+.up-header-sol {}
+.up-header-baslik {
+  font-size: 18px; font-weight: 900; color: #0f172a; margin: 0 0 2px;  /* 22px → 18px */
+}
+.up-header-alt {
+  font-size: 12px; color: #94a3b8; margin: 0; font-weight: 400;         /* 13px → 12px, daha soluk */
+}
+.up-yeni-btn {
+  padding: 11px 22px; background: #f6c343; color: #1a1a1a;
+  border: none; border-radius: 10px; font-size: 14px; font-weight: 800;
+  cursor: pointer; white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(246,195,67,.35);
+}
+.up-yeni-btn:hover { background: #e9b020; }
+
+/* ── Özet Satırı ── */
+.up-ozet-satir {
+  max-width: 1400px; margin: 12px auto 0; padding: 0 28px;
+  display: grid; grid-template-columns: repeat(6,1fr); gap: 8px;   /* gap: 12→8, margin: 20→12 */
+}
+.up-ozet-kart {
+  background: #fff; border: 1px solid #e5e9f0; border-radius: 9px;
+  padding: 10px 14px; display: flex; align-items: center; gap: 10px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+}
+.up-ozet-ikon {
+  width: 30px; height: 30px; border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.up-oi-toplam  { background: #f1f5f9; color: #64748b; }
+.up-oi-bekleme { background: #fefce8; color: #92400e; }
+.up-oi-basladi { background: #f0f9ff; color: #0369a1; }
+.up-oi-kismi   { background: #fff7ed; color: #9a3412; }
+.up-oi-bitti   { background: #f0fdf4; color: #166534; }
+.up-oi-iptal   { background: #f8fafc; color: #94a3b8; }
+.up-ozet-ic-metin {}
+.up-ozet-sayi   { font-size: 17px; font-weight: 700; color: #111827; line-height: 1; }
+.up-ozet-etiket { font-size: 10px; font-weight: 500; color: #9ca3af; margin-top: 2px; text-transform: uppercase; letter-spacing: .3px; }
+
+/* ── Gövde (filtre + tablo) ── */
+.up-govde {
+  max-width: 1400px; margin: 12px auto 40px; padding: 0 28px;  /* 16px → 12px */
+}
+
+/* ── Filtre Satırı — tek satır, flex-nowrap ── */
+.up-filtre-bar {
+  display: flex; align-items: center; gap: 8px;
+  flex-wrap: nowrap;           /* ← alt alta olmasın */
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 10px 10px 0 0;
+  padding: 10px 14px;          /* 12px → 10px */
+  border-bottom: 1px solid #e2e8f0;
+  overflow-x: auto;            /* dar ekranda yatay scroll */
+}
+.up-filtre-ara-kap {
+  position: relative;
+  flex: 1 1 160px; min-width: 140px;   /* kalan alanı al, max yok */
+}
+.up-filtre-ara-ikon {
+  position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+  color: #94a3b8; pointer-events: none;
+}
+.up-filtre-inp {
+  width: 100%; height: 38px; padding: 0 10px 0 30px;
+  border: 1.5px solid #e2e8f0; border-radius: 8px;
+  font-size: 13px; color: #1e293b; outline: none; background: #f8fafc;
+  white-space: nowrap;
+}
+.up-filtre-inp:focus { border-color: #f6c343; background: #fff; }
+.up-filtre-sel {
+  height: 38px; padding: 0 8px;
+  border: 1.5px solid #e2e8f0; border-radius: 8px;
+  font-size: 13px; color: #1e293b; outline: none; background: #f8fafc;
+  cursor: pointer; white-space: nowrap; flex-shrink: 0;
+}
+/* Sabit genişlikler */
+#f-durum  { width: 150px; }
+#f-formul { width: 160px; }
+#f-renk   { width: 130px; }
+#f-boyut  { width: 120px; }
+.up-filtre-sel:focus { border-color: #f6c343; }
+.up-filtre-tarih-kap {
+  display: flex; align-items: center; gap: 4px; flex-shrink: 0;
+}
+.up-filtre-tarih {
+  height: 38px; padding: 0 8px;
+  border: 1.5px solid #e2e8f0; border-radius: 8px;
+  font-size: 12px; color: #1e293b; outline: none; background: #f8fafc;
+  width: 126px;
+}
+.up-filtre-tarih:focus { border-color: #f6c343; }
+.up-filtre-tarih-ayrac { font-size: 12px; color: #94a3b8; font-weight: 700; }
+.up-filtre-reset-btn {
+  display: flex; align-items: center; gap: 5px; flex-shrink: 0;
+  height: 38px; padding: 0 14px;
+  border: 1.5px solid #e2e8f0; border-radius: 8px;
+  background: #f8fafc; color: #475569; font-size: 13px; font-weight: 700;
+  cursor: pointer; white-space: nowrap;
+}
+.up-filtre-reset-btn:hover { background: #f1f5f9; border-color: #cbd5e1; }
+
+/* ── Tablo Kapsayıcı ── */
+.up-tablo-kap {
+  overflow-x: auto;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-top: none;
+}
+.up-tablo {
+  width: 100%; border-collapse: collapse;
+  font-size: 13px; color: #111827;
+}
+
+/* Thead */
+.ut-th {
+  background: #f8fafc; padding: 9px 14px;
+  font-size: 10px; font-weight: 700; color: #64748b;
+  text-transform: uppercase; letter-spacing: .6px;
+  border-bottom: 1px solid #e5e9f0;
+  white-space: nowrap; text-align: left;
+}
+.ut-th-sira  { width: 42px; text-align: center; }
+.ut-th-r     { text-align: right; }
+.ut-th-c     { text-align: center; }
+.ut-th-islem { width: 190px; text-align: right; }
+
+/* Tbody */
+.ut-tr {
+  border-bottom: 1px solid #f1f3f6;
+  transition: background .06s;
+}
+.ut-tr:last-child { border-bottom: none; }
+.ut-tr:hover { background: #fafaf8; }
+
+/* Sol kenar çizgisi — tüm statüler aynı ince, nötr renk */
+.ut-tr-planlandi,
+.ut-tr-basladi,
+.ut-tr-kismi_uretim,
+.ut-tr-bitti    { border-left: 2px solid #e2e8f0; }
+.ut-tr-iptal    { border-left: 2px solid #e2e8f0; opacity: .6; }
+
+/* Hücre base */
+.ut-td {
+  padding: 13px 14px; vertical-align: middle;
+  color: #1e293b; font-size: 13px;
+}
+.ut-td-sira    { text-align: center; color: #c4cdd8; font-size: 11px; font-weight: 600; }
+.ut-td-kg      { text-align: right; font-size: 13px; font-weight: 700; color: #b45309; }
+.ut-td-altemir { text-align: center; }
+.ut-td-tarih   { font-size: 11px; color: #94a3b8; white-space: nowrap; }
+.ut-td-formul  { font-size: 13px; font-weight: 700; color: #111827; }
+.ut-td-renk    { font-size: 13px; color: #475569; font-weight: 400; }
+.ut-td-islem   { text-align: right; white-space: nowrap; }
+.ut-td-bos     { color: #d1d5db; font-size: 13px; }
+
+/* Plan No / Sipariş No */
+.ut-sip-no    { font-size: 13px; font-weight: 600; color: #1e293b; font-family: monospace; }
+.ut-plan-kodu { font-size: 11px; font-weight: 400; color: #9ca3af; font-family: monospace; margin-top: 1px; }
+
+/* Cari — sade düz metin */
+.ut-cari-metin { font-size: 13px; color: #334155; font-weight: 400; }
+
+/* Boyut — sadece metin, rozet hafif */
+.ut-boyut {
+  font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px;
+  text-transform: uppercase; letter-spacing: .3px;
+}
+.ut-boyut-large { background: #f1f5f9; color: #475569; }
+.ut-boyut-small { background: #f8fafc; color: #64748b; }
+
+/* Alt Emir */
+.ut-altemir-sayi { font-size: 13px; font-weight: 600; color: #334155; }
+.ut-altemir-yok  { font-size: 11px; color: #d1d5db; }
+
+/* Durum rozetleri — pastel, göz yormaz */
+.ut-durum {
+  font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 4px;
+  white-space: nowrap; display: inline-block;
+}
+.ut-d-planlandi { background: #fefce8; color: #854d0e; border: 1px solid #fef08a; }
+.ut-d-basladi   { background: #f0f9ff; color: #0369a1; border: 1px solid #bae6fd; }
+.ut-d-kismi     { background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; }
+.ut-d-bitti     { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+.ut-d-iptal     { background: #f8fafc; color: #94a3b8; border: 1px solid #e2e8f0; }
+.ut-d-diger     { background: #f8fafc; color: #64748b; border: 1px solid #e2e8f0; }
+
+/* İşlem butonları */
+.ut-islem-grup { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+
+.ut-btn-gonder {
+  padding: 5px 12px; background: #f6c343; color: #111827;
+  border: none; border-radius: 6px; font-size: 12px; font-weight: 600;
+  cursor: pointer; white-space: nowrap; transition: background .08s;
+}
+.ut-btn-gonder:hover    { background: #f5b82e; }
+.ut-btn-gonder:disabled { background: #f1f5f9; color: #9ca3af; cursor: not-allowed; }
+
+/* Devam butonu — nötr, bağırmıyor */
+.ut-btn-devam {
+  padding: 5px 12px;
+  background: #f8fafc; color: #475569;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px; font-size: 12px; font-weight: 500;
+  text-decoration: none; white-space: nowrap; display: inline-block;
+  transition: all .08s;
+}
+.ut-btn-devam:hover { background: #f1f5f9; color: #1e293b; border-color: #cbd5e1; }
+
+/* İptal X — küçük, soft */
+.ut-btn-kucuk {
+  width: 24px; height: 24px; border-radius: 5px;
+  border: 1px solid #e5e9f0; font-size: 11px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; font-weight: 600;
+  transition: background .07s; background: #f8fafc; color: #94a3b8;
+}
+.ut-btn-iptal { }
+.ut-btn-iptal:hover { background: #fee2e2; color: #ef4444; border-color: #fca5a5; }
+.ut-islem-bitti { font-size: 12px; font-weight: 500; color: #16a34a; }
+.ut-islem-pasif { font-size: 12px; color: #9ca3af; }
+
+/* ── Boş durum ── */
+.up-bos {
+  text-align: center; padding: 60px 20px;
+  background: #fff; border: 1px solid #e2e8f0; border-top: none;
+  border-radius: 0 0 12px 12px;
+}
+.up-bos-ikon  { font-size: 48px; margin-bottom: 12px; }
+.up-bos-metin { font-size: 16px; color: #6b7280; margin-bottom: 16px; }
+
+/* ── Alt bar: toplam + pagination + sayfa başına ── */
+.up-alt-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  background: #fff; border: 1px solid #e2e8f0; border-top: none;
+  border-radius: 0 0 12px 12px;
+  padding: 10px 16px; gap: 12px; flex-wrap: wrap;
+}
+.up-alt-toplam { font-size: 13px; color: #64748b; font-weight: 600; }
+.up-sayfalama  { display: flex; gap: 4px; align-items: center; }
+.up-pag-btn {
+  min-width: 32px; height: 32px; padding: 0 8px;
+  border: 1.5px solid #e2e8f0; border-radius: 7px;
+  background: #fff; font-size: 13px; font-weight: 700; color: #374151;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.up-pag-btn:hover    { background: #f1f5f9; }
+.up-pag-btn.aktif    { background: #f6c343; border-color: #f6c343; color: #1a1a1a; }
+.up-pag-btn:disabled { opacity: .35; cursor: not-allowed; }
+.up-sayfa-basi { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #64748b; font-weight: 600; }
+.up-sayfa-basi select {
+  padding: 5px 8px; border: 1.5px solid #e2e8f0; border-radius: 7px;
+  font-size: 13px; color: #1e293b; background: #f8fafc; outline: none;
+}
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+  .up-ozet-satir { grid-template-columns: repeat(3,1fr); }
+}
+@media (max-width: 600px) {
+  .up-ozet-satir { grid-template-columns: repeat(2,1fr); }
+  .up-header-ic  { flex-direction: column; align-items: flex-start; gap: 12px; }
+}
+
+/* ── Üretime Gönder Önizleme Modal ─────────────────── */
+.up-onizleme-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(15,23,42,.55); backdrop-filter: blur(4px);
+  display: none; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.up-onizleme-kutu {
+  background: #fff; border-radius: 16px;
+  padding: 28px; width: 100%; max-width: 440px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.2);
+  border: 1px solid #e2e8f0;
+  display: flex; flex-direction: column; gap: 16px;
+}
+.up-onizleme-baslik {
+  font-size: 16px; font-weight: 900; color: #0f172a;
+  display: flex; align-items: center; gap: 8px;
+}
+.up-onizleme-baslik::before {
+  content: ''; display: inline-block;
+  width: 4px; height: 20px; background: #f6c343; border-radius: 2px;
+}
+.up-onizleme-tablo { width: 100%; border-collapse: collapse; }
+.up-onizleme-tablo tr { border-bottom: 1px solid #f1f5f9; }
+.up-onizleme-tablo tr:last-child { border-bottom: none; }
+.up-onizleme-et {
+  font-size: 12px; font-weight: 700; color: #64748b;
+  padding: 8px 0; width: 44%;
+}
+.up-onizleme-val {
+  font-size: 14px; font-weight: 700; color: #1e293b;
+  padding: 8px 0;
+}
+.up-onizleme-uyari {
+  background: #fefce8; border: 1px solid #fde047;
+  color: #854d0e; border-radius: 8px;
+  padding: 10px 14px; font-size: 13px; font-weight: 600;
+}
+.up-onizleme-butonlar { display: flex; gap: 10px; }
+.up-onizleme-btn {
+  flex: 1; padding: 14px; border: none; border-radius: 10px;
+  font-size: 14px; font-weight: 800; cursor: pointer;
+}
+.up-onizleme-iptal { background: #f1f5f9; color: #64748b; }
+.up-onizleme-iptal:hover { background: #e2e8f0; }
+.up-onizleme-onayla {
+  background: #f6c343; color: #1a1a1a;
+  box-shadow: 0 2px 8px rgba(246,195,67,.4);
+}
+.up-onizleme-onayla:hover { background: #e9b020; }
+.up-onizleme-onayla:disabled { opacity: .4; cursor: not-allowed; }
+.up-onizleme-hata {
+  background: #fef2f2; border: 1px solid #fecaca;
+  color: #dc2626; border-radius: 8px;
+  padding: 10px 14px; font-size: 13px; font-weight: 600;
+  display: none;
+}
+.up-onizleme-yukleniyor {
+  text-align: center; color: #94a3b8;
+  font-size: 14px; padding: 20px 0;
+}
+</style>
+
+{# ── Üretime Gönder Önizleme Modal ──────────────────── #}
+<div class="up-onizleme-overlay" id="up-onizleme-modal">
+  <div class="up-onizleme-kutu">
+    <div class="up-onizleme-baslik">Üretime Gönder — Alt Emir Özeti</div>
+    <div id="up-onizleme-icerik"></div>
+    <div class="up-onizleme-hata" id="up-onizleme-hata"></div>
+    <div class="up-onizleme-butonlar">
+      <button class="up-onizleme-btn up-onizleme-iptal"
+              onclick="planGonderModalKapat()">İptal</button>
+      <button class="up-onizleme-btn up-onizleme-onayla"
+              id="up-onizleme-onayla"
+              onclick="planGonderOnayla()">Onayla ve Gönder</button>
+    </div>
+  </div>
+</div>
+
 {% endblock %}

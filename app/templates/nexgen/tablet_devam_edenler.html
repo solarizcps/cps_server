@@ -1,250 +1,721 @@
 {% extends "base.html" %}
-{% set page_title = "Devam Eden Üretimler — NexGen Tablet" %}
-
+{% set page_title = "Operatör Ekranı — NexGen Tablet" %}
+<!-- NEXGEN DEVAM EDENLER V4 ACTIVE -->
 {% block content %}
-<div class="tde2-ana">
+<div class="tde-ana">
 
   {# ══ ÜST BAR ════════════════════════════════════════════════════════ #}
-  <div class="tde2-topbar">
-    <div class="tde2-topbar-ic">
-      <a href="/nexgen/tablet" class="tde2-geri-btn">
+  <div class="tde-topbar">
+    <div class="tde-topbar-ic">
+      <a href="/nexgen/tablet" class="tde-geri-btn" title="Ana Ekran">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-             stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+             stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
           <polyline points="15 18 9 12 15 6"/>
         </svg>
       </a>
-      <div>
-        <div class="tde2-topbar-kucuk">NEXGEN TABLET</div>
-        <div class="tde2-topbar-buyuk">DEVAM EDEN ÜRETİMLER</div>
+      <div class="tde-topbar-baslik">
+        <div class="tde-topbar-kucuk">NEXGEN TABLET</div>
+        <div class="tde-topbar-buyuk">OPERATÖR EKRANI</div>
       </div>
-      <div class="tde2-topbar-sag">
-        {% if batches %}
-        <div class="tde2-sayi-rozet">{{ batches|length }}</div>
+      <div class="tde-topbar-sag">
+        {% if siparis_listesi %}
+        <span class="tde-sayi-rozet" id="tde-aktif-sayi">{{ siparis_listesi|length }}</span>
         {% endif %}
-        <a href="/nexgen/tablet" class="tde2-topbar-link">Ana Ekran</a>
+        <a href="/nexgen/tablet" class="tde-topbar-link">Ana Ekran</a>
       </div>
     </div>
   </div>
 
-  <div class="tde2-icerik">
+  {# ══ FİLTRE + ARAMA SATIRI ══════════════════════════════════════════ #}
+  <div class="tde-filtre-bar">
+    <div class="tde-filtre-ic">
+      <div class="tde-filtre-sekmeler">
+        <button class="tde-fsekme tde-fsekme-aktif" data-filtre="tumu" onclick="filtreUygula('tumu',this)">Tümü
+          <span class="tde-fsekme-sayi" id="fs-tumu">{{ siparis_listesi|length }}</span>
+        </button>
+        <button class="tde-fsekme" data-filtre="hazir" onclick="filtreUygula('hazir',this)">Hazır
+          <span class="tde-fsekme-sayi" id="fs-hazir">0</span>
+        </button>
+        <button class="tde-fsekme" data-filtre="devam" onclick="filtreUygula('devam',this)">Üretimde
+          <span class="tde-fsekme-sayi" id="fs-devam">0</span>
+        </button>
+        <button class="tde-fsekme" data-filtre="bekleme" onclick="filtreUygula('bekleme',this)">Beklemede
+          <span class="tde-fsekme-sayi" id="fs-bekleme">0</span>
+        </button>
+        <button class="tde-fsekme" data-filtre="bitti" onclick="filtreUygula('bitti',this)">Bitti
+          <span class="tde-fsekme-sayi" id="fs-bitti">0</span>
+        </button>
+      </div>
+      <div class="tde-arama-wrap">
+        <svg class="tde-arama-ikon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" width="14" height="14">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input type="text" class="tde-arama" id="tde-arama"
+               placeholder="Sipariş No, Cari, Ürün ara..."
+               oninput="aramaUygula(this.value)">
+      </div>
+    </div>
+  </div>
 
-    {% if not batches %}
-    {# Boş durum #}
-    <div class="tde2-bos">
-      <div class="tde2-bos-ikon">📋</div>
-      <div class="tde2-bos-baslik">Şu an devam eden üretim yok.</div>
-      <a href="/nexgen/tablet/uretim" class="tde2-yeni-btn">+ Yeni Üretim Başlat</a>
+  {# ══ LİSTE ══════════════════════════════════════════════════════════ #}
+  <div class="tde-icerik">
+
+    {% if not siparis_listesi %}
+    <div class="tde-bos">
+      <div class="tde-bos-ikon">📋</div>
+      <div class="tde-bos-baslik">Şu an aktif üretim yok.</div>
+      <a href="/nexgen/tablet/uretim" class="tde-yeni-btn">+ Yeni Üretim Başlat</a>
     </div>
 
     {% else %}
 
-    <div class="tde2-liste">
-      {% for b in batches %}
-      <div class="tde2-kart tde2-kart-{{ b.durum|lower }}">
+    <div class="tde-liste" id="tde-liste">
+      {% for sip in siparis_listesi %}
 
-        {# Üst satır: kod + durum #}
-        <div class="tde2-kart-ust">
-          <span class="tde2-batch-kod">{{ b.batch_kodu }}</span>
-          <span class="tde2-durum tde2-d-{{ b.durum|lower }}">{{ b.durum }}</span>
-        </div>
-
-        {# Ana bilgi #}
-        <div class="tde2-formul-ad">{{ b.formul_ad or '—' }}</div>
-        <div class="tde2-varyant-satir">
-          <span class="tde2-renk-ad">{{ b.renk_ad or '' }}</span>
-          {% if b.boyut %}
-          <span class="tde2-boyut-tag">{{ 'BÜYÜK BOY' if b.boyut == 'LARGE' else 'KÜÇÜK BOY' if b.boyut == 'SMALL' else b.boyut }}</span>
-          {% endif %}
-        </div>
-
-        {# KG ve kazan #}
-        <div class="tde2-alt-satir">
-          <div class="tde2-kg-blok">
-            <span class="tde2-kg-sayi">{{ b.planlanan_kg | int }}</span>
-            <span class="tde2-kg-birim">KG</span>
-          </div>
-          {% if b.notlar %}
-          <div class="tde2-not">{{ b.notlar }}</div>
-          {% endif %}
-          <div class="tde2-tarih">{{ b.olusturma_tarihi[:10] if b.olusturma_tarihi else '' }}</div>
-        </div>
-
-        {# Devam Et + Etiket #}
-        <div class="tde2-kart-butonlar">
-          <a href="/nexgen/tablet/uretim" class="tde2-devam-btn">DEVAM ET →</a>
-          <a href="/nexgen/tablet/etiket/uretim/{{ b.batch_kodu }}" class="tde2-etiket-btn">🖨 Etiket</a>
-        </div>
-
-      </div>
+      {# ── Genel durum hesapla ── #}
+      {% set toplam_boyut = sip.boyutlar | length %}
+      {% set genel_durum = namespace(v='HAZIR') %}
+      {% for by in sip.boyutlar %}
+        {% if by.durum == 'DEVAM' %}{% set genel_durum.v = 'DEVAM' %}
+        {% elif by.durum == 'BEKLEME' and genel_durum.v != 'DEVAM' %}{% set genel_durum.v = 'BEKLEME' %}
+        {% elif by.durum == 'BITTI' and genel_durum.v == 'HAZIR' %}{% set genel_durum.v = 'BITTI' %}
+        {% endif %}
       {% endfor %}
+      {% set by0 = sip.boyutlar[0] %}
+
+      {# ── Cari temizle ── #}
+      {% set _cad = sip.musteri_adi or '— Cari Yok —' %}
+      {% if ' - ' in _cad %}
+        {% set _pfx = _cad.split(' - ', 1)[0] %}
+        {% if '.' in _pfx and ' ' not in _pfx %}{% set _cad = _cad.split(' - ', 1)[1] %}{% endif %}
+      {% endif %}
+
+      <div class="tde-kart tde-kart-{{ genel_durum.v|lower }}"
+           data-durum="{{ genel_durum.v|lower }}"
+           data-cari="{{ _cad|lower }}"
+           data-sip="{{ (sip.siparis_no or '')|lower }}"
+           data-urun="{{ (sip.formul_ad or '')|lower }}">
+
+        {# ── ÜST SATIR: Cari | Sipariş No | Tarih | Durum ── #}
+        <div class="tde-kart-ust">
+          <div class="tde-ust-cari">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 width="12" height="12" style="flex-shrink:0;color:#94a3b8">
+              <rect x="3" y="7" width="18" height="14" rx="2"/>
+              <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+            </svg>
+            <span class="tde-ust-cari-ad">{{ _cad }}</span>
+          </div>
+          <div class="tde-ust-sip">
+            <span class="tde-ust-sip-no">{{ sip.siparis_no or by0.batch_kodu }}</span>
+          </div>
+          <div class="tde-ust-tarih">
+            {% if sip.plan_tarihi %}📅 {{ sip.plan_tarihi[:10] }}{% endif %}
+          </div>
+          <div class="tde-durum-rozet tde-d-{{ genel_durum.v|lower }}">{{ genel_durum.v }}</div>
+        </div>
+
+        {# ── ANA İÇERİK: 4 KOLON ── #}
+        <div class="tde-kart-govde">
+
+          {# Kolon 1 — Ürün #}
+          <div class="tde-gov-kolon tde-gov-urun">
+            <div class="tde-gov-et">ÜRÜN</div>
+            <div class="tde-gov-formul">{{ sip.formul_ad or '—' }}</div>
+            <div class="tde-gov-varyant">
+              <span class="tde-gov-renk">{{ sip.renk_ad or '' }}</span>
+              {% for by in sip.boyutlar %}
+              <span class="tde-boyut-rozet">{{ by.boyut }}</span>
+              {% endfor %}
+            </div>
+          </div>
+
+          {# Kolon 2 — Emir Sayıları (açık yaz, L/S ayrı blok) #}
+          <div class="tde-gov-kolon tde-gov-emirler">
+            <div class="tde-gov-et">ÜRETİM EMİRLERİ</div>
+            {% for by in sip.boyutlar %}
+            <div class="tde-emir-blok {% if toplam_boyut > 1 %}tde-emir-blok-ls{% endif %}">
+              {% if toplam_boyut > 1 %}
+              <span class="tde-ls-rozet">{{ by.boyut }}</span>
+              {% endif %}
+              {% if parca_tablosu %}
+              <div class="tde-emir-satirlar">
+                <div class="tde-emir-satir tde-emir-biten">
+                  <span class="tde-emir-sayi">{{ by.biten_alt_emir }}</span>
+                  <span class="tde-emir-yazi">Emir Bitti</span>
+                </div>
+                <div class="tde-emir-satir tde-emir-devamda">
+                  <span class="tde-emir-sayi">{{ by.devam_alt_emir }}</span>
+                  <span class="tde-emir-yazi">Emir Üretimde</span>
+                </div>
+                <div class="tde-emir-satir tde-emir-kalan">
+                  <span class="tde-emir-sayi">{{ by.hazir_alt_emir }}</span>
+                  <span class="tde-emir-yazi">Emir Kaldı</span>
+                </div>
+              </div>
+              {% else %}
+              <div class="tde-emir-satirlar">
+                <div class="tde-emir-satir">
+                  <span class="tde-emir-yazi" style="color:#9ca3af">Alt emir henüz oluşmadı</span>
+                </div>
+              </div>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+
+          {# Kolon 3 — KG + Progress #}
+          <div class="tde-gov-kolon tde-gov-kg">
+            <div class="tde-gov-et">ÜRETİM (KG)</div>
+            {% for by in sip.boyutlar %}
+            <div class="tde-kg-blok {% if toplam_boyut > 1 %}tde-kg-blok-ls{% endif %}">
+              {% if toplam_boyut > 1 %}
+              <span class="tde-ls-rozet">{{ by.boyut }}</span>
+              {% endif %}
+              <div class="tde-kg-sayilar">
+                <span class="tde-kg-uretilen">{{ "{:,.0f}".format(by.uretilen_kg) }}</span>
+                <span class="tde-kg-sep">/</span>
+                <span class="tde-kg-plan">{{ by.planlanan_kg | int }} KG</span>
+              </div>
+              {% if by.planlanan_kg and by.planlanan_kg > 0 %}
+              {% set yuzde = ((by.uretilen_kg / by.planlanan_kg) * 100)|round(0)|int %}
+              {% set yuzde_clip = [yuzde, 100]|min %}
+              <div class="tde-progress-bar">
+                <div class="tde-progress-dolu" style="width:{{ yuzde_clip }}%"></div>
+              </div>
+              <div class="tde-kg-yuzde">%{{ yuzde_clip }}</div>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+
+          {# Kolon 4 — Aksiyon Butonları #}
+          <div class="tde-gov-kolon tde-gov-aksiyon">
+            {% if toplam_boyut == 1 %}
+              <a href="/nexgen/tablet/uretim-islem/{{ by0.batch_kodu }}"
+                 class="tde-btn-ana">▶ Devam Et</a>
+              <a href="/nexgen/tablet/etiket/uretim/{{ by0.batch_kodu }}"
+                 class="tde-btn-ikincil">🖨 Etiket</a>
+            {% else %}
+              <button class="tde-btn-ana"
+                      onclick="lsModalAc('{{ loop.index }}')">▶ Devam Et</button>
+              {# L/S Modal için gizli batch bilgileri #}
+              <div id="ls-data-{{ loop.index }}" style="display:none">
+                {% for by in sip.boyutlar %}
+                <span data-boyut="{{ by.boyut }}" data-batch="{{ by.batch_kodu }}"></span>
+                {% endfor %}
+              </div>
+              {# Etiket: ilk batch için #}
+              <a href="/nexgen/tablet/etiket/uretim/{{ by0.batch_kodu }}"
+                 class="tde-btn-ikincil">🖨 Etiket</a>
+            {% endif %}
+          </div>
+
+        </div>{# /govde #}
+      </div>{# /kart #}
+      {% endfor %}
+    </div>{# /liste #}
+
+    {# Bulunamadı mesajı #}
+    <div class="tde-bos-arama" id="tde-bos-arama" style="display:none">
+      <div class="tde-bos-ikon">🔍</div>
+      <div class="tde-bos-baslik">Sonuç bulunamadı.</div>
     </div>
 
     {% endif %}
 
-    {# Yeni üretim butonu #}
-    <div class="tde2-footer">
-      <a href="/nexgen/tablet/uretim" class="tde2-yeni-alt-btn">
-        + Yeni Üretim Başlat
-      </a>
+    <div class="tde-footer">
+      <a href="/nexgen/tablet/uretim" class="tde-yeni-alt-btn">+ Yeni Üretim Başlat</a>
     </div>
 
+  </div>{# /icerik #}
+</div>{# /ana #}
+
+{# ══ L/S SEÇİM MODALI ═══════════════════════════════════════════════ #}
+<div class="tde-modal-overlay" id="tde-ls-modal" style="display:none" onclick="lsModalKapat(event)">
+  <div class="tde-modal">
+    <div class="tde-modal-baslik">Hangi boyuta devam edeceksiniz?</div>
+    <div class="tde-modal-altyazi">Aynı sipariş için LARGE ve SMALL üretimleri ayrı takip edilir.</div>
+    <div class="tde-modal-butonlar" id="tde-modal-butonlar"></div>
+    <button class="tde-modal-iptal" onclick="lsModalKapat()">İptal</button>
   </div>
 </div>
 
+<script>
+/* ─── Filtre + Arama ──────────────────────────────── */
+var _aktifFiltre = 'tumu';
+var _aktifArama  = '';
+
+function sayilariHesapla() {
+  var kartlar = document.querySelectorAll('.tde-kart');
+  var sayac = { tumu: 0, hazir: 0, devam: 0, bekleme: 0, bitti: 0 };
+  kartlar.forEach(function(k) {
+    var d = k.dataset.durum || 'taslak';
+    sayac.tumu++;
+    if (sayac[d] !== undefined) sayac[d]++;
+  });
+  document.getElementById('fs-tumu').textContent    = sayac.tumu;
+  document.getElementById('fs-hazir').textContent   = sayac.hazir;
+  document.getElementById('fs-devam').textContent   = sayac.devam;
+  document.getElementById('fs-bekleme').textContent = sayac.bekleme;
+  document.getElementById('fs-bitti').textContent   = sayac.bitti;
+}
+
+function goster() {
+  var kartlar = document.querySelectorAll('.tde-kart');
+  var gorununen = 0;
+  kartlar.forEach(function(k) {
+    var d = k.dataset.durum || 'taslak';
+    var cari  = k.dataset.cari  || '';
+    var sip   = k.dataset.sip   || '';
+    var urun  = k.dataset.urun  || '';
+    var arama = _aktifArama.toLowerCase();
+
+    var filtrePas = (_aktifFiltre === 'tumu') || (d === _aktifFiltre);
+    var aramaPas  = !arama || cari.includes(arama) || sip.includes(arama) || urun.includes(arama);
+
+    if (filtrePas && aramaPas) {
+      k.style.display = '';
+      gorununen++;
+    } else {
+      k.style.display = 'none';
+    }
+  });
+  var bosArama = document.getElementById('tde-bos-arama');
+  if (bosArama) bosArama.style.display = gorununen === 0 ? 'flex' : 'none';
+  var aktifSayi = document.getElementById('tde-aktif-sayi');
+  if (aktifSayi) aktifSayi.textContent = gorununen;
+}
+
+function filtreUygula(filtre, btn) {
+  _aktifFiltre = filtre;
+  document.querySelectorAll('.tde-fsekme').forEach(function(b) {
+    b.classList.remove('tde-fsekme-aktif');
+  });
+  if (btn) btn.classList.add('tde-fsekme-aktif');
+  goster();
+}
+
+function aramaUygula(val) {
+  _aktifArama = val;
+  goster();
+}
+
+/* ─── L/S Modal ───────────────────────────────────── */
+function lsModalAc(idx) {
+  var data = document.getElementById('ls-data-' + idx);
+  if (!data) return;
+  var spans = data.querySelectorAll('span[data-boyut]');
+  var butonlar = document.getElementById('tde-modal-butonlar');
+  butonlar.innerHTML = '';
+  spans.forEach(function(s) {
+    var boyut = s.dataset.boyut;
+    var batch = s.dataset.batch;
+    var a = document.createElement('a');
+    a.href = '/nexgen/tablet/uretim-islem/' + batch;
+    a.className = 'tde-modal-boyut-btn';
+    a.textContent = '▶ ' + boyut + ' — Devam Et';
+    butonlar.appendChild(a);
+  });
+  document.getElementById('tde-ls-modal').style.display = 'flex';
+}
+
+function lsModalKapat(e) {
+  if (!e || e.target === document.getElementById('tde-ls-modal')) {
+    document.getElementById('tde-ls-modal').style.display = 'none';
+  }
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') lsModalKapat();
+});
+
+/* ─── Sayfa yüklenince ─────────────────────────────── */
+sayilariHesapla();
+</script>
+
 <style>
-* { box-sizing: border-box; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-.tde2-ana {
-  min-height: calc(100vh - 56px);
-  background: #eef2f6;
+/* ─── SAYFA ─────────────────────────────────────────── */
+body { background: #f3f6fa; font-family: system-ui, -apple-system, sans-serif; }
+.tde-ana {
+  min-height: 100vh;
+  background: #f3f6fa;
 }
 
-/* Topbar — yeşil tonlu */
-.tde2-topbar {
-  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
-  border-bottom: 3px solid #14532d;
+/* ─── TOPBAR ─────────────────────────────────────────── */
+.tde-topbar {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border-bottom: 3px solid #f6c343;
+  position: sticky; top: 0; z-index: 20;
 }
-.tde2-topbar-ic {
-  max-width: 1180px; margin: 0 auto;
+.tde-topbar-ic {
+  max-width: 1400px; margin: 0 auto;
   display: flex; align-items: center; gap: 14px;
-  padding: 14px 20px;
+  padding: 0 20px; height: 52px;
 }
-.tde2-geri-btn {
-  width: 44px; height: 44px; border-radius: 12px;
-  background: rgba(255,255,255,.2); border: none;
+.tde-geri-btn {
+  width: 36px; height: 36px; border-radius: 8px;
+  background: rgba(255,255,255,.15); border: none;
   display: flex; align-items: center; justify-content: center;
-  color: #fff; text-decoration: none; cursor: pointer; flex-shrink: 0;
+  color: #e2e8f0; text-decoration: none; flex-shrink: 0;
 }
-.tde2-geri-btn:hover { background: rgba(255,255,255,.3); }
-.tde2-topbar-kucuk { font-size: 10px; font-weight: 800; color: rgba(255,255,255,.5); letter-spacing: 3px; text-transform: uppercase; }
-.tde2-topbar-buyuk { font-size: 18px; font-weight: 900; color: #fff; }
-.tde2-topbar-sag {
-  margin-left: auto; display: flex; align-items: center; gap: 10px;
-}
-.tde2-sayi-rozet {
-  width: 36px; height: 36px; border-radius: 50%;
-  background: #fef08a; color: #92400e;
-  font-size: 17px; font-weight: 900;
-  display: flex; align-items: center; justify-content: center;
-}
-.tde2-topbar-link {
-  font-size: 13px; font-weight: 700; color: rgba(255,255,255,.85);
-  text-decoration: none; padding: 8px 14px;
-  background: rgba(255,255,255,.2); border-radius: 9px;
-}
-.tde2-topbar-link:hover { background: rgba(255,255,255,.3); }
-
-.tde2-icerik {
-  max-width: 900px; margin: 0 auto;
-  padding: 20px 20px 40px;
-}
-
-/* Boş durum */
-.tde2-bos {
-  display: flex; flex-direction: column; align-items: center;
-  gap: 14px; padding: 60px 20px; text-align: center;
-}
-.tde2-bos-ikon   { font-size: 52px; }
-.tde2-bos-baslik { font-size: 18px; font-weight: 800; color: #374151; }
-.tde2-yeni-btn {
-  display: inline-block; padding: 14px 28px;
+.tde-geri-btn:hover { background: rgba(255,255,255,.25); }
+.tde-topbar-baslik {}
+.tde-topbar-kucuk { font-size: 9px; font-weight: 800; color: #f6c343; letter-spacing: 2px; line-height: 1; }
+.tde-topbar-buyuk { font-size: 16px; font-weight: 900; color: #fff; line-height: 1.2; }
+.tde-topbar-sag { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.tde-sayi-rozet {
+  width: 30px; height: 30px; border-radius: 50%;
   background: #f6c343; color: #1a1a1a;
-  border-radius: 12px; font-size: 15px; font-weight: 800;
-  text-decoration: none; transition: background .12s;
+  font-size: 13px; font-weight: 900;
+  display: flex; align-items: center; justify-content: center;
 }
-.tde2-yeni-btn:hover { background: #e9b020; }
+.tde-topbar-link {
+  font-size: 12px; font-weight: 700; color: rgba(255,255,255,.85);
+  text-decoration: none; padding: 6px 12px;
+  background: rgba(255,255,255,.15); border-radius: 8px;
+}
+.tde-topbar-link:hover { background: rgba(255,255,255,.25); color: #fff; }
 
-/* Liste */
-.tde2-liste {
+/* ─── FİLTRE BAR ─────────────────────────────────────── */
+.tde-filtre-bar {
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+  position: sticky; top: 52px; z-index: 19;
+}
+.tde-filtre-ic {
+  max-width: 1400px; margin: 0 auto;
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 20px; flex-wrap: wrap;
+}
+.tde-filtre-sekmeler {
+  display: flex; gap: 4px; flex-wrap: wrap;
+}
+.tde-fsekme {
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 10px; border-radius: 6px;
+  border: 1px solid #e5e7eb; background: #f9fafb;
+  color: #6b7280; font-size: 12px; font-weight: 600;
+  cursor: pointer; white-space: nowrap; transition: all .12s;
+}
+.tde-fsekme:hover { background: #f3f4f6; border-color: #d1d5db; color: #374151; }
+.tde-fsekme-aktif {
+  background: #0f172a; border-color: #0f172a; color: #f6c343;
+}
+.tde-fsekme-aktif:hover { background: #1e293b; }
+.tde-fsekme-sayi {
+  background: rgba(0,0,0,.08); color: inherit;
+  font-size: 10px; font-weight: 700;
+  padding: 1px 5px; border-radius: 10px; min-width: 18px; text-align: center;
+}
+.tde-fsekme-aktif .tde-fsekme-sayi { background: rgba(246,195,67,.3); }
+
+.tde-arama-wrap {
+  margin-left: auto; position: relative; display: flex; align-items: center;
+}
+.tde-arama-ikon {
+  position: absolute; left: 10px; color: #9ca3af; pointer-events: none;
+}
+.tde-arama {
+  padding: 6px 10px 6px 30px;
+  border: 1px solid #e5e7eb; border-radius: 7px;
+  font-size: 12px; color: #374151; background: #f9fafb;
+  outline: none; width: 240px; transition: border-color .15s;
+}
+.tde-arama:focus { border-color: #f6c343; background: #fff; }
+.tde-arama::placeholder { color: #9ca3af; }
+
+/* ─── İÇERİK ─────────────────────────────────────────── */
+.tde-icerik {
+  max-width: 1400px; margin: 0 auto;
+  padding: 14px 20px 40px;
+}
+
+/* ─── BOŞ DURUM ──────────────────────────────────────── */
+.tde-bos, .tde-bos-arama {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 12px; padding: 50px 20px; text-align: center;
+}
+.tde-bos-ikon   { font-size: 44px; }
+.tde-bos-baslik { font-size: 16px; font-weight: 800; color: #374151; }
+.tde-yeni-btn {
+  display: inline-block; padding: 10px 24px;
+  background: #f6c343; color: #1a1a1a;
+  border-radius: 8px; font-size: 14px; font-weight: 800;
+  text-decoration: none;
+}
+.tde-yeni-btn:hover { background: #e9b020; }
+
+/* ─── LİSTE ──────────────────────────────────────────── */
+.tde-liste {
+  display: flex; flex-direction: column; gap: 8px;
+  margin-bottom: 12px;
+}
+
+/* ─── KART ───────────────────────────────────────────── */
+.tde-kart {
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  border-left: 4px solid #e5e7eb;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,.05);
+  transition: box-shadow .15s;
+}
+.tde-kart:hover { box-shadow: 0 3px 10px rgba(0,0,0,.08); }
+.tde-kart-hazir   { border-left-color: #16a34a; }
+.tde-kart-devam   { border-left-color: #f6c343; }
+.tde-kart-bekleme { border-left-color: #f97316; }
+.tde-kart-bitti   { border-left-color: #9ca3af; opacity: .85; }
+.tde-kart-taslak  { border-left-color: #d1d5db; }
+
+/* ─── ÜST SATIR ──────────────────────────────────────── */
+.tde-kart-ust {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 14px 7px;
+  border-bottom: 1px solid #f3f4f6;
+  min-height: 36px;
+}
+.tde-ust-cari {
+  display: flex; align-items: center; gap: 5px;
+  flex: 1; min-width: 0;
+}
+.tde-ust-cari-ad {
+  font-size: 13px; font-weight: 800; color: #111827;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tde-ust-sip {
+  flex-shrink: 0;
+}
+.tde-ust-sip-no {
+  font-size: 12px; font-weight: 700; color: #374151;
+  font-family: monospace; letter-spacing: .3px;
+  background: #f3f6fa; padding: 2px 8px; border-radius: 4px;
+  border: 1px solid #e5e7eb;
+}
+.tde-ust-tarih {
+  font-size: 11px; color: #9ca3af; white-space: nowrap; flex-shrink: 0;
+}
+
+/* ─── DURUM ROZETİ ───────────────────────────────────── */
+.tde-durum-rozet {
+  font-size: 9px; font-weight: 700;
+  padding: 2px 8px; border-radius: 4px;
+  letter-spacing: .4px; white-space: nowrap; flex-shrink: 0;
+}
+.tde-d-hazir   { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+.tde-d-devam   { background: #fefce8; color: #854d0e; border: 1px solid #fde68a; }
+.tde-d-bekleme { background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; }
+.tde-d-bitti   { background: #dcfce7; color: #14532d; border: 1px solid #4ade80; }
+.tde-d-taslak  { background: #f9fafb; color: #9ca3af; border: 1px solid #e5e7eb; }
+
+/* ─── ANA GÖVDE: 4 KOLON ─────────────────────────────── */
+.tde-kart-govde {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 14px;
-  margin-bottom: 20px;
+  grid-template-columns: 1.4fr 1.6fr 1.4fr auto;
+  gap: 0;
+  min-height: 88px;
+}
+.tde-gov-kolon {
+  padding: 9px 14px;
+  display: flex; flex-direction: column; gap: 4px;
+  min-width: 0;
+}
+.tde-gov-kolon + .tde-gov-kolon {
+  border-left: 1px solid #f3f4f6;
+}
+.tde-gov-et {
+  font-size: 9px; font-weight: 700; color: #9ca3af;
+  letter-spacing: .6px; text-transform: uppercase;
+  margin-bottom: 2px;
 }
 
-/* İş kartı */
-.tde2-kart {
-  background: #fff; border-radius: 18px;
-  border: 2px solid #e5e7eb;
-  padding: 18px 20px;
-  box-shadow: 0 2px 8px rgba(15,23,42,.05);
+/* Kolon 1 — Ürün */
+.tde-gov-formul {
+  font-size: 14px; font-weight: 900; color: #111827; line-height: 1.2;
+}
+.tde-gov-varyant {
+  display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 2px;
+}
+.tde-gov-renk {
+  font-size: 11px; font-weight: 600; color: #475569;
+}
+.tde-boyut-rozet {
+  font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 3px;
+  background: #f1f5f9; color: #374151; border: 1px solid #e2e8f0; letter-spacing: .3px;
+}
+
+/* Kolon 2 — Emir Sayıları */
+.tde-gov-emirler { gap: 3px; }
+.tde-emir-blok {
+  display: flex; flex-direction: column; gap: 1px;
+}
+.tde-emir-blok-ls {
+  padding: 4px 0;
+}
+.tde-emir-blok-ls + .tde-emir-blok-ls {
+  border-top: 1px solid #f3f4f6;
+  padding-top: 5px;
+}
+.tde-ls-rozet {
+  font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 3px;
+  background: #f1f5f9; color: #374151; border: 1px solid #e2e8f0;
+  display: inline-block; margin-bottom: 3px;
+}
+.tde-emir-satirlar {
+  display: flex; flex-direction: column; gap: 1px;
+}
+.tde-emir-satir {
+  display: flex; align-items: baseline; gap: 5px;
+}
+.tde-emir-sayi {
+  font-size: 16px; font-weight: 900; line-height: 1;
+  min-width: 22px; text-align: right;
+}
+.tde-emir-yazi {
+  font-size: 11px; font-weight: 500; color: #6b7280;
+}
+.tde-emir-biten   .tde-emir-sayi { color: #15803d; }
+.tde-emir-devamda .tde-emir-sayi { color: #d97706; }
+.tde-emir-kalan   .tde-emir-sayi { color: #374151; }
+
+/* Kolon 3 — KG + Progress */
+.tde-gov-kg { gap: 3px; }
+.tde-kg-blok {
+  display: flex; flex-direction: column; gap: 3px;
+}
+.tde-kg-blok-ls {
+  padding: 4px 0;
+}
+.tde-kg-blok-ls + .tde-kg-blok-ls {
+  border-top: 1px solid #f3f4f6;
+  padding-top: 5px;
+}
+.tde-kg-sayilar {
+  display: flex; align-items: baseline; gap: 3px;
+}
+.tde-kg-uretilen {
+  font-size: 16px; font-weight: 900; color: #16a34a;
+}
+.tde-kg-sep { font-size: 11px; color: #9ca3af; }
+.tde-kg-plan {
+  font-size: 11px; font-weight: 600; color: #6b7280;
+}
+.tde-progress-bar {
+  height: 5px; background: #f3f4f6; border-radius: 3px; overflow: hidden;
+  border: 1px solid #e5e7eb;
+}
+.tde-progress-dolu {
+  height: 100%; background: linear-gradient(90deg, #16a34a, #22c55e);
+  border-radius: 3px; transition: width .3s;
+  min-width: 2px;
+}
+.tde-kg-yuzde {
+  font-size: 9px; color: #9ca3af; font-weight: 600;
+}
+
+/* Kolon 4 — Aksiyon */
+.tde-gov-aksiyon {
+  display: flex; flex-direction: column; align-items: stretch;
+  gap: 6px; padding: 10px 14px; justify-content: center;
+  min-width: 130px; border-left: 1px solid #f3f4f6;
+}
+.tde-btn-ana {
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  padding: 9px 14px; border-radius: 8px; border: none;
+  background: #f6c343; color: #1a1a1a;
+  font-size: 13px; font-weight: 800;
+  text-decoration: none; cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,.1);
+  transition: background .12s;
+  white-space: nowrap;
+}
+.tde-btn-ana:hover { background: #e9b020; box-shadow: 0 2px 6px rgba(0,0,0,.15); }
+.tde-btn-ikincil {
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  padding: 6px 10px; border-radius: 7px;
+  background: #f9fafb; color: #374151;
+  border: 1px solid #e5e7eb;
+  font-size: 12px; font-weight: 600;
+  text-decoration: none; cursor: pointer;
+  transition: background .12s;
+  white-space: nowrap;
+}
+.tde-btn-ikincil:hover { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
+
+/* ─── L/S MODAL ──────────────────────────────────────── */
+.tde-modal-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(15,23,42,.5); backdrop-filter: blur(2px);
+  display: flex; align-items: center; justify-content: center;
+}
+.tde-modal {
+  background: #fff; border-radius: 14px;
+  padding: 28px 24px; min-width: 300px; max-width: 420px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.25);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.tde-modal-baslik {
+  font-size: 16px; font-weight: 900; color: #111827;
+}
+.tde-modal-altyazi {
+  font-size: 12px; color: #6b7280; margin-top: -6px;
+}
+.tde-modal-butonlar {
   display: flex; flex-direction: column; gap: 8px;
 }
-.tde2-kart-hazir { border-color: #86efac; }
-.tde2-kart-taslak { border-color: #fde68a; }
-
-.tde2-kart-ust {
-  display: flex; align-items: center; justify-content: space-between;
-}
-.tde2-batch-kod {
-  font-family: monospace; font-size: 13px; font-weight: 700;
-  color: #6b7280; letter-spacing: .5px;
-}
-.tde2-durum {
-  font-size: 10px; font-weight: 800; padding: 3px 10px;
-  border-radius: 6px; text-transform: uppercase;
-}
-.tde2-d-hazir  { background: #dcfce7; color: #15803d; }
-.tde2-d-taslak { background: #fef9c3; color: #854d0e; }
-
-.tde2-formul-ad {
-  font-size: 20px; font-weight: 900; color: #1e293b; line-height: 1.2;
-}
-.tde2-varyant-satir {
-  display: flex; align-items: center; gap: 8px;
-}
-.tde2-renk-ad { font-size: 14px; color: #374151; font-weight: 600; }
-.tde2-boyut-tag {
-  font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 5px;
-  background: #dbeafe; color: #1d4ed8;
-}
-
-.tde2-alt-satir {
-  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 4px;
-}
-.tde2-kg-blok  { display: flex; align-items: baseline; gap: 4px; }
-.tde2-kg-sayi  { font-size: 30px; font-weight: 900; color: #f59e0b; }
-.tde2-kg-birim { font-size: 14px; font-weight: 600; color: #6b7280; }
-
-.tde2-not {
-  font-size: 12px; color: #6b7280; background: #f8fafc;
-  padding: 4px 10px; border-radius: 6px; flex: 1;
-}
-.tde2-tarih { font-size: 11px; color: #9ca3af; margin-left: auto; }
-
-.tde2-kart-butonlar {
-  display: flex; gap: 8px; margin-top: 6px;
-}
-.tde2-devam-btn {
-  flex: 1; display: block; text-align: center;
-  padding: 14px; background: #f6c343; color: #1a1a1a;
-  border-radius: 12px; font-size: 16px; font-weight: 900;
-  text-decoration: none; letter-spacing: .5px;
+.tde-modal-boyut-btn {
+  display: block; padding: 12px 16px;
+  background: #f6c343; color: #1a1a1a;
+  border-radius: 9px; font-size: 14px; font-weight: 800;
+  text-decoration: none; text-align: center;
   transition: background .12s;
 }
-.tde2-devam-btn:hover { background: #e9b020; }
-.tde2-etiket-btn {
-  padding: 14px 16px; background: #f0fdf4; color: #15803d;
-  border: 2px solid #86efac; border-radius: 12px;
-  font-size: 13px; font-weight: 800; text-decoration: none;
-  white-space: nowrap; transition: all .12s;
+.tde-modal-boyut-btn:hover { background: #e9b020; }
+.tde-modal-iptal {
+  background: none; border: 1px solid #e5e7eb;
+  border-radius: 8px; padding: 8px;
+  font-size: 12px; color: #6b7280; cursor: pointer;
+  margin-top: 4px;
 }
-.tde2-etiket-btn:hover { background: #dcfce7; }
+.tde-modal-iptal:hover { background: #f9fafb; }
 
-/* Footer */
-.tde2-footer { margin-top: 4px; }
-.tde2-yeni-alt-btn {
+/* ─── FOOTER ─────────────────────────────────────────── */
+.tde-footer { margin-top: 8px; }
+.tde-yeni-alt-btn {
   display: block; text-align: center;
-  padding: 16px; background: #f6c343; color: #1a1a1a;
-  border-radius: 14px; font-size: 17px; font-weight: 900;
-  text-decoration: none; transition: background .12s;
+  padding: 12px; background: #f6c343; color: #1a1a1a;
+  border-radius: 10px; font-size: 14px; font-weight: 900;
+  text-decoration: none;
 }
-.tde2-yeni-alt-btn:hover { background: #e9b020; }
+.tde-yeni-alt-btn:hover { background: #e9b020; }
 
-@media (max-width: 560px) {
-  .tde2-icerik { padding: 14px 12px 32px; }
-  .tde2-liste  { grid-template-columns: 1fr; }
-  .tde2-formul-ad { font-size: 17px; }
+/* ─── RESPONSIVE ─────────────────────────────────────── */
+@media (max-width: 900px) {
+  .tde-kart-govde {
+    grid-template-columns: 1fr 1fr;
+  }
+  .tde-gov-aksiyon {
+    grid-column: 1 / -1;
+    flex-direction: row; border-left: none;
+    border-top: 1px solid #f3f4f6;
+    justify-content: flex-end;
+    min-width: auto; padding: 8px 14px;
+  }
+  .tde-btn-ana, .tde-btn-ikincil { flex: 0 0 auto; }
+  .tde-arama { width: 180px; }
+}
+@media (max-width: 600px) {
+  .tde-kart-govde { grid-template-columns: 1fr; }
+  .tde-gov-kolon { border-left: none; border-top: 1px solid #f3f4f6; }
+  .tde-gov-kolon:first-child { border-top: none; }
+  .tde-gov-aksiyon { grid-column: auto; }
+  .tde-arama { width: 140px; }
+  .tde-filtre-sekmeler { gap: 3px; }
+  .tde-fsekme { padding: 4px 7px; font-size: 11px; }
 }
 </style>
 {% endblock %}

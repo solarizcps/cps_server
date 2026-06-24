@@ -39,7 +39,7 @@ from flask import (
     request, jsonify, session, g,
     Response, redirect, url_for, flash
 )
-from modules.auth import yetki_gerekli, yetki_var
+from modules.auth import yetki_gerekli, yetki_var, login_gerekli
 
 nexgen_bp = Blueprint('nexgen', __name__, url_prefix='/nexgen')
 
@@ -3519,20 +3519,62 @@ def _lot_kodu_uret(con):
 def tablet_ana():
     con = _db()
     try:
-        devam_eden = con.execute("""
-            SELECT nb.batch_kodu, nb.planlanan_kg, nb.durum,
-                   nb.olusturma_tarihi,
-                   uv.ad AS uv_ad, uv.boyut,
-                   rv.ad AS renk_ad, f.ad AS formul_ad
-            FROM nexgen_uretim_batch nb
-            JOIN nexgen_uretim_varyant uv ON uv.id = nb.uretim_varyant_id
-            JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
-            JOIN nexgen_formul f          ON f.id  = rv.formul_id
-            WHERE nb.durum IN ('TASLAK','HAZIR')
-            ORDER BY nb.id DESC
-            LIMIT 20
-        """).fetchall()
+        _bcols = [c['name'] for c in con.execute(
+            "PRAGMA table_info(nexgen_uretim_batch)"
+        ).fetchall()]
+        if 'plan_id' in _bcols:
+            devam_eden = con.execute("""
+                SELECT nb.batch_kodu, nb.lot_kodu, nb.planlanan_kg, nb.durum,
+                       nb.olusturma_tarihi,
+                       uv.ad AS uv_ad, uv.boyut,
+                       rv.ad AS renk_ad, f.ad AS formul_ad,
+                       np.musteri_adi, np.siparis_no
+                FROM nexgen_uretim_batch nb
+                JOIN nexgen_uretim_varyant uv ON uv.id = nb.uretim_varyant_id
+                JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+                JOIN nexgen_formul f          ON f.id  = rv.formul_id
+                LEFT JOIN nexgen_uretim_plan np ON np.id = nb.plan_id
+                WHERE nb.durum IN ('TASLAK','HAZIR','DEVAM','BEKLEME')
+                ORDER BY nb.id DESC
+                LIMIT 20
+            """).fetchall()
+        else:
+            devam_eden = con.execute("""
+                SELECT nb.batch_kodu, nb.lot_kodu, nb.planlanan_kg, nb.durum,
+                       nb.olusturma_tarihi,
+                       uv.ad AS uv_ad, uv.boyut,
+                       rv.ad AS renk_ad, f.ad AS formul_ad,
+                       NULL AS musteri_adi, NULL AS siparis_no
+                FROM nexgen_uretim_batch nb
+                JOIN nexgen_uretim_varyant uv ON uv.id = nb.uretim_varyant_id
+                JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+                JOIN nexgen_formul f          ON f.id  = rv.formul_id
+                WHERE nb.durum IN ('TASLAK','HAZIR','DEVAM','BEKLEME')
+                ORDER BY nb.id DESC
+                LIMIT 20
+            """).fetchall()
         devam_eden = [dict(d) for d in devam_eden]
+
+        # Alt emir sayaçları ve KG ilerleme (Migration 072+ gerekli)
+        if _parca_tablosu_var(con):
+            for b in devam_eden:
+                bk = b['batch_kodu']
+                sayac = con.execute("""
+                    SELECT COUNT(*) AS toplam,
+                           SUM(CASE WHEN durum='BITTI' THEN 1 ELSE 0 END) AS biten,
+                           SUM(CASE WHEN durum='BITTI' THEN uretilen_kg ELSE 0 END) AS uretilen
+                    FROM nexgen_uretim_parca WHERE batch_kodu=?
+                """, (bk,)).fetchone()
+                b['toplam_alt_emir'] = sayac['toplam'] or 0
+                b['biten_alt_emir']  = sayac['biten']  or 0
+                b['uretilen_kg']     = round(float(sayac['uretilen'] or 0), 1)
+                b['kalan_kg']        = round(max(0.0, float(b['planlanan_kg']) - b['uretilen_kg']), 1)
+        else:
+            for b in devam_eden:
+                b['toplam_alt_emir'] = None
+                b['biten_alt_emir']  = None
+                b['uretilen_kg']     = 0.0
+                b['kalan_kg']        = float(b['planlanan_kg'])
 
         from datetime import date as _date
         bugun = _date.today().isoformat()
@@ -3566,32 +3608,281 @@ def tablet_ana():
 @nexgen_bp.route('/tablet/devam-edenler')
 @yetki_gerekli('nexgen.tablet.view', 'can_view')
 def tablet_devam_edenler():
-    """Tüm TASLAK/HAZIR batch listesi."""
+    """Devam eden üretimler — sipariş bazında gruplandırılmış, L/S kırılımlı."""
     con = _db()
     try:
-        batches = con.execute("""
-            SELECT nb.id, nb.batch_kodu, nb.planlanan_kg, nb.durum,
-                   nb.olusturma_tarihi, nb.notlar,
-                   uv.ad AS uv_ad, uv.boyut,
-                   rv.ad AS renk_ad,
-                   f.ad AS formul_ad, f.kod AS formul_kod,
-                   ku.KullaniciAdi AS olusturan_ad
-            FROM nexgen_uretim_batch nb
-            JOIN nexgen_uretim_varyant uv ON uv.id = nb.uretim_varyant_id
-            JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
-            JOIN nexgen_formul f          ON f.id  = rv.formul_id
-            LEFT JOIN sistem_kullanici ku ON ku.Id  = nb.olusturan_id
-            WHERE nb.durum IN ('TASLAK','HAZIR')
-            ORDER BY nb.id DESC
-        """).fetchall()
-        batches = [dict(b) for b in batches]
+        _cols = [c['name'] for c in con.execute(
+            "PRAGMA table_info(nexgen_uretim_batch)"
+        ).fetchall()]
+        if 'plan_id' in _cols:
+            batches_raw = con.execute("""
+                SELECT nb.id, nb.batch_kodu, nb.lot_kodu, nb.plan_id,
+                       nb.planlanan_kg, nb.durum,
+                       nb.olusturma_tarihi, nb.notlar,
+                       uv.ad AS uv_ad, uv.boyut,
+                       rv.ad AS renk_ad,
+                       f.ad AS formul_ad, f.kod AS formul_kod,
+                       ku.KullaniciAdi AS olusturan_ad,
+                       np.musteri_adi, np.siparis_no,
+                       np.plan_tarihi, np.created_at AS plan_created_at
+                FROM nexgen_uretim_batch nb
+                JOIN nexgen_uretim_varyant uv ON uv.id = nb.uretim_varyant_id
+                JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+                JOIN nexgen_formul f          ON f.id  = rv.formul_id
+                LEFT JOIN sistem_kullanici ku ON ku.Id  = nb.olusturan_id
+                LEFT JOIN nexgen_uretim_plan np ON np.id = nb.plan_id
+                WHERE nb.durum IN ('TASLAK','HAZIR','DEVAM','BEKLEME')
+                ORDER BY nb.id DESC
+            """).fetchall()
+        else:
+            batches_raw = con.execute("""
+                SELECT nb.id, nb.batch_kodu, nb.lot_kodu,
+                       nb.planlanan_kg, nb.durum,
+                       nb.olusturma_tarihi, nb.notlar,
+                       uv.ad AS uv_ad, uv.boyut,
+                       rv.ad AS renk_ad,
+                       f.ad AS formul_ad, f.kod AS formul_kod,
+                       ku.KullaniciAdi AS olusturan_ad,
+                       NULL AS musteri_adi, NULL AS siparis_no,
+                       NULL AS plan_tarihi, NULL AS plan_created_at
+                FROM nexgen_uretim_batch nb
+                JOIN nexgen_uretim_varyant uv ON uv.id = nb.uretim_varyant_id
+                JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+                JOIN nexgen_formul f          ON f.id  = rv.formul_id
+                LEFT JOIN sistem_kullanici ku ON ku.Id  = nb.olusturan_id
+                WHERE nb.durum IN ('TASLAK','HAZIR','DEVAM','BEKLEME')
+                ORDER BY nb.id DESC
+            """).fetchall()
+        batches_raw = [dict(b) for b in batches_raw]
+
+        # Alt emir sayaçları + KG
+        parca_tablosu = _parca_tablosu_var(con)
+        if parca_tablosu:
+            for b in batches_raw:
+                sayac = con.execute("""
+                    SELECT COUNT(*) AS toplam,
+                           SUM(CASE WHEN durum='HAZIR'   THEN 1 ELSE 0 END) AS hazir,
+                           SUM(CASE WHEN durum='DEVAM'   THEN 1 ELSE 0 END) AS devam,
+                           SUM(CASE WHEN durum='BEKLEME' THEN 1 ELSE 0 END) AS bekleme,
+                           SUM(CASE WHEN durum='BITTI'   THEN 1 ELSE 0 END) AS biten,
+                           SUM(CASE WHEN durum='BITTI'   THEN uretilen_kg ELSE 0 END) AS uretilen
+                    FROM nexgen_uretim_parca WHERE batch_kodu=?
+                """, (b['batch_kodu'],)).fetchone()
+                b['toplam_alt_emir'] = sayac['toplam'] or 0
+                b['biten_alt_emir']  = sayac['biten']  or 0
+                b['hazir_alt_emir']  = sayac['hazir']  or 0
+                b['devam_alt_emir']  = sayac['devam']  or 0
+                b['bekleme_alt_emir']= sayac['bekleme']or 0
+                b['uretilen_kg']     = round(float(sayac['uretilen'] or 0), 1)
+                b['kalan_kg']        = round(max(0.0, float(b['planlanan_kg']) - b['uretilen_kg']), 1)
+        else:
+            for b in batches_raw:
+                b['toplam_alt_emir'] = b['biten_alt_emir'] = 0
+                b['hazir_alt_emir']  = b['devam_alt_emir'] = b['bekleme_alt_emir'] = 0
+                b['uretilen_kg']     = 0.0
+                b['kalan_kg']        = float(b['planlanan_kg'])
+
+        # Sipariş bazında gruplama:
+        # siparis_no varsa → gruplama anahtarı siparis_no
+        # yoksa → her batch kendi grubu (batch_kodu anahtar)
+        from collections import OrderedDict
+        siparis_gruplari = OrderedDict()
+
+        for b in batches_raw:
+            sip = b.get('siparis_no') or ('__batch_' + b['batch_kodu'])
+            if sip not in siparis_gruplari:
+                siparis_gruplari[sip] = {
+                    'siparis_no':   b.get('siparis_no'),
+                    'musteri_adi':  b.get('musteri_adi'),
+                    'plan_tarihi':  b.get('plan_tarihi'),
+                    'formul_ad':    b.get('formul_ad'),
+                    'renk_ad':      b.get('renk_ad'),
+                    'boyutlar':     [],   # [{boyut, batch_kodu, durum, ...}]
+                    'tek_batch':    None, # tek boyut varsa direkt batch_kodu
+                }
+            grup = siparis_gruplari[sip]
+            grup['boyutlar'].append({
+                'boyut':          b.get('boyut') or 'STD',
+                'batch_kodu':     b['batch_kodu'],
+                'lot_kodu':       b.get('lot_kodu'),
+                'durum':          b['durum'],
+                'planlanan_kg':   b['planlanan_kg'],
+                'uretilen_kg':    b['uretilen_kg'],
+                'kalan_kg':       b['kalan_kg'],
+                'toplam_alt_emir':b['toplam_alt_emir'],
+                'biten_alt_emir': b['biten_alt_emir'],
+                'hazir_alt_emir': b['hazir_alt_emir'],
+                'devam_alt_emir': b['devam_alt_emir'],
+                'bekleme_alt_emir':b['bekleme_alt_emir'],
+            })
+
+        # Tek boyutlu gruplarda tek_batch doldur
+        for sip, grup in siparis_gruplari.items():
+            if len(grup['boyutlar']) == 1:
+                grup['tek_batch'] = grup['boyutlar'][0]['batch_kodu']
+
+        siparis_listesi = list(siparis_gruplari.values())
+
     finally:
         con.close()
 
     return render_template(
         'nexgen/tablet_devam_edenler.html',
         active='nexgen',
-        batches=batches,
+        siparis_listesi=siparis_listesi,
+        parca_tablosu=parca_tablosu,
+    )
+
+
+@nexgen_bp.route('/tablet/uretim-islem/<batch_kodu>')
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def tablet_uretim_islem(batch_kodu):
+    """Üretim işlem takip ekranı — operatör karışım/dolum sürecini buradan görür."""
+    con = _db()
+    try:
+        # plan_id kolonu migration 071 sonrası mevcut — graceful JOIN
+        _cols = [c['name'] for c in con.execute(
+            "PRAGMA table_info(nexgen_uretim_batch)"
+        ).fetchall()]
+        if 'plan_id' in _cols:
+            batch = con.execute("""
+                SELECT nb.id, nb.batch_kodu, nb.lot_kodu, nb.plan_id,
+                       nb.uretim_varyant_id,
+                       nb.planlanan_kg, nb.durum, nb.olusturma_tarihi, nb.notlar,
+                       uv.boyut,
+                       rv.ad AS renk_ad,
+                       f.ad AS formul_ad,
+                       np.musteri_adi, np.siparis_no, np.plan_tarihi
+                FROM nexgen_uretim_batch nb
+                JOIN nexgen_uretim_varyant uv ON uv.id = nb.uretim_varyant_id
+                JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+                JOIN nexgen_formul f          ON f.id  = rv.formul_id
+                LEFT JOIN nexgen_uretim_plan np ON np.id = nb.plan_id
+                WHERE nb.batch_kodu = ?
+            """, (batch_kodu,)).fetchone()
+        else:
+            batch = con.execute("""
+                SELECT nb.id, nb.batch_kodu, nb.lot_kodu,
+                       nb.uretim_varyant_id,
+                       nb.planlanan_kg, nb.durum, nb.olusturma_tarihi, nb.notlar,
+                       uv.boyut,
+                       rv.ad AS renk_ad,
+                       f.ad AS formul_ad,
+                       NULL AS musteri_adi, NULL AS siparis_no, NULL AS plan_tarihi
+                FROM nexgen_uretim_batch nb
+                JOIN nexgen_uretim_varyant uv ON uv.id = nb.uretim_varyant_id
+                JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+                JOIN nexgen_formul f          ON f.id  = rv.formul_id
+                WHERE nb.batch_kodu = ?
+            """, (batch_kodu,)).fetchone()
+        if not batch:
+            from flask import abort
+            abort(404)
+        batch = dict(batch)
+
+        # Alt Emirler (nexgen_uretim_parca) — Migration 072+ sonrası aktif
+        alt_emirler = []
+        toplam_uretilen_kg = 0.0
+        parca_tablosu = _parca_tablosu_var(con)
+        formul_batch_kg = 0.0
+        sayaclar = {'toplam': 0, 'hazir': 0, 'devam': 0, 'bekleme': 0, 'bitti': 0}
+
+        if parca_tablosu:
+            # formul_batch_kg kolonu var mı?
+            _pk_cols = [c['name'] for c in con.execute(
+                "PRAGMA table_info(nexgen_uretim_parca)"
+            ).fetchall()]
+            has_formul_kg_col = 'formul_batch_kg' in _pk_cols
+
+            if has_formul_kg_col:
+                _select = """
+                    SELECT np.id, np.parca_no, np.hedef_kg, np.formul_batch_kg,
+                           np.uretilen_kg, np.durum, np.baslama_zamani, np.bitis_zamani,
+                           np.bekleme_sebebi, np.notlar, np.vardiya,
+                           ku.KullaniciAdi AS operator_ad
+                    FROM nexgen_uretim_parca np
+                    LEFT JOIN sistem_kullanici ku ON ku.Id = np.operator_id
+                    WHERE np.batch_kodu = ?
+                    ORDER BY np.parca_no ASC
+                """
+            else:
+                _select = """
+                    SELECT np.id, np.parca_no, np.hedef_kg,
+                           np.hedef_kg AS formul_batch_kg,
+                           np.uretilen_kg, np.durum, np.baslama_zamani, np.bitis_zamani,
+                           np.bekleme_sebebi, np.notlar, np.vardiya,
+                           ku.KullaniciAdi AS operator_ad
+                    FROM nexgen_uretim_parca np
+                    LEFT JOIN sistem_kullanici ku ON ku.Id = np.operator_id
+                    WHERE np.batch_kodu = ?
+                    ORDER BY np.parca_no ASC
+                """
+
+            _kayitlar = con.execute(_select, (batch_kodu,)).fetchall()
+            alt_emirler = [dict(r) for r in _kayitlar]
+
+            for ae in alt_emirler:
+                sayaclar['toplam'] += 1
+                d_lower = ae['durum'].lower()
+                if d_lower in sayaclar:
+                    sayaclar[d_lower] += 1
+                if ae['durum'] == 'BITTI':
+                    toplam_uretilen_kg += float(ae['uretilen_kg'])
+
+            # formul_batch_kg: ilk kayıttan veya reçeteden al
+            if alt_emirler:
+                formul_batch_kg = float(alt_emirler[0].get('formul_batch_kg') or 0)
+            if formul_batch_kg <= 0 and batch.get('uretim_varyant_id'):
+                formul_batch_kg = _formul_batch_kg_hesapla(con, batch['uretim_varyant_id'])
+        else:
+            # Migration yoksa reçeteden hesapla (sadece gösterim için)
+            if batch.get('uretim_varyant_id'):
+                formul_batch_kg = _formul_batch_kg_hesapla(con, batch['uretim_varyant_id'])
+
+        planlanan_kg = float(batch['planlanan_kg'])
+        kalan_kg = max(0.0, planlanan_kg - toplam_uretilen_kg)
+
+        # Aynı siparis_no'daki kardeş batch'ler (L/S seçim ekranı için)
+        kardes_boyutlar = []
+        sip_no = batch.get('siparis_no')
+        if sip_no and 'plan_id' in _cols:
+            kardesler = con.execute("""
+                SELECT nb.batch_kodu, uv.boyut
+                FROM nexgen_uretim_batch nb
+                JOIN nexgen_uretim_varyant uv ON uv.id = nb.uretim_varyant_id
+                LEFT JOIN nexgen_uretim_plan np ON np.id = nb.plan_id
+                WHERE np.siparis_no = ?
+                  AND nb.durum IN ('TASLAK','HAZIR','DEVAM','BEKLEME','BITTI')
+                ORDER BY uv.boyut
+            """, (sip_no,)).fetchall()
+            # Tüm boyutlar (bu batch dahil)
+            kardes_boyutlar = [
+                {'boyut': r['boyut'] or 'STD', 'batch_kodu': r['batch_kodu'],
+                 'aktif': r['batch_kodu'] == batch_kodu}
+                for r in kardesler
+            ]
+
+        # Barkod/sevk özet: BITTI olan alt emirlerin toplamı
+        # (ileride sevke_hazir flag gerekir; şimdilik BITTI = barkoda hazır)
+        barkod_hazir_adet = sayaclar.get('bitti', 0)
+        barkod_hazir_kg   = round(toplam_uretilen_kg, 1)
+
+    finally:
+        con.close()
+
+    return render_template(
+        'nexgen/tablet_uretim_islem.html',
+        active='nexgen',
+        batch=batch,
+        alt_emirler=alt_emirler,
+        toplam_uretilen_kg=round(toplam_uretilen_kg, 3),
+        kalan_kg=round(kalan_kg, 3),
+        parca_tablosu=parca_tablosu,
+        formul_batch_kg=round(formul_batch_kg, 3),
+        sayaclar=sayaclar,
+        kardes_boyutlar=kardes_boyutlar,
+        barkod_hazir_adet=barkod_hazir_adet,
+        barkod_hazir_kg=barkod_hazir_kg,
     )
 
 
@@ -4145,6 +4436,7 @@ def api_tablet_uretim_kodu():
     except Exception:
         return jsonify({"ok": False, "hata": "Geçersiz planlanan_kg"}), 400
 
+    import math as _math
     con = _db()
     try:
         uv = con.execute(
@@ -4168,15 +4460,52 @@ def api_tablet_uretim_kodu():
             "VALUES(?,?,?,?,'HAZIR',?,?)",
             (batch_kodu, lot_kodu, uv_id, round(planlanan, 3), uid, notlar)
         )
+
+        # Alt emirleri otomatik oluştur (wizard'dan açılan batch'ler için)
+        alt_emir_sayisi = 0
+        if _parca_tablosu_var(con):
+            batch_row = con.execute(
+                "SELECT id FROM nexgen_uretim_batch WHERE batch_kodu=?",
+                (batch_kodu,)
+            ).fetchone()
+            batch_id = batch_row['id'] if batch_row else None
+            formul_batch_kg = _formul_batch_kg_hesapla(con, uv_id)
+            if batch_id and formul_batch_kg > 0:
+                alt_emir_sayisi = _math.ceil(planlanan / formul_batch_kg)
+                parca_cols = [c['name'] for c in con.execute(
+                    "PRAGMA table_info(nexgen_uretim_parca)"
+                ).fetchall()]
+                has_formul_kg_col = 'formul_batch_kg' in parca_cols
+                for no in range(1001, 1001 + alt_emir_sayisi):
+                    if has_formul_kg_col:
+                        con.execute("""
+                            INSERT INTO nexgen_uretim_parca
+                                (batch_id, batch_kodu, parca_no,
+                                 hedef_kg, formul_batch_kg, uretilen_kg,
+                                 durum, operator_id)
+                            VALUES (?, ?, ?, ?, ?, 0, 'HAZIR', ?)
+                        """, (batch_id, batch_kodu, no,
+                              round(formul_batch_kg, 3),
+                              round(formul_batch_kg, 3), uid))
+                    else:
+                        con.execute("""
+                            INSERT INTO nexgen_uretim_parca
+                                (batch_id, batch_kodu, parca_no,
+                                 hedef_kg, uretilen_kg, durum, operator_id)
+                            VALUES (?, ?, ?, ?, 0, 'HAZIR', ?)
+                        """, (batch_id, batch_kodu, no,
+                              round(formul_batch_kg, 3), uid))
+
         con.commit()
         return jsonify({
             "ok": True,
-            "batch_kodu":  batch_kodu,
-            "lot_kodu":    lot_kodu,
-            "formul_ad":   uv['formul_ad'],
-            "renk_ad":     uv['renk_ad'],
-            "boyut":       uv['boyut'],
-            "planlanan_kg": round(planlanan, 3),
+            "batch_kodu":      batch_kodu,
+            "lot_kodu":        lot_kodu,
+            "formul_ad":       uv['formul_ad'],
+            "renk_ad":         uv['renk_ad'],
+            "boyut":           uv['boyut'],
+            "planlanan_kg":    round(planlanan, 3),
+            "alt_emir_sayisi": alt_emir_sayisi,
         })
     except Exception as e:
         con.rollback()
@@ -4261,20 +4590,42 @@ def tablet_etiket_uretim(batch_kodu):
     """Üretim batch için LOT / barkod etiket önizleme sayfası."""
     con = _db()
     try:
-        batch = con.execute("""
-            SELECT nb.id, nb.batch_kodu, nb.lot_kodu, nb.planlanan_kg,
-                   nb.durum, nb.olusturma_tarihi, nb.notlar,
-                   uv.boyut,
-                   rv.ad AS renk_ad,
-                   f.ad AS formul_ad,
-                   ku.KullaniciAdi AS olusturan_ad
-            FROM nexgen_uretim_batch nb
-            JOIN nexgen_uretim_varyant uv ON uv.id = nb.uretim_varyant_id
-            JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
-            JOIN nexgen_formul f          ON f.id  = rv.formul_id
-            LEFT JOIN sistem_kullanici ku ON ku.Id  = nb.olusturan_id
-            WHERE nb.batch_kodu = ?
-        """, (batch_kodu,)).fetchone()
+        _ecols = [c['name'] for c in con.execute(
+            "PRAGMA table_info(nexgen_uretim_batch)"
+        ).fetchall()]
+        if 'plan_id' in _ecols:
+            batch = con.execute("""
+                SELECT nb.id, nb.batch_kodu, nb.lot_kodu, nb.planlanan_kg,
+                       nb.durum, nb.olusturma_tarihi, nb.notlar,
+                       uv.boyut,
+                       rv.ad AS renk_ad,
+                       f.ad AS formul_ad,
+                       ku.KullaniciAdi AS olusturan_ad,
+                       np.musteri_adi, np.siparis_no
+                FROM nexgen_uretim_batch nb
+                JOIN nexgen_uretim_varyant uv ON uv.id = nb.uretim_varyant_id
+                JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+                JOIN nexgen_formul f          ON f.id  = rv.formul_id
+                LEFT JOIN sistem_kullanici ku ON ku.Id  = nb.olusturan_id
+                LEFT JOIN nexgen_uretim_plan np ON np.id = nb.plan_id
+                WHERE nb.batch_kodu = ?
+            """, (batch_kodu,)).fetchone()
+        else:
+            batch = con.execute("""
+                SELECT nb.id, nb.batch_kodu, nb.lot_kodu, nb.planlanan_kg,
+                       nb.durum, nb.olusturma_tarihi, nb.notlar,
+                       uv.boyut,
+                       rv.ad AS renk_ad,
+                       f.ad AS formul_ad,
+                       ku.KullaniciAdi AS olusturan_ad,
+                       NULL AS musteri_adi, NULL AS siparis_no
+                FROM nexgen_uretim_batch nb
+                JOIN nexgen_uretim_varyant uv ON uv.id = nb.uretim_varyant_id
+                JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+                JOIN nexgen_formul f          ON f.id  = rv.formul_id
+                LEFT JOIN sistem_kullanici ku ON ku.Id  = nb.olusturan_id
+                WHERE nb.batch_kodu = ?
+            """, (batch_kodu,)).fetchone()
         if not batch:
             from flask import abort
             abort(404)
@@ -4563,9 +4914,45 @@ def _plan_kodu_uret(con):
     return f"NP-{yil}-{son_no + 1:05d}"
 
 
+def _nexgen_siparis_no_uret(con):
+    """NSP-YYYY-NNNNN formatında benzersiz sipariş no üretir.
+
+    Kullanıcı sipariş no girmezse otomatik çağrılır.
+    LARGE+SMALL aynı request'ten geliyorsa JS aynı no'yu tekrar gönderir,
+    bu fonksiyon yalnızca bir kez çağrılır (ilk kayıt için).
+    """
+    import datetime
+    yil = datetime.datetime.now().year
+    prefix = f"NSP-{yil}-%"
+    son = con.execute(
+        "SELECT siparis_no FROM nexgen_uretim_plan "
+        "WHERE siparis_no LIKE ? ORDER BY id DESC LIMIT 1",
+        (prefix,)
+    ).fetchone()
+    if son and son['siparis_no']:
+        try:
+            son_no = int(son['siparis_no'].split('-')[-1])
+        except Exception:
+            son_no = 0
+    else:
+        son_no = 0
+    return f"NSP-{yil}-{son_no + 1:05d}"
+
+
 def _plan_liste_sorgu(con, sadece_aktif=False):
-    """Plan listesini join'li şekilde döner."""
+    """Plan listesini join'li şekilde döner.
+    plan_id üzerinden bağlı batch_kodu da getirilir (BASLADI → Devam linki için).
+    """
     where = "WHERE np.durum NOT IN ('BITTI','IPTAL')" if sadece_aktif else ""
+    # plan_id kolonu varlığına göre batch JOIN kararı
+    _bcols = [c['name'] for c in con.execute(
+        "PRAGMA table_info(nexgen_uretim_batch)"
+    ).fetchall()]
+    batch_join = ""
+    batch_select = "NULL AS batch_kodu"
+    if 'plan_id' in _bcols:
+        batch_join = "LEFT JOIN nexgen_uretim_batch nb ON nb.plan_id = np.id AND nb.durum NOT IN ('BITTI')"
+        batch_select = "nb.batch_kodu"
     return con.execute(f"""
         SELECT np.id, np.plan_kodu, np.kaynak, np.siparis_no, np.musteri_adi,
                np.planlanan_kg, np.oncelik_sira, np.plan_tarihi,
@@ -4573,14 +4960,16 @@ def _plan_liste_sorgu(con, sadece_aktif=False):
                uv.id AS uv_id, uv.boyut,
                rv.ad AS renk_ad,
                f.ad AS formul_ad, f.kod AS formul_kod,
-               ku.KullaniciAdi AS olusturan_ad
+               ku.KullaniciAdi AS olusturan_ad,
+               {batch_select}
         FROM nexgen_uretim_plan np
         JOIN nexgen_uretim_varyant uv ON uv.id = np.uretim_varyant_id
         JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
         JOIN nexgen_formul f          ON f.id  = rv.formul_id
         LEFT JOIN sistem_kullanici ku ON ku.Id  = np.created_by
+        {batch_join}
         {where}
-        ORDER BY np.durum ASC, np.oncelik_sira ASC, np.id ASC
+        ORDER BY np.id DESC
     """).fetchall()
 
 
@@ -4591,6 +4980,22 @@ def uretim_plan_liste():
     con = _db()
     try:
         planlar = [dict(p) for p in _plan_liste_sorgu(con)]
+
+        # Alt emir sayaçlarını planlara ekle (Migration 072+ gerekli)
+        if _parca_tablosu_var(con):
+            for pl in planlar:
+                bk = pl.get('batch_kodu')
+                if bk:
+                    sayac = con.execute("""
+                        SELECT COUNT(*) AS toplam,
+                               SUM(CASE WHEN durum='BITTI' THEN 1 ELSE 0 END) AS biten
+                        FROM nexgen_uretim_parca WHERE batch_kodu=?
+                    """, (bk,)).fetchone()
+                    pl['toplam_alt_emir'] = sayac['toplam'] or 0
+                    pl['biten_alt_emir']  = sayac['biten']  or 0
+                else:
+                    pl['toplam_alt_emir'] = 0
+                    pl['biten_alt_emir']  = 0
 
         # Aktif varyantları formül > renk > boyut hiyerarşisinde grupla
         # Yapı: [{formul_id, formul_ad, renkler: [{renk_id, renk_ad,
@@ -4603,6 +5008,7 @@ def uretim_plan_liste():
             JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
             JOIN nexgen_formul f        ON f.id  = rv.formul_id
             WHERE uv.aktif = 1
+              AND uv.recete_durum = 'URETIME_ACIK'
             ORDER BY f.ad, rv.ad, uv.boyut
         """).fetchall()
 
@@ -4691,6 +5097,10 @@ def api_plan_ekle():
         if not uv:
             return jsonify({'ok': False, 'hata': 'Üretim varyantı bulunamadı'}), 404
 
+        # Sipariş no boşsa otomatik üret
+        if not siparis_no:
+            siparis_no = _nexgen_siparis_no_uret(con)
+
         plan_kodu = _plan_kodu_uret(con)
         uid = _kullanici_id()
         con.execute(
@@ -4705,6 +5115,7 @@ def api_plan_ekle():
         return jsonify({
             'ok': True,
             'plan_kodu': plan_kodu,
+            'siparis_no': siparis_no,
             'formul_ad': uv['formul_ad'],
             'renk_ad': uv['renk_ad'],
             'boyut': uv['boyut'],
@@ -4742,14 +5153,183 @@ def api_plan_iptal(plan_id):
         con.close()
 
 
-@nexgen_bp.route('/api/plan/<int:plan_id>/basla', methods=['POST'])
-@yetki_gerekli('nexgen.tablet.uretim', 'can_uretim')
-def api_plan_basla(plan_id):
-    """Plandan üretim batch kodu oluştur. Plan durumu BASLADI olur.
+@nexgen_bp.route('/api/batch/<batch_kodu>/durum', methods=['POST'])
+@login_gerekli
+def api_batch_durum_guncelle(batch_kodu):
+    """Batch durumunu güncelle.
 
-    Stok hareketi yapılmaz.
-    Mevcut nexgen_uretim_batch + LOT mekanizmasını kullanır.
+    Kabul edilen geçişler:
+      HAZIR      → DEVAM      (operatör başlattı)
+      DEVAM      → BEKLEME    (beklemede)
+      BEKLEME    → DEVAM      (devam ettirdi)
+      DEVAM      → BITTI      (üretim bitti)
+      HAZIR      → BITTI      (direkt bitti)
+
+    Yetki: nexgen.tablet.uretim VEYA nexgen.plan.manage
     """
+    if not (yetki_var('nexgen.tablet.uretim', 'can_uretim') or
+            yetki_var('nexgen.plan.manage', 'can_manage')):
+        return jsonify({'ok': False, 'hata': 'Yetki yok'}), 403
+
+    d = request.get_json(silent=True) or {}
+    yeni_durum = (d.get('durum') or '').strip().upper()
+    notlar = (d.get('notlar') or '').strip() or None
+
+    GECERLI_DURUMLAR = {'HAZIR', 'DEVAM', 'BEKLEME', 'BITTI'}
+    GECISLER = {
+        'HAZIR':   {'DEVAM', 'BITTI'},
+        'DEVAM':   {'BEKLEME', 'BITTI'},
+        'BEKLEME': {'DEVAM'},
+    }
+
+    if yeni_durum not in GECERLI_DURUMLAR:
+        return jsonify({'ok': False, 'hata': f'Geçersiz durum: {yeni_durum}'}), 400
+
+    con = _db()
+    try:
+        batch = con.execute(
+            "SELECT batch_kodu, durum, plan_id FROM nexgen_uretim_batch WHERE batch_kodu=?",
+            (batch_kodu,)
+        ).fetchone()
+        if not batch:
+            return jsonify({'ok': False, 'hata': 'Batch bulunamadı'}), 404
+
+        mevcut = batch['durum']
+        izin = GECISLER.get(mevcut, set())
+        if yeni_durum not in izin:
+            return jsonify({
+                'ok': False,
+                'hata': f'{mevcut} → {yeni_durum} geçişi geçersiz'
+            }), 400
+
+        if notlar:
+            con.execute(
+                "UPDATE nexgen_uretim_batch SET durum=?, notlar=? WHERE batch_kodu=?",
+                (yeni_durum, notlar, batch_kodu)
+            )
+        else:
+            con.execute(
+                "UPDATE nexgen_uretim_batch SET durum=? WHERE batch_kodu=?",
+                (yeni_durum, batch_kodu)
+            )
+
+        # Üretim bitti → bağlı planı BITTI yap
+        if yeni_durum == 'BITTI' and batch['plan_id']:
+            con.execute(
+                "UPDATE nexgen_uretim_plan SET durum='BITTI' WHERE id=? AND durum='BASLADI'",
+                (batch['plan_id'],)
+            )
+
+        con.commit()
+        return jsonify({'ok': True, 'durum': yeni_durum, 'batch_kodu': batch_kodu})
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+def _formul_batch_kg_hesapla(con, uretim_varyant_id):
+    """Bir üretim varyantının aktif reçete kalemlerinden standart batch KG'sini döner.
+
+    Returns: float (0.0 reçete bulunamazsa)
+    """
+    row = con.execute(
+        "SELECT COALESCE(SUM(miktar_kg), 0) AS toplam "
+        "FROM nexgen_recete_kalem "
+        "WHERE uretim_varyant_id=? AND aktif=1",
+        (uretim_varyant_id,)
+    ).fetchone()
+    return round(float(row['toplam']), 3) if row else 0.0
+
+
+@nexgen_bp.route('/api/plan/<int:plan_id>/alt-emir-onizle')
+@login_gerekli
+def api_alt_emir_onizle(plan_id):
+    """Alt Emir önizleme — DB'ye yazmaz, sadece hesap döner.
+
+    Planlama ekranı "Üretime Gönder" öncesi bu endpoint'i çağırarak
+    özet bilgiyi modal'da gösterir.
+
+    Yanıt:
+      planlanan_kg      : float
+      formul_batch_kg   : float  (reçeteden)
+      alt_emir_sayisi   : int    (ceil)
+      toplam_uretim_kg  : float  (alt_emir_sayisi × formul_batch_kg)
+      fazla_kg          : float  (toplam_uretim_kg - planlanan_kg)
+      uyari             : str | None (reçete yoksa)
+
+    Yetki: nexgen.plan.manage
+    """
+    if not yetki_var('nexgen.plan.manage', 'can_manage'):
+        return jsonify({'ok': False, 'hata': 'Yetki yok'}), 403
+
+    con = _db()
+    try:
+        p = con.execute("""
+            SELECT np.id, np.planlanan_kg, np.uretim_varyant_id, np.durum,
+                   f.ad AS formul_ad, rv.ad AS renk_ad, uv.boyut
+            FROM nexgen_uretim_plan np
+            JOIN nexgen_uretim_varyant uv ON uv.id = np.uretim_varyant_id
+            JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+            JOIN nexgen_formul f          ON f.id  = rv.formul_id
+            WHERE np.id = ?
+        """, (plan_id,)).fetchone()
+        if not p:
+            return jsonify({'ok': False, 'hata': 'Plan bulunamadı'}), 404
+
+        planlanan = float(p['planlanan_kg'])
+        formul_batch_kg = _formul_batch_kg_hesapla(con, p['uretim_varyant_id'])
+
+        uyari = None
+        if formul_batch_kg <= 0:
+            uyari = 'Bu formül için aktif reçete kalemi bulunamadı.'
+            alt_emir_sayisi = 0
+            toplam_uretim_kg = 0.0
+            fazla_kg = 0.0
+        else:
+            import math
+            alt_emir_sayisi  = math.ceil(planlanan / formul_batch_kg)
+            toplam_uretim_kg = round(alt_emir_sayisi * formul_batch_kg, 3)
+            fazla_kg         = round(toplam_uretim_kg - planlanan, 3)
+
+        return jsonify({
+            'ok': True,
+            'plan_id': plan_id,
+            'formul_ad': p['formul_ad'],
+            'renk_ad': p['renk_ad'],
+            'boyut': p['boyut'],
+            'planlanan_kg': round(planlanan, 3),
+            'formul_batch_kg': formul_batch_kg,
+            'alt_emir_sayisi': alt_emir_sayisi,
+            'toplam_uretim_kg': toplam_uretim_kg,
+            'fazla_kg': fazla_kg,
+            'uyari': uyari,
+        })
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/plan/<int:plan_id>/basla', methods=['POST'])
+@login_gerekli
+def api_plan_basla(plan_id):
+    """Plandan üretim başlat: Batch + LOT oluştur, Alt Emirleri otomatik oluştur.
+
+    FAZ-5G: api_plan_basla artık nexgen_uretim_parca tablosuna
+    alt emirleri toplu olarak HAZIR durumuyla INSERT eder.
+    Alt emir sayısı = ceil(planlanan_kg / formul_batch_kg).
+    Her alt emirin hedef_kg = formul_batch_kg (formül KG).
+    Operatör KG girmez.
+
+    Yetki: nexgen.tablet.uretim VEYA nexgen.plan.manage
+    Stok hareketi yapılmaz. MRP yok.
+    """
+    if not (yetki_var('nexgen.tablet.uretim', 'can_uretim') or
+            yetki_var('nexgen.plan.manage', 'can_manage')):
+        return jsonify({'ok': False, 'hata': 'Yetki yok (tablet.uretim veya plan.manage gerekli)'}), 403
+
+    import math
+
     d = request.get_json(silent=True) or {}
     notlar = (d.get('notlar') or '').strip() or None
 
@@ -4771,19 +5351,80 @@ def api_plan_basla(plan_id):
         if p['durum'] not in ('PLANLANDI',):
             return jsonify({'ok': False, 'hata': f'Plan durumu uygun değil: {p["durum"]}'}), 400
 
-        batch_kodu = _batch_kodu_uret(con)
-        lot_kodu   = _lot_kodu_uret(con)
-        uid = _kullanici_id()
+        # Batch + LOT oluştur
+        batch_kodu   = _batch_kodu_uret(con)
+        lot_kodu     = _lot_kodu_uret(con)
+        uid          = _kullanici_id()
         batch_notlar = notlar or p['notlar']
 
-        con.execute(
-            "INSERT INTO nexgen_uretim_batch"
-            "(batch_kodu, lot_kodu, uretim_varyant_id, planlanan_kg,"
-            " durum, olusturan_id, notlar)"
-            " VALUES(?,?,?,?,'HAZIR',?,?)",
-            (batch_kodu, lot_kodu, p['uretim_varyant_id'],
-             round(p['planlanan_kg'], 3), uid, batch_notlar)
-        )
+        # plan_id kolonu migration 071 sonrası mevcut — graceful INSERT
+        batch_cols = [c['name'] for c in con.execute(
+            "PRAGMA table_info(nexgen_uretim_batch)"
+        ).fetchall()]
+        if 'plan_id' in batch_cols:
+            con.execute(
+                "INSERT INTO nexgen_uretim_batch"
+                "(batch_kodu, lot_kodu, uretim_varyant_id, planlanan_kg,"
+                " durum, olusturan_id, notlar, plan_id)"
+                " VALUES(?,?,?,?,'HAZIR',?,?,?)",
+                (batch_kodu, lot_kodu, p['uretim_varyant_id'],
+                 round(p['planlanan_kg'], 3), uid, batch_notlar, plan_id)
+            )
+        else:
+            con.execute(
+                "INSERT INTO nexgen_uretim_batch"
+                "(batch_kodu, lot_kodu, uretim_varyant_id, planlanan_kg,"
+                " durum, olusturan_id, notlar)"
+                " VALUES(?,?,?,?,'HAZIR',?,?)",
+                (batch_kodu, lot_kodu, p['uretim_varyant_id'],
+                 round(p['planlanan_kg'], 3), uid, batch_notlar)
+            )
+
+        # Batch id'yi al
+        batch_row = con.execute(
+            "SELECT id FROM nexgen_uretim_batch WHERE batch_kodu=?",
+            (batch_kodu,)
+        ).fetchone()
+        batch_id = batch_row['id'] if batch_row else None
+
+        # Alt Emirleri toplu oluştur (FAZ-5G)
+        alt_emir_sayisi = 0
+        formul_batch_kg = 0.0
+
+        if _parca_tablosu_var(con) and batch_id:
+            formul_batch_kg = _formul_batch_kg_hesapla(con, p['uretim_varyant_id'])
+            if formul_batch_kg > 0:
+                planlanan = float(p['planlanan_kg'])
+                alt_emir_sayisi = math.ceil(planlanan / formul_batch_kg)
+
+                # formul_batch_kg kolonu var mı? (Migration 073)
+                parca_cols = [c['name'] for c in con.execute(
+                    "PRAGMA table_info(nexgen_uretim_parca)"
+                ).fetchall()]
+                has_formul_kg_col = 'formul_batch_kg' in parca_cols
+
+                # Alt emir numaraları 1001'den başlar (1001, 1002, 1003, ...)
+                for no in range(1001, 1001 + alt_emir_sayisi):
+                    if has_formul_kg_col:
+                        con.execute("""
+                            INSERT INTO nexgen_uretim_parca
+                                (batch_id, batch_kodu, plan_id, parca_no,
+                                 hedef_kg, formul_batch_kg, uretilen_kg,
+                                 durum, operator_id)
+                            VALUES (?, ?, ?, ?, ?, ?, 0, 'HAZIR', ?)
+                        """, (batch_id, batch_kodu, plan_id, no,
+                              round(formul_batch_kg, 3),
+                              round(formul_batch_kg, 3),
+                              uid))
+                    else:
+                        con.execute("""
+                            INSERT INTO nexgen_uretim_parca
+                                (batch_id, batch_kodu, plan_id, parca_no,
+                                 hedef_kg, uretilen_kg, durum, operator_id)
+                            VALUES (?, ?, ?, ?, ?, 0, 'HAZIR', ?)
+                        """, (batch_id, batch_kodu, plan_id, no,
+                              round(formul_batch_kg, 3), uid))
+
         con.execute(
             "UPDATE nexgen_uretim_plan SET durum='BASLADI' WHERE id=?", (plan_id,)
         )
@@ -4797,6 +5438,8 @@ def api_plan_basla(plan_id):
             'renk_ad': p['renk_ad'],
             'boyut': p['boyut'],
             'planlanan_kg': round(p['planlanan_kg'], 3),
+            'formul_batch_kg': round(formul_batch_kg, 3),
+            'alt_emir_sayisi': alt_emir_sayisi,
         })
     except Exception as e:
         con.rollback()
@@ -4954,4 +5597,842 @@ def api_recycle_stok_kartlari():
     finally:
         con.close()
     return jsonify([dict(k) for k in kartlar])
+
+
+# ─────────────────────────────────────────────────────────────
+# NEXGEN FAZ-5F — Parçalı Üretim (nexgen_uretim_parca)
+# Migration 072 sonrası aktif.
+# MRP/Stok hareketi YOK. Barkod batch bazlı korunur.
+# ─────────────────────────────────────────────────────────────
+
+def _parca_tablosu_var(con):
+    """nexgen_uretim_parca tablosunun var olup olmadığını kontrol eder."""
+    tablolar = [r[0] for r in con.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='nexgen_uretim_parca'"
+    ).fetchall()]
+    return bool(tablolar)
+
+
+def _batch_toplam_uretilen(con, batch_kodu):
+    """Bir batch'in BITTI parçalarından toplam üretilen KG'yi döner."""
+    row = con.execute(
+        "SELECT COALESCE(SUM(uretilen_kg), 0) AS toplam "
+        "FROM nexgen_uretim_parca "
+        "WHERE batch_kodu=? AND durum='BITTI'",
+        (batch_kodu,)
+    ).fetchone()
+    return float(row['toplam']) if row else 0.0
+
+
+def _batch_kalan_kg(con, batch_kodu):
+    """Bir batch için kalan KG = planlanan_kg - toplam_uretilen (BITTI parçalar)."""
+    batch = con.execute(
+        "SELECT planlanan_kg FROM nexgen_uretim_batch WHERE batch_kodu=?",
+        (batch_kodu,)
+    ).fetchone()
+    if not batch:
+        return 0.0
+    toplam = _batch_toplam_uretilen(con, batch_kodu)
+    return max(0.0, float(batch['planlanan_kg']) - toplam)
+
+
+def _parca_no_uret(con, batch_kodu):
+    """Batch içinde bir sonraki parca_no'yu döner.
+    Yeni numara sistemi: 1001'den başlar (1001, 1002, 1003, ...).
+    Eski kayıtlar (1, 2, 3) varsa mevcut max'ın üstünden devam eder.
+    """
+    row = con.execute(
+        "SELECT COALESCE(MAX(parca_no), 1000) AS maks "
+        "FROM nexgen_uretim_parca WHERE batch_kodu=?",
+        (batch_kodu,)
+    ).fetchone()
+    maks = row['maks'] if row else 1000
+    # Eski kayıt (1-999) varsa 1001'den başlat
+    return max(maks, 1000) + 1
+
+
+@nexgen_bp.route('/api/batch/<batch_kodu>/parca/ekle', methods=['POST'])
+@login_gerekli
+def api_parca_ekle(batch_kodu):
+    """Batch altına manuel üretim parçası ekle (admin override).
+
+    FAZ-5G'den itibaren normal akışta alt emirler api_plan_basla ile
+    otomatik oluşturulur. Bu endpoint yalnızca plan.manage yetkisiyle
+    kullanılabilir (operatör erişemez).
+
+    Body (JSON):
+      hedef_kg  : float  — zorunlu, kalan KG'yi geçemez
+      notlar    : str    — opsiyonel
+      vardiya   : str    — opsiyonel (SABAH / OGLEN / AKSAM / GECE)
+
+    Yetki: SADECE nexgen.plan.manage (operatöre kapalı)
+    """
+    if not yetki_var('nexgen.plan.manage', 'can_manage'):
+        return jsonify({'ok': False, 'hata': 'Bu işlem için plan.manage yetkisi gerekli'}), 403
+
+    d = request.get_json(silent=True) or {}
+    hedef_kg = d.get('hedef_kg')
+    notlar   = (d.get('notlar') or '').strip() or None
+    vardiya  = (d.get('vardiya') or '').strip() or None
+
+    if hedef_kg is None:
+        return jsonify({'ok': False, 'hata': 'hedef_kg zorunlu'}), 400
+    try:
+        hedef_kg = float(hedef_kg)
+        if hedef_kg <= 0:
+            return jsonify({'ok': False, 'hata': 'hedef_kg sıfırdan büyük olmalı'}), 400
+    except (TypeError, ValueError):
+        return jsonify({'ok': False, 'hata': 'Geçersiz hedef_kg'}), 400
+
+    con = _db()
+    try:
+        if not _parca_tablosu_var(con):
+            return jsonify({'ok': False, 'hata': 'Migration 072 çalıştırılmadı'}), 500
+
+        batch = con.execute(
+            "SELECT id, batch_kodu, plan_id, planlanan_kg, durum "
+            "FROM nexgen_uretim_batch WHERE batch_kodu=?",
+            (batch_kodu,)
+        ).fetchone()
+        if not batch:
+            return jsonify({'ok': False, 'hata': 'Batch bulunamadı'}), 404
+        if batch['durum'] == 'BITTI':
+            return jsonify({'ok': False, 'hata': 'Tamamlanmış batch\'e parça eklenemez'}), 400
+
+        kalan = _batch_kalan_kg(con, batch_kodu)
+        if hedef_kg > round(kalan, 3):
+            return jsonify({
+                'ok': False,
+                'hata': f'Girilen miktar ({hedef_kg} KG) kalan KG\'yi ({round(kalan,3)} KG) aşıyor'
+            }), 400
+
+        parca_no = _parca_no_uret(con, batch_kodu)
+        uid      = _kullanici_id()
+
+        con.execute("""
+            INSERT INTO nexgen_uretim_parca
+                (batch_id, batch_kodu, plan_id, parca_no,
+                 hedef_kg, uretilen_kg, durum,
+                 operator_id, vardiya, notlar)
+            VALUES (?, ?, ?, ?, ?, 0, 'HAZIR', ?, ?, ?)
+        """, (
+            batch['id'], batch_kodu, batch['plan_id'], parca_no,
+            round(hedef_kg, 3), uid, vardiya, notlar
+        ))
+        con.commit()
+
+        parca = con.execute(
+            "SELECT * FROM nexgen_uretim_parca WHERE batch_kodu=? AND parca_no=?",
+            (batch_kodu, parca_no)
+        ).fetchone()
+
+        return jsonify({
+            'ok': True,
+            'parca_no': parca_no,
+            'parca_id': parca['id'],
+            'hedef_kg': hedef_kg,
+            'kalan_kg': round(kalan - hedef_kg, 3),
+        })
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/batch/<batch_kodu>/alt-emir-olustur', methods=['POST'])
+@login_gerekli
+def api_batch_alt_emir_olustur(batch_kodu):
+    """Mevcut bir batch için alt emirleri otomatik oluşturur.
+
+    Alt emir yoksa formül KG'sine göre hesaplayıp toplu HAZIR olarak ekler.
+    Alt emir zaten varsa dokunmaz (idempotent).
+    Yetki: nexgen.tablet.uretim VEYA nexgen.plan.manage
+    """
+    if not (yetki_var('nexgen.tablet.uretim', 'can_uretim') or
+            yetki_var('nexgen.plan.manage', 'can_manage')):
+        return jsonify({'ok': False, 'hata': 'Yetki yok'}), 403
+
+    import math as _math
+
+    con = _db()
+    try:
+        # Batch'i getir
+        batch = con.execute("""
+            SELECT nb.id, nb.batch_kodu, nb.planlanan_kg, nb.durum,
+                   nb.uretim_varyant_id, nb.plan_id
+            FROM nexgen_uretim_batch nb
+            WHERE nb.batch_kodu = ?
+        """, (batch_kodu,)).fetchone()
+        if not batch:
+            return jsonify({'ok': False, 'hata': 'Batch bulunamadı'}), 404
+
+        if not _parca_tablosu_var(con):
+            return jsonify({'ok': False, 'hata': 'Alt emir tablosu (nexgen_uretim_parca) mevcut değil'}), 400
+
+        # Zaten alt emir var mı?
+        mevcut = con.execute(
+            "SELECT COUNT(*) AS adet FROM nexgen_uretim_parca WHERE batch_kodu=?",
+            (batch_kodu,)
+        ).fetchone()
+        if mevcut and mevcut['adet'] > 0:
+            return jsonify({
+                'ok': True,
+                'mesaj': f'Bu batch için zaten {mevcut["adet"]} alt emir mevcut. Dokunulmadı.',
+                'alt_emir_sayisi': mevcut['adet'],
+                'olusturuldu': False,
+            })
+
+        # Formül batch KG hesapla
+        formul_batch_kg = _formul_batch_kg_hesapla(con, batch['uretim_varyant_id'])
+        if formul_batch_kg <= 0:
+            return jsonify({'ok': False, 'hata': 'Formül reçete KG hesaplanamadı (aktif reçete kalemi yok)'}), 400
+
+        planlanan = float(batch['planlanan_kg'])
+        alt_emir_sayisi = _math.ceil(planlanan / formul_batch_kg)
+        uid = _kullanici_id()
+        plan_id = batch['plan_id'] if 'plan_id' in batch.keys() else None
+
+        parca_cols = [c['name'] for c in con.execute(
+            "PRAGMA table_info(nexgen_uretim_parca)"
+        ).fetchall()]
+        has_formul_kg_col = 'formul_batch_kg' in parca_cols
+
+        for no in range(1001, 1001 + alt_emir_sayisi):
+            if has_formul_kg_col:
+                con.execute("""
+                    INSERT INTO nexgen_uretim_parca
+                        (batch_id, batch_kodu, plan_id, parca_no,
+                         hedef_kg, formul_batch_kg, uretilen_kg,
+                         durum, operator_id)
+                    VALUES (?, ?, ?, ?, ?, ?, 0, 'HAZIR', ?)
+                """, (batch['id'], batch_kodu, plan_id, no,
+                      round(formul_batch_kg, 3),
+                      round(formul_batch_kg, 3), uid))
+            else:
+                con.execute("""
+                    INSERT INTO nexgen_uretim_parca
+                        (batch_id, batch_kodu, plan_id, parca_no,
+                         hedef_kg, uretilen_kg, durum, operator_id)
+                    VALUES (?, ?, ?, ?, ?, 0, 'HAZIR', ?)
+                """, (batch['id'], batch_kodu, plan_id, no,
+                      round(formul_batch_kg, 3), uid))
+
+        con.commit()
+        return jsonify({
+            'ok': True,
+            'batch_kodu': batch_kodu,
+            'alt_emir_sayisi': alt_emir_sayisi,
+            'formul_batch_kg': formul_batch_kg,
+            'olusturuldu': True,
+            'mesaj': f'{alt_emir_sayisi} alt emir oluşturuldu (1001–{1000 + alt_emir_sayisi})',
+        })
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/batch/<batch_kodu>/parca/<int:parca_id>/baslat', methods=['POST'])
+@login_gerekli
+def api_parca_baslat(batch_kodu, parca_id):
+    """Parçayı HAZIR → DEVAM'a al, baslama_zamani atar.
+
+    Yetki: nexgen.tablet.uretim VEYA nexgen.plan.manage
+    """
+    if not (yetki_var('nexgen.tablet.uretim', 'can_uretim') or
+            yetki_var('nexgen.plan.manage', 'can_manage')):
+        return jsonify({'ok': False, 'hata': 'Yetki yok'}), 403
+
+    con = _db()
+    try:
+        if not _parca_tablosu_var(con):
+            return jsonify({'ok': False, 'hata': 'Migration 072 çalıştırılmadı'}), 500
+
+        parca = con.execute(
+            "SELECT id, batch_kodu, durum FROM nexgen_uretim_parca "
+            "WHERE id=? AND batch_kodu=?",
+            (parca_id, batch_kodu)
+        ).fetchone()
+        if not parca:
+            return jsonify({'ok': False, 'hata': 'Parça bulunamadı'}), 404
+        if parca['durum'] not in ('HAZIR', 'BEKLEME'):
+            return jsonify({
+                'ok': False,
+                'hata': f'{parca["durum"]} durumundaki parça başlatılamaz'
+            }), 400
+
+        con.execute("""
+            UPDATE nexgen_uretim_parca
+            SET durum='DEVAM',
+                baslama_zamani=datetime('now','localtime'),
+                updated_at=datetime('now','localtime')
+            WHERE id=?
+        """, (parca_id,))
+
+        # Ana batch'i de DEVAM'a çek (henüz HAZIR ise)
+        con.execute("""
+            UPDATE nexgen_uretim_batch SET durum='DEVAM'
+            WHERE batch_kodu=? AND durum='HAZIR'
+        """, (batch_kodu,))
+
+        con.commit()
+        return jsonify({'ok': True, 'parca_id': parca_id, 'durum': 'DEVAM'})
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/batch/<batch_kodu>/parca/<int:parca_id>/bitir', methods=['POST'])
+@login_gerekli
+def api_parca_bitir(batch_kodu, parca_id):
+    """Alt Emiri DEVAM → BITTI yap.
+
+    FAZ-5G: Operatör KG girmez.
+    uretilen_kg = hedef_kg (formül KG) otomatik atanır.
+
+    Body (JSON — opsiyonel):
+      notlar : str — opsiyonel not
+
+    Yetki: nexgen.tablet.uretim VEYA nexgen.plan.manage
+    """
+    if not (yetki_var('nexgen.tablet.uretim', 'can_uretim') or
+            yetki_var('nexgen.plan.manage', 'can_manage')):
+        return jsonify({'ok': False, 'hata': 'Yetki yok'}), 403
+
+    d = request.get_json(silent=True) or {}
+    notlar = (d.get('notlar') or '').strip() or None
+
+    con = _db()
+    try:
+        if not _parca_tablosu_var(con):
+            return jsonify({'ok': False, 'hata': 'Migration 072 çalıştırılmadı'}), 500
+
+        parca = con.execute(
+            "SELECT id, batch_kodu, durum, hedef_kg FROM nexgen_uretim_parca "
+            "WHERE id=? AND batch_kodu=?",
+            (parca_id, batch_kodu)
+        ).fetchone()
+        if not parca:
+            return jsonify({'ok': False, 'hata': 'Alt Emir bulunamadı'}), 404
+        if parca['durum'] not in ('DEVAM', 'HAZIR'):
+            return jsonify({
+                'ok': False,
+                'hata': f'{parca["durum"]} durumundaki Alt Emir bitirilemez'
+            }), 400
+
+        # uretilen_kg = hedef_kg (formül KG), operatör girmez
+        uretilen_kg = round(float(parca['hedef_kg']), 3)
+
+        update_fields = [
+            "durum='BITTI'",
+            "uretilen_kg=?",
+            "bitis_zamani=datetime('now','localtime')",
+            "updated_at=datetime('now','localtime')",
+        ]
+        params = [uretilen_kg]
+        if notlar:
+            update_fields.append("notlar=?")
+            params.append(notlar)
+        params.append(parca_id)
+
+        con.execute(
+            f"UPDATE nexgen_uretim_parca SET {', '.join(update_fields)} WHERE id=?",
+            params
+        )
+
+        # Toplam üretilen hesapla (BITTI olanların toplamı, yeni biten dahil)
+        toplam = _batch_toplam_uretilen(con, batch_kodu) + uretilen_kg
+        batch  = con.execute(
+            "SELECT planlanan_kg FROM nexgen_uretim_batch WHERE batch_kodu=?",
+            (batch_kodu,)
+        ).fetchone()
+        planlanan = float(batch['planlanan_kg']) if batch else 0.0
+
+        # Toplam alt emir ve biten sayısı
+        sayac = con.execute("""
+            SELECT COUNT(*) AS toplam,
+                   SUM(CASE WHEN durum='BITTI' THEN 1 ELSE 0 END) AS biten
+            FROM nexgen_uretim_parca WHERE batch_kodu=?
+        """, (batch_kodu,)).fetchone()
+        toplam_emir = sayac['toplam'] if sayac else 0
+        biten_emir  = (sayac['biten'] or 0) + 1  # yeni biten dahil
+
+        con.commit()
+        return jsonify({
+            'ok': True,
+            'parca_id': parca_id,
+            'durum': 'BITTI',
+            'uretilen_kg': uretilen_kg,
+            'toplam_uretilen_kg': round(toplam, 3),
+            'kalan_kg': round(max(0.0, planlanan - toplam), 3),
+            'toplam_emir': toplam_emir,
+            'biten_emir': biten_emir,
+        })
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/batch/<batch_kodu>/parca/<int:parca_id>/beklet', methods=['POST'])
+@login_gerekli
+def api_parca_beklet(batch_kodu, parca_id):
+    """Parçayı DEVAM → BEKLEME'ye al, bekleme sebebi kaydet.
+
+    Body (JSON):
+      sebep  : str — opsiyonel
+      notlar : str — opsiyonel
+
+    Yetki: nexgen.tablet.uretim VEYA nexgen.plan.manage
+    """
+    if not (yetki_var('nexgen.tablet.uretim', 'can_uretim') or
+            yetki_var('nexgen.plan.manage', 'can_manage')):
+        return jsonify({'ok': False, 'hata': 'Yetki yok'}), 403
+
+    d = request.get_json(silent=True) or {}
+    sebep  = (d.get('sebep') or '').strip() or None
+    notlar = (d.get('notlar') or '').strip() or None
+
+    con = _db()
+    try:
+        if not _parca_tablosu_var(con):
+            return jsonify({'ok': False, 'hata': 'Migration 072 çalıştırılmadı'}), 500
+
+        parca = con.execute(
+            "SELECT id, batch_kodu, durum FROM nexgen_uretim_parca "
+            "WHERE id=? AND batch_kodu=?",
+            (parca_id, batch_kodu)
+        ).fetchone()
+        if not parca:
+            return jsonify({'ok': False, 'hata': 'Parça bulunamadı'}), 404
+        if parca['durum'] != 'DEVAM':
+            return jsonify({
+                'ok': False,
+                'hata': f'Sadece DEVAM durumundaki parça bekletilebilir (şu an: {parca["durum"]})'
+            }), 400
+
+        con.execute("""
+            UPDATE nexgen_uretim_parca
+            SET durum='BEKLEME',
+                bekleme_sebebi=?,
+                notlar=COALESCE(?, notlar),
+                updated_at=datetime('now','localtime')
+            WHERE id=?
+        """, (sebep, notlar, parca_id))
+        con.commit()
+        return jsonify({'ok': True, 'parca_id': parca_id, 'durum': 'BEKLEME'})
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/batch/<batch_kodu>/parca/liste')
+@login_gerekli
+def api_parca_liste(batch_kodu):
+    """Bir batch'in tüm parçalarını listeler.
+
+    Yetki: nexgen.tablet.view
+    """
+    if not yetki_var('nexgen.tablet.view', 'can_view'):
+        return jsonify({'ok': False, 'hata': 'Yetki yok'}), 403
+
+    con = _db()
+    try:
+        if not _parca_tablosu_var(con):
+            return jsonify({'ok': True, 'parcalar': [], 'migration_eksik': True})
+
+        parcalar = con.execute("""
+            SELECT np.id, np.parca_no, np.hedef_kg, np.uretilen_kg,
+                   np.durum, np.baslama_zamani, np.bitis_zamani,
+                   np.bekleme_sebebi, np.notlar, np.vardiya,
+                   np.created_at,
+                   ku.KullaniciAdi AS operator_ad
+            FROM nexgen_uretim_parca np
+            LEFT JOIN sistem_kullanici ku ON ku.Id = np.operator_id
+            WHERE np.batch_kodu = ?
+            ORDER BY np.parca_no ASC
+        """, (batch_kodu,)).fetchall()
+
+        return jsonify({
+            'ok': True,
+            'batch_kodu': batch_kodu,
+            'parcalar': [dict(p) for p in parcalar],
+        })
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/batch/<batch_kodu>/ilerleme')
+@login_gerekli
+def api_batch_ilerleme(batch_kodu):
+    """Batch KG ilerleme özeti: planlanan / toplam_uretilen / kalan.
+
+    Tablet ana ekranı ve uretim_islem ekranı için.
+    Migration 072 yoksa placeholder sıfırlar döner.
+    """
+    if not yetki_var('nexgen.tablet.view', 'can_view'):
+        return jsonify({'ok': False, 'hata': 'Yetki yok'}), 403
+
+    con = _db()
+    try:
+        batch = con.execute(
+            "SELECT batch_kodu, planlanan_kg, durum "
+            "FROM nexgen_uretim_batch WHERE batch_kodu=?",
+            (batch_kodu,)
+        ).fetchone()
+        if not batch:
+            return jsonify({'ok': False, 'hata': 'Batch bulunamadı'}), 404
+
+        planlanan = float(batch['planlanan_kg'])
+
+        if not _parca_tablosu_var(con):
+            return jsonify({
+                'ok': True,
+                'batch_kodu': batch_kodu,
+                'planlanan_kg': planlanan,
+                'toplam_uretilen_kg': 0.0,
+                'kalan_kg': planlanan,
+                'parca_sayisi': 0,
+                'migration_eksik': True,
+            })
+
+        toplam = _batch_toplam_uretilen(con, batch_kodu)
+        kalan  = max(0.0, planlanan - toplam)
+
+        parca_sayisi = con.execute(
+            "SELECT COUNT(*) AS cnt FROM nexgen_uretim_parca WHERE batch_kodu=?",
+            (batch_kodu,)
+        ).fetchone()['cnt']
+
+        return jsonify({
+            'ok': True,
+            'batch_kodu': batch_kodu,
+            'planlanan_kg': round(planlanan, 3),
+            'toplam_uretilen_kg': round(toplam, 3),
+            'kalan_kg': round(kalan, 3),
+            'parca_sayisi': parca_sayisi,
+            'migration_eksik': False,
+        })
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/batch/<batch_kodu>/parca/toplu-baslat', methods=['POST'])
+@login_gerekli
+def api_parca_toplu_baslat(batch_kodu):
+    """İlk N adet HAZIR alt emiri toplu DEVAM'a al.
+
+    Body (JSON):
+      adet : int — kaç tane başlatılacak (1-500)
+
+    Mantık:
+      parca_no sırasıyla ilk <adet> HAZIR kaydı DEVAM yapılır.
+      BITTI / DEVAM emirler etkilenmez.
+      Her emire baslama_zamani atanır.
+      Ana batch HAZIR ise DEVAM'a çekilir.
+    """
+    if not (yetki_var('nexgen.tablet.uretim', 'can_uretim') or
+            yetki_var('nexgen.plan.manage', 'can_manage')):
+        return jsonify({'ok': False, 'hata': 'Yetki yok'}), 403
+
+    d    = request.get_json(silent=True) or {}
+    adet = d.get('adet', 1)
+    try:
+        adet = max(1, min(500, int(adet)))
+    except Exception:
+        return jsonify({'ok': False, 'hata': 'Geçersiz adet'}), 400
+
+    con = _db()
+    try:
+        if not _parca_tablosu_var(con):
+            return jsonify({'ok': False, 'hata': 'Migration 072 çalıştırılmadı'}), 500
+
+        hedefler = con.execute("""
+            SELECT id FROM nexgen_uretim_parca
+            WHERE batch_kodu=? AND durum='HAZIR'
+            ORDER BY parca_no ASC
+            LIMIT ?
+        """, (batch_kodu, adet)).fetchall()
+
+        if not hedefler:
+            return jsonify({'ok': False, 'hata': 'Başlatılacak HAZIR alt emir yok'}), 400
+
+        ids = [r['id'] for r in hedefler]
+        placeholders = ','.join(['?'] * len(ids))
+        con.execute(f"""
+            UPDATE nexgen_uretim_parca
+            SET durum='DEVAM',
+                baslama_zamani=datetime('now','localtime'),
+                updated_at=datetime('now','localtime')
+            WHERE id IN ({placeholders})
+        """, ids)
+
+        con.execute("""
+            UPDATE nexgen_uretim_batch SET durum='DEVAM'
+            WHERE batch_kodu=? AND durum='HAZIR'
+        """, (batch_kodu,))
+
+        con.commit()
+
+        sayac = con.execute("""
+            SELECT
+              COUNT(*) AS toplam,
+              SUM(CASE WHEN durum='HAZIR'   THEN 1 ELSE 0 END) AS hazir,
+              SUM(CASE WHEN durum='DEVAM'   THEN 1 ELSE 0 END) AS devam,
+              SUM(CASE WHEN durum='BEKLEME' THEN 1 ELSE 0 END) AS bekleme,
+              SUM(CASE WHEN durum='BITTI'   THEN 1 ELSE 0 END) AS bitti
+            FROM nexgen_uretim_parca WHERE batch_kodu=?
+        """, (batch_kodu,)).fetchone()
+
+        return jsonify({
+            'ok': True,
+            'baslanan': len(ids),
+            'sayac': {
+                'toplam':  sayac['toplam']  or 0,
+                'hazir':   sayac['hazir']   or 0,
+                'devam':   sayac['devam']   or 0,
+                'bekleme': sayac['bekleme'] or 0,
+                'bitti':   sayac['bitti']   or 0,
+            },
+        })
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/batch/<batch_kodu>/parca/toplu-bitir', methods=['POST'])
+@login_gerekli
+def api_parca_toplu_bitir(batch_kodu):
+    """İlk N adet DEVAM alt emiri toplu BITTI yap.
+
+    Body (JSON):
+      adet : int — kaç tane bitirilecek (1-500)
+
+    Mantık:
+      parca_no sırasıyla ilk <adet> DEVAM kaydı BITTI yapılır.
+      uretilen_kg = hedef_kg (formül KG) otomatik atanır.
+      Tekrar basılırsa zaten BITTI olanlar atlanır, sonraki DEVAM emirlerden devam eder.
+    """
+    if not (yetki_var('nexgen.tablet.uretim', 'can_uretim') or
+            yetki_var('nexgen.plan.manage', 'can_manage')):
+        return jsonify({'ok': False, 'hata': 'Yetki yok'}), 403
+
+    d    = request.get_json(silent=True) or {}
+    adet = d.get('adet', 1)
+    try:
+        adet = max(1, min(500, int(adet)))
+    except Exception:
+        return jsonify({'ok': False, 'hata': 'Geçersiz adet'}), 400
+
+    con = _db()
+    try:
+        if not _parca_tablosu_var(con):
+            return jsonify({'ok': False, 'hata': 'Migration 072 çalıştırılmadı'}), 500
+
+        hedefler = con.execute("""
+            SELECT id, hedef_kg FROM nexgen_uretim_parca
+            WHERE batch_kodu=? AND durum='DEVAM'
+            ORDER BY parca_no ASC
+            LIMIT ?
+        """, (batch_kodu, adet)).fetchall()
+
+        if not hedefler:
+            return jsonify({'ok': False, 'hata': 'Bitirilecek DEVAM alt emir yok'}), 400
+
+        biten_kg = 0.0
+        for r in hedefler:
+            uretilen = round(float(r['hedef_kg']), 3)
+            con.execute("""
+                UPDATE nexgen_uretim_parca
+                SET durum='BITTI',
+                    uretilen_kg=?,
+                    bitis_zamani=datetime('now','localtime'),
+                    updated_at=datetime('now','localtime')
+                WHERE id=?
+            """, (uretilen, r['id']))
+            biten_kg += uretilen
+
+        con.commit()
+
+        toplam_uretilen = _batch_toplam_uretilen(con, batch_kodu)
+        batch_row = con.execute(
+            "SELECT planlanan_kg FROM nexgen_uretim_batch WHERE batch_kodu=?",
+            (batch_kodu,)
+        ).fetchone()
+        planlanan = float(batch_row['planlanan_kg']) if batch_row else 0.0
+
+        sayac = con.execute("""
+            SELECT
+              COUNT(*) AS toplam,
+              SUM(CASE WHEN durum='HAZIR'   THEN 1 ELSE 0 END) AS hazir,
+              SUM(CASE WHEN durum='DEVAM'   THEN 1 ELSE 0 END) AS devam,
+              SUM(CASE WHEN durum='BEKLEME' THEN 1 ELSE 0 END) AS bekleme,
+              SUM(CASE WHEN durum='BITTI'   THEN 1 ELSE 0 END) AS bitti
+            FROM nexgen_uretim_parca WHERE batch_kodu=?
+        """, (batch_kodu,)).fetchone()
+
+        return jsonify({
+            'ok': True,
+            'biten': len(hedefler),
+            'biten_kg': round(biten_kg, 3),
+            'toplam_uretilen_kg': round(toplam_uretilen, 3),
+            'kalan_kg': round(max(0.0, planlanan - toplam_uretilen), 3),
+            'sayac': {
+                'toplam':  sayac['toplam']  or 0,
+                'hazir':   sayac['hazir']   or 0,
+                'devam':   sayac['devam']   or 0,
+                'bekleme': sayac['bekleme'] or 0,
+                'bitti':   sayac['bitti']   or 0,
+            },
+        })
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/batch/<batch_kodu>/parca/secili-isle', methods=['POST'])
+@login_gerekli
+def api_parca_secili_isle(batch_kodu):
+    """Seçili alt emirleri toplu işle: baslat / bitir / beklet.
+
+    Body (JSON):
+      islem   : 'baslat' | 'bitir' | 'beklet'
+      ids     : [int, ...]  — parca id listesi
+      sebep   : str (opsiyonel, beklet için)
+      notlar  : str (opsiyonel)
+    """
+    if not (yetki_var('nexgen.tablet.uretim', 'can_uretim') or
+            yetki_var('nexgen.plan.manage', 'can_manage')):
+        return jsonify({'ok': False, 'hata': 'Yetki yok'}), 403
+
+    d      = request.get_json(silent=True) or {}
+    islem  = (d.get('islem') or '').strip()
+    ids    = d.get('ids', [])
+    sebep  = (d.get('sebep')  or '').strip() or None
+    notlar = (d.get('notlar') or '').strip() or None
+
+    if islem not in ('baslat', 'bitir', 'beklet', 'not'):
+        return jsonify({'ok': False, 'hata': 'Geçersiz işlem'}), 400
+    if not ids or not isinstance(ids, list):
+        return jsonify({'ok': False, 'hata': 'id listesi boş'}), 400
+
+    ids = [int(i) for i in ids[:200]]  # max 200
+
+    con = _db()
+    try:
+        if not _parca_tablosu_var(con):
+            return jsonify({'ok': False, 'hata': 'Migration 072 çalıştırılmadı'}), 500
+
+        placeholders = ','.join(['?'] * len(ids))
+        durum_filtresi = "" if islem == 'not' else ""
+        parcalar = con.execute(
+            f"SELECT id, durum, hedef_kg FROM nexgen_uretim_parca "
+            f"WHERE id IN ({placeholders}) AND batch_kodu=?",
+            ids + [batch_kodu]
+        ).fetchall()
+
+        islenen = 0
+        atlanan = 0
+        for p in parcalar:
+            pid   = p['id']
+            durum = p['durum']
+
+            if islem == 'baslat':
+                if durum not in ('HAZIR', 'BEKLEME'):
+                    atlanan += 1; continue
+                con.execute("""
+                    UPDATE nexgen_uretim_parca
+                    SET durum='DEVAM', baslama_zamani=datetime('now','localtime'),
+                        updated_at=datetime('now','localtime')
+                    WHERE id=?
+                """, (pid,))
+
+            elif islem == 'bitir':
+                if durum not in ('DEVAM', 'HAZIR'):
+                    atlanan += 1; continue
+                uretilen = round(float(p['hedef_kg']), 3)
+                fields = ["durum='BITTI'", "uretilen_kg=?",
+                          "bitis_zamani=datetime('now','localtime')",
+                          "updated_at=datetime('now','localtime')"]
+                params = [uretilen]
+                if notlar:
+                    fields.append("notlar=?"); params.append(notlar)
+                params.append(pid)
+                con.execute(f"UPDATE nexgen_uretim_parca SET {', '.join(fields)} WHERE id=?", params)
+
+            elif islem == 'beklet':
+                if durum != 'DEVAM':
+                    atlanan += 1; continue
+                con.execute("""
+                    UPDATE nexgen_uretim_parca
+                    SET durum='BEKLEME', bekleme_sebebi=?,
+                        notlar=COALESCE(?, notlar),
+                        updated_at=datetime('now','localtime')
+                    WHERE id=?
+                """, (sebep, notlar, pid))
+
+            elif islem == 'not':
+                con.execute("""
+                    UPDATE nexgen_uretim_parca
+                    SET notlar=?,
+                        updated_at=datetime('now','localtime')
+                    WHERE id=?
+                """, (notlar, pid))
+
+            islenen += 1
+
+        if islem == 'baslat' and islenen:
+            con.execute("""
+                UPDATE nexgen_uretim_batch SET durum='DEVAM'
+                WHERE batch_kodu=? AND durum='HAZIR'
+            """, (batch_kodu,))
+
+        con.commit()
+
+        toplam_uretilen = _batch_toplam_uretilen(con, batch_kodu)
+        batch_row = con.execute(
+            "SELECT planlanan_kg FROM nexgen_uretim_batch WHERE batch_kodu=?",
+            (batch_kodu,)
+        ).fetchone()
+        planlanan = float(batch_row['planlanan_kg']) if batch_row else 0.0
+
+        sayac = con.execute("""
+            SELECT COUNT(*) AS toplam,
+              SUM(CASE WHEN durum='HAZIR'   THEN 1 ELSE 0 END) AS hazir,
+              SUM(CASE WHEN durum='DEVAM'   THEN 1 ELSE 0 END) AS devam,
+              SUM(CASE WHEN durum='BEKLEME' THEN 1 ELSE 0 END) AS bekleme,
+              SUM(CASE WHEN durum='BITTI'   THEN 1 ELSE 0 END) AS bitti
+            FROM nexgen_uretim_parca WHERE batch_kodu=?
+        """, (batch_kodu,)).fetchone()
+
+        return jsonify({
+            'ok': True,
+            'islenen': islenen,
+            'atlanan': atlanan,
+            'toplam_uretilen_kg': round(toplam_uretilen, 3),
+            'kalan_kg': round(max(0.0, planlanan - toplam_uretilen), 3),
+            'sayac': {
+                'toplam':  sayac['toplam']  or 0,
+                'hazir':   sayac['hazir']   or 0,
+                'devam':   sayac['devam']   or 0,
+                'bekleme': sayac['bekleme'] or 0,
+                'bitti':   sayac['bitti']   or 0,
+            },
+        })
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
 

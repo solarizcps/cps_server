@@ -81,11 +81,7 @@
       </div>
       <div class="tbsn-satir">
         <span class="tbsn-etiket">Boyut</span>
-        <span class="tbsn-deger">
-          {% if kayit.boyut == 'LARGE' %}BÜYÜK BOY
-          {% elif kayit.boyut == 'SMALL' %}KÜÇÜK BOY
-          {% else %}{{ kayit.boyut }}{% endif %}
-        </span>
+        <span class="tbsn-deger">{{ kayit.boyut }}</span>
       </div>
       <div class="tbsn-satir">
         <span class="tbsn-etiket">Planlanan KG</span>
@@ -111,12 +107,15 @@
 
     {# Aksiyon butonları #}
     <div class="tbsn-butonlar">
-      <a href="/nexgen/tablet/uretim" class="tbsn-btn tbsn-btn-ana">
-        ▶ Üretime Devam Et
+      <a href="/nexgen/tablet" class="tbsn-btn tbsn-btn-ana">
+        ← Sipariş Listesi
       </a>
       <a href="/nexgen/tablet/etiket/uretim/{{ kayit.batch_kodu }}" class="tbsn-btn tbsn-btn-etiket">
         🖨 Etiket Yazdır
       </a>
+      <button class="tbsn-btn tbsn-btn-sevk" disabled title="Bu özellik yakında aktif olacak">
+        📦 Sevk Et <span class="tbsn-yakinda">Yakında</span>
+      </button>
       <a href="/nexgen/tablet" class="tbsn-btn tbsn-btn-sec">
         ⌂ Ana Ekran
       </a>
@@ -178,6 +177,9 @@
       <a href="/nexgen/tablet/etiket/arge/{{ kayit.test_no }}" class="tbsn-btn tbsn-btn-etiket">
         🖨 Etiket Yazdır
       </a>
+      <button class="tbsn-btn tbsn-btn-sevk" disabled title="Bu özellik yakında aktif olacak">
+        📦 Sevk Et <span class="tbsn-yakinda">Yakında</span>
+      </button>
       <a href="/nexgen/tablet" class="tbsn-btn tbsn-btn-sec">
         ⌂ Ana Ekran
       </a>
@@ -307,6 +309,16 @@
 .tbsn-btn-etiket:hover { background: #dcfce7; }
 .tbsn-btn-sec    { background: #f1f5f9; color: #374151; border: 1px solid #e5e7eb; }
 .tbsn-btn-sec:hover { background: #e2e8f0; }
+.tbsn-btn-sevk {
+  background: #f0fdf4; color: #15803d; border: 2px solid #86efac;
+  cursor: not-allowed; opacity: .65;
+  font-size: 17px; width: 100%; padding: 17px; border-radius: 14px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.tbsn-yakinda {
+  font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 20px;
+  background: #86efac; color: #15803d; letter-spacing: 1px;
+}
 
 @media (max-width: 480px) {
   .tbsn-kod-karsilastir { flex-direction: column; }
