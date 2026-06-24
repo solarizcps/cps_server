@@ -1214,6 +1214,74 @@ def _arge_test_no_uret(con):
     return f'AT-{yil}-{son + 1:04d}'
 
 
+def _arge_renk_calisma_kaydet(con, kaynak_uv_id, test_batch_kg, yeni_renk_adi, cari_id,
+                              shore_hedef, talep_referansi, notlar, makina, kullanici_id):
+    """RENK_TEST calismasi olusturur (test + kalem clone). Commit disarida yapilir."""
+    uv = con.execute(
+        "SELECT id FROM nexgen_uretim_varyant WHERE id=? AND aktif=1",
+        (kaynak_uv_id,)
+    ).fetchone()
+    if not uv:
+        raise ValueError("Kaynak uretim varyanti bulunamadi.")
+
+    kalemler = con.execute("""
+        SELECT rk.stok_kart_id, rk.sira, rk.miktar_kg, rk.aciklama,
+               sk.kod AS stok_kod, sk.ad AS stok_ad
+        FROM nexgen_recete_kalem rk
+        JOIN nexgen_stok_kart sk ON sk.id = rk.stok_kart_id
+        WHERE rk.uretim_varyant_id = ? AND rk.aktif = 1
+        ORDER BY rk.sira, rk.id
+    """, (kaynak_uv_id,)).fetchall()
+    if not kalemler:
+        raise ValueError("Kaynak varyantta recete kalemi yok.")
+
+    kaynak_batch_kg = round(sum(float(k['miktar_kg']) for k in kalemler), 3)
+    if kaynak_batch_kg <= 0:
+        raise ValueError("Kaynak batch KG sifir — recete gecersiz.")
+
+    carpan = test_batch_kg / kaynak_batch_kg
+    test_no = _arge_test_no_uret(con)
+
+    from datetime import datetime
+    yil = datetime.now().year
+    son = con.execute(
+        "SELECT COUNT(*) FROM nexgen_arge_test WHERE lot_no LIKE ?",
+        (f'ARGE-LOT-{yil}-%',)
+    ).fetchone()[0]
+    lot_no = f'ARGE-LOT-{yil}-{(son + 1):05d}'
+
+    con.execute("""
+        INSERT INTO nexgen_arge_test
+            (kaynak_uretim_varyant_id, test_no, test_tipi,
+             makina, test_batch_kg, kaynak_batch_kg,
+             yeni_renk_adi, notlar, durum,
+             cari_id, shore_hedef, lot_no, talep_referansi,
+             olusturan_id, olusturma_tarihi)
+        VALUES (?, ?, 'RENK_TEST', ?, ?, ?, ?, ?, 'TASLAK', ?, ?, ?, ?, ?, datetime('now'))
+    """, (kaynak_uv_id, test_no, makina, test_batch_kg, kaynak_batch_kg,
+          yeni_renk_adi, notlar, cari_id, shore_hedef, lot_no, talep_referansi,
+          kullanici_id))
+    test_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+    for k in kalemler:
+        orj_kg = float(k['miktar_kg'])
+        test_kg = round(orj_kg * carpan, 4)
+        con.execute("""
+            INSERT INTO nexgen_arge_test_kalem
+                (test_id, stok_kart_id, sira, orjinal_miktar_kg, test_miktar_kg, aciklama)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (test_id, k['stok_kart_id'], k['sira'], orj_kg, test_kg, k['aciklama']))
+
+    return {
+        'test_id': test_id,
+        'test_no': test_no,
+        'lot_no': lot_no,
+        'kaynak_batch_kg': kaynak_batch_kg,
+        'test_batch_kg': test_batch_kg,
+        'kalem_sayisi': len(kalemler),
+    }
+
+
 def _rf_kod_uret(con):
     """RF-NNN formatinda benzersiz RF renk kodu uretir."""
     row = con.execute(
@@ -1369,6 +1437,122 @@ def api_arge_test_olustur():
         "kalem_sayisi":    len(test_kalemler),
         "kalemler":        test_kalemler,
         "mesaj":           f"{test_no} / {lot_no} oluşturuldu. {len(test_kalemler)} kalem ölçeklendi.",
+    })
+
+
+@nexgen_bp.route('/arge/renk-yeni')
+@yetki_gerekli('nexgen.recete.create', 'can_create')
+def arge_renk_yeni():
+    """Masaustu RENK gelistirme calismasi olusturma formu."""
+    con = _db()
+    try:
+        cariler = con.execute(
+            "SELECT id, cari_kod, unvan FROM nexgen_cari WHERE aktif=1 ORDER BY cari_kod"
+        ).fetchall()
+        kaynak_uvler = con.execute("""
+            SELECT uv.id, uv.boyut,
+                   rv.ad AS renk_ad,
+                   f.id AS formul_id, f.kod AS formul_kod, f.ad AS formul_ad,
+                   ROUND(SUM(rk.miktar_kg), 3) AS kaynak_batch_kg,
+                   COUNT(rk.id) AS kalem_sayisi
+            FROM nexgen_uretim_varyant uv
+            JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
+            JOIN nexgen_formul f ON f.id = rv.formul_id
+            JOIN nexgen_recete_kalem rk ON rk.uretim_varyant_id = uv.id AND rk.aktif = 1
+            WHERE uv.aktif = 1 AND rv.aktif = 1 AND f.aktif = 1
+            GROUP BY uv.id
+            HAVING kalem_sayisi > 0
+            ORDER BY f.ad, rv.ad, uv.boyut
+        """).fetchall()
+    finally:
+        con.close()
+
+    return render_template(
+        'nexgen/arge_renk_olustur.html',
+        active='nexgen',
+        cariler=[dict(c) for c in cariler],
+        kaynak_uvler=[dict(u) for u in kaynak_uvler],
+    )
+
+
+@nexgen_bp.route('/api/arge/renk-calisma-olustur', methods=['POST'])
+@yetki_gerekli('nexgen.recete.create', 'can_create')
+def api_arge_renk_calisma_olustur():
+    """RENK gelistirme calismasi olusturur (TASLAK + recete clone).
+
+    POST JSON:
+        cari_id         : int   zorunlu
+        kaynak_uv_id    : int   zorunlu
+        yeni_renk_adi   : str   zorunlu
+        test_batch_kg   : float zorunlu (>0)
+        shore_hedef     : float opsiyonel
+        talep_referansi : str   opsiyonel
+        notlar          : str   opsiyonel
+        makina          : str   opsiyonel (default 7.5 LT)
+    """
+    data = request.get_json(silent=True) or {}
+    cari_id = data.get('cari_id')
+    kaynak_uv_id = data.get('kaynak_uv_id')
+    yeni_renk_adi = (data.get('yeni_renk_adi') or '').strip()
+    notlar = (data.get('notlar') or '').strip() or None
+    talep_referansi = (data.get('talep_referansi') or '').strip() or None
+    makina = (data.get('makina') or '7.5 LT').strip() or '7.5 LT'
+
+    try:
+        shore_hedef = float(data['shore_hedef']) if data.get('shore_hedef') not in (None, '') else None
+    except (ValueError, TypeError):
+        shore_hedef = None
+
+    try:
+        test_batch_kg = float(data.get('test_batch_kg') or 0)
+    except (ValueError, TypeError):
+        return jsonify({"ok": False, "hata": "test_batch_kg gecersiz."}), 400
+
+    if not cari_id:
+        return jsonify({"ok": False, "hata": "cari_id zorunludur."}), 400
+    if not kaynak_uv_id:
+        return jsonify({"ok": False, "hata": "kaynak_uv_id zorunludur."}), 400
+    if not yeni_renk_adi:
+        return jsonify({"ok": False, "hata": "yeni_renk_adi zorunludur."}), 400
+    if test_batch_kg <= 0:
+        return jsonify({"ok": False, "hata": "test_batch_kg sifirdan buyuk olmali."}), 400
+
+    kullanici_id = _kullanici_id()
+    con = _db()
+    try:
+        cari = con.execute(
+            "SELECT id FROM nexgen_cari WHERE id=? AND aktif=1", (cari_id,)
+        ).fetchone()
+        if not cari:
+            return jsonify({"ok": False, "hata": "Cari kaydi bulunamadi."}), 400
+
+        sonuc = _arge_renk_calisma_kaydet(
+            con, kaynak_uv_id, test_batch_kg, yeni_renk_adi, cari_id,
+            shore_hedef, talep_referansi, notlar, makina, kullanici_id,
+        )
+        con.commit()
+    except ValueError as e:
+        con.rollback()
+        msg = str(e)
+        code = 404 if 'bulunamadi' in msg.lower() else 400
+        return jsonify({"ok": False, "hata": msg}), code
+    except Exception as e:
+        con.rollback()
+        return jsonify({"ok": False, "hata": str(e)}), 500
+    finally:
+        con.close()
+
+    return jsonify({
+        "ok": True,
+        "test_id": sonuc['test_id'],
+        "test_no": sonuc['test_no'],
+        "lot_no": sonuc['lot_no'],
+        "test_tipi": "RENK_TEST",
+        "durum": "TASLAK",
+        "kaynak_batch_kg": sonuc['kaynak_batch_kg'],
+        "test_batch_kg": sonuc['test_batch_kg'],
+        "kalem_sayisi": sonuc['kalem_sayisi'],
+        "redirect_url": f"/nexgen/arge/test/{sonuc['test_id']}",
     })
 
 

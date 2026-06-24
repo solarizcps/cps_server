@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+{% set page_title = "Yeni Renk Çalışması — AR-GE — NexGen" %}
+
+{% block content %}
+<div class="aro-sayfa">
+
+  <div class="aro-baslik-blok">
+    <div class="aro-baslik-satir">
+      <div>
+        <a href="/nexgen/arge" class="aro-geri">← AR-GE Merkezi</a>
+        <div class="aro-baslik">YENİ RENK GELİŞTİRME ÇALIŞMASI</div>
+        <div class="aro-alt">Kaynak reçete klonlanır. Ana reçete ve stok hareketi değişmez.</div>
+      </div>
+    </div>
+  </div>
+
+  {% if not kaynak_uvler %}
+  <div class="aro-bos">
+    <div class="aro-bos-baslik">Kaynak üretim varyantı yok</div>
+    <div class="aro-bos-metin">Reçetesi olan aktif bir formül / renk / boyut gerekli.</div>
+    <a href="/nexgen/recete/" class="aro-link-btn">Reçete Merkezi</a>
+  </div>
+  {% else %}
+
+  <div class="aro-form-kart">
+    <div class="aro-form-grid">
+
+      <div class="aro-fg aro-fg-tam">
+        <label for="aro-cari">Cari <span class="aro-zorunlu">*</span></label>
+        <select id="aro-cari" class="aro-input" required>
+          <option value="">— Cari seçin —</option>
+          {% for c in cariler %}
+          <option value="{{ c.id }}">{{ c.cari_kod }} — {{ c.unvan }}</option>
+          {% endfor %}
+        </select>
+        {% if not cariler %}
+        <div class="aro-yardim">Aktif cari kaydı yok. Önce cari master ekleyin.</div>
+        {% endif %}
+      </div>
+
+      <div class="aro-fg aro-fg-tam">
+        <label for="aro-kaynak">Kaynak Formül / Renk / Boyut <span class="aro-zorunlu">*</span></label>
+        <select id="aro-kaynak" class="aro-input" required onchange="aroKaynakSec()">
+          <option value="">— Kaynak varyant seçin —</option>
+          {% for u in kaynak_uvler %}
+          <option value="{{ u.id }}"
+                  data-batch="{{ u.kaynak_batch_kg }}"
+                  data-kalem="{{ u.kalem_sayisi }}">
+            {{ u.formul_ad }} · {{ u.renk_ad }} · {{ u.boyut }}
+            ({{ '{:,.1f}'.format(u.kaynak_batch_kg) }} KG, {{ u.kalem_sayisi }} kalem)
+          </option>
+          {% endfor %}
+        </select>
+        <div id="aro-kaynak-ozet" class="aro-yardim" style="display:none"></div>
+      </div>
+
+      <div class="aro-fg">
+        <label for="aro-renk">Yeni Renk Adı <span class="aro-zorunlu">*</span></label>
+        <input type="text" id="aro-renk" class="aro-input" maxlength="100"
+               placeholder="örn: BORDO" autocomplete="off">
+      </div>
+
+      <div class="aro-fg">
+        <label for="aro-test-kg">Test Batch KG <span class="aro-zorunlu">*</span></label>
+        <input type="number" id="aro-test-kg" class="aro-input" value="7.5"
+               min="0.001" step="0.001">
+      </div>
+
+      <div class="aro-fg">
+        <label for="aro-shore">Shore Hedef</label>
+        <input type="number" id="aro-shore" class="aro-input" step="0.1" min="0" max="100"
+               placeholder="Opsiyonel">
+      </div>
+
+      <div class="aro-fg">
+        <label for="aro-makina">Makina</label>
+        <input type="text" id="aro-makina" class="aro-input" value="7.5 LT" maxlength="30">
+      </div>
+
+      <div class="aro-fg aro-fg-tam">
+        <label for="aro-talep">Talep Referansı</label>
+        <input type="text" id="aro-talep" class="aro-input" maxlength="200"
+               placeholder="Müşteri talebi, fuar, referans no…">
+      </div>
+
+      <div class="aro-fg aro-fg-tam">
+        <label for="aro-notlar">Notlar</label>
+        <input type="text" id="aro-notlar" class="aro-input" maxlength="200"
+               placeholder="Laboratuvar notu…">
+      </div>
+
+    </div>
+
+    <div id="aro-hata" class="aro-hata" style="display:none"></div>
+
+    <div class="aro-aksiyon">
+      <button type="button" class="aro-btn-kaydet" id="aro-kaydet-btn" onclick="aroKaydet()">
+        Çalışmayı Oluştur
+      </button>
+      <a href="/nexgen/arge" class="aro-btn-iptal">İptal</a>
+    </div>
+  </div>
+
+  {% endif %}
+</div>
+
+<script>
+function aroKaynakSec() {
+  var sel = document.getElementById('aro-kaynak');
+  var oz = document.getElementById('aro-kaynak-ozet');
+  if (!sel || !oz) return;
+  var opt = sel.options[sel.selectedIndex];
+  if (!opt || !opt.value) {
+    oz.style.display = 'none';
+    return;
+  }
+  oz.style.display = 'block';
+  oz.textContent = 'Kaynak batch: ' + opt.dataset.batch + ' KG · ' + opt.dataset.kalem + ' kalem klonlanacak';
+}
+
+function aroKaydet() {
+  var hata = document.getElementById('aro-hata');
+  var btn = document.getElementById('aro-kaydet-btn');
+  hata.style.display = 'none';
+
+  var cariId = parseInt(document.getElementById('aro-cari').value, 10);
+  var uvId = parseInt(document.getElementById('aro-kaynak').value, 10);
+  var renk = document.getElementById('aro-renk').value.trim();
+  var testKg = parseFloat(document.getElementById('aro-test-kg').value);
+  var shore = document.getElementById('aro-shore').value;
+  var payload = {
+    cari_id: cariId,
+    kaynak_uv_id: uvId,
+    yeni_renk_adi: renk,
+    test_batch_kg: testKg,
+    makina: document.getElementById('aro-makina').value.trim() || '7.5 LT',
+    talep_referansi: document.getElementById('aro-talep').value.trim() || null,
+    notlar: document.getElementById('aro-notlar').value.trim() || null
+  };
+  if (shore !== '') payload.shore_hedef = parseFloat(shore);
+
+  if (!cariId) {
+    hata.textContent = 'Cari seçimi zorunludur.';
+    hata.style.display = 'block';
+    return;
+  }
+  if (!uvId) {
+    hata.textContent = 'Kaynak varyant seçimi zorunludur.';
+    hata.style.display = 'block';
+    return;
+  }
+  if (!renk) {
+    hata.textContent = 'Yeni renk adı zorunludur.';
+    hata.style.display = 'block';
+    return;
+  }
+  if (!testKg || testKg <= 0) {
+    hata.textContent = 'Test batch KG sıfırdan büyük olmalı.';
+    hata.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Oluşturuluyor…';
+
+  fetch('/nexgen/api/arge/renk-calisma-olustur', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  })
+  .then(function(r) { return r.json().then(function(j) { return { status: r.status, body: j }; }); })
+  .then(function(res) {
+    if (res.body.ok) {
+      window.location.href = res.body.redirect_url || ('/nexgen/arge/test/' + res.body.test_id);
+      return;
+    }
+    hata.textContent = res.body.hata || ('Hata (HTTP ' + res.status + ')');
+    hata.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Çalışmayı Oluştur';
+  })
+  .catch(function() {
+    hata.textContent = 'Bağlantı hatası.';
+    hata.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Çalışmayı Oluştur';
+  });
+}
+</script>
+
+<style>
+*{ box-sizing:border-box; }
+.aro-sayfa { max-width:720px; display:flex; flex-direction:column; gap:12px; }
+.aro-baslik-blok {
+  background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:16px 18px;
+}
+.aro-geri { font-size:12px; color:#64748b; text-decoration:none; display:inline-block; margin-bottom:6px; }
+.aro-geri:hover { color:#0f172a; }
+.aro-baslik { font-size:18px; font-weight:800; color:#0f172a; }
+.aro-alt { font-size:12px; color:#64748b; margin-top:4px; }
+.aro-form-kart {
+  background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:18px;
+}
+.aro-form-grid {
+  display:grid; grid-template-columns:1fr 1fr; gap:14px 16px;
+}
+.aro-fg { display:flex; flex-direction:column; gap:5px; }
+.aro-fg-tam { grid-column:1 / -1; }
+.aro-fg label { font-size:11px; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:.4px; }
+.aro-zorunlu { color:#dc2626; }
+.aro-input {
+  width:100%; padding:9px 11px; border:1px solid #d1d5db; border-radius:8px;
+  font-size:14px; color:#0f172a; background:#fff;
+}
+.aro-input:focus { outline:none; border-color:#7c3aed; box-shadow:0 0 0 2px rgba(124,58,237,.15); }
+.aro-yardim { font-size:11px; color:#64748b; margin-top:2px; }
+.aro-hata {
+  margin-top:14px; padding:10px 12px; border-radius:8px;
+  background:#fef2f2; color:#b91c1c; font-size:13px; border:1px solid #fecaca;
+}
+.aro-aksiyon { margin-top:18px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.aro-btn-kaydet {
+  padding:10px 18px; border:none; border-radius:8px;
+  background:#7c3aed; color:#fff; font-size:14px; font-weight:700; cursor:pointer;
+}
+.aro-btn-kaydet:hover:not(:disabled) { background:#6d28d9; }
+.aro-btn-kaydet:disabled { opacity:.6; cursor:not-allowed; }
+.aro-btn-iptal {
+  padding:10px 14px; border-radius:8px; background:#f8fafc; color:#374151;
+  font-size:13px; font-weight:600; text-decoration:none; border:1px solid #e5e7eb;
+}
+.aro-bos {
+  background:#fff; border:1px solid #e5e7eb; border-radius:12px;
+  padding:32px 24px; text-align:center;
+}
+.aro-bos-baslik { font-size:16px; font-weight:800; color:#0f172a; }
+.aro-bos-metin { font-size:13px; color:#64748b; margin:8px 0 16px; }
+.aro-link-btn {
+  display:inline-block; padding:10px 16px; background:#f6c343; color:#0f172a;
+  border-radius:8px; font-weight:700; text-decoration:none; font-size:13px;
+}
+@media (max-width:640px) {
+  .aro-form-grid { grid-template-columns:1fr; }
+  .aro-fg-tam { grid-column:auto; }
+}
+</style>
+{% endblock %}
