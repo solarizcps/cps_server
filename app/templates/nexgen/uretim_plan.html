@@ -36,7 +36,7 @@
         </svg>
       </div>
       <div class="up-ozet-ic-metin">
-        <div class="up-ozet-sayi">{{ toplam }}</div>
+        <div class="up-ozet-sayi" id="up-ozet-toplam">{{ planlar | map(attribute='siparis_no') | unique | list | length }}</div>
         <div class="up-ozet-etiket">Toplam Sipariş</div>
       </div>
     </div>
@@ -48,7 +48,7 @@
         </svg>
       </div>
       <div class="up-ozet-ic-metin">
-        <div class="up-ozet-sayi">{{ planlandi }}</div>
+        <div class="up-ozet-sayi" id="up-ozet-planlandi">{{ planlandi }}</div>
         <div class="up-ozet-etiket">Bekleyen / Planlandı</div>
       </div>
     </div>
@@ -60,7 +60,7 @@
         </svg>
       </div>
       <div class="up-ozet-ic-metin">
-        <div class="up-ozet-sayi">{{ basladi }}</div>
+        <div class="up-ozet-sayi" id="up-ozet-basladi">{{ basladi }}</div>
         <div class="up-ozet-etiket">Başlayan</div>
       </div>
     </div>
@@ -72,7 +72,7 @@
         </svg>
       </div>
       <div class="up-ozet-ic-metin">
-        <div class="up-ozet-sayi">{{ kismi }}</div>
+        <div class="up-ozet-sayi" id="up-ozet-kismi">{{ kismi }}</div>
         <div class="up-ozet-etiket">Kısmi Üretimde</div>
       </div>
     </div>
@@ -84,7 +84,7 @@
         </svg>
       </div>
       <div class="up-ozet-ic-metin">
-        <div class="up-ozet-sayi">{{ bitti }}</div>
+        <div class="up-ozet-sayi" id="up-ozet-bitti">{{ bitti }}</div>
         <div class="up-ozet-etiket">Biten</div>
       </div>
     </div>
@@ -96,7 +96,7 @@
         </svg>
       </div>
       <div class="up-ozet-ic-metin">
-        <div class="up-ozet-sayi">{{ iptal }}</div>
+        <div class="up-ozet-sayi" id="up-ozet-iptal">{{ iptal }}</div>
         <div class="up-ozet-etiket">İptal</div>
       </div>
     </div>
@@ -167,7 +167,13 @@
       </button>
     </div>
 
-    {# Tablo #}
+    {# Tablo — JS ile siparis_no bazında gruplandırılmış #}
+    {# Ham plan verisi JS'e aktarılır #}
+    <script>
+    var _PLANLAR = {{ planlar | tojson | safe }};
+    var _CAN_MANAGE = {{ 'true' if can_manage else 'false' }};
+    </script>
+
     {% if not planlar %}
     <div class="up-bos">
       <div class="up-bos-ikon">📋</div>
@@ -183,12 +189,11 @@
         <thead>
           <tr>
             <th class="ut-th ut-th-sira">#</th>
-            <th class="ut-th">Plan No / Sipariş No</th>
-            <th class="ut-th">Cari</th>
-            <th class="ut-th">Formül</th>
-            <th class="ut-th">Renk</th>
-            <th class="ut-th">Boyut</th>
-            <th class="ut-th ut-th-r">Plan KG</th>
+            <th class="ut-th ut-th-sipno">Sipariş No</th>
+            <th class="ut-th ut-th-cari">Cari</th>
+            <th class="ut-th ut-th-urun">Ürün</th>
+            <th class="ut-th ut-th-varyant">Varyant / KG</th>
+            <th class="ut-th ut-th-r ut-th-topkg">Toplam KG</th>
             <th class="ut-th ut-th-c">Alt Emir</th>
             <th class="ut-th">Durum</th>
             <th class="ut-th">Tarih</th>
@@ -196,99 +201,7 @@
           </tr>
         </thead>
         <tbody id="up-tablo-body">
-        {% for p in planlar %}
-        <tr class="ut-tr ut-tr-{{ p.durum|lower }}" id="plan-{{ p.id }}"
-            data-ara="{{ ((p.musteri_adi or '') ~ ' ' ~ (p.siparis_no or '') ~ ' ' ~ (p.plan_kodu or '') ~ ' ' ~ (p.formul_ad or ''))|lower }}"
-            data-cari="{{ p.musteri_adi|lower if p.musteri_adi else '' }}"
-            data-formul="{{ p.formul_ad if p.formul_ad else '' }}"
-            data-renk="{{ p.renk_ad if p.renk_ad else '' }}"
-            data-boyut="{{ p.boyut if p.boyut else '' }}"
-            data-tarih="{{ p.plan_tarihi if p.plan_tarihi else '' }}"
-            data-durum="{{ p.durum }}">
-
-          <td class="ut-td ut-td-sira">{{ loop.index }}</td>
-
-          <td class="ut-td">
-            {% if p.siparis_no %}
-            <div class="ut-sip-no">{{ p.siparis_no }}</div>
-            {% endif %}
-            <div class="ut-plan-kodu">{{ p.plan_kodu }}</div>
-          </td>
-
-          <td class="ut-td ut-td-cari">
-            {% if p.musteri_adi %}
-            {% set _cari = p.musteri_adi %}
-            {% if ' - ' in _cari %}{% set _prefix = _cari.split(' - ', 1)[0] %}{% if '.' in _prefix and ' ' not in _prefix %}{% set _cari = _cari.split(' - ', 1)[1] %}{% endif %}{% endif %}
-            <span class="ut-cari-metin">{{ _cari }}</span>
-            {% else %}<span class="ut-td-bos">—</span>{% endif %}
-          </td>
-
-          <td class="ut-td ut-td-formul">{{ p.formul_ad or '—' }}</td>
-
-          <td class="ut-td ut-td-renk">{{ p.renk_ad or '—' }}</td>
-
-          <td class="ut-td">
-            {% if p.boyut %}
-            <span class="ut-boyut ut-boyut-{{ p.boyut|lower }}">{{ p.boyut }}</span>
-            {% else %}<span class="ut-td-bos">—</span>{% endif %}
-          </td>
-
-          <td class="ut-td ut-td-kg">{{ p.planlanan_kg | int }}</td>
-
-          <td class="ut-td ut-td-altemir">
-            {% if p.get('toplam_alt_emir') and p.toplam_alt_emir > 0 %}
-            <span class="ut-altemir-sayi">{{ p.biten_alt_emir or 0 }} / {{ p.toplam_alt_emir }}</span>
-            {% else %}
-            <span class="ut-altemir-yok">Oluşmadı</span>
-            {% endif %}
-          </td>
-
-          <td class="ut-td">
-            {% if p.durum == 'PLANLANDI' %}
-            <span class="ut-durum ut-d-planlandi">PLANLANDI</span>
-            {% elif p.durum == 'BASLADI' %}
-            <span class="ut-durum ut-d-basladi">BAŞLADI</span>
-            {% elif p.durum == 'KISMI_URETIM' %}
-            <span class="ut-durum ut-d-kismi">KISMİ ÜRETİM</span>
-            {% elif p.durum == 'BITTI' %}
-            <span class="ut-durum ut-d-bitti">BİTTİ</span>
-            {% elif p.durum == 'IPTAL' %}
-            <span class="ut-durum ut-d-iptal">İPTAL</span>
-            {% else %}
-            <span class="ut-durum ut-d-diger">{{ p.durum }}</span>
-            {% endif %}
-          </td>
-
-          <td class="ut-td ut-td-tarih">{{ p.plan_tarihi or '—' }}</td>
-
-          <td class="ut-td ut-td-islem">
-            {% if p.durum == 'PLANLANDI' and can_manage %}
-            <div class="ut-islem-grup">
-              <button class="ut-btn-gonder"
-                      onclick="planGonder({{ p.id }}, '{{ p.plan_kodu }}', '{{ p.formul_ad }} {{ p.renk_ad }} {{ p.boyut }}')">
-                Üretime Gönder
-              </button>
-              <button class="ut-btn-kucuk ut-btn-iptal" onclick="planIptal({{ p.id }})" title="İptal">✕</button>
-            </div>
-            {% elif p.durum in ('BASLADI', 'KISMI_URETIM') %}
-            <div class="ut-islem-grup">
-              {% if p.batch_kodu %}
-              <a href="/nexgen/tablet/uretim-islem/{{ p.batch_kodu }}" class="ut-btn-devam">Devam →</a>
-              {% else %}
-              <a href="/nexgen/tablet" class="ut-btn-devam">Devam →</a>
-              {% endif %}
-            </div>
-            {% elif p.durum == 'BITTI' %}
-            <span class="ut-islem-bitti">✓ Tamamlandı</span>
-            {% elif p.durum == 'IPTAL' %}
-            <span class="ut-islem-pasif">Pasif</span>
-            {% else %}
-            <span class="ut-td-bos">—</span>
-            {% endif %}
-          </td>
-
-        </tr>
-        {% endfor %}
+        {# JS tarafından doldurulur — gruplama siparis_no bazlı #}
         </tbody>
       </table>
     </div>
@@ -296,7 +209,7 @@
     {# Alt sayfa: toplam + pagination #}
     <div class="up-alt-bar">
       <div class="up-alt-toplam" id="up-toplam-metin">
-        Toplam {{ planlar | length }} kayıt
+        Toplam <span id="up-toplam-sayi">{{ planlar | length }}</span> kayıt
       </div>
       <div class="up-sayfalama" id="up-sayfalama"></div>
       <div class="up-sayfa-basi">
@@ -771,6 +684,240 @@ var _secili = {
   dagitim: null,    /* ESIT | LARGE | SMALL | MANUEL */
 };
 
+/* ═══════════════════════════════════════════════════
+   SİPARİŞ GRUPLAMA — siparis_no bazlı 1 satır
+═══════════════════════════════════════════════════ */
+var _gruplar = [];   // gruplandırılmış sipariş listesi
+
+function cariTemizle(s) {
+  if (!s) return '—';
+  if (s.indexOf(' - ') !== -1) {
+    var pfx = s.split(' - ')[0];
+    if (pfx.indexOf('.') !== -1 && pfx.indexOf(' ') === -1) {
+      return s.split(' - ').slice(1).join(' - ');
+    }
+  }
+  return s;
+}
+
+function durumEtiket(d) {
+  var map = {
+    'PLANLANDI':    '<span class="ut-durum ut-d-planlandi">PLANLANDI</span>',
+    'BASLADI':      '<span class="ut-durum ut-d-basladi">BAŞLADI</span>',
+    'KISMI_URETIM': '<span class="ut-durum ut-d-kismi">KISMİ ÜRETİM</span>',
+    'BITTI':        '<span class="ut-durum ut-d-bitti">BİTTİ</span>',
+    'IPTAL':        '<span class="ut-durum ut-d-iptal">İPTAL</span>',
+  };
+  return map[d] || '<span class="ut-durum">' + d + '</span>';
+}
+
+/* Planları siparis_no bazında grupla */
+function veriGrupla() {
+  var harita = {};
+  var sira   = [];
+
+  (_PLANLAR || []).forEach(function(p) {
+    /* Sipariş no yoksa plan_kodu'nu anahtar yap */
+    var key = p.siparis_no || ('_pk_' + p.plan_kodu);
+    if (!harita[key]) {
+      harita[key] = {
+        key:         key,
+        siparis_no:  p.siparis_no || p.plan_kodu,
+        musteri_adi: cariTemizle(p.musteri_adi || '—'),
+        formul_ad:   p.formul_ad  || '—',
+        renk_ad:     p.renk_ad    || '—',
+        plan_tarihi: p.plan_tarihi || '',
+        varyantlar:  [],
+        /* Genel durum: en "aktif" varyanttan alınır */
+        durum: p.durum,
+      };
+      sira.push(key);
+    }
+    var g = harita[key];
+    /* Genel durum: BASLADI > KISMI_URETIM > PLANLANDI > BITTI > IPTAL */
+    var oncelik = { 'BASLADI': 5, 'KISMI_URETIM': 4, 'PLANLANDI': 3, 'BITTI': 2, 'IPTAL': 1 };
+    if ((oncelik[p.durum] || 0) > (oncelik[g.durum] || 0)) {
+      g.durum = p.durum;
+    }
+    g.varyantlar.push({
+      id:            p.id,
+      plan_kodu:     p.plan_kodu,
+      boyut:         p.boyut || '',
+      planlanan_kg:  p.planlanan_kg || 0,
+      durum:         p.durum,
+      batch_kodu:    p.batch_kodu || null,
+      toplam_alt_emir: p.toplam_alt_emir || 0,
+      biten_alt_emir:  p.biten_alt_emir  || 0,
+    });
+  });
+
+  _gruplar = sira.map(function(k) { return harita[k]; });
+}
+
+/* Gruptan tek tablo satırı HTML'i üret */
+function grupSatirHtml(g, idx) {
+
+  /* ── Toplam KG ── */
+  var toplamKg = g.varyantlar.reduce(function(s, v) { return s + (parseFloat(v.planlanan_kg) || 0); }, 0);
+
+  /* ── Varyant / KG listesi ──
+     SMALL  1.250 KG
+     LARGE  1.250 KG                                                       */
+  var varyantHtml = g.varyantlar.map(function(v) {
+    var kg = v.planlanan_kg ? Math.round(v.planlanan_kg).toLocaleString('tr-TR') + ' KG' : '—';
+    return '<div class="ut-varyant-satir">' +
+           '<span class="ut-boyut ut-boyut-' + v.boyut.toLowerCase() + '">' + v.boyut + '</span>' +
+           '<span class="ut-varyant-kg">' + kg + '</span>' +
+           '</div>';
+  }).join('');
+
+  /* ── Alt Emir ── */
+  var toplamEmir = g.varyantlar.reduce(function(s, v) { return s + (v.toplam_alt_emir || 0); }, 0);
+  var bitenEmir  = g.varyantlar.reduce(function(s, v) { return s + (v.biten_alt_emir  || 0); }, 0);
+  var altEmirHtml = toplamEmir > 0
+    ? '<span class="ut-altemir-sayi">' + bitenEmir + ' / ' + toplamEmir + '</span>'
+    : '<span class="ut-altemir-yok">Oluşmadı</span>';
+
+  /* ── İşlem butonu ── */
+  var islemHtml = '';
+  var planlandi = g.varyantlar.filter(function(v) { return v.durum === 'PLANLANDI'; });
+  var aktif     = g.varyantlar.filter(function(v) { return v.durum === 'BASLADI' || v.durum === 'KISMI_URETIM'; });
+
+  if (planlandi.length > 0 && _CAN_MANAGE) {
+    var planIds = planlandi.map(function(v) { return v.id; }).join(',');
+    var planAd  = (g.formul_ad + ' ' + g.renk_ad).replace(/'/g, '');
+    islemHtml =
+      '<div class="ut-islem-grup">' +
+      '<button class="ut-btn-gonder" onclick="grupGonder([' + planIds + '],\'' + planAd + '\')">' +
+      'Üretime Gönder</button>' +
+      (planlandi.length === 1
+        ? '<button class="ut-btn-kucuk ut-btn-iptal" onclick="planIptal(' + planlandi[0].id + ')" title="İptal">✕</button>'
+        : '') +
+      '</div>';
+  } else if (aktif.length === 1) {
+    var href = aktif[0].batch_kodu
+      ? '/nexgen/tablet/uretim-islem/' + aktif[0].batch_kodu
+      : '/nexgen/tablet';
+    islemHtml = '<div class="ut-islem-grup"><a href="' + href + '" class="ut-btn-devam">Devam →</a></div>';
+  } else if (aktif.length > 1) {
+    islemHtml = '<div class="ut-islem-grup ut-islem-grup-kolon">' +
+      aktif.map(function(v) {
+        var href = v.batch_kodu
+          ? '/nexgen/tablet/uretim-islem/' + v.batch_kodu
+          : '/nexgen/tablet';
+        return '<a href="' + href + '" class="ut-btn-devam ut-btn-devam-kucuk">' + (v.boyut || '—') + ' →</a>';
+      }).join('') + '</div>';
+  } else if (g.durum === 'BITTI') {
+    islemHtml = '<span class="ut-islem-bitti">✓ Tamamlandı</span>';
+  } else if (g.durum === 'IPTAL') {
+    islemHtml = '<span class="ut-islem-pasif">Pasif</span>';
+  }
+
+  /* ── data attributes — filtre için ── */
+  var dataAra   = (g.musteri_adi + ' ' + g.siparis_no + ' ' + g.formul_ad).toLowerCase();
+  var dataBoyut = g.varyantlar.map(function(v) { return v.boyut; }).join(' ');
+
+  return '<tr class="ut-tr ut-tr-' + g.durum.toLowerCase() + '"' +
+    ' data-ara="'    + dataAra           + '"' +
+    ' data-durum="'  + g.durum           + '"' +
+    ' data-formul="' + g.formul_ad       + '"' +
+    ' data-renk="'   + g.renk_ad         + '"' +
+    ' data-boyut="'  + dataBoyut         + '"' +
+    ' data-tarih="'  + (g.plan_tarihi || '') + '">' +
+
+    /* # */
+    '<td class="ut-td ut-td-sira">' + (idx + 1) + '</td>' +
+
+    /* Sipariş No — tek satır, sabit genişlik */
+    '<td class="ut-td ut-td-sipno"><span class="ut-sip-no">' + g.siparis_no + '</span></td>' +
+
+    /* Cari */
+    '<td class="ut-td ut-td-cari"><span class="ut-cari-metin">' + g.musteri_adi + '</span></td>' +
+
+    /* Ürün: Formül + Renk */
+    '<td class="ut-td ut-td-urun">' +
+      '<div class="ut-urun-formul">' + g.formul_ad + '</div>' +
+      '<div class="ut-urun-renk">'   + g.renk_ad   + '</div>' +
+    '</td>' +
+
+    /* Varyant / KG: SMALL 1250 KG / LARGE 1250 KG */
+    '<td class="ut-td ut-td-varyant">' + varyantHtml + '</td>' +
+
+    /* Toplam KG */
+    '<td class="ut-td ut-td-kg ut-td-r">' + Math.round(toplamKg).toLocaleString('tr-TR') + '</td>' +
+
+    /* Alt Emir */
+    '<td class="ut-td ut-td-altemir">' + altEmirHtml + '</td>' +
+
+    /* Durum */
+    '<td class="ut-td">' + durumEtiket(g.durum) + '</td>' +
+
+    /* Tarih */
+    '<td class="ut-td ut-td-tarih">' + (g.plan_tarihi || '—') + '</td>' +
+
+    /* İşlem */
+    '<td class="ut-td ut-td-islem">' + islemHtml + '</td>' +
+
+    '</tr>';
+}
+
+/* Tbody'yi gruplarla doldur */
+function tabloRender(liste) {
+  var tbody = document.getElementById('up-tablo-body');
+  if (!tbody) return;
+  if (!liste || liste.length === 0) {
+    tbody.innerHTML = '';
+    return;
+  }
+  tbody.innerHTML = liste.map(function(g, i) {
+    return grupSatirHtml(g, i);
+  }).join('');
+}
+
+/* ─── Üretime Gönder — grup versiyonu (birden fazla plan_id) ─── */
+var _grupGonderIds  = [];
+var _grupGonderAd   = '';
+
+async function grupGonder(planIdler, ad) {
+  if (!planIdler || planIdler.length === 0) return;
+  _grupGonderIds = planIdler;
+  _grupGonderAd  = ad;
+
+  /* Tek plan ise mevcut önizleme modal'ını kullan */
+  if (planIdler.length === 1) {
+    /* planGonder event.currentTarget bekliyor — sahte buton referansını bul */
+    var btn = document.activeElement;
+    _aktifGonderBtn    = btn;
+    _aktifGonderPlanId = planIdler[0];
+    var modal = document.getElementById('up-onizleme-modal');
+    if (modal) {
+      /* planGonder'ı doğrudan çağır */
+      planGonder(planIdler[0], '', ad);
+    }
+    return;
+  }
+
+  /* Birden fazla plan — her birini sırayla gönder */
+  if (!confirm(ad + '\n\n' + planIdler.length + ' boyut üretime gönderilecek.\nOnaylıyor musunuz?')) return;
+  for (var i = 0; i < planIdler.length; i++) {
+    await _planGonderApi(planIdler[i]);
+  }
+  window.location.reload();
+}
+
+async function _planGonderApi(planId) {
+  try {
+    var r = await fetch('/nexgen/api/plan/' + planId + '/basla', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    return await r.json();
+  } catch(e) {
+    return { ok: false, hata: String(e) };
+  }
+}
+
 /* ─── Tablo Filtrele + Pagination ─── */
 var _sayfa_basi   = 25;
 var _aktif_sayfa  = 1;
@@ -793,33 +940,41 @@ function sayfaBasiDegis(val) {
 }
 
 function tabloFiltrele() {
-  var ara    = (document.getElementById('f-ara')   ? document.getElementById('f-ara').value   : '').toLowerCase();
-  var durum  = (document.getElementById('f-durum') ? document.getElementById('f-durum').value  : '');
-  var formul = (document.getElementById('f-formul')? document.getElementById('f-formul').value : '');
-  var renk   = (document.getElementById('f-renk')  ? document.getElementById('f-renk').value   : '');
-  var boyut  = (document.getElementById('f-boyut') ? document.getElementById('f-boyut').value   : '');
+  var ara      = (document.getElementById('f-ara')      ? document.getElementById('f-ara').value      : '').toLowerCase();
+  var durum    = (document.getElementById('f-durum')    ? document.getElementById('f-durum').value    : '');
+  var formul   = (document.getElementById('f-formul')   ? document.getElementById('f-formul').value   : '');
+  var renk     = (document.getElementById('f-renk')     ? document.getElementById('f-renk').value     : '');
+  var boyut    = (document.getElementById('f-boyut')    ? document.getElementById('f-boyut').value    : '');
   var tarihBas = (document.getElementById('f-tarih-bas')? document.getElementById('f-tarih-bas').value : '');
   var tarihBit = (document.getElementById('f-tarih-bit')? document.getElementById('f-tarih-bit').value : '');
 
-  var satirlar = document.querySelectorAll('#up-tablo-body .ut-tr');
-  _gorulen_trler = [];
-  satirlar.forEach(function(tr) {
-    var tara   = (tr.dataset.ara    || '');
-    var tdurum  = (tr.dataset.durum  || '');
-    var tformul = (tr.dataset.formul || '');
-    var trenk   = (tr.dataset.renk   || '');
-    var tboyut  = (tr.dataset.boyut  || '');
-    var ttarih  = (tr.dataset.tarih  || '');
-    var eslesir = (!ara    || tara.includes(ara))                  &&
-                  (!durum  || tdurum === durum)                    &&
-                  (!formul || tformul === formul)                  &&
-                  (!renk   || trenk === renk)                      &&
-                  (!boyut  || tboyut === boyut)                    &&
-                  (!tarihBas || ttarih >= tarihBas)                &&
-                  (!tarihBit || ttarih <= tarihBit);
-    tr.style.display = 'none';  /* pagination açar */
-    if (eslesir) _gorulen_trler.push(tr);
+  /* Gruplara filtre uygula */
+  var filtreli = _gruplar.filter(function(g) {
+    var tara    = (g.musteri_adi + ' ' + g.siparis_no + ' ' + g.formul_ad).toLowerCase();
+    var tdurum  = g.durum;
+    var tformul = g.formul_ad;
+    var trenk   = g.renk_ad;
+    var tboyut  = g.varyantlar.map(function(v) { return v.boyut; }).join(' ');
+    var ttarih  = g.plan_tarihi || '';
+    return (!ara      || tara.includes(ara))        &&
+           (!durum    || tdurum === durum)           &&
+           (!formul   || tformul === formul)         &&
+           (!renk     || trenk === renk)             &&
+           (!boyut    || tboyut.includes(boyut))     &&
+           (!tarihBas || ttarih >= tarihBas)         &&
+           (!tarihBit || ttarih <= tarihBit);
   });
+
+  /* Tbody'yi filtreli gruplarla doldur */
+  tabloRender(filtreli);
+
+  /* Pagination için DOM satırlarını topla */
+  var satirlar = document.querySelectorAll('#up-tablo-body .ut-tr');
+  _gorulen_trler = Array.from(satirlar);
+  /* Toplam sayı güncelle */
+  var ts = document.getElementById('up-toplam-sayi');
+  if (ts) ts.textContent = filtreli.length;
+
   _aktif_sayfa = 1;
   sayfaGoster();
 }
@@ -834,8 +989,8 @@ function sayfaGoster() {
   var sayfa_sayisi = Math.max(1, Math.ceil(toplam / _sayfa_basi));
 
   /* Toplam metin */
-  var tm = document.getElementById('up-toplam-metin');
-  if (tm) tm.textContent = 'Toplam ' + toplam + ' kayıt';
+  var ts2 = document.getElementById('up-toplam-sayi');
+  if (ts2) ts2.textContent = toplam;
 
   /* Boş mesaj */
   var bosDiv = document.getElementById('up-filtre-bos');
@@ -870,10 +1025,32 @@ function sayfaGoster() {
 
 /* İlk yükleme: tüm satırlar görünür olsun */
 document.addEventListener('DOMContentLoaded', function() {
-  var satirlar = document.querySelectorAll('#up-tablo-body .ut-tr');
-  satirlar.forEach(function(tr) { _gorulen_trler.push(tr); });
-  sayfaGoster();
+  /* Sipariş gruplarını oluştur ve tablo render et */
+  veriGrupla();
+  tabloFiltrele();
+  /* Özet kartları grup bazlı güncelle */
+  _ozet_guncelle();
 });
+
+function _ozet_guncelle() {
+  var sayac = { PLANLANDI:0, BASLADI:0, KISMI_URETIM:0, BITTI:0, IPTAL:0, TOPLAM:0 };
+  _gruplar.forEach(function(g) {
+    sayac.TOPLAM++;
+    if (sayac[g.durum] !== undefined) sayac[g.durum]++;
+  });
+  var harita = {
+    'up-ozet-toplam': sayac.TOPLAM,
+    'up-ozet-planlandi': sayac.PLANLANDI,
+    'up-ozet-basladi':   sayac.BASLADI,
+    'up-ozet-kismi':     sayac.KISMI_URETIM,
+    'up-ozet-bitti':     sayac.BITTI,
+    'up-ozet-iptal':     sayac.IPTAL,
+  };
+  Object.keys(harita).forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = harita[id];
+  });
+}
 
 /* ─── Modal ─── */
 function modalAc() {
@@ -1272,7 +1449,7 @@ var _aktifGonderBtn = null;
 var _aktifGonderPlanId = null;
 
 async function planGonder(planId, planKodu, ad) {
-  _aktifGonderBtn    = event.currentTarget;
+  _aktifGonderBtn    = (typeof event !== 'undefined' && event && event.currentTarget) ? event.currentTarget : document.activeElement;
   _aktifGonderPlanId = planId;
 
   var modal = document.getElementById('up-onizleme-modal');
@@ -1568,7 +1745,7 @@ async function planIptal(planId) {
 
 /* Hücre base */
 .ut-td {
-  padding: 13px 14px; vertical-align: middle;
+  padding: 14px 14px; vertical-align: middle;
   color: #1e293b; font-size: 13px;
 }
 .ut-td-sira    { text-align: center; color: #c4cdd8; font-size: 11px; font-weight: 600; }
@@ -1632,6 +1809,32 @@ async function planIptal(planId) {
   transition: all .08s;
 }
 .ut-btn-devam:hover { background: #f1f5f9; color: #1e293b; border-color: #cbd5e1; }
+.ut-btn-devam-kucuk { padding: 4px 10px; font-size: 11px; }
+.ut-islem-grup-kolon { flex-direction: column; gap: 4px; align-items: flex-start; }
+
+/* Kolon genişlikleri */
+.ut-th-sipno  { width: 140px; white-space: nowrap; }
+.ut-th-cari   { min-width: 160px; }
+.ut-th-urun   { min-width: 120px; }
+.ut-th-varyant{ min-width: 140px; }
+.ut-th-topkg  { width: 90px; }
+.ut-td-sipno  { white-space: nowrap; }
+.ut-td-r      { text-align: right; font-weight: 600; font-size: 13px; color: #1e293b; }
+
+/* Sipariş no — kalın, tek satır */
+.ut-sip-no { font-weight: 700; font-size: 13px; color: #1e293b; white-space: nowrap; }
+
+/* Ürün kolonu */
+.ut-urun-formul { font-size: 13px; font-weight: 600; color: #1e293b; }
+.ut-urun-renk   { font-size: 11px; color: #6b7280; margin-top: 2px; }
+
+/* Varyant / KG satırları */
+.ut-varyant-satir {
+  display: flex; align-items: center; gap: 8px;
+  padding: 2px 0; line-height: 1.5;
+}
+.ut-varyant-satir + .ut-varyant-satir { border-top: 1px solid #f1f5f9; }
+.ut-varyant-kg { font-size: 12px; font-weight: 500; color: #374151; margin-left: auto; }
 
 /* İptal X — küçük, soft */
 .ut-btn-kucuk {
