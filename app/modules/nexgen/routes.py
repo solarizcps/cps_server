@@ -1622,7 +1622,7 @@ def arge_test_detay(test_id):
             abort(404)
 
         kalemler = con.execute("""
-            SELECT tk.sira, tk.orjinal_miktar_kg, tk.test_miktar_kg, tk.aciklama,
+            SELECT tk.id, tk.stok_kart_id, tk.sira, tk.orjinal_miktar_kg, tk.test_miktar_kg, tk.aciklama,
                    sk.kod AS stok_kod, sk.ad AS stok_ad, sk.kategori
             FROM nexgen_arge_test_kalem tk
             JOIN nexgen_stok_kart sk ON sk.id = tk.stok_kart_id
@@ -1661,8 +1661,153 @@ def arge_test_detay(test_id):
         can_create=can_create,
         can_approve=can_approve,
         olusan_uv=olusan_uv,
+        boya_editable=(
+            can_create
+            and test_d.get('durum') == 'TASLAK'
+            and test_d.get('test_tipi') == 'RENK_TEST'
+        ),
     )
 
+
+@nexgen_bp.route('/api/arge/renk-stok-secenekleri', methods=['GET'])
+@yetki_gerekli('nexgen.recete.view', 'can_view')
+def api_arge_renk_stok_secenekleri():
+    """RENK_TEST boya kalem edit icin aktif BOYA stok kartlari."""
+    con = _db()
+    try:
+        rows = con.execute("""
+            SELECT id, kod, ad, kategori
+            FROM nexgen_stok_kart
+            WHERE aktif = 1 AND kategori = 'BOYA'
+            ORDER BY kod
+        """).fetchall()
+    finally:
+        con.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@nexgen_bp.route('/api/arge/test/<int:test_id>/boya-kalemler', methods=['PUT'])
+@yetki_gerekli('nexgen.recete.create', 'can_create')
+def api_arge_test_boya_kalemler(test_id):
+    """TASLAK RENK_TEST icin yalnizca BOYA kalemlerini gunceller.
+
+    PUT JSON:
+        kalemler: [{stok_kart_id: int, test_miktar_kg: float}, ...]
+    """
+    data = request.get_json(silent=True) or {}
+    kalemler_in = data.get('kalemler')
+    if kalemler_in is None or not isinstance(kalemler_in, list):
+        return jsonify({"ok": False, "hata": "kalemler listesi zorunludur."}), 400
+    if not kalemler_in:
+        return jsonify({"ok": False, "hata": "En az bir BOYA kalemi gerekli."}), 400
+
+    con = _db()
+    try:
+        test = con.execute(
+            "SELECT id, durum, test_tipi, test_batch_kg, kaynak_batch_kg "
+            "FROM nexgen_arge_test WHERE id=? AND aktif=1",
+            (test_id,)
+        ).fetchone()
+        if not test:
+            return jsonify({"ok": False, "hata": "Test kaydi bulunamadi."}), 404
+        if test['durum'] != 'TASLAK':
+            return jsonify({
+                "ok": False,
+                "hata": f"Sadece TASLAK testlerde boya duzenlenebilir. Mevcut: {test['durum']}"
+            }), 400
+        if test['test_tipi'] != 'RENK_TEST':
+            return jsonify({
+                "ok": False,
+                "hata": f"Sadece RENK_TEST tipinde boya duzenlenebilir. Mevcut: {test['test_tipi']}"
+            }), 400
+
+        test_batch_kg = float(test['test_batch_kg'])
+        kaynak_batch_kg = float(test['kaynak_batch_kg'])
+        if test_batch_kg <= 0 or kaynak_batch_kg <= 0:
+            return jsonify({"ok": False, "hata": "test_batch_kg veya kaynak_batch_kg gecersiz."}), 400
+
+        non_boya_before = con.execute("""
+            SELECT COUNT(*) AS c FROM nexgen_arge_test_kalem tk
+            JOIN nexgen_stok_kart sk ON sk.id = tk.stok_kart_id
+            WHERE tk.test_id = ? AND sk.kategori != 'BOYA'
+        """, (test_id,)).fetchone()['c']
+
+        seen_stok = set()
+        parsed = []
+        for i, k in enumerate(kalemler_in):
+            try:
+                stok_id = int(k.get('stok_kart_id'))
+                test_kg = float(k.get('test_miktar_kg'))
+            except (TypeError, ValueError):
+                return jsonify({"ok": False, "hata": f"Kalem {i + 1}: gecersiz stok veya miktar."}), 400
+            if stok_id in seen_stok:
+                return jsonify({"ok": False, "hata": "Ayni stok_kart_id birden fazla kez gonderilemez."}), 400
+            if test_kg <= 0:
+                return jsonify({"ok": False, "hata": f"Kalem {i + 1}: test_miktar_kg sifirdan buyuk olmali."}), 400
+            seen_stok.add(stok_id)
+            parsed.append((stok_id, round(test_kg, 4)))
+
+        for stok_id, _ in parsed:
+            sk = con.execute(
+                "SELECT id, kategori, aktif FROM nexgen_stok_kart WHERE id=?",
+                (stok_id,)
+            ).fetchone()
+            if not sk or not sk['aktif']:
+                return jsonify({"ok": False, "hata": f"Stok karti bulunamadi veya pasif (id={stok_id})."}), 400
+            if sk['kategori'] != 'BOYA':
+                return jsonify({
+                    "ok": False,
+                    "hata": f"Yalnizca BOYA stoklari kabul edilir (id={stok_id}, kategori={sk['kategori']})."
+                }), 400
+
+        max_sira_row = con.execute("""
+            SELECT COALESCE(MAX(tk.sira), 0) AS maks
+            FROM nexgen_arge_test_kalem tk
+            JOIN nexgen_stok_kart sk ON sk.id = tk.stok_kart_id
+            WHERE tk.test_id = ? AND sk.kategori != 'BOYA'
+        """, (test_id,)).fetchone()
+        base_sira = int(max_sira_row['maks'] or 0)
+
+        con.execute("""
+            DELETE FROM nexgen_arge_test_kalem
+            WHERE test_id = ?
+              AND stok_kart_id IN (
+                  SELECT id FROM nexgen_stok_kart WHERE kategori = 'BOYA'
+              )
+        """, (test_id,))
+
+        carpan = kaynak_batch_kg / test_batch_kg
+        for idx, (stok_id, test_kg) in enumerate(parsed):
+            orj_kg = round(test_kg * carpan, 4)
+            con.execute("""
+                INSERT INTO nexgen_arge_test_kalem
+                    (test_id, stok_kart_id, sira, orjinal_miktar_kg, test_miktar_kg, aciklama)
+                VALUES (?, ?, ?, ?, ?, NULL)
+            """, (test_id, stok_id, base_sira + idx + 1, orj_kg, test_kg))
+
+        non_boya_after = con.execute("""
+            SELECT COUNT(*) AS c FROM nexgen_arge_test_kalem tk
+            JOIN nexgen_stok_kart sk ON sk.id = tk.stok_kart_id
+            WHERE tk.test_id = ? AND sk.kategori != 'BOYA'
+        """, (test_id,)).fetchone()['c']
+
+        if non_boya_after != non_boya_before:
+            con.rollback()
+            return jsonify({"ok": False, "hata": "Taban reçete kalemleri korunamadi."}), 500
+
+        con.commit()
+        boya_cnt = len(parsed)
+    except Exception as e:
+        con.rollback()
+        return jsonify({"ok": False, "hata": str(e)}), 500
+    finally:
+        con.close()
+
+    return jsonify({
+        "ok": True,
+        "test_id": test_id,
+        "boya_kalem_sayisi": boya_cnt,
+    })
 
 @nexgen_bp.route('/api/arge/sonuc-kaydet', methods=['POST'])
 @yetki_gerekli('nexgen.recete.create', 'can_create')

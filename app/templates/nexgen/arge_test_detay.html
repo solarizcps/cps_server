@@ -95,6 +95,35 @@
         <span>Kaynak: <strong>{{ '{:,.1f}'.format(test.kaynak_batch_kg) }} KG</strong></span>
       </div>
 
+      {% if boya_editable %}
+      <div class="ad-boya-edit" id="ad-boya-edit">
+        <div class="ad-boya-edit-hdr">
+          <span class="ad-boya-edit-baslik">BOYA / PIGMENT DÜZENLE</span>
+          <span class="ad-boya-edit-alt">Taban reçete (HAMMADDE/KATKI) satırları değişmez</span>
+        </div>
+        <div class="ad-boya-edit-table-wrap">
+          <table class="ad-boya-edit-tablo" id="ad-boya-tablo">
+            <thead>
+              <tr>
+                <th>Stok</th>
+                <th class="r">Test KG</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="ad-boya-tbody"></tbody>
+          </table>
+        </div>
+        <div class="ad-boya-edit-bar">
+          <button type="button" class="ad-btn-boya-ekle" onclick="adBoyaSatirEkle()">+ Boya Ekle</button>
+          <button type="button" class="ad-btn-boya-kaydet" id="ad-btn-boya-kaydet" onclick="adBoyaKaydet()">Boya Kalemlerini Kaydet</button>
+        </div>
+        <div id="ad-boya-hata" class="ad-msg ad-msg-hata" style="display:none"></div>
+        <div id="ad-boya-basari" class="ad-msg ad-msg-ok" style="display:none"></div>
+      </div>
+      {% elif test.test_tipi == 'RENK_TEST' and form_kilitli %}
+      <div class="ad-uyari ad-uyari-inline">Boya kalemleri kilitli ({{ durum_etiket }}).</div>
+      {% endif %}
+
       {% if not kalemler %}
       <div class="ad-bos">Bu test için kalem kaydı yok.</div>
       {% else %}
@@ -110,7 +139,7 @@
           </thead>
           <tbody>
             {% for k in kalemler %}
-            <tr>
+            <tr class="{% if k.kategori == 'BOYA' %}ad-row-boya{% else %}ad-row-taban{% endif %}">
               <td>
                 <span class="ad-stok-kod">{{ k.stok_kod }}</span>
                 <span class="ad-stok-ad">{{ k.stok_ad }}</span>
@@ -419,6 +448,47 @@
 .ad-kat-hammadde { background:#dbeafe; color:#1d4ed8; }
 .ad-kat-boya { background:#fae8ff; color:#7e22ce; }
 .ad-kat-katki { background:#d1fae5; color:#065f46; }
+.ad-row-boya { background:#fdf4ff; }
+.ad-row-taban { background:#fff; }
+
+/* Boya edit panel */
+.ad-boya-edit {
+  margin: 0 14px 12px; padding:12px; background:#faf5ff;
+  border:1px solid #e9d5ff; border-radius:10px;
+}
+.ad-boya-edit-hdr { margin-bottom:10px; }
+.ad-boya-edit-baslik {
+  display:block; font-size:11px; font-weight:800; color:#7e22ce;
+  letter-spacing:.4px; text-transform:uppercase;
+}
+.ad-boya-edit-alt { font-size:10px; color:#94a3b8; }
+.ad-boya-edit-table-wrap { overflow-x:auto; margin-bottom:10px; }
+.ad-boya-edit-tablo { width:100%; border-collapse:collapse; font-size:12px; }
+.ad-boya-edit-tablo th {
+  padding:6px 8px; font-size:10px; color:#94a3b8; text-transform:uppercase;
+  border-bottom:1px solid #e9d5ff; text-align:left;
+}
+.ad-boya-edit-tablo th.r { text-align:right; }
+.ad-boya-edit-tablo td { padding:6px 8px; vertical-align:middle; }
+.ad-boya-edit-tablo select, .ad-boya-edit-tablo input {
+  width:100%; padding:6px 8px; border:1px solid #e5e7eb; border-radius:6px; font-size:12px;
+}
+.ad-boya-edit-tablo input[type=number] { max-width:110px; text-align:right; }
+.ad-btn-boya-sil {
+  padding:4px 8px; border:none; background:#fee2e2; color:#dc2626;
+  border-radius:6px; font-size:11px; font-weight:700; cursor:pointer;
+}
+.ad-boya-edit-bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.ad-btn-boya-ekle {
+  padding:8px 12px; border:1px dashed #c084fc; background:#fff; color:#7e22ce;
+  border-radius:8px; font-size:12px; font-weight:700; cursor:pointer;
+}
+.ad-btn-boya-kaydet {
+  padding:8px 14px; border:none; background:#7e22ce; color:#fff;
+  border-radius:8px; font-size:12px; font-weight:700; cursor:pointer;
+}
+.ad-btn-boya-kaydet:disabled { opacity:.6; cursor:not-allowed; }
+.ad-uyari-inline { margin:0 14px 10px; }
 
 /* Sonuç form */
 .ad-sonuc-form { padding:14px; display:flex; flex-direction:column; gap:12px; flex:1; }
@@ -550,12 +620,135 @@
 const AT_TEST_ID = {{ test.id }};
 const AT_KAYNAK_BATCH = {{ test.kaynak_batch_kg }};
 const AT_TEST_BATCH   = {{ test.test_batch_kg }};
+const AT_BOYA_EDIT    = {{ 'true' if boya_editable else 'false' }};
+const AT_BOYA_INIT    = {{ kalemler | selectattr('kategori', 'equalto', 'BOYA') | list | tojson }};
+
+var AD_STOK_BOYA = [];
 
 var DURUM_ETIKET = {
   'TASLAK':'TASLAK','TEST_EDILDI':'TEST EDİLDİ','BASARILI':'BAŞARILI',
   'BASARISIZ':'BAŞARISIZ','ONAYA_GONDERILDI':'ONAYA GÖNDERİLDİ',
   'ONAYLANDI':'ONAYLANDI','REDDEDILDI':'REDDEDİLDİ'
 };
+
+function adBoyaStokOptions(selectedId){
+  var html = '<option value="">— Stok seçin —</option>';
+  AD_STOK_BOYA.forEach(function(s){
+    var sel = (selectedId && parseInt(selectedId) === s.id) ? ' selected' : '';
+    html += '<option value="' + s.id + '"' + sel + '>' + s.kod + ' — ' + s.ad + '</option>';
+  });
+  return html;
+}
+
+function adBoyaSatirEkle(stokId, miktar){
+  var tbody = document.getElementById('ad-boya-tbody');
+  if (!tbody) return;
+  var tr = document.createElement('tr');
+  tr.innerHTML =
+    '<td><select class="ad-boya-stok">' + adBoyaStokOptions(stokId || '') + '</select></td>' +
+    '<td class="r"><input type="number" class="ad-boya-kg" step="0.0001" min="0.0001" value="' +
+      (miktar != null && miktar !== '' ? miktar : '') + '" placeholder="0.0000"></td>' +
+    '<td class="r"><button type="button" class="ad-btn-boya-sil" onclick="adBoyaSatirSil(this)">Sil</button></td>';
+  tbody.appendChild(tr);
+}
+
+function adBoyaSatirSil(btn){
+  var tbody = document.getElementById('ad-boya-tbody');
+  if (!tbody) return;
+  if (tbody.rows.length <= 1) {
+    alert('En az bir boya kalemi kalmalı.');
+    return;
+  }
+  btn.closest('tr').remove();
+}
+
+function adBoyaPanelInit(){
+  if (AT_BOYA_EDIT !== 'true') return;
+  fetch('/nexgen/api/arge/renk-stok-secenekleri')
+    .then(function(r){ return r.json(); })
+    .then(function(list){
+      AD_STOK_BOYA = list || [];
+      var tbody = document.getElementById('ad-boya-tbody');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+      var init = AT_BOYA_INIT || [];
+      if (init.length) {
+        init.forEach(function(k){
+          adBoyaSatirEkle(k.stok_kart_id, k.test_miktar_kg);
+        });
+      } else {
+        adBoyaSatirEkle('', '');
+      }
+    })
+    .catch(function(){
+      var h = document.getElementById('ad-boya-hata');
+      if (h) { h.textContent = 'Boya stok listesi yüklenemedi.'; h.style.display = 'block'; }
+    });
+}
+
+function adBoyaKaydet(){
+  var hataDiv = document.getElementById('ad-boya-hata');
+  var basariDiv = document.getElementById('ad-boya-basari');
+  var btn = document.getElementById('ad-btn-boya-kaydet');
+  hataDiv.style.display = 'none';
+  basariDiv.style.display = 'none';
+
+  var rows = document.querySelectorAll('#ad-boya-tbody tr');
+  var kalemler = [];
+  var seen = {};
+  for (var i = 0; i < rows.length; i++) {
+    var stokEl = rows[i].querySelector('.ad-boya-stok');
+    var kgEl = rows[i].querySelector('.ad-boya-kg');
+    var stokId = parseInt(stokEl.value) || 0;
+    var kg = parseFloat(kgEl.value);
+    if (!stokId) {
+      hataDiv.textContent = 'Satır ' + (i + 1) + ': stok seçin.';
+      hataDiv.style.display = 'block';
+      return;
+    }
+    if (!(kg > 0)) {
+      hataDiv.textContent = 'Satır ' + (i + 1) + ': test KG sıfırdan büyük olmalı.';
+      hataDiv.style.display = 'block';
+      return;
+    }
+    if (seen[stokId]) {
+      hataDiv.textContent = 'Aynı stok birden fazla seçilemez.';
+      hataDiv.style.display = 'block';
+      return;
+    }
+    seen[stokId] = true;
+    kalemler.push({ stok_kart_id: stokId, test_miktar_kg: kg });
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Kaydediliyor…'; }
+
+  fetch('/nexgen/api/arge/test/' + AT_TEST_ID + '/boya-kalemler', {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ kalemler: kalemler })
+  })
+  .then(function(r){ return r.json().then(function(d){ return {status:r.status, data:d}; }); })
+  .then(function(res){
+    if (res.data.ok) {
+      basariDiv.textContent = '✓ Boya kalemleri kaydedildi.';
+      basariDiv.style.display = 'block';
+      setTimeout(function(){ location.reload(); }, 700);
+    } else {
+      hataDiv.textContent = res.data.hata || ('Kayıt hatası (' + res.status + ').');
+      hataDiv.style.display = 'block';
+      if (btn) { btn.disabled = false; btn.textContent = 'Boya Kalemlerini Kaydet'; }
+    }
+  })
+  .catch(function(){
+    hataDiv.textContent = 'Bağlantı hatası.';
+    hataDiv.style.display = 'block';
+    if (btn) { btn.disabled = false; btn.textContent = 'Boya Kalemlerini Kaydet'; }
+  });
+}
+
+if (AT_BOYA_EDIT === 'true') {
+  document.addEventListener('DOMContentLoaded', adBoyaPanelInit);
+}
 
 function adSonucKaydet(zorlaDurum){
   var hataDiv = document.getElementById('ad-hata');
