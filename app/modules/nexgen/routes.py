@@ -1723,9 +1723,12 @@ def arge_test_detay(test_id):
 
 
 @nexgen_bp.route('/api/arge/renk-stok-secenekleri', methods=['GET'])
-@yetki_gerekli('nexgen.recete.view', 'can_view')
+@login_gerekli
 def api_arge_renk_stok_secenekleri():
     """RENK_TEST boya kalem edit icin aktif BOYA stok kartlari."""
+    if not (yetki_var('nexgen.recete.view', 'can_view')
+            or yetki_var('nexgen.tablet.view', 'can_view')):
+        abort(403)
     con = _db()
     try:
         rows = con.execute("""
@@ -1740,13 +1743,19 @@ def api_arge_renk_stok_secenekleri():
 
 
 @nexgen_bp.route('/api/arge/test/<int:test_id>/boya-kalemler', methods=['PUT'])
-@yetki_gerekli('nexgen.recete.create', 'can_create')
+@login_gerekli
 def api_arge_test_boya_kalemler(test_id):
     """TASLAK RENK_TEST icin yalnizca BOYA kalemlerini gunceller.
 
     PUT JSON:
         kalemler: [{stok_kart_id: int, test_miktar_kg: float}, ...]
+
+    Yetki: nexgen.recete.create VEYA nexgen.tablet.view (tablet numune girisi).
     """
+    if not (yetki_var('nexgen.recete.create', 'can_create')
+            or yetki_var('nexgen.tablet.view', 'can_view')):
+        abort(403)
+
     data = request.get_json(silent=True) or {}
     kalemler_in = data.get('kalemler')
     if kalemler_in is None or not isinstance(kalemler_in, list):
@@ -5654,6 +5663,41 @@ def tablet_arge():
         varyantlar = [dict(v) for v in varyantlar]
         for v in varyantlar:
             v['toplam_kg'] = round(float(v['toplam_kg'] or 0), 3)
+
+        son_numuneler = con.execute("""
+            SELECT t.id, t.test_no, t.durum, t.yeni_renk_adi, t.test_batch_kg,
+                   t.olusturma_tarihi,
+                   f.ad AS formul_ad,
+                   rv.ad AS kaynak_renk_ad,
+                   ku.KullaniciAdi AS olusturan_ad
+            FROM nexgen_arge_test t
+            JOIN nexgen_uretim_varyant uv ON uv.id = t.kaynak_uretim_varyant_id
+            JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+            JOIN nexgen_formul f          ON f.id  = rv.formul_id
+            LEFT JOIN sistem_kullanici ku ON ku.Id = t.olusturan_id
+            WHERE t.aktif = 1
+            ORDER BY t.id DESC
+            LIMIT 5
+        """).fetchall()
+        son_numuneler = [dict(r) for r in son_numuneler]
+
+        boya_stok = con.execute("""
+            SELECT id, kod, ad, kategori
+            FROM nexgen_stok_kart
+            WHERE aktif = 1 AND kategori = 'BOYA'
+            ORDER BY ad
+        """).fetchall()
+        boya_stok = [dict(r) for r in boya_stok]
+
+        cariler = con.execute(
+            "SELECT id, cari_kod, unvan FROM nexgen_cari WHERE aktif=1 ORDER BY unvan"
+        ).fetchall()
+        cariler = [dict(c) for c in cariler]
+
+        bugun_numune = con.execute("""
+            SELECT COUNT(*) AS c FROM nexgen_arge_test
+            WHERE aktif = 1 AND date(olusturma_tarihi) = date('now')
+        """).fetchone()['c']
     finally:
         con.close()
 
@@ -5661,6 +5705,11 @@ def tablet_arge():
         'nexgen/tablet_arge.html',
         active='nexgen',
         varyantlar=varyantlar,
+        son_numuneler=son_numuneler,
+        boya_stok=boya_stok,
+        cariler=cariler,
+        bugun_numune=bugun_numune,
+        kullanici_ad=_kullanici_ad(),
     )
 
 
