@@ -2,435 +2,873 @@
 {% set page_title = "Reçete Merkezi — NexGen" %}
 
 {% block content %}
-<div class="ng-sayfa">
+<script>
+const _FORMULLER = {{ formuller | tojson }};
+const _CAN_CREATE = {{ 'true' if can_create else 'false' }};
+const _CAN_MANAGE = {{ 'true' if can_manage else 'false' }};
+</script>
 
-  {# ── Breadcrumb ── #}
-  <div class="ng-baslik-blok">
-    <div class="ng-baslik">
-      <a href="/nexgen/" class="ng-bc-link">NexGen</a>
-      <span class="ng-bc-sep">›</span>
-      <span class="ng-baslik-metin">Reçete Merkezi</span>
-    </div>
-    <div class="ng-baslik-aciklama">
-      Formül ve renk bazında hammadde reçeteleri
-    </div>
-  </div>
+<div class="rm-sayfa">
 
-  {# ── KPI Bar ── #}
-  <div class="rl-kpi-bar">
-    <div class="rl-kpi">
-      <span class="rl-kpi-deger">{{ formuller|length }}</span>
-      <span class="rl-kpi-etiket">Toplam Formül</span>
-    </div>
-    {% set uretime_acik = namespace(n=0) %}
-    {% set onayli_n = namespace(n=0) %}
-    {% set taslak_n = namespace(n=0) %}
+  {# ══════════════ KPI BAR ══════════════ #}
+  <div class="rm-kpi-bar">
+    {% set uretime_n = namespace(n=0) %}
+    {% set arge_n    = namespace(n=0) %}
+    {% set onay_n    = namespace(n=0) %}
+    {% set taslak_n  = namespace(n=0) %}
+    {% set varyant_n = namespace(n=0) %}
+    {% set mal_v = namespace(v=0.0, c=0) %}
     {% for f in formuller %}
-      {% if f.recete_durum_ozet == 'URETIME_ACIK' %}{% set uretime_acik.n = uretime_acik.n + 1 %}{% endif %}
-      {% if f.recete_durum_ozet == 'ONAYLI' %}{% set onayli_n.n = onayli_n.n + 1 %}{% endif %}
-      {% if f.recete_durum_ozet == 'TASLAK' or not f.recete_durum_ozet %}{% set taslak_n.n = taslak_n.n + 1 %}{% endif %}
-    {% endfor %}
-    <div class="rl-kpi">
-      <span class="rl-kpi-deger rl-kpi-yesil">{{ uretime_acik.n }}</span>
-      <span class="rl-kpi-etiket">Üretime Açık</span>
-    </div>
-    <div class="rl-kpi">
-      <span class="rl-kpi-deger rl-kpi-mavi">{{ onayli_n.n }}</span>
-      <span class="rl-kpi-etiket">Onaylı</span>
-    </div>
-    <div class="rl-kpi">
-      <span class="rl-kpi-deger rl-kpi-gri">{{ taslak_n.n }}</span>
-      <span class="rl-kpi-etiket">Taslak</span>
-    </div>
-  </div>
-
-  {# ── Toolbar ── #}
-  <div class="rl-toolbar">
-    <div class="ngsk-ara-wrap" style="flex:1;max-width:320px">
-      <svg class="ngsk-ara-ikon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-           stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15">
-        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-      </svg>
-      <input type="text" id="rl-arama" class="ngsk-ara-input"
-             placeholder="Kod veya formül adı ara…" autocomplete="off"
-             oninput="rlFiltrele()">
-    </div>
-    <select id="rl-durum-filtre" class="ngsk-select" onchange="rlFiltrele()">
-      <option value="">Tüm Durumlar</option>
-      <option value="URETIME_ACIK">Üretime Açık</option>
-      <option value="ONAYLI">Onaylı</option>
-      <option value="DENEME">Deneme</option>
-      <option value="TASLAK">Taslak</option>
-    </select>
-    {% if can_create %}
-    <button class="ngsk-btn-yeni" onclick="alert('Yeni formül FAZ-4E\'de eklenecek.')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-           stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
-        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-      </svg>
-      Yeni Formül
-    </button>
-    {% endif %}
-  </div>
-
-  {# ── Formül Kartları ── #}
-  {% if formuller %}
-  <div class="rl-kart-grid" id="rl-kart-grid">
-
-    {% for f in formuller %}
-    <div class="rl-kart"
-         data-ara="{{ (f.kod ~ ' ' ~ f.ad)|lower }}"
-         data-durum="{{ f.recete_durum_ozet or 'TASLAK' }}">
-
-      {# ── Kart Başlığı ── #}
-      <div class="rl-kart-hdr">
-        <div class="rl-kart-hdr-sol">
-          <span class="rl-formul-kod">{{ f.kod }}</span>
-          <h3 class="rl-formul-ad">{{ f.ad }}</h3>
-          {% if f.notlar %}
-          <div class="rl-formul-notlar">{{ f.notlar }}</div>
-          {% endif %}
-        </div>
-        <div class="rl-kart-hdr-sag">
-          <div class="rl-formul-sayilar">
-            <span class="rl-fs-sayi">{{ f.renk_say }}</span>
-            <span class="rl-fs-etiket">Renk</span>
-          </div>
-          <div class="rl-formul-sayilar">
-            <span class="rl-fs-sayi">{{ f.uretim_say }}</span>
-            <span class="rl-fs-etiket">Varyant</span>
-          </div>
-          {% if f.liste_kg_maliyet > 0 %}
-          <div class="rl-formul-sayilar">
-            <span class="rl-fs-sayi rl-kpi-yesil">{{ '{:,.0f}'.format(f.liste_kg_maliyet) }} ₺</span>
-            <span class="rl-fs-etiket">Ort. ₺/KG</span>
-          </div>
-          {% endif %}
-        </div>
-      </div>
-
-      {# ── Renk Blokları ── #}
-      {% if f.rv_ozet %}
-      <div class="rl-renkler">
-        {% for rv in f.rv_ozet %}
-        <div class="rl-renk-blok">
-
-          {# Renk başlığı #}
-          <div class="rl-renk-hdr">
-            <span class="rl-renk-daire"></span>
-            <span class="rl-renk-ad">{{ rv.ad }}</span>
-          </div>
-
-          {# Varyant (boyut) kartları #}
-          <div class="rl-boyut-kartlar">
-            {% for uv in rv.varyantlar %}
-            {% set boyut_label = 'BÜYÜK BOY' if uv.boyut == 'LARGE' else ('KÜÇÜK BOY' if uv.boyut == 'SMALL' else uv.boyut) %}
-            {% set uretime_acik_mi = uv.recete_durum == 'URETIME_ACIK' %}
-            <div class="rl-boyut-kart rl-boyut-kart-{{ 'acik' if uretime_acik_mi else 'kapali' }}">
-
-              {# Boyut etiketi #}
-              <div class="rl-boyut-hdr">
-                <span class="rl-boyut-label rl-boyut-{{ uv.boyut|lower }}">{{ boyut_label }}</span>
-                <span class="rl-durum-rozet rl-d-{{ uv.recete_durum|lower|replace('_','-') }}">
-                  {%- if uv.recete_durum == 'URETIME_ACIK' -%}ÜRETİME AÇIK
-                  {%- elif uv.recete_durum == 'ONAYLI' -%}ONAYLI
-                  {%- elif uv.recete_durum == 'DENEME' -%}DENEME
-                  {%- elif uv.recete_durum == 'TASLAK' -%}TASLAK
-                  {%- elif uv.recete_durum == 'PASIF' -%}PASİF
-                  {%- else -%}{{ uv.recete_durum }}{%- endif -%}
-                </span>
-              </div>
-
-              {# Sayılar #}
-              <div class="rl-boyut-veri">
-                {% if uv.toplam_kg > 0 %}
-                <div class="rl-boyut-veri-kpi">
-                  <span class="rl-boyut-veri-sayi">{{ '{:,.1f}'.format(uv.toplam_kg) }} KG</span>
-                  <span class="rl-boyut-veri-etiket">Batch KG</span>
-                </div>
-                {% endif %}
-                {% if uv.kg_maliyet > 0 %}
-                <div class="rl-boyut-veri-kpi">
-                  <span class="rl-boyut-veri-sayi rl-kpi-yesil">{{ '{:,.0f}'.format(uv.kg_maliyet) }} ₺</span>
-                  <span class="rl-boyut-veri-etiket">1 KG Maliyet</span>
-                </div>
-                {% else %}
-                <div class="rl-boyut-veri-kpi">
-                  <span class="rl-boyut-veri-sayi" style="color:#9ca3af">—</span>
-                  <span class="rl-boyut-veri-etiket">Fiyat Yok</span>
-                </div>
-                {% endif %}
-              </div>
-
-              {# Uyarı — üretime açık değilse #}
-              {% if not uretime_acik_mi %}
-              <div class="rl-boyut-uyari">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                     width="13" height="13">
-                  <circle cx="12" cy="12" r="10"/>
-                  <line x1="12" y1="8" x2="12" y2="12"/>
-                  <line x1="12" y1="16" x2="12.01" y2="16"/>
-                </svg>
-                Henüz üretimde kullanılmaz
-              </div>
-              {% endif %}
-
-              {# Kontrol Et Butonu #}
-              <a href="/nexgen/recete/{{ f.id }}" class="rl-kontrol-btn rl-kontrol-{{ 'acik' if uretime_acik_mi else 'kapali' }}">
-                KONTROL ET
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                     stroke-linecap="round" stroke-linejoin="round" width="13" height="13">
-                  <polyline points="9 18 15 12 9 6"/>
-                </svg>
-              </a>
-
-            </div>
-            {% endfor %}
-          </div>
-
-        </div>
-        {% endfor %}
-      </div>
-
-      {% else %}
-      <div class="rl-bos-agac">Henüz reçete kalemi yok</div>
-      {% endif %}
-
-    </div>
+      {% if f.recete_durum_ozet == 'URETIME_ACIK' %}{% set uretime_n.n = uretime_n.n + 1 %}{% endif %}
+      {% if f.recete_durum_ozet == 'DENEME' %}{% set arge_n.n = arge_n.n + 1 %}{% endif %}
+      {% if f.recete_durum_ozet == 'ONAYLI' %}{% set onay_n.n = onay_n.n + 1 %}{% endif %}
+      {% if not f.recete_durum_ozet or f.recete_durum_ozet == 'TASLAK' %}{% set taslak_n.n = taslak_n.n + 1 %}{% endif %}
+      {% set varyant_n.n = varyant_n.n + f.uretim_say %}
+      {% if f.liste_kg_maliyet > 0 %}{% set mal_v.v = mal_v.v + f.liste_kg_maliyet %}{% set mal_v.c = mal_v.c + 1 %}{% endif %}
     {% endfor %}
 
-  </div>
-
-  <div id="rl-bos-mesaj" class="rl-bos-sonuc" style="display:none">
-    Arama kriterine uygun formül bulunamadı.
-  </div>
-
-  {% else %}
-  <div class="rl-bos-tam">
-    <div class="rl-bos-ikon">
-      <svg viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.2"
-           stroke-linecap="round" stroke-linejoin="round" width="52" height="52">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-        <polyline points="14 2 14 8 20 8"/>
-        <line x1="9" y1="13" x2="15" y2="13"/>
-        <line x1="9" y1="17" x2="12" y2="17"/>
-      </svg>
+    <div class="rm-kpi rm-kpi-blue">
+      <div class="rm-kpi-sayi">{{ formuller|length }}</div>
+      <div class="rm-kpi-etiket">Ana Formül</div>
     </div>
-    <div class="rl-bos-baslik">Henüz Formül Yok</div>
-    <div class="rl-bos-aciklama">
-      İlk reçeteyi oluşturmak için Yeni Formül butonunu kullanın.
+    <div class="rm-kpi rm-kpi-green">
+      <div class="rm-kpi-sayi">{{ uretime_n.n }}</div>
+      <div class="rm-kpi-etiket">Üretime Açık</div>
+    </div>
+    <div class="rm-kpi rm-kpi-orange">
+      <div class="rm-kpi-sayi">{{ arge_n.n }}</div>
+      <div class="rm-kpi-etiket">AR-GE Testte</div>
+    </div>
+    <div class="rm-kpi rm-kpi-yellow">
+      <div class="rm-kpi-sayi">{{ onay_n.n }}</div>
+      <div class="rm-kpi-etiket">Onay Bekleyen</div>
+    </div>
+    <div class="rm-kpi rm-kpi-purple">
+      <div class="rm-kpi-sayi">{{ varyant_n.n }}</div>
+      <div class="rm-kpi-etiket">Toplam Varyant</div>
+    </div>
+    <div class="rm-kpi rm-kpi-gold">
+      <div class="rm-kpi-sayi cost-secure">
+        {% if mal_v.c > 0 %}{{ '{:,.0f}'.format(mal_v.v / mal_v.c) }} ₺{% else %}—{% endif %}
+      </div>
+      <div class="rm-kpi-etiket">Ort. Maliyet /KG</div>
     </div>
   </div>
-  {% endif %}
 
+  {# ══════════════ 3 PANELLİ ALAN ══════════════ #}
+  <div class="rm-layout">
+
+    {# ── SOL: ANA FORMÜLLER ── #}
+    <div class="rm-panel rm-sol">
+      <div class="rm-panel-hdr">
+        <span class="rm-panel-no">①</span>
+        <span class="rm-panel-baslik">ANA FORMÜLLER</span>
+        {% if can_create %}
+        <button class="rm-yeni-btn" onclick="alert('Yeni formül — FAZ-4E\'de.')">+ Yeni Formül</button>
+        {% endif %}
+      </div>
+      <div class="rm-ara-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" width="13" height="13"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="rm-formul-ara" class="rm-ara-input" placeholder="Formül ara…" oninput="rmFormulFiltrele()" autocomplete="off">
+      </div>
+      <div class="rm-kaydirma" id="rm-formul-liste"></div>
+    </div>
+
+    {# ── ORTA: RENK FORMÜLLERİ ── #}
+    <div class="rm-panel rm-orta">
+      <div class="rm-panel-hdr">
+        <span class="rm-panel-no">②</span>
+        <span class="rm-panel-baslik">RENK FORMÜLLERİ</span>
+        <span id="rm-orta-ad" class="rm-panel-hdr-alt">← Formül seçin</span>
+      </div>
+      <div class="rm-ara-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" width="13" height="13"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="rm-renk-ara" class="rm-ara-input" placeholder="Renk ara…" oninput="rmRenkFiltrele()" autocomplete="off">
+      </div>
+      <div class="rm-kaydirma" id="rm-renk-liste">
+        <div class="rm-bos">← Sol panelden formül seçin</div>
+      </div>
+    </div>
+
+    {# ── SAĞ: DETAY PANELİ (fixed height, iç scroll) ── #}
+    <div class="rm-panel rm-sag" id="rm-sag-panel">
+      <div class="rm-panel-hdr">
+        <span class="rm-panel-no">③</span>
+        <span class="rm-panel-baslik" id="rm-detay-baslik">DETAY</span>
+        <span id="rm-detay-hdr-ad" class="rm-panel-hdr-alt">← Renk seçin</span>
+      </div>
+      <div id="rm-detay-icerik" class="rm-detay-icerik">
+        <div class="rm-bos rm-bos-buyuk">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.2" width="44" height="44"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <span>Formül ve renk seçerek detayı görüntüleyin</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
 </div>
 
+{# ═══════════════ CSS ═══════════════ #}
 <style>
-* { box-sizing: border-box; }
+*{ box-sizing:border-box; }
+
+/* ── Sayfa ── */
+.rm-sayfa {
+  display:flex; flex-direction:column; gap:10px;
+  height:calc(100vh - 100px);
+}
 
 /* ── KPI Bar ── */
-.rl-kpi-bar {
-  display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px;
+.rm-kpi-bar {
+  display:flex; gap:8px; flex-shrink:0;
 }
-.rl-kpi {
-  flex: 1; min-width: 110px; background: #fff;
-  border: 1px solid rgba(17,24,39,.07); border-radius: 10px;
-  padding: 12px 16px; box-shadow: 0 1px 4px rgba(15,23,42,.04);
+.rm-kpi {
+  flex:1; min-width:100px;
+  border-radius:10px; padding:10px 14px;
+  border-left:3px solid transparent;
 }
-.rl-kpi-deger  { display: block; font-size: 22px; font-weight: 700; color: #111827; }
-.rl-kpi-etiket { display: block; font-size: 11px; color: #6b7280; margin-top: 2px; }
-.rl-kpi-yesil  { color: #059669; }
-.rl-kpi-mavi   { color: #1d4ed8; }
-.rl-kpi-gri    { color: #9ca3af; }
+.rm-kpi-blue   { background:#eff6ff; border-color:#3b82f6; }
+.rm-kpi-green  { background:#f0fdf4; border-color:#22c55e; }
+.rm-kpi-orange { background:#fff7ed; border-color:#f97316; }
+.rm-kpi-yellow { background:#fefce8; border-color:#eab308; }
+.rm-kpi-purple { background:#faf5ff; border-color:#a855f7; }
+.rm-kpi-gold   { background:#fef9e7; border-color:#f6c343; }
 
-/* ── Toolbar ── */
-.rl-toolbar {
-  display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
-  margin-bottom: 14px;
+.rm-kpi-sayi {
+  font-size:20px; font-weight:800; color:#0f172a; line-height:1;
 }
-
-/* ── Kart Grid ── */
-.rl-kart-grid {
-  display: flex; flex-direction: column; gap: 14px;
+.rm-kpi-etiket {
+  font-size:10px; font-weight:600; color:#64748b; margin-top:4px;
+  text-transform:uppercase; letter-spacing:.4px;
 }
 
-/* ── Formül Kartı ── */
-.rl-kart {
-  background: #fff; border: 1px solid rgba(17,24,39,.07);
-  border-radius: 16px; overflow: hidden;
-  box-shadow: 0 2px 8px rgba(15,23,42,.04);
-  transition: box-shadow .15s;
-}
-.rl-kart:hover { box-shadow: 0 4px 18px rgba(15,23,42,.09); }
-
-/* ── Kart Başlık ── */
-.rl-kart-hdr {
-  display: flex; align-items: flex-start; justify-content: space-between;
-  gap: 12px; padding: 16px 20px 14px;
-  border-bottom: 1px solid #f3f4f6;
-}
-.rl-kart-hdr-sol { flex: 1; }
-.rl-kart-hdr-sag {
-  display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap;
-}
-.rl-formul-kod {
-  font-family: 'Courier New', monospace; font-size: 11px; font-weight: 700;
-  color: #9ca3af; letter-spacing: .5px; display: block; margin-bottom: 3px;
-}
-.rl-formul-ad {
-  margin: 0; font-size: 18px; font-weight: 800; color: #111827; line-height: 1.3;
-}
-.rl-formul-notlar {
-  font-size: 12px; color: #6b7280; margin-top: 5px; line-height: 1.5;
-}
-.rl-formul-sayilar {
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  min-width: 52px;
-}
-.rl-fs-sayi   { font-size: 15px; font-weight: 800; color: #111827; }
-.rl-fs-etiket { font-size: 10px; color: #9ca3af; text-transform: uppercase; letter-spacing: .3px; }
-
-/* ── Renk Blokları ── */
-.rl-renkler {
-  padding: 14px 20px 16px;
-  display: flex; flex-direction: column; gap: 16px;
+/* ── 3 Panel ── */
+.rm-layout {
+  display:grid;
+  grid-template-columns: 260px 240px 1fr;
+  gap:10px;
+  flex:1;
+  min-height:0;
 }
 
-.rl-renk-blok { }
-
-.rl-renk-hdr {
-  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
-}
-.rl-renk-daire {
-  display: inline-block; width: 10px; height: 10px; border-radius: 50%;
-  background: #6b7280; flex-shrink: 0;
-}
-.rl-renk-ad {
-  font-size: 15px; font-weight: 800; color: #111827;
-  text-transform: uppercase; letter-spacing: .6px;
+/* ── Panel ortak ── */
+.rm-panel {
+  background:#fff;
+  border:1px solid #e5e7eb;
+  border-radius:12px;
+  display:flex; flex-direction:column;
+  overflow:hidden;
+  min-height:0;
 }
 
-/* ── Boyut Kartları ── */
-.rl-boyut-kartlar {
-  display: flex; gap: 10px; flex-wrap: wrap;
+.rm-panel-hdr {
+  display:flex; align-items:center; gap:8px;
+  padding:10px 14px;
+  background:#0f172a;
+  flex-shrink:0;
+}
+.rm-panel-no {
+  width:20px; height:20px; border-radius:50%;
+  background:#f6c343; color:#0f172a;
+  font-size:10px; font-weight:900;
+  display:flex; align-items:center; justify-content:center;
+  flex-shrink:0;
+}
+.rm-panel-baslik {
+  font-size:11px; font-weight:700; color:#f1f5f9;
+  letter-spacing:.5px; text-transform:uppercase; flex:1;
+}
+.rm-panel-hdr-alt {
+  font-size:10px; color:#94a3b8; font-style:italic; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100px;
 }
 
-.rl-boyut-kart {
-  flex: 1; min-width: 200px; max-width: 340px;
-  border-radius: 12px; padding: 14px 16px;
-  border: 2px solid transparent;
-  display: flex; flex-direction: column; gap: 10px;
+/* ── Arama ── */
+.rm-ara-wrap {
+  display:flex; align-items:center; gap:7px;
+  padding:7px 12px; border-bottom:1px solid #f1f5f9;
+  flex-shrink:0;
 }
-.rl-boyut-kart-acik {
-  background: #f0fdf4; border-color: #bbf7d0;
+.rm-ara-input {
+  flex:1; border:none; outline:none; font-size:12px; color:#374151; background:transparent;
 }
-.rl-boyut-kart-kapali {
-  background: #f9fafb; border-color: #e5e7eb;
-}
+.rm-ara-input::placeholder{ color:#cbd5e1; }
 
-/* ── Boyut Başlık ── */
-.rl-boyut-hdr {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+/* ── Kaydırma alanı ── */
+.rm-kaydirma {
+  flex:1; overflow-y:auto; min-height:0;
 }
-.rl-boyut-label {
-  font-size: 14px; font-weight: 900; letter-spacing: .5px;
-  padding: 4px 10px; border-radius: 7px;
-}
-.rl-boyut-large   { background: #dbeafe; color: #1d4ed8; }
-.rl-boyut-small   { background: #fef3c7; color: #92400e; }
-.rl-boyut-standart{ background: #f1f5f9; color: #64748b; }
-
-/* ── Durum Rozetleri ── */
-.rl-durum-rozet {
-  font-size: 10px; font-weight: 800; padding: 3px 9px;
-  border-radius: 6px; white-space: nowrap; letter-spacing: .3px;
-}
-.rl-d-uretime-acik { background: #dbeafe; color: #1d4ed8; border: 1px solid #bfdbfe; }
-.rl-d-onayli       { background: #d1fae5; color: #059669; border: 1px solid #a7f3d0; }
-.rl-d-deneme       { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
-.rl-d-taslak       { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
-.rl-d-pasif        { background: #f9fafb; color: #9ca3af; border: 1px solid #e5e7eb; }
-
-/* ── Boyut Veri ── */
-.rl-boyut-veri {
-  display: flex; gap: 14px; flex-wrap: wrap;
-}
-.rl-boyut-veri-kpi {
-  display: flex; flex-direction: column; gap: 2px;
-}
-.rl-boyut-veri-sayi   { font-size: 16px; font-weight: 800; color: #111827; }
-.rl-boyut-veri-etiket {
-  font-size: 10px; color: #9ca3af; text-transform: uppercase; letter-spacing: .3px; font-weight: 700;
-}
-
-/* ── Uyarı ── */
-.rl-boyut-uyari {
-  display: flex; align-items: center; gap: 6px;
-  font-size: 12px; font-weight: 600; color: #92400e;
-  background: #fffbeb; border: 1px solid #fde68a;
-  border-radius: 7px; padding: 6px 10px;
-}
-
-/* ── Kontrol Et Butonu ── */
-.rl-kontrol-btn {
-  display: flex; align-items: center; justify-content: center; gap: 6px;
-  padding: 11px 16px; border-radius: 9px;
-  font-size: 13px; font-weight: 800; text-decoration: none;
-  letter-spacing: .5px; transition: all .12s;
-}
-.rl-kontrol-acik {
-  background: #f6c343; color: #111827;
-}
-.rl-kontrol-acik:hover { background: #f5b82e; transform: translateY(-1px); }
-.rl-kontrol-kapali {
-  background: #f3f4f6; color: #6b7280; border: 1px solid #e5e7eb;
-}
-.rl-kontrol-kapali:hover { background: #e5e7eb; }
+.rm-kaydirma::-webkit-scrollbar{ width:4px; }
+.rm-kaydirma::-webkit-scrollbar-track{ background:transparent; }
+.rm-kaydirma::-webkit-scrollbar-thumb{ background:#e5e7eb; border-radius:4px; }
 
 /* ── Boş ── */
-.rl-bos-agac {
-  padding: 14px 20px; font-size: 13px; color: #9ca3af; font-style: italic;
+.rm-bos {
+  padding:32px 20px; text-align:center; color:#cbd5e1;
+  font-size:12px; display:flex; flex-direction:column; align-items:center; gap:10px;
 }
-.rl-bos-sonuc {
-  text-align: center; padding: 32px; color: #9ca3af;
-  font-size: 13px; background: #fff;
-  border: 1px solid rgba(17,24,39,.06); border-radius: 12px;
-}
-.rl-bos-tam {
-  display: flex; flex-direction: column; align-items: center;
-  padding: 64px 24px; text-align: center; background: #fff;
-  border: 1px solid rgba(17,24,39,.06); border-radius: 14px;
-}
-.rl-bos-ikon { margin-bottom: 14px; }
-.rl-bos-baslik { font-size: 17px; font-weight: 700; color: #374151; margin-bottom: 8px; }
-.rl-bos-aciklama { font-size: 13px; color: #9ca3af; line-height: 1.7; }
+.rm-bos-buyuk{ padding:52px 24px; }
 
-/* ── Tablet / Mobil ── */
-@media (max-width: 600px) {
-  .rl-kart-hdr { flex-direction: column; gap: 8px; }
-  .rl-kart-hdr-sag { flex-direction: row; align-items: center; }
-  .rl-boyut-kart { min-width: 100%; max-width: 100%; }
-  .rl-formul-ad { font-size: 16px; }
-  .rl-renkler { padding: 12px 14px 14px; }
+/* ── Sol: Formül kartları ── */
+.rm-fk {
+  padding:11px 14px; border-bottom:1px solid #f8fafc;
+  cursor:pointer; transition:background .1s;
+}
+.rm-fk:hover{ background:#f8fafc; }
+.rm-fk.aktif{ background:#fef9e7; border-left:3px solid #f6c343; }
+
+.rm-fk-ust { display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:3px; }
+.rm-fk-kod { font-family:'Courier New',monospace; font-size:10px; color:#94a3b8; font-weight:700; }
+.rm-fk-ad  { font-size:13px; font-weight:700; color:#0f172a; margin-bottom:4px; }
+.rm-fk-alt { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.rm-fk-renk-say {
+  font-size:10px; font-weight:700; padding:1px 6px;
+  background:#eff6ff; color:#1d4ed8; border-radius:4px;
+}
+
+/* ── Durum rozet (ortak) ── */
+.rm-rozet {
+  font-size:9px; font-weight:800; padding:2px 7px;
+  border-radius:5px; white-space:nowrap; letter-spacing:.3px;
+}
+.rm-rozet-acik   { background:#d1fae5; color:#059669; }
+.rm-rozet-onayli { background:#dbeafe; color:#1d4ed8; }
+.rm-rozet-deneme { background:#fef3c7; color:#92400e; }
+.rm-rozet-taslak { background:#f1f5f9; color:#64748b; }
+.rm-rozet-pasif  { background:#f9fafb; color:#9ca3af; }
+
+/* ── Orta: Renk kartları ── */
+.rm-rk {
+  padding:12px 14px; border-bottom:1px solid #f8fafc;
+  cursor:pointer; transition:background .1s;
+}
+.rm-rk:hover{ background:#f8fafc; }
+.rm-rk.aktif{ background:#fef9e7; border-left:3px solid #f6c343; }
+
+.rm-rk-ust { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+.rm-rk-nokta { width:9px; height:9px; border-radius:50%; background:#e5e7eb; flex-shrink:0; }
+.rm-rk-ad    { font-size:13px; font-weight:700; color:#0f172a; flex:1; }
+
+.rm-rk-meta { display:grid; grid-template-columns:1fr 1fr; gap:3px 8px; margin-bottom:7px; }
+.rm-rk-meta-satir { font-size:10px; color:#6b7280; }
+.rm-rk-meta-satir strong { color:#374151; font-weight:600; }
+
+.rm-rk-boyutlar { display:flex; gap:5px; flex-wrap:wrap; }
+.rm-rk-chip {
+  display:inline-flex; align-items:center; gap:4px;
+  padding:3px 8px; border-radius:6px; font-size:10px; font-weight:700;
+  border:1px solid #e5e7eb; background:#f9fafb; color:#374151;
+  cursor:pointer; transition:all .1s;
+}
+.rm-rk-chip:hover{ background:#eff6ff; border-color:#bfdbfe; color:#1d4ed8; }
+.rm-rk-chip.aktif{ background:#fef9e7; border-color:#f6c343; }
+
+/* ── AR-GE geçmişi rozet ── */
+.rm-rk-arge-gecmis {
+  margin-top:7px; padding:7px 10px; background:#f8fafc;
+  border:1px solid #e2e8f0; border-radius:7px;
+  font-size:10px; color:#6b7280;
+}
+.rm-rk-arge-baslik {
+  font-size:10px; font-weight:700; color:#374151;
+  text-transform:uppercase; letter-spacing:.4px; margin-bottom:5px;
+  display:flex; align-items:center; gap:5px;
+}
+.rm-rk-arge-no {
+  font-family:'Courier New',monospace; font-size:10px;
+  color:#0891b2; font-weight:700;
+}
+.rm-rk-arge-detay { display:flex; gap:10px; flex-wrap:wrap; color:#6b7280; }
+
+/* ══════════════════════════════════════
+   SAĞ PANEL — sabit yükseklik, iç scroll
+════════════════════════════════════════ */
+.rm-detay-icerik {
+  flex:1; min-height:0;
+  display:flex; flex-direction:column;
+  overflow:hidden;
+}
+
+/* Üst kart özeti — scroll dışında sabit */
+.rm-detay-ust {
+  flex-shrink:0;
+  padding:12px 14px;
+  border-bottom:2px solid #f1f5f9;
+  background:#fafafa;
+}
+.rm-detay-baslik-satir {
+  display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;
+}
+.rm-detay-formul-baslik {
+  font-size:15px; font-weight:800; color:#0f172a;
+}
+.rm-detay-kpi-satir {
+  display:grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap:6px;
+}
+.rm-detay-kpi-kart {
+  background:#fff; border:1px solid #e5e7eb; border-radius:8px;
+  padding:7px 10px; text-align:center;
+  min-width:0;
+}
+.rm-detay-kpi-deger {
+  font-size:13px; font-weight:800; color:#0f172a; line-height:1.1;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.rm-detay-kpi-etiket {
+  font-size:9px; font-weight:600; color:#94a3b8;
+  text-transform:uppercase; letter-spacing:.3px; margin-top:3px;
+}
+
+/* Durum akışı — scroll dışında sabit */
+.rm-durum-band {
+  display:flex; flex-shrink:0;
+  border-bottom:1px solid #f1f5f9;
+}
+.rm-durum-adim {
+  flex:1; display:flex; flex-direction:column; align-items:center;
+  padding:8px 6px; border-right:1px solid #f1f5f9;
+  font-size:9px; font-weight:600; color:#cbd5e1;
+  transition:all .15s;
+}
+.rm-durum-adim:last-child{ border-right:none; }
+.rm-durum-adim.gecildi { color:#059669; background:#f0fdf4; }
+.rm-durum-adim.aktif   { color:#0f172a; background:#fef9e7; font-weight:800; }
+.rm-durum-daire {
+  width:18px; height:18px; border-radius:50%; margin-bottom:3px;
+  background:#e5e7eb; color:#94a3b8;
+  display:flex; align-items:center; justify-content:center; font-size:8px; font-weight:800;
+}
+.rm-durum-adim.gecildi .rm-durum-daire { background:#d1fae5; color:#059669; }
+.rm-durum-adim.aktif   .rm-durum-daire { background:#f6c343; color:#0f172a; }
+
+/* İki tablo scroll alanı */
+.rm-iki-tablo-wrap {
+  flex:1; min-height:0;
+  display:grid;
+  grid-template-columns:60fr 40fr;
+  border-bottom:1px solid #f1f5f9;
+  overflow:hidden;
+}
+.rm-tablo-col {
+  display:flex; flex-direction:column; overflow:hidden;
+  border-right:2px solid #f1f5f9;
+}
+.rm-tablo-col:last-child{ border-right:none; }
+
+.rm-tablo-col-hdr {
+  flex-shrink:0;
+  padding:9px 13px;
+  display:flex; align-items:center; gap:6px;
+  border-bottom:1px solid #f1f5f9;
+}
+.rm-tablo-col-baslik {
+  font-size:11px; font-weight:700; color:#374151;
+  text-transform:uppercase; letter-spacing:.4px;
+  border-left:3px solid #0f172a; padding-left:7px; flex:1;
+}
+.rm-tablo-col-baslik.renk { border-left-color:#7c3aed; }
+.rm-tablo-col-kg {
+  font-size:11px; font-weight:700; color:#059669;
+}
+.rm-tablo-col-kg.renk { color:#7c3aed; }
+
+/* Tablo scroll body */
+.rm-tablo-scroll {
+  flex:1; overflow-y:auto; min-height:0;
+}
+.rm-tablo-scroll::-webkit-scrollbar{ width:3px; }
+.rm-tablo-scroll::-webkit-scrollbar-thumb{ background:#e5e7eb; border-radius:3px; }
+
+.rm-t {
+  width:100%; border-collapse:collapse; font-size:12px;
+}
+.rm-t thead th {
+  padding:5px 10px; text-align:left; font-size:10px; font-weight:600;
+  color:#94a3b8; text-transform:uppercase; letter-spacing:.3px;
+  border-bottom:1px solid #f1f5f9; background:#fafafa;
+  position:sticky; top:0; z-index:1;
+}
+.rm-t th.r{ text-align:right; }
+.rm-t tbody tr{ border-bottom:1px solid #f8fafc; transition:background .1s; }
+.rm-t tbody tr:hover{ background:#fafafa; }
+.rm-t td{ padding:6px 10px; vertical-align:middle; }
+.rm-t td.r{ text-align:right; font-weight:700; color:#0f172a; font-size:12px; }
+
+.rm-tablo-foot {
+  flex-shrink:0;
+  display:flex; justify-content:space-between; align-items:center;
+  padding:7px 13px;
+  background:#f9fafb; border-top:2px solid #e5e7eb;
+  font-size:11px; font-weight:800; color:#374151;
+}
+
+.rm-stok-kod { font-family:'Courier New',monospace; font-size:10px; color:#0891b2; display:block; }
+.rm-stok-ad  { font-size:12px; font-weight:600; color:#0f172a; }
+
+.rm-ybar-wrap {
+  display:inline-block; width:32px; height:4px;
+  background:#e5e7eb; border-radius:2px; overflow:hidden;
+  vertical-align:middle; margin-right:4px;
+}
+.rm-ybar { display:block; height:100%; border-radius:2px; }
+.rm-ybar-ana  { background:#f6c343; }
+.rm-ybar-renk { background:#a78bfa; }
+
+/* Batch + Varyant bandı — scroll dışı */
+.rm-alt-band {
+  flex-shrink:0;
+  border-top:1px solid #f1f5f9;
+}
+.rm-batch-satir {
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  padding:8px 14px; background:#f0fdf4;
+  font-size:12px; color:#374151;
+}
+.rm-batch-arti { font-size:14px; font-weight:800; color:#d1d5db; }
+
+.rm-varyant-satir {
+  display:flex; gap:6px; padding:8px 14px; flex-wrap:wrap; background:#fff;
+  border-top:1px solid #f1f5f9;
+}
+.rm-v-chip {
+  display:flex; align-items:center; gap:6px;
+  padding:5px 10px; border-radius:8px; cursor:pointer;
+  border:1px solid #e5e7eb; background:#f9fafb;
+  transition:all .1s;
+}
+.rm-v-chip:hover{ background:#eff6ff; border-color:#bfdbfe; }
+.rm-v-chip.aktif{ background:#fef9e7; border-color:#f6c343; }
+.rm-v-chip-boyut { font-size:11px; font-weight:800; color:#0f172a; }
+.rm-v-chip-kg    { font-size:10px; color:#6b7280; }
+.rm-v-chip-maliyet { font-size:10px; font-weight:700; color:#d97706; }
+
+/* AR-GE kutusu (statik, gelecek faz) */
+.rm-arge-kutu {
+  margin:10px 14px;
+  border:1px dashed #e2e8f0; border-radius:8px;
+  overflow:hidden;
+}
+.rm-arge-kutu-hdr {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:7px 12px; background:#f8fafc;
+  font-size:10px; font-weight:700; color:#374151;
+  text-transform:uppercase; letter-spacing:.4px;
+  border-bottom:1px dashed #e2e8f0;
+}
+.rm-arge-kutu-bos {
+  padding:14px 12px; text-align:center;
+  color:#94a3b8; font-size:11px; font-style:italic;
+}
+.rm-arge-kutu-satir {
+  display:flex; align-items:center; gap:8px;
+  padding:7px 12px; border-bottom:1px solid #f8fafc;
+  font-size:11px; color:#374151;
+}
+.rm-arge-kutu-satir:last-child{ border-bottom:none; }
+.rm-arge-no { font-family:'Courier New',monospace; font-size:10px; color:#0891b2; font-weight:700; }
+
+/* Alt butonlar */
+.rm-butonlar {
+  display:flex; gap:8px; padding:10px 14px;
+  flex-shrink:0; border-top:2px solid #f1f5f9;
+  background:#fafafa;
+}
+.rm-btn {
+  flex:1; padding:9px 12px; border-radius:8px;
+  font-size:12px; font-weight:700; cursor:pointer;
+  text-align:center; text-decoration:none;
+  display:inline-block; transition:all .1s; border:none;
+}
+.rm-btn-arge  { background:#fef3c7; color:#92400e; }
+.rm-btn-arge:hover{ background:#fde68a; }
+.rm-btn-onay  { background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
+.rm-btn-onay:hover{ background:#dcfce7; }
+.rm-btn-detay { flex:2; background:#0f172a; color:#f6c343; }
+.rm-btn-detay:hover{ background:#1e293b; }
+
+/* cost-secure: maliyet alanı — yetkiye bağlanacak */
+.cost-secure { /* gelecekte visibility:hidden veya blur ile gizlenebilir */ }
+
+@media(max-width:1024px){
+  .rm-layout{ grid-template-columns:220px 200px 1fr; }
+}
+@media(max-width:768px){
+  .rm-sayfa{ height:auto; }
+  .rm-layout{ grid-template-columns:1fr; height:auto; }
+  .rm-iki-tablo-wrap{ grid-template-columns:1fr; }
 }
 </style>
 
+{# ═══════════════ JS ═══════════════ #}
 <script>
-function rlFiltrele() {
-  var ara   = (document.getElementById('rl-arama').value || '').toLowerCase();
-  var durum = document.getElementById('rl-durum-filtre').value;
-  var kartlar = document.querySelectorAll('.rl-kart');
-  var goster = 0;
-  kartlar.forEach(function(k) {
-    var araUy   = !ara   || (k.dataset.ara   || '').includes(ara);
-    var durumUy = !durum || k.dataset.durum === durum;
-    var ok = araUy && durumUy;
-    k.style.display = ok ? '' : 'none';
-    if (ok) goster++;
-  });
-  var bos = document.getElementById('rl-bos-mesaj');
-  if (bos) bos.style.display = goster === 0 ? 'block' : 'none';
+var _aktifFormulId = null;
+var _aktifRvId     = null;
+var _aktifUvId     = null;
+/* Renk ayrımı gelecek fazda ayrı RF tablosu ile yapılacak.
+   Şimdilik otomatik kategori ayrımı KAPALI — tüm kalemler ANA formülde. */
+var RENK_KATEGORILER = []; /* kasıtlı boş — gelecek faz: RF kodu ile bağlı kalemler buraya */
+
+/* ── Yardımcılar ── */
+function rmDurumEtiket(d){
+  return {URETIME_ACIK:'ÜRETİME AÇIK',ONAYLI:'ONAYLI',DENEME:'AR-GE TEST',TASLAK:'TASLAK',PASIF:'PASİF'}[d] || d || 'TASLAK';
 }
+function rmDurumCss(d){
+  return 'rm-rozet rm-rozet-'+({'URETIME_ACIK':'acik','ONAYLI':'onayli','DENEME':'deneme','TASLAK':'taslak','PASIF':'pasif'}[d]||'taslak');
+}
+function rmKg(v){
+  var n = parseFloat(v)||0;
+  if(n===0) return '0';
+  return n.toLocaleString('de-DE',{minimumFractionDigits:0,maximumFractionDigits:3});
+}
+function isRenkKalem(k){
+  var kat = (k.kategori||'').toUpperCase().trim();
+  return RENK_KATEGORILER.some(function(r){ return kat.indexOf(r)>=0; });
+}
+function bestDurum(varyantlar){
+  var d = 'TASLAK';
+  varyantlar.forEach(function(uv){
+    var x = uv.recete_durum||'TASLAK';
+    if(x==='URETIME_ACIK') d='URETIME_ACIK';
+    else if(x==='ONAYLI' && d!=='URETIME_ACIK') d='ONAYLI';
+    else if(x==='DENEME' && d==='TASLAK') d='DENEME';
+  });
+  return d;
+}
+
+/* ── SOL PANEL ── */
+function rmRenderFormulListe(filtre){
+  filtre = (filtre||'').toLowerCase().trim();
+  var el = document.getElementById('rm-formul-liste');
+  if(!el) return;
+  var html = '';
+  _FORMULLER.forEach(function(f){
+    var ara = (f.kod+' '+f.ad).toLowerCase();
+    if(filtre && ara.indexOf(filtre)<0) return;
+    var d = f.recete_durum_ozet||'TASLAK';
+    var aktif = _aktifFormulId===f.id;
+    html +=
+      '<div class="rm-fk'+(aktif?' aktif':'')+'" onclick="rmFormulSec('+f.id+')">' +
+        '<div class="rm-fk-ust">' +
+          '<span class="rm-fk-kod">'+f.kod+'</span>' +
+          '<span class="'+rmDurumCss(d)+'">'+rmDurumEtiket(d)+'</span>' +
+        '</div>' +
+        '<div class="rm-fk-ad">'+f.ad+'</div>' +
+        '<div class="rm-fk-alt">' +
+          '<span class="rm-fk-renk-say">'+( f.renk_say||0)+' renk</span>' +
+          (f.liste_kg_maliyet>0
+            ? '<span class="cost-secure" style="font-size:10px;color:#d97706;font-weight:700;">'+Math.round(f.liste_kg_maliyet).toLocaleString('tr-TR')+' ₺/KG</span>'
+            : '') +
+        '</div>' +
+      '</div>';
+  });
+  el.innerHTML = html || '<div class="rm-bos"><span>Sonuç yok</span></div>';
+}
+
+/* ── ORTA PANEL ── */
+function rmRenderRenkListe(){
+  var el = document.getElementById('rm-renk-liste');
+  if(!el) return;
+  var f = _FORMULLER.find(function(x){ return x.id===_aktifFormulId; });
+  if(!f || !f.rv_ozet || !f.rv_ozet.length){
+    el.innerHTML = '<div class="rm-bos"><span>Bu formüle renk eklenmemiş</span></div>';
+    return;
+  }
+  var ara = (document.getElementById('rm-renk-ara').value||'').toLowerCase().trim();
+  var html = '';
+  f.rv_ozet.forEach(function(rv){
+    if(ara && rv.ad.toLowerCase().indexOf(ara)<0) return;
+    var d = bestDurum(rv.varyantlar);
+    var aktifRv = _aktifRvId===rv.rv_id;
+
+    /* İlk uv'den toplam kg */
+    var toplamKglar = rv.varyantlar.map(function(u){ return u.toplam_kg||0; });
+    var maxKg = Math.max.apply(null, toplamKglar);
+
+    html += '<div class="rm-rk'+(aktifRv?' aktif':'')+'" data-rv="'+rv.rv_id+'">';
+    html +=   '<div class="rm-rk-ust">' +
+                '<span class="rm-rk-nokta"></span>' +
+                '<span class="rm-rk-ad">'+rv.ad+'</span>' +
+                '<span class="'+rmDurumCss(d)+'">'+rmDurumEtiket(d)+'</span>' +
+              '</div>';
+
+    /* Meta bilgiler */
+    html +=   '<div class="rm-rk-meta">' +
+                '<div class="rm-rk-meta-satir">Varyant: <strong>'+rv.varyantlar.length+'</strong></div>' +
+                '<div class="rm-rk-meta-satir cost-secure">Max KG: <strong>'+rmKg(maxKg)+'</strong></div>' +
+              '</div>';
+
+    /* Boyut chip'leri */
+    html +=   '<div class="rm-rk-boyutlar">';
+    rv.varyantlar.forEach(function(uv){
+      var ud = uv.recete_durum||'TASLAK';
+      var chipAktif = _aktifUvId===uv.uv_id;
+      html += '<span class="rm-rk-chip'+(chipAktif?' aktif':'')+'" '+
+        'onclick="event.stopPropagation();rmUvSec('+rv.rv_id+','+uv.uv_id+')">' +
+        '<span class="rm-v-chip-boyut">'+uv.boyut+'</span>' +
+        '<span class="'+rmDurumCss(ud)+'" style="font-size:8px;">'+rmDurumEtiket(ud)+'</span>' +
+      '</span>';
+    });
+    html +=   '</div>';
+
+    /* AR-GE geçmişi (statik placeholder) */
+    html +=   '<div class="rm-rk-arge-gecmis">' +
+                '<div class="rm-rk-arge-baslik">' +
+                  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="10" height="10"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4"/></svg>' +
+                  'AR-GE Geçmişi' +
+                '</div>' +
+                '<div style="color:#94a3b8;font-size:10px;font-style:italic;">Henüz test kaydı yok — AR-GE test modülünde görünecek</div>' +
+              '</div>';
+
+    html += '</div>';
+  });
+
+  el.innerHTML = html || '<div class="rm-bos"><span>Arama sonucu yok</span></div>';
+
+  /* Kart tıklaması */
+  el.querySelectorAll('.rm-rk').forEach(function(card){
+    card.addEventListener('click', function(){
+      var rvId = parseInt(card.dataset.rv);
+      var f2 = _FORMULLER.find(function(x){ return x.id===_aktifFormulId; });
+      if(!f2) return;
+      var rv2 = f2.rv_ozet.find(function(r){ return r.rv_id===rvId; });
+      if(!rv2||!rv2.varyantlar.length) return;
+      rmUvSec(rvId, rv2.varyantlar[0].uv_id);
+    });
+  });
+}
+
+/* ── Seçim işlemleri ── */
+function rmFormulSec(id){
+  _aktifFormulId = id;
+  _aktifRvId = null; _aktifUvId = null;
+  rmRenderFormulListe(document.getElementById('rm-formul-ara').value);
+  rmRenderRenkListe();
+  rmDetayBos();
+  var f = _FORMULLER.find(function(x){ return x.id===id; });
+  var el = document.getElementById('rm-orta-ad');
+  if(el) el.textContent = f ? f.ad : '';
+}
+function rmUvSec(rvId, uvId){
+  _aktifRvId = rvId;
+  _aktifUvId = uvId;
+  rmRenderRenkListe();
+  rmRenderDetay();
+}
+function rmFormulFiltrele(){ rmRenderFormulListe(document.getElementById('rm-formul-ara').value); }
+function rmRenkFiltrele(){ rmRenderRenkListe(); }
+
+/* ── Sağ panel boş ── */
+function rmDetayBos(){
+  document.getElementById('rm-detay-icerik').innerHTML =
+    '<div class="rm-bos rm-bos-buyuk">' +
+    '<svg viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.2" width="44" height="44"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>' +
+    '<span>Formül ve renk seçerek detayı görüntüleyin</span></div>';
+  var bh = document.getElementById('rm-detay-hdr-ad');
+  if(bh){ bh.textContent='← Renk seçin'; }
+}
+
+/* ── Hammadde tablo HTML (kompakt, scroll içinde) ── */
+function rmTabloHtml(kalemler, toplamKg, isRenk){
+  var toplam = 0;
+  kalemler.forEach(function(k){ toplam += k.miktar_kg; });
+  var barCls = isRenk ? 'rm-ybar-renk' : 'rm-ybar-ana';
+
+  var satirlar = '';
+  if(!kalemler.length){
+    satirlar = '<tr><td colspan="3" style="text-align:center;color:#94a3b8;padding:20px;font-size:11px;font-style:italic;">' +
+      (isRenk ? 'Renk formülü kalemleri bu varyanta bağlanmamış.' : 'Kalem bulunamadı') +
+      '</td></tr>';
+  } else {
+    kalemler.forEach(function(k){
+      var yuzde = toplam > 0 ? (k.miktar_kg / toplam * 100) : 0;
+      var barW  = Math.min(yuzde,100).toFixed(1);
+      satirlar +=
+        '<tr>' +
+        '<td><span class="rm-stok-kod">'+k.stok_kod+'</span><span class="rm-stok-ad">'+k.stok_ad+'</span></td>' +
+        '<td class="r">'+rmKg(k.miktar_kg)+'</td>' +
+        '<td class="r">' +
+          '<span class="rm-ybar-wrap"><span class="rm-ybar '+barCls+'" style="width:'+barW+'%"></span></span>' +
+          yuzde.toFixed(1)+'%' +
+        '</td>' +
+        '</tr>';
+    });
+  }
+
+  return '<table class="rm-t"><thead><tr>' +
+    '<th>Hammadde</th><th class="r">KG</th><th class="r">%</th>' +
+    '</tr></thead><tbody>'+satirlar+'</tbody></table>';
+}
+
+/* ── SAĞ PANEL RENDER ── */
+function rmRenderDetay(){
+  var f = _FORMULLER.find(function(x){ return x.id===_aktifFormulId; });
+  if(!f){ rmDetayBos(); return; }
+  var rv = f.rv_ozet.find(function(r){ return r.rv_id===_aktifRvId; });
+  if(!rv){ rmDetayBos(); return; }
+  var uv = rv.varyantlar.find(function(u){ return u.uv_id===_aktifUvId; });
+  if(!uv){ rmDetayBos(); return; }
+
+  /* Header güncelle */
+  var bh = document.getElementById('rm-detay-hdr-ad');
+  if(bh) bh.textContent = f.ad+' + '+rv.ad;
+
+  var d = uv.recete_durum||'TASLAK';
+  var ADIMLAR = ['TASLAK','DENEME','ONAYLI','URETIME_ACIK','PASIF'];
+  var aktifIdx = ADIMLAR.indexOf(d);
+  var LABELS   = {TASLAK:'Taslak',DENEME:'AR-GE Test',ONAYLI:'Onaylı',URETIME_ACIK:'Üretime Açık',PASIF:'Pasif'};
+
+  /* Kalem ayrımı: gelecek fazda RF tablosu bağlandığında aktif olacak.
+     Şimdilik tüm kalemler ANA formülde. Renk paneli placeholder. */
+  var tumK = uv.kalemler||[];
+  var anaK = tumK;   /* tümü ANA */
+  var rnkK = [];     /* renk: henüz ayrı tablo yok */
+
+  var anaTopKg = 0; anaK.forEach(function(k){ anaTopKg+=k.miktar_kg; });
+  var rnkTopKg = 0; /* tanımsız */
+  var batchKg  = anaTopKg;  /* batch = tüm ana kalemler toplamı */
+  var kgMal    = uv.kg_maliyet||0;
+
+  /* Durum bandı */
+  var durumBand = '';
+  ADIMLAR.forEach(function(adim,idx){
+    var cls = idx<aktifIdx ? 'gecildi' : (idx===aktifIdx ? 'aktif' : '');
+    durumBand +=
+      '<div class="rm-durum-adim '+cls+'">' +
+        '<div class="rm-durum-daire">'+(idx+1)+'</div>' +
+        '<span>'+LABELS[adim]+'</span>' +
+      '</div>';
+  });
+
+  /* Varyant chip'leri — toplam batch kg doğrudan uv.toplam_kg'den */
+  var vChips = '';
+  rv.varyantlar.forEach(function(u){
+    var aktif = u.uv_id===_aktifUvId;
+    /* Gerçek toplam: kalemler varsa hesapla, yoksa backend değerini kullan */
+    var uKalemler = u.kalemler||[];
+    var uTopKg = 0;
+    if(uKalemler.length > 0){
+      uKalemler.forEach(function(k){ uTopKg += k.miktar_kg; });
+    } else {
+      uTopKg = u.toplam_kg||0;
+    }
+    vChips +=
+      '<div class="rm-v-chip'+(aktif?' aktif':'')+'" onclick="rmUvSec('+rv.rv_id+','+u.uv_id+')">' +
+        '<span class="rm-v-chip-boyut">'+u.boyut+'</span>' +
+        '<span class="rm-v-chip-kg">'+rmKg(uTopKg)+' KG</span>' +
+        (u.kg_maliyet>0 ? '<span class="rm-v-chip-maliyet cost-secure">'+Math.round(u.kg_maliyet).toLocaleString('tr-TR')+'₺</span>' : '') +
+      '</div>';
+  });
+
+  var detayUrl = '/nexgen/recete/' + _aktifFormulId;
+
+  var html =
+    /* ① ÜST: Başlık + KPI kartları */
+    '<div class="rm-detay-ust">' +
+      '<div class="rm-detay-baslik-satir">' +
+        '<span class="rm-detay-formul-baslik">'+f.ad+' + '+rv.ad+'</span>' +
+        '<span class="'+rmDurumCss(d)+'">'+rmDurumEtiket(d)+'</span>' +
+      '</div>' +
+      '<div class="rm-detay-kpi-satir">' +
+        '<div class="rm-detay-kpi-kart">' +
+          '<div class="rm-detay-kpi-deger" style="color:#059669">'+rmKg(batchKg)+' KG</div>' +
+          '<div class="rm-detay-kpi-etiket">Batch KG</div>' +
+        '</div>' +
+        '<div class="rm-detay-kpi-kart">' +
+          '<div class="rm-detay-kpi-deger">'+rmKg(anaTopKg)+' KG</div>' +
+          '<div class="rm-detay-kpi-etiket">Ana Formül KG</div>' +
+        '</div>' +
+        '<div class="rm-detay-kpi-kart" title="Gelecek fazda ayrı RF tablosu ile bağlanacak">' +
+          '<div class="rm-detay-kpi-deger" style="color:#94a3b8;font-size:11px;">Tanımsız</div>' +
+          '<div class="rm-detay-kpi-etiket">Renk Formül KG</div>' +
+        '</div>' +
+        '<div class="rm-detay-kpi-kart">' +
+          '<div class="rm-detay-kpi-deger cost-secure" style="color:#d97706">'+(kgMal>0?Math.round(kgMal).toLocaleString('tr-TR')+' ₺':'—')+'</div>' +
+          '<div class="rm-detay-kpi-etiket">₺/KG</div>' +
+        '</div>' +
+        '<div class="rm-detay-kpi-kart">' +
+          '<div class="rm-detay-kpi-deger">'+uv.boyut+'</div>' +
+          '<div class="rm-detay-kpi-etiket">Seçili Boyut</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+
+    /* ② Durum akışı */
+    '<div class="rm-durum-band">'+durumBand+'</div>' +
+
+    /* ③ İKİ TABLO YAN YANA — kendi içinde scroll */
+    '<div class="rm-iki-tablo-wrap">' +
+
+      /* ANA EVA FORMÜLÜ — %60 — tüm batch kalemleri */
+      '<div class="rm-tablo-col">' +
+        '<div class="rm-tablo-col-hdr">' +
+          '<span class="rm-tablo-col-baslik">ANA EVA FORMÜLÜ</span>' +
+          '<span class="rm-tablo-col-kg">'+rmKg(batchKg)+' KG</span>' +
+        '</div>' +
+        '<div class="rm-tablo-scroll">'+rmTabloHtml(anaK, batchKg, false)+'</div>' +
+        '<div class="rm-tablo-foot"><span>TOPLAM BATCH</span><span>'+rmKg(batchKg)+' KG</span></div>' +
+      '</div>' +
+
+      /* RENK FORMÜLÜ — %40 — gelecek faz placeholder */
+      '<div class="rm-tablo-col">' +
+        '<div class="rm-tablo-col-hdr">' +
+          '<span class="rm-tablo-col-baslik renk">RENK FORMÜLÜ</span>' +
+          '<span class="rm-tablo-col-kg renk" style="color:#94a3b8;font-size:10px;">Bağlı değil</span>' +
+        '</div>' +
+        '<div class="rm-tablo-scroll rm-renk-placeholder">' +
+          '<div style="padding:24px 16px;text-align:center;">' +
+            '<div style="width:40px;height:40px;border-radius:50%;background:#f5f3ff;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.5" width="20" height="20"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>' +
+            '</div>' +
+            '<div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:6px;">Renk formülü henüz ayrı tanımlanmadı</div>' +
+            '<div style="font-size:11px;color:#6b7280;line-height:1.5;">Gelecek fazda <strong>RF kodu</strong> ile<br>bağlandığında burada görünecek.</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="rm-tablo-foot"><span>TOPLAM</span><span style="color:#94a3b8">— KG</span></div>' +
+      '</div>' +
+
+    '</div>' +
+
+    /* ④ Alt band: batch özet + varyant seçici */
+    '<div class="rm-alt-band">' +
+      '<div class="rm-batch-satir">' +
+        '<span>Batch: <strong style="color:#059669;font-size:14px">'+rmKg(batchKg)+' KG</strong></span>' +
+        '<span style="margin-left:8px;color:#94a3b8;font-size:10px;">·</span>' +
+        '<span style="color:#6b7280;font-size:11px;">'+anaK.length+' kalem</span>' +
+        '<span style="margin-left:auto;color:#94a3b8;font-size:10px;">cost-secure alanlar yetkiye bağlanacak</span>' +
+      '</div>' +
+      '<div class="rm-varyant-satir">'+vChips+'</div>' +
+    '</div>' +
+
+    /* ⑤ Bilgi notu */
+    '<div style="padding:6px 14px;background:#fefce8;border-top:1px solid #fde68a;display:flex;align-items:center;gap:6px;">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2" width="12" height="12"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>' +
+      '<span style="font-size:10px;color:#92400e;">Renk formülü ayrımı gelecek fazda ayrı renk reçetesi tablosu (RF kodu) ile yapılacaktır.</span>' +
+    '</div>' +
+
+    /* ⑥ Alt butonlar */
+    '<div class="rm-butonlar">' +
+      '<a href="'+detayUrl+'#arge"  class="rm-btn rm-btn-arge">🔬 AR-GE Test Başlat</a>' +
+      '<a href="'+detayUrl+'#durum" class="rm-btn rm-btn-onay">✓ Onaya Gönder</a>' +
+      '<a href="'+detayUrl+'"       class="rm-btn rm-btn-detay">Üretim Formülü →</a>' +
+    '</div>';
+
+  document.getElementById('rm-detay-icerik').innerHTML = html;
+}
+
+/* ── Init ── */
+(function(){
+  rmRenderFormulListe('');
+  if(_FORMULLER.length>0){
+    rmFormulSec(_FORMULLER[0].id);
+    var f0 = _FORMULLER[0];
+    if(f0.rv_ozet && f0.rv_ozet.length>0){
+      var rv0 = f0.rv_ozet[0];
+      if(rv0.varyantlar && rv0.varyantlar.length>0){
+        setTimeout(function(){ rmUvSec(rv0.rv_id, rv0.varyantlar[0].uv_id); }, 0);
+      }
+    }
+  }
+})();
 </script>
 {% endblock %}

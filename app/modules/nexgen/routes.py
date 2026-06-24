@@ -682,7 +682,7 @@ def recete_liste():
             for row in rv_ozet:
                 rv_id = row['rv_id']
                 if rv_id not in rv_gruplar:
-                    rv_gruplar[rv_id] = {'ad': row['rv_ad'], 'renk': row['renk'], 'varyantlar': []}
+                    rv_gruplar[rv_id] = {'rv_id': rv_id, 'ad': row['rv_ad'], 'renk': row['renk'], 'varyantlar': []}
                 rv_gruplar[rv_id]['varyantlar'].append({
                     'uv_id':        row['uv_id'],
                     'boyut':        row['boyut'],
@@ -692,16 +692,20 @@ def recete_liste():
                 })
             f_dict['rv_ozet'] = list(rv_gruplar.values())
 
-            # Her varyant için KG maliyet ekle
+            # Her varyant için KG maliyet + kalem listesi ekle
             for rv_g in f_dict['rv_ozet']:
                 for uv in rv_g['varyantlar']:
                     if uv['toplam_kg'] > 0:
                         uv_kalemler = con.execute("""
-                            SELECT rk.miktar_kg, rk.stok_kart_id
+                            SELECT rk.miktar_kg, rk.stok_kart_id, rk.sira,
+                                   sk.kod AS stok_kod, sk.ad AS stok_ad, sk.kategori
                             FROM nexgen_recete_kalem rk
+                            JOIN nexgen_stok_kart sk ON sk.id = rk.stok_kart_id
                             WHERE rk.uretim_varyant_id = ? AND rk.aktif = 1
+                            ORDER BY rk.sira, rk.id
                         """, (uv['uv_id'],)).fetchall()
                         mal = 0.0
+                        kalemler_liste = []
                         for k in uv_kalemler:
                             fr = con.execute("""
                                 SELECT fiyat, para_birimi, kur, fiyat_try
@@ -719,9 +723,17 @@ def recete_liste():
                                 else:
                                     bp = 0.0
                                 mal += float(k['miktar_kg']) * bp
+                            kalemler_liste.append({
+                                'stok_kod': k['stok_kod'],
+                                'stok_ad':  k['stok_ad'],
+                                'kategori': k['kategori'] or '',
+                                'miktar_kg': float(k['miktar_kg']),
+                            })
                         uv['kg_maliyet'] = round(mal / uv['toplam_kg'], 2) if uv['toplam_kg'] > 0 else 0.0
+                        uv['kalemler']   = kalemler_liste
                     else:
                         uv['kg_maliyet'] = 0.0
+                        uv['kalemler']   = []
 
     finally:
         con.close()
