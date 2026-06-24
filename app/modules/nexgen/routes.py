@@ -1320,6 +1320,45 @@ def api_arge_test_olustur():
     })
 
 
+@nexgen_bp.route('/arge')
+@yetki_gerekli('nexgen.recete.view', 'can_view')
+def arge_liste():
+    """AR-GE Merkezi — tüm test kayıtları listesi."""
+    con = _db()
+    try:
+        rows = con.execute("""
+            SELECT t.id, t.test_no, t.lot_no, t.test_tipi, t.makina,
+                   t.durum, t.shore_hedef, t.shore_degeri,
+                   t.yeni_renk_adi, t.talep_referansi,
+                   t.olusturma_tarihi, t.onay_tarihi,
+                   uv.boyut,
+                   rv.ad AS renk_ad,
+                   f.id AS formul_id, f.kod AS formul_kod, f.ad AS formul_ad,
+                   c.unvan AS cari_unvan, c.cari_kod,
+                   ku.KullaniciAdi AS olusturan_ad
+            FROM nexgen_arge_test t
+            JOIN nexgen_uretim_varyant uv ON uv.id = t.kaynak_uretim_varyant_id
+            JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+            JOIN nexgen_formul f          ON f.id  = rv.formul_id
+            LEFT JOIN nexgen_cari c       ON c.id  = t.cari_id
+            LEFT JOIN sistem_kullanici ku ON ku.Id = t.olusturan_id
+            WHERE t.aktif = 1
+            ORDER BY t.id DESC
+        """).fetchall()
+        testler = [dict(r) for r in rows]
+    finally:
+        con.close()
+
+    can_create = yetki_var('nexgen.recete.create', 'can_create')
+
+    return render_template(
+        'nexgen/arge_liste.html',
+        active='nexgen',
+        testler=testler,
+        can_create=can_create,
+    )
+
+
 @nexgen_bp.route('/arge/test/<int:test_id>')
 @yetki_gerekli('nexgen.recete.view', 'can_view')
 def arge_test_detay(test_id):
