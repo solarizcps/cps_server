@@ -101,9 +101,9 @@ STOK_KARTLARI = [
     ('NEX-08-12', 'Kahverengi 610 Pigment','08','BOYA',    'Pigment',    None),
     ('NEX-08-13', 'Kahverengi 600 Pigment','08','BOYA',    'Pigment',    'Tedarikçi belirlenecek'),
     ('NEX-08-14', 'Kahverengi 660 Pigment','08','BOYA',    'Pigment',    None),
-    # ── Karbon Siyah (09) ──────────────────────────────────────
-    ('NEX-09-01', 'N550',                '09', 'KATKI',    'Karbon Siyah',None),
-    ('NEX-09-02', 'N330',                '09', 'KATKI',    'Karbon Siyah',None),
+    # ── Karbon Siyah pigment (09) — kategori BOYA ────────────────
+    ('NEX-09-01', 'N550',                '09', 'BOYA',     'Karbon Siyah',None),
+    ('NEX-09-02', 'N330',                '09', 'BOYA',     'Karbon Siyah',None),
     # ── Recycle (10) ───────────────────────────────────────────
     ('NEX-10-01', 'Recycle Siyah',       '10', 'RECYCLE',  'Recycle',    None),
     ('NEX-10-02', 'Recycle Beyaz',       '10', 'RECYCLE',  'Recycle',    None),
