@@ -73,7 +73,7 @@
           <div class="tu-is-formul">{{ is.formul_ad }}</div>
           <div class="tu-is-varyant">
             {{ is.renk_ad }}
-            <span class="tu-boyut-tag">{{ 'BÜYÜK BOY' if is.boyut == 'LARGE' else 'KÜÇÜK BOY' if is.boyut == 'SMALL' else is.boyut }}</span>
+            <span class="tu-boyut-tag">{{ is.boyut }}</span>
           </div>
           {% if is.notlar %}<div class="tu-is-not">{{ is.notlar }}</div>{% endif %}
         </div>
@@ -104,7 +104,7 @@
           <div class="tu-is-formul">{{ is.formul_ad }}</div>
           <div class="tu-is-varyant">
             {{ is.renk_ad }}
-            <span class="tu-boyut-tag">{{ 'BÜYÜK BOY' if is.boyut == 'LARGE' else 'KÜÇÜK BOY' if is.boyut == 'SMALL' else is.boyut }}</span>
+            <span class="tu-boyut-tag">{{ is.boyut }}</span>
           </div>
           {% if is.notlar %}
           <div class="tu-is-not">{{ is.notlar }}</div>
@@ -120,49 +120,6 @@
       </div>
       {% endif %}
       {% endfor %}
-      <div class="tu-ayrac">veya yeni iş başlat</div>
-      {% endif %}
-
-      {# Yeni iş: Reçete seçimi #}
-      <div class="tu-bolum-etiket">REÇETE SEÇ</div>
-      {% if not varyantlar %}
-      <div class="tu-uyari-kart">
-        <div class="tu-uyari-ikon">📋</div>
-        <div>
-          <strong>Üretime açık formül yok.</strong><br>
-          Lütfen planlama ekibiyle görüşün.
-        </div>
-      </div>
-      {% else %}
-        {% set gorulen_formuller = [] %}
-        {% for uv in varyantlar %}
-          {% if uv.formul_ad not in gorulen_formuller %}
-            {% if gorulen_formuller.append(uv.formul_ad) %}{% endif %}
-            <div class="tu-formul-grup">
-              <div class="tu-formul-baslik">{{ uv.formul_ad }}</div>
-              <div class="tu-varyant-satir">
-                {% for v in varyantlar %}
-                {% if v.formul_ad == uv.formul_ad %}
-                <div class="tu-varyant-kart"
-                     data-uv-id="{{ v.id }}"
-                     data-formul="{{ v.formul_ad }}"
-                     data-renk="{{ v.renk_ad }}"
-                     data-boyut="{{ v.boyut }}"
-                     data-batch-kg="{{ '%.3f' | format(v.toplam_kg) }}"
-                     onclick="tuVaryantSec(this)">
-                  <div class="tu-vk-renk">{{ v.renk_ad }}</div>
-                  <div class="tu-vk-boyut">{{ 'BÜYÜK BOY' if v.boyut == 'LARGE' else 'KÜÇÜK BOY' if v.boyut == 'SMALL' else v.boyut }}</div>
-                  {% if v.toplam_kg > 0 %}
-                  <div class="tu-vk-batch">~{{ '%.0f' | format(v.toplam_kg) }} KG/kazan</div>
-                  {% endif %}
-                  <div class="tu-vk-secildi">✓</div>
-                </div>
-                {% endif %}
-                {% endfor %}
-              </div>
-            </div>
-          {% endif %}
-        {% endfor %}
       {% endif %}
     </div>{# /panel-1 #}
 
@@ -657,9 +614,8 @@ function tuVaryantSec(el) {
     batch_kodu: null,
   };
   tuAdim(2);
-  var boyutMetin = _tuSecili.boyut === 'LARGE' ? 'BÜYÜK BOY' : _tuSecili.boyut === 'SMALL' ? 'KÜÇÜK BOY' : _tuSecili.boyut;
   document.getElementById('tu-secili-band').textContent =
-    _tuSecili.formul + '  ·  ' + _tuSecili.renk + '  ·  ' + boyutMetin;
+    _tuSecili.formul + '  ·  ' + _tuSecili.renk + '  ·  ' + _tuSecili.boyut;
   document.getElementById('tu-btn-stok-kontrol').disabled = true;
   document.getElementById('tu-kazan-oniz').style.display = 'none';
 }
@@ -730,14 +686,12 @@ function tuStokKontrolDirekt(kg) {
 
     var batchKg = _tuSecili.batch_kg;
     var kazan   = batchKg > 0 ? Math.ceil(kg / batchKg) : 0;
-    var boyutMetin = _tuSecili.boyut === 'LARGE' ? 'BÜYÜK BOY' : _tuSecili.boyut === 'SMALL' ? 'KÜÇÜK BOY' : _tuSecili.boyut;
-
     // Özet band
     var band = document.getElementById('tu-stok-ozet-band');
     band.style.display = 'block';
     var notStr = [hat, vardiya].filter(Boolean).join(' · ');
     band.innerHTML =
-      '<div style="font-size:13px;color:#94a3b8">' + _tuSecili.formul + ' — ' + _tuSecili.renk + ' (' + boyutMetin + ')</div>' +
+      '<div style="font-size:13px;color:#94a3b8">' + _tuSecili.formul + ' — ' + _tuSecili.renk + ' (' + _tuSecili.boyut + ')</div>' +
       '<div style="font-size:22px;font-weight:900">' + kg.toFixed(0) + ' KG' +
         (kazan > 0 ? ' &nbsp;<span style="font-size:15px;color:#f6c343">' + kazan + ' kazan</span>' : '') +
       '</div>' +

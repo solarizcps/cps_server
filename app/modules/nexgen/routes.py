@@ -138,6 +138,15 @@ def _kullanici_ad():
     return u.get('KullaniciAdi', 'sistem') if u else 'sistem'
 
 
+def _taban_kalemler(kalemler):
+    """Ana formül görünümü: BOYA satırları hariç (RF/renk panelinde yönetilir)."""
+    return [k for k in kalemler if (k.get('kategori') or '').upper() != 'BOYA']
+
+
+def _boya_kalemler_filtre(kalemler):
+    return [k for k in kalemler if (k.get('kategori') or '').upper() == 'BOYA']
+
+
 # ─────────────────────────────────────────────────────────────
 # Stok miktarı hesapla (hareket toplamı)
 # ─────────────────────────────────────────────────────────────
@@ -893,6 +902,7 @@ def recete_detay(formul_id):
                     ORDER BY rk.sira, rk.id
                 """, (uv['id'],)).fetchall()
                 kalemler = []
+                kalemler_boya = []
                 toplam_kg    = 0.0
                 toplam_maliyet = 0.0
                 for k in kalemler_raw:
@@ -902,9 +912,12 @@ def recete_detay(formul_id):
                     satir_maliyet = round(miktar * birim_fiyat, 4)
                     k_dict['birim_fiyat_try'] = birim_fiyat
                     k_dict['satir_maliyet']   = satir_maliyet
-                    toplam_kg      += miktar
-                    toplam_maliyet += satir_maliyet
-                    kalemler.append(k_dict)
+                    if (k_dict.get('kategori') or '').upper() == 'BOYA':
+                        kalemler_boya.append(k_dict)
+                    else:
+                        toplam_kg      += miktar
+                        toplam_maliyet += satir_maliyet
+                        kalemler.append(k_dict)
 
                 toplam_kg      = round(toplam_kg, 3)
                 toplam_maliyet = round(toplam_maliyet, 4)
@@ -913,6 +926,7 @@ def recete_detay(formul_id):
                 uretim_listesi.append({
                     **dict(uv),
                     'kalemler':       kalemler,
+                    'boya_kalem_say': len(kalemler_boya),
                     'toplam_kg':      toplam_kg,
                     'toplam_maliyet': toplam_maliyet,
                     'kg_maliyet':     kg_maliyet,
@@ -1620,6 +1634,7 @@ def arge_test_detay(test_id):
         """, (test_id,)).fetchone()
         if not test:
             abort(404)
+        test_row = dict(test)
 
         kalemler = con.execute("""
             SELECT tk.id, tk.stok_kart_id, tk.sira, tk.orjinal_miktar_kg, tk.test_miktar_kg, tk.aciklama,
@@ -1630,9 +1645,14 @@ def arge_test_detay(test_id):
             ORDER BY tk.sira
         """, (test_id,)).fetchall()
         kalem_list = [dict(k) for k in kalemler]
-        boya_kalemler = [k for k in kalem_list if k.get('kategori') == 'BOYA']
+        boya_kalemler = _boya_kalemler_filtre(kalem_list)
+        if test_row.get('test_tipi') == 'RENK_TEST':
+            taban_kalemler = _taban_kalemler(kalem_list)
+        else:
+            taban_kalemler = kalem_list
+        taban_orj_top = round(sum(k['orjinal_miktar_kg'] for k in taban_kalemler), 3)
+        taban_test_top = round(sum(k['test_miktar_kg'] for k in taban_kalemler), 4)
         boya_stok_secenekleri = []
-        test_row = dict(test)
         if (test_row.get('durum') == 'TASLAK'
                 and test_row.get('test_tipi') == 'RENK_TEST'):
             boya_stok_secenekleri = [
@@ -1671,6 +1691,9 @@ def arge_test_detay(test_id):
         active='nexgen',
         test=test_d,
         kalemler=kalem_list,
+        taban_kalemler=taban_kalemler,
+        taban_orj_top=taban_orj_top,
+        taban_test_top=taban_test_top,
         boya_kalemler=boya_kalemler,
         boya_stok_secenekleri=boya_stok_secenekleri,
         can_manage=can_manage,
@@ -1992,7 +2015,9 @@ def api_arge_rf_olustur():
     nexgen_recete_kalem / uretim_varyant DOKUNULMAZ.
 
     POST JSON:
-        test_id : int
+        test_id   : int
+        cari_id   : int (opsiyonel; yoksa test.cari_id)
+        siparis_id: int (opsiyonel; nexgen_uretim_plan.id)
     """
     data = request.get_json(silent=True) or {}
     test_id = data.get('test_id')
@@ -2036,6 +2061,31 @@ def api_arge_rf_olustur():
                 "hata": f"Bu test icin RF zaten kayitli ({mevcut_rf['rf_kod']})."
             }), 409
 
+        cari_id = test['cari_id']
+        if data.get('cari_id') is not None and data.get('cari_id') != '':
+            try:
+                cari_id = int(data['cari_id'])
+            except (TypeError, ValueError):
+                return jsonify({"ok": False, "hata": "cari_id gecersiz."}), 400
+            if not con.execute(
+                "SELECT id FROM nexgen_cari WHERE id=? AND aktif=1", (cari_id,)
+            ).fetchone():
+                return jsonify({"ok": False, "hata": f"Cari bulunamadi (id={cari_id})."}), 400
+
+        siparis_id = None
+        if data.get('siparis_id') is not None and data.get('siparis_id') != '':
+            try:
+                siparis_id = int(data['siparis_id'])
+            except (TypeError, ValueError):
+                return jsonify({"ok": False, "hata": "siparis_id gecersiz."}), 400
+            if not con.execute(
+                "SELECT id FROM nexgen_uretim_plan WHERE id=?", (siparis_id,)
+            ).fetchone():
+                return jsonify({
+                    "ok": False,
+                    "hata": f"Uretim plani bulunamadi (siparis_id={siparis_id})."
+                }), 400
+
         test_batch_kg   = float(test['test_batch_kg'])
         kaynak_batch_kg = float(test['kaynak_batch_kg'])
         if test_batch_kg <= 0 or kaynak_batch_kg <= 0:
@@ -2070,10 +2120,11 @@ def api_arge_rf_olustur():
         con.execute("""
             INSERT INTO nexgen_rf_renk
                 (rf_kod, ad, durum, kaynak_arge_test_id, ilk_talep_cari_id,
-                 aciklama, olusturan_id, onaylayan_id, onay_tarihi, aktif)
-            VALUES (?, ?, 'ONAYLI', ?, ?, ?, ?, ?, ?, 1)
-        """, (rf_kod, rf_ad, test_id, test['cari_id'], aciklama,
-              test['olusturan_id'], test['onaylayan_id'], test['onay_tarihi']))
+                 cari_id, siparis_id, aciklama, olusturan_id, onaylayan_id,
+                 onay_tarihi, aktif)
+            VALUES (?, ?, 'ONAYLI', ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        """, (rf_kod, rf_ad, test_id, test['cari_id'], cari_id, siparis_id,
+              aciklama, test['olusturan_id'], test['onaylayan_id'], test['onay_tarihi']))
         rf_renk_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
 
         for k in boya_kalemler:
@@ -2114,8 +2165,541 @@ def api_arge_rf_olustur():
         "rf_ad":            rf_ad,
         "formul_id":        test['formul_id'],
         "formul_ad":        test['formul_ad'],
+        "cari_id":          cari_id,
+        "siparis_id":       siparis_id,
         "boya_kalem_sayisi": len(boya_kalemler),
     })
+
+
+@nexgen_bp.route('/api/rf/kullanim-log', methods=['POST'])
+@yetki_gerekli('nexgen.recete.manage', 'can_manage')
+def api_rf_kullanim_log():
+    """RF renk kullanim kaydi olusturur (planlama / siparis izi).
+
+    POST JSON:
+        rf_renk_id : int (zorunlu)
+        formul_id  : int (opsiyonel)
+        cari_id    : int (opsiyonel)
+        siparis_id : int (opsiyonel; nexgen_uretim_plan.id)
+        aciklama   : str (opsiyonel)
+    """
+    data = request.get_json(silent=True) or {}
+    rf_renk_id = data.get('rf_renk_id')
+    if not rf_renk_id:
+        return jsonify({"ok": False, "hata": "rf_renk_id zorunludur."}), 400
+
+    try:
+        rf_renk_id = int(rf_renk_id)
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "hata": "rf_renk_id gecersiz."}), 400
+
+    formul_id = data.get('formul_id')
+    cari_id = data.get('cari_id')
+    siparis_id = data.get('siparis_id')
+    aciklama = (data.get('aciklama') or '').strip() or None
+
+    con = _db()
+    try:
+        rf = con.execute(
+            "SELECT id, rf_kod, durum FROM nexgen_rf_renk WHERE id=? AND aktif=1",
+            (rf_renk_id,)
+        ).fetchone()
+        if not rf:
+            return jsonify({"ok": False, "hata": "RF renk kaydi bulunamadi."}), 404
+        if rf['durum'] not in ('ONAYLI',):
+            return jsonify({
+                "ok": False,
+                "hata": f"RF durumu kullanim icin uygun degil: {rf['durum']}"
+            }), 400
+
+        if formul_id is not None and formul_id != '':
+            try:
+                formul_id = int(formul_id)
+            except (TypeError, ValueError):
+                return jsonify({"ok": False, "hata": "formul_id gecersiz."}), 400
+            if not con.execute(
+                "SELECT id FROM nexgen_formul WHERE id=? AND aktif=1", (formul_id,)
+            ).fetchone():
+                return jsonify({"ok": False, "hata": f"Formul bulunamadi (id={formul_id})."}), 400
+        else:
+            formul_id = None
+
+        if cari_id is not None and cari_id != '':
+            try:
+                cari_id = int(cari_id)
+            except (TypeError, ValueError):
+                return jsonify({"ok": False, "hata": "cari_id gecersiz."}), 400
+            if not con.execute(
+                "SELECT id FROM nexgen_cari WHERE id=? AND aktif=1", (cari_id,)
+            ).fetchone():
+                return jsonify({"ok": False, "hata": f"Cari bulunamadi (id={cari_id})."}), 400
+        else:
+            cari_id = None
+
+        if siparis_id is not None and siparis_id != '':
+            try:
+                siparis_id = int(siparis_id)
+            except (TypeError, ValueError):
+                return jsonify({"ok": False, "hata": "siparis_id gecersiz."}), 400
+            if not con.execute(
+                "SELECT id FROM nexgen_uretim_plan WHERE id=?", (siparis_id,)
+            ).fetchone():
+                return jsonify({
+                    "ok": False,
+                    "hata": f"Uretim plani bulunamadi (siparis_id={siparis_id})."
+                }), 400
+        else:
+            siparis_id = None
+
+        kullanici_id = _kullanici_id()
+        cols = _rf_kullanim_kolonlari(con)
+        miktar_kg = 0.0
+        if 'miktar_kg' in cols:
+            try:
+                miktar_kg = round(float(data.get('miktar_kg') or 0), 3)
+            except (TypeError, ValueError):
+                miktar_kg = 0.0
+
+        if 'durum' in cols:
+            con.execute("""
+                INSERT INTO nexgen_rf_kullanim
+                    (rf_renk_id, formul_id, cari_id, siparis_id, aciklama,
+                     olusturan_id, aktif, durum, miktar_kg)
+                VALUES (?, ?, ?, ?, ?, ?, 1, 'MANUEL', ?)
+            """, (rf_renk_id, formul_id, cari_id, siparis_id, aciklama,
+                  kullanici_id, miktar_kg))
+        else:
+            con.execute("""
+                INSERT INTO nexgen_rf_kullanim
+                    (rf_renk_id, formul_id, cari_id, siparis_id, aciklama, olusturan_id, aktif)
+                VALUES (?, ?, ?, ?, ?, ?, 1)
+            """, (rf_renk_id, formul_id, cari_id, siparis_id, aciklama, kullanici_id))
+        kullanim_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+        con.commit()
+    except Exception as e:
+        con.rollback()
+        return jsonify({"ok": False, "hata": str(e)}), 500
+    finally:
+        con.close()
+
+    return jsonify({
+        "ok":          True,
+        "kullanim_id": kullanim_id,
+        "rf_renk_id":  rf_renk_id,
+        "rf_kod":      rf['rf_kod'],
+        "formul_id":   formul_id,
+        "cari_id":     cari_id,
+        "siparis_id":  siparis_id,
+    })
+
+
+def _analitik_view_var(con):
+    return con.execute(
+        "SELECT name FROM sqlite_master WHERE type='view' AND name='v_nexgen_rf_kullanim_ozet'"
+    ).fetchone() is not None
+
+
+def _siparis_kontrol_view_var(con):
+    return con.execute(
+        "SELECT name FROM sqlite_master WHERE type='view' "
+        "AND name='v_nexgen_siparis_uretim_kontrol'"
+    ).fetchone() is not None
+
+
+def _rf_kullanim_tablosu_var(con):
+    return con.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='nexgen_rf_kullanim'"
+    ).fetchone() is not None
+
+
+def _rf_kullanim_uretilen_kg(con, siparis_id=None, batch_kodu=None):
+    """Tek kaynak: nexgen_rf_kullanim SUM(miktar_kg)."""
+    if not _rf_kullanim_tablosu_var(con):
+        return 0.0
+    if batch_kodu:
+        row = con.execute("""
+            SELECT ROUND(COALESCE(SUM(miktar_kg), 0), 3) AS kg
+            FROM nexgen_rf_kullanim
+            WHERE aktif = 1 AND tablet_session_id = ?
+        """, (batch_kodu,)).fetchone()
+        kg = float(row['kg'] or 0) if row else 0.0
+        if kg > 0:
+            return kg
+    if siparis_id:
+        row = con.execute("""
+            SELECT ROUND(COALESCE(SUM(miktar_kg), 0), 3) AS kg
+            FROM nexgen_rf_kullanim
+            WHERE aktif = 1 AND siparis_id = ?
+        """, (siparis_id,)).fetchone()
+        return float(row['kg'] or 0) if row else 0.0
+    return 0.0
+
+
+def _uretim_kontrol_durumu(siparis_toplam_kg, uretilen_kg):
+    """Validation: asim / devam / tam."""
+    st = float(siparis_toplam_kg or 0)
+    ur = float(uretilen_kg or 0)
+    if st <= 0:
+        return {'kontrol_durum': 'BELIRSIZ', 'uyari': None}
+    if ur > st + 0.001:
+        return {
+            'kontrol_durum': 'ASIM',
+            'uyari': f'Uretilen ({ur:g} KG) siparis toplamini ({st:g} KG) asiyor.',
+        }
+    if ur < st - 0.001:
+        return {
+            'kontrol_durum': 'DEVAM',
+            'uyari': None,
+            'mesaj': 'Devam eden uretim',
+        }
+    return {'kontrol_durum': 'TAM', 'uyari': None}
+
+
+def _siparis_kontrol_get(con, siparis_id):
+    """Siparis KG kontrol ozeti (VIEW veya fallback)."""
+    if _siparis_kontrol_view_var(con):
+        row = con.execute(
+            "SELECT * FROM v_nexgen_siparis_uretim_kontrol WHERE siparis_id=?",
+            (siparis_id,)
+        ).fetchone()
+        if row:
+            d = dict(row)
+            d.update(_uretim_kontrol_durumu(d['siparis_toplam_kg'], d['uretilen_kg']))
+            return d
+    plan = con.execute(
+        "SELECT id, planlanan_kg FROM nexgen_uretim_plan WHERE id=?",
+        (siparis_id,)
+    ).fetchone()
+    if not plan:
+        return None
+    dagitim = 0.0
+    if _parca_tablosu_var(con):
+        r = con.execute("""
+            SELECT ROUND(COALESCE(SUM(p.hedef_kg), 0), 3) AS kg
+            FROM nexgen_uretim_parca p
+            JOIN nexgen_uretim_batch b ON b.batch_kodu = p.batch_kodu
+            WHERE b.plan_id = ?
+        """, (siparis_id,)).fetchone()
+        dagitim = float(r['kg'] or 0) if r else 0.0
+    uretilen = _rf_kullanim_uretilen_kg(con, siparis_id=siparis_id)
+    siparis_toplam = float(plan['planlanan_kg'])
+    d = {
+        'siparis_id': siparis_id,
+        'siparis_toplam_kg': round(siparis_toplam, 3),
+        'planlanan_kg': round(dagitim, 3),
+        'uretilen_kg': round(uretilen, 3),
+        'fark_kg': round(siparis_toplam - uretilen, 3),
+    }
+    d.update(_uretim_kontrol_durumu(siparis_toplam, uretilen))
+    return d
+
+
+def _batch_uretim_kontrol(con, batch_kodu):
+    """Batch/tablet ekrani icin siparis master + rf uretilen."""
+    batch = con.execute("""
+        SELECT nb.batch_kodu, nb.planlanan_kg, nb.plan_id
+        FROM nexgen_uretim_batch nb
+        WHERE nb.batch_kodu = ?
+    """, (batch_kodu,)).fetchone()
+    if not batch:
+        return None
+    plan_id = batch['plan_id']
+    siparis_toplam = float(batch['planlanan_kg'])
+    if plan_id:
+        sk = _siparis_kontrol_get(con, plan_id)
+        if sk:
+            return {
+                **sk,
+                'batch_kodu': batch_kodu,
+                'batch_planlanan_kg': round(float(batch['planlanan_kg']), 3),
+                'kalan_kg': max(0.0, float(sk['fark_kg'])),
+            }
+    uretilen = _rf_kullanim_uretilen_kg(con, batch_kodu=batch_kodu)
+    d = {
+        'siparis_id': plan_id,
+        'batch_kodu': batch_kodu,
+        'siparis_toplam_kg': round(siparis_toplam, 3),
+        'batch_planlanan_kg': round(float(batch['planlanan_kg']), 3),
+        'planlanan_kg': 0.0,
+        'uretilen_kg': round(uretilen, 3),
+        'fark_kg': round(siparis_toplam - uretilen, 3),
+        'kalan_kg': max(0.0, siparis_toplam - uretilen),
+    }
+    d.update(_uretim_kontrol_durumu(siparis_toplam, uretilen))
+    return d
+
+
+def _batch_kg_rf_enrich(con, b_dict):
+    """KG gosterim alanlarini rf_kullanim tek kaynagindan doldurur."""
+    k = _batch_uretim_kontrol(con, b_dict.get('batch_kodu'))
+    if not k:
+        return b_dict
+    b_dict['siparis_toplam_kg'] = k['siparis_toplam_kg']
+    b_dict['uretilen_kg'] = k['uretilen_kg']
+    b_dict['kalan_kg'] = k['kalan_kg']
+    b_dict['kontrol_durum'] = k.get('kontrol_durum')
+    b_dict['kontrol_uyari'] = k.get('uyari')
+    b_dict['kontrol_mesaj'] = k.get('mesaj')
+    return b_dict
+
+
+def _durum_dagilimi_satir(row):
+    """VIEW veya aggregation satirindan durum dagilimi dict."""
+    if not row:
+        return {'MANUEL': 0, 'URETIM': 0, 'TAMAMLANDI': 0}
+    keys = row.keys() if hasattr(row, 'keys') else []
+    if 'adet_manuel' in keys:
+        return {
+            'MANUEL': int(row['adet_manuel'] or 0),
+            'URETIM': int(row['adet_uretim'] or 0),
+            'TAMAMLANDI': int(row['adet_tamamlandi'] or 0),
+        }
+    return {'MANUEL': 0, 'URETIM': 0, 'TAMAMLANDI': 0}
+
+
+@nexgen_bp.route('/api/nexgen/siparis-kontrol/<int:siparis_id>', methods=['GET'])
+@yetki_gerekli('nexgen.recete.view', 'can_view')
+def api_nexgen_siparis_kontrol(siparis_id):
+    """Siparis KG kontrol ozeti (VIEW v_nexgen_siparis_uretim_kontrol)."""
+    con = _db()
+    try:
+        row = _siparis_kontrol_get(con, siparis_id)
+        if not row:
+            return jsonify({'ok': False, 'hata': 'Siparis bulunamadi.'}), 404
+        return jsonify({'ok': True, **row})
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/nexgen/uretim-ozet', methods=['GET'])
+@yetki_gerekli('nexgen.recete.view', 'can_view')
+def api_nexgen_uretim_ozet():
+    """RF kullanim + tablet uretim ozet analitigi (JSON)."""
+    con = _db()
+    try:
+        if not con.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='nexgen_rf_kullanim'"
+        ).fetchone():
+            return jsonify({
+                'ok': True,
+                'toplam_kg': 0.0,
+                'aktif_uretim': 0,
+                'tamamlanan_batch': 0,
+                'en_cok_kullanilan_rf': None,
+                'view_hazir': False,
+            })
+
+        ozet = con.execute("""
+            SELECT ROUND(COALESCE(SUM(miktar_kg), 0), 3) AS toplam_kg,
+                   SUM(CASE WHEN durum = 'URETIM' THEN 1 ELSE 0 END) AS aktif_uretim
+            FROM nexgen_rf_kullanim WHERE aktif = 1
+        """).fetchone()
+
+        tamamlanan = con.execute("""
+            SELECT COUNT(DISTINCT tablet_session_id) AS c
+            FROM nexgen_rf_kullanim
+            WHERE aktif = 1 AND durum = 'TAMAMLANDI'
+              AND tablet_session_id IS NOT NULL AND tablet_session_id != ''
+        """).fetchone()
+        tamamlanan_batch = int(tamamlanan['c'] or 0) if tamamlanan else 0
+
+        if tamamlanan_batch == 0:
+            batch_bit = con.execute(
+                "SELECT COUNT(*) AS c FROM nexgen_uretim_batch WHERE durum = 'BITTI'"
+            ).fetchone()
+            tamamlanan_batch = int(batch_bit['c'] or 0) if batch_bit else 0
+
+        en_cok = con.execute("""
+            SELECT k.rf_renk_id,
+                   COUNT(*) AS kullanim_sayisi,
+                   ROUND(SUM(COALESCE(k.miktar_kg, 0)), 3) AS toplam_kg,
+                   rf.rf_kod, rf.ad AS rf_ad
+            FROM nexgen_rf_kullanim k
+            LEFT JOIN nexgen_rf_renk rf ON rf.id = k.rf_renk_id
+            WHERE k.aktif = 1
+            GROUP BY k.rf_renk_id
+            ORDER BY kullanim_sayisi DESC, toplam_kg DESC
+            LIMIT 1
+        """).fetchone()
+
+        en_cok_rf = None
+        if en_cok and en_cok['rf_renk_id']:
+            en_cok_rf = {
+                'rf_renk_id': en_cok['rf_renk_id'],
+                'rf_kod': en_cok['rf_kod'],
+                'rf_ad': en_cok['rf_ad'],
+                'kullanim_sayisi': int(en_cok['kullanim_sayisi'] or 0),
+                'toplam_kg': float(en_cok['toplam_kg'] or 0),
+            }
+
+        return jsonify({
+            'ok': True,
+            'toplam_kg': float(ozet['toplam_kg'] or 0) if ozet else 0.0,
+            'aktif_uretim': int(ozet['aktif_uretim'] or 0) if ozet else 0,
+            'tamamlanan_batch': tamamlanan_batch,
+            'en_cok_kullanilan_rf': en_cok_rf,
+            'view_hazir': _analitik_view_var(con),
+        })
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/nexgen/cari-rf-analiz/<int:cari_id>', methods=['GET'])
+@yetki_gerekli('nexgen.recete.view', 'can_view')
+def api_nexgen_cari_rf_analiz(cari_id):
+    """Cari bazli RF kullanim analizi."""
+    con = _db()
+    try:
+        cari = con.execute(
+            "SELECT id, cari_kod, unvan FROM nexgen_cari WHERE id=? AND aktif=1",
+            (cari_id,)
+        ).fetchone()
+        if not cari:
+            return jsonify({'ok': False, 'hata': 'Cari bulunamadi.'}), 404
+
+        if _analitik_view_var(con):
+            rows = con.execute("""
+                SELECT v.*, rf.rf_kod, rf.ad AS rf_ad
+                FROM v_nexgen_rf_kullanim_ozet v
+                LEFT JOIN nexgen_rf_renk rf ON rf.id = v.rf_renk_id
+                WHERE v.cari_id = ?
+                ORDER BY v.toplam_uretim_kg DESC
+            """, (cari_id,)).fetchall()
+        else:
+            rows = con.execute("""
+                SELECT k.rf_renk_id, k.cari_id, k.siparis_id, k.formul_id,
+                       ROUND(SUM(COALESCE(k.miktar_kg, 0)), 3) AS toplam_uretim_kg,
+                       COUNT(*) AS kayit_sayisi,
+                       SUM(CASE WHEN COALESCE(k.durum,'MANUEL')='MANUEL' THEN 1 ELSE 0 END) AS adet_manuel,
+                       SUM(CASE WHEN k.durum='URETIM' THEN 1 ELSE 0 END) AS adet_uretim,
+                       SUM(CASE WHEN k.durum='TAMAMLANDI' THEN 1 ELSE 0 END) AS adet_tamamlandi,
+                       rf.rf_kod, rf.ad AS rf_ad
+                FROM nexgen_rf_kullanim k
+                LEFT JOIN nexgen_rf_renk rf ON rf.id = k.rf_renk_id
+                WHERE k.aktif = 1 AND k.cari_id = ?
+                GROUP BY k.rf_renk_id, k.cari_id, k.siparis_id, k.formul_id
+                ORDER BY toplam_uretim_kg DESC
+            """, (cari_id,)).fetchall()
+
+        rf_map = {}
+        siparis_set = set()
+        toplam_kg = 0.0
+        for r in rows:
+            rd = dict(r)
+            siparis_set.add(rd.get('siparis_id'))
+            kg = float(rd.get('toplam_uretim_kg') or 0)
+            toplam_kg += kg
+            rid = rd['rf_renk_id']
+            if rid not in rf_map:
+                rf_map[rid] = {
+                    'rf_renk_id': rid,
+                    'rf_kod': rd.get('rf_kod'),
+                    'rf_ad': rd.get('rf_ad'),
+                    'toplam_kg': 0.0,
+                    'kayit_sayisi': 0,
+                    'durum_dagilimi': {'MANUEL': 0, 'URETIM': 0, 'TAMAMLANDI': 0},
+                }
+            rf_map[rid]['toplam_kg'] = round(rf_map[rid]['toplam_kg'] + kg, 3)
+            rf_map[rid]['kayit_sayisi'] += int(rd.get('kayit_sayisi') or 1)
+            dd = _durum_dagilimi_satir(rd)
+            for k, v in dd.items():
+                rf_map[rid]['durum_dagilimi'][k] += v
+
+        rf_listesi = sorted(rf_map.values(), key=lambda x: x['toplam_kg'], reverse=True)
+
+        return jsonify({
+            'ok': True,
+            'cari_id': cari_id,
+            'cari_kod': cari['cari_kod'],
+            'cari_unvan': cari['unvan'],
+            'toplam_kg': round(toplam_kg, 3),
+            'siparis_sayisi': len([s for s in siparis_set if s is not None]),
+            'rf_listesi': rf_listesi,
+        })
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/nexgen/formul-rf-analiz/<int:formul_id>', methods=['GET'])
+@yetki_gerekli('nexgen.recete.view', 'can_view')
+def api_nexgen_formul_rf_analiz(formul_id):
+    """Formul bazli RF kullanim analizi."""
+    con = _db()
+    try:
+        formul = con.execute(
+            "SELECT id, kod, ad FROM nexgen_formul WHERE id=? AND aktif=1",
+            (formul_id,)
+        ).fetchone()
+        if not formul:
+            return jsonify({'ok': False, 'hata': 'Formul bulunamadi.'}), 404
+
+        if _analitik_view_var(con):
+            rows = con.execute("""
+                SELECT v.*, rf.rf_kod, rf.ad AS rf_ad
+                FROM v_nexgen_rf_kullanim_ozet v
+                LEFT JOIN nexgen_rf_renk rf ON rf.id = v.rf_renk_id
+                WHERE v.formul_id = ?
+                ORDER BY v.toplam_uretim_kg DESC
+            """, (formul_id,)).fetchall()
+        else:
+            rows = con.execute("""
+                SELECT k.rf_renk_id, k.cari_id, k.siparis_id, k.formul_id,
+                       ROUND(SUM(COALESCE(k.miktar_kg, 0)), 3) AS toplam_uretim_kg,
+                       COUNT(*) AS kayit_sayisi,
+                       SUM(CASE WHEN COALESCE(k.durum,'MANUEL')='MANUEL' THEN 1 ELSE 0 END) AS adet_manuel,
+                       SUM(CASE WHEN k.durum='URETIM' THEN 1 ELSE 0 END) AS adet_uretim,
+                       SUM(CASE WHEN k.durum='TAMAMLANDI' THEN 1 ELSE 0 END) AS adet_tamamlandi,
+                       rf.rf_kod, rf.ad AS rf_ad
+                FROM nexgen_rf_kullanim k
+                LEFT JOIN nexgen_rf_renk rf ON rf.id = k.rf_renk_id
+                WHERE k.aktif = 1 AND k.formul_id = ?
+                GROUP BY k.rf_renk_id, k.cari_id, k.siparis_id, k.formul_id
+                ORDER BY toplam_uretim_kg DESC
+            """, (formul_id,)).fetchall()
+
+        rf_map = {}
+        cari_set = set()
+        toplam_kg = 0.0
+        for r in rows:
+            rd = dict(r)
+            cari_set.add(rd.get('cari_id'))
+            kg = float(rd.get('toplam_uretim_kg') or 0)
+            toplam_kg += kg
+            rid = rd['rf_renk_id']
+            if rid not in rf_map:
+                rf_map[rid] = {
+                    'rf_renk_id': rid,
+                    'rf_kod': rd.get('rf_kod'),
+                    'rf_ad': rd.get('rf_ad'),
+                    'toplam_kg': 0.0,
+                    'kayit_sayisi': 0,
+                    'cari_sayisi': set(),
+                    'durum_dagilimi': {'MANUEL': 0, 'URETIM': 0, 'TAMAMLANDI': 0},
+                }
+            rf_map[rid]['toplam_kg'] = round(rf_map[rid]['toplam_kg'] + kg, 3)
+            rf_map[rid]['kayit_sayisi'] += int(rd.get('kayit_sayisi') or 1)
+            if rd.get('cari_id'):
+                rf_map[rid]['cari_sayisi'].add(rd['cari_id'])
+            dd = _durum_dagilimi_satir(rd)
+            for k, v in dd.items():
+                rf_map[rid]['durum_dagilimi'][k] += v
+
+        rf_listesi = []
+        for item in sorted(rf_map.values(), key=lambda x: x['toplam_kg'], reverse=True):
+            item['cari_sayisi'] = len(item.pop('cari_sayisi'))
+            rf_listesi.append(item)
+
+        return jsonify({
+            'ok': True,
+            'formul_id': formul_id,
+            'formul_kod': formul['kod'],
+            'formul_ad': formul['ad'],
+            'toplam_kg': round(toplam_kg, 3),
+            'cari_sayisi': len([c for c in cari_set if c is not None]),
+            'rf_listesi': rf_listesi,
+        })
+    finally:
+        con.close()
 
 
 @nexgen_bp.route('/api/arge/gecmis/<int:uv_id>', methods=['GET'])
@@ -4298,14 +4882,14 @@ def tablet_ana():
                 """, (bk,)).fetchone()
                 b['toplam_alt_emir'] = sayac['toplam'] or 0
                 b['biten_alt_emir']  = sayac['biten']  or 0
-                b['uretilen_kg']     = round(float(sayac['uretilen'] or 0), 1)
-                b['kalan_kg']        = round(max(0.0, float(b['planlanan_kg']) - b['uretilen_kg']), 1)
+                _batch_kg_rf_enrich(con, b)
         else:
             for b in devam_eden:
                 b['toplam_alt_emir'] = None
                 b['biten_alt_emir']  = None
                 b['uretilen_kg']     = 0.0
                 b['kalan_kg']        = float(b['planlanan_kg'])
+                _batch_kg_rf_enrich(con, b)
 
         from datetime import date as _date
         bugun = _date.today().isoformat()
@@ -4404,14 +4988,14 @@ def tablet_devam_edenler():
                 b['hazir_alt_emir']  = sayac['hazir']  or 0
                 b['devam_alt_emir']  = sayac['devam']  or 0
                 b['bekleme_alt_emir']= sayac['bekleme']or 0
-                b['uretilen_kg']     = round(float(sayac['uretilen'] or 0), 1)
-                b['kalan_kg']        = round(max(0.0, float(b['planlanan_kg']) - b['uretilen_kg']), 1)
+                _batch_kg_rf_enrich(con, b)
         else:
             for b in batches_raw:
                 b['toplam_alt_emir'] = b['biten_alt_emir'] = 0
                 b['hazir_alt_emir']  = b['devam_alt_emir'] = b['bekleme_alt_emir'] = 0
                 b['uretilen_kg']     = 0.0
                 b['kalan_kg']        = float(b['planlanan_kg'])
+                _batch_kg_rf_enrich(con, b)
 
         # Sipariş bazında gruplama:
         # siparis_no varsa → gruplama anahtarı siparis_no
@@ -4557,21 +5141,23 @@ def tablet_uretim_islem(batch_kodu):
                 d_lower = ae['durum'].lower()
                 if d_lower in sayaclar:
                     sayaclar[d_lower] += 1
-                if ae['durum'] == 'BITTI':
-                    toplam_uretilen_kg += float(ae['uretilen_kg'])
 
-            # formul_batch_kg: ilk kayıttan veya reçeteden al
+            # formul_batch_kg: ilk kayittan (plan bilgisi, uretim hesabi degil)
             if alt_emirler:
                 formul_batch_kg = float(alt_emirler[0].get('formul_batch_kg') or 0)
-            if formul_batch_kg <= 0 and batch.get('uretim_varyant_id'):
-                formul_batch_kg = _formul_batch_kg_hesapla(con, batch['uretim_varyant_id'])
         else:
-            # Migration yoksa reçeteden hesapla (sadece gösterim için)
-            if batch.get('uretim_varyant_id'):
-                formul_batch_kg = _formul_batch_kg_hesapla(con, batch['uretim_varyant_id'])
+            formul_batch_kg = 0.0
 
-        planlanan_kg = float(batch['planlanan_kg'])
-        kalan_kg = max(0.0, planlanan_kg - toplam_uretilen_kg)
+        kg_kontrol = _batch_uretim_kontrol(con, batch_kodu) or {}
+        siparis_toplam_kg = float(
+            kg_kontrol.get('siparis_toplam_kg') or batch['planlanan_kg']
+        )
+        toplam_uretilen_kg = float(kg_kontrol.get('uretilen_kg') or 0.0)
+        kalan_kg = float(kg_kontrol.get('kalan_kg') or max(0.0, siparis_toplam_kg - toplam_uretilen_kg))
+        kontrol_durum = kg_kontrol.get('kontrol_durum')
+        kontrol_uyari = kg_kontrol.get('uyari')
+        kontrol_mesaj = kg_kontrol.get('mesaj')
+        planlanan_kg = siparis_toplam_kg
 
         # Aynı siparis_no'daki kardeş batch'ler (L/S seçim ekranı için)
         kardes_boyutlar = []
@@ -4607,7 +5193,11 @@ def tablet_uretim_islem(batch_kodu):
         batch=batch,
         alt_emirler=alt_emirler,
         toplam_uretilen_kg=round(toplam_uretilen_kg, 3),
+        siparis_toplam_kg=round(siparis_toplam_kg, 3),
         kalan_kg=round(kalan_kg, 3),
+        kontrol_durum=kontrol_durum,
+        kontrol_uyari=kontrol_uyari,
+        kontrol_mesaj=kontrol_mesaj,
         parca_tablosu=parca_tablosu,
         formul_batch_kg=round(formul_batch_kg, 3),
         sayaclar=sayaclar,
@@ -5712,6 +6302,19 @@ def uretim_plan_liste():
     try:
         planlar = [dict(p) for p in _plan_liste_sorgu(con)]
 
+        for pl in planlar:
+            sk = _siparis_kontrol_get(con, pl['id'])
+            if sk:
+                pl['siparis_toplam_kg'] = sk['siparis_toplam_kg']
+                pl['uretilen_kg'] = sk['uretilen_kg']
+                pl['kalan_kg'] = max(0.0, float(sk['fark_kg']))
+                pl['kontrol_durum'] = sk.get('kontrol_durum')
+                pl['kontrol_uyari'] = sk.get('uyari')
+            else:
+                pl['siparis_toplam_kg'] = pl.get('planlanan_kg', 0)
+                pl['uretilen_kg'] = 0.0
+                pl['kalan_kg'] = pl['siparis_toplam_kg']
+
         # Alt emir sayaçlarını planlara ekle (Migration 072+ gerekli)
         if _parca_tablosu_var(con):
             for pl in planlar:
@@ -5951,6 +6554,11 @@ def api_batch_durum_guncelle(batch_kodu):
                 (batch['plan_id'],)
             )
 
+        if yeni_durum == 'DEVAM':
+            _rf_kullanim_tablet_sync(con, batch_kodu)
+        elif yeni_durum == 'BITTI':
+            _rf_kullanim_tablet_sync(con, batch_kodu, tamamlandi=True)
+
         con.commit()
         return jsonify({'ok': True, 'durum': yeni_durum, 'batch_kodu': batch_kodu})
     except Exception as e:
@@ -6159,6 +6767,9 @@ def api_plan_basla(plan_id):
         con.execute(
             "UPDATE nexgen_uretim_plan SET durum='BASLADI' WHERE id=?", (plan_id,)
         )
+
+        _rf_kullanim_tablet_sync(con, batch_kodu)
+
         con.commit()
 
         return jsonify({
@@ -6353,6 +6964,122 @@ def _batch_toplam_uretilen(con, batch_kodu):
         (batch_kodu,)
     ).fetchone()
     return float(row['toplam']) if row else 0.0
+
+
+def _rf_kullanim_kolonlari(con):
+    """nexgen_rf_kullanim tablo kolonlari; tablo yoksa bos set."""
+    if not con.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='nexgen_rf_kullanim'"
+    ).fetchone():
+        return set()
+    return {c['name'] for c in con.execute(
+        "PRAGMA table_info(nexgen_rf_kullanim)"
+    ).fetchall()}
+
+
+def _rf_kullanim_tablet_aktif(con):
+    cols = _rf_kullanim_kolonlari(con)
+    return {'tablet_session_id', 'durum', 'miktar_kg'}.issubset(cols)
+
+
+def _rf_renk_uv_icin(con, uretim_varyant_id):
+    """UV + formul uygunluk uzerinden en uygun RF renk kaydini bulur."""
+    row = con.execute("""
+        SELECT rf.id AS rf_renk_id, rf.rf_kod, rf.cari_id, u.formul_id, rv.ad AS renk_ad
+        FROM nexgen_uretim_varyant uv
+        JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
+        JOIN nexgen_rf_formul_uygunluk u ON u.formul_id = rv.formul_id
+            AND u.durum = 'ONAYLI' AND u.aktif = 1
+        JOIN nexgen_rf_renk rf ON rf.id = u.rf_renk_id
+            AND rf.aktif = 1 AND rf.durum = 'ONAYLI'
+        WHERE uv.id = ?
+        ORDER BY
+            CASE
+                WHEN UPPER(rf.ad) = UPPER(rv.ad) THEN 0
+                WHEN UPPER(rf.ad) LIKE '%' || UPPER(rv.ad) || '%' THEN 1
+                WHEN UPPER(rv.ad) LIKE '%' || UPPER(rf.ad) || '%' THEN 2
+                ELSE 3
+            END,
+            rf.id DESC
+        LIMIT 1
+    """, (uretim_varyant_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def _batch_uretim_miktar_kg(con, batch_kodu):
+    """BITTI uretilen + DEVAM alt emir hedeflerinin toplami."""
+    miktar = _batch_toplam_uretilen(con, batch_kodu)
+    if _parca_tablosu_var(con):
+        row = con.execute("""
+            SELECT COALESCE(SUM(hedef_kg), 0) AS s
+            FROM nexgen_uretim_parca
+            WHERE batch_kodu = ? AND durum = 'DEVAM'
+        """, (batch_kodu,)).fetchone()
+        miktar += float(row['s'] or 0) if row else 0.0
+    return round(miktar, 3)
+
+
+def _rf_kullanim_tablet_sync(con, batch_kodu, uretim_emir_id=None, tamamlandi=False):
+    """Tablet uretim akisindan RF kullanim kaydini olusturur veya gunceller."""
+    if not _rf_kullanim_tablet_aktif(con):
+        return None
+
+    baglam = con.execute("""
+        SELECT nb.batch_kodu, nb.plan_id, nb.uretim_varyant_id
+        FROM nexgen_uretim_batch nb
+        WHERE nb.batch_kodu = ?
+    """, (batch_kodu,)).fetchone()
+    if not baglam:
+        return None
+
+    rf = _rf_renk_uv_icin(con, baglam['uretim_varyant_id'])
+    if not rf:
+        return None
+
+    cols = _rf_kullanim_kolonlari(con)
+    miktar_kg = _batch_uretim_miktar_kg(con, batch_kodu)
+    durum = 'TAMAMLANDI' if tamamlandi else 'URETIM'
+    tablet_session_id = batch_kodu
+    uid = _kullanici_id()
+
+    mevcut = con.execute("""
+        SELECT id FROM nexgen_rf_kullanim
+        WHERE tablet_session_id = ? AND aktif = 1
+        ORDER BY id DESC LIMIT 1
+    """, (tablet_session_id,)).fetchone()
+
+    if mevcut:
+        sets = ["durum = ?", "miktar_kg = ?", "guncelleme_tarihi = datetime('now')"]
+        params = [durum, miktar_kg]
+        if uretim_emir_id is not None and 'uretim_emir_id' in cols:
+            sets.append("uretim_emir_id = ?")
+            params.append(uretim_emir_id)
+        params.append(mevcut['id'])
+        con.execute(
+            f"UPDATE nexgen_rf_kullanim SET {', '.join(sets)} WHERE id = ?",
+            params
+        )
+        return mevcut['id']
+
+    col_names = [
+        'rf_renk_id', 'formul_id', 'cari_id', 'siparis_id', 'aciklama',
+        'olusturan_id', 'aktif', 'durum', 'miktar_kg', 'tablet_session_id',
+    ]
+    values = [
+        rf['rf_renk_id'], rf.get('formul_id'), rf.get('cari_id'),
+        baglam['plan_id'], 'Tablet uretim', uid, 1, durum, miktar_kg,
+        tablet_session_id,
+    ]
+    if uretim_emir_id is not None and 'uretim_emir_id' in cols:
+        col_names.append('uretim_emir_id')
+        values.append(uretim_emir_id)
+
+    ph = ','.join(['?'] * len(values))
+    con.execute(
+        f"INSERT INTO nexgen_rf_kullanim ({','.join(col_names)}) VALUES ({ph})",
+        values
+    )
+    return con.execute("SELECT last_insert_rowid()").fetchone()[0]
 
 
 def _batch_kalan_kg(con, batch_kodu):
@@ -6608,6 +7335,8 @@ def api_parca_baslat(batch_kodu, parca_id):
             WHERE batch_kodu=? AND durum='HAZIR'
         """, (batch_kodu,))
 
+        _rf_kullanim_tablet_sync(con, batch_kodu, uretim_emir_id=parca_id)
+
         con.commit()
         return jsonify({'ok': True, 'parca_id': parca_id, 'durum': 'DEVAM'})
     except Exception as e:
@@ -6675,13 +7404,10 @@ def api_parca_bitir(batch_kodu, parca_id):
             params
         )
 
-        # Toplam üretilen hesapla (BITTI olanların toplamı, yeni biten dahil)
-        toplam = _batch_toplam_uretilen(con, batch_kodu) + uretilen_kg
-        batch  = con.execute(
-            "SELECT planlanan_kg FROM nexgen_uretim_batch WHERE batch_kodu=?",
-            (batch_kodu,)
-        ).fetchone()
-        planlanan = float(batch['planlanan_kg']) if batch else 0.0
+        _rf_kullanim_tablet_sync(con, batch_kodu, uretim_emir_id=parca_id)
+
+        con.commit()
+        kg = _batch_uretim_kontrol(con, batch_kodu) or {}
 
         # Toplam alt emir ve biten sayısı
         sayac = con.execute("""
@@ -6690,16 +7416,18 @@ def api_parca_bitir(batch_kodu, parca_id):
             FROM nexgen_uretim_parca WHERE batch_kodu=?
         """, (batch_kodu,)).fetchone()
         toplam_emir = sayac['toplam'] if sayac else 0
-        biten_emir  = (sayac['biten'] or 0) + 1  # yeni biten dahil
+        biten_emir  = sayac['biten'] or 0
 
-        con.commit()
         return jsonify({
             'ok': True,
             'parca_id': parca_id,
             'durum': 'BITTI',
             'uretilen_kg': uretilen_kg,
-            'toplam_uretilen_kg': round(toplam, 3),
-            'kalan_kg': round(max(0.0, planlanan - toplam), 3),
+            'siparis_toplam_kg': kg.get('siparis_toplam_kg'),
+            'toplam_uretilen_kg': round(float(kg.get('uretilen_kg') or 0), 3),
+            'kalan_kg': round(float(kg.get('kalan_kg') or 0), 3),
+            'kontrol_durum': kg.get('kontrol_durum'),
+            'kontrol_uyari': kg.get('uyari'),
             'toplam_emir': toplam_emir,
             'biten_emir': biten_emir,
         })
@@ -6813,43 +7541,29 @@ def api_batch_ilerleme(batch_kodu):
 
     con = _db()
     try:
-        batch = con.execute(
-            "SELECT batch_kodu, planlanan_kg, durum "
-            "FROM nexgen_uretim_batch WHERE batch_kodu=?",
-            (batch_kodu,)
-        ).fetchone()
-        if not batch:
+        kg = _batch_uretim_kontrol(con, batch_kodu)
+        if not kg:
             return jsonify({'ok': False, 'hata': 'Batch bulunamadı'}), 404
 
-        planlanan = float(batch['planlanan_kg'])
-
-        if not _parca_tablosu_var(con):
-            return jsonify({
-                'ok': True,
-                'batch_kodu': batch_kodu,
-                'planlanan_kg': planlanan,
-                'toplam_uretilen_kg': 0.0,
-                'kalan_kg': planlanan,
-                'parca_sayisi': 0,
-                'migration_eksik': True,
-            })
-
-        toplam = _batch_toplam_uretilen(con, batch_kodu)
-        kalan  = max(0.0, planlanan - toplam)
-
-        parca_sayisi = con.execute(
-            "SELECT COUNT(*) AS cnt FROM nexgen_uretim_parca WHERE batch_kodu=?",
-            (batch_kodu,)
-        ).fetchone()['cnt']
+        parca_sayisi = 0
+        if _parca_tablosu_var(con):
+            parca_sayisi = con.execute(
+                "SELECT COUNT(*) AS cnt FROM nexgen_uretim_parca WHERE batch_kodu=?",
+                (batch_kodu,)
+            ).fetchone()['cnt']
 
         return jsonify({
             'ok': True,
             'batch_kodu': batch_kodu,
-            'planlanan_kg': round(planlanan, 3),
-            'toplam_uretilen_kg': round(toplam, 3),
-            'kalan_kg': round(kalan, 3),
+            'siparis_toplam_kg': kg['siparis_toplam_kg'],
+            'planlanan_kg': kg['siparis_toplam_kg'],
+            'toplam_uretilen_kg': kg['uretilen_kg'],
+            'kalan_kg': kg['kalan_kg'],
+            'kontrol_durum': kg.get('kontrol_durum'),
+            'kontrol_uyari': kg.get('uyari'),
+            'kontrol_mesaj': kg.get('mesaj'),
             'parca_sayisi': parca_sayisi,
-            'migration_eksik': False,
+            'migration_eksik': not _parca_tablosu_var(con),
         })
     finally:
         con.close()
@@ -6909,6 +7623,9 @@ def api_parca_toplu_baslat(batch_kodu):
             UPDATE nexgen_uretim_batch SET durum='DEVAM'
             WHERE batch_kodu=? AND durum='HAZIR'
         """, (batch_kodu,))
+
+        ilk_id = ids[0] if ids else None
+        _rf_kullanim_tablet_sync(con, batch_kodu, uretim_emir_id=ilk_id)
 
         con.commit()
 
@@ -6992,14 +7709,14 @@ def api_parca_toplu_bitir(batch_kodu):
             """, (uretilen, r['id']))
             biten_kg += uretilen
 
+        _rf_kullanim_tablet_sync(
+            con, batch_kodu,
+            uretim_emir_id=hedefler[-1]['id'] if hedefler else None
+        )
+
         con.commit()
 
-        toplam_uretilen = _batch_toplam_uretilen(con, batch_kodu)
-        batch_row = con.execute(
-            "SELECT planlanan_kg FROM nexgen_uretim_batch WHERE batch_kodu=?",
-            (batch_kodu,)
-        ).fetchone()
-        planlanan = float(batch_row['planlanan_kg']) if batch_row else 0.0
+        kg = _batch_uretim_kontrol(con, batch_kodu) or {}
 
         sayac = con.execute("""
             SELECT
@@ -7015,8 +7732,11 @@ def api_parca_toplu_bitir(batch_kodu):
             'ok': True,
             'biten': len(hedefler),
             'biten_kg': round(biten_kg, 3),
-            'toplam_uretilen_kg': round(toplam_uretilen, 3),
-            'kalan_kg': round(max(0.0, planlanan - toplam_uretilen), 3),
+            'siparis_toplam_kg': kg.get('siparis_toplam_kg'),
+            'toplam_uretilen_kg': round(float(kg.get('uretilen_kg') or 0), 3),
+            'kalan_kg': round(float(kg.get('kalan_kg') or 0), 3),
+            'kontrol_durum': kg.get('kontrol_durum'),
+            'kontrol_uyari': kg.get('uyari'),
             'sayac': {
                 'toplam':  sayac['toplam']  or 0,
                 'hazir':   sayac['hazir']   or 0,
@@ -7129,14 +7849,13 @@ def api_parca_secili_isle(batch_kodu):
                 WHERE batch_kodu=? AND durum='HAZIR'
             """, (batch_kodu,))
 
+        if islem in ('baslat', 'bitir') and islenen:
+            son_id = ids[0] if ids else None
+            _rf_kullanim_tablet_sync(con, batch_kodu, uretim_emir_id=son_id)
+
         con.commit()
 
-        toplam_uretilen = _batch_toplam_uretilen(con, batch_kodu)
-        batch_row = con.execute(
-            "SELECT planlanan_kg FROM nexgen_uretim_batch WHERE batch_kodu=?",
-            (batch_kodu,)
-        ).fetchone()
-        planlanan = float(batch_row['planlanan_kg']) if batch_row else 0.0
+        kg = _batch_uretim_kontrol(con, batch_kodu) or {}
 
         sayac = con.execute("""
             SELECT COUNT(*) AS toplam,
@@ -7151,8 +7870,11 @@ def api_parca_secili_isle(batch_kodu):
             'ok': True,
             'islenen': islenen,
             'atlanan': atlanan,
-            'toplam_uretilen_kg': round(toplam_uretilen, 3),
-            'kalan_kg': round(max(0.0, planlanan - toplam_uretilen), 3),
+            'siparis_toplam_kg': kg.get('siparis_toplam_kg'),
+            'toplam_uretilen_kg': round(float(kg.get('uretilen_kg') or 0), 3),
+            'kalan_kg': round(float(kg.get('kalan_kg') or 0), 3),
+            'kontrol_durum': kg.get('kontrol_durum'),
+            'kontrol_uyari': kg.get('uyari'),
             'sayac': {
                 'toplam':  sayac['toplam']  or 0,
                 'hazir':   sayac['hazir']   or 0,

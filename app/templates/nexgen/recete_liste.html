@@ -718,15 +718,14 @@ function rmRenderDetay(){
   var aktifIdx = ADIMLAR.indexOf(d);
   var LABELS   = {TASLAK:'Taslak',DENEME:'AR-GE Test',ONAYLI:'Onaylı',URETIME_ACIK:'Üretime Açık',PASIF:'Pasif'};
 
-  /* Kalem ayrımı: gelecek fazda RF tablosu bağlandığında aktif olacak.
-     Şimdilik tüm kalemler ANA formülde. Renk paneli placeholder. */
+  /* Kalem ayrımı: BOYA = renk formülü (RF), diğerleri = ana formül */
   var tumK = uv.kalemler||[];
-  var anaK = tumK;   /* tümü ANA */
-  var rnkK = [];     /* renk: henüz ayrı tablo yok */
+  var anaK = tumK.filter(function(k){ return (k.kategori||'').toUpperCase() !== 'BOYA'; });
+  var rnkK = tumK.filter(function(k){ return (k.kategori||'').toUpperCase() === 'BOYA'; });
 
   var anaTopKg = 0; anaK.forEach(function(k){ anaTopKg+=k.miktar_kg; });
-  var rnkTopKg = 0; /* tanımsız */
-  var batchKg  = anaTopKg;  /* batch = tüm ana kalemler toplamı */
+  var rnkTopKg = 0; rnkK.forEach(function(k){ rnkTopKg+=k.miktar_kg; });
+  var batchKg  = anaTopKg + rnkTopKg;
   var kgMal    = uv.kg_maliyet||0;
 
   /* Durum bandı */
@@ -748,7 +747,10 @@ function rmRenderDetay(){
     var uKalemler = u.kalemler||[];
     var uTopKg = 0;
     if(uKalemler.length > 0){
-      uKalemler.forEach(function(k){ uTopKg += k.miktar_kg; });
+      uKalemler.forEach(function(k){
+        if((k.kategori||'').toUpperCase() !== 'BOYA'){ uTopKg += k.miktar_kg; }
+      });
+      if(uTopKg <= 0){ uTopKg = u.toplam_kg||0; }
     } else {
       uTopKg = u.toplam_kg||0;
     }
@@ -778,9 +780,9 @@ function rmRenderDetay(){
           '<div class="rm-detay-kpi-deger">'+rmKg(anaTopKg)+' KG</div>' +
           '<div class="rm-detay-kpi-etiket">Ana Formül KG</div>' +
         '</div>' +
-        '<div class="rm-detay-kpi-kart" title="Gelecek fazda ayrı RF tablosu ile bağlanacak">' +
-          '<div class="rm-detay-kpi-deger" style="color:#94a3b8;font-size:11px;">Tanımsız</div>' +
-          '<div class="rm-detay-kpi-etiket">Renk Formül KG</div>' +
+        '<div class="rm-detay-kpi-kart">' +
+          '<div class="rm-detay-kpi-deger" style="color:#7c3aed">'+(rnkTopKg>0?rmKg(rnkTopKg)+' KG':'—')+'</div>' +
+          '<div class="rm-detay-kpi-etiket">Renk Formül KG (BOYA)</div>' +
         '</div>' +
         '<div class="rm-detay-kpi-kart">' +
           '<div class="rm-detay-kpi-deger cost-secure" style="color:#d97706">'+(kgMal>0?Math.round(kgMal).toLocaleString('tr-TR')+' ₺':'—')+'</div>' +
@@ -799,32 +801,29 @@ function rmRenderDetay(){
     /* ③ İKİ TABLO YAN YANA — kendi içinde scroll */
     '<div class="rm-iki-tablo-wrap">' +
 
-      /* ÜRETİM REÇETESİ — %60 — tüm batch kalemleri */
+      /* ÜRETİM REÇETESİ — ana formül (BOYA hariç) */
       '<div class="rm-tablo-col">' +
         '<div class="rm-tablo-col-hdr">' +
-          '<span class="rm-tablo-col-baslik">ÜRETİM REÇETESİ</span>' +
-          '<span class="rm-tablo-col-kg">'+rmKg(batchKg)+' KG</span>' +
+          '<span class="rm-tablo-col-baslik">ANA FORMÜL</span>' +
+          '<span class="rm-tablo-col-kg">'+rmKg(anaTopKg)+' KG</span>' +
         '</div>' +
-        '<div class="rm-tablo-scroll">'+rmTabloHtml(anaK, batchKg, false)+'</div>' +
-        '<div class="rm-tablo-foot"><span>TOPLAM BATCH</span><span>'+rmKg(batchKg)+' KG</span></div>' +
+        '<div class="rm-tablo-scroll">'+rmTabloHtml(anaK, anaTopKg, false)+'</div>' +
+        '<div class="rm-tablo-foot"><span>TOPLAM ANA</span><span>'+rmKg(anaTopKg)+' KG</span></div>' +
       '</div>' +
 
-      /* RENK FORMÜLÜ — %40 — gelecek faz placeholder */
+      /* RENK FORMÜLÜ — BOYA kalemleri (recete_kalem içinde, görünüm ayrımı) */
       '<div class="rm-tablo-col">' +
         '<div class="rm-tablo-col-hdr">' +
-          '<span class="rm-tablo-col-baslik renk">RENK FORMÜLÜ</span>' +
-          '<span class="rm-tablo-col-kg renk" style="color:#94a3b8;font-size:10px;">Bağlı değil</span>' +
+          '<span class="rm-tablo-col-baslik renk">RENK FORMÜLÜ (BOYA)</span>' +
+          '<span class="rm-tablo-col-kg renk">'+ (rnkTopKg>0 ? rmKg(rnkTopKg)+' KG' : '—') +'</span>' +
         '</div>' +
-        '<div class="rm-tablo-scroll rm-renk-placeholder">' +
-          '<div style="padding:24px 16px;text-align:center;">' +
-            '<div style="width:40px;height:40px;border-radius:50%;background:#f5f3ff;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;">' +
-              '<svg viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.5" width="20" height="20"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>' +
-            '</div>' +
-            '<div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:6px;">Renk formülü henüz ayrı tanımlanmadı</div>' +
-            '<div style="font-size:11px;color:#6b7280;line-height:1.5;">Gelecek fazda <strong>RF kodu</strong> ile<br>bağlandığında burada görünecek.</div>' +
-          '</div>' +
+        '<div class="rm-tablo-scroll">' +
+          (rnkK.length ? rmTabloHtml(rnkK, rnkTopKg, true) :
+            '<div class="rm-renk-placeholder" style="padding:24px 16px;text-align:center;">' +
+              '<div style="font-size:12px;color:#6b7280;">Bu varyantta BOYA kalemi yok.</div>' +
+            '</div>') +
         '</div>' +
-        '<div class="rm-tablo-foot"><span>TOPLAM</span><span style="color:#94a3b8">— KG</span></div>' +
+        '<div class="rm-tablo-foot"><span>TOPLAM BOYA</span><span>'+(rnkTopKg>0?rmKg(rnkTopKg)+' KG':'— KG')+'</span></div>' +
       '</div>' +
 
     '</div>' +
@@ -843,7 +842,7 @@ function rmRenderDetay(){
     /* ⑤ Bilgi notu */
     '<div style="padding:6px 14px;background:#fefce8;border-top:1px solid #fde68a;display:flex;align-items:center;gap:6px;">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2" width="12" height="12"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>' +
-      '<span style="font-size:10px;color:#92400e;">Renk formülü ayrımı gelecek fazda ayrı renk reçetesi tablosu (RF kodu) ile yapılacaktır.</span>' +
+      '<span style="font-size:10px;color:#92400e;">BOYA kalemleri renk formülü sütununda gösterilir; ana formül listesinde yer almaz. RF import sonrası ayrı RF tablosuna taşınacaktır.</span>' +
     '</div>' +
 
     /* ⑥ Alt butonlar */

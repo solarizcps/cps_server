@@ -43,17 +43,21 @@
           <div class="tgd-etiket">PERSONELİN ADI</div>
           <input type="text" id="tgd-personel" class="tgd-input" placeholder="Ad Soyad">
         </div>
-        <div class="tgd-alan">
-          <div class="tgd-etiket">VARDİYA</div>
-          <select id="tgd-vardiya" class="tgd-input">
-            <option value="">— Seçiniz —</option>
-            <option>1. Vardiya</option>
-            <option>2. Vardiya</option>
-            <option>3. Vardiya</option>
-            <option>Gündüz</option>
-          </select>
-        </div>
       </div>
+
+      {# Vardiya — büyük buton seçimi #}
+      <div class="tgd-bolum-etiket">VARDİYA</div>
+      <div class="tgd-vardiya-grid">
+        <button class="tgd-vardiya-btn" data-deger="Gündüz" onclick="tgdVardiyaSec(this)">
+          <div class="tgd-vd-ikon">☀️</div>
+          <div class="tgd-vd-ad">GÜNDÜZ</div>
+        </button>
+        <button class="tgd-vardiya-btn" data-deger="Gece" onclick="tgdVardiyaSec(this)">
+          <div class="tgd-vd-ikon">🌙</div>
+          <div class="tgd-vd-ad">GECE</div>
+        </button>
+      </div>
+      <input type="hidden" id="tgd-vardiya" value="">
 
       {# Renk seç bölümü #}
       <div class="tgd-bolum-etiket">RENK SEÇ</div>
@@ -297,6 +301,24 @@
   .tgd-renk-sec-grid { grid-template-columns: repeat(2, 1fr); }
   .tgd-kg-input { width: 130px; font-size: 26px; }
 }
+
+/* Vardiya büyük buton */
+.tgd-vardiya-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px;
+}
+.tgd-vardiya-btn {
+  padding: 16px 8px; border-radius: 14px;
+  border: 2px solid #e5e7eb; background: #f8fafc;
+  cursor: pointer; text-align: center; transition: all .12s;
+}
+.tgd-vardiya-btn:hover { border-color: #f97316; background: #fff7ed; }
+.tgd-vardiya-btn.secili { border-color: #f97316; background: #fff7ed; }
+.tgd-vd-ikon { font-size: 22px; margin-bottom: 6px; }
+.tgd-vd-ad   { font-size: 11px; font-weight: 800; color: #374151; letter-spacing: .5px; }
+.tgd-vardiya-btn.secili .tgd-vd-ad { color: #ea580c; }
+@media (max-width: 480px) {
+  .tgd-vardiya-grid { grid-template-columns: repeat(2, 1fr); }
+}
 </style>
 
 <script>
@@ -310,6 +332,12 @@
 
 var _tgdSecili   = null;   /* { kartId, renk } */
 var _tgdEklenmis = [];     /* [{ stok_kart_id, renk, miktar_kg }] */
+
+function tgdVardiyaSec(btn) {
+  document.querySelectorAll('.tgd-vardiya-btn').forEach(function(b){ b.classList.remove('secili'); });
+  btn.classList.add('secili');
+  document.getElementById('tgd-vardiya').value = btn.dataset.deger;
+}
 
 function tgdRenkSec(btn) {
   document.querySelectorAll('.tgd-renk-btn').forEach(function(b){ b.classList.remove('secili'); });

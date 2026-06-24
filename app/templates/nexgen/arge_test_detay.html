@@ -84,12 +84,15 @@
     {# ── SOL: Kaynak Üretim Reçetesi ── #}
     <div class="ad-panel ad-panel-sol">
       <div class="ad-panel-hdr">
-        <span class="ad-panel-baslik">KAYNAK ÜRETİM REÇETESİ</span>
+        <span class="ad-panel-baslik">{% if test.test_tipi == 'RENK_TEST' %}ANA FORMÜL KALEMLERİ{% else %}KAYNAK ÜRETİM REÇETESİ{% endif %}</span>
       </div>
       <div class="ad-kaynak-baslik">
         <strong>{{ test.formul_ad }} + {{ renk_goster }}</strong>
         <span class="ad-kaynak-alt">{{ test.formul_kod }} · {{ test.boyut }}</span>
       </div>
+      {% if test.test_tipi == 'RENK_TEST' %}
+      <div class="ad-kaynak-not">HAMMADDE / KATKI / DOLGU — renk pigmentleri (BOYA) yalnızca aşağıdaki panelde düzenlenir.</div>
+      {% endif %}
       <div class="ad-batch-ozet">
         <span>Test batch: <strong>{{ '{:,.3f}'.format(test.test_batch_kg) }} KG</strong></span>
         <span>Kaynak: <strong>{{ '{:,.1f}'.format(test.kaynak_batch_kg) }} KG</strong></span>
@@ -124,8 +127,8 @@
       <div class="ad-uyari ad-uyari-inline">Boya kalemleri kilitli ({{ durum_etiket }}).</div>
       {% endif %}
 
-      {% if not kalemler %}
-      <div class="ad-bos">Bu test için kalem kaydı yok.</div>
+      {% if not taban_kalemler %}
+      <div class="ad-bos">{% if test.test_tipi == 'RENK_TEST' and boya_kalemler %}Ana formül kalemi yok — boya/pigment satırları üst panelde.{% else %}Bu test için kalem kaydı yok.{% endif %}</div>
       {% else %}
       <div class="ad-tablo-scroll">
         <table class="ad-tablo">
@@ -138,8 +141,8 @@
             </tr>
           </thead>
           <tbody>
-            {% for k in kalemler %}
-            <tr class="{% if k.kategori == 'BOYA' %}ad-row-boya{% else %}ad-row-taban{% endif %}">
+            {% for k in taban_kalemler %}
+            <tr class="ad-row-taban">
               <td>
                 <span class="ad-stok-kod">{{ k.stok_kod }}</span>
                 <span class="ad-stok-ad">{{ k.stok_ad }}</span>
@@ -152,9 +155,9 @@
           </tbody>
           <tfoot>
             <tr>
-              <td colspan="2"><strong>TOPLAM</strong></td>
-              <td class="r"><strong>{{ '{:,.3f}'.format(test.kaynak_batch_kg) }}</strong></td>
-              <td class="r"><strong>{{ '{:,.4f}'.format(test.test_batch_kg) }}</strong></td>
+              <td colspan="2"><strong>TOPLAM (ANA FORMÜL)</strong></td>
+              <td class="r"><strong>{{ '{:,.3f}'.format(taban_orj_top) }}</strong></td>
+              <td class="r"><strong>{{ '{:,.4f}'.format(taban_test_top) }}</strong></td>
             </tr>
           </tfoot>
         </table>
@@ -242,8 +245,13 @@
   {# ══ ONAY BLOĞU ══ #}
   <div class="ad-panel ad-onay-blok">
     <div class="ad-panel-hdr ad-panel-hdr-yesil">
-      <span class="ad-panel-baslik">ONAY</span>
+      <span class="ad-panel-baslik">{% if test.test_tipi == 'RENK_TEST' %}ARGE Renk Onayı{% else %}ONAY{% endif %}</span>
     </div>
+    {% if test.test_tipi == 'RENK_TEST' %}
+    <div class="ad-onay-renk-not">
+      Bu onay <strong>RF renk oluşturmak içindir</strong>. Formül onayı değildir; ana formül reçetesi değişmez.
+    </div>
+    {% endif %}
     <div class="ad-onay-grid">
       <div class="ad-onay-hucre">
         <div class="ad-etiket">Onay Durumu</div>
@@ -285,7 +293,7 @@
     <button class="ad-btn-kaydet" id="ad-btn-kaydet" onclick="adSonucKaydet()">Sonuç Kaydet</button>
     {% endif %}
     {% if can_create and test.durum in ['TEST_EDILDI', 'REDDEDILDI'] %}
-    <button class="ad-btn-onay" id="ad-btn-onay" onclick="adOnayaGonder()">Onaya Gönder</button>
+    <button class="ad-btn-onay" id="ad-btn-onay" onclick="adOnayaGonder()">{% if test.test_tipi == 'RENK_TEST' %}Renk Onayına Gönder{% else %}Onaya Gönder{% endif %}</button>
     {% endif %}
     <a href="/nexgen/arge" class="ad-btn-geri">← Listeye Dön</a>
   </div>
@@ -552,6 +560,13 @@
 }
 .ad-btn-reddet:hover { background:#fecaca; }
 .ad-panel-hdr-yesil { background:linear-gradient(90deg,#ecfdf5,#f0fdf4); border-bottom:1px solid #bbf7d0; }
+.ad-kaynak-not {
+  font-size:10px; color:#64748b; margin:0 0 10px; line-height:1.45;
+}
+.ad-onay-renk-not {
+  margin:0 16px 12px; padding:10px 12px; background:#ecfdf5; border:1px solid #a7f3d0;
+  border-radius:6px; font-size:11px; color:#065f46; line-height:1.45;
+}
 .ad-onay-blok { padding-bottom:14px; }
 .ad-onay-grid {
   display:grid; grid-template-columns:repeat(3,1fr); gap:12px 16px;
@@ -618,6 +633,7 @@
 
 <script>
 const AT_TEST_ID = {{ test.id }};
+const AT_TEST_TIPI = {{ test.test_tipi | tojson }};
 const AT_KAYNAK_BATCH = {{ test.kaynak_batch_kg }};
 const AT_TEST_BATCH   = {{ test.test_batch_kg }};
 const AT_BOYA_EDIT        = {{ boya_editable | tojson }};
@@ -837,7 +853,10 @@ function adSonucKaydet(zorlaDurum){
 }
 
 function adOnayaGonder(){
-  if (!confirm('Test sonucu onaya gönderilecek. Devam?')) return;
+  var mesaj = AT_TEST_TIPI === 'RENK_TEST'
+    ? 'Renk çalışması AR-GE renk onayına gönderilecek. Bu formül onayı değildir. Devam?'
+    : 'Test sonucu onaya gönderilecek. Devam?';
+  if (!confirm(mesaj)) return;
   adSonucKaydet('ONAYA_GONDERILDI');
 }
 
@@ -871,7 +890,9 @@ function adOnayIslem(eylem){
   })
   .then(function(d){
     if (d.ok) {
-      basariDiv.textContent = eylem === 'ONAYLA' ? '✓ Test onaylandı.' : '✓ Test reddedildi.';
+      basariDiv.textContent = eylem === 'ONAYLA'
+        ? (AT_TEST_TIPI === 'RENK_TEST' ? '✓ Renk çalışması onaylandı.' : '✓ Test onaylandı.')
+        : '✓ Test reddedildi.';
       basariDiv.style.display = 'block';
       setTimeout(function(){ location.reload(); }, 800);
     } else {
