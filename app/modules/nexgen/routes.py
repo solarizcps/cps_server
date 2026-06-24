@@ -47,6 +47,37 @@ DB_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'mock_data.db')
 
 
 # ─────────────────────────────────────────────────────────────
+# Migration 074 — AR-GE kimlik alanları (startup, idempotent)
+# ─────────────────────────────────────────────────────────────
+def _mig074_arge_identity():
+    """nexgen_arge_test tablosuna FAZ-2A-P1 alanlarını ekler."""
+    try:
+        _con = sqlite3.connect(DB_PATH)
+        cols = [c[1] for c in _con.execute(
+            "PRAGMA table_info(nexgen_arge_test)"
+        ).fetchall()]
+        eklemeler = [
+            ("cari_id",         "ALTER TABLE nexgen_arge_test ADD COLUMN cari_id INTEGER"),
+            ("shore_hedef",     "ALTER TABLE nexgen_arge_test ADD COLUMN shore_hedef REAL"),
+            ("lot_no",          "ALTER TABLE nexgen_arge_test ADD COLUMN lot_no TEXT"),
+            ("talep_referansi", "ALTER TABLE nexgen_arge_test ADD COLUMN talep_referansi TEXT"),
+        ]
+        degisti = False
+        for kolon, sql in eklemeler:
+            if kolon not in cols:
+                _con.execute(sql)
+                degisti = True
+        if degisti:
+            _con.commit()
+            print("[nexgen] Migration 074: AR-GE kimlik alanları eklendi")
+        _con.close()
+    except Exception as _e:
+        print(f"[nexgen] Migration 074 uyarı: {_e}")
+
+_mig074_arge_identity()
+
+
+# ─────────────────────────────────────────────────────────────
 # Yardımcı: DB bağlantısı
 # ─────────────────────────────────────────────────────────────
 def _db():
@@ -1148,19 +1179,31 @@ def api_arge_test_olustur():
     Ana reçete (nexgen_recete_kalem) YAZILMAZ — sadece ARGE tabloları.
 
     POST JSON:
-        kaynak_uv_id   : int
-        test_tipi      : RENK_TEST | FORMUL_TEST
-        makina         : str  (default: "7.5 LT")
-        test_batch_kg  : float
-        yeni_renk_adi  : str  opsiyonel
-        notlar         : str  opsiyonel
+        kaynak_uv_id    : int
+        test_tipi       : RENK_TEST | FORMUL_TEST
+        makina          : str   (default: "7.5 LT")
+        test_batch_kg   : float
+        yeni_renk_adi   : str   opsiyonel
+        notlar          : str   opsiyonel
+        cari_id         : int   opsiyonel — hangi cari/firma için (nexgen_cari.id)
+        shore_hedef     : float opsiyonel — hedef shore değeri
+        lot_no          : str   opsiyonel — otomatik üretilir (ARGE-LOT-YYYY-NNNNN)
+        talep_referansi : str   opsiyonel — müşteri talebi / referans notu
     """
     data = request.get_json(silent=True) or {}
-    kaynak_uv_id  = data.get('kaynak_uv_id')
-    test_tipi     = (data.get('test_tipi') or 'RENK_TEST').strip().upper()
-    makina        = (data.get('makina') or '7.5 LT').strip()
-    yeni_renk_adi = (data.get('yeni_renk_adi') or '').strip() or None
-    notlar        = (data.get('notlar') or '').strip() or None
+    kaynak_uv_id    = data.get('kaynak_uv_id')
+    test_tipi       = (data.get('test_tipi') or 'RENK_TEST').strip().upper()
+    makina          = (data.get('makina') or '7.5 LT').strip()
+    yeni_renk_adi   = (data.get('yeni_renk_adi') or '').strip() or None
+    notlar          = (data.get('notlar') or '').strip() or None
+    cari_id         = data.get('cari_id') or None
+    talep_referansi = (data.get('talep_referansi') or '').strip() or None
+    lot_no_giris    = (data.get('lot_no') or '').strip() or None
+
+    try:
+        shore_hedef = float(data['shore_hedef']) if data.get('shore_hedef') not in (None, '') else None
+    except (ValueError, TypeError):
+        shore_hedef = None
 
     try:
         test_batch_kg = float(data.get('test_batch_kg') or 0)
@@ -1209,17 +1252,31 @@ def api_arge_test_olustur():
         # Test no üret
         test_no = _arge_test_no_uret(con)
 
-        # Ana test kaydı
+        # Lot no: giriş yoksa otomatik üret (ARGE-LOT-YYYY-NNNNN)
+        if lot_no_giris:
+            lot_no = lot_no_giris
+        else:
+            _yil = __import__('datetime').datetime.now().year
+            _son = con.execute(
+                "SELECT COUNT(*) FROM nexgen_arge_test WHERE lot_no LIKE ?",
+                (f'ARGE-LOT-{_yil}-%',)
+            ).fetchone()[0]
+            lot_no = f'ARGE-LOT-{_yil}-{(_son + 1):05d}'
+
+        # Ana test kaydı — yeni kimlik alanları dahil
         con.execute("""
             INSERT INTO nexgen_arge_test
                 (kaynak_uretim_varyant_id, test_no, test_tipi,
                  makina, test_batch_kg, kaynak_batch_kg,
                  yeni_renk_adi, notlar, durum,
+                 cari_id, shore_hedef, lot_no, talep_referansi,
                  olusturan_id, olusturma_tarihi)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'TASLAK', ?, datetime('now'))
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'TASLAK', ?, ?, ?, ?, ?, datetime('now'))
         """, (kaynak_uv_id, test_no, test_tipi,
               makina, test_batch_kg, kaynak_batch_kg,
-              yeni_renk_adi, notlar, kullanici_id))
+              yeni_renk_adi, notlar,
+              cari_id, shore_hedef, lot_no, talep_referansi,
+              kullanici_id))
         test_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
 
         # Test kalemleri — REAL hassasiyet, round(x, 4) yeterli
@@ -1253,12 +1310,13 @@ def api_arge_test_olustur():
         "ok":              True,
         "test_id":         test_id,
         "test_no":         test_no,
+        "lot_no":          lot_no,
         "kaynak_batch_kg": kaynak_batch_kg,
         "test_batch_kg":   test_batch_kg,
         "carpan":          round(carpan, 6),
         "kalem_sayisi":    len(test_kalemler),
         "kalemler":        test_kalemler,
-        "mesaj":           f"{test_no} oluşturuldu. {len(test_kalemler)} kalem ölçeklendi.",
+        "mesaj":           f"{test_no} / {lot_no} oluşturuldu. {len(test_kalemler)} kalem ölçeklendi.",
     })
 
 
