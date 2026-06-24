@@ -1,314 +1,244 @@
 {% extends "base.html" %}
 {% set page_title = test.test_no ~ " — AR-GE Test — NexGen" %}
+{% set renk_goster = test.yeni_renk_adi or test.renk_ad %}
+{% set kilitli = test.durum in ['ONAYLANDI', 'REDDEDILDI'] %}
+{% set durum_etiket = {
+  'TASLAK': 'TASLAK',
+  'TEST_EDILDI': 'TEST EDİLDİ',
+  'BASARILI': 'BAŞARILI',
+  'BASARISIZ': 'BAŞARISIZ',
+  'ONAYA_GONDERILDI': 'ONAYA GÖNDERİLDİ',
+  'ONAYLANDI': 'ONAYLANDI',
+  'REDDEDILDI': 'REDDEDİLDİ'
+}.get(test.durum, test.durum or 'TASLAK') %}
+{% set durum_cls = (test.durum or 'taslak')|lower|replace('_','-') %}
 
 {% block content %}
-<div class="ng-sayfa">
+<div class="ad-sayfa">
 
-  {# ── Breadcrumb ──────────────────────────────────────────── #}
-  <div class="ng-baslik-blok">
-    <div class="ng-baslik">
-      <a href="/nexgen/" class="ng-bc-link">NexGen</a>
-      <span class="ng-bc-sep">›</span>
-      <a href="/nexgen/recete/" class="ng-bc-link">Reçete Merkezi</a>
-      <span class="ng-bc-sep">›</span>
-      <a href="/nexgen/recete/{{ test.formul_id }}" class="ng-bc-link">{{ test.formul_kod }}</a>
-      <span class="ng-bc-sep">›</span>
-      <span class="ngrc-kod-baslik">{{ test.test_no }}</span>
-    </div>
-    <div class="ng-baslik-aciklama">
-      AR-GE Test — {{ test.uv_ad }} / {{ test.boyut }}
-      {% if test.yeni_renk_adi %} → <strong>{{ test.yeni_renk_adi }}</strong>{% endif %}
-    </div>
+  {# ── Breadcrumb ── #}
+  <div class="ad-bc">
+    <a href="/nexgen/arge" class="ad-bc-link">← AR-GE Merkezi</a>
+    <span class="ad-bc-sep">›</span>
+    <span class="ad-bc-aktif">{{ test.test_no }}</span>
   </div>
 
-  {# ── Üst Bilgi Bandı ──────────────────────────────────────── #}
-  <div class="ngat-bilgi-band">
-    <div class="ngat-bilgi-item">
-      <span class="ngrc-batch-etiket">Test No</span>
-      <span class="ngrc-kod" style="font-size:15px">{{ test.test_no }}</span>
+  {# ══ ÜST KART ══ #}
+  <div class="ad-ust-kart">
+    <div class="ad-ust-grid">
+      <div class="ad-ust-hucre ad-ust-hucre-vurgu">
+        <div class="ad-etiket">ARGE NO</div>
+        <div class="ad-arge-no">{{ test.test_no }}</div>
+      </div>
+      <div class="ad-ust-hucre">
+        <div class="ad-etiket">LOT</div>
+        <div class="ad-lot">{{ test.lot_no or '—' }}</div>
+      </div>
+      <div class="ad-ust-hucre">
+        <div class="ad-etiket">Durum</div>
+        <span class="ad-rozet ad-rozet-{{ durum_cls }}" id="ad-durum-rozet">{{ durum_etiket }}</span>
+      </div>
+      <div class="ad-ust-hucre">
+        <div class="ad-etiket">Cari</div>
+        <div class="ad-deger">{% if test.cari_unvan %}{{ test.cari_unvan }}{% else %}—{% endif %}</div>
+        {% if test.cari_kod %}<div class="ad-alt-deger">{{ test.cari_kod }}</div>{% endif %}
+      </div>
+      <div class="ad-ust-hucre ad-ust-hucre-genis">
+        <div class="ad-etiket">Talep</div>
+        <div class="ad-deger ad-talep">{{ test.talep_referansi or test.notlar or '—' }}</div>
+      </div>
+      <div class="ad-ust-hucre">
+        <div class="ad-etiket">Yapan</div>
+        <div class="ad-deger">{{ test.olusturan_ad or '—' }}</div>
+      </div>
+      <div class="ad-ust-hucre">
+        <div class="ad-etiket">Tarih</div>
+        <div class="ad-deger">{{ (test.olusturma_tarihi or '')[:16] }}</div>
+        {% if test.makina %}<div class="ad-alt-deger">{{ test.makina }}</div>{% endif %}
+      </div>
     </div>
-    <div class="ngat-bilgi-item">
-      <span class="ngrc-batch-etiket">Kaynak</span>
-      <span>{{ test.formul_kod }} / {{ test.renk_ad }} / {{ test.boyut }}</span>
-    </div>
-    <div class="ngat-bilgi-item">
-      <span class="ngrc-batch-etiket">Makina</span>
-      <span>{{ test.makina }}</span>
-    </div>
-    <div class="ngat-bilgi-item">
-      <span class="ngrc-batch-etiket">Kaynak Batch</span>
-      <span><strong>{{ '{:,.3f}'.format(test.kaynak_batch_kg) }}</strong> KG</span>
-    </div>
-    <div class="ngat-bilgi-item">
-      <span class="ngrc-batch-etiket">Test Batch</span>
-      <span class="ngrc-batch-deger ngrc-batch-ana">{{ '{:,.3f}'.format(test.test_batch_kg) }} KG</span>
-    </div>
-    <div class="ngat-bilgi-item">
-      <span class="ngrc-batch-etiket">Çarpan</span>
-      <span style="font-family:monospace;font-size:13px">
-        {% if test.kaynak_batch_kg > 0 %}
-          {{ '{:.6f}'.format(test.test_batch_kg / test.kaynak_batch_kg) }}
-        {% else %}—{% endif %}
-      </span>
-    </div>
-    <div class="ngat-bilgi-item">
-      <span class="ngrc-batch-etiket">Durum</span>
-      <span class="ngrc-rd-rozet ngrc-rd-{{ (test.durum or 'taslak')|lower|replace('_','-') }}"
-            id="at-durum-rozet">
-        {{ test.durum or 'TASLAK' }}
-      </span>
-    </div>
-    {% if can_manage and test.durum == 'ONAYLANDI' and not olusan_uv %}
-    <div class="ngat-bilgi-item" style="justify-content:center">
-      <button class="ngsk-btn-yeni" style="white-space:nowrap" onclick="urAcModal()">
-        ↑ Üretim Reçetesi Oluştur
-      </button>
-    </div>
-    {% endif %}
+
     {% if olusan_uv %}
-    <div class="ngat-bilgi-item ngat-baglanti-item">
-      <span class="ngrc-batch-etiket">Oluşan Reçete</span>
-      <a href="/nexgen/recete/{{ olusan_uv.formul_id }}" class="ngsk-link" title="Reçete Detayı">
+    <div class="ad-olusan-band">
+      <span>Oluşan reçete:</span>
+      <a href="/nexgen/recete/{{ olusan_uv.formul_id }}" class="ad-link">
         {{ olusan_uv.formul_kod }} / {{ olusan_uv.renk_ad }} / {{ olusan_uv.boyut }}
-        <span class="ngrc-rd-rozet ngrc-rd-{{ olusan_uv.recete_durum|lower|replace('_','-') }}" style="margin-left:6px">
-          {{ olusan_uv.recete_durum }}
-        </span>
+        <span class="ad-rozet ad-rozet-onaylandi">{{ olusan_uv.recete_durum }}</span>
       </a>
     </div>
+    {% elif can_manage and test.durum == 'ONAYLANDI' %}
+    <div class="ad-olusan-band">
+      <button class="ad-btn-sari" onclick="urAcModal()">↑ Üretim Reçetesi Oluştur</button>
+    </div>
     {% endif %}
   </div>
 
-  {# ── Sekme Bar ──────────────────────────────────────────────#}
-  <div class="ngsd-sekme-bar">
-    <button class="ngsd-sekme-btn" data-sekme="karsilastirma" onclick="atSekme('karsilastirma')">
-      Orijinal vs Test
-    </button>
-    <button class="ngsd-sekme-btn" data-sekme="sonuc" onclick="atSekme('sonuc')">
-      Sonuç Kaydı
-    </button>
-  </div>
+  {# ══ ORTA: SOL + SAĞ ══ #}
+  <div class="ad-orta">
 
-  {# ═══════════════════════════════════════════════════════════ #}
-  {# SEKME 1 — ORİJİNAL vs TEST KARŞILAŞTIRMASI                  #}
-  {# ═══════════════════════════════════════════════════════════ #}
-  <div id="at-sekme-karsilastirma" class="ngsd-sekme-icerik">
-
-    {% if not kalemler %}
-    <div class="ngsd-placeholder-kart">
-      <div class="ngsd-placeholder-aciklama">Bu test için kayıtlı kalem yok.</div>
-    </div>
-    {% else %}
-
-    {# Yeni renk başlığı #}
-    {% if test.yeni_renk_adi %}
-    <div class="ngat-yeni-renk-baslik">
-      <span class="ngrc-kod">{{ test.formul_kod }} / {{ test.renk_ad }}</span>
-      <span class="ngat-ok">→</span>
-      <strong>{{ test.yeni_renk_adi }}</strong>
-    </div>
-    {% endif %}
-
-    <div class="ngrc-kalem-cerceve">
-      <table class="ngrc-kalem-tablo ngat-tablo">
-        <thead>
-          <tr>
-            <th style="width:32px">#</th>
-            <th>Hammadde</th>
-            <th>Kategori</th>
-            <th class="ngsk-th-r">Orijinal KG<br><small>({{ '{:,.1f}'.format(test.kaynak_batch_kg) }} KG batch)</small></th>
-            <th class="ngsk-th-r">Test KG<br><small>({{ '{:,.3f}'.format(test.test_batch_kg) }} KG — {{ test.makina }})</small></th>
-            <th class="ngsk-th-r">Oran %</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for k in kalemler %}
-          {% set oran = (k.orjinal_miktar_kg / test.kaynak_batch_kg * 100) if test.kaynak_batch_kg > 0 else 0 %}
-          <tr>
-            <td class="ngrc-sira">{{ k.sira }}</td>
-            <td>
-              <span class="ngrc-kod">{{ k.stok_kod }}</span>
-              <span class="ngrc-stok-ad">{{ k.stok_ad }}</span>
-            </td>
-            <td>
-              <span class="ngrc-kat-rozet ngrc-kat-{{ k.kategori|lower }}">{{ k.kategori }}</span>
-            </td>
-            <td class="ngsk-td-r">
-              <span class="ngat-orj-kg">{{ '{:,.3f}'.format(k.orjinal_miktar_kg) }}</span>
-              <span class="ngsk-birim"> KG</span>
-            </td>
-            <td class="ngsk-td-r ngat-test-hucre">
-              <strong>{{ '{:,.4f}'.format(k.test_miktar_kg) }}</strong>
-              <span class="ngsk-birim"> KG</span>
-            </td>
-            <td class="ngsk-td-r" style="color:#9ca3af;font-size:12px">
-              {{ '{:.1f}'.format(oran) }}%
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-        <tfoot>
-          <tr class="ngrc-toplam-satir">
-            <td colspan="3">Toplam</td>
-            <td class="ngsk-td-r">
-              <strong>{{ '{:,.3f}'.format(test.kaynak_batch_kg) }}</strong>
-              <span class="ngsk-birim"> KG</span>
-            </td>
-            <td class="ngsk-td-r">
-              <strong>{{ '{:,.4f}'.format(test.test_batch_kg) }}</strong>
-              <span class="ngsk-birim"> KG</span>
-            </td>
-            <td></td>
-          </tr>
-        </tfoot>
-      </table>
-    </div>
-
-    {# Test notları #}
-    {% if test.notlar %}
-    <div class="ngat-not-kutu">
-      <strong>Not:</strong> {{ test.notlar }}
-    </div>
-    {% endif %}
-
-    {% endif %}
-  </div>
-
-  {# ═══════════════════════════════════════════════════════════ #}
-  {# SEKME 2 — SONUÇ KAYDI                                       #}
-  {# KURAL: Ana reçete yazılmaz. Sadece arge_test kaydı güncellenir. #}
-  {# ═══════════════════════════════════════════════════════════ #}
-  <div id="at-sekme-sonuc" class="ngsd-sekme-icerik" style="display:none">
-
-    {% if test.durum in ['ONAYLANDI', 'REDDEDILDI'] %}
-    <div class="ngat-not-kutu" style="background:#fef3c7;border-color:#fde68a">
-      Bu test kilitlenmiştir ({{ test.durum }}). Değişiklik yapılamaz.
-    </div>
-    {% endif %}
-
-    <div class="ngat-sonuc-kart">
-      <div class="ngrc-bilgi-baslik">Test Sonucu</div>
-
-      <div class="ngrc-arge-form">
-        <div class="ngsk-fg">
-          <label>Durum</label>
-          <select id="at-durum-sel" {% if test.durum in ['ONAYLANDI','REDDEDILDI'] %}disabled{% endif %}>
-            {% for d in ['TEST_EDILDI','BASARILI','BASARISIZ','ONAYA_GONDERILDI','ONAYLANDI','REDDEDILDI'] %}
-            <option value="{{ d }}" {% if test.durum == d %}selected{% endif %}>
-              {{ d.replace('_',' ') }}
-            </option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="ngsk-fg" style="max-width:160px">
-          <label>Shore Değeri</label>
-          <input type="number" id="at-shore" value="{{ test.shore_degeri or '' }}"
-                 step="0.1" min="0" max="100"
-                 {% if test.durum in ['ONAYLANDI','REDDEDILDI'] %}disabled{% endif %}>
-        </div>
-        <div class="ngsk-fg" style="max-width:160px">
-          <label>Renk Tuttu?</label>
-          <select id="at-renk-tuttu" {% if test.durum in ['ONAYLANDI','REDDEDILDI'] %}disabled{% endif %}>
-            <option value="">Seçilmedi</option>
-            <option value="1" {% if test.renk_tuttu == 1 %}selected{% endif %}>Evet</option>
-            <option value="0" {% if test.renk_tuttu == 0 %}selected{% endif %}>Hayır</option>
-          </select>
-        </div>
-        <div class="ngsk-fg" style="max-width:160px">
-          <label>Çekme Problemi?</label>
-          <select id="at-cekme" {% if test.durum in ['ONAYLANDI','REDDEDILDI'] %}disabled{% endif %}>
-            <option value="">Seçilmedi</option>
-            <option value="0" {% if test.cekme_problemi == 0 %}selected{% endif %}>Yok</option>
-            <option value="1" {% if test.cekme_problemi == 1 %}selected{% endif %}>Var</option>
-          </select>
-        </div>
-        <div class="ngsk-fg" style="flex:2">
-          <label>Köpürme Notu</label>
-          <input type="text" id="at-kopurme" value="{{ test.kopurme_notu or '' }}"
-                 placeholder="Normal / Az / Çok…"
-                 {% if test.durum in ['ONAYLANDI','REDDEDILDI'] %}disabled{% endif %}>
-        </div>
-        <div class="ngsk-fg" style="width:100%">
-          <label>Sonuç Notu</label>
-          <input type="text" id="at-sonuc-not" value="{{ test.sonuc_notu or '' }}"
-                 placeholder="Kısa değerlendirme…"
-                 {% if test.durum in ['ONAYLANDI','REDDEDILDI'] %}disabled{% endif %}>
-        </div>
-        <div class="ngsk-fg" style="width:100%">
-          <label>Genel Açıklama</label>
-          <input type="text" id="at-genel-aciklama" value="{{ test.genel_aciklama or '' }}"
-                 placeholder="Detaylı notlar…"
-                 {% if test.durum in ['ONAYLANDI','REDDEDILDI'] %}disabled{% endif %}>
-        </div>
+    {# ── SOL: Kaynak Üretim Reçetesi ── #}
+    <div class="ad-panel ad-panel-sol">
+      <div class="ad-panel-hdr">
+        <span class="ad-panel-baslik">KAYNAK ÜRETİM REÇETESİ</span>
+      </div>
+      <div class="ad-kaynak-baslik">
+        <strong>{{ test.formul_ad }} + {{ renk_goster }}</strong>
+        <span class="ad-kaynak-alt">{{ test.formul_kod }} · {{ test.boyut }}</span>
+      </div>
+      <div class="ad-batch-ozet">
+        <span>Test batch: <strong>{{ '{:,.3f}'.format(test.test_batch_kg) }} KG</strong></span>
+        <span>Kaynak: <strong>{{ '{:,.1f}'.format(test.kaynak_batch_kg) }} KG</strong></span>
       </div>
 
-      {% if test.durum not in ['ONAYLANDI', 'REDDEDILDI'] %}
-      <div style="display:flex;gap:10px;align-items:center">
-        <button class="ngsk-btn-yeni" onclick="atSonucKaydet()">Sonucu Kaydet</button>
-        <div id="at-hata"   class="ngrc-klon-hata"   style="display:none"></div>
-        <div id="at-basari" class="ngrc-klon-basari"  style="display:none"></div>
+      {% if not kalemler %}
+      <div class="ad-bos">Bu test için kalem kaydı yok.</div>
+      {% else %}
+      <div class="ad-tablo-scroll">
+        <table class="ad-tablo">
+          <thead>
+            <tr>
+              <th>Hammadde</th>
+              <th>Kategori</th>
+              <th class="r">Orijinal KG</th>
+              <th class="r">Test KG</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for k in kalemler %}
+            <tr>
+              <td>
+                <span class="ad-stok-kod">{{ k.stok_kod }}</span>
+                <span class="ad-stok-ad">{{ k.stok_ad }}</span>
+              </td>
+              <td><span class="ad-kat ad-kat-{{ (k.kategori or 'diger')|lower }}">{{ k.kategori or '—' }}</span></td>
+              <td class="r">{{ '{:,.3f}'.format(k.orjinal_miktar_kg) }}</td>
+              <td class="r ad-test-kg"><strong>{{ '{:,.4f}'.format(k.test_miktar_kg) }}</strong></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="2"><strong>TOPLAM</strong></td>
+              <td class="r"><strong>{{ '{:,.3f}'.format(test.kaynak_batch_kg) }}</strong></td>
+              <td class="r"><strong>{{ '{:,.4f}'.format(test.test_batch_kg) }}</strong></td>
+            </tr>
+          </tfoot>
+        </table>
       </div>
       {% endif %}
-
     </div>
 
-    {# Mevcut kayıtlı sonuç #}
-    {% if test.sonuc_notu or test.genel_aciklama %}
-    <div class="ngat-not-kutu" style="margin-top:16px">
-      {% if test.sonuc_notu %}<p><strong>Sonuç:</strong> {{ test.sonuc_notu }}</p>{% endif %}
-      {% if test.genel_aciklama %}<p><strong>Açıklama:</strong> {{ test.genel_aciklama }}</p>{% endif %}
-    </div>
-    {% endif %}
-
-  </div>
-
-</div>{# /.ng-sayfa #}
-
-{# ═══════════════════════════════════════════════════════════ #}
-{# MODAL: ÜRETİM REÇETESİ OLUŞTUR                              #}
-{# FAZ-4C-4 — sadece ONAYLANDI testlerde görünür               #}
-{# KURAL: nexgen_stok_hareket YAZILMAZ                         #}
-{# ═══════════════════════════════════════════════════════════ #}
-{% if can_manage and test.durum == 'ONAYLANDI' and not olusan_uv %}
-<div id="ur-modal-bg" class="ngat-aktarim-modal-bg" style="display:none" onclick="urModalBgClick(event)">
-  <div class="ngat-aktarim-modal">
-    <div class="ngat-aktarim-modal-hdr">
-      <h3>Üretim Reçetesi Oluştur</h3>
-      <button class="ngat-aktarim-modal-kapat" onclick="urKapat()">✕</button>
-    </div>
-    <div class="ngat-aktarim-modal-body">
-
-      <div style="font-size:12px;color:#6b7280;margin-bottom:14px">
-        Test: <strong>{{ test.test_no }}</strong> —
-        Kaynak: {{ test.formul_kod }} / {{ test.renk_ad }} / {{ test.boyut }}
-        ({{ '{:,.3f}'.format(test.kaynak_batch_kg) }} KG)
-        <br>
-        Test kalemleri <strong>geri ölçeklenerek</strong> {{ '{:,.3f}'.format(test.kaynak_batch_kg) }} KG üretim reçetesi oluşturulacak.
+    {# ── SAĞ: Test Sonucu ── #}
+    <div class="ad-panel ad-panel-sag">
+      <div class="ad-panel-hdr ad-panel-hdr-mor">
+        <span class="ad-panel-baslik">TEST SONUCU</span>
       </div>
 
-      <div class="ngrc-arge-form">
-        <div class="ngsk-fg" style="width:100%">
-          <label>Hedef Formül</label>
-          <select id="ur-formul" onchange="urFormulSec()">
-            <option value="">Yükleniyor…</option>
-          </select>
-        </div>
-        <div class="ngsk-fg" style="width:100%">
-          <label>Renk Varyantı</label>
-          <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">
-            <div style="flex:1;min-width:160px">
-              <select id="ur-mevcut-renk" style="width:100%" onchange="urRenkSec()">
-                <option value="">— Yeni renk oluştur —</option>
-              </select>
-              <div style="font-size:11px;color:#9ca3af;margin-top:3px">Mevcut renk seç (opsiyonel)</div>
-            </div>
-            <div style="flex:1;min-width:160px">
-              <input type="text" id="ur-yeni-renk" placeholder="Yeni renk adı (örn: MAVİ)"
-                     maxlength="80" oninput="urOnizle()">
-              <div style="font-size:11px;color:#9ca3af;margin-top:3px" id="ur-renk-yorum">Yeni renk oluşturulacak</div>
+      {% if kilitli %}
+      <div class="ad-uyari">Bu test kilitlenmiştir ({{ durum_etiket }}). Değişiklik yapılamaz.</div>
+      {% endif %}
+
+      <div class="ad-sonuc-form">
+        <div class="ad-form-satir ad-shore-satir">
+          <div class="ad-fg">
+            <label>Shore hedef</label>
+            <div class="ad-readonly">
+              {% if test.shore_hedef is not none %}{{ '{:g}'.format(test.shore_hedef) }}{% else %}—{% endif %}
             </div>
           </div>
+          <div class="ad-fg">
+            <label>Shore ölçülen</label>
+            <input type="number" id="ad-shore" value="{{ test.shore_degeri if test.shore_degeri is not none else '' }}"
+                   step="0.1" min="0" max="100" placeholder="Ölçüm değeri"
+                   {% if kilitli %}disabled{% endif %}>
+          </div>
         </div>
-        <div class="ngsk-fg" style="max-width:160px">
+
+        <div class="ad-form-satir">
+          <div class="ad-fg">
+            <label>Renk sonucu</label>
+            <select id="ad-renk-tuttu" {% if kilitli %}disabled{% endif %}>
+              <option value="">Seçilmedi</option>
+              <option value="1" {% if test.renk_tuttu == 1 %}selected{% endif %}>Renk tuttu</option>
+              <option value="0" {% if test.renk_tuttu == 0 %}selected{% endif %}>Renk tutmadı</option>
+            </select>
+          </div>
+          <div class="ad-fg">
+            <label>Numune sonucu</label>
+            <select id="ad-cekme" {% if kilitli %}disabled{% endif %}>
+              <option value="">Seçilmedi</option>
+              <option value="0" {% if test.cekme_problemi == 0 %}selected{% endif %}>Sorun yok</option>
+              <option value="1" {% if test.cekme_problemi == 1 %}selected{% endif %}>Çekme / numune sorunu var</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="ad-fg">
+          <label>Köpürme / fiziksel gözlem</label>
+          <input type="text" id="ad-kopurme" value="{{ test.kopurme_notu or '' }}"
+                 placeholder="Normal / Az / Çok…" {% if kilitli %}disabled{% endif %}>
+        </div>
+
+        <div class="ad-fg">
+          <label>Açıklama</label>
+          <textarea id="ad-genel-aciklama" rows="3" placeholder="Laboratuvar gözlemi, numune notu…"
+                    {% if kilitli %}disabled{% endif %}>{{ test.genel_aciklama or '' }}</textarea>
+        </div>
+
+        <div class="ad-fg">
+          <label>Kısa sonuç notu</label>
+          <input type="text" id="ad-sonuc-not" value="{{ test.sonuc_notu or '' }}"
+                 placeholder="Özet değerlendirme…" {% if kilitli %}disabled{% endif %}>
+        </div>
+
+        <input type="hidden" id="ad-durum-sel" value="{{ test.durum or 'TASLAK' }}">
+      </div>
+
+      <div id="ad-hata" class="ad-msg ad-msg-hata" style="display:none"></div>
+      <div id="ad-basari" class="ad-msg ad-msg-ok" style="display:none"></div>
+    </div>
+  </div>
+
+  {# ══ ALT BUTONLAR ══ #}
+  <div class="ad-alt-bar">
+    <a href="/nexgen/tablet/etiket/arge/{{ test.test_no }}" class="ad-btn-etiket" target="_blank">
+      🏷 Etiket Yazdır
+    </a>
+    {% if not kilitli and can_create %}
+    <button class="ad-btn-kaydet" id="ad-btn-kaydet" onclick="adSonucKaydet()">Sonuç Kaydet</button>
+    <button class="ad-btn-onay" id="ad-btn-onay" onclick="adOnayaGonder()">Onaya Gönder</button>
+    {% endif %}
+    <a href="/nexgen/arge" class="ad-btn-geri">← Listeye Dön</a>
+  </div>
+
+</div>
+
+{# ══ MODAL: Üretim Reçetesi (ONAYLANDI) ══ #}
+{% if can_manage and test.durum == 'ONAYLANDI' and not olusan_uv %}
+<div id="ur-modal-bg" class="ad-modal-bg" style="display:none" onclick="urModalBgClick(event)">
+  <div class="ad-modal">
+    <div class="ad-modal-hdr">
+      <h3>Üretim Reçetesi Oluştur</h3>
+      <button class="ad-modal-kapat" onclick="urKapat()">✕</button>
+    </div>
+    <div class="ad-modal-body">
+      <div class="ad-modal-info">
+        Test: <strong>{{ test.test_no }}</strong> — Kaynak: {{ test.formul_kod }} / {{ test.renk_ad }} / {{ test.boyut }}
+      </div>
+      <div class="ad-form-grid">
+        <div class="ad-fg ad-fg-full">
+          <label>Hedef Formül</label>
+          <select id="ur-formul" onchange="urFormulSec()"><option value="">Yükleniyor…</option></select>
+        </div>
+        <div class="ad-fg ad-fg-full">
+          <label>Renk Varyantı</label>
+          <div class="ad-renk-sec">
+            <select id="ur-mevcut-renk" onchange="urRenkSec()"><option value="">— Yeni renk oluştur —</option></select>
+            <input type="text" id="ur-yeni-renk" placeholder="Yeni renk adı" maxlength="80" oninput="urOnizle()">
+          </div>
+          <div class="ad-alt-deger" id="ur-renk-yorum">Yeni renk oluşturulacak</div>
+        </div>
+        <div class="ad-fg">
           <label>Üretim Tipi</label>
           <select id="ur-boyut" onchange="urOnizle()">
             <option value="LARGE">LARGE</option>
@@ -316,185 +246,263 @@
             <option value="STANDART">STANDART</option>
           </select>
         </div>
-        <div class="ngsk-fg" style="max-width:200px">
+        <div class="ad-fg">
           <label>Reçete Durumu</label>
           <select id="ur-recete-durum">
             <option value="ONAYLI">ONAYLI</option>
             <option value="URETIME_ACIK">URETIME_ACIK</option>
           </select>
         </div>
-        <div class="ngsk-fg" style="width:100%">
+        <div class="ad-fg ad-fg-full">
           <label>Notlar</label>
           <input type="text" id="ur-notlar" placeholder="Aktarım notu…" maxlength="200">
         </div>
       </div>
-
-      {# Önizleme #}
-      <div id="ur-onizleme" class="ngat-onizleme-band" style="display:none">
-        <div id="ur-onizleme-text"></div>
-      </div>
-
+      <div id="ur-onizleme" class="ad-onizleme" style="display:none"><div id="ur-onizleme-text"></div></div>
     </div>
-    <div class="ngat-aktarim-modal-ftr">
-      <button class="ngsk-btn-yeni" id="ur-kaydet-btn" onclick="urKaydet()" disabled>
-        Üretim Reçetesi Oluştur
-      </button>
-      <button class="ngsk-btn-iptal" onclick="urKapat()">Vazgeç</button>
-      <div id="ur-hata"   class="ngrc-klon-hata"   style="display:none;flex:1"></div>
-      <div id="ur-basari" class="ngrc-klon-basari"  style="display:none;flex:1"></div>
+    <div class="ad-modal-ftr">
+      <button class="ad-btn-sari" id="ur-kaydet-btn" onclick="urKaydet()" disabled>Üretim Reçetesi Oluştur</button>
+      <button class="ad-btn-geri" onclick="urKapat()">Vazgeç</button>
+      <div id="ur-hata" class="ad-msg ad-msg-hata" style="display:none;flex:1"></div>
+      <div id="ur-basari" class="ad-msg ad-msg-ok" style="display:none;flex:1"></div>
     </div>
   </div>
 </div>
 {% endif %}
 
 <style>
-/* ── AR-GE Test Detay ── */
-.ngat-bilgi-band {
-  display:flex; gap:0; flex-wrap:wrap;
-  background:#fff; border:1px solid rgba(17,24,39,.08);
-  border-radius:12px; margin-bottom:16px; overflow:hidden;
+*{ box-sizing:border-box; }
+.ad-sayfa { display:flex; flex-direction:column; gap:12px; max-width:1300px; }
+
+/* Breadcrumb */
+.ad-bc { display:flex; align-items:center; gap:8px; font-size:12px; }
+.ad-bc-link { color:#0891b2; text-decoration:none; font-weight:600; }
+.ad-bc-link:hover { text-decoration:underline; }
+.ad-bc-sep { color:#cbd5e1; }
+.ad-bc-aktif { font-family:'Courier New',monospace; font-weight:700; color:#0f172a; }
+
+/* Üst kart */
+.ad-ust-kart {
+  background:#fff; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden;
   box-shadow:0 1px 4px rgba(15,23,42,.04);
 }
-.ngat-bilgi-item {
-  display:flex; flex-direction:column; gap:2px;
-  padding:10px 16px; border-right:1px solid #f3f4f6; flex:1; min-width:110px;
+.ad-ust-grid {
+  display:grid; grid-template-columns:repeat(4, 1fr); gap:0;
 }
-.ngat-bilgi-item:last-child { border-right:none; }
-.ngat-tablo { min-width:600px; }
-.ngat-test-hucre { background:#f0fdf4; }
-.ngat-orj-kg { color:#6b7280; }
-.ngat-yeni-renk-baslik {
-  font-size:14px; font-weight:700; margin-bottom:12px;
-  display:flex; align-items:center; gap:10px;
+.ad-ust-hucre {
+  padding:12px 16px; border-right:1px solid #f1f5f9; border-bottom:1px solid #f1f5f9;
 }
-.ngat-ok { font-size:20px; color:#d1d5db; }
-.ngat-not-kutu {
-  background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px;
-  padding:10px 14px; font-size:13px; margin-top:12px; line-height:1.7;
+.ad-ust-hucre-vurgu { background:#f8fafc; }
+.ad-ust-hucre-genis { grid-column:span 2; }
+.ad-etiket {
+  font-size:9px; font-weight:700; color:#94a3b8;
+  text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px;
 }
-.ngat-sonuc-kart {
-  background:#fff; border:1px solid rgba(17,24,39,.06);
-  border-radius:12px; padding:20px;
-  box-shadow:0 2px 8px rgba(15,23,42,.04);
+.ad-arge-no {
+  font-family:'Courier New',monospace; font-size:16px; font-weight:800; color:#0891b2;
 }
+.ad-lot { font-family:'Courier New',monospace; font-size:12px; font-weight:600; color:#374151; }
+.ad-deger { font-size:13px; font-weight:600; color:#0f172a; line-height:1.4; }
+.ad-alt-deger { font-size:10px; color:#94a3b8; margin-top:2px; }
+.ad-talep { font-weight:400; color:#374151; font-size:12px; }
 
-/* reçete detay'dan taşınan ortak stiller */
-.ngrc-kod-baslik {
-  font-family:'Courier New',monospace; font-size:13px; color:#0891b2; font-weight:700;
+/* Rozet */
+.ad-rozet {
+  display:inline-block; font-size:9px; font-weight:800; padding:3px 8px;
+  border-radius:5px; letter-spacing:.3px;
 }
-.ngrc-batch-etiket {
-  font-size:10px; font-weight:700; color:#374151;
-  text-transform:uppercase; letter-spacing:.4px;
+.ad-rozet-taslak { background:#f1f5f9; color:#64748b; }
+.ad-rozet-test-edildi, .ad-rozet-basarili { background:#ecfdf5; color:#059669; }
+.ad-rozet-basarisiz, .ad-rozet-reddedildi { background:#fef2f2; color:#dc2626; }
+.ad-rozet-onaya-gonderildi { background:#fefce8; color:#a16207; }
+.ad-rozet-onaylandi { background:#d1fae5; color:#059669; }
+
+.ad-olusan-band {
+  padding:10px 16px; background:#f0fdf4; border-top:1px solid #bbf7d0;
+  font-size:12px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;
 }
-.ngrc-batch-deger { font-size:14px; font-weight:700; color:#111827; }
-.ngrc-batch-ana   { font-size:16px; color:#059669; }
-.ngrc-rd-rozet {
-  display:inline-block; padding:2px 8px; border-radius:7px;
-  font-size:11px; font-weight:700; border:1px solid transparent;
+.ad-link { color:#0891b2; font-weight:600; text-decoration:none; }
+
+/* Orta 2 kolon */
+.ad-orta {
+  display:grid; grid-template-columns:1fr 1fr; gap:12px; min-height:360px;
 }
-.ngrc-rd-taslak        { background:#f1f5f9; color:#64748b; border-color:#e2e8f0; }
-.ngrc-rd-deneme        { background:#fef3c7; color:#92400e; border-color:#fde68a; }
-.ngrc-rd-onayli        { background:#d1fae5; color:#059669; border-color:#a7f3d0; }
-.ngrc-rd-uretime-acik  { background:#dbeafe; color:#1d4ed8; border-color:#bfdbfe; }
-.ngrc-rd-pasif         { background:#f9fafb; color:#9ca3af; border-color:#e5e7eb; }
-.ngrc-rd-test-edildi   { background:#fef3c7; color:#92400e; border-color:#fde68a; }
-.ngrc-rd-basarili      { background:#d1fae5; color:#059669; border-color:#a7f3d0; }
-.ngrc-rd-basarisiz     { background:#fee2e2; color:#dc2626; border-color:#fecaca; }
-.ngrc-rd-onaya-gonderildi { background:#fef3c7; color:#92400e; border-color:#fde68a; }
-.ngrc-rd-onaylandi     { background:#dbeafe; color:#1d4ed8; border-color:#bfdbfe; }
-.ngrc-rd-reddedildi    { background:#fee2e2; color:#dc2626; border-color:#fecaca; }
-.ngrc-klon-hata {
-  font-size:13px; color:#dc2626; background:#fee2e2;
-  border:1px solid #fecaca; border-radius:6px; padding:6px 12px;
+.ad-panel {
+  background:#fff; border:1px solid #e5e7eb; border-radius:12px;
+  display:flex; flex-direction:column; overflow:hidden;
 }
-.ngrc-klon-basari {
-  font-size:13px; color:#059669; background:#d1fae5;
-  border:1px solid #a7f3d0; border-radius:6px; padding:6px 12px;
+.ad-panel-hdr {
+  padding:10px 14px; background:#0f172a;
 }
-.ngrc-arge-form {
-  display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;
-  background:#f9fafb; border:1px solid #e5e7eb; border-radius:10px;
-  padding:14px; margin-bottom:14px;
+.ad-panel-hdr-mor { background:#312e81; }
+.ad-panel-baslik {
+  font-size:11px; font-weight:700; color:#f1f5f9;
+  letter-spacing:.5px; text-transform:uppercase;
 }
-.ngat-baglanti-item {
-  background:#ecfdf5; border-left:3px solid #059669;
+.ad-kaynak-baslik { padding:12px 14px 6px; }
+.ad-kaynak-baslik strong { font-size:14px; color:#0f172a; }
+.ad-kaynak-alt { display:block; font-size:11px; color:#94a3b8; margin-top:2px; }
+.ad-batch-ozet {
+  display:flex; gap:16px; padding:0 14px 10px; font-size:11px; color:#6b7280;
 }
-.ngat-aktarim-modal-bg {
+.ad-batch-ozet strong { color:#0f172a; }
+
+.ad-tablo-scroll { flex:1; overflow-y:auto; min-height:0; max-height:420px; }
+.ad-tablo { width:100%; border-collapse:collapse; font-size:12px; }
+.ad-tablo thead th {
+  padding:6px 10px; text-align:left; font-size:10px; font-weight:600;
+  color:#94a3b8; text-transform:uppercase; background:#fafafa;
+  border-bottom:1px solid #f1f5f9; position:sticky; top:0;
+}
+.ad-tablo th.r, .ad-tablo td.r { text-align:right; }
+.ad-tablo tbody tr { border-bottom:1px solid #f8fafc; }
+.ad-tablo tbody tr:hover { background:#fafafa; }
+.ad-tablo td { padding:7px 10px; vertical-align:middle; }
+.ad-tablo tfoot td { padding:8px 10px; background:#f9fafb; border-top:2px solid #e5e7eb; }
+.ad-stok-kod { font-family:'Courier New',monospace; font-size:10px; color:#0891b2; display:block; }
+.ad-stok-ad { font-size:12px; font-weight:600; color:#0f172a; }
+.ad-test-kg { background:#f0fdf4; }
+.ad-kat {
+  font-size:9px; font-weight:700; padding:2px 6px; border-radius:4px;
+  background:#f1f5f9; color:#64748b;
+}
+.ad-kat-hammadde { background:#dbeafe; color:#1d4ed8; }
+.ad-kat-boya { background:#fae8ff; color:#7e22ce; }
+.ad-kat-katki { background:#d1fae5; color:#065f46; }
+
+/* Sonuç form */
+.ad-sonuc-form { padding:14px; display:flex; flex-direction:column; gap:12px; flex:1; }
+.ad-form-satir { display:flex; gap:12px; flex-wrap:wrap; }
+.ad-shore-satir .ad-fg { flex:1; min-width:120px; }
+.ad-fg { display:flex; flex-direction:column; gap:4px; flex:1; min-width:140px; }
+.ad-fg-full { width:100%; flex:none; }
+.ad-fg label {
+  font-size:10px; font-weight:700; color:#64748b;
+  text-transform:uppercase; letter-spacing:.3px;
+}
+.ad-fg input, .ad-fg select, .ad-fg textarea {
+  padding:8px 10px; border:1px solid #e5e7eb; border-radius:8px;
+  font-size:13px; color:#0f172a; background:#fff;
+}
+.ad-fg input:focus, .ad-fg select:focus, .ad-fg textarea:focus {
+  outline:none; border-color:#f6c343; box-shadow:0 0 0 2px rgba(246,195,67,.25);
+}
+.ad-fg input:disabled, .ad-fg select:disabled, .ad-fg textarea:disabled {
+  background:#f9fafb; color:#6b7280;
+}
+.ad-readonly {
+  padding:8px 10px; background:#f8fafc; border:1px solid #e5e7eb;
+  border-radius:8px; font-size:14px; font-weight:700; color:#0f172a;
+}
+.ad-uyari {
+  margin:12px 14px 0; padding:10px 12px; background:#fef3c7;
+  border:1px solid #fde68a; border-radius:8px; font-size:12px; color:#92400e;
+}
+.ad-bos { padding:32px; text-align:center; color:#94a3b8; font-size:13px; }
+
+/* Alt bar */
+.ad-alt-bar {
+  display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+  padding:12px 16px; background:#fff; border:1px solid #e5e7eb; border-radius:12px;
+}
+.ad-btn-etiket {
+  padding:9px 14px; border-radius:8px; background:#f8fafc; color:#374151;
+  font-size:12px; font-weight:600; text-decoration:none; border:1px solid #e5e7eb;
+}
+.ad-btn-etiket:hover { background:#eff6ff; border-color:#bfdbfe; color:#1d4ed8; }
+.ad-btn-kaydet {
+  padding:9px 16px; border-radius:8px; background:#0f172a; color:#f6c343;
+  font-size:12px; font-weight:700; border:none; cursor:pointer;
+}
+.ad-btn-kaydet:hover { background:#1e293b; }
+.ad-btn-kaydet:disabled { opacity:.6; cursor:not-allowed; }
+.ad-btn-onay {
+  padding:9px 16px; border-radius:8px; background:#fef3c7; color:#92400e;
+  font-size:12px; font-weight:700; border:1px solid #fde68a; cursor:pointer;
+}
+.ad-btn-onay:hover { background:#fde68a; }
+.ad-btn-sari {
+  padding:8px 14px; border-radius:8px; background:#f6c343; color:#0f172a;
+  font-size:12px; font-weight:700; border:none; cursor:pointer;
+}
+.ad-btn-geri {
+  margin-left:auto; padding:9px 12px; color:#64748b; font-size:12px;
+  text-decoration:none; font-weight:600;
+}
+.ad-btn-geri:hover { color:#0f172a; }
+
+.ad-msg { font-size:12px; padding:8px 12px; border-radius:8px; margin:0 14px 14px; }
+.ad-msg-hata { background:#fef2f2; color:#dc2626; border:1px solid #fecaca; }
+.ad-msg-ok { background:#ecfdf5; color:#059669; border:1px solid #bbf7d0; }
+
+/* Modal */
+.ad-modal-bg {
   position:fixed; inset:0; background:rgba(15,23,42,.45);
-  display:flex; align-items:center; justify-content:center;
-  z-index:9999; padding:16px;
+  display:flex; align-items:center; justify-content:center; z-index:9999; padding:16px;
 }
-.ngat-aktarim-modal {
-  background:#fff; border-radius:16px; width:100%; max-width:540px;
-  box-shadow:0 20px 60px rgba(15,23,42,.18);
-  display:flex; flex-direction:column; max-height:90vh;
-  overflow:hidden;
+.ad-modal {
+  background:#fff; border-radius:16px; width:100%; max-width:520px;
+  box-shadow:0 20px 60px rgba(15,23,42,.18); max-height:90vh; overflow:hidden;
+  display:flex; flex-direction:column;
 }
-.ngat-aktarim-modal-hdr {
-  padding:18px 22px 14px; border-bottom:1px solid #f3f4f6;
+.ad-modal-hdr {
+  padding:16px 20px; border-bottom:1px solid #f1f5f9;
   display:flex; align-items:center; justify-content:space-between;
 }
-.ngat-aktarim-modal-hdr h3 {
-  margin:0; font-size:15px; font-weight:700; color:#111827;
+.ad-modal-hdr h3 { margin:0; font-size:15px; font-weight:700; }
+.ad-modal-kapat { background:none; border:none; font-size:20px; cursor:pointer; color:#94a3b8; }
+.ad-modal-body { padding:16px 20px; overflow-y:auto; flex:1; }
+.ad-modal-info { font-size:12px; color:#6b7280; margin-bottom:14px; }
+.ad-form-grid { display:flex; flex-wrap:wrap; gap:12px; }
+.ad-renk-sec { display:flex; gap:8px; flex-wrap:wrap; }
+.ad-renk-sec select, .ad-renk-sec input { flex:1; min-width:140px; }
+.ad-onizleme {
+  margin-top:12px; padding:10px 12px; background:#f0fdf4;
+  border:1px solid #bbf7d0; border-radius:8px; font-size:12px;
 }
-.ngat-aktarim-modal-kapat {
-  background:none; border:none; cursor:pointer; color:#9ca3af;
-  font-size:20px; line-height:1; padding:2px;
+.ad-modal-ftr {
+  padding:12px 20px; border-top:1px solid #f1f5f9;
+  display:flex; gap:10px; align-items:center; flex-wrap:wrap;
 }
-.ngat-aktarim-modal-body {
-  padding:20px 22px; overflow-y:auto; flex:1;
-}
-.ngat-aktarim-modal-ftr {
-  padding:14px 22px; border-top:1px solid #f3f4f6;
-  display:flex; gap:10px; align-items:center;
-}
-.ngat-onizleme-band {
-  background:#f0fdf4; border:1px solid #a7f3d0; border-radius:8px;
-  padding:10px 14px; margin-bottom:14px; font-size:13px;
+
+@media(max-width:900px){
+  .ad-orta { grid-template-columns:1fr; }
+  .ad-ust-grid { grid-template-columns:1fr 1fr; }
+  .ad-ust-hucre-genis { grid-column:span 2; }
+  .ad-btn-geri { margin-left:0; }
 }
 </style>
 
 <script>
 const AT_TEST_ID = {{ test.id }};
-const AT_DURUM   = '{{ test.durum or "TASLAK" }}';
 const AT_KAYNAK_BATCH = {{ test.kaynak_batch_kg }};
 const AT_TEST_BATCH   = {{ test.test_batch_kg }};
 
-const AT_SEKMELER = ['karsilastirma', 'sonuc'];
-function atSekme(hedef) {
-  AT_SEKMELER.forEach(function(s) {
-    var el = document.getElementById('at-sekme-' + s);
-    if (el) el.style.display = (s === hedef ? 'block' : 'none');
-  });
-  document.querySelectorAll('.ngsd-sekme-btn').forEach(function(btn) {
-    btn.classList.toggle('aktif', btn.dataset.sekme === hedef);
-  });
-  try { history.replaceState(null, '', '#' + hedef); } catch(e){}
-}
-(function(){
-  var h = (location.hash||'#karsilastirma').replace('#','');
-  atSekme(AT_SEKMELER.indexOf(h) >= 0 ? h : 'karsilastirma');
-})();
+var DURUM_ETIKET = {
+  'TASLAK':'TASLAK','TEST_EDILDI':'TEST EDİLDİ','BASARILI':'BAŞARILI',
+  'BASARISIZ':'BAŞARISIZ','ONAYA_GONDERILDI':'ONAYA GÖNDERİLDİ',
+  'ONAYLANDI':'ONAYLANDI','REDDEDILDI':'REDDEDİLDİ'
+};
 
-function atSonucKaydet() {
-  var btn      = document.querySelector('[onclick="atSonucKaydet()"]');
-  var hataDiv  = document.getElementById('at-hata');
-  var basariDiv = document.getElementById('at-basari');
-  hataDiv.style.display   = 'none';
+function adSonucKaydet(zorlaDurum){
+  var hataDiv = document.getElementById('ad-hata');
+  var basariDiv = document.getElementById('ad-basari');
+  var btnKaydet = document.getElementById('ad-btn-kaydet');
+  var btnOnay = document.getElementById('ad-btn-onay');
+  hataDiv.style.display = 'none';
   basariDiv.style.display = 'none';
 
-  var durum = document.getElementById('at-durum-sel').value;
-  if (!durum) {
-    hataDiv.textContent = 'Durum seçin.';
-    hataDiv.style.display = 'block';
-    return;
-  }
+  var durumEl = document.getElementById('ad-durum-sel');
+  var durum = zorlaDurum || durumEl.value || 'TEST_EDILDI';
+  if (durum === 'TASLAK') durum = 'TEST_EDILDI';
+  if (zorlaDurum) durumEl.value = zorlaDurum;
 
-  if (btn) { btn.disabled = true; btn.textContent = 'Kaydediliyor…'; }
+  if (btnKaydet) { btnKaydet.disabled = true; btnKaydet.textContent = 'Kaydediliyor…'; }
+  if (btnOnay) btnOnay.disabled = true;
 
-  var renkTuttu  = document.getElementById('at-renk-tuttu').value;
-  var cekme      = document.getElementById('at-cekme').value;
-  var shore      = document.getElementById('at-shore').value;
+  var renkTuttu = document.getElementById('ad-renk-tuttu').value;
+  var cekme = document.getElementById('ad-cekme').value;
+  var shore = document.getElementById('ad-shore').value;
 
   fetch('/nexgen/api/arge/sonuc-kaydet', {
     method: 'POST',
@@ -504,191 +512,154 @@ function atSonucKaydet() {
       durum:           durum,
       renk_tuttu:      renkTuttu !== '' ? parseInt(renkTuttu) : null,
       shore_degeri:    shore !== '' ? parseFloat(shore) : null,
-      kopurme_notu:    document.getElementById('at-kopurme').value.trim() || null,
+      kopurme_notu:    document.getElementById('ad-kopurme').value.trim() || null,
       cekme_problemi:  cekme !== '' ? parseInt(cekme) : null,
-      genel_aciklama:  document.getElementById('at-genel-aciklama').value.trim() || null,
-      sonuc_notu:      document.getElementById('at-sonuc-not').value.trim() || null
+      genel_aciklama:  document.getElementById('ad-genel-aciklama').value.trim() || null,
+      sonuc_notu:      document.getElementById('ad-sonuc-not').value.trim() || null
     })
   })
   .then(function(r){ return r.json(); })
-  .then(function(d) {
+  .then(function(d){
     if (d.ok) {
+      durumEl.value = durum;
       basariDiv.textContent = '✓ Sonuç kaydedildi.';
       basariDiv.style.display = 'block';
-      // Rozeti güncelle
-      var rozet = document.getElementById('at-durum-rozet');
+      var rozet = document.getElementById('ad-durum-rozet');
       if (rozet) {
-        rozet.textContent = durum.replace('_',' ');
-        rozet.className = 'ngrc-rd-rozet ngrc-rd-' + durum.toLowerCase().replace(/_/g,'-');
+        rozet.textContent = DURUM_ETIKET[durum] || durum;
+        rozet.className = 'ad-rozet ad-rozet-' + durum.toLowerCase().replace(/_/g,'-');
       }
-      if (btn) { btn.textContent = 'Kaydedildi ✓'; btn.disabled = false; }
+      if (btnKaydet) { btnKaydet.textContent = 'Kaydedildi ✓'; btnKaydet.disabled = false; }
+      if (btnOnay) btnOnay.disabled = false;
     } else {
-      hataDiv.textContent = d.hata || 'Hata.';
+      hataDiv.textContent = d.hata || 'Kayıt hatası.';
       hataDiv.style.display = 'block';
-      if (btn) { btn.disabled = false; btn.textContent = 'Sonucu Kaydet'; }
+      if (btnKaydet) { btnKaydet.disabled = false; btnKaydet.textContent = 'Sonuç Kaydet'; }
+      if (btnOnay) btnOnay.disabled = false;
     }
   })
-  .catch(function() {
+  .catch(function(){
     hataDiv.textContent = 'Bağlantı hatası.';
     hataDiv.style.display = 'block';
-    if (btn) { btn.disabled = false; btn.textContent = 'Sonucu Kaydet'; }
+    if (btnKaydet) { btnKaydet.disabled = false; btnKaydet.textContent = 'Sonuç Kaydet'; }
+    if (btnOnay) btnOnay.disabled = false;
   });
 }
-// ══════════════════════════════════════════════════════════════
-// FAZ-4C-4: ÜRETİM REÇETESİ OLUŞTUR
-// ══════════════════════════════════════════════════════════════
+
+function adOnayaGonder(){
+  if (!confirm('Test sonucu onaya gönderilecek. Devam?')) return;
+  adSonucKaydet('ONAYA_GONDERILDI');
+}
 
 var UR_FORMULLER = [];
 var UR_RENKLER   = [];
 
-function urAcModal() {
+function urAcModal(){
   document.getElementById('ur-modal-bg').style.display = 'flex';
   if (!UR_FORMULLER.length) urYukle();
 }
-function urKapat() {
-  document.getElementById('ur-modal-bg').style.display = 'none';
-}
-function urModalBgClick(e) {
-  if (e.target === document.getElementById('ur-modal-bg')) urKapat();
-}
+function urKapat(){ document.getElementById('ur-modal-bg').style.display = 'none'; }
+function urModalBgClick(e){ if (e.target.id === 'ur-modal-bg') urKapat(); }
 
-function urYukle() {
+function urYukle(){
   fetch('/nexgen/api/arge/hedef-formuller')
     .then(function(r){ return r.json(); })
-    .then(function(d) {
+    .then(function(d){
       UR_FORMULLER = d.formuller || [];
-      UR_RENKLER   = d.renkler || [];
-
+      UR_RENKLER = d.renkler || [];
       var sel = document.getElementById('ur-formul');
       sel.innerHTML = '<option value="">— Formül seçin —</option>';
-      UR_FORMULLER.forEach(function(f) {
+      UR_FORMULLER.forEach(function(f){
         var opt = document.createElement('option');
-        opt.value = f.id;
-        opt.textContent = f.kod + ' — ' + f.ad;
+        opt.value = f.id; opt.textContent = f.kod + ' — ' + f.ad;
         sel.appendChild(opt);
       });
-    })
-    .catch(function() {
-      var sel = document.getElementById('ur-formul');
-      sel.innerHTML = '<option value="">Yüklenemedi</option>';
     });
 }
 
-function urFormulSec() {
+function urFormulSec(){
   var formul_id = parseInt(document.getElementById('ur-formul').value) || 0;
-  var renk_sel  = document.getElementById('ur-mevcut-renk');
+  var renk_sel = document.getElementById('ur-mevcut-renk');
   renk_sel.innerHTML = '<option value="">— Yeni renk oluştur —</option>';
-
   if (formul_id) {
-    var renkler = UR_RENKLER.filter(function(r){ return r.formul_id === formul_id; });
-    renkler.forEach(function(r) {
+    UR_RENKLER.filter(function(r){ return r.formul_id === formul_id; }).forEach(function(r){
       var opt = document.createElement('option');
-      opt.value = r.id;
-      opt.textContent = r.ad + (r.boyutlar ? ' (' + r.boyutlar + ')' : '');
+      opt.value = r.id; opt.textContent = r.ad + (r.boyutlar ? ' (' + r.boyutlar + ')' : '');
       renk_sel.appendChild(opt);
     });
   }
   urOnizle();
 }
 
-function urRenkSec() {
+function urRenkSec(){
   var renkId = parseInt(document.getElementById('ur-mevcut-renk').value) || 0;
   var yeniInput = document.getElementById('ur-yeni-renk');
-  var yorum     = document.getElementById('ur-renk-yorum');
-  if (renkId) {
-    yeniInput.disabled = true;
-    yorum.textContent  = 'Mevcut renk kullanılacak';
-    yorum.style.color  = '#059669';
-  } else {
-    yeniInput.disabled = false;
-    yorum.textContent  = 'Yeni renk oluşturulacak';
-    yorum.style.color  = '#9ca3af';
-  }
+  var yorum = document.getElementById('ur-renk-yorum');
+  yeniInput.disabled = !!renkId;
+  yorum.textContent = renkId ? 'Mevcut renk kullanılacak' : 'Yeni renk oluşturulacak';
   urOnizle();
 }
 
-function urOnizle() {
-  var formul_id  = parseInt(document.getElementById('ur-formul').value) || 0;
+function urOnizle(){
+  var formul_id = parseInt(document.getElementById('ur-formul').value) || 0;
   var mevcutRenk = parseInt(document.getElementById('ur-mevcut-renk').value) || 0;
-  var yeniRenk   = document.getElementById('ur-yeni-renk').value.trim();
-  var boyut      = document.getElementById('ur-boyut').value;
-  var btn        = document.getElementById('ur-kaydet-btn');
-  var onizleme   = document.getElementById('ur-onizleme');
-  var onizTxt    = document.getElementById('ur-onizleme-text');
-
+  var yeniRenk = document.getElementById('ur-yeni-renk').value.trim();
+  var boyut = document.getElementById('ur-boyut').value;
+  var btn = document.getElementById('ur-kaydet-btn');
+  var onizleme = document.getElementById('ur-onizleme');
+  var onizTxt = document.getElementById('ur-onizleme-text');
   var gecerli = formul_id && (mevcutRenk || yeniRenk) && boyut;
   btn.disabled = !gecerli;
-
   if (gecerli) {
     var renkAd = mevcutRenk
       ? (UR_RENKLER.find(function(r){ return r.id === mevcutRenk; }) || {ad:'?'}).ad
       : yeniRenk;
-    var geriCarpan = AT_KAYNAK_BATCH / AT_TEST_BATCH;
-    onizTxt.innerHTML =
-      '↑ Geri çarpan: <strong>' + geriCarpan.toFixed(4) + '</strong> ' +
-      '(test_batch=' + AT_TEST_BATCH.toFixed(3) + ' KG → kaynak=' + AT_KAYNAK_BATCH.toFixed(3) + ' KG)' +
-      '<br>Oluşacak reçete: <strong>' + renkAd + ' / ' + boyut + '</strong> · ~' +
-      AT_KAYNAK_BATCH.toFixed(1) + ' KG batch';
+    onizTxt.innerHTML = 'Oluşacak: <strong>' + renkAd + ' / ' + boyut + '</strong>';
     onizleme.style.display = 'block';
   } else {
     onizleme.style.display = 'none';
   }
 }
 
-function urKaydet() {
-  var btn      = document.getElementById('ur-kaydet-btn');
-  var hataDiv  = document.getElementById('ur-hata');
+function urKaydet(){
+  var btn = document.getElementById('ur-kaydet-btn');
+  var hataDiv = document.getElementById('ur-hata');
   var basariDiv = document.getElementById('ur-basari');
-  hataDiv.style.display   = 'none';
+  hataDiv.style.display = 'none';
   basariDiv.style.display = 'none';
-
-  var formul_id  = parseInt(document.getElementById('ur-formul').value) || 0;
+  var formul_id = parseInt(document.getElementById('ur-formul').value) || 0;
   var mevcutRenk = parseInt(document.getElementById('ur-mevcut-renk').value) || 0;
-  var yeniRenk   = document.getElementById('ur-yeni-renk').value.trim();
-  var boyut      = document.getElementById('ur-boyut').value;
-
-  if (!formul_id) {
-    hataDiv.textContent = 'Formül seçin.';
-    hataDiv.style.display = 'block'; return;
+  var yeniRenk = document.getElementById('ur-yeni-renk').value.trim();
+  if (!formul_id || (!mevcutRenk && !yeniRenk)) {
+    hataDiv.textContent = 'Formül ve renk seçin.'; hataDiv.style.display = 'block'; return;
   }
-  if (!mevcutRenk && !yeniRenk) {
-    hataDiv.textContent = 'Renk adı girin veya mevcut renk seçin.';
-    hataDiv.style.display = 'block'; return;
-  }
-
   btn.disabled = true; btn.textContent = 'Oluşturuluyor…';
-
   fetch('/nexgen/api/arge/uretim-recetesi-olustur', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
-      test_id:         AT_TEST_ID,
+      test_id: AT_TEST_ID,
       hedef_formul_id: formul_id,
-      yeni_renk_adi:   yeniRenk || null,
-      mevcut_renk_id:  mevcutRenk || null,
-      boyut:           boyut,
-      recete_durum:    document.getElementById('ur-recete-durum').value,
-      notlar:          document.getElementById('ur-notlar').value.trim() || null
+      yeni_renk_adi: yeniRenk || null,
+      mevcut_renk_id: mevcutRenk || null,
+      boyut: document.getElementById('ur-boyut').value,
+      recete_durum: document.getElementById('ur-recete-durum').value,
+      notlar: document.getElementById('ur-notlar').value.trim() || null
     })
   })
   .then(function(r){ return r.json(); })
-  .then(function(d) {
+  .then(function(d){
     if (d.ok) {
-      basariDiv.textContent = '✓ ' + d.mesaj + ' Reçete sayfasına yönlendiriliyorsunuz…';
+      basariDiv.textContent = '✓ ' + d.mesaj;
       basariDiv.style.display = 'block';
-      btn.textContent = 'Oluşturuldu ✓';
-      setTimeout(function() {
-        window.location.href = '/nexgen/recete/' + (d.yeni_renk_varyant_id ? '' : '') + '?uv=' + d.yeni_uv_id;
-      }, 2000);
+      setTimeout(function(){ location.reload(); }, 1500);
     } else {
-      hataDiv.textContent = d.hata || 'Hata.';
-      hataDiv.style.display = 'block';
+      hataDiv.textContent = d.hata || 'Hata.'; hataDiv.style.display = 'block';
       btn.disabled = false; btn.textContent = 'Üretim Reçetesi Oluştur';
     }
   })
-  .catch(function() {
-    hataDiv.textContent = 'Bağlantı hatası.';
-    hataDiv.style.display = 'block';
+  .catch(function(){
+    hataDiv.textContent = 'Bağlantı hatası.'; hataDiv.style.display = 'block';
     btn.disabled = false; btn.textContent = 'Üretim Reçetesi Oluştur';
   });
 }

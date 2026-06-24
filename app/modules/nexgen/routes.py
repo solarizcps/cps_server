@@ -1370,12 +1370,14 @@ def arge_test_detay(test_id):
                    uv.ad AS uv_ad, uv.boyut,
                    rv.ad AS renk_ad,
                    f.id  AS formul_id, f.kod AS formul_kod, f.ad AS formul_ad,
+                   c.unvan AS cari_unvan, c.cari_kod,
                    ku.KullaniciAdi AS olusturan_ad,
                    on_ku.KullaniciAdi AS onaylayan_ad
             FROM nexgen_arge_test t
             JOIN nexgen_uretim_varyant uv ON uv.id = t.kaynak_uretim_varyant_id
             JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
             JOIN nexgen_formul f          ON f.id  = rv.formul_id
+            LEFT JOIN nexgen_cari c       ON c.id  = t.cari_id
             LEFT JOIN sistem_kullanici ku    ON ku.Id    = t.olusturan_id
             LEFT JOIN sistem_kullanici on_ku ON on_ku.Id = t.onaylayan_id
             WHERE t.id = ? AND t.aktif = 1
@@ -1411,6 +1413,7 @@ def arge_test_detay(test_id):
         con.close()
 
     can_manage = yetki_var('nexgen.recete.manage', 'can_manage')
+    can_create = yetki_var('nexgen.recete.create', 'can_create')
 
     return render_template(
         'nexgen/arge_test_detay.html',
@@ -1418,6 +1421,7 @@ def arge_test_detay(test_id):
         test=test_d,
         kalemler=[dict(k) for k in kalemler],
         can_manage=can_manage,
+        can_create=can_create,
         olusan_uv=olusan_uv,
     )
 
