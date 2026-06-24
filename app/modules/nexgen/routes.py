@@ -99,6 +99,27 @@ _mig075_arge_onay_notu()
 
 
 # ─────────────────────────────────────────────────────────────
+# Migration 076 — AR-GE rf_renk_id FK (startup, idempotent)
+# ─────────────────────────────────────────────────────────────
+def _mig076_rf_renk_id():
+    """nexgen_arge_test tablosuna rf_renk_id alanini ekler."""
+    try:
+        _con = sqlite3.connect(DB_PATH)
+        cols = [c[1] for c in _con.execute(
+            "PRAGMA table_info(nexgen_arge_test)"
+        ).fetchall()]
+        if 'rf_renk_id' not in cols:
+            _con.execute("ALTER TABLE nexgen_arge_test ADD COLUMN rf_renk_id INTEGER")
+            _con.commit()
+            print("[nexgen] Migration 076: rf_renk_id eklendi")
+        _con.close()
+    except Exception as _e:
+        print(f"[nexgen] Migration 076 uyari: {_e}")
+
+_mig076_rf_renk_id()
+
+
+# ─────────────────────────────────────────────────────────────
 # Yardımcı: DB bağlantısı
 # ─────────────────────────────────────────────────────────────
 def _db():
