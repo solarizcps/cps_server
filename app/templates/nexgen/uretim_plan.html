@@ -193,7 +193,7 @@
             <th class="ut-th ut-th-cari">Cari</th>
             <th class="ut-th ut-th-urun">Ürün</th>
             <th class="ut-th ut-th-varyant">Varyant / KG</th>
-            <th class="ut-th ut-th-r ut-th-topkg">Toplam KG</th>
+            <th class="ut-th ut-th-r ut-th-topkg">Üretim / Sipariş KG</th>
             <th class="ut-th ut-th-c">Alt Emir</th>
             <th class="ut-th">Durum</th>
             <th class="ut-th">Tarih</th>
@@ -744,6 +744,9 @@ function veriGrupla() {
       plan_kodu:     p.plan_kodu,
       boyut:         p.boyut || '',
       planlanan_kg:  p.planlanan_kg || 0,
+      siparis_toplam_kg: p.siparis_toplam_kg || p.planlanan_kg || 0,
+      uretilen_kg:   p.uretilen_kg || 0,
+      kontrol_durum: p.kontrol_durum || null,
       durum:         p.durum,
       batch_kodu:    p.batch_kodu || null,
       toplam_alt_emir: p.toplam_alt_emir || 0,
@@ -757,7 +760,20 @@ function veriGrupla() {
 /* Gruptan tek tablo satırı HTML'i üret */
 function grupSatirHtml(g, idx) {
 
-  /* ── Toplam KG ── */
+  /* ── Sipariş / Üretim KG (RF tek kaynak) ── */
+  var sipToplam = g.varyantlar.reduce(function(s, v) {
+    return s + (parseFloat(v.siparis_toplam_kg) || 0);
+  }, 0);
+  var uretToplam = g.varyantlar.reduce(function(s, v) {
+    return s + (parseFloat(v.uretilen_kg) || 0);
+  }, 0);
+  var asimUyari = g.varyantlar.some(function(v) { return v.kontrol_durum === 'ASIM'; });
+  var kgHtml =
+    '<div class="ut-kg-uretilen">' + Math.round(uretToplam).toLocaleString('tr-TR') + '</div>' +
+    '<div class="ut-kg-siparis">/ ' + Math.round(sipToplam).toLocaleString('tr-TR') + ' KG</div>' +
+    (asimUyari ? '<div class="ut-kg-uyari">Aşım uyarısı</div>' : '');
+
+  /* ── Toplam KG (varyant dagilimi) ── */
   var toplamKg = g.varyantlar.reduce(function(s, v) { return s + (parseFloat(v.planlanan_kg) || 0); }, 0);
 
   /* ── Varyant / KG listesi ──
@@ -843,8 +859,8 @@ function grupSatirHtml(g, idx) {
     /* Varyant / KG: SMALL 1250 KG / LARGE 1250 KG */
     '<td class="ut-td ut-td-varyant">' + varyantHtml + '</td>' +
 
-    /* Toplam KG */
-    '<td class="ut-td ut-td-kg ut-td-r">' + Math.round(toplamKg).toLocaleString('tr-TR') + '</td>' +
+    /* Üretim / Sipariş KG */
+    '<td class="ut-td ut-td-kg ut-td-r">' + kgHtml + '</td>' +
 
     /* Alt Emir */
     '<td class="ut-td ut-td-altemir">' + altEmirHtml + '</td>' +

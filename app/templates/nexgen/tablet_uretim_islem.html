@@ -130,11 +130,11 @@
         </div>
       </div>
 
-      {# Plan KG vurgu #}
+      {# Siparis master KG #}
       <div class="sol-kg-blok">
-        <div class="sol-etiket">PLANLANAN KG</div>
+        <div class="sol-etiket">SİPARİŞ TOPLAM KG</div>
         <div class="sol-kg-rakam">
-          {{ "{:,}".format(batch.planlanan_kg|int) }}
+          {{ "{:,}".format(siparis_toplam_kg|int) }}
           <span class="sol-kg-birim">KG</span>
         </div>
       </div>
@@ -251,16 +251,23 @@
       </div>
 
       {# ── İlerleme ── #}
+      {% if kontrol_durum == 'ASIM' and kontrol_uyari %}
+      <div class="pp-kontrol-uyari pp-kontrol-asim">{{ kontrol_uyari }}</div>
+      {% elif kontrol_durum == 'DEVAM' %}
+      <div class="pp-kontrol-uyari pp-kontrol-devam">Devam eden üretim</div>
+      {% elif kontrol_durum == 'TAM' %}
+      <div class="pp-kontrol-uyari pp-kontrol-tam">Sipariş hedefi tamamlandı</div>
+      {% endif %}
       <div class="pp-ilerleme-blok">
         <div class="pp-ilerleme-ust">
-          <span class="pp-ilerleme-etiket">ÜRETİM İLERLEMESİ</span>
+          <span class="pp-ilerleme-etiket">ÜRETİM İLERLEMESİ (RF)</span>
           <span class="pp-ilerleme-kg">
             <span id="pp-uretilen-kg">{{ "{:,.1f}".format(toplam_uretilen_kg) }}</span>
-            KG / {{ "{:,}".format(batch.planlanan_kg|int) }} KG
+            KG / {{ "{:,}".format(siparis_toplam_kg|int) }} KG
           </span>
         </div>
         <div style="height:10px;border-radius:10px;background:#f3f4f6;overflow:hidden;border:1px solid #e5e7eb;">
-          {% set yuzde = ((toplam_uretilen_kg / batch.planlanan_kg) * 100) if batch.planlanan_kg else 0 %}
+          {% set yuzde = ((toplam_uretilen_kg / siparis_toplam_kg) * 100) if siparis_toplam_kg else 0 %}
           {% set yuzde_clip = [yuzde, 100]|min %}
           <div id="pp-progress-dolu"
                style="width:{{ yuzde_clip|int }}%;height:100%;background:linear-gradient(90deg,#16a34a,#22c55e);border-radius:10px;transition:width .4s;"></div>
@@ -511,7 +518,7 @@
 <script>
 var _batch_kodu      = '{{ batch.batch_kodu }}';
 var _durum           = '{{ batch.durum }}';
-var _plan_kg         = {{ batch.planlanan_kg }};
+var _plan_kg         = {{ siparis_toplam_kg }};
 var _uretilen_kg     = {{ toplam_uretilen_kg }};
 var _boyut           = '{{ batch.boyut or "" }}';
 var _biten_adet      = {{ sayaclar.bitti }};
@@ -1539,8 +1546,16 @@ body { background: #f3f6fa; font-family: system-ui, -apple-system, sans-serif; }
 .pp-ozet-kalan    { background: #f9fafb; border: 1px solid #e5e7eb; }
 .pp-ozet-kalan .pp-ozet-deger    { color: #374151; }
 
+/* KG kontrol banner */
+.pp-kontrol-uyari {
+  border-radius: 8px; padding: 8px 12px; margin-bottom: 10px;
+  font-size: 12px; font-weight: 700;
+}
+.pp-kontrol-asim { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+.pp-kontrol-devam { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+.pp-kontrol-tam { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+
 /* İlerleme */
-.pp-progress-wrap { display: flex; align-items: center; gap: 10px; }
 .pp-progress-bar {
   flex: 1; height: 10px; background: #e2e8f0;
   border-radius: 10px; overflow: hidden;
