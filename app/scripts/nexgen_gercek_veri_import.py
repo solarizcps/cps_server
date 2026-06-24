@@ -101,6 +101,13 @@ STOK_KARTLARI = [
     ('NEX-08-12', 'Kahverengi 610 Pigment','08','BOYA',    'Pigment',    None),
     ('NEX-08-13', 'Kahverengi 600 Pigment','08','BOYA',    'Pigment',    'Tedarikçi belirlenecek'),
     ('NEX-08-14', 'Kahverengi 660 Pigment','08','BOYA',    'Pigment',    None),
+    # ── FAZ-3D RF legacy import eksik pigmentler (08) ───────────
+    ('NEX-08-15', 'Green 7',             '08', 'BOYA',     'Pigment',    None),
+    ('NEX-08-16', 'M.B 6501 Brown',      '08', 'BOYA',     'Pigment',    None),
+    ('NEX-08-17', 'M.B 8502 Black',      '08', 'BOYA',     'Pigment',    None),
+    ('NEX-08-18', 'Blue KNP 909',        '08', 'BOYA',     'Pigment',    None),
+    ('NEX-08-19', 'Orange 34',           '08', 'BOYA',     'Pigment',    None),
+    ('NEX-08-20', 'Yellow 15',           '08', 'BOYA',     'Pigment',    None),
     # ── Karbon Siyah pigment (09) — kategori BOYA ────────────────
     ('NEX-09-01', 'N550',                '09', 'BOYA',     'Karbon Siyah',None),
     ('NEX-09-02', 'N330',                '09', 'BOYA',     'Karbon Siyah',None),
