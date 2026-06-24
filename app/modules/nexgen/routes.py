@@ -78,6 +78,27 @@ _mig074_arge_identity()
 
 
 # ─────────────────────────────────────────────────────────────
+# Migration 075 — AR-GE onay notu (startup, idempotent)
+# ─────────────────────────────────────────────────────────────
+def _mig075_arge_onay_notu():
+    """nexgen_arge_test tablosuna onay_notu alanını ekler."""
+    try:
+        _con = sqlite3.connect(DB_PATH)
+        cols = [c[1] for c in _con.execute(
+            "PRAGMA table_info(nexgen_arge_test)"
+        ).fetchall()]
+        if 'onay_notu' not in cols:
+            _con.execute("ALTER TABLE nexgen_arge_test ADD COLUMN onay_notu TEXT")
+            _con.commit()
+            print("[nexgen] Migration 075: onay_notu eklendi")
+        _con.close()
+    except Exception as _e:
+        print(f"[nexgen] Migration 075 uyarı: {_e}")
+
+_mig075_arge_onay_notu()
+
+
+# ─────────────────────────────────────────────────────────────
 # Yardımcı: DB bağlantısı
 # ─────────────────────────────────────────────────────────────
 def _db():
@@ -1412,8 +1433,9 @@ def arge_test_detay(test_id):
     finally:
         con.close()
 
-    can_manage = yetki_var('nexgen.recete.manage', 'can_manage')
-    can_create = yetki_var('nexgen.recete.create', 'can_create')
+    can_manage  = yetki_var('nexgen.recete.manage', 'can_manage')
+    can_create  = yetki_var('nexgen.recete.create', 'can_create')
+    can_approve = yetki_var('nexgen.recete.approve', 'can_approve')
 
     return render_template(
         'nexgen/arge_test_detay.html',
@@ -1422,6 +1444,7 @@ def arge_test_detay(test_id):
         kalemler=[dict(k) for k in kalemler],
         can_manage=can_manage,
         can_create=can_create,
+        can_approve=can_approve,
         olusan_uv=olusan_uv,
     )
 
@@ -1429,12 +1452,12 @@ def arge_test_detay(test_id):
 @nexgen_bp.route('/api/arge/sonuc-kaydet', methods=['POST'])
 @yetki_gerekli('nexgen.recete.create', 'can_create')
 def api_arge_sonuc_kaydet():
-    """Test sonucunu ve durum değişikliğini kaydeder.
-    Ana reçeteye dokunulmaz.
+    """Test sonucunu ve durum değişikliğini kaydeder (AR-GE).
+    ONAYLANDI / REDDEDILDI bu endpoint'ten kabul edilmez.
 
     POST JSON:
         test_id           : int
-        durum             : TEST_EDILDI | BASARILI | BASARISIZ | ONAYA_GONDERILDI
+        durum             : TEST_EDILDI | ONAYA_GONDERILDI
         renk_tuttu        : 1/0  opsiyonel
         shore_degeri      : float opsiyonel
         kopurme_notu      : str opsiyonel
@@ -1446,10 +1469,7 @@ def api_arge_sonuc_kaydet():
     test_id = data.get('test_id')
     durum   = (data.get('durum') or '').strip().upper()
 
-    GECERLI_DURUM = {
-        'TEST_EDILDI', 'BASARILI', 'BASARISIZ',
-        'ONAYA_GONDERILDI', 'ONAYLANDI', 'REDDEDILDI'
-    }
+    GECERLI_DURUM = {'TEST_EDILDI', 'ONAYA_GONDERILDI'}
     if not test_id:
         return jsonify({"ok": False, "hata": "test_id zorunludur."}), 400
     if durum not in GECERLI_DURUM:
@@ -1478,18 +1498,55 @@ def api_arge_sonuc_kaydet():
         if not test:
             return jsonify({"ok": False, "hata": "Test kaydı bulunamadı."}), 404
 
-        con.execute("""
-            UPDATE nexgen_arge_test
-            SET durum=?, renk_tuttu=?, shore_degeri=?,
-                kopurme_notu=?, cekme_problemi=?,
-                genel_aciklama=?, sonuc_notu=?
-            WHERE id=?
-        """, (durum,
-              int(renk_tuttu) if renk_tuttu is not None else None,
-              shore_degeri, kopurme_notu,
-              int(cekme_problemi) if cekme_problemi is not None else None,
-              genel_aciklama, sonuc_notu,
-              test_id))
+        mevcut = test['durum']
+
+        # Onay sürecindeki / kilitli kayıtlar — sadece REDDEDILDI → tekrar onaya gönder
+        if mevcut in ('ONAYA_GONDERILDI', 'ONAYLANDI'):
+            return jsonify({
+                "ok": False,
+                "hata": f"Bu durumda sonuç güncellenemez ({mevcut})."
+            }), 400
+        if mevcut == 'REDDEDILDI' and durum != 'ONAYA_GONDERILDI':
+            return jsonify({
+                "ok": False,
+                "hata": "Reddedilmiş test yalnızca tekrar onaya gönderilebilir."
+            }), 400
+
+        # Durum geçiş kuralları
+        if durum == 'TEST_EDILDI':
+            if mevcut not in ('TASLAK', 'TEST_EDILDI'):
+                return jsonify({
+                    "ok": False,
+                    "hata": f"TASLAK → TEST_EDILDI geçişi gerekli. Mevcut: {mevcut}"
+                }), 400
+        elif durum == 'ONAYA_GONDERILDI':
+            if mevcut not in ('TEST_EDILDI', 'REDDEDILDI'):
+                return jsonify({
+                    "ok": False,
+                    "hata": "Sadece TEST_EDILDI veya REDDEDILDI testler onaya gönderilebilir."
+                }), 400
+
+        if durum == 'ONAYA_GONDERILDI' and mevcut == 'REDDEDILDI':
+            # Tekrar onaya gönder — sonuç alanları kilitli, sadece durum + eski onay temizle
+            con.execute("""
+                UPDATE nexgen_arge_test
+                SET durum='ONAYA_GONDERILDI',
+                    onaylayan_id=NULL, onay_tarihi=NULL, onay_notu=NULL
+                WHERE id=?
+            """, (test_id,))
+        else:
+            con.execute("""
+                UPDATE nexgen_arge_test
+                SET durum=?, renk_tuttu=?, shore_degeri=?,
+                    kopurme_notu=?, cekme_problemi=?,
+                    genel_aciklama=?, sonuc_notu=?
+                WHERE id=?
+            """, (durum,
+                  int(renk_tuttu) if renk_tuttu is not None else None,
+                  shore_degeri, kopurme_notu,
+                  int(cekme_problemi) if cekme_problemi is not None else None,
+                  genel_aciklama, sonuc_notu,
+                  test_id))
         con.commit()
     except Exception as e:
         con.rollback()
@@ -1498,6 +1555,58 @@ def api_arge_sonuc_kaydet():
         con.close()
 
     return jsonify({"ok": True, "test_id": test_id, "yeni_durum": durum})
+
+
+@nexgen_bp.route('/api/arge/onay-islem', methods=['POST'])
+@yetki_gerekli('nexgen.recete.approve', 'can_approve')
+def api_arge_onay_islem():
+    """Yönetim onayı — sadece ONAYA_GONDERILDI testler.
+
+    POST JSON:
+        test_id    : int
+        eylem      : ONAYLA | REDDET
+        onay_notu  : str opsiyonel
+    """
+    data = request.get_json(silent=True) or {}
+    test_id   = data.get('test_id')
+    eylem     = (data.get('eylem') or '').strip().upper()
+    onay_notu = (data.get('onay_notu') or '').strip() or None
+
+    if not test_id:
+        return jsonify({"ok": False, "hata": "test_id zorunludur."}), 400
+    if eylem not in ('ONAYLA', 'REDDET'):
+        return jsonify({"ok": False, "hata": "eylem: ONAYLA veya REDDET"}), 400
+
+    kullanici_id = _kullanici_id()
+    yeni_durum = 'ONAYLANDI' if eylem == 'ONAYLA' else 'REDDEDILDI'
+
+    con = _db()
+    try:
+        test = con.execute(
+            "SELECT id, durum FROM nexgen_arge_test WHERE id=? AND aktif=1",
+            (test_id,)
+        ).fetchone()
+        if not test:
+            return jsonify({"ok": False, "hata": "Test kaydı bulunamadı."}), 404
+        if test['durum'] != 'ONAYA_GONDERILDI':
+            return jsonify({
+                "ok": False,
+                "hata": f"Sadece ONAYA_GONDERILDI testler işlenebilir. Mevcut: {test['durum']}"
+            }), 400
+
+        con.execute("""
+            UPDATE nexgen_arge_test
+            SET durum=?, onaylayan_id=?, onay_tarihi=datetime('now'), onay_notu=?
+            WHERE id=?
+        """, (yeni_durum, kullanici_id, onay_notu, test_id))
+        con.commit()
+    except Exception as e:
+        con.rollback()
+        return jsonify({"ok": False, "hata": str(e)}), 500
+    finally:
+        con.close()
+
+    return jsonify({"ok": True, "test_id": test_id, "yeni_durum": yeni_durum})
 
 
 @nexgen_bp.route('/api/arge/gecmis/<int:uv_id>', methods=['GET'])

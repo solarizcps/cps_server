@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% set page_title = test.test_no ~ " — AR-GE Test — NexGen" %}
 {% set renk_goster = test.yeni_renk_adi or test.renk_ad %}
-{% set kilitli = test.durum in ['ONAYLANDI', 'REDDEDILDI'] %}
+{% set form_kilitli = test.durum in ['ONAYA_GONDERILDI', 'ONAYLANDI', 'REDDEDILDI'] %}
 {% set durum_etiket = {
   'TASLAK': 'TASLAK',
   'TEST_EDILDI': 'TEST EDİLDİ',
@@ -11,6 +11,11 @@
   'ONAYLANDI': 'ONAYLANDI',
   'REDDEDILDI': 'REDDEDİLDİ'
 }.get(test.durum, test.durum or 'TASLAK') %}
+{% set onay_durum_etiket = {
+  'ONAYA_GONDERILDI': 'ONAYA GÖNDERİLDİ',
+  'ONAYLANDI': 'ONAYLANDI',
+  'REDDEDILDI': 'REDDEDİLDİ'
+}.get(test.durum, '—') %}
 {% set durum_cls = (test.durum or 'taslak')|lower|replace('_','-') %}
 
 {% block content %}
@@ -134,8 +139,14 @@
         <span class="ad-panel-baslik">TEST SONUCU</span>
       </div>
 
-      {% if kilitli %}
-      <div class="ad-uyari">Bu test kilitlenmiştir ({{ durum_etiket }}). Değişiklik yapılamaz.</div>
+      {% if form_kilitli %}
+      <div class="ad-uyari">
+        {% if test.durum == 'ONAYA_GONDERILDI' %}
+        Test onay bekliyor — sonuç alanları düzenlenemez.
+        {% else %}
+        Bu test kilitlenmiştir ({{ durum_etiket }}). Değişiklik yapılamaz.
+        {% endif %}
+      </div>
       {% endif %}
 
       <div class="ad-sonuc-form">
@@ -150,14 +161,14 @@
             <label>Shore ölçülen</label>
             <input type="number" id="ad-shore" value="{{ test.shore_degeri if test.shore_degeri is not none else '' }}"
                    step="0.1" min="0" max="100" placeholder="Ölçüm değeri"
-                   {% if kilitli %}disabled{% endif %}>
+                   {% if form_kilitli %}disabled{% endif %}>
           </div>
         </div>
 
         <div class="ad-form-satir">
           <div class="ad-fg">
             <label>Renk sonucu</label>
-            <select id="ad-renk-tuttu" {% if kilitli %}disabled{% endif %}>
+            <select id="ad-renk-tuttu" {% if form_kilitli %}disabled{% endif %}>
               <option value="">Seçilmedi</option>
               <option value="1" {% if test.renk_tuttu == 1 %}selected{% endif %}>Renk tuttu</option>
               <option value="0" {% if test.renk_tuttu == 0 %}selected{% endif %}>Renk tutmadı</option>
@@ -165,7 +176,7 @@
           </div>
           <div class="ad-fg">
             <label>Numune sonucu</label>
-            <select id="ad-cekme" {% if kilitli %}disabled{% endif %}>
+            <select id="ad-cekme" {% if form_kilitli %}disabled{% endif %}>
               <option value="">Seçilmedi</option>
               <option value="0" {% if test.cekme_problemi == 0 %}selected{% endif %}>Sorun yok</option>
               <option value="1" {% if test.cekme_problemi == 1 %}selected{% endif %}>Çekme / numune sorunu var</option>
@@ -176,19 +187,19 @@
         <div class="ad-fg">
           <label>Köpürme / fiziksel gözlem</label>
           <input type="text" id="ad-kopurme" value="{{ test.kopurme_notu or '' }}"
-                 placeholder="Normal / Az / Çok…" {% if kilitli %}disabled{% endif %}>
+                 placeholder="Normal / Az / Çok…" {% if form_kilitli %}disabled{% endif %}>
         </div>
 
         <div class="ad-fg">
           <label>Açıklama</label>
           <textarea id="ad-genel-aciklama" rows="3" placeholder="Laboratuvar gözlemi, numune notu…"
-                    {% if kilitli %}disabled{% endif %}>{{ test.genel_aciklama or '' }}</textarea>
+                    {% if form_kilitli %}disabled{% endif %}>{{ test.genel_aciklama or '' }}</textarea>
         </div>
 
         <div class="ad-fg">
           <label>Kısa sonuç notu</label>
           <input type="text" id="ad-sonuc-not" value="{{ test.sonuc_notu or '' }}"
-                 placeholder="Özet değerlendirme…" {% if kilitli %}disabled{% endif %}>
+                 placeholder="Özet değerlendirme…" {% if form_kilitli %}disabled{% endif %}>
         </div>
 
         <input type="hidden" id="ad-durum-sel" value="{{ test.durum or 'TASLAK' }}">
@@ -199,13 +210,52 @@
     </div>
   </div>
 
+  {# ══ ONAY BLOĞU ══ #}
+  <div class="ad-panel ad-onay-blok">
+    <div class="ad-panel-hdr ad-panel-hdr-yesil">
+      <span class="ad-panel-baslik">ONAY</span>
+    </div>
+    <div class="ad-onay-grid">
+      <div class="ad-onay-hucre">
+        <div class="ad-etiket">Onay Durumu</div>
+        <div class="ad-deger" id="ad-onay-durum-goster">{{ onay_durum_etiket if test.durum in ['ONAYA_GONDERILDI','ONAYLANDI','REDDEDILDI'] else '—' }}</div>
+      </div>
+      <div class="ad-onay-hucre">
+        <div class="ad-etiket">Onaylayan</div>
+        <div class="ad-deger" id="ad-onaylayan-goster">{{ test.onaylayan_ad or '—' }}</div>
+      </div>
+      <div class="ad-onay-hucre">
+        <div class="ad-etiket">Onay Tarihi</div>
+        <div class="ad-deger" id="ad-onay-tarih-goster">{{ (test.onay_tarihi or '')[:16] or '—' }}</div>
+      </div>
+      <div class="ad-onay-hucre ad-onay-hucre-genis">
+        <div class="ad-etiket">Onay Notu</div>
+        {% if can_approve and test.durum == 'ONAYA_GONDERILDI' %}
+        <textarea id="ad-onay-notu-input" rows="2" placeholder="Onay veya red gerekçesi…">{{ test.onay_notu or '' }}</textarea>
+        {% else %}
+        <div class="ad-readonly" id="ad-onay-notu-goster">{{ test.onay_notu or '—' }}</div>
+        {% endif %}
+      </div>
+    </div>
+    {% if can_approve and test.durum == 'ONAYA_GONDERILDI' %}
+    <div class="ad-onay-btns">
+      <button class="ad-btn-onayla" id="ad-btn-onayla" onclick="adOnayIslem('ONAYLA')">Onayla</button>
+      <button class="ad-btn-reddet" id="ad-btn-reddet" onclick="adOnayIslem('REDDET')">Reddet</button>
+    </div>
+    {% endif %}
+    <div id="ad-onay-hata" class="ad-msg ad-msg-hata" style="display:none"></div>
+    <div id="ad-onay-basari" class="ad-msg ad-msg-ok" style="display:none"></div>
+  </div>
+
   {# ══ ALT BUTONLAR ══ #}
   <div class="ad-alt-bar">
     <a href="/nexgen/tablet/etiket/arge/{{ test.test_no }}" class="ad-btn-etiket" target="_blank">
       🏷 Etiket Yazdır
     </a>
-    {% if not kilitli and can_create %}
+    {% if can_create and test.durum in ['TASLAK', 'TEST_EDILDI'] %}
     <button class="ad-btn-kaydet" id="ad-btn-kaydet" onclick="adSonucKaydet()">Sonuç Kaydet</button>
+    {% endif %}
+    {% if can_create and test.durum in ['TEST_EDILDI', 'REDDEDILDI'] %}
     <button class="ad-btn-onay" id="ad-btn-onay" onclick="adOnayaGonder()">Onaya Gönder</button>
     {% endif %}
     <a href="/nexgen/arge" class="ad-btn-geri">← Listeye Dön</a>
@@ -421,6 +471,27 @@
   font-size:12px; font-weight:700; border:1px solid #fde68a; cursor:pointer;
 }
 .ad-btn-onay:hover { background:#fde68a; }
+.ad-btn-onayla {
+  padding:9px 16px; border-radius:8px; background:#d1fae5; color:#059669;
+  font-size:12px; font-weight:700; border:1px solid #a7f3d0; cursor:pointer;
+}
+.ad-btn-onayla:hover { background:#a7f3d0; }
+.ad-btn-reddet {
+  padding:9px 16px; border-radius:8px; background:#fef2f2; color:#dc2626;
+  font-size:12px; font-weight:700; border:1px solid #fecaca; cursor:pointer;
+}
+.ad-btn-reddet:hover { background:#fecaca; }
+.ad-panel-hdr-yesil { background:linear-gradient(90deg,#ecfdf5,#f0fdf4); border-bottom:1px solid #bbf7d0; }
+.ad-onay-blok { padding-bottom:14px; }
+.ad-onay-grid {
+  display:grid; grid-template-columns:repeat(3,1fr); gap:12px 16px;
+  padding:14px 16px 0;
+}
+.ad-onay-hucre-genis { grid-column:span 3; }
+.ad-onay-btns {
+  display:flex; gap:10px; padding:12px 16px 0;
+}
+.ad-onay-blok .ad-msg { margin:12px 16px 0; }
 .ad-btn-sari {
   padding:8px 14px; border-radius:8px; background:#f6c343; color:#0f172a;
   font-size:12px; font-weight:700; border:none; cursor:pointer;
@@ -469,6 +540,8 @@
   .ad-orta { grid-template-columns:1fr; }
   .ad-ust-grid { grid-template-columns:1fr 1fr; }
   .ad-ust-hucre-genis { grid-column:span 2; }
+  .ad-onay-grid { grid-template-columns:1fr 1fr; }
+  .ad-onay-hucre-genis { grid-column:span 2; }
   .ad-btn-geri { margin-left:0; }
 }
 </style>
@@ -531,6 +604,9 @@ function adSonucKaydet(zorlaDurum){
       }
       if (btnKaydet) { btnKaydet.textContent = 'Kaydedildi ✓'; btnKaydet.disabled = false; }
       if (btnOnay) btnOnay.disabled = false;
+      if (durum === 'ONAYA_GONDERILDI') {
+        setTimeout(function(){ location.reload(); }, 800);
+      }
     } else {
       hataDiv.textContent = d.hata || 'Kayıt hatası.';
       hataDiv.style.display = 'block';
@@ -549,6 +625,54 @@ function adSonucKaydet(zorlaDurum){
 function adOnayaGonder(){
   if (!confirm('Test sonucu onaya gönderilecek. Devam?')) return;
   adSonucKaydet('ONAYA_GONDERILDI');
+}
+
+function adOnayIslem(eylem){
+  var hataDiv = document.getElementById('ad-onay-hata');
+  var basariDiv = document.getElementById('ad-onay-basari');
+  var btnOnayla = document.getElementById('ad-btn-onayla');
+  var btnReddet = document.getElementById('ad-btn-reddet');
+  var notEl = document.getElementById('ad-onay-notu-input');
+  hataDiv.style.display = 'none';
+  basariDiv.style.display = 'none';
+
+  var mesaj = eylem === 'ONAYLA' ? 'Test onaylanacak. Devam?' : 'Test reddedilecek. Devam?';
+  if (!confirm(mesaj)) return;
+
+  if (btnOnayla) btnOnayla.disabled = true;
+  if (btnReddet) btnReddet.disabled = true;
+
+  fetch('/nexgen/api/arge/onay-islem', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      test_id: AT_TEST_ID,
+      eylem: eylem,
+      onay_notu: notEl ? notEl.value.trim() || null : null
+    })
+  })
+  .then(function(r){
+    if (r.status === 403) throw new Error('Onay yetkisi yok (403).');
+    return r.json();
+  })
+  .then(function(d){
+    if (d.ok) {
+      basariDiv.textContent = eylem === 'ONAYLA' ? '✓ Test onaylandı.' : '✓ Test reddedildi.';
+      basariDiv.style.display = 'block';
+      setTimeout(function(){ location.reload(); }, 800);
+    } else {
+      hataDiv.textContent = d.hata || 'İşlem hatası.';
+      hataDiv.style.display = 'block';
+      if (btnOnayla) btnOnayla.disabled = false;
+      if (btnReddet) btnReddet.disabled = false;
+    }
+  })
+  .catch(function(e){
+    hataDiv.textContent = e.message || 'Bağlantı hatası.';
+    hataDiv.style.display = 'block';
+    if (btnOnayla) btnOnayla.disabled = false;
+    if (btnReddet) btnReddet.disabled = false;
+  });
 }
 
 var UR_FORMULLER = [];
