@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% set page_title = "NexGen Depo — Mal Kabul" %}
+{% macro _kg(v) %}{% set n = v | float %}{% set f = "{:,.3f}".format(n).replace(",", ".") %}{{ f.rstrip('0').rstrip('.') }}{% endmacro %}
 
 {% block content %}
 <div class="ng-sayfa">
@@ -301,7 +302,7 @@
               </span>
             </td>
             <td class="ngsd-td-r ngsd-sayi {% if is_giris %}ngdp-gelen{% else %}ngdp-cikis-kg{% endif %}">
-              {% if is_giris %}+{% endif %}{{ "%.3g"|format(g.miktar_kg|abs) if g.miktar_kg else '0' }}
+              {% if is_giris %}+{% endif %}{{ _kg(g.miktar_kg|abs if g.miktar_kg else 0) }}
             </td>
             <td class="ngsd-td-tarih" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ g.aciklama or '' }}">
               {{ g.aciklama or '—' }}

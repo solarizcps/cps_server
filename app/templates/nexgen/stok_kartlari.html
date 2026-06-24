@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% set page_title = "Stok Kartları — NexGen" %}
+{% macro _kg(v) %}{% set n = v | float %}{% set f = "{:,.3f}".format(n).replace(",", ".") %}{{ f.rstrip('0').rstrip('.') }}{% endmacro %}
 
 {% block content %}
 <div class="ng-sayfa">
@@ -118,7 +119,7 @@
               </span>
             </td>
             <td class="ngsk-td-r ngsk-stok-miktar">
-              <span class="ngsk-miktar-deger ngsk-stok-{{ k.durum }}">{{ "%.3g"|format(k.mevcut_stok) }}</span>
+              <span class="ngsk-miktar-deger ngsk-stok-{{ k.durum }}">{{ _kg(k.mevcut_stok) }}</span>
               <span class="ngsk-birim">{{ k.birim }}</span>
               <div class="ngsk-alt-bilgi ngsk-alt-r">
                 Min: {{ "%.0f"|format(k.minimum_stok) }} / Kritik: {{ "%.0f"|format(k.kritik_stok) }}
