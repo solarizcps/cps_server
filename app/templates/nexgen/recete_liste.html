@@ -548,7 +548,7 @@ function rmRenderFormulListe(filtre){
     var d = f.recete_durum_ozet||'TASLAK';
     var aktif = _aktifFormulId===f.id;
     html +=
-      '<div class="rm-fk'+(aktif?' aktif':'')+'" onclick="rmFormulSec('+f.id+')">' +
+      '<div class="rm-fk'+(aktif?' aktif':'')+'" onclick="rmFormulSec('+f.id+')" ondblclick="window.location.href=\'/nexgen/recete/'+f.id+'\'" title="Tık: seç · Çift tık: tam detay sayfası">' +
         '<div class="rm-fk-ust">' +
           '<span class="rm-fk-kod">'+f.kod+'</span>' +
           '<span class="'+rmDurumCss(d)+'">'+rmDurumEtiket(d)+'</span>' +

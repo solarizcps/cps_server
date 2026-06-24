@@ -91,8 +91,13 @@
         <div class="ng-kart-baslik">Formüller</div>
         <div class="ng-kart-aciklama">Ürün başına hammadde bileşim ve reçete tanımları.</div>
         <div class="ng-kart-alt">
-          <span class="ng-yakinda">Yakında</span>
-          <a href="/nexgen/formuller" class="ng-btn ng-btn-pasif">Aç</a>
+          {% if can_recete %}
+            <span class="ng-rozet-aktif">FAZ-4 Aktif</span>
+            <a href="/nexgen/recete/" class="ng-btn ng-btn-aktif">Aç</a>
+          {% else %}
+            <span class="ng-yakinda">Yetki Gerekli</span>
+            <a href="/nexgen/recete/" class="ng-btn ng-btn-pasif">Aç</a>
+          {% endif %}
         </div>
       </div>
     </div>
@@ -197,6 +202,9 @@
     {% if can_recete %}
     <a href="/nexgen/recete/" class="ng-diger-item ng-diger-aktif">
       <span>Reçete Merkezi</span><span class="ng-aktif-kucuk">Aktif ›</span>
+    </a>
+    <a href="/nexgen/arge" class="ng-diger-item ng-diger-aktif">
+      <span>ARGE Merkezi</span><span class="ng-aktif-kucuk">Aktif ›</span>
     </a>
     {% endif %}
     <a href="/nexgen/uretim-plan" class="ng-diger-item ng-diger-aktif">

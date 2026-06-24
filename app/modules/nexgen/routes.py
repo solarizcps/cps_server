@@ -176,6 +176,14 @@ def index():
                            can_tablet=can_tablet)
 
 
+@nexgen_bp.route('/formuller')
+@nexgen_bp.route('/formuller/')
+@yetki_gerekli('nexgen.recete.view', 'can_view')
+def formuller_redirect():
+    """Eski /formuller linklerini Reçete Merkezine yönlendir."""
+    return redirect('/nexgen/recete/')
+
+
 # ─────────────────────────────────────────────────────────────
 # Stok Kartları — Liste
 # ─────────────────────────────────────────────────────────────
