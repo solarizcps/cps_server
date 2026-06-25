@@ -225,7 +225,11 @@
 
           {% if not uv.kalemler %}
           <div style="padding:20px;text-align:center;color:#9ca3af;font-size:13px">
+            {% if uv.boya_kalem_say %}
+            Ana formül kalemi yok. {{ uv.boya_kalem_say }} renk pigmenti (BOYA) RF renk formülünde yönetilir.
+            {% else %}
             Bu boyut varyantına henüz reçete kalemi eklenmemiş.
+            {% endif %}
           </div>
           {% else %}
           <div class="ngrc-kalem-cerceve">
