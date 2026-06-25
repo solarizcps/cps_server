@@ -7727,6 +7727,56 @@ def _depo_hazirlik_batch_durum(con, batch_kodu):
     return dict(row) if row else None
 
 
+def _stok_rezerv_tablosu_var(con):
+    return con.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='nexgen_stok_rezerv'"
+    ).fetchone() is not None
+
+
+def _aktif_rezerv_toplam(con, stok_kart_id, exclude_batch_kodu=None):
+    """AKTIF rezerv kalan_kg toplamı. exclude_batch_kodu: kendi batch hariç."""
+    if not _stok_rezerv_tablosu_var(con):
+        return 0.0
+    params = [stok_kart_id]
+    batch_filtre = ""
+    if exclude_batch_kodu:
+        batch_filtre = " AND batch_kodu != ?"
+        params.append(exclude_batch_kodu)
+    row = con.execute(f"""
+        SELECT COALESCE(SUM(kalan_kg), 0) AS toplam
+        FROM nexgen_stok_rezerv
+        WHERE stok_kart_id = ? AND durum = 'AKTIF'{batch_filtre}
+    """, params).fetchone()
+    return round(float(row['toplam'] or 0), 3) if row else 0.0
+
+
+def _yumusak_talep_toplam(con, stok_kart_id, exclude_batch_kodu=None):
+    """BEKLIYOR/HAZIRLANIYOR depo hazırlık kalemlerinin gerekli_kg toplamı."""
+    if not _depo_hazirlik_tablosu_var(con):
+        return 0.0
+    params = [stok_kart_id]
+    batch_filtre = ""
+    if exclude_batch_kodu:
+        batch_filtre = " AND h.batch_kodu != ?"
+        params.append(exclude_batch_kodu)
+    row = con.execute(f"""
+        SELECT COALESCE(SUM(k.gerekli_kg), 0) AS toplam
+        FROM nexgen_depo_hazirlik_kalem k
+        JOIN nexgen_depo_hazirlik h ON h.id = k.hazirlik_id
+        WHERE k.stok_kart_id = ?
+          AND h.durum IN ('BEKLIYOR', 'HAZIRLANIYOR'){batch_filtre}
+    """, params).fetchone()
+    return round(float(row['toplam'] or 0), 3) if row else 0.0
+
+
+def _kullanilabilir_stok(con, stok_kart_id, exclude_batch_kodu=None):
+    """Fiziksel − aktif rezerv − yumuşak talep (kendi batch hariç tutulabilir)."""
+    fiziksel = _mevcut_stok(con, stok_kart_id)
+    rezerv = _aktif_rezerv_toplam(con, stok_kart_id, exclude_batch_kodu)
+    yumusak = _yumusak_talep_toplam(con, stok_kart_id, exclude_batch_kodu)
+    return round(fiziksel - rezerv - yumusak, 3)
+
+
 def _batch_formul_parca_sec(con, batch_kodu, parca_id=None):
     """Formül önizleme için varsayılan parça: DEVAM → HAZIR → ilk kayıt."""
     if parca_id:
