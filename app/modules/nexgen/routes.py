@@ -7437,6 +7437,30 @@ def _formul_kalemleri_birimli(con, mpr_kalemler, kaynak):
     return out
 
 
+def _formul_bolum_toplamlar(taban, rf):
+    """Formül bölümü alt toplamları (kg cinsinden)."""
+    taban_kg = round(sum(float(k.get('miktar_kg') or 0) for k in taban), 3)
+    rf_kg = round(sum(float(k.get('miktar_kg') or 0) for k in rf), 3)
+    return {
+        'taban_kg': taban_kg,
+        'rf_kg': rf_kg,
+        'genel_kg': round(taban_kg + rf_kg, 3),
+    }
+
+
+def _formul_bolum_yap(con, ihtiyac, kg):
+    """Tek formül bölümü: taban + RF kalemleri ve toplamlar."""
+    taban = _formul_kalemleri_birimli(con, ihtiyac.get('kalemler', []), 'TABAN')
+    rf = _formul_kalemleri_birimli(con, ihtiyac.get('kalemler', []), 'RF')
+    return {
+        'kg': round(float(kg), 3),
+        'taban': taban,
+        'rf': rf,
+        'toplamlar': _formul_bolum_toplamlar(taban, rf),
+        'taban_batch_kg': ihtiyac.get('taban_batch_kg'),
+    }
+
+
 def _batch_formul_parca_sec(con, batch_kodu, parca_id=None):
     """Formül önizleme için varsayılan parça: DEVAM → HAZIR → ilk kayıt."""
     if parca_id:
@@ -7830,7 +7854,9 @@ def api_batch_formul_icerik(batch_kodu):
     try:
         batch = con.execute("""
             SELECT nb.batch_kodu, nb.lot_kodu, nb.uretim_varyant_id, nb.plan_id,
-                   COALESCE(c.unvan, np.musteri_adi) AS cari_ad
+                   nb.planlanan_kg,
+                   COALESCE(c.unvan, np.musteri_adi) AS cari_ad,
+                   np.siparis_no, np.rf_renk_id AS plan_rf_renk_id
             FROM nexgen_uretim_batch nb
             LEFT JOIN nexgen_uretim_plan np ON np.id = nb.plan_id
             LEFT JOIN nexgen_cari c ON c.id = np.cari_id
@@ -7846,36 +7872,65 @@ def api_batch_formul_icerik(batch_kodu):
         if not parca:
             return jsonify({'ok': False, 'hata': 'Alt emir bulunamadı'}), 404
 
-        kg = round(float(parca['hedef_kg']), 3)
+        parca_kg = round(float(parca['hedef_kg']), 3)
         rf_bilgi = _batch_plan_rf_bilgi(
             con,
             batch_kodu=batch_kodu,
             plan_id=batch['plan_id'],
             uretim_varyant_id=batch['uretim_varyant_id'],
         )
-        rf_renk_id = rf_bilgi.get('rf_renk_id') if rf_bilgi else None
+        rf_renk_id = rf_bilgi.get('rf_renk_id') if rf_bilgi else batch['plan_rf_renk_id']
 
-        ihtiyac = _mpr_stok_ihtiyac_hesapla(
-            con, batch['uretim_varyant_id'], rf_renk_id, kg,
+        kg_kontrol = _batch_uretim_kontrol(con, batch_kodu) or {}
+        toplam_kg = float(
+            kg_kontrol.get('siparis_toplam_kg')
+            or batch['planlanan_kg']
+            or 0
         )
-        if not ihtiyac.get('ok'):
-            return jsonify({'ok': False, 'hata': ihtiyac.get('hata', 'Hesaplanamadı')}), 400
+        if toplam_kg <= 0:
+            row_sum = con.execute("""
+                SELECT COALESCE(SUM(hedef_kg), 0) AS s
+                FROM nexgen_uretim_parca WHERE batch_kodu=?
+            """, (batch_kodu,)).fetchone()
+            toplam_kg = float(row_sum['s'] or 0) if row_sum else parca_kg
+        toplam_kg = round(toplam_kg, 3)
+
+        ihtiyac_parca = _mpr_stok_ihtiyac_hesapla(
+            con, batch['uretim_varyant_id'], rf_renk_id, parca_kg,
+        )
+        if not ihtiyac_parca.get('ok'):
+            return jsonify({'ok': False, 'hata': ihtiyac_parca.get('hata', 'Hesaplanamadı')}), 400
+
+        ihtiyac_toplam = _mpr_stok_ihtiyac_hesapla(
+            con, batch['uretim_varyant_id'], rf_renk_id, toplam_kg,
+        )
+        if not ihtiyac_toplam.get('ok'):
+            return jsonify({'ok': False, 'hata': ihtiyac_toplam.get('hata', 'Toplam hesaplanamadı')}), 400
+
+        parca_blok = _formul_bolum_yap(con, ihtiyac_parca, parca_kg)
+        toplam_blok = _formul_bolum_yap(con, ihtiyac_toplam, toplam_kg)
 
         return jsonify({
             'ok': True,
             'batch_kodu': batch_kodu,
             'lot_kodu': batch['lot_kodu'],
             'cari_ad': batch['cari_ad'],
+            'siparis_no': batch['siparis_no'],
             'rf_kod': rf_bilgi.get('rf_kod') if rf_bilgi else None,
             'rf_renk_ad': rf_bilgi.get('renk_ad') if rf_bilgi else None,
+            'rf_renk_id': rf_renk_id,
             'rf_var': bool(rf_renk_id),
             'parca_id': parca['id'],
             'parca_no': parca['parca_no'],
             'parca_durum': parca['durum'],
-            'kg': kg,
-            'taban_batch_kg': ihtiyac.get('taban_batch_kg'),
-            'taban': _formul_kalemleri_birimli(con, ihtiyac.get('kalemler', []), 'TABAN'),
-            'rf': _formul_kalemleri_birimli(con, ihtiyac.get('kalemler', []), 'RF'),
+            'toplam_kg': toplam_kg,
+            'parca': parca_blok,
+            'toplam': toplam_blok,
+            # FAZ-4C geriye uyumluluk
+            'kg': parca_kg,
+            'taban_batch_kg': ihtiyac_parca.get('taban_batch_kg'),
+            'taban': parca_blok['taban'],
+            'rf': parca_blok['rf'],
         })
     finally:
         con.close()

@@ -144,21 +144,26 @@
       <div class="tui-rf-uyari">{{ rf_uyari }}</div>
       {% endif %}
 
-      {# FAZ-4C: Formül hazırlık listesi #}
+      {# FAZ-4E: Formül hazırlık kompakt kart + modal #}
       <div class="tui-formul-hazirlik" id="tui-formul-hazirlik">
         <div class="tui-fh-baslik">FORMÜL HAZIRLIK</div>
-        <div class="tui-fh-meta">
-          <div class="tui-fh-meta-satir"><span>Batch</span><strong id="tui-fh-batch">{{ batch.batch_kodu }}</strong></div>
-          <div class="tui-fh-meta-satir"><span>LOT</span><strong id="tui-fh-lot">{{ batch.lot_kodu or '—' }}</strong></div>
-          <div class="tui-fh-meta-satir"><span>Cari</span><strong id="tui-fh-cari">{{ _tui_cad }}</strong></div>
-          <div class="tui-fh-meta-satir"><span>RF</span><strong id="tui-fh-rf">{{ rf_kod or '—' }}</strong></div>
-          <div class="tui-fh-meta-satir tui-fh-kg-satir"><span>Alt emir KG</span><strong id="tui-fh-kg">—</strong></div>
+        <div class="tui-fh-kompakt">
+          <div class="tui-fh-kompakt-satir">
+            <span class="tui-fh-k-label">RF</span>
+            <span class="tui-fh-k-val" id="tui-fh-rf">{{ rf_kod or '—' }}{% if rf_renk_ad %} / {{ rf_renk_ad }}{% endif %}</span>
+          </div>
+          <div class="tui-fh-kompakt-satir">
+            <span class="tui-fh-k-label">Alt emir KG</span>
+            <span class="tui-fh-k-val" id="tui-fh-kg">—</span>
+          </div>
+          <div class="tui-fh-kompakt-satir">
+            <span class="tui-fh-k-label">Sipariş / Batch</span>
+            <span class="tui-fh-k-val" id="tui-fh-toplam">{{ "{:,}".format(siparis_toplam_kg|int) }} KG</span>
+          </div>
         </div>
-        <div class="tui-fh-alt-baslik">HAMMADDELER</div>
-        <div class="tui-fh-liste" id="tui-fh-taban"><div class="tui-fh-bos">Yükleniyor…</div></div>
-        <div class="tui-fh-alt-baslik">RENK / BOYA (RF)</div>
-        <div class="tui-fh-liste" id="tui-fh-rf"></div>
-        <div class="tui-fh-rf-yok" id="tui-fh-rf-yok" style="display:none">RF eşleşmesi yok — sadece taban hammadde.</div>
+        <button type="button" class="tui-fh-gor-btn" id="tui-formul-gor-btn" onclick="tuiFormulModalAc()">
+          Formülü Gör
+        </button>
       </div>
 
       {# Siparis master KG #}
@@ -548,6 +553,29 @@
   </div>
 </div>
 
+{# FAZ-4E: Üretim Formülü Modal #}
+<div class="tui-formul-modal-arka" id="tui-formul-modal" style="display:none"
+     onclick="tuiFormulModalKapat(event)">
+  <div class="tui-formul-modal" onclick="event.stopPropagation()">
+    <div class="tui-fm-baslik">
+      <span class="tui-fm-baslik-yazi">ÜRETİM FORMÜLÜ</span>
+      <button type="button" class="tui-fm-kapat" onclick="tuiFormulModalKapat()">✕</button>
+    </div>
+    <div class="tui-fm-ust" id="tui-fm-ust"></div>
+    <div class="tui-fm-bolum">
+      <div class="tui-fm-bolum-baslik">A) DEPO HAZIRLIK — SİPARİŞ / BATCH TOPLAM</div>
+      <div id="tui-fm-toplam-icerik" class="tui-fm-icerik"></div>
+    </div>
+    <div class="tui-fm-bolum">
+      <div class="tui-fm-bolum-baslik">B) ALT EMİR FORMÜLÜ</div>
+      <div id="tui-fm-parca-icerik" class="tui-fm-icerik"></div>
+    </div>
+    <div class="tui-fm-alt">
+      <button type="button" class="tui-fm-kapat-btn" onclick="tuiFormulModalKapat()">Kapat</button>
+    </div>
+  </div>
+</div>
+
 <script>
 var _batch_kodu      = '{{ batch.batch_kodu }}';
 var _durum           = '{{ batch.durum }}';
@@ -558,8 +586,9 @@ var _biten_adet      = {{ sayaclar.bitti }};
 var _aktif_beklet_id = null;
 var _aktif_not_id    = null;
 var _aktif_formul_parca_id = null;
+var _formul_api_cache = null;
 
-/* ─── FAZ-4C: Formül hazırlık listesi ─────────────── */
+/* ─── FAZ-4E: Formül hazırlık + modal ─────────────── */
 function tuiMiktarEtiket(k, rfBolum) {
   var kg = parseFloat(k.miktar_kg);
   if (!(kg >= 0)) return '—';
@@ -571,17 +600,84 @@ function tuiMiktarEtiket(k, rfBolum) {
   return kg.toFixed(3).replace(/\.?0+$/, '') + ' KG';
 }
 
-function tuiFormulListeRender(el, kalemler, rfBolum) {
-  if (!el) return;
+function tuiFormulTabloHtml(kalemler, rfBolum) {
   if (!kalemler || !kalemler.length) {
-    el.innerHTML = '<div class="tui-fh-bos">—</div>';
-    return;
+    return '<div class="tui-fm-bos">—</div>';
   }
-  el.innerHTML = kalemler.map(function(k) {
-    var ad = (k.ad || k.kod || '—').trim();
-    return '<div class="tui-fh-satir"><span class="tui-fh-ad">' + ad + '</span>' +
-      '<span class="tui-fh-miktar">' + tuiMiktarEtiket(k, rfBolum) + '</span></div>';
+  var rows = kalemler.map(function(k) {
+    return '<tr><td class="tui-fm-kod">' + (k.kod || '—') + '</td>' +
+      '<td class="tui-fm-ad">' + (k.ad || k.kod || '—') + '</td>' +
+      '<td class="tui-fm-miktar">' + tuiMiktarEtiket(k, rfBolum) + '</td></tr>';
   }).join('');
+  return '<table class="tui-fm-tablo"><thead><tr>' +
+    '<th>Kod</th><th>Ad</th><th>' + (rfBolum ? 'KG/GR' : 'KG') + '</th></tr></thead>' +
+    '<tbody>' + rows + '</tbody></table>';
+}
+
+function tuiFormulBolumRender(bolum, rfVar) {
+  var taban = bolum.taban || [];
+  var rf = bolum.rf || [];
+  var top = bolum.toplamlar || {};
+  var rfUyari = '';
+  if (!rf.length && !rfVar) {
+    rfUyari = '<div class="tui-fm-rf-uyari">RF boya bilgisi yok</div>';
+  }
+  return '<div class="tui-fm-alt-grup">' +
+    '<div class="tui-fm-alt-etiket">ANA HAMMADDELER</div>' +
+    tuiFormulTabloHtml(taban, false) +
+    '</div>' +
+    '<div class="tui-fm-alt-grup">' +
+    '<div class="tui-fm-alt-etiket">RENK / BOYA — RF</div>' +
+    (rf.length ? tuiFormulTabloHtml(rf, true) : rfUyari) +
+    '</div>' +
+    '<div class="tui-fm-toplamlar">' +
+    '<div><span>Ana hammadde</span><strong>' + (top.taban_kg != null ? top.taban_kg.toFixed(2) : '0') + ' KG</strong></div>' +
+    '<div><span>Boya (RF)</span><strong>' + tuiMiktarEtiket({miktar_kg: top.rf_kg || 0}, true) + '</strong></div>' +
+    '<div class="tui-fm-genel"><span>Genel toplam</span><strong>' + (top.genel_kg != null ? top.genel_kg.toFixed(2) : '0') + ' KG</strong></div>' +
+    '</div>';
+}
+
+function tuiFormulKompaktGuncelle(d) {
+  var rfTxt = d.rf_kod || '—';
+  if (d.rf_renk_ad) rfTxt += ' / ' + d.rf_renk_ad;
+  document.getElementById('tui-fh-rf').textContent = rfTxt;
+  document.getElementById('tui-fh-kg').textContent =
+    (d.parca && d.parca.kg != null ? parseFloat(d.parca.kg).toFixed(2) : '—') + ' KG';
+  var topEl = document.getElementById('tui-fh-toplam');
+  if (topEl && d.toplam_kg != null) {
+    topEl.textContent = Math.round(parseFloat(d.toplam_kg)).toLocaleString('tr-TR') + ' KG';
+  }
+}
+
+function tuiFormulModalIcerik(d) {
+  if (!d || !d.ok) return;
+  var rfTxt = d.rf_kod || '—';
+  if (d.rf_renk_ad) rfTxt += ' / ' + d.rf_renk_ad;
+  document.getElementById('tui-fm-ust').innerHTML =
+    '<div class="tui-fm-ust-grid">' +
+    '<div><span>Cari</span><strong>' + (d.cari_ad || '—') + '</strong></div>' +
+    '<div><span>Sipariş No</span><strong>' + (d.siparis_no || '—') + '</strong></div>' +
+    '<div><span>Batch</span><strong>' + (d.batch_kodu || '—') + '</strong></div>' +
+    '<div><span>LOT</span><strong>' + (d.lot_kodu || '—') + '</strong></div>' +
+    '<div><span>RF</span><strong>' + rfTxt + '</strong></div>' +
+    '<div><span>Alt emir KG</span><strong>' + (d.parca ? parseFloat(d.parca.kg).toFixed(2) : '—') + ' KG</strong></div>' +
+    '<div><span>Sipariş / Batch KG</span><strong>' + Math.round(parseFloat(d.toplam_kg || 0)).toLocaleString('tr-TR') + ' KG</strong></div>' +
+    '</div>';
+  document.getElementById('tui-fm-toplam-icerik').innerHTML =
+    tuiFormulBolumRender(d.toplam || {}, d.rf_var);
+  document.getElementById('tui-fm-parca-icerik').innerHTML =
+    tuiFormulBolumRender(d.parca || {}, d.rf_var);
+}
+
+function tuiFormulModalAc() {
+  if (_formul_api_cache) tuiFormulModalIcerik(_formul_api_cache);
+  document.getElementById('tui-formul-modal').style.display = 'flex';
+}
+
+function tuiFormulModalKapat(e) {
+  if (e && e.target && e.target.id !== 'tui-formul-modal') return;
+  var m = document.getElementById('tui-formul-modal');
+  if (m) m.style.display = 'none';
 }
 
 async function tuiFormulYukle(parcaId) {
@@ -591,35 +687,22 @@ async function tuiFormulYukle(parcaId) {
     var r = await fetch(url);
     var d = await r.json();
     if (!d.ok) {
-      document.getElementById('tui-fh-taban').innerHTML =
-        '<div class="tui-fh-bos">' + (d.hata || 'Hesaplanamadı') + '</div>';
+      document.getElementById('tui-fh-kg').textContent = d.hata || 'Hata';
       return;
     }
+    _formul_api_cache = d;
     _aktif_formul_parca_id = d.parca_id;
-    document.getElementById('tui-fh-kg').textContent =
-      (d.kg != null ? parseFloat(d.kg).toFixed(2) : '—') + ' KG';
-    if (d.lot_kodu) document.getElementById('tui-fh-lot').textContent = d.lot_kodu;
-    if (d.cari_ad) document.getElementById('tui-fh-cari').textContent = d.cari_ad;
-    document.getElementById('tui-fh-rf').textContent = d.rf_kod || '—';
-    tuiFormulListeRender(document.getElementById('tui-fh-taban'), d.taban, false);
-    var rfEl = document.getElementById('tui-fh-rf');
-    var rfYok = document.getElementById('tui-fh-rf-yok');
-    if (d.rf && d.rf.length) {
-      rfEl.style.display = 'block';
-      rfYok.style.display = 'none';
-      tuiFormulListeRender(rfEl, d.rf, true);
-    } else {
-      rfEl.innerHTML = '';
-      rfEl.style.display = 'none';
-      rfYok.style.display = d.rf_var ? 'none' : 'block';
+    tuiFormulKompaktGuncelle(d);
+    var modal = document.getElementById('tui-formul-modal');
+    if (modal && modal.style.display === 'flex') {
+      tuiFormulModalIcerik(d);
     }
     document.querySelectorAll('#pp-tablo-body .pp-tr').forEach(function(tr) {
       tr.classList.toggle('pp-tr-formul-secili',
         parseInt(tr.dataset.parcaId, 10) === d.parca_id);
     });
   } catch (e) {
-    document.getElementById('tui-fh-taban').innerHTML =
-      '<div class="tui-fh-bos">Bağlantı hatası</div>';
+    document.getElementById('tui-fh-kg').textContent = 'Bağlantı hatası';
   }
 }
 
@@ -1312,32 +1395,106 @@ body { background: #f3f6fa; font-family: system-ui, -apple-system, sans-serif; }
   padding: 8px 10px; font-size: 11px; color: #991b1b; line-height: 1.4;
 }
 
-/* FAZ-4C Formül Hazırlık */
+/* FAZ-4E Formül Hazırlık — kompakt kart */
 .tui-formul-hazirlik {
   background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px;
-  padding: 10px 11px; display: flex; flex-direction: column; gap: 6px;
+  padding: 10px 11px; display: flex; flex-direction: column; gap: 8px;
 }
 .tui-fh-baslik {
   font-size: 10px; font-weight: 800; color: #92400e; letter-spacing: .8px;
 }
-.tui-fh-meta { display: flex; flex-direction: column; gap: 3px; font-size: 11px; }
-.tui-fh-meta-satir { display: flex; justify-content: space-between; gap: 8px; color: #64748b; }
-.tui-fh-meta-satir strong { color: #0f172a; font-weight: 700; text-align: right; }
-.tui-fh-kg-satir strong { color: #15803d; }
-.tui-fh-alt-baslik {
-  font-size: 9px; font-weight: 700; color: #94a3b8; letter-spacing: .6px;
-  margin-top: 4px; text-transform: uppercase;
+.tui-fh-kompakt { display: flex; flex-direction: column; gap: 5px; }
+.tui-fh-kompakt-satir {
+  display: flex; justify-content: space-between; gap: 8px; font-size: 12px;
 }
-.tui-fh-liste { display: flex; flex-direction: column; gap: 2px; }
-.tui-fh-satir {
-  display: flex; justify-content: space-between; gap: 6px;
-  font-size: 11px; padding: 3px 0; border-bottom: 1px solid #fef3c7;
+.tui-fh-k-label { color: #64748b; font-weight: 600; }
+.tui-fh-k-val { color: #0f172a; font-weight: 800; text-align: right; }
+.tui-fh-gor-btn {
+  width: 100%; padding: 10px 12px; margin-top: 2px;
+  background: #f6c343; color: #1a1a1a; border: none; border-radius: 8px;
+  font-size: 13px; font-weight: 800; cursor: pointer;
+  box-shadow: 0 2px 6px rgba(246,195,67,.35);
 }
-.tui-fh-ad { color: #334155; font-weight: 600; flex: 1; min-width: 0; }
-.tui-fh-miktar { color: #0f172a; font-weight: 800; white-space: nowrap; font-family: 'Courier New', monospace; font-size: 10px; }
-.tui-fh-bos { font-size: 11px; color: #94a3b8; padding: 4px 0; }
-.tui-fh-rf-yok { font-size: 10px; color: #b45309; font-weight: 600; }
+.tui-fh-gor-btn:hover { background: #e9b020; }
 .pp-tr-formul-secili { background: #fffbeb !important; outline: 1px solid #f6c343; }
+
+/* FAZ-4E Formül Modal */
+.tui-formul-modal-arka {
+  position: fixed; inset: 0; z-index: 3000;
+  background: rgba(15,23,42,.62); backdrop-filter: blur(3px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px;
+}
+.tui-formul-modal {
+  background: #fff; border-radius: 14px; width: 100%; max-width: 720px;
+  max-height: 92vh; overflow: hidden; display: flex; flex-direction: column;
+  box-shadow: 0 24px 64px rgba(0,0,0,.28); border: 1px solid #e2e8f0;
+}
+.tui-fm-baslik {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px; border-bottom: 1px solid #e2e8f0; background: #f8fafc;
+}
+.tui-fm-baslik-yazi { font-size: 16px; font-weight: 900; color: #0f172a; letter-spacing: .4px; }
+.tui-fm-kapat {
+  background: none; border: none; font-size: 20px; color: #64748b;
+  cursor: pointer; padding: 4px 8px; line-height: 1;
+}
+.tui-fm-ust {
+  padding: 12px 18px; background: #fffbeb; border-bottom: 1px solid #fde68a;
+}
+.tui-fm-ust-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 16px;
+  font-size: 13px;
+}
+.tui-fm-ust-grid span { display: block; font-size: 10px; color: #94a3b8; font-weight: 700; text-transform: uppercase; }
+.tui-fm-ust-grid strong { color: #0f172a; font-weight: 800; }
+.tui-fm-bolum {
+  padding: 12px 18px; overflow-y: auto; flex: 1; min-height: 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+.tui-fm-bolum-baslik {
+  font-size: 12px; font-weight: 900; color: #0f766e; margin-bottom: 10px;
+  letter-spacing: .3px;
+}
+.tui-fm-alt-grup { margin-bottom: 12px; }
+.tui-fm-alt-etiket {
+  font-size: 10px; font-weight: 800; color: #64748b; letter-spacing: .6px;
+  margin-bottom: 6px; text-transform: uppercase;
+}
+.tui-fm-tablo { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tui-fm-tablo th {
+  text-align: left; padding: 8px 10px; background: #f1f5f9;
+  font-size: 11px; font-weight: 800; color: #475569; border-bottom: 2px solid #e2e8f0;
+}
+.tui-fm-tablo td { padding: 9px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+.tui-fm-kod { font-family: 'Courier New', monospace; font-weight: 700; color: #0f766e; white-space: nowrap; width: 22%; }
+.tui-fm-ad { color: #334155; font-weight: 600; }
+.tui-fm-miktar { font-family: 'Courier New', monospace; font-weight: 800; text-align: right; white-space: nowrap; width: 18%; }
+.tui-fm-toplamlar {
+  display: flex; flex-direction: column; gap: 6px; margin-top: 8px;
+  padding: 10px 12px; background: #f8fafc; border-radius: 8px; font-size: 13px;
+}
+.tui-fm-toplamlar div { display: flex; justify-content: space-between; gap: 12px; }
+.tui-fm-toplamlar span { color: #64748b; font-weight: 600; }
+.tui-fm-toplamlar strong { color: #0f172a; font-weight: 800; }
+.tui-fm-genel { border-top: 1px solid #e2e8f0; padding-top: 6px; margin-top: 2px; }
+.tui-fm-genel strong { color: #15803d; font-size: 15px; }
+.tui-fm-rf-uyari {
+  background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;
+  border-radius: 8px; padding: 10px 12px; font-size: 13px; font-weight: 700;
+}
+.tui-fm-bos { font-size: 13px; color: #94a3b8; padding: 6px 0; }
+.tui-fm-alt { padding: 12px 18px; background: #f8fafc; }
+.tui-fm-kapat-btn {
+  width: 100%; padding: 12px; background: #e2e8f0; color: #334155;
+  border: none; border-radius: 8px; font-size: 14px; font-weight: 800; cursor: pointer;
+}
+.tui-fm-kapat-btn:hover { background: #cbd5e1; }
+@media (max-width: 600px) {
+  .tui-fm-ust-grid { grid-template-columns: 1fr; }
+  .tui-formul-modal { max-height: 96vh; border-radius: 10px; }
+  .tui-fm-tablo { font-size: 13px; }
+}
 
 /* Bilgi Listesi (Formül) */
 .sol-bilgi-liste {
