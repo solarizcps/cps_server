@@ -7292,6 +7292,148 @@ def _formul_batch_kg_hesapla(con, uretim_varyant_id):
     return round(float(row['toplam']), 3) if row else 0.0
 
 
+def _mpr_stok_ihtiyac_hesapla(con, uretim_varyant_id, rf_renk_id, planlanan_kg):
+    """MPR stok ihtiyacı önizleme — taban hammadde (BOYA hariç) + RF boya.
+
+    Stok hareketi YAZMAZ. Mevcut stok: nexgen_stok_hareket SUM (_mevcut_stok).
+    """
+    try:
+        planlanan_kg = float(planlanan_kg)
+    except (TypeError, ValueError):
+        return {'ok': False, 'hata': 'Geçersiz planlanan_kg'}
+    if planlanan_kg <= 0:
+        return {'ok': False, 'hata': 'planlanan_kg sıfırdan büyük olmalı'}
+
+    taban_batch_kg = _formul_batch_kg_hesapla(con, uretim_varyant_id)
+    if taban_batch_kg <= 0:
+        return {
+            'ok': False,
+            'hata': 'Taban reçete batch KG bulunamadı (BOYA hariç kalem yok).',
+            'taban_batch_kg': 0.0,
+        }
+
+    carpan = planlanan_kg / taban_batch_kg
+    satirlar = []
+
+    taban_rows = con.execute("""
+        SELECT rk.stok_kart_id, rk.miktar_kg,
+               sk.kod AS stok_kod, sk.ad AS stok_ad
+        FROM nexgen_recete_kalem rk
+        JOIN nexgen_stok_kart sk ON sk.id = rk.stok_kart_id
+        WHERE rk.uretim_varyant_id = ? AND rk.aktif = 1
+          AND UPPER(COALESCE(sk.kategori, '')) != 'BOYA'
+        ORDER BY rk.sira, rk.id
+    """, (uretim_varyant_id,)).fetchall()
+
+    for row in taban_rows:
+        gerekli = round(float(row['miktar_kg']) * carpan, 3)
+        if gerekli <= 0:
+            continue
+        satirlar.append({
+            'kaynak': 'TABAN',
+            'stok_kart_id': row['stok_kart_id'],
+            'stok_kod': row['stok_kod'] or '',
+            'stok_ad': row['stok_ad'] or '',
+            'gerekli_kg': gerekli,
+        })
+
+    rf_id = None
+    if rf_renk_id not in (None, ''):
+        try:
+            rf_id = int(rf_renk_id)
+        except (TypeError, ValueError):
+            pass
+    if rf_id:
+        rf_rows = con.execute("""
+            SELECT rk.stok_kart_id, rk.miktar_kg,
+                   sk.kod AS stok_kod, sk.ad AS stok_ad
+            FROM nexgen_rf_kalem rk
+            JOIN nexgen_stok_kart sk ON sk.id = rk.stok_kart_id
+            WHERE rk.rf_renk_id = ? AND rk.aktif = 1
+            ORDER BY rk.sira, rk.id
+        """, (rf_id,)).fetchall()
+        for row in rf_rows:
+            gerekli = round(float(row['miktar_kg']) * carpan, 3)
+            if gerekli <= 0:
+                continue
+            satirlar.append({
+                'kaynak': 'RF',
+                'stok_kart_id': row['stok_kart_id'],
+                'stok_kod': row['stok_kod'] or '',
+                'stok_ad': row['stok_ad'] or '',
+                'gerekli_kg': gerekli,
+            })
+
+    talep = {}
+    for s in satirlar:
+        sid = s['stok_kart_id']
+        talep[sid] = round(talep.get(sid, 0.0) + s['gerekli_kg'], 3)
+
+    mevcut_cache = {sid: _mevcut_stok(con, sid) for sid in talep}
+    eksik_stok_ids = {
+        sid for sid, gerekli in talep.items()
+        if mevcut_cache[sid] < gerekli
+    }
+
+    kalemler = []
+    for s in satirlar:
+        sid = s['stok_kart_id']
+        toplam_gerekli = talep[sid]
+        mevcut = mevcut_cache[sid]
+        kalemler.append({
+            'kaynak': s['kaynak'],
+            'stok_kart_id': sid,
+            'stok_kod': s['stok_kod'],
+            'stok_ad': s['stok_ad'],
+            'gerekli_kg': s['gerekli_kg'],
+            'mevcut_kg': mevcut,
+            'fark_kg': round(mevcut - toplam_gerekli, 3),
+            'yeterli': sid not in eksik_stok_ids,
+        })
+
+    return {
+        'ok': True,
+        'yeterli_mi': len(eksik_stok_ids) == 0,
+        'eksik_sayisi': len(eksik_stok_ids),
+        'taban_batch_kg': taban_batch_kg,
+        'planlanan_kg': round(planlanan_kg, 3),
+        'kalemler': kalemler,
+    }
+
+
+@nexgen_bp.route('/api/plan/stok-onizle', methods=['POST'])
+@login_gerekli
+def api_plan_stok_onizle():
+    """MPR stok ihtiyacı önizleme — salt okuma, hareket yazmaz."""
+    if not (yetki_var('nexgen.plan.manage', 'can_manage') or
+            yetki_var('nexgen.plan.view', 'can_view')):
+        return jsonify({'ok': False, 'hata': 'Yetki yok'}), 403
+
+    d = request.get_json(silent=True) or {}
+    uv_id = d.get('uretim_varyant_id')
+    rf_renk_id = d.get('rf_renk_id')
+    planlanan_kg = d.get('planlanan_kg')
+
+    if not uv_id:
+        return jsonify({'ok': False, 'hata': 'uretim_varyant_id zorunlu'}), 400
+
+    con = _db()
+    try:
+        uv = con.execute(
+            "SELECT id FROM nexgen_uretim_varyant WHERE id=? AND aktif=1",
+            (uv_id,),
+        ).fetchone()
+        if not uv:
+            return jsonify({'ok': False, 'hata': 'Üretim varyantı bulunamadı'}), 404
+
+        sonuc = _mpr_stok_ihtiyac_hesapla(con, uv_id, rf_renk_id, planlanan_kg)
+        if not sonuc.get('ok'):
+            return jsonify(sonuc), 400
+        return jsonify(sonuc)
+    finally:
+        con.close()
+
+
 @nexgen_bp.route('/api/plan/<int:plan_id>/alt-emir-onizle')
 @login_gerekli
 def api_alt_emir_onizle(plan_id):
@@ -7400,6 +7542,22 @@ def api_plan_basla(plan_id):
             return jsonify({'ok': False, 'hata': 'Plan bulunamadı'}), 404
         if p['durum'] not in ('PLANLANDI',):
             return jsonify({'ok': False, 'hata': f'Plan durumu uygun değil: {p["durum"]}'}), 400
+
+        rf_renk_id = p['rf_renk_id'] if 'rf_renk_id' in p.keys() else None
+        stok = _mpr_stok_ihtiyac_hesapla(
+            con, p['uretim_varyant_id'], rf_renk_id, float(p['planlanan_kg'])
+        )
+        if not stok.get('ok'):
+            return jsonify({'ok': False, 'hata': stok.get('hata', 'Stok hesaplanamadı')}), 400
+        if not stok.get('yeterli_mi'):
+            eksik = [k for k in stok.get('kalemler', []) if not k.get('yeterli')]
+            return jsonify({
+                'ok': False,
+                'hata': 'Stok yetersiz',
+                'eksik_sayisi': stok.get('eksik_sayisi', len(eksik)),
+                'eksik_kalemler': eksik,
+                'kalemler': stok.get('kalemler', []),
+            }), 400
 
         # Batch + LOT oluştur
         batch_kodu   = _batch_kodu_uret(con)
