@@ -7021,6 +7021,155 @@ def api_plan_ekle():
         con.close()
 
 
+@nexgen_bp.route('/api/planlama-siparis/<int:ps_id>/mpr-ekle', methods=['POST'])
+@yetki_gerekli('nexgen.plan.manage', 'can_manage')
+def api_planlama_siparis_mpr_ekle(ps_id):
+    """Mevcut planlama sipariş header'ına yeni MPR satırı ekler."""
+    d = request.get_json(silent=True) or {}
+    uv_id = d.get('uretim_varyant_id')
+    kg = d.get('planlanan_kg')
+    oncelik = d.get('oncelik_sira', 10)
+    plan_tarihi = (d.get('plan_tarihi') or '').strip()
+    notlar = (d.get('notlar') or '').strip() or None
+    rf_renk_id_raw = d.get('rf_renk_id')
+
+    if not uv_id or not kg:
+        return jsonify({'ok': False, 'hata': 'uretim_varyant_id ve planlanan_kg zorunlu'}), 400
+    try:
+        kg = float(kg)
+        if kg <= 0:
+            return jsonify({'ok': False, 'hata': 'KG sıfırdan büyük olmalı'}), 400
+    except Exception:
+        return jsonify({'ok': False, 'hata': 'Geçersiz planlanan_kg'}), 400
+
+    if not plan_tarihi:
+        from datetime import date as _date
+        plan_tarihi = _date.today().isoformat()
+
+    con = _db()
+    try:
+        if not _planlama_siparis_tablosu_var(con):
+            return jsonify({'ok': False, 'hata': 'Planlama sipariş tablosu yok'}), 400
+
+        hdr = con.execute(
+            "SELECT id, siparis_no, cari_id, cari_unvan, termin_tarihi, durum "
+            "FROM nexgen_planlama_siparis WHERE id=?",
+            (ps_id,),
+        ).fetchone()
+        if not hdr:
+            return jsonify({'ok': False, 'hata': 'Planlama siparişi bulunamadı'}), 404
+        if hdr['durum'] == 'IPTAL':
+            return jsonify({'ok': False, 'hata': 'İptal edilmiş siparişe satır eklenemez'}), 400
+
+        uv = con.execute(
+            "SELECT uv.id, uv.boyut, rv.ad AS renk_ad, f.ad AS formul_ad "
+            "FROM nexgen_uretim_varyant uv "
+            "JOIN nexgen_renk_varyant rv ON rv.id=uv.renk_varyant_id "
+            "JOIN nexgen_formul f ON f.id=rv.formul_id "
+            "WHERE uv.id=? AND uv.aktif=1",
+            (uv_id,),
+        ).fetchone()
+        if not uv:
+            return jsonify({'ok': False, 'hata': 'Üretim varyantı bulunamadı'}), 404
+
+        cari_id = hdr['cari_id']
+        musteri_adi = hdr['cari_unvan']
+        siparis_no = hdr['siparis_no']
+        termin_tarihi = hdr['termin_tarihi']
+
+        rf_renk_id = None
+        rf_cari_uyari = None
+        rf = None
+        if _plan_rf_renk_kolonu_var(con):
+            if not rf_renk_id_raw:
+                return jsonify({'ok': False, 'hata': 'rf_renk_id zorunlu'}), 400
+            try:
+                rf_renk_id = int(rf_renk_id_raw)
+            except (TypeError, ValueError):
+                return jsonify({'ok': False, 'hata': 'rf_renk_id geçersiz'}), 400
+            rf = con.execute("""
+                SELECT rf.id, rf.rf_kod, rf.ad, rf.cari_id
+                FROM nexgen_rf_renk rf
+                JOIN nexgen_rf_formul_uygunluk u ON u.rf_renk_id = rf.id
+                JOIN nexgen_uretim_varyant uv2 ON uv2.id = ?
+                JOIN nexgen_renk_varyant rv ON rv.id = uv2.renk_varyant_id
+                    AND rv.formul_id = u.formul_id
+                WHERE rf.id = ?
+                  AND rf.durum = 'ONAYLI' AND rf.aktif = 1
+                  AND u.durum = 'ONAYLI' AND u.aktif = 1
+            """, (uv_id, rf_renk_id)).fetchone()
+            if not rf:
+                return jsonify({
+                    'ok': False,
+                    'hata': 'Seçilen RF bu formül için ONAYLI değil veya bulunamadı.',
+                }), 400
+            if cari_id and rf['cari_id']:
+                rf_cari_uyari = _rf_cari_uyari(con, rf['cari_id'], cari_id)
+
+        if _plan_termin_kolonu_var(con) and not termin_tarihi:
+            return jsonify({'ok': False, 'hata': 'Header termin tarihi eksik'}), 400
+
+        planlama_siparis_id = hdr['id']
+        plan_kodu = _plan_kodu_uret(con)
+        uid = _kullanici_id()
+
+        cols = [
+            'plan_kodu', 'kaynak', 'siparis_no', 'musteri_adi',
+            'uretim_varyant_id', 'planlanan_kg', 'oncelik_sira', 'plan_tarihi',
+            'durum', 'notlar', 'created_by',
+        ]
+        vals = [
+            plan_kodu, 'MANUEL', siparis_no, musteri_adi, uv_id,
+            round(kg, 3), int(oncelik), plan_tarihi, 'PLANLANDI', notlar, uid,
+        ]
+        if _plan_cari_kolonu_var(con):
+            cols.insert(4, 'cari_id')
+            vals.insert(4, cari_id)
+        if _plan_planlama_siparis_kolonu_var(con) and planlama_siparis_id:
+            cols.insert(-3, 'planlama_siparis_id')
+            vals.insert(-3, planlama_siparis_id)
+        if _plan_rf_renk_kolonu_var(con):
+            cols.insert(-3, 'rf_renk_id')
+            vals.insert(-3, rf_renk_id)
+        if _plan_termin_kolonu_var(con):
+            cols.insert(-3, 'termin_tarihi')
+            vals.insert(-3, termin_tarihi)
+
+        placeholders = ','.join(['?'] * len(cols))
+        con.execute(
+            f"INSERT INTO nexgen_uretim_plan ({','.join(cols)}) VALUES ({placeholders})",
+            vals,
+        )
+        con.commit()
+        resp = {
+            'ok': True,
+            'plan_kodu': plan_kodu,
+            'siparis_no': siparis_no,
+            'planlama_siparis_id': planlama_siparis_id,
+            'formul_ad': uv['formul_ad'],
+            'renk_ad': uv['renk_ad'],
+            'boyut': uv['boyut'],
+            'planlanan_kg': round(kg, 3),
+            'musteri_adi': musteri_adi,
+        }
+        if cari_id is not None:
+            resp['cari_id'] = cari_id
+        if rf_renk_id is not None and rf:
+            resp['rf_renk_id'] = rf_renk_id
+            resp['rf_kod'] = rf['rf_kod']
+            resp['rf_renk_ad'] = rf['ad']
+        if termin_tarihi:
+            resp['termin_tarihi'] = termin_tarihi
+        if rf_cari_uyari:
+            resp['rf_cari_uyari'] = rf_cari_uyari
+        return jsonify(resp)
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
 @nexgen_bp.route('/api/plan/<int:plan_id>/iptal', methods=['POST'])
 @yetki_gerekli('nexgen.plan.manage', 'can_manage')
 def api_plan_iptal(plan_id):

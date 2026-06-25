@@ -453,6 +453,106 @@ var _formuller = {{ formuller | tojson }};
 
   </div>
 </div>
+
+{# ── MPR Satırı Ekle Modal ── #}
+<div class="up-modal-arka" id="mpr-modal-arka" onclick="mprModalKapat(event)" style="display:none">
+  <div class="up-modal up-modal-mpr" onclick="event.stopPropagation()">
+    <div class="up-modal-baslik">
+      <div class="up-modal-baslik-ic">
+        <div class="up-modal-baslik-yazi">MPR Satırı Ekle</div>
+        <div class="up-modal-aciklama">Mevcut siparişe yeni üretim plan satırı ekleyin.</div>
+      </div>
+      <button class="up-modal-kapat" onclick="mprModalKapat()">✕</button>
+    </div>
+    <div class="up-modal-govde">
+      <input type="hidden" id="mpr-ps-id" value="">
+      <input type="hidden" id="mpr-cari-id" value="">
+      <input type="hidden" id="mpr-formul-id" value="">
+      <input type="hidden" id="mpr-rf-id" value="">
+      <input type="hidden" id="mpr-boyut" value="">
+
+      <div class="up-mpr-kilit-satir">
+        <div class="up-mpr-kilit-kutu">
+          <span class="up-mpr-kilit-etiket">Sipariş No</span>
+          <span class="up-mpr-kilit-deger" id="mpr-hdr-sipno">—</span>
+        </div>
+        <div class="up-mpr-kilit-kutu">
+          <span class="up-mpr-kilit-etiket">Cari</span>
+          <span class="up-mpr-kilit-deger" id="mpr-hdr-cari">—</span>
+        </div>
+      </div>
+
+      <div class="up-form-grid-2">
+        <div class="up-form-grup">
+          <label class="up-form-etiket">Formül <span class="up-zorunlu">*</span></label>
+          <div class="up-cdrop" id="mpr-fdrop" onclick="mprFdropToggle()">
+            <span id="mpr-fdrop-label" class="up-cdrop-placeholder">— Seçiniz —</span>
+            <svg class="up-cdrop-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" width="14" height="14">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </div>
+          <div class="up-cdrop-liste" id="mpr-fdrop-liste" style="display:none">
+            <input type="text" class="up-cdrop-ara" id="mpr-fdrop-ara"
+                   placeholder="Ara..." oninput="mprFdropFiltrele(this.value)"
+                   onclick="event.stopPropagation()">
+            {% for f in formuller | groupby('formul_ad') %}
+            {% set fid = f.list[0].formul_id %}
+            <div class="up-cdrop-item mpr-fdrop-item"
+                 data-value="{{ fid }}" data-ad="{{ f.grouper }}"
+                 onclick="event.stopPropagation(); mprFdropSec(this)">
+              <span class="up-cdrop-ad">{{ f.grouper }}</span>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="up-form-grup" id="mpr-rf-grup" style="display:none">
+          <label class="up-form-etiket">RF Renk <span class="up-zorunlu">*</span></label>
+          <div class="up-cdrop" id="mpr-rdrop" onclick="mprRdropToggle()">
+            <span id="mpr-rdrop-label" class="up-cdrop-placeholder">— RF Seçiniz —</span>
+            <svg class="up-cdrop-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" width="14" height="14">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </div>
+          <div class="up-cdrop-liste" id="mpr-rdrop-liste" style="display:none"></div>
+          <div id="mpr-rf-cari-uyari" class="up-rf-cari-uyari" style="display:none"></div>
+        </div>
+      </div>
+
+      <div class="up-form-grup" id="mpr-renk-grup" style="display:none">
+        <label class="up-form-etiket">Renk / Varyant <span class="up-zorunlu">*</span></label>
+        <div class="up-renk-butonlar" id="mpr-renk-butonlar"></div>
+      </div>
+
+      <div class="up-form-grup" id="mpr-boyut-grup" style="display:none">
+        <label class="up-form-etiket">Boyut (S/L) <span class="up-zorunlu">*</span></label>
+        <div class="up-dag-butonlar">
+          <button type="button" class="up-dag-btn" id="mpr-boyut-large" onclick="mprBoyutSec('LARGE')">LARGE</button>
+          <button type="button" class="up-dag-btn" id="mpr-boyut-small" onclick="mprBoyutSec('SMALL')">SMALL</button>
+        </div>
+      </div>
+
+      <div class="up-form-grup" id="mpr-kg-grup" style="display:none">
+        <label class="up-form-etiket">Planlanan KG <span class="up-zorunlu">*</span></label>
+        <input type="number" id="mpr-kg" class="up-form-input" min="1" step="1"
+               placeholder="KG" oninput="mprKaydetKontrol()">
+      </div>
+
+      <div class="up-form-grup">
+        <label class="up-form-etiket">Not</label>
+        <textarea id="mpr-notlar" class="up-form-textarea" rows="2" placeholder="Opsiyonel not..."></textarea>
+      </div>
+
+      <div id="mpr-form-hata" class="up-form-hata" style="display:none"></div>
+    </div>
+    <div class="up-modal-alt">
+      <button class="up-modal-iptal-btn" onclick="mprModalKapat()">İptal</button>
+      <button class="up-modal-kaydet-btn" id="mpr-kaydet-btn"
+              onclick="mprSatirKaydet()" disabled>Kaydet</button>
+    </div>
+  </div>
+</div>
 {% endif %}
 
 {# ══ STYLE ════════════════════════════════════════════════════════════ #}
@@ -767,6 +867,7 @@ function veriGrupla() {
         planlama_siparis_id: p.planlama_siparis_id || null,
         siparis_no:  p.hdr_siparis_no || p.siparis_no || p.plan_kodu,
         musteri_adi: cariTemizle(p.hdr_cari_unvan || p.musteri_adi || '—'),
+        cari_id:     p.cari_id || null,
         termin_tarihi: p.hdr_termin_tarihi || p.termin_tarihi || '',
         hdr_durum:   p.hdr_durum || 'TALEP',
         satirlar:    [],
@@ -802,6 +903,17 @@ function veriGrupla() {
 /* Header + MPR satır HTML */
 function grupSatirHtml(g, idx) {
   var colSay = 12;
+  var toplamKg = g.satirlar.reduce(function(s, v) {
+    return s + (parseFloat(v.planlanan_kg) || 0);
+  }, 0);
+  var toplamKgStr = toplamKg > 0
+    ? Math.round(toplamKg).toLocaleString('tr-TR') + ' KG'
+    : '—';
+  var mprBtn = '';
+  if (_CAN_MANAGE && g.planlama_siparis_id) {
+    mprBtn = '<button type="button" class="ut-btn-mpr-ekle" onclick="mprModalAcById('
+      + g.planlama_siparis_id + ')">+ MPR Satırı Ekle</button>';
+  }
   var hdrHtml =
     '<tr class="ut-tr ut-tr-hdr"' +
     ' data-ara="' + (g.musteri_adi + ' ' + g.siparis_no).toLowerCase() + '"' +
@@ -813,8 +925,12 @@ function grupSatirHtml(g, idx) {
         '<span class="ut-hdr-cari">' + g.musteri_adi + '</span>' +
         '<span class="ut-hdr-ayrac">·</span>' +
         '<span class="ut-hdr-termin">Termin: ' + (g.termin_tarihi || '—') + '</span>' +
-        '<span class="ut-hdr-durum">' + hdrDurumEtiket(g.hdr_durum) + '</span>' +
+        '<span class="ut-hdr-ayrac">·</span>' +
+        '<span class="ut-hdr-topkg">' + toplamKgStr + '</span>' +
+        '<span class="ut-hdr-ayrac">·</span>' +
         '<span class="ut-hdr-satir-sayi">' + g.satirlar.length + ' MPR satır</span>' +
+        mprBtn +
+        '<span class="ut-hdr-durum">' + hdrDurumEtiket(g.hdr_durum) + '</span>' +
       '</div>' +
     '</td></tr>';
 
@@ -1568,6 +1684,281 @@ function hataErr(msg) {
   d.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
+/* ─── MPR Satırı Ekle Modal ─── */
+var _mprSecili = {
+  formul_id: null, formul_ad: null,
+  rf_renk_id: null, rf_kod: null, rf_ad: null,
+  renk_id: null, renk_ad: null,
+  uv_id: null, boyut: null,
+};
+var _mprRfListe = [];
+
+function mprModalAcById(psId) {
+  var g = _gruplar.find(function(x) { return x.planlama_siparis_id === psId; });
+  if (!g) return;
+  mprModalAc(g);
+}
+
+function mprModalAc(grup) {
+  mprModalSifirla();
+  document.getElementById('mpr-ps-id').value = grup.planlama_siparis_id;
+  document.getElementById('mpr-cari-id').value = grup.cari_id || '';
+  document.getElementById('mpr-hdr-sipno').textContent = grup.siparis_no || '—';
+  document.getElementById('mpr-hdr-cari').textContent = grup.musteri_adi || '—';
+  document.getElementById('mpr-modal-arka').style.display = 'flex';
+}
+
+function mprModalKapat(e) {
+  if (e && e.target !== document.getElementById('mpr-modal-arka')) return;
+  document.getElementById('mpr-modal-arka').style.display = 'none';
+}
+
+function mprModalSifirla() {
+  _mprSecili = {
+    formul_id: null, formul_ad: null,
+    rf_renk_id: null, rf_kod: null, rf_ad: null,
+    renk_id: null, renk_ad: null,
+    uv_id: null, boyut: null,
+  };
+  _mprRfListe = [];
+  ['mpr-formul-id', 'mpr-rf-id', 'mpr-boyut'].forEach(function(id) {
+    var el = document.getElementById(id); if (el) el.value = '';
+  });
+  var fl = document.getElementById('mpr-fdrop-label');
+  if (fl) { fl.className = 'up-cdrop-placeholder'; fl.textContent = '— Seçiniz —'; }
+  var rl = document.getElementById('mpr-rdrop-label');
+  if (rl) { rl.className = 'up-cdrop-placeholder'; rl.textContent = '— RF Seçiniz —'; }
+  document.getElementById('mpr-rdrop-liste').innerHTML = '';
+  document.getElementById('mpr-rf-cari-uyari').style.display = 'none';
+  document.getElementById('mpr-rf-grup').style.display = 'none';
+  document.getElementById('mpr-renk-grup').style.display = 'none';
+  document.getElementById('mpr-boyut-grup').style.display = 'none';
+  document.getElementById('mpr-kg-grup').style.display = 'none';
+  document.getElementById('mpr-kg').value = '';
+  document.getElementById('mpr-notlar').value = '';
+  document.getElementById('mpr-form-hata').style.display = 'none';
+  document.getElementById('mpr-kaydet-btn').disabled = true;
+  document.querySelectorAll('#mpr-boyut-grup .up-dag-btn').forEach(function(b){ b.classList.remove('aktif'); });
+}
+
+function mprFdropToggle() {
+  var liste = document.getElementById('mpr-fdrop-liste');
+  var drop  = document.getElementById('mpr-fdrop');
+  var acik  = liste.style.display !== 'none';
+  liste.style.display = acik ? 'none' : 'block';
+  drop.classList.toggle('acik', !acik);
+}
+
+function mprFdropFiltrele(q) {
+  q = (q || '').toLowerCase();
+  document.querySelectorAll('.mpr-fdrop-item').forEach(function(el) {
+    var ad = (el.dataset.ad || '').toLowerCase();
+    el.style.display = (!q || ad.includes(q)) ? '' : 'none';
+  });
+}
+
+function mprFdropSec(el) {
+  var fid = parseInt(el.dataset.value, 10);
+  var ad  = el.dataset.ad;
+  document.getElementById('mpr-formul-id').value = fid;
+  var label = document.getElementById('mpr-fdrop-label');
+  label.className = 'up-cdrop-label-ad';
+  label.textContent = ad;
+  document.getElementById('mpr-fdrop-liste').style.display = 'none';
+  document.getElementById('mpr-fdrop').classList.remove('acik');
+  mprFormulSec(fid);
+}
+
+function mprFormulSec(fid) {
+  var f = _formuller.find(function(x){ return x.formul_id == fid; });
+  if (!f) return;
+  _mprSecili.formul_id = fid;
+  _mprSecili.formul_ad = f.formul_ad;
+  _mprSecili.rf_renk_id = null; _mprSecili.rf_kod = null; _mprSecili.rf_ad = null;
+  _mprSecili.renk_id = null; _mprSecili.renk_ad = null;
+  _mprSecili.uv_id = null; _mprSecili.boyut = null;
+  document.getElementById('mpr-rf-id').value = '';
+  document.getElementById('mpr-rdrop-label').className = 'up-cdrop-placeholder';
+  document.getElementById('mpr-rdrop-label').textContent = '— RF Seçiniz —';
+  document.getElementById('mpr-rf-cari-uyari').style.display = 'none';
+  document.getElementById('mpr-rf-grup').style.display = 'block';
+  document.getElementById('mpr-renk-grup').style.display = 'none';
+  document.getElementById('mpr-boyut-grup').style.display = 'none';
+  document.getElementById('mpr-kg-grup').style.display = 'none';
+  document.getElementById('mpr-kaydet-btn').disabled = true;
+  mprRfListeYukle(fid);
+}
+
+async function mprRfListeYukle(formulId) {
+  var liste = document.getElementById('mpr-rdrop-liste');
+  liste.innerHTML = '<div class="up-cdrop-item up-cdrop-bos">Yükleniyor...</div>';
+  try {
+    var r = await fetch('/nexgen/api/plan/rf-secenekleri?formul_id=' + formulId);
+    var j = await r.json();
+    liste.innerHTML = '';
+    if (!j.ok || !j.liste || j.liste.length === 0) {
+      liste.innerHTML = '<div class="up-cdrop-item up-cdrop-bos">ONAYLI RF bulunamadı</div>';
+      return;
+    }
+    _mprRfListe = j.liste;
+    j.liste.forEach(function(rf) {
+      var div = document.createElement('div');
+      div.className = 'up-cdrop-item';
+      div.dataset.rfId = rf.id;
+      div.dataset.rfKod = rf.rf_kod;
+      div.dataset.rfAd = rf.ad;
+      div.dataset.rfCariId = rf.cari_id || '';
+      div.innerHTML = '<span class="up-cdrop-ad">' + rf.rf_kod + ' · ' + rf.ad + '</span>';
+      div.onclick = function(e) { e.stopPropagation(); mprRdropSec(div); };
+      liste.appendChild(div);
+    });
+  } catch (err) {
+    liste.innerHTML = '<div class="up-cdrop-item up-cdrop-bos">RF listesi yüklenemedi</div>';
+  }
+}
+
+function mprRdropToggle() {
+  var liste = document.getElementById('mpr-rdrop-liste');
+  var drop  = document.getElementById('mpr-rdrop');
+  var acik  = liste.style.display !== 'none';
+  liste.style.display = acik ? 'none' : 'block';
+  drop.classList.toggle('acik', !acik);
+}
+
+function mprRdropSec(el) {
+  _mprSecili.rf_renk_id = parseInt(el.dataset.rfId, 10);
+  _mprSecili.rf_kod = el.dataset.rfKod;
+  _mprSecili.rf_ad = el.dataset.rfAd;
+  document.getElementById('mpr-rf-id').value = _mprSecili.rf_renk_id;
+  var label = document.getElementById('mpr-rdrop-label');
+  label.className = 'up-cdrop-label-ad';
+  label.textContent = _mprSecili.rf_kod + ' · ' + _mprSecili.rf_ad;
+  document.getElementById('mpr-rdrop-liste').style.display = 'none';
+  document.getElementById('mpr-rdrop').classList.remove('acik');
+
+  var planCariId = parseInt(document.getElementById('mpr-cari-id').value, 10) || 0;
+  var rfCariId = parseInt(el.dataset.rfCariId, 10) || 0;
+  var uyariEl = document.getElementById('mpr-rf-cari-uyari');
+  if (rfCariId && planCariId && rfCariId !== planCariId) {
+    uyariEl.textContent = 'Bu RF farklı cariye bağlı; genel renk olabilir.';
+    uyariEl.style.display = 'block';
+  } else {
+    uyariEl.style.display = 'none';
+  }
+  mprRenkGoster();
+}
+
+function mprRenkGoster() {
+  var f = _formuller.find(function(x){ return x.formul_id == _mprSecili.formul_id; });
+  if (!f) return;
+  var konteyner = document.getElementById('mpr-renk-butonlar');
+  konteyner.innerHTML = '';
+  f.renkler.forEach(function(r) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'up-renk-btn';
+    btn.textContent = r.renk_ad;
+    btn.dataset.renkId = r.renk_id;
+    btn.dataset.renkAd = r.renk_ad;
+    btn.dataset.largeUvId = r.large_uv_id || '';
+    btn.dataset.smallUvId = r.small_uv_id || '';
+    btn.onclick = function() { mprRenkSec(this); };
+    konteyner.appendChild(btn);
+  });
+  document.getElementById('mpr-renk-grup').style.display = 'block';
+  _mprSecili.renk_id = null; _mprSecili.renk_ad = null;
+  _mprSecili.uv_id = null; _mprSecili.boyut = null;
+  document.getElementById('mpr-boyut-grup').style.display = 'none';
+  document.getElementById('mpr-kg-grup').style.display = 'none';
+  document.getElementById('mpr-kaydet-btn').disabled = true;
+}
+
+function mprRenkSec(btn) {
+  document.querySelectorAll('#mpr-renk-butonlar .up-renk-btn').forEach(function(b){ b.classList.remove('aktif'); });
+  btn.classList.add('aktif');
+  _mprSecili.renk_id = parseInt(btn.dataset.renkId, 10);
+  _mprSecili.renk_ad = btn.dataset.renkAd;
+  _mprSecili.uv_id = null;
+  _mprSecili.boyut = null;
+  document.getElementById('mpr-boyut').value = '';
+  document.querySelectorAll('#mpr-boyut-grup .up-dag-btn').forEach(function(b){ b.classList.remove('aktif'); });
+
+  var hasL = !!btn.dataset.largeUvId;
+  var hasS = !!btn.dataset.smallUvId;
+  document.getElementById('mpr-boyut-large').disabled = !hasL;
+  document.getElementById('mpr-boyut-small').disabled = !hasS;
+  document.getElementById('mpr-boyut-grup').style.display = 'block';
+  document.getElementById('mpr-kg-grup').style.display = 'block';
+  document.getElementById('mpr-kaydet-btn').disabled = true;
+  _mprSecili._largeUvId = hasL ? parseInt(btn.dataset.largeUvId, 10) : null;
+  _mprSecili._smallUvId = hasS ? parseInt(btn.dataset.smallUvId, 10) : null;
+}
+
+function mprBoyutSec(tip) {
+  document.querySelectorAll('#mpr-boyut-grup .up-dag-btn').forEach(function(b){ b.classList.remove('aktif'); });
+  var btnId = tip === 'LARGE' ? 'mpr-boyut-large' : 'mpr-boyut-small';
+  document.getElementById(btnId).classList.add('aktif');
+  _mprSecili.boyut = tip;
+  document.getElementById('mpr-boyut').value = tip;
+  _mprSecili.uv_id = tip === 'LARGE' ? _mprSecili._largeUvId : _mprSecili._smallUvId;
+  mprKaydetKontrol();
+}
+
+function mprKaydetKontrol() {
+  var kg = parseFloat(document.getElementById('mpr-kg').value || 0);
+  var ok = _mprSecili.rf_renk_id && _mprSecili.uv_id && kg > 0;
+  document.getElementById('mpr-kaydet-btn').disabled = !ok;
+}
+
+async function mprSatirKaydet() {
+  var btn = document.getElementById('mpr-kaydet-btn');
+  var hataDiv = document.getElementById('mpr-form-hata');
+  hataDiv.style.display = 'none';
+
+  var psId = parseInt(document.getElementById('mpr-ps-id').value, 10);
+  var kg = parseFloat(document.getElementById('mpr-kg').value || 0);
+  var notlar = document.getElementById('mpr-notlar').value.trim() || null;
+  var today = new Date().toISOString().split('T')[0];
+
+  if (!psId || !_mprSecili.uv_id || !_mprSecili.rf_renk_id || kg <= 0) {
+    hataDiv.textContent = 'Formül, RF, boyut ve KG zorunludur.';
+    hataDiv.style.display = 'flex';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Kaydediliyor...';
+
+  try {
+    var r = await fetch('/nexgen/api/planlama-siparis/' + psId + '/mpr-ekle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        uretim_varyant_id: _mprSecili.uv_id,
+        planlanan_kg: kg,
+        rf_renk_id: _mprSecili.rf_renk_id,
+        plan_tarihi: today,
+        notlar: notlar,
+        oncelik_sira: 10,
+      })
+    });
+    var j = await r.json();
+    if (!j.ok) {
+      hataDiv.textContent = j.hata || 'Kayıt hatası';
+      hataDiv.style.display = 'flex';
+      btn.disabled = false;
+      btn.textContent = 'Kaydet';
+    } else {
+      location.reload();
+    }
+  } catch (err) {
+    hataDiv.textContent = 'Sunucu hatası';
+    hataDiv.style.display = 'flex';
+    btn.disabled = false;
+    btn.textContent = 'Kaydet';
+  }
+}
+
 /* ─── Plan Başla (tablet flow) ─── */
 async function planBasla(planId, planKodu, ad) {
   if (!confirm(ad + '\n\nBu plan için üretim batch kodu oluşturulsun mu?')) return;
@@ -1996,7 +2387,25 @@ async function planIptal(planId) {
 .ut-hdr-cari { font-weight: 600; color: #334155; }
 .ut-hdr-termin { color: #64748b; }
 .ut-hdr-durum { margin-left: auto; }
+.ut-hdr-topkg { font-weight: 600; color: #0f766e; }
 .ut-hdr-satir-sayi { font-size: 11px; color: #94a3b8; }
+.ut-btn-mpr-ekle {
+  margin-left: 8px; padding: 4px 10px; font-size: 11px; font-weight: 600;
+  background: #fff; color: #0f766e; border: 1px solid #99f6e4;
+  border-radius: 6px; cursor: pointer; white-space: nowrap;
+  transition: all .08s;
+}
+.ut-btn-mpr-ekle:hover { background: #f0fdfa; border-color: #5eead4; }
+.up-modal-mpr { max-width: 640px; }
+.up-mpr-kilit-satir {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  margin-bottom: 16px; padding: 12px 14px;
+  background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;
+}
+.up-mpr-kilit-kutu { display: flex; flex-direction: column; gap: 2px; }
+.up-mpr-kilit-etiket { font-size: 10px; font-weight: 600; color: #94a3b8; text-transform: uppercase; }
+.up-mpr-kilit-deger { font-size: 13px; font-weight: 700; color: #1e293b; }
+.up-mpr-kilit-kutu:first-child .up-mpr-kilit-deger { font-family: 'Courier New', monospace; color: #0f766e; }
 .ut-hdr-ayrac { color: #cbd5e1; }
 .ut-tr-mpr { background: #fff; }
 .ut-tr-mpr:hover { background: #fafbfc; }
