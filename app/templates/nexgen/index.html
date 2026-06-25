@@ -129,7 +129,7 @@
     </div>
 
     {# 5 — Sevk & Barkod #}
-    <div class="ng-kart">
+    <div class="ng-kart ng-kart-pasif">
       <div class="ng-kart-ikon ng-ikon-sari">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
              stroke-linecap="round" stroke-linejoin="round" width="28" height="28">
@@ -143,13 +143,13 @@
         <div class="ng-kart-aciklama">Ürün sevkiyat süreçleri ve barkod yönetim merkezi.</div>
         <div class="ng-kart-alt">
           <span class="ng-yakinda">Yakında</span>
-          <a href="/nexgen/sevk" class="ng-btn ng-btn-pasif">Aç</a>
+          <span class="ng-btn ng-btn-pasif">Aç</span>
         </div>
       </div>
     </div>
 
     {# 6 — Maliyet & Rapor #}
-    <div class="ng-kart">
+    <div class="ng-kart ng-kart-pasif">
       <div class="ng-kart-ikon ng-ikon-kirmizi">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
              stroke-linecap="round" stroke-linejoin="round" width="28" height="28">
@@ -164,7 +164,7 @@
         <div class="ng-kart-aciklama">Hammadde maliyet analizi, trend ve operasyon raporları.</div>
         <div class="ng-kart-alt">
           <span class="ng-yakinda">Yakında</span>
-          <a href="/nexgen/maliyet" class="ng-btn ng-btn-pasif">Aç</a>
+          <span class="ng-btn ng-btn-pasif">Aç</span>
         </div>
       </div>
     </div>
@@ -210,15 +210,15 @@
     <a href="/nexgen/uretim-plan" class="ng-diger-item ng-diger-aktif">
       <span>Üretim Planı</span><span class="ng-aktif-kucuk">FAZ-5D ›</span>
     </a>
-    <a href="/nexgen/recycle" class="ng-diger-item">
-      <span>Recycle</span><span class="ng-yakinda-kucuk">Yakında</span>
+    <a href="/nexgen/tablet/geri-donusum" class="ng-diger-item ng-diger-aktif">
+      <span>Recycle</span><span class="ng-aktif-kucuk">Aktif ›</span>
     </a>
-    <a href="/nexgen/deneme" class="ng-diger-item">
+    <span class="ng-diger-item ng-diger-pasif">
       <span>Deneme</span><span class="ng-yakinda-kucuk">Yakında</span>
-    </a>
-    <a href="/nexgen/raporlar" class="ng-diger-item">
+    </span>
+    <span class="ng-diger-item ng-diger-pasif">
       <span>Raporlar</span><span class="ng-yakinda-kucuk">Yakında</span>
-    </a>
+    </span>
   </div>
 
 </div>{# /.ng-sayfa #}
@@ -445,6 +445,14 @@
   transition: border-color 0.12s;
 }
 .ng-diger-item:hover { border-color: #f59e0b; color: #111827; }
+.ng-diger-pasif {
+  cursor: default;
+  opacity: 0.72;
+  pointer-events: none;
+}
+.ng-diger-pasif:hover { border-color: rgba(17,24,39,0.07); color: #374151; }
+.ng-kart-pasif { opacity: 0.78; }
+.ng-kart-pasif .ng-btn-pasif { cursor: default; pointer-events: none; }
 .ng-yakinda-kucuk {
   background: #f3f4f6;
   color: #9ca3af;

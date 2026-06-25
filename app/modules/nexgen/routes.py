@@ -147,6 +147,49 @@ def _boya_kalemler_filtre(kalemler):
     return [k for k in kalemler if (k.get('kategori') or '').upper() == 'BOYA']
 
 
+def _kg_to_gr_etiket(kg):
+    """Test kalem kg → tablet boya özeti (gram)."""
+    try:
+        g = float(kg) * 1000
+    except (TypeError, ValueError):
+        return '—'
+    if g >= 10:
+        s = f'{g:.1f}'.rstrip('0').rstrip('.')
+    else:
+        s = f'{g:.2f}'.rstrip('0').rstrip('.')
+    return f'{s} gr'
+
+
+def _stok_boya_dropdown_etiket(kod, ad):
+    """Tablet boya select: KOD — AD."""
+    k = (kod or '').strip()
+    a = (ad or '').strip()
+    if k and a:
+        return f'{k} — {a}'
+    return a or k or 'Boya'
+
+
+def _stok_boya_ozet_ad(kod, ad):
+    """Sol panel boya özeti — operatör adı (N550, P.Red 48:3)."""
+    return (ad or kod or 'Boya').strip()
+
+
+def _arge_test_boya_ozet(con, test_id, limit=3):
+    """Tablet sol panel: BOYA kalem özeti satırları."""
+    rows = con.execute("""
+        SELECT sk.ad, sk.kod, tk.test_miktar_kg
+        FROM nexgen_arge_test_kalem tk
+        JOIN nexgen_stok_kart sk ON sk.id = tk.stok_kart_id
+        WHERE tk.test_id = ? AND UPPER(COALESCE(sk.kategori, '')) = 'BOYA'
+        ORDER BY tk.sira, tk.id
+    """, (test_id,)).fetchall()
+    satirlar = []
+    for r in rows[:limit]:
+        ad = _stok_boya_ozet_ad(r['kod'], r['ad'])
+        satirlar.append({'ad': ad, 'gram': _kg_to_gr_etiket(r['test_miktar_kg'])})
+    return satirlar, max(0, len(rows) - limit)
+
+
 # ─────────────────────────────────────────────────────────────
 # Stok miktarı hesapla (hareket toplamı)
 # ─────────────────────────────────────────────────────────────
@@ -635,7 +678,6 @@ def api_stok_kart_durum():
 # Placeholder Alt Sayfalar (satinalma ve stok-kartlari hariç)
 # ─────────────────────────────────────────────────────────────
 _SAYFALAR = {
-    'depo':      ('Depo & Stok',    'Hammadde depo ve stok takip ekranı.'),
     'formuller': ('Formüller',       'Ürün başına hammadde formül tanımları.'),
     'uretim':    ('Üretim Tablet',   'Üretim sürecinde kullanılan hammadde giriş/çıkış ekranı.'),
     'recycle':   ('Recycle',         'Geri dönüşüm ve fire takip ekranı.'),
@@ -1872,7 +1914,7 @@ def api_arge_test_boya_kalemler(test_id):
     })
 
 @nexgen_bp.route('/api/arge/sonuc-kaydet', methods=['POST'])
-@yetki_gerekli('nexgen.recete.create', 'can_create')
+@login_gerekli
 def api_arge_sonuc_kaydet():
     """Test sonucunu ve durum değişikliğini kaydeder (AR-GE).
     ONAYLANDI / REDDEDILDI bu endpoint'ten kabul edilmez.
@@ -1886,7 +1928,15 @@ def api_arge_sonuc_kaydet():
         cekme_problemi    : 1/0 opsiyonel
         genel_aciklama    : str opsiyonel
         sonuc_notu        : str opsiyonel
+
+    Tablet alias: urun_calisti, abras_var, pisme_saniye, enjeksiyon_saniye, not
+
+    Yetki: nexgen.recete.create VEYA nexgen.tablet.view
     """
+    if not (yetki_var('nexgen.recete.create', 'can_create')
+            or yetki_var('nexgen.tablet.view', 'can_view')):
+        abort(403)
+
     data = request.get_json(silent=True) or {}
     test_id = data.get('test_id')
     durum   = (data.get('durum') or '').strip().upper()
@@ -1899,11 +1949,22 @@ def api_arge_sonuc_kaydet():
                         "hata": f"Geçerli durumlar: {', '.join(sorted(GECERLI_DURUM))}"}), 400
 
     renk_tuttu       = data.get('renk_tuttu')
+    if renk_tuttu is None and data.get('urun_calisti') is not None:
+        renk_tuttu = data.get('urun_calisti')
     shore_degeri     = data.get('shore_degeri')
     kopurme_notu     = (data.get('kopurme_notu') or '').strip() or None
     cekme_problemi   = data.get('cekme_problemi')
+    if cekme_problemi is None and data.get('abras_var') is not None:
+        cekme_problemi = data.get('abras_var')
     genel_aciklama   = (data.get('genel_aciklama') or '').strip() or None
-    sonuc_notu       = (data.get('sonuc_notu') or '').strip() or None
+    sonuc_notu       = (data.get('sonuc_notu') or data.get('not') or '').strip() or None
+
+    pisme = data.get('pisme_saniye')
+    if pisme in (None, ''):
+        pisme = data.get('enjeksiyon_saniye')
+    if pisme not in (None, ''):
+        pisme_metin = f'Pişme/enjeksiyon: {pisme} sn'
+        genel_aciklama = pisme_metin if not genel_aciklama else f'{pisme_metin}\n{genel_aciklama}'
 
     try:
         if shore_degeri is not None:
@@ -4474,6 +4535,13 @@ def api_cari_durum():
 # FAZ-3A — NexGen Depo Mal Kabul
 # =============================================================
 
+@nexgen_bp.route('/depo')
+def depo_slash_yonlendir():
+    """Depo ana sayfa slash uyumu — /nexgen/depo → /nexgen/depo/"""
+    from flask import redirect
+    return redirect('/nexgen/depo/', code=302)
+
+
 # ─────────────────────────────────────────────────────────────
 # Depo Ana Sayfa
 # GET /nexgen/depo/
@@ -4874,80 +4942,7 @@ def _lot_kodu_uret(con):
 def tablet_ana():
     con = _db()
     try:
-        _bcols = [c['name'] for c in con.execute(
-            "PRAGMA table_info(nexgen_uretim_batch)"
-        ).fetchall()]
-        if 'plan_id' in _bcols:
-            devam_eden = con.execute("""
-                SELECT nb.batch_kodu, nb.lot_kodu, nb.planlanan_kg, nb.durum,
-                       nb.olusturma_tarihi,
-                       uv.ad AS uv_ad, uv.boyut,
-                       rv.ad AS renk_ad, f.ad AS formul_ad,
-                       np.musteri_adi, np.siparis_no
-                FROM nexgen_uretim_batch nb
-                JOIN nexgen_uretim_varyant uv ON uv.id = nb.uretim_varyant_id
-                JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
-                JOIN nexgen_formul f          ON f.id  = rv.formul_id
-                LEFT JOIN nexgen_uretim_plan np ON np.id = nb.plan_id
-                WHERE nb.durum IN ('TASLAK','HAZIR','DEVAM','BEKLEME')
-                ORDER BY nb.id DESC
-                LIMIT 20
-            """).fetchall()
-        else:
-            devam_eden = con.execute("""
-                SELECT nb.batch_kodu, nb.lot_kodu, nb.planlanan_kg, nb.durum,
-                       nb.olusturma_tarihi,
-                       uv.ad AS uv_ad, uv.boyut,
-                       rv.ad AS renk_ad, f.ad AS formul_ad,
-                       NULL AS musteri_adi, NULL AS siparis_no
-                FROM nexgen_uretim_batch nb
-                JOIN nexgen_uretim_varyant uv ON uv.id = nb.uretim_varyant_id
-                JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
-                JOIN nexgen_formul f          ON f.id  = rv.formul_id
-                WHERE nb.durum IN ('TASLAK','HAZIR','DEVAM','BEKLEME')
-                ORDER BY nb.id DESC
-                LIMIT 20
-            """).fetchall()
-        devam_eden = [dict(d) for d in devam_eden]
-
-        # Alt emir sayaçları ve KG ilerleme (Migration 072+ gerekli)
-        if _parca_tablosu_var(con):
-            for b in devam_eden:
-                bk = b['batch_kodu']
-                sayac = con.execute("""
-                    SELECT COUNT(*) AS toplam,
-                           SUM(CASE WHEN durum='BITTI' THEN 1 ELSE 0 END) AS biten,
-                           SUM(CASE WHEN durum='BITTI' THEN uretilen_kg ELSE 0 END) AS uretilen
-                    FROM nexgen_uretim_parca WHERE batch_kodu=?
-                """, (bk,)).fetchone()
-                b['toplam_alt_emir'] = sayac['toplam'] or 0
-                b['biten_alt_emir']  = sayac['biten']  or 0
-                _batch_kg_rf_enrich(con, b, liste_modu=True)
-        else:
-            for b in devam_eden:
-                b['toplam_alt_emir'] = None
-                b['biten_alt_emir']  = None
-                b['uretilen_kg']     = 0.0
-                b['kalan_kg']        = float(b['planlanan_kg'])
-                _batch_kg_rf_enrich(con, b, liste_modu=True)
-
-        from datetime import date as _date
-        bugun = _date.today().isoformat()
-        plan_isler = con.execute("""
-            SELECT np.id AS plan_id, np.plan_kodu, np.planlanan_kg,
-                   np.durum AS plan_durum, np.oncelik_sira, np.notlar,
-                   np.musteri_adi,
-                   uv.id AS uv_id, uv.boyut,
-                   rv.ad AS renk_ad, f.ad AS formul_ad
-            FROM nexgen_uretim_plan np
-            JOIN nexgen_uretim_varyant uv ON uv.id = np.uretim_varyant_id
-            JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
-            JOIN nexgen_formul f          ON f.id  = rv.formul_id
-            WHERE np.durum = 'PLANLANDI' AND np.plan_tarihi <= ?
-            ORDER BY np.oncelik_sira ASC, np.id ASC
-            LIMIT 20
-        """, (bugun,)).fetchall()
-        plan_isler = [dict(p) for p in plan_isler]
+        devam_eden, plan_isler = _tablet_ana_veri(con)
     finally:
         con.close()
 
@@ -5666,28 +5661,36 @@ def tablet_arge():
 
         son_numuneler = con.execute("""
             SELECT t.id, t.test_no, t.durum, t.yeni_renk_adi, t.test_batch_kg,
-                   t.olusturma_tarihi,
+                   t.olusturma_tarihi, t.shore_degeri,
                    f.ad AS formul_ad,
                    rv.ad AS kaynak_renk_ad,
-                   ku.KullaniciAdi AS olusturan_ad
+                   ku.KullaniciAdi AS olusturan_ad,
+                   c.unvan AS cari_unvan
             FROM nexgen_arge_test t
             JOIN nexgen_uretim_varyant uv ON uv.id = t.kaynak_uretim_varyant_id
             JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
             JOIN nexgen_formul f          ON f.id  = rv.formul_id
             LEFT JOIN sistem_kullanici ku ON ku.Id = t.olusturan_id
+            LEFT JOIN nexgen_cari c       ON c.id  = t.cari_id
             WHERE t.aktif = 1
             ORDER BY t.id DESC
             LIMIT 5
         """).fetchall()
         son_numuneler = [dict(r) for r in son_numuneler]
+        for n in son_numuneler:
+            ozet, fazla = _arge_test_boya_ozet(con, n['id'])
+            n['boya_ozet'] = ozet
+            n['boya_fazla'] = fazla
 
         boya_stok = con.execute("""
             SELECT id, kod, ad, kategori
             FROM nexgen_stok_kart
             WHERE aktif = 1 AND kategori = 'BOYA'
-            ORDER BY ad
+            ORDER BY kod, ad
         """).fetchall()
         boya_stok = [dict(r) for r in boya_stok]
+        for s in boya_stok:
+            s['etiket'] = _stok_boya_dropdown_etiket(s.get('kod'), s.get('ad'))
 
         cariler = con.execute(
             "SELECT id, cari_kod, unvan FROM nexgen_cari WHERE aktif=1 ORDER BY unvan"
@@ -6339,6 +6342,81 @@ def _nexgen_siparis_no_uret(con):
     else:
         son_no = 0
     return f"NSP-{yil}-{son_no + 1:05d}"
+
+
+def _tablet_ana_veri(con):
+    """Tablet ana ekran — üretim plan ile aynı aktif plan/batch listesi."""
+    from datetime import date as _date
+    bugun = _date.today().isoformat()
+    _AKTIF_BATCH = ('TASLAK', 'HAZIR', 'DEVAM', 'BEKLEME')
+    planlar = [dict(p) for p in _plan_liste_sorgu(con, sadece_aktif=True)]
+
+    devam_eden = []
+    plan_isler = []
+    seen_batches = set()
+
+    for pl in planlar:
+        bk = pl.get('batch_kodu')
+        bd = pl.get('batch_durum')
+        if bk and bd in _AKTIF_BATCH and bk not in seen_batches:
+            seen_batches.add(bk)
+            b = con.execute("""
+                SELECT nb.batch_kodu, nb.lot_kodu, nb.planlanan_kg, nb.durum,
+                       nb.olusturma_tarihi,
+                       uv.ad AS uv_ad, uv.boyut,
+                       rv.ad AS renk_ad, f.ad AS formul_ad
+                FROM nexgen_uretim_batch nb
+                JOIN nexgen_uretim_varyant uv ON uv.id = nb.uretim_varyant_id
+                JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+                JOIN nexgen_formul f          ON f.id  = rv.formul_id
+                WHERE nb.batch_kodu = ?
+            """, (bk,)).fetchone()
+            if b:
+                row = dict(b)
+                row['musteri_adi'] = pl.get('musteri_adi')
+                row['siparis_no'] = pl.get('siparis_no') or pl.get('plan_kodu')
+                devam_eden.append(row)
+        elif pl['durum'] == 'PLANLANDI' and (pl.get('plan_tarihi') or '') <= bugun and not bk:
+            plan_isler.append({
+                'plan_id': pl['id'],
+                'plan_kodu': pl['plan_kodu'],
+                'planlanan_kg': pl['planlanan_kg'],
+                'plan_durum': pl['durum'],
+                'oncelik_sira': pl.get('oncelik_sira'),
+                'notlar': pl.get('notlar'),
+                'musteri_adi': pl.get('musteri_adi'),
+                'uv_id': pl['uv_id'],
+                'boyut': pl['boyut'],
+                'renk_ad': pl['renk_ad'],
+                'formul_ad': pl['formul_ad'],
+            })
+
+    plan_isler.sort(key=lambda p: (p.get('oncelik_sira') or 999, p.get('plan_id') or 0))
+    devam_eden.sort(key=lambda b: b.get('olusturma_tarihi') or '', reverse=True)
+    devam_eden = devam_eden[:20]
+    plan_isler = plan_isler[:20]
+
+    if _parca_tablosu_var(con):
+        for b in devam_eden:
+            bk = b['batch_kodu']
+            sayac = con.execute("""
+                SELECT COUNT(*) AS toplam,
+                       SUM(CASE WHEN durum='BITTI' THEN 1 ELSE 0 END) AS biten,
+                       SUM(CASE WHEN durum='BITTI' THEN uretilen_kg ELSE 0 END) AS uretilen
+                FROM nexgen_uretim_parca WHERE batch_kodu=?
+            """, (bk,)).fetchone()
+            b['toplam_alt_emir'] = sayac['toplam'] or 0
+            b['biten_alt_emir']  = sayac['biten']  or 0
+            _batch_kg_rf_enrich(con, b, liste_modu=True)
+    else:
+        for b in devam_eden:
+            b['toplam_alt_emir'] = None
+            b['biten_alt_emir']  = None
+            b['uretilen_kg']     = 0.0
+            b['kalan_kg']        = float(b['planlanan_kg'])
+            _batch_kg_rf_enrich(con, b, liste_modu=True)
+
+    return devam_eden, plan_isler
 
 
 def _plan_liste_sorgu(con, sadece_aktif=False):
