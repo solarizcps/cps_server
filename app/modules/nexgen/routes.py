@@ -5109,6 +5109,17 @@ def api_depo_hazirlik_hazir(hazirlik_id):
         if row['durum'] not in ('BEKLIYOR', 'HAZIRLANIYOR'):
             return jsonify({'ok': False, 'hata': f'Durum uygun değil: {row["durum"]}'}), 400
         uid = _kullanici_id()
+
+        rezerv = _depo_hazirlik_rezerv_olustur(con, hazirlik_id, olusturan_id=uid)
+        if not rezerv.get('ok'):
+            con.rollback()
+            return jsonify({
+                'ok': False,
+                'hata': rezerv.get('hata', 'Rezerv oluşturulamadı'),
+                'eksik_sayisi': rezerv.get('eksik_sayisi', 0),
+                'eksik_kalemler': rezerv.get('eksik_kalemler', []),
+            }), 400
+
         con.execute("""
             UPDATE nexgen_depo_hazirlik_kalem
             SET hazirlanan_kg = gerekli_kg
@@ -5123,7 +5134,13 @@ def api_depo_hazirlik_hazir(hazirlik_id):
             WHERE id=?
         """, (uid, hazirlik_id))
         con.commit()
-        return jsonify({'ok': True, 'id': hazirlik_id, 'durum': 'HAZIR'})
+        return jsonify({
+            'ok': True,
+            'id': hazirlik_id,
+            'durum': 'HAZIR',
+            'rezerv_sayisi': rezerv.get('rezerv_sayisi', 0),
+            'rezerv_atlandi': rezerv.get('atlandi', False),
+        })
     except Exception as e:
         con.rollback()
         return jsonify({'ok': False, 'hata': str(e)}), 500
@@ -7775,6 +7792,119 @@ def _kullanilabilir_stok(con, stok_kart_id, exclude_batch_kodu=None):
     rezerv = _aktif_rezerv_toplam(con, stok_kart_id, exclude_batch_kodu)
     yumusak = _yumusak_talep_toplam(con, stok_kart_id, exclude_batch_kodu)
     return round(fiziksel - rezerv - yumusak, 3)
+
+
+def _rezerv_no_uret(con):
+    """RZ-YYYY-NNNNN formatında benzersiz rezerv numarası."""
+    import datetime
+    yil = datetime.datetime.now().year
+    son = con.execute(
+        "SELECT rezerv_no FROM nexgen_stok_rezerv "
+        "WHERE rezerv_no LIKE ? ORDER BY id DESC LIMIT 1",
+        (f"RZ-{yil}-%",),
+    ).fetchone()
+    if son:
+        try:
+            son_no = int(son['rezerv_no'].split('-')[-1])
+        except Exception:
+            son_no = 0
+    else:
+        son_no = 0
+    return f"RZ-{yil}-{son_no + 1:05d}"
+
+
+def _depo_hazirlik_rezerv_olustur(con, hazirlik_id, olusturan_id=None):
+    """FAZ-5C-2: Depo HAZIR anında AKTIF rezerv oluştur. Stok hareketi yazmaz."""
+    if not _stok_rezerv_tablosu_var(con):
+        return {'ok': True, 'atlandi': True, 'rezerv_sayisi': 0}
+
+    mevcut = con.execute(
+        "SELECT id FROM nexgen_stok_rezerv "
+        "WHERE hazirlik_id=? AND durum='AKTIF' LIMIT 1",
+        (hazirlik_id,),
+    ).fetchone()
+    if mevcut:
+        cnt = con.execute(
+            "SELECT COUNT(*) FROM nexgen_stok_rezerv "
+            "WHERE hazirlik_id=? AND durum='AKTIF'",
+            (hazirlik_id,),
+        ).fetchone()[0]
+        return {'ok': True, 'atlandi': True, 'rezerv_sayisi': cnt}
+
+    hdr = con.execute("""
+        SELECT id, batch_kodu, plan_id, planlama_siparis_id, cari_id
+        FROM nexgen_depo_hazirlik WHERE id=?
+    """, (hazirlik_id,)).fetchone()
+    if not hdr:
+        return {'ok': False, 'hata': 'Hazırlık bulunamadı'}
+
+    kalemler = con.execute("""
+        SELECT k.id, k.stok_kart_id, k.kaynak, k.gerekli_kg, k.hazirlanan_kg,
+               sk.kod AS stok_kod, sk.ad AS stok_ad
+        FROM nexgen_depo_hazirlik_kalem k
+        JOIN nexgen_stok_kart sk ON sk.id = k.stok_kart_id
+        WHERE k.hazirlik_id=?
+    """, (hazirlik_id,)).fetchall()
+    if not kalemler:
+        return {'ok': False, 'hata': 'Hazırlık kalemi yok'}
+
+    batch_kodu = hdr['batch_kodu']
+    talep = {}
+    meta = {}
+    for k in kalemler:
+        hk = float(k['hazirlanan_kg'] or 0)
+        gk = float(k['gerekli_kg'] or 0)
+        miktar = round(hk if hk > 0 else gk, 3)
+        if miktar <= 0:
+            continue
+        sid = k['stok_kart_id']
+        talep[sid] = round(talep.get(sid, 0) + miktar, 3)
+        meta[sid] = {'stok_kod': k['stok_kod'], 'stok_ad': k['stok_ad']}
+
+    eksik_kalemler = []
+    for sid, miktar in talep.items():
+        kul = _kullanilabilir_stok(con, sid, exclude_batch_kodu=batch_kodu)
+        if kul < miktar - 0.0005:
+            eksik_kalemler.append({
+                'stok_kart_id': sid,
+                'stok_kod': meta[sid]['stok_kod'],
+                'stok_ad': meta[sid]['stok_ad'],
+                'gerekli_kg': miktar,
+                'kullanilabilir_kg': kul,
+                'fark_kg': round(kul - miktar, 3),
+            })
+
+    if eksik_kalemler:
+        return {
+            'ok': False,
+            'hata': 'Rezerv için stok yetersiz',
+            'eksik_sayisi': len(eksik_kalemler),
+            'eksik_kalemler': eksik_kalemler,
+        }
+
+    uid = olusturan_id if olusturan_id is not None else _kullanici_id()
+    rezerv_sayisi = 0
+    for k in kalemler:
+        hk = float(k['hazirlanan_kg'] or 0)
+        gk = float(k['gerekli_kg'] or 0)
+        miktar = round(hk if hk > 0 else gk, 3)
+        if miktar <= 0:
+            continue
+        rezerv_no = _rezerv_no_uret(con)
+        con.execute("""
+            INSERT INTO nexgen_stok_rezerv
+              (rezerv_no, stok_kart_id, kaynak_tip, kaynak_id, hazirlik_id,
+               batch_kodu, plan_id, planlama_siparis_id, cari_id,
+               miktar_kg, kalan_kg, durum, olusturan_id)
+            VALUES (?, ?, 'DEPO_HAZIRLIK', ?, ?, ?, ?, ?, ?, ?, ?, 'AKTIF', ?)
+        """, (
+            rezerv_no, k['stok_kart_id'], hazirlik_id, hazirlik_id,
+            batch_kodu, hdr['plan_id'], hdr['planlama_siparis_id'],
+            hdr['cari_id'], miktar, miktar, uid,
+        ))
+        rezerv_sayisi += 1
+
+    return {'ok': True, 'atlandi': False, 'rezerv_sayisi': rezerv_sayisi}
 
 
 def _batch_formul_parca_sec(con, batch_kodu, parca_id=None):
