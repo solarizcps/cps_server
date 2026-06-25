@@ -5040,6 +5040,7 @@ def tablet_devam_edenler():
         if 'plan_id' in _cols:
             batches_raw = con.execute("""
                 SELECT nb.id, nb.batch_kodu, nb.lot_kodu, nb.plan_id,
+                       nb.uretim_varyant_id,
                        nb.planlanan_kg, nb.durum,
                        nb.olusturma_tarihi, nb.notlar,
                        uv.ad AS uv_ad, uv.boyut,
@@ -5060,6 +5061,7 @@ def tablet_devam_edenler():
         else:
             batches_raw = con.execute("""
                 SELECT nb.id, nb.batch_kodu, nb.lot_kodu,
+                       nb.uretim_varyant_id,
                        nb.planlanan_kg, nb.durum,
                        nb.olusturma_tarihi, nb.notlar,
                        uv.ad AS uv_ad, uv.boyut,
@@ -5077,6 +5079,15 @@ def tablet_devam_edenler():
                 ORDER BY nb.id DESC
             """).fetchall()
         batches_raw = [dict(b) for b in batches_raw]
+
+        for b in batches_raw:
+            rf = _rf_renk_uv_icin(con, b.get('uretim_varyant_id'))
+            if rf:
+                b['rf_kod'] = rf['rf_kod']
+                b['rf_renk_ad'] = rf.get('renk_ad')
+            else:
+                b['rf_kod'] = None
+                b['rf_renk_ad'] = None
 
         # Alt emir sayaçları + KG
         parca_tablosu = _parca_tablosu_var(con)
@@ -5293,6 +5304,14 @@ def tablet_uretim_islem(batch_kodu):
         barkod_hazir_adet = sayaclar.get('bitti', 0)
         barkod_hazir_kg   = round(toplam_uretilen_kg, 1)
 
+        rf_bilgi = _rf_renk_uv_icin(con, batch['uretim_varyant_id'])
+        rf_kod = rf_bilgi['rf_kod'] if rf_bilgi else None
+        rf_renk_ad = rf_bilgi.get('renk_ad') if rf_bilgi else None
+        rf_uyari = None if rf_bilgi else (
+            'Bu formül/renk için ONAYLI RF eşleşmesi bulunamadı. '
+            'RF kullanım logu oluşturulmayabilir.'
+        )
+
     finally:
         con.close()
 
@@ -5313,6 +5332,9 @@ def tablet_uretim_islem(batch_kodu):
         kardes_boyutlar=kardes_boyutlar,
         barkod_hazir_adet=barkod_hazir_adet,
         barkod_hazir_kg=barkod_hazir_kg,
+        rf_kod=rf_kod,
+        rf_renk_ad=rf_renk_ad,
+        rf_uyari=rf_uyari,
     )
 
 
@@ -6435,7 +6457,7 @@ def _tablet_ana_veri(con):
             seen_batches.add(bk)
             b = con.execute("""
                 SELECT nb.batch_kodu, nb.lot_kodu, nb.planlanan_kg, nb.durum,
-                       nb.olusturma_tarihi,
+                       nb.olusturma_tarihi, nb.uretim_varyant_id,
                        uv.ad AS uv_ad, uv.boyut,
                        rv.ad AS renk_ad, f.ad AS formul_ad
                 FROM nexgen_uretim_batch nb
@@ -6448,9 +6470,16 @@ def _tablet_ana_veri(con):
                 row = dict(b)
                 row['musteri_adi'] = pl.get('musteri_adi')
                 row['siparis_no'] = pl.get('siparis_no') or pl.get('plan_kodu')
+                rf = _rf_renk_uv_icin(con, row.get('uretim_varyant_id') or pl.get('uv_id'))
+                if rf:
+                    row['rf_kod'] = rf['rf_kod']
+                    row['rf_renk_ad'] = rf.get('renk_ad')
+                else:
+                    row['rf_kod'] = None
+                    row['rf_renk_ad'] = None
                 devam_eden.append(row)
         elif pl['durum'] == 'PLANLANDI' and (pl.get('plan_tarihi') or '') <= bugun and not bk:
-            plan_isler.append({
+            pi = {
                 'plan_id': pl['id'],
                 'plan_kodu': pl['plan_kodu'],
                 'planlanan_kg': pl['planlanan_kg'],
@@ -6462,7 +6491,12 @@ def _tablet_ana_veri(con):
                 'boyut': pl['boyut'],
                 'renk_ad': pl['renk_ad'],
                 'formul_ad': pl['formul_ad'],
-            })
+            }
+            rf = _rf_renk_uv_icin(con, pl['uv_id'])
+            if rf:
+                pi['rf_kod'] = rf['rf_kod']
+                pi['rf_renk_ad'] = rf.get('renk_ad')
+            plan_isler.append(pi)
 
     plan_isler.sort(key=lambda p: (p.get('oncelik_sira') or 999, p.get('plan_id') or 0))
     devam_eden.sort(key=lambda b: b.get('olusturma_tarihi') or '', reverse=True)
@@ -6538,6 +6572,17 @@ def uretim_plan_liste():
         planlar = [dict(p) for p in _plan_liste_sorgu(con)]
 
         for pl in planlar:
+            rf = _rf_renk_uv_icin(con, pl['uv_id'])
+            if rf:
+                pl['rf_kod'] = rf['rf_kod']
+                pl['rf_renk_ad'] = rf.get('renk_ad')
+            else:
+                pl['rf_kod'] = None
+                pl['rf_renk_ad'] = None
+                pl['rf_uyari'] = (
+                    'Bu formül/renk için ONAYLI RF eşleşmesi bulunamadı.'
+                )
+
             sk = _siparis_kontrol_get(con, pl['id'])
             if sk:
                 pl['siparis_toplam_kg'] = sk['siparis_toplam_kg']
@@ -6806,14 +6851,16 @@ def api_batch_durum_guncelle(batch_kodu):
 def _formul_batch_kg_hesapla(con, uretim_varyant_id):
     """Bir üretim varyantının aktif reçete kalemlerinden standart batch KG'sini döner.
 
+    BOYA kalemleri hariç — renk formülü RF tarafında yönetilir (FAZ-1A/2A).
     Returns: float (0.0 reçete bulunamazsa)
     """
-    row = con.execute(
-        "SELECT COALESCE(SUM(miktar_kg), 0) AS toplam "
-        "FROM nexgen_recete_kalem "
-        "WHERE uretim_varyant_id=? AND aktif=1",
-        (uretim_varyant_id,)
-    ).fetchone()
+    row = con.execute("""
+        SELECT COALESCE(SUM(rk.miktar_kg), 0) AS toplam
+        FROM nexgen_recete_kalem rk
+        JOIN nexgen_stok_kart sk ON sk.id = rk.stok_kart_id
+        WHERE rk.uretim_varyant_id = ? AND rk.aktif = 1
+          AND UPPER(COALESCE(sk.kategori, '')) != 'BOYA'
+    """, (uretim_varyant_id,)).fetchone()
     return round(float(row['toplam']), 3) if row else 0.0
 
 
@@ -7005,9 +7052,17 @@ def api_plan_basla(plan_id):
 
         _rf_kullanim_tablet_sync(con, batch_kodu)
 
+        rf_bilgi = _rf_renk_uv_icin(con, p['uretim_varyant_id'])
+        rf_uyari = None
+        if not rf_bilgi:
+            rf_uyari = (
+                'Bu formül/renk için ONAYLI RF eşleşmesi bulunamadı. '
+                'Üretim başladı; RF kullanım logu oluşturulamadı.'
+            )
+
         con.commit()
 
-        return jsonify({
+        resp = {
             'ok': True,
             'batch_kodu': batch_kodu,
             'lot_kodu': lot_kodu,
@@ -7017,7 +7072,13 @@ def api_plan_basla(plan_id):
             'planlanan_kg': round(p['planlanan_kg'], 3),
             'formul_batch_kg': round(formul_batch_kg, 3),
             'alt_emir_sayisi': alt_emir_sayisi,
-        })
+        }
+        if rf_bilgi:
+            resp['rf_kod'] = rf_bilgi['rf_kod']
+            resp['rf_renk_ad'] = rf_bilgi.get('renk_ad')
+        if rf_uyari:
+            resp['rf_uyari'] = rf_uyari
+        return jsonify(resp)
     except Exception as e:
         con.rollback()
         return jsonify({'ok': False, 'hata': str(e)}), 500

@@ -227,11 +227,17 @@ function veriGrupla() {
         musteri_adi: b.musteri_adi || '—',
         formul_ad:  b.formul_ad || '—',
         renk_ad:    b.renk_ad || '',
+        rf_kod:     b.rf_kod || null,
+        rf_renk_ad: b.rf_renk_ad || null,
         plan_tarihi: b.olusturma_tarihi || '',
         boyutlar:   [],
         tip:        'batch'
       };
       sira.push(key);
+    }
+    if (!harita[key].rf_kod && b.rf_kod) {
+      harita[key].rf_kod = b.rf_kod;
+      harita[key].rf_renk_ad = b.rf_renk_ad;
     }
     // cari temizle
     var cad = harita[key].musteri_adi;
@@ -253,6 +259,8 @@ function veriGrupla() {
       boyut:      b.boyut || 'STD',
       batch_kodu: b.batch_kodu,
       durum:      b.durum,
+      rf_kod:     b.rf_kod || null,
+      rf_renk_ad: b.rf_renk_ad || null,
       planlanan_kg:  parseFloat(b.planlanan_kg) || 0,
       uretilen_kg:   parseFloat(b.uretilen_kg || 0),
       toplam_alt_emir: toplam,
@@ -279,6 +287,8 @@ function veriGrupla() {
         musteri_adi: cad,
         formul_ad:  p.formul_ad || '—',
         renk_ad:    p.renk_ad || '',
+        rf_kod:     p.rf_kod || null,
+        rf_renk_ad: p.rf_renk_ad || null,
         plan_tarihi: '',
         boyutlar: [{
           boyut:      p.boyut || 'STD',
@@ -426,6 +436,8 @@ function kartHtml(sip, kartIdx) {
         '<div class="nxt-gov-et">FORMÜL</div>' +
         '<div class="nxt-gov-formul">' + esc(sip.formul_ad) + '</div>' +
         (sip.renk_ad ? '<div class="nxt-gov-et" style="margin-top:6px">RENK</div><div class="nxt-gov-renk">' + esc(sip.renk_ad) + '</div>' : '') +
+        (sip.rf_kod ? '<div class="nxt-gov-et" style="margin-top:6px">RF</div><div class="nxt-gov-rf"><span class="nxt-rf-kod">' + esc(sip.rf_kod) + '</span>'
+          + (sip.rf_renk_ad ? ' <span class="nxt-rf-ad">' + esc(sip.rf_renk_ad) + '</span>' : '') + '</div>' : '') +
         '<div class="nxt-gov-et" style="margin-top:6px">BOYUT</div>' +
         '<div class="nxt-gov-boyutlar">' + boyutRozetler + '</div>' +
       '</div>' +
@@ -884,6 +896,9 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #f3f6fa; }
 }
 .nxt-gov-formul { font-size: 14px; font-weight: 900; color: #111827; line-height: 1.2; }
 .nxt-gov-renk   { font-size: 12px; font-weight: 600; color: #475569; }
+.nxt-gov-rf     { font-size: 12px; margin-top: 2px; }
+.nxt-rf-kod     { font-family: 'Courier New', monospace; font-weight: 700; color: #0f766e; }
+.nxt-rf-ad      { color: #64748b; font-weight: 500; }
 .nxt-gov-boyutlar { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
 .nxt-boyut-rozet {
   font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 3px;

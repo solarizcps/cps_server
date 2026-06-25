@@ -728,6 +728,9 @@ function veriGrupla() {
         musteri_adi: cariTemizle(p.musteri_adi || '—'),
         formul_ad:   p.formul_ad  || '—',
         renk_ad:     p.renk_ad    || '—',
+        rf_kod:      null,
+        rf_renk_ad:  null,
+        rf_uyari:    null,
         plan_tarihi: p.plan_tarihi || '',
         varyantlar:  [],
         durum: p.durum,
@@ -748,7 +751,15 @@ function veriGrupla() {
       batch_durum:   p.batch_durum || null,
       toplam_alt_emir: p.toplam_alt_emir || 0,
       biten_alt_emir:  p.biten_alt_emir  || 0,
+      rf_kod:        p.rf_kod || null,
+      rf_renk_ad:    p.rf_renk_ad || null,
+      rf_uyari:      p.rf_uyari || null,
     });
+    if (p.rf_kod && !g.rf_kod) {
+      g.rf_kod = p.rf_kod;
+      g.rf_renk_ad = p.rf_renk_ad;
+    }
+    if (p.rf_uyari && !g.rf_uyari) g.rf_uyari = p.rf_uyari;
   });
 
   _gruplar = sira.map(function(k) { return harita[k]; });
@@ -871,10 +882,16 @@ function grupSatirHtml(g, idx) {
     /* Cari */
     '<td class="ut-td ut-td-cari"><span class="ut-cari-metin">' + g.musteri_adi + '</span></td>' +
 
-    /* Ürün: Formül + Renk */
+    /* Ürün: Formül + Renk + RF */
     '<td class="ut-td ut-td-urun">' +
       '<div class="ut-urun-formul">' + g.formul_ad + '</div>' +
       '<div class="ut-urun-renk">'   + g.renk_ad   + '</div>' +
+      (g.rf_kod
+        ? '<div class="ut-urun-rf"><span class="ut-rf-kod">' + g.rf_kod + '</span>'
+          + (g.rf_renk_ad ? ' <span class="ut-rf-ad">' + g.rf_renk_ad + '</span>' : '') + '</div>'
+        : (g.rf_uyari
+            ? '<div class="ut-urun-rf-uyari" title="' + g.rf_uyari + '">RF yok</div>'
+            : '')) +
     '</td>' +
 
     /* Varyant / KG: SMALL 1250 KG / LARGE 1250 KG */
@@ -1881,6 +1898,10 @@ async function planIptal(planId) {
 /* Ürün kolonu */
 .ut-urun-formul { font-size: 13px; font-weight: 600; color: #1e293b; }
 .ut-urun-renk   { font-size: 11px; color: #6b7280; margin-top: 2px; }
+.ut-urun-rf { font-size: 11px; margin-top: 4px; }
+.ut-rf-kod { font-family: 'Courier New', monospace; font-weight: 700; color: #0f766e; }
+.ut-rf-ad { color: #64748b; }
+.ut-urun-rf-uyari { font-size: 11px; color: #dc2626; margin-top: 4px; font-weight: 600; }
 
 /* Varyant / KG satırları */
 .ut-varyant-satir {

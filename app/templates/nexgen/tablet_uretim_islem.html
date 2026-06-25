@@ -130,6 +130,20 @@
         </div>
       </div>
 
+      {# RF Renk Formülü #}
+      <div class="sol-rf-blok">
+        <div class="sol-etiket">RF RENK</div>
+        {% if rf_kod %}
+        <div class="sol-rf-kod">{{ rf_kod }}</div>
+        <div class="sol-rf-ad">{{ rf_renk_ad or batch.renk_ad or '—' }}</div>
+        {% else %}
+        <div class="sol-rf-yok">RF eşleşmesi yok</div>
+        {% endif %}
+      </div>
+      {% if rf_uyari %}
+      <div class="tui-rf-uyari">{{ rf_uyari }}</div>
+      {% endif %}
+
       {# Siparis master KG #}
       <div class="sol-kg-blok">
         <div class="sol-etiket">SİPARİŞ TOPLAM KG</div>
@@ -1187,6 +1201,22 @@ body { background: #f3f6fa; font-family: system-ui, -apple-system, sans-serif; }
   overflow-wrap: break-word;
   hyphens: auto;
   max-width: 100%;
+}
+
+/* RF Bloğu */
+.sol-rf-blok {
+  background: #f0fdfa; border-radius: 8px;
+  border: 1px solid #99f6e4; padding: 9px 11px;
+}
+.sol-rf-kod {
+  font-family: 'Courier New', monospace; font-size: 14px;
+  font-weight: 800; color: #0f766e;
+}
+.sol-rf-ad { font-size: 12px; color: #475569; margin-top: 2px; font-weight: 600; }
+.sol-rf-yok { font-size: 12px; color: #dc2626; font-weight: 700; }
+.tui-rf-uyari {
+  background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px;
+  padding: 8px 10px; font-size: 11px; color: #991b1b; line-height: 1.4;
 }
 
 /* Bilgi Listesi (Formül) */
