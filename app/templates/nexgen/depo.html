@@ -42,6 +42,12 @@
       <span class="ngsd-sekme-sayac ngsd-sayac-turuncu">{{ bekleyen_say }}</span>
       {% endif %}
     </button>
+    <button class="ngsd-sekme-btn" data-sekme="uretim-hazirlik" onclick="sekmeGec('uretim-hazirlik')">
+      Üretim Hazırlık
+      {% if uretim_hazirlik_aktif %}
+      <span class="ngsd-sekme-sayac ngsd-sayac-turuncu">{{ uretim_hazirlik_aktif }}</span>
+      {% endif %}
+    </button>
     <button class="ngsd-sekme-btn" data-sekme="direkt" onclick="sekmeGec('direkt')">
       Direkt Giriş
     </button>
@@ -131,6 +137,40 @@
           {% endfor %}
         </tbody>
       </table>
+    </div>
+    {% endif %}
+  </div>
+
+  {# ═══════════════════════════════════════════════════════════ #}
+  {# SEKME — ÜRETİM HAZIRLIK (FAZ-5B)                            #}
+  {# ═══════════════════════════════════════════════════════════ #}
+  <div id="ngsd-sekme-uretim-hazirlik" class="ngsd-sekme-icerik" style="display:none;">
+
+    {% if not uretim_hazirlik %}
+    <div class="ngsd-placeholder-kart">
+      <div class="ngsd-placeholder-ikon">🏭</div>
+      <div class="ngsd-placeholder-baslik">Üretim Hazırlığı Yok</div>
+      <div class="ngsd-placeholder-aciklama">
+        Planlama üretime gönderdiğinde malzeme listesi burada görünür.
+      </div>
+    </div>
+    {% else %}
+    <div class="ngdp-uh-grid">
+      {% for h in uretim_hazirlik %}
+      <div class="ngdp-uh-kart ngdp-uh-{{ h.durum|lower }}">
+        <div class="ngdp-uh-ust">
+          <span class="ngdp-uh-sip">{{ h.siparis_goster }}</span>
+          <span class="ngdp-uh-durum">{{ h.durum }}</span>
+        </div>
+        <div class="ngdp-uh-satir"><span>Cari</span><strong>{{ h.cari_ad or '—' }}</strong></div>
+        <div class="ngdp-uh-satir"><span>Batch</span><strong class="ngsd-mono">{{ h.batch_kodu }}</strong></div>
+        <div class="ngdp-uh-satir"><span>RF</span><strong>{{ h.rf_kod or '—' }}{% if h.rf_renk_ad %} / {{ h.rf_renk_ad }}{% endif %}</strong></div>
+        <div class="ngdp-uh-alt">
+          <button type="button" class="ngsk-btn-kaydet ngdp-uh-detay-btn"
+                  onclick="uhDetayAc({{ h.id }})">Detay</button>
+        </div>
+      </div>
+      {% endfor %}
     </div>
     {% endif %}
   </div>
@@ -387,6 +427,29 @@
   </div>
 </div>
 
+{# MODAL — ÜRETİM HAZIRLIK DETAY #}
+<div id="ngdp-uh-overlay" class="ngsk-overlay" onclick="uhDetayKapat(event)">
+  <div class="ngsk-modal ngdp-uh-modal" onclick="event.stopPropagation()">
+    <div class="ngsk-modal-baslik">
+      <span id="uh-modal-baslik">Üretim Hazırlık</span>
+      <button class="ngsk-modal-kapat" onclick="uhDetayKapat()">&times;</button>
+    </div>
+    <div id="uh-modal-ozet" class="ngdp-uh-modal-ozet"></div>
+    <div id="uh-modal-icerik" class="ngdp-uh-modal-icerik"></div>
+    <div id="uh-modal-hata" class="ngsk-hata-alan" style="display:none"></div>
+    <div class="ngsk-modal-footer ngdp-uh-modal-footer">
+      <button class="ngsk-btn-iptal" onclick="uhDetayKapat()">Kapat</button>
+      {% if can_giris %}
+      <button class="ngsk-btn-kaydet" id="uh-basla-btn" onclick="uhBaslat()" style="display:none">
+        Hazırlamaya Başla
+      </button>
+      <button class="ngsk-btn-kaydet ngdp-btn-kabul-kaydet" id="uh-hazir-btn"
+              onclick="uhHazir()" style="display:none">Hazırladım</button>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
 <style>
 /* ── Genel ── */
 .ng-sayfa { padding:22px 28px; background:#f6f7f9; min-height:100vh; box-sizing:border-box; }
@@ -500,6 +563,51 @@
 /* Çıkış sekme butonu */
 .ngsd-sekme-btn-cikis.aktif { background:#fef2f2; color:#dc2626; font-weight:700; }
 
+/* FAZ-5B Üretim Hazırlık */
+.ngdp-uh-grid {
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));
+  gap:12px; padding:16px 0;
+}
+.ngdp-uh-kart {
+  background:#fff; border:1px solid #e5e7eb; border-radius:10px;
+  padding:14px 16px; display:flex; flex-direction:column; gap:8px;
+  box-shadow:0 1px 4px rgba(15,23,42,0.04);
+}
+.ngdp-uh-bekliyor { border-left:3px solid #f59e0b; }
+.ngdp-uh-hazirlaniyor { border-left:3px solid #3b82f6; }
+.ngdp-uh-hazir { border-left:3px solid #16a34a; opacity:.92; }
+.ngdp-uh-ust { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.ngdp-uh-sip { font-weight:800; font-size:14px; color:#0f172a; font-family:monospace; }
+.ngdp-uh-durum {
+  font-size:10px; font-weight:800; padding:2px 8px; border-radius:6px;
+  background:#f1f5f9; color:#475569;
+}
+.ngdp-uh-bekliyor .ngdp-uh-durum { background:#fef3c7; color:#92400e; }
+.ngdp-uh-hazirlaniyor .ngdp-uh-durum { background:#dbeafe; color:#1d4ed8; }
+.ngdp-uh-hazir .ngdp-uh-durum { background:#dcfce7; color:#166534; }
+.ngdp-uh-satir { display:flex; justify-content:space-between; font-size:12px; color:#64748b; }
+.ngdp-uh-satir strong { color:#1e293b; font-weight:700; text-align:right; }
+.ngdp-uh-alt { margin-top:6px; display:flex; justify-content:flex-end; }
+.ngdp-uh-detay-btn { font-size:12px; padding:6px 14px; }
+.ngdp-uh-modal { max-width:560px; }
+.ngdp-uh-modal-ozet {
+  padding:12px 20px; background:#f8fafc; border-bottom:1px solid #e2e8f0;
+  font-size:12px; display:grid; grid-template-columns:1fr 1fr; gap:6px 16px;
+}
+.ngdp-uh-modal-icerik { padding:16px 20px; max-height:50vh; overflow-y:auto; }
+.ngdp-uh-grup-baslik {
+  font-size:10px; font-weight:800; color:#64748b; letter-spacing:.6px;
+  margin:12px 0 6px; text-transform:uppercase;
+}
+.ngdp-uh-grup-baslik:first-child { margin-top:0; }
+.ngdp-uh-tablo { width:100%; border-collapse:collapse; font-size:13px; }
+.ngdp-uh-tablo th {
+  text-align:left; padding:6px 8px; background:#f1f5f9;
+  font-size:10px; font-weight:700; color:#64748b;
+}
+.ngdp-uh-tablo td { padding:7px 8px; border-bottom:1px solid #f1f5f9; }
+.ngdp-uh-modal-footer { gap:8px; flex-wrap:wrap; }
+
 /* Form başlık çıkış varyantı */
 .ngdp-form-baslik-cikis { border-left:3px solid #dc2626; color:#dc2626; }
 
@@ -590,7 +698,10 @@
 </style>
 
 <script>
-const SEKMELER_DP = ['bekleyen', 'direkt', 'cikis', 'gecmis'];
+const SEKMELER_DP = ['bekleyen', 'uretim-hazirlik', 'direkt', 'cikis', 'gecmis'];
+const CAN_GIRIS_DP = {{ 'true' if can_giris else 'false' }};
+let _uhAktifId = null;
+let _uhAktifDurum = null;
 
 function sekmeGec(hedef) {
   SEKMELER_DP.forEach(function(s) {
@@ -818,6 +929,112 @@ function cikisKaydet() {
   })
   .catch(function() { hataDiv.textContent = 'Bağlantı hatası.'; hataDiv.style.display='block'; })
   .finally(function() { btn.textContent = 'Çıkışı Kaydet'; btn.disabled = false; });
+}
+
+function uhMiktarEtiket(kg, rf) {
+  var n = parseFloat(kg);
+  if (!(n >= 0)) return '—';
+  if (rf && n < 1) {
+    var gr = n * 1000;
+    return gr.toFixed(gr >= 10 ? 1 : 2).replace(/\.?0+$/, '') + ' GR';
+  }
+  return formatKg(n) + ' KG';
+}
+
+function uhTabloHtml(kalemler, rf) {
+  if (!kalemler || !kalemler.length) return '<div style="color:#94a3b8;font-size:12px">—</div>';
+  var rows = kalemler.map(function(k) {
+    return '<tr><td class="ngsd-mono">' + (k.stok_kod || '—') + '</td>' +
+      '<td>' + (k.stok_ad || '—') + '</td>' +
+      '<td style="text-align:right;font-weight:700">' +
+      uhMiktarEtiket(k.gerekli_kg, rf) + '</td></tr>';
+  }).join('');
+  return '<table class="ngdp-uh-tablo"><thead><tr><th>Kod</th><th>Ad</th><th>' +
+    (rf ? 'KG/GR' : 'KG') + '</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+
+function uhButonGuncelle() {
+  var basla = document.getElementById('uh-basla-btn');
+  var hazir = document.getElementById('uh-hazir-btn');
+  if (!basla || !hazir) return;
+  basla.style.display = 'none';
+  hazir.style.display = 'none';
+  if (!CAN_GIRIS_DP) return;
+  if (_uhAktifDurum === 'BEKLIYOR') {
+    basla.style.display = 'inline-block';
+    hazir.style.display = 'inline-block';
+  } else if (_uhAktifDurum === 'HAZIRLANIYOR') {
+    hazir.style.display = 'inline-block';
+  }
+}
+
+async function uhDetayAc(id) {
+  _uhAktifId = id;
+  document.getElementById('uh-modal-hata').style.display = 'none';
+  document.getElementById('uh-modal-icerik').innerHTML =
+    '<div style="padding:20px;color:#94a3b8">Yükleniyor…</div>';
+  document.getElementById('ngdp-uh-overlay').classList.add('acik');
+  try {
+    var r = await fetch('/nexgen/api/depo/hazirlik/' + id);
+    var d = await r.json();
+    if (!d.ok) {
+      document.getElementById('uh-modal-icerik').innerHTML =
+        '<div class="ngsk-hata-alan">' + (d.hata || 'Hata') + '</div>';
+      return;
+    }
+    var h = d.hazirlik || {};
+    _uhAktifDurum = h.durum;
+    document.getElementById('uh-modal-baslik').textContent =
+      'Üretim Hazırlık — ' + (h.batch_kodu || '');
+    document.getElementById('uh-modal-ozet').innerHTML =
+      '<div><span style="color:#94a3b8">Sipariş</span><br><strong>' +
+      (h.siparis_goster || h.siparis_no || '—') + '</strong></div>' +
+      '<div><span style="color:#94a3b8">Cari</span><br><strong>' +
+      (h.cari_ad || '—') + '</strong></div>' +
+      '<div><span style="color:#94a3b8">Batch</span><br><strong>' +
+      (h.batch_kodu || '—') + '</strong></div>' +
+      '<div><span style="color:#94a3b8">Durum</span><br><strong>' +
+      (h.durum || '—') + '</strong></div>';
+    var html = '<div class="ngdp-uh-grup-baslik">ANA HAMMADDE</div>' +
+      uhTabloHtml(d.taban, false);
+    html += '<div class="ngdp-uh-grup-baslik">RENK / BOYA — RF</div>';
+    if (d.rf && d.rf.length) {
+      html += uhTabloHtml(d.rf, true);
+    } else {
+      html += '<div style="color:#b45309;font-size:12px;font-weight:600">RF boya bilgisi yok</div>';
+    }
+    document.getElementById('uh-modal-icerik').innerHTML = html;
+    uhButonGuncelle();
+  } catch (e) {
+    document.getElementById('uh-modal-icerik').innerHTML =
+      '<div class="ngsk-hata-alan">Bağlantı hatası</div>';
+  }
+}
+
+function uhDetayKapat(e) {
+  if (e && e.target !== document.getElementById('ngdp-uh-overlay')) return;
+  document.getElementById('ngdp-uh-overlay').classList.remove('acik');
+  _uhAktifId = null;
+}
+
+async function uhBaslat() {
+  if (!_uhAktifId) return;
+  var hata = document.getElementById('uh-modal-hata');
+  hata.style.display = 'none';
+  var r = await fetch('/nexgen/api/depo/hazirlik/' + _uhAktifId + '/baslat', { method: 'POST' });
+  var d = await r.json();
+  if (d.ok) { location.reload(); }
+  else { hata.textContent = d.hata || 'Hata'; hata.style.display = 'block'; }
+}
+
+async function uhHazir() {
+  if (!_uhAktifId) return;
+  var hata = document.getElementById('uh-modal-hata');
+  hata.style.display = 'none';
+  var r = await fetch('/nexgen/api/depo/hazirlik/' + _uhAktifId + '/hazir', { method: 'POST' });
+  var d = await r.json();
+  if (d.ok) { location.reload(); }
+  else { hata.textContent = d.hata || 'Hata'; hata.style.display = 'block'; }
 }
 
 function formatKg(v) {

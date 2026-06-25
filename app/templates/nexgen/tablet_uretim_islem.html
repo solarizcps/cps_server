@@ -166,6 +166,19 @@
         </button>
       </div>
 
+      {# FAZ-5B: Depo hazırlık durumu (bilgi — üretimi bloklamaz) #}
+      <div class="tui-depo-durum" id="tui-depo-durum">
+        <div class="tui-depo-etiket">DEPO HAZIRLIK</div>
+        {% if depo_hazirlik %}
+        <div class="tui-depo-val tui-depo-{{ depo_hazirlik.durum|lower }}">
+          {{ depo_hazirlik.durum }}
+        </div>
+        <div class="tui-depo-alt">{{ depo_hazirlik.hazirlik_no }}</div>
+        {% else %}
+        <div class="tui-depo-val tui-depo-yok">—</div>
+        {% endif %}
+      </div>
+
       {# Siparis master KG #}
       <div class="sol-kg-blok">
         <div class="sol-etiket">SİPARİŞ TOPLAM KG</div>
@@ -1417,6 +1430,23 @@ body { background: #f3f6fa; font-family: system-ui, -apple-system, sans-serif; }
 }
 .tui-fh-gor-btn:hover { background: #e9b020; }
 .pp-tr-formul-secili { background: #fffbeb !important; outline: 1px solid #f6c343; }
+
+/* FAZ-5B Depo durum bilgisi */
+.tui-depo-durum {
+  background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;
+  padding: 9px 11px; display: flex; flex-direction: column; gap: 4px;
+}
+.tui-depo-etiket {
+  font-size: 10px; font-weight: 800; color: #64748b; letter-spacing: .8px;
+}
+.tui-depo-val {
+  font-size: 14px; font-weight: 900; letter-spacing: .3px;
+}
+.tui-depo-bekliyor { color: #b45309; }
+.tui-depo-hazirlaniyor { color: #2563eb; }
+.tui-depo-hazir { color: #15803d; }
+.tui-depo-yok { color: #94a3b8; font-weight: 600; font-size: 13px; }
+.tui-depo-alt { font-size: 10px; color: #94a3b8; font-family: monospace; }
 
 /* FAZ-4E Formül Modal */
 .tui-formul-modal-arka {

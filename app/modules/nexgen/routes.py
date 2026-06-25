@@ -4624,6 +4624,8 @@ def depo_slash_yonlendir():
 @yetki_gerekli('nexgen.depo.view', 'can_view')
 def depo():
     can_giris = yetki_var('nexgen.depo.giris', 'can_create')
+    uretim_hazirlik = []
+    uretim_hazirlik_aktif = 0
     con = _db()
     try:
         # Bekleyen / kısmi siparişler
@@ -4707,6 +4709,13 @@ def depo():
             WHERE kabul_tarihi >= datetime('now', '-7 days')
         """).fetchone()[0]
 
+        uretim_hazirlik = _depo_hazirlik_liste_sorgu(
+            con, durumlar=('BEKLIYOR', 'HAZIRLANIYOR', 'HAZIR'),
+        )
+        uretim_hazirlik_aktif = sum(
+            1 for h in uretim_hazirlik if h.get('durum') in ('BEKLIYOR', 'HAZIRLANIYOR')
+        )
+
     finally:
         con.close()
 
@@ -4727,6 +4736,8 @@ def depo():
         bugun_giren_kg=round(bugun_giren_kg, 1),
         bu_hafta_kabul_say=bu_hafta_kabul_say,
         bekleyen_say=len(bekleyen),
+        uretim_hazirlik=uretim_hazirlik,
+        uretim_hazirlik_aktif=uretim_hazirlik_aktif,
     )
 
 
@@ -4964,6 +4975,162 @@ def api_depo_cikis():
     })
 
 
+# ─────────────────────────────────────────────────────────────
+# FAZ-5B — Depo Üretim Hazırlık (workflow only, stok yazmaz)
+# ─────────────────────────────────────────────────────────────
+
+def _depo_hazirlik_liste_sorgu(con, durumlar=None):
+    if not _depo_hazirlik_tablosu_var(con):
+        return []
+    where = ""
+    params = []
+    if durumlar:
+        placeholders = ','.join(['?'] * len(durumlar))
+        where = f"WHERE dh.durum IN ({placeholders})"
+        params = list(durumlar)
+    rf_join = ""
+    rf_select = "NULL AS rf_kod, NULL AS rf_renk_ad"
+    if _plan_rf_renk_kolonu_var(con):
+        rf_join = "LEFT JOIN nexgen_rf_renk rf ON rf.id = np.rf_renk_id "
+        rf_select = "rf.rf_kod, rf.ad AS rf_renk_ad"
+    cari_join = ""
+    cari_select = "NULL AS cari_ad"
+    if _plan_cari_kolonu_var(con):
+        cari_join = "LEFT JOIN nexgen_cari c ON c.id = dh.cari_id "
+        cari_select = "COALESCE(c.unvan, np.musteri_adi) AS cari_ad"
+    ps_join = ""
+    ps_select = "NULL AS hdr_siparis_no"
+    if _planlama_siparis_tablosu_var(con):
+        ps_join = (
+            "LEFT JOIN nexgen_planlama_siparis ps "
+            "ON ps.id = dh.planlama_siparis_id "
+        )
+        ps_select = "ps.siparis_no AS hdr_siparis_no"
+    rows = con.execute(f"""
+        SELECT dh.id, dh.hazirlik_no, dh.batch_kodu, dh.plan_id,
+               dh.planlama_siparis_id, dh.cari_id, dh.durum,
+               dh.hazirlayan_id, dh.hazir_tarihi, dh.notlar,
+               dh.olusturma_tarihi,
+               np.siparis_no, np.planlanan_kg,
+               {ps_select},
+               {cari_select},
+               {rf_select}
+        FROM nexgen_depo_hazirlik dh
+        LEFT JOIN nexgen_uretim_plan np ON np.id = dh.plan_id
+        {ps_join}
+        {cari_join}
+        {rf_join}
+        {where}
+        ORDER BY
+          CASE dh.durum
+            WHEN 'BEKLIYOR' THEN 0
+            WHEN 'HAZIRLANIYOR' THEN 1
+            WHEN 'HAZIR' THEN 2
+            ELSE 3
+          END,
+          dh.id DESC
+    """, params).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        d['siparis_goster'] = d.get('hdr_siparis_no') or d.get('siparis_no') or '—'
+        out.append(d)
+    return out
+
+
+@nexgen_bp.route('/api/depo/hazirlik/<int:hazirlik_id>')
+@yetki_gerekli('nexgen.depo.view', 'can_view')
+def api_depo_hazirlik_detay(hazirlik_id):
+    con = _db()
+    try:
+        if not _depo_hazirlik_tablosu_var(con):
+            return jsonify({'ok': False, 'hata': 'Migration 085 çalıştırılmadı'}), 500
+        hdr = next(
+            (x for x in _depo_hazirlik_liste_sorgu(con) if x['id'] == hazirlik_id),
+            None,
+        )
+        if not hdr:
+            return jsonify({'ok': False, 'hata': 'Hazırlık bulunamadı'}), 404
+        kalemler = _depo_hazirlik_kalemleri(con, hazirlik_id)
+        taban = [k for k in kalemler if k.get('kaynak') == 'TABAN']
+        rf = [k for k in kalemler if k.get('kaynak') == 'RF']
+        return jsonify({
+            'ok': True,
+            'hazirlik': hdr,
+            'kalemler': kalemler,
+            'taban': taban,
+            'rf': rf,
+        })
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/depo/hazirlik/<int:hazirlik_id>/baslat', methods=['POST'])
+@yetki_gerekli('nexgen.depo.giris', 'can_create')
+def api_depo_hazirlik_baslat(hazirlik_id):
+    con = _db()
+    try:
+        if not _depo_hazirlik_tablosu_var(con):
+            return jsonify({'ok': False, 'hata': 'Migration 085 çalıştırılmadı'}), 500
+        row = con.execute(
+            "SELECT id, durum FROM nexgen_depo_hazirlik WHERE id=?", (hazirlik_id,)
+        ).fetchone()
+        if not row:
+            return jsonify({'ok': False, 'hata': 'Hazırlık bulunamadı'}), 404
+        if row['durum'] != 'BEKLIYOR':
+            return jsonify({'ok': False, 'hata': f'Durum uygun değil: {row["durum"]}'}), 400
+        con.execute("""
+            UPDATE nexgen_depo_hazirlik
+            SET durum='HAZIRLANIYOR',
+                guncelleme_tarihi=datetime('now','localtime')
+            WHERE id=?
+        """, (hazirlik_id,))
+        con.commit()
+        return jsonify({'ok': True, 'id': hazirlik_id, 'durum': 'HAZIRLANIYOR'})
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/depo/hazirlik/<int:hazirlik_id>/hazir', methods=['POST'])
+@yetki_gerekli('nexgen.depo.giris', 'can_create')
+def api_depo_hazirlik_hazir(hazirlik_id):
+    con = _db()
+    try:
+        if not _depo_hazirlik_tablosu_var(con):
+            return jsonify({'ok': False, 'hata': 'Migration 085 çalıştırılmadı'}), 500
+        row = con.execute(
+            "SELECT id, durum FROM nexgen_depo_hazirlik WHERE id=?", (hazirlik_id,)
+        ).fetchone()
+        if not row:
+            return jsonify({'ok': False, 'hata': 'Hazırlık bulunamadı'}), 404
+        if row['durum'] not in ('BEKLIYOR', 'HAZIRLANIYOR'):
+            return jsonify({'ok': False, 'hata': f'Durum uygun değil: {row["durum"]}'}), 400
+        uid = _kullanici_id()
+        con.execute("""
+            UPDATE nexgen_depo_hazirlik_kalem
+            SET hazirlanan_kg = gerekli_kg
+            WHERE hazirlik_id=?
+        """, (hazirlik_id,))
+        con.execute("""
+            UPDATE nexgen_depo_hazirlik
+            SET durum='HAZIR',
+                hazirlayan_id=?,
+                hazir_tarihi=datetime('now','localtime'),
+                guncelleme_tarihi=datetime('now','localtime')
+            WHERE id=?
+        """, (uid, hazirlik_id))
+        con.commit()
+        return jsonify({'ok': True, 'id': hazirlik_id, 'durum': 'HAZIR'})
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
 # ═══════════════════════════════════════════════════════════════
 # NEXGEN FAZ-5A — TABLET EKRANI
 # Stok hareketi yapılmaz. Sadece batch kodu üretimi + AR-GE testi.
@@ -5181,6 +5348,7 @@ def tablet_devam_edenler():
 @yetki_gerekli('nexgen.tablet.view', 'can_view')
 def tablet_uretim_islem(batch_kodu):
     """Üretim işlem takip ekranı — operatör karışım/dolum sürecini buradan görür."""
+    depo_hazirlik = None
     con = _db()
     try:
         # plan_id kolonu migration 071 sonrası mevcut — graceful JOIN
@@ -5331,6 +5499,8 @@ def tablet_uretim_islem(batch_kodu):
             'RF kullanım logu oluşturulmayabilir.'
         )
 
+        depo_hazirlik = _depo_hazirlik_batch_durum(con, batch_kodu)
+
     finally:
         con.close()
 
@@ -5354,6 +5524,7 @@ def tablet_uretim_islem(batch_kodu):
         rf_kod=rf_kod,
         rf_renk_ad=rf_renk_ad,
         rf_uyari=rf_uyari,
+        depo_hazirlik=depo_hazirlik,
     )
 
 
@@ -7461,6 +7632,101 @@ def _formul_bolum_yap(con, ihtiyac, kg):
     }
 
 
+def _depo_hazirlik_tablosu_var(con):
+    return con.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='nexgen_depo_hazirlik'"
+    ).fetchone() is not None
+
+
+def _depo_hazirlik_no_uret(con):
+    """DH-YYYY-NNNNN formatında benzersiz hazırlık numarası."""
+    import datetime
+    yil = datetime.datetime.now().year
+    son = con.execute(
+        "SELECT hazirlik_no FROM nexgen_depo_hazirlik "
+        "WHERE hazirlik_no LIKE ? ORDER BY id DESC LIMIT 1",
+        (f"DH-{yil}-%",),
+    ).fetchone()
+    if son:
+        try:
+            son_no = int(son['hazirlik_no'].split('-')[-1])
+        except Exception:
+            son_no = 0
+    else:
+        son_no = 0
+    return f"DH-{yil}-{son_no + 1:05d}"
+
+
+def _depo_hazirlik_olustur(con, batch_kodu, plan_id, uretim_varyant_id,
+                            planlanan_kg, rf_renk_id=None, cari_id=None,
+                            planlama_siparis_id=None, olusturan_id=None):
+    """FAZ-5B: batch oluşunca depo hazırlık snapshot (FAZ-4E toplam hesap). Stok yazmaz."""
+    if not _depo_hazirlik_tablosu_var(con):
+        return None
+
+    mevcut = con.execute(
+        "SELECT id FROM nexgen_depo_hazirlik "
+        "WHERE batch_kodu=? AND durum NOT IN ('IPTAL')",
+        (batch_kodu,),
+    ).fetchone()
+    if mevcut:
+        return mevcut['id']
+
+    toplam_kg = round(float(planlanan_kg), 3)
+    ihtiyac = _mpr_stok_ihtiyac_hesapla(
+        con, uretim_varyant_id, rf_renk_id, toplam_kg,
+    )
+    if not ihtiyac.get('ok'):
+        return None
+
+    hazirlik_no = _depo_hazirlik_no_uret(con)
+    uid = olusturan_id if olusturan_id is not None else _kullanici_id()
+    con.execute("""
+        INSERT INTO nexgen_depo_hazirlik
+          (hazirlik_no, batch_kodu, plan_id, planlama_siparis_id, cari_id,
+           durum, olusturan_id)
+        VALUES (?, ?, ?, ?, ?, 'BEKLIYOR', ?)
+    """, (hazirlik_no, batch_kodu, plan_id, planlama_siparis_id,
+          cari_id, uid))
+    hid = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+    for k in ihtiyac.get('kalemler', []):
+        gerekli = round(float(k.get('gerekli_kg') or 0), 3)
+        if gerekli <= 0:
+            continue
+        con.execute("""
+            INSERT INTO nexgen_depo_hazirlik_kalem
+              (hazirlik_id, stok_kart_id, kaynak, gerekli_kg, hazirlanan_kg)
+            VALUES (?, ?, ?, ?, 0)
+        """, (hid, k['stok_kart_id'], k.get('kaynak') or 'TABAN', gerekli))
+
+    return hid
+
+
+def _depo_hazirlik_kalemleri(con, hazirlik_id):
+    rows = con.execute("""
+        SELECT k.id, k.stok_kart_id, k.kaynak, k.gerekli_kg, k.hazirlanan_kg,
+               sk.kod AS stok_kod, sk.ad AS stok_ad, sk.birim, sk.kategori
+        FROM nexgen_depo_hazirlik_kalem k
+        JOIN nexgen_stok_kart sk ON sk.id = k.stok_kart_id
+        WHERE k.hazirlik_id=?
+        ORDER BY k.kaynak, sk.kod
+    """, (hazirlik_id,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def _depo_hazirlik_batch_durum(con, batch_kodu):
+    if not _depo_hazirlik_tablosu_var(con):
+        return None
+    row = con.execute("""
+        SELECT id, hazirlik_no, durum, hazir_tarihi
+        FROM nexgen_depo_hazirlik
+        WHERE batch_kodu=? AND durum NOT IN ('IPTAL')
+        ORDER BY id DESC LIMIT 1
+    """, (batch_kodu,)).fetchone()
+    return dict(row) if row else None
+
+
 def _batch_formul_parca_sec(con, batch_kodu, parca_id=None):
     """Formül önizleme için varsayılan parça: DEVAM → HAZIR → ilk kayıt."""
     if parca_id:
@@ -8059,10 +8325,15 @@ def api_plan_basla(plan_id):
 
     con = _db()
     try:
+        plan_extra = ""
+        if _plan_cari_kolonu_var(con):
+            plan_extra += ", np.cari_id"
+        if _plan_planlama_siparis_kolonu_var(con):
+            plan_extra += ", np.planlama_siparis_id"
         rf_col = ", np.rf_renk_id" if _plan_rf_renk_kolonu_var(con) else ", NULL AS rf_renk_id"
         p = con.execute(f"""
             SELECT np.id, np.plan_kodu, np.uretim_varyant_id,
-                   np.planlanan_kg, np.durum, np.notlar{rf_col},
+                   np.planlanan_kg, np.durum, np.notlar{rf_col}{plan_extra},
                    uv.recete_durum,
                    uv.boyut, rv.ad AS renk_ad, f.ad AS formul_ad
             FROM nexgen_uretim_plan np
@@ -8165,6 +8436,21 @@ def api_plan_basla(plan_id):
                             VALUES (?, ?, ?, ?, ?, 0, 'HAZIR', ?)
                         """, (batch_id, batch_kodu, plan_id, no,
                               round(formul_batch_kg, 3), uid))
+
+        _depo_hazirlik_olustur(
+            con,
+            batch_kodu=batch_kodu,
+            plan_id=plan_id,
+            uretim_varyant_id=p['uretim_varyant_id'],
+            planlanan_kg=float(p['planlanan_kg']),
+            rf_renk_id=rf_renk_id,
+            cari_id=p['cari_id'] if 'cari_id' in p.keys() else None,
+            planlama_siparis_id=(
+                p['planlama_siparis_id']
+                if 'planlama_siparis_id' in p.keys() else None
+            ),
+            olusturan_id=uid,
+        )
 
         con.execute(
             "UPDATE nexgen_uretim_plan SET durum='BASLADI' WHERE id=?", (plan_id,)
