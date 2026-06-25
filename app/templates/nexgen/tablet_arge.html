@@ -201,6 +201,19 @@
           </div>
         </section>
 
+        {# FAZ-4C: Numune formül önizleme #}
+        <section class="ta-adim ta-formul-onizle-blok" id="ta-formul-onizle-blok" style="display:none">
+          <div class="ta-adim-no">↳</div>
+          <div class="ta-adim-ic">
+            <div class="ta-adim-baslik">Numune Formülü</div>
+            <div class="ta-onizle-kg" id="ta-onizle-kg">Numune: — KG</div>
+            <div class="ta-onizle-baslik">HAMMADDE</div>
+            <div class="ta-onizle-liste" id="ta-onizle-taban"></div>
+            <div class="ta-onizle-baslik">BOYA</div>
+            <div class="ta-onizle-liste" id="ta-onizle-boya"><div class="ta-onizle-bos">Boya satırı ekleyin</div></div>
+          </div>
+        </section>
+
         {# 4 — Amaç & numune tipi #}
         <section class="ta-adim">
           <div class="ta-adim-no">4</div>
@@ -557,6 +570,23 @@
 }
 .ta-formul-kart:hover { border-color: var(--ta-gold-dark); background: var(--ta-gold-bg); }
 .ta-formul-kart.secili { border-color: var(--ta-navy); background: var(--ta-gold-bg); box-shadow: inset 0 0 0 1px var(--ta-gold); }
+
+/* FAZ-4C Numune formül önizleme */
+.ta-formul-onizle-blok { background: #fffbeb; border-radius: 10px; border: 1px solid #fcd34d; }
+.ta-onizle-kg { font-size: 15px; font-weight: 800; color: #15803d; margin-bottom: 8px; }
+.ta-onizle-baslik {
+  font-size: 9px; font-weight: 700; color: #94a3b8; letter-spacing: .6px;
+  text-transform: uppercase; margin: 8px 0 4px;
+}
+.ta-onizle-liste { display: flex; flex-direction: column; gap: 2px; }
+.ta-onizle-satir {
+  display: flex; justify-content: space-between; gap: 8px;
+  font-size: 12px; padding: 4px 0; border-bottom: 1px solid #fef3c7;
+}
+.ta-onizle-ad { font-weight: 600; color: #334155; flex: 1; }
+.ta-onizle-miktar { font-weight: 800; font-family: 'Courier New', monospace; color: #0f172a; white-space: nowrap; }
+.ta-onizle-bos { font-size: 11px; color: #94a3b8; padding: 4px 0; }
+
 .ta-fk-ad { font-size: 16px; font-weight: 900; color: var(--ta-text); line-height: 1.25; word-break: break-word; }
 .ta-fk-alt { font-size: 15px; font-weight: 700; color: var(--ta-text-muted); margin-top: 4px; line-height: 1.2; }
 
@@ -1099,7 +1129,9 @@ function taFormulKartSec(btn) {
   var rozet = document.getElementById('ta-secili-rozet');
   rozet.style.display = 'block';
   rozet.textContent = '✓ ' + btn.dataset.formulAd + ' — ' + btn.dataset.renkAd;
+  document.getElementById('ta-formul-onizle-blok').style.display = 'flex';
   taKontrol();
+  taFormulOnizleYenile();
 }
 
 function taTestSec(btn) {
@@ -1107,6 +1139,58 @@ function taTestSec(btn) {
   btn.classList.add('ta-test-aktif');
   _taTestKg = parseFloat(btn.dataset.kg);
   taKontrol();
+  taFormulOnizleYenile();
+}
+
+function taBoyaOnizleRender() {
+  var el = document.getElementById('ta-onizle-boya');
+  if (!el) return;
+  var lines = [];
+  document.querySelectorAll('.ta-boya-satir').forEach(function(row) {
+    var sel = row.querySelector('.ta-boya-stok');
+    var gram = parseFloat(row.querySelector('.ta-boya-gram').value);
+    if (!sel || !sel.value || !(gram > 0)) return;
+    var stok = taBoyaStokById(sel.value);
+    lines.push({ ad: taBoyaOzetAd(stok), gram: taFormatGr(gram) });
+  });
+  if (!lines.length) {
+    el.innerHTML = '<div class="ta-onizle-bos">Boya satırı ekleyin</div>';
+    return;
+  }
+  el.innerHTML = lines.map(function(l) {
+    return '<div class="ta-onizle-satir"><span class="ta-onizle-ad">' + l.ad +
+      '</span><span class="ta-onizle-miktar">' + l.gram + '</span></div>';
+  }).join('');
+}
+
+function taFormulOnizleYenile() {
+  if (!_taUvId) return;
+  document.getElementById('ta-onizle-kg').textContent =
+    'Numune: ' + parseFloat(_taTestKg).toFixed(1) + ' KG';
+  taBoyaOnizleRender();
+  fetch('/nexgen/api/tablet/arge/formul-onizle?uv_id=' + _taUvId + '&test_kg=' + _taTestKg)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var tabanEl = document.getElementById('ta-onizle-taban');
+      if (!d.ok || !tabanEl) {
+        if (tabanEl) tabanEl.innerHTML = '<div class="ta-onizle-bos">' + (d.hata || '—') + '</div>';
+        return;
+      }
+      if (!d.taban || !d.taban.length) {
+        tabanEl.innerHTML = '<div class="ta-onizle-bos">Taban kalem yok</div>';
+        return;
+      }
+      tabanEl.innerHTML = d.taban.map(function(k) {
+        var kg = parseFloat(k.miktar_kg);
+        var miktar = kg.toFixed(3).replace(/\.?0+$/, '') + ' KG';
+        return '<div class="ta-onizle-satir"><span class="ta-onizle-ad">' + (k.ad || k.kod) +
+          '</span><span class="ta-onizle-miktar">' + miktar + '</span></div>';
+      }).join('');
+    })
+    .catch(function() {
+      var tabanEl = document.getElementById('ta-onizle-taban');
+      if (tabanEl) tabanEl.innerHTML = '<div class="ta-onizle-bos">Bağlantı hatası</div>';
+    });
 }
 
 function taBoyaStokOptions(secili) {
@@ -1124,9 +1208,9 @@ function taBoyaSatirEkle(stokId, gram) {
   var row = document.createElement('div');
   row.className = 'ta-boya-satir';
   row.innerHTML =
-    '<select class="ta-boya-stok" onchange="taKontrol()">' + taBoyaStokOptions(stokId || '') + '</select>' +
+    '<select class="ta-boya-stok" onchange="taKontrol();taFormulOnizleYenile()">' + taBoyaStokOptions(stokId || '') + '</select>' +
     '<input type="number" class="ta-boya-gram" min="0.1" step="0.1" placeholder="gr" ' +
-    'value="' + (gram || '') + '" oninput="taKontrol()">' +
+    'value="' + (gram || '') + '" oninput="taKontrol();taFormulOnizleYenile()">' +
     '<button type="button" class="ta-boya-sil" onclick="taBoyaSatirSil(this)">×</button>';
   wrap.appendChild(row);
 }
@@ -1134,6 +1218,7 @@ function taBoyaSatirEkle(stokId, gram) {
 function taBoyaSatirSil(btn) {
   btn.closest('.ta-boya-satir').remove();
   taKontrol();
+  taFormulOnizleYenile();
 }
 
 function taBoyaKalemleriTopla() {
@@ -1187,6 +1272,7 @@ function taYeniNumune() {
   document.getElementById('ta-cari').value = '';
   document.querySelectorAll('.ta-formul-kart').forEach(function(b){ b.classList.remove('secili'); });
   document.getElementById('ta-secili-rozet').style.display = 'none';
+  document.getElementById('ta-formul-onizle-blok').style.display = 'none';
   _taUvId = null;
   _taFormulAd = '';
   _taAmac = 'renk_gormek';

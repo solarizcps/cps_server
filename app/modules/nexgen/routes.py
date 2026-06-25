@@ -7401,6 +7401,109 @@ def _mpr_stok_ihtiyac_hesapla(con, uretim_varyant_id, rf_renk_id, planlanan_kg):
     }
 
 
+def _formul_kalemleri_birimli(con, mpr_kalemler, kaynak):
+    """_mpr_stok_ihtiyac_hesapla kalemlerini API görünüm formatına çevirir."""
+    sid_list = [k['stok_kart_id'] for k in mpr_kalemler if k.get('kaynak') == kaynak]
+    if not sid_list:
+        return []
+    placeholders = ','.join(['?'] * len(sid_list))
+    birim_map = {
+        r['id']: {'birim': r['birim'] or 'KG', 'kategori': (r['kategori'] or '').upper()}
+        for r in con.execute(
+            f"SELECT id, birim, kategori FROM nexgen_stok_kart WHERE id IN ({placeholders})",
+            sid_list,
+        ).fetchall()
+    }
+    out = []
+    for k in mpr_kalemler:
+        if k.get('kaynak') != kaynak:
+            continue
+        meta = birim_map.get(k['stok_kart_id'], {'birim': 'KG', 'kategori': ''})
+        out.append({
+            'ad': k.get('stok_ad') or '',
+            'kod': k.get('stok_kod') or '',
+            'miktar_kg': k.get('gerekli_kg', 0),
+            'birim': meta['birim'] or 'KG',
+            'kategori': meta['kategori'],
+        })
+    return out
+
+
+def _batch_formul_parca_sec(con, batch_kodu, parca_id=None):
+    """Formül önizleme için varsayılan parça: DEVAM → HAZIR → ilk kayıt."""
+    if parca_id:
+        row = con.execute(
+            "SELECT id, parca_no, hedef_kg, durum FROM nexgen_uretim_parca "
+            "WHERE id=? AND batch_kodu=?",
+            (parca_id, batch_kodu),
+        ).fetchone()
+        return dict(row) if row else None
+
+    for durum in ('DEVAM', 'HAZIR', 'BEKLEME'):
+        row = con.execute(
+            "SELECT id, parca_no, hedef_kg, durum FROM nexgen_uretim_parca "
+            "WHERE batch_kodu=? AND durum=? ORDER BY parca_no LIMIT 1",
+            (batch_kodu, durum),
+        ).fetchone()
+        if row:
+            return dict(row)
+
+    row = con.execute(
+        "SELECT id, parca_no, hedef_kg, durum FROM nexgen_uretim_parca "
+        "WHERE batch_kodu=? ORDER BY parca_no LIMIT 1",
+        (batch_kodu,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def _arge_formul_taban_onizle(con, uretim_varyant_id, test_kg):
+    """ARGE tablet önizleme — test-olustur ile aynı ölçek, TABAN (BOYA hariç)."""
+    try:
+        test_kg = float(test_kg)
+    except (TypeError, ValueError):
+        return {'ok': False, 'hata': 'Geçersiz test_kg'}
+    if test_kg <= 0:
+        return {'ok': False, 'hata': 'test_kg sıfırdan büyük olmalı'}
+
+    kalemler = con.execute("""
+        SELECT rk.stok_kart_id, rk.miktar_kg, rk.sira,
+               sk.kod AS stok_kod, sk.ad AS stok_ad, sk.birim, sk.kategori
+        FROM nexgen_recete_kalem rk
+        JOIN nexgen_stok_kart sk ON sk.id = rk.stok_kart_id
+        WHERE rk.uretim_varyant_id = ? AND rk.aktif = 1
+        ORDER BY rk.sira, rk.id
+    """, (uretim_varyant_id,)).fetchall()
+    if not kalemler:
+        return {'ok': False, 'hata': 'Reçete kalemi bulunamadı'}
+
+    kaynak_batch_kg = round(sum(float(k['miktar_kg']) for k in kalemler), 3)
+    if kaynak_batch_kg <= 0:
+        return {'ok': False, 'hata': 'Kaynak batch KG sıfır'}
+
+    carpan = test_kg / kaynak_batch_kg
+    taban = []
+    for k in kalemler:
+        if (k['kategori'] or '').upper() == 'BOYA':
+            continue
+        miktar = round(float(k['miktar_kg']) * carpan, 4)
+        if miktar <= 0:
+            continue
+        taban.append({
+            'ad': k['stok_ad'] or '',
+            'kod': k['stok_kod'] or '',
+            'miktar_kg': miktar,
+            'birim': k['birim'] or 'KG',
+        })
+
+    return {
+        'ok': True,
+        'test_kg': round(test_kg, 3),
+        'kaynak_batch_kg': kaynak_batch_kg,
+        'carpan': round(carpan, 6),
+        'taban': taban,
+    }
+
+
 def _parca_stok_tuket(con, parca_id, uretilen_kg=None, olusturan_id=None):
     """Alt emir bitince hammadde tüketimini nexgen_stok_hareket'e yazar.
 
@@ -7570,6 +7673,101 @@ def api_plan_stok_onizle():
             return jsonify({'ok': False, 'hata': 'Üretim varyantı bulunamadı'}), 404
 
         sonuc = _mpr_stok_ihtiyac_hesapla(con, uv_id, rf_renk_id, planlanan_kg)
+        if not sonuc.get('ok'):
+            return jsonify(sonuc), 400
+        return jsonify(sonuc)
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/batch/<batch_kodu>/formul-icerik')
+@login_gerekli
+def api_batch_formul_icerik(batch_kodu):
+    """Alt emir formül hazırlık listesi — salt okuma, FAZ-4B tüketim ile aynı hesap."""
+    if not yetki_var('nexgen.tablet.view', 'can_view'):
+        return jsonify({'ok': False, 'hata': 'Yetki yok'}), 403
+
+    parca_id = request.args.get('parca_id', type=int)
+
+    con = _db()
+    try:
+        batch = con.execute("""
+            SELECT nb.batch_kodu, nb.lot_kodu, nb.uretim_varyant_id, nb.plan_id,
+                   COALESCE(c.unvan, np.musteri_adi) AS cari_ad
+            FROM nexgen_uretim_batch nb
+            LEFT JOIN nexgen_uretim_plan np ON np.id = nb.plan_id
+            LEFT JOIN nexgen_cari c ON c.id = np.cari_id
+            WHERE nb.batch_kodu = ?
+        """, (batch_kodu,)).fetchone()
+        if not batch:
+            return jsonify({'ok': False, 'hata': 'Batch bulunamadı'}), 404
+
+        if not _parca_tablosu_var(con):
+            return jsonify({'ok': False, 'hata': 'Migration 072 çalıştırılmadı'}), 500
+
+        parca = _batch_formul_parca_sec(con, batch_kodu, parca_id=parca_id)
+        if not parca:
+            return jsonify({'ok': False, 'hata': 'Alt emir bulunamadı'}), 404
+
+        kg = round(float(parca['hedef_kg']), 3)
+        rf_bilgi = _batch_plan_rf_bilgi(
+            con,
+            batch_kodu=batch_kodu,
+            plan_id=batch['plan_id'],
+            uretim_varyant_id=batch['uretim_varyant_id'],
+        )
+        rf_renk_id = rf_bilgi.get('rf_renk_id') if rf_bilgi else None
+
+        ihtiyac = _mpr_stok_ihtiyac_hesapla(
+            con, batch['uretim_varyant_id'], rf_renk_id, kg,
+        )
+        if not ihtiyac.get('ok'):
+            return jsonify({'ok': False, 'hata': ihtiyac.get('hata', 'Hesaplanamadı')}), 400
+
+        return jsonify({
+            'ok': True,
+            'batch_kodu': batch_kodu,
+            'lot_kodu': batch['lot_kodu'],
+            'cari_ad': batch['cari_ad'],
+            'rf_kod': rf_bilgi.get('rf_kod') if rf_bilgi else None,
+            'rf_renk_ad': rf_bilgi.get('renk_ad') if rf_bilgi else None,
+            'rf_var': bool(rf_renk_id),
+            'parca_id': parca['id'],
+            'parca_no': parca['parca_no'],
+            'parca_durum': parca['durum'],
+            'kg': kg,
+            'taban_batch_kg': ihtiyac.get('taban_batch_kg'),
+            'taban': _formul_kalemleri_birimli(con, ihtiyac.get('kalemler', []), 'TABAN'),
+            'rf': _formul_kalemleri_birimli(con, ihtiyac.get('kalemler', []), 'RF'),
+        })
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/tablet/arge/formul-onizle')
+@login_gerekli
+def api_tablet_arge_formul_onizle():
+    """ARGE numune taban hammadde önizleme — test-olustur ölçeği, DB yazmaz."""
+    if not yetki_var('nexgen.tablet.view', 'can_view'):
+        return jsonify({'ok': False, 'hata': 'Yetki yok'}), 403
+
+    uv_id = request.args.get('uv_id', type=int)
+    test_kg = request.args.get('test_kg', type=float)
+    if not uv_id:
+        return jsonify({'ok': False, 'hata': 'uv_id zorunlu'}), 400
+    if test_kg is None:
+        return jsonify({'ok': False, 'hata': 'test_kg zorunlu'}), 400
+
+    con = _db()
+    try:
+        uv = con.execute(
+            "SELECT id FROM nexgen_uretim_varyant WHERE id=? AND aktif=1",
+            (uv_id,),
+        ).fetchone()
+        if not uv:
+            return jsonify({'ok': False, 'hata': 'Üretim varyantı bulunamadı'}), 404
+
+        sonuc = _arge_formul_taban_onizle(con, uv_id, test_kg)
         if not sonuc.get('ok'):
             return jsonify(sonuc), 400
         return jsonify(sonuc)

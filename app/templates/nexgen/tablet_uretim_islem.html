@@ -144,6 +144,23 @@
       <div class="tui-rf-uyari">{{ rf_uyari }}</div>
       {% endif %}
 
+      {# FAZ-4C: Formül hazırlık listesi #}
+      <div class="tui-formul-hazirlik" id="tui-formul-hazirlik">
+        <div class="tui-fh-baslik">FORMÜL HAZIRLIK</div>
+        <div class="tui-fh-meta">
+          <div class="tui-fh-meta-satir"><span>Batch</span><strong id="tui-fh-batch">{{ batch.batch_kodu }}</strong></div>
+          <div class="tui-fh-meta-satir"><span>LOT</span><strong id="tui-fh-lot">{{ batch.lot_kodu or '—' }}</strong></div>
+          <div class="tui-fh-meta-satir"><span>Cari</span><strong id="tui-fh-cari">{{ _tui_cad }}</strong></div>
+          <div class="tui-fh-meta-satir"><span>RF</span><strong id="tui-fh-rf">{{ rf_kod or '—' }}</strong></div>
+          <div class="tui-fh-meta-satir tui-fh-kg-satir"><span>Alt emir KG</span><strong id="tui-fh-kg">—</strong></div>
+        </div>
+        <div class="tui-fh-alt-baslik">HAMMADDELER</div>
+        <div class="tui-fh-liste" id="tui-fh-taban"><div class="tui-fh-bos">Yükleniyor…</div></div>
+        <div class="tui-fh-alt-baslik">RENK / BOYA (RF)</div>
+        <div class="tui-fh-liste" id="tui-fh-rf"></div>
+        <div class="tui-fh-rf-yok" id="tui-fh-rf-yok" style="display:none">RF eşleşmesi yok — sadece taban hammadde.</div>
+      </div>
+
       {# Siparis master KG #}
       <div class="sol-kg-blok">
         <div class="sol-etiket">SİPARİŞ TOPLAM KG</div>
@@ -391,6 +408,8 @@
             {% for ae in alt_emirler %}
             <tr class="pp-tr pp-tr-{{ ae.durum|lower }}"
                 id="pp-tr-{{ ae.id }}"
+                data-parca-id="{{ ae.id }}"
+                onclick="tuiParcaFormulSec({{ ae.id }}, event)"
                 data-durum="{{ ae.durum|lower }}"
                 data-id="{{ ae.id }}">
               <td class="pp-td pp-td-chk">
@@ -538,6 +557,80 @@ var _boyut           = '{{ batch.boyut or "" }}';
 var _biten_adet      = {{ sayaclar.bitti }};
 var _aktif_beklet_id = null;
 var _aktif_not_id    = null;
+var _aktif_formul_parca_id = null;
+
+/* ─── FAZ-4C: Formül hazırlık listesi ─────────────── */
+function tuiMiktarEtiket(k, rfBolum) {
+  var kg = parseFloat(k.miktar_kg);
+  if (!(kg >= 0)) return '—';
+  if (rfBolum && kg < 1) {
+    var gr = kg * 1000;
+    var s = gr >= 10 ? gr.toFixed(1) : gr.toFixed(2);
+    return s.replace(/\.?0+$/, '') + ' GR';
+  }
+  return kg.toFixed(3).replace(/\.?0+$/, '') + ' KG';
+}
+
+function tuiFormulListeRender(el, kalemler, rfBolum) {
+  if (!el) return;
+  if (!kalemler || !kalemler.length) {
+    el.innerHTML = '<div class="tui-fh-bos">—</div>';
+    return;
+  }
+  el.innerHTML = kalemler.map(function(k) {
+    var ad = (k.ad || k.kod || '—').trim();
+    return '<div class="tui-fh-satir"><span class="tui-fh-ad">' + ad + '</span>' +
+      '<span class="tui-fh-miktar">' + tuiMiktarEtiket(k, rfBolum) + '</span></div>';
+  }).join('');
+}
+
+async function tuiFormulYukle(parcaId) {
+  var url = '/nexgen/api/batch/' + encodeURIComponent(_batch_kodu) + '/formul-icerik';
+  if (parcaId) url += '?parca_id=' + parcaId;
+  try {
+    var r = await fetch(url);
+    var d = await r.json();
+    if (!d.ok) {
+      document.getElementById('tui-fh-taban').innerHTML =
+        '<div class="tui-fh-bos">' + (d.hata || 'Hesaplanamadı') + '</div>';
+      return;
+    }
+    _aktif_formul_parca_id = d.parca_id;
+    document.getElementById('tui-fh-kg').textContent =
+      (d.kg != null ? parseFloat(d.kg).toFixed(2) : '—') + ' KG';
+    if (d.lot_kodu) document.getElementById('tui-fh-lot').textContent = d.lot_kodu;
+    if (d.cari_ad) document.getElementById('tui-fh-cari').textContent = d.cari_ad;
+    document.getElementById('tui-fh-rf').textContent = d.rf_kod || '—';
+    tuiFormulListeRender(document.getElementById('tui-fh-taban'), d.taban, false);
+    var rfEl = document.getElementById('tui-fh-rf');
+    var rfYok = document.getElementById('tui-fh-rf-yok');
+    if (d.rf && d.rf.length) {
+      rfEl.style.display = 'block';
+      rfYok.style.display = 'none';
+      tuiFormulListeRender(rfEl, d.rf, true);
+    } else {
+      rfEl.innerHTML = '';
+      rfEl.style.display = 'none';
+      rfYok.style.display = d.rf_var ? 'none' : 'block';
+    }
+    document.querySelectorAll('#pp-tablo-body .pp-tr').forEach(function(tr) {
+      tr.classList.toggle('pp-tr-formul-secili',
+        parseInt(tr.dataset.parcaId, 10) === d.parca_id);
+    });
+  } catch (e) {
+    document.getElementById('tui-fh-taban').innerHTML =
+      '<div class="tui-fh-bos">Bağlantı hatası</div>';
+  }
+}
+
+function tuiParcaFormulSec(parcaId, ev) {
+  if (ev && ev.target.closest('button,input,select,a,label')) return;
+  tuiFormulYukle(parcaId);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  tuiFormulYukle(null);
+});
 
 /* ─── Kaydet ve Çık ───────────────────────────────── */
 async function kaydetCik() {
@@ -1218,6 +1311,33 @@ body { background: #f3f6fa; font-family: system-ui, -apple-system, sans-serif; }
   background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px;
   padding: 8px 10px; font-size: 11px; color: #991b1b; line-height: 1.4;
 }
+
+/* FAZ-4C Formül Hazırlık */
+.tui-formul-hazirlik {
+  background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px;
+  padding: 10px 11px; display: flex; flex-direction: column; gap: 6px;
+}
+.tui-fh-baslik {
+  font-size: 10px; font-weight: 800; color: #92400e; letter-spacing: .8px;
+}
+.tui-fh-meta { display: flex; flex-direction: column; gap: 3px; font-size: 11px; }
+.tui-fh-meta-satir { display: flex; justify-content: space-between; gap: 8px; color: #64748b; }
+.tui-fh-meta-satir strong { color: #0f172a; font-weight: 700; text-align: right; }
+.tui-fh-kg-satir strong { color: #15803d; }
+.tui-fh-alt-baslik {
+  font-size: 9px; font-weight: 700; color: #94a3b8; letter-spacing: .6px;
+  margin-top: 4px; text-transform: uppercase;
+}
+.tui-fh-liste { display: flex; flex-direction: column; gap: 2px; }
+.tui-fh-satir {
+  display: flex; justify-content: space-between; gap: 6px;
+  font-size: 11px; padding: 3px 0; border-bottom: 1px solid #fef3c7;
+}
+.tui-fh-ad { color: #334155; font-weight: 600; flex: 1; min-width: 0; }
+.tui-fh-miktar { color: #0f172a; font-weight: 800; white-space: nowrap; font-family: 'Courier New', monospace; font-size: 10px; }
+.tui-fh-bos { font-size: 11px; color: #94a3b8; padding: 4px 0; }
+.tui-fh-rf-yok { font-size: 10px; color: #b45309; font-weight: 600; }
+.pp-tr-formul-secili { background: #fffbeb !important; outline: 1px solid #f6c343; }
 
 /* Bilgi Listesi (Formül) */
 .sol-bilgi-liste {
