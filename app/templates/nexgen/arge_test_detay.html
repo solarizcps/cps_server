@@ -73,7 +73,15 @@
     </div>
     {% elif can_manage and test.durum == 'ONAYLANDI' %}
     <div class="ad-olusan-band">
+      {% if rf_renk %}
+      <span>RF:</span>
+      <strong class="ad-rf-kod">{{ rf_renk.rf_kod }}</strong>
+      <span class="ad-alt-deger">{{ rf_renk.ad }}</span>
       <button class="ad-btn-sari" onclick="urAcModal()">↑ Üretim Reçetesi Oluştur</button>
+      {% else %}
+      <button class="ad-btn-sari" id="ad-rf-btn" onclick="adRfOlustur()">RF Oluştur</button>
+      <span class="ad-alt-deger" id="ad-rf-msg"></span>
+      {% endif %}
     </div>
     {% endif %}
   </div>
@@ -300,8 +308,8 @@
 
 </div>
 
-{# ══ MODAL: Üretim Reçetesi (ONAYLANDI) ══ #}
-{% if can_manage and test.durum == 'ONAYLANDI' and not olusan_uv %}
+{# ══ MODAL: Üretim Reçetesi (ONAYLANDI + RF mevcut) ══ #}
+{% if can_manage and test.durum == 'ONAYLANDI' and not olusan_uv and rf_renk %}
 <div id="ur-modal-bg" class="ad-modal-bg" style="display:none" onclick="urModalBgClick(event)">
   <div class="ad-modal">
     <div class="ad-modal-hdr">
@@ -312,6 +320,12 @@
       <div class="ad-modal-info">
         Test: <strong>{{ test.test_no }}</strong> — Kaynak: {{ test.formul_kod }} / {{ test.renk_ad }} / {{ test.boyut }}
       </div>
+      {% if rf_renk %}
+      <div class="ad-modal-info ad-modal-rf">
+        RF Renk: <strong>{{ rf_renk.rf_kod }}</strong> — {{ rf_renk.ad }}
+        <span class="ad-alt-deger">(Boya formülü RF'de; ana reçeteye yazılmaz)</span>
+      </div>
+      {% endif %}
       <div class="ad-form-grid">
         <div class="ad-fg ad-fg-full">
           <label>Hedef Formül</label>
@@ -408,6 +422,8 @@
   padding:10px 16px; background:#f0fdf4; border-top:1px solid #bbf7d0;
   font-size:12px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;
 }
+.ad-rf-kod { font-family:'Courier New',monospace; color:#0f766e; font-size:13px; }
+.ad-modal-rf { background:#f0fdfa; border:1px solid #99f6e4; border-radius:6px; padding:8px 10px; margin-bottom:10px; }
 .ad-link { color:#0891b2; font-weight:600; text-decoration:none; }
 
 /* Orta 2 kolon */
@@ -912,6 +928,32 @@ function adOnayIslem(eylem){
 
 var UR_FORMULLER = [];
 var UR_RENKLER   = [];
+
+function adRfOlustur(){
+  var btn = document.getElementById('ad-rf-btn');
+  var msg = document.getElementById('ad-rf-msg');
+  if (btn) { btn.disabled = true; btn.textContent = 'Oluşturuluyor…'; }
+  if (msg) { msg.textContent = ''; msg.style.color = ''; }
+  fetch('/nexgen/api/arge/rf-olustur', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({test_id: AT_TEST_ID})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    if (d.ok) {
+      if (msg) { msg.textContent = '✓ RF: ' + d.rf_kod; msg.style.color = '#059669'; }
+      setTimeout(function(){ location.reload(); }, 800);
+    } else {
+      if (msg) { msg.textContent = d.hata || 'Hata.'; msg.style.color = '#dc2626'; }
+      if (btn) { btn.disabled = false; btn.textContent = 'RF Oluştur'; }
+    }
+  })
+  .catch(function(){
+    if (msg) { msg.textContent = 'Bağlantı hatası.'; msg.style.color = '#dc2626'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'RF Oluştur'; }
+  });
+}
 
 function urAcModal(){
   document.getElementById('ur-modal-bg').style.display = 'flex';

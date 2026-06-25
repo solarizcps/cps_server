@@ -1722,6 +1722,7 @@ def arge_test_detay(test_id):
 
         # Bağlantılı üretim varyantı bilgisi (FAZ-4C-4)
         olusan_uv = None
+        rf_renk = None
         test_d = test_row
         if test_d.get('olusan_uretim_varyant_id'):
             row = con.execute("""
@@ -1734,6 +1735,8 @@ def arge_test_detay(test_id):
             """, (test_d['olusan_uretim_varyant_id'],)).fetchone()
             if row:
                 olusan_uv = dict(row)
+
+        rf_renk = _arge_rf_mevcut_bul(con, test_id, test_row)
 
     finally:
         con.close()
@@ -1756,6 +1759,7 @@ def arge_test_detay(test_id):
         can_create=can_create,
         can_approve=can_approve,
         olusan_uv=olusan_uv,
+        rf_renk=rf_renk,
         boya_editable=(
             can_create
             and test_d.get('durum') == 'TASLAK'
@@ -2092,11 +2096,183 @@ def api_arge_onay_islem():
     return jsonify({"ok": True, "test_id": test_id, "yeni_durum": yeni_durum})
 
 
+def _arge_rf_mevcut_bul(con, test_id, test_row=None):
+    """Test için mevcut RF kaydını döner; test.rf_renk_id ile senkron eksikse tamamlar."""
+    if test_row is None:
+        test_row = con.execute(
+            "SELECT id, rf_renk_id FROM nexgen_arge_test WHERE id=? AND aktif=1",
+            (test_id,)
+        ).fetchone()
+    if not test_row:
+        return None
+    rf_id = test_row['rf_renk_id']
+    if rf_id:
+        rf = con.execute(
+            "SELECT id, rf_kod, ad, durum, cari_id, ilk_talep_cari_id "
+            "FROM nexgen_rf_renk WHERE id=? AND aktif=1",
+            (rf_id,)
+        ).fetchone()
+        if rf:
+            return dict(rf)
+    rf = con.execute(
+        "SELECT id, rf_kod, ad, durum, cari_id, ilk_talep_cari_id "
+        "FROM nexgen_rf_renk WHERE kaynak_arge_test_id=? AND aktif=1",
+        (test_id,)
+    ).fetchone()
+    if rf and not test_row['rf_renk_id']:
+        con.execute(
+            "UPDATE nexgen_arge_test SET rf_renk_id=? WHERE id=?",
+            (rf['id'], test_id)
+        )
+    return dict(rf) if rf else None
+
+
+def _arge_rf_olustur_core(con, test_id, cari_id_override=None, siparis_id_override=None):
+    """ONAYLANDI testten RF oluşturur veya mevcut RF döner. commit yapmaz."""
+    test = con.execute("""
+        SELECT t.*,
+               rv.ad AS kaynak_renk_ad,
+               f.id AS formul_id, f.kod AS formul_kod, f.ad AS formul_ad
+        FROM nexgen_arge_test t
+        JOIN nexgen_uretim_varyant uv ON uv.id = t.kaynak_uretim_varyant_id
+        JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+        JOIN nexgen_formul f          ON f.id  = rv.formul_id
+        WHERE t.id = ? AND t.aktif = 1
+    """, (test_id,)).fetchone()
+    if not test:
+        return {'ok': False, 'hata': 'Test kaydi bulunamadi.', 'status': 404}
+    if test['durum'] != 'ONAYLANDI':
+        return {
+            'ok': False,
+            'hata': f"Sadece ONAYLANDI testlerden RF olusturulabilir. Mevcut: {test['durum']}",
+            'status': 400,
+        }
+
+    mevcut = _arge_rf_mevcut_bul(con, test_id, test)
+    if mevcut:
+        return {
+            'ok': True, 'mevcut': True, 'test_id': test_id,
+            'rf_renk_id': mevcut['id'], 'rf_kod': mevcut['rf_kod'],
+            'rf_ad': mevcut['ad'], 'formul_id': test['formul_id'],
+            'formul_ad': test['formul_ad'],
+            'cari_id': mevcut.get('cari_id'), 'siparis_id': None,
+            'boya_kalem_sayisi': con.execute(
+                "SELECT COUNT(*) FROM nexgen_rf_kalem WHERE rf_renk_id=? AND aktif=1",
+                (mevcut['id'],)
+            ).fetchone()[0],
+        }
+
+    cari_id = test['cari_id']
+    if cari_id_override is not None and cari_id_override != '':
+        try:
+            cari_id = int(cari_id_override)
+        except (TypeError, ValueError):
+            return {'ok': False, 'hata': 'cari_id gecersiz.', 'status': 400}
+        if not con.execute(
+            "SELECT id FROM nexgen_cari WHERE id=? AND aktif=1", (cari_id,)
+        ).fetchone():
+            return {'ok': False, 'hata': f'Cari bulunamadi (id={cari_id}).', 'status': 400}
+
+    siparis_id = None
+    if siparis_id_override is not None and siparis_id_override != '':
+        try:
+            siparis_id = int(siparis_id_override)
+        except (TypeError, ValueError):
+            return {'ok': False, 'hata': 'siparis_id gecersiz.', 'status': 400}
+        if not con.execute(
+            "SELECT id FROM nexgen_uretim_plan WHERE id=?", (siparis_id,)
+        ).fetchone():
+            return {
+                'ok': False,
+                'hata': f'Uretim plani bulunamadi (siparis_id={siparis_id}).',
+                'status': 400,
+            }
+
+    test_batch_kg = float(test['test_batch_kg'])
+    kaynak_batch_kg = float(test['kaynak_batch_kg'])
+    if test_batch_kg <= 0 or kaynak_batch_kg <= 0:
+        return {
+            'ok': False,
+            'hata': 'test_batch_kg veya kaynak_batch_kg sifir — RF olusturulamaz.',
+            'status': 400,
+        }
+
+    boya_kalemler = con.execute("""
+        SELECT tk.stok_kart_id, tk.sira, tk.test_miktar_kg, tk.aciklama
+        FROM nexgen_arge_test_kalem tk
+        JOIN nexgen_stok_kart sk ON sk.id = tk.stok_kart_id
+        WHERE tk.test_id = ?
+          AND sk.kategori = 'BOYA'
+          AND sk.aktif = 1
+          AND tk.test_miktar_kg > 0
+        ORDER BY tk.sira
+    """, (test_id,)).fetchall()
+    if not boya_kalemler:
+        return {
+            'ok': False,
+            'hata': 'BOYA kategorisinde kalem bulunamadi — RF olusturulamaz.',
+            'status': 400,
+        }
+
+    rf_ad = (test['yeni_renk_adi'] or test['kaynak_renk_ad'] or '').strip()
+    if not rf_ad:
+        return {'ok': False, 'hata': 'RF renk adi belirlenemedi.', 'status': 400}
+
+    rf_kod = _rf_kod_uret(con)
+    carpan = kaynak_batch_kg / test_batch_kg
+    aciklama = (test['genel_aciklama'] or test['sonuc_notu'] or '').strip() or None
+    ilk_cari = test['cari_id']
+
+    con.execute("""
+        INSERT INTO nexgen_rf_renk
+            (rf_kod, ad, durum, kaynak_arge_test_id, ilk_talep_cari_id,
+             cari_id, siparis_id, aciklama, olusturan_id, onaylayan_id,
+             onay_tarihi, aktif)
+        VALUES (?, ?, 'ONAYLI', ?, ?, ?, ?, ?, ?, ?, ?, 1)
+    """, (rf_kod, rf_ad, test_id, ilk_cari, cari_id, siparis_id,
+          aciklama, test['olusturan_id'], test['onaylayan_id'], test['onay_tarihi']))
+    rf_renk_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+    for k in boya_kalemler:
+        miktar_kg = round(float(k['test_miktar_kg']) * carpan, 4)
+        if miktar_kg <= 0:
+            continue
+        con.execute("""
+            INSERT INTO nexgen_rf_kalem
+                (rf_renk_id, stok_kart_id, miktar_kg, sira, aciklama, aktif)
+            VALUES (?, ?, ?, ?, ?, 1)
+        """, (rf_renk_id, k['stok_kart_id'], miktar_kg, k['sira'], k['aciklama']))
+
+    con.execute("""
+        INSERT INTO nexgen_rf_formul_uygunluk
+            (rf_renk_id, formul_id, kaynak_arge_test_id, durum,
+             ilk_talep_cari_id, shore_hedef, shore_sonuc,
+             renk_sonucu, numune_sonucu, onay_tarihi, aktif)
+        VALUES (?, ?, ?, 'ONAYLI', ?, ?, ?, ?, ?, ?, 1)
+    """, (rf_renk_id, test['formul_id'], test_id, ilk_cari,
+          test['shore_hedef'], test['shore_degeri'],
+          test['renk_tuttu'], test['cekme_problemi'], test['onay_tarihi']))
+
+    con.execute(
+        "UPDATE nexgen_arge_test SET rf_renk_id=? WHERE id=?",
+        (rf_renk_id, test_id)
+    )
+
+    return {
+        'ok': True, 'mevcut': False, 'test_id': test_id,
+        'rf_renk_id': rf_renk_id, 'rf_kod': rf_kod, 'rf_ad': rf_ad,
+        'formul_id': test['formul_id'], 'formul_ad': test['formul_ad'],
+        'cari_id': cari_id, 'siparis_id': siparis_id,
+        'boya_kalem_sayisi': len(boya_kalemler),
+    }
+
+
 @nexgen_bp.route('/api/arge/rf-olustur', methods=['POST'])
 @yetki_gerekli('nexgen.recete.manage', 'can_manage')
 def api_arge_rf_olustur():
     """Onayli AR-GE testinden global RF renk + formul uygunluk olusturur.
     nexgen_recete_kalem / uretim_varyant DOKUNULMAZ.
+    Mevcut RF varsa ayni kaydi doner (idempotent).
 
     POST JSON:
         test_id   : int
@@ -2110,149 +2286,22 @@ def api_arge_rf_olustur():
 
     con = _db()
     try:
-        test = con.execute("""
-            SELECT t.*,
-                   rv.ad AS kaynak_renk_ad,
-                   f.id AS formul_id, f.kod AS formul_kod, f.ad AS formul_ad
-            FROM nexgen_arge_test t
-            JOIN nexgen_uretim_varyant uv ON uv.id = t.kaynak_uretim_varyant_id
-            JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
-            JOIN nexgen_formul f          ON f.id  = rv.formul_id
-            WHERE t.id = ? AND t.aktif = 1
-        """, (test_id,)).fetchone()
-        if not test:
-            return jsonify({"ok": False, "hata": "Test kaydi bulunamadi."}), 404
-
-        if test['durum'] != 'ONAYLANDI':
-            return jsonify({
-                "ok": False,
-                "hata": f"Sadece ONAYLANDI testlerden RF olusturulabilir. Mevcut: {test['durum']}"
-            }), 400
-
-        if test['rf_renk_id']:
-            return jsonify({
-                "ok": False,
-                "hata": f"Bu test icin RF zaten olusturulmus (rf_renk_id={test['rf_renk_id']})."
-            }), 409
-
-        mevcut_rf = con.execute(
-            "SELECT id, rf_kod FROM nexgen_rf_renk WHERE kaynak_arge_test_id=?",
-            (test_id,)
-        ).fetchone()
-        if mevcut_rf:
-            return jsonify({
-                "ok": False,
-                "hata": f"Bu test icin RF zaten kayitli ({mevcut_rf['rf_kod']})."
-            }), 409
-
-        cari_id = test['cari_id']
-        if data.get('cari_id') is not None and data.get('cari_id') != '':
-            try:
-                cari_id = int(data['cari_id'])
-            except (TypeError, ValueError):
-                return jsonify({"ok": False, "hata": "cari_id gecersiz."}), 400
-            if not con.execute(
-                "SELECT id FROM nexgen_cari WHERE id=? AND aktif=1", (cari_id,)
-            ).fetchone():
-                return jsonify({"ok": False, "hata": f"Cari bulunamadi (id={cari_id})."}), 400
-
-        siparis_id = None
-        if data.get('siparis_id') is not None and data.get('siparis_id') != '':
-            try:
-                siparis_id = int(data['siparis_id'])
-            except (TypeError, ValueError):
-                return jsonify({"ok": False, "hata": "siparis_id gecersiz."}), 400
-            if not con.execute(
-                "SELECT id FROM nexgen_uretim_plan WHERE id=?", (siparis_id,)
-            ).fetchone():
-                return jsonify({
-                    "ok": False,
-                    "hata": f"Uretim plani bulunamadi (siparis_id={siparis_id})."
-                }), 400
-
-        test_batch_kg   = float(test['test_batch_kg'])
-        kaynak_batch_kg = float(test['kaynak_batch_kg'])
-        if test_batch_kg <= 0 or kaynak_batch_kg <= 0:
-            return jsonify({
-                "ok": False,
-                "hata": "test_batch_kg veya kaynak_batch_kg sifir — RF olusturulamaz."
-            }), 400
-
-        boya_kalemler = con.execute("""
-            SELECT tk.stok_kart_id, tk.sira, tk.test_miktar_kg, tk.aciklama
-            FROM nexgen_arge_test_kalem tk
-            JOIN nexgen_stok_kart sk ON sk.id = tk.stok_kart_id
-            WHERE tk.test_id = ?
-              AND sk.kategori = 'BOYA'
-              AND sk.aktif = 1
-            ORDER BY tk.sira
-        """, (test_id,)).fetchall()
-        if not boya_kalemler:
-            return jsonify({
-                "ok": False,
-                "hata": "BOYA kategorisinde kalem bulunamadi — RF olusturulamaz."
-            }), 400
-
-        rf_ad = (test['yeni_renk_adi'] or test['kaynak_renk_ad'] or '').strip()
-        if not rf_ad:
-            return jsonify({"ok": False, "hata": "RF renk adi belirlenemedi."}), 400
-
-        rf_kod = _rf_kod_uret(con)
-        carpan = kaynak_batch_kg / test_batch_kg
-        aciklama = (test['genel_aciklama'] or test['sonuc_notu'] or '').strip() or None
-
-        con.execute("""
-            INSERT INTO nexgen_rf_renk
-                (rf_kod, ad, durum, kaynak_arge_test_id, ilk_talep_cari_id,
-                 cari_id, siparis_id, aciklama, olusturan_id, onaylayan_id,
-                 onay_tarihi, aktif)
-            VALUES (?, ?, 'ONAYLI', ?, ?, ?, ?, ?, ?, ?, ?, 1)
-        """, (rf_kod, rf_ad, test_id, test['cari_id'], cari_id, siparis_id,
-              aciklama, test['olusturan_id'], test['onaylayan_id'], test['onay_tarihi']))
-        rf_renk_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
-
-        for k in boya_kalemler:
-            miktar_kg = round(float(k['test_miktar_kg']) * carpan, 4)
-            con.execute("""
-                INSERT INTO nexgen_rf_kalem
-                    (rf_renk_id, stok_kart_id, miktar_kg, sira, aciklama, aktif)
-                VALUES (?, ?, ?, ?, ?, 1)
-            """, (rf_renk_id, k['stok_kart_id'], miktar_kg, k['sira'], k['aciklama']))
-
-        con.execute("""
-            INSERT INTO nexgen_rf_formul_uygunluk
-                (rf_renk_id, formul_id, kaynak_arge_test_id, durum,
-                 ilk_talep_cari_id, shore_hedef, shore_sonuc,
-                 renk_sonucu, numune_sonucu, onay_tarihi, aktif)
-            VALUES (?, ?, ?, 'ONAYLI', ?, ?, ?, ?, ?, ?, 1)
-        """, (rf_renk_id, test['formul_id'], test_id, test['cari_id'],
-              test['shore_hedef'], test['shore_degeri'],
-              test['renk_tuttu'], test['cekme_problemi'], test['onay_tarihi']))
-
-        con.execute(
-            "UPDATE nexgen_arge_test SET rf_renk_id=? WHERE id=?",
-            (rf_renk_id, test_id)
+        sonuc = _arge_rf_olustur_core(
+            con, test_id,
+            cari_id_override=data.get('cari_id'),
+            siparis_id_override=data.get('siparis_id'),
         )
+        if not sonuc.get('ok'):
+            con.rollback()
+            return jsonify({"ok": False, "hata": sonuc.get('hata')}), sonuc.get('status', 400)
         con.commit()
-
     except Exception as e:
         con.rollback()
         return jsonify({"ok": False, "hata": str(e)}), 500
     finally:
         con.close()
 
-    return jsonify({
-        "ok":               True,
-        "test_id":          test_id,
-        "rf_renk_id":       rf_renk_id,
-        "rf_kod":           rf_kod,
-        "rf_ad":            rf_ad,
-        "formul_id":        test['formul_id'],
-        "formul_ad":        test['formul_ad'],
-        "cari_id":          cari_id,
-        "siparis_id":       siparis_id,
-        "boya_kalem_sayisi": len(boya_kalemler),
-    })
+    return jsonify(sonuc)
 
 
 @nexgen_bp.route('/api/rf/kullanim-log', methods=['POST'])
@@ -2930,6 +2979,13 @@ def api_arge_uretim_recetesi_olustur():
                 "hata": f"Bu test zaten aktarıldı. Oluşan varyant id={test['olusan_uretim_varyant_id']}"
             }), 409
 
+        rf_info = _arge_rf_mevcut_bul(con, test_id, test)
+        if not rf_info:
+            return jsonify({
+                "ok": False,
+                "hata": "Önce RF oluşturulmalı."
+            }), 400
+
         # ── 2) Hedef formül var mı? ───────────────────────────
         formul = con.execute(
             "SELECT id, kod, ad FROM nexgen_formul WHERE id=? AND aktif=1",
@@ -2938,10 +2994,12 @@ def api_arge_uretim_recetesi_olustur():
         if not formul:
             return jsonify({"ok": False, "hata": "Hedef formül bulunamadı."}), 404
 
-        # ── 3) Test kalemleri ─────────────────────────────────
+        # ── 3) Test kalemleri (BOYA hariç — RF renk formülünde) ──
         test_kalemler = con.execute("""
-            SELECT tk.stok_kart_id, tk.sira, tk.orjinal_miktar_kg, tk.test_miktar_kg, tk.aciklama
+            SELECT tk.stok_kart_id, tk.sira, tk.orjinal_miktar_kg, tk.test_miktar_kg,
+                   tk.aciklama, sk.kategori
             FROM nexgen_arge_test_kalem tk
+            JOIN nexgen_stok_kart sk ON sk.id = tk.stok_kart_id
             WHERE tk.test_id = ?
             ORDER BY tk.sira
         """, (test_id,)).fetchall()
@@ -2953,18 +3011,29 @@ def api_arge_uretim_recetesi_olustur():
         if test_batch_kg <= 0 or kaynak_batch_kg <= 0:
             return jsonify({"ok": False, "hata": "test_batch_kg veya kaynak_batch_kg sıfır."}), 400
 
-        # Geri ölçekleme: uretim_kg = test_kg / test_batch * kaynak_batch
         geri_carpan = kaynak_batch_kg / test_batch_kg
 
         uretim_kalemleri = []
+        atlanan_sifir = 0
         for k in test_kalemler:
+            if (k['kategori'] or '').upper() == 'BOYA':
+                continue
             uretim_kg = round(float(k['test_miktar_kg']) * geri_carpan, 3)
+            if uretim_kg <= 0:
+                atlanan_sifir += 1
+                continue
             uretim_kalemleri.append({
                 'stok_kart_id': k['stok_kart_id'],
                 'sira':         k['sira'],
                 'uretim_kg':    uretim_kg,
                 'aciklama':     k['aciklama'],
             })
+
+        if not uretim_kalemleri:
+            return jsonify({
+                "ok": False,
+                "hata": "Taban kalem bulunamadi (BOYA haric) veya tum miktarlar sifir."
+            }), 400
 
         toplam_uretim_kg = round(sum(x['uretim_kg'] for x in uretim_kalemleri), 3)
 
@@ -3064,10 +3133,14 @@ def api_arge_uretim_recetesi_olustur():
         "toplam_uretim_kg":  toplam_uretim_kg,
         "kalem_sayisi":      len(uretim_kalemleri),
         "geri_carpan":       round(geri_carpan, 6),
+        "rf_renk_id":        rf_info['id'],
+        "rf_kod":            rf_info['rf_kod'],
+        "rf_ad":             rf_info['ad'],
+        "atlanan_sifir_kalem": atlanan_sifir,
         "mesaj": (
             f"{'Yeni renk oluşturuldu: ' + yeni_renk_adi + '. ' if renk_yeni_mi else ''}"
-            f"Üretim reçetesi oluşturuldu. "
-            f"Toplam: {toplam_uretim_kg} KG, {len(uretim_kalemleri)} kalem."
+            f"Üretim reçetesi oluşturuldu (BOYA → {rf_info['rf_kod']}). "
+            f"Toplam: {toplam_uretim_kg} KG, {len(uretim_kalemleri)} taban kalem."
         ),
     })
 
