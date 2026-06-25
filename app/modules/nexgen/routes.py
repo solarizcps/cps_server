@@ -7401,6 +7401,149 @@ def _mpr_stok_ihtiyac_hesapla(con, uretim_varyant_id, rf_renk_id, planlanan_kg):
     }
 
 
+def _parca_stok_tuket(con, parca_id, uretilen_kg=None, olusturan_id=None):
+    """Alt emir bitince hammadde tüketimini nexgen_stok_hareket'e yazar.
+
+    Idempotent: referans_tip='URETIM_PARCA' + referans_id=parca_id varsa tekrar yazmaz.
+    Stok yetersizse hareket yazmaz, ok=False döner.
+    """
+    mevcut_hareket = con.execute(
+        "SELECT id FROM nexgen_stok_hareket "
+        "WHERE referans_tip='URETIM_PARCA' AND referans_id=? LIMIT 1",
+        (parca_id,),
+    ).fetchone()
+    if mevcut_hareket:
+        return {'ok': True, 'atlandi': True, 'hareket_sayisi': 0}
+
+    row = con.execute("""
+        SELECT p.id, p.parca_no, p.hedef_kg, p.formul_batch_kg, p.batch_kodu,
+               p.plan_id AS parca_plan_id,
+               b.lot_kodu, b.uretim_varyant_id, b.plan_id AS batch_plan_id,
+               pl.rf_renk_id, pl.cari_id, pl.planlama_siparis_id
+        FROM nexgen_uretim_parca p
+        JOIN nexgen_uretim_batch b ON b.batch_kodu = p.batch_kodu
+        LEFT JOIN nexgen_uretim_plan pl
+               ON pl.id = COALESCE(p.plan_id, b.plan_id)
+        WHERE p.id = ?
+    """, (parca_id,)).fetchone()
+    if not row:
+        return {'ok': False, 'hata': 'Parça bulunamadı'}
+
+    if uretilen_kg is None:
+        uretilen_kg = row['hedef_kg']
+    try:
+        tuketim_kg = round(float(uretilen_kg), 3)
+    except (TypeError, ValueError):
+        return {'ok': False, 'hata': 'Geçersiz uretilen_kg'}
+    if tuketim_kg <= 0:
+        return {'ok': False, 'hata': 'uretilen_kg sıfırdan büyük olmalı'}
+
+    uv_id = row['uretim_varyant_id']
+    rf_renk_id = row['rf_renk_id']
+    if not rf_renk_id:
+        rf_bilgi = _batch_plan_rf_bilgi(
+            con,
+            batch_kodu=row['batch_kodu'],
+            plan_id=row['parca_plan_id'] or row['batch_plan_id'],
+            uretim_varyant_id=uv_id,
+        )
+        if rf_bilgi:
+            rf_renk_id = rf_bilgi.get('rf_renk_id')
+
+    ihtiyac = _mpr_stok_ihtiyac_hesapla(con, uv_id, rf_renk_id, tuketim_kg)
+    if not ihtiyac.get('ok'):
+        return {'ok': False, 'hata': ihtiyac.get('hata', 'Stok hesaplanamadı')}
+    if not ihtiyac.get('yeterli_mi'):
+        eksik = [k for k in ihtiyac.get('kalemler', []) if not k.get('yeterli')]
+        return {
+            'ok': False,
+            'hata': 'Stok yetersiz',
+            'eksik_sayisi': ihtiyac.get('eksik_sayisi', len(eksik)),
+            'eksik_kalemler': eksik,
+            'kalemler': ihtiyac.get('kalemler', []),
+        }
+
+    talep = {}
+    for k in ihtiyac.get('kalemler', []):
+        sid = k['stok_kart_id']
+        talep[sid] = round(talep.get(sid, 0.0) + float(k['gerekli_kg']), 3)
+
+    batch_kodu = row['batch_kodu']
+    lot_kodu = row['lot_kodu'] or '—'
+    parca_no = row['parca_no']
+    aciklama = f"Batch {batch_kodu} / LOT {lot_kodu} / Alt emir {parca_no}"
+    uid = olusturan_id if olusturan_id is not None else _kullanici_id()
+
+    hareket_sayisi = 0
+    for sid, miktar in talep.items():
+        if miktar <= 0:
+            continue
+        onceki = _mevcut_stok(con, sid)
+        negatif = round(-miktar, 3)
+        sonraki = round(onceki + negatif, 3)
+        con.execute("""
+            INSERT INTO nexgen_stok_hareket
+              (stok_kart_id, hareket_tipi, miktar_kg,
+               onceki_stok, sonraki_stok,
+               aciklama, referans_tip, referans_id,
+               olusturan_id, olusturma_tarihi)
+            VALUES (?, 'URETIM_TUKETIM', ?, ?, ?, ?, 'URETIM_PARCA', ?, ?, datetime('now'))
+        """, (sid, negatif, onceki, sonraki, aciklama, parca_id, uid))
+        hareket_sayisi += 1
+
+    return {
+        'ok': True,
+        'atlandi': False,
+        'hareket_sayisi': hareket_sayisi,
+        'tuketim_kg': tuketim_kg,
+        'batch_kodu': batch_kodu,
+        'lot_kodu': lot_kodu,
+        'parca_no': parca_no,
+    }
+
+
+def _parca_bitir_uygula(con, parca_id, hedef_kg, notlar=None):
+    """FAZ-4B: stok tüketimi + parça BITTI güncelleme (tek transaction içi)."""
+    uretilen_kg = round(float(hedef_kg), 3)
+    stok = _parca_stok_tuket(con, parca_id, uretilen_kg=uretilen_kg)
+    if not stok.get('ok'):
+        return stok
+
+    update_fields = [
+        "durum='BITTI'",
+        "uretilen_kg=?",
+        "bitis_zamani=datetime('now','localtime')",
+        "updated_at=datetime('now','localtime')",
+    ]
+    params = [uretilen_kg]
+    if notlar:
+        update_fields.append("notlar=?")
+        params.append(notlar)
+    params.append(parca_id)
+    con.execute(
+        f"UPDATE nexgen_uretim_parca SET {', '.join(update_fields)} WHERE id=?",
+        params,
+    )
+    return {
+        'ok': True,
+        'uretilen_kg': uretilen_kg,
+        'stok_atlandi': stok.get('atlandi'),
+        'hareket_sayisi': stok.get('hareket_sayisi', 0),
+    }
+
+
+def _parca_stok_yetersiz_response(stok):
+    """Bitirme endpoint'leri için ortak 400 gövdesi."""
+    eksik = stok.get('eksik_kalemler', [])
+    return jsonify({
+        'ok': False,
+        'hata': stok.get('hata', 'Stok yetersiz'),
+        'eksik_sayisi': stok.get('eksik_sayisi', len(eksik)),
+        'eksik_kalemler': eksik,
+        'kalemler': stok.get('kalemler', []),
+    }), 400
+
+
 @nexgen_bp.route('/api/plan/stok-onizle', methods=['POST'])
 @login_gerekli
 def api_plan_stok_onizle():
@@ -8329,24 +8472,11 @@ def api_parca_bitir(batch_kodu, parca_id):
             }), 400
 
         # uretilen_kg = hedef_kg (formül KG), operatör girmez
-        uretilen_kg = round(float(parca['hedef_kg']), 3)
-
-        update_fields = [
-            "durum='BITTI'",
-            "uretilen_kg=?",
-            "bitis_zamani=datetime('now','localtime')",
-            "updated_at=datetime('now','localtime')",
-        ]
-        params = [uretilen_kg]
-        if notlar:
-            update_fields.append("notlar=?")
-            params.append(notlar)
-        params.append(parca_id)
-
-        con.execute(
-            f"UPDATE nexgen_uretim_parca SET {', '.join(update_fields)} WHERE id=?",
-            params
-        )
+        bitir = _parca_bitir_uygula(con, parca_id, parca['hedef_kg'], notlar=notlar)
+        if not bitir.get('ok'):
+            con.rollback()
+            return _parca_stok_yetersiz_response(bitir)
+        uretilen_kg = bitir['uretilen_kg']
 
         _rf_kullanim_tablet_sync(con, batch_kodu, uretim_emir_id=parca_id)
 
@@ -8642,16 +8772,11 @@ def api_parca_toplu_bitir(batch_kodu):
 
         biten_kg = 0.0
         for r in hedefler:
-            uretilen = round(float(r['hedef_kg']), 3)
-            con.execute("""
-                UPDATE nexgen_uretim_parca
-                SET durum='BITTI',
-                    uretilen_kg=?,
-                    bitis_zamani=datetime('now','localtime'),
-                    updated_at=datetime('now','localtime')
-                WHERE id=?
-            """, (uretilen, r['id']))
-            biten_kg += uretilen
+            bitir = _parca_bitir_uygula(con, r['id'], r['hedef_kg'])
+            if not bitir.get('ok'):
+                con.rollback()
+                return _parca_stok_yetersiz_response(bitir)
+            biten_kg += bitir['uretilen_kg']
 
         _rf_kullanim_tablet_sync(
             con, batch_kodu,
@@ -8756,15 +8881,10 @@ def api_parca_secili_isle(batch_kodu):
             elif islem == 'bitir':
                 if durum not in ('DEVAM', 'HAZIR'):
                     atlanan += 1; continue
-                uretilen = round(float(p['hedef_kg']), 3)
-                fields = ["durum='BITTI'", "uretilen_kg=?",
-                          "bitis_zamani=datetime('now','localtime')",
-                          "updated_at=datetime('now','localtime')"]
-                params = [uretilen]
-                if notlar:
-                    fields.append("notlar=?"); params.append(notlar)
-                params.append(pid)
-                con.execute(f"UPDATE nexgen_uretim_parca SET {', '.join(fields)} WHERE id=?", params)
+                bitir = _parca_bitir_uygula(con, pid, p['hedef_kg'], notlar=notlar)
+                if not bitir.get('ok'):
+                    con.rollback()
+                    return _parca_stok_yetersiz_response(bitir)
 
             elif islem == 'beklet':
                 if durum != 'DEVAM':
