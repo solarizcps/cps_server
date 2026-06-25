@@ -92,7 +92,10 @@
             <th>Kod</th>
             <th>Ad</th>
             <th>Kategori</th>
-            <th class="ngsk-th-r">Mevcut Stok</th>
+            <th class="ngsk-th-r">Fiziksel</th>
+            <th class="ngsk-th-r">Rezerve</th>
+            <th class="ngsk-th-r">Bekleyen</th>
+            <th class="ngsk-th-r">Kullanılabilir</th>
             <th>Durum</th>
             <th></th>
           </tr>
@@ -119,7 +122,17 @@
               </span>
             </td>
             <td class="ngsk-td-r ngsk-stok-miktar">
-              <span class="ngsk-miktar-deger ngsk-stok-{{ k.durum }}">{{ _kg(k.mevcut_stok) }}</span>
+              <span class="ngsk-miktar-deger">{{ _kg(k.fiziksel_kg) }}</span>
+              <span class="ngsk-birim">{{ k.birim }}</span>
+            </td>
+            <td class="ngsk-td-r ngsk-stok-alt">
+              <span class="ngsk-miktar-deger ngsk-rezerve">{{ _kg(k.rezerve_kg) }}</span>
+            </td>
+            <td class="ngsk-td-r ngsk-stok-alt">
+              <span class="ngsk-miktar-deger ngsk-bekleyen">{{ _kg(k.yumusak_talep_kg) }}</span>
+            </td>
+            <td class="ngsk-td-r ngsk-stok-miktar">
+              <span class="ngsk-miktar-deger ngsk-stok-{{ k.durum }}">{{ _kg(k.kullanilabilir_kg) }}</span>
               <span class="ngsk-birim">{{ k.birim }}</span>
               <div class="ngsk-alt-bilgi ngsk-alt-r">
                 Min: {{ "%.0f"|format(k.minimum_stok) }} / Kritik: {{ "%.0f"|format(k.kritik_stok) }}
@@ -436,6 +449,9 @@
 
 /* Stok gösterimi */
 .ngsk-stok-miktar { white-space: nowrap; }
+.ngsk-stok-alt { white-space: nowrap; font-size: 12px; color: #64748b; }
+.ngsk-rezerve { color: #7c3aed; font-weight: 700; }
+.ngsk-bekleyen { color: #d97706; font-weight: 700; }
 .ngsk-miktar-deger { font-weight: 700; font-size: 14px; }
 .ngsk-stok-normal  { color: #16a34a; }
 .ngsk-stok-uyari   { color: #d97706; }

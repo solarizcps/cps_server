@@ -1783,8 +1783,15 @@ function stokKontrolHtml(kalemler) {
     }
     var ad = (k.stok_kod || k.stok_ad || '—');
     var cls = k.yeterli ? 'up-stok-ok' : 'up-stok-eksik';
+    var fiz = Number(k.fiziksel_kg != null ? k.fiziksel_kg : k.mevcut_kg || 0);
+    var rez = Number(k.rezerve_kg || 0);
+    var bek = Number(k.yumusak_talep_kg || 0);
+    var kul = Number(k.kullanilabilir_kg != null ? k.kullanilabilir_kg : fiz - rez - bek);
     var detay = 'Gerekli ' + Number(k.gerekli_kg).toLocaleString('tr-TR') + ' KG'
-      + ' · Stok ' + Number(k.mevcut_kg).toLocaleString('tr-TR') + ' KG';
+      + ' · Fiziki ' + fiz.toLocaleString('tr-TR') + ' KG'
+      + ' · Rezerve ' + rez.toLocaleString('tr-TR') + ' KG'
+      + ' · Bekleyen ' + bek.toLocaleString('tr-TR') + ' KG'
+      + ' · Kullanılabilir ' + kul.toLocaleString('tr-TR') + ' KG';
     if (!k.yeterli) {
       detay += ' · Eksik ' + Math.abs(Number(k.fark_kg)).toLocaleString('tr-TR') + ' KG';
     }
@@ -1811,8 +1818,11 @@ function stokKalemlerBirlestir(snapshots) {
   satirlar.forEach(function(k) {
     var sid = k.stok_kart_id;
     var toplam = Math.round((talep[sid] || 0) * 1000) / 1000;
-    var mevcut = Number(k.mevcut_kg || 0);
-    var yeterli = mevcut >= toplam;
+    var fiz = Number(k.fiziksel_kg != null ? k.fiziksel_kg : k.mevcut_kg || 0);
+    var rez = Number(k.rezerve_kg || 0);
+    var bek = Number(k.yumusak_talep_kg || 0);
+    var kul = Number(k.kullanilabilir_kg != null ? k.kullanilabilir_kg : fiz - rez - bek);
+    var yeterli = kul >= toplam - 0.0005;
     if (seen[sid]) return;
     seen[sid] = true;
     out.push({
@@ -1821,8 +1831,12 @@ function stokKalemlerBirlestir(snapshots) {
       stok_kod: k.stok_kod,
       stok_ad: k.stok_ad,
       gerekli_kg: toplam,
-      mevcut_kg: mevcut,
-      fark_kg: Math.round((mevcut - toplam) * 1000) / 1000,
+      fiziksel_kg: fiz,
+      rezerve_kg: rez,
+      yumusak_talep_kg: bek,
+      kullanilabilir_kg: kul,
+      mevcut_kg: fiz,
+      fark_kg: Math.round((kul - toplam) * 1000) / 1000,
       yeterli: yeterli,
     });
   });
@@ -2277,8 +2291,9 @@ async function planGonderOnayla() {
       var msg = j.hata || 'Bilinmeyen hata';
       if (j.eksik_kalemler && j.eksik_kalemler.length) {
         msg += '\n\nEksik kalemler:\n' + j.eksik_kalemler.map(function(k) {
+          var kul = k.kullanilabilir_kg != null ? k.kullanilabilir_kg : k.mevcut_kg;
           return (k.stok_kod || k.stok_ad) + ': gerekli ' + k.gerekli_kg
-            + ' KG, stok ' + k.mevcut_kg + ' KG';
+            + ' KG, kullanılabilir ' + kul + ' KG';
         }).join('\n');
       }
       hataEl.textContent = msg;

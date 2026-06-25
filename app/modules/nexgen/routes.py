@@ -244,26 +244,54 @@ def stok_kartlari():
             GROUP BY k.id
             ORDER BY k.kategori, k.ad
         """).fetchall()
+
+        rezerve_map = {}
+        yumusak_map = {}
+        if _stok_rezerv_tablosu_var(con):
+            for r in con.execute("""
+                SELECT stok_kart_id, COALESCE(SUM(kalan_kg), 0) AS toplam
+                FROM nexgen_stok_rezerv WHERE durum='AKTIF'
+                GROUP BY stok_kart_id
+            """).fetchall():
+                rezerve_map[r['stok_kart_id']] = round(float(r['toplam'] or 0), 3)
+        if _depo_hazirlik_tablosu_var(con):
+            for r in con.execute("""
+                SELECT k.stok_kart_id, COALESCE(SUM(k.gerekli_kg), 0) AS toplam
+                FROM nexgen_depo_hazirlik_kalem k
+                JOIN nexgen_depo_hazirlik h ON h.id = k.hazirlik_id
+                WHERE h.durum IN ('BEKLIYOR', 'HAZIRLANIYOR')
+                GROUP BY k.stok_kart_id
+            """).fetchall():
+                yumusak_map[r['stok_kart_id']] = round(float(r['toplam'] or 0), 3)
     finally:
         con.close()
 
     kartlar = []
     for r in kartlar_raw:
-        ms = r["mevcut_stok"]
-        mn = r["minimum_stok"]
-        kr = r["kritik_stok"]
-        if ms <= kr:
-            durum = "kritik"
-        elif ms <= mn:
-            durum = "uyari"
+        sid = r['id']
+        fiziksel = round(float(r['mevcut_stok'] or 0), 3)
+        rezerve = rezerve_map.get(sid, 0.0)
+        yumusak = yumusak_map.get(sid, 0.0)
+        kullanilabilir = round(fiziksel - rezerve - yumusak, 3)
+        mn = r['minimum_stok']
+        kr = r['kritik_stok']
+        if kullanilabilir <= kr:
+            durum = 'kritik'
+        elif kullanilabilir <= mn:
+            durum = 'uyari'
         else:
-            durum = "normal"
+            durum = 'normal'
         kartlar.append({
-            "id": r["id"], "kod": r["kod"], "ad": r["ad"],
-            "kategori": r["kategori"], "birim": r["birim"],
-            "minimum_stok": mn, "kritik_stok": kr,
-            "mevcut_stok": ms, "durum": durum,
-            "aktif": r["aktif"],
+            'id': sid, 'kod': r['kod'], 'ad': r['ad'],
+            'kategori': r['kategori'], 'birim': r['birim'],
+            'minimum_stok': mn, 'kritik_stok': kr,
+            'mevcut_stok': fiziksel,
+            'fiziksel_kg': fiziksel,
+            'rezerve_kg': rezerve,
+            'yumusak_talep_kg': yumusak,
+            'kullanilabilir_kg': kullanilabilir,
+            'durum': durum,
+            'aktif': r['aktif'],
         })
 
     can_manage = yetki_var('nexgen.stok.manage', 'can_manage') or yetki_var('nexgen.stok.manage', 'can_create')
@@ -4935,6 +4963,16 @@ def api_depo_cikis():
             return jsonify({"ok": False, "hata": "Stok kartı bulunamadı veya pasif"}), 404
 
         onceki_stok = _mevcut_stok(con, stok_kart_id)
+        kullanilabilir = _kullanilabilir_stok(con, stok_kart_id)
+        if kullanilabilir < miktar_kg - 0.0005:
+            return jsonify({
+                'ok': False,
+                'hata': (
+                    f'Yetersiz kullanılabilir stok. '
+                    f'Kullanılabilir: {kullanilabilir:.3f} KG, '
+                    f'İstenen: {miktar_kg:.3f} KG'
+                ),
+            }), 400
         if onceki_stok < miktar_kg:
             return jsonify({
                 "ok": False,
@@ -7488,10 +7526,13 @@ def _formul_batch_kg_hesapla(con, uretim_varyant_id):
     return round(float(row['toplam']), 3) if row else 0.0
 
 
-def _mpr_stok_ihtiyac_hesapla(con, uretim_varyant_id, rf_renk_id, planlanan_kg):
+def _mpr_stok_ihtiyac_hesapla(con, uretim_varyant_id, rf_renk_id, planlanan_kg,
+                              exclude_batch_kodu=None):
     """MPR stok ihtiyacı önizleme — taban hammadde (BOYA hariç) + RF boya.
 
-    Stok hareketi YAZMAZ. Mevcut stok: nexgen_stok_hareket SUM (_mevcut_stok).
+    Stok hareketi YAZMAZ.
+    Yeterlilik: kullanilabilir_kg (fiziksel − aktif rezerv − yumuşak talep).
+    exclude_batch_kodu: kendi batch rezerv/talep hariç (üretim tüketimi).
     """
     try:
         planlanan_kg = float(planlanan_kg)
@@ -7565,25 +7606,41 @@ def _mpr_stok_ihtiyac_hesapla(con, uretim_varyant_id, rf_renk_id, planlanan_kg):
         sid = s['stok_kart_id']
         talep[sid] = round(talep.get(sid, 0.0) + s['gerekli_kg'], 3)
 
-    mevcut_cache = {sid: _mevcut_stok(con, sid) for sid in talep}
+    stok_cache = {}
+    for sid in talep:
+        fiziksel = _mevcut_stok(con, sid)
+        rezerve = _aktif_rezerv_toplam(con, sid, exclude_batch_kodu)
+        yumusak = _yumusak_talep_toplam(con, sid, exclude_batch_kodu)
+        kullanilabilir = round(fiziksel - rezerve - yumusak, 3)
+        stok_cache[sid] = {
+            'fiziksel_kg': fiziksel,
+            'rezerve_kg': rezerve,
+            'yumusak_talep_kg': yumusak,
+            'kullanilabilir_kg': kullanilabilir,
+        }
+
     eksik_stok_ids = {
         sid for sid, gerekli in talep.items()
-        if mevcut_cache[sid] < gerekli
+        if stok_cache[sid]['kullanilabilir_kg'] < gerekli - 0.0005
     }
 
     kalemler = []
     for s in satirlar:
         sid = s['stok_kart_id']
         toplam_gerekli = talep[sid]
-        mevcut = mevcut_cache[sid]
+        sc = stok_cache[sid]
         kalemler.append({
             'kaynak': s['kaynak'],
             'stok_kart_id': sid,
             'stok_kod': s['stok_kod'],
             'stok_ad': s['stok_ad'],
             'gerekli_kg': s['gerekli_kg'],
-            'mevcut_kg': mevcut,
-            'fark_kg': round(mevcut - toplam_gerekli, 3),
+            'fiziksel_kg': sc['fiziksel_kg'],
+            'rezerve_kg': sc['rezerve_kg'],
+            'yumusak_talep_kg': sc['yumusak_talep_kg'],
+            'kullanilabilir_kg': sc['kullanilabilir_kg'],
+            'mevcut_kg': sc['fiziksel_kg'],
+            'fark_kg': round(sc['kullanilabilir_kg'] - toplam_gerekli, 3),
             'yeterli': sid not in eksik_stok_ids,
         })
 
@@ -8040,7 +8097,10 @@ def _parca_stok_tuket(con, parca_id, uretilen_kg=None, olusturan_id=None):
         if rf_bilgi:
             rf_renk_id = rf_bilgi.get('rf_renk_id')
 
-    ihtiyac = _mpr_stok_ihtiyac_hesapla(con, uv_id, rf_renk_id, tuketim_kg)
+    ihtiyac = _mpr_stok_ihtiyac_hesapla(
+        con, uv_id, rf_renk_id, tuketim_kg,
+        exclude_batch_kodu=row['batch_kodu'],
+    )
     if not ihtiyac.get('ok'):
         return {'ok': False, 'hata': ihtiyac.get('hata', 'Stok hesaplanamadı')}
     if not ihtiyac.get('yeterli_mi'):
