@@ -6756,6 +6756,14 @@ def uretim_plan_liste():
         # Alt emir sayaçlarını planlara ekle (Migration 072+ gerekli)
         if _parca_tablosu_var(con):
             for pl in planlar:
+                if not pl.get('batch_kodu') and pl.get('id'):
+                    brow = con.execute("""
+                        SELECT batch_kodu, durum FROM nexgen_uretim_batch
+                        WHERE plan_id=? ORDER BY id DESC LIMIT 1
+                    """, (pl['id'],)).fetchone()
+                    if brow:
+                        pl['batch_kodu'] = brow['batch_kodu']
+                        pl['batch_durum'] = brow['durum']
                 bk = pl.get('batch_kodu')
                 if bk:
                     sayac = con.execute("""
@@ -7504,18 +7512,27 @@ def _arge_formul_taban_onizle(con, uretim_varyant_id, test_kg):
     }
 
 
+def _parca_stok_net_tuketim(con, parca_id):
+    """Parça için net stok tüketimi (negatif = aktif tüketim var)."""
+    row = con.execute("""
+        SELECT COALESCE(SUM(miktar_kg), 0) AS net
+        FROM nexgen_stok_hareket
+        WHERE referans_id = ?
+          AND (
+            (referans_tip = 'URETIM_PARCA' AND hareket_tipi = 'URETIM_TUKETIM')
+            OR (referans_tip = 'URETIM_PARCA_IPTAL' AND hareket_tipi = 'URETIM_TUKETIM_IPTAL')
+          )
+    """, (parca_id,)).fetchone()
+    return round(float(row['net'] or 0), 3) if row else 0.0
+
+
 def _parca_stok_tuket(con, parca_id, uretilen_kg=None, olusturan_id=None):
     """Alt emir bitince hammadde tüketimini nexgen_stok_hareket'e yazar.
 
-    Idempotent: referans_tip='URETIM_PARCA' + referans_id=parca_id varsa tekrar yazmaz.
+    Idempotent: net tüketim (URETIM_PARCA − URETIM_PARCA_IPTAL) aktifse tekrar yazmaz.
     Stok yetersizse hareket yazmaz, ok=False döner.
     """
-    mevcut_hareket = con.execute(
-        "SELECT id FROM nexgen_stok_hareket "
-        "WHERE referans_tip='URETIM_PARCA' AND referans_id=? LIMIT 1",
-        (parca_id,),
-    ).fetchone()
-    if mevcut_hareket:
+    if _parca_stok_net_tuketim(con, parca_id) < -0.0005:
         return {'ok': True, 'atlandi': True, 'hareket_sayisi': 0}
 
     row = con.execute("""
@@ -7602,6 +7619,126 @@ def _parca_stok_tuket(con, parca_id, uretilen_kg=None, olusturan_id=None):
         'batch_kodu': batch_kodu,
         'lot_kodu': lot_kodu,
         'parca_no': parca_no,
+    }
+
+
+def _parca_stok_iade(con, parca_id, gerekce, olusturan_id=None):
+    """BITTI alt emir stok tüketimini ters kayıtla iade eder (silme yok)."""
+    parca = con.execute("""
+        SELECT id, durum, batch_kodu, parca_no, baslama_zamani
+        FROM nexgen_uretim_parca WHERE id=?
+    """, (parca_id,)).fetchone()
+    if not parca:
+        return {'ok': False, 'hata': 'Parça bulunamadı'}
+    if parca['durum'] != 'BITTI':
+        return {'ok': False, 'hata': f'Parça BITTI değil (durum: {parca["durum"]})'}
+
+    iptal_var = con.execute(
+        "SELECT id FROM nexgen_stok_hareket "
+        "WHERE referans_tip='URETIM_PARCA_IPTAL' AND referans_id=? LIMIT 1",
+        (parca_id,),
+    ).fetchone()
+    if iptal_var:
+        return {'ok': True, 'atlandi': True, 'hareket_sayisi': 0}
+
+    originals = con.execute("""
+        SELECT stok_kart_id, miktar_kg
+        FROM nexgen_stok_hareket
+        WHERE referans_tip='URETIM_PARCA' AND referans_id=?
+          AND hareket_tipi='URETIM_TUKETIM' AND miktar_kg < 0
+    """, (parca_id,)).fetchall()
+    if not originals:
+        return {'ok': False, 'hata': 'Geri alınacak stok tüketimi bulunamadı'}
+
+    gerekce_trim = (gerekce or '').strip()
+    aciklama = f"Geri alma — Alt emir {parca['parca_no']}: {gerekce_trim}"
+    uid = olusturan_id if olusturan_id is not None else _kullanici_id()
+    hareket_sayisi = 0
+    for orig in originals:
+        pozitif = round(abs(float(orig['miktar_kg'])), 3)
+        if pozitif <= 0:
+            continue
+        sid = orig['stok_kart_id']
+        onceki = _mevcut_stok(con, sid)
+        sonraki = round(onceki + pozitif, 3)
+        con.execute("""
+            INSERT INTO nexgen_stok_hareket
+              (stok_kart_id, hareket_tipi, miktar_kg,
+               onceki_stok, sonraki_stok,
+               aciklama, referans_tip, referans_id,
+               olusturan_id, olusturma_tarihi)
+            VALUES (?, 'URETIM_TUKETIM_IPTAL', ?, ?, ?, ?, 'URETIM_PARCA_IPTAL', ?, ?, datetime('now'))
+        """, (sid, pozitif, onceki, sonraki, aciklama, parca_id, uid))
+        hareket_sayisi += 1
+
+    return {
+        'ok': True,
+        'atlandi': False,
+        'hareket_sayisi': hareket_sayisi,
+        'parca_no': parca['parca_no'],
+    }
+
+
+def _parca_geri_al_uygula(con, parca_id, batch_kodu, gerekce):
+    """FAZ-4D: stok iade + parça durum geri sarma + RF/batch/plan senkron."""
+    stok = _parca_stok_iade(con, parca_id, gerekce)
+    if not stok.get('ok'):
+        return stok
+
+    parca = con.execute(
+        "SELECT id, baslama_zamani, batch_kodu, plan_id FROM nexgen_uretim_parca WHERE id=?",
+        (parca_id,),
+    ).fetchone()
+    if not parca:
+        return {'ok': False, 'hata': 'Parça bulunamadı'}
+
+    yeni_durum = 'DEVAM' if parca['baslama_zamani'] else 'HAZIR'
+    con.execute("""
+        UPDATE nexgen_uretim_parca
+        SET durum=?, uretilen_kg=0, bitis_zamani=NULL,
+            updated_at=datetime('now','localtime')
+        WHERE id=?
+    """, (yeni_durum, parca_id))
+
+    _rf_kullanim_tablet_sync(con, batch_kodu, uretim_emir_id=parca_id)
+
+    batch = con.execute(
+        "SELECT durum, plan_id FROM nexgen_uretim_batch WHERE batch_kodu=?",
+        (batch_kodu,),
+    ).fetchone()
+    batch_yeni_durum = None
+    if batch and batch['durum'] == 'BITTI':
+        acik = con.execute("""
+            SELECT COUNT(*) AS c FROM nexgen_uretim_parca
+            WHERE batch_kodu=? AND durum NOT IN ('BITTI')
+        """, (batch_kodu,)).fetchone()
+        if acik and acik['c'] > 0:
+            con.execute(
+                "UPDATE nexgen_uretim_batch SET durum='DEVAM' WHERE batch_kodu=?",
+                (batch_kodu,),
+            )
+            batch_yeni_durum = 'DEVAM'
+
+    plan_id = parca['plan_id'] or (batch['plan_id'] if batch else None)
+    plan_yeni_durum = None
+    if plan_id:
+        plan = con.execute(
+            "SELECT durum FROM nexgen_uretim_plan WHERE id=?", (plan_id,)
+        ).fetchone()
+        if plan and plan['durum'] == 'BITTI':
+            con.execute(
+                "UPDATE nexgen_uretim_plan SET durum='BASLADI' WHERE id=?",
+                (plan_id,),
+            )
+            plan_yeni_durum = 'BASLADI'
+
+    return {
+        'ok': True,
+        'parca_id': parca_id,
+        'yeni_durum': yeni_durum,
+        'stok_iade': stok,
+        'batch_yeni_durum': batch_yeni_durum,
+        'plan_yeni_durum': plan_yeni_durum,
     }
 
 
@@ -8710,6 +8847,48 @@ def api_parca_bitir(batch_kodu, parca_id):
         con.close()
 
 
+@nexgen_bp.route('/api/batch/<batch_kodu>/parca/<int:parca_id>/geri-al', methods=['POST'])
+@login_gerekli
+def api_parca_geri_al(batch_kodu, parca_id):
+    """BITTI alt emri geri al — stok ters kayıt, parça DEVAM/HAZIR.
+
+    Yetki: nexgen.plan.manage (tablet.view yetmez)
+    Body: { "gerekce": "..." } — min 10 karakter
+    """
+    if not yetki_var('nexgen.plan.manage', 'can_manage'):
+        return jsonify({'ok': False, 'hata': 'Yetki yok'}), 403
+
+    d = request.get_json(silent=True) or {}
+    gerekce = (d.get('gerekce') or '').strip()
+    if len(gerekce) < 10:
+        return jsonify({'ok': False, 'hata': 'Gerekçe en az 10 karakter olmalı'}), 400
+
+    con = _db()
+    try:
+        if not _parca_tablosu_var(con):
+            return jsonify({'ok': False, 'hata': 'Migration 072 çalıştırılmadı'}), 500
+
+        parca = con.execute(
+            "SELECT id FROM nexgen_uretim_parca WHERE id=? AND batch_kodu=?",
+            (parca_id, batch_kodu),
+        ).fetchone()
+        if not parca:
+            return jsonify({'ok': False, 'hata': 'Alt emir bulunamadı'}), 404
+
+        sonuc = _parca_geri_al_uygula(con, parca_id, batch_kodu, gerekce)
+        if not sonuc.get('ok'):
+            con.rollback()
+            return jsonify(sonuc), 400
+
+        con.commit()
+        return jsonify(sonuc)
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
 @nexgen_bp.route('/api/batch/<batch_kodu>/parca/<int:parca_id>/beklet', methods=['POST'])
 @login_gerekli
 def api_parca_beklet(batch_kodu, parca_id):
@@ -8769,9 +8948,10 @@ def api_parca_beklet(batch_kodu, parca_id):
 def api_parca_liste(batch_kodu):
     """Bir batch'in tüm parçalarını listeler.
 
-    Yetki: nexgen.tablet.view
+    Yetki: nexgen.tablet.view VEYA nexgen.plan.manage
     """
-    if not yetki_var('nexgen.tablet.view', 'can_view'):
+    if not (yetki_var('nexgen.tablet.view', 'can_view') or
+            yetki_var('nexgen.plan.manage', 'can_manage')):
         return jsonify({'ok': False, 'hata': 'Yetki yok'}), 403
 
     con = _db()

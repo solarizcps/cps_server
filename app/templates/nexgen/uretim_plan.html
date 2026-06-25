@@ -566,6 +566,38 @@ var _formuller = {{ formuller | tojson }};
     </div>
   </div>
 </div>
+
+{# ── Alt Emir Geri Al Modal ── #}
+<div class="up-modal-arka" id="geri-al-modal-arka" onclick="geriAlModalKapat(event)" style="display:none">
+  <div class="up-modal up-modal-geri-al" onclick="event.stopPropagation()">
+    <div class="up-modal-baslik">
+      <div class="up-modal-baslik-ic">
+        <div class="up-modal-baslik-yazi">Alt Emir Geri Al</div>
+        <div class="up-modal-aciklama" id="geri-al-modal-alt">Yanlış kapatılan alt emri geri alın.</div>
+      </div>
+      <button class="up-modal-kapat" onclick="geriAlModalKapat()">✕</button>
+    </div>
+    <div class="up-modal-govde">
+      <input type="hidden" id="geri-al-batch" value="">
+      <input type="hidden" id="geri-al-parca-id" value="">
+      <div class="up-geri-al-uyari">
+        Stok hareketleri silinmez; ters kayıt atılır. Parça tekrar üretime açılır.
+      </div>
+      <div id="geri-al-parca-liste" class="up-geri-al-liste"></div>
+      <div class="up-form-grup" id="geri-al-gerekce-grup" style="display:none">
+        <label class="up-form-etiket">Gerekçe <span class="up-zorunlu">*</span></label>
+        <textarea id="geri-al-gerekce" class="up-form-input up-geri-al-textarea" rows="3"
+                  placeholder="En az 10 karakter — örn: yanlış kapatma"></textarea>
+      </div>
+      <div id="geri-al-hata" class="up-form-hata" style="display:none"></div>
+    </div>
+    <div class="up-modal-alt">
+      <button class="up-modal-iptal-btn" onclick="geriAlModalKapat()">İptal</button>
+      <button class="up-modal-kaydet-btn up-geri-al-onay-btn" id="geri-al-onay-btn"
+              onclick="geriAlOnayla()" disabled>Geri Al</button>
+    </div>
+  </div>
+</div>
 {% endif %}
 
 {# ══ STYLE ════════════════════════════════════════════════════════════ #}
@@ -989,6 +1021,10 @@ function mprSatirHtml(g, v, gIdx, vIdx) {
     islemHtml = '<span class="ut-islem-bitti">✓</span>';
   } else if (v.durum === 'IPTAL') {
     islemHtml = '<span class="ut-islem-pasif">—</span>';
+  }
+  if (_CAN_MANAGE && v.batch_kodu && v.biten_alt_emir > 0) {
+    islemHtml += ' <button type="button" class="ut-btn-geri-al ut-btn-kucuk" onclick="geriAlModalAc('
+      + JSON.stringify(v.batch_kodu) + ',' + JSON.stringify(v.plan_kodu || '') + ')">Geri Al</button>';
   }
 
   var dataAra = (g.musteri_adi + ' ' + g.siparis_no + ' ' + v.plan_kodu + ' ' + v.formul_ad).toLowerCase();
@@ -2276,6 +2312,119 @@ async function planIptal(planId) {
     else { alert('HATA: ' + (j.hata || 'Bilinmeyen hata')); }
   } catch(e) { alert('Sunucu hatası.'); }
 }
+
+/* ─── Alt Emir Geri Al ─── */
+var _geriAlSeciliParca = null;
+
+function geriAlModalKapat(e) {
+  if (e && e.target && e.target.id !== 'geri-al-modal-arka') return;
+  var arka = document.getElementById('geri-al-modal-arka');
+  if (arka) arka.style.display = 'none';
+  _geriAlSeciliParca = null;
+  var gerekce = document.getElementById('geri-al-gerekce');
+  if (gerekce) gerekce.value = '';
+  var hata = document.getElementById('geri-al-hata');
+  if (hata) { hata.style.display = 'none'; hata.textContent = ''; }
+  var onay = document.getElementById('geri-al-onay-btn');
+  if (onay) { onay.disabled = true; onay.textContent = 'Geri Al'; }
+}
+
+async function geriAlModalAc(batchKodu, planKodu) {
+  document.getElementById('geri-al-batch').value = batchKodu;
+  document.getElementById('geri-al-parca-id').value = '';
+  document.getElementById('geri-al-modal-alt').textContent =
+    (planKodu ? planKodu + ' — ' : '') + batchKodu;
+  document.getElementById('geri-al-gerekce-grup').style.display = 'none';
+  document.getElementById('geri-al-parca-liste').innerHTML =
+    '<div class="up-geri-al-yukleniyor">Yükleniyor...</div>';
+  document.getElementById('geri-al-modal-arka').style.display = 'flex';
+  _geriAlSeciliParca = null;
+
+  try {
+    var r = await fetch('/nexgen/api/batch/' + encodeURIComponent(batchKodu) + '/parca/liste');
+    var j = await r.json();
+    if (!j.ok) {
+      document.getElementById('geri-al-parca-liste').innerHTML =
+        '<div class="up-form-hata">' + (j.hata || 'Liste alınamadı') + '</div>';
+      return;
+    }
+    var bitti = (j.parcalar || []).filter(function(p) { return p.durum === 'BITTI'; });
+    if (!bitti.length) {
+      document.getElementById('geri-al-parca-liste').innerHTML =
+        '<div class="up-geri-al-bos">BITTI alt emir bulunamadı.</div>';
+      return;
+    }
+    var html = bitti.map(function(p) {
+      return '<button type="button" class="up-geri-al-parca-btn" data-id="' + p.id + '"'
+        + ' onclick="geriAlParcaSec(' + p.id + ', this)">'
+        + 'Alt emir #' + p.parca_no + ' — ' + (p.uretilen_kg || p.hedef_kg || 0) + ' KG'
+        + '</button>';
+    }).join('');
+    document.getElementById('geri-al-parca-liste').innerHTML = html;
+  } catch (err) {
+    document.getElementById('geri-al-parca-liste').innerHTML =
+      '<div class="up-form-hata">Sunucu hatası.</div>';
+  }
+}
+
+function geriAlParcaSec(parcaId, btn) {
+  _geriAlSeciliParca = parcaId;
+  document.getElementById('geri-al-parca-id').value = parcaId;
+  document.querySelectorAll('.up-geri-al-parca-btn').forEach(function(b) {
+    b.classList.remove('secili');
+  });
+  if (btn) btn.classList.add('secili');
+  document.getElementById('geri-al-gerekce-grup').style.display = 'block';
+  var gerekce = document.getElementById('geri-al-gerekce');
+  var onay = document.getElementById('geri-al-onay-btn');
+  function chk() {
+    onay.disabled = !(gerekce.value.trim().length >= 10 && _geriAlSeciliParca);
+  }
+  gerekce.oninput = chk;
+  chk();
+  gerekce.focus();
+}
+
+async function geriAlOnayla() {
+  if (!_geriAlSeciliParca) return;
+  var batchKodu = document.getElementById('geri-al-batch').value;
+  var gerekce = document.getElementById('geri-al-gerekce').value.trim();
+  if (gerekce.length < 10) {
+    var h = document.getElementById('geri-al-hata');
+    h.textContent = 'Gerekçe en az 10 karakter olmalı.';
+    h.style.display = 'block';
+    return;
+  }
+  var btn = document.getElementById('geri-al-onay-btn');
+  var hataEl = document.getElementById('geri-al-hata');
+  btn.disabled = true;
+  btn.textContent = 'İşleniyor...';
+  hataEl.style.display = 'none';
+
+  try {
+    var r = await fetch('/nexgen/api/batch/' + encodeURIComponent(batchKodu)
+      + '/parca/' + _geriAlSeciliParca + '/geri-al', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gerekce: gerekce })
+    });
+    var j = await r.json();
+    if (j.ok) {
+      geriAlModalKapat();
+      location.reload();
+    } else {
+      hataEl.textContent = j.hata || 'Geri alma başarısız';
+      hataEl.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Geri Al';
+    }
+  } catch (e) {
+    hataEl.textContent = 'Sunucu hatası.';
+    hataEl.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Geri Al';
+  }
+}
 </script>
 
 <style>
@@ -2633,6 +2782,31 @@ async function planIptal(planId) {
 .ut-tr-mpr:hover { background: #fafbfc; }
 .ut-d-talep { background: #e0e7ff; color: #3730a3; }
 .ut-btn-gonder-kucuk { font-size: 12px; padding: 4px 10px; }
+.ut-btn-kucuk { font-size: 11px; padding: 4px 10px; }
+.ut-btn-geri-al {
+  padding: 4px 10px; font-size: 11px; font-weight: 600;
+  background: #fff; color: #b45309; border: 1px solid #fcd34d;
+  border-radius: 6px; cursor: pointer; white-space: nowrap;
+  transition: all .08s;
+}
+.ut-btn-geri-al:hover { background: #fffbeb; border-color: #f59e0b; }
+.up-modal-geri-al { max-width: 480px; }
+.up-geri-al-uyari {
+  background: #fffbeb; border: 1px solid #fde68a; color: #92400e;
+  border-radius: 8px; padding: 10px 12px; font-size: 12px; font-weight: 600;
+  margin-bottom: 12px;
+}
+.up-geri-al-liste { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.up-geri-al-parca-btn {
+  text-align: left; padding: 10px 12px; border: 1.5px solid #e2e8f0;
+  border-radius: 8px; background: #fff; font-size: 13px; font-weight: 600;
+  color: #334155; cursor: pointer; transition: all .08s;
+}
+.up-geri-al-parca-btn:hover { border-color: #f59e0b; background: #fffbeb; }
+.up-geri-al-parca-btn.secili { border-color: #f59e0b; background: #fef3c7; color: #92400e; }
+.up-geri-al-textarea { resize: vertical; min-height: 72px; }
+.up-geri-al-onay-btn { background: #f59e0b !important; }
+.up-geri-al-yukleniyor, .up-geri-al-bos { font-size: 13px; color: #64748b; padding: 8px 0; }
 
 /* Varyant / KG satırları */
 .ut-varyant-satir {
