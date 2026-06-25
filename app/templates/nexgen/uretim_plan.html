@@ -269,6 +269,7 @@ var _formuller = {{ formuller | tojson }};
       {# Satır 1: Cari (tam genişlik) #}
       <div class="up-form-grup">
         <label class="up-form-etiket">Cari <span class="up-zorunlu">*</span></label>
+        <input type="hidden" id="plan-cari-id" value="">
         <input type="hidden" id="plan-cari" value="">
         <div class="up-cdrop" id="up-cdrop" onclick="cdropToggle()">
           <span id="up-cdrop-label" class="up-cdrop-placeholder">— Cari Seçiniz —</span>
@@ -286,6 +287,7 @@ var _formuller = {{ formuller | tojson }};
                data-value="{{ c.cari_kod }} - {{ c.unvan }}"
                data-unvan="{{ c.unvan }}"
                data-kod="{{ c.cari_kod }}"
+               data-cari-id="{{ c.id }}"
                onclick="event.stopPropagation(); cdropSec(this)">
             <span class="up-cdrop-ad">{{ c.unvan }}</span>
           </div>
@@ -1127,6 +1129,7 @@ function modalSifirla() {
   var sipEl = document.getElementById('plan-siparis-no');
   if (sipEl) sipEl.value = '';
   document.getElementById('plan-cari').value = '';
+  document.getElementById('plan-cari-id').value = '';
   var lbl = document.getElementById('up-cdrop-label');
   if (lbl) { lbl.className = 'up-cdrop-placeholder'; lbl.innerHTML = '— Cari Seçiniz —'; }
   document.querySelectorAll('#up-cdrop-liste .up-cdrop-item').forEach(function(i){ i.classList.remove('aktif'); });
@@ -1179,7 +1182,9 @@ function cdropFiltrele(q) {
 
 function cdropSec(el) {
   var unvan = el.dataset.unvan;
-  /* Hidden input'a sadece unvan yaz — kod gösterilmez, backend'e unvan gider */
+  var cariId = el.dataset.cariId || '';
+  document.getElementById('plan-cari-id').value = cariId;
+  /* Hidden input'a unvan — geriye uyum + gösterim */
   document.getElementById('plan-cari').value = unvan;
   /* Dropdown label — sadece unvan */
   var label = document.getElementById('up-cdrop-label');
@@ -1397,11 +1402,12 @@ async function planKaydet() {
   hataDiv.style.display = 'none';
 
   var cari    = document.getElementById('plan-cari').value.trim();
+  var cariId  = parseInt(document.getElementById('plan-cari-id').value, 10) || null;
   var kg      = parseFloat(document.getElementById('plan-kg').value || 0);
   var notlar  = document.getElementById('plan-notlar').value.trim() || null;
   var dag     = _secili.dagitim;
 
-  if (!cari) {
+  if (!cari || !cariId) {
     hataDiv.textContent = 'Lütfen cari seçiniz.';
     hataDiv.style.display = 'block'; return;
   }
@@ -1449,6 +1455,7 @@ async function planKaydet() {
         body: JSON.stringify({
           uretim_varyant_id: k.uv_id,
           planlanan_kg: k.kg,
+          cari_id: cariId,
           musteri_adi: cari,
           siparis_no: siparis_no,
           plan_tarihi: today,

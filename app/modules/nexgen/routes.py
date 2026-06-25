@@ -5038,7 +5038,12 @@ def tablet_devam_edenler():
             "PRAGMA table_info(nexgen_uretim_batch)"
         ).fetchall()]
         if 'plan_id' in _cols:
-            batches_raw = con.execute("""
+            _cari_join = ""
+            _musteri_sel = "np.musteri_adi"
+            if _plan_cari_kolonu_var(con):
+                _cari_join = "LEFT JOIN nexgen_cari c ON c.id = np.cari_id"
+                _musteri_sel = "COALESCE(c.unvan, np.musteri_adi) AS musteri_adi"
+            batches_raw = con.execute(f"""
                 SELECT nb.id, nb.batch_kodu, nb.lot_kodu, nb.plan_id,
                        nb.uretim_varyant_id,
                        nb.planlanan_kg, nb.durum,
@@ -5047,7 +5052,8 @@ def tablet_devam_edenler():
                        rv.ad AS renk_ad,
                        f.ad AS formul_ad, f.kod AS formul_kod,
                        ku.KullaniciAdi AS olusturan_ad,
-                       np.musteri_adi, np.siparis_no,
+                       {_musteri_sel},
+                       np.siparis_no,
                        np.plan_tarihi, np.created_at AS plan_created_at
                 FROM nexgen_uretim_batch nb
                 JOIN nexgen_uretim_varyant uv ON uv.id = nb.uretim_varyant_id
@@ -5055,6 +5061,7 @@ def tablet_devam_edenler():
                 JOIN nexgen_formul f          ON f.id  = rv.formul_id
                 LEFT JOIN sistem_kullanici ku ON ku.Id  = nb.olusturan_id
                 LEFT JOIN nexgen_uretim_plan np ON np.id = nb.plan_id
+                {_cari_join}
                 WHERE nb.durum IN ('TASLAK','HAZIR','DEVAM','BEKLEME')
                 ORDER BY nb.id DESC
             """).fetchall()
@@ -5180,19 +5187,26 @@ def tablet_uretim_islem(batch_kodu):
             "PRAGMA table_info(nexgen_uretim_batch)"
         ).fetchall()]
         if 'plan_id' in _cols:
-            batch = con.execute("""
+            _cari_join = ""
+            _musteri_sel = "np.musteri_adi"
+            if _plan_cari_kolonu_var(con):
+                _cari_join = "LEFT JOIN nexgen_cari c ON c.id = np.cari_id"
+                _musteri_sel = "COALESCE(c.unvan, np.musteri_adi) AS musteri_adi"
+            batch = con.execute(f"""
                 SELECT nb.id, nb.batch_kodu, nb.lot_kodu, nb.plan_id,
                        nb.uretim_varyant_id,
                        nb.planlanan_kg, nb.durum, nb.olusturma_tarihi, nb.notlar,
                        uv.boyut,
                        rv.ad AS renk_ad,
                        f.ad AS formul_ad,
-                       np.musteri_adi, np.siparis_no, np.plan_tarihi
+                       {_musteri_sel},
+                       np.siparis_no, np.plan_tarihi
                 FROM nexgen_uretim_batch nb
                 JOIN nexgen_uretim_varyant uv ON uv.id = nb.uretim_varyant_id
                 JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
                 JOIN nexgen_formul f          ON f.id  = rv.formul_id
                 LEFT JOIN nexgen_uretim_plan np ON np.id = nb.plan_id
+                {_cari_join}
                 WHERE nb.batch_kodu = ?
             """, (batch_kodu,)).fetchone()
         else:
@@ -6526,6 +6540,25 @@ def _tablet_ana_veri(con):
     return devam_eden, plan_isler
 
 
+def _plan_cari_kolonu_var(con):
+    return 'cari_id' in [
+        c['name'] for c in con.execute(
+            "PRAGMA table_info(nexgen_uretim_plan)"
+        ).fetchall()
+    ]
+
+
+def _plan_cari_select_sql(con):
+    """Plan sorgularında cari gösterim: FK unvan, yoksa musteri_adi."""
+    if _plan_cari_kolonu_var(con):
+        return (
+            "np.cari_id, COALESCE(c.unvan, np.musteri_adi) AS musteri_adi, "
+            "np.musteri_adi AS musteri_adi_legacy",
+            "LEFT JOIN nexgen_cari c ON c.id = np.cari_id",
+        )
+    return "NULL AS cari_id, np.musteri_adi, np.musteri_adi AS musteri_adi_legacy", ""
+
+
 def _plan_liste_sorgu(con, sadece_aktif=False):
     """Plan listesini join'li şekilde döner.
     plan_id üzerinden bağlı batch_kodu da getirilir (BASLADI → Devam linki için).
@@ -6543,8 +6576,10 @@ def _plan_liste_sorgu(con, sadece_aktif=False):
             "ON nb.plan_id = np.id AND nb.durum NOT IN ('BITTI')"
         )
         batch_select = "nb.batch_kodu, nb.durum AS batch_durum"
+    cari_select, cari_join = _plan_cari_select_sql(con)
     return con.execute(f"""
-        SELECT np.id, np.plan_kodu, np.kaynak, np.siparis_no, np.musteri_adi,
+        SELECT np.id, np.plan_kodu, np.kaynak, np.siparis_no,
+               {cari_select},
                np.planlanan_kg, np.oncelik_sira, np.plan_tarihi,
                np.durum, np.notlar, np.created_at,
                uv.id AS uv_id, uv.boyut,
@@ -6553,6 +6588,7 @@ def _plan_liste_sorgu(con, sadece_aktif=False):
                ku.KullaniciAdi AS olusturan_ad,
                {batch_select}
         FROM nexgen_uretim_plan np
+        {cari_join}
         JOIN nexgen_uretim_varyant uv ON uv.id = np.uretim_varyant_id
         JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
         JOIN nexgen_formul f          ON f.id  = rv.formul_id
@@ -6684,6 +6720,7 @@ def api_plan_ekle():
     notlar     = (d.get('notlar') or '').strip() or None
     siparis_no  = (d.get('siparis_no') or '').strip() or None
     musteri_adi = (d.get('musteri_adi') or '').strip() or None
+    cari_id_raw = d.get('cari_id')
 
     if not uv_id or not kg:
         return jsonify({'ok': False, 'hata': 'uretim_varyant_id ve planlanan_kg zorunlu'}), 400
@@ -6711,22 +6748,49 @@ def api_plan_ekle():
         if not uv:
             return jsonify({'ok': False, 'hata': 'Üretim varyantı bulunamadı'}), 404
 
+        cari_id = None
+        if cari_id_raw is not None and cari_id_raw != '':
+            try:
+                cari_id = int(cari_id_raw)
+            except (TypeError, ValueError):
+                return jsonify({'ok': False, 'hata': 'cari_id geçersiz'}), 400
+            cari = con.execute(
+                "SELECT id, unvan FROM nexgen_cari WHERE id=? AND aktif=1",
+                (cari_id,)
+            ).fetchone()
+            if not cari:
+                return jsonify({'ok': False, 'hata': f'Cari bulunamadı (id={cari_id})'}), 400
+            musteri_adi = cari['unvan']
+        elif not musteri_adi:
+            return jsonify({'ok': False, 'hata': 'Cari seçimi zorunludur.'}), 400
+
         # Sipariş no boşsa otomatik üret
         if not siparis_no:
             siparis_no = _nexgen_siparis_no_uret(con)
 
         plan_kodu = _plan_kodu_uret(con)
         uid = _kullanici_id()
-        con.execute(
-            "INSERT INTO nexgen_uretim_plan"
-            "(plan_kodu, kaynak, siparis_no, musteri_adi, uretim_varyant_id,"
-            " planlanan_kg, oncelik_sira, plan_tarihi, durum, notlar, created_by)"
-            " VALUES(?,?,?,?,?,?,?,?,'PLANLANDI',?,?)",
-            (plan_kodu, 'MANUEL', siparis_no, musteri_adi, uv_id,
-             round(kg, 3), int(oncelik), plan_tarihi, notlar, uid)
-        )
+        if _plan_cari_kolonu_var(con):
+            con.execute(
+                "INSERT INTO nexgen_uretim_plan"
+                "(plan_kodu, kaynak, siparis_no, musteri_adi, cari_id,"
+                " uretim_varyant_id, planlanan_kg, oncelik_sira, plan_tarihi,"
+                " durum, notlar, created_by)"
+                " VALUES(?,?,?,?,?,?,?,?,?,'PLANLANDI',?,?)",
+                (plan_kodu, 'MANUEL', siparis_no, musteri_adi, cari_id, uv_id,
+                 round(kg, 3), int(oncelik), plan_tarihi, notlar, uid)
+            )
+        else:
+            con.execute(
+                "INSERT INTO nexgen_uretim_plan"
+                "(plan_kodu, kaynak, siparis_no, musteri_adi, uretim_varyant_id,"
+                " planlanan_kg, oncelik_sira, plan_tarihi, durum, notlar, created_by)"
+                " VALUES(?,?,?,?,?,?,?,?,'PLANLANDI',?,?)",
+                (plan_kodu, 'MANUEL', siparis_no, musteri_adi, uv_id,
+                 round(kg, 3), int(oncelik), plan_tarihi, notlar, uid)
+            )
         con.commit()
-        return jsonify({
+        resp = {
             'ok': True,
             'plan_kodu': plan_kodu,
             'siparis_no': siparis_no,
@@ -6734,7 +6798,11 @@ def api_plan_ekle():
             'renk_ad': uv['renk_ad'],
             'boyut': uv['boyut'],
             'planlanan_kg': round(kg, 3),
-        })
+            'musteri_adi': musteri_adi,
+        }
+        if cari_id is not None:
+            resp['cari_id'] = cari_id
+        return jsonify(resp)
     except Exception as e:
         con.rollback()
         return jsonify({'ok': False, 'hata': str(e)}), 500
