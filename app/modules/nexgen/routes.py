@@ -5088,7 +5088,8 @@ def tablet_devam_edenler():
         batches_raw = [dict(b) for b in batches_raw]
 
         for b in batches_raw:
-            rf = _rf_renk_uv_icin(con, b.get('uretim_varyant_id'))
+            rf = _batch_plan_rf_bilgi(con, batch_kodu=b.get('batch_kodu'),
+                                      uretim_varyant_id=b.get('uretim_varyant_id'))
             if rf:
                 b['rf_kod'] = rf['rf_kod']
                 b['rf_renk_ad'] = rf.get('renk_ad')
@@ -5318,7 +5319,11 @@ def tablet_uretim_islem(batch_kodu):
         barkod_hazir_adet = sayaclar.get('bitti', 0)
         barkod_hazir_kg   = round(toplam_uretilen_kg, 1)
 
-        rf_bilgi = _rf_renk_uv_icin(con, batch['uretim_varyant_id'])
+        rf_bilgi = _batch_plan_rf_bilgi(
+            con, batch_kodu=batch_kodu,
+            plan_id=batch.get('plan_id'),
+            uretim_varyant_id=batch['uretim_varyant_id'],
+        )
         rf_kod = rf_bilgi['rf_kod'] if rf_bilgi else None
         rf_renk_ad = rf_bilgi.get('renk_ad') if rf_bilgi else None
         rf_uyari = None if rf_bilgi else (
@@ -6432,24 +6437,27 @@ def _nexgen_siparis_no_uret(con):
     """NSP-YYYY-NNNNN formatında benzersiz sipariş no üretir.
 
     Kullanıcı sipariş no girmezse otomatik çağrılır.
-    LARGE+SMALL aynı request'ten geliyorsa JS aynı no'yu tekrar gönderir,
-    bu fonksiyon yalnızca bir kez çağrılır (ilk kayıt için).
+    LARGE+SMALL aynı request'ten geliyorsa JS aynı no'yu tekrar gönderir.
     """
     import datetime
     yil = datetime.datetime.now().year
     prefix = f"NSP-{yil}-%"
-    son = con.execute(
-        "SELECT siparis_no FROM nexgen_uretim_plan "
-        "WHERE siparis_no LIKE ? ORDER BY id DESC LIMIT 1",
-        (prefix,)
-    ).fetchone()
-    if son and son['siparis_no']:
+    son_no = 0
+    for tbl in ('nexgen_planlama_siparis', 'nexgen_uretim_plan'):
         try:
-            son_no = int(son['siparis_no'].split('-')[-1])
+            row = con.execute(
+                f"SELECT siparis_no FROM {tbl} "
+                "WHERE siparis_no LIKE ? ORDER BY id DESC LIMIT 1",
+                (prefix,),
+            ).fetchone()
+            if row and row['siparis_no']:
+                try:
+                    n = int(row['siparis_no'].split('-')[-1])
+                    son_no = max(son_no, n)
+                except Exception:
+                    pass
         except Exception:
-            son_no = 0
-    else:
-        son_no = 0
+            pass
     return f"NSP-{yil}-{son_no + 1:05d}"
 
 
@@ -6484,7 +6492,10 @@ def _tablet_ana_veri(con):
                 row = dict(b)
                 row['musteri_adi'] = pl.get('musteri_adi')
                 row['siparis_no'] = pl.get('siparis_no') or pl.get('plan_kodu')
-                rf = _rf_renk_uv_icin(con, row.get('uretim_varyant_id') or pl.get('uv_id'))
+                rf = _batch_plan_rf_bilgi(
+                    con, batch_kodu=bk,
+                    uretim_varyant_id=row.get('uretim_varyant_id') or pl.get('uv_id'),
+                )
                 if rf:
                     row['rf_kod'] = rf['rf_kod']
                     row['rf_renk_ad'] = rf.get('renk_ad')
@@ -6506,7 +6517,7 @@ def _tablet_ana_veri(con):
                 'renk_ad': pl['renk_ad'],
                 'formul_ad': pl['formul_ad'],
             }
-            rf = _rf_renk_uv_icin(con, pl['uv_id'])
+            rf = _plan_rf_bilgi(con, rf_renk_id=pl.get('rf_renk_id'), uretim_varyant_id=pl['uv_id'])
             if rf:
                 pi['rf_kod'] = rf['rf_kod']
                 pi['rf_renk_ad'] = rf.get('renk_ad')
@@ -6548,6 +6559,73 @@ def _plan_cari_kolonu_var(con):
     ]
 
 
+def _plan_rf_renk_kolonu_var(con):
+    return 'rf_renk_id' in [
+        c['name'] for c in con.execute(
+            "PRAGMA table_info(nexgen_uretim_plan)"
+        ).fetchall()
+    ]
+
+
+def _plan_termin_kolonu_var(con):
+    return 'termin_tarihi' in [
+        c['name'] for c in con.execute(
+            "PRAGMA table_info(nexgen_uretim_plan)"
+        ).fetchall()
+    ]
+
+
+def _plan_planlama_siparis_kolonu_var(con):
+    return 'planlama_siparis_id' in [
+        c['name'] for c in con.execute(
+            "PRAGMA table_info(nexgen_uretim_plan)"
+        ).fetchall()
+    ]
+
+
+def _planlama_siparis_tablosu_var(con):
+    return con.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' "
+        "AND name='nexgen_planlama_siparis'"
+    ).fetchone() is not None
+
+
+def _planlama_siparis_olustur(con, siparis_no, cari_id, cari_unvan,
+                                termin_tarihi=None, notlar=None,
+                                talep_referansi=None, olusturan_id=None,
+                                durum='TALEP'):
+    """Yeni planlama sipariş header kaydı oluşturur."""
+    cur = con.execute("""
+        INSERT INTO nexgen_planlama_siparis
+            (siparis_no, cari_id, cari_unvan, termin_tarihi, talep_referansi,
+             durum, notlar, olusturan_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        siparis_no, cari_id, cari_unvan, termin_tarihi, talep_referansi,
+        durum, notlar, olusturan_id,
+    ))
+    return cur.lastrowid
+
+
+def _planlama_siparis_bul_veya_olustur(con, siparis_no, cari_id, cari_unvan,
+                                         termin_tarihi=None, notlar=None,
+                                         olusturan_id=None):
+    """siparis_no ile header bulur; yoksa oluşturur."""
+    if not _planlama_siparis_tablosu_var(con):
+        return None
+    row = con.execute(
+        "SELECT id FROM nexgen_planlama_siparis WHERE siparis_no=?",
+        (siparis_no,),
+    ).fetchone()
+    if row:
+        return row['id']
+    return _planlama_siparis_olustur(
+        con, siparis_no, cari_id, cari_unvan,
+        termin_tarihi=termin_tarihi, notlar=notlar,
+        olusturan_id=olusturan_id,
+    )
+
+
 def _plan_cari_select_sql(con):
     """Plan sorgularında cari gösterim: FK unvan, yoksa musteri_adi."""
     if _plan_cari_kolonu_var(con):
@@ -6577,18 +6655,53 @@ def _plan_liste_sorgu(con, sadece_aktif=False):
         )
         batch_select = "nb.batch_kodu, nb.durum AS batch_durum"
     cari_select, cari_join = _plan_cari_select_sql(con)
+    if _plan_rf_renk_kolonu_var(con):
+        mpr_select = (
+            "np.rf_renk_id, np.termin_tarihi, "
+            "rf.rf_kod AS rf_kod_fk, rf.ad AS rf_ad_fk, "
+        )
+        mpr_join = "LEFT JOIN nexgen_rf_renk rf ON rf.id = np.rf_renk_id "
+    else:
+        mpr_select = (
+            "NULL AS rf_renk_id, NULL AS termin_tarihi, "
+            "NULL AS rf_kod_fk, NULL AS rf_ad_fk, "
+        )
+        mpr_join = ""
+    hdr_select = ""
+    hdr_join = ""
+    if _plan_planlama_siparis_kolonu_var(con) and _planlama_siparis_tablosu_var(con):
+        hdr_select = (
+            "np.planlama_siparis_id, "
+            "ps.siparis_no AS hdr_siparis_no, ps.cari_unvan AS hdr_cari_unvan, "
+            "ps.termin_tarihi AS hdr_termin_tarihi, ps.durum AS hdr_durum, "
+            "ps.talep_referansi AS hdr_talep_referansi, "
+        )
+        hdr_join = (
+            "LEFT JOIN nexgen_planlama_siparis ps "
+            "ON ps.id = np.planlama_siparis_id "
+        )
+    else:
+        hdr_select = (
+            "NULL AS planlama_siparis_id, NULL AS hdr_siparis_no, "
+            "NULL AS hdr_cari_unvan, NULL AS hdr_termin_tarihi, "
+            "NULL AS hdr_durum, NULL AS hdr_talep_referansi, "
+        )
     return con.execute(f"""
         SELECT np.id, np.plan_kodu, np.kaynak, np.siparis_no,
                {cari_select},
+               {hdr_select}
+               {mpr_select}
                np.planlanan_kg, np.oncelik_sira, np.plan_tarihi,
                np.durum, np.notlar, np.created_at,
                uv.id AS uv_id, uv.boyut,
                rv.ad AS renk_ad,
-               f.ad AS formul_ad, f.kod AS formul_kod,
+               f.ad AS formul_ad, f.kod AS formul_kod, f.id AS formul_id,
                ku.KullaniciAdi AS olusturan_ad,
                {batch_select}
         FROM nexgen_uretim_plan np
         {cari_join}
+        {hdr_join}
+        {mpr_join}
         JOIN nexgen_uretim_varyant uv ON uv.id = np.uretim_varyant_id
         JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
         JOIN nexgen_formul f          ON f.id  = rv.formul_id
@@ -6608,16 +6721,25 @@ def uretim_plan_liste():
         planlar = [dict(p) for p in _plan_liste_sorgu(con)]
 
         for pl in planlar:
-            rf = _rf_renk_uv_icin(con, pl['uv_id'])
+            rf = _plan_rf_bilgi(
+                con,
+                rf_renk_id=pl.get('rf_renk_id'),
+                uretim_varyant_id=pl['uv_id'],
+            )
             if rf:
                 pl['rf_kod'] = rf['rf_kod']
                 pl['rf_renk_ad'] = rf.get('renk_ad')
+                pl['rf_uyari'] = None
             else:
-                pl['rf_kod'] = None
-                pl['rf_renk_ad'] = None
+                pl['rf_kod'] = pl.get('rf_kod_fk')
+                pl['rf_renk_ad'] = pl.get('rf_ad_fk')
                 pl['rf_uyari'] = (
                     'Bu formül/renk için ONAYLI RF eşleşmesi bulunamadı.'
                 )
+            if pl.get('rf_renk_id') and pl.get('cari_id') and rf and rf.get('cari_id'):
+                pl['rf_cari_uyari'] = _rf_cari_uyari(con, rf['cari_id'], pl['cari_id'])
+            else:
+                pl['rf_cari_uyari'] = None
 
             sk = _siparis_kontrol_get(con, pl['id'])
             if sk:
@@ -6708,6 +6830,34 @@ def uretim_plan_liste():
     )
 
 
+@nexgen_bp.route('/api/plan/rf-secenekleri')
+@login_gerekli
+def api_plan_rf_secenekleri():
+    """Formül için ONAYLI RF renk listesi (plan oluşturma)."""
+    formul_id = request.args.get('formul_id')
+    if not formul_id:
+        return jsonify({'ok': False, 'hata': 'formul_id zorunlu'}), 400
+    try:
+        formul_id = int(formul_id)
+    except (TypeError, ValueError):
+        return jsonify({'ok': False, 'hata': 'formul_id geçersiz'}), 400
+
+    con = _db()
+    try:
+        rows = con.execute("""
+            SELECT rf.id, rf.rf_kod, rf.ad, rf.cari_id, rf.ilk_talep_cari_id
+            FROM nexgen_rf_renk rf
+            JOIN nexgen_rf_formul_uygunluk u ON u.rf_renk_id = rf.id
+            WHERE u.formul_id = ?
+              AND u.durum = 'ONAYLI' AND u.aktif = 1
+              AND rf.aktif = 1 AND rf.durum = 'ONAYLI'
+            ORDER BY rf.rf_kod
+        """, (formul_id,)).fetchall()
+        return jsonify({'ok': True, 'liste': [dict(r) for r in rows]})
+    finally:
+        con.close()
+
+
 @nexgen_bp.route('/api/plan/ekle', methods=['POST'])
 @yetki_gerekli('nexgen.plan.manage', 'can_manage')
 def api_plan_ekle():
@@ -6721,6 +6871,8 @@ def api_plan_ekle():
     siparis_no  = (d.get('siparis_no') or '').strip() or None
     musteri_adi = (d.get('musteri_adi') or '').strip() or None
     cari_id_raw = d.get('cari_id')
+    rf_renk_id_raw = d.get('rf_renk_id')
+    termin_tarihi = (d.get('termin_tarihi') or '').strip()
 
     if not uv_id or not kg:
         return jsonify({'ok': False, 'hata': 'uretim_varyant_id ve planlanan_kg zorunlu'}), 400
@@ -6764,31 +6916,80 @@ def api_plan_ekle():
         elif not musteri_adi:
             return jsonify({'ok': False, 'hata': 'Cari seçimi zorunludur.'}), 400
 
+        rf_renk_id = None
+        rf_cari_uyari = None
+        if _plan_rf_renk_kolonu_var(con):
+            if not rf_renk_id_raw:
+                return jsonify({'ok': False, 'hata': 'rf_renk_id zorunlu'}), 400
+            try:
+                rf_renk_id = int(rf_renk_id_raw)
+            except (TypeError, ValueError):
+                return jsonify({'ok': False, 'hata': 'rf_renk_id geçersiz'}), 400
+            rf = con.execute("""
+                SELECT rf.id, rf.rf_kod, rf.ad, rf.cari_id
+                FROM nexgen_rf_renk rf
+                JOIN nexgen_rf_formul_uygunluk u ON u.rf_renk_id = rf.id
+                JOIN nexgen_uretim_varyant uv ON uv.id = ?
+                JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
+                    AND rv.formul_id = u.formul_id
+                WHERE rf.id = ?
+                  AND rf.durum = 'ONAYLI' AND rf.aktif = 1
+                  AND u.durum = 'ONAYLI' AND u.aktif = 1
+            """, (uv_id, rf_renk_id)).fetchone()
+            if not rf:
+                return jsonify({
+                    'ok': False,
+                    'hata': 'Seçilen RF bu formül için ONAYLI değil veya bulunamadı.',
+                }), 400
+            if cari_id and rf['cari_id']:
+                rf_cari_uyari = _rf_cari_uyari(con, rf['cari_id'], cari_id)
+
+        if _plan_termin_kolonu_var(con) and not termin_tarihi:
+            return jsonify({'ok': False, 'hata': 'termin_tarihi zorunlu'}), 400
+
         # Sipariş no boşsa otomatik üret
         if not siparis_no:
             siparis_no = _nexgen_siparis_no_uret(con)
 
+        planlama_siparis_id = None
+        if (_plan_planlama_siparis_kolonu_var(con)
+                and _planlama_siparis_tablosu_var(con)):
+            planlama_siparis_id = _planlama_siparis_bul_veya_olustur(
+                con, siparis_no, cari_id, musteri_adi,
+                termin_tarihi=termin_tarihi, notlar=notlar,
+                olusturan_id=_kullanici_id(),
+            )
+
         plan_kodu = _plan_kodu_uret(con)
         uid = _kullanici_id()
+
+        cols = [
+            'plan_kodu', 'kaynak', 'siparis_no', 'musteri_adi',
+            'uretim_varyant_id', 'planlanan_kg', 'oncelik_sira', 'plan_tarihi',
+            'durum', 'notlar', 'created_by',
+        ]
+        vals = [
+            plan_kodu, 'MANUEL', siparis_no, musteri_adi, uv_id,
+            round(kg, 3), int(oncelik), plan_tarihi, 'PLANLANDI', notlar, uid,
+        ]
         if _plan_cari_kolonu_var(con):
-            con.execute(
-                "INSERT INTO nexgen_uretim_plan"
-                "(plan_kodu, kaynak, siparis_no, musteri_adi, cari_id,"
-                " uretim_varyant_id, planlanan_kg, oncelik_sira, plan_tarihi,"
-                " durum, notlar, created_by)"
-                " VALUES(?,?,?,?,?,?,?,?,?,'PLANLANDI',?,?)",
-                (plan_kodu, 'MANUEL', siparis_no, musteri_adi, cari_id, uv_id,
-                 round(kg, 3), int(oncelik), plan_tarihi, notlar, uid)
-            )
-        else:
-            con.execute(
-                "INSERT INTO nexgen_uretim_plan"
-                "(plan_kodu, kaynak, siparis_no, musteri_adi, uretim_varyant_id,"
-                " planlanan_kg, oncelik_sira, plan_tarihi, durum, notlar, created_by)"
-                " VALUES(?,?,?,?,?,?,?,?,'PLANLANDI',?,?)",
-                (plan_kodu, 'MANUEL', siparis_no, musteri_adi, uv_id,
-                 round(kg, 3), int(oncelik), plan_tarihi, notlar, uid)
-            )
+            cols.insert(4, 'cari_id')
+            vals.insert(4, cari_id)
+        if _plan_planlama_siparis_kolonu_var(con) and planlama_siparis_id:
+            cols.insert(-3, 'planlama_siparis_id')
+            vals.insert(-3, planlama_siparis_id)
+        if _plan_rf_renk_kolonu_var(con):
+            cols.insert(-3, 'rf_renk_id')
+            vals.insert(-3, rf_renk_id)
+        if _plan_termin_kolonu_var(con):
+            cols.insert(-3, 'termin_tarihi')
+            vals.insert(-3, termin_tarihi)
+
+        placeholders = ','.join(['?'] * len(cols))
+        con.execute(
+            f"INSERT INTO nexgen_uretim_plan ({','.join(cols)}) VALUES ({placeholders})",
+            vals,
+        )
         con.commit()
         resp = {
             'ok': True,
@@ -6802,6 +7003,16 @@ def api_plan_ekle():
         }
         if cari_id is not None:
             resp['cari_id'] = cari_id
+        if planlama_siparis_id is not None:
+            resp['planlama_siparis_id'] = planlama_siparis_id
+        if rf_renk_id is not None:
+            resp['rf_renk_id'] = rf_renk_id
+            resp['rf_kod'] = rf['rf_kod']
+            resp['rf_renk_ad'] = rf['ad']
+        if termin_tarihi:
+            resp['termin_tarihi'] = termin_tarihi
+        if rf_cari_uyari:
+            resp['rf_cari_uyari'] = rf_cari_uyari
         return jsonify(resp)
     except Exception as e:
         con.rollback()
@@ -7024,9 +7235,10 @@ def api_plan_basla(plan_id):
 
     con = _db()
     try:
-        p = con.execute("""
+        rf_col = ", np.rf_renk_id" if _plan_rf_renk_kolonu_var(con) else ", NULL AS rf_renk_id"
+        p = con.execute(f"""
             SELECT np.id, np.plan_kodu, np.uretim_varyant_id,
-                   np.planlanan_kg, np.durum, np.notlar,
+                   np.planlanan_kg, np.durum, np.notlar{rf_col},
                    uv.recete_durum,
                    uv.boyut, rv.ad AS renk_ad, f.ad AS formul_ad
             FROM nexgen_uretim_plan np
@@ -7120,7 +7332,11 @@ def api_plan_basla(plan_id):
 
         _rf_kullanim_tablet_sync(con, batch_kodu)
 
-        rf_bilgi = _rf_renk_uv_icin(con, p['uretim_varyant_id'])
+        rf_bilgi = _plan_rf_bilgi(
+            con,
+            rf_renk_id=p['rf_renk_id'],
+            uretim_varyant_id=p['uretim_varyant_id'],
+        )
         rf_uyari = None
         if not rf_bilgi:
             rf_uyari = (
@@ -7370,6 +7586,58 @@ def _rf_renk_uv_icin(con, uretim_varyant_id):
     return dict(row) if row else None
 
 
+def _rf_cari_uyari(con, rf_cari_id, plan_cari_id):
+    """RF cari ile plan cari farkliysa uyari metni (engelleme yok)."""
+    if not rf_cari_id or not plan_cari_id or rf_cari_id == plan_cari_id:
+        return None
+    return (
+        'Seçilen RF farklı bir cari kaydına bağlı; '
+        'genel kullanılabilir renk olabilir.'
+    )
+
+
+def _plan_rf_bilgi(con, rf_renk_id=None, uretim_varyant_id=None):
+    """Plan/batch RF bilgisi — önce rf_renk_id FK, yoksa UV otomatik eşleşme."""
+    if rf_renk_id:
+        row = con.execute("""
+            SELECT rf.id AS rf_renk_id, rf.rf_kod, rf.cari_id, rf.ad AS renk_ad
+            FROM nexgen_rf_renk rf
+            WHERE rf.id = ? AND rf.aktif = 1 AND rf.durum = 'ONAYLI'
+        """, (rf_renk_id,)).fetchone()
+        if row:
+            return dict(row)
+    if uretim_varyant_id:
+        return _rf_renk_uv_icin(con, uretim_varyant_id)
+    return None
+
+
+def _batch_plan_rf_bilgi(con, batch_kodu=None, plan_id=None, uretim_varyant_id=None):
+    """Batch/plan bağlamında RF — plan.rf_renk_id öncelikli."""
+    rf_renk_id = None
+    if batch_kodu:
+        row = con.execute("""
+            SELECT nb.plan_id, nb.uretim_varyant_id, np.rf_renk_id
+            FROM nexgen_uretim_batch nb
+            LEFT JOIN nexgen_uretim_plan np ON np.id = nb.plan_id
+            WHERE nb.batch_kodu = ?
+        """, (batch_kodu,)).fetchone()
+        if row:
+            plan_id = plan_id or row['plan_id']
+            uretim_varyant_id = uretim_varyant_id or row['uretim_varyant_id']
+            rf_renk_id = row['rf_renk_id']
+    elif plan_id and _plan_rf_renk_kolonu_var(con):
+        row = con.execute(
+            "SELECT rf_renk_id, uretim_varyant_id FROM nexgen_uretim_plan WHERE id=?",
+            (plan_id,),
+        ).fetchone()
+        if row:
+            rf_renk_id = row['rf_renk_id']
+            uretim_varyant_id = uretim_varyant_id or row['uretim_varyant_id']
+    return _plan_rf_bilgi(
+        con, rf_renk_id=rf_renk_id, uretim_varyant_id=uretim_varyant_id,
+    )
+
+
 def _batch_uretim_miktar_kg(con, batch_kodu):
     """BITTI uretilen + DEVAM alt emir hedeflerinin toplami."""
     miktar = _batch_toplam_uretilen(con, batch_kodu)
@@ -7396,7 +7664,12 @@ def _rf_kullanim_tablet_sync(con, batch_kodu, uretim_emir_id=None, tamamlandi=Fa
     if not baglam:
         return None
 
-    rf = _rf_renk_uv_icin(con, baglam['uretim_varyant_id'])
+    rf = _batch_plan_rf_bilgi(
+        con,
+        batch_kodu=batch_kodu,
+        plan_id=baglam['plan_id'],
+        uretim_varyant_id=baglam['uretim_varyant_id'],
+    )
     if not rf:
         return None
 
