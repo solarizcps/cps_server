@@ -185,34 +185,16 @@
     </div>
     {% else %}
 
-    <div class="up-tablo-kap">
-      <table class="up-tablo" id="up-tablo">
-        <thead>
-          <tr>
-            <th class="ut-th ut-th-sira">#</th>
-            <th class="ut-th ut-th-sipno">Plan / Sipariş No</th>
-            <th class="ut-th ut-th-batch">Batch</th>
-            <th class="ut-th ut-th-cari">Cari</th>
-            <th class="ut-th ut-th-termin">Termin</th>
-            <th class="ut-th ut-th-urun">Formül / RF</th>
-            <th class="ut-th ut-th-varyant">S/L · KG</th>
-            <th class="ut-th ut-th-r ut-th-topkg">Üretim / Sipariş KG</th>
-            <th class="ut-th ut-th-c">Alt Emir</th>
-            <th class="ut-th">Durum</th>
-            <th class="ut-th">Tarih</th>
-            <th class="ut-th ut-th-islem">İşlem</th>
-          </tr>
-        </thead>
-        <tbody id="up-tablo-body">
-        {# JS tarafından doldurulur — gruplama siparis_no bazlı #}
-        </tbody>
-      </table>
+    <div class="up-kart-liste-kap">
+      <div class="up-kart-liste" id="up-kart-liste">
+        {# JS tarafından doldurulur — planlama_siparis kartları #}
+      </div>
     </div>
 
     {# Alt sayfa: toplam + pagination #}
     <div class="up-alt-bar">
       <div class="up-alt-toplam" id="up-toplam-metin">
-        Toplam <span id="up-toplam-sayi">{{ planlar | length }}</span> kayıt
+        Toplam <span id="up-toplam-sayi">{{ planlar | length }}</span> sipariş
       </div>
       <div class="up-sayfalama" id="up-sayfalama"></div>
       <div class="up-sayfa-basi">
@@ -923,6 +905,8 @@ function veriGrupla() {
     g.satirlar.push({
       id:            p.id,
       plan_kodu:     p.plan_kodu,
+      uv_id:         p.uv_id,
+      rf_renk_id:    p.rf_renk_id,
       formul_ad:     p.formul_ad || '—',
       renk_ad:       p.renk_ad || '—',
       boyut:         p.boyut || '',
@@ -945,45 +929,104 @@ function veriGrupla() {
   _gruplar = sira.map(function(k) { return harita[k]; });
 }
 
-/* Header + MPR satır HTML */
-function grupSatirHtml(g, idx) {
-  var colSay = 12;
+/* Plan kartı + iç MPR tablo HTML */
+function grupHdrAksiyonlar(g, idx) {
+  var btns = '<button type="button" class="up-ps-btn up-ps-btn-stok" onclick="grupStokOnizleFromEl(this)">Talep / Stok</button>';
+  if (!_CAN_MANAGE) return btns;
+  if (g.planlama_siparis_id) {
+    btns += '<button type="button" class="up-ps-btn up-ps-btn-mpr" onclick="mprModalAcById('
+      + g.planlama_siparis_id + ')">+ MPR Satırı</button>';
+  }
+  var planIds = g.satirlar.filter(function(v) { return v.durum === 'PLANLANDI'; })
+    .map(function(v) { return v.id; });
+  if (planIds.length) {
+    btns += '<button type="button" class="up-ps-btn up-ps-btn-gonder" onclick="grupUretimeGonderFromEl(this)">Üretime Gönder</button>';
+  }
+  return btns;
+}
+
+function _grupFromEl(el) {
+  var kart = el.closest('.up-ps-kart');
+  if (!kart) return null;
+  var i = parseInt(kart.getAttribute('data-idx'), 10);
+  if (isNaN(i)) return null;
+  var bas = (_aktif_sayfa - 1) * _sayfa_basi;
+  return _filtreliGruplar[bas + i] || null;
+}
+
+function grupUretimeGonderFromEl(el) {
+  var g = _grupFromEl(el);
+  if (!g) return;
+  var ids = g.satirlar.filter(function(v) { return v.durum === 'PLANLANDI'; })
+    .map(function(v) { return v.id; });
+  grupGonder(ids, g.siparis_no || g.musteri_adi);
+}
+
+function grupStokOnizleFromEl(el) {
+  var g = _grupFromEl(el);
+  if (g) grupStokOnizle(g);
+}
+
+function grupKartHtml(g, idx) {
   var toplamKg = g.satirlar.reduce(function(s, v) {
     return s + (parseFloat(v.planlanan_kg) || 0);
   }, 0);
   var toplamKgStr = toplamKg > 0
     ? Math.round(toplamKg).toLocaleString('tr-TR') + ' KG'
     : '—';
-  var mprBtn = '';
-  if (_CAN_MANAGE && g.planlama_siparis_id) {
-    mprBtn = '<button type="button" class="ut-btn-mpr-ekle" onclick="mprModalAcById('
-      + g.planlama_siparis_id + ')">+ MPR Satırı Ekle</button>';
-  }
-  var hdrHtml =
-    '<tr class="ut-tr ut-tr-hdr"' +
-    ' data-ara="' + (g.musteri_adi + ' ' + g.siparis_no).toLowerCase() + '"' +
-    ' data-durum="' + g.hdr_durum + '">' +
-    '<td colspan="' + colSay + '" class="ut-hdr-cell">' +
-      '<div class="ut-hdr-ic">' +
-        '<span class="ut-hdr-sipno">' + (g.siparis_no || '—') + '</span>' +
-        '<span class="ut-hdr-ayrac">·</span>' +
-        '<span class="ut-hdr-cari">' + g.musteri_adi + '</span>' +
-        '<span class="ut-hdr-ayrac">·</span>' +
-        '<span class="ut-hdr-termin">Termin: ' + (g.termin_tarihi || '—') + '</span>' +
-        '<span class="ut-hdr-ayrac">·</span>' +
-        '<span class="ut-hdr-topkg">' + toplamKgStr + '</span>' +
-        '<span class="ut-hdr-ayrac">·</span>' +
-        '<span class="ut-hdr-satir-sayi">' + g.satirlar.length + ' MPR satır</span>' +
-        mprBtn +
-        '<span class="ut-hdr-durum">' + hdrDurumEtiket(g.hdr_durum) + '</span>' +
-      '</div>' +
-    '</td></tr>';
-
+  var satirDurumlari = g.satirlar.map(function(v) { return v.durum; }).join(' ');
+  var batchHazir = g.satirlar.some(function(v) { return v.batch_durum === 'HAZIR'; });
+  var dataDurum = batchHazir ? 'HAZIR' : (g.hdr_durum || satirDurumlari.split(' ')[0] || '');
   var mprHtml = g.satirlar.map(function(v, vi) {
     return mprSatirHtml(g, v, idx, vi);
   }).join('');
 
-  return hdrHtml + mprHtml;
+  return '<article class="up-ps-kart"' +
+    ' data-idx="' + idx + '"' +
+    ' data-ara="' + escAttr((g.musteri_adi + ' ' + g.siparis_no).toLowerCase()) + '"' +
+    ' data-durum="' + escAttr(dataDurum) + '"' +
+    ' data-key="' + escAttr(g.key) + '">' +
+    '<header class="up-ps-hdr">' +
+      '<div class="up-ps-hdr-sol">' +
+        '<div class="up-ps-sipno">' + escHtml(g.siparis_no || '—') + '</div>' +
+        '<div class="up-ps-meta">' +
+          '<span class="up-ps-meta-item"><b>Cari</b> ' + escHtml(g.musteri_adi) + '</span>' +
+          '<span class="up-ps-meta-sep">·</span>' +
+          '<span class="up-ps-meta-item"><b>Termin</b> ' + escHtml(g.termin_tarihi || '—') + '</span>' +
+          '<span class="up-ps-meta-sep">·</span>' +
+          '<span class="up-ps-meta-item up-ps-meta-kg">' + toplamKgStr + '</span>' +
+          '<span class="up-ps-meta-sep">·</span>' +
+          '<span class="up-ps-meta-item">' + g.satirlar.length + ' MPR</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="up-ps-hdr-sag">' +
+        '<span class="up-ps-hdr-durum">' + hdrDurumEtiket(g.hdr_durum) + '</span>' +
+        '<div class="up-ps-hdr-aksiyon">' + grupHdrAksiyonlar(g, idx) + '</div>' +
+      '</div>' +
+    '</header>' +
+    '<div class="up-ps-mpr-wrap">' +
+      '<table class="up-ps-mpr-tablo">' +
+        '<thead><tr>' +
+          '<th class="up-mpr-th-sira">#</th>' +
+          '<th>Formül / RF</th>' +
+          '<th>Renk</th>' +
+          '<th>S/L · KG</th>' +
+          '<th class="up-mpr-th-r">Üretim / Sipariş</th>' +
+          '<th>Batch / Alt Emir</th>' +
+          '<th>Durum</th>' +
+          '<th class="up-mpr-th-islem">İşlem</th>' +
+        '</tr></thead>' +
+        '<tbody>' + mprHtml + '</tbody>' +
+      '</table>' +
+    '</div>' +
+  '</article>';
+}
+
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function escAttr(s) {
+  return escHtml(s).replace(/"/g, '&quot;');
 }
 
 function mprSatirHtml(g, v, gIdx, vIdx) {
@@ -1029,48 +1072,80 @@ function mprSatirHtml(g, v, gIdx, vIdx) {
 
   var dataAra = (g.musteri_adi + ' ' + g.siparis_no + ' ' + v.plan_kodu + ' ' + v.formul_ad).toLowerCase();
 
-  return '<tr class="ut-tr ut-tr-mpr ut-tr-' + v.durum.toLowerCase() + '"' +
-    ' data-ara="' + dataAra + '"' +
-    ' data-durum="' + v.durum + '"' +
-    ' data-batch-durum="' + (v.batch_durum || '') + '"' +
-    ' data-formul="' + v.formul_ad + '"' +
-    ' data-renk="' + v.renk_ad + '"' +
-    ' data-boyut="' + (v.boyut || '') + '"' +
-    ' data-tarih="' + (v.plan_tarihi || '') + '">' +
-    '<td class="ut-td ut-td-sira ut-td-mpr-gir">' + (gIdx + 1) + '.' + (vIdx + 1) + '</td>' +
-    '<td class="ut-td ut-td-sipno"><span class="ut-plan-kodu">' + (v.plan_kodu || '—') + '</span></td>' +
-    '<td class="ut-td ut-td-batch">' + batchHtml + '</td>' +
-    '<td class="ut-td ut-td-cari ut-td-mpr-bos">—</td>' +
-    '<td class="ut-td ut-td-termin ut-td-mpr-bos">—</td>' +
-    '<td class="ut-td ut-td-urun">' +
-      '<div class="ut-urun-formul">' + v.formul_ad + '</div>' +
+  return '<tr class="up-mpr-tr up-mpr-tr-' + v.durum.toLowerCase() + '"' +
+    ' data-ara="' + escAttr(dataAra) + '"' +
+    ' data-durum="' + escAttr(v.durum) + '"' +
+    ' data-batch-durum="' + escAttr(v.batch_durum || '') + '"' +
+    ' data-formul="' + escAttr(v.formul_ad) + '"' +
+    ' data-renk="' + escAttr(v.renk_ad) + '"' +
+    ' data-boyut="' + escAttr(v.boyut || '') + '"' +
+    ' data-tarih="' + escAttr(v.plan_tarihi || '') + '">' +
+    '<td class="up-mpr-td-sira">' + (gIdx + 1) + '.' + (vIdx + 1) + '</td>' +
+    '<td class="up-mpr-td-urun">' +
+      '<div class="ut-urun-formul">' + escHtml(v.formul_ad) + '</div>' +
       '<div class="ut-urun-rf">' + rfHtml + '</div>' +
+      '<div class="ut-plan-kodu-alt">' + escHtml(v.plan_kodu || '') + '</div>' +
     '</td>' +
-    '<td class="ut-td ut-td-varyant">' +
-      '<span class="ut-boyut ut-boyut-' + (v.boyut || 'std').toLowerCase() + '">' + (v.boyut || '—') + '</span>' +
+    '<td class="up-mpr-td-renk">' + escHtml(v.renk_ad) + '</td>' +
+    '<td class="up-mpr-td-varyant">' +
+      '<span class="ut-boyut ut-boyut-' + (v.boyut || 'std').toLowerCase() + '">' + escHtml(v.boyut || '—') + '</span>' +
       ' <span class="ut-varyant-kg">' + kg + '</span>' +
     '</td>' +
-    '<td class="ut-td ut-td-kg ut-td-r">' +
+    '<td class="up-mpr-td-kg">' +
       '<div class="ut-kg-uretilen">' + uretKg + '</div>' +
       '<div class="ut-kg-siparis">/ ' + sipKg + ' KG</div>' +
     '</td>' +
-    '<td class="ut-td ut-td-altemir">' + altEmirHtml + '</td>' +
-    '<td class="ut-td">' + durumEtiket(v.durum) + '</td>' +
-    '<td class="ut-td ut-td-tarih">' + (v.plan_tarihi || '—') + '</td>' +
-    '<td class="ut-td ut-td-islem">' + islemHtml + '</td>' +
+    '<td class="up-mpr-td-batch"><div class="up-mpr-batch-cell">' + batchHtml
+      + '<div class="up-mpr-altemir">' + altEmirHtml + '</div></div></td>' +
+    '<td class="up-mpr-td-durum">' + durumEtiket(v.durum) + '</td>' +
+    '<td class="up-mpr-td-islem"><div class="ut-islem-grup">' + islemHtml + '</div></td>' +
     '</tr>';
 }
 
-/* Tbody'yi gruplarla doldur */
+function grupStokOnizle(g) {
+  if (!g || !g.satirlar.length) return;
+  var modal = document.getElementById('grup-stok-modal');
+  var icerik = document.getElementById('grup-stok-icerik');
+  var baslik = document.getElementById('grup-stok-baslik');
+  if (!modal || !icerik) return;
+  baslik.textContent = (g.siparis_no || 'Sipariş') + ' — Talep / Stok Önizleme';
+  icerik.innerHTML = '<div class="up-stok-yukleniyor">Hesaplanıyor...</div>';
+  modal.style.display = 'flex';
+  Promise.all(g.satirlar.map(function(v) {
+    if (!v.uv_id) return Promise.resolve({ ok: false });
+    return stokOnizleFetch(v.uv_id, v.rf_renk_id, v.planlanan_kg);
+  })).then(function(results) {
+    var birlesik = stokKalemlerBirlestir(results.filter(function(r) { return r && r.ok; }));
+    if (!birlesik.kalemler.length) {
+      icerik.innerHTML = '<div class="up-stok-hata">Stok önizlemesi hesaplanamadı.</div>';
+      return;
+    }
+    var html = stokKontrolHtml(birlesik.kalemler);
+    if (!birlesik.yeterli_mi) {
+      html += '<div class="up-stok-kontrol-uyari" style="margin-top:8px">⚠ '
+        + birlesik.eksik_sayisi + ' kalemde kullanılabilir stok yetersiz.</div>';
+    }
+    icerik.innerHTML = html;
+  }).catch(function() {
+    icerik.innerHTML = '<div class="up-stok-hata">Stok kontrolü yüklenemedi.</div>';
+  });
+}
+
+function grupStokModalKapat(e) {
+  if (e && e.target !== document.getElementById('grup-stok-modal')) return;
+  document.getElementById('grup-stok-modal').style.display = 'none';
+}
+
+/* Kart listesini doldur */
 function tabloRender(liste) {
-  var tbody = document.getElementById('up-tablo-body');
-  if (!tbody) return;
+  var kap = document.getElementById('up-kart-liste');
+  if (!kap) return;
   if (!liste || liste.length === 0) {
-    tbody.innerHTML = '';
+    kap.innerHTML = '';
     return;
   }
-  tbody.innerHTML = liste.map(function(g, i) {
-    return grupSatirHtml(g, i);
+  kap.innerHTML = liste.map(function(g, i) {
+    return grupKartHtml(g, i);
   }).join('');
 }
 
@@ -2590,7 +2665,103 @@ async function geriAlOnayla() {
 }
 .up-filtre-reset-btn:hover { background: #f1f5f9; border-color: #cbd5e1; }
 
-/* ── Tablo Kapsayıcı ── */
+/* ── Planlama Sipariş Kartları (FAZ UI fix) ── */
+.up-kart-liste-kap {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-top: none;
+  border-radius: 0;
+  padding: 10px 12px 14px;
+}
+.up-kart-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.up-ps-kart {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15,23,42,.04);
+}
+.up-ps-hdr {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid #e2e8f0;
+  flex-wrap: wrap;
+}
+.up-ps-hdr-sol { min-width: 0; flex: 1 1 240px; }
+.up-ps-hdr-sag {
+  display: flex; flex-direction: column; align-items: flex-end;
+  gap: 8px; flex-shrink: 0;
+}
+.up-ps-sipno {
+  font-size: 15px; font-weight: 800; color: #0f172a;
+  font-family: 'Courier New', monospace; line-height: 1.2;
+}
+.up-ps-meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  margin-top: 4px; font-size: 12px; color: #64748b;
+}
+.up-ps-meta-item b { color: #94a3b8; font-weight: 600; margin-right: 3px; }
+.up-ps-meta-kg { color: #0f766e; font-weight: 700; }
+.up-ps-meta-sep { color: #cbd5e1; }
+.up-ps-hdr-aksiyon {
+  display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end;
+}
+.up-ps-btn {
+  padding: 5px 10px; border-radius: 6px; font-size: 11px; font-weight: 700;
+  cursor: pointer; white-space: nowrap; border: 1px solid transparent;
+  transition: background .08s, border-color .08s;
+}
+.up-ps-btn-mpr { background: #fff; color: #0f766e; border-color: #99f6e4; }
+.up-ps-btn-mpr:hover { background: #f0fdfa; }
+.up-ps-btn-stok { background: #fff; color: #475569; border-color: #e2e8f0; }
+.up-ps-btn-stok:hover { background: #f8fafc; }
+.up-ps-btn-gonder { background: #f6c343; color: #111827; border-color: #f6c343; }
+.up-ps-btn-gonder:hover { background: #f5b82e; }
+.up-ps-mpr-wrap {
+  overflow-x: auto;
+  padding: 0 8px 8px;
+  background: #fafbfc;
+}
+.up-ps-mpr-tablo {
+  width: 100%; border-collapse: collapse; font-size: 12px; min-width: 720px;
+}
+.up-ps-mpr-tablo thead th {
+  padding: 7px 10px; text-align: left;
+  font-size: 10px; font-weight: 700; color: #94a3b8;
+  text-transform: uppercase; letter-spacing: .5px;
+  border-bottom: 1px solid #e8edf2; background: #fafbfc;
+}
+.up-mpr-th-sira { width: 42px; text-align: center; }
+.up-mpr-th-r { text-align: right; }
+.up-mpr-th-islem { width: 170px; text-align: right; }
+.up-mpr-tr { border-bottom: 1px solid #eef2f6; }
+.up-mpr-tr:last-child { border-bottom: none; }
+.up-mpr-tr:hover { background: #fff; }
+.up-mpr-tr td {
+  padding: 9px 10px; vertical-align: middle; color: #334155;
+}
+.up-mpr-td-sira {
+  text-align: center; color: #94a3b8; font-size: 11px; font-weight: 600;
+  padding-left: 14px !important;
+}
+.up-mpr-td-kg { text-align: right; white-space: nowrap; }
+.up-mpr-td-islem { text-align: right; white-space: nowrap; }
+.up-mpr-td-renk { color: #475569; font-size: 12px; }
+.up-mpr-batch-cell { display: flex; flex-direction: column; gap: 3px; }
+.up-mpr-altemir { font-size: 11px; }
+.ut-plan-kodu-alt { font-size: 10px; color: #94a3b8; font-family: monospace; margin-top: 2px; }
+.up-grup-stok-kutu { max-width: 520px; }
+.up-grup-stok-icerik { max-height: 360px; overflow-y: auto; }
+
+/* ── Tablo Kapsayıcı (legacy) ── */
 .up-tablo-kap {
   overflow-x: auto;
   background: #fff;
@@ -2879,10 +3050,16 @@ async function geriAlOnayla() {
 /* ── Responsive ── */
 @media (max-width: 900px) {
   .up-ozet-satir { grid-template-columns: repeat(3,1fr); }
+  .up-ps-hdr { flex-direction: column; }
+  .up-ps-hdr-sag { align-items: flex-start; width: 100%; }
+  .up-ps-hdr-aksiyon { justify-content: flex-start; }
 }
 @media (max-width: 600px) {
   .up-ozet-satir { grid-template-columns: repeat(2,1fr); }
   .up-header-ic  { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .up-govde { padding: 0 12px; }
+  .up-ps-meta { flex-direction: column; align-items: flex-start; gap: 2px; }
+  .up-ps-meta-sep { display: none; }
 }
 
 /* ── Üretime Gönder Önizleme Modal ─────────────────── */
@@ -2949,6 +3126,16 @@ async function geriAlOnayla() {
 </style>
 
 {# ── Üretime Gönder Önizleme Modal ──────────────────── #}
+<div class="up-onizleme-overlay" id="grup-stok-modal" onclick="grupStokModalKapat(event)">
+  <div class="up-onizleme-kutu up-grup-stok-kutu" onclick="event.stopPropagation()">
+    <div class="up-onizleme-baslik" id="grup-stok-baslik">Talep / Stok Önizleme</div>
+    <div id="grup-stok-icerik" class="up-grup-stok-icerik"></div>
+    <div class="up-onizleme-butonlar">
+      <button class="up-onizleme-btn up-onizleme-iptal" onclick="grupStokModalKapat()">Kapat</button>
+    </div>
+  </div>
+</div>
+
 <div class="up-onizleme-overlay" id="up-onizleme-modal">
   <div class="up-onizleme-kutu">
     <div class="up-onizleme-baslik">Üretime Gönder — Alt Emir Özeti</div>
