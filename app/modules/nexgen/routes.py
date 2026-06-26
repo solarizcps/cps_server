@@ -6910,11 +6910,22 @@ def _plan_cari_select_sql(con):
     return "NULL AS cari_id, np.musteri_adi, np.musteri_adi AS musteri_adi_legacy", ""
 
 
-def _plan_liste_sorgu(con, sadece_aktif=False):
+def _plan_liste_sorgu(con, sadece_aktif=False, mpr_on_calisma_only=False):
     """Plan listesini join'li şekilde döner.
     plan_id üzerinden bağlı batch_kodu da getirilir (BASLADI → Devam linki için).
     """
-    where = "WHERE np.durum NOT IN ('BITTI','IPTAL')" if sadece_aktif else ""
+    where_parts = []
+    if sadece_aktif:
+        where_parts.append("np.durum NOT IN ('BITTI','IPTAL')")
+    if mpr_on_calisma_only:
+        if (_plan_planlama_siparis_kolonu_var(con)
+                and _planlama_siparis_tablosu_var(con)):
+            where_parts.append(
+                "(np.kaynak = 'MPR_ONCALISMA' OR np.planlama_siparis_id IS NULL)"
+            )
+        else:
+            where_parts.append("np.kaynak = 'MPR_ONCALISMA'")
+    where = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
     # plan_id kolonu varlığına göre batch JOIN kararı
     _bcols = [c['name'] for c in con.execute(
         "PRAGMA table_info(nexgen_uretim_batch)"
@@ -7109,6 +7120,193 @@ def uretim_plan_liste():
         cariler=cariler,
         can_manage=yetki_var('nexgen.plan.manage', 'can_manage'),
     )
+
+
+def _formuller_varyant_hiyerarsi(con):
+    """Aktif URETIME_ACIK varyantları formül > renk > boyut hiyerarşisinde döner."""
+    varyant_rows = con.execute("""
+        SELECT uv.id AS uv_id, uv.boyut, uv.recete_durum,
+               rv.id AS renk_id, rv.ad AS renk_ad,
+               f.id  AS formul_id, f.ad AS formul_ad
+        FROM nexgen_uretim_varyant uv
+        JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
+        JOIN nexgen_formul f        ON f.id  = rv.formul_id
+        WHERE uv.aktif = 1
+          AND uv.recete_durum = 'URETIME_ACIK'
+        ORDER BY f.ad, rv.ad, uv.boyut
+    """).fetchall()
+
+    formul_map = {}
+    for r in varyant_rows:
+        fid = r['formul_id']
+        if fid not in formul_map:
+            formul_map[fid] = {'formul_id': fid, 'formul_ad': r['formul_ad'], 'renkler': {}}
+        rid = r['renk_id']
+        if rid not in formul_map[fid]['renkler']:
+            formul_map[fid]['renkler'][rid] = {
+                'renk_id': rid, 'renk_ad': r['renk_ad'],
+                'large_uv_id': None, 'small_uv_id': None,
+            }
+        if r['boyut'] == 'LARGE':
+            formul_map[fid]['renkler'][rid]['large_uv_id'] = r['uv_id']
+        elif r['boyut'] == 'SMALL':
+            formul_map[fid]['renkler'][rid]['small_uv_id'] = r['uv_id']
+
+    return [
+        {
+            'formul_id': f['formul_id'],
+            'formul_ad': f['formul_ad'],
+            'renkler': list(f['renkler'].values()),
+        }
+        for f in formul_map.values()
+    ]
+
+
+@nexgen_bp.route('/mpr')
+@yetki_gerekli('nexgen.plan.view', 'can_view')
+def mpr_on_calisma_liste():
+    """MPR ön çalışma listesi — siparişsiz MPR satırları."""
+    con = _db()
+    try:
+        planlar = [dict(p) for p in _plan_liste_sorgu(con, mpr_on_calisma_only=True)]
+
+        for pl in planlar:
+            rf = _plan_rf_bilgi(
+                con,
+                rf_renk_id=pl.get('rf_renk_id'),
+                uretim_varyant_id=pl['uv_id'],
+            )
+            if rf:
+                pl['rf_kod'] = rf['rf_kod']
+                pl['rf_renk_ad'] = rf.get('renk_ad')
+            else:
+                pl['rf_kod'] = pl.get('rf_kod_fk')
+                pl['rf_renk_ad'] = pl.get('rf_ad_fk')
+
+            stok = _mpr_stok_ihtiyac_hesapla(
+                con, pl['uv_id'], pl.get('rf_renk_id'), float(pl['planlanan_kg'])
+            )
+            pl['stok_yeterli_mi'] = stok.get('yeterli_mi') if stok.get('ok') else None
+            pl['stok_eksik_sayisi'] = stok.get('eksik_sayisi', 0) if stok.get('ok') else None
+
+        formuller = _formuller_varyant_hiyerarsi(con)
+    finally:
+        con.close()
+
+    return render_template(
+        'nexgen/mpr_on_calisma.html',
+        active='nexgen',
+        planlar=planlar,
+        formuller=formuller,
+        can_manage=yetki_var('nexgen.plan.manage', 'can_manage'),
+    )
+
+
+@nexgen_bp.route('/api/mpr/on-calisma/ekle', methods=['POST'])
+@yetki_gerekli('nexgen.plan.manage', 'can_manage')
+def api_mpr_on_calisma_ekle():
+    """Siparişsiz MPR ön çalışma satırı oluşturur. Header oluşturmaz."""
+    d = request.get_json(silent=True) or {}
+    uv_id = d.get('uretim_varyant_id')
+    kg = d.get('planlanan_kg')
+    notlar = (d.get('notlar') or '').strip() or None
+    rf_renk_id_raw = d.get('rf_renk_id')
+
+    if not uv_id or not kg:
+        return jsonify({'ok': False, 'hata': 'uretim_varyant_id ve planlanan_kg zorunlu'}), 400
+    try:
+        kg = float(kg)
+        if kg <= 0:
+            return jsonify({'ok': False, 'hata': 'KG sıfırdan büyük olmalı'}), 400
+    except Exception:
+        return jsonify({'ok': False, 'hata': 'Geçersiz planlanan_kg'}), 400
+
+    from datetime import date as _date
+    plan_tarihi = _date.today().isoformat()
+
+    con = _db()
+    try:
+        uv = con.execute(
+            "SELECT uv.id, uv.boyut, rv.ad AS renk_ad, f.ad AS formul_ad "
+            "FROM nexgen_uretim_varyant uv "
+            "JOIN nexgen_renk_varyant rv ON rv.id=uv.renk_varyant_id "
+            "JOIN nexgen_formul f ON f.id=rv.formul_id "
+            "WHERE uv.id=? AND uv.aktif=1",
+            (uv_id,),
+        ).fetchone()
+        if not uv:
+            return jsonify({'ok': False, 'hata': 'Üretim varyantı bulunamadı'}), 404
+
+        rf_renk_id = None
+        rf = None
+        if _plan_rf_renk_kolonu_var(con):
+            if not rf_renk_id_raw:
+                return jsonify({'ok': False, 'hata': 'rf_renk_id zorunlu'}), 400
+            try:
+                rf_renk_id = int(rf_renk_id_raw)
+            except (TypeError, ValueError):
+                return jsonify({'ok': False, 'hata': 'rf_renk_id geçersiz'}), 400
+            rf = con.execute("""
+                SELECT rf.id, rf.rf_kod, rf.ad
+                FROM nexgen_rf_renk rf
+                JOIN nexgen_rf_formul_uygunluk u ON u.rf_renk_id = rf.id
+                JOIN nexgen_uretim_varyant uv ON uv.id = ?
+                JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
+                    AND rv.formul_id = u.formul_id
+                WHERE rf.id = ?
+                  AND rf.durum = 'ONAYLI' AND rf.aktif = 1
+                  AND u.durum = 'ONAYLI' AND u.aktif = 1
+            """, (uv_id, rf_renk_id)).fetchone()
+            if not rf:
+                return jsonify({
+                    'ok': False,
+                    'hata': 'Seçilen RF bu formül için ONAYLI değil veya bulunamadı.',
+                }), 400
+
+        plan_kodu = _plan_kodu_uret(con)
+        uid = _kullanici_id()
+
+        cols = [
+            'plan_kodu', 'kaynak', 'uretim_varyant_id', 'planlanan_kg',
+            'oncelik_sira', 'plan_tarihi', 'durum', 'notlar', 'created_by',
+        ]
+        vals = [
+            plan_kodu, 'MPR_ONCALISMA', uv_id, round(kg, 3),
+            10, plan_tarihi, 'ON_CALISMA', notlar, uid,
+        ]
+        if _plan_rf_renk_kolonu_var(con):
+            cols.insert(-3, 'rf_renk_id')
+            vals.insert(-3, rf_renk_id)
+
+        placeholders = ','.join(['?'] * len(cols))
+        con.execute(
+            f"INSERT INTO nexgen_uretim_plan ({','.join(cols)}) VALUES ({placeholders})",
+            vals,
+        )
+        plan_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+        con.commit()
+
+        resp = {
+            'ok': True,
+            'plan_id': plan_id,
+            'plan_kodu': plan_kodu,
+            'formul_ad': uv['formul_ad'],
+            'renk_ad': uv['renk_ad'],
+            'boyut': uv['boyut'],
+            'planlanan_kg': round(kg, 3),
+            'durum': 'ON_CALISMA',
+            'kaynak': 'MPR_ONCALISMA',
+        }
+        if rf_renk_id is not None and rf:
+            resp['rf_renk_id'] = rf_renk_id
+            resp['rf_kod'] = rf['rf_kod']
+            resp['rf_renk_ad'] = rf['ad']
+        return jsonify(resp)
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
 
 
 @nexgen_bp.route('/api/plan/rf-secenekleri')
@@ -8986,6 +9184,12 @@ def api_plan_basla(plan_id):
         """, (plan_id,)).fetchone()
         if not p:
             return jsonify({'ok': False, 'hata': 'Plan bulunamadı'}), 404
+        if p['durum'] == 'ON_CALISMA':
+            return jsonify({
+                'ok': False,
+                'hata': 'ON_CALISMA durumundaki MPR üretime gönderilemez. '
+                        'Önce planlama siparişine bağlayın.',
+            }), 400
         if p['durum'] not in ('PLANLANDI',):
             return jsonify({'ok': False, 'hata': f'Plan durumu uygun değil: {p["durum"]}'}), 400
 
