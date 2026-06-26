@@ -8,16 +8,12 @@
     <div class="mo-header-ic">
       <div class="mo-header-sol">
         <h1 class="mo-header-baslik">MPR Ön Çalışma</h1>
-        <p class="mo-header-alt">Operasyon görünümü — stok yeterliliği ve üretim kararı.</p>
+        <p class="mo-header-alt">Stok yeterliliği ve üretim kararı — operasyon ekranı</p>
       </div>
       {% if can_manage %}
       <button class="mo-yeni-btn" type="button" onclick="moModalAc()">+ Yeni MPR</button>
       {% endif %}
     </div>
-  </div>
-
-  <div class="mo-info-bant">
-    Satıra tıklayın veya <strong>Stok Durumu</strong> ile detayı açın. Üretime göndermek için planlama siparişine bağlanmalıdır.
   </div>
 
   <div class="mo-layout">
@@ -31,56 +27,64 @@
           {% endif %}
         </div>
         {% else %}
-        <div class="mo-liste-baslik">MPR Kayıtları ({{ planlar|length }})</div>
-        <div class="mo-tablo-kap">
-          <table class="mo-tablo">
-            <thead>
-              <tr>
-                <th>MPR</th>
-                <th>Formül / RF</th>
-                <th class="mo-td-sag">Sipariş KG</th>
-                <th>Stok</th>
-                <th>İşlem</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for p in planlar %}
-              <tr class="mo-satir" id="mo-satir-{{ p.id }}" data-plan-id="{{ p.id }}"
-                  onclick="moSatirSec({{ p.id }})">
-                <td>
-                  <span class="mo-kod">{{ p.plan_kodu }}</span>
-                  <div class="mo-satir-alt">{{ p.renk_ad or '—' }} · {{ p.boyut or '—' }}</div>
-                </td>
-                <td>
-                  <div class="mo-satir-formul">{{ p.formul_ad or '—' }}</div>
-                  <div class="mo-satir-alt">
-                    {% if p.rf_kod %}{{ p.rf_kod }}{% if p.rf_renk_ad %} · {{ p.rf_renk_ad }}{% endif %}{% else %}—{% endif %}
-                  </div>
-                </td>
-                <td class="mo-td-sag">{{ '%.3f'|format(p.planlanan_kg or 0) }}</td>
-                <td onclick="event.stopPropagation()">
-                  {% if p.stok_yeterli_mi is none %}
-                    <span class="mo-rozet mo-rozet-gri">—</span>
-                  {% elif p.stok_yeterli_mi %}
-                    <span class="mo-rozet mo-rozet-yesil">Hazır</span>
-                  {% else %}
-                    <span class="mo-rozet mo-rozet-kirmizi">Eksik {{ p.stok_eksik_sayisi or 0 }}</span>
-                  {% endif %}
-                </td>
-                <td class="mo-islem-hucre" onclick="event.stopPropagation()">
-                  <button type="button" class="mo-islem-btn mo-islem-btn-ana"
-                          onclick="moSatirSec({{ p.id }})">Stok Durumu</button>
-                  {% if can_manage and p.durum == 'ON_CALISMA' %}
-                  <button type="button" class="mo-islem-btn mo-islem-btn-bagla"
-                          onclick="moBaglaAc({{ p.id }}, '{{ p.plan_kodu|e }}', {{ p.uv_id }}, {{ p.rf_renk_id or 'null' }}, {{ p.planlanan_kg }})">
-                    Bağla
-                  </button>
-                  {% endif %}
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+        <div class="mo-liste-baslik">
+          MPR Kayıtları <span class="mo-liste-sayi" id="mo-liste-sayi">{{ planlar|length }}</span>
+        </div>
+        <div class="mo-liste-filtre">
+          <input type="search" class="mo-f-inp" id="mo-f-ara" placeholder="Ara (kod, formül, RF…)" oninput="moListeFiltrele()">
+          <select class="mo-f-inp" id="mo-f-durum" onchange="moListeFiltrele()">
+            <option value="">Tüm durumlar</option>
+            <option value="hazir">Hazır</option>
+            <option value="eksik">Eksik</option>
+          </select>
+          <select class="mo-f-inp" id="mo-f-formul" onchange="moListeFiltrele()">
+            <option value="">Tüm formüller</option>
+            {% set ns = namespace(seen=[]) %}
+            {% for p in planlar %}
+              {% if p.formul_ad and p.formul_ad not in ns.seen %}
+                {% set _ = ns.seen.append(p.formul_ad) %}
+                <option value="{{ p.formul_ad|e }}">{{ p.formul_ad }}</option>
+              {% endif %}
+            {% endfor %}
+          </select>
+          <label class="mo-f-eksik">
+            <input type="checkbox" id="mo-f-sadece-eksik" onchange="moListeFiltrele()"> Sadece eksikler
+          </label>
+        </div>
+        <div class="mo-liste-scroll" id="mo-liste-scroll">
+          {% for p in planlar %}
+          <div class="mo-liste-kart mo-satir" id="mo-satir-{{ p.id }}" data-plan-id="{{ p.id }}"
+               onclick="moSatirSec({{ p.id }})">
+            <div class="mo-lk-ust">
+              <span class="mo-lk-kod">{{ p.plan_kodu }}</span>
+              {% if p.stok_yeterli_mi is none %}
+                <span class="mo-rozet mo-rozet-gri">—</span>
+              {% elif p.stok_yeterli_mi %}
+                <span class="mo-rozet mo-rozet-yesil">Hazır</span>
+              {% else %}
+                <span class="mo-rozet mo-rozet-kirmizi">Eksik {{ p.stok_eksik_sayisi or 0 }}</span>
+              {% endif %}
+            </div>
+            <div class="mo-lk-formul">{{ p.formul_ad or '—' }}</div>
+            <div class="mo-lk-alt">
+              {% if p.rf_kod %}{{ p.rf_kod }}{% if p.rf_renk_ad %} · {{ p.rf_renk_ad }}{% endif %}{% else %}—{% endif %}
+              · {{ p.renk_ad or '—' }} · {{ p.boyut or '—' }}
+            </div>
+            <div class="mo-lk-alt">
+              <strong>{{ '%.3f'|format(p.planlanan_kg or 0) }} kg</strong>
+            </div>
+            <div class="mo-lk-islem" onclick="event.stopPropagation()">
+              <button type="button" class="mo-islem-btn mo-islem-btn-ana"
+                      onclick="moSatirSec({{ p.id }})">Stok Durumu</button>
+              {% if can_manage and p.durum == 'ON_CALISMA' %}
+              <button type="button" class="mo-islem-btn mo-islem-btn-bagla"
+                      onclick="moBaglaAc({{ p.id }}, '{{ p.plan_kodu|e }}', {{ p.uv_id }}, {{ p.rf_renk_id or 'null' }}, {{ p.planlanan_kg }})">
+                Bağla
+              </button>
+              {% endif %}
+            </div>
+          </div>
+          {% endfor %}
         </div>
         {% endif %}
       </div>
@@ -90,7 +94,7 @@
       <div class="mo-detay-bos" id="mo-detay-bos">
         <div class="mo-detay-bos-ikon">📋</div>
         <div class="mo-detay-bos-baslik">MPR seçin</div>
-        <div class="mo-detay-bos-metin">Listeden bir satıra tıklayın; stok özeti ve üretim kararı burada görünür.</div>
+        <div class="mo-detay-bos-metin">Soldan bir kayıt seçin; stok analizi ve üretim kararı burada görünür.</div>
       </div>
       <div id="mo-detay-icerik" style="display:none"></div>
     </div>
@@ -202,11 +206,13 @@
 <script>
 var _MO_FORMULLER = {{ formuller | tojson | safe }};
 var _MO_PLANLAR = {{ planlar | tojson | safe }};
+var _MO_CAN_MANAGE = {{ can_manage | tojson | safe }};
 var _moSeciliBoyut = null;
 var _moStokTimer = null;
 var _moSeciliPlanId = null;
 var _moDetayFiltre = 'all';
 var _moDetayCache = { planId: null, api: null, meta: null };
+var _moKalemIdx = 0;
 
 function moEsc(s) {
   if (s == null) return '';
@@ -219,6 +225,33 @@ function moFmtKg(n) {
 
 function moPlanMeta(planId) {
   return _MO_PLANLAR.find(function(p) { return p.id === planId; }) || {};
+}
+
+function moListeFiltrele() {
+  var araEl = document.getElementById('mo-f-ara');
+  if (!araEl) return;
+  var ara = (araEl.value || '').toLowerCase();
+  var durum = (document.getElementById('mo-f-durum') || {}).value || '';
+  var formul = (document.getElementById('mo-f-formul') || {}).value || '';
+  var sadeceEksik = document.getElementById('mo-f-sadece-eksik') && document.getElementById('mo-f-sadece-eksik').checked;
+  var gorunen = 0;
+  document.querySelectorAll('.mo-liste-kart').forEach(function(el) {
+    var pid = parseInt(el.dataset.planId, 10);
+    var meta = moPlanMeta(pid);
+    var haystack = [
+      meta.plan_kodu, meta.formul_ad, meta.rf_kod, meta.rf_renk_ad, meta.renk_ad, meta.boyut
+    ].join(' ').toLowerCase();
+    var show = true;
+    if (ara && haystack.indexOf(ara) < 0) show = false;
+    if (durum === 'hazir' && !meta.stok_yeterli_mi) show = false;
+    if (durum === 'eksik' && meta.stok_yeterli_mi !== false) show = false;
+    if (formul && meta.formul_ad !== formul) show = false;
+    if (sadeceEksik && meta.stok_yeterli_mi !== false) show = false;
+    el.style.display = show ? '' : 'none';
+    if (show) gorunen++;
+  });
+  var sayiEl = document.getElementById('mo-liste-sayi');
+  if (sayiEl) sayiEl.textContent = gorunen;
 }
 
 function moKalemSayilar(kalemler) {
@@ -250,11 +283,75 @@ function moKalemMetrik(k) {
   var rez = Number(k.rezerve_kg || 0);
   var bek = Number(k.yumusak_talep_kg || 0);
   var kul = Number(k.kullanilabilir_kg != null ? k.kullanilabilir_kg : fiz - rez - bek);
-  var eksikKg = k.yeterli ? 0 : Math.max(0, -Number(k.fark_kg || 0));
-  return { fiz: fiz, rez: rez, bek: bek, kul: kul, eksikKg: eksikKg };
+  var gerekli = Number(k.gerekli_kg || 0);
+  var eksikKg = k.yeterli ? 0 : Math.max(0, gerekli - kul, -Number(k.fark_kg || 0));
+  if (!k.yeterli && eksikKg <= 0) eksikKg = Math.max(0, -Number(k.fark_kg || 0));
+  return { fiz: fiz, rez: rez, bek: bek, kul: kul, gerekli: gerekli, eksikKg: eksikKg };
 }
 
-function moToplamPanelHtml(kalemler, ozet) {
+function moKalemKarar(k) {
+  var m = moKalemMetrik(k);
+  if (k.yeterli) {
+    return { tip: 'hazir', ikon: '🟢', etiket: 'Hazır', cls: 'mo-karar-hazir', kartCls: 'mo-kalem-hazir' };
+  }
+  if (m.fiz <= 0.0005) {
+    return { tip: 'yok', ikon: '🔴', etiket: 'Depoda yok', cls: 'mo-karar-yok', kartCls: 'mo-kalem-yok' };
+  }
+  if (m.kul > 0.0005 && m.kul < m.gerekli - 0.0005) {
+    if ((m.rez > 0.0005 || m.bek > 0.0005) && m.fiz >= m.gerekli * 0.3) {
+      return {
+        tip: 'ayrilmis', ikon: '🟡',
+        etiket: 'Depoda var fakat başka üretime ayrılmış',
+        cls: 'mo-karar-ayrilmis', kartCls: 'mo-kalem-ayrilmis',
+      };
+    }
+    return { tip: 'kismi', ikon: '🟠', etiket: 'Kısmi stok mevcut', cls: 'mo-karar-kismi', kartCls: 'mo-kalem-kismi' };
+  }
+  if (m.fiz > 0.0005 && (m.rez > 0.0005 || m.bek > 0.0005)) {
+    return {
+      tip: 'ayrilmis', ikon: '🟡',
+      etiket: 'Depoda var fakat başka üretime ayrılmış',
+      cls: 'mo-karar-ayrilmis', kartCls: 'mo-kalem-ayrilmis',
+    };
+  }
+  return { tip: 'yok', ikon: '🔴', etiket: 'Depoda yok', cls: 'mo-karar-yok', kartCls: 'mo-kalem-yok' };
+}
+
+function moNedenEksik(k, karar, m) {
+  var satirlar = [
+    'Fiziksel stok: ' + moFmtKg(m.fiz) + ' kg',
+    'Rezerv: ' + moFmtKg(m.rez) + ' kg',
+    'Başka üretimler: ' + moFmtKg(m.bek) + ' kg',
+    'Kullanılabilir: ' + moFmtKg(m.kul) + ' kg',
+    'İhtiyaç: ' + moFmtKg(m.gerekli) + ' kg',
+  ];
+  var sonuc = 'Stok yetersiz.';
+  if (karar.tip === 'hazir') sonuc = 'Bu kalem için stok yeterli.';
+  else if (karar.tip === 'yok') sonuc = 'Bu hammadde depoda bulunmuyor.';
+  else if (karar.tip === 'ayrilmis') sonuc = 'Başka üretimler nedeniyle stok yetersiz.';
+  else if (karar.tip === 'kismi') sonuc = 'Kısmi stok var ancak üretim ihtiyacını karşılamıyor.';
+  return { satirlar: satirlar, sonuc: sonuc };
+}
+
+function moOneriPlaceholder(k, karar, m) {
+  if (karar.tip === 'hazir') return [];
+  var oneriler = [];
+  if (m.fiz <= 0.0005 || m.eksikKg >= m.gerekli * 0.8) oneriler.push('Satın alma gerekli');
+  if (m.rez > 0.0005 || m.bek > 0.0005) oneriler.push('Depodan serbest bırakılabilir');
+  var ad = ((k.stok_ad || '') + ' ' + (k.stok_kod || '')).toLowerCase();
+  if (ad.indexOf('recycle') >= 0 || ad.indexOf('geri') >= 0) oneriler.push('Recycle kullanılabilir');
+  if ((k.kaynak || '').toUpperCase() === 'RF') oneriler.push('Alternatif RF kullanılabilir');
+  if (!oneriler.length) oneriler.push('Stok girişi veya rezerv kontrolü gerekli');
+  return oneriler;
+}
+
+function moKpiBlok(label, val, cls) {
+  return '<div class="mo-kpi-blok' + (cls ? ' ' + cls : '') + '">'
+    + '<div class="mo-kpi-deger">' + val + '</div>'
+    + '<div class="mo-kpi-etiket">' + label + '</div></div>';
+}
+
+function moToplamPanelHtml(kalemler, ozet, yeterliMi) {
   var tG = 0, tF = 0, tR = 0, tB = 0, tK = 0, tE = 0;
   kalemler.forEach(function(k) {
     var m = moKalemMetrik(k);
@@ -265,25 +362,68 @@ function moToplamPanelHtml(kalemler, ozet) {
     tK += m.kul;
     tE += m.eksikKg;
   });
+  var toplam = kalemler.length || 1;
+  var pY = Math.round(ozet.hazir / toplam * 100);
+  var pK = Math.round(ozet.kritik / toplam * 100);
+  var pE = Math.round(ozet.eksik / toplam * 100);
   return '<div class="mo-toplam-panel">'
     + '<div class="mo-toplam-baslik">Toplam Özet</div>'
-    + '<div class="mo-toplam-satir"><span>Bu üretim için gerekli</span><strong>' + moFmtKg(tG) + ' kg</strong></div>'
-    + '<div class="mo-toplam-satir"><span>Depoda fiziksel</span><strong>' + moFmtKg(tF) + ' kg</strong></div>'
-    + '<div class="mo-toplam-satir"><span>Depo ayırdı</span><strong>' + moFmtKg(tR) + ' kg</strong></div>'
-    + '<div class="mo-toplam-satir"><span>Başka üretimler istiyor</span><strong>' + moFmtKg(tB) + ' kg</strong></div>'
-    + '<div class="mo-toplam-satir"><span>Şu an kullanılabilir</span><strong>' + moFmtKg(tK) + ' kg</strong></div>'
-    + '<div class="mo-toplam-satir mo-toplam-eksik"><span>Toplam eksik</span><strong>' + moFmtKg(tE) + ' kg</strong></div>'
+    + '<div class="mo-kpi-grid">'
+    + moKpiBlok('Bu üretim için gerekli', moFmtKg(tG) + ' <small>kg</small>')
+    + moKpiBlok('Depoda fiziksel', moFmtKg(tF) + ' <small>kg</small>')
+    + moKpiBlok('Rezerve edilen', moFmtKg(tR) + ' <small>kg</small>')
+    + moKpiBlok('Başka üretimler', moFmtKg(tB) + ' <small>kg</small>')
+    + moKpiBlok('Şu an kullanılabilir', moFmtKg(tK) + ' <small>kg</small>')
+    + moKpiBlok('Toplam eksik', moFmtKg(tE) + ' <small>kg</small>', 'mo-kpi-eksik')
+    + '</div>'
+    + '<div class="mo-dagitim-baslik">Stok dağılımı</div>'
+    + '<div class="mo-dagitim-bar">'
+    + '<div class="mo-dagitim-parca mo-dp-yesil" style="width:' + pY + '%" title="' + ozet.hazir + ' yeterli"></div>'
+    + '<div class="mo-dagitim-parca mo-dp-sari" style="width:' + pK + '%" title="' + ozet.kritik + ' kritik"></div>'
+    + '<div class="mo-dagitim-parca mo-dp-kirmizi" style="width:' + pE + '%" title="' + ozet.eksik + ' eksik"></div>'
+    + '</div>'
     + '<div class="mo-toplam-dagitim">'
-    + '<span class="mo-rozet mo-rozet-yesil">' + ozet.hazir + ' yeterli</span> '
-    + '<span class="mo-rozet mo-rozet-sari">' + ozet.kritik + ' kritik</span> '
+    + '<span class="mo-rozet mo-rozet-yesil">' + ozet.hazir + ' yeterli</span>'
+    + '<span class="mo-rozet mo-rozet-sari">' + ozet.kritik + ' kritik</span>'
     + '<span class="mo-rozet mo-rozet-kirmizi">' + ozet.eksik + ' eksik</span>'
-    + '</div></div>';
+    + '</div>'
+    + moSonrakiAdimHtml(yeterliMi)
+    + '</div>';
 }
 
-function moDurumRozet(durum) {
-  if (durum === 'yeterli') return '<span class="mo-kart-rozet mo-kart-rozet-yesil">Yeterli</span>';
-  if (durum === 'kritik') return '<span class="mo-kart-rozet mo-kart-rozet-sari">Kritik</span>';
-  return '<span class="mo-kart-rozet mo-kart-rozet-kirmizi">Eksik</span>';
+function moSonrakiAdimHtml(yeterliMi) {
+  var adimlar = [
+    { n: 1, txt: 'Eksik stokları tamamla', aktif: !yeterliMi },
+    { n: 2, txt: 'Plan siparişine bağla', aktif: yeterliMi },
+    { n: 3, txt: 'Depo hazırlığı', aktif: false },
+    { n: 4, txt: 'Üretimi başlat', aktif: false },
+  ];
+  var html = '<div class="mo-sonraki-adim"><div class="mo-sonraki-baslik">Sonraki Adım</div><ol class="mo-adim-liste">';
+  adimlar.forEach(function(a) {
+    html += '<li class="mo-adim-item' + (a.aktif ? ' mo-adim-aktif' : '') + '">'
+      + '<span class="mo-adim-no">' + a.n + '</span> ' + a.txt + '</li>';
+  });
+  return html + '</ol></div>';
+}
+
+function moEksikOzetBand(ozet, yeterliMi) {
+  var eksikKalem = ozet.kritik + ozet.eksik;
+  var tamamlama = yeterliMi
+    ? 'Stok tamam — ek giriş gerekmez'
+    : (ozet.toplamEksikKg > 0 ? 'Stok girişi / serbest bırakma gerekli' : 'Rezerv ve talep kontrolü gerekli');
+  var uretimDurumu = yeterliMi ? 'Üretime hazır' : 'Üretime başlanamaz';
+  var uretimCls = yeterliMi ? 'mo-eob-yesil' : 'mo-eob-kirmizi';
+  return '<div class="mo-eksik-ozet-band">'
+    + moKpiBlok('Toplam eksik kalem', String(eksikKalem), eksikKalem ? 'mo-kpi-eksik' : '')
+    + moKpiBlok('Toplam eksik KG', moFmtKg(ozet.toplamEksikKg) + ' <small>kg</small>', eksikKalem ? 'mo-kpi-eksik' : '')
+    + moKpiBlok('Tahmini stok tamamlama', '<span class="mo-eob-metin">' + moEsc(tamamlama) + '</span>')
+    + '<div class="mo-kpi-blok ' + uretimCls + '"><div class="mo-kpi-deger mo-eob-durum">' + uretimDurumu + '</div>'
+    + '<div class="mo-kpi-etiket">Üretim durumu</div></div>'
+    + '</div>';
+}
+
+function moKararRozetHtml(karar) {
+  return '<span class="mo-karar-rozet ' + karar.cls + '">' + karar.ikon + ' ' + karar.etiket + '</span>';
 }
 
 function moKaynakBadge(kaynak) {
@@ -293,75 +433,118 @@ function moKaynakBadge(kaynak) {
 }
 
 function moKalemKartHtml(k) {
+  _moKalemIdx++;
   var m = moKalemMetrik(k);
-  var durum = moKalemDurum(k);
-  var cls = 'mo-kalem-kart mo-kalem-' + durum;
-  return '<div class="' + cls + '" data-durum="' + durum + '">'
+  var filtreDurum = moKalemDurum(k);
+  var karar = moKalemKarar(k);
+  var neden = moNedenEksik(k, karar, m);
+  var oneriler = moOneriPlaceholder(k, karar, m);
+  var cls = 'mo-kalem-kart ' + karar.kartCls;
+  var nedenHtml = '';
+  if (karar.tip !== 'hazir') {
+    var bullets = neden.satirlar.map(function(s) { return '<li>' + moEsc(s) + '</li>'; }).join('');
+    nedenHtml = '<details class="mo-neden-wrap">'
+      + '<summary class="mo-neden-ozet">Neden eksik?</summary>'
+      + '<div class="mo-neden-icerik"><ul class="mo-neden-liste">' + bullets + '</ul>'
+      + '<div class="mo-neden-sonuc"><strong>Sonuç:</strong> ' + moEsc(neden.sonuc) + '</div></div>'
+      + '</details>';
+  }
+  var oneriHtml = '';
+  if (oneriler.length) {
+    oneriHtml = '<div class="mo-oneri-kutu"><span class="mo-oneri-etiket">Öneri</span>'
+      + oneriler.map(function(o) { return '<div class="mo-oneri-metin">' + moEsc(o) + '</div>'; }).join('')
+      + '</div>';
+  }
+  return '<div class="' + cls + '" data-durum="' + filtreDurum + '">'
     + '<div class="mo-kalem-ust">'
-    + '<div><span class="mo-kalem-kod">' + moEsc(k.stok_kod || '—') + '</span>'
-    + moKaynakBadge(k.kaynak) + '</div>'
-    + moDurumRozet(durum) + '</div>'
-    + '<div class="mo-kalem-ad">' + moEsc(k.stok_ad || '') + '</div>'
+    + '<div class="mo-kalem-baslik-wrap">'
+    + '<div class="mo-kalem-ad">' + moEsc(k.stok_ad || '—') + '</div>'
+    + '<div class="mo-kalem-kod">Stok kodu: <strong>' + moEsc(k.stok_kod || '—') + '</strong> ' + moKaynakBadge(k.kaynak) + '</div>'
+    + '</div>'
+    + moKararRozetHtml(karar) + '</div>'
     + '<div class="mo-kalem-metrikler">'
-    + '<div class="mo-metrik"><span>Bu üretim için gerekli</span><strong>' + moFmtKg(k.gerekli_kg) + '</strong></div>'
-    + '<div class="mo-metrik"><span>Depoda fiziksel</span><strong>' + moFmtKg(m.fiz) + '</strong></div>'
-    + '<div class="mo-metrik"><span>Depo ayırdı</span><strong>' + moFmtKg(m.rez) + '</strong></div>'
-    + '<div class="mo-metrik"><span>Başka üretimler istiyor</span><strong>' + moFmtKg(m.bek) + '</strong></div>'
-    + '<div class="mo-metrik"><span>Şu an kullanılabilir</span><strong>' + moFmtKg(m.kul) + '</strong></div>'
-    + '<div class="mo-metrik mo-metrik-eksik"><span>Eksik</span><strong>' + (durum === 'yeterli' ? '—' : moFmtKg(m.eksikKg)) + '</strong></div>'
-    + '</div></div>';
+    + '<div class="mo-metrik"><span>Bu üretim için gerekli KG</span><strong>' + moFmtKg(m.gerekli) + '</strong></div>'
+    + '<div class="mo-metrik"><span>Depoda fiziksel KG</span><strong>' + moFmtKg(m.fiz) + '</strong></div>'
+    + '<div class="mo-metrik"><span>Rezerve edilen KG</span><strong>' + moFmtKg(m.rez) + '</strong></div>'
+    + '<div class="mo-metrik"><span>Başka üretimlerin kullandığı KG</span><strong>' + moFmtKg(m.bek) + '</strong></div>'
+    + '<div class="mo-metrik"><span>Şu an kullanılabilir KG</span><strong>' + moFmtKg(m.kul) + '</strong></div>'
+    + '<div class="mo-metrik mo-metrik-eksik"><span>Eksik KG</span><strong>' + (karar.tip === 'hazir' ? '—' : moFmtKg(m.eksikKg)) + '</strong></div>'
+    + '</div>'
+    + nedenHtml + oneriHtml + '</div>';
 }
 
-function moOzetKartHtml(meta, api) {
-  var rf = meta.rf_kod ? meta.rf_kod + (meta.rf_renk_ad ? ' · ' + meta.rf_renk_ad : '') : '—';
-  return '<div class="mo-ozet-kart">'
-    + '<div class="mo-ozet-ust">'
-    + '<span class="mo-ozet-kod">' + moEsc(meta.plan_kodu) + '</span>'
-    + '<span class="mo-rozet mo-rozet-altin">Ön çalışma</span></div>'
-    + '<div class="mo-ozet-grid">'
-    + '<div class="mo-ozet-item"><span>Formül</span><strong>' + moEsc(meta.formul_ad || '—') + '</strong></div>'
-    + '<div class="mo-ozet-item"><span>RF</span><strong>' + moEsc(rf) + '</strong></div>'
-    + '<div class="mo-ozet-item"><span>Renk</span><strong>' + moEsc(meta.renk_ad || '—') + '</strong></div>'
-    + '<div class="mo-ozet-item"><span>S / L</span><strong>' + moEsc(meta.boyut || '—') + '</strong></div>'
-    + '<div class="mo-ozet-item"><span>Sipariş KG</span><strong>' + moFmtKg(api.siparis_kg != null ? api.siparis_kg : meta.planlanan_kg) + '</strong></div>'
-    + '<div class="mo-ozet-item mo-ozet-vurgu"><span>Üretilecek KG</span><strong>' + moFmtKg(api.uretilecek_kg) + '</strong></div>'
-    + '<div class="mo-ozet-item"><span>Batch sayısı</span><strong>' + (api.batch_sayisi != null ? api.batch_sayisi : '—') + '</strong></div>'
-    + '<div class="mo-ozet-item"><span>Fazla üretim</span><strong>' + moFmtKg(api.fazla_kg) + ' kg</strong></div>'
-    + '<div class="mo-ozet-item mo-ozet-genis"><span>Oluşturma</span><strong>' + moEsc((meta.created_at || '').slice(0, 16) || '—') + '</strong></div>'
+function moKararHeaderHtml(meta, api) {
+  var rf = meta.rf_kod || '—';
+  var renk = meta.renk_ad || '—';
+  var baslik = moEsc((meta.formul_ad || '—') + ' — ' + rf + ' — ' + renk);
+  var sipKg = moFmtKg(api.siparis_kg != null ? api.siparis_kg : meta.planlanan_kg);
+  return '<div class="mo-karar-header">'
+    + '<div class="mo-kh-ust">'
+    + '<div><span class="mo-kh-etiket">MPR Stok Analizi</span>'
+    + '<span class="mo-kh-badge">' + moEsc(meta.plan_kodu) + '</span></div>'
+    + '<div class="mo-kh-aksiyon">'
+    + '<button type="button" class="mo-genis-btn" onclick="moStokModalAc()">Tam ekran</button>'
+    + '</div></div>'
+    + '<div class="mo-kh-baslik">' + baslik + '</div>'
+    + '<div class="mo-kh-meta">' + moEsc(meta.boyut || '—') + ' · Oluşturma: ' + moEsc((meta.created_at || '').slice(0, 16) || '—') + '</div>'
+    + '<div class="mo-kpi-satir">'
+    + moKpiBlok('Sipariş KG', sipKg + ' <small>kg</small>', 'mo-kpi-altin')
+    + moKpiBlok('Üretilecek KG', moFmtKg(api.uretilecek_kg) + ' <small>kg</small>', 'mo-kpi-altin')
+    + moKpiBlok('Batch Sayısı', String(api.batch_sayisi != null ? api.batch_sayisi : '—'))
+    + moKpiBlok('Fazla KG', moFmtKg(api.fazla_kg) + ' <small>kg</small>')
     + '</div></div>';
 }
 
 function moDurumKutulariHtml(ozet, yeterliMi) {
-  var kararCls = yeterliMi ? 'mo-karar-evet' : 'mo-karar-hayir';
+  var kararCls = yeterliMi ? 'mo-karar-band-evet' : 'mo-karar-band-hayir';
   var kararTxt = yeterliMi ? 'EVET' : 'HAYIR';
-  return '<div class="mo-durum-kutular">'
-    + '<div class="mo-dk mo-dk-yesil"><div class="mo-dk-sayi">' + ozet.hazir + '</div><div class="mo-dk-etiket">Hazır kalem</div></div>'
-    + '<div class="mo-dk mo-dk-sari"><div class="mo-dk-sayi">' + ozet.kritik + '</div><div class="mo-dk-etiket">Kritik kalem</div></div>'
-    + '<div class="mo-dk mo-dk-kirmizi"><div class="mo-dk-sayi">' + ozet.eksik + '</div><div class="mo-dk-etiket">Eksik kalem</div></div>'
-    + '<div class="mo-dk mo-dk-gri"><div class="mo-dk-sayi">' + moFmtKg(ozet.toplamEksikKg) + '</div><div class="mo-dk-etiket">Toplam eksik kg</div></div>'
+  var kararAlt = yeterliMi ? 'Tüm kalemler yeterli — üretime gönderilebilir' : 'Eksik veya kritik stok var — önce tamamlayın';
+  var kararIkon = yeterliMi ? '✓' : '✕';
+  var kararBuyuk = yeterliMi ? 'BAŞLANABİLİR' : 'BAŞLANAMAZ';
+  return '<div class="mo-durum-satir">'
+    + '<div class="mo-dk mo-dk-yesil"><div class="mo-dk-sayi">' + ozet.hazir + '</div><div class="mo-dk-etiket">Hazır Kalem</div></div>'
+    + '<div class="mo-dk mo-dk-sari"><div class="mo-dk-sayi">' + ozet.kritik + '</div><div class="mo-dk-etiket">Kritik Kalem</div></div>'
+    + '<div class="mo-dk mo-dk-kirmizi"><div class="mo-dk-sayi">' + ozet.eksik + '</div><div class="mo-dk-etiket">Eksik Kalem</div></div>'
+    + '<div class="mo-dk mo-dk-eksik-kg"><div class="mo-dk-sayi">' + moFmtKg(ozet.toplamEksikKg) + '</div><div class="mo-dk-etiket">Toplam Eksik KG</div></div>'
     + '</div>'
-    + '<div class="mo-karar-kutu ' + kararCls + '">'
-    + '<div class="mo-karar-soru">Üretime başlanabilir mi?</div>'
-    + '<div class="mo-karar-cevap">' + kararTxt + '</div></div>';
+    + '<div class="mo-karar-band ' + kararCls + '">'
+    + '<div class="mo-karar-band-sol">'
+    + '<div class="mo-karar-band-soru">Üretime başlanabilir mi?</div>'
+    + '<div class="mo-karar-band-alt">' + kararAlt + '</div></div>'
+    + '<div class="mo-karar-band-sag">'
+    + '<div class="mo-karar-band-ikon">' + kararIkon + '</div>'
+    + '<div class="mo-karar-band-buyuk">' + kararBuyuk + '</div>'
+    + '<div class="mo-karar-band-cevap">' + kararTxt + '</div></div></div>';
 }
 
 function moFiltreBarHtml(aktif) {
   var filtreler = [
     { id: 'all', label: 'Tümü' },
     { id: 'eksik', label: 'Sadece Eksikler' },
-    { id: 'kritik', label: 'Sadece Kritik' },
+    { id: 'kritik', label: 'Sadece Kritikler' },
     { id: 'yeterli', label: 'Yeterliler' },
   ];
-  var html = '<div class="mo-filtre-bar">';
+  var html = '<div class="mo-stok-bolum-baslik">Hammadde Stok Analizi <span class="mo-stok-adet" id="mo-stok-adet"></span></div>'
+    + '<div class="mo-filtre-bar">';
   filtreler.forEach(function(f) {
     html += '<button type="button" class="mo-filtre-btn' + (aktif === f.id ? ' aktif' : '') + '" onclick="moFiltreUygula(\'' + f.id + '\')">' + f.label + '</button>';
   });
   return html + '</div>';
 }
 
+function moDetayAltBar(meta) {
+  if (!_MO_CAN_MANAGE || meta.durum !== 'ON_CALISMA') return '';
+  return '<div class="mo-detay-alt">'
+    + '<button type="button" class="mo-btn-bagla-buyuk" onclick="moBaglaAc('
+    + meta.id + ', \'' + moEsc(meta.plan_kodu).replace(/'/g, "\\'") + '\', '
+    + meta.uv_id + ', ' + (meta.rf_renk_id || 'null') + ', ' + meta.planlanan_kg + ')">'
+    + 'Plan Siparişine Bağla</button></div>';
+}
+
 function moDetayRender(api, meta) {
   var kalemler = api.kalemler || [];
   var ozet = moKalemSayilar(kalemler);
+  _moKalemIdx = 0;
   var filtrelenmis = kalemler.filter(function(k) {
     if (_moDetayFiltre === 'all') return true;
     return moKalemDurum(k) === _moDetayFiltre;
@@ -369,18 +552,22 @@ function moDetayRender(api, meta) {
   var kartlar = filtrelenmis.map(moKalemKartHtml).join('');
   if (!kartlar) kartlar = '<div class="mo-stok-bos">Bu filtrede kalem yok.</div>';
 
-  return '<div class="mo-detay-ust-bar">'
-    + '<button type="button" class="mo-genis-btn" onclick="moStokModalAc()">Tam ekran görünüm</button>'
-    + '</div>'
-    + moOzetKartHtml(meta, api)
+  setTimeout(function() {
+    var adetEl = document.getElementById('mo-stok-adet');
+    if (adetEl) adetEl.textContent = '(' + filtrelenmis.length + ' / ' + kalemler.length + ' kalem)';
+  }, 0);
+
+  return moKararHeaderHtml(meta, api)
+    + moEksikOzetBand(ozet, api.yeterli_mi)
     + moDurumKutulariHtml(ozet, api.yeterli_mi)
     + '<div class="mo-detay-govde">'
     + '<div class="mo-detay-sol">'
     + moFiltreBarHtml(_moDetayFiltre)
     + '<div class="mo-kalem-grid">' + kartlar + '</div>'
     + '</div>'
-    + '<div class="mo-detay-sag">' + moToplamPanelHtml(kalemler, ozet) + '</div>'
-    + '</div>';
+    + '<div class="mo-detay-sag">' + moToplamPanelHtml(kalemler, ozet, api.yeterli_mi) + '</div>'
+    + '</div>'
+    + moDetayAltBar(meta);
 }
 
 function moOnizleCompactHtml(api) {
@@ -403,8 +590,8 @@ function moSatirSec(planId) {
   if (!meta.id) return;
   _moSeciliPlanId = planId;
   _moDetayFiltre = 'all';
-  document.querySelectorAll('.mo-satir').forEach(function(tr) {
-    tr.classList.toggle('mo-satir-secili', parseInt(tr.dataset.planId, 10) === planId);
+  document.querySelectorAll('.mo-satir').forEach(function(el) {
+    el.classList.toggle('mo-satir-secili', parseInt(el.dataset.planId, 10) === planId);
   });
   document.getElementById('mo-detay-bos').style.display = 'none';
   var icerik = document.getElementById('mo-detay-icerik');
@@ -765,159 +952,273 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <style>
-.mo-sayfa { padding: 22px 28px; background: #f6f7f9; min-height: 100vh; box-sizing: border-box; }
-.mo-header-bar { margin-bottom: 16px; }
-.mo-header-ic { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.mo-header-baslik { font-size: 20px; font-weight: 700; color: #1e293b; margin: 0 0 4px; }
-.mo-header-alt { font-size: 13px; color: #64748b; margin: 0; }
+.mo-sayfa { padding: 14px 18px; background: #f4f6f8; min-height: calc(100vh - 60px); box-sizing: border-box; }
+.mo-header-bar { margin-bottom: 12px; }
+.mo-header-ic { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.mo-header-baslik { font-size: 18px; font-weight: 800; color: #1e293b; margin: 0 0 2px; }
+.mo-header-alt { font-size: 12px; color: #64748b; margin: 0; }
 .mo-yeni-btn {
-  background: #f59e0b; color: #fff; border: none; border-radius: 8px;
-  padding: 10px 18px; font-size: 13px; font-weight: 600; cursor: pointer;
+  background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
+  color: #fff; border: none; border-radius: 8px;
+  padding: 9px 16px; font-size: 13px; font-weight: 700; cursor: pointer;
+  box-shadow: 0 2px 6px rgba(245,158,11,.35);
 }
-.mo-yeni-btn:hover { background: #d97706; }
-.mo-info-bant {
-  background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px;
-  padding: 10px 14px; font-size: 12px; color: #92400e; margin-bottom: 16px;
-}
+.mo-yeni-btn:hover { background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%); }
+
 .mo-layout {
-  display: grid; grid-template-columns: minmax(320px, 42%) 1fr;
-  gap: 16px; align-items: start;
+  display: grid; grid-template-columns: minmax(248px, 26%) 1fr;
+  gap: 12px; align-items: start;
 }
-.mo-liste-col { min-width: 0; }
+.mo-liste-col { min-width: 0; max-width: 340px; }
 .mo-detay-col {
   background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;
-  min-height: 420px; position: sticky; top: 16px;
+  min-height: 480px; box-shadow: 0 1px 4px rgba(15,23,42,.06);
 }
-.mo-govde { background: #fff; border-radius: 10px; border: 1px solid #e2e8f0; overflow: hidden; }
+.mo-govde { background: #fff; border-radius: 10px; border: 1px solid #e2e8f0; overflow: hidden; display: flex; flex-direction: column; max-height: calc(100vh - 120px); }
 .mo-liste-baslik {
-  padding: 12px 14px; font-size: 12px; font-weight: 700; color: #64748b;
-  text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid #f1f5f9;
+  padding: 10px 12px; font-size: 11px; font-weight: 800; color: #475569;
+  text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid #f1f5f9;
+  flex-shrink: 0;
 }
-.mo-tablo-kap { overflow-x: auto; }
-.mo-tablo { width: 100%; border-collapse: collapse; font-size: 13px; }
-.mo-tablo th {
-  text-align: left; padding: 10px 12px; background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0; font-weight: 600; color: #475569; white-space: nowrap;
+.mo-liste-sayi {
+  display: inline-block; background: #fef3c7; color: #92400e;
+  padding: 1px 7px; border-radius: 999px; font-size: 10px; margin-left: 4px;
 }
-.mo-tablo td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
-.mo-satir { cursor: pointer; transition: background .15s; }
-.mo-satir:hover { background: #fffbeb; }
-.mo-satir-secili { background: #fef3c7 !important; box-shadow: inset 3px 0 0 #f59e0b; }
-.mo-td-sag { text-align: right; font-variant-numeric: tabular-nums; }
-.mo-kod { font-family: ui-monospace, monospace; font-weight: 700; color: #0f172a; font-size: 13px; }
-.mo-satir-alt { font-size: 11px; color: #64748b; margin-top: 2px; }
-.mo-satir-formul { font-weight: 600; color: #334155; font-size: 12px; }
-.mo-rozet {
-  display: inline-block; font-size: 11px; font-weight: 700;
-  padding: 3px 8px; border-radius: 999px;
+.mo-liste-filtre { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+.mo-f-inp {
+  width: 100%; box-sizing: border-box; border: 1px solid #e2e8f0; border-radius: 6px;
+  padding: 6px 8px; font-size: 11px; background: #fafbfc; color: #334155;
 }
+.mo-f-eksik { font-size: 11px; color: #64748b; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.mo-liste-scroll { overflow-y: auto; flex: 1; padding: 6px; }
+
+.mo-liste-kart {
+  border: 1px solid #e8ecf1; border-radius: 8px; padding: 10px 10px 8px;
+  margin-bottom: 6px; cursor: pointer; background: #fff; transition: all .15s;
+}
+.mo-liste-kart:hover { border-color: #fcd34d; background: #fffdf5; }
+.mo-satir-secili { border-color: #f59e0b !important; background: #fffbeb !important; box-shadow: inset 3px 0 0 #f59e0b; }
+.mo-lk-ust { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 4px; }
+.mo-lk-kod { font-family: ui-monospace, monospace; font-weight: 800; font-size: 11px; color: #0f172a; }
+.mo-lk-formul { font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mo-lk-alt { font-size: 10px; color: #64748b; line-height: 1.4; }
+.mo-lk-islem { margin-top: 8px; display: flex; gap: 4px; flex-wrap: wrap; }
+
+.mo-rozet { display: inline-block; font-size: 9px; font-weight: 800; padding: 2px 7px; border-radius: 999px; }
 .mo-rozet-yesil { background: #dcfce7; color: #15803d; }
 .mo-rozet-kirmizi { background: #fee2e2; color: #b91c1c; }
 .mo-rozet-sari { background: #fef3c7; color: #92400e; }
 .mo-rozet-gri { background: #f1f5f9; color: #64748b; }
-.mo-rozet-altin { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+
 .mo-islem-btn {
-  background: #fff; border: 1px solid #cbd5e1; border-radius: 6px;
-  padding: 5px 10px; font-size: 11px; cursor: pointer; color: #334155;
+  background: #fff; border: 1px solid #cbd5e1; border-radius: 5px;
+  padding: 4px 8px; font-size: 10px; font-weight: 600; cursor: pointer; color: #475569;
 }
 .mo-islem-btn-ana { border-color: #f59e0b; color: #92400e; background: #fffbeb; }
+.mo-islem-btn-bagla { border-color: #fcd34d; color: #92400e; }
 .mo-islem-btn:hover { background: #f8fafc; }
-.mo-islem-hucre { white-space: nowrap; }
-.mo-islem-btn-bagla { margin-left: 4px; border-color: #fcd34d; color: #92400e; }
-.mo-detay-bos { padding: 48px 24px; text-align: center; color: #64748b; }
-.mo-detay-bos-ikon { font-size: 32px; margin-bottom: 8px; }
-.mo-detay-bos-baslik { font-size: 16px; font-weight: 700; color: #334155; margin-bottom: 6px; }
-.mo-detay-bos-metin { font-size: 13px; max-width: 280px; margin: 0 auto; line-height: 1.5; }
-#mo-detay-icerik { padding: 16px; }
-.mo-detay-ust-bar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
-.mo-genis-btn {
-  border: 1px solid #cbd5e1; background: #fff; border-radius: 6px;
-  padding: 4px 10px; font-size: 11px; color: #475569; cursor: pointer;
+
+.mo-detay-bos { padding: 40px 20px; text-align: center; color: #64748b; }
+.mo-detay-bos-ikon { font-size: 28px; margin-bottom: 6px; }
+.mo-detay-bos-baslik { font-size: 15px; font-weight: 700; color: #334155; margin-bottom: 4px; }
+.mo-detay-bos-metin { font-size: 12px; max-width: 320px; margin: 0 auto; line-height: 1.5; }
+#mo-detay-icerik { padding: 14px 16px 12px; }
+
+/* Karar header */
+.mo-karar-header {
+  background: linear-gradient(135deg, #fffbeb 0%, #fff 55%);
+  border: 1px solid #fde68a; border-radius: 12px; padding: 14px 16px 12px; margin-bottom: 12px;
 }
-.mo-genis-btn:hover { background: #f8fafc; }
-.mo-ozet-kart {
-  background: linear-gradient(135deg, #fffbeb 0%, #fff 60%);
-  border: 1px solid #fde68a; border-radius: 10px; padding: 14px 16px; margin-bottom: 14px;
+.mo-kh-ust { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 6px; }
+.mo-kh-etiket { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: #64748b; margin-right: 8px; }
+.mo-kh-badge {
+  display: inline-block; font-family: ui-monospace, monospace; font-size: 11px; font-weight: 700;
+  background: #ede9fe; color: #6d28d9; padding: 2px 8px; border-radius: 6px;
 }
-.mo-ozet-ust { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
-.mo-ozet-kod { font-family: ui-monospace, monospace; font-size: 16px; font-weight: 800; color: #0f172a; }
-.mo-ozet-grid {
-  display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 16px;
+.mo-kh-baslik { font-size: 18px; font-weight: 800; color: #0f172a; line-height: 1.25; margin-bottom: 4px; }
+.mo-kh-meta { font-size: 11px; color: #64748b; margin-bottom: 12px; }
+.mo-kpi-satir { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.mo-kpi-blok {
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+  padding: 10px 8px; text-align: center;
 }
-.mo-ozet-item span { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #64748b; margin-bottom: 2px; }
-.mo-ozet-item strong { font-size: 13px; color: #1e293b; font-variant-numeric: tabular-nums; }
-.mo-ozet-vurgu strong { color: #b45309; font-size: 15px; }
-.mo-ozet-genis { grid-column: 1 / -1; }
-.mo-durum-kutular {
+.mo-kpi-altin { background: #fffbeb; border-color: #fde68a; }
+.mo-kpi-deger { font-size: 20px; font-weight: 900; color: #0f172a; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.mo-kpi-deger small { font-size: 11px; font-weight: 600; color: #64748b; }
+.mo-kpi-etiket { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #64748b; margin-top: 4px; line-height: 1.3; }
+.mo-kpi-eksik .mo-kpi-deger { color: #b91c1c; }
+
+/* Eksik özet bandı */
+.mo-eksik-ozet-band {
   display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px;
 }
-.mo-dk {
-  border-radius: 8px; padding: 10px 8px; text-align: center; border: 1px solid transparent;
+.mo-eksik-ozet-band .mo-kpi-blok { padding: 10px 8px; }
+.mo-eksik-ozet-band .mo-kpi-deger { font-size: 16px; }
+.mo-eob-metin { font-size: 11px; font-weight: 700; color: #475569; line-height: 1.35; display: block; }
+.mo-eob-durum { font-size: 14px !important; }
+.mo-eob-yesil { background: #ecfdf5; border-color: #86efac; }
+.mo-eob-yesil .mo-eob-durum { color: #15803d; }
+.mo-eob-kirmizi { background: #fef2f2; border-color: #fca5a5; }
+.mo-eob-kirmizi .mo-eob-durum { color: #b91c1c; }
+
+/* Durum kutuları */
+.mo-durum-satir { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; }
+.mo-dk { border-radius: 10px; padding: 14px 10px; text-align: center; border: 1px solid transparent; }
+.mo-dk-yesil { background: #ecfdf5; border-color: #86efac; }
+.mo-dk-sari { background: #fffbeb; border-color: #fcd34d; }
+.mo-dk-kirmizi { background: #fef2f2; border-color: #fca5a5; }
+.mo-dk-eksik-kg { background: #fff; border: 2px solid #fca5a5; }
+.mo-dk-eksik-kg .mo-dk-sayi { color: #b91c1c; font-size: 26px; }
+.mo-dk-sayi { font-size: 28px; font-weight: 900; font-variant-numeric: tabular-nums; color: #0f172a; line-height: 1; }
+.mo-dk-etiket { font-size: 10px; font-weight: 600; color: #64748b; margin-top: 6px; line-height: 1.25; }
+
+/* Karar bandı */
+.mo-karar-band {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  border-radius: 12px; padding: 16px 20px; margin-bottom: 14px;
 }
-.mo-dk-yesil { background: #f0fdf4; border-color: #bbf7d0; }
-.mo-dk-sari { background: #fffbeb; border-color: #fde68a; }
-.mo-dk-kirmizi { background: #fef2f2; border-color: #fecaca; }
-.mo-dk-gri { background: #f8fafc; border-color: #e2e8f0; }
-.mo-dk-sayi { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; color: #0f172a; }
-.mo-dk-etiket { font-size: 10px; color: #64748b; margin-top: 2px; line-height: 1.3; }
-.mo-karar-kutu {
-  border-radius: 10px; padding: 14px 16px; margin-bottom: 16px;
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+.mo-karar-band-evet { background: linear-gradient(90deg, #ecfdf5 0%, #d1fae5 100%); border: 2px solid #86efac; }
+.mo-karar-band-hayir { background: linear-gradient(90deg, #fef2f2 0%, #fee2e2 100%); border: 2px solid #fca5a5; }
+.mo-karar-band-soru { font-size: 15px; font-weight: 800; color: #1e293b; letter-spacing: .02em; }
+.mo-karar-band-alt { font-size: 12px; color: #64748b; margin-top: 4px; }
+.mo-karar-band-sag { text-align: center; flex-shrink: 0; min-width: 120px; }
+.mo-karar-band-ikon {
+  width: 36px; height: 36px; border-radius: 50%; margin: 0 auto 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 900;
 }
-.mo-karar-evet { background: #ecfdf5; border: 2px solid #86efac; }
-.mo-karar-hayir { background: #fef2f2; border: 2px solid #fca5a5; }
-.mo-karar-soru { font-size: 14px; font-weight: 600; color: #334155; }
-.mo-karar-cevap { font-size: 22px; font-weight: 900; letter-spacing: .06em; }
-.mo-karar-evet .mo-karar-cevap { color: #15803d; }
-.mo-karar-hayir .mo-karar-cevap { color: #b91c1c; }
-.mo-detay-govde { display: grid; grid-template-columns: 1fr 240px; gap: 14px; }
-.mo-filtre-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.mo-karar-band-evet .mo-karar-band-ikon { background: #22c55e; color: #fff; }
+.mo-karar-band-hayir .mo-karar-band-ikon { background: #ef4444; color: #fff; }
+.mo-karar-band-buyuk { font-size: 13px; font-weight: 800; letter-spacing: .04em; }
+.mo-karar-band-evet .mo-karar-band-buyuk { color: #15803d; }
+.mo-karar-band-hayir .mo-karar-band-buyuk { color: #b91c1c; }
+.mo-karar-band-cevap { font-size: 28px; font-weight: 900; letter-spacing: .08em; line-height: 1; margin-top: 2px; }
+.mo-karar-band-evet .mo-karar-band-cevap { color: #15803d; }
+.mo-karar-band-hayir .mo-karar-band-cevap { color: #b91c1c; }
+
+.mo-detay-govde { display: grid; grid-template-columns: 1fr 268px; gap: 12px; }
+.mo-stok-bolum-baslik { font-size: 13px; font-weight: 800; color: #334155; margin-bottom: 8px; }
+.mo-stok-adet { font-size: 11px; font-weight: 600; color: #94a3b8; }
+.mo-filtre-bar { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
 .mo-filtre-btn {
   border: 1px solid #e2e8f0; background: #fff; border-radius: 999px;
-  padding: 5px 12px; font-size: 11px; font-weight: 600; color: #475569; cursor: pointer;
+  padding: 5px 12px; font-size: 11px; font-weight: 700; color: #475569; cursor: pointer;
 }
 .mo-filtre-btn.aktif { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
-.mo-kalem-grid { display: grid; grid-template-columns: 1fr; gap: 10px; max-height: 52vh; overflow-y: auto; padding-right: 4px; }
-.mo-kalem-kart {
-  border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; background: #fff;
+
+.mo-kalem-grid { display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow-y: auto; padding-right: 2px; }
+.mo-kalem-kart { border-radius: 10px; padding: 12px 14px; border: 1px solid transparent; }
+.mo-kalem-hazir { background: #f0fdf4; border-color: #bbf7d0; }
+.mo-kalem-ayrilmis { background: #fffbeb; border-color: #fde68a; }
+.mo-kalem-kismi { background: #fff7ed; border-color: #fdba74; }
+.mo-kalem-yok { background: #fef2f2; border-color: #fecaca; }
+.mo-kalem-yeterli { background: #f0fdf4; border-color: #bbf7d0; }
+.mo-kalem-kritik { background: #fff7ed; border-color: #fdba74; }
+.mo-kalem-eksik { background: #fef2f2; border-color: #fecaca; }
+.mo-karar-rozet {
+  display: inline-block; font-size: 10px; font-weight: 700; padding: 5px 10px;
+  border-radius: 999px; line-height: 1.3; text-align: right; max-width: 52%;
 }
-.mo-kalem-yeterli { border-left: 4px solid #22c55e; }
-.mo-kalem-kritik { border-left: 4px solid #f59e0b; }
-.mo-kalem-eksik { border-left: 4px solid #ef4444; }
-.mo-kalem-ust { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 6px; }
-.mo-kalem-kod { font-family: ui-monospace, monospace; font-weight: 700; font-size: 13px; color: #0f172a; margin-right: 6px; }
-.mo-kalem-ad { font-size: 12px; color: #64748b; margin-bottom: 10px; }
-.mo-kaynak {
-  font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 4px; vertical-align: middle;
+.mo-karar-hazir { background: #dcfce7; color: #15803d; }
+.mo-karar-ayrilmis { background: #fef3c7; color: #92400e; }
+.mo-karar-kismi { background: #ffedd5; color: #c2410c; }
+.mo-karar-yok { background: #fee2e2; color: #b91c1c; }
+.mo-neden-wrap { margin-top: 10px; border-top: 1px dashed rgba(0,0,0,.08); padding-top: 8px; }
+.mo-neden-ozet {
+  font-size: 11px; font-weight: 700; color: #6366f1; cursor: pointer; list-style: none;
+  user-select: none;
 }
+.mo-neden-wrap summary::-webkit-details-marker { display: none; }
+.mo-neden-ozet::before { content: '▸ '; }
+.mo-neden-wrap[open] .mo-neden-ozet::before { content: '▾ '; }
+.mo-neden-icerik { padding: 8px 0 4px 4px; }
+.mo-neden-liste { margin: 0 0 8px; padding-left: 18px; font-size: 11px; color: #475569; line-height: 1.6; }
+.mo-neden-sonuc { font-size: 11px; color: #1e293b; background: #f8fafc; border-radius: 6px; padding: 8px 10px; }
+.mo-oneri-kutu {
+  margin-top: 8px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 8px 10px;
+}
+.mo-oneri-etiket {
+  font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: #92400e;
+  display: block; margin-bottom: 4px;
+}
+.mo-oneri-metin { font-size: 12px; font-weight: 700; color: #b45309; line-height: 1.4; }
+.mo-sonraki-adim {
+  margin-top: 14px; padding-top: 12px; border-top: 1px solid #e2e8f0;
+}
+.mo-sonraki-baslik {
+  font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em;
+  color: #64748b; margin-bottom: 8px;
+}
+.mo-adim-liste { list-style: none; margin: 0; padding: 0; }
+.mo-adim-item {
+  font-size: 11px; color: #94a3b8; padding: 6px 0; border-bottom: 1px solid #f1f5f9;
+  display: flex; align-items: center; gap: 8px;
+}
+.mo-adim-item:last-child { border-bottom: none; }
+.mo-adim-no {
+  width: 20px; height: 20px; border-radius: 50%; background: #f1f5f9; color: #64748b;
+  font-size: 10px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.mo-adim-aktif { color: #92400e; font-weight: 700; }
+.mo-adim-aktif .mo-adim-no { background: #fef3c7; color: #b45309; border: 1px solid #fcd34d; }
+.mo-kalem-ust { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+.mo-kalem-ad { font-size: 14px; font-weight: 800; color: #0f172a; line-height: 1.25; margin-bottom: 3px; }
+.mo-kalem-kod { font-family: ui-monospace, monospace; font-size: 10px; color: #64748b; font-weight: 600; }
+.mo-kaynak { font-size: 8px; font-weight: 800; padding: 2px 5px; border-radius: 4px; vertical-align: middle; }
 .mo-kaynak-taban { background: #e0e7ff; color: #4338ca; }
 .mo-kaynak-rf { background: #f3e8ff; color: #7c3aed; }
-.mo-kart-rozet { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 999px; white-space: nowrap; }
+.mo-kart-rozet { font-size: 10px; font-weight: 800; padding: 4px 10px; border-radius: 999px; white-space: nowrap; flex-shrink: 0; }
 .mo-kart-rozet-yesil { background: #dcfce7; color: #15803d; }
 .mo-kart-rozet-sari { background: #fef3c7; color: #92400e; }
 .mo-kart-rozet-kirmizi { background: #fee2e2; color: #b91c1c; }
-.mo-kalem-metrikler { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
-.mo-metrik span { display: block; font-size: 10px; color: #94a3b8; }
-.mo-metrik strong { font-size: 12px; font-variant-numeric: tabular-nums; color: #1e293b; }
+.mo-kalem-metrikler { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 10px; }
+.mo-metrik span { display: block; font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: #94a3b8; margin-bottom: 2px; }
+.mo-metrik strong { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; color: #1e293b; }
 .mo-metrik-eksik strong { color: #b91c1c; }
+
 .mo-toplam-panel {
-  background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px;
+  background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px;
   position: sticky; top: 0;
 }
-.mo-toplam-baslik { font-size: 11px; font-weight: 800; text-transform: uppercase; color: #64748b; margin-bottom: 10px; }
-.mo-toplam-satir { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; padding: 5px 0; border-bottom: 1px solid #f1f5f9; }
-.mo-toplam-satir span { color: #64748b; }
-.mo-toplam-satir strong { font-variant-numeric: tabular-nums; color: #0f172a; }
-.mo-toplam-eksik strong { color: #b91c1c; }
-.mo-toplam-dagitim { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 4px; }
-.mo-onizle-compact {
-  background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; font-size: 12px;
+.mo-toplam-baslik { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: #64748b; margin-bottom: 10px; }
+.mo-kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px; }
+.mo-kpi-grid .mo-kpi-blok { padding: 8px 6px; }
+.mo-kpi-grid .mo-kpi-deger { font-size: 15px; }
+.mo-kpi-grid .mo-kpi-etiket { font-size: 8px; }
+.mo-dagitim-baslik { font-size: 10px; font-weight: 700; color: #64748b; margin-bottom: 6px; text-transform: uppercase; }
+.mo-dagitim-bar { display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: #e2e8f0; margin-bottom: 8px; }
+.mo-dagitim-parca { height: 100%; min-width: 2px; }
+.mo-dp-yesil { background: #22c55e; }
+.mo-dp-sari { background: #f59e0b; }
+.mo-dp-kirmizi { background: #ef4444; }
+.mo-toplam-dagitim { display: flex; flex-wrap: wrap; gap: 4px; }
+
+.mo-detay-alt { margin-top: 12px; padding-top: 12px; border-top: 1px solid #f1f5f9; display: flex; justify-content: flex-end; }
+.mo-btn-bagla-buyuk {
+  background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
+  color: #fff; border: none; border-radius: 8px; padding: 10px 20px;
+  font-size: 13px; font-weight: 700; cursor: pointer;
+  box-shadow: 0 2px 6px rgba(245,158,11,.3);
 }
+.mo-btn-bagla-buyuk:hover { background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%); }
+
+.mo-genis-btn {
+  border: 1px solid #cbd5e1; background: #fff; border-radius: 6px;
+  padding: 4px 10px; font-size: 10px; font-weight: 600; color: #475569; cursor: pointer;
+}
+.mo-genis-btn:hover { background: #f8fafc; }
+
+.mo-onizle-compact { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; font-size: 12px; }
 .mo-onizle-satir { display: flex; justify-content: space-between; margin-bottom: 4px; }
 .mo-onizle-rozetler { margin: 8px 0; display: flex; flex-wrap: wrap; gap: 4px; }
 .mo-karar-mini { margin-top: 6px; padding: 6px 8px; border-radius: 6px; font-size: 12px; }
-.mo-bos { padding: 48px 24px; text-align: center; }
-.mo-bos-metin { color: #64748b; margin-bottom: 14px; }
+.mo-karar-evet { background: #ecfdf5; }
+.mo-karar-hayir { background: #fef2f2; }
+.mo-bos { padding: 32px 16px; text-align: center; }
+.mo-bos-metin { color: #64748b; margin-bottom: 12px; font-size: 12px; }
+.mo-stok-yukleniyor, .mo-stok-hata, .mo-stok-bos { font-size: 12px; color: #64748b; padding: 12px 0; }
+.mo-stok-hata { color: #b91c1c; }
+
 .mo-modal-arka {
   display: none; position: fixed; inset: 0; background: rgba(15,23,42,.45);
   z-index: 9000; align-items: center; justify-content: center; padding: 16px;
@@ -926,7 +1227,7 @@ document.addEventListener('DOMContentLoaded', function() {
   background: #fff; border-radius: 12px; width: 100%; max-width: 480px;
   max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 40px rgba(0,0,0,.15);
 }
-.mo-modal-genis { max-width: 720px; }
+.mo-modal-genis { max-width: 900px; }
 .mo-modal-baslik { padding: 16px 20px; font-size: 16px; font-weight: 700; border-bottom: 1px solid #e2e8f0; color: #1e293b; }
 .mo-form { padding: 16px 20px 20px; }
 .mo-label { display: block; font-size: 12px; font-weight: 600; color: #475569; margin: 10px 0 4px; }
@@ -938,29 +1239,36 @@ document.addEventListener('DOMContentLoaded', function() {
 .mo-boyut-btn:disabled { opacity: .45; cursor: not-allowed; }
 .mo-stok-onizle { margin-top: 14px; border-top: 1px solid #e2e8f0; padding-top: 12px; }
 .mo-stok-baslik { font-size: 12px; font-weight: 700; color: #475569; margin-bottom: 8px; }
-.mo-stok-yukleniyor, .mo-stok-hata, .mo-stok-bos { font-size: 12px; color: #64748b; padding: 8px 0; }
-.mo-stok-hata { color: #b91c1c; }
 .mo-hata { margin-top: 10px; padding: 8px 10px; background: #fef2f2; color: #b91c1c; border-radius: 6px; font-size: 12px; }
 .mo-modal-alt { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 .mo-btn-iptal, .mo-btn-kaydet { padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
 .mo-btn-iptal { background: #fff; border: 1px solid #cbd5e1; color: #475569; }
 .mo-btn-kaydet { background: #f59e0b; border: none; color: #fff; }
 .mo-btn-kaydet:disabled { opacity: .5; cursor: not-allowed; }
-.mo-stok-modal-icerik { padding: 16px 20px; max-height: 60vh; overflow-y: auto; }
+.mo-stok-modal-icerik { padding: 16px 20px; max-height: 75vh; overflow-y: auto; }
 .mo-bagla-mod { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
 .mo-bagla-mod-opt { font-size: 13px; color: #334155; cursor: pointer; }
 
-@media (max-width: 1100px) {
+@media (max-width: 1200px) {
+  .mo-layout { grid-template-columns: minmax(220px, 30%) 1fr; }
+  .mo-kpi-satir { grid-template-columns: repeat(2, 1fr); }
+  .mo-durum-satir { grid-template-columns: repeat(2, 1fr); }
+  .mo-eksik-ozet-band { grid-template-columns: repeat(2, 1fr); }
+  .mo-kalem-metrikler { grid-template-columns: repeat(2, 1fr); }
+  .mo-karar-rozet { max-width: 100%; margin-top: 6px; }
+}
+@media (max-width: 900px) {
   .mo-layout { grid-template-columns: 1fr; }
-  .mo-detay-col { position: static; min-height: 300px; }
+  .mo-liste-col { max-width: none; }
+  .mo-govde { max-height: none; }
   .mo-detay-govde { grid-template-columns: 1fr; }
-  .mo-durum-kutular { grid-template-columns: repeat(2, 1fr); }
+  .mo-kalem-grid { max-height: none; }
 }
 @media (max-width: 640px) {
-  .mo-sayfa { padding: 14px 12px; }
-  .mo-ozet-grid { grid-template-columns: 1fr; }
-  .mo-kalem-metrikler { grid-template-columns: 1fr; }
-  .mo-durum-kutular { grid-template-columns: 1fr 1fr; }
+  .mo-sayfa { padding: 10px 10px; }
+  .mo-kpi-satir { grid-template-columns: 1fr 1fr; }
+  .mo-karar-band { flex-direction: column; text-align: center; }
+  .mo-kalem-metrikler { grid-template-columns: 1fr 1fr; }
 }
 </style>
 {% endblock %}
