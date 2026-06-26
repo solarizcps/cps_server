@@ -2558,35 +2558,48 @@ def _siparis_kontrol_get(con, siparis_id):
 def _batch_uretim_kontrol(con, batch_kodu):
     """Batch/tablet ekrani icin siparis master + rf uretilen."""
     batch = con.execute("""
-        SELECT nb.batch_kodu, nb.planlanan_kg, nb.plan_id
+        SELECT nb.batch_kodu, nb.planlanan_kg, nb.plan_id, nb.uretim_varyant_id
         FROM nexgen_uretim_batch nb
         WHERE nb.batch_kodu = ?
     """, (batch_kodu,)).fetchone()
     if not batch:
         return None
     plan_id = batch['plan_id']
-    siparis_toplam = float(batch['planlanan_kg'])
+    siparis_kg = float(batch['planlanan_kg'])
+    batch_meta = _batch_uretim_hesapla(con, batch['uretim_varyant_id'], siparis_kg)
+    uretilecek_kg = batch_meta.get('uretilecek_kg', siparis_kg) if batch_meta.get('ok') else siparis_kg
     if plan_id:
         sk = _siparis_kontrol_get(con, plan_id)
         if sk:
+            uretilen = float(sk.get('uretilen_kg') or 0)
             return {
                 **sk,
                 'batch_kodu': batch_kodu,
-                'batch_planlanan_kg': round(float(batch['planlanan_kg']), 3),
+                'batch_planlanan_kg': round(siparis_kg, 3),
+                'uretilecek_kg': uretilecek_kg,
+                'formul_batch_kg': batch_meta.get('formul_batch_kg', 0),
+                'batch_sayisi': batch_meta.get('batch_sayisi', 0),
+                'fazla_kg': batch_meta.get('fazla_kg', 0),
                 'kalan_kg': max(0.0, float(sk['fark_kg'])),
+                'kalan_uretim_kg': max(0.0, uretilecek_kg - uretilen),
             }
     uretilen = _rf_kullanim_uretilen_kg(con, batch_kodu=batch_kodu)
     d = {
         'siparis_id': plan_id,
         'batch_kodu': batch_kodu,
-        'siparis_toplam_kg': round(siparis_toplam, 3),
-        'batch_planlanan_kg': round(float(batch['planlanan_kg']), 3),
+        'siparis_toplam_kg': round(siparis_kg, 3),
+        'batch_planlanan_kg': round(siparis_kg, 3),
+        'uretilecek_kg': uretilecek_kg,
+        'formul_batch_kg': batch_meta.get('formul_batch_kg', 0),
+        'batch_sayisi': batch_meta.get('batch_sayisi', 0),
+        'fazla_kg': batch_meta.get('fazla_kg', 0),
         'planlanan_kg': 0.0,
         'uretilen_kg': round(uretilen, 3),
-        'fark_kg': round(siparis_toplam - uretilen, 3),
-        'kalan_kg': max(0.0, siparis_toplam - uretilen),
+        'fark_kg': round(siparis_kg - uretilen, 3),
+        'kalan_kg': max(0.0, siparis_kg - uretilen),
+        'kalan_uretim_kg': max(0.0, uretilecek_kg - uretilen),
     }
-    d.update(_uretim_kontrol_durumu(siparis_toplam, uretilen))
+    d.update(_uretim_kontrol_durumu(siparis_kg, uretilen))
     return d
 
 
@@ -5557,8 +5570,16 @@ def tablet_uretim_islem(batch_kodu):
         siparis_toplam_kg = float(
             kg_kontrol.get('siparis_toplam_kg') or batch['planlanan_kg']
         )
+        uretilecek_kg = float(
+            kg_kontrol.get('uretilecek_kg') or siparis_toplam_kg
+        )
+        fazla_kg = float(kg_kontrol.get('fazla_kg') or 0)
+        batch_sayisi = int(kg_kontrol.get('batch_sayisi') or 0)
         toplam_uretilen_kg = float(kg_kontrol.get('uretilen_kg') or 0.0)
         kalan_kg = float(kg_kontrol.get('kalan_kg') or max(0.0, siparis_toplam_kg - toplam_uretilen_kg))
+        kalan_uretim_kg = float(
+            kg_kontrol.get('kalan_uretim_kg') or max(0.0, uretilecek_kg - toplam_uretilen_kg)
+        )
         kontrol_durum = kg_kontrol.get('kontrol_durum')
         kontrol_uyari = kg_kontrol.get('uyari')
         kontrol_mesaj = kg_kontrol.get('mesaj')
@@ -5613,7 +5634,11 @@ def tablet_uretim_islem(batch_kodu):
         alt_emirler=alt_emirler,
         toplam_uretilen_kg=round(toplam_uretilen_kg, 3),
         siparis_toplam_kg=round(siparis_toplam_kg, 3),
+        uretilecek_kg=round(uretilecek_kg, 3),
+        fazla_kg=round(fazla_kg, 3),
+        batch_sayisi=batch_sayisi,
         kalan_kg=round(kalan_kg, 3),
+        kalan_uretim_kg=round(kalan_uretim_kg, 3),
         kontrol_durum=kontrol_durum,
         kontrol_uyari=kontrol_uyari,
         kontrol_mesaj=kontrol_mesaj,
@@ -7999,6 +8024,46 @@ def _formul_batch_kg_hesapla(con, uretim_varyant_id):
     return round(float(row['toplam']), 3) if row else 0.0
 
 
+def _batch_uretim_hesapla(con, uretim_varyant_id, siparis_kg):
+    """Sipariş KG → yukarı yuvarlanmış batch sayısı ve üretilecek KG.
+
+    batch_sayisi = ceil(siparis_kg / formul_batch_kg)
+    uretilecek_kg  = batch_sayisi × formul_batch_kg
+    fazla_kg       = uretilecek_kg − siparis_kg
+    """
+    import math
+    try:
+        siparis_kg = float(siparis_kg)
+    except (TypeError, ValueError):
+        return {'ok': False, 'hata': 'Geçersiz siparis_kg'}
+    if siparis_kg <= 0:
+        return {'ok': False, 'hata': 'siparis_kg sıfırdan büyük olmalı'}
+
+    formul_batch_kg = _formul_batch_kg_hesapla(con, uretim_varyant_id)
+    if formul_batch_kg <= 0:
+        return {
+            'ok': False,
+            'hata': 'Taban reçete batch KG bulunamadı (BOYA hariç kalem yok).',
+            'formul_batch_kg': 0.0,
+            'batch_sayisi': 0,
+            'siparis_kg': round(siparis_kg, 3),
+            'uretilecek_kg': 0.0,
+            'fazla_kg': 0.0,
+        }
+
+    batch_sayisi = int(math.ceil(siparis_kg / formul_batch_kg))
+    uretilecek_kg = round(batch_sayisi * formul_batch_kg, 3)
+    fazla_kg = round(uretilecek_kg - siparis_kg, 3)
+    return {
+        'ok': True,
+        'formul_batch_kg': formul_batch_kg,
+        'batch_sayisi': batch_sayisi,
+        'siparis_kg': round(siparis_kg, 3),
+        'uretilecek_kg': uretilecek_kg,
+        'fazla_kg': fazla_kg,
+    }
+
+
 def _mpr_stok_ihtiyac_hesapla(con, uretim_varyant_id, rf_renk_id, planlanan_kg,
                               exclude_batch_kodu=None):
     """MPR stok ihtiyacı önizleme — taban hammadde (BOYA hariç) + RF boya.
@@ -8014,15 +8079,20 @@ def _mpr_stok_ihtiyac_hesapla(con, uretim_varyant_id, rf_renk_id, planlanan_kg,
     if planlanan_kg <= 0:
         return {'ok': False, 'hata': 'planlanan_kg sıfırdan büyük olmalı'}
 
-    taban_batch_kg = _formul_batch_kg_hesapla(con, uretim_varyant_id)
-    if taban_batch_kg <= 0:
+    batch = _batch_uretim_hesapla(con, uretim_varyant_id, planlanan_kg)
+    if not batch.get('ok'):
         return {
             'ok': False,
-            'hata': 'Taban reçete batch KG bulunamadı (BOYA hariç kalem yok).',
-            'taban_batch_kg': 0.0,
+            'hata': batch.get('hata', 'Batch hesaplanamadı'),
+            'taban_batch_kg': batch.get('formul_batch_kg', 0.0),
         }
 
-    carpan = planlanan_kg / taban_batch_kg
+    taban_batch_kg = batch['formul_batch_kg']
+    siparis_kg = batch['siparis_kg']
+    uretilecek_kg = batch['uretilecek_kg']
+    batch_sayisi = batch['batch_sayisi']
+    fazla_kg = batch['fazla_kg']
+    carpan = float(batch_sayisi)
     satirlar = []
 
     taban_rows = con.execute("""
@@ -8122,7 +8192,12 @@ def _mpr_stok_ihtiyac_hesapla(con, uretim_varyant_id, rf_renk_id, planlanan_kg,
         'yeterli_mi': len(eksik_stok_ids) == 0,
         'eksik_sayisi': len(eksik_stok_ids),
         'taban_batch_kg': taban_batch_kg,
-        'planlanan_kg': round(planlanan_kg, 3),
+        'formul_batch_kg': taban_batch_kg,
+        'batch_sayisi': batch_sayisi,
+        'siparis_kg': siparis_kg,
+        'uretilecek_kg': uretilecek_kg,
+        'fazla_kg': fazla_kg,
+        'planlanan_kg': siparis_kg,
         'kalemler': kalemler,
     }
 
@@ -9171,12 +9246,10 @@ def api_batch_formul_icerik(batch_kodu):
         )
         rf_renk_id = rf_bilgi.get('rf_renk_id') if rf_bilgi else batch['plan_rf_renk_id']
 
-        kg_kontrol = _batch_uretim_kontrol(con, batch_kodu) or {}
-        toplam_kg = float(
-            kg_kontrol.get('siparis_toplam_kg')
-            or batch['planlanan_kg']
-            or 0
+        batch_meta = _batch_uretim_hesapla(
+            con, batch['uretim_varyant_id'], float(batch['planlanan_kg'])
         )
+        toplam_kg = batch_meta.get('uretilecek_kg') if batch_meta.get('ok') else float(batch['planlanan_kg'] or 0)
         if toplam_kg <= 0:
             row_sum = con.execute("""
                 SELECT COALESCE(SUM(hedef_kg), 0) AS s
@@ -9192,7 +9265,7 @@ def api_batch_formul_icerik(batch_kodu):
             return jsonify({'ok': False, 'hata': ihtiyac_parca.get('hata', 'Hesaplanamadı')}), 400
 
         ihtiyac_toplam = _mpr_stok_ihtiyac_hesapla(
-            con, batch['uretim_varyant_id'], rf_renk_id, toplam_kg,
+            con, batch['uretim_varyant_id'], rf_renk_id, float(batch['planlanan_kg']),
         )
         if not ihtiyac_toplam.get('ok'):
             return jsonify({'ok': False, 'hata': ihtiyac_toplam.get('hata', 'Toplam hesaplanamadı')}), 400
@@ -9213,9 +9286,15 @@ def api_batch_formul_icerik(batch_kodu):
             'parca_id': parca['id'],
             'parca_no': parca['parca_no'],
             'parca_durum': parca['durum'],
+            'siparis_kg': batch_meta.get('siparis_kg', float(batch['planlanan_kg'] or 0)),
+            'formul_batch_kg': batch_meta.get('formul_batch_kg'),
+            'batch_sayisi': batch_meta.get('batch_sayisi'),
+            'uretilecek_kg': toplam_kg,
+            'fazla_kg': batch_meta.get('fazla_kg', 0),
             'toplam_kg': toplam_kg,
             'parca': parca_blok,
             'toplam': toplam_blok,
+            'batch_uretim': batch_meta,
             # FAZ-4C geriye uyumluluk
             'kg': parca_kg,
             'taban_batch_kg': ihtiyac_parca.get('taban_batch_kg'),
@@ -9293,19 +9372,20 @@ def api_alt_emir_onizle(plan_id):
             return jsonify({'ok': False, 'hata': 'Plan bulunamadı'}), 404
 
         planlanan = float(p['planlanan_kg'])
-        formul_batch_kg = _formul_batch_kg_hesapla(con, p['uretim_varyant_id'])
+        batch_meta = _batch_uretim_hesapla(con, p['uretim_varyant_id'], planlanan)
 
         uyari = None
-        if formul_batch_kg <= 0:
-            uyari = 'Bu formül için aktif reçete kalemi bulunamadı.'
+        if not batch_meta.get('ok'):
+            uyari = batch_meta.get('hata', 'Bu formül için aktif reçete kalemi bulunamadı.')
             alt_emir_sayisi = 0
             toplam_uretim_kg = 0.0
             fazla_kg = 0.0
+            formul_batch_kg = batch_meta.get('formul_batch_kg', 0.0)
         else:
-            import math
-            alt_emir_sayisi  = math.ceil(planlanan / formul_batch_kg)
-            toplam_uretim_kg = round(alt_emir_sayisi * formul_batch_kg, 3)
-            fazla_kg         = round(toplam_uretim_kg - planlanan, 3)
+            formul_batch_kg = batch_meta['formul_batch_kg']
+            alt_emir_sayisi = batch_meta['batch_sayisi']
+            toplam_uretim_kg = batch_meta['uretilecek_kg']
+            fazla_kg = batch_meta['fazla_kg']
 
         return jsonify({
             'ok': True,
@@ -9314,9 +9394,12 @@ def api_alt_emir_onizle(plan_id):
             'renk_ad': p['renk_ad'],
             'boyut': p['boyut'],
             'planlanan_kg': round(planlanan, 3),
+            'siparis_kg': round(planlanan, 3),
             'formul_batch_kg': formul_batch_kg,
             'alt_emir_sayisi': alt_emir_sayisi,
+            'batch_sayisi': alt_emir_sayisi,
             'toplam_uretim_kg': toplam_uretim_kg,
+            'uretilecek_kg': toplam_uretim_kg,
             'fazla_kg': fazla_kg,
             'uyari': uyari,
         })
@@ -9432,12 +9515,15 @@ def api_plan_basla(plan_id):
         # Alt Emirleri toplu oluştur (FAZ-5G)
         alt_emir_sayisi = 0
         formul_batch_kg = 0.0
+        batch_meta = {'uretilecek_kg': 0.0, 'fazla_kg': 0.0, 'batch_sayisi': 0}
 
         if _parca_tablosu_var(con) and batch_id:
-            formul_batch_kg = _formul_batch_kg_hesapla(con, p['uretim_varyant_id'])
-            if formul_batch_kg > 0:
-                planlanan = float(p['planlanan_kg'])
-                alt_emir_sayisi = math.ceil(planlanan / formul_batch_kg)
+            batch_meta = _batch_uretim_hesapla(
+                con, p['uretim_varyant_id'], float(p['planlanan_kg'])
+            )
+            formul_batch_kg = batch_meta.get('formul_batch_kg', 0.0)
+            if batch_meta.get('ok') and formul_batch_kg > 0:
+                alt_emir_sayisi = batch_meta['batch_sayisi']
 
                 # formul_batch_kg kolonu var mı? (Migration 073)
                 parca_cols = [c['name'] for c in con.execute(
@@ -9510,8 +9596,12 @@ def api_plan_basla(plan_id):
             'renk_ad': p['renk_ad'],
             'boyut': p['boyut'],
             'planlanan_kg': round(p['planlanan_kg'], 3),
+            'siparis_kg': round(float(p['planlanan_kg']), 3),
             'formul_batch_kg': round(formul_batch_kg, 3),
+            'batch_sayisi': batch_meta.get('batch_sayisi', alt_emir_sayisi),
             'alt_emir_sayisi': alt_emir_sayisi,
+            'uretilecek_kg': batch_meta.get('uretilecek_kg', 0.0),
+            'fazla_kg': batch_meta.get('fazla_kg', 0.0),
         }
         if rf_bilgi:
             resp['rf_kod'] = rf_bilgi['rf_kod']

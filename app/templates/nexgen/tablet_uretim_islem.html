@@ -157,8 +157,20 @@
             <span class="tui-fh-k-val" id="tui-fh-kg">—</span>
           </div>
           <div class="tui-fh-kompakt-satir">
-            <span class="tui-fh-k-label">Sipariş / Batch</span>
-            <span class="tui-fh-k-val" id="tui-fh-toplam">{{ "{:,}".format(siparis_toplam_kg|int) }} KG</span>
+            <span class="tui-fh-k-label">Formül Batch</span>
+            <span class="tui-fh-k-val" id="tui-fh-batch-kg">{{ "%.2f"|format(formul_batch_kg) }} KG</span>
+          </div>
+          <div class="tui-fh-kompakt-satir">
+            <span class="tui-fh-k-label">Batch Sayısı</span>
+            <span class="tui-fh-k-val" id="tui-fh-batch-n">{{ batch_sayisi or '—' }}</span>
+          </div>
+          <div class="tui-fh-kompakt-satir">
+            <span class="tui-fh-k-label">Üretilecek</span>
+            <span class="tui-fh-k-val" id="tui-fh-toplam">{{ "{:,.1f}".format(uretilecek_kg) }} KG</span>
+          </div>
+          <div class="tui-fh-kompakt-satir">
+            <span class="tui-fh-k-label">Sipariş / Fazla</span>
+            <span class="tui-fh-k-val" id="tui-fh-siparis">{{ "{:,}".format(siparis_toplam_kg|int) }} / +{{ "{:,.1f}".format(fazla_kg) }}</span>
           </div>
         </div>
         <button type="button" class="tui-fh-gor-btn" id="tui-formul-gor-btn" onclick="tuiFormulModalAc()">
@@ -181,10 +193,15 @@
 
       {# Siparis master KG #}
       <div class="sol-kg-blok">
-        <div class="sol-etiket">SİPARİŞ TOPLAM KG</div>
+        <div class="sol-etiket">SİPARİŞ / ÜRETİLECEK</div>
         <div class="sol-kg-rakam">
           {{ "{:,}".format(siparis_toplam_kg|int) }}
           <span class="sol-kg-birim">KG</span>
+        </div>
+        <div class="sol-kg-alt">
+          Üretilecek: <strong>{{ "{:,.1f}".format(uretilecek_kg) }} KG</strong>
+          ({{ batch_sayisi }}×{{ "%.2f"|format(formul_batch_kg) }})
+          {% if fazla_kg > 0 %} · Fazla: +{{ "{:,.1f}".format(fazla_kg) }}{% endif %}
         </div>
       </div>
 
@@ -312,11 +329,11 @@
           <span class="pp-ilerleme-etiket">ÜRETİM İLERLEMESİ (RF)</span>
           <span class="pp-ilerleme-kg">
             <span id="pp-uretilen-kg">{{ "{:,.1f}".format(toplam_uretilen_kg) }}</span>
-            KG / {{ "{:,}".format(siparis_toplam_kg|int) }} KG
+            KG / {{ "{:,.1f}".format(uretilecek_kg) }} KG
           </span>
         </div>
         <div style="height:10px;border-radius:10px;background:#f3f4f6;overflow:hidden;border:1px solid #e5e7eb;">
-          {% set yuzde = ((toplam_uretilen_kg / siparis_toplam_kg) * 100) if siparis_toplam_kg else 0 %}
+          {% set yuzde = ((toplam_uretilen_kg / uretilecek_kg) * 100) if uretilecek_kg else 0 %}
           {% set yuzde_clip = [yuzde, 100]|min %}
           <div id="pp-progress-dolu"
                style="width:{{ yuzde_clip|int }}%;height:100%;background:linear-gradient(90deg,#16a34a,#22c55e);border-radius:10px;transition:width .4s;"></div>
@@ -324,7 +341,9 @@
         <div class="pp-ilerleme-alt">
           <span class="pp-progress-yuzde" id="pp-progress-yuzde">{{ "%.1f"|format(yuzde_clip) }}%</span>
           <span class="pp-ilerleme-kalan">
-            Kalan: <strong><span id="pp-kalan-kg">{{ "{:,.1f}".format(kalan_kg) }}</span> KG</strong>
+            Sipariş: <strong>{{ "{:,}".format(siparis_toplam_kg|int) }} KG</strong>
+            {% if fazla_kg > 0 %} · Fazla: <strong>+{{ "{:,.1f}".format(fazla_kg) }}</strong>{% endif %}
+            · Kalan üretim: <strong><span id="pp-kalan-kg">{{ "{:,.1f}".format(kalan_uretim_kg) }}</span> KG</strong>
           </span>
         </div>
       </div>
@@ -602,6 +621,9 @@
 var _batch_kodu      = '{{ batch.batch_kodu }}';
 var _durum           = '{{ batch.durum }}';
 var _plan_kg         = {{ siparis_toplam_kg }};
+var _uretilecek_kg   = {{ uretilecek_kg }};
+var _fazla_kg        = {{ fazla_kg }};
+var _batch_sayisi    = {{ batch_sayisi or 0 }};
 var _uretilen_kg     = {{ toplam_uretilen_kg }};
 var _boyut           = '{{ batch.boyut or "" }}';
 var _biten_adet      = {{ sayaclar.bitti }};
@@ -676,8 +698,22 @@ function tuiFormulKompaktGuncelle(d) {
   document.getElementById('tui-fh-kg').textContent =
     (d.parca && d.parca.kg != null ? parseFloat(d.parca.kg).toFixed(2) : '—') + ' KG';
   var topEl = document.getElementById('tui-fh-toplam');
-  if (topEl && d.toplam_kg != null) {
-    topEl.textContent = Math.round(parseFloat(d.toplam_kg)).toLocaleString('tr-TR') + ' KG';
+  if (topEl && d.uretilecek_kg != null) {
+    topEl.textContent = parseFloat(d.uretilecek_kg).toLocaleString('tr-TR', {maximumFractionDigits: 1}) + ' KG';
+  } else if (topEl && d.toplam_kg != null) {
+    topEl.textContent = parseFloat(d.toplam_kg).toLocaleString('tr-TR', {maximumFractionDigits: 1}) + ' KG';
+  }
+  var batchEl = document.getElementById('tui-fh-batch-n');
+  if (batchEl && d.batch_sayisi != null) batchEl.textContent = d.batch_sayisi;
+  var batchKgEl = document.getElementById('tui-fh-batch-kg');
+  if (batchKgEl && d.formul_batch_kg != null) {
+    batchKgEl.textContent = parseFloat(d.formul_batch_kg).toFixed(2) + ' KG';
+  }
+  var sipEl = document.getElementById('tui-fh-siparis');
+  if (sipEl && d.siparis_kg != null) {
+    var faz = d.fazla_kg != null ? parseFloat(d.fazla_kg) : 0;
+    sipEl.textContent = Math.round(parseFloat(d.siparis_kg)).toLocaleString('tr-TR')
+      + ' / +' + faz.toLocaleString('tr-TR', {maximumFractionDigits: 1});
   }
 }
 
@@ -1615,6 +1651,7 @@ body { background: #f3f6fa; font-family: system-ui, -apple-system, sans-serif; }
   display: flex; align-items: baseline; gap: 5px; margin-top: 4px;
 }
 .sol-kg-birim { font-size: 13px; font-weight: 600; color: #16a34a; }
+.sol-kg-alt { font-size: 11px; color: #64748b; margin-top: 6px; line-height: 1.4; }
 
 /* Kod Satırları (Batch / LOT / Alındı) */
 .sol-kod-blok {
