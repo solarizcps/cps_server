@@ -248,12 +248,11 @@ function veriGrupla() {
       }
     }
 
-    // Emir sayıları
-    var toplam  = b.toplam_alt_emir || 0;
-    var biten   = b.biten_alt_emir  || 0;
-    var devamda = 0; // batch bazlı devamda sayısı: durum DEVAM ise 1 varsay
-    if (b.durum === 'DEVAM' && biten < toplam) devamda = 1;
-    var kalan   = Math.max(0, toplam - biten - devamda);
+    // Emir sayıları — snapshot alanları (sunucudan)
+    var toplam  = b.parca_toplam != null ? b.parca_toplam : (b.toplam_alt_emir || 0);
+    var biten   = b.parca_biten != null ? b.parca_biten : (b.biten_alt_emir || 0);
+    var devamda = b.parca_devam != null ? b.parca_devam : (b.devam_alt_emir || 0);
+    var kalan   = b.parca_kalan != null ? b.parca_kalan : (b.hazir_alt_emir || 0);
 
     harita[key].boyutlar.push({
       boyut:      b.boyut || 'STD',
@@ -261,12 +260,19 @@ function veriGrupla() {
       durum:      b.durum,
       rf_kod:     b.rf_kod || null,
       rf_renk_ad: b.rf_renk_ad || null,
-      planlanan_kg:  parseFloat(b.planlanan_kg) || 0,
-      uretilen_kg:   parseFloat(b.uretilen_kg || 0),
+      siparis_kg: parseFloat(b.siparis_kg != null ? b.siparis_kg : b.planlanan_kg) || 0,
+      planlanan_kg: parseFloat(b.siparis_kg != null ? b.siparis_kg : b.planlanan_kg) || 0,
+      uretilecek_kg: parseFloat(b.uretilecek_kg) || 0,
+      fazla_kg: parseFloat(b.fazla_kg) || 0,
+      uretilen_kg: parseFloat(b.uretilen_kg || 0),
       toplam_alt_emir: toplam,
       biten_alt_emir:  biten,
       devam_alt_emir:  devamda,
-      hazir_alt_emir:  kalan
+      hazir_alt_emir:  kalan,
+      parca_toplam: toplam,
+      parca_biten: biten,
+      parca_devam: devamda,
+      parca_kalan: kalan
     });
   });
 
@@ -360,8 +366,9 @@ function kartHtml(sip, kartIdx) {
   // Emir + KG kolonları
   var emirKgHtml = '';
   sip.boyutlar.forEach(function(by) {
-    var yuzde = by.planlanan_kg > 0
-      ? Math.min(100, Math.round((by.uretilen_kg / by.planlanan_kg) * 100))
+    var hedefKg = by.uretilecek_kg > 0 ? by.uretilecek_kg : by.siparis_kg;
+    var yuzde = hedefKg > 0
+      ? Math.min(100, Math.round((by.uretilen_kg / hedefKg) * 100))
       : 0;
     var lsRozet = !tek
       ? '<span class="nxt-ls-rozet">' + esc(by.boyut) + '</span>' : '';
@@ -378,8 +385,10 @@ function kartHtml(sip, kartIdx) {
         '<div class="nxt-kg-satir">' +
           '<span class="nxt-kg-uretilen">' + fmt(by.uretilen_kg) + '</span>' +
           '<span class="nxt-kg-sep"> / </span>' +
-          '<span class="nxt-kg-plan">' + fmt(by.planlanan_kg) + ' KG</span>' +
+          '<span class="nxt-kg-plan">' + fmt(hedefKg) + ' KG</span>' +
         '</div>' +
+        '<div class="nxt-kg-alt-satir">Sipariş: ' + fmt(by.siparis_kg) +
+          (by.fazla_kg > 0 ? ' · Fazla: +' + fmt(by.fazla_kg) : '') + '</div>' +
         '<div class="nxt-progress-bar"><div class="nxt-progress-dolu" style="width:' + yuzde + '%"></div></div>';
     } else {
       emirKgHtml +=
@@ -945,6 +954,7 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #f3f6fa; }
 .nxt-kg-uretilen { font-size: 18px; font-weight: 900; color: #16a34a; }
 .nxt-kg-sep { font-size: 11px; color: #9ca3af; }
 .nxt-kg-plan { font-size: 11px; font-weight: 600; color: #6b7280; }
+.nxt-kg-alt-satir { font-size: 10px; color: #6b7280; margin-top: 2px; }
 .nxt-progress-bar {
   height: 5px; background: #f3f4f6; border-radius: 3px; overflow: hidden;
   border: 1px solid #e5e7eb; margin-top: 4px;

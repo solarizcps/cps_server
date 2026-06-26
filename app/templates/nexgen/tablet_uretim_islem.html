@@ -191,6 +191,12 @@
         {% endif %}
       </div>
 
+      {% if stale_depo_var_mi %}
+      <div class="tui-stale-depo-uyari">
+        Depo hazırlık eski hesapla oluşturulmuş olabilir. Güncel ihtiyaç ile fark: {{ "{:,.1f}".format(stale_depo_fark_kg) }} KG
+      </div>
+      {% endif %}
+
       {# Siparis master KG #}
       <div class="sol-kg-blok">
         <div class="sol-etiket">SİPARİŞ / ÜRETİLECEK</div>
@@ -343,7 +349,8 @@
           <span class="pp-ilerleme-kalan">
             Sipariş: <strong>{{ "{:,}".format(siparis_toplam_kg|int) }} KG</strong>
             {% if fazla_kg > 0 %} · Fazla: <strong>+{{ "{:,.1f}".format(fazla_kg) }}</strong>{% endif %}
-            · Kalan üretim: <strong><span id="pp-kalan-kg">{{ "{:,.1f}".format(kalan_uretim_kg) }}</span> KG</strong>
+            · Kalan üretim: <strong><span id="pp-kalan-uretim-kg">{{ "{:,.1f}".format(kalan_uretim_kg) }}</span> KG</strong>
+            · Kalan sipariş: <strong><span id="pp-kalan-siparis-kg">{{ "{:,.1f}".format(kalan_siparis_kg) }}</span> KG</strong>
           </span>
         </div>
       </div>
@@ -619,6 +626,8 @@
 
 <script>
 var _batch_kodu      = '{{ batch.batch_kodu }}';
+var _kalan_siparis_kg = {{ kalan_siparis_kg }};
+var _kalan_uretim_kg  = {{ kalan_uretim_kg }};
 var _durum           = '{{ batch.durum }}';
 var _plan_kg         = {{ siparis_toplam_kg }};
 var _uretilecek_kg   = {{ uretilecek_kg }};
@@ -927,17 +936,21 @@ function toastGoster(metin) {
 islemGridRender(_durum);
 
 /* ─── Yardımcı: İlerleme Güncelle ─────────────────── */
-function iLerlemeGuncelle(yeniUretilen, yeniKalan) {
+function iLerlemeGuncelle(yeniUretilen, yeniKalanUretim, yeniKalanSiparis) {
   _uretilen_kg = yeniUretilen;
+  if (yeniKalanUretim != null) _kalan_uretim_kg = yeniKalanUretim;
+  if (yeniKalanSiparis != null) _kalan_siparis_kg = yeniKalanSiparis;
   var fmt = function(v) {
     return v.toLocaleString('tr-TR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   };
   var el;
   el = document.getElementById('pp-uretilen-kg');
   if (el) el.textContent = fmt(yeniUretilen);
-  el = document.getElementById('pp-kalan-kg');
-  if (el) el.textContent = fmt(yeniKalan);
-  var yuzde = _plan_kg > 0 ? Math.min(100, (yeniUretilen / _plan_kg) * 100) : 0;
+  el = document.getElementById('pp-kalan-uretim-kg');
+  if (el) el.textContent = fmt(_kalan_uretim_kg);
+  el = document.getElementById('pp-kalan-siparis-kg');
+  if (el) el.textContent = fmt(_kalan_siparis_kg);
+  var yuzde = _uretilecek_kg > 0 ? Math.min(100, (yeniUretilen / _uretilecek_kg) * 100) : 0;
   el = document.getElementById('pp-progress-dolu');
   if (el) el.style.width = yuzde.toFixed(1) + '%';
   el = document.getElementById('pp-progress-yuzde');
@@ -1091,7 +1104,7 @@ async function topluBitir() {
     });
     var j = await r.json();
     if (j.ok) {
-      iLerlemeGuncelle(j.toplam_uretilen_kg, j.kalan_kg);
+      iLerlemeGuncelle(j.toplam_uretilen_kg, j.kalan_uretim_kg, j.kalan_siparis_kg);
       sayacGuncelle(j.sayac);
       toastGoster(j.biten + ' alt emir tamamlandı. +' + j.biten_kg.toFixed(1) + ' KG');
       setTimeout(function() { location.reload(); }, 800);
@@ -1125,7 +1138,7 @@ async function seciliIsle(islem) {
     });
     var j = await r.json();
     if (j.ok) {
-      iLerlemeGuncelle(j.toplam_uretilen_kg, j.kalan_kg);
+      iLerlemeGuncelle(j.toplam_uretilen_kg, j.kalan_uretim_kg, j.kalan_siparis_kg);
       sayacGuncelle(j.sayac);
       var msg = j.islenen + ' emir işlendi';
       if (j.atlanan) msg += ' (' + j.atlanan + ' atlandı)';
@@ -1177,7 +1190,7 @@ async function altEmirBitir(altEmirId) {
     });
     var j = await r.json();
     if (j.ok) {
-      iLerlemeGuncelle(j.toplam_uretilen_kg, j.kalan_kg);
+      iLerlemeGuncelle(j.toplam_uretilen_kg, j.kalan_uretim_kg, j.kalan_siparis_kg);
       toastGoster('Alt Emir tamamlandı. Üretilen: ' + j.uretilen_kg + ' KG');
       setTimeout(function() { location.reload(); }, 500);
     } else {
@@ -1510,6 +1523,11 @@ body { background: #f3f6fa; font-family: system-ui, -apple-system, sans-serif; }
 .tui-depo-hazir { color: #15803d; }
 .tui-depo-yok { color: #94a3b8; font-weight: 600; font-size: 13px; }
 .tui-depo-alt { font-size: 10px; color: #94a3b8; font-family: monospace; }
+.tui-stale-depo-uyari {
+  margin-top: 8px; padding: 8px 10px; border-radius: 8px;
+  background: #fff7ed; border: 1px solid #fdba74; color: #9a3412;
+  font-size: 11px; font-weight: 600; line-height: 1.35;
+}
 
 /* FAZ-4E Formül Modal */
 .tui-formul-modal-arka {

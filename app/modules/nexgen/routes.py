@@ -2603,34 +2603,202 @@ def _batch_uretim_kontrol(con, batch_kodu):
     return d
 
 
-def _batch_kg_rf_enrich(con, b_dict, liste_modu=False):
-    """KG gosterim alanlarini rf_kullanim tek kaynagindan doldurur.
+def _nexgen_batch_snapshot(con, batch_kodu):
+    """Batch/plan tek kaynak özet — tablet ve API ekranları için."""
+    batch = con.execute("""
+        SELECT nb.batch_kodu, nb.planlanan_kg, nb.plan_id, nb.uretim_varyant_id,
+               nb.durum AS batch_durum,
+               np.durum AS plan_durum, np.planlama_siparis_id, np.rf_renk_id
+        FROM nexgen_uretim_batch nb
+        LEFT JOIN nexgen_uretim_plan np ON np.id = nb.plan_id
+        WHERE nb.batch_kodu = ?
+    """, (batch_kodu,)).fetchone()
+    if not batch:
+        return None
 
-    liste_modu=True: batch kartlari (L/S) — uretilen = batch rf SUM, hedef = batch planlanan_kg
-    liste_modu=False: siparis ozeti — plan master + siparis rf SUM
-    """
-    k = _batch_uretim_kontrol(con, b_dict.get('batch_kodu'))
-    if not k:
-        return b_dict
-    b_dict['siparis_toplam_kg'] = k['siparis_toplam_kg']
-    b_dict['kontrol_durum'] = k.get('kontrol_durum')
-    b_dict['kontrol_uyari'] = k.get('uyari')
-    b_dict['kontrol_mesaj'] = k.get('mesaj')
-    if liste_modu:
-        batch_ur = 0.0
-        if _rf_kullanim_tablosu_var(con) and b_dict.get('batch_kodu'):
-            row = con.execute("""
-                SELECT ROUND(COALESCE(SUM(miktar_kg), 0), 3) AS kg
-                FROM nexgen_rf_kullanim
-                WHERE aktif = 1 AND tablet_session_id = ?
-            """, (b_dict['batch_kodu'],)).fetchone()
-            batch_ur = float(row['kg'] or 0) if row else 0.0
-        bpl = float(b_dict.get('planlanan_kg') or 0)
-        b_dict['uretilen_kg'] = round(batch_ur, 3)
-        b_dict['kalan_kg'] = round(max(0.0, bpl - batch_ur), 3)
+    plan_id = batch['plan_id']
+    siparis_kg = round(float(batch['planlanan_kg']), 3)
+    uv_id = batch['uretim_varyant_id']
+    batch_meta = _batch_uretim_hesapla(con, uv_id, siparis_kg)
+    if batch_meta.get('ok'):
+        formul_batch_kg = batch_meta['formul_batch_kg']
+        batch_sayisi = batch_meta['batch_sayisi']
+        uretilecek_kg = batch_meta['uretilecek_kg']
+        fazla_kg = batch_meta['fazla_kg']
     else:
-        b_dict['uretilen_kg'] = k['uretilen_kg']
-        b_dict['kalan_kg'] = k['kalan_kg']
+        formul_batch_kg = batch_meta.get('formul_batch_kg', 0.0)
+        batch_sayisi = 0
+        uretilecek_kg = siparis_kg
+        fazla_kg = 0.0
+
+    uretilen_kg = 0.0
+    if _rf_kullanim_tablosu_var(con):
+        row = con.execute("""
+            SELECT ROUND(COALESCE(SUM(miktar_kg), 0), 3) AS kg
+            FROM nexgen_rf_kullanim
+            WHERE aktif = 1 AND tablet_session_id = ?
+        """, (batch_kodu,)).fetchone()
+        uretilen_kg = float(row['kg'] or 0) if row else 0.0
+    uretilen_kg = round(uretilen_kg, 3)
+
+    kalan_siparis_kg = round(max(0.0, siparis_kg - uretilen_kg), 3)
+    kalan_uretim_kg = round(max(0.0, uretilecek_kg - uretilen_kg), 3)
+
+    parca_toplam = parca_biten = parca_devam = parca_bekleyen = parca_hazir = 0
+    if _parca_tablosu_var(con):
+        sayac = con.execute("""
+            SELECT COUNT(*) AS toplam,
+                   SUM(CASE WHEN durum='BITTI' THEN 1 ELSE 0 END) AS biten,
+                   SUM(CASE WHEN durum='DEVAM' THEN 1 ELSE 0 END) AS devam,
+                   SUM(CASE WHEN durum='BEKLEME' THEN 1 ELSE 0 END) AS bekleme,
+                   SUM(CASE WHEN durum='HAZIR' THEN 1 ELSE 0 END) AS hazir
+            FROM nexgen_uretim_parca WHERE batch_kodu=?
+        """, (batch_kodu,)).fetchone()
+        parca_toplam = int(sayac['toplam'] or 0)
+        parca_biten = int(sayac['biten'] or 0)
+        parca_devam = int(sayac['devam'] or 0)
+        parca_bekleyen = int(sayac['bekleme'] or 0)
+        parca_hazir = int(sayac['hazir'] or 0)
+    parca_kalan = max(0, parca_toplam - parca_biten - parca_devam)
+
+    depo_hazirlik = _depo_hazirlik_batch_durum(con, batch_kodu)
+    depo_durum = depo_hazirlik['durum'] if depo_hazirlik else None
+    depo_toplam_kg = 0.0
+    if depo_hazirlik:
+        drow = con.execute("""
+            SELECT COALESCE(SUM(gerekli_kg), 0) AS s
+            FROM nexgen_depo_hazirlik_kalem WHERE hazirlik_id=?
+        """, (depo_hazirlik['id'],)).fetchone()
+        depo_toplam_kg = round(float(drow['s'] or 0), 3) if drow else 0.0
+
+    rezerv_kg = 0.0
+    if _stok_rezerv_tablosu_var(con):
+        rrow = con.execute("""
+            SELECT COALESCE(SUM(kalan_kg), 0) AS s
+            FROM nexgen_stok_rezerv
+            WHERE batch_kodu=? AND durum='AKTIF'
+        """, (batch_kodu,)).fetchone()
+        rezerv_kg = round(float(rrow['s'] or 0), 3) if rrow else 0.0
+
+    rf_renk_id = batch['rf_renk_id'] if 'rf_renk_id' in batch.keys() else None
+    if not rf_renk_id and plan_id:
+        rf_bilgi = _batch_plan_rf_bilgi(
+            con, batch_kodu=batch_kodu, plan_id=plan_id, uretim_varyant_id=uv_id,
+        )
+        if rf_bilgi:
+            rf_renk_id = rf_bilgi.get('rf_renk_id')
+
+    canli_ihtiyac_toplam = 0.0
+    ihtiyac = _mpr_stok_ihtiyac_hesapla(con, uv_id, rf_renk_id, siparis_kg)
+    if ihtiyac.get('ok'):
+        canli_ihtiyac_toplam = round(
+            sum(float(k.get('gerekli_kg') or 0) for k in ihtiyac.get('kalemler', [])),
+            3,
+        )
+
+    stale_depo_var_mi = False
+    stale_depo_fark_kg = 0.0
+    if depo_toplam_kg > 0 and canli_ihtiyac_toplam > 0:
+        stale_depo_fark_kg = round(canli_ihtiyac_toplam - depo_toplam_kg, 3)
+        stale_depo_var_mi = abs(stale_depo_fark_kg) > 0.5
+
+    kontrol = _uretim_kontrol_durumu(siparis_kg, uretilen_kg)
+
+    planlama_siparis_id = None
+    if 'planlama_siparis_id' in batch.keys():
+        planlama_siparis_id = batch['planlama_siparis_id']
+
+    return {
+        'plan_id': plan_id,
+        'batch_kodu': batch_kodu,
+        'planlama_siparis_id': planlama_siparis_id,
+        'siparis_kg': siparis_kg,
+        'formul_batch_kg': formul_batch_kg,
+        'batch_sayisi': batch_sayisi,
+        'uretilecek_kg': uretilecek_kg,
+        'fazla_kg': fazla_kg,
+        'uretilen_kg': uretilen_kg,
+        'kalan_siparis_kg': kalan_siparis_kg,
+        'kalan_uretim_kg': kalan_uretim_kg,
+        'parca_toplam': parca_toplam,
+        'parca_biten': parca_biten,
+        'parca_devam': parca_devam,
+        'parca_bekleyen': parca_bekleyen,
+        'parca_hazir': parca_hazir,
+        'parca_kalan': parca_kalan,
+        'batch_durum': batch['batch_durum'],
+        'plan_durum': batch['plan_durum'],
+        'depo_durum': depo_durum,
+        'rezerv_kg': rezerv_kg,
+        'depo_toplam_kg': depo_toplam_kg,
+        'canli_ihtiyac_toplam_kg': canli_ihtiyac_toplam,
+        'stale_depo_var_mi': stale_depo_var_mi,
+        'stale_depo_fark_kg': stale_depo_fark_kg,
+        'kontrol_durum': kontrol.get('kontrol_durum'),
+        'kontrol_uyari': kontrol.get('uyari'),
+        'kontrol_mesaj': kontrol.get('mesaj'),
+    }
+
+
+def _snapshot_batch_dict_merge(b_dict, snap):
+    """Snapshot alanlarını batch dict'e yazar (tablet liste geriye uyum aliasları)."""
+    if not snap:
+        return b_dict
+    b_dict.update(snap)
+    b_dict['siparis_toplam_kg'] = snap['siparis_kg']
+    b_dict['planlanan_kg'] = snap['siparis_kg']
+    b_dict['toplam_alt_emir'] = snap['parca_toplam']
+    b_dict['biten_alt_emir'] = snap['parca_biten']
+    b_dict['devam_alt_emir'] = snap['parca_devam']
+    b_dict['bekleme_alt_emir'] = snap['parca_bekleyen']
+    b_dict['hazir_alt_emir'] = snap['parca_kalan']
+    return b_dict
+
+
+def _snapshot_api_kg_payload(snap):
+    """Parça/bitir API yanıtları için KG + sayaç alanları."""
+    if not snap:
+        return {}
+    return {
+        'siparis_kg': snap['siparis_kg'],
+        'siparis_toplam_kg': snap['siparis_kg'],
+        'uretilecek_kg': snap['uretilecek_kg'],
+        'fazla_kg': snap['fazla_kg'],
+        'formul_batch_kg': snap['formul_batch_kg'],
+        'batch_sayisi': snap['batch_sayisi'],
+        'toplam_uretilen_kg': snap['uretilen_kg'],
+        'uretilen_kg': snap['uretilen_kg'],
+        'kalan_siparis_kg': snap['kalan_siparis_kg'],
+        'kalan_uretim_kg': snap['kalan_uretim_kg'],
+        'kontrol_durum': snap.get('kontrol_durum'),
+        'kontrol_uyari': snap.get('kontrol_uyari'),
+        'stale_depo_var_mi': snap.get('stale_depo_var_mi'),
+        'stale_depo_fark_kg': snap.get('stale_depo_fark_kg'),
+        'sayac': {
+            'toplam': snap['parca_toplam'],
+            'hazir': snap['parca_hazir'],
+            'devam': snap['parca_devam'],
+            'bekleme': snap['parca_bekleyen'],
+            'bitti': snap['parca_biten'],
+        },
+        'parca_toplam': snap['parca_toplam'],
+        'parca_biten': snap['parca_biten'],
+        'parca_devam': snap['parca_devam'],
+        'parca_kalan': snap['parca_kalan'],
+    }
+
+
+def _batch_kg_rf_enrich(con, b_dict, liste_modu=False):
+    """Batch dict'e _nexgen_batch_snapshot alanlarını ekler."""
+    snap = _nexgen_batch_snapshot(con, b_dict.get('batch_kodu'))
+    if not snap:
+        return b_dict
+    _snapshot_batch_dict_merge(b_dict, snap)
+    if not liste_modu:
+        sk = _siparis_kontrol_get(con, snap['plan_id']) if snap.get('plan_id') else None
+        if sk:
+            b_dict['uretilen_kg'] = sk['uretilen_kg']
+            b_dict['kalan_siparis_kg'] = max(0.0, float(sk['fark_kg']))
     return b_dict
 
 
@@ -5383,27 +5551,12 @@ def tablet_devam_edenler():
         parca_tablosu = _parca_tablosu_var(con)
         if parca_tablosu:
             for b in batches_raw:
-                sayac = con.execute("""
-                    SELECT COUNT(*) AS toplam,
-                           SUM(CASE WHEN durum='HAZIR'   THEN 1 ELSE 0 END) AS hazir,
-                           SUM(CASE WHEN durum='DEVAM'   THEN 1 ELSE 0 END) AS devam,
-                           SUM(CASE WHEN durum='BEKLEME' THEN 1 ELSE 0 END) AS bekleme,
-                           SUM(CASE WHEN durum='BITTI'   THEN 1 ELSE 0 END) AS biten,
-                           SUM(CASE WHEN durum='BITTI'   THEN uretilen_kg ELSE 0 END) AS uretilen
-                    FROM nexgen_uretim_parca WHERE batch_kodu=?
-                """, (b['batch_kodu'],)).fetchone()
-                b['toplam_alt_emir'] = sayac['toplam'] or 0
-                b['biten_alt_emir']  = sayac['biten']  or 0
-                b['hazir_alt_emir']  = sayac['hazir']  or 0
-                b['devam_alt_emir']  = sayac['devam']  or 0
-                b['bekleme_alt_emir']= sayac['bekleme']or 0
                 _batch_kg_rf_enrich(con, b, liste_modu=True)
         else:
             for b in batches_raw:
                 b['toplam_alt_emir'] = b['biten_alt_emir'] = 0
-                b['hazir_alt_emir']  = b['devam_alt_emir'] = b['bekleme_alt_emir'] = 0
-                b['uretilen_kg']     = 0.0
-                b['kalan_kg']        = float(b['planlanan_kg'])
+                b['hazir_alt_emir'] = b['devam_alt_emir'] = b['bekleme_alt_emir'] = 0
+                b['uretilen_kg'] = 0.0
                 _batch_kg_rf_enrich(con, b, liste_modu=True)
 
         # Sipariş bazında gruplama:
@@ -5430,15 +5583,19 @@ def tablet_devam_edenler():
                 'batch_kodu':     b['batch_kodu'],
                 'lot_kodu':       b.get('lot_kodu'),
                 'durum':          b['durum'],
-                'planlanan_kg':   b['planlanan_kg'],
-                'siparis_toplam_kg': b.get('siparis_toplam_kg'),
-                'uretilen_kg':    b['uretilen_kg'],
-                'kalan_kg':       b['kalan_kg'],
-                'toplam_alt_emir':b['toplam_alt_emir'],
-                'biten_alt_emir': b['biten_alt_emir'],
-                'hazir_alt_emir': b['hazir_alt_emir'],
-                'devam_alt_emir': b['devam_alt_emir'],
-                'bekleme_alt_emir':b['bekleme_alt_emir'],
+                'siparis_kg':     b.get('siparis_kg', b.get('planlanan_kg')),
+                'planlanan_kg':   b.get('siparis_kg', b.get('planlanan_kg')),
+                'uretilecek_kg':  b.get('uretilecek_kg'),
+                'fazla_kg':       b.get('fazla_kg', 0),
+                'siparis_toplam_kg': b.get('siparis_kg', b.get('siparis_toplam_kg')),
+                'uretilen_kg':    b.get('uretilen_kg', 0),
+                'kalan_siparis_kg': b.get('kalan_siparis_kg', 0),
+                'kalan_uretim_kg': b.get('kalan_uretim_kg', 0),
+                'toplam_alt_emir': b.get('parca_toplam', b.get('toplam_alt_emir', 0)),
+                'biten_alt_emir': b.get('parca_biten', b.get('biten_alt_emir', 0)),
+                'hazir_alt_emir': b.get('parca_kalan', b.get('hazir_alt_emir', 0)),
+                'devam_alt_emir': b.get('parca_devam', b.get('devam_alt_emir', 0)),
+                'bekleme_alt_emir': b.get('parca_bekleyen', b.get('bekleme_alt_emir', 0)),
             })
 
         # Tek boyutlu gruplarda tek_batch doldur
@@ -5560,29 +5717,26 @@ def tablet_uretim_islem(batch_kodu):
                 if d_lower in sayaclar:
                     sayaclar[d_lower] += 1
 
-            # formul_batch_kg: ilk kayittan (plan bilgisi, uretim hesabi degil)
+            # formul_batch_kg snapshot'tan (BOYA hariç taban batch)
             if alt_emirler:
                 formul_batch_kg = float(alt_emirler[0].get('formul_batch_kg') or 0)
         else:
             formul_batch_kg = 0.0
 
-        kg_kontrol = _batch_uretim_kontrol(con, batch_kodu) or {}
-        siparis_toplam_kg = float(
-            kg_kontrol.get('siparis_toplam_kg') or batch['planlanan_kg']
-        )
-        uretilecek_kg = float(
-            kg_kontrol.get('uretilecek_kg') or siparis_toplam_kg
-        )
-        fazla_kg = float(kg_kontrol.get('fazla_kg') or 0)
-        batch_sayisi = int(kg_kontrol.get('batch_sayisi') or 0)
-        toplam_uretilen_kg = float(kg_kontrol.get('uretilen_kg') or 0.0)
-        kalan_kg = float(kg_kontrol.get('kalan_kg') or max(0.0, siparis_toplam_kg - toplam_uretilen_kg))
-        kalan_uretim_kg = float(
-            kg_kontrol.get('kalan_uretim_kg') or max(0.0, uretilecek_kg - toplam_uretilen_kg)
-        )
-        kontrol_durum = kg_kontrol.get('kontrol_durum')
-        kontrol_uyari = kg_kontrol.get('uyari')
-        kontrol_mesaj = kg_kontrol.get('mesaj')
+        snap = _nexgen_batch_snapshot(con, batch_kodu) or {}
+        siparis_toplam_kg = float(snap.get('siparis_kg') or batch['planlanan_kg'])
+        uretilecek_kg = float(snap.get('uretilecek_kg') or siparis_toplam_kg)
+        fazla_kg = float(snap.get('fazla_kg') or 0)
+        batch_sayisi = int(snap.get('batch_sayisi') or 0)
+        toplam_uretilen_kg = float(snap.get('uretilen_kg') or 0.0)
+        kalan_siparis_kg = float(snap.get('kalan_siparis_kg') or 0.0)
+        kalan_uretim_kg = float(snap.get('kalan_uretim_kg') or 0.0)
+        kontrol_durum = snap.get('kontrol_durum')
+        kontrol_uyari = snap.get('kontrol_uyari')
+        kontrol_mesaj = snap.get('kontrol_mesaj')
+        formul_batch_kg = float(snap.get('formul_batch_kg') or formul_batch_kg)
+        stale_depo_var_mi = bool(snap.get('stale_depo_var_mi'))
+        stale_depo_fark_kg = float(snap.get('stale_depo_fark_kg') or 0)
         planlanan_kg = siparis_toplam_kg
 
         # Aynı siparis_no'daki kardeş batch'ler (L/S seçim ekranı için)
@@ -5637,7 +5791,7 @@ def tablet_uretim_islem(batch_kodu):
         uretilecek_kg=round(uretilecek_kg, 3),
         fazla_kg=round(fazla_kg, 3),
         batch_sayisi=batch_sayisi,
-        kalan_kg=round(kalan_kg, 3),
+        kalan_siparis_kg=round(kalan_siparis_kg, 3),
         kalan_uretim_kg=round(kalan_uretim_kg, 3),
         kontrol_durum=kontrol_durum,
         kontrol_uyari=kontrol_uyari,
@@ -5652,6 +5806,8 @@ def tablet_uretim_islem(batch_kodu):
         rf_renk_ad=rf_renk_ad,
         rf_uyari=rf_uyari,
         depo_hazirlik=depo_hazirlik,
+        stale_depo_var_mi=stale_depo_var_mi,
+        stale_depo_fark_kg=round(stale_depo_fark_kg, 3),
     )
 
 
@@ -5999,19 +6155,13 @@ def tablet_uretim():
         for is_ in acik_isler:
             is_dict = dict(is_)
             is_dict['kaynak'] = 'BATCH'
-            # Reçete batch KG
-            kalemler2 = con.execute("""
-                SELECT SUM(miktar_kg) as toplam
-                FROM nexgen_recete_kalem
-                WHERE uretim_varyant_id=? AND aktif=1
-            """, (is_dict['uv_id'],)).fetchone()
-            batch_kg = round(float(kalemler2['toplam'] or 0), 3) if kalemler2 else 0.0
-            is_dict['batch_kg'] = batch_kg
-            if batch_kg > 0 and is_dict['planlanan_kg'] > 0:
-                q = is_dict['planlanan_kg'] / batch_kg
-                is_dict['kazan_sayisi'] = int(q) if q == int(q) else int(q) + 1
-            else:
-                is_dict['kazan_sayisi'] = 0
+            batch_meta = _batch_uretim_hesapla(
+                con, is_dict['uv_id'], float(is_dict['planlanan_kg'])
+            )
+            is_dict['batch_kg'] = batch_meta.get('formul_batch_kg', 0.0)
+            is_dict['kazan_sayisi'] = batch_meta.get('batch_sayisi', 0) if batch_meta.get('ok') else 0
+            is_dict['uretilecek_kg'] = batch_meta.get('uretilecek_kg', 0.0) if batch_meta.get('ok') else 0.0
+            is_dict['fazla_kg'] = batch_meta.get('fazla_kg', 0.0) if batch_meta.get('ok') else 0.0
             acik_isler_liste.append(is_dict)
 
         # Plan kayıtlarını da ekle (PLANLANDI + tarih uygun)
@@ -6020,18 +6170,13 @@ def tablet_uretim():
             p_dict['kaynak'] = 'PLAN'
             p_dict['batch_kodu'] = None
             p_dict['durum'] = p_dict.get('plan_durum', 'PLANLANDI')
-            kalemler3 = con.execute("""
-                SELECT SUM(miktar_kg) as toplam
-                FROM nexgen_recete_kalem
-                WHERE uretim_varyant_id=? AND aktif=1
-            """, (p_dict['uv_id'],)).fetchone()
-            batch_kg = round(float(kalemler3['toplam'] or 0), 3) if kalemler3 else 0.0
-            p_dict['batch_kg'] = batch_kg
-            if batch_kg > 0 and p_dict['planlanan_kg'] > 0:
-                q = p_dict['planlanan_kg'] / batch_kg
-                p_dict['kazan_sayisi'] = int(q) if q == int(q) else int(q) + 1
-            else:
-                p_dict['kazan_sayisi'] = 0
+            batch_meta = _batch_uretim_hesapla(
+                con, p_dict['uv_id'], float(p_dict['planlanan_kg'])
+            )
+            p_dict['batch_kg'] = batch_meta.get('formul_batch_kg', 0.0)
+            p_dict['kazan_sayisi'] = batch_meta.get('batch_sayisi', 0) if batch_meta.get('ok') else 0
+            p_dict['uretilecek_kg'] = batch_meta.get('uretilecek_kg', 0.0) if batch_meta.get('ok') else 0.0
+            p_dict['fazla_kg'] = batch_meta.get('fazla_kg', 0.0) if batch_meta.get('ok') else 0.0
             acik_isler_liste.append(p_dict)
     finally:
         con.close()
@@ -6828,22 +6973,12 @@ def _tablet_ana_veri(con):
 
     if _parca_tablosu_var(con):
         for b in devam_eden:
-            bk = b['batch_kodu']
-            sayac = con.execute("""
-                SELECT COUNT(*) AS toplam,
-                       SUM(CASE WHEN durum='BITTI' THEN 1 ELSE 0 END) AS biten,
-                       SUM(CASE WHEN durum='BITTI' THEN uretilen_kg ELSE 0 END) AS uretilen
-                FROM nexgen_uretim_parca WHERE batch_kodu=?
-            """, (bk,)).fetchone()
-            b['toplam_alt_emir'] = sayac['toplam'] or 0
-            b['biten_alt_emir']  = sayac['biten']  or 0
             _batch_kg_rf_enrich(con, b, liste_modu=True)
     else:
         for b in devam_eden:
             b['toplam_alt_emir'] = None
-            b['biten_alt_emir']  = None
-            b['uretilen_kg']     = 0.0
-            b['kalan_kg']        = float(b['planlanan_kg'])
+            b['biten_alt_emir'] = None
+            b['uretilen_kg'] = 0.0
             _batch_kg_rf_enrich(con, b, liste_modu=True)
 
     return devam_eden, plan_isler
@@ -10277,29 +10412,17 @@ def api_parca_bitir(batch_kodu, parca_id):
         _rf_kullanim_tablet_sync(con, batch_kodu, uretim_emir_id=parca_id)
 
         con.commit()
-        kg = _batch_uretim_kontrol(con, batch_kodu) or {}
-
-        # Toplam alt emir ve biten sayısı
-        sayac = con.execute("""
-            SELECT COUNT(*) AS toplam,
-                   SUM(CASE WHEN durum='BITTI' THEN 1 ELSE 0 END) AS biten
-            FROM nexgen_uretim_parca WHERE batch_kodu=?
-        """, (batch_kodu,)).fetchone()
-        toplam_emir = sayac['toplam'] if sayac else 0
-        biten_emir  = sayac['biten'] or 0
+        snap = _nexgen_batch_snapshot(con, batch_kodu)
+        payload = _snapshot_api_kg_payload(snap)
 
         return jsonify({
             'ok': True,
             'parca_id': parca_id,
             'durum': 'BITTI',
             'uretilen_kg': uretilen_kg,
-            'siparis_toplam_kg': kg.get('siparis_toplam_kg'),
-            'toplam_uretilen_kg': round(float(kg.get('uretilen_kg') or 0), 3),
-            'kalan_kg': round(float(kg.get('kalan_kg') or 0), 3),
-            'kontrol_durum': kg.get('kontrol_durum'),
-            'kontrol_uyari': kg.get('uyari'),
-            'toplam_emir': toplam_emir,
-            'biten_emir': biten_emir,
+            **payload,
+            'toplam_emir': snap['parca_toplam'] if snap else 0,
+            'biten_emir': snap['parca_biten'] if snap else 0,
         })
     except Exception as e:
         con.rollback()
@@ -10454,28 +10577,17 @@ def api_batch_ilerleme(batch_kodu):
 
     con = _db()
     try:
-        kg = _batch_uretim_kontrol(con, batch_kodu)
-        if not kg:
+        snap = _nexgen_batch_snapshot(con, batch_kodu)
+        if not snap:
             return jsonify({'ok': False, 'hata': 'Batch bulunamadı'}), 404
 
-        parca_sayisi = 0
-        if _parca_tablosu_var(con):
-            parca_sayisi = con.execute(
-                "SELECT COUNT(*) AS cnt FROM nexgen_uretim_parca WHERE batch_kodu=?",
-                (batch_kodu,)
-            ).fetchone()['cnt']
-
+        payload = _snapshot_api_kg_payload(snap)
         return jsonify({
             'ok': True,
             'batch_kodu': batch_kodu,
-            'siparis_toplam_kg': kg['siparis_toplam_kg'],
-            'planlanan_kg': kg['siparis_toplam_kg'],
-            'toplam_uretilen_kg': kg['uretilen_kg'],
-            'kalan_kg': kg['kalan_kg'],
-            'kontrol_durum': kg.get('kontrol_durum'),
-            'kontrol_uyari': kg.get('uyari'),
-            'kontrol_mesaj': kg.get('mesaj'),
-            'parca_sayisi': parca_sayisi,
+            'planlanan_kg': snap['siparis_kg'],
+            **payload,
+            'parca_sayisi': snap['parca_toplam'],
             'migration_eksik': not _parca_tablosu_var(con),
         })
     finally:
@@ -10624,34 +10736,14 @@ def api_parca_toplu_bitir(batch_kodu):
 
         con.commit()
 
-        kg = _batch_uretim_kontrol(con, batch_kodu) or {}
-
-        sayac = con.execute("""
-            SELECT
-              COUNT(*) AS toplam,
-              SUM(CASE WHEN durum='HAZIR'   THEN 1 ELSE 0 END) AS hazir,
-              SUM(CASE WHEN durum='DEVAM'   THEN 1 ELSE 0 END) AS devam,
-              SUM(CASE WHEN durum='BEKLEME' THEN 1 ELSE 0 END) AS bekleme,
-              SUM(CASE WHEN durum='BITTI'   THEN 1 ELSE 0 END) AS bitti
-            FROM nexgen_uretim_parca WHERE batch_kodu=?
-        """, (batch_kodu,)).fetchone()
+        snap = _nexgen_batch_snapshot(con, batch_kodu)
+        payload = _snapshot_api_kg_payload(snap)
 
         return jsonify({
             'ok': True,
             'biten': len(hedefler),
             'biten_kg': round(biten_kg, 3),
-            'siparis_toplam_kg': kg.get('siparis_toplam_kg'),
-            'toplam_uretilen_kg': round(float(kg.get('uretilen_kg') or 0), 3),
-            'kalan_kg': round(float(kg.get('kalan_kg') or 0), 3),
-            'kontrol_durum': kg.get('kontrol_durum'),
-            'kontrol_uyari': kg.get('uyari'),
-            'sayac': {
-                'toplam':  sayac['toplam']  or 0,
-                'hazir':   sayac['hazir']   or 0,
-                'devam':   sayac['devam']   or 0,
-                'bekleme': sayac['bekleme'] or 0,
-                'bitti':   sayac['bitti']   or 0,
-            },
+            **payload,
         })
     except Exception as e:
         con.rollback()
@@ -10758,33 +10850,14 @@ def api_parca_secili_isle(batch_kodu):
 
         con.commit()
 
-        kg = _batch_uretim_kontrol(con, batch_kodu) or {}
-
-        sayac = con.execute("""
-            SELECT COUNT(*) AS toplam,
-              SUM(CASE WHEN durum='HAZIR'   THEN 1 ELSE 0 END) AS hazir,
-              SUM(CASE WHEN durum='DEVAM'   THEN 1 ELSE 0 END) AS devam,
-              SUM(CASE WHEN durum='BEKLEME' THEN 1 ELSE 0 END) AS bekleme,
-              SUM(CASE WHEN durum='BITTI'   THEN 1 ELSE 0 END) AS bitti
-            FROM nexgen_uretim_parca WHERE batch_kodu=?
-        """, (batch_kodu,)).fetchone()
+        snap = _nexgen_batch_snapshot(con, batch_kodu)
+        payload = _snapshot_api_kg_payload(snap)
 
         return jsonify({
             'ok': True,
             'islenen': islenen,
             'atlanan': atlanan,
-            'siparis_toplam_kg': kg.get('siparis_toplam_kg'),
-            'toplam_uretilen_kg': round(float(kg.get('uretilen_kg') or 0), 3),
-            'kalan_kg': round(float(kg.get('kalan_kg') or 0), 3),
-            'kontrol_durum': kg.get('kontrol_durum'),
-            'kontrol_uyari': kg.get('uyari'),
-            'sayac': {
-                'toplam':  sayac['toplam']  or 0,
-                'hazir':   sayac['hazir']   or 0,
-                'devam':   sayac['devam']   or 0,
-                'bekleme': sayac['bekleme'] or 0,
-                'bitti':   sayac['bitti']   or 0,
-            },
+            **payload,
         })
     except Exception as e:
         con.rollback()

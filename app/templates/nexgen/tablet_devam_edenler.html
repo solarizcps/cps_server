@@ -176,10 +176,11 @@
               <div class="tde-kg-sayilar">
                 <span class="tde-kg-uretilen">{{ "{:,.0f}".format(by.uretilen_kg) }}</span>
                 <span class="tde-kg-sep">/</span>
-                <span class="tde-kg-plan">{{ by.planlanan_kg | int }} KG</span>
+                <span class="tde-kg-plan">{{ (by.uretilecek_kg or by.siparis_kg or by.planlanan_kg)|int }} KG</span>
               </div>
-              {% if by.planlanan_kg and by.planlanan_kg > 0 %}
-              {% set yuzde = ((by.uretilen_kg / by.planlanan_kg) * 100)|round(0)|int %}
+              {% set hedef_kg = by.uretilecek_kg or by.siparis_kg or by.planlanan_kg %}
+              {% if hedef_kg and hedef_kg > 0 %}
+              {% set yuzde = ((by.uretilen_kg / hedef_kg) * 100)|round(0)|int %}
               {% set yuzde_clip = [yuzde, 100]|min %}
               <div class="tde-progress-bar">
                 <div class="tde-progress-dolu" style="width:{{ yuzde_clip }}%"></div>
