@@ -8039,6 +8039,236 @@ def _arge_formul_taban_onizle(con, uretim_varyant_id, test_kg):
     }
 
 
+def _rezerv_tuket_talep_hesapla(con, parca_row, tuketim_kg, tuketim_kalemleri=None):
+    """Parça tüketim talebini stok_kart_id bazında döner (FAZ-4B ile aynı MPR)."""
+    if tuketim_kalemleri is not None:
+        if isinstance(tuketim_kalemleri, dict):
+            return {'ok': True, 'talep': dict(tuketim_kalemleri)}
+        talep = {}
+        for k in tuketim_kalemleri:
+            sid = k['stok_kart_id']
+            talep[sid] = round(talep.get(sid, 0.0) + float(k['gerekli_kg']), 3)
+        return {'ok': True, 'talep': talep}
+
+    uv_id = parca_row['uretim_varyant_id']
+    rf_renk_id = parca_row['rf_renk_id']
+    if not rf_renk_id:
+        rf_bilgi = _batch_plan_rf_bilgi(
+            con,
+            batch_kodu=parca_row['batch_kodu'],
+            plan_id=parca_row.get('parca_plan_id') or parca_row.get('batch_plan_id'),
+            uretim_varyant_id=uv_id,
+        )
+        if rf_bilgi:
+            rf_renk_id = rf_bilgi.get('rf_renk_id')
+
+    ihtiyac = _mpr_stok_ihtiyac_hesapla(
+        con, uv_id, rf_renk_id, tuketim_kg,
+        exclude_batch_kodu=parca_row['batch_kodu'],
+    )
+    if not ihtiyac.get('ok'):
+        return {'ok': False, 'hata': ihtiyac.get('hata', 'Stok hesaplanamadı')}
+    talep = {}
+    for k in ihtiyac.get('kalemler', []):
+        sid = k['stok_kart_id']
+        talep[sid] = round(talep.get(sid, 0.0) + float(k['gerekli_kg']), 3)
+    return {'ok': True, 'talep': talep}
+
+
+def _batch_aktif_rezerv_var(con, batch_kodu):
+    if not _stok_rezerv_tablosu_var(con):
+        return False
+    return con.execute(
+        "SELECT 1 FROM nexgen_stok_rezerv "
+        "WHERE batch_kodu=? AND durum='AKTIF' LIMIT 1",
+        (batch_kodu,),
+    ).fetchone() is not None
+
+
+def _rezerv_tuket(con, parca_id, tuketim_kalemleri=None, uretilen_kg=None, kontrol_only=False):
+    """FAZ-5C-4: Alt emir bitince batch AKTIF rezerv kalan_kg düşür.
+
+    Legacy: batch için AKTIF rezerv yoksa sessizce atlanır.
+    Idempotent: aktif stok tüketimi varsa tekrar düşmez.
+    kontrol_only: yalnızca yeterlilik kontrolü (yazma yok).
+    """
+    if not _stok_rezerv_tablosu_var(con):
+        return {'ok': True, 'atlandi': True, 'legacy': True, 'guncellenen': 0}
+
+    parca_durum = con.execute(
+        "SELECT durum FROM nexgen_uretim_parca WHERE id=?", (parca_id,),
+    ).fetchone()
+    if (not kontrol_only and parca_durum and parca_durum['durum'] == 'BITTI'
+            and _parca_stok_net_tuketim(con, parca_id) < -0.0005):
+        return {'ok': True, 'atlandi': True, 'guncellenen': 0}
+
+    row = con.execute("""
+        SELECT p.id, p.parca_no, p.hedef_kg, p.uretilen_kg, p.batch_kodu,
+               p.plan_id AS parca_plan_id,
+               b.uretim_varyant_id, b.plan_id AS batch_plan_id,
+               pl.rf_renk_id
+        FROM nexgen_uretim_parca p
+        JOIN nexgen_uretim_batch b ON b.batch_kodu = p.batch_kodu
+        LEFT JOIN nexgen_uretim_plan pl
+               ON pl.id = COALESCE(p.plan_id, b.plan_id)
+        WHERE p.id = ?
+    """, (parca_id,)).fetchone()
+    if not row:
+        return {'ok': False, 'hata': 'Parça bulunamadı'}
+
+    parca_row = dict(row)
+    batch_kodu = parca_row['batch_kodu']
+    if not _batch_aktif_rezerv_var(con, batch_kodu):
+        return {'ok': True, 'atlandi': True, 'legacy': True, 'guncellenen': 0}
+
+    if uretilen_kg is None:
+        uretilen_kg = parca_row['uretilen_kg'] if parca_row['uretilen_kg'] else parca_row['hedef_kg']
+    try:
+        tuketim_kg = round(float(uretilen_kg), 3)
+    except (TypeError, ValueError):
+        return {'ok': False, 'hata': 'Geçersiz uretilen_kg'}
+    if tuketim_kg <= 0:
+        return {'ok': False, 'hata': 'uretilen_kg sıfırdan büyük olmalı'}
+
+    talep_res = _rezerv_tuket_talep_hesapla(
+        con, parca_row, tuketim_kg, tuketim_kalemleri=tuketim_kalemleri,
+    )
+    if not talep_res.get('ok'):
+        return talep_res
+    talep = talep_res['talep']
+
+    eksik = []
+    for sid, miktar in talep.items():
+        if miktar <= 0:
+            continue
+        rez_row = con.execute("""
+            SELECT COALESCE(SUM(kalan_kg), 0) AS toplam
+            FROM nexgen_stok_rezerv
+            WHERE batch_kodu=? AND stok_kart_id=? AND durum='AKTIF'
+        """, (batch_kodu, sid)).fetchone()
+        kul = round(float(rez_row['toplam'] or 0), 3) if rez_row else 0.0
+        if kul < miktar - 0.0005:
+            eksik.append({'stok_kart_id': sid, 'gerekli_kg': miktar, 'kalan_kg': kul})
+
+    if eksik:
+        return {
+            'ok': False,
+            'hata': 'Rezerv yetersiz',
+            'eksik_sayisi': len(eksik),
+            'eksik_kalemler': eksik,
+        }
+
+    if kontrol_only:
+        return {'ok': True, 'atlandi': False, 'kontrol': True, 'guncellenen': 0}
+
+    guncellenen = 0
+    for sid, miktar in talep.items():
+        if miktar <= 0:
+            continue
+        kalan_tuket = miktar
+        satirlar = con.execute("""
+            SELECT id, kalan_kg FROM nexgen_stok_rezerv
+            WHERE batch_kodu=? AND stok_kart_id=? AND durum='AKTIF'
+            ORDER BY id
+        """, (batch_kodu, sid)).fetchall()
+        for sat in satirlar:
+            if kalan_tuket <= 0.0005:
+                break
+            kk = round(float(sat['kalan_kg'] or 0), 3)
+            dus = round(min(kk, kalan_tuket), 3)
+            if dus <= 0:
+                continue
+            yeni = round(kk - dus, 3)
+            kalan_tuket = round(kalan_tuket - dus, 3)
+            if yeni <= 0.001:
+                con.execute("""
+                    UPDATE nexgen_stok_rezerv
+                    SET kalan_kg=0, durum='TUKETILDI',
+                        kapanis_tarihi=datetime('now','localtime')
+                    WHERE id=?
+                """, (sat['id'],))
+            else:
+                con.execute(
+                    "UPDATE nexgen_stok_rezerv SET kalan_kg=? WHERE id=?",
+                    (yeni, sat['id']),
+                )
+            guncellenen += 1
+
+    return {'ok': True, 'atlandi': False, 'guncellenen': guncellenen, 'batch_kodu': batch_kodu}
+
+
+def _rezerv_iade(con, parca_id):
+    """FAZ-5C-4: Geri alma sonrası batch rezerv kalan_kg geri yükle."""
+    if not _stok_rezerv_tablosu_var(con):
+        return {'ok': True, 'atlandi': True, 'legacy': True, 'guncellenen': 0}
+
+    row = con.execute("""
+        SELECT p.id, p.durum, p.hedef_kg, p.uretilen_kg, p.batch_kodu,
+               p.plan_id AS parca_plan_id,
+               b.uretim_varyant_id, b.plan_id AS batch_plan_id,
+               pl.rf_renk_id
+        FROM nexgen_uretim_parca p
+        JOIN nexgen_uretim_batch b ON b.batch_kodu = p.batch_kodu
+        LEFT JOIN nexgen_uretim_plan pl
+               ON pl.id = COALESCE(p.plan_id, b.plan_id)
+        WHERE p.id = ?
+    """, (parca_id,)).fetchone()
+    if not row:
+        return {'ok': False, 'hata': 'Parça bulunamadı'}
+    if row['durum'] != 'BITTI':
+        return {'ok': True, 'atlandi': True, 'guncellenen': 0}
+
+    parca_row = dict(row)
+    batch_kodu = parca_row['batch_kodu']
+    rezerv_var = con.execute(
+        "SELECT 1 FROM nexgen_stok_rezerv WHERE batch_kodu=? LIMIT 1",
+        (batch_kodu,),
+    ).fetchone()
+    if not rezerv_var:
+        return {'ok': True, 'atlandi': True, 'legacy': True, 'guncellenen': 0}
+
+    tuketim_kg = parca_row['uretilen_kg'] if parca_row['uretilen_kg'] else parca_row['hedef_kg']
+    try:
+        tuketim_kg = round(float(tuketim_kg), 3)
+    except (TypeError, ValueError):
+        return {'ok': False, 'hata': 'Geçersiz tüketim KG'}
+
+    talep_res = _rezerv_tuket_talep_hesapla(con, parca_row, tuketim_kg)
+    if not talep_res.get('ok'):
+        return talep_res
+    talep = talep_res['talep']
+
+    guncellenen = 0
+    for sid, miktar in talep.items():
+        if miktar <= 0:
+            continue
+        kalan_iade = miktar
+        satirlar = con.execute("""
+            SELECT id, kalan_kg, miktar_kg, durum FROM nexgen_stok_rezerv
+            WHERE batch_kodu=? AND stok_kart_id=?
+            ORDER BY id DESC
+        """, (batch_kodu, sid)).fetchall()
+        for sat in satirlar:
+            if kalan_iade <= 0.0005:
+                break
+            kk = round(float(sat['kalan_kg'] or 0), 3)
+            mk = round(float(sat['miktar_kg'] or 0), 3)
+            bosluk = round(mk - kk, 3)
+            if bosluk <= 0.0005:
+                continue
+            ekle = round(min(bosluk, kalan_iade), 3)
+            yeni = round(min(kk + ekle, mk), 3)
+            kalan_iade = round(kalan_iade - ekle, 3)
+            con.execute("""
+                UPDATE nexgen_stok_rezerv
+                SET kalan_kg=?, durum='AKTIF', kapanis_tarihi=NULL
+                WHERE id=?
+            """, (yeni, sat['id']))
+            guncellenen += 1
+
+    return {'ok': True, 'atlandi': False, 'guncellenen': guncellenen, 'batch_kodu': batch_kodu}
+
+
 def _parca_stok_net_tuketim(con, parca_id):
     """Parça için net stok tüketimi (negatif = aktif tüketim var)."""
     row = con.execute("""
@@ -8215,6 +8445,10 @@ def _parca_geri_al_uygula(con, parca_id, batch_kodu, gerekce):
     if not stok.get('ok'):
         return stok
 
+    rezerv = _rezerv_iade(con, parca_id)
+    if not rezerv.get('ok'):
+        return rezerv
+
     parca = con.execute(
         "SELECT id, baslama_zamani, batch_kodu, plan_id FROM nexgen_uretim_parca WHERE id=?",
         (parca_id,),
@@ -8267,17 +8501,28 @@ def _parca_geri_al_uygula(con, parca_id, batch_kodu, gerekce):
         'parca_id': parca_id,
         'yeni_durum': yeni_durum,
         'stok_iade': stok,
+        'rezerv_iade': rezerv,
         'batch_yeni_durum': batch_yeni_durum,
         'plan_yeni_durum': plan_yeni_durum,
     }
 
 
 def _parca_bitir_uygula(con, parca_id, hedef_kg, notlar=None):
-    """FAZ-4B: stok tüketimi + parça BITTI güncelleme (tek transaction içi)."""
+    """FAZ-4B/5C-4: stok tüketimi + rezerv kapatma + parça BITTI (tek transaction içi)."""
     uretilen_kg = round(float(hedef_kg), 3)
+    rezerv_kontrol = _rezerv_tuket(
+        con, parca_id, uretilen_kg=uretilen_kg, kontrol_only=True,
+    )
+    if not rezerv_kontrol.get('ok'):
+        return rezerv_kontrol
+
     stok = _parca_stok_tuket(con, parca_id, uretilen_kg=uretilen_kg)
     if not stok.get('ok'):
         return stok
+
+    rezerv = _rezerv_tuket(con, parca_id, uretilen_kg=uretilen_kg)
+    if not rezerv.get('ok'):
+        return rezerv
 
     update_fields = [
         "durum='BITTI'",
@@ -8298,7 +8543,9 @@ def _parca_bitir_uygula(con, parca_id, hedef_kg, notlar=None):
         'ok': True,
         'uretilen_kg': uretilen_kg,
         'stok_atlandi': stok.get('atlandi'),
+        'rezerv_atlandi': rezerv.get('atlandi'),
         'hareket_sayisi': stok.get('hareket_sayisi', 0),
+        'rezerv_guncellenen': rezerv.get('guncellenen', 0),
     }
 
 
