@@ -202,6 +202,56 @@ def _mevcut_stok(con, kart_id):
     return round(row["toplam"], 3) if row else 0.0
 
 
+def _stok_hareket_yaz(con, stok_kart_id, hareket_tipi, miktar_kg,
+                      aciklama=None, referans_tip=None, referans_id=None,
+                      olusturan_id=None, olusturma_tarihi=None):
+    """Tek stok hareketi INSERT — yalnızca ledger yazımı (iş kuralı yok).
+
+    miktar_kg: imzalı değer (giriş pozitif, çıkış negatif); çağıran belirler.
+    Dönüş: hareket_id, onceki_stok, sonraki_stok
+    """
+    onceki = _mevcut_stok(con, stok_kart_id)
+    miktar_kayit = round(float(miktar_kg), 3)
+    sonraki = round(onceki + miktar_kayit, 3)
+    uid = olusturan_id if olusturan_id is not None else _kullanici_id()
+
+    if olusturma_tarihi:
+        con.execute("""
+            INSERT INTO nexgen_stok_hareket
+              (stok_kart_id, hareket_tipi, miktar_kg,
+               onceki_stok, sonraki_stok,
+               aciklama, referans_tip, referans_id,
+               olusturan_id, olusturma_tarihi)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            stok_kart_id, hareket_tipi, miktar_kayit,
+            onceki, sonraki,
+            aciklama, referans_tip, referans_id,
+            uid, olusturma_tarihi,
+        ))
+    else:
+        con.execute("""
+            INSERT INTO nexgen_stok_hareket
+              (stok_kart_id, hareket_tipi, miktar_kg,
+               onceki_stok, sonraki_stok,
+               aciklama, referans_tip, referans_id,
+               olusturan_id, olusturma_tarihi)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        """, (
+            stok_kart_id, hareket_tipi, miktar_kayit,
+            onceki, sonraki,
+            aciklama, referans_tip, referans_id,
+            uid,
+        ))
+
+    hareket_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+    return {
+        'hareket_id': hareket_id,
+        'onceki_stok': onceki,
+        'sonraki_stok': sonraki,
+    }
+
+
 # ─────────────────────────────────────────────────────────────
 # Ana Sayfa
 # ─────────────────────────────────────────────────────────────
@@ -614,20 +664,13 @@ def api_stok_hareket_ekle():
         if not kart:
             return jsonify({"ok": False, "hata": "Stok kartı bulunamadı veya pasif."}), 404
 
-        onceki = _mevcut_stok(con, kart_id)
-        sonraki = round(onceki + miktar_kayit, 3)
-
-        con.execute("""
-            INSERT INTO nexgen_stok_hareket
-              (stok_kart_id, hareket_tipi, miktar_kg,
-               onceki_stok, sonraki_stok,
-               aciklama, olusturan_id, olusturma_tarihi)
-            VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
-        """, (
-            kart_id, hareket_tipi, miktar_kayit,
-            onceki, sonraki,
-            aciklama, _kullanici_id()
-        ))
+        wr = _stok_hareket_yaz(
+            con, kart_id, hareket_tipi, miktar_kayit,
+            aciklama=aciklama or None,
+            olusturan_id=_kullanici_id(),
+        )
+        onceki = wr['onceki_stok']
+        sonraki = wr['sonraki_stok']
         con.commit()
     except Exception as e:
         con.rollback()
@@ -5007,10 +5050,6 @@ def api_depo_mal_kabul():
             if siparis['durum'] in ('TAMAMLANDI', 'IPTAL'):
                 return jsonify({"ok": False, "hata": f"Sipariş durumu {siparis['durum']}, mal kabul yapılamaz"}), 400
 
-        # ── Stok mevcut durumu ─────────────────────────────────
-        onceki_stok = _mevcut_stok(con, stok_kart_id)
-        sonraki_stok = round(onceki_stok + miktar_kg, 3)
-
         # ── referans_tip belirle ───────────────────────────────
         if siparis_id:
             referans_tip = 'SATIN_ALMA_SIPARIS'
@@ -5019,22 +5058,21 @@ def api_depo_mal_kabul():
             referans_tip = 'DIREKT_GIRIS'
             ref_id = None  # mal_kabul INSERT sonrası doldurulacak
 
-        # ── nexgen_stok_hareket INSERT ─────────────────────────
         aciklama_hareket = aciklama or (
             f"Mal kabul — "
             + (f"Sipariş #{siparis_id}" if siparis_id else "Direkt giriş")
             + (f" İrsaliye:{irsaliye_no}" if irsaliye_no else "")
         )
-        con.execute("""
-            INSERT INTO nexgen_stok_hareket
-              (stok_kart_id, hareket_tipi, miktar_kg,
-               onceki_stok, sonraki_stok,
-               aciklama, referans_tip, referans_id,
-               olusturan_id, olusturma_tarihi)
-            VALUES (?, 'GIRIS', ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-        """, (stok_kart_id, miktar_kg, onceki_stok, sonraki_stok,
-              aciklama_hareket, referans_tip, ref_id, kullanici_id))
-        hareket_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+        wr = _stok_hareket_yaz(
+            con, stok_kart_id, 'GIRIS', miktar_kg,
+            aciklama=aciklama_hareket,
+            referans_tip=referans_tip,
+            referans_id=ref_id,
+            olusturan_id=kullanici_id,
+        )
+        hareket_id = wr['hareket_id']
+        onceki_stok = wr['onceki_stok']
+        sonraki_stok = wr['sonraki_stok']
 
         # ── nexgen_mal_kabul INSERT ────────────────────────────
         con.execute("""
@@ -5161,21 +5199,17 @@ def api_depo_cikis():
             }), 400
 
         miktar_negatif = -round(miktar_kg, 3)
-        sonraki_stok   = round(onceki_stok + miktar_negatif, 3)
-
         aciklama_hareket = aciklama or f"Depo çıkış — {hareket_tipi}"
 
-        con.execute("""
-            INSERT INTO nexgen_stok_hareket
-              (stok_kart_id, hareket_tipi, miktar_kg,
-               onceki_stok, sonraki_stok,
-               aciklama, referans_tip,
-               olusturan_id, olusturma_tarihi)
-            VALUES (?, ?, ?, ?, ?, ?, 'DEPO_CIKIS', ?, datetime('now'))
-        """, (stok_kart_id, hareket_tipi, miktar_negatif,
-              onceki_stok, sonraki_stok,
-              aciklama_hareket, kullanici_id))
-        hareket_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+        wr = _stok_hareket_yaz(
+            con, stok_kart_id, hareket_tipi, miktar_negatif,
+            aciklama=aciklama_hareket,
+            referans_tip='DEPO_CIKIS',
+            olusturan_id=kullanici_id,
+        )
+        hareket_id = wr['hareket_id']
+        onceki_stok = wr['onceki_stok']
+        sonraki_stok = wr['sonraki_stok']
         con.commit()
 
     except Exception as e:
@@ -5892,13 +5926,14 @@ def api_tablet_geri_donusum_kaydet():
             ).fetchone()
             if not kart or kart['kategori'] != 'RECYCLE':
                 continue
-            con.execute("""
-                INSERT INTO nexgen_stok_hareket
-                    (stok_kart_id, hareket_tipi, miktar_kg, aciklama,
-                     referans_no, olusturan_id, olusturma_tarihi)
-                VALUES (?,?,?,?,?,?,?)
-            """, (kart_id, 'GERI_DONUSUM_DEVIR', miktar, aciklama,
-                  tarih, olusturan, now_str))
+            _stok_hareket_yaz(
+                con, kart_id, 'GERI_DONUSUM_DEVIR', miktar,
+                aciklama=aciklama,
+                referans_tip='RECYCLE_GUNLUK',
+                referans_id=None,
+                olusturan_id=olusturan,
+                olusturma_tarihi=now_str,
+            )
             eklenen += 1
         con.commit()
     finally:
@@ -8647,6 +8682,139 @@ def _depo_hazirlik_rezerv_olustur(con, hazirlik_id, olusturan_id=None):
     return {'ok': True, 'atlandi': False, 'rezerv_sayisi': rezerv_sayisi}
 
 
+def _refresh_depo_snapshot(con, batch_kodu):
+    """Batch depo/rezerv snapshot'ını canlı MPR motor çıktısı ile günceller.
+
+    Depo kalemlerini silmez; gerekli_kg (HAZIR ise hazirlanan_kg) günceller.
+    AKTIF rezerv miktar_kg/kalan_kg değerlerini senkronize eder. Stok hareketi yazmaz.
+    """
+    if not _depo_hazirlik_tablosu_var(con):
+        return {'ok': False, 'hata': 'Depo hazırlık tablosu yok'}
+
+    batch = con.execute("""
+        SELECT nb.batch_kodu, nb.planlanan_kg, nb.plan_id, nb.uretim_varyant_id
+        FROM nexgen_uretim_batch nb
+        WHERE nb.batch_kodu = ? AND nb.durum NOT IN ('IPTAL')
+    """, (batch_kodu,)).fetchone()
+    if not batch:
+        return {'ok': False, 'hata': f'Batch bulunamadı: {batch_kodu}'}
+
+    depo = _depo_hazirlik_batch_durum(con, batch_kodu)
+    if not depo:
+        return {'ok': False, 'hata': f'Depo hazırlık bulunamadı: {batch_kodu}'}
+
+    hazirlik_id = depo['id']
+    siparis_kg = round(float(batch['planlanan_kg']), 3)
+    uv_id = batch['uretim_varyant_id']
+    plan_id = batch['plan_id']
+
+    rf_renk_id = None
+    if plan_id:
+        prow = con.execute(
+            "SELECT rf_renk_id FROM nexgen_uretim_plan WHERE id = ?", (plan_id,),
+        ).fetchone()
+        if prow:
+            rf_renk_id = prow['rf_renk_id']
+
+    once_snap = _nexgen_batch_snapshot(con, batch_kodu)
+    once_depo = once_snap['depo_toplam_kg'] if once_snap else 0.0
+    once_rezerv = once_snap['rezerv_kg'] if once_snap else 0.0
+    once_canli = once_snap['canli_ihtiyac_toplam_kg'] if once_snap else 0.0
+
+    ihtiyac = _mpr_stok_ihtiyac_hesapla(con, uv_id, rf_renk_id, siparis_kg)
+    if not ihtiyac.get('ok'):
+        return {'ok': False, 'hata': ihtiyac.get('hata', 'MPR hesaplanamadı')}
+
+    mpr_map = {}
+    for k in ihtiyac.get('kalemler', []):
+        key = (k['stok_kart_id'], k.get('kaynak') or 'TABAN')
+        mpr_map[key] = round(float(k.get('gerekli_kg') or 0), 3)
+
+    depo_kalemler = _depo_hazirlik_kalemleri(con, hazirlik_id)
+    depo_durum = depo.get('durum')
+    guncellenen_depo = 0
+    eslesmeyen = []
+
+    for k in depo_kalemler:
+        key = (k['stok_kart_id'], k.get('kaynak') or 'TABAN')
+        yeni = mpr_map.get(key)
+        if yeni is None:
+            eslesmeyen.append({'stok_kod': k.get('stok_kod'), 'kaynak': key[1]})
+            continue
+        eski_gk = round(float(k.get('gerekli_kg') or 0), 3)
+        eski_hk = round(float(k.get('hazirlanan_kg') or 0), 3)
+        degisti = abs(eski_gk - yeni) > 0.0005
+        if depo_durum == 'HAZIR' and eski_hk > 0:
+            degisti = degisti or abs(eski_hk - yeni) > 0.0005
+        if not degisti:
+            continue
+        if depo_durum == 'HAZIR' and eski_hk > 0:
+            con.execute(
+                "UPDATE nexgen_depo_hazirlik_kalem SET gerekli_kg=?, hazirlanan_kg=? WHERE id=?",
+                (yeni, yeni, k['id']),
+            )
+        else:
+            con.execute(
+                "UPDATE nexgen_depo_hazirlik_kalem SET gerekli_kg=? WHERE id=?",
+                (yeni, k['id']),
+            )
+        guncellenen_depo += 1
+
+    guncellenen_rezerv = 0
+    if _stok_rezerv_tablosu_var(con):
+        depo_kalemler = _depo_hazirlik_kalemleri(con, hazirlik_id)
+        for k in depo_kalemler:
+            hk = float(k.get('hazirlanan_kg') or 0)
+            gk = float(k.get('gerekli_kg') or 0)
+            miktar = round(hk if hk > 0 else gk, 3)
+            if miktar <= 0:
+                continue
+            rez_rows = con.execute("""
+                SELECT id, miktar_kg, kalan_kg
+                FROM nexgen_stok_rezerv
+                WHERE hazirlik_id = ? AND stok_kart_id = ? AND durum = 'AKTIF'
+            """, (hazirlik_id, k['stok_kart_id'])).fetchall()
+            for r in rez_rows:
+                eski_miktar = float(r['miktar_kg'] or 0)
+                eski_kalan = float(r['kalan_kg'] or 0)
+                tuketilen = round(max(0.0, eski_miktar - eski_kalan), 3)
+                yeni_kalan = round(max(0.0, miktar - tuketilen), 3)
+                if abs(eski_miktar - miktar) > 0.0005 or abs(eski_kalan - yeni_kalan) > 0.0005:
+                    con.execute(
+                        "UPDATE nexgen_stok_rezerv SET miktar_kg=?, kalan_kg=? WHERE id=?",
+                        (miktar, yeni_kalan, r['id']),
+                    )
+                    guncellenen_rezerv += 1
+
+    son_snap = _nexgen_batch_snapshot(con, batch_kodu)
+    return {
+        'ok': True,
+        'batch_kodu': batch_kodu,
+        'hazirlik_id': hazirlik_id,
+        'guncellenen_depo_kalem': guncellenen_depo,
+        'guncellenen_rezerv': guncellenen_rezerv,
+        'eslesmeyen_kalem': eslesmeyen,
+        'once': {
+            'depo_toplam_kg': once_depo,
+            'rezerv_kg': once_rezerv,
+            'canli_ihtiyac_toplam_kg': once_canli,
+            'stale_depo_var_mi': once_snap.get('stale_depo_var_mi') if once_snap else None,
+        },
+        'sonra': {
+            'depo_toplam_kg': son_snap['depo_toplam_kg'] if son_snap else 0.0,
+            'rezerv_kg': son_snap['rezerv_kg'] if son_snap else 0.0,
+            'canli_ihtiyac_toplam_kg': son_snap['canli_ihtiyac_toplam_kg'] if son_snap else 0.0,
+            'stale_depo_var_mi': son_snap.get('stale_depo_var_mi') if son_snap else None,
+            'uretilecek_kg': son_snap.get('uretilecek_kg') if son_snap else 0.0,
+        },
+        'ihtiyac': {
+            'uretilecek_kg': ihtiyac.get('uretilecek_kg'),
+            'batch_sayisi': ihtiyac.get('batch_sayisi'),
+            'formul_batch_kg': ihtiyac.get('formul_batch_kg'),
+        },
+    }
+
+
 def _batch_formul_parca_sec(con, batch_kodu, parca_id=None):
     """Formül önizleme için varsayılan parça: DEVAM → HAZIR → ilk kayıt."""
     if parca_id:
@@ -9105,17 +9273,14 @@ def _parca_stok_tuket(con, parca_id, uretilen_kg=None, olusturan_id=None):
     for sid, miktar in talep.items():
         if miktar <= 0:
             continue
-        onceki = _mevcut_stok(con, sid)
         negatif = round(-miktar, 3)
-        sonraki = round(onceki + negatif, 3)
-        con.execute("""
-            INSERT INTO nexgen_stok_hareket
-              (stok_kart_id, hareket_tipi, miktar_kg,
-               onceki_stok, sonraki_stok,
-               aciklama, referans_tip, referans_id,
-               olusturan_id, olusturma_tarihi)
-            VALUES (?, 'URETIM_TUKETIM', ?, ?, ?, ?, 'URETIM_PARCA', ?, ?, datetime('now'))
-        """, (sid, negatif, onceki, sonraki, aciklama, parca_id, uid))
+        _stok_hareket_yaz(
+            con, sid, 'URETIM_TUKETIM', negatif,
+            aciklama=aciklama,
+            referans_tip='URETIM_PARCA',
+            referans_id=parca_id,
+            olusturan_id=uid,
+        )
         hareket_sayisi += 1
 
     return {
@@ -9166,16 +9331,13 @@ def _parca_stok_iade(con, parca_id, gerekce, olusturan_id=None):
         if pozitif <= 0:
             continue
         sid = orig['stok_kart_id']
-        onceki = _mevcut_stok(con, sid)
-        sonraki = round(onceki + pozitif, 3)
-        con.execute("""
-            INSERT INTO nexgen_stok_hareket
-              (stok_kart_id, hareket_tipi, miktar_kg,
-               onceki_stok, sonraki_stok,
-               aciklama, referans_tip, referans_id,
-               olusturan_id, olusturma_tarihi)
-            VALUES (?, 'URETIM_TUKETIM_IPTAL', ?, ?, ?, ?, 'URETIM_PARCA_IPTAL', ?, ?, datetime('now'))
-        """, (sid, pozitif, onceki, sonraki, aciklama, parca_id, uid))
+        _stok_hareket_yaz(
+            con, sid, 'URETIM_TUKETIM_IPTAL', pozitif,
+            aciklama=aciklama,
+            referans_tip='URETIM_PARCA_IPTAL',
+            referans_id=parca_id,
+            olusturan_id=uid,
+        )
         hareket_sayisi += 1
 
     return {
