@@ -5186,6 +5186,53 @@ def api_depo_hazirlik_hazir(hazirlik_id):
         con.close()
 
 
+@nexgen_bp.route('/api/depo/hazirlik/<int:hazirlik_id>/iptal', methods=['POST'])
+@yetki_gerekli('nexgen.depo.giris', 'can_create')
+def api_depo_hazirlik_iptal(hazirlik_id):
+    """Depo hazırlık IPTAL — HAZIR ise AKTIF rezerv serbest bırakılır (FAZ-5C-5)."""
+    d = request.get_json(silent=True) or {}
+    nedeni = (d.get('nedeni') or d.get('gerekce') or '').strip() or 'Hazırlık iptal'
+    con = _db()
+    try:
+        if not _depo_hazirlik_tablosu_var(con):
+            return jsonify({'ok': False, 'hata': 'Migration 085 çalıştırılmadı'}), 500
+        row = con.execute(
+            "SELECT id, durum FROM nexgen_depo_hazirlik WHERE id=?", (hazirlik_id,)
+        ).fetchone()
+        if not row:
+            return jsonify({'ok': False, 'hata': 'Hazırlık bulunamadı'}), 404
+        if row['durum'] == 'IPTAL':
+            rezerv = _rezerv_aktif_iptal(con, hazirlik_id=hazirlik_id, nedeni=nedeni)
+            con.commit()
+            return jsonify({'ok': True, 'durum': 'IPTAL', 'rezerv': rezerv, 'atlandi': True})
+        if row['durum'] not in ('BEKLIYOR', 'HAZIRLANIYOR', 'HAZIR'):
+            return jsonify({'ok': False, 'hata': f'İptal edilemez durum: {row["durum"]}'}), 400
+        rezerv = {'ok': True, 'atlandi': True, 'guncellenen': 0}
+        if row['durum'] == 'HAZIR':
+            rezerv = _rezerv_aktif_iptal(con, hazirlik_id=hazirlik_id, nedeni=nedeni)
+            if not rezerv.get('ok'):
+                con.rollback()
+                return jsonify({'ok': False, 'hata': rezerv.get('hata')}), 400
+        con.execute("""
+            UPDATE nexgen_depo_hazirlik
+            SET durum='IPTAL',
+                guncelleme_tarihi=datetime('now','localtime')
+            WHERE id=?
+        """, (hazirlik_id,))
+        con.commit()
+        return jsonify({
+            'ok': True,
+            'id': hazirlik_id,
+            'durum': 'IPTAL',
+            'rezerv': rezerv,
+        })
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
 # ═══════════════════════════════════════════════════════════════
 # NEXGEN FAZ-5A — TABLET EKRANI
 # Stok hareketi yapılmaz. Sadece batch kodu üretimi + AR-GE testi.
@@ -7408,6 +7455,8 @@ def api_planlama_siparis_mpr_ekle(ps_id):
 @yetki_gerekli('nexgen.plan.manage', 'can_manage')
 def api_plan_iptal(plan_id):
     """Planı IPTAL durumuna çeker."""
+    d = request.get_json(silent=True) or {}
+    nedeni = (d.get('nedeni') or d.get('gerekce') or '').strip() or 'Plan iptal'
     con = _db()
     try:
         p = con.execute(
@@ -7417,11 +7466,53 @@ def api_plan_iptal(plan_id):
             return jsonify({'ok': False, 'hata': 'Plan bulunamadı'}), 404
         if p['durum'] == 'BITTI':
             return jsonify({'ok': False, 'hata': 'Tamamlanan plan iptal edilemez'}), 400
+        rezerv = _rezerv_aktif_iptal(con, plan_id=plan_id, nedeni=nedeni)
+        if not rezerv.get('ok'):
+            con.rollback()
+            return jsonify({'ok': False, 'hata': rezerv.get('hata')}), 400
         con.execute(
             "UPDATE nexgen_uretim_plan SET durum='IPTAL' WHERE id=?", (plan_id,)
         )
         con.commit()
-        return jsonify({'ok': True})
+        return jsonify({'ok': True, 'rezerv': rezerv})
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/batch/<batch_kodu>/iptal', methods=['POST'])
+@yetki_gerekli('nexgen.plan.manage', 'can_manage')
+def api_batch_iptal(batch_kodu):
+    """Batch IPTAL + AKTIF rezerv serbest bırakma (FAZ-5C-5)."""
+    d = request.get_json(silent=True) or {}
+    nedeni = (d.get('nedeni') or d.get('gerekce') or '').strip() or 'Batch iptal'
+    con = _db()
+    try:
+        batch = con.execute(
+            "SELECT batch_kodu, durum FROM nexgen_uretim_batch WHERE batch_kodu=?",
+            (batch_kodu,),
+        ).fetchone()
+        if not batch:
+            return jsonify({'ok': False, 'hata': 'Batch bulunamadı'}), 404
+        if batch['durum'] == 'BITTI':
+            return jsonify({'ok': False, 'hata': 'Tamamlanan batch iptal edilemez'}), 400
+        rezerv = _rezerv_aktif_iptal(con, batch_kodu=batch_kodu, nedeni=nedeni)
+        if not rezerv.get('ok'):
+            con.rollback()
+            return jsonify({'ok': False, 'hata': rezerv.get('hata')}), 400
+        if batch['durum'] != 'IPTAL':
+            con.execute(
+                "UPDATE nexgen_uretim_batch SET durum='IPTAL' WHERE batch_kodu=?",
+                (batch_kodu,),
+            )
+        con.commit()
+        return jsonify({
+            'ok': True,
+            'durum': 'IPTAL',
+            'rezerv': rezerv,
+        })
     except Exception as e:
         con.rollback()
         return jsonify({'ok': False, 'hata': str(e)}), 500
@@ -8246,6 +8337,7 @@ def _rezerv_iade(con, parca_id):
         satirlar = con.execute("""
             SELECT id, kalan_kg, miktar_kg, durum FROM nexgen_stok_rezerv
             WHERE batch_kodu=? AND stok_kart_id=?
+              AND durum IN ('AKTIF', 'TUKETILDI')
             ORDER BY id DESC
         """, (batch_kodu, sid)).fetchall()
         for sat in satirlar:
@@ -8267,6 +8359,69 @@ def _rezerv_iade(con, parca_id):
             guncellenen += 1
 
     return {'ok': True, 'atlandi': False, 'guncellenen': guncellenen, 'batch_kodu': batch_kodu}
+
+
+def _rezerv_tablo_kolonlari(con):
+    if not _stok_rezerv_tablosu_var(con):
+        return set()
+    return {r[1] for r in con.execute("PRAGMA table_info(nexgen_stok_rezerv)").fetchall()}
+
+
+def _rezerv_aktif_iptal(con, batch_kodu=None, plan_id=None, hazirlik_id=None, nedeni=None):
+    """FAZ-5C-5: AKTIF rezervleri IPTAL yap. kalan_kg korunur, TUKETILDI dokunulmaz."""
+    if not _stok_rezerv_tablosu_var(con):
+        return {'ok': True, 'atlandi': True, 'legacy': True, 'guncellenen': 0}
+
+    filtre = ["durum='AKTIF'"]
+    params = []
+    if batch_kodu:
+        filtre.append("batch_kodu=?")
+        params.append(batch_kodu)
+    if plan_id is not None:
+        filtre.append("plan_id=?")
+        params.append(plan_id)
+    if hazirlik_id is not None:
+        filtre.append("hazirlik_id=?")
+        params.append(hazirlik_id)
+    if len(filtre) == 1:
+        return {'ok': False, 'hata': 'Rezerv iptal filtresi gerekli'}
+
+    satirlar = con.execute(
+        f"SELECT id, notlar FROM nexgen_stok_rezerv WHERE {' AND '.join(filtre)}",
+        params,
+    ).fetchall()
+    if not satirlar:
+        return {'ok': True, 'atlandi': True, 'guncellenen': 0}
+
+    cols = _rezerv_tablo_kolonlari(con)
+    nedeni_trim = (nedeni or '').strip() or None
+    guncellenen = 0
+    for sat in satirlar:
+        set_parts = ["durum='IPTAL'"]
+        upd_params = []
+        if 'iptal_tarihi' in cols:
+            set_parts.append("iptal_tarihi=datetime('now','localtime')")
+        else:
+            set_parts.append("kapanis_tarihi=datetime('now','localtime')")
+        if 'iptal_nedeni' in cols:
+            set_parts.append("iptal_nedeni=?")
+            upd_params.append(nedeni_trim or '')
+        elif nedeni_trim:
+            mevcut = (sat['notlar'] or '').strip()
+            yeni_not = (
+                f"{mevcut} | İPTAL: {nedeni_trim}".strip(' |')
+                if mevcut else f"İPTAL: {nedeni_trim}"
+            )
+            set_parts.append("notlar=?")
+            upd_params.append(yeni_not)
+        upd_params.append(sat['id'])
+        con.execute(
+            f"UPDATE nexgen_stok_rezerv SET {', '.join(set_parts)} WHERE id=?",
+            upd_params,
+        )
+        guncellenen += 1
+
+    return {'ok': True, 'atlandi': False, 'guncellenen': guncellenen}
 
 
 def _parca_stok_net_tuketim(con, parca_id):
