@@ -6918,13 +6918,7 @@ def _plan_liste_sorgu(con, sadece_aktif=False, mpr_on_calisma_only=False):
     if sadece_aktif:
         where_parts.append("np.durum NOT IN ('BITTI','IPTAL')")
     if mpr_on_calisma_only:
-        if (_plan_planlama_siparis_kolonu_var(con)
-                and _planlama_siparis_tablosu_var(con)):
-            where_parts.append(
-                "(np.kaynak = 'MPR_ONCALISMA' OR np.planlama_siparis_id IS NULL)"
-            )
-        else:
-            where_parts.append("np.kaynak = 'MPR_ONCALISMA'")
+        where_parts.append("np.durum = 'ON_CALISMA'")
     where = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
     # plan_id kolonu varlığına göre batch JOIN kararı
     _bcols = [c['name'] for c in con.execute(
@@ -7190,6 +7184,15 @@ def mpr_on_calisma_liste():
             pl['stok_eksik_sayisi'] = stok.get('eksik_sayisi', 0) if stok.get('ok') else None
 
         formuller = _formuller_varyant_hiyerarsi(con)
+        try:
+            cariler = [
+                dict(c) for c in con.execute(
+                    "SELECT id, cari_kod, unvan FROM nexgen_cari "
+                    "WHERE aktif=1 ORDER BY cari_kod"
+                ).fetchall()
+            ]
+        except Exception:
+            cariler = []
     finally:
         con.close()
 
@@ -7198,6 +7201,7 @@ def mpr_on_calisma_liste():
         active='nexgen',
         planlar=planlar,
         formuller=formuller,
+        cariler=cariler,
         can_manage=yetki_var('nexgen.plan.manage', 'can_manage'),
     )
 
@@ -7301,6 +7305,186 @@ def api_mpr_on_calisma_ekle():
             resp['rf_renk_id'] = rf_renk_id
             resp['rf_kod'] = rf['rf_kod']
             resp['rf_renk_ad'] = rf['ad']
+        return jsonify(resp)
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/planlama-siparis/liste')
+@login_gerekli
+def api_planlama_siparis_liste():
+    """Aktif planlama sipariş header listesi (MPR bağlama modalı)."""
+    con = _db()
+    try:
+        if not _planlama_siparis_tablosu_var(con):
+            return jsonify({'ok': True, 'liste': []})
+        rows = con.execute("""
+            SELECT id, siparis_no, cari_id, cari_unvan, termin_tarihi, durum,
+                   talep_referansi
+            FROM nexgen_planlama_siparis
+            WHERE durum != 'IPTAL'
+            ORDER BY id DESC
+            LIMIT 100
+        """).fetchall()
+        return jsonify({'ok': True, 'liste': [dict(r) for r in rows]})
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/mpr/<int:plan_id>/siparise-bagla', methods=['POST'])
+@yetki_gerekli('nexgen.plan.manage', 'can_manage')
+def api_mpr_siparise_bagla(plan_id):
+    """ON_CALISMA MPR satırını planlama siparişine bağlar → PLANLANDI."""
+    d = request.get_json(silent=True) or {}
+    planlama_siparis_id_raw = d.get('planlama_siparis_id')
+    cari_id_raw = d.get('cari_id')
+    cari_unvan = (d.get('cari_unvan') or '').strip()
+    termin_tarihi = (d.get('termin_tarihi') or '').strip()
+    talep_referansi = (d.get('talep_referansi') or '').strip() or None
+    notlar = (d.get('not') or d.get('notlar') or '').strip() or None
+    siparis_no = (d.get('siparis_no') or '').strip() or None
+
+    con = _db()
+    try:
+        if not _planlama_siparis_tablosu_var(con):
+            return jsonify({'ok': False, 'hata': 'Planlama sipariş tablosu yok'}), 400
+        if not _plan_planlama_siparis_kolonu_var(con):
+            return jsonify({'ok': False, 'hata': 'planlama_siparis_id kolonu yok'}), 400
+
+        p = con.execute("""
+            SELECT id, plan_kodu, durum, kaynak, planlama_siparis_id,
+                   uretim_varyant_id, rf_renk_id, planlanan_kg, notlar
+            FROM nexgen_uretim_plan WHERE id=?
+        """, (plan_id,)).fetchone()
+        if not p:
+            return jsonify({'ok': False, 'hata': 'MPR plan bulunamadı'}), 404
+        if p['durum'] == 'IPTAL':
+            return jsonify({'ok': False, 'hata': 'İptal edilmiş MPR bağlanamaz'}), 400
+        if p['durum'] != 'ON_CALISMA':
+            return jsonify({
+                'ok': False,
+                'hata': f'Sadece ON_CALISMA MPR bağlanabilir (mevcut: {p["durum"]})',
+            }), 400
+        if p['planlama_siparis_id']:
+            return jsonify({
+                'ok': False,
+                'hata': 'Bu MPR zaten bir planlama siparişine bağlı',
+            }), 400
+
+        hdr = None
+        ps_id = None
+        if planlama_siparis_id_raw not in (None, ''):
+            try:
+                ps_id = int(planlama_siparis_id_raw)
+            except (TypeError, ValueError):
+                return jsonify({'ok': False, 'hata': 'planlama_siparis_id geçersiz'}), 400
+            hdr = con.execute(
+                "SELECT id, siparis_no, cari_id, cari_unvan, termin_tarihi, durum "
+                "FROM nexgen_planlama_siparis WHERE id=?",
+                (ps_id,),
+            ).fetchone()
+            if not hdr:
+                return jsonify({'ok': False, 'hata': 'Planlama siparişi bulunamadı'}), 404
+            if hdr['durum'] == 'IPTAL':
+                return jsonify({
+                    'ok': False,
+                    'hata': 'İptal edilmiş siparişe bağlanamaz',
+                }), 400
+        else:
+            cari_id = None
+            if cari_id_raw is not None and cari_id_raw != '':
+                try:
+                    cari_id = int(cari_id_raw)
+                except (TypeError, ValueError):
+                    return jsonify({'ok': False, 'hata': 'cari_id geçersiz'}), 400
+                cari = con.execute(
+                    "SELECT id, unvan FROM nexgen_cari WHERE id=? AND aktif=1",
+                    (cari_id,),
+                ).fetchone()
+                if not cari:
+                    return jsonify({'ok': False, 'hata': f'Cari bulunamadı (id={cari_id})'}), 400
+                cari_unvan = cari['unvan']
+            elif not cari_unvan:
+                return jsonify({'ok': False, 'hata': 'cari_id veya cari_unvan zorunlu'}), 400
+
+            if _plan_termin_kolonu_var(con) and not termin_tarihi:
+                return jsonify({'ok': False, 'hata': 'termin_tarihi zorunlu'}), 400
+            if not siparis_no:
+                siparis_no = _nexgen_siparis_no_uret(con)
+            ps_id = _planlama_siparis_olustur(
+                con, siparis_no, cari_id, cari_unvan,
+                termin_tarihi=termin_tarihi or None,
+                notlar=notlar, talep_referansi=talep_referansi,
+                olusturan_id=_kullanici_id(),
+            )
+            hdr = con.execute(
+                "SELECT id, siparis_no, cari_id, cari_unvan, termin_tarihi, durum "
+                "FROM nexgen_planlama_siparis WHERE id=?",
+                (ps_id,),
+            ).fetchone()
+
+        set_parts = [
+            "durum='PLANLANDI'",
+            "planlama_siparis_id=?",
+            "siparis_no=?",
+            "musteri_adi=?",
+        ]
+        params = [ps_id, hdr['siparis_no'], hdr['cari_unvan']]
+        if _plan_cari_kolonu_var(con):
+            set_parts.append("cari_id=?")
+            params.append(hdr['cari_id'])
+        if _plan_termin_kolonu_var(con):
+            set_parts.append("termin_tarihi=?")
+            params.append(hdr['termin_tarihi'])
+        if notlar and p['notlar']:
+            set_parts.append("notlar=?")
+            params.append(f"{p['notlar']}\n[MPR-BAGLA] {notlar}")
+        elif notlar:
+            set_parts.append("notlar=?")
+            params.append(notlar)
+        params.append(plan_id)
+        con.execute(
+            f"UPDATE nexgen_uretim_plan SET {', '.join(set_parts)} WHERE id=?",
+            params,
+        )
+
+        rf_renk_id = p['rf_renk_id'] if 'rf_renk_id' in p.keys() else None
+        stok = _mpr_stok_ihtiyac_hesapla(
+            con, p['uretim_varyant_id'], rf_renk_id, float(p['planlanan_kg'])
+        )
+        stok_uyari = None
+        if stok.get('ok') and not stok.get('yeterli_mi'):
+            stok_uyari = (
+                f'{stok.get("eksik_sayisi", 0)} kalemde kullanılabilir stok yetersiz. '
+                'Bağlama yapıldı; üretime göndermeden önce stok tamamlayın.'
+            )
+
+        con.commit()
+
+        resp = {
+            'ok': True,
+            'plan_id': plan_id,
+            'plan_kodu': p['plan_kodu'],
+            'durum': 'PLANLANDI',
+            'kaynak': p['kaynak'],
+            'planlama_siparis_id': ps_id,
+            'siparis_no': hdr['siparis_no'],
+            'cari_unvan': hdr['cari_unvan'],
+            'termin_tarihi': hdr['termin_tarihi'],
+            'stok_yeterli_mi': stok.get('yeterli_mi') if stok.get('ok') else None,
+            'stok_eksik_sayisi': stok.get('eksik_sayisi', 0) if stok.get('ok') else None,
+        }
+        if stok_uyari:
+            resp['stok_uyari'] = stok_uyari
+        if stok.get('ok'):
+            resp['stok_ozet'] = {
+                'yeterli_mi': stok.get('yeterli_mi'),
+                'eksik_sayisi': stok.get('eksik_sayisi', 0),
+                'kalem_sayisi': len(stok.get('kalemler', [])),
+            }
         return jsonify(resp)
     except Exception as e:
         con.rollback()

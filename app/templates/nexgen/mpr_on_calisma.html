@@ -69,11 +69,17 @@
               {% endif %}
             </td>
             <td class="mo-td-kucuk">{{ (p.created_at or '')[:16] }}</td>
-            <td>
+            <td class="mo-islem-hucre">
               <button type="button" class="mo-islem-btn"
                       onclick="moStokAnaliz({{ p.id }}, '{{ p.plan_kodu|e }}', {{ p.uv_id }}, {{ p.rf_renk_id or 'null' }}, {{ p.planlanan_kg }})">
                 Stok Analizi
               </button>
+              {% if can_manage and p.durum == 'ON_CALISMA' %}
+              <button type="button" class="mo-islem-btn mo-islem-btn-bagla"
+                      onclick="moBaglaAc({{ p.id }}, '{{ p.plan_kodu|e }}', {{ p.uv_id }}, {{ p.rf_renk_id or 'null' }}, {{ p.planlanan_kg }})">
+                Plan Siparişine Bağla
+              </button>
+              {% endif %}
             </td>
           </tr>
           {% endfor %}
@@ -146,6 +152,61 @@
     </div>
   </div>
 </div>
+
+{% if can_manage %}
+<div class="mo-modal-arka" id="mo-bagla-modal" onclick="moBaglaKapat(event)">
+  <div class="mo-modal mo-modal-genis" onclick="event.stopPropagation()">
+    <div class="mo-modal-baslik" id="mo-bagla-baslik">Plan Siparişine Bağla</div>
+    <div class="mo-form">
+      <input type="hidden" id="mo-bagla-plan-id" value="">
+      <input type="hidden" id="mo-bagla-uv-id" value="">
+      <input type="hidden" id="mo-bagla-rf-id" value="">
+      <input type="hidden" id="mo-bagla-kg" value="">
+
+      <div class="mo-bagla-mod">
+        <label class="mo-bagla-mod-opt"><input type="radio" name="mo-bagla-mod" value="yeni" checked onchange="moBaglaModDegisti()"> Yeni sipariş oluştur</label>
+        <label class="mo-bagla-mod-opt"><input type="radio" name="mo-bagla-mod" value="mevcut" onchange="moBaglaModDegisti()"> Mevcut sipariş seç</label>
+      </div>
+
+      <div id="mo-bagla-yeni">
+        <label class="mo-label">Cari *</label>
+        <select class="mo-inp" id="mo-bagla-cari">
+          <option value="">— Seçiniz —</option>
+          {% for c in cariler %}
+          <option value="{{ c.id }}">{{ c.cari_kod }} · {{ c.unvan }}</option>
+          {% endfor %}
+        </select>
+        <label class="mo-label">Termin *</label>
+        <input type="date" class="mo-inp" id="mo-bagla-termin">
+        <label class="mo-label">Talep referansı</label>
+        <input type="text" class="mo-inp" id="mo-bagla-talep" placeholder="Opsiyonel">
+      </div>
+
+      <div id="mo-bagla-mevcut" style="display:none">
+        <label class="mo-label">Planlama siparişi *</label>
+        <select class="mo-inp" id="mo-bagla-ps">
+          <option value="">Yükleniyor...</option>
+        </select>
+      </div>
+
+      <label class="mo-label">Not</label>
+      <textarea class="mo-inp mo-textarea" id="mo-bagla-not" rows="2" placeholder="Opsiyonel"></textarea>
+
+      <div class="mo-stok-onizle" id="mo-bagla-stok-wrap">
+        <div class="mo-stok-baslik">Son stok özeti</div>
+        <div id="mo-bagla-stok"></div>
+      </div>
+
+      <div class="mo-hata" id="mo-bagla-hata" style="display:none"></div>
+
+      <div class="mo-modal-alt">
+        <button type="button" class="mo-btn-iptal" onclick="moBaglaKapat()">İptal</button>
+        <button type="button" class="mo-btn-kaydet" id="mo-bagla-btn" onclick="moBaglaKaydet()">Bağla</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
 
 <script>
 var _MO_FORMULLER = {{ formuller | tojson | safe }};
@@ -358,6 +419,113 @@ function moStokModalKapat(e) {
   document.getElementById('mo-stok-modal').style.display = 'none';
 }
 
+var _moBaglaPsYuklendi = false;
+
+function moBaglaModDegisti() {
+  var mod = document.querySelector('input[name="mo-bagla-mod"]:checked').value;
+  document.getElementById('mo-bagla-yeni').style.display = mod === 'yeni' ? 'block' : 'none';
+  document.getElementById('mo-bagla-mevcut').style.display = mod === 'mevcut' ? 'block' : 'none';
+  if (mod === 'mevcut' && !_moBaglaPsYuklendi) moBaglaPsYukle();
+}
+
+async function moBaglaPsYukle() {
+  var sel = document.getElementById('mo-bagla-ps');
+  try {
+    var r = await fetch('/nexgen/api/planlama-siparis/liste');
+    var j = await r.json();
+    sel.innerHTML = '<option value="">— Sipariş seçin —</option>';
+    if (j.ok && j.liste && j.liste.length) {
+      j.liste.forEach(function(ps) {
+        var opt = document.createElement('option');
+        opt.value = ps.id;
+        opt.textContent = ps.siparis_no + ' · ' + (ps.cari_unvan || '—')
+          + (ps.termin_tarihi ? ' · ' + ps.termin_tarihi : '');
+        sel.appendChild(opt);
+      });
+    } else {
+      sel.innerHTML = '<option value="">Aktif sipariş yok</option>';
+    }
+    _moBaglaPsYuklendi = true;
+  } catch (err) {
+    sel.innerHTML = '<option value="">Liste yüklenemedi</option>';
+  }
+}
+
+function moBaglaAc(planId, planKodu, uvId, rfId, kg) {
+  document.getElementById('mo-bagla-plan-id').value = planId;
+  document.getElementById('mo-bagla-uv-id').value = uvId;
+  document.getElementById('mo-bagla-rf-id').value = rfId || '';
+  document.getElementById('mo-bagla-kg').value = kg;
+  document.getElementById('mo-bagla-baslik').textContent = planKodu + ' — Plan Siparişine Bağla';
+  document.getElementById('mo-bagla-hata').style.display = 'none';
+  document.getElementById('mo-bagla-not').value = '';
+  document.querySelector('input[name="mo-bagla-mod"][value="yeni"]').checked = true;
+  moBaglaModDegisti();
+  var t = new Date();
+  t.setDate(t.getDate() + 1);
+  document.getElementById('mo-bagla-termin').value = t.toISOString().slice(0, 10);
+  document.getElementById('mo-bagla-modal').style.display = 'flex';
+  moStokFetch(uvId, rfId, kg, 'mo-bagla-stok', 'mo-bagla-stok-wrap');
+}
+
+function moBaglaKapat(e) {
+  if (e && e.target !== document.getElementById('mo-bagla-modal')) return;
+  document.getElementById('mo-bagla-modal').style.display = 'none';
+}
+
+async function moBaglaKaydet() {
+  var planId = document.getElementById('mo-bagla-plan-id').value;
+  var mod = document.querySelector('input[name="mo-bagla-mod"]:checked').value;
+  var hataEl = document.getElementById('mo-bagla-hata');
+  var btn = document.getElementById('mo-bagla-btn');
+  var body = {};
+  if (mod === 'mevcut') {
+    var psId = document.getElementById('mo-bagla-ps').value;
+    if (!psId) {
+      hataEl.textContent = 'Planlama siparişi seçin.';
+      hataEl.style.display = 'block';
+      return;
+    }
+    body.planlama_siparis_id = parseInt(psId, 10);
+  } else {
+    var cariId = document.getElementById('mo-bagla-cari').value;
+    var termin = document.getElementById('mo-bagla-termin').value;
+    if (!cariId || !termin) {
+      hataEl.textContent = 'Cari ve termin zorunludur.';
+      hataEl.style.display = 'block';
+      return;
+    }
+    body.cari_id = parseInt(cariId, 10);
+    body.termin_tarihi = termin;
+    var talep = document.getElementById('mo-bagla-talep').value.trim();
+    if (talep) body.talep_referansi = talep;
+  }
+  var not = document.getElementById('mo-bagla-not').value.trim();
+  if (not) body.not = not;
+  btn.disabled = true;
+  hataEl.style.display = 'none';
+  try {
+    var r = await fetch('/nexgen/api/mpr/' + planId + '/siparise-bagla', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    var j = await r.json();
+    if (!j.ok) {
+      hataEl.textContent = j.hata || 'Bağlama başarısız';
+      hataEl.style.display = 'block';
+      btn.disabled = false;
+      return;
+    }
+    if (j.stok_uyari) alert(j.stok_uyari);
+    location.reload();
+  } catch (err) {
+    hataEl.textContent = 'Bağlantı hatası';
+    hataEl.style.display = 'block';
+    btn.disabled = false;
+  }
+}
+
 async function moKaydet() {
   var uvId = document.getElementById('mo-uv-id').value;
   var rfId = document.getElementById('mo-rf').value;
@@ -440,6 +608,11 @@ async function moKaydet() {
   padding: 5px 10px; font-size: 12px; cursor: pointer; color: #334155;
 }
 .mo-islem-btn:hover { background: #f8fafc; border-color: #94a3b8; }
+.mo-islem-hucre { white-space: nowrap; }
+.mo-islem-btn-bagla { margin-left: 6px; border-color: #fcd34d; color: #92400e; }
+.mo-islem-btn-bagla:hover { background: #fffbeb; }
+.mo-bagla-mod { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.mo-bagla-mod-opt { font-size: 13px; color: #334155; cursor: pointer; }
 .mo-bos { padding: 48px 24px; text-align: center; }
 .mo-bos-metin { color: #64748b; margin-bottom: 14px; }
 .mo-modal-arka {
