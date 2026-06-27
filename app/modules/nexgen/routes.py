@@ -8241,15 +8241,14 @@ def api_batch_durum_guncelle(batch_kodu):
 def _formul_batch_kg_hesapla(con, uretim_varyant_id):
     """Bir üretim varyantının aktif reçete kalemlerinden standart batch KG'sini döner.
 
-    BOYA kalemleri hariç — renk formülü RF tarafında yönetilir (FAZ-1A/2A).
+    Batch kg makineye giren gerçek toplam reçetedir; BOYA dahil.
+    Stok ihtiyacında BOYA ayrımı _mpr_stok_ihtiyac_hesapla içinde yapılır (RF üzerinden).
     Returns: float (0.0 reçete bulunamazsa)
     """
     row = con.execute("""
         SELECT COALESCE(SUM(rk.miktar_kg), 0) AS toplam
         FROM nexgen_recete_kalem rk
-        JOIN nexgen_stok_kart sk ON sk.id = rk.stok_kart_id
         WHERE rk.uretim_varyant_id = ? AND rk.aktif = 1
-          AND UPPER(COALESCE(sk.kategori, '')) != 'BOYA'
     """, (uretim_varyant_id,)).fetchone()
     return round(float(row['toplam']), 3) if row else 0.0
 
@@ -8273,7 +8272,7 @@ def _batch_uretim_hesapla(con, uretim_varyant_id, siparis_kg):
     if formul_batch_kg <= 0:
         return {
             'ok': False,
-            'hata': 'Taban reçete batch KG bulunamadı (BOYA hariç kalem yok).',
+            'hata': 'Reçete batch KG bulunamadı (aktif kalem yok).',
             'formul_batch_kg': 0.0,
             'batch_sayisi': 0,
             'siparis_kg': round(siparis_kg, 3),
@@ -8418,6 +8417,10 @@ def _rf_renk_formul_dogrula(con, rf_renk_id, renk_varyant_id):
 def _mpr_stok_ihtiyac_hesapla(con, uretim_varyant_id, rf_renk_id, planlanan_kg,
                               exclude_batch_kodu=None):
     """MPR stok ihtiyacı önizleme — taban hammadde (BOYA hariç) + RF boya.
+
+    Batch sayısı tam reçete batch kg (_formul_batch_kg_hesapla, BOYA dahil) ile hesaplanır.
+    Stok kalemlerinde taban reçetedeki BOYA dahil edilmez; RF varsa boya ihtiyacı RF'den gelir
+    (çift boya sayımı önlenir).
 
     Stok hareketi YAZMAZ.
     Yeterlilik: kullanilabilir_kg (fiziksel − aktif rezerv − yumuşak talep).
