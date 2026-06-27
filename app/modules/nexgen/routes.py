@@ -7483,6 +7483,7 @@ def api_mpr_on_calisma_ekle():
             vals,
         )
         plan_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+        _plan_boyut_satir_ensure(con, plan_id, uv_id, round(kg, 3), uv['boyut'])
         con.commit()
 
         resp = {
@@ -8232,6 +8233,67 @@ def _batch_uretim_hesapla(con, uretim_varyant_id, siparis_kg):
         'uretilecek_kg': uretilecek_kg,
         'fazla_kg': fazla_kg,
     }
+
+
+def _plan_boyut_tablosu_var(con):
+    return con.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='nexgen_uretim_plan_boyut'"
+    ).fetchone() is not None
+
+
+def _plan_boyut_sira(boyut):
+    b = (boyut or '').upper()
+    if b == 'LARGE':
+        return 1
+    if b == 'SMALL':
+        return 2
+    if b == 'STANDART':
+        return 3
+    return 9
+
+
+def _plan_boyut_satir_ensure(con, plan_id, uretim_varyant_id, planlanan_kg, boyut):
+    """FAZ-BOYUT-1: Plan için boyut satırı yoksa ekler (idempotent, aynı transaction)."""
+    if not _plan_boyut_tablosu_var(con):
+        return False
+    mevcut = con.execute(
+        "SELECT id FROM nexgen_uretim_plan_boyut "
+        "WHERE plan_id=? AND uretim_varyant_id=?",
+        (plan_id, uretim_varyant_id),
+    ).fetchone()
+    if mevcut:
+        return False
+
+    boyut_norm = (boyut or 'STANDART').upper()
+    if boyut_norm == 'MEDIUM':
+        boyut_norm = 'STANDART'
+
+    siparis_kg = round(float(planlanan_kg or 0), 3)
+    bh = _batch_uretim_hesapla(con, uretim_varyant_id, siparis_kg)
+    if bh.get('ok'):
+        fb = bh['formul_batch_kg']
+        batch_sayisi = bh['batch_sayisi']
+        uretilecek_kg = bh['uretilecek_kg']
+        fazla_kg = bh['fazla_kg']
+    else:
+        fb = _formul_batch_kg_hesapla(con, uretim_varyant_id)
+        batch_sayisi = 0
+        uretilecek_kg = 0.0
+        fazla_kg = 0.0
+
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    con.execute("""
+        INSERT INTO nexgen_uretim_plan_boyut (
+            plan_id, uretim_varyant_id, boyut, siparis_kg,
+            formul_batch_kg, batch_sayisi, uretilecek_kg, fazla_kg,
+            sira, aktif, olusturma_tarihi, guncelleme_tarihi
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+    """, (
+        plan_id, uretim_varyant_id, boyut_norm, siparis_kg,
+        fb, batch_sayisi, uretilecek_kg, fazla_kg,
+        _plan_boyut_sira(boyut_norm), now, now,
+    ))
+    return True
 
 
 def _mpr_stok_ihtiyac_hesapla(con, uretim_varyant_id, rf_renk_id, planlanan_kg,
