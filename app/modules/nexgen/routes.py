@@ -7226,6 +7226,9 @@ def uretim_plan_liste():
                 pl['uretilen_kg'] = 0.0
                 pl['kalan_kg'] = pl['siparis_toplam_kg']
 
+        for pl in planlar:
+            pl['boyut_parcalari'] = _plan_boyut_parcalari_list(con, pl['id'])
+
         # Alt emir sayaçlarını planlara ekle (Migration 072+ gerekli)
         if _parca_tablosu_var(con):
             for pl in planlar:
@@ -7249,6 +7252,10 @@ def uretim_plan_liste():
                 else:
                     pl['toplam_alt_emir'] = 0
                     pl['biten_alt_emir']  = 0
+        else:
+            for pl in planlar:
+                pl['toplam_alt_emir'] = 0
+                pl['biten_alt_emir']  = 0
 
         # Aktif varyantları formül > renk > boyut hiyerarşisinde grupla
         # Yapı: [{formul_id, formul_ad, renkler: [{renk_id, renk_ad,
@@ -7355,6 +7362,15 @@ def _formuller_varyant_hiyerarsi(con):
     ]
 
 
+def _mpr_dev_test_mode_allowed():
+    """MPR workflow test modu — yalnızca MPR_TEST_MODE=true env ile aktif (BR-G-06)."""
+    try:
+        from flask import current_app
+        return bool(current_app.config.get('MPR_TEST_MODE_ALLOWED', False))
+    except Exception:
+        return False
+
+
 @nexgen_bp.route('/mpr')
 @yetki_gerekli('nexgen.plan.view', 'can_view')
 def mpr_on_calisma_liste():
@@ -7375,12 +7391,10 @@ def mpr_on_calisma_liste():
             else:
                 pl['rf_kod'] = pl.get('rf_kod_fk')
                 pl['rf_renk_ad'] = pl.get('rf_ad_fk')
-
-            stok = _mpr_stok_ihtiyac_hesapla(
-                con, pl['uv_id'], pl.get('rf_renk_id'), float(pl['planlanan_kg'])
-            )
-            pl['stok_yeterli_mi'] = stok.get('yeterli_mi') if stok.get('ok') else None
-            pl['stok_eksik_sayisi'] = stok.get('eksik_sayisi', 0) if stok.get('ok') else None
+            # Stok hesabı sayfa yükünde yapılmaz (N+1 / FAZ-1 KRİTİK #1).
+            # Her kart /api/plan/<id>/stok-durum ile lazy olarak yükler.
+            pl['stok_yeterli_mi'] = None
+            pl['stok_eksik_sayisi'] = None
 
         formuller = _formuller_varyant_hiyerarsi(con)
         try:
@@ -7402,6 +7416,7 @@ def mpr_on_calisma_liste():
         formuller=formuller,
         cariler=cariler,
         can_manage=yetki_var('nexgen.plan.manage', 'can_manage'),
+        mpr_test_mode_allowed=_mpr_dev_test_mode_allowed(),
     )
 
 
@@ -7597,7 +7612,7 @@ def api_mpr_siparise_bagla(plan_id):
     planlama_siparis_id_raw = d.get('planlama_siparis_id')
     cari_id_raw = d.get('cari_id')
     cari_unvan = (d.get('cari_unvan') or '').strip()
-    termin_tarihi = (d.get('termin_tarihi') or '').strip()
+    termin_tarihi = (d.get('termin_tarihi') or d.get('termin') or '').strip()
     talep_referansi = (d.get('talep_referansi') or '').strip() or None
     notlar = (d.get('not') or d.get('notlar') or '').strip() or None
     siparis_no = (d.get('siparis_no') or '').strip() or None
@@ -7706,15 +7721,14 @@ def api_mpr_siparise_bagla(plan_id):
             params,
         )
 
-        rf_renk_id = p['rf_renk_id'] if 'rf_renk_id' in p.keys() else None
-        stok = _mpr_stok_ihtiyac_hesapla(
-            con, p['uretim_varyant_id'], rf_renk_id, float(p['planlanan_kg'])
-        )
+        # Stok durumu _birlestir ile hesaplanır (KRİTİK #3 / YÜKSEK #10 / FAZ-1).
+        # Stok yetersiz olsa bile bağlama gerçekleşir — üretime geçişte hard kontrol yapılır.
+        stok = _mpr_stok_ihtiyac_birlestir(con, plan_id)
         stok_uyari = None
         if stok.get('ok') and not stok.get('yeterli_mi'):
             stok_uyari = (
                 f'{stok.get("eksik_sayisi", 0)} kalemde kullanılabilir stok yetersiz. '
-                'Bağlama yapıldı; üretime göndermeden önce stok tamamlayın.'
+                'Sipariş bağlandı; üretime göndermeden önce eksik stokları tamamlayın.'
             )
 
         con.commit()
@@ -7772,6 +7786,63 @@ def api_plan_rf_secenekleri():
             ORDER BY rf.rf_kod
         """, (formul_id,)).fetchall()
         return jsonify({'ok': True, 'liste': [dict(r) for r in rows]})
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/plan/rf-renk-varyantlari')
+@login_gerekli
+def api_plan_rf_renk_varyantlari():
+    """RF renk formülüne uyumlu renk varyantları (FAZ-1 YÜKSEK #11).
+
+    RF seçilince o RF'in uygulandığı formüle ait üretim varyantları döner.
+    Kullanıcı arayüzünde Renk Formülü → Renk/Varyant filtrelemesi için kullanılır.
+    """
+    rf_renk_id_raw = request.args.get('rf_renk_id')
+    if not rf_renk_id_raw:
+        return jsonify({'ok': False, 'hata': 'rf_renk_id zorunlu'}), 400
+    try:
+        rf_renk_id = int(rf_renk_id_raw)
+    except (TypeError, ValueError):
+        return jsonify({'ok': False, 'hata': 'rf_renk_id geçersiz'}), 400
+
+    con = _db()
+    try:
+        rows = con.execute("""
+            SELECT rv.id AS renk_id, rv.ad AS renk_ad,
+                   uv.id AS uv_id, uv.boyut,
+                   f.id AS formul_id
+            FROM nexgen_rf_formul_uygunluk u
+            JOIN nexgen_renk_varyant rv ON rv.formul_id = u.formul_id
+            JOIN nexgen_uretim_varyant uv ON uv.renk_varyant_id = rv.id
+                AND uv.aktif = 1
+                AND uv.recete_durum = 'URETIME_ACIK'
+            JOIN nexgen_formul f ON f.id = u.formul_id
+            WHERE u.rf_renk_id = ?
+              AND u.durum = 'ONAYLI' AND u.aktif = 1
+            ORDER BY rv.ad, uv.boyut
+        """, (rf_renk_id,)).fetchall()
+
+        # renk_id bazında grupla
+        renk_map = {}
+        for r in rows:
+            rid = r['renk_id']
+            if rid not in renk_map:
+                renk_map[rid] = {
+                    'renk_id': rid,
+                    'renk_ad': r['renk_ad'],
+                    'large_uv_id': None,
+                    'small_uv_id': None,
+                    'standart_uv_id': None,
+                }
+            b = (r['boyut'] or '').upper()
+            if b == 'LARGE':
+                renk_map[rid]['large_uv_id'] = r['uv_id']
+            elif b == 'SMALL':
+                renk_map[rid]['small_uv_id'] = r['uv_id']
+            elif b in ('STANDART', 'MEDIUM'):
+                renk_map[rid]['standart_uv_id'] = r['uv_id']
+        return jsonify({'ok': True, 'liste': list(renk_map.values())})
     finally:
         con.close()
 
@@ -8299,6 +8370,27 @@ def _plan_boyut_tablosu_var(con):
     ).fetchone() is not None
 
 
+def _plan_boyut_parcalari_list(con, plan_id):
+    """Planın aktif boyut kırılımlarını UI listesi için döner."""
+    if not _plan_boyut_tablosu_var(con):
+        return []
+    rows = con.execute("""
+        SELECT boyut, siparis_kg, uretim_varyant_id
+        FROM nexgen_uretim_plan_boyut
+        WHERE plan_id=? AND aktif=1 AND siparis_kg > 0
+        ORDER BY sira, id
+    """, (plan_id,)).fetchall()
+    return [
+        {
+            'boyut': r['boyut'],
+            'siparis_kg': float(r['siparis_kg']),
+            'kg': float(r['siparis_kg']),
+            'uretim_varyant_id': r['uretim_varyant_id'],
+        }
+        for r in rows
+    ]
+
+
 def _plan_boyut_sira(boyut):
     b = (boyut or '').upper()
     if b == 'LARGE':
@@ -8559,8 +8651,11 @@ def _mpr_stok_ihtiyac_hesapla(con, uretim_varyant_id, rf_renk_id, planlanan_kg,
 def _mpr_stok_ihtiyac_birlestir(con, plan_id, exclude_batch_kodu=None):
     """Çok boyutlu MPR stok ihtiyacı — boyut satırlarını ayrı hesaplayıp birleştirir.
 
-    nexgen_uretim_plan_boyut satırları (aktif=1, siparis_kg>0) okunur.
-    Her satır için _mpr_stok_ihtiyac_hesapla çağrılır; stok_kart_id bazında merge edilir.
+    Düzeltme (KRİTİK #3 / FAZ-1):
+    Tüm boyutlar için önce talep toplamı ve stok kart listesi çıkarılır,
+    ardından stok bakiyeleri TEK SEFERDE sorgulanır. Her boyut için ayrı
+    stok sorgusu yapılmaz — tutarsızlık ve N×M sorgu sorunu giderildi.
+
     Boyut satırı yoksa header üzerinden tek varyantlı eski akışa düşer.
     """
     plan = con.execute(
@@ -8608,9 +8703,10 @@ def _mpr_stok_ihtiyac_birlestir(con, plan_id, exclude_batch_kodu=None):
         sonuc['cok_boyut'] = False
         return sonuc
 
+    # ── Adım 1: Her boyut için reçete + batch hesabını yap; stok sorgusu YOK ──
     boyut_ozetleri = []
-    merged_talep = {}
-    stok_meta = {}
+    merged_talep = {}   # stok_kart_id → toplam gerekli_kg
+    stok_kart_meta = {} # stok_kart_id → {stok_kod, stok_ad, kaynak}
     toplam_siparis = 0.0
     toplam_uretilecek = 0.0
     toplam_fazla = 0.0
@@ -8618,48 +8714,107 @@ def _mpr_stok_ihtiyac_birlestir(con, plan_id, exclude_batch_kodu=None):
 
     for row in boyut_satirlari:
         uv_id = row['uretim_varyant_id']
-        sonuc = _mpr_stok_ihtiyac_hesapla(
-            con, uv_id, rf_renk_id, row['siparis_kg'],
-            exclude_batch_kodu=exclude_batch_kodu,
-        )
-        if not sonuc.get('ok'):
-            return sonuc
+        try:
+            siparis_kg = float(row['siparis_kg'])
+        except (TypeError, ValueError):
+            continue
+        if siparis_kg <= 0:
+            continue
+
+        batch = _batch_uretim_hesapla(con, uv_id, siparis_kg)
+        if not batch.get('ok'):
+            return {'ok': False, 'hata': batch.get('hata', 'Batch hesaplanamadı')}
+
+        carpan = float(batch['batch_sayisi'])
 
         boyut_ozetleri.append({
             'boyut': row['boyut'],
-            'siparis_kg': sonuc['siparis_kg'],
-            'formul_batch_kg': sonuc['formul_batch_kg'],
-            'batch_sayisi': sonuc['batch_sayisi'],
-            'uretilecek_kg': sonuc['uretilecek_kg'],
-            'fazla_kg': sonuc['fazla_kg'],
+            'siparis_kg': batch['siparis_kg'],
+            'formul_batch_kg': batch['formul_batch_kg'],
+            'batch_sayisi': batch['batch_sayisi'],
+            'uretilecek_kg': batch['uretilecek_kg'],
+            'fazla_kg': batch['fazla_kg'],
         })
-        toplam_siparis += float(sonuc['siparis_kg'])
-        toplam_uretilecek += float(sonuc['uretilecek_kg'])
-        toplam_fazla += float(sonuc['fazla_kg'])
-        batch_toplam += int(sonuc['batch_sayisi'])
+        toplam_siparis += float(batch['siparis_kg'])
+        toplam_uretilecek += float(batch['uretilecek_kg'])
+        toplam_fazla += float(batch['fazla_kg'])
+        batch_toplam += int(batch['batch_sayisi'])
 
-        for k in sonuc.get('kalemler', []):
-            sid = k['stok_kart_id']
-            merged_talep[sid] = round(
-                merged_talep.get(sid, 0.0) + float(k['gerekli_kg']), 3
-            )
-            if sid not in stok_meta:
-                stok_meta[sid] = {
-                    'stok_kod': k.get('stok_kod') or '',
-                    'stok_ad': k.get('stok_ad') or '',
-                    'kaynak': k.get('kaynak') or '',
-                    'fiziksel_kg': k.get('fiziksel_kg', 0),
-                    'rezerve_kg': k.get('rezerve_kg', 0),
-                    'yumusak_talep_kg': k.get('yumusak_talep_kg', 0),
-                    'kullanilabilir_kg': k.get('kullanilabilir_kg', 0),
-                    'mevcut_kg': k.get('mevcut_kg', 0),
+        # Taban reçete (BOYA hariç)
+        taban_rows = con.execute("""
+            SELECT rk.stok_kart_id, rk.miktar_kg,
+                   sk.kod AS stok_kod, sk.ad AS stok_ad
+            FROM nexgen_recete_kalem rk
+            JOIN nexgen_stok_kart sk ON sk.id = rk.stok_kart_id
+            WHERE rk.uretim_varyant_id = ? AND rk.aktif = 1
+              AND UPPER(COALESCE(sk.kategori, '')) != 'BOYA'
+            ORDER BY rk.sira, rk.id
+        """, (uv_id,)).fetchall()
+        for r in taban_rows:
+            gerekli = round(float(r['miktar_kg']) * carpan, 3)
+            if gerekli <= 0:
+                continue
+            sid = r['stok_kart_id']
+            merged_talep[sid] = round(merged_talep.get(sid, 0.0) + gerekli, 3)
+            if sid not in stok_kart_meta:
+                stok_kart_meta[sid] = {
+                    'stok_kod': r['stok_kod'] or '',
+                    'stok_ad': r['stok_ad'] or '',
+                    'kaynak': 'TABAN',
                 }
 
+        # RF boya kalemleri
+        rf_id = None
+        if rf_renk_id not in (None, ''):
+            try:
+                rf_id = int(rf_renk_id)
+            except (TypeError, ValueError):
+                pass
+        if rf_id:
+            rf_rows = con.execute("""
+                SELECT rk.stok_kart_id, rk.miktar_kg,
+                       sk.kod AS stok_kod, sk.ad AS stok_ad
+                FROM nexgen_rf_kalem rk
+                JOIN nexgen_stok_kart sk ON sk.id = rk.stok_kart_id
+                WHERE rk.rf_renk_id = ? AND rk.aktif = 1
+                ORDER BY rk.sira, rk.id
+            """, (rf_id,)).fetchall()
+            for r in rf_rows:
+                gerekli = round(float(r['miktar_kg']) * carpan, 3)
+                if gerekli <= 0:
+                    continue
+                sid = r['stok_kart_id']
+                merged_talep[sid] = round(merged_talep.get(sid, 0.0) + gerekli, 3)
+                if sid not in stok_kart_meta:
+                    stok_kart_meta[sid] = {
+                        'stok_kod': r['stok_kod'] or '',
+                        'stok_ad': r['stok_ad'] or '',
+                        'kaynak': 'RF',
+                    }
+
+    if not merged_talep:
+        return {'ok': False, 'hata': 'Reçete kalemi bulunamadı'}
+
+    # ── Adım 2: Tüm stok kartları için bakiye TEK SEFERDE sorgulanır ──
+    stok_bakiye = {}
+    for sid in merged_talep:
+        fiziksel = _mevcut_stok(con, sid)
+        rezerve = _aktif_rezerv_toplam(con, sid, exclude_batch_kodu)
+        yumusak = _yumusak_talep_toplam(con, sid, exclude_batch_kodu)
+        stok_bakiye[sid] = {
+            'fiziksel_kg': fiziksel,
+            'rezerve_kg': rezerve,
+            'yumusak_talep_kg': yumusak,
+            'kullanilabilir_kg': round(fiziksel - rezerve - yumusak, 3),
+        }
+
+    # ── Adım 3: Yeterlilik hesabı ──
     eksik_stok_ids = set()
     kalemler = []
     for sid, gerekli in merged_talep.items():
-        meta = stok_meta[sid]
-        kullanilabilir = meta['kullanilabilir_kg']
+        meta = stok_kart_meta[sid]
+        bak = stok_bakiye[sid]
+        kullanilabilir = bak['kullanilabilir_kg']
         fark = round(kullanilabilir - gerekli, 3)
         if fark < -0.0005:
             eksik_stok_ids.add(sid)
@@ -8669,11 +8824,11 @@ def _mpr_stok_ihtiyac_birlestir(con, plan_id, exclude_batch_kodu=None):
             'stok_kod': meta['stok_kod'],
             'stok_ad': meta['stok_ad'],
             'gerekli_kg': gerekli,
-            'fiziksel_kg': meta['fiziksel_kg'],
-            'rezerve_kg': meta['rezerve_kg'],
-            'yumusak_talep_kg': meta['yumusak_talep_kg'],
+            'fiziksel_kg': bak['fiziksel_kg'],
+            'rezerve_kg': bak['rezerve_kg'],
+            'yumusak_talep_kg': bak['yumusak_talep_kg'],
             'kullanilabilir_kg': kullanilabilir,
-            'mevcut_kg': meta['mevcut_kg'],
+            'mevcut_kg': bak['fiziksel_kg'],
             'fark_kg': fark,
             'yeterli': sid not in eksik_stok_ids,
         })
@@ -9843,6 +9998,32 @@ def api_plan_stok_onizle():
         if not sonuc.get('ok'):
             return jsonify(sonuc), 400
         return jsonify(sonuc)
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/plan/<int:plan_id>/stok-durum')
+@login_gerekli
+def api_plan_stok_durum(plan_id):
+    """Hafif stok durum sorgusu — liste rozeti için (FAZ-1 KRİTİK #1).
+
+    Sadece yeterli_mi + eksik_sayisi döner.
+    Sayfa yükünde N+1 sorgusu yapılmaz; her kart lazy olarak bu endpoint'i çağırır.
+    """
+    if not (yetki_var('nexgen.plan.manage', 'can_manage') or
+            yetki_var('nexgen.plan.view', 'can_view')):
+        return jsonify({'ok': False, 'hata': 'Yetki yok'}), 403
+    con = _db()
+    try:
+        sonuc = _mpr_stok_ihtiyac_birlestir(con, plan_id)
+        if not sonuc.get('ok'):
+            return jsonify({'ok': False, 'hata': sonuc.get('hata')}), 400
+        return jsonify({
+            'ok': True,
+            'plan_id': plan_id,
+            'yeterli_mi': sonuc.get('yeterli_mi'),
+            'eksik_sayisi': sonuc.get('eksik_sayisi', 0),
+        })
     finally:
         con.close()
 

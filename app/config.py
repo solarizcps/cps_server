@@ -49,3 +49,8 @@ class Config:
     # True: lazy hook ve scheduler trigger calisabilir (P4 + C.8 sonrasi).
     # C.8 FLAG flip oncesi True YAPILMAZ.
     USE_CPS_NATIVE_PROSES = True
+
+    # ===================== NEXGEN MPR =====================
+    # Test modunu yalnızca geliştirme ortamında aktif et.
+    # Production'da False olmalı — DB adı kontrolü KALDIRILDI (BR-G-06).
+    MPR_TEST_MODE_ALLOWED = os.environ.get('MPR_TEST_MODE', 'false').lower() == 'true'

@@ -12,12 +12,15 @@
       </div>
       {% if can_manage %}
       <div class="mo-header-aksiyon">
-        <button type="button" class="mo-taslak-btn" disabled title="Taslak kaydet — sonraki faz">Taslağı Kaydet</button>
-        <button type="button" class="mo-taslak-btn mo-taslak-sil" disabled title="Silme endpoint henüz yok">Taslağı Sil</button>
         <button class="mo-yeni-btn" type="button" onclick="moModalAc()">+ Yeni</button>
       </div>
       {% endif %}
     </div>
+  </div>
+
+  <div id="mo-test-modu-global-band" class="mo-test-modu-band" style="display:none" role="status" aria-live="polite">
+    <strong>TEST MODU</strong>
+    <span>Eksik stok kontrolü geçici olarak devre dışı.</span>
   </div>
 
   <div class="mo-layout">
@@ -35,7 +38,7 @@
           MPR Kayıtları <span class="mo-liste-sayi" id="mo-liste-sayi">{{ planlar|length }}</span>
         </div>
         <div class="mo-liste-filtre">
-          <input type="search" class="mo-f-inp" id="mo-f-ara" placeholder="Ara (kod, formül, RF…)" oninput="moListeFiltrele()">
+          <input type="search" class="mo-f-inp" id="mo-f-ara" placeholder="Ara (kod, formül, renk…)" oninput="moListeFiltrele()">
           <select class="mo-f-inp" id="mo-f-durum" onchange="moListeFiltrele()">
             <option value="">Tüm durumlar</option>
             <option value="hazir">Hazır</option>
@@ -61,16 +64,10 @@
                onclick="moSatirSec({{ p.id }})">
             <div class="mo-lk-ust">
               <span class="mo-lk-kod">{{ p.plan_kodu }}</span>
-              {% if p.stok_yeterli_mi is none %}
-                <span class="mo-rozet mo-rozet-gri">—</span>
-              {% elif p.stok_yeterli_mi %}
-                <span class="mo-rozet mo-rozet-yesil">Hazır</span>
-              {% else %}
-                <span class="mo-rozet mo-rozet-kirmizi">Eksik {{ p.stok_eksik_sayisi or 0 }}</span>
-              {% endif %}
+              <span class="mo-rozet mo-rozet-gri" id="mo-stok-badge-{{ p.id }}">—</span>
             </div>
             <div class="mo-lk-formul">{{ p.formul_ad or '—' }}</div>
-            <div class="mo-lk-rf">{% if p.rf_kod %}{{ p.rf_kod }}{% else %}—{% endif %}</div>
+            <div class="mo-lk-rf">{% if p.rf_kod %}<span class="mo-lk-rf-label">Renk Formülü:</span> {{ p.rf_kod }}{% endif %}</div>
             <div class="mo-lk-kg">{{ '%.3f'|format(p.planlanan_kg or 0) }} kg</div>
             <div class="mo-lk-durum">{% if p.durum == 'ON_CALISMA' %}Ön çalışma · Taslak MPR{% else %}{{ p.durum or '—' }}{% endif %}</div>
           </div>
@@ -107,13 +104,13 @@
         <option value="{{ f.formul_id }}">{{ f.formul_ad }}</option>
         {% endfor %}
       </select>
-      <label class="mo-label">RF Renk *</label>
+      <label class="mo-label">Renk Formülü *</label>
       <select class="mo-inp" id="mo-rf" disabled onchange="moRfDegisti()">
         <option value="">— Önce formül seçin —</option>
       </select>
       <label class="mo-label">Renk / Varyant *</label>
       <select class="mo-inp" id="mo-renk" disabled onchange="moRenkDegisti()">
-        <option value="">— Önce RF seçin —</option>
+        <option value="">— Önce Renk Formülü seçin —</option>
       </select>
       <label class="mo-label">Boyut dağılımı (kg) *</label>
       <div class="mo-boyut-kg-grid" id="mo-boyut-kg-grid">
@@ -208,12 +205,65 @@
 var _MO_FORMULLER = {{ formuller | tojson | safe }};
 var _MO_PLANLAR = {{ planlar | tojson | safe }};
 var _MO_CAN_MANAGE = {{ can_manage | tojson | safe }};
+var _MO_TEST_MODE_ALLOWED = {{ mpr_test_mode_allowed | tojson | safe }};
+var _MO_TEST_OVERRIDE_KEY = 'mo_mpr_test_override';
 var _moSeciliRenkMeta = null;
 var _moStokTimer = null;
 var _moSeciliPlanId = null;
 var _moDetayFiltre = 'all';
 var _moDetayCache = { planId: null, api: null, meta: null };
 var _moKalemIdx = 0;
+
+function moTestOverrideOku() {
+  if (!_MO_TEST_MODE_ALLOWED) return {};
+  try {
+    var raw = sessionStorage.getItem(_MO_TEST_OVERRIDE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) { return {}; }
+}
+
+function moTestOverrideYaz(map) {
+  if (!_MO_TEST_MODE_ALLOWED) return;
+  try {
+    sessionStorage.setItem(_MO_TEST_OVERRIDE_KEY, JSON.stringify(map || {}));
+  } catch (e) { /* ignore */ }
+}
+
+function moTestModeAktif(planId) {
+  if (!_MO_TEST_MODE_ALLOWED || !planId) return false;
+  return !!moTestOverrideOku()[String(planId)];
+}
+
+function moTestModeToggle(planId) {
+  if (!_MO_TEST_MODE_ALLOWED || !_MO_CAN_MANAGE || !planId) return;
+  var m = moTestOverrideOku();
+  var key = String(planId);
+  if (m[key]) delete m[key];
+  else m[key] = true;
+  moTestOverrideYaz(m);
+  moTestModuBandGuncelle(planId);
+  if (_moDetayCache.planId === planId && _moDetayCache.api) {
+    moDetayRender(_moDetayCache.api, _moDetayCache.meta);
+  }
+}
+
+function moEfektifYeterliMi(api, planId) {
+  if (moTestModeAktif(planId)) return true;
+  return !!(api && api.yeterli_mi);
+}
+
+function moSipariseGit(planId) {
+  var meta = moPlanMeta(planId) || _moDetayCache.meta || {};
+  var qs = 'from_mpr=' + encodeURIComponent(planId);
+  if (meta.plan_kodu) qs += '&plan_kodu=' + encodeURIComponent(meta.plan_kodu);
+  window.location.href = '/nexgen/uretim-plan?' + qs;
+}
+
+function moTestModuBandGuncelle(planId) {
+  var el = document.getElementById('mo-test-modu-global-band');
+  if (!el) return;
+  el.style.display = (planId && moTestModeAktif(planId)) ? 'flex' : 'none';
+}
 
 function moEsc(s) {
   if (s == null) return '';
@@ -392,7 +442,7 @@ function moUretilecekKirilimHtml(bv) {
   var html = '<div class="mo-boyut-blok mo-boyut-uretilecek">'
     + '<div class="mo-boyut-baslik">ÜRETİLECEK</div>';
   bv.satirlar.forEach(function(s) {
-    var batchTxt = Number(s.batch_sayisi || 0) > 0 ? String(s.batch_sayisi) + ' batch' : '—';
+    var batchTxt = Number(s.batch_sayisi || 0) > 0 ? String(s.batch_sayisi) + ' Formül' : '—';
     html += '<div class="mo-bt-satir mo-bt-ure' + (Number(s.siparis_kg || 0) <= 0.0005 ? ' mo-bt-sifir' : '') + '">'
       + '<span class="mo-bt-boyut">' + moEsc(s.uiLabel) + '</span>'
       + '<span class="mo-bt-kg">' + moFmtKg(s.uretilecek_kg) + ' kg</span>'
@@ -403,7 +453,7 @@ function moUretilecekKirilimHtml(bv) {
     + '<div class="mo-bt-satir mo-bt-toplam">'
     + '<span class="mo-bt-boyut">TOPLAM</span>'
     + '<span class="mo-bt-kg">' + moFmtKg(bv.toplamUretilecek) + ' kg</span>'
-    + '<span class="mo-bt-ek">' + (bv.batchToplam > 0 ? String(bv.batchToplam) + ' batch' : '—') + '</span>'
+    + '<span class="mo-bt-ek">' + (bv.batchToplam > 0 ? String(bv.batchToplam) + ' Formül' : '—') + '</span>'
     + '</div></div>';
   return html;
 }
@@ -474,10 +524,13 @@ function moListeFiltrele() {
     ].join(' ').toLowerCase();
     var show = true;
     if (ara && haystack.indexOf(ara) < 0) show = false;
-    if (durum === 'hazir' && !meta.stok_yeterli_mi) show = false;
-    if (durum === 'eksik' && meta.stok_yeterli_mi !== false) show = false;
+    // Stok badge henüz yüklenmemişse (null) durum filtresinde göster —
+    // yarış koşulunu önler: badge yüklenmeden kullanıcı filtre basarsa kart kaybolmaz.
+    var stokBilinmiyor = meta.stok_yeterli_mi === null || meta.stok_yeterli_mi === undefined;
+    if (durum === 'hazir' && !stokBilinmiyor && !meta.stok_yeterli_mi) show = false;
+    if (durum === 'eksik' && !stokBilinmiyor && meta.stok_yeterli_mi !== false) show = false;
     if (formul && meta.formul_ad !== formul) show = false;
-    if (sadeceEksik && meta.stok_yeterli_mi !== false) show = false;
+    if (sadeceEksik && !stokBilinmiyor && meta.stok_yeterli_mi !== false) show = false;
     el.style.display = show ? '' : 'none';
     if (show) gorunen++;
   });
@@ -642,7 +695,7 @@ function moOneriPlaceholder(k, karar, m) {
   if (m.rez > 0.0005 || m.bek > 0.0005) oneriler.push('Depodan serbest bırakılabilir');
   var ad = ((k.stok_ad || '') + ' ' + (k.stok_kod || '')).toLowerCase();
   if (ad.indexOf('recycle') >= 0 || ad.indexOf('geri') >= 0) oneriler.push('Recycle kullanılabilir');
-  if ((k.kaynak || '').toUpperCase() === 'RF') oneriler.push('Alternatif RF kullanılabilir');
+  if ((k.kaynak || '').toUpperCase() === 'RF') oneriler.push('Alternatif Renk Formülü kullanılabilir');
   if (!oneriler.length) oneriler.push('Stok girişi veya rezerv kontrolü gerekli');
   return oneriler;
 }
@@ -670,7 +723,7 @@ function moUretimOzetHtml(meta, api, kalemler) {
     + '</div>'
     + '<div class="mo-kimlik-meta">'
     + moKimlikHucre('Formül', meta.formul_ad || '—', 'mo-kim-buyuk')
-    + moKimlikHucre('RF', meta.rf_kod || '—', 'mo-kim-buyuk')
+    + moKimlikHucre('Renk Formülü', meta.rf_kod || '—', 'mo-kim-buyuk')
     + moKimlikHucre('Renk', meta.renk_ad || meta.rf_renk_ad || '—', 'mo-kim-buyuk')
     + moKimlikHucre('Cari', cari || bagPlaceholder, cari ? '' : 'mo-kim-bekle')
     + moKimlikHucre('Termin', termin || bagPlaceholder, termin ? '' : 'mo-kim-bekle')
@@ -706,26 +759,36 @@ function moKararMerkezHtml(meta, api, ozet, kalemler) {
     + '</div></div>';
 }
 
-function moWorkflowHtml(aktifAdim, yeterliMi, kalemler) {
+function moWorkflowHtml(aktifAdim, yeterliMi, kalemler, testMode) {
   var eksikListe = moEksikHammaddeListesi(kalemler || []);
   var eksikKg = 0;
   eksikListe.forEach(function(it) { eksikKg += it.eksikKg; });
   eksikKg = Math.round(eksikKg * 1000) / 1000;
+
+  // Adım 2 (Hammadde Kontrolü): stok eksikse uyarı rengi — ama akışı bloklamaz.
+  // Adım 5 (Üretime Gönder): stok eksikse uyarı — bu adımda hard kontrol var.
   var adimlar = [
     { n: '1', lbl: 'Taslak MPR', key: 1 },
-    { n: '2', lbl: 'Hammadde Kontrolü', key: 2, warn: !yeterliMi },
+    { n: '2', lbl: 'Hammadde Kontrolü', key: 2, warn: !yeterliMi && eksikListe.length > 0 },
     { n: '3', lbl: 'Siparişe Bağla', key: 3 },
     { n: '4', lbl: 'Depo Hazırlık', key: 4 },
-    { n: '5', lbl: 'Üretime Gönder', key: 5 },
+    { n: '5', lbl: 'Üretime Gönder', key: 5, warn: !yeterliMi },
   ];
+
   var html = '<div class="mo-workflow" aria-label="MPR iş akışı">';
   adimlar.forEach(function(a, i) {
     if (i > 0) html += '<div class="mo-wf-ok" aria-hidden="true">↓</div>';
     var cls = a.key === aktifAdim ? ' mo-wf-aktif' : (a.key < aktifAdim ? ' mo-wf-tamam' : '');
     if (a.warn) cls += ' mo-wf-uyari';
     var alt = '';
-    if (a.key === 2 && !yeterliMi && eksikListe.length) {
-      alt = 'Eksik ' + eksikListe.length + ' kalem / ' + moFmtKg(eksikKg) + ' kg';
+    if (a.key === 2) {
+      if (yeterliMi) {
+        alt = testMode ? 'Hazır (test override)' : 'Hazır';
+      } else if (eksikListe.length) {
+        alt = 'Eksik ' + eksikListe.length + ' kalem / ' + moFmtKg(eksikKg) + ' kg';
+      }
+    } else if (a.key === 5 && !yeterliMi) {
+      alt = 'Stok eksik — üretime geçiş kilitli';
     } else if (a.key > aktifAdim) {
       alt = 'Bekliyor';
     }
@@ -737,32 +800,64 @@ function moWorkflowHtml(aktifAdim, yeterliMi, kalemler) {
   return html + '</div>';
 }
 
-function moOperasyonPanelHtml(meta, yeterliMi, kalemler) {
+function moOperasyonPanelHtml(meta, yeterliMi, kalemler, planId) {
+  planId = planId || meta.id || _moSeciliPlanId;
+  var testMode = moTestModeAktif(planId);
   var durumMetin = meta.durum === 'ON_CALISMA' ? 'Taslak MPR' : (meta.durum || '—');
+
+  // Aktif adım: siparişe bağlanmış mı? (PLANLANDI) → adım 3; değilse adım 2.
+  // Stok durumu adım ilerlemesini BLOKLAMAZ — sadece Üretime Gönder bloklar.
+  var aktifAdim;
+  if (meta.durum === 'PLANLANDI' || meta.durum === 'URETIMDE' || meta.durum === 'TAMAMLANDI') {
+    aktifAdim = yeterliMi ? 5 : 4;
+  } else {
+    aktifAdim = 2;
+  }
+
   var sonraki;
   if (yeterliMi) {
-    sonraki = 'Stok yeterli. Siparişe bağlandıktan sonra depo hazırlığı ve üretime gönderim adımlarına geçilebilir.';
+    sonraki = testMode
+      ? 'Test modu aktif. Siparişe bağlayarak üretime gönderebilirsiniz.'
+      : 'Tüm hammaddeler hazır. Siparişe bağlayabilir ve üretime gönderebilirsiniz.';
   } else {
-    sonraki = 'Eksik hammaddeleri tamamlayın. Stok kontrolü tamamlanmadan siparişe bağlama adımına geçilemez.';
+    sonraki = 'Stok eksik — siparişe bağlayabilirsiniz, ancak eksik hammaddeler tamamlanmadan üretime gönderilemez.';
   }
+
   var html = '<div class="mo-op-panel">'
     + '<div class="mo-op-blok"><div class="mo-op-etiket">DURUM</div>'
     + '<div class="mo-op-durum">' + moEsc(durumMetin) + '</div></div>'
     + '<div class="mo-op-blok"><div class="mo-op-etiket">SONRAKİ ADIM</div>'
     + '<p class="mo-op-sonraki">' + moEsc(sonraki) + '</p></div>'
-    + moWorkflowHtml(1, yeterliMi, kalemler)
+    + moWorkflowHtml(aktifAdim, yeterliMi, kalemler, testMode)
     + '<div class="mo-op-butonlar">';
-  if (!yeterliMi) {
-    html += '<button type="button" class="mo-sa-btn mo-sa-eksik" onclick="moStokTamamla()">Stokları Tamamla</button>';
+
+  if (_MO_TEST_MODE_ALLOWED && _MO_CAN_MANAGE) {
+    if (testMode) {
+      html += '<button type="button" class="mo-sa-btn mo-test-modu-kapat" onclick="moTestModeToggle(' + planId + ')">Test Modunu Kapat</button>';
+    } else {
+      html += '<button type="button" class="mo-sa-btn mo-test-modu-ac" onclick="moTestModeToggle(' + planId + ')">Test İçin Eksikleri Geç</button>';
+    }
   }
-  html += '<button type="button" class="mo-sa-btn mo-sa-siparis" disabled>Siparişe Git</button>';
-  html += '<p class="mo-op-siparis-not">Önce eksik hammaddeleri tamamlayın veya sipariş bağlantısını yapın.</p>';
+
+  // Stok eksikse "Stokları Tamamla" aksiyonu göster, ama siparişe bağlamayı ENGELLEME
+  if (!yeterliMi) {
+    html += '<button type="button" class="mo-sa-btn mo-sa-eksik" onclick="moStokTamamla()">Eksik Hammaddeleri Gör</button>';
+  }
+
+  // Siparişe Git butonu her durumda aktif (kullanıcı kararı #1)
+  html += '<button type="button" class="mo-sa-btn mo-sa-siparis mo-sa-siparis-aktif" onclick="moSipariseGit(' + planId + ')">Siparişe Git</button>';
+  if (!yeterliMi) {
+    html += '<p class="mo-op-siparis-not mo-op-siparis-uyari">Stok eksik — üretime geçişte onay gerekecek.</p>';
+  } else {
+    html += '<p class="mo-op-siparis-not">' + (testMode ? 'Test modu aktif.' : '') + '</p>';
+  }
+
   html += '</div></div>';
   return html;
 }
 
-function moSagPanelHtml(kalemler, ozet, meta, yeterliMi) {
-  return moOperasyonPanelHtml(meta, yeterliMi, kalemler);
+function moSagPanelHtml(kalemler, ozet, meta, yeterliMi, planId) {
+  return moOperasyonPanelHtml(meta, yeterliMi, kalemler, planId);
 }
 
 function moStokTamamla() {
@@ -793,7 +888,8 @@ function moKararRozetHtml(karar) {
 function moKaynakBadge(kaynak) {
   var k = (kaynak || 'TABAN').toUpperCase();
   var cls = k === 'RF' ? 'mo-kaynak-rf' : 'mo-kaynak-taban';
-  return '<span class="mo-kaynak ' + cls + '">' + moEsc(k) + '</span>';
+  var etiket = k === 'RF' ? 'Renk Formülü' : 'Hammadde Formülü';
+  return '<span class="mo-kaynak ' + cls + '">' + etiket + '</span>';
 }
 
 function moMetrikHucre(lbl, val, cls, title) {
@@ -872,7 +968,9 @@ function moDetayOrtaHtml(api, meta) {
 function moDetaySagHtml(api, meta) {
   var kalemler = api.kalemler || [];
   var ozet = moKalemSayilar(kalemler);
-  return moSagPanelHtml(kalemler, ozet, meta, api.yeterli_mi);
+  var planId = meta.id || _moSeciliPlanId;
+  var efektifYeterli = moEfektifYeterliMi(api, planId);
+  return moSagPanelHtml(kalemler, ozet, meta, efektifYeterli, planId);
 }
 
 function moDetayTamHtml(api, meta) {
@@ -887,6 +985,8 @@ function moDetayRender(api, meta) {
   var sagEl = document.getElementById('mo-detay-sag');
   var sagPanel = document.getElementById('mo-sag-panel');
   var bosEl = document.getElementById('mo-detay-bos');
+  var planId = meta.id || _moSeciliPlanId;
+  moTestModuBandGuncelle(planId);
   if (ortaEl) {
     ortaEl.innerHTML = moDetayOrtaHtml(api, meta);
     ortaEl.style.display = 'block';
@@ -919,7 +1019,7 @@ function moOnizleCompactHtml(api) {
   var cls = api.yeterli_mi ? 'mo-karar-evet' : 'mo-karar-hayir';
   return '<div class="mo-onizle-compact">'
     + '<div class="mo-onizle-satir"><span>Üretilecek</span><strong>' + moFmtKg(api.uretilecek_kg) + ' kg</strong></div>'
-    + '<div class="mo-onizle-satir"><span>Batch</span><strong>' + (api.batch_sayisi || '—') + '</strong></div>'
+    + '<div class="mo-onizle-satir"><span>Formül Adedi</span><strong>' + (api.batch_sayisi || '—') + '</strong></div>'
     + '<div class="mo-onizle-rozetler">'
     + '<span class="mo-rozet mo-rozet-yesil">' + ozet.hazir + ' hazır</span>'
     + '<span class="mo-rozet mo-rozet-sari">' + ozet.kritik + ' kritik</span>'
@@ -1017,9 +1117,24 @@ function moModalKapat(e) {
 }
 
 function moSeciliRenkMeta() {
-  var fid = parseInt(document.getElementById('mo-formul').value, 10);
   var rid = parseInt(document.getElementById('mo-renk').value, 10);
-  if (!fid || !rid) return null;
+  if (!rid) return null;
+  var renkSel = document.getElementById('mo-renk');
+  var seciliOpt = renkSel.options[renkSel.selectedIndex];
+  if (!seciliOpt || !seciliOpt.value) return null;
+  // Önce API'den yüklenen dataset'i kullan (RF filtreli)
+  if (seciliOpt.dataset && (seciliOpt.dataset.largeUvId || seciliOpt.dataset.smallUvId || seciliOpt.dataset.standartUvId)) {
+    return {
+      renk_id: rid,
+      renk_ad: seciliOpt.textContent,
+      large_uv_id: parseInt(seciliOpt.dataset.largeUvId || '0', 10) || null,
+      small_uv_id: parseInt(seciliOpt.dataset.smallUvId || '0', 10) || null,
+      standart_uv_id: parseInt(seciliOpt.dataset.standartUvId || '0', 10) || null,
+    };
+  }
+  // Fallback: _MO_FORMULLER statik verisi
+  var fid = parseInt(document.getElementById('mo-formul').value, 10);
+  if (!fid) return null;
   var f = _MO_FORMULLER.find(function(x) { return x.formul_id === fid; });
   if (!f) return null;
   return f.renkler.find(function(r) { return r.renk_id === rid; }) || null;
@@ -1062,7 +1177,7 @@ function moFormSifirla() {
   document.getElementById('mo-formul').value = '';
   document.getElementById('mo-rf').innerHTML = '<option value="">— Önce formül seçin —</option>';
   document.getElementById('mo-rf').disabled = true;
-  document.getElementById('mo-renk').innerHTML = '<option value="">— Önce RF seçin —</option>';
+  document.getElementById('mo-renk').innerHTML = '<option value="">— Önce Renk Formülü seçin —</option>';
   document.getElementById('mo-renk').disabled = true;
   document.getElementById('mo-kg-large').value = '';
   document.getElementById('mo-kg-medium').value = '';
@@ -1079,7 +1194,7 @@ async function moFormulDegisti() {
   var renkSel = document.getElementById('mo-renk');
   rfSel.innerHTML = '<option value="">Yükleniyor...</option>';
   rfSel.disabled = true;
-  renkSel.innerHTML = '<option value="">— Önce RF seçin —</option>';
+  renkSel.innerHTML = '<option value="">— Önce Renk Formülü seçin —</option>';
   renkSel.disabled = true;
   moBoyutKgInputlariAc(null);
   document.getElementById('mo-kaydet-btn').disabled = true;
@@ -1090,7 +1205,7 @@ async function moFormulDegisti() {
   try {
     var r = await fetch('/nexgen/api/plan/rf-secenekleri?formul_id=' + fid);
     var j = await r.json();
-    rfSel.innerHTML = '<option value="">— RF Seçiniz —</option>';
+    rfSel.innerHTML = '<option value="">— Renk Formülü Seçiniz —</option>';
     if (j.ok && j.liste && j.liste.length) {
       j.liste.forEach(function(rf) {
         var opt = document.createElement('option');
@@ -1100,29 +1215,47 @@ async function moFormulDegisti() {
       });
       rfSel.disabled = false;
     } else {
-      rfSel.innerHTML = '<option value="">ONAYLI RF bulunamadı</option>';
+      rfSel.innerHTML = '<option value="">Onaylı Renk Formülü bulunamadı</option>';
     }
   } catch (err) {
-    rfSel.innerHTML = '<option value="">RF yüklenemedi</option>';
+    rfSel.innerHTML = '<option value="">Renk Formülü yüklenemedi</option>';
   }
 }
 
-function moRfDegisti() {
-  var fid = parseInt(document.getElementById('mo-formul').value, 10);
+async function moRfDegisti() {
+  var rfId = parseInt(document.getElementById('mo-rf').value, 10);
   var renkSel = document.getElementById('mo-renk');
-  renkSel.innerHTML = '<option value="">— Renk Seçiniz —</option>';
+  renkSel.innerHTML = '<option value="">Yükleniyor...</option>';
   renkSel.disabled = true;
+  _moSeciliRenkMeta = null;
   moBoyutKgInputlariAc(null);
   document.getElementById('mo-kaydet-btn').disabled = true;
-  var f = _MO_FORMULLER.find(function(x) { return x.formul_id === fid; });
-  if (!f) return;
-  f.renkler.forEach(function(r) {
-    var opt = document.createElement('option');
-    opt.value = r.renk_id;
-    opt.textContent = r.renk_ad;
-    renkSel.appendChild(opt);
-  });
-  renkSel.disabled = false;
+  if (!rfId) {
+    renkSel.innerHTML = '<option value="">— Önce Renk Formülü seçin —</option>';
+    return;
+  }
+  // Seçilen Renk Formülüne ait renk varyantlarını API'den çek (FAZ-1 YÜKSEK #11)
+  try {
+    var r = await fetch('/nexgen/api/plan/rf-renk-varyantlari?rf_renk_id=' + rfId);
+    var j = await r.json();
+    if (j.ok && j.liste && j.liste.length) {
+      renkSel.innerHTML = '<option value="">— Renk Seçiniz —</option>';
+      j.liste.forEach(function(rv) {
+        var opt = document.createElement('option');
+        opt.value = rv.renk_id;
+        opt.dataset.largeUvId = rv.large_uv_id || '';
+        opt.dataset.smallUvId = rv.small_uv_id || '';
+        opt.dataset.standartUvId = rv.standart_uv_id || '';
+        opt.textContent = rv.renk_ad;
+        renkSel.appendChild(opt);
+      });
+      renkSel.disabled = false;
+    } else {
+      renkSel.innerHTML = '<option value="">Bu Renk Formülü için uyumlu renk bulunamadı</option>';
+    }
+  } catch (err) {
+    renkSel.innerHTML = '<option value="">Renkler yüklenemedi</option>';
+  }
 }
 
 function moRenkDegisti() {
@@ -1144,7 +1277,7 @@ async function moKaydet() {
   };
   var toplam = moBoyutKgToplam();
   if (!meta || !rfId || toplam <= 0) {
-    hataEl.textContent = 'Formül, RF, renk ve en az bir boyut kg zorunludur.';
+    hataEl.textContent = 'Formül, Renk Formülü, renk ve en az bir boyut kg zorunludur.';
     hataEl.style.display = 'block';
     return;
   }
@@ -1184,12 +1317,88 @@ async function moKaydet() {
       btn.disabled = false;
       return;
     }
-    location.reload();
+    // location.reload() yerine: yeni kartı listeye ekle, detayı aç (FAZ-1 YÜKSEK #6)
+    moModalKapat();
+    moListeyeYeniKartEkle(j);
+    if (j.plan_id) {
+      moSatirSec(j.plan_id);
+      moStokBadgeLazyYukle(j.plan_id);
+    }
   } catch (err) {
     hataEl.textContent = 'Bağlantı hatası';
     hataEl.style.display = 'block';
     btn.disabled = false;
   }
+}
+
+// Yeni oluşturulan MPR'yi listeye DOM'a ekler (sayfa reload olmadan)
+function moListeyeYeniKartEkle(j) {
+  if (!j || !j.plan_id) return;
+  var scroll = document.getElementById('mo-liste-scroll');
+  if (!scroll) return;
+  // _MO_PLANLAR dizisine ekle (filtre için)
+  var yeniMeta = {
+    id: j.plan_id,
+    plan_kodu: j.plan_kodu || ('MPR-' + j.plan_id),
+    formul_ad: j.formul_ad || '',
+    rf_kod: j.rf_kod || '',
+    rf_renk_ad: j.rf_renk_ad || '',
+    renk_ad: j.renk_ad || '',
+    boyut: j.boyut || '',
+    planlanan_kg: j.planlanan_kg || 0,
+    durum: 'ON_CALISMA',
+    uv_id: j.uretim_varyant_id || null,
+    stok_yeterli_mi: null,
+    stok_eksik_sayisi: null,
+  };
+  _MO_PLANLAR.push(yeniMeta);
+  // Kart HTML oluştur
+  var div = document.createElement('div');
+  div.className = 'mo-liste-kart mo-satir';
+  div.id = 'mo-satir-' + j.plan_id;
+  div.dataset.planId = j.plan_id;
+  div.setAttribute('onclick', 'moSatirSec(' + j.plan_id + ')');
+  div.innerHTML = '<div class="mo-lk-ust">'
+    + '<span class="mo-lk-kod">' + moEsc(yeniMeta.plan_kodu) + '</span>'
+    + '<span class="mo-rozet mo-rozet-gri" id="mo-stok-badge-' + j.plan_id + '">—</span>'
+    + '</div>'
+    + '<div class="mo-lk-formul">' + moEsc(yeniMeta.formul_ad || '—') + '</div>'
+    + (yeniMeta.rf_kod ? '<div class="mo-lk-rf"><span class="mo-lk-rf-label">Renk Formülü:</span> ' + moEsc(yeniMeta.rf_kod) + '</div>' : '<div class="mo-lk-rf"></div>')
+    + '<div class="mo-lk-kg">' + moFmtKg(yeniMeta.planlanan_kg) + ' kg</div>'
+    + '<div class="mo-lk-durum">Ön çalışma · Taslak MPR</div>';
+  scroll.appendChild(div);
+  // Liste sayısını güncelle
+  var sayiEl = document.getElementById('mo-liste-sayi');
+  if (sayiEl) sayiEl.textContent = String(_MO_PLANLAR.length);
+}
+
+// Stok badge'ini API'den lazy yükler (FAZ-1 KRİTİK #1)
+async function moStokBadgeLazyYukle(planId) {
+  var badge = document.getElementById('mo-stok-badge-' + planId);
+  if (!badge) return;
+  try {
+    var r = await fetch('/nexgen/api/plan/' + planId + '/stok-durum');
+    var j = await r.json();
+    if (!j.ok) return;
+    var meta = _MO_PLANLAR.find(function(p) { return p.id === planId; });
+    if (meta) {
+      meta.stok_yeterli_mi = j.yeterli_mi;
+      meta.stok_eksik_sayisi = j.eksik_sayisi;
+    }
+    if (j.yeterli_mi) {
+      badge.className = 'mo-rozet mo-rozet-yesil';
+      badge.textContent = 'Hazır';
+    } else {
+      badge.className = 'mo-rozet mo-rozet-kirmizi';
+      badge.textContent = 'Eksik ' + (j.eksik_sayisi || 0);
+    }
+    // Badge yüklendi — aktif filtre varsa listeyi yeniden uygula
+    var durumFiltre = (document.getElementById('mo-f-durum') || {}).value || '';
+    var sadeceEksik = document.getElementById('mo-f-sadece-eksik') && document.getElementById('mo-f-sadece-eksik').checked;
+    if (durumFiltre || sadeceEksik) {
+      moListeFiltrele();
+    }
+  } catch (e) { /* badge boş kalır, filtre dokunulmaz */ }
 }
 
 function moStokModalKapat(e) {
@@ -1251,6 +1460,45 @@ function moBaglaKapat(e) {
   document.getElementById('mo-bagla-modal').style.display = 'none';
 }
 
+// Bağlama sonrası listedeki kartın durumunu günceller
+function moKartDurumGuncelle(planId, j) {
+  var meta = _MO_PLANLAR.find(function(p) { return p.id === planId; });
+  if (meta) {
+    meta.durum = j.durum || 'PLANLANDI';
+    meta.stok_yeterli_mi = j.stok_yeterli_mi;
+    meta.stok_eksik_sayisi = j.stok_eksik_sayisi;
+  }
+  var kartEl = document.getElementById('mo-satir-' + planId);
+  if (!kartEl) return;
+  // Durum satırı güncelle
+  var durumEl = kartEl.querySelector('.mo-lk-durum');
+  if (durumEl) durumEl.textContent = 'Siparişe bağlandı · ' + (j.siparis_no || '');
+  // Stok badge güncelle
+  var badge = document.getElementById('mo-stok-badge-' + planId);
+  if (badge) {
+    if (j.stok_yeterli_mi === true) {
+      badge.className = 'mo-rozet mo-rozet-yesil';
+      badge.textContent = 'Hazır';
+    } else if (j.stok_yeterli_mi === false) {
+      badge.className = 'mo-rozet mo-rozet-kirmizi';
+      badge.textContent = 'Eksik ' + (j.stok_eksik_sayisi || 0);
+    }
+  }
+}
+
+// Stok uyarısını detay panelinde gösterir (alert() kullanmaz — sadelik kuralı)
+function moUyariBantGoster(planId, mesaj) {
+  var panel = document.getElementById('mo-detay-orta');
+  if (!panel) return;
+  var eski = panel.querySelector('.mo-stok-uyari-bant');
+  if (eski) eski.remove();
+  var div = document.createElement('div');
+  div.className = 'mo-stok-uyari-bant';
+  div.innerHTML = '<strong>Stok Uyarısı:</strong> ' + moEsc(mesaj);
+  panel.insertBefore(div, panel.firstChild);
+  setTimeout(function() { if (div.parentNode) div.remove(); }, 8000);
+}
+
 async function moBaglaKaydet() {
   var planId = document.getElementById('mo-bagla-plan-id').value;
   var mod = document.querySelector('input[name="mo-bagla-mod"]:checked').value;
@@ -1295,8 +1543,13 @@ async function moBaglaKaydet() {
       btn.disabled = false;
       return;
     }
-    if (j.stok_uyari) alert(j.stok_uyari);
-    location.reload();
+    // location.reload() yerine: kartı güncelle, detayı yenile (FAZ-1 YÜKSEK #6)
+    moBaglaKapat();
+    moKartDurumGuncelle(parseInt(planId, 10), j);
+    if (j.stok_uyari) {
+      moUyariBantGoster(parseInt(planId, 10), j.stok_uyari);
+    }
+    moSatirSec(parseInt(planId, 10));
   } catch (err) {
     hataEl.textContent = 'Bağlantı hatası';
     hataEl.style.display = 'block';
@@ -1308,6 +1561,11 @@ document.addEventListener('DOMContentLoaded', function() {
   if (_MO_PLANLAR.length === 1) {
     moSatirSec(_MO_PLANLAR[0].id);
   }
+  // Mevcut kartların stok badge'ini lazy yükle (FAZ-1 KRİTİK #1)
+  // Stagger ile sunucu üzerindeki yükü dağıt
+  _MO_PLANLAR.forEach(function(p, i) {
+    setTimeout(function() { moStokBadgeLazyYukle(p.id); }, i * 50);
+  });
 });
 </script>
 
@@ -1348,6 +1606,14 @@ document.addEventListener('DOMContentLoaded', function() {
   font-size: 10px; line-height: 1.45; color: #78350f;
 }
 .mo-baseline-ikon { font-weight: 800; color: #d97706; flex-shrink: 0; }
+.mo-stok-uyari-bant {
+  background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px;
+  padding: 8px 12px; margin-bottom: 8px; font-size: 12px; color: #7c2d12;
+  animation: mo-fade-in 0.25s ease;
+}
+.mo-op-siparis-uyari {
+  font-size: 11px; color: #b45309; margin: 4px 0 0; font-style: italic;
+}
 .mo-taslak-band {
   background: linear-gradient(135deg, #fef9c3 0%, #fef08a 100%);
   border: 2px solid #facc15; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px;
@@ -1527,6 +1793,31 @@ document.addEventListener('DOMContentLoaded', function() {
 .mo-sa-siparis {
   background: #f1f5f9; color: #94a3b8; border: 2px dashed #cbd5e1; cursor: not-allowed; opacity: .85;
 }
+.mo-sa-siparis-aktif {
+  background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+  color: #fff; border: none; cursor: pointer; opacity: 1;
+  box-shadow: 0 2px 6px rgba(37,99,235,.25);
+}
+.mo-sa-siparis-aktif:hover { background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%); }
+.mo-test-modu-band {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin: 0 0 10px; padding: 8px 14px;
+  background: #fef9c3; border: 1px solid #fde047; border-radius: 8px;
+  font-size: 12px; color: #854d0e; line-height: 1.35;
+}
+.mo-test-modu-band strong {
+  font-size: 11px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase;
+  padding: 2px 8px; background: #facc15; border-radius: 4px; color: #713f12;
+}
+.mo-test-modu-ac {
+  background: #fffbeb; color: #92400e; border: 2px dashed #fbbf24;
+}
+.mo-test-modu-ac:hover { background: #fef3c7; }
+.mo-test-modu-kapat {
+  background: #fef2f2; color: #b91c1c; border: 2px solid #fca5a5;
+}
+.mo-test-modu-kapat:hover { background: #fee2e2; }
+.mo-wf-adim.mo-wf-tamam { color: #15803d; background: #f0fdf4; border-radius: 6px; padding: 4px 6px; }
 
 .mo-kalem-ozet-satir {
   display: flex; flex-wrap: wrap; gap: 12px; font-size: 11px; color: #64748b; margin-bottom: 6px;
