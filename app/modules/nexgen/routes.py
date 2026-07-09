@@ -119,6 +119,224 @@ def _mig076_rf_renk_id():
 _mig076_rf_renk_id()
 
 
+# Migration 077 — AR-GE numune_orani (startup, idempotent)
+# ─────────────────────────────────────────────────────────────
+def _mig077_numune_orani():
+    """nexgen_arge_test tablosuna numune_orani alanini ekler (REAL, %).
+    Örnek: 10.0 = master reçetenin %10'u üretildi."""
+    try:
+        _con = sqlite3.connect(DB_PATH)
+        cols = [c[1] for c in _con.execute(
+            "PRAGMA table_info(nexgen_arge_test)"
+        ).fetchall()]
+        if 'numune_orani' not in cols:
+            _con.execute("ALTER TABLE nexgen_arge_test ADD COLUMN numune_orani REAL")
+            _con.commit()
+            print("[nexgen] Migration 077: numune_orani eklendi")
+        _con.close()
+    except Exception as _e:
+        print(f"[nexgen] Migration 077 uyari: {_e}")
+
+_mig077_numune_orani()
+
+
+# ─────────────────────────────────────────────────────────────
+# Migration 078 — MODÜL-02 alanları: arge_kodu, renk_bilesenleri_json
+# ─────────────────────────────────────────────────────────────
+def _mig078_modul02_alanlar():
+    """nexgen_arge_test tablosuna MODÜL-02 alanlarını ekler.
+    arge_kodu           : NX-AR-001 formatında AR-GE kodu
+    renk_bilesenleri_json: Seçilen renk bileşenlerinin JSON listesi
+    """
+    try:
+        _con = sqlite3.connect(DB_PATH)
+        cols = [c[1] for c in _con.execute(
+            "PRAGMA table_info(nexgen_arge_test)"
+        ).fetchall()]
+        eklemeler = [
+            ("arge_kodu",              "ALTER TABLE nexgen_arge_test ADD COLUMN arge_kodu TEXT"),
+            ("renk_bilesenleri_json",  "ALTER TABLE nexgen_arge_test ADD COLUMN renk_bilesenleri_json TEXT"),
+        ]
+        degisti = False
+        for kolon, sql in eklemeler:
+            if kolon not in cols:
+                _con.execute(sql)
+                degisti = True
+        if degisti:
+            _con.commit()
+            print("[nexgen] Migration 078: arge_kodu + renk_bilesenleri_json eklendi")
+        _con.close()
+    except Exception as _e:
+        print(f"[nexgen] Migration 078 uyarı: {_e}")
+
+_mig078_modul02_alanlar()
+
+
+# ─────────────────────────────────────────────────────────────
+# Migration 079 — FAZ-3A: tanim, yeni_tanim, renk_bileseni_mi
+# ─────────────────────────────────────────────────────────────
+def _mig079_stok_kimlik():
+    """nexgen_stok_kart tablosuna kimlik alanlarını ekler ve Excel
+    referansından tanim/yeni_tanim/renk_bileseni_mi değerlerini yazar.
+    Idempotent: kolon varsa atlar, data varsa üzerine yazar (safe).
+    """
+    import shutil as _shutil
+    from datetime import datetime as _dt
+    try:
+        _con = sqlite3.connect(DB_PATH)
+        cols = [c[1] for c in _con.execute(
+            "PRAGMA table_info(nexgen_stok_kart)"
+        ).fetchall()]
+
+        # ── Kolon ekle (idempotent) ──
+        for _kolon, _ddl in [
+            ('tanim',            "ALTER TABLE nexgen_stok_kart ADD COLUMN tanim TEXT"),
+            ('yeni_tanim',       "ALTER TABLE nexgen_stok_kart ADD COLUMN yeni_tanim TEXT"),
+            ('renk_bileseni_mi', "ALTER TABLE nexgen_stok_kart ADD COLUMN renk_bileseni_mi INTEGER DEFAULT 0"),
+        ]:
+            if _kolon not in cols:
+                _con.execute(_ddl)
+                print(f"[nexgen] Migration 079: {_kolon} eklendi")
+
+        # ── tanim + yeni_tanim (Excel referans) ──
+        _UPDATES = [
+            ('NEX-01-01','ANA MALZEME','N0A1'), ('NEX-01-02','ANA MALZEME','N0A1'),
+            ('NEX-01-03','ANA MALZEME','N0A1'), ('NEX-01-04','ANA MALZEME','N0A1'),
+            ('NEX-02-01','ANA MALZEME','N0A2'),
+            ('NEX-03-01','ANA MALZEME','N0A4'), ('NEX-03-02','ANA MALZEME','N0A5'),
+            ('NEX-03-03','ANA MALZEME','N0A7'), ('NEX-03-04','ANA MALZEME','N0A6'),
+            ('NEX-07-01','ANA MALZEME','N0A3'), ('NEX-07-02','Yan malzeme','N0YN'),
+            ('NEX-04-01','Katki','NK01'), ('NEX-04-02','Katki','NK03'),
+            ('NEX-04-03','Katki','NK02'), ('NEX-04-04','Katki','NK10'),
+            ('NEX-05-01','Katki','NK06'), ('NEX-05-02','Katki','NK07'),
+            ('NEX-05-03','Katki','NK08'), ('NEX-05-04','Katki','NK09'),
+            ('NEX-05-05','Katki','NK12'), ('NEX-05-06','Katki','NK13'),
+            ('NEX-05-07','Katki','NK05'), ('NEX-05-08','Katki','NK11'),
+            ('NEX-06-01','Katki','NK04'),
+            ('NEX-08-01','Pigment boya','NB19'), ('NEX-08-02','Pigment boya','NB16'),
+            ('NEX-08-03','Pigment boya','NB17'), ('NEX-08-04','Pigment boya','NB18'),
+            ('NEX-08-05','Pigment boya','NB01'), ('NEX-08-06','Pigment boya','NB02'),
+            ('NEX-08-07','Pigment boya','NB06'), ('NEX-08-08','Pigment boya','NB07'),
+            ('NEX-08-09','Pigment boya','NB21'), ('NEX-08-10','Pigment boya','NB05'),
+            ('NEX-08-11','Pigment boya','NB20'), ('NEX-08-12','Pigment boya','NB10'),
+            ('NEX-08-13','Pigment boya','NB09'), ('NEX-08-14','Pigment boya','NB11'),
+            ('NEX-08-15','Pigment boya','NB04'), ('NEX-08-16','Pigment boya','NB12'),
+            ('NEX-08-17','Pigment boya','NB13'), ('NEX-08-18','Pigment boya','NB03'),
+            ('NEX-08-19','Pigment boya','NB15'), ('NEX-08-20','Pigment boya','NB22'),
+            ('NEX-08-21','Pigment boya','NB08'), ('NEX-08-22','Pigment boya','NB14'),
+            ('NEX-09-01','MASTERBATCH BOYA','NBA2'), ('NEX-09-02','MASTERBATCH BOYA','NBA1'),
+            ('NEX-MB-01','BOYA','NBA3'),
+            ('NEX-10-01','BIOGREEN','NR33'), ('NEX-10-02','BIOGREEN','NR31'),
+            ('NEX-10-03','BIOGREEN','NR32'), ('NEX-10-04','BIOGREEN','NR01'),
+            ('NEX-10-05','BIOGREEN','NR02'), ('NEX-10-06','BIOGREEN','NR03'),
+            ('NEX-10-07','BIOGREEN','NR04'), ('NEX-10-08','BIOGREEN','NR05'),
+            ('NEX-10-09','BIOGREEN','NR06'), ('NEX-10-10','BIOGREEN','NR07'),
+            ('NEX-10-11','BIOGREEN','NR08'), ('NEX-10-12','BIOGREEN','NR09'),
+            ('NEX-10-13','BIOGREEN','NR10'), ('NEX-10-14','BIOGREEN','NR11'),
+            ('NEX-10-15','BIOGREEN','NR12'), ('NEX-10-16','BIOGREEN','NR13'),
+            ('NEX-10-17','BIOGREEN','NR14'), ('NEX-10-18','BIOGREEN','NR15'),
+            ('NEX-10-19','BIOGREEN','NR16'), ('NEX-10-20','BIOGREEN','NR17'),
+            ('NEX-10-21','BIOGREEN','NR18'), ('NEX-10-22','BIOGREEN','NR19'),
+            ('NEX-10-23','BIOGREEN','NR20'), ('NEX-10-24','BIOGREEN','NR21'),
+            ('NEX-10-25','BIOGREEN','NR22'), ('NEX-10-26','BIOGREEN','NR23'),
+            ('NEX-10-27','BIOGREEN','NR24'), ('NEX-10-28','BIOGREEN','NR25'),
+            ('NEX-10-29','BIOGREEN','NR26'), ('NEX-10-30','BIOGREEN','NR27'),
+            ('NEX-10-31','BIOGREEN','NR28'), ('NEX-10-32','BIOGREEN','NR29'),
+            ('NEX-10-33','BIOGREEN','NR30'),
+        ]
+        _t = 0
+        for _k, _tanim, _yt in _UPDATES:
+            if _con.execute(
+                "UPDATE nexgen_stok_kart SET tanim=?, yeni_tanim=? WHERE kod=?",
+                (_tanim, _yt, _k)
+            ).rowcount > 0:
+                _t += 1
+
+        # ── renk_bileseni_mi bayrakları ──
+        _con.execute("UPDATE nexgen_stok_kart SET renk_bileseni_mi = 0")
+        _RENK = [
+            'NEX-08-01','NEX-08-02','NEX-08-03','NEX-08-04','NEX-08-05',
+            'NEX-08-06','NEX-08-07','NEX-08-08','NEX-08-09','NEX-08-10',
+            'NEX-08-11','NEX-08-12','NEX-08-13','NEX-08-14','NEX-08-15',
+            'NEX-08-16','NEX-08-17','NEX-08-18','NEX-08-19','NEX-08-20',
+            'NEX-08-21','NEX-08-22',
+            'NEX-09-01','NEX-09-02','NEX-MB-01',
+            'NEX-04-01',  # ATR-312: KATKI kalır, renk bileşeni olarak da seçilir
+        ]
+        _r = sum(
+            _con.execute(
+                "UPDATE nexgen_stok_kart SET renk_bileseni_mi = 1 WHERE kod = ?", (_k,)
+            ).rowcount for _k in _RENK
+        )
+
+        _con.commit()
+        print(f"[nexgen] Migration 079: tanim/yeni_tanim={_t} kart, renk_bileseni_mi=1: {_r} kart")
+        _con.close()
+    except Exception as _e:
+        print(f"[nexgen] Migration 079 uyarı: {_e}")
+
+_mig079_stok_kimlik()
+
+
+# ─────────────────────────────────────────────────────────────
+# Migration 080 — FAZ-3F-9: nexgen_arge_formul tablosu
+# ─────────────────────────────────────────────────────────────
+def _mig080_arge_formul():
+    """nexgen_arge_formul ve nexgen_arge_formul_kalem tablolarını oluşturur.
+    İdempotent — tablolar zaten varsa CREATE TABLE IF NOT EXISTS atlar.
+    """
+    try:
+        _con = sqlite3.connect(DB_PATH)
+        _con.execute("""
+            CREATE TABLE IF NOT EXISTS nexgen_arge_formul (
+                id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+                arge_kodu            TEXT    UNIQUE,
+                formul_adi           TEXT    NOT NULL,
+                aciklama             TEXT,
+                yontem               TEXT    NOT NULL DEFAULT 'SIFIRDAN',
+                kaynak_formul_id     INTEGER,
+                cari_id              INTEGER,
+                renk_secim           TEXT    NOT NULL DEFAULT 'YOK',
+                arge_notu            TEXT,
+                durum                TEXT    NOT NULL DEFAULT 'TASLAK',
+                olusan_formul_id     INTEGER,
+                olusturan_id         INTEGER,
+                olusturma_tarihi     TEXT    NOT NULL DEFAULT (datetime('now')),
+                guncelleme_tarihi    TEXT,
+                aktif                INTEGER NOT NULL DEFAULT 1
+            )
+        """)
+        _con.execute("""
+            CREATE TABLE IF NOT EXISTS nexgen_arge_formul_kalem (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                arge_formul_id      INTEGER NOT NULL,
+                stok_kart_id        INTEGER NOT NULL,
+                sira                INTEGER NOT NULL DEFAULT 1,
+                miktar_kg           REAL    NOT NULL DEFAULT 0,
+                renk_bileseni_mi    INTEGER NOT NULL DEFAULT 0,
+                miktar_gr           REAL,
+                aciklama            TEXT,
+                aktif               INTEGER NOT NULL DEFAULT 1,
+                olusturma_tarihi    TEXT    NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        for idx_sql in [
+            "CREATE INDEX IF NOT EXISTS idx_naf_arge_kodu ON nexgen_arge_formul(arge_kodu)",
+            "CREATE INDEX IF NOT EXISTS idx_naf_cari      ON nexgen_arge_formul(cari_id)",
+            "CREATE INDEX IF NOT EXISTS idx_naf_kaynak    ON nexgen_arge_formul(kaynak_formul_id)",
+            "CREATE INDEX IF NOT EXISTS idx_nafk_formul   ON nexgen_arge_formul_kalem(arge_formul_id)",
+            "CREATE INDEX IF NOT EXISTS idx_nafk_stok     ON nexgen_arge_formul_kalem(stok_kart_id)",
+        ]:
+            _con.execute(idx_sql)
+        _con.commit()
+        print("[nexgen] Migration 080: nexgen_arge_formul tabloları hazır")
+        _con.close()
+    except Exception as _e:
+        print(f"[nexgen] Migration 080 uyarı: {_e}")
+
+_mig080_arge_formul()
+
+
 # ─────────────────────────────────────────────────────────────
 # Yardımcı: DB bağlantısı
 # ─────────────────────────────────────────────────────────────
@@ -1294,6 +1512,530 @@ def api_recete_durum_guncelle():
     })
 
 
+# ═════════════════════════════════════════════════════════════
+# FAZ-3H-UI-3 — Reçete Ekleme / Düzenleme API'leri
+# KURAL: Sadece TASLAK UV'ler düzenlenebilir.
+#        URETIME_ACIK / ONAYLI UV'e dokunulamaz.
+#        Fiziksel silme yok — aktif=0.
+#        Her işlemde transaction + rollback.
+# ─────────────────────────────────────────────────────────────
+
+_DUZENLEME_ENGELI = {'URETIME_ACIK', 'ONAYLI'}
+_GECERLI_BOYUT    = {'SMALL', 'LARGE', 'STANDART', 'MEDIUM'}
+
+
+@nexgen_bp.route('/api/recete/varyant-ekle', methods=['POST'])
+@yetki_gerekli('nexgen.recete.create', 'can_create')
+def api_recete_varyant_ekle():
+    """Bir ana formüle yeni nexgen_renk_varyant kaydı ekler.
+
+    POST JSON:
+        formul_id : int   — hedef formül
+        ad        : str   — varyant adı (ör: "HSN TERLİK KREM 269")
+        aciklama  : str   opsiyonel
+    """
+    data        = request.get_json(silent=True) or {}
+    formul_id   = data.get('formul_id')
+    ad          = (data.get('ad') or '').strip()
+    aciklama    = (data.get('aciklama') or '').strip() or None
+
+    if not formul_id:
+        return jsonify({"ok": False, "hata": "formul_id zorunludur."}), 400
+    if not ad:
+        return jsonify({"ok": False, "hata": "Varyant adı zorunludur."}), 400
+    if len(ad) > 120:
+        return jsonify({"ok": False, "hata": "Varyant adı 120 karakterden uzun olamaz."}), 400
+
+    kullanici_id = _kullanici_id()
+    con = _db()
+    try:
+        # Formül var mı?
+        formul = con.execute(
+            "SELECT id, kod FROM nexgen_formul WHERE id=? AND aktif=1",
+            (formul_id,)
+        ).fetchone()
+        if not formul:
+            return jsonify({"ok": False, "hata": "Formül bulunamadı."}), 404
+
+        # Aynı formül + ad kombinasyonu zaten var mı?
+        mevcut = con.execute(
+            "SELECT id FROM nexgen_renk_varyant WHERE formul_id=? AND ad=? AND aktif=1",
+            (formul_id, ad)
+        ).fetchone()
+        if mevcut:
+            return jsonify({
+                "ok": False,
+                "hata": f"Bu formül altında '{ad}' adlı varyant zaten mevcut (id={mevcut['id']})."
+            }), 409
+
+        # Kod üret: RV-<FORMUL_KOD>-<kısa ad>
+        kod_parca = ad[:10].upper().replace(' ', '').replace('/', '')
+        rv_kod    = f"RV-{formul['kod']}-{kod_parca}"
+
+        # renk alanı (formul_id, renk) UNIQUE constraint var — rv_kod kullan
+        con.execute("""
+            INSERT INTO nexgen_renk_varyant
+                (formul_id, kod, ad, renk, notlar, aktif, olusturma_tarihi)
+            VALUES (?, ?, ?, ?, ?, 1, datetime('now'))
+        """, (formul_id, rv_kod, ad, rv_kod, aciklama))
+        yeni_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+        con.commit()
+
+    except Exception as e:
+        con.rollback()
+        return jsonify({"ok": False, "hata": str(e)}), 500
+    finally:
+        con.close()
+
+    return jsonify({
+        "ok":         True,
+        "rv_id":      yeni_id,
+        "rv_kod":     rv_kod,
+        "rv_ad":      ad,
+        "formul_id":  formul_id,
+        "mesaj":      f"Reçete varyantı '{ad}' oluşturuldu.",
+    })
+
+
+@nexgen_bp.route('/api/recete/uv-ekle', methods=['POST'])
+@yetki_gerekli('nexgen.recete.create', 'can_create')
+def api_recete_uv_ekle():
+    """Bir renk varyantına yeni nexgen_uretim_varyant (üretim boyutu) ekler.
+
+    POST JSON:
+        rv_id    : int   — hedef renk_varyant_id
+        boyut    : str   — LARGE / SMALL / STANDART / MEDIUM
+        ad       : str   opsiyonel — boşsa otomatik üretilir
+        notlar   : str   opsiyonel
+    """
+    data   = request.get_json(silent=True) or {}
+    rv_id  = data.get('rv_id')
+    boyut  = (data.get('boyut') or '').strip().upper()
+    ad     = (data.get('ad') or '').strip() or None
+    notlar = (data.get('notlar') or '').strip() or None
+
+    if not rv_id:
+        return jsonify({"ok": False, "hata": "rv_id zorunludur."}), 400
+    if boyut not in _GECERLI_BOYUT:
+        return jsonify({"ok": False, "hata": f"boyut geçerli değil. Geçerliler: {', '.join(sorted(_GECERLI_BOYUT))}"}), 400
+
+    kullanici_id = _kullanici_id()
+    con = _db()
+    try:
+        # Renk varyantı var mı?
+        rv = con.execute(
+            "SELECT rv.id, rv.ad, f.ad AS formul_ad FROM nexgen_renk_varyant rv "
+            "JOIN nexgen_formul f ON f.id=rv.formul_id "
+            "WHERE rv.id=? AND rv.aktif=1",
+            (rv_id,)
+        ).fetchone()
+        if not rv:
+            return jsonify({"ok": False, "hata": "Renk varyantı bulunamadı."}), 404
+
+        # Aynı boyut zaten var mı?
+        mevcut = con.execute(
+            "SELECT id FROM nexgen_uretim_varyant WHERE renk_varyant_id=? AND boyut=? AND aktif=1",
+            (rv_id, boyut)
+        ).fetchone()
+        if mevcut:
+            return jsonify({
+                "ok": False,
+                "hata": f"Bu varyant altında '{boyut}' boyutu zaten mevcut (uv_id={mevcut['id']})."
+            }), 409
+
+        uv_ad = ad or f"{rv['formul_ad']} {rv['ad']} {boyut}"
+        con.execute("""
+            INSERT INTO nexgen_uretim_varyant
+                (renk_varyant_id, boyut, ad, onay_durumu,
+                 notlar, aktif, olusturma_tarihi, recete_durum)
+            VALUES (?, ?, ?, 'TASLAK', ?, 1, datetime('now'), 'TASLAK')
+        """, (rv_id, boyut, uv_ad, notlar))
+        yeni_uv_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+        con.commit()
+
+    except Exception as e:
+        con.rollback()
+        return jsonify({"ok": False, "hata": str(e)}), 500
+    finally:
+        con.close()
+
+    return jsonify({
+        "ok":      True,
+        "uv_id":   yeni_uv_id,
+        "uv_ad":   uv_ad,
+        "boyut":   boyut,
+        "rv_id":   rv_id,
+        "durum":   "TASLAK",
+        "mesaj":   f"Üretim boyutu '{boyut}' oluşturuldu (uv_id={yeni_uv_id}).",
+    })
+
+
+@nexgen_bp.route('/api/recete/kalem-ekle', methods=['POST'])
+@yetki_gerekli('nexgen.recete.manage', 'can_manage')
+def api_recete_kalem_ekle():
+    """TASLAK bir UV'ye yeni nexgen_recete_kalem satırı ekler.
+
+    POST JSON:
+        uv_id        : int
+        stok_kart_id : int
+        miktar       : float   — kullanıcının girdiği değer
+        birim        : str     — 'KG' veya 'GR' (GR ise /1000 ile KG'ye çevrilir)
+        aciklama     : str     opsiyonel
+    """
+    data         = request.get_json(silent=True) or {}
+    uv_id        = data.get('uv_id')
+    stok_kart_id = data.get('stok_kart_id')
+    miktar_raw   = data.get('miktar')
+    birim        = (data.get('birim') or 'KG').strip().upper()
+    aciklama     = (data.get('aciklama') or '').strip() or None
+
+    if not uv_id:
+        return jsonify({"ok": False, "hata": "uv_id zorunludur."}), 400
+    if not stok_kart_id:
+        return jsonify({"ok": False, "hata": "stok_kart_id zorunludur."}), 400
+    try:
+        miktar_raw = float(miktar_raw)
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "hata": "miktar geçerli bir sayı olmalıdır."}), 400
+    if miktar_raw <= 0:
+        return jsonify({"ok": False, "hata": "miktar sıfırdan büyük olmalıdır."}), 400
+    if birim not in ('KG', 'GR'):
+        return jsonify({"ok": False, "hata": "birim 'KG' veya 'GR' olmalıdır."}), 400
+
+    miktar_kg = round(miktar_raw / 1000.0, 6) if birim == 'GR' else round(miktar_raw, 6)
+
+    con = _db()
+    try:
+        # UV var mı ve TASLAK mi?
+        uv = con.execute(
+            "SELECT id, recete_durum FROM nexgen_uretim_varyant WHERE id=? AND aktif=1",
+            (uv_id,)
+        ).fetchone()
+        if not uv:
+            return jsonify({"ok": False, "hata": "Üretim varyantı bulunamadı."}), 404
+        if (uv['recete_durum'] or 'TASLAK').upper() in _DUZENLEME_ENGELI:
+            return jsonify({
+                "ok": False,
+                "hata": f"Bu varyant '{uv['recete_durum']}' durumunda — düzenlenemez."
+            }), 403
+
+        # Stok kartı var mı?
+        sk = con.execute(
+            "SELECT id, kod, ad FROM nexgen_stok_kart WHERE id=? AND aktif=1",
+            (stok_kart_id,)
+        ).fetchone()
+        if not sk:
+            return jsonify({"ok": False, "hata": "Stok kartı bulunamadı veya pasif."}), 404
+
+        # Bu UV'de aynı stok kartı zaten var mı? (mükerrer uyarısı — engel değil)
+        mukerrer = con.execute(
+            "SELECT id FROM nexgen_recete_kalem WHERE uretim_varyant_id=? AND stok_kart_id=? AND aktif=1",
+            (uv_id, stok_kart_id)
+        ).fetchone()
+        mukerrer_uyari = bool(mukerrer)
+
+        # Sıra numarası: mevcut max+10
+        max_sira = con.execute(
+            "SELECT COALESCE(MAX(sira),0) FROM nexgen_recete_kalem WHERE uretim_varyant_id=? AND aktif=1",
+            (uv_id,)
+        ).fetchone()[0]
+        sira = max_sira + 10
+
+        con.execute("""
+            INSERT INTO nexgen_recete_kalem
+                (uretim_varyant_id, stok_kart_id, sira, miktar_kg,
+                 aciklama, aktif, olusturma_tarihi)
+            VALUES (?, ?, ?, ?, ?, 1, datetime('now'))
+        """, (uv_id, stok_kart_id, sira, miktar_kg, aciklama))
+        yeni_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+        con.commit()
+
+    except Exception as e:
+        con.rollback()
+        return jsonify({"ok": False, "hata": str(e)}), 500
+    finally:
+        con.close()
+
+    return jsonify({
+        "ok":           True,
+        "kalem_id":     yeni_id,
+        "uv_id":        uv_id,
+        "stok_kart_id": stok_kart_id,
+        "stok_kod":     sk['kod'],
+        "stok_ad":      sk['ad'],
+        "miktar_kg":    miktar_kg,
+        "birim_girilen": birim,
+        "miktar_girilen": miktar_raw,
+        "mukerrer_uyari": mukerrer_uyari,
+        "mesaj":        f"'{sk['ad']}' ({miktar_kg} KG) eklendi.",
+    })
+
+
+@nexgen_bp.route('/api/recete/kalem-guncelle', methods=['PUT'])
+@yetki_gerekli('nexgen.recete.manage', 'can_manage')
+def api_recete_kalem_guncelle():
+    """TASLAK UV'deki bir recete_kalem satırının miktarını günceller.
+
+    PUT JSON:
+        kalem_id  : int
+        miktar    : float
+        birim     : str   — 'KG' veya 'GR'
+        aciklama  : str   opsiyonel
+    """
+    data     = request.get_json(silent=True) or {}
+    kalem_id = data.get('kalem_id')
+    miktar_raw = data.get('miktar')
+    birim    = (data.get('birim') or 'KG').strip().upper()
+    aciklama = data.get('aciklama')  # None = değiştirme
+
+    if not kalem_id:
+        return jsonify({"ok": False, "hata": "kalem_id zorunludur."}), 400
+    try:
+        miktar_raw = float(miktar_raw)
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "hata": "miktar geçerli bir sayı olmalıdır."}), 400
+    if miktar_raw <= 0:
+        return jsonify({"ok": False, "hata": "miktar sıfırdan büyük olmalıdır."}), 400
+    if birim not in ('KG', 'GR'):
+        return jsonify({"ok": False, "hata": "birim 'KG' veya 'GR' olmalıdır."}), 400
+
+    miktar_kg = round(miktar_raw / 1000.0, 6) if birim == 'GR' else round(miktar_raw, 6)
+
+    con = _db()
+    try:
+        # Kalem + UV birlikte çek
+        kalem = con.execute("""
+            SELECT rk.id, rk.uretim_varyant_id, rk.miktar_kg, rk.aciklama,
+                   uv.recete_durum
+            FROM nexgen_recete_kalem rk
+            JOIN nexgen_uretim_varyant uv ON uv.id = rk.uretim_varyant_id
+            WHERE rk.id=? AND rk.aktif=1 AND uv.aktif=1
+        """, (kalem_id,)).fetchone()
+        if not kalem:
+            return jsonify({"ok": False, "hata": "Kalem bulunamadı."}), 404
+        if (kalem['recete_durum'] or 'TASLAK').upper() in _DUZENLEME_ENGELI:
+            return jsonify({
+                "ok": False,
+                "hata": f"Varyant '{kalem['recete_durum']}' durumunda — düzenlenemez."
+            }), 403
+
+        yeni_aciklama = aciklama if aciklama is not None else kalem['aciklama']
+        eski_kg = kalem['miktar_kg']
+
+        con.execute(
+            "UPDATE nexgen_recete_kalem SET miktar_kg=?, aciklama=? WHERE id=?",
+            (miktar_kg, yeni_aciklama, kalem_id)
+        )
+        con.commit()
+
+    except Exception as e:
+        con.rollback()
+        return jsonify({"ok": False, "hata": str(e)}), 500
+    finally:
+        con.close()
+
+    return jsonify({
+        "ok":        True,
+        "kalem_id":  kalem_id,
+        "eski_kg":   eski_kg,
+        "yeni_kg":   miktar_kg,
+        "mesaj":     f"Kalem güncellendi: {eski_kg} KG → {miktar_kg} KG.",
+    })
+
+
+@nexgen_bp.route('/api/recete/kalem-sil', methods=['DELETE'])
+@yetki_gerekli('nexgen.recete.manage', 'can_manage')
+def api_recete_kalem_sil():
+    """TASLAK UV'deki bir recete_kalem satırını pasife alır (aktif=0).
+    Fiziksel silme yapılmaz.
+
+    DELETE JSON:
+        kalem_id : int
+    """
+    data     = request.get_json(silent=True) or {}
+    kalem_id = data.get('kalem_id')
+
+    if not kalem_id:
+        return jsonify({"ok": False, "hata": "kalem_id zorunludur."}), 400
+
+    con = _db()
+    try:
+        kalem = con.execute("""
+            SELECT rk.id, rk.uretim_varyant_id, rk.aktif,
+                   uv.recete_durum, sk.ad AS stok_ad
+            FROM nexgen_recete_kalem rk
+            JOIN nexgen_uretim_varyant uv ON uv.id = rk.uretim_varyant_id
+            JOIN nexgen_stok_kart sk       ON sk.id = rk.stok_kart_id
+            WHERE rk.id=? AND rk.aktif=1 AND uv.aktif=1
+        """, (kalem_id,)).fetchone()
+        if not kalem:
+            return jsonify({"ok": False, "hata": "Kalem bulunamadı veya zaten pasif."}), 404
+        if (kalem['recete_durum'] or 'TASLAK').upper() in _DUZENLEME_ENGELI:
+            return jsonify({
+                "ok": False,
+                "hata": f"Varyant '{kalem['recete_durum']}' durumunda — düzenlenemez."
+            }), 403
+
+        con.execute(
+            "UPDATE nexgen_recete_kalem SET aktif=0 WHERE id=?",
+            (kalem_id,)
+        )
+        con.commit()
+
+    except Exception as e:
+        con.rollback()
+        return jsonify({"ok": False, "hata": str(e)}), 500
+    finally:
+        con.close()
+
+    return jsonify({
+        "ok":       True,
+        "kalem_id": kalem_id,
+        "stok_ad":  kalem['stok_ad'],
+        "mesaj":    f"'{kalem['stok_ad']}' kalemi pasife alındı (aktif=0).",
+    })
+
+
+@nexgen_bp.route('/api/recete/uv-sil', methods=['DELETE'])
+@yetki_gerekli('nexgen.recete.manage', 'can_manage')
+def api_recete_uv_sil():
+    """Sadece TASLAK durumundaki bir uretim_varyant'ı ve altındaki kalemleri siler (aktif=0).
+
+    DELETE JSON:
+        uv_id : int
+    """
+    data  = request.get_json(silent=True) or {}
+    uv_id = data.get('uv_id')
+
+    if not uv_id:
+        return jsonify({"ok": False, "hata": "uv_id zorunludur."}), 400
+
+    con = _db()
+    try:
+        uv = con.execute(
+            "SELECT id, boyut, recete_durum, renk_varyant_id FROM nexgen_uretim_varyant WHERE id=? AND aktif=1",
+            (uv_id,)
+        ).fetchone()
+        if not uv:
+            return jsonify({"ok": False, "hata": "Üretim varyantı bulunamadı."}), 404
+        durum = (uv['recete_durum'] or 'TASLAK').upper()
+        if durum != 'TASLAK':
+            return jsonify({
+                "ok": False,
+                "hata": f"Sadece TASLAK UV silinebilir. Bu UV '{durum}' durumunda."
+            }), 403
+
+        kalem_say = con.execute(
+            "SELECT COUNT(*) FROM nexgen_recete_kalem WHERE uretim_varyant_id=? AND aktif=1",
+            (uv_id,)
+        ).fetchone()[0]
+
+        # Önce kalemleri pasife al
+        con.execute(
+            "UPDATE nexgen_recete_kalem SET aktif=0 WHERE uretim_varyant_id=?",
+            (uv_id,)
+        )
+        # Sonra UV'yi pasife al
+        con.execute(
+            "UPDATE nexgen_uretim_varyant SET aktif=0 WHERE id=?",
+            (uv_id,)
+        )
+        con.commit()
+
+    except Exception as e:
+        con.rollback()
+        return jsonify({"ok": False, "hata": str(e)}), 500
+    finally:
+        con.close()
+
+    return jsonify({
+        "ok":        True,
+        "uv_id":     uv_id,
+        "boyut":     uv['boyut'],
+        "rv_id":     uv['renk_varyant_id'],
+        "kalem_say": kalem_say,
+        "mesaj":     f"'{uv['boyut']}' UV ve {kalem_say} kalemi silindi.",
+    })
+
+
+@nexgen_bp.route('/api/recete/varyant-sil', methods=['DELETE'])
+@yetki_gerekli('nexgen.recete.manage', 'can_manage')
+def api_recete_varyant_sil():
+    """Sadece tüm UV'leri TASLAK olan bir renk_varyant'ı siler (aktif=0).
+    UV ve kalemleri de pasife alır.
+
+    DELETE JSON:
+        rv_id : int
+    """
+    data  = request.get_json(silent=True) or {}
+    rv_id = data.get('rv_id')
+
+    if not rv_id:
+        return jsonify({"ok": False, "hata": "rv_id zorunludur."}), 400
+
+    con = _db()
+    try:
+        rv = con.execute(
+            "SELECT id, ad, formul_id FROM nexgen_renk_varyant WHERE id=? AND aktif=1",
+            (rv_id,)
+        ).fetchone()
+        if not rv:
+            return jsonify({"ok": False, "hata": "Reçete varyantı bulunamadı."}), 404
+
+        # Tüm aktif UV'lerin durumunu kontrol et
+        uvler = con.execute(
+            "SELECT id, boyut, recete_durum FROM nexgen_uretim_varyant WHERE renk_varyant_id=? AND aktif=1",
+            (rv_id,)
+        ).fetchall()
+        engel_uvler = [
+            uv['boyut'] for uv in uvler
+            if (uv['recete_durum'] or 'TASLAK').upper() != 'TASLAK'
+        ]
+        if engel_uvler:
+            return jsonify({
+                "ok": False,
+                "hata": f"Şu boyutlar TASLAK değil, silinemez: {', '.join(engel_uvler)}"
+            }), 403
+
+        toplam_kalem = 0
+        for uv in uvler:
+            kalem_say = con.execute(
+                "SELECT COUNT(*) FROM nexgen_recete_kalem WHERE uretim_varyant_id=? AND aktif=1",
+                (uv['id'],)
+            ).fetchone()[0]
+            toplam_kalem += kalem_say
+            con.execute(
+                "UPDATE nexgen_recete_kalem SET aktif=0 WHERE uretim_varyant_id=?",
+                (uv['id'],)
+            )
+            con.execute(
+                "UPDATE nexgen_uretim_varyant SET aktif=0 WHERE id=?",
+                (uv['id'],)
+            )
+
+        con.execute(
+            "UPDATE nexgen_renk_varyant SET aktif=0 WHERE id=?",
+            (rv_id,)
+        )
+        con.commit()
+
+    except Exception as e:
+        con.rollback()
+        return jsonify({"ok": False, "hata": str(e)}), 500
+    finally:
+        con.close()
+
+    return jsonify({
+        "ok":           True,
+        "rv_id":        rv_id,
+        "rv_ad":        rv['ad'],
+        "formul_id":    rv['formul_id'],
+        "uv_say":       len(uvler),
+        "kalem_say":    toplam_kalem,
+        "mesaj":        f"'{rv['ad']}' varyantı, {len(uvler)} UV ve {toplam_kalem} kalemi silindi.",
+    })
+
+
 @nexgen_bp.route('/api/recete/hedef-varyantlar', methods=['GET'])
 @yetki_gerekli('nexgen.recete.view', 'can_view')
 def api_recete_hedef_varyantlar():
@@ -1418,13 +2160,240 @@ def _arge_renk_calisma_kaydet(con, kaynak_uv_id, test_batch_kg, yeni_renk_adi, c
 
 
 def _rf_kod_uret(con):
-    """RF-NNN formatinda benzersiz RF renk kodu uretir."""
+    """[LEGACY] RF-NNN formatinda eski RF renk kodu uretir.
+    Yeni sistemde _nx_rf_kod_uret kullanilacak.
+    Bu fonksiyon mevcut kodu bozmamak icin birakildi.
+    """
     row = con.execute(
         "SELECT MAX(CAST(SUBSTR(rf_kod, 4) AS INTEGER)) AS son "
         "FROM nexgen_rf_renk WHERE rf_kod LIKE 'RF-%'"
     ).fetchone()
     son = row['son'] if row and row['son'] else 0
     return f'RF-{son + 1:03d}'
+
+
+def _nx_rf_kod_uret(con):
+    """NX-RF-NNNN formatında benzersiz RF renk kodu üretir.
+    Örnek: NX-RF-0001, NX-RF-0002, ...
+    nexgen_rf_renk.rf_kod sütunundan MAX alır (NX-RF- ile başlayanlar).
+    Not: İleride merkezi kod_servisi.py'e taşınacak.
+    """
+    row = con.execute(
+        "SELECT MAX(CAST(SUBSTR(rf_kod, 8) AS INTEGER)) AS son "
+        "FROM nexgen_rf_renk WHERE rf_kod LIKE 'NX-RF-%'"
+    ).fetchone()
+    son = row['son'] if row and row['son'] else 0
+    return f'NX-RF-{son + 1:04d}'
+
+
+def _nx_rt_kod_uret(con):
+    """NX-RT-NNNN formatında benzersiz Müşteri Renk Talebi kodu üretir.
+    Örnek: NX-RT-0001, NX-RT-0002, ...
+    nexgen_arge_test.arge_kodu sütunundan MAX alır (NX-RT- ile başlayanlar).
+    MODÜL-01 (Müşteri Renk Talebi) tarafından kullanılır.
+    Not: İleride merkezi kod_servisi.py'e taşınacak.
+    """
+    row = con.execute(
+        "SELECT MAX(CAST(SUBSTR(arge_kodu, 7) AS INTEGER)) AS son "
+        "FROM nexgen_arge_test WHERE arge_kodu LIKE 'NX-RT-%'"
+    ).fetchone()
+    son = row['son'] if row and row['son'] else 0
+    return f'NX-RT-{son + 1:04d}'
+
+
+def _nx_ar_kod_uret(con):
+    """NX-AR-NNNN formatında benzersiz AR-GE Renk Çalışması kodu üretir.
+    Örnek: NX-AR-0001, NX-AR-0002, ...
+    nexgen_arge_test.arge_kodu sütunundan NX-AR- ile başlayanların MAX'ını alır.
+    MODÜL-02 (Yeni Renk Denemesi) tarafından kullanılır.
+    Not: İleride merkezi kod_servisi.py'e taşınacak.
+    """
+    row = con.execute(
+        "SELECT MAX(CAST(SUBSTR(arge_kodu, 7) AS INTEGER)) AS son "
+        "FROM nexgen_arge_test WHERE arge_kodu LIKE 'NX-AR-%'"
+    ).fetchone()
+    son = row['son'] if row and row['son'] else 0
+    return f'NX-AR-{son + 1:04d}'
+
+
+def _nx_arf_kod_uret(con):
+    """NX-ARF-NNNN formatında benzersiz AR-GE Formül kodu üretir.
+    Örnek: NX-ARF-0001, NX-ARF-0002, ...
+    nexgen_arge_formul.arge_kodu sütunundan MAX alır.
+    Not: İleride merkezi kod_servisi.py'e taşınacak.
+    """
+    row = con.execute(
+        "SELECT MAX(CAST(SUBSTR(arge_kodu, 8) AS INTEGER)) AS son "
+        "FROM nexgen_arge_formul WHERE arge_kodu LIKE 'NX-ARF-%'"
+    ).fetchone()
+    son = row['son'] if row and row['son'] else 0
+    return f'NX-ARF-{son + 1:04d}'
+
+
+# ─────────────────────────────────────────────────────────────
+# MODÜL-02 — Yeni Renk Denemesi kayıt endpointi
+# ─────────────────────────────────────────────────────────────
+
+@nexgen_bp.route('/api/tablet/arge/yeni-renk-denemesi', methods=['POST'])
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def api_tablet_yeni_renk_denemesi():
+    """MODÜL-02 — Yeni Renk Denemesi kaydı.
+
+    POST JSON:
+        kaynak_uv_id          : int   — seçilen üretim varyantı
+        cari_id               : int
+        renk_adi              : str   — ZORUNLU
+        renk_aciklama         : str   — opsiyonel
+        musteri_notu          : str   — opsiyonel
+        notlar                : str   — AR-GE notu (ZORUNLU)
+        renk_bilesenleri      : list  — [{stok_kart_id, stok_kodu, ad, gram, kg}]
+        renk_bileseni_toplam_gr : float
+        renk_bileseni_toplam_kg : float
+        ana_formul_numune_kg  : float
+        tahmini_toplam_kg     : float
+        numune_orani          : float — default 10.0
+
+    Döner: { ok, arge_kodu, test_id, test_no }
+    """
+    import json as _json
+
+    data = request.get_json(silent=True) or {}
+
+    # Frontend S.rv_id = nexgen_renk_varyant.id
+    # kaynak_uv_id ise nexgen_uretim_varyant.id — her ikisini de kabul et
+    kaynak_uv_id   = data.get('kaynak_uv_id') or None
+    rv_id          = data.get('rv_id') or None          # renk_varyant.id
+    cari_id        = data.get('cari_id') or None
+    renk_adi       = (data.get('renk_adi') or '').strip()
+    renk_aciklama  = (data.get('renk_aciklama') or '').strip() or None
+    musteri_notu   = (data.get('musteri_notu') or '').strip() or None
+    notlar         = (data.get('notlar') or '').strip() or None
+    bileskenler    = data.get('renk_bilesenleri') or []
+    numune_orani   = float(data.get('numune_orani') or 10.0)
+    ana_formul_kg  = float(data.get('ana_formul_numune_kg') or 0)
+    tahmini_top_kg = float(data.get('tahmini_toplam_kg') or 0)
+
+    # Zorunlu alan kontrolleri
+    if not kaynak_uv_id and not rv_id:
+        return jsonify({"ok": False, "hata": "kaynak_uv_id veya rv_id zorunludur."}), 400
+    if not renk_adi:
+        return jsonify({"ok": False, "hata": "renk_adi zorunludur."}), 400
+    if not notlar:
+        return jsonify({"ok": False, "hata": "AR-GE notu (notlar) zorunludur."}), 400
+    if not bileskenler:
+        return jsonify({"ok": False, "hata": "En az bir renk bileşeni zorunludur."}), 400
+
+    # talep_referansi: renk açıklaması + müşteri notunu birleştir
+    talep_parca = [p for p in [renk_aciklama, musteri_notu] if p]
+    talep_referansi = ' | '.join(talep_parca) if talep_parca else None
+
+    kullanici_id = _kullanici_id()
+    con = _db()
+    try:
+        # uv_id geldi mi? (nexgen_uretim_varyant.id — en güvenilir yol)
+        uv_id_dogrudan = data.get('uv_id') or None
+        if uv_id_dogrudan:
+            kaynak_uv_id = int(uv_id_dogrudan)
+
+        # Yoksa rv_id (nexgen_renk_varyant.id) üzerinden çöz
+        if not kaynak_uv_id and rv_id:
+            uv_row = con.execute(
+                "SELECT id FROM nexgen_uretim_varyant WHERE renk_varyant_id=? AND aktif=1 LIMIT 1",
+                (rv_id,)
+            ).fetchone()
+            if uv_row:
+                kaynak_uv_id = uv_row['id']
+
+        if not kaynak_uv_id:
+            # debug bilgisi: kaç kayıt var?
+            rv_say = con.execute(
+                "SELECT COUNT(*) FROM nexgen_uretim_varyant WHERE renk_varyant_id=?", (rv_id,)
+            ).fetchone()[0] if rv_id else '—'
+            return jsonify({
+                "ok": False,
+                "hata": f"Kaynak üretim varyantı bulunamadı. rv_id={rv_id}, uv_id_dogrudan={uv_id_dogrudan}, bulunan_uv_sayisi={rv_say}"
+            }), 404
+
+        # Kaynak varyant doğrulama
+        uv = con.execute(
+            "SELECT id, ad FROM nexgen_uretim_varyant WHERE id=? AND aktif=1",
+            (kaynak_uv_id,)
+        ).fetchone()
+        if not uv:
+            return jsonify({
+                "ok": False,
+                "hata": f"Üretim varyantı DB'de bulunamadı veya pasif. kaynak_uv_id={kaynak_uv_id}"
+            }), 404
+
+        kalemler = con.execute("""
+            SELECT ROUND(SUM(rk.miktar_kg), 3) AS master_kg
+            FROM nexgen_recete_kalem rk
+            WHERE rk.uretim_varyant_id = ? AND rk.aktif = 1
+        """, (kaynak_uv_id,)).fetchone()
+        master_kg = float(kalemler['master_kg'] or 0) if kalemler else 0
+        if master_kg <= 0:
+            return jsonify({"ok": False, "hata": "Kaynak varyantta reçete kalemi yok."}), 400
+
+        # test_batch_kg: ana_formul_numune_kg geldiyse onu kullan,
+        # gelmediyse master × (numune_orani/100) hesapla
+        if ana_formul_kg > 0:
+            test_batch_kg = round(ana_formul_kg, 4)
+        else:
+            test_batch_kg = round(master_kg * numune_orani / 100.0, 4)
+
+        # test_no: LEGACY — tablodan kaldırılmıyor, eski sistem uyumu için
+        test_no   = _arge_test_no_uret(con)
+        # arge_kodu: YENİ STANDART — NX-AR-NNNN (4 hane), kullanıcıya bu gösterilir
+        arge_kodu = _nx_ar_kod_uret(con)
+
+        # Lot no
+        from datetime import datetime as _dt
+        _yil = _dt.now().year
+        _son = con.execute(
+            "SELECT COUNT(*) FROM nexgen_arge_test WHERE lot_no LIKE ?",
+            (f'ARGE-LOT-{_yil}-%',)
+        ).fetchone()[0]
+        lot_no = f'ARGE-LOT-{_yil}-{(_son + 1):05d}'
+
+        # Ana kayıt — test_tipi = 'RENK_DENEMESI'
+        con.execute("""
+            INSERT INTO nexgen_arge_test
+                (kaynak_uretim_varyant_id, test_no, test_tipi,
+                 makina, test_batch_kg, kaynak_batch_kg,
+                 yeni_renk_adi, notlar, durum,
+                 cari_id, lot_no, talep_referansi,
+                 numune_orani, arge_kodu, renk_bilesenleri_json,
+                 olusturan_id, olusturma_tarihi)
+            VALUES (?, ?, 'RENK_DENEMESI', '—', ?, ?, ?, ?, 'TASLAK',
+                    ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        """, (
+            kaynak_uv_id, test_no,
+            test_batch_kg, round(master_kg, 3),
+            renk_adi, notlar,
+            cari_id, lot_no, talep_referansi,
+            numune_orani, arge_kodu,
+            _json.dumps(bileskenler, ensure_ascii=False),
+            kullanici_id,
+        ))
+        test_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+        con.commit()
+
+    except Exception as e:
+        con.rollback()
+        return jsonify({"ok": False, "hata": str(e)}), 500
+    finally:
+        con.close()
+
+    return jsonify({
+        "ok":        True,
+        "arge_kodu": arge_kodu,   # NX-AR-NNNN — başarı ekranında gösterilir
+        "test_id":   test_id,
+        "lot_no":    lot_no,
+        "mesaj":     f"{arge_kodu} oluşturuldu. Durum: Onay Bekliyor.",
+        # test_no (AT-YYYY-NNNN) kasıtlı olarak response'dan çıkarıldı.
+        # Sadece nexgen_arge_test.test_no sütununda legacy olarak saklanır.
+    })
 
 
 @nexgen_bp.route('/api/arge/test-olustur', methods=['POST'])
@@ -1454,17 +2423,25 @@ def api_arge_test_olustur():
     data = request.get_json(silent=True) or {}
     kaynak_uv_id    = data.get('kaynak_uv_id')
     test_tipi       = (data.get('test_tipi') or 'RENK_TEST').strip().upper()
-    makina          = (data.get('makina') or '7.5 LT').strip()
+    makina          = (data.get('makina') or '—').strip()
     yeni_renk_adi   = (data.get('yeni_renk_adi') or '').strip() or None
     notlar          = (data.get('notlar') or data.get('aciklama') or '').strip() or None
     cari_id         = data.get('cari_id') or None
     talep_referansi = (data.get('talep_referansi') or '').strip() or None
     lot_no_giris    = (data.get('lot_no') or '').strip() or None
+    # MODÜL-01 ek alanlar
+    rf_renk_id_in   = data.get('rf_renk_id') or None
+    numune_orani_in = data.get('numune_orani')   # % değeri, ör: 10.0
 
     try:
         shore_hedef = float(data['shore_hedef']) if data.get('shore_hedef') not in (None, '') else None
     except (ValueError, TypeError):
         shore_hedef = None
+
+    try:
+        numune_orani_val = float(numune_orani_in) if numune_orani_in not in (None, '') else None
+    except (ValueError, TypeError):
+        numune_orani_val = None
 
     try:
         test_batch_kg = float(data.get('test_batch_kg') or data.get('test_kg') or 0)
@@ -1510,8 +2487,11 @@ def api_arge_test_olustur():
         # Ölçekleme çarpanı
         carpan = test_batch_kg / kaynak_batch_kg
 
-        # Test no üret
+        # Test no üret (LEGACY — tablodan kaldırılmıyor, eski kayıtlar için)
         test_no = _arge_test_no_uret(con)
+
+        # Yeni NX-RT kodu üret (MODÜL-01 Müşteri Renk Talebi standart kodu)
+        nx_rt_kodu = _nx_rt_kod_uret(con)
 
         # Lot no: giriş yoksa otomatik üret (ARGE-LOT-YYYY-NNNNN)
         if lot_no_giris:
@@ -1524,19 +2504,21 @@ def api_arge_test_olustur():
             ).fetchone()[0]
             lot_no = f'ARGE-LOT-{_yil}-{(_son + 1):05d}'
 
-        # Ana test kaydı — yeni kimlik alanları dahil
+        # Ana test kaydı — arge_kodu artık NX-RT-NNNN formatında
         con.execute("""
             INSERT INTO nexgen_arge_test
                 (kaynak_uretim_varyant_id, test_no, test_tipi,
                  makina, test_batch_kg, kaynak_batch_kg,
                  yeni_renk_adi, notlar, durum,
                  cari_id, shore_hedef, lot_no, talep_referansi,
+                 rf_renk_id, numune_orani, arge_kodu,
                  olusturan_id, olusturma_tarihi)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'TASLAK', ?, ?, ?, ?, ?, datetime('now'))
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'TASLAK', ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
         """, (kaynak_uv_id, test_no, test_tipi,
               makina, test_batch_kg, kaynak_batch_kg,
               yeni_renk_adi, notlar,
               cari_id, shore_hedef, lot_no, talep_referansi,
+              rf_renk_id_in, numune_orani_val, nx_rt_kodu,
               kullanici_id))
         test_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
 
@@ -1570,14 +2552,18 @@ def api_arge_test_olustur():
     return jsonify({
         "ok":              True,
         "test_id":         test_id,
-        "test_no":         test_no,
+        "test_no":         test_no,           # legacy — tabloda tutuluyor
+        "nx_rt_kodu":      nx_rt_kodu,        # YENİ — başarı ekranında gösterilecek
+        "arge_kodu":       nx_rt_kodu,        # frontend arge_kodu okuyorsa da doğru alır
         "lot_no":          lot_no,
         "kaynak_batch_kg": kaynak_batch_kg,
         "test_batch_kg":   test_batch_kg,
+        "numune_orani":    numune_orani_val,
+        "rf_renk_id":      rf_renk_id_in,
         "carpan":          round(carpan, 6),
         "kalem_sayisi":    len(test_kalemler),
         "kalemler":        test_kalemler,
-        "mesaj":           f"{test_no} / {lot_no} oluşturuldu. {len(test_kalemler)} kalem ölçeklendi.",
+        "mesaj":           f"{nx_rt_kodu} oluşturuldu. {len(test_kalemler)} kalem.",
     })
 
 
@@ -6227,85 +7213,836 @@ def tablet_uretim():
 @nexgen_bp.route('/tablet/arge')
 @yetki_gerekli('nexgen.tablet.view', 'can_view')
 def tablet_arge():
+    """AR-GE Tablet — yeni mimari (FAZ-3K).
+    Akış: Cari → Formül → RF → Boyut → Miktar → Not → Kaydet → Barkod.
+    """
     con = _db()
     try:
-        # Kaynak reçetesi olan tüm aktif varyantlar (TASLAK dahil — AR-GE kaynak seçimi)
-        varyantlar = con.execute("""
-            SELECT uv.id, uv.boyut, uv.ad, uv.recete_durum,
+        # Formüller (reçetesi olan, aktif)
+        formuller_raw = con.execute("""
+            SELECT DISTINCT f.id, f.kod, f.ad
+            FROM nexgen_formul f
+            JOIN nexgen_renk_varyant rv ON rv.formul_id = f.id AND rv.aktif = 1
+            JOIN nexgen_uretim_varyant uv ON uv.renk_varyant_id = rv.id AND uv.aktif = 1
+            JOIN nexgen_recete_kalem rk ON rk.uretim_varyant_id = uv.id AND rk.aktif = 1
+            WHERE f.aktif = 1 AND uv.recete_durum != 'PASIF'
+            ORDER BY f.kod, f.ad
+        """).fetchall()
+        formuller = [dict(r) for r in formuller_raw]
+
+        # Üretim varyantları (formül+boyut bilgisiyle, taban reçetesi olan)
+        # renk_varyant_id ve master_kg frontend için zorunlu
+        varyantlar_raw = con.execute("""
+            SELECT uv.id, uv.boyut, uv.ad AS uv_ad, uv.recete_durum,
+                   rv.id AS renk_varyant_id,
                    rv.ad AS renk_ad,
                    f.id AS formul_id, f.kod AS formul_kod, f.ad AS formul_ad,
-                   COUNT(rk.id) AS kalem_say,
-                   SUM(rk.miktar_kg) AS toplam_kg
+                   ROUND(SUM(rk.miktar_kg), 3) AS master_kg,
+                   COUNT(rk.id) AS kalem_say
             FROM nexgen_uretim_varyant uv
-            JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
-            JOIN nexgen_formul f        ON f.id  = rv.formul_id
-            JOIN nexgen_recete_kalem rk
-                   ON rk.uretim_varyant_id = uv.id AND rk.aktif = 1
-            WHERE uv.aktif = 1 AND rv.aktif = 1 AND f.aktif = 1
-              AND uv.recete_durum != 'PASIF'
+            JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id AND rv.aktif = 1
+            JOIN nexgen_formul f        ON f.id  = rv.formul_id AND f.aktif = 1
+            JOIN nexgen_recete_kalem rk ON rk.uretim_varyant_id = uv.id AND rk.aktif = 1
+            WHERE uv.aktif = 1 AND uv.recete_durum != 'PASIF'
             GROUP BY uv.id
             HAVING kalem_say > 0
             ORDER BY f.kod, rv.ad, uv.boyut
         """).fetchall()
-        varyantlar = [dict(v) for v in varyantlar]
-        for v in varyantlar:
-            v['toplam_kg'] = round(float(v['toplam_kg'] or 0), 3)
+        varyantlar = [dict(v) for v in varyantlar_raw]
 
-        son_numuneler = con.execute("""
+        # RF renk listesi (onaylı) — kolon adı 'ad'
+        rf_liste_raw = con.execute("""
+            SELECT id, rf_kod, ad AS rf_ad, durum
+            FROM nexgen_rf_renk
+            WHERE aktif = 1 AND durum = 'ONAYLI'
+            ORDER BY rf_kod
+        """).fetchall()
+        rf_liste = [dict(r) for r in rf_liste_raw]
+
+        # Boya stok (RF el girişi için)
+        boya_stok_raw = con.execute("""
+            SELECT id, kod, ad FROM nexgen_stok_kart
+            WHERE aktif = 1 AND kategori = 'BOYA'
+            ORDER BY kod, ad
+        """).fetchall()
+        boya_stok = [dict(r) for r in boya_stok_raw]
+
+        # Cariler
+        cariler_raw = con.execute(
+            "SELECT id, cari_kod, unvan FROM nexgen_cari WHERE aktif=1 ORDER BY unvan"
+        ).fetchall()
+        cariler = [dict(c) for c in cariler_raw]
+
+        # Son 8 numune (sol panel)
+        son_numuneler_raw = con.execute("""
             SELECT t.id, t.test_no, t.durum, t.yeni_renk_adi, t.test_batch_kg,
-                   t.olusturma_tarihi, t.shore_degeri,
+                   t.olusturma_tarihi,
                    f.ad AS formul_ad,
-                   rv.ad AS kaynak_renk_ad,
-                   ku.KullaniciAdi AS olusturan_ad,
-                   c.unvan AS cari_unvan
+                   c.unvan AS cari_unvan,
+                   ku.KullaniciAdi AS olusturan_ad
             FROM nexgen_arge_test t
             JOIN nexgen_uretim_varyant uv ON uv.id = t.kaynak_uretim_varyant_id
             JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
             JOIN nexgen_formul f          ON f.id  = rv.formul_id
-            LEFT JOIN sistem_kullanici ku ON ku.Id = t.olusturan_id
             LEFT JOIN nexgen_cari c       ON c.id  = t.cari_id
+            LEFT JOIN sistem_kullanici ku ON ku.Id  = t.olusturan_id
             WHERE t.aktif = 1
-            ORDER BY t.id DESC
-            LIMIT 5
+            ORDER BY t.id DESC LIMIT 8
         """).fetchall()
-        son_numuneler = [dict(r) for r in son_numuneler]
-        for n in son_numuneler:
-            ozet, fazla = _arge_test_boya_ozet(con, n['id'])
-            n['boya_ozet'] = ozet
-            n['boya_fazla'] = fazla
+        son_numuneler = [dict(r) for r in son_numuneler_raw]
 
-        boya_stok = con.execute("""
-            SELECT id, kod, ad, kategori
-            FROM nexgen_stok_kart
-            WHERE aktif = 1 AND kategori = 'BOYA'
-            ORDER BY kod, ad
-        """).fetchall()
-        boya_stok = [dict(r) for r in boya_stok]
-        for s in boya_stok:
-            s['etiket'] = _stok_boya_dropdown_etiket(s.get('kod'), s.get('ad'))
+        bugun_numune = con.execute(
+            "SELECT COUNT(*) AS c FROM nexgen_arge_test "
+            "WHERE aktif=1 AND date(olusturma_tarihi)=date('now')"
+        ).fetchone()['c']
 
-        cariler = con.execute(
-            "SELECT id, cari_kod, unvan FROM nexgen_cari WHERE aktif=1 ORDER BY unvan"
-        ).fetchall()
-        cariler = [dict(c) for c in cariler]
+        # Ana ekran — bekleyen sayısı (BEKLIYOR veya DEVAM durumundakiler)
+        bekleyen_say_row = con.execute(
+            "SELECT COUNT(*) AS c FROM nexgen_arge_test "
+            "WHERE aktif=1 AND durum IN ('BEKLIYOR','DEVAM','FERHAT_BEKLIYOR')"
+        ).fetchone()
+        bekleyen_say = bekleyen_say_row['c'] if bekleyen_say_row else 0
 
-        bugun_numune = con.execute("""
-            SELECT COUNT(*) AS c FROM nexgen_arge_test
-            WHERE aktif = 1 AND date(olusturma_tarihi) = date('now')
-        """).fetchone()['c']
     finally:
         con.close()
 
     return render_template(
         'nexgen/tablet_arge.html',
         active='nexgen',
+        formuller=formuller,
         varyantlar=varyantlar,
-        son_numuneler=son_numuneler,
+        rf_liste=rf_liste,
         boya_stok=boya_stok,
         cariler=cariler,
+        son_numuneler=son_numuneler,
         bugun_numune=bugun_numune,
+        bekleyen_say=bekleyen_say,
         kullanici_ad=_kullanici_ad(),
     )
+
+
+@nexgen_bp.route('/tablet/arge/musteri-renk')
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def tablet_arge_musteri_renk():
+    """MODÜL-01 — Müşteri Renk Talebi.
+    Müşterinin karteladan seçtiği onaylı RF rengi ile numune hazırlama.
+    Adımlar: Cari → Formül → RF → Boyut → Miktar → Reçete Önizleme → Kaydet & Barkod
+    """
+    con = _db()
+    try:
+        # Cariler
+        cariler = [dict(r) for r in con.execute(
+            "SELECT id, cari_kod, unvan FROM nexgen_cari WHERE aktif=1 ORDER BY unvan"
+        ).fetchall()]
+
+        # Formüller — reçetesi olan, aktif
+        formuller = [dict(r) for r in con.execute("""
+            SELECT DISTINCT f.id, f.kod, f.ad
+            FROM nexgen_formul f
+            JOIN nexgen_renk_varyant rv ON rv.formul_id = f.id AND rv.aktif = 1
+            JOIN nexgen_uretim_varyant uv ON uv.renk_varyant_id = rv.id AND uv.aktif = 1
+            JOIN nexgen_recete_kalem rk ON rk.uretim_varyant_id = uv.id AND rk.aktif = 1
+            WHERE f.aktif = 1 AND uv.recete_durum != 'PASIF'
+            ORDER BY f.kod, f.ad
+        """).fetchall()]
+
+        # Renk varyantları (alt formül / model — TERLİK 18-22, TABAN 18-28 vb.)
+        # Her rv için hangi boyutların (uv) mevcut olduğu bilgisi de gönderilir.
+        renk_varyantlar = [dict(r) for r in con.execute("""
+            SELECT rv.id, rv.ad AS rv_ad, rv.formul_id,
+                   f.kod AS formul_kod,
+                   GROUP_CONCAT(DISTINCT uv.boyut ORDER BY uv.boyut) AS boyutlar,
+                   GROUP_CONCAT(DISTINCT uv.id    ORDER BY uv.boyut) AS uv_idler
+            FROM nexgen_renk_varyant rv
+            JOIN nexgen_formul f ON f.id = rv.formul_id AND f.aktif = 1
+            JOIN nexgen_uretim_varyant uv ON uv.renk_varyant_id = rv.id AND uv.aktif = 1
+            JOIN nexgen_recete_kalem rk ON rk.uretim_varyant_id = uv.id AND rk.aktif = 1
+            WHERE rv.aktif = 1 AND uv.recete_durum != 'PASIF'
+            GROUP BY rv.id HAVING boyutlar IS NOT NULL
+            ORDER BY rv.formul_id, rv.ad
+        """).fetchall()]
+
+        # Üretim varyantları (boyut → uv_id eşlemesi için, reçete önizlemede kullanılır)
+        varyantlar = [dict(v) for v in con.execute("""
+            SELECT uv.id, uv.boyut, uv.ad AS uv_ad, uv.recete_durum,
+                   rv.id AS rv_id, rv.ad AS renk_ad,
+                   f.id AS formul_id, f.kod AS formul_kod, f.ad AS formul_ad,
+                   ROUND(SUM(rk.miktar_kg), 3) AS master_kg,
+                   COUNT(rk.id) AS kalem_say
+            FROM nexgen_uretim_varyant uv
+            JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id AND rv.aktif = 1
+            JOIN nexgen_formul f ON f.id = rv.formul_id AND f.aktif = 1
+            JOIN nexgen_recete_kalem rk ON rk.uretim_varyant_id = uv.id AND rk.aktif = 1
+            WHERE uv.aktif = 1 AND uv.recete_durum != 'PASIF'
+            GROUP BY uv.id HAVING kalem_say > 0
+            ORDER BY f.kod, rv.ad, uv.boyut
+        """).fetchall()]
+
+        # Onaylı RF renkleri
+        rf_liste = [dict(r) for r in con.execute("""
+            SELECT id, rf_kod, ad AS rf_ad, durum
+            FROM nexgen_rf_renk
+            WHERE aktif = 1 AND durum = 'ONAYLI'
+            ORDER BY rf_kod
+        """).fetchall()]
+
+    finally:
+        con.close()
+
+    return render_template(
+        'nexgen/modul01_musteri_renk.html',
+        active='nexgen',
+        cariler=cariler,
+        formuller=formuller,
+        renk_varyantlar=renk_varyantlar,
+        varyantlar=varyantlar,
+        rf_liste=rf_liste,
+        kullanici_ad=_kullanici_ad(),
+    )
+
+
+@nexgen_bp.route('/tablet/arge/yeni-rf')
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def tablet_arge_yeni_rf():
+    """MODÜL-02 — Yeni RF Renk Geliştirme.
+    Vedat stok pigmentlerinden seçip gramaj girerek yeni RF denemesi oluşturur.
+    Backend API henüz bağlanmadı — frontend onayı bekleniyor.
+    """
+    con = _db()
+    try:
+        cariler = [dict(r) for r in con.execute(
+            "SELECT id, cari_kod, unvan FROM nexgen_cari WHERE aktif=1 ORDER BY unvan"
+        ).fetchall()]
+
+        formuller = [dict(r) for r in con.execute("""
+            SELECT DISTINCT f.id, f.kod, f.ad
+            FROM nexgen_formul f
+            JOIN nexgen_renk_varyant rv ON rv.formul_id = f.id AND rv.aktif = 1
+            WHERE f.aktif = 1
+            ORDER BY f.kod, f.ad
+        """).fetchall()]
+
+        renk_varyantlar = [dict(r) for r in con.execute("""
+            SELECT rv.id, rv.formul_id, rv.ad,
+                   GROUP_CONCAT(DISTINCT uv.boyut) AS boyutlar
+            FROM nexgen_renk_varyant rv
+            LEFT JOIN nexgen_uretim_varyant uv ON uv.renk_varyant_id = rv.id AND uv.aktif = 1
+            WHERE rv.aktif = 1
+            GROUP BY rv.id
+            ORDER BY rv.formul_id, rv.ad
+        """).fetchall()]
+
+        # renk_varyant_id ve master_kg frontend'de uv_id çözümü + hesap için zorunlu
+        varyantlar = [dict(r) for r in con.execute("""
+            SELECT uv.id, uv.renk_varyant_id, uv.boyut, uv.recete_durum,
+                   rv.ad AS rv_ad,
+                   ROUND(SUM(rk.miktar_kg), 3) AS master_kg
+            FROM nexgen_uretim_varyant uv
+            JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id AND rv.aktif = 1
+            LEFT JOIN nexgen_recete_kalem rk ON rk.uretim_varyant_id = uv.id AND rk.aktif = 1
+            WHERE uv.aktif = 1
+            GROUP BY uv.id
+            ORDER BY rv.formul_id, rv.ad, uv.boyut
+        """).fetchall()]
+
+        # Renk bileşenleri — renk_bileseni_mi=1 olan tüm kartlar
+        # (BOYA kategorisi + ATR-312 gibi çift rollü katkılar dahil)
+        # Liste: yeni_tanim - ad - kod formatında sıralanır
+        stok_pigmentler = [dict(r) for r in con.execute("""
+            SELECT id, kod, ad, kategori, yeni_tanim, tanim
+            FROM nexgen_stok_kart
+            WHERE aktif = 1 AND renk_bileseni_mi = 1
+            ORDER BY yeni_tanim, ad
+        """).fetchall()]
+
+    finally:
+        con.close()
+
+    return render_template(
+        'nexgen/modul02_yeni_rf.html',
+        active='nexgen',
+        cariler=cariler,
+        formuller=formuller,
+        renk_varyantlar=renk_varyantlar,
+        varyantlar=varyantlar,
+        stok_pigmentler=stok_pigmentler,
+        kullanici_ad=_kullanici_ad(),
+    )
+
+
+@nexgen_bp.route('/tablet/arge/yeni-formul')
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def tablet_arge_yeni_formul():
+    """MODÜL-03 — Yeni Formül Geliştir.  (FAZ-3F-10 / 2026-07-09)
+    İki yol: (A) Mevcut formülden taslak al, (B) Sıfırdan yeni formül oluştur.
+    Backend: POST /nexgen/api/tablet/arge/yeni-formul-kaydet → NX-ARF-NNNN
+    """
+    con = _db()
+    try:
+        # Cariler
+        cariler = [dict(r) for r in con.execute(
+            "SELECT id, cari_kod, unvan FROM nexgen_cari WHERE aktif=1 ORDER BY unvan"
+        ).fetchall()]
+
+        # Referans formüller (taslak için)
+        formuller = [dict(r) for r in con.execute("""
+            SELECT DISTINCT f.id, f.kod, f.ad
+            FROM nexgen_formul f
+            JOIN nexgen_renk_varyant rv ON rv.formul_id = f.id AND rv.aktif = 1
+            JOIN nexgen_uretim_varyant uv ON uv.renk_varyant_id = rv.id AND uv.aktif = 1
+            WHERE f.aktif = 1
+            ORDER BY f.kod, f.ad
+        """).fetchall()]
+
+        # Hammadde/Katkı/Recycle stok kartları (renk bileşeni olmayanlar)
+        stok_hammaddeler = [dict(r) for r in con.execute("""
+            SELECT id, kod, ad, kategori, yeni_tanim, tanim,
+                   beklenen_kg, rezerve_kg, giris_kg
+            FROM nexgen_stok_kart
+            WHERE aktif = 1 AND COALESCE(renk_bileseni_mi, 0) = 0
+            ORDER BY kategori, ad
+        """).fetchall()]
+
+        # Renk bileşenleri
+        stok_renkler = [dict(r) for r in con.execute("""
+            SELECT id, kod, ad, kategori, yeni_tanim, tanim,
+                   beklenen_kg, rezerve_kg, giris_kg
+            FROM nexgen_stok_kart
+            WHERE aktif = 1 AND renk_bileseni_mi = 1
+            ORDER BY yeni_tanim, ad
+        """).fetchall()]
+
+    except Exception as e:
+        print(f"[nexgen] tablet_arge_yeni_formul hata: {e}")
+        cariler = []
+        formuller = []
+        stok_hammaddeler = []
+        stok_renkler = []
+    finally:
+        con.close()
+
+    return render_template(
+        'nexgen/modul03_yeni_formul.html',
+        active='nexgen',
+        cariler=cariler,
+        formuller=formuller,
+        stok_hammaddeler=stok_hammaddeler,
+        stok_renkler=stok_renkler,
+        kullanici_ad=_kullanici_ad(),
+    )
+
+
+# ─────────────────────────────────────────────────────────────
+# MODÜL-03 — Yeni Formül Kaydet (FAZ-3F-9)
+# POST /nexgen/api/tablet/arge/yeni-formul-kaydet
+# ─────────────────────────────────────────────────────────────
+@nexgen_bp.route('/api/tablet/arge/yeni-formul-kaydet', methods=['POST'])
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def api_tablet_yeni_formul_kaydet():
+    """MODÜL-03 — AR-GE Yeni Formül kaydı oluşturur.
+
+    İki yol:
+      yontem='SIFIRDAN'  → boş formül, hammaddeler payload'dan gelir
+      yontem='TASLAK'    → kaynak_formul_id'nin reçete kalemleri kopyalanır,
+                           üzerine payload'daki hammaddeler eklenir/güncellenir.
+
+    Kaynak üretim formülü (nexgen_formul) ASLA değişmez.
+
+    POST JSON:
+    {
+      "yontem"           : "SIFIRDAN" | "TASLAK",
+      "cari_id"          : int | null,
+      "formul_adi"       : str,         -- zorunlu
+      "aciklama"         : str | null,
+      "kaynak_formul_id" : int | null,  -- yontem=TASLAK ise zorunlu
+      "hammaddeler"      : [            -- seçilen bileşenler
+          {
+            "stok_kart_id"    : int,
+            "kg_str"          : str,    -- örn: "3.500"
+            "yeni_tanim"      : str,
+            "ad"              : str,
+            "kategori"        : str,
+            "renk_bileseni_mi": 0,
+            "gram_str"        : str | null  -- renk bileşeni için
+          }, ...
+      ],
+      "renk_bilesenleri" : [            -- renk bileşenleri (renk_secim='MEVCUT')
+          {
+            "stok_kart_id": int,
+            "gram_str"    : str,
+            "ad"          : str,
+            "yeni_tanim"  : str
+          }, ...
+      ],
+      "renk_secim"       : "YOK" | "MEVCUT" | "YENI",
+      "arge_notu"        : str          -- zorunlu
+    }
+
+    Response (ok):
+    {
+      "ok"         : true,
+      "arge_kodu"  : "NX-ARF-0001",
+      "formul_id"  : int,
+      "formul_adi" : str
+    }
+    """
+    data = request.get_json(silent=True) or {}
+
+    # ── Zorunlu alan kontrolü ──────────────────────────────────
+    formul_adi  = (data.get('formul_adi') or '').strip()
+    arge_notu   = (data.get('arge_notu')  or '').strip()
+    yontem      = (data.get('yontem')     or 'SIFIRDAN').strip().upper()
+    renk_secim  = (data.get('renk_secim') or 'YOK').strip().upper()
+
+    if not formul_adi:
+        return jsonify({"ok": False, "hata": "formul_adi zorunludur."}), 400
+    if not arge_notu:
+        return jsonify({"ok": False, "hata": "arge_notu zorunludur."}), 400
+    if yontem not in {'SIFIRDAN', 'TASLAK'}:
+        return jsonify({"ok": False, "hata": "yontem: SIFIRDAN veya TASLAK olmalı."}), 400
+
+    cari_id           = data.get('cari_id')
+    aciklama          = (data.get('aciklama') or '').strip() or None
+    kaynak_formul_id  = data.get('kaynak_formul_id')
+    hammaddeler       = data.get('hammaddeler') or []
+    renk_bilesenleri  = data.get('renk_bilesenleri') or []
+
+    if yontem == 'TASLAK' and not kaynak_formul_id:
+        return jsonify({"ok": False, "hata": "TASLAK yönteminde kaynak_formul_id zorunludur."}), 400
+
+    _kul = session.get('kullanici') or {}
+    olusturan_id = _kul.get('id') or _kul.get('kullanici_id') or None
+
+    con = _db()
+    try:
+        # ── NX-ARF kodu üret ──────────────────────────────────
+        arge_kodu = _nx_arf_kod_uret(con)
+
+        # ── Ana kayıt ─────────────────────────────────────────
+        con.execute("""
+            INSERT INTO nexgen_arge_formul
+                (arge_kodu, formul_adi, aciklama, yontem,
+                 kaynak_formul_id, cari_id, renk_secim,
+                 arge_notu, durum, olusturan_id, olusturma_tarihi)
+            VALUES (?, ?, ?, ?,
+                    ?, ?, ?,
+                    ?, 'TASLAK', ?, datetime('now'))
+        """, (arge_kodu, formul_adi, aciklama, yontem,
+              kaynak_formul_id, cari_id, renk_secim,
+              arge_notu, olusturan_id))
+
+        formul_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+        # ── TASLAK: kaynak üretim formülünün reçetesini kopyala ──
+        if yontem == 'TASLAK' and kaynak_formul_id:
+            # Kaynak formülün tüm üretim varyantlarındaki kalemleri al
+            # (ilk/varsayılan varyant: önce STANDART, yoksa ilk bulunan)
+            kaynak_uv = con.execute("""
+                SELECT uv.id FROM nexgen_uretim_varyant uv
+                JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
+                WHERE rv.formul_id = ? AND uv.aktif = 1
+                ORDER BY CASE uv.boyut
+                    WHEN 'STANDART' THEN 1
+                    WHEN 'LARGE'    THEN 2
+                    WHEN 'SMALL'    THEN 3
+                    ELSE 4 END
+                LIMIT 1
+            """, (kaynak_formul_id,)).fetchone()
+
+            if kaynak_uv:
+                kaynaklar = con.execute("""
+                    SELECT rk.stok_kart_id, rk.sira, rk.miktar_kg, rk.aciklama,
+                           sk.ad, sk.kategori, sk.yeni_tanim,
+                           COALESCE(sk.renk_bileseni_mi, 0) AS renk_bileseni_mi
+                    FROM nexgen_recete_kalem rk
+                    JOIN nexgen_stok_kart sk ON sk.id = rk.stok_kart_id
+                    WHERE rk.uretim_varyant_id = ? AND rk.aktif = 1
+                    ORDER BY rk.sira
+                """, (kaynak_uv['id'],)).fetchall()
+
+                for sira_no, k in enumerate(kaynaklar, start=1):
+                    con.execute("""
+                        INSERT INTO nexgen_arge_formul_kalem
+                            (arge_formul_id, stok_kart_id, sira,
+                             miktar_kg, renk_bileseni_mi, aciklama)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    """, (formul_id, k['stok_kart_id'], sira_no,
+                          k['miktar_kg'], k['renk_bileseni_mi'],
+                          k['aciklama']))
+
+        # ── Payload'dan gelen hammaddeler ────────────────────────
+        # (SIFIRDAN'da tümü, TASLAK'ta var olanın üzerine eklenir/güncellenir)
+        # Önce mevcut formül kalem ID'lerini al (taslakta gelmiş olabilir)
+        mevcut_stok_ids = {
+            r['stok_kart_id'] for r in con.execute(
+                "SELECT stok_kart_id FROM nexgen_arge_formul_kalem WHERE arge_formul_id=? AND aktif=1",
+                (formul_id,)
+            ).fetchall()
+        }
+
+        # Son sıra no
+        son_sira_row = con.execute(
+            "SELECT COALESCE(MAX(sira),0) FROM nexgen_arge_formul_kalem WHERE arge_formul_id=?",
+            (formul_id,)
+        ).fetchone()
+        son_sira = son_sira_row[0] if son_sira_row else 0
+
+        for hm in hammaddeler:
+            stok_id = hm.get('stok_kart_id')
+            if not stok_id:
+                continue
+            try:
+                miktar_kg = float(hm.get('kg_str') or 0)
+            except (ValueError, TypeError):
+                miktar_kg = 0.0
+
+            if stok_id in mevcut_stok_ids:
+                # Taslak kopyasında zaten var — miktarı güncelle
+                con.execute(
+                    "UPDATE nexgen_arge_formul_kalem "
+                    "SET miktar_kg=? "
+                    "WHERE arge_formul_id=? AND stok_kart_id=? AND aktif=1",
+                    (miktar_kg, formul_id, stok_id))
+            else:
+                son_sira += 1
+                con.execute("""
+                    INSERT INTO nexgen_arge_formul_kalem
+                        (arge_formul_id, stok_kart_id, sira, miktar_kg,
+                         renk_bileseni_mi, aktif)
+                    VALUES (?, ?, ?, ?, 0, 1)
+                """, (formul_id, stok_id, son_sira, miktar_kg))
+                mevcut_stok_ids.add(stok_id)
+
+        # ── Renk bileşenleri ─────────────────────────────────────
+        for rb in renk_bilesenleri:
+            stok_id = rb.get('stok_kart_id')
+            if not stok_id:
+                continue
+            try:
+                gram    = float(rb.get('gram_str') or 0)
+                kg_val  = round(gram / 1000, 9)
+            except (ValueError, TypeError):
+                gram, kg_val = 0.0, 0.0
+
+            son_sira += 1
+            con.execute("""
+                INSERT OR IGNORE INTO nexgen_arge_formul_kalem
+                    (arge_formul_id, stok_kart_id, sira, miktar_kg,
+                     renk_bileseni_mi, miktar_gr, aktif)
+                VALUES (?, ?, ?, ?, 1, ?, 1)
+            """, (formul_id, stok_id, son_sira, kg_val, gram))
+
+        con.commit()
+
+        # Kaydın olusturma_tarihi'ni al
+        tarih_row = con.execute(
+            "SELECT olusturma_tarihi FROM nexgen_arge_formul WHERE id=?",
+            (formul_id,)
+        ).fetchone()
+        olusturma_tarihi = tarih_row['olusturma_tarihi'] if tarih_row else None
+
+        return jsonify({
+            "ok"                : True,
+            "arge_kodu"         : arge_kodu,
+            "formul_id"         : formul_id,
+            "formul_adi"        : formul_adi,
+            "olusturma_tarihi"  : olusturma_tarihi,
+            "durum"             : "TASLAK",
+        })
+
+    except Exception as e:
+        con.rollback()
+        print(f"[nexgen] api_tablet_yeni_formul_kaydet hata: {e}")
+        return jsonify({"ok": False, "hata": f"Sunucu hatası: {str(e)}"}), 500
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/tablet/arge/barkod-yazdir')
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def tablet_arge_barkod_yazdir():
+    """MODÜL-01 — Barkod Yazdır.
+    AR-GE test kaydının barkodunu yazdırma sayfası.
+    ?test_id=<int> ile çağrılır.
+    """
+    test_id = request.args.get('test_id', type=int)
+    if not test_id:
+        return "test_id parametresi gerekli.", 400
+
+    con = _db()
+    try:
+        test = con.execute("""
+            SELECT
+                at.id, at.test_no, at.lot_no, at.test_batch_kg,
+                at.numune_orani, at.yeni_renk_adi, at.makina,
+                at.notlar, at.talep_referansi, at.olusturma_tarihi,
+                at.durum,
+                uv.boyut,
+                rv.ad  AS rv_ad,
+                f.kod  AS formul_kod,
+                f.ad   AS formul_ad,
+                c.unvan AS cari_ad,
+                rf.rf_kod, rf.ad AS rf_ad
+            FROM nexgen_arge_test at
+            JOIN nexgen_uretim_varyant uv ON uv.id = at.kaynak_uretim_varyant_id
+            JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+            JOIN nexgen_formul f          ON f.id  = rv.formul_id
+            LEFT JOIN nexgen_cari c       ON c.id  = at.cari_id
+            LEFT JOIN nexgen_rf_renk rf   ON rf.id = at.rf_renk_id
+            WHERE at.id = ?
+        """, (test_id,)).fetchone()
+
+        if not test:
+            return f"Test ID={test_id} bulunamadı.", 404
+
+        # Code39 benzeri SVG barkod oluştur (basit dikey çizgi temsili)
+        barkod_svg = _barkod_svg_olustur(test['test_no'])
+
+        return render_template(
+            'nexgen/modul01_barkod.html',
+            active='nexgen',
+            test=dict(test),
+            barkod_svg=barkod_svg,
+        )
+    finally:
+        con.close()
+
+
+def _barkod_svg_olustur(metin):
+    """Verilen metinden basit görsel barkod SVG üretir.
+    Gerçek Code39 encoder olmadan deterministik çizgi genişliği kullanır.
+    Sonuç baskıda tanımlanabilir değil, görsel temsil amaçlıdır.
+    Gerçek barkod okutma için ZPL/PDF entegrasyonu gerekir.
+    """
+    import hashlib
+    W, H = 300, 60
+    ince, kalin = 2, 5
+    bosluk = 2
+
+    # Metni hash'e çevirip deterministik çizgi deseni üret
+    h = hashlib.md5(metin.encode()).hexdigest()
+    bars = []
+    x = 10
+    for i, ch in enumerate(h[:40]):
+        val = int(ch, 16)
+        genislik = kalin if val > 7 else ince
+        if x + genislik > W - 10:
+            break
+        bars.append((x, genislik))
+        x += genislik + bosluk
+
+    rects = ''.join(
+        f'<rect x="{bx}" y="4" width="{bw}" height="{H - 8}" fill="#0B2545"/>'
+        for bx, bw in bars
+    )
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
+        f'viewBox="0 0 {W} {H}">{rects}</svg>'
+    )
+
+
+@nexgen_bp.route('/api/tablet/arge/recete-onizle', methods=['GET'])
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def api_tablet_recete_onizle():
+    """MODÜL-01 Reçete Önizleme API.
+
+    Giriş: uv_id, rf_id (0=yok), oran (numune yüzdesi, ör: 10.0 = %10)
+    Hesap: numune_kg = master_kg × (oran / 100)
+    RF boya da aynı oranla ölçeklenir.
+    debug=1 eklenirse ham audit bilgisi döner.
+    DB yazmaz.
+    """
+    if not yetki_var('nexgen.tablet.view', 'can_view'):
+        return jsonify({'ok': False, 'hata': 'Yetki yok'}), 403
+
+    uv_id    = request.args.get('uv_id', type=int)
+    rf_id    = request.args.get('rf_id', type=int, default=0)
+    oran_str = request.args.get('oran',  type=str, default='10')
+    debug    = request.args.get('debug', type=int, default=0)
+
+    try:
+        oran = float(oran_str)   # yüzde değeri, örn: 10.0 = %10
+    except (TypeError, ValueError):
+        return jsonify({'ok': False, 'hata': 'Geçersiz oran değeri'}), 400
+
+    if oran <= 0 or oran > 100:
+        return jsonify({'ok': False, 'hata': 'oran 0-100 arasında olmalı'}), 400
+
+    if not uv_id:
+        return jsonify({'ok': False, 'hata': 'uv_id zorunlu'}), 400
+
+    con = _db()
+    try:
+        # Üretim varyantı doğrula
+        uv = con.execute("""
+            SELECT uv.id, uv.boyut,
+                   rv.id AS rv_id, rv.ad AS rv_ad,
+                   f.id AS formul_id, f.kod AS formul_kod, f.ad AS formul_ad
+            FROM nexgen_uretim_varyant uv
+            JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
+            JOIN nexgen_formul f ON f.id = rv.formul_id
+            WHERE uv.id = ? AND uv.aktif = 1
+        """, (uv_id,)).fetchone()
+        if not uv:
+            return jsonify({'ok': False, 'hata': f'uv_id={uv_id} bulunamadı veya pasif'}), 404
+
+        # Master reçete kalemleri — TÜMÜ (BOYA dahil, sadece audit için)
+        kalemler = con.execute("""
+            SELECT rk.miktar_kg, rk.sira, sk.id AS sk_id, sk.kod, sk.ad, sk.kategori
+            FROM nexgen_recete_kalem rk
+            JOIN nexgen_stok_kart sk ON sk.id = rk.stok_kart_id
+            WHERE rk.uretim_varyant_id = ? AND rk.aktif = 1
+            ORDER BY rk.sira, rk.id
+        """, (uv_id,)).fetchall()
+        if not kalemler:
+            return jsonify({'ok': False, 'hata': f'uv_id={uv_id} için reçete kalemi yok'}), 404
+
+        # Master KG = tüm kalemlerin toplamı (BOYA dahil)
+        master_kg = round(sum(float(k['miktar_kg']) for k in kalemler), 4)
+        if master_kg <= 0:
+            return jsonify({'ok': False, 'hata': 'Master reçete KG = 0'}), 400
+
+        # NexGen hesap kuralı:
+        #   Giriş: oran (%) — operatör tarafından seçilir
+        #   Hesap: numune_kg = master_kg × (oran / 100)
+        numune_orani       = oran / 100.0          # ondalık çarpan, ör: 0.10
+        numune_kg          = round(master_kg * numune_orani, 4)
+        numune_orani_yuzde = oran                  # ekranda gösterilecek % değeri
+
+        # Taban hammaddeler (BOYA kategorisi hariç)
+        taban = []
+        taban_audit = []
+        for k in kalemler:
+            kategori = (k['kategori'] or '').upper()
+            ham_kg   = float(k['miktar_kg'])
+            olcek_kg = ham_kg * numune_orani
+            olcek_kg_yuvarlak = round(olcek_kg, 4)
+
+            taban_audit.append({
+                'ad': k['ad'] or '', 'kod': k['kod'] or '',
+                'kategori': kategori,
+                'master_kg': ham_kg,
+                'olcek_kg': olcek_kg,
+                'olcek_kg_yuvarlak': olcek_kg_yuvarlak,
+                'atildi': kategori == 'BOYA' or olcek_kg_yuvarlak <= 0,
+            })
+
+            if kategori == 'BOYA':
+                continue
+            if olcek_kg_yuvarlak <= 0:
+                continue
+            taban.append({'ad': k['ad'] or '', 'kod': k['kod'] or '', 'kg': olcek_kg_yuvarlak})
+
+        # RF Boya kalemleri
+        # nexgen_rf_kalem.miktar_kg → RF'nin master reçete bazında miktarı (kg)
+        # Aynı numune_orani ile ölçeklenir.
+        boya = []
+        boya_audit = []
+        rf_debug_info = {'rf_id': rf_id, 'row_count': 0, 'pigment_ad_col_exists': None}
+
+        if rf_id and rf_id > 0:
+            # Önce sütun varlığını kontrol et
+            try:
+                pragma = con.execute("PRAGMA table_info(nexgen_rf_kalem)").fetchall()
+                rf_cols = [p['name'] for p in pragma]
+                rf_debug_info['columns'] = rf_cols
+                has_pigment_ad = 'pigment_ad' in rf_cols
+                rf_debug_info['pigment_ad_col_exists'] = has_pigment_ad
+            except Exception as e:
+                rf_debug_info['pragma_error'] = str(e)
+                has_pigment_ad = False
+
+            rf_rows = con.execute("""
+                SELECT rk.id, rk.miktar_kg, rk.sira,
+                       rk.stok_kart_id,
+                       sk.kod AS stok_kod, sk.ad AS stok_ad
+                FROM nexgen_rf_kalem rk
+                LEFT JOIN nexgen_stok_kart sk ON sk.id = rk.stok_kart_id
+                WHERE rk.rf_renk_id = ? AND rk.aktif = 1
+                ORDER BY rk.sira, rk.id
+            """, (rf_id,)).fetchall()
+            rf_debug_info['row_count'] = len(rf_rows)
+
+            # pigment_ad varsa ayrıca çek
+            pigment_map = {}
+            if has_pigment_ad:
+                try:
+                    pa_rows = con.execute(
+                        "SELECT id, pigment_ad FROM nexgen_rf_kalem WHERE rf_renk_id=? AND aktif=1",
+                        (rf_id,)
+                    ).fetchall()
+                    pigment_map = {row['id']: (row['pigment_ad'] or '') for row in pa_rows}
+                except Exception as e:
+                    rf_debug_info['pigment_ad_error'] = str(e)
+
+            for r in rf_rows:
+                ham_kg   = float(r['miktar_kg'])
+                olcek_kg = ham_kg * numune_orani
+                # RF/pigment kalemleri için round(6) — çok küçük değerleri sıfıra düşürme
+                olcek_kg_yuvarlak = round(olcek_kg, 6)
+
+                p_ad = pigment_map.get(r['id'], '')
+                ad   = r['stok_ad'] or p_ad or f'(rf_kalem id={r["id"]})'
+
+                boya_audit.append({
+                    'id': r['id'],
+                    'stok_kart_id': r['stok_kart_id'],
+                    'stok_kod': r['stok_kod'] or '',
+                    'ad': ad,
+                    'master_kg': ham_kg,
+                    'olcek_kg': olcek_kg,
+                    'olcek_kg_yuvarlak': olcek_kg_yuvarlak,
+                    'atildi': olcek_kg_yuvarlak <= 0,
+                })
+
+                if olcek_kg_yuvarlak <= 0:
+                    continue
+                boya.append({'ad': ad, 'kod': r['stok_kod'] or '', 'kg': olcek_kg_yuvarlak})
+
+        # Toplamlar ve yüzdeler
+        taban_top = round(sum(t['kg'] for t in taban), 4)
+        boya_top  = round(sum(b['kg'] for b in boya),  6)
+        genel_top = round(taban_top + boya_top, 4)
+
+        def yuzde(x):
+            return round(x / genel_top * 100, 2) if genel_top > 0 else 0.0
+
+        for t in taban:
+            t['yuzde'] = yuzde(t['kg'])
+        for b in boya:
+            b['yuzde'] = yuzde(b['kg'])
+
+        sonuc = {
+            'ok':               True,
+            'boyut':            uv['boyut'] or '—',
+            'rv_ad':            uv['rv_ad'] or '—',
+            'formul':           uv['formul_kod'] + ' ' + uv['formul_ad'],
+            'master_kg':        master_kg,
+            'numune_kg':        numune_kg,       # master × oran
+            'numune_orani':     numune_orani_yuzde,   # % değeri (ör: 10.0)
+            'taban':            taban,
+            'boya':             boya,
+            'taban_top':        taban_top,
+            'boya_top':         round(boya_top, 4),
+            'genel_top':        genel_top,
+        }
+
+        if debug:
+            sonuc['_audit'] = {
+                'uv_id': uv_id, 'rf_id': rf_id,
+                'oran_girdi': oran,
+                'master_kg': master_kg,
+                'numune_kg_hesap': numune_kg,
+                'numune_orani_ondalik': numune_orani,
+                'taban_audit': taban_audit,
+                'boya_audit': boya_audit,
+                'rf_debug': rf_debug_info,
+            }
+
+        return jsonify(sonuc)
+
+    finally:
+        con.close()
 
 
 @nexgen_bp.route('/api/tablet/uretim-onizleme', methods=['POST'])
@@ -7325,7 +9062,7 @@ def _formuller_varyant_hiyerarsi(con):
     varyant_rows = con.execute("""
         SELECT uv.id AS uv_id, uv.boyut, uv.recete_durum,
                rv.id AS renk_id, rv.ad AS renk_ad,
-               f.id  AS formul_id, f.ad AS formul_ad
+               f.id  AS formul_id, f.ad AS formul_ad, f.kod AS formul_kod
         FROM nexgen_uretim_varyant uv
         JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
         JOIN nexgen_formul f        ON f.id  = rv.formul_id
@@ -7338,7 +9075,16 @@ def _formuller_varyant_hiyerarsi(con):
     for r in varyant_rows:
         fid = r['formul_id']
         if fid not in formul_map:
-            formul_map[fid] = {'formul_id': fid, 'formul_ad': r['formul_ad'], 'renkler': {}}
+            # Display format: "675 - AYM" — kod varsa önüne ekle
+            raw_ad  = r['formul_ad'] or ''
+            raw_kod = r['formul_kod'] or ''
+            display_ad = (f'{raw_kod} - {raw_ad}') if raw_kod else raw_ad
+            formul_map[fid] = {
+                'formul_id':  fid,
+                'formul_ad':  display_ad,
+                'formul_kod': raw_kod,
+                'renkler': {},
+            }
         rid = r['renk_id']
         if rid not in formul_map[fid]['renkler']:
             formul_map[fid]['renkler'][rid] = {
@@ -7354,8 +9100,9 @@ def _formuller_varyant_hiyerarsi(con):
 
     return [
         {
-            'formul_id': f['formul_id'],
-            'formul_ad': f['formul_ad'],
+            'formul_id':  f['formul_id'],
+            'formul_ad':  f['formul_ad'],   # "675 - AYM" formatı
+            'formul_kod': f['formul_kod'],
             'renkler': list(f['renkler'].values()),
         }
         for f in formul_map.values()
@@ -7395,6 +9142,10 @@ def mpr_on_calisma_liste():
             # Her kart /api/plan/<id>/stok-durum ile lazy olarak yükler.
             pl['stok_yeterli_mi'] = None
             pl['stok_eksik_sayisi'] = None
+            # Display format: "675 - AYM" — kod varsa önüne ekle
+            fkod = (pl.get('formul_kod') or '').strip()
+            fad  = (pl.get('formul_ad')  or '').strip()
+            pl['formul_ad'] = (f'{fkod} - {fad}') if fkod and fkod not in fad else (fad or '—')
 
         formuller = _formuller_varyant_hiyerarsi(con)
         try:
@@ -7481,7 +9232,8 @@ def api_mpr_on_calisma_ekle():
                 return jsonify({'ok': False, 'hata': 'Header varyant seçilemedi'}), 400
 
             uv = con.execute(
-                "SELECT uv.id, uv.boyut, rv.ad AS renk_ad, f.ad AS formul_ad "
+                "SELECT uv.id, uv.boyut, rv.id AS renk_varyant_id, "
+                "rv.ad AS renk_ad, f.ad AS formul_ad, f.kod AS formul_kod "
                 "FROM nexgen_uretim_varyant uv "
                 "JOIN nexgen_renk_varyant rv ON rv.id=uv.renk_varyant_id "
                 "JOIN nexgen_formul f ON f.id=rv.formul_id "
@@ -7501,7 +9253,8 @@ def api_mpr_on_calisma_ekle():
                 return jsonify({'ok': False, 'hata': 'Geçersiz planlanan_kg'}), 400
 
             uv = con.execute(
-                "SELECT uv.id, uv.boyut, rv.id AS renk_varyant_id, rv.ad AS renk_ad, f.ad AS formul_ad "
+                "SELECT uv.id, uv.boyut, rv.id AS renk_varyant_id, rv.ad AS renk_ad, "
+                "f.ad AS formul_ad, f.kod AS formul_kod "
                 "FROM nexgen_uretim_varyant uv "
                 "JOIN nexgen_renk_varyant rv ON rv.id=uv.renk_varyant_id "
                 "JOIN nexgen_formul f ON f.id=rv.formul_id "
@@ -7525,7 +9278,7 @@ def api_mpr_on_calisma_ekle():
             if not rf:
                 return jsonify({
                     'ok': False,
-                    'hata': 'Seçilen RF bu formül için ONAYLI değil veya bulunamadı.',
+                    'hata': 'Seçilen renk bulunamadı veya onaylı değil.',
                 }), 400
 
         plan_kodu = _plan_kodu_uret(con)
@@ -7555,11 +9308,15 @@ def api_mpr_on_calisma_ekle():
 
         con.commit()
 
+        _fkod = (uv['formul_kod'] or '').strip() if uv['formul_kod'] else ''
+        _fad  = (uv['formul_ad']  or '').strip()
+        _formul_display = (f'{_fkod} - {_fad}') if _fkod and _fkod not in _fad else (_fad or '—')
         resp = {
             'ok': True,
             'plan_id': plan_id,
             'plan_kodu': plan_kodu,
-            'formul_ad': uv['formul_ad'],
+            'formul_ad': _formul_display,
+            'formul_kod': _fkod,
             'renk_ad': uv['renk_ad'],
             'boyut': uv['boyut'],
             'planlanan_kg': round(toplam_kg, 3),
@@ -7919,26 +9676,22 @@ def api_mpr_siparise_bagla(plan_id):
 @nexgen_bp.route('/api/plan/rf-secenekleri')
 @login_gerekli
 def api_plan_rf_secenekleri():
-    """Formül için ONAYLI RF renk listesi (plan oluşturma)."""
-    formul_id = request.args.get('formul_id')
-    if not formul_id:
-        return jsonify({'ok': False, 'hata': 'formul_id zorunlu'}), 400
-    try:
-        formul_id = int(formul_id)
-    except (TypeError, ValueError):
-        return jsonify({'ok': False, 'hata': 'formul_id geçersiz'}), 400
+    """Tüm ONAYLI + aktif RF renk listesi (plan oluşturma).
 
+    FAZ-3F-6: Renk seçimi artık hammadde formülüne bağlı değil.
+    Kullanıcı seçilen formülden bağımsız olarak tüm onaylı renkleri görebilir.
+    formul_id parametresi hâlâ kabul edilir (JS uyumluluğu) ama filtrelemede kullanılmaz.
+    RF-001/RF-004/RF-005/RF-006 gibi teknik test kodları gösterilmez.
+    """
     con = _db()
     try:
         rows = con.execute("""
             SELECT rf.id, rf.rf_kod, rf.ad, rf.cari_id, rf.ilk_talep_cari_id
             FROM nexgen_rf_renk rf
-            JOIN nexgen_rf_formul_uygunluk u ON u.rf_renk_id = rf.id
-            WHERE u.formul_id = ?
-              AND u.durum = 'ONAYLI' AND u.aktif = 1
-              AND rf.aktif = 1 AND rf.durum = 'ONAYLI'
+            WHERE rf.aktif = 1 AND rf.durum = 'ONAYLI'
+              AND rf.rf_kod NOT LIKE 'RF-%'
             ORDER BY rf.rf_kod
-        """, (formul_id,)).fetchall()
+        """).fetchall()
         return jsonify({'ok': True, 'liste': [dict(r) for r in rows]})
     finally:
         con.close()
@@ -7947,35 +9700,52 @@ def api_plan_rf_secenekleri():
 @nexgen_bp.route('/api/plan/rf-renk-varyantlari')
 @login_gerekli
 def api_plan_rf_renk_varyantlari():
-    """RF renk formülüne uyumlu renk varyantları (FAZ-1 YÜKSEK #11).
+    """Seçilen hammadde formülüne ait üretim varyantları (LARGE/SMALL/MEDIUM).
 
-    RF seçilince o RF'in uygulandığı formüle ait üretim varyantları döner.
-    Kullanıcı arayüzünde Renk Formülü → Renk/Varyant filtrelemesi için kullanılır.
+    FAZ-3F-6: Artık nexgen_rf_formul_uygunluk JOIN'i kullanılmıyor.
+    formul_id parametresi zorunlu — JS'den mv-formul değeri gönderilir.
+    rf_renk_id hâlâ kabul edilir (ileride pigment hesabı için kullanılabilir).
     """
-    rf_renk_id_raw = request.args.get('rf_renk_id')
-    if not rf_renk_id_raw:
-        return jsonify({'ok': False, 'hata': 'rf_renk_id zorunlu'}), 400
+    formul_id_raw = request.args.get('formul_id')
+    if not formul_id_raw:
+        return jsonify({'ok': False, 'hata': 'formul_id zorunlu'}), 400
     try:
-        rf_renk_id = int(rf_renk_id_raw)
+        formul_id = int(formul_id_raw)
     except (TypeError, ValueError):
-        return jsonify({'ok': False, 'hata': 'rf_renk_id geçersiz'}), 400
+        return jsonify({'ok': False, 'hata': 'formul_id geçersiz'}), 400
 
     con = _db()
     try:
+        # Önce URETIME_ACIK UV'leri çek
         rows = con.execute("""
             SELECT rv.id AS renk_id, rv.ad AS renk_ad,
                    uv.id AS uv_id, uv.boyut,
-                   f.id AS formul_id
-            FROM nexgen_rf_formul_uygunluk u
-            JOIN nexgen_renk_varyant rv ON rv.formul_id = u.formul_id
+                   f.id AS formul_id,
+                   1 AS uretime_acik
+            FROM nexgen_renk_varyant rv
             JOIN nexgen_uretim_varyant uv ON uv.renk_varyant_id = rv.id
                 AND uv.aktif = 1
                 AND uv.recete_durum = 'URETIME_ACIK'
-            JOIN nexgen_formul f ON f.id = u.formul_id
-            WHERE u.rf_renk_id = ?
-              AND u.durum = 'ONAYLI' AND u.aktif = 1
+            JOIN nexgen_formul f ON f.id = rv.formul_id
+            WHERE rv.formul_id = ?
             ORDER BY rv.ad, uv.boyut
-        """, (rf_renk_id,)).fetchall()
+        """, (formul_id,)).fetchall()
+
+        # URETIME_ACIK yoksa, aktif UV'ler olmasa da en azından RV var mı bak
+        if not rows:
+            rows_rv = con.execute("""
+                SELECT rv.id AS renk_id, rv.ad AS renk_ad,
+                       uv.id AS uv_id, uv.boyut, uv.recete_durum,
+                       f.id AS formul_id,
+                       0 AS uretime_acik
+                FROM nexgen_renk_varyant rv
+                LEFT JOIN nexgen_uretim_varyant uv ON uv.renk_varyant_id = rv.id
+                    AND uv.aktif = 1
+                JOIN nexgen_formul f ON f.id = rv.formul_id
+                WHERE rv.formul_id = ?
+                ORDER BY rv.ad, uv.boyut
+            """, (formul_id,)).fetchall()
+            rows = rows_rv
 
         # renk_id bazında grupla
         renk_map = {}
@@ -7988,14 +9758,16 @@ def api_plan_rf_renk_varyantlari():
                     'large_uv_id': None,
                     'small_uv_id': None,
                     'standart_uv_id': None,
+                    'uretime_acik': bool(r['uretime_acik']),
                 }
             b = (r['boyut'] or '').upper()
-            if b == 'LARGE':
-                renk_map[rid]['large_uv_id'] = r['uv_id']
-            elif b == 'SMALL':
-                renk_map[rid]['small_uv_id'] = r['uv_id']
-            elif b in ('STANDART', 'MEDIUM'):
-                renk_map[rid]['standart_uv_id'] = r['uv_id']
+            if r['uretime_acik']:
+                if b == 'LARGE':
+                    renk_map[rid]['large_uv_id'] = r['uv_id']
+                elif b == 'SMALL':
+                    renk_map[rid]['small_uv_id'] = r['uv_id']
+                elif b in ('STANDART', 'MEDIUM'):
+                    renk_map[rid]['standart_uv_id'] = r['uv_id']
         return jsonify({'ok': True, 'liste': list(renk_map.values())})
     finally:
         con.close()
@@ -8068,21 +9840,17 @@ def api_plan_ekle():
                 rf_renk_id = int(rf_renk_id_raw)
             except (TypeError, ValueError):
                 return jsonify({'ok': False, 'hata': 'rf_renk_id geçersiz'}), 400
+            # FAZ-3F-6: Formül bağlantısı kontrolü kaldırıldı — RF ONAYLI+aktif ise yeterli
             rf = con.execute("""
                 SELECT rf.id, rf.rf_kod, rf.ad, rf.cari_id
                 FROM nexgen_rf_renk rf
-                JOIN nexgen_rf_formul_uygunluk u ON u.rf_renk_id = rf.id
-                JOIN nexgen_uretim_varyant uv ON uv.id = ?
-                JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
-                    AND rv.formul_id = u.formul_id
                 WHERE rf.id = ?
                   AND rf.durum = 'ONAYLI' AND rf.aktif = 1
-                  AND u.durum = 'ONAYLI' AND u.aktif = 1
-            """, (uv_id, rf_renk_id)).fetchone()
+            """, (rf_renk_id,)).fetchone()
             if not rf:
                 return jsonify({
                     'ok': False,
-                    'hata': 'Seçilen RF bu formül için ONAYLI değil veya bulunamadı.',
+                    'hata': 'Seçilen renk bulunamadı veya onaylı değil.',
                 }), 400
             if cari_id and rf['cari_id']:
                 rf_cari_uyari = _rf_cari_uyari(con, rf['cari_id'], cari_id)
@@ -8230,21 +9998,17 @@ def api_planlama_siparis_mpr_ekle(ps_id):
                 rf_renk_id = int(rf_renk_id_raw)
             except (TypeError, ValueError):
                 return jsonify({'ok': False, 'hata': 'rf_renk_id geçersiz'}), 400
+            # FAZ-3F-6: Formül bağlantısı kontrolü kaldırıldı — RF ONAYLI+aktif ise yeterli
             rf = con.execute("""
                 SELECT rf.id, rf.rf_kod, rf.ad, rf.cari_id
                 FROM nexgen_rf_renk rf
-                JOIN nexgen_rf_formul_uygunluk u ON u.rf_renk_id = rf.id
-                JOIN nexgen_uretim_varyant uv2 ON uv2.id = ?
-                JOIN nexgen_renk_varyant rv ON rv.id = uv2.renk_varyant_id
-                    AND rv.formul_id = u.formul_id
                 WHERE rf.id = ?
                   AND rf.durum = 'ONAYLI' AND rf.aktif = 1
-                  AND u.durum = 'ONAYLI' AND u.aktif = 1
-            """, (uv_id, rf_renk_id)).fetchone()
+            """, (rf_renk_id,)).fetchone()
             if not rf:
                 return jsonify({
                     'ok': False,
-                    'hata': 'Seçilen RF bu formül için ONAYLI değil veya bulunamadı.',
+                    'hata': 'Seçilen renk bulunamadı veya onaylı değil.',
                 }), 400
             if cari_id and rf['cari_id']:
                 rf_cari_uyari = _rf_cari_uyari(con, rf['cari_id'], cari_id)
@@ -8647,17 +10411,18 @@ def _mpr_header_uv_boyut(boyut_kg_map, uv_map):
 
 
 def _rf_renk_formul_dogrula(con, rf_renk_id, renk_varyant_id):
-    """RF'nin renk varyantının formülü ile ONAYLI uyumunu kontrol eder."""
+    """RF'nin ONAYLI ve aktif olduğunu kontrol eder.
+
+    FAZ-3F-6: nexgen_rf_formul_uygunluk bağlantısı artık zorunlu değil.
+    Renk, formüle bağlı olmaksızın ONAYLI + aktif ise kullanılabilir.
+    renk_varyant_id parametresi geriye dönük uyumluluk için tutuldu.
+    """
     return con.execute("""
-        SELECT rf.id, rf.rf_kod, rf.ad
+        SELECT rf.id, rf.rf_kod, rf.ad, rf.cari_id
         FROM nexgen_rf_renk rf
-        JOIN nexgen_rf_formul_uygunluk u ON u.rf_renk_id = rf.id
-        JOIN nexgen_renk_varyant rv ON rv.id = ?
-            AND rv.formul_id = u.formul_id
         WHERE rf.id = ?
           AND rf.durum = 'ONAYLI' AND rf.aktif = 1
-          AND u.durum = 'ONAYLI' AND u.aktif = 1
-    """, (renk_varyant_id, rf_renk_id)).fetchone()
+    """, (rf_renk_id,)).fetchone()
 
 
 def _mpr_stok_ihtiyac_hesapla(con, uretim_varyant_id, rf_renk_id, planlanan_kg,
@@ -8695,6 +10460,16 @@ def _mpr_stok_ihtiyac_hesapla(con, uretim_varyant_id, rf_renk_id, planlanan_kg,
     carpan = float(batch_sayisi)
     satirlar = []
 
+    # FAZ-3I-1: UV detay debug bilgisi
+    uv_meta = con.execute("""
+        SELECT uv.id, uv.boyut, uv.recete_durum, uv.renk_varyant_id,
+               rv.ad AS rv_ad, f.kod AS formul_kod
+        FROM nexgen_uretim_varyant uv
+        JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
+        JOIN nexgen_formul f        ON f.id  = rv.formul_id
+        WHERE uv.id = ?
+    """, (uretim_varyant_id,)).fetchone()
+
     taban_rows = con.execute("""
         SELECT rk.stok_kart_id, rk.miktar_kg,
                sk.kod AS stok_kod, sk.ad AS stok_ad
@@ -8723,30 +10498,55 @@ def _mpr_stok_ihtiyac_hesapla(con, uretim_varyant_id, rf_renk_id, planlanan_kg,
             rf_id = int(rf_renk_id)
         except (TypeError, ValueError):
             pass
+
+    rf_debug_kalemler = []  # FAZ-3I-1: tüm RF kalemleri (sıfır dahil)
     if rf_id:
+        # FAZ-3F-6C: LEFT JOIN — stok_kart_id NULL olan pigment kalemleri de dahil
         rf_rows = con.execute("""
             SELECT rk.stok_kart_id, rk.miktar_kg,
+                   rk.pigment_ad,
                    sk.kod AS stok_kod, sk.ad AS stok_ad
             FROM nexgen_rf_kalem rk
-            JOIN nexgen_stok_kart sk ON sk.id = rk.stok_kart_id
+            LEFT JOIN nexgen_stok_kart sk ON sk.id = rk.stok_kart_id
             WHERE rk.rf_renk_id = ? AND rk.aktif = 1
             ORDER BY rk.sira, rk.id
         """, (rf_id,)).fetchall()
         for row in rf_rows:
-            gerekli = round(float(row['miktar_kg']) * carpan, 3)
+            # FAZ-3I-5B: RF/boya kalemleri için round(6) — küçük pigment miktarları sıfıra yuvarlanmasın
+            gerekli = round(float(row['miktar_kg']) * carpan, 6)
+            stok_kart_id = row['stok_kart_id']
+            pigment_ad = None
+            try:
+                pigment_ad = row['pigment_ad']
+            except (IndexError, KeyError):
+                pass
+            ad = row['stok_ad'] or pigment_ad or ''
+            rf_debug_kalemler.append({
+                'stok_kod': row['stok_kod'] or '',
+                'stok_ad': ad,
+                'miktar_kg_birim': float(row['miktar_kg']),
+                'gerekli_kg': gerekli,
+                'sifir': gerekli <= 0,
+            })
             if gerekli <= 0:
+                # Sıfır miktar: debug listesine eklendi, stok hesabına dahil edilmez
                 continue
             satirlar.append({
                 'kaynak': 'RF',
-                'stok_kart_id': row['stok_kart_id'],
+                'stok_kart_id': stok_kart_id,
                 'stok_kod': row['stok_kod'] or '',
-                'stok_ad': row['stok_ad'] or '',
+                'stok_ad': ad,
+                'pigment_ad': pigment_ad or ad,
+                'stok_eslesmis': stok_kart_id is not None,
                 'gerekli_kg': gerekli,
             })
 
+    # Stok talep toplamı — NULL stok_kart_id olanlar atlanır (stok kontrolü yapılamaz)
     talep = {}
     for s in satirlar:
         sid = s['stok_kart_id']
+        if sid is None:
+            continue
         talep[sid] = round(talep.get(sid, 0.0) + s['gerekli_kg'], 3)
 
     stok_cache = {}
@@ -8770,6 +10570,27 @@ def _mpr_stok_ihtiyac_hesapla(con, uretim_varyant_id, rf_renk_id, planlanan_kg,
     kalemler = []
     for s in satirlar:
         sid = s['stok_kart_id']
+        stok_eslesmis = s.get('stok_eslesmis', True)
+        if sid is None or not stok_eslesmis:
+            # NULL stok kartı — stok kontrolü yapılamaz, uyarı olarak eklenir
+            kalemler.append({
+                'kaynak': s['kaynak'],
+                'stok_kart_id': None,
+                'stok_kod': '',
+                'stok_ad': s.get('pigment_ad') or s.get('stok_ad') or '?',
+                'pigment_ad': s.get('pigment_ad') or s.get('stok_ad') or '?',
+                'stok_eslesmis': False,
+                'gerekli_kg': s['gerekli_kg'],
+                'fiziksel_kg': 0.0,
+                'rezerve_kg': 0.0,
+                'yumusak_talep_kg': 0.0,
+                'kullanilabilir_kg': 0.0,
+                'mevcut_kg': 0.0,
+                'fark_kg': -s['gerekli_kg'],
+                'yeterli': False,
+            })
+            eksik_stok_ids.add(None)
+            continue
         toplam_gerekli = talep[sid]
         sc = stok_cache[sid]
         kalemler.append({
@@ -8777,6 +10598,8 @@ def _mpr_stok_ihtiyac_hesapla(con, uretim_varyant_id, rf_renk_id, planlanan_kg,
             'stok_kart_id': sid,
             'stok_kod': s['stok_kod'],
             'stok_ad': s['stok_ad'],
+            'pigment_ad': s.get('pigment_ad') or s['stok_ad'],
+            'stok_eslesmis': True,
             'gerekli_kg': s['gerekli_kg'],
             'fiziksel_kg': sc['fiziksel_kg'],
             'rezerve_kg': sc['rezerve_kg'],
@@ -8786,6 +10609,42 @@ def _mpr_stok_ihtiyac_hesapla(con, uretim_varyant_id, rf_renk_id, planlanan_kg,
             'fark_kg': round(sc['kullanilabilir_kg'] - toplam_gerekli, 3),
             'yeterli': sid not in eksik_stok_ids,
         })
+
+    # FAZ-3I-1/2: debug_info — UV kimliği, batch detayı, RF kalem özeti
+    _boyut_val = uv_meta['boyut'] if uv_meta else None
+    debug_info = {
+        'uv_id':         uretim_varyant_id,
+        'rv_id':         uv_meta['renk_varyant_id'] if uv_meta else None,
+        'rv_ad':         uv_meta['rv_ad']            if uv_meta else None,
+        'formul_kod':    uv_meta['formul_kod']       if uv_meta else None,
+        'boyut':         _boyut_val,
+        'recete_durum':  uv_meta['recete_durum']     if uv_meta else None,
+        'batch_kg':      taban_batch_kg,
+        'batch_sayisi':  batch_sayisi,
+        'siparis_kg':    siparis_kg,
+        'uretilecek_kg': uretilecek_kg,
+        'carpan':        carpan,
+        'kalem_say':     len(taban_rows),
+        'rf_id':         rf_id,
+        'rf_renk_id':    rf_id,
+        'rf_kalem_say':  len(rf_debug_kalemler),
+        'rf_sifir_say':  sum(1 for k in rf_debug_kalemler if k['sifir']),
+        'rf_kalemler':   rf_debug_kalemler,
+        # FAZ-3I-2: tekli UV için de boyutlar array — JS tek kod yolu
+        'boyutlar': [{
+            'boyut':        _boyut_val,
+            'uv_id':        uretim_varyant_id,
+            'rv_id':        uv_meta['renk_varyant_id'] if uv_meta else None,
+            'formul_kod':   uv_meta['formul_kod']       if uv_meta else None,
+            'recete_durum': uv_meta['recete_durum']     if uv_meta else None,
+            'batch_kg':     taban_batch_kg,
+            'siparis_kg':   siparis_kg,
+            'batch_sayisi': batch_sayisi,
+            'uretilecek_kg': uretilecek_kg,
+            'carpan':       carpan,
+            'kalem_say':    len(taban_rows),
+        }],
+    }
 
     return {
         'ok': True,
@@ -8799,6 +10658,7 @@ def _mpr_stok_ihtiyac_hesapla(con, uretim_varyant_id, rf_renk_id, planlanan_kg,
         'fazla_kg': fazla_kg,
         'planlanan_kg': siparis_kg,
         'kalemler': kalemler,
+        'debug_info': debug_info,
     }
 
 
@@ -8881,6 +10741,20 @@ def _mpr_stok_ihtiyac_birlestir(con, plan_id, exclude_batch_kodu=None):
 
         carpan = float(batch['batch_sayisi'])
 
+        # FAZ-3I-1: UV kimlik bilgilerini boyut özetine ekle
+        uv_meta_b = con.execute("""
+            SELECT uv.id, uv.boyut AS uv_boyut, uv.recete_durum, uv.renk_varyant_id,
+                   rv.ad AS rv_ad, f.kod AS formul_kod,
+                   COUNT(rk.id) AS kalem_say
+            FROM nexgen_uretim_varyant uv
+            JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
+            JOIN nexgen_formul f        ON f.id  = rv.formul_id
+            LEFT JOIN nexgen_recete_kalem rk
+                   ON rk.uretim_varyant_id = uv.id AND rk.aktif = 1
+                  AND UPPER(COALESCE((SELECT kategori FROM nexgen_stok_kart WHERE id=rk.stok_kart_id),'')) != 'BOYA'
+            WHERE uv.id = ?
+            GROUP BY uv.id
+        """, (uv_id,)).fetchone()
         boyut_ozetleri.append({
             'boyut': row['boyut'],
             'siparis_kg': batch['siparis_kg'],
@@ -8888,6 +10762,13 @@ def _mpr_stok_ihtiyac_birlestir(con, plan_id, exclude_batch_kodu=None):
             'batch_sayisi': batch['batch_sayisi'],
             'uretilecek_kg': batch['uretilecek_kg'],
             'fazla_kg': batch['fazla_kg'],
+            'uv_id': uv_id,
+            'rv_id': uv_meta_b['renk_varyant_id'] if uv_meta_b else None,
+            'rv_ad': uv_meta_b['rv_ad']            if uv_meta_b else None,
+            'formul_kod': uv_meta_b['formul_kod']  if uv_meta_b else None,
+            'recete_durum': uv_meta_b['recete_durum'] if uv_meta_b else None,
+            'kalem_say': uv_meta_b['kalem_say']    if uv_meta_b else 0,
+            'carpan': carpan,
         })
         toplam_siparis += float(batch['siparis_kg'])
         toplam_uretilecek += float(batch['uretilecek_kg'])
@@ -8927,22 +10808,44 @@ def _mpr_stok_ihtiyac_birlestir(con, plan_id, exclude_batch_kodu=None):
         if rf_id:
             rf_rows = con.execute("""
                 SELECT rk.stok_kart_id, rk.miktar_kg,
+                       rk.pigment_ad,
                        sk.kod AS stok_kod, sk.ad AS stok_ad
                 FROM nexgen_rf_kalem rk
-                JOIN nexgen_stok_kart sk ON sk.id = rk.stok_kart_id
+                LEFT JOIN nexgen_stok_kart sk ON sk.id = rk.stok_kart_id
                 WHERE rk.rf_renk_id = ? AND rk.aktif = 1
                 ORDER BY rk.sira, rk.id
             """, (rf_id,)).fetchall()
             for r in rf_rows:
-                gerekli = round(float(r['miktar_kg']) * carpan, 3)
+                # FAZ-3I-5B: RF/boya kalemleri için round(6) — küçük pigment miktarları sıfıra yuvarlanmasın
+                gerekli = round(float(r['miktar_kg']) * carpan, 6)
                 if gerekli <= 0:
                     continue
                 sid = r['stok_kart_id']
-                merged_talep[sid] = round(merged_talep.get(sid, 0.0) + gerekli, 3)
+                pigment_ad = None
+                try:
+                    pigment_ad = r['pigment_ad']
+                except (IndexError, KeyError):
+                    pass
+                ad = r['stok_ad'] or pigment_ad or ''
+                if sid is None:
+                    # NULL stok kartı — stok_kart_meta'ya özel anahtar ile ekle
+                    null_key = 'RF_NULL_' + ad
+                    stok_kart_meta[null_key] = {
+                        'stok_kod': '',
+                        'stok_ad': ad,
+                        'pigment_ad': pigment_ad or ad,
+                        'stok_eslesmis': False,
+                        'kaynak': 'RF',
+                    }
+                    # talep'e eklenmez — stok kontrolü yapılamaz
+                    continue
+                merged_talep[sid] = round(merged_talep.get(sid, 0.0) + gerekli, 6)
                 if sid not in stok_kart_meta:
                     stok_kart_meta[sid] = {
                         'stok_kod': r['stok_kod'] or '',
-                        'stok_ad': r['stok_ad'] or '',
+                        'stok_ad': ad,
+                        'pigment_ad': pigment_ad or ad,
+                        'stok_eslesmis': True,
                         'kaynak': 'RF',
                     }
 
@@ -8977,6 +10880,8 @@ def _mpr_stok_ihtiyac_birlestir(con, plan_id, exclude_batch_kodu=None):
             'stok_kart_id': sid,
             'stok_kod': meta['stok_kod'],
             'stok_ad': meta['stok_ad'],
+            'pigment_ad': meta.get('pigment_ad') or meta['stok_ad'],
+            'stok_eslesmis': meta.get('stok_eslesmis', True),
             'gerekli_kg': gerekli,
             'fiziksel_kg': bak['fiziksel_kg'],
             'rezerve_kg': bak['rezerve_kg'],
@@ -8987,11 +10892,56 @@ def _mpr_stok_ihtiyac_birlestir(con, plan_id, exclude_batch_kodu=None):
             'yeterli': sid not in eksik_stok_ids,
         })
 
-    kalemler.sort(key=lambda x: (x.get('stok_kod') or '', x.get('stok_kart_id') or 0))
+    # NULL stok_kart_id'li RF kalemleri (eşleşmemiş pigmentler) ekle
+    for null_key, meta in stok_kart_meta.items():
+        if not isinstance(null_key, str) or not null_key.startswith('RF_NULL_'):
+            continue
+        eksik_stok_ids.add(null_key)
+        kalemler.append({
+            'kaynak': 'RF',
+            'stok_kart_id': None,
+            'stok_kod': '',
+            'stok_ad': meta['stok_ad'],
+            'pigment_ad': meta.get('pigment_ad') or meta['stok_ad'],
+            'stok_eslesmis': False,
+            'gerekli_kg': 0.0,
+            'fiziksel_kg': 0.0,
+            'rezerve_kg': 0.0,
+            'yumusak_talep_kg': 0.0,
+            'kullanilabilir_kg': 0.0,
+            'mevcut_kg': 0.0,
+            'fark_kg': 0.0,
+            'yeterli': False,
+        })
+
+    kalemler.sort(key=lambda x: (x.get('kaynak') or '', x.get('stok_kod') or '', x.get('stok_kart_id') or 0))
     toplam_siparis = round(toplam_siparis, 3)
     toplam_uretilecek = round(toplam_uretilecek, 3)
     toplam_fazla = round(toplam_fazla, 3)
     toplam_hammadde = round(sum(merged_talep.values()), 3)
+
+    # FAZ-3I-1: debug_info — çok boyutlu özet
+    debug_info = {
+        'cok_boyut': len(boyut_ozetleri) > 1,
+        'toplam_boyut': len(boyut_ozetleri),
+        'rf_renk_id': rf_renk_id,
+        'boyutlar': [
+            {
+                'boyut':          oz['boyut'],
+                'uv_id':          oz['uv_id'],
+                'rv_id':          oz['rv_id'],
+                'rv_ad':          oz['rv_ad'],
+                'formul_kod':     oz['formul_kod'],
+                'recete_durum':   oz['recete_durum'],
+                'batch_kg':       oz['formul_batch_kg'],
+                'siparis_kg':     oz['siparis_kg'],
+                'batch_sayisi':   oz['batch_sayisi'],
+                'carpan':         oz['carpan'],
+                'kalem_say':      oz['kalem_say'],
+            }
+            for oz in boyut_ozetleri
+        ],
+    }
 
     return {
         'ok': True,
@@ -9011,6 +10961,7 @@ def _mpr_stok_ihtiyac_birlestir(con, plan_id, exclude_batch_kodu=None):
         'batch_sayisi': batch_toplam,
         'planlanan_kg': toplam_siparis,
         'cok_boyut': len(boyut_ozetleri) > 1,
+        'debug_info': debug_info,
     }
 
 
@@ -10312,6 +12263,123 @@ def api_tablet_arge_formul_onizle():
         con.close()
 
 
+@nexgen_bp.route('/api/tablet/arge/onizle-tam_DISABLED', methods=['GET'])
+@login_gerekli
+def api_tablet_arge_onizle_tam():
+    """AR-GE Tablet reçete önizleme — taban + RF boya, yüzde dahil.
+
+    GET params:
+        uv_id   : int   — nexgen_uretim_varyant.id
+        rf_id   : int   — nexgen_rf_renk.id  (0 = RF yok)
+        kg      : float — numune KG
+
+    Yanıt:
+        boyut        : str
+        kg           : float
+        taban_toplam : float
+        boya_toplam  : float
+        genel_toplam : float
+        taban        : [{ad, kod, kg, yuzde}]
+        boya         : [{ad, kod, kg, yuzde}]
+    """
+    if not yetki_var('nexgen.tablet.view', 'can_view'):
+        return jsonify({'ok': False, 'hata': 'Yetki yok'}), 403
+
+    uv_id = request.args.get('uv_id', type=int)
+    rf_id_raw = request.args.get('rf_id', type=int)
+    kg = request.args.get('kg', type=float)
+
+    if not uv_id:
+        return jsonify({'ok': False, 'hata': 'uv_id zorunlu'}), 400
+    if not kg or kg <= 0:
+        return jsonify({'ok': False, 'hata': 'kg zorunlu ve > 0'}), 400
+
+    rf_id = rf_id_raw if rf_id_raw and rf_id_raw > 0 else None
+
+    con = _db()
+    try:
+        uv = con.execute("""
+            SELECT uv.id, uv.boyut,
+                   f.kod AS formul_kod, f.ad AS formul_ad
+            FROM nexgen_uretim_varyant uv
+            JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
+            JOIN nexgen_formul f ON f.id = rv.formul_id
+            WHERE uv.id = ? AND uv.aktif = 1
+        """, (uv_id,)).fetchone()
+        if not uv:
+            return jsonify({'ok': False, 'hata': 'Üretim varyantı bulunamadı'}), 404
+
+        # Kaynak taban reçete
+        kalemler = con.execute("""
+            SELECT rk.miktar_kg, sk.kod, sk.ad, sk.kategori
+            FROM nexgen_recete_kalem rk
+            JOIN nexgen_stok_kart sk ON sk.id = rk.stok_kart_id
+            WHERE rk.uretim_varyant_id = ? AND rk.aktif = 1
+            ORDER BY rk.sira, rk.id
+        """, (uv_id,)).fetchall()
+
+        if not kalemler:
+            return jsonify({'ok': False, 'hata': 'Reçete kalemi bulunamadı'}), 404
+
+        kaynak_batch = round(sum(float(k['miktar_kg']) for k in kalemler), 4)
+        carpan = kg / kaynak_batch if kaynak_batch > 0 else 0.0
+
+        taban = []
+        for k in kalemler:
+            if (k['kategori'] or '').upper() == 'BOYA':
+                continue
+            mktar = round(float(k['miktar_kg']) * carpan, 4)
+            if mktar <= 0:
+                continue
+            taban.append({'ad': k['ad'] or '', 'kod': k['kod'] or '', 'kg': mktar})
+
+        boya = []
+        if rf_id:
+            rf_rows = con.execute("""
+                SELECT rk.miktar_kg, rk.pigment_ad,
+                       sk.kod, sk.ad
+                FROM nexgen_rf_kalem rk
+                LEFT JOIN nexgen_stok_kart sk ON sk.id = rk.stok_kart_id
+                WHERE rk.rf_renk_id = ? AND rk.aktif = 1
+                ORDER BY rk.sira, rk.id
+            """, (rf_id,)).fetchall()
+            for r in rf_rows:
+                mktar = round(float(r['miktar_kg']) * carpan, 6)
+                if mktar <= 0:
+                    continue
+                ad = r['ad'] or r['pigment_ad'] or ''
+                boya.append({'ad': ad, 'kod': r['kod'] or '', 'kg': mktar})
+
+        taban_top = round(sum(t['kg'] for t in taban), 4)
+        boya_top = round(sum(b['kg'] for b in boya), 6)
+        genel_top = round(taban_top + boya_top, 4)
+
+        # Yüzde hesapla (genel toplamdan)
+        def yuzde(x):
+            return round(x / genel_top * 100, 2) if genel_top > 0 else 0.0
+
+        for t in taban:
+            t['yuzde'] = yuzde(t['kg'])
+        for b in boya:
+            b['yuzde'] = yuzde(b['kg'])
+
+        return jsonify({
+            'ok': True,
+            'boyut': uv['boyut'] or '—',
+            'formul': uv['formul_kod'] + ' ' + uv['formul_ad'],
+            'kg': kg,
+            'kaynak_batch_kg': kaynak_batch,
+            'carpan': round(carpan, 6),
+            'taban': taban,
+            'boya': boya,
+            'taban_toplam': taban_top,
+            'boya_toplam': boya_top,
+            'genel_toplam': genel_top,
+        })
+    finally:
+        con.close()
+
+
 @nexgen_bp.route('/api/plan/<int:plan_id>/alt-emir-onizle')
 @login_gerekli
 def api_alt_emir_onizle(plan_id):
@@ -10785,27 +12853,80 @@ def _rf_kullanim_tablet_aktif(con):
 
 
 def _rf_renk_uv_icin(con, uretim_varyant_id):
-    """UV + formul uygunluk uzerinden en uygun RF renk kaydini bulur."""
-    row = con.execute("""
-        SELECT rf.id AS rf_renk_id, rf.rf_kod, rf.cari_id, u.formul_id, rv.ad AS renk_ad
+    """UV'den renk adına göre en uygun RF renk kaydını bulur.
+
+    FAZ-3F-6E FIX: Önceki sürümde nexgen_rf_renk ile CROSS JOIN yapılıyordu
+    (ON koşulunda gerçek FK bağlantısı yoktu). Bu durum tie-breaker olarak
+    rf.id DESC kullanıldığından yanlış RF seçimine neden oluyordu.
+
+    Düzeltme: Önce nexgen_rf_formul_uygunluk tablosundan formüle bağlı
+    RF'ler arasında ad eşleşmesi yapılır. Bulunamazsa tüm ONAYLI RF'lerde
+    ad eşleşmesi denenir; yalnızca CASE=3 (hiç eşleşme yok) durumunda
+    ad ID sırası yerine None döner — bu fonksiyon sadece otomatik öneri
+    içindir, hesap motoru her zaman plan.rf_renk_id'yi önceliklendirmelidir.
+    """
+    # Adım 1: UV'nin ait olduğu formülü bul
+    uv_meta = con.execute("""
+        SELECT rv.id AS rv_id, rv.ad AS rv_ad, rv.formul_id
         FROM nexgen_uretim_varyant uv
         JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
-        JOIN nexgen_rf_formul_uygunluk u ON u.formul_id = rv.formul_id
-            AND u.durum = 'ONAYLI' AND u.aktif = 1
-        JOIN nexgen_rf_renk rf ON rf.id = u.rf_renk_id
-            AND rf.aktif = 1 AND rf.durum = 'ONAYLI'
         WHERE uv.id = ?
+    """, (uretim_varyant_id,)).fetchone()
+    if not uv_meta:
+        return None
+
+    rv_ad      = (uv_meta['rv_ad'] or '').upper()
+    formul_id  = uv_meta['formul_id']
+
+    # Adım 2: Formüle bağlı RF'lerde ad eşleşmesi (nexgen_rf_formul_uygunluk)
+    uyg_rows = con.execute("""
+        SELECT rf.id AS rf_renk_id, rf.rf_kod, rf.cari_id, rf.ad AS renk_ad,
+               ? AS formul_id
+        FROM nexgen_rf_formul_uygunluk rfu
+        JOIN nexgen_rf_renk rf ON rf.id = rfu.rf_renk_id
+        WHERE rfu.formul_id = ? AND rfu.aktif = 1
+          AND rf.aktif = 1 AND rf.durum = 'ONAYLI'
         ORDER BY
             CASE
-                WHEN UPPER(rf.ad) = UPPER(rv.ad) THEN 0
-                WHEN UPPER(rf.ad) LIKE '%' || UPPER(rv.ad) || '%' THEN 1
-                WHEN UPPER(rv.ad) LIKE '%' || UPPER(rf.ad) || '%' THEN 2
+                WHEN UPPER(rf.ad) = ? THEN 0
+                WHEN UPPER(rf.ad) LIKE '%' || ? || '%' THEN 1
+                WHEN ? LIKE '%' || UPPER(rf.ad) || '%' THEN 2
                 ELSE 3
             END,
-            rf.id DESC
-        LIMIT 1
-    """, (uretim_varyant_id,)).fetchone()
-    return dict(row) if row else None
+            rf.id ASC
+    """, (formul_id, formul_id, rv_ad, rv_ad, rv_ad)).fetchall()
+
+    for row in uyg_rows:
+        rf_up = (row['renk_ad'] or '').upper()
+        if rf_up == rv_ad or rv_ad in rf_up or rf_up in rv_ad:
+            return dict(row)
+    # Uygunluk tablosunda ad eşleşmesi yoksa ilk kaydı döndür (fallback)
+    if uyg_rows:
+        return dict(uyg_rows[0])
+
+    # Adım 3: Uygunluk tablosunda formül bağlantısı yoksa — tüm ONAYLI RF'lerde ad ara
+    all_rf = con.execute("""
+        SELECT rf.id AS rf_renk_id, rf.rf_kod, rf.cari_id, rf.ad AS renk_ad,
+               ? AS formul_id
+        FROM nexgen_rf_renk rf
+        WHERE rf.aktif = 1 AND rf.durum = 'ONAYLI'
+        ORDER BY
+            CASE
+                WHEN UPPER(rf.ad) = ? THEN 0
+                WHEN UPPER(rf.ad) LIKE '%' || ? || '%' THEN 1
+                WHEN ? LIKE '%' || UPPER(rf.ad) || '%' THEN 2
+                ELSE 3
+            END,
+            rf.id ASC
+    """, (formul_id, rv_ad, rv_ad, rv_ad)).fetchall()
+
+    for row in all_rf:
+        rf_up = (row['renk_ad'] or '').upper()
+        if rf_up == rv_ad or rv_ad in rf_up or rf_up in rv_ad:
+            return dict(row)
+
+    # Hiç ad eşleşmesi yoksa None döndür — yanlış RF seçimi engellenir
+    return None
 
 
 def _rf_cari_uyari(con, rf_cari_id, plan_cari_id):
@@ -10819,7 +12940,13 @@ def _rf_cari_uyari(con, rf_cari_id, plan_cari_id):
 
 
 def _plan_rf_bilgi(con, rf_renk_id=None, uretim_varyant_id=None):
-    """Plan/batch RF bilgisi — önce rf_renk_id FK, yoksa UV otomatik eşleşme."""
+    """Plan/batch RF bilgisi — plan.rf_renk_id tek doğru kaynak.
+
+    FAZ-3F-6F: uretim_varyant_id ile otomatik RF eşleşme (fallback) kaldırıldı.
+    Hesap motoru yalnızca plan.rf_renk_id kullanır; rf_renk_id yoksa RF kalemleri
+    dahil edilmez. _rf_renk_uv_icin sadece UI'daki "Otomatik RF Öner" özelliği
+    için ayrı bir endpoint üzerinden çağrılmalıdır.
+    """
     if rf_renk_id:
         row = con.execute("""
             SELECT rf.id AS rf_renk_id, rf.rf_kod, rf.cari_id, rf.ad AS renk_ad
@@ -10828,8 +12955,6 @@ def _plan_rf_bilgi(con, rf_renk_id=None, uretim_varyant_id=None):
         """, (rf_renk_id,)).fetchone()
         if row:
             return dict(row)
-    if uretim_varyant_id:
-        return _rf_renk_uv_icin(con, uretim_varyant_id)
     return None
 
 
@@ -11705,4 +13830,5 @@ def api_parca_secili_isle(batch_kodu):
         return jsonify({'ok': False, 'hata': str(e)}), 500
     finally:
         con.close()
+
 

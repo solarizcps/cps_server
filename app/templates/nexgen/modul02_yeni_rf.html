@@ -1,0 +1,1260 @@
+{% extends "base.html" %}
+{% set page_title = "Yeni Renk Denemesi — NexGen AR-GE" %}
+
+{% block content %}
+{#
+  MODÜL-02 — Yeni Renk Denemesi
+  Design System v2.0  |  NexGen AR-GE Tablet
+  Amaç: Vedat stok pigmentlerinden seçip gramaj girerek yeni renk denemesi oluşturur.
+  Akış: Cari → Formül → Varyant → Pigment Seç + Gramaj → %10 Otomatik → Önizleme → Not → Kaydet
+  NOTLAR:
+    - Mevcut RF seçilmez, AR-GE kodu backend tarafından kayıt sırasında üretilir (NX-AR-NNN formatı)
+    - Batch KG yok — MODÜL-01 gibi %10 otomatik
+    - Pigment birimleri: GRAM
+    - Backend kaydet: şimdilik mock, onay sonrası bağlanacak
+#}
+
+{# ── Veri JSON ── #}
+<script>
+var M2_CARILER         = {{ cariler         | tojson | safe }};
+var M2_FORMULLER       = {{ formuller       | tojson | safe }};
+var M2_RENK_VARYANTLAR = {{ renk_varyantlar | tojson | safe }};
+var M2_VARYANTLAR      = {{ varyantlar      | tojson | safe }};
+var M2_STOK_PIGMENTLER = {{ stok_pigmentler | tojson | safe }};
+</script>
+
+<div class="m2-shell">
+
+  {# ══ ÜST BAR — DS v2.0, MODÜL-01 ile birebir ══ #}
+  <header class="m2-bar">
+    <a href="{{ url_for('nexgen.tablet_arge') }}" class="m2-geri" title="Ana Ekrana Dön">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="15 18 9 12 15 6"/>
+      </svg>
+    </a>
+    <div class="m2-bar-logo">
+      <img src="{{ url_for('static', filename='img/nexgen-logo.png') }}"
+           alt="NexGen" class="m2-logo"
+           onerror="this.style.display='none'">
+    </div>
+    <div class="m2-bar-divider"></div>
+    <div class="m2-bar-title">
+      <span class="m2-bar-label">YENİ RENK DENEMESİ</span>
+      <span class="m2-bar-name">Renk Geliştirme</span>
+    </div>
+    <div class="m2-bar-sag">
+      <div class="m2-clock-wrap">
+        <span class="m2-clock" id="m2-clock">--:--</span>
+        <span class="m2-date"  id="m2-date">--.--</span>
+      </div>
+      <div class="m2-user-wrap">
+        <div class="m2-avatar">{{ (kullanici_ad or 'V')[0]|upper }}</div>
+        <span class="m2-uname">{{ kullanici_ad or 'Kullanıcı' }}</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="m2-body">
+    <aside class="m2-sidebar">
+      <div class="m2-sidebar-ic">
+        <div class="m2-prog-baslik">İLERLEME</div>
+        <div class="m2-adimlar" id="m2-adimlar"></div>
+      </div>
+    </aside>
+    <main class="m2-icerik" id="m2-icerik"></main>
+  </div>
+</div>
+
+<style>
+/* ── DS v2.0 — MODÜL-01 ile aynı renk paleti, m2- prefix ── */
+:root{
+  --navy:    #1E2D4A;
+  --navy-dk: #0F1929;
+  --steel:   #3D5A7A;
+  --orange:  #F47920;
+  --white:   #FFFFFF;
+  --light:   #F0F4F8;
+  --border:  #DDE3ED;
+  --muted:   #64748B;
+  --green:   #16A34A;
+  --card:    #FFFFFF;
+  --ob:      #FFF4EC;
+  --sb:      rgba(61,90,122,.07);
+  --sbd:     rgba(61,90,122,.16);
+
+  /* ── Ortak AR-GE Layout Tokenları ── */
+  --arge-bar-h:        62px;
+  --arge-sidebar-w:   210px;
+  --arge-card-max-w:  820px;
+  --arge-row-h:        48px;
+  --arge-input-h:      42px;
+  --arge-btn-h:        44px;
+  --arge-content-pad: 24px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;overflow:hidden;}
+
+.m2-shell{height:100vh;display:flex;flex-direction:column;background:var(--light);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;}
+
+/* ÜST BAR — MODÜL-01 ile birebir */
+.m2-bar{flex:0 0 var(--arge-bar-h);height:var(--arge-bar-h);background:var(--navy);border-bottom:3px solid var(--orange);display:flex;align-items:center;padding:0 20px;gap:0;z-index:100;}
+.m2-geri{display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;border:1.5px solid rgba(255,255,255,.2);color:rgba(255,255,255,.8);text-decoration:none;flex-shrink:0;margin-right:12px;transition:background .1s;}
+.m2-geri:hover{background:rgba(255,255,255,.1);color:#fff;}
+.m2-geri svg{width:16px;height:16px;}
+.m2-bar-logo{display:flex;align-items:center;flex-shrink:0;padding-right:16px;}
+.m2-logo{height:40px;width:auto;max-width:150px;object-fit:contain;display:block;}
+.m2-bar-divider{width:1px;height:30px;background:rgba(255,255,255,.15);flex-shrink:0;margin-right:16px;}
+.m2-bar-title{display:flex;flex-direction:column;gap:2px;}
+.m2-bar-label{font-size:8px;font-weight:700;color:var(--orange);letter-spacing:3px;text-transform:uppercase;line-height:1;}
+.m2-bar-name{font-size:14px;font-weight:800;color:var(--white);line-height:1;}
+.m2-bar-sag{margin-left:auto;display:flex;align-items:center;gap:12px;flex-shrink:0;}
+.m2-clock-wrap{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:4px 11px;text-align:center;min-width:66px;}
+.m2-clock{display:block;font-size:16px;font-weight:900;color:var(--orange);font-variant-numeric:tabular-nums;line-height:1;}
+.m2-date{display:block;font-size:9px;color:rgba(255,255,255,.3);font-weight:600;line-height:1.5;}
+.m2-user-wrap{display:flex;align-items:center;gap:7px;}
+.m2-avatar{width:34px;height:34px;border-radius:50%;background:var(--orange);color:#fff;font-size:13px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.m2-uname{font-size:12px;font-weight:600;color:rgba(255,255,255,.55);}
+
+/* LAYOUT */
+.m2-body{flex:1;display:flex;overflow:hidden;}
+.m2-sidebar{flex:0 0 var(--arge-sidebar-w);background:var(--white);border-right:1px solid var(--border);overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 14px;}
+.m2-sidebar-ic{height:100%;}
+.m2-icerik{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:var(--arge-content-pad) 20px 28px;}
+
+/* SOL PANEL — MODÜL-01 ile birebir aynı stil */
+.m2-prog-baslik{font-size:9px;font-weight:700;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:14px;padding-left:4px;}
+.m2-adim-sira{display:flex;flex-direction:column;gap:0;}
+.m2-adim-item{display:flex;align-items:flex-start;gap:10px;padding:8px 8px 8px 6px;border-radius:9px;margin-bottom:2px;cursor:default;transition:background .1s;position:relative;}
+.m2-adim-item::before{content:'';position:absolute;left:17px;top:34px;width:2px;height:calc(100% - 8px);background:var(--border);}
+.m2-adim-item:last-child::before{display:none;}
+.m2-adim-item.aktif{background:#FFF9F5;border-left:3px solid var(--orange);padding-left:5px;}
+.m2-adim-item.tamamlandi{cursor:pointer;}
+.m2-adim-item.tamamlandi:hover{background:var(--sb);}
+.m2-adim-dot{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0;margin-top:1px;z-index:1;}
+.m2-adim-dot.bekliyor{background:var(--light);border:1.5px solid var(--border);color:var(--muted);}
+.m2-adim-dot.aktif{background:var(--orange);color:#fff;}
+.m2-adim-dot.tamamlandi{background:var(--green);color:#fff;}
+.m2-adim-ic{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0;}
+.m2-adim-no{display:none;}
+.m2-adim-ad{font-size:13px;font-weight:600;color:var(--muted);line-height:1.2;}
+.m2-adim-item.aktif .m2-adim-ad{color:var(--navy);font-weight:800;font-size:13px;}
+.m2-adim-item.tamamlandi .m2-adim-ad{color:#16A34A;font-weight:700;}
+.m2-adim-deger{display:inline-block;margin-top:3px;font-size:10px;font-weight:700;background:#DCFCE7;color:#15803D;border:1px solid #BBF7D0;padding:1px 7px;border-radius:4px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+/* KART — MODÜL-01 ile birebir aynı */
+.m2-kart{background:var(--white);border:1.5px solid var(--orange);border-radius:16px;padding:22px 20px 20px;box-shadow:0 4px 20px rgba(30,45,74,.09);margin-bottom:0;max-width:var(--arge-card-max-w);}
+.m2-adim-baslik{font-size:16px;font-weight:900;color:var(--navy);margin-bottom:4px;}
+.m2-adim-alt{font-size:12px;color:var(--muted);margin-bottom:16px;}
+
+/* SEÇİM LİSTESİ — MODÜL-01 ile aynı stil */
+.m2-secim-grid{display:flex;flex-direction:column;gap:7px;max-height:360px;overflow-y:auto;}
+.m2-secim-item{display:flex;align-items:center;gap:12px;min-height:var(--arge-row-h);padding:10px 14px;border:1.5px solid var(--border);border-radius:10px;cursor:pointer;transition:border-color .12s,background .12s;-webkit-tap-highlight-color:transparent;}
+.m2-secim-item:hover{border-color:var(--steel);background:var(--sb);}
+.m2-secim-item.secili{border-color:var(--orange);background:var(--ob);}
+.m2-si-dot{width:10px;height:10px;border-radius:50%;border:2px solid var(--border);flex-shrink:0;transition:all .12s;}
+.m2-secim-item.secili .m2-si-dot{border-color:var(--orange);background:var(--orange);}
+.m2-si-ad{font-size:13px;font-weight:700;color:var(--navy);flex:1;}
+.m2-si-alt{font-size:11px;color:var(--muted);margin-top:2px;}
+.m2-si-badge{font-size:10px;font-weight:700;color:var(--steel);background:var(--sb);padding:2px 8px;border-radius:20px;flex-shrink:0;}
+
+/* ARAMA */
+.m2-ara-wrap{position:relative;margin-bottom:10px;}
+.m2-ara-inp{width:100%;height:var(--arge-input-h);padding:0 14px 0 34px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-weight:600;color:var(--navy);background:var(--white);outline:none;transition:border-color .15s;}
+.m2-ara-inp:focus{border-color:var(--orange);}
+.m2-ara-ikon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none;}
+
+/* FORM ALANLARI */
+.m2-form-grup{margin-bottom:14px;}
+.m2-form-label{font-size:11px;font-weight:800;color:var(--navy);letter-spacing:.3px;text-transform:uppercase;display:flex;align-items:center;gap:6px;margin-bottom:6px;}
+.m2-form-label .zorunlu{font-size:9px;font-weight:700;color:#fff;background:var(--orange);padding:1px 6px;border-radius:20px;}
+.m2-input{width:100%;height:var(--arge-input-h);padding:0 14px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-weight:600;color:var(--navy);background:var(--white);outline:none;transition:border-color .15s;font-family:inherit;}
+.m2-input:focus{border-color:var(--orange);}
+.m2-textarea{width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-weight:500;color:var(--navy);background:var(--white);resize:vertical;outline:none;transition:border-color .15s;font-family:inherit;}
+.m2-textarea:focus{border-color:var(--orange);}
+
+/* PİGMENT PANELI */
+.m2-pigment-panel{border:1.5px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:14px;}
+.m2-pigment-panel-baslik{background:var(--light);padding:9px 14px;font-size:11px;font-weight:800;color:var(--navy);letter-spacing:.4px;text-transform:uppercase;display:flex;align-items:center;justify-content:space-between;}
+.m2-pigment-panel-baslik span.sayac{font-size:11px;font-weight:700;color:var(--orange);background:var(--ob);padding:2px 9px;border-radius:20px;}
+.m2-pigment-satir{display:flex;align-items:center;gap:10px;padding:10px 14px;border-top:1px solid var(--border);background:var(--white);}
+.m2-pigment-satir:hover{background:var(--light);}
+.m2-pigment-sil{width:26px;height:26px;border-radius:6px;border:1.5px solid #FECACA;background:#FFF1F1;color:#DC2626;font-size:14px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .1s;}
+.m2-pigment-sil:hover{background:#FEE2E2;}
+.m2-pigment-ad{flex:1;font-size:13px;font-weight:700;color:var(--navy);}
+.m2-pigment-kod{font-size:10px;color:var(--muted);margin-left:5px;font-weight:500;}
+.m2-pigment-gram-wrap{display:flex;align-items:center;gap:5px;flex-shrink:0;}
+.m2-pigment-gram-inp{width:80px;padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-weight:700;color:var(--navy);text-align:right;outline:none;transition:border-color .15s;}
+.m2-pigment-gram-inp:focus{border-color:var(--orange);}
+.m2-pigment-gram-birim{font-size:11px;font-weight:700;color:var(--muted);}
+.m2-pigment-bos{padding:20px;text-align:center;font-size:12px;color:var(--muted);font-style:italic;}
+
+/* PİGMENT EKLE */
+.m2-pigment-ekle-btn{display:flex;align-items:center;gap:8px;width:100%;padding:11px 14px;border:1.5px dashed var(--border);border-radius:10px;background:var(--light);color:var(--steel);font-size:13px;font-weight:700;cursor:pointer;transition:all .1s;margin-bottom:14px;}
+.m2-pigment-ekle-btn:hover{background:var(--sb);border-color:var(--steel);}
+
+/* PİGMENT ARAMA DROPDOWN */
+.m2-pigment-dropdown{background:var(--light);border:1.5px solid var(--border);border-radius:12px;padding:12px;margin-bottom:14px;}
+.m2-pigment-ara{width:100%;height:var(--arge-input-h);padding:0 14px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-weight:600;color:var(--navy);background:var(--white);outline:none;margin-bottom:8px;transition:border-color .15s;}
+.m2-pigment-ara:focus{border-color:var(--orange);}
+.m2-pigment-sonuclar{max-height:200px;overflow-y:auto;background:var(--white);border:1px solid var(--border);border-radius:9px;}
+.m2-pigment-sonuc-item{padding:9px 12px;font-size:13px;font-weight:600;color:var(--navy);cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s;display:flex;align-items:center;justify-content:space-between;}
+.m2-pigment-sonuc-item:last-child{border-bottom:none;}
+.m2-pigment-sonuc-item:hover{background:var(--ob);}
+.m2-pigment-sonuc-item .p-kod{font-size:10px;color:var(--muted);}
+.m2-pigment-iptal{display:flex;align-items:center;justify-content:center;width:100%;padding:8px;margin-top:8px;background:transparent;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;}
+.m2-pigment-iptal:hover{background:var(--border);}
+
+/* ÖNIZLEME TABLOSU */
+.m2-onizleme-tablo{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:4px;}
+.m2-onizleme-tablo th{padding:7px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid var(--border);background:var(--light);}
+.m2-onizleme-tablo td{padding:8px 10px;border-bottom:1px solid var(--border);color:var(--navy);font-weight:600;}
+.m2-onizleme-tablo tr.rf-baslik td{background:var(--ob);font-weight:800;color:var(--navy);font-size:11px;letter-spacing:.4px;text-transform:uppercase;}
+.m2-onizleme-tablo tr.rf-satir td{background:#FFFBF7;}
+.m2-onizleme-toplam{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-radius:9px;margin-top:5px;font-size:13px;font-weight:700;}
+.m2-onizleme-toplam.taban{background:var(--sb);}
+.m2-onizleme-toplam.rf{background:var(--ob);color:var(--navy);}
+.m2-onizleme-toplam.genel{background:var(--navy);color:#fff;font-size:14px;font-weight:900;margin-top:8px;}
+
+/* META KUTU */
+.m2-meta-kutu{display:flex;align-items:center;gap:0;background:var(--light);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:14px;flex-wrap:wrap;gap:8px;}
+.m2-meta-item{display:flex;flex-direction:column;gap:2px;flex:1;min-width:80px;}
+.m2-meta-item span{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
+.m2-meta-item strong{font-size:13px;font-weight:900;color:var(--navy);}
+.m2-meta-item strong.aksan{color:var(--orange);}
+.m2-meta-arrow{color:var(--border);font-size:16px;font-weight:300;flex-shrink:0;align-self:center;}
+
+/* UYARI KUTUSU */
+.m2-uyari-kutu{display:flex;align-items:flex-start;gap:8px;background:#FFFBEB;border:1.5px solid #FDE68A;border-radius:9px;padding:10px 12px;margin-bottom:12px;}
+.m2-uyari-kutu svg{flex-shrink:0;margin-top:1px;}
+.m2-uyari-kutu p{font-size:11px;font-weight:600;color:#92400E;line-height:1.5;}
+
+/* İLERİ BUTONU */
+.m2-ileri-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:var(--arge-btn-h);margin-top:14px;background:var(--orange);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:800;cursor:pointer;letter-spacing:.3px;transition:background .12s;-webkit-tap-highlight-color:transparent;}
+.m2-ileri-btn:hover{background:#D96810;}
+.m2-ileri-btn:disabled{opacity:.4;cursor:not-allowed;}
+.m2-ileri-btn svg{width:18px;height:18px;flex-shrink:0;}
+.m2-ileri-btn.ikincil{background:var(--steel);}
+.m2-ileri-btn.ikincil:hover{background:var(--navy);}
+
+/* KAYDET */
+.m2-kaydet-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:var(--arge-btn-h);margin-top:14px;background:var(--green);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:800;cursor:pointer;transition:background .12s;}
+.m2-kaydet-btn:hover{background:#15803D;}
+.m2-kaydet-btn:disabled{opacity:.4;cursor:not-allowed;}
+
+/* ÖZET SATIR */
+.m2-ozet-satir{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);}
+.m2-ozet-etiket{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;min-width:80px;flex-shrink:0;}
+.m2-ozet-deger{font-size:13px;font-weight:700;color:var(--navy);}
+
+/* BARKOD / BAŞARI */
+.m2-basari{text-align:center;padding:24px 16px;}
+.m2-basari-check{width:64px;height:64px;border-radius:50%;background:var(--green);color:#fff;font-size:28px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;}
+.m2-basari-no{font-size:22px;font-weight:900;color:var(--navy);margin-bottom:4px;}
+.m2-basari-alt{font-size:12px;color:var(--muted);margin-bottom:16px;}
+.m2-barkod-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:50px;background:var(--navy);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:800;cursor:pointer;transition:background .12s;}
+.m2-barkod-btn:hover{background:var(--navy-dk);}
+.m2-yeni-btn{display:inline-flex;align-items:center;gap:6px;background:var(--orange);color:#fff;border:none;border-radius:10px;padding:12px 24px;font-size:14px;font-weight:800;cursor:pointer;margin-top:10px;}
+
+/* SPIN / HATA */
+.m2-yukleniyor{display:flex;align-items:center;gap:10px;padding:14px;font-size:13px;color:var(--muted);}
+.m2-spin{width:18px;height:18px;border:2.5px solid var(--border);border-top-color:var(--orange);border-radius:50%;animation:m2Spin .7s linear infinite;flex-shrink:0;}
+@keyframes m2Spin{to{transform:rotate(360deg);}}
+.m2-hata{padding:10px 14px;background:#FEE2E2;border:1px solid #FECACA;border-radius:8px;color:#991B1B;font-size:13px;font-weight:600;margin-top:10px;}
+
+/* RESPONSIVE */
+@media(max-width:680px){
+  .m2-bar{padding:0 12px;height:54px;}
+  .m2-logo{height:32px;}
+  .m2-uname{display:none;}
+  .m2-sidebar{flex:0 0 140px;}
+}
+</style>
+
+<script>
+/* ─────────────────────────────────────────────────
+   DS v2.0 / MODÜL-02 — Yeni Renk Denemesi
+   Akış (7 adım):
+     1. Cari Seç
+     2. Formül Seç
+     3. Varyant Seç
+     4. Renk Seç (stok pigment + gramaj)
+     5. Reçete Önizleme  ← %10 otomatik, uv_id üzerinden
+     6. AR-GE Notu (zorunlu)
+     (7. Kaydet — mock, backend onay sonrası)
+   PİGMENT BUG NOTU:
+     Gramaj değerleri SADECE state'te tutulur.
+     DOM → state yazımı renderIcerik()'ten ÖNCE yapılır.
+     Hiçbir render gramaj değerlerini sıfırlamaz.
+   ───────────────────────────────────────────────── */
+
+/* ── Mock fallback (DB boşsa) ── */
+if(!M2_CARILER.length){
+  M2_CARILER=[
+    {id:1,unvan:'ULUKUCAN A.Ş.',kod:'ULK'},
+    {id:2,unvan:'SOLARİZ İÇ AR-GE',kod:'SLR'},
+    {id:3,unvan:'NUMUNE STOK',kod:'NUM'},
+  ];
+}
+if(!M2_FORMULLER.length){
+  M2_FORMULLER=[
+    {id:1,kod:'575',ad:'TERLİK'},
+    {id:2,kod:'627',ad:'TABAN'},
+  ];
+}
+if(!M2_RENK_VARYANTLAR.length){
+  M2_RENK_VARYANTLAR=[
+    {id:1,formul_id:1,ad:'TERLİK 18-22',boyutlar:'LARGE,SMALL'},
+    {id:2,formul_id:1,ad:'TERLİK 18-28',boyutlar:'LARGE,SMALL,MEDIUM'},
+    {id:3,formul_id:2,ad:'TABAN 18-28',boyutlar:'STANDART'},
+  ];
+}
+if(!M2_VARYANTLAR.length){
+  M2_VARYANTLAR=[
+    {id:101,renk_varyant_id:1,boyut:'LARGE',rv_ad:'TERLİK 18-22',master_kg:82.0},
+    {id:102,renk_varyant_id:1,boyut:'SMALL',rv_ad:'TERLİK 18-22',master_kg:82.0},
+    {id:103,renk_varyant_id:2,boyut:'LARGE',rv_ad:'TERLİK 18-28',master_kg:82.0},
+    {id:201,renk_varyant_id:3,boyut:'STANDART',rv_ad:'TABAN 18-28',master_kg:82.0},
+  ];
+}
+if(!M2_STOK_PIGMENTLER.length){
+  /* Fallback — renk_bileseni_mi=1 olan gerçek kartlara göre */
+  M2_STOK_PIGMENTLER=[
+    {id:1, kod:'NEX-04-01',ad:'ATR-312',         yeni_tanim:'NK01',kategori:'KATKI'},
+    {id:2, kod:'NEX-08-05',ad:'Blue 15:1 Mavi Pigment', yeni_tanim:'NB01',kategori:'BOYA'},
+    {id:3, kod:'NEX-08-06',ad:'Blue 15:3 Mavi Pigment', yeni_tanim:'NB02',kategori:'BOYA'},
+    {id:4, kod:'NEX-08-18',ad:'Blue KNP 909',    yeni_tanim:'NB03',kategori:'BOYA'},
+    {id:5, kod:'NEX-08-15',ad:'Green 7',          yeni_tanim:'NB04',kategori:'BOYA'},
+    {id:6, kod:'NEX-08-10',ad:'HTA-301 Anatase Titanium Dioksit',yeni_tanim:'NB05',kategori:'BOYA'},
+    {id:7, kod:'NEX-08-07',ad:'Iron Oxide Red 130',      yeni_tanim:'NB06',kategori:'BOYA'},
+    {id:8, kod:'NEX-08-08',ad:'Iron Oxide Yellow 313',   yeni_tanim:'NB07',kategori:'BOYA'},
+    {id:9, kod:'NEX-08-21',ad:'Iron Oxide Yellow 920',   yeni_tanim:'NB08',kategori:'BOYA'},
+    {id:10,kod:'NEX-08-13',ad:'Kahverengi 600 Pigment',  yeni_tanim:'NB09',kategori:'BOYA'},
+    {id:11,kod:'NEX-08-12',ad:'Kahverengi 610 Pigment',  yeni_tanim:'NB10',kategori:'BOYA'},
+    {id:12,kod:'NEX-08-14',ad:'Kahverengi 660 Pigment',  yeni_tanim:'NB11',kategori:'BOYA'},
+    {id:13,kod:'NEX-08-16',ad:'M.B 6501 Brown',          yeni_tanim:'NB12',kategori:'BOYA'},
+    {id:14,kod:'NEX-08-17',ad:'M.B 8502 Black',          yeni_tanim:'NB13',kategori:'BOYA'},
+    {id:15,kod:'NEX-08-22',ad:'Orange 13 Pigment',       yeni_tanim:'NB14',kategori:'BOYA'},
+    {id:16,kod:'NEX-08-19',ad:'Orange 34',               yeni_tanim:'NB15',kategori:'BOYA'},
+    {id:17,kod:'NEX-08-02',ad:'P.Red 122',               yeni_tanim:'NB16',kategori:'BOYA'},
+    {id:18,kod:'NEX-08-03',ad:'P.Red 48:2 BP',           yeni_tanim:'NB17',kategori:'BOYA'},
+    {id:19,kod:'NEX-08-04',ad:'P.Red 48:3',              yeni_tanim:'NB18',kategori:'BOYA'},
+    {id:20,kod:'NEX-08-01',ad:'P.Yellow 13 (1148)',      yeni_tanim:'NB19',kategori:'BOYA'},
+    {id:21,kod:'NEX-08-11',ad:'Pearlescent Silver 100',  yeni_tanim:'NB20',kategori:'BOYA'},
+    {id:22,kod:'NEX-08-09',ad:'Ultramarine Blue DTI-52', yeni_tanim:'NB21',kategori:'BOYA'},
+    {id:23,kod:'NEX-08-20',ad:'Yellow 15',               yeni_tanim:'NB22',kategori:'BOYA'},
+    {id:24,kod:'NEX-09-02',ad:'N330',                    yeni_tanim:'NBA1',kategori:'BOYA'},
+    {id:25,kod:'NEX-09-01',ad:'N550',                    yeni_tanim:'NBA2',kategori:'BOYA'},
+    {id:26,kod:'NEX-MB-01',ad:'MB-3513 Yellow',          yeni_tanim:'NBA3',kategori:'MASTERBATCH'},
+  ];
+}
+
+/* ── Sabit ── */
+var VARSAYILAN_ORAN = 10;    /* % */
+var ADIM_ADLARI = ['','Cari Seç','Formül Seç','Varyant Seç','Renk Adı & Bilgisi','Renk Bileşenleri','Reçete Önizleme','AR-GE Notu'];
+var TOPLAM_ADIM = 7;
+
+/* ─────────────────────────────────────────────────
+   STATE — Gramajlar YALNIZCA buradan okunup yazılır.
+   renderIcerik() DOM'u yeniden inşa eder ama
+   S.pigmentler[i].gram değerlerine dokunmaz.
+   DOM → state yazımı gramajSyncDom() ile yapılır.
+   ───────────────────────────────────────────────── */
+var S = {
+  adim: 1,
+  cari_id: null, cari_ad: '',
+  formul_id: null, formul_ad: '', formul_kod: '',
+  rv_id: null, rv_ad: '',
+  uv_id: null,   /* nexgen_uretim_varyant.id — rv seçilince doldurulur */
+  /* Adım 4 — Renk Adı & Bilgisi */
+  renk_adi: '',          /* ZORUNLU — Açık Gri, Buz Mavi vb. */
+  renk_aciklama: '',     /* opsiyonel */
+  musteri_notu: '',      /* opsiyonel */
+  /* Adım 5 — Renk bileşenleri [{stok_id, ad, kod, gram_str}]
+     gram_str: kullanıcının girdiği string ("0.000" başlangıç)
+     Hiçbir zaman sıfırlanmaz, sadece push/splice ile değişir. */
+  pigmentler: [],
+  _pigment_ara_acik: false,
+  _pigment_ara_metin: '',
+  /* Reçete önizleme verisi */
+  onizleme: null,
+  not: '',
+  _kaydedilen_test_id: null,
+};
+
+/* ─────────────────────────────────────────────────
+   gramajSyncDom() — DOM'daki gramaj inputlarını state'e yaz.
+   Her adım geçişi ve her hesap ÖNCE bu çağrılır.
+   input[value] değil inp.value okunur — anlık kullanıcı değeri.
+   ───────────────────────────────────────────────── */
+function gramajSyncDom(){
+  document.querySelectorAll('[data-tip="pigment-gram"]').forEach(function(inp){
+    var idx = parseInt(inp.getAttribute('data-idx'), 10);
+    if(!isNaN(idx) && S.pigmentler[idx]){
+      /* inp.value: kullanıcının gerçek anlık değeri */
+      var v = inp.value.trim();
+      S.pigmentler[idx].gram_str = v !== '' ? v : S.pigmentler[idx].gram_str;
+    }
+  });
+}
+
+/* ── Render ana fonksiyon ── */
+function render(){
+  renderSidebar();
+  renderIcerik();
+  adimPostRender(S.adim);
+}
+
+/* ── SOL PANEL — MODÜL-01 ile birebir aynı yapı ── */
+function renderSidebar(){
+  var el = document.getElementById('m2-adimlar');
+  if(!el) return;
+  var checkIco = '<svg viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><polyline points="2 8 6 12 14 4"/></svg>';
+  var html = '<div class="m2-adim-sira">';
+  for(var i=1; i<=TOPLAM_ADIM; i++){
+    var adimAd = ADIM_ADLARI[i] || '';
+    if(!adimAd) continue;
+    var d = i < S.adim ? 'tamamlandi' : (i===S.adim ? 'aktif' : 'bekliyor');
+    var ikon = d==='tamamlandi' ? checkIco : String(i);
+    var deger = adimDeger(i);
+    html += '<div class="m2-adim-item '+d+'" '+(d==='tamamlandi'?'onclick="adimeGit('+i+')" title="Düzenle"':'')+'>'
+      +'<div class="m2-adim-dot '+d+'">'+ikon+'</div>'
+      +'<div class="m2-adim-ic">'
+      +'<div class="m2-adim-ad">'+esc(adimAd)+'</div>'
+      +(deger?'<div class="m2-adim-deger">'+esc(deger)+'</div>':'')
+      +'</div></div>';
+  }
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function adimDeger(i){
+  if(i===1) return S.cari_ad;
+  if(i===2) return S.formul_ad ? S.formul_kod+' '+S.formul_ad : '';
+  if(i===3) return S.rv_ad;
+  if(i===4) return S.renk_adi || '';
+  if(i===5) return S.pigmentler.length ? S.pigmentler.length+' bileşen' : '';
+  if(i===6) return S.onizleme ? 'Hazır' : '';
+  if(i===7) return S.not ? S.not.substring(0,22)+'…' : '';
+  return '';
+}
+
+/* ── SAĞ İÇERİK ── */
+function renderIcerik(){
+  var el = document.getElementById('m2-icerik');
+  if(!el) return;
+  var fnMap = {1:adim1Html, 2:adim2Html, 3:adim3Html, 4:adim4Html, 5:adim5Html, 6:adim6Html, 7:adim7Html};
+  var fn = fnMap[S.adim];
+  el.innerHTML = fn ? '<div class="m2-kart">'+fn()+'</div>' : '';
+}
+
+/* ══════════════════════════════
+   ADIM 1 — CARİ SEÇ
+══════════════════════════════ */
+function adim1Html(){
+  var h = '<div class="m2-adim-baslik">Cari Seç</div>'
+    +'<div class="m2-adim-alt">Bu renk denemesi hangi müşteri veya proje için?</div>'
+    +'<div class="m2-ara-wrap">'
+    +'<svg class="m2-ara-ikon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><circle cx="8" cy="8" r="5"/><line x1="13" y1="13" x2="18" y2="18"/></svg>'
+    +'<input type="text" id="m2-cari-ara" class="m2-ara-inp" placeholder="Cari ara…">'
+    +'</div>'
+    +'<div class="m2-secim-grid" id="m2-cari-liste">';
+  M2_CARILER.forEach(function(c){
+    var s = S.cari_id===c.id?' secili':'';
+    h += '<div class="m2-secim-item'+s+'" data-tip="cari" data-id="'+c.id+'" data-ad="'+esc(c.unvan)+'" data-kod="'+esc(c.kod||'')+'">'
+      +'<div class="m2-si-dot"></div>'
+      +'<div class="m2-si-ad">'+esc(c.unvan)+'</div>'
+      +'<span class="m2-si-badge">'+esc(c.kod||'')+'</span>'
+      +'</div>';
+  });
+  h += '</div>'
+    +'<button class="m2-ileri-btn" id="btn-1" '+(S.cari_id?'':'disabled')+' onclick="adim1Ileri()">'
+    +'Devam <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10h10M12 6l4 4-4 4"/></svg>'
+    +'</button>';
+  return h;
+}
+function adim1Ileri(){ if(S.cari_id){ S.adim=2; render(); } }
+
+/* ══════════════════════════════
+   ADIM 2 — FORMÜL SEÇ
+══════════════════════════════ */
+function adim2Html(){
+  var h = '<div class="m2-adim-baslik">Ana Formül Seç</div>'
+    +'<div class="m2-adim-alt">Renk denemesi hangi ana formüle uygulanacak?</div>'
+    +'<div class="m2-ara-wrap">'
+    +'<svg class="m2-ara-ikon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><circle cx="8" cy="8" r="5"/><line x1="13" y1="13" x2="18" y2="18"/></svg>'
+    +'<input type="text" id="m2-formul-ara" class="m2-ara-inp" placeholder="Formül ara…">'
+    +'</div>'
+    +'<div class="m2-secim-grid" id="m2-formul-liste">';
+  M2_FORMULLER.forEach(function(f){
+    var s = S.formul_id===f.id?' secili':'';
+    h += '<div class="m2-secim-item'+s+'" data-tip="formul" data-id="'+f.id+'" data-ad="'+esc(f.ad)+'" data-kod="'+esc(f.kod)+'">'
+      +'<div class="m2-si-dot"></div>'
+      +'<div class="m2-si-ad">'+esc(f.kod)+' — '+esc(f.ad)+'</div>'
+      +'</div>';
+  });
+  h += '</div>'
+    +'<button class="m2-ileri-btn" id="btn-2" '+(S.formul_id?'':'disabled')+' onclick="adim2Ileri()">'
+    +'Devam <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10h10M12 6l4 4-4 4"/></svg>'
+    +'</button>';
+  return h;
+}
+function adim2Ileri(){ if(S.formul_id){ S.adim=3; render(); } }
+
+/* ══════════════════════════════
+   ADIM 3 — VARYANT SEÇ
+══════════════════════════════ */
+function adim3Html(){
+  var liste = M2_RENK_VARYANTLAR.filter(function(rv){ return rv.formul_id===S.formul_id; });
+  var h = '<div class="m2-adim-baslik">Model / Varyant Seç</div>'
+    +'<div class="m2-adim-alt">Renk hangi üretim modeli için geliştiriliyor?</div>'
+    +'<div class="m2-secim-grid">';
+  if(!liste.length){
+    h += '<div style="padding:20px;text-align:center;font-size:13px;color:var(--muted)">Bu formüle ait varyant bulunamadı.</div>';
+  } else {
+    liste.forEach(function(rv){
+      var s = S.rv_id===rv.id?' secili':'';
+      var bStr = rv.boyutlar ? rv.boyutlar.replace(/,/g,' · ') : '';
+      h += '<div class="m2-secim-item'+s+'" data-tip="rv" data-id="'+rv.id+'" data-ad="'+esc(rv.ad)+'">'
+        +'<div class="m2-si-dot"></div>'
+        +'<div><div class="m2-si-ad">'+esc(rv.ad)+'</div>'
+        +(bStr?'<div class="m2-si-alt">'+bStr+'</div>':'')
+        +'</div></div>';
+    });
+  }
+  h += '</div>'
+    +'<button class="m2-ileri-btn" id="btn-3" '+(S.rv_id?'':'disabled')+' onclick="adim3Ileri()">'
+    +'Devam <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10h10M12 6l4 4-4 4"/></svg>'
+    +'</button>';
+  return h;
+}
+function adim3Ileri(){ if(S.rv_id){ S.adim=4; render(); } }
+
+/* ══════════════════════════════
+   ADIM 4 — RENK ADI & BİLGİSİ
+   Operatör rengin görünen adını ve açıklamasını girer.
+   Renk kodu sistem üretir — sadece bilgi gösterilir.
+══════════════════════════════ */
+function adim4Html(){
+  var h = '<div class="m2-adim-baslik">Renk Adı &amp; Bilgisi</div>'
+    +'<div class="m2-adim-alt">Geliştirilen rengin adını girin. Kod sistem tarafından otomatik oluşturulacak.</div>'
+
+    /* Renk Adı — ZORUNLU */
+    +'<div class="m2-form-grup">'
+    +'<div class="m2-form-label">Renk Adı <span class="zorunlu">ZORUNLU</span></div>'
+    +'<input type="text" id="m2-renk-adi" class="m2-input" maxlength="80"'
+    +' placeholder="Örn: Açık Gri / Buz Mavi / Kemik / Krem / Süt Beyazı"'
+    +' value="'+esc(S.renk_adi)+'">'
+    +'<div id="m2-renk-adi-uyari" style="font-size:11px;color:var(--orange);font-weight:700;margin-top:4px;display:none">Renk adı zorunludur.</div>'
+    +'</div>'
+
+    /* AR-GE Kodu — salt okunur, sistem üretir, kayıt öncesi KOD GÖSTERİLMEZ */
+    +'<div class="m2-form-grup">'
+    +'<div class="m2-form-label">AR-GE Kodu</div>'
+    +'<div style="display:flex;align-items:center;gap:8px;padding:11px 14px;background:var(--light);border:1.5px dashed var(--border);border-radius:9px;">'
+    +'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="15" height="15" style="color:var(--muted);flex-shrink:0"><circle cx="10" cy="10" r="8"/><line x1="10" y1="7" x2="10" y2="10"/><circle cx="10" cy="13.5" r=".6" fill="currentColor" stroke="none"/></svg>'
+    +'<span style="font-size:12px;font-weight:600;color:var(--muted)">Kaydedildiğinde backend tarafından otomatik oluşturulacaktır.</span>'
+    +'</div>'
+    +'</div>'
+
+    /* Renk Açıklaması — opsiyonel */
+    +'<div class="m2-form-grup">'
+    +'<div class="m2-form-label">Renk Açıklaması <span style="font-size:10px;font-weight:500;color:var(--muted);text-transform:none;letter-spacing:0">(opsiyonel)</span></div>'
+    +'<input type="text" id="m2-renk-aciklama" class="m2-input" maxlength="120"'
+    +' placeholder="Örn: Açık gri, buz beyazı tonlamalı, müşteri referansı RAL 9018"'
+    +' value="'+esc(S.renk_aciklama)+'">'
+    +'</div>'
+
+    /* Müşteri Talebi — opsiyonel */
+    +'<div class="m2-form-grup">'
+    +'<div class="m2-form-label">Müşteri Talebi / Not <span style="font-size:10px;font-weight:500;color:var(--muted);text-transform:none;letter-spacing:0">(opsiyonel)</span></div>'
+    +'<textarea id="m2-musteri-notu" class="m2-textarea" rows="2" maxlength="300"'
+    +' placeholder="Müşteri ne istedi? Hangi renk referans alındı?">'+esc(S.musteri_notu)+'</textarea>'
+    +'</div>'
+
+    +'<button class="m2-ileri-btn" id="btn-4" '+(S.renk_adi.trim()?'':'disabled')+' onclick="adim4Ileri()">'
+    +'Devam — Renk Bileşenleri '
+    +'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10h10M12 6l4 4-4 4"/></svg>'
+    +'</button>';
+  return h;
+}
+function adim4Ileri(){
+  var rAdiEl    = document.getElementById('m2-renk-adi');
+  var rAckEl    = document.getElementById('m2-renk-aciklama');
+  var rNotEl    = document.getElementById('m2-musteri-notu');
+  if(rAdiEl)  S.renk_adi        = rAdiEl.value.trim();
+  if(rAckEl)  S.renk_aciklama   = rAckEl.value.trim();
+  if(rNotEl)  S.musteri_notu    = rNotEl.value.trim();
+  if(!S.renk_adi){
+    var uyari = document.getElementById('m2-renk-adi-uyari');
+    if(uyari) uyari.style.display = '';
+    return;
+  }
+  S.adim = 5; render();
+}
+
+/* ══════════════════════════════
+   ADIM 5 — RENK BİLEŞENLERİ
+   Bug-free: gram_str state'te tutulur, gramajSyncDom() ile sync edilir.
+══════════════════════════════ */
+function adim5Html(){
+  var hazir = S.pigmentler.length > 0
+    && S.pigmentler.every(function(p){ return parseFloat(p.gram_str)>0; });
+
+  var h = '<div class="m2-adim-baslik">Renk Bileşenleri</div>'
+    +'<div class="m2-adim-alt">Stok kartından renk bileşeni seçin ve gramajını girin.</div>'
+
+    /* Seçilen bileşenler paneli */
+    +'<div class="m2-pigment-panel">'
+    +'<div class="m2-pigment-panel-baslik">'
+    +'<span>Seçilen Renk Bileşenleri</span>'
+    +(S.pigmentler.length
+      ? '<span class="sayac">'+S.pigmentler.length+' adet</span>'
+      : '<span style="font-size:11px;color:var(--muted)">henüz yok</span>')
+    +'</div>';
+
+  if(!S.pigmentler.length){
+    h += '<div class="m2-pigment-bos">Aşağıdaki butona tıklayarak renk bileşeni ekleyin.</div>';
+  } else {
+    /* ÖNEMLİ: her satır kendi idx'ini data-idx ile taşır.
+       gram_str: state değeri — DOM yeniden render edilse bile korunur. */
+    S.pigmentler.forEach(function(p, idx){
+      /* yeni_tanim: state'te varsa göster */
+      var ytEtiket = p.yeni_tanim
+        ? '<span style="font-size:10px;font-weight:800;color:var(--navy);background:rgba(26,43,109,.08);padding:1px 6px;border-radius:10px;margin-right:6px">'+esc(p.yeni_tanim)+'</span>'
+        : '';
+      h += '<div class="m2-pigment-satir">'
+        +'<button class="m2-pigment-sil" data-tip="pigment-sil" data-idx="'+idx+'" title="Kaldır">✕</button>'
+        +'<div class="m2-pigment-ad">'+ytEtiket+esc(p.ad)
+          +'<span class="m2-pigment-kod">'+esc(p.kod)+'</span></div>'
+        +'<div class="m2-pigment-gram-wrap">'
+        +'<input type="number" class="m2-pigment-gram-inp"'
+        +' data-tip="pigment-gram" data-idx="'+idx+'"'
+        +' min="0.001" step="0.001"'
+        +' value="'+esc(p.gram_str)+'"'
+        +' placeholder="0.000">'
+        +'<span class="m2-pigment-gram-birim">gr</span>'
+        +'</div>'
+        +'</div>';
+    });
+  }
+  h += '</div>'; /* pigment-panel */
+
+  /* Pigment arama */
+  if(S._pigment_ara_acik){
+    h += '<div class="m2-pigment-dropdown">'
+      +'<input type="text" id="m2-pigment-ara" class="m2-pigment-ara"'
+      +' placeholder="Renk bileşeni adı veya kodu…"'
+      +' value="'+esc(S._pigment_ara_metin)+'" autocomplete="off">'
+      +'<div class="m2-pigment-sonuclar" id="m2-pigment-sonuclar">'
+      +pigmentSonuclarHtml(S._pigment_ara_metin)
+      +'</div>'
+      +'<button class="m2-pigment-iptal" onclick="pigmentAramaKapat()">İptal</button>'
+      +'</div>';
+  } else {
+    h += '<button class="m2-pigment-ekle-btn" onclick="pigmentAramaAc()">'
+      +'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><line x1="10" y1="4" x2="10" y2="16"/><line x1="4" y1="10" x2="16" y2="10"/></svg>'
+      +'+ Renk Bileşeni Ekle'
+      +'</button>';
+  }
+
+  /* btn-5: gram_str > 0 yerine gram_str boş olmayan kontrolü
+     0.000 başlangıç değeri > 0 değil, bu yüzden gram girilince aktif olur.
+     Ama burada anlık state'e bakıyoruz — DOM henüz render edilmedi. */
+  h += '<button class="m2-ileri-btn" id="btn-5" '+(hazir?'':'disabled')+' onclick="adim5Ileri()">'
+    +'Devam — Reçete Önizle '
+    +'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10h10M12 6l4 4-4 4"/></svg>'
+    +'</button>'
+    /* Diagnostic — geliştirme sırasında görünür, onay sonrası kaldırılır */
+    +'<div id="m2-diag" style="margin-top:8px;padding:8px 12px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;font-size:11px;font-family:monospace;color:#166534;display:none"></div>';
+  return h;
+}
+
+/* Adım 5 → 6: DOM'daki gramaj değerlerini önce state'e yaz */
+function adim5Ileri(){
+  gramajSyncDom();
+  console.log('[M02 adim5Ileri] S.pigmentler ÖNCE:', JSON.stringify(S.pigmentler));
+  var hazir = S.pigmentler.length > 0
+    && S.pigmentler.every(function(p){ return parseFloat(p.gram_str)>0; });
+  console.log('[M02 adim5Ileri] hazir='+hazir);
+  if(!hazir) return;
+  S.onizleme = null;
+  S.adim = 6;
+  render();
+}
+
+/* ──────────────────────────────────
+   Pigment yönetimi — BUG-FREE versiyon
+   
+   pigmentEkle: yeni satır push eder, gram_str='0.000'
+     → renderIcerik çağrısı ÖNCE mevcut gramajları sync eder
+   
+   pigmentSil: splice sonrası yeni idx sırası otomatik doğru
+     → renderIcerik yeni state'le DOM'u yeniden inşa eder
+   
+   Aynı stok_id tekrar eklenemez (zatenVar kontrolü)
+   ────────────────────────────────── */
+function pigmentEkle(id, ad, kod, yeniTanim){
+  gramajSyncDom();
+  var zatenVar = S.pigmentler.some(function(p){ return p.stok_id===id; });
+  if(zatenVar){ pigmentAramaKapat(); return; }
+  /* yeni_tanim: data-yeni-tanim attribute'undan veya M2_STOK_PIGMENTLER'dan al */
+  var yt = yeniTanim || '';
+  if(!yt){
+    var stokObj = M2_STOK_PIGMENTLER.find(function(p){ return p.id===id; });
+    if(stokObj) yt = stokObj.yeni_tanim || '';
+  }
+  S.pigmentler.push({stok_id:id, ad:ad, kod:kod, yeni_tanim:yt, gram_str:'0.000'});
+  S._pigment_ara_acik = false;
+  S._pigment_ara_metin = '';
+  renderIcerik();
+  adimPostRender(5);
+}
+
+function pigmentSil(idx){
+  gramajSyncDom();
+  S.pigmentler.splice(idx, 1);
+  renderIcerik();
+  adimPostRender(5);
+}
+
+function pigmentAramaAc(){
+  gramajSyncDom();
+  S._pigment_ara_acik = true;
+  S._pigment_ara_metin = '';
+  renderIcerik();
+  adimPostRender(5);
+}
+function pigmentAramaKapat(){
+  S._pigment_ara_acik = false;
+  S._pigment_ara_metin = '';
+  renderIcerik();
+  adimPostRender(5);
+}
+
+function pigmentSonuclarHtml(metin){
+  var q = (metin||'').toLowerCase();
+  var seciliIdler = S.pigmentler.map(function(p){ return p.stok_id; });
+  var liste = M2_STOK_PIGMENTLER.filter(function(p){
+    if(seciliIdler.indexOf(p.id)>=0) return false;
+    /* arama: ad, kod veya yeni_tanim'da eşleşme */
+    return !q
+      || (p.ad||'').toLowerCase().indexOf(q)>=0
+      || (p.kod||'').toLowerCase().indexOf(q)>=0
+      || (p.yeni_tanim||'').toLowerCase().indexOf(q)>=0;
+  });
+  if(!liste.length) return '<div style="padding:11px 12px;font-size:13px;color:var(--muted)">Sonuç bulunamadı.</div>';
+  return liste.map(function(p){
+    var etiket = p.yeni_tanim ? esc(p.yeni_tanim)+' — ' : '';
+    return '<div class="m2-pigment-sonuc-item"'
+      +' data-tip="pigment-sec" data-id="'+p.id+'" data-ad="'+esc(p.ad)+'" data-kod="'+esc(p.kod||'')+'"'
+      +' data-yeni-tanim="'+esc(p.yeni_tanim||'')+'">'
+      +'<span><strong style="color:var(--navy);font-size:11px;margin-right:4px">'+etiket+'</strong>'+esc(p.ad)+'</span>'
+      +'<span class="p-kod">'+esc(p.kod||'')+'</span>'
+      +'</div>';
+  }).join('');
+}
+
+/* ══════════════════════════════
+   ADIM 6 — REÇETE ÖNİZLEME
+   %10 otomatik, tüm bileşenler görünür
+══════════════════════════════ */
+function hesaplaOnizleme(){
+  /* 1. DOM → state sync */
+  gramajSyncDom();
+
+  /* 2. Master KG: M2_VARYANTLAR listesinden uv_id'ye göre al */
+  var masterKg = 82.0;   /* fallback */
+  if(S.uv_id){
+    var uvObj = M2_VARYANTLAR.find(function(v){ return v.id === S.uv_id; });
+    if(uvObj && uvObj.master_kg && parseFloat(uvObj.master_kg) > 0){
+      masterKg = parseFloat(uvObj.master_kg);
+    }
+  }
+  var numune_orani = VARSAYILAN_ORAN / 100;
+  var numune_kg    = masterKg * numune_orani;
+
+  /* 3. Bileşenler: kullanıcı GR giriyor
+     gram_str → GR (float) → kg = GR / 1000
+     stok_id  → payload için taşınır
+     Kural: 340 gr / 1000 = 0.340 kg   (DOĞRU)
+            0.001 gr / 1000 = 0.000001 kg  (DOĞRU) */
+  var bileskenler = S.pigmentler.map(function(p){
+    var gramStr = (p.gram_str || '0').replace(',', '.');
+    var gr  = parseFloat(gramStr) || 0;   /* GR — kullanıcının girdiği */
+    var kg  = gr / 1000;                  /* KG = gr ÷ 1000 */
+    return {
+      stok_id:  p.stok_id,   /* payload için */
+      ad:       p.ad,
+      kod:      p.kod,
+      gram_str: p.gram_str,
+      gr:       gr,          /* GR — gösterim ve toplam için */
+      kg:       kg,          /* KG — maliyet ve toplam için */
+    };
+  });
+
+  /* 4. Toplam
+     rfTopGr: tüm bileşenlerin GR toplamı (örn: 340.001 gr)
+     rfTopKg: rfTopGr / 1000               (örn: 0.340001 kg) */
+  var rfTopGr = bileskenler.reduce(function(t, b){ return t + b.gr; }, 0);
+  var rfTopKg = rfTopGr / 1000;
+
+  /* 5. Genel toplam: ana formül numune KG + renk bileşeni KG */
+  var genelTop = numune_kg + rfTopKg;
+
+  /* 6. Debug */
+  console.log('[M02 hesaplaOnizleme]',
+    'bileşen:', bileskenler.length,
+    '| rfTopGr:', rfTopGr.toFixed(3)+'gr',
+    '| rfTopKg:', rfTopKg.toFixed(6)+'kg',
+    '| numune_kg:', numune_kg.toFixed(3)+'kg',
+    '| genelTop:', genelTop.toFixed(6)+'kg'
+  );
+
+  return {
+    master_kg:   masterKg,
+    numune_oran: VARSAYILAN_ORAN,
+    numune_kg:   parseFloat(numune_kg.toFixed(4)),
+    rf_top_gr:   rfTopGr,                          /* GR toplam */
+    rf_top_kg:   rfTopKg,                          /* KG toplam (= rfTopGr/1000) */
+    genel_top:   genelTop,                         /* KG toplam */
+    pigmentler:  bileskenler,
+  };
+}
+
+function adim6Html(){
+  /* Her render'da taze hesapla — adım 5'te bileşen eklenip çıkarılmış olabilir */
+  var oz = hesaplaOnizleme();
+  S.onizleme = oz;
+
+  var h = '<div class="m2-adim-baslik">Reçete Önizleme</div>'
+    +'<div class="m2-adim-alt">Kaydetmeden önce son kontrol. Renk bileşeni miktarlarını teyit edin.</div>'
+
+    /* Meta kutu */
+    +'<div class="m2-meta-kutu">'
+    +'<div class="m2-meta-item"><span>Master KG</span><strong>'+oz.master_kg.toFixed(3)+' kg</strong></div>'
+    +'<div class="m2-meta-arrow">→</div>'
+    +'<div class="m2-meta-item"><span>Numune Oranı</span><strong>%'+oz.numune_oran+' — Otomatik</strong></div>'
+    +'<div class="m2-meta-arrow">→</div>'
+    +'<div class="m2-meta-item"><span>Üretilecek KG</span><strong class="aksan">'+oz.numune_kg.toFixed(3)+' kg</strong></div>'
+    +'</div>'
+
+    /* Hassas tartım uyarısı */
+    +'<div class="m2-uyari-kutu">'
+    +'<svg viewBox="0 0 20 20" fill="none" stroke="#D97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="10" cy="10" r="8"/><line x1="10" y1="6" x2="10" y2="10"/><circle cx="10" cy="14" r="0.5" fill="#D97706"/></svg>'
+    +'<p>Renk bileşenlerini hassas terazi ile tartın. ATR gibi büyük bileşenleri gram, Yellow / Blue gibi mikro bileşenleri miligram hassasiyetiyle ölçün. Yuvarlama hatası renk sonucunu etkiler.</p>'
+    +'</div>'
+
+    /* Pigment tablosu */
+    +'<table class="m2-onizleme-tablo">'
+    +'<thead><tr><th>Renk Bileşeni</th><th style="text-align:right">Gramaj</th></tr></thead>'
+    +'<tbody>'
+    +'<tr class="rf-baslik"><td colspan="2">Renk Bileşenleri ('+oz.pigmentler.length+' adet)</td></tr>';
+
+  /* TÜM bileşenler — goster_gr_m2 KG alır, p.kg = gr/1000 */
+  oz.pigmentler.forEach(function(p){
+    h += '<tr class="rf-satir">'
+      +'<td>'+esc(p.ad)+'<span style="font-size:10px;color:var(--muted);margin-left:6px">'+esc(p.kod)+'</span></td>'
+      +'<td style="text-align:right;font-variant-numeric:tabular-nums">'+goster_gr_m2(p.kg)+'</td>'
+      +'</tr>';
+  });
+
+  /* ── Renk Bileşeni Toplam: her zaman tam kg değeri göster ── */
+  var rfKgTam;   /* kaç ondalık basamak gerekiyorsa o kadar göster */
+  if(oz.rf_top_kg === 0){
+    rfKgTam = '0 kg';
+  } else if(oz.rf_top_kg >= 0.001){
+    rfKgTam = oz.rf_top_kg.toFixed(3) + ' kg';
+  } else {
+    /* 0.001 kg altı: 6 ondalık basamakla göster, gereksiz sıfırları at */
+    var kgStr6 = parseFloat(oz.rf_top_kg.toFixed(6));
+    rfKgTam = kgStr6 + ' kg';
+  }
+
+  var genelTopStr = oz.genel_top.toFixed(3) + ' kg';
+  /* Mikro bilgi: renk bileşeni toplamı 0.001 kg altındaysa uyarı */
+  var mikroBilgi = oz.rf_top_kg > 0 && oz.rf_top_kg < 0.001;
+  var mikroBilgiMetin = mikroBilgi
+    ? 'Toplam içinde ' + goster_gr_m2(oz.rf_top_kg) + ' renk bileşeni bulunmaktadır. '
+      + 'Mikro değerler toplam kg\'yi 3 ondalık gösterimde değiştirmeyebilir.'
+    : '';
+
+  /* Tahmini Toplam gösterimi:
+     Ana Formül Numune + renk bileşeni açık yazılır, gerçek toplam alt satırda */
+  var rfGrGoster   = goster_gr_m2(oz.rf_top_kg);          /* örn: "340 gr" veya "0.001 gr" */
+  var toplamSatir  = oz.numune_kg.toFixed(3)+' kg + '+rfGrGoster+' renk bileşeni';
+  var gercekToplam = 'Gerçek toplam: '+oz.genel_top.toFixed(6).replace(/0+$/, '').replace(/\.$/, '')+' kg';
+
+  h += '</tbody></table>'
+    +'<div class="m2-onizleme-toplam rf">'
+    +'<span>Renk Bileşeni Toplam</span>'
+    +'<span style="font-variant-numeric:tabular-nums;text-align:right;line-height:1.7">'
+    +rfGrGoster
+    +'<br><span style="font-size:11px;font-weight:600;opacity:.7">('+rfKgTam+')</span>'
+    +'</span>'
+    +'</div>'
+    +'<div class="m2-onizleme-toplam taban">'
+    +'<span>Ana Formül Numune</span><span>'+oz.numune_kg.toFixed(3)+' kg</span>'
+    +'</div>'
+    /* Tahmini Toplam: iki satır — formül + gerçek değer */
+    +'<div class="m2-onizleme-toplam genel" style="flex-direction:column;align-items:flex-start;gap:3px">'
+    +'<div style="display:flex;justify-content:space-between;width:100%">'
+    +'<span>Tahmini Toplam</span>'
+    +'<span style="font-size:13px">'+toplamSatir+'</span>'
+    +'</div>'
+    +'<div style="font-size:11px;font-weight:600;opacity:.75;align-self:flex-end">'+gercekToplam+'</div>'
+    +'</div>'
+    +'<button class="m2-ileri-btn" onclick="adim6Ileri()">'
+    +'Reçete Onaylandı — Nota Geç '
+    +'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10h10M12 6l4 4-4 4"/></svg>'
+    +'</button>';
+  return h;
+}
+function adim6Ileri(){ S.adim=7; render(); }
+
+/* ══════════════════════════════
+   ADIM 7 — AR-GE NOTU + KAYDET
+══════════════════════════════ */
+function adim7Html(){
+  var notBosMu = !(S.not && S.not.trim().length>0);
+  /* S.onizleme adım 6'da hesaplandı — adım 7'ye geçişte güvenilir */
+  var oz = S.onizleme || hesaplaOnizleme();
+  /* Renk bileşeni toplamı için kg gösterim — mikro uyarısı */
+  var rfKgOzet = oz.rf_top_kg >= 0.001
+    ? oz.rf_top_kg.toFixed(3)+' kg'
+    : (oz.rf_top_kg > 0 ? '<0.001 kg' : '0 kg');
+
+  var ozet = [
+    ['Cari',           S.cari_ad],
+    ['Formül',         S.formul_kod+' '+S.formul_ad],
+    ['Varyant',        S.rv_ad],
+    ['Renk Adı',       S.renk_adi],
+    ['AR-GE Kodu',     'Kayıt sırasında backend tarafından oluşturulacak'],
+    ['Batch',          oz.numune_kg.toFixed(3)+' kg  (%'+oz.numune_oran+' Otomatik)'],
+    ['Durum',          'Yeni Renk Denemesi / Onay Bekliyor'],
+  ];
+  var h = '<div class="m2-adim-baslik">Kaydet &amp; Barkod</div>'
+    +'<div class="m2-adim-alt">Son kontrol — AR-GE notunu yaz ve kaydet.</div>'
+    +'<div style="margin-bottom:14px">';
+  ozet.forEach(function(r){
+    if(r[0] === 'AR-GE Kodu'){
+      /* AR-GE kodu henüz yok — farklı stil, kod gösterilmez */
+      h += '<div class="m2-ozet-satir">'
+        +'<span class="m2-ozet-etiket">'+r[0]+'</span>'
+        +'<span style="font-size:11px;font-weight:600;color:var(--muted);font-style:italic">'+esc(r[1])+'</span>'
+        +'</div>';
+    } else {
+      h += '<div class="m2-ozet-satir">'
+        +'<span class="m2-ozet-etiket">'+r[0]+'</span>'
+        +'<span class="m2-ozet-deger">'+esc(r[1])+'</span>'
+        +'</div>';
+    }
+  });
+  /* Renk bileşenleri satır satır */
+  h += '<div class="m2-ozet-satir" style="align-items:flex-start">'
+    +'<span class="m2-ozet-etiket">Bileşenler</span>'
+    +'<div style="flex:1">';
+  oz.pigmentler.forEach(function(p){
+    var gStr = goster_gr_m2(p.kg);
+    h += '<div style="font-size:12px;font-weight:600;color:var(--navy);padding:2px 0">'
+      +'<span style="font-size:10px;color:var(--muted);min-width:60px;display:inline-block">'+esc(p.kod)+'</span>'
+      +' '+esc(p.ad)
+      +' <strong style="color:var(--orange)">'+gStr+'</strong>'
+      +'</div>';
+  });
+  h += '<div style="font-size:11px;color:var(--muted);margin-top:3px">Toplam: '
+    +goster_gr_m2(oz.rf_top_kg)
+    +' <span style="opacity:.7">('+rfKgOzet+')</span>'
+    +'</div>'
+    +'</div></div>';
+  h += '</div>'
+    +'<div class="m2-form-grup">'
+    +'<div class="m2-form-label">AR-GE NOTU <span class="zorunlu">ZORUNLU</span></div>'
+    +'<textarea class="m2-textarea" id="m2-arge-notu" rows="3" maxlength="400"'
+    +' placeholder="Örn: ATR 340gr + Yellow 0.001gr denendi. Müşteri istediği tona yakın. Isı testine gönderildi.">'
+    +(S.not ? esc(S.not) : '')+'</textarea>'
+    +'<div id="m2-not-uyari" style="font-size:11px;color:var(--orange);font-weight:700;margin-top:4px;'+(notBosMu?'':'display:none')+'">Kaydetmek için AR-GE Notu zorunludur.</div>'
+    +'</div>'
+    +'<button class="m2-kaydet-btn" id="m2-kaydet-btn" onclick="kaydet()" '+(notBosMu?'disabled style="opacity:.4;cursor:not-allowed"':'')+'>'
+    +'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M17 3H7L3 7v10h14V3z"/><rect x="7" y="13" width="6" height="4" rx="1"/><rect x="6" y="3" width="8" height="5" rx="1"/></svg>'
+    +'NUMUNE KAYDET'
+    +'</button>'
+    +'<div id="m2-kaydet-spinner" style="display:none" class="m2-yukleniyor"><div class="m2-spin"></div> Kaydediliyor…</div>'
+    +'<div id="m2-kaydet-hata" class="m2-hata" style="display:none"></div>'
+    +'<div id="m2-basari" class="m2-basari" style="display:none">'
+    +'<div class="m2-basari-check">✓</div>'
+    /* NX-AR-NNNN kodu — backend'den geldikten sonra JS doldurur */
+    +'<div id="m2-basari-no" class="m2-basari-no" style="display:none"></div>'
+    +'<div class="m2-basari-alt">AR-GE kaydı oluşturuldu.<br>'
+    +'Durum: <strong>Onay Bekliyor</strong>'
+    +'</div>'
+    /* Barkod butonu — sonraki fazda aktif edilecek */
+    +'<button class="m2-barkod-btn" id="m2-barkod-btn" '
+    +'style="opacity:.45;cursor:not-allowed;pointer-events:none" disabled>'
+    +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><rect x="2" y="6" width="20" height="12" rx="2"/><line x1="6" y1="10" x2="6" y2="14"/><line x1="10" y1="10" x2="10" y2="14"/><line x1="14" y1="10" x2="14" y2="14"/><line x1="18" y1="10" x2="18" y2="14"/></svg>'
+    +'Barkod (Yakinda)'
+    +'</button>'
+    +'<button class="m2-yeni-btn" onclick="yeniBaslat()">Yeni Deneme</button>'
+    +'</div>';
+  return h;
+}
+
+/* ══ Kaydet — gerçek backend endpointi ══ */
+function kaydet(){
+  if(!(S.not && S.not.trim())) return;
+
+  gramajSyncDom();
+  var oz = hesaplaOnizleme();
+  S.onizleme = oz;
+
+  var renk_bilesenleri = oz.pigmentler.map(function(p){
+    return {
+      stok_kart_id: p.stok_id,
+      stok_kodu:    p.kod,
+      ad:           p.ad,
+      gram:         p.gr,
+      kg:           p.kg,
+    };
+  });
+
+  console.log('[M02 kaydet] rv_id='+S.rv_id+' uv_id='+S.uv_id);
+  var payload = {
+    kaynak_uv_id:              S.uv_id || S.rv_id,  /* uv_id öncelikli */
+    rv_id:                     S.rv_id,
+    uv_id:                     S.uv_id,
+    cari_id:                   S.cari_id,
+    renk_adi:                  S.renk_adi,
+    renk_aciklama:             S.renk_aciklama,
+    musteri_notu:              S.musteri_notu,
+    notlar:                    S.not,
+    renk_bilesenleri:          renk_bilesenleri,
+    renk_bileseni_toplam_gr:   oz.rf_top_gr,
+    renk_bileseni_toplam_kg:   oz.rf_top_kg,
+    ana_formul_numune_kg:      oz.numune_kg,
+    numune_orani:              oz.numune_oran,
+    tahmini_toplam_kg:         oz.genel_top,
+  };
+
+  var btn  = document.getElementById('m2-kaydet-btn');
+  var spin = document.getElementById('m2-kaydet-spinner');
+  var hataEl = document.getElementById('m2-kaydet-hata');
+  if(btn)   btn.style.display   = 'none';
+  if(spin)  spin.style.display  = 'flex';
+  if(hataEl){ hataEl.style.display = 'none'; hataEl.textContent = ''; }
+
+  fetch('/nexgen/api/tablet/arge/yeni-renk-denemesi', {
+    method:  'POST',
+    headers: {'Content-Type': 'application/json'},
+    body:    JSON.stringify(payload),
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if(spin) spin.style.display = 'none';
+    if(!data.ok){
+      if(hataEl){ hataEl.style.display = 'block'; hataEl.textContent = data.hata || 'Kayıt başarısız.'; }
+      if(btn) btn.style.display = 'flex';
+      return;
+    }
+    S._kaydedilen_test_id  = data.test_id;
+    S._kaydedilen_arge_kodu = data.arge_kodu;
+
+    var noEl = document.getElementById('m2-basari-no');
+    if(noEl){ noEl.textContent = data.arge_kodu; noEl.style.display = 'block'; }
+
+    var basari = document.getElementById('m2-basari');
+    if(basari) basari.style.display = 'block';
+
+    /* Barkod butonu kasıtlı olarak disabled bırakılıyor — sonraki fazda aktif edilecek */
+  })
+  .catch(function(err){
+    if(spin) spin.style.display = 'none';
+    if(hataEl){ hataEl.style.display = 'block'; hataEl.textContent = 'Bağlantı hatası: ' + err.message; }
+    if(btn) btn.style.display = 'flex';
+  });
+}
+
+function barkodYazdir(){
+  if(!S._kaydedilen_test_id){ alert('Kayıt tamamlanmadan barkod yazdırılamaz.'); return; }
+  window.open('/nexgen/tablet/arge/barkod-yazdir?test_id='+S._kaydedilen_test_id,'_blank','width=600,height=400');
+}
+
+function yeniBaslat(){
+  S={adim:1,cari_id:null,cari_ad:'',formul_id:null,formul_ad:'',formul_kod:'',
+     rv_id:null,rv_ad:'',renk_adi:'',renk_aciklama:'',musteri_notu:'',
+     pigmentler:[],_pigment_ara_acik:false,_pigment_ara_metin:'',
+     onizleme:null,not:'',_kaydedilen_test_id:null};
+  render();
+}
+
+/* ══ Saat ══ */
+function saatGuncelle(){
+  var now=new Date();
+  var s=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
+  var t=now.getDate().toString().padStart(2,'0')+'.'+(now.getMonth()+1).toString().padStart(2,'0');
+  var e1=document.getElementById('m2-clock'); if(e1) e1.textContent=s;
+  var e2=document.getElementById('m2-date');  if(e2) e2.textContent=t;
+}
+setInterval(saatGuncelle,1000); saatGuncelle();
+
+/* ══ Gösterim Fonksiyonları — DS v2.0 ══ */
+function goster_gr_m2(kg_val){
+  if(kg_val===null||kg_val===undefined||isNaN(kg_val)) return '—';
+  var gr=parseFloat(kg_val)*1000;
+  var gr3=parseFloat(gr.toFixed(3));
+  var sonuc=(gr3===Math.floor(gr3)) ? String(gr3) : gr3.toFixed(3);
+  return sonuc+' gr';
+}
+
+/* ══ adimPostRender ══ */
+function adimPostRender(no){
+  /* Cari arama */
+  var cAra=document.getElementById('m2-cari-ara');
+  if(cAra){
+    cAra.addEventListener('input',function(){
+      var q=this.value.toLowerCase();
+      document.querySelectorAll('#m2-cari-liste .m2-secim-item').forEach(function(el){
+        var ad=(el.getAttribute('data-ad')||'').toLowerCase();
+        el.style.display=(!q||ad.indexOf(q)>=0)?'':'none';
+      });
+    });
+    setTimeout(function(){ cAra.focus(); },60);
+  }
+  /* Formül arama */
+  var fAra=document.getElementById('m2-formul-ara');
+  if(fAra){
+    fAra.addEventListener('input',function(){
+      var q=this.value.toLowerCase();
+      document.querySelectorAll('#m2-formul-liste .m2-secim-item').forEach(function(el){
+        var ad=(el.getAttribute('data-ad')||'').toLowerCase();
+        el.style.display=(!q||ad.indexOf(q)>=0)?'':'none';
+      });
+    });
+    setTimeout(function(){ fAra.focus(); },60);
+  }
+  /* Pigment arama input */
+  var pAra=document.getElementById('m2-pigment-ara');
+  if(pAra){
+    pAra.addEventListener('input',function(){
+      S._pigment_ara_metin=this.value;
+      var sonEl=document.getElementById('m2-pigment-sonuclar');
+      if(sonEl) sonEl.innerHTML=pigmentSonuclarHtml(this.value);
+    });
+    setTimeout(function(){ pAra.focus(); },60);
+  }
+  /* Renk Adı değişince btn-4 aktif et */
+  var rAdiEl=document.getElementById('m2-renk-adi');
+  if(rAdiEl){
+    rAdiEl.addEventListener('input',function(){
+      S.renk_adi=this.value.trim();
+      var btn=document.getElementById('btn-4'); if(btn) btn.disabled=!S.renk_adi;
+      var uyr=document.getElementById('m2-renk-adi-uyari'); if(uyr) uyr.style.display=S.renk_adi?'none':'';
+    });
+    setTimeout(function(){ rAdiEl.focus(); },60);
+  }
+  /* Gramaj değişince btn-5 güncelle + diagnostic panel */
+  function diagGuncelle(){
+    var diagEl = document.getElementById('m2-diag');
+    if(!diagEl) return;
+    var satirlar = S.pigmentler.map(function(p,i){
+      return (i+1)+'. '+p.ad+' | stok_id='+p.stok_id+' | gram_str="'+p.gram_str+'"';
+    });
+    diagEl.style.display = 'block';
+    diagEl.innerHTML = '<strong>S.pigmentler ('+S.pigmentler.length+' adet):</strong><br>'
+      + (satirlar.length ? satirlar.join('<br>') : '<em>boş</em>');
+  }
+  diagGuncelle();
+
+  document.querySelectorAll('[data-tip="pigment-gram"]').forEach(function(inp){
+    inp.addEventListener('input',function(){
+      var idx=parseInt(this.getAttribute('data-idx'),10);
+      if(!isNaN(idx)&&S.pigmentler[idx]) S.pigmentler[idx].gram_str=this.value;
+      var hazir=S.pigmentler.length>0&&S.pigmentler.every(function(p){return parseFloat(p.gram_str)>0;});
+      var btn=document.getElementById('btn-5'); if(btn) btn.disabled=!hazir;
+      diagGuncelle();
+    });
+  });
+  /* AR-GE Notu */
+  var notEl=document.getElementById('m2-arge-notu');
+  if(notEl){
+    notEl.addEventListener('input',function(){
+      S.not=this.value.trim();
+      var btn=document.getElementById('m2-kaydet-btn');
+      var uyr=document.getElementById('m2-not-uyari');
+      var dolu=S.not.length>0;
+      if(btn){btn.disabled=!dolu;btn.style.opacity=dolu?'1':'0.4';btn.style.cursor=dolu?'pointer':'not-allowed';}
+      if(uyr) uyr.style.display=dolu?'none':'';
+    });
+    setTimeout(function(){ notEl.focus(); },60);
+  }
+}
+
+/* ══ Event delegation ══ */
+function initEvents(){
+  var icerik=document.getElementById('m2-icerik');
+  if(!icerik) return;
+  icerik.addEventListener('click',function(e){
+    /* Cari */
+    var item=e.target.closest('.m2-secim-item[data-tip="cari"]');
+    if(item){
+      S.cari_id=parseInt(item.getAttribute('data-id'),10);
+      S.cari_ad=item.getAttribute('data-ad')||'';
+      icerik.querySelectorAll('[data-tip="cari"]').forEach(function(el){el.classList.toggle('secili',el===item);});
+      var b=document.getElementById('btn-1'); if(b) b.disabled=false;
+      return;
+    }
+    /* Formül */
+    item=e.target.closest('.m2-secim-item[data-tip="formul"]');
+    if(item){
+      S.formul_id=parseInt(item.getAttribute('data-id'),10);
+      S.formul_ad=item.getAttribute('data-ad')||'';
+      S.formul_kod=item.getAttribute('data-kod')||'';
+      S.rv_id=null; S.rv_ad='';
+      icerik.querySelectorAll('[data-tip="formul"]').forEach(function(el){el.classList.toggle('secili',el===item);});
+      var b=document.getElementById('btn-2'); if(b) b.disabled=false;
+      return;
+    }
+    /* Varyant */
+    item=e.target.closest('.m2-secim-item[data-tip="rv"]');
+    if(item){
+      S.rv_id=parseInt(item.getAttribute('data-id'),10);
+      S.rv_ad=item.getAttribute('data-ad')||'';
+      /* M2_VARYANTLAR listesinden bu rv'ye ait ilk uv_id'yi bul */
+      var uvBul = M2_VARYANTLAR.find(function(v){ return v.renk_varyant_id===S.rv_id; });
+      S.uv_id = uvBul ? uvBul.id : null;
+      console.log('[M02] rv_id='+S.rv_id+' uv_id='+S.uv_id+' ('+S.rv_ad+')');
+      icerik.querySelectorAll('[data-tip="rv"]').forEach(function(el){el.classList.toggle('secili',el===item);});
+      var b=document.getElementById('btn-3'); if(b) b.disabled=false;
+      return;
+    }
+    /* Pigment seç (dropdown) */
+    item=e.target.closest('[data-tip="pigment-sec"]');
+    if(item){
+      pigmentEkle(
+        parseInt(item.getAttribute('data-id'),10),
+        item.getAttribute('data-ad')||'',
+        item.getAttribute('data-kod')||'',
+        item.getAttribute('data-yeni-tanim')||''
+      );
+      return;
+    }
+    /* Pigment sil */
+    item=e.target.closest('[data-tip="pigment-sil"]');
+    if(item){
+      pigmentSil(parseInt(item.getAttribute('data-idx'),10));
+      return;
+    }
+  });
+}
+
+function adimeGit(no){ if(no<S.adim){ S.adim=no; render(); } }
+
+function esc(s){
+  if(s===null||s===undefined) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* ── Başlat ── */
+render();
+initEvents();
+</script>
+{% endblock %}

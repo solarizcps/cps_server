@@ -109,3 +109,45 @@ app/*.txt
 app/static/img/personel/*
 !app/static/img/personel/.gitkeep
 
+# Kök dizin geçici analiz/patch scriptleri
+/_analiz_*.py
+/_apply_*.py
+/_chk_*.py
+/_check_*.py
+/_canli*.py
+/_faz*.py
+/_debug_*.py
+/_audit_*.py
+/_arge_*.py
+/_dryrun_*.py
+/_commit_*.txt
+/_dup_*.py
+/_dup_*.txt
+/_7c4_verify.py
+/_api_analiz.py
+/_durum.py
+/_copy_logo.py
+/_crm_test_*.py
+/_db_*.py
+
+# Kök json/xlsx analiz çıktıları
+/_b_group_*.json
+/_baseline_*.json
+/_c8_baseline_*.json
+/_faz3*.json
+
+# Sprint notları / recon klasörleri
+/Yetkilendirme A/
+/_5058_referans/
+
+# Rapor çıktıları
+/reports/
+
+# Backup snapshot klasörü
+/backups/
+
+# Static geçici yedekler
+app/static/**/*.YEDEK_*
+app/static/**/*_backup_*
+app/static/**/*ENJ_*backup*
+

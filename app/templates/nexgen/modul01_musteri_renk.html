@@ -1,0 +1,1480 @@
+{% extends "base.html" %}
+{% set page_title = "Müşteri Renk Talebi — NexGen AR-GE" %}
+
+{% block content %}
+{#
+  MODÜL-01 — Müşteri Renk Talebi
+  Design System v2.0  |  NexGen AR-GE Tablet
+  Amaç: Müşterinin karteladan seçtiği onaylı RF rengi ile numune hazırla.
+  Adımlar: Cari → Formül → RF → Boyut → Miktar → Reçete Önizleme → Kaydet & Barkod
+  FAZ-1 kararları:
+    - Master reçete KG → seçilen KG oranında ölçekleme
+    - Boyutlar: LARGE, SMALL, MEDIUM, STANDART (çoklu seçim desteklenir)
+    - KG: 7.5 / 15 / serbest
+    - 10 KG FAZ-1'de kullanılmaz
+#}
+
+{# ── Veri JSON ── #}
+<script>
+var CARILER         = {{ cariler         | tojson | safe }};
+var FORMULLER       = {{ formuller       | tojson | safe }};
+var RENK_VARYANTLAR = {{ renk_varyantlar | tojson | safe }};  /* rv: alt formül/model */
+var VARYANTLAR      = {{ varyantlar      | tojson | safe }};  /* uv: rv_id + boyut + uv_id */
+var RF_LISTE        = {{ rf_liste        | tojson | safe }};
+</script>
+
+<div class="m1-shell">
+
+  {# ══ ÜST BAR ══ #}
+  <header class="m1-bar">
+    <a href="{{ url_for('nexgen.tablet_arge') }}" class="m1-geri" title="Ana Ekrana Dön">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="15 18 9 12 15 6"/>
+      </svg>
+    </a>
+    <div class="m1-bar-logo">
+      <img src="{{ url_for('static', filename='img/nexgen-logo.png') }}"
+           alt="NexGen" class="m1-logo"
+           onerror="this.style.display='none'">
+    </div>
+    <div class="m1-bar-divider"></div>
+    <div class="m1-bar-title">
+      <span class="m1-bar-label">MÜŞTERİ RENK TALEBİ</span>
+      <span class="m1-bar-name">Yeni Numune</span>
+    </div>
+    <div class="m1-bar-sag">
+      <div class="m1-clock-wrap">
+        <span class="m1-clock" id="m1-clock">--:--</span>
+        <span class="m1-date"  id="m1-date">--.--</span>
+      </div>
+      <div class="m1-user-wrap">
+        <div class="m1-avatar">{{ (kullanici_ad or 'V')[0]|upper }}</div>
+        <span class="m1-uname">{{ kullanici_ad or 'Kullanıcı' }}</span>
+      </div>
+    </div>
+  </header>
+
+  {# ══ İÇERİK ══ #}
+  <div class="m1-body">
+
+    {# ── SOL: İlerleme paneli ── #}
+    <aside class="m1-sidebar">
+      <div class="m1-sidebar-ic">
+        <div class="m1-prog-baslik">İLERLEME</div>
+        <div class="m1-adimlar" id="m1-adimlar">
+          {# JS tarafından render edilecek #}
+        </div>
+      </div>
+    </aside>
+
+    {# ── SAĞ: Aktif adım içeriği ── #}
+    <main class="m1-icerik" id="m1-icerik">
+      {# JS tarafından render edilecek #}
+    </main>
+
+  </div>
+</div>
+
+{# ══ CSS ══ #}
+<style>
+/* ── DS v2.0 Değişkenler + Ortak AR-GE Layout Tokenları ── */
+:root {
+  --navy:     #1E2D4A;
+  --navy-dk:  #0F1929;
+  --steel:    #3D5A7A;
+  --orange:   #F47920;
+  --white:    #FFFFFF;
+  --light:    #F0F4F8;
+  --border:   #DDE3ED;
+  --muted:    #64748B;
+  --green:    #16A34A;
+  --card:     #FFFFFF;
+  --ob:       #FFF4EC;
+  --sb:       rgba(61,90,122,.07);
+  --sbd:      rgba(61,90,122,.16);
+
+  /* ── Ortak AR-GE Layout Tokenları (tüm modüllerde aynı) ── */
+  --arge-bar-h:        62px;   /* üst bar yüksekliği     */
+  --arge-sidebar-w:   210px;   /* sol progress genişliği  */
+  --arge-card-max-w:  820px;   /* ana kart max genişliği  */
+  --arge-row-h:        48px;   /* liste satır min yüksekliği */
+  --arge-input-h:      42px;   /* input yüksekliği        */
+  --arge-btn-h:        44px;   /* buton yüksekliği        */
+  --arge-content-pad: 24px;    /* icerik iç padding       */
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+
+/* KABUK */
+.m1-shell {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--light);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+}
+
+/* ════ ÜST BAR ════ */
+.m1-bar {
+  flex: 0 0 var(--arge-bar-h);
+  height: var(--arge-bar-h);
+  background: var(--navy);
+  border-bottom: 3px solid var(--orange);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 0;
+  z-index: 100;
+}
+.m1-geri {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255,255,255,.2);
+  color: rgba(255,255,255,.8);
+  text-decoration: none;
+  flex-shrink: 0;
+  margin-right: 12px;
+  transition: background .1s;
+}
+.m1-geri:hover { background: rgba(255,255,255,.1); color: #fff; }
+.m1-geri svg { width: 16px; height: 16px; }
+
+.m1-bar-logo { display: flex; align-items: center; flex-shrink: 0; padding-right: 16px; }
+.m1-logo { height: 40px; width: auto; max-width: 150px; object-fit: contain; display: block; }
+
+.m1-bar-divider { width: 1px; height: 30px; background: rgba(255,255,255,.15); flex-shrink: 0; margin-right: 16px; }
+
+.m1-bar-title { display: flex; flex-direction: column; gap: 2px; }
+.m1-bar-label { font-size: 8px; font-weight: 700; color: var(--orange); letter-spacing: 3px; text-transform: uppercase; line-height: 1; }
+.m1-bar-name  { font-size: 14px; font-weight: 800; color: var(--white); line-height: 1; }
+
+.m1-bar-sag { margin-left: auto; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+
+.m1-clock-wrap { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); border-radius: 8px; padding: 4px 11px; text-align: center; min-width: 66px; }
+.m1-clock { display: block; font-size: 16px; font-weight: 900; color: var(--orange); font-variant-numeric: tabular-nums; line-height: 1; }
+.m1-date  { display: block; font-size: 9px; color: rgba(255,255,255,.3); font-weight: 600; line-height: 1.5; }
+
+.m1-user-wrap { display: flex; align-items: center; gap: 7px; }
+.m1-avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--orange); color: #fff; font-size: 13px; font-weight: 900; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.m1-uname  { font-size: 12px; font-weight: 600; color: rgba(255,255,255,.55); }
+
+/* ════ İÇERİK ALANI ════ */
+.m1-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* ── SOL PANEL ── */
+.m1-sidebar {
+  flex: 0 0 var(--arge-sidebar-w);
+  background: var(--white);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px 14px;
+}
+.m1-sidebar-ic { height: 100%; }
+
+.m1-prog-baslik {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+  padding-left: 4px;
+}
+
+/* Adım satırı */
+.m1-adim {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 8px 8px 6px;
+  border-radius: 9px;
+  margin-bottom: 2px;
+  cursor: default;
+  transition: background .1s;
+  position: relative;
+}
+.m1-adim::before {
+  content: '';
+  position: absolute;
+  left: 17px;
+  top: 34px;
+  width: 2px;
+  height: calc(100% - 8px);
+  background: var(--border);
+}
+.m1-adim:last-child::before { display: none; }
+
+/* Durum ikonları */
+.m1-adim-ikon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  flex-shrink: 0;
+  line-height: 1;
+  margin-top: 1px;
+  z-index: 1;
+}
+.m1-adim.durum-bekliyor .m1-adim-ikon { background: var(--light); border: 1.5px solid var(--border); color: var(--muted); }
+.m1-adim.durum-aktif    .m1-adim-ikon { background: var(--orange); color: #fff; }
+.m1-adim.durum-tamam    .m1-adim-ikon { background: var(--green); color: #fff; }
+
+/* Adım metni */
+.m1-adim-metin { flex: 1; min-width: 0; }
+.m1-adim-ad {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  line-height: 1.2;
+}
+.m1-adim.durum-aktif .m1-adim-ad { color: var(--navy); font-weight: 800; }
+.m1-adim.durum-tamam .m1-adim-ad { color: #16A34A; font-weight: 700; }
+
+/* Seçilen değer etiketi */
+.m1-adim-deger {
+  display: inline-block;
+  margin-top: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  background: #DCFCE7;
+  color: #15803D;
+  border: 1px solid #BBF7D0;
+  padding: 1px 7px;
+  border-radius: 4px;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Aktif adım sol çizgi */
+.m1-adim.durum-aktif {
+  background: #FFF9F5;
+  border-left: 3px solid var(--orange);
+  padding-left: 5px;
+}
+
+/* ── SAĞ: AKTİF İÇERİK ── */
+.m1-icerik {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: var(--arge-content-pad) 20px 28px;
+}
+
+/* Tamamlanan adım özet satırı */
+.m1-ozet-satir {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 14px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: border-color .1s;
+}
+.m1-ozet-satir:hover { border-color: var(--steel); }
+.m1-ozet-check { width: 20px; height: 20px; background: var(--green); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.m1-ozet-check svg { width: 10px; height: 10px; }
+.m1-ozet-no   { font-size: 11px; font-weight: 700; color: var(--muted); flex-shrink: 0; }
+.m1-ozet-ad   { font-size: 12px; font-weight: 700; color: var(--navy); flex-shrink: 0; }
+.m1-ozet-sep  { width: 1px; height: 14px; background: var(--border); flex-shrink: 0; }
+.m1-ozet-val  { font-size: 12px; font-weight: 600; color: var(--muted); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m1-ozet-edit { flex-shrink: 0; color: var(--muted); opacity: .6; }
+.m1-ozet-edit svg { width: 13px; height: 13px; display: block; }
+
+/* Aktif adım kartı */
+.m1-adim-kart {
+  background: var(--white);
+  border: 1.5px solid var(--orange);
+  border-radius: 16px;
+  padding: 22px 20px 20px;
+  box-shadow: 0 4px 20px rgba(30,45,74,.09);
+  margin-bottom: 0;
+}
+.m1-adim-kart-baslik {
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--navy);
+  margin-bottom: 4px;
+}
+.m1-adim-kart-alt {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+/* Arama kutusu */
+.m1-arama {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--light);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 9px 13px;
+  margin-bottom: 14px;
+}
+.m1-arama svg { width: 15px; height: 15px; color: var(--muted); flex-shrink: 0; }
+.m1-arama input {
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  color: var(--navy);
+  flex: 1;
+  outline: none;
+}
+.m1-arama input::placeholder { color: var(--muted); }
+
+/* Seçim listesi */
+.m1-liste { display: flex; flex-direction: column; gap: 7px; max-height: 280px; overflow-y: auto; padding-right: 2px; }
+
+.m1-secim-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--white);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 11px 14px;
+  cursor: pointer;
+  transition: border-color .1s, background .1s;
+  -webkit-tap-highlight-color: transparent;
+}
+.m1-secim-item:hover { border-color: rgba(244,121,32,.35); background: var(--ob); }
+.m1-secim-item.secili { border-color: var(--orange); background: var(--ob); }
+.m1-secim-item.secili .m1-si-ad { color: var(--orange); }
+
+.m1-si-check { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--border); flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: all .1s; }
+.m1-secim-item.secili .m1-si-check { background: var(--orange); border-color: var(--orange); }
+.m1-si-check-ic { width: 8px; height: 8px; border-radius: 50%; background: #fff; display: none; }
+.m1-secim-item.secili .m1-si-check-ic { display: block; }
+
+.m1-si-metin { flex: 1; min-width: 0; }
+.m1-si-ad   { font-size: 14px; font-weight: 700; color: var(--navy); }
+.m1-si-alt  { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+/* RF renk daire */
+.m1-renk-daire {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  flex-shrink: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+/* Boyut seçimi — büyük dokunmatik kartlar */
+.m1-boyut-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.m1-boyut-kart {
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 14px;
+  cursor: pointer;
+  text-align: center;
+  background: var(--white);
+  transition: border-color .1s, background .1s;
+  -webkit-tap-highlight-color: transparent;
+}
+.m1-boyut-kart:hover { border-color: rgba(244,121,32,.4); background: var(--ob); }
+.m1-boyut-kart.secili { border-color: var(--orange); background: var(--ob); }
+.m1-boyut-kart .m1-bk-ad { font-size: 16px; font-weight: 900; color: var(--navy); }
+.m1-boyut-kart .m1-bk-alt { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.m1-boyut-kart.secili .m1-bk-ad { color: var(--orange); }
+
+/* Miktar seçimi */
+.m1-miktar-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.m1-miktar-kart {
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  padding: 18px 10px;
+  cursor: pointer;
+  text-align: center;
+  background: var(--white);
+  transition: border-color .1s, background .1s;
+  -webkit-tap-highlight-color: transparent;
+}
+.m1-miktar-kart:hover { border-color: rgba(244,121,32,.4); background: var(--ob); }
+.m1-miktar-kart.secili { border-color: var(--orange); background: var(--ob); }
+.m1-miktar-kart .m1-mk-kg { font-size: 22px; font-weight: 900; color: var(--navy); }
+.m1-miktar-kart .m1-mk-birim { font-size: 11px; color: var(--muted); }
+.m1-miktar-kart.secili .m1-mk-kg { color: var(--orange); }
+
+/* Serbest KG */
+.m1-serbest {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: var(--white);
+  cursor: pointer;
+}
+.m1-serbest.secili { border-color: var(--orange); }
+.m1-serbest label { font-size: 13px; font-weight: 700; color: var(--navy); cursor: pointer; }
+.m1-serbest input {
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 6px 10px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--navy);
+  width: 90px;
+  text-align: center;
+  outline: none;
+}
+.m1-serbest input:focus { border-color: var(--orange); }
+.m1-serbest span { font-size: 13px; color: var(--muted); }
+
+/* Reçete önizleme */
+.m1-recete-blok { margin-bottom: 16px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+
+/* Master → Numune oranı bilgi kutusu */
+.m1-recete-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #F8FAFC;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.m1-recete-meta-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.m1-recete-meta-item span { font-size: 9px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+.m1-recete-meta-item strong { font-size: 14px; font-weight: 900; color: var(--navy); }
+.m1-recete-meta-sonuc strong { color: var(--orange); font-size: 16px; }
+.m1-recete-meta-arrow { font-size: 16px; color: var(--muted); flex-shrink: 0; }
+
+.m1-recete-baslik {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 13px;
+  background: var(--navy);
+  color: #fff;
+}
+.m1-recete-baslik .m1-rb-boyut {
+  background: var(--orange);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+.m1-recete-baslik .m1-rb-kg { margin-left: auto; font-size: 12px; color: rgba(255,255,255,.65); }
+
+.m1-recete-tablo { width: 100%; border-collapse: collapse; }
+.m1-recete-tablo th {
+  background: var(--light);
+  padding: 7px 12px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: .4px;
+  text-transform: uppercase;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.m1-recete-tablo th:last-child { text-align: right; }
+.m1-recete-tablo td { padding: 8px 12px; font-size: 13px; font-weight: 600; color: var(--navy); border-bottom: 1px solid #F1F5F9; }
+.m1-recete-tablo td:last-child { text-align: right; }
+.m1-recete-tablo tr:last-child td { border-bottom: none; }
+.m1-recete-tablo tr.boya-row td { color: #6D28D9; background: #FAF5FF; }
+.m1-recete-tablo tr.ara-row td { background: #F8FAFC; font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+.m1-recete-toplam { display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; background: #F8FAFC; border-top: 2px solid var(--border); border-radius: 0 0 10px 10px; }
+.m1-recete-toplam span:first-child { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+.m1-recete-toplam span:last-child  { font-size: 15px; font-weight: 900; color: var(--navy); }
+.m1-recete-genel { display: flex; justify-content: space-between; align-items: center; padding: 9px 13px; background: var(--ob); border: 1px solid rgba(244,121,32,.25); border-radius: 9px; margin-top: 8px; }
+.m1-recete-genel span:first-child { font-size: 11px; font-weight: 700; color: var(--orange); text-transform: uppercase; letter-spacing: .4px; }
+.m1-recete-genel span:last-child  { font-size: 16px; font-weight: 900; color: var(--orange); }
+
+/* AR-GE Notu */
+.m1-textarea {
+  width: 100%;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 14px;
+  color: var(--navy);
+  font-family: inherit;
+  resize: none;
+  outline: none;
+  line-height: 1.5;
+}
+.m1-textarea:focus { border-color: var(--orange); }
+.m1-textarea::placeholder { color: var(--muted); }
+
+/* İleri / Kaydet butonları */
+.m1-ileri-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 50px;
+  margin-top: 16px;
+  background: var(--orange);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background .1s, opacity .1s;
+  -webkit-tap-highlight-color: transparent;
+}
+.m1-ileri-btn:hover { background: #D4621A; }
+.m1-ileri-btn:disabled { opacity: .45; cursor: not-allowed; }
+.m1-ileri-btn svg { width: 18px; height: 18px; }
+
+.m1-kaydet-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 54px;
+  margin-top: 16px;
+  background: var(--green);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: background .1s;
+  -webkit-tap-highlight-color: transparent;
+}
+.m1-kaydet-btn:hover { background: #15803D; }
+.m1-kaydet-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* Yükleniyor */
+.m1-yukleniyor {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 0;
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.m1-spin {
+  width: 18px;
+  height: 18px;
+  border: 2.5px solid var(--border);
+  border-top-color: var(--orange);
+  border-radius: 50%;
+  animation: m1Spin .7s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes m1Spin { to { transform: rotate(360deg); } }
+
+/* Başarı ekranı */
+.m1-basari {
+  text-align: center;
+  padding: 28px 20px;
+}
+.m1-basari-check {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--green);
+  color: #fff;
+  font-size: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+}
+.m1-basari-no { font-size: 22px; font-weight: 900; color: var(--navy); margin-bottom: 6px; }
+.m1-basari-alt { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+.m1-yeni-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--orange);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 12px 24px;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.m1-barkod-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 50px;
+  margin-top: 12px;
+  background: var(--navy);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  letter-spacing: .5px;
+  transition: background .1s;
+  -webkit-tap-highlight-color: transparent;
+}
+.m1-barkod-btn:hover { background: var(--navy-dk); }
+
+/* Hata mesajı */
+.m1-hata { padding: 10px 14px; background: #FEE2E2; border: 1px solid #FECACA; border-radius: 8px; color: #991B1B; font-size: 13px; font-weight: 600; margin-top: 10px; }
+
+/* Responsive */
+@media (max-width: 680px) {
+  .m1-bar      { padding: 0 12px; height: 54px; }
+  .m1-logo     { height: 32px; }
+  .m1-uname    { display: none; }
+  .m1-sidebar  { flex: 0 0 140px; }
+  .m1-boyut-grid { grid-template-columns: 1fr 1fr; }
+  .m1-miktar-grid{ grid-template-columns: 1fr 1fr; }
+}
+</style>
+
+{# ══ JavaScript ══ #}
+<script>
+/* ─────────────────────────────────────────
+   DS v2.0 / MODÜL-01 — Müşteri Renk Talebi
+   FAZ-1 kararları:
+   - Master → seçilen KG oranında ölçekleme
+   - KG: 7.5 / 15 / serbest (10 KG YOK)
+   - Boyutlar: LARGE / SMALL / MEDIUM / STANDART (çoklu seçim)
+   - Her kart tam tıklanabilir
+───────────────────────────────────────── */
+
+/* ── Durum ── */
+var S = {
+  adim: 1,   /* 1-8 */
+  cari_id:    null, cari_ad: '',
+  formul_id:  null, formul_ad: '', formul_kod: '',
+  rv_id:      null, rv_ad: '',    /* adım 3 — renk_varyant (alt formül / model) */
+  rf_id:      null, rf_ad: '',
+  boyutlar:   [],   /* adım 5 — sadece seçilen rv'de mevcut boyutlar */
+  oran:       0,    /* adım 6 — numune oranı % (10 = %10). KG değil, ORAN seçilir. */
+  oran_serbest: false,
+  not:        '',
+  uv_id:      null, /* adım 5 sonrası: boyut seçiminden türetilir */
+  onizleme:   [],
+};
+
+/*
+  Adım sırası:
+  1 Cari Seç
+  2 Formül Seç
+  3 Üretim Varyantı Seç
+  4 RF Renk Seç
+  5 Boyut Seç
+  6 Miktar Seç
+  7 Reçete Önizleme
+  8 Kaydet & Barkod
+*/
+/* FAZ-1: Numune Oranı adımı kaldırıldı. Sistem otomatik %10 kullanır. */
+var ADIM_ADLARI = ['Cari Seç','Formül Seç','Varyant Seç','RF Renk Seç','Boyut Seç','Reçete Önizleme','Kaydet & Barkod'];
+var VARSAYILAN_ORAN = 10; /* %10 — sistem ayarlarından değiştirilebilir (ileride) */
+var BOYUTLAR = ['LARGE','SMALL','MEDIUM','STANDART'];
+
+/* ── Saat ── */
+(function tick(){
+  var d=new Date();
+  var hm=('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+  var dt=('0'+d.getDate()).slice(-2)+'.'+ ('0'+(d.getMonth()+1)).slice(-2)+'.'+d.getFullYear();
+  var ec=document.getElementById('m1-clock'), ed=document.getElementById('m1-date');
+  if(ec)ec.textContent=hm; if(ed)ed.textContent=dt;
+  setTimeout(tick,30000);
+})();
+
+/* ══ RENDER ══ */
+function render(){
+  renderSidebar();
+  renderIcerik();
+}
+
+/* ── Sidebar ── */
+function renderSidebar(){
+  var adimlar = document.getElementById('m1-adimlar');
+  var html = '';
+  var toplamAdim = ADIM_ADLARI.length;
+  for(var i=1;i<=toplamAdim;i++){
+    var durum = i < S.adim ? 'tamam' : (i===S.adim ? 'aktif' : 'bekliyor');
+    var ikon = durum==='tamam'
+      ? '<svg viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><polyline points="2 8 6 12 14 4"/></svg>'
+      : i;
+    var degerHtml = '';
+    if(durum==='tamam'){
+      var deger = adimDeger(i);
+      if(deger) degerHtml = '<span class="m1-adim-deger">'+esc(deger)+'</span>';
+    }
+    var adimAd = ADIM_ADLARI[i-1] || '';
+    if(!adimAd) continue;
+    html += '<div class="m1-adim durum-'+durum+'">'
+      +'<div class="m1-adim-ikon">'+ikon+'</div>'
+      +'<div class="m1-adim-metin">'
+      +'<div class="m1-adim-ad">'+adimAd+'</div>'
+      +degerHtml
+      +'</div>'
+      +'</div>';
+  }
+  adimlar.innerHTML = html;
+}
+
+function adimDeger(i){
+  if(i===1) return S.cari_ad;
+  if(i===2) return S.formul_kod ? S.formul_kod+' '+S.formul_ad : S.formul_ad;
+  if(i===3) return S.rv_ad;
+  if(i===4) return S.rf_ad;
+  if(i===5) return S.boyutlar.length ? S.boyutlar.join('+') : '';
+  if(i===6) return S.onizleme.length ? 'Hesaplandı' : '';
+  if(i===7) return '';
+  return '';
+}
+
+/* ── İçerik ── */
+function renderIcerik(){
+  var el = document.getElementById('m1-icerik');
+  var html = '';
+
+  /* Tamamlanan adımların özet satırları */
+  for(var i=1; i < S.adim; i++){
+    var deger = adimDeger(i);
+    html += '<div class="m1-ozet-satir" onclick="adimeGit('+i+')" title="Düzenlemek için tıkla">'
+      +'<div class="m1-ozet-check"><svg viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="10" height="10"><polyline points="2 8 6 12 14 4"/></svg></div>'
+      +'<span class="m1-ozet-no">'+i+'</span>'
+      +'<span class="m1-ozet-ad">'+ADIM_ADLARI[i-1]+'</span>'
+      +'<div class="m1-ozet-sep"></div>'
+      +'<span class="m1-ozet-val">'+esc(deger||'—')+'</span>'
+      +'<div class="m1-ozet-edit"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M11 2l3 3-9 9H2v-3L11 2z"/></svg></div>'
+      +'</div>';
+  }
+
+  /* Aktif adım kartı */
+  html += '<div class="m1-adim-kart" id="aktif-kart">';
+  html += adimIcerik(S.adim);
+  html += '</div>';
+
+  el.innerHTML = html;
+  adimPostRender(S.adim);
+  el.scrollTop = 0;
+}
+
+function adimIcerik(no){
+  if(no===1) return adim1Html();
+  if(no===2) return adim2Html();
+  if(no===3) return adim3Html();  /* Varyant Seç */
+  if(no===4) return adim4Html();  /* RF Renk Seç */
+  if(no===5) return adim5Html();  /* Boyut Seç */
+  if(no===6) return adim6Html();  /* Reçete Önizleme (oran otomatik %10) */
+  if(no===7) return adim7Html();  /* Kaydet & Barkod */
+  return '';
+}
+
+/* ════════════════════
+   ADIM 1 — CARİ SEÇ
+════════════════════ */
+function adim1Html(){
+  var html = '<div class="m1-adim-kart-baslik">Cari Seç</div>'
+    +'<div class="m1-adim-kart-alt">Bu numuneyi hangi müşteri için hazırlıyorsunuz?</div>'
+    +'<div class="m1-arama">'
+    +'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="9" r="6"/><path d="M16 16l-3.5-3.5"/></svg>'
+    +'<input type="text" id="cari-ara" placeholder="Cari adı veya kodu ara…" autocomplete="off">'
+    +'</div>'
+    +'<div class="m1-liste" id="cari-liste">';
+  CARILER.forEach(function(c){
+    var sec = S.cari_id===c.id ? ' secili' : '';
+    /* data-* ile güvenli veri — onclick string concat yok */
+    html += '<div class="m1-secim-item'+sec+'" data-tip="cari" data-id="'+c.id+'" data-ad="'+esc(c.unvan)+'">'
+      +'<div class="m1-si-check"><div class="m1-si-check-ic"></div></div>'
+      +'<div class="m1-si-metin">'
+      +'<div class="m1-si-ad">'+esc(c.unvan)+'</div>'
+      +'<div class="m1-si-alt">'+esc(c.cari_kod||'')+'</div>'
+      +'</div></div>';
+  });
+  html += '</div>'
+    +'<button class="m1-ileri-btn" id="btn-1" '+(S.cari_id?'':'disabled')+'>'
+    +'Seçimi Onayla <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10h10M12 6l4 4-4 4"/></svg>'
+    +'</button>';
+  return html;
+}
+
+function adim1Ileri(){
+  if(!S.cari_id){ return; }
+  S.adim = 2; render();
+}
+
+/* ════════════════════
+   ADIM 2 — FORMÜL SEÇ
+════════════════════ */
+function adim2Html(){
+  var html = '<div class="m1-adim-kart-baslik">Formül Seç</div>'
+    +'<div class="m1-adim-kart-alt">Müşterinin kullandığı mevcut formülü seçin</div>'
+    +'<div class="m1-arama">'
+    +'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="9" r="6"/><path d="M16 16l-3.5-3.5"/></svg>'
+    +'<input type="text" id="formul-ara" placeholder="Formül kodu veya adı ara…" autocomplete="off">'
+    +'</div>'
+    +'<div class="m1-liste" id="formul-liste">';
+  FORMULLER.forEach(function(f){
+    var sec = S.formul_id===f.id ? ' secili' : '';
+    html += '<div class="m1-secim-item'+sec+'" data-tip="formul" data-id="'+f.id+'" data-ad="'+esc(f.ad)+'" data-kod="'+esc(f.kod||'')+'">'
+      +'<div class="m1-si-check"><div class="m1-si-check-ic"></div></div>'
+      +'<div class="m1-si-metin">'
+      +'<div class="m1-si-ad">'+esc(f.kod)+' — '+esc(f.ad)+'</div>'
+      +'</div></div>';
+  });
+  html += '</div>'
+    +'<button class="m1-ileri-btn" id="btn-2" '+(S.formul_id?'':'disabled')+'>'
+    +'Seçimi Onayla <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10h10M12 6l4 4-4 4"/></svg>'
+    +'</button>';
+  return html;
+}
+
+function adim2Ileri(){
+  if(!S.formul_id){ return; }
+  /* Alt formül adımına geç; önceki seçimleri sıfırla */
+  S.rv_id = null; S.rv_ad = ''; S.uv_id = null; S.boyutlar = [];
+  S.adim = 3; render();
+}
+
+/* ════════════════════════════════════
+   ADIM 3 — ALT FORMÜL / MODEL SEÇ
+   (nexgen_renk_varyant)
+   Örn: TERLİK 18-22, TERLİK 18-28
+   LARGE/SMALL/MEDIUM burada görünmez.
+════════════════════════════════════ */
+function adim3Html(){
+  /* Seçilen ana formüle ait renk_varyant listesi */
+  var rvListesi = RENK_VARYANTLAR.filter(function(rv){
+    return rv.formul_id === S.formul_id;
+  });
+
+  var html = '<div class="m1-adim-kart-baslik">Model / Alt Formül Seç</div>'
+    +'<div class="m1-adim-kart-alt">'
+    +'<strong>'+esc(S.formul_kod+' '+S.formul_ad)+'</strong> formülünün hangi modelini kullanacaksınız?'
+    +'</div>'
+    +'<div class="m1-liste" id="rv-liste">';
+
+  if(!rvListesi.length){
+    html += '<div style="padding:14px;color:var(--muted);font-size:13px;">Bu formül için aktif model bulunamadı.</div>';
+  } else {
+    rvListesi.forEach(function(rv){
+      var sec = S.rv_id===rv.id ? ' secili' : '';
+      /* Mevcut boyutları alt bilgi olarak göster (LARGE, SMALL vb.) */
+      var boyutBilgi = rv.boyutlar ? rv.boyutlar.replace(/,/g, ' · ') : '';
+      html += '<div class="m1-secim-item'+sec+'" data-tip="rv" data-id="'+rv.id+'" data-ad="'+esc(rv.rv_ad||'')+'">'
+        +'<div class="m1-si-check"><div class="m1-si-check-ic"></div></div>'
+        +'<div class="m1-si-metin">'
+        +'<div class="m1-si-ad">'+esc(rv.rv_ad||'—')+'</div>'
+        +(boyutBilgi ? '<div class="m1-si-alt">Mevcut boyutlar: '+esc(boyutBilgi)+'</div>' : '')
+        +'</div></div>';
+    });
+  }
+
+  html += '</div>'
+    +'<button class="m1-ileri-btn" id="btn-3" '+(S.rv_id?'':'disabled')+'>'
+    +'Seçimi Onayla <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10h10M12 6l4 4-4 4"/></svg>'
+    +'</button>';
+  return html;
+}
+
+function adim3Ileri(){
+  if(!S.rv_id){ return; }
+  /* Boyut seçimini sıfırla — yeni rv için */
+  S.boyutlar = []; S.uv_id = null;
+  S.adim = 4; render();
+}
+
+/* ════════════════════
+   ADIM 4 — RF RENK SEÇ
+════════════════════ */
+function adim4Html(){
+  var html = '<div class="m1-adim-kart-baslik">RF Renk Seç</div>'
+    +'<div class="m1-adim-kart-alt">Müşterinin karteladan seçtiği onaylı rengi seçin</div>'
+    +'<div class="m1-arama">'
+    +'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="9" r="6"/><path d="M16 16l-3.5-3.5"/></svg>'
+    +'<input type="text" id="rf-ara" placeholder="RF kodu veya renk adı ara…" autocomplete="off">'
+    +'</div>'
+    +'<div class="m1-liste" id="rf-liste">';
+  RF_LISTE.forEach(function(r){
+    var sec = S.rf_id===r.id ? ' secili' : '';
+    html += '<div class="m1-secim-item'+sec+'" data-tip="rf" data-id="'+r.id+'" data-ad="'+esc(r.rf_ad||'')+'" data-kod="'+esc(r.rf_kod||'')+'">'
+      +'<div class="m1-renk-daire">?</div>'
+      +'<div class="m1-si-metin">'
+      +'<div class="m1-si-ad">'+esc(r.rf_kod||'')+'</div>'
+      +'<div class="m1-si-alt">'+esc(r.rf_ad||'')+'</div>'
+      +'</div>'
+      +'<div class="m1-si-check"><div class="m1-si-check-ic"></div></div>'
+      +'</div>';
+  });
+  html += '</div>'
+    +'<button class="m1-ileri-btn" id="btn-4" '+(S.rf_id?'':'disabled')+'>'
+    +'Seçimi Onayla <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10h10M12 6l4 4-4 4"/></svg>'
+    +'</button>';
+  return html;
+}
+
+function adim4Ileri(){
+  if(!S.rf_id){ return; }
+  S.adim = 5; render();
+}
+
+/* ════════════════════
+   ADIM 5 — BOYUT SEÇ
+   Sadece seçilen rv'de mevcut boyutlar gösterilir.
+════════════════════ */
+function adim5Html(){
+  /* Seçilen rv_id'ye ait mevcut boyutları VARYANTLAR'dan çek */
+  var mevcutBoyutlar = [];
+  VARYANTLAR.forEach(function(uv){
+    if(uv.rv_id === S.rv_id && mevcutBoyutlar.indexOf(uv.boyut) < 0){
+      mevcutBoyutlar.push(uv.boyut);
+    }
+  });
+
+  var html = '<div class="m1-adim-kart-baslik">Boyut Seç</div>'
+    +'<div class="m1-adim-kart-alt">'
+    +esc(S.rv_ad)+' için mevcut boyutlar aşağıdadır. Birden fazla seçilebilir.'
+    +'</div>'
+    +'<div class="m1-boyut-grid">';
+
+  var boyutAciklama = {LARGE:'Büyük kalıp', SMALL:'Küçük kalıp', MEDIUM:'Orta kalıp', STANDART:'Standart kalıp'};
+
+  if(!mevcutBoyutlar.length){
+    html += '</div><div style="padding:14px;color:var(--muted);font-size:13px;">Bu model için aktif boyut bulunamadı.</div>';
+  } else {
+    /* Sabit sıralama: LARGE, SMALL, MEDIUM, STANDART */
+    var siraliBoyutlar = BOYUTLAR.filter(function(b){ return mevcutBoyutlar.indexOf(b) >= 0; });
+    siraliBoyutlar.forEach(function(b){
+      var sec = S.boyutlar.indexOf(b)>=0 ? ' secili' : '';
+      html += '<div class="m1-boyut-kart'+sec+'" data-boyut="'+b+'">'
+        +'<div class="m1-bk-ad">'+b+'</div>'
+        +'<div class="m1-bk-alt">'+(boyutAciklama[b]||'')+'</div>'
+        +'</div>';
+    });
+    html += '</div>';
+  }
+
+  html += '<button class="m1-ileri-btn" id="btn-5" '+(S.boyutlar.length?'':'disabled')+'>'
+    +'Seçimi Onayla <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10h10M12 6l4 4-4 4"/></svg>'
+    +'</button>';
+  return html;
+}
+
+function boyutToggle(b){
+  var idx = S.boyutlar.indexOf(b);
+  if(idx>=0) S.boyutlar.splice(idx,1); else S.boyutlar.push(b);
+}
+function adim5Ileri(){
+  if(!S.boyutlar.length){ return; }
+  /* FAZ-1: Numune oranı otomatik %10. Operatör seçim yapmaz. */
+  S.oran = VARSAYILAN_ORAN;
+  /* İlk boyut için uv_id'yi belirle */
+  if(S.boyutlar.length){
+    var ilkUv = uvNesneBul(S.boyutlar[0]);
+    S.uv_id = ilkUv ? ilkUv.id : null;
+  }
+  S.adim = 6;
+  S.onizleme = [];
+  render();
+  receteYukle();
+}
+
+
+/* ════════════════════════
+   ADIM 6 — REÇETE ÖNİZLEME
+   (eski adım 7 — numune oranı otomatik %10)
+════════════════════════ */
+function adim6Html(){
+  return adim7HtmlIcerik();
+}
+
+function adim6Ileri(){
+  S.adim = 7; render();
+}
+
+/* ════════════════════════
+   ADIM 7 — REÇETE ÖNİZLEME
+════════════════════════ */
+function adim7HtmlIcerik(){
+  var html = '<div class="m1-adim-kart-baslik">Reçete Önizleme</div>'
+    +'<div class="m1-adim-kart-alt">Master reçete %'+VARSAYILAN_ORAN+' oranında otomatik ölçeklendi.</div>';
+  if(!S.onizleme.length){
+    html += '<div class="m1-yukleniyor"><div class="m1-spin"></div> Reçete hesaplanıyor…</div>';
+  } else {
+    /* Genel toplam (tüm boyutlar) */
+    var genelTop = 0;
+    S.onizleme.forEach(function(blok){ genelTop += blok.genel_top || 0; });
+
+    S.onizleme.forEach(function(blok){
+      /* Numune oranı gösterimi */
+      var oraniStr = blok.numune_orani !== undefined
+        ? '%' + blok.numune_orani.toFixed(0) + ' — Otomatik'
+        : '—';
+
+      html += '<div class="m1-recete-blok">'
+        /* Başlık satırı */
+        +'<div class="m1-recete-baslik">'
+        +'<span class="m1-rb-boyut">'+esc(blok.boyut)+'</span>'
+        +'<span style="opacity:.7;font-size:11px">'+esc(blok.rv_ad||blok.formul||'')+'</span>'
+        +'</div>'
+        /* Master / Numune bilgi kutusu */
+        +'<div class="m1-recete-meta">'
+        +'<div class="m1-recete-meta-item"><span>Master KG</span><strong>'+goster_kg(blok.master_kg)+'</strong></div>'
+        +'<div class="m1-recete-meta-arrow">→</div>'
+        +'<div class="m1-recete-meta-item"><span>Numune Oranı</span><strong>'+oraniStr+'</strong></div>'
+        +'<div class="m1-recete-meta-arrow">→</div>'
+        +'<div class="m1-recete-meta-item m1-recete-meta-sonuc"><span>Üretilecek KG</span><strong>'+goster_kg(blok.numune_kg)+'</strong></div>'
+        +'</div>'
+        /* Tablo */
+        +'<table class="m1-recete-tablo">'
+        +'<thead><tr><th>Hammadde</th><th>Miktar</th><th>%</th></tr></thead>'
+        +'<tbody>';
+
+      /* 1. ANA HAMMADDE — her zaman KG */
+      blok.taban.forEach(function(t){
+        html += '<tr><td>'+esc(t.ad)+'</td>'
+          +'<td>'+goster_kg(t.kg)+'</td>'
+          +'<td>%'+t.yuzde.toFixed(2)+'</td></tr>';
+      });
+
+      /* 2. RF BOYA KALEMLERİ — her zaman GR, yüzde sütunu yok */
+      if(blok.boya && blok.boya.length){
+        html += '<tr class="ara-row">'
+          +'<td colspan="2">RF Boya — '+esc(S.rf_ad)+'</td>'
+          +'<td></td>'
+          +'</tr>';
+        blok.boya.forEach(function(b){
+          html += '<tr class="boya-row">'
+            +'<td>'+esc(b.ad)+'</td>'
+            +'<td colspan="2">'+goster_gr(b.kg)+'</td>'
+            +'</tr>';
+        });
+      } else if(S.rf_id){
+        html += '<tr class="ara-row"><td colspan="3" style="color:#B45309">⚠ RF boya kalemi bulunamadı — debug için URL\'e &amp;debug=1 ekle</td></tr>';
+      }
+
+      html += '</tbody></table>'
+        /* 4. TABAN TOPLAM — KG */
+        +'<div class="m1-recete-toplam">'
+        +'<span>Taban Toplam</span><span>'+goster_kg(blok.taban_top)+'</span>'
+        +'</div>';
+
+      /* 3. RF BOYA TOPLAM — KG */
+      if(blok.boya_top > 0){
+        html += '<div class="m1-recete-toplam" style="background:#F5F3FF;border-top:1px solid #DDD6FE">'
+          +'<span>RF Boya Toplam</span><span>'+goster_kg(blok.boya_top)+'</span>'
+          +'</div>';
+      }
+
+      /* 5. GENEL TOPLAM — KG */
+      html += '<div class="m1-recete-toplam" style="background:#EFF6FF;border-top:2px solid var(--border);font-weight:900">'
+        +'<span>Genel Toplam</span><span>'+goster_kg(blok.genel_top)+'</span>'
+        +'</div>'
+        +'</div>';  /* m1-recete-blok */
+    });
+
+    /* Çok boyutlu üretim toplamı */
+    if(S.onizleme.length > 1){
+      html += '<div class="m1-recete-genel">'
+        +'<span>'+S.boyutlar.join(' + ')+' — Toplam Üretim</span>'
+        +'<span>'+goster_kg(genelTop)+'</span>'
+        +'</div>';
+    }
+
+    html += '<button class="m1-ileri-btn" onclick="adim6Ileri()">'
+      +'Reçete Onaylandı — Kaydet &amp; Barkod '
+      +'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10h10M12 6l4 4-4 4"/></svg>'
+      +'</button>';
+  }
+  return html;
+}
+
+function receteYukle(){
+  if(!S.rv_id){ return; }
+  var boyutlar = S.boyutlar.length ? S.boyutlar : [];
+  if(!boyutlar.length) return;
+  if(!(S.oran > 0)){ return; }
+  var rfId = S.rf_id || 0;
+
+  var promises = boyutlar.map(function(boyut){
+    var uv = uvNesneBul(boyut);
+    if(!uv) return Promise.resolve({ok:false, hata:boyut+' için üretim varyantı bulunamadı', boyut:boyut});
+    /* NexGen kural: oran (%) gönderilir, API master×oran hesaplar */
+    var url = '/nexgen/api/tablet/arge/recete-onizle?uv_id='+uv.id+'&rf_id='+rfId+'&oran='+S.oran;
+    return fetch(url)
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        /* boyut API'den geliyor ama JS tarafındaki seçimi de kaydet */
+        if(!d.boyut || d.boyut === '—') d.boyut = boyut;
+        return d;
+      });
+  });
+
+  Promise.all(promises).then(function(results){
+    S.onizleme = results.filter(function(r){ return r.ok; });
+    var kart = document.getElementById('aktif-kart');
+    if(kart) kart.innerHTML = adim7HtmlIcerik();
+  }).catch(function(err){
+    var kart = document.getElementById('aktif-kart');
+    if(kart) kart.innerHTML = adim7HtmlIcerik()+'<div class="m1-hata">Bağlantı hatası: '+esc(err.message)+'</div>';
+  });
+}
+
+function uvNesneBul(boyut){
+  /* rv_id + boyut kombinasyonu ile uv bul */
+  if(S.rv_id && boyut){
+    var eslesme = VARYANTLAR.filter(function(v){
+      return v.rv_id === S.rv_id && v.boyut === boyut;
+    })[0];
+    if(eslesme) return eslesme;
+  }
+  /* rv_id varsa boyutsuz fallback */
+  if(S.rv_id){
+    var rvUv = VARYANTLAR.filter(function(v){ return v.rv_id === S.rv_id; })[0];
+    if(rvUv) return rvUv;
+  }
+  /* Son fallback: formül */
+  return VARYANTLAR.filter(function(v){ return v.formul_id===S.formul_id; })[0] || null;
+}
+
+/* ════════════════════
+   ADIM 7 — KAYDET & BARKOD
+════════════════════ */
+function adim7Html(){
+  var boyStr = S.boyutlar.join('+') || '—';
+  var rows = [
+    ['Cari',      S.cari_ad],
+    ['Formül',    S.formul_kod+' '+S.formul_ad],
+    ['Model',     S.rv_ad],
+    ['RF Renk',   S.rf_ad],
+    ['Boyut',     boyStr],
+    ['Numune Oranı', '%'+S.oran+' (Otomatik)'],
+  ];
+  var notBosMu = !(S.not && S.not.trim().length > 0);
+  var html = '<div class="m1-adim-kart-baslik">Kaydet &amp; Barkod</div>'
+    +'<div class="m1-adim-kart-alt">Son kontrol — AR-GE notunu yazın ve kaydedin.</div>'
+    +'<div style="margin-bottom:14px">';
+  rows.forEach(function(r){
+    html += '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">'
+      +'<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;min-width:76px;flex-shrink:0">'+r[0]+'</span>'
+      +'<span style="font-size:13px;font-weight:700;color:var(--navy)">'+esc(r[1])+'</span>'
+      +'</div>';
+  });
+  html += '</div>'
+    /* AR-GE Notu — ZORUNLU */
+    +'<div style="margin-bottom:12px">'
+    +'<label style="font-size:12px;font-weight:800;color:var(--navy);display:flex;align-items:center;gap:6px;margin-bottom:6px">'
+    +'AR-GE NOTU'
+    +'<span style="font-size:10px;font-weight:700;color:#fff;background:var(--orange);padding:1px 7px;border-radius:20px">ZORUNLU</span>'
+    +'</label>'
+    +'<textarea class="m1-textarea" id="arge-notu" rows="3" maxlength="400"'
+    +' placeholder="Örn: Müşteri biraz koyu istedi · Köpük fazla oluştu · Large uygun, Small sert kaldı…">'
+    +(S.not ? esc(S.not) : '')
+    +'</textarea>'
+    +'<div id="not-uyari" style="font-size:11px;color:var(--orange);font-weight:700;margin-top:4px;'+(notBosMu?'':'display:none')+'">Kaydetmek için AR-GE Notu zorunludur.</div>'
+    +'</div>'
+    /* Kaydet butonu — not boşken disabled */
+    +'<button class="m1-kaydet-btn" id="kaydet-btn" onclick="kaydet()" '+(notBosMu?'disabled style="opacity:.4;cursor:not-allowed"':'')+'>'
+    +'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M17 3H7L3 7v10h14V3z"/><rect x="7" y="13" width="6" height="4" rx="1"/><rect x="6" y="3" width="8" height="5" rx="1"/></svg>'
+    +'NUMUNE KAYDET'
+    +'</button>'
+    +'<div id="kaydet-spinner" style="display:none" class="m1-yukleniyor"><div class="m1-spin"></div> Kaydediliyor…</div>'
+    +'<div id="kaydet-hata" class="m1-hata" style="display:none"></div>'
+    /* Başarı bloğu */
+    +'<div id="kaydet-basari" class="m1-basari" style="display:none">'
+    +'<div class="m1-basari-check">✓</div>'
+    +'<div class="m1-basari-no" id="kaydet-no"></div>'
+    +'<div class="m1-basari-alt">Numune kaydedildi.</div>'
+    /* Barkod butonu — sonraki fazda aktif edilecek */
+    +'<button class="m1-barkod-btn" id="barkod-btn" disabled style="opacity:.45;cursor:not-allowed">'
+    +'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="18" height="18"><rect x="2" y="4" width="16" height="12" rx="2"/><line x1="6" y1="8" x2="6" y2="12"/><line x1="8" y1="7" x2="8" y2="13"/><line x1="10" y1="8" x2="10" y2="12"/><line x1="12" y1="7" x2="12" y2="13"/><line x1="14" y1="8" x2="14" y2="12"/></svg>'
+    +'Barkod (Yakinda)'
+    +'</button>'
+    +'<button class="m1-yeni-btn" style="margin-top:8px" onclick="location.href=\''+yeniUrl()+'\'">+ Yeni Numune</button>'
+    +'</div>';
+  return html;
+}
+
+function yeniUrl(){
+  return '{{ url_for("nexgen.tablet_arge_musteri_renk") }}';
+}
+
+function kaydet(){
+  if(!(S.not && S.not.trim())){ return; }
+  var uv = uvNesneBul(S.boyutlar[0] || null);
+  if(!uv){ alert('Üretim varyantı bulunamadı.'); return; }
+
+  var boyStr = S.boyutlar.join('+');
+
+  /* test_batch_kg: önizlemeden gelen hesaplı değer kullan.
+     Birden fazla boyut varsa toplamı al (L+S = iki ayrı batch). */
+  var hesapKg = 0;
+  if(S.onizleme.length){
+    S.onizleme.forEach(function(blok){ hesapKg += (blok.numune_kg || 0); });
+  }
+  /* Fallback: önizleme yoksa API'nin hesaplayacağı oran bilgisiyle gönder;
+     API test_batch_kg > 0 zorunlu — 0 gelirse hata döner.
+     Bu durumda kullanıcıya önizleme zorunlu uyarısı göster. */
+  if(hesapKg <= 0){
+    document.getElementById('kaydet-hata').style.display = 'block';
+    document.getElementById('kaydet-hata').textContent = 'Önce reçete önizlemesi yüklenmelidir.';
+    document.getElementById('kaydet-spinner').style.display = 'none';
+    document.getElementById('kaydet-btn').style.display = 'flex';
+    return;
+  }
+
+  var payload = {
+    kaynak_uv_id:    uv.id,
+    test_batch_kg:   hesapKg,
+    numune_orani:    S.oran,           /* % değeri — DB'ye yazılır */
+    rf_renk_id:      S.rf_id || null,  /* seçilen RF ID */
+    yeni_renk_adi:   S.rf_ad || null,
+    makina:          '%'+S.oran+' numune'+(boyStr?' / '+boyStr:''),
+    test_tipi:       'RENK_TEST',
+    cari_id:         S.cari_id || null,
+    notlar:          'Cari:'+S.cari_ad+' | Formül:'+S.formul_ad
+                     +' | Model:'+S.rv_ad
+                     +' | RF:'+S.rf_ad+' | Boyut:'+(boyStr||'—')
+                     +' | Oran:%'+S.oran+' | Not:'+S.not,
+    talep_referansi: S.not,
+  };
+
+  document.getElementById('kaydet-btn').style.display    = 'none';
+  document.getElementById('kaydet-spinner').style.display= 'flex';
+  document.getElementById('kaydet-hata').style.display   = 'none';
+
+  fetch('/nexgen/api/arge/test-olustur', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  })
+  .then(function(r){ if(r.status===403) throw new Error('Yetki yok'); return r.json(); })
+  .then(function(d){
+    document.getElementById('kaydet-spinner').style.display='none';
+    if(!d.ok && !d.test_id) throw new Error(d.hata||'Kayıt hatası');
+    /* NX-RT-NNNN kodunu göster — AT kodu hiçbir zaman ekranda görünmez */
+    var no = d.nx_rt_kodu || d.arge_kodu || ('ID-' + d.test_id);
+    S._kaydedilen_test_id = d.test_id;
+    S._kaydedilen_no = no;
+    document.getElementById('kaydet-no').textContent = no;
+    document.getElementById('kaydet-basari').style.display='block';
+  })
+  .catch(function(err){
+    document.getElementById('kaydet-spinner').style.display='none';
+    document.getElementById('kaydet-btn').style.display='flex';
+    document.getElementById('kaydet-hata').style.display='block';
+    document.getElementById('kaydet-hata').textContent = err.message;
+  });
+}
+
+/* ── Barkod Yazdır ── */
+function barkodYazdir(){
+  var testId = S._kaydedilen_test_id;
+  if(!testId){ alert('Kayıt No bulunamadı.'); return; }
+  /* Barkod yazdırma sayfasını yeni pencerede aç */
+  var url = '/nexgen/tablet/arge/barkod-yazdir?test_id='+testId;
+  window.open(url, '_blank', 'width=600,height=400');
+}
+
+/* ══ GENEL YARDIMCILAR ══ */
+function adimeGit(no){
+  if(no < S.adim){ S.adim = no; render(); }
+}
+
+function adimPostRender(no){
+  /* Arama kutusu: RF adımı artık 4 numaralı */
+  var aramaIdMap = {1:'cari-ara', 2:'formul-ara', 4:'rf-ara'};
+  if(aramaIdMap[no]){
+    var aramaEl = document.getElementById(aramaIdMap[no]);
+    if(aramaEl){
+      aramaEl.addEventListener('input', function(){ aramaYap(aramaEl); });
+      setTimeout(function(){ aramaEl.focus(); }, 60);
+    }
+  }
+
+  /* AR-GE Notu — adım numarasına bağımlı değil, DOM varlığına göre kur */
+  var notEl = document.getElementById('arge-notu');
+  if(notEl){
+    notEl.addEventListener('input', function(){
+      S.not = this.value.trim();
+      var btn   = document.getElementById('kaydet-btn');
+      var uyari = document.getElementById('not-uyari');
+      var dolu  = S.not.length > 0;
+      if(btn){
+        btn.disabled      = !dolu;
+        btn.style.opacity = dolu ? '1' : '0.4';
+        btn.style.cursor  = dolu ? 'pointer' : 'not-allowed';
+      }
+      if(uyari) uyari.style.display = dolu ? 'none' : '';
+    });
+    setTimeout(function(){ notEl.focus(); }, 60);
+  }
+
+}
+
+/* ── Event delegation: sayfa açılışında BİR KEZ kur ── */
+function initEvents(){
+  var icerik = document.getElementById('m1-icerik');
+  if(!icerik) return;
+
+  icerik.addEventListener('click', function(e){
+    /* Seçim item (cari / formul / rf) */
+    var item = e.target.closest('.m1-secim-item[data-tip]');
+    if(item){
+      var tip  = item.getAttribute('data-tip');
+      var id   = parseInt(item.getAttribute('data-id'), 10);
+      var ad   = item.getAttribute('data-ad')  || '';
+      var kod  = item.getAttribute('data-kod') || '';
+
+      if(tip === 'cari'){
+        S.cari_id = id; S.cari_ad = ad;
+        icerik.querySelectorAll('[data-tip="cari"]').forEach(function(el){
+          el.classList.toggle('secili', el === item);
+        });
+        var b1 = document.getElementById('btn-1');
+        if(b1) b1.disabled = false;
+      } else if(tip === 'formul'){
+        S.formul_id = id; S.formul_ad = ad; S.formul_kod = kod;
+        S.rv_id = null; S.rv_ad = '';
+        S.rf_id = null; S.rf_ad = ''; S.uv_id = null; S.boyutlar = [];
+        icerik.querySelectorAll('[data-tip="formul"]').forEach(function(el){
+          el.classList.toggle('secili', el === item);
+        });
+        var b2 = document.getElementById('btn-2');
+        if(b2) b2.disabled = false;
+      } else if(tip === 'rv'){
+        S.rv_id  = id;
+        S.rv_ad  = item.getAttribute('data-ad') || '';
+        S.uv_id  = null;   /* boyut seçilince belirlenir */
+        S.boyutlar = [];    /* rv değişince boyut sıfırla */
+        icerik.querySelectorAll('[data-tip="rv"]').forEach(function(el){
+          el.classList.toggle('secili', el === item);
+        });
+        var b3 = document.getElementById('btn-3');
+        if(b3) b3.disabled = false;
+      } else if(tip === 'rf'){
+        S.rf_id = id; S.rf_ad = ad;
+        icerik.querySelectorAll('[data-tip="rf"]').forEach(function(el){
+          el.classList.toggle('secili', el === item);
+        });
+        var b4 = document.getElementById('btn-4');
+        if(b4) b4.disabled = false;
+      }
+      return;
+    }
+
+    /* İleri butonları */
+    var btn = e.target.closest('.m1-ileri-btn[id^="btn-"]');
+    if(btn && !btn.disabled){
+      var btnId = btn.getAttribute('id');
+      if     (btnId==='btn-1'){ adim1Ileri(); }
+      else if(btnId==='btn-2'){ adim2Ileri(); }
+      else if(btnId==='btn-3'){ adim3Ileri(); }
+      else if(btnId==='btn-4'){ adim4Ileri(); }
+      else if(btnId==='btn-5'){ adim5Ileri(); }
+      /* btn-6 = önizleme içindeki "AR-GE Notuna Geç" — onclick ile zaten bağlı */
+      return;
+    }
+
+    /* Boyut kartları */
+    var bkart = e.target.closest('.m1-boyut-kart[data-boyut]');
+    if(bkart){
+      var b = bkart.getAttribute('data-boyut');
+      var idx = S.boyutlar.indexOf(b);
+      if(idx>=0) S.boyutlar.splice(idx,1); else S.boyutlar.push(b);
+      icerik.querySelectorAll('.m1-boyut-kart[data-boyut]').forEach(function(el){
+        el.classList.toggle('secili', S.boyutlar.indexOf(el.getAttribute('data-boyut'))>=0);
+      });
+      var b5 = document.getElementById('btn-5');
+      if(b5) b5.disabled = !S.boyutlar.length;
+      return;
+    }
+
+    /* Serbest toggle kaldırıldı (FAZ-1: oran otomatik) */
+  });
+}
+
+function aramaYap(input){
+  var q   = input.value.toLowerCase();
+  var tip = input.id.replace('-ara','');
+  var liste = document.getElementById(tip + '-liste');
+  if(!liste) return;
+  liste.querySelectorAll('.m1-secim-item').forEach(function(el){
+    var ad  = (el.getAttribute('data-ad')  || '').toLowerCase();
+    var kod = (el.getAttribute('data-kod') || '').toLowerCase();
+    el.style.display = (!q || ad.includes(q) || kod.includes(q)) ? '' : 'none';
+  });
+}
+
+function esc(s){
+  if(s===null||s===undefined) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* ── NexGen Gösterim Standardı ─────────────────────────────────────
+ * Alan bazlı birim gösterimi — değer ne olursa olsun alan belirler.
+ * Backend / API / DB / hesap motoru kesinlikle değişmez.
+ * ─────────────────────────────────────────────────────────────── */
+
+/* 1. Ana hammadde bölümü → her zaman KG, 3 ondalık */
+function goster_kg(v){
+  if(v === null || v === undefined || isNaN(v)) return '—';
+  return parseFloat(v).toFixed(3) + ' kg';
+}
+
+/* 2. RF boya kalemleri → her zaman GR, laboratuvar formatı
+ * Kural:
+ *   Tam sayı (ondalık = .000) → sıfırları at   450 gr / 340 gr / 85 gr
+ *   Ondalıklı                 → 3 hane koru    4.500 gr / 0.230 gr / 0.007 gr
+ * Dönüşüm tablosu:
+ *   0.450 kg → 450 gr   | 0.340 kg → 340 gr | 0.085 kg → 85 gr
+ *   0.000230 kg → 0.230 gr | 0.000007 kg → 0.007 gr
+ */
+function goster_gr(v){
+  if(v === null || v === undefined || isNaN(v)) return '—';
+  var gr = parseFloat(v) * 1000;
+  /* 3 ondalıkla yuvarla (float hassasiyet gürültüsünü temizle) */
+  var gr3 = parseFloat(gr.toFixed(3));
+  /* Tam sayı mı? Math.floor karşılaştırması ile kontrol */
+  var sonuc = (gr3 === Math.floor(gr3))
+    ? String(gr3)           /* tam sayı: 450, 340, 85 */
+    : gr3.toFixed(3);       /* ondalıklı: 4.500, 0.230, 0.007 */
+  return sonuc + ' gr';
+}
+
+/* Eski çağrılar için uyumluluk takma adı (kaldırılacak) */
+function miktar_goster(v){ return goster_kg(v); }
+
+/* ── Başlat ── */
+render();
+initEvents();
+</script>
+{% endblock %}
