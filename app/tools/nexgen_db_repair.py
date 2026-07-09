@@ -663,21 +663,32 @@ def mig071_073(cur, con, log):
         if _alter_add(cur, con, 'nexgen_uretim_batch', 'plan_id', 'INTEGER'):
             added.append('uretim_batch.plan_id')
 
-    # 072
+    # 072 — batch_kodu + parca_no (mig072 orijinal şeması; parca_kodu yok)
     if not _tablo_var(cur, 'nexgen_uretim_parca'):
         cur.execute("""
             CREATE TABLE IF NOT EXISTS nexgen_uretim_parca (
                 id               INTEGER PRIMARY KEY AUTOINCREMENT,
-                plan_id          INTEGER,
-                batch_id         INTEGER,
-                parca_kodu       TEXT    NOT NULL UNIQUE,
-                uretim_varyant_id INTEGER,
-                agirlik_kg       REAL,
-                durum            TEXT    NOT NULL DEFAULT 'URETILDI',
+                batch_id         INTEGER NOT NULL REFERENCES nexgen_uretim_batch(id),
+                batch_kodu       TEXT    NOT NULL,
+                plan_id          INTEGER REFERENCES nexgen_uretim_plan(id),
+                parca_no         INTEGER NOT NULL DEFAULT 1,
+                hedef_kg         REAL    NOT NULL DEFAULT 0,
+                uretilen_kg      REAL    NOT NULL DEFAULT 0,
+                durum            TEXT    NOT NULL DEFAULT 'HAZIR',
+                baslama_zamani   TEXT,
+                bitis_zamani     TEXT,
+                created_at       TEXT DEFAULT (datetime('now','localtime')),
+                updated_at       TEXT DEFAULT (datetime('now','localtime')),
+                operator_id      INTEGER,
+                vardiya          TEXT,
+                bekleme_sebebi   TEXT,
                 notlar           TEXT,
-                olusturma_tarihi TEXT    DEFAULT (datetime('now'))
+                formul_batch_kg  REAL,
+                UNIQUE(batch_kodu, parca_no)
             )
         """)
+        _create_index(cur, con, 'idx_uretim_parca_batch', 'nexgen_uretim_parca(batch_kodu)')
+        _create_index(cur, con, 'idx_uretim_parca_plan',  'nexgen_uretim_parca(plan_id)')
         con.commit()
         added.append('nexgen_uretim_parca')
 
@@ -983,37 +994,41 @@ def mig085(cur, con, log):
     created = []
 
     if not _tablo_var(cur, 'nexgen_depo_hazirlik'):
+        # batch_kodu: routes.py'deki tüm sorgular dh.batch_kodu kullanır (mig085 orijinal şema)
         cur.execute("""
             CREATE TABLE IF NOT EXISTS nexgen_depo_hazirlik (
                 id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-                hazirlik_kodu       TEXT    NOT NULL UNIQUE,
+                hazirlik_no         TEXT    NOT NULL UNIQUE,
+                batch_kodu          TEXT    NOT NULL,
                 plan_id             INTEGER,
                 planlama_siparis_id INTEGER,
                 cari_id             INTEGER,
-                durum               TEXT    NOT NULL DEFAULT 'BEKLEMEDE',
-                hedef_tarih         TEXT,
+                durum               TEXT    NOT NULL DEFAULT 'BEKLIYOR',
+                hazirlayan_id       INTEGER,
+                hazir_tarihi        TEXT,
                 notlar              TEXT,
                 olusturan_id        INTEGER,
-                olusturma_tarihi    TEXT DEFAULT (datetime('now')),
+                olusturma_tarihi    TEXT DEFAULT (datetime('now','localtime')),
                 guncelleme_tarihi   TEXT
             )
         """)
+        _create_index(cur, con, 'idx_ndh_batch', 'nexgen_depo_hazirlik(batch_kodu)')
+        _create_index(cur, con, 'idx_ndh_durum', 'nexgen_depo_hazirlik(durum)')
         con.commit()
         created.append('nexgen_depo_hazirlik')
 
     if not _tablo_var(cur, 'nexgen_depo_hazirlik_kalem'):
         cur.execute("""
             CREATE TABLE IF NOT EXISTS nexgen_depo_hazirlik_kalem (
-                id               INTEGER PRIMARY KEY AUTOINCREMENT,
-                hazirlik_id      INTEGER NOT NULL REFERENCES nexgen_depo_hazirlik(id),
-                stok_kart_id     INTEGER REFERENCES nexgen_stok_kart(id),
-                uretim_varyant_id INTEGER,
-                miktar_kg        REAL    NOT NULL DEFAULT 0,
-                hazir_mi         INTEGER NOT NULL DEFAULT 0,
-                notlar           TEXT,
-                olusturma_tarihi TEXT    DEFAULT (datetime('now'))
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                hazirlik_id     INTEGER NOT NULL REFERENCES nexgen_depo_hazirlik(id),
+                stok_kart_id    INTEGER NOT NULL,
+                kaynak          TEXT    NOT NULL,
+                gerekli_kg      REAL    NOT NULL,
+                hazirlanan_kg   REAL    NOT NULL DEFAULT 0
             )
         """)
+        _create_index(cur, con, 'idx_ndhk_hazirlik', 'nexgen_depo_hazirlik_kalem(hazirlik_id)')
         con.commit()
         created.append('nexgen_depo_hazirlik_kalem')
 
@@ -1028,21 +1043,31 @@ def mig085(cur, con, log):
 def mig086(cur, con, log):
     tag = "[086]"
     if not _tablo_var(cur, 'nexgen_stok_rezerv'):
+        # rezerv_no, batch_kodu, miktar_kg, kalan_kg: mig086 orijinal şeması
         cur.execute("""
             CREATE TABLE IF NOT EXISTS nexgen_stok_rezerv (
                 id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-                stok_kart_id        INTEGER NOT NULL REFERENCES nexgen_stok_kart(id),
+                rezerv_no           TEXT    NOT NULL UNIQUE,
+                stok_kart_id        INTEGER NOT NULL,
+                kaynak_tip          TEXT,
+                kaynak_id           INTEGER,
                 hazirlik_id         INTEGER,
+                batch_kodu          TEXT    NOT NULL,
                 plan_id             INTEGER,
                 planlama_siparis_id INTEGER,
-                rezerv_kg           REAL    NOT NULL DEFAULT 0,
+                cari_id             INTEGER,
+                miktar_kg           REAL    NOT NULL,
+                kalan_kg            REAL    NOT NULL,
                 durum               TEXT    NOT NULL DEFAULT 'AKTIF',
-                notlar              TEXT,
-                olusturma_tarihi    TEXT DEFAULT (datetime('now')),
-                guncelleme_tarihi   TEXT
+                olusturan_id        INTEGER,
+                olusturma_tarihi    TEXT DEFAULT (datetime('now','localtime')),
+                kapanis_tarihi      TEXT,
+                notlar              TEXT
             )
         """)
-        _create_index(cur, con, 'idx_nsr_stok', 'nexgen_stok_rezerv(stok_kart_id)')
+        _create_index(cur, con, 'idx_nsr_stok_durum', 'nexgen_stok_rezerv(stok_kart_id, durum)')
+        _create_index(cur, con, 'idx_nsr_batch',      'nexgen_stok_rezerv(batch_kodu)')
+        _create_index(cur, con, 'idx_nsr_hazirlik',   'nexgen_stok_rezerv(hazirlik_id)')
         con.commit()
         cur.execute("INSERT OR IGNORE INTO schema_migrations(version, aciklama) VALUES('086', 'stok rezerv')")
         con.commit()
@@ -1142,13 +1167,13 @@ TABLO_MAP = [
      'MPR Sipariş Header'),
     ('nexgen_uretim_batch',       ['id','batch_kodu','uretim_varyant_id','durum'],
      'Tablet Batch'),
-    ('nexgen_uretim_parca',       ['id','batch_id','parca_no','durum'],
+    ('nexgen_uretim_parca',       ['id','batch_id','batch_kodu','parca_no','durum'],
      'Parça Takip'),
-    ('nexgen_depo_hazirlik',      ['id','hazirlik_no','durum'],
+    ('nexgen_depo_hazirlik',      ['id','hazirlik_no','batch_kodu','durum'],
      'Depo Hazırlık'),
     ('nexgen_depo_hazirlik_kalem',['id','hazirlik_id'],
      'Depo Hazırlık Kalem'),
-    ('nexgen_stok_rezerv',        ['id','stok_kart_id','miktar_kg','durum'],
+    ('nexgen_stok_rezerv',        ['id','rezerv_no','stok_kart_id','batch_kodu','miktar_kg','durum'],
      'Stok Rezerv'),
     ('nexgen_uretim_plan_boyut',  ['id','plan_id','uretim_varyant_id','boyut'],
      'MPR Boyut Satırları'),
