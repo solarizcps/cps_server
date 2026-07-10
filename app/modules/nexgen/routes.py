@@ -14605,7 +14605,9 @@ def api_tablet_arge_dogrudan_yazdir(etiket_id):
         user_id = session.get('user_id') or session.get('kullanici_id')
         job_id  = _print_job_olustur(etiket_id, payload_bytes, user_id)
     except Exception as e:
-        print(f'[nexgen] print_job oluşturma hatası: {e}')
+        import traceback as _tb
+        print(f'[nexgen] print_job oluşturma hatası etiket_id={etiket_id}: {e}')
+        print(_tb.format_exc())
         return jsonify({'ok': False, 'hata': 'Baskı kuyruğuna eklenemedi'}), 500
 
     return jsonify({

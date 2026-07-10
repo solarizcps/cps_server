@@ -70,10 +70,19 @@ def mig092(cur, con, log):
         log.append(f"  {tag} nexgen_arge_etiket mevcut.")
 
         # 1a. revizyon_id NOT NULL kısıtı varsa kaldır (tek seferlik)
-        _notnull = cur.execute(
-            "SELECT notnull FROM pragma_table_info('nexgen_arge_etiket') WHERE name='revizyon_id'"
-        ).fetchone()
-        if _notnull and _notnull[0] == 1:
+        #     PRAGMA table_info sütunları: cid, name, type, notnull, dflt_value, pk
+        #     Python tarafında işliyoruz — pragma_table_info() SQL fonksiyonu yerine
+        _kolon_bilgisi = cur.execute(
+            "PRAGMA table_info(nexgen_arge_etiket)"
+        ).fetchall()
+        _revizyon_notnull = None
+        for _satir in _kolon_bilgisi:
+            # _satir[1] = name, _satir[3] = notnull (0=nullable, 1=NOT NULL)
+            if _satir[1] == 'revizyon_id':
+                _revizyon_notnull = _satir[3]
+                break
+
+        if _revizyon_notnull == 1:
             cur.executescript("""
                 PRAGMA foreign_keys = OFF;
                 CREATE TABLE IF NOT EXISTS nexgen_arge_etiket_bak AS SELECT * FROM nexgen_arge_etiket;

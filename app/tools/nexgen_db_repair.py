@@ -1489,14 +1489,47 @@ def mig092(cur, con, log):
 # Merkezi kaynak: app/migrations/093_nexgen_print_job.py
 # ──────────────────────────────────────────────────────────────────────────────
 def mig093(cur, con, log):
-    """Merkezi migration dosyasini cagir — tek kaynak prensibi."""
+    """Merkezi migration dosyasini cagir — tek kaynak prensibi.
+
+    Schema drift tespiti:
+      - schema_migrations kaydı VAR ama nexgen_print_job tablosu YOK
+        → drift olarak raporla, migration yeniden uygula
+      - Her iki durum da mig093 fonksiyonuna bırakılır (idempotent)
+    """
     import sys, os
     _mig_dir = os.path.join(os.path.dirname(__file__), '..', 'migrations')
+    _mig_dir = os.path.normpath(_mig_dir)
     if _mig_dir not in sys.path:
         sys.path.insert(0, _mig_dir)
     from importlib import import_module
+
+    # Drift tespiti: kayıt var ama tablo yok mu?
+    _kayit_var = cur.execute(
+        "SELECT version FROM schema_migrations WHERE version = '093'"
+    ).fetchone() is not None
+    _tablo_var = cur.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='nexgen_print_job'"
+    ).fetchone() is not None
+
+    if _kayit_var and not _tablo_var:
+        log.append("[093] SCHEMA DRIFT: schema_migrations kaydı var ama nexgen_print_job tablosu yok!")
+        log.append("[093] schema_migrations kaydı siliniyor — migration yeniden uygulanacak.")
+        cur.execute("DELETE FROM schema_migrations WHERE version = '093'")
+        con.commit()
+
+    # Her durumda mig093 çalıştır (idempotent)
     m = import_module('093_nexgen_print_job')
     m.mig093(cur, con, log)
+
+    # Son doğrulama: tablo gerçekten oluştu mu?
+    _dogrulama = cur.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='nexgen_print_job'"
+    ).fetchone()
+    if _dogrulama:
+        _kolonlar = [c[1] for c in cur.execute("PRAGMA table_info(nexgen_print_job)").fetchall()]
+        log.append(f"[093] Doğrulama OK — kolonlar: {', '.join(_kolonlar)}")
+    else:
+        raise RuntimeError("[093] KRITIK: mig093 çalıştı ama nexgen_print_job tablosu oluşmadı!")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
