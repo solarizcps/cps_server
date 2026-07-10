@@ -247,23 +247,35 @@ def login():
 
             # FAZ 5.1: next param oncelikli, yoksa tip bazli redirect
             nxt = request.args.get('next') or request.form.get('next')
-            if not nxt:
-                _tip = u.get('Tip') or 'sistem'
-                if _tip == 'personel':
-                    nxt = '/uretim/'
-                elif _tip == 'usta':
-                    nxt = '/hedef/'
-                # FERHAT_LOGIN_REDIRECT_V1 (15.05.2026): Enjeksiyon rolu direkt saha
-                elif u.get('RolAd') == 'Enjeksiyon':
-                    nxt = '/enjeksiyon/'
-                # OET_LOGIN_REDIRECT_V1 (09.06.2026): Online E-Ticaret rolu direkt OET
-                elif u.get('RolAd') == 'Online E-Ticaret':
-                    nxt = '/online-eticaret/'
-                # VEDAT_ARGE_REDIRECT_V1 (10.07.2026): AR-GE Operatörü direkt tablet hub
-                elif u.get('RolAd') == 'AR-GE Operatörü':
-                    nxt = '/nexgen/tablet/arge'
-                else:
-                    nxt = '/'
+            # DEBUG_LOGIN_REDIRECT: kök neden tespiti
+            print(f"[AUTH DEBUG] login OK: kadi={kadi!r} RolId={u.get('RolId')!r} "
+                  f"RolAd={u.get('RolAd')!r} Tip={u.get('Tip')!r} "
+                  f"next_param={nxt!r}")
+
+            # Özel roller: next parametresi olsa bile kendi modülüne yönlendir.
+            # Bu roller sadece belirli modüllere erişebilir; yanlışlıkla ?next=/yonetim/
+            # gibi parametre geldiğinde bile kendi sayfalarına götürülür.
+            _rol_ad = u.get('RolAd') or ''
+            _tip    = u.get('Tip') or 'sistem'
+
+            if _tip == 'personel':
+                nxt = '/uretim/'
+            elif _tip == 'usta':
+                nxt = '/hedef/'
+            # FERHAT_LOGIN_REDIRECT_V1 (15.05.2026): Enjeksiyon rolu direkt saha
+            elif _rol_ad == 'Enjeksiyon':
+                nxt = '/enjeksiyon/'
+            # OET_LOGIN_REDIRECT_V1 (09.06.2026): Online E-Ticaret rolu direkt OET
+            elif _rol_ad == 'Online E-Ticaret':
+                nxt = '/online-eticaret/'
+            # VEDAT_ARGE_REDIRECT_V1 (10.07.2026): AR-GE Operatörü — next'i yoksay
+            elif _rol_ad == 'AR-GE Operatörü':
+                nxt = '/nexgen/tablet/arge'
+            elif not nxt:
+                # Diğer sistem kullanıcıları: next varsa kullan, yoksa '/'
+                nxt = '/'
+
+            print(f"[AUTH DEBUG] redirect hedefi: {nxt!r}")
             return redirect(nxt)
         hata = 'Kullanıcı adı veya şifre hatalı.'
     return render_template('giris.html', hata=hata)
