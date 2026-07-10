@@ -1139,6 +1139,120 @@ def mig088_089(cur, con, log):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# MIG 090 — nexgen_arge_revizyon + aktif_rev_no (MODÜL-04)
+# ──────────────────────────────────────────────────────────────────────────────
+def mig090(cur, con, log):
+    """MODÜL-04: revizyon tablosu ve aktif_rev_no kolonunu tesis eder."""
+    import os as _os, sys as _sys, json as _json
+    from datetime import datetime as _dt
+    tag = "[090]"
+
+    changed = False
+
+    # aktif_rev_no
+    if not _kolon_var(cur, 'nexgen_arge_test', 'aktif_rev_no'):
+        cur.execute('ALTER TABLE nexgen_arge_test ADD COLUMN aktif_rev_no INTEGER DEFAULT 0')
+        con.commit()
+        log.append(f"{tag} nexgen_arge_test.aktif_rev_no eklendi.")
+        changed = True
+
+    # basarili alanlar
+    for kolon, tip in [
+        ('basarili_mi', 'INTEGER DEFAULT 0'),
+        ('basarili_yapan_id', 'INTEGER'),
+        ('basarili_yapan_adi', 'TEXT'),
+        ('basarili_tarihi', 'TEXT'),
+    ]:
+        if not _kolon_var(cur, 'nexgen_arge_test', kolon):
+            cur.execute(f'ALTER TABLE nexgen_arge_test ADD COLUMN {kolon} {tip}')
+            con.commit()
+            log.append(f"{tag} nexgen_arge_test.{kolon} eklendi.")
+            changed = True
+
+    # revizyon tablosu
+    if not _tablo_var(cur, 'nexgen_arge_revizyon'):
+        cur.execute("""
+            CREATE TABLE nexgen_arge_revizyon (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                test_id             INTEGER NOT NULL,
+                rev_no              INTEGER NOT NULL,
+                onceki_rev_no       INTEGER,
+                neden               TEXT,
+                ne_degisti          TEXT,
+                revizyon_notu       TEXT,
+                snapshot_json       TEXT NOT NULL DEFAULT '{}',
+                degisiklik_json     TEXT NOT NULL DEFAULT '[]',
+                olusturan_id        INTEGER,
+                olusturan_adi       TEXT,
+                olusturma_tarihi    TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+                basarili_mi         INTEGER NOT NULL DEFAULT 0,
+                basarili_yapan_id   INTEGER,
+                basarili_yapan_adi  TEXT,
+                basarili_tarihi     TEXT,
+                kilitli_mi          INTEGER NOT NULL DEFAULT 0,
+                UNIQUE(test_id, rev_no),
+                FOREIGN KEY(test_id) REFERENCES nexgen_arge_test(id)
+            )
+        """)
+        _create_index(cur, con, 'idx_arge_rev_test_id', 'nexgen_arge_revizyon(test_id)')
+        con.commit()
+        log.append(f"{tag} nexgen_arge_revizyon tablosu oluşturuldu.")
+        changed = True
+
+    # REV-0 seed — mevcut testler için idempotent
+    SNAP_ALANLAR = [
+        'kaynak_uretim_varyant_id', 'test_no', 'test_tipi', 'makina',
+        'test_batch_kg', 'kaynak_batch_kg', 'yeni_renk_adi', 'notlar',
+        'durum', 'sonuc_notu', 'renk_tuttu', 'shore_degeri',
+        'kopurme_notu', 'cekme_problemi', 'genel_aciklama',
+        'olusturan_id', 'olusturma_tarihi',
+        'onaylayan_id', 'onay_tarihi', 'onay_notu',
+        'cari_id', 'shore_hedef', 'lot_no', 'talep_referansi',
+        'rf_renk_id', 'arge_kodu', 'numune_orani', 'renk_bilesenleri_json',
+        'olusan_uretim_varyant_id', 'olusan_renk_varyant_id', 'aktif',
+    ]
+    mevcut_kolonlar = [r[1] for r in cur.execute('PRAGMA table_info(nexgen_arge_test)').fetchall()]
+    snap_alanlar = [a for a in SNAP_ALANLAR if a in mevcut_kolonlar]
+    testler = cur.execute('SELECT id FROM nexgen_arge_test').fetchall()
+    rev0_n = 0
+    for (test_id,) in testler:
+        var = cur.execute(
+            'SELECT 1 FROM nexgen_arge_revizyon WHERE test_id=? AND rev_no=0', (test_id,)
+        ).fetchone()
+        if var:
+            continue
+        row = cur.execute(
+            f'SELECT {", ".join(snap_alanlar)} FROM nexgen_arge_test WHERE id=?', (test_id,)
+        ).fetchone()
+        if not row:
+            continue
+        snapshot = dict(zip(snap_alanlar, row))
+        olusturma = snapshot.get('olusturma_tarihi') or _dt.now().strftime('%Y-%m-%d %H:%M:%S')
+        cur.execute("""
+            INSERT INTO nexgen_arge_revizyon
+                (test_id, rev_no, onceki_rev_no, neden, ne_degisti, revizyon_notu,
+                 snapshot_json, degisiklik_json,
+                 olusturan_id, olusturan_adi, olusturma_tarihi, basarili_mi, kilitli_mi)
+            VALUES (?, 0, NULL, 'ilk_kayit', '[]', 'İlk kayıt', ?, '[]',
+                    ?, NULL, ?, 0, 0)
+        """, (test_id, _json.dumps(snapshot, ensure_ascii=False),
+              snapshot.get('olusturan_id'), olusturma))
+        rev0_n += 1
+
+    if rev0_n:
+        con.commit()
+        log.append(f"{tag} {rev0_n} test için REV-0 oluşturuldu.")
+        changed = True
+
+    cur.execute("INSERT OR IGNORE INTO schema_migrations(version) VALUES('090')")
+    con.commit()
+
+    if not changed:
+        log.append(f"{tag} OK — değişiklik yok.")
+    return changed
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # STEP 3 — TABLO RAPORU
 # ──────────────────────────────────────────────────────────────────────────────
 TABLO_MAP = [
@@ -1167,8 +1281,10 @@ TABLO_MAP = [
      'MODÜL-01/02, MPR'),
     ('nexgen_recete_kalem',       ['id','uretim_varyant_id','stok_kart_id','miktar_kg'],
      'MODÜL-01, Reçete Detay'),
-    ('nexgen_arge_test',          ['id','kaynak_uretim_varyant_id','arge_kodu','rf_renk_id'],
-     'MODÜL-01/02'),
+    ('nexgen_arge_test',          ['id','kaynak_uretim_varyant_id','arge_kodu','rf_renk_id','aktif_rev_no'],
+     'MODÜL-01/02/04'),
+    ('nexgen_arge_revizyon',      ['id','test_id','rev_no','snapshot_json','olusturma_tarihi'],
+     'MODÜL-04 Revizyon Geçmişi'),
     ('nexgen_arge_test_kalem',    ['id','test_id','stok_kart_id'],
      'MODÜL-01/02'),
     ('nexgen_rf_renk',            ['id','rf_kod','ad','aktif'],
@@ -1325,6 +1441,7 @@ def main():
         ("MIG 085 — depo_hazirlik",                  lambda: mig085(cur, con, log)),
         ("MIG 086 — stok_rezerv",                    lambda: mig086(cur, con, log)),
         ("MIG 088-089 — uretim_plan_boyut",          lambda: mig088_089(cur, con, log)),
+        ("MIG 090 — arge_revizyon (MODÜL-04)",        lambda: mig090(cur, con, log)),
     ]
 
     for aciklama, fn in steps:

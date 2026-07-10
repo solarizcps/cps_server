@@ -1,0 +1,1243 @@
+{% extends "base.html" %}
+{% set page_title = "Numune Revizyonu — NexGen AR-GE" %}
+
+{% block content %}
+{#
+  MODÜL-04 — Numune Revizyon Ekranı
+  Design System v2.0  |  NexGen AR-GE Tablet
+  Amaç: Vedat mevcut AR-GE numunesini REV-0→REV-N şeklinde revize eder.
+  Akış: Özet Kart → REVİZE ET modal → Kaydet  |  veya  DENEME BAŞARILI onay
+  Kural: Başarılı numune kilitleniyor. Yeni REV oluşturmak sadece aktif revizyondan yapılır.
+#}
+
+{# ─── Veri JSON ─── #}
+<script>
+var M4_TEST          = {{ test          | tojson | safe }};
+var M4_REVLER        = {{ revler        | tojson | safe }};
+var M4_AKTIF_REV_NO  = {{ aktif_rev_no  | tojson | safe }};
+var M4_NEDEN         = {{ neden_secenekler        | tojson | safe }};
+var M4_DEGISEN_ALAN  = {{ degisen_alan_secenekler | tojson | safe }};
+</script>
+
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   MODÜL-04 — DS v2.0 Variables
+═══════════════════════════════════════════════════════════════ */
+:root{
+  --navy:    #0B2545;
+  --orange:  #E87722;
+  --steel:   #4A6FA5;
+  --light:   #F5F7FA;
+  --border:  #D8E0EC;
+  --green:   #1E7C3D;
+  --red:     #C62828;
+  --yellow:  #F59E0B;
+  --text-pri:#0B2545;
+  --text-sec:#4A6FA5;
+  --radius:  10px;
+  --shadow:  0 2px 8px rgba(11,37,69,.10);
+  --bar-h:   64px;
+}
+
+/* Shell */
+.m4-shell{
+  display:flex; flex-direction:column;
+  height:100vh; background:var(--light); overflow:hidden;
+}
+
+/* ── Top Bar ─────────────────────────────────────────────────── */
+.m4-bar{
+  flex-shrink:0;
+  height:var(--bar-h);
+  background:var(--navy);
+  border-bottom:3px solid var(--orange);
+  display:flex; align-items:center; gap:14px;
+  padding:0 20px;
+}
+.m4-geri{
+  display:flex; align-items:center; justify-content:center;
+  width:42px; height:42px; border-radius:8px;
+  background:rgba(255,255,255,.10);
+  color:#fff; text-decoration:none;
+  border:1px solid rgba(255,255,255,.20);
+  transition:background .2s;
+}
+.m4-geri:hover{ background:rgba(255,255,255,.20); }
+.m4-geri svg{ width:22px; height:22px; }
+.m4-bar-logo img{
+  height:34px; object-fit:contain;
+}
+.m4-bar-divider{
+  width:1px; height:36px;
+  background:rgba(255,255,255,.25);
+  margin:0 4px;
+}
+.m4-bar-title{ flex:1; }
+.m4-bar-label{
+  display:block; color:var(--orange);
+  font-size:10px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase;
+}
+.m4-bar-name{
+  display:block; color:#fff;
+  font-size:15px; font-weight:600; margin-top:1px;
+}
+.m4-bar-sag{
+  display:flex; align-items:center; gap:14px;
+}
+.m4-clock-wrap{ text-align:right; line-height:1.2; }
+.m4-clock{ display:block; color:#fff; font-size:16px; font-weight:700; }
+.m4-date { display:block; color:rgba(255,255,255,.6); font-size:11px; }
+.m4-user-wrap{ display:flex; align-items:center; gap:8px; }
+.m4-avatar{
+  width:36px; height:36px; border-radius:50%;
+  background:var(--orange); color:#fff;
+  display:flex; align-items:center; justify-content:center;
+  font-size:15px; font-weight:700;
+}
+.m4-uname{ color:rgba(255,255,255,.85); font-size:13px; }
+
+/* ── Scroll Body ─────────────────────────────────────────────── */
+.m4-body{
+  flex:1; overflow-y:auto;
+  padding:20px;
+  display:flex; flex-direction:column; align-items:center; gap:16px;
+}
+
+/* ── Özet Kart ───────────────────────────────────────────────── */
+.m4-ozet{
+  width:100%; max-width:780px;
+  background:#fff; border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  border:1px solid var(--border);
+  overflow:hidden;
+}
+.m4-ozet-head{
+  background:var(--navy); padding:16px 20px;
+  display:flex; align-items:center; gap:16px;
+}
+.m4-ozet-kod{
+  font-size:22px; font-weight:800; color:#fff; letter-spacing:.5px;
+}
+.m4-ozet-alt{
+  flex:1;
+}
+.m4-ozet-deneme{
+  color:rgba(255,255,255,.7); font-size:13px;
+}
+.m4-rev-badge{
+  display:inline-flex; align-items:center;
+  background:rgba(255,255,255,.15);
+  border:1px solid rgba(255,255,255,.3);
+  color:#fff; font-size:12px; font-weight:700;
+  padding:3px 10px; border-radius:12px;
+}
+.m4-ozet-body{
+  padding:16px 20px;
+  display:grid; grid-template-columns:1fr 1fr; gap:10px 20px;
+}
+.m4-ozet-sat{
+  display:flex; flex-direction:column; gap:2px;
+}
+.m4-ozet-etiket{
+  font-size:11px; color:var(--text-sec); text-transform:uppercase; letter-spacing:.6px;
+}
+.m4-ozet-deger{
+  font-size:14px; font-weight:600; color:var(--text-pri);
+}
+
+/* Durum rozeti */
+.m4-durum{
+  display:inline-block; padding:3px 10px;
+  border-radius:12px; font-size:12px; font-weight:700;
+  text-transform:uppercase;
+}
+.m4-durum-taslak    { background:#EFF3FA; color:var(--steel); }
+.m4-durum-test      { background:#FFF8E1; color:#B45309; }
+.m4-durum-onaylandi { background:#E8F5E9; color:var(--green); }
+.m4-durum-basarili  { background:#E8F5E9; color:var(--green); border:1px solid #A5D6A7; }
+.m4-durum-kilitli   { background:#FFEBEE; color:var(--red); }
+
+/* ── Aksiyon Butonları ───────────────────────────────────────── */
+.m4-aksiyonlar{
+  width:100%; max-width:780px;
+  display:flex; gap:12px;
+}
+.m4-btn-revize{
+  flex:1; height:56px; border-radius:var(--radius);
+  background:var(--navy); color:#fff;
+  font-size:16px; font-weight:700; letter-spacing:.5px;
+  border:none; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; gap:10px;
+  transition:background .2s, transform .1s;
+}
+.m4-btn-revize:hover:not(:disabled){ background:#0e2f5c; }
+.m4-btn-revize:active:not(:disabled){ transform:scale(.98); }
+.m4-btn-revize:disabled{ opacity:.45; cursor:not-allowed; }
+.m4-btn-basarili{
+  flex:1; height:56px; border-radius:var(--radius);
+  background:var(--green); color:#fff;
+  font-size:16px; font-weight:700; letter-spacing:.5px;
+  border:none; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; gap:10px;
+  transition:background .2s, transform .1s;
+}
+.m4-btn-basarili:hover:not(:disabled){ background:#165c2e; }
+.m4-btn-basarili:active:not(:disabled){ transform:scale(.98); }
+.m4-btn-basarili:disabled{ opacity:.45; cursor:not-allowed; }
+.m4-btn-icon{ width:22px; height:22px; }
+
+/* ── Geçmiş Kart ─────────────────────────────────────────────── */
+.m4-gecmis{
+  width:100%; max-width:780px;
+  background:#fff; border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  border:1px solid var(--border);
+  overflow:hidden;
+}
+.m4-gecmis-baslik{
+  padding:14px 20px;
+  background:var(--navy);
+  color:#fff; font-size:14px; font-weight:700; letter-spacing:.5px;
+  display:flex; align-items:center; justify-content:space-between;
+}
+.m4-gecmis-sayi{
+  background:var(--orange); color:#fff;
+  font-size:11px; font-weight:700;
+  padding:2px 8px; border-radius:10px;
+}
+
+/* Revizyon item (accordion) */
+.m4-rev-item{
+  border-top:1px solid var(--border);
+}
+.m4-rev-item:first-child{ border-top:none; }
+.m4-rev-header{
+  display:flex; align-items:center; gap:12px;
+  padding:14px 20px; cursor:pointer;
+  transition:background .15s;
+  user-select:none;
+}
+.m4-rev-header:hover{ background:var(--light); }
+.m4-rev-no{
+  min-width:54px; height:36px;
+  border-radius:8px; background:var(--light);
+  border:1px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+  font-size:12px; font-weight:800; color:var(--text-pri);
+  text-transform:uppercase;
+}
+.m4-rev-no-aktif{ background:var(--navy); color:#fff; border-color:var(--navy); }
+.m4-rev-ozet{ flex:1; }
+.m4-rev-neden{ font-size:14px; font-weight:600; color:var(--text-pri); }
+.m4-rev-meta{
+  font-size:12px; color:var(--text-sec); margin-top:2px;
+}
+.m4-rev-ok{
+  width:20px; height:20px; color:var(--text-sec);
+  transition:transform .2s;
+}
+.m4-rev-ok.acik{ transform:rotate(90deg); }
+
+/* Revizyon detay */
+.m4-rev-detay{
+  display:none;
+  padding:12px 20px 16px;
+  background:#FAFBFC;
+  border-top:1px solid var(--border);
+}
+.m4-rev-detay.acik{ display:block; }
+
+/* Eski revizyon uyarısı */
+.m4-eski-uyari{
+  background:#FFF3E0; border:1px solid #FFE0B2;
+  border-radius:8px; padding:10px 14px;
+  margin-bottom:12px;
+  font-size:13px; color:#E65100; font-weight:600;
+  display:flex; align-items:center; gap:8px;
+}
+
+/* Fark tablosu */
+.m4-fark-kart{
+  border:1px solid var(--border); border-radius:8px; overflow:hidden;
+  margin-bottom:8px;
+}
+.m4-fark-baslik{
+  background:#EFF3FA; padding:8px 14px;
+  font-size:12px; font-weight:700; color:var(--text-pri);
+  text-transform:uppercase; letter-spacing:.4px;
+}
+.m4-fark-satir{
+  display:flex; align-items:center; gap:0;
+  padding:8px 14px; border-top:1px solid var(--border);
+  font-size:13px;
+}
+.m4-fark-satir:first-child{ border-top:none; }
+.m4-fark-alan{
+  min-width:140px; color:var(--text-sec); font-weight:500;
+}
+.m4-fark-eski{
+  flex:1; color:var(--red); text-decoration:line-through;
+  font-size:12px;
+}
+.m4-fark-ok{
+  margin:0 8px; color:var(--text-sec);
+}
+.m4-fark-yeni{
+  flex:1; color:var(--green); font-weight:600;
+}
+
+/* not kutusu */
+.m4-rev-not{
+  font-size:13px; color:var(--text-sec);
+  background:var(--light); border-radius:8px;
+  padding:8px 12px; margin-top:8px;
+  border-left:3px solid var(--border);
+}
+
+/* başarılı rozeti */
+.m4-basarili-badge{
+  display:inline-flex; align-items:center; gap:6px;
+  background:#E8F5E9; border:1px solid #A5D6A7;
+  color:var(--green); font-size:12px; font-weight:700;
+  padding:4px 10px; border-radius:12px; margin-top:6px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MODAL — REVİZE ET
+═══════════════════════════════════════════════════════════════ */
+.m4-overlay{
+  display:none; position:fixed; inset:0;
+  background:rgba(11,37,69,.55); z-index:1000;
+  align-items:center; justify-content:center; padding:16px;
+}
+.m4-overlay.acik{ display:flex; }
+
+.m4-modal{
+  background:#fff; border-radius:14px;
+  width:100%; max-width:680px; max-height:90vh;
+  display:flex; flex-direction:column;
+  box-shadow:0 12px 40px rgba(0,0,0,.25);
+  overflow:hidden;
+}
+.m4-modal-head{
+  background:var(--navy); padding:16px 20px;
+  display:flex; align-items:center; justify-content:space-between;
+  flex-shrink:0;
+}
+.m4-modal-baslik{ color:#fff; font-size:17px; font-weight:700; }
+.m4-modal-kapat{
+  width:36px; height:36px; border-radius:50%;
+  background:rgba(255,255,255,.15); border:none; cursor:pointer;
+  color:#fff; display:flex; align-items:center; justify-content:center;
+  font-size:20px; line-height:1;
+}
+.m4-modal-kapat:hover{ background:rgba(255,255,255,.25); }
+
+.m4-modal-body{
+  flex:1; overflow-y:auto; padding:20px;
+  display:flex; flex-direction:column; gap:18px;
+}
+
+/* Section */
+.m4-sek{
+  border:1px solid var(--border); border-radius:10px; overflow:hidden;
+}
+.m4-sek-baslik{
+  background:var(--light); padding:10px 16px;
+  font-size:12px; font-weight:700; color:var(--text-pri);
+  text-transform:uppercase; letter-spacing:.5px;
+  border-bottom:1px solid var(--border);
+}
+.m4-sek-body{ padding:14px 16px; }
+
+/* Chip seçenekleri */
+.m4-chip-grup{
+  display:flex; flex-wrap:wrap; gap:10px;
+}
+.m4-chip{
+  padding:10px 18px; border-radius:10px;
+  background:var(--light); border:2px solid var(--border);
+  font-size:14px; font-weight:600; cursor:pointer;
+  transition:all .15s; color:var(--text-pri);
+  user-select:none;
+}
+.m4-chip:hover{ border-color:var(--steel); }
+.m4-chip.secili{ background:var(--navy); border-color:var(--navy); color:#fff; }
+.m4-chip.secili-alt{ background:#EFF3FA; border-color:var(--steel); color:var(--navy); }
+
+/* Değişim alanları */
+.m4-degisim-alanlari{
+  display:flex; flex-direction:column; gap:12px;
+}
+.m4-degisim-blok{
+  border:1px solid var(--border); border-radius:10px; overflow:hidden;
+}
+.m4-degisim-blok-baslik{
+  background:#EFF3FA; padding:8px 14px;
+  font-size:12px; font-weight:700; color:var(--navy);
+  display:flex; align-items:center; gap:8px;
+}
+.m4-degisim-blok-icerik{
+  padding:12px 14px;
+  display:flex; flex-direction:column; gap:8px;
+}
+.m4-alan-satir{
+  display:flex; align-items:center; gap:10px;
+  font-size:13px;
+}
+.m4-alan-etiket{
+  min-width:120px; color:var(--text-sec); font-weight:500;
+}
+.m4-alan-eski{
+  flex:1; color:var(--text-sec); font-size:12px;
+  background:var(--light); padding:4px 8px; border-radius:6px;
+}
+.m4-alan-ok{ color:var(--text-sec); font-size:14px; }
+.m4-alan-input{
+  flex:1; padding:8px 10px; border-radius:8px;
+  border:1.5px solid var(--border); font-size:14px;
+  outline:none; transition:border-color .15s;
+}
+.m4-alan-input:focus{ border-color:var(--steel); }
+
+/* Not alanı */
+.m4-not-input{
+  width:100%; padding:10px 12px;
+  border:1.5px solid var(--border); border-radius:8px;
+  font-size:14px; resize:vertical; min-height:60px;
+  max-height:80px; outline:none;
+  font-family:inherit;
+  transition:border-color .15s;
+}
+.m4-not-input:focus{ border-color:var(--steel); }
+
+/* Bilesen tablosu */
+.m4-bilesen-tablo{
+  width:100%; border-collapse:collapse; font-size:13px;
+}
+.m4-bilesen-tablo th{
+  background:var(--light); padding:6px 10px;
+  text-align:left; font-size:11px; font-weight:700; color:var(--text-sec);
+  text-transform:uppercase; letter-spacing:.4px; border-bottom:1px solid var(--border);
+}
+.m4-bilesen-tablo td{
+  padding:7px 10px; border-bottom:1px solid var(--border);
+}
+.m4-bilesen-tablo tr:last-child td{ border-bottom:none; }
+.m4-bilesen-input{
+  width:80px; padding:5px 8px;
+  border:1.5px solid var(--border); border-radius:6px;
+  font-size:13px; text-align:right; outline:none;
+}
+.m4-bilesen-input:focus{ border-color:var(--steel); }
+
+/* Modal footer */
+.m4-modal-footer{
+  padding:16px 20px;
+  border-top:1px solid var(--border);
+  display:flex; gap:10px; flex-shrink:0;
+}
+.m4-btn-kaydet{
+  flex:1; height:52px; border-radius:10px;
+  background:var(--orange); color:#fff;
+  font-size:16px; font-weight:700; letter-spacing:.5px;
+  border:none; cursor:pointer;
+  transition:background .15s, transform .1s;
+}
+.m4-btn-kaydet:hover:not(:disabled){ background:#d06b1a; }
+.m4-btn-kaydet:active:not(:disabled){ transform:scale(.98); }
+.m4-btn-kaydet:disabled{ opacity:.5; cursor:not-allowed; }
+.m4-btn-iptal{
+  width:110px; height:52px; border-radius:10px;
+  background:var(--light); color:var(--text-pri);
+  font-size:14px; font-weight:600;
+  border:1px solid var(--border); cursor:pointer;
+}
+.m4-btn-iptal:hover{ background:#e0e6f0; }
+
+/* ═══════════════════════════════════════════════════════════════
+   ONAY DIALOG — DENEME BAŞARILI
+═══════════════════════════════════════════════════════════════ */
+.m4-onay-overlay{
+  display:none; position:fixed; inset:0;
+  background:rgba(11,37,69,.55); z-index:1100;
+  align-items:center; justify-content:center; padding:16px;
+}
+.m4-onay-overlay.acik{ display:flex; }
+.m4-onay-kart{
+  background:#fff; border-radius:14px; padding:28px 28px 22px;
+  max-width:420px; width:100%;
+  box-shadow:0 12px 40px rgba(0,0,0,.25);
+  text-align:center;
+}
+.m4-onay-ikon{
+  width:60px; height:60px; border-radius:50%;
+  background:#E8F5E9; margin:0 auto 14px;
+  display:flex; align-items:center; justify-content:center;
+}
+.m4-onay-ikon svg{ width:32px; height:32px; color:var(--green); }
+.m4-onay-baslik{
+  font-size:18px; font-weight:800; color:var(--text-pri); margin-bottom:8px;
+}
+.m4-onay-aciklama{
+  font-size:14px; color:var(--text-sec); margin-bottom:22px; line-height:1.5;
+}
+.m4-onay-butonlar{
+  display:flex; gap:10px;
+}
+.m4-onay-evet{
+  flex:1; height:50px; border-radius:10px;
+  background:var(--green); color:#fff;
+  font-size:15px; font-weight:700; border:none; cursor:pointer;
+}
+.m4-onay-evet:hover{ background:#165c2e; }
+.m4-onay-hayir{
+  width:110px; height:50px; border-radius:10px;
+  background:var(--light); color:var(--text-pri);
+  font-size:14px; font-weight:600;
+  border:1px solid var(--border); cursor:pointer;
+}
+.m4-onay-hayir:hover{ background:#e0e6f0; }
+
+/* ═══════════════════════════════════════════════════════════════
+   TOAST
+═══════════════════════════════════════════════════════════════ */
+.m4-toast{
+  position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(80px);
+  background:#0B2545; color:#fff;
+  padding:12px 22px; border-radius:10px;
+  font-size:14px; font-weight:600;
+  box-shadow:0 4px 20px rgba(0,0,0,.25);
+  z-index:2000;
+  transition:transform .3s ease, opacity .3s ease;
+  opacity:0;
+}
+.m4-toast.gorunu{
+  transform:translateX(-50%) translateY(0); opacity:1;
+}
+.m4-toast.basarili{ border-left:4px solid var(--green); }
+.m4-toast.hata    { border-left:4px solid var(--red); background:#C62828; }
+
+/* ─── Yükleniyor spinner ─────────────────────────────────────── */
+.m4-yukleniyor{
+  display:inline-block;
+  width:18px; height:18px;
+  border:3px solid rgba(255,255,255,.3);
+  border-top-color:#fff;
+  border-radius:50%;
+  animation:m4-spin .7s linear infinite;
+  vertical-align:middle;
+}
+@keyframes m4-spin{ to{ transform:rotate(360deg); } }
+</style>
+
+{# ─── HTML ─── #}
+<div class="m4-shell">
+
+  {# ══ ÜST BAR ══ #}
+  <header class="m4-bar">
+    <a href="{{ url_for('nexgen.tablet_arge') }}" class="m4-geri" title="AR-GE Hub'a Dön">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="15 18 9 12 15 6"/>
+      </svg>
+    </a>
+    <div class="m4-bar-logo">
+      <img src="{{ url_for('static', filename='img/nexgen-logo.png') }}"
+           alt="NexGen"
+           onerror="this.style.display='none'">
+    </div>
+    <div class="m4-bar-divider"></div>
+    <div class="m4-bar-title">
+      <span class="m4-bar-label">NUMUNE REVİZYONU</span>
+      <span class="m4-bar-name">
+        {{ test.arge_kodu or test.test_no or ('Numune #' ~ test.id) }}
+      </span>
+    </div>
+    <div class="m4-bar-sag">
+      <div class="m4-clock-wrap">
+        <span class="m4-clock" id="m4-clock">--:--</span>
+        <span class="m4-date"  id="m4-date">--.--</span>
+      </div>
+      <div class="m4-user-wrap">
+        <div class="m4-avatar">{{ (kullanici_ad or 'V')[0]|upper }}</div>
+        <span class="m4-uname">{{ kullanici_ad or 'Kullanıcı' }}</span>
+      </div>
+    </div>
+  </header>
+
+  {# ══ SCROLL BODY ══ #}
+  <div class="m4-body" id="m4-body">
+
+    {# ─── Özet Kart ─── #}
+    <div class="m4-ozet">
+      <div class="m4-ozet-head">
+        <div>
+          <div class="m4-ozet-kod">
+            {{ test.arge_kodu or test.test_no or ('Numune #' ~ test.id) }}
+          </div>
+          <div class="m4-ozet-deneme">
+            {% if test.yeni_renk_adi %}{{ test.yeni_renk_adi }}{% endif %}
+            {% if test.cari_unvan %} · {{ test.cari_unvan }}{% endif %}
+          </div>
+        </div>
+        <div style="margin-left:auto">
+          <div class="m4-rev-badge">REV-{{ aktif_rev_no }}</div>
+        </div>
+      </div>
+      <div class="m4-ozet-body">
+        <div class="m4-ozet-sat">
+          <span class="m4-ozet-etiket">Durum</span>
+          <span class="m4-ozet-deger">
+            {% set d = test.durum or 'TASLAK' %}
+            {% if test.basarili_mi %}
+              <span class="m4-durum m4-durum-basarili">DENEME BAŞARILI</span>
+            {% elif d == 'TASLAK' %}
+              <span class="m4-durum m4-durum-taslak">Taslak</span>
+            {% elif d == 'TEST_EDILDI' %}
+              <span class="m4-durum m4-durum-test">Test Edildi</span>
+            {% elif d == 'ONAYLANDI' %}
+              <span class="m4-durum m4-durum-onaylandi">Onaylandı</span>
+            {% else %}
+              <span class="m4-durum m4-durum-taslak">{{ d }}</span>
+            {% endif %}
+          </span>
+        </div>
+        <div class="m4-ozet-sat">
+          <span class="m4-ozet-etiket">Test Tipi</span>
+          <span class="m4-ozet-deger">{{ test.test_tipi or '—' }}</span>
+        </div>
+        {% if test.uretim_boyut %}
+        <div class="m4-ozet-sat">
+          <span class="m4-ozet-etiket">Boyut</span>
+          <span class="m4-ozet-deger">{{ test.uretim_boyut }}</span>
+        </div>
+        {% endif %}
+        <div class="m4-ozet-sat">
+          <span class="m4-ozet-etiket">Batch KG</span>
+          <span class="m4-ozet-deger">
+            {% if test.test_batch_kg %}{{ test.test_batch_kg|round(2) }} KG{% else %}—{% endif %}
+          </span>
+        </div>
+        {% if test.shore_degeri %}
+        <div class="m4-ozet-sat">
+          <span class="m4-ozet-etiket">Shore</span>
+          <span class="m4-ozet-deger">{{ test.shore_degeri }}</span>
+        </div>
+        {% endif %}
+        <div class="m4-ozet-sat">
+          <span class="m4-ozet-etiket">Oluşturulma</span>
+          <span class="m4-ozet-deger">{{ test.olusturma_tarihi or '—' }}</span>
+        </div>
+        {% if test.basarili_mi and test.basarili_tarihi %}
+        <div class="m4-ozet-sat" style="grid-column:1/-1">
+          <span class="m4-ozet-etiket">Başarılı İşareti</span>
+          <span class="m4-ozet-deger" style="color:var(--green)">
+            {{ test.basarili_tarihi }}
+            {% if test.basarili_yapan_adi %} · {{ test.basarili_yapan_adi }}{% endif %}
+          </span>
+        </div>
+        {% endif %}
+        {% if test.notlar %}
+        <div class="m4-ozet-sat" style="grid-column:1/-1">
+          <span class="m4-ozet-etiket">Notlar</span>
+          <span class="m4-ozet-deger" style="font-weight:400; font-size:13px">{{ test.notlar }}</span>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# ─── Aksiyon Butonları ─── #}
+    {% set kilitli = test.basarili_mi %}
+    <div class="m4-aksiyonlar">
+      <button class="m4-btn-revize" id="m4-btn-revize"
+              {% if kilitli %}disabled title="Başarılı numune revize edilemez."{% endif %}>
+        <svg class="m4-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+        </svg>
+        REVİZE ET
+      </button>
+      <button class="m4-btn-basarili" id="m4-btn-basarili"
+              {% if kilitli %}disabled title="Zaten başarılı işaretlendi."{% endif %}>
+        <svg class="m4-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+        DENEME BAŞARILI
+      </button>
+    </div>
+
+    {# ─── Revizyon Geçmişi ─── #}
+    <div class="m4-gecmis">
+      <div class="m4-gecmis-baslik">
+        REVİZYON GEÇMİŞİ
+        <span class="m4-gecmis-sayi">{{ revler|length }}</span>
+      </div>
+      {% if revler %}
+        {% for rev in revler %}
+        {% set is_aktif = (rev.rev_no == aktif_rev_no) %}
+        <div class="m4-rev-item">
+          <div class="m4-rev-header" onclick="m4ToggleRev(this)">
+            <div class="m4-rev-no {{ 'aktif m4-rev-no-aktif' if is_aktif else '' }}">
+              REV-{{ rev.rev_no }}
+            </div>
+            <div class="m4-rev-ozet">
+              <div class="m4-rev-neden">
+                {% if rev.neden == 'ilk_kayit' %}İlk Kayıt
+                {% else %}{{ rev.neden or '—' }}
+                {% endif %}
+                {% if is_aktif %}&nbsp;<span style="color:var(--orange);font-size:11px">● Aktif</span>{% endif %}
+              </div>
+              <div class="m4-rev-meta">
+                {{ rev.olusturma_tarihi or '' }}
+                {% if rev.olusturan_adi %} · {{ rev.olusturan_adi }}{% endif %}
+              </div>
+            </div>
+            {% if rev.basarili_mi %}
+            <span class="m4-basarili-badge">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+              BAŞARILI
+            </span>
+            {% endif %}
+            <svg class="m4-rev-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </div>
+          <div class="m4-rev-detay" id="rev-detay-{{ rev.rev_no }}">
+            {% if not is_aktif %}
+            <div class="m4-eski-uyari">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              Bu eski bir revizyondur — salt okunur görünümdür.
+            </div>
+            {% endif %}
+
+            {# Fark tablosu #}
+            {% if rev.degisiklik_json and rev.degisiklik_json|length > 0 %}
+            <div class="m4-fark-kart">
+              <div class="m4-fark-baslik">Değişiklikler</div>
+              {% for fark in rev.degisiklik_json %}
+              <div class="m4-fark-satir">
+                <span class="m4-fark-alan">{{ fark.alan }}</span>
+                <span class="m4-fark-eski">{{ fark.onceki if fark.onceki is not none else '—' }}</span>
+                <span class="m4-fark-ok">→</span>
+                <span class="m4-fark-yeni">{{ fark.yeni if fark.yeni is not none else '—' }}
+                  {% if fark.fark is not none %}
+                    <span style="color:var(--text-sec); font-size:11px; font-weight:400">
+                      ({% if fark.fark > 0 %}+{% endif %}{{ fark.fark|round(4) }})
+                    </span>
+                  {% endif %}
+                </span>
+              </div>
+              {% endfor %}
+            </div>
+            {% elif rev.neden != 'ilk_kayit' %}
+            <div style="font-size:13px; color:var(--text-sec); padding:4px 0">
+              Bu revizyonda kayıtlı fark bilgisi yok.
+            </div>
+            {% endif %}
+
+            {# Not #}
+            {% if rev.revizyon_notu %}
+            <div class="m4-rev-not">
+              <strong>Not:</strong> {{ rev.revizyon_notu }}
+            </div>
+            {% endif %}
+
+            {# Başarılı bilgisi #}
+            {% if rev.basarili_mi %}
+            <div class="m4-basarili-badge" style="margin-top:8px">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+              DENEME BAŞARILI — {{ rev.basarili_tarihi or '' }}
+              {% if rev.basarili_yapan_adi %} · {{ rev.basarili_yapan_adi }}{% endif %}
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div style="padding:20px; text-align:center; color:var(--text-sec); font-size:14px">
+          Henüz revizyon kaydı yok.
+        </div>
+      {% endif %}
+    </div>
+
+  </div>{# /m4-body #}
+</div>{# /m4-shell #}
+
+{# ══════════════════════════════════════════════════════════════
+   MODAL — REVİZE ET
+═══════════════════════════════════════════════════════════════ #}
+<div class="m4-overlay" id="m4-overlay">
+  <div class="m4-modal">
+    <div class="m4-modal-head">
+      <span class="m4-modal-baslik">REVİZE ET</span>
+      <button class="m4-modal-kapat" onclick="m4ModalKapat()">×</button>
+    </div>
+
+    <div class="m4-modal-body">
+
+      {# ── 1. Neden revize ediyorsun? ── #}
+      <div class="m4-sek">
+        <div class="m4-sek-baslik">Neden revize ediyorsun?</div>
+        <div class="m4-sek-body">
+          <div class="m4-chip-grup" id="m4-neden-grup">
+            {% for s in neden_secenekler %}
+            <div class="m4-chip" data-key="{{ s.key }}" onclick="m4NedenSec(this)">
+              {{ s.etiket }}
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      {# ── 2. Ne değişecek? ── #}
+      <div class="m4-sek">
+        <div class="m4-sek-baslik">Ne değişecek?</div>
+        <div class="m4-sek-body">
+          <div class="m4-chip-grup" id="m4-ne-degisecek-grup">
+            {% for s in degisen_alan_secenekler %}
+            <div class="m4-chip" data-key="{{ s.key }}" onclick="m4AlanSec(this)">
+              {{ s.etiket }}
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      {# ── 3. Değişiklik alanları (dinamik) ── #}
+      <div id="m4-degisim-alanlari" class="m4-degisim-alanlari" style="display:none">
+
+        {# Renk Bileşenleri #}
+        <div class="m4-degisim-blok" id="m4-blok-renk_bilesenleri" style="display:none">
+          <div class="m4-degisim-blok-baslik">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 8v4m0 4h.01"/>
+            </svg>
+            Renk Bileşenleri
+          </div>
+          <div class="m4-degisim-blok-icerik">
+            <div id="m4-bilesen-wrap">
+              <table class="m4-bilesen-tablo">
+                <thead>
+                  <tr><th>Bileşen</th><th>Eski Değer</th><th>Yeni Değer (gr)</th></tr>
+                </thead>
+                <tbody id="m4-bilesen-tbody"></tbody>
+              </table>
+              <div style="font-size:12px; color:var(--text-sec); margin-top:8px">
+                Sadece değiştirdiğin hücreleri doldur. Boş bırakılan hücreler değişmez.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {# Gramaj / Batch KG #}
+        <div class="m4-degisim-blok" id="m4-blok-gramaj" style="display:none">
+          <div class="m4-degisim-blok-baslik">Gramaj / Batch KG</div>
+          <div class="m4-degisim-blok-icerik">
+            <div class="m4-alan-satir">
+              <span class="m4-alan-etiket">Batch KG</span>
+              <span class="m4-alan-eski" id="m4-eski-batch_kg">
+                {{ test.test_batch_kg or '—' }} KG
+              </span>
+              <span class="m4-alan-ok">→</span>
+              <input type="number" step="0.1" min="0.1"
+                     class="m4-alan-input" id="m4-input-batch_kg"
+                     placeholder="Yeni KG">
+            </div>
+          </div>
+        </div>
+
+        {# Shore #}
+        <div class="m4-degisim-blok" id="m4-blok-shore" style="display:none">
+          <div class="m4-degisim-blok-baslik">Shore Değeri</div>
+          <div class="m4-degisim-blok-icerik">
+            <div class="m4-alan-satir">
+              <span class="m4-alan-etiket">Shore</span>
+              <span class="m4-alan-eski">{{ test.shore_degeri or '—' }}</span>
+              <span class="m4-alan-ok">→</span>
+              <input type="number" step="1" min="0" max="100"
+                     class="m4-alan-input" id="m4-input-shore_degeri"
+                     placeholder="Yeni Shore">
+            </div>
+          </div>
+        </div>
+
+        {# Not / Açıklama #}
+        <div class="m4-degisim-blok" id="m4-blok-notlar" style="display:none">
+          <div class="m4-degisim-blok-baslik">Not / Açıklama</div>
+          <div class="m4-degisim-blok-icerik">
+            <div class="m4-alan-satir">
+              <span class="m4-alan-etiket">Eski Not</span>
+              <span class="m4-alan-eski">{{ test.notlar or '—' }}</span>
+            </div>
+            <textarea class="m4-not-input" id="m4-input-notlar"
+                      placeholder="Yeni not...">{{ test.notlar or '' }}</textarea>
+          </div>
+        </div>
+
+        {# Müşteri #}
+        <div class="m4-degisim-blok" id="m4-blok-cari" style="display:none">
+          <div class="m4-degisim-blok-baslik">Müşteri</div>
+          <div class="m4-degisim-blok-icerik">
+            <div class="m4-alan-satir">
+              <span class="m4-alan-etiket">Eski Müşteri</span>
+              <span class="m4-alan-eski">{{ test.cari_unvan or '—' }}</span>
+              <span class="m4-alan-ok">→</span>
+              <input type="text" class="m4-alan-input" id="m4-input-cari_id"
+                     placeholder="Yeni müşteri ID (sayı)"
+                     title="Müşteri ID giriniz">
+            </div>
+          </div>
+        </div>
+
+      </div>{# /degisim-alanlari #}
+
+      {# ── 4. Kısa Not ── #}
+      <div class="m4-sek">
+        <div class="m4-sek-baslik">Kısa Not (isteğe bağlı)</div>
+        <div class="m4-sek-body">
+          <textarea class="m4-not-input" id="m4-revizyon-not"
+                    placeholder="Neden bu değişikliği yaptığınızı kısaca yazın..."
+                    maxlength="300"></textarea>
+        </div>
+      </div>
+
+    </div>{# /modal-body #}
+
+    <div class="m4-modal-footer">
+      <button class="m4-btn-iptal" onclick="m4ModalKapat()">İptal</button>
+      <button class="m4-btn-kaydet" id="m4-btn-kaydet" onclick="m4Kaydet()">
+        REVİZYONU KAYDET
+      </button>
+    </div>
+  </div>
+</div>
+
+{# ══ ONAY DIALOG ══ #}
+<div class="m4-onay-overlay" id="m4-onay-overlay">
+  <div class="m4-onay-kart">
+    <div class="m4-onay-ikon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>
+    </div>
+    <div class="m4-onay-baslik">Deneme Başarılı?</div>
+    <div class="m4-onay-aciklama">
+      Bu numune <strong>DENEME BAŞARILI</strong> olarak işaretlenecek
+      ve yeniden revize edilemez hale gelecektir.<br>
+      Emin misiniz?
+    </div>
+    <div class="m4-onay-butonlar">
+      <button class="m4-onay-hayir" onclick="m4OnayKapat()">Hayır</button>
+      <button class="m4-onay-evet" onclick="m4BasariliOnayla()">
+        Evet, Başarılı
+      </button>
+    </div>
+  </div>
+</div>
+
+{# ══ TOAST ══ #}
+<div class="m4-toast" id="m4-toast"></div>
+
+<script>
+// ──────────────────────────────────────────────────────────────
+// MODÜL-04 — Client-side JS
+// ──────────────────────────────────────────────────────────────
+
+// Saat
+(function m4Saat(){
+  function guncelle(){
+    var now = new Date();
+    var hh = String(now.getHours()).padStart(2,'0');
+    var mm = String(now.getMinutes()).padStart(2,'0');
+    var dd = String(now.getDate()).padStart(2,'0');
+    var ay = String(now.getMonth()+1).padStart(2,'0');
+    var el1 = document.getElementById('m4-clock');
+    var el2 = document.getElementById('m4-date');
+    if(el1) el1.textContent = hh + ':' + mm;
+    if(el2) el2.textContent = dd + '.' + ay;
+  }
+  guncelle();
+  setInterval(guncelle, 30000);
+})();
+
+// ─── Revizyon accordion ───────────────────────────────────────
+function m4ToggleRev(header){
+  var detay = header.nextElementSibling;
+  var ok    = header.querySelector('.m4-rev-ok');
+  var acik  = detay.classList.contains('acik');
+  detay.classList.toggle('acik', !acik);
+  if(ok) ok.classList.toggle('acik', !acik);
+}
+
+// ─── Modal aç/kapat ──────────────────────────────────────────
+document.getElementById('m4-btn-revize').addEventListener('click', function(){
+  m4ModalAc();
+});
+
+function m4ModalAc(){
+  // Reset form
+  document.querySelectorAll('#m4-neden-grup .m4-chip').forEach(function(c){ c.classList.remove('secili'); });
+  document.querySelectorAll('#m4-ne-degisecek-grup .m4-chip').forEach(function(c){ c.classList.remove('secili-alt'); });
+  document.getElementById('m4-degisim-alanlari').style.display = 'none';
+  document.querySelectorAll('.m4-degisim-blok').forEach(function(b){ b.style.display='none'; });
+  document.getElementById('m4-revizyon-not').value = '';
+  document.getElementById('m4-overlay').classList.add('acik');
+}
+function m4ModalKapat(){
+  document.getElementById('m4-overlay').classList.remove('acik');
+}
+
+// ─── Neden seç ───────────────────────────────────────────────
+function m4NedenSec(chip){
+  document.querySelectorAll('#m4-neden-grup .m4-chip').forEach(function(c){
+    c.classList.remove('secili');
+  });
+  chip.classList.add('secili');
+}
+
+// ─── Alan seç ────────────────────────────────────────────────
+function m4AlanSec(chip){
+  chip.classList.toggle('secili-alt');
+  var seciliAlanlar = [];
+  document.querySelectorAll('#m4-ne-degisecek-grup .m4-chip.secili-alt').forEach(function(c){
+    seciliAlanlar.push(c.dataset.key);
+  });
+  var wrap = document.getElementById('m4-degisim-alanlari');
+  wrap.style.display = seciliAlanlar.length ? 'flex' : 'none';
+  // Tüm blokları gizle
+  document.querySelectorAll('.m4-degisim-blok').forEach(function(b){ b.style.display='none'; });
+  // Seçilenleri göster
+  seciliAlanlar.forEach(function(k){
+    var blok = document.getElementById('m4-blok-' + k);
+    if(blok) blok.style.display = 'block';
+  });
+  // Renk bileşenleri seçildiyse tabloyu doldur
+  if(seciliAlanlar.indexOf('renk_bilesenleri') !== -1){
+    m4BilesenTabloDoldur();
+  }
+}
+
+// ─── Bileşen tablosu ─────────────────────────────────────────
+function m4BilesenTabloDoldur(){
+  var tbody = document.getElementById('m4-bilesen-tbody');
+  if(!tbody) return;
+  tbody.innerHTML = '';
+  var json = M4_TEST.renk_bilesenleri_json;
+  var bilesler = [];
+  if(json){
+    try{ bilesler = JSON.parse(json); } catch(e){ bilesler = []; }
+  }
+  if(!bilesler || bilesler.length === 0){
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td colspan="3" style="color:var(--text-sec);font-size:13px;padding:8px">Bileşen verisi yok.</td>';
+    tbody.appendChild(tr);
+    return;
+  }
+  bilesler.forEach(function(b, idx){
+    var tr = document.createElement('tr');
+    var ad = b.ad || b.stok_ad || ('Bileşen ' + (idx+1));
+    var eski = b.miktar_gr !== undefined ? b.miktar_gr : (b.miktar_kg !== undefined ? (b.miktar_kg*1000).toFixed(3) : '');
+    tr.innerHTML =
+      '<td>' + ad + '</td>' +
+      '<td>' + (eski !== '' ? eski + ' gr' : '—') + '</td>' +
+      '<td><input type="number" step="0.001" min="0" class="m4-bilesen-input"' +
+      ' data-ad="' + ad + '" data-idx="' + idx + '" data-eski="' + eski + '"' +
+      ' placeholder="' + (eski !== '' ? eski : '') + '"></td>';
+    tbody.appendChild(tr);
+  });
+}
+
+// ─── Kaydet ──────────────────────────────────────────────────
+var m4_kayit_yapiliyor = false;
+
+function m4Kaydet(){
+  if(m4_kayit_yapiliyor) return;
+
+  var neden = '';
+  var seciliNeden = document.querySelector('#m4-neden-grup .m4-chip.secili');
+  if(seciliNeden) neden = seciliNeden.dataset.key;
+  if(!neden){
+    m4Toast('Lütfen revizyon nedenini seçin.', 'hata'); return;
+  }
+
+  var neDegisti = [];
+  document.querySelectorAll('#m4-ne-degisecek-grup .m4-chip.secili-alt').forEach(function(c){
+    neDegisti.push(c.dataset.key);
+  });
+
+  var revNot = document.getElementById('m4-revizyon-not').value.trim();
+  var degisiklikler = {};
+
+  // Gramaj
+  var batchInput = document.getElementById('m4-input-batch_kg');
+  if(batchInput && batchInput.closest('.m4-degisim-blok').style.display !== 'none' && batchInput.value){
+    degisiklikler['test_batch_kg'] = parseFloat(batchInput.value);
+  }
+
+  // Shore
+  var shoreInput = document.getElementById('m4-input-shore_degeri');
+  if(shoreInput && shoreInput.closest('.m4-degisim-blok').style.display !== 'none' && shoreInput.value){
+    degisiklikler['shore_degeri'] = parseFloat(shoreInput.value);
+  }
+
+  // Notlar
+  var notInput = document.getElementById('m4-input-notlar');
+  if(notInput && notInput.closest('.m4-degisim-blok').style.display !== 'none'){
+    var yeniNot = notInput.value.trim();
+    if(yeniNot !== (M4_TEST.notlar || '')){
+      degisiklikler['notlar'] = yeniNot;
+    }
+  }
+
+  // Müşteri ID
+  var cariInput = document.getElementById('m4-input-cari_id');
+  if(cariInput && cariInput.closest('.m4-degisim-blok').style.display !== 'none' && cariInput.value){
+    degisiklikler['cari_id'] = parseInt(cariInput.value, 10);
+  }
+
+  // Renk bileşenleri
+  var bilesenBlok = document.getElementById('m4-blok-renk_bilesenleri');
+  if(bilesenBlok && bilesenBlok.style.display !== 'none'){
+    var bilesler = [];
+    try{ bilesler = JSON.parse(M4_TEST.renk_bilesenleri_json || '[]'); } catch(e){ bilesler = []; }
+    var inputs = document.querySelectorAll('#m4-bilesen-tbody input.m4-bilesen-input');
+    var degistiMi = false;
+    inputs.forEach(function(inp){
+      var idx   = parseInt(inp.dataset.idx, 10);
+      var eskiV = parseFloat(inp.dataset.eski);
+      if(inp.value){
+        var yeniV = parseFloat(inp.value);
+        if(bilesler[idx] !== undefined && yeniV !== eskiV){
+          bilesler[idx].miktar_gr = yeniV;
+          bilesler[idx].miktar_kg = parseFloat((yeniV/1000).toFixed(6));
+          degistiMi = true;
+        }
+      }
+    });
+    if(degistiMi){
+      degisiklikler['renk_bilesenleri_json'] = JSON.stringify(bilesler);
+    }
+  }
+
+  if(Object.keys(degisiklikler).length === 0 && neDegisti.length > 0){
+    m4Toast('Herhangi bir değer değiştirilmedi.', 'hata'); return;
+  }
+
+  var payload = {
+    test_id:                M4_TEST.id,
+    aktif_rev_no_beklenen:  M4_AKTIF_REV_NO,
+    neden:                  neden,
+    ne_degisti:             neDegisti,
+    revizyon_notu:          revNot,
+    degisiklikler:          degisiklikler,
+  };
+
+  m4_kayit_yapiliyor = true;
+  var btn = document.getElementById('m4-btn-kaydet');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="m4-yukleniyor"></span> Kaydediliyor...';
+
+  fetch('/nexgen/api/tablet/arge/revizyon-kaydet', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload),
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    m4_kayit_yapiliyor = false;
+    btn.disabled = false;
+    btn.innerHTML = 'REVİZYONU KAYDET';
+    if(d.ok){
+      m4Toast(d.mesaj || 'Revizyon kaydedildi!', 'basarili');
+      m4ModalKapat();
+      setTimeout(function(){ location.reload(); }, 1200);
+    } else {
+      m4Toast(d.hata || 'Bir hata oluştu.', 'hata');
+    }
+  })
+  .catch(function(e){
+    m4_kayit_yapiliyor = false;
+    btn.disabled = false;
+    btn.innerHTML = 'REVİZYONU KAYDET';
+    m4Toast('Bağlantı hatası: ' + e.message, 'hata');
+  });
+}
+
+// ─── Deneme Başarılı ────────────────────────────────────────
+document.getElementById('m4-btn-basarili').addEventListener('click', function(){
+  document.getElementById('m4-onay-overlay').classList.add('acik');
+});
+function m4OnayKapat(){
+  document.getElementById('m4-onay-overlay').classList.remove('acik');
+}
+
+var m4_basarili_yapiliyor = false;
+
+function m4BasariliOnayla(){
+  if(m4_basarili_yapiliyor) return;
+  m4_basarili_yapiliyor = true;
+  m4OnayKapat();
+
+  fetch('/nexgen/api/tablet/arge/deneme-basarili', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      test_id:                M4_TEST.id,
+      aktif_rev_no_beklenen:  M4_AKTIF_REV_NO,
+    }),
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    m4_basarili_yapiliyor = false;
+    if(d.ok){
+      m4Toast('Deneme başarılı işaretlendi!', 'basarili');
+      setTimeout(function(){ location.reload(); }, 1200);
+    } else {
+      m4Toast(d.hata || 'Hata oluştu.', 'hata');
+    }
+  })
+  .catch(function(e){
+    m4_basarili_yapiliyor = false;
+    m4Toast('Bağlantı hatası: ' + e.message, 'hata');
+  });
+}
+
+// ─── Toast ───────────────────────────────────────────────────
+function m4Toast(msg, tip){
+  var el = document.getElementById('m4-toast');
+  el.textContent = msg;
+  el.className = 'm4-toast gorunu ' + (tip || '');
+  clearTimeout(el._t);
+  el._t = setTimeout(function(){
+    el.classList.remove('gorunu');
+  }, 3500);
+}
+
+// ─── ESC ile modal kapat ─────────────────────────────────────
+document.addEventListener('keydown', function(e){
+  if(e.key === 'Escape'){
+    m4ModalKapat();
+    m4OnayKapat();
+  }
+});
+</script>
+
+{% endblock %}

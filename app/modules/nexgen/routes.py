@@ -32,6 +32,7 @@ KURAL: nexgen_stok_hareket INSERT SADECE Depo mal kabulünde yapılır (FAZ-3A+)
 import sqlite3
 import os
 import io
+import json
 from datetime import datetime, date
 
 from flask import (
@@ -13547,4 +13548,415 @@ def api_parca_secili_isle(batch_kodu):
     finally:
         con.close()
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MODÜL-04 — Numune Revizyon Ekranı
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ─── Sabitler ────────────────────────────────────────────────────────────────
+_M04_NEDEN_SECENEKLER = [
+    {'key': 'renk_tutmadi',      'etiket': 'Renk tutmadı'},
+    {'key': 'cok_koyu',          'etiket': 'Çok koyu'},
+    {'key': 'cok_acik',          'etiket': 'Çok açık'},
+    {'key': 'yanlis_bilgi',      'etiket': 'Yanlış bilgi girdim'},
+    {'key': 'shore_hatali',      'etiket': 'Shore değeri hatalı'},
+    {'key': 'kopurme_sorunu',    'etiket': 'Köpürme sorunu'},
+    {'key': 'diger',             'etiket': 'Diğer'},
+]
+
+_M04_DEGISEN_ALAN_SECENEKLER = [
+    {'key': 'renk_bilesenleri',  'etiket': 'Renk bileşenleri'},
+    {'key': 'gramaj',            'etiket': 'Gramaj / Batch KG'},
+    {'key': 'shore',             'etiket': 'Shore değeri'},
+    {'key': 'notlar',            'etiket': 'Not / Açıklama'},
+    {'key': 'cari',              'etiket': 'Müşteri'},
+]
+
+# Snapshot'ta tutulacak alanlar (nexgen_arge_test → revizyon)
+_M04_SNAPSHOT_ALANLAR = [
+    'test_no', 'test_tipi', 'makina', 'test_batch_kg', 'kaynak_batch_kg',
+    'yeni_renk_adi', 'notlar', 'durum', 'sonuc_notu', 'renk_tuttu',
+    'shore_degeri', 'shore_hedef', 'kopurme_notu', 'cekme_problemi',
+    'genel_aciklama', 'cari_id', 'lot_no', 'talep_referansi',
+    'rf_renk_id', 'arge_kodu', 'numune_orani', 'renk_bilesenleri_json',
+    'kaynak_uretim_varyant_id', 'olusan_uretim_varyant_id',
+    'olusan_renk_varyant_id', 'olusturan_id', 'olusturma_tarihi',
+    'onaylayan_id', 'onay_tarihi', 'onay_notu', 'aktif',
+]
+
+
+def _m04_snapshot_al(cur, test_id):
+    """nexgen_arge_test'ten snapshot dict üretir."""
+    mevcut = [r[1] for r in cur.execute('PRAGMA table_info(nexgen_arge_test)').fetchall()]
+    alanlar = [a for a in _M04_SNAPSHOT_ALANLAR if a in mevcut]
+    row = cur.execute(
+        f'SELECT {", ".join(alanlar)} FROM nexgen_arge_test WHERE id=?', (test_id,)
+    ).fetchone()
+    if not row:
+        return None
+    return dict(zip(alanlar, row))
+
+
+def _m04_fark_hesapla(eski_snap, yeni_snap):
+    """İki snapshot arasındaki farkları [{alan, onceki, yeni, fark}] formatında döner."""
+    farklar = []
+    for alan in set(list(eski_snap.keys()) + list(yeni_snap.keys())):
+        eski_val = eski_snap.get(alan)
+        yeni_val = yeni_snap.get(alan)
+        if eski_val != yeni_val:
+            fark_bilgi = None
+            try:
+                if eski_val is not None and yeni_val is not None:
+                    fark_bilgi = round(float(yeni_val) - float(eski_val), 6)
+            except (TypeError, ValueError):
+                pass
+            farklar.append({
+                'alan':    alan,
+                'onceki':  eski_val,
+                'yeni':    yeni_val,
+                'fark':    fark_bilgi,
+            })
+    return farklar
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GET /nexgen/tablet/arge/revize/<test_id>
+# ─────────────────────────────────────────────────────────────────────────────
+@nexgen_bp.route('/tablet/arge/revize/<int:test_id>')
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def tablet_arge_revize(test_id):
+    """MODÜL-04 — Numune Revizyon Ekranı.
+    Kaydı ve tüm revizyon geçmişini yükler.
+    Sadece okuma işlemi yapar.
+    """
+    con = _db()
+    try:
+        # Ana test kaydı
+        test = con.execute("""
+            SELECT
+                at.id, at.test_no, at.arge_kodu, at.test_tipi,
+                at.yeni_renk_adi, at.makina, at.test_batch_kg,
+                at.numune_orani, at.durum, at.notlar, at.sonuc_notu,
+                at.shore_degeri, at.shore_hedef, at.renk_tuttu,
+                at.kopurme_notu, at.cekme_problemi, at.genel_aciklama,
+                at.olusturma_tarihi, at.onay_tarihi, at.onay_notu,
+                at.aktif_rev_no,
+                at.basarili_mi,
+                at.basarili_yapan_adi,
+                at.basarili_tarihi,
+                at.cari_id,
+                c.unvan  AS cari_unvan,
+                at.kaynak_uretim_varyant_id,
+                uv.boyut AS uretim_boyut,
+                rv.ad    AS renk_varyant_adi,
+                at.lot_no,
+                at.talep_referansi,
+                at.olusturan_id,
+                at.renk_bilesenleri_json
+            FROM nexgen_arge_test at
+            LEFT JOIN nexgen_cari c              ON c.id = at.cari_id
+            LEFT JOIN nexgen_uretim_varyant uv   ON uv.id = at.kaynak_uretim_varyant_id
+            LEFT JOIN nexgen_renk_varyant rv     ON rv.id = uv.renk_varyant_id
+            WHERE at.id = ? AND at.aktif = 1
+        """, (test_id,)).fetchone()
+
+        if not test:
+            return abort(404)
+
+        test = dict(test)
+
+        # Revizyon geçmişi (en yeni üstte)
+        revler_raw = con.execute("""
+            SELECT
+                id, rev_no, onceki_rev_no, neden, ne_degisti, revizyon_notu,
+                snapshot_json, degisiklik_json,
+                olusturan_id, olusturan_adi, olusturma_tarihi,
+                basarili_mi, basarili_yapan_adi, basarili_tarihi, kilitli_mi
+            FROM nexgen_arge_revizyon
+            WHERE test_id = ?
+            ORDER BY rev_no DESC
+        """, (test_id,)).fetchall()
+
+        revler = []
+        for r in revler_raw:
+            rd = dict(r)
+            try:
+                rd['snapshot_json']    = json.loads(rd['snapshot_json'] or '{}')
+            except Exception:
+                rd['snapshot_json']    = {}
+            try:
+                rd['degisiklik_json']  = json.loads(rd['degisiklik_json'] or '[]')
+            except Exception:
+                rd['degisiklik_json']  = []
+            try:
+                rd['ne_degisti']       = json.loads(rd['ne_degisti'] or '[]')
+            except Exception:
+                rd['ne_degisti']       = []
+            revler.append(rd)
+
+        aktif_rev_no = test.get('aktif_rev_no', 0)
+
+        return render_template(
+            'nexgen/modul04_revize.html',
+            test=test,
+            revler=revler,
+            aktif_rev_no=aktif_rev_no,
+            neden_secenekler=_M04_NEDEN_SECENEKLER,
+            degisen_alan_secenekler=_M04_DEGISEN_ALAN_SECENEKLER,
+        )
+    except Exception as e:
+        print(f'[nexgen] tablet_arge_revize hata: {e}')
+        return jsonify({'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# POST /nexgen/api/tablet/arge/revizyon-kaydet
+# ─────────────────────────────────────────────────────────────────────────────
+@nexgen_bp.route('/api/tablet/arge/revizyon-kaydet', methods=['POST'])
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def api_tablet_arge_revizyon_kaydet():
+    """MODÜL-04 — Revizyon Kaydet.
+
+    Beklenen JSON:
+      test_id             : int
+      aktif_rev_no_beklenen: int   (optimistik kilit)
+      neden               : str
+      ne_degisti          : list[str]
+      revizyon_notu       : str
+      degisiklikler       : dict   (alan → yeni_deger)
+    """
+    if not yetki_var('nexgen.tablet.view', 'can_view'):
+        return jsonify({'ok': False, 'hata': 'Yetki yok'}), 403
+
+    data     = request.get_json(silent=True) or {}
+    test_id  = data.get('test_id')
+    beklenen_rev = data.get('aktif_rev_no_beklenen')
+
+    # Temel doğrulama
+    if not test_id or beklenen_rev is None:
+        return jsonify({'ok': False, 'hata': 'test_id ve aktif_rev_no_beklenen gerekli'}), 400
+
+    neden         = (data.get('neden') or '').strip()
+    ne_degisti    = data.get('ne_degisti') or []
+    revizyon_notu = (data.get('revizyon_notu') or '').strip()
+    degisiklikler = data.get('degisiklikler') or {}
+
+    if not neden:
+        return jsonify({'ok': False, 'hata': 'Revizyon nedeni boş bırakılamaz.'}), 400
+
+    kul_id  = _kullanici_id()
+    kul_adi = _kullanici_ad()
+
+    con = _db()
+    try:
+        con.execute('PRAGMA foreign_keys=ON')
+
+        # Kaydın varlığını ve durumunu kontrol et
+        test_row = con.execute(
+            'SELECT id, aktif_rev_no, basarili_mi, aktif FROM nexgen_arge_test WHERE id=?',
+            (test_id,)
+        ).fetchone()
+
+        if not test_row:
+            return jsonify({'ok': False, 'hata': 'Numune bulunamadı.'}), 404
+        if not test_row['aktif']:
+            return jsonify({'ok': False, 'hata': 'Bu numune pasif durumdadır.'}), 400
+        if test_row['basarili_mi']:
+            return jsonify({'ok': False, 'hata': 'Başarılı olarak işaretlenmiş numune revize edilemez.'}), 400
+
+        # Optimistik kilit — çift gönderim / eşzamanlılık koruması
+        gercek_rev = test_row['aktif_rev_no']
+        if gercek_rev != beklenen_rev:
+            return jsonify({
+                'ok': False,
+                'hata': 'Bu numune başka bir işlemle güncellendi. Sayfayı yenileyip tekrar deneyin.',
+                'conflict': True,
+            }), 409
+
+        # Mevcut aktif revizyonun snapshot'ını al
+        aktif_rev_row = con.execute(
+            'SELECT snapshot_json FROM nexgen_arge_revizyon WHERE test_id=? AND rev_no=?',
+            (test_id, gercek_rev)
+        ).fetchone()
+
+        if aktif_rev_row:
+            try:
+                eski_snap = json.loads(aktif_rev_row['snapshot_json'] or '{}')
+            except Exception:
+                eski_snap = {}
+        else:
+            # Fallback: doğrudan tablodan al
+            eski_snap = _m04_snapshot_al(con.cursor(), test_id) or {}
+
+        # Yeni snapshot = eski snapshot + değişiklikler
+        yeni_snap = dict(eski_snap)
+        yeni_snap.update(degisiklikler)
+
+        # Fark hesapla
+        farklar = _m04_fark_hesapla(eski_snap, yeni_snap)
+
+        yeni_rev_no = gercek_rev + 1
+        simdi = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        # Transaction başlat
+        con.execute('BEGIN')
+
+        # 1) Yeni revizyonu ekle
+        con.execute("""
+            INSERT INTO nexgen_arge_revizyon
+                (test_id, rev_no, onceki_rev_no, neden, ne_degisti, revizyon_notu,
+                 snapshot_json, degisiklik_json,
+                 olusturan_id, olusturan_adi, olusturma_tarihi,
+                 basarili_mi, kilitli_mi)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?, 0,0)
+        """, (
+            test_id, yeni_rev_no, gercek_rev,
+            neden,
+            json.dumps(ne_degisti, ensure_ascii=False),
+            revizyon_notu,
+            json.dumps(yeni_snap,  ensure_ascii=False),
+            json.dumps(farklar,    ensure_ascii=False),
+            kul_id, kul_adi, simdi,
+        ))
+
+        # 2) Ana tabloyu güncelle — sadece aktif durumu yansıtacak alanlar
+        guncelle_alanlar = {k: v for k, v in degisiklikler.items()
+                            if k in _M04_SNAPSHOT_ALANLAR}
+        if guncelle_alanlar:
+            set_parcalar  = ', '.join(f'{k} = ?' for k in guncelle_alanlar)
+            set_degerler  = list(guncelle_alanlar.values())
+            con.execute(
+                f'UPDATE nexgen_arge_test SET {set_parcalar}, aktif_rev_no=? WHERE id=?',
+                set_degerler + [yeni_rev_no, test_id]
+            )
+        else:
+            con.execute(
+                'UPDATE nexgen_arge_test SET aktif_rev_no=? WHERE id=?',
+                (yeni_rev_no, test_id)
+            )
+
+        con.execute('COMMIT')
+
+        return jsonify({
+            'ok':        True,
+            'rev_no':    yeni_rev_no,
+            'mesaj':     f'REV-{yeni_rev_no} kaydedildi.',
+        })
+
+    except sqlite3.IntegrityError as e:
+        con.execute('ROLLBACK')
+        if 'UNIQUE' in str(e):
+            return jsonify({
+                'ok': False,
+                'hata': 'Bu revizyon numarası zaten mevcut. Sayfayı yenileyip tekrar deneyin.',
+                'conflict': True,
+            }), 409
+        return jsonify({'ok': False, 'hata': f'Veritabanı hatası: {e}'}), 500
+    except Exception as e:
+        try:
+            con.execute('ROLLBACK')
+        except Exception:
+            pass
+        print(f'[nexgen] api_tablet_arge_revizyon_kaydet hata: {e}')
+        return jsonify({'ok': False, 'hata': f'Sunucu hatası: {str(e)}'}), 500
+    finally:
+        con.close()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# POST /nexgen/api/tablet/arge/deneme-basarili
+# ─────────────────────────────────────────────────────────────────────────────
+@nexgen_bp.route('/api/tablet/arge/deneme-basarili', methods=['POST'])
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def api_tablet_arge_deneme_basarili():
+    """MODÜL-04 — Deneme Başarılı.
+
+    Yeni REV oluşturmaz.
+    Aktif revizyona başarı bilgisi işler ve ana kaydı kilitler.
+
+    Beklenen JSON:
+      test_id             : int
+      aktif_rev_no_beklenen: int  (optimistik kilit)
+    """
+    if not yetki_var('nexgen.tablet.view', 'can_view'):
+        return jsonify({'ok': False, 'hata': 'Yetki yok'}), 403
+
+    data     = request.get_json(silent=True) or {}
+    test_id  = data.get('test_id')
+    beklenen_rev = data.get('aktif_rev_no_beklenen')
+
+    if not test_id or beklenen_rev is None:
+        return jsonify({'ok': False, 'hata': 'test_id ve aktif_rev_no_beklenen gerekli'}), 400
+
+    kul_id  = _kullanici_id()
+    kul_adi = _kullanici_ad()
+
+    con = _db()
+    try:
+        con.execute('PRAGMA foreign_keys=ON')
+
+        test_row = con.execute(
+            'SELECT id, aktif_rev_no, basarili_mi, aktif FROM nexgen_arge_test WHERE id=?',
+            (test_id,)
+        ).fetchone()
+
+        if not test_row:
+            return jsonify({'ok': False, 'hata': 'Numune bulunamadı.'}), 404
+        if not test_row['aktif']:
+            return jsonify({'ok': False, 'hata': 'Bu numune pasif durumdadır.'}), 400
+        if test_row['basarili_mi']:
+            return jsonify({'ok': False, 'hata': 'Bu numune zaten başarılı olarak işaretlenmiş.'}), 400
+
+        gercek_rev = test_row['aktif_rev_no']
+        if gercek_rev != beklenen_rev:
+            return jsonify({
+                'ok': False,
+                'hata': 'Bu numune başka bir işlemle güncellendi. Sayfayı yenileyip tekrar deneyin.',
+                'conflict': True,
+            }), 409
+
+        simdi = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        con.execute('BEGIN')
+
+        # Aktif revizyona başarı bilgisi işle
+        con.execute("""
+            UPDATE nexgen_arge_revizyon
+               SET basarili_mi        = 1,
+                   basarili_yapan_id  = ?,
+                   basarili_yapan_adi = ?,
+                   basarili_tarihi    = ?,
+                   kilitli_mi         = 1
+             WHERE test_id = ? AND rev_no = ?
+        """, (kul_id, kul_adi, simdi, test_id, gercek_rev))
+
+        # Ana kaydı güncelle
+        con.execute("""
+            UPDATE nexgen_arge_test
+               SET basarili_mi        = 1,
+                   basarili_yapan_id  = ?,
+                   basarili_yapan_adi = ?,
+                   basarili_tarihi    = ?,
+                   durum              = 'BASARILI'
+             WHERE id = ?
+        """, (kul_id, kul_adi, simdi, test_id))
+
+        con.execute('COMMIT')
+
+        return jsonify({
+            'ok':    True,
+            'mesaj': 'Deneme başarılı olarak işaretlendi.',
+        })
+
+    except Exception as e:
+        try:
+            con.execute('ROLLBACK')
+        except Exception:
+            pass
+        print(f'[nexgen] api_tablet_arge_deneme_basarili hata: {e}')
+        return jsonify({'ok': False, 'hata': f'Sunucu hatası: {str(e)}'}), 500
+    finally:
+        con.close()
 

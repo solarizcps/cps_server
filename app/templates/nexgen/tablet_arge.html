@@ -133,14 +133,15 @@
           </div>
         </a>
 
-        {# KART 4 — Numuneyi Revize Et #}
-        <a href="#" class="ag-card ag-card-sm" data-modul="revize">
+        {# KART 4 — Numuneyi Revize Et (MODÜL-04) #}
+        <a href="#" class="ag-card ag-card-sm" id="ag-kart-revize"
+           onclick="agRevizeListeAc(event)">
           <div class="ag-card-left-strip ag-strip-steel"></div>
           <div class="ag-card-ikon ag-ikon-bg-steel">
             <svg viewBox="0 0 28 28" fill="none" stroke="#3D5A7A"
                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="4 8 4 4 8 4"/>
-              <path d="M4 4 A12 12 0 1 1 4 20"/>
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+              <path d="M17.5 2.5a2 2 0 0 1 2.829 2.829L12 13.657 8 15l1.343-4z"/>
             </svg>
           </div>
           <div class="ag-card-metin">
@@ -199,6 +200,54 @@
   </main>
 
 </div>{# /ag-shell #}
+
+{# ═══════════════════════════════════════
+   OVERLAY — MODÜL-04 Numune Seç
+═══════════════════════════════════════ #}
+<div id="ag-revize-overlay" class="ag-overlay" style="display:none" onclick="agRevizeKapat(event)">
+  <div class="ag-modal ag-modal-revize" onclick="event.stopPropagation()">
+    <div class="ag-modal-top">
+      <span>Hangi numuneyi revize etmek istiyorsun?</span>
+      <button class="ag-modal-x" onclick="agRevizeKapat()">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor"
+             stroke-width="2.2" stroke-linecap="round" width="16" height="16">
+          <path d="M4 4l12 12M16 4L4 16"/>
+        </svg>
+      </button>
+    </div>
+    <div class="ag-modal-body" style="padding:0">
+      {% if son_numuneler %}
+      <div class="ag-revize-liste">
+        {% for t in son_numuneler %}
+        <a href="{{ url_for('nexgen.tablet_arge_revize', test_id=t.id) }}"
+           class="ag-revize-satir">
+          <div class="ag-revize-sol">
+            <div class="ag-revize-kod">{{ t.test_no }}</div>
+            <div class="ag-revize-ad">
+              {{ t.yeni_renk_adi or t.formul_ad or '—' }}
+              {% if t.cari_unvan %} · {{ t.cari_unvan }}{% endif %}
+            </div>
+          </div>
+          <div class="ag-revize-sag">
+            <span class="ag-revize-durum ag-rd-{{ (t.durum or 'TASLAK')|lower }}">
+              {{ t.durum or 'TASLAK' }}
+            </span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div style="padding:20px; text-align:center; color:#64748B; font-size:14px">
+        Henüz numune kaydı yok.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
 
 {# ═══════════════════════════════════════
    OVERLAY — Yakında
@@ -718,6 +767,55 @@ html, body { height: 100%; overflow: hidden; }
   font-weight: 500;
 }
 
+/* ── MODÜL-04 Revize Liste Overlay ── */
+.ag-modal-revize {
+  max-width: 540px;
+  padding: 0;
+}
+.ag-modal-revize .ag-modal-top {
+  background: var(--navy);
+  color: #fff;
+  border-radius: 12px 12px 0 0;
+  padding: 14px 20px;
+  font-size: 15px;
+  font-weight: 700;
+}
+.ag-modal-revize .ag-modal-x {
+  color: rgba(255,255,255,.8);
+}
+.ag-revize-liste {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.ag-revize-satir {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 20px;
+  border-top: 1px solid var(--border);
+  text-decoration: none;
+  color: var(--navy);
+  transition: background .15s;
+}
+.ag-revize-satir:first-child { border-top: none; }
+.ag-revize-satir:hover { background: var(--light); }
+.ag-revize-sol { flex: 1; }
+.ag-revize-kod { font-size: 13px; font-weight: 700; }
+.ag-revize-ad  { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.ag-revize-sag {
+  display: flex; align-items: center; gap: 8px;
+  color: var(--muted);
+}
+.ag-revize-durum {
+  font-size: 11px; font-weight: 700;
+  padding: 2px 8px; border-radius: 10px;
+  text-transform: uppercase;
+}
+.ag-rd-taslak    { background: #EFF3FA; color: #4A6FA5; }
+.ag-rd-test_edildi { background: #FFF8E1; color: #B45309; }
+.ag-rd-onaylandi { background: #E8F5E9; color: #1E7C3D; }
+.ag-rd-basarili  { background: #E8F5E9; color: #1E7C3D; border:1px solid #A5D6A7; }
+
 /* ── Responsive ── */
 @media (max-width: 680px) {
   .ag-bar      { padding: 0 14px; height: 56px; }
@@ -760,8 +858,10 @@ document.querySelectorAll('.ag-card').forEach(function(kart) {
   kart.addEventListener('click', function(e) {
     var id   = this.getAttribute('data-modul');
     var href = this.getAttribute('href');
-    /* Kart 1 gerçek URL'e sahip — tarayıcı normal geçiş yapar */
+    /* Gerçek URL'e sahip kartlar — tarayıcı normal geçiş yapar */
     if(href && href !== '#') return;
+    /* MODÜL-04 — kendi onclick'i var, buraya gelirse atla */
+    if(id === 'revize') return;
     e.preventDefault();
     document.getElementById('ag-modal-baslik').textContent = MODUL_ADLARI[id] || id;
     document.getElementById('ag-overlay').style.display = 'flex';
@@ -771,8 +871,22 @@ document.querySelectorAll('.ag-card').forEach(function(kart) {
 function agKapat() {
   document.getElementById('ag-overlay').style.display = 'none';
 }
+
+/* ── MODÜL-04 Revize overlay ── */
+function agRevizeListeAc(e) {
+  e.preventDefault();
+  document.getElementById('ag-revize-overlay').style.display = 'flex';
+}
+function agRevizeKapat(e) {
+  if(e && e.target !== document.getElementById('ag-revize-overlay')) return;
+  document.getElementById('ag-revize-overlay').style.display = 'none';
+}
+
 document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') agKapat();
+  if (e.key === 'Escape') {
+    agKapat();
+    document.getElementById('ag-revize-overlay').style.display = 'none';
+  }
 });
 </script>
 
