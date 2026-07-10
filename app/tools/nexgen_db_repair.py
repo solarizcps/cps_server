@@ -1386,6 +1386,84 @@ def step3_rapor(cur, log):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# MIG 091 — Vedat AR-GE kullanicisi + AR-GE Operatoru rolu
+# ──────────────────────────────────────────────────────────────────────────────
+def mig091(cur, con, log):
+    """Vedat sistem_kullanici + AR-GE Operatoru rolu + nexgen.tablet.view yetkisi."""
+    from datetime import datetime as _dt
+    tag = "[091]"
+    simdi = _dt.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    ROL_ID   = 42
+    ROL_AD   = 'AR-GE Operatoru'
+    ROL_ACIK = 'NexGen AR-GE tablet operatoru. Formul testi, revizyon, renk denemesi.'
+    ROL_RENK = '#0891b2'
+    YETKI_KODLAR = ['nexgen.view', 'nexgen.tablet.view', 'nexgen.recete.view']
+    VEDAT_KADI   = 'vedat'
+    VEDAT_ADSOYAD = 'Vedat (AR-GE)'
+    VEDAT_EMAIL   = 'vedat@solariz.com.tr'
+    VEDAT_SIFRE   = '123456'
+    VEDAT_TIP     = 'sistem'
+
+    # Rol
+    mevcut_rol = cur.execute("SELECT Id FROM sistem_rol WHERE Id=?", (ROL_ID,)).fetchone()
+    if not mevcut_rol:
+        cur.execute("""
+            INSERT INTO sistem_rol(Id,Ad,Aciklama,Renk,Aktif,SuperAdmin,OlusturmaTarih,OlusturanKullanici)
+            VALUES(?,?,?,?,1,0,?,'migration_091')
+        """, (ROL_ID, ROL_AD, ROL_ACIK, ROL_RENK, simdi))
+        con.commit()
+        log.append(f"  {tag} sistem_rol {ROL_ID} olusturuldu.")
+
+    # Yetki atamalari
+    for kod in YETKI_KODLAR:
+        yr = cur.execute("SELECT Id FROM sistem_yetki WHERE Kod=?", (kod,)).fetchone()
+        if not yr:
+            continue
+        yid = yr['Id']
+        if not cur.execute("SELECT Id FROM sistem_rol_yetki WHERE RolId=? AND YetkiId=?", (ROL_ID, yid)).fetchone():
+            cur.execute("""
+                INSERT INTO sistem_rol_yetki
+                    (RolId,YetkiId,Gorebilir,Duzenleyebilir,
+                     can_view,can_create,can_update,can_delete,can_approve,can_report,can_manage)
+                VALUES(?,?,1,1,1,1,1,0,0,1,0)
+            """, (ROL_ID, yid))
+    con.commit()
+
+    # sistem_kullanici
+    sk = cur.execute("SELECT Id FROM sistem_kullanici WHERE KullaniciAdi=?", (VEDAT_KADI,)).fetchone()
+    if not sk:
+        cur.execute("""
+            INSERT INTO sistem_kullanici
+                (KullaniciAdi,AdSoyad,Email,Sifre,RolId,Rol,
+                 Aktif,ZorunluSifreDegistir,OlusturmaTarih,OlusturanKullanici,Tip)
+            VALUES(?,?,?,?,?,?,1,1,?,'migration_091',?)
+        """, (VEDAT_KADI, VEDAT_ADSOYAD, VEDAT_EMAIL, VEDAT_SIFRE, ROL_ID, ROL_AD, simdi, VEDAT_TIP))
+        con.commit()
+        vedat_id = cur.lastrowid
+        log.append(f"  {tag} sistem_kullanici 'vedat' olusturuldu Id={vedat_id}")
+    else:
+        vedat_id = sk['Id']
+        log.append(f"  {tag} sistem_kullanici 'vedat' mevcut Id={vedat_id}")
+
+    # kullanici_profil
+    profil = cur.execute(
+        "SELECT id FROM kullanici_profil WHERE kaynak='sistem_kullanici' AND kaynak_id=?", (vedat_id,)
+    ).fetchone()
+    if not profil:
+        p2 = cur.execute("SELECT id FROM kullanici_profil WHERE kullanici_adi=?", (VEDAT_KADI,)).fetchone()
+        if not p2:
+            cur.execute("""
+                INSERT INTO kullanici_profil
+                    (gercek_ad,kullanici_adi,departman,unvan,profil_tipi,aktif,kaynak,kaynak_id,created_at)
+                VALUES(?,?,?,?,?,1,?,?,?)
+            """, (VEDAT_ADSOYAD, VEDAT_KADI, 'AR-GE', 'AR-GE Operatoru', 'calisan',
+                  'sistem_kullanici', vedat_id, simdi))
+            con.commit()
+            log.append(f"  {tag} kullanici_profil 'vedat' olusturuldu.")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # MAIN
 # ──────────────────────────────────────────────────────────────────────────────
 def main():
@@ -1442,6 +1520,7 @@ def main():
         ("MIG 086 — stok_rezerv",                    lambda: mig086(cur, con, log)),
         ("MIG 088-089 — uretim_plan_boyut",          lambda: mig088_089(cur, con, log)),
         ("MIG 090 — arge_revizyon (MODÜL-04)",        lambda: mig090(cur, con, log)),
+        ("MIG 091 — vedat arge kullanici",             lambda: mig091(cur, con, log)),
     ]
 
     for aciklama, fn in steps:

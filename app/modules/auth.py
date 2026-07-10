@@ -259,6 +259,9 @@ def login():
                 # OET_LOGIN_REDIRECT_V1 (09.06.2026): Online E-Ticaret rolu direkt OET
                 elif u.get('RolAd') == 'Online E-Ticaret':
                     nxt = '/online-eticaret/'
+                # VEDAT_ARGE_REDIRECT_V1 (10.07.2026): AR-GE Operatörü direkt tablet hub
+                elif u.get('RolAd') == 'AR-GE Operatörü':
+                    nxt = '/nexgen/tablet/arge'
                 else:
                     nxt = '/'
             return redirect(nxt)
