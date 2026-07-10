@@ -313,6 +313,31 @@ def hata_500(e):
 # BAŞLAT
 # ============================================================
 if __name__ == '__main__':
+    # -------------------------------------------------------
+    # BAŞLANGIÇ KORUMASI: mock_data.db yoksa sessizce devam etme
+    # -------------------------------------------------------
+    import os as _os
+    _db_check = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), 'mock_data.db')
+    if not _os.path.exists(_db_check):
+        print("=" * 60)
+        print("  [KRITIK HATA] Canlı veritabanı bulunamadı!")
+        print(f"  Beklenen konum: {_db_check}")
+        print("  Uygulama başlatılmadı.")
+        print("  Çözüm: mock_data.db dosyasını bu konuma kopyalayın,")
+        print("         ardından uygulamayı yeniden başlatın.")
+        print("=" * 60)
+        import sys as _sys
+        _sys.exit(1)
+    elif _os.path.getsize(_db_check) < 1024:
+        print("=" * 60)
+        print("  [KRITIK HATA] Veritabanı dosyası boş veya bozuk!")
+        print(f"  Konum: {_db_check}")
+        print(f"  Boyut: {_os.path.getsize(_db_check)} bytes (min 1024 bekleniyor)")
+        print("  Uygulama başlatılmadı.")
+        print("=" * 60)
+        import sys as _sys
+        _sys.exit(1)
+    # -------------------------------------------------------
     print("=" * 60)
     print(f"  CPS DEV — Faz 1")
     print(f"  DB_MODE: {Config.DB_MODE}")

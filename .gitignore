@@ -151,3 +151,27 @@ app/static/**/*.YEDEK_*
 app/static/**/*_backup_*
 app/static/**/*ENJ_*backup*
 
+# =====================================================================
+# Canlı SQLite veritabanı — Git tarafından takip edilmez
+# Fiziksel olarak sunucuda kalır; git pull/checkout/reset dokunamaz.
+# =====================================================================
+
+# Ana runtime DB
+/app/mock_data.db
+/app/mock_data.db-wal
+/app/mock_data.db-shm
+/app/mock_data.db-journal
+
+# Otomatik repair / timestamp yedekleri (sunucu tarafı)
+/app/mock_data_backup_*.db
+/app/mock_data_after_git_reset_*.db
+/app/mock_data_before_git_untrack_*.db
+
+# SQLite geçici .bak dosyaları (app/ altındaki tüm .bak_ yedekler)
+/app/mock_data.db.bak_*
+
+# backups/ klasörü zaten yukarıda kapsanıyor (/backups/)
+# NOT: app/modules/mock_data.db (boş, 0 byte) kasıtlı olarak repoda tutuluyor.
+# NOT: app/solariz_dev.db ve app/5055_snapshot/solariz.db kasıtlı repoda.
+# Bu dosyalara genel *.db kuralı uygulanmamıştır.
+
