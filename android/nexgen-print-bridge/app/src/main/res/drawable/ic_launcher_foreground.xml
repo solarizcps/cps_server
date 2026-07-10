@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Yazıcı ikonu: NexGen Print Bridge -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,38 L78,38 L78,58 L30,58 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M36,58 L36,78 L72,78 L72,58 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M36,28 L72,28 L72,40 L36,40 Z" />
+    <path
+        android:fillColor="#7C3AED"
+        android:pathData="M42,64 L66,64 L66,68 L42,68 Z" />
+    <path
+        android:fillColor="#7C3AED"
+        android:pathData="M42,70 L58,70 L58,74 L42,74 Z" />
+    <circle
+        android:fillColor="#7C3AED"
+        android:cx="70"
+        android:cy="48"
+        android:r="4" />
+</vector>

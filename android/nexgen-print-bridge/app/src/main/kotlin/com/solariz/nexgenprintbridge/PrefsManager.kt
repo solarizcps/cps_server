@@ -40,7 +40,7 @@ class PrefsManager private constructor(context: Context) {
         private const val KEY_PRINTER_MAC   = "printer_mac"
         private const val KEY_PRINTER_NAME  = "printer_name"
         private const val KEY_SERVER_URL    = "server_url"
-        private const val DEFAULT_SERVER_URL = "http://192.168.1.100:8080"
+        private const val DEFAULT_SERVER_URL = "http://192.168.1.16:8080"
 
         @Volatile
         private var instance: PrefsManager? = null

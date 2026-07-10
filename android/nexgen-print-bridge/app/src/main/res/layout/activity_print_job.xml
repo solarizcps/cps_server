@@ -13,7 +13,7 @@
         android:orientation="vertical"
         android:gravity="center"
         android:background="@drawable/card_bg"
-        android:margin="32dp"
+        android:layout_margin="32dp"
         android:padding="32dp">
 
         <!-- Spinner -->
