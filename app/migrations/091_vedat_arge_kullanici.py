@@ -30,8 +30,8 @@ VERSION = '091'
 VEDAT_KULLANICI_ADI = 'vedat'
 VEDAT_AD_SOYAD      = 'Vedat (AR-GE)'
 VEDAT_EMAIL         = 'vedat@solariz.com.tr'
-VEDAT_SIFRE         = '123456'          # İlk giriş şifresi — değiştirilmeli
-VEDAT_ZORUNLU       = 1                 # İlk girişte şifre değiştirme zorunlu
+VEDAT_SIFRE         = '147258'          # Gerçek şifre
+VEDAT_ZORUNLU       = 0                 # Şifre değiştirme zorunlu değil
 VEDAT_TIP           = 'sistem'
 VEDAT_DEPARTMAN     = 'AR-GE'
 
@@ -46,6 +46,7 @@ YETKI_KODLAR = [
     'nexgen.view',           # Modül genel görüntüleme
     'nexgen.tablet.view',    # AR-GE tablet ana erişim
     'nexgen.recete.view',    # Reçete görüntüleme (önizleme için)
+    'tasks',                 # Görevler modülü görüntüleme
 ]
 # VERILMEYECEKLER: nexgen.satinalma.*, nexgen.fiyat.*, nexgen.stok.manage,
 #                  nexgen.recete.manage, nexgen.recete.approve,
@@ -188,7 +189,7 @@ def run():
     for l in log:
         print(l)
     print(f'[091] Özet: {degisim}')
-    print(f'[091] NOT: Vedat şifresi "{VEDAT_SIFRE}" — ilk girişte değiştirme zorunlu (ZorunluSifreDegistir=1).')
+    print(f'[091] NOT: Vedat şifresi "{VEDAT_SIFRE}".')
     return degisim
 
 

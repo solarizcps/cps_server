@@ -312,6 +312,23 @@ def sifre_degistir():
                 session['kullanici']['Sifre'] = yeni
                 session['kullanici']['ZorunluSifreDegistir'] = 0
                 basarili = True
+                # Sifre degistirme sonrasi rol bazli yonlendirme
+                _rol_ad = u.get('RolAd') or (
+                    session['kullanici'].get('Rol') or
+                    session['kullanici'].get('RolAd')
+                )
+                if _rol_ad == 'AR-GE Operatoru' or _rol_ad == 'AR-GE Operatörü':
+                    return redirect('/nexgen/tablet/arge')
+                elif u.get('Tip') == 'personel':
+                    return redirect('/uretim/')
+                elif u.get('Tip') == 'usta':
+                    return redirect('/hedef/')
+                elif _rol_ad == 'Enjeksiyon':
+                    return redirect('/enjeksiyon/')
+                elif _rol_ad == 'Online E-Ticaret':
+                    return redirect('/online-eticaret/')
+                else:
+                    return redirect('/')
     return render_template('sifre_degistir.html',
                            hata=hata, basarili=basarili,
                            zorunlu=bool(u.get('ZorunluSifreDegistir')))

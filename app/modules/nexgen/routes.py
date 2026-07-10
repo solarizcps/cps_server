@@ -6990,10 +6990,11 @@ def tablet_arge():
         ).fetchall()
         cariler = [dict(c) for c in cariler_raw]
 
-        # Son 8 numune (sol panel)
+        # Son numuneler (popup için — arama + son 3 + tam liste)
         son_numuneler_raw = con.execute("""
-            SELECT t.id, t.test_no, t.durum, t.yeni_renk_adi, t.test_batch_kg,
-                   t.olusturma_tarihi,
+            SELECT t.id, t.test_no, t.arge_kodu, t.durum,
+                   t.yeni_renk_adi, t.test_batch_kg,
+                   t.olusturma_tarihi, t.aktif_rev_no,
                    f.ad AS formul_ad,
                    c.unvan AS cari_unvan,
                    ku.KullaniciAdi AS olusturan_ad
@@ -7004,7 +7005,7 @@ def tablet_arge():
             LEFT JOIN nexgen_cari c       ON c.id  = t.cari_id
             LEFT JOIN sistem_kullanici ku ON ku.Id  = t.olusturan_id
             WHERE t.aktif = 1
-            ORDER BY t.id DESC LIMIT 8
+            ORDER BY t.id DESC LIMIT 20
         """).fetchall()
         son_numuneler = [dict(r) for r in son_numuneler_raw]
 
@@ -13959,4 +13960,805 @@ def api_tablet_arge_deneme_basarili():
         return jsonify({'ok': False, 'hata': f'Sunucu hatası: {str(e)}'}), 500
     finally:
         con.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MODÜL-05 — AR-GE NUMUNE ETİKETİ / BARKOD FAZ-1
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Kapsam: nexgen_arge_etiket, nexgen_arge_etiket_yazdirma, CODE128 SVG,
+#         browser print (40×80 mm), yeniden baskı, numune sırası
+#
+# TALEP TARİHİ NOTU: NX-AR ile NX-RT arasında doğrudan FK bağlantısı
+# bulunmamaktadır (talep_referansi serbest metin, ilişki yok). Bu nedenle
+# talep_tarihi = nexgen_arge_test.olusturma_tarihi (fallback) kullanılmaktadır.
+# İleride NX-RT bağlantısı kurulursa bu helper güncellenmeli.
+#
+# NUMUNE TARİHİ: Etiket oluşturulduğu günün tarihi (fiziksel numune tarihi).
+# Revizyon tarihi değil. Yeniden baskıda tarih değişmez.
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+import re as _re
+
+
+# ── Merkezi barkod kimlik üretici ─────────────────────────────────────────────
+
+def _m05_barkod_kimlik(arge_kodu, rev_no, numune_no):
+    """
+    NX-ARGE-{TIP}{KOD}-R{REV:02d}-N{NUM:02d}
+
+    Kural:
+      NX-AR-0004  → tip='AR',  numkod='0004'  → NX-ARGE-AR0004-R00-N01
+      NX-RT-0005  → tip='RT',  numkod='0005'  → NX-ARGE-RT0005-R00-N01
+      NX-ARF-0003 → tip='ARF', numkod='0003'  → NX-ARGE-ARF0003-R00-N01
+    Tip prefiksi dahil edilir — aynı numara farklı tip kaynaklarda çakışmaz.
+    Türkçe karakter yok, boşluk yok, tire sadece bölümleri ayırıyor.
+    """
+    if not arge_kodu:
+        arge_kodu = 'BILINMIYOR'
+
+    kodu = str(arge_kodu).strip().upper()
+
+    # NX-AR-XXXX / NX-RT-XXXX / NX-RF-XXXX / NX-ARF-XXXX → tip + numkod
+    m = _re.match(r'^NX-(AR|RT|RF|ARF)-(.+)$', kodu)
+    if m:
+        tip    = m.group(1)                            # AR, RT, RF, ARF
+        parca  = m.group(2)
+        numkod = _re.sub(r'[^A-Z0-9]', '', parca)     # sadece alfanümerik
+        temiz  = tip + (numkod or 'X')
+    else:
+        # Fallback: tüm kodu temizle
+        temiz = _re.sub(r'[^A-Z0-9]', '', kodu)
+
+    if not temiz:
+        temiz = 'BILINMIYOR'
+
+    return f"NX-ARGE-{temiz}-R{int(rev_no):02d}-N{int(numune_no):02d}"
+
+
+# ── CODE128 SVG üretici ────────────────────────────────────────────────────────
+
+# decompose() sembol haritası:
+# Büyük harf = bar  (A=1x, B=2x, C=3x, D=4x birim)
+# Küçük harf = boşluk (a=1x, b=2x, c=3x, d=4x birim)
+_C128_BAR = {'A': 1, 'B': 2, 'C': 3, 'D': 4}
+_C128_SP  = {'a': 1, 'b': 2, 'c': 3, 'd': 4}
+
+
+def _m05_code128_svg(deger, bar_height=38, bar_width=1.15, font_size=7):
+    """
+    Gerçek CODE128 barkodu SVG string olarak döner.
+    Kullanım: <img src="data:image/svg+xml;base64,...">
+    Kütüphane: reportlab.graphics.barcode.code128.Code128 (mevcut, test edildi)
+    """
+    from reportlab.graphics.barcode.code128 import Code128 as _C128
+    import base64 as _b64
+
+    bc = _C128(
+        str(deger),
+        barWidth=bar_width,
+        barHeight=bar_height,
+        humanReadable=True,
+        fontSize=font_size,
+        lquiet=6,
+        rquiet=6,
+    )
+    bc.validate()
+    bc.encode()
+    bars_str = bc.decompose()
+
+    total_w = bc.width
+    text_h  = font_size + 4
+    total_h = bar_height + text_h
+
+    svg = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" '
+        f'width="{total_w:.2f}" height="{total_h:.2f}" '
+        f'viewBox="0 0 {total_w:.2f} {total_h:.2f}">'
+    ]
+    svg.append(f'<rect width="{total_w:.2f}" height="{total_h:.2f}" fill="white"/>')
+
+    x = 0.0
+    is_bar = True
+    for ch in bars_str:
+        if is_bar:
+            w = _C128_BAR.get(ch, 1) * bar_width
+            svg.append(
+                f'<rect x="{x:.3f}" y="0" width="{w:.3f}" '
+                f'height="{bar_height:.1f}" fill="#000000"/>'
+            )
+        else:
+            w = _C128_SP.get(ch, 1) * bar_width
+        x += w
+        is_bar = not is_bar
+
+    # Okunabilir metin
+    cx = total_w / 2
+    svg.append(
+        f'<text x="{cx:.2f}" y="{bar_height + font_size:.1f}" '
+        f'text-anchor="middle" font-family="Courier New,monospace" '
+        f'font-size="{font_size}px" fill="#000000">{deger}</text>'
+    )
+
+    svg.append('</svg>')
+    svg_str = ''.join(svg)
+    b64 = _b64.b64encode(svg_str.encode('utf-8')).decode('ascii')
+    return f"data:image/svg+xml;base64,{b64}"
+
+
+# ── Endpoint: Etiket önizleme (test_id bazlı) ────────────────────────────────
+# GET /nexgen/tablet/arge/etiket/test/<int:test_id>/onizleme
+
+@nexgen_bp.route('/tablet/arge/etiket/test/<int:test_id>/onizleme')
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def tablet_arge_etiket_onizleme(test_id):
+    """MODÜL-05 — Etiket önizleme (modal için JSON).
+    test_id bazlı çalışır — revizyon kaydı olmasa da çalışır.
+    aktif_rev_no kullanılır (0 = ilk kayıt).
+    """
+    con = _db()
+    try:
+        # Test kaydını doğrula
+        test = con.execute("""
+            SELECT t.id, t.arge_kodu, t.cari_id, t.aktif_rev_no,
+                   t.olusturma_tarihi AS talep_tarihi,
+                   c.unvan AS cari_adi
+            FROM nexgen_arge_test t
+            LEFT JOIN nexgen_cari c ON c.id = t.cari_id
+            WHERE t.id = ? AND t.aktif = 1
+        """, (test_id,)).fetchone()
+
+        if not test:
+            return jsonify({'ok': False, 'hata': 'AR-GE kaydı bulunamadı'}), 404
+
+        test     = dict(test)
+        rev_no   = test['aktif_rev_no'] or 0
+
+        # Mevcut etiketler (bu test + aktif rev_no için)
+        etiketler = con.execute("""
+            SELECT id, numune_no, barkod_kodu, durum,
+                   yazdirma_sayisi, ilk_yazdirma_tarihi,
+                   numune_tarihi, olusturan_kullanici_adi
+            FROM nexgen_arge_etiket
+            WHERE arge_kayit_id = ? AND rev_no = ?
+            ORDER BY numune_no
+        """, (test_id, rev_no)).fetchall()
+
+        return jsonify({
+            'ok': True,
+            'revizyon': {
+                'id':          None,
+                'test_id':     test_id,
+                'rev_no':      rev_no,
+                'arge_kodu':   test['arge_kodu'] or '—',
+                'cari_id':     test['cari_id'],
+                'cari_adi':    test['cari_adi'] or '—',
+                'talep_tarihi': (test['talep_tarihi'] or '')[:10],
+            },
+            'etiketler': [dict(e) for e in etiketler],
+        })
+    finally:
+        con.close()
+
+
+# ── Endpoint: Yeni numune etiketi oluştur (test_id bazlı) ────────────────────
+# POST /nexgen/tablet/arge/etiket/test/<int:test_id>/yeni-numune
+
+@nexgen_bp.route('/tablet/arge/etiket/test/<int:test_id>/yeni-numune', methods=['POST'])
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def tablet_arge_etiket_yeni_numune(test_id):
+    """MODÜL-05 — Yeni fiziksel numune oluştur (yeni N numarası).
+    test_id bazlı — revizyon kaydı olmasa da çalışır.
+    Transaction + UNIQUE ile eşzamanlı çakışma önlenir.
+    """
+    from datetime import datetime as _dt, date as _date
+
+    kon = _db()
+    try:
+        # Test doğrula
+        test = kon.execute("""
+            SELECT t.id, t.arge_kodu, t.cari_id, t.aktif_rev_no,
+                   t.olusturma_tarihi AS talep_tarihi,
+                   c.unvan AS cari_adi
+            FROM nexgen_arge_test t
+            LEFT JOIN nexgen_cari c ON c.id = t.cari_id
+            WHERE t.id = ? AND t.aktif = 1
+        """, (test_id,)).fetchone()
+
+        if not test:
+            return jsonify({'ok': False, 'hata': 'AR-GE kaydı bulunamadı'}), 404
+
+        test = dict(test)
+        rev_no        = test['aktif_rev_no'] or 0
+        kullanici_id  = session.get('kullanici_id') or session.get('id')
+        kullanici_adi = _kullanici_ad()
+        simdi         = _dt.now().strftime('%Y-%m-%d %H:%M:%S')
+        bugun         = _date.today().strftime('%Y-%m-%d')
+
+        # BEGIN IMMEDIATE — eşzamanlı N üretimini önler
+        kon.execute('BEGIN IMMEDIATE')
+
+        # Bir sonraki numune_no al
+        maks = kon.execute(
+            "SELECT COALESCE(MAX(numune_no), 0) FROM nexgen_arge_etiket "
+            "WHERE arge_kayit_id = ? AND rev_no = ?",
+            (test_id, rev_no)
+        ).fetchone()[0]
+        numune_no = maks + 1
+
+        barkod_kodu = _m05_barkod_kimlik(
+            test['arge_kodu'], rev_no, numune_no
+        )
+
+        # TALEP TARİHİ: nexgen_arge_test.olusturma_tarihi (fallback, NX-RT FK yok)
+        talep_tarihi  = (test['talep_tarihi'] or '')[:10]
+        # NUMUNE TARİHİ: fiziksel numunenin üretildiği gün (bugün)
+        numune_tarihi = bugun
+
+        kon.execute("""
+            INSERT INTO nexgen_arge_etiket
+              (arge_kayit_id, revizyon_id, arge_kodu, rev_no, numune_no,
+               barkod_kodu, cari_id, cari_adi_snapshot, talep_tarihi,
+               numune_tarihi, olusturan_kullanici_id, olusturan_kullanici_adi,
+               yazdirma_sayisi, created_at, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,0,?,?)
+        """, (
+            test_id, None, test['arge_kodu'], rev_no,
+            numune_no, barkod_kodu, test['cari_id'], test['cari_adi'],
+            talep_tarihi, numune_tarihi,
+            kullanici_id, kullanici_adi, simdi, simdi
+        ))
+
+        etiket_id = kon.execute("SELECT last_insert_rowid()").fetchone()[0]
+        kon.execute('COMMIT')
+
+        return jsonify({
+            'ok':          True,
+            'etiket_id':   etiket_id,
+            'numune_no':   numune_no,
+            'barkod_kodu': barkod_kodu,
+        })
+
+    except Exception as e:
+        try:
+            kon.execute('ROLLBACK')
+        except Exception:
+            pass
+        print(f'[nexgen] etiket_yeni_numune hata: {e}')
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        kon.close()
+
+
+# ── Endpoint: Yeniden bas ────────────────────────────────────────────────────
+# POST /nexgen/tablet/arge/etiket/<int:etiket_id>/yeniden-bas
+
+@nexgen_bp.route('/tablet/arge/etiket/<int:etiket_id>/yeniden-bas', methods=['POST'])
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def tablet_arge_etiket_yeniden_bas(etiket_id):
+    """MODÜL-05 — Mevcut etiketi yeniden bas.
+    Yeni N numarası üretilmez. Sadece yazdırma sayacı güncellenir.
+    """
+    from datetime import datetime as _dt
+
+    data        = request.get_json(silent=True) or {}
+    kopya_sayisi = max(1, int(data.get('kopya_sayisi', 1)))
+
+    kon = _db()
+    try:
+        etiket = kon.execute(
+            "SELECT * FROM nexgen_arge_etiket WHERE id = ?", (etiket_id,)
+        ).fetchone()
+
+        if not etiket:
+            return jsonify({'ok': False, 'hata': 'Etiket bulunamadı'}), 404
+
+        etiket = dict(etiket)
+        if etiket['durum'] == 'IPTAL':
+            return jsonify({'ok': False, 'hata': 'Bu etiket iptal edilmiş'}), 400
+
+        kullanici_id  = session.get('kullanici_id') or session.get('id')
+        kullanici_adi = _kullanici_ad()
+        simdi         = _dt.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        # Yazdırma sayacı güncelle; numune_tarihi değişmez
+        kon.execute("""
+            UPDATE nexgen_arge_etiket
+            SET yazdirma_sayisi    = yazdirma_sayisi + ?,
+                ilk_yazdirma_tarihi = COALESCE(ilk_yazdirma_tarihi, ?),
+                son_yazdirma_tarihi = ?,
+                updated_at          = ?
+            WHERE id = ?
+        """, (kopya_sayisi, simdi, simdi, simdi, etiket_id))
+
+        # Yazdırma logu
+        kon.execute("""
+            INSERT INTO nexgen_arge_etiket_yazdirma
+              (etiket_id, barkod_kodu, kullanici_id, kullanici_adi,
+               kopya_sayisi, ilk_basim_mi)
+            VALUES (?,?,?,?,?,0)
+        """, (etiket_id, etiket['barkod_kodu'], kullanici_id, kullanici_adi, kopya_sayisi))
+
+        kon.commit()
+
+        return jsonify({'ok': True, 'barkod_kodu': etiket['barkod_kodu']})
+
+    except Exception as e:
+        print(f'[nexgen] etiket_yeniden_bas hata: {e}')
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        kon.close()
+
+
+# ── Endpoint: Print sayfası ───────────────────────────────────────────────────
+# GET /nexgen/tablet/arge/etiket/<int:etiket_id>/print
+
+@nexgen_bp.route('/tablet/arge/etiket/<int:etiket_id>/print')
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def tablet_arge_etiket_print(etiket_id):
+    """MODÜL-05 — Print-only etiket sayfası (40×80 mm, tarayıcı print).
+    Sayaç bu endpoint ile güncellenmiyor — yeniden-bas endpoint'i kullanılmalı.
+    """
+    kon = _db()
+    try:
+        etiket = kon.execute("""
+            SELECT e.*,
+                   t.arge_kodu AS t_arge_kodu,
+                   c.unvan AS c_unvan
+            FROM nexgen_arge_etiket e
+            JOIN nexgen_arge_test t ON t.id = e.arge_kayit_id
+            LEFT JOIN nexgen_cari c ON c.id = e.cari_id
+            WHERE e.id = ?
+        """, (etiket_id,)).fetchone()
+
+        if not etiket:
+            from flask import abort
+            abort(404)
+
+        etiket = dict(etiket)
+
+        # Tarih formatlama (YYYY-MM-DD → GG.AA.YYYY)
+        def _fmt(tarih_str):
+            if not tarih_str:
+                return '—'
+            try:
+                parcalar = str(tarih_str)[:10].split('-')
+                if len(parcalar) == 3:
+                    return f"{parcalar[2]}.{parcalar[1]}.{parcalar[0]}"
+            except Exception:
+                pass
+            return str(tarih_str)[:10]
+
+        etiket['talep_tarihi_fmt']  = _fmt(etiket.get('talep_tarihi'))
+        etiket['numune_tarihi_fmt'] = _fmt(etiket.get('numune_tarihi'))
+
+        # Barkod SVG üret
+        barkod_svg_uri = _m05_code128_svg(
+            etiket['barkod_kodu'],
+            bar_height=38,
+            bar_width=1.15,
+            font_size=7,
+        )
+
+        return render_template(
+            'nexgen/modul05_etiket_print.html',
+            etiket=etiket,
+            barkod_svg_uri=barkod_svg_uri,
+        )
+    finally:
+        kon.close()
+
+
+# ── MODÜL-04 — Barkodla kayıt bul ────────────────────────────────────────────
+# GET /nexgen/api/tablet/arge/barkod-bul?kod=NX-ARGE-RT0004-R00-N01
+
+@nexgen_bp.route('/api/tablet/arge/barkod-bul')
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def api_tablet_arge_barkod_bul():
+    """MODÜL-04 Popup — Barkodla nexgen_arge_test.id bul.
+    Exact eşleşme, yalnızca aktif kayıtlar.
+    Dönüş: {ok, test_id, arge_kodu, redirect_url}
+    """
+    kod = (request.args.get('kod') or '').strip()
+    if not kod:
+        return jsonify({'ok': False, 'hata': 'Barkod boş'}), 400
+
+    kon = _db()
+    try:
+        satir = kon.execute(
+            """
+            SELECT e.arge_kayit_id AS test_id,
+                   t.arge_kodu,
+                   t.aktif
+            FROM nexgen_arge_etiket e
+            JOIN nexgen_arge_test t ON t.id = e.arge_kayit_id
+            WHERE e.barkod_kodu = ?
+              AND t.aktif = 1
+            LIMIT 1
+            """,
+            (kod,)
+        ).fetchone()
+
+        if not satir:
+            return jsonify({'ok': False, 'hata': f'Kayıt bulunamadı: {kod}'}), 404
+
+        test_id   = satir['test_id']
+        arge_kodu = satir['arge_kodu'] or ''
+        return jsonify({
+            'ok':          True,
+            'test_id':     test_id,
+            'arge_kodu':   arge_kodu,
+            'redirect_url': f'/nexgen/tablet/arge/revize/{test_id}',
+        })
+    finally:
+        kon.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# NEXGEN PRINT AGENT — FAZ-1
+# Doğrudan Yazıcı Baskı Sistemi (Windows Bluetooth COM Port üzerinden)
+#
+# Akış:
+#   Tablet → POST /dogrudan-yazdir       → nexgen_print_job(PENDING)
+#   Agent  → GET  /print-agent/next       (PENDING → CLAIMED)
+#   Agent  → POST /print-agent/<id>/success (CLAIMED → PRINTED)
+#   Agent  → POST /print-agent/<id>/fail    (CLAIMED → FAILED)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+import base64 as _pa_b64
+
+
+def _m05_etiket_tspl_bytes(etiket_id, copies=1):
+    """
+    nexgen_arge_etiket kaydından 40×80 mm TSPL bayt dizisi üretir.
+
+    - Boyut  : 40 mm × 80 mm  (320 × 640 dot @ 203 DPI)
+    - Font   : TSPL dahili fontlar (TTF yok)
+    - Barkod : CODE128, TSPL BARCODE komutu
+    - CP     : CODEPAGE 857 (Türkçe Latin-5)
+    - copies : 1–5 arası
+
+    Dönüş: bytes  (CP857 encoded, \\r\\n satır sonu)
+    Hata : ValueError eğer etiket bulunamadı
+    """
+    kon = _db()
+    try:
+        row = kon.execute("""
+            SELECT e.*,
+                   t.arge_kodu AS t_arge_kodu,
+                   c.unvan     AS c_unvan
+            FROM nexgen_arge_etiket e
+            JOIN nexgen_arge_test t ON t.id = e.arge_kayit_id
+            LEFT JOIN nexgen_cari c ON c.id = e.cari_id
+            WHERE e.id = ?
+        """, (etiket_id,)).fetchone()
+    finally:
+        kon.close()
+
+    if not row:
+        raise ValueError(f"Etiket ID={etiket_id} bulunamadı.")
+
+    row = dict(row)
+
+    # ── Alan hazırlığı ────────────────────────────────────────────────────────
+    def _safe(val, maxlen=28):
+        """Türkçe → CP857 güvenli fallback."""
+        s = str(val or '').strip()
+        tr_map = str.maketrans('İıĞğÜüÖöŞşÇç', 'IiGgUuOoSsCc')
+        return s.translate(tr_map)[:maxlen]
+
+    def _fmt_tarih(tarih_str):
+        """YYYY-MM-DD → GG.AA.YYYY"""
+        try:
+            p = str(tarih_str or '')[:10].split('-')
+            if len(p) == 3:
+                return f"{p[2]}.{p[1]}.{p[0]}"
+        except Exception:
+            pass
+        return str(tarih_str or '—')[:10]
+
+    barkod_kodu  = str(row.get('barkod_kodu') or '').strip()
+    arge_kodu    = _safe(row.get('t_arge_kodu') or row.get('arge_kodu') or '—', 24)
+    musteri      = _safe(row.get('cari_adi_snapshot') or row.get('c_unvan') or '—', 26)
+    talep_tar    = _fmt_tarih(row.get('talep_tarihi'))
+    numune_tar   = _fmt_tarih(row.get('numune_tarihi'))
+    rev_no       = int(row.get('rev_no') or 0)
+    numune_no    = int(row.get('numune_no') or 1)
+    copies_safe  = max(1, min(5, int(copies or 1)))
+
+    # ── TSPL komutları ────────────────────────────────────────────────────────
+    # 40 mm × 80 mm @ 203 DPI = 320 × 640 dot
+    # Font "3" = 12×20 dot (küçük metin)
+    # Font "4" = 16×24 dot (orta metin)
+    # BARCODE sözdizimi:
+    #   BARCODE x,y,"type",height,human,rotation,narrow,wide,"data"
+    cmds = [
+        "SIZE 40 mm,80 mm",
+        "GAP 3 mm,0 mm",
+        "DIRECTION 0",
+        "REFERENCE 0,0",
+        "OFFSET 0 mm",
+        "SET PEEL OFF",
+        "SET TEAR ON",
+        "CODEPAGE 857",
+        "SPEED 4",
+        "DENSITY 10",
+        "CLS",
+        # ── Başlık bandı (siyah dolgu + beyaz ters metin) ──────────────────
+        "BAR 0,0,320,30",
+        'REVERSE 6,4,308,24,"4",0,1,1,"NEXGEN AR-GE"',
+        # ── AR-GE kodu (orta büyük font) ───────────────────────────────────
+        f'TEXT 6,36,"4",0,1,1,"{arge_kodu}"',
+        # ── Yatay çizgi ────────────────────────────────────────────────────
+        "BAR 0,62,320,1",
+        # ── Müşteri ────────────────────────────────────────────────────────
+        f'TEXT 6,68,"3",0,1,1,"Mst: {musteri}"',
+        # ── Tarihler ───────────────────────────────────────────────────────
+        f'TEXT 6,88,"3",0,1,1,"Talep : {talep_tar}"',
+        f'TEXT 6,104,"3",0,1,1,"Numune: {numune_tar}"',
+        # ── REV / Numune No ────────────────────────────────────────────────
+        f'TEXT 6,120,"3",0,1,1,"REV: R{rev_no:02d}   N: N{numune_no:02d}"',
+        # ── Yatay çizgi ────────────────────────────────────────────────────
+        "BAR 0,138,320,1",
+        # ── Code128 barkod (human-readable dahil) ──────────────────────────
+        f'BARCODE 10,144,"128",60,1,0,2,4,"{barkod_kodu}"',
+        # ── Barkod metin (yedek) ───────────────────────────────────────────
+        f'TEXT 6,218,"3",0,1,1,"{barkod_kodu}"',
+        # ── Baskı ──────────────────────────────────────────────────────────
+        f"PRINT {copies_safe},1",
+    ]
+
+    tspl_str = "\r\n".join(cmds) + "\r\n"
+    return tspl_str.encode('cp857', errors='replace')
+
+
+def _print_job_olustur(etiket_id, payload_bytes, user_id):
+    """nexgen_print_job'a PENDING iş ekler; job_id döner."""
+    payload_b64 = _pa_b64.b64encode(payload_bytes).decode('ascii')
+    kon = _db()
+    try:
+        kon.execute("BEGIN IMMEDIATE")
+        cur = kon.execute("""
+            INSERT INTO nexgen_print_job
+                (etiket_id, payload_base64, status,
+                 requested_by_user_id, requested_at,
+                 created_at, updated_at)
+            VALUES (?, ?, 'PENDING', ?,
+                    datetime('now','localtime'),
+                    datetime('now','localtime'),
+                    datetime('now','localtime'))
+        """, (etiket_id, payload_b64, user_id))
+        job_id = cur.lastrowid
+        kon.commit()
+        return job_id
+    except Exception:
+        kon.rollback()
+        raise
+    finally:
+        kon.close()
+
+
+def _agent_key_kontrol():
+    """X-NexGen-Agent-Key başlığını ortam değişkeniyle doğrular."""
+    beklenen = os.environ.get('NEXGEN_PRINT_AGENT_KEY', '')
+    gelen    = request.headers.get('X-NexGen-Agent-Key', '')
+    if not beklenen:
+        return False, 'NEXGEN_PRINT_AGENT_KEY ortam degiskeni ayarlanmamis'
+    if not gelen or gelen != beklenen:
+        return False, 'Gecersiz agent key'
+    return True, ''
+
+
+# ── Endpoint A: Tablet → Doğrudan Yazdır ─────────────────────────────────────
+
+@nexgen_bp.route('/api/tablet/arge/etiket/<int:etiket_id>/dogrudan-yazdir',
+                 methods=['POST'])
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def api_tablet_arge_dogrudan_yazdir(etiket_id):
+    """MODÜL-05 — Doğrudan Yazıcı Baskı.
+
+    TSPL üretir, nexgen_print_job'a PENDING iş ekler.
+    Windows Print Agent kuyruğu okur ve XP-365B'ye yazar.
+
+    Body JSON : {"copies": 1}
+    Dönüş     : {"ok": true, "job_id": 42, "mesaj": "..."}
+    """
+    try:
+        body = request.get_json(force=True, silent=True) or {}
+    except Exception:
+        body = {}
+
+    copies = int(body.get('copies', 1))
+    if copies < 1 or copies > 5:
+        return jsonify({'ok': False, 'hata': 'copies 1–5 arasında olmalı'}), 400
+
+    # Etiket var mı ve aktif mi?
+    kon = _db()
+    try:
+        etiket = kon.execute(
+            "SELECT id, durum, barkod_kodu FROM nexgen_arge_etiket WHERE id = ?",
+            (etiket_id,)
+        ).fetchone()
+    finally:
+        kon.close()
+
+    if not etiket:
+        return jsonify({'ok': False, 'hata': f'Etiket bulunamadı (ID={etiket_id})'}), 404
+
+    # durum NULL veya 'AKTIF' veya 'YENIDEN_BAS' kabul et
+    durum_val = str(etiket['durum'] or '').upper()
+    if durum_val not in ('AKTIF', 'YENIDEN_BAS', ''):
+        return jsonify({'ok': False, 'hata': 'Etiket aktif değil'}), 409
+
+    # TSPL üret
+    try:
+        payload_bytes = _m05_etiket_tspl_bytes(etiket_id, copies=copies)
+    except ValueError as e:
+        return jsonify({'ok': False, 'hata': str(e)}), 404
+    except Exception as e:
+        print(f'[nexgen] TSPL üretim hatası etiket_id={etiket_id}: {e}')
+        return jsonify({'ok': False, 'hata': 'TSPL üretim hatası'}), 500
+
+    # Print job oluştur
+    try:
+        user_id = session.get('user_id') or session.get('kullanici_id')
+        job_id  = _print_job_olustur(etiket_id, payload_bytes, user_id)
+    except Exception as e:
+        print(f'[nexgen] print_job oluşturma hatası: {e}')
+        return jsonify({'ok': False, 'hata': 'Baskı kuyruğuna eklenemedi'}), 500
+
+    return jsonify({
+        'ok':     True,
+        'job_id': job_id,
+        'mesaj':  f'Baskı kuyruğuna eklendi. İş no: {job_id}',
+        'barkod': etiket['barkod_kodu'],
+        'copies': copies,
+    })
+
+
+# ── Endpoint B: Agent → Sıradaki İşi Al ──────────────────────────────────────
+
+@nexgen_bp.route('/api/print-agent/next', methods=['GET'])
+def api_print_agent_next():
+    """Print Agent — PENDING işi atomik olarak CLAIMED'e alır.
+
+    Header : X-NexGen-Agent-Key: <secret>
+    Dönüş  : {"ok": true, "job_id": 42, "etiket_id": 7, "payload_base64": "..."}
+             veya {"ok": true, "job_id": null} (kuyruk boş)
+    """
+    tamam, hata_msg = _agent_key_kontrol()
+    if not tamam:
+        return jsonify({'ok': False, 'hata': hata_msg}), 401
+
+    kon = _db()
+    try:
+        kon.execute("BEGIN IMMEDIATE")
+        row = kon.execute("""
+            SELECT id, etiket_id, payload_base64
+            FROM nexgen_print_job
+            WHERE status = 'PENDING'
+            ORDER BY id ASC
+            LIMIT 1
+        """).fetchone()
+
+        if not row:
+            kon.rollback()
+            return jsonify({'ok': True, 'job_id': None})
+
+        job_id = row['id']
+        kon.execute("""
+            UPDATE nexgen_print_job
+            SET status     = 'CLAIMED',
+                claimed_at = datetime('now','localtime'),
+                updated_at = datetime('now','localtime')
+            WHERE id = ?
+        """, (job_id,))
+        kon.commit()
+
+        return jsonify({
+            'ok':             True,
+            'job_id':         job_id,
+            'etiket_id':      row['etiket_id'],
+            'payload_base64': row['payload_base64'],
+        })
+    except Exception as e:
+        try:
+            kon.rollback()
+        except Exception:
+            pass
+        print(f'[nexgen] print_agent/next hata: {e}')
+        return jsonify({'ok': False, 'hata': 'Sunucu hatası'}), 500
+    finally:
+        kon.close()
+
+
+# ── Endpoint C: Agent → Başarı Bildir ────────────────────────────────────────
+
+@nexgen_bp.route('/api/print-agent/<int:job_id>/success', methods=['POST'])
+def api_print_agent_success(job_id):
+    """Print Agent — İş tamamlandı, PRINTED olarak işaretle."""
+    tamam, hata_msg = _agent_key_kontrol()
+    if not tamam:
+        return jsonify({'ok': False, 'hata': hata_msg}), 401
+
+    kon = _db()
+    try:
+        kon.execute("""
+            UPDATE nexgen_print_job
+            SET status     = 'PRINTED',
+                printed_at = datetime('now','localtime'),
+                last_error = NULL,
+                updated_at = datetime('now','localtime')
+            WHERE id = ? AND status = 'CLAIMED'
+        """, (job_id,))
+        kon.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        kon.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        kon.close()
+
+
+# ── Endpoint D: Agent → Hata Bildir ──────────────────────────────────────────
+
+@nexgen_bp.route('/api/print-agent/<int:job_id>/fail', methods=['POST'])
+def api_print_agent_fail(job_id):
+    """Print Agent — İş başarısız, FAILED olarak işaretle."""
+    tamam, hata_msg = _agent_key_kontrol()
+    if not tamam:
+        return jsonify({'ok': False, 'hata': hata_msg}), 401
+
+    try:
+        body = request.get_json(force=True, silent=True) or {}
+    except Exception:
+        body = {}
+    hata_mesaj = str(body.get('hata', 'Bilinmeyen hata'))[:500]
+
+    kon = _db()
+    try:
+        kon.execute("""
+            UPDATE nexgen_print_job
+            SET status     = 'FAILED',
+                last_error = ?,
+                updated_at = datetime('now','localtime')
+            WHERE id = ? AND status = 'CLAIMED'
+        """, (hata_mesaj, job_id))
+        kon.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        kon.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        kon.close()
+
+
+# ── Endpoint E: Tablet → İş Durumu Sorgula ───────────────────────────────────
+
+@nexgen_bp.route('/api/tablet/arge/print-job/<int:job_id>/durum', methods=['GET'])
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def api_tablet_print_job_durum(job_id):
+    """Tablet polling — iş durumunu döner.
+
+    Dönüş: {"ok": true, "status": "PENDING"|"CLAIMED"|"PRINTED"|"FAILED",
+             "hata": null}
+    """
+    kon = _db()
+    try:
+        row = kon.execute(
+            "SELECT status, last_error FROM nexgen_print_job WHERE id = ?",
+            (job_id,)
+        ).fetchone()
+    finally:
+        kon.close()
+
+    if not row:
+        return jsonify({'ok': False, 'hata': 'İş bulunamadı'}), 404
+
+    return jsonify({
+        'ok':     True,
+        'status': row['status'],
+        'hata':   row['last_error'],
+    })
 

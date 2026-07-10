@@ -386,10 +386,12 @@ window.__cpsRootMap = function(pathname) {
       <!-- ============ GENEL ============ -->
 
 
-      <div class="sn-sec sn-toggle{% if aktif_grup == 'genel' %} acik{% endif %}" data-grup="genel">
+      {# tasks yetkisi varsa (AR-GE operatoru gibi) Genel grubu her zaman acik #}
+      {% set _genel_acik = aktif_grup == 'genel' or (yetki('tasks') and not yetki('yonetim')) %}
+      <div class="sn-sec sn-toggle{% if _genel_acik %} acik{% endif %}" data-grup="genel">
 
 
-        <span class="sn-arrow">{% if aktif_grup == 'genel' %}▼{% else %}►{% endif %}</span>
+        <span class="sn-arrow">{% if _genel_acik %}▼{% else %}►{% endif %}</span>
 
 
         <svg class="sn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
@@ -398,13 +400,13 @@ window.__cpsRootMap = function(pathname) {
         <span class="sn-baslik">Genel</span>
 
 
-        <span class="sn-count">1</span>
+        <span class="sn-count">{% if yetki('tasks') %}2{% else %}1{% endif %}</span>
 
 
       </div>
 
 
-      <div class="sn-grup{% if aktif_grup != 'genel' %} kapali{% endif %}" data-grup="genel">
+      <div class="sn-grup{% if not _genel_acik %} kapali{% endif %}" data-grup="genel">
 
 
         <a href="/" class="si {% if active == 'home' %}active{% endif %}" title="Özet">
@@ -417,10 +419,12 @@ window.__cpsRootMap = function(pathname) {
 
 
         </a>
+{% if yetki('tasks') %}
 <a href="/tasks" class="si {% if active == 'tasks' %}active{% endif %}" title="G&#246;revler">
 <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
 <span class="sl">G&#246;revler</span>
 </a>
+{% endif %}
 <a href="#" class="si si-disabled" title="Bildirimler (yak&#305;nda)" onclick="event.preventDefault(); return false;">
 <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span>
 <span class="sl">Bildirimler</span>

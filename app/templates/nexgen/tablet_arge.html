@@ -135,7 +135,7 @@
 
         {# KART 4 — Numuneyi Revize Et (MODÜL-04) #}
         <a href="#" class="ag-card ag-card-sm" id="ag-kart-revize"
-           onclick="agRevizeListeAc(event)">
+           data-modul="revize" onclick="agRevizeListeAc(event)">
           <div class="ag-card-left-strip ag-strip-steel"></div>
           <div class="ag-card-ikon ag-ikon-bg-steel">
             <svg viewBox="0 0 28 28" fill="none" stroke="#3D5A7A"
@@ -202,11 +202,20 @@
 </div>{# /ag-shell #}
 
 {# ═══════════════════════════════════════
-   OVERLAY — MODÜL-04 Numune Seç
+   OVERLAY — MODÜL-04 Numune Seç (v2)
+   Amaç: NUMUNEYİ BUL → SEÇ → MEVCUT REVİZYON SAYFASINA GİT
+   Popup içinde işlem yapılmaz.
 ═══════════════════════════════════════ #}
 <div id="ag-revize-overlay" class="ag-overlay" style="display:none" onclick="agRevizeKapat(event)">
   <div class="ag-modal ag-modal-revize" onclick="event.stopPropagation()">
-    <div class="ag-modal-top">
+
+    {# ── Başlık ── #}
+    <div class="ag-rz-top">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
+           stroke="rgba(255,255,255,.55)" stroke-width="2" stroke-linecap="round">
+        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+      </svg>
       <span>Hangi numuneyi revize etmek istiyorsun?</span>
       <button class="ag-modal-x" onclick="agRevizeKapat()">
         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor"
@@ -215,38 +224,138 @@
         </svg>
       </button>
     </div>
-    <div class="ag-modal-body" style="padding:0">
-      {% if son_numuneler %}
-      <div class="ag-revize-liste">
-        {% for t in son_numuneler %}
-        <a href="{{ url_for('nexgen.tablet_arge_revize', test_id=t.id) }}"
-           class="ag-revize-satir">
-          <div class="ag-revize-sol">
-            <div class="ag-revize-kod">{{ t.test_no }}</div>
-            <div class="ag-revize-ad">
-              {{ t.yeni_renk_adi or t.formul_ad or '—' }}
-              {% if t.cari_unvan %} · {{ t.cari_unvan }}{% endif %}
-            </div>
-          </div>
-          <div class="ag-revize-sag">
-            <span class="ag-revize-durum ag-rd-{{ (t.durum or 'TASLAK')|lower }}">
-              {{ t.durum or 'TASLAK' }}
-            </span>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="9 18 15 12 9 6"/>
-            </svg>
-          </div>
-        </a>
-        {% endfor %}
+
+    {# ── Arama / Barkod sekmesi ── #}
+    <div class="ag-rz-toolbar">
+      <div class="ag-rz-tabs">
+        <button class="ag-rz-tab ag-rz-tab-aktif" id="rz-tab-ara"
+                onclick="rzSekmeAc('ara')">Ara</button>
+        <button class="ag-rz-tab" id="rz-tab-barkod"
+                onclick="rzSekmeAc('barkod')">Barkod Okut</button>
       </div>
-      {% else %}
-      <div style="padding:20px; text-align:center; color:#64748B; font-size:14px">
-        Henüz numune kaydı yok.
+
+      {# Arama paneli #}
+      <div id="rz-panel-ara" class="ag-rz-panel">
+        <div class="ag-rz-arama-wrap">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+               stroke="#94A3B8" stroke-width="2" stroke-linecap="round"
+               class="ag-rz-arama-ikon">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input type="text" id="rz-arama" class="ag-rz-arama-input"
+                 placeholder="AT kodu, NX-RT, NX-AR, müşteri, renk, durum..."
+                 oninput="rzFiltrele()" autocomplete="off" spellcheck="false">
+          <button class="ag-rz-arama-temizle" id="rz-arama-x"
+                  onclick="rzAramaTmizle()" style="display:none">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none"
+                 stroke="#94A3B8" stroke-width="2.2" stroke-linecap="round">
+              <path d="M4 4l12 12M16 4L4 16"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {# Barkod paneli #}
+      <div id="rz-panel-barkod" class="ag-rz-panel" style="display:none">
+        <div class="ag-rz-arama-wrap ag-rz-barkod-wrap">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="#E87722" stroke-width="2" stroke-linecap="round"
+               class="ag-rz-arama-ikon">
+            <rect x="3" y="3" width="4" height="8" rx="1"/>
+            <rect x="3" y="13" width="4" height="8" rx="1"/>
+            <rect x="9" y="3" width="2" height="18" rx="1"/>
+            <rect x="13" y="3" width="4" height="8" rx="1"/>
+            <rect x="13" y="13" width="4" height="8" rx="1"/>
+            <rect x="19" y="3" width="2" height="18" rx="1"/>
+          </svg>
+          <input type="text" id="rz-barkod" class="ag-rz-arama-input ag-rz-barkod-input"
+                 placeholder="Barkodu okutun — NX-ARGE-RT0004-R00-N01"
+                 onkeydown="if(event.key==='Enter') rzBarkodAra()"
+                 autocomplete="off" spellcheck="false">
+        </div>
+        <div id="rz-barkod-sonuc" class="ag-rz-barkod-sonuc" style="display:none"></div>
+        <p class="ag-rz-barkod-ipucu">
+          USB okuyucu klavye gibi yazar — Enter'a basınca yönlendirir.
+        </p>
+      </div>
+    </div>
+
+    {# ── Kaydırılabilir içerik ── #}
+    <div class="ag-rz-icerik">
+
+      {# Son 3 çalışılan #}
+      {% if son_numuneler %}
+      <div class="ag-rz-bolum">
+        <div class="ag-rz-bolum-baslik">Son Çalışılanlar</div>
+        <div class="ag-rz-son3">
+          {% for t in son_numuneler[:3] %}
+          <a href="{{ url_for('nexgen.tablet_arge_revize', test_id=t.id) }}"
+             class="ag-rz-son3-kart">
+            <div class="ag-rz-son3-kod">{{ t.arge_kodu or t.test_no }}</div>
+            <div class="ag-rz-son3-renk">{{ t.yeni_renk_adi or t.formul_ad or '—' }}</div>
+            <div class="ag-rz-son3-alt">
+              <span class="ag-rz-durum ag-rz-d-{{ (t.durum or 'TASLAK')|lower }}">
+                {{ t.durum or 'TASLAK' }}
+              </span>
+              <span class="ag-rz-son3-rev">REV-{{ t.aktif_rev_no or 0 }}</span>
+            </div>
+          </a>
+          {% endfor %}
+        </div>
       </div>
       {% endif %}
-    </div>
-  </div>
+
+      {# Tüm numune listesi #}
+      <div class="ag-rz-bolum">
+        <div class="ag-rz-bolum-baslik" style="display:flex;align-items:center;justify-content:space-between">
+          <span>Tüm Numuneler</span>
+          <span class="ag-rz-sayac" id="rz-sayac">
+            {{ son_numuneler|length }} kayıt
+          </span>
+        </div>
+
+        <div id="rz-liste">
+          {% if son_numuneler %}
+          {% for t in son_numuneler %}
+          <a href="{{ url_for('nexgen.tablet_arge_revize', test_id=t.id) }}"
+             class="ag-rz-satir"
+             data-kod="{{ (t.arge_kodu or t.test_no or '')|lower }}"
+             data-renk="{{ (t.yeni_renk_adi or t.formul_ad or '')|lower }}"
+             data-musteri="{{ (t.cari_unvan or '')|lower }}"
+             data-durum="{{ (t.durum or 'TASLAK')|lower }}">
+            <div class="ag-rz-satir-sol">
+              <div class="ag-rz-satir-kod">{{ t.arge_kodu or t.test_no }}</div>
+              <div class="ag-rz-satir-meta">{{ t.test_no }}</div>
+            </div>
+            <div class="ag-rz-satir-orta">
+              <div class="ag-rz-satir-renk">{{ t.yeni_renk_adi or t.formul_ad or '—' }}</div>
+              <div class="ag-rz-satir-musteri">{{ t.cari_unvan or '—' }}</div>
+            </div>
+            <div class="ag-rz-satir-sag">
+              <span class="ag-rz-rev">REV-{{ t.aktif_rev_no or 0 }}</span>
+              <span class="ag-rz-durum ag-rz-d-{{ (t.durum or 'TASLAK')|lower }}">
+                {{ t.durum or 'TASLAK' }}
+              </span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+                   class="ag-rz-ok">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </div>
+          </a>
+          {% endfor %}
+          {% else %}
+          <div class="ag-rz-bos">Henüz numune kaydı yok.</div>
+          {% endif %}
+        </div>
+
+        <div id="rz-bos-sonuc" class="ag-rz-bos" style="display:none">
+          Arama sonucu bulunamadı.
+        </div>
+      </div>
+
+    </div>{# /ag-rz-icerik #}
+  </div>{# /ag-modal-revize #}
 </div>
 
 {# ═══════════════════════════════════════
@@ -438,11 +547,11 @@ html, body { height: 100%; overflow: hidden; }
   padding: 24px 24px 32px;
 }
 .ag-wrap {
-  max-width: 900px;
+  max-width: 1100px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
 /* HERO */
@@ -630,22 +739,22 @@ html, body { height: 100%; overflow: hidden; }
 .ag-row3 {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  gap: 12px;
+  gap: 14px;
 }
 .ag-card-sm {
-  box-shadow: 0 2px 12px rgba(30,45,74,.07), 0 1px 3px rgba(30,45,74,.04);
+  box-shadow: 0 4px 18px rgba(30,45,74,.09), 0 1px 4px rgba(30,45,74,.05);
 }
 .ag-card-sm .ag-card-ikon {
-  width: 52px;
-  height: 52px;
-  margin: 16px 14px 16px 16px;
-  border-radius: 10px;
+  width: 64px;
+  height: 64px;
+  margin: 20px 16px 20px 20px;
+  border-radius: 12px;
 }
-.ag-card-sm .ag-card-ikon svg { width: 24px; height: 24px; }
-.ag-card-sm .ag-card-metin { padding: 16px 0; }
-.ag-card-sm .ag-card-h { font-size: 14px; }
-.ag-card-sm .ag-card-p { font-size: 11px; }
-.ag-card-sm .ag-card-ok { margin-right: 16px; }
+.ag-card-sm .ag-card-ikon svg { width: 28px; height: 28px; }
+.ag-card-sm .ag-card-metin { padding: 20px 0; }
+.ag-card-sm .ag-card-h { font-size: 15px; }
+.ag-card-sm .ag-card-p { font-size: 12px; }
+.ag-card-sm .ag-card-ok { margin-right: 18px; }
 
 /* ════════════════════
    BEKLEYEN KART (Kart 5)
@@ -767,54 +876,296 @@ html, body { height: 100%; overflow: hidden; }
   font-weight: 500;
 }
 
-/* ── MODÜL-04 Revize Liste Overlay ── */
+/* ── MODÜL-04 Revize Popup v2 ───────────────────────────────────── */
 .ag-modal-revize {
-  max-width: 540px;
+  width: 620px;
+  max-width: 96vw;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  overflow: hidden;
   padding: 0;
 }
-.ag-modal-revize .ag-modal-top {
+
+/* Başlık */
+.ag-rz-top {
   background: var(--navy);
-  color: #fff;
-  border-radius: 12px 12px 0 0;
-  padding: 14px 20px;
-  font-size: 15px;
-  font-weight: 700;
-}
-.ag-modal-revize .ag-modal-x {
-  color: rgba(255,255,255,.8);
-}
-.ag-revize-liste {
-  max-height: 70vh;
-  overflow-y: auto;
-}
-.ag-revize-satir {
+  border-bottom: 3px solid var(--orange);
+  padding: 0 18px;
+  height: 52px;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 13px 20px;
-  border-top: 1px solid var(--border);
+  gap: 10px;
+  flex-shrink: 0;
+}
+.ag-rz-top span {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--white);
+  flex: 1;
+}
+
+/* Araç çubuğu */
+.ag-rz-toolbar {
+  background: #F5F7FA;
+  border-bottom: 1px solid var(--border);
+  padding: 10px 14px;
+  flex-shrink: 0;
+}
+.ag-rz-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.ag-rz-tab {
+  padding: 5px 14px;
+  border-radius: 6px;
+  border: none;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  background: transparent;
+  color: var(--muted);
+  transition: background .12s, color .12s;
+}
+.ag-rz-tab-aktif {
+  background: var(--navy);
+  color: var(--white);
+}
+.ag-rz-panel { display: block; }
+
+/* Arama kutusu */
+.ag-rz-arama-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.ag-rz-arama-ikon {
+  position: absolute;
+  left: 10px;
+  pointer-events: none;
+}
+.ag-rz-arama-input {
+  width: 100%;
+  padding: 9px 32px 9px 32px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  outline: none;
+  background: var(--white);
+  color: var(--navy);
+}
+.ag-rz-arama-input:focus {
+  border-color: var(--steel);
+}
+.ag-rz-arama-temizle {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+}
+
+/* Barkod özel stil */
+.ag-rz-barkod-wrap .ag-rz-arama-input {
+  border-color: var(--orange);
+  background: #FFF4EC;
+}
+.ag-rz-barkod-wrap .ag-rz-arama-input:focus {
+  border-color: var(--orange);
+}
+.ag-rz-barkod-sonuc {
+  margin-top: 6px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.ag-rz-barkod-sonuc.basarili { background: #DCFCE7; color: #14532D; }
+.ag-rz-barkod-sonuc.hata     { background: #FEE2E2; color: #991B1B; }
+.ag-rz-barkod-ipucu {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 5px;
+}
+
+/* İçerik alanı */
+.ag-rz-icerik {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px 16px;
+}
+.ag-rz-bolum { margin-bottom: 14px; }
+.ag-rz-bolum-baslik {
+  font-size: 10px;
+  font-weight: 700;
+  color: #94A3B8;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.ag-rz-sayac {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+  background: #EEF1F6;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+/* Son 3 kart */
+.ag-rz-son3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.ag-rz-son3-kart {
+  padding: 10px 11px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
+  background: var(--white);
+  text-decoration: none;
+  display: block;
+  transition: border-color .13s, background .13s;
+}
+.ag-rz-son3-kart:hover {
+  border-color: var(--orange);
+  background: var(--orange-bg);
+}
+.ag-rz-son3-kod {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--navy);
+}
+.ag-rz-son3-renk {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.ag-rz-son3-alt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+.ag-rz-son3-rev {
+  font-size: 10px;
+  color: #94A3B8;
+}
+
+/* Liste satırları */
+.ag-rz-satir {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
   text-decoration: none;
   color: var(--navy);
-  transition: background .15s;
+  border-left: 3px solid transparent;
+  transition: background .12s, border-color .12s;
 }
-.ag-revize-satir:first-child { border-top: none; }
-.ag-revize-satir:hover { background: var(--light); }
-.ag-revize-sol { flex: 1; }
-.ag-revize-kod { font-size: 13px; font-weight: 700; }
-.ag-revize-ad  { font-size: 12px; color: var(--muted); margin-top: 2px; }
-.ag-revize-sag {
-  display: flex; align-items: center; gap: 8px;
-  color: var(--muted);
+.ag-rz-satir:hover {
+  background: var(--orange-bg);
+  border-left-color: var(--orange);
 }
-.ag-revize-durum {
-  font-size: 11px; font-weight: 700;
-  padding: 2px 8px; border-radius: 10px;
+.ag-rz-satir + .ag-rz-satir {
+  border-top: 1px solid #EEF1F6;
+}
+.ag-rz-satir-sol {
+  width: 115px;
+  flex-shrink: 0;
+}
+.ag-rz-satir-kod {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--navy);
+}
+.ag-rz-satir-meta {
+  font-size: 10px;
+  color: #94A3B8;
+  margin-top: 1px;
+}
+.ag-rz-satir-orta {
+  flex: 1;
+  min-width: 0;
+}
+.ag-rz-satir-renk {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--steel);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ag-rz-satir-musteri {
+  font-size: 11px;
+  color: #94A3B8;
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ag-rz-satir-sag {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+}
+.ag-rz-rev {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94A3B8;
+}
+.ag-rz-ok { color: #C4CDDA; }
+.ag-rz-satir:hover .ag-rz-ok { color: var(--orange); }
+.ag-rz-satir:hover .ag-rz-satir-kod { color: var(--orange); }
+
+/* Durum renkleri */
+.ag-rz-durum {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 5px;
   text-transform: uppercase;
+  white-space: nowrap;
 }
-.ag-rd-taslak    { background: #EFF3FA; color: #4A6FA5; }
-.ag-rd-test_edildi { background: #FFF8E1; color: #B45309; }
-.ag-rd-onaylandi { background: #E8F5E9; color: #1E7C3D; }
-.ag-rd-basarili  { background: #E8F5E9; color: #1E7C3D; border:1px solid #A5D6A7; }
+.ag-rz-d-devam      { background: #FFF4EC; color: #E87722; }
+.ag-rz-d-bekliyor   { background: #EFF3FA; color: #4A6FA5; }
+.ag-rz-d-basarili   { background: #E8F5E9; color: #1E7C3D; }
+.ag-rz-d-taslak     { background: #F1F5F9; color: #64748B; }
+.ag-rz-d-ferhat_bekliyor { background: #FFF4EC; color: #E87722; }
+.ag-rz-d-pasif      { background: #F1F5F9; color: #94A3B8; }
+
+/* Boş durum */
+.ag-rz-bos {
+  padding: 20px;
+  text-align: center;
+  color: #94A3B8;
+  font-size: 13px;
+}
+
+/* Gizli satır (arama filtresi) */
+.ag-rz-satir.gizli { display: none; }
+
+/* ── ESKİ revize stilleri korunuyor (diğer olası referanslar için) ── */
+.ag-revize-liste  { max-height: 70vh; overflow-y: auto; }
+.ag-revize-satir  { display:flex;align-items:center;gap:12px;padding:13px 20px;
+                    border-top:1px solid var(--border);text-decoration:none;color:var(--navy); }
+.ag-revize-satir:first-child { border-top:none; }
+.ag-revize-satir:hover { background:var(--light); }
+.ag-revize-sol { flex:1; }
+.ag-revize-kod { font-size:13px;font-weight:700; }
+.ag-revize-ad  { font-size:12px;color:var(--muted);margin-top:2px; }
+.ag-revize-sag { display:flex;align-items:center;gap:8px;color:var(--muted); }
+.ag-revize-durum { font-size:11px;font-weight:700;padding:2px 8px;
+                   border-radius:10px;text-transform:uppercase; }
+.ag-rd-taslak     { background:#EFF3FA;color:#4A6FA5; }
+.ag-rd-basarili   { background:#E8F5E9;color:#1E7C3D;border:1px solid #A5D6A7; }
 
 /* ── Responsive ── */
 @media (max-width: 680px) {
@@ -861,7 +1212,7 @@ document.querySelectorAll('.ag-card').forEach(function(kart) {
     /* Gerçek URL'e sahip kartlar — tarayıcı normal geçiş yapar */
     if(href && href !== '#') return;
     /* MODÜL-04 — kendi onclick'i var, buraya gelirse atla */
-    if(id === 'revize') return;
+    if(id === 'revize' || this.id === 'ag-kart-revize') return;
     e.preventDefault();
     document.getElementById('ag-modal-baslik').textContent = MODUL_ADLARI[id] || id;
     document.getElementById('ag-overlay').style.display = 'flex';
@@ -876,10 +1227,104 @@ function agKapat() {
 function agRevizeListeAc(e) {
   e.preventDefault();
   document.getElementById('ag-revize-overlay').style.display = 'flex';
+  /* Arama kutusunu sıfırla ve odakla */
+  rzAramaTmizle();
+  rzSekmeAc('ara');
+  setTimeout(function(){ var el=document.getElementById('rz-arama'); if(el) el.focus(); }, 80);
 }
 function agRevizeKapat(e) {
   if(e && e.target !== document.getElementById('ag-revize-overlay')) return;
   document.getElementById('ag-revize-overlay').style.display = 'none';
+}
+
+/* ── Sekme geçişi ── */
+function rzSekmeAc(sekme) {
+  var araPanel    = document.getElementById('rz-panel-ara');
+  var barkodPanel = document.getElementById('rz-panel-barkod');
+  var araTab      = document.getElementById('rz-tab-ara');
+  var barkodTab   = document.getElementById('rz-tab-barkod');
+  if (sekme === 'ara') {
+    araPanel.style.display    = 'block';
+    barkodPanel.style.display = 'none';
+    araTab.classList.add('ag-rz-tab-aktif');
+    barkodTab.classList.remove('ag-rz-tab-aktif');
+    setTimeout(function(){ var el=document.getElementById('rz-arama'); if(el) el.focus(); }, 50);
+  } else {
+    araPanel.style.display    = 'none';
+    barkodPanel.style.display = 'block';
+    araTab.classList.remove('ag-rz-tab-aktif');
+    barkodTab.classList.add('ag-rz-tab-aktif');
+    /* Barkod sonuç alanını temizle */
+    var sonuc = document.getElementById('rz-barkod-sonuc');
+    if (sonuc) { sonuc.style.display='none'; sonuc.textContent=''; sonuc.className='ag-rz-barkod-sonuc'; }
+    var bi = document.getElementById('rz-barkod');
+    if (bi) { bi.value=''; bi.focus(); }
+  }
+}
+
+/* ── Canlı arama filtresi ── */
+function rzFiltrele() {
+  var q     = (document.getElementById('rz-arama').value || '').toLowerCase().trim();
+  var satirlar = document.querySelectorAll('#rz-liste .ag-rz-satir');
+  var gorunen  = 0;
+  satirlar.forEach(function(s) {
+    var kod     = s.getAttribute('data-kod')     || '';
+    var renk    = s.getAttribute('data-renk')    || '';
+    var musteri = s.getAttribute('data-musteri') || '';
+    var durum   = s.getAttribute('data-durum')   || '';
+    var eslesir = !q ||
+                  kod.includes(q) ||
+                  renk.includes(q) ||
+                  musteri.includes(q) ||
+                  durum.includes(q);
+    s.classList.toggle('gizli', !eslesir);
+    if (eslesir) gorunen++;
+  });
+  /* Sayaç */
+  var sayac = document.getElementById('rz-sayac');
+  if (sayac) sayac.textContent = (q ? gorunen + ' / ' + satirlar.length : satirlar.length) + ' kayıt';
+  /* Boş mesaj */
+  var bos = document.getElementById('rz-bos-sonuc');
+  if (bos) bos.style.display = (q && gorunen === 0) ? 'block' : 'none';
+  /* Temizle butonu */
+  var x = document.getElementById('rz-arama-x');
+  if (x) x.style.display = q ? 'flex' : 'none';
+}
+
+function rzAramaTmizle() {
+  var el = document.getElementById('rz-arama');
+  if (el) el.value = '';
+  rzFiltrele();
+}
+
+/* ── Barkod arama ── */
+function rzBarkodAra() {
+  var input  = document.getElementById('rz-barkod');
+  var sonuc  = document.getElementById('rz-barkod-sonuc');
+  var kod    = (input ? input.value : '').trim();
+  if (!kod) return;
+  if (!sonuc) return;
+
+  sonuc.textContent = 'Aranıyor...';
+  sonuc.className   = 'ag-rz-barkod-sonuc';
+  sonuc.style.display = 'block';
+
+  fetch('/nexgen/api/tablet/arge/barkod-bul?kod=' + encodeURIComponent(kod))
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.ok && d.redirect_url) {
+        sonuc.textContent = 'Bulundu: ' + (d.arge_kodu || '') + ' — yönlendiriliyor...';
+        sonuc.className   = 'ag-rz-barkod-sonuc basarili';
+        setTimeout(function(){ window.location.href = d.redirect_url; }, 600);
+      } else {
+        sonuc.textContent = d.hata || 'Kayıt bulunamadı';
+        sonuc.className   = 'ag-rz-barkod-sonuc hata';
+      }
+    })
+    .catch(function(){
+      sonuc.textContent = 'Bağlantı hatası';
+      sonuc.className   = 'ag-rz-barkod-sonuc hata';
+    });
 }
 
 document.addEventListener('keydown', function(e) {

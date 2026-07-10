@@ -186,6 +186,100 @@ var M4_DEGISEN_ALAN  = {{ degisen_alan_secenekler | tojson | safe }};
 .m4-btn-basarili:disabled{ opacity:.45; cursor:not-allowed; }
 .m4-btn-icon{ width:22px; height:22px; }
 
+/* ── ETİKET BAS butonu ──────────────────────────────────────────── */
+.m4-btn-etiket{
+  height:48px; border-radius:var(--radius);
+  background:#0B2545; color:#fff;
+  font-size:14px; font-weight:700; letter-spacing:.5px;
+  border:none; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  transition:background .2s, transform .1s;
+  padding: 0 20px;
+  margin-top:10px;
+  width:100%;
+}
+.m4-btn-etiket:hover{ background:#1a3a6e; }
+.m4-btn-etiket:active{ transform:scale(.98); }
+
+/* ── Etiket Modal ───────────────────────────────────────────────── */
+.m5-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.6);
+  display:none;align-items:center;justify-content:center;
+  z-index:9000;padding:16px;
+}
+.m5-overlay.acik{ display:flex; }
+.m5-modal{
+  background:#fff;border-radius:16px;
+  max-width:520px;width:100%;
+  box-shadow:0 8px 40px rgba(0,0,0,.3);
+  overflow:hidden;
+}
+.m5-modal-baslik{
+  background:#0B2545;color:#fff;
+  padding:16px 20px;
+  font-size:15px;font-weight:700;letter-spacing:.5px;
+}
+.m5-modal-icerik{ padding:20px; }
+.m5-kayit-ozet{
+  background:#f4f7fb;border-radius:10px;
+  padding:14px;margin-bottom:16px;
+}
+.m5-kayit-satir{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:4px 0;border-bottom:1px solid #e5eaf0;font-size:13px;
+}
+.m5-kayit-satir:last-child{border-bottom:none;}
+.m5-kayit-etiket{color:#555;font-size:12px;}
+.m5-kayit-deger{font-weight:700;color:#0B2545;}
+.m5-etiket-listesi{margin-bottom:16px;}
+.m5-liste-baslik{font-size:12px;color:#666;font-weight:600;margin-bottom:8px;}
+.m5-etiket-satir{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 12px;background:#f9fafb;border-radius:8px;
+  margin-bottom:6px;border:1px solid #e5eaf0;
+}
+.m5-etiket-no{font-weight:700;font-size:14px;color:#0B2545;}
+.m5-etiket-barkod{font-size:11px;color:#666;font-family:monospace;}
+.m5-btn-yeniden{
+  background:#1565C0;color:#fff;border:none;
+  padding:4px 10px;border-radius:6px;font-size:12px;
+  cursor:pointer;
+}
+.m5-btn-yeniden:hover{background:#0d47a1;}
+.m5-modal-alt{
+  display:flex;gap:10px;padding:16px 20px;
+  background:#f9fafb;border-top:1px solid #e5eaf0;
+}
+.m5-btn-yeni-numune{
+  flex:1;height:48px;background:#0B2545;color:#fff;
+  border:none;border-radius:10px;font-size:14px;font-weight:700;
+  cursor:pointer;
+}
+.m5-btn-yeni-numune:hover{background:#1a3a6e;}
+.m5-btn-iptal{
+  height:48px;padding:0 20px;background:#e5eaf0;color:#333;
+  border:none;border-radius:10px;font-size:14px;cursor:pointer;
+}
+.m5-btn-iptal:hover{background:#d0d8e8;}
+.m5-kopya-satir{
+  display:flex;align-items:center;gap:12px;
+  margin:12px 0;padding:12px;
+  background:#f4f7fb;border-radius:8px;
+}
+.m5-kopya-label{font-size:13px;color:#555;}
+.m5-kopya-input{
+  width:60px;border:1.5px solid #c0cfe0;border-radius:6px;
+  padding:4px 8px;font-size:14px;font-weight:700;text-align:center;
+}
+.m5-mesaj-kutu{
+  margin-top:8px;padding:8px 12px;border-radius:6px;
+  font-size:13px;font-weight:600;
+  display:none;
+}
+.m5-mesaj-kutu.ok{background:#dcfce7;color:#166534;}
+.m5-mesaj-kutu.hata{background:#fee2e2;color:#991b1b;}
+.m5-mesaj-kutu.bilgi{background:#dbeafe;color:#1e40af;}
+
 /* ── Geçmiş Kart ─────────────────────────────────────────────── */
 .m4-gecmis{
   width:100%; max-width:780px;
@@ -668,6 +762,17 @@ var M4_DEGISEN_ALAN  = {{ degisen_alan_secenekler | tojson | safe }};
         DENEME BAŞARILI
       </button>
     </div>
+
+    {# ─── ETİKET BAS (MODÜL-05) ─── #}
+    <button class="m4-btn-etiket" id="m4-btn-etiket" onclick="m5EtiketAc()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="6 9 6 2 18 2 18 9"/>
+        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+        <rect x="6" y="14" width="12" height="8"/>
+      </svg>
+      ETİKET BAS
+    </button>
 
     {# ─── Revizyon Geçmişi ─── #}
     <div class="m4-gecmis">
@@ -1236,8 +1341,284 @@ document.addEventListener('keydown', function(e){
   if(e.key === 'Escape'){
     m4ModalKapat();
     m4OnayKapat();
+    m5EtiketKapat();
   }
 });
+</script>
+
+{# ════════════════════════════════════════════════════════════════
+   MODÜL-05 — ETİKET BAS MODAL
+════════════════════════════════════════════════════════════════ #}
+<div class="m5-overlay" id="m5-overlay" onclick="if(event.target===this)m5EtiketKapat()">
+  <div class="m5-modal">
+
+    <div class="m5-modal-baslik">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
+           style="vertical-align:-3px;margin-right:8px">
+        <polyline points="6 9 6 2 18 2 18 9"/>
+        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+        <rect x="6" y="14" width="12" height="8"/>
+      </svg>
+      AR-GE NUMUNE ETİKETİ
+    </div>
+
+    <div class="m5-modal-icerik">
+
+      {# Kayıt özeti #}
+      <div class="m5-kayit-ozet">
+        <div class="m5-kayit-satir">
+          <span class="m5-kayit-etiket">AR-GE KODU</span>
+          <span class="m5-kayit-deger" id="m5-arge-kodu">—</span>
+        </div>
+        <div class="m5-kayit-satir">
+          <span class="m5-kayit-etiket">MÜŞTERİ</span>
+          <span class="m5-kayit-deger" id="m5-cari-adi">—</span>
+        </div>
+        <div class="m5-kayit-satir">
+          <span class="m5-kayit-etiket">REVİZYON</span>
+          <span class="m5-kayit-deger" id="m5-rev-no">—</span>
+        </div>
+        <div class="m5-kayit-satir">
+          <span class="m5-kayit-etiket">TALEP TARİHİ</span>
+          <span class="m5-kayit-deger" id="m5-talep-tarihi">—</span>
+        </div>
+      </div>
+
+      {# Mevcut etiketler listesi #}
+      <div class="m5-etiket-listesi" id="m5-etiket-listesi" style="display:none">
+        <div class="m5-liste-baslik">MEVCUT ETİKETLER</div>
+        <div id="m5-etiket-satirlari"></div>
+      </div>
+
+      {# İlk numune — kopya sayısı #}
+      <div id="m5-yeni-blok">
+        <div class="m5-kopya-satir">
+          <span class="m5-kopya-label">Kopya sayısı:</span>
+          <input type="number" class="m5-kopya-input" id="m5-kopya" value="1" min="1" max="10">
+        </div>
+      </div>
+
+      <div class="m5-mesaj-kutu" id="m5-mesaj"></div>
+    </div>
+
+    <div class="m5-modal-alt">
+      <button class="m5-btn-yeni-numune" id="m5-btn-yeni" onclick="m5YeniNumune()">
+        YENİ NUMUNE ETİKETİ OLUŞTUR
+      </button>
+      <button class="m5-btn-iptal" onclick="m5EtiketKapat()">İPTAL</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// MODÜL-05 — ETİKET JS
+// ════════════════════════════════════════════════════════════════
+
+var M5_TEST_ID   = M4_TEST ? M4_TEST.id : null;  // test kaydı id'si
+var M5_ETIKETLER = [];                             // mevcut etiketler listesi
+
+function m5EtiketAc(){
+  if(!M5_TEST_ID){
+    alert('AR-GE kaydı bulunamadı.');
+    return;
+  }
+  m5MesajTemizle();
+  document.getElementById('m5-overlay').classList.add('acik');
+  m5OnizlemeYukle(M5_TEST_ID);
+}
+
+function m5EtiketKapat(){
+  document.getElementById('m5-overlay').classList.remove('acik');
+}
+
+function m5OnizlemeYukle(testId){
+  document.getElementById('m5-arge-kodu').textContent = (M4_TEST.arge_kodu || '—');
+  document.getElementById('m5-rev-no').textContent    = 'REV-' + M4_AKTIF_REV_NO;
+
+  // Önizleme verisi API'den (test_id bazlı)
+  fetch('/nexgen/tablet/arge/etiket/test/' + testId + '/onizleme')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(!d.ok){ m5Mesaj('Veri yüklenemedi: ' + d.hata, 'hata'); return; }
+      var r = d.revizyon;
+      document.getElementById('m5-cari-adi').textContent     = r.cari_adi || '—';
+      document.getElementById('m5-talep-tarihi').textContent = r.talep_tarihi
+        ? r.talep_tarihi.replace(/(\d{4})-(\d{2})-(\d{2})/, '$3.$2.$1') : '—';
+
+      M5_ETIKETLER = d.etiketler || [];
+      m5EtiketListesiniGoster(M5_ETIKETLER);
+    })
+    .catch(function(e){ m5Mesaj('Bağlantı hatası', 'hata'); });
+}
+
+function m5EtiketListesiniGoster(liste){
+  var kapsayici = document.getElementById('m5-etiket-listesi');
+  var satirlar  = document.getElementById('m5-etiket-satirlari');
+  var yeniBlok  = document.getElementById('m5-yeni-blok');
+  var btnYeni   = document.getElementById('m5-btn-yeni');
+
+  satirlar.innerHTML = '';
+
+  if(liste && liste.length > 0){
+    kapsayici.style.display = 'block';
+    liste.forEach(function(e){
+      var satir = document.createElement('div');
+      satir.className = 'm5-etiket-satir';
+      satir.innerHTML =
+        '<div>' +
+          '<div class="m5-etiket-no">N' + String(e.numune_no).padStart(2,'0') +
+          (e.durum === 'IPTAL' ? ' <span style="color:#dc2626;font-size:11px">[İPTAL]</span>' : '') + '</div>' +
+          '<div class="m5-etiket-barkod">' + e.barkod_kodu + '</div>' +
+        '</div>' +
+        (e.durum !== 'IPTAL'
+          ? '<button class="m5-btn-yeniden" onclick="m5YenidenBas(' + e.id + ',\'' + e.barkod_kodu + '\')">YENİDEN BAS</button>'
+          : '<span style="font-size:11px;color:#dc2626">İptal edildi</span>');
+      satirlar.appendChild(satir);
+    });
+    // Mevcut etiket varsa "YENİ NUMUNE" butonu metnini güncelle
+    btnYeni.textContent = 'YENİ NUMUNE OLUŞTUR (N' + String(liste.length+1).padStart(2,'0') + ')';
+  } else {
+    kapsayici.style.display = 'none';
+    btnYeni.textContent = 'YENİ NUMUNE ETİKETİ OLUŞTUR';
+  }
+}
+
+/* ── Print Agent: Doğrudan yazıcıya gönder ──────────────────────────────
+   Önce etiket ID alınır, sonra doğrudan-yazdir endpointi çağrılır.
+   Polling: 2 sn'de bir job durumu sorgulanır (maks 30 sn / 15 deneme).
+   Başarıda: "Etiket yazdırıldı ✓"
+   Başarısızda: sade Türkçe hata mesajı.
+   ──────────────────────────────────────────────────────────────────── */
+function _m5DogrudanYazdir(etiketId, kopya) {
+  m5Mesaj('Baskı gönderiliyor...', 'bilgi');
+
+  fetch('/nexgen/api/tablet/arge/etiket/' + etiketId + '/dogrudan-yazdir', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({copies: kopya})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    if(!d.ok){
+      m5Mesaj('Hata: ' + (d.hata || 'Baskı başlatılamadı'), 'hata');
+      return;
+    }
+    var jobId = d.job_id;
+    m5Mesaj('Baskı kuyruğuna eklendi (İş #' + jobId + ')...', 'bilgi');
+    _m5JobPoll(jobId, 0);
+  })
+  .catch(function(){ m5Mesaj('Sunucuya bağlanılamadı', 'hata'); });
+}
+
+function _m5JobPoll(jobId, deneme) {
+  var MAKS = 15;  /* 15 × 2 sn = 30 sn */
+  if(deneme >= MAKS){
+    m5Mesaj('Yazıcıdan yanıt alınamadı. Print Agent çalışıyor mu?', 'hata');
+    return;
+  }
+  setTimeout(function(){
+    fetch('/nexgen/api/tablet/arge/print-job/' + jobId + '/durum')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(!d.ok){ m5Mesaj('Durum sorgulanamadı', 'hata'); return; }
+      var st = d.status;
+      if(st === 'PRINTED'){
+        m5Mesaj('Etiket yazdırıldı \u2713', 'ok');
+        m5OnizlemeYukle(M5_TEST_ID);
+      } else if(st === 'FAILED'){
+        var hataMetni = d.hata || 'Yazıcı hatası';
+        /* Kullanıcıya teknik detay gösterme */
+        if(hataMetni.indexOf('COM port') !== -1 || hataMetni.indexOf('Serial') !== -1){
+          m5Mesaj('Yazıcıya bağlanılamadı. Kablo veya Bluetooth bağlantısını kontrol edin.', 'hata');
+        } else if(hataMetni.indexOf('Agent') !== -1 || hataMetni.indexOf('agent') !== -1){
+          m5Mesaj('Print Agent çalışmıyor. Lütfen yetkiliyle iletişime geçin.', 'hata');
+        } else {
+          m5Mesaj('Baskı başarısız. Lütfen tekrar deneyin.', 'hata');
+        }
+      } else {
+        /* PENDING veya CLAIMED — bekle */
+        _m5JobPoll(jobId, deneme + 1);
+      }
+    })
+    .catch(function(){ _m5JobPoll(jobId, deneme + 1); });
+  }, 2000);
+}
+
+function m5YeniNumune(){
+  if(!M5_TEST_ID){ m5Mesaj('AR-GE kayıt ID bulunamadı','hata'); return; }
+  var kopya = parseInt(document.getElementById('m5-kopya').value) || 1;
+
+  document.getElementById('m5-btn-yeni').disabled = true;
+  document.getElementById('m5-btn-yeni').textContent = 'Oluşturuluyor...';
+
+  fetch('/nexgen/tablet/arge/etiket/test/' + M5_TEST_ID + '/yeni-numune', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({kopya_sayisi: kopya})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    document.getElementById('m5-btn-yeni').disabled = false;
+    if(!d.ok){ m5Mesaj('Hata: ' + d.hata, 'hata'); m5BtnYeniGuncelle(); return; }
+
+    /* Yazdırma log kaydı (sayaç için) */
+    fetch('/nexgen/tablet/arge/etiket/' + d.etiket_id + '/yeniden-bas', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({kopya_sayisi: kopya, ilk_basim: true})
+    });
+
+    m5BtnYeniGuncelle();
+    _m5DogrudanYazdir(d.etiket_id, kopya);
+    m5OnizlemeYukle(M5_TEST_ID);
+  })
+  .catch(function(e){
+    document.getElementById('m5-btn-yeni').disabled = false;
+    m5Mesaj('Bağlantı hatası', 'hata');
+    m5BtnYeniGuncelle();
+  });
+}
+
+function m5BtnYeniGuncelle(){
+  var btn = document.getElementById('m5-btn-yeni');
+  var liste = M5_ETIKETLER;
+  if(liste && liste.length > 0){
+    btn.textContent = 'YENİ NUMUNE OLUŞTUR (N' + String(liste.length+1).padStart(2,'0') + ')';
+  } else {
+    btn.textContent = 'YENİ NUMUNE ETİKETİ OLUŞTUR';
+  }
+}
+
+function m5YenidenBas(etiketId, barkodKodu){
+  var kopya = parseInt(document.getElementById('m5-kopya').value) || 1;
+
+  fetch('/nexgen/tablet/arge/etiket/' + etiketId + '/yeniden-bas', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({kopya_sayisi: kopya})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    if(!d.ok){ m5Mesaj('Hata: ' + d.hata, 'hata'); return; }
+    _m5DogrudanYazdir(etiketId, kopya);
+  })
+  .catch(function(){ m5Mesaj('Bağlantı hatası', 'hata'); });
+}
+
+function m5Mesaj(txt, tip){
+  var el = document.getElementById('m5-mesaj');
+  el.textContent = txt;
+  el.className   = 'm5-mesaj-kutu ' + (tip || '');
+  el.style.display = 'block';
+}
+
+function m5MesajTemizle(){
+  var el = document.getElementById('m5-mesaj');
+  el.style.display = 'none';
+  el.textContent = '';
+}
 </script>
 
 {% endblock %}

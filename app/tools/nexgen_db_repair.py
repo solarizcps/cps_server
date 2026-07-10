@@ -1319,6 +1319,12 @@ TABLO_MAP = [
      'MPR Boyut Satırları'),
     ('nexgen_recete_recycle_izin',['id','uretim_varyant_id'],
      'Recycle İzin'),
+    ('nexgen_arge_etiket',        ['id','arge_kayit_id','revizyon_id','barkod_kodu','numune_no'],
+     'MODÜL-05 AR-GE Numune Etiketi'),
+    ('nexgen_arge_etiket_yazdirma',['id','etiket_id','barkod_kodu'],
+     'MODÜL-05 Yazdırma Logu'),
+    ('nexgen_print_job',          ['id','etiket_id','payload_base64','status','requested_at'],
+     'Print Agent — Doğrudan Yazıcı Baskı Kuyruğu'),
 ]
 
 SEED_KONTROL = [
@@ -1398,11 +1404,11 @@ def mig091(cur, con, log):
     ROL_AD   = 'AR-GE Operatoru'
     ROL_ACIK = 'NexGen AR-GE tablet operatoru. Formul testi, revizyon, renk denemesi.'
     ROL_RENK = '#0891b2'
-    YETKI_KODLAR = ['nexgen.view', 'nexgen.tablet.view', 'nexgen.recete.view']
+    YETKI_KODLAR = ['nexgen.view', 'nexgen.tablet.view', 'nexgen.recete.view', 'tasks']
     VEDAT_KADI   = 'vedat'
     VEDAT_ADSOYAD = 'Vedat (AR-GE)'
     VEDAT_EMAIL   = 'vedat@solariz.com.tr'
-    VEDAT_SIFRE   = '123456'
+    VEDAT_SIFRE   = '147258'
     VEDAT_TIP     = 'sistem'
 
     # Rol
@@ -1437,7 +1443,7 @@ def mig091(cur, con, log):
             INSERT INTO sistem_kullanici
                 (KullaniciAdi,AdSoyad,Email,Sifre,RolId,Rol,
                  Aktif,ZorunluSifreDegistir,OlusturmaTarih,OlusturanKullanici,Tip)
-            VALUES(?,?,?,?,?,?,1,1,?,'migration_091',?)
+            VALUES(?,?,?,?,?,?,1,0,?,'migration_091',?)
         """, (VEDAT_KADI, VEDAT_ADSOYAD, VEDAT_EMAIL, VEDAT_SIFRE, ROL_ID, ROL_AD, simdi, VEDAT_TIP))
         con.commit()
         vedat_id = cur.lastrowid
@@ -1461,6 +1467,36 @@ def mig091(cur, con, log):
                   'sistem_kullanici', vedat_id, simdi))
             con.commit()
             log.append(f"  {tag} kullanici_profil 'vedat' olusturuldu.")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# MIG 092 — nexgen_arge_etiket + nexgen_arge_etiket_yazdirma (MODÜL-05 FAZ-1)
+# Merkezi kaynak: app/migrations/092_nexgen_arge_etiket.py
+# ──────────────────────────────────────────────────────────────────────────────
+def mig092(cur, con, log):
+    """Merkezi migration dosyasini cagir — tek kaynak prensibi."""
+    import sys, os
+    _mig_dir = os.path.join(os.path.dirname(__file__), '..', 'migrations')
+    if _mig_dir not in sys.path:
+        sys.path.insert(0, _mig_dir)
+    from importlib import import_module
+    m = import_module('092_nexgen_arge_etiket')
+    m.mig092(cur, con, log)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# MIG 093 — nexgen_print_job (NexGen Print Agent FAZ-1)
+# Merkezi kaynak: app/migrations/093_nexgen_print_job.py
+# ──────────────────────────────────────────────────────────────────────────────
+def mig093(cur, con, log):
+    """Merkezi migration dosyasini cagir — tek kaynak prensibi."""
+    import sys, os
+    _mig_dir = os.path.join(os.path.dirname(__file__), '..', 'migrations')
+    if _mig_dir not in sys.path:
+        sys.path.insert(0, _mig_dir)
+    from importlib import import_module
+    m = import_module('093_nexgen_print_job')
+    m.mig093(cur, con, log)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1521,6 +1557,8 @@ def main():
         ("MIG 088-089 — uretim_plan_boyut",          lambda: mig088_089(cur, con, log)),
         ("MIG 090 — arge_revizyon (MODÜL-04)",        lambda: mig090(cur, con, log)),
         ("MIG 091 — vedat arge kullanici",             lambda: mig091(cur, con, log)),
+        ("MIG 092 — nexgen_arge_etiket (MODÜL-05)",   lambda: mig092(cur, con, log)),
+        ("MIG 093 — nexgen_print_job (Print Agent)",  lambda: mig093(cur, con, log)),
     ]
 
     for aciklama, fn in steps:

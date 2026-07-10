@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AR-GE Numune Etiketi — {{ etiket.barkod_kodu }}</title>
+<style>
+/* ── Merkezi etiket boyut ayarları ─────────────────────────────────────── */
+:root {
+  --etiket-genislik: 40mm;
+  --etiket-yukseklik: 80mm;
+  --etiket-kenar: 2mm;
+  --baslik-yukseklik: 10mm;
+  --barkod-yukseklik: 14mm;
+  --font-baslik: 7pt;
+  --font-alan-etiket: 5pt;
+  --font-alan-deger: 7pt;
+  --lacivert: #0B2545;
+  --mavi: #1565C0;
+  --siyah: #111111;
+  --bos: #FFFFFF;
+}
+
+/* ── Print sıfırlama ───────────────────────────────────────────────────── */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: var(--etiket-genislik);
+  height: var(--etiket-yukseklik);
+  background: var(--bos);
+  font-family: Arial, Helvetica, sans-serif;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+@page {
+  size: var(--etiket-genislik) var(--etiket-yukseklik);
+  margin: 0;
+}
+
+@media print {
+  html, body { margin: 0; padding: 0; }
+  /* Tarayıcı header/footer gizleme (destekleyen tarayıcılarda çalışır) */
+  @page { margin: 0; }
+  .no-print { display: none !important; }
+}
+
+/* ── Etiket kapsayıcı ──────────────────────────────────────────────────── */
+.etiket {
+  width: var(--etiket-genislik);
+  height: var(--etiket-yukseklik);
+  display: flex;
+  flex-direction: column;
+  border: 0.5pt solid #ccc;
+  overflow: hidden;
+  page-break-inside: avoid;
+}
+
+/* ── Başlık bandı ──────────────────────────────────────────────────────── */
+.etiket-baslik {
+  background: var(--lacivert);
+  color: var(--bos);
+  height: var(--baslik-yukseklik);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1mm 2mm;
+  flex-shrink: 0;
+}
+.eb-sirket {
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 1.5pt;
+}
+.eb-modul {
+  font-size: 5.5pt;
+  opacity: 0.85;
+  letter-spacing: 0.8pt;
+}
+
+/* ── İçerik alanı ─────────────────────────────────────────────────────── */
+.etiket-icerik {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: var(--etiket-kenar);
+  gap: 0;
+  overflow: hidden;
+}
+
+/* ── Alan satırı ───────────────────────────────────────────────────────── */
+.ea-satir {
+  display: flex;
+  flex-direction: column;
+  padding: 0.8mm var(--etiket-kenar) 0.8mm 0;
+  border-bottom: 0.4pt solid #e0e0e0;
+}
+.ea-satir:last-child { border-bottom: none; }
+
+.ea-etiket {
+  font-size: var(--font-alan-etiket);
+  color: var(--mavi);
+  font-weight: 700;
+  letter-spacing: 0.5pt;
+  text-transform: uppercase;
+}
+.ea-deger {
+  font-size: var(--font-alan-deger);
+  color: var(--siyah);
+  font-weight: 700;
+  margin-top: 0.3mm;
+  word-break: break-all;
+}
+
+/* ── REV ve NUMUNE yan yana ────────────────────────────────────────────── */
+.ea-cift {
+  display: flex;
+  flex-direction: row;
+  gap: 2mm;
+  padding: 0.8mm 0;
+  border-bottom: 0.4pt solid #e0e0e0;
+}
+.ea-cift-blok {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.ea-cift-blok:first-child {
+  border-right: 0.4pt solid #e0e0e0;
+  padding-right: 1mm;
+}
+
+/* ── Barkod alanı ──────────────────────────────────────────────────────── */
+.etiket-barkod {
+  padding: 1mm var(--etiket-kenar);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-top: 0.4pt solid #e0e0e0;
+  flex-shrink: 0;
+  background: var(--bos);
+}
+.etiket-barkod img {
+  width: 36mm;
+  height: auto;
+  display: block;
+}
+.etiket-barkod-id {
+  font-size: 4.5pt;
+  font-family: 'Courier New', monospace;
+  color: var(--siyah);
+  letter-spacing: 0.3pt;
+  margin-top: 0.5mm;
+}
+
+/* ── Yazdırma butonu (ekranda görünür, baskıda gizlenir) ────────────────── */
+.print-btn {
+  position: fixed;
+  bottom: 8px;
+  right: 8px;
+  background: var(--lacivert);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  z-index: 9999;
+}
+.print-btn:hover { background: #1a3a6e; }
+</style>
+</head>
+<body>
+
+<!-- ══ ETİKET ══════════════════════════════════════════════════════════════ -->
+<div class="etiket">
+
+  <!-- Başlık bandı -->
+  <div class="etiket-baslik">
+    <div class="eb-sirket">NEXGEN</div>
+    <div class="eb-modul">AR-GE NUMUNE</div>
+  </div>
+
+  <!-- İçerik -->
+  <div class="etiket-icerik">
+
+    <!-- AR-GE KODU -->
+    <div class="ea-satir">
+      <div class="ea-etiket">AR-GE KODU</div>
+      <div class="ea-deger">{{ etiket.arge_kodu or '—' }}</div>
+    </div>
+
+    <!-- TALEP EDEN -->
+    <div class="ea-satir">
+      <div class="ea-etiket">TALEP EDEN</div>
+      <div class="ea-deger">{{ etiket.cari_adi_snapshot or '—' }}</div>
+    </div>
+
+    <!-- TALEP TARİHİ -->
+    <div class="ea-satir">
+      <div class="ea-etiket">TALEP TARİHİ</div>
+      <div class="ea-deger">{{ etiket.talep_tarihi_fmt or '—' }}</div>
+    </div>
+
+    <!-- NUMUNE TARİHİ -->
+    <div class="ea-satir">
+      <div class="ea-etiket">NUMUNE TARİHİ</div>
+      <div class="ea-deger">{{ etiket.numune_tarihi_fmt or '—' }}</div>
+    </div>
+
+    <!-- REV NO + NUMUNE NO yan yana -->
+    <div class="ea-cift">
+      <div class="ea-cift-blok">
+        <div class="ea-etiket">REV NO</div>
+        <div class="ea-deger">{{ '%02d' % (etiket.rev_no | int) }}</div>
+      </div>
+      <div class="ea-cift-blok">
+        <div class="ea-etiket">NUMUNE NO</div>
+        <div class="ea-deger">N{{ '%02d' % (etiket.numune_no | int) }}</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Barkod -->
+  <div class="etiket-barkod">
+    <img src="{{ barkod_svg_uri }}" alt="{{ etiket.barkod_kodu }}">
+    <div class="etiket-barkod-id">{{ etiket.barkod_kodu }}</div>
+  </div>
+
+</div>
+
+<!-- Yazdırma butonu (ekranda görünür) -->
+<button class="print-btn no-print" onclick="window.print()">🖨 YAZDIR</button>
+
+<script>
+/* Sayfa yüklenince otomatik print dialog aç */
+/* Opsiyonel — yorumu kaldırarak aktif edilebilir */
+/* window.onload = function() { window.print(); }; */
+</script>
+</body>
+</html>
