@@ -275,7 +275,8 @@ def login():
             elif _rol_ad == 'Online E-Ticaret':
                 nxt = '/online-eticaret/'
             # VEDAT_ARGE_REDIRECT_V1 (10.07.2026): AR-GE Operatörü — next'i yoksay
-            elif _rol_ad == 'AR-GE Operatörü':
+            # RolId=42 (migration_091) veya string kontrolü — server DB Türkçe karakter farkına karşı
+            elif u.get('RolId') == 42 or _rol_ad in ('AR-GE Operatörü', 'AR-GE Operatoru'):
                 nxt = '/nexgen/tablet/arge'
             elif not nxt:
                 # Diğer sistem kullanıcıları: next varsa kullan, yoksa '/'
