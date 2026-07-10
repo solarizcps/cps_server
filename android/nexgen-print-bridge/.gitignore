@@ -1,0 +1,14 @@
+# Android build çıktıları — Git'e eklenmez
+*.apk
+*.aab
+*.ap_
+*.dex
+.gradle/
+build/
+app/build/
+local.properties
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/

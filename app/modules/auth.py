@@ -247,16 +247,6 @@ def login():
 
             # FAZ 5.1: next param oncelikli, yoksa tip bazli redirect
             nxt = request.args.get('next') or request.form.get('next')
-            # DEBUG_LOGIN_REDIRECT — sunucuda görmek için kasıtlı olarak dikkat çekici
-            print("=" * 60, flush=True)
-            print("[AUTH DEBUG] *** LOGIN REDIRECT KARAR NOKTASI ***", flush=True)
-            print(f"[AUTH DEBUG] kadi       = {kadi!r}", flush=True)
-            print(f"[AUTH DEBUG] RolId      = {u.get('RolId')!r}", flush=True)
-            print(f"[AUTH DEBUG] RolAd      = {u.get('RolAd')!r}", flush=True)
-            print(f"[AUTH DEBUG] Tip        = {u.get('Tip')!r}", flush=True)
-            print(f"[AUTH DEBUG] next_param = {nxt!r}", flush=True)
-            print(f"[AUTH DEBUG] auth.py    = {__file__!r}", flush=True)
-            print("=" * 60, flush=True)
 
             # Özel roller: next parametresi olsa bile kendi modülüne yönlendir.
             # Bu roller sadece belirli modüllere erişebilir; yanlışlıkla ?next=/yonetim/
@@ -282,8 +272,6 @@ def login():
                 # Diğer sistem kullanıcıları: next varsa kullan, yoksa '/'
                 nxt = '/'
 
-            print(f"[AUTH DEBUG] redirect hedefi: {nxt!r}", flush=True)
-            print("[AUTH DEBUG] *** REDIRECT YAPILIYOR ***", flush=True)
             return redirect(nxt)
         hata = 'Kullanıcı adı veya şifre hatalı.'
     return render_template('giris.html', hata=hata)

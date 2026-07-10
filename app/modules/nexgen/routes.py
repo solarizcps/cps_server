@@ -8155,12 +8155,26 @@ def tablet_etiket_arge(test_no):
     from flask import session as _session
     operator_ad = _session.get('kullanici_ad') or _session.get('ad') or '—'
     from datetime import date as _date
+
+    # Android Print Bridge için etiket kaydını bul (nexgen_arge_etiket)
+    con2 = _db()
+    try:
+        etiket_row = con2.execute(
+            "SELECT id FROM nexgen_arge_etiket WHERE arge_kayit_id = ? AND aktif = 1 "
+            "ORDER BY id DESC LIMIT 1",
+            (test['id'],)
+        ).fetchone()
+        etiket_id_val = etiket_row['id'] if etiket_row else None
+    finally:
+        con2.close()
+
     return render_template(
         'nexgen/tablet_etiket_arge.html',
         active='nexgen',
         test=test,
         operator_ad=operator_ad,
         bugun=_date.today().isoformat(),
+        etiket_id=etiket_id_val,
     )
 
 
@@ -14514,24 +14528,26 @@ def _m05_etiket_tspl_bytes(etiket_id, copies=1):
 
 
 def _print_job_olustur(etiket_id, payload_bytes, user_id):
-    """nexgen_print_job'a PENDING iş ekler; job_id döner."""
+    """nexgen_print_job'a PENDING iş ekler; (job_id, print_token) tuple döner."""
+    import secrets as _sec
     payload_b64 = _pa_b64.b64encode(payload_bytes).decode('ascii')
+    token = _sec.token_urlsafe(24)   # ~32 karakter, URL-güvenli
     kon = _db()
     try:
         kon.execute("BEGIN IMMEDIATE")
         cur = kon.execute("""
             INSERT INTO nexgen_print_job
-                (etiket_id, payload_base64, status,
+                (etiket_id, payload_base64, status, print_token,
                  requested_by_user_id, requested_at,
                  created_at, updated_at)
-            VALUES (?, ?, 'PENDING', ?,
+            VALUES (?, ?, 'PENDING', ?, ?,
                     datetime('now','localtime'),
                     datetime('now','localtime'),
                     datetime('now','localtime'))
-        """, (etiket_id, payload_b64, user_id))
+        """, (etiket_id, payload_b64, token, user_id))
         job_id = cur.lastrowid
         kon.commit()
-        return job_id
+        return job_id, token
     except Exception:
         kon.rollback()
         raise
@@ -14603,7 +14619,7 @@ def api_tablet_arge_dogrudan_yazdir(etiket_id):
     # Print job oluştur
     try:
         user_id = session.get('user_id') or session.get('kullanici_id')
-        job_id  = _print_job_olustur(etiket_id, payload_bytes, user_id)
+        job_id, print_token = _print_job_olustur(etiket_id, payload_bytes, user_id)
     except Exception as e:
         import traceback as _tb
         print(f'[nexgen] print_job oluşturma hatası etiket_id={etiket_id}: {e}')
@@ -14611,11 +14627,12 @@ def api_tablet_arge_dogrudan_yazdir(etiket_id):
         return jsonify({'ok': False, 'hata': 'Baskı kuyruğuna eklenemedi'}), 500
 
     return jsonify({
-        'ok':     True,
-        'job_id': job_id,
-        'mesaj':  f'Baskı kuyruğuna eklendi. İş no: {job_id}',
-        'barkod': etiket['barkod_kodu'],
-        'copies': copies,
+        'ok':          True,
+        'job_id':      job_id,
+        'print_token': print_token,
+        'mesaj':       f'Baskı kuyruğuna eklendi. İş no: {job_id}',
+        'barkod':      etiket['barkod_kodu'],
+        'copies':      copies,
     })
 
 
@@ -14763,4 +14780,193 @@ def api_tablet_print_job_durum(job_id):
         'status': row['status'],
         'hata':   row['last_error'],
     })
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# NEXGEN ANDROID PRINT BRIDGE — API
+# Android tablete Bluetooth baskı için token tabanlı endpoint'ler.
+#
+# Auth  : X-Print-Token başlığı (job oluşturulurken üretilir, DB'de saklanır)
+# Çift baskı koruması : PRINTED veya FAILED job tekrar işlenemez
+# Akış  :
+#   Android → GET  /api/android/print-job/<id>         (payload al)
+#   Android → POST /api/android/print-job/<id>/claim   (CLAIMED)
+#   Android → POST /api/android/print-job/<id>/success (PRINTED)
+#   Android → POST /api/android/print-job/<id>/fail    (FAILED)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _android_token_kontrol(job_id):
+    """X-Print-Token başlığını DB'deki print_token ile doğrular.
+
+    Dönüş: (row_dict, None) başarıda;  (None, (json_resp, http_code)) hata.
+    """
+    token = request.headers.get('X-Print-Token', '').strip()
+    if not token:
+        return None, (jsonify({'ok': False, 'hata': 'Token eksik'}), 401)
+
+    kon = _db()
+    try:
+        row = kon.execute(
+            "SELECT id, etiket_id, payload_base64, status, print_token, last_error "
+            "FROM nexgen_print_job WHERE id = ?",
+            (job_id,)
+        ).fetchone()
+    finally:
+        kon.close()
+
+    if not row:
+        return None, (jsonify({'ok': False, 'hata': 'İş bulunamadı'}), 404)
+
+    db_token = row['print_token'] or ''
+    if not db_token or db_token != token:
+        return None, (jsonify({'ok': False, 'hata': 'Geçersiz token'}), 403)
+
+    return dict(row), None
+
+
+@nexgen_bp.route('/api/android/print-job/<int:job_id>', methods=['GET'])
+def api_android_print_job_get(job_id):
+    """Android Print Bridge — baskı işi payloadını döner.
+
+    Header: X-Print-Token: <token>
+    Dönüş : {"ok": true, "job_id": 42, "status": "PENDING",
+              "payload_base64": "...", "etiket_id": 7}
+
+    - Sadece PENDING veya CLAIMED iş döner.
+    - PRINTED / FAILED job çift baskı önleme amacıyla 409 döner.
+    """
+    row, err = _android_token_kontrol(job_id)
+    if err:
+        return err
+
+    status = row['status']
+    if status in ('PRINTED', 'FAILED'):
+        return jsonify({
+            'ok':     False,
+            'hata':   f'İş zaten tamamlandı (status={status}). Çift baskı engellendi.',
+            'status': status,
+        }), 409
+
+    return jsonify({
+        'ok':             True,
+        'job_id':         row['id'],
+        'etiket_id':      row['etiket_id'],
+        'status':         status,
+        'payload_base64': row['payload_base64'],
+    })
+
+
+@nexgen_bp.route('/api/android/print-job/<int:job_id>/claim', methods=['POST'])
+def api_android_print_job_claim(job_id):
+    """Android Print Bridge — işi CLAIMED yap (baskı başlıyor).
+
+    Header: X-Print-Token: <token>
+    - Yalnızca PENDING iş claim edilebilir.
+    """
+    row, err = _android_token_kontrol(job_id)
+    if err:
+        return err
+
+    if row['status'] != 'PENDING':
+        return jsonify({
+            'ok':     False,
+            'hata':   f'İş claim edilemez (status={row["status"]})',
+            'status': row['status'],
+        }), 409
+
+    kon = _db()
+    try:
+        kon.execute("""
+            UPDATE nexgen_print_job
+            SET status     = 'CLAIMED',
+                claimed_at = datetime('now','localtime'),
+                updated_at = datetime('now','localtime')
+            WHERE id = ? AND status = 'PENDING'
+        """, (job_id,))
+        kon.commit()
+    except Exception as e:
+        kon.rollback()
+        return jsonify({'ok': False, 'hata': 'Sunucu hatası'}), 500
+    finally:
+        kon.close()
+
+    return jsonify({'ok': True, 'job_id': job_id, 'status': 'CLAIMED'})
+
+
+@nexgen_bp.route('/api/android/print-job/<int:job_id>/success', methods=['POST'])
+def api_android_print_job_success(job_id):
+    """Android Print Bridge — baskı başarılı, PRINTED olarak işaretle.
+
+    Header: X-Print-Token: <token>
+    """
+    row, err = _android_token_kontrol(job_id)
+    if err:
+        return err
+
+    if row['status'] == 'PRINTED':
+        return jsonify({'ok': True, 'mesaj': 'Zaten PRINTED'})
+
+    if row['status'] not in ('CLAIMED', 'PENDING'):
+        return jsonify({
+            'ok':   False,
+            'hata': f'Beklenmeyen durum: {row["status"]}',
+        }), 409
+
+    kon = _db()
+    try:
+        kon.execute("""
+            UPDATE nexgen_print_job
+            SET status     = 'PRINTED',
+                printed_at = datetime('now','localtime'),
+                last_error = NULL,
+                updated_at = datetime('now','localtime')
+            WHERE id = ?
+        """, (job_id,))
+        kon.commit()
+    except Exception as e:
+        kon.rollback()
+        return jsonify({'ok': False, 'hata': 'Sunucu hatası'}), 500
+    finally:
+        kon.close()
+
+    return jsonify({'ok': True, 'job_id': job_id, 'status': 'PRINTED'})
+
+
+@nexgen_bp.route('/api/android/print-job/<int:job_id>/fail', methods=['POST'])
+def api_android_print_job_fail(job_id):
+    """Android Print Bridge — baskı başarısız, FAILED olarak işaretle.
+
+    Header: X-Print-Token: <token>
+    Body  : {"hata": "Bluetooth bağlantısı kurulamadı"}
+    """
+    row, err = _android_token_kontrol(job_id)
+    if err:
+        return err
+
+    if row['status'] == 'FAILED':
+        return jsonify({'ok': True, 'mesaj': 'Zaten FAILED'})
+
+    try:
+        body = request.get_json(force=True, silent=True) or {}
+    except Exception:
+        body = {}
+    hata_mesaj = str(body.get('hata', 'Android baskı hatası'))[:500]
+
+    kon = _db()
+    try:
+        kon.execute("""
+            UPDATE nexgen_print_job
+            SET status     = 'FAILED',
+                last_error = ?,
+                updated_at = datetime('now','localtime')
+            WHERE id = ?
+        """, (hata_mesaj, job_id))
+        kon.commit()
+    except Exception as e:
+        kon.rollback()
+        return jsonify({'ok': False, 'hata': 'Sunucu hatası'}), 500
+    finally:
+        kon.close()
+
+    return jsonify({'ok': True, 'job_id': job_id, 'status': 'FAILED'})
 

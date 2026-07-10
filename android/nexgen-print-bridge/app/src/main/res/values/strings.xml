@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NexGen Print Bridge</string>
+    <string name="notif_channel_id">nexgen_print</string>
+    <string name="notif_channel_name">NexGen Baskı</string>
+    <string name="notif_printing">Baskı devam ediyor...</string>
+    <string name="notif_success">Etiket basıldı</string>
+    <string name="notif_failed">Baskı başarısız</string>
+    <string name="err_bt_off">Bluetooth kapalı. Lütfen açın.</string>
+    <string name="err_no_printer">Yazıcı bulunamadı. Ana ekrandan seçin.</string>
+    <string name="err_connect">Bluetooth bağlantısı kurulamadı</string>
+    <string name="err_write">Yazıcı kapalı veya menzil dışı</string>
+    <string name="err_server">Sunucu bağlantısı kesildi</string>
+    <string name="err_token">Baskı yetkisi süresi dolmuş</string>
+    <string name="err_already_printed">Bu etiket zaten basılmış</string>
+    <string name="success_label">Etiket basıldı</string>
+    <string name="btn_back_cps">CPS\'ye Dön</string>
+    <string name="btn_retry">Tekrar Dene</string>
+    <string name="btn_ok">Tamam</string>
+    <string name="select_printer">Yazıcı Seç</string>
+    <string name="no_paired_devices">Eşleşmiş Bluetooth cihazı bulunamadı.\nAndroid Ayarlar → Bağlı Cihazlar → Yeni Cihaz Eşleştir</string>
+    <string name="test_label">Test Etiketi Bas</string>
+    <string name="connecting">Bağlanıyor...</string>
+    <string name="printing">Basılıyor...</string>
+    <string name="printer_selected">Seçili Yazıcı: %1$s</string>
+</resources>

@@ -18,7 +18,7 @@
         <div class="arge-et-topbar-buyuk">AR-GE ETİKET</div>
       </div>
       <div class="arge-et-topbar-sag">
-        <button class="arge-et-yazdir-btn" onclick="window.print()">
+        <button class="arge-et-yazdir-btn" id="yazdir-btn" onclick="yazdirBasla()">
           🖨 YAZDIR
         </button>
       </div>
@@ -139,6 +139,37 @@
   </div>
 
 </div>
+
+<!-- ── Android Print Overlay ── -->
+<div id="print-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);
+     z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:18px;">
+  <div style="background:#fff;border-radius:18px;padding:32px 28px;max-width:300px;width:90%;
+              text-align:center;box-shadow:0 8px 40px rgba(0,0,0,.4);">
+    <div id="print-overlay-spinner" style="display:block;">
+      <div class="poi-spinner"></div>
+    </div>
+    <div id="print-overlay-ikon" class="poi-ikon" style="display:none;font-size:48px;"></div>
+    <div id="print-overlay-mesaj" style="font-size:15px;font-weight:700;color:#1e293b;
+         margin-top:14px;line-height:1.5;white-space:pre-line;">Hazırlanıyor...</div>
+    <button id="print-overlay-kapat" onclick="_overlayGizle();_butonSifirla(document.getElementById('yazdir-btn'));"
+            style="display:none;margin-top:18px;padding:12px 28px;background:#7c3aed;color:#fff;
+                   border:none;border-radius:10px;font-size:15px;font-weight:800;cursor:pointer;">
+      Tamam
+    </button>
+  </div>
+</div>
+
+<style>
+.poi-spinner {
+  width: 44px; height: 44px; margin: 0 auto;
+  border: 5px solid #e9d5ff; border-top-color: #7c3aed;
+  border-radius: 50%; animation: poi-spin .75s linear infinite;
+}
+@keyframes poi-spin { to { transform: rotate(360deg); } }
+.poi-ikon { line-height: 1; }
+.poi-ok   { color: #16a34a; }
+.poi-hata { color: #dc2626; }
+</style>
 
 <style>
 * { box-sizing: border-box; }
@@ -334,6 +365,7 @@
 </style>
 
 <script>
+/* ── Barkod çubukları (görsel) ── */
 (function() {
   var kod = '{{ test.test_no }}';
   var kap = document.getElementById('aet-cubuklar');
@@ -351,5 +383,159 @@
     }
   }
 })();
+
+/* ── Android UA tespiti ── */
+function _isAndroid() {
+  return /android/i.test(navigator.userAgent);
+}
+
+/* ── Overlay yönetimi ── */
+function _overlayGoster(mesaj, spinner) {
+  var o = document.getElementById('print-overlay');
+  if (!o) return;
+  document.getElementById('print-overlay-mesaj').textContent = mesaj;
+  document.getElementById('print-overlay-spinner').style.display = spinner ? 'block' : 'none';
+  document.getElementById('print-overlay-ikon').style.display = spinner ? 'none' : 'block';
+  o.style.display = 'flex';
+}
+function _overlayGizle() {
+  var o = document.getElementById('print-overlay');
+  if (o) o.style.display = 'none';
+}
+function _overlayBasari() {
+  document.getElementById('print-overlay-spinner').style.display = 'none';
+  document.getElementById('print-overlay-ikon').textContent = '✓';
+  document.getElementById('print-overlay-ikon').className = 'poi-ikon poi-ok';
+  document.getElementById('print-overlay-ikon').style.display = 'block';
+  document.getElementById('print-overlay-mesaj').textContent = 'Etiket basıldı';
+  document.getElementById('print-overlay-kapat').style.display = 'inline-block';
+}
+function _overlayHata(mesaj) {
+  document.getElementById('print-overlay-spinner').style.display = 'none';
+  document.getElementById('print-overlay-ikon').textContent = '✗';
+  document.getElementById('print-overlay-ikon').className = 'poi-ikon poi-hata';
+  document.getElementById('print-overlay-ikon').style.display = 'block';
+  document.getElementById('print-overlay-mesaj').textContent = mesaj;
+  document.getElementById('print-overlay-kapat').style.display = 'inline-block';
+}
+
+/* ── Ana yazdır fonksiyonu ── */
+function yazdirBasla() {
+  if (!_isAndroid()) {
+    /* Masaüstü / Windows: tarayıcı print diyaloğu */
+    window.print();
+    return;
+  }
+
+  /* Android akışı */
+  var etiketId = {{ etiket_id if etiket_id is defined else 'null' }};
+  if (!etiketId) {
+    alert('Etiket ID bulunamadı. Sayfayı yenileyip tekrar deneyin.');
+    return;
+  }
+
+  var btn = document.getElementById('yazdir-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ İşleniyor...'; }
+
+  _overlayGoster('Baskı hazırlanıyor...', true);
+
+  /* 1. Print job oluştur */
+  fetch('/nexgen/api/tablet/arge/etiket/' + etiketId + '/dogrudan-yazdir', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({copies: 1})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (!data.ok) {
+      _overlayHata(data.hata || 'Baskı kuyruğuna eklenemedi');
+      _butonSifirla(btn);
+      return;
+    }
+
+    var jobId    = data.job_id;
+    var token    = data.print_token;
+    var scheme   = 'nexgenprint://print?job_id=' + jobId + '&token=' + encodeURIComponent(token);
+
+    /* 2. Android uygulamasını aç */
+    _overlayGoster('Yazıcıya bağlanıyor...', true);
+
+    var acildi = false;
+    var iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = scheme;
+    document.body.appendChild(iframe);
+
+    /* 2s sonra uygulama açılıp açılmadığını anla */
+    setTimeout(function() {
+      if (document.hidden) {
+        /* Sayfa arka plana geçti → uygulama açıldı */
+        acildi = true;
+        _overlayGoster('Baskı devam ediyor...', true);
+        _pollingBaslat(jobId, token, btn);
+      } else {
+        /* Sayfa hâlâ önde → uygulama yüklü değil */
+        _overlayHata('NexGen Print Bridge uygulaması yüklü değil.\nAna ekrandan kurulum talimatlarını alın.');
+        _butonSifirla(btn);
+      }
+    }, 2000);
+
+    /* visibilitychange: sayfa geri geldiğinde polling başlat */
+    document.addEventListener('visibilitychange', function _vis() {
+      if (!document.hidden && !acildi) {
+        document.removeEventListener('visibilitychange', _vis);
+      }
+    }, {once: true});
+  })
+  .catch(function() {
+    _overlayHata('Sunucu bağlantısı kesildi');
+    _butonSifirla(btn);
+  });
+}
+
+/* ── Job durum polling ── */
+function _pollingBaslat(jobId, token, btn) {
+  var deneme = 0;
+  var maxDeneme = 60; /* 60 × 1s = 60s max */
+  var timer = setInterval(function() {
+    deneme++;
+    fetch('/nexgen/api/tablet/arge/print-job/' + jobId + '/durum')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok) {
+          clearInterval(timer);
+          _overlayHata('Durum sorgulanamadı');
+          _butonSifirla(btn);
+          return;
+        }
+        if (d.status === 'PRINTED') {
+          clearInterval(timer);
+          _overlayBasari();
+          _butonSifirla(btn);
+        } else if (d.status === 'FAILED') {
+          clearInterval(timer);
+          _overlayHata(d.hata || 'Baskı başarısız');
+          _butonSifirla(btn);
+        } else if (deneme >= maxDeneme) {
+          clearInterval(timer);
+          _overlayHata('Zaman aşımı — yazıcı kapalı veya bağlantı kesildi');
+          _butonSifirla(btn);
+        }
+      })
+      .catch(function() {
+        if (deneme >= maxDeneme) {
+          clearInterval(timer);
+          _overlayHata('Sunucu bağlantısı kesildi');
+          _butonSifirla(btn);
+        }
+      });
+  }, 1000);
+}
+
+function _butonSifirla(btn) {
+  if (!btn) return;
+  btn.disabled = false;
+  btn.textContent = '🖨 YAZDIR';
+}
 </script>
 {% endblock %}

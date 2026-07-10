@@ -1323,7 +1323,7 @@ TABLO_MAP = [
      'MODÜL-05 AR-GE Numune Etiketi'),
     ('nexgen_arge_etiket_yazdirma',['id','etiket_id','barkod_kodu'],
      'MODÜL-05 Yazdırma Logu'),
-    ('nexgen_print_job',          ['id','etiket_id','payload_base64','status','requested_at'],
+    ('nexgen_print_job',          ['id','etiket_id','payload_base64','status','requested_at','print_token'],
      'Print Agent — Doğrudan Yazıcı Baskı Kuyruğu'),
 ]
 
@@ -1533,8 +1533,22 @@ def mig093(cur, con, log):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# MAIN
+# MIG 094 — nexgen_print_job.print_token (Android Print Bridge)
+# Merkezi kaynak: app/migrations/094_print_job_token.py
 # ──────────────────────────────────────────────────────────────────────────────
+def mig094(cur, con, log):
+    """Android Print Bridge token kolonu — merkezi migration dosyasini cagir."""
+    import sys, os
+    _mig_dir = os.path.join(os.path.dirname(__file__), '..', 'migrations')
+    _mig_dir = os.path.normpath(_mig_dir)
+    if _mig_dir not in sys.path:
+        sys.path.insert(0, _mig_dir)
+    from importlib import import_module
+    m = import_module('094_print_job_token')
+    m.mig094(cur, con, log)
+
+
+
 def main():
     ts = datetime.now().strftime('%Y%m%d_%H%M')
     log = []
@@ -1592,6 +1606,7 @@ def main():
         ("MIG 091 — vedat arge kullanici",             lambda: mig091(cur, con, log)),
         ("MIG 092 — nexgen_arge_etiket (MODÜL-05)",   lambda: mig092(cur, con, log)),
         ("MIG 093 — nexgen_print_job (Print Agent)",  lambda: mig093(cur, con, log)),
+        ("MIG 094 — print_token (Android Bridge)",     lambda: mig094(cur, con, log)),
     ]
 
     for aciklama, fn in steps:

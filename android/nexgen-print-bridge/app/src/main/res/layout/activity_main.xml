@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#F8F7FF"
+    android:padding="0dp">
+
+    <!-- Başlık bandı -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#7C3AED"
+        android:padding="20dp"
+        android:gravity="center_vertical"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="NEXGEN"
+            android:textColor="#C4B5FD"
+            android:textSize="11sp"
+            android:letterSpacing="0.15"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Print Bridge"
+            android:textColor="#FFFFFF"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:padding="16dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gap="12dp">
+
+            <!-- Seçili yazıcı kartı -->
+            <LinearLayout
+                android:id="@+id/card_printer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/card_bg"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:layout_marginBottom="12dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="SEÇİLİ YAZICI"
+                    android:textSize="10sp"
+                    android:textColor="#9CA3AF"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.1" />
+
+                <TextView
+                    android:id="@+id/tv_selected_printer"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Yazıcı seçilmedi"
+                    android:textSize="16sp"
+                    android:textColor="#1E293B"
+                    android:textStyle="bold"
+                    android:layout_marginTop="4dp" />
+            </LinearLayout>
+
+            <!-- Eşleşmiş cihazlar -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="EŞLEŞMIŞ BLUETOOTH CİHAZLARI"
+                android:textSize="10sp"
+                android:textColor="#6B7280"
+                android:textStyle="bold"
+                android:letterSpacing="0.1"
+                android:layout_marginBottom="6dp" />
+
+            <ListView
+                android:id="@+id/lv_devices"
+                android:layout_width="match_parent"
+                android:layout_height="240dp"
+                android:background="@drawable/card_bg"
+                android:divider="#F1F5F9"
+                android:dividerHeight="1dp" />
+
+            <TextView
+                android:id="@+id/tv_no_devices"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:visibility="gone"
+                android:text="@string/no_paired_devices"
+                android:textSize="13sp"
+                android:textColor="#9CA3AF"
+                android:gravity="center"
+                android:padding="24dp"
+                android:background="@drawable/card_bg"
+                android:layout_marginBottom="12dp" />
+
+            <!-- Bağlantı testi butonu -->
+            <Button
+                android:id="@+id/btn_test_connection"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:text="Bağlantıyı Test Et"
+                android:backgroundTint="#EDE9FE"
+                android:textColor="#6D28D9"
+                android:textStyle="bold"
+                android:layout_marginTop="8dp" />
+
+            <!-- Test etiketi butonu -->
+            <Button
+                android:id="@+id/btn_test_label"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:text="@string/test_label"
+                android:backgroundTint="#7C3AED"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold" />
+
+            <!-- Son baskı durumu -->
+            <LinearLayout
+                android:id="@+id/card_last_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/card_bg"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:layout_marginTop="8dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="SON BASKI"
+                    android:textSize="10sp"
+                    android:textColor="#9CA3AF"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.1" />
+
+                <TextView
+                    android:id="@+id/tv_last_status"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="14sp"
+                    android:textColor="#1E293B"
+                    android:layout_marginTop="6dp" />
+
+                <TextView
+                    android:id="@+id/tv_last_error"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="12sp"
+                    android:textColor="#DC2626"
+                    android:layout_marginTop="4dp"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <!-- Server URL ayarı -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="CPS SUNUCU ADRESI"
+                android:textSize="10sp"
+                android:textColor="#6B7280"
+                android:textStyle="bold"
+                android:letterSpacing="0.1"
+                android:layout_marginTop="12dp"
+                android:layout_marginBottom="4dp" />
+
+            <EditText
+                android:id="@+id/et_server_url"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="http://192.168.1.x:8080"
+                android:inputType="textUri"
+                android:padding="12dp"
+                android:background="@drawable/card_bg"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/btn_save_url"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:text="Kaydet"
+                android:backgroundTint="#F1F5F9"
+                android:textColor="#374151"
+                android:textStyle="bold"
+                android:layout_marginBottom="24dp" />
+
+        </LinearLayout>
+    </ScrollView>
+
+</LinearLayout>
