@@ -1,0 +1,12 @@
+Server'da şu komutları sırayla çalıştırın (her birinin çıktısını kopyalayın):
+
+1. Flask'ın çalıştığı klasörü bul:
+   cd C:\Solariz_CPS_SERVER\app
+   python -c "from modules.nexgen import nexgen_bp; print('OK:', nexgen_bp.url_prefix)"
+
+2. [AUTH DEBUG] logunu göster — server'da en son login sonrası terminalde:
+   Son 30 satırı kopyala
+
+3. Registered route listesi:
+   cd C:\Solariz_CPS_SERVER\app
+   python -c "import sys; sys.path.insert(0,'.'); from app import app; routes=[r.rule for r in app.url_map.iter_rules() if 'nexgen' in r.rule]; print('\n'.join(routes[:10]) if routes else 'NEXGEN ROUTE YOK')"
