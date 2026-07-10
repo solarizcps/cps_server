@@ -1579,6 +1579,7 @@ initEvents();
   </div>
 </div>
 
+<script src="{{ url_for('static', filename='js/nexgen_print_bridge.js') }}"></script>
 <script>
 // ════════════════════════════════════════════════════════════════
 // MODÜL-05 — ETİKET JS (MODÜL-01 entegrasyonu)
@@ -1648,42 +1649,10 @@ function m5EtiketListesiniGoster(liste){
   }
 }
 
+/* _m5DogrudanYazdir — nexgen_print_bridge.js ortak helper'ına yönlendirir.
+   Android'de nexgenprint:// URL scheme, Windows'da Print Agent polling. */
 function _m5DogrudanYazdir(etiketId, kopya) {
-  m5Mesaj('Baskı gönderiliyor...', 'bilgi');
-  fetch('/nexgen/api/tablet/arge/etiket/' + etiketId + '/dogrudan-yazdir', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({copies: kopya})
-  })
-  .then(function(r){ return r.json(); })
-  .then(function(d){
-    if(!d.ok){ m5Mesaj('Hata: ' + (d.hata || 'Baskı başlatılamadı'), 'hata'); return; }
-    m5Mesaj('Baskı kuyruğuna eklendi (İş #' + d.job_id + ')...', 'bilgi');
-    _m5JobPoll(d.job_id, 0);
-  })
-  .catch(function(){ m5Mesaj('Sunucuya bağlanılamadı', 'hata'); });
-}
-
-function _m5JobPoll(jobId, deneme) {
-  if(deneme >= 15){ m5Mesaj('Yazıcıdan yanıt alınamadı. Print Agent çalışıyor mu?', 'hata'); return; }
-  setTimeout(function(){
-    fetch('/nexgen/api/tablet/arge/print-job/' + jobId + '/durum')
-    .then(function(r){ return r.json(); })
-    .then(function(d){
-      if(!d.ok){ m5Mesaj('Durum sorgulanamadı', 'hata'); return; }
-      if(d.status === 'PRINTED'){
-        m5Mesaj('Etiket yazdırıldı \u2713', 'ok');
-      } else if(d.status === 'FAILED'){
-        var h = d.hata || '';
-        if(h.indexOf('COM') !== -1 || h.indexOf('Serial') !== -1 || h.indexOf('port') !== -1){
-          m5Mesaj('Yazıcıya bağlanılamadı. Kablo veya Bluetooth bağlantısını kontrol edin.', 'hata');
-        } else {
-          m5Mesaj('Baskı başarısız. Lütfen tekrar deneyin.', 'hata');
-        }
-      } else { _m5JobPoll(jobId, deneme + 1); }
-    })
-    .catch(function(){ _m5JobPoll(jobId, deneme + 1); });
-  }, 2000);
+  NexGenPrint.yazdir(etiketId, kopya, m5Mesaj);
 }
 
 function m5YeniNumune(){

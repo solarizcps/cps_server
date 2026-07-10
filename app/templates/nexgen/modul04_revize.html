@@ -1411,6 +1411,7 @@ document.addEventListener('keydown', function(e){
   </div>
 </div>
 
+<script src="{{ url_for('static', filename='js/nexgen_print_bridge.js') }}"></script>
 <script>
 // ════════════════════════════════════════════════════════════════
 // MODÜL-05 — ETİKET JS
@@ -1485,65 +1486,12 @@ function m5EtiketListesiniGoster(liste){
   }
 }
 
-/* ── Print Agent: Doğrudan yazıcıya gönder ──────────────────────────────
-   Önce etiket ID alınır, sonra doğrudan-yazdir endpointi çağrılır.
-   Polling: 2 sn'de bir job durumu sorgulanır (maks 30 sn / 15 deneme).
-   Başarıda: "Etiket yazdırıldı ✓"
-   Başarısızda: sade Türkçe hata mesajı.
-   ──────────────────────────────────────────────────────────────────── */
+/* ── _m5DogrudanYazdir — nexgen_print_bridge.js ortak helper'ına yönlendirir.
+   Android'de nexgenprint:// URL scheme, Windows'da Print Agent polling. */
 function _m5DogrudanYazdir(etiketId, kopya) {
-  m5Mesaj('Baskı gönderiliyor...', 'bilgi');
-
-  fetch('/nexgen/api/tablet/arge/etiket/' + etiketId + '/dogrudan-yazdir', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({copies: kopya})
-  })
-  .then(function(r){ return r.json(); })
-  .then(function(d){
-    if(!d.ok){
-      m5Mesaj('Hata: ' + (d.hata || 'Baskı başlatılamadı'), 'hata');
-      return;
-    }
-    var jobId = d.job_id;
-    m5Mesaj('Baskı kuyruğuna eklendi (İş #' + jobId + ')...', 'bilgi');
-    _m5JobPoll(jobId, 0);
-  })
-  .catch(function(){ m5Mesaj('Sunucuya bağlanılamadı', 'hata'); });
-}
-
-function _m5JobPoll(jobId, deneme) {
-  var MAKS = 15;  /* 15 × 2 sn = 30 sn */
-  if(deneme >= MAKS){
-    m5Mesaj('Yazıcıdan yanıt alınamadı. Print Agent çalışıyor mu?', 'hata');
-    return;
-  }
-  setTimeout(function(){
-    fetch('/nexgen/api/tablet/arge/print-job/' + jobId + '/durum')
-    .then(function(r){ return r.json(); })
-    .then(function(d){
-      if(!d.ok){ m5Mesaj('Durum sorgulanamadı', 'hata'); return; }
-      var st = d.status;
-      if(st === 'PRINTED'){
-        m5Mesaj('Etiket yazdırıldı \u2713', 'ok');
-        m5OnizlemeYukle(M5_TEST_ID);
-      } else if(st === 'FAILED'){
-        var hataMetni = d.hata || 'Yazıcı hatası';
-        /* Kullanıcıya teknik detay gösterme */
-        if(hataMetni.indexOf('COM port') !== -1 || hataMetni.indexOf('Serial') !== -1){
-          m5Mesaj('Yazıcıya bağlanılamadı. Kablo veya Bluetooth bağlantısını kontrol edin.', 'hata');
-        } else if(hataMetni.indexOf('Agent') !== -1 || hataMetni.indexOf('agent') !== -1){
-          m5Mesaj('Print Agent çalışmıyor. Lütfen yetkiliyle iletişime geçin.', 'hata');
-        } else {
-          m5Mesaj('Baskı başarısız. Lütfen tekrar deneyin.', 'hata');
-        }
-      } else {
-        /* PENDING veya CLAIMED — bekle */
-        _m5JobPoll(jobId, deneme + 1);
-      }
-    })
-    .catch(function(){ _m5JobPoll(jobId, deneme + 1); });
-  }, 2000);
+  NexGenPrint.yazdir(etiketId, kopya, m5Mesaj, {
+    onBasari: function() { m5OnizlemeYukle(M5_TEST_ID); }
+  });
 }
 
 function m5YeniNumune(){
