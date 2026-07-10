@@ -212,7 +212,7 @@ def mig049(cur, con, log):
                 para_birimi      TEXT    DEFAULT 'TRY',
                 durum            TEXT    NOT NULL DEFAULT 'BEKLEMEDE',
                 siparis_tarihi   TEXT    DEFAULT (datetime('now')),
-                tahmini_teslimat TEXT,
+                beklenen_teslim  TEXT,
                 notlar           TEXT,
                 olusturan_id     INTEGER,
                 olusturma_tarihi TEXT    DEFAULT (datetime('now'))
@@ -220,6 +220,10 @@ def mig049(cur, con, log):
         """)
         con.commit()
         created.append('nexgen_satin_siparis')
+    else:
+        # Tablo zaten varsa eksik kolon ekle
+        if _alter_add(cur, con, 'nexgen_satin_siparis', 'beklenen_teslim', 'TEXT'):
+            created.append('satin_siparis.beklenen_teslim (eklendi)')
 
     cur.execute("INSERT OR IGNORE INTO schema_migrations(version, aciklama) VALUES('049', 'tedarikci + satin siparis')")
     con.commit()
@@ -506,22 +510,24 @@ def mig065_068(cur, con, log):
             if _alter_add(cur, con, 'nexgen_arge_test', kolon, tip):
                 added.append(f'arge_test.{kolon}')
 
-    # 066: uretim_batch
+    # 066: uretim_batch (batch_kodu = migration 066 orijinal şeması)
     if not _tablo_var(cur, 'nexgen_uretim_batch'):
         cur.execute("""
             CREATE TABLE IF NOT EXISTS nexgen_uretim_batch (
-                id               INTEGER PRIMARY KEY AUTOINCREMENT,
-                batch_no         TEXT    NOT NULL UNIQUE,
-                uretim_varyant_id INTEGER,
-                planlanan_kg     REAL    NOT NULL DEFAULT 0,
-                uretilen_kg      REAL    DEFAULT 0,
-                fire_kg          REAL    DEFAULT 0,
-                baslangic_tarihi TEXT,
-                bitis_tarihi     TEXT,
-                durum            TEXT    NOT NULL DEFAULT 'BEKLEMEDE',
-                notlar           TEXT,
-                olusturan_id     INTEGER,
-                olusturma_tarihi TEXT    DEFAULT (datetime('now'))
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                batch_kodu          TEXT    NOT NULL UNIQUE,
+                uretim_varyant_id   INTEGER REFERENCES nexgen_uretim_varyant(id),
+                plan_id             INTEGER REFERENCES nexgen_uretim_plan(id),
+                planlanan_kg        REAL    NOT NULL DEFAULT 0,
+                uretilen_kg         REAL    DEFAULT 0,
+                fire_kg             REAL    DEFAULT 0,
+                baslangic_tarihi    TEXT,
+                bitis_tarihi        TEXT,
+                durum               TEXT    NOT NULL DEFAULT 'BEKLEMEDE',
+                notlar              TEXT,
+                olusturan_id        INTEGER,
+                olusturma_tarihi    TEXT    DEFAULT (datetime('now','localtime')),
+                lot_kodu            TEXT
             )
         """)
         con.commit()
@@ -658,10 +664,12 @@ def mig071_073(cur, con, log):
     tag = "[071-073]"
     added = []
 
-    # 071
+    # 071 + batch_kodu güvenlik (eski DB'lerde batch_no ile oluşturulmuş olabilir)
     if _tablo_var(cur, 'nexgen_uretim_batch'):
         if _alter_add(cur, con, 'nexgen_uretim_batch', 'plan_id', 'INTEGER'):
             added.append('uretim_batch.plan_id')
+        if _alter_add(cur, con, 'nexgen_uretim_batch', 'batch_kodu', 'TEXT'):
+            added.append('uretim_batch.batch_kodu')
 
     # 072 — batch_kodu + parca_no (mig072 orijinal şeması; parca_kodu yok)
     if not _tablo_var(cur, 'nexgen_uretim_parca'):
@@ -832,7 +840,8 @@ def mig076_rf(cur, con, log):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# MIG 079 — stok_kart kimlik kolonları (tanim, yeni_tanim, renk_bileseni_mi)
+# MIG 079 — stok_kart kimlik kolonları + güvenli seed
+# Seed verisi 079 migration modülünden import edilir (tek kaynak, kopyalanmaz).
 # ──────────────────────────────────────────────────────────────────────────────
 def mig079(cur, con, log):
     tag = "[079]"
@@ -845,6 +854,21 @@ def mig079(cur, con, log):
         ]:
             if _alter_add(cur, con, 'nexgen_stok_kart', kolon, tip):
                 added.append(kolon)
+
+        # Güvenli seed — kaynak: app/migrations/079_nexgen_rf_kullanim_tablet.py
+        try:
+            import sys
+            _mig_dir = os.path.normpath(os.path.join(_HERE, '..', 'migrations'))
+            if _mig_dir not in sys.path:
+                sys.path.insert(0, _mig_dir)
+            from importlib import import_module as _imp
+            _m079 = _imp('079_nexgen_rf_kullanim_tablet')
+            tanim_n, renk_n = _m079._stok_kimlik_seed_uygula(cur, con)
+            log.append(f"{tag} seed tanim/yeni_tanim guncellenen: {tanim_n}")
+            log.append(f"{tag} seed renk_bileseni_mi=1 set edilen: {renk_n}")
+        except Exception as _e:
+            log.append(f"{tag} WARN seed: {_e}")
+
     cur.execute("INSERT OR IGNORE INTO schema_migrations(version) VALUES('079')")
     con.commit()
     log.append(f"{tag} {'eklendi: '+', '.join(added) if added else 'OK'}")
@@ -1127,11 +1151,11 @@ TABLO_MAP = [
      'Satınalma'),
     ('nexgen_satin_siparis',      ['id','siparis_no','tedarikci_id','stok_kart_id'],
      'Satınalma'),
-    ('nexgen_fiyat_batch',        ['id','hafta_kodu','durum'],
+    ('nexgen_fiyat_batch',        ['id','durum'],
      'Fiyat Yönetimi'),
-    ('nexgen_fiyat_batch_detay',  ['id','batch_id','stok_kart_id','fiyat'],
+    ('nexgen_fiyat_batch_detay',  ['id','batch_id','stok_kart_id'],
      'Fiyat Yönetimi'),
-    ('nexgen_hammadde_fiyat',     ['id','stok_kart_id','fiyat','aktif'],
+    ('nexgen_hammadde_fiyat',     ['id','stok_kart_id','aktif'],
      'Fiyat Yönetimi, Reçete Maliyet'),
     ('nexgen_mal_kabul',          ['id','stok_kart_id','miktar_kg'],
      'Depo / Mal Kabul'),
