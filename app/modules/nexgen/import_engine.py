@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """
 P5A — NexGen Import Engine (transaction motoru) v5
+P5D.2 — UV revizyon motoru ve güvenli reçete güncelleme
 ===================================================
 P5B.1 — bağımlılık filtresi, scoped RF identity, kısmi apply koruması
   - Yalnız güvenli yeni kayıtlar import planına alınır
-  - Mevcut UV reçete değişiklikleri BLOCKED (CHANGED_RECIPE / REVISION_SNAPSHOT)
-  - MODEL B: plan veya aktif batch bağlı UV değişikliği → REVISION_SNAPSHOT_REQUIRED
+  - P5D.2: kullanılmayan UV → UPDATE_ANA_KALEM; plan/batch/üretim → INSERT_UV_REVISION
   - INSERT_ANA_KALEM (ana kalemler); boya → NEW_RF_CANDIDATE (recete_kalem'e yazılmaz)
 P4F.2F (Model 1 — RF tabanlı boya):
   - UV kimliği: (rv_id, boyut) — tek UV; müşteri rengi UV açmaz
@@ -60,10 +60,12 @@ AKTIF_BATCH_DURUMLARI = ("TASLAK", "HAZIR", "DEVAM", "BEKLEME")
 # P5A — kısmi import aksiyon sınıfları
 GUVENLI_IMPORT_AKSIYONLARI = frozenset({
     "MATCH_FORMUL", "MATCH_RV", "INSERT_RV", "MATCH_UV", "INSERT_UV",
-    "INSERT_ANA_KALEM", "INSERT_PLANLAMA", "NEW_RF_CANDIDATE", "WARNING_ONLY",
+    "INSERT_UV_REVISION", "UPDATE_ANA_KALEM",
+    "INSERT_ANA_KALEM", "INSERT_PLANLAMA", "INSERT_PLANLAMA_REVISION",
+    "NEW_RF_CANDIDATE", "WARNING_ONLY", "MATCH_UV_REVISION",
 })
 BLOKE_IMPORT_AKSIYONLARI = frozenset({
-    "REVISION_SNAPSHOT_REQUIRED", "CHANGED_RECIPE",
+    "REVISION_SNAPSHOT_REQUIRED", "CHANGED_RECIPE", "GERCEK_BLOCKER",
     "BLOCKER_PARENT", "PARENT_FORMUL_BELIRSIZ", "RF_CONFLICT", "BLOCKED",
     "BLOCKED_DEPENDENCY", "SCHEMA_IDENTITY_EKSIK", "GIT_COMMIT_ALINAMADI",
     "PLANLAMA_RV_UNRESOLVED",
@@ -77,14 +79,25 @@ MOTOR_FP_FILES = (
     "app/modules/nexgen/import_normalizer.py",
     "app/tools/nexgen_import_apply.py",
 )
-SAFE_OP_ORDER = ("INSERT_RV", "INSERT_UV", "INSERT_ANA_KALEM", "INSERT_PLANLAMA")
+SAFE_OP_ORDER = (
+    "INSERT_RV", "INSERT_UV", "INSERT_UV_REVISION",
+    "UPDATE_ANA_KALEM", "INSERT_ANA_KALEM",
+    "INSERT_PLANLAMA", "INSERT_PLANLAMA_REVISION",
+)
 
 # Geriye dönük uyumluluk (artık dry-run dinamik token üretir)
 KISMI_IMPORT_CONFIRM_TOKEN = "NEXGEN-PARTIAL-IMPORT-v1"
 
 YAZILABILIR_AKSIYONLAR = frozenset({
-    "INSERT_RV", "INSERT_UV", "INSERT_ANA_KALEM", "INSERT_PLANLAMA",
+    "INSERT_RV", "INSERT_UV", "INSERT_UV_REVISION",
+    "UPDATE_ANA_KALEM", "INSERT_ANA_KALEM",
+    "INSERT_PLANLAMA", "INSERT_PLANLAMA_REVISION",
 })
+
+# P5D.2 — deterministik revizyon suffix (idempotent; R3 üretilmez)
+REVISION_SUFFIX = " R2"
+REVISION_REV_NO = 2
+UV_REV_NO_INDEX = "uq_nuv_rv_boyut_rev"
 
 
 # ---------------------------------------------------------------------------
@@ -237,7 +250,7 @@ class SimulasyonSonucu:
             self.ozet["BLOCKED"] = bloke_cnt
         yazilabilir = [
             k for k in self.islemler
-            if k.aksiyon in ("INSERT_RV", "INSERT_UV", "INSERT_ANA_KALEM", "INSERT_PLANLAMA")
+            if k.aksiyon in YAZILABILIR_AKSIYONLAR
             and k.safe_to_apply and not k.blocked_dependency
         ]
         self.guvenli_yazma_sayisi = len(yazilabilir)
@@ -416,11 +429,65 @@ def _rv_id_map_varyant(con: sqlite3.Connection) -> dict[tuple, int]:
 
 
 def _uv_id_map(con: sqlite3.Connection) -> dict[tuple, int]:
-    """(rv_id, boyut) → uv_id"""
-    rows = con.execute(
-        "SELECT id, renk_varyant_id, boyut FROM nexgen_uretim_varyant WHERE aktif=1"
-    ).fetchall()
+    """(rv_id, boyut) → birincil uv_id (kaynak_varyant_id yok)."""
+    return _uv_id_map_primary(con)
+
+
+def _uv_rev_no_kolon_var_mi(con: sqlite3.Connection) -> bool:
+    """P5D-2B — nexgen_uretim_varyant.rev_no kolonu var mı?"""
+    try:
+        cols = [r[1] for r in con.execute(
+            "PRAGMA table_info(nexgen_uretim_varyant)"
+        ).fetchall()]
+        return "rev_no" in cols
+    except sqlite3.OperationalError:
+        return False
+
+
+def _uv_id_map_primary(con: sqlite3.Connection) -> dict[tuple, int]:
+    """(rv_id, boyut) → birincil (rev_no=1) uv_id."""
+    if _uv_rev_no_kolon_var_mi(con):
+        rows = con.execute(
+            """SELECT id, renk_varyant_id, boyut FROM nexgen_uretim_varyant
+               WHERE aktif=1 AND rev_no=1"""
+        ).fetchall()
+    else:
+        rows = con.execute(
+            """SELECT id, renk_varyant_id, boyut FROM nexgen_uretim_varyant
+               WHERE aktif=1 AND COALESCE(kaynak_varyant_id, 0)=0"""
+        ).fetchall()
     return {(r[1], (r[2] or "STANDART").strip().upper()): r[0] for r in rows}
+
+
+def _uv_id_map_canonical(con: sqlite3.Connection) -> dict[tuple, int]:
+    """
+    (rv_id, boyut) → planlama için tercih edilen uv_id (en yüksek rev_no).
+    """
+    if _uv_rev_no_kolon_var_mi(con):
+        rows = con.execute(
+            """SELECT id, renk_varyant_id, boyut, rev_no
+               FROM nexgen_uretim_varyant WHERE aktif=1
+               ORDER BY renk_varyant_id, boyut, rev_no DESC"""
+        ).fetchall()
+        canonical: dict[tuple, int] = {}
+        for r in rows:
+            key = (r[1], (r[2] or "STANDART").strip().upper())
+            if key not in canonical:
+                canonical[key] = r[0]
+        return canonical
+    primary = _uv_id_map_primary(con)
+    canonical = dict(primary)
+    rows = con.execute(
+        """SELECT uv.id, uv.renk_varyant_id, uv.boyut
+           FROM nexgen_uretim_varyant uv
+           WHERE uv.aktif=1 AND COALESCE(uv.kaynak_varyant_id, 0) > 0
+           ORDER BY uv.id"""
+    ).fetchall()
+    for r in rows:
+        key = (r[1], (r[2] or "STANDART").strip().upper())
+        if key in primary:
+            canonical[key] = r[0]
+    return canonical
 
 
 def _aktif_batch_listesi(con: sqlite3.Connection) -> list[dict]:
@@ -515,14 +582,152 @@ def _uv_recete_degisikligi_bloklu_mu(
     con: sqlite3.Connection, uv_id: int,
 ) -> tuple[bool, str]:
     """
-    P5A MODEL B: mevcut UV reçete değişikliği bloklu mu?
-    Aktif batch veya herhangi bir plan bağlıysa REVISION_SNAPSHOT_REQUIRED.
+    P5D.2 — mevcut UV reçete değişikliği revizyon mu gerektirir?
+    Plan, batch veya üretim kullanımı varsa doğrudan UPDATE yapılmaz.
     """
     if _uv_aktif_batch_var_mi(con, uv_id):
         return True, f"Aktif batch bağlı (uv_id={uv_id})"
     if _uv_plan_var_mi(con, uv_id):
         return True, f"Plan bağlı (uv_id={uv_id})"
+    if _uv_batch_var_mi(con, uv_id):
+        return True, f"Batch geçmişi var (uv_id={uv_id})"
+    if _uv_uretim_kullanim_var_mi(con, uv_id):
+        return True, f"Üretim kullanım kaydı var (uv_id={uv_id})"
     return False, ""
+
+
+def _uv_batch_var_mi(con: sqlite3.Connection, uv_id: int) -> bool:
+    """Belirtilen UV'ye bağlı herhangi bir batch var mı?"""
+    try:
+        row = con.execute(
+            "SELECT COUNT(*) FROM nexgen_uretim_batch WHERE uretim_varyant_id=?",
+            (uv_id,),
+        ).fetchone()
+        return row[0] > 0
+    except sqlite3.OperationalError:
+        return False
+
+
+def _uv_uretim_kullanim_var_mi(con: sqlite3.Connection, uv_id: int) -> bool:
+    """UV'ye bağlı batch üzerinden aktif RF/üretim kullanımı var mı?"""
+    try:
+        row = con.execute(
+            """SELECT COUNT(*) FROM nexgen_rf_kullanim rfk
+               JOIN nexgen_uretim_batch nb ON nb.batch_kodu = rfk.tablet_session_id
+               WHERE nb.uretim_varyant_id=? AND rfk.aktif=1""",
+            (uv_id,),
+        ).fetchone()
+        return row[0] > 0
+    except sqlite3.OperationalError:
+        return False
+
+
+def _uv_guncelleme_guvenli_mi(
+    con: sqlite3.Connection, uv_id: int,
+) -> tuple[bool, str]:
+    """P5D.2 — mevcut UV üzerinde UPDATE_ANA_KALEM güvenli mi?"""
+    bloklu, neden = _uv_recete_degisikligi_bloklu_mu(con, uv_id)
+    if bloklu:
+        return False, neden
+    return True, ""
+
+
+def _uv_revision_schema_destekli_mi(con: sqlite3.Connection) -> tuple[bool, str]:
+    """
+    P5D-2B — aynı RV+boyut altında revizyon UV (rev_no=2) mümkün mü?
+    rev_no kolonu + UNIQUE(renk_varyant_id, boyut, rev_no) gerekir.
+    Eski UNIQUE(renk_varyant_id, boyut) engeldir.
+    """
+    if not _uv_rev_no_kolon_var_mi(con):
+        try:
+            for idx in con.execute("PRAGMA index_list(nexgen_uretim_varyant)"):
+                if not idx[2]:
+                    continue
+                cols = [
+                    r[2] for r in con.execute(f"PRAGMA index_info({idx[1]})")
+                ]
+                col_set = {c.lower() for c in cols}
+                if col_set == {"renk_varyant_id", "boyut"}:
+                    return False, (
+                        f"UNIQUE({', '.join(cols)}) — revizyon UV şeması "
+                        f"desteklenmiyor (Migration 102 gerekli)"
+                    )
+        except sqlite3.OperationalError:
+            pass
+        return False, "rev_no kolonu yok (Migration 102 gerekli)"
+    try:
+        for idx in con.execute("PRAGMA index_list(nexgen_uretim_varyant)"):
+            if not idx[2]:
+                continue
+            cols = [
+                r[2] for r in con.execute(f"PRAGMA index_info({idx[1]})")
+            ]
+            col_set = {c.lower() for c in cols}
+            if col_set == {"renk_varyant_id", "boyut"}:
+                return False, (
+                    f"Eski UNIQUE({', '.join(cols)}) hâlâ aktif"
+                )
+        if not con.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND name=?",
+            (UV_REV_NO_INDEX,),
+        ).fetchone():
+            # Tablo UNIQUE constraint ile de olabilir
+            tbl = con.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' "
+                "AND name='nexgen_uretim_varyant'"
+            ).fetchone()
+            sql = (tbl[0] or "").upper() if tbl else ""
+            if "REV_NO" not in sql or "UNIQUE" not in sql:
+                return False, f"{UV_REV_NO_INDEX} veya rev_no UNIQUE yok"
+    except sqlite3.OperationalError:
+        return False, "Şema kontrol hatası"
+    return True, ""
+
+
+def _revision_uv_bul(
+    con: sqlite3.Connection, kaynak_uv_id: int, rev_no: int = REVISION_REV_NO,
+) -> int | None:
+    """kaynak_varyant_id + rev_no ile mevcut revizyon UV (idempotent)."""
+    if _uv_rev_no_kolon_var_mi(con):
+        row = con.execute(
+            """SELECT id FROM nexgen_uretim_varyant
+               WHERE aktif=1 AND kaynak_varyant_id=? AND rev_no=?
+               ORDER BY id DESC LIMIT 1""",
+            (kaynak_uv_id, rev_no),
+        ).fetchone()
+    else:
+        row = con.execute(
+            """SELECT id FROM nexgen_uretim_varyant
+               WHERE aktif=1 AND kaynak_varyant_id=?
+               ORDER BY id DESC LIMIT 1""",
+            (kaynak_uv_id,),
+        ).fetchone()
+    return row[0] if row else None
+
+
+def _revision_uv_ad_uret(eski_ad: str, kaynak_uv_id: int) -> str:
+    """Deterministik revizyon adı — her zaman R2 suffix."""
+    base = (eski_ad or f"uv-{kaynak_uv_id}").strip()
+    if base.upper().endswith(REVISION_SUFFIX.strip().upper()):
+        return base
+    return f"{base}{REVISION_SUFFIX}"
+
+
+def _kalem_fingerprint_list_ana(kalemler: list[dict]) -> str:
+    """DB ile uyumlu ana kalem fingerprint (sıra = insert sırası)."""
+    raw = "|".join(
+        f"{(k.get('stok_kodu') or '').strip().upper()}:"
+        f"{float(k.get('miktar_kg', 0)):.6f}:{i}"
+        for i, k in enumerate(kalemler, 1)
+    )
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+
+def _ana_kalem_listesi(nb: "NormalizedBoyut") -> list[dict]:
+    return [
+        {"stok_kodu": k.stok_kodu, "miktar_kg": k.miktar_kg}
+        for k in nb.ana_kalemler
+    ]
 
 
 def _rf_identity_key(
@@ -803,8 +1008,10 @@ def _p5b_bagimlilik_filtre(
     # Bağımlılık grafiği raporu
     for k in sonuc.islemler:
         if k.aksiyon not in (
-            "INSERT_RV", "INSERT_UV", "INSERT_ANA_KALEM",
-            "INSERT_PLANLAMA", "NEW_RF_CANDIDATE", "BLOCKED_DEPENDENCY",
+            "INSERT_RV", "INSERT_UV", "INSERT_UV_REVISION",
+            "UPDATE_ANA_KALEM", "INSERT_ANA_KALEM",
+            "INSERT_PLANLAMA", "INSERT_PLANLAMA_REVISION",
+            "NEW_RF_CANDIDATE", "BLOCKED_DEPENDENCY",
         ):
             continue
         sonuc.bagimlilik_grafigi.append({
@@ -1054,13 +1261,8 @@ def simulate_import(
     db_path: str | None = None,
 ) -> SimulasyonSonucu:
     """
-    DB'ye hiç yazmadan tam işlem planını üretir.
-    v5 (P5A): Kısmi import — yalnız güvenli yeni kayıtlar planlanır.
-
-    Ana kalemler → INSERT_ANA_KALEM (nexgen_recete_kalem)
-    Boya kalemleri → NEW_RF_CANDIDATE (RF katmanı; recete_kalem'e yazılmaz)
-    Mevcut UV reçete değişiklikleri → BLOCKED (import dışı)
-    INSERT_FORMUL = 0 beklenir (mevcut 575/627/810 kullanılır)
+    P5D.2 — DB'ye hiç yazmadan tam işlem planını üretir.
+    Kullanılmayan UV → UPDATE_ANA_KALEM; plan/batch/üretim → INSERT_UV_REVISION.
     """
     db_path = os.path.abspath(db_path or DB_PATH)
     sonuc = SimulasyonSonucu()
@@ -1072,7 +1274,8 @@ def simulate_import(
         ut_map         = _ut_id_map(con)
         formul_map     = _formul_id_map_ascii(con)
         rv_map         = _rv_id_map_varyant(con)
-        uv_map         = _uv_id_map(con)
+        uv_map         = _uv_id_map_primary(con)
+        canonical_uv_map = _uv_id_map_canonical(con)
         aktif_batchler = _aktif_batch_listesi(con)
 
         # formul_ad → (uretim_tipi, urun_ailesi) haritası
@@ -1102,6 +1305,9 @@ def simulate_import(
         # Değişecek UV set'i (batch kontrolü için)
         degisecek_uv_ids: set[int] = set()
         bloke_uv_ids: set[int] = set()
+        revision_op_by_kaynak: dict[int, str] = {}
+        revision_uv_by_kaynak: dict[int, int] = {}
+        rev_schema_ok, rev_schema_neden = _uv_revision_schema_destekli_mi(con)
 
         # P5B.1 — scoped RF identity (cari|parent|varyant|renk_kodu)
         rf_identity_fp: dict[str, set[str]] = {}
@@ -1281,7 +1487,8 @@ def simulate_import(
                     ))
                     # Mevcut UV — ana fingerprint karşılaştır (boya hariç)
                     fp_eski = _kalem_fingerprint_db_ana(con, uv_db_id)
-                    fp_yeni = nb_ref.fingerprint_ana
+                    kalemler = _ana_kalem_listesi(nb_ref)
+                    fp_yeni = _kalem_fingerprint_list_ana(kalemler)
 
                     if fp_eski == fp_yeni:
                         sonuc.ekle(SimulasyonKalemi(
@@ -1294,41 +1501,131 @@ def simulate_import(
                             ),
                         ))
                     else:
-                        bloklu, blok_neden = _uv_recete_degisikligi_bloklu_mu(
+                        guvenli, guvenli_neden = _uv_guncelleme_guvenli_mi(
                             con, uv_db_id
                         )
-                        if bloklu:
+                        if guvenli:
+                            upd_op = _next_op("upd")
                             sonuc.ekle(SimulasyonKalemi(
-                                aksiyon="REVISION_SNAPSHOT_REQUIRED",
-                                tablo="nexgen_recete_kalem",
-                                identity=f"uv_id={uv_db_id}",
-                                mesaj=(
-                                    f"ANA reçete değişti + kullanım var: "
-                                    f"{db_f['f_kod']}/{varyant}/{bk} "
-                                    f"fp_eski={fp_eski} fp_yeni={fp_yeni[:8]}"
-                                ),
-                                bloker_mi=True,
-                                bloker_nedeni=blok_neden,
-                            ))
-                        else:
-                            sonuc.ekle(SimulasyonKalemi(
-                                aksiyon="CHANGED_RECIPE",
+                                aksiyon="UPDATE_ANA_KALEM",
                                 tablo="nexgen_recete_kalem",
                                 identity=f"uv_id={uv_db_id}",
                                 eski_deger={"fp_ana": fp_eski},
-                                yeni_deger={"fp_ana": fp_yeni[:8]},
+                                yeni_deger={
+                                    "uv_id": uv_db_id,
+                                    "kalemler": kalemler,
+                                    "fp_eski": fp_eski,
+                                    "fp_hedef": fp_yeni,
+                                },
                                 mesaj=(
-                                    f"Ana reçete değişti (import dışı): "
-                                    f"{db_f['f_kod']}/{varyant}/{bk}"
+                                    f"Güvenli ana reçete güncelleme: "
+                                    f"{db_f['f_kod']}/{varyant}/{bk} "
+                                    f"fp_eski={fp_eski} fp_yeni={fp_yeni[:8]}"
                                 ),
-                                bloker_mi=True,
-                                bloker_nedeni=(
-                                    f"P5A kısmi import: mevcut UV değişikliği "
-                                    f"bloklandı (uv_id={uv_db_id})"
-                                ),
+                                op_id=upd_op,
+                                bagli_uv_id=uv_db_id,
+                                bagli_rv_id=rv_db_id,
+                                bagli_formul_kod=db_f["f_kod"],
                             ))
-                        degisecek_uv_ids.add(uv_db_id)
-                        bloke_uv_ids.add(uv_db_id)
+                            degisecek_uv_ids.add(uv_db_id)
+                        else:
+                            rev_uv_id = _revision_uv_bul(con, uv_db_id)
+                            if rev_uv_id:
+                                fp_rev = _kalem_fingerprint_db_ana(con, rev_uv_id)
+                                revision_uv_by_kaynak[uv_db_id] = rev_uv_id
+                                canonical_uv_map[(rv_db_id, bk)] = rev_uv_id
+                                if fp_rev == fp_yeni:
+                                    sonuc.ekle(SimulasyonKalemi(
+                                        aksiyon="MATCH_UV_REVISION",
+                                        tablo="nexgen_uretim_varyant",
+                                        identity=f"rev_uv_id={rev_uv_id}",
+                                        mesaj=(
+                                            f"Revizyon UV mevcut ve eşleşti: "
+                                            f"kaynak={uv_db_id} rev={rev_uv_id}"
+                                        ),
+                                        bagli_uv_id=rev_uv_id,
+                                        bagli_rv_id=rv_db_id,
+                                    ))
+                                else:
+                                    sonuc.ekle(SimulasyonKalemi(
+                                        aksiyon="GERCEK_BLOCKER",
+                                        tablo="nexgen_uretim_varyant",
+                                        identity=f"rev_uv_id={rev_uv_id}",
+                                        mesaj=(
+                                            f"Revizyon UV fingerprint uyuşmuyor: "
+                                            f"kaynak={uv_db_id} rev={rev_uv_id} "
+                                            f"fp_rev={fp_rev} fp_excel={fp_yeni[:8]}"
+                                        ),
+                                        bloker_mi=True,
+                                        bloker_nedeni=(
+                                            "Revizyon UV mevcut ama Excel ile uyuşmuyor"
+                                        ),
+                                    ))
+                                    bloke_uv_ids.add(uv_db_id)
+                            else:
+                                if not rev_schema_ok:
+                                    sonuc.ekle(SimulasyonKalemi(
+                                        aksiyon="GERCEK_BLOCKER",
+                                        tablo="nexgen_uretim_varyant",
+                                        identity=f"uv_id={uv_db_id}",
+                                        mesaj=(
+                                            f"Revizyon UV şeması desteklenmiyor: "
+                                            f"{db_f['f_kod']}/{varyant}/{bk} "
+                                            f"uv_id={uv_db_id} — {rev_schema_neden}"
+                                        ),
+                                        bloker_mi=True,
+                                        bloker_nedeni=rev_schema_neden,
+                                        bagli_uv_id=uv_db_id,
+                                    ))
+                                    bloke_uv_ids.add(uv_db_id)
+                                    continue
+                                uv_row = con.execute(
+                                    "SELECT ad FROM nexgen_uretim_varyant WHERE id=?",
+                                    (uv_db_id,),
+                                ).fetchone()
+                                eski_ad = uv_row[0] if uv_row else f"uv-{uv_db_id}"
+                                rev_ad = _revision_uv_ad_uret(eski_ad, uv_db_id)
+                                rev_op = _next_op("rev")
+                                revision_op_by_kaynak[uv_db_id] = rev_op
+                                sonuc.ekle(SimulasyonKalemi(
+                                    aksiyon="INSERT_UV_REVISION",
+                                    tablo="nexgen_uretim_varyant",
+                                    identity=f"kaynak_uv_id={uv_db_id}",
+                                    eski_deger={"fp_ana": fp_eski, "uv_id": uv_db_id},
+                                    yeni_deger={
+                                        "kaynak_uv_id": uv_db_id,
+                                        "renk_varyant_id": rv_db_id,
+                                        "boyut": bk,
+                                        "ad": rev_ad,
+                                        "rev_no": REVISION_REV_NO,
+                                        "kalemler": kalemler,
+                                        "fp_hedef": fp_yeni,
+                                    },
+                                    mesaj=(
+                                        f"UV revizyonu: {db_f['f_kod']}/{varyant}/{bk} "
+                                        f"kaynak={uv_db_id} ad={rev_ad!r} "
+                                        f"neden={guvenli_neden}"
+                                    ),
+                                    op_id=rev_op,
+                                    bagli_uv_id=uv_db_id,
+                                    bagli_rv_id=rv_db_id,
+                                    bagli_formul_kod=db_f["f_kod"],
+                                ))
+                                sonuc.ekle(SimulasyonKalemi(
+                                    aksiyon="INSERT_ANA_KALEM",
+                                    tablo="nexgen_recete_kalem",
+                                    identity=f"rev_uv:kaynak={uv_db_id}/{bk}",
+                                    yeni_deger=kalemler,
+                                    mesaj=(
+                                        f"Revizyon UV ana kalemler: "
+                                        f"{db_f['f_kod']}/{varyant}/{bk}"
+                                    ),
+                                    op_id=_next_op("kalem"),
+                                    parent_op_id=rev_op,
+                                    bagli_uv_id=uv_db_id,
+                                    bagli_rv_id=rv_db_id,
+                                    bagli_formul_kod=db_f["f_kod"],
+                                ))
 
             # P5B.1 RF planı: scoped identity → NEW_RF_CANDIDATE
             for rv_excel in formul.renk_varyantlari:
@@ -1394,10 +1691,25 @@ def simulate_import(
             )
             if not (cari_id and ut_id):
                 continue
-            uv_id, _, parent_kod = _kullanim_uv_coz(ku, formul_map, rv_map, uv_map)
+            uv_id, rv_id_from_uv, parent_kod = _kullanim_uv_coz(
+                ku, formul_map, rv_map, uv_map,
+            )
             rv_id, rv_parent_op, rv_kaynak, fid = _planlama_rv_coz(
                 ku, formul_map, rv_map, pending_rv,
             )
+            boyut_key = (ku.boyut or "STANDART").strip().upper()
+            canonical_uv_id = (
+                canonical_uv_map.get((rv_id, boyut_key)) if rv_id else uv_id
+            )
+            revision_parent_op = ""
+            plan_aksiyon = "INSERT_PLANLAMA"
+            if uv_id and uv_id in revision_op_by_kaynak:
+                revision_parent_op = revision_op_by_kaynak[uv_id]
+                plan_aksiyon = "INSERT_PLANLAMA_REVISION"
+                canonical_uv_id = revision_uv_by_kaynak.get(uv_id) or canonical_uv_id
+            elif uv_id and uv_id in revision_uv_by_kaynak:
+                canonical_uv_id = revision_uv_by_kaynak[uv_id]
+                plan_aksiyon = "INSERT_PLANLAMA_REVISION"
             plan_op = _next_op("plan")
             plan_identity = _planlama_identity_key(ku, parent_kod)
             db_f_for_plan, _ = _formul_parent_coz(
@@ -1417,6 +1729,8 @@ def simulate_import(
                 "musteri_formul_kodu": ku.musteri_formul_kodu,
                 "mamul_uretim_kodu": ku.mamul_uretim_kodu,
                 "uv_id": uv_id,
+                "canonical_uv_id": canonical_uv_id,
+                "kaynak_uv_id": uv_id,
                 "rv_id": rv_id,
                 "rv_kaynak": rv_kaynak,
                 "rv_parent_op_id": rv_parent_op,
@@ -1464,19 +1778,19 @@ def simulate_import(
                 ))
             else:
                 sonuc.ekle(SimulasyonKalemi(
-                    aksiyon="INSERT_PLANLAMA",
+                    aksiyon=plan_aksiyon,
                     tablo="nexgen_planlama_uygunluk",
                     identity=plan_identity,
                     yeni_deger=plan_deger,
                     mesaj=(
                         f"Planlama: {ku.cari_kodu}/{ku.uretim_tipi}/"
                         f"{ku.formul_ad}/{ku.renk_kodu} "
-                        f"(rv_kaynak={rv_kaynak})"
+                        f"(rv_kaynak={rv_kaynak}, canonical_uv={canonical_uv_id})"
                     ),
                     kaynak_hucre=ku.kaynak_hucre,
                     op_id=plan_op,
-                    parent_op_id=rv_parent_op or "",
-                    bagli_uv_id=uv_id,
+                    parent_op_id=revision_parent_op or rv_parent_op or "",
+                    bagli_uv_id=canonical_uv_id or uv_id,
                     bagli_rv_id=rv_id,
                     bagli_formul_kod=parent_kod,
                     safe_to_apply=True,
@@ -1498,9 +1812,17 @@ def simulate_import(
                 formul_ad=b.get("f_ad", ""),
                 rv_renk=b.get("rv_renk", ""),
                 boyut=b.get("boyut", ""),
-                planlanan_op="CHANGED_RECIPE" if etkileniyor else "DOKUNULMAZ",
+                planlanan_op=(
+                    "INSERT_UV_REVISION" if uv_id in revision_op_by_kaynak
+                    or uv_id in revision_uv_by_kaynak
+                    else ("UPDATE_ANA_KALEM" if etkileniyor else "DOKUNULMAZ")
+                ),
                 etkileniyor_mu=etkileniyor,
-                bloker_nedeni="Değişen UV'ye bağlı aktif batch" if etkileniyor else "",
+                bloker_nedeni=(
+                    "Eski UV korunuyor — revizyon yeni UV'de"
+                    if (uv_id in revision_op_by_kaynak or uv_id in revision_uv_by_kaynak)
+                    else ("Değişen UV'ye bağlı aktif batch" if etkileniyor else "")
+                ),
             ))
 
     finally:
@@ -1549,11 +1871,14 @@ def simulate_import(
     # P5B.4 — aday vs uygulanabilir sayaçları
     plan_aday = sum(
         1 for k in sonuc.islemler
-        if k.aksiyon in ("INSERT_PLANLAMA", "PLANLAMA_RV_UNRESOLVED")
+        if k.aksiyon in (
+            "INSERT_PLANLAMA", "INSERT_PLANLAMA_REVISION", "PLANLAMA_RV_UNRESOLVED",
+        )
     )
     plan_uygulanabilir = sum(
         1 for k in sonuc.islemler
-        if k.aksiyon == "INSERT_PLANLAMA" and k.safe_to_apply and not k.blocked_dependency
+        if k.aksiyon in ("INSERT_PLANLAMA", "INSERT_PLANLAMA_REVISION")
+        and k.safe_to_apply and not k.blocked_dependency
     )
     sonuc.guvenli_aday_sayisi = (
         sonuc.guvenli_yazma_sayisi + (plan_aday - plan_uygulanabilir)
@@ -1626,7 +1951,17 @@ def partial_plan_fingerprint(sim: SimulasyonSonucu) -> str:
                 (pd.get("mamul_uretim_kodu") or "").strip(),
             ])
         else:
-            line = f"{k.aksiyon}|{k.identity}|{k.op_id}"
+            vd = k.yeni_deger or {}
+            extra = ""
+            if k.aksiyon == "UPDATE_ANA_KALEM":
+                extra = f"|uv={vd.get('uv_id', '')}|fp={str(vd.get('fp_hedef', ''))[:16]}"
+            elif k.aksiyon == "INSERT_UV_REVISION":
+                extra = (
+                    f"|kaynak={vd.get('kaynak_uv_id', '')}"
+                    f"|ad={vd.get('ad', '')}"
+                    f"|rev_no={vd.get('rev_no', REVISION_REV_NO)}"
+                )
+            line = f"{k.aksiyon}|{k.identity}|{k.op_id}{extra}"
         lines.append(line)
     return hashlib.sha256("\n".join(lines).encode()).hexdigest()
 
@@ -1763,6 +2098,164 @@ def _insert_import_batch_partial(
         return con.execute("SELECT last_insert_rowid()").fetchone()[0]
     except sqlite3.OperationalError:
         return 0
+
+
+def _deactivate_ana_kalemler(con: sqlite3.Connection, uv_id: int) -> None:
+    """Yalnız ana kalemleri pasifleştir — BOYA/pigment dokunulmaz."""
+    con.execute(
+        """UPDATE nexgen_recete_kalem SET aktif=0
+           WHERE uretim_varyant_id=? AND aktif=1
+             AND stok_kart_id IN (
+               SELECT id FROM nexgen_stok_kart
+               WHERE UPPER(COALESCE(kategori,'')) != 'BOYA'
+             )""",
+        (uv_id,),
+    )
+
+
+def _purge_inactive_ana_kalemler(con: sqlite3.Connection, uv_id: int) -> None:
+    """Pasif ana kalemleri sil — UNIQUE(uv, stok) için INSERT öncesi."""
+    con.execute(
+        """DELETE FROM nexgen_recete_kalem
+           WHERE uretim_varyant_id=? AND aktif=0
+             AND stok_kart_id IN (
+               SELECT id FROM nexgen_stok_kart
+               WHERE UPPER(COALESCE(kategori,'')) != 'BOYA'
+             )""",
+        (uv_id,),
+    )
+    """Yalnız ana kalemleri pasifleştir — BOYA/pigment dokunulmaz."""
+    con.execute(
+        """UPDATE nexgen_recete_kalem SET aktif=0
+           WHERE uretim_varyant_id=? AND aktif=1
+             AND stok_kart_id IN (
+               SELECT id FROM nexgen_stok_kart
+               WHERE UPPER(COALESCE(kategori,'')) != 'BOYA'
+             )""",
+        (uv_id,),
+    )
+
+
+def _insert_ana_kalemler(
+    con: sqlite3.Connection,
+    uv_id: int,
+    kalemler: list[dict],
+    stok_map: dict[str, int],
+) -> int:
+    """Ana kalemleri UV'ye yazar; yazılan kalem sayısını döner."""
+    n = 0
+    for sira, k in enumerate(kalemler, 1):
+        kod = (k.get("stok_kodu") or "").strip().upper()
+        sk_id = stok_map.get(kod)
+        if sk_id is None:
+            raise ValueError(f"Stok kartı bulunamadı: {kod}")
+        con.execute(
+            """INSERT INTO nexgen_recete_kalem
+               (uretim_varyant_id, stok_kart_id, sira, miktar_kg, aktif, olusturma_tarihi)
+               VALUES (?, ?, ?, ?, 1, datetime('now'))""",
+            (uv_id, sk_id, sira, k.get("miktar_kg", 0)),
+        )
+        n += 1
+    return n
+
+
+def _apply_insert_planlama_op(
+    con, op, cari_map, ut_map, formul_map, rv_map, rv_id_by_op,
+    onayli_kullanici_id, sonuc,
+) -> None:
+    """INSERT_PLANLAMA ve INSERT_PLANLAMA_REVISION ortak uygulayıcı."""
+    pd = op.yeni_deger or {}
+    cari_id = cari_map.get((pd.get("cari") or "").strip())
+    ut_nk = normalize_ascii_import(pd.get("ut") or "")
+    ut_id = next(
+        (v for k, v in ut_map.items() if normalize_ascii_import(k) == ut_nk),
+        None,
+    )
+    if not cari_id or not ut_id:
+        return
+    db_f, _ = _formul_parent_coz(
+        pd.get("ut") or "",
+        pd.get("urun_ailesi") or "",
+        formul_map,
+    )
+    if not db_f:
+        return
+    fid = db_f["f_id"]
+    rv_nk = normalize_ascii_import(pd.get("varyant") or "")
+    rv_id = rv_map.get((fid, rv_nk))
+    if not rv_id and op.parent_op_id:
+        rv_id = rv_id_by_op.get(op.parent_op_id)
+    if not rv_id:
+        sonuc.ozet["SKIP_PLANLAMA_RV"] = (
+            sonuc.ozet.get("SKIP_PLANLAMA_RV", 0) + 1
+        )
+        return
+    renk_kodu = (pd.get("renk_kodu") or "").strip()
+    boyut_val = (pd.get("boyut") or "STANDART").strip().upper()
+    kc = pd.get("kalip_carpani")
+    has_renk_col = _planlama_musteri_renk_kolon_var_mi(con)
+    has_boyut_col = _planlama_boyut_kolon_var_mi(con)
+    if has_renk_col and has_boyut_col:
+        dup = con.execute(
+            """SELECT id FROM nexgen_planlama_uygunluk
+               WHERE cari_id=? AND uretim_tipi_id=? AND formul_id=?
+                 AND renk_varyant_id=? AND aktif=1
+                 AND COALESCE(musteri_renk_kodu,'')=?
+                 AND COALESCE(boyut,'')=?""",
+            (cari_id, ut_id, fid, rv_id, renk_kodu, boyut_val),
+        ).fetchone()
+    elif has_renk_col:
+        dup = con.execute(
+            """SELECT id FROM nexgen_planlama_uygunluk
+               WHERE cari_id=? AND uretim_tipi_id=? AND formul_id=?
+                 AND renk_varyant_id=? AND aktif=1
+                 AND COALESCE(musteri_renk_kodu,'')=?""",
+            (cari_id, ut_id, fid, rv_id, renk_kodu),
+        ).fetchone()
+    else:
+        dup = con.execute(
+            """SELECT id FROM nexgen_planlama_uygunluk
+               WHERE cari_id=? AND uretim_tipi_id=? AND formul_id=?
+                 AND renk_varyant_id=? AND aktif=1""",
+            (cari_id, ut_id, fid, rv_id),
+        ).fetchone()
+    if dup:
+        sonuc.ozet["SKIP_PLANLAMA"] = sonuc.ozet.get("SKIP_PLANLAMA", 0) + 1
+        return
+    aks_key = "INSERT_PLANLAMA_REVISION" if op.aksiyon == "INSERT_PLANLAMA_REVISION" else "INSERT_PLANLAMA"
+    if has_renk_col and has_boyut_col:
+        con.execute(
+            """INSERT INTO nexgen_planlama_uygunluk
+               (cari_id, uretim_tipi_id, formul_id, renk_varyant_id,
+                musteri_renk_kodu, boyut, kalip_carpani, durum, olusturan_id,
+                olusturma_tarihi, aktif)
+               VALUES (?, ?, ?, ?, ?, ?, ?, 'AKTIF', ?, datetime('now'), 1)""",
+            (
+                cari_id, ut_id, fid, rv_id, renk_kodu or None,
+                boyut_val or None, kc, onayli_kullanici_id,
+            ),
+        )
+    elif has_renk_col:
+        con.execute(
+            """INSERT INTO nexgen_planlama_uygunluk
+               (cari_id, uretim_tipi_id, formul_id, renk_varyant_id,
+                musteri_renk_kodu, kalip_carpani, durum, olusturan_id,
+                olusturma_tarihi, aktif)
+               VALUES (?, ?, ?, ?, ?, ?, 'AKTIF', ?, datetime('now'), 1)""",
+            (
+                cari_id, ut_id, fid, rv_id, renk_kodu or None,
+                kc, onayli_kullanici_id,
+            ),
+        )
+    else:
+        con.execute(
+            """INSERT INTO nexgen_planlama_uygunluk
+               (cari_id, uretim_tipi_id, formul_id, renk_varyant_id,
+                kalip_carpani, durum, olusturan_id, olusturma_tarihi, aktif)
+               VALUES (?, ?, ?, ?, ?, 'AKTIF', ?, datetime('now'), 1)""",
+            (cari_id, ut_id, fid, rv_id, kc, onayli_kullanici_id),
+        )
+    sonuc.ozet[aks_key] = sonuc.ozet.get(aks_key, 0) + 1
 
 
 def execute_partial_import(
@@ -1907,6 +2400,82 @@ def execute_partial_import(
                 _log_item(con, batch_id, "nexgen_uretim_varyant", "INSERT",
                           None, uv_db_id, {"boyut": boyut_key})
 
+            elif op.aksiyon == "INSERT_UV_REVISION":
+                vd = op.yeni_deger or {}
+                kaynak_uv_id = vd.get("kaynak_uv_id") or op.bagli_uv_id
+                rv_db_id = vd.get("renk_varyant_id") or op.bagli_rv_id
+                boyut_key = (vd.get("boyut") or "STANDART").strip().upper()
+                rev_ad = vd.get("ad") or _revision_uv_ad_uret("", kaynak_uv_id or 0)
+                if not kaynak_uv_id or not rv_db_id:
+                    raise ValueError(
+                        f"INSERT_UV_REVISION için kaynak/RV çözülemedi: {op.identity}"
+                    )
+                existing = _revision_uv_bul(con, kaynak_uv_id)
+                if existing:
+                    uv_id_by_op[op.op_id] = existing
+                    continue
+                rev_no = int(vd.get("rev_no") or REVISION_REV_NO)
+                if _uv_rev_no_kolon_var_mi(con):
+                    con.execute(
+                        """INSERT INTO nexgen_uretim_varyant
+                           (renk_varyant_id, boyut, ad, kaynak_varyant_id, rev_no,
+                            recete_durum, aktif, olusturma_tarihi)
+                           VALUES (?, ?, ?, ?, ?, 'AKTIF', 1, datetime('now'))""",
+                        (rv_db_id, boyut_key, rev_ad, kaynak_uv_id, rev_no),
+                    )
+                else:
+                    con.execute(
+                        """INSERT INTO nexgen_uretim_varyant
+                           (renk_varyant_id, boyut, ad, kaynak_varyant_id,
+                            recete_durum, aktif, olusturma_tarihi)
+                           VALUES (?, ?, ?, ?, 'AKTIF', 1, datetime('now'))""",
+                        (rv_db_id, boyut_key, rev_ad, kaynak_uv_id),
+                    )
+                rev_uv_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+                uv_id_by_op[op.op_id] = rev_uv_id
+                sonuc.ozet["INSERT_UV_REVISION"] = (
+                    sonuc.ozet.get("INSERT_UV_REVISION", 0) + 1
+                )
+                _log_item(
+                    con, batch_id, "nexgen_uretim_varyant", "INSERT_REVISION",
+                    kaynak_uv_id, rev_uv_id,
+                    {"ad": rev_ad, "boyut": boyut_key},
+                )
+
+            elif op.aksiyon == "UPDATE_ANA_KALEM":
+                vd = op.yeni_deger or {}
+                uv_db_id = vd.get("uv_id") or op.bagli_uv_id
+                if not uv_db_id:
+                    m = re.search(r"uv_id=(\d+)", op.identity or "")
+                    uv_db_id = int(m.group(1)) if m else None
+                if not uv_db_id:
+                    raise ValueError(
+                        f"UPDATE_ANA_KALEM için UV çözülemedi: {op.identity}"
+                    )
+                fp_hedef = vd.get("fp_hedef") or ""
+                fp_once = _kalem_fingerprint_db_ana(con, uv_db_id)
+                if fp_hedef and fp_once == fp_hedef:
+                    continue
+                guvenli, neden = _uv_guncelleme_guvenli_mi(con, uv_db_id)
+                if not guvenli:
+                    raise ValueError(f"UPDATE_ANA_KALEM güvensiz: {neden}")
+                _deactivate_ana_kalemler(con, uv_db_id)
+                _purge_inactive_ana_kalemler(con, uv_db_id)
+                kalemler = vd.get("kalemler") or []
+                n = _insert_ana_kalemler(con, uv_db_id, kalemler, stok_map)
+                fp_sonra = _kalem_fingerprint_db_ana(con, uv_db_id)
+                if fp_hedef and fp_sonra != fp_hedef:
+                    raise ValueError(
+                        f"Fingerprint doğrulama başarısız: {fp_sonra} != {fp_hedef}"
+                    )
+                sonuc.ozet["UPDATE_ANA_KALEM"] = (
+                    sonuc.ozet.get("UPDATE_ANA_KALEM", 0) + 1
+                )
+                _log_item(
+                    con, batch_id, "nexgen_recete_kalem", "UPDATE_ANA",
+                    uv_db_id, uv_db_id, {"kalem_sayisi": n, "fp_sonra": fp_sonra},
+                )
+
             elif op.aksiyon == "INSERT_ANA_KALEM":
                 uv_db_id = None
                 if op.parent_op_id:
@@ -1915,124 +2484,27 @@ def execute_partial_import(
                     raise ValueError(f"INSERT_ANA_KALEM için UV çözülemedi: {op.identity}")
                 mevcut = con.execute(
                     "SELECT COUNT(*) FROM nexgen_recete_kalem "
-                    "WHERE uretim_varyant_id=? AND aktif=1",
+                    "WHERE uretim_varyant_id=? AND aktif=1 "
+                    "AND stok_kart_id IN ("
+                    "  SELECT id FROM nexgen_stok_kart "
+                    "  WHERE UPPER(COALESCE(kategori,'')) != 'BOYA'"
+                    ")",
                     (uv_db_id,),
                 ).fetchone()[0]
                 if mevcut > 0:
                     continue
                 kalemler = op.yeni_deger or []
-                for sira, k in enumerate(kalemler, 1):
-                    kod = (k.get("stok_kodu") or "").strip().upper()
-                    sk_id = stok_map.get(kod)
-                    if sk_id is None:
-                        raise ValueError(f"Stok kartı bulunamadı: {kod}")
-                    con.execute(
-                        """INSERT INTO nexgen_recete_kalem
-                           (uretim_varyant_id, stok_kart_id, sira, miktar_kg, aktif, olusturma_tarihi)
-                           VALUES (?, ?, ?, ?, 1, datetime('now'))""",
-                        (uv_db_id, sk_id, sira, k.get("miktar_kg", 0)),
-                    )
+                n = _insert_ana_kalemler(con, uv_db_id, kalemler, stok_map)
                 sonuc.ozet["INSERT_ANA_KALEM"] = (
                     sonuc.ozet.get("INSERT_ANA_KALEM", 0) + 1
                 )
                 _log_item(con, batch_id, "nexgen_recete_kalem", "INSERT",
-                          None, uv_db_id, {"kalem_sayisi": len(kalemler)})
+                          None, uv_db_id, {"kalem_sayisi": n})
 
-            elif op.aksiyon == "INSERT_PLANLAMA":
-                pd = op.yeni_deger or {}
-                cari_id = cari_map.get((pd.get("cari") or "").strip())
-                ut_nk = normalize_ascii_import(pd.get("ut") or "")
-                ut_id = next(
-                    (v for k, v in ut_map.items() if normalize_ascii_import(k) == ut_nk),
-                    None,
-                )
-                if not cari_id or not ut_id:
-                    continue
-                db_f, _ = _formul_parent_coz(
-                    pd.get("ut") or "",
-                    pd.get("urun_ailesi") or "",
-                    formul_map,
-                )
-                if not db_f:
-                    continue
-                fid = db_f["f_id"]
-                rv_nk = normalize_ascii_import(pd.get("varyant") or "")
-                rv_id = rv_map.get((fid, rv_nk))
-                if not rv_id and op.parent_op_id:
-                    rv_id = rv_id_by_op.get(op.parent_op_id)
-                if not rv_id:
-                    sonuc.ozet["SKIP_PLANLAMA_RV"] = (
-                        sonuc.ozet.get("SKIP_PLANLAMA_RV", 0) + 1
-                    )
-                    continue
-                renk_kodu = (pd.get("renk_kodu") or "").strip()
-                boyut_val = (pd.get("boyut") or "STANDART").strip().upper()
-                kc = pd.get("kalip_carpani")
-                has_renk_col = _planlama_musteri_renk_kolon_var_mi(con)
-                has_boyut_col = _planlama_boyut_kolon_var_mi(con)
-                if has_renk_col and has_boyut_col:
-                    dup = con.execute(
-                        """SELECT id FROM nexgen_planlama_uygunluk
-                           WHERE cari_id=? AND uretim_tipi_id=? AND formul_id=?
-                             AND renk_varyant_id=? AND aktif=1
-                             AND COALESCE(musteri_renk_kodu,'')=?
-                             AND COALESCE(boyut,'')=?""",
-                        (cari_id, ut_id, fid, rv_id, renk_kodu, boyut_val),
-                    ).fetchone()
-                elif has_renk_col:
-                    dup = con.execute(
-                        """SELECT id FROM nexgen_planlama_uygunluk
-                           WHERE cari_id=? AND uretim_tipi_id=? AND formul_id=?
-                             AND renk_varyant_id=? AND aktif=1
-                             AND COALESCE(musteri_renk_kodu,'')=?""",
-                        (cari_id, ut_id, fid, rv_id, renk_kodu),
-                    ).fetchone()
-                else:
-                    dup = con.execute(
-                        """SELECT id FROM nexgen_planlama_uygunluk
-                           WHERE cari_id=? AND uretim_tipi_id=? AND formul_id=?
-                             AND renk_varyant_id=? AND aktif=1""",
-                        (cari_id, ut_id, fid, rv_id),
-                    ).fetchone()
-                if dup:
-                    sonuc.ozet["SKIP_PLANLAMA"] = (
-                        sonuc.ozet.get("SKIP_PLANLAMA", 0) + 1
-                    )
-                    continue
-                if has_renk_col and has_boyut_col:
-                    con.execute(
-                        """INSERT INTO nexgen_planlama_uygunluk
-                           (cari_id, uretim_tipi_id, formul_id, renk_varyant_id,
-                            musteri_renk_kodu, boyut, kalip_carpani, durum, olusturan_id,
-                            olusturma_tarihi, aktif)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, 'AKTIF', ?, datetime('now'), 1)""",
-                        (
-                            cari_id, ut_id, fid, rv_id, renk_kodu or None,
-                            boyut_val or None, kc, onayli_kullanici_id,
-                        ),
-                    )
-                elif has_renk_col:
-                    con.execute(
-                        """INSERT INTO nexgen_planlama_uygunluk
-                           (cari_id, uretim_tipi_id, formul_id, renk_varyant_id,
-                            musteri_renk_kodu, kalip_carpani, durum, olusturan_id,
-                            olusturma_tarihi, aktif)
-                           VALUES (?, ?, ?, ?, ?, ?, 'AKTIF', ?, datetime('now'), 1)""",
-                        (
-                            cari_id, ut_id, fid, rv_id, renk_kodu or None,
-                            kc, onayli_kullanici_id,
-                        ),
-                    )
-                else:
-                    con.execute(
-                        """INSERT INTO nexgen_planlama_uygunluk
-                           (cari_id, uretim_tipi_id, formul_id, renk_varyant_id,
-                            kalip_carpani, durum, olusturan_id, olusturma_tarihi, aktif)
-                           VALUES (?, ?, ?, ?, ?, 'AKTIF', ?, datetime('now'), 1)""",
-                        (cari_id, ut_id, fid, rv_id, kc, onayli_kullanici_id),
-                    )
-                sonuc.ozet["INSERT_PLANLAMA"] = (
-                    sonuc.ozet.get("INSERT_PLANLAMA", 0) + 1
+            elif op.aksiyon in ("INSERT_PLANLAMA", "INSERT_PLANLAMA_REVISION"):
+                _apply_insert_planlama_op(
+                    con, op, cari_map, ut_map, formul_map, rv_map,
+                    rv_id_by_op, onayli_kullanici_id, sonuc,
                 )
 
         if batch_id:
@@ -2122,7 +2594,12 @@ def test_partial_transaction(
             pkg, temp_db, plan2.confirm_token, excel_sha=excel_sha, sim=sim2,
         )
         sha_after_idem = _sha256(temp_db)
-        yeni_yazma = sum(r2.ozet.values())
+        _write_keys = frozenset({
+            "INSERT_RV", "INSERT_UV", "INSERT_UV_REVISION",
+            "UPDATE_ANA_KALEM", "INSERT_ANA_KALEM",
+            "INSERT_PLANLAMA", "INSERT_PLANLAMA_REVISION",
+        })
+        yeni_yazma = sum(v for k, v in r2.ozet.items() if k in _write_keys)
         sonuc["idempotent_ok"] = r2.basarili and yeni_yazma == 0
         sonuc["apply2_ozet"] = r2.ozet
         sonuc["apply2_sha"] = sha_after_idem
@@ -2155,12 +2632,127 @@ def test_partial_transaction(
     )
     sonuc["rollback_hata"] = r_rb.hatalar
 
+    # ── P5D.2 doğrulamaları (apply sonrası temp DB) ─────────────────
+    sonuc["p5d2"] = _p5d2_post_apply_validate(source_db, temp_db, sim1)
+
+    sonuc["sim1_bloker_sayisi"] = len(sim1.blokerler)
+    sonuc["sim1_ozet"] = {
+        k: sim1.ozet.get(k, 0)
+        for k in (
+            "UPDATE_ANA_KALEM", "INSERT_UV_REVISION", "INSERT_ANA_KALEM",
+            "GERCEK_BLOCKER", "BLOCKED", "REVISION_SNAPSHOT_REQUIRED",
+            "CHANGED_RECIPE",
+        )
+        if sim1.ozet.get(k, 0)
+    }
+    sonuc["sim1_token"] = plan1.confirm_token
+    sonuc["sim2_token"] = plan2.confirm_token if sim2 else plan1.confirm_token
+
     sonuc["tum_testler_gecildi"] = (
         sonuc.get("apply1_basarili")
         and sonuc.get("idempotent_ok")
         and sonuc.get("rollback_ok")
+        and sonuc.get("p5d2", {}).get("tum_kontroller_ok", False)
     )
     return sonuc
+
+
+def _p5d2_post_apply_validate(
+    source_db: str, temp_db: str, sim1: SimulasyonSonucu,
+) -> dict[str, Any]:
+    """P5D.2 — geçici DB apply sonrası koruma ve reçete doğrulamaları."""
+    rapor: dict[str, Any] = {"tum_kontroller_ok": True, "kontroller": []}
+
+    def _chk(ad: str, ok: bool, detay: str = "") -> None:
+        rapor["kontroller"].append({"ad": ad, "ok": ok, "detay": detay})
+        if not ok:
+            rapor["tum_kontroller_ok"] = False
+
+    src = sqlite3.connect(source_db)
+    tmp = sqlite3.connect(temp_db)
+    src.row_factory = sqlite3.Row
+    tmp.row_factory = sqlite3.Row
+
+    try:
+        # Kaynak fingerprint'ler (eski UV korunumu)
+        fp_10014_src = _kalem_fingerprint_db_ana(src, 10014)
+        fp_10017_src = _kalem_fingerprint_db_ana(src, 10017)
+        fp_10015_src = _kalem_fingerprint_db_ana(src, 10015)
+
+        fp_10014_tmp = _kalem_fingerprint_db_ana(tmp, 10014)
+        fp_10017_tmp = _kalem_fingerprint_db_ana(tmp, 10017)
+
+        _chk("uv_10014_recete_korundu", fp_10014_src == fp_10014_tmp, f"{fp_10014_src}")
+        _chk("uv_10017_recete_korundu", fp_10017_src == fp_10017_tmp, f"{fp_10017_src}")
+
+        # Plan UV id'leri
+        for pid in (88, 93, 91):
+            row = tmp.execute(
+                "SELECT uretim_varyant_id FROM nexgen_uretim_plan WHERE id=?",
+                (pid,),
+            ).fetchone()
+            if row:
+                _chk(f"plan_{pid}_uv_korundu", True, f"uv={row[0]}")
+
+        batch10 = tmp.execute(
+            "SELECT uretim_varyant_id FROM nexgen_uretim_batch WHERE id=10",
+        ).fetchone()
+        if batch10:
+            _chk(
+                "batch_10_uv_korundu",
+                batch10[0] == 10017,
+                f"uv={batch10[0]}",
+            )
+
+        # Revizyon UV'ler
+        for kaynak in (10014, 10017):
+            rev = _revision_uv_bul(tmp, kaynak)
+            if rev:
+                fp_rev = _kalem_fingerprint_db_ana(tmp, rev)
+                row = tmp.execute(
+                    "SELECT ad, kaynak_varyant_id FROM nexgen_uretim_varyant WHERE id=?",
+                    (rev,),
+                ).fetchone()
+                _chk(
+                    f"revizyon_uv_{kaynak}",
+                    row and row["kaynak_varyant_id"] == kaynak,
+                    f"rev_id={rev} ad={row['ad'] if row else ''} fp={fp_rev}",
+                )
+
+        # UV 10015 güncellendi mi
+        if fp_10015_src != _kalem_fingerprint_db_ana(tmp, 10015):
+            _chk("uv_10015_guncellendi", True, _kalem_fingerprint_db_ana(tmp, 10015))
+        else:
+            _chk("uv_10015_guncellendi", False, "fingerprint değişmedi")
+
+        # RF sayısı değişmedi
+        rf_src = src.execute("SELECT COUNT(*) FROM nexgen_rf_kullanim").fetchone()[0]
+        rf_tmp = tmp.execute("SELECT COUNT(*) FROM nexgen_rf_kullanim").fetchone()[0]
+        _chk("rf_kullanim_sayisi", rf_src == rf_tmp, f"{rf_src}->{rf_tmp}")
+
+        # Simülasyon operasyon özeti
+        rapor["update_ana_kalem"] = sim1.ozet.get("UPDATE_ANA_KALEM", 0)
+        rapor["insert_uv_revision"] = sim1.ozet.get("INSERT_UV_REVISION", 0)
+        rapor["gercek_blocker"] = sim1.ozet.get("GERCEK_BLOCKER", 0)
+        rapor["bloker_sayisi"] = len(sim1.blokerler)
+
+        # 10056-10061 kararları
+        uv_karar = {}
+        for k in sim1.islemler:
+            m = re.search(r"uv_id=(\d+)", k.identity or "")
+            if not m:
+                m = re.search(r"kaynak_uv_id=(\d+)", k.identity or "")
+            if m:
+                uid = int(m.group(1))
+                if uid in (10056, 10057, 10058, 10059, 10060, 10061):
+                    uv_karar[uid] = k.aksiyon
+        rapor["uv_10056_61"] = uv_karar
+
+    finally:
+        src.close()
+        tmp.close()
+
+    return rapor
 
 
 # ---------------------------------------------------------------------------
@@ -2179,7 +2771,7 @@ def execute_import(
     Tam import: bloker varken çalışmaz.
     Kısmi import: --apply-partial --confirm TOKEN ile; yalnız safe_to_apply operasyonlar.
     """
-    from modules.nexgen.kod_uretici import yeni_formul_kodu_uret, yeni_rv_kodu_uret
+    from modules.nexgen.kod_uretici import yeni_rv_kodu_uret  # noqa: F401 — INSERT_RV apply
 
     db_path = os.path.abspath(db_path or DB_PATH)
 
@@ -2201,186 +2793,18 @@ def execute_import(
         )
         return sonuc
 
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    yedek_dizin = yedek_dizin or os.path.abspath(os.path.join(
-        os.path.dirname(db_path), "..", "..", "backup", "import_analysis"
-    ))
-    t_baslangic = datetime.now()
-
-    try:
-        sonuc.yedek_yolu = db_yedek_al(db_path, yedek_dizin)
-    except Exception as e:
-        sonuc.hatalar.append(f"Yedek alınamadı: {e}")
-        return sonuc
-
-    sonuc.sha_once = _sha256(db_path)
-    con = sqlite3.connect(db_path, timeout=30)
-    con.row_factory = sqlite3.Row
-    try:
-        con.execute("BEGIN IMMEDIATE")
-        stok_map   = _stok_id_map_v2(con)
-        cari_map   = _cari_id_map(con)
-        ut_map     = _ut_id_map(con)
-        formul_map = _formul_id_map_ascii(con)
-        rv_map     = _rv_id_map_varyant(con)
-        uv_map     = _uv_id_map(con)
-
-        batch_id: int = _insert_import_batch(con, pkg, sonuc.sha_once, onayli_kullanici_id)
-        sonuc.batch_id = batch_id
-
-        for formul in pkg.formuller:
-            nk = normalize_ascii_import(formul.ad)
-            db_f = formul_map.get(nk)
-
-            if db_f is None:
-                formul_kod = yeni_formul_kodu_uret(con)
-                con.execute(
-                    """INSERT INTO nexgen_formul
-                       (kod, ad, urun_ailesi, durum, onay_durumu, aktif, olusturma_tarihi)
-                       VALUES (?, ?, ?, 'AKTIF', 'ONAYLI', 1, datetime('now'))""",
-                    (formul_kod, formul.ad, formul.urun_ailesi or None),
-                )
-                formul_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
-                sonuc.ozet["INSERT_FORMUL"] = sonuc.ozet.get("INSERT_FORMUL", 0) + 1
-                _log_item(con, batch_id, "nexgen_formul", "INSERT", None, formul_id,
-                          {"ad": formul.ad})
-                formul_map[nk] = {
-                    "f_id": formul_id, "f_kod": formul_kod,
-                    "f_ad": formul.ad, "f_aile": formul.urun_ailesi,
-                }
-            else:
-                formul_id = db_f["f_id"]
-                if formul.urun_ailesi:
-                    con.execute(
-                        "UPDATE nexgen_formul SET urun_ailesi=?, guncelleme_tarihi=datetime('now') WHERE id=?",
-                        (formul.urun_ailesi, formul_id),
-                    )
-
-            for rv in formul.renk_varyantlari:
-                rv_nk = normalize_ascii_import(rv.renk_adi or rv.renk_kodu)
-                rv_db_id = rv_map.get((formul_id, rv_nk))
-                if rv_db_id is None:
-                    rv_db_id = rv_map.get(
-                        (formul_id, normalize_ascii_import(rv.renk_kodu))
-                    )
-
-                if rv_db_id is None:
-                    rv_kod = yeni_rv_kodu_uret(con, formul_map[nk]["f_kod"])
-                    con.execute(
-                        """INSERT INTO nexgen_renk_varyant
-                           (formul_id, kod, ad, renk, aktif, olusturma_tarihi)
-                           VALUES (?, ?, ?, ?, 1, datetime('now'))""",
-                        (formul_id, rv_kod, rv.renk_adi or rv.renk_kodu, rv.renk_kodu),
-                    )
-                    rv_db_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
-                    rv_map[(formul_id, rv_nk)] = rv_db_id
-                    rv_map[(formul_id, normalize_ascii_import(rv.renk_kodu))] = rv_db_id
-                    sonuc.ozet["INSERT_RV"] = sonuc.ozet.get("INSERT_RV", 0) + 1
-                    _log_item(con, batch_id, "nexgen_renk_varyant", "INSERT", None, rv_db_id,
-                              {"renk": rv.renk_kodu})
-
-                for boyut, nb in rv.boyutlar.items():
-                    boyut_key = (boyut or "STANDART").strip().upper()
-                    uv_db_id = uv_map.get((rv_db_id, boyut_key))
-
-                    if uv_db_id is None:
-                        con.execute(
-                            """INSERT INTO nexgen_uretim_varyant
-                               (renk_varyant_id, boyut, ad, recete_durum, aktif, olusturma_tarihi)
-                               VALUES (?, ?, ?, 'AKTIF', 1, datetime('now'))""",
-                            (rv_db_id, boyut_key, f"{rv.renk_kodu}/{boyut_key}"),
-                        )
-                        uv_db_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
-                        uv_map[(rv_db_id, boyut_key)] = uv_db_id
-                        sonuc.ozet["INSERT_UV"] = sonuc.ozet.get("INSERT_UV", 0) + 1
-                        _log_item(con, batch_id, "nexgen_uretim_varyant", "INSERT",
-                                  None, uv_db_id, {"boyut": boyut_key})
-
-                    fp_eski = _kalem_fingerprint_db(con, uv_db_id)
-                    fp_yeni = nb.fingerprint_ana
-
-                    if fp_eski != fp_yeni:
-                        if _uv_aktif_plan_var_mi(con, uv_db_id):
-                            raise ValueError(
-                                f"Aktif batch bağlı UV değiştirilemez: uv_id={uv_db_id}"
-                            )
-                        con.execute(
-                            "UPDATE nexgen_recete_kalem SET aktif=0 WHERE uretim_varyant_id=? AND aktif=1",
-                            (uv_db_id,),
-                        )
-                        for sira, k in enumerate(nb.ana_kalemler, 1):
-                            sk_id = stok_map.get(k.stok_kodu.strip().upper())
-                            if sk_id is None:
-                                raise ValueError(f"Stok kartı bulunamadı: {k.stok_kodu}")
-                            con.execute(
-                                """INSERT INTO nexgen_recete_kalem
-                                   (uretim_varyant_id, stok_kart_id, sira, miktar_kg, aktif, olusturma_tarihi)
-                                   VALUES (?, ?, ?, ?, 1, datetime('now'))""",
-                                (uv_db_id, sk_id, sira, k.miktar_kg),
-                            )
-                        sonuc.ozet["REPLACE_KALEMLER"] = sonuc.ozet.get("REPLACE_KALEMLER", 0) + 1
-                        _log_item(con, batch_id, "nexgen_recete_kalem", "REPLACE",
-                                  uv_db_id, uv_db_id,
-                                  {"fp_eski": fp_eski, "fp_yeni": fp_yeni})
-
-        for ku in pkg.kullanimlar:
-            if not ku.cari_kodu or not ku.uretim_tipi:
-                continue
-            cari_id = cari_map.get(ku.cari_kodu.strip())
-            ut_nk = normalize_ascii_import(ku.uretim_tipi)
-            ut_id = next(
-                (v for k, v in ut_map.items() if normalize_ascii_import(k) == ut_nk),
-                None,
-            )
-            if not cari_id or not ut_id:
-                continue
-            nk_f = normalize_ascii_import(ku.formul_ad)
-            db_f = formul_map.get(nk_f)
-            if not db_f:
-                continue
-            fid = db_f["f_id"]
-            rv_nk = normalize_ascii_import(ku.renk_adi if hasattr(ku, 'renk_adi') else ku.renk_kodu)
-            rv_id = rv_map.get((fid, rv_nk))
-            if not rv_id:
-                rv_id = rv_map.get((fid, normalize_ascii_import(ku.renk_kodu)))
-            if not rv_id:
-                continue
-
-            mevcut = con.execute(
-                "SELECT id FROM nexgen_planlama_uygunluk "
-                "WHERE cari_id=? AND uretim_tipi_id=? AND formul_id=? AND renk_varyant_id=? AND aktif=1",
-                (cari_id, ut_id, fid, rv_id),
-            ).fetchone()
-            if not mevcut:
-                con.execute(
-                    """INSERT INTO nexgen_planlama_uygunluk
-                       (cari_id, uretim_tipi_id, formul_id, renk_varyant_id,
-                        kalip_carpani, durum, olusturan_id, olusturma_tarihi, aktif)
-                       VALUES (?, ?, ?, ?, ?, 'AKTIF', ?, datetime('now'), 1)""",
-                    (cari_id, ut_id, fid, rv_id, ku.kalip_carpani, onayli_kullanici_id),
-                )
-                sonuc.ozet["INSERT_PLANLAMA"] = sonuc.ozet.get("INSERT_PLANLAMA", 0) + 1
-
-        con.execute(
-            "UPDATE nexgen_import_batch SET durum='TAMAMLANDI', import_zamani=datetime('now') WHERE id=?",
-            (batch_id,),
-        )
-        con.execute("COMMIT")
-
-    except Exception as e:
-        con.execute("ROLLBACK")
-        sonuc.hatalar.append(f"Transaction hatası: {e}")
-        sonuc.basarili = False
-        con.close()
-        return sonuc
-
-    con.close()
-    sonuc.sha_sonra = _sha256(db_path)
-    sonuc.basarili = sonuc.sha_sonra != sonuc.sha_once
-    if not sonuc.basarili:
-        sonuc.hatalar.append("SHA değişmedi — commit başarısız olabilir")
-    sonuc.elapsed_ms = (datetime.now() - t_baslangic).total_seconds() * 1000
-    return sonuc
+    excel_sha = pkg.kaynak_bilgisi.get("dosya_sha256", "")
+    db_sha = _sha256(db_path)
+    plan = build_partial_import_plan(sim, excel_sha, db_sha)
+    result = execute_partial_import(
+        pkg, db_path, plan.confirm_token,
+        excel_sha=excel_sha,
+        yedek_dizin=yedek_dizin,
+        onayli_kullanici_id=onayli_kullanici_id,
+        sim=sim,
+    )
+    result.partial_mode = False
+    return result
 
 
 # ---------------------------------------------------------------------------
