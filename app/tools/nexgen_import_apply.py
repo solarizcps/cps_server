@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 """
 P5B.1 — NexGen Import Apply CLI  (v5 — RF Identity + Bağımlılık)
+P5C-3A — kontrollü gerçek DB partial apply (--allow-real-db-partial)
 """
 from __future__ import annotations
 
 import argparse
 import json
 import os
+import sqlite3
 import sys
 from dataclasses import asdict
 from datetime import datetime
@@ -39,6 +41,110 @@ OUTPUT_ROOT    = os.path.join(ROOT, "backup", "import_analysis")
 BACKUP_ROOT    = os.path.join(ROOT, "backup", "import_analysis")
 REAL_DB_PATH   = os.path.abspath(DB_PATH)
 
+# P5C-3A — exit code'lar (gerçek DB partial apply doğrulama)
+EXIT_ARG = 1
+EXIT_PREFLIGHT = 2
+EXIT_BLOCKED = 3
+EXIT_APPLY_ERR = 4
+EXIT_TOKEN = 5
+EXIT_NO_BYPASS = 6
+EXIT_TX_FAIL = 7
+EXIT_NO_BACKUP = 8
+EXIT_BACKUP_SHA = 9
+EXIT_SCHEMA = 10
+EXIT_SCHEMA_IDENTITY = 11
+EXIT_RV_UNRESOLVED = 12
+
+
+def _migration101_schema_ok(db_path: str) -> tuple[bool, str]:
+    """Migration 101: musteri_renk_kodu, boyut kolonları ve uq_npu_identity."""
+    try:
+        con = sqlite3.connect(db_path)
+        cur = con.cursor()
+        cols = {c[1] for c in cur.execute(
+            "PRAGMA table_info(nexgen_planlama_uygunluk)"
+        ).fetchall()}
+        if "musteri_renk_kodu" not in cols:
+            return False, "musteri_renk_kodu kolonu yok"
+        if "boyut" not in cols:
+            return False, "boyut kolonu yok"
+        idx = cur.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' "
+            "AND name='uq_npu_identity'"
+        ).fetchone()
+        if not idx:
+            return False, "uq_npu_identity indexi yok"
+        con.close()
+        return True, ""
+    except sqlite3.Error as e:
+        return False, str(e)
+
+
+def _dogrula_gercek_db_partial(
+    *,
+    db_path: str,
+    confirm: str,
+    partial_plan: Any,
+    sim: Any,
+    allow_real: bool,
+    backup_file: str,
+    db_sha_once: str,
+) -> tuple[int, str]:
+    """
+    P5C-3A — gerçek DB partial apply ön koşulları.
+    Döner: (0, '') başarı; aksi halde (exit_code, mesaj).
+    """
+    is_real = os.path.abspath(db_path) == REAL_DB_PATH
+
+    if is_real:
+        if not allow_real:
+            return (
+                EXIT_NO_BYPASS,
+                "Gerçek DB partial apply için --allow-real-db-partial zorunlu.",
+            )
+        if confirm != partial_plan.confirm_token:
+            return (
+                EXIT_TOKEN,
+                f"Token uyuşmuyor. Beklenen: {partial_plan.confirm_token}",
+            )
+        ok, msg = _migration101_schema_ok(db_path)
+        if not ok:
+            return EXIT_SCHEMA, f"Migration 101 şema eksik: {msg}"
+        if partial_plan.schema_identity_eksik:
+            return (
+                EXIT_SCHEMA_IDENTITY,
+                "SCHEMA_IDENTITY_EKSIK: musteri_renk_kodu/boyut şema kontrolü başarısız.",
+            )
+        rv_unres = sim.ozet.get("PLANLAMA_RV_UNRESOLVED", 0)
+        if rv_unres > 0:
+            return (
+                EXIT_RV_UNRESOLVED,
+                f"PLANLAMA_RV_UNRESOLVED={rv_unres} — apply başlamadan durduruldu.",
+            )
+        if not backup_file or not str(backup_file).strip():
+            return (
+                EXIT_NO_BACKUP,
+                "Gerçek DB partial apply için --backup-file zorunlu.",
+            )
+        backup_abs = os.path.abspath(backup_file)
+        if not os.path.isfile(backup_abs):
+            return EXIT_NO_BACKUP, f"Backup dosyası bulunamadı: {backup_abs}"
+        backup_sha = _sha256(backup_abs)
+        if backup_sha != db_sha_once:
+            return (
+                EXIT_BACKUP_SHA,
+                "Backup SHA apply öncesi DB SHA ile eşleşmiyor.",
+            )
+        return 0, ""
+
+    # Geçici / alternatif DB — yalnız token kontrolü
+    if confirm != partial_plan.confirm_token:
+        return (
+            EXIT_TOKEN,
+            f"Token uyuşmuyor. Beklenen: {partial_plan.confirm_token}",
+        )
+    return 0, ""
+
 
 class _Enc(json.JSONEncoder):
     def default(self, o: Any) -> Any:
@@ -68,6 +174,8 @@ def _calistir(args: argparse.Namespace) -> int:
     test_tx_mod = getattr(args, "test_partial_tx", False)
     confirm    = getattr(args, "confirm", "") or ""
     force      = getattr(args, 'force', False)
+    allow_real = getattr(args, "allow_real_db_partial", False)
+    backup_file = getattr(args, "backup_file", "") or ""
 
     if apply_mod and partial_mod:
         print("HATA: --apply ve --apply-partial aynı anda kullanılamaz.")
@@ -242,6 +350,11 @@ def _calistir(args: argparse.Namespace) -> int:
         print(f"    *** GERÇEK KISMİ IMPORT NO-GO: git commit alınamadı ***")
     else:
         print(f"    (Kullanım: --apply-partial --confirm {partial_plan.confirm_token})")
+        if os.path.abspath(db_path) == REAL_DB_PATH:
+            print(
+                "    Gerçek DB: --apply-partial --allow-real-db-partial "
+                f"--backup-file <yedek> --confirm {partial_plan.confirm_token}"
+            )
 
     # Çıktı dizini
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -358,19 +471,33 @@ def _calistir(args: argparse.Namespace) -> int:
         return 0 if tx.get("tum_testler_gecildi") else 7
 
     if partial_mod:
-        if os.path.abspath(db_path) == REAL_DB_PATH:
-            print(f"\n[5/5] P5B.2: Gerçek DB üzerinde --apply-partial YASAK.")
-            print(f"  Dinamik token: {partial_plan.confirm_token}")
-            print("  Transaction testi için: --test-partial-tx")
-            print("  DB yazılmadı.")
-            return 6
-        if confirm != partial_plan.confirm_token:
-            print(f"\n[5/5] KISMI APPLY REDDEDİLDİ — token uyuşmuyor.")
-            print(f"  Beklenen: {partial_plan.confirm_token}")
-            print(f"  Verilen : {confirm or '(boş)'}")
-            print("  DB yazılmadı.")
-            return 5
+        val_code, val_msg = _dogrula_gercek_db_partial(
+            db_path=db_path,
+            confirm=confirm,
+            partial_plan=partial_plan,
+            sim=sim,
+            allow_real=allow_real,
+            backup_file=backup_file,
+            db_sha_once=db_sha_once,
+        )
+        if val_code != 0:
+            print(f"\n[5/5] KISMI APPLY REDDEDİLDİ — {val_msg}")
+            if val_code == EXIT_NO_BYPASS:
+                print(f"  Dinamik token: {partial_plan.confirm_token}")
+                print("  Geçici test: --test-partial-tx")
+            elif val_code == EXIT_TOKEN:
+                print(f"  Beklenen: {partial_plan.confirm_token}")
+                print(f"  Verilen : {confirm or '(boş)'}")
+            elif val_code == EXIT_BACKUP_SHA:
+                print(f"  DB SHA    : {db_sha_once[:16]}...")
+                if backup_file:
+                    print(f"  Backup SHA: {_sha256(os.path.abspath(backup_file))[:16]}...")
+            print("  Transaction başlamadı. DB yazılmadı.")
+            return val_code
         print(f"\n[5/5] --apply-partial başlıyor (hedef: {db_path})...")
+        if os.path.abspath(db_path) == REAL_DB_PATH:
+            print(f"  P5C-3A: gerçek DB onaylı bypass aktif")
+            print(f"  Backup    : {os.path.abspath(backup_file)}")
         sonuc_p = execute_partial_import(
             pkg, db_path, confirm, excel_sha=excel_sha, sim=sim,
             yedek_dizin=BACKUP_ROOT,
@@ -533,8 +660,22 @@ def main() -> int:
                     help="Geçici DB kopyasında transaction/idempotency/rollback testi")
     ap.add_argument("--confirm", default="", help="Dinamik kısmi import onay tokeni")
     ap.add_argument("--force",         action="store_true", help="Preflight uyarılarını geç")
+    ap.add_argument(
+        "--allow-real-db-partial",
+        action="store_true",
+        help="P5C-3A: Gerçek DB üzerinde kısmi apply için açık onay bayrağı",
+    )
+    ap.add_argument(
+        "--backup-file",
+        default="",
+        help="P5C-3A: Gerçek DB partial apply öncesi doğrulanacak yedek dosyası",
+    )
 
     args = ap.parse_args()
+
+    if args.allow_real_db_partial and not args.apply_partial:
+        print("HATA: --allow-real-db-partial yalnız --apply-partial ile kullanılabilir.")
+        return EXIT_ARG
 
     if args.apply and args.dry_run:
         print("HATA: --apply ve --dry-run aynı anda kullanılamaz.")
