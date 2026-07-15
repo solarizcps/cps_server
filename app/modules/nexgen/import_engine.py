@@ -62,7 +62,7 @@ GUVENLI_IMPORT_AKSIYONLARI = frozenset({
     "MATCH_FORMUL", "MATCH_RV", "INSERT_RV", "MATCH_UV", "INSERT_UV",
     "INSERT_UV_REVISION", "UPDATE_ANA_KALEM",
     "INSERT_ANA_KALEM", "INSERT_PLANLAMA", "INSERT_PLANLAMA_REVISION",
-    "NEW_RF_CANDIDATE", "WARNING_ONLY", "MATCH_UV_REVISION",
+    "NEW_RF_CANDIDATE", "WARNING_ONLY", "MATCH_UV_REVISION", "MATCH_PLANLAMA",
 })
 BLOKE_IMPORT_AKSIYONLARI = frozenset({
     "REVISION_SNAPSHOT_REQUIRED", "CHANGED_RECIPE", "GERCEK_BLOCKER",
@@ -759,6 +759,47 @@ def _kullanim_uv_coz(
     boyut = (ku.boyut or "STANDART").strip().upper()
     uv_id = uv_map.get((rv_id, boyut)) if rv_id else None
     return uv_id, rv_id, db_f["f_kod"]
+
+
+def _planlama_db_satir_bul(
+    con: sqlite3.Connection,
+    cari_id: int,
+    ut_id: int,
+    fid: int,
+    rv_id: int,
+    renk_kodu: str,
+    boyut_val: str,
+) -> int | None:
+    """Apply ile aynı business identity — mevcut aktif planlama satırı."""
+    renk_kodu = (renk_kodu or "").strip()
+    boyut_val = (boyut_val or "STANDART").strip().upper()
+    has_renk_col = _planlama_musteri_renk_kolon_var_mi(con)
+    has_boyut_col = _planlama_boyut_kolon_var_mi(con)
+    if has_renk_col and has_boyut_col:
+        row = con.execute(
+            """SELECT id FROM nexgen_planlama_uygunluk
+               WHERE cari_id=? AND uretim_tipi_id=? AND formul_id=?
+                 AND renk_varyant_id=? AND aktif=1
+                 AND COALESCE(musteri_renk_kodu,'')=?
+                 AND COALESCE(boyut,'')=?""",
+            (cari_id, ut_id, fid, rv_id, renk_kodu, boyut_val),
+        ).fetchone()
+    elif has_renk_col:
+        row = con.execute(
+            """SELECT id FROM nexgen_planlama_uygunluk
+               WHERE cari_id=? AND uretim_tipi_id=? AND formul_id=?
+                 AND renk_varyant_id=? AND aktif=1
+                 AND COALESCE(musteri_renk_kodu,'')=?""",
+            (cari_id, ut_id, fid, rv_id, renk_kodu),
+        ).fetchone()
+    else:
+        row = con.execute(
+            """SELECT id FROM nexgen_planlama_uygunluk
+               WHERE cari_id=? AND uretim_tipi_id=? AND formul_id=?
+                 AND renk_varyant_id=? AND aktif=1""",
+            (cari_id, ut_id, fid, rv_id),
+        ).fetchone()
+    return row[0] if row else None
 
 
 def _planlama_identity_key(
@@ -1682,6 +1723,7 @@ def simulate_import(
 
         # Planlama uygunluğu — P5B.4 RV dependency çözümü
         pending_rv = _pending_rv_map_from_sim(sonuc)
+        seen_plan_identity: set[str] = set()
         for ku in pkg.kullanimlar:
             cari_id = cari_map.get(ku.cari_kodu.strip()) if ku.cari_kodu else None
             ut_nk = normalize_ascii_import(ku.uretim_tipi or "")
@@ -1777,24 +1819,62 @@ def simulate_import(
                     ),
                 ))
             else:
-                sonuc.ekle(SimulasyonKalemi(
-                    aksiyon=plan_aksiyon,
-                    tablo="nexgen_planlama_uygunluk",
-                    identity=plan_identity,
-                    yeni_deger=plan_deger,
-                    mesaj=(
-                        f"Planlama: {ku.cari_kodu}/{ku.uretim_tipi}/"
-                        f"{ku.formul_ad}/{ku.renk_kodu} "
-                        f"(rv_kaynak={rv_kaynak}, canonical_uv={canonical_uv_id})"
-                    ),
-                    kaynak_hucre=ku.kaynak_hucre,
-                    op_id=plan_op,
-                    parent_op_id=revision_parent_op or rv_parent_op or "",
-                    bagli_uv_id=canonical_uv_id or uv_id,
-                    bagli_rv_id=rv_id,
-                    bagli_formul_kod=parent_kod,
-                    safe_to_apply=True,
-                ))
+                plan_db_id: int | None = None
+                plan_dup_neden = ""
+                if cari_id and ut_id and rv_id and plan_deger.get("formul_id"):
+                    plan_db_id = _planlama_db_satir_bul(
+                        con,
+                        cari_id,
+                        ut_id,
+                        int(plan_deger["formul_id"]),
+                        rv_id,
+                        ku.renk_kodu or "",
+                        boyut_key,
+                    )
+                    if plan_db_id:
+                        plan_dup_neden = f"DB kaydı mevcut (id={plan_db_id})"
+                if plan_identity in seen_plan_identity:
+                    plan_dup_neden = (
+                        plan_dup_neden or "Excel içi duplicate identity"
+                    )
+                if plan_db_id or plan_identity in seen_plan_identity:
+                    sonuc.ekle(SimulasyonKalemi(
+                        aksiyon="MATCH_PLANLAMA",
+                        tablo="nexgen_planlama_uygunluk",
+                        identity=plan_identity,
+                        eski_deger={"planlama_id": plan_db_id},
+                        yeni_deger=plan_deger,
+                        mesaj=(
+                            f"Planlama eşleşti: {plan_identity} "
+                            f"({plan_dup_neden or 'duplicate'})"
+                        ),
+                        kaynak_hucre=ku.kaynak_hucre,
+                        op_id=plan_op,
+                        bagli_uv_id=canonical_uv_id or uv_id,
+                        bagli_rv_id=rv_id,
+                        bagli_formul_kod=parent_kod,
+                        safe_to_apply=False,
+                    ))
+                else:
+                    seen_plan_identity.add(plan_identity)
+                    sonuc.ekle(SimulasyonKalemi(
+                        aksiyon=plan_aksiyon,
+                        tablo="nexgen_planlama_uygunluk",
+                        identity=plan_identity,
+                        yeni_deger=plan_deger,
+                        mesaj=(
+                            f"Planlama: {ku.cari_kodu}/{ku.uretim_tipi}/"
+                            f"{ku.formul_ad}/{ku.renk_kodu} "
+                            f"(rv_kaynak={rv_kaynak}, canonical_uv={canonical_uv_id})"
+                        ),
+                        kaynak_hucre=ku.kaynak_hucre,
+                        op_id=plan_op,
+                        parent_op_id=revision_parent_op or rv_parent_op or "",
+                        bagli_uv_id=canonical_uv_id or uv_id,
+                        bagli_rv_id=rv_id,
+                        bagli_formul_kod=parent_kod,
+                        safe_to_apply=True,
+                    ))
 
         # ─────────────────────────────────────────────
         # Batch raporu
