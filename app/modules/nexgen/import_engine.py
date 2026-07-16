@@ -62,6 +62,8 @@ GUVENLI_IMPORT_AKSIYONLARI = frozenset({
     "MATCH_FORMUL", "MATCH_RV", "INSERT_RV", "MATCH_UV", "INSERT_UV",
     "INSERT_UV_REVISION", "UPDATE_ANA_KALEM",
     "INSERT_ANA_KALEM", "INSERT_PLANLAMA", "INSERT_PLANLAMA_REVISION",
+    "INSERT_RF_TASLAK", "MATCH_RF", "MATCH_RF_TASLAK",
+    "RF_REVISION_MANUAL_REVIEW",
     "NEW_RF_CANDIDATE", "WARNING_ONLY", "MATCH_UV_REVISION", "MATCH_PLANLAMA",
 })
 BLOKE_IMPORT_AKSIYONLARI = frozenset({
@@ -83,6 +85,7 @@ SAFE_OP_ORDER = (
     "INSERT_RV", "INSERT_UV", "INSERT_UV_REVISION",
     "UPDATE_ANA_KALEM", "INSERT_ANA_KALEM",
     "INSERT_PLANLAMA", "INSERT_PLANLAMA_REVISION",
+    "INSERT_RF_TASLAK",
 )
 
 # Geriye dönük uyumluluk (artık dry-run dinamik token üretir)
@@ -92,7 +95,13 @@ YAZILABILIR_AKSIYONLAR = frozenset({
     "INSERT_RV", "INSERT_UV", "INSERT_UV_REVISION",
     "UPDATE_ANA_KALEM", "INSERT_ANA_KALEM",
     "INSERT_PLANLAMA", "INSERT_PLANLAMA_REVISION",
+    "INSERT_RF_TASLAK",
 })
+
+# P5E-RF — RF pigment kategorileri (yalnız RF katmanı; ana reçeteye yazılmaz)
+RF_PIGMENT_KATEGORILERI = frozenset({"BOYA", "PIGMENT", "KATKI", "MASTERBATCH"})
+RF_IMPORT_IDENTITY_PREFIX = "IMPORT_RF_ID|"
+RF_ONAYLI_DURUMLAR = frozenset({"ONAYLI", "AKTIF", "URETIME_ACIK"})
 
 # P5D.2 — deterministik revizyon suffix (idempotent; R3 üretilmez)
 REVISION_SUFFIX = " R2"
@@ -742,6 +751,320 @@ def _rf_identity_key(
     )
 
 
+def _rf_import_identity_marker(rf_key: str) -> str:
+    return f"{RF_IMPORT_IDENTITY_PREFIX}{rf_key}"
+
+
+def _rf_pigment_kategori_gecerli(kategori: str) -> bool:
+    return (kategori or "").strip().upper() in RF_PIGMENT_KATEGORILERI
+
+
+def _rf_pigment_fp_from_kalemler(kalemler: list[dict]) -> str:
+    parts = sorted(
+        f"{k['stok_kodu']}:{float(k['miktar_kg']):.6f}"
+        for k in kalemler
+        if k.get("stok_kodu")
+    )
+    return "|".join(parts)
+
+
+def _rf_pigment_fp_db(con: sqlite3.Connection, rf_renk_id: int) -> str:
+    rows = con.execute(
+        """
+        SELECT sk.kod, rk.miktar_kg
+        FROM nexgen_rf_kalem rk
+        JOIN nexgen_stok_kart sk ON sk.id = rk.stok_kart_id
+        WHERE rk.rf_renk_id=? AND rk.aktif=1
+        ORDER BY sk.kod
+        """,
+        (rf_renk_id,),
+    ).fetchall()
+    return "|".join(f"{r[0]}:{float(r[1]):.6f}" for r in rows)
+
+
+def _rf_revizyon_tablosu_var_mi(con: sqlite3.Connection) -> bool:
+    return bool(con.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='nexgen_rf_revizyon'"
+    ).fetchone())
+
+
+def _import_rf_kod_uret(con: sqlite3.Connection, renk_kodu: str) -> str:
+    """TABAN import TASLAK RF kodu — NX-RF- prefix."""
+    row = con.execute(
+        "SELECT MAX(CAST(SUBSTR(rf_kod, 8) AS INTEGER)) AS son "
+        "FROM nexgen_rf_renk WHERE rf_kod LIKE 'NX-RF-%'"
+    ).fetchone()
+    son = row[0] if row and row[0] else 0
+    base = f"NX-RF-{son + 1:04d}"
+    clash = con.execute(
+        "SELECT id FROM nexgen_rf_renk WHERE rf_kod=?", (base,),
+    ).fetchone()
+    if clash:
+        return f"NX-RF-T{renk_kodu}-{son + 1:04d}"
+    return base
+
+
+def _rf_pigment_kod_set(pigment_fp: str) -> frozenset[str]:
+    if not pigment_fp:
+        return frozenset()
+    return frozenset(p.split(":")[0] for p in pigment_fp.split("|") if p)
+
+
+def _rf_aktif_revizyon_var_mi(con: sqlite3.Connection, rf_renk_id: int) -> bool:
+    if not _rf_revizyon_tablosu_var_mi(con):
+        return False
+    return bool(con.execute(
+        "SELECT 1 FROM nexgen_rf_revizyon WHERE rf_renk_id=? AND aktif=1 LIMIT 1",
+        (rf_renk_id,),
+    ).fetchone())
+
+
+def _rf_boya_kalemler_for_cari(
+    rv_excel: NormalizedRenkVaryanti,
+    formul_nk: str,
+    cari_kod: str,
+    pkg: ImportPackage,
+    varyant_pref: str = "",
+) -> tuple[list, str, str]:
+    """Cari+kullanım boyutuna göre pigment kalemleri ve fingerprint."""
+    rk = (rv_excel.renk_kodu or "").strip()
+    vv = (varyant_pref or "").strip()
+    boyut_pref = ""
+    for ku in pkg.kullanimlar:
+        if (ku.cari_kodu or "").strip() != cari_kod:
+            continue
+        if (ku.renk_kodu or "").strip() != rk:
+            continue
+        if vv and (ku.varyant or "").strip() != vv:
+            continue
+        if normalize_ascii_import(ku.formul_ad or "") != formul_nk:
+            continue
+        boyut_pref = (ku.boyut or "MEDIUM").strip().upper()
+        break
+    if boyut_pref and boyut_pref in rv_excel.boyutlar:
+        nb = rv_excel.boyutlar[boyut_pref]
+        return nb.boya_kalemleri, nb.fingerprint_boya, boyut_pref
+    for boyut, nb in rv_excel.boyutlar.items():
+        if nb.boya_kalemleri:
+            return nb.boya_kalemleri, nb.fingerprint_boya, boyut
+    return [], "", boyut_pref or "MEDIUM"
+
+
+def _rf_stok_dogrula(
+    con: sqlite3.Connection,
+    boya_kalemler: list,
+    stok_map: dict[str, int],
+) -> list[str]:
+    """RF pigment stok kontrolü — MASTERBATCH dahil."""
+    issues: list[str] = []
+    for k in boya_kalemler:
+        sc = (k.stok_kodu or "").strip()
+        if not sc:
+            issues.append("BOS_STOK_KODU")
+            continue
+        sk = con.execute(
+            "SELECT id, kod, kategori, aktif FROM nexgen_stok_kart WHERE kod=?",
+            (sc,),
+        ).fetchone()
+        if not sk:
+            issues.append(f"EKSIK:{sc}")
+        elif not sk[3]:
+            issues.append(f"PASIF:{sc}")
+        elif not _rf_pigment_kategori_gecerli(sk[2]):
+            issues.append(f"KATEGORI:{sc}={sk[2]}")
+        else:
+            stok_map[sc] = sk[0]
+    return issues
+
+
+def _rf_taslak_bul(
+    con: sqlite3.Connection, rf_key: str, pigment_fp: str,
+) -> dict | None:
+    marker = _rf_import_identity_marker(rf_key)
+    row = con.execute(
+        "SELECT id, rf_kod, ad, durum, cari_id FROM nexgen_rf_renk "
+        "WHERE aktif=1 AND durum='TASLAK' AND aciklama LIKE ?",
+        (f"%{marker}%",),
+    ).fetchone()
+    if not row:
+        return None
+    d = dict(row)
+    if _rf_pigment_fp_db(con, d["id"]) == pigment_fp:
+        return d
+    return None
+
+
+def _rf_db_eslesmeleri(
+    con: sqlite3.Connection,
+    cari_id: int,
+    renk_kodu: str,
+    parent_kod: str = "",
+) -> list[dict]:
+    """Renk kodu ile mevcut RF adayları (ONAYLI/TASLAK)."""
+    pat = f"%{renk_kodu}%"
+    rows = con.execute(
+        """
+        SELECT rf.id, rf.rf_kod, rf.ad, rf.durum, rf.cari_id, rf.ilk_talep_cari_id,
+               f.kod AS formul_kod
+        FROM nexgen_rf_renk rf
+        LEFT JOIN nexgen_rf_formul_uygunluk rfu ON rfu.rf_renk_id=rf.id AND rfu.aktif=1
+        LEFT JOIN nexgen_formul f ON f.id=rfu.formul_id
+        WHERE rf.aktif=1
+          AND (rf.cari_id=? OR rf.ilk_talep_cari_id=? OR rf.cari_id IS NULL)
+          AND (rf.rf_kod LIKE ? OR rf.ad LIKE ? OR rf.rf_kod=? OR rf.ad=?)
+        """,
+        (cari_id, cari_id, pat, pat, renk_kodu, renk_kodu),
+    ).fetchall()
+    pk = (parent_kod or "").strip()
+    seen: set[int] = set()
+    out = []
+    for r in rows:
+        rid = r[0]
+        if rid in seen:
+            continue
+        seen.add(rid)
+        fk = (r[6] or "").strip() if len(r) > 6 else ""
+        parent_mismatch = bool(pk and fk and fk != pk)
+        d = {
+            "id": rid, "rf_kod": r[1], "ad": r[2], "durum": r[3],
+            "cari_id": r[4], "ilk_talep_cari_id": r[5],
+            "formul_kod": fk,
+            "parent_mismatch": parent_mismatch,
+            "pigment_fp": _rf_pigment_fp_db(con, rid),
+        }
+        out.append(d)
+    return out
+
+
+def _rf_siniflandir(
+    con: sqlite3.Connection,
+    rf_key: str,
+    pigment_fp: str,
+    pigment_kalemler: list[dict],
+    stok_issues: list[str],
+    cari_id: int,
+    renk_kodu: str,
+    parent_kod: str = "",
+) -> tuple[str, str, dict | None]:
+    """
+    RF aday kararı.
+    Döner: (aksiyon, mesaj_ek, eslesen_rf_dict)
+    """
+    if stok_issues:
+        return "GERCEK_BLOCKER", ";".join(stok_issues), None
+
+    taslak = _rf_taslak_bul(con, rf_key, pigment_fp)
+    if taslak:
+        return "MATCH_RF_TASLAK", f"rf_id={taslak['id']}", taslak
+
+    db_matches = _rf_db_eslesmeleri(con, cari_id, renk_kodu, parent_kod)
+    uyumlu = [m for m in db_matches if not m.get("parent_mismatch")]
+
+    exact = [m for m in uyumlu if m["pigment_fp"] == pigment_fp]
+    if exact:
+        onayli = [m for m in exact if m["durum"] in RF_ONAYLI_DURUMLAR]
+        hedef = onayli[0] if onayli else exact[0]
+        return "MATCH_RF", f"rf_id={hedef['id']} durum={hedef['durum']}", hedef
+
+    excel_kodlar = _rf_pigment_kod_set(pigment_fp)
+    if excel_kodlar:
+        global_zayif = [
+            m for m in uyumlu
+            if m["cari_id"] is None
+            and m["durum"] in RF_ONAYLI_DURUMLAR
+            and _rf_pigment_kod_set(m["pigment_fp"]) == excel_kodlar
+        ]
+        if global_zayif:
+            h = global_zayif[0]
+            return (
+                "MATCH_RF",
+                f"rf_id={h['id']} durum={h['durum']} (global_zayif)",
+                h,
+            )
+
+    rev_aday = [
+        m for m in uyumlu
+        if m["durum"] in RF_ONAYLI_DURUMLAR
+        and m["pigment_fp"]
+        and m["pigment_fp"] != pigment_fp
+        and _rf_aktif_revizyon_var_mi(con, m["id"])
+    ]
+    if rev_aday:
+        h = rev_aday[0]
+        return (
+            "RF_REVISION_MANUAL_REVIEW",
+            f"Mevcut ONAYLI RF pigment farklı: rf_id={h['id']}",
+            h,
+        )
+
+    return "INSERT_RF_TASLAK", "Yeni TASLAK RF", None
+
+
+def _rf_taslak_payload(
+    *,
+    rf_key: str,
+    cari_id: int,
+    cari_kod: str,
+    parent_formul_id: int,
+    parent_kod: str,
+    rv_id: int | None,
+    varyant: str,
+    renk_kodu: str,
+    renk_adi: str,
+    pigment_kalemler: list[dict],
+    pigment_fp: str,
+    fingerprint_boya: str,
+    boyut: str,
+    excel_kaynak: str = "TABAN_EXCEL",
+) -> dict:
+    return {
+        "rf_identity": rf_key,
+        "cari_id": cari_id,
+        "cari_kod": cari_kod,
+        "parent_formul_id": parent_formul_id,
+        "parent_kod": parent_kod,
+        "rv_id": rv_id,
+        "varyant": varyant,
+        "renk_kodu": renk_kodu,
+        "renk_adi": renk_adi,
+        "pigment_kalemleri": pigment_kalemler,
+        "pigment_fp": pigment_fp,
+        "fingerprint_boya": fingerprint_boya,
+        "boyut": boyut,
+        "durum": "TASLAK",
+        "excel_kaynak": excel_kaynak,
+    }
+
+
+def _rf_pigmentler_json_olustur(
+    con: sqlite3.Connection, pigment_kalemler: list[dict], stok_map: dict[str, int],
+) -> str:
+    pigmentler = []
+    for i, p in enumerate(pigment_kalemler, 1):
+        sk_id = stok_map.get(p["stok_kodu"])
+        if not sk_id:
+            row = con.execute(
+                "SELECT id, ad FROM nexgen_stok_kart WHERE kod=? AND aktif=1",
+                (p["stok_kodu"],),
+            ).fetchone()
+            sk_id = row[0] if row else None
+            ad = row[1] if row else p["stok_kodu"]
+        else:
+            row = con.execute(
+                "SELECT ad FROM nexgen_stok_kart WHERE id=?", (sk_id,),
+            ).fetchone()
+            ad = row[0] if row else p["stok_kodu"]
+        if not sk_id:
+            continue
+        pigmentler.append({
+            "stok_kart_id": sk_id,
+            "pigment_ad": ad,
+            "miktar_kg": float(p["miktar_kg"]),
+            "sira": i,
+        })
+    return json.dumps(pigmentler, ensure_ascii=False)
+
+
 def _kullanim_uv_coz(
     ku: "NormalizedKullanim",
     formul_map: dict[str, dict],
@@ -1052,7 +1375,8 @@ def _p5b_bagimlilik_filtre(
             "INSERT_RV", "INSERT_UV", "INSERT_UV_REVISION",
             "UPDATE_ANA_KALEM", "INSERT_ANA_KALEM",
             "INSERT_PLANLAMA", "INSERT_PLANLAMA_REVISION",
-            "NEW_RF_CANDIDATE", "BLOCKED_DEPENDENCY",
+            "INSERT_RF_TASLAK", "MATCH_RF", "MATCH_RF_TASLAK",
+            "RF_REVISION_MANUAL_REVIEW", "BLOCKED_DEPENDENCY",
         ):
             continue
         sonuc.bagimlilik_grafigi.append({
@@ -1668,7 +1992,11 @@ def simulate_import(
                                     bagli_formul_kod=db_f["f_kod"],
                                 ))
 
-            # P5B.1 RF planı: scoped identity → NEW_RF_CANDIDATE
+            # P5E-RF — scoped identity → INSERT_RF_TASLAK / MATCH / REVIEW
+            rv_db_id_for_rf = None
+            rv_nk_rf = normalize_ascii_import(varyant)
+            rv_db_id_for_rf = rv_map.get((db_f["f_id"], rv_nk_rf))
+
             for rv_excel in formul.renk_varyantlari:
                 rk = (rv_excel.renk_kodu or "").strip()
                 if not rk:
@@ -1707,19 +2035,77 @@ def simulate_import(
                             bloker_nedeni=f"RF_CONFLICT: {rf_key}",
                             op_id=_next_op("rf"),
                             bagli_formul_kod=db_f["f_kod"],
+                            safe_to_apply=False,
                         ))
+                        continue
+
+                    cari_id = cari_map.get(cari) if cari else None
+                    boya_k, fp_boya, boyut_rf = _rf_boya_kalemler_for_cari(
+                        rv_excel, nk, cari, pkg, varyant_pref=varyant,
+                    )
+                    pigment_kalemler = [
+                        {
+                            "stok_kodu": k.stok_kodu,
+                            "miktar_kg": k.miktar_kg,
+                            "kaynak_hucre": k.kaynak_hucre,
+                            "sira": k.sira,
+                        }
+                        for k in boya_k
+                    ]
+                    pigment_fp = _rf_pigment_fp_from_kalemler(pigment_kalemler)
+                    stok_issues = (
+                        _rf_stok_dogrula(con, boya_k, stok_map)
+                        if cari_id and boya_k else ["CARI_YOK" if not cari_id else "BOYA_YOK"]
+                    )
+
+                    if cari_id and boya_k:
+                        aksiyon, ek, eslesen = _rf_siniflandir(
+                            con, rf_key, pigment_fp, pigment_kalemler,
+                            stok_issues, cari_id, rk, db_f["f_kod"],
+                        )
                     else:
-                        sonuc.ekle(SimulasyonKalemi(
-                            aksiyon="NEW_RF_CANDIDATE",
-                            tablo="nexgen_rf_renk",
-                            identity=rf_key,
-                            mesaj=(
-                                f"Yeni RF adayı: {rf_key} "
-                                f"({rv_excel.renk_adi or rk}) — boya RF katmanında"
-                            ),
-                            op_id=_next_op("rf"),
-                            bagli_formul_kod=db_f["f_kod"],
-                        ))
+                        aksiyon = "GERCEK_BLOCKER"
+                        ek = ";".join(stok_issues) if stok_issues else "CARI/BOYA eksik"
+                        eslesen = None
+
+                    yazilabilir = aksiyon == "INSERT_RF_TASLAK"
+                    bloker = aksiyon == "GERCEK_BLOCKER"
+                    payload = None
+                    if aksiyon == "INSERT_RF_TASLAK" and cari_id:
+                        payload = _rf_taslak_payload(
+                            rf_key=rf_key,
+                            cari_id=cari_id,
+                            cari_kod=cari,
+                            parent_formul_id=db_f["f_id"],
+                            parent_kod=db_f["f_kod"],
+                            rv_id=rv_db_id_for_rf,
+                            varyant=varyant,
+                            renk_kodu=rk,
+                            renk_adi=rv_excel.renk_adi or rk,
+                            pigment_kalemler=pigment_kalemler,
+                            pigment_fp=pigment_fp,
+                            fingerprint_boya=fp_boya,
+                            boyut=boyut_rf,
+                        )
+
+                    mesaj = (
+                        f"{aksiyon}: {rf_key} ({rv_excel.renk_adi or rk})"
+                        + (f" — {ek}" if ek else "")
+                    )
+                    sonuc.ekle(SimulasyonKalemi(
+                        aksiyon=aksiyon,
+                        tablo="nexgen_rf_renk",
+                        identity=rf_key,
+                        yeni_deger=payload,
+                        eski_deger={"rf_id": eslesen["id"]} if eslesen else None,
+                        mesaj=mesaj,
+                        op_id=_next_op("rf"),
+                        bagli_formul_kod=db_f["f_kod"],
+                        bagli_rv_id=rv_db_id_for_rf,
+                        bloker_mi=bloker,
+                        bloker_nedeni=ek if bloker else "",
+                        safe_to_apply=yazilabilir and not bloker,
+                    ))
 
         # Planlama uygunluğu — P5B.4 RV dependency çözümü
         pending_rv = _pending_rv_map_from_sim(sonuc)
@@ -2030,6 +2416,18 @@ def partial_plan_fingerprint(sim: SimulasyonSonucu) -> str:
                 (pd.get("musteri_formul_kodu") or "").strip(),
                 (pd.get("mamul_uretim_kodu") or "").strip(),
             ])
+        elif k.aksiyon == "INSERT_RF_TASLAK":
+            vd = k.yeni_deger or {}
+            line = "|".join([
+                k.aksiyon,
+                k.identity,
+                k.op_id,
+                str(vd.get("cari_id") or ""),
+                str(vd.get("parent_formul_id") or ""),
+                str(vd.get("rv_id") or ""),
+                (vd.get("renk_kodu") or "").strip(),
+                (vd.get("pigment_fp") or "")[:32],
+            ])
         else:
             vd = k.yeni_deger or {}
             extra = ""
@@ -2115,7 +2513,9 @@ def build_partial_import_plan(
                 "aksiyon": k.aksiyon,
                 "identity": k.identity,
                 "parent_op_id": k.parent_op_id,
-                **({"yeni_deger": k.yeni_deger} if k.aksiyon == "INSERT_PLANLAMA" else {}),
+                **({"yeni_deger": k.yeni_deger} if k.aksiyon in (
+                    "INSERT_PLANLAMA", "INSERT_RF_TASLAK",
+                ) else {}),
             }
             for k in ops
         ],
@@ -2587,6 +2987,118 @@ def execute_partial_import(
                     rv_id_by_op, onayli_kullanici_id, sonuc,
                 )
 
+            elif op.aksiyon == "INSERT_RF_TASLAK":
+                vd = op.yeni_deger or {}
+                rf_key = vd.get("rf_identity") or op.identity
+                marker = _rf_import_identity_marker(rf_key)
+                existing = con.execute(
+                    "SELECT id FROM nexgen_rf_renk "
+                    "WHERE aktif=1 AND aciklama LIKE ?",
+                    (f"%{marker}%",),
+                ).fetchone()
+                if existing:
+                    continue
+
+                cari_id = vd.get("cari_id")
+                parent_fid = vd.get("parent_formul_id")
+                renk_kodu = vd.get("renk_kodu") or ""
+                renk_adi = vd.get("renk_adi") or renk_kodu
+                pigment_kalemler = vd.get("pigment_kalemleri") or []
+                if not cari_id or not pigment_kalemler:
+                    raise ValueError(
+                        f"INSERT_RF_TASLAK eksik payload: {op.identity}"
+                    )
+
+                rf_kod = _import_rf_kod_uret(con, renk_kodu)
+                excel_kaynak = vd.get("excel_kaynak") or "TABAN_EXCEL"
+                aciklama = f"{marker}|{excel_kaynak}"
+                con.execute(
+                    """
+                    INSERT INTO nexgen_rf_renk
+                        (rf_kod, ad, durum, ilk_talep_cari_id, cari_id,
+                         aciklama, olusturan_id, aktif, aktif_rev_no)
+                    VALUES (?, ?, 'TASLAK', ?, ?, ?, 1, 1, 0)
+                    """,
+                    (rf_kod, renk_adi, cari_id, cari_id, aciklama),
+                )
+                rf_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+                for i, p in enumerate(pigment_kalemler, 1):
+                    sk_id = stok_map.get(p["stok_kodu"])
+                    if not sk_id:
+                        row = con.execute(
+                            "SELECT id FROM nexgen_stok_kart WHERE kod=? AND aktif=1",
+                            (p["stok_kodu"],),
+                        ).fetchone()
+                        sk_id = row[0] if row else None
+                    if not sk_id:
+                        raise ValueError(
+                            f"INSERT_RF_TASLAK stok bulunamadı: {p['stok_kodu']}"
+                        )
+                    con.execute(
+                        """
+                        INSERT INTO nexgen_rf_kalem
+                            (rf_renk_id, stok_kart_id, pigment_ad, miktar_kg,
+                             sira, aciklama, aktif)
+                        VALUES (?, ?, ?, ?, ?, ?, 1)
+                        """,
+                        (
+                            rf_id, sk_id, p["stok_kodu"],
+                            float(p["miktar_kg"]), i,
+                            p.get("kaynak_hucre") or "",
+                        ),
+                    )
+
+                pigmentler_json = _rf_pigmentler_json_olustur(
+                    con, pigment_kalemler, stok_map,
+                )
+                if _rf_revizyon_tablosu_var_mi(con):
+                    mevcut_rev = con.execute(
+                        "SELECT id FROM nexgen_rf_revizyon "
+                        "WHERE rf_renk_id=? AND rev_no=1",
+                        (rf_id,),
+                    ).fetchone()
+                    if not mevcut_rev:
+                        kalip = None
+                        con.execute(
+                            """
+                            INSERT INTO nexgen_rf_revizyon
+                                (rf_renk_id, rev_no, durum, pigmentler_json,
+                                 neden, aciklama, olusturan_id,
+                                 olusturma_tarihi, kilitli_mi, aktif)
+                            VALUES (?, 1, 'TASLAK', ?, 'TABAN_IMPORT',
+                                    'Excel TABAN TASLAK REV-1', 1,
+                                    datetime('now'), 0, 1)
+                            """,
+                            (rf_id, pigmentler_json),
+                        )
+
+                if parent_fid:
+                    uygun = con.execute(
+                        "SELECT id FROM nexgen_rf_formul_uygunluk "
+                        "WHERE rf_renk_id=? AND formul_id=? AND aktif=1",
+                        (rf_id, parent_fid),
+                    ).fetchone()
+                    if not uygun:
+                        con.execute(
+                            """
+                            INSERT INTO nexgen_rf_formul_uygunluk
+                                (rf_renk_id, formul_id, durum,
+                                 ilk_talep_cari_id, aktif, olusturma_tarihi)
+                            VALUES (?, ?, 'TASLAK', ?, 1, datetime('now'))
+                            """,
+                            (rf_id, parent_fid, cari_id),
+                        )
+
+                sonuc.ozet["INSERT_RF_TASLAK"] = (
+                    sonuc.ozet.get("INSERT_RF_TASLAK", 0) + 1
+                )
+                _log_item(
+                    con, batch_id, "nexgen_rf_renk", "INSERT_RF_TASLAK",
+                    None, rf_id,
+                    {"rf_kod": rf_kod, "identity": rf_key},
+                )
+
         if batch_id:
             con.execute(
                 "UPDATE nexgen_import_batch SET durum='TAMAMLANDI', "
@@ -2678,6 +3190,7 @@ def test_partial_transaction(
             "INSERT_RV", "INSERT_UV", "INSERT_UV_REVISION",
             "UPDATE_ANA_KALEM", "INSERT_ANA_KALEM",
             "INSERT_PLANLAMA", "INSERT_PLANLAMA_REVISION",
+            "INSERT_RF_TASLAK",
         })
         yeni_yazma = sum(v for k, v in r2.ozet.items() if k in _write_keys)
         sonuc["idempotent_ok"] = r2.basarili and yeni_yazma == 0
@@ -2714,14 +3227,16 @@ def test_partial_transaction(
 
     # ── P5D.2 doğrulamaları (apply sonrası temp DB) ─────────────────
     sonuc["p5d2"] = _p5d2_post_apply_validate(source_db, temp_db, sim1)
+    sonuc["rf_taslak"] = _rf_taslak_post_apply_validate(source_db, temp_db, sim1)
 
     sonuc["sim1_bloker_sayisi"] = len(sim1.blokerler)
     sonuc["sim1_ozet"] = {
         k: sim1.ozet.get(k, 0)
         for k in (
+            "INSERT_RF_TASLAK", "MATCH_RF", "MATCH_RF_TASLAK",
+            "RF_REVISION_MANUAL_REVIEW", "GERCEK_BLOCKER",
             "UPDATE_ANA_KALEM", "INSERT_UV_REVISION", "INSERT_ANA_KALEM",
-            "GERCEK_BLOCKER", "BLOCKED", "REVISION_SNAPSHOT_REQUIRED",
-            "CHANGED_RECIPE",
+            "BLOCKED", "REVISION_SNAPSHOT_REQUIRED", "CHANGED_RECIPE",
         )
         if sim1.ozet.get(k, 0)
     }
@@ -2733,8 +3248,113 @@ def test_partial_transaction(
         and sonuc.get("idempotent_ok")
         and sonuc.get("rollback_ok")
         and sonuc.get("p5d2", {}).get("tum_kontroller_ok", False)
+        and sonuc.get("rf_taslak", {}).get("tum_kontroller_ok", False)
     )
     return sonuc
+
+
+def _rf_taslak_post_apply_validate(
+    source_db: str, temp_db: str, sim1: SimulasyonSonucu,
+) -> dict[str, Any]:
+    """P5E-RF — geçici DB RF TASLAK apply sonrası koruma doğrulamaları."""
+    rapor: dict[str, Any] = {"tum_kontroller_ok": True, "kontroller": []}
+
+    def _chk(ad: str, ok: bool, detay: str = "") -> None:
+        rapor["kontroller"].append({"ad": ad, "ok": ok, "detay": detay})
+        if not ok:
+            rapor["tum_kontroller_ok"] = False
+
+    src = sqlite3.connect(source_db)
+    tmp = sqlite3.connect(temp_db)
+    src.row_factory = sqlite3.Row
+    tmp.row_factory = sqlite3.Row
+
+    try:
+        src_onayli = src.execute(
+            "SELECT COUNT(*) FROM nexgen_rf_renk "
+            "WHERE durum IN ('ONAYLI','AKTIF') AND aktif=1"
+        ).fetchone()[0]
+        tmp_onayli = tmp.execute(
+            "SELECT COUNT(*) FROM nexgen_rf_renk "
+            "WHERE durum IN ('ONAYLI','AKTIF') AND aktif=1"
+        ).fetchone()[0]
+        _chk("aktif_onayli_rf_korundu", src_onayli == tmp_onayli, f"{src_onayli}=={tmp_onayli}")
+
+        src_recete = src.execute(
+            "SELECT COUNT(*) FROM nexgen_recete_kalem"
+        ).fetchone()[0]
+        tmp_recete = tmp.execute(
+            "SELECT COUNT(*) FROM nexgen_recete_kalem"
+        ).fetchone()[0]
+        _chk("recete_kalem_degmedi", src_recete == tmp_recete, f"{src_recete}=={tmp_recete}")
+
+        src_plan = src.execute(
+            "SELECT COUNT(*) FROM nexgen_planlama_uygunluk"
+        ).fetchone()[0]
+        tmp_plan = tmp.execute(
+            "SELECT COUNT(*) FROM nexgen_planlama_uygunluk"
+        ).fetchone()[0]
+        _chk("planlama_degmedi", src_plan == tmp_plan, f"{src_plan}=={tmp_plan}")
+
+        src_batch = src.execute(
+            "SELECT COUNT(*) FROM nexgen_uretim_batch"
+        ).fetchone()[0]
+        tmp_batch = tmp.execute(
+            "SELECT COUNT(*) FROM nexgen_uretim_batch"
+        ).fetchone()[0]
+        _chk("batch_degmedi", src_batch == tmp_batch, f"{src_batch}=={tmp_batch}")
+
+        beklenen_taslak = sim1.ozet.get("INSERT_RF_TASLAK", 0)
+        gercek_taslak = tmp.execute(
+            "SELECT COUNT(*) FROM nexgen_rf_renk WHERE durum='TASLAK' AND aktif=1 "
+            "AND aciklama LIKE ?",
+            (f"%{RF_IMPORT_IDENTITY_PREFIX}%",),
+        ).fetchone()[0]
+        _chk(
+            "taslak_rf_sayisi",
+            gercek_taslak >= beklenen_taslak,
+            f"beklenen>={beklenen_taslak} gercek={gercek_taslak}",
+        )
+
+        # 0118 MASTERBATCH pigment doğrulama
+        mb_rf = tmp.execute(
+            "SELECT id FROM nexgen_rf_renk WHERE durum='TASLAK' AND aktif=1 "
+            "AND ad LIKE '%Buz Beyaz%' OR aciklama LIKE '%|810|18-28|0118'"
+        ).fetchone()
+        if beklenen_taslak >= 12:
+            rf_0118 = tmp.execute(
+                "SELECT id FROM nexgen_rf_renk WHERE aktif=1 AND aciklama LIKE ?",
+                (f"%{RF_IMPORT_IDENTITY_PREFIX}120.NX.008|810|18-28|0118%",),
+            ).fetchone()
+            if rf_0118:
+                mb_cnt = tmp.execute(
+                    """
+                    SELECT COUNT(*) FROM nexgen_rf_kalem rk
+                    JOIN nexgen_stok_kart sk ON sk.id=rk.stok_kart_id
+                    WHERE rk.rf_renk_id=? AND UPPER(sk.kategori)='MASTERBATCH'
+                    """,
+                    (rf_0118[0],),
+                ).fetchone()[0]
+                _chk("0118_masterbatch_kalem", mb_cnt >= 6, f"mb_kalem={mb_cnt}")
+
+        plan_rf_bos = tmp.execute(
+            "SELECT COUNT(*) FROM nexgen_planlama_uygunluk "
+            "WHERE rf_renk_id IS NOT NULL"
+        ).fetchone()[0]
+        src_plan_rf = src.execute(
+            "SELECT COUNT(*) FROM nexgen_planlama_uygunluk "
+            "WHERE rf_renk_id IS NOT NULL"
+        ).fetchone()[0]
+        _chk(
+            "planlama_rf_baglanmadi",
+            plan_rf_bos == src_plan_rf,
+            f"plan_rf={plan_rf_bos}",
+        )
+    finally:
+        src.close()
+        tmp.close()
+
+    return rapor
 
 
 def _p5d2_post_apply_validate(

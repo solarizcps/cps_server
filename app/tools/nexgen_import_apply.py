@@ -292,7 +292,11 @@ def _calistir(args: argparse.Namespace) -> int:
         if k.endswith("_GUVENLI")
     }
     bloke_cnt = sim.ozet.get("BLOCKED", 0)
-    rf_aday = sim.ozet.get("NEW_RF_CANDIDATE", 0)
+    rf_taslak = sim.ozet.get("INSERT_RF_TASLAK", 0)
+    rf_match = sim.ozet.get("MATCH_RF", 0)
+    rf_match_taslak = sim.ozet.get("MATCH_RF_TASLAK", 0)
+    rf_rev_manual = sim.ozet.get("RF_REVISION_MANUAL_REVIEW", 0)
+    rf_blocker = sim.ozet.get("GERCEK_BLOCKER", 0)
     blocked_dep = sim.ozet.get("BLOCKED_DEPENDENCY", 0)
     guvenli_plan = sim.ozet.get("INSERT_PLANLAMA_GUVENLI", sim.ozet.get("INSERT_PLANLAMA", 0))
 
@@ -300,7 +304,11 @@ def _calistir(args: argparse.Namespace) -> int:
     print(f"    Güvenli yazma (filtreli): {sim.guvenli_yazma_sayisi}")
     for k, v in sorted(guvenli_yaz.items()):
         print(f"      {k}: {v}")
-    print(f"    NEW_RF_CANDIDATE        : {rf_aday}")
+    print(f"    INSERT_RF_TASLAK        : {rf_taslak}")
+    print(f"    MATCH_RF                : {rf_match}")
+    print(f"    MATCH_RF_TASLAK         : {rf_match_taslak}")
+    print(f"    RF_REVISION_MANUAL      : {rf_rev_manual}")
+    print(f"    GERCEK_BLOCKER (RF)     : {rf_blocker}")
     print(f"    BLOCKED (import dışı)   : {bloke_cnt}")
     print(f"    BLOCKED_DEPENDENCY      : {blocked_dep}")
     print(f"    INSERT_PLANLAMA güvenli  : {guvenli_plan}")
@@ -320,10 +328,14 @@ def _calistir(args: argparse.Namespace) -> int:
     print(f"    Güvenli aday toplam        : {sim.guvenli_aday_sayisi}")
     print(f"    Uygulanabilir toplam (token): {sim.uygulanabilir_yazma_sayisi}")
 
-    # RF aday özeti (Model 1)
-    if rf_aday:
-        print(f"\n  RF Durum (Model 1 — boya RF katmanında):")
-        print(f"    NEW_RF_CANDIDATE : {rf_aday} (RF oluşturma AR-GE sürecinde)")
+    # RF TABAN özeti (P5E-RF)
+    if rf_taslak or rf_match or rf_rev_manual:
+        print(f"\n  RF Durum (TABAN — TASLAK motoru):")
+        print(f"    INSERT_RF_TASLAK          : {rf_taslak}")
+        print(f"    MATCH_RF                  : {rf_match}")
+        print(f"    RF_REVISION_MANUAL_REVIEW : {rf_rev_manual}")
+        if rf_match:
+            print(f"    NOT: MATCH_RF global/zayıf bağ — planlama rf_renk_id bu fazda bağlanmaz")
 
     # Bloker özeti
     if sim.blokerler:
