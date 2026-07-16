@@ -2707,18 +2707,7 @@ function exSonTikla(formulId, rvId, uvId, tur) {
           </div>
 
           <!-- ELLE GİR -->
-          <div id="nf-panel-elle">
-            <div class="nf-btab-nav" id="nf-elle-btabs"></div>
-            <div id="nf-elle-boyut-panelleri"></div>
-            <div class="nf-oz-serit" style="margin-top:10px;">
-              <div class="nf-oz-k"><div class="nf-oz-v bl" id="nf-e-top-hm">0</div><div class="nf-oz-l">Hammadde</div></div>
-              <div class="nf-oz-k"><div class="nf-oz-v gr" id="nf-e-top-lg">—</div><div class="nf-oz-l">LARGE KG</div></div>
-              <div class="nf-oz-k"><div class="nf-oz-v gr" id="nf-e-top-sm">—</div><div class="nf-oz-l">SMALL KG</div></div>
-              <div class="nf-oz-k"><div class="nf-oz-v" style="color:#94a3b8;" id="nf-e-top-md">—</div><div class="nf-oz-l">MED KG</div></div>
-              <div class="nf-oz-k"><div class="nf-oz-v rd">0</div><div class="nf-oz-l">Hata</div></div>
-              <div class="nf-oz-k"><div class="nf-oz-v or">0</div><div class="nf-oz-l">Uyarı</div></div>
-            </div>
-          </div>
+          <div id="nf-panel-elle"></div>
 
           <!-- KOPYALA -->
           <div id="nf-panel-kopya" style="display:none;">
@@ -2752,12 +2741,23 @@ function exSonTikla(formulId, rvId, uvId, tur) {
               <button type="button" class="nf-btn-getir" id="nf-k-getir-btn" onclick="nfKopyaGetir()">📋 Formülü Getir</button>
               <div id="nf-kopya-hata" style="display:none;margin-top:8px;font-size:11px;color:#dc2626;"></div>
             </div>
-            <div class="nf-prev-wrap">
-              <div class="nf-prev-hdr"><div class="nf-prev-hdr-l" id="nf-k-prev-baslik">Kopya Önizleme</div></div>
-              <table class="nf-oniz-t">
-                <thead><tr><th>Boyut</th><th>Stok Kodu</th><th>Hammadde</th><th style="text-align:right;">Miktar</th><th>Birim</th></tr></thead>
-                <tbody id="nf-k-prev-tbody"><tr><td colspan="5" style="text-align:center;padding:16px;color:#94a3b8;font-size:11px;">Formül getirildiğinde önizleme burada görünür</td></tr></tbody>
-              </table>
+            <div id="nf-kopya-bekle" style="text-align:center;padding:14px;color:#94a3b8;font-size:11px;font-style:italic;">
+              Formül getirildiğinde kalemler aşağıdaki düzenleme alanına aktarılır
+            </div>
+          </div>
+
+          <!-- ORTAK HAMMADDE EDİTÖRÜ (Elle + Kopya) -->
+          <div id="nf-ortak-editor" style="display:none;">
+            <div style="font-size:10px;font-weight:800;color:#374151;text-transform:uppercase;letter-spacing:.5px;margin:12px 0 8px;" id="nf-editor-baslik">Hammadde Listesi</div>
+            <div class="nf-btab-nav" id="nf-elle-btabs"></div>
+            <div id="nf-elle-boyut-panelleri"></div>
+            <div class="nf-oz-serit" style="margin-top:10px;">
+              <div class="nf-oz-k"><div class="nf-oz-v bl" id="nf-e-top-hm">0</div><div class="nf-oz-l">Hammadde</div></div>
+              <div class="nf-oz-k"><div class="nf-oz-v gr" id="nf-e-top-lg">—</div><div class="nf-oz-l">LARGE KG</div></div>
+              <div class="nf-oz-k"><div class="nf-oz-v gr" id="nf-e-top-sm">—</div><div class="nf-oz-l">SMALL KG</div></div>
+              <div class="nf-oz-k"><div class="nf-oz-v" style="color:#94a3b8;" id="nf-e-top-md">—</div><div class="nf-oz-l">MED KG</div></div>
+              <div class="nf-oz-k"><div class="nf-oz-v rd">0</div><div class="nf-oz-l">Hata</div></div>
+              <div class="nf-oz-k"><div class="nf-oz-v or">0</div><div class="nf-oz-l">Uyarı</div></div>
             </div>
           </div>
 
@@ -2855,6 +2855,7 @@ var _nfElleAktifBoyut = null;
 var _nfExcelOnizleme = null;
 var _nfExcelGecerli = false;
 var _nfKopyaOnizleme = null;
+var _nfKopyaYuklendi = false;
 var _nfKopyaRfKopyala = true;
 var _nfKaynakRf = null;
 var _nfBrPigmentUid = 1;
@@ -2880,6 +2881,7 @@ function _nfModalSifirla() {
   _nfExcelOnizleme = null;
   _nfExcelGecerli = false;
   _nfKopyaOnizleme = null;
+  _nfKopyaYuklendi = false;
   _nfKaynakRf = null;
   _nfBrPigmentler = [];
   _nfBrPigmentUid = 1;
@@ -3044,6 +3046,22 @@ function _nfAdimGoster(n) {
     document.getElementById('nf-btn-kaydet').style.display = '';
     _nfOzetGoster();
     _nfEllePanelRender();
+    _nfOrtakEditorGoster();
+  }
+}
+
+function _nfOrtakEditorGoster() {
+  var ed = document.getElementById('nf-ortak-editor');
+  if (!ed) return;
+  var show = (_nfYontem === 'elle') || (_nfYontem === 'kopyala' && _nfKopyaYuklendi);
+  ed.style.display = show ? '' : 'none';
+  var bekle = document.getElementById('nf-kopya-bekle');
+  if (bekle) bekle.style.display = (_nfYontem === 'kopyala' && !_nfKopyaYuklendi) ? '' : 'none';
+  var baslik = document.getElementById('nf-editor-baslik');
+  if (baslik) {
+    baslik.textContent = (_nfYontem === 'kopyala' && _nfKopyaYuklendi)
+      ? 'KOPYALANAN FORMÜLÜ DÜZENLE'
+      : 'Hammadde Listesi';
   }
 }
 
@@ -3060,6 +3078,7 @@ window.nfYontemSec = function(yontem) {
     if (panel) panel.style.display = active ? '' : 'none';
   });
   if (yontem === 'kopyala') _nfKopyaFormullerYukle();
+  _nfOrtakEditorGoster();
   _nfOzetGoster();
 };
 
@@ -3335,9 +3354,6 @@ function _nfKalemlerPayload() {
   if (_nfYontem === 'excel' && _nfExcelOnizleme && _nfExcelOnizleme.kalemler) {
     return _nfExcelOnizleme.kalemler;
   }
-  if (_nfYontem === 'kopyala' && _nfKopyaOnizleme && _nfKopyaOnizleme.kalemler) {
-    return _nfKopyaOnizleme.kalemler;
-  }
 
   _nfKalemler.forEach(function(k) {
     if (!out[k.boyut]) out[k.boyut] = [];
@@ -3352,7 +3368,6 @@ function _nfKalemlerPayload() {
 
 function _nfAktifKalemSayisi() {
   if (_nfYontem === 'excel' && _nfExcelOnizleme) return _nfExcelOnizleme.hammadde_sayisi || 0;
-  if (_nfYontem === 'kopyala' && _nfKopyaOnizleme) return _nfKopyaOnizleme.kalem_sayisi || 0;
   return _nfKalemler.length;
 }
 
@@ -3360,12 +3375,33 @@ function _nfAktifBoyutToplamlari() {
   if (_nfYontem === 'excel' && _nfExcelOnizleme && _nfExcelOnizleme.boyut_toplamlari_kg) {
     return _nfExcelOnizleme.boyut_toplamlari_kg;
   }
-  if (_nfYontem === 'kopyala' && _nfKopyaOnizleme && _nfKopyaOnizleme.boyut_toplamlari_kg) {
-    return _nfKopyaOnizleme.boyut_toplamlari_kg;
-  }
   var boyutTop = {};
   _nfBoyutlar.forEach(function(b) { boyutTop[b] = _nfBoyutToplamKg(b); });
   return boyutTop;
+}
+
+function _nfKopyaKalemleriAktar(d) {
+  _nfKalemler = [];
+  _nfKalemUid = 1;
+  _nfDuzenUid = null;
+  (d.onizleme || []).forEach(function(s) {
+    if (!s.stok_kart_id) return;
+    var miktar = s.miktar;
+    var birim = (s.birim || 'KG').toUpperCase();
+    if (s.miktar_kg != null && (!s.miktar || birim === 'KG')) {
+      miktar = s.miktar_kg;
+      birim = 'KG';
+    }
+    _nfKalemler.push({
+      uid: _nfKalemUid++,
+      stok_kart_id: s.stok_kart_id,
+      stok_kod: s.stok_kod || '',
+      stok_ad: s.stok_ad || '',
+      boyut: s.boyut,
+      miktar: miktar,
+      birim: birim,
+    });
+  });
 }
 
 /* ── Excel yükleme ──────────────────────────────── */
@@ -3495,7 +3531,10 @@ window.nfKopyaFormulDegis = function(fid) {
   if (!sel) return;
   sel.innerHTML = '<option value="">— Seçiniz —</option>';
   _nfKopyaOnizleme = null;
+  _nfKopyaYuklendi = false;
   _nfKaynakRf = null;
+  _nfKalemler = [];
+  _nfOrtakEditorGoster();
   if (!fid) return;
   fetch('/nexgen/api/recete/yeni-formul/kaynak-varyantlar?formul_id=' + fid)
     .then(function(r) { return r.json(); })
@@ -3512,14 +3551,36 @@ window.nfKopyaFormulDegis = function(fid) {
 
 window.nfKopyaVaryantDegis = function() {
   _nfKopyaOnizleme = null;
+  _nfKopyaYuklendi = false;
   _nfKaynakRf = null;
+  _nfKalemler = [];
+  _nfOrtakEditorGoster();
 };
 
 window.nfKopyaRfSec = function(el, evet) {
   document.getElementById('nf-k-rf-seg').querySelectorAll('.nf-seg-b').forEach(function(b) { b.classList.remove('on'); });
   el.classList.add('on');
   _nfKopyaRfKopyala = evet;
+  if (_nfKopyaYuklendi) _nfKopyaRfPanelAyarla();
 };
+
+function _nfKopyaRfPanelAyarla() {
+  if (_nfKopyaRfKopyala && _nfKaynakRf && _nfKaynakRf.rf_renk_id) {
+    var mevcutOpt = document.querySelector('.nf-br-opt[onclick*="mevcut"]');
+    if (mevcutOpt) nfBrSec(mevcutOpt, 'mevcut');
+    _nfRfListesiYukle();
+    setTimeout(function() {
+      var sel = document.getElementById('nf-br-rf-select');
+      if (sel) {
+        sel.value = String(_nfKaynakRf.rf_renk_id);
+        _nfOzetGoster();
+      }
+    }, 350);
+  } else {
+    var baglaOpt = document.querySelector('.nf-br-opt[onclick*="bagla"]');
+    if (baglaOpt) nfBrSec(baglaOpt, 'bagla');
+  }
+}
 
 window.nfKopyaGetir = function() {
   var fid = parseInt(document.getElementById('nf-k-formul').value, 10);
@@ -3557,12 +3618,12 @@ window.nfKopyaGetir = function() {
     }
     _nfKopyaOnizleme = d;
     _nfKaynakRf = d.rf || null;
-    document.getElementById('nf-k-prev-baslik').textContent = 'Kopya Önizleme — ' + d.kalem_sayisi + ' kalem';
-    document.getElementById('nf-k-prev-tbody').innerHTML = (d.onizleme || []).map(function(s) {
-      return '<tr><td>' + s.boyut + '</td><td style="font-family:monospace;font-size:9px;">' + s.stok_kod +
-        '</td><td>' + s.stok_ad + '</td><td style="text-align:right;">' + (s.miktar_kg != null ? s.miktar_kg.toFixed(3) : s.miktar) +
-        '</td><td>' + (s.birim || 'KG') + '</td></tr>';
-    }).join('');
+    _nfBoyutlar = boyutlar.slice();
+    _nfKopyaKalemleriAktar(d);
+    _nfKopyaYuklendi = true;
+    _nfEllePanelleriOlustur();
+    _nfKopyaRfPanelAyarla();
+    _nfOrtakEditorGoster();
     _nfOzetGoster();
   })
   .catch(function(err) {
@@ -3736,8 +3797,8 @@ window.nfTaslakKaydet = function() {
     alert('Excel dosyasında hata var. Düzeltmeden kayıt yapılamaz.');
     return;
   }
-  if (_nfYontem === 'kopyala' && !_nfKopyaOnizleme) {
-    alert('Önce "Formülü Getir" ile kopya önizlemesi alın.');
+  if (_nfYontem === 'kopyala' && !_nfKopyaYuklendi) {
+    alert('Önce "Formülü Getir" ile kalemleri düzenleme alanına aktarın.');
     return;
   }
 
@@ -3767,9 +3828,11 @@ window.nfTaslakKaydet = function() {
   var urunAilesi = aile ? aile.value : '';
   var ad         = (document.getElementById('nf-formul-ad').value || '').trim();
   var renk       = (document.getElementById('nf-renk').value || '').trim();
-  var boyutlar   = Array.from(document.querySelectorAll('#nf-boyutlar .nf-cc.on')).map(function(el) {
-    return el.textContent.trim();
-  });
+  var boyutlar = (_nfYontem === 'kopyala' && _nfKopyaYuklendi && _nfBoyutlar.length)
+    ? _nfBoyutlar.slice()
+    : Array.from(document.querySelectorAll('#nf-boyutlar .nf-cc.on')).map(function(el) {
+        return el.textContent.trim();
+      });
 
   var kalemlerPayload = _nfKalemlerPayload();
   var hasKalem = Object.keys(kalemlerPayload).some(function(b) {
@@ -3797,9 +3860,6 @@ window.nfTaslakKaydet = function() {
     payload.kaynak_formul_id = _nfKopyaOnizleme.kaynak ? _nfKopyaOnizleme.kaynak.formul_id : null;
     payload.kaynak_renk_varyant_id = _nfKopyaOnizleme.kaynak ? _nfKopyaOnizleme.kaynak.rv_id : null;
     if (_nfKaynakRf) payload.kaynak_rf = _nfKaynakRf;
-    if (_nfKopyaRfKopyala && _nfKaynakRf) {
-      payload.boya_recete = { tip: 'kopya', rf_renk_id: _nfKaynakRf.rf_renk_id };
-    }
   }
 
   fetch('/nexgen/api/recete/yeni-formul/taslak-kaydet', {
