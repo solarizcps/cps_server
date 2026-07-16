@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% set page_title = "Üretim Emirleri Merkezi — NexGen" %}
+
+{% block content %}
+<div class="uem-sayfa">
+
+  <div class="uem-header">
+    <div>
+      <h1 class="uem-baslik">Üretim Emirleri Merkezi</h1>
+      <p class="uem-alt">Planlamaya hazır kayıtlar · Batch · Tablet üretim</p>
+    </div>
+    <a href="/nexgen/mpr" class="uem-link-btn">MPR Merkezi →</a>
+  </div>
+
+  <div class="uem-filtre">
+    <input type="search" class="uem-inp" id="uem-ara" placeholder="Emir, cari, formül ara…" oninput="uemFiltrele()">
+    <select class="uem-inp" id="uem-durum-f" onchange="uemFiltrele()">
+      <option value="">Tüm durumlar</option>
+      <option value="MPR Bekliyor">MPR Bekliyor</option>
+      <option value="Planlandı">Planlandı</option>
+      <option value="Üretimde">Üretimde</option>
+      <option value="Tablette">Tablette</option>
+      <option value="Bekletildi">Bekletildi</option>
+    </select>
+  </div>
+
+  <div class="uem-grid" id="uem-grid">
+    {% if not emirler %}
+    <div class="uem-bos">Planlamaya hazır üretim emri yok.</div>
+    {% else %}
+    {% for e in emirler %}
+    <div class="uem-kart" data-id="{{ e.id }}"
+         data-ara="{{ (e.emir_no ~ ' ' ~ e.cari_goster ~ ' ' ~ e.formul_goster ~ ' ' ~ (e.renk_ad or ''))|lower }}"
+         data-durum="{{ e.durum_etiket }}">
+      <div class="uem-kart-ust">
+        <span class="uem-emir-no">{{ e.emir_no }}</span>
+        <span class="uem-rozet uem-rozet-{{ e.durum|lower }}">{{ e.durum_etiket }}</span>
+      </div>
+      <div class="uem-satir"><span>Cari</span><strong>{{ e.cari_goster }}</strong></div>
+      <div class="uem-satir"><span>Ürün</span><strong>{{ e.formul_goster }}</strong></div>
+      <div class="uem-satir"><span>Renk</span><strong>{{ e.renk_ad or '—' }}</strong></div>
+      <div class="uem-satir"><span>Boyut</span><strong>{{ e.boyut_ozet }}</strong></div>
+      <div class="uem-satir"><span>KG</span><strong>{{ '%.3f'|format(e.planlanan_kg or 0) }}</strong></div>
+      <div class="uem-satir"><span>Öncelik</span><strong>{{ e.oncelik_goster }}</strong></div>
+      <div class="uem-satir"><span>Termin</span><strong>{{ e.termin_goster }}</strong></div>
+      <div class="uem-satir"><span>Oluşturan</span><strong>{{ e.olusturan_ad or '—' }}</strong></div>
+      {% if e.batch_kodu %}
+      <div class="uem-batch-band">Batch: {{ e.batch_kodu }} · {{ e.batch_durum or '—' }}</div>
+      {% endif %}
+      {% if can_manage %}
+      <div class="uem-aksiyonlar">
+        <button type="button" class="uem-btn" onclick="uemIncele({{ e.id }})">İncele</button>
+        <a class="uem-btn" href="/nexgen/mpr" target="_blank">Planı Aç</a>
+        {% if e.durum == 'ON_CALISMA' and e.planlama_siparis_id %}
+        <button type="button" class="uem-btn uem-btn-gold" onclick="uemPlanlandiYap({{ e.id }})">Planla</button>
+        {% endif %}
+        {% if e.durum == 'PLANLANDI' and not e.batch_kodu %}
+        <button type="button" class="uem-btn uem-btn-gold" onclick="uemBatchOlustur({{ e.id }})">Batch Oluştur</button>
+        {% endif %}
+        {% if e.batch_kodu and not e.tablet_gonderildi %}
+        <button type="button" class="uem-btn uem-btn-gold" onclick="uemTabletGonder({{ e.id }})">Tablete Gönder</button>
+        {% elif e.tablet_gonderildi and e.batch_kodu %}
+        <a class="uem-btn" href="/nexgen/tablet/uretim-islem/{{ e.batch_kodu }}" target="_blank">Tableti Aç</a>
+        {% endif %}
+        <button type="button" class="uem-btn" onclick="uemBeklet({{ e.id }})">Beklet</button>
+        {% if e.durum not in ('URETIMDE',) or not e.batch_kodu %}
+        <button type="button" class="uem-btn uem-btn-danger" onclick="uemIptal({{ e.id }})">İptal</button>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+    {% endif %}
+  </div>
+</div>
+
+<div id="uem-modal-bg" class="uem-modal-bg" style="display:none;" onclick="uemModalKapat(event)">
+  <div class="uem-modal" onclick="event.stopPropagation()">
+    <div class="uem-modal-hdr">
+      <span id="uem-modal-baslik">Emir Detayı</span>
+      <button type="button" onclick="uemModalKapat()">✕</button>
+    </div>
+    <div id="uem-modal-icerik" class="uem-modal-ic"></div>
+  </div>
+</div>
+
+<style>
+.uem-sayfa { padding: 20px 24px; background: #f6f7f9; min-height: 100vh; box-sizing: border-box; }
+.uem-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.uem-baslik { font-size: 22px; font-weight: 700; color: #111827; margin: 0 0 4px; }
+.uem-alt { font-size: 13px; color: #6b7280; margin: 0; }
+.uem-link-btn { font-size: 12px; font-weight: 700; color: #006a8e; text-decoration: none; padding: 8px 12px; border: 1px solid #bae6fd; border-radius: 8px; background: #f0f9ff; }
+.uem-filtre { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.uem-inp { border: 1px solid #d1d5db; border-radius: 8px; padding: 9px 12px; font-size: 13px; min-width: 180px; flex: 1; }
+.uem-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+.uem-kart { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+.uem-kart-ust { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 10px; align-items: center; }
+.uem-emir-no { font-family: monospace; font-size: 12px; font-weight: 700; color: #006a8e; }
+.uem-rozet { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 99px; }
+.uem-rozet-on_calisma { background: #f3f4f6; color: #4b5563; }
+.uem-rozet-planlandi { background: #dbeafe; color: #1d4ed8; }
+.uem-rozet-uretimde { background: #fef3c7; color: #92400e; }
+.uem-satir { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; padding: 4px 0; border-bottom: 1px solid #f9fafb; }
+.uem-satir span { color: #6b7280; }
+.uem-satir strong { color: #111827; text-align: right; max-width: 60%; }
+.uem-batch-band { margin-top: 8px; font-size: 11px; color: #059669; background: #ecfdf5; padding: 6px 8px; border-radius: 6px; }
+.uem-aksiyonlar { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.uem-btn { font-size: 11px; font-weight: 600; padding: 6px 10px; border-radius: 6px; border: 1px solid #d1d5db; background: #fff; color: #374151; cursor: pointer; text-decoration: none; display: inline-block; }
+.uem-btn-gold { background: linear-gradient(135deg,#f59e0b,#d97706); color: #fff; border-color: transparent; }
+.uem-btn-danger { color: #dc2626; border-color: #fecaca; }
+.uem-bos { grid-column: 1/-1; text-align: center; color: #9ca3af; padding: 40px; }
+.uem-modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 9000; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.uem-modal { background: #fff; border-radius: 12px; max-width: 520px; width: 100%; max-height: 85vh; overflow: auto; }
+.uem-modal-hdr { display: flex; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid #e5e7eb; font-weight: 700; }
+.uem-modal-ic { padding: 16px; font-size: 13px; }
+.uem-detay-satir { margin-bottom: 8px; }
+@media (max-width: 640px) {
+  .uem-sayfa { padding: 14px; }
+  .uem-grid { grid-template-columns: 1fr; }
+}
+</style>
+
+<script>
+var _uemCanManage = {{ 'true' if can_manage else 'false' }};
+
+window.uemFiltrele = function() {
+  var q = (document.getElementById('uem-ara').value || '').toLowerCase();
+  var d = document.getElementById('uem-durum-f').value;
+  document.querySelectorAll('.uem-kart').forEach(function(k) {
+    var ara = k.dataset.ara || '';
+    var dur = k.dataset.durum || '';
+    var okA = !q || ara.indexOf(q) >= 0;
+    var okD = !d || dur === d;
+    k.style.display = (okA && okD) ? '' : 'none';
+  });
+};
+
+window.uemIncele = function(id) {
+  fetch('/nexgen/api/uem/emir/' + id)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { alert(d.hata || 'Detay alınamadı'); return; }
+      var e = d.emir;
+      var html = '<div class="uem-detay-satir"><strong>Emir:</strong> ' + (e.emir_no || '') + '</div>'
+        + '<div class="uem-detay-satir"><strong>Cari:</strong> ' + (e.cari_goster || '') + '</div>'
+        + '<div class="uem-detay-satir"><strong>Formül:</strong> ' + (e.formul_goster || '') + '</div>'
+        + '<div class="uem-detay-satir"><strong>Renk:</strong> ' + (e.renk_ad || '') + '</div>'
+        + '<div class="uem-detay-satir"><strong>Boyut:</strong> ' + (e.boyut_ozet || '') + '</div>'
+        + '<div class="uem-detay-satir"><strong>KG:</strong> ' + (e.planlanan_kg || 0) + '</div>'
+        + '<div class="uem-detay-satir"><strong>Durum:</strong> ' + (e.durum_etiket || '') + '</div>';
+      if (e.batch_kodu) html += '<div class="uem-detay-satir"><strong>Batch:</strong> ' + e.batch_kodu + ' (' + (e.batch_durum || '') + ')</div>';
+      if (e.stok_yeterli_mi != null) {
+        html += '<div class="uem-detay-satir"><strong>Stok:</strong> ' + (e.stok_yeterli_mi ? 'Yeterli' : ('Eksik ' + (e.stok_eksik_sayisi || 0) + ' kalem')) + '</div>';
+      }
+      document.getElementById('uem-modal-baslik').textContent = e.emir_no || 'Emir';
+      document.getElementById('uem-modal-icerik').innerHTML = html;
+      document.getElementById('uem-modal-bg').style.display = 'flex';
+    });
+};
+
+window.uemModalKapat = function(ev) {
+  if (ev && ev.target && ev.target.id !== 'uem-modal-bg') return;
+  document.getElementById('uem-modal-bg').style.display = 'none';
+};
+
+window.uemPlanlandiYap = function(id) {
+  if (!confirm('Plan PLANLANDI durumuna alınsın mı?')) return;
+  fetch('/nexgen/api/uem/emir/' + id + '/planlandi-yap', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { alert(d.hata || 'İşlem başarısız'); return; }
+      location.reload();
+    });
+};
+
+window.uemBatchOlustur = function(id) {
+  if (!confirm('Batch oluşturulsun mu?\n\nÜretim emri açılır; stok yetersizse engellenir.')) return;
+  fetch('/nexgen/api/mpr/' + id + '/uretime-gonder', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) {
+        var msg = d.hata || 'Batch oluşturulamadı';
+        if (d.stok_eksik) msg += '\n\nStok eksik: ' + (d.stok_eksik_sayisi || 0) + ' kalem';
+        alert(msg);
+        return;
+      }
+      alert('Batch oluşturuldu: ' + d.batch_kodu);
+      location.reload();
+    });
+};
+
+window.uemTabletGonder = function(id) {
+  fetch('/nexgen/api/uem/emir/' + id + '/tablet-gonder', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { alert(d.hata || 'Gönderilemedi'); return; }
+      if (d.tablet_url) window.open(d.tablet_url, '_blank');
+      location.reload();
+    });
+};
+
+window.uemBeklet = function(id) {
+  if (!confirm('Emir bekletilsin mi?')) return;
+  fetch('/nexgen/api/uem/emir/' + id + '/beklet', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { alert(d.hata || 'Bekletilemedi'); return; }
+      location.reload();
+    });
+};
+
+window.uemIptal = function(id) {
+  if (!confirm('Emir iptal edilsin mi?')) return;
+  fetch('/nexgen/api/plan/' + id + '/iptal', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ nedeni: 'UEM iptal' }),
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { alert(d.hata || 'İptal edilemedi'); return; }
+      location.reload();
+    });
+};
+</script>
+{% endblock %}

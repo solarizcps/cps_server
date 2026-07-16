@@ -1,0 +1,522 @@
+{% extends "base.html" %}
+{% set page_title = "Pazarlama Merkezi — NexGen" %}
+
+{% block content %}
+<div class="pzm-sayfa">
+
+  <div class="pzm-header">
+    <div>
+      <h1 class="pzm-baslik">Pazarlama Merkezi</h1>
+      <p class="pzm-alt">Müşteri talebi hazırla · Taslak kaydet · MPR oluştur</p>
+    </div>
+    {% if can_manage %}
+    <button type="button" class="pzm-btn pzm-btn-gold" onclick="pzmYeniTalep()">+ Yeni Talep</button>
+    {% endif %}
+  </div>
+
+  <div class="pzm-layout">
+    <div class="pzm-form-col">
+      <div class="pzm-kart">
+        <div class="pzm-kart-baslik">Talep Bilgileri</div>
+
+        <div class="pzm-alan">
+          <label class="pzm-label">Müşteri (Cari) <span class="pzm-z">*</span></label>
+          <select class="pzm-inp" id="pzm-cari" onchange="pzmCariDegisti()">
+            <option value="">— Müşteri seçin —</option>
+            {% for c in cariler %}
+            <option value="{{ c.id }}">{{ c.unvan }} ({{ c.cari_kod }})</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="pzm-alan pzm-kilitli" id="pzm-wrap-aile">
+          <label class="pzm-label">Ürün Ailesi <span class="pzm-z">*</span></label>
+          <div class="pzm-seg" id="pzm-aile-seg">
+            <button type="button" class="pzm-seg-b" data-aile="TERLIK" onclick="pzmAileSec(this)" disabled>Terlik</button>
+            <button type="button" class="pzm-seg-b" data-aile="TABAN" onclick="pzmAileSec(this)" disabled>Taban</button>
+          </div>
+        </div>
+
+        <div class="pzm-alan pzm-kilitli" id="pzm-wrap-formul">
+          <label class="pzm-label">Ürün / Formül <span class="pzm-z">*</span></label>
+          <select class="pzm-inp" id="pzm-formul" onchange="pzmFormulDegisti()" disabled>
+            <option value="">— Önce cari ve aile seçin —</option>
+          </select>
+        </div>
+
+        <div class="pzm-alan pzm-kilitli" id="pzm-wrap-renk">
+          <label class="pzm-label">Renk <span class="pzm-z">*</span></label>
+          <select class="pzm-inp" id="pzm-renk" onchange="pzmRenkDegisti()" disabled>
+            <option value="">— Önce ürün seçin —</option>
+          </select>
+        </div>
+
+        <div class="pzm-alan pzm-kilitli" id="pzm-wrap-boyut">
+          <label class="pzm-label">Boyut ve Miktar (kg) <span class="pzm-z">*</span></label>
+          <div class="pzm-boyut-grid" id="pzm-boyut-grid"></div>
+          <div class="pzm-ipucu">Planlama birimi kilogramdır. En az bir boyut için miktar girin.</div>
+        </div>
+
+        <div class="pzm-alan pzm-kilitli" id="pzm-wrap-termin">
+          <label class="pzm-label">Teslim Tarihi <span class="pzm-z">*</span></label>
+          <input type="date" class="pzm-inp" id="pzm-termin" disabled onchange="pzmOzetGuncelle()">
+        </div>
+
+        <div class="pzm-alan pzm-kilitli" id="pzm-wrap-not">
+          <label class="pzm-label">Not</label>
+          <textarea class="pzm-inp pzm-textarea" id="pzm-not" rows="2" placeholder="Sipariş notu, özel istek…" disabled oninput="pzmOzetGuncelle()"></textarea>
+        </div>
+
+        <div id="pzm-hata" class="pzm-hata" style="display:none;"></div>
+
+        {% if can_manage %}
+        <div class="pzm-aksiyon">
+          <button type="button" class="pzm-btn pzm-btn-outline" id="pzm-btn-taslak" onclick="pzmTaslakKaydet()" disabled>Taslağı Kaydet</button>
+          <button type="button" class="pzm-btn pzm-btn-gold" id="pzm-btn-mpr" onclick="pzmMprOlustur()" disabled>MPR Oluştur</button>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="pzm-ozet-col">
+      <div class="pzm-kart pzm-ozet-kart">
+        <div class="pzm-kart-baslik">Talep Özeti</div>
+        <div class="pzm-ozet-grid" id="pzm-ozet">
+          <div class="pzm-ozet-satir"><span>Müşteri</span><strong id="pzm-oz-cari">—</strong></div>
+          <div class="pzm-ozet-satir"><span>Ürün Ailesi</span><strong id="pzm-oz-aile">—</strong></div>
+          <div class="pzm-ozet-satir"><span>Ürün</span><strong id="pzm-oz-formul">—</strong></div>
+          <div class="pzm-ozet-satir"><span>Renk</span><strong id="pzm-oz-renk">—</strong></div>
+          <div class="pzm-ozet-satir"><span>Boyutlar</span><strong id="pzm-oz-boyut">—</strong></div>
+          <div class="pzm-ozet-satir"><span>Toplam</span><strong id="pzm-oz-toplam">—</strong></div>
+          <div class="pzm-ozet-satir"><span>Teslim</span><strong id="pzm-oz-termin">—</strong></div>
+          <div class="pzm-ozet-satir"><span>Durum</span><strong id="pzm-oz-durum">Yeni</strong></div>
+        </div>
+      </div>
+
+      <div class="pzm-kart">
+        <div class="pzm-kart-baslik">Son Talepler</div>
+        <div class="pzm-talep-liste" id="pzm-talep-liste">
+          {% if talepler %}
+          {% for t in talepler %}
+          <div class="pzm-talep-satir" data-id="{{ t.id }}" onclick="pzmTalepYukle({{ t.id }})">
+            <div class="pzm-talep-ust">
+              <span class="pzm-talep-no">{{ t.siparis_no }}</span>
+              <span class="pzm-rozet pzm-rozet-{{ t.durum|lower }}">{{ t.durum_etiket }}</span>
+            </div>
+            <div class="pzm-talep-cari">{{ t.cari_unvan or '—' }}</div>
+            <div class="pzm-talep-alt">{{ t.termin_tarihi or '—' }}</div>
+          </div>
+          {% endfor %}
+          {% else %}
+          <div class="pzm-bos">Henüz talep yok.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.pzm-sayfa { padding: 20px 24px; background: #f6f7f9; min-height: 100vh; box-sizing: border-box; }
+.pzm-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+.pzm-baslik { font-size: 22px; font-weight: 700; color: #111827; margin: 0 0 4px; }
+.pzm-alt { font-size: 13px; color: #6b7280; margin: 0; }
+.pzm-layout { display: grid; grid-template-columns: 1fr 340px; gap: 16px; align-items: start; }
+.pzm-kart { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px 18px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+.pzm-kart-baslik { font-size: 11px; font-weight: 800; color: #006a8e; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 14px; }
+.pzm-alan { margin-bottom: 14px; }
+.pzm-label { display: block; font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 6px; }
+.pzm-z { color: #dc2626; }
+.pzm-inp { width: 100%; box-sizing: border-box; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px 12px; font-size: 14px; background: #fff; }
+.pzm-inp:disabled { background: #f3f4f6; color: #9ca3af; }
+.pzm-textarea { resize: vertical; min-height: 64px; }
+.pzm-seg { display: flex; gap: 8px; flex-wrap: wrap; }
+.pzm-seg-b { flex: 1; min-width: 120px; padding: 12px 14px; border: 2px solid #e5e7eb; border-radius: 10px; background: #fff; font-size: 14px; font-weight: 600; cursor: pointer; transition: .15s; }
+.pzm-seg-b:disabled { opacity: .5; cursor: not-allowed; }
+.pzm-seg-b.on { border-color: #f59e0b; background: #fffbeb; color: #92400e; }
+.pzm-boyut-grid { display: grid; gap: 10px; }
+.pzm-boyut-satir { display: grid; grid-template-columns: 90px 1fr; gap: 10px; align-items: center; }
+.pzm-boyut-etiket { font-size: 13px; font-weight: 700; color: #374151; }
+.pzm-ipucu { font-size: 11px; color: #9ca3af; margin-top: 6px; }
+.pzm-btn { border: none; border-radius: 8px; padding: 10px 16px; font-size: 13px; font-weight: 700; cursor: pointer; }
+.pzm-btn:disabled { opacity: .45; cursor: not-allowed; }
+.pzm-btn-gold { background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; }
+.pzm-btn-outline { background: #fff; border: 1px solid #d1d5db; color: #374151; }
+.pzm-aksiyon { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+.pzm-hata { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; padding: 10px 12px; border-radius: 8px; font-size: 12px; margin-bottom: 10px; }
+.pzm-ozet-grid { display: grid; gap: 8px; }
+.pzm-ozet-satir { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; border-bottom: 1px solid #f3f4f6; padding-bottom: 6px; }
+.pzm-ozet-satir span { color: #6b7280; }
+.pzm-ozet-satir strong { color: #111827; text-align: right; max-width: 58%; }
+.pzm-talep-liste { max-height: 360px; overflow-y: auto; display: grid; gap: 8px; }
+.pzm-talep-satir { border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 12px; cursor: pointer; transition: .12s; }
+.pzm-talep-satir:hover { border-color: #f59e0b; background: #fffbeb; }
+.pzm-talep-ust { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.pzm-talep-no { font-size: 11px; font-weight: 700; color: #006a8e; font-family: monospace; }
+.pzm-talep-cari { font-size: 12px; font-weight: 600; color: #111827; }
+.pzm-talep-alt { font-size: 11px; color: #9ca3af; }
+.pzm-rozet { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
+.pzm-rozet-taslak { background: #f3f4f6; color: #4b5563; }
+.pzm-rozet-mpr_bekliyor { background: #fef3c7; color: #92400e; }
+.pzm-rozet-planlamaya_hazir { background: #d1fae5; color: #065f46; }
+.pzm-rozet-iptal { background: #fee2e2; color: #991b1b; }
+.pzm-bos { text-align: center; color: #9ca3af; font-size: 12px; padding: 20px; }
+@media (max-width: 960px) {
+  .pzm-layout { grid-template-columns: 1fr; }
+  .pzm-ozet-col { order: -1; }
+}
+@media (max-width: 520px) {
+  .pzm-sayfa { padding: 14px; }
+  .pzm-seg-b { min-width: 100%; }
+  .pzm-aksiyon .pzm-btn { flex: 1; }
+}
+</style>
+
+<script>
+(function() {
+var _pzmAile = null;
+var _pzmRenkler = [];
+var _pzmRfId = null;
+var _pzmTalepId = null;
+var _pzmCanManage = {{ 'true' if can_manage else 'false' }};
+var _pzmTalepCache = {{ talepler | tojson }};
+
+function pzmBugun() {
+  var d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function pzmKilit(id, ac) {
+  var w = document.getElementById(id);
+  if (w) w.classList.toggle('pzm-kilitli', !ac);
+  var inp = w ? w.querySelector('select, input, textarea, button.pzm-seg-b') : null;
+  if (!w) return;
+  w.querySelectorAll('select, input, textarea').forEach(function(el) { el.disabled = !ac; });
+  w.querySelectorAll('button.pzm-seg-b').forEach(function(el) { el.disabled = !ac; });
+}
+
+function pzmHata(msg) {
+  var el = document.getElementById('pzm-hata');
+  if (!el) return;
+  if (msg) { el.textContent = msg; el.style.display = ''; }
+  else { el.style.display = 'none'; }
+}
+
+function pzmAksiyonDurum() {
+  var ok = !!document.getElementById('pzm-cari').value && _pzmAile
+    && document.getElementById('pzm-formul').value
+    && document.getElementById('pzm-renk').value
+    && document.getElementById('pzm-termin').value;
+  var kg = pzmBoyutToplam();
+  var btnT = document.getElementById('pzm-btn-taslak');
+  var btnM = document.getElementById('pzm-btn-mpr');
+  if (btnT) btnT.disabled = !_pzmCanManage || !ok || kg <= 0;
+  if (btnM) btnM.disabled = !_pzmCanManage || !ok || kg <= 0;
+}
+
+window.pzmYeniTalep = function() {
+  _pzmTalepId = null;
+  document.getElementById('pzm-cari').value = '';
+  document.getElementById('pzm-aile-seg').querySelectorAll('.pzm-seg-b').forEach(function(b) { b.classList.remove('on'); });
+  _pzmAile = null;
+  document.getElementById('pzm-formul').innerHTML = '<option value="">— Önce cari ve aile seçin —</option>';
+  document.getElementById('pzm-renk').innerHTML = '<option value="">— Önce ürün seçin —</option>';
+  document.getElementById('pzm-boyut-grid').innerHTML = '';
+  document.getElementById('pzm-termin').value = '';
+  document.getElementById('pzm-not').value = '';
+  document.getElementById('pzm-oz-durum').textContent = 'Yeni';
+  pzmKilit('pzm-wrap-aile', false);
+  pzmKilit('pzm-wrap-formul', false);
+  pzmKilit('pzm-wrap-renk', false);
+  pzmKilit('pzm-wrap-boyut', false);
+  pzmKilit('pzm-wrap-termin', false);
+  pzmKilit('pzm-wrap-not', false);
+  pzmHata('');
+  pzmOzetGuncelle();
+  pzmAksiyonDurum();
+};
+
+window.pzmCariDegisti = function() {
+  var cid = document.getElementById('pzm-cari').value;
+  pzmKilit('pzm-wrap-aile', !!cid);
+  if (!cid) {
+    pzmYeniTalep();
+    return;
+  }
+  pzmOzetGuncelle();
+  pzmAksiyonDurum();
+};
+
+window.pzmAileSec = function(el) {
+  if (!el || el.disabled) return;
+  document.getElementById('pzm-aile-seg').querySelectorAll('.pzm-seg-b').forEach(function(b) { b.classList.remove('on'); });
+  el.classList.add('on');
+  _pzmAile = el.dataset.aile;
+  pzmFormullerYukle();
+  pzmKilit('pzm-wrap-formul', true);
+  pzmOzetGuncelle();
+};
+
+function pzmFormullerYukle() {
+  var sel = document.getElementById('pzm-formul');
+  sel.innerHTML = '<option value="">Yükleniyor…</option>';
+  sel.disabled = true;
+  fetch('/nexgen/api/pazarlama/formuller?urun_ailesi=' + encodeURIComponent(_pzmAile || ''))
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      sel.innerHTML = '<option value="">— Ürün seçin —</option>';
+      if (d.ok && d.liste) {
+        d.liste.forEach(function(f) {
+          var o = document.createElement('option');
+          o.value = f.formul_id;
+          o.textContent = f.formul_ad;
+          o.dataset.ad = f.formul_ad;
+          sel.appendChild(o);
+        });
+        sel.disabled = false;
+      }
+      pzmAksiyonDurum();
+    });
+}
+
+window.pzmFormulDegisti = function() {
+  var fid = parseInt(document.getElementById('pzm-formul').value, 10);
+  var renkSel = document.getElementById('pzm-renk');
+  renkSel.innerHTML = '<option value="">Yükleniyor…</option>';
+  renkSel.disabled = true;
+  document.getElementById('pzm-boyut-grid').innerHTML = '';
+  _pzmRenkler = [];
+  _pzmRfId = null;
+  if (!fid) {
+    pzmKilit('pzm-wrap-renk', false);
+    pzmKilit('pzm-wrap-boyut', false);
+    pzmOzetGuncelle();
+    return;
+  }
+  var cid = document.getElementById('pzm-cari').value;
+  var url = '/nexgen/api/pazarlama/renk-boyut?formul_id=' + fid;
+  if (cid) url += '&cari_id=' + cid;
+  fetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      renkSel.innerHTML = '<option value="">— Renk seçin —</option>';
+      if (d.ok && d.renkler) {
+        _pzmRenkler = d.renkler;
+        _pzmRfId = d.rf_oneri_id || null;
+        d.renkler.forEach(function(rv) {
+          var o = document.createElement('option');
+          o.value = rv.renk_id;
+          o.textContent = rv.renk_ad;
+          o.dataset.json = JSON.stringify(rv.boyutlar || []);
+          renkSel.appendChild(o);
+        });
+        renkSel.disabled = false;
+        pzmKilit('pzm-wrap-renk', true);
+      }
+      pzmOzetGuncelle();
+      pzmAksiyonDurum();
+    });
+};
+
+window.pzmRenkDegisti = function() {
+  var renkSel = document.getElementById('pzm-renk');
+  var opt = renkSel.options[renkSel.selectedIndex];
+  var grid = document.getElementById('pzm-boyut-grid');
+  grid.innerHTML = '';
+  if (!opt || !opt.value) {
+    pzmKilit('pzm-wrap-boyut', false);
+    pzmKilit('pzm-wrap-termin', false);
+    pzmKilit('pzm-wrap-not', false);
+    pzmOzetGuncelle();
+    pzmAksiyonDurum();
+    return;
+  }
+  var boyutlar = [];
+  try { boyutlar = JSON.parse(opt.dataset.json || '[]'); } catch(e) {}
+  boyutlar.forEach(function(b) {
+    var row = document.createElement('div');
+    row.className = 'pzm-boyut-satir';
+    row.innerHTML = '<span class="pzm-boyut-etiket">' + b.boyut + '</span>' +
+      '<input type="number" class="pzm-inp pzm-kg" data-boyut="' + b.boyut + '" min="0" step="0.001" placeholder="0" oninput="pzmOzetGuncelle(); pzmAksiyonDurum();">';
+    grid.appendChild(row);
+  });
+  var term = document.getElementById('pzm-termin');
+  term.min = pzmBugun();
+  if (!term.value) term.value = '';
+  pzmKilit('pzm-wrap-boyut', true);
+  pzmKilit('pzm-wrap-termin', true);
+  pzmKilit('pzm-wrap-not', true);
+  pzmOzetGuncelle();
+  pzmAksiyonDurum();
+};
+
+function pzmBoyutToplam() {
+  var top = 0;
+  document.querySelectorAll('.pzm-kg').forEach(function(inp) {
+    var v = parseFloat((inp.value || '').replace(',', '.'));
+    if (!isNaN(v) && v > 0) top += v;
+  });
+  return Math.round(top * 1000) / 1000;
+}
+
+function pzmPayloadTopla() {
+  var boyut = {};
+  document.querySelectorAll('.pzm-kg').forEach(function(inp) {
+    var b = inp.dataset.boyut;
+    var v = parseFloat((inp.value || '').replace(',', '.'));
+    if (b && !isNaN(v) && v > 0) boyut[b] = v;
+  });
+  return {
+    talep_id: _pzmTalepId,
+    cari_id: parseInt(document.getElementById('pzm-cari').value, 10),
+    urun_ailesi: _pzmAile,
+    formul_id: parseInt(document.getElementById('pzm-formul').value, 10),
+    renk_varyant_id: parseInt(document.getElementById('pzm-renk').value, 10),
+    rf_renk_id: _pzmRfId,
+    boyut_miktar: boyut,
+    termin_tarihi: document.getElementById('pzm-termin').value,
+    notlar: (document.getElementById('pzm-not').value || '').trim(),
+  };
+}
+
+window.pzmOzetGuncelle = function() {
+  var cariSel = document.getElementById('pzm-cari');
+  document.getElementById('pzm-oz-cari').textContent = cariSel.value
+    ? (cariSel.options[cariSel.selectedIndex].text || '—') : '—';
+  document.getElementById('pzm-oz-aile').textContent = _pzmAile || '—';
+  var fSel = document.getElementById('pzm-formul');
+  document.getElementById('pzm-oz-formul').textContent = fSel.value
+    ? (fSel.options[fSel.selectedIndex].text || '—') : '—';
+  var rSel = document.getElementById('pzm-renk');
+  document.getElementById('pzm-oz-renk').textContent = rSel.value
+    ? (rSel.options[rSel.selectedIndex].text || '—') : '—';
+  var parcalar = [];
+  document.querySelectorAll('.pzm-kg').forEach(function(inp) {
+    var v = parseFloat(inp.value);
+    if (!isNaN(v) && v > 0) parcalar.push(inp.dataset.boyut + ' ' + v.toFixed(3) + ' kg');
+  });
+  document.getElementById('pzm-oz-boyut').textContent = parcalar.length ? parcalar.join(' · ') : '—';
+  document.getElementById('pzm-oz-toplam').textContent = parcalar.length
+    ? (pzmBoyutToplam().toFixed(3) + ' kg') : '—';
+  document.getElementById('pzm-oz-termin').textContent = document.getElementById('pzm-termin').value || '—';
+};
+
+window.pzmTaslakKaydet = function() {
+  pzmHata('');
+  var payload = pzmPayloadTopla();
+  var btn = document.getElementById('pzm-btn-taslak');
+  if (btn) btn.disabled = true;
+  fetch('/nexgen/api/pazarlama/taslak-kaydet', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload),
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (btn) btn.disabled = false;
+    if (!d.ok) { pzmHata(d.hata || 'Kayıt başarısız'); pzmAksiyonDurum(); return; }
+    _pzmTalepId = d.talep_id;
+    document.getElementById('pzm-oz-durum').textContent = 'Taslak';
+    pzmTalepListesiYenile();
+    alert('Taslak kaydedildi: ' + (d.siparis_no || d.talep_id));
+    pzmAksiyonDurum();
+  })
+  .catch(function() {
+    if (btn) btn.disabled = false;
+    pzmHata('Bağlantı hatası');
+    pzmAksiyonDurum();
+  });
+};
+
+window.pzmMprOlustur = function() {
+  pzmHata('');
+  if (!window.confirm('MPR oluşturulsun mu?\n\nÜretim emri açılmaz; kayıt planlama ön çalışması olarak kalır.')) return;
+  var payload = pzmPayloadTopla();
+  var btn = document.getElementById('pzm-btn-mpr');
+  if (btn) btn.disabled = true;
+  fetch('/nexgen/api/pazarlama/mpr-olustur', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload),
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (btn) btn.disabled = false;
+    if (!d.ok) { pzmHata(d.hata || 'MPR oluşturulamadı'); pzmAksiyonDurum(); return; }
+    _pzmTalepId = d.talep_id;
+    document.getElementById('pzm-oz-durum').textContent = 'MPR Bekliyor';
+    pzmTalepListesiYenile();
+    alert('MPR oluşturuldu: ' + d.plan_kodu);
+    pzmAksiyonDurum();
+  })
+  .catch(function() {
+    if (btn) btn.disabled = false;
+    pzmHata('Bağlantı hatası');
+    pzmAksiyonDurum();
+  });
+};
+
+function pzmTalepListesiYenile() {
+  fetch('/nexgen/api/pazarlama/talepler')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) return;
+      _pzmTalepCache = d.liste || [];
+      var box = document.getElementById('pzm-talep-liste');
+      if (!box) return;
+      if (!_pzmTalepCache.length) {
+        box.innerHTML = '<div class="pzm-bos">Henüz talep yok.</div>';
+        return;
+      }
+      box.innerHTML = _pzmTalepCache.map(function(t) {
+        return '<div class="pzm-talep-satir" data-id="' + t.id + '" onclick="pzmTalepYukle(' + t.id + ')">' +
+          '<div class="pzm-talep-ust"><span class="pzm-talep-no">' + (t.siparis_no || '') + '</span>' +
+          '<span class="pzm-rozet pzm-rozet-' + (t.durum || '').toLowerCase() + '">' + (t.durum_etiket || t.durum) + '</span></div>' +
+          '<div class="pzm-talep-cari">' + (t.cari_unvan || '—') + '</div>' +
+          '<div class="pzm-talep-alt">' + (t.termin_tarihi || '—') + '</div></div>';
+      }).join('');
+    });
+}
+
+window.pzmTalepYukle = function(id) {
+  var t = (_pzmTalepCache || []).find(function(x) { return x.id === id; });
+  if (!t || !t.payload) return;
+  var p = t.payload;
+  _pzmTalepId = t.id;
+  document.getElementById('pzm-cari').value = t.cari_id || '';
+  pzmCariDegisti();
+  document.getElementById('pzm-aile-seg').querySelectorAll('.pzm-seg-b').forEach(function(b) {
+    b.classList.toggle('on', b.dataset.aile === p.urun_ailesi);
+  });
+  _pzmAile = p.urun_ailesi;
+  pzmFormullerYukle();
+  setTimeout(function() {
+    document.getElementById('pzm-formul').value = p.formul_id || '';
+    pzmFormulDegisti();
+    setTimeout(function() {
+      document.getElementById('pzm-renk').value = p.renk_varyant_id || '';
+      pzmRenkDegisti();
+      setTimeout(function() {
+        var bm = p.boyut_miktar || {};
+        document.querySelectorAll('.pzm-kg').forEach(function(inp) {
+          var b = inp.dataset.boyut;
+          var key = b === 'MEDIUM' ? 'STANDART' : b;
+          if (bm[b] != null) inp.value = bm[b];
+          else if (bm[key] != null) inp.value = bm[key];
+        });
+        document.getElementById('pzm-termin').value = p.termin_tarihi || t.termin_tarihi || '';
+        document.getElementById('pzm-not').value = p.notlar || t.notlar || '';
+        _pzmRfId = p.rf_renk_id || null;
+        document.getElementById('pzm-oz-durum').textContent = t.durum_etiket || t.durum;
+        pzmOzetGuncelle();
+        pzmAksiyonDurum();
+      }, 400);
+    }, 500);
+  }, 500);
+};
+
+document.getElementById('pzm-termin').min = pzmBugun();
+pzmYeniTalep();
+})();
+</script>
+{% endblock %}

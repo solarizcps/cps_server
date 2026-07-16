@@ -13911,6 +13911,885 @@ def api_mpr_on_calisma_ekle():
         con.close()
 
 
+# ═════════════════════════════════════════════════════════════
+# PAZARLAMA MERKEZİ V1 — talep taslağı + MPR (üretim emri yok)
+# ═════════════════════════════════════════════════════════════
+
+_PZM_JSON_PREFIX = '__PZM_V1__'
+_PZM_DURUMLAR = frozenset({'TASLAK', 'MPR_BEKLIYOR', 'PLANLAMAYA_HAZIR', 'IPTAL'})
+
+
+def _pzm_payload_pack(data):
+    import json
+    return _PZM_JSON_PREFIX + json.dumps(data, ensure_ascii=False, separators=(',', ':'))
+
+
+def _pzm_payload_unpack(ref):
+    if not ref or not str(ref).startswith(_PZM_JSON_PREFIX):
+        return None
+    import json
+    try:
+        return json.loads(str(ref)[len(_PZM_JSON_PREFIX):])
+    except Exception:
+        return None
+
+
+def _pzm_siparis_no_uret(con):
+    import datetime
+    yil = datetime.datetime.now().year
+    prefix = f'PZM-{yil}-'
+    row = con.execute(
+        "SELECT siparis_no FROM nexgen_planlama_siparis "
+        "WHERE siparis_no LIKE ? ORDER BY id DESC LIMIT 1",
+        (prefix + '%',),
+    ).fetchone()
+    son = 0
+    if row and row['siparis_no']:
+        try:
+            son = int(str(row['siparis_no']).split('-')[-1])
+        except Exception:
+            son = 0
+    return f'PZM-{yil}-{son + 1:04d}'
+
+
+def _pzm_formuller_filtreli(con, urun_ailesi=None):
+    q = """
+        SELECT DISTINCT f.id AS formul_id, f.kod AS formul_kod, f.ad AS formul_ad,
+               f.urun_ailesi
+        FROM nexgen_formul f
+        JOIN nexgen_renk_varyant rv ON rv.formul_id = f.id AND rv.aktif = 1
+        JOIN nexgen_uretim_varyant uv ON uv.renk_varyant_id = rv.id
+            AND uv.aktif = 1 AND uv.recete_durum = 'URETIME_ACIK'
+        WHERE f.aktif = 1 AND f.durum IN ('AKTIF', 'URETIME_ACIK')
+    """
+    params = []
+    if urun_ailesi == 'TABAN':
+        q += " AND UPPER(COALESCE(f.urun_ailesi,'')) = 'TABAN'"
+    elif urun_ailesi == 'TERLIK':
+        q += " AND UPPER(COALESCE(NULLIF(TRIM(f.urun_ailesi),''), 'TERLIK')) = 'TERLIK'"
+    elif urun_ailesi:
+        q += " AND UPPER(COALESCE(f.urun_ailesi,'')) = ?"
+        params.append(urun_ailesi.upper())
+    q += " ORDER BY f.ad, f.kod"
+    out = []
+    for r in con.execute(q, params).fetchall():
+        kod = (r['formul_kod'] or '').strip()
+        ad = (r['formul_ad'] or '').strip()
+        display = ad or kod
+        if kod and ad and kod.upper() not in ad.upper():
+            display = f'{ad}'
+        out.append({
+            'formul_id': r['formul_id'],
+            'formul_ad': display,
+            'formul_kod': kod,
+            'urun_ailesi': r['urun_ailesi'],
+        })
+    return out
+
+
+def _pzm_renk_boyut_listesi(con, formul_id):
+    rows = con.execute("""
+        SELECT rv.id AS renk_id, rv.ad AS renk_ad, rv.renk,
+               uv.id AS uv_id, uv.boyut
+        FROM nexgen_renk_varyant rv
+        JOIN nexgen_uretim_varyant uv ON uv.renk_varyant_id = rv.id
+            AND uv.aktif = 1 AND uv.recete_durum = 'URETIME_ACIK'
+        WHERE rv.formul_id = ? AND rv.aktif = 1
+        ORDER BY rv.ad, uv.boyut
+    """, (formul_id,)).fetchall()
+    renk_map = {}
+    for r in rows:
+        rid = r['renk_id']
+        if rid not in renk_map:
+            renk_map[rid] = {
+                'renk_id': rid,
+                'renk_ad': r['renk_ad'] or r['renk'] or '—',
+                'boyutlar': [],
+            }
+        b = (r['boyut'] or '').upper()
+        label = 'MEDIUM' if b in ('STANDART', 'MEDIUM') else b
+        renk_map[rid]['boyutlar'].append({'boyut': label, 'uv_id': r['uv_id']})
+    return list(renk_map.values())
+
+
+def _pzm_rf_oner(con, cari_id=None):
+    rows = con.execute("""
+        SELECT rf.id, rf.rf_kod, rf.ad, rf.cari_id, rf.ilk_talep_cari_id
+        FROM nexgen_rf_renk rf
+        WHERE rf.aktif = 1 AND rf.durum = 'ONAYLI'
+          AND rf.rf_kod NOT LIKE 'RF-%'
+        ORDER BY rf.rf_kod
+    """).fetchall()
+    liste = [dict(r) for r in rows]
+    if cari_id:
+        liste.sort(key=lambda x: (
+            0 if (x.get('cari_id') == cari_id or x.get('ilk_talep_cari_id') == cari_id) else 1,
+            x.get('rf_kod') or '',
+        ))
+    return (liste[0]['id'] if liste else None), liste
+
+
+def _pzm_termin_dogrula(termin):
+    from datetime import date
+    if not termin:
+        return False, 'Teslim tarihi zorunlu.', None
+    try:
+        t = date.fromisoformat(str(termin)[:10])
+    except ValueError:
+        return False, 'Geçersiz teslim tarihi.', None
+    if t < date.today():
+        return False, 'Teslim tarihi geçmiş olamaz.', None
+    return True, None, t.isoformat()
+
+
+def _pzm_boyut_kg_normalize(boyut_miktar_raw):
+    boyut_kg = {}
+    if not isinstance(boyut_miktar_raw, dict):
+        return boyut_kg, 'Boyut miktarı geçersiz.'
+    for b, v in boyut_miktar_raw.items():
+        key = (b or '').upper()
+        if key == 'MEDIUM':
+            key = 'STANDART'
+        if key not in ('LARGE', 'SMALL', 'STANDART'):
+            continue
+        try:
+            kg = round(float(v), 3)
+        except (TypeError, ValueError):
+            return boyut_kg, f'{b} miktarı geçersiz.'
+        if kg < 0:
+            return boyut_kg, 'Miktar negatif olamaz.'
+        if kg > 0:
+            boyut_kg[key] = kg
+    if not boyut_kg or sum(boyut_kg.values()) <= 0:
+        return boyut_kg, 'En az bir boyut için pozitif miktar girin.'
+    return boyut_kg, None
+
+
+def _pzm_talep_satir_dict(row):
+    d = dict(row)
+    payload = _pzm_payload_unpack(d.get('talep_referansi'))
+    d['payload'] = payload
+    d['durum_etiket'] = {
+        'TASLAK': 'Taslak',
+        'MPR_BEKLIYOR': 'MPR Bekliyor',
+        'PLANLAMAYA_HAZIR': 'Planlamaya Hazır',
+        'IPTAL': 'İptal',
+    }.get(d.get('durum'), d.get('durum') or '—')
+    return d
+
+
+def _pzm_talep_payload_olustur(con, data):
+    """Ortak talep payload doğrulama."""
+    try:
+        cari_id = int(data.get('cari_id'))
+    except (TypeError, ValueError):
+        return None, 'Cari seçimi zorunlu.'
+    cari = con.execute(
+        "SELECT id, cari_kod, unvan FROM nexgen_cari WHERE id=? AND aktif=1",
+        (cari_id,),
+    ).fetchone()
+    if not cari:
+        return None, 'Cari bulunamadı.'
+
+    urun_ailesi = (data.get('urun_ailesi') or '').strip().upper()
+    if urun_ailesi not in _GECERLI_AILELER:
+        return None, 'Ürün ailesi TERLİK veya TABAN olmalı.'
+
+    try:
+        formul_id = int(data.get('formul_id'))
+        renk_varyant_id = int(data.get('renk_varyant_id'))
+    except (TypeError, ValueError):
+        return None, 'Ürün ve renk seçimi zorunlu.'
+
+    f = con.execute(
+        "SELECT id, ad, kod FROM nexgen_formul WHERE id=? AND aktif=1 "
+        "AND durum IN ('AKTIF','URETIME_ACIK')",
+        (formul_id,),
+    ).fetchone()
+    if not f:
+        return None, 'Seçilen ürün uygun değil.'
+
+    rv = con.execute(
+        "SELECT id, ad, renk FROM nexgen_renk_varyant "
+        "WHERE id=? AND formul_id=? AND aktif=1",
+        (renk_varyant_id, formul_id),
+    ).fetchone()
+    if not rv:
+        return None, 'Seçilen renk uygun değil.'
+
+    boyut_kg, b_hata = _pzm_boyut_kg_normalize(data.get('boyut_miktar') or {})
+    if b_hata:
+        return None, b_hata
+
+    ok, t_hata, termin = _pzm_termin_dogrula(data.get('termin_tarihi'))
+    if not ok:
+        return None, t_hata
+
+    rf_renk_id = data.get('rf_renk_id')
+    if rf_renk_id in (None, ''):
+        rf_renk_id, _ = _pzm_rf_oner(con, cari_id)
+    else:
+        try:
+            rf_renk_id = int(rf_renk_id)
+        except (TypeError, ValueError):
+            return None, 'Renk formülü geçersiz.'
+    if _plan_rf_renk_kolonu_var(con) and not rf_renk_id:
+        return None, 'Bu ürün için onaylı renk formülü bulunamadı.'
+    if rf_renk_id:
+        rf = _rf_renk_formul_dogrula(con, rf_renk_id, renk_varyant_id)
+        if not rf:
+            return None, 'Seçilen renk formülü onaylı değil.'
+
+    uv_map = _renk_varyant_uv_haritasi(con, renk_varyant_id)
+    for boyut in boyut_kg:
+        if not uv_map.get(boyut):
+            return None, f'{boyut} boyutu bu renk için üretime açık değil.'
+
+    notlar = (data.get('notlar') or data.get('not') or '').strip() or None
+    payload = {
+        'v': 1,
+        'urun_ailesi': urun_ailesi,
+        'formul_id': formul_id,
+        'formul_ad': (f['ad'] or f['kod'] or '').strip(),
+        'renk_varyant_id': renk_varyant_id,
+        'renk_ad': (rv['ad'] or rv['renk'] or '').strip(),
+        'rf_renk_id': rf_renk_id,
+        'boyut_miktar': boyut_kg,
+        'termin_tarihi': termin,
+        'notlar': notlar,
+    }
+    return {
+        'cari': dict(cari),
+        'payload': payload,
+        'boyut_kg': boyut_kg,
+        'termin': termin,
+        'notlar': notlar,
+        'rf_renk_id': rf_renk_id,
+        'renk_varyant_id': renk_varyant_id,
+    }, None
+
+
+@nexgen_bp.route('/pazarlama')
+@yetki_gerekli('nexgen.plan.view', 'can_view')
+def pazarlama_merkezi():
+    """Pazarlama personeli talep / MPR V1 ekranı."""
+    con = _db()
+    try:
+        cariler = [
+            dict(c) for c in con.execute(
+                "SELECT id, cari_kod, unvan FROM nexgen_cari WHERE aktif=1 ORDER BY unvan"
+            ).fetchall()
+        ]
+        talepler = []
+        if _planlama_siparis_tablosu_var(con):
+            rows = con.execute("""
+                SELECT id, siparis_no, cari_id, cari_unvan, termin_tarihi,
+                       durum, notlar, talep_referansi, olusturma_tarihi
+                FROM nexgen_planlama_siparis
+                WHERE talep_referansi LIKE ?
+                ORDER BY id DESC LIMIT 30
+            """, (_PZM_JSON_PREFIX + '%',)).fetchall()
+            talepler = [_pzm_talep_satir_dict(r) for r in rows]
+    finally:
+        con.close()
+    return render_template(
+        'nexgen/pazarlama_merkezi.html',
+        active='nexgen',
+        cariler=cariler,
+        talepler=talepler,
+        can_manage=yetki_var('nexgen.plan.manage', 'can_manage'),
+    )
+
+
+@nexgen_bp.route('/api/pazarlama/formuller')
+@yetki_gerekli('nexgen.plan.view', 'can_view')
+def api_pazarlama_formuller():
+    urun_ailesi = (request.args.get('urun_ailesi') or '').strip().upper()
+    if urun_ailesi and urun_ailesi not in _GECERLI_AILELER:
+        return jsonify({'ok': False, 'hata': 'Geçersiz ürün ailesi.'}), 400
+    con = _db()
+    try:
+        return jsonify({
+            'ok': True,
+            'liste': _pzm_formuller_filtreli(con, urun_ailesi or None),
+        })
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/pazarlama/renk-boyut')
+@yetki_gerekli('nexgen.plan.view', 'can_view')
+def api_pazarlama_renk_boyut():
+    try:
+        formul_id = int(request.args.get('formul_id'))
+        cari_id = int(request.args.get('cari_id')) if request.args.get('cari_id') else None
+    except (TypeError, ValueError):
+        return jsonify({'ok': False, 'hata': 'formul_id zorunlu.'}), 400
+    con = _db()
+    try:
+        rf_id, rf_liste = _pzm_rf_oner(con, cari_id)
+        return jsonify({
+            'ok': True,
+            'renkler': _pzm_renk_boyut_listesi(con, formul_id),
+            'rf_oneri_id': rf_id,
+            'rf_liste': [{
+                'id': r['id'],
+                'rf_kod': r['rf_kod'],
+                'ad': r['ad'],
+            } for r in rf_liste[:20]],
+        })
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/pazarlama/talepler')
+@yetki_gerekli('nexgen.plan.view', 'can_view')
+def api_pazarlama_talepler():
+    con = _db()
+    try:
+        if not _planlama_siparis_tablosu_var(con):
+            return jsonify({'ok': True, 'liste': []})
+        rows = con.execute("""
+            SELECT id, siparis_no, cari_id, cari_unvan, termin_tarihi,
+                   durum, notlar, talep_referansi, olusturma_tarihi
+            FROM nexgen_planlama_siparis
+            WHERE talep_referansi LIKE ?
+            ORDER BY id DESC LIMIT 30
+        """, (_PZM_JSON_PREFIX + '%',)).fetchall()
+        return jsonify({'ok': True, 'liste': [_pzm_talep_satir_dict(r) for r in rows]})
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/pazarlama/taslak-kaydet', methods=['POST'])
+@yetki_gerekli('nexgen.plan.manage', 'can_manage')
+def api_pazarlama_taslak_kaydet():
+    """Pazarlama talebini TASLAK olarak kaydeder (üretim emri oluşturmaz)."""
+    if not _planlama_siparis_tablosu_var(_db()):
+        return jsonify({'ok': False, 'hata': 'Planlama sipariş tablosu yok.'}), 400
+
+    data = request.get_json(silent=True) or {}
+    con = _db()
+    try:
+        hazir, hata = _pzm_talep_payload_olustur(con, data)
+        if hata:
+            return jsonify({'ok': False, 'hata': hata}), 400
+
+        ps_id = data.get('talep_id')
+        uid = _kullanici_id()
+        cari = hazir['cari']
+        payload = hazir['payload']
+        termin = hazir['termin']
+        notlar = hazir['notlar']
+
+        if ps_id:
+            try:
+                ps_id = int(ps_id)
+            except (TypeError, ValueError):
+                return jsonify({'ok': False, 'hata': 'talep_id geçersiz.'}), 400
+            row = con.execute(
+                "SELECT id, durum FROM nexgen_planlama_siparis WHERE id=? "
+                "AND talep_referansi LIKE ?",
+                (ps_id, _PZM_JSON_PREFIX + '%'),
+            ).fetchone()
+            if not row:
+                return jsonify({'ok': False, 'hata': 'Talep bulunamadı.'}), 404
+            if row['durum'] not in ('TASLAK',):
+                return jsonify({'ok': False, 'hata': 'Yalnız taslak talepler güncellenebilir.'}), 400
+            con.execute("""
+                UPDATE nexgen_planlama_siparis
+                SET cari_id=?, cari_unvan=?, termin_tarihi=?, notlar=?,
+                    talep_referansi=?, durum='TASLAK',
+                    guncelleme_tarihi=datetime('now','localtime')
+                WHERE id=?
+            """, (
+                cari['id'], cari['unvan'], termin, notlar,
+                _pzm_payload_pack(payload), ps_id,
+            ))
+            con.commit()
+            return jsonify({'ok': True, 'talep_id': ps_id, 'durum': 'TASLAK', 'guncellendi': True})
+
+        siparis_no = _pzm_siparis_no_uret(con)
+        cur = con.execute("""
+            INSERT INTO nexgen_planlama_siparis
+                (siparis_no, cari_id, cari_unvan, termin_tarihi, talep_referansi,
+                 durum, notlar, olusturan_id)
+            VALUES (?, ?, ?, ?, ?, 'TASLAK', ?, ?)
+        """, (
+            siparis_no, cari['id'], cari['unvan'], termin,
+            _pzm_payload_pack(payload), notlar, uid,
+        ))
+        talep_id = cur.lastrowid
+        con.commit()
+        return jsonify({
+            'ok': True,
+            'talep_id': talep_id,
+            'siparis_no': siparis_no,
+            'durum': 'TASLAK',
+        })
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/pazarlama/mpr-olustur', methods=['POST'])
+@yetki_gerekli('nexgen.plan.manage', 'can_manage')
+def api_pazarlama_mpr_olustur():
+    """Talepten MPR ön çalışma satırı oluşturur — üretim emri/batch açmaz."""
+    data = request.get_json(silent=True) or {}
+    con = _db()
+    try:
+        hazir, hata = _pzm_talep_payload_olustur(con, data)
+        if hata:
+            return jsonify({'ok': False, 'hata': hata}), 400
+
+        if not _planlama_siparis_tablosu_var(con):
+            return jsonify({'ok': False, 'hata': 'Planlama sipariş tablosu yok.'}), 400
+
+        cari = hazir['cari']
+        payload = hazir['payload']
+        boyut_kg = hazir['boyut_kg']
+        termin = hazir['termin']
+        notlar = hazir['notlar']
+        renk_varyant_id = hazir['renk_varyant_id']
+        rf_renk_id = hazir['rf_renk_id']
+        talep_id = data.get('talep_id')
+
+        from datetime import date as _date
+        plan_tarihi = _date.today().isoformat()
+        uid = _kullanici_id()
+
+        uv_map = _renk_varyant_uv_haritasi(con, renk_varyant_id)
+        boyut_satirlari = []
+        for boyut, bkg in boyut_kg.items():
+            uv_b = uv_map.get(boyut)
+            if not uv_b:
+                return jsonify({'ok': False, 'hata': f'{boyut} için varyant yok.'}), 400
+            boyut_satirlari.append((boyut, uv_b, bkg))
+        toplam_kg = round(sum(b[2] for b in boyut_satirlari), 3)
+        header_uv_id, _ = _mpr_header_uv_boyut(boyut_kg, uv_map)
+        if not header_uv_id:
+            return jsonify({'ok': False, 'hata': 'Header varyant seçilemedi.'}), 400
+
+        uv = con.execute(
+            "SELECT uv.id, uv.boyut, rv.ad AS renk_ad, f.ad AS formul_ad, f.kod AS formul_kod "
+            "FROM nexgen_uretim_varyant uv "
+            "JOIN nexgen_renk_varyant rv ON rv.id=uv.renk_varyant_id "
+            "JOIN nexgen_formul f ON f.id=rv.formul_id "
+            "WHERE uv.id=? AND uv.aktif=1",
+            (header_uv_id,),
+        ).fetchone()
+
+        if talep_id:
+            try:
+                talep_id = int(talep_id)
+            except (TypeError, ValueError):
+                talep_id = None
+        if talep_id:
+            hdr = con.execute(
+                "SELECT id, siparis_no, durum FROM nexgen_planlama_siparis WHERE id=? "
+                "AND talep_referansi LIKE ?",
+                (talep_id, _PZM_JSON_PREFIX + '%'),
+            ).fetchone()
+            if not hdr:
+                return jsonify({'ok': False, 'hata': 'Talep bulunamadı.'}), 404
+            if hdr['durum'] == 'IPTAL':
+                return jsonify({'ok': False, 'hata': 'İptal edilmiş talep.'}), 400
+            siparis_no = hdr['siparis_no']
+            ps_id = hdr['id']
+            con.execute("""
+                UPDATE nexgen_planlama_siparis
+                SET cari_id=?, cari_unvan=?, termin_tarihi=?, notlar=?,
+                    talep_referansi=?, durum='MPR_BEKLIYOR',
+                    guncelleme_tarihi=datetime('now','localtime')
+                WHERE id=?
+            """, (
+                cari['id'], cari['unvan'], termin, notlar,
+                _pzm_payload_pack(payload), ps_id,
+            ))
+        else:
+            siparis_no = _pzm_siparis_no_uret(con)
+            cur = con.execute("""
+                INSERT INTO nexgen_planlama_siparis
+                    (siparis_no, cari_id, cari_unvan, termin_tarihi, talep_referansi,
+                     durum, notlar, olusturan_id)
+                VALUES (?, ?, ?, ?, ?, 'MPR_BEKLIYOR', ?, ?)
+            """, (
+                siparis_no, cari['id'], cari['unvan'], termin,
+                _pzm_payload_pack(payload), notlar, uid,
+            ))
+            ps_id = cur.lastrowid
+
+        plan_kodu = _plan_kodu_uret(con)
+        cols = [
+            'plan_kodu', 'kaynak', 'siparis_no', 'musteri_adi',
+            'uretim_varyant_id', 'planlanan_kg', 'oncelik_sira', 'plan_tarihi',
+            'durum', 'notlar', 'created_by',
+        ]
+        vals = [
+            plan_kodu, 'PAZARLAMA', siparis_no, cari['unvan'],
+            header_uv_id, toplam_kg, 10, plan_tarihi, 'ON_CALISMA', notlar, uid,
+        ]
+        if _plan_cari_kolonu_var(con):
+            cols.insert(4, 'cari_id')
+            vals.insert(4, cari['id'])
+        if _plan_planlama_siparis_kolonu_var(con):
+            cols.insert(-3, 'planlama_siparis_id')
+            vals.insert(-3, ps_id)
+        if _plan_rf_renk_kolonu_var(con):
+            cols.insert(-3, 'rf_renk_id')
+            vals.insert(-3, rf_renk_id)
+        if _plan_termin_kolonu_var(con):
+            cols.insert(-3, 'termin_tarihi')
+            vals.insert(-3, termin)
+
+        placeholders = ','.join(['?'] * len(cols))
+        con.execute(
+            f"INSERT INTO nexgen_uretim_plan ({','.join(cols)}) VALUES ({placeholders})",
+            vals,
+        )
+        plan_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+        for boyut, uv_b, bkg in boyut_satirlari:
+            _plan_boyut_satir_ensure(con, plan_id, uv_b, bkg, boyut)
+
+        con.commit()
+        return jsonify({
+            'ok': True,
+            'talep_id': ps_id,
+            'siparis_no': siparis_no,
+            'plan_id': plan_id,
+            'plan_kodu': plan_kodu,
+            'durum': 'MPR_BEKLIYOR',
+            'plan_durum': 'ON_CALISMA',
+            'formul_ad': payload.get('formul_ad'),
+            'renk_ad': payload.get('renk_ad'),
+            'planlanan_kg': toplam_kg,
+            'boyut_miktar': boyut_kg,
+        })
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/pazarlama/talep/<int:talep_id>/iptal', methods=['POST'])
+@yetki_gerekli('nexgen.plan.manage', 'can_manage')
+def api_pazarlama_talep_iptal(talep_id):
+    con = _db()
+    try:
+        if not _planlama_siparis_tablosu_var(con):
+            return jsonify({'ok': False, 'hata': 'Tablo yok.'}), 400
+        row = con.execute(
+            "SELECT id, durum FROM nexgen_planlama_siparis WHERE id=? "
+            "AND talep_referansi LIKE ?",
+            (talep_id, _PZM_JSON_PREFIX + '%'),
+        ).fetchone()
+        if not row:
+            return jsonify({'ok': False, 'hata': 'Talep bulunamadı.'}), 404
+        if row['durum'] == 'IPTAL':
+            return jsonify({'ok': True, 'durum': 'IPTAL'})
+        if row['durum'] not in ('TASLAK', 'MPR_BEKLIYOR'):
+            return jsonify({'ok': False, 'hata': 'Bu durumdaki talep iptal edilemez.'}), 400
+        con.execute("""
+            UPDATE nexgen_planlama_siparis
+            SET durum='IPTAL', guncelleme_tarihi=datetime('now','localtime')
+            WHERE id=?
+        """, (talep_id,))
+        con.commit()
+        return jsonify({'ok': True, 'durum': 'IPTAL'})
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+# ═════════════════════════════════════════════════════════════
+# ÜRETİM EMİRLERİ MERKEZİ V1 — plan → batch → tablet
+# ═════════════════════════════════════════════════════════════
+
+_UEM_TABLET_MARKER = '__UEM_TABLET__'
+_UEM_BEKLET_MARKER = '__UEM_BEKLET__'
+
+
+def _uem_emir_liste_sorgu(con):
+    """Planlamaya hazır / üretimdeki emirleri listeler."""
+    where = "np.durum IN ('ON_CALISMA','PLANLANDI','URETIMDE')"
+    _bcols = [c['name'] for c in con.execute(
+        "PRAGMA table_info(nexgen_uretim_batch)"
+    ).fetchall()]
+    batch_join = ""
+    batch_select = (
+        "NULL AS batch_kodu, NULL AS batch_durum, NULL AS batch_id, "
+        "NULL AS lot_kodu, 0 AS tablet_gonderildi"
+    )
+    if 'plan_id' in _bcols:
+        batch_join = (
+            "LEFT JOIN nexgen_uretim_batch nb "
+            "ON nb.plan_id = np.id AND nb.durum NOT IN ('IPTAL','BITTI')"
+        )
+        batch_select = (
+            "nb.batch_kodu, nb.durum AS batch_durum, nb.id AS batch_id, "
+            "nb.lot_kodu, "
+            "CASE WHEN COALESCE(nb.notlar,'') LIKE '%__UEM_TABLET__%' THEN 1 ELSE 0 END "
+            "AS tablet_gonderildi"
+        )
+    cari_select, cari_join = _plan_cari_select_sql(con)
+    hdr_select = ""
+    hdr_join = ""
+    if _plan_planlama_siparis_kolonu_var(con) and _planlama_siparis_tablosu_var(con):
+        hdr_select = (
+            "np.planlama_siparis_id, ps.siparis_no AS hdr_siparis_no, "
+            "ps.durum AS hdr_durum, "
+        )
+        hdr_join = (
+            "LEFT JOIN nexgen_planlama_siparis ps ON ps.id = np.planlama_siparis_id "
+        )
+    else:
+        hdr_select = "NULL AS planlama_siparis_id, NULL AS hdr_siparis_no, NULL AS hdr_durum, "
+    rf_select = ""
+    rf_join = ""
+    if _plan_rf_renk_kolonu_var(con):
+        rf_select = "np.rf_renk_id, np.termin_tarihi, rf.rf_kod, rf.ad AS rf_ad, "
+        rf_join = "LEFT JOIN nexgen_rf_renk rf ON rf.id = np.rf_renk_id "
+    else:
+        rf_select = "NULL AS rf_renk_id, NULL AS termin_tarihi, NULL AS rf_kod, NULL AS rf_ad, "
+    rows = con.execute(f"""
+        SELECT np.id, np.plan_kodu, np.kaynak, np.siparis_no,
+               {cari_select},
+               {hdr_select}
+               {rf_select}
+               np.planlanan_kg, np.oncelik_sira, np.plan_tarihi,
+               np.durum, np.notlar, np.created_at,
+               uv.id AS uv_id, uv.boyut,
+               rv.ad AS renk_ad,
+               f.ad AS formul_ad, f.kod AS formul_kod, f.id AS formul_id,
+               ku.KullaniciAdi AS olusturan_ad,
+               {batch_select}
+        FROM nexgen_uretim_plan np
+        {cari_join}
+        {hdr_join}
+        {rf_join}
+        JOIN nexgen_uretim_varyant uv ON uv.id = np.uretim_varyant_id
+        JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
+        JOIN nexgen_formul f          ON f.id  = rv.formul_id
+        LEFT JOIN sistem_kullanici ku ON ku.Id  = np.created_by
+        {batch_join}
+        WHERE {where}
+        ORDER BY np.oncelik_sira ASC, np.id DESC
+        LIMIT 80
+    """).fetchall()
+    return rows
+
+
+def _uem_emir_dict(con, row):
+    d = dict(row)
+    fkod = (d.get('formul_kod') or '').strip()
+    fad = (d.get('formul_ad') or '').strip()
+    d['formul_goster'] = (f'{fkod} - {fad}') if fkod and fkod not in fad else (fad or fkod or '—')
+    d['cari_goster'] = d.get('musteri_adi') or d.get('hdr_cari_unvan') or '—'
+    d['emir_no'] = d.get('plan_kodu') or f"PLAN-{d.get('id')}"
+    d['boyut_parcalari'] = _plan_boyut_parcalari_list(con, d['id'])
+    if d['boyut_parcalari']:
+        d['boyut_ozet'] = ', '.join(
+            f"{b['boyut']} {b['kg']:.3f}kg" for b in d['boyut_parcalari']
+        )
+    else:
+        d['boyut_ozet'] = d.get('boyut') or '—'
+    d['bekletildi'] = _UEM_BEKLET_MARKER in (d.get('notlar') or '')
+    durum = d.get('durum') or ''
+    bk = d.get('batch_kodu')
+    bd = d.get('batch_durum')
+    if durum == 'URETIMDE' and bk:
+        if bd == 'BEKLEME':
+            d['durum_etiket'] = 'Bekletildi'
+        elif d.get('tablet_gonderildi'):
+            d['durum_etiket'] = 'Tablette'
+        else:
+            d['durum_etiket'] = 'Üretimde'
+    elif durum == 'PLANLANDI':
+        d['durum_etiket'] = 'Planlandı'
+    elif durum == 'ON_CALISMA':
+        d['durum_etiket'] = 'MPR Bekliyor' if d.get('planlama_siparis_id') else 'Taslak MPR'
+    else:
+        d['durum_etiket'] = durum
+    d['termin_goster'] = d.get('termin_tarihi') or d.get('plan_tarihi') or '—'
+    d['oncelik_goster'] = d.get('oncelik_sira') if d.get('oncelik_sira') is not None else 10
+    return d
+
+
+@nexgen_bp.route('/uretim-emirleri')
+@yetki_gerekli('nexgen.plan.view', 'can_view')
+def uretim_emirleri_merkezi():
+    con = _db()
+    try:
+        emirler = [_uem_emir_dict(con, r) for r in _uem_emir_liste_sorgu(con)]
+    finally:
+        con.close()
+    return render_template(
+        'nexgen/uretim_emirleri.html',
+        active='nexgen',
+        emirler=emirler,
+        can_manage=yetki_var('nexgen.plan.manage', 'can_manage'),
+    )
+
+
+@nexgen_bp.route('/api/uem/emirler')
+@yetki_gerekli('nexgen.plan.view', 'can_view')
+def api_uem_emirler():
+    con = _db()
+    try:
+        liste = [_uem_emir_dict(con, r) for r in _uem_emir_liste_sorgu(con)]
+        return jsonify({'ok': True, 'liste': liste})
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/uem/emir/<int:plan_id>')
+@yetki_gerekli('nexgen.plan.view', 'can_view')
+def api_uem_emir_detay(plan_id):
+    con = _db()
+    try:
+        rows = [r for r in _uem_emir_liste_sorgu(con) if r['id'] == plan_id]
+        if not rows:
+            return jsonify({'ok': False, 'hata': 'Emir bulunamadı'}), 404
+        emir = _uem_emir_dict(con, rows[0])
+        stok = _mpr_stok_ihtiyac_birlestir(con, plan_id)
+        if stok.get('ok'):
+            emir['stok_yeterli_mi'] = stok.get('yeterli_mi')
+            emir['stok_eksik_sayisi'] = stok.get('eksik_sayisi', 0)
+        return jsonify({'ok': True, 'emir': emir})
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/uem/emir/<int:plan_id>/planlandi-yap', methods=['POST'])
+@yetki_gerekli('nexgen.plan.manage', 'can_manage')
+def api_uem_planlandi_yap(plan_id):
+    """ON_CALISMA → PLANLANDI (Pazarlama/MPR planlama siparişi bağlıysa)."""
+    con = _db()
+    try:
+        p = con.execute(
+            "SELECT id, durum, planlama_siparis_id, plan_kodu FROM nexgen_uretim_plan WHERE id=?",
+            (plan_id,),
+        ).fetchone()
+        if not p:
+            return jsonify({'ok': False, 'hata': 'Plan bulunamadı'}), 404
+        if p['durum'] != 'ON_CALISMA':
+            return jsonify({'ok': False, 'hata': f'Yalnız ON_CALISMA plan planlanabilir (mevcut: {p["durum"]})'}), 400
+        if not p['planlama_siparis_id']:
+            return jsonify({
+                'ok': False,
+                'hata': 'Planlama siparişi bağlı değil. Önce MPR Merkezinden siparişe bağlayın.',
+            }), 400
+        con.execute(
+            "UPDATE nexgen_uretim_plan SET durum='PLANLANDI' WHERE id=?",
+            (plan_id,),
+        )
+        if _planlama_siparis_tablosu_var(con):
+            con.execute("""
+                UPDATE nexgen_planlama_siparis
+                SET durum='PLANLAMAYA_HAZIR',
+                    guncelleme_tarihi=datetime('now','localtime')
+                WHERE id=? AND durum IN ('MPR_BEKLIYOR','TALEP','TASLAK')
+            """, (p['planlama_siparis_id'],))
+        con.commit()
+        return jsonify({
+            'ok': True,
+            'plan_id': plan_id,
+            'plan_kodu': p['plan_kodu'],
+            'durum': 'PLANLANDI',
+        })
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/uem/emir/<int:plan_id>/tablet-gonder', methods=['POST'])
+@yetki_gerekli('nexgen.plan.manage', 'can_manage')
+def api_uem_tablet_gonder(plan_id):
+    """Batch tablete işaretle — tekrar gönderimi engeller."""
+    con = _db()
+    try:
+        batch = con.execute(
+            "SELECT batch_kodu, durum, notlar FROM nexgen_uretim_batch "
+            "WHERE plan_id=? AND durum NOT IN ('IPTAL','BITTI') ORDER BY id DESC LIMIT 1",
+            (plan_id,),
+        ).fetchone()
+        if not batch:
+            return jsonify({'ok': False, 'hata': 'Önce batch oluşturun.'}), 400
+        if _UEM_TABLET_MARKER in (batch['notlar'] or ''):
+            return jsonify({
+                'ok': False,
+                'hata': 'Bu batch zaten tablete gönderildi.',
+                'batch_kodu': batch['batch_kodu'],
+                'tablet_url': f'/nexgen/tablet/uretim-islem/{batch["batch_kodu"]}',
+            }), 400
+        yeni_not = ((batch['notlar'] or '').strip() + f'\n{_UEM_TABLET_MARKER}').strip()
+        con.execute(
+            "UPDATE nexgen_uretim_batch SET notlar=? WHERE batch_kodu=?",
+            (yeni_not, batch['batch_kodu']),
+        )
+        con.commit()
+        return jsonify({
+            'ok': True,
+            'batch_kodu': batch['batch_kodu'],
+            'tablet_url': f'/nexgen/tablet/uretim-islem/{batch["batch_kodu"]}',
+        })
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/uem/emir/<int:plan_id>/beklet', methods=['POST'])
+@yetki_gerekli('nexgen.plan.manage', 'can_manage')
+def api_uem_beklet(plan_id):
+    """Plan veya batch bekletme."""
+    con = _db()
+    try:
+        p = con.execute(
+            "SELECT id, durum, notlar, oncelik_sira FROM nexgen_uretim_plan WHERE id=?",
+            (plan_id,),
+        ).fetchone()
+        if not p:
+            return jsonify({'ok': False, 'hata': 'Plan bulunamadı'}), 404
+        if p['durum'] in ('BITTI', 'IPTAL'):
+            return jsonify({'ok': False, 'hata': 'Bu plan bekletilemez'}), 400
+
+        batch = con.execute(
+            "SELECT batch_kodu, durum FROM nexgen_uretim_batch "
+            "WHERE plan_id=? AND durum NOT IN ('IPTAL','BITTI') ORDER BY id DESC LIMIT 1",
+            (plan_id,),
+        ).fetchone()
+        if batch and batch['durum'] == 'DEVAM':
+            con.execute(
+                "UPDATE nexgen_uretim_batch SET durum='BEKLEME' WHERE batch_kodu=?",
+                (batch['batch_kodu'],),
+            )
+            con.commit()
+            return jsonify({'ok': True, 'tip': 'batch', 'durum': 'BEKLEME', 'batch_kodu': batch['batch_kodu']})
+
+        yeni_not = ((p['notlar'] or '').strip() + f'\n{_UEM_BEKLET_MARKER}').strip()
+        con.execute(
+            "UPDATE nexgen_uretim_plan SET notlar=?, oncelik_sira=999 WHERE id=?",
+            (yeni_not, plan_id),
+        )
+        con.commit()
+        return jsonify({'ok': True, 'tip': 'plan', 'durum': 'BEKLET'})
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
 @nexgen_bp.route('/api/planlama-siparis/liste')
 @login_gerekli
 def api_planlama_siparis_liste():
