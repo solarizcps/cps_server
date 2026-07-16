@@ -28,16 +28,18 @@ const _CAN_APPROVE = {{ 'true' if can_approve else 'false' }};
     {# ════ SOL: EXPLORER ════ #}
     <div class="rm-panel rm-sol">
 
-      {# Explorer başlık + arama #}
-      <div class="rm-panel-hdr">
-        <svg class="rm-panel-ikon" viewBox="0 0 24 24" fill="none" stroke="#f6c343" stroke-width="2">
-          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-          <polyline points="9 22 9 12 15 12 15 22"/>
-        </svg>
-        <span class="rm-panel-baslik">FORMÜLLER</span>
-        {% if can_create %}
-        <button class="rm-yeni-btn" onclick="nfModalAc()">+ Yeni</button>
-        {% endif %}
+      {# Explorer başlık + görünüm filtresi + arama #}
+      <div class="rm-panel-hdr rm-panel-hdr-explorer">
+        <div class="rm-explorer-hdr-ust">
+          <svg class="rm-panel-ikon" viewBox="0 0 24 24" fill="none" stroke="#f6c343" stroke-width="2">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+            <polyline points="9 22 9 12 15 12 15 22"/>
+          </svg>
+          <span class="rm-panel-baslik">FORMÜLLER</span>
+          {% if can_create %}
+          <button class="rm-yeni-btn" onclick="nfModalAc()">+ Yeni</button>
+          {% endif %}
+        </div>
       </div>
       <div class="rm-ara-wrap">
         <svg viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" width="13" height="13">
@@ -70,6 +72,16 @@ const _CAN_APPROVE = {{ 'true' if can_approve else 'false' }};
         <div style="padding:20px;text-align:center;color:#94a3b8;font-size:12px;">Yükleniyor…</div>
       </div>
 
+    {# ── AR-GE / Onay Bekleyen + Pasif (kompakt) ── #}
+      <div id="rm-hizli-durum-wrap" style="display:none; flex-shrink:0; border-top:1px solid #e5e7eb;">
+        <div class="rm-hd-hdr">
+          <span class="rm-hd-ikon">⚡</span>
+          <span class="rm-hd-baslik">Onay Bekleyenler</span>
+        </div>
+        <div id="rm-hizli-durum-msg" class="rm-hd-msg" style="display:none"></div>
+        <div id="rm-hizli-durum-icerik" class="rm-hd-icerik"></div>
+      </div>
+
       {# ── Kullanım Geçmişi mini kartı ── #}
       <div id="rm-gecmis-kart" style="display:none; flex-shrink:0; border-top:1px solid #e5e7eb;">
         <div class="rm-gk-hdr">
@@ -94,6 +106,20 @@ const _CAN_APPROVE = {{ 'true' if can_approve else 'false' }};
         <div id="rm-gecmis-popup-icerik" class="rm-popup-icerik">
           <div class="rm-gk-bos">Yükleniyor…</div>
         </div>
+      </div>
+    </div>
+
+    {# ── AR-GE Onay Popup (küçük) ── #}
+    <div id="rm-hd-popup-bg" class="rm-hd-popup-bg" style="display:none" onclick="rmHdPopupBgClick(event)">
+      <div class="rm-hd-popup" id="rm-hd-popup" onclick="event.stopPropagation()">
+        <div class="rm-hd-popup-hdr">
+          <span id="rm-hd-popup-baslik" class="rm-hd-popup-baslik">AR-GE Denemesi</span>
+          <button type="button" class="rm-popup-kapat" onclick="rmHdPopupKapat()">✕</button>
+        </div>
+        <div id="rm-hd-popup-icerik" class="rm-hd-popup-icerik">
+          <div class="rm-gk-bos">Yükleniyor…</div>
+        </div>
+        <div id="rm-hd-popup-btns" class="rm-hd-popup-btns"></div>
       </div>
     </div>
 
@@ -177,6 +203,20 @@ const _CAN_APPROVE = {{ 'true' if can_approve else 'false' }};
   flex-shrink:0;
   overflow:visible;
 }
+
+.rm-panel-hdr-explorer {
+  padding:0 10px;
+}
+.rm-explorer-hdr-ust {
+  display:flex; align-items:center; gap:6px; width:100%;
+}
+.rm-rf-liste-wrap { max-height:140px; overflow-y:auto; border-bottom:1px solid #e5e7eb; }
+.rm-rf-kart { padding:8px 10px; border-bottom:1px solid #f1f5f9; cursor:pointer; background:#fff; }
+.rm-rf-kart:hover { background:#faf5ff; }
+.rm-rf-kart.aktif { background:#f5f3ff; border-left:3px solid #7c3aed; }
+.rm-rf-kart-renk { font-size:11px; font-weight:700; color:#4c1d95; }
+.rm-rf-kart-meta { display:flex; gap:8px; flex-wrap:wrap; margin-top:3px; font-size:9px; color:#6b7280; }
+
 .rm-page-hdr-sol {
   display:flex;
   flex-direction:row;
@@ -237,7 +277,7 @@ const _CAN_APPROVE = {{ 'true' if can_approve else 'false' }};
 /* ── Layout: Explorer + Detay ── */
 .rm-layout {
   display:grid;
-  grid-template-columns: 195px 1fr;
+  grid-template-columns: 435px 1fr;
   gap:6px;
   align-items:start;
 }
@@ -353,6 +393,59 @@ const _CAN_APPROVE = {{ 'true' if can_approve else 'false' }};
   overflow:hidden;
 }
 
+/* ── Sol panel okunabilirlik ── */
+.rm-sol .rm-panel-baslik { font-size:12px; }
+.rm-sol .rm-panel-no { font-size:11px; width:22px; height:22px; }
+.rm-sol .rm-yeni-btn { font-size:12px; padding:4px 10px; }
+.rm-sol .rm-ara-input { font-size:12px; }
+.rm-sol .ex-son-baslik { font-size:11px; }
+.rm-sol .ex-son-satir { font-size:12px; padding:5px 10px 5px 12px; }
+.rm-sol .ex-son-tur { font-size:11px; padding:2px 6px; }
+.rm-sol .ex-lv0 { min-height:34px; }
+.rm-sol .ex-lv1 { min-height:32px; }
+.rm-sol .ex-lv2 { min-height:28px; }
+.rm-sol .ex-satir-ad { font-size:13px; }
+.rm-sol .ex-lv0 .ex-satir-ad { font-size:14px; font-weight:600; }
+.rm-sol .ex-lv1 .ex-satir-ad { font-size:13px; }
+.rm-sol .ex-lv2 .ex-satir-ad { font-size:13px; }
+.rm-sol .ex-satir-kod { font-size:11px; }
+.rm-sol .ex-satir-ozet { font-size:10px; max-width:120px; }
+.rm-sol .ex-bos { font-size:12px; }
+.rm-sol .ex-yeni-etiket { font-size:9px; padding:2px 5px; }
+.rm-sol .rm-hd-baslik { font-size:11px; }
+.rm-sol .rm-hd-ikon { font-size:13px; }
+.rm-sol .rm-hd-grup-hdr { font-size:10px; padding:6px 10px 4px 28px; }
+.rm-sol .rm-hd-mini { min-height:36px; padding:6px 10px 7px 28px; gap:4px; }
+.rm-sol .rm-hd-ad-mini { font-size:14px; }
+.rm-sol .rm-hd-mini-alt { font-size:11px; }
+.rm-sol .rm-hd-kod { font-size:10px; }
+.rm-sol .rm-hd-rozet-mini { font-size:9px; padding:2px 7px; }
+.rm-sol .rm-hd-kaynak-etiket { font-size:10px; padding:2px 5px; }
+.rm-sol .rm-hd-yeni-etiket { font-size:9px; }
+.rm-sol .rm-hd-bos { font-size:12px; }
+.rm-sol .rm-gk-baslik { font-size:11px; }
+.rm-sol .rm-gk-detay-btn { font-size:11px; padding:3px 8px; }
+.rm-sol .rm-gk-bos { font-size:12px; padding:12px; }
+.rm-sol .rm-gk-ozet-l { font-size:12px; }
+.rm-sol .rm-gk-ozet-v { font-size:13px; }
+.rm-sol .rm-gk-ozet-satir { font-size:12px; padding:4px 0; }
+.rm-sol .rm-gk-satir { font-size:13px; padding:5px 10px; }
+.rm-sol .rm-gk-cari { font-size:13px; max-width:200px; }
+.rm-sol .rm-gk-kg { font-size:12px; }
+.rm-sol .rm-hd-boyut-mini {
+  min-width:24px; height:24px; font-size:12px; border-radius:5px;
+}
+.rm-sol .ex-satir-ic .rm-hd-boyut-mini {
+  min-width:26px; height:26px; font-size:13px; font-weight:800;
+}
+.ex-satir-boyut-wrap {
+  display:flex; align-items:center; gap:6px; min-width:0; flex:1;
+}
+.ex-satir-boyut-ad {
+  font-size:12px !important; font-weight:600 !important; color:var(--rm-t2) !important;
+}
+.ex-satir.aktif-onay .ex-satir-boyut-ad { color:var(--rm-t1) !important; }
+
 /* ── Kaydırma alanı (Explorer ağaç) ── */
 .rm-kaydirma {
   flex:1; overflow-y:auto;
@@ -452,6 +545,19 @@ const _CAN_APPROVE = {{ 'true' if can_approve else 'false' }};
 .ex-satir.secili .ex-boy-daire {
   background:var(--rm-blue);
   box-shadow:0 0 0 2px var(--rm-blue-bg2);
+}
+
+/* YENİ etiketi — onay sonrası 15 gün */
+.ex-yeni-etiket {
+  font-size:7px; font-weight:800; letter-spacing:.4px;
+  padding:1px 4px; border-radius:3px; flex-shrink:0;
+  background:#fef3c7; color:#b45309; border:1px solid #fcd34d;
+  text-transform:uppercase; line-height:1.3;
+}
+.rm-hd-yeni-etiket {
+  font-size:7px; font-weight:700; padding:1px 4px; border-radius:3px;
+  background:#fef3c7; color:#b45309; border:1px solid #fcd34d;
+  text-transform:uppercase; flex-shrink:0; letter-spacing:.3px; line-height:1.4;
 }
 
 /* Grup collapse */
@@ -713,6 +819,169 @@ const _CAN_APPROVE = {{ 'true' if can_approve else 'false' }};
 .rm-gk-cari { font-weight:500; font-size:11px; color:var(--rm-t2); max-width:140px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .rm-gk-kg   { color:var(--rm-t3); font-size:10px; font-weight:400; }
 
+/* ── Onay Bekleyenler paneli ── */
+.rm-hd-hdr {
+  display:flex; align-items:center; gap:6px;
+  padding:5px 10px; background:var(--rm-bg);
+  border-bottom:1px solid #e5e7eb;
+}
+.rm-hd-ikon { font-size:11px; color:#94a3b8; }
+.rm-hd-baslik {
+  font-size:9px; font-weight:700; color:var(--rm-t4);
+  text-transform:uppercase; letter-spacing:.6px; flex:1;
+}
+.rm-hd-msg {
+  margin:4px 8px 0; padding:4px 7px; border-radius:4px; border:1px solid;
+  font-size:9px; font-weight:600;
+}
+.rm-hd-icerik { max-height:200px; overflow-y:auto; }
+.rm-hd-icerik::-webkit-scrollbar { width:3px; }
+.rm-hd-grup-hdr {
+  padding:5px 10px 3px 28px; font-size:8px; font-weight:700;
+  color:var(--rm-t4); text-transform:uppercase; letter-spacing:.5px;
+  background:var(--rm-bg); border-top:1px solid #f1f5f9;
+}
+.rm-hd-grup-hdr:first-child { border-top:none; }
+.rm-hd-mini {
+  display:flex; flex-direction:column; gap:3px;
+  min-height:30px;
+  padding:5px 10px 6px 28px; cursor:pointer;
+  border-left:2px solid transparent;
+  transition:background .1s;
+}
+.rm-hd-mini-ust {
+  display:flex; align-items:center; gap:6px;
+  min-width:0; width:100%; line-height:1.3;
+}
+.rm-hd-mini-alt {
+  font-size:8px; color:var(--rm-t4); font-weight:400;
+  line-height:1.35; letter-spacing:.1px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  padding-left:0;
+}
+.rm-hd-mini:hover { background:#f1f5f9; border-left-color:#e2e8f0; }
+.rm-hd-mini.aktif { background:var(--rm-blue-bg); border-left-color:var(--rm-blue); }
+.rm-hd-kod {
+  font-size:8px; font-weight:600; color:#7c3aed;
+  font-family:'Courier New',monospace; letter-spacing:.2px;
+}
+.rm-hd-ad-mini {
+  flex:1; min-width:0;
+  font-size:11px; font-weight:500; color:var(--rm-t2);
+  line-height:1.3; letter-spacing:.01em;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.rm-hd-mini.aktif .rm-hd-ad-mini {
+  font-weight:600; color:var(--rm-t1);
+}
+.rm-hd-rozet-mini {
+  font-size:7px; font-weight:700; padding:1px 5px;
+  border-radius:3px; flex-shrink:0; text-transform:uppercase;
+  letter-spacing:.3px; line-height:1.4; white-space:nowrap;
+}
+.rm-hd-bos {
+  padding:8px 10px 8px 28px; font-size:10px; color:var(--rm-t4);
+  font-style:italic; text-align:left;
+}
+
+/* AR-GE popup — okunaklı */
+.rm-hd-popup-bg {
+  position:fixed; inset:0; background:rgba(0,0,0,.28); z-index:9100;
+  display:flex; align-items:center; justify-content:center;
+}
+.rm-hd-popup {
+  background:#fff; border-radius:12px; width:520px; max-width:94vw;
+  box-shadow:0 8px 32px rgba(0,0,0,.18); overflow:hidden;
+  max-height:88vh; display:flex; flex-direction:column;
+}
+.rm-hd-popup-hdr {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 16px; background:#006a8e; flex-shrink:0;
+}
+.rm-hd-popup-baslik { font-size:13px; font-weight:700; color:#f1f5f9; letter-spacing:.2px; }
+.rm-hd-popup-icerik {
+  padding:14px 16px; overflow-y:auto; flex:1;
+  font-size:13px; line-height:1.6; color:#374151;
+}
+.rm-hd-popup-btns {
+  display:flex; gap:8px; padding:12px 14px;
+  border-top:1px solid #e5e7eb; background:#f8fafc; flex-shrink:0;
+}
+.rm-hd-popup-btns .rm-hd-btn { flex:1; font-size:12px; padding:8px 10px; }
+.rm-hd-btn {
+  padding:6px 10px; border-radius:6px; border:1px solid;
+  font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap;
+}
+.rm-hd-p-ozet { margin-bottom:10px; }
+.rm-hd-p-satir { display:flex; gap:8px; margin-bottom:5px; align-items:center; }
+.rm-hd-p-l { color:#6b7280; min-width:88px; flex-shrink:0; font-size:12px; }
+.rm-hd-p-v { color:#0f172a; font-weight:600; font-size:13px; }
+.rm-hd-p-tablo { width:100%; border-collapse:collapse; margin-top:8px; font-size:12px; }
+.rm-hd-p-tablo th {
+  text-align:left; padding:6px 8px; color:#6b7280; font-weight:700;
+  border-bottom:1px solid #e5e7eb; font-size:11px;
+  text-transform:uppercase; letter-spacing:.3px;
+}
+.rm-hd-p-tablo td { padding:6px 8px; border-bottom:1px solid #f1f5f9; }
+.rm-hd-p-tablo tr:nth-child(even) td { background:#f8fafc; }
+.rm-hd-p-tablo td:last-child { font-weight:700; color:#059669; white-space:nowrap; }
+.rm-hd-p-baslik {
+  font-size:11px; font-weight:800; color:#475569;
+  text-transform:uppercase; margin:12px 0 6px; letter-spacing:.5px;
+  padding-bottom:4px; border-bottom:1px solid #e5e7eb;
+}
+.rm-hd-p-form { margin:8px 0 10px; }
+.rm-hd-p-inp-lbl {
+  display:block; font-size:11px; font-weight:700; color:#64748b;
+  text-transform:uppercase; margin-bottom:4px; letter-spacing:.3px;
+}
+.rm-hd-p-inp {
+  width:100%; padding:7px 10px; border:1px solid #e5e7eb; border-radius:6px;
+  font-size:13px; margin-bottom:8px; box-sizing:border-box;
+}
+.rm-hd-p-inp:focus { outline:none; border-color:#3b82f6; }
+.rm-hd-p-koken {
+  font-size:12px; color:#7c3aed; background:#f5f3ff; border:1px solid #ddd6fe;
+  border-radius:6px; padding:8px 10px; margin-bottom:10px; line-height:1.5;
+}
+.rm-hd-p-onay-info {
+  font-size:12px; color:#059669; background:#ecfdf5; border:1px solid #a7f3d0;
+  border-radius:6px; padding:8px 10px; margin-top:6px; line-height:1.5;
+}
+.rm-hd-p-uyari {
+  font-size:12px; color:#b45309; background:#fffbeb; border:1px solid #fde68a;
+  border-radius:6px; padding:8px 10px; margin:8px 0; line-height:1.5;
+}
+.rm-hd-p-deneme-chk {
+  display:flex; align-items:center; gap:8px; font-size:12px; color:#374151;
+  margin-top:8px; cursor:pointer;
+}
+.rm-hd-btn-arge   { background:#fef3c7; border-color:#f59e0b; color:#92400e; }
+.rm-hd-btn-onayla { background:#dbeafe; border-color:#3b82f6; color:#1e40af; }
+.rm-hd-btn-uretim { background:#dcfce7; border-color:#22c55e; color:#15803d; }
+.rm-hd-btn-pasif  { background:#fee2e2; border-color:#f87171; color:#991b1b; }
+.rm-hd-btn-aktif  { background:#f3f4f6; border-color:#d1d5db; color:#374151; }
+.rm-hd-boyut-grup {
+  display:inline-flex; align-items:center; gap:3px; flex-shrink:0;
+}
+.rm-hd-boyut-badge {
+  display:inline-flex; align-items:center; justify-content:center;
+  min-width:28px; height:28px; border-radius:6px;
+  font-size:13px; font-weight:800; letter-spacing:.3px;
+  flex-shrink:0; text-transform:uppercase;
+}
+.rm-hd-boyut-l { background:#dbeafe; color:#1d4ed8; border:1px solid #93c5fd; }
+.rm-hd-boyut-m { background:#fef3c7; color:#b45309; border:1px solid #fcd34d; }
+.rm-hd-boyut-s { background:#dcfce7; color:#15803d; border:1px solid #86efac; }
+.rm-hd-boyut-d { background:#f3f4f6; color:#374151; border:1px solid #d1d5db; font-size:11px; min-width:auto; padding:0 8px; }
+.rm-hd-p-varyant-satir { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.rm-hd-p-not { font-size:12px; color:#6b7280; font-style:italic; line-height:1.5; }
+.rm-hd-kaynak-etiket {
+  font-size:8px; font-weight:700; color:#7c3aed; background:#f5f3ff;
+  border:1px solid #ddd6fe; border-radius:3px; padding:1px 4px; margin-right:4px;
+}
+.rm-rozet-onay-bek { background:#fef3c7; color:#b45309; }
+
 /* ── Popup ── */
 .rm-popup-bg {
   position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:9000;
@@ -810,10 +1079,10 @@ const _CAN_APPROVE = {{ 'true' if can_approve else 'false' }};
 
 /* ── Responsive ── */
 @media(max-width:1100px){
-  .rm-layout{ grid-template-columns:195px 1fr; }
+  .rm-layout{ grid-template-columns:390px 1fr; }
 }
 @media(max-width:800px){
-  .rm-layout{ grid-template-columns:195px 1fr; }
+  .rm-layout{ grid-template-columns:360px 1fr; }
   .rm-sol{ position:static; max-height:none; }
 }
 @media(max-width:640px){
@@ -837,7 +1106,7 @@ var _aktifUvId     = null;
 var RENK_KATEGORILER = [];
 
 function rmDurumEtiket(d){
-  return {URETIME_ACIK:'ÜRETİME AÇIK',ONAYLI:'ONAYLI',DENEME:'AR-GE TEST',TASLAK:'TASLAK',PASIF:'PASİF'}[d] || d || 'TASLAK';
+  return {URETIME_ACIK:'ÜRETİME AÇIK',ONAYLI:'ONAYLI',AKTIF:'AKTİF',DENEME:'AR-GE TEST',TASLAK:'TASLAK',PASIF:'PASİF'}[d] || d || 'TASLAK';
 }
 function rmDurumCss(d){
   return 'rm-rozet rm-rozet-'+({'URETIME_ACIK':'acik','ONAYLI':'onayli','DENEME':'deneme','TASLAK':'taslak','PASIF':'pasif'}[d]||'taslak');
@@ -851,15 +1120,50 @@ function isRenkKalem(k){
   var kat = (k.kategori||'').toUpperCase().trim();
   return RENK_KATEGORILER.some(function(r){ return kat.indexOf(r)>=0; });
 }
+var _RM_YENI_GUN = 15;
+
+function _rmUvYeniMi(uv) {
+  if (!uv || !uv.onay_tarihi) return false;
+  var ham = String(uv.onay_tarihi).trim();
+  if (!ham) return false;
+  var onay = new Date(ham.replace(' ', 'T'));
+  if (isNaN(onay.getTime())) return false;
+  var gun = (Date.now() - onay.getTime()) / 86400000;
+  return gun >= 0 && gun <= _RM_YENI_GUN;
+}
+
+function _rmYeniEtiketHtml(cls) {
+  return '<span class="' + (cls || 'ex-yeni-etiket') + '">YENİ</span>';
+}
+
 function bestDurum(varyantlar){
   var d = 'TASLAK';
   (varyantlar||[]).forEach(function(uv){
     var x = uv.recete_durum||'TASLAK';
     if(x==='URETIME_ACIK') d='URETIME_ACIK';
     else if(x==='ONAYLI' && d!=='URETIME_ACIK') d='ONAYLI';
+    else if(x==='AKTIF' && d!=='URETIME_ACIK' && d!=='ONAYLI') d='AKTIF';
     else if(x==='DENEME' && d==='TASLAK') d='DENEME';
   });
   return d;
+}
+
+var _RM_AGAC_AKTIF = ['URETIME_ACIK', 'ONAYLI', 'AKTIF'];
+var _RM_BEKLEYEN = ['TASLAK', 'DENEME'];
+var _ARGE_ONAY_BEKLEYEN = ['TASLAK', 'TEST_EDILDI', 'ONAYA_GONDERILDI', 'DENEME', ''];
+
+function _rmUvAgacGoster(d) {
+  return _RM_AGAC_AKTIF.indexOf((d || 'TASLAK').toUpperCase()) >= 0;
+}
+
+function _agacAktifUvs(varyantlar) {
+  return (varyantlar || []).filter(function(uv) {
+    return _rmUvAgacGoster(uv.recete_durum);
+  });
+}
+
+function bestDurumAgac(varyantlar) {
+  return bestDurum(_agacAktifUvs(varyantlar));
 }
 
 /* Sağ panel boş */
@@ -875,6 +1179,7 @@ function rmDetayBos(){
   if (rsa) { rsa.style.display='none'; rsa.innerHTML=''; }
   rmBreadcrumbGizle();
   rmGecmisGizle();
+  rmHizliDurumGizle();
 }
 
 /* Ana Formül tablo HTML — canvas'a birebir */
@@ -1012,11 +1317,12 @@ function rmRenderDetay(){
   if(!uv){ rmDetayBos(); return; }
 
   /* Header güncelle */
+  var rvKisa = _exRvKisaAd(f, rv);
   var bh = document.getElementById('rm-detay-hdr-ad');
-  if(bh) bh.textContent = f.ad+' + '+rv.ad;
+  if(bh) bh.textContent = f.ad+' + '+rvKisa;
 
   /* Breadcrumb */
-  rmBreadcrumbGoster(f.ad, rv.ad, uv.boyut);
+  rmBreadcrumbGoster(f.ad, rvKisa, uv.boyut);
 
   var d = uv.recete_durum||'TASLAK';
   var ADIMLAR = ['TASLAK','DENEME','ONAYLI','URETIME_ACIK','PASIF'];
@@ -1090,7 +1396,7 @@ function rmRenderDetay(){
   var html =
     '<div class="rm-detay-ust">' +
       '<div class="rm-detay-baslik-satir">' +
-        '<span class="rm-detay-formul-baslik">'+f.ad+' + '+rv.ad+'</span>' +
+        '<span class="rm-detay-formul-baslik">'+f.ad+' + '+rvKisa+'</span>' +
         '<span class="'+rmDurumCss(d)+'">'+rmDurumEtiket(d)+'</span>' +
       '</div>' +
     '</div>' +
@@ -1154,42 +1460,201 @@ function rmRenderDetay(){
   document.getElementById('rm-detay-icerik').innerHTML = html;
   /* Kullanım Geçmişini güncelle */
   rmGecmisYukle(_aktifUvId);
-  /* Boya panelini async yükle */
-  rmBoyaPanelYukle(_aktifUvId);
+  /* Sol panel hızlı durum */
+  rmHizliDurumRender();
+  /* Boya / RF panelini async yükle */
+  var rvFilter = _rmRvFilterKey(rv);
+  rmBoyaPanelYukle(_aktifFormulId, rvFilter);
+}
+
+function _rmRvFilterKey(rv) {
+  if (!rv) return '';
+  var ad = rv.ad || '';
+  var m = ad.match(/(\d{2}-\d{2})/);
+  if (m) return m[1];
+  return rv.renk || '';
 }
 
 /* ═══════════════════════════════════════════════
-   BOYA PANELİ — Async API çağrısı + render
+   BOYA / RF PANELİ — formul bazlı liste + seçim
 ═══════════════════════════════════════════════ */
-var _rmBoyaYukleniyorUvId = null;
+var _rmRfSeciliId = null;
+var _rmRfYukleniyorKey = null;
 
-function rmBoyaPanelYukle(uvId) {
+function rmBoyaPanelYukle(formulId, rvKey) {
   var panel = document.getElementById('rm-boya-panel');
-  if (!panel || !uvId) return;
-  _rmBoyaYukleniyorUvId = uvId;
+  if (!panel || !formulId) return;
+  var yuklemeKey = formulId + '|' + (rvKey || '');
+  _rmRfYukleniyorKey = yuklemeKey;
+  panel.innerHTML = '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:10px;">Yükleniyor…</div>';
 
+  var params = new URLSearchParams({ formul_id: String(formulId), durum: 'ONAYLI' });
+  if (rvKey) params.set('rv', rvKey);
+
+  fetch('/nexgen/api/recete/rf-listesi?' + params.toString())
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (_rmRfYukleniyorKey !== yuklemeKey) return;
+      var p = document.getElementById('rm-boya-panel');
+      if (!p) return;
+      if (!d.ok || !d.liste || !d.liste.length) {
+        if (rvKey) {
+          rmBoyaPanelYukle(formulId, '');
+          return;
+        }
+        rmBoyaPanelFallbackUv(_aktifUvId);
+        return;
+      }
+      var secili = _rmRfSeciliId;
+      if (!secili || !d.liste.some(function(x){ return x._rf_key === secili; })) {
+        secili = d.liste[0]._rf_key;
+      }
+      _rmRfSeciliId = secili;
+      p.innerHTML = rmRfListeHtml(d.liste, secili);
+      rmRfDetayYukle(secili, formulId);
+    })
+    .catch(function(){
+      if (_rmRfYukleniyorKey !== yuklemeKey) return;
+      rmBoyaPanelFallbackUv(_aktifUvId);
+    });
+}
+
+function rmBoyaPanelFallbackUv(uvId) {
+  if (!uvId) {
+    var p = document.getElementById('rm-boya-panel');
+    if (p) p.innerHTML = rmRenkFormuluHtml([]);
+    return;
+  }
   fetch('/nexgen/api/recete/boya-bilgi?uv_id=' + uvId)
     .then(function(r){ return r.json(); })
     .then(function(d){
-      /* Seçim değiştiyse eski yanıtı yoksay */
-      if (_rmBoyaYukleniyorUvId !== uvId) return;
       var p = document.getElementById('rm-boya-panel');
       if (!p) return;
       p.innerHTML = rmBoyaPanelHtml(d);
     })
     .catch(function(){
-      if (_rmBoyaYukleniyorUvId !== uvId) return;
       var p = document.getElementById('rm-boya-panel');
       if (p) p.innerHTML = rmRenkFormuluHtml([]);
     });
 }
 
+function rmRfListeHtml(liste, seciliId) {
+  var html = '<div class="rm-rf-liste-wrap">';
+  liste.forEach(function(item) {
+    var aktif = item._rf_key === seciliId ? ' aktif' : '';
+    var renkEtiket = (item.renk_kodu && item.renk_kodu !== '—')
+      ? (item.renk_kodu + ' — ' + (item.renk_adi || '—'))
+      : (item.renk_adi || item.rf_kod || '—');
+    html += '<div class="rm-rf-kart' + aktif + '" data-rf-id="' + item._rf_key + '" onclick="rmRfKartSec(' + item._rf_key + ')">' +
+      '<div class="rm-rf-kart-renk">' + _exEsc(renkEtiket) + '</div>' +
+      '<div class="rm-rf-kart-meta">' +
+        '<span>' + _exEsc(item.cari_kod || '—') + '</span>' +
+        '<span>' + _exEsc(item.durum || '—') + '</span>' +
+        '<span>' + (item.kalem_sayisi || 0) + ' kalem</span>' +
+      '</div></div>';
+  });
+  html += '</div><div id="rm-rf-detay-alan"></div>';
+  return html;
+}
+
+function rmRfKartSec(rfId) {
+  _rmRfSeciliId = rfId;
+  document.querySelectorAll('.rm-rf-kart').forEach(function(el) {
+    el.classList.toggle('aktif', parseInt(el.getAttribute('data-rf-id'), 10) === rfId);
+  });
+  rmRfDetayYukle(rfId, _aktifFormulId);
+}
+
+function rmRfDetayYukle(rfId, formulId) {
+  var alan = document.getElementById('rm-rf-detay-alan');
+  if (!alan || !rfId) return;
+  alan.innerHTML = '<div style="padding:12px;text-align:center;color:#94a3b8;font-size:10px;">Yükleniyor…</div>';
+  var q = formulId ? ('?formul_id=' + formulId) : '';
+  fetch('/nexgen/api/recete/rf-detay/' + rfId + q)
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (_rmRfSeciliId !== rfId) return;
+      if (!d.ok || !d.rf) {
+        alan.innerHTML = '<div style="padding:12px;color:#6b7280;font-size:11px;">RF detayı yüklenemedi.</div>';
+        return;
+      }
+      alan.innerHTML = rmRfDetayHtml(d);
+    })
+    .catch(function(){
+      if (_rmRfSeciliId !== rfId) return;
+      alan.innerHTML = '<div style="padding:12px;color:#6b7280;font-size:11px;">RF detayı yüklenemedi.</div>';
+    });
+}
+
+function rmRfDetayHtml(d) {
+  var rf = d.rf || {};
+  var kalemler = d.kalemler || [];
+  var renkBaslik = (rf.renk_kodu && rf.renk_kodu !== '—')
+    ? (rf.renk_kodu + ' — ' + (rf.renk_adi || ''))
+    : (rf.renk_adi || rf.rf_kod || '—');
+  var rev = rf.rev_no ? ('REV-' + rf.rev_no + (rf.rev_durum ? ' · ' + rf.rev_durum : '')) : '—';
+  var toplam = rf.toplam_kg || 0;
+  var pigmentler = '';
+  kalemler.forEach(function(k, idx) {
+    var yuzde = toplam > 0 ? (k.miktar_kg / toplam * 100) : 0;
+    var barW = Math.min(yuzde, 100).toFixed(0);
+    var bg = idx % 2 === 0 ? '#fff' : '#faf5ff55';
+    pigmentler +=
+      '<div style="display:flex;padding:5px 10px;align-items:center;gap:6px;background:' + bg + ';border-top:1px solid #7c3aed18;">' +
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="font-size:9px;color:#94a3b8;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (k.stok_kodu || '—') + '</div>' +
+          '<div style="font-size:11px;font-weight:500;color:#0f172a;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (k.stok_ad || '—') + '</div>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">' +
+          '<div style="width:32px;height:3px;background:#7c3aed20;border-radius:2px;overflow:hidden;">' +
+            '<div style="width:' + barW + '%;height:100%;background:#7c3aed;border-radius:2px;"></div>' +
+          '</div>' +
+          '<span style="font-size:10px;color:#6b7280;min-width:28px;text-align:right;">' + yuzde.toFixed(1) + '%</span>' +
+        '</div>' +
+        '<span style="font-size:11px;font-weight:700;color:#7c3aed;min-width:44px;text-align:right;flex-shrink:0;">' + rmKg(k.miktar_kg) + ' KG</span>' +
+      '</div>';
+  });
+  return '<div style="border:1px solid #7c3aed25;border-radius:8px;overflow:hidden;margin:8px;">' +
+    '<div style="padding:8px 10px;background:#f5f3ff;border-bottom:1px solid #7c3aed18;">' +
+      '<div style="font-size:13px;font-weight:800;color:#7c3aed;">' + _exEsc(renkBaslik) + '</div>' +
+      '<div style="font-size:10px;color:#6b7280;margin-top:3px;">' + _exEsc(rf.rf_kod || '') + ' · ' + _exEsc(rf.cari_kod || '—') + ' · ' + _exEsc(rev) + '</div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">' +
+        '<span style="font-size:9px;font-weight:800;color:#059669;background:#ecfdf5;padding:2px 6px;border-radius:3px;">' + _exEsc(rf.durum || '—') + '</span>' +
+        '<span style="font-size:9px;font-weight:700;color:#6b7280;background:#f3f4f6;padding:2px 6px;border-radius:3px;">' + (rf.kalem_sayisi || kalemler.length) + ' kalem</span>' +
+      '</div>' +
+    '</div>' +
+    '<div>' + (pigmentler || '<div style="padding:12px;color:#94a3b8;font-size:11px;">Pigment kalemi yok.</div>') + '</div>' +
+    '<div style="padding:5px 10px;background:#f5f3ff;border-top:1px solid #7c3aed18;display:flex;justify-content:space-between;align-items:center;">' +
+      '<span style="font-size:10px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.4px;">TOPLAM BOYA</span>' +
+      '<span style="font-size:13px;font-weight:800;color:#7c3aed;">' + rmKg(toplam) + ' KG</span>' +
+    '</div>' +
+  '</div>';
+}
+
 function rmBoyaPanelHtml(d) {
+  if (d && d.ok && d.rf_kod && (!d.kalemler || !d.kalemler.length)) {
+    var durum = d.rf_durum || 'ONAYLI';
+    var uyg = d.uygunluk_durum || '—';
+    var rev = d.rev_no ? ('REV-' + d.rev_no + (d.rev_durum ? ' · ' + d.rev_durum : '')) : '—';
+    return '<div style="border:1px solid #7c3aed25;border-radius:8px;overflow:hidden;margin:8px;">' +
+      '<div style="padding:10px 12px;background:#f5f3ff;">' +
+        '<div style="font-size:13px;font-weight:800;color:#7c3aed;">' + _exEsc(d.rf_kod) + '</div>' +
+        '<div style="font-size:11px;color:#374151;margin-top:3px;">' + _exEsc(d.rf_ad || '') + '</div>' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">' +
+          '<span style="font-size:9px;font-weight:800;color:#059669;background:#ecfdf5;padding:2px 6px;border-radius:3px;">' + _exEsc(durum) + '</span>' +
+          '<span style="font-size:9px;font-weight:700;color:#6b7280;background:#f3f4f6;padding:2px 6px;border-radius:3px;">' + _exEsc(rev) + '</span>' +
+          '<span style="font-size:9px;font-weight:700;color:#6b7280;background:#f3f4f6;padding:2px 6px;border-radius:3px;">Uygunluk: ' + _exEsc(uyg) + '</span>' +
+        '</div>' +
+        '<div style="font-size:9px;color:#94a3b8;margin-top:8px;">' + _exEsc(d.kaynak || 'FORMUL_RF') + '</div>' +
+      '</div></div>';
+  }
   if (!d || !d.ok || !d.kalemler || d.kalemler.length === 0) {
-    var neden = (d && d.neden) ? d.neden : 'RF yok · Plan yok · Batch yok';
+    var neden = (d && d.neden) ? d.neden : '';
+    if (d && d.rf_kod) neden = '';
+    if (!neden) neden = 'RF bulunamadı';
     return '<div style="padding:24px 14px;text-align:center;">' +
       '<div style="font-size:12px;color:#6b7280;font-style:italic;">Bu seçim için bağlı Boya Reçetesi bulunamadı.</div>' +
-      '<div style="font-size:10px;color:#94a3b8;margin-top:6px;line-height:1.6;">' + neden + '</div>' +
+      (neden ? '<div style="font-size:10px;color:#94a3b8;margin-top:6px;line-height:1.6;">' + neden + '</div>' : '') +
     '</div>';
   }
 
@@ -1206,8 +1671,11 @@ function rmBoyaPanelHtml(d) {
     baslikAlt   = d.kalemler.length + ' kalem · BOYA kategorisi';
     kaynakBadge = 'ANA REÇETE';
   } else {
-    baslikAd    = rfKod ? rfKod : 'Boya Reçetesi';
-    if (rfAd && rfAd !== rfKod) baslikAd += ' · ' + rfAd;
+    var renkBaslik = (d.renk_kodu && d.renk_adi)
+      ? (d.renk_kodu + ' — ' + d.renk_adi)
+      : (d.renk_adi || rfAd || rfKod || 'Boya Reçetesi');
+    baslikAd    = renkBaslik;
+    if (rfKod && baslikAd.indexOf(rfKod) < 0) baslikAd = rfKod + ' · ' + baslikAd;
     baslikAlt   = revNo ? ('REV-' + revNo + (revDurum ? ' · ' + revDurum : '')) : '';
     kaynakBadge = kaynak || 'RF';
   }
@@ -1335,21 +1803,10 @@ function _lsGet(k) { try { return JSON.parse(localStorage.getItem(k)); } catch(e
 function _lsSet(k,v){ try { localStorage.setItem(k,JSON.stringify(v)); } catch(e) {} }
 
 /* Explorer ağaç — gruplama konfigürasyonu
-   TABAN (kod:627) grup başlığıdır.
-   AYM (kod:675) ve DÖKME (kod:810) TABAN altında gösterilir.
-   TERLİK (kod:575) bağımsız lv0 olarak kalır. */
-var _EX_GRUP_CONFIG = {
-  /* baslikKod: altKodlar[] */
-  '627': ['675', '810']
-};
-/* altKod -> baslikKod eşlemesi */
-var _EX_GRUP_COCUK_KODLAR = (function() {
-  var set = {};
-  Object.keys(_EX_GRUP_CONFIG).forEach(function(bk) {
-    _EX_GRUP_CONFIG[bk].forEach(function(k) { set[k] = bk; });
-  });
-  return set;
-})();
+   FAZ-RM-UX-1: Her ana formül bağımsız Parent→RV→Boyut ağacı */
+var _EX_GRUP_CONFIG = {};
+var _EX_GRUP_COCUK_KODLAR = {};
+var _EX_FORMUL_SIRASI = {'627': 1, '810': 2, '575': 3, '675': 4};
 
 /* Formül için arama eşleşmesi (yardımcı) */
 function _exFormulEslesti(f, sorgu) {
@@ -1367,17 +1824,29 @@ function _exFormulEslesti(f, sorgu) {
   return eslesti;
 }
 
+/* RV kısa ad — Parent altında yalnız varyant etiketi */
+function _exRvKisaAd(f, rv) {
+  var ad = rv.ad || '';
+  var fAd = (f.ad || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  var kisalt = ad.replace(new RegExp('^' + fAd + '\\s*', 'i'), '').trim();
+  if (!kisalt && rv.renk) kisalt = rv.renk;
+  return kisalt || ad;
+}
+
+/* Formül sıralama — TABAN, DÖKME, TERLİK */
+function _exFormulSirala(liste) {
+  return liste.slice().sort(function(a, b) {
+    var sa = _EX_FORMUL_SIRASI[a.kod] || 99;
+    var sb = _EX_FORMUL_SIRASI[b.kod] || 99;
+    if (sa !== sb) return sa - sb;
+    return (a.ad || '').localeCompare(b.ad || '', 'tr');
+  });
+}
 /* Formül için kısa rv özeti (teknik ID yerine) */
 function _exFormulOzet(f) {
   var rvler = f.rv_ozet || [];
   if (!rvler.length) return '';
-  /* rv adlarının kısa versiyonunu al: "TERLIK 18-22" → "18-22" */
-  var adlar = rvler.map(function(rv) {
-    var ad = rv.ad || '';
-    /* Formül adını çıkar: "TERLIK 18-22" → "18-22" */
-    var kisalt = ad.replace(new RegExp('^' + (f.ad||'').replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '\\s*', 'i'), '').trim();
-    return kisalt || ad;
-  });
+  var adlar = rvler.map(function(rv) { return _exRvKisaAd(f, rv); });
   var MAX = 3;
   var goster = adlar.slice(0, MAX);
   var kalan  = adlar.length - MAX;
@@ -1431,7 +1900,8 @@ function _exFormulHtml(f, lv, extraIndent) {
           (uvVar ? rvOkSimge : _svgChevronBoş()) +
         '</div>' +
         '<div class="ex-satir-ic">' +
-          '<span class="ex-satir-ad" title="' + _exEsc(rv.ad) + '">' + _exEsc(rv.ad) + '</span>' +
+          '<span class="ex-satir-ad" title="' + _exEsc(rv.ad) + '">' + _exEsc(_exRvKisaAd(f, rv)) + '</span>' +
+          ((rv.varyantlar || []).some(function(u){ return _rmUvYeniMi(u); }) ? _rmYeniEtiketHtml('ex-yeni-etiket') : '') +
           '<span class="' + _exNokta(rvDurum) + '" title="' + rmDurumEtiket(rvDurum) + '"></span>' +
         '</div>' +
       '</div>';
@@ -1450,6 +1920,7 @@ function _exFormulHtml(f, lv, extraIndent) {
             '<div class="ex-satir-ic">' +
               '<span class="ex-boy-daire"></span>' +
               '<span class="ex-satir-ad">' + _exEsc(uv.boyut) + '</span>' +
+              (_rmUvYeniMi(uv) ? _rmYeniEtiketHtml('ex-yeni-etiket') : '') +
               '<span class="' + _exNokta(uvDurum) + '" title="' + rmDurumEtiket(uvDurum) + '"></span>' +
             '</div>' +
           '</div>';
@@ -1474,127 +1945,12 @@ function exAgacRender(aramaFiltre) {
 
   var sorgu = (aramaFiltre||'').trim();
   var html  = '';
+  var formuller = _exFormulSirala(_FORMULLER);
 
-  /* Gruplanmış formülleri topla */
-  var grupFormulMap = {}; /* grupKey -> [formul, ...] */
-  var bagimsizFormullar = [];
-
-  var _grupBaslikKodlar = Object.keys(_EX_GRUP_CONFIG); /* ['627', ...] */
-
-  _FORMULLER.forEach(function(f) {
-    /* isTaslak: TASLAK veya ONAY_BEKLIYOR durumundaki serbest (grup-dışı) formüller
-       bağımsız üst ağaca eklenmez; onlar yalnızca "Taslak / Onay Bekleyen" grubuna gider.
-       ANCAK: bir grubun alt formülüyse (ör. AYM = TABAN'ın altı), TASLAK olsa bile
-       kendi grubunda (grupFormulMap) görünmesi gerekir. */
-    var isTaslak = (f.durum === 'TASLAK' || f.onay_durumu === 'ONAY_BEKLIYOR');
-    var grupKey = _EX_GRUP_COCUK_KODLAR[f.kod];
-    if (grupKey) {
-      /* Alt formül (AYM, DÖKME) — her durumda kendi grup başlığının altında göster */
-      if (!grupFormulMap[grupKey]) grupFormulMap[grupKey] = [];
-      grupFormulMap[grupKey].push(f);
-    } else if (_grupBaslikKodlar.indexOf(f.kod) !== -1) {
-      /* Grup başlığı (TABAN) — bağımsız listesine değil, gruba */
-    } else if (!isTaslak) {
-      /* Serbest formül (TERLİK vb.) — yalnız aktif/onaylı olanlar üst ağaçta */
-      bagimsizFormullar.push(f);
-    }
-    /* Serbest TASLAK formüller → aşağıdaki "Taslak / Onay Bekleyen" bloğuna gider */
-  });
-
-  /* Bağımsız formüller (TERLİK vb.) */
-  bagimsizFormullar.forEach(function(f) {
+  formuller.forEach(function(f) {
     if (sorgu && !_exFormulEslesti(f, sorgu)) return;
     html += _exFormulHtml(f, 0);
   });
-
-  /* Gruplar (TABAN → AYM, DÖKME):
-     Grup başlığı kod (örn. '627') ile eşleşen formül lv0 olarak render edilir.
-     Alt formüller (grupFormulMap) onun ex-alt kapsayıcısına lv1 olarak eklenir. */
-  Object.keys(_EX_GRUP_CONFIG).forEach(function(baslikKod) {
-    var altlar    = grupFormulMap[baslikKod] || [];
-    var baslikF   = _FORMULLER.find(function(x) { return x.kod === baslikKod; });
-    if (!baslikF) return;
-
-    /* Arama: başlık veya alt formüllerden biri eşleşiyorsa göster */
-    if (sorgu) {
-      var eslesti = _exFormulEslesti(baslikF, sorgu);
-      if (!eslesti) altlar.forEach(function(f) { if (_exFormulEslesti(f, sorgu)) eslesti = true; });
-      if (!eslesti) return;
-    }
-
-    var fKey   = 'f-' + baslikF.id;
-    var fAcik  = sorgu ? true : !!_exAcikDallar[fKey];
-    var fSecili= (_aktifFormulId === baslikF.id && _aktifRvId === null);
-    var fDurum = baslikF.recete_durum_ozet || baslikF.durum || 'TASLAK';
-    var gOk    = fAcik ? _svgChevronDown() : _svgChevronRight();
-    /* Grup başlığı için alt formül adlarını özet göster */
-    var grupOzetAdlar = altlar.map(function(af){ return af.ad || ''; }).filter(Boolean);
-    var grupOzet = grupOzetAdlar.length ? grupOzetAdlar.join(' • ') : '';
-
-    /* TABAN başlık satırı — lv0, her zaman expand oku var (altları var) */
-    html += '<div class="ex-satir ex-lv0 ex-g0' + (fSecili ? ' secili' : '') + '" onclick="exFormulSec(' + baslikF.id + ')">' +
-      '<div class="ex-ok" onclick="exOkTikla(event,\'' + fKey + '\',true)">' +
-        gOk +
-      '</div>' +
-      '<div class="ex-satir-ic">' +
-        '<span class="ex-satir-ad" title="' + _exEsc(baslikF.ad) + '">' + _exEsc(baslikF.ad) + '</span>' +
-        (grupOzet ? '<span class="ex-satir-ozet">' + _exEsc(grupOzet) + '</span>' : '') +
-        '<span class="' + _exNokta(fDurum) + '" title="' + rmDurumEtiket(fDurum) + '"></span>' +
-      '</div>' +
-    '</div>';
-
-    /* Alt formüller (AYM, DÖKME) lv1 olarak başlığın ex-alt kapsayıcısına */
-    html += '<div class="ex-grup' + (fAcik ? '' : ' kapali') + '" id="ex-alt-' + fKey + '">';
-    altlar.forEach(function(f) {
-      if (sorgu && !_exFormulEslesti(f, sorgu)) return;
-      html += _exFormulHtml(f, 1);
-    });
-    html += '</div>'; /* /ex-alt-fKey (TABAN) */
-  });
-
-  /* ── Taslak / Onay Bekleyen grubu ──────────────────────────────
-     TASLAK veya ONAY_BEKLIYOR durumundaki formüller ayrı grupta gösterilir.
-     Gruplama: nexgen_formul.durum === 'TASLAK' veya onay_durumu === 'ONAY_BEKLIYOR'
-     Mevcut formüller (AKTIF/ONAYLI) yukarıdaki döngüde zaten yer aldı.
-     Bu blok yalnız taslak/onay-bekleyen formülleri listeler. ──────────────── */
-  var taslaklar = _FORMULLER.filter(function(f) {
-    return f.durum === 'TASLAK' || f.onay_durumu === 'ONAY_BEKLIYOR';
-  });
-
-  /* Arama aktifken sadece eşleşenleri göster */
-  if (sorgu) {
-    taslaklar = taslaklar.filter(function(f) { return _exFormulEslesti(f, sorgu); });
-  }
-
-  /* Yukarıdaki döngüde zaten dahil edilmiş formülleri çıkar */
-  var yukariGosterilen = {};
-  bagimsizFormullar.forEach(function(f) { yukariGosterilen[f.id] = true; });
-  Object.keys(_EX_GRUP_CONFIG).forEach(function(bk) {
-    var bF = _FORMULLER.find(function(x) { return x.kod === bk; });
-    if (bF) yukariGosterilen[bF.id] = true;
-    (grupFormulMap[bk] || []).forEach(function(f) { yukariGosterilen[f.id] = true; });
-  });
-  taslaklar = taslaklar.filter(function(f) { return !yukariGosterilen[f.id]; });
-
-  if (taslaklar.length) {
-    var grpKey = 'ex-taslak-grp';
-    var grpAcik = !!_exAcikDallar[grpKey];
-    var grpOk  = grpAcik ? _svgChevronDown() : _svgChevronRight();
-    html += '<div class="ex-bolum-baslik" style="display:flex;align-items:center;gap:6px;' +
-            'padding:6px 10px 4px;font-size:9px;font-weight:800;color:#f97316;' +
-            'text-transform:uppercase;letter-spacing:.6px;border-top:1px solid #f1f5f9;margin-top:4px;cursor:pointer;"' +
-            ' onclick="exGrpTikla(\'' + grpKey + '\')">' +
-      '<span onclick="exGrpTikla(\'' + grpKey + '\')" style="display:inline-flex;">' + grpOk + '</span>' +
-      'Taslak / Onay Bekleyen' +
-      '<span style="margin-left:auto;background:#fef3c7;color:#92400e;font-size:8px;' +
-             'font-weight:800;padding:1px 5px;border-radius:3px;">' + taslaklar.length + '</span>' +
-    '</div>';
-    html += '<div class="ex-grup' + (grpAcik ? '' : ' kapali') + '" id="ex-alt-' + grpKey + '">';
-    taslaklar.forEach(function(f) {
-      html += _exFormulHtml(f, 0);
-    });
-    html += '</div>';
-  }
 
   el.innerHTML = html || '<div class="ex-bos" style="padding:20px;text-align:center;">Arama sonucu bulunamadı.</div>';
 }
@@ -1697,7 +2053,7 @@ function rmRenkSecGoster(formulId) {
       ' onclick="exRvSec(' + formulId + ',' + rv.rv_id + ')"' +
       ' title="' + _exEsc(rv.ad) + ' — ' + _exEsc(rmDurumEtiket(d)) + '">' +
       '<span class="rm-renk-chip-renk" style="' + renkStil + '"></span>' +
-      '<span class="rm-renk-chip-ad">'  + _exEsc(rv.ad) + '</span>' +
+        '<span class="rm-renk-chip-ad">'  + _exEsc(_exRvKisaAd(f, rv)) + '</span>' +
       '<span class="ex-nokta ' + noktaCls + '"></span>' +
     '</div>';
   });
@@ -1735,6 +2091,715 @@ function rmUvSecRenk(rvId, uvId) {
   exAgacRender(_exAramaAktif ? (document.getElementById('ex-arama')||{}).value||'' : '');
   rmRenderDetay();
   if (_aktifFormulId) rmRenkSecGoster(_aktifFormulId);
+}
+
+/* ════════════════════════════════════════════════
+   ONAY / PASİF — Sol panel (kompakt + popup)
+════════════════════════════════════════════════ */
+var _RM_HIZLI_GECIS = {
+  'TASLAK':       ['DENEME', 'ONAYLI', 'PASIF'],
+  'DENEME':       ['TASLAK', 'ONAYLI', 'PASIF'],
+  'ONAYLI':       ['URETIME_ACIK', 'PASIF'],
+  'URETIME_ACIK': ['PASIF'],
+  'AKTIF':        ['ONAYLI', 'URETIME_ACIK', 'PASIF'],
+  'PASIF':        ['TASLAK', 'ONAYLI', 'URETIME_ACIK'],
+};
+var _rmHdPopupUv = null;
+var _rmHdPopupDurum = null;
+var _rmHdPopupTestId = null;
+var _rmHdPopupBekliyor = false;
+var _rmHdPopupKaynakTipi = null;
+var _rmHdGruplar = {};
+var _rmHdPopupGrupKey = null;
+
+function _rmArgeMock(uv) {
+  return {
+    notlar: uv.arge_notlar,
+    talep_referansi: uv.arge_talep,
+    genel_aciklama: uv.arge_aciklama,
+    sonuc_notu: uv.arge_sonuc,
+    test_id: uv.arge_test_id
+  };
+}
+
+function _rmHdBekleyenGrupAnahtar(x) {
+  var uv = x.uv;
+  if (uv.arge_test_id) return x.rv.rv_id + ':t:' + uv.arge_test_id;
+  if (uv.arge_kod) return x.rv.rv_id + ':k:' + uv.arge_kod;
+  var db = _rmDenemeBoyutListesi(uv, _rmArgeMock(uv));
+  if (db.length > 1) return x.rv.rv_id + ':d:' + db.slice().sort().join('+');
+  return x.rv.rv_id + ':u:' + uv.uv_id;
+}
+
+function _rmHdBekleyenGrupla(items) {
+  var map = {};
+  items.forEach(function(x) {
+    var key = _rmHdBekleyenGrupAnahtar(x);
+    if (!map[key]) map[key] = { f: x.f, rv: x.rv, uvs: [], boyutlar: [] };
+    map[key].uvs.push(x.uv);
+    var bl = _rmDenemeBoyutListesi(x.uv, _rmArgeMock(x.uv));
+    if (!bl.length && x.uv.boyut) bl = [x.uv.boyut];
+    bl.forEach(function(b) {
+      if (b && map[key].boyutlar.indexOf(b) < 0) map[key].boyutlar.push(b);
+    });
+  });
+  return Object.keys(map).map(function(k) {
+    map[k].boyutlar.sort(function(a, b) { return _rmBoyutSira(a) - _rmBoyutSira(b); });
+    return map[k];
+  });
+}
+
+function _rmOnayKaynakTipi(uv, ar, testKalemler, apiKaynak) {
+  if (apiKaynak) return apiKaynak;
+  ar = ar || {};
+  var kt = (uv.arge_kaynak_tipi || ar.kaynak_tipi || '').toUpperCase();
+  if (kt) return kt;
+  if (!uv.arge_kod && !uv.arge_test_id && !ar.test_id) {
+    var d = (uv.recete_durum || 'TASLAK').toUpperCase();
+    if (d === 'TASLAK' || d === 'DENEME') return 'FORMUL_YENI';
+  }
+  var tip = (ar.test_tipi || uv.arge_test_tipi || '').toUpperCase();
+  var durum = (ar.arge_durum || uv.arge_durum || '').toUpperCase();
+  var denemeSay = (testKalemler || []).length;
+  if (tip === 'FORMUL_TEST') return 'FORMUL_DENEME';
+  if (tip === 'RENK_TEST' || tip === 'RENK_DENEMESI') {
+    if (denemeSay > 0 || ar.shore_degeri || durum === 'TEST_EDILDI' || durum === 'ONAYA_GONDERILDI') {
+      return 'RENK_DENEME';
+    }
+    return 'RENK_CALISMA';
+  }
+  return 'ARGE_GENEL';
+}
+
+function _rmKaynakTipMeta(kt) {
+  var m = {
+    FORMUL_YENI: { baslik: 'Yeni Formül', durumBek: 'Planlama onayı bekliyor', etiket: 'FORMÜL', yapanLbl: 'Ekleyen' },
+    FORMUL_DENEME: { baslik: 'AR-GE Formül Denemesi', durumBek: 'Formül denemesi — onay bekleniyor', etiket: 'FORMÜL DENEME', yapanLbl: 'Deneyi Yapan' },
+    RENK_DENEME: { baslik: 'AR-GE Renk Denemesi', durumBek: 'Renk denemesi yapıldı — onay bekleniyor', etiket: 'RENK DENEME', yapanLbl: 'Deneyi Yapan' },
+    RENK_CALISMA: { baslik: 'AR-GE Renk Çalışması', durumBek: 'Renk çalışıldı — deneme yapılmadan gönderildi', etiket: 'RENK', yapanLbl: 'Çalışmayı Yapan' },
+    ARGE_GENEL: { baslik: 'AR-GE Kaydı', durumBek: 'Onay bekleniyor', etiket: 'AR-GE', yapanLbl: 'Yapan' }
+  };
+  return m[kt] || m.ARGE_GENEL;
+}
+
+function _rmKaynakEtiketKisa(uv) {
+  var kt = (uv.arge_kaynak_tipi || '').toUpperCase();
+  if (!kt && !uv.arge_kod && !uv.arge_test_id) {
+    var d = (uv.recete_durum || '').toUpperCase();
+    if (d === 'TASLAK' || d === 'DENEME') return 'FORMÜL';
+  }
+  return kt ? (_rmKaynakTipMeta(kt).etiket || '') : '';
+}
+
+function _rmBoyutKisa(boyut) {
+  var b = (boyut || '').toUpperCase().trim();
+  if (b === 'SMALL' || b === 'S') return { kisa: 'S', tam: 'SMALL', cls: 'rm-hd-boyut-s' };
+  if (b === 'MEDIUM' || b === 'M') return { kisa: 'M', tam: 'MEDIUM', cls: 'rm-hd-boyut-m' };
+  if (b === 'LARGE' || b === 'L') return { kisa: 'L', tam: 'LARGE', cls: 'rm-hd-boyut-l' };
+  return { kisa: boyut || '—', tam: boyut || '—', cls: 'rm-hd-boyut-d' };
+}
+
+function _rmBoyutBadgeHtml(boyut, mini) {
+  var b = _rmBoyutKisa(boyut);
+  var cls = 'rm-hd-boyut-badge ' + b.cls + (mini ? ' rm-hd-boyut-mini' : '');
+  return '<span class="' + cls + '" title="' + _exEsc(b.tam) + '">' + _exEsc(b.kisa) + '</span>';
+}
+
+function _rmDenemeBoyutListesi(uv, ar) {
+  ar = ar || {};
+  var metin = [
+    ar.notlar, ar.talep_referansi, ar.genel_aciklama, ar.sonuc_notu
+  ].join(' ').toUpperCase();
+  if (/\bS\s*[\+\/&\-]\s*L\b/.test(metin) || /SMALL\s*[\+\/&\-]\s*LARGE/.test(metin) || /\bS\s+L\b/.test(metin)) {
+    return ['SMALL', 'LARGE'];
+  }
+  if (/\bS\s*[\+\/&\-]\s*M\b/.test(metin) || /SMALL\s*[\+\/&\-]\s*MEDIUM/.test(metin)) {
+    return ['SMALL', 'MEDIUM'];
+  }
+  if (/\bL\s*[\+\/&\-]\s*M\b/.test(metin) || /LARGE\s*[\+\/&\-]\s*MEDIUM/.test(metin)) {
+    return ['LARGE', 'MEDIUM'];
+  }
+  if (/\bMEDIUM\b/.test(metin) || /\bORTA\b/.test(metin)) return ['MEDIUM'];
+  if (/\bSMALL\b/.test(metin) && /\bLARGE\b/.test(metin)) return ['SMALL', 'LARGE'];
+  if (/\bSMALL\b/.test(metin)) return ['SMALL'];
+  if (/\bLARGE\b/.test(metin)) return ['LARGE'];
+  if (uv.boyut) return [uv.boyut];
+  return [];
+}
+
+function _rmUvBoyutListesi(uv, ar) {
+  if (_rmUvOnayBekliyor(uv) && (uv.arge_kod || uv.arge_test_id || (ar && ar.test_id))) {
+    var dl = _rmDenemeBoyutListesi(uv, ar);
+    if (dl.length) return dl;
+  }
+  return uv.boyut ? [uv.boyut] : [];
+}
+
+function _rmBoyutBadgesHtml(boyutlar, mini) {
+  return (boyutlar || []).map(function(b) {
+    return _rmBoyutBadgeHtml(b, mini);
+  }).join('');
+}
+
+function _rmBoyutListeMetin(boyutlar) {
+  return (boyutlar || []).map(function(b) {
+    return _rmBoyutKisa(b).kisa;
+  }).filter(function(x) { return x && x !== '—'; }).join(' · ');
+}
+
+function _rmBoyutSira(boyut) {
+  var b = (boyut || '').toUpperCase().trim();
+  if (b === 'LARGE' || b === 'L') return 1;
+  if (b === 'MEDIUM' || b === 'M') return 2;
+  if (b === 'SMALL' || b === 'S') return 3;
+  return 9;
+}
+
+function _rmUvBoyutSirala(liste) {
+  return (liste || []).slice().sort(function(a, b) {
+    var sa = _rmBoyutSira(a.boyut);
+    var sb = _rmBoyutSira(b.boyut);
+    if (sa !== sb) return sa - sb;
+    return (a.boyut || '').localeCompare(b.boyut || '', 'tr');
+  });
+}
+
+function _rmOnaySonrasiAgacAc(uvId) {
+  var yerel = _rmUvYerelBul(uvId);
+  if (!yerel) return;
+  _exUstAc(yerel.f.id, yerel.rv.rv_id);
+}
+
+function _rmAgacUvScroll(uvId) {
+  setTimeout(function() {
+    var satirlar = document.querySelectorAll('#ex-agac .ex-satir');
+    satirlar.forEach(function(el) {
+      var oc = el.getAttribute('onclick') || '';
+      if (oc.indexOf('exUvSec(') !== -1 && oc.indexOf(',' + uvId + ')') !== -1) {
+        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    });
+  }, 80);
+}
+
+function rmHizliDurumGizle() {
+  var w = document.getElementById('rm-hizli-durum-wrap');
+  if (w) w.style.display = 'none';
+}
+
+function _rmUvDurumGuncelle(uvId, yeniDurum) {
+  var onaylu = (yeniDurum === 'ONAYLI' || yeniDurum === 'URETIME_ACIK');
+  var simdi = onaylu ? new Date().toISOString().slice(0, 19).replace('T', ' ') : null;
+  _FORMULLER.forEach(function(f) {
+    (f.rv_ozet || []).forEach(function(rv) {
+      (rv.varyantlar || []).forEach(function(uv) {
+        if (uv.uv_id === uvId) {
+          uv.recete_durum = yeniDurum;
+          if (simdi) uv.onay_tarihi = simdi;
+        }
+      });
+    });
+  });
+}
+
+function _rmUvArgeOnayGuncelle(uvId, yeniDurum, rvAd, renk, onaylayanAd) {
+  var simdi = new Date().toISOString().slice(0, 19).replace('T', ' ');
+  _FORMULLER.forEach(function(f) {
+    (f.rv_ozet || []).forEach(function(rv) {
+      (rv.varyantlar || []).forEach(function(uv) {
+        if (uv.uv_id === uvId) {
+          uv.recete_durum = yeniDurum;
+          uv.arge_durum = 'ONAYLANDI';
+          uv.onay_tarihi = simdi;
+          if (onaylayanAd) {
+            uv.arge_onaylayan = onaylayanAd;
+            uv.onaylayan_ad = onaylayanAd;
+          }
+        }
+      });
+      if (rvAd && (rv.varyantlar || []).some(function(u){ return u.uv_id === uvId; })) {
+        rv.ad = rvAd;
+        if (renk) rv.renk = renk;
+      }
+    });
+  });
+}
+
+function rmHizliDurumMsg(txt, ok) {
+  var el = document.getElementById('rm-hizli-durum-msg');
+  if (!el) return;
+  el.textContent = txt;
+  el.style.display = 'block';
+  el.style.background = ok ? '#d1fae5' : '#fee2e2';
+  el.style.color = ok ? '#059669' : '#dc2626';
+  el.style.borderColor = ok ? '#a7f3d0' : '#fecaca';
+  setTimeout(function(){ el.style.display = 'none'; }, 3500);
+}
+
+function _rmUvOnayBekliyor(uv) {
+  if (!uv) return false;
+  if ((uv.recete_durum || '').toUpperCase() === 'PASIF') return false;
+  var ard = (uv.arge_durum || '').toUpperCase();
+  if (uv.arge_kod || uv.arge_test_id) {
+    if (ard === 'ONAYLANDI' || ard === 'REDDEDILDI') return false;
+    return true;
+  }
+  return _RM_BEKLEYEN.indexOf((uv.recete_durum || 'TASLAK').toUpperCase()) >= 0;
+}
+
+function _rmHdGrup(uv) {
+  if (_rmUvOnayBekliyor(uv)) return 'bekleyen';
+  var d = (uv.recete_durum || 'TASLAK').toUpperCase();
+  if (d === 'PASIF') return 'pasif';
+  return 'calisan';
+}
+
+function _rmHdDurumEtiket(uv) {
+  if (_rmUvOnayBekliyor(uv)) {
+    var kt = _rmOnayKaynakTipi(uv, {}, [], uv.arge_kaynak_tipi || null);
+    if (kt === 'RENK_CALISMA') return 'RENK ONAY';
+    if (kt === 'FORMUL_YENI') return 'FORMÜL ONAY';
+    return 'ONAY BEKLİYOR';
+  }
+  return rmDurumEtiket(uv.recete_durum || 'TASLAK');
+}
+
+function _rmHdRozetCls(d) {
+  d = (d || 'TASLAK').toUpperCase();
+  if (d === 'URETIME_ACIK' || d === 'AKTIF') return 'rm-rozet-acik';
+  if (d === 'ONAYLI') return 'rm-rozet-onayli';
+  if (d === 'PASIF') return 'rm-rozet-pasif';
+  if (d === 'DENEME') return 'rm-rozet-deneme';
+  return 'rm-rozet-taslak';
+}
+
+function _rmHdRozetClsUv(uv) {
+  if (_rmUvOnayBekliyor(uv)) return 'rm-rozet-onay-bek';
+  return _rmHdRozetCls(uv.recete_durum || 'TASLAK');
+}
+
+function _rmHdMiniSatirNormal(f, rv, uv) {
+  var rvKisa = _exRvKisaAd(f, rv);
+  var ad = f.ad + ' ' + rvKisa;
+  var boyutlar = uv.boyut ? [uv.boyut] : [];
+  var boyutMetin = _rmBoyutListeMetin(boyutlar) || '—';
+  var kalemSay = uv.kalem_say || (uv.kalemler || []).length || 0;
+  var kg = uv.toplam_kg || 0;
+  var aktifCls = (_aktifUvId === uv.uv_id) ? ' aktif' : '';
+  var alt = boyutMetin + ' · ' + kalemSay + ' kalem · ' + rmKg(kg) + ' KG';
+  return '<div class="rm-hd-mini' + aktifCls + '" onclick="rmHdPopupAc(' + uv.uv_id + ')">' +
+    '<div class="rm-hd-mini-ust">' +
+      '<span class="rm-hd-boyut-grup">' + _rmBoyutBadgesHtml(boyutlar, true) + '</span>' +
+      '<span class="rm-hd-ad-mini" title="' + _exEsc(ad + ' · ' + boyutMetin) + '">' + _exEsc(ad) + '</span>' +
+      (_rmUvYeniMi(uv) ? _rmYeniEtiketHtml('rm-hd-yeni-etiket') : '') +
+      '<span class="rm-hd-rozet-mini ' + _rmHdRozetClsUv(uv) + '">' + _rmHdDurumEtiket(uv) + '</span>' +
+    '</div>' +
+    '<div class="rm-hd-mini-alt">' + alt + '</div>' +
+  '</div>';
+}
+
+function _rmHdMiniSatirDeneme(grup, gKey) {
+  var f = grup.f, rv = grup.rv, uvs = grup.uvs;
+  var uv = uvs[0];
+  var rvKisa = _exRvKisaAd(f, rv);
+  var ad = f.ad + ' ' + rvKisa;
+  var boyutlar = grup.boyutlar.length ? grup.boyutlar : (uv.boyut ? [uv.boyut] : []);
+  var boyutMetin = _rmBoyutListeMetin(boyutlar);
+  var kod = uv.arge_kod || (uv.arge_test_id ? ('T-' + uv.arge_test_id) : '');
+  var kalemSay = 0, kg = 0;
+  uvs.forEach(function(u) {
+    kalemSay = Math.max(kalemSay, u.kalem_say || (u.kalemler || []).length || 0);
+    kg += u.toplam_kg || 0;
+  });
+  var aktifCls = uvs.some(function(u){ return _aktifUvId === u.uv_id; }) ? ' aktif' : '';
+  var alt = boyutMetin + ' · ' + kalemSay + ' kalem · ' + rmKg(kg) + ' KG';
+  var kaynakEt = _rmKaynakEtiketKisa(uv);
+  if (kaynakEt) alt = '<span class="rm-hd-kaynak-etiket">' + _exEsc(kaynakEt) + '</span>' + alt;
+  if (kod) alt = '<span class="rm-hd-kod">' + _exEsc(kod) + '</span> · ' + alt;
+  _rmHdGruplar[gKey] = { uvs: uvs, boyutlar: boyutlar, test_id: uv.arge_test_id || null };
+  return '<div class="rm-hd-mini rm-hd-mini-deneme' + aktifCls + '" onclick="rmHdPopupAc(' + uv.uv_id + ',\'' + gKey + '\')">' +
+    '<div class="rm-hd-mini-ust">' +
+      '<span class="rm-hd-boyut-grup">' + _rmBoyutBadgesHtml(boyutlar, true) + '</span>' +
+      '<span class="rm-hd-ad-mini" title="' + _exEsc(ad + ' · ' + boyutMetin) + '">' + _exEsc(ad) + '</span>' +
+      '<span class="rm-hd-rozet-mini rm-rozet-onay-bek">' + _rmHdDurumEtiket(uv) + '</span>' +
+    '</div>' +
+    '<div class="rm-hd-mini-alt">' + alt + '</div>' +
+  '</div>';
+}
+
+function rmHizliDurumRender() {
+  var wrap = document.getElementById('rm-hizli-durum-wrap');
+  var icerik = document.getElementById('rm-hizli-durum-icerik');
+  if (!wrap || !icerik) return;
+  if (!_aktifFormulId) { rmHizliDurumGizle(); return; }
+  var f = _FORMULLER.find(function(x){ return x.id === _aktifFormulId; });
+  if (!f || !f.rv_ozet || !f.rv_ozet.length) { rmHizliDurumGizle(); return; }
+
+  var bekleyen = '', calisan = '', pasif = '', nB = 0, nC = 0, nP = 0;
+  _rmHdGruplar = {};
+  var bekItems = [], diger = [];
+  (f.rv_ozet || []).forEach(function(rv) {
+    (rv.varyantlar || []).forEach(function(uv) {
+      var x = { f: f, rv: rv, uv: uv };
+      if (_rmHdGrup(uv) === 'bekleyen') bekItems.push(x);
+      else diger.push(x);
+    });
+  });
+  var gruplar = _rmHdBekleyenGrupla(bekItems);
+  gruplar.sort(function(a, b) {
+    var sa = _rmBoyutSira((a.boyutlar[0] || ''));
+    var sb = _rmBoyutSira((b.boyutlar[0] || ''));
+    return sa - sb;
+  });
+  gruplar.forEach(function(grup, idx) {
+    bekleyen += _rmHdMiniSatirDeneme(grup, 'g' + idx);
+    nB++;
+  });
+  if (!nB) {
+    bekleyen = '<div class="rm-hd-bos">Onay bekleyen deneme yok.</div>';
+  }
+
+  diger.sort(function(a, b) {
+    var sa = _rmBoyutSira(a.uv.boyut);
+    var sb = _rmBoyutSira(b.uv.boyut);
+    if (sa !== sb) return sa - sb;
+    return (a.uv.boyut || '').localeCompare(b.uv.boyut || '', 'tr');
+  });
+  diger.forEach(function(x) {
+    var satir = _rmHdMiniSatirNormal(x.f, x.rv, x.uv);
+    var g = _rmHdGrup(x.uv);
+    if (g === 'pasif') { pasif += satir; nP++; }
+    else { calisan += satir; nC++; }
+  });
+
+  var html = bekleyen;
+  if (nC) html += '<div class="rm-hd-grup-hdr">Çalışan (' + nC + ')</div>' + calisan;
+  if (nP) html += '<div class="rm-hd-grup-hdr">Pasif (' + nP + ')</div>' + pasif;
+  icerik.innerHTML = html;
+  wrap.style.display = 'block';
+}
+
+function rmHdPopupKapat() {
+  var bg = document.getElementById('rm-hd-popup-bg');
+  if (bg) bg.style.display = 'none';
+  _rmHdPopupUv = null;
+  _rmHdPopupDurum = null;
+  _rmHdPopupTestId = null;
+  _rmHdPopupBekliyor = false;
+  _rmHdPopupKaynakTipi = null;
+  _rmHdPopupGrupKey = null;
+}
+
+function rmHdPopupBgClick(e) {
+  if (e.target.id === 'rm-hd-popup-bg') rmHdPopupKapat();
+}
+
+function rmHdPopupBtnsHtml(uv, uvId) {
+  if (!_CAN_APPROVE && !_CAN_MANAGE) return '';
+  var bekliyor = _rmUvOnayBekliyor(uv);
+  var d = (uv.recete_durum || 'TASLAK').toUpperCase();
+  var h = '';
+  if (bekliyor && (uv.arge_kod || uv.arge_test_id)) {
+    h += '<button type="button" class="rm-hd-btn rm-hd-btn-onayla" onclick="rmHdOnayla(' + uvId + ')">Onayla · Üretime Aç</button>';
+    return h;
+  }
+  if (bekliyor) {
+    h += '<button type="button" class="rm-hd-btn rm-hd-btn-onayla" onclick="rmHizliDurumKaydet(' + uvId + ',\'' + d + '\',\'ONAYLI\',true)">Onayla</button>';
+    return h;
+  }
+  if (d === 'ONAYLI') {
+    h += '<button type="button" class="rm-hd-btn rm-hd-btn-uretim" onclick="rmHizliDurumKaydet(' + uvId + ',\'' + d + '\',\'URETIME_ACIK\',true)">Üretime Aç</button>';
+  }
+  if (d === 'PASIF') {
+    h += '<button type="button" class="rm-hd-btn rm-hd-btn-aktif" onclick="rmHizliDurumKaydet(' + uvId + ',\'' + d + '\',\'ONAYLI\',true)">Aktif Et</button>';
+    h += '<button type="button" class="rm-hd-btn rm-hd-btn-uretim" onclick="rmHizliDurumKaydet(' + uvId + ',\'' + d + '\',\'URETIME_ACIK\',true)">Üretime Aç</button>';
+  } else if (d !== 'PASIF' && (d === 'URETIME_ACIK' || d === 'AKTIF' || d === 'ONAYLI')) {
+    h += '<button type="button" class="rm-hd-btn rm-hd-btn-pasif" onclick="rmHizliDurumKaydet(' + uvId + ',\'' + d + '\',\'PASIF\',true)">Pasife Al</button>';
+  }
+  return h;
+}
+
+function _rmUvYerelBul(uvId) {
+  for (var i = 0; i < _FORMULLER.length; i++) {
+    var f = _FORMULLER[i];
+    var rvler = f.rv_ozet || [];
+    for (var j = 0; j < rvler.length; j++) {
+      var rv = rvler[j];
+      var uvs = rv.varyantlar || [];
+      for (var k = 0; k < uvs.length; k++) {
+        if (uvs[k].uv_id === uvId) return { f: f, rv: rv, uv: uvs[k] };
+      }
+    }
+  }
+  return null;
+}
+
+function _rmUvArgeBirlestir(uv, ar) {
+  ar = ar || {};
+  return Object.assign({}, uv, {
+    arge_kod: uv.arge_kod || ar.arge_kod || ar.test_no || null,
+    arge_test_id: uv.arge_test_id || ar.test_id || null,
+    arge_durum: uv.arge_durum || ar.arge_durum || null,
+    arge_yapan: uv.arge_yapan || ar.yapan_ad || null,
+    arge_renk: uv.arge_renk || ar.yeni_renk_adi || null,
+    arge_onaylayan: uv.arge_onaylayan || ar.onaylayan_ad || uv.uv_onaylayan_ad || null,
+    arge_test_tipi: uv.arge_test_tipi || ar.test_tipi || null,
+    arge_kaynak_tipi: uv.arge_kaynak_tipi || ar.kaynak_tipi || null,
+    arge_notlar: uv.arge_notlar || ar.notlar || null,
+    arge_talep: uv.arge_talep || ar.talep_referansi || null,
+    arge_aciklama: uv.arge_aciklama || ar.genel_aciklama || null,
+    arge_sonuc: uv.arge_sonuc || ar.sonuc_notu || null,
+  });
+}
+
+function _rmHdPopupGoster(uv, ar, formulKalemler, testKalemler, uvId, opts) {
+  opts = opts || {};
+  var ic = document.getElementById('rm-hd-popup-icerik');
+  var bt = document.getElementById('rm-hd-popup-btns');
+  var bas = document.getElementById('rm-hd-popup-baslik');
+  if (!ic) return;
+  ar = ar || {};
+  uv = _rmUvArgeBirlestir(uv, ar);
+  _rmHdPopupTestId = ar.test_id || uv.arge_test_id || null;
+  _rmHdPopupBekliyor = _rmUvOnayBekliyor(uv);
+  _rmHdPopupDurum = (uv.recete_durum || 'TASLAK').toUpperCase();
+  var kaynakTipi = _rmOnayKaynakTipi(uv, ar, testKalemler, opts.kaynak_tipi || null);
+  _rmHdPopupKaynakTipi = kaynakTipi;
+  var meta = _rmKaynakTipMeta(kaynakTipi);
+  var kod = ar.arge_kod || ar.test_no || uv.arge_kod || (uv.arge_test_id ? ('T-' + uv.arge_test_id) : '');
+  if (bas) bas.textContent = (kod ? kod + ' · ' : '') + meta.baslik;
+
+  var bekliyor = _rmHdPopupBekliyor;
+  var onaylayan = ar.onaylayan_ad || uv.arge_onaylayan || uv.uv_onaylayan_ad || '';
+  var rvAd = uv.rv_ad || '';
+  var renk = ar.yeni_renk_adi || uv.arge_renk || uv.renk || '';
+  var renkBilesenleri = opts.renk_bilesenleri || [];
+  var boyutlar = _rmUvBoyutListesi(uv, ar);
+  if (!boyutlar.length && uv.boyut) boyutlar = [uv.boyut];
+  var boyutBadge = _rmBoyutBadgesHtml(boyutlar, false);
+  var boyutTam = boyutlar.map(function(b){ return _rmBoyutKisa(b).tam; }).join(' + ');
+
+  var html = '';
+  if (kod) {
+    html += '<div class="rm-hd-p-koken">Köken: <b>' + _exEsc(kod) + '</b> → ' +
+      _exEsc(rvAd) + ' · <b>' + _exEsc(boyutTam) + '</b></div>';
+  } else if (kaynakTipi === 'FORMUL_YENI') {
+    html += '<div class="rm-hd-p-koken">Kaynak: <b>Planlama / kullanıcı formül ekleme</b> → ' +
+      _exEsc(rvAd) + ' · <b>' + _exEsc(boyutTam) + '</b></div>';
+  }
+
+  html += '<div class="rm-hd-p-ozet">' +
+    '<div class="rm-hd-p-satir"><span class="rm-hd-p-l">Kaynak</span><span class="rm-hd-p-v">' + _exEsc(meta.etiket) + '</span></div>' +
+    '<div class="rm-hd-p-satir"><span class="rm-hd-p-l">Durum</span><span class="rm-hd-p-v">' +
+      (bekliyor ? meta.durumBek : _exEsc(rmDurumEtiket(_rmHdPopupDurum))) + '</span></div>' +
+    '<div class="rm-hd-p-satir"><span class="rm-hd-p-l">' + _exEsc(meta.yapanLbl) + '</span><span class="rm-hd-p-v">' +
+      _exEsc(ar.yapan_ad || uv.arge_yapan || '—') + '</span></div>';
+  if (onaylayan) {
+    html += '<div class="rm-hd-p-satir"><span class="rm-hd-p-l">Onaylayan</span><span class="rm-hd-p-v">' + _exEsc(onaylayan) + '</span></div>';
+  }
+  html += '</div>';
+
+  if (kaynakTipi === 'RENK_CALISMA' && bekliyor) {
+    html += '<div class="rm-hd-p-uyari">Renk çalışması tamamlandı; fiziksel deneme yapılmadan onaya gönderildi.</div>';
+  }
+
+  if (bekliyor && (_CAN_APPROVE || _CAN_MANAGE)) {
+    html += '<div class="rm-hd-p-ozet" style="margin-bottom:8px;">' +
+      '<div class="rm-hd-p-satir"><span class="rm-hd-p-l">Boyut</span><span class="rm-hd-p-v rm-hd-p-varyant-satir">' +
+        boyutBadge + '<span>' + _exEsc(boyutTam) + '</span></span></div></div>';
+    html += '<div class="rm-hd-p-baslik">Onay Öncesi Düzenleme</div><div class="rm-hd-p-form">' +
+      '<label class="rm-hd-p-inp-lbl">Varyant Adı</label>' +
+      '<input type="text" id="rm-hd-inp-rv" class="rm-hd-p-inp" value="' + _exEsc(rvAd) + '">' +
+      '<label class="rm-hd-p-inp-lbl">Renk Eşleşmesi</label>' +
+      '<input type="text" id="rm-hd-inp-renk" class="rm-hd-p-inp" value="' + _exEsc(renk) + '">';
+    if (kaynakTipi === 'RENK_CALISMA') {
+      html += '<label class="rm-hd-p-deneme-chk"><input type="checkbox" id="rm-hd-chk-denemesiz" checked> Deneme yapılmadan onaylandı</label>';
+    }
+    html += '</div>';
+  } else {
+    html += '<div class="rm-hd-p-ozet">' +
+      '<div class="rm-hd-p-satir"><span class="rm-hd-p-l">Varyant</span><span class="rm-hd-p-v rm-hd-p-varyant-satir">' +
+        boyutBadge + '<span>' + _exEsc(rvAd) + '</span></span></div>' +
+      '<div class="rm-hd-p-satir"><span class="rm-hd-p-l">Boyut</span><span class="rm-hd-p-v">' + _exEsc(boyutTam) + '</span></div>' +
+      '<div class="rm-hd-p-satir"><span class="rm-hd-p-l">Renk</span><span class="rm-hd-p-v">' + _exEsc(renk || '—') + '</span></div>' +
+    '</div>';
+  }
+
+  if (renkBilesenleri.length) {
+    html += '<div class="rm-hd-p-baslik">Renk Bileşenleri</div><table class="rm-hd-p-tablo"><thead><tr><th>Bileşen</th><th style="text-align:right">Miktar</th></tr></thead><tbody>';
+    renkBilesenleri.forEach(function(rb) {
+      var miktar = rb.kg || rb.gram || rb.miktar_kg || '';
+      var birim = rb.kg ? ' KG' : (rb.gram ? ' g' : '');
+      html += '<tr><td>' + _exEsc(rb.ad || rb.stok_kodu || rb.kod || '—') + '</td>' +
+        '<td style="text-align:right">' + (miktar ? (rmKg(miktar) + birim) : '—') + '</td></tr>';
+    });
+    html += '</tbody></table>';
+  }
+
+  if (formulKalemler && formulKalemler.length) {
+    html += '<div class="rm-hd-p-baslik">Formül İçeriği <span style="font-weight:500;color:#94a3b8;text-transform:none;">(' + formulKalemler.length + ' kalem · ' + _exEsc(boyutTam) + ')</span></div>' +
+      '<table class="rm-hd-p-tablo"><thead><tr><th>Hammadde</th><th style="text-align:right">KG</th></tr></thead><tbody>';
+    formulKalemler.forEach(function(k) {
+      html += '<tr><td>' + _exEsc(k.stok_ad) + '</td><td style="text-align:right">' + rmKg(k.miktar_kg) + ' KG</td></tr>';
+    });
+    html += '</tbody></table>';
+  }
+  if (testKalemler && testKalemler.length) {
+    var denemeBaslik = (kaynakTipi === 'RENK_DENEME' || kaynakTipi === 'RENK_CALISMA') ? 'Renk Deneme Kalemleri' : 'Deneme Kalemleri';
+    html += '<div class="rm-hd-p-baslik">' + denemeBaslik + '</div><table class="rm-hd-p-tablo"><thead><tr><th>Kalem</th><th style="text-align:right">KG</th></tr></thead><tbody>';
+    testKalemler.forEach(function(k) {
+      html += '<tr><td>' + _exEsc(k.stok_ad) + '</td><td style="text-align:right">' + rmKg(k.test_miktar_kg || k.miktar_kg) + ' KG</td></tr>';
+    });
+    html += '</tbody></table>';
+  } else if (kaynakTipi === 'RENK_CALISMA' && bekliyor) {
+    html += '<div class="rm-hd-p-onay-info">Deneme kalemi girilmedi — renk çalışması doğrudan onaya iletildi.</div>';
+  }
+  var notMetin = ar.notlar || ar.genel_aciklama || ar.sonuc_notu || ar.talep_referansi || '';
+  if (notMetin) {
+    html += '<div class="rm-hd-p-baslik">Not</div><div class="rm-hd-p-not">' +
+      _exEsc(notMetin) + '</div>';
+  }
+  ic.innerHTML = html;
+  if (bt) bt.innerHTML = rmHdPopupBtnsHtml(uv, uvId);
+}
+
+function rmHdOnayla(uvId) {
+  var rvInp = document.getElementById('rm-hd-inp-rv');
+  var renkInp = document.getElementById('rm-hd-inp-renk');
+  var denemesizChk = document.getElementById('rm-hd-chk-denemesiz');
+  var body = {
+    uv_id: uvId,
+    test_id: _rmHdPopupTestId,
+    rv_ad: rvInp ? rvInp.value.trim() : null,
+    renk: renkInp ? renkInp.value.trim() : null,
+    hedef_durum: 'URETIME_ACIK'
+  };
+  if (_rmHdPopupKaynakTipi === 'RENK_CALISMA' && denemesizChk && denemesizChk.checked) {
+    body.deneme_yapilmadi = true;
+  }
+  fetch('/nexgen/api/recete/uv-arge-onayla', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    if (d.ok) {
+      rmHizliDurumMsg((d.onaylayan_ad ? d.onaylayan_ad + ' onayladı — ' : '') + (d.mesaj || 'Onaylandı.'), true);
+      _rmUvArgeOnayGuncelle(uvId, d.yeni_durum || 'URETIME_ACIK', rvInp ? rvInp.value.trim() : null, renkInp ? renkInp.value.trim() : null, d.onaylayan_ad);
+      if (_rmHdPopupGrupKey && _rmHdGruplar[_rmHdPopupGrupKey]) {
+        (_rmHdGruplar[_rmHdPopupGrupKey].uvs || []).forEach(function(u) {
+          if (u.uv_id !== uvId) {
+            _rmUvArgeOnayGuncelle(u.uv_id, d.yeni_durum || 'URETIME_ACIK', rvInp ? rvInp.value.trim() : null, renkInp ? renkInp.value.trim() : null, d.onaylayan_ad);
+          }
+        });
+      }
+      _rmOnaySonrasiAgacAc(uvId);
+      var sorgu = _exAramaAktif ? (document.getElementById('ex-arama')||{}).value||'' : '';
+      exAgacRender(sorgu);
+      rmHizliDurumRender();
+      if (_aktifUvId === uvId) rmRenderDetay();
+      rmHdPopupKapat();
+      _rmAgacUvScroll(uvId);
+    } else {
+      rmHizliDurumMsg(d.hata || 'Onay başarısız.', false);
+    }
+  })
+  .catch(function(){ rmHizliDurumMsg('Bağlantı hatası.', false); });
+}
+
+function rmHdPopupAc(uvId, grupKey) {
+  _rmHdPopupUv = uvId;
+  _rmHdPopupGrupKey = grupKey || null;
+  var bg = document.getElementById('rm-hd-popup-bg');
+  var ic = document.getElementById('rm-hd-popup-icerik');
+  var bt = document.getElementById('rm-hd-popup-btns');
+  if (!bg || !ic) return;
+  bg.style.display = 'flex';
+  ic.innerHTML = '<div class="rm-gk-bos">Yükleniyor…</div>';
+  if (bt) bt.innerHTML = '';
+
+  var yerel = _rmUvYerelBul(uvId);
+  if (yerel) {
+    var yuv = Object.assign({
+      formul_ad: yerel.f.ad,
+      rv_ad: yerel.rv.ad,
+      boyut: yerel.uv.boyut,
+      recete_durum: yerel.uv.recete_durum,
+      formul_id: yerel.f.id,
+      arge_kod: yerel.uv.arge_kod,
+      arge_yapan: yerel.uv.arge_yapan,
+      arge_renk: yerel.uv.arge_renk,
+      arge_durum: yerel.uv.arge_durum,
+      arge_test_id: yerel.uv.arge_test_id,
+    }, yerel.uv);
+    _rmHdPopupGoster(yuv, {
+      arge_kod: yerel.uv.arge_kod,
+      yapan_ad: yerel.uv.arge_yapan,
+      yeni_renk_adi: yerel.uv.arge_renk,
+      arge_durum: yerel.uv.arge_durum,
+      test_tipi: yerel.uv.arge_test_tipi,
+      kaynak_tipi: yerel.uv.arge_kaynak_tipi,
+    }, yerel.uv.kalemler || [], [], uvId, {
+      kaynak_tipi: yerel.uv.arge_kaynak_tipi || (yerel.uv.arge_kod ? null : 'FORMUL_YENI')
+    });
+    exUvSec(yerel.f.id, yerel.rv.rv_id, uvId);
+  }
+
+  fetch('/nexgen/api/recete/uv-arge-popup?uv_id=' + uvId)
+    .then(function(r){
+      var ct = (r.headers.get('content-type') || '').toLowerCase();
+      if (!ct.includes('json')) throw new Error('not json');
+      return r.json();
+    })
+    .then(function(d){
+      if (!d.ok) return;
+      var uv = _rmUvArgeBirlestir(d.uv || {}, d.arge);
+      _rmHdPopupGoster(uv, d.arge, d.formul_kalemler, d.test_kalemler, uvId, {
+        kaynak_tipi: d.kaynak_tipi,
+        renk_bilesenleri: d.renk_bilesenleri || []
+      });
+      var f = _FORMULLER.find(function(x){ return x.id === uv.formul_id; });
+      if (f) {
+        (f.rv_ozet||[]).forEach(function(rv) {
+          (rv.varyantlar||[]).forEach(function(v) {
+            if (v.uv_id === uvId) exUvSec(uv.formul_id, rv.rv_id, uvId);
+          });
+        });
+      }
+    })
+    .catch(function(){ /* yerel veri zaten gösterildi */ });
+}
+
+function rmHizliDurumKaydet(uvId, eskiDurum, yeniDurum, popupKapat) {
+  if (_RM_HIZLI_GECIS[eskiDurum] && _RM_HIZLI_GECIS[eskiDurum].indexOf(yeniDurum) === -1) {
+    rmHizliDurumMsg('Bu geçiş izinli değil.', false);
+    return;
+  }
+  fetch('/nexgen/api/recete/durum-guncelle', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ uv_id: uvId, yeni_durum: yeniDurum })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    if (d.ok) {
+      rmHizliDurumMsg(d.mesaj || 'Güncellendi.', true);
+      _rmUvDurumGuncelle(uvId, yeniDurum);
+      if (yeniDurum === 'ONAYLI' || yeniDurum === 'URETIME_ACIK') {
+        _rmOnaySonrasiAgacAc(uvId);
+      }
+      var sorgu = _exAramaAktif ? (document.getElementById('ex-arama')||{}).value||'' : '';
+      exAgacRender(sorgu);
+      rmHizliDurumRender();
+      if (_aktifUvId === uvId) rmRenderDetay();
+      if (popupKapat) rmHdPopupKapat();
+      if (yeniDurum === 'ONAYLI' || yeniDurum === 'URETIME_ACIK') _rmAgacUvScroll(uvId);
+    } else {
+      rmHizliDurumMsg(d.hata || 'Hata oluştu.', false);
+    }
+  })
+  .catch(function(){ rmHizliDurumMsg('Bağlantı hatası.', false); });
 }
 
 /* ════════════════════════════════════════════════
@@ -1799,7 +2864,7 @@ function rmGecmisRender(d) {
       html += '<div class="rm-gk-satir">' +
         '<div style="min-width:0;flex:1;overflow:hidden;">' +
           '<div class="rm-gk-cari" title="' + cariAd + '" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + cariAd + '</div>' +
-          (s.plan_tarihi ? '<div style="font-size:9px;color:#94a3b8;margin-top:1px;">' + s.plan_tarihi + '</div>' : '') +
+          (s.plan_tarihi ? '<div class="rm-gk-tarih">' + s.plan_tarihi + '</div>' : '') +
         '</div>' +
         '<span class="rm-gk-kg" style="flex-shrink:0;margin-left:6px;">' + (s.planlanan_kg||0).toLocaleString('tr-TR') + ' KG</span>' +
       '</div>';
@@ -1867,20 +2932,31 @@ function rmGecmisPopupBgClick(e) {
   if (e.target === document.getElementById('rm-gecmis-popup-bg')) rmGecmisPopupKapat();
 }
 
+function _ilkAktifRv(f) {
+  if (!f || !f.rv_ozet) return null;
+  return f.rv_ozet[0] || null;
+}
+
 /* Formül Başlığı seçimi */
 function exFormulSec(formulId) {
   _aktifFormulId = formulId;
   _aktifRvId     = null;
   _aktifUvId     = null;
+  _rmRfSeciliId  = null;
   _exUstAc(formulId, null);
-  /* Anında görsel — ağaç re-render yok, sadece CSS güncelle */
   _exSeciliGoster(formulId, null, null);
   exSonEkle('formul', formulId, null, null);
   var f = _FORMULLER.find(function(x){ return x.id===formulId; });
+  if (f && f.rv_ozet && f.rv_ozet.length) {
+    exRvSec(formulId, f.rv_ozet[0].rv_id);
+    return;
+  }
+  rmDetayBos();
   var bh = document.getElementById('rm-detay-hdr-ad');
-  if(bh && f) bh.textContent = f.ad;
-  rmRenkSecGoster(formulId);
+  if (bh && f) bh.textContent = f.ad;
   if (f) rmBreadcrumbGoster(f.ad, null, null);
+  rmRenkSecGoster(formulId);
+  rmHizliDurumRender();
 }
 
 /* Formül (RV) seçimi */
@@ -1889,20 +2965,22 @@ function exRvSec(formulId, rvId) {
   _aktifRvId     = rvId;
   _aktifUvId     = null;
   _exUstAc(formulId, rvId);
-  /* Anında görsel — ağaç re-render yok */
-  _exSeciliGoster(formulId, rvId, null);
   exSonEkle('rv', formulId, rvId, null);
   var f  = _FORMULLER.find(function(x){ return x.id===formulId; });
   var rv = f ? (f.rv_ozet||[]).find(function(r){ return r.rv_id===rvId; }) : null;
   var bh = document.getElementById('rm-detay-hdr-ad');
-  if(bh && f && rv) bh.textContent = f.ad + ' + ' + rv.ad;
+  if(bh && f && rv) bh.textContent = f.ad + ' + ' + _exRvKisaAd(f, rv);
   if (rv && rv.varyantlar && rv.varyantlar.length) {
-    rmRenkSecGoster(formulId);
     _aktifUvId = rv.varyantlar[0].uv_id;
+    _exSeciliGoster(formulId, rvId, _aktifUvId);
+    rmRenkSecGoster(formulId);
     rmRenderDetay();
   } else {
+    _exSeciliGoster(formulId, rvId, null);
     rmRenkSecGoster(formulId);
-    if (f && rv) rmBreadcrumbGoster(f.ad, rv.ad, null);
+    if (f && rv) rmBreadcrumbGoster(f.ad, _exRvKisaAd(f, rv), null);
+    rmDetayBos();
+    rmHizliDurumRender();
   }
 }
 

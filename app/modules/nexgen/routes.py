@@ -1381,15 +1381,46 @@ def recete_boya_bilgi():
                 pass
 
         if not rf_renk_id:
+            uv_ctx = con.execute("""
+                SELECT uv.id, rv.formul_id, rv.renk, rv.ad AS rv_ad
+                FROM nexgen_uretim_varyant uv
+                JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
+                WHERE uv.id = ?
+            """, (uv_id,)).fetchone()
+            if uv_ctx:
+                rv_key = (uv_ctx['renk'] or '').strip()
+                rf_rows = con.execute("""
+                    SELECT rf.id, rf.rf_kod, rf.ad, rf.aciklama, rf.aktif_rev_no,
+                           rf.durum, rfu.durum AS uygunluk_durum
+                    FROM nexgen_rf_renk rf
+                    JOIN nexgen_rf_formul_uygunluk rfu
+                      ON rfu.rf_renk_id = rf.id AND rfu.aktif = 1
+                    WHERE rfu.formul_id = ? AND rf.aktif = 1 AND rf.durum = 'ONAYLI'
+                    ORDER BY rf.rf_kod, rf.id
+                """, (uv_ctx['formul_id'],)).fetchall()
+                for rf in rf_rows:
+                    ident = _rf_ui_identity_parcala(rf['aciklama'])
+                    if rv_key and ident.get('rv') and ident['rv'] != rv_key:
+                        continue
+                    rf_renk_id = rf['id']
+                    rf_rev_no = rf['aktif_rev_no']
+                    kaynak = 'FORMUL_RF'
+                    break
+
+        if not rf_renk_id:
             return jsonify({'ok': True, 'kaynak': None, 'kalemler': [],
                             'rf_kod': None, 'rf_ad': None, 'rev_no': None,
-                            'neden': 'RF yok · Plan yok · Batch yok · Uygunluk yok'})
+                            'neden': 'RF bulunamadı'})
 
         # RF bilgisi
-        rf_row = con.execute(
-            "SELECT id, rf_kod, ad, aktif_rev_no FROM nexgen_rf_renk WHERE id=? AND aktif=1",
-            (rf_renk_id,)
-        ).fetchone()
+        rf_row = con.execute("""
+            SELECT rf.id, rf.rf_kod, rf.ad, rf.aciklama, rf.aktif_rev_no, rf.durum,
+                   (SELECT rfu.durum FROM nexgen_rf_formul_uygunluk rfu
+                    WHERE rfu.rf_renk_id = rf.id AND rfu.aktif = 1
+                    ORDER BY rfu.id DESC LIMIT 1) AS uygunluk_durum
+            FROM nexgen_rf_renk rf
+            WHERE rf.id = ? AND rf.aktif = 1
+        """, (rf_renk_id,)).fetchone()
         if not rf_row:
             return jsonify({'ok': True, 'kaynak': None, 'kalemler': [],
                             'rf_kod': None, 'rf_ad': None, 'rev_no': None,
@@ -1465,11 +1496,17 @@ def recete_boya_bilgi():
                 'miktar_kg': float(p.get('miktar_kg') or p.get('miktar') or 0),
             })
 
+        rf_ident = _rf_ui_identity_parcala(rf_row['aciklama'])
+
         return jsonify({
             'ok':       True,
             'kaynak':   kaynak,
             'rf_kod':   rf_row['rf_kod'],
             'rf_ad':    rf_row['ad'],
+            'renk_kodu': rf_ident.get('renk_kodu') or '',
+            'renk_adi': rf_row['ad'],
+            'rf_durum': rf_row['durum'],
+            'uygunluk_durum': rf_row['uygunluk_durum'],
             'rev_no':   gercek_rev_no,
             'rev_durum': rev_durum,
             'kalemler': kalemler,
@@ -1483,163 +1520,365 @@ def recete_boya_bilgi():
 
 # ─────────────────────────────────────────────────────────────
 
+# ─────────────────────────────────────────────────────────────
+# FAZ-FORMUL-TEMIZLIK-2B: Canonical UV + Arşiv/Geçmiş görünümü
+# ─────────────────────────────────────────────────────────────
+
+_RC_UV_GECERLI_DURUM = frozenset({'AKTIF', 'ONAYLI', 'URETIME_ACIK'})
+_RC_ARSIV_FORMUL_IDS = frozenset({4, 19, 20})
+_RC_LEGACY_TERLIK_UV = frozenset({
+    10019, 10020, 10021, 10022, 10023, 10024, 10025, 10026, 10032,
+})
+
+
+def _rc_test_kayit_mi(*metinler) -> bool:
+    for p in metinler:
+        if not p:
+            continue
+        u = str(p).upper()
+        if any(k in u for k in (
+            'TEST', 'FAZ1A', 'FAZ-', 'GATE', 'SETUP-TEMP', '_TEST_', 'GECICI', 'GEÇİCİ',
+        )):
+            return True
+    return False
+
+
+def _rc_canonical_uv_map(con) -> dict[tuple, int]:
+    """(renk_varyant_id, boyut) -> canonical uv_id (max rev_no, tie max id)."""
+    rows = con.execute("""
+        SELECT uv.id, uv.renk_varyant_id, uv.boyut, uv.rev_no
+        FROM nexgen_uretim_varyant uv
+        WHERE uv.aktif = 1
+        ORDER BY uv.renk_varyant_id, uv.boyut, uv.rev_no DESC, uv.id DESC
+    """).fetchall()
+    m: dict[tuple, int] = {}
+    for r in rows:
+        key = (r['renk_varyant_id'], r['boyut'] or '')
+        if key not in m:
+            m[key] = r['id']
+    return m
+
+
+def _rc_uv_kullanim(con, uv_id: int) -> tuple[int, int]:
+    p = con.execute(
+        "SELECT COUNT(*) n FROM nexgen_uretim_plan WHERE uretim_varyant_id=?",
+        (uv_id,),
+    ).fetchone()['n']
+    b = con.execute(
+        "SELECT COUNT(*) n FROM nexgen_uretim_batch WHERE uretim_varyant_id=?",
+        (uv_id,),
+    ).fetchone()['n']
+    return int(p), int(b)
+
+
+def _rc_uv_gorunum_sinifi(
+    con,
+    uv_row,
+    rv_row,
+    formul_row,
+    canon_map: dict[tuple, int],
+) -> str | None:
+    """guncel | gecmis | arsiv | None"""
+    uv = dict(uv_row)
+    rv = dict(rv_row)
+    f = dict(formul_row)
+    uv_id = uv['uv_id']
+    rv_id = rv['rv_id']
+    boyut = uv['boyut'] or ''
+    canon_id = canon_map.get((rv_id, boyut))
+    is_canon = uv_id == canon_id
+    durum = (uv.get('recete_durum') or 'TASLAK').upper()
+    plan_s, batch_s = _rc_uv_kullanim(con, uv_id)
+
+    if f['id'] in _RC_ARSIV_FORMUL_IDS or f.get('aktif', 1) != 1:
+        return 'arsiv'
+    if (f.get('durum') or '').upper() == 'TASLAK':
+        return 'arsiv'
+    if _rc_test_kayit_mi(rv.get('rv_ad'), f.get('kod'), f.get('ad')):
+        return 'arsiv'
+    if uv_id in _RC_LEGACY_TERLIK_UV:
+        return 'arsiv'
+    if rv.get('rv_aktif', 1) != 1 or uv.get('uv_aktif', 1) != 1:
+        return 'arsiv'
+
+    if is_canon and durum in _RC_UV_GECERLI_DURUM:
+        return 'guncel'
+
+    if not is_canon and (plan_s > 0 or batch_s > 0):
+        return 'gecmis'
+
+    if not is_canon:
+        return 'arsiv'
+
+    if durum not in _RC_UV_GECERLI_DURUM:
+        return 'arsiv'
+
+    return 'arsiv'
+
+
+def _rc_gecmis_neden(plan_s: int, batch_s: int, canon_id: int | None) -> str:
+    parcalar = []
+    if plan_s:
+        parcalar.append(f'{plan_s} plan')
+    if batch_s:
+        parcalar.append(f'{batch_s} batch')
+    neden = ', '.join(parcalar) + ' geçmişi korunuyor' if parcalar else 'Eski revizyon'
+    if canon_id:
+        neden += f' (güncel UV {canon_id})'
+    return neden
+
+
+def _rc_uv_kalem_maliyet(con, uv_id: int, toplam_kg: float) -> tuple[list, float]:
+    if toplam_kg <= 0:
+        return [], 0.0
+    uv_kalemler = con.execute("""
+        SELECT rk.miktar_kg, rk.stok_kart_id, rk.sira,
+               sk.kod AS stok_kod, sk.ad AS stok_ad, sk.kategori
+        FROM nexgen_recete_kalem rk
+        JOIN nexgen_stok_kart sk ON sk.id = rk.stok_kart_id
+        WHERE rk.uretim_varyant_id = ? AND rk.aktif = 1
+        ORDER BY rk.sira, rk.id
+    """, (uv_id,)).fetchall()
+    mal = 0.0
+    kalemler_liste = []
+    for k in uv_kalemler:
+        fr = con.execute("""
+            SELECT fiyat, para_birimi, kur, fiyat_try
+            FROM nexgen_hammadde_fiyat
+            WHERE stok_kart_id = ? AND aktif = 1
+            ORDER BY fiyat_tarihi DESC, id DESC LIMIT 1
+        """, (k['stok_kart_id'],)).fetchone()
+        bp = 0.0
+        if fr:
+            if fr['fiyat_try'] and fr['fiyat_try'] > 0:
+                bp = float(fr['fiyat_try'])
+            elif fr['para_birimi'] == 'TRY':
+                bp = float(fr['fiyat'] or 0)
+            elif fr['kur'] and fr['kur'] > 0:
+                bp = float(fr['fiyat'] or 0) * float(fr['kur'])
+        mal += float(k['miktar_kg']) * bp
+        kalemler_liste.append({
+            'stok_kod': k['stok_kod'],
+            'stok_ad': k['stok_ad'],
+            'kategori': k['kategori'] or '',
+            'miktar_kg': float(k['miktar_kg']),
+        })
+    kg_maliyet = round(mal / toplam_kg, 2) if toplam_kg > 0 else 0.0
+    return kalemler_liste, kg_maliyet
+
+
+def _rc_arge_kaynak_tipi(arge: dict | None, test_kalem_say: int = 0) -> str | None:
+    """Onay popup kaynak sınıfı."""
+    if not arge:
+        return None
+    tip = (arge.get('test_tipi') or '').upper()
+    durum = (arge.get('arge_durum') or '').upper()
+    has_deneme = test_kalem_say > 0 or arge.get('shore_degeri') not in (None, '', 0)
+    if tip == 'FORMUL_TEST':
+        return 'FORMUL_DENEME'
+    if tip in ('RENK_TEST', 'RENK_DENEMESI'):
+        if has_deneme or durum in ('TEST_EDILDI', 'ONAYA_GONDERILDI'):
+            return 'RENK_DENEME'
+        return 'RENK_CALISMA'
+    return 'ARGE_GENEL'
+
+
+def _rc_uv_son_arge(con, uv_id: int) -> dict | None:
+    """UV için son AR-GE test özeti (liste + popup)."""
+    try:
+        cols = [c[1] for c in con.execute("PRAGMA table_info(nexgen_arge_test)").fetchall()]
+    except Exception:
+        cols = []
+    kod_expr = "COALESCE(arge_kodu, test_no)" if 'arge_kodu' in cols else "test_no"
+    renk_json_sel = "t.renk_bilesenleri_json" if 'renk_bilesenleri_json' in cols else "NULL AS renk_bilesenleri_json"
+    row = con.execute(f"""
+        SELECT t.id AS test_id, {kod_expr} AS arge_kod, t.test_no, t.lot_no,
+               t.test_tipi, t.durum AS arge_durum, t.yeni_renk_adi,
+               t.shore_degeri, t.shore_hedef, t.test_batch_kg, t.kaynak_batch_kg,
+               t.genel_aciklama, t.sonuc_notu, t.notlar, t.talep_referansi,
+               {renk_json_sel},
+               t.olusturma_tarihi, t.onay_tarihi,
+               ku.KullaniciAdi AS yapan_ad,
+               on_ku.KullaniciAdi AS onaylayan_ad
+        FROM nexgen_arge_test t
+        LEFT JOIN sistem_kullanici ku ON ku.Id = t.olusturan_id
+        LEFT JOIN sistem_kullanici on_ku ON on_ku.Id = t.onaylayan_id
+        WHERE t.kaynak_uretim_varyant_id = ? AND t.aktif = 1
+        ORDER BY t.id DESC LIMIT 1
+    """, (uv_id,)).fetchone()
+    if not row:
+        return None
+    out = dict(row)
+    test_kalem_say = con.execute(
+        "SELECT COUNT(*) AS n FROM nexgen_arge_test_kalem WHERE test_id=?",
+        (out['test_id'],)
+    ).fetchone()['n'] or 0
+    out['test_kalem_say'] = test_kalem_say
+    out['kaynak_tipi'] = _rc_arge_kaynak_tipi(out, test_kalem_say)
+    return out
+
+
+def _rc_liste_veri_hazirla(con) -> tuple[list, list, list]:
+    """Güncel formül listesi, geçmiş düz liste, arşiv düz liste."""
+    canon_map = _rc_canonical_uv_map(con)
+    formuller_raw = con.execute("""
+        SELECT f.id, f.kod, f.ad, f.durum, f.onay_durumu, f.aktif,
+               f.olusturma_tarihi, f.notlar,
+               ku.KullaniciAdi AS olusturan_ad
+        FROM nexgen_formul f
+        LEFT JOIN sistem_kullanici ku ON ku.Id = f.olusturan_id
+        WHERE f.aktif = 1
+        ORDER BY f.id DESC
+    """).fetchall()
+
+    formuller_guncel: list[dict] = []
+    gecmis_kayitlari: list[dict] = []
+    arsiv_kayitlari: list[dict] = []
+
+    for f in formuller_raw:
+        f_dict = dict(f)
+        rv_rows = con.execute("""
+            SELECT rv.id AS rv_id, rv.ad AS rv_ad, rv.renk, rv.aktif AS rv_aktif,
+                   uv.id AS uv_id, uv.boyut, uv.rev_no, uv.kaynak_varyant_id,
+                   uv.recete_durum, uv.aktif AS uv_aktif,
+                   uv.onay_tarihi, ku.KullaniciAdi AS onaylayan_ad,
+                   COUNT(rk.id) AS kalem_say,
+                   COALESCE(SUM(rk.miktar_kg), 0) AS toplam_kg
+            FROM nexgen_renk_varyant rv
+            JOIN nexgen_uretim_varyant uv ON uv.renk_varyant_id = rv.id
+            LEFT JOIN nexgen_recete_kalem rk ON rk.uretim_varyant_id = uv.id AND rk.aktif = 1
+            LEFT JOIN sistem_kullanici ku ON ku.Id = uv.onaylayan_id
+            WHERE rv.formul_id = ?
+            GROUP BY uv.id
+            ORDER BY rv.id, uv.boyut, uv.rev_no, uv.id
+        """, (f_dict['id'],)).fetchall()
+
+        rv_gruplar_guncel: dict[int, dict] = {}
+        guncel_kalemler: list = []
+
+        for row in rv_rows:
+            sinif = _rc_uv_gorunum_sinifi(con, row, row, f_dict, canon_map)
+            if not sinif:
+                continue
+            boyut = row['boyut'] or ''
+            canon_id = canon_map.get((row['rv_id'], boyut))
+            plan_s, batch_s = _rc_uv_kullanim(con, row['uv_id'])
+            toplam_kg = round(float(row['toplam_kg'] or 0), 3)
+            uv_entry = {
+                'uv_id': row['uv_id'],
+                'boyut': boyut,
+                'rev_no': row['rev_no'],
+                'kaynak_varyant_id': row['kaynak_varyant_id'],
+                'recete_durum': row['recete_durum'] or 'TASLAK',
+                'onay_tarihi': row['onay_tarihi'],
+                'onaylayan_ad': row['onaylayan_ad'],
+                'kalem_say': row['kalem_say'] or 0,
+                'toplam_kg': toplam_kg,
+                'canonical_uv_id': canon_id,
+                'is_canonical': row['uv_id'] == canon_id,
+                'plan_say': plan_s,
+                'batch_say': batch_s,
+                'gorunum': sinif,
+            }
+            kl, km = _rc_uv_kalem_maliyet(con, row['uv_id'], toplam_kg)
+            uv_entry['kalemler'] = kl
+            uv_entry['kg_maliyet'] = km
+            arge = _rc_uv_son_arge(con, row['uv_id'])
+            if arge:
+                uv_entry['arge_kod'] = arge.get('arge_kod')
+                uv_entry['arge_durum'] = arge.get('arge_durum')
+                uv_entry['arge_yapan'] = arge.get('yapan_ad')
+                uv_entry['arge_renk'] = arge.get('yeni_renk_adi')
+                uv_entry['arge_test_id'] = arge.get('test_id')
+                uv_entry['arge_onaylayan'] = arge.get('onaylayan_ad')
+                uv_entry['arge_test_tipi'] = arge.get('test_tipi')
+                uv_entry['arge_kaynak_tipi'] = arge.get('kaynak_tipi')
+                uv_entry['arge_notlar'] = arge.get('notlar')
+                uv_entry['arge_talep'] = arge.get('talep_referansi')
+                uv_entry['arge_aciklama'] = arge.get('genel_aciklama')
+                uv_entry['arge_sonuc'] = arge.get('sonuc_notu')
+
+            flat = {
+                'formul_id': f_dict['id'],
+                'formul_kod': f_dict['kod'],
+                'formul_ad': f_dict['ad'],
+                'formul_durum': f_dict['durum'],
+                'rv_id': row['rv_id'],
+                'rv_ad': row['rv_ad'],
+                **uv_entry,
+            }
+
+            if sinif == 'guncel':
+                rv_id = row['rv_id']
+                if rv_id not in rv_gruplar_guncel:
+                    rv_gruplar_guncel[rv_id] = {
+                        'rv_id': rv_id,
+                        'ad': row['rv_ad'],
+                        'renk': row['renk'],
+                        'varyantlar': [],
+                    }
+                rv_gruplar_guncel[rv_id]['varyantlar'].append(uv_entry)
+                guncel_kalemler.extend(kl)
+            elif sinif == 'gecmis':
+                flat['neden'] = _rc_gecmis_neden(plan_s, batch_s, canon_id)
+                gecmis_kayitlari.append(flat)
+            else:
+                flat['neden'] = (
+                    'Test/legacy kayıt' if _rc_test_kayit_mi(row['rv_ad'], f_dict['kod'])
+                    else 'Arşiv / kullanılmayan'
+                )
+                arsiv_kayitlari.append(flat)
+
+        if not rv_gruplar_guncel:
+            continue
+        if f_dict['id'] in _RC_ARSIV_FORMUL_IDS:
+            continue
+        if (f_dict.get('durum') or '').upper() == 'TASLAK':
+            continue
+
+        f_out = dict(f_dict)
+        f_out['rv_ozet'] = list(rv_gruplar_guncel.values())
+        if guncel_kalemler:
+            f_out['liste_toplam_kg'] = round(
+                sum(k['miktar_kg'] for k in guncel_kalemler if k.get('kategori', '').upper() != 'BOYA'), 3
+            )
+        else:
+            f_out['liste_toplam_kg'] = 0.0
+        f_out['liste_kg_maliyet'] = 0.0
+
+        durumlar = [
+            (uv['recete_durum'] or 'TASLAK').upper()
+            for rv in f_out['rv_ozet']
+            for uv in rv['varyantlar']
+        ]
+        if 'URETIME_ACIK' in durumlar:
+            f_out['recete_durum_ozet'] = 'URETIME_ACIK'
+        elif 'ONAYLI' in durumlar:
+            f_out['recete_durum_ozet'] = 'ONAYLI'
+        elif 'AKTIF' in durumlar:
+            f_out['recete_durum_ozet'] = 'AKTIF'
+        else:
+            f_out['recete_durum_ozet'] = durumlar[0] if durumlar else None
+
+        renk_say = len(f_out['rv_ozet'])
+        uretim_say = sum(len(rv['varyantlar']) for rv in f_out['rv_ozet'])
+        kalem_say = sum(uv['kalem_say'] for rv in f_out['rv_ozet'] for uv in rv['varyantlar'])
+        f_out['renk_say'] = renk_say
+        f_out['uretim_say'] = uretim_say
+        f_out['kalem_say'] = kalem_say
+        formuller_guncel.append(f_out)
+
+    gecmis_kayitlari.sort(key=lambda x: (x['formul_kod'], x['rv_id'], x['rev_no'] or 0))
+    arsiv_kayitlari.sort(key=lambda x: (x['formul_kod'], x['rv_id'], x['uv_id']))
+    return formuller_guncel, gecmis_kayitlari, arsiv_kayitlari
+
+
 @nexgen_bp.route('/recete/')
 @yetki_gerekli('nexgen.recete.view', 'can_view')
 def recete_liste():
     con = _db()
     try:
-        formuller_raw = con.execute("""
-            SELECT
-                f.id, f.kod, f.ad, f.durum, f.onay_durumu,
-                f.olusturma_tarihi, f.notlar,
-                ku.KullaniciAdi AS olusturan_ad,
-                COUNT(DISTINCT rv.id)  AS renk_say,
-                COUNT(DISTINCT uv.id)  AS uretim_say,
-                COUNT(DISTINCT rk.id)  AS kalem_say
-            FROM nexgen_formul f
-            LEFT JOIN sistem_kullanici ku ON ku.Id = f.olusturan_id
-            LEFT JOIN nexgen_renk_varyant rv ON rv.formul_id = f.id AND rv.aktif = 1
-            LEFT JOIN nexgen_uretim_varyant uv ON uv.renk_varyant_id = rv.id AND uv.aktif = 1
-            LEFT JOIN nexgen_recete_kalem rk ON rk.uretim_varyant_id = uv.id AND rk.aktif = 1
-            WHERE f.aktif = 1
-            GROUP BY f.id
-            ORDER BY f.id DESC
-        """).fetchall()
-
-        # Her formül için toplam batch KG ve KG maliyet (ilk üretim varyantı bazında özet)
-        formuller = []
-        for f in formuller_raw:
-            f_dict = dict(f)
-            # Tüm aktif kalemler ve fiyatları
-            kalemler = con.execute("""
-                SELECT rk.miktar_kg, rk.stok_kart_id
-                FROM nexgen_recete_kalem rk
-                JOIN nexgen_uretim_varyant uv ON uv.id = rk.uretim_varyant_id
-                JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
-                WHERE rv.formul_id = ? AND rv.aktif = 1
-                  AND uv.aktif = 1 AND rk.aktif = 1
-            """, (f_dict['id'],)).fetchall()
-
-            if kalemler:
-                toplam_kg = round(sum(k['miktar_kg'] for k in kalemler), 3)
-                toplam_maliyet = 0.0
-                for k in kalemler:
-                    fiyat_row = con.execute("""
-                        SELECT fiyat, para_birimi, kur, fiyat_try
-                        FROM nexgen_hammadde_fiyat
-                        WHERE stok_kart_id = ? AND aktif = 1
-                        ORDER BY fiyat_tarihi DESC, id DESC LIMIT 1
-                    """, (k['stok_kart_id'],)).fetchone()
-                    if fiyat_row:
-                        if fiyat_row['fiyat_try'] and fiyat_row['fiyat_try'] > 0:
-                            birim_fiyat = float(fiyat_row['fiyat_try'])
-                        elif fiyat_row['para_birimi'] == 'TRY':
-                            birim_fiyat = float(fiyat_row['fiyat'] or 0)
-                        elif fiyat_row['kur'] and fiyat_row['kur'] > 0:
-                            birim_fiyat = float(fiyat_row['fiyat'] or 0) * float(fiyat_row['kur'])
-                        else:
-                            birim_fiyat = float(fiyat_row['fiyat'] or 0)
-                        toplam_maliyet += float(k['miktar_kg']) * birim_fiyat
-                f_dict['liste_toplam_kg']  = toplam_kg
-                f_dict['liste_kg_maliyet'] = round(toplam_maliyet / toplam_kg, 2) if toplam_kg > 0 else 0.0
-            else:
-                f_dict['liste_toplam_kg']  = 0.0
-                f_dict['liste_kg_maliyet'] = 0.0
-
-            # recete_durum özeti: üretime açık varyant var mı?
-            durum_rows = con.execute("""
-                SELECT uv.recete_durum
-                FROM nexgen_uretim_varyant uv
-                JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
-                WHERE rv.formul_id = ? AND rv.aktif = 1 AND uv.aktif = 1
-            """, (f_dict['id'],)).fetchall()
-            durumlar = [r['recete_durum'] or 'TASLAK' for r in durum_rows]
-            if 'URETIME_ACIK' in durumlar:
-                f_dict['recete_durum_ozet'] = 'URETIME_ACIK'
-            elif 'ONAYLI' in durumlar:
-                f_dict['recete_durum_ozet'] = 'ONAYLI'
-            elif 'DENEME' in durumlar:
-                f_dict['recete_durum_ozet'] = 'DENEME'
-            elif durumlar:
-                f_dict['recete_durum_ozet'] = 'TASLAK'
-            else:
-                f_dict['recete_durum_ozet'] = None
-
-            formuller.append(f_dict)
-
-        # Her formül için renk/varyant özet listesi (liste kartı için)
-        for f_dict in formuller:
-            rv_ozet = con.execute("""
-                SELECT rv.id AS rv_id, rv.ad AS rv_ad, rv.renk,
-                       uv.id AS uv_id, uv.boyut, uv.recete_durum,
-                       COUNT(rk.id) AS kalem_say,
-                       SUM(rk.miktar_kg) AS toplam_kg
-                FROM nexgen_renk_varyant rv
-                JOIN nexgen_uretim_varyant uv ON uv.renk_varyant_id = rv.id AND uv.aktif = 1
-                LEFT JOIN nexgen_recete_kalem rk ON rk.uretim_varyant_id = uv.id AND rk.aktif = 1
-                WHERE rv.formul_id = ? AND rv.aktif = 1
-                GROUP BY uv.id
-                ORDER BY rv.id, uv.id
-            """, (f_dict['id'],)).fetchall()
-
-            # Renk bazında grupla
-            rv_gruplar = {}
-            for row in rv_ozet:
-                rv_id = row['rv_id']
-                if rv_id not in rv_gruplar:
-                    rv_gruplar[rv_id] = {'rv_id': rv_id, 'ad': row['rv_ad'], 'renk': row['renk'], 'varyantlar': []}
-                rv_gruplar[rv_id]['varyantlar'].append({
-                    'uv_id':        row['uv_id'],
-                    'boyut':        row['boyut'],
-                    'recete_durum': row['recete_durum'] or 'TASLAK',
-                    'kalem_say':    row['kalem_say'] or 0,
-                    'toplam_kg':    round(float(row['toplam_kg'] or 0), 3),
-                })
-            f_dict['rv_ozet'] = list(rv_gruplar.values())
-
-            # Her varyant için KG maliyet + kalem listesi ekle
-            for rv_g in f_dict['rv_ozet']:
-                for uv in rv_g['varyantlar']:
-                    if uv['toplam_kg'] > 0:
-                        uv_kalemler = con.execute("""
-                            SELECT rk.miktar_kg, rk.stok_kart_id, rk.sira,
-                                   sk.kod AS stok_kod, sk.ad AS stok_ad, sk.kategori
-                            FROM nexgen_recete_kalem rk
-                            JOIN nexgen_stok_kart sk ON sk.id = rk.stok_kart_id
-                            WHERE rk.uretim_varyant_id = ? AND rk.aktif = 1
-                            ORDER BY rk.sira, rk.id
-                        """, (uv['uv_id'],)).fetchall()
-                        mal = 0.0
-                        kalemler_liste = []
-                        for k in uv_kalemler:
-                            fr = con.execute("""
-                                SELECT fiyat, para_birimi, kur, fiyat_try
-                                FROM nexgen_hammadde_fiyat
-                                WHERE stok_kart_id = ? AND aktif = 1
-                                ORDER BY fiyat_tarihi DESC, id DESC LIMIT 1
-                            """, (k['stok_kart_id'],)).fetchone()
-                            if fr:
-                                if fr['fiyat_try'] and fr['fiyat_try'] > 0:
-                                    bp = float(fr['fiyat_try'])
-                                elif fr['para_birimi'] == 'TRY':
-                                    bp = float(fr['fiyat'] or 0)
-                                elif fr['kur'] and fr['kur'] > 0:
-                                    bp = float(fr['fiyat'] or 0) * float(fr['kur'])
-                                else:
-                                    bp = 0.0
-                                mal += float(k['miktar_kg']) * bp
-                            kalemler_liste.append({
-                                'stok_kod': k['stok_kod'],
-                                'stok_ad':  k['stok_ad'],
-                                'kategori': k['kategori'] or '',
-                                'miktar_kg': float(k['miktar_kg']),
-                            })
-                        uv['kg_maliyet'] = round(mal / uv['toplam_kg'], 2) if uv['toplam_kg'] > 0 else 0.0
-                        uv['kalemler']   = kalemler_liste
-                    else:
-                        uv['kg_maliyet'] = 0.0
-                        uv['kalemler']   = []
-
+        formuller, _, _ = _rc_liste_veri_hazirla(con)
     finally:
         con.close()
 
@@ -1678,6 +1917,7 @@ def recete_liste():
 @nexgen_bp.route('/recete/<int:formul_id>')
 @yetki_gerekli('nexgen.recete.view', 'can_view')
 def recete_detay(formul_id):
+    agac_gecmis: list[dict] = []
     con = _db()
     try:
         formul = con.execute("""
@@ -1778,6 +2018,43 @@ def recete_detay(formul_id):
                 'uretim_listesi': uretim_listesi,
             })
 
+        canon_map = _rc_canonical_uv_map(con)
+        f_row = dict(formul)
+        agac_guncel: list[dict] = []
+        agac_gecmis: list[dict] = []
+        for rv in agac:
+            guncel_uvs: list[dict] = []
+            gecmis_uvs: list[dict] = []
+            for uv in rv['uretim_listesi']:
+                mock_row = {
+                    'uv_id': uv['id'],
+                    'boyut': uv.get('boyut'),
+                    'rev_no': uv.get('rev_no'),
+                    'recete_durum': uv.get('recete_durum'),
+                    'uv_aktif': 1,
+                    'kaynak_varyant_id': uv.get('kaynak_varyant_id'),
+                    'rv_id': rv['id'],
+                    'rv_ad': rv.get('ad'),
+                    'rv_aktif': 1,
+                }
+                sinif = _rc_uv_gorunum_sinifi(con, mock_row, mock_row, f_row, canon_map)
+                plan_s, batch_s = _rc_uv_kullanim(con, uv['id'])
+                cuv = canon_map.get((rv['id'], uv.get('boyut') or ''))
+                uv['plan_say'] = plan_s
+                uv['batch_say'] = batch_s
+                uv['is_canonical'] = uv['id'] == cuv
+                uv['canonical_uv_id'] = cuv
+                if sinif == 'guncel':
+                    guncel_uvs.append(uv)
+                elif sinif == 'gecmis':
+                    uv['gecmis_neden'] = _rc_gecmis_neden(plan_s, batch_s, cuv)
+                    gecmis_uvs.append(uv)
+            if guncel_uvs:
+                agac_guncel.append({**rv, 'uretim_listesi': guncel_uvs})
+            if gecmis_uvs:
+                agac_gecmis.append({**rv, 'uretim_listesi': gecmis_uvs})
+        agac = agac_guncel
+
         # FAZ-4F: her varyant için recycle izinleri (con kapanmadan önce)
         for rv in agac:
             for uv in rv['uretim_listesi']:
@@ -1809,6 +2086,7 @@ def recete_detay(formul_id):
         active='nexgen',
         formul=dict(formul),
         agac=agac,
+        agac_gecmis=agac_gecmis,
         can_create=can_create,
         can_approve=can_approve,
         can_manage=can_manage,
@@ -5748,6 +6026,195 @@ def api_arge_gecmis(uv_id):
     finally:
         con.close()
     return jsonify([dict(r) for r in rows])
+
+
+@nexgen_bp.route('/api/recete/uv-arge-popup', methods=['GET'])
+@yetki_gerekli('nexgen.recete.view', 'can_view')
+def api_recete_uv_arge_popup():
+    """Sol panel AR-GE popup — deneme özeti + formül kalemleri."""
+    uv_id = request.args.get('uv_id', type=int)
+    if not uv_id:
+        return jsonify({"ok": False, "hata": "uv_id zorunlu"}), 400
+    con = _db()
+    try:
+        uv = con.execute("""
+            SELECT uv.id, uv.boyut, uv.recete_durum, uv.rev_no, uv.ad AS uv_ad,
+                   rv.id AS rv_id, rv.ad AS rv_ad, rv.renk,
+                   f.id AS formul_id, f.ad AS formul_ad, f.kod AS formul_kod,
+                   on_ku.KullaniciAdi AS uv_onaylayan_ad, uv.onay_tarihi AS uv_onay_tarihi
+            FROM nexgen_uretim_varyant uv
+            JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
+            JOIN nexgen_formul f ON f.id = rv.formul_id
+            LEFT JOIN sistem_kullanici on_ku ON on_ku.Id = uv.onaylayan_id
+            WHERE uv.id = ?
+        """, (uv_id,)).fetchone()
+        if not uv:
+            return jsonify({"ok": False, "hata": "UV bulunamadı"}), 404
+        arge = _rc_uv_son_arge(con, uv_id)
+        test_kalemler = []
+        renk_bilesenleri = []
+        if arge and arge.get('test_id'):
+            test_kalemler = [dict(k) for k in con.execute("""
+                SELECT sk.kod AS stok_kod, sk.ad AS stok_ad, sk.kategori,
+                       tk.test_miktar_kg, tk.orjinal_miktar_kg
+                FROM nexgen_arge_test_kalem tk
+                JOIN nexgen_stok_kart sk ON sk.id = tk.stok_kart_id
+                WHERE tk.test_id = ?
+                ORDER BY tk.sira LIMIT 15
+            """, (arge['test_id'],)).fetchall()]
+            rbj = arge.get('renk_bilesenleri_json')
+            if rbj:
+                try:
+                    import json as _json
+                    renk_bilesenleri = _json.loads(rbj) if isinstance(rbj, str) else (rbj or [])
+                except Exception:
+                    renk_bilesenleri = []
+        kaynak_tipi = arge.get('kaynak_tipi') if arge else None
+        if not kaynak_tipi:
+            d = (dict(uv).get('recete_durum') or 'TASLAK').upper()
+            if d in ('TASLAK', 'DENEME'):
+                kaynak_tipi = 'FORMUL_YENI'
+        formul_kalemler = [dict(k) for k in con.execute("""
+            SELECT sk.kod AS stok_kod, sk.ad AS stok_ad, sk.kategori, rk.miktar_kg
+            FROM nexgen_recete_kalem rk
+            JOIN nexgen_stok_kart sk ON sk.id = rk.stok_kart_id
+            WHERE rk.uretim_varyant_id = ? AND rk.aktif = 1
+            ORDER BY rk.sira LIMIT 30
+        """, (uv_id,)).fetchall()]
+    finally:
+        con.close()
+    return jsonify({
+        "ok": True,
+        "uv": dict(uv),
+        "arge": arge,
+        "kaynak_tipi": kaynak_tipi,
+        "test_kalemler": test_kalemler,
+        "formul_kalemler": formul_kalemler,
+        "renk_bilesenleri": renk_bilesenleri,
+    })
+
+
+_ARGE_ONAY_BEKLEYEN = frozenset({'TASLAK', 'TEST_EDILDI', 'ONAYA_GONDERILDI', 'DENEME'})
+
+
+@nexgen_bp.route('/api/recete/uv-arge-onayla', methods=['POST'])
+@yetki_gerekli('nexgen.recete.approve', 'can_approve')
+def api_recete_uv_arge_onayla():
+    """AR-GE deneme sonucunu Reçete Merkezi'nden onayla — isim/renk düzeltilebilir."""
+    data = request.get_json(silent=True) or {}
+    uv_id = data.get('uv_id')
+    test_id = data.get('test_id')
+    rv_ad = (data.get('rv_ad') or '').strip() or None
+    renk = (data.get('renk') or '').strip() or None
+    onay_notu = (data.get('onay_notu') or '').strip() or None
+    deneme_yapilmadi = bool(data.get('deneme_yapilmadi'))
+    if deneme_yapilmadi:
+        ek = 'Renk çalışıldı — deneme yapılmadan onaylandı.'
+        onay_notu = (onay_notu + ' ' + ek).strip() if onay_notu else ek
+    hedef_durum = (data.get('hedef_durum') or 'URETIME_ACIK').strip().upper()
+    if hedef_durum not in ('ONAYLI', 'URETIME_ACIK'):
+        hedef_durum = 'URETIME_ACIK'
+
+    if not uv_id:
+        return jsonify({"ok": False, "hata": "uv_id zorunlu"}), 400
+
+    kullanici_id = _kullanici_id()
+    con = _db()
+    try:
+        uv = con.execute("""
+            SELECT uv.id, uv.boyut, uv.recete_durum, uv.renk_varyant_id, uv.ad AS uv_ad,
+                   rv.id AS rv_id, rv.ad AS rv_ad, rv.renk,
+                   f.ad AS formul_ad
+            FROM nexgen_uretim_varyant uv
+            JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
+            JOIN nexgen_formul f ON f.id = rv.formul_id
+            WHERE uv.id = ? AND uv.aktif = 1
+        """, (uv_id,)).fetchone()
+        if not uv:
+            return jsonify({"ok": False, "hata": "UV bulunamadı"}), 404
+
+        if test_id:
+            test = con.execute(
+                "SELECT * FROM nexgen_arge_test WHERE id=? AND aktif=1",
+                (test_id,)
+            ).fetchone()
+        else:
+            test = con.execute(
+                "SELECT * FROM nexgen_arge_test WHERE kaynak_uretim_varyant_id=? AND aktif=1 "
+                "ORDER BY id DESC LIMIT 1",
+                (uv_id,)
+            ).fetchone()
+        if not test:
+            return jsonify({"ok": False, "hata": "AR-GE test kaydı bulunamadı"}), 404
+
+        test_durum = (test['durum'] or 'TASLAK').upper()
+        if test_durum == 'ONAYLANDI':
+            return jsonify({"ok": False, "hata": "Bu deneme zaten onaylanmış"}), 400
+        if test_durum == 'REDDEDILDI':
+            return jsonify({"ok": False, "hata": "Reddedilmiş deneme tekrar onaylanamaz"}), 400
+
+        if rv_ad and rv_ad != uv['rv_ad']:
+            con.execute("UPDATE nexgen_renk_varyant SET ad=? WHERE id=?", (rv_ad, uv['rv_id']))
+        if renk and renk != (uv['renk'] or ''):
+            con.execute("UPDATE nexgen_renk_varyant SET renk=? WHERE id=?", (renk, uv['rv_id']))
+
+        try:
+            cols = [c[1] for c in con.execute("PRAGMA table_info(nexgen_arge_test)").fetchall()]
+        except Exception:
+            cols = []
+        if renk and 'yeni_renk_adi' in cols:
+            con.execute(
+                "UPDATE nexgen_arge_test SET yeni_renk_adi=? WHERE id=?",
+                (renk, test['id'])
+            )
+
+        con.execute("""
+            UPDATE nexgen_arge_test
+            SET durum='ONAYLANDI', onaylayan_id=?, onay_tarihi=datetime('now'), onay_notu=?
+            WHERE id=?
+        """, (kullanici_id, onay_notu, test['id']))
+
+        if hedef_durum == 'URETIME_ACIK':
+            cakisan = con.execute("""
+                SELECT uv2.id FROM nexgen_uretim_varyant uv2
+                WHERE uv2.renk_varyant_id=? AND uv2.boyut=?
+                  AND uv2.recete_durum='URETIME_ACIK' AND uv2.aktif=1 AND uv2.id!=?
+            """, (uv['renk_varyant_id'], uv['boyut'], uv_id)).fetchone()
+            if cakisan:
+                hedef_durum = 'ONAYLI'
+
+        con.execute("""
+            UPDATE nexgen_uretim_varyant
+            SET recete_durum=?, onay_durumu='ONAYLANDI',
+                onaylayan_id=?, onay_tarihi=datetime('now')
+            WHERE id=?
+        """, (hedef_durum, kullanici_id, uv_id))
+
+        onaylayan = con.execute(
+            "SELECT KullaniciAdi FROM sistem_kullanici WHERE Id=?",
+            (kullanici_id,)
+        ).fetchone()
+        kod_expr = "COALESCE(arge_kodu, test_no)" if 'arge_kodu' in cols else "test_no"
+        arge_kod_row = con.execute(
+            f"SELECT {kod_expr} AS kod FROM nexgen_arge_test WHERE id=?",
+            (test['id'],)
+        ).fetchone()
+        con.commit()
+    except Exception as e:
+        con.rollback()
+        return jsonify({"ok": False, "hata": str(e)}), 500
+    finally:
+        con.close()
+
+    return jsonify({
+        "ok": True,
+        "uv_id": uv_id,
+        "test_id": test['id'],
+        "arge_kod": arge_kod_row['kod'] if arge_kod_row else None,
+        "yeni_durum": hedef_durum,
+        "onaylayan_ad": onaylayan['KullaniciAdi'] if onaylayan else None,
+        "mesaj": "AR-GE denemesi onaylandı ve üretim reçetesine aktarıldı.",
+    })
 
 # ═════════════════════════════════════════════════════════════
 # FAZ-4C-4: ARGE TESTTEN ÜRETİM REÇETESİNE AKTARIM
