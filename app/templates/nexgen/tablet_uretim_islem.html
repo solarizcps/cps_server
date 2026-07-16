@@ -97,9 +97,16 @@
 
       {# Sipariş No #}
       <div class="sol-sip-blok">
-        <div class="sol-etiket">SİPARİŞ NO</div>
-        <div class="sol-sip-no">{{ batch.siparis_no or batch.batch_kodu }}</div>
+        <div class="sol-etiket">{% if batch.uretim_kodu %}ÜRETİM KODU{% else %}SİPARİŞ NO{% endif %}</div>
+        <div class="sol-sip-no">{% if batch.uretim_kodu %}{{ batch.uretim_kodu }}{% else %}{{ batch.siparis_no or batch.batch_kodu }}{% endif %}</div>
+        {% if batch.uretim_kodu %}
+        <div class="sol-tarih">
+          {% if batch.ana_formul_kodu %}{{ batch.ana_formul_kodu }}{% endif %}
+          {% if batch.renk_kodu and batch.renk_ad %} · {{ batch.renk_kodu }} {{ batch.renk_ad }}{% elif batch.renk_ad %} · {{ batch.renk_ad }}{% endif %}
+        </div>
+        {% else %}
         <div class="sol-tarih">{{ batch.plan_tarihi[:10] if batch.plan_tarihi else '—' }}</div>
+        {% endif %}
       </div>
 
       {# Cari #}

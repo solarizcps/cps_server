@@ -21,9 +21,12 @@
     {% for i in isler %}
     <div class="tui-is-kart tui-is-{{ i.batch_durum|lower }}">
       <div class="tui-is-ust">
-        <strong>{{ i.emir_no }}</strong>
+        <strong>{% if i.uretim_kodu_goster %}{{ i.uretim_kodu_goster }}{% else %}{{ i.emir_no }}{% endif %}</strong>
         <span class="tui-is-rozet">{{ i.durum_etiket }}</span>
       </div>
+      {% if i.uretim_kodu_alt %}
+      <div class="tui-is-alt">{{ i.uretim_kodu_alt }}</div>
+      {% endif %}
       <div class="tui-is-satir"><span>Cari</span><b>{{ i.cari_goster }}</b></div>
       <div class="tui-is-satir"><span>Formül</span><b>{{ i.formul_goster }}</b></div>
       <div class="tui-is-satir"><span>Renk</span><b>{{ i.renk_ad or '—' }}</b></div>
@@ -54,6 +57,7 @@
 .tui-is-devam { border-left: 4px solid #0ea5e9; }
 .tui-is-bekleme { border-left: 4px solid #f59e0b; }
 .tui-is-ust { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.tui-is-alt { font-size: 11px; color: #64748b; line-height: 1.35; margin: -4px 0 8px; white-space: pre-line; }
 .tui-is-rozet { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: #f1f5f9; color: #334155; }
 .tui-is-satir { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; padding: 3px 0; }
 .tui-is-satir span { color: #64748b; }

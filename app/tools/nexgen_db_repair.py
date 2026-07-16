@@ -836,6 +836,11 @@ def mig076_rf(cur, con, log):
         if _alter_add(cur, con, 'nexgen_rf_kullanim', 'tablet_kayit_id', 'INTEGER'):
             pass
 
+    # FAZ-MRP-00A: pigment_ad kolonu — routes.py bu kolonu bekliyor (try/except korumalı)
+    if _tablo_var(cur, 'nexgen_rf_kalem'):
+        if _alter_add(cur, con, 'nexgen_rf_kalem', 'pigment_ad', 'TEXT'):
+            log.append(f"{tag} nexgen_rf_kalem.pigment_ad eklendi")
+
     log.append(f"{tag} {'OLUŞTURULDU: '+', '.join(created) if created else 'OK'}")
 
 
@@ -941,28 +946,36 @@ def mig080(cur, con, log):
 def mig081(cur, con, log):
     tag = "[081]"
     try:
+        cur.execute("DROP VIEW IF EXISTS v_nexgen_siparis_uretim_kontrol")
         cur.execute("""
             CREATE VIEW IF NOT EXISTS v_nexgen_siparis_uretim_kontrol AS
             SELECT
-                np.id,
-                np.plan_kodu,
-                np.siparis_no,
-                np.musteri_adi,
-                np.planlanan_kg,
-                np.durum,
-                np.plan_tarihi,
-                uv.boyut,
-                f.kod  AS formul_kod,
-                f.ad   AS formul_ad
+                np.id AS siparis_id,
+                ROUND(np.planlanan_kg, 3) AS siparis_toplam_kg,
+                COALESCE((
+                    SELECT ROUND(SUM(p.hedef_kg), 3)
+                    FROM nexgen_uretim_parca p
+                    JOIN nexgen_uretim_batch b ON b.batch_kodu = p.batch_kodu
+                    WHERE b.plan_id = np.id
+                ), 0) AS planlanan_kg,
+                COALESCE((
+                    SELECT ROUND(SUM(k.miktar_kg), 3)
+                    FROM nexgen_rf_kullanim k
+                    WHERE k.aktif = 1 AND k.siparis_id = np.id
+                ), 0) AS uretilen_kg,
+                ROUND(
+                    np.planlanan_kg - COALESCE((
+                        SELECT SUM(k.miktar_kg)
+                        FROM nexgen_rf_kullanim k
+                        WHERE k.aktif = 1 AND k.siparis_id = np.id
+                    ), 0),
+                3) AS fark_kg
             FROM nexgen_uretim_plan np
-            JOIN nexgen_uretim_varyant uv ON uv.id = np.uretim_varyant_id
-            JOIN nexgen_renk_varyant   rv ON rv.id = uv.renk_varyant_id
-            JOIN nexgen_formul          f ON  f.id = rv.formul_id
         """)
         con.commit()
         cur.execute("INSERT OR IGNORE INTO schema_migrations(version) VALUES('081')")
         con.commit()
-        log.append(f"{tag} OK view v_nexgen_siparis_uretim_kontrol")
+        log.append(f"{tag} OK view v_nexgen_siparis_uretim_kontrol (KG kontrol)")
     except Exception as e:
         log.append(f"{tag} WARN view: {e}")
 
@@ -1289,7 +1302,7 @@ TABLO_MAP = [
      'MODÜL-01/02'),
     ('nexgen_rf_renk',            ['id','rf_kod','ad','aktif'],
      'MODÜL-01/02, RF Seçimi'),
-    ('nexgen_rf_kalem',           ['id','rf_renk_id','stok_kart_id','miktar_kg'],
+    ('nexgen_rf_kalem',           ['id','rf_renk_id','stok_kart_id','miktar_kg','pigment_ad'],
      'MODÜL-01, RF Hesaplama'),
     ('nexgen_rf_formul_uygunluk', ['id','rf_renk_id','formul_id'],
      'MODÜL-01, RF Seçim Filtresi'),
@@ -1549,6 +1562,45 @@ def mig094(cur, con, log):
 
 
 
+def mig095_boya_audit(cur, con, log):
+    """FAZ-MRP-00A — BOYA audit: recete_kalem'deki BOYA kategorili aktif kalemleri pasife al.
+    Bu kalemleri routes.py zaten hesaplamadan dışlıyor; pasifleştirme şema tutarlılığını sağlar.
+    Stok hareketlerine dokunulmaz.
+    """
+    tag = "[095-BOYA]"
+
+    # Güvenlik: stok_hareket sayısı değişmemeli
+    sh_once = cur.execute("SELECT COUNT(*) FROM nexgen_stok_hareket").fetchone()[0]
+
+    # BOYA kategorili aktif recete_kalem
+    boya_aktif = cur.execute("""
+        SELECT rk.id, rk.uretim_varyant_id, sk.kod, sk.ad
+        FROM nexgen_recete_kalem rk
+        JOIN nexgen_stok_kart sk ON sk.id = rk.stok_kart_id
+        WHERE UPPER(COALESCE(sk.kategori, '')) = 'BOYA' AND rk.aktif = 1
+    """).fetchall()
+
+    if boya_aktif:
+        ids = [r['id'] for r in boya_aktif]
+        cur.executemany(
+            "UPDATE nexgen_recete_kalem SET aktif=0 WHERE id=?",
+            [(i,) for i in ids]
+        )
+        con.commit()
+        log.append(f"{tag} {len(ids)} BOYA recete_kalem pasife alındı: ids={ids}")
+    else:
+        log.append(f"{tag} Aktif BOYA recete_kalem yok — işlem gerekmedi")
+
+    # Güvenlik kontrol
+    sh_sonra = cur.execute("SELECT COUNT(*) FROM nexgen_stok_hareket").fetchone()[0]
+    if sh_once != sh_sonra:
+        raise RuntimeError(f"stok_hareket count değişti! {sh_once} → {sh_sonra}")
+
+    cur.execute("INSERT OR IGNORE INTO schema_migrations(version) VALUES(95)")
+    con.commit()
+    log.append(f"{tag} schema_migrations version=95 kayıt edildi")
+
+
 def main():
     ts = datetime.now().strftime('%Y%m%d_%H%M')
     log = []
@@ -1607,6 +1659,7 @@ def main():
         ("MIG 092 — nexgen_arge_etiket (MODÜL-05)",   lambda: mig092(cur, con, log)),
         ("MIG 093 — nexgen_print_job (Print Agent)",  lambda: mig093(cur, con, log)),
         ("MIG 094 — print_token (Android Bridge)",     lambda: mig094(cur, con, log)),
+        ("MIG 095 — BOYA audit + RF kalem şema uyumu", lambda: mig095_boya_audit(cur, con, log)),
     ]
 
     for aciklama, fn in steps:
