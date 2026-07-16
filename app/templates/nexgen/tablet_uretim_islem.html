@@ -823,18 +823,18 @@ async function kaydetCik() {
 /* Durum'a göre butonları render et */
 var GECISLER = {
   'HAZIR':   [
-    { yeni: 'DEVAM',  etiket: '▶ Üretime Başla', cls: 'tui-islem-basla' }
+    { yeni: 'DEVAM',  etiket: 'BAŞLA', cls: 'tui-islem-basla' }
   ],
   'DEVAM':   [
-    { yeni: 'BEKLEME', etiket: '⏸ Beklemede',    cls: 'tui-islem-bekle' },
-    { yeni: 'BITTI',   etiket: '✓ Üretim Bitti', cls: 'tui-islem-bitti' }
+    { yeni: 'BEKLEME', etiket: 'BEKLET',    cls: 'tui-islem-bekle' },
+    { yeni: 'BITTI',   etiket: 'BİTİR', cls: 'tui-islem-bitti' }
   ],
   'BEKLEME': [
-    { yeni: 'DEVAM',   etiket: '▶ Devam Ettir',  cls: 'tui-islem-basla' }
+    { yeni: 'DEVAM',   etiket: 'DEVAM ET',  cls: 'tui-islem-basla' }
   ],
   'BITTI':   [],
   'TASLAK':  [
-    { yeni: 'DEVAM',  etiket: '▶ Üretime Başla', cls: 'tui-islem-basla' }
+    { yeni: 'DEVAM',  etiket: 'BAŞLA', cls: 'tui-islem-basla' }
   ],
 };
 
@@ -901,7 +901,14 @@ async function durumGuncelle(yeniDurum) {
       rozet.className = 'tui-durum tui-d-' + j.durum.toLowerCase();
       islemGridRender(j.durum);
       adimGuncelle(j.durum);
-      toastGoster(j.durum + ' olarak güncellendi.');
+      if (j.durum === 'BITTI') {
+        toastGoster('Üretim tamamlandı. İş listesine dönülüyor…');
+        setTimeout(function() {
+          window.location.href = '/nexgen/tablet/uretim-isleri';
+        }, 1200);
+      } else {
+        toastGoster(j.durum + ' olarak güncellendi.');
+      }
     } else {
       hataEl.textContent = j.hata || 'Hata oluştu.';
       hataEl.style.display = 'block';

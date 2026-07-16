@@ -14513,6 +14513,97 @@ def api_pazarlama_talep_iptal(talep_id):
 
 _UEM_TABLET_MARKER = '__UEM_TABLET__'
 _UEM_BEKLET_MARKER = '__UEM_BEKLET__'
+_TUA_AKTIF_BATCH_DURUMLAR = ('HAZIR', 'DEVAM', 'BEKLEME')
+
+
+def _tua_tablet_marker_var(notlar):
+    return _UEM_TABLET_MARKER in (notlar or '')
+
+
+def _tua_tablet_marker_satir(kullanici_id=None, kullanici_ad=None):
+    from datetime import datetime as _dt
+    uid = kullanici_id or _kullanici_id() or 0
+    kad = (kullanici_ad or '').strip() or f'uid:{uid}'
+    return f"{_UEM_TABLET_MARKER}|{_dt.now().strftime('%Y-%m-%d %H:%M')}|{kad}"
+
+
+def _tua_plan_durum_sync(con, plan_id, batch_durum):
+    """Tablet batch durumuna göre plan durumunu günceller (tek plan)."""
+    if not plan_id:
+        return
+    if batch_durum == 'DEVAM':
+        con.execute(
+            "UPDATE nexgen_uretim_plan SET durum='URETIMDE' "
+            "WHERE id=? AND durum IN ('PLANLANDI','URETIMDE','BASLADI')",
+            (plan_id,),
+        )
+    elif batch_durum == 'BEKLEME':
+        con.execute(
+            "UPDATE nexgen_uretim_plan SET durum='URETIMDE' "
+            "WHERE id=? AND durum IN ('PLANLANDI','URETIMDE','BASLADI')",
+            (plan_id,),
+        )
+    elif batch_durum == 'BITTI':
+        con.execute(
+            "UPDATE nexgen_uretim_plan SET durum='BITTI' "
+            "WHERE id=? AND durum IN ('BASLADI','URETIMDE')",
+            (plan_id,),
+        )
+
+
+def _tua_batch_bitir_kontrol(con, batch_kodu, mevcut_durum):
+    """Bitir öncesi doğrulama — batch seviyesi Başla/Devam zorunlu."""
+    if mevcut_durum == 'BEKLEME':
+        return False, 'Beklemedeki iş bitirilemez. Önce DEVAM ET ile sürdürün.'
+    if mevcut_durum != 'DEVAM':
+        return False, 'Önce üretimi başlatın (BAŞLA).'
+    return True, None
+
+
+def _tua_tablet_is_liste_sorgu(con):
+    """ÜEM'den tablete gönderilmiş aktif batch listesi."""
+    _cols = [c['name'] for c in con.execute(
+        "PRAGMA table_info(nexgen_uretim_batch)"
+    ).fetchall()]
+    if 'plan_id' not in _cols:
+        return []
+    cari_select, cari_join = _plan_cari_select_sql(con)
+    termin_sel = "np.termin_tarihi," if _plan_termin_kolonu_var(con) else "NULL AS termin_tarihi,"
+    rows = con.execute(f"""
+        SELECT nb.id, nb.batch_kodu, nb.planlanan_kg, nb.durum AS batch_durum,
+               nb.notlar, nb.olusturma_tarihi,
+               np.id AS plan_id, np.plan_kodu, np.siparis_no, np.durum AS plan_durum,
+               {termin_sel} np.oncelik_sira, np.plan_tarihi,
+               {cari_select},
+               uv.boyut, rv.ad AS renk_ad,
+               f.ad AS formul_ad, f.kod AS formul_kod
+        FROM nexgen_uretim_batch nb
+        JOIN nexgen_uretim_plan np ON np.id = nb.plan_id
+        JOIN nexgen_uretim_varyant uv ON uv.id = nb.uretim_varyant_id
+        JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
+        JOIN nexgen_formul f ON f.id = rv.formul_id
+        {cari_join}
+        WHERE COALESCE(nb.notlar, '') LIKE ?
+          AND nb.durum IN ('HAZIR','DEVAM','BEKLEME')
+        ORDER BY np.oncelik_sira ASC, nb.id DESC
+        LIMIT 100
+    """, (f'%{_UEM_TABLET_MARKER}%',)).fetchall()
+    liste = []
+    for r in rows:
+        d = dict(r)
+        fkod = (d.get('formul_kod') or '').strip()
+        fad = (d.get('formul_ad') or '').strip()
+        d['formul_goster'] = (f'{fkod} - {fad}') if fkod and fkod not in fad else (fad or fkod or '—')
+        d['emir_no'] = d.get('plan_kodu') or d.get('siparis_no') or d.get('batch_kodu')
+        d['cari_goster'] = d.get('musteri_adi') or '—'
+        d['termin_goster'] = d.get('termin_tarihi') or d.get('plan_tarihi') or '—'
+        d['oncelik_goster'] = d.get('oncelik_sira') if d.get('oncelik_sira') is not None else 10
+        bd = d.get('batch_durum') or 'HAZIR'
+        d['durum_etiket'] = {
+            'HAZIR': 'Hazır', 'DEVAM': 'Üretimde', 'BEKLEME': 'Beklemede',
+        }.get(bd, bd)
+        liste.append(d)
+    return liste
 
 
 def _uem_emir_liste_sorgu(con):
@@ -14606,6 +14697,8 @@ def _uem_emir_dict(con, row):
     if durum == 'URETIMDE' and bk:
         if bd == 'BEKLEME':
             d['durum_etiket'] = 'Bekletildi'
+        elif bd == 'DEVAM':
+            d['durum_etiket'] = 'Üretimde'
         elif d.get('tablet_gonderildi'):
             d['durum_etiket'] = 'Tablette'
         else:
@@ -14723,6 +14816,11 @@ def api_uem_tablet_gonder(plan_id):
         ).fetchone()
         if not batch:
             return jsonify({'ok': False, 'hata': 'Önce batch oluşturun.'}), 400
+        if batch['durum'] in ('BITTI', 'IPTAL'):
+            return jsonify({
+                'ok': False,
+                'hata': f'Tamamlanan veya iptal batch tablete gönderilemez (durum: {batch["durum"]}).',
+            }), 400
         if _UEM_TABLET_MARKER in (batch['notlar'] or ''):
             return jsonify({
                 'ok': False,
@@ -14730,7 +14828,12 @@ def api_uem_tablet_gonder(plan_id):
                 'batch_kodu': batch['batch_kodu'],
                 'tablet_url': f'/nexgen/tablet/uretim-islem/{batch["batch_kodu"]}',
             }), 400
-        yeni_not = ((batch['notlar'] or '').strip() + f'\n{_UEM_TABLET_MARKER}').strip()
+        kullanici = session.get('kullanici') or {}
+        marker_satir = _tua_tablet_marker_satir(
+            kullanici_id=kullanici.get('Id'),
+            kullanici_ad=kullanici.get('KullaniciAdi'),
+        )
+        yeni_not = ((batch['notlar'] or '').strip() + f'\n{marker_satir}').strip()
         con.execute(
             "UPDATE nexgen_uretim_batch SET notlar=? WHERE batch_kodu=?",
             (yeni_not, batch['batch_kodu']),
@@ -14786,6 +14889,38 @@ def api_uem_beklet(plan_id):
     except Exception as e:
         con.rollback()
         return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+# ═════════════════════════════════════════════════════════════
+# TABLET ÜRETİM AKIŞI V1 — ÜEM → tablet iş listesi → operatör
+# ═════════════════════════════════════════════════════════════
+
+@nexgen_bp.route('/tablet/uretim-isleri')
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def tablet_uretim_isleri():
+    """ÜEM'den tablete gönderilmiş üretim iş listesi."""
+    con = _db()
+    try:
+        isler = _tua_tablet_is_liste_sorgu(con)
+    finally:
+        con.close()
+    return render_template(
+        'nexgen/tablet_uretim_isleri.html',
+        active='nexgen',
+        isler=isler,
+        can_uretim=yetki_var('nexgen.tablet.uretim', 'can_uretim'),
+    )
+
+
+@nexgen_bp.route('/api/tablet/is-listesi')
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def api_tablet_is_listesi():
+    """Tablet iş listesi JSON."""
+    con = _db()
+    try:
+        return jsonify({'ok': True, 'liste': _tua_tablet_is_liste_sorgu(con)})
     finally:
         con.close()
 
@@ -15689,9 +15824,10 @@ def api_batch_durum_guncelle(batch_kodu):
 
     GECERLI_DURUMLAR = {'HAZIR', 'DEVAM', 'BEKLEME', 'BITTI'}
     GECISLER = {
-        'HAZIR':   {'DEVAM', 'BITTI'},
+        'HAZIR':   {'DEVAM'},
         'DEVAM':   {'BEKLEME', 'BITTI'},
         'BEKLEME': {'DEVAM'},
+        'BITTI':   set(),
     }
 
     if yeni_durum not in GECERLI_DURUMLAR:
@@ -15700,13 +15836,18 @@ def api_batch_durum_guncelle(batch_kodu):
     con = _db()
     try:
         batch = con.execute(
-            "SELECT batch_kodu, durum, plan_id FROM nexgen_uretim_batch WHERE batch_kodu=?",
+            "SELECT batch_kodu, durum, plan_id, notlar FROM nexgen_uretim_batch WHERE batch_kodu=?",
             (batch_kodu,)
         ).fetchone()
         if not batch:
             return jsonify({'ok': False, 'hata': 'Batch bulunamadı'}), 404
 
         mevcut = batch['durum']
+        if mevcut == yeni_durum:
+            return jsonify({
+                'ok': False,
+                'hata': f'Batch zaten {mevcut} durumunda.',
+            }), 400
         izin = GECISLER.get(mevcut, set())
         if yeni_durum not in izin:
             return jsonify({
@@ -15714,10 +15855,17 @@ def api_batch_durum_guncelle(batch_kodu):
                 'hata': f'{mevcut} → {yeni_durum} geçişi geçersiz'
             }), 400
 
+        if yeni_durum == 'BITTI':
+            uygun, b_hata = _tua_batch_bitir_kontrol(con, batch_kodu, mevcut)
+            if not uygun:
+                return jsonify({'ok': False, 'hata': b_hata}), 400
+
+        mevcut_notlar = batch['notlar'] or ''
         if notlar:
+            yeni_notlar = (mevcut_notlar.strip() + '\n' + notlar.strip()).strip()
             con.execute(
                 "UPDATE nexgen_uretim_batch SET durum=?, notlar=? WHERE batch_kodu=?",
-                (yeni_durum, notlar, batch_kodu)
+                (yeni_durum, yeni_notlar, batch_kodu)
             )
         else:
             con.execute(
@@ -15725,14 +15873,7 @@ def api_batch_durum_guncelle(batch_kodu):
                 (yeni_durum, batch_kodu)
             )
 
-        # FAZ-MRP-03: Üretim bitti → bağlı planı BITTI yap
-        # BASLADI (standart) ve URETIMDE (legacy/geç kapama) her ikisi desteklenir
-        if yeni_durum == 'BITTI' and batch['plan_id']:
-            con.execute(
-                "UPDATE nexgen_uretim_plan SET durum='BITTI' "
-                "WHERE id=? AND durum IN ('BASLADI','URETIMDE')",
-                (batch['plan_id'],)
-            )
+        _tua_plan_durum_sync(con, batch['plan_id'], yeni_durum)
 
         if yeni_durum == 'DEVAM':
             _rf_kullanim_tablet_sync(con, batch_kodu)
@@ -15740,7 +15881,12 @@ def api_batch_durum_guncelle(batch_kodu):
             _rf_kullanim_tablet_sync(con, batch_kodu, tamamlandi=True)
 
         con.commit()
-        return jsonify({'ok': True, 'durum': yeni_durum, 'batch_kodu': batch_kodu})
+        return jsonify({
+            'ok': True,
+            'durum': yeni_durum,
+            'batch_kodu': batch_kodu,
+            'plan_id': batch['plan_id'],
+        })
     except Exception as e:
         con.rollback()
         return jsonify({'ok': False, 'hata': str(e)}), 500

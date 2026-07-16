@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% set page_title = "Üretim İşleri — NexGen Tablet" %}
+{% block content %}
+<div class="tui-liste-sayfa">
+  <div class="tui-liste-topbar">
+    <a href="/nexgen/tablet" class="tui-liste-geri">‹</a>
+    <div>
+      <div class="tui-liste-kucuk">NEXGEN TABLET</div>
+      <div class="tui-liste-buyuk">ÜRETİM İŞLERİ</div>
+    </div>
+    <span class="tui-liste-sayi">{{ isler|length }}</span>
+  </div>
+
+  {% if not isler %}
+  <div class="tui-liste-bos">
+    <div>Tablete gönderilmiş aktif iş yok.</div>
+    <a href="/nexgen/uretim-emirleri" class="tui-liste-link">Üretim Emirleri Merkezi</a>
+  </div>
+  {% else %}
+  <div class="tui-liste-grid">
+    {% for i in isler %}
+    <div class="tui-is-kart tui-is-{{ i.batch_durum|lower }}">
+      <div class="tui-is-ust">
+        <strong>{{ i.emir_no }}</strong>
+        <span class="tui-is-rozet">{{ i.durum_etiket }}</span>
+      </div>
+      <div class="tui-is-satir"><span>Cari</span><b>{{ i.cari_goster }}</b></div>
+      <div class="tui-is-satir"><span>Formül</span><b>{{ i.formul_goster }}</b></div>
+      <div class="tui-is-satir"><span>Renk</span><b>{{ i.renk_ad or '—' }}</b></div>
+      <div class="tui-is-satir"><span>Boyut</span><b>{{ i.boyut or '—' }}</b></div>
+      <div class="tui-is-satir"><span>KG</span><b>{{ '%.3f'|format(i.planlanan_kg or 0) }}</b></div>
+      <div class="tui-is-satir"><span>Öncelik</span><b>{{ i.oncelik_goster }}</b></div>
+      <div class="tui-is-satir"><span>Termin</span><b>{{ i.termin_goster }}</b></div>
+      <a href="/nexgen/tablet/uretim-islem/{{ i.batch_kodu }}" class="tui-is-btn">
+        {% if i.batch_durum == 'HAZIR' %}BAŞLA{% elif i.batch_durum == 'BEKLEME' %}DEVAM ET{% else %}İŞLEME GİR{% endif %}
+      </a>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+<style>
+.tui-liste-sayfa { max-width: 1100px; margin: 0 auto; padding: 12px 14px 28px; }
+.tui-liste-topbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.tui-liste-geri { font-size: 28px; text-decoration: none; color: #334155; line-height: 1; padding: 4px 8px; }
+.tui-liste-kucuk { font-size: 11px; color: #64748b; letter-spacing: .06em; }
+.tui-liste-buyuk { font-size: 20px; font-weight: 700; color: #0f172a; }
+.tui-liste-sayi { margin-left: auto; background: #0ea5e9; color: #fff; border-radius: 999px; padding: 4px 10px; font-weight: 700; }
+.tui-liste-bos { text-align: center; padding: 48px 16px; color: #64748b; }
+.tui-liste-link { display: inline-block; margin-top: 12px; color: #0284c7; }
+.tui-liste-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.tui-is-kart { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; box-shadow: 0 1px 3px rgba(15,23,42,.06); }
+.tui-is-hazir { border-left: 4px solid #22c55e; }
+.tui-is-devam { border-left: 4px solid #0ea5e9; }
+.tui-is-bekleme { border-left: 4px solid #f59e0b; }
+.tui-is-ust { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.tui-is-rozet { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: #f1f5f9; color: #334155; }
+.tui-is-satir { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; padding: 3px 0; }
+.tui-is-satir span { color: #64748b; }
+.tui-is-satir b { text-align: right; font-weight: 600; color: #0f172a; }
+.tui-is-btn { display: block; margin-top: 12px; text-align: center; text-decoration: none; font-size: 16px; font-weight: 800; letter-spacing: .04em; padding: 14px 12px; border-radius: 10px; background: #16a34a; color: #fff; min-height: 48px; line-height: 1.2; }
+.tui-is-devam .tui-is-btn { background: #0284c7; }
+.tui-is-bekleme .tui-is-btn { background: #d97706; }
+</style>
+{% endblock %}
