@@ -33,6 +33,32 @@
     {% endfor %}
   {% endfor %}
 
+  {# ── P3.1: EKSİK TASLAK uyarı bandı ────────────────────────── #}
+  {% if formul.durum == 'TASLAK' and eksik_liste %}
+  <div style="background:#fef3c7;border:1.5px solid #f59e0b;border-radius:8px;
+              padding:10px 16px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start;">
+    <span style="font-size:18px;line-height:1;">⚠</span>
+    <div>
+      <div style="font-weight:700;font-size:12px;color:#92400e;text-transform:uppercase;
+                  letter-spacing:.4px;margin-bottom:4px;">EKSİK TASLAK</div>
+      <div style="font-size:11px;color:#78350f;line-height:1.6;">
+        Bu formül henüz tamamlanmamış. Aşağıdaki eksikler giderilmeden
+        <strong>Onaya Gönderilemez</strong> ve <strong>AR-GE testi başlatılamaz</strong>.
+      </div>
+      <ul style="margin:6px 0 0 14px;padding:0;font-size:11px;color:#78350f;line-height:1.8;">
+        {% for e in eksik_liste %}<li>{{ e }}</li>{% endfor %}
+      </ul>
+    </div>
+  </div>
+  {% elif formul.durum == 'TASLAK' and taslak_tam %}
+  <div style="background:#f0fdf4;border:1.5px solid #22c55e;border-radius:8px;
+              padding:8px 16px;margin-bottom:10px;font-size:11px;color:#166534;
+              display:flex;align-items:center;gap:8px;">
+    <span>✓</span>
+    <span>Taslak tamamlanmış görünüyor. Onaya göndermek için Durum &amp; Onay sekmesini kullanın.</span>
+  </div>
+  {% endif %}
+
   <div class="rd-ozet-band">
     <div class="rd-ozet-sol">
       <div class="rd-ozet-formul-kod">{{ formul.kod }}</div>
@@ -85,6 +111,17 @@
         <polyline points="14 2 14 8 20 8"/>
       </svg>
       Reçete Ağacı
+    </button>
+    <button class="rd-sekme-btn" data-sekme="rfboya" onclick="rcSekme('rfboya')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+        <circle cx="13.5" cy="6.5" r="2.5"/>
+        <circle cx="17.5" cy="10.5" r="2.5"/>
+        <circle cx="8.5" cy="7.5" r="2.5"/>
+        <circle cx="6.5" cy="12.5" r="2.5"/>
+        <path d="M12 22c4-4 6-7 6-10a6 6 0 0 0-12 0c0 3 2 6 6 10z"/>
+      </svg>
+      RF / BOYA REÇETELERİ
     </button>
     <button class="rd-sekme-btn" data-sekme="genel" onclick="rcSekme('genel')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -322,6 +359,65 @@
   </div>
 
   {# ═══════════════════════════════════════════════════════════ #}
+  {# SEKME — RF / BOYA REÇETELERİ (FAZ-RF-UI-1, read-only)      #}
+  {# ═══════════════════════════════════════════════════════════ #}
+  <div id="rc-sekme-rfboya" class="rd-sekme-icerik" style="display:none">
+
+    <div class="rfb-ust-bant">
+      <div class="rfb-baslik">RF / Boya Reçeteleri</div>
+      <div class="rfb-aciklama">
+        Pigment ve boya katmanı — ana reçeteden ayrı. Bu ekranda yalnızca görüntüleme.
+      </div>
+    </div>
+
+    <div class="rfb-filtre-bar">
+      <div class="rfb-filtre-grup">
+        <label for="rfb-f-durum">Durum</label>
+        <select id="rfb-f-durum" onchange="rfbListeYukle()">
+          <option value="">Tümü</option>
+          <option value="TASLAK">TASLAK</option>
+          <option value="ONAYLI">ONAYLI</option>
+        </select>
+      </div>
+      <div class="rfb-filtre-grup">
+        <label for="rfb-f-cari">Cari</label>
+        <select id="rfb-f-cari" onchange="rfbListeYukle()">
+          <option value="">Tümü</option>
+        </select>
+      </div>
+      <div class="rfb-filtre-grup">
+        <label for="rfb-f-rv">RV</label>
+        <select id="rfb-f-rv" onchange="rfbListeYukle()">
+          <option value="">Tümü</option>
+        </select>
+      </div>
+      <div class="rfb-filtre-grup rfb-filtre-arama">
+        <label for="rfb-f-ara">Renk ara</label>
+        <input type="search" id="rfb-f-ara" placeholder="Kod veya ad…"
+               oninput="rfbListeYukleDebounced()">
+      </div>
+      <div class="rfb-filtre-sayac" id="rfb-liste-sayac">—</div>
+    </div>
+
+    <div class="rfb-layout">
+      <div class="rfb-liste-wrap">
+        <div id="rfb-liste-yukleniyor" class="rfb-durum-mesaj">Yükleniyor…</div>
+        <div id="rfb-liste-bos" class="rfb-durum-mesaj" style="display:none">
+          Bu formül için RF kaydı bulunamadı.
+        </div>
+        <div id="rfb-liste" class="rfb-liste"></div>
+      </div>
+      <div class="rfb-detay-wrap">
+        <div id="rfb-detay-bos" class="rfb-durum-mesaj">
+          Detay görmek için listeden bir RF seçin.
+        </div>
+        <div id="rfb-detay" class="rfb-detay" style="display:none"></div>
+      </div>
+    </div>
+
+  </div>
+
+  {# ═══════════════════════════════════════════════════════════ #}
   {# SEKME 2 — GENEL BİLGİ                                       #}
   {# ═══════════════════════════════════════════════════════════ #}
   <div id="rc-sekme-genel" class="rd-sekme-icerik" style="display:none">
@@ -443,15 +539,38 @@
 
           {% if can_manage %}
           <div class="rd-durum-degistir">
+            {# FAZ-RECETE-REVIZYON-01B: İzin matrisi — sadece geçerli seçenekler gösterilir #}
+            {% if d in ('URETIME_ACIK', 'ONAYLI') %}
+            <div class="rd-durum-kilit-uyari">
+              <span style="font-size:11px;color:#92400e;background:#fef3c7;border:1px solid #fcd34d;padding:4px 10px;border-radius:6px;display:inline-block">
+                Kilitli — Değişiklik için yeni revizyon açın
+              </span>
+              {# Yalnızca PASIF seçeneği gösterilir #}
+              <select class="ngrc-durum-sel" id="durum-sel-{{ uv.id }}" style="margin-left:8px">
+                <option value="PASIF" {% if d == 'PASIF' %}selected{% endif %}>Pasife Al</option>
+              </select>
+              <button class="ngsk-btn-sil" style="font-size:12px;padding:6px 14px"
+                      onclick="rcDurumKaydet({{ uv.id }}, '{{ d }}')">Pasife Al</button>
+            </div>
+            {% elif d == 'PASIF' %}
             <select class="ngrc-durum-sel" id="durum-sel-{{ uv.id }}">
-              {% for adim_d in ['TASLAK','DENEME','ONAYLI','URETIME_ACIK','PASIF'] %}
+              <option value="PASIF" selected>PASIF</option>
+              <option value="TASLAK">TASLAK</option>
+            </select>
+            <button class="ngsk-btn-yeni" style="font-size:12px;padding:6px 14px"
+                    onclick="rcDurumKaydet({{ uv.id }}, '{{ d }}')">Kaydet</button>
+            {% else %}
+            {# TASLAK veya DENEME — tüm izinli seçenekler #}
+            <select class="ngrc-durum-sel" id="durum-sel-{{ uv.id }}">
+              {% for adim_d in ['TASLAK','DENEME','ONAYLI','PASIF'] %}
               <option value="{{ adim_d }}" {% if d == adim_d %}selected{% endif %}>
                 {{ adim_d.replace('_',' ') }}
               </option>
               {% endfor %}
             </select>
             <button class="ngsk-btn-yeni" style="font-size:12px;padding:6px 14px"
-                    onclick="rcDurumKaydet({{ uv.id }})">Kaydet</button>
+                    onclick="rcDurumKaydet({{ uv.id }}, '{{ d }}')">Kaydet</button>
+            {% endif %}
           </div>
           {% endif %}
         </div>
@@ -1407,11 +1526,88 @@ const RC_CAN_MANAGE = {{ 'true' if can_manage else 'false' }};
   font-size:13px; font-weight:700; cursor:pointer; transition:all .12s;
 }
 .rd-arge-test-btn:hover { background:#fde68a; }
+
+/* ── FAZ-RF-UI-1: RF / Boya Reçeteleri ─────────────────────── */
+.rfb-ust-bant { margin-bottom:14px; }
+.rfb-baslik { font-size:15px; font-weight:700; color:#111827; margin-bottom:4px; }
+.rfb-aciklama { font-size:12px; color:#6b7280; line-height:1.5; }
+.rfb-filtre-bar {
+  display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;
+  padding:12px 14px; background:#f9fafb; border:1px solid #e5e7eb;
+  border-radius:10px; margin-bottom:14px;
+}
+.rfb-filtre-grup { display:flex; flex-direction:column; gap:3px; min-width:110px; }
+.rfb-filtre-grup label { font-size:10px; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:.3px; }
+.rfb-filtre-grup select, .rfb-filtre-grup input {
+  padding:6px 10px; border:1px solid #d1d5db; border-radius:6px;
+  font-size:13px; background:#fff;
+}
+.rfb-filtre-arama { flex:1; min-width:160px; }
+.rfb-filtre-sayac {
+  margin-left:auto; font-size:12px; font-weight:700; color:#374151;
+  padding:6px 10px; background:#fff; border:1px solid #e5e7eb; border-radius:6px;
+}
+.rfb-layout {
+  display:grid; grid-template-columns:minmax(280px, 1fr) minmax(320px, 1.2fr);
+  gap:14px; align-items:start;
+}
+@media(max-width:900px){ .rfb-layout { grid-template-columns:1fr; } }
+.rfb-liste-wrap, .rfb-detay-wrap {
+  border:1px solid #e5e7eb; border-radius:10px; background:#fafafa;
+  min-height:200px; overflow:hidden;
+}
+.rfb-liste { max-height:520px; overflow-y:auto; }
+.rfb-kart {
+  padding:12px 14px; border-bottom:1px solid #f3f4f6; cursor:pointer;
+  transition:background .12s;
+}
+.rfb-kart:hover { background:#f0f9ff; }
+.rfb-kart.aktif { background:#e0f2fe; border-left:3px solid #0ea5e9; }
+.rfb-kart-ust { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:6px; }
+.rfb-kart-kod { font-family:'Courier New',monospace; font-size:12px; font-weight:700; color:#0891b2; }
+.rfb-kart-ad { font-size:14px; font-weight:700; color:#111827; }
+.rfb-kart-meta { display:flex; flex-wrap:wrap; gap:6px 12px; font-size:11px; color:#6b7280; }
+.rfb-kart-meta strong { color:#374151; }
+.rfb-rozet {
+  display:inline-block; padding:2px 8px; border-radius:6px;
+  font-size:10px; font-weight:700; border:1px solid transparent; white-space:nowrap;
+}
+.rfb-rozet-taslak { background:#fef3c7; color:#92400e; border-color:#fde68a; }
+.rfb-rozet-onayli { background:#d1fae5; color:#059669; border-color:#a7f3d0; }
+.rfb-rozet-aktif { background:#dbeafe; color:#1d4ed8; border-color:#bfdbfe; }
+.rfb-rozet-diger { background:#f1f5f9; color:#475569; border-color:#e2e8f0; }
+.rfb-durum-mesaj { padding:24px 16px; text-align:center; font-size:13px; color:#9ca3af; }
+.rfb-detay { padding:16px; }
+.rfb-detay-hdr { margin-bottom:12px; padding-bottom:10px; border-bottom:1px solid #e5e7eb; }
+.rfb-detay-baslik { font-size:16px; font-weight:800; color:#111827; }
+.rfb-detay-alt { font-size:12px; color:#6b7280; margin-top:4px; }
+.rfb-detay-kpi {
+  display:flex; flex-wrap:wrap; gap:8px; margin:12px 0;
+}
+.rfb-detay-kpi span {
+  font-size:11px; background:#fff; border:1px solid #e5e7eb;
+  padding:4px 10px; border-radius:6px; color:#374151;
+}
+.rfb-detay-kpi strong { color:#111827; }
+.rfb-detay-tablo { width:100%; border-collapse:collapse; font-size:12px; margin-top:8px; }
+.rfb-detay-tablo th {
+  text-align:left; padding:6px 8px; background:#f9fafb; color:#6b7280;
+  font-size:10px; text-transform:uppercase; border-bottom:1px solid #e5e7eb;
+}
+.rfb-detay-tablo td { padding:7px 8px; border-bottom:1px solid #f3f4f6; vertical-align:middle; }
+.rfb-detay-tablo tr:last-child td { border-bottom:none; }
+.rfb-kat-mb { background:#fae8ff; color:#7e22ce; padding:1px 5px; border-radius:4px; font-size:10px; font-weight:600; }
+.rfb-kat-boya { background:#fce7f3; color:#be185d; padding:1px 5px; border-radius:4px; font-size:10px; font-weight:600; }
+.rfb-fp-kutu {
+  margin-top:10px; padding:8px 10px; background:#f8fafc; border:1px dashed #cbd5e1;
+  border-radius:6px; font-size:10px; font-family:monospace; color:#475569;
+  word-break:break-all; line-height:1.4;
+}
 </style>
 
 <script>
 // ── Sekme geçişi ──────────────────────────────────────────────
-const RC_SEKMELER = ['recete', 'genel', 'hesap', 'durum', 'klon', 'recycle', 'arge'];
+const RC_SEKMELER = ['recete', 'rfboya', 'genel', 'hesap', 'durum', 'klon', 'recycle', 'arge'];
 function rcSekme(hedef) {
   RC_SEKMELER.forEach(function(s) {
     const el = document.getElementById('rc-sekme-' + s);
@@ -1421,6 +1617,7 @@ function rcSekme(hedef) {
     btn.classList.toggle('aktif', btn.dataset.sekme === hedef);
   });
   try { history.replaceState(null, '', '#' + hedef); } catch(e){}
+  if (hedef === 'rfboya') rfbSekmeAc();
 }
 (function(){
   const hash = (location.hash||'#recete').replace('#','');
@@ -1555,10 +1752,37 @@ function hsHesapla() {
 // FAZ-4C-2: DURUM YÖNETİMİ
 // ══════════════════════════════════════════════════════════════
 
-function rcDurumKaydet(uvId) {
+// FAZ-RECETE-REVIZYON-01B: İzinli geçiş matrisi (UI tarafı)
+var _RC_GECIS_MATRISI = {
+  'TASLAK':       ['DENEME', 'ONAYLI', 'PASIF'],
+  'DENEME':       ['TASLAK', 'ONAYLI', 'PASIF'],
+  'ONAYLI':       ['PASIF'],
+  'URETIME_ACIK': ['PASIF'],
+  'PASIF':        ['TASLAK'],
+};
+
+function rcDurumKaydet(uvId, eskiDurum) {
   const sel = document.getElementById('durum-sel-' + uvId);
   const yeniDurum = sel ? sel.value : '';
   if (!yeniDurum) return;
+
+  // UI tarafı izin kontrolü — arka uç da kontrol eder, bu sadece UX
+  if (eskiDurum && _RC_GECIS_MATRISI[eskiDurum]) {
+    if (_RC_GECIS_MATRISI[eskiDurum].indexOf(yeniDurum) === -1 && eskiDurum !== yeniDurum) {
+      var mesajEl = document.getElementById('durum-mesaj');
+      if (mesajEl) {
+        mesajEl.textContent = eskiDurum === yeniDurum
+          ? 'Zaten bu durumda.'
+          : 'Onaylı veya üretime açık reçete doğrudan düzenlenemez. Değişiklik için yeni revizyon açın.';
+        mesajEl.style.display = 'block';
+        mesajEl.style.background = '#fee2e2';
+        mesajEl.style.color = '#dc2626';
+        mesajEl.style.borderColor = '#fecaca';
+        setTimeout(function(){ mesajEl.style.display = 'none'; }, 5000);
+      }
+      return;
+    }
+  }
 
   fetch('/nexgen/api/recete/durum-guncelle', {
     method: 'POST',
@@ -1567,14 +1791,12 @@ function rcDurumKaydet(uvId) {
   })
   .then(function(r) { return r.json(); })
   .then(function(d) {
-    const mesajEl = document.getElementById('durum-mesaj');
-    const rozetEl = document.getElementById('durum-rozet-' + uvId);
+    var mesajEl = document.getElementById('durum-mesaj');
+    var rozetEl = document.getElementById('durum-rozet-' + uvId);
     if (d.ok) {
-      // Rozeti güncelle
       if (rozetEl) {
-        const snf = ['taslak','deneme','onayli','uretime-acik','pasif'];
-        rozetEl.className = 'ngrc-rd-rozet ngrc-rd-' + yeniDurum.toLowerCase().replace('_','-');
-        rozetEl.textContent = yeniDurum.replace('_',' ');
+        rozetEl.className = 'ngrc-rd-rozet ngrc-rd-' + yeniDurum.toLowerCase().replace(/_/g, '-');
+        rozetEl.textContent = yeniDurum.replace(/_/g, ' ');
       }
       if (mesajEl) {
         mesajEl.textContent = d.mesaj;
@@ -1584,6 +1806,8 @@ function rcDurumKaydet(uvId) {
         mesajEl.style.borderColor = '#a7f3d0';
         setTimeout(function(){ mesajEl.style.display = 'none'; }, 3000);
       }
+      // Sayfa yenile — durum kartı render'ı güncel kalsın
+      setTimeout(function(){ window.location.reload(); }, 1200);
     } else {
       if (mesajEl) {
         mesajEl.textContent = d.hata || 'Hata.';
@@ -1591,7 +1815,7 @@ function rcDurumKaydet(uvId) {
         mesajEl.style.background = '#fee2e2';
         mesajEl.style.color = '#dc2626';
         mesajEl.style.borderColor = '#fecaca';
-        setTimeout(function(){ mesajEl.style.display = 'none'; }, 4000);
+        setTimeout(function(){ mesajEl.style.display = 'none'; }, 5000);
       }
     }
   })
@@ -2224,6 +2448,184 @@ function agKaydet() {
       });
   };
 })();
+</script>
+
+<script>
+// FAZ-RF-UI-1: RF / BOYA REÇETELERİ (read-only)
+var _rfbYuklendi = false;
+var _rfbListeCache = [];
+var _rfbSeciliId = null;
+var _rfbAraTimer = null;
+
+function rfbDurumRozet(durum) {
+  var d = (durum || '').toUpperCase();
+  if (d === 'TASLAK') return 'rfb-rozet-taslak';
+  if (d === 'ONAYLI' || d === 'AKTIF') return 'rfb-rozet-onayli';
+  return 'rfb-rozet-diger';
+}
+
+function rfbSekmeAc() {
+  if (_rfbYuklendi) { rfbListeYukle(); return; }
+  fetch('/nexgen/api/recete/rf-filtreler?formul_id=' + RC_FORMUL_ID)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) return;
+      var cariSel = document.getElementById('rfb-f-cari');
+      var rvSel = document.getElementById('rfb-f-rv');
+      if (cariSel) {
+        cariSel.innerHTML = '<option value="">Tümü</option>';
+        (d.cariler || []).forEach(function(c) {
+          var opt = document.createElement('option');
+          opt.value = c.kod || '';
+          opt.textContent = c.kod || '—';
+          cariSel.appendChild(opt);
+        });
+      }
+      if (rvSel) {
+        rvSel.innerHTML = '<option value="">Tümü</option>';
+        (d.rv_listesi || []).forEach(function(rv) {
+          var opt = document.createElement('option');
+          opt.value = rv;
+          opt.textContent = rv;
+          rvSel.appendChild(opt);
+        });
+      }
+      _rfbYuklendi = true;
+      rfbListeYukle();
+    })
+    .catch(function() {
+      var el = document.getElementById('rfb-liste-yukleniyor');
+      if (el) el.textContent = 'Filtreler yüklenemedi.';
+    });
+}
+
+function rfbListeYukleDebounced() {
+  clearTimeout(_rfbAraTimer);
+  _rfbAraTimer = setTimeout(rfbListeYukle, 280);
+}
+
+function rfbListeYukle() {
+  var durum = document.getElementById('rfb-f-durum').value;
+  var cari = document.getElementById('rfb-f-cari').value;
+  var rv = document.getElementById('rfb-f-rv').value;
+  var q = document.getElementById('rfb-f-ara').value.trim();
+  var params = new URLSearchParams({ formul_id: String(RC_FORMUL_ID) });
+  if (durum) params.set('durum', durum);
+  if (cari) params.set('cari', cari);
+  if (rv) params.set('rv', rv);
+  if (q) params.set('q', q);
+
+  document.getElementById('rfb-liste-yukleniyor').style.display = 'block';
+  document.getElementById('rfb-liste-bos').style.display = 'none';
+  document.getElementById('rfb-liste').innerHTML = '';
+
+  fetch('/nexgen/api/recete/rf-listesi?' + params.toString())
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      document.getElementById('rfb-liste-yukleniyor').style.display = 'none';
+      if (!d.ok || !d.liste || !d.liste.length) {
+        document.getElementById('rfb-liste-bos').style.display = 'block';
+        document.getElementById('rfb-liste-sayac').textContent = '0 kayıt';
+        _rfbListeCache = [];
+        return;
+      }
+      _rfbListeCache = d.liste;
+      document.getElementById('rfb-liste-sayac').textContent = d.toplam + ' kayıt';
+      var wrap = document.getElementById('rfb-liste');
+      d.liste.forEach(function(item) {
+        var kart = document.createElement('div');
+        kart.className = 'rfb-kart' + (_rfbSeciliId === item._rf_key ? ' aktif' : '');
+        kart.dataset.rfId = item._rf_key;
+        kart.onclick = function() { rfbDetayAc(item._rf_key); };
+        var revEtiket = item.rev_no ? ('REV-' + item.rev_no) : '—';
+        var kgTxt = item.toplam_kg >= 0.001
+          ? item.toplam_kg.toFixed(3) + ' KG'
+          : (item.toplam_gr ? item.toplam_gr.toFixed(2) + ' GR' : '—');
+        kart.innerHTML =
+          '<div class="rfb-kart-ust">' +
+            '<div><div class="rfb-kart-kod">' + (item.rf_kod || '—') + '</div>' +
+            '<div class="rfb-kart-ad">' + (item.renk_adi || '—') + '</div></div>' +
+            '<span class="rfb-rozet ' + rfbDurumRozet(item.durum) + '">' + (item.durum || '—') + '</span>' +
+          '</div>' +
+          '<div class="rfb-kart-meta">' +
+            '<span>Renk <strong>' + (item.renk_kodu || '—') + '</strong></span>' +
+            '<span>Cari <strong>' + (item.cari_kod || '—') + '</strong></span>' +
+            '<span>RV <strong>' + (item.rv || '—') + '</strong></span>' +
+            '<span>' + revEtiket + '</span>' +
+            '<span>' + item.kalem_sayisi + ' kalem</span>' +
+            '<span>' + kgTxt + '</span>' +
+          '</div>';
+        wrap.appendChild(kart);
+      });
+      if (_rfbSeciliId) {
+        var hala = d.liste.some(function(x) { return x._rf_key === _rfbSeciliId; });
+        if (!hala) {
+          _rfbSeciliId = null;
+          document.getElementById('rfb-detay').style.display = 'none';
+          document.getElementById('rfb-detay-bos').style.display = 'block';
+        }
+      }
+    })
+    .catch(function() {
+      document.getElementById('rfb-liste-yukleniyor').textContent = 'Liste yüklenemedi.';
+    });
+}
+
+function rfbDetayAc(rfId) {
+  _rfbSeciliId = rfId;
+  document.querySelectorAll('.rfb-kart').forEach(function(k) {
+    k.classList.toggle('aktif', parseInt(k.dataset.rfId, 10) === rfId);
+  });
+  document.getElementById('rfb-detay-bos').style.display = 'none';
+  var detayEl = document.getElementById('rfb-detay');
+  detayEl.style.display = 'block';
+  detayEl.innerHTML = '<div class="rfb-durum-mesaj">Detay yükleniyor…</div>';
+
+  fetch('/nexgen/api/recete/rf-detay/' + rfId + '?formul_id=' + RC_FORMUL_ID)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) {
+        detayEl.innerHTML = '<div class="rfb-durum-mesaj">' + (d.hata || 'Detay alınamadı') + '</div>';
+        return;
+      }
+      var rf = d.rf;
+      var revTxt = rf.rev_no ? ('REV-' + rf.rev_no + (rf.rev_durum ? ' / ' + rf.rev_durum : '')) : '—';
+      var uyg = (d.uygunluk || []).map(function(u) {
+        return (u.formul_kod || '') + ' (' + (u.durum || '—') + ')';
+      }).join(', ') || '—';
+      var rows = (d.kalemler || []).map(function(k) {
+        var katCls = (k.kategori || '').toUpperCase() === 'MASTERBATCH' ? 'rfb-kat-mb' : 'rfb-kat-boya';
+        return '<tr>' +
+          '<td><span style="font-family:monospace;font-size:11px;font-weight:600">' + k.stok_kodu + '</span></td>' +
+          '<td>' + (k.stok_ad || '—') + '</td>' +
+          '<td><span class="' + katCls + '">' + (k.kategori || '—') + '</span></td>' +
+          '<td style="text-align:right;font-weight:600">' + k.miktar_kg.toFixed(6) + '</td>' +
+          '<td style="text-align:right;color:#6b7280">' + k.miktar_gr.toFixed(2) + ' gr</td>' +
+          '<td>' + (k.birim || 'KG') + '</td></tr>';
+      }).join('');
+      detayEl.innerHTML =
+        '<div class="rfb-detay-hdr">' +
+          '<div class="rfb-detay-baslik">' + (rf.rf_kod || '') + ' — ' + (rf.renk_adi || '') + '</div>' +
+          '<div class="rfb-detay-alt">Renk ' + rf.renk_kodu + ' · Cari ' + rf.cari_kod + ' · RV ' + rf.rv + '</div>' +
+        '</div>' +
+        '<div class="rfb-detay-kpi">' +
+          '<span>Durum <strong><span class="rfb-rozet ' + rfbDurumRozet(rf.durum) + '">' + rf.durum + '</span></strong></span>' +
+          '<span>Revizyon <strong>' + revTxt + '</strong></span>' +
+          '<span>Kalem <strong>' + rf.kalem_sayisi + '</strong></span>' +
+          '<span>Toplam <strong>' + rf.toplam_kg.toFixed(6) + ' KG</strong></span>' +
+          (rf.masterbatch_sayisi ? '<span>MASTERBATCH <strong>' + rf.masterbatch_sayisi + '</strong></span>' : '') +
+          '<span>Oluşturma <strong>' + (rf.olusturma_tarihi || '—') + '</strong></span>' +
+        '</div>' +
+        '<div style="font-size:11px;color:#6b7280;margin-bottom:6px">Formül uygunluk: ' + uyg + '</div>' +
+        '<table class="rfb-detay-tablo"><thead><tr>' +
+          '<th>Stok</th><th>Ad</th><th>Kategori</th><th style="text-align:right">KG</th><th style="text-align:right">GR</th><th>Birim</th>' +
+        '</tr></thead><tbody>' + rows + '</tbody></table>' +
+        '<div class="rfb-fp-kutu"><span style="font-weight:700">Pigment fingerprint:</span> ' + (rf.pigment_fp || '—') + '</div>';
+    })
+    .catch(function() {
+      detayEl.innerHTML = '<div class="rfb-durum-mesaj">Bağlantı hatası.</div>';
+    });
+}
 </script>
 
 {% endblock %}

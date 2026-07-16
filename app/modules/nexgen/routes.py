@@ -83,6 +83,53 @@ def _boya_kalemler_filtre(kalemler):
     return [k for k in kalemler if (k.get('kategori') or '').upper() == 'BOYA']
 
 
+_RF_UI_IDENTITY_PREFIX = "IMPORT_RF_ID|"
+
+
+def _rf_ui_identity_parcala(aciklama: str | None) -> dict:
+    """TABAN import RF kimliği — aciklama alanından cari/parent/rv/renk."""
+    out = {"cari_kod": "", "parent_kod": "", "rv": "", "renk_kodu": ""}
+    if not aciklama or _RF_UI_IDENTITY_PREFIX not in aciklama:
+        return out
+    try:
+        part = aciklama.split(_RF_UI_IDENTITY_PREFIX, 1)[1].split("|")
+        if len(part) >= 4:
+            out["cari_kod"] = (part[0] or "").strip()
+            out["parent_kod"] = (part[1] or "").strip()
+            out["rv"] = (part[2] or "").strip()
+            out["renk_kodu"] = (part[3] or "").strip()
+    except Exception:
+        pass
+    return out
+
+
+def _rf_ui_pigment_fp(con, rf_renk_id: int) -> str:
+    rows = con.execute("""
+        SELECT sk.kod, rk.miktar_kg
+        FROM nexgen_rf_kalem rk
+        JOIN nexgen_stok_kart sk ON sk.id = rk.stok_kart_id
+        WHERE rk.rf_renk_id=? AND rk.aktif=1
+        ORDER BY sk.kod
+    """, (rf_renk_id,)).fetchall()
+    return "|".join(f"{r['kod']}:{float(r['miktar_kg']):.6f}" for r in rows)
+
+
+def _rf_ui_rev_bilgi(con, rf_renk_id: int, aktif_rev_no: int) -> dict:
+    rev = {"rev_no": aktif_rev_no or 0, "durum": None, "var_mi": False}
+    if not con.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='nexgen_rf_revizyon'"
+    ).fetchone():
+        return rev
+    row = con.execute("""
+        SELECT rev_no, durum FROM nexgen_rf_revizyon
+        WHERE rf_renk_id=? AND aktif=1
+        ORDER BY rev_no DESC LIMIT 1
+    """, (rf_renk_id,)).fetchone()
+    if row:
+        rev = {"rev_no": row["rev_no"], "durum": row["durum"], "var_mi": True}
+    return rev
+
+
 def _kg_to_gr_etiket(kg):
     """Test kalem kg → tablet boya özeti (gram)."""
     try:
@@ -3373,6 +3420,241 @@ def api_recete_hedef_varyantlar():
         con.close()
 
     return jsonify([dict(r) for r in rows])
+
+
+# ─────────────────────────────────────────────────────────────
+# FAZ-RF-UI-1: RF / BOYA REÇETELERİ — read-only API
+# ─────────────────────────────────────────────────────────────
+
+@nexgen_bp.route('/api/recete/rf-filtreler')
+@yetki_gerekli('nexgen.recete.view', 'can_view')
+def api_recete_rf_filtreler():
+    """Seçili parent formül için RF filtre seçenekleri (cari, RV)."""
+    formul_id = request.args.get('formul_id', type=int)
+    if not formul_id:
+        return jsonify({'ok': False, 'hata': 'formul_id gerekli'}), 400
+
+    con = _db()
+    try:
+        rows = con.execute("""
+            SELECT rf.aciklama,
+                   c.id AS cari_id, c.cari_kod
+            FROM nexgen_rf_renk rf
+            JOIN nexgen_rf_formul_uygunluk rfu
+              ON rfu.rf_renk_id = rf.id AND rfu.aktif = 1
+            LEFT JOIN nexgen_cari c
+              ON c.id = COALESCE(rf.cari_id, rf.ilk_talep_cari_id)
+            WHERE rfu.formul_id = ? AND rf.aktif = 1
+        """, (formul_id,)).fetchall()
+
+        cari_set: set[str] = set()
+        rv_set: set[str] = set()
+        for r in rows:
+            ident = _rf_ui_identity_parcala(r['aciklama'])
+            ck = (r['cari_kod'] or ident['cari_kod'] or '').strip()
+            if ck:
+                cari_set.add(ck)
+            if ident['rv']:
+                rv_set.add(ident['rv'])
+
+        return jsonify({
+            'ok': True,
+            'cariler': [{'kod': c} for c in sorted(cari_set)],
+            'rv_listesi': sorted(rv_set),
+        })
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/recete/rf-listesi')
+@yetki_gerekli('nexgen.recete.view', 'can_view')
+def api_recete_rf_listesi():
+    """Parent formüle bağlı RF kayıtları — yalnız SELECT."""
+    formul_id = request.args.get('formul_id', type=int)
+    if not formul_id:
+        return jsonify({'ok': False, 'hata': 'formul_id gerekli'}), 400
+
+    durum = (request.args.get('durum') or '').strip().upper()
+    cari_filtre = (request.args.get('cari') or '').strip()
+    rv_filtre = (request.args.get('rv') or '').strip()
+    arama = (request.args.get('q') or '').strip().lower()
+
+    con = _db()
+    try:
+        rows = con.execute("""
+            SELECT rf.id, rf.rf_kod, rf.ad, rf.durum, rf.aciklama,
+                   rf.olusturma_tarihi, rf.aktif_rev_no,
+                   c.cari_kod,
+                   rfu.durum AS uygunluk_durum,
+                   (SELECT COUNT(*) FROM nexgen_rf_kalem k
+                    WHERE k.rf_renk_id = rf.id AND k.aktif = 1) AS kalem_sayisi,
+                   (SELECT COALESCE(SUM(k.miktar_kg), 0) FROM nexgen_rf_kalem k
+                    WHERE k.rf_renk_id = rf.id AND k.aktif = 1) AS toplam_kg
+            FROM nexgen_rf_renk rf
+            JOIN nexgen_rf_formul_uygunluk rfu
+              ON rfu.rf_renk_id = rf.id AND rfu.aktif = 1
+            LEFT JOIN nexgen_cari c
+              ON c.id = COALESCE(rf.cari_id, rf.ilk_talep_cari_id)
+            WHERE rfu.formul_id = ? AND rf.aktif = 1
+            ORDER BY rf.durum DESC, rf.rf_kod, rf.ad
+        """, (formul_id,)).fetchall()
+
+        liste = []
+        for r in rows:
+            ident = _rf_ui_identity_parcala(r['aciklama'])
+            cari_kod = r['cari_kod'] or ident['cari_kod'] or '—'
+            renk_kodu = ident['renk_kodu'] or ''
+            rv = ident['rv'] or '—'
+            rev = _rf_ui_rev_bilgi(con, r['id'], r['aktif_rev_no'] or 0)
+            rev_no = rev['rev_no'] if rev['var_mi'] else (r['aktif_rev_no'] or 0)
+            toplam_kg = float(r['toplam_kg'] or 0)
+
+            if durum and durum != 'TUMU' and (r['durum'] or '').upper() != durum:
+                continue
+            if cari_filtre and cari_kod != cari_filtre:
+                continue
+            if rv_filtre and rv != rv_filtre:
+                continue
+            if arama:
+                blob = ' '.join([
+                    r['rf_kod'] or '', r['ad'] or '', renk_kodu, cari_kod, rv,
+                ]).lower()
+                if arama not in blob:
+                    continue
+
+            liste.append({
+                'rf_kod': r['rf_kod'],
+                'renk_kodu': renk_kodu or '—',
+                'renk_adi': r['ad'],
+                'cari_kod': cari_kod,
+                'rv': rv,
+                'durum': r['durum'],
+                'rev_no': rev_no,
+                'kalem_sayisi': int(r['kalem_sayisi'] or 0),
+                'toplam_kg': round(toplam_kg, 6),
+                'toplam_gr': round(toplam_kg * 1000, 3),
+                'olusturma_tarihi': (r['olusturma_tarihi'] or '')[:16],
+                'uygunluk_durum': r['uygunluk_durum'],
+                '_rf_key': r['id'],
+            })
+
+        return jsonify({'ok': True, 'liste': liste, 'toplam': len(liste)})
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/recete/rf-detay/<int:rf_id>')
+@yetki_gerekli('nexgen.recete.view', 'can_view')
+def api_recete_rf_detay(rf_id):
+    """Tek RF detayı — pigment kalemleri, revizyon, uygunluk (read-only)."""
+    formul_id = request.args.get('formul_id', type=int)
+
+    con = _db()
+    try:
+        rf = con.execute("""
+            SELECT rf.*, c.cari_kod, f.kod AS parent_kod, f.ad AS parent_ad
+            FROM nexgen_rf_renk rf
+            LEFT JOIN nexgen_cari c
+              ON c.id = COALESCE(rf.cari_id, rf.ilk_talep_cari_id)
+            LEFT JOIN nexgen_rf_formul_uygunluk rfu
+              ON rfu.rf_renk_id = rf.id AND rfu.aktif = 1
+            LEFT JOIN nexgen_formul f ON f.id = rfu.formul_id
+            WHERE rf.id = ? AND rf.aktif = 1
+            LIMIT 1
+        """, (rf_id,)).fetchone()
+        if not rf:
+            return jsonify({'ok': False, 'hata': 'RF bulunamadı'}), 404
+
+        if formul_id:
+            bag = con.execute("""
+                SELECT 1 FROM nexgen_rf_formul_uygunluk
+                WHERE rf_renk_id=? AND formul_id=? AND aktif=1
+            """, (rf_id, formul_id)).fetchone()
+            if not bag:
+                return jsonify({'ok': False, 'hata': 'RF bu formülle ilişkili değil'}), 404
+
+        ident = _rf_ui_identity_parcala(rf['aciklama'])
+        kalemler_raw = con.execute("""
+            SELECT rk.sira, rk.miktar_kg, rk.aciklama AS kaynak_hucre,
+                   sk.kod AS stok_kodu, sk.ad AS stok_ad,
+                   sk.kategori, sk.birim
+            FROM nexgen_rf_kalem rk
+            JOIN nexgen_stok_kart sk ON sk.id = rk.stok_kart_id
+            WHERE rk.rf_renk_id=? AND rk.aktif=1
+            ORDER BY rk.sira, sk.kod
+        """, (rf_id,)).fetchall()
+
+        kalemler = []
+        toplam_kg = 0.0
+        mb_say = 0
+        for k in kalemler_raw:
+            kg = float(k['miktar_kg'] or 0)
+            toplam_kg += kg
+            kat = (k['kategori'] or '').upper()
+            if kat == 'MASTERBATCH':
+                mb_say += 1
+            kalemler.append({
+                'stok_kodu': k['stok_kodu'],
+                'stok_ad': k['stok_ad'],
+                'kategori': k['kategori'],
+                'miktar_kg': round(kg, 6),
+                'miktar_gr': round(kg * 1000, 3),
+                'birim': k['birim'] or 'KG',
+                'kaynak_hucre': k['kaynak_hucre'] or '',
+            })
+
+        rev = _rf_ui_rev_bilgi(con, rf_id, rf['aktif_rev_no'] or 0)
+        rev_rows = []
+        if con.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='nexgen_rf_revizyon'"
+        ).fetchone():
+            rev_rows = [
+                dict(x) for x in con.execute("""
+                    SELECT rev_no, durum, neden, olusturma_tarihi
+                    FROM nexgen_rf_revizyon
+                    WHERE rf_renk_id=? AND aktif=1
+                    ORDER BY rev_no
+                """, (rf_id,)).fetchall()
+            ]
+
+        uygunluk = [
+            dict(x) for x in con.execute("""
+                SELECT rfu.durum, rfu.formul_id, f.kod AS formul_kod, f.ad AS formul_ad
+                FROM nexgen_rf_formul_uygunluk rfu
+                JOIN nexgen_formul f ON f.id = rfu.formul_id
+                WHERE rfu.rf_renk_id=? AND rfu.aktif=1
+            """, (rf_id,)).fetchall()
+        ]
+
+        pigment_fp = _rf_ui_pigment_fp(con, rf_id)
+
+        return jsonify({
+            'ok': True,
+            'rf': {
+                'rf_kod': rf['rf_kod'],
+                'renk_adi': rf['ad'],
+                'renk_kodu': ident['renk_kodu'] or '—',
+                'cari_kod': rf['cari_kod'] or ident['cari_kod'] or '—',
+                'rv': ident['rv'] or '—',
+                'parent_kod': rf['parent_kod'] or ident['parent_kod'] or '—',
+                'parent_ad': rf['parent_ad'] or '',
+                'durum': rf['durum'],
+                'rev_no': rev['rev_no'],
+                'rev_durum': rev['durum'],
+                'kalem_sayisi': len(kalemler),
+                'toplam_kg': round(toplam_kg, 6),
+                'toplam_gr': round(toplam_kg * 1000, 3),
+                'masterbatch_sayisi': mb_say,
+                'pigment_fp': pigment_fp,
+                'olusturma_tarihi': (rf['olusturma_tarihi'] or '')[:16],
+            },
+            'kalemler': kalemler,
+            'revizyonlar': rev_rows,
+            'uygunluk': uygunluk,
+        })
+    finally:
+        con.close()
+
 
 # ═════════════════════════════════════════════════════════════
 # FAZ-4C-3: ARGE RENK TEST MERKEZİ
@@ -14925,6 +15207,7 @@ def api_tablet_is_listesi():
         con.close()
 
 
+# ═════════════════════════════════════════════════════════════
 @nexgen_bp.route('/api/planlama-siparis/liste')
 @login_gerekli
 def api_planlama_siparis_liste():
