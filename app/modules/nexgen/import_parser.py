@@ -357,3 +357,14 @@ def parse_excel(dosya_yolu: str) -> HamExcelVerisi:
         kullanim_metni=kullanim,
         parser_uyarilari=uyarilar,
     )
+
+
+CEKIRDEK_SUTUN_HARFLERI = frozenset({"G", "H", "I", "J", "K", "L", "M", "N", "O"})
+
+
+def filtre_cekirdek_sutunlari(ham: HamExcelVerisi) -> HamExcelVerisi:
+    """Yalnız çekirdek formül kolonlarını (G–O) bırakır."""
+    ham.formul_sutunlari = [
+        fs for fs in ham.formul_sutunlari if fs.sutun_harf in CEKIRDEK_SUTUN_HARFLERI
+    ]
+    return ham

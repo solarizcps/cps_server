@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-"""P4A — Excel verisini merkezi ImportPackage modeline dönüştürür."""
+"""P4A — Excel verisini merkezi ImportPackage modeline dönüştürür.
+P4F.2F: _formul_grup_anahtari Türkçe/ASCII tekilleştirme için
+        normalize_ascii_import kullanır.
+"""
 from __future__ import annotations
 
 import hashlib
@@ -78,14 +81,42 @@ def fingerprint_boya_kalemler(kalemler: list[NormalizedKalem]) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def _na(s: str) -> str:
+    """
+    Grup anahtarı için Türkçe-ASCII duyarsız normalizasyon.
+    'ENJEKSİYON 18' ve 'ENJEKSIYON 18' aynı anahtar üretir.
+    import_engine.normalize_ascii_import ile aynı mantık —
+    döngüsel import olmadan burada yeniden tanımlandı.
+    """
+    if not s:
+        return ""
+    _MAP = {
+        ord("\u0130"): "I", ord("\u0131"): "i",
+        ord("\u015e"): "S", ord("\u015f"): "s",
+        ord("\u011e"): "G", ord("\u011f"): "g",
+        ord("\u00dc"): "U", ord("\u00fc"): "u",
+        ord("\u00d6"): "O", ord("\u00f6"): "o",
+        ord("\u00c7"): "C", ord("\u00e7"): "c",
+    }
+    s = unicodedata.normalize("NFKC", s)
+    s = s.translate(_MAP)
+    s = s.strip().upper()
+    s = re.sub(r"\s+", " ", s)
+    return s
+
+
 def _formul_grup_anahtari(ad: str, aile: str) -> str:
-    raw = f"{normalize_metin(aile)}|{normalize_metin(ad)}"
+    """
+    Türkçe/ASCII farkından bağımsız formül grubu anahtarı.
+    'ENJEKSİYON 18' == 'ENJEKSIYON 18' aynı gruba düşer.
+    """
+    raw = f"{_na(aile)}|{_na(ad)}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
 def _infer_uretim_tipi(formul_ad: str) -> str:
-    ad = (formul_ad or "").upper()
-    if "DOKME" in ad or "DÖKME" in (formul_ad or ""):
+    ad = _na(formul_ad or "")
+    if "DOKME" in ad:
         return "DOKME"
     return "ENJEKSIYON"
 
@@ -230,5 +261,136 @@ def normalize_excel(ham: HamExcelVerisi) -> ImportPackage:
                 if nb.fingerprint_ana:
                     fps.append(nb.fingerprint_ana)
         f.fingerprint_tum = hashlib.sha256("|".join(sorted(fps)).encode()).hexdigest() if fps else ""
+
+    return pkg
+
+
+# ---------------------------------------------------------------------------
+# Çekirdek import (1BA/2BA/3BA) — her kolon ayrı ana formül
+# ---------------------------------------------------------------------------
+
+CEKIRDEK_KOD_RE = re.compile(r"^[123]BA-(FL|FS|FM)\d{2}$", re.I)
+CEKIRDEK_PREFIX_AILE = {"1BA": "TERLIK", "2BA": "TABAN", "3BA": "TABAN"}
+CEKIRDEK_SUFFIX_BOYUT = {"FL": "LARGE", "FS": "SMALL", "FM": "MEDIUM"}
+
+
+def dogrula_cekirdek_kod(kod: str, boyut: str = "") -> tuple[bool, str]:
+    """Kod formatı ve FL/FS/FM ↔ boyut uyumu."""
+    k = (kod or "").strip().upper()
+    if not k:
+        return False, "Formül kodu boş"
+    if not CEKIRDEK_KOD_RE.match(k):
+        return False, f"Geçersiz çekirdek kod formatı: {k!r}"
+    prefix = k[:3]
+    suffix = k[4:6]
+    bek_aile = CEKIRDEK_PREFIX_AILE.get(prefix)
+    bek_boyut = CEKIRDEK_SUFFIX_BOYUT.get(suffix)
+    if not bek_aile:
+        return False, f"Bilinmeyen ürün ön eki: {prefix}"
+    b = (boyut or "").strip().upper()
+    if b and bek_boyut and b != bek_boyut:
+        return False, f"Kod {k} → {bek_boyut} beklenir, Excel boyut={b}"
+    return True, ""
+
+
+def _sutundan_ana_kalemler_cekirdek(fs: HamFormulSutunu) -> tuple[list[NormalizedKalem], list[str]]:
+    """Yalnız KG ana kalemler; boya/gram ve sıfır miktar atlanır."""
+    ana: list[NormalizedKalem] = []
+    uyarilar: list[str] = []
+    for hk in fs.kalemler:
+        rol = kalem_rolu_belirle(hk.kategori, hk.birim)
+        if rol == KalemRolu.BOYA_RECETESI:
+            continue
+        if rol != KalemRolu.ANA_FORMUL:
+            continue
+        miktar = hk.miktar_ham if isinstance(hk.miktar_ham, (int, float)) else None
+        if miktar is None or float(miktar) <= 0:
+            continue
+        bir = (hk.birim or "").upper().strip()
+        if bir in ("GR", "GRAM", "G"):
+            continue
+        kg = miktar_kg_cevir(miktar, hk.birim)
+        if kg is None or kg <= 0:
+            continue
+        ana.append(NormalizedKalem(
+            stok_kodu=hk.stok_kodu,
+            miktar_kg=kg,
+            kategori=hk.kategori,
+            birim=hk.birim,
+            rol=KalemRolu.ANA_FORMUL,
+            sira=hk.sira,
+            kaynak_hucre=hk.kaynak.hucre if hk.kaynak else "",
+        ))
+    return ana, uyarilar
+
+
+def normalize_excel_cekirdek(
+    ham: HamExcelVerisi,
+    hedef_kodlar: set[str] | None = None,
+) -> ImportPackage:
+    """
+    Çekirdek mod: her dolu Excel kolonu ayrı nexgen_formul kaydı.
+    musteri_formul_kodu → gelecekteki nexgen_formul.kod
+    """
+    pkg = ImportPackage(
+        cekirdek_import=True,
+        stok_referanslari=ham.stok_kartlari,
+        cari_referanslari=ham.cari_listesi,
+        kaynak_bilgisi={
+            "dosya_yolu": ham.dosya_yolu,
+            "dosya_sha256": ham.dosya_sha256,
+            "dosya_boyut": ham.dosya_boyut,
+            "dosya_modified": ham.dosya_modified,
+            "sayfa_adlari": ham.sayfa_adlari,
+            "formul_sutun_sayisi": len(ham.formul_sutunlari),
+            "cekirdek_import": True,
+        },
+    )
+    pkg.uyarilar.extend(ham.parser_uyarilari)
+
+    from modules.nexgen.import_models import NormalizedCekirdekKolon
+
+    seen_kod: dict[str, str] = {}
+
+    for fs in ham.formul_sutunlari:
+        kod = (fs.musteri_formul_kodu or "").strip().upper()
+        if not kod:
+            pkg.uyarilar.append(f"{fs.sutun_harf}: Formül kodu boş — atlandı")
+            continue
+        if hedef_kodlar and kod not in {h.upper() for h in hedef_kodlar}:
+            continue
+
+        ok, hata = dogrula_cekirdek_kod(kod, fs.boyut or "")
+        if not ok:
+            pkg.uyarilar.append(f"{fs.sutun_harf}: BLOCKER — {hata}")
+            continue
+
+        if kod in seen_kod:
+            pkg.uyarilar.append(
+                f"{fs.sutun_harf}: DUPLICATE_KOD — {kod} zaten {seen_kod[kod]} kolonunda"
+            )
+            continue
+        seen_kod[kod] = fs.sutun_harf
+
+        ana_k, k_uyari = _sutundan_ana_kalemler_cekirdek(fs)
+        pkg.uyarilar.extend(k_uyari)
+        boyut = (fs.boyut or CEKIRDEK_SUFFIX_BOYUT.get(kod[4:6], "STANDART")).strip().upper()
+        prefix = kod[:3]
+        urun_ailesi = CEKIRDEK_PREFIX_AILE.get(prefix, _na(fs.urun_ailesi or ""))
+
+        pkg.cekirdek_kolonlar.append(NormalizedCekirdekKolon(
+            formul_kod=kod,
+            formul_ad=fs.formul_ad or kod,
+            urun_ailesi=urun_ailesi,
+            varyant=fs.varyant or "",
+            boyut=boyut,
+            kalip_carpani=fs.kalip_carpani,
+            durum=fs.durum or "",
+            cari_kodu=fs.cari_kodu or "",
+            sutun_harf=fs.sutun_harf,
+            mamul_uretim_kodu=fs.mamul_uretim_kodu or "",
+            ana_kalemler=ana_k,
+            fingerprint_ana=fingerprint_ana_kalemler(ana_k, boyut) if ana_k else "",
+        ))
 
     return pkg

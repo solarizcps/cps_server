@@ -2624,11 +2624,14 @@ def _insert_ana_kalemler(
 ) -> int:
     """Ana kalemleri UV'ye yazar; yazılan kalem sayısını döner."""
     n = 0
-    for sira, k in enumerate(kalemler, 1):
+    for i, k in enumerate(kalemler, 1):
         kod = (k.get("stok_kodu") or "").strip().upper()
         sk_id = stok_map.get(kod)
         if sk_id is None:
             raise ValueError(f"Stok kartı bulunamadı: {kod}")
+        sira = k.get("sira")
+        if sira is None:
+            sira = i
         con.execute(
             """INSERT INTO nexgen_recete_kalem
                (uretim_varyant_id, stok_kart_id, sira, miktar_kg, aktif, olusturma_tarihi)
@@ -3534,3 +3537,19 @@ def _log_item(con, batch_id, tablo, aksiyon, eski_id, yeni_id, detay):
         )
     except sqlite3.OperationalError:
         pass  # tablo yoksa sessizce geç
+
+
+# Çekirdek import — lazy import ile döngüsel bağımlılık önlenir
+def simulate_cekirdek_import_reexport(pkg, db_path=None):
+    from modules.nexgen.import_cekirdek import simulate_cekirdek_import as _sim
+    return _sim(pkg, db_path=db_path)
+
+simulate_cekirdek_import = simulate_cekirdek_import_reexport  # noqa: F811
+
+
+def partial_apply_cekirdek_import_reexport(pkg, db_path=None, yedek_dizin=None, sim=None):
+    from modules.nexgen.import_cekirdek import partial_apply_cekirdek_import as _apply
+    return _apply(pkg, db_path=db_path, yedek_dizin=yedek_dizin, sim=sim)
+
+
+partial_apply_cekirdek_import = partial_apply_cekirdek_import_reexport  # noqa: F811

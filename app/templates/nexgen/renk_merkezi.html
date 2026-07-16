@@ -1,0 +1,1061 @@
+{% extends "base.html" %}
+{% set page_title = "Renk Merkezi — NexGen" %}
+
+{% block content %}
+<style>
+/* Renk Merkezi — Reçete Merkezi ile aynı tasarım token'ları ve sınıflar */
+*{ box-sizing:border-box; }
+:root {
+  --rm-teal:        #006a8e;
+  --rm-teal-dark:   #005a7a;
+  --rm-gold:        #f6c343;
+  --rm-orange:      #f97316;
+  --rm-green:       #16a34a;
+  --rm-blue:        #2563eb;
+  --rm-blue-bg:     #eff6ff;
+  --rm-purple:      #7c3aed;
+  --rm-purple-bg:   #f5f3ff;
+  --rm-border:      #e2e8f0;
+  --rm-border2:     #cbd5e1;
+  --rm-bg:          #f8fafc;
+  --rm-bg2:         #f1f5f9;
+  --rm-t1:          #0f172a;
+  --rm-t2:          #374151;
+  --rm-t3:          #6b7280;
+  --rm-t4:          #9ca3af;
+  --rm-white:       #ffffff;
+  --rm-font:        'Inter', system-ui, -apple-system, sans-serif;
+}
+.rm-sayfa {
+  display:flex; flex-direction:column; gap:6px;
+  min-height:0; font-family:var(--rm-font);
+}
+.rm-page-hdr {
+  display:flex; flex-direction:row; align-items:center; justify-content:space-between;
+  height:61px; padding:0; border-bottom:1px solid var(--rm-border);
+  flex-shrink:0; overflow:visible;
+}
+.rm-page-hdr-sol { display:flex; align-items:center; gap:12px; }
+.rm-page-logo {
+  width:150px; height:61px; display:block; flex-shrink:0;
+  object-fit:contain; object-position:left center;
+}
+.rm-page-bc { display:flex; align-items:center; gap:5px; font-size:10px; color:var(--rm-t3); }
+.rm-page-bc-cur { font-size:12px; font-weight:700; color:var(--rm-t1); }
+.rm-page-geri {
+  display:flex; align-items:center; gap:5px; padding:5px 12px; border-radius:6px;
+  border:1px solid var(--rm-border); background:var(--rm-white);
+  font-size:11px; font-weight:600; color:var(--rm-t2); text-decoration:none;
+}
+.rm-page-geri:hover { background:var(--rm-bg); }
+.rm-layout {
+  display:grid; grid-template-columns:435px 1fr; gap:6px; align-items:start;
+}
+.rm-panel {
+  background:var(--rm-white); border:1px solid var(--rm-border); border-radius:10px;
+  display:flex; flex-direction:column; overflow:visible;
+  max-height:calc(100vh - 80px);
+}
+.rm-panel-hdr {
+  display:flex; align-items:center; gap:8px; padding:7px 12px;
+  background:var(--rm-teal); flex-shrink:0; border-radius:10px 10px 0 0;
+}
+.rm-panel-ikon { width:13px; height:13px; flex-shrink:0; }
+.rm-panel-baslik {
+  font-size:10px; font-weight:700; color:#f1f5f9;
+  letter-spacing:.5px; text-transform:uppercase; flex:1;
+}
+.rm-panel-hdr-alt {
+  font-size:10px; color:#94a3b8; font-style:normal;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:280px;
+}
+.rm-yeni-btn {
+  font-size:10px; font-weight:700; padding:3px 8px;
+  background:#f6c343; color:#0f172a; border:none; border-radius:5px; cursor:pointer;
+}
+.rm-yeni-btn:hover { background:#fde68a; }
+.rm-ara-wrap {
+  display:flex; align-items:center; gap:6px; padding:6px 9px;
+  border-bottom:1px solid var(--rm-border); background:var(--rm-bg); flex-shrink:0;
+}
+.rm-ara-input {
+  flex:1; border:none; outline:none; font-size:10px; color:var(--rm-t2); background:transparent;
+}
+.rm-ara-input::placeholder { color:var(--rm-t4); }
+.rm-filtre-bar {
+  display:flex; gap:4px; padding:5px 9px; border-bottom:1px solid var(--rm-border);
+  flex-shrink:0; background:var(--rm-white); flex-wrap:wrap;
+}
+.rm-fb {
+  padding:3px 8px; border-radius:5px; border:1px solid var(--rm-border);
+  background:transparent; font-size:9px; font-weight:600; color:var(--rm-t3); cursor:pointer;
+}
+.rm-fb:hover { background:var(--rm-bg2); color:var(--rm-t2); }
+.rm-fb.aktif { background:var(--rm-teal); color:#fff; border-color:var(--rm-teal); }
+.rm-rf-liste { flex:1; overflow-y:auto; min-height:0; }
+.rm-rf-kart {
+  padding:8px 10px; border-bottom:1px solid #f1f5f9; cursor:pointer;
+  background:#fff; border-left:3px solid transparent;
+}
+.rm-rf-kart:hover { background:var(--rm-blue-bg); }
+.rm-rf-kart.aktif {
+  background:var(--rm-blue-bg); border-left-color:var(--rm-blue);
+}
+.rm-rf-kart-kod {
+  font-size:9px; font-weight:700; color:var(--rm-blue);
+  font-family:'Courier New',monospace; margin-bottom:2px;
+}
+.rm-rf-kart-ad {
+  font-size:11px; font-weight:700; color:var(--rm-t1); margin-bottom:2px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.rm-rf-kart-meta {
+  font-size:10px; color:var(--rm-t3); margin-bottom:3px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.rm-rf-kart-durum { display:flex; gap:4px; align-items:center; flex-wrap:wrap; }
+.rm-rozet {
+  font-size:9px; font-weight:800; padding:2px 7px; border-radius:5px;
+  white-space:nowrap; letter-spacing:.5px; text-transform:uppercase;
+}
+.rm-rozet-acik   { background:#d1fae5; color:#059669; }
+.rm-rozet-onayli { background:#dbeafe; color:#1d4ed8; }
+.rm-rozet-deneme { background:#fef3c7; color:#92400e; }
+.rm-rozet-taslak { background:#f1f5f9; color:#64748b; }
+.rm-rozet-pasif  { background:#f9fafb; color:#9ca3af; }
+.rm-rozet-onay-bek { background:#fef3c7; color:#b45309; }
+.rm-sag-ic { display:flex; flex-direction:column; flex:1; min-height:0; overflow:hidden; }
+.rm-bos { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; color:var(--rm-t4); }
+.rm-bos-buyuk { padding:52px 24px; }
+.rm-bos svg { opacity:.2; }
+.rm-bos span { font-size:12px; }
+.rm-ozet { padding:10px 14px 8px; border-bottom:1px solid var(--rm-border); flex-shrink:0; }
+.rm-ozet-satir1 { display:flex; align-items:baseline; gap:10px; margin-bottom:3px; }
+.rm-ozet-ad { font-size:16px; font-weight:800; color:var(--rm-t1); }
+.rm-ozet-kodlar { font-size:10px; color:var(--rm-t3); font-family:monospace; }
+.rm-ozet-satir2 { font-size:11px; color:var(--rm-t3); margin-bottom:6px; }
+.rm-ozet-satir3 { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.rm-tl {
+  display:flex; align-items:center; padding:6px 14px;
+  border-bottom:1px solid var(--rm-border); flex-shrink:0;
+}
+.rm-tl-adim { display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; color:var(--rm-t4); text-transform:uppercase; }
+.rm-tl-adim.done { color:var(--rm-green); }
+.rm-tl-adim.cur { color:var(--rm-orange); }
+.rm-tl-dot { width:6px; height:6px; border-radius:50%; background:#cbd5e1; }
+.rm-tl-dot.done { background:var(--rm-green); }
+.rm-tl-dot.cur { background:var(--rm-orange); }
+.rm-tl-line { width:20px; height:2px; background:#e2e8f0; margin:0 2px; }
+.rm-tl-line.done { background:var(--rm-green); }
+.rm-butonlar {
+  display:flex; gap:8px; padding:10px 14px; flex-shrink:0;
+  border-top:1px solid var(--rm-border); background:var(--rm-bg); flex-wrap:wrap;
+}
+.rm-btn {
+  padding:8px 12px; border-radius:8px; font-size:11px; font-weight:700;
+  cursor:pointer; border:none; transition:all .1s; white-space:nowrap;
+}
+.rm-btn-onay  { background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
+.rm-btn-onay:hover { background:#dcfce7; }
+.rm-btn-arge  { background:#fef3c7; color:#92400e; }
+.rm-btn-arge:hover { background:#fde68a; }
+.rm-btn-detay { background:#0f172a; color:#f6c343; }
+.rm-btn-detay:hover { background:#1e293b; }
+.rm-sekme-bar {
+  display:flex; gap:0; padding:0 14px; border-bottom:2px solid var(--rm-border);
+  flex-shrink:0; background:var(--rm-white);
+}
+.rm-sekme {
+  padding:7px 14px; font-size:11px; font-weight:600; color:var(--rm-t3);
+  cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px;
+}
+.rm-sekme:hover { color:var(--rm-t1); }
+.rm-sekme.aktif { color:var(--rm-teal); border-bottom-color:var(--rm-teal); }
+.rm-sek-ic { flex:1; overflow-y:auto; min-height:0; padding:12px 14px; display:none; flex-direction:column; gap:10px; }
+.rm-sek-ic.goster { display:flex; }
+.rm-2k { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.rm-bl-bas { font-size:9px; font-weight:700; color:var(--rm-t3); letter-spacing:.5px; text-transform:uppercase; margin-bottom:5px; padding-bottom:4px; border-bottom:1px solid var(--rm-border); }
+.rm-bs { display:grid; grid-template-columns:110px 1fr; gap:4px; padding:3px 0; font-size:11px; border-bottom:1px solid #f8fafc; }
+.rm-be { color:var(--rm-t3); font-size:10px; }
+.rm-bv { color:var(--rm-t1); font-weight:600; }
+.rm-bv.iyi { color:var(--rm-green); }
+.rm-bv.kotu { color:var(--rm-red, #dc2626); }
+.rm-t { width:100%; border-collapse:collapse; font-size:11px; }
+.rm-t thead th {
+  padding:5px 8px; text-align:left; font-size:9px; font-weight:700;
+  color:#94a3b8; text-transform:uppercase; letter-spacing:.5px;
+  border-bottom:1px solid #e5e7eb; background:#f8fafc;
+}
+.rm-t th.r, .rm-t td.r { text-align:right; }
+.rm-t tbody tr { border-bottom:1px solid #f1f5f9; }
+.rm-t tbody tr:hover { background:#fafafa; }
+.rm-t td { padding:4px 8px; vertical-align:middle; }
+.rm-tablo-foot {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:7px 13px; background:#f9fafb; border-top:2px solid #e5e7eb;
+  font-size:12px; font-weight:800; color:#374151;
+}
+.rm-tablo-foot-renk {
+  background:#f5f3ff; border-top:1px solid #7c3aed18; padding:8px 13px;
+}
+.rm-tablo-foot-etiket {
+  font-size:10px; font-weight:700; color:#7c3aed;
+  text-transform:uppercase; letter-spacing:.4px;
+}
+.rm-tablo-foot-deger {
+  font-size:13px; font-weight:800; color:#7c3aed; white-space:nowrap;
+}
+.rm-ybar-wrap {
+  display:inline-block; width:32px; height:4px;
+  background:#e5e7eb; border-radius:2px; overflow:hidden;
+  vertical-align:middle; margin-right:4px;
+}
+.rm-ybar { display:block; height:100%; border-radius:2px; }
+.rm-ybar-renk { background:#a78bfa; }
+.rm-pct-hucre { white-space:nowrap; }
+.rm-pct-metin { font-size:10px; color:#6b7280; }
+.rm-pct-metin.rm-pct-max { font-size:11px; font-weight:700; color:#7c3aed; }
+.rm-pct-max .rm-ybar-renk { background:#7c3aed; }
+.rm-ptbl-genel-toplam {
+  display:flex; padding:7px 12px; align-items:center;
+  background:#006a8e; border-top:1px solid #005a7a;
+}
+.rm-ptbl-genel-etiket {
+  flex:1; font-size:10px; font-weight:800; color:#fff;
+  text-transform:uppercase; letter-spacing:.5px;
+}
+.rm-ptbl-genel-deger {
+  font-size:13px; font-weight:800; color:#fff; text-align:right; min-width:90px;
+}
+.rm-ptbl-alt-bilgi {
+  padding:5px 12px; font-size:9px; color:#94a3b8; font-style:italic;
+  background:#fafafa; border-top:1px solid #e5e7eb; line-height:1.4;
+}
+.rm-bag-kart {
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  padding:8px 10px; margin-bottom:6px;
+  background:var(--rm-bg); border:1px solid var(--rm-border); border-radius:7px;
+}
+.rm-bag-kod { font-size:12px; font-weight:700; color:#7c3aed; font-family:monospace; }
+.rm-bag-alt { font-size:10px; color:var(--rm-t3); }
+.rm-bag-gecmis-wrap {
+  margin-top:12px; padding-top:8px; border-top:1px dashed var(--rm-border);
+}
+.rm-bag-gecmis-bas {
+  font-size:9px; font-weight:700; color:var(--rm-t4);
+  text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px;
+}
+.rm-popup-bg {
+  position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:9000;
+  display:flex; align-items:center; justify-content:center;
+}
+.rm-popup {
+  background:#fff; border-radius:10px; width:640px; max-width:96vw;
+  box-shadow:0 8px 32px rgba(0,0,0,.18); overflow:hidden;
+  max-height:85vh; display:flex; flex-direction:column;
+}
+.rm-popup-hdr {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 16px; background:#006a8e; flex-shrink:0;
+}
+.rm-popup-baslik-metin { font-size:11px; font-weight:700; color:#f1f5f9; letter-spacing:.3px; }
+.rm-popup-kapat {
+  background:none; border:none; font-size:18px; cursor:pointer; color:#94a3b8; line-height:1;
+}
+.rm-popup-kapat:hover { color:#fff; }
+.rm-popup-icerik { padding:16px; overflow-y:auto; flex:1; }
+.rm-popup-footer {
+  display:flex; gap:8px; justify-content:flex-end; padding:12px 16px;
+  border-top:1px solid var(--rm-border); background:var(--rm-bg);
+}
+.rm-fb-satir {
+  display:flex; align-items:center; gap:8px; padding:8px 10px;
+  border-bottom:1px solid #f1f5f9; cursor:pointer;
+}
+.rm-fb-satir:hover { background:#f8fafc; }
+.rm-fb-satir.secili { background:#eff6ff; border-left:3px solid #2563eb; }
+.rm-fb-satir.zaten { opacity:.55; cursor:not-allowed; }
+.rm-fb-kod { font-size:12px; font-weight:700; color:#0f172a; font-family:monospace; min-width:90px; }
+.rm-fb-alt { font-size:10px; color:var(--rm-t3); flex:1; }
+.rm-stok-kod { font-family:'Courier New',monospace; font-size:9px; color:#94a3b8; }
+.rm-stok-ad  { font-size:12px; font-weight:500; color:#0f172a; }
+.rm-yukleniyor { padding:20px; text-align:center; color:var(--rm-t4); font-size:11px; }
+.rm-toast {
+  position:fixed; bottom:20px; right:20px; padding:10px 16px; border-radius:7px;
+  font-size:12px; font-weight:600; background:#1e293b; color:#fff; z-index:9999;
+  opacity:0; transition:opacity .3s; pointer-events:none;
+}
+.rm-toast.goster { opacity:1; }
+.rm-toast.hata { background:#dc2626; }
+.rm-toast.basari { background:#16a34a; }
+::-webkit-scrollbar { width:4px; height:4px; }
+::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:10px; }
+</style>
+
+<div class="rm-sayfa">
+
+  <!-- PAGE HEADER -->
+  <div class="rm-page-hdr">
+    <div class="rm-page-hdr-sol">
+      <img src="{{ url_for('static', filename='img/nexgen-logo.png') }}" alt="NexGen" class="rm-page-logo">
+      <div class="rm-page-bc">
+        <span class="rm-page-bc-cur">Renk Merkezi</span>
+        <span style="color:var(--rm-t4);font-size:10px;">RF / Boya Reçeteleri</span>
+      </div>
+    </div>
+    <a href="/nexgen/" class="rm-page-geri">
+      <span style="font-size:13px;">←</span>
+      <span>Ana Menü</span>
+    </a>
+  </div>
+
+  <!-- LAYOUT -->
+  <div class="rm-layout">
+
+    <!-- SOL PANEL -->
+    <div class="rm-panel rm-sol">
+      <div class="rm-panel-hdr">
+        <svg class="rm-panel-ikon" viewBox="0 0 24 24" fill="none" stroke="#f6c343" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/>
+        </svg>
+        <span class="rm-panel-baslik">Renk Formülleri</span>
+        <button class="rm-yeni-btn" onclick="rmSonrakiFaz('Yeni çalışma')">+ Yeni</button>
+      </div>
+      <div class="rm-ara-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" width="12" height="12">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input class="rm-ara-input" id="rm-ara-input"
+                 placeholder="RF adı, cari veya kod ara…"
+                 oninput="rmAra(this.value)" autocomplete="off">
+        </div>
+        <div class="rm-filtre-bar" id="rm-filtre-bar">
+          <button class="rm-fb aktif" data-f="TUMU"     onclick="rmFiltre(this)">Tümü</button>
+          <button class="rm-fb"       data-f="BEKLEYEN" onclick="rmFiltre(this)">Bekleyen</button>
+          <button class="rm-fb"       data-f="AKTİF"    onclick="rmFiltre(this)">Aktif</button>
+          <button class="rm-fb"       data-f="REVİZE"   onclick="rmFiltre(this)">Revize</button>
+          <button class="rm-fb"       data-f="PASİF"    onclick="rmFiltre(this)">Pasif</button>
+        </div>
+        <div class="rm-rf-liste" id="rm-liste">
+          <div class="rm-yukleniyor">Yükleniyor…</div>
+        </div>
+    </div>
+
+    <!-- SAĞ PANEL -->
+    <div class="rm-panel rm-sag" id="rm-sag-panel">
+      <div class="rm-panel-hdr">
+        <svg class="rm-panel-ikon" viewBox="0 0 24 24" fill="none" stroke="#f6c343" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+        </svg>
+        <span class="rm-panel-baslik">DETAY</span>
+        <span id="rm-hdr-ad" class="rm-panel-hdr-alt">Bir çalışma seçin</span>
+      </div>
+
+      <!-- Boş durum -->
+      <div id="rm-bos" class="rm-bos rm-bos-buyuk">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.2" width="40" height="40">
+          <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/>
+          <line x1="21.17" y1="8" x2="12" y2="8"/>
+          <line x1="3.95" y1="6.06" x2="8.54" y2="14"/>
+          <line x1="10.88" y1="21.94" x2="15.46" y2="14"/>
+        </svg>
+        <span>Sol listeden bir çalışma seçin</span>
+      </div>
+
+      <!-- Detay içerik -->
+      <div id="rm-detay" class="rm-sag-ic" style="display:none;">
+
+        <!-- Özet bant -->
+        <div class="rm-ozet">
+          <div class="rm-ozet-satir1">
+            <span class="rm-ozet-ad" id="oz-ad">—</span>
+            <span class="rm-ozet-kodlar" id="oz-kodlar"></span>
+          </div>
+          <div class="rm-ozet-satir2" id="oz-alt"></div>
+          <div class="rm-ozet-satir3">
+            <div id="oz-durum"></div>
+            <div class="rm-ozet-onay" id="oz-onay"></div>
+          </div>
+        </div>
+
+        <!-- Timeline -->
+        <div class="rm-tl" id="rm-tl"></div>
+
+        <!-- Buton bant -->
+        <div class="rm-butonlar" id="rm-btn-bant"></div>
+
+        <!-- Sekmeler -->
+        <div class="rm-sekme-bar">
+          <div class="rm-sekme aktif" data-s="calisma"     onclick="rmSekme(this)">Çalışma</div>
+          <div class="rm-sekme"       data-s="pigmentler"  onclick="rmSekme(this)">Pigmentler</div>
+          <div class="rm-sekme"       data-s="baglantilar" onclick="rmSekme(this)">Bağlantılar</div>
+          <div class="rm-sekme"       data-s="gecmis"      onclick="rmSekme(this)">Geçmiş</div>
+        </div>
+
+        <div class="rm-sek-ic goster" id="s-calisma">
+          <div class="rm-yukleniyor">Yükleniyor…</div>
+        </div>
+        <div class="rm-sek-ic" id="s-pigmentler"></div>
+        <div class="rm-sek-ic" id="s-baglantilar"></div>
+        <div class="rm-sek-ic" id="s-gecmis"></div>
+      </div>
+    </div>
+
+  </div><!-- /rm-layout -->
+</div><!-- /rm-sayfa -->
+
+<!-- Formüle Bağla Modal -->
+<div id="rm-fb-popup-bg" class="rm-popup-bg" style="display:none" onclick="rmFbPopupBgClick(event)">
+  <div class="rm-popup" onclick="event.stopPropagation()">
+    <div class="rm-popup-hdr">
+      <span class="rm-popup-baslik-metin">Formüle Bağla — Çekirdek Formüller</span>
+      <button class="rm-popup-kapat" onclick="rmFbPopupKapat()">✕</button>
+    </div>
+    <div class="rm-popup-icerik" id="rm-fb-liste">
+      <div class="rm-yukleniyor">Yükleniyor…</div>
+    </div>
+    <div class="rm-popup-footer">
+      <button class="rm-btn rm-btn-arge" onclick="rmFbPopupKapat()">İptal</button>
+      <button class="rm-btn rm-btn-onay" onclick="rmFormulBaglaKaydet()">Bağla</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="rm-toast" class="rm-toast"></div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════════
+//  GLOBAL
+// ══════════════════════════════════════════════════════════════════════
+const CAN_APPROVE = {{ 'true' if (can_approve or can_manage) else 'false' }};
+const CAN_MANAGE  = {{ 'true' if can_manage else 'false' }};
+let aktifFiltre  = 'TUMU';
+let araMetni     = '';
+let seciliKart   = null;
+let tumKartlar   = [];
+let aktifRfId    = null;
+let rmFbSeciliIds = new Set();
+
+// ── yardımcı ─────────────────────────────────────────────────────────
+function rmE(s){
+  if(s==null)return'';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function rmGr(v){
+  const n=Number(v);
+  if(isNaN(n)) return '—';
+  if(n===0) return '0 GR';
+  let s=n.toLocaleString('tr-TR',{minimumFractionDigits:0,maximumFractionDigits:6});
+  if(s.includes(',')) s=s.replace(/0+$/,'').replace(/,$/,'');
+  return s+' GR';
+}
+function rmPct(v){
+  const n=Number(v);
+  if(isNaN(n)) return '—';
+  if(n===0) return '0%';
+  if(n>0 && n<0.00005) return '&lt;0,001%';
+  const maxD=n>=1?2:(n>=0.01?2:3);
+  let s=n.toLocaleString('tr-TR',{minimumFractionDigits:0,maximumFractionDigits:maxD});
+  if(s.includes(',')) s=s.replace(/0+$/,'').replace(/,$/,'');
+  return s+'%';
+}
+function rmPctBarW(yuzde, maxYuzde){
+  if(yuzde<=0) return 0;
+  const oran=maxYuzde>0?Math.min((yuzde/maxYuzde)*100,100):Math.min(yuzde,100);
+  return Math.max(Math.round(oran), yuzde<1?3:6);
+}
+function rmPigmentVeriHazirla(pigs, ozet){
+  const kalemler=(pigs||[]).map(p=>({
+    ...p,
+    gr:Number(p.miktar_gr)||0,
+    yuzde:Number(p.oran_yuzde)||0,
+  }));
+  const toplam = (ozet && ozet.toplam_gr != null)
+    ? Number(ozet.toplam_gr)
+    : kalemler.reduce((s,k)=>s+k.gr,0);
+  const maxYuzde=kalemler.reduce((m,k)=>Math.max(m,k.yuzde),0);
+  return {kalemler, toplam, maxYuzde};
+}
+function rmPigmentTabloHtml(pigs, ozet){
+  const {kalemler, toplam, maxYuzde}=rmPigmentVeriHazirla(pigs, ozet);
+  if(!kalemler.length){
+    return '<div style="font-size:11px;color:var(--rm-t4);padding:14px;text-align:center">Pigment kalemi girilmemiş.</div>';
+  }
+  let satirlar='';
+  kalemler.forEach((p,idx)=>{
+    const maxPct=Math.abs(p.yuzde-maxYuzde)<1e-9;
+    const barW=rmPctBarW(p.yuzde,maxYuzde);
+    const bg=idx%2===0?'#ffffff':'#f8fafc';
+    const pctRenk=maxPct?'#7c3aed':'#6b7280';
+    const barRenk=maxPct?'#7c3aed':'#a78bfa';
+    satirlar+=`<tr style="background:${bg};border-bottom:1px solid #f1f5f9;">
+      <td style="width:24px;font-size:10px;font-weight:400;color:#94a3b8;padding:4px 4px 4px 12px;vertical-align:middle;">${p.sira}</td>
+      <td style="padding:4px 8px;vertical-align:middle;min-width:0;">
+        <div style="font-size:9px;color:#94a3b8;letter-spacing:.3px;line-height:1.2;">${rmE(p.stok_kodu)}</div>
+        <div style="font-size:12px;font-weight:${maxPct?700:500};color:#0f172a;line-height:1.3;">${rmE(p.stok_adi)}</div>
+      </td>
+      <td style="padding:4px 10px;min-width:88px;vertical-align:middle;">
+        <div style="display:flex;align-items:center;gap:5px;">
+          <div style="width:36px;height:3px;background:#e5e7eb;border-radius:2px;overflow:hidden;flex-shrink:0;">
+            <div style="width:${barW}%;height:100%;background:${barRenk};border-radius:2px;"></div>
+          </div>
+          <span style="font-size:10px;color:${pctRenk};font-weight:${maxPct?700:400};white-space:nowrap;">${rmPct(p.yuzde)}</span>
+        </div>
+      </td>
+      <td style="text-align:right;font-size:12px;font-weight:700;color:#0f172a;padding:4px 12px 4px 6px;vertical-align:middle;white-space:nowrap;min-width:72px;">${rmGr(p.gr)}</td>
+      <td style="padding:4px 8px;vertical-align:middle;white-space:nowrap;">
+        <span class="rm-rozet ${p.aktif?'rm-rozet-acik':'rm-rozet-pasif'}">${p.aktif?'Aktif':'Pasif'}</span>
+      </td>
+    </tr>`;
+  });
+  const thead=`<thead><tr style="background:#f8fafc;border-bottom:1px solid #e5e7eb;">
+    <th style="width:24px;padding:5px 4px 5px 12px;font-size:8px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;text-align:left;">#</th>
+    <th style="padding:5px 8px;font-size:8px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;text-align:left;">Hammadde / Pigment</th>
+    <th style="padding:5px 10px;font-size:8px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;text-align:left;min-width:88px;">%</th>
+    <th style="padding:5px 12px 5px 6px;font-size:8px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;text-align:right;min-width:72px;">GR</th>
+    <th style="padding:5px 8px;font-size:8px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;text-align:left;">Durum</th>
+  </tr></thead>`;
+  return `<table style="width:100%;border-collapse:collapse;table-layout:auto;min-width:420px;">${thead}<tbody>${satirlar}</tbody></table>
+    <div style="display:flex;padding:6px 12px;align-items:center;background:#f8fafc;border-top:1px solid #e5e7eb;">
+      <span style="width:24px;"></span>
+      <span style="flex:1;font-size:9px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.4px;">Pigment Toplamı</span>
+      <span style="min-width:88px;"></span>
+      <span style="font-size:12px;font-weight:800;color:#0f172a;text-align:right;min-width:90px;">${rmGr(toplam)}</span>
+      <span style="width:52px;"></span>
+    </div>
+    <div class="rm-ptbl-genel-toplam">
+      <span style="width:24px;"></span>
+      <span class="rm-ptbl-genel-etiket" style="flex:1;">Genel Toplam</span>
+      <span style="min-width:88px;"></span>
+      <span class="rm-ptbl-genel-deger">${rmGr(toplam)}</span>
+      <span style="width:52px;"></span>
+    </div>
+    <div class="rm-ptbl-alt-bilgi">Toplam: ${rmGr(toplam)} • ${kalemler.length} kalem</div>`;
+}
+function rmBaglantiHtml(baglar, gecmis){
+  let h='';
+  if(baglar.length){
+    h+=baglar.map(b=>{
+      const kaldir=CAN_MANAGE&&b.kaldirilabilir
+        ?`<button class="rm-btn rm-btn-arge" style="padding:4px 8px;font-size:9px;margin-left:auto"
+             onclick="rmBaglantiKaldir(${b.uygunluk_id})">Kaldır</button>`:'';
+      const uk=b.uretim_kodu
+        ?`<div style="font-size:10px;font-weight:700;color:#7c3aed;margin-top:4px;">Üretim Kodu: ${rmE(b.uretim_kodu)}</div>`:'';
+      return `<div class="rm-bag-kart">
+        <div style="flex:1;min-width:0;">
+          <div class="rm-bag-kod">${rmE(b.formul_kodu)}</div>
+          <div class="rm-bag-alt">${rmE(b.formul_alt||b.formul_adi)}</div>
+          ${uk}
+        </div>
+        <span class="rm-rozet rm-rozet-onayli">${rmE(b.durum)}</span>
+        ${kaldir}
+      </div>`;
+    }).join('');
+  } else {
+    h='<div style="font-size:11px;color:var(--rm-t4);padding:14px 0;text-align:center">Aktif çekirdek formül bağlantısı yok.</div>';
+  }
+  if(gecmis&&gecmis.length){
+    h+=`<div class="rm-bag-gecmis-wrap">
+      <div class="rm-bag-gecmis-bas">Geçmiş Bağlantılar (bilgi amaçlı)</div>
+      ${gecmis.map(b=>`<div class="rm-bag-kart" style="opacity:.75">
+        <div style="flex:1"><div class="rm-bag-kod" style="color:var(--rm-t3)">${rmE(b.formul_kodu)}</div>
+        <div class="rm-bag-alt">${rmE(b.formul_adi)}</div></div>
+        <span class="rm-rozet rm-rozet-pasif">Geçmiş</span>
+      </div>`).join('')}
+    </div>`;
+  }
+  return h;
+}
+function rmDurumRz(grubu){
+  if(grubu==='AKTİF')   return 'rm-rozet rm-rozet-acik';
+  if(grubu==='PASİF')   return 'rm-rozet rm-rozet-pasif';
+  if(grubu==='REVİZE')  return 'rm-rozet rm-rozet-deneme';
+  return 'rm-rozet rm-rozet-onay-bek';
+}
+function rmFiltreSayilariGuncelle(sayilar){
+  if(!sayilar) return;
+  const etiket={'TUMU':'Tümü','BEKLEYEN':'Bekleyen','AKTİF':'Aktif','REVİZE':'Revize','PASİF':'Pasif'};
+  document.querySelectorAll('#rm-filtre-bar .rm-fb').forEach(b=>{
+    const f=b.dataset.f;
+    const n=f==='TUMU'?sayilar.toplam:(sayilar[f]||0);
+    b.textContent=(etiket[f]||f)+(n?` (${n})`:'');
+  });
+}
+function rmToast(mesaj, tip=''){
+  const t=document.getElementById('rm-toast');
+  t.textContent=mesaj;
+  t.className='rm-toast goster'+(tip?' '+tip:'');
+  setTimeout(()=>t.classList.remove('goster'),3500);
+}
+function rmSonrakiFaz(islem){
+  rmToast(islem+' — bu işlem sonraki fazda aktif edilecek.');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  LİSTE YÜKLE
+// ══════════════════════════════════════════════════════════════════════
+async function rmListeYukle(){
+  const el=document.getElementById('rm-liste');
+  el.innerHTML='<div class="rm-yukleniyor">Yükleniyor…</div>';
+  try{
+    const params=new URLSearchParams({filtre:aktifFiltre});
+    if(araMetni) params.set('q',araMetni);
+    const res=await fetch('/nexgen/api/renk-merkezi/liste?'+params.toString());
+    const d=await res.json();
+    if(!d.ok){el.innerHTML='<div class="rm-yukleniyor">Hata: '+rmE(d.hata)+'</div>';return;}
+    tumKartlar=d.kartlar;
+    rmFiltreSayilariGuncelle(d.sayilar);
+    rmListeRender(tumKartlar);
+    // Önceki seçimi koru
+    if(seciliKart){
+      const hala=tumKartlar.find(k=>
+        (seciliKart.arge_test_id && k.arge_test_id===seciliKart.arge_test_id)||
+        (seciliKart.rf_id && k.rf_id===seciliKart.rf_id && !k.arge_test_id)
+      );
+      if(hala) rmDetayYukle(hala);
+    }
+  }catch(err){
+    el.innerHTML='<div class="rm-yukleniyor">Ağ hatası</div>';
+  }
+}
+
+function rmListeRender(kartlar){
+  const el=document.getElementById('rm-liste');
+  if(!kartlar.length){
+    el.innerHTML='<div class="rm-yukleniyor">Sonuç bulunamadı</div>';
+    return;
+  }
+  el.innerHTML=kartlar.map(k=>{
+    const secilik=(seciliKart&&(
+      (seciliKart.arge_test_id&&k.arge_test_id===seciliKart.arge_test_id)||
+      (seciliKart.rf_id&&k.rf_id===seciliKart.rf_id&&!k.arge_test_id)
+    ));
+    const rzCls=rmDurumRz(k.liste_grubu);
+    const kodStr=k.rf_kodu&&k.rf_kodu!=='—'?k.rf_kodu:(k.arge_kodu||'—');
+    return `<div class="rm-rf-kart${secilik?' aktif':''}"
+                onclick='rmKartSec(${JSON.stringify(k)})'>
+      <div class="rm-rf-kart-kod">${rmE(kodStr)}</div>
+      <div class="rm-rf-kart-ad">${rmE(k.rf_adi)}</div>
+      <div class="rm-rf-kart-meta">${rmE(k.cari_kodu)}</div>
+      <div class="rm-rf-kart-durum">
+        <span class="${rzCls}">${rmE(k.durum_etiketi)}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function rmFiltre(btn){
+  document.querySelectorAll('#rm-filtre-bar .rm-fb').forEach(b=>b.classList.remove('aktif'));
+  btn.classList.add('aktif');
+  aktifFiltre=btn.dataset.f;
+  rmListeYukle();
+}
+
+function rmAra(v){
+  araMetni=v.trim();
+  clearTimeout(rmAra._t);
+  rmAra._t=setTimeout(rmListeYukle,300);
+}
+
+function rmKartSec(k){
+  seciliKart=k;
+  rmDetayYukle(k);
+  // Liste vurgusunu güncelle
+  document.querySelectorAll('.rm-rf-kart').forEach(el=>el.classList.remove('aktif'));
+  // seçili kartı vurgula
+  rmListeRender(tumKartlar);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  DETAY YÜKLEer
+// ══════════════════════════════════════════════════════════════════════
+async function rmDetayYukle(k){
+  document.getElementById('rm-bos').style.display='none';
+  const detayEl=document.getElementById('rm-detay');
+  detayEl.style.display='flex';
+  document.getElementById('s-calisma').innerHTML='<div class="rm-yukleniyor">Yükleniyor…</div>';
+
+  const params=new URLSearchParams();
+  if(k.arge_test_id) params.set('arge_test_id',k.arge_test_id);
+  else params.set('rf_id',k.rf_id);
+
+  try{
+    const res=await fetch('/nexgen/api/renk-merkezi/detay?'+params.toString());
+    const d=await res.json();
+    if(!d.ok){
+      document.getElementById('s-calisma').innerHTML='<div class="rm-yukleniyor">Hata: '+rmE(d.hata)+'</div>';
+      return;
+    }
+    rmRender(k, d);
+  }catch(err){
+    document.getElementById('s-calisma').innerHTML='<div class="rm-yukleniyor">Ağ hatası</div>';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  RENDER
+// ══════════════════════════════════════════════════════════════════════
+const TL_ADIMLAR=['Talep','AR-GE','Ferhat','Onay','Aktif'];
+
+function rmTlHtml(grubu){
+  // Timeline adım durumlarını liste grubuna göre belirle
+  let tl=[0,0,0,0,0];
+  if(grubu==='AKTİF')          tl=[1,1,1,1,1];
+  else if(grubu==='PASİF')     tl=[1,1,1,1,0];
+  else                          tl=[1,1,1,2,0];  // BEKLEYEN/REVİZE
+
+  let h='';
+  for(let i=0;i<TL_ADIMLAR.length;i++){
+    const s=tl[i];
+    const nc=s===1?'done':s===2?'cur':'';
+    h+=`<div class="rm-tl-adim ${nc}"><div class="rm-tl-dot ${nc}"></div>${s===1?'✓ ':''}${rmE(TL_ADIMLAR[i])}</div>`;
+    if(i<TL_ADIMLAR.length-1)
+      h+=`<div class="rm-tl-line${s===1?' done':''}"></div>`;
+  }
+  return h;
+}
+
+function rmRender(kart, d){
+  const oz=d.ozet;
+  const grubu=kart.liste_grubu;
+
+  // Başlık
+  document.getElementById('rm-hdr-ad').textContent=(oz.arge_kodu||'')+' — '+(oz.rf_adi||'');
+
+  // Özet
+  const kodStr=[oz.arge_kodu,oz.rf_kodu].filter(Boolean).join(' · ');
+  document.getElementById('oz-ad').textContent=oz.rf_adi||'—';
+  document.getElementById('oz-kodlar').textContent=kodStr;
+  document.getElementById('oz-alt').textContent=
+    [oz.cari,oz.ana_formul].filter(v=>v&&v!=='—').join(' · ');
+
+  const rzCls=rmDurumRz(grubu);
+  const revBadge=oz.rf_kodu&&oz.rf_kodu!=='—'
+    ?`<span class="rm-rozet rm-rozet-taslak" style="margin-left:4px">REV-1</span>`:'';
+  document.getElementById('oz-durum').innerHTML=
+    `<span class="${rzCls}">${rmE(oz.durum_etiketi||oz.durum)}</span>${revBadge}`;
+  document.getElementById('oz-onay').innerHTML=
+    oz.onaylayan_id&&oz.onay_tarihi
+      ?`Onay tarihi: ${rmE(oz.onay_tarihi)}`:'';
+
+  // Timeline
+  document.getElementById('rm-tl').innerHTML=rmTlHtml(grubu);
+
+  // Butonlar — duruma göre
+  let btnHtml='';
+  if(grubu==='BEKLEYEN'&&CAN_APPROVE&&d.calisma){
+    btnHtml=`
+      <button class="rm-btn rm-btn-onay" onclick="rmOnayla(${kart.arge_test_id})">✓ ONAYLA VE AKTİF ET</button>
+      <button class="rm-btn rm-btn-arge" onclick="rmSonrakiFaz('Revize Gönder')">↩ Revize Gönder</button>
+      <button class="rm-btn rm-btn-arge" onclick="rmSonrakiFaz('Reddet')">✕ Reddet</button>
+    `;
+  } else if(grubu==='AKTİF'){
+    const rfId = (d.ozet && d.ozet.rf_id) || kart.rf_id || null;
+    aktifRfId = rfId;
+    btnHtml=`
+      <button class="rm-btn rm-btn-detay" onclick="rmSonrakiFaz('Düzenle')">Düzenle</button>
+      <button class="rm-btn rm-btn-arge"   onclick="rmYeniRevizyon(${rfId||'null'})">Yeni Revizyon</button>
+      ${CAN_MANAGE?`<button class="rm-btn rm-btn-onay" onclick="rmFormulBaglaAc()">Formüle Bağla</button>
+      <button class="rm-btn rm-btn-arge" onclick="rmPasifeAl()">Pasife Al</button>`:''}
+    `;
+  } else if(grubu==='PASİF' && oz.rf_aktif===0){
+    aktifRfId = oz.rf_id || kart.rf_id || null;
+    btnHtml=CAN_MANAGE?`<button class="rm-btn rm-btn-onay" onclick="rmAktifeAl()">Yeniden Aktifleştir</button>`:'';
+  } else {
+    aktifRfId = oz.rf_id || kart.rf_id || null;
+    btnHtml=`<button class="rm-btn rm-btn-detay" onclick="rmSonrakiFaz('Düzenle')">Düzenle</button>`;
+  }
+  document.getElementById('rm-btn-bant').innerHTML=btnHtml;
+
+  // Sekme sıfırla
+  document.querySelectorAll('.rm-sekme').forEach((b,i)=>b.classList.toggle('aktif',i===0));
+  document.querySelectorAll('.rm-sek-ic').forEach((el,i)=>el.classList.toggle('goster',i===0));
+
+  // ─── ÇALIŞMA sekmesi ────────────────────────────────────────────────
+  const c=d.calisma;
+  let solHtml='';
+  if(c){
+    solHtml=`
+      <div class="rm-bl">
+        <div class="rm-bl-bas">Talep Bilgisi</div>
+        <div class="rm-bs"><span class="rm-be">Çalışma türü</span><span class="rm-bv">${rmE(oz.kaynak)}</span></div>
+        <div class="rm-bs"><span class="rm-be">Cari</span><span class="rm-bv">${rmE(oz.cari)}</span></div>
+        <div class="rm-bs"><span class="rm-be">RF adı</span><span class="rm-bv">${rmE(oz.rf_adi)}</span></div>
+        <div class="rm-bs"><span class="rm-be">Ana formül</span><span class="rm-bv">${rmE(oz.ana_formul)}</span></div>
+        <div class="rm-bs"><span class="rm-be">Test No</span><span class="rm-bv">${rmE(c.test_no||'—')}</span></div>
+        <div class="rm-bs"><span class="rm-be">Tarih</span><span class="rm-bv">${rmE((c.olusturma_tarihi||'—').substring(0,10))}</span></div>
+        <div class="rm-bs"><span class="rm-be">Numune</span><span class="rm-bv">${c.test_batch_kg||'—'} KG</span></div>
+        ${c.notlar?`<div class="rm-bs"><span class="rm-be">Not</span><span class="rm-bv" style="font-weight:400;color:var(--rm-t3)">${rmE(c.notlar)}</span></div>`:''}
+      </div>`;
+  } else {
+    solHtml='<div class="rm-bl"><div class="rm-bl-bas">Talep Bilgisi</div><div style="font-size:11px;color:var(--rm-t4);padding:8px 0">AR-GE verisi yok (Legacy RF).</div></div>';
+  }
+
+  let sagHtml='';
+  if(c&&(c.shore_degeri!=null||c.renk_tuttu!=null||c.ferhat_adi)){
+    const renkOk=c.renk_tuttu===1||c.renk_tuttu===true;
+    sagHtml=`
+      <div class="rm-bl">
+        <div class="rm-bl-bas">Ferhat Saha Sonucu</div>
+        ${c.ferhat_adi?`<div class="rm-bs"><span class="rm-be">Yapan</span><span class="rm-bv">${rmE(c.ferhat_adi)}</span></div>`:''}
+        ${c.ferhat_tarihi?`<div class="rm-bs"><span class="rm-be">Tarih</span><span class="rm-bv">${rmE(c.ferhat_tarihi)}</span></div>`:''}
+        ${c.shore_hedef!=null?`<div class="rm-bs"><span class="rm-be">Shore hedef</span><span class="rm-bv">${c.shore_hedef}</span></div>`:''}
+        ${c.shore_degeri!=null?`<div class="rm-bs"><span class="rm-be">Shore sonuç</span><span class="rm-bv ${renkOk?'iyi':'kotu'}">${String(c.shore_degeri).replace('.',',')}</span></div>`:''}
+        ${c.pisme_suresi_dk!=null?`<div class="rm-bs"><span class="rm-be">Pişme</span><span class="rm-bv">${c.pisme_suresi_dk} dk</span></div>`:''}
+        ${c.renk_tuttu!=null?`<div class="rm-bs"><span class="rm-be">Renk</span><span class="rm-bv ${renkOk?'iyi':'kotu'}">${renkOk?'UYGUN':'UYGUN DEĞİL'}</span></div>`:''}
+        ${c.kopurme_notu?`<div class="rm-bs"><span class="rm-be">Köpürme</span><span class="rm-bv">${rmE(c.kopurme_notu)}</span></div>`:''}
+        ${c.genel_aciklama?`<div class="rm-bs"><span class="rm-be">Genel</span><span class="rm-bv">${rmE(c.genel_aciklama)}</span></div>`:''}
+        ${c.sonuc_notu?`<div class="rm-bs"><span class="rm-be">Sonuç notu</span><span class="rm-bv" style="font-weight:400;color:var(--rm-t3)">${rmE(c.sonuc_notu)}</span></div>`:''}
+      </div>`;
+  } else if(c){
+    sagHtml=`<div class="rm-bl"><div class="rm-bl-bas">Ferhat Saha Sonucu</div><div style="font-size:11px;color:var(--rm-t4);padding:8px 0">Ferhat saha sonucu henüz girilmedi.</div></div>`;
+  }
+
+  let kararHtml='';
+  if(grubu==='BEKLEYEN'&&CAN_APPROVE&&c){
+    kararHtml=`
+      <div class="rm-onay-kutu" style="grid-column:1/-1">
+        <div class="rm-onay-btns">
+          <button class="rm-btn rm-btn-green" onclick="rmOnayla(${kart.arge_test_id})">✓ ONAYLA VE AKTİF ET</button>
+          <button class="rm-btn rm-btn-orange" onclick="rmSonrakiFaz('Revize Gönder')">↩ Revize Gönder</button>
+          <button class="rm-btn rm-btn-red"    onclick="rmSonrakiFaz('Reddet')">✕ Reddet</button>
+        </div>
+        <div class="rm-onay-not">Onaylandığında RF aktifleşir ve Reçete Merkezi, Pazarlama ve üretim seçimlerinde kullanılabilir.</div>
+      </div>`;
+  }
+
+  document.getElementById('s-calisma').innerHTML=
+    `<div class="rm-2k">${solHtml}${sagHtml}${kararHtml}</div>`;
+
+  // ─── PİGMENT sekmesi ───────────────────────────────────────────────
+  document.getElementById('s-pigmentler').innerHTML=rmPigmentTabloHtml(
+    d.pigmentler||[], d.pigment_ozet||d.ozet
+  );
+
+  // ─── BAĞLANTILAR sekmesi ────────────────────────────────────────────
+  document.getElementById('s-baglantilar').innerHTML=rmBaglantiHtml(
+    d.baglantilar||[], d.baglantilar_gecmis||[]
+  );
+
+  // ─── GEÇMİŞ sekmesi ────────────────────────────────────────────────
+  const revs=d.revizyonlar||[];
+  const kulls=d.kullanim||[];
+
+  const revHtml=`
+    <div class="rm-sek-bas">Revizyon Geçmişi</div>
+    ${revs.length?revs.map(rv=>`
+      <div class="rm-hg">
+        <span class="rm-hg-i">REV-${rv.rev_no} — ${rmE(rv.durum)}</span>
+        <span class="rm-hg-k">${rv.kilitli_mi?'Kilitli':''}</span>
+        <span class="rm-hg-t">${rmE((rv.onay_tarihi||rv.olusturma_tarihi||'').substring(0,10))}</span>
+      </div>`).join('')
+    :'<div style="font-size:11px;color:var(--rm-t4);padding:8px 0">Revizyon kaydı yok.</div>'}
+  `;
+
+  const kullHtml=`
+    <div class="rm-sek-bas" style="margin-top:12px">Kullanım Geçmişi</div>
+    ${kulls.length?kulls.map(k=>`
+      <div class="rm-hg">
+        <span class="rm-hg-i">${rmE(k.batch_kodu)} — ${rmE(k.formul_adi||'')}</span>
+        <span class="rm-hg-k">${k.kg!=null?k.kg+' KG':''}</span>
+        <span class="rm-hg-t">${rmE((k.tarih||'').substring(0,10))}</span>
+      </div>`).join('')
+    :'<div style="font-size:11px;color:var(--rm-t4);padding:8px 0">Henüz üretimde kullanılmadı.</div>'}
+  `;
+
+  document.getElementById('s-gecmis').innerHTML=revHtml+kullHtml;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  YENİ REVİZYON
+// ══════════════════════════════════════════════════════════════════════
+async function rmYeniRevizyon(rfId){
+  if(!rfId){rmToast('RF ID bulunamadı.','hata');return;}
+  if(!CAN_APPROVE){rmSonrakiFaz('Yeni Revizyon (yetki yok)');return;}
+  const neden = prompt('Revizyon nedeni (opsiyonel):','');
+  if(neden===null)return;
+  try{
+    const res=await fetch(`/nexgen/api/boya-recetesi/${rfId}/revizyon-ac`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':rmCsrf()},
+      body:JSON.stringify({neden:neden.trim()||null}),
+    });
+    const d=await res.json();
+    if(d.ok){
+      rmToast('Yeni TASLAK revizyon açıldı. Reçete Merkezi\'nden düzenleyebilirsiniz.','basari');
+      await rmListeYukle();
+    } else {
+      rmToast('Hata: '+(d.hata||'Bilinmeyen hata'),'hata');
+    }
+  }catch(err){rmToast('Ağ hatası','hata');}
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  ONAY
+// ══════════════════════════════════════════════════════════════════════
+async function rmOnayla(argeTestId){
+  if(!argeTestId){rmToast('AR-GE ID bulunamadı.','hata');return;}
+  if(!confirm('Bu çalışmayı onaylamak ve RF aktif etmek istiyor musunuz?')) return;
+
+  try{
+    const res=await fetch('/nexgen/api/renk-merkezi/onayla',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':rmCsrf()},
+      body:JSON.stringify({arge_test_id:argeTestId}),
+    });
+    const d=await res.json();
+    if(!d.ok){
+      if(d.hata&&d.hata.includes('mevcut')){
+        rmToast('RF zaten oluşturulmuş ve aktif.','basari');
+      } else {
+        rmToast('Hata: '+(d.hata||'Bilinmeyen hata'),'hata');
+      }
+      return;
+    }
+    rmToast('RF oluşturuldu ve aktifleşti: '+(d.rf_kod||''),'basari');
+    await rmListeYukle();
+  }catch(err){
+    rmToast('Ağ hatası','hata');
+  }
+}
+
+function rmCsrf(){
+  const m=document.cookie.match(/csrf_token=([^;]+)/);
+  if(m)return decodeURIComponent(m[1]);
+  const el=document.querySelector('meta[name="csrf-token"]');
+  return el?el.content:'';
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  FORMÜLE BAĞLA
+// ══════════════════════════════════════════════════════════════════════
+async function rmFormulBaglaAc(){
+  if(!aktifRfId){rmToast('RF seçili değil.','hata');return;}
+  if(!CAN_MANAGE){rmToast('Yetki yok.','hata');return;}
+  rmFbSeciliIds.clear();
+  document.getElementById('rm-fb-popup-bg').style.display='flex';
+  const el=document.getElementById('rm-fb-liste');
+  el.innerHTML='<div class="rm-yukleniyor">Yükleniyor…</div>';
+  try{
+    const res=await fetch('/nexgen/api/renk-merkezi/cekirdek-formuller?rf_id='+aktifRfId);
+    const d=await res.json();
+    if(!d.ok){el.innerHTML='<div class="rm-yukleniyor">Hata: '+rmE(d.hata)+'</div>';return;}
+    if(!d.formuller.length){
+      el.innerHTML='<div class="rm-yukleniyor">Çekirdek formül bulunamadı.</div>';return;
+    }
+    el.innerHTML=d.formuller.map(f=>{
+      const cls='rm-fb-satir'+(f.zaten_bagli?' zaten':'');
+      return `<div class="${cls}" data-fid="${f.formul_id}" onclick="rmFbSatirSec(this,${f.formul_id},${f.zaten_bagli?'true':'false'})">
+        <input type="checkbox" ${f.zaten_bagli?'disabled checked':''} onclick="event.stopPropagation()">
+        <span class="rm-fb-kod">${rmE(f.kod)}</span>
+        <span class="rm-fb-alt">${rmE(f.alt_metin)}</span>
+        ${f.zaten_bagli?'<span class="rm-rozet rm-rozet-taslak">Bağlı</span>':''}
+      </div>`;
+    }).join('');
+  }catch(err){el.innerHTML='<div class="rm-yukleniyor">Ağ hatası</div>';}
+}
+function rmFbSatirSec(el,fid,zaten){
+  if(zaten) return;
+  el.classList.toggle('secili');
+  const cb=el.querySelector('input[type=checkbox]');
+  if(el.classList.contains('secili')){rmFbSeciliIds.add(fid);if(cb)cb.checked=true;}
+  else{rmFbSeciliIds.delete(fid);if(cb)cb.checked=false;}
+}
+function rmFbPopupKapat(){
+  document.getElementById('rm-fb-popup-bg').style.display='none';
+}
+function rmFbPopupBgClick(e){
+  if(e.target.id==='rm-fb-popup-bg') rmFbPopupKapat();
+}
+async function rmFormulBaglaKaydet(){
+  if(!aktifRfId||!rmFbSeciliIds.size){
+    rmToast('En az bir formül seçin.','hata');return;
+  }
+  try{
+    const res=await fetch('/nexgen/api/renk-merkezi/formul-bagla',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':rmCsrf()},
+      body:JSON.stringify({rf_id:aktifRfId, formul_ids:[...rmFbSeciliIds]}),
+    });
+    const d=await res.json();
+    if(!d.ok){rmToast(d.hata||'Bağlantı eklenemedi.','hata');return;}
+    const ukMsg=(d.eklenen||[]).map(e=>e.uretim_kodu).filter(Boolean)
+      .concat((d.atlanan||[]).filter(a=>a.idempotent&&a.uretim_kodu).map(a=>a.uretim_kodu))
+      .map(k=>k+' üretim kodu oluşturuldu.').join(' ');
+    rmToast(ukMsg||d.mesaj||'Bağlandı.','basari');
+    rmFbPopupKapat();
+    if(seciliKart) await rmDetayYukle(seciliKart);
+    if(typeof window.rmReceteRfYenile==='function') window.rmReceteRfYenile();
+  }catch(err){rmToast('Ağ hatası','hata');}
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  BAĞLANTI KALDIR / PASİFE AL
+// ══════════════════════════════════════════════════════════════════════
+async function rmBaglantiKaldir(uygunlukId){
+  if(!aktifRfId||!CAN_MANAGE) return;
+  if(!confirm('Bu formül bağlantısını kaldırmak istiyor musunuz?')) return;
+  try{
+    const res=await fetch('/nexgen/api/renk-merkezi/baglanti-kaldir',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':rmCsrf()},
+      body:JSON.stringify({rf_id:aktifRfId, uygunluk_id:uygunlukId}),
+    });
+    const d=await res.json();
+    if(!d.ok){rmToast(d.hata||'Kaldırılamadı.','hata');return;}
+    rmToast(d.mesaj||'Kaldırıldı.','basari');
+    if(seciliKart) await rmDetayYukle(seciliKart);
+  }catch(err){rmToast('Ağ hatası','hata');}
+}
+async function rmPasifeAl(){
+  if(!aktifRfId||!CAN_MANAGE) return;
+  if(!confirm('Bu rengi pasife almak istiyor musunuz? Yeni seçimlerde görünmez.')) return;
+  try{
+    const res=await fetch('/nexgen/api/renk-merkezi/pasife-al',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':rmCsrf()},
+      body:JSON.stringify({rf_id:aktifRfId}),
+    });
+    const d=await res.json();
+    if(!d.ok){rmToast(d.hata||'Pasife alınamadı.','hata');return;}
+    rmToast(d.mesaj||'Pasife alındı.','basari');
+    seciliKart=null;
+    await rmListeYukle();
+  }catch(err){rmToast('Ağ hatası','hata');}
+}
+async function rmAktifeAl(){
+  if(!aktifRfId||!CAN_MANAGE) return;
+  try{
+    const res=await fetch('/nexgen/api/renk-merkezi/aktife-al',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':rmCsrf()},
+      body:JSON.stringify({rf_id:aktifRfId}),
+    });
+    const d=await res.json();
+    if(!d.ok){rmToast(d.hata||'Aktifleştirilemedi.','hata');return;}
+    rmToast(d.mesaj||'Aktifleştirildi.','basari');
+    await rmListeYukle();
+    if(seciliKart) await rmDetayYukle(seciliKart);
+  }catch(err){rmToast('Ağ hatası','hata');}
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  SEKME
+// ══════════════════════════════════════════════════════════════════════
+function rmSekme(btn){
+  document.querySelectorAll('.rm-sekme').forEach(b=>b.classList.remove('aktif'));
+  document.querySelectorAll('.rm-sek-ic').forEach(el=>el.classList.remove('goster'));
+  btn.classList.add('aktif');
+  document.getElementById('s-'+btn.dataset.s).classList.add('goster');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  BAŞLAT
+// ══════════════════════════════════════════════════════════════════════
+rmListeYukle();
+</script>
+{% endblock %}

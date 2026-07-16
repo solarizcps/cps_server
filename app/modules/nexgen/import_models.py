@@ -205,6 +205,23 @@ class NormalizedKullanim:
 
 
 @dataclass
+class NormalizedCekirdekKolon:
+    """Çekirdek import: her Excel kolonu = ayrı ana formül (1BA/2BA/3BA)."""
+    formul_kod: str
+    formul_ad: str = ""
+    urun_ailesi: str = ""
+    varyant: str = ""
+    boyut: str = ""
+    kalip_carpani: float | None = None
+    durum: str = ""
+    cari_kodu: str = ""
+    sutun_harf: str = ""
+    mamul_uretim_kodu: str = ""
+    ana_kalemler: list[NormalizedKalem] = field(default_factory=list)
+    fingerprint_ana: str = ""
+
+
+@dataclass
 class ImportPackage:
     formuller: list[NormalizedFormul] = field(default_factory=list)
     kullanimlar: list[NormalizedKullanim] = field(default_factory=list)
@@ -212,6 +229,8 @@ class ImportPackage:
     cari_referanslari: list[HamCariKaydi] = field(default_factory=list)
     uyarilar: list[str] = field(default_factory=list)
     kaynak_bilgisi: dict[str, Any] = field(default_factory=dict)
+    cekirdek_import: bool = False
+    cekirdek_kolonlar: list[NormalizedCekirdekKolon] = field(default_factory=list)
 
 
 @dataclass

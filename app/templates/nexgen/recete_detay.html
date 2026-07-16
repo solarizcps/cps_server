@@ -55,7 +55,7 @@
               padding:8px 16px;margin-bottom:10px;font-size:11px;color:#166534;
               display:flex;align-items:center;gap:8px;">
     <span>✓</span>
-    <span>Taslak tamamlanmış görünüyor. Onaya göndermek için Durum &amp; Onay sekmesini kullanın.</span>
+    <span>Taslak tamamlanmış görünüyor. Onayı Reçete Merkezi sol panelinden verin.</span>
   </div>
   {% endif %}
 
@@ -142,7 +142,7 @@
       </svg>
       Hesap Paneli
     </button>
-    <button class="rd-sekme-btn" data-sekme="durum" onclick="rcSekme('durum')">
+    <button class="rd-sekme-btn" data-sekme="durum" onclick="rcSekme('durum')" style="display:none" aria-hidden="true">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
            stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
         <polyline points="9 11 12 14 22 4"/>
@@ -459,7 +459,21 @@
   <div id="rc-sekme-rfboya" class="rd-sekme-icerik" style="display:none">
 
     <div class="rfb-ust-bant">
-      <div class="rfb-baslik">RF / Boya Reçeteleri</div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div class="rfb-baslik">RF / Boya Reçeteleri</div>
+        <a href="{{ url_for('nexgen.renk_merkezi') }}"
+           class="rfb-rm-link"
+           title="Tüm renk çalışmalarını Renk Merkezi'nde yönet">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" width="11" height="11">
+            <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/>
+            <line x1="21.17" y1="8" x2="12" y2="8"/>
+            <line x1="3.95" y1="6.06" x2="8.54" y2="14"/>
+            <line x1="10.88" y1="21.94" x2="15.46" y2="14"/>
+          </svg>
+          Renk Merkezi'ne Git →
+        </a>
+      </div>
       <div class="rfb-aciklama">
         Pigment ve boya katmanı — ana reçeteden ayrı. Bu ekranda yalnızca görüntüleme.
       </div>
@@ -1711,6 +1725,16 @@ const RC_CAN_MANAGE = {{ 'true' if can_manage else 'false' }};
 }
 .rfb-baslik { font-size:15px; font-weight:700; color:#111827; margin-bottom:4px; }
 .rfb-aciklama { font-size:12px; color:#6b7280; line-height:1.5; }
+.rfb-rm-link {
+  display:inline-flex; align-items:center; gap:4px;
+  font-size:10px; font-weight:600; color:#15803d;
+  text-decoration:none; padding:3px 9px; border-radius:5px;
+  border:1px solid #bbf7d0; background:#f0fdf4;
+  transition:background .1s;
+}
+.rfb-rm-link:hover, .rfb-rm-link:focus {
+  background:#dcfce7; border-color:#86efac; text-decoration:none;
+}
 .rfb-filtre-bar {
   display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;
   padding:12px 14px; background:#f9fafb; border:1px solid #e5e7eb;
@@ -1787,8 +1811,9 @@ const RC_CAN_MANAGE = {{ 'true' if can_manage else 'false' }};
 
 <script>
 // ── Sekme geçişi ──────────────────────────────────────────────
-const RC_SEKMELER = ['recete', 'rfboya', 'genel', 'hesap', 'durum', 'klon', 'recycle', 'arge'];
+const RC_SEKMELER = ['recete', 'rfboya', 'genel', 'hesap', 'klon', 'recycle', 'arge'];
 function rcSekme(hedef) {
+  if (hedef === 'durum') hedef = 'recete';
   RC_SEKMELER.forEach(function(s) {
     const el = document.getElementById('rc-sekme-' + s);
     if (el) el.style.display = (s === hedef ? 'block' : 'none');
@@ -1801,7 +1826,7 @@ function rcSekme(hedef) {
 }
 (function(){
   const hash = (location.hash||'#recete').replace('#','');
-  const h = RC_SEKMELER.indexOf(hash) >= 0 ? hash : 'recete';
+  const h = (hash === 'durum') ? 'recete' : (RC_SEKMELER.indexOf(hash) >= 0 ? hash : 'recete');
   rcSekme(h);
 })();
 
