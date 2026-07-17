@@ -20450,6 +20450,489 @@ def _mpr_stok_ihtiyac_birlestir(con, plan_id, exclude_batch_kodu=None):
     }
 
 
+def _mi_merkez_kaynak_turu(kaynak_or_set):
+    """MPR kaynak kodunu merkezi ekran kaynak_turu değerine çevirir."""
+    if isinstance(kaynak_or_set, str):
+        srcs = {kaynak_or_set} if kaynak_or_set else set()
+    else:
+        srcs = set(kaynak_or_set or [])
+    mapped = set()
+    for s in srcs:
+        if s == 'TABAN':
+            mapped.add('ANA_RECETE')
+        elif s == 'RF':
+            mapped.add('BOYA_RECETESI')
+        elif s in ('ANA_RECETE', 'BOYA_RECETESI', 'HER_IKISI'):
+            mapped.add(s)
+    if 'ANA_RECETE' in mapped and 'BOYA_RECETESI' in mapped:
+        return 'HER_IKISI'
+    if 'BOYA_RECETESI' in mapped:
+        return 'BOYA_RECETESI'
+    if 'ANA_RECETE' in mapped:
+        return 'ANA_RECETE'
+    return 'ANA_RECETE'
+
+
+def _mi_merkez_plan_oku(con, plan_id):
+    """Malzeme İhtiyaç Merkezi — plan meta (dinamik kolon)."""
+    plan_cols = [c[1] for c in con.execute("PRAGMA table_info(nexgen_uretim_plan)").fetchall()]
+    rev_sql = ", rf_rev_no" if "rf_rev_no" in plan_cols else ", NULL AS rf_rev_no"
+    sip_sql = ", siparis_no" if "siparis_no" in plan_cols else ", NULL AS siparis_no"
+    must_sql = ", musteri_adi" if "musteri_adi" in plan_cols else ", NULL AS musteri_adi"
+    sip_id_sql = ", planlama_siparis_id AS siparis_id" if "planlama_siparis_id" in plan_cols else ", NULL AS siparis_id"
+    cari_sql = ", cari_id" if "cari_id" in plan_cols else ", NULL AS cari_id"
+    return con.execute(
+        f"SELECT id, plan_kodu, durum, uretim_varyant_id, planlanan_kg, "
+        f"rf_renk_id{rev_sql}{sip_sql}{must_sql}{sip_id_sql}{cari_sql} "
+        "FROM nexgen_uretim_plan WHERE id=?",
+        (plan_id,),
+    ).fetchone()
+
+
+def _mpr_plan_detay_trace_uret(con, plan_id, exclude_batch_kodu=None):
+    """Tek plan için boyut/UV kırılımlı hammadde trace — stok düşümü yapmaz."""
+    plan = _mi_merkez_plan_oku(con, plan_id)
+    if not plan:
+        return {'ok': False, 'hata': 'Plan bulunamadı'}
+
+    rf_renk_id = plan['rf_renk_id']
+    plan_rf_rev_no = plan['rf_rev_no']
+    satirlar = []
+
+    def _trace_satir_ekle(kalem, uretim_meta):
+        sid = kalem.get('stok_kart_id')
+        batch_sayisi = int(uretim_meta.get('batch_sayisi') or uretim_meta.get('formul_adedi') or 0)
+        gerekli = float(kalem.get('gerekli_kg') or 0)
+        bir_formulde_kg = round(gerekli / batch_sayisi, 6) if batch_sayisi > 0 else 0.0
+        kaynak_raw = kalem.get('kaynak')
+        satirlar.append({
+            'plan_id': plan_id,
+            'plan_kodu': plan['plan_kodu'],
+            'siparis_id': plan['siparis_id'],
+            'siparis_no': plan['siparis_no'],
+            'cari_id': plan['cari_id'],
+            'musteri_adi': plan['musteri_adi'],
+            'boyut': uretim_meta.get('boyut'),
+            'uretim_varyant_id': uretim_meta.get('uretim_varyant_id'),
+            'formul_kod': uretim_meta.get('formul_kod'),
+            'rv_id': uretim_meta.get('rv_id'),
+            'rv_ad': uretim_meta.get('rv_ad'),
+            'siparis_kg': uretim_meta.get('siparis_kg'),
+            'uretilecek_kg': uretim_meta.get('uretilecek_kg'),
+            'formul_adedi': uretim_meta.get('formul_adedi'),
+            'batch_sayisi': batch_sayisi,
+            'kaynak': kaynak_raw,
+            'kaynak_turu': _mi_merkez_kaynak_turu(kaynak_raw),
+            'stok_kart_id': sid,
+            'stok_kod': kalem.get('stok_kod') or '',
+            'stok_ad': kalem.get('stok_ad') or '',
+            'pigment_ad': kalem.get('pigment_ad') or kalem.get('stok_ad') or '',
+            'stok_eslesmis': kalem.get('stok_eslesmis', sid is not None),
+            'bir_formulde_kg': bir_formulde_kg,
+            'gerekli_kg': gerekli,
+        })
+
+    boyut_parcalari = _plan_boyut_parcalari_list(con, plan_id)
+    if boyut_parcalari:
+        for bp in boyut_parcalari:
+            uv_id = bp.get('uretim_varyant_id')
+            if not uv_id:
+                return {'ok': False, 'hata': 'Boyut satırında üretim varyantı yok', 'boyut': bp.get('boyut')}
+            hesap = _mpr_stok_ihtiyac_hesapla(
+                con, uv_id, rf_renk_id, bp['siparis_kg'],
+                exclude_batch_kodu=exclude_batch_kodu,
+                rf_rev_no=plan_rf_rev_no,
+            )
+            if not hesap.get('ok'):
+                return {
+                    'ok': False,
+                    'hata': hesap.get('hata', 'Hesaplanamadı'),
+                    'boyut': bp.get('boyut'),
+                }
+            dbg = hesap.get('debug_info') or {}
+            uretim_meta = {
+                'boyut': bp.get('boyut') or dbg.get('boyut'),
+                'uretim_varyant_id': uv_id,
+                'formul_kod': dbg.get('formul_kod'),
+                'rv_id': dbg.get('rv_id'),
+                'rv_ad': dbg.get('rv_ad'),
+                'siparis_kg': hesap.get('siparis_kg'),
+                'uretilecek_kg': hesap.get('uretilecek_kg'),
+                'formul_adedi': hesap.get('formul_adedi'),
+                'batch_sayisi': hesap.get('batch_sayisi'),
+            }
+            for k in hesap.get('kalemler', []):
+                _trace_satir_ekle(k, uretim_meta)
+    else:
+        if not plan['uretim_varyant_id']:
+            return {'ok': False, 'hata': 'Plan varyant bilgisi yok'}
+        try:
+            planlanan_kg = float(plan['planlanan_kg'] or 0)
+        except (TypeError, ValueError):
+            planlanan_kg = 0.0
+        if planlanan_kg <= 0:
+            return {'ok': False, 'hata': 'planlanan_kg sıfırdan büyük olmalı'}
+        hesap = _mpr_stok_ihtiyac_hesapla(
+            con, plan['uretim_varyant_id'], rf_renk_id, planlanan_kg,
+            exclude_batch_kodu=exclude_batch_kodu,
+            rf_rev_no=plan_rf_rev_no,
+        )
+        if not hesap.get('ok'):
+            return {'ok': False, 'hata': hesap.get('hata', 'Hesaplanamadı')}
+        dbg = hesap.get('debug_info') or {}
+        uretim_meta = {
+            'boyut': dbg.get('boyut'),
+            'uretim_varyant_id': plan['uretim_varyant_id'],
+            'formul_kod': dbg.get('formul_kod'),
+            'rv_id': dbg.get('rv_id'),
+            'rv_ad': dbg.get('rv_ad'),
+            'siparis_kg': hesap.get('siparis_kg'),
+            'uretilecek_kg': hesap.get('uretilecek_kg'),
+            'formul_adedi': hesap.get('formul_adedi'),
+            'batch_sayisi': hesap.get('batch_sayisi'),
+        }
+        for k in hesap.get('kalemler', []):
+            _trace_satir_ekle(k, uretim_meta)
+
+    if not satirlar:
+        return {'ok': False, 'hata': 'Reçete kalemi bulunamadı'}
+
+    return {'ok': True, 'satirlar': satirlar}
+
+
+def _mpr_stok_ihtiyac_coklu_plan(con, plan_ids, exclude_batch_kodu=None):
+    """FAZ-MI-MERKEZ-BE-1 — Çoklu plan malzeme ihtiyacı wrapper.
+
+    Mevcut _mpr_stok_ihtiyac_birlestir / _mpr_stok_ihtiyac_hesapla motorunu yeniden kullanır.
+    Detay katmanı: plan × boyut × hammadde trace (stok düşümü yok).
+    Toplu katman: stok_kart_id bazında birleşik talep + stok tek seferde uygulanır.
+    """
+    if plan_ids is None:
+        return {'ok': False, 'hata': 'plan_ids zorunlu'}
+    if not isinstance(plan_ids, (list, tuple)):
+        return {'ok': False, 'hata': 'plan_ids liste olmalı'}
+
+    uniq_ids = []
+    seen = set()
+    for raw in plan_ids:
+        try:
+            pid = int(raw)
+        except (TypeError, ValueError):
+            return {'ok': False, 'hata': f'Geçersiz plan_id: {raw!r}'}
+        if pid <= 0:
+            return {'ok': False, 'hata': f'Geçersiz plan_id: {pid}'}
+        if pid not in seen:
+            seen.add(pid)
+            uniq_ids.append(pid)
+
+    if not uniq_ids:
+        return {'ok': False, 'hata': 'En az bir plan_id gerekli'}
+
+    plan_ozetleri = []
+    hesaplanamayan_planlar = []
+    detay = []
+    merged_talep = {}
+    stok_kart_meta = {}
+    stok_trace = {}
+    eslesmemis_rf = []
+
+    toplam_siparis_kg = 0.0
+    toplam_uretilecek_kg = 0.0
+    toplam_fazla_kg = 0.0
+    batch_toplam = 0
+
+    def _stok_trace_ensure(sid):
+        if sid not in stok_trace:
+            stok_trace[sid] = {
+                'kaynak_raw': set(),
+                'plan_ids': set(),
+                'siparis_ids': set(),
+                'cari_ids': set(),
+                'formul_kods': set(),
+            }
+        return stok_trace[sid]
+
+    def _stok_trace_kaydet(sid, plan_id, plan_row, trace_row):
+        tr = _stok_trace_ensure(sid)
+        tr['plan_ids'].add(plan_id)
+        if trace_row.get('kaynak'):
+            tr['kaynak_raw'].add(trace_row['kaynak'])
+        sip_id = plan_row['siparis_id']
+        if sip_id not in (None, ''):
+            try:
+                tr['siparis_ids'].add(int(sip_id))
+            except (TypeError, ValueError):
+                pass
+        cari_id = plan_row['cari_id']
+        if cari_id not in (None, ''):
+            try:
+                tr['cari_ids'].add(int(cari_id))
+            except (TypeError, ValueError):
+                pass
+        fk = trace_row.get('formul_kod')
+        if fk:
+            tr['formul_kods'].add(fk)
+
+    for plan_id in uniq_ids:
+        plan_row = _mi_merkez_plan_oku(con, plan_id)
+        if not plan_row:
+            hesaplanamayan_planlar.append({
+                'plan_id': plan_id,
+                'hata': 'Plan bulunamadı',
+            })
+            continue
+
+        plan_sonuc = _mpr_stok_ihtiyac_birlestir(
+            con, plan_id, exclude_batch_kodu=exclude_batch_kodu,
+        )
+        if not plan_sonuc.get('ok'):
+            hesaplanamayan_planlar.append({
+                'plan_id': plan_id,
+                'plan_kodu': plan_row['plan_kodu'],
+                'hata': plan_sonuc.get('hata', 'Hesaplanamadı'),
+            })
+            continue
+
+        trace_sonuc = _mpr_plan_detay_trace_uret(
+            con, plan_id, exclude_batch_kodu=exclude_batch_kodu,
+        )
+        if not trace_sonuc.get('ok'):
+            hesaplanamayan_planlar.append({
+                'plan_id': plan_id,
+                'plan_kodu': plan_row['plan_kodu'],
+                'hata': trace_sonuc.get('hata', 'Detay trace üretilemedi'),
+            })
+            continue
+
+        plan_ozetleri.append({
+            'plan_id': plan_id,
+            'plan_kodu': plan_row['plan_kodu'],
+            'siparis_id': plan_row['siparis_id'],
+            'siparis_no': plan_row['siparis_no'],
+            'cari_id': plan_row['cari_id'],
+            'musteri_adi': plan_row['musteri_adi'],
+            'durum': plan_row['durum'],
+            'rf_renk_id': plan_row['rf_renk_id'],
+            'toplam_siparis_kg': plan_sonuc.get('toplam_siparis_kg', plan_sonuc.get('siparis_kg', 0)),
+            'toplam_uretilecek_kg': plan_sonuc.get('toplam_uretilecek_kg', plan_sonuc.get('uretilecek_kg', 0)),
+            'toplam_faturalanacak_kg': plan_sonuc.get(
+                'toplam_uretilecek_kg', plan_sonuc.get('uretilecek_kg', 0),
+            ),
+            'toplam_fazla_kg': plan_sonuc.get('toplam_fazla_kg', plan_sonuc.get('fazla_kg', 0)),
+            'toplam_hammadde_kg': plan_sonuc.get('toplam_hammadde_kg', 0),
+            'batch_toplam': plan_sonuc.get('batch_toplam', plan_sonuc.get('batch_sayisi', 0)),
+            'yeterli_mi': plan_sonuc.get('yeterli_mi'),
+            'eksik_sayisi': plan_sonuc.get('eksik_sayisi', 0),
+            'cok_boyut': plan_sonuc.get('cok_boyut', False),
+        })
+
+        toplam_siparis_kg += float(plan_sonuc.get('toplam_siparis_kg') or plan_sonuc.get('siparis_kg') or 0)
+        toplam_uretilecek_kg += float(plan_sonuc.get('toplam_uretilecek_kg') or plan_sonuc.get('uretilecek_kg') or 0)
+        toplam_fazla_kg += float(plan_sonuc.get('toplam_fazla_kg') or plan_sonuc.get('fazla_kg') or 0)
+        batch_toplam += int(plan_sonuc.get('batch_toplam') or plan_sonuc.get('batch_sayisi') or 0)
+
+        for t in trace_sonuc['satirlar']:
+            sid = t.get('stok_kart_id')
+            gerekli = float(t.get('gerekli_kg') or 0)
+            if sid is None or not t.get('stok_eslesmis', sid is not None):
+                eslesmemis_rf.append({
+                    'plan_id': plan_id,
+                    'plan_kodu': t.get('plan_kodu'),
+                    'boyut': t.get('boyut'),
+                    'formul_kod': t.get('formul_kod'),
+                    'rv_ad': t.get('rv_ad'),
+                    'pigment_ad': t.get('pigment_ad') or t.get('stok_ad'),
+                    'gerekli_kg': gerekli,
+                })
+                detay.append({**t, 'net_eksik_kg': None, 'net_eksik_toplanabilir': False})
+                continue
+            if gerekli <= 0:
+                continue
+            merged_talep[sid] = round(merged_talep.get(sid, 0.0) + gerekli, 6)
+            _stok_trace_kaydet(sid, plan_id, plan_row, t)
+            if sid not in stok_kart_meta:
+                stok_kart_meta[sid] = {
+                    'stok_kod': t.get('stok_kod') or '',
+                    'stok_ad': t.get('stok_ad') or '',
+                    'pigment_ad': t.get('pigment_ad') or t.get('stok_ad') or '',
+                    'kaynak': t.get('kaynak') or '',
+                    'stok_eslesmis': True,
+                }
+            detay.append({**t, 'net_eksik_kg': None, 'net_eksik_toplanabilir': False})
+
+    if not merged_talep and not eslesmemis_rf:
+        hata = 'Hiçbir planda hammadde ihtiyacı hesaplanamadı'
+        if hesaplanamayan_planlar and not plan_ozetleri:
+            hata = hesaplanamayan_planlar[0].get('hata') or hata
+        return {
+            'ok': False,
+            'hata': hata,
+            'plan_ids': uniq_ids,
+            'hesaplanamayan_planlar': hesaplanamayan_planlar,
+        }
+
+    stok_bakiye = {}
+    for sid in merged_talep:
+        fiziksel = _mevcut_stok(con, sid)
+        rezerve = _aktif_rezerv_toplam(con, sid, exclude_batch_kodu)
+        yumusak = _yumusak_talep_toplam(con, sid, exclude_batch_kodu)
+        acik_sa = _acik_satin_alma_arzi(con, sid)
+        stok_bakiye[sid] = {
+            'fiziksel_kg': fiziksel,
+            'rezerve_kg': rezerve,
+            'yumusak_talep_kg': yumusak,
+            'kullanilabilir_kg': round(fiziksel - rezerve - yumusak, 3),
+            'yolda_kg': acik_sa['yolda_kg'],
+            'acik_sa_siparisler': acik_sa['siparisler'],
+        }
+
+    birim_map = {}
+    if merged_talep:
+        sid_list = list(merged_talep.keys())
+        placeholders = ','.join(['?'] * len(sid_list))
+        birim_map = {
+            r['id']: r['birim'] or 'KG'
+            for r in con.execute(
+                f"SELECT id, birim FROM nexgen_stok_kart WHERE id IN ({placeholders})",
+                sid_list,
+            ).fetchall()
+        }
+
+    eksik_stok_ids = set()
+    toplu = []
+    for sid, gerekli in merged_talep.items():
+        meta = stok_kart_meta[sid]
+        bak = stok_bakiye[sid]
+        kullanilabilir = bak['kullanilabilir_kg']
+        fark = round(kullanilabilir - gerekli, 3)
+        if fark < -0.0005:
+            eksik_stok_ids.add(sid)
+        fiziksel_eksik = round(max(gerekli - kullanilabilir, 0.0), 3)
+        yolda_kg = bak['yolda_kg']
+        net_eksik = round(max(fiziksel_eksik - yolda_kg, 0.0), 3)
+        th = _tahmini_hazir_tarih(
+            gerekli, kullanilabilir, {'siparisler': bak['acik_sa_siparisler']},
+        )
+        durum = _mpr_malzeme_durumu(
+            gerekli, kullanilabilir, yolda_kg, fiziksel_eksik, net_eksik,
+        )
+        tr = stok_trace.get(sid, {})
+        kaynak_turu = _mi_merkez_kaynak_turu(tr.get('kaynak_raw') or meta.get('kaynak'))
+        toplu.append({
+            'kaynak': meta['kaynak'],
+            'kaynak_turu': kaynak_turu,
+            'stok_kart_id': sid,
+            'stok_kod': meta['stok_kod'],
+            'stok_ad': meta['stok_ad'],
+            'pigment_ad': meta.get('pigment_ad') or meta['stok_ad'],
+            'stok_eslesmis': True,
+            'birim': birim_map.get(sid, 'KG'),
+            'gerekli_kg': gerekli,
+            'toplam_gerekli_kg': gerekli,
+            'fiziksel_kg': bak['fiziksel_kg'],
+            'rezerve_kg': bak['rezerve_kg'],
+            'yumusak_talep_kg': bak['yumusak_talep_kg'],
+            'kullanilabilir_kg': kullanilabilir,
+            'mevcut_kg': bak['fiziksel_kg'],
+            'fark_kg': fark,
+            'yeterli': sid not in eksik_stok_ids,
+            'yolda_kg': yolda_kg,
+            'fiziksel_eksik_kg': fiziksel_eksik,
+            'net_eksik_kg': net_eksik,
+            'net_eksik_toplanabilir': True,
+            'malzeme_durumu': durum,
+            'durum': durum,
+            'plan_sayisi': len(tr.get('plan_ids') or []),
+            'siparis_sayisi': len(tr.get('siparis_ids') or []),
+            'cari_sayisi': len(tr.get('cari_ids') or []),
+            'formul_sayisi': len(tr.get('formul_kods') or []),
+            'tahmini_hazir': th['tarih'],
+            'termin_riski': th['termin_riski'],
+            'tahmini_aciklama': th['aciklama'],
+            'acik_sa_siparisler': bak['acik_sa_siparisler'],
+        })
+
+    for d in detay:
+        sid = d.get('stok_kart_id')
+        if sid in stok_bakiye:
+            bak = stok_bakiye[sid]
+            d['fiziksel_kg'] = bak['fiziksel_kg']
+            d['rezerve_kg'] = bak['rezerve_kg']
+            d['yumusak_talep_kg'] = bak['yumusak_talep_kg']
+            d['kullanilabilir_kg'] = bak['kullanilabilir_kg']
+            d['yolda_kg'] = bak['yolda_kg']
+            d['birim'] = birim_map.get(sid, 'KG')
+
+    toplu.sort(key=lambda x: (x.get('kaynak') or '', x.get('stok_kod') or '', x.get('stok_kart_id') or 0))
+    detay.sort(key=lambda x: (
+        x.get('plan_id') or 0,
+        x.get('formul_kod') or '',
+        x.get('boyut') or '',
+        x.get('stok_kod') or '',
+        x.get('stok_kart_id') or 0,
+    ))
+
+    toplam_hammadde_kg = round(sum(merged_talep.values()), 3)
+    toplam_net_eksik_kg = round(sum(float(k.get('net_eksik_kg') or 0) for k in toplu), 3)
+    yeterli_kalem_sayisi = sum(1 for k in toplu if k.get('yeterli'))
+    yeterli_mi = len(eksik_stok_ids) == 0 and len(eslesmemis_rf) == 0
+
+    basarili_siparis_ids = set()
+    basarili_cari_ids = set()
+    for p in plan_ozetleri:
+        sip_id = p.get('siparis_id')
+        if sip_id not in (None, ''):
+            try:
+                basarili_siparis_ids.add(int(sip_id))
+            except (TypeError, ValueError):
+                pass
+        cari_id = p.get('cari_id')
+        if cari_id not in (None, ''):
+            try:
+                basarili_cari_ids.add(int(cari_id))
+            except (TypeError, ValueError):
+                pass
+
+    toplam_faturalanacak_kg = round(toplam_uretilecek_kg, 3)
+
+    ozet = {
+        'plan_sayisi': len(uniq_ids),
+        'basarili_plan_sayisi': len(plan_ozetleri),
+        'hesaplanamayan_plan_sayisi': len(hesaplanamayan_planlar),
+        'siparis_sayisi': len(basarili_siparis_ids),
+        'cari_sayisi': len(basarili_cari_ids),
+        'detay_satir_sayisi': len(detay),
+        'toplu_satir_sayisi': len(toplu),
+        'toplam_siparis_kg': round(toplam_siparis_kg, 3),
+        'toplam_talep_kg': round(toplam_siparis_kg, 3),
+        'toplam_uretilecek_kg': round(toplam_uretilecek_kg, 3),
+        'toplam_faturalanacak_kg': toplam_faturalanacak_kg,
+        'toplam_fazla_kg': round(toplam_fazla_kg, 3),
+        'toplam_hammadde_kg': toplam_hammadde_kg,
+        'batch_toplam': batch_toplam,
+        'toplam_net_eksik_kg': toplam_net_eksik_kg,
+        'eksik_stok_sayisi': len(eksik_stok_ids),
+        'eksik_kalem_sayisi': len(eksik_stok_ids),
+        'yeterli_kalem_sayisi': yeterli_kalem_sayisi,
+        'eslesmemis_rf_sayisi': len(eslesmemis_rf),
+        'yeterli_mi': yeterli_mi,
+    }
+
+    return {
+        'ok': True,
+        'plan_ids': uniq_ids,
+        'ozet': ozet,
+        'plan_ozetleri': plan_ozetleri,
+        'hesaplanamayan_planlar': hesaplanamayan_planlar,
+        'detay': detay,
+        'toplu': toplu,
+        'eslesmemis_rf': eslesmemis_rf,
+        'kalemler': toplu,
+        'yeterli_mi': yeterli_mi,
+        'eksik_sayisi': len(eksik_stok_ids) + len(eslesmemis_rf),
+    }
+
+
 def _formul_kalemleri_birimli(con, mpr_kalemler, kaynak):
     """_mpr_stok_ihtiyac_hesapla kalemlerini API görünüm formatına çevirir."""
     sid_list = [k['stok_kart_id'] for k in mpr_kalemler if k.get('kaynak') == kaynak]
@@ -21758,6 +22241,47 @@ def api_plan_stok_onizle():
         if not sonuc.get('ok'):
             return jsonify(sonuc), 400
         return jsonify(sonuc)
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/mi-merkez/analiz', methods=['POST'])
+@login_gerekli
+def api_mi_merkez_analiz():
+    """Malzeme İhtiyaç Merkezi — çoklu plan malzeme analizi (salt okuma, DB yazmaz)."""
+    if not (yetki_var('nexgen.plan.manage', 'can_manage') or
+            yetki_var('nexgen.plan.view', 'can_view')):
+        return jsonify({'ok': False, 'hata': 'Yetki yok'}), 403
+
+    d = request.get_json(silent=True) or {}
+    plan_ids = d.get('plan_ids')
+    if plan_ids is None:
+        return jsonify({'ok': False, 'hata': 'plan_ids zorunlu'}), 400
+    if not isinstance(plan_ids, list):
+        return jsonify({'ok': False, 'hata': 'plan_ids liste olmalı'}), 400
+    if len(plan_ids) > 200:
+        return jsonify({
+            'ok': False,
+            'hata': 'En fazla 200 plan aynı anda analiz edilebilir.',
+        }), 400
+    for raw in plan_ids:
+        if isinstance(raw, bool) or not isinstance(raw, int):
+            return jsonify({'ok': False, 'hata': f'Geçersiz plan_id: {raw!r}'}), 400
+
+    exclude_batch_kodu = d.get('exclude_batch_kodu')
+    if exclude_batch_kodu is not None and not isinstance(exclude_batch_kodu, str):
+        exclude_batch_kodu = str(exclude_batch_kodu)
+
+    con = _db()
+    try:
+        sonuc = _mpr_stok_ihtiyac_coklu_plan(
+            con, plan_ids, exclude_batch_kodu=exclude_batch_kodu,
+        )
+        if not sonuc.get('ok'):
+            return jsonify(sonuc), 400
+        return jsonify(sonuc)
+    except Exception:
+        return jsonify({'ok': False, 'hata': 'Analiz hesaplanamadı'}), 500
     finally:
         con.close()
 
