@@ -69,7 +69,7 @@ with open(TPL, encoding='utf-8') as f:
 
 for m in ['pzmDetayStokYukle', 'pzmDetayHydrate', 'pzmDetayUretimeGonder',
           'stokSonuclari', 'hydrating', 'uretimeGonderiliyor', 'pzmStokOzetHtml',
-          'Çok planlı sipariş için atomik']:
+          'pzmSiparisUretimeGonder', '/api/pazarlama/siparis/']:
     ok('template: ' + m[:35], m in tpl)
 
 shutil.copy2(SRC_DB, TEST_DB)

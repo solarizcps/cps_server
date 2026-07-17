@@ -17692,6 +17692,21 @@ def api_pazarlama_talep_iptal(talep_id):
         con.close()
 
 
+@nexgen_bp.route('/api/pazarlama/siparis/<int:talep_id>/uretime-gonder', methods=['POST'])
+@yetki_gerekli('nexgen.plan.manage', 'can_manage')
+def api_pazarlama_siparis_uretime_gonder(talep_id):
+    """Pazarlama siparişine bağlı tüm MPR planlarını atomik olarak üretime gönderir."""
+    data = request.get_json(silent=True) or {}
+    confirm = bool(data.get('confirm'))
+    con = _db()
+    try:
+        sonuc = _pzm_siparis_uretime_gonder_atomik(con, talep_id, _kullanici_id(), confirm=confirm)
+        status = sonuc.pop('status', 200)
+        return jsonify(sonuc), status
+    finally:
+        con.close()
+
+
 # ═════════════════════════════════════════════════════════════
 # ÜRETİM EMİRLERİ MERKEZİ V1 — plan → batch → tablet
 # ═════════════════════════════════════════════════════════════
@@ -18148,209 +18163,368 @@ def api_planlama_siparis_liste():
         con.close()
 
 
-@nexgen_bp.route('/api/mpr/<int:plan_id>/uretime-gonder', methods=['POST'])
-@yetki_gerekli('nexgen.plan.manage', 'can_manage')
-def api_mpr_uretime_gonder(plan_id):
-    """PLANLANDI durumundaki MPR planını üretime gönderir — STANDART ZİNCİR.
+def _mpr_plan_satir_yukle(con, plan_id):
+    """Üretime gönderme için plan satırı."""
+    rf_col = ", p.rf_renk_id" if _plan_rf_renk_kolonu_var(con) else ", NULL AS rf_renk_id"
+    cari_col = ", p.cari_id" if _plan_cari_kolonu_var(con) else ", NULL AS cari_id"
+    pls_col = ", p.planlama_siparis_id" if _plan_planlama_siparis_kolonu_var(con) else ", NULL AS planlama_siparis_id"
+    return con.execute(f"""
+        SELECT p.id, p.plan_kodu, p.durum, p.uretim_varyant_id, p.planlanan_kg,
+               p.notlar, p.termin_tarihi{rf_col}{cari_col}{pls_col}
+        FROM nexgen_uretim_plan p
+        WHERE p.id = ?
+    """, (plan_id,)).fetchone()
 
-    FAZ-MRP-02: PDF kararlı üretim zinciri (Üretime Gönder aşaması):
-      1. Plan kontrolü: PLANLANDI + reçete URETIME_ACIK
-      2. Duplicate koruması: aktif batch zaten varsa engel
-      3. Stok kontrolü: HARD BLOCK — eksik stokla üretime GEÇİLEMEZ
-         (PDF: "Üretime gerçek başlangıç için kullanılabilir fiziksel stok yeterli olmalı")
-         NOT: Yoldaki satın alma miktarı fiziksel stok sayılmaz (_kullanilabilir_stok kullanılır)
-      4. nexgen_uretim_batch INSERT (durum=HAZIR, plan_id bağlı)
-      5. nexgen_uretim_parca alt emirlerini otomatik oluşturur
-      6. _depo_hazirlik_olustur — depo hazırlık kaydı oluşturur (BEKLIYOR)
-      7. _rf_kullanim_tablet_sync — RF kullanım logu
-      8. nexgen_uretim_plan.durum = URETIMDE
-      9. Tablet bu batch'i HAZIR durumuyla görür
 
-    Tüm işlemler tek transaction içinde — hata olursa rollback, yarım kayıt kalmaz.
+def _mpr_stok_eksik_yanit(stok):
+    """Stok yetersizlik yanıt gövdesi."""
+    stok_eksik_sayisi = stok.get('eksik_sayisi', 0)
+    eksik = [
+        {
+            'stok_ad': k.get('stok_ad') or k.get('pigment_ad') or '?',
+            'stok_kod': k.get('stok_kod') or '',
+            'gerekli_kg': k.get('gerekli_kg'),
+            'kullanilabilir_kg': k.get('kullanilabilir_kg'),
+            'yolda_kg': k.get('yolda_kg', 0),
+            'net_eksik_kg': k.get('net_eksik_kg'),
+            'malzeme_durumu': k.get('malzeme_durumu', ''),
+        }
+        for k in stok.get('kalemler', []) if not k.get('yeterli')
+    ]
+    return {
+        'ok': False,
+        'stok_eksik': True,
+        'stok_eksik_sayisi': stok_eksik_sayisi,
+        'eksik_kalemler': eksik,
+        'hata': (
+            f'{stok_eksik_sayisi} kalemde stok yetersiz. '
+            'Üretime başlamak için fiziksel stok yeterli olmalıdır. '
+            'Yoldaki satın alma miktarı fiziksel stok sayılmaz.'
+        ),
+        'status': 400,
+    }
 
-    Eski soft-block davranışı (stok_eksik_onaylandi override) kaldırıldı.
-    PDF kararı: stok eksikse kesin engel.
-    """
-    import math as _math
-    con = _db()
-    try:
-        rf_col = ", p.rf_renk_id" if _plan_rf_renk_kolonu_var(con) else ", NULL AS rf_renk_id"
-        cari_col = ", p.cari_id" if _plan_cari_kolonu_var(con) else ", NULL AS cari_id"
-        pls_col = ", p.planlama_siparis_id" if _plan_planlama_siparis_kolonu_var(con) else ", NULL AS planlama_siparis_id"
-        plan = con.execute(f"""
-            SELECT p.id, p.plan_kodu, p.durum, p.uretim_varyant_id, p.planlanan_kg,
-                   p.notlar, p.termin_tarihi{rf_col}{cari_col}{pls_col}
-            FROM nexgen_uretim_plan p
-            WHERE p.id = ?
-        """, (plan_id,)).fetchone()
-        if not plan:
-            return jsonify({'ok': False, 'hata': 'Plan bulunamadı'}), 404
-        if plan['durum'] != 'PLANLANDI':
-            return jsonify({
-                'ok': False,
-                'hata': f'Sadece PLANLANDI planlar üretime gönderilebilir (mevcut: {plan["durum"]})'
-            }), 400
 
-        # Duplicate koruması: aktif batch zaten varsa engel
-        mevcut_batch = con.execute(
-            "SELECT batch_kodu FROM nexgen_uretim_batch WHERE plan_id = ? AND durum != 'IPTAL'",
-            (plan_id,)
-        ).fetchone()
-        if mevcut_batch:
-            return jsonify({
-                'ok': False,
-                'hata': f'Bu plan için zaten bir batch açık: {mevcut_batch["batch_kodu"]}'
-            }), 400
+def _mpr_plan_uretime_on_kontrol(con, plan_id, plan=None, izin_durumlar=('PLANLANDI',)):
+    """Yazma yapmadan plan üretime gönderme ön kontrolü."""
+    plan = plan or _mpr_plan_satir_yukle(con, plan_id)
+    if not plan:
+        return None, {'ok': False, 'hata': 'Plan bulunamadı', 'status': 404}
+    if plan['durum'] not in izin_durumlar:
+        return plan, {
+            'ok': False,
+            'hata': f'Plan durumu uygun değil: {plan["durum"]}',
+            'plan_id': plan_id,
+            'plan_kodu': plan['plan_kodu'],
+            'status': 400,
+        }
+    mevcut_batch = con.execute(
+        "SELECT batch_kodu FROM nexgen_uretim_batch WHERE plan_id = ? AND durum != 'IPTAL'",
+        (plan_id,),
+    ).fetchone()
+    if mevcut_batch:
+        return plan, {
+            'ok': False,
+            'hata': f'Bu plan için zaten bir batch açık: {mevcut_batch["batch_kodu"]}',
+            'plan_id': plan_id,
+            'plan_kodu': plan['plan_kodu'],
+            'status': 400,
+        }
+    uv_id = plan['uretim_varyant_id']
+    uv = con.execute(
+        "SELECT uv.id, uv.boyut, uv.recete_durum, rv.ad AS renk_ad, f.ad AS formul_ad "
+        "FROM nexgen_uretim_varyant uv "
+        "JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id "
+        "JOIN nexgen_formul f ON f.id = rv.formul_id "
+        "WHERE uv.id = ? AND uv.aktif = 1",
+        (uv_id,),
+    ).fetchone()
+    if not uv:
+        return plan, {
+            'ok': False,
+            'hata': 'Üretim varyantı bulunamadı veya pasif',
+            'plan_id': plan_id,
+            'plan_kodu': plan['plan_kodu'],
+            'status': 404,
+        }
+    if uv['recete_durum'] != 'URETIME_ACIK':
+        return plan, {
+            'ok': False,
+            'hata': f'Reçete üretime açık değil (mevcut: {uv["recete_durum"]}). ARGE onayı gerekiyor.',
+            'plan_id': plan_id,
+            'plan_kodu': plan['plan_kodu'],
+            'status': 400,
+        }
+    stok = _mpr_stok_ihtiyac_birlestir(con, plan_id)
+    if not stok.get('ok'):
+        err = {
+            'ok': False,
+            'hata': stok.get('hata', 'Stok hesaplanamadı'),
+            'plan_id': plan_id,
+            'plan_kodu': plan['plan_kodu'],
+            'status': 400,
+        }
+        return plan, err
+    if not stok.get('yeterli_mi', True):
+        err = _mpr_stok_eksik_yanit(stok)
+        err['plan_id'] = plan_id
+        err['plan_kodu'] = plan['plan_kodu']
+        return plan, err
+    return plan, {'ok': True, 'uv': uv}
 
-        uv_id = plan['uretim_varyant_id']
+
+def _mpr_plan_planlandi_yap_tx(con, plan_id, plan=None):
+    """ON_CALISMA → PLANLANDI (açık transaction içinde)."""
+    plan = plan or _mpr_plan_satir_yukle(con, plan_id)
+    if not plan:
+        raise ValueError('Plan bulunamadı')
+    if plan['durum'] == 'PLANLANDI':
+        return plan
+    if plan['durum'] != 'ON_CALISMA':
+        raise ValueError(f'Yalnız ON_CALISMA plan planlanabilir (mevcut: {plan["durum"]})')
+    if not plan['planlama_siparis_id']:
+        raise ValueError('Planlama siparişi bağlı değil.')
+    con.execute(
+        "UPDATE nexgen_uretim_plan SET durum='PLANLANDI' WHERE id=?",
+        (plan_id,),
+    )
+    if _planlama_siparis_tablosu_var(con):
+        con.execute("""
+            UPDATE nexgen_planlama_siparis
+            SET durum='PLANLAMAYA_HAZIR',
+                guncelleme_tarihi=datetime('now','localtime')
+            WHERE id=? AND durum IN ('MPR_BEKLIYOR','TALEP','TASLAK')
+        """, (plan['planlama_siparis_id'],))
+    plan = dict(plan)
+    plan['durum'] = 'PLANLANDI'
+    return plan
+
+
+def _mpr_plan_uretime_gonder_tx(con, plan_id, uid, plan=None, uv=None):
+    """PLANLANDI planı üretime gönderir — commit yapmaz."""
+    plan = plan or _mpr_plan_satir_yukle(con, plan_id)
+    if not plan:
+        raise ValueError('Plan bulunamadı')
+    if plan['durum'] != 'PLANLANDI':
+        raise ValueError(f'Sadece PLANLANDI planlar üretime gönderilebilir (mevcut: {plan["durum"]})')
+    if uv is None:
         uv = con.execute(
             "SELECT uv.id, uv.boyut, uv.recete_durum, rv.ad AS renk_ad, f.ad AS formul_ad "
             "FROM nexgen_uretim_varyant uv "
             "JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id "
             "JOIN nexgen_formul f ON f.id = rv.formul_id "
             "WHERE uv.id = ? AND uv.aktif = 1",
-            (uv_id,)
+            (plan['uretim_varyant_id'],),
         ).fetchone()
-        if not uv:
-            return jsonify({'ok': False, 'hata': 'Üretim varyantı bulunamadı veya pasif'}), 404
-        if uv['recete_durum'] != 'URETIME_ACIK':
-            return jsonify({
+    if not uv:
+        raise ValueError('Üretim varyantı bulunamadı veya pasif')
+
+    planlanan_kg = float(plan['planlanan_kg'])
+    uv_id = plan['uretim_varyant_id']
+    batch_kodu = _batch_kodu_uret(con)
+    lot_kodu = _lot_kodu_uret(con)
+    notlar = plan['notlar']
+    rf_renk_id = plan['rf_renk_id']
+
+    con.execute(
+        "INSERT INTO nexgen_uretim_batch"
+        "(batch_kodu, lot_kodu, uretim_varyant_id, planlanan_kg, durum, olusturan_id, notlar, plan_id) "
+        "VALUES (?, ?, ?, ?, 'HAZIR', ?, ?, ?)",
+        (batch_kodu, lot_kodu, uv_id, round(planlanan_kg, 3), uid, notlar, plan_id),
+    )
+    _rf_batch_revizyon_kopyala(con, plan_id, batch_kodu)
+
+    batch_row = con.execute(
+        "SELECT id FROM nexgen_uretim_batch WHERE batch_kodu = ?",
+        (batch_kodu,),
+    ).fetchone()
+    batch_id = batch_row['id'] if batch_row else None
+
+    alt_emir_sayisi = 0
+    formul_batch_kg = 0.0
+    if _parca_tablosu_var(con) and batch_id:
+        batch_meta = _batch_uretim_hesapla(con, uv_id, planlanan_kg, rf_renk_id=plan['rf_renk_id'])
+        formul_batch_kg = batch_meta.get('formul_batch_kg', 0.0)
+        if batch_meta.get('ok') and formul_batch_kg > 0:
+            alt_emir_sayisi = batch_meta['batch_sayisi']
+            parca_cols = [c['name'] for c in con.execute(
+                "PRAGMA table_info(nexgen_uretim_parca)"
+            ).fetchall()]
+            has_formul_kg_col = 'formul_batch_kg' in parca_cols
+            has_plan_id_col = 'plan_id' in parca_cols
+            for no in range(1001, 1001 + alt_emir_sayisi):
+                if has_formul_kg_col and has_plan_id_col:
+                    con.execute("""
+                        INSERT INTO nexgen_uretim_parca
+                            (batch_id, batch_kodu, plan_id, parca_no,
+                             hedef_kg, formul_batch_kg, uretilen_kg,
+                             durum, operator_id)
+                        VALUES (?, ?, ?, ?, ?, ?, 0, 'HAZIR', ?)
+                    """, (batch_id, batch_kodu, plan_id, no,
+                          round(formul_batch_kg, 3),
+                          round(formul_batch_kg, 3), uid))
+                elif has_formul_kg_col:
+                    con.execute("""
+                        INSERT INTO nexgen_uretim_parca
+                            (batch_id, batch_kodu, parca_no,
+                             hedef_kg, formul_batch_kg, uretilen_kg,
+                             durum, operator_id)
+                        VALUES (?, ?, ?, ?, ?, 0, 'HAZIR', ?)
+                    """, (batch_id, batch_kodu, no,
+                          round(formul_batch_kg, 3),
+                          round(formul_batch_kg, 3), uid))
+                else:
+                    con.execute("""
+                        INSERT INTO nexgen_uretim_parca
+                            (batch_id, batch_kodu, parca_no,
+                             hedef_kg, uretilen_kg, durum, operator_id)
+                        VALUES (?, ?, ?, ?, 0, 'HAZIR', ?)
+                    """, (batch_id, batch_kodu, no,
+                          round(formul_batch_kg, 3), uid))
+
+    _depo_hazirlik_olustur(
+        con,
+        batch_kodu=batch_kodu,
+        plan_id=plan_id,
+        uretim_varyant_id=uv_id,
+        planlanan_kg=planlanan_kg,
+        rf_renk_id=rf_renk_id,
+        cari_id=plan['cari_id'],
+        planlama_siparis_id=plan['planlama_siparis_id'],
+        olusturan_id=uid,
+    )
+    _rf_kullanim_tablet_sync(con, batch_kodu)
+    con.execute(
+        "UPDATE nexgen_uretim_plan SET durum = 'URETIMDE' WHERE id = ?",
+        (plan_id,),
+    )
+    return {
+        'plan_id': plan_id,
+        'plan_kodu': plan['plan_kodu'],
+        'durum': 'URETIMDE',
+        'batch_kodu': batch_kodu,
+        'lot_kodu': lot_kodu,
+        'formul_ad': uv['formul_ad'],
+        'renk_ad': uv['renk_ad'],
+        'alt_emir_sayisi': alt_emir_sayisi,
+        'formul_batch_kg': round(formul_batch_kg, 3),
+    }
+
+
+def _pzm_siparis_uretime_gonder_atomik(con, talep_id, uid, confirm=False):
+    """Siparişe bağlı tüm planları tek transaction içinde üretime gönderir."""
+    from modules.nexgen.pzm_siparis_read import pzm_siparis_v2_mi
+
+    if not _planlama_siparis_tablosu_var(con):
+        return {'ok': False, 'hata': 'Planlama sipariş tablosu yok.', 'status': 400}
+    if not _plan_planlama_siparis_kolonu_var(con):
+        return {'ok': False, 'hata': 'planlama_siparis_id kolonu yok.', 'status': 400}
+
+    hdr = con.execute(
+        """
+        SELECT id, siparis_no, durum, talep_referansi
+        FROM nexgen_planlama_siparis WHERE id=?
+        """,
+        (talep_id,),
+    ).fetchone()
+    if not hdr:
+        return {'ok': False, 'hata': 'Talep bulunamadı.', 'status': 404}
+    if not pzm_siparis_v2_mi(hdr['talep_referansi']):
+        return {'ok': False, 'hata': 'Yalnız Pazarlama V2 siparişleri desteklenir.', 'status': 400}
+    if hdr['durum'] == 'IPTAL':
+        return {'ok': False, 'hata': 'İptal edilmiş sipariş üretime gönderilemez.', 'status': 400}
+    if hdr['durum'] == 'URETIMDE':
+        return {'ok': False, 'hata': 'Sipariş zaten üretimde.', 'status': 400}
+
+    plan_rows = con.execute("""
+        SELECT id, plan_kodu, durum
+        FROM nexgen_uretim_plan
+        WHERE planlama_siparis_id=? AND durum NOT IN ('IPTAL')
+        ORDER BY id
+    """, (talep_id,)).fetchall()
+    if not plan_rows:
+        return {'ok': False, 'hata': 'Siparişe bağlı MPR planı yok.', 'status': 400}
+
+    izin = ('ON_CALISMA', 'PLANLANDI')
+    on_kontroller = []
+    for row in plan_rows:
+        if row['durum'] in ('URETIMDE', 'BITTI', 'BASLADI'):
+            return {
                 'ok': False,
-                'hata': f'Reçete üretime açık değil (mevcut: {uv["recete_durum"]}). ARGE onayı gerekiyor.'
-            }), 400
+                'hata': f'Plan {row["plan_kodu"]} zaten üretim sürecinde ({row["durum"]}).',
+                'plan_id': row['id'],
+                'plan_kodu': row['plan_kodu'],
+                'status': 400,
+            }
+        plan, chk = _mpr_plan_uretime_on_kontrol(con, row['id'], izin_durumlar=izin)
+        if not chk.get('ok'):
+            err = {k: v for k, v in chk.items() if k != 'status'}
+            err['plan_hatalari'] = [{
+                'plan_id': chk.get('plan_id'),
+                'plan_kodu': chk.get('plan_kodu'),
+                'hata': chk.get('hata'),
+                'stok_eksik': chk.get('stok_eksik'),
+            }]
+            err['status'] = chk.get('status', 400)
+            return err
+        on_kontroller.append((plan, chk.get('uv')))
 
-        # HARD BLOCK: Stok kontrolü — yoldaki SA fiziksel stok sayılmaz
-        rf_renk_id = plan['rf_renk_id']
-        stok = _mpr_stok_ihtiyac_birlestir(con, plan_id)
-        if not stok.get('ok'):
-            return jsonify({'ok': False, 'hata': stok.get('hata', 'Stok hesaplanamadı')}), 400
-        stok_yeterli = stok.get('yeterli_mi', True)
-        stok_eksik_sayisi = stok.get('eksik_sayisi', 0)
-        if not stok_yeterli:
-            eksik = [
-                {
-                    'stok_ad': k.get('stok_ad') or k.get('pigment_ad') or '?',
-                    'stok_kod': k.get('stok_kod') or '',
-                    'gerekli_kg': k.get('gerekli_kg'),
-                    'kullanilabilir_kg': k.get('kullanilabilir_kg'),
-                    'yolda_kg': k.get('yolda_kg', 0),
-                    'net_eksik_kg': k.get('net_eksik_kg'),
-                    'malzeme_durumu': k.get('malzeme_durumu', ''),
-                }
-                for k in stok.get('kalemler', []) if not k.get('yeterli')
-            ]
-            return jsonify({
-                'ok': False,
-                'stok_eksik': True,
-                'stok_eksik_sayisi': stok_eksik_sayisi,
-                'eksik_kalemler': eksik,
-                'hata': (
-                    f'{stok_eksik_sayisi} kalemde stok yetersiz. '
-                    'Üretime başlamak için fiziksel stok yeterli olmalıdır. '
-                    'Yoldaki satın alma miktarı fiziksel stok sayılmaz.'
-                ),
-            }), 400
+    if not confirm:
+        return {
+            'ok': False,
+            'hata': 'Onay gerekli (confirm: true).',
+            'status': 400,
+        }
 
-        # Tüm DB işlemleri tek transaction içinde
-        planlanan_kg = float(plan['planlanan_kg'])
-        batch_kodu = _batch_kodu_uret(con)
-        lot_kodu = _lot_kodu_uret(con)
-        uid = _kullanici_id()
-        notlar = plan['notlar']
+    con.execute('BEGIN IMMEDIATE')
+    try:
+        sonuclar = []
+        for (plan, uv) in on_kontroller:
+            plan_id = plan['id']
+            if plan['durum'] == 'ON_CALISMA':
+                plan = _mpr_plan_planlandi_yap_tx(con, plan_id, plan=plan)
+            sonuc = _mpr_plan_uretime_gonder_tx(con, plan_id, uid, plan=plan, uv=uv)
+            sonuclar.append(sonuc)
 
-        con.execute(
-            "INSERT INTO nexgen_uretim_batch"
-            "(batch_kodu, lot_kodu, uretim_varyant_id, planlanan_kg, durum, olusturan_id, notlar, plan_id) "
-            "VALUES (?, ?, ?, ?, 'HAZIR', ?, ?, ?)",
-            (batch_kodu, lot_kodu, uv_id, round(planlanan_kg, 3), uid, notlar, plan_id)
-        )
-        # FAZ-BOYA-RECETESI-02B: plan RF bilgisini batch'e kopyala
-        _rf_batch_revizyon_kopyala(con, plan_id, batch_kodu)
-
-        batch_row = con.execute(
-            "SELECT id FROM nexgen_uretim_batch WHERE batch_kodu = ?",
-            (batch_kodu,)
-        ).fetchone()
-        batch_id = batch_row['id'] if batch_row else None
-
-        # Alt emirler
-        alt_emir_sayisi = 0
-        formul_batch_kg = 0.0
-        if _parca_tablosu_var(con) and batch_id:
-            batch_meta = _batch_uretim_hesapla(con, uv_id, planlanan_kg, rf_renk_id=plan['rf_renk_id'])
-            formul_batch_kg = batch_meta.get('formul_batch_kg', 0.0)
-            if batch_meta.get('ok') and formul_batch_kg > 0:
-                alt_emir_sayisi = batch_meta['batch_sayisi']
-                parca_cols = [c['name'] for c in con.execute(
-                    "PRAGMA table_info(nexgen_uretim_parca)"
-                ).fetchall()]
-                has_formul_kg_col = 'formul_batch_kg' in parca_cols
-                has_plan_id_col = 'plan_id' in parca_cols
-                for no in range(1001, 1001 + alt_emir_sayisi):
-                    if has_formul_kg_col and has_plan_id_col:
-                        con.execute("""
-                            INSERT INTO nexgen_uretim_parca
-                                (batch_id, batch_kodu, plan_id, parca_no,
-                                 hedef_kg, formul_batch_kg, uretilen_kg,
-                                 durum, operator_id)
-                            VALUES (?, ?, ?, ?, ?, ?, 0, 'HAZIR', ?)
-                        """, (batch_id, batch_kodu, plan_id, no,
-                              round(formul_batch_kg, 3),
-                              round(formul_batch_kg, 3), uid))
-                    elif has_formul_kg_col:
-                        con.execute("""
-                            INSERT INTO nexgen_uretim_parca
-                                (batch_id, batch_kodu, parca_no,
-                                 hedef_kg, formul_batch_kg, uretilen_kg,
-                                 durum, operator_id)
-                            VALUES (?, ?, ?, ?, ?, 0, 'HAZIR', ?)
-                        """, (batch_id, batch_kodu, no,
-                              round(formul_batch_kg, 3),
-                              round(formul_batch_kg, 3), uid))
-                    else:
-                        con.execute("""
-                            INSERT INTO nexgen_uretim_parca
-                                (batch_id, batch_kodu, parca_no,
-                                 hedef_kg, uretilen_kg, durum, operator_id)
-                            VALUES (?, ?, ?, ?, 0, 'HAZIR', ?)
-                        """, (batch_id, batch_kodu, no,
-                              round(formul_batch_kg, 3), uid))
-
-        # Depo hazırlık oluştur (BEKLIYOR) — PDF zinciri gereği
-        _depo_hazirlik_olustur(
-            con,
-            batch_kodu=batch_kodu,
-            plan_id=plan_id,
-            uretim_varyant_id=uv_id,
-            planlanan_kg=planlanan_kg,
-            rf_renk_id=rf_renk_id,
-            cari_id=plan['cari_id'],
-            planlama_siparis_id=plan['planlama_siparis_id'],
-            olusturan_id=uid,
-        )
-
-        # RF kullanım logu
-        _rf_kullanim_tablet_sync(con, batch_kodu)
-
-        con.execute(
-            "UPDATE nexgen_uretim_plan SET durum = 'URETIMDE' WHERE id = ?",
-            (plan_id,)
-        )
+        con.execute("""
+            UPDATE nexgen_planlama_siparis
+            SET durum='URETIMDE',
+                guncelleme_tarihi=datetime('now','localtime')
+            WHERE id=?
+        """, (talep_id,))
         con.commit()
+    except Exception as e:
+        con.rollback()
+        return {'ok': False, 'hata': str(e), 'status': 500}
 
-        return jsonify({
-            'ok': True,
-            'plan_id': plan_id,
-            'plan_kodu': plan['plan_kodu'],
-            'durum': 'URETIMDE',
-            'batch_kodu': batch_kodu,
-            'lot_kodu': lot_kodu,
-            'formul_ad': uv['formul_ad'],
-            'renk_ad': uv['renk_ad'],
-            'alt_emir_sayisi': alt_emir_sayisi,
-            'formul_batch_kg': round(formul_batch_kg, 3),
-            'stok_yeterli_mi': True,
-        })
+    return {
+        'ok': True,
+        'talep_id': talep_id,
+        'siparis_no': hdr['siparis_no'],
+        'durum': 'URETIMDE',
+        'plan_sayisi': len(sonuclar),
+        'planlar': sonuclar,
+        'status': 200,
+    }
+
+
+@nexgen_bp.route('/api/mpr/<int:plan_id>/uretime-gonder', methods=['POST'])
+@yetki_gerekli('nexgen.plan.manage', 'can_manage')
+def api_mpr_uretime_gonder(plan_id):
+    """PLANLANDI durumundaki MPR planını üretime gönderir — STANDART ZİNCİR."""
+    con = _db()
+    try:
+        plan, chk = _mpr_plan_uretime_on_kontrol(con, plan_id, izin_durumlar=('PLANLANDI',))
+        if not chk.get('ok'):
+            status = chk.pop('status', 400)
+            return jsonify(chk), status
+        uid = _kullanici_id()
+        con.execute('BEGIN IMMEDIATE')
+        sonuc = _mpr_plan_uretime_gonder_tx(con, plan_id, uid, plan=plan, uv=chk.get('uv'))
+        con.commit()
+        sonuc['ok'] = True
+        sonuc['stok_yeterli_mi'] = True
+        return jsonify(sonuc)
     except Exception as e:
         con.rollback()
         return jsonify({'ok': False, 'hata': str(e)}), 500

@@ -1242,10 +1242,13 @@ function pzmDetayUretimBlokMesaj(st, t) {
   if (st.rfEksik) return 'RF eksik — üretime gönderilemez.';
   if (st.stokYukleniyor) return 'Stok kontrolü devam ediyor…';
   if (st.stokEksik) return 'Stok eksik — üretime gönderilemez.';
-  if (st.planlar.length > 1) return 'Çok planlı sipariş için atomik gönderim gerekli. Bu fazda yalnız tek planlı sipariş gönderilebilir.';
   if (pzmDetayReadonly(t)) return 'Sipariş salt okunur.';
-  var p = st.planlar[0];
-  if (p.durum === 'URETIMDE' || p.durum === 'BITTI') return 'Plan zaten üretimde veya tamamlandı.';
+  if (st.planlar.every(function(p) { return p.durum === 'URETIMDE' || p.durum === 'BITTI'; })) {
+    return 'Plan zaten üretimde veya tamamlandı.';
+  }
+  if (st.planlar.some(function(p) { return p.durum === 'URETIMDE' || p.durum === 'BITTI'; })) {
+    return 'Siparişte kısmi üretim var; atomik gönderim yapılamaz.';
+  }
   return null;
 }
 
@@ -1374,9 +1377,6 @@ function pzmMprSonucIcerikHtml(st, opts) {
     html += pzmStokOzetHtml(st);
     if (st.stokEksik && st.stokYuklendi) {
       html += '<div class="pzm-det-hata-kutu">Stok eksik — üretime gönderme kapalı.</div>';
-    }
-    if (st.planlar.length > 1) {
-      html += '<div class="pzm-det-bilgi-kutu">Çok planlı sipariş: atomik üretime gönderim henüz desteklenmiyor.</div>';
     }
     if (st.hata && !st.rfEksik) {
       html += '<div class="pzm-det-hata-kutu">' + pzmEsc(st.hata) + '</div>';
@@ -1571,9 +1571,6 @@ function pzmDetayAsama4Icerik(t, st) {
       html += '<div class="pzm-det-hata-kutu">Stok eksik — üretime gönderme kapalı. Eksik hammaddeleri tamamlayın.</div>';
       html += pzmStokOzetHtml(st);
     }
-    if (st.planlar.length > 1) {
-      html += '<div class="pzm-det-bilgi-kutu">Çok planlı sipariş: atomik üretime gönderim henüz desteklenmiyor.</div>';
-    }
     if (st.hata && !st.rfEksik) {
       html += '<div class="pzm-det-hata-kutu">' + pzmEsc(st.hata) + '</div>';
     }
@@ -1749,25 +1746,14 @@ window.pzmDetayMprHesapla = function(tid) {
   });
 };
 
-function pzmDetayPlanPlanlandiYap(plan) {
-  if ((plan.durum || '') === 'PLANLANDI' || plan.durum === 'URETIMDE') {
-    return Promise.resolve({ ok: true, durum: plan.durum });
-  }
-  if (plan.durum !== 'ON_CALISMA') {
-    return Promise.resolve({ ok: false, hata: 'Plan durumu uygun değil: ' + plan.durum });
-  }
-  return fetch('/nexgen/api/uem/emir/' + plan.plan_id + '/planlandi-yap', {
+function pzmSiparisUretimeGonder(tid) {
+  return fetch('/nexgen/api/pazarlama/siparis/' + tid + '/uretime-gonder', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-  }).then(function(r) { return r.json(); });
-}
-
-function pzmDetayPlanUretimeGonder(planId) {
-  return fetch('/nexgen/api/mpr/' + planId + '/uretime-gonder', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: '{}',
-  }).then(function(r) { return r.json().then(function(d) { d._status = r.status; return d; }); });
+    body: JSON.stringify({ confirm: true }),
+  }).then(function(r) {
+    return r.json().then(function(d) { d._status = r.status; return d; });
+  });
 }
 
 window.pzmDetayUretimeGonder = function(tid) {
@@ -1787,30 +1773,27 @@ window.pzmDetayUretimeGonder = function(tid) {
     'Faturalanacak KG: ' + oz.fatura.toLocaleString('tr') + ' kg\n' +
     'Fark KG: ' + (oz.fark >= 0 ? '+' : '') + oz.fark.toLocaleString('tr') + ' kg\n' +
     'Plan sayısı: ' + oz.planSayisi + '\n' +
-    'Stok durumu: ' + stokTxt
+    'Stok durumu: ' + stokTxt + '\n\n' +
+    (oz.planSayisi > 1 ? 'Tüm planlar birlikte (atomik) gönderilecek.' : '')
   );
   if (!onay) return;
 
-  var plan = st.planlar[0];
   st.uretimeGonderiliyor = true;
   st.hata = null;
   pzmDetayRender(t);
+  if (_pzmAktifEkran === 'yeni' && String(_pzmTalepId) === String(tid)) pzmYeniMprRender();
 
-  pzmDetayPlanPlanlandiYap(plan)
-    .then(function(plRes) {
-      if (!plRes.ok) throw new Error(plRes.hata || 'Plan planlanamadı.');
-      plan.durum = 'PLANLANDI';
-      return pzmDetayPlanUretimeGonder(plan.plan_id);
-    })
+  pzmSiparisUretimeGonder(tid)
     .then(function(d) {
       st.uretimeGonderiliyor = false;
       if (!d.ok) {
         st.hata = d.hata || 'Üretime gönderilemedi.';
         if (d.stok_eksik) st.stokEksik = true;
         pzmDetayRender(t);
+        if (_pzmAktifEkran === 'yeni' && String(_pzmTalepId) === String(tid)) pzmYeniMprRender();
         return;
       }
-      plan.durum = 'URETIMDE';
+      st.planlar.forEach(function(p) { p.durum = 'URETIMDE'; });
       t.durum = 'URETIMDE';
       t.durum_etiket = 'Üretimde';
       pzmTalepListesiYenile();
@@ -1821,6 +1804,7 @@ window.pzmDetayUretimeGonder = function(tid) {
       st.uretimeGonderiliyor = false;
       st.hata = (err && err.message) ? err.message : 'Üretime gönderme hatası.';
       pzmDetayRender(t);
+      if (_pzmAktifEkran === 'yeni' && String(_pzmTalepId) === String(tid)) pzmYeniMprRender();
     });
 };
 
