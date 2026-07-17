@@ -276,23 +276,216 @@ def renk_merkezi_listede_gosterilebilir_mi(rf: dict | Any) -> bool:
     return durum in ('ONAYLI', 'AKTIF', 'URETIME_ACIK')
 
 
-def cekirdek_formul_gosterim(kod: str | None, ad: str | None = None) -> dict:
-    """Çekirdek formül seçim listesi etiketi."""
+_BOYUT_HARF = {'LARGE': 'L', 'SMALL': 'S', 'MEDIUM': 'M'}
+
+
+def boyut_kisaltma(boyut: str | None) -> str:
+    """UV.boyut (LARGE/SMALL/MEDIUM) → seçim harfi (L/S/M)."""
+    if not boyut:
+        return ''
+    return _BOYUT_HARF.get(str(boyut).strip().upper(), '')
+
+
+def cekirdek_secim_adi(kod: str | None) -> str:
+    """Seçim ekranı adı — DB ad kullanılmaz (ENJEKSİYON vb. engellenir).
+
+    1BA → TERLİK 18-28 / 18-22 / 18-POE
+    2BA → TABAN 18-28
+    3BA → DÖKME 18-28
+    """
+    k = (kod or '').strip()
+    if not cekirdek_formul_mu(k):
+        return ''
+    ku = k.upper()
+    _, aile = _cekirdek_aile(k)
+    varyant = _cekirdek_varyant_baslik(k)
+    if ku.startswith('1BA-'):
+        return f'{aile} {varyant}'.strip()
+    if ku.startswith('3BA-'):
+        return varyant  # DÖKME 18-28
+    if ku.startswith('2BA-'):
+        return varyant  # TABAN 18-28
+    return varyant or aile
+
+
+def cekirdek_formul_gosterim(
+    kod: str | None,
+    ad: str | None = None,
+    *,
+    uv_boyut: str | None = None,
+) -> dict:
+    """Çekirdek formül seçim listesi etiketi.
+
+    uv_boyut: gerçek nexgen_uretim_varyant.boyut — harf (L/S/M) yalnız bundan üretilir.
+    """
     k = (kod or '').strip()
     aile_key, aile = _cekirdek_aile(k)
+    if k.upper().startswith('3BA-'):
+        aile = 'DÖKME'
     varyant = _cekirdek_varyant_baslik(k)
-    boyut = _cekirdek_boyut(k)
-    parcalar = [aile, varyant]
-    if boyut:
-        parcalar.append(boyut)
+    boyut_kod = _cekirdek_boyut(k)
+    secim_adi = cekirdek_secim_adi(k) or (ad or '').strip()
+    harf = boyut_kisaltma(uv_boyut)
+    etiket_ad = f'{secim_adi} ({harf})' if secim_adi and harf else secim_adi
+    boyut_goster = (str(uv_boyut).strip().upper() if uv_boyut else '') or boyut_kod
+    parcalar = [secim_adi] if secim_adi else [p for p in (aile, varyant) if p]
+    if boyut_goster:
+        parcalar.append(boyut_goster)
     return {
         'kod': k,
         'ad': (ad or '').strip(),
         'aile': aile,
         'varyant': varyant,
-        'boyut': boyut,
+        'boyut': boyut_goster,
+        'secim_adi': secim_adi,
+        'boyut_harf': harf,
+        'etiket_ad': etiket_ad,
         'alt_metin': ' • '.join(p for p in parcalar if p),
     }
+
+
+def formul_secim_gosterim_uygula(
+    satirlar: list[dict],
+    *,
+    kod_alan: str = 'kod',
+    ad_alan: str = 'ad',
+    id_alan: str = 'id',
+    boyut_alan: str | None = None,
+    uv_boyut_map: dict[int, str] | None = None,
+    harf_ekle: bool = True,
+) -> list[dict]:
+    """Çekirdek satırlarda ad alanını seçim adı (+ isteğe bağlı L/S/M) ile değiştirir."""
+    out: list[dict] = []
+    for s in satirlar:
+        d = dict(s)
+        kod = d.get(kod_alan)
+        if not cekirdek_formul_mu(kod):
+            out.append(d)
+            continue
+        uv_b = None
+        if boyut_alan and d.get(boyut_alan):
+            uv_b = d.get(boyut_alan)
+        elif uv_boyut_map is not None:
+            try:
+                uv_b = uv_boyut_map.get(int(d.get(id_alan)))
+            except (TypeError, ValueError):
+                uv_b = uv_boyut_map.get(d.get(id_alan))
+        g = cekirdek_formul_gosterim(kod, d.get(ad_alan), uv_boyut=uv_b)
+        if harf_ekle:
+            d[ad_alan] = g['etiket_ad'] or g['secim_adi'] or d.get(ad_alan)
+        else:
+            d[ad_alan] = g['secim_adi'] or d.get(ad_alan)
+        d['secim_adi'] = g['secim_adi']
+        d['boyut_harf'] = g['boyut_harf']
+        out.append(d)
+    return out
+
+
+_BOYUT_SIRA_SECIM = ('LARGE', 'SMALL', 'MEDIUM', 'STANDART')
+_AILE_SIRA_SECIM = {'TERLIK': 1, 'TABAN': 2, 'DOKME': 3, 'DÖKME': 3}
+# Model sırası — rv.ad / başlıktaki model parçası (kod FL/FS parse edilmez)
+_MODEL_SIRA_SECIM = {
+    '18-28': 1,
+    '18-22': 2,
+    '18-POE': 3,
+}
+
+
+def _secim_model_anahtari(rv_ad: str | None, baslik: str | None) -> str:
+    """Grup sıralaması için model anahtarı — önce rv.ad, yoksa başlıktan son parça."""
+    rv = (rv_ad or '').strip().upper().replace('İ', 'I')
+    if rv:
+        return rv
+    b = (baslik or '').strip().upper().replace('İ', 'I')
+    if not b:
+        return ''
+    parcalar = b.split()
+    return parcalar[-1] if parcalar else b
+
+
+def formul_secim_gruplari_hazirla(uv_satirlari: list[dict]) -> list[dict]:
+    """Aynı ana formülün LARGE/SMALL UV kayıtlarını tek seçim grubunda birleştirir.
+
+    Grup anahtarı: urun_ailesi + secim_adi (DB formul.ad kardeşleri aynı adı paylaşır;
+    gösterim adı ENJEKSİYON yerine TABAN/DÖKME olur).
+    Boyut seçenekleri nexgen_uretim_varyant.boyut üzerinden gelir.
+    """
+    buckets: dict[str, dict[str, Any]] = {}
+    for uv in uv_satirlari:
+        kod = (uv.get('formul_kod') or uv.get('kod') or '').strip()
+        if not cekirdek_formul_mu(kod):
+            continue
+        boyut = (uv.get('boyut') or '').strip().upper()
+        if not boyut:
+            continue
+        g = cekirdek_formul_gosterim(kod, uv.get('formul_ad'), uv_boyut=boyut)
+        baslik = g.get('secim_adi') or ''
+        if not baslik:
+            continue
+        aile_db = (uv.get('urun_ailesi') or '').strip().upper()
+        aile = aile_db or (g.get('aile') or '').upper().replace('İ', 'I')
+        if baslik.upper().startswith('DÖKME') or baslik.upper().startswith('DOKME'):
+            aile_grup = 'DÖKME'
+        elif aile in ('TERLIK', 'TERLİK'):
+            aile_grup = 'TERLİK'
+        elif aile == 'TABAN':
+            aile_grup = 'TABAN'
+        else:
+            aile_grup = g.get('aile') or aile or 'DİĞER'
+        grup_key = f'{aile_grup}|{baslik}'
+        bucket = buckets.get(grup_key)
+        if not bucket:
+            bucket = {
+                'grup_key': grup_key,
+                'baslik': baslik,
+                'aile': aile_grup,
+                'rv_ad': (uv.get('renk_ad') or uv.get('rv_ad') or '').strip(),
+                'secenekler_map': {},
+            }
+            buckets[grup_key] = bucket
+        if boyut in bucket['secenekler_map']:
+            continue
+        try:
+            uv_id = int(uv.get('id') or uv.get('uv_id'))
+            formul_id = int(uv.get('formul_id'))
+            rv_id = int(uv.get('rv_id')) if uv.get('rv_id') is not None else None
+        except (TypeError, ValueError):
+            continue
+        bucket['secenekler_map'][boyut] = {
+            'boyut': boyut,
+            'boyut_harf': g.get('boyut_harf') or boyut_kisaltma(boyut),
+            'formul_id': formul_id,
+            'formul_kod': kod,
+            'uv_id': uv_id,
+            'rv_id': rv_id,
+        }
+
+    sonuc: list[dict] = []
+    for bucket in buckets.values():
+        secenekler = [
+            bucket['secenekler_map'][b]
+            for b in _BOYUT_SIRA_SECIM
+            if b in bucket['secenekler_map']
+        ]
+        if not secenekler:
+            continue
+        sonuc.append({
+            'grup_key': bucket['grup_key'],
+            'baslik': bucket['baslik'],
+            'aile': bucket['aile'],
+            'rv_ad': bucket['rv_ad'],
+            'secenekler': secenekler,
+        })
+
+    def _sira(g: dict) -> tuple:
+        aile = (g.get('aile') or '').upper().replace('İ', 'I').replace('Ö', 'O')
+        aile_s = _AILE_SIRA_SECIM.get(aile, 50)
+        model = _secim_model_anahtari(g.get('rv_ad'), g.get('baslik'))
+        model_s = _MODEL_SIRA_SECIM.get(model, 50)
+        return (aile_s, model_s, g.get('baslik') or '')
+
+    sonuc.sort(key=_sira)
+    return sonuc
 
 
 def renk_liste_grubu(rf: dict) -> str:
