@@ -157,7 +157,8 @@
     {% else %}
     <div class="ngdp-uh-grid">
       {% for h in uretim_hazirlik %}
-      <div class="ngdp-uh-kart ngdp-uh-{{ h.durum|lower }}">
+      <div class="ngdp-uh-kart ngdp-uh-{{ h.durum|lower }}"
+           data-batch="{{ h.batch_kodu or '' }}" data-hazirlik-id="{{ h.id }}">
         <div class="ngdp-uh-ust">
           <span class="ngdp-uh-sip">{{ h.siparis_goster }}</span>
           <span class="ngdp-uh-durum">{{ h.durum }}</span>
@@ -717,6 +718,25 @@ function sekmeGec(hedef) {
   const hash = (location.hash || '#bekleyen').replace('#', '');
   const gecerli = SEKMELER_DP.indexOf(hash) >= 0 ? hash : 'bekleyen';
   sekmeGec(gecerli);
+  var qs = new URLSearchParams(location.search);
+  var batchF = (qs.get('batch') || '').trim();
+  if (batchF) {
+    sekmeGec('uretim-hazirlik');
+    var eslesen = null;
+    document.querySelectorAll('.ngdp-uh-kart').forEach(function(k) {
+      var ok = (k.dataset.batch || '') === batchF;
+      k.style.display = ok ? '' : 'none';
+      if (ok) {
+        k.style.outline = '2px solid #f59e0b';
+        eslesen = k;
+      }
+    });
+    if (eslesen) {
+      eslesen.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      var hid = eslesen.dataset.hazirlikId;
+      if (hid) setTimeout(function() { uhDetayAc(parseInt(hid, 10)); }, 400);
+    }
+  }
 })();
 
 // Modal

@@ -1,0 +1,876 @@
+{% extends "base.html" %}
+{% set page_title = "Malzeme İhtiyaç Merkezi — NexGen" %}
+
+{% block content %}
+<style>
+:root {
+  --rm-teal:#006a8e; --rm-teal-dark:#005a7a; --rm-gold:#f6c343;
+  --rm-green:#16a34a; --rm-green-bg:#dcfce7;
+  --rm-amber:#d97706; --rm-amber-bg:#fef3c7;
+  --rm-red:#dc2626; --rm-red-bg:#fee2e2;
+  --rm-border:#e2e8f0; --rm-bg:#f8fafc; --rm-bg2:#f1f5f9;
+  --rm-t1:#0f172a; --rm-t2:#374151; --rm-t3:#6b7280; --rm-t4:#9ca3af;
+  --rm-white:#fff;
+}
+.mim-sayfa { padding:14px 18px 28px; background:var(--rm-bg); min-height:100vh; box-sizing:border-box; }
+.mim-hdr { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+.mim-baslik { margin:0; font-size:20px; font-weight:800; color:var(--rm-t1); }
+.mim-alt { margin:4px 0 0; font-size:12px; color:var(--rm-t3); max-width:560px; }
+.mim-aksiyon { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.mim-btn {
+  padding:8px 14px; border-radius:7px; border:1px solid var(--rm-border);
+  background:var(--rm-white); font-size:12px; font-weight:700; color:var(--rm-t2); cursor:pointer;
+}
+.mim-btn:hover:not(:disabled) { background:var(--rm-bg2); }
+.mim-btn:disabled { opacity:.55; cursor:not-allowed; }
+.mim-btn-ana { background:var(--rm-teal); color:#fff; border-color:var(--rm-teal); }
+.mim-btn-ana:hover:not(:disabled) { background:var(--rm-teal-dark); color:#fff; }
+.mim-btn-excel[title] { position:relative; }
+
+.mim-filtre {
+  display:flex; flex-wrap:wrap; gap:8px; padding:10px 12px; margin-bottom:10px;
+  background:var(--rm-white); border:1px solid var(--rm-border); border-radius:10px; align-items:center;
+}
+.mim-filtre input, .mim-filtre select {
+  height:32px; padding:0 8px; border:1px solid var(--rm-border); border-radius:6px;
+  font-size:11px; color:var(--rm-t2); background:#fff; min-width:120px;
+}
+.mim-filtre .mim-ara { flex:1; min-width:180px; }
+.mim-gelismis-toggle {
+  font-size:11px; font-weight:700; color:var(--rm-teal); background:none; border:none; cursor:pointer; padding:4px 6px;
+}
+.mim-gelismis { display:none; width:100%; gap:8px; flex-wrap:wrap; padding-top:4px; }
+.mim-gelismis.acik { display:flex; }
+
+.mim-secim-grid {
+  display:grid; grid-template-columns:1.4fr 1fr; gap:10px; margin-bottom:12px; align-items:start;
+}
+.mim-panel {
+  background:var(--rm-white); border:1px solid var(--rm-border); border-radius:10px; overflow:hidden;
+  display:flex; flex-direction:column; min-height:280px; max-height:420px;
+}
+.mim-panel-hdr {
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  padding:8px 12px; background:var(--rm-teal); color:#f1f5f9; flex-shrink:0;
+}
+.mim-panel-baslik { font-size:11px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; }
+.mim-panel-meta { font-size:10px; color:#94a3b8; }
+.mim-panel-govde { flex:1; overflow:auto; min-height:0; padding:0; }
+.mim-sip-grup { border-bottom:1px solid var(--rm-border); }
+.mim-sip-baslik {
+  display:flex; align-items:flex-start; gap:8px; padding:8px 10px; background:var(--rm-bg2);
+  cursor:pointer; user-select:none;
+}
+.mim-sip-baslik:hover { background:#e8eef3; }
+.mim-sip-baslik strong { font-size:12px; color:var(--rm-t1); display:block; }
+.mim-sip-baslik .mim-sip-alt { font-size:10px; color:var(--rm-t3); margin-top:2px; }
+.mim-plan-satir {
+  display:flex; align-items:flex-start; gap:8px; padding:7px 10px 7px 28px;
+  border-top:1px solid #f1f5f9; cursor:pointer;
+}
+.mim-plan-satir:hover { background:#fafbfc; }
+.mim-plan-satir.secili { background:#f0f7fb; }
+.mim-plan-satir .mim-plan-kod { font-size:11px; font-weight:800; color:var(--rm-teal); }
+.mim-plan-satir .mim-plan-meta { font-size:10px; color:var(--rm-t3); margin-top:2px; line-height:1.35; }
+.mim-plan-satir .mim-plan-kg { margin-left:auto; font-size:11px; font-weight:700; color:var(--rm-t1); white-space:nowrap; }
+
+.mim-secilen-ozet { padding:10px 12px; border-bottom:1px solid var(--rm-border); background:var(--rm-bg); flex-shrink:0; }
+.mim-ozet-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.mim-ozet-kart {
+  background:var(--rm-white); border:1px solid var(--rm-border); border-radius:7px; padding:7px 8px;
+}
+.mim-ozet-kart .l { font-size:9px; color:var(--rm-t3); text-transform:uppercase; font-weight:700; }
+.mim-ozet-kart .v { font-size:14px; font-weight:800; color:var(--rm-t1); margin-top:2px; }
+.mim-limit { font-size:10px; color:var(--rm-t3); margin-top:8px; }
+.mim-limit.warn { color:var(--rm-red); font-weight:700; }
+.mim-secilen-list { flex:1; overflow:auto; padding:6px 0; }
+.mim-secilen-item {
+  display:flex; align-items:center; gap:8px; padding:6px 12px; font-size:11px;
+  border-bottom:1px solid #f8fafc;
+}
+.mim-secilen-item button {
+  margin-left:auto; border:none; background:none; color:var(--rm-red); cursor:pointer; font-size:14px; font-weight:700;
+}
+.mim-secilen-aksiyon { display:flex; gap:8px; padding:10px 12px; border-top:1px solid var(--rm-border); flex-shrink:0; }
+.mim-secilen-aksiyon .mim-btn { flex:1; }
+
+.mim-bos {
+  text-align:center; padding:36px 20px; background:var(--rm-white);
+  border:1px dashed var(--rm-border); border-radius:10px; color:var(--rm-t3);
+}
+.mim-bos strong { display:block; color:var(--rm-t1); font-size:14px; margin-bottom:6px; }
+.mim-bos .mim-bos-alt { font-size:11px; margin-top:10px; color:var(--rm-t4); }
+
+.mim-kpi-row {
+  display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-bottom:10px;
+}
+.mim-kpi {
+  background:var(--rm-white); border:1px solid var(--rm-border); border-radius:10px; padding:10px 12px;
+}
+.mim-kpi .l { font-size:10px; font-weight:700; color:var(--rm-t3); text-transform:uppercase; }
+.mim-kpi .v { font-size:18px; font-weight:800; color:var(--rm-t1); margin-top:4px; }
+.mim-kpi .s { font-size:10px; color:var(--rm-t4); margin-top:2px; }
+.mim-kpi-durum.yeterli { border-color:#86efac; background:var(--rm-green-bg); }
+.mim-kpi-durum.kismi { border-color:#fcd34d; background:var(--rm-amber-bg); }
+.mim-kpi-durum.kritik { border-color:#fca5a5; background:var(--rm-red-bg); }
+.mim-mini-ozet { font-size:11px; color:var(--rm-t3); margin:-2px 0 10px; }
+
+.mim-uyari {
+  border:1px solid #fcd34d; background:#fffbeb; border-radius:8px; padding:10px 12px; margin-bottom:10px;
+}
+.mim-uyari h4 { margin:0 0 6px; font-size:12px; color:#92400e; }
+.mim-uyari ul { margin:0; padding-left:18px; font-size:11px; color:#78350f; }
+.mim-hata {
+  border:1px solid #fca5a5; background:var(--rm-red-bg); border-radius:8px; padding:10px 12px; margin-bottom:10px;
+  font-size:12px; color:#991b1b; display:none;
+}
+
+.mim-tabs { display:flex; gap:0; border-bottom:2px solid var(--rm-border); margin-bottom:0; }
+.mim-tab {
+  padding:9px 16px; font-size:12px; font-weight:700; color:var(--rm-t3); background:none; border:none;
+  border-bottom:2px solid transparent; margin-bottom:-2px; cursor:pointer;
+}
+.mim-tab.aktif { color:var(--rm-teal); border-bottom-color:var(--rm-teal); }
+.mim-tab-panel { display:none; background:var(--rm-white); border:1px solid var(--rm-border); border-top:none; border-radius:0 0 10px 10px; }
+.mim-tab-panel.aktif { display:block; }
+.mim-tab-arac {
+  display:flex; flex-wrap:wrap; gap:8px; padding:10px 12px; border-bottom:1px solid var(--rm-border); align-items:center;
+}
+.mim-chip {
+  display:inline-flex; align-items:center; gap:5px; padding:5px 10px; border-radius:999px;
+  border:1px solid var(--rm-border); font-size:11px; font-weight:600; color:var(--rm-t2); background:#fff; cursor:pointer;
+}
+.mim-chip.aktif { background:var(--rm-teal); color:#fff; border-color:var(--rm-teal); }
+.mim-tab-arac input { height:30px; padding:0 8px; border:1px solid var(--rm-border); border-radius:6px; font-size:11px; min-width:160px; }
+.mim-not { font-size:11px; color:var(--rm-t3); padding:8px 12px; background:var(--rm-bg); border-bottom:1px solid var(--rm-border); }
+
+.mim-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.mim-tablo { width:100%; border-collapse:collapse; font-size:11px; min-width:980px; }
+.mim-tablo th {
+  text-align:left; padding:8px 8px; background:var(--rm-bg2); color:var(--rm-t3);
+  font-size:10px; font-weight:800; text-transform:uppercase; border-bottom:1px solid var(--rm-border); white-space:nowrap;
+}
+.mim-tablo td { padding:7px 8px; border-bottom:1px solid #f1f5f9; color:var(--rm-t2); white-space:nowrap; }
+.mim-tablo tr:hover td { background:#fafbfc; }
+.mim-num { text-align:right; font-variant-numeric:tabular-nums; font-weight:600; }
+.mim-badge {
+  display:inline-block; padding:2px 7px; border-radius:999px; font-size:10px; font-weight:800;
+}
+.mim-badge.yesil { background:var(--rm-green-bg); color:#166534; }
+.mim-badge.sari { background:var(--rm-amber-bg); color:#92400e; }
+.mim-badge.kirmizi { background:var(--rm-red-bg); color:#991b1b; }
+.mim-badge.gri { background:var(--rm-bg2); color:var(--rm-t3); }
+
+.mim-yukleniyor {
+  display:none; align-items:center; gap:8px; padding:14px; font-size:12px; color:var(--rm-teal); font-weight:700;
+}
+.mim-yukleniyor.goster { display:flex; }
+.mim-sonuc { display:none; }
+.mim-sonuc.goster { display:block; }
+
+@media (max-width: 960px) {
+  .mim-secim-grid { grid-template-columns:1fr; }
+  .mim-secilen-sticky { position:sticky; top:8px; z-index:5; }
+  .mim-kpi-row { grid-template-columns:1fr 1fr; }
+  .mim-filtre { row-gap:8px; }
+}
+@media (max-width: 640px) {
+  .mim-kpi-row { grid-template-columns:1fr; }
+  .mim-hdr { flex-direction:column; }
+}
+</style>
+
+<div class="mim-sayfa" id="mim-sayfa">
+  <div class="mim-hdr">
+    <div>
+      <h1 class="mim-baslik">Malzeme İhtiyaç Merkezi</h1>
+      <p class="mim-alt">Çoklu planların hammadde ihtiyacını detaylı ve toplu olarak analiz edin.</p>
+    </div>
+    <div class="mim-aksiyon">
+      <button type="button" class="mim-btn mim-btn-ana" id="mim-btn-analiz-ust" onclick="mimAnalizEt()">Analiz Et</button>
+      <button type="button" class="mim-btn mim-btn-excel" id="mim-btn-excel" disabled
+              title="Excel dışa aktarma sonraki fazda etkinleştirilecek.">
+        Excel’e Aktar
+      </button>
+    </div>
+  </div>
+
+  <div class="mim-filtre" id="mim-filtre">
+    <input type="date" id="mim-f-termin-bas" title="Termin başlangıç">
+    <input type="date" id="mim-f-termin-bit" title="Termin bitiş">
+    <select id="mim-f-cari" onchange="mimHavuzRender()">
+      <option value="">Tüm cariler</option>
+      {% for c in filtre_cariler %}
+      <option value="{{ c|e }}">{{ c }}</option>
+      {% endfor %}
+    </select>
+    <select id="mim-f-durum" onchange="mimHavuzRender()">
+      <option value="">Tüm durumlar</option>
+      {% for d in filtre_durumlar %}
+      <option value="{{ d|e }}">{{ d }}</option>
+      {% endfor %}
+    </select>
+    <input type="search" class="mim-ara" id="mim-f-ara" placeholder="Plan kodu / sipariş no / müşteri"
+           oninput="mimHavuzRender()">
+    <button type="button" class="mim-gelismis-toggle" id="mim-gelismis-toggle" onclick="mimGelismisToggle()">
+      Gelişmiş filtreler ▾
+    </button>
+    <div class="mim-gelismis" id="mim-gelismis">
+      <select id="mim-f-aile" onchange="mimHavuzRender()">
+        <option value="">Ürün ailesi</option>
+        {% for a in filtre_aileler %}
+        <option value="{{ a|e }}">{{ a }}</option>
+        {% endfor %}
+      </select>
+      <select id="mim-f-formul" onchange="mimHavuzRender()">
+        <option value="">Formül</option>
+        {% for f in filtre_formuller %}
+        <option value="{{ f|e }}">{{ f }}</option>
+        {% endfor %}
+      </select>
+      <select id="mim-f-renk" onchange="mimHavuzRender()">
+        <option value="">Renk</option>
+        {% for r in filtre_renkler %}
+        <option value="{{ r|e }}">{{ r }}</option>
+        {% endfor %}
+      </select>
+      <select id="mim-f-boyut" onchange="mimHavuzRender()">
+        <option value="">Boyut</option>
+        {% for b in filtre_boyutlar %}
+        <option value="{{ b|e }}">{{ b }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <div class="mim-secim-grid">
+    <div class="mim-panel" id="mim-havuz-panel">
+      <div class="mim-panel-hdr">
+        <span class="mim-panel-baslik">Plan Havuzu</span>
+        <span class="mim-panel-meta" id="mim-havuz-meta">0 plan</span>
+      </div>
+      <div class="mim-panel-govde" id="mim-havuz"></div>
+    </div>
+
+    <div class="mim-panel mim-secilen-sticky" id="mim-secilen-panel">
+      <div class="mim-panel-hdr">
+        <span class="mim-panel-baslik">Seçilen Planlar</span>
+        <span class="mim-panel-meta" id="mim-secilen-meta">0 / 200</span>
+      </div>
+      <div class="mim-secilen-ozet">
+        <div class="mim-ozet-grid">
+          <div class="mim-ozet-kart"><div class="l">Plan</div><div class="v" id="mim-oz-plan">0</div></div>
+          <div class="mim-ozet-kart"><div class="l">Sipariş</div><div class="v" id="mim-oz-sip">0</div></div>
+          <div class="mim-ozet-kart"><div class="l">Cari</div><div class="v" id="mim-oz-cari">0</div></div>
+          <div class="mim-ozet-kart"><div class="l">Toplam KG</div><div class="v" id="mim-oz-kg">0</div></div>
+        </div>
+        <div class="mim-limit" id="mim-limit-msg">En fazla 200 plan aynı anda analiz edilebilir.</div>
+      </div>
+      <div class="mim-secilen-list" id="mim-secilen-list"></div>
+      <div class="mim-secilen-aksiyon">
+        <button type="button" class="mim-btn" onclick="mimSecimTemizle()">Seçimi Temizle</button>
+        <button type="button" class="mim-btn mim-btn-ana" id="mim-btn-analiz" onclick="mimAnalizEt()">Analiz Et</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="mim-hata" id="mim-hata"></div>
+
+  <div class="mim-bos" id="mim-bos">
+    <strong>Planları seçin ve Analiz Et butonuna basın.</strong>
+    <div>Çoklu planların hammadde ihtiyacı toplu ve detaylı olarak listelenir.</div>
+    <div class="mim-bos-alt">Bu işlem salt okunurdur; stok, rezervasyon veya plan kayıtlarını değiştirmez.</div>
+  </div>
+
+  <div class="mim-yukleniyor" id="mim-yukleniyor">
+    <span>Analiz hesaplanıyor…</span>
+  </div>
+
+  <div class="mim-sonuc" id="mim-sonuc">
+    <div class="mim-kpi-row" id="mim-kpi-row">
+      <div class="mim-kpi">
+        <div class="l">Seçilen Plan</div>
+        <div class="v" id="mim-kpi-plan">—</div>
+      </div>
+      <div class="mim-kpi">
+        <div class="l">Toplam Üretilecek KG</div>
+        <div class="v" id="mim-kpi-uret">—</div>
+      </div>
+      <div class="mim-kpi">
+        <div class="l">Toplam Hammadde KG</div>
+        <div class="v" id="mim-kpi-ham">—</div>
+      </div>
+      <div class="mim-kpi">
+        <div class="l">Net Eksik KG</div>
+        <div class="v" id="mim-kpi-eksik">—</div>
+      </div>
+      <div class="mim-kpi mim-kpi-durum" id="mim-kpi-durum-kart">
+        <div class="l">Durum</div>
+        <div class="v" id="mim-kpi-durum">—</div>
+      </div>
+    </div>
+    <div class="mim-mini-ozet" id="mim-mini-ozet"></div>
+
+    <div class="mim-uyari" id="mim-hesaplanamayan" style="display:none">
+      <h4>Hesaplanamayan planlar</h4>
+      <ul id="mim-hesaplanamayan-list"></ul>
+    </div>
+
+    <div class="mim-tabs">
+      <button type="button" class="mim-tab aktif" data-tab="toplu" onclick="mimTabAc('toplu')">Toplu İhtiyaç</button>
+      <button type="button" class="mim-tab" data-tab="detay" onclick="mimTabAc('detay')">Detaylı İhtiyaç</button>
+    </div>
+
+    <div class="mim-tab-panel aktif" id="mim-panel-toplu">
+      <div class="mim-tab-arac">
+        <label class="mim-chip" id="mim-chip-eksik"><input type="checkbox" id="mim-f-yalniz-eksik" onchange="mimTopluRender()"> Yalnız Eksikler</label>
+        <label class="mim-chip" id="mim-chip-ana"><input type="checkbox" id="mim-f-yalniz-ana" onchange="mimTopluRender()"> Yalnız Ana Reçete</label>
+        <label class="mim-chip" id="mim-chip-boya"><input type="checkbox" id="mim-f-yalniz-boya" onchange="mimTopluRender()"> Yalnız Boya Reçetesi</label>
+        <input type="search" id="mim-f-toplu-ara" placeholder="Stok kodu / ad ara" oninput="mimTopluRender()">
+      </div>
+      <div class="mim-scroll">
+        <table class="mim-tablo" id="mim-tablo-toplu">
+          <thead>
+            <tr>
+              <th>Stok Kodu</th>
+              <th>Hammadde Adı</th>
+              <th>Kaynak Türü</th>
+              <th class="mim-num">Toplam Gerekli KG</th>
+              <th class="mim-num">Fiziksel KG</th>
+              <th class="mim-num">Rezerve KG</th>
+              <th class="mim-num">Yumuşak Talep KG</th>
+              <th class="mim-num">Kullanılabilir KG</th>
+              <th class="mim-num">Yolda KG</th>
+              <th class="mim-num">Fiziksel Eksik KG</th>
+              <th class="mim-num">Net Eksik KG</th>
+              <th>Durum</th>
+              <th class="mim-num">Plan Sayısı</th>
+              <th class="mim-num">Sipariş Sayısı</th>
+              <th class="mim-num">Cari Sayısı</th>
+              <th class="mim-num">Formül Sayısı</th>
+              <th>Tahmini Hazır</th>
+              <th>Termin Riski</th>
+              <th>Satın Alma</th>
+            </tr>
+          </thead>
+          <tbody id="mim-tbody-toplu"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="mim-tab-panel" id="mim-panel-detay">
+      <div class="mim-not">Stok ve satın alma kararı Toplu İhtiyaç sekmesinde değerlendirilir.</div>
+      <div class="mim-scroll">
+        <table class="mim-tablo" id="mim-tablo-detay">
+          <thead>
+            <tr>
+              <th>Sipariş</th>
+              <th>Plan Kodu</th>
+              <th>Cari</th>
+              <th>Ürün Ailesi</th>
+              <th>Formül</th>
+              <th>Renk</th>
+              <th>Boyut</th>
+              <th>Kaynak Türü</th>
+              <th>Stok Kodu</th>
+              <th>Hammadde Adı</th>
+              <th class="mim-num">Bir Formülde KG</th>
+              <th class="mim-num">Formül Adedi</th>
+              <th class="mim-num">Gerekli KG</th>
+              <th>Birim</th>
+            </tr>
+          </thead>
+          <tbody id="mim-tbody-detay"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+window.MIM_PLANLAR = {{ planlar_json|tojson }};
+window.MIM_MAX_PLAN = 200;
+window.MIM_API = '/nexgen/api/mi-merkez/analiz';
+
+(function () {
+  var selected = new Set();
+  var analizBusy = false;
+  var lastPayload = null;
+  var planById = {};
+
+  (window.MIM_PLANLAR || []).forEach(function (p) {
+    planById[p.plan_id] = p;
+  });
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+  function fmtKg(n) {
+    var x = Number(n);
+    if (!isFinite(x)) return '—';
+    return x.toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+  }
+  function durumBadge(durum, netEksik) {
+    var d = String(durum || '').toUpperCase();
+    var net = Math.max(0, Number(netEksik) || 0);
+    var cls = 'gri', label = durum || '—';
+    if (d === 'HAZIR' || d.indexOf('YETER') >= 0) { cls = 'yesil'; label = 'Yeterli'; }
+    else if (d.indexOf('YOLDA') >= 0) { cls = 'sari'; label = (d.indexOf('KISMEN') >= 0) ? 'Yolda (kısmi)' : 'Yolda kapanır'; }
+    else if (net > 0.001 || d.indexOf('SATIN') >= 0 || d.indexOf('EKSİK') >= 0 || d.indexOf('EKSIK') >= 0) {
+      cls = 'kirmizi'; label = 'Eksik';
+    }
+    return '<span class="mim-badge ' + cls + '">' + esc(label) + '</span>';
+  }
+
+  function kaynakMetin(k) {
+    if (k === 'ANA_RECETE') return 'Ana Reçete';
+    if (k === 'BOYA_RECETESI') return 'Boya Reçetesi';
+    if (k === 'HER_IKISI') return 'Ana + Boya';
+    return k || '—';
+  }
+
+  function mimSatinalmaEksikMi(r) {
+    var net = Math.max(0, Number(r.net_eksik_kg) || 0);
+    var durum = String(r.durum || r.malzeme_durumu || '').toUpperCase();
+    return net > 0.001 || r.yeterli === false ||
+      durum.indexOf('SATIN') >= 0 || durum.indexOf('EKSIK') >= 0 || durum.indexOf('EKSİK') >= 0;
+  }
+
+  function mimSatinalmaUrl(r) {
+    var params = new URLSearchParams();
+    params.set('kaynak', 'mi');
+    if (r.stok_kod) params.set('stok_kod', r.stok_kod);
+    var planIds = Array.from(selected);
+    if (planIds.length) params.set('plan_ids', planIds.join(','));
+    var sipSet = {};
+    planIds.forEach(function (pid) {
+      var p = planById[pid];
+      if (p && p.siparis_id != null) sipSet[p.siparis_id] = true;
+    });
+    var sipIds = Object.keys(sipSet);
+    if (sipIds.length) params.set('siparis_ids', sipIds.join(','));
+    var net = Math.max(0, Number(r.net_eksik_kg) || 0);
+    if (net > 0.001) params.set('net_eksik_kg', String(Math.round(net * 1000) / 1000));
+    return '/nexgen/satinalma?' + params.toString();
+  }
+
+  function filtrelenmisPlanlar() {
+    var ara = (document.getElementById('mim-f-ara').value || '').trim().toLowerCase();
+    var cari = document.getElementById('mim-f-cari').value || '';
+    var durum = document.getElementById('mim-f-durum').value || '';
+    var aile = document.getElementById('mim-f-aile').value || '';
+    var formul = document.getElementById('mim-f-formul').value || '';
+    var renk = document.getElementById('mim-f-renk').value || '';
+    var boyut = document.getElementById('mim-f-boyut').value || '';
+    var tBas = document.getElementById('mim-f-termin-bas').value || '';
+    var tBit = document.getElementById('mim-f-termin-bit').value || '';
+
+    return (window.MIM_PLANLAR || []).filter(function (p) {
+      if (cari && (p.cari || '') !== cari) return false;
+      if (durum && (p.plan_durum || '') !== durum) return false;
+      if (aile && (p.urun_ailesi || '') !== aile) return false;
+      if (formul && (p.formul || '') !== formul) return false;
+      if (renk && (p.renk || '') !== renk) return false;
+      if (boyut && (p.boyut || '') !== boyut) return false;
+      var term = (p.termin || '').slice(0, 10);
+      if (tBas && (!term || term < tBas)) return false;
+      if (tBit && (!term || term > tBit)) return false;
+      if (ara) {
+        var blob = [p.plan_kodu, p.siparis_kodu, p.cari, p.formul, p.renk].join(' ').toLowerCase();
+        if (blob.indexOf(ara) < 0) return false;
+      }
+      return true;
+    });
+  }
+
+  function grupla(planlar) {
+    var map = {};
+    var order = [];
+    planlar.forEach(function (p) {
+      var key = p.siparis_id != null ? ('S:' + p.siparis_id) : ('P:' + p.plan_id);
+      if (!map[key]) {
+        map[key] = {
+          key: key,
+          siparis_id: p.siparis_id,
+          siparis_kodu: p.siparis_kodu || (p.siparis_id ? ('SIP-' + p.siparis_id) : 'Siparişsiz'),
+          cari: p.cari || '—',
+          planlar: []
+        };
+        order.push(key);
+      }
+      map[key].planlar.push(p);
+    });
+    return order.map(function (k) { return map[k]; });
+  }
+
+  window.mimGelismisToggle = function () {
+    var el = document.getElementById('mim-gelismis');
+    var btn = document.getElementById('mim-gelismis-toggle');
+    el.classList.toggle('acik');
+    btn.textContent = el.classList.contains('acik') ? 'Gelişmiş filtreler ▴' : 'Gelişmiş filtreler ▾';
+  };
+
+  window.mimHavuzRender = function () {
+    var list = filtrelenmisPlanlar();
+    var gruplar = grupla(list);
+    var html = '';
+    if (!gruplar.length) {
+      html = '<div style="padding:24px;text-align:center;color:#9ca3af;font-size:12px">Filtreye uyan plan yok.</div>';
+    }
+    gruplar.forEach(function (g) {
+      var ids = g.planlar.map(function (p) { return p.plan_id; });
+      var allSel = ids.every(function (id) { return selected.has(id); });
+      var someSel = !allSel && ids.some(function (id) { return selected.has(id); });
+      var kgTop = g.planlar.reduce(function (s, p) { return s + (Number(p.planlanan_kg) || 0); }, 0);
+      html += '<div class="mim-sip-grup">';
+      html += '<div class="mim-sip-baslik" onclick="mimSiparisToggle(' + JSON.stringify(ids) + ')">';
+      html += '<input type="checkbox" ' + (allSel ? 'checked' : '') + (someSel ? ' data-indeterminate="1"' : '') + ' onclick="event.stopPropagation();mimSiparisToggle(' + JSON.stringify(ids) + ')">';
+      html += '<div><strong>' + esc(g.siparis_kodu) + '</strong>';
+      html += '<div class="mim-sip-alt">' + esc(g.cari) + ' · ' + g.planlar.length + ' plan · ' + fmtKg(kgTop) + ' KG</div></div></div>';
+      g.planlar.forEach(function (p) {
+        var on = selected.has(p.plan_id);
+        html += '<div class="mim-plan-satir' + (on ? ' secili' : '') + '" onclick="mimPlanToggle(' + p.plan_id + ')">';
+        html += '<input type="checkbox" ' + (on ? 'checked' : '') + ' onclick="event.stopPropagation();mimPlanToggle(' + p.plan_id + ')">';
+        html += '<div><div class="mim-plan-kod">' + esc(p.plan_kodu || ('PLN-' + p.plan_id)) + '</div>';
+        html += '<div class="mim-plan-meta">' + esc(p.formul || '—');
+        if (p.renk) html += '<br>' + esc(p.renk);
+        if (p.boyut) html += '<br>' + esc(p.boyut);
+        html += '<br>' + esc(p.plan_durum || '');
+        html += '</div></div>';
+        html += '<div class="mim-plan-kg">' + fmtKg(p.planlanan_kg) + ' KG</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    });
+    document.getElementById('mim-havuz').innerHTML = html;
+    document.getElementById('mim-havuz-meta').textContent = list.length + ' plan';
+    document.querySelectorAll('#mim-havuz input[data-indeterminate="1"]').forEach(function (cb) {
+      cb.indeterminate = true;
+    });
+    mimSecilenRender();
+  };
+
+  function mimLimitUyari(show) {
+    var el = document.getElementById('mim-limit-msg');
+    if (show) {
+      el.textContent = 'En fazla 200 plan aynı anda analiz edilebilir.';
+      el.classList.add('warn');
+    } else {
+      el.textContent = 'En fazla 200 plan aynı anda analiz edilebilir.';
+      el.classList.remove('warn');
+    }
+  }
+
+  window.mimPlanToggle = function (planId) {
+    planId = Number(planId);
+    if (selected.has(planId)) {
+      selected.delete(planId);
+      mimLimitUyari(false);
+    } else {
+      if (selected.size >= window.MIM_MAX_PLAN) {
+        mimLimitUyari(true);
+        mimHataGoster('En fazla 200 plan aynı anda analiz edilebilir.');
+        return;
+      }
+      selected.add(planId);
+      mimLimitUyari(selected.size >= window.MIM_MAX_PLAN);
+    }
+    mimHavuzRender();
+  };
+
+  window.mimSiparisToggle = function (ids) {
+    ids = (ids || []).map(Number);
+    var allOn = ids.every(function (id) { return selected.has(id); });
+    if (allOn) {
+      ids.forEach(function (id) { selected.delete(id); });
+      mimLimitUyari(false);
+    } else {
+      var eklenecek = ids.filter(function (id) { return !selected.has(id); });
+      if (selected.size + eklenecek.length > window.MIM_MAX_PLAN) {
+        mimLimitUyari(true);
+        mimHataGoster('En fazla 200 plan aynı anda analiz edilebilir.');
+        return;
+      }
+      eklenecek.forEach(function (id) { selected.add(id); });
+      mimLimitUyari(selected.size >= window.MIM_MAX_PLAN);
+    }
+    mimHavuzRender();
+  };
+
+  window.mimSecimTemizle = function () {
+    selected.clear();
+    mimLimitUyari(false);
+    mimHavuzRender();
+  };
+
+  function mimSecilenRender() {
+    var ids = Array.from(selected);
+    var plans = ids.map(function (id) { return planById[id]; }).filter(Boolean);
+    var sip = new Set();
+    var cari = new Set();
+    var kg = 0;
+    plans.forEach(function (p) {
+      if (p.siparis_id != null) sip.add(p.siparis_id);
+      else if (p.siparis_kodu) sip.add(p.siparis_kodu);
+      if (p.cari) cari.add(p.cari);
+      kg += Number(p.planlanan_kg) || 0;
+    });
+    document.getElementById('mim-oz-plan').textContent = String(plans.length);
+    document.getElementById('mim-oz-sip').textContent = String(sip.size);
+    document.getElementById('mim-oz-cari').textContent = String(cari.size);
+    document.getElementById('mim-oz-kg').textContent = fmtKg(kg);
+    document.getElementById('mim-secilen-meta').textContent = plans.length + ' / ' + window.MIM_MAX_PLAN;
+
+    var list = document.getElementById('mim-secilen-list');
+    if (!plans.length) {
+      list.innerHTML = '<div style="padding:16px;text-align:center;color:#9ca3af;font-size:11px">Henüz plan seçilmedi.</div>';
+      return;
+    }
+    list.innerHTML = plans.map(function (p) {
+      return '<div class="mim-secilen-item"><span><strong>' + esc(p.plan_kodu) + '</strong> · ' +
+        esc(p.siparis_kodu || '—') + '<br><span style="color:#6b7280">' + esc(p.cari || '') +
+        ' · ' + fmtKg(p.planlanan_kg) + ' KG</span></span>' +
+        '<button type="button" title="Kaldır" onclick="mimPlanToggle(' + p.plan_id + ')">×</button></div>';
+    }).join('');
+  }
+
+  function mimHataGoster(msg) {
+    var el = document.getElementById('mim-hata');
+    el.style.display = 'block';
+    el.textContent = msg || 'İşlem tamamlanamadı.';
+  }
+  function mimHataTemizle() {
+    var el = document.getElementById('mim-hata');
+    el.style.display = 'none';
+    el.textContent = '';
+  }
+
+  function setBusy(on) {
+    analizBusy = !!on;
+    ['mim-btn-analiz', 'mim-btn-analiz-ust'].forEach(function (id) {
+      var b = document.getElementById(id);
+      if (b) b.disabled = !!on;
+    });
+    document.getElementById('mim-yukleniyor').classList.toggle('goster', !!on);
+  }
+
+  window.mimTabAc = function (name) {
+    document.querySelectorAll('.mim-tab').forEach(function (t) {
+      t.classList.toggle('aktif', t.getAttribute('data-tab') === name);
+    });
+    document.getElementById('mim-panel-toplu').classList.toggle('aktif', name === 'toplu');
+    document.getElementById('mim-panel-detay').classList.toggle('aktif', name === 'detay');
+  };
+
+  function kpiDurum(oz) {
+    if (oz && oz.yeterli_mi) return { kod: 'yeterli', metin: 'YETERLİ' };
+    var y = Number(oz && oz.yeterli_kalem_sayisi) || 0;
+    var e = Number(oz && oz.eksik_kalem_sayisi) || 0;
+    if (y > 0 && e > 0) return { kod: 'kismi', metin: 'KISMİ' };
+    if (e > 0) return { kod: 'kritik', metin: 'KRİTİK' };
+    return { kod: 'kismi', metin: 'KISMİ' };
+  }
+
+  function mimSonucGoster(data) {
+    lastPayload = data;
+    document.getElementById('mim-bos').style.display = 'none';
+    document.getElementById('mim-sonuc').classList.add('goster');
+
+    var oz = data.ozet || {};
+    document.getElementById('mim-kpi-plan').textContent = String(oz.basarili_plan_sayisi != null ? oz.basarili_plan_sayisi : (data.plan_ids || []).length);
+    document.getElementById('mim-kpi-uret').textContent = fmtKg(oz.toplam_uretilecek_kg);
+    document.getElementById('mim-kpi-ham').textContent = fmtKg(oz.toplam_hammadde_kg);
+    document.getElementById('mim-kpi-eksik').textContent = fmtKg(Math.max(0, Number(oz.toplam_net_eksik_kg) || 0));
+    var d = kpiDurum(oz);
+    var kart = document.getElementById('mim-kpi-durum-kart');
+    kart.classList.remove('yeterli', 'kismi', 'kritik');
+    kart.classList.add(d.kod);
+    document.getElementById('mim-kpi-durum').textContent = d.metin;
+    document.getElementById('mim-mini-ozet').textContent =
+      'Sipariş: ' + (oz.siparis_sayisi != null ? oz.siparis_sayisi : '—') +
+      ' · Cari: ' + (oz.cari_sayisi != null ? oz.cari_sayisi : '—') +
+      ' · Toplu kalem: ' + ((data.toplu || []).length);
+
+    var hp = data.hesaplanamayan_planlar || [];
+    var box = document.getElementById('mim-hesaplanamayan');
+    var ul = document.getElementById('mim-hesaplanamayan-list');
+    if (hp.length) {
+      box.style.display = 'block';
+      ul.innerHTML = hp.map(function (h) {
+        var kod = h.plan_kodu || ('Plan #' + (h.plan_id || '—'));
+        var sebep = h.hata || h.sebep || 'Hesaplanamadı';
+        return '<li><strong>' + esc(kod) + '</strong> — ' + esc(sebep) + '</li>';
+      }).join('');
+    } else {
+      box.style.display = 'none';
+      ul.innerHTML = '';
+    }
+
+    mimTabAc('toplu');
+    mimTopluRender();
+    mimDetayRender();
+  }
+
+  window.mimTopluRender = function () {
+    if (!lastPayload) return;
+    var rows = lastPayload.toplu || [];
+    var sadeceEksik = document.getElementById('mim-f-yalniz-eksik').checked;
+    var sadeceAna = document.getElementById('mim-f-yalniz-ana').checked;
+    var sadeceBoya = document.getElementById('mim-f-yalniz-boya').checked;
+    var ara = (document.getElementById('mim-f-toplu-ara').value || '').trim().toLowerCase();
+
+    document.getElementById('mim-chip-eksik').classList.toggle('aktif', sadeceEksik);
+    document.getElementById('mim-chip-ana').classList.toggle('aktif', sadeceAna);
+    document.getElementById('mim-chip-boya').classList.toggle('aktif', sadeceBoya);
+
+    rows = rows.filter(function (r) {
+      var net = Math.max(0, Number(r.net_eksik_kg) || 0);
+      var kt = r.kaynak_turu || '';
+      if (sadeceEksik) {
+        var durum = String(r.durum || r.malzeme_durumu || '').toUpperCase();
+        var eksikMi = net > 0.001 || r.yeterli === false ||
+          durum.indexOf('SATIN') >= 0 || durum.indexOf('EKSIK') >= 0 || durum.indexOf('EKSİK') >= 0;
+        if (!eksikMi) return false;
+      }
+      if (sadeceAna && kt !== 'ANA_RECETE' && kt !== 'HER_IKISI') return false;
+      if (sadeceBoya && kt !== 'BOYA_RECETESI' && kt !== 'HER_IKISI') return false;
+      if (ara) {
+        var blob = [r.stok_kod, r.stok_ad, r.pigment_ad].join(' ').toLowerCase();
+        if (blob.indexOf(ara) < 0) return false;
+      }
+      return true;
+    });
+
+    var tb = document.getElementById('mim-tbody-toplu');
+    if (!rows.length) {
+      tb.innerHTML = '<tr><td colspan="19" style="text-align:center;color:#9ca3af;padding:20px">Kayıt yok.</td></tr>';
+      return;
+    }
+    tb.innerHTML = rows.map(function (r) {
+      var net = Math.max(0, Number(r.net_eksik_kg) || 0);
+      var saLink = '';
+      if (mimSatinalmaEksikMi(r) && r.stok_kod) {
+        saLink = '<a class="mim-btn mim-btn-ana" style="padding:4px 8px;font-size:10px;text-decoration:none;display:inline-block" href="' +
+          esc(mimSatinalmaUrl(r)) + '" title="Satın Alma Merkezi — filtreli">Satın Alma →</a>';
+      } else {
+        saLink = '<span style="color:#9ca3af">—</span>';
+      }
+      return '<tr>' +
+        '<td>' + esc(r.stok_kod || '—') + '</td>' +
+        '<td>' + esc(r.stok_ad || r.pigment_ad || '—') + '</td>' +
+        '<td>' + esc(kaynakMetin(r.kaynak_turu)) + '</td>' +
+        '<td class="mim-num">' + fmtKg(r.gerekli_kg != null ? r.gerekli_kg : r.toplam_gerekli_kg) + '</td>' +
+        '<td class="mim-num">' + fmtKg(r.fiziksel_kg) + '</td>' +
+        '<td class="mim-num">' + fmtKg(r.rezerve_kg) + '</td>' +
+        '<td class="mim-num">' + fmtKg(r.yumusak_talep_kg) + '</td>' +
+        '<td class="mim-num">' + fmtKg(r.kullanilabilir_kg) + '</td>' +
+        '<td class="mim-num">' + fmtKg(r.yolda_kg) + '</td>' +
+        '<td class="mim-num">' + fmtKg(Math.max(0, Number(r.fiziksel_eksik_kg) || 0)) + '</td>' +
+        '<td class="mim-num">' + fmtKg(net) + '</td>' +
+        '<td>' + durumBadge(r.durum || r.malzeme_durumu, net) + '</td>' +
+        '<td class="mim-num">' + esc(r.plan_sayisi != null ? r.plan_sayisi : '—') + '</td>' +
+        '<td class="mim-num">' + esc(r.siparis_sayisi != null ? r.siparis_sayisi : '—') + '</td>' +
+        '<td class="mim-num">' + esc(r.cari_sayisi != null ? r.cari_sayisi : '—') + '</td>' +
+        '<td class="mim-num">' + esc(r.formul_sayisi != null ? r.formul_sayisi : '—') + '</td>' +
+        '<td>' + esc(r.tahmini_hazir || '—') + '</td>' +
+        '<td>' + (r.termin_riski ? '<span class="mim-badge kirmizi">Risk</span>' : '<span class="mim-badge gri">—</span>') + '</td>' +
+        '<td>' + saLink + '</td>' +
+        '</tr>';
+    }).join('');
+  };
+
+  window.mimDetayRender = function () {
+    if (!lastPayload) return;
+    var rows = lastPayload.detay || [];
+    var planMeta = {};
+    (window.MIM_PLANLAR || []).forEach(function (p) { planMeta[p.plan_id] = p; });
+
+    var tb = document.getElementById('mim-tbody-detay');
+    if (!rows.length) {
+      tb.innerHTML = '<tr><td colspan="14" style="text-align:center;color:#9ca3af;padding:20px">Kayıt yok.</td></tr>';
+      return;
+    }
+    tb.innerHTML = rows.map(function (r) {
+      var meta = planMeta[r.plan_id] || {};
+      return '<tr>' +
+        '<td>' + esc(r.siparis_no || meta.siparis_kodu || '—') + '</td>' +
+        '<td>' + esc(r.plan_kodu || meta.plan_kodu || r.plan_id || '—') + '</td>' +
+        '<td>' + esc(r.musteri_adi || meta.cari || '—') + '</td>' +
+        '<td>' + esc(meta.urun_ailesi || '—') + '</td>' +
+        '<td>' + esc(r.formul_kod || meta.formul || '—') + '</td>' +
+        '<td>' + esc(r.rv_ad || meta.renk || '—') + '</td>' +
+        '<td>' + esc(r.boyut || meta.boyut || '—') + '</td>' +
+        '<td>' + esc(kaynakMetin(r.kaynak_turu)) + '</td>' +
+        '<td>' + esc(r.stok_kod || '—') + '</td>' +
+        '<td>' + esc(r.stok_ad || r.pigment_ad || '—') + '</td>' +
+        '<td class="mim-num">' + fmtKg(r.bir_formulde_kg) + '</td>' +
+        '<td class="mim-num">' + esc(r.formul_adedi != null ? r.formul_adedi : (r.batch_sayisi != null ? r.batch_sayisi : '—')) + '</td>' +
+        '<td class="mim-num">' + fmtKg(r.gerekli_kg) + '</td>' +
+        '<td>' + esc(r.birim || 'KG') + '</td>' +
+        '</tr>';
+    }).join('');
+  };
+
+  window.mimAnalizEt = function () {
+    mimHataTemizle();
+    if (analizBusy) return;
+    var ids = Array.from(selected);
+    if (!ids.length) {
+      mimHataGoster('Analiz için en az bir plan seçin.');
+      return;
+    }
+    if (ids.length > window.MIM_MAX_PLAN) {
+      mimHataGoster('En fazla 200 plan aynı anda analiz edilebilir.');
+      return;
+    }
+
+    document.getElementById('mim-sonuc').classList.remove('goster');
+    document.getElementById('mim-bos').style.display = 'none';
+    lastPayload = null;
+    setBusy(true);
+
+    fetch(window.MIM_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ plan_ids: ids })
+    }).then(function (r) {
+      return r.json().then(function (d) { return { status: r.status, data: d }; }).catch(function () {
+        return { status: r.status, data: { ok: false, hata: 'Yanıt okunamadı' } };
+      });
+    }).then(function (res) {
+      setBusy(false);
+      var d = res.data || {};
+      if (res.status === 200 && d.ok) {
+        mimSonucGoster(d);
+        return;
+      }
+      if (d.ok === false && (d.hesaplanamayan_planlar || []).length && !(d.detay || []).length) {
+        document.getElementById('mim-bos').style.display = 'none';
+        document.getElementById('mim-sonuc').classList.add('goster');
+        mimSonucGoster({
+          ok: false,
+          ozet: d.ozet || { basarili_plan_sayisi: 0, toplam_uretilecek_kg: 0, toplam_hammadde_kg: 0, toplam_net_eksik_kg: 0, yeterli_mi: false, yeterli_kalem_sayisi: 0, eksik_kalem_sayisi: 0 },
+          plan_ids: d.plan_ids || ids,
+          toplu: [],
+          detay: [],
+          hesaplanamayan_planlar: d.hesaplanamayan_planlar || []
+        });
+        mimHataGoster(d.hata || 'Seçilen planlar hesaplanamadı.');
+        return;
+      }
+      document.getElementById('mim-bos').style.display = 'block';
+      mimHataGoster(d.hata || 'Analiz tamamlanamadı.');
+    }).catch(function () {
+      setBusy(false);
+      document.getElementById('mim-bos').style.display = 'block';
+      mimHataGoster('Analiz isteği gönderilemedi.');
+    });
+  };
+
+  mimHavuzRender();
+})();
+</script>
+{% endblock %}

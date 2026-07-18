@@ -989,6 +989,22 @@ button.rm-page-geri { appearance:none; }
 }
 </style>
 
+<div id="pzm-sonraki-modal" class="pzm-sonraki-overlay" style="display:none" onclick="pzmSonrakiKapat(event)">
+  <div class="pzm-sonraki-kutu" onclick="event.stopPropagation()">
+    <div class="pzm-sonraki-baslik">Üretime Gönderildi — Sonraki Adımlar</div>
+    <div id="pzm-sonraki-icerik"></div>
+    <div style="padding:12px 16px;border-top:1px solid #e5e7eb;text-align:right">
+      <button type="button" class="rm-btn" onclick="pzmSonrakiKapat()">Kapat</button>
+    </div>
+  </div>
+</div>
+<style>
+.pzm-sonraki-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:9500; display:flex; align-items:center; justify-content:center; padding:16px; }
+.pzm-sonraki-kutu { background:#fff; border-radius:12px; max-width:480px; width:100%; box-shadow:0 10px 40px rgba(0,0,0,.15); }
+.pzm-sonraki-baslik { padding:14px 16px; font-weight:800; border-bottom:1px solid #e5e7eb; }
+#pzm-sonraki-icerik { padding:14px 16px; font-size:13px; color:#374151; }
+</style>
+
 {# ── JavaScript ───────────────────────────────────────────────────────────── #}
 <script>
 (function() {
@@ -2189,6 +2205,32 @@ function pzmSiparisUretimeGonder(tid) {
   });
 }
 
+function pzmSonrakiAdimGoster(opts) {
+  opts = opts || {};
+  var batch = opts.batch_kodu || '';
+  var planId = opts.plan_id || '';
+  var depoUrl = '/nexgen/depo/?batch=' + encodeURIComponent(batch) + '#uretim-hazirlik';
+  var uemUrl = '/nexgen/uretim-emirleri' + (planId ? ('?vurgu=' + planId) : '');
+  var el = document.getElementById('pzm-sonraki-icerik');
+  if (!el) return;
+  el.innerHTML =
+    '<p style="margin:0 0 10px">Sipariş üretime gönderildi.'
+    + (batch ? ' Batch: <strong>' + pzmEsc(batch) + '</strong>.' : '') + '</p>'
+    + '<ul style="margin:0;padding:0;list-style:none">'
+    + '<li style="padding:8px 0;border-bottom:1px solid #f1f5f9"><span style="color:#16a34a;font-weight:800">✓</span> Depo hazırlığını tamamla</li>'
+    + '<li style="padding:8px 0"><span style="color:#16a34a;font-weight:800">✓</span> UEM\'den tablete gönder</li></ul>'
+    + '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">'
+    + '<a href="' + depoUrl + '" class="rm-btn rm-btn-gold" style="text-decoration:none">Depo Hazırlık →</a>'
+    + '<a href="' + uemUrl + '" class="rm-btn" style="text-decoration:none">UEM →</a></div>';
+  document.getElementById('pzm-sonraki-modal').style.display = 'flex';
+}
+
+window.pzmSonrakiKapat = function(ev) {
+  if (ev && ev.target && ev.target.id !== 'pzm-sonraki-modal') return;
+  var m = document.getElementById('pzm-sonraki-modal');
+  if (m) m.style.display = 'none';
+};
+
 window.pzmDetayUretimeGonder = function(tid) {
   var t = pzmTalepBul(tid);
   if (!t || !_pzmCanManage) return;
@@ -2232,6 +2274,11 @@ window.pzmDetayUretimeGonder = function(tid) {
       pzmTalepListesiYenile();
       pzmDetayRender(t);
       if (_pzmAktifEkran === 'yeni' && String(_pzmTalepId) === String(tid)) pzmYeniMprRender();
+      var ilkPlan = (d.planlar && d.planlar.length) ? d.planlar[0] : {};
+      pzmSonrakiAdimGoster({
+        batch_kodu: ilkPlan.batch_kodu,
+        plan_id: ilkPlan.plan_id,
+      });
     })
     .catch(function(err) {
       st.uretimeGonderiliyor = false;

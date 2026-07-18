@@ -115,6 +115,29 @@
 
   </div>{# /toolbar #}
 
+  {% if mi_kopru %}
+  <div class="ngsa-mi-kopru" id="ngsa-mi-kopru">
+    <strong>Malzeme İhtiyaç köprüsü</strong>
+    {% if mi_kopru.stok_kod %}
+    <span>Stok: <code>{{ mi_kopru.stok_kod }}</code>{% if mi_kopru.stok_ad %} — {{ mi_kopru.stok_ad }}{% endif %}</span>
+    {% endif %}
+    {% if mi_kopru.planlar %}
+    <span>Plan: {% for p in mi_kopru.planlar %}{{ p.plan_kodu or ('#' ~ p.id) }}{% if not loop.last %}, {% endif %}{% endfor %}</span>
+    {% elif mi_kopru.plan_ids %}
+    <span>Plan ID: {{ mi_kopru.plan_ids|join(', ') }}</span>
+    {% endif %}
+    {% if mi_kopru.siparisler %}
+    <span>Sipariş: {% for s in mi_kopru.siparisler %}{{ s.siparis_no or ('#' ~ s.id) }}{% if not loop.last %}, {% endif %}{% endfor %}</span>
+    {% elif mi_kopru.siparis_ids %}
+    <span>Sipariş ID: {{ mi_kopru.siparis_ids|join(', ') }}</span>
+    {% endif %}
+    {% if mi_kopru.net_eksik_kg %}
+    <span>Net eksik: {{ mi_kopru.net_eksik_kg }} KG</span>
+    {% endif %}
+    <a href="/nexgen/malzeme-ihtiyac-merkezi" class="ngsa-mi-geri">← MI'ya dön</a>
+  </div>
+  {% endif %}
+
   {# ── Tablo alanı ──────────────────────────────────────────── #}
   <div class="ngsk-tablo-cerceve">
 
@@ -642,26 +665,54 @@
 
 /* Arama ile gizlenen satırlar */
 .ngsa-satir-gizli { display: none; }
+.ngsa-mi-kopru {
+  display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center;
+  padding:10px 14px; margin-bottom:12px; border:1px solid #fcd34d; border-radius:10px;
+  background:#fffbeb; font-size:12px; color:#78350f;
+}
+.ngsa-mi-kopru strong { color:#92400e; }
+.ngsa-mi-kopru code { font-family:monospace; font-weight:700; }
+.ngsa-mi-geri { margin-left:auto; color:#006a8e; font-weight:700; text-decoration:none; }
 </style>
 
 <script>
+window.NGSA_MI_KOPRU = {{ mi_kopru|tojson if mi_kopru else 'null' }};
 /* ── Dropdown cache ─────────────────────────────────────────── */
 const _ngTedarikciler = [];
 const _ngStokKartlar  = [];
+let _ngUygunTedIds    = new Set();  // stok kartı seçilince dolan set
+let _ngDigerGoster    = false;
 
 /* ── Modal aç / kapat ────────────────────────────────────────── */
-async function ngSipModalAc() {
+async function ngSipModalAc(prefill) {
   document.getElementById('ngSipOverlay').classList.add('acik');
   document.getElementById('ngSipHataAlan').style.display = 'none';
-  // Bugünü varsayılan tarih
+  document.getElementById('ngSipOverridePaneli').style.display = 'none';
+  document.getElementById('ngSipOverride').checked = false;
+  _ngDigerGoster = false;
   document.getElementById('ngSipTarih').value = new Date().toISOString().split('T')[0];
   await _ngYukleDropdownlar();
+  if (prefill && prefill.stok_kart_id) {
+    document.getElementById('ngSipStok').value = String(prefill.stok_kart_id);
+    await ngSipStokSec();
+  }
+  if (prefill && prefill.net_eksik_kg) {
+    var miktar = parseFloat(prefill.net_eksik_kg);
+    if (miktar > 0) document.getElementById('ngSipMiktar').value = String(miktar);
+  }
+  if (prefill && prefill.aciklama) {
+    document.getElementById('ngSipAciklama').value = prefill.aciklama;
+  }
   ngSipHesapla();
 }
 
 function ngSipModalKapat() {
   document.getElementById('ngSipOverlay').classList.remove('acik');
   document.getElementById('ngSipHataAlan').style.display = 'none';
+  document.getElementById('ngSipOverridePaneli').style.display = 'none';
+  document.getElementById('ngSipOverride').checked = false;
+  _ngDigerGoster = false;
+  _ngUygunTedIds = new Set();
 }
 
 function ngSipOverlayKapat(e) {
@@ -812,9 +863,115 @@ function _ngSipHata(msg) {
   el.style.display = 'block';
 }
 
+/* FAZ-SATINALMA-FIYAT-01: Tedarikçi+stok seçilince geçerli fiyatı auto-fill */
+async function _ngFiyatDoldur(tedId, stokId) {
+  const fiyatEl  = document.getElementById('ngSipFiyat');
+  const kurEl    = document.getElementById('ngSipKur');
+  const pbSel    = document.getElementById('ngSipPB');
+  const uyariEl  = document.getElementById('ngSipFiyatUyari');
+  if (!fiyatEl || !uyariEl) return;
+
+  // Sipariş tarihini al (auto-fill için bugünkü tarih yeterli)
+  const tarihEl = document.getElementById('ngSipTarih');
+  const tarih   = (tarihEl && tarihEl.value) || new Date().toISOString().slice(0, 10);
+
+  uyariEl.style.display = 'none';
+  uyariEl.textContent   = '';
+
+  try {
+    const r = await fetch(
+      `/nexgen/api/satinalma/son-fiyat?tedarikci_id=${tedId}&stok_kart_id=${stokId}&tarih=${tarih}`
+    );
+    const d = await r.json();
+
+    if (!d.ok) {
+      // Çakışan fiyat kaydı — veri hatası, kullanıcı uyarılır, fiyat temizlenir
+      uyariEl.textContent = '⚠ ' + (d.hata || 'Fiyat verisi hatalı.');
+      uyariEl.className   = 'ngsk-fiyat-uyari ngsk-fiyat-uyari-hata';
+      uyariEl.style.display = '';
+      fiyatEl.value = '';
+      return;
+    }
+
+    if (!d.fiyat) {
+      // Geçerli fiyat yok
+      uyariEl.textContent = 'ℹ ' + (d.uyari || 'Bu tedarikçi için geçerli fiyat bulunamadı. Manuel girin.');
+      uyariEl.className   = 'ngsk-fiyat-uyari ngsk-fiyat-uyari-bilgi';
+      uyariEl.style.display = '';
+      fiyatEl.value = '';
+      return;
+    }
+
+    // Geçerli fiyat bulundu — auto-fill
+    const f = d.fiyat;
+    fiyatEl.value = f.fiyat;
+    if (f.kur && kurEl)  kurEl.value = f.kur;
+    if (f.para_birimi && pbSel) pbSel.value = f.para_birimi;
+    ngSipHesapla();
+
+    // Tarih aralığı bilgisini göster
+    const aralik = [
+      f.gecerlilik_bas   ? 'Geçerli: ' + f.gecerlilik_bas : '',
+      f.gecerlilik_bitis ? '– ' + f.gecerlilik_bitis : '',
+    ].filter(Boolean).join(' ');
+    if (aralik) {
+      uyariEl.textContent = '✓ Geçerli fiyat: ' + f.fiyat + ' ' + f.para_birimi + ' (' + aralik + ')';
+      uyariEl.className   = 'ngsk-fiyat-uyari ngsk-fiyat-uyari-tamam';
+      uyariEl.style.display = '';
+    } else {
+      uyariEl.style.display = 'none';
+    }
+  } catch(e) {
+    uyariEl.textContent   = 'Fiyat bilgisi alınamadı.';
+    uyariEl.className     = 'ngsk-fiyat-uyari ngsk-fiyat-uyari-bilgi';
+    uyariEl.style.display = '';
+  }
+}
+
+/* ── Gecikme rozeti hesapla ──────────────────────────────────── */
+function ngsa_gecikmeHesapla() {
+  const bugun = new Date();
+  bugun.setHours(0, 0, 0, 0);
+  document.querySelectorAll('.ngsa-gecikme-rozet').forEach(el => {
+    const teslim = el.dataset.teslim;
+    if (!teslim) return;
+    const teslimDate = new Date(teslim);
+    teslimDate.setHours(0, 0, 0, 0);
+    if (teslimDate < bugun) {
+      const fark = Math.round((bugun - teslimDate) / 86400000);
+      el.textContent = fark === 1 ? '1 gün gecikti' : fark + ' gün gecikti';
+      el.style.display = 'inline-block';
+    }
+  });
+}
+
 /* ── Canlı tablo araması ─────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
+  ngsa_gecikmeHesapla();
+
+  const mi = window.NGSA_MI_KOPRU;
   const araEl = document.getElementById('ngsa-arama');
+  if (mi && araEl) {
+    if (mi.stok_kod) araEl.value = mi.stok_kod;
+    var planTxt = (mi.planlar || []).map(function(p){ return p.plan_kodu || ('PLN-' + p.id); }).join(' ');
+    var sipTxt = (mi.siparisler || []).map(function(s){ return s.siparis_no || ('SIP-' + s.id); }).join(' ');
+    if (planTxt) araEl.value += (araEl.value ? ' ' : '') + planTxt;
+    if (sipTxt) araEl.value += (araEl.value ? ' ' : '') + sipTxt;
+    araEl.dispatchEvent(new Event('input'));
+    if (mi.stok_kart_id && {{ 'true' if can_manage else 'false' }}) {
+      var aciklama = 'MI köprüsü';
+      if (planTxt) aciklama += ' | Plan: ' + planTxt;
+      if (sipTxt) aciklama += ' | Sipariş: ' + sipTxt;
+      setTimeout(function() {
+        ngSipModalAc({
+          stok_kart_id: mi.stok_kart_id,
+          net_eksik_kg: mi.net_eksik_kg,
+          aciklama: aciklama.slice(0, 200),
+        });
+      }, 350);
+    }
+  }
+
   if (!araEl) return;
   araEl.addEventListener('input', () => {
     const q = araEl.value.toLowerCase();

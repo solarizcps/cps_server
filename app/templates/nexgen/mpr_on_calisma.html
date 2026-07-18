@@ -294,6 +294,16 @@
   </div>
 </div>
 
+<div class="mo-modal-arka" id="mo-sonraki-modal" onclick="moSonrakiKapat(event)" style="display:none">
+  <div class="mo-modal" onclick="event.stopPropagation()" style="max-width:480px">
+    <div class="mo-modal-baslik">Üretime Gönderildi — Sonraki Adımlar</div>
+    <div id="mo-sonraki-icerik" style="padding:14px 16px;font-size:13px"></div>
+    <div class="mo-modal-alt">
+      <button type="button" class="mo-btn-iptal" onclick="moSonrakiKapat()">Kapat</button>
+    </div>
+  </div>
+</div>
+
 {% if can_manage %}
 <div class="mo-modal-arka" id="mo-bagla-modal" onclick="moBaglaKapat(event)">
   <div class="mo-modal mo-modal-genis" onclick="event.stopPropagation()">
@@ -401,63 +411,73 @@ function moSipariseGit(planId) {
 async function moUretime_Gonder(planId) {
   var meta = moPlanMeta(planId) || _moDetayCache.meta || {};
   if (meta.durum !== 'PLANLANDI') return;
-  await moUretime_GonderIstek(planId, false);
+  await moUretime_GonderIstek(planId);
 }
 
-async function moUretime_GonderIstek(planId, onaylandi) {
+async function moUretime_GonderIstek(planId) {
+  // FAZ-MRP-02: Hard block — stok_eksik_onaylandi override kaldırıldı.
+  // PDF kararı: eksik stokla üretime geçilemez.
   var btn = document.getElementById('mo-uretime-gonder-btn-' + planId);
   if (btn) { btn.disabled = true; btn.textContent = 'Gönderiliyor\u2026'; }
   try {
     var r = await fetch('/nexgen/api/mpr/' + planId + '/uretime-gonder', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stok_eksik_onaylandi: onaylandi })
+      body: JSON.stringify({})
     });
     var j = await r.json();
-    if (!j.ok && j.stok_eksik && !onaylandi) {
-      if (btn) { btn.disabled = false; btn.textContent = '\u00dcretim G\u00f6nder'; }
-      moUretime_GonderStokUyari(planId, j.hata);
-      return;
-    }
     if (!j.ok) {
       if (btn) { btn.disabled = false; btn.textContent = '\u00dcretim G\u00f6nder'; }
-      moUyariBantGoster(planId, j.hata || '\u00dcretim g\u00f6nderme ba\u015far\u0131s\u0131z.');
+      if (j.stok_eksik) {
+        moUretime_StokBlokGoster(planId, j.hata, j.eksik_kalemler || []);
+      } else {
+        moUyariBantGoster(planId, j.hata || '\u00dcretim g\u00f6nderme ba\u015far\u0131s\u0131z.');
+      }
       return;
     }
     var planMeta = _MO_PLANLAR.find(function(p) { return p.id === planId; });
     if (planMeta) planMeta.durum = 'URETIMDE';
     moKartDurumUretime(planId, j);
     moSatirSec(planId);
+    moSonrakiAdimGoster({ batch_kodu: j.batch_kodu, plan_id: planId });
   } catch (err) {
     if (btn) { btn.disabled = false; btn.textContent = '\u00dcretim G\u00f6nder'; }
     moUyariBantGoster(planId, 'Ba\u011flant\u0131 hatas\u0131. L\u00fctfen tekrar deneyin.');
   }
 }
 
-function moUretime_GonderStokUyari(planId, mesaj) {
+function moUretime_StokBlokGoster(planId, mesaj, eksikKalemler) {
+  // FAZ-MRP-02: Stok eksik — override YOK, yalnızca bilgi göster
   var panel = document.getElementById('mo-detay-sag');
   if (!panel) return;
   var eski = panel.querySelector('.mo-uretime-stok-uyari');
   if (eski) eski.remove();
+  var satirlar = (eksikKalemler || []).map(function(k) {
+    var yolda = Number(k.yolda_kg || 0);
+    var net = Number(k.net_eksik_kg != null ? k.net_eksik_kg : 0);
+    var satir = '<li><strong>' + moEsc(k.stok_ad || k.stok_kod || '?') + '</strong>'
+      + ' — Gerekli: ' + moFmtKg(k.gerekli_kg) + ' kg'
+      + ', Kullanılabilir: ' + moFmtKg(k.kullanilabilir_kg) + ' kg';
+    if (yolda > 0.001) satir += ', Yolda: ' + moFmtKg(yolda) + ' kg (üretime hazır değil)';
+    if (net > 0.001) satir += ', Net Eksik: <strong>' + moFmtKg(net) + ' kg</strong>';
+    satir += '</li>';
+    return satir;
+  }).join('');
   var div = document.createElement('div');
   div.className = 'mo-uretime-stok-uyari';
   div.innerHTML =
     '<div class="mo-ug-uyari-metin">' +
-      '<strong>&#9888; Stok Eksik</strong><br>' + moEsc(mesaj) +
+      '<strong>&#128683; Stok Yetersiz — Üretime Gönderilemez</strong><br>' +
+      moEsc(mesaj) +
+      (satirlar ? '<ul class="mo-ug-eksik-liste">' + satirlar + '</ul>' : '') +
+      '<em style="font-size:10px;color:#64748b;">Yoldaki satın alma miktarı fiziksel stok sayılmaz.</em>' +
     '</div>' +
     '<div class="mo-ug-uyari-butonlar">' +
-      '<button type="button" class="mo-sa-btn mo-ug-iptal" onclick="this.closest(\'.mo-uretime-stok-uyari\').remove()">Vazge\u00e7</button>' +
-      '<button type="button" class="mo-sa-btn mo-ug-devam" onclick="moUretime_GonderOnaylandi(' + planId + ')">Yine de G\u00f6nder</button>' +
+      '<button type="button" class="mo-sa-btn mo-ug-iptal" onclick="this.closest(\'.mo-uretime-stok-uyari\').remove()">Kapat</button>' +
     '</div>';
   var butonlarDiv = panel.querySelector('.mo-op-butonlar');
   if (butonlarDiv) butonlarDiv.insertBefore(div, butonlarDiv.firstChild);
   else panel.appendChild(div);
-}
-
-async function moUretime_GonderOnaylandi(planId) {
-  var panel = document.getElementById('mo-detay-sag');
-  if (panel) { var w = panel.querySelector('.mo-uretime-stok-uyari'); if (w) w.remove(); }
-  await moUretime_GonderIstek(planId, true);
 }
 
 function moKartDurumUretime(planId, j) {
@@ -470,6 +490,30 @@ function moKartDurumUretime(planId, j) {
     badge.className = 'mo-rozet mo-rozet-mavi';
     badge.textContent = 'Üretimde';
   }
+}
+
+function moSonrakiAdimGoster(opts) {
+  opts = opts || {};
+  var batch = opts.batch_kodu || '';
+  var planId = opts.plan_id || '';
+  var depoUrl = '/nexgen/depo/?batch=' + encodeURIComponent(batch) + '#uretim-hazirlik';
+  var uemUrl = '/nexgen/uretim-emirleri' + (planId ? ('?vurgu=' + planId) : '');
+  document.getElementById('mo-sonraki-icerik').innerHTML =
+    '<p style="margin:0 0 10px;color:#374151">Batch <strong>' + moEsc(batch || '—') + '</strong> oluşturuldu.</p>'
+    + '<ul style="margin:0;padding:0;list-style:none">'
+    + '<li style="padding:8px 0;border-bottom:1px solid #f1f5f9"><span style="color:#16a34a;font-weight:800">✓</span> '
+    + '<strong>Depo hazırlığını tamamla</strong></li>'
+    + '<li style="padding:8px 0"><span style="color:#16a34a;font-weight:800">✓</span> '
+    + '<strong>UEM\'den tablete gönder</strong></li></ul>'
+    + '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">'
+    + '<a href="' + depoUrl + '" class="mo-btn-kaydet" style="text-decoration:none;display:inline-block">Depo Hazırlık →</a>'
+    + '<a href="' + uemUrl + '" class="mo-btn-iptal" style="text-decoration:none;display:inline-block">UEM →</a></div>';
+  document.getElementById('mo-sonraki-modal').style.display = 'flex';
+}
+
+function moSonrakiKapat(ev) {
+  if (ev && ev.target && ev.target.id !== 'mo-sonraki-modal') return;
+  document.getElementById('mo-sonraki-modal').style.display = 'none';
 }
 
 function moTestModuBandGuncelle(planId) {

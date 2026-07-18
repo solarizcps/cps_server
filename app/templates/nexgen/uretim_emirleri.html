@@ -21,6 +21,7 @@
       <option value="Üretimde">Üretimde</option>
       <option value="Tablette">Tablette</option>
       <option value="Bekletildi">Bekletildi</option>
+      <option value="__tablet_bekliyor__">Tablete Gönderilmedi</option>
     </select>
   </div>
 
@@ -31,10 +32,16 @@
     {% for e in emirler %}
     <div class="uem-kart" data-id="{{ e.id }}"
          data-ara="{{ (e.emir_no ~ ' ' ~ e.cari_goster ~ ' ' ~ e.formul_goster ~ ' ' ~ (e.renk_ad or ''))|lower }}"
-         data-durum="{{ e.durum_etiket }}">
+         data-durum="{{ e.durum_etiket }}"
+         data-tablet-bekliyor="{{ '1' if e.batch_kodu and not e.tablet_gonderildi else '0' }}">
       <div class="uem-kart-ust">
         <span class="uem-emir-no">{{ e.emir_no }}</span>
-        <span class="uem-rozet uem-rozet-{{ e.durum|lower }}">{{ e.durum_etiket }}</span>
+        <div class="uem-kart-rozetler">
+          {% if e.batch_kodu and not e.tablet_gonderildi %}
+          <span class="uem-rozet-tablet-warn">TABLETE GÖNDERİLMEDİ</span>
+          {% endif %}
+          <span class="uem-rozet uem-rozet-{{ e.durum|lower }}">{{ e.durum_etiket }}</span>
+        </div>
       </div>
       <div class="uem-satir"><span>Cari</span><strong>{{ e.cari_goster }}</strong></div>
       <div class="uem-satir"><span>Ürün</span><strong>{{ e.formul_goster }}</strong></div>
@@ -94,7 +101,15 @@
 .uem-inp { border: 1px solid #d1d5db; border-radius: 8px; padding: 9px 12px; font-size: 13px; min-width: 180px; flex: 1; }
 .uem-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
 .uem-kart { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
-.uem-kart-ust { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 10px; align-items: center; }
+.uem-kart-ust { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 10px; align-items: flex-start; flex-wrap: wrap; }
+.uem-kart-rozetler { display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-end; }
+.uem-rozet-tablet-warn { font-size:10px; font-weight:800; padding:3px 8px; border-radius:99px; background:#fef3c7; color:#92400e; border:1px solid #fcd34d; }
+.uem-sonraki-modal { max-width:480px; }
+.uem-sonraki-list { margin:0; padding:0; list-style:none; }
+.uem-sonraki-list li { display:flex; gap:10px; align-items:flex-start; padding:10px 0; border-bottom:1px solid #f3f4f6; font-size:13px; }
+.uem-sonraki-list li:last-child { border-bottom:none; }
+.uem-sonraki-ikon { color:#16a34a; font-weight:800; }
+.uem-sonraki-link { display:inline-block; margin-top:12px; font-size:12px; font-weight:700; color:#006a8e; text-decoration:none; }
 .uem-emir-no { font-family: monospace; font-size: 12px; font-weight: 700; color: #006a8e; }
 .uem-rozet { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 99px; }
 .uem-rozet-on_calisma { background: #f3f4f6; color: #4b5563; }
@@ -129,11 +144,46 @@ window.uemFiltrele = function() {
   document.querySelectorAll('.uem-kart').forEach(function(k) {
     var ara = k.dataset.ara || '';
     var dur = k.dataset.durum || '';
+    var tb = k.dataset.tabletBekliyor === '1';
     var okA = !q || ara.indexOf(q) >= 0;
-    var okD = !d || dur === d;
+    var okD = !d || (d === '__tablet_bekliyor__' ? tb : dur === d);
     k.style.display = (okA && okD) ? '' : 'none';
   });
 };
+
+window.uemSonrakiAdimGoster = function(opts) {
+  opts = opts || {};
+  var batch = opts.batch_kodu || '';
+  var planId = opts.plan_id || '';
+  var depoUrl = '/nexgen/depo/?batch=' + encodeURIComponent(batch) + '#uretim-hazirlik';
+  var uemUrl = '/nexgen/uretim-emirleri' + (planId ? ('?vurgu=' + planId) : '');
+  var html = '<p style="margin:0 0 10px;color:#374151">Batch <strong>' + (batch || '—') + '</strong> oluşturuldu.</p>'
+    + '<ul class="uem-sonraki-list">'
+    + '<li><span class="uem-sonraki-ikon">✓</span><span><strong>Depo hazırlığını tamamla</strong><br>'
+    + '<span style="color:#6b7280;font-size:12px">Üretim hazırlık kartını açıp hazır işaretleyin.</span></span></li>'
+    + '<li><span class="uem-sonraki-ikon">✓</span><span><strong>UEM\'den tablete gönder</strong><br>'
+    + '<span style="color:#6b7280;font-size:12px">Tablete Gönder butonu ile operatör ekranına iletin.</span></span></li>'
+    + '</ul>'
+    + '<a class="uem-btn uem-btn-gold uem-sonraki-link" href="' + depoUrl + '">Depo Hazırlık →</a> '
+    + '<a class="uem-btn uem-sonraki-link" href="' + uemUrl + '">UEM\'ye git →</a>';
+  document.getElementById('uem-sonraki-icerik').innerHTML = html;
+  document.getElementById('uem-sonraki-bg').style.display = 'flex';
+};
+
+window.uemSonrakiKapat = function(ev) {
+  if (ev && ev.target && ev.target.id !== 'uem-sonraki-bg') return;
+  document.getElementById('uem-sonraki-bg').style.display = 'none';
+};
+
+(function uemVurguBaslat() {
+  var qs = new URLSearchParams(location.search);
+  var vid = qs.get('vurgu');
+  if (!vid) return;
+  var kart = document.querySelector('.uem-kart[data-id="' + vid + '"]');
+  if (!kart) return;
+  kart.style.outline = '2px solid #f59e0b';
+  kart.scrollIntoView({ behavior: 'smooth', block: 'center' });
+})();
 
 window.uemIncele = function(id) {
   fetch('/nexgen/api/uem/emir/' + id)
@@ -184,8 +234,7 @@ window.uemBatchOlustur = function(id) {
         alert(msg);
         return;
       }
-      alert('Batch oluşturuldu: ' + d.batch_kodu);
-      location.reload();
+      uemSonrakiAdimGoster({ batch_kodu: d.batch_kodu, plan_id: id });
     });
 };
 

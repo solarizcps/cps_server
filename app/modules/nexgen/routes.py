@@ -8154,6 +8154,18 @@ def satinalma_index():
     try:
         durum_filtre = request.args.get('durum', '')
         tedarikci_filtre = request.args.get('tedarikci_id', '')
+        mi_kaynak = (request.args.get('kaynak') or '').strip().lower() == 'mi'
+        mi_stok_kod = (request.args.get('stok_kod') or '').strip()
+        mi_net_eksik = (request.args.get('net_eksik_kg') or '').strip()
+        mi_plan_ids = [
+            int(x) for x in (request.args.get('plan_ids') or '').split(',')
+            if str(x).strip().isdigit()
+        ]
+        mi_siparis_ids = [
+            int(x) for x in (request.args.get('siparis_ids') or '').split(',')
+            if str(x).strip().isdigit()
+        ]
+        mi_kopru = None
 
         sorgu = """
             SELECT s.id, s.siparis_no, s.siparis_tarihi, s.beklenen_teslim,
@@ -8179,6 +8191,9 @@ def satinalma_index():
         if tedarikci_filtre:
             sorgu += " AND s.tedarikci_id = ?"
             params.append(tedarikci_filtre)
+        if mi_kaynak and mi_stok_kod:
+            sorgu += " AND k.kod = ?"
+            params.append(mi_stok_kod)
         sorgu += " ORDER BY s.id DESC"
 
         siparisler_raw = con.execute(sorgu, params).fetchall()
@@ -8186,6 +8201,43 @@ def satinalma_index():
             "SELECT id, ad FROM nexgen_tedarikci WHERE aktif=1 ORDER BY ad"
         ).fetchall()
 
+        if mi_kaynak and (mi_stok_kod or mi_plan_ids or mi_siparis_ids):
+            plan_etiketler = []
+            if mi_plan_ids and _planlama_siparis_tablosu_var(con):
+                ph = ','.join(['?'] * len(mi_plan_ids))
+                for r in con.execute(
+                    f"SELECT id, plan_kodu FROM nexgen_uretim_plan WHERE id IN ({ph})",
+                    mi_plan_ids,
+                ).fetchall():
+                    plan_etiketler.append(dict(r))
+            siparis_etiketler = []
+            if mi_siparis_ids and _planlama_siparis_tablosu_var(con):
+                ph = ','.join(['?'] * len(mi_siparis_ids))
+                for r in con.execute(
+                    f"SELECT id, siparis_no FROM nexgen_planlama_siparis WHERE id IN ({ph})",
+                    mi_siparis_ids,
+                ).fetchall():
+                    siparis_etiketler.append(dict(r))
+            stok_kart_id = None
+            stok_ad = None
+            if mi_stok_kod:
+                sk = con.execute(
+                    "SELECT id, kod, ad FROM nexgen_stok_kart WHERE kod=? AND aktif=1",
+                    (mi_stok_kod,),
+                ).fetchone()
+                if sk:
+                    stok_kart_id = sk['id']
+                    stok_ad = sk['ad']
+            mi_kopru = {
+                'stok_kod': mi_stok_kod,
+                'stok_ad': stok_ad,
+                'stok_kart_id': stok_kart_id,
+                'net_eksik_kg': mi_net_eksik,
+                'plan_ids': mi_plan_ids,
+                'siparis_ids': mi_siparis_ids,
+                'planlar': plan_etiketler,
+                'siparisler': siparis_etiketler,
+            }
     finally:
         con.close()
 
@@ -8220,6 +8272,7 @@ def satinalma_index():
         tedarikciler=[dict(t) for t in tedarikciler],
         durum_filtre=durum_filtre,
         tedarikci_filtre=tedarikci_filtre,
+        mi_kopru=mi_kopru,
         can_manage=can_manage,
         can_approve=can_approve,
         can_fiyat=can_fiyat,
@@ -16495,6 +16548,111 @@ def mpr_on_calisma_liste():
         cariler=cariler,
         can_manage=yetki_var('nexgen.plan.manage', 'can_manage'),
         mpr_test_mode_allowed=_mpr_dev_test_mode_allowed(),
+    )
+
+
+@nexgen_bp.route('/malzeme-ihtiyac-merkezi')
+@yetki_gerekli('nexgen.plan.view', 'can_view')
+def malzeme_ihtiyac_merkezi():
+    """Malzeme İhtiyaç Merkezi — çoklu plan hammadde analizi (salt okuma UI)."""
+    con = _db()
+    try:
+        raw = [dict(p) for p in _plan_liste_sorgu(con, sadece_aktif=True)]
+        aile_map = {}
+        try:
+            aile_map = {
+                int(r['id']): (r['urun_ailesi'] or '')
+                for r in con.execute(
+                    "SELECT id, urun_ailesi FROM nexgen_formul"
+                ).fetchall()
+            }
+        except Exception:
+            aile_map = {}
+
+        planlar = []
+        for pl in raw:
+            try:
+                kg = float(pl.get('planlanan_kg') or 0)
+            except (TypeError, ValueError):
+                kg = 0.0
+            if kg <= 0:
+                continue
+            durum = (pl.get('durum') or '').upper()
+            if durum in ('IPTAL', 'BITTI'):
+                continue
+
+            rf = _plan_rf_bilgi(
+                con,
+                rf_renk_id=pl.get('rf_renk_id'),
+                uretim_varyant_id=pl.get('uv_id'),
+            )
+            rf_kod = (rf or {}).get('rf_kod') or pl.get('rf_kod_fk') or ''
+            rf_ad = (rf or {}).get('renk_ad') or pl.get('rf_ad_fk') or pl.get('renk_ad') or ''
+
+            siparis_id = pl.get('planlama_siparis_id')
+            siparis_kodu = (
+                pl.get('hdr_siparis_no')
+                or pl.get('siparis_no')
+                or (f'SIP-{siparis_id}' if siparis_id else None)
+            )
+            cari = (
+                pl.get('hdr_cari_unvan')
+                or pl.get('musteri_adi')
+                or ''
+            )
+            termin = pl.get('hdr_termin_tarihi') or pl.get('termin_tarihi') or ''
+            formul_id = pl.get('formul_id')
+            urun_ailesi = aile_map.get(int(formul_id)) if formul_id else ''
+
+            planlar.append({
+                'plan_id': pl['id'],
+                'plan_kodu': pl.get('plan_kodu') or '',
+                'siparis_id': siparis_id,
+                'siparis_kodu': siparis_kodu or '',
+                'cari': cari,
+                'cari_id': pl.get('cari_id'),
+                'termin': termin,
+                'plan_durum': pl.get('durum') or '',
+                'urun_ailesi': urun_ailesi or '',
+                'formul': pl.get('formul_kod') or pl.get('formul_ad') or '',
+                'formul_ad': pl.get('formul_ad') or '',
+                'renk': ((rf_kod + ' — ' + rf_ad).strip(' —') if (rf_kod or rf_ad) else (pl.get('renk_ad') or '')),
+                'boyut': pl.get('boyut') or '',
+                'planlanan_kg': round(kg, 3),
+            })
+
+        cariler = sorted({
+            p['cari'] for p in planlar if (p.get('cari') or '').strip()
+        })
+        durumlar = sorted({
+            p['plan_durum'] for p in planlar if (p.get('plan_durum') or '').strip()
+        })
+        aileler = sorted({
+            p['urun_ailesi'] for p in planlar if (p.get('urun_ailesi') or '').strip()
+        })
+        formuller = sorted({
+            p['formul'] for p in planlar if (p.get('formul') or '').strip()
+        })
+        renkler = sorted({
+            p['renk'] for p in planlar if (p.get('renk') or '').strip()
+        })
+        boyutlar = sorted({
+            p['boyut'] for p in planlar if (p.get('boyut') or '').strip()
+        })
+    finally:
+        con.close()
+
+    return render_template(
+        'nexgen/malzeme_ihtiyac_merkezi.html',
+        active='nexgen',
+        planlar_json=planlar,
+        filtre_cariler=cariler,
+        filtre_durumlar=durumlar,
+        filtre_aileler=aileler,
+        filtre_formuller=formuller,
+        filtre_renkler=renkler,
+        filtre_boyutlar=boyutlar,
+        can_manage=yetki_var('nexgen.plan.manage', 'can_manage'),
     )
 
 
