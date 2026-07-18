@@ -16695,7 +16695,9 @@ _PZM_JSON_PREFIX = '__PZM_V1__'
 _PZM_V2_JSON_PREFIX = '__PZM_V2__'
 _PZM_TALEP_LIKE = '__PZM_V%'
 _PZM_AILELER = frozenset({'TERLIK', 'TABAN', 'DOKME'})
-_PZM_DURUMLAR = frozenset({'TASLAK', 'MPR_BEKLIYOR', 'PLANLAMAYA_HAZIR', 'IPTAL'})
+_PZM_DURUMLAR = frozenset({
+    'TASLAK', 'MPR_BEKLIYOR', 'PLANLAMAYA_HAZIR', 'URETIMDE', 'TAMAMLANDI', 'IPTAL',
+})
 
 
 def _pzm_payload_pack(data):
@@ -17020,6 +17022,7 @@ def _pzm_talep_satir_dict(row, con=None):
         'MPR_BEKLIYOR': 'MPR Bekliyor',
         'PLANLAMAYA_HAZIR': 'Planlamaya Hazır',
         'URETIMDE': 'Üretimde',
+        'TAMAMLANDI': 'Tamamlandı',
         'IPTAL': 'İptal',
     }.get(d.get('durum'), d.get('durum') or '—')
     if con is not None and d.get('id'):
@@ -17749,6 +17752,7 @@ def _tua_plan_durum_sync(con, plan_id, batch_durum):
             "WHERE id=? AND durum IN ('BASLADI','URETIMDE')",
             (plan_id,),
         )
+        _pzm_siparis_tamamlandi_sync(con, plan_id)
 
 
 def _tua_batch_bitir_kontrol(con, batch_kodu, mevcut_durum):
@@ -18340,47 +18344,44 @@ def _mpr_plan_uretime_gonder_tx(con, plan_id, uid, plan=None, uv=None):
     ).fetchone()
     batch_id = batch_row['id'] if batch_row else None
 
-    alt_emir_sayisi = 0
-    formul_batch_kg = 0.0
-    if _parca_tablosu_var(con) and batch_id:
-        batch_meta = _batch_uretim_hesapla(con, uv_id, planlanan_kg, rf_renk_id=plan['rf_renk_id'])
-        formul_batch_kg = batch_meta.get('formul_batch_kg', 0.0)
-        if batch_meta.get('ok') and formul_batch_kg > 0:
-            alt_emir_sayisi = batch_meta['batch_sayisi']
-            parca_cols = [c['name'] for c in con.execute(
-                "PRAGMA table_info(nexgen_uretim_parca)"
-            ).fetchall()]
-            has_formul_kg_col = 'formul_batch_kg' in parca_cols
-            has_plan_id_col = 'plan_id' in parca_cols
-            for no in range(1001, 1001 + alt_emir_sayisi):
-                if has_formul_kg_col and has_plan_id_col:
-                    con.execute("""
-                        INSERT INTO nexgen_uretim_parca
-                            (batch_id, batch_kodu, plan_id, parca_no,
-                             hedef_kg, formul_batch_kg, uretilen_kg,
-                             durum, operator_id)
-                        VALUES (?, ?, ?, ?, ?, ?, 0, 'HAZIR', ?)
-                    """, (batch_id, batch_kodu, plan_id, no,
-                          round(formul_batch_kg, 3),
-                          round(formul_batch_kg, 3), uid))
-                elif has_formul_kg_col:
-                    con.execute("""
-                        INSERT INTO nexgen_uretim_parca
-                            (batch_id, batch_kodu, parca_no,
-                             hedef_kg, formul_batch_kg, uretilen_kg,
-                             durum, operator_id)
-                        VALUES (?, ?, ?, ?, ?, 0, 'HAZIR', ?)
-                    """, (batch_id, batch_kodu, no,
-                          round(formul_batch_kg, 3),
-                          round(formul_batch_kg, 3), uid))
-                else:
-                    con.execute("""
-                        INSERT INTO nexgen_uretim_parca
-                            (batch_id, batch_kodu, parca_no,
-                             hedef_kg, uretilen_kg, durum, operator_id)
-                        VALUES (?, ?, ?, ?, 0, 'HAZIR', ?)
-                    """, (batch_id, batch_kodu, no,
-                          round(formul_batch_kg, 3), uid))
+    uretim_satirlari = _mpr_plan_uretim_parcalari_hesapla(
+        con, plan_id, rf_renk_id=plan['rf_renk_id'],
+    )
+    alt_emir_sayisi = sum(s['parca_sayisi'] for s in uretim_satirlari)
+    toplam_uretilecek_kg = round(sum(s['uretilecek_kg'] for s in uretim_satirlari), 3)
+    formul_batch_kg = uretim_satirlari[0]['formul_batch_kg'] if uretim_satirlari else 0.0
+
+    if _parca_tablosu_var(con) and batch_id and alt_emir_sayisi > 0:
+        parca_cols = [c['name'] for c in con.execute(
+            "PRAGMA table_info(nexgen_uretim_parca)"
+        ).fetchall()]
+        has_formul_kg_col = 'formul_batch_kg' in parca_cols
+        has_plan_id_col = 'plan_id' in parca_cols
+        has_notlar_col = 'notlar' in parca_cols
+        parca_no = 1001
+        for satir in uretim_satirlari:
+            hedef = satir['formul_batch_kg']
+            boyut_not = _parca_boyut_uv_notlar(
+                satir.get('boyut'), satir['uretim_varyant_id'],
+            )
+            for _ in range(satir['parca_sayisi']):
+                cols = ['batch_id', 'batch_kodu', 'parca_no', 'hedef_kg', 'uretilen_kg', 'durum', 'operator_id']
+                vals = [batch_id, batch_kodu, parca_no, round(hedef, 3), 0, 'HAZIR', uid]
+                if has_plan_id_col:
+                    cols.insert(2, 'plan_id')
+                    vals.insert(2, plan_id)
+                if has_formul_kg_col:
+                    cols.insert(-3, 'formul_batch_kg')
+                    vals.insert(-3, round(hedef, 3))
+                if has_notlar_col and boyut_not:
+                    cols.insert(-1, 'notlar')
+                    vals.insert(-1, boyut_not)
+                ph = ','.join(['?'] * len(vals))
+                con.execute(
+                    f"INSERT INTO nexgen_uretim_parca ({', '.join(cols)}) VALUES ({ph})",
+                    vals,
+                )
+                parca_no += 1
 
     _depo_hazirlik_olustur(
         con,
@@ -18408,6 +18409,8 @@ def _mpr_plan_uretime_gonder_tx(con, plan_id, uid, plan=None, uv=None):
         'renk_ad': uv['renk_ad'],
         'alt_emir_sayisi': alt_emir_sayisi,
         'formul_batch_kg': round(formul_batch_kg, 3),
+        'toplam_uretilecek_kg': toplam_uretilecek_kg,
+        'boyut_sayisi': len(uretim_satirlari),
     }
 
 
@@ -19412,6 +19415,129 @@ def _batch_uretim_hesapla(con, uretim_varyant_id, siparis_kg, rf_renk_id=None, r
         'uretilecek_kg': uretilecek_kg,
         'fazla_kg': fazla_kg,
     }
+
+
+_PARCA_BOYUT_UV_MARKER = '__BOYUT_UV__'
+
+
+def _parca_boyut_uv_notlar(boyut, uretim_varyant_id):
+    """Parça notlarında boyut/UV meta (migration gerektirmez)."""
+    if not boyut or not uretim_varyant_id:
+        return None
+    return f"{_PARCA_BOYUT_UV_MARKER}|{(boyut or '').strip().upper()}|{int(uretim_varyant_id)}"
+
+
+def _parca_boyut_uv_parse(notlar):
+    """Parça notlarından boyut + uretim_varyant_id okur."""
+    if not notlar or _PARCA_BOYUT_UV_MARKER not in (notlar or ''):
+        return None, None
+    for line in (notlar or '').split('\n'):
+        if not line.startswith(_PARCA_BOYUT_UV_MARKER + '|'):
+            continue
+        parts = line.split('|')
+        if len(parts) >= 3:
+            try:
+                return parts[1], int(parts[2])
+            except (TypeError, ValueError):
+                return parts[1], None
+    return None, None
+
+
+def _parca_effective_uv_id(parca_notlar, batch_uv_id):
+    """Batch UV yerine parça boyut UV'si (çok boyutlu plan)."""
+    _, uv_id = _parca_boyut_uv_parse(parca_notlar)
+    return uv_id if uv_id else batch_uv_id
+
+
+def _mpr_plan_uretim_parcalari_hesapla(con, plan_id, rf_renk_id=None, rf_rev_no=None):
+    """Plan → üretim parça satırları (boyut bazlı veya legacy tek varyant)."""
+    plan_col_list = [c[1] for c in con.execute(
+        "PRAGMA table_info(nexgen_uretim_plan)"
+    ).fetchall()]
+    rev_sql = ", rf_rev_no" if "rf_rev_no" in plan_col_list else ", NULL AS rf_rev_no"
+    plan = con.execute(
+        f"SELECT id, uretim_varyant_id, planlanan_kg, rf_renk_id{rev_sql} "
+        "FROM nexgen_uretim_plan WHERE id=?",
+        (plan_id,),
+    ).fetchone()
+    if not plan:
+        raise ValueError('Plan bulunamadı')
+    if rf_renk_id is None:
+        rf_renk_id = plan['rf_renk_id']
+    if rf_rev_no is None and 'rf_rev_no' in plan.keys():
+        rf_rev_no = plan['rf_rev_no']
+
+    boyut_satirlari = _plan_boyut_parcalari_list(con, plan_id)
+    kaynak = []
+
+    if not boyut_satirlari:
+        uv_id = plan['uretim_varyant_id']
+        if not uv_id:
+            raise ValueError('Plan varyant bilgisi yok')
+        try:
+            siparis_kg = float(plan['planlanan_kg'] or 0)
+        except (TypeError, ValueError):
+            siparis_kg = 0.0
+        if siparis_kg <= 0:
+            raise ValueError('planlanan_kg sıfırdan büyük olmalı')
+        kaynak.append((None, uv_id, siparis_kg))
+    else:
+        for bp in boyut_satirlari:
+            uv_id = bp.get('uretim_varyant_id')
+            siparis_kg = float(bp.get('siparis_kg') or 0)
+            if not uv_id or siparis_kg <= 0:
+                continue
+            kaynak.append((bp.get('boyut'), uv_id, siparis_kg))
+        if not kaynak:
+            raise ValueError('Aktif boyut satırı yok')
+
+    satirlar = []
+    for boyut, uv_id, siparis_kg in kaynak:
+        batch = _batch_uretim_hesapla(
+            con, uv_id, siparis_kg,
+            rf_renk_id=rf_renk_id, rf_rev_no=rf_rev_no,
+        )
+        if not batch.get('ok'):
+            raise ValueError(batch.get('hata', 'Batch hesaplanamadı'))
+        if batch.get('batch_sayisi', 0) <= 0 or batch.get('formul_batch_kg', 0) <= 0:
+            raise ValueError(f'Boyut {boyut or "?"} için formül batch KG hesaplanamadı')
+        satirlar.append({
+            'boyut': boyut,
+            'uretim_varyant_id': uv_id,
+            'siparis_kg': round(siparis_kg, 3),
+            'formul_batch_kg': round(float(batch['formul_batch_kg']), 3),
+            'parca_sayisi': int(batch['batch_sayisi']),
+            'uretilecek_kg': round(float(batch['uretilecek_kg']), 3),
+        })
+    return satirlar
+
+
+def _pzm_siparis_tamamlandi_sync(con, plan_id):
+    """Plan BITTI sonrası — tüm planlar bittiyse siparişi TAMAMLANDI yap."""
+    if not plan_id or not _plan_planlama_siparis_kolonu_var(con):
+        return {'ok': True, 'atlandi': True}
+    if not _planlama_siparis_tablosu_var(con):
+        return {'ok': True, 'atlandi': True}
+    row = con.execute(
+        "SELECT planlama_siparis_id FROM nexgen_uretim_plan WHERE id=?",
+        (plan_id,),
+    ).fetchone()
+    if not row or not row['planlama_siparis_id']:
+        return {'ok': True, 'atlandi': True}
+    ps_id = row['planlama_siparis_id']
+    acik = con.execute("""
+        SELECT COUNT(*) AS c FROM nexgen_uretim_plan
+        WHERE planlama_siparis_id=? AND durum NOT IN ('BITTI','IPTAL')
+    """, (ps_id,)).fetchone()
+    if acik and int(acik['c'] or 0) > 0:
+        return {'ok': True, 'atlandi': True, 'acik_plan_sayisi': int(acik['c'])}
+    con.execute("""
+        UPDATE nexgen_planlama_siparis
+        SET durum='TAMAMLANDI',
+            guncelleme_tarihi=datetime('now','localtime')
+        WHERE id=? AND durum NOT IN ('IPTAL','TAMAMLANDI')
+    """, (ps_id,))
+    return {'ok': True, 'siparis_id': ps_id, 'durum': 'TAMAMLANDI'}
 
 
 def _plan_boyut_tablosu_var(con):
@@ -21025,10 +21151,14 @@ def _depo_hazirlik_olustur(con, batch_kodu, plan_id, uretim_varyant_id,
     if mevcut:
         return mevcut['id']
 
-    toplam_kg = round(float(planlanan_kg), 3)
-    ihtiyac = _mpr_stok_ihtiyac_hesapla(
-        con, uretim_varyant_id, rf_renk_id, toplam_kg,
-    )
+    ihtiyac = None
+    if plan_id:
+        ihtiyac = _mpr_stok_ihtiyac_birlestir(con, plan_id)
+    if not ihtiyac or not ihtiyac.get('ok'):
+        toplam_kg = round(float(planlanan_kg), 3)
+        ihtiyac = _mpr_stok_ihtiyac_hesapla(
+            con, uretim_varyant_id, rf_renk_id, toplam_kg,
+        )
     if not ihtiyac.get('ok'):
         return None
 
@@ -21632,7 +21762,9 @@ def _rezerv_tuket_talep_hesapla(con, parca_row, tuketim_kg, tuketim_kalemleri=No
             talep[sid] = round(talep.get(sid, 0.0) + float(k['gerekli_kg']), 3)
         return {'ok': True, 'talep': talep}
 
-    uv_id = parca_row['uretim_varyant_id']
+    uv_id = _parca_effective_uv_id(
+        parca_row.get('parca_notlar'), parca_row['uretim_varyant_id'],
+    )
     rf_renk_id = parca_row['rf_renk_id']
     if not rf_renk_id:
         rf_bilgi = _batch_plan_rf_bilgi(
@@ -21686,7 +21818,7 @@ def _rezerv_tuket(con, parca_id, tuketim_kalemleri=None, uretilen_kg=None, kontr
 
     row = con.execute("""
         SELECT p.id, p.parca_no, p.hedef_kg, p.uretilen_kg, p.batch_kodu,
-               p.plan_id AS parca_plan_id,
+               p.plan_id AS parca_plan_id, p.notlar AS parca_notlar,
                b.uretim_varyant_id, b.plan_id AS batch_plan_id,
                pl.rf_renk_id
         FROM nexgen_uretim_parca p
@@ -21699,6 +21831,9 @@ def _rezerv_tuket(con, parca_id, tuketim_kalemleri=None, uretilen_kg=None, kontr
         return {'ok': False, 'hata': 'Parça bulunamadı'}
 
     parca_row = dict(row)
+    parca_row['uretim_varyant_id'] = _parca_effective_uv_id(
+        parca_row.get('parca_notlar'), parca_row['uretim_varyant_id'],
+    )
     batch_kodu = parca_row['batch_kodu']
     if not _batch_aktif_rezerv_var(con, batch_kodu):
         return {'ok': True, 'atlandi': True, 'legacy': True, 'guncellenen': 0}
@@ -21940,7 +22075,7 @@ def _parca_stok_tuket(con, parca_id, uretilen_kg=None, olusturan_id=None):
 
     row = con.execute("""
         SELECT p.id, p.parca_no, p.hedef_kg, p.formul_batch_kg, p.batch_kodu,
-               p.plan_id AS parca_plan_id,
+               p.plan_id AS parca_plan_id, p.notlar AS parca_notlar,
                b.lot_kodu, b.uretim_varyant_id, b.plan_id AS batch_plan_id,
                pl.rf_renk_id, pl.cari_id, pl.planlama_siparis_id
         FROM nexgen_uretim_parca p
@@ -21961,7 +22096,7 @@ def _parca_stok_tuket(con, parca_id, uretilen_kg=None, olusturan_id=None):
     if tuketim_kg <= 0:
         return {'ok': False, 'hata': 'uretilen_kg sıfırdan büyük olmalı'}
 
-    uv_id = row['uretim_varyant_id']
+    uv_id = _parca_effective_uv_id(row['parca_notlar'], row['uretim_varyant_id'])
     rf_renk_id = row['rf_renk_id']
     if not rf_renk_id:
         rf_bilgi = _batch_plan_rf_bilgi(
