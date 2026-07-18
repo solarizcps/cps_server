@@ -16275,6 +16275,16 @@ def _pzm_mpr_plan_satir_zengin(con, plan_id, kalem_sira=1):
         tam_kg = satir.get('tam_formul_kg')
 
     toplam_uret_r = round(toplam_uret, 3)
+    uretilen_fiili = None
+    if (plan['durum'] or '').upper() == 'BITTI' and _parca_tablosu_var(con):
+        fiili_row = con.execute("""
+            SELECT COALESCE(SUM(p.uretilen_kg), 0) AS kg
+            FROM nexgen_uretim_parca p
+            JOIN nexgen_uretim_batch b ON b.batch_kodu = p.batch_kodu
+            WHERE b.plan_id = ? AND p.durum = 'BITTI'
+        """, (plan_id,)).fetchone()
+        uretilen_fiili = round(float(fiili_row['kg'] or 0), 3) if fiili_row else 0.0
+    faturalanacak = uretilen_fiili if uretilen_fiili and uretilen_fiili > 0 else toplam_uret_r
     return {
         'plan_id': plan_id,
         'plan_kodu': plan['plan_kodu'],
@@ -16288,7 +16298,8 @@ def _pzm_mpr_plan_satir_zengin(con, plan_id, kalem_sira=1):
         'tam_formul_kg': tam_kg,
         'formul_adedi': toplam_formul_adedi,
         'uretilecek_kg': toplam_uret_r,
-        'faturalanacak_kg': toplam_uret_r,
+        'uretilen_kg': uretilen_fiili if uretilen_fiili is not None else None,
+        'faturalanacak_kg': faturalanacak,
         'fazla_kg': round(toplam_fazla, 3),
     }
 
@@ -18066,10 +18077,24 @@ def _tua_plan_durum_sync(con, plan_id, batch_durum):
 
 def _tua_batch_bitir_kontrol(con, batch_kodu, mevcut_durum):
     """Bitir öncesi doğrulama — batch seviyesi Başla/Devam zorunlu."""
+    if mevcut_durum == 'BITTI':
+        return False, 'Batch zaten tamamlanmış.'
     if mevcut_durum == 'BEKLEME':
         return False, 'Beklemedeki iş bitirilemez. Önce DEVAM ET ile sürdürün.'
     if mevcut_durum != 'DEVAM':
         return False, 'Önce üretimi başlatın (BAŞLA).'
+    if _parca_tablosu_var(con):
+        sayac = con.execute("""
+            SELECT COUNT(*) AS toplam,
+                   SUM(CASE WHEN durum NOT IN ('BITTI','IPTAL') THEN 1 ELSE 0 END) AS acik
+            FROM nexgen_uretim_parca WHERE batch_kodu=?
+        """, (batch_kodu,)).fetchone()
+        toplam = int(sayac['toplam'] or 0)
+        acik = int(sayac['acik'] or 0)
+        if toplam > 0 and acik > 0:
+            return False, (
+                f'Tüm alt emirler bitmeden batch kapatılamaz ({acik} açık parça).'
+            )
     return True, None
 
 
@@ -19559,6 +19584,14 @@ def api_batch_durum_guncelle(batch_kodu):
 
         mevcut = batch['durum']
         if mevcut == yeni_durum:
+            if yeni_durum == 'BITTI':
+                return jsonify({
+                    'ok': True,
+                    'durum': yeni_durum,
+                    'batch_kodu': batch_kodu,
+                    'plan_id': batch['plan_id'],
+                    'idempotent': True,
+                })
             return jsonify({
                 'ok': False,
                 'hata': f'Batch zaten {mevcut} durumunda.',
@@ -19579,14 +19612,20 @@ def api_batch_durum_guncelle(batch_kodu):
         if notlar:
             yeni_notlar = (mevcut_notlar.strip() + '\n' + notlar.strip()).strip()
             con.execute(
-                "UPDATE nexgen_uretim_batch SET durum=?, notlar=? WHERE batch_kodu=?",
-                (yeni_durum, yeni_notlar, batch_kodu)
+                "UPDATE nexgen_uretim_batch SET durum=?, notlar=? "
+                "WHERE batch_kodu=? AND durum=?",
+                (yeni_durum, yeni_notlar, batch_kodu, mevcut)
             )
         else:
             con.execute(
-                "UPDATE nexgen_uretim_batch SET durum=? WHERE batch_kodu=?",
-                (yeni_durum, batch_kodu)
+                "UPDATE nexgen_uretim_batch SET durum=? WHERE batch_kodu=? AND durum=?",
+                (yeni_durum, batch_kodu, mevcut)
             )
+        if con.total_changes == 0:
+            return jsonify({
+                'ok': False,
+                'hata': 'Batch durumu değişti — işlem tekrarlanamaz.',
+            }), 409
 
         _tua_plan_durum_sync(con, batch['plan_id'], yeni_durum)
 
@@ -24135,6 +24174,19 @@ def api_parca_bitir(batch_kodu, parca_id):
         ).fetchone()
         if not parca:
             return jsonify({'ok': False, 'hata': 'Alt Emir bulunamadı'}), 404
+
+        batch_row = con.execute(
+            "SELECT durum FROM nexgen_uretim_batch WHERE batch_kodu=?",
+            (batch_kodu,),
+        ).fetchone()
+        if not batch_row:
+            return jsonify({'ok': False, 'hata': 'Batch bulunamadı'}), 404
+        if batch_row['durum'] != 'DEVAM':
+            return jsonify({
+                'ok': False,
+                'hata': f'Alt emir bitirmek için batch üretimde olmalı (durum: {batch_row["durum"]}).',
+            }), 400
+
         if parca['durum'] not in ('DEVAM', 'HAZIR'):
             return jsonify({
                 'ok': False,
