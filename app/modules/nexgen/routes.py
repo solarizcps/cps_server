@@ -5575,6 +5575,100 @@ def api_arge_rf_olustur():
 # FAZ-RENK-MERKEZI-BACKEND-1
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _formul_kod_boyut(kod):
+    """Çekirdek formül kodundan boyut (LARGE/SMALL/MEDIUM)."""
+    k = (kod or '').upper()
+    if '-FM' in k:
+        return 'MEDIUM'
+    if '-FL' in k:
+        return 'LARGE'
+    if '-FS' in k:
+        return 'SMALL'
+    return ''
+
+
+def _rf_kardes_boyut_hedefleri(kaynak_kod):
+    """Onaylanan çekirdek formüle göre otomatik bağlanacak kardeş boyutları."""
+    boyut = _formul_kod_boyut(kaynak_kod)
+    if boyut == 'LARGE':
+        return {'SMALL'}
+    if boyut == 'SMALL':
+        return {'LARGE'}
+    if boyut == 'MEDIUM':
+        return {'MEDIUM'}
+    return set()
+
+
+def _rf_onay_sonrasi_kardes_uygunluk(con, rf_renk_id, formul_id, arge_test_id, ilk_cari, test_row):
+    """Yeni RF onayında aynı grup kardeş boyut uygunluklarını idempotent oluşturur."""
+    frm = con.execute(
+        "SELECT id, kod, ad, urun_ailesi FROM nexgen_formul WHERE id=? AND aktif=1",
+        (formul_id,),
+    ).fetchone()
+    if not frm or not cekirdek_formul_mu(frm['kod']):
+        return {'ok': True, 'atlandi': True, 'neden': 'Çekirdek formül değil'}
+
+    rf = con.execute(
+        "SELECT id, rf_kod, ad, aktif, durum FROM nexgen_rf_renk WHERE id=?",
+        (rf_renk_id,),
+    ).fetchone()
+    if not rf:
+        return {'ok': False, 'hata': 'RF bulunamadı'}
+
+    hedef_boyutlar = _rf_kardes_boyut_hedefleri(frm['kod'])
+    if not hedef_boyutlar:
+        return {'ok': True, 'atlandi': True, 'neden': 'Boyut parse edilemedi'}
+
+    test = dict(test_row) if test_row is not None else {}
+    eklenen = []
+    for fid in _pzm_formul_kardesleri(con, formul_id):
+        if fid == formul_id:
+            continue
+        kfrm = con.execute(
+            "SELECT id, kod, ad FROM nexgen_formul WHERE id=? AND aktif=1",
+            (fid,),
+        ).fetchone()
+        if not kfrm or not cekirdek_formul_mu(kfrm['kod']):
+            continue
+        if _formul_kod_boyut(kfrm['kod']) not in hedef_boyutlar:
+            continue
+        if con.execute(
+            "SELECT id FROM nexgen_rf_formul_uygunluk "
+            "WHERE rf_renk_id=? AND formul_id=? AND aktif=1",
+            (rf_renk_id, fid),
+        ).fetchone():
+            continue
+        uk = _uretim_kodu_bagla_islem(con, dict(rf), fid, kfrm['kod'])
+        if not uk.get('ok'):
+            continue
+        ins_cols = [
+            'rf_renk_id', 'formul_id', 'kaynak_arge_test_id', 'durum', 'aktif',
+            'onay_tarihi', 'ilk_talep_cari_id', 'shore_hedef', 'shore_sonuc',
+            'renk_sonucu', 'numune_sonucu',
+        ]
+        ins_vals = [
+            rf_renk_id, fid, arge_test_id, 'ONAYLI', 1,
+            "datetime('now','localtime')", ilk_cari,
+            test.get('shore_hedef'), test.get('shore_degeri'),
+            test.get('renk_tuttu'), test.get('cekme_problemi'),
+        ]
+        if _uretim_kodu_kolon_var(con):
+            ins_cols.extend(['uretim_kodu', 'ana_formul_kodu', 'renk_kodu'])
+            ins_vals.extend([
+                uk['uretim_kodu'],
+                uk.get('ana_formul_kodu'),
+                uk.get('renk_kodu'),
+            ])
+        ph = ','.join(['?'] * len(ins_cols))
+        con.execute(
+            f"INSERT INTO nexgen_rf_formul_uygunluk ({','.join(ins_cols)}) VALUES ({ph})",
+            ins_vals,
+        )
+        eklenen.append({'formul_id': fid, 'kod': kfrm['kod']})
+
+    return {'ok': True, 'eklenen': eklenen}
+
+
 def _renk_merkezi_arge_onayla_core(con, arge_test_id, onaylayan_id):
     """
     AR-GE renk çalışmasını tek adımda onaylar ve RF oluşturur.
@@ -5646,6 +5740,10 @@ def _renk_merkezi_arge_onayla_core(con, arge_test_id, onaylayan_id):
                     aktarildi_mi=1, aktarim_tarihi=datetime('now','localtime')
                 WHERE id=?
             """, (onaylayan_id, arge_test_id))
+        _rf_onay_sonrasi_kardes_uygunluk(
+            con, mevcut["id"], test["formul_id"], arge_test_id,
+            test["cari_id"], test,
+        )
         return {
             "ok": True, "yeni_mi": False,
             "rf_renk_id": mevcut["id"],
@@ -5730,6 +5828,10 @@ def _renk_merkezi_arge_onayla_core(con, arge_test_id, onaylayan_id):
         """, (rf_renk_id, test["formul_id"], arge_test_id, ilk_cari,
               test["shore_hedef"], test["shore_degeri"],
               test["renk_tuttu"], test["cekme_problemi"]))
+
+    _rf_onay_sonrasi_kardes_uygunluk(
+        con, rf_renk_id, test["formul_id"], arge_test_id, ilk_cari, test,
+    )
 
     # ── REV-1 oluştur (idempotent — mevcut varsa atlar) ─────────────
     _rf_revizyon_ilk_olustur(
