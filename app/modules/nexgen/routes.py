@@ -17333,6 +17333,29 @@ def _pzm_boyut_kg_normalize(boyut_miktar_raw):
     return boyut_kg, None
 
 
+def _pzm_siparis_gorunen_durum(con, siparis_id, kayitli_durum):
+    """Backend plan durumlarına göre görünen operasyonel durum (DB yazmaz)."""
+    kd = (kayitli_durum or '').upper()
+    if kd in ('TAMAMLANDI', 'IPTAL', 'TASLAK'):
+        return kd, None
+    planlar = con.execute("""
+        SELECT durum FROM nexgen_uretim_plan
+        WHERE planlama_siparis_id=? AND durum NOT IN ('IPTAL')
+    """, (siparis_id,)).fetchall()
+    if not planlar:
+        return kd, None
+    durumlar = {(p['durum'] or '').upper() for p in planlar}
+    if durumlar and all(d == 'BITTI' for d in durumlar):
+        return 'TAMAMLANDI', 'Tüm planlar bitti'
+    if any(d in ('URETIMDE', 'BASLADI') for d in durumlar):
+        return 'URETIMDE', None
+    if any(d in ('ON_CALISMA', 'PLANLANDI') for d in durumlar):
+        return 'PLANLAMAYA_HAZIR', None
+    if kd == 'MPR_BEKLIYOR':
+        return 'PLANLAMAYA_HAZIR', 'Plan mevcut'
+    return kd, None
+
+
 def _pzm_talep_satir_dict(row, con=None):
     d = dict(row)
     payload = _pzm_payload_unpack(d.get('talep_referansi'))
@@ -17341,11 +17364,28 @@ def _pzm_talep_satir_dict(row, con=None):
         'TASLAK': 'Taslak',
         'MPR_BEKLIYOR': 'MPR Bekliyor',
         'PLANLAMAYA_HAZIR': 'Planlamaya Hazır',
+        'ON_CALISMA': 'Ön Çalışma',
         'URETIMDE': 'Üretimde',
+        'BITTI': 'Bitti',
         'TAMAMLANDI': 'Tamamlandı',
         'IPTAL': 'İptal',
     }.get(d.get('durum'), d.get('durum') or '—')
     if con is not None and d.get('id'):
+        gorunen, gerekce = _pzm_siparis_gorunen_durum(con, d['id'], d.get('durum'))
+        if gorunen and gorunen != (d.get('durum') or '').upper():
+            d['gorunen_durum'] = gorunen
+            d['durum_etiket'] = {
+                'TASLAK': 'Taslak',
+                'MPR_BEKLIYOR': 'MPR Bekliyor',
+                'PLANLAMAYA_HAZIR': 'Planlamaya Hazır',
+                'ON_CALISMA': 'Ön Çalışma',
+                'URETIMDE': 'Üretimde',
+                'BITTI': 'Bitti',
+                'TAMAMLANDI': 'Tamamlandı',
+                'IPTAL': 'İptal',
+            }.get(gorunen, gorunen)
+            if gerekce:
+                d['durum_uyari'] = gerekce
         from modules.nexgen.pzm_siparis_read import (
             pzm_siparis_kalemleri_getir,
             pzm_siparis_ozet,
@@ -18466,6 +18506,32 @@ def tablet_uretim_isleri():
         isler=isler,
         can_uretim=yetki_var('nexgen.tablet.uretim', 'can_uretim'),
     )
+
+
+@nexgen_bp.route('/tablet/ferhat')
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def tablet_ferhat():
+    """Ferhat saha ekranı — tablete gönderilmiş işler."""
+    con = _db()
+    try:
+        tum = _tua_tablet_is_liste_sorgu(con)
+        aktif = [i for i in tum if i.get('batch_durum') == 'DEVAM']
+        bekleyen = [i for i in tum if i.get('batch_durum') in ('HAZIR', 'BEKLEME')]
+    finally:
+        con.close()
+    return render_template(
+        'nexgen/tablet_ferhat.html',
+        active='nexgen',
+        aktif_isler=aktif,
+        bekleyen_isler=bekleyen,
+    )
+
+
+@nexgen_bp.route('/tablet/ferhat/<batch_kodu>')
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def tablet_ferhat_is(batch_kodu):
+    """Ferhat iş detayı — mevcut tablet üretim ekranına yönlendirir."""
+    return redirect(f'/nexgen/tablet/uretim-islem/{batch_kodu}')
 
 
 @nexgen_bp.route('/api/tablet/is-listesi')
@@ -22541,7 +22607,28 @@ def _parca_stok_tuket(con, parca_id, uretilen_kg=None, olusturan_id=None):
     batch_kodu = row['batch_kodu']
     lot_kodu = row['lot_kodu'] or '—'
     parca_no = row['parca_no']
-    aciklama = f"Batch {batch_kodu} / LOT {lot_kodu} / Alt emir {parca_no}"
+    plan_kodu = None
+    pzm_no = None
+    plan_id = row['parca_plan_id'] or row['batch_plan_id']
+    if plan_id:
+        plan_info = con.execute(
+            "SELECT plan_kodu, siparis_no FROM nexgen_uretim_plan WHERE id=?",
+            (plan_id,),
+        ).fetchone()
+        if plan_info:
+            plan_kodu = plan_info['plan_kodu']
+            pzm_no = plan_info['siparis_no']
+    if row['planlama_siparis_id']:
+        ps = con.execute(
+            "SELECT siparis_no FROM nexgen_planlama_siparis WHERE id=?",
+            (row['planlama_siparis_id'],),
+        ).fetchone()
+        if ps and ps['siparis_no']:
+            pzm_no = ps['siparis_no']
+    aciklama = (
+        f"PZM {pzm_no or '—'} / Plan {plan_kodu or '—'} / "
+        f"Batch {batch_kodu} / Parça {parca_no} / LOT {lot_kodu}"
+    )
     uid = olusturan_id if olusturan_id is not None else _kullanici_id()
 
     hareket_sayisi = 0
