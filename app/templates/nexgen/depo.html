@@ -699,6 +699,7 @@
 </style>
 
 <script>
+const NGDP_BEKLEYEN = {{ bekleyen | tojson }};
 const SEKMELER_DP = ['bekleyen', 'uretim-hazirlik', 'direkt', 'cikis', 'gecmis'];
 const CAN_GIRIS_DP = {{ 'true' if can_giris else 'false' }};
 let _uhAktifId = null;
@@ -737,6 +738,17 @@ function sekmeGec(hedef) {
       if (hid) setTimeout(function() { uhDetayAc(parseInt(hid, 10)); }, 400);
     }
   }
+  var siparisF = (qs.get('siparis') || '').trim();
+  if (siparisF) {
+    sekmeGec('bekleyen');
+    var sid = parseInt(siparisF, 10);
+    if (sid) {
+      var hit = (NGDP_BEKLEYEN || []).find(function(s) { return s.siparis_id === sid; });
+      if (hit) {
+        setTimeout(function() { malKabulModalAc(hit); }, 300);
+      }
+    }
+  }
 })();
 
 // Modal
@@ -744,6 +756,7 @@ let _kmData = {};
 
 function malKabulModalAc(siparis) {
   _kmData = siparis;
+  window._kmFazlaOnay = false;
   document.getElementById('kabul-modal-baslik').textContent =
     'Mal Kabul — ' + (siparis.siparis_no || 'Sipariş #' + siparis.siparis_id);
   document.getElementById('km-ted-ad').textContent   = siparis.ted_ad;
@@ -791,6 +804,16 @@ function malKabulKaydet() {
   const kg = parseFloat(document.getElementById('km-kg').value);
   if (!kg || kg <= 0) { hataDiv.textContent = 'KG giriniz.'; hataDiv.style.display='block'; return; }
 
+  const kalanKg = parseFloat(_kmData.kalan_kg) || 0;
+  const fazlaOnay = kg > kalanKg + 0.001;
+  if (fazlaOnay && !window._kmFazlaOnay) {
+    hataDiv.textContent = 'Fazla teslim tespit edildi. Devam etmek için tekrar tıklayın.';
+    hataDiv.style.display = 'block';
+    window._kmFazlaOnay = true;
+    btn.textContent = 'Fazla teslimatı onayla ve kaydet';
+    return;
+  }
+
   btn.disabled = true; btn.textContent = 'Kaydediliyor…';
   fetch('/nexgen/api/depo/mal-kabul', {
     method: 'POST',
@@ -803,6 +826,7 @@ function malKabulKaydet() {
       irsaliye_no:      document.getElementById('km-irsaliye').value.trim(),
       lot_no:           document.getElementById('km-lot').value.trim(),
       aciklama:         document.getElementById('km-aciklama').value.trim(),
+      fazla_onaylandi:  fazlaOnay ? 1 : 0,
     })
   })
   .then(function(r) { return r.json(); })

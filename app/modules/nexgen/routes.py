@@ -8626,6 +8626,17 @@ def api_satinalma_siparis_durum():
         elif eylem == 'IPTAL':
             if mevcut_durum == 'TAMAMLANDI':
                 return jsonify({"ok": False, "hata": "Tamamlanmış sipariş iptal edilemez."}), 400
+            gelen_row = con.execute(
+                "SELECT COALESCE(SUM(miktar_kg), 0) FROM nexgen_mal_kabul WHERE satin_siparis_id=?",
+                (siparis_id,),
+            ).fetchone()
+            gelen_kg = round(float((gelen_row[0] if gelen_row else 0) or 0), 3)
+            if gelen_kg > 0.001:
+                return jsonify({
+                    "ok": False,
+                    "hata": "Kısmi teslim alınmış sipariş iptal edilemez.",
+                    "gelen_kg": gelen_kg,
+                }), 400
             con.execute("""
                 UPDATE nexgen_satin_siparis
                 SET durum='IPTAL',
@@ -12796,6 +12807,7 @@ def api_depo_mal_kabul():
     lot_no         = d.get('lot_no', '').strip() or None
     aciklama       = d.get('aciklama', '').strip() or None
     siparis_id     = d.get('satin_siparis_id') or None  # None → direkt giriş
+    fazla_onay     = bool(d.get('fazla_onay') or d.get('fazla_onaylandi'))
 
     # Zorunlu alan kontrolü
     if not tedarikci_id or not stok_kart_id or not miktar_kg:
@@ -12809,8 +12821,13 @@ def api_depo_mal_kabul():
 
     kullanici_id = _kullanici_id()
     con = _db()
+    mal_kabul_id = None
+    hareket_id = None
+    onceki_stok = None
+    sonraki_stok = None
+    yeni_durum = None
+    toplam_gelen = None
     try:
-        # Tedarikçi ve stok kartı var mı?
         ted = con.execute("SELECT id FROM nexgen_tedarikci WHERE id=?", (tedarikci_id,)).fetchone()
         if not ted:
             return jsonify({"ok": False, "hata": "Tedarikçi bulunamadı"}), 404
@@ -12818,31 +12835,65 @@ def api_depo_mal_kabul():
         if not kart:
             return jsonify({"ok": False, "hata": "Stok kartı bulunamadı"}), 404
 
-        # Siparişe bağlıysa kontrol
         siparis = None
         if siparis_id:
             siparis = con.execute(
-                "SELECT id, siparis_miktari_kg, durum, stok_kart_id, tedarikci_id FROM nexgen_satin_siparis WHERE id=?",
-                (siparis_id,)
+                "SELECT id, siparis_no, siparis_miktari_kg, durum, stok_kart_id, "
+                "tedarikci_id, onay_durumu "
+                "FROM nexgen_satin_siparis WHERE id=?",
+                (siparis_id,),
             ).fetchone()
             if not siparis:
                 return jsonify({"ok": False, "hata": "Sipariş bulunamadı"}), 404
+            if siparis['onay_durumu'] != 'ONAYLANDI':
+                return jsonify({
+                    "ok": False,
+                    "hata": f"Onaylanmamış siparişe mal kabul yapılamaz ({siparis['onay_durumu']})",
+                }), 400
             if siparis['durum'] in ('TAMAMLANDI', 'IPTAL'):
-                return jsonify({"ok": False, "hata": f"Sipariş durumu {siparis['durum']}, mal kabul yapılamaz"}), 400
+                return jsonify({
+                    "ok": False,
+                    "hata": f"Sipariş durumu {siparis['durum']}, mal kabul yapılamaz",
+                }), 400
+            if int(siparis['stok_kart_id']) != int(stok_kart_id):
+                return jsonify({
+                    "ok": False,
+                    "hata": "Stok kartı sipariş satırı ile uyuşmuyor",
+                }), 400
+            if int(siparis['tedarikci_id']) != int(tedarikci_id):
+                return jsonify({
+                    "ok": False,
+                    "hata": "Tedarikçi sipariş ile uyuşmuyor",
+                }), 400
+            gelen_row = con.execute(
+                "SELECT COALESCE(SUM(miktar_kg), 0) FROM nexgen_mal_kabul WHERE satin_siparis_id=?",
+                (siparis_id,),
+            ).fetchone()[0]
+            gelen_kg = round(float(gelen_row or 0), 3)
+            kalan_kg = round(float(siparis['siparis_miktari_kg']) - gelen_kg, 3)
+            if miktar_kg > kalan_kg + 0.001 and not fazla_onay:
+                return jsonify({
+                    "ok": False,
+                    "hata": f"Kalan miktar {kalan_kg} KG. Fazla teslim için onay gerekli.",
+                    "kalan_kg": kalan_kg,
+                    "fazla_gerekli": True,
+                }), 400
 
-        # ── referans_tip belirle ───────────────────────────────
         if siparis_id:
             referans_tip = 'SATIN_ALMA_SIPARIS'
             ref_id = siparis_id
         else:
             referans_tip = 'DIREKT_GIRIS'
-            ref_id = None  # mal_kabul INSERT sonrası doldurulacak
+            ref_id = None
 
+        sip_no = siparis['siparis_no'] if siparis and siparis.get('siparis_no') else None
         aciklama_hareket = aciklama or (
-            f"Mal kabul — "
-            + (f"Sipariş #{siparis_id}" if siparis_id else "Direkt giriş")
+            "Mal kabul — "
+            + (f"SA {sip_no or siparis_id}" if siparis_id else "Direkt giriş")
             + (f" İrsaliye:{irsaliye_no}" if irsaliye_no else "")
         )
+
+        con.execute('BEGIN IMMEDIATE')
         wr = _stok_hareket_yaz(
             con, stok_kart_id, 'GIRIS', miktar_kg,
             aciklama=aciklama_hareket,
@@ -12854,7 +12905,6 @@ def api_depo_mal_kabul():
         onceki_stok = wr['onceki_stok']
         sonraki_stok = wr['sonraki_stok']
 
-        # ── nexgen_mal_kabul INSERT ────────────────────────────
         con.execute("""
             INSERT INTO nexgen_mal_kabul
               (satin_siparis_id, tedarikci_id, stok_kart_id,
@@ -12866,37 +12916,34 @@ def api_depo_mal_kabul():
               kullanici_id, aciklama, hareket_id))
         mal_kabul_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
 
-        # Direkt girişte referans_id = mal_kabul_id
         if not siparis_id:
             con.execute(
                 "UPDATE nexgen_stok_hareket SET referans_id=? WHERE id=?",
-                (mal_kabul_id, hareket_id)
+                (mal_kabul_id, hareket_id),
             )
 
-        # ── Sipariş durumunu güncelle ──────────────────────────
-        yeni_durum = None
-        toplam_gelen = None
         if siparis and siparis_id:
             toplam_gelen_row = con.execute(
                 "SELECT COALESCE(SUM(miktar_kg), 0) FROM nexgen_mal_kabul WHERE satin_siparis_id=?",
-                (siparis_id,)
+                (siparis_id,),
             ).fetchone()[0]
-            toplam_gelen = round(toplam_gelen_row, 3)
-
-            if toplam_gelen >= siparis['siparis_miktari_kg']:
+            toplam_gelen = round(float(toplam_gelen_row or 0), 3)
+            if toplam_gelen >= float(siparis['siparis_miktari_kg']) - 0.001:
                 yeni_durum = 'TAMAMLANDI'
             else:
                 yeni_durum = 'KISMI_TESLIM'
-
             con.execute(
                 "UPDATE nexgen_satin_siparis SET durum=? WHERE id=?",
-                (yeni_durum, siparis_id)
+                (yeni_durum, siparis_id),
             )
 
         con.commit()
 
     except Exception as e:
-        con.close()
+        try:
+            con.rollback()
+        except Exception:
+            pass
         return jsonify({"ok": False, "hata": str(e)}), 500
     finally:
         con.close()
@@ -13253,12 +13300,14 @@ def api_depo_hazirlik_detay(hazirlik_id):
         kalemler = _depo_hazirlik_kalemleri(con, hazirlik_id)
         taban = [k for k in kalemler if k.get('kaynak') == 'TABAN']
         rf = [k for k in kalemler if k.get('kaynak') == 'RF']
+        mi_uyari = _depo_hazirlik_mi_uyari(con, hdr.get('plan_id'), kalemler)
         return jsonify({
             'ok': True,
             'hazirlik': hdr,
             'kalemler': kalemler,
             'taban': taban,
             'rf': rf,
+            'mi_uyari': mi_uyari,
         })
     finally:
         con.close()
@@ -21368,6 +21417,67 @@ def _depo_hazirlik_batch_durum(con, batch_kodu):
     return dict(row) if row else None
 
 
+def _batch_depo_hazir_zorunlu(con, batch_kodu):
+    """Parça bitirmeden önce batch için depo hazırlığının HAZIR olmasını zorunlu kılar."""
+    if not _depo_hazirlik_tablosu_var(con):
+        return {'ok': True, 'atlandi': True}
+    dh = _depo_hazirlik_batch_durum(con, batch_kodu)
+    if not dh:
+        return {
+            'ok': False,
+            'hata': 'Bu batch için depo hazırlık kaydı yok. Önce üretime gönderin.',
+        }
+    if dh.get('durum') != 'HAZIR':
+        return {
+            'ok': False,
+            'hata': (
+                f'Depo hazırlığı tamamlanmadı (durum: {dh.get("durum")}). '
+                'Parça bitirmeden önce depoda HAZIR işaretleyin.'
+            ),
+            'depo_durum': dh.get('durum'),
+        }
+    return {'ok': True, 'depo_durum': 'HAZIR'}
+
+
+def _depo_hazirlik_mi_uyari(con, plan_id, kalemler):
+    """Hazırlık snapshot'ını güncel MI ile karşılaştır — otomatik değiştirme yok."""
+    if not plan_id:
+        return None
+    mi = _mpr_stok_ihtiyac_birlestir(con, plan_id)
+    if not mi.get('ok'):
+        return None
+    mi_map = {}
+    for k in mi.get('kalemler', []):
+        sid = k.get('stok_kart_id')
+        if sid:
+            mi_map[int(sid)] = round(float(k.get('gerekli_kg') or 0), 3)
+    snap_map = {}
+    for k in kalemler:
+        sid = k.get('stok_kart_id')
+        if sid:
+            snap_map[int(sid)] = round(float(k.get('gerekli_kg') or 0), 3)
+    farklar = []
+    for sid in sorted(set(mi_map) | set(snap_map)):
+        mi_kg = mi_map.get(sid, 0)
+        snap_kg = snap_map.get(sid, 0)
+        if abs(mi_kg - snap_kg) > 0.05:
+            farklar.append({
+                'stok_kart_id': sid,
+                'snapshot_kg': snap_kg,
+                'guncel_kg': mi_kg,
+            })
+    if not farklar:
+        return None
+    return {
+        'uyari': (
+            'Hazırlık snapshot\'ı güncel Malzeme İhtiyacı ile uyuşmuyor. '
+            'Yeniden kontrol edin.'
+        ),
+        'fark_sayisi': len(farklar),
+        'farklar': farklar[:10],
+    }
+
+
 def _stok_rezerv_tablosu_var(con):
     return con.execute(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='nexgen_stok_rezerv'"
@@ -22442,6 +22552,21 @@ def _parca_geri_al_uygula(con, parca_id, batch_kodu, gerekce):
 
 def _parca_bitir_uygula(con, parca_id, hedef_kg, notlar=None):
     """FAZ-4B/5C-4: stok tüketimi + rezerv kapatma + parça BITTI (tek transaction içi)."""
+    row = con.execute(
+        "SELECT batch_kodu, durum FROM nexgen_uretim_parca WHERE id=?",
+        (parca_id,),
+    ).fetchone()
+    if not row:
+        return {'ok': False, 'hata': 'Alt emir bulunamadı'}
+    if row['durum'] == 'BITTI':
+        return {'ok': True, 'atlandi': True, 'uretilen_kg': round(float(hedef_kg), 3)}
+    if row['durum'] not in ('DEVAM', 'HAZIR'):
+        return {'ok': False, 'hata': f'{row["durum"]} durumundaki alt emir bitirilemez'}
+
+    depo_chk = _batch_depo_hazir_zorunlu(con, row['batch_kodu'])
+    if not depo_chk.get('ok'):
+        return depo_chk
+
     uretilen_kg = round(float(hedef_kg), 3)
     rezerv_kontrol = _rezerv_tuket(
         con, parca_id, uretilen_kg=uretilen_kg, kontrol_only=True,
@@ -22469,9 +22594,12 @@ def _parca_bitir_uygula(con, parca_id, hedef_kg, notlar=None):
         params.append(notlar)
     params.append(parca_id)
     con.execute(
-        f"UPDATE nexgen_uretim_parca SET {', '.join(update_fields)} WHERE id=?",
+        f"UPDATE nexgen_uretim_parca SET {', '.join(update_fields)} "
+        f"WHERE id=? AND durum IN ('DEVAM','HAZIR')",
         params,
     )
+    if con.total_changes == 0:
+        return {'ok': False, 'hata': 'Alt emir zaten bitirilmiş veya durum uygun değil'}
     return {
         'ok': True,
         'uretilen_kg': uretilen_kg,

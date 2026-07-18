@@ -44,6 +44,9 @@
       <button class="ngsd-eylem-btn ngsd-btn-onayla" onclick="ngsdEylem('ONAYLA')">Onayla</button>
       <button class="ngsd-eylem-btn ngsd-btn-reddet" onclick="ngsdEylem('REDDET')">Reddet</button>
       {% endif %}
+      {% if siparis.onay_durumu == 'ONAYLANDI' and siparis.durum in ('BEKLIYOR', 'KISMI_TESLIM') %}
+      <a href="/nexgen/depo/?siparis={{ siparis.id }}" class="ngsd-eylem-btn">Depoda Teslim Al</a>
+      {% endif %}
       {% if siparis.durum != 'TAMAMLANDI' and siparis.durum != 'IPTAL' and can_manage %}
       <button class="ngsd-eylem-btn ngsd-btn-iptal" onclick="ngsdEylem('IPTAL')">İptal Et</button>
       {% endif %}
