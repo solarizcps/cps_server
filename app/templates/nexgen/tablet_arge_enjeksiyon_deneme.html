@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% set page_title = "Enjeksiyon Deneme — " ~ (kart.test_no or '') %}
+{% block content %}
+{% set boyutlar = kart.boyutlar or [] %}
+{% set sonuclar = kart.boyut_sonuclar or [] %}
+<div class="nx-fd-sayfa">
+  <div class="nx-fd-ust">
+    <a class="nx-fd-geri" href="/nexgen/tablet/arge/enjeksiyon-denemeleri">← Liste</a>
+    <div class="nx-fd-kod">{{ kart.test_no or '—' }}</div>
+    <div class="nx-fd-ad">{{ kart.hedef_renk_adi or '—' }}</div>
+    <div class="nx-fd-meta">{{ kart.calisma_tipi or '' }} · {{ kart.boyut_etiket or '' }} · {{ kart.durum or '' }}</div>
+  </div>
+
+  {% if ok %}
+  <div class="nx-fd-ok">Kayıt alındı. Durum: {{ kart.durum }}</div>
+  {% endif %}
+  {% if hata %}
+  <div class="nx-fd-hata">{{ hata }}</div>
+  {% endif %}
+
+  {% if kart.durum in ('FERHAT_BEKLIYOR','DENEMEDE') %}
+  <form id="nx-fd-form" class="nx-fd-form" onsubmit="return nxFdKaydet(event)">
+    {% for b in boyutlar %}
+    <section class="nx-fd-boyut" data-boyut="{{ b }}">
+      <h3>{{ b }}</h3>
+      <div class="nx-fd-grid">
+        <label>Shore<input type="number" step="0.1" name="shore_{{ b }}"></label>
+        <label>Pişme (dk)<input type="number" step="0.1" name="pisme_{{ b }}"></label>
+        <label>Enj. sn<input type="number" step="1" name="sn_{{ b }}"></label>
+        <label>Yoğunluk<input type="number" step="0.01" name="yog_{{ b }}"></label>
+      </div>
+      <label class="nx-fd-full">Kalıp sonucu<input type="text" name="kalip_{{ b }}"></label>
+      <label class="nx-fd-full">Renk sonucu<input type="text" name="renk_{{ b }}"></label>
+      <label class="nx-fd-chk"><input type="checkbox" name="kalite_{{ b }}"> Kalite sorunu var</label>
+      <label class="nx-fd-full">Kalite açıklama<textarea name="kalite_ack_{{ b }}" rows="2"></textarea></label>
+      <label class="nx-fd-full">Operasyon notu<textarea name="not_{{ b }}" rows="2"></textarea></label>
+    </section>
+    {% endfor %}
+
+    <section class="nx-fd-genel">
+      <h3>Genel karar</h3>
+      <div class="nx-fd-karar">
+        <label><input type="radio" name="genel_karar" value="BASARILI" required> Başarılı</label>
+        <label><input type="radio" name="genel_karar" value="REVIZYON_GEREKLI"> Revizyon</label>
+        <label><input type="radio" name="genel_karar" value="RED"> Red</label>
+      </div>
+      <label class="nx-fd-full">Genel not<textarea name="genel_not" id="genel_not" rows="3" placeholder="Revizyon/Red için zorunlu">{{ kart.ferhat_genel_not or '' }}</textarea></label>
+      <button type="submit" class="nx-fd-btn">Kaydet</button>
+    </section>
+  </form>
+  {% else %}
+  <div class="nx-fd-ozet">
+    <div>Durum: <b>{{ kart.durum }}</b></div>
+    <div>Karar: {{ kart.ferhat_genel_karar or '—' }}</div>
+    <div>Not: {{ kart.ferhat_genel_not or '—' }}</div>
+    {% for s in sonuclar %}
+    <div class="nx-fd-ozet-b">
+      <b>{{ s.boyut }}</b> — Shore {{ s.shore_sonuc or '—' }} · Pişme {{ s.pisme_suresi_dk or '—' }} · Sn {{ s.enjeksiyon_saniye or '—' }}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+<style>
+.nx-fd-sayfa{max-width:720px;margin:0 auto;padding:12px 12px 40px;background:#f8fafc;min-height:80vh}
+.nx-fd-ust{text-align:center;padding:8px 0 12px;position:relative}
+.nx-fd-geri{position:absolute;left:0;top:10px;font-size:13px;font-weight:700;color:#64748b;text-decoration:none}
+.nx-fd-kod{font-size:22px;font-weight:900;font-family:ui-monospace,monospace;color:#0f172a}
+.nx-fd-ad{font-size:15px;font-weight:700;color:#334155;margin-top:4px}
+.nx-fd-meta{font-size:12px;color:#64748b;margin-top:4px}
+.nx-fd-ok{background:#dcfce7;color:#14532d;padding:10px 12px;border-radius:10px;margin-bottom:10px;font-weight:700}
+.nx-fd-hata{background:#fee2e2;color:#991b1b;padding:10px 12px;border-radius:10px;margin-bottom:10px;font-weight:700}
+.nx-fd-boyut,.nx-fd-genel{background:#fff;border:1.5px solid #e2e8f0;border-radius:14px;padding:14px;margin-bottom:12px}
+.nx-fd-boyut h3,.nx-fd-genel h3{margin:0 0 10px;font-size:14px;font-weight:900;color:#0f172a}
+.nx-fd-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.nx-fd-full{display:block;margin-top:8px}
+.nx-fd-chk{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;font-weight:700}
+label{font-size:12px;font-weight:700;color:#475569}
+input[type=number],input[type=text],textarea{width:100%;margin-top:4px;padding:10px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:14px;box-sizing:border-box}
+.nx-fd-karar{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px}
+.nx-fd-karar label{font-size:14px;color:#0f172a}
+.nx-fd-btn{width:100%;margin-top:12px;padding:14px;border:0;border-radius:12px;background:#ea580c;color:#fff;font-weight:900;font-size:15px}
+.nx-fd-ozet{background:#fff;border-radius:14px;padding:16px;border:1.5px solid #e2e8f0;line-height:1.6}
+.nx-fd-ozet-b{margin-top:8px;padding-top:8px;border-top:1px solid #f1f5f9;font-size:13px}
+</style>
+<script>
+function nxFdKaydet(ev){
+  ev.preventDefault();
+  var form = document.getElementById('nx-fd-form');
+  var kararEl = form.querySelector('input[name="genel_karar"]:checked');
+  if(!kararEl){ alert('Genel karar seçin'); return false; }
+  var karar = kararEl.value;
+  var genelNot = (form.genel_not.value||'').trim();
+  if((karar==='REVIZYON_GEREKLI'||karar==='RED') && !genelNot){
+    alert('Revizyon/Red için genel not zorunlu'); return false;
+  }
+  var boyutlar = [];
+  form.querySelectorAll('.nx-fd-boyut').forEach(function(sec){
+    var b = sec.getAttribute('data-boyut');
+    var kalite = sec.querySelector('[name="kalite_'+b+'"]').checked ? 1 : 0;
+    boyutlar.push({
+      boyut: b,
+      shore_sonuc: sec.querySelector('[name="shore_'+b+'"]').value,
+      pisme_suresi_dk: sec.querySelector('[name="pisme_'+b+'"]').value,
+      enjeksiyon_saniye: sec.querySelector('[name="sn_'+b+'"]').value,
+      yogunluk: sec.querySelector('[name="yog_'+b+'"]').value,
+      kalip_sonucu: sec.querySelector('[name="kalip_'+b+'"]').value,
+      renk_sonucu: sec.querySelector('[name="renk_'+b+'"]').value,
+      kalite_sorunu_var: kalite,
+      kalite_aciklama: sec.querySelector('[name="kalite_ack_'+b+'"]').value,
+      saha_notu: sec.querySelector('[name="not_'+b+'"]').value,
+      basarili_mi: karar==='BASARILI' ? 1 : 0
+    });
+  });
+  fetch(location.pathname, {
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},
+    body: JSON.stringify({
+      ferhat_genel_karar: karar,
+      ferhat_genel_not: genelNot,
+      boyut_sonuclar: boyutlar
+    })
+  }).then(function(r){ return r.json().then(function(d){ return {ok:r.ok,d:d}; }); })
+  .then(function(x){
+    if(!x.ok || x.d.ok===false){ alert(x.d.hata||'Kayıt hatası'); return; }
+    location.href = location.pathname + '?ok=1';
+  }).catch(function(){ alert('Ağ hatası'); });
+  return false;
+}
+</script>
+{% endblock %}

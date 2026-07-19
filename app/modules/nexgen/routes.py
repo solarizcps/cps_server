@@ -5863,21 +5863,10 @@ def _renk_merkezi_arge_onayla_core(con, arge_test_id, onaylayan_id):
 @nexgen_bp.route('/api/renk-merkezi/onayla', methods=['POST'])
 @login_gerekli
 def api_renk_merkezi_onayla():
-    """Renk Merkezi V1 — AR-GE çalışmasını tek transaction'da onaylar ve RF oluşturur.
+    """Renk Merkezi — legacy AR-GE onay VEYA NX-AR yonetim_karar(ONAY).
 
-    Yetki: nexgen.recete.manage can_manage VEYA nexgen.recete.create can_create
-
-    POST JSON:
-        arge_test_id : int   — zorunlu
-        onay_notu    : str   — opsiyonel
-
-    Döner:
-        {"ok": true, "rf_renk_id": ..., "rf_kod": ..., "rf_ad": ..., "yeni_mi": bool}
+    Yetki: approve/manage (NX-AR) veya eski manage/create (legacy).
     """
-    if not (yetki_var('nexgen.recete.manage', 'can_manage')
-            or yetki_var('nexgen.recete.create', 'can_create')):
-        abort(403)
-
     data         = request.get_json(silent=True) or {}
     arge_test_id = data.get('arge_test_id')
     onay_notu    = (data.get('onay_notu') or '').strip() or None
@@ -5892,25 +5881,66 @@ def api_renk_merkezi_onayla():
     onaylayan_id = _kullanici_id()
     con = _db()
     try:
+        row = con.execute(
+            "SELECT arge_kodu, calisma_tipi FROM nexgen_arge_test WHERE id=? AND aktif=1",
+            (arge_test_id,),
+        ).fetchone()
+        if not row:
+            return jsonify({"ok": False, "hata": "AR-GE kaydı bulunamadı."}), 404
+        is_nx = (row['arge_kodu'] or '').startswith('NX-AR-')
+        if is_nx:
+            if not (
+                yetki_var('nexgen.recete.approve', 'can_approve')
+                or yetki_var('nexgen.yonetim.manage', 'can_view')
+            ):
+                abort(403)
+            from modules.nexgen.nx_ar_service import NxArError, yonetim_karar
+            payload = {
+                'karar': 'ONAY',
+                'neden': onay_notu,
+                'formul_kod': (data.get('formul_kod') or '').strip() or None,
+                'formul_ad': (data.get('formul_ad') or '').strip() or None,
+                'urun_ailesi': (data.get('urun_ailesi') or '').strip() or None,
+            }
+            try:
+                out = yonetim_karar(con, arge_test_id, payload, kullanici_id=onaylayan_id)
+            except NxArError as e:
+                return jsonify({'ok': False, 'hata': e.message, 'kod': e.kod}), e.status
+            rf = out.get('rf') or {}
+            return jsonify({
+                'ok': True,
+                'yeni_mi': bool(rf.get('id')),
+                'rf_renk_id': rf.get('id'),
+                'rf_kod': rf.get('rf_kod'),
+                'rf_ad': rf.get('ad'),
+                'renk_kodu': out.get('renk_kodu'),
+                'durum': out.get('durum'),
+                'test_no': out.get('test_no'),
+            })
+
+        if not (yetki_var('nexgen.recete.manage', 'can_manage')
+                or yetki_var('nexgen.recete.create', 'can_create')):
+            abort(403)
         con.execute("BEGIN")
         sonuc = _renk_merkezi_arge_onayla_core(con, arge_test_id, onaylayan_id)
         if not sonuc.get("ok"):
             con.rollback()
             return jsonify({"ok": False, "hata": sonuc.get("hata")}), sonuc.get("status", 400)
-        # onay_notu varsa yaz
         if onay_notu:
             con.execute(
                 "UPDATE nexgen_arge_test SET onay_notu=? WHERE id=?",
                 (onay_notu, arge_test_id)
             )
         con.commit()
+        return jsonify(sonuc)
     except Exception as exc:
-        con.rollback()
+        try:
+            con.rollback()
+        except Exception:
+            pass
         return jsonify({"ok": False, "hata": str(exc)}), 500
     finally:
         con.close()
-
-    return jsonify(sonuc)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -5947,19 +5977,19 @@ def _rm_liste_grubu(arge_durum, rf_id, rf_aktif, rf_durum):
 
 
 def _nx_ar_durum_etiketi(durum: str | None) -> str:
-    """NX-AR durum → Renk Merkezi / UI etiketi (RF oluşturma yok)."""
+    """NX-AR durum → Renk Merkezi / UI etiketi."""
     d = (durum or '').upper()
     return {
-        'ARGE_HAZIR': 'AR-GE ÇALIŞMASI',
-        'DENEMEDE': 'DENEMEDE',
+        'ARGE_HAZIR': 'AR-GE TEST',
+        'DENEMEDE': 'ENJEKSİYONDA',
         'REVIZYON_GEREKLI': 'REVİZYON GEREKLİ',
         'ONAY_BEKLIYOR': 'ONAY BEKLİYOR',
         'ONAYA_GONDERILDI': 'ONAY BEKLİYOR',
-        'ONAYLANDI': 'ONAY BEKLİYOR',
-        'SAHA_BEKLIYOR': 'SAHA BEKLİYOR',
-        'FERHAT_BEKLIYOR': 'SAHA BEKLİYOR',
-        'REDDEDILDI': 'PASİF',
-    }.get(d, d or 'AR-GE ÇALIŞMASI')
+        'ONAYLANDI': 'ONAYLANDI',
+        'SAHA_BEKLIYOR': 'ENJEKSİYON BEKLİYOR',
+        'FERHAT_BEKLIYOR': 'ENJEKSİYON BEKLİYOR',
+        'REDDEDILDI': 'REDDEDİLDİ',
+    }.get(d, d or 'AR-GE TEST')
 
 
 def _nx_ar_liste_grubu(durum: str | None, rf_id, rf_aktif, rf_durum) -> str:
@@ -6182,6 +6212,7 @@ def api_rm_detay():
         return jsonify({'ok': False, 'hata': 'arge_test_id veya rf_id gerekli.'}), 400
 
     con = _db()
+    olaylar = []
     try:
         arge = None
         rf   = None
@@ -6249,7 +6280,7 @@ def api_rm_detay():
                 formul_grup = None
         is_nx_ar = bool(
             arge and (arge['arge_kodu'] or '').startswith('NX-AR-')
-            and calisma_tipi in ('MUSTERI_RENK', 'YENI_RF')
+            and calisma_tipi in ('MUSTERI_RENK', 'YENI_RF', 'YENI_FORMUL')
         )
         durum_ham = (rf['durum'] if rf else arge_durum) or '—'
         durum_etiketi = (
@@ -6258,10 +6289,11 @@ def api_rm_detay():
         )
         ozet = {
             'arge_kodu':    (arge['arge_kodu'] if arge else None),
+            'test_no':      (arge['test_no'] if arge else None),
             'rf_id':        (rf['id'] if rf else None),
             'rf_kodu':      rf_kodu,
             'rf_adi':       rf_adi or '—',
-            'durum':        durum_ham,
+            'durum':        (arge_durum if is_nx_ar and arge_durum else durum_ham),
             'durum_etiketi': durum_etiketi,
             'cari':         cari_str or '—',
             'ana_formul':   formul_grup or formul or '—',
@@ -6272,6 +6304,7 @@ def api_rm_detay():
             'onay_tarihi':  (arge['onay_tarihi']  if arge else (rf['onay_tarihi']  if rf else None)),
             'rf_aktif':     (rf['aktif'] if rf else 1),
             'nx_ar_rf_bagli': bool(rf and is_nx_ar),
+            'renk_kodu':    (arge['renk_kodu'] if arge and 'renk_kodu' in arge.keys() else None),
         }
 
         # B. Çalışma detayı
@@ -6287,7 +6320,9 @@ def api_rm_detay():
                 'test_batch_kg':  arge['test_batch_kg'],
                 'kaynak_batch_kg':arge['kaynak_batch_kg'],
                 'numune_orani':   arge['numune_orani'],
-                # Ferhat alanları (migration 103)
+                'durum':          arge['durum'],
+                'calisma_tipi':   calisma_tipi,
+                # Ferhat alanları (migration 103 / 106)
                 'shore_hedef':    arge['shore_hedef'],
                 'shore_degeri':   arge['shore_degeri'],
                 'renk_tuttu':     arge['renk_tuttu'],
@@ -6299,7 +6334,31 @@ def api_rm_detay():
                 'pisme_suresi_dk':arge['pisme_suresi_dk'],
                 'ferhat_adi':     arge['ferhat_adi'],
                 'ferhat_tarihi':  arge['ferhat_tarihi'],
+                'saha_testi_gerekli_mi': arge['saha_testi_gerekli_mi'] if 'saha_testi_gerekli_mi' in arge.keys() else None,
+                'saha_testi_nedeni': arge['saha_testi_nedeni'] if 'saha_testi_nedeni' in arge.keys() else None,
+                'ferhat_genel_karar': arge['ferhat_genel_karar'] if 'ferhat_genel_karar' in arge.keys() else None,
+                'ferhat_genel_not': arge['ferhat_genel_not'] if 'ferhat_genel_not' in arge.keys() else None,
+                'renk_kodu': arge['renk_kodu'] if 'renk_kodu' in arge.keys() else None,
             }
+            # NX-AR boyut sonuçları (aktif deneme)
+            try:
+                den = con.execute(
+                    """
+                    SELECT id FROM nexgen_arge_deneme
+                    WHERE arge_test_id=? AND aktif_mi=1
+                    ORDER BY deneme_no DESC LIMIT 1
+                    """,
+                    (arge['id'],),
+                ).fetchone()
+                if den:
+                    calisma['boyut_sonuclar'] = [
+                        dict(r) for r in con.execute(
+                            "SELECT * FROM nexgen_arge_boyut_sonuc WHERE deneme_id=? ORDER BY boyut",
+                            (den['id'],),
+                        ).fetchall()
+                    ]
+            except Exception:
+                calisma['boyut_sonuclar'] = []
 
         # C. Pigmentler — tek normalize payload
         pigmentler = []
@@ -6344,7 +6403,45 @@ def api_rm_detay():
             except Exception:
                 pass
 
-        if rf and pigment_ozet['kalem_sayisi']:
+        if not pigmentler and arge and is_nx_ar:
+            try:
+                den = con.execute(
+                    """
+                    SELECT id FROM nexgen_arge_deneme
+                    WHERE arge_test_id=? AND aktif_mi=1
+                    ORDER BY deneme_no DESC LIMIT 1
+                    """,
+                    (arge['id'],),
+                ).fetchone()
+                if den:
+                    dk = con.execute(
+                        """
+                        SELECT k.sira, k.test_miktar_kg, k.aciklama,
+                               sk.kod AS stok_kodu, sk.ad AS stok_adi, sk.kategori
+                        FROM nexgen_arge_deneme_kalem k
+                        JOIN nexgen_stok_kart sk ON sk.id = k.stok_kart_id
+                        WHERE k.deneme_id=? AND sk.kategori='BOYA' AND sk.aktif=1
+                          AND k.test_miktar_kg > 0
+                        ORDER BY k.sira, k.id
+                        """,
+                        (den['id'],),
+                    ).fetchall()
+                    ham = [{
+                        'sira': k['sira'],
+                        'stok_kodu': k['stok_kodu'] or '—',
+                        'stok_adi': k['stok_adi'] or k['aciklama'] or '—',
+                        'kategori': k['kategori'] or 'BOYA',
+                        'miktar_kg': float(k['test_miktar_kg'] or 0),
+                        'aktif': 1,
+                    } for k in dk]
+                    if ham:
+                        pl = _rf_pigment_payload_olustur(ham)
+                        pigmentler = pl['pigmentler']
+                        pigment_ozet = pl['ozet']
+            except Exception:
+                pass
+
+        if (rf or is_nx_ar) and pigment_ozet['kalem_sayisi']:
             ozet['kalem_sayisi'] = pigment_ozet['kalem_sayisi']
             ozet['toplam_gr'] = pigment_ozet['toplam_gr']
             ozet['toplam_kg'] = pigment_ozet['toplam_kg']
@@ -6442,6 +6539,14 @@ def api_rm_detay():
                     'rf_rev_no':    k['rf_rev_no'],
                 })
 
+        olaylar = []
+        if arge and is_nx_ar:
+            try:
+                from modules.nexgen.nx_ar_service import olay_liste as _olay_liste
+                olaylar = _olay_liste(con, int(arge['id']))
+            except Exception:
+                olaylar = []
+
     finally:
         con.close()
 
@@ -6455,6 +6560,7 @@ def api_rm_detay():
         'baglantilar_gecmis': baglantilar_gecmis,
         'revizyonlar': revizyonlar,
         'kullanim':   kullanim,
+        'olaylar':    olaylar,
     })
 
 
@@ -18540,6 +18646,105 @@ def tablet_ferhat():
         active='nexgen',
         aktif_isler=aktif,
         bekleyen_isler=bekleyen,
+    )
+
+
+@nexgen_bp.route('/tablet/arge/enjeksiyon-denemeleri')
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def tablet_arge_enjeksiyon_denemeleri():
+    """NX-AR Ferhat bekleyen AR-GE enjeksiyon denemeleri (AT bağli)."""
+    from modules.nexgen.nx_ar_service import ferhat_bekleyen_liste
+    con = _db()
+    try:
+        data = ferhat_bekleyen_liste(con, limit=100)
+    finally:
+        con.close()
+    return render_template(
+        'nexgen/tablet_arge_enjeksiyon_denemeleri.html',
+        active='nexgen',
+        items=data.get('items') or [],
+    )
+
+
+@nexgen_bp.route('/tablet/arge/enjeksiyon-deneme/<int:arge_test_id>', methods=['GET', 'POST'])
+@yetki_gerekli('nexgen.tablet.view', 'can_view')
+def tablet_arge_enjeksiyon_deneme(arge_test_id):
+    """NX-AR Ferhat enjeksiyon deneme formu — yalnız AT kodu; yeni AT üretilmez."""
+    from modules.nexgen.nx_ar_service import (
+        NxArError, ferhat_ac, ferhat_sonuc_kaydet, get_nx_ar,
+    )
+    con = _db()
+    hata = None
+    try:
+        if request.method == 'GET':
+            try:
+                ferhat_ac(con, arge_test_id, kullanici_id=_kullanici_id())
+            except NxArError as e:
+                hata = e.message
+        kart = get_nx_ar(con, arge_test_id)
+    except NxArError as e:
+        con.close()
+        abort(e.status if e.status in (403, 404) else 404)
+    except Exception:
+        con.close()
+        abort(404)
+
+    if request.method == 'POST':
+        payload = request.get_json(silent=True)
+        if payload is None:
+            # form-urlencoded / multipart fallback
+            payload = {
+                'ferhat_genel_karar': request.form.get('ferhat_genel_karar'),
+                'ferhat_genel_not': request.form.get('ferhat_genel_not'),
+                'ferhat_adi': request.form.get('ferhat_adi'),
+            }
+            # boyutlar JSON string olabilir
+            import json as _json
+            raw_b = request.form.get('boyut_sonuclar')
+            if raw_b:
+                try:
+                    payload['boyut_sonuclar'] = _json.loads(raw_b)
+                except Exception:
+                    payload['boyut_sonuclar'] = []
+        try:
+            kart = ferhat_sonuc_kaydet(
+                con, arge_test_id, payload or {}, kullanici_id=_kullanici_id()
+            )
+            con.close()
+            if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify(kart)
+            return redirect(
+                f'/nexgen/tablet/arge/enjeksiyon-deneme/{arge_test_id}?ok=1'
+            )
+        except NxArError as e:
+            con.close()
+            if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'ok': False, 'hata': e.message, 'kod': e.kod}), e.status
+            hata = e.message
+            con = _db()
+            try:
+                kart = get_nx_ar(con, arge_test_id)
+            finally:
+                con.close()
+            return render_template(
+                'nexgen/tablet_arge_enjeksiyon_deneme.html',
+                active='nexgen',
+                kart=kart,
+                hata=hata,
+            )
+        except Exception as exc:
+            con.close()
+            if request.is_json:
+                return jsonify({'ok': False, 'hata': str(exc)}), 500
+            abort(500)
+
+    con.close()
+    return render_template(
+        'nexgen/tablet_arge_enjeksiyon_deneme.html',
+        active='nexgen',
+        kart=kart,
+        hata=hata,
+        ok=request.args.get('ok'),
     )
 
 

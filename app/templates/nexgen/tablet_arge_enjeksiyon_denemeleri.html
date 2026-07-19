@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% set page_title = "AR-GE Enjeksiyon Denemeleri" %}
+{% block content %}
+<div class="nx-enj-sayfa">
+  <div class="nx-enj-ust">
+    <a class="nx-enj-geri" href="/nexgen/tablet">← Tablet</a>
+    <div class="nx-enj-baslik">AR-GE ENJEKSİYON DENEMELERİ</div>
+    <div class="nx-enj-alt">Ferhat — bekleyen / devam eden</div>
+  </div>
+
+  {% if not items %}
+  <div class="nx-enj-bos">Bekleyen enjeksiyon denemesi yok.</div>
+  {% else %}
+  <div class="nx-enj-grid">
+    {% for i in items %}
+    <a class="nx-enj-kart" href="/nexgen/tablet/arge/enjeksiyon-deneme/{{ i.arge_test_id }}">
+      <div class="nx-enj-k-ust">
+        <b>{{ i.test_no or '—' }}</b>
+        <span>{{ i.durum }}</span>
+      </div>
+      <div class="nx-enj-k-s">{{ i.hedef_renk_adi or '—' }}</div>
+      <div class="nx-enj-k-s">{{ i.calisma_tipi_etiket or i.calisma_tipi }} · {{ i.boyut_etiket or '—' }}</div>
+      <div class="nx-enj-k-s">{{ i.cari_unvan or i.cari_kod or '—' }}</div>
+      {% if i.saha_testi_nedeni %}
+      <div class="nx-enj-k-s nx-enj-neden">{{ i.saha_testi_nedeni }}</div>
+      {% endif %}
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+<style>
+.nx-enj-sayfa{max-width:900px;margin:0 auto;padding:14px 12px 32px;background:#f8fafc;min-height:80vh}
+.nx-enj-ust{text-align:center;padding:10px 0 14px;position:relative}
+.nx-enj-geri{position:absolute;left:0;top:12px;font-size:13px;font-weight:700;color:#64748b;text-decoration:none}
+.nx-enj-baslik{font-size:20px;font-weight:900;letter-spacing:.04em;color:#0f172a}
+.nx-enj-alt{font-size:13px;color:#64748b;margin-top:4px}
+.nx-enj-grid{display:grid;gap:10px}
+.nx-enj-kart{display:block;text-decoration:none;background:#fff;border-radius:14px;padding:16px;border:2px solid #e2e8f0;border-left:6px solid #d97706}
+.nx-enj-k-ust{display:flex;justify-content:space-between;gap:8px;margin-bottom:6px}
+.nx-enj-k-ust b{font-size:16px;color:#0f172a;font-family:ui-monospace,monospace}
+.nx-enj-k-ust span{font-size:11px;font-weight:800;padding:3px 8px;border-radius:8px;background:#fef3c7;color:#92400e}
+.nx-enj-k-s{font-size:14px;color:#475569;line-height:1.4}
+.nx-enj-neden{font-size:12px;color:#b45309;margin-top:4px}
+.nx-enj-bos{color:#94a3b8;padding:24px 4px;text-align:center}
+</style>
+{% endblock %}

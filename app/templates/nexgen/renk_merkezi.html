@@ -841,6 +841,7 @@ function rmTlHtml(grubu){
 }
 
 function rmRender(kart, d){
+  window._rmSonDetay = d;
   const oz=d.ozet;
   const grubu=kart.liste_grubu;
   const c0=d.calisma;
@@ -878,14 +879,10 @@ function rmRender(kart, d){
   document.getElementById('rm-tl').innerHTML=rmTlHtml(grubu);
 
   // Butonlar — duruma göre
-  // NX-AR: bu fazda RF oluşturma / onay yok — yalnız görüntüleme + bağlantı hazırlığı
   const isNxAr = (kart.kart_tipi==='NX_AR') || (oz.kart_tipi==='NX_AR');
   let btnHtml='';
-  if(isNxAr && grubu==='BEKLEYEN'){
-    btnHtml=`<button class="rm-btn rm-btn-detay" disabled title="Sonraki faz">RF oluşturma sonraki faz</button>`;
-    if(oz.rf_kodu&&oz.rf_kodu!=='—'){
-      btnHtml=`<button class="rm-btn rm-btn-detay" disabled>RF bağlı: ${rmE(oz.rf_kodu)}</button>`;
-    }
+  if(isNxAr){
+    btnHtml = rmNxArBtnHtml(kart, oz, d.calisma, CAN_APPROVE);
   } else if(grubu==='BEKLEYEN'&&CAN_APPROVE&&d.calisma){
     btnHtml=`
       <button class="rm-btn rm-btn-onay" onclick="rmOnayla(${kart.arge_test_id})">✓ ONAYLA VE AKTİF ET</button>
@@ -954,15 +951,24 @@ function rmRender(kart, d){
     sagHtml=`<div class="rm-bl"><div class="rm-bl-bas">Ferhat Saha Sonucu</div><div style="font-size:11px;color:var(--rm-t4);padding:8px 0">Ferhat saha sonucu henüz girilmedi.</div></div>`;
   }
 
-  let kararHtml='';
-  if(isNxAr && grubu==='BEKLEYEN'&&c){
-    kararHtml=`
-      <div class="rm-onay-kutu" style="grid-column:1/-1">
-        <div style="font-size:12px;color:var(--rm-t3);padding:8px 0">
-          Çalışma kartı listede. RF oluşturma / bağlama sonraki fazda yapılacak.
-          ${oz.rf_kodu&&oz.rf_kodu!=='—'?' Bağlı RF: '+rmE(oz.rf_kodu)+'.':''}
-        </div>
+  // NX-AR Ferhat özeti (boyut sonuçları)
+  if(isNxAr && c && (c.ferhat_genel_karar || (c.boyut_sonuclar&&c.boyut_sonuclar.length))){
+    const bs=(c.boyut_sonuclar||[]).map(b=>
+      `<div class="rm-bs"><span class="rm-be">${rmE(b.boyut||'')}</span>`+
+      `<span class="rm-bv">Shore ${b.shore_sonuc??'—'} · Pişme ${b.pisme_suresi_dk??'—'} · Sn ${b.enjeksiyon_saniye??'—'}</span></div>`
+    ).join('');
+    sagHtml=`
+      <div class="rm-bl">
+        <div class="rm-bl-bas">Ferhat Enjeksiyon Sonucu</div>
+        <div class="rm-bs"><span class="rm-be">Karar</span><span class="rm-bv">${rmE(c.ferhat_genel_karar||'—')}</span></div>
+        ${c.ferhat_genel_not?`<div class="rm-bs"><span class="rm-be">Not</span><span class="rm-bv">${rmE(c.ferhat_genel_not)}</span></div>`:''}
+        ${bs||'<div style="font-size:11px;color:var(--rm-t4);padding:6px 0">Boyut sonucu yok.</div>'}
       </div>`;
+  }
+
+  let kararHtml='';
+  if(isNxAr && c){
+    kararHtml = rmNxArKararHtml(kart, oz, c, CAN_APPROVE);
   } else if(grubu==='BEKLEYEN'&&CAN_APPROVE&&c){
     kararHtml=`
       <div class="rm-onay-kutu" style="grid-column:1/-1">
@@ -997,9 +1003,21 @@ function rmRender(kart, d){
   // ─── GEÇMİŞ sekmesi ────────────────────────────────────────────────
   const revs=d.revizyonlar||[];
   const kulls=d.kullanim||[];
+  const olaylar=d.olaylar||[];
+
+  const olayHtml=isNxAr?`
+    <div class="rm-sek-bas">Durum Geçmişi</div>
+    ${olaylar.length?olaylar.map(o=>`
+      <div class="rm-hg">
+        <span class="rm-hg-i">${rmE(o.olay_tipi)} · ${rmE(o.eski_durum||'—')} → ${rmE(o.yeni_durum||'—')}</span>
+        <span class="rm-hg-k">${rmE(o.aciklama||'')}</span>
+        <span class="rm-hg-t">${rmE((o.olusturma_tarihi||'').substring(0,16))}</span>
+      </div>`).join('')
+    :'<div style="font-size:11px;color:var(--rm-t4);padding:8px 0">Olay kaydı yok.</div>'}
+  `:'';
 
   const revHtml=`
-    <div class="rm-sek-bas">Revizyon Geçmişi</div>
+    <div class="rm-sek-bas"${isNxAr?' style="margin-top:12px"':''}>Revizyon Geçmişi</div>
     ${revs.length?revs.map(rv=>`
       <div class="rm-hg">
         <span class="rm-hg-i">REV-${rv.rev_no} — ${rmE(rv.durum)}</span>
@@ -1020,7 +1038,133 @@ function rmRender(kart, d){
     :'<div style="font-size:11px;color:var(--rm-t4);padding:8px 0">Henüz üretimde kullanılmadı.</div>'}
   `;
 
-  document.getElementById('s-gecmis').innerHTML=revHtml+kullHtml;
+  document.getElementById('s-gecmis').innerHTML=olayHtml+revHtml+kullHtml;
+}
+
+function rmNxArBtnHtml(kart, oz, c, canApprove){
+  const durum=((c&&c.durum)||oz.durum||'').toUpperCase();
+  const tid=kart.arge_test_id;
+  if(durum==='ONAYLANDI'){
+    const kod=oz.renk_kodu||oz.rf_kodu||'';
+    return `<button class="rm-btn rm-btn-detay" disabled>Onaylandı${kod?' · '+rmE(kod):''}</button>`;
+  }
+  if(durum==='REDDEDILDI'){
+    return `<button class="rm-btn rm-btn-arge" disabled>Reddedildi</button>`;
+  }
+  if(durum==='FERHAT_BEKLIYOR'||durum==='DENEMEDE'){
+    return `<a class="rm-btn rm-btn-detay" href="/nexgen/tablet/arge/enjeksiyon-deneme/${tid}">Ferhat formu</a>`;
+  }
+  if(!canApprove) return '';
+  if(durum==='ONAY_BEKLIYOR'){
+    return `
+      <button class="rm-btn rm-btn-onay" onclick="rmNxYonetim(${tid},'ONAY')">✓ Onayla</button>
+      <button class="rm-btn rm-btn-arge" onclick="rmNxYonetim(${tid},'REVIZYON')">↩ Revizyon</button>
+      <button class="rm-btn rm-btn-arge" onclick="rmNxYonetim(${tid},'RED')">✕ Red</button>`;
+  }
+  if(durum==='ARGE_HAZIR'||durum==='REVIZYON_GEREKLI'){
+    return `<button class="rm-btn rm-btn-detay" onclick="document.getElementById('rm-nx-saha')?.scrollIntoView({behavior:'smooth'})">Saha kararı bekleniyor</button>`;
+  }
+  return '';
+}
+
+function rmNxArKararHtml(kart, oz, c, canApprove){
+  const durum=(c.durum||oz.durum||'').toUpperCase();
+  const tid=kart.arge_test_id;
+  let h=`<div class="rm-onay-kutu" style="grid-column:1/-1" id="rm-nx-saha">`;
+  h+=`<div style="font-size:11px;font-weight:800;color:var(--rm-t3);margin-bottom:8px">Çalışma: ${rmE(c.test_no||oz.test_no||'—')} · ${rmE(durum)}</div>`;
+  if(canApprove && (durum==='ARGE_HAZIR'||durum==='REVIZYON_GEREKLI'||(durum==='DENEMEDE'&&!c.ferhat_genel_karar))){
+    h+=`
+      <div style="font-size:12px;font-weight:700;margin-bottom:6px">Enjeksiyon denemesi gerekli mi?</div>
+      <div class="rm-onay-btns" style="flex-wrap:wrap">
+        <button class="rm-btn rm-btn-green" onclick="rmNxSahaKarar(${tid},0)">Hayır — Onaya gönder</button>
+        <button class="rm-btn rm-btn-orange" onclick="rmNxSahaKarar(${tid},1)">Evet — Ferhat'a gönder</button>
+      </div>
+      <div style="margin-top:8px">
+        <select id="rm-nx-saha-neden" class="rm-input" style="max-width:320px">
+          <option value="">Neden (Evet ise zorunlu)</option>
+          <option value="YENI_RENK">Yeni renk</option>
+          <option value="YENI_FORMUL">Yeni formül</option>
+          <option value="KALIP_RISKI">Kalıp riski</option>
+          <option value="SHORE_RISKI">Shore riski</option>
+          <option value="PISME_RISKI">Pişme riski</option>
+          <option value="YOGUNLUK_RISKI">Yoğunluk riski</option>
+          <option value="YONETICI_KARARI">Yönetici kararı</option>
+          <option value="DIGER">Diğer</option>
+        </select>
+      </div>`;
+  } else if(durum==='FERHAT_BEKLIYOR'||durum==='DENEMEDE'){
+    h+=`<div class="rm-onay-not">Enjeksiyon bekleniyor.
+      <a href="/nexgen/tablet/arge/enjeksiyon-deneme/${tid}">Ferhat formunu aç</a></div>`;
+  } else if(canApprove && durum==='ONAY_BEKLIYOR'){
+    const tip=(c.calisma_tipi||oz.calisma_tipi||'').toUpperCase();
+    h+=`<div class="rm-onay-btns">
+      <button class="rm-btn rm-btn-green" onclick="rmNxYonetim(${tid},'ONAY')">✓ Onayla${tip==='YENI_FORMUL'?' (formül kodu sorulur)':''}</button>
+      <button class="rm-btn rm-btn-orange" onclick="rmNxYonetim(${tid},'REVIZYON')">↩ Revizyon</button>
+      <button class="rm-btn rm-btn-red" onclick="rmNxYonetim(${tid},'RED')">✕ Red</button>
+    </div>
+    <div class="rm-onay-not">Renk onayında kod sistem üretir. Formül onayında kodu siz girersiniz.</div>`;
+  } else if(durum==='ONAYLANDI'){
+    h+=`<div class="rm-onay-not">Onaylandı.${oz.renk_kodu?' Renk kodu: '+rmE(oz.renk_kodu)+'.':''}${oz.rf_kodu&&oz.rf_kodu!=='—'?' RF: '+rmE(oz.rf_kodu)+'.':''}</div>`;
+  } else {
+    h+=`<div class="rm-onay-not">Durum: ${rmE(durum)}</div>`;
+  }
+  h+=`</div>`;
+  return h;
+}
+
+async function rmNxSahaKarar(argeTestId, gerekli){
+  if(!CAN_APPROVE){rmToast('Yetki yok.','hata');return;}
+  const sel=document.getElementById('rm-nx-saha-neden');
+  const neden=sel?sel.value:'';
+  if(gerekli===1 && !neden){rmToast('Enjeksiyon için neden seçin.','hata');return;}
+  try{
+    const res=await fetch(`/nexgen/api/arge/nx-ar/${argeTestId}/saha-karar`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':rmCsrf()},
+      body:JSON.stringify({saha_testi_gerekli_mi:gerekli,saha_testi_nedeni:neden||null}),
+    });
+    const d=await res.json();
+    if(!d.ok){rmToast('Hata: '+(d.hata||''),'hata');return;}
+    rmToast(gerekli?'Ferhat kuyruğuna alındı.':'Onay bekliyor.','basari');
+    await rmListeYukle();
+  }catch(e){rmToast('Ağ hatası','hata');}
+}
+
+async function rmNxYonetim(argeTestId, karar){
+  if(!CAN_APPROVE){rmToast('Yetki yok.','hata');return;}
+  const payload={karar};
+  if(karar==='REVIZYON'||karar==='RED'){
+    const neden=prompt(karar==='RED'?'Red nedeni:':'Revizyon nedeni:');
+    if(neden===null)return;
+    if(!neden.trim()){rmToast('Neden zorunlu.','hata');return;}
+    payload.neden=neden.trim();
+  }
+  if(karar==='ONAY'){
+    const tip=((window._rmSonDetay&&window._rmSonDetay.calisma)||{}).calisma_tipi
+      || ((window._rmSonDetay&&window._rmSonDetay.ozet)||{}).calisma_tipi || '';
+    if(String(tip).toUpperCase()==='YENI_FORMUL'){
+      const formul_kod=prompt('Nihai formül kodu (örn. 1BA-...):');
+      if(formul_kod===null)return;
+      const formul_ad=prompt('Formül adı:');
+      if(formul_ad===null)return;
+      if(!formul_kod.trim()||!formul_ad.trim()){rmToast('Kod ve ad zorunlu.','hata');return;}
+      payload.formul_kod=formul_kod.trim();
+      payload.formul_ad=formul_ad.trim();
+    } else if(!confirm('Onaylansın mı? Renk kodu sistem tarafından verilecek.')){
+      return;
+    }
+  }
+  try{
+    const res=await fetch(`/nexgen/api/arge/nx-ar/${argeTestId}/yonetim-karar`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':rmCsrf()},
+      body:JSON.stringify(payload),
+    });
+    const d=await res.json();
+    if(!d.ok){rmToast('Hata: '+(d.hata||''),'hata');return;}
+    rmToast('İşlem tamam · '+(d.durum||karar)+(d.renk_kodu?' · '+d.renk_kodu:''),'basari');
+    await rmListeYukle();
+  }catch(e){rmToast('Ağ hatası','hata');}
 }
 
 // ══════════════════════════════════════════════════════════════════════
