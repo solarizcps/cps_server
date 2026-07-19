@@ -13943,6 +13943,11 @@ def tablet_devam_edenler():
 def tablet_uretim_islem(batch_kodu):
     """Üretim işlem takip ekranı — operatör karışım/dolum sürecini buradan görür."""
     depo_hazirlik = None
+    secili_boyut = (request.args.get('boyut') or '').strip().upper() or None
+    if secili_boyut == 'MEDIUM':
+        secili_boyut = 'STANDART'
+    boyut_hedef_kg = boyut_uretilen_kg = boyut_kalan_kg = None
+    kalem_no = 1
     con = _db()
     try:
         # plan_id kolonu migration 071 sonrası mevcut — graceful JOIN
@@ -14064,6 +14069,11 @@ def tablet_uretim_islem(batch_kodu):
             _kayitlar = con.execute(_select, (batch_kodu,)).fetchall()
             alt_emirler = [dict(r) for r in _kayitlar]
 
+            batch_boyut_fb = _boyut_norm_etiket(batch.get('boyut'))
+            for ae in alt_emirler:
+                boyut_p, _ = _parca_boyut_uv_parse(ae.get('notlar'))
+                ae['boyut'] = _boyut_norm_etiket(boyut_p or batch_boyut_fb)
+
             for ae in alt_emirler:
                 sayaclar['toplam'] += 1
                 d_lower = ae['durum'].lower()
@@ -14092,25 +14102,55 @@ def tablet_uretim_islem(batch_kodu):
         stale_depo_fark_kg = float(snap.get('stale_depo_fark_kg') or 0)
         planlanan_kg = siparis_toplam_kg
 
-        # Aynı siparis_no'daki kardeş batch'ler (L/S seçim ekranı için)
-        kardes_boyutlar = []
+        plan_id = batch.get('plan_id') or snap.get('plan_id')
+        boyut_kirilim = _batch_boyut_ozet_list(
+            con, batch_kodu, plan_id=plan_id, batch_boyut=batch.get('boyut'),
+        )
+        kardes_boyutlar = [
+            {
+                'boyut': oz['boyut'],
+                'batch_kodu': batch_kodu,
+                'aktif': (
+                    secili_boyut == oz['boyut']
+                    if secili_boyut
+                    else len(boyut_kirilim) == 1 and oz['boyut'] == boyut_kirilim[0]['boyut']
+                ),
+                'siparis_kg': oz['siparis_kg'],
+                'uretilen_kg': oz['uretilen_kg'],
+                'kalan_kg': oz['kalan_kg'],
+                'durum': oz['durum'],
+            }
+            for oz in boyut_kirilim
+        ]
+
+        if secili_boyut and len(boyut_kirilim) > 1:
+            alt_emirler = [ae for ae in alt_emirler if ae.get('boyut') == secili_boyut]
+            sayaclar = {'toplam': 0, 'hazir': 0, 'devam': 0, 'bekleme': 0, 'bitti': 0}
+            for ae in alt_emirler:
+                sayaclar['toplam'] += 1
+                d_lower = (ae.get('durum') or '').lower()
+                if d_lower in sayaclar:
+                    sayaclar[d_lower] += 1
+            oz_sec = next((o for o in boyut_kirilim if o['boyut'] == secili_boyut), None)
+            if oz_sec:
+                boyut_hedef_kg = float(oz_sec.get('uretilecek_kg') or oz_sec.get('siparis_kg') or 0)
+                boyut_uretilen_kg = float(oz_sec.get('uretilen_kg') or 0)
+                boyut_kalan_kg = float(oz_sec.get('kalan_kg') or 0)
+                toplam_uretilen_kg = boyut_uretilen_kg
+                uretilecek_kg = boyut_hedef_kg
+                kalan_uretim_kg = boyut_kalan_kg
+                kalan_siparis_kg = boyut_kalan_kg
+
         sip_no = batch.get('siparis_no')
-        if sip_no and 'plan_id' in _cols:
-            kardesler = con.execute("""
-                SELECT nb.batch_kodu, uv.boyut
-                FROM nexgen_uretim_batch nb
-                JOIN nexgen_uretim_varyant uv ON uv.id = nb.uretim_varyant_id
-                LEFT JOIN nexgen_uretim_plan np ON np.id = nb.plan_id
-                WHERE np.siparis_no = ?
-                  AND nb.durum IN ('TASLAK','HAZIR','DEVAM','BEKLEME','BITTI')
-                ORDER BY uv.boyut
-            """, (sip_no,)).fetchall()
-            # Tüm boyutlar (bu batch dahil)
-            kardes_boyutlar = [
-                {'boyut': r['boyut'] or 'STD', 'batch_kodu': r['batch_kodu'],
-                 'aktif': r['batch_kodu'] == batch_kodu}
-                for r in kardesler
-            ]
+        if sip_no and plan_id:
+            plan_sira = con.execute(
+                "SELECT id FROM nexgen_uretim_plan WHERE siparis_no=? ORDER BY id",
+                (sip_no,),
+            ).fetchall()
+            for idx, pr in enumerate(plan_sira, start=1):
+                if pr['id'] == plan_id:
+                    kalem_no = idx
+                    break
 
         # Barkod/sevk özet: BITTI olan alt emirlerin toplamı
         # (ileride sevke_hazir flag gerekir; şimdilik BITTI = barkoda hazır)
@@ -14161,6 +14201,12 @@ def tablet_uretim_islem(batch_kodu):
         depo_hazirlik=depo_hazirlik,
         stale_depo_var_mi=stale_depo_var_mi,
         stale_depo_fark_kg=round(stale_depo_fark_kg, 3),
+        secili_boyut=secili_boyut,
+        boyut_hedef_kg=round(boyut_hedef_kg, 3) if boyut_hedef_kg is not None else None,
+        boyut_uretilen_kg=round(boyut_uretilen_kg, 3) if boyut_uretilen_kg is not None else None,
+        boyut_kalan_kg=round(boyut_kalan_kg, 3) if boyut_kalan_kg is not None else None,
+        kalem_no=kalem_no,
+        boyut_kirilim=boyut_kirilim,
     )
 
 
@@ -16168,6 +16214,20 @@ def _tablet_ana_veri(con):
     _AKTIF_BATCH = ('TASLAK', 'HAZIR', 'DEVAM', 'BEKLEME')
     planlar = [dict(p) for p in _plan_liste_sorgu(con, sadece_aktif=True)]
 
+    kalem_harita = {}
+    for pl in planlar:
+        sn = pl.get('siparis_no') or pl.get('hdr_siparis_no') or pl.get('plan_kodu')
+        if sn:
+            kalem_harita.setdefault(sn, set()).add(pl['id'])
+    for sn in kalem_harita:
+        siralı = sorted(kalem_harita[sn])
+        kalem_harita[sn] = {pid: idx + 1 for idx, pid in enumerate(siralı)}
+
+    _bcols = [c['name'] for c in con.execute(
+        "PRAGMA table_info(nexgen_uretim_batch)"
+    ).fetchall()]
+    _plan_id_sel = 'nb.plan_id' if 'plan_id' in _bcols else 'NULL AS plan_id'
+
     devam_eden = []
     plan_isler = []
     seen_batches = set()
@@ -16177,9 +16237,10 @@ def _tablet_ana_veri(con):
         bd = pl.get('batch_durum')
         if bk and bd in _AKTIF_BATCH and bk not in seen_batches:
             seen_batches.add(bk)
-            b = con.execute("""
+            b = con.execute(f"""
                 SELECT nb.batch_kodu, nb.lot_kodu, nb.planlanan_kg, nb.durum,
                        nb.olusturma_tarihi, nb.uretim_varyant_id,
+                       {_plan_id_sel},
                        uv.ad AS uv_ad, uv.boyut,
                        rv.ad AS renk_ad, f.ad AS formul_ad
                 FROM nexgen_uretim_batch nb
@@ -16190,10 +16251,14 @@ def _tablet_ana_veri(con):
             """, (bk,)).fetchone()
             if b:
                 row = dict(b)
-                row['musteri_adi'] = pl.get('musteri_adi')
-                row['siparis_no'] = pl.get('siparis_no') or pl.get('plan_kodu')
+                row['plan_id'] = row.get('plan_id') or pl.get('id')
+                row['musteri_adi'] = pl.get('musteri_adi') or pl.get('hdr_cari_unvan')
+                row['siparis_no'] = pl.get('siparis_no') or pl.get('hdr_siparis_no') or pl.get('plan_kodu')
+                sn = row['siparis_no']
+                row['kalem_no'] = kalem_harita.get(sn, {}).get(row['plan_id'], 1) if sn else 1
                 rf = _batch_plan_rf_bilgi(
                     con, batch_kodu=bk,
+                    plan_id=row.get('plan_id'),
                     uretim_varyant_id=row.get('uretim_varyant_id') or pl.get('uv_id'),
                 )
                 if rf:
@@ -16204,23 +16269,58 @@ def _tablet_ana_veri(con):
                     row['rf_renk_ad'] = None
                 devam_eden.append(row)
         elif pl['durum'] == 'PLANLANDI' and (pl.get('plan_tarihi') or '') <= bugun and not bk:
+            sn = pl.get('siparis_no') or pl.get('hdr_siparis_no') or pl.get('plan_kodu')
             pi = {
                 'plan_id': pl['id'],
                 'plan_kodu': pl['plan_kodu'],
+                'siparis_no': sn,
                 'planlanan_kg': pl['planlanan_kg'],
                 'plan_durum': pl['durum'],
                 'oncelik_sira': pl.get('oncelik_sira'),
                 'notlar': pl.get('notlar'),
-                'musteri_adi': pl.get('musteri_adi'),
+                'musteri_adi': pl.get('musteri_adi') or pl.get('hdr_cari_unvan'),
                 'uv_id': pl['uv_id'],
                 'boyut': pl['boyut'],
                 'renk_ad': pl['renk_ad'],
                 'formul_ad': pl['formul_ad'],
+                'kalem_no': kalem_harita.get(sn, {}).get(pl['id'], 1) if sn else 1,
             }
             rf = _plan_rf_bilgi(con, rf_renk_id=pl.get('rf_renk_id'), uretim_varyant_id=pl['uv_id'])
             if rf:
                 pi['rf_kod'] = rf['rf_kod']
                 pi['rf_renk_ad'] = rf.get('renk_ad')
+            boyut_satirlari = _plan_boyut_parcalari_list(con, pl['id'])
+            if boyut_satirlari:
+                pi['boyut_kirilim'] = [{
+                    'boyut': _boyut_norm_etiket(bp.get('boyut')),
+                    'siparis_kg': round(float(bp.get('siparis_kg') or 0), 3),
+                    'uretilecek_kg': round(float(bp.get('siparis_kg') or 0), 3),
+                    'uretilen_kg': 0.0,
+                    'kalan_kg': round(float(bp.get('siparis_kg') or 0), 3),
+                    'parca_toplam': 0,
+                    'parca_biten': 0,
+                    'parca_devam': 0,
+                    'parca_bekleme': 0,
+                    'parca_hazir': 0,
+                    'parca_kalan': 0,
+                    'durum': 'HAZIR',
+                } for bp in boyut_satirlari]
+            else:
+                kg = round(float(pl.get('planlanan_kg') or 0), 3)
+                pi['boyut_kirilim'] = [{
+                    'boyut': _boyut_norm_etiket(pl.get('boyut')),
+                    'siparis_kg': kg,
+                    'uretilecek_kg': kg,
+                    'uretilen_kg': 0.0,
+                    'kalan_kg': kg,
+                    'parca_toplam': 0,
+                    'parca_biten': 0,
+                    'parca_devam': 0,
+                    'parca_bekleme': 0,
+                    'parca_hazir': 0,
+                    'parca_kalan': 0,
+                    'durum': 'HAZIR',
+                }]
             plan_isler.append(pi)
 
     plan_isler.sort(key=lambda p: (p.get('oncelik_sira') or 999, p.get('plan_id') or 0))
@@ -16237,6 +16337,13 @@ def _tablet_ana_veri(con):
             b['biten_alt_emir'] = None
             b['uretilen_kg'] = 0.0
             _batch_kg_rf_enrich(con, b, liste_modu=True)
+
+    for b in devam_eden:
+        bk = b.get('batch_kodu')
+        pid = b.get('plan_id')
+        b['boyut_kirilim'] = _batch_boyut_ozet_list(
+            con, bk, plan_id=pid, batch_boyut=b.get('boyut'),
+        )
 
     return devam_eden, plan_isler
 
@@ -20127,6 +20234,161 @@ def _parca_boyut_uv_parse(notlar):
             except (TypeError, ValueError):
                 return parts[1], None
     return None, None
+
+
+def _boyut_ozet_durum_derive(parca_devam, parca_bekleme, parca_toplam, parca_biten):
+    """Boyut satırı durumu — parça state dağılımından türetilir."""
+    if parca_devam > 0:
+        return 'DEVAM'
+    if parca_bekleme > 0:
+        return 'BEKLEME'
+    if parca_toplam > 0 and parca_biten >= parca_toplam:
+        return 'BITTI'
+    return 'HAZIR'
+
+
+def _boyut_norm_etiket(boyut):
+    b = (boyut or 'STANDART').strip().upper()
+    if b == 'MEDIUM':
+        return 'STANDART'
+    return b or 'STANDART'
+
+
+def _batch_boyut_ozet_list(con, batch_kodu, plan_id=None, batch_boyut=None):
+    """Batch boyut kırılım özeti — tablet liste / işlem ekranı."""
+    plan_boyut_map = {}
+    if plan_id and _plan_boyut_tablosu_var(con):
+        pb_cols = [c[1] for c in con.execute(
+            "PRAGMA table_info(nexgen_uretim_plan_boyut)"
+        ).fetchall()]
+        has_uretilecek = 'uretilecek_kg' in pb_cols
+        sel = 'boyut, siparis_kg'
+        if has_uretilecek:
+            sel += ', uretilecek_kg'
+        rows = con.execute(
+            f"SELECT {sel} FROM nexgen_uretim_plan_boyut "
+            "WHERE plan_id=? AND aktif=1 AND siparis_kg > 0 "
+            "ORDER BY sira, id",
+            (plan_id,),
+        ).fetchall()
+        for r in rows:
+            b = _boyut_norm_etiket(r['boyut'])
+            plan_boyut_map[b] = {
+                'siparis_kg': float(r['siparis_kg'] or 0),
+                'uretilecek_kg': (
+                    float(r['uretilecek_kg'] or 0) if has_uretilecek else None
+                ),
+            }
+
+    parca_agg = {}
+    fallback_boyut = _boyut_norm_etiket(batch_boyut)
+    if _parca_tablosu_var(con) and batch_kodu:
+        parcalar = con.execute(
+            "SELECT durum, uretilen_kg, hedef_kg, notlar "
+            "FROM nexgen_uretim_parca WHERE batch_kodu=?",
+            (batch_kodu,),
+        ).fetchall()
+        for p in parcalar:
+            boyut, _ = _parca_boyut_uv_parse(p['notlar'])
+            boyut = _boyut_norm_etiket(boyut or fallback_boyut)
+            if boyut not in parca_agg:
+                parca_agg[boyut] = {
+                    'parca_toplam': 0,
+                    'parca_biten': 0,
+                    'parca_devam': 0,
+                    'parca_bekleme': 0,
+                    'parca_hazir': 0,
+                    'uretilen_kg': 0.0,
+                    'hedef_kg': 0.0,
+                }
+            ag = parca_agg[boyut]
+            ag['parca_toplam'] += 1
+            d = (p['durum'] or '').upper()
+            if d == 'BITTI':
+                ag['parca_biten'] += 1
+            elif d == 'DEVAM':
+                ag['parca_devam'] += 1
+            elif d == 'BEKLEME':
+                ag['parca_bekleme'] += 1
+            elif d == 'HAZIR':
+                ag['parca_hazir'] += 1
+            ag['uretilen_kg'] += float(p['uretilen_kg'] or 0)
+            ag['hedef_kg'] += float(p['hedef_kg'] or 0)
+
+    all_keys = set(plan_boyut_map.keys()) | set(parca_agg.keys())
+    if not all_keys:
+        snap = _nexgen_batch_snapshot(con, batch_kodu) if batch_kodu else None
+        fb_boyut = _boyut_norm_etiket(batch_boyut)
+        siparis_kg = float(snap['siparis_kg'] or 0) if snap else 0.0
+        uretilecek_kg = float(snap['uretilecek_kg'] or siparis_kg) if snap else siparis_kg
+        uretilen_kg = float(snap['uretilen_kg'] or 0) if snap else 0.0
+        pt = int(snap['parca_toplam'] or 0) if snap else 0
+        pb = int(snap['parca_biten'] or 0) if snap else 0
+        pd = int(snap['parca_devam'] or 0) if snap else 0
+        pbe = int(snap['parca_bekleyen'] or 0) if snap else 0
+        ph = int(snap['parca_hazir'] or 0) if snap else 0
+        pk = max(0, pt - pb - pd)
+        hedef = uretilecek_kg if uretilecek_kg > 0 else siparis_kg
+        return [{
+            'boyut': fb_boyut,
+            'siparis_kg': round(siparis_kg, 3),
+            'uretilecek_kg': round(uretilecek_kg, 3),
+            'uretilen_kg': round(uretilen_kg, 3),
+            'kalan_kg': round(max(0.0, hedef - uretilen_kg), 3),
+            'parca_toplam': pt,
+            'parca_biten': pb,
+            'parca_devam': pd,
+            'parca_bekleme': pbe,
+            'parca_hazir': ph,
+            'parca_kalan': pk,
+            'durum': _boyut_ozet_durum_derive(pd, pbe, pt, pb),
+        }]
+
+    result = []
+    for boyut in sorted(all_keys, key=_plan_boyut_sira):
+        pb = plan_boyut_map.get(boyut, {})
+        pa = parca_agg.get(boyut, {})
+        siparis_kg = pb.get('siparis_kg')
+        if siparis_kg is None:
+            siparis_kg = float(pa.get('hedef_kg') or 0)
+        uretilecek_kg = pb.get('uretilecek_kg')
+        if uretilecek_kg is None or uretilecek_kg <= 0:
+            uretilecek_kg = siparis_kg
+        uretilen_kg = round(float(pa.get('uretilen_kg') or 0), 3)
+        pt = int(pa.get('parca_toplam') or 0)
+        pb_cnt = int(pa.get('parca_biten') or 0)
+        pd = int(pa.get('parca_devam') or 0)
+        pbe = int(pa.get('parca_bekleme') or 0)
+        ph = int(pa.get('parca_hazir') or 0)
+        pk = max(0, pt - pb_cnt - pd)
+        hedef = float(uretilecek_kg or 0) if float(uretilecek_kg or 0) > 0 else float(siparis_kg or 0)
+        result.append({
+            'boyut': boyut,
+            'siparis_kg': round(float(siparis_kg or 0), 3),
+            'uretilecek_kg': round(float(uretilecek_kg or 0), 3),
+            'uretilen_kg': uretilen_kg,
+            'kalan_kg': round(max(0.0, hedef - uretilen_kg), 3),
+            'parca_toplam': pt,
+            'parca_biten': pb_cnt,
+            'parca_devam': pd,
+            'parca_bekleme': pbe,
+            'parca_hazir': ph,
+            'parca_kalan': pk,
+            'durum': _boyut_ozet_durum_derive(pd, pbe, pt, pb_cnt),
+        })
+
+    # Tek boyut: RF kullanım özeti parça.uretilen_kg boşken gösterim için kullanılır
+    # (üretim matematiği değişmez; L/S ayrımı parça bazlı kalır)
+    if len(result) == 1 and batch_kodu:
+        snap = _nexgen_batch_snapshot(con, batch_kodu)
+        if snap:
+            snap_u = float(snap.get('uretilen_kg') or 0)
+            if snap_u > float(result[0].get('uretilen_kg') or 0):
+                hedef = float(result[0].get('uretilecek_kg') or result[0].get('siparis_kg') or 0)
+                result[0]['uretilen_kg'] = round(snap_u, 3)
+                result[0]['kalan_kg'] = round(max(0.0, hedef - snap_u), 3)
+
+    return result
 
 
 def _parca_effective_uv_id(parca_notlar, batch_uv_id):
