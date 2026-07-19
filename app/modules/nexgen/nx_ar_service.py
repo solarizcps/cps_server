@@ -837,7 +837,14 @@ _SAHA_NEDEN_UI = {
     'BILINEN_RENK': 'BILINEN_RENK',
     'YOGUNLUK_RISKI': 'YOGUNLUK_RISKI',
     'YONETICI_KARARI': 'YONETICI_KARARI',
+    # UI etiket aliasları
+    'SHORE_KONTROLU': 'SHORE_RISKI',
+    'PISME_SURESI_KONTROLU': 'PISME_RISKI',
+    'KALIP_DAVRANISI': 'KALIP_RISKI',
+    'URUN_KALITE_KONTROLU': 'YOGUNLUK_RISKI',
 }
+
+SAHA_KARARLAR = frozenset({'ONAYA_GONDER', 'ENJEKSIYON', 'BIRAK'})
 
 
 def _nx_ar_row(con, arge_test_id: int) -> dict:
@@ -879,31 +886,98 @@ def _aktif_deneme_id(con, arge_test_id: int) -> int:
 
 
 def saha_karar_kaydet(con, arge_test_id: int, payload: dict, kullanici_id: int | None = None) -> dict:
-    """Enjeksiyon denemesi gerekli mi? → durum geçişi."""
+    """AR-GE kararı: ONAYA_GONDER | ENJEKSIYON | BIRAK.
+
+    Backend durum stringleri korunur (FERHAT_BEKLIYOR vb.).
+    BIRAK → durum ARGE_HAZIR kalır (idempotent); RED/REVİZYON değildir.
+    """
     t = _nx_ar_row(con, arge_test_id)
     eski = (t.get('durum') or '').strip().upper()
-    if eski not in ('ARGE_HAZIR', 'REVIZYON_GEREKLI', 'DENEMEDE'):
-        raise NxArError(f'Bu durumda saha kararı verilemez: {eski}', 409, 'DURUM')
 
-    gerekli = payload.get('saha_testi_gerekli_mi')
-    try:
-        gerekli_mi = int(gerekli)
-    except (TypeError, ValueError):
-        raise NxArError('saha_testi_gerekli_mi 0/1 olmalı.', 400)
-    if gerekli_mi not in (0, 1):
-        raise NxArError('saha_testi_gerekli_mi 0/1 olmalı.', 400)
+    karar = (payload.get('karar') or '').strip().upper()
+    if not karar:
+        gerekli = payload.get('saha_testi_gerekli_mi')
+        if gerekli in (0, '0', False):
+            karar = 'ONAYA_GONDER'
+        elif gerekli in (1, '1', True):
+            karar = 'ENJEKSIYON'
+        else:
+            raise NxArError(
+                'karar zorunlu: ONAYA_GONDER / ENJEKSIYON / BIRAK',
+                400,
+                'KARAR',
+            )
+    if karar not in SAHA_KARARLAR:
+        raise NxArError(
+            'karar: ONAYA_GONDER / ENJEKSIYON / BIRAK',
+            400,
+            'KARAR',
+        )
 
-    neden = (payload.get('saha_testi_nedeni') or '').strip().upper() or None
-    if gerekli_mi == 1:
-        neden = _SAHA_NEDEN_UI.get(neden or '', neden)
+    aciklama = (
+        payload.get('aciklama') or payload.get('saha_testi_aciklama') or ''
+    ).strip() or None
+    neden_raw = (payload.get('saha_testi_nedeni') or '').strip().upper() or None
+    simdi = _now()
+
+    if karar == 'BIRAK':
+        if eski != 'ARGE_HAZIR':
+            raise NxArError(
+                f'Karar vermeden bırak yalnız ARGE_HAZIR durumunda: {eski}',
+                409,
+                'DURUM',
+            )
+        try:
+            con.execute('BEGIN IMMEDIATE')
+            con.execute(
+                """
+                UPDATE nexgen_arge_test
+                SET guncelleme_tarihi=?
+                WHERE id=? AND durum='ARGE_HAZIR'
+                """,
+                (simdi, arge_test_id),
+            )
+            _olay_yaz(
+                con, arge_test_id, kullanici_id, eski, 'ARGE_HAZIR',
+                'SAHA_KARAR_BIRAK',
+                aciklama or 'Karar vermeden bırakıldı',
+            )
+            con.commit()
+        except Exception:
+            con.rollback()
+            raise
+        return get_nx_ar(con, arge_test_id)
+
+    if karar == 'ENJEKSIYON' and eski in ('FERHAT_BEKLIYOR', 'DENEMEDE'):
+        # Duplicate enjeksiyon işi oluşturma — idempotent
+        return get_nx_ar(con, arge_test_id)
+    if karar == 'ONAYA_GONDER' and eski == 'ONAY_BEKLIYOR':
+        return get_nx_ar(con, arge_test_id)
+
+    if eski not in ('ARGE_HAZIR', 'REVIZYON_GEREKLI'):
+        raise NxArError(f'Bu durumda AR-GE kararı verilemez: {eski}', 409, 'DURUM')
+
+    if karar == 'ENJEKSIYON':
+        neden = _SAHA_NEDEN_UI.get(neden_raw or '', neden_raw)
         if not neden or neden not in SAHA_NEDENLERI:
-            raise NxArError('Enjeksiyon gerekliyse geçerli neden zorunlu.', 400, 'SAHA_NEDEN')
+            raise NxArError(
+                'Enjeksiyon denemesi için geçerli neden zorunlu.',
+                400,
+                'SAHA_NEDEN',
+            )
+        if neden == 'DIGER' and not aciklama:
+            raise NxArError('Diğer seçildiğinde açıklama zorunlu.', 400, 'ACIKLAMA')
+        gerekli_mi = 1
         yeni = 'FERHAT_BEKLIYOR'
+        olay_tipi = 'SAHA_KARAR_ENJEKSIYON'
+        olay_ack = f'neden={neden}' + (f'; {aciklama}' if aciklama else '')
     else:
+        gerekli_mi = 0
         neden = None
         yeni = 'ONAY_BEKLIYOR'
+        olay_tipi = 'SAHA_KARAR_ONAYA'
+        olay_ack = aciklama or 'Onaya gönderildi'
 
-    simdi = _now()
     try:
         con.execute('BEGIN IMMEDIATE')
         con.execute(
@@ -921,8 +995,7 @@ def saha_karar_kaydet(con, arge_test_id: int, payload: dict, kullanici_id: int |
         )
         _olay_yaz(
             con, arge_test_id, kullanici_id, eski, yeni,
-            'SAHA_KARAR',
-            f"gerekli={gerekli_mi}; neden={neden or '-'}",
+            olay_tipi, olay_ack,
         )
         con.commit()
     except Exception:
@@ -975,7 +1048,7 @@ def ferhat_ac(con, arge_test_id: int, kullanici_id: int | None = None) -> dict:
         raise NxArError('Bu çalışma enjeksiyon denemesi gerektirmiyor.', 409, 'SAHA')
     eski = (t.get('durum') or '').strip().upper()
     if eski not in ('FERHAT_BEKLIYOR', 'DENEMEDE'):
-        raise NxArError(f'Ferhat formu bu durumda açılamaz: {eski}', 409, 'DURUM')
+        raise NxArError(f'Enjeksiyon formu bu durumda açılamaz: {eski}', 409, 'DURUM')
     if eski == 'FERHAT_BEKLIYOR':
         simdi = _now()
         try:
@@ -1004,7 +1077,7 @@ def ferhat_sonuc_kaydet(con, arge_test_id: int, payload: dict, kullanici_id: int
         raise NxArError('Enjeksiyon denemesi gerekli değil.', 409, 'SAHA')
     eski = (t.get('durum') or '').strip().upper()
     if eski not in ('FERHAT_BEKLIYOR', 'DENEMEDE'):
-        raise NxArError(f'Ferhat sonucu bu durumda kaydedilemez: {eski}', 409, 'DURUM')
+        raise NxArError(f'Enjeksiyon sonucu bu durumda kaydedilemez: {eski}', 409, 'DURUM')
 
     karar = (payload.get('ferhat_genel_karar') or payload.get('genel_karar') or '').strip().upper()
     if karar not in FERHAT_KARARLAR:
@@ -1326,7 +1399,7 @@ def yonetim_karar(con, arge_test_id: int, payload: dict, kullanici_id: int | Non
         if not fk:
             raise NxArError('Enjeksiyon raporu tamamlanmadan onaylanamaz.', 409, 'FERHAT')
         if fk == 'RED':
-            raise NxArError('Ferhat RED sonucundan doğrudan onay yok.', 409, 'FERHAT_RED')
+            raise NxArError('Enjeksiyon RED sonucundan doğrudan onay yok.', 409, 'FERHAT_RED')
 
     tip = (t.get('calisma_tipi') or '').strip().upper()
     simdi = _now()
