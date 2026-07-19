@@ -275,8 +275,15 @@ import sqlite3 as _sqlite3
 
 
 def _enj_kalip_db_path():
-    # CPS standart DB yolu - app/mock_data.db
+    # Config.MOCK_DB_PATH — testler tmp path set edebilir; prod'da app/mock_data.db
     import os
+    try:
+        from config import Config
+        p = getattr(Config, 'MOCK_DB_PATH', None)
+        if p:
+            return p
+    except Exception:
+        pass
     base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     return os.path.join(base, 'mock_data.db')
 
