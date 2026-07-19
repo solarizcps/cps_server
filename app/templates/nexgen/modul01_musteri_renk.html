@@ -1478,12 +1478,12 @@ function adim7Html(){
   html += '</div>'
     /* Saha testi — FAZ-2E */
     +'<div style="margin-bottom:14px;padding:12px;border:1px solid var(--border);border-radius:10px;background:#f8fafc">'
-    +'<div style="font-size:12px;font-weight:800;color:var(--navy);margin-bottom:8px">SAHA TESTİ (FERHAT)</div>'
+    +'<div style="font-size:12px;font-weight:800;color:var(--navy);margin-bottom:8px">ENJEKSİYON DENEMESİ</div>'
     +'<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;margin-bottom:6px;cursor:pointer">'
-    +'<input type="radio" name="saha-gerekli" value="0" '+(sahaGerekli?'':'checked')+' onchange="sahaSecimDegisti(0)"> Gerekli değil'
+    +'<input type="radio" name="saha-gerekli" value="0" '+(sahaGerekli?'':'checked')+' onchange="sahaSecimDegisti(0)"> Gerekli değil — Onaya gönderilebilir'
     +'</label>'
     +'<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;margin-bottom:8px;cursor:pointer">'
-    +'<input type="radio" name="saha-gerekli" value="1" '+(sahaGerekli?'checked':'')+' onchange="sahaSecimDegisti(1)"> Ferhat testi gerekli'
+    +'<input type="radio" name="saha-gerekli" value="1" '+(sahaGerekli?'checked':'')+' onchange="sahaSecimDegisti(1)"> Gerekli — Enjeksiyon denemesine gönder'
     +'</label>'
     +'<div id="saha-neden-wrap" style="'+(sahaGerekli?'':'display:none')+'">'
     +'<label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">Neden (zorunlu)</label>'
@@ -1609,7 +1609,7 @@ function kaydet(){
     if(nedenEl) S.saha_testi_nedeni = nedenEl.value || null;
     if(!S.saha_testi_nedeni){
       document.getElementById('kaydet-hata').style.display = 'block';
-      document.getElementById('kaydet-hata').textContent = 'Ferhat testi için neden seçiniz.';
+      document.getElementById('kaydet-hata').textContent = 'Enjeksiyon denemesi için neden seçiniz.';
       return;
     }
   }

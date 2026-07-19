@@ -179,15 +179,15 @@
     </div>
   </div>
 
-  {# ══ FERHAT / SAHA ══ #}
+  {# ══ ENJEKSİYON DENEMESİ ══ #}
   <div class="ad-panel">
     <div class="ad-panel-hdr">
-      <span class="ad-panel-baslik">Saha Testi (Ferhat)</span>
+      <span class="ad-panel-baslik">Enjeksiyon Denemesi</span>
     </div>
     <div class="nx-ar-bolum">
-      <div class="ad-deger">Saha Testi: {% if saha_gerekli %}Gerekli{% else %}Gerekli Değil{% endif %}</div>
+      <div class="ad-deger">Enjeksiyon denemesi: {% if saha_gerekli %}Gerekli{% else %}Gerekli Değil{% endif %}</div>
       {% if not saha_gerekli %}
-      <div class="ad-alt-deger" style="margin-top:6px">Saha testi gerekmiyor.</div>
+      <div class="ad-alt-deger" style="margin-top:6px">Enjeksiyon denemesi gerekmiyor.</div>
       {% elif kart.saha_testi_nedeni %}
       <div class="ad-alt-deger" style="margin-top:6px">Neden: {{ kart.saha_testi_nedeni }}</div>
       {% endif %}

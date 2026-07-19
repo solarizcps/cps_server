@@ -5977,17 +5977,17 @@ def _rm_liste_grubu(arge_durum, rf_id, rf_aktif, rf_durum):
 
 
 def _nx_ar_durum_etiketi(durum: str | None) -> str:
-    """NX-AR durum → Renk Merkezi / UI etiketi."""
+    """NX-AR durum → Renk Merkezi / UI etiketi (kişi adı yok)."""
     d = (durum or '').upper()
     return {
         'ARGE_HAZIR': 'AR-GE TEST',
-        'DENEMEDE': 'ENJEKSİYONDA',
+        'DENEMEDE': 'ENJEKSİYON DENEMESİ DEVAM EDİYOR',
         'REVIZYON_GEREKLI': 'REVİZYON GEREKLİ',
         'ONAY_BEKLIYOR': 'ONAY BEKLİYOR',
         'ONAYA_GONDERILDI': 'ONAY BEKLİYOR',
         'ONAYLANDI': 'ONAYLANDI',
-        'SAHA_BEKLIYOR': 'ENJEKSİYON BEKLİYOR',
-        'FERHAT_BEKLIYOR': 'ENJEKSİYON BEKLİYOR',
+        'SAHA_BEKLIYOR': 'ENJEKSİYON DENEMESİ BEKLİYOR',
+        'FERHAT_BEKLIYOR': 'ENJEKSİYON DENEMESİ BEKLİYOR',
         'REDDEDILDI': 'REDDEDİLDİ',
     }.get(d, d or 'AR-GE TEST')
 
@@ -18663,7 +18663,7 @@ def tablet_ferhat():
 @nexgen_bp.route('/tablet/arge/enjeksiyon-denemeleri')
 @yetki_gerekli('nexgen.tablet.view', 'can_view')
 def tablet_arge_enjeksiyon_denemeleri():
-    """NX-AR Ferhat bekleyen AR-GE enjeksiyon denemeleri (AT bağli)."""
+    """NX-AR enjeksiyon denemesi bekleyen AR-GE çalışmaları (AT bağlı)."""
     from modules.nexgen.nx_ar_service import ferhat_bekleyen_liste
     con = _db()
     try:
@@ -18680,7 +18680,7 @@ def tablet_arge_enjeksiyon_denemeleri():
 @nexgen_bp.route('/tablet/arge/enjeksiyon-deneme/<int:arge_test_id>', methods=['GET', 'POST'])
 @yetki_gerekli('nexgen.tablet.view', 'can_view')
 def tablet_arge_enjeksiyon_deneme(arge_test_id):
-    """NX-AR Ferhat enjeksiyon deneme formu — yalnız AT kodu; yeni AT üretilmez."""
+    """NX-AR enjeksiyon deneme formu — yalnız AT kodu; yeni AT üretilmez."""
     from modules.nexgen.nx_ar_service import (
         NxArError, ferhat_ac, ferhat_sonuc_kaydet, get_nx_ar,
     )

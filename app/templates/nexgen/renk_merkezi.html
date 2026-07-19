@@ -972,8 +972,8 @@ function rmRender(kart, d){
     const renkOk=c.renk_tuttu===1||c.renk_tuttu===true;
     sagHtml=`
       <div class="rm-bl">
-        <div class="rm-bl-bas">Ferhat Saha Sonucu</div>
-        ${c.ferhat_adi?`<div class="rm-bs"><span class="rm-be">Yapan</span><span class="rm-bv">${rmE(c.ferhat_adi)}</span></div>`:''}
+        <div class="rm-bl-bas">Enjeksiyon Deneme Sonucu</div>
+        ${c.ferhat_adi?`<div class="rm-bs"><span class="rm-be">Denemeyi yapan</span><span class="rm-bv">${rmE(c.ferhat_adi)}</span></div>`:''}
         ${c.ferhat_tarihi?`<div class="rm-bs"><span class="rm-be">Tarih</span><span class="rm-bv">${rmE(c.ferhat_tarihi)}</span></div>`:''}
         ${c.shore_hedef!=null?`<div class="rm-bs"><span class="rm-be">Shore hedef</span><span class="rm-bv">${c.shore_hedef}</span></div>`:''}
         ${c.shore_degeri!=null?`<div class="rm-bs"><span class="rm-be">Shore sonuç</span><span class="rm-bv ${renkOk?'iyi':'kotu'}">${String(c.shore_degeri).replace('.',',')}</span></div>`:''}
@@ -984,10 +984,10 @@ function rmRender(kart, d){
         ${c.sonuc_notu?`<div class="rm-bs"><span class="rm-be">Sonuç notu</span><span class="rm-bv" style="font-weight:400;color:var(--rm-t3)">${rmE(c.sonuc_notu)}</span></div>`:''}
       </div>`;
   } else if(c){
-    sagHtml=`<div class="rm-bl"><div class="rm-bl-bas">Ferhat Saha Sonucu</div><div style="font-size:11px;color:var(--rm-t4);padding:8px 0">Ferhat saha sonucu henüz girilmedi.</div></div>`;
+    sagHtml=`<div class="rm-bl"><div class="rm-bl-bas">Enjeksiyon Deneme Sonucu</div><div style="font-size:11px;color:var(--rm-t4);padding:8px 0">Enjeksiyon deneme sonucu henüz girilmedi.</div></div>`;
   }
 
-  // NX-AR Ferhat özeti (boyut sonuçları)
+  // NX-AR enjeksiyon özeti (boyut sonuçları)
   if(isNxAr && c && (c.ferhat_genel_karar || (c.boyut_sonuclar&&c.boyut_sonuclar.length))){
     const bs=(c.boyut_sonuclar||[]).map(b=>
       `<div class="rm-bs"><span class="rm-be">${rmE(b.boyut||'')}</span>`+
@@ -995,9 +995,10 @@ function rmRender(kart, d){
     ).join('');
     sagHtml=`
       <div class="rm-bl">
-        <div class="rm-bl-bas">Ferhat Enjeksiyon Sonucu</div>
+        <div class="rm-bl-bas">Enjeksiyon Deneme Sonucu</div>
         <div class="rm-bs"><span class="rm-be">Karar</span><span class="rm-bv">${rmE(c.ferhat_genel_karar||'—')}</span></div>
         ${c.ferhat_genel_not?`<div class="rm-bs"><span class="rm-be">Not</span><span class="rm-bv">${rmE(c.ferhat_genel_not)}</span></div>`:''}
+        ${c.ferhat_adi?`<div class="rm-bs"><span class="rm-be">Sonucu giren</span><span class="rm-bv">${rmE(c.ferhat_adi)}</span></div>`:''}
         ${bs||'<div style="font-size:11px;color:var(--rm-t4);padding:6px 0">Boyut sonucu yok.</div>'}
       </div>`;
   }
@@ -1088,7 +1089,7 @@ function rmNxArBtnHtml(kart, oz, c, canApprove){
     return `<button class="rm-btn rm-btn-arge" disabled>Reddedildi</button>`;
   }
   if(durum==='FERHAT_BEKLIYOR'||durum==='DENEMEDE'){
-    return `<a class="rm-btn rm-btn-detay" href="/nexgen/tablet/arge/enjeksiyon-deneme/${tid}">Ferhat formu</a>`;
+    return `<a class="rm-btn rm-btn-detay" href="/nexgen/tablet/arge/enjeksiyon-deneme/${tid}">Enjeksiyon deneme formu</a>`;
   }
   if(!canApprove) return '';
   if(durum==='ONAY_BEKLIYOR'){
@@ -1098,7 +1099,7 @@ function rmNxArBtnHtml(kart, oz, c, canApprove){
       <button class="rm-btn rm-btn-arge" onclick="rmNxYonetim(${tid},'RED')">✕ Red</button>`;
   }
   if(durum==='ARGE_HAZIR'||durum==='REVIZYON_GEREKLI'){
-    return `<button class="rm-btn rm-btn-detay" onclick="document.getElementById('rm-nx-saha')?.scrollIntoView({behavior:'smooth'})">Saha kararı bekleniyor</button>`;
+    return `<button class="rm-btn rm-btn-detay" onclick="document.getElementById('rm-nx-saha')?.scrollIntoView({behavior:'smooth'})">AR-GE kararı bekleniyor</button>`;
   }
   return '';
 }
@@ -1107,30 +1108,39 @@ function rmNxArKararHtml(kart, oz, c, canApprove){
   const durum=(c.durum||oz.durum||'').toUpperCase();
   const tid=kart.arge_test_id;
   let h=`<div class="rm-onay-kutu" style="grid-column:1/-1" id="rm-nx-saha">`;
-  h+=`<div style="font-size:11px;font-weight:800;color:var(--rm-t3);margin-bottom:8px">Çalışma: ${rmE(c.test_no||oz.test_no||'—')} · ${rmE(durum)}</div>`;
-  if(canApprove && (durum==='ARGE_HAZIR'||durum==='REVIZYON_GEREKLI'||(durum==='DENEMEDE'&&!c.ferhat_genel_karar))){
+  h+=`<div style="font-size:11px;font-weight:800;color:var(--rm-t3);margin-bottom:8px">Çalışma: ${rmE(c.test_no||oz.test_no||'—')} · ${rmE(oz.durum_etiketi||durum)}</div>`;
+  if(canApprove && (durum==='ARGE_HAZIR'||durum==='REVIZYON_GEREKLI')){
     h+=`
-      <div style="font-size:12px;font-weight:700;margin-bottom:6px">Enjeksiyon denemesi gerekli mi?</div>
-      <div class="rm-onay-btns" style="flex-wrap:wrap">
-        <button class="rm-btn rm-btn-green" onclick="rmNxSahaKarar(${tid},0)">Hayır — Onaya gönder</button>
-        <button class="rm-btn rm-btn-orange" onclick="rmNxSahaKarar(${tid},1)">Evet — Ferhat'a gönder</button>
+      <div style="font-size:13px;font-weight:800;margin-bottom:4px">AR-GE Kararı</div>
+      <div style="font-size:12px;font-weight:600;color:var(--rm-t3);margin-bottom:8px">Enjeksiyon denemesi gerekli mi?</div>
+      <div class="rm-onay-btns" style="flex-wrap:wrap;gap:8px">
+        <button class="rm-btn rm-btn-green" onclick="rmNxSahaKarar(${tid},'ONAYA_GONDER')">Gerekli Değil — Onaya Gönder</button>
+        <button class="rm-btn rm-btn-orange" onclick="rmNxSahaKarar(${tid},'ENJEKSIYON')">Gerekli — Enjeksiyon Denemesine Gönder</button>
+        ${durum==='ARGE_HAZIR'?`<button class="rm-btn rm-btn-detay" onclick="rmNxSahaKarar(${tid},'BIRAK')">Karar Vermeden Bırak</button>`:''}
       </div>
-      <div style="margin-top:8px">
-        <select id="rm-nx-saha-neden" class="rm-input" style="max-width:320px">
-          <option value="">Neden (Evet ise zorunlu)</option>
-          <option value="YENI_RENK">Yeni renk</option>
-          <option value="YENI_FORMUL">Yeni formül</option>
-          <option value="KALIP_RISKI">Kalıp riski</option>
-          <option value="SHORE_RISKI">Shore riski</option>
-          <option value="PISME_RISKI">Pişme riski</option>
-          <option value="YOGUNLUK_RISKI">Yoğunluk riski</option>
-          <option value="YONETICI_KARARI">Yönetici kararı</option>
+      <div style="margin-top:10px" id="rm-nx-neden-wrap">
+        <div style="font-size:11px;font-weight:700;margin-bottom:4px">Enjeksiyon nedeni <span style="font-weight:500;color:var(--rm-t4)">(yalnız enjeksiyon seçiminde zorunlu)</span></div>
+        <select id="rm-nx-saha-neden" class="rm-input" style="max-width:340px"
+          onchange="var a=document.getElementById('rm-nx-saha-ack'); if(a) a.style.display=this.value==='DIGER'?'block':'none'">
+          <option value="">Neden seçin…</option>
+          <option value="YENI_FORMUL">Yeni Formül</option>
+          <option value="YENI_RENK">Yeni Renk</option>
+          <option value="SHORE_RISKI">Shore Kontrolü</option>
+          <option value="PISME_RISKI">Pişme Süresi Kontrolü</option>
+          <option value="KALIP_RISKI">Kalıp Davranışı</option>
+          <option value="YOGUNLUK_RISKI">Ürün Kalite Kontrolü</option>
+          <option value="MUSTERI_TALEBI">Müşteri Talebi</option>
           <option value="DIGER">Diğer</option>
         </select>
+        <textarea id="rm-nx-saha-ack" class="rm-input" rows="2" style="margin-top:6px;max-width:340px;display:none"
+          placeholder="Diğer seçildiğinde açıklama zorunlu"></textarea>
       </div>`;
-  } else if(durum==='FERHAT_BEKLIYOR'||durum==='DENEMEDE'){
-    h+=`<div class="rm-onay-not">Enjeksiyon bekleniyor.
-      <a href="/nexgen/tablet/arge/enjeksiyon-deneme/${tid}">Ferhat formunu aç</a></div>`;
+  } else if(durum==='FERHAT_BEKLIYOR'){
+    h+=`<div class="rm-onay-not">Enjeksiyon denemesi bekliyor.
+      <a href="/nexgen/tablet/arge/enjeksiyon-deneme/${tid}">Enjeksiyon deneme formunu aç</a></div>`;
+  } else if(durum==='DENEMEDE'){
+    h+=`<div class="rm-onay-not">Enjeksiyon denemesi devam ediyor.
+      <a href="/nexgen/tablet/arge/enjeksiyon-deneme/${tid}">Enjeksiyon deneme formunu aç</a></div>`;
   } else if(canApprove && durum==='ONAY_BEKLIYOR'){
     const tip=(c.calisma_tipi||oz.calisma_tipi||'').toUpperCase();
     h+=`<div class="rm-onay-btns">
@@ -1142,28 +1152,53 @@ function rmNxArKararHtml(kart, oz, c, canApprove){
   } else if(durum==='ONAYLANDI'){
     h+=`<div class="rm-onay-not">Onaylandı.${oz.renk_kodu?' Renk kodu: '+rmE(oz.renk_kodu)+'.':''}${oz.rf_kodu&&oz.rf_kodu!=='—'?' RF: '+rmE(oz.rf_kodu)+'.':''}</div>`;
   } else {
-    h+=`<div class="rm-onay-not">Durum: ${rmE(durum)}</div>`;
+    h+=`<div class="rm-onay-not">Durum: ${rmE(oz.durum_etiketi||durum)}</div>`;
   }
   h+=`</div>`;
   return h;
 }
 
-async function rmNxSahaKarar(argeTestId, gerekli){
+async function rmNxSahaKarar(argeTestId, karar){
   if(!CAN_APPROVE){rmToast('Yetki yok.','hata');return;}
   const sel=document.getElementById('rm-nx-saha-neden');
+  const ackEl=document.getElementById('rm-nx-saha-ack');
   const neden=sel?sel.value:'';
-  if(gerekli===1 && !neden){rmToast('Enjeksiyon için neden seçin.','hata');return;}
+  const aciklama=ackEl?(ackEl.value||'').trim():'';
+  if(karar==='ENJEKSIYON'){
+    if(!neden){rmToast('Enjeksiyon denemesi için neden seçin.','hata');return;}
+    if(neden==='DIGER' && !aciklama){rmToast('Diğer için açıklama zorunlu.','hata');return;}
+  }
+  const body={karar:karar};
+  if(karar==='ENJEKSIYON'){
+    body.saha_testi_gerekli_mi=1;
+    body.saha_testi_nedeni=neden;
+    if(aciklama) body.aciklama=aciklama;
+  } else if(karar==='ONAYA_GONDER'){
+    body.saha_testi_gerekli_mi=0;
+  } else if(aciklama){
+    body.aciklama=aciklama;
+  }
   try{
     const res=await fetch(`/nexgen/api/arge/nx-ar/${argeTestId}/saha-karar`,{
       method:'POST',
       headers:{'Content-Type':'application/json','X-CSRFToken':rmCsrf()},
-      body:JSON.stringify({saha_testi_gerekli_mi:gerekli,saha_testi_nedeni:neden||null}),
+      body:JSON.stringify(body),
     });
-    const d=await res.json();
-    if(!d.ok){rmToast('Hata: '+(d.hata||''),'hata');return;}
-    rmToast(gerekli?'Ferhat kuyruğuna alındı.':'Onay bekliyor.','basari');
+    const ct=(res.headers.get('content-type')||'').toLowerCase();
+    const d=ct.includes('json')?await res.json():null;
+    if(!res.ok || !d || d.ok===false){
+      console.error('RM saha karar', res.status, d);
+      rmToast('Hata: '+((d&&d.hata)||('HTTP '+res.status)),'hata');
+      return;
+    }
+    const msg=karar==='ENJEKSIYON'?'Enjeksiyon denemesine gönderildi.'
+      :(karar==='ONAYA_GONDER'?'Onaya gönderildi.':'Karar verilmeden bırakıldı.');
+    rmToast(msg,'basari');
     await rmListeYukle();
-  }catch(e){rmToast('Ağ hatası','hata');}
+  }catch(e){
+    console.error('RM saha karar fetch', e);
+    rmToast('Bağlantı kurulamadı.','hata');
+  }
 }
 
 async function rmNxYonetim(argeTestId, karar){
