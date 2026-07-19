@@ -12,8 +12,9 @@
 
 {# ── Alt Emir Görüntü Kodu: LARGE→L1001, SMALL→S1001, diğer→1001 ── #}
 {% macro alt_emir_no(parca_no) %}
-  {%- if batch.boyut == 'LARGE' %}L{{ parca_no }}
-  {%- elif batch.boyut == 'SMALL' %}S{{ parca_no }}
+  {%- set _b = secili_boyut or batch.boyut -%}
+  {%- if _b == 'LARGE' %}L{{ parca_no }}
+  {%- elif _b == 'SMALL' %}S{{ parca_no }}
   {%- else %}{{ parca_no }}
   {%- endif %}
 {%- endmacro %}
@@ -34,22 +35,31 @@
         <div class="tui-topbar-kucuk">NEXGEN TABLET — ÜRETİM İŞLEMİ</div>
         <div class="tui-topbar-buyuk">
           {{ batch.siparis_no or batch.batch_kodu }}
-          {% if batch.boyut %}
-          <span class="tui-topbar-boyut tui-tb-{{ batch.boyut|lower }}">{{ batch.boyut }}</span>
+          {% if kalem_no %}<span class="tui-topbar-kalem">K{{ kalem_no }}</span>{% endif %}
+          {% if secili_boyut or batch.boyut %}
+          <span class="tui-topbar-boyut tui-tb-{{ (secili_boyut or batch.boyut)|lower }}">{{ secili_boyut or batch.boyut }}</span>
+          {% endif %}
+        </div>
+        <div class="tui-topbar-meta">
+          <span>{{ batch.formul_ad or '—' }}</span>
+          {% if batch.renk_ad %}<span>· {{ batch.renk_ad }}</span>{% endif %}
+          {% if boyut_hedef_kg is not none %}
+          <span class="tui-topbar-kg">· {{ "{:,.0f}".format(boyut_uretilen_kg or 0) }} / {{ "{:,.0f}".format(boyut_hedef_kg) }} KG · Kalan {{ "{:,.0f}".format(boyut_kalan_kg or 0) }}</span>
           {% endif %}
         </div>
       </div>
       <div class="tui-topbar-saglar">
-        {# Kardeş boyuta geçiş butonu #}
-        {% for kb in kardes_boyutlar %}
-        {% if not kb.aktif %}
-        <a href="/nexgen/tablet/uretim-islem/{{ kb.batch_kodu }}"
-           class="tui-topbar-boyut-btn"
-           title="{{ kb.boyut }} boyutuna geç">
-          ⇄ {{ kb.boyut }}'a Geç
-        </a>
+        {# Aynı batch içinde boyut geçişi #}
+        {% if kardes_boyutlar|length > 1 %}
+        <div class="tui-boyut-toggle">
+          {% for kb in kardes_boyutlar %}
+          <a href="/nexgen/tablet/uretim-islem/{{ batch.batch_kodu }}?boyut={{ kb.boyut }}"
+             class="tui-boyut-toggle-btn{% if kb.aktif or (secili_boyut == kb.boyut) %} tui-boyut-toggle-aktif{% endif %}">
+            {{ kb.boyut }}
+          </a>
+          {% endfor %}
+        </div>
         {% endif %}
-        {% endfor %}
         <button class="tui-kaydet-cik-btn" onclick="kaydetCik()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                width="13" height="13"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
@@ -133,7 +143,7 @@
         </div>
         <div class="sol-kart">
           <span class="sol-bilgi-et">BOYUT</span>
-          <span class="sol-bilgi-val">{{ batch.boyut or '—' }}</span>
+          <span class="sol-bilgi-val">{{ secili_boyut or batch.boyut or '—' }}</span>
         </div>
       </div>
 
@@ -205,16 +215,23 @@
       {% endif %}
 
       {# Siparis master KG #}
+      {% set _hedef_kg = boyut_hedef_kg if boyut_hedef_kg is not none else uretilecek_kg %}
+      {% set _uretilen_kg = boyut_uretilen_kg if boyut_uretilen_kg is not none else toplam_uretilen_kg %}
+      {% set _kalan_kg = boyut_kalan_kg if boyut_kalan_kg is not none else kalan_uretim_kg %}
       <div class="sol-kg-blok">
-        <div class="sol-etiket">SİPARİŞ / ÜRETİLECEK</div>
+        <div class="sol-etiket">SİPARİŞ / ÜRETİLECEK{% if secili_boyut %} ({{ secili_boyut }}){% endif %}</div>
         <div class="sol-kg-rakam">
-          {{ "{:,}".format(siparis_toplam_kg|int) }}
+          {{ "{:,}".format((boyut_hedef_kg if boyut_hedef_kg is not none else siparis_toplam_kg)|int) }}
           <span class="sol-kg-birim">KG</span>
         </div>
         <div class="sol-kg-alt">
-          Üretilecek: <strong>{{ "{:,.1f}".format(uretilecek_kg) }} KG</strong>
+          Üretilen: <strong>{{ "{:,.1f}".format(_uretilen_kg) }} KG</strong>
+          · Kalan: <strong>{{ "{:,.1f}".format(_kalan_kg) }} KG</strong>
+          {% if boyut_hedef_kg is none %}
+          · Üretilecek: <strong>{{ "{:,.1f}".format(uretilecek_kg) }} KG</strong>
           ({{ batch_sayisi }}×{{ "%.2f"|format(formul_batch_kg) }})
           {% if fazla_kg > 0 %} · Fazla: +{{ "{:,.1f}".format(fazla_kg) }}{% endif %}
+          {% endif %}
         </div>
       </div>
 
@@ -341,12 +358,12 @@
         <div class="pp-ilerleme-ust">
           <span class="pp-ilerleme-etiket">ÜRETİM İLERLEMESİ (RF)</span>
           <span class="pp-ilerleme-kg">
-            <span id="pp-uretilen-kg">{{ "{:,.1f}".format(toplam_uretilen_kg) }}</span>
-            KG / {{ "{:,.1f}".format(uretilecek_kg) }} KG
+            <span id="pp-uretilen-kg">{{ "{:,.1f}".format(_uretilen_kg) }}</span>
+            KG / {{ "{:,.1f}".format(_hedef_kg) }} KG
           </span>
         </div>
         <div style="height:10px;border-radius:10px;background:#f3f4f6;overflow:hidden;border:1px solid #e5e7eb;">
-          {% set yuzde = ((toplam_uretilen_kg / uretilecek_kg) * 100) if uretilecek_kg else 0 %}
+          {% set yuzde = ((_uretilen_kg / _hedef_kg) * 100) if _hedef_kg else 0 %}
           {% set yuzde_clip = [yuzde, 100]|min %}
           <div id="pp-progress-dolu"
                style="width:{{ yuzde_clip|int }}%;height:100%;background:linear-gradient(90deg,#16a34a,#22c55e);border-radius:10px;transition:width .4s;"></div>
@@ -1371,6 +1388,31 @@ body { background: #f3f6fa; font-family: system-ui, -apple-system, sans-serif; }
 .tui-geri-btn:hover { background: rgba(255,255,255,.2); }
 .tui-topbar-kucuk { font-size: 10px; color: #f6c343; font-weight: 800; letter-spacing: 1px; }
 .tui-topbar-buyuk { font-size: 18px; font-weight: 900; color: #fff; }
+.tui-topbar-kalem {
+  font-size: 11px; font-weight: 800; color: #f6c343;
+  background: rgba(246,195,67,.15); border: 1px solid rgba(246,195,67,.35);
+  padding: 2px 7px; border-radius: 5px; margin-left: 6px; vertical-align: middle;
+}
+.tui-topbar-meta {
+  font-size: 11px; color: rgba(255,255,255,.75); font-weight: 600;
+  margin-top: 3px; display: flex; flex-wrap: wrap; gap: 4px;
+}
+.tui-topbar-kg { color: #86efac; font-weight: 700; }
+.tui-boyut-toggle {
+  display: flex; gap: 4px; background: rgba(0,0,0,.2);
+  padding: 3px; border-radius: 8px; border: 1px solid rgba(255,255,255,.12);
+}
+.tui-boyut-toggle-btn {
+  font-size: 11px; font-weight: 800; letter-spacing: .3px;
+  padding: 5px 12px; border-radius: 6px; text-decoration: none;
+  color: rgba(255,255,255,.7); border: 1px solid transparent;
+  transition: all .12s;
+}
+.tui-boyut-toggle-btn:hover { color: #fff; background: rgba(255,255,255,.1); }
+.tui-boyut-toggle-aktif {
+  background: #f6c343 !important; color: #1a1a1a !important;
+  border-color: #e9b020 !important;
+}
 .tui-topbar-link {
   margin-left: auto; font-size: 12px; color: #94a3b8;
   text-decoration: none; white-space: nowrap;
