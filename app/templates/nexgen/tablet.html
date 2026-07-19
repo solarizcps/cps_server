@@ -128,16 +128,16 @@ var _PARCA_VAR = {% if devam_eden_batches and devam_eden_batches[0]['toplam_alt_
           Tümü <span class="nxt-fsayi" id="fs-tumu">0</span>
         </button>
         <button class="nxt-fsekme" data-filtre="hazir" onclick="filtreUygula('hazir',this)">
-          Hazır <span class="nxt-fsayi" id="fs-hazir">0</span>
+          Başlayacak <span class="nxt-fsayi" id="fs-hazir">0</span>
         </button>
         <button class="nxt-fsekme" data-filtre="devam" onclick="filtreUygula('devam',this)">
-          Üretimde <span class="nxt-fsayi" id="fs-devam">0</span>
-        </button>
-        <button class="nxt-fsekme" data-filtre="bekleme" onclick="filtreUygula('bekleme',this)">
-          Beklemede <span class="nxt-fsayi" id="fs-bekleme">0</span>
+          Devam Eden <span class="nxt-fsayi" id="fs-devam">0</span>
         </button>
         <button class="nxt-fsekme" data-filtre="bitti" onclick="filtreUygula('bitti',this)">
-          Bitti <span class="nxt-fsayi" id="fs-bitti">0</span>
+          Biten <span class="nxt-fsayi" id="fs-bitti">0</span>
+        </button>
+        <button class="nxt-fsekme nxt-fsekme-ikincil" data-filtre="bekleme" onclick="filtreUygula('bekleme',this)">
+          Beklemeye Alındı <span class="nxt-fsayi" id="fs-bekleme">0</span>
         </button>
       </div>
       <div class="nxt-arama-wrap">
@@ -326,7 +326,7 @@ function veriGrupla() {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   2. GENEL DURUM HESAPLA
+   2. GENEL DURUM HESAPLA + ETİKET (DB enum değişmez)
 ═══════════════════════════════════════════════════════════ */
 function genelDurum(sip) {
   var d = 'HAZIR';
@@ -339,142 +339,151 @@ function genelDurum(sip) {
   return d;
 }
 
+function durumEtiket(gd) {
+  return {
+    'HAZIR': 'Başlayacak',
+    'PLANLI': 'Başlayacak',
+    'DEVAM': 'Devam Eden',
+    'BEKLEME': 'Beklemeye Alındı',
+    'BITTI': 'Biten'
+  }[gd] || gd;
+}
+
+function siparisEmirToplam(sip) {
+  var t = { baslayacak: 0, devam: 0, biten: 0, toplam: 0, uretilen: 0, hedef: 0 };
+  sip.boyutlar.forEach(function(by) {
+    t.baslayacak += by.hazir_alt_emir || 0;
+    t.devam += by.devam_alt_emir || 0;
+    t.biten += by.biten_alt_emir || 0;
+    t.toplam += by.toplam_alt_emir || 0;
+    t.uretilen += parseFloat(by.uretilen_kg) || 0;
+    var hk = by.uretilecek_kg > 0 ? by.uretilecek_kg : (by.siparis_kg || by.planlanan_kg || 0);
+    t.hedef += parseFloat(hk) || 0;
+  });
+  return t;
+}
+
+function kartCtaYazi(sip, gd) {
+  var e = siparisEmirToplam(sip);
+  if (gd === 'BEKLEME' || e.devam > 0) return 'Devam Et';
+  if (e.baslayacak > 0 || gd === 'HAZIR' || gd === 'PLANLI') return 'Başlat';
+  if (gd === 'BITTI' || (e.toplam > 0 && e.biten >= e.toplam)) return 'Görüntüle';
+  return 'Başlat';
+}
+
 /* ═══════════════════════════════════════════════════════════
-   3. KART HTML ÜRET
+   3. KART HTML ÜRET — kompakt Ali sipariş listesi
 ═══════════════════════════════════════════════════════════ */
 function kartHtml(sip, kartIdx) {
   var gd  = genelDurum(sip);
   var tek = sip.boyutlar.length === 1;
   var by0 = sip.boyutlar[0];
+  var et  = durumEtiket(gd);
+  var em  = siparisEmirToplam(sip);
+  var cta = kartCtaYazi(sip, gd);
 
-  // Durum renk sınıfı
   var durumCls = {
     'HAZIR':  'nxt-d-hazir',
     'DEVAM':  'nxt-d-devam',
     'BEKLEME':'nxt-d-bekleme',
     'BITTI':  'nxt-d-bitti',
-    'PLANLI': 'nxt-d-planli'
+    'PLANLI': 'nxt-d-hazir'
   }[gd] || 'nxt-d-taslak';
   var solCls = {
     'HAZIR':  'nxt-sol-hazir',
     'DEVAM':  'nxt-sol-devam',
     'BEKLEME':'nxt-sol-bekleme',
     'BITTI':  'nxt-sol-bitti',
-    'PLANLI': 'nxt-sol-planli'
+    'PLANLI': 'nxt-sol-hazir'
   }[gd] || 'nxt-sol-taslak';
 
-  // Tarih
   var tarih = sip.plan_tarihi ? sip.plan_tarihi.substring(0,10) : '';
+  var boyutYazi = sip.boyutlar.map(function(by) { return by.boyut; }).join(' / ');
+  var renkKod = sip.rf_kod || '';
+  var renkAd  = sip.rf_renk_ad || sip.renk_ad || '';
+  var kimlik = esc(sip.formul_ad || '—');
+  if (renkKod || renkAd) {
+    kimlik += ' · ';
+    if (renkKod) kimlik += '<span class="nxt-rf-kod">' + esc(renkKod) + '</span>';
+    if (renkAd) kimlik += (renkKod ? ' ' : '') + esc(renkAd);
+  }
+  if (boyutYazi) kimlik += ' · <span class="nxt-boyut-rozet">' + esc(boyutYazi) + '</span>';
 
-  // Boyut rozetleri
-  var boyutRozetler = sip.boyutlar.map(function(by) {
-    return '<span class="nxt-boyut-rozet">' + esc(by.boyut) + '</span>';
-  }).join('');
+  var hedefKg = em.hedef;
+  var uretilenKg = em.uretilen;
+  var kalanKg = Math.max(0, hedefKg - uretilenKg);
+  var yuzde = hedefKg > 0 ? Math.min(100, Math.round((uretilenKg / hedefKg) * 100)) : 0;
 
-  // Emir + KG kolonları
-  var emirKgHtml = '';
-  sip.boyutlar.forEach(function(by) {
-    var hedefKg = by.uretilecek_kg > 0 ? by.uretilecek_kg : by.siparis_kg;
-    var yuzde = hedefKg > 0
-      ? Math.min(100, Math.round((by.uretilen_kg / hedefKg) * 100))
-      : 0;
-    var lsRozet = !tek
-      ? '<span class="nxt-ls-rozet">' + esc(by.boyut) + '</span>' : '';
+  var emirHtml = '';
+  if (_PARCA_VAR && em.toplam > 0) {
+    emirHtml =
+      '<div class="nxt-emir-satirlar nxt-emir-sira">' +
+        '<div class="nxt-emir-satir nxt-es-kalan"><span class="nxt-es-sayi">' + em.baslayacak + '</span><span class="nxt-es-yazi">Başlayacak</span></div>' +
+        '<div class="nxt-emir-satir nxt-es-devam"><span class="nxt-es-sayi">' + em.devam + '</span><span class="nxt-es-yazi">Devam Eden</span></div>' +
+        '<div class="nxt-emir-satir nxt-es-biten"><span class="nxt-es-sayi">' + em.biten + '</span><span class="nxt-es-yazi">Biten</span></div>' +
+      '</div>';
+  } else {
+    emirHtml = '<div class="nxt-emir-satirlar nxt-emir-sira">' +
+      '<div class="nxt-emir-satir"><span class="nxt-es-sayi">—</span><span class="nxt-es-yazi">Emir</span></div></div>';
+  }
 
-    emirKgHtml += '<div class="nxt-emir-kg-blok' + (!tek ? ' nxt-emir-kg-ls' : '') + '">';
-    emirKgHtml += lsRozet;
-    if (_PARCA_VAR && by.toplam_alt_emir > 0) {
-      emirKgHtml +=
-        '<div class="nxt-emir-satirlar">' +
-          '<div class="nxt-emir-satir nxt-es-biten"><span class="nxt-es-sayi">' + by.biten_alt_emir + '</span><span class="nxt-es-yazi">Emir Bitti</span></div>' +
-          '<div class="nxt-emir-satir nxt-es-devam"><span class="nxt-es-sayi">' + by.devam_alt_emir + '</span><span class="nxt-es-yazi">Emir Üretimde</span></div>' +
-          '<div class="nxt-emir-satir nxt-es-kalan"><span class="nxt-es-sayi">' + by.hazir_alt_emir + '</span><span class="nxt-es-yazi">Emir Kaldı</span></div>' +
-        '</div>' +
-        '<div class="nxt-kg-satir">' +
-          '<span class="nxt-kg-uretilen">' + fmt(by.uretilen_kg) + '</span>' +
-          '<span class="nxt-kg-sep"> / </span>' +
-          '<span class="nxt-kg-plan">' + fmt(hedefKg) + ' KG</span>' +
-        '</div>' +
-        '<div class="nxt-kg-alt-satir">Sipariş: ' + fmt(by.siparis_kg) +
-          (by.fazla_kg > 0 ? ' · Fazla: +' + fmt(by.fazla_kg) : '') + '</div>' +
-        '<div class="nxt-progress-bar"><div class="nxt-progress-dolu" style="width:' + yuzde + '%"></div></div>';
-    } else {
-      emirKgHtml +=
-        '<div class="nxt-kg-satir" style="margin-top:6px">' +
-          '<span class="nxt-kg-plan" style="font-size:13px;font-weight:700;color:#374151">' + fmt(by.planlanan_kg) + ' KG</span>' +
-        '</div>' +
-        '<div class="nxt-progress-bar" style="margin-top:6px"><div class="nxt-progress-dolu" style="width:0%"></div></div>';
-    }
-    emirKgHtml += '</div>';
-  });
+  var kgHtml =
+    '<div class="nxt-kg-blok">' +
+      '<div class="nxt-kg-satir">' +
+        '<span class="nxt-kg-uretilen">' + fmt(uretilenKg) + '</span>' +
+        '<span class="nxt-kg-sep"> / </span>' +
+        '<span class="nxt-kg-plan">' + fmt(hedefKg) + ' KG</span>' +
+      '</div>' +
+      '<div class="nxt-kg-alt-satir">Kalan: ' + fmt(kalanKg) + ' KG · %' + yuzde + ' tamamlandı</div>' +
+      '<div class="nxt-progress-bar"><div class="nxt-progress-dolu" style="width:' + yuzde + '%"></div></div>' +
+    '</div>';
 
-  // Aksiyon butonu
   var butonHtml = '';
+  var btnCls = (cta === 'Görüntüle' || cta === 'Tamamlandı') ? 'nxt-btn-ana nxt-btn-ana-muted' : 'nxt-btn-ana';
   if (tek) {
     if (by0.batch_kodu) {
-      var bYazi = (by0.durum === 'DEVAM') ? 'Devam Et' : (by0.durum === 'BITTI' ? 'Detay' : 'Başlat');
-      butonHtml = '<a href="/nexgen/tablet/uretim-islem/' + esc(by0.batch_kodu) + '" class="nxt-btn-ana">&#9654; ' + bYazi + '</a>';
+      butonHtml = '<a href="/nexgen/tablet/uretim-islem/' + esc(by0.batch_kodu) + '" class="' + btnCls + '">' + esc(cta) + '</a>';
     } else {
-      butonHtml = '<button class="nxt-btn-ana" onclick="planBasla(' + by0.plan_id + ',\'' + esc(sip.formul_ad) + '\')">&#9654; Başlat</button>';
+      butonHtml = '<button class="nxt-btn-ana" onclick="planBasla(' + by0.plan_id + ',\'' + esc(sip.formul_ad) + '\')">' + esc(cta) + '</button>';
     }
-    butonHtml += '<a href="/nexgen/tablet/etiket/uretim/' + esc(by0.batch_kodu || '') + '" class="nxt-btn-ikincil">&#128424; Etiket</a>';
+    if (by0.batch_kodu) {
+      butonHtml += '<a href="/nexgen/tablet/etiket/uretim/' + esc(by0.batch_kodu) + '" class="nxt-btn-ikincil">Etiket</a>';
+    } else {
+      butonHtml += '<span class="nxt-btn-ikincil nxt-btn-disabled">Etiket</span>';
+    }
   } else {
-    butonHtml = '<button type="button" class="nxt-btn-ana" onclick="lsModalAc(' + kartIdx + ')">&#9654; Devam Et</button>';
+    butonHtml = '<button type="button" class="' + btnCls + '" onclick="lsModalAc(' + kartIdx + ')">' + esc(cta) + '</button>';
     butonHtml += '<div id="nxt-ls-data-' + kartIdx + '" style="display:none">';
     sip.boyutlar.forEach(function(by) {
       butonHtml += '<span data-boyut="' + esc(by.boyut) + '" data-batch="' + esc(by.batch_kodu || '') + '"></span>';
     });
     butonHtml += '</div>';
-    butonHtml += '<a href="/nexgen/tablet/etiket/uretim/' + esc(by0.batch_kodu || '') + '" class="nxt-btn-ikincil">&#128424; Etiket</a>';
+    butonHtml += '<a href="/nexgen/tablet/etiket/uretim/' + esc(by0.batch_kodu || '') + '" class="nxt-btn-ikincil">Etiket</a>';
   }
 
-  return '<div class="nxt-kart ' + solCls + '" ' +
+  return '<div class="nxt-kart nxt-kart-kompakt ' + solCls + '" ' +
     'data-durum="' + gd.toLowerCase() + '" ' +
     'data-cari="' + esc(sip.musteri_adi.toLowerCase()) + '" ' +
     'data-sip="' + esc((sip.siparis_no||'').toLowerCase()) + '" ' +
     'data-urun="' + esc(sip.formul_ad.toLowerCase()) + '">' +
 
-    // Üst satır
     '<div class="nxt-kart-ust">' +
       '<div class="nxt-ust-cari">' +
-        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12" style="flex-shrink:0;color:#94a3b8;margin-right:4px"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>' +
         '<span class="nxt-ust-cari-ad">' + esc(sip.musteri_adi) + '</span>' +
       '</div>' +
       '<div class="nxt-ust-sip-no">' + esc(sip.siparis_no) + '</div>' +
-      (tarih ? '<div class="nxt-ust-tarih">&#128197; ' + tarih + '</div>' : '') +
-      '<div class="nxt-durum-rozet ' + durumCls + '">' + gd + '</div>' +
+      (tarih ? '<div class="nxt-ust-tarih">' + tarih + '</div>' : '') +
+      '<div class="nxt-durum-rozet ' + durumCls + '">' + esc(et) + '</div>' +
     '</div>' +
 
-    // Gövde: 4 kolon
-    '<div class="nxt-kart-govde">' +
+    '<div class="nxt-kimlik-satir">' + kimlik + '</div>' +
 
-      // Kolon 1 — Ürün
-      '<div class="nxt-gov-kolon nxt-gov-urun">' +
-        '<div class="nxt-gov-et">FORMÜL</div>' +
-        '<div class="nxt-gov-formul">' + esc(sip.formul_ad) + '</div>' +
-        (sip.renk_ad ? '<div class="nxt-gov-et" style="margin-top:6px">RENK</div><div class="nxt-gov-renk">' + esc(sip.renk_ad) + '</div>' : '') +
-        (sip.rf_kod ? '<div class="nxt-gov-et" style="margin-top:6px">RF</div><div class="nxt-gov-rf"><span class="nxt-rf-kod">' + esc(sip.rf_kod) + '</span>'
-          + (sip.rf_renk_ad ? ' <span class="nxt-rf-ad">' + esc(sip.rf_renk_ad) + '</span>' : '') + '</div>' : '') +
-        '<div class="nxt-gov-et" style="margin-top:6px">BOYUT</div>' +
-        '<div class="nxt-gov-boyutlar">' + boyutRozetler + '</div>' +
-      '</div>' +
-
-      // Kolon 2+3 — Emir + KG (birleşik)
-      '<div class="nxt-gov-kolon nxt-gov-emirkg">' +
-        '<div class="nxt-emirkg-ust">' +
-          '<div class="nxt-gov-et">ÜRETİM EMİRLERİ</div>' +
-          '<div class="nxt-gov-et" style="text-align:right">ÜRETİM (KG)</div>' +
-        '</div>' +
-        emirKgHtml +
-      '</div>' +
-
-      // Kolon 4 — Aksiyon
-      '<div class="nxt-gov-aksiyon">' +
-        butonHtml +
-      '</div>' +
-
-    '</div>' + // /govde
-  '</div>';   // /kart
+    '<div class="nxt-kart-govde nxt-kart-govde-kompakt">' +
+      '<div class="nxt-gov-kolon nxt-gov-emir">' + emirHtml + '</div>' +
+      '<div class="nxt-gov-kolon nxt-gov-kg">' + kgHtml + '</div>' +
+      '<div class="nxt-gov-aksiyon">' + butonHtml + '</div>' +
+    '</div>' +
+  '</div>';
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -815,6 +824,8 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #f3f6fa; }
 .nxt-fsekme:hover { background: #f3f4f6; color: #374151; }
 .nxt-fsekme-aktif { background: #0f172a; border-color: #0f172a; color: #f6c343; }
 .nxt-fsekme-aktif:hover { background: #1e293b; }
+.nxt-fsekme-ikincil { opacity: .78; font-weight: 500; }
+.nxt-fsekme-ikincil.nxt-fsekme-aktif { opacity: 1; }
 .nxt-fsayi {
   background: rgba(0,0,0,.08); font-size: 10px; font-weight: 800;
   padding: 1px 5px; border-radius: 8px; min-width: 18px; text-align: center;
@@ -894,12 +905,38 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #f3f6fa; }
 .nxt-d-planli  { background: #f3f4f6; color: #6b7280; border: 1px solid #e5e7eb; }
 .nxt-d-taslak  { background: #f9fafb; color: #9ca3af; border: 1px solid #e5e7eb; }
 
-/* Gövde: 3 kolon */
+/* Gövde: 3 kolon (eski) + kompakt */
 .nxt-kart-govde {
   display: grid;
   grid-template-columns: 210px 1fr auto;
   gap: 0;
   align-items: stretch;
+}
+.nxt-kart-kompakt .nxt-kart-ust { padding: 7px 12px 5px; min-height: 30px; }
+.nxt-kimlik-satir {
+  padding: 2px 12px 6px;
+  font-size: 12px; font-weight: 600; color: #374151;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
+  border-bottom: 1px solid #f3f4f6;
+}
+.nxt-kimlik-satir .nxt-boyut-rozet { margin-left: 2px; }
+.nxt-kart-govde-kompakt {
+  grid-template-columns: auto 1fr 118px;
+  align-items: center;
+}
+.nxt-kart-govde-kompakt .nxt-gov-kolon { padding: 8px 12px; }
+.nxt-kart-govde-kompakt .nxt-gov-aksiyon { padding: 8px 10px; min-width: 118px; }
+.nxt-emir-sira { display: flex; flex-direction: row; gap: 14px; align-items: flex-end; }
+.nxt-emir-sira .nxt-emir-satir { flex-direction: column; align-items: center; gap: 0; }
+.nxt-emir-sira .nxt-es-sayi { min-width: 0; text-align: center; font-size: 17px; }
+.nxt-emir-sira .nxt-es-yazi { font-size: 10px; }
+.nxt-kg-blok { min-width: 0; }
+.nxt-btn-ana-muted { background: #e5e7eb !important; color: #374151 !important; box-shadow: none !important; }
+.nxt-btn-disabled { opacity: .45; pointer-events: none; cursor: default; }
+@media (max-width: 900px) {
+  .nxt-kart-govde-kompakt { grid-template-columns: 1fr; }
+  .nxt-kart-govde-kompakt .nxt-gov-aksiyon { border-left: none; border-top: 1px solid #f3f4f6; flex-direction: row; }
+  .nxt-kart-govde-kompakt .nxt-btn-ana { flex: 1; }
 }
 .nxt-gov-kolon {
   padding: 10px 14px;
