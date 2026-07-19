@@ -363,6 +363,7 @@ var S = {
   uv_by_boyut: {},
   /* Adım 4 — Renk Adı & Bilgisi */
   renk_adi: '',
+  renk_hex: '#94a3b8',
   renk_aciklama: '',
   musteri_notu: '',
   pigmentler: [],
@@ -565,12 +566,17 @@ function adim4Html(){
   var h = '<div class="m2-adim-baslik">Renk Adı &amp; Bilgisi</div>'
     +'<div class="m2-adim-alt">Geliştirilen rengin adını girin. Kod sistem tarafından otomatik oluşturulacak.</div>'
 
-    /* Renk Adı — ZORUNLU */
+    /* Renk Adı — ZORUNLU + swatch */
     +'<div class="m2-form-grup">'
     +'<div class="m2-form-label">Renk Adı <span class="zorunlu">ZORUNLU</span></div>'
-    +'<input type="text" id="m2-renk-adi" class="m2-input" maxlength="80"'
+    +'<div style="display:flex;align-items:center;gap:10px">'
+    +'<div id="m2-renk-swatch" class="rm-renk-daıre" style="width:36px;height:36px;border-radius:50%;border:1.5px solid rgba(0,0,0,.12);flex-shrink:0;background:'+esc(S.renk_hex||'#94a3b8')+'"></div>'
+    +'<input type="color" id="m2-renk-hex" value="'+(S.renk_hex||'#94a3b8')+'" '
+    +' style="width:42px;height:36px;padding:0;border:1.5px solid var(--border);border-radius:8px;cursor:pointer;background:transparent">'
+    +'<input type="text" id="m2-renk-adi" class="m2-input" maxlength="80" style="flex:1"'
     +' placeholder="Örn: Açık Gri / Buz Mavi / Kemik / Krem / Süt Beyazı"'
     +' value="'+esc(S.renk_adi)+'">'
+    +'</div>'
     +'<div id="m2-renk-adi-uyari" style="font-size:11px;color:var(--orange);font-weight:700;margin-top:4px;display:none">Renk adı zorunludur.</div>'
     +'</div>'
 
@@ -1066,7 +1072,7 @@ function kaydet(){
     deneme: {
       numune_orani: (oz && oz.numune_oran) || VARSAYILAN_ORAN,
       lot_no: null,
-      genel_not: [S.renk_aciklama, S.not].filter(Boolean).join(' | ') || null
+      genel_not: [S.renk_aciklama, S.renk_hex ? ('HEX '+S.renk_hex) : '', S.not].filter(Boolean).join(' | ') || null
     }
   };
 
@@ -1183,7 +1189,7 @@ function adimPostRender(no){
     });
     setTimeout(function(){ pAra.focus(); },60);
   }
-  /* Renk Adı değişince btn-4 aktif et */
+  /* Renk Adı + swatch */
   var rAdiEl=document.getElementById('m2-renk-adi');
   if(rAdiEl){
     rAdiEl.addEventListener('input',function(){
@@ -1192,6 +1198,14 @@ function adimPostRender(no){
       var uyr=document.getElementById('m2-renk-adi-uyari'); if(uyr) uyr.style.display=S.renk_adi?'none':'';
     });
     setTimeout(function(){ rAdiEl.focus(); },60);
+  }
+  var rHexEl=document.getElementById('m2-renk-hex');
+  if(rHexEl){
+    rHexEl.addEventListener('input',function(){
+      S.renk_hex=this.value||'#94a3b8';
+      var sw=document.getElementById('m2-renk-swatch');
+      if(sw) sw.style.background=S.renk_hex;
+    });
   }
   /* Gramaj değişince btn-5 güncelle + diagnostic panel */
   function diagGuncelle(){

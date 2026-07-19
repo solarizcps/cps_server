@@ -819,6 +819,13 @@ html, body { height: 100%; overflow: hidden; }
    - Her kart tam tıklanabilir
 ───────────────────────────────────────── */
 
+function m1SwatchRenk(ad){
+  var s=String(ad||'');
+  var h=0;
+  for(var i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))>>>0;
+  return 'hsl('+(h%360)+' 55% 62%)';
+}
+
 /* ── Durum ── */
 var S = {
   adim: 1,   /* 1-8 */
@@ -1172,8 +1179,9 @@ function adim4Html(){
     +'<div class="m1-liste" id="rf-liste">';
   RF_LISTE.forEach(function(r){
     var sec = S.rf_id===r.id ? ' secili' : '';
+    var sw = m1SwatchRenk(r.rf_ad||r.rf_kod||'');
     html += '<div class="m1-secim-item'+sec+'" data-tip="rf" data-id="'+r.id+'" data-ad="'+esc(r.rf_ad||'')+'" data-kod="'+esc(r.rf_kod||'')+'">'
-      +'<div class="m1-renk-daire">?</div>'
+      +'<div class="m1-renk-daire" style="background:'+sw+';border-color:rgba(0,0,0,.12)"></div>'
       +'<div class="m1-si-metin">'
       +'<div class="m1-si-ad">'+esc(r.rf_kod||'')+'</div>'
       +'<div class="m1-si-alt">'+esc(r.rf_ad||'')+'</div>'
