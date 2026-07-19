@@ -49,9 +49,12 @@ var _PARCA_VAR = {% if devam_eden_batches and devam_eden_batches[0]['toplam_alt_
 
     </div>
 
-    {# Alt menü #}
+    {# Alt menü — rol/permission bazlı (kullanıcı adı hardcode yok) #}
+    {% set _ops = can_tablet_uretim if can_tablet_uretim is defined else can_uretim %}
+    {% set _arge = can_arge_tablet if can_arge_tablet is defined else false %}
     <div class="nxt-alt-menu">
       <div class="nxt-alt-menu-ic">
+        {% if _ops %}
         <a class="nxt-amenu-item nxt-amenu-aktif" href="/nexgen/tablet">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                width="13" height="13">
@@ -77,6 +80,7 @@ var _PARCA_VAR = {% if devam_eden_batches and devam_eden_batches[0]['toplam_alt_
           </svg>
           Devam Eden
         </a>
+        {# Üretim: mevcut route korunur; Siparişler ile kısmen örtüşür ama ayrı akış #}
         <a class="nxt-amenu-item" href="/nexgen/tablet/uretim">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                width="13" height="13">
@@ -85,13 +89,17 @@ var _PARCA_VAR = {% if devam_eden_batches and devam_eden_batches[0]['toplam_alt_
           </svg>
           Üretim
         </a>
-        <a class="nxt-amenu-item" href="/nexgen/tablet/arge">
+        {% endif %}
+        {% if _arge %}
+        <a class="nxt-amenu-item{% if not _ops %} nxt-amenu-aktif{% endif %}" href="/nexgen/tablet/arge">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                width="13" height="13">
             <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4"/>
           </svg>
-          AR-GE Tablet
+          AR-GE
         </a>
+        {% endif %}
+        {% if _ops or _arge %}
         <a class="nxt-amenu-item" href="/nexgen/tablet/barkod">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                width="13" height="13">
@@ -101,6 +109,8 @@ var _PARCA_VAR = {% if devam_eden_batches and devam_eden_batches[0]['toplam_alt_
           </svg>
           Barkod
         </a>
+        {% endif %}
+        {% if _ops %}
         <a class="nxt-amenu-item" href="/nexgen/tablet/geri-donusum">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                width="13" height="13">
@@ -110,7 +120,6 @@ var _PARCA_VAR = {% if devam_eden_batches and devam_eden_batches[0]['toplam_alt_
           </svg>
           Geri Dönüşüm
         </a>
-        {% if can_uretim %}
         <a class="nxt-amenu-item nxt-amenu-yeni" href="/nexgen/tablet/uretim">
           + Yeni Üretim
         </a>
@@ -339,15 +348,20 @@ function genelDurum(sip) {
   return d;
 }
 
-function durumEtiket(gd) {
-  return {
-    'HAZIR': 'Başlayacak',
-    'PLANLI': 'Başlayacak',
-    'DEVAM': 'Devam Eden',
-    'BEKLEME': 'Beklemeye Alındı',
-    'BITTI': 'Biten'
-  }[gd] || gd;
+/* View-model: DB enum → filtre / etiket / rozet / CTA (enum değişmez) */
+var DURUM_VM = {
+  HAZIR:   { filtre: 'hazir',   etiket: 'Başlayacak',       rozet: 'nxt-d-hazir',    sol: 'nxt-sol-hazir' },
+  PLANLI:  { filtre: 'hazir',   etiket: 'Başlayacak',       rozet: 'nxt-d-hazir',    sol: 'nxt-sol-hazir' },
+  DEVAM:   { filtre: 'devam',   etiket: 'Devam Eden',       rozet: 'nxt-d-devam',    sol: 'nxt-sol-devam' },
+  BEKLEME: { filtre: 'bekleme', etiket: 'Beklemeye Alındı',  rozet: 'nxt-d-bekleme',  sol: 'nxt-sol-bekleme' },
+  BITTI:   { filtre: 'bitti',   etiket: 'Biten',            rozet: 'nxt-d-bitti',    sol: 'nxt-sol-bitti' }
+};
+
+function durumVm(gd) {
+  return DURUM_VM[gd] || { filtre: 'hazir', etiket: gd, rozet: 'nxt-d-taslak', sol: 'nxt-sol-taslak' };
 }
+
+function durumEtiket(gd) { return durumVm(gd).etiket; }
 
 function siparisEmirToplam(sip) {
   var t = { baslayacak: 0, devam: 0, biten: 0, toplam: 0, uretilen: 0, hedef: 0 };
@@ -371,6 +385,29 @@ function kartCtaYazi(sip, gd) {
   return 'Başlat';
 }
 
+/** Renk kodu + adı tek kez; "0031 BUZ GRİ 0031 BUZ GRİ" tekrarını engelle */
+function renkKimlikMetin(sip) {
+  var kod = String(sip.rf_kod || '').trim();
+  var ad = String(sip.rf_renk_ad || sip.renk_ad || '').trim();
+  if (kod && ad) {
+    var ku = kod.toUpperCase();
+    var au = ad.toUpperCase();
+    if (au === ku) ad = '';
+    else if (au.indexOf(ku) === 0) {
+      ad = ad.substring(kod.length).replace(/^[\s\-·.]+/, '').trim();
+    } else if (au.indexOf(ku + ' ') === 0) {
+      ad = ad.substring(kod.length).trim();
+    }
+    // ad içinde kod tekrarını temizle
+    if (ad) {
+      var re = new RegExp('\\b' + kod.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'ig');
+      ad = ad.replace(re, '').replace(/\s{2,}/g, ' ').trim();
+    }
+  }
+  if (kod && ad) return kod + ' ' + ad;
+  return kod || ad || '';
+}
+
 /* ═══════════════════════════════════════════════════════════
    3. KART HTML ÜRET — kompakt Ali sipariş listesi
 ═══════════════════════════════════════════════════════════ */
@@ -378,36 +415,23 @@ function kartHtml(sip, kartIdx) {
   var gd  = genelDurum(sip);
   var tek = sip.boyutlar.length === 1;
   var by0 = sip.boyutlar[0];
-  var et  = durumEtiket(gd);
+  var vm  = durumVm(gd);
+  var et  = vm.etiket;
   var em  = siparisEmirToplam(sip);
   var cta = kartCtaYazi(sip, gd);
-
-  var durumCls = {
-    'HAZIR':  'nxt-d-hazir',
-    'DEVAM':  'nxt-d-devam',
-    'BEKLEME':'nxt-d-bekleme',
-    'BITTI':  'nxt-d-bitti',
-    'PLANLI': 'nxt-d-hazir'
-  }[gd] || 'nxt-d-taslak';
-  var solCls = {
-    'HAZIR':  'nxt-sol-hazir',
-    'DEVAM':  'nxt-sol-devam',
-    'BEKLEME':'nxt-sol-bekleme',
-    'BITTI':  'nxt-sol-bitti',
-    'PLANLI': 'nxt-sol-hazir'
-  }[gd] || 'nxt-sol-taslak';
+  var durumCls = vm.rozet;
+  var solCls = vm.sol;
 
   var tarih = sip.plan_tarihi ? sip.plan_tarihi.substring(0,10) : '';
   var boyutYazi = sip.boyutlar.map(function(by) { return by.boyut; }).join(' / ');
-  var renkKod = sip.rf_kod || '';
-  var renkAd  = sip.rf_renk_ad || sip.renk_ad || '';
-  var kimlik = esc(sip.formul_ad || '—');
-  if (renkKod || renkAd) {
-    kimlik += ' · ';
-    if (renkKod) kimlik += '<span class="nxt-rf-kod">' + esc(renkKod) + '</span>';
-    if (renkAd) kimlik += (renkKod ? ' ' : '') + esc(renkAd);
+  var renkMetin = renkKimlikMetin(sip);
+  var kimlik = '<span class="nxt-kimlik-formul">' + esc(sip.formul_ad || '—') + '</span>';
+  if (renkMetin) {
+    kimlik += ' <span class="nxt-kimlik-ayrac">·</span> <span class="nxt-rf-kod">' + esc(renkMetin) + '</span>';
   }
-  if (boyutYazi) kimlik += ' · <span class="nxt-boyut-rozet">' + esc(boyutYazi) + '</span>';
+  if (boyutYazi) {
+    kimlik += ' <span class="nxt-kimlik-ayrac">·</span> <span class="nxt-boyut-rozet">' + esc(boyutYazi) + '</span>';
+  }
 
   var hedefKg = em.hedef;
   var uretilenKg = em.uretilen;
@@ -469,7 +493,7 @@ function kartHtml(sip, kartIdx) {
 
     '<div class="nxt-kart-ust">' +
       '<div class="nxt-ust-cari">' +
-        '<span class="nxt-ust-cari-ad">' + esc(sip.musteri_adi) + '</span>' +
+        '<span class="nxt-ust-cari-ad" title="' + esc(sip.musteri_adi) + '">' + esc(sip.musteri_adi) + '</span>' +
       '</div>' +
       '<div class="nxt-ust-sip-no">' + esc(sip.siparis_no) + '</div>' +
       (tarih ? '<div class="nxt-ust-tarih">' + tarih + '</div>' : '') +
@@ -497,14 +521,14 @@ function filtrele() {
     var urun  = sip.formul_ad.toLowerCase();
     var arama = _aktifArama.toLowerCase();
 
-    var fPas = (_aktifFiltre === 'tumu') || gd === _aktifFiltre ||
-               (_aktifFiltre === 'devam' && gd === 'devam') ||
-               (_aktifFiltre === 'hazir' && (gd === 'hazir' || gd === 'planli'));
+    var vm = durumVm(genelDurum(sip));
+    var fPas = (_aktifFiltre === 'tumu') || vm.filtre === _aktifFiltre;
     var batchKod = sip.boyutlar.map(function(by) {
       return (by.batch_kodu || '').toLowerCase();
     }).join(' ');
+    var renk = renkKimlikMetin(sip).toLowerCase();
     var aPas = !arama || cari.includes(arama) || sipNo.includes(arama) ||
-               urun.includes(arama) || batchKod.includes(arama);
+               urun.includes(arama) || batchKod.includes(arama) || renk.includes(arama);
     return fPas && aPas;
   });
 }
@@ -512,12 +536,12 @@ function filtrele() {
 function sayacGuncelle() {
   var sayac = { tumu:0, hazir:0, devam:0, bekleme:0, bitti:0 };
   _gruplar.forEach(function(sip) {
-    var gd = genelDurum(sip).toLowerCase();
+    var f = durumVm(genelDurum(sip)).filtre;
     sayac.tumu++;
-    if (gd === 'hazir' || gd === 'planli') sayac.hazir++;
-    else if (gd === 'devam')   sayac.devam++;
-    else if (gd === 'bekleme') sayac.bekleme++;
-    else if (gd === 'bitti')   sayac.bitti++;
+    if (f === 'hazir') sayac.hazir++;
+    else if (f === 'devam') sayac.devam++;
+    else if (f === 'bekleme') sayac.bekleme++;
+    else if (f === 'bitti') sayac.bitti++;
   });
   document.getElementById('fs-tumu').textContent    = sayac.tumu;
   document.getElementById('fs-hazir').textContent   = sayac.hazir;
@@ -921,22 +945,34 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #f3f6fa; }
 }
 .nxt-kimlik-satir .nxt-boyut-rozet { margin-left: 2px; }
 .nxt-kart-govde-kompakt {
-  grid-template-columns: auto 1fr 118px;
+  grid-template-columns: minmax(200px, 240px) 1fr 128px;
   align-items: center;
 }
-.nxt-kart-govde-kompakt .nxt-gov-kolon { padding: 8px 12px; }
-.nxt-kart-govde-kompakt .nxt-gov-aksiyon { padding: 8px 10px; min-width: 118px; }
-.nxt-emir-sira { display: flex; flex-direction: row; gap: 14px; align-items: flex-end; }
-.nxt-emir-sira .nxt-emir-satir { flex-direction: column; align-items: center; gap: 0; }
-.nxt-emir-sira .nxt-es-sayi { min-width: 0; text-align: center; font-size: 17px; }
-.nxt-emir-sira .nxt-es-yazi { font-size: 10px; }
+.nxt-kart-govde-kompakt .nxt-gov-kolon { padding: 10px 14px; }
+.nxt-kart-govde-kompakt .nxt-gov-emir { min-width: 200px; }
+.nxt-kart-govde-kompakt .nxt-gov-aksiyon { padding: 10px 12px; min-width: 128px; }
+.nxt-emir-sira { display: flex; flex-direction: row; gap: 18px; align-items: flex-end; justify-content: flex-start; }
+.nxt-emir-sira .nxt-emir-satir { flex-direction: column; align-items: center; gap: 1px; min-width: 52px; }
+.nxt-emir-sira .nxt-es-sayi { min-width: 0; text-align: center; font-size: 18px; line-height: 1.1; }
+.nxt-emir-sira .nxt-es-yazi { font-size: 10px; text-align: center; white-space: nowrap; }
 .nxt-kg-blok { min-width: 0; }
+.nxt-kimlik-ayrac { color: #9ca3af; font-weight: 500; }
+.nxt-kimlik-formul { font-weight: 800; color: #111827; }
+.nxt-kart-kompakt .nxt-ust-cari { min-width: 0; flex: 1; }
+.nxt-kart-kompakt .nxt-ust-cari-ad {
+  display: block; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .nxt-btn-ana-muted { background: #e5e7eb !important; color: #374151 !important; box-shadow: none !important; }
 .nxt-btn-disabled { opacity: .45; pointer-events: none; cursor: default; }
+@media (max-width: 1100px) {
+  .nxt-kart-govde-kompakt { grid-template-columns: minmax(180px, 1fr) 1.2fr 120px; }
+}
 @media (max-width: 900px) {
   .nxt-kart-govde-kompakt { grid-template-columns: 1fr; }
   .nxt-kart-govde-kompakt .nxt-gov-aksiyon { border-left: none; border-top: 1px solid #f3f4f6; flex-direction: row; }
   .nxt-kart-govde-kompakt .nxt-btn-ana { flex: 1; }
+  .nxt-emir-sira { justify-content: space-around; }
 }
 .nxt-gov-kolon {
   padding: 10px 14px;
