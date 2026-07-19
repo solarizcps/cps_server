@@ -56,17 +56,18 @@ m2 = open(os.path.join(_APP, "templates", "nexgen", "modul02_yeni_rf.html"), enc
 nx = open(os.path.join(_APP, "templates", "nexgen", "nx_ar_detay.html"), encoding="utf-8").read()
 al = open(os.path.join(_APP, "templates", "nexgen", "arge_liste.html"), encoding="utf-8").read()
 
+# FAZ-1A: NX-AR kullanıcı UI'de yok — yalnız AT
 ok("RM esit agirlik yok", " · '+k.arge_kodu" not in rm and "test_no + (k.arge_kodu" not in rm)
-ok("RM Sistem Referansı", "Sistem Referansı" in rm)
-ok("RM AT ana kart", "k.test_no || k.arge_kodu" in rm or "kart.test_no" in rm)
-ok("M02 Sistem Referansı", "Sistem Referansı" in m2)
+ok("RM Sistem Referansı yok", "Sistem Referansı" not in rm)
+ok("RM AT ana kart", "kart.test_no" in rm or "k.test_no" in rm)
+ok("M02 Sistem Referansı yok", "Sistem Referansı" not in m2)
 ok("M02 esit · yok", "' · '+S._kaydedilen_arge_kodu" not in m2)
-ok("M01 test_no ana", "d.test_no || d.arge_kodu" in m1)
-ok("M01 Sistem Referansı", "Sistem Referansı" in m1)
-ok("NX detay AT baslik", "kart.test_no or kart.arge_kodu" in nx)
+ok("M01 test_no ana", "d.test_no" in m1)
+ok("M01 Sistem Referansı yok", "Sistem Referansı" not in m1)
+ok("NX detay AT baslik", "kart.test_no" in nx)
 ok("NX detay etiket Çalışma", "Çalışma Kodu" in nx)
-ok("Liste AT uste", "t.test_no or t.arge_kodu" in al)
-ok("Liste Sistem Referansı", "Sistem Referansı" in al)
+ok("Liste AT uste", "t.test_no" in al)
+ok("Liste Sistem Referansı yok", "Sistem Referansı" not in al)
 
 con = sqlite3.connect(TEST_DB)
 con.row_factory = sqlite3.Row
@@ -152,7 +153,7 @@ with _app.test_client() as c:
         ok("detay sayfa", rd.status_code < 500, str(rd.status_code))
         html = rd.get_data(as_text=True)
         ok("detay AT gorunur", tn in html)
-        ok("detay Sistem Referansı", "Sistem Referansı" in html and ak in html)
+        ok("detay NX-AR UI yok", ak not in html and "Sistem Referansı" not in html)
         # eski AT
         eski = con.execute(
             "SELECT test_no FROM nexgen_arge_test WHERE test_no LIKE 'AT-2026-%' LIMIT 1"
