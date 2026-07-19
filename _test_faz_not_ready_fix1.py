@@ -16,7 +16,7 @@ _APP = os.path.join(_ROOT, "app")
 sys.path.insert(0, _APP)
 os.chdir(_APP)
 
-from nexgen_test_isolation import sha256_file, cleanup_tmp
+from tools.nexgen_tmp_db import sha256_file, cleanup_tmp
 
 _LIVE = os.path.join(_APP, "mock_data.db")
 _SHA0 = sha256_file(_LIVE)

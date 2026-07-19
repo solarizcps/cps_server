@@ -12,7 +12,7 @@ os.chdir(_APP_DIR)
 _LIVE_DB = os.path.join(_APP_DIR, 'mock_data.db')
 
 import tempfile
-from nexgen_test_isolation import sha256_file, cleanup_tmp
+from tools.nexgen_tmp_db import sha256_file, cleanup_tmp
 
 _SHA_BEFORE = sha256_file(_LIVE_DB)
 _TMP_DIR = tempfile.mkdtemp(prefix='faz5c2_')
