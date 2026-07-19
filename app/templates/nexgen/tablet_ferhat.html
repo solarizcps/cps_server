@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% set page_title = "Ferhat — Üretim Saha" %}
+{% block content %}
+<div class="frh-sayfa">
+  <div class="frh-ust">
+    <div class="frh-baslik">ÜRETİM SAHA</div>
+    <div class="frh-alt">Ferhat</div>
+  </div>
+
+  <section class="frh-bolum">
+    <h2>AKTİF İŞLER <span>{{ aktif_isler|length }}</span></h2>
+    {% if not aktif_isler %}
+    <div class="frh-bos">Aktif iş yok</div>
+    {% else %}
+    <div class="frh-grid">
+      {% for i in aktif_isler %}
+      <a href="/nexgen/tablet/ferhat/{{ i.batch_kodu }}" class="frh-kart frh-{{ (i.batch_durum or i.durum or '')|lower }}">
+        <div class="frh-k-ust"><b>{{ i.cari_goster }}</b><span>{{ i.durum_etiket }}</span></div>
+        <div class="frh-k-s">{{ i.formul_goster }}</div>
+        <div class="frh-k-s">{{ i.renk_ad or '—' }} · {{ i.boyut or '—' }}</div>
+        <div class="frh-k-s">{{ i.batch_kodu }} · {{ '%.1f'|format(i.planlanan_kg or 0) }} KG</div>
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </section>
+
+  <section class="frh-bolum">
+    <h2>BEKLEYEN <span>{{ bekleyen_isler|length }}</span></h2>
+    {% if not bekleyen_isler %}
+    <div class="frh-bos">Bekleyen iş yok</div>
+    {% else %}
+    <div class="frh-grid">
+      {% for i in bekleyen_isler %}
+      <a href="/nexgen/tablet/ferhat/{{ i.batch_kodu }}" class="frh-kart frh-bekleme">
+        <div class="frh-k-ust"><b>{{ i.cari_goster }}</b><span>Beklemede</span></div>
+        <div class="frh-k-s">{{ i.formul_goster }}</div>
+        <div class="frh-k-s">{{ i.batch_kodu }}</div>
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </section>
+
+  <section class="frh-bolum">
+    {% set _tamam = tamamlanan_isler|default([]) %}
+    <h2>BUGÜN TAMAMLANAN <span>{{ _tamam|length }}</span></h2>
+    {% if not _tamam %}
+    <div class="frh-bos">—</div>
+    {% else %}
+    <div class="frh-grid">
+      {% for i in _tamam %}
+      <div class="frh-kart frh-bitti frh-sade">
+        <div class="frh-k-ust"><b>{{ i.cari_goster }}</b><span>Bitti</span></div>
+        <div class="frh-k-s">{{ i.formul_goster }} · {{ i.batch_kodu }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </section>
+</div>
+<style>
+.frh-sayfa{max-width:900px;margin:0 auto;padding:14px 12px 32px;background:#f8fafc;min-height:80vh}
+.frh-ust{text-align:center;padding:18px 0 10px}
+.frh-baslik{font-size:26px;font-weight:900;letter-spacing:.08em;color:#0f172a}
+.frh-alt{font-size:14px;color:#64748b;margin-top:4px}
+.frh-bolum{margin-top:18px}
+.frh-bolum h2{font-size:13px;font-weight:800;color:#475569;margin:0 0 10px;letter-spacing:.06em}
+.frh-bolum h2 span{background:#e2e8f0;border-radius:999px;padding:2px 8px;margin-left:6px}
+.frh-grid{display:grid;gap:10px}
+.frh-kart{display:block;text-decoration:none;background:#fff;border-radius:14px;padding:16px;border:2px solid #e2e8f0;box-shadow:0 2px 6px rgba(15,23,42,.06);min-height:88px}
+.frh-kart.frh-sade{opacity:.85}
+.frh-hazir,.frh-devam{border-left:6px solid #16a34a}
+.frh-bekleme{border-left:6px solid #d97706}
+.frh-bitti{border-left:6px solid #64748b}
+.frh-k-ust{display:flex;justify-content:space-between;gap:8px;margin-bottom:8px}
+.frh-k-ust b{font-size:17px;color:#0f172a}
+.frh-k-ust span{font-size:12px;font-weight:800;padding:4px 8px;border-radius:8px;background:#f1f5f9;color:#334155}
+.frh-k-s{font-size:14px;color:#475569;line-height:1.45}
+.frh-bos{color:#94a3b8;padding:12px 4px;font-size:15px}
+</style>
+{% endblock %}
