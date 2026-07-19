@@ -12,7 +12,17 @@ _ROOT = os.path.dirname(os.path.abspath(__file__))
 _APP = os.path.join(_ROOT, 'app')
 sys.path.insert(0, _APP)
 os.chdir(_APP)
-DB = os.path.join(_APP, 'mock_data.db')
+_LIVE_DB = os.path.join(_APP, 'mock_data.db')
+
+import shutil, tempfile
+from nexgen_test_isolation import sha256_file, cleanup_tmp
+
+_SHA_BEFORE = sha256_file(_LIVE_DB)
+_TMP_DIR = tempfile.mkdtemp(prefix='faz2_')
+DB = os.path.join(_TMP_DIR, 'mock_data_test.db')
+shutil.copy2(_LIVE_DB, DB)
+print(f'[ISO] tmp_db={DB}')
+print(f'[ISO] main_sha_before={_SHA_BEFORE}')
 
 results = []
 
@@ -44,8 +54,12 @@ ok('08 hazirlik mi uyari', 'def _depo_hazirlik_mi_uyari' in routes and "'mi_uyar
 ok('09 depo siparis url', "qs.get('siparis')" in depo and 'NGDP_BEKLEYEN' in depo)
 ok('10 SA depo link', '/nexgen/depo/?siparis=' in sa_det)
 
+import config as _cfg  # noqa: E402
+_cfg.Config.MOCK_DB_PATH = DB
 import app as flask_app  # noqa: E402
+import modules.nexgen.routes as nx_routes  # noqa: E402
 from modules.nexgen.routes import _batch_depo_hazir_zorunlu  # noqa: E402
+nx_routes.DB_PATH = DB
 
 _app = flask_app.app
 _app.config['TESTING'] = True
@@ -143,6 +157,11 @@ else:
     ok('14 depo hazir gate', True, 'BEKLIYOR/HAZIRLANIYOR batch yok — atlandi')
 
 con.close()
+_SHA_AFTER = sha256_file(_LIVE_DB)
+ok('ISO main DB SHA unchanged', _SHA_BEFORE == _SHA_AFTER, f'{_SHA_BEFORE[:12]}..')
+print(f'[ISO] main_sha_after={_SHA_AFTER}')
+print(f'[ISO] main_db_changed={_SHA_BEFORE != _SHA_AFTER}')
+cleanup_tmp({'tmp_dir': _TMP_DIR})
 passed = sum(1 for _, c, _ in results if c)
 failed = len(results) - passed
 print('=' * 72)
