@@ -815,8 +815,14 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #f3f6fa; }
   transition: transform .15s; flex-shrink: 0;
 }
 .nxt-acc-open > .nxt-acc-hdr .nxt-acc-chevron { transform: rotate(180deg); }
-.nxt-acc-body { display: none; }
-.nxt-acc-open > .nxt-acc-body { display: block; }
+.nxt-acc-body { display: none !important; }
+.nxt-acc-open > .nxt-acc-body { display: block !important; }
+.nxt-acc-open > .nxt-kalemler.nxt-acc-body {
+  display: flex !important; flex-direction: column; gap: 6px;
+}
+.nxt-acc-open > .nxt-boyut-satirlar.nxt-acc-body {
+  display: flex !important; flex-direction: column; gap: 4px;
+}
 
 .nxt-sip-hdr-sol {
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; flex: 1;
