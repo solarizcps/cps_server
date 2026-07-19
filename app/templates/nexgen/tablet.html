@@ -10,157 +10,75 @@ var _PLAN_ISLER = {{ plan_isler | tojson | safe }};
 var _PARCA_VAR = {% if devam_eden_batches and devam_eden_batches[0]['toplam_alt_emir'] is not none %}true{% else %}false{% endif %};
 </script>
 
-<div class="nxt-ana">
+<div class="rm-sayfa nxt-ana">
 
-  {# ══ ÜST BAR ════════════════════════════════════════════════════ #}
-  <div class="nxt-topbar">
-    <div class="nxt-topbar-ic">
-
-      {# Sol: NexGen logo + başlık #}
-      <div class="nxt-tb-sol">
-        <div class="nxt-logo-yazi">
-          <div class="nxt-logo-nexgen">NEX<span>GEN</span><span class="nxt-logo-r">®</span></div>
-          <div class="nxt-logo-slogan">YENİ NESİL KİMYA</div>
-        </div>
-        <div class="nxt-logo-ayrac"></div>
-        <div class="nxt-tb-baslik-blok">
-          <div class="nxt-tb-buyuk">NEXGEN TABLET — OPERATÖR EKRANI</div>
-        </div>
-      </div>
-
-      {# Sağ: Aktif iş + Ana Ekran + Saat #}
-      <div class="nxt-tb-sag">
-        <div class="nxt-aktif-rozet" id="nxt-aktif-rozet" style="display:none">
-          <span class="nxt-rozet-nokta"></span>
-          <span id="nxt-aktif-sayi">0</span> Aktif İş
-        </div>
-        <a href="/nexgen/tablet" class="nxt-tb-btn">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-               width="14" height="14">
-            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-          </svg>
-          Ana Ekran
-        </a>
-        <div class="nxt-saat-blok">
-          <div class="nxt-saat" id="nxt-saat-val">--:--</div>
-          <div class="nxt-tarih" id="nxt-tarih-val">--.--.----</div>
-        </div>
-      </div>
-
-    </div>
-
-    {# Alt menü — rol/permission bazlı (kullanıcı adı hardcode yok) #}
-    {% set _ops = can_tablet_uretim if can_tablet_uretim is defined else can_uretim %}
-    {% set _arge = can_arge_tablet if can_arge_tablet is defined else false %}
-    <div class="nxt-alt-menu">
-      <div class="nxt-alt-menu-ic">
-        {% if _ops %}
-        <a class="nxt-amenu-item nxt-amenu-aktif" href="/nexgen/tablet">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-               width="13" height="13">
-            <rect x="3" y="3" width="7" height="7" rx="1"/>
-            <rect x="14" y="3" width="7" height="7" rx="1"/>
-            <rect x="3" y="14" width="7" height="7" rx="1"/>
-            <rect x="14" y="14" width="7" height="7" rx="1"/>
-          </svg>
-          Siparişler
-        </a>
-        <a class="nxt-amenu-item" href="/nexgen/tablet/uretim-isleri">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-               width="13" height="13">
-            <rect x="3" y="4" width="18" height="16" rx="2"/>
-            <line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="13" y2="14"/>
-          </svg>
-          Üretim İşleri
-        </a>
-        <a class="nxt-amenu-item" href="/nexgen/tablet/devam-edenler">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-               width="13" height="13">
-            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-          </svg>
-          Devam Eden
-        </a>
-        {# Üretim: mevcut route korunur; Siparişler ile kısmen örtüşür ama ayrı akış #}
-        <a class="nxt-amenu-item" href="/nexgen/tablet/uretim">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-               width="13" height="13">
-            <path d="M10 2v8L4.72 20.55A1 1 0 0 0 5.68 22h12.64a1 1 0 0 0 .96-1.45L14 10V2"/>
-            <path d="M8.5 2h7"/>
-          </svg>
-          Üretim
-        </a>
-        {% endif %}
-        {% if _arge %}
-        <a class="nxt-amenu-item{% if not _ops %} nxt-amenu-aktif{% endif %}" href="/nexgen/tablet/arge">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-               width="13" height="13">
-            <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4"/>
-          </svg>
-          AR-GE
-        </a>
-        {% endif %}
-        {% if _ops or _arge %}
-        <a class="nxt-amenu-item" href="/nexgen/tablet/barkod">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-               width="13" height="13">
-            <rect x="3" y="4" width="18" height="16" rx="2"/>
-            <line x1="7" y1="8" x2="7" y2="16"/><line x1="11" y1="8" x2="11" y2="16"/>
-            <line x1="15" y1="8" x2="15" y2="12"/><line x1="19" y1="8" x2="19" y2="16"/>
-          </svg>
-          Barkod
-        </a>
-        {% endif %}
-        {% if _ops %}
-        <a class="nxt-amenu-item" href="/nexgen/tablet/geri-donusum">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-               width="13" height="13">
-            <polyline points="1 4 1 10 7 10"/>
-            <polyline points="23 20 23 14 17 14"/>
-            <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/>
-          </svg>
-          Geri Dönüşüm
-        </a>
-        <a class="nxt-amenu-item nxt-amenu-yeni" href="/nexgen/tablet/uretim">
-          + Yeni Üretim
-        </a>
-        {% endif %}
+  {# ══ Reçete Merkezi logo bandı ══════════════════════════════════ #}
+  <div class="rm-page-hdr">
+    <div class="rm-page-hdr-sol">
+      <img src="{{ url_for('static', filename='img/nexgen-logo.png') }}" alt="NexGen" class="rm-page-logo">
+      <div class="rm-page-bc">
+        <span class="rm-page-bc-cur">Operatör Ekranı</span>
       </div>
     </div>
-
-  </div>{# /topbar #}
-
-  {# ══ FİLTRE + ARAMA ═════════════════════════════════════════════ #}
-  <div class="nxt-filtre-bar">
-    <div class="nxt-filtre-ic">
-      <div class="nxt-filtre-sekmeler">
-        <button class="nxt-fsekme nxt-fsekme-aktif" data-filtre="tumu" onclick="filtreUygula('tumu',this)">
-          Tümü <span class="nxt-fsayi" id="fs-tumu">0</span>
-        </button>
-        <button class="nxt-fsekme" data-filtre="hazir" onclick="filtreUygula('hazir',this)">
-          Başlayacak <span class="nxt-fsayi" id="fs-hazir">0</span>
-        </button>
-        <button class="nxt-fsekme" data-filtre="devam" onclick="filtreUygula('devam',this)">
-          Devam Eden <span class="nxt-fsayi" id="fs-devam">0</span>
-        </button>
-        <button class="nxt-fsekme" data-filtre="bitti" onclick="filtreUygula('bitti',this)">
-          Biten <span class="nxt-fsayi" id="fs-bitti">0</span>
-        </button>
-        <button class="nxt-fsekme nxt-fsekme-ikincil" data-filtre="bekleme" onclick="filtreUygula('bekleme',this)">
-          Beklemeye Alındı <span class="nxt-fsayi" id="fs-bekleme">0</span>
-        </button>
+    <div class="nxt-hdr-sag">
+      <div class="nxt-aktif-rozet" id="nxt-aktif-rozet" style="display:none">
+        <span class="nxt-rozet-nokta"></span>
+        <span id="nxt-aktif-sayi">0</span> Aktif İş
       </div>
-      <div class="nxt-arama-wrap">
-        <svg class="nxt-arama-ikon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="2" width="13" height="13">
+      <a href="/nexgen/" class="rm-page-geri">
+        <span style="font-size:13px;">←</span>
+        <span>Ana Menü</span>
+      </a>
+    </div>
+  </div>
+
+  {# Alt navigasyon — işlev aynı, görünüm rm-sekme #}
+  {% set _ops = can_tablet_uretim if can_tablet_uretim is defined else can_uretim %}
+  {% set _arge = can_arge_tablet if can_arge_tablet is defined else false %}
+  <div class="rm-sekme-bar nxt-sekme-bar">
+    {% if _ops %}
+    <a class="rm-sekme aktif" href="/nexgen/tablet">Siparişler</a>
+    <a class="rm-sekme" href="/nexgen/tablet/uretim-isleri">Üretim İşleri</a>
+    <a class="rm-sekme" href="/nexgen/tablet/devam-edenler">Devam Eden</a>
+    <a class="rm-sekme" href="/nexgen/tablet/uretim">Üretim</a>
+    {% endif %}
+    {% if _arge %}
+    <a class="rm-sekme{% if not _ops %} aktif{% endif %}" href="/nexgen/tablet/arge">AR-GE</a>
+    {% endif %}
+    {% if _ops or _arge %}
+    <a class="rm-sekme" href="/nexgen/tablet/barkod">Barkod</a>
+    {% endif %}
+    {% if _ops %}
+    <a class="rm-sekme" href="/nexgen/tablet/geri-donusum">Geri Dönüşüm</a>
+    <a class="rm-yeni-btn nxt-sekme-yeni" href="/nexgen/tablet/uretim">+ Yeni Üretim</a>
+    {% endif %}
+  </div>
+
+  {# ══ FİLTRE + ARAMA (rm-fb / rm-ara) ═════════════════════════════ #}
+  <div class="rm-panel nxt-toolbar-panel">
+    <div class="rm-filtre-bar nxt-filtre-bar">
+      <button type="button" class="rm-fb aktif nxt-fsekme" data-filtre="tumu" onclick="filtreUygula('tumu',this)">
+        Tümü <span class="nxt-fsayi" id="fs-tumu">0</span>
+      </button>
+      <button type="button" class="rm-fb nxt-fsekme" data-filtre="hazir" onclick="filtreUygula('hazir',this)">
+        Başlayacak <span class="nxt-fsayi" id="fs-hazir">0</span>
+      </button>
+      <button type="button" class="rm-fb nxt-fsekme" data-filtre="devam" onclick="filtreUygula('devam',this)">
+        Devam Eden <span class="nxt-fsayi" id="fs-devam">0</span>
+      </button>
+      <button type="button" class="rm-fb nxt-fsekme" data-filtre="bitti" onclick="filtreUygula('bitti',this)">
+        Biten <span class="nxt-fsayi" id="fs-bitti">0</span>
+      </button>
+      <button type="button" class="rm-fb nxt-fsekme nxt-fsekme-ikincil" data-filtre="bekleme" onclick="filtreUygula('bekleme',this)">
+        Beklemeye Alındı <span class="nxt-fsayi" id="fs-bekleme">0</span>
+      </button>
+      <div class="rm-ara-wrap nxt-arama-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" width="13" height="13">
           <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
-        <input type="text" id="nxt-arama" class="nxt-arama"
-               placeholder="Sipariş No, Cari, Ürün ara..."
-               oninput="aramaUygula(this.value)">
-        <svg class="nxt-filtre-ikon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="2" width="14" height="14">
-          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
-        </svg>
+        <input type="text" id="nxt-arama" class="rm-ara-input"
+               placeholder="Sipariş No, Cari, Ürün ara…"
+               oninput="aramaUygula(this.value)" autocomplete="off">
       </div>
     </div>
   </div>
@@ -419,16 +337,16 @@ function boyutSatirHtml(kalem, bk) {
   var uret = parseFloat(bk.uretilen_kg) || 0;
   if (hedef > 0) yuzde = Math.min(100, Math.round((uret / hedef) * 100));
   var cta = boyutCtaYazi(bk);
-  var btnCls = (cta === 'Görüntüle') ? 'nxt-cta nxt-cta-muted nxt-cta-xs' : 'nxt-cta nxt-cta-xs';
+  var btnCls = (cta === 'Görüntüle') ? 'rm-btn rm-btn-arge nxt-cta-xs' : 'rm-yeni-btn nxt-cta-xs';
   var href = kalem.batch_kodu
     ? '/nexgen/tablet/uretim-islem/' + esc(kalem.batch_kodu) + '?boyut=' + encodeURIComponent(bk.boyut)
     : '#';
   var ctaHtml = kalem.batch_kodu
     ? '<a href="' + href + '" class="' + btnCls + '">' + esc(cta) + '</a>'
-    : '<button type="button" class="nxt-cta nxt-cta-xs" onclick="planBasla(' + kalem.plan_id + ',\'' + esc(kalem.formul_ad) + '\')">' + esc(cta) + '</button>';
+    : '<button type="button" class="rm-yeni-btn nxt-cta-xs" onclick="planBasla(' + kalem.plan_id + ',\'' + esc(kalem.formul_ad) + '\')">' + esc(cta) + '</button>';
   var etiketHtml = kalem.batch_kodu
-    ? '<a href="/nexgen/tablet/etiket/uretim/' + esc(kalem.batch_kodu) + '" class="nxt-cta-etiket nxt-cta-xs">Etiket</a>'
-    : '<span class="nxt-cta-etiket nxt-cta-xs nxt-btn-disabled">Etiket</span>';
+    ? '<a href="/nexgen/tablet/etiket/uretim/' + esc(kalem.batch_kodu) + '" class="rm-btn rm-btn-onay nxt-cta-xs">Etiket</a>'
+    : '<span class="rm-btn rm-btn-onay nxt-cta-xs nxt-btn-disabled">Etiket</span>';
   var emirTxt = 'Başlayacak ' + (bk.parca_kalan != null ? bk.parca_kalan : (bk.parca_hazir || 0)) +
     ' · Devam ' + (bk.parca_devam || 0) + ' · Biten ' + (bk.parca_biten || 0);
   return '<div class="nxt-boyut-satir">' +
@@ -603,8 +521,10 @@ function sayfalamaRender(toplam, sayfa, bsz) {
 
 function filtreUygula(filtre, btn) {
   _aktifFiltre = filtre; _aktifSayfa = 1;
-  document.querySelectorAll('.nxt-fsekme').forEach(function(b) { b.classList.remove('nxt-fsekme-aktif'); });
-  if (btn) btn.classList.add('nxt-fsekme-aktif');
+  document.querySelectorAll('.nxt-fsekme, .rm-fb').forEach(function(b) {
+    b.classList.remove('nxt-fsekme-aktif', 'aktif');
+  });
+  if (btn) btn.classList.add('nxt-fsekme-aktif', 'aktif');
   render();
 }
 function aramaUygula(val) { _aktifArama = val; _aktifSayfa = 1; render(); }
@@ -648,170 +568,183 @@ render();
 </script>
 
 <style>
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: system-ui, -apple-system, sans-serif; background: #f3f6fa; }
-
-/* ─── SAYFA ──────────────────────────────────────────────── */
-.nxt-ana { min-height: 100vh; background: #f3f6fa; }
-
-/* ─── TOPBAR ─────────────────────────────────────────────── */
-.nxt-topbar {
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-  position: sticky; top: 0; z-index: 30;
+/* FAZ-ALI-UI-BASE-1 — Reçete Merkezi / Renk Merkezi görsel dili */
+*, *::before, *::after { box-sizing: border-box; }
+:root {
+  --rm-teal:        #006a8e;
+  --rm-teal-dark:   #005a7a;
+  --rm-gold:        #f6c343;
+  --rm-orange:      #f97316;
+  --rm-green:       #16a34a;
+  --rm-border:      #e2e8f0;
+  --rm-border2:     #cbd5e1;
+  --rm-bg:          #f8fafc;
+  --rm-bg2:         #f1f5f9;
+  --rm-t1:          #0f172a;
+  --rm-t2:          #374151;
+  --rm-t3:          #6b7280;
+  --rm-t4:          #9ca3af;
+  --rm-white:       #ffffff;
+  --rm-font:        'Inter', system-ui, -apple-system, sans-serif;
 }
-.nxt-topbar-ic {
-  max-width: 1400px; margin: 0 auto;
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 0 20px; height: 52px; gap: 16px;
-}
-.nxt-tb-sol { display: flex; align-items: center; gap: 14px; }
-.nxt-logo-yazi { display: flex; flex-direction: column; gap: 0; }
-.nxt-logo-nexgen {
-  font-family: 'Arial Black', Arial, sans-serif;
-  font-size: 20px; font-weight: 900; color: #fff; line-height: 1;
-}
-.nxt-logo-nexgen span { color: #f6c343; }
-.nxt-logo-r { font-size: 10px; vertical-align: super; color: #f6c343; }
-.nxt-logo-slogan { font-size: 7px; font-weight: 700; color: #64748b; letter-spacing: 2px; }
-.nxt-logo-ayrac { width: 1px; height: 32px; background: rgba(255,255,255,.15); flex-shrink: 0; }
-.nxt-tb-baslik-blok {}
-.nxt-tb-buyuk { font-size: 15px; font-weight: 900; color: #fff; line-height: 1; }
+body { font-family: var(--rm-font); background: var(--rm-bg); }
 
-.nxt-tb-sag { display: flex; align-items: center; gap: 8px; }
+.rm-sayfa, .nxt-ana {
+  display: flex; flex-direction: column; gap: 6px;
+  min-height: 100vh; font-family: var(--rm-font); background: var(--rm-bg);
+  padding: 0 10px 24px;
+}
+
+/* Logo bandı — Reçete birebir */
+.rm-page-hdr {
+  display: flex; flex-direction: row; align-items: center; justify-content: space-between;
+  height: 61px; padding: 0; border-bottom: 1px solid var(--rm-border);
+  flex-shrink: 0; background: var(--rm-white); margin: 0 -10px; padding: 0 10px;
+}
+.rm-page-hdr-sol { display: flex; align-items: center; gap: 12px; }
+.rm-page-logo {
+  width: 150px; height: 61px; display: block; flex-shrink: 0;
+  object-fit: contain; object-position: left center;
+}
+.rm-page-bc { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--rm-t3); }
+.rm-page-bc-cur { font-size: 12px; font-weight: 700; color: var(--rm-t1); }
+.rm-page-geri {
+  display: flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 6px;
+  border: 1px solid var(--rm-border); background: var(--rm-white);
+  font-size: 11px; font-weight: 600; color: var(--rm-t2); text-decoration: none;
+}
+.rm-page-geri:hover { background: var(--rm-bg); }
+.nxt-hdr-sag { display: flex; align-items: center; gap: 8px; }
 .nxt-aktif-rozet {
   display: flex; align-items: center; gap: 5px;
-  background: rgba(34,197,94,.15); border: 1px solid rgba(34,197,94,.4);
-  color: #86efac; font-size: 12px; font-weight: 700;
-  padding: 5px 10px; border-radius: 20px;
+  background: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d;
+  font-size: 11px; font-weight: 700; padding: 5px 10px; border-radius: 6px;
 }
 .nxt-rozet-nokta {
-  width: 6px; height: 6px; border-radius: 50%; background: #22c55e;
+  width: 6px; height: 6px; border-radius: 50%; background: var(--rm-green);
   animation: nxt-blink 1.4s infinite;
 }
 @keyframes nxt-blink { 0%,100%{opacity:1} 50%{opacity:.3} }
-.nxt-tb-btn {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-size: 12px; font-weight: 700; color: #e2e8f0;
-  text-decoration: none; padding: 6px 12px;
-  background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.12);
-  border-radius: 8px; white-space: nowrap;
-}
-.nxt-tb-btn:hover { background: rgba(255,255,255,.18); color: #fff; }
-.nxt-saat-blok {
-  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12);
-  border-radius: 8px; padding: 5px 10px; text-align: center; min-width: 68px;
-}
-.nxt-saat  { font-size: 15px; font-weight: 900; color: #f6c343; font-variant-numeric: tabular-nums; }
-.nxt-tarih { font-size: 9px; color: #64748b; font-weight: 600; }
 
-/* Alt menü */
-.nxt-alt-menu {
-  border-top: 1px solid rgba(255,255,255,.08);
-  border-bottom: 3px solid #f6c343;
+/* Sekmeler — Renk Merkezi rm-sekme */
+.rm-sekme-bar, .nxt-sekme-bar {
+  display: flex; gap: 0; padding: 0 4px; border-bottom: 2px solid var(--rm-border);
+  flex-shrink: 0; background: var(--rm-white); align-items: center;
+  margin: 0 -10px; padding: 0 14px; overflow-x: auto;
 }
-.nxt-alt-menu-ic {
-  max-width: 1400px; margin: 0 auto;
-  display: flex; align-items: center; gap: 0;
-  padding: 0 20px;
-  overflow-x: auto;
+a.rm-sekme, .rm-sekme {
+  padding: 7px 14px; font-size: 11px; font-weight: 600; color: var(--rm-t3);
+  cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;
+  text-decoration: none; white-space: nowrap; display: inline-flex; align-items: center;
 }
-.nxt-amenu-item {
-  display: flex; align-items: center; gap: 5px;
-  padding: 8px 14px; font-size: 12px; font-weight: 600;
-  color: rgba(255,255,255,.6); text-decoration: none;
-  white-space: nowrap; border-bottom: 2px solid transparent;
-  margin-bottom: -3px; transition: color .12s, border-color .12s;
+a.rm-sekme:hover, .rm-sekme:hover { color: var(--rm-t1); }
+a.rm-sekme.aktif, .rm-sekme.aktif {
+  color: var(--rm-teal); border-bottom-color: var(--rm-teal); font-weight: 700;
 }
-.nxt-amenu-item:hover { color: rgba(255,255,255,.9); border-bottom-color: rgba(255,255,255,.3); }
-.nxt-amenu-aktif { color: #f6c343 !important; border-bottom-color: #f6c343 !important; font-weight: 800; }
-.nxt-amenu-yeni {
-  margin-left: auto;
-  color: #f6c343 !important; font-weight: 800;
-  border: 1px solid rgba(246,195,67,.4); border-radius: 6px;
-  padding: 4px 10px; margin-bottom: 4px; margin-top: 4px;
-  border-bottom: 1px solid rgba(246,195,67,.4) !important;
+.rm-yeni-btn, a.rm-yeni-btn {
+  font-size: 10px; font-weight: 700; padding: 3px 8px;
+  background: var(--rm-gold); color: var(--rm-t1); border: none;
+  border-radius: 5px; cursor: pointer; text-decoration: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background .15s;
 }
-.nxt-amenu-yeni:hover { background: rgba(246,195,67,.15); }
+.rm-yeni-btn:hover, a.rm-yeni-btn:hover { background: #fde68a; color: var(--rm-t1); }
+.nxt-sekme-yeni { margin-left: auto; margin-bottom: 4px; height: 26px; padding: 0 10px; }
 
-/* ─── FİLTRE BAR ─────────────────────────────────────────── */
-.nxt-filtre-bar {
-  background: #fff;
-  border-bottom: 1px solid #e5e7eb;
-  position: sticky; top: 82px; z-index: 20;
+/* Panel / filtre / arama */
+.rm-panel {
+  background: var(--rm-white); border: 1px solid var(--rm-border); border-radius: 10px;
+  display: flex; flex-direction: column; overflow: hidden;
 }
-.nxt-filtre-ic {
-  max-width: 1400px; margin: 0 auto;
-  display: flex; align-items: center; gap: 10px;
-  padding: 7px 20px; flex-wrap: wrap;
+.nxt-toolbar-panel { margin-top: 2px; }
+.rm-filtre-bar, .nxt-filtre-bar {
+  display: flex; gap: 6px; padding: 7px 10px; border-bottom: none;
+  flex-shrink: 0; background: var(--rm-white); flex-wrap: wrap; align-items: center;
 }
-.nxt-filtre-sekmeler { display: flex; gap: 4px; flex-wrap: wrap; }
-.nxt-fsekme {
-  display: flex; align-items: center; gap: 5px;
-  padding: 5px 10px; border-radius: 6px;
-  border: 1px solid #e5e7eb; background: #f9fafb;
-  color: #6b7280; font-size: 12px; font-weight: 600;
-  cursor: pointer; white-space: nowrap; transition: all .12s;
+.rm-fb, .nxt-fsekme.rm-fb {
+  padding: 5px 12px; border-radius: 6px; border: 1px solid var(--rm-border);
+  background: transparent; font-size: 11px; font-weight: 600; color: var(--rm-t2);
+  cursor: pointer; display: inline-flex; align-items: center; gap: 5px;
 }
-.nxt-fsekme:hover { background: #f3f4f6; color: #374151; }
-.nxt-fsekme-aktif { background: #0f172a; border-color: #0f172a; color: #f6c343; }
-.nxt-fsekme-aktif:hover { background: #1e293b; }
-.nxt-fsekme-ikincil { opacity: .78; font-weight: 500; }
-.nxt-fsekme-ikincil.nxt-fsekme-aktif { opacity: 1; }
+.rm-fb:hover { background: var(--rm-bg2); color: var(--rm-t1); }
+.rm-fb.aktif, .nxt-fsekme-aktif.rm-fb {
+  background: var(--rm-teal); color: #fff; border-color: var(--rm-teal);
+}
 .nxt-fsayi {
   background: rgba(0,0,0,.08); font-size: 10px; font-weight: 800;
   padding: 1px 5px; border-radius: 8px; min-width: 18px; text-align: center;
 }
-.nxt-fsekme-aktif .nxt-fsayi { background: rgba(246,195,67,.3); color: #f6c343; }
-
-.nxt-arama-wrap {
-  margin-left: auto; display: flex; align-items: center; gap: 8px; position: relative;
+.rm-fb.aktif .nxt-fsayi { background: rgba(255,255,255,.22); color: #fff; }
+.rm-ara-wrap, .nxt-arama-wrap {
+  display: flex; align-items: center; gap: 6px; margin-left: auto;
+  padding: 5px 9px; border: 1px solid var(--rm-border); border-radius: 6px;
+  background: var(--rm-bg); min-width: 220px; flex: 0 1 260px;
 }
-.nxt-arama-ikon { position: absolute; left: 10px; color: #9ca3af; pointer-events: none; }
-.nxt-filtre-ikon { color: #6b7280; cursor: pointer; flex-shrink: 0; }
-.nxt-arama {
-  padding: 6px 10px 6px 28px;
-  border: 1px solid #e5e7eb; border-radius: 7px;
-  font-size: 12px; color: #374151; background: #f9fafb;
-  outline: none; width: 230px; transition: border-color .15s;
+.rm-ara-input {
+  flex: 1; border: none; outline: none; font-size: 11px; color: var(--rm-t2); background: transparent;
+  font-family: var(--rm-font);
 }
-.nxt-arama:focus { border-color: #f6c343; background: #fff; }
-.nxt-arama::placeholder { color: #9ca3af; }
+.rm-ara-input::placeholder { color: var(--rm-t4); }
 
-/* ─── İÇERİK ─────────────────────────────────────────────── */
-.nxt-icerik {
-  max-width: 1400px; margin: 0 auto;
-  padding: 14px 20px 48px;
+.rm-btn {
+  height: 28px; padding: 0 12px; border-radius: 6px; font-size: 11px; font-weight: 600;
+  cursor: pointer; transition: all .1s; white-space: nowrap;
+  display: inline-flex; align-items: center; justify-content: center; text-decoration: none;
 }
+.rm-btn-detay { background: #006a8e; color: #fff; border: 1px solid #005a7a; }
+.rm-btn-detay:hover { background: #005a7a; color: #fff; }
+.rm-btn-onay  { background: #f0fdf4; color: #15803d; border: 1px solid #86efac; }
+.rm-btn-onay:hover { background: #dcfce7; color: #15803d; }
+.rm-btn-arge  { background: #fff8f0; color: #7c4a00; border: 1px solid #ddb88a; }
+.rm-btn-arge:hover { background: #fef3c7; color: #7c4a00; }
+.nxt-cta-xs { height: 28px; padding: 0 10px; font-size: 11px; }
+.nxt-btn-disabled { opacity: .45; pointer-events: none; cursor: default; }
 
-/* ─── KART LİSTESİ ───────────────────────────────────────── */
+/* İçerik */
+.nxt-icerik { max-width: 1400px; width: 100%; margin: 0 auto; padding: 4px 0 32px; }
 .nxt-kart-liste { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
 
-/* ─── SİPARİŞ / KALEM ACCORDION ──────────────────────────── */
+/* Kartlar — rm-panel dili */
 .nxt-sip-kart, .nxt-kalem-satir {
-  background: #fff;
+  background: var(--rm-white);
   border-radius: 10px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--rm-border);
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0,0,0,.05);
+  box-shadow: none;
 }
 .nxt-sip-kart {
-  border-left: 4px solid #e5e7eb;
-  margin-bottom: 8px;
+  border-left: 3px solid var(--rm-border);
+  margin-bottom: 2px;
 }
-.nxt-sol-hazir   { border-left-color: #16a34a; }
-.nxt-sol-devam   { border-left-color: #f6c343; }
-.nxt-sol-bekleme { border-left-color: #f97316; }
-.nxt-sol-bitti   { border-left-color: #9ca3af; opacity: .9; }
-.nxt-sol-planli, .nxt-sol-taslak { border-left-color: #d1d5db; }
+.nxt-sol-hazir   { border-left-color: var(--rm-green); }
+.nxt-sol-devam   { border-left-color: var(--rm-gold); }
+.nxt-sol-bekleme { border-left-color: var(--rm-orange); }
+.nxt-sol-bitti   { border-left-color: #9ca3af; opacity: .92; }
+.nxt-sol-planli, .nxt-sol-taslak { border-left-color: var(--rm-border2); }
 
 .nxt-acc-hdr {
   display: flex; align-items: center; gap: 8px;
   padding: 8px 12px; cursor: pointer; user-select: none;
   border-bottom: 1px solid transparent;
+  background: var(--rm-white);
 }
-.nxt-acc-hdr:hover { background: #fafbfc; }
+.nxt-sip-header.nxt-acc-hdr {
+  background: var(--rm-teal);
+  border-bottom: none;
+}
+.nxt-sip-header .nxt-sip-cari { color: #f1f5f9; font-size: 12px; }
+.nxt-sip-header .nxt-ust-sip-no {
+  background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.18); color: #fff;
+}
+.nxt-sip-header .nxt-ust-tarih { color: #94a3b8; }
+.nxt-sip-header .nxt-sip-kalem-sayi {
+  background: rgba(246,195,67,.2); color: var(--rm-gold); border: none;
+}
+.nxt-sip-header .nxt-acc-chevron { color: #94a3b8; }
+.nxt-acc-hdr:hover { background: var(--rm-bg); }
+.nxt-sip-header.nxt-acc-hdr:hover { background: var(--rm-teal-dark); }
 .nxt-acc-chevron {
-  margin-left: auto; font-size: 11px; color: #9ca3af;
+  margin-left: auto; font-size: 11px; color: var(--rm-t4);
   transition: transform .15s; flex-shrink: 0;
 }
 .nxt-acc-open > .nxt-acc-hdr .nxt-acc-chevron { transform: rotate(180deg); }
@@ -828,68 +761,66 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #f3f6fa; }
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; flex: 1;
 }
 .nxt-sip-cari {
-  font-size: 13px; font-weight: 800; color: #111827;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px;
+  font-size: 12px; font-weight: 700; color: var(--rm-t1);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px;
 }
 .nxt-sip-kalem-sayi {
-  font-size: 10px; font-weight: 700; color: #64748b;
-  background: #f1f5f9; padding: 2px 7px; border-radius: 4px;
+  font-size: 10px; font-weight: 700; color: var(--rm-t3);
+  background: var(--rm-bg2); padding: 2px 7px; border-radius: 4px;
 }
 .nxt-sip-ozet {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
-  padding: 6px 12px 8px; border-bottom: 1px solid #f3f4f6;
-  font-size: 11px; color: #6b7280;
+  padding: 6px 12px 8px; border-bottom: 1px solid var(--rm-border);
+  font-size: 11px; color: var(--rm-t3); background: var(--rm-bg);
 }
-.nxt-sip-ozet-kg { font-weight: 800; color: #374151; }
+.nxt-sip-ozet-kg { font-weight: 800; color: var(--rm-t2); }
 .nxt-sip-ozet-kalan { font-weight: 600; }
 .nxt-progress-thin { flex: 1; min-width: 120px; height: 4px; margin: 0; }
 
 .nxt-kalemler { padding: 6px 8px 8px; display: flex; flex-direction: column; gap: 6px; }
-.nxt-kalem-satir { border: 1px solid #eef2f7; border-radius: 8px; }
+.nxt-kalem-satir { border: 1px solid #f1f5f9; border-radius: 8px; }
 .nxt-kalem-hdr {
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
   padding: 7px 10px; font-size: 11px;
 }
 .nxt-kalem-no {
-  font-size: 10px; font-weight: 900; color: #f6c343; background: #0f172a;
+  font-size: 10px; font-weight: 900; color: var(--rm-gold); background: var(--rm-teal);
   padding: 2px 6px; border-radius: 4px;
 }
-.nxt-kalem-formul { font-size: 12px; font-weight: 800; color: #111827; }
-.nxt-kalem-renk { font-size: 11px; font-weight: 700; color: #0f766e; font-family: monospace; }
-.nxt-kalem-ls { font-size: 10px; color: #64748b; font-weight: 600; }
-.nxt-kalem-kg { font-size: 11px; font-weight: 700; color: #374151; }
-.nxt-kalem-emir { font-size: 10px; color: #6b7280; font-weight: 600; }
+.nxt-kalem-formul { font-size: 12px; font-weight: 800; color: var(--rm-t1); }
+.nxt-kalem-renk { font-size: 11px; font-weight: 700; color: #0f766e; font-family: 'Courier New', monospace; }
+.nxt-kalem-ls { font-size: 10px; color: var(--rm-t3); font-weight: 600; }
+.nxt-kalem-kg { font-size: 11px; font-weight: 700; color: var(--rm-t2); }
+.nxt-kalem-emir { font-size: 10px; color: var(--rm-t3); font-weight: 600; }
 
 .nxt-boyut-satirlar { padding: 0 8px 8px; display: flex; flex-direction: column; gap: 4px; }
 .nxt-boyut-satir {
-  display: grid;
-  grid-template-columns: 72px 1fr auto auto;
+  display: grid; grid-template-columns: 72px 1fr auto auto;
   align-items: center; gap: 8px;
-  padding: 6px 8px; background: #f8fafc; border-radius: 7px;
-  border: 1px solid #eef2f7;
+  padding: 6px 8px; background: var(--rm-bg); border-radius: 7px;
+  border: 1px solid #f1f5f9;
 }
 .nxt-boyut-etiket {
   font-size: 10px; font-weight: 800; letter-spacing: .3px;
   padding: 3px 8px; border-radius: 4px;
-  background: #e2e8f0; color: #334155; text-align: center;
+  background: var(--rm-bg2); color: var(--rm-t2); text-align: center;
 }
-.nxt-boyut-kg-val { font-size: 11px; font-weight: 700; color: #374151; display: block; margin-bottom: 3px; }
-.nxt-boyut-emir { font-size: 10px; color: #6b7280; font-weight: 600; white-space: nowrap; }
+.nxt-boyut-kg-val { font-size: 11px; font-weight: 700; color: var(--rm-t2); display: block; margin-bottom: 3px; }
+.nxt-boyut-emir { font-size: 10px; color: var(--rm-t3); font-weight: 600; white-space: nowrap; }
 .nxt-boyut-cta { display: flex; gap: 4px; flex-shrink: 0; }
 
 .nxt-ust-sip-no {
-  font-size: 11px; font-weight: 700; color: #374151; font-family: monospace;
-  background: #f3f6fa; padding: 2px 8px; border-radius: 4px;
-  border: 1px solid #e5e7eb; white-space: nowrap; flex-shrink: 0;
+  font-size: 11px; font-weight: 700; color: var(--rm-t2); font-family: monospace;
+  background: var(--rm-bg); padding: 2px 8px; border-radius: 4px;
+  border: 1px solid var(--rm-border); white-space: nowrap; flex-shrink: 0;
 }
-.nxt-ust-tarih { font-size: 11px; color: #9ca3af; white-space: nowrap; flex-shrink: 0; }
+.nxt-ust-tarih { font-size: 11px; color: var(--rm-t4); white-space: nowrap; flex-shrink: 0; }
 
-/* Durum rozeti */
 .nxt-durum-rozet {
-  font-size: 9px; font-weight: 700;
-  padding: 2px 8px; border-radius: 4px;
+  font-size: 9px; font-weight: 700; padding: 2px 8px; border-radius: 4px;
   letter-spacing: .4px; white-space: nowrap; flex-shrink: 0;
 }
+.nxt-sip-header .nxt-durum-rozet { border-color: transparent; }
 .nxt-d-hazir   { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
 .nxt-d-devam   { background: #fefce8; color: #854d0e; border: 1px solid #fde68a; }
 .nxt-d-bekleme { background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; }
@@ -898,228 +829,63 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #f3f6fa; }
 .nxt-d-taslak  { background: #f9fafb; color: #9ca3af; border: 1px solid #e5e7eb; }
 
 .nxt-progress-bar {
-  height: 5px; background: #f3f4f6; border-radius: 3px; overflow: hidden;
-  border: 1px solid #e5e7eb;
+  height: 4px; background: #e5e7eb; border-radius: 2px; overflow: hidden; border: none;
 }
 .nxt-progress-dolu {
-  height: 100%; background: linear-gradient(90deg, #16a34a, #22c55e);
-  border-radius: 3px; min-width: 2px;
+  height: 100%; background: var(--rm-green); border-radius: 2px; min-width: 2px;
 }
 
-.nxt-cta {
-  display: inline-flex; align-items: center; justify-content: center;
-  padding: 7px 10px; border-radius: 7px; border: none;
-  background: #f6c343; color: #1a1a1a;
-  font-size: 12px; font-weight: 800;
-  text-decoration: none; cursor: pointer;
-  box-shadow: 0 1px 3px rgba(246,195,67,.3);
-  white-space: nowrap;
+.nxt-bos { text-align: center; padding: 48px 20px; color: var(--rm-t4); }
+.nxt-bos-ikon { font-size: 32px; margin-bottom: 8px; }
+.nxt-bos-baslik { font-size: 14px; font-weight: 700; color: var(--rm-t2); }
+.nxt-bos-alt { font-size: 12px; margin-top: 4px; }
+
+.nxt-sayfalama {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 0; font-size: 11px; color: var(--rm-t3); flex-wrap: wrap;
 }
-.nxt-cta-xs { padding: 5px 8px; font-size: 11px; min-height: 28px; }
-.nxt-cta:hover { background: #e9b020; color: #1a1a1a; }
-.nxt-cta-muted {
-  background: #e5e7eb !important; color: #374151 !important; box-shadow: none !important;
+.nxt-sp-btn {
+  padding: 4px 10px; border-radius: 6px; border: 1px solid var(--rm-border);
+  background: var(--rm-white); font-size: 11px; font-weight: 600; color: var(--rm-t2); cursor: pointer;
 }
-.nxt-cta-etiket {
-  display: inline-flex; align-items: center; justify-content: center;
-  padding: 5px 8px; border-radius: 6px;
-  background: #f9fafb; color: #374151;
-  border: 1px solid #e5e7eb;
-  font-size: 10px; font-weight: 600;
-  text-decoration: none; cursor: pointer;
+.nxt-sp-btn:hover { background: var(--rm-bg2); }
+.nxt-sp-aktif { background: var(--rm-teal); color: #fff; border-color: var(--rm-teal); }
+.nxt-sp-tumunu {
+  padding: 4px 10px; border-radius: 6px; border: 1px solid var(--rm-border);
+  background: var(--rm-white); font-size: 11px; font-weight: 600; cursor: pointer;
 }
-.nxt-cta-etiket:hover { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
-.nxt-btn-disabled { opacity: .45; pointer-events: none; cursor: default; }
+.nxt-sp-select {
+  border: 1px solid var(--rm-border); border-radius: 6px; padding: 3px 6px; font-size: 11px;
+}
+
+.nxt-modal-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(15,23,42,.45);
+  display: flex; align-items: center; justify-content: center;
+}
+.nxt-modal {
+  background: #fff; border-radius: 10px; border: 1px solid var(--rm-border);
+  padding: 24px; min-width: 300px; max-width: 400px;
+  box-shadow: 0 8px 30px rgba(15,23,42,.12);
+  display: flex; flex-direction: column; gap: 12px; font-family: var(--rm-font);
+}
+.nxt-modal-baslik { font-size: 14px; font-weight: 800; color: var(--rm-t1); }
+.nxt-modal-altyazi { font-size: 12px; color: var(--rm-t3); margin-top: -6px; }
+.nxt-modal-butonlar { display: flex; flex-direction: column; gap: 8px; }
+.nxt-modal-boyut-btn {
+  display: block; padding: 10px 14px; background: var(--rm-gold); color: var(--rm-t1);
+  border-radius: 6px; font-size: 13px; font-weight: 800; text-decoration: none; text-align: center;
+}
+.nxt-modal-iptal {
+  background: none; border: 1px solid var(--rm-border); border-radius: 6px; padding: 8px;
+  font-size: 12px; color: var(--rm-t3); cursor: pointer;
+}
 
 @media (max-width: 900px) {
   .nxt-boyut-satir { grid-template-columns: 1fr; gap: 4px; }
   .nxt-boyut-cta { justify-content: flex-start; }
   .nxt-kalem-hdr { flex-direction: column; align-items: flex-start; }
-}
-.nxt-gov-kolon {
-  padding: 10px 14px;
-  display: flex; flex-direction: column; gap: 3px;
-  min-width: 0;
-}
-.nxt-gov-kolon + .nxt-gov-kolon { border-left: 1px solid #f3f4f6; }
-.nxt-gov-et {
-  font-size: 9px; font-weight: 700; color: #9ca3af;
-  letter-spacing: .6px; text-transform: uppercase;
-}
-.nxt-gov-formul { font-size: 14px; font-weight: 900; color: #111827; line-height: 1.2; }
-.nxt-gov-renk   { font-size: 12px; font-weight: 600; color: #475569; }
-.nxt-gov-rf     { font-size: 12px; margin-top: 2px; }
-.nxt-rf-kod     { font-family: 'Courier New', monospace; font-weight: 700; color: #0f766e; }
-.nxt-rf-ad      { color: #64748b; font-weight: 500; }
-.nxt-gov-boyutlar { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
-.nxt-boyut-rozet {
-  font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 3px;
-  background: #f1f5f9; color: #374151; border: 1px solid #e2e8f0; letter-spacing: .3px;
-}
-
-/* Emir + KG kolon */
-.nxt-gov-emirkg { flex-direction: column; }
-.nxt-emirkg-ust {
-  display: grid; grid-template-columns: 1fr 1fr;
-  gap: 0; margin-bottom: 4px;
-}
-.nxt-emir-kg-blok {
-  display: grid; grid-template-columns: 1fr 1fr;
-  gap: 0 16px; align-items: start;
-  padding: 0;
-}
-.nxt-emir-kg-ls {
-  border-bottom: 1px solid #f3f4f6;
-  padding-bottom: 6px; margin-bottom: 4px;
-}
-.nxt-emir-kg-ls:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-.nxt-ls-rozet {
-  font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 3px;
-  background: #f1f5f9; color: #374151; border: 1px solid #e2e8f0;
-  display: inline-block; margin-bottom: 4px;
-  grid-column: 1 / -1;
-}
-.nxt-emir-satirlar { display: flex; flex-direction: column; gap: 0; }
-.nxt-emir-satir {
-  display: flex; align-items: baseline; gap: 4px;
-}
-.nxt-es-sayi {
-  font-size: 18px; font-weight: 900; min-width: 24px; text-align: right; line-height: 1.1;
-}
-.nxt-es-yazi { font-size: 11px; color: #6b7280; font-weight: 500; }
-.nxt-es-biten  .nxt-es-sayi { color: #15803d; }
-.nxt-es-devam  .nxt-es-sayi { color: #d97706; }
-.nxt-es-kalan  .nxt-es-sayi { color: #374151; }
-
-.nxt-kg-satir {
-  display: flex; align-items: baseline; gap: 2px;
-}
-.nxt-kg-uretilen { font-size: 18px; font-weight: 900; color: #16a34a; }
-.nxt-kg-sep { font-size: 11px; color: #9ca3af; }
-.nxt-kg-plan { font-size: 11px; font-weight: 600; color: #6b7280; }
-.nxt-kg-alt-satir { font-size: 10px; color: #6b7280; margin-top: 2px; }
-.nxt-progress-bar {
-  height: 5px; background: #f3f4f6; border-radius: 3px; overflow: hidden;
-  border: 1px solid #e5e7eb; margin-top: 4px;
-}
-.nxt-progress-dolu {
-  height: 100%; background: linear-gradient(90deg, #16a34a, #22c55e);
-  border-radius: 3px; min-width: 2px;
-}
-
-/* Aksiyon kolon */
-.nxt-gov-aksiyon {
-  display: flex; flex-direction: column; align-items: stretch;
-  gap: 6px; padding: 10px 14px; justify-content: center;
-  min-width: 120px; border-left: 1px solid #f3f4f6;
-}
-.nxt-btn-ana {
-  display: flex; align-items: center; justify-content: center; gap: 5px;
-  padding: 9px 14px; border-radius: 8px; border: none;
-  background: #f6c343; color: #1a1a1a;
-  font-size: 13px; font-weight: 800;
-  text-decoration: none; cursor: pointer;
-  box-shadow: 0 1px 4px rgba(246,195,67,.35);
-  white-space: nowrap; transition: background .12s;
-}
-.nxt-btn-ana:hover { background: #e9b020; }
-.nxt-btn-ikincil {
-  display: flex; align-items: center; justify-content: center; gap: 5px;
-  padding: 6px 10px; border-radius: 7px;
-  background: #f9fafb; color: #374151;
-  border: 1px solid #e5e7eb;
-  font-size: 12px; font-weight: 600;
-  text-decoration: none; cursor: pointer;
-  white-space: nowrap; transition: background .12s;
-}
-.nxt-btn-ikincil:hover { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
-
-/* ─── BOŞ DURUM ──────────────────────────────────────────── */
-.nxt-bos {
-  display: flex; flex-direction: column; align-items: center;
-  gap: 10px; padding: 50px 20px; text-align: center;
-  background: #fff; border-radius: 12px;
-  border: 1.5px dashed #e2e8f0;
-}
-.nxt-bos-arama { border-style: solid; }
-.nxt-bos-ikon   { font-size: 44px; }
-.nxt-bos-baslik { font-size: 16px; font-weight: 800; color: #374151; }
-.nxt-bos-alt    { font-size: 13px; color: #94a3b8; }
-
-/* ─── SAYFALAMA ───────────────────────────────────────────── */
-.nxt-sayfalama {
-  display: flex; align-items: center; justify-content: space-between;
-  flex-wrap: wrap; gap: 10px;
-  padding: 10px 0; margin-top: 4px;
-}
-.nxt-sp-sol { display: flex; align-items: center; gap: 10px; }
-.nxt-sp-tumunu {
-  padding: 5px 12px; border-radius: 6px;
-  border: 1px solid #e5e7eb; background: #f9fafb;
-  color: #374151; font-size: 12px; font-weight: 600; cursor: pointer;
-}
-.nxt-sp-tumunu:hover { background: #f3f4f6; }
-.nxt-sp-toplam { font-size: 12px; color: #9ca3af; }
-.nxt-sp-sayfalar { display: flex; align-items: center; gap: 3px; }
-.nxt-sp-btn {
-  width: 30px; height: 30px; border-radius: 6px;
-  border: 1px solid #e5e7eb; background: #fff;
-  color: #374151; font-size: 12px; font-weight: 600; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-}
-.nxt-sp-btn:hover:not(:disabled) { background: #f3f4f6; }
-.nxt-sp-btn:disabled { opacity: .4; cursor: default; }
-.nxt-sp-aktif { background: #0f172a !important; color: #f6c343 !important; border-color: #0f172a !important; }
-.nxt-sp-nokta { font-size: 12px; color: #9ca3af; padding: 0 4px; }
-.nxt-sp-sag { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #9ca3af; }
-.nxt-sp-select {
-  padding: 4px 8px; border-radius: 6px; border: 1px solid #e5e7eb;
-  font-size: 12px; color: #374151; background: #fff; cursor: pointer;
-}
-
-/* ─── L/S MODAL ──────────────────────────────────────────── */
-.nxt-modal-overlay {
-  position: fixed; inset: 0; z-index: 100;
-  background: rgba(15,23,42,.5); backdrop-filter: blur(2px);
-  display: flex; align-items: center; justify-content: center;
-}
-.nxt-modal {
-  background: #fff; border-radius: 14px;
-  padding: 28px 24px; min-width: 300px; max-width: 400px;
-  box-shadow: 0 20px 60px rgba(0,0,0,.25);
-  display: flex; flex-direction: column; gap: 12px;
-}
-.nxt-modal-baslik { font-size: 16px; font-weight: 900; color: #111827; }
-.nxt-modal-altyazi { font-size: 12px; color: #6b7280; margin-top: -6px; }
-.nxt-modal-butonlar { display: flex; flex-direction: column; gap: 8px; }
-.nxt-modal-boyut-btn {
-  display: block; padding: 12px 16px;
-  background: #f6c343; color: #1a1a1a;
-  border-radius: 9px; font-size: 14px; font-weight: 800;
-  text-decoration: none; text-align: center;
-}
-.nxt-modal-boyut-btn:hover { background: #e9b020; }
-.nxt-modal-iptal {
-  background: none; border: 1px solid #e5e7eb;
-  border-radius: 8px; padding: 8px;
-  font-size: 12px; color: #6b7280; cursor: pointer;
-}
-.nxt-modal-iptal:hover { background: #f9fafb; }
-
-/* ─── RESPONSIVE ─────────────────────────────────────────── */
-@media (max-width: 900px) {
-  .nxt-kart-govde { grid-template-columns: 180px 1fr auto; }
-  .nxt-arama { width: 170px; }
-}
-@media (max-width: 680px) {
-  .nxt-kart-govde { grid-template-columns: 1fr; }
-  .nxt-gov-kolon { border-left: none; border-top: 1px solid #f3f4f6; }
-  .nxt-gov-kolon:first-child { border-top: none; }
-  .nxt-gov-aksiyon { flex-direction: row; }
-  .nxt-saat-blok { display: none; }
-  .nxt-tb-buyuk  { font-size: 12px; }
-  .nxt-emir-kg-blok { grid-template-columns: 1fr; }
-  .nxt-sayfalama { flex-direction: column; align-items: flex-start; }
+  .rm-ara-wrap { margin-left: 0; flex: 1 1 100%; }
 }
 </style>
 {% endblock %}
