@@ -725,11 +725,25 @@ def get_nx_ar(con, arge_test_id: int) -> dict:
     olusturan_ad = user_map.get(int(t['olusturan_id'])) if t.get('olusturan_id') else None
     sorumlu_ad = user_map.get(int(t['sorumlu_kullanici_id'])) if t.get('sorumlu_kullanici_id') else None
 
+    olaylar = []
+    try:
+        olaylar = olay_liste(con, arge_test_id)
+    except Exception:
+        olaylar = []
     gecmis = [{
         'olay': 'olusturuldu',
         'kullanici': olusturan_ad or '—',
         'tarih': t.get('olusturma_tarihi'),
     }]
+    for o in olaylar:
+        gecmis.append({
+            'olay': o.get('olay_tipi'),
+            'eski_durum': o.get('eski_durum'),
+            'yeni_durum': o.get('yeni_durum'),
+            'aciklama': o.get('aciklama'),
+            'tarih': o.get('olusturma_tarihi'),
+            'kullanici_id': o.get('kullanici_id'),
+        })
 
     return {
         'ok': True,
@@ -752,6 +766,11 @@ def get_nx_ar(con, arge_test_id: int) -> dict:
         'talep_referansi': t.get('talep_referansi'),
         'saha_testi_gerekli_mi': t.get('saha_testi_gerekli_mi'),
         'saha_testi_nedeni': t.get('saha_testi_nedeni'),
+        'ferhat_genel_karar': t.get('ferhat_genel_karar'),
+        'ferhat_genel_not': t.get('ferhat_genel_not'),
+        'ferhat_adi': t.get('ferhat_adi'),
+        'ferhat_tarihi': t.get('ferhat_tarihi'),
+        'ferhat_kayit_tarihi': t.get('ferhat_kayit_tarihi'),
         'boyutlar': boyutlar,
         'boyut_etiket': _boyut_etiket(boyutlar),
         'kaynak_uvler': kaynaklar,
@@ -760,6 +779,7 @@ def get_nx_ar(con, arge_test_id: int) -> dict:
         'kalemler_by_boyut': kalemler_by_boyut,
         'boyut_sonuclar': boyut_sonuclar,
         'revizyonlar': revizyonlar,
+        'olaylar': olaylar,
         'rf': rf,
         'uretim_kodlari': uretim_kodlari,
         'olusturan_id': t.get('olusturan_id'),
@@ -794,6 +814,695 @@ def list_nx_ar(con, *, limit: int = 50, offset: int = 0) -> dict:
         "SELECT COUNT(*) FROM nexgen_arge_test WHERE aktif=1 AND arge_kodu LIKE 'NX-AR-%'"
     ).fetchone()[0]
     return {'ok': True, 'total': total, 'items': rows}
+
+
+# ── Durum geçişleri / Ferhat / Yönetim ───────────────────────────────
+
+DURUM_GECERLI = frozenset({
+    'ARGE_HAZIR', 'FERHAT_BEKLIYOR', 'DENEMEDE', 'ONAY_BEKLIYOR',
+    'REVIZYON_GEREKLI', 'ONAYLANDI', 'REDDEDILDI',
+})
+FERHAT_KARARLAR = frozenset({'BASARILI', 'REVIZYON_GEREKLI', 'RED'})
+YONETIM_KARARLAR = frozenset({'ONAY', 'REVIZYON', 'RED'})
+
+_SAHA_NEDEN_UI = {
+    'YENI_FORMUL': 'YENI_FORMUL',
+    'YENI_RENK': 'YENI_RENK',
+    'KALIP_RISKI': 'KALIP_RISKI',
+    'SHORE_RISKI': 'SHORE_RISKI',
+    'PISME_RISKI': 'PISME_RISKI',
+    'MUSTERI_TALEBI': 'YONETICI_KARARI',
+    'DIGER': 'DIGER',
+    'BILINEN_RECETE': 'BILINEN_RECETE',
+    'BILINEN_RENK': 'BILINEN_RENK',
+    'YOGUNLUK_RISKI': 'YOGUNLUK_RISKI',
+    'YONETICI_KARARI': 'YONETICI_KARARI',
+}
+
+
+def _nx_ar_row(con, arge_test_id: int) -> dict:
+    row = con.execute(
+        'SELECT * FROM nexgen_arge_test WHERE id=? AND aktif=1',
+        (arge_test_id,),
+    ).fetchone()
+    if not row:
+        raise NxArError('NX-AR kartı bulunamadı.', 404, 'YOK')
+    t = dict(row)
+    if not (t.get('arge_kodu') or '').startswith('NX-AR-'):
+        raise NxArError('Kayıt NX-AR kartı değil.', 404, 'YOK')
+    return t
+
+
+def _olay_yaz(con, arge_test_id: int, kullanici_id, eski, yeni, olay_tipi, aciklama=None):
+    con.execute(
+        """
+        INSERT INTO nexgen_arge_olay
+            (arge_test_id, kullanici_id, eski_durum, yeni_durum, olay_tipi, aciklama)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (arge_test_id, kullanici_id, eski, yeni, olay_tipi, aciklama),
+    )
+
+
+def _aktif_deneme_id(con, arge_test_id: int) -> int:
+    d = con.execute(
+        """
+        SELECT id FROM nexgen_arge_deneme
+        WHERE arge_test_id=? AND aktif_mi=1
+        ORDER BY deneme_no DESC LIMIT 1
+        """,
+        (arge_test_id,),
+    ).fetchone()
+    if not d:
+        raise NxArError('Aktif deneme yok.', 409, 'DENEME_YOK')
+    return int(d['id'])
+
+
+def saha_karar_kaydet(con, arge_test_id: int, payload: dict, kullanici_id: int | None = None) -> dict:
+    """Enjeksiyon denemesi gerekli mi? → durum geçişi."""
+    t = _nx_ar_row(con, arge_test_id)
+    eski = (t.get('durum') or '').strip().upper()
+    if eski not in ('ARGE_HAZIR', 'REVIZYON_GEREKLI', 'DENEMEDE'):
+        raise NxArError(f'Bu durumda saha kararı verilemez: {eski}', 409, 'DURUM')
+
+    gerekli = payload.get('saha_testi_gerekli_mi')
+    try:
+        gerekli_mi = int(gerekli)
+    except (TypeError, ValueError):
+        raise NxArError('saha_testi_gerekli_mi 0/1 olmalı.', 400)
+    if gerekli_mi not in (0, 1):
+        raise NxArError('saha_testi_gerekli_mi 0/1 olmalı.', 400)
+
+    neden = (payload.get('saha_testi_nedeni') or '').strip().upper() or None
+    if gerekli_mi == 1:
+        neden = _SAHA_NEDEN_UI.get(neden or '', neden)
+        if not neden or neden not in SAHA_NEDENLERI:
+            raise NxArError('Enjeksiyon gerekliyse geçerli neden zorunlu.', 400, 'SAHA_NEDEN')
+        yeni = 'FERHAT_BEKLIYOR'
+    else:
+        neden = None
+        yeni = 'ONAY_BEKLIYOR'
+
+    simdi = _now()
+    try:
+        con.execute('BEGIN IMMEDIATE')
+        con.execute(
+            """
+            UPDATE nexgen_arge_test
+            SET saha_testi_gerekli_mi=?,
+                saha_testi_nedeni=?,
+                saha_testi_karar_veren_id=?,
+                saha_testi_karar_tarihi=?,
+                durum=?,
+                guncelleme_tarihi=?
+            WHERE id=?
+            """,
+            (gerekli_mi, neden, kullanici_id, simdi, yeni, simdi, arge_test_id),
+        )
+        _olay_yaz(
+            con, arge_test_id, kullanici_id, eski, yeni,
+            'SAHA_KARAR',
+            f"gerekli={gerekli_mi}; neden={neden or '-'}",
+        )
+        con.commit()
+    except Exception:
+        con.rollback()
+        raise
+    return get_nx_ar(con, arge_test_id)
+
+
+def ferhat_bekleyen_liste(con, *, limit: int = 100) -> dict:
+    limit = max(1, min(int(limit or 100), 200))
+    rows = [
+        dict(r) for r in con.execute(
+            """
+            SELECT t.id AS arge_test_id, t.test_no, t.durum, t.calisma_tipi,
+                   t.yeni_renk_adi AS hedef_renk_adi, t.oncelik,
+                   t.formul_grup_adi, t.ana_formul_grup_kodu,
+                   t.saha_testi_nedeni, t.olusturma_tarihi,
+                   c.unvan AS cari_unvan, c.cari_kod
+            FROM nexgen_arge_test t
+            LEFT JOIN nexgen_cari c ON c.id = t.cari_id
+            WHERE t.aktif=1 AND t.arge_kodu LIKE 'NX-AR-%'
+              AND t.saha_testi_gerekli_mi=1
+              AND t.durum IN ('FERHAT_BEKLIYOR', 'DENEMEDE')
+            ORDER BY
+              CASE t.oncelik WHEN 'KRITIK' THEN 0 WHEN 'ACIL' THEN 1 ELSE 2 END,
+              t.id ASC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+    ]
+    for r in rows:
+        r['calisma_tipi_etiket'] = calisma_tipi_etiket(r.get('calisma_tipi'))
+        boy = [
+            x[0] for x in con.execute(
+                """
+                SELECT boyut FROM nexgen_arge_kaynak_uv
+                WHERE arge_test_id=? AND aktif_mi=1 ORDER BY sira_no
+                """,
+                (r['arge_test_id'],),
+            ).fetchall()
+        ]
+        r['boyut_etiket'] = _boyut_etiket([str(b).upper() for b in boy])
+    return {'ok': True, 'items': rows}
+
+
+def ferhat_ac(con, arge_test_id: int, kullanici_id: int | None = None) -> dict:
+    t = _nx_ar_row(con, arge_test_id)
+    if int(t.get('saha_testi_gerekli_mi') or 0) != 1:
+        raise NxArError('Bu çalışma enjeksiyon denemesi gerektirmiyor.', 409, 'SAHA')
+    eski = (t.get('durum') or '').strip().upper()
+    if eski not in ('FERHAT_BEKLIYOR', 'DENEMEDE'):
+        raise NxArError(f'Ferhat formu bu durumda açılamaz: {eski}', 409, 'DURUM')
+    if eski == 'FERHAT_BEKLIYOR':
+        simdi = _now()
+        try:
+            con.execute('BEGIN IMMEDIATE')
+            con.execute(
+                """
+                UPDATE nexgen_arge_test
+                SET durum='DENEMEDE', guncelleme_tarihi=?
+                WHERE id=? AND durum='FERHAT_BEKLIYOR'
+                """,
+                (simdi, arge_test_id),
+            )
+            if con.execute('SELECT changes()').fetchone()[0]:
+                _olay_yaz(con, arge_test_id, kullanici_id, eski, 'DENEMEDE', 'FERHAT_AC', None)
+            con.commit()
+        except Exception:
+            con.rollback()
+            raise
+    return get_nx_ar(con, arge_test_id)
+
+
+def ferhat_sonuc_kaydet(con, arge_test_id: int, payload: dict, kullanici_id: int | None = None) -> dict:
+    """Boyut sonuçları + genel karar → aynı AT kartı."""
+    t = _nx_ar_row(con, arge_test_id)
+    if int(t.get('saha_testi_gerekli_mi') or 0) != 1:
+        raise NxArError('Enjeksiyon denemesi gerekli değil.', 409, 'SAHA')
+    eski = (t.get('durum') or '').strip().upper()
+    if eski not in ('FERHAT_BEKLIYOR', 'DENEMEDE'):
+        raise NxArError(f'Ferhat sonucu bu durumda kaydedilemez: {eski}', 409, 'DURUM')
+
+    karar = (payload.get('ferhat_genel_karar') or payload.get('genel_karar') or '').strip().upper()
+    if karar not in FERHAT_KARARLAR:
+        raise NxArError('Genel karar: BASARILI / REVIZYON_GEREKLI / RED', 400, 'KARAR')
+    genel_not = (payload.get('ferhat_genel_not') or payload.get('genel_not') or '').strip() or None
+    if karar in ('REVIZYON_GEREKLI', 'RED') and not genel_not:
+        raise NxArError('Revizyon/Red için genel not zorunlu.', 400, 'NOT')
+
+    boyutlar_payload = payload.get('boyut_sonuclar') or payload.get('boyutlar') or []
+    if not isinstance(boyutlar_payload, list) or not boyutlar_payload:
+        raise NxArError('boyut_sonuclar zorunlu.', 400)
+
+    kaynak_boyutlar = {
+        str(r[0]).upper()
+        for r in con.execute(
+            "SELECT boyut FROM nexgen_arge_kaynak_uv WHERE arge_test_id=? AND aktif_mi=1",
+            (arge_test_id,),
+        ).fetchall()
+    }
+    if not kaynak_boyutlar:
+        raise NxArError('Kaynak UV boyutları yok.', 409)
+
+    normalized = []
+    for i, item in enumerate(boyutlar_payload):
+        if not isinstance(item, dict):
+            raise NxArError(f'boyut_sonuclar[{i}] geçersiz.', 400)
+        b = (item.get('boyut') or '').strip().upper()
+        if b not in BOYUTLAR or b not in kaynak_boyutlar:
+            raise NxArError(f'Geçersiz boyut: {b}', 400)
+        kalite_var = int(item.get('kalite_sorunu_var') or 0)
+        if kalite_var not in (0, 1):
+            raise NxArError('kalite_sorunu_var 0/1.', 400)
+        kalite_acik = (item.get('kalite_aciklama') or '').strip() or None
+        if kalite_var == 1 and not kalite_acik:
+            raise NxArError(f'{b}: kalite sorunu açıklaması zorunlu.', 400)
+        calisir = item.get('basarili_mi')
+        if calisir in (None, ''):
+            calisir = 1 if karar == 'BASARILI' else 0
+        try:
+            calisir = int(calisir)
+        except (TypeError, ValueError):
+            raise NxArError(f'{b}: basarili_mi geçersiz.', 400)
+        if karar == 'BASARILI' and calisir != 1:
+            raise NxArError(f'{b}: Başarılı kararda ürün çalışır olmalı.', 400)
+        shore = item.get('shore_sonuc')
+        pisme = item.get('pisme_suresi_dk')
+        sn = item.get('enjeksiyon_saniye')
+        yog = item.get('yogunluk')
+        try:
+            shore_f = float(shore) if shore not in (None, '') else None
+            pisme_f = float(pisme) if pisme not in (None, '') else None
+            sn_i = int(sn) if sn not in (None, '') else None
+            yog_f = float(yog) if yog not in (None, '') else None
+        except (TypeError, ValueError):
+            raise NxArError(f'{b}: sayısal alan geçersiz.', 400)
+        if karar == 'BASARILI' and (shore_f is None or pisme_f is None or sn_i is None):
+            raise NxArError(f'{b}: Shore, pişme ve saniye zorunlu.', 400)
+        normalized.append({
+            'boyut': b,
+            'shore_sonuc': shore_f,
+            'pisme_suresi_dk': pisme_f,
+            'enjeksiyon_saniye': sn_i,
+            'yogunluk': yog_f,
+            'kalip_sonucu': (item.get('kalip_sonucu') or '').strip() or None,
+            'renk_sonucu': (item.get('renk_sonucu') or '').strip() or None,
+            'kalite_sorunu_var': kalite_var,
+            'kalite_aciklama': kalite_acik,
+            'basarili_mi': calisir,
+            'saha_notu': (item.get('saha_notu') or item.get('operasyon_notu') or '').strip() or None,
+        })
+
+    gelen = {x['boyut'] for x in normalized}
+    if gelen != kaynak_boyutlar:
+        raise NxArError(
+            f'Tüm kaynak boyutlar gerekli: {sorted(kaynak_boyutlar)}',
+            400,
+            'BOYUT',
+        )
+
+    if karar == 'BASARILI':
+        yeni = 'ONAY_BEKLIYOR'
+    elif karar == 'REVIZYON_GEREKLI':
+        yeni = 'REVIZYON_GEREKLI'
+    else:
+        yeni = 'REDDEDILDI'
+
+    simdi = _now()
+    try:
+        con.execute('BEGIN IMMEDIATE')
+        deneme_id = _aktif_deneme_id(con, arge_test_id)
+        for item in normalized:
+            con.execute(
+                """
+                INSERT INTO nexgen_arge_boyut_sonuc (
+                    deneme_id, arge_test_id, boyut,
+                    shore_sonuc, pisme_suresi_dk, yogunluk,
+                    renk_sonucu, kalip_sonucu, basarili_mi, saha_notu,
+                    enjeksiyon_saniye, kalite_sorunu_var, kalite_aciklama,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(deneme_id, boyut) DO UPDATE SET
+                    shore_sonuc=excluded.shore_sonuc,
+                    pisme_suresi_dk=excluded.pisme_suresi_dk,
+                    yogunluk=excluded.yogunluk,
+                    renk_sonucu=excluded.renk_sonucu,
+                    kalip_sonucu=excluded.kalip_sonucu,
+                    basarili_mi=excluded.basarili_mi,
+                    saha_notu=excluded.saha_notu,
+                    enjeksiyon_saniye=excluded.enjeksiyon_saniye,
+                    kalite_sorunu_var=excluded.kalite_sorunu_var,
+                    kalite_aciklama=excluded.kalite_aciklama,
+                    updated_at=excluded.updated_at
+                """,
+                (
+                    deneme_id, arge_test_id, item['boyut'],
+                    item['shore_sonuc'], item['pisme_suresi_dk'], item['yogunluk'],
+                    item['renk_sonucu'], item['kalip_sonucu'], item['basarili_mi'],
+                    item['saha_notu'], item['enjeksiyon_saniye'],
+                    item['kalite_sorunu_var'], item['kalite_aciklama'],
+                    simdi, simdi,
+                ),
+            )
+        # ferhat_adi: kullanıcı adı yoksa id
+        ferhat_adi = (payload.get('ferhat_adi') or '').strip() or None
+        con.execute(
+            """
+            UPDATE nexgen_arge_test SET
+                durum=?,
+                ferhat_genel_karar=?,
+                ferhat_genel_not=?,
+                ferhat_kaydeden_id=?,
+                ferhat_kayit_tarihi=?,
+                ferhat_adi=COALESCE(?, ferhat_adi),
+                ferhat_tarihi=?,
+                guncelleme_tarihi=?
+            WHERE id=?
+            """,
+            (
+                yeni, karar, genel_not, kullanici_id, simdi,
+                ferhat_adi, simdi, simdi, arge_test_id,
+            ),
+        )
+        _olay_yaz(
+            con, arge_test_id, kullanici_id, eski, yeni,
+            'FERHAT_SONUC', f'karar={karar}; {genel_not or ""}',
+        )
+        con.commit()
+    except Exception:
+        con.rollback()
+        raise
+    return get_nx_ar(con, arge_test_id)
+
+
+def _renk_kodu_sonraki(con) -> str:
+    """Aktif/pasif tüm sayısal renk kodlarından MAX+1 (zero-pad). Transaction içinde çağrılmalı."""
+    from modules.nexgen.cekirdek_gorunum import renk_sayisal_onek
+
+    candidates: list[str] = []
+    for (kod,) in con.execute(
+        "SELECT DISTINCT renk_kodu FROM nexgen_arge_test WHERE renk_kodu IS NOT NULL AND renk_kodu != ''"
+    ):
+        o = renk_sayisal_onek(kod) or (
+            kod.strip() if str(kod).strip().isdigit() else None
+        )
+        if o and o.isdigit():
+            candidates.append(o)
+    try:
+        for (kod,) in con.execute(
+            "SELECT DISTINCT kod FROM enj_renk WHERE kod IS NOT NULL"
+        ):
+            if str(kod).strip().isdigit():
+                candidates.append(str(kod).strip())
+    except Exception:
+        pass
+    for (ad,) in con.execute(
+        "SELECT DISTINCT ad FROM nexgen_rf_renk WHERE ad IS NOT NULL"
+    ):
+        o = renk_sayisal_onek(ad)
+        if o:
+            candidates.append(o)
+
+    if not candidates:
+        return '0001'
+    width = max(len(c) for c in candidates)
+    width = 4 if width >= 4 else max(3, width)
+    son = max(int(c) for c in candidates)
+    return f'{son + 1:0{width}d}'
+
+
+def _nx_ar_boya_kalemler(con, arge_test_id: int, deneme_id: int) -> list:
+    rows = [
+        dict(r) for r in con.execute(
+            """
+            SELECT k.stok_kart_id, k.sira, k.test_miktar_kg, k.aciklama, k.boyut
+            FROM nexgen_arge_deneme_kalem k
+            JOIN nexgen_stok_kart sk ON sk.id = k.stok_kart_id
+            WHERE k.deneme_id=? AND sk.kategori='BOYA' AND sk.aktif=1
+              AND k.test_miktar_kg > 0
+            ORDER BY k.sira, k.id
+            """,
+            (deneme_id,),
+        ).fetchall()
+    ]
+    if rows:
+        return rows
+    # fallback: renk_bilesenleri_json
+    import json
+    t = con.execute(
+        'SELECT renk_bilesenleri_json FROM nexgen_arge_test WHERE id=?',
+        (arge_test_id,),
+    ).fetchone()
+    raw = (t['renk_bilesenleri_json'] if t else None) or '[]'
+    try:
+        items = json.loads(raw) if isinstance(raw, str) else (raw or [])
+    except Exception:
+        items = []
+    out = []
+    for i, it in enumerate(items or []):
+        if not isinstance(it, dict):
+            continue
+        sid = it.get('stok_kart_id')
+        gr = it.get('gram') or it.get('miktar_gr') or it.get('test_miktar_kg')
+        if not sid:
+            continue
+        try:
+            kg = float(gr) / 1000.0 if float(gr) > 1 else float(gr)
+        except (TypeError, ValueError):
+            continue
+        if kg <= 0:
+            continue
+        out.append({
+            'stok_kart_id': int(sid),
+            'sira': i + 1,
+            'test_miktar_kg': kg,
+            'aciklama': it.get('ad'),
+            'boyut': 'LARGE',
+        })
+    return out
+
+
+def yonetim_karar(con, arge_test_id: int, payload: dict, kullanici_id: int | None = None) -> dict:
+    """Onay / Revizyon / Red — AT-R/M renk kodu; AT-F kullanıcı formul kodu."""
+    t = _nx_ar_row(con, arge_test_id)
+    eski = (t.get('durum') or '').strip().upper()
+    karar = (payload.get('karar') or '').strip().upper()
+    if karar not in YONETIM_KARARLAR:
+        raise NxArError('karar: ONAY / REVIZYON / RED', 400)
+
+    neden = (payload.get('neden') or payload.get('aciklama') or '').strip() or None
+
+    if karar == 'REVIZYON':
+        if not neden:
+            raise NxArError('Revizyon nedeni zorunlu.', 400)
+        if eski not in ('ONAY_BEKLIYOR', 'DENEMEDE', 'ARGE_HAZIR', 'FERHAT_BEKLIYOR'):
+            raise NxArError(f'Revizyon bu durumda verilemez: {eski}', 409)
+        simdi = _now()
+        rev = int(t.get('aktif_rev_no') or 0) + 1
+        try:
+            con.execute('BEGIN IMMEDIATE')
+            con.execute(
+                """
+                INSERT INTO nexgen_arge_revizyon
+                    (test_id, rev_no, onceki_rev_no, neden, revizyon_notu,
+                     olusturan_id, olusturma_tarihi)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    arge_test_id, rev, t.get('aktif_rev_no') or 0, neden, neden,
+                    kullanici_id, simdi,
+                ),
+            )
+            con.execute(
+                """
+                UPDATE nexgen_arge_test
+                SET durum='REVIZYON_GEREKLI', aktif_rev_no=?,
+                    guncelleme_tarihi=?, onay_notu=?
+                WHERE id=?
+                """,
+                (rev, simdi, neden, arge_test_id),
+            )
+            _olay_yaz(con, arge_test_id, kullanici_id, eski, 'REVIZYON_GEREKLI', 'YONETIM_REVIZYON', neden)
+            con.commit()
+        except Exception:
+            con.rollback()
+            raise
+        return get_nx_ar(con, arge_test_id)
+
+    if karar == 'RED':
+        if not neden:
+            raise NxArError('Red nedeni zorunlu.', 400)
+        if eski == 'ONAYLANDI':
+            raise NxArError('Onaylanmış kayıt reddedilemez.', 409)
+        simdi = _now()
+        try:
+            con.execute('BEGIN IMMEDIATE')
+            con.execute(
+                """
+                UPDATE nexgen_arge_test
+                SET durum='REDDEDILDI', guncelleme_tarihi=?, onay_notu=?,
+                    onaylayan_id=?, onay_tarihi=?
+                WHERE id=?
+                """,
+                (simdi, neden, kullanici_id, simdi, arge_test_id),
+            )
+            _olay_yaz(con, arge_test_id, kullanici_id, eski, 'REDDEDILDI', 'YONETIM_RED', neden)
+            con.commit()
+        except Exception:
+            con.rollback()
+            raise
+        return get_nx_ar(con, arge_test_id)
+
+    # ONAY
+    if eski == 'ONAYLANDI' and t.get('rf_renk_id'):
+        return get_nx_ar(con, arge_test_id)  # idempotent
+    if eski != 'ONAY_BEKLIYOR':
+        raise NxArError(f'Onay yalnız ONAY_BEKLIYOR durumunda: {eski}', 409, 'DURUM')
+    if int(t.get('saha_testi_gerekli_mi') or 0) == 1:
+        fk = (t.get('ferhat_genel_karar') or '').strip().upper()
+        if not fk:
+            raise NxArError('Enjeksiyon raporu tamamlanmadan onaylanamaz.', 409, 'FERHAT')
+        if fk == 'RED':
+            raise NxArError('Ferhat RED sonucundan doğrudan onay yok.', 409, 'FERHAT_RED')
+
+    tip = (t.get('calisma_tipi') or '').strip().upper()
+    simdi = _now()
+
+    try:
+        con.execute('BEGIN IMMEDIATE')
+        if tip == 'YENI_FORMUL':
+            formul_kod = (payload.get('formul_kod') or '').strip()
+            formul_ad = (payload.get('formul_ad') or '').strip()
+            if not formul_kod or not formul_ad:
+                raise NxArError('Formül onayı için formul_kod ve formul_ad zorunlu.', 400)
+            if not cekirdek_formul_mu(formul_kod):
+                raise NxArError('Formül kodu 1BA/2BA/3BA standardında olmalı.', 400)
+            var = con.execute(
+                'SELECT id FROM nexgen_formul WHERE kod=? COLLATE NOCASE',
+                (formul_kod,),
+            ).fetchone()
+            if var:
+                raise NxArError(f'Formül kodu zaten var: {formul_kod}', 409, 'DUPLICATE')
+            con.execute(
+                """
+                INSERT INTO nexgen_formul (kod, ad, aktif, urun_ailesi, olusturma_tarihi)
+                VALUES (?, ?, 1, ?, ?)
+                """,
+                (
+                    formul_kod, formul_ad,
+                    (payload.get('urun_ailesi') or t.get('urun_ailesi') or '').strip() or None,
+                    simdi,
+                ),
+            )
+            fid = con.execute('SELECT last_insert_rowid()').fetchone()[0]
+            con.execute(
+                """
+                UPDATE nexgen_arge_test SET
+                    durum='ONAYLANDI', renk_kodu=COALESCE(renk_kodu, ?),
+                    onaylayan_id=?, onay_tarihi=?, guncelleme_tarihi=?,
+                    aktarildi_mi=1, aktarim_tarihi=?
+                WHERE id=?
+                """,
+                (formul_kod, kullanici_id, simdi, simdi, simdi, arge_test_id),
+            )
+            _olay_yaz(
+                con, arge_test_id, kullanici_id, eski, 'ONAYLANDI',
+                'YONETIM_ONAY_FORMUL', f'{formul_kod} / {formul_ad} / id={fid}',
+            )
+        else:
+            # AT-R / AT-M — renk kodu + RF
+            if t.get('rf_renk_id'):
+                con.execute(
+                    """
+                    UPDATE nexgen_arge_test SET durum='ONAYLANDI',
+                        onaylayan_id=?, onay_tarihi=?, guncelleme_tarihi=?
+                    WHERE id=?
+                    """,
+                    (kullanici_id, simdi, simdi, arge_test_id),
+                )
+                _olay_yaz(con, arge_test_id, kullanici_id, eski, 'ONAYLANDI', 'YONETIM_ONAY_IDEM', None)
+                con.commit()
+                return get_nx_ar(con, arge_test_id)
+
+            renk_kod = _renk_kodu_sonraki(con)
+            deneme_id = _aktif_deneme_id(con, arge_test_id)
+            boyalar = _nx_ar_boya_kalemler(con, arge_test_id, deneme_id)
+            if not boyalar:
+                raise NxArError('Onay için pigment (BOYA) kalemi yok.', 400, 'PIGMENT')
+
+            # NX-RF kod
+            row = con.execute(
+                "SELECT MAX(CAST(SUBSTR(rf_kod, 8) AS INTEGER)) AS son "
+                "FROM nexgen_rf_renk WHERE rf_kod LIKE 'NX-RF-%'"
+            ).fetchone()
+            son = int(row['son'] or 0) if row else 0
+            rf_kod = f'NX-RF-{son + 1:04d}'
+            rf_ad = (t.get('yeni_renk_adi') or '').strip() or f'Renk {renk_kod}'
+
+            con.execute(
+                """
+                INSERT INTO nexgen_rf_renk
+                    (rf_kod, ad, durum, kaynak_arge_test_id, ilk_talep_cari_id,
+                     cari_id, aciklama, olusturan_id, onaylayan_id, onay_tarihi, aktif)
+                VALUES (?, ?, 'ONAYLI', ?, ?, ?, ?, ?, ?, ?, 1)
+                """,
+                (
+                    rf_kod, rf_ad, arge_test_id, t.get('cari_id'), t.get('cari_id'),
+                    (t.get('talep_referansi') or '').strip() or None,
+                    t.get('olusturan_id'), kullanici_id, simdi,
+                ),
+            )
+            rf_id = con.execute('SELECT last_insert_rowid()').fetchone()[0]
+
+            # kalemler — yüzde/kg normalize
+            for i, k in enumerate(boyalar):
+                kg = float(k['test_miktar_kg'] or 0)
+                con.execute(
+                    """
+                    INSERT INTO nexgen_rf_kalem
+                        (rf_renk_id, stok_kart_id, sira, miktar_kg, aciklama)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        rf_id, int(k['stok_kart_id']), int(k.get('sira') or i + 1),
+                        kg, k.get('aciklama'),
+                    ),
+                )
+
+            # formül uygunluk — ana kaynak formul
+            kuv = con.execute(
+                """
+                SELECT kaynak_uretim_varyant_id FROM nexgen_arge_kaynak_uv
+                WHERE arge_test_id=? AND aktif_mi=1
+                ORDER BY CASE boyut WHEN 'LARGE' THEN 0 WHEN 'MEDIUM' THEN 1 ELSE 2 END
+                LIMIT 1
+                """,
+                (arge_test_id,),
+            ).fetchone()
+            if kuv:
+                fr = con.execute(
+                    """
+                    SELECT f.id FROM nexgen_uretim_varyant uv
+                    JOIN nexgen_renk_varyant rv ON rv.id=uv.renk_varyant_id
+                    JOIN nexgen_formul f ON f.id=rv.formul_id
+                    WHERE uv.id=?
+                    """,
+                    (kuv['kaynak_uretim_varyant_id'],),
+                ).fetchone()
+                if fr:
+                    try:
+                        con.execute(
+                            """
+                            INSERT INTO nexgen_rf_formul_uygunluk
+                                (rf_renk_id, formul_id, aktif, olusturma_tarihi)
+                            VALUES (?, ?, 1, ?)
+                            """,
+                            (rf_id, fr['id'], simdi),
+                        )
+                    except Exception:
+                        pass
+
+            con.execute(
+                """
+                UPDATE nexgen_arge_test SET
+                    durum='ONAYLANDI', rf_renk_id=?, renk_kodu=?,
+                    onaylayan_id=?, onay_tarihi=?, guncelleme_tarihi=?,
+                    aktarildi_mi=1, aktarim_tarihi=?
+                WHERE id=?
+                """,
+                (rf_id, renk_kod, kullanici_id, simdi, simdi, simdi, arge_test_id),
+            )
+            _olay_yaz(
+                con, arge_test_id, kullanici_id, eski, 'ONAYLANDI',
+                'YONETIM_ONAY_RENK', f'{renk_kod} / {rf_kod}',
+            )
+
+        con.commit()
+    except NxArError:
+        con.rollback()
+        raise
+    except Exception:
+        con.rollback()
+        raise
+    return get_nx_ar(con, arge_test_id)
+
+
+def olay_liste(con, arge_test_id: int) -> list:
+    return [
+        dict(r) for r in con.execute(
+            """
+            SELECT id, arge_test_id, kullanici_id, eski_durum, yeni_durum,
+                   olay_tipi, aciklama, olusturma_tarihi
+            FROM nexgen_arge_olay
+            WHERE arge_test_id=?
+            ORDER BY id DESC
+            """,
+            (arge_test_id,),
+        ).fetchall()
+    ]
 
 
 # Kanonik CREATE örneği (dokümantasyon / test) — legacy UV YOK
