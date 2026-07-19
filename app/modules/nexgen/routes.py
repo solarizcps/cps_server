@@ -13755,9 +13755,32 @@ def _lot_kodu_uret(con):
     return f"NG-LOT-{yil}-{son_no + 1:05d}"
 
 
+def _tablet_can_uretim_ops():
+    """Üretim operatör menü/route — nexgen.tablet.uretim (kullanıcı adı hardcode yok)."""
+    return (
+        yetki_var('nexgen.tablet.uretim', 'can_view')
+        or yetki_var('nexgen.tablet.uretim', 'can_uretim')
+    )
+
+
+def _tablet_can_arge_ops():
+    """AR-GE tablet menü/route — reçete yetkisi veya yönetim (kullanıcı adı hardcode yok)."""
+    return (
+        yetki_var('nexgen.recete.view', 'can_view')
+        or yetki_var('nexgen.recete.create', 'can_create')
+        or yetki_var('nexgen.yonetim.manage', 'can_manage')
+    )
+
+
 @nexgen_bp.route('/tablet')
 @yetki_gerekli('nexgen.tablet.view', 'can_view')
 def tablet_ana():
+    can_ops = _tablet_can_uretim_ops()
+    can_arge = _tablet_can_arge_ops()
+    # Yalnız AR-GE yetkisi olanlar sipariş listesine düşmesin
+    if not can_ops and can_arge:
+        return redirect('/nexgen/tablet/arge')
+
     con = _db()
     try:
         devam_eden, plan_isler = _tablet_ana_veri(con)
@@ -13767,7 +13790,9 @@ def tablet_ana():
     return render_template(
         'nexgen/tablet.html',
         active='nexgen',
-        can_uretim=yetki_var('nexgen.tablet.uretim', 'can_uretim'),
+        can_uretim=can_ops,
+        can_tablet_uretim=can_ops,
+        can_arge_tablet=can_arge,
         devam_eden_batches=devam_eden,
         plan_isler=plan_isler,
     )
@@ -13777,6 +13802,8 @@ def tablet_ana():
 @yetki_gerekli('nexgen.tablet.view', 'can_view')
 def tablet_devam_edenler():
     """Devam eden üretimler — sipariş bazında gruplandırılmış, L/S kırılımlı."""
+    if not _tablet_can_uretim_ops():
+        abort(403)
     con = _db()
     try:
         _cols = [c['name'] for c in con.execute(
@@ -14141,6 +14168,8 @@ def tablet_uretim_islem(batch_kodu):
 @yetki_gerekli('nexgen.tablet.view', 'can_view')
 def tablet_geri_donusum():
     """Geri Dönüşüm Günlük Girişi — RECYCLE kategorisi kartlarını listele."""
+    if not _tablet_can_uretim_ops():
+        abort(403)
     con = _db()
     try:
         recycle_kartlar = con.execute("""
@@ -14177,6 +14206,8 @@ def api_tablet_geri_donusum_kaydet():
     Hareket tipi: GERI_DONUSUM_DEVIR
     Stok ARTAR (pozitif miktar).
     """
+    if not _tablet_can_uretim_ops():
+        return jsonify({'ok': False, 'hata': 'Yetki yok'}), 403
     d = request.get_json(silent=True) or {}
     tarih    = (d.get('tarih') or '').strip()
     vardiya  = (d.get('vardiya') or '').strip()
@@ -14524,6 +14555,8 @@ def tablet_arge():
     """AR-GE Tablet — yeni mimari (FAZ-3K).
     Akış: Cari → Formül → RF → Boyut → Miktar → Not → Kaydet → Barkod.
     """
+    if not _tablet_can_arge_ops():
+        abort(403)
     con = _db()
     try:
         # Formüller (reçetesi olan, aktif)
@@ -18628,6 +18661,8 @@ def api_uem_beklet(plan_id):
 @yetki_gerekli('nexgen.tablet.view', 'can_view')
 def tablet_uretim_isleri():
     """ÜEM'den tablete gönderilmiş üretim iş listesi."""
+    if not _tablet_can_uretim_ops():
+        abort(403)
     con = _db()
     try:
         isler = _tua_tablet_is_liste_sorgu(con)
