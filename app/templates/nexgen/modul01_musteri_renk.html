@@ -1459,7 +1459,7 @@ function adim7Html(){
     ['DIGER','Diğer']
   ];
   var html = '<div class="m1-adim-kart-baslik">Kaydet &amp; Barkod</div>'
-    +'<div class="m1-adim-kart-alt">Son kontrol — NX-AR çalışma kartı oluşturulacak.</div>'
+    +'<div class="m1-adim-kart-alt">Son kontrol — çalışma kartı oluşturulacak.</div>'
     +'<div style="margin-bottom:14px">';
   rows.forEach(function(r){
     html += '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">'
@@ -1504,7 +1504,7 @@ function adim7Html(){
     +'</button>'
     +'<div id="kaydet-spinner" style="display:none" class="m1-yukleniyor"><div class="m1-spin"></div> Kaydediliyor…</div>'
     +'<div id="kaydet-hata" class="m1-hata" style="display:none"></div>'
-    /* Başarı bloğu — AT ana; NX-AR sistem referansı */
+    /* Başarı bloğu — yalnız AT kodu */
     +'<div id="kaydet-basari" class="m1-basari" style="display:none">'
     +'<div class="m1-basari-check">✓</div>'
     +'<div class="m1-basari-no" id="kaydet-no"></div>'
@@ -1640,18 +1640,13 @@ function kaydet(){
   })
   .then(function(d){
     document.getElementById('kaydet-spinner').style.display='none';
-    var anaKod = d.test_no || d.arge_kodu || ('ID-' + d.arge_test_id);
-    var sysRef = d.arge_kodu || '';
+    var anaKod = d.test_no || ('ID-' + d.arge_test_id);
     S._kaydedilen_test_id = d.arge_test_id;
     S._kaydedilen_no = anaKod;
-    S._kaydedilen_arge_kodu = sysRef;
+    S._kaydedilen_arge_kodu = d.arge_kodu || '';
     var noEl = document.getElementById('kaydet-no');
     if(noEl){
-      var refHtml = (d.test_no && sysRef)
-        ? '<div style="font-size:12px;font-weight:500;color:#94a3b8;margin-top:4px">Sistem Referansı: '
-          +esc(sysRef)+'</div>'
-        : '';
-      noEl.innerHTML = '<div>'+esc(anaKod)+'</div>'+refHtml;
+      noEl.textContent = anaKod;
     }
     var ozet = document.getElementById('kaydet-ozet');
     if(ozet){
@@ -1995,7 +1990,7 @@ function m1EtiketAc(){
     return;
   }
   m5MesajTemizle();
-  document.getElementById('m5-arge-kodu').textContent = S._kaydedilen_no || S._kaydedilen_arge_kodu || '—';
+  document.getElementById('m5-arge-kodu').textContent = S._kaydedilen_no || '—';
   document.getElementById('m5-rev-no').textContent    = 'REV-0';
   document.getElementById('m5-overlay').classList.add('acik');
   m5OnizlemeYukle(testId);
@@ -2011,7 +2006,7 @@ function m5OnizlemeYukle(testId){
     .then(function(d){
       if(!d.ok){ m5Mesaj('Veri yüklenemedi: ' + d.hata, 'hata'); return; }
       var r = d.revizyon;
-      document.getElementById('m5-arge-kodu').textContent     = r.test_no || S._kaydedilen_no || r.arge_kodu || '—';
+      document.getElementById('m5-arge-kodu').textContent     = r.test_no || S._kaydedilen_no || '—';
       document.getElementById('m5-cari-adi').textContent      = r.cari_adi || '—';
       document.getElementById('m5-talep-tarihi').textContent  = r.talep_tarihi
         ? r.talep_tarihi.replace(/(\d{4})-(\d{2})-(\d{2})/, '$3.$2.$1') : '—';

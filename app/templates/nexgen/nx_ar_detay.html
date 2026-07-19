@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% set page_title = (kart.test_no or kart.arge_kodu or 'AR-GE') ~ " — AR-GE Çalışma Kartı — NexGen" %}
+{% set page_title = (kart.test_no or 'AR-GE') ~ " — AR-GE Çalışma Kartı — NexGen" %}
 {% set durum_cls = (kart.durum or 'taslak')|lower|replace('_','-') %}
 {% set saha_gerekli = (kart.saha_testi_gerekli_mi or 0)|int == 1 %}
 {% set boyut_harf = {'LARGE':'L','SMALL':'S','MEDIUM':'M'} %}
@@ -10,18 +10,15 @@
   <div class="ad-bc">
     <a href="/nexgen/arge" class="ad-bc-link">← Listeye Dön</a>
     <span class="ad-bc-sep">›</span>
-    <span class="ad-bc-aktif">{{ kart.test_no or kart.arge_kodu }}</span>
+    <span class="ad-bc-aktif">{{ kart.test_no or '—' }}</span>
   </div>
 
-  {# ══ ÜST KART — AT ana kimlik; NX-AR sistem referansı ══ #}
+  {# ══ ÜST KART — yalnız AT çalışma kodu ══ #}
   <div class="ad-ust-kart">
     <div class="ad-ust-grid">
       <div class="ad-ust-hucre ad-ust-hucre-vurgu">
         <div class="ad-etiket">Çalışma Kodu</div>
-        <div class="ad-arge-no">{{ kart.test_no or kart.arge_kodu }}</div>
-        {% if kart.test_no and kart.arge_kodu %}
-        <div class="ad-alt-deger" style="color:#94a3b8;margin-top:4px">Sistem Referansı: {{ kart.arge_kodu }}</div>
-        {% endif %}
+        <div class="ad-arge-no">{{ kart.test_no or '—' }}</div>
       </div>
       <div class="ad-ust-hucre">
         <div class="ad-etiket">Durum</div>

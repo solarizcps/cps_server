@@ -243,7 +243,7 @@
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
           <input type="text" id="rz-arama" class="ag-rz-arama-input"
-                 placeholder="AT kodu, NX-RT, NX-AR, müşteri, renk, durum..."
+                 placeholder="AT kodu, müşteri, renk, durum..."
                  oninput="rzFiltrele()" autocomplete="off" spellcheck="false">
           <button class="ag-rz-arama-temizle" id="rz-arama-x"
                   onclick="rzAramaTmizle()" style="display:none">
@@ -291,7 +291,7 @@
           {% for t in son_numuneler[:3] %}
           <a href="{{ url_for('nexgen.tablet_arge_revize', test_id=t.id) }}"
              class="ag-rz-son3-kart">
-            <div class="ag-rz-son3-kod">{{ t.test_no or t.arge_kodu }}</div>
+            <div class="ag-rz-son3-kod">{{ t.test_no or '—' }}</div>
             <div class="ag-rz-son3-renk">{{ t.yeni_renk_adi or t.formul_ad or '—' }}</div>
             <div class="ag-rz-son3-alt">
               <span class="ag-rz-durum ag-rz-d-{{ (t.durum or 'TASLAK')|lower }}">
@@ -324,8 +324,8 @@
              data-musteri="{{ (t.cari_unvan or '')|lower }}"
              data-durum="{{ (t.durum or 'TASLAK')|lower }}">
             <div class="ag-rz-satir-sol">
-              <div class="ag-rz-satir-kod">{{ t.test_no or t.arge_kodu }}</div>
-              <div class="ag-rz-satir-meta">{% if t.test_no and t.arge_kodu %}<span style="color:#94a3b8">Sistem Referansı: {{ t.arge_kodu }}</span>{% else %}{{ t.test_no or '—' }}{% endif %}</div>
+              <div class="ag-rz-satir-kod">{{ t.test_no or '—' }}</div>
+              <div class="ag-rz-satir-meta">{{ t.boyut or t.formul_ad or '—' }}</div>
             </div>
             <div class="ag-rz-satir-orta">
               <div class="ag-rz-satir-renk">{{ t.yeni_renk_adi or t.formul_ad or '—' }}</div>
@@ -1313,7 +1313,7 @@ function rzBarkodAra() {
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (d.ok && d.redirect_url) {
-        sonuc.textContent = 'Bulundu: ' + (d.arge_kodu || '') + ' — yönlendiriliyor...';
+        sonuc.textContent = 'Bulundu — yönlendiriliyor...';
         sonuc.className   = 'ag-rz-barkod-sonuc basarili';
         setTimeout(function(){ window.location.href = d.redirect_url; }, 600);
       } else {

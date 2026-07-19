@@ -1009,7 +1009,7 @@ function adim7Html(){
     +'<div id="m2-kaydet-hata" class="m2-hata" style="display:none"></div>'
     +'<div id="m2-basari" class="m2-basari" style="display:none">'
     +'<div class="m2-basari-check">✓</div>'
-    /* AT çalışma kodu — NX-AR yalnız sistem referansı olarak alt satırda */
+    /* AT çalışma kodu */
     +'<div id="m2-basari-no" class="m2-basari-no" style="display:none"></div>'
     +'<div class="m2-basari-alt">Çalışma kaydı oluşturuldu.<br>'
     +'Durum: <strong>Onay Bekliyor</strong>'
@@ -1099,13 +1099,8 @@ function kaydet(){
     S._kaydedilen_test_no = kart.test_no || data.test_no;
     var noEl = document.getElementById('m2-basari-no');
     if(noEl){
-      /* AT ana kimlik; NX-AR küçük sistem referansı */
-      var ana = S._kaydedilen_test_no || S._kaydedilen_arge_kodu || 'OK';
-      var ref = (S._kaydedilen_test_no && S._kaydedilen_arge_kodu)
-        ? ('<div style="font-size:12px;font-weight:500;color:#94a3b8;margin-top:4px">Sistem Referansı: '
-           +esc(S._kaydedilen_arge_kodu)+'</div>')
-        : '';
-      noEl.innerHTML = '<div>'+esc(ana)+'</div>'+ref;
+      /* Kullanıcıya yalnız AT kodu */
+      noEl.textContent = S._kaydedilen_test_no || 'OK';
       noEl.style.display = 'block';
     }
     var basari = document.getElementById('m2-basari');
