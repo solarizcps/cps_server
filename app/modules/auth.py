@@ -258,6 +258,9 @@ def login():
                 nxt = '/uretim/'
             elif _tip == 'usta':
                 nxt = '/hedef/'
+            # FERHAT_TABLET_V1 (16.07.2026): Ferhat usta → saha tablet
+            elif (u.get('KullaniciAdi') or '').lower() == 'ferhat':
+                nxt = '/nexgen/tablet/ferhat'
             # FERHAT_LOGIN_REDIRECT_V1 (15.05.2026): Enjeksiyon rolu direkt saha
             elif _rol_ad == 'Enjeksiyon':
                 nxt = '/enjeksiyon/'
@@ -327,6 +330,8 @@ def sifre_degistir():
                 )
                 if _rol_ad == 'AR-GE Operatoru' or _rol_ad == 'AR-GE Operatörü':
                     return redirect('/nexgen/tablet/arge')
+                if (u.get('KullaniciAdi') or '').lower() == 'ferhat':
+                    return redirect('/nexgen/tablet/ferhat')
                 elif u.get('Tip') == 'personel':
                     return redirect('/uretim/')
                 elif u.get('Tip') == 'usta':
