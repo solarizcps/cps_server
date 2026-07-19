@@ -1500,15 +1500,15 @@ function adim7Html(){
     /* Kaydet butonu — not boşken disabled */
     +'<button class="m1-kaydet-btn" id="kaydet-btn" onclick="kaydet()" '+(notBosMu?'disabled style="opacity:.4;cursor:not-allowed"':'')+'>'
     +'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M17 3H7L3 7v10h14V3z"/><rect x="7" y="13" width="6" height="4" rx="1"/><rect x="6" y="3" width="8" height="5" rx="1"/></svg>'
-    +'NX-AR KARTI OLUŞTUR'
+    +'ÇALIŞMA KAYDET'
     +'</button>'
     +'<div id="kaydet-spinner" style="display:none" class="m1-yukleniyor"><div class="m1-spin"></div> Kaydediliyor…</div>'
     +'<div id="kaydet-hata" class="m1-hata" style="display:none"></div>'
-    /* Başarı bloğu */
+    /* Başarı bloğu — AT ana; NX-AR sistem referansı */
     +'<div id="kaydet-basari" class="m1-basari" style="display:none">'
     +'<div class="m1-basari-check">✓</div>'
     +'<div class="m1-basari-no" id="kaydet-no"></div>'
-    +'<div class="m1-basari-alt" id="kaydet-ozet">NX-AR çalışma kartı oluşturuldu.</div>'
+    +'<div class="m1-basari-alt" id="kaydet-ozet">Çalışma kaydı oluşturuldu.</div>'
     /* Tablet aksiyonları — masaüstü /nexgen/arge linki yok */
     +'<button class="m1-barkod-btn" id="barkod-btn" disabled style="opacity:.45;cursor:not-allowed">'
     +'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="18" height="18"><rect x="2" y="4" width="16" height="12" rx="2"/><line x1="6" y1="8" x2="6" y2="12"/><line x1="8" y1="7" x2="8" y2="13"/><line x1="10" y1="8" x2="10" y2="12"/><line x1="12" y1="7" x2="12" y2="13"/><line x1="14" y1="8" x2="14" y2="12"/></svg>'
@@ -1640,14 +1640,22 @@ function kaydet(){
   })
   .then(function(d){
     document.getElementById('kaydet-spinner').style.display='none';
-    var no = d.arge_kodu || ('ID-' + d.arge_test_id);
+    var anaKod = d.test_no || d.arge_kodu || ('ID-' + d.arge_test_id);
+    var sysRef = d.arge_kodu || '';
     S._kaydedilen_test_id = d.arge_test_id;
-    S._kaydedilen_no = no;
-    document.getElementById('kaydet-no').textContent = no;
+    S._kaydedilen_no = anaKod;
+    S._kaydedilen_arge_kodu = sysRef;
+    var noEl = document.getElementById('kaydet-no');
+    if(noEl){
+      var refHtml = (d.test_no && sysRef)
+        ? '<div style="font-size:12px;font-weight:500;color:#94a3b8;margin-top:4px">Sistem Referansı: '
+          +esc(sysRef)+'</div>'
+        : '';
+      noEl.innerHTML = '<div>'+esc(anaKod)+'</div>'+refHtml;
+    }
     var ozet = document.getElementById('kaydet-ozet');
     if(ozet){
       ozet.textContent = 'Durum: '+(d.durum||'—')
-        +' · Kart ID: '+(d.arge_test_id||'—')
         +' · Kaynak UV: '+(d.kaynak_uvler?d.kaynak_uvler.length:payload.kaynak_uvler.length);
     }
     document.getElementById('kaydet-basari').style.display='block';
@@ -1987,7 +1995,7 @@ function m1EtiketAc(){
     return;
   }
   m5MesajTemizle();
-  document.getElementById('m5-arge-kodu').textContent = S._kaydedilen_no || '—';
+  document.getElementById('m5-arge-kodu').textContent = S._kaydedilen_no || S._kaydedilen_arge_kodu || '—';
   document.getElementById('m5-rev-no').textContent    = 'REV-0';
   document.getElementById('m5-overlay').classList.add('acik');
   m5OnizlemeYukle(testId);
@@ -2003,7 +2011,7 @@ function m5OnizlemeYukle(testId){
     .then(function(d){
       if(!d.ok){ m5Mesaj('Veri yüklenemedi: ' + d.hata, 'hata'); return; }
       var r = d.revizyon;
-      document.getElementById('m5-arge-kodu').textContent     = r.arge_kodu || S._kaydedilen_no || '—';
+      document.getElementById('m5-arge-kodu').textContent     = r.test_no || S._kaydedilen_no || r.arge_kodu || '—';
       document.getElementById('m5-cari-adi').textContent      = r.cari_adi || '—';
       document.getElementById('m5-talep-tarihi').textContent  = r.talep_tarihi
         ? r.talep_tarihi.replace(/(\d{4})-(\d{2})-(\d{2})/, '$3.$2.$1') : '—';

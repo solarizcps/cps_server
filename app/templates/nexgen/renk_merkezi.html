@@ -111,8 +111,18 @@
 }
 .rm-rf-kart-icerik { flex:1; min-width:0; }
 .rm-rf-kart-kod {
-  font-size:9px; font-weight:700; color:#2563eb;
-  font-family:'Courier New',monospace; margin-bottom:2px;
+  font-size:12px; font-weight:800; color:#0f172a;
+  font-family:'Courier New',monospace; margin-bottom:1px;
+  letter-spacing:.2px;
+}
+.rm-rf-kart-ref {
+  font-size:9px; font-weight:500; color:#94a3b8;
+  font-family:'Courier New',monospace; margin-bottom:3px;
+  letter-spacing:0;
+}
+.rm-ozet-chip-ref {
+  font-size:9px; font-weight:500; color:#94a3b8;
+  font-family:monospace; background:transparent; border-color:#e2e8f0;
 }
 .rm-rf-kart-ad {
   font-size:11px; font-weight:700; color:var(--rm-t1);
@@ -711,9 +721,14 @@ function rmListeRender(kartlar){
     ));
     const rzCls=rmDurumRz(k.liste_grubu);
     const isNx = k.kart_tipi==='NX_AR';
-    const kodStr = isNx
-      ? ((k.test_no||'') ? k.test_no + (k.arge_kodu?(' · '+k.arge_kodu):'') : (k.arge_kodu||'—'))
-      : (k.rf_kodu&&k.rf_kodu!=='—'?k.rf_kodu:(k.arge_kodu||'—'));
+    /* AT ana kimlik; NX-AR yalnız küçük sistem referansı */
+    const anaKod = isNx
+      ? (k.test_no || k.arge_kodu || '—')
+      : (k.rf_kodu&&k.rf_kodu!=='—'?k.rf_kodu:(k.test_no||k.arge_kodu||'—'));
+    const refKod = isNx && k.test_no && k.arge_kodu ? k.arge_kodu : '';
+    const refHtml = refKod
+      ? `<div class="rm-rf-kart-ref">Sistem Referansı: ${rmE(refKod)}</div>`
+      : '';
     // Cari: yalnız gerçek değer varsa göster
     const cariGercek = k.cari_kodu && k.cari_kodu!=='—' && k.cari_kodu.trim()!=='';
     const cariHtml = cariGercek ? `<div class="rm-rf-kart-meta">${rmE(k.cari_kodu)}</div>` : '';
@@ -731,7 +746,8 @@ function rmListeRender(kartlar){
                 onclick='rmKartSec(${JSON.stringify(k)})'>
       <div class="rm-renk-daıre" style="background:${dc.bg};color:${dc.fg};border-color:${dc.bg==='#f5f5f5'?'#d1d5db':dc.bg}"></div>
       <div class="rm-rf-kart-icerik">
-        <div class="rm-rf-kart-kod">${rmE(kodStr)}</div>
+        <div class="rm-rf-kart-kod">${rmE(anaKod)}</div>
+        ${refHtml}
         <div class="rm-rf-kart-durum">
           <span class="rm-rf-kart-ad">${rmE(k.rf_adi)}</span>
           <span class="${rzCls}">${rmE(k.durum_etiketi)}</span>
@@ -832,18 +848,23 @@ function rmTlHtml(grubu){
 function rmRender(kart, d){
   const oz=d.ozet;
   const grubu=kart.liste_grubu;
+  const c0=d.calisma;
+  const anaKod=(kart.test_no)||(c0&&c0.test_no)||(oz.rf_kodu&&oz.rf_kodu!=='—'&&oz.rf_kodu)||oz.arge_kodu||'';
+  const sysRef=(kart.arge_kodu)||oz.arge_kodu||'';
 
-  // Başlık
-  document.getElementById('rm-hdr-ad').textContent=(oz.arge_kodu||'')+' — '+(oz.rf_adi||'');
+  // Başlık — AT ana kimlik
+  document.getElementById('rm-hdr-ad').textContent=(anaKod||'')+(oz.rf_adi?(' — '+oz.rf_adi):'');
 
   // Özet — chip'li başlık yapısı
   document.getElementById('oz-ad').textContent=oz.rf_adi||'—';
-  // Kod + REV chip'leri
+  // Kod + REV chip'leri — AT büyük; NX-AR küçük referans
   let chipHtml='';
   if(oz.rf_kodu&&oz.rf_kodu!=='—')
     chipHtml+=`<span class="rm-ozet-chip rm-ozet-chip-kod">${rmE(oz.rf_kodu)}</span>`;
-  else if(oz.arge_kodu)
-    chipHtml+=`<span class="rm-ozet-chip rm-ozet-chip-kod">${rmE(oz.arge_kodu)}</span>`;
+  else if(anaKod)
+    chipHtml+=`<span class="rm-ozet-chip rm-ozet-chip-kod">${rmE(anaKod)}</span>`;
+  if(sysRef && sysRef!==anaKod && String(sysRef).indexOf('NX-AR-')===0)
+    chipHtml+=`<span class="rm-ozet-chip rm-ozet-chip-ref">Sistem Referansı: ${rmE(sysRef)}</span>`;
   chipHtml+=`<span class="rm-ozet-chip rm-ozet-chip-rev">REV-${oz.rev_no||1}</span>`;
   document.getElementById('oz-kodlar').innerHTML=chipHtml;
 
@@ -913,7 +934,8 @@ function rmRender(kart, d){
         <div class="rm-bs"><span class="rm-be">Cari</span><span class="rm-bv">${rmE(oz.cari)}</span></div>
         <div class="rm-bs"><span class="rm-be">RF adı</span><span class="rm-bv">${rmE(oz.rf_adi)}</span></div>
         <div class="rm-bs"><span class="rm-be">Ana formül</span><span class="rm-bv">${rmE(oz.ana_formul)}</span></div>
-        <div class="rm-bs"><span class="rm-be">Test No</span><span class="rm-bv">${rmE(c.test_no||'—')}</span></div>
+        <div class="rm-bs"><span class="rm-be">Çalışma Kodu</span><span class="rm-bv">${rmE(c.test_no||'—')}</span></div>
+        <div class="rm-bs"><span class="rm-be">Sistem Referansı</span><span class="rm-bv" style="font-weight:500;color:var(--rm-t4);font-size:11px">${rmE(oz.arge_kodu||'—')}</span></div>
         <div class="rm-bs"><span class="rm-be">Tarih</span><span class="rm-bv">${rmE((c.olusturma_tarihi||'—').substring(0,10))}</span></div>
         <div class="rm-bs"><span class="rm-be">Numune</span><span class="rm-bv">${c.test_batch_kg||'—'} KG</span></div>
         ${c.notlar?`<div class="rm-bs"><span class="rm-be">Not</span><span class="rm-bv" style="font-weight:400;color:var(--rm-t3)">${rmE(c.notlar)}</span></div>`:''}

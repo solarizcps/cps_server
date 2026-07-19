@@ -1,0 +1,399 @@
+{% extends "base.html" %}
+{% set page_title = (kart.test_no or kart.arge_kodu or 'AR-GE') ~ " — AR-GE Çalışma Kartı — NexGen" %}
+{% set durum_cls = (kart.durum or 'taslak')|lower|replace('_','-') %}
+{% set saha_gerekli = (kart.saha_testi_gerekli_mi or 0)|int == 1 %}
+{% set boyut_harf = {'LARGE':'L','SMALL':'S','MEDIUM':'M'} %}
+
+{% block content %}
+<div class="ad-sayfa nx-ar-sayfa">
+
+  <div class="ad-bc">
+    <a href="/nexgen/arge" class="ad-bc-link">← Listeye Dön</a>
+    <span class="ad-bc-sep">›</span>
+    <span class="ad-bc-aktif">{{ kart.test_no or kart.arge_kodu }}</span>
+  </div>
+
+  {# ══ ÜST KART — AT ana kimlik; NX-AR sistem referansı ══ #}
+  <div class="ad-ust-kart">
+    <div class="ad-ust-grid">
+      <div class="ad-ust-hucre ad-ust-hucre-vurgu">
+        <div class="ad-etiket">Çalışma Kodu</div>
+        <div class="ad-arge-no">{{ kart.test_no or kart.arge_kodu }}</div>
+        {% if kart.test_no and kart.arge_kodu %}
+        <div class="ad-alt-deger" style="color:#94a3b8;margin-top:4px">Sistem Referansı: {{ kart.arge_kodu }}</div>
+        {% endif %}
+      </div>
+      <div class="ad-ust-hucre">
+        <div class="ad-etiket">Durum</div>
+        <span class="ad-rozet ad-rozet-{{ durum_cls }}">{{ kart.durum or '—' }}</span>
+      </div>
+      <div class="ad-ust-hucre">
+        <div class="ad-etiket">Cari</div>
+        <div class="ad-deger">{{ kart.cari_unvan or '—' }}</div>
+        {% if kart.cari_kod %}<div class="ad-alt-deger">{{ kart.cari_kod }}</div>{% endif %}
+      </div>
+      <div class="ad-ust-hucre">
+        <div class="ad-etiket">Çalışma Tipi</div>
+        <div class="ad-deger">{{ kart.calisma_tipi or '—' }}</div>
+      </div>
+      <div class="ad-ust-hucre">
+        <div class="ad-etiket">Ürün Ailesi</div>
+        <div class="ad-deger">{{ kart.urun_ailesi or '—' }}</div>
+      </div>
+      <div class="ad-ust-hucre">
+        <div class="ad-etiket">Formül Grubu</div>
+        <div class="ad-deger">{{ kart.formul_grup_adi or '—' }}</div>
+        {% if kart.ana_formul_grup_kodu %}<div class="ad-alt-deger">{{ kart.ana_formul_grup_kodu }}</div>{% endif %}
+      </div>
+      <div class="ad-ust-hucre">
+        <div class="ad-etiket">Boyut</div>
+        <div class="ad-deger">{{ kart.boyut_etiket or '—' }}</div>
+      </div>
+      <div class="ad-ust-hucre">
+        <div class="ad-etiket">Renk</div>
+        <div class="ad-deger">{{ kart.hedef_renk_adi or kart.renk_kodu or '—' }}</div>
+        {% if kart.renk_kodu and kart.hedef_renk_adi %}<div class="ad-alt-deger">{{ kart.renk_kodu }}</div>{% endif %}
+      </div>
+      <div class="ad-ust-hucre">
+        <div class="ad-etiket">Öncelik</div>
+        <div class="ad-deger">{{ kart.oncelik or '—' }}</div>
+      </div>
+      <div class="ad-ust-hucre">
+        <div class="ad-etiket">Saha Testi</div>
+        <div class="ad-deger">{% if saha_gerekli %}Gerekli{% else %}Gerekli Değil{% endif %}</div>
+        {% if saha_gerekli and kart.saha_testi_nedeni %}<div class="ad-alt-deger">{{ kart.saha_testi_nedeni }}</div>{% endif %}
+      </div>
+      <div class="ad-ust-hucre">
+        <div class="ad-etiket">Oluşturan</div>
+        <div class="ad-deger">{{ kart.olusturan_ad or '—' }}</div>
+      </div>
+      <div class="ad-ust-hucre">
+        <div class="ad-etiket">Sorumlu</div>
+        <div class="ad-deger">{{ kart.sorumlu_ad or '—' }}</div>
+      </div>
+      <div class="ad-ust-hucre">
+        <div class="ad-etiket">Oluşturma</div>
+        <div class="ad-deger">{{ (kart.olusturma_tarihi or '')[:16] or '—' }}</div>
+      </div>
+    </div>
+  </div>
+
+  {# ══ KAYNAK FORMÜLLER ══ #}
+  <div class="ad-panel">
+    <div class="ad-panel-hdr">
+      <span class="ad-panel-baslik">Kaynak Formüller</span>
+    </div>
+    <div class="nx-ar-bolum">
+      {% if kart.kaynak_uvler %}
+      <div class="nx-ar-kaynak-grid">
+        {% for k in kart.kaynak_uvler %}
+        <div class="nx-ar-kaynak-kart">
+          <div class="nx-ar-kaynak-boyut">{{ boyut_harf.get(k.boyut, k.boyut) }} — {{ k.boyut }}</div>
+          <div class="ad-bs"><span class="ad-be">UV</span><span class="ad-bv">{{ k.uv_ad or k.kaynak_uretim_varyant_id or '—' }}</span></div>
+          <div class="ad-bs"><span class="ad-be">RV</span><span class="ad-bv">{{ k.rv_ad or '—' }}</span></div>
+          <div class="ad-bs"><span class="ad-be">Formül</span><span class="ad-bv">{{ k.formul_kod or '—' }}{% if k.formul_ad %} · {{ k.formul_ad }}{% endif %}</span></div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="ad-bos">Kaynak UV bulunmuyor.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ══ DENEMELER ══ #}
+  <div class="ad-panel">
+    <div class="ad-panel-hdr">
+      <span class="ad-panel-baslik">Denemeler</span>
+    </div>
+    <div class="nx-ar-bolum">
+      {% if kart.deneme %}
+      <div class="nx-ar-deneme-ust">
+        <div class="ad-deger">Deneme {{ kart.deneme.deneme_no or 1 }}</div>
+        <div class="nx-ar-meta-row">
+          <span>Durum: <strong>{{ kart.deneme.durum or '—' }}</strong></span>
+          <span>Numune: <strong>{{ kart.deneme.numune_orani or '—' }}%</strong></span>
+          <span>Lot: <strong>{{ kart.deneme.lot_no or '—' }}</strong></span>
+        </div>
+        {% if kart.deneme.genel_not %}
+        <div class="ad-alt-deger" style="margin-top:6px">{{ kart.deneme.genel_not }}</div>
+        {% endif %}
+      </div>
+
+      {% for b in kart.boyutlar %}
+      <div class="nx-ar-alt-baslik">{{ boyut_harf.get(b, b) }} — Reçete Kalemleri</div>
+      {% set kalemler = kart.kalemler_by_boyut.get(b, []) %}
+      {% if kalemler %}
+      <div class="ad-tablo-scroll">
+        <table class="ad-tablo">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Stok</th>
+              <th class="r">Orijinal KG</th>
+              <th class="r">Test KG</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for kl in kalemler %}
+            <tr>
+              <td>{{ kl.sira }}</td>
+              <td>
+                <span class="ad-stok-kod">{{ kl.stok_kod or '—' }}</span>
+                <span class="ad-stok-ad">{{ kl.stok_ad or '—' }}</span>
+              </td>
+              <td class="r">{{ '%.4f'|format(kl.orjinal_miktar_kg or 0) }}</td>
+              <td class="r ad-test-kg">{{ '%.4f'|format(kl.test_miktar_kg or 0) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="ad-bos">Bu boyut için kalem yok.</div>
+      {% endif %}
+      {% endfor %}
+      {% else %}
+      <div class="ad-bos">Aktif deneme bulunmuyor.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ══ BOYUT SONUÇLARI ══ #}
+  <div class="ad-panel">
+    <div class="ad-panel-hdr">
+      <span class="ad-panel-baslik">Boyut Sonuçları</span>
+    </div>
+    <div class="nx-ar-bolum">
+      <div class="nx-ar-kaynak-grid">
+        {% for s in kart.boyut_sonuclar %}
+        <div class="nx-ar-kaynak-kart">
+          <div class="nx-ar-kaynak-boyut">{{ boyut_harf.get(s.boyut, s.boyut) }} — {{ s.boyut }}</div>
+          <div class="ad-bs"><span class="ad-be">Shore</span><span class="ad-bv">{{ s.shore_sonuc if s.shore_sonuc is not none else '—' }}</span></div>
+          <div class="ad-bs"><span class="ad-be">Yoğunluk</span><span class="ad-bv">{{ s.yogunluk if s.yogunluk is not none else '—' }}</span></div>
+          <div class="ad-bs"><span class="ad-be">Pişme</span><span class="ad-bv">{% if s.pisme_suresi_dk is not none %}{{ s.pisme_suresi_dk }} dk{% else %}—{% endif %}</span></div>
+          <div class="ad-bs"><span class="ad-be">Renk</span><span class="ad-bv">{{ s.renk_sonucu or '—' }}</span></div>
+          <div class="ad-bs"><span class="ad-be">Kalıp</span><span class="ad-bv">{{ s.kalip_sonucu or '—' }}</span></div>
+        </div>
+        {% else %}
+        <div class="ad-bos">Boyut sonucu henüz yok.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  {# ══ FERHAT / SAHA ══ #}
+  <div class="ad-panel">
+    <div class="ad-panel-hdr">
+      <span class="ad-panel-baslik">Saha Testi (Ferhat)</span>
+    </div>
+    <div class="nx-ar-bolum">
+      <div class="ad-deger">Saha Testi: {% if saha_gerekli %}Gerekli{% else %}Gerekli Değil{% endif %}</div>
+      {% if not saha_gerekli %}
+      <div class="ad-alt-deger" style="margin-top:6px">Saha testi gerekmiyor.</div>
+      {% elif kart.saha_testi_nedeni %}
+      <div class="ad-alt-deger" style="margin-top:6px">Neden: {{ kart.saha_testi_nedeni }}</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ══ REVİZYON ══ #}
+  <div class="ad-panel">
+    <div class="ad-panel-hdr">
+      <span class="ad-panel-baslik">Revizyon</span>
+    </div>
+    <div class="nx-ar-bolum">
+      {% if kart.revizyonlar %}
+      <table class="ad-tablo">
+        <thead>
+          <tr>
+            <th>Rev</th>
+            <th>Neden</th>
+            <th>Yapan</th>
+            <th>Tarih</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in kart.revizyonlar %}
+          <tr>
+            <td>REV-{{ r.rev_no }}</td>
+            <td>{{ r.neden or r.revizyon_notu or '—' }}</td>
+            <td>{{ r.olusturan_adi or '—' }}</td>
+            <td>{{ (r.olusturma_tarihi or '')[:16] }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="ad-bos">Henüz revizyon bulunmuyor.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ══ RF ══ #}
+  <div class="ad-panel">
+    <div class="ad-panel-hdr">
+      <span class="ad-panel-baslik">RF</span>
+    </div>
+    <div class="nx-ar-bolum">
+      {% if kart.rf %}
+      <div class="ad-deger">{{ kart.rf.rf_kod }} — {{ kart.rf.ad }}</div>
+      <div class="ad-alt-deger">Durum: {{ kart.rf.durum }}</div>
+      {% else %}
+      <div class="ad-bos">Henüz RF oluşturulmadı.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ══ ÜRETİM KODLARI ══ #}
+  <div class="ad-panel">
+    <div class="ad-panel-hdr">
+      <span class="ad-panel-baslik">Üretim Kodları</span>
+    </div>
+    <div class="nx-ar-bolum">
+      {% if kart.uretim_kodlari %}
+      <table class="ad-tablo">
+        <thead>
+          <tr><th>Boyut</th><th>Üretim Kodu</th><th>UV</th></tr>
+        </thead>
+        <tbody>
+          {% for u in kart.uretim_kodlari %}
+          <tr>
+            <td>{{ u.boyut }}</td>
+            <td>{{ u.uretim_kodu or '—' }}</td>
+            <td>{{ u.olusan_uv_id or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="ad-bos">Henüz oluşmadı.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ══ GEÇMİŞ ══ #}
+  <div class="ad-panel">
+    <div class="ad-panel-hdr">
+      <span class="ad-panel-baslik">Geçmiş</span>
+    </div>
+    <div class="nx-ar-bolum">
+      {% for g in kart.gecmis %}
+      <div class="ad-bs">
+        <span class="ad-be">{{ g.olay }}</span>
+        <span class="ad-bv">{{ g.kullanici }} · {{ (g.tarih or '')[:16] or '—' }}</span>
+      </div>
+      {% else %}
+      <div class="ad-bos">Kayıt yok.</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="ad-alt-bar">
+    <a href="/nexgen/arge" class="ad-btn-geri">← Listeye Dön</a>
+  </div>
+
+</div>
+
+<style>
+*{ box-sizing:border-box; }
+.ad-sayfa {
+  display:flex; flex-direction:column; gap:12px;
+  max-width:1200px;
+}
+.ad-bc {
+  display:flex; align-items:center; gap:8px; font-size:12px; color:#64748b;
+}
+.ad-bc-link { color:#0891b2; text-decoration:none; font-weight:600; }
+.ad-bc-link:hover { text-decoration:underline; }
+.ad-bc-sep { color:#cbd5e1; }
+.ad-bc-aktif { color:#0f172a; font-weight:600; }
+
+.ad-ust-kart {
+  background:#fff; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden;
+}
+.ad-ust-grid {
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
+  gap:0; padding:4px;
+}
+.ad-ust-hucre { padding:12px 14px; border-right:1px solid #f1f5f9; border-bottom:1px solid #f1f5f9; }
+.ad-ust-hucre-vurgu { background:#f0f9ff; }
+.ad-etiket {
+  font-size:10px; font-weight:700; color:#94a3b8;
+  text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px;
+}
+.ad-arge-no {
+  font-family:'Courier New',monospace; font-size:16px; font-weight:800; color:#0891b2;
+}
+.ad-deger { font-size:13px; font-weight:600; color:#0f172a; line-height:1.4; }
+.ad-alt-deger { font-size:10px; color:#94a3b8; margin-top:2px; }
+
+.ad-rozet {
+  display:inline-block; font-size:9px; font-weight:800; padding:3px 8px;
+  border-radius:5px; letter-spacing:.3px;
+}
+.ad-rozet-arge-hazir, .ad-rozet-denemede { background:#ecfdf5; color:#059669; }
+.ad-rozet-revizyon-gerekli, .ad-rozet-onay-bekliyor { background:#fefce8; color:#a16207; }
+.ad-rozet-taslak { background:#f1f5f9; color:#64748b; }
+
+.ad-panel {
+  background:#fff; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden;
+}
+.ad-panel-hdr { padding:10px 14px; background:#0f172a; }
+.ad-panel-baslik {
+  font-size:11px; font-weight:700; color:#f1f5f9;
+  letter-spacing:.5px; text-transform:uppercase;
+}
+.nx-ar-bolum { padding:14px; }
+.nx-ar-kaynak-grid {
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:10px;
+}
+.nx-ar-kaynak-kart {
+  border:1px solid #e5e7eb; border-radius:10px; padding:12px; background:#fafafa;
+}
+.nx-ar-kaynak-boyut {
+  font-size:12px; font-weight:800; color:#0f172a; margin-bottom:8px;
+  letter-spacing:.3px;
+}
+.ad-bs {
+  display:flex; justify-content:space-between; gap:8px;
+  padding:4px 0; font-size:12px; border-bottom:1px solid #f1f5f9;
+}
+.ad-be { color:#94a3b8; font-weight:600; }
+.ad-bv { color:#0f172a; font-weight:600; text-align:right; }
+
+.nx-ar-deneme-ust { margin-bottom:12px; }
+.nx-ar-meta-row {
+  display:flex; flex-wrap:wrap; gap:14px; margin-top:6px;
+  font-size:12px; color:#64748b;
+}
+.nx-ar-alt-baslik {
+  font-size:11px; font-weight:800; color:#334155; text-transform:uppercase;
+  letter-spacing:.4px; margin:14px 0 8px;
+}
+
+.ad-tablo-scroll { overflow-x:auto; margin-bottom:8px; }
+.ad-tablo { width:100%; border-collapse:collapse; font-size:12px; }
+.ad-tablo thead th {
+  padding:6px 10px; text-align:left; font-size:10px; font-weight:600;
+  color:#94a3b8; text-transform:uppercase; background:#fafafa;
+  border-bottom:1px solid #f1f5f9;
+}
+.ad-tablo th.r, .ad-tablo td.r { text-align:right; }
+.ad-tablo tbody tr { border-bottom:1px solid #f8fafc; }
+.ad-tablo td { padding:7px 10px; vertical-align:middle; }
+.ad-stok-kod { font-family:'Courier New',monospace; font-size:10px; color:#0891b2; display:block; }
+.ad-stok-ad { font-size:12px; font-weight:600; color:#0f172a; }
+.ad-test-kg { background:#f0fdf4; }
+.ad-bos { padding:20px; text-align:center; color:#94a3b8; font-size:13px; }
+
+.ad-alt-bar {
+  display:flex; gap:10px; flex-wrap:wrap; align-items:center; padding:4px 0 20px;
+}
+.ad-btn-geri {
+  padding:10px 16px; border-radius:8px; background:#0f172a; color:#f1f5f9;
+  font-size:12px; font-weight:700; text-decoration:none; border:none;
+}
+.ad-btn-geri:hover { background:#1e293b; }
+</style>
+{% endblock %}

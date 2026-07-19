@@ -291,7 +291,7 @@
           {% for t in son_numuneler[:3] %}
           <a href="{{ url_for('nexgen.tablet_arge_revize', test_id=t.id) }}"
              class="ag-rz-son3-kart">
-            <div class="ag-rz-son3-kod">{{ t.arge_kodu or t.test_no }}</div>
+            <div class="ag-rz-son3-kod">{{ t.test_no or t.arge_kodu }}</div>
             <div class="ag-rz-son3-renk">{{ t.yeni_renk_adi or t.formul_ad or '—' }}</div>
             <div class="ag-rz-son3-alt">
               <span class="ag-rz-durum ag-rz-d-{{ (t.durum or 'TASLAK')|lower }}">
@@ -319,13 +319,13 @@
           {% for t in son_numuneler %}
           <a href="{{ url_for('nexgen.tablet_arge_revize', test_id=t.id) }}"
              class="ag-rz-satir"
-             data-kod="{{ (t.arge_kodu or t.test_no or '')|lower }}"
+             data-kod="{{ ((t.test_no or '') ~ ' ' ~ (t.arge_kodu or ''))|lower }}"
              data-renk="{{ (t.yeni_renk_adi or t.formul_ad or '')|lower }}"
              data-musteri="{{ (t.cari_unvan or '')|lower }}"
              data-durum="{{ (t.durum or 'TASLAK')|lower }}">
             <div class="ag-rz-satir-sol">
-              <div class="ag-rz-satir-kod">{{ t.arge_kodu or t.test_no }}</div>
-              <div class="ag-rz-satir-meta">{{ t.test_no }}</div>
+              <div class="ag-rz-satir-kod">{{ t.test_no or t.arge_kodu }}</div>
+              <div class="ag-rz-satir-meta">{% if t.test_no and t.arge_kodu %}<span style="color:#94a3b8">Sistem Referansı: {{ t.arge_kodu }}</span>{% else %}{{ t.test_no or '—' }}{% endif %}</div>
             </div>
             <div class="ag-rz-satir-orta">
               <div class="ag-rz-satir-renk">{{ t.yeni_renk_adi or t.formul_ad or '—' }}</div>

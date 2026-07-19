@@ -118,10 +118,12 @@
             'ONAYLANDI': 'ONAYLANDI',
             'REDDEDILDI': 'REDDEDİLDİ'
           }.get(t.durum, t.durum or 'TASLAK') %}
-          <tr class="al-satir" data-ara="{{ (t.test_no ~ ' ' ~ (t.lot_no or '') ~ ' ' ~ (t.cari_unvan or '') ~ ' ' ~ t.formul_ad ~ ' ' ~ renk_goster)|lower }}">
+          <tr class="al-satir" data-ara="{{ ((t.arge_kodu or '') ~ ' ' ~ (t.test_no or '') ~ ' ' ~ (t.lot_no or '') ~ ' ' ~ (t.cari_unvan or '') ~ ' ' ~ (t.formul_ad or '') ~ ' ' ~ renk_goster)|lower }}">
             <td>
-              <div class="al-kod">{{ t.test_no }}</div>
-              {% if t.lot_no %}
+              <div class="al-kod">{{ t.test_no or t.arge_kodu }}</div>
+              {% if t.test_no and t.arge_kodu %}
+              <div class="al-lot">Sistem Referansı: {{ t.arge_kodu }}</div>
+              {% elif t.lot_no %}
               <div class="al-lot">{{ t.lot_no }}</div>
               {% else %}
               <div class="al-lot al-lot-bos">LOT tanımsız</div>
