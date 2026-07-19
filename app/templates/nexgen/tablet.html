@@ -409,7 +409,7 @@ function renkKimlikMetin(sip) {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   3. KART HTML ÜRET — kompakt Ali sipariş listesi
+   3. KART HTML — 3 kolon (Kimlik | Üretim durumu | Aksiyon)
 ═══════════════════════════════════════════════════════════ */
 function kartHtml(sip, kartIdx) {
   var gd  = genelDurum(sip);
@@ -425,55 +425,28 @@ function kartHtml(sip, kartIdx) {
   var tarih = sip.plan_tarihi ? sip.plan_tarihi.substring(0,10) : '';
   var boyutYazi = sip.boyutlar.map(function(by) { return by.boyut; }).join(' / ');
   var renkMetin = renkKimlikMetin(sip);
-  var kimlik = '<span class="nxt-kimlik-formul">' + esc(sip.formul_ad || '—') + '</span>';
-  if (renkMetin) {
-    kimlik += ' <span class="nxt-kimlik-ayrac">·</span> <span class="nxt-rf-kod">' + esc(renkMetin) + '</span>';
-  }
-  if (boyutYazi) {
-    kimlik += ' <span class="nxt-kimlik-ayrac">·</span> <span class="nxt-boyut-rozet">' + esc(boyutYazi) + '</span>';
-  }
 
   var hedefKg = em.hedef;
   var uretilenKg = em.uretilen;
   var kalanKg = Math.max(0, hedefKg - uretilenKg);
   var yuzde = hedefKg > 0 ? Math.min(100, Math.round((uretilenKg / hedefKg) * 100)) : 0;
 
-  var emirHtml = '';
-  if (_PARCA_VAR && em.toplam > 0) {
-    emirHtml =
-      '<div class="nxt-emir-satirlar nxt-emir-sira">' +
-        '<div class="nxt-emir-satir nxt-es-kalan"><span class="nxt-es-sayi">' + em.baslayacak + '</span><span class="nxt-es-yazi">Başlayacak</span></div>' +
-        '<div class="nxt-emir-satir nxt-es-devam"><span class="nxt-es-sayi">' + em.devam + '</span><span class="nxt-es-yazi">Devam Eden</span></div>' +
-        '<div class="nxt-emir-satir nxt-es-biten"><span class="nxt-es-sayi">' + em.biten + '</span><span class="nxt-es-yazi">Biten</span></div>' +
-      '</div>';
-  } else {
-    emirHtml = '<div class="nxt-emir-satirlar nxt-emir-sira">' +
-      '<div class="nxt-emir-satir"><span class="nxt-es-sayi">—</span><span class="nxt-es-yazi">Emir</span></div></div>';
-  }
-
-  var kgHtml =
-    '<div class="nxt-kg-blok">' +
-      '<div class="nxt-kg-satir">' +
-        '<span class="nxt-kg-uretilen">' + fmt(uretilenKg) + '</span>' +
-        '<span class="nxt-kg-sep"> / </span>' +
-        '<span class="nxt-kg-plan">' + fmt(hedefKg) + ' KG</span>' +
-      '</div>' +
-      '<div class="nxt-kg-alt-satir">Kalan: ' + fmt(kalanKg) + ' KG · %' + yuzde + ' tamamlandı</div>' +
-      '<div class="nxt-progress-bar"><div class="nxt-progress-dolu" style="width:' + yuzde + '%"></div></div>' +
-    '</div>';
+  var baslayacak = (_PARCA_VAR && em.toplam > 0) ? em.baslayacak : '—';
+  var devamEden  = (_PARCA_VAR && em.toplam > 0) ? em.devam : '—';
+  var bitenSay   = (_PARCA_VAR && em.toplam > 0) ? em.biten : '—';
 
   var butonHtml = '';
-  var btnCls = (cta === 'Görüntüle' || cta === 'Tamamlandı') ? 'nxt-btn-ana nxt-btn-ana-muted' : 'nxt-btn-ana';
+  var btnCls = (cta === 'Görüntüle' || cta === 'Tamamlandı') ? 'nxt-cta nxt-cta-muted' : 'nxt-cta';
   if (tek) {
     if (by0.batch_kodu) {
       butonHtml = '<a href="/nexgen/tablet/uretim-islem/' + esc(by0.batch_kodu) + '" class="' + btnCls + '">' + esc(cta) + '</a>';
     } else {
-      butonHtml = '<button class="nxt-btn-ana" onclick="planBasla(' + by0.plan_id + ',\'' + esc(sip.formul_ad) + '\')">' + esc(cta) + '</button>';
+      butonHtml = '<button type="button" class="nxt-cta" onclick="planBasla(' + by0.plan_id + ',\'' + esc(sip.formul_ad) + '\')">' + esc(cta) + '</button>';
     }
     if (by0.batch_kodu) {
-      butonHtml += '<a href="/nexgen/tablet/etiket/uretim/' + esc(by0.batch_kodu) + '" class="nxt-btn-ikincil">Etiket</a>';
+      butonHtml += '<a href="/nexgen/tablet/etiket/uretim/' + esc(by0.batch_kodu) + '" class="nxt-cta-etiket">Etiket</a>';
     } else {
-      butonHtml += '<span class="nxt-btn-ikincil nxt-btn-disabled">Etiket</span>';
+      butonHtml += '<span class="nxt-cta-etiket nxt-btn-disabled">Etiket</span>';
     }
   } else {
     butonHtml = '<button type="button" class="' + btnCls + '" onclick="lsModalAc(' + kartIdx + ')">' + esc(cta) + '</button>';
@@ -482,30 +455,66 @@ function kartHtml(sip, kartIdx) {
       butonHtml += '<span data-boyut="' + esc(by.boyut) + '" data-batch="' + esc(by.batch_kodu || '') + '"></span>';
     });
     butonHtml += '</div>';
-    butonHtml += '<a href="/nexgen/tablet/etiket/uretim/' + esc(by0.batch_kodu || '') + '" class="nxt-btn-ikincil">Etiket</a>';
+    butonHtml += '<a href="/nexgen/tablet/etiket/uretim/' + esc(by0.batch_kodu || '') + '" class="nxt-cta-etiket">Etiket</a>';
   }
 
-  return '<div class="nxt-kart nxt-kart-kompakt ' + solCls + '" ' +
+  return '<div class="nxt-kart nxt-kart-v2 ' + solCls + '" ' +
     'data-durum="' + gd.toLowerCase() + '" ' +
     'data-cari="' + esc(sip.musteri_adi.toLowerCase()) + '" ' +
     'data-sip="' + esc((sip.siparis_no||'').toLowerCase()) + '" ' +
     'data-urun="' + esc(sip.formul_ad.toLowerCase()) + '">' +
 
-    '<div class="nxt-kart-ust">' +
-      '<div class="nxt-ust-cari">' +
-        '<span class="nxt-ust-cari-ad" title="' + esc(sip.musteri_adi) + '">' + esc(sip.musteri_adi) + '</span>' +
+    '<div class="nxt-kart-v2-row">' +
+
+      /* A — KİMLİK ~32% */
+      '<div class="nxt-col-kimlik">' +
+        '<div class="nxt-kimlik-ust">' +
+          '<div class="nxt-cari-baslik" title="' + esc(sip.musteri_adi) + '">' + esc(sip.musteri_adi) + '</div>' +
+          '<div class="nxt-kimlik-meta">' +
+            '<span class="nxt-ust-sip-no">' + esc(sip.siparis_no) + '</span>' +
+            (tarih ? '<span class="nxt-ust-tarih">' + tarih + '</span>' : '') +
+            '<span class="nxt-durum-rozet ' + durumCls + '">' + esc(et) + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="nxt-urun-blok">' +
+          '<div class="nxt-urun-formul">' + esc(sip.formul_ad || '—') + '</div>' +
+          (renkMetin ? '<div class="nxt-urun-renk">' + esc(renkMetin) + '</div>' : '') +
+          (boyutYazi ? '<div class="nxt-urun-boyut">' + esc(boyutYazi) + '</div>' : '') +
+        '</div>' +
       '</div>' +
-      '<div class="nxt-ust-sip-no">' + esc(sip.siparis_no) + '</div>' +
-      (tarih ? '<div class="nxt-ust-tarih">' + tarih + '</div>' : '') +
-      '<div class="nxt-durum-rozet ' + durumCls + '">' + esc(et) + '</div>' +
-    '</div>' +
 
-    '<div class="nxt-kimlik-satir">' + kimlik + '</div>' +
+      /* B — ÜRETİM DURUMU ~45% */
+      '<div class="nxt-col-durum">' +
+        '<div class="nxt-sayac-grid">' +
+          '<div class="nxt-sayac-hucre">' +
+            '<div class="nxt-sayac-etiket">BAŞLAYACAK</div>' +
+            '<div class="nxt-sayac-rakam nxt-sr-basla">' + baslayacak + '</div>' +
+          '</div>' +
+          '<div class="nxt-sayac-hucre">' +
+            '<div class="nxt-sayac-etiket">DEVAM EDEN</div>' +
+            '<div class="nxt-sayac-rakam nxt-sr-devam">' + devamEden + '</div>' +
+          '</div>' +
+          '<div class="nxt-sayac-hucre">' +
+            '<div class="nxt-sayac-etiket">BİTEN</div>' +
+            '<div class="nxt-sayac-rakam nxt-sr-biten">' + bitenSay + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="nxt-kg-merkez">' +
+          '<div class="nxt-kg-buyuk">' +
+            '<span class="nxt-kg-uretilen">' + fmt(uretilenKg) + '</span>' +
+            '<span class="nxt-kg-sep"> / </span>' +
+            '<span class="nxt-kg-plan">' + fmt(hedefKg) + ' KG</span>' +
+          '</div>' +
+          '<div class="nxt-progress-bar nxt-progress-bar-v2">' +
+            '<div class="nxt-progress-dolu" style="width:' + yuzde + '%"></div>' +
+          '</div>' +
+          '<div class="nxt-kg-alt-satir">Kalan: ' + fmt(kalanKg) + ' KG · %' + yuzde + ' tamamlandı</div>' +
+        '</div>' +
+      '</div>' +
 
-    '<div class="nxt-kart-govde nxt-kart-govde-kompakt">' +
-      '<div class="nxt-gov-kolon nxt-gov-emir">' + emirHtml + '</div>' +
-      '<div class="nxt-gov-kolon nxt-gov-kg">' + kgHtml + '</div>' +
-      '<div class="nxt-gov-aksiyon">' + butonHtml + '</div>' +
+      /* C — AKSİYON ~23% */
+      '<div class="nxt-col-aksiyon">' + butonHtml + '</div>' +
+
     '</div>' +
   '</div>';
 }
@@ -936,43 +945,135 @@ body { font-family: system-ui, -apple-system, sans-serif; background: #f3f6fa; }
   gap: 0;
   align-items: stretch;
 }
-.nxt-kart-kompakt .nxt-kart-ust { padding: 7px 12px 5px; min-height: 30px; }
-.nxt-kimlik-satir {
-  padding: 2px 12px 6px;
-  font-size: 12px; font-weight: 600; color: #374151;
-  display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
-  border-bottom: 1px solid #f3f4f6;
+/* ─── KART V2 — 3 kolon yatay (Kimlik 32% | Durum 45% | Aksiyon 23%) ─── */
+.nxt-kart-v2 {
+  padding: 0;
+  overflow: hidden;
 }
-.nxt-kimlik-satir .nxt-boyut-rozet { margin-left: 2px; }
-.nxt-kart-govde-kompakt {
-  grid-template-columns: minmax(200px, 240px) 1fr 128px;
-  align-items: center;
+.nxt-kart-v2-row {
+  display: grid;
+  grid-template-columns: 32% 45% 23%;
+  align-items: stretch;
+  min-height: 96px;
 }
-.nxt-kart-govde-kompakt .nxt-gov-kolon { padding: 10px 14px; }
-.nxt-kart-govde-kompakt .nxt-gov-emir { min-width: 200px; }
-.nxt-kart-govde-kompakt .nxt-gov-aksiyon { padding: 10px 12px; min-width: 128px; }
-.nxt-emir-sira { display: flex; flex-direction: row; gap: 18px; align-items: flex-end; justify-content: flex-start; }
-.nxt-emir-sira .nxt-emir-satir { flex-direction: column; align-items: center; gap: 1px; min-width: 52px; }
-.nxt-emir-sira .nxt-es-sayi { min-width: 0; text-align: center; font-size: 18px; line-height: 1.1; }
-.nxt-emir-sira .nxt-es-yazi { font-size: 10px; text-align: center; white-space: nowrap; }
-.nxt-kg-blok { min-width: 0; }
-.nxt-kimlik-ayrac { color: #9ca3af; font-weight: 500; }
-.nxt-kimlik-formul { font-weight: 800; color: #111827; }
-.nxt-kart-kompakt .nxt-ust-cari { min-width: 0; flex: 1; }
-.nxt-kart-kompakt .nxt-ust-cari-ad {
-  display: block; max-width: 100%;
+.nxt-col-kimlik {
+  padding: 8px 12px;
+  border-right: 1px solid #f3f4f6;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.nxt-kimlik-ust { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.nxt-cari-baslik {
+  font-size: 14px; font-weight: 800; color: #111827; line-height: 1.2;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.nxt-btn-ana-muted { background: #e5e7eb !important; color: #374151 !important; box-shadow: none !important; }
+.nxt-kimlik-meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+}
+.nxt-urun-blok { display: flex; flex-direction: column; gap: 2px; }
+.nxt-urun-formul { font-size: 13px; font-weight: 800; color: #111827; line-height: 1.2; }
+.nxt-urun-renk {
+  font-size: 12px; font-weight: 700; color: #0f766e;
+  font-family: 'Courier New', monospace;
+}
+.nxt-urun-boyut {
+  display: inline-block; align-self: flex-start;
+  margin-top: 2px; font-size: 10px; font-weight: 700;
+  padding: 2px 7px; border-radius: 3px;
+  background: #f1f5f9; color: #374151; border: 1px solid #e2e8f0;
+  letter-spacing: .3px;
+}
+
+.nxt-col-durum {
+  padding: 8px 14px;
+  border-right: 1px solid #f3f4f6;
+  display: flex; flex-direction: column; justify-content: center; gap: 6px;
+  min-width: 0;
+}
+.nxt-sayac-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+}
+.nxt-sayac-hucre {
+  text-align: center;
+  background: #f8fafc;
+  border: 1px solid #eef2f7;
+  border-radius: 7px;
+  padding: 4px 3px 5px;
+}
+.nxt-sayac-etiket {
+  font-size: 9px; font-weight: 800; color: #9ca3af;
+  letter-spacing: .5px; margin-bottom: 1px;
+}
+.nxt-sayac-rakam {
+  font-size: 20px; font-weight: 900; line-height: 1.05; color: #374151;
+}
+.nxt-sr-basla { color: #374151; }
+.nxt-sr-devam { color: #d97706; }
+.nxt-sr-biten { color: #15803d; }
+
+.nxt-kg-merkez { min-width: 0; }
+.nxt-kg-buyuk {
+  display: flex; align-items: baseline; gap: 2px;
+  margin-bottom: 5px;
+}
+.nxt-kg-buyuk .nxt-kg-uretilen { font-size: 20px; font-weight: 900; color: #16a34a; }
+.nxt-kg-buyuk .nxt-kg-sep { font-size: 13px; color: #9ca3af; }
+.nxt-kg-buyuk .nxt-kg-plan { font-size: 13px; font-weight: 700; color: #6b7280; }
+.nxt-progress-bar-v2 {
+  height: 8px; border-radius: 4px; margin: 0 0 4px;
+}
+.nxt-kg-merkez .nxt-kg-alt-satir { font-size: 11px; color: #6b7280; font-weight: 500; }
+
+.nxt-col-aksiyon {
+  padding: 8px 12px;
+  display: flex; flex-direction: column;
+  align-items: stretch; justify-content: center; gap: 5px;
+}
+.nxt-cta {
+  display: flex; align-items: center; justify-content: center;
+  padding: 10px 10px; border-radius: 8px; border: none;
+  background: #f6c343; color: #1a1a1a;
+  font-size: 14px; font-weight: 800;
+  text-decoration: none; cursor: pointer;
+  box-shadow: 0 1px 4px rgba(246,195,67,.35);
+  white-space: nowrap; min-height: 40px;
+}
+.nxt-cta:hover { background: #e9b020; color: #1a1a1a; }
+.nxt-cta-muted {
+  background: #e5e7eb !important; color: #374151 !important;
+  box-shadow: none !important;
+}
+.nxt-cta-etiket {
+  display: flex; align-items: center; justify-content: center;
+  padding: 6px 8px; border-radius: 7px;
+  background: #f9fafb; color: #374151;
+  border: 1px solid #e5e7eb;
+  font-size: 12px; font-weight: 600;
+  text-decoration: none; cursor: pointer;
+}
+.nxt-cta-etiket:hover { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
 .nxt-btn-disabled { opacity: .45; pointer-events: none; cursor: default; }
+
 @media (max-width: 1100px) {
-  .nxt-kart-govde-kompakt { grid-template-columns: minmax(180px, 1fr) 1.2fr 120px; }
+  .nxt-kart-v2-row { grid-template-columns: 35% 45% 20%; }
+  .nxt-sayac-rakam { font-size: 20px; }
 }
 @media (max-width: 900px) {
-  .nxt-kart-govde-kompakt { grid-template-columns: 1fr; }
-  .nxt-kart-govde-kompakt .nxt-gov-aksiyon { border-left: none; border-top: 1px solid #f3f4f6; flex-direction: row; }
-  .nxt-kart-govde-kompakt .nxt-btn-ana { flex: 1; }
-  .nxt-emir-sira { justify-content: space-around; }
+  .nxt-kart-v2-row {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+  .nxt-col-kimlik, .nxt-col-durum {
+    border-right: none;
+    border-bottom: 1px solid #f3f4f6;
+  }
+  .nxt-col-aksiyon { flex-direction: row; }
+  .nxt-cta { flex: 1; }
+  .nxt-sayac-grid { grid-template-columns: 1fr 1fr 1fr; }
 }
 .nxt-gov-kolon {
   padding: 10px 14px;
