@@ -49,7 +49,7 @@
 }
 .rm-page-geri:hover { background:var(--rm-bg); }
 .rm-layout {
-  display:grid; grid-template-columns:435px 1fr; gap:6px; align-items:start;
+  display:grid; grid-template-columns:295px 1fr; gap:6px; align-items:start;
 }
 .rm-panel {
   background:var(--rm-white); border:1px solid var(--rm-border); border-radius:10px;
@@ -75,92 +75,136 @@
 }
 .rm-yeni-btn:hover { background:#fde68a; }
 .rm-ara-wrap {
-  display:flex; align-items:center; gap:6px; padding:6px 9px;
+  display:flex; align-items:center; gap:7px; padding:8px 10px;
   border-bottom:1px solid var(--rm-border); background:var(--rm-bg); flex-shrink:0;
 }
 .rm-ara-input {
-  flex:1; border:none; outline:none; font-size:10px; color:var(--rm-t2); background:transparent;
+  flex:1; border:none; outline:none; font-size:11px; color:var(--rm-t2); background:transparent;
 }
 .rm-ara-input::placeholder { color:var(--rm-t4); }
 .rm-filtre-bar {
-  display:flex; gap:4px; padding:5px 9px; border-bottom:1px solid var(--rm-border);
+  display:flex; gap:6px; padding:7px 10px; border-bottom:1px solid var(--rm-border);
   flex-shrink:0; background:var(--rm-white); flex-wrap:wrap;
 }
 .rm-fb {
-  padding:3px 8px; border-radius:5px; border:1px solid var(--rm-border);
-  background:transparent; font-size:9px; font-weight:600; color:var(--rm-t3); cursor:pointer;
+  padding:5px 12px; border-radius:6px; border:1px solid var(--rm-border);
+  background:transparent; font-size:11px; font-weight:600; color:var(--rm-t2); cursor:pointer;
 }
-.rm-fb:hover { background:var(--rm-bg2); color:var(--rm-t2); }
+.rm-fb:hover { background:var(--rm-bg2); color:var(--rm-t1); }
 .rm-fb.aktif { background:var(--rm-teal); color:#fff; border-color:var(--rm-teal); }
 .rm-rf-liste { flex:1; overflow-y:auto; min-height:0; }
 .rm-rf-kart {
   padding:8px 10px; border-bottom:1px solid #f1f5f9; cursor:pointer;
   background:#fff; border-left:3px solid transparent;
+  display:flex; align-items:flex-start; gap:8px;
 }
-.rm-rf-kart:hover { background:var(--rm-blue-bg); }
+.rm-rf-kart:hover { background:var(--rm-bg); }
 .rm-rf-kart.aktif {
-  background:var(--rm-blue-bg); border-left-color:var(--rm-blue);
+  background:#f0f7fb; border-left-color:var(--rm-teal);
 }
+/* Renk önizleme dairesi */
+.rm-renk-daıre {
+  width:28px; height:28px; border-radius:50%; flex-shrink:0;
+  border:1.5px solid rgba(0,0,0,.12); margin-top:2px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:8px; font-weight:800; color:inherit; letter-spacing:0;
+}
+.rm-rf-kart-icerik { flex:1; min-width:0; }
 .rm-rf-kart-kod {
-  font-size:9px; font-weight:700; color:var(--rm-blue);
+  font-size:9px; font-weight:700; color:#2563eb;
   font-family:'Courier New',monospace; margin-bottom:2px;
 }
 .rm-rf-kart-ad {
-  font-size:11px; font-weight:700; color:var(--rm-t1); margin-bottom:2px;
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  font-size:11px; font-weight:700; color:var(--rm-t1);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1;
 }
 .rm-rf-kart-meta {
-  font-size:10px; color:var(--rm-t3); margin-bottom:3px;
+  font-size:10px; color:var(--rm-t3); margin-top:2px;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
-.rm-rf-kart-durum { display:flex; gap:4px; align-items:center; flex-wrap:wrap; }
+.rm-rf-kart-durum { display:flex; gap:6px; align-items:center; flex-wrap:nowrap; justify-content:space-between; }
 .rm-rozet {
   font-size:9px; font-weight:800; padding:2px 7px; border-radius:5px;
   white-space:nowrap; letter-spacing:.5px; text-transform:uppercase;
 }
-.rm-rozet-acik   { background:#d1fae5; color:#059669; }
-.rm-rozet-onayli { background:#dbeafe; color:#1d4ed8; }
-.rm-rozet-deneme { background:#fef3c7; color:#92400e; }
-.rm-rozet-taslak { background:#f1f5f9; color:#64748b; }
-.rm-rozet-pasif  { background:#f9fafb; color:#9ca3af; }
-.rm-rozet-onay-bek { background:#fef3c7; color:#b45309; }
+.rm-rozet-acik   { background:#dcfce7; color:#15803d; }
+.rm-rozet-onayli { background:#dcfce7; color:#15803d; }
+.rm-rozet-deneme { background:#fef9c3; color:#7c5a00; }
+.rm-rozet-taslak { background:#f1f5f9; color:#4b5563; }
+.rm-rozet-pasif  { background:#f3f4f6; color:#6b7280; }
+.rm-rozet-onay-bek { background:#fef9c3; color:#7c5a00; }
 .rm-sag-ic { display:flex; flex-direction:column; flex:1; min-height:0; overflow:hidden; }
 .rm-bos { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; color:var(--rm-t4); }
 .rm-bos-buyuk { padding:52px 24px; }
 .rm-bos svg { opacity:.2; }
 .rm-bos span { font-size:12px; }
-.rm-ozet { padding:10px 14px 8px; border-bottom:1px solid var(--rm-border); flex-shrink:0; }
-.rm-ozet-satir1 { display:flex; align-items:baseline; gap:10px; margin-bottom:3px; }
-.rm-ozet-ad { font-size:16px; font-weight:800; color:var(--rm-t1); }
-.rm-ozet-kodlar { font-size:10px; color:var(--rm-t3); font-family:monospace; }
-.rm-ozet-satir2 { font-size:11px; color:var(--rm-t3); margin-bottom:6px; }
-.rm-ozet-satir3 { display:flex; align-items:center; justify-content:space-between; gap:10px; }
-.rm-tl {
-  display:flex; align-items:center; padding:6px 14px;
-  border-bottom:1px solid var(--rm-border); flex-shrink:0;
+.rm-ozet { padding:12px 16px 10px; border-bottom:1px solid var(--rm-border); flex-shrink:0; }
+.rm-ozet-satir1 { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:4px; }
+.rm-ozet-ad { font-size:18px; font-weight:800; color:var(--rm-t1); line-height:1.2; }
+/* RF kodu + REV chip grubu */
+.rm-ozet-chips { display:flex; align-items:center; gap:5px; flex-shrink:0; margin-top:3px; }
+.rm-ozet-chip {
+  font-size:10px; font-weight:700; padding:2px 8px; border-radius:5px;
+  border:1px solid var(--rm-border); background:var(--rm-bg); white-space:nowrap;
 }
-.rm-tl-adim { display:flex; align-items:center; gap:3px; font-size:9px; font-weight:700; color:var(--rm-t4); text-transform:uppercase; }
-.rm-tl-adim.done { color:var(--rm-green); }
-.rm-tl-adim.cur { color:var(--rm-orange); }
-.rm-tl-dot { width:6px; height:6px; border-radius:50%; background:#cbd5e1; }
-.rm-tl-dot.done { background:var(--rm-green); }
-.rm-tl-dot.cur { background:var(--rm-orange); }
-.rm-tl-line { width:20px; height:2px; background:#e2e8f0; margin:0 2px; }
-.rm-tl-line.done { background:var(--rm-green); }
+.rm-ozet-chip-kod { color:var(--rm-t2); font-family:monospace; }
+.rm-ozet-chip-rev { color:var(--rm-t4); background:var(--rm-bg2); }
+.rm-ozet-satir2 { font-size:11px; color:var(--rm-t3); margin-bottom:6px; display:flex; align-items:center; gap:6px; }
+.rm-ozet-satir3 { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.rm-ozet-onay { display:flex; flex-direction:column; align-items:flex-end; gap:1px; }
+.rm-ozet-onay-etiket { font-size:9px; color:var(--rm-t4); text-transform:uppercase; letter-spacing:.4px; }
+.rm-ozet-onay-tarih  { font-size:11px; font-weight:600; color:var(--rm-t2); }
+/* Pigment chip — boşken gizle */
+#oz-pig-chip:empty { display:none; }
+/* Liste satırı chip'leri */
+.rm-rf-kart-chips { display:flex; gap:4px; align-items:center; margin-top:5px; flex-wrap:wrap; }
+.rm-rf-chip {
+  font-size:9px; color:var(--rm-t3); background:var(--rm-bg2);
+  padding:2px 7px; border-radius:3px; border:1px solid var(--rm-border);
+  white-space:nowrap;
+}
+.rm-rf-chip-bold { font-weight:600; color:var(--rm-t2); }
+.rm-tl {
+  display:flex; align-items:center; justify-content:center; padding:10px 16px;
+  border-bottom:1px solid var(--rm-border); flex-shrink:0; background:var(--rm-bg);
+}
+/* Daire stili timeline */
+.rm-tl-adim {
+  display:flex; flex-direction:column; align-items:center; gap:4px;
+}
+.rm-tl-dot {
+  width:28px; height:28px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:11px; font-weight:700; background:#e5e7eb; color:var(--rm-t4);
+}
+.rm-tl-dot.done { background:#16c25a; color:#fff; }
+.rm-tl-dot.cur  { background:var(--rm-orange); color:#fff; outline:3px solid rgba(249,115,22,.25); outline-offset:1px; }
+.rm-tl-label {
+  font-size:9px; font-weight:400; color:var(--rm-t4); white-space:nowrap; letter-spacing:.2px;
+}
+.rm-tl-label.done { color:#15803d; }
+.rm-tl-label.cur  { color:var(--rm-orange); font-weight:700; }
+.rm-tl-line { width:36px; height:2px; background:var(--rm-border); margin:0 4px; margin-bottom:18px; flex-shrink:0; }
+.rm-tl-line.done { background:#16c25a; }
 .rm-butonlar {
-  display:flex; gap:8px; padding:10px 14px; flex-shrink:0;
-  border-top:1px solid var(--rm-border); background:var(--rm-bg); flex-wrap:wrap;
+  display:flex; gap:8px; padding:10px 16px; flex-shrink:0;
+  border-bottom:1px solid var(--rm-border); background:var(--rm-white); flex-wrap:wrap;
+  align-items:center;
 }
 .rm-btn {
-  padding:8px 12px; border-radius:8px; font-size:11px; font-weight:700;
-  cursor:pointer; border:none; transition:all .1s; white-space:nowrap;
+  height:32px; padding:0 16px; border-radius:6px; font-size:11px; font-weight:600;
+  cursor:pointer; transition:all .1s; white-space:nowrap; letter-spacing:.1px;
+  display:inline-flex; align-items:center; justify-content:center;
 }
-.rm-btn-onay  { background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
+/* Primary — teal solid (Düzenle) */
+.rm-btn-detay { background:#006a8e; color:#fff; border:1px solid #005a7a; }
+.rm-btn-detay:hover { background:#005a7a; }
+/* Positive — açık yeşil (Formüle Bağla, Onayla, Aktifleştir) */
+.rm-btn-onay  { background:#f0fdf4; color:#15803d; border:1px solid #86efac; }
 .rm-btn-onay:hover { background:#dcfce7; }
-.rm-btn-arge  { background:#fef3c7; color:#92400e; }
-.rm-btn-arge:hover { background:#fde68a; }
-.rm-btn-detay { background:#0f172a; color:#f6c343; }
-.rm-btn-detay:hover { background:#1e293b; }
+/* Warning — amber subdued (Yeni Revizyon, Pasife Al, Revize, Reddet) */
+.rm-btn-arge  { background:#fff8f0; color:#7c4a00; border:1px solid #ddb88a; }
+.rm-btn-arge:hover { background:#fef3c7; }
 .rm-sekme-bar {
   display:flex; gap:0; padding:0 14px; border-bottom:2px solid var(--rm-border);
   flex-shrink:0; background:var(--rm-white);
@@ -232,12 +276,14 @@
   background:#fafafa; border-top:1px solid #e5e7eb; line-height:1.4;
 }
 .rm-bag-kart {
-  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  display:flex; align-items:flex-start; gap:8px;
   padding:8px 10px; margin-bottom:6px;
   background:var(--rm-bg); border:1px solid var(--rm-border); border-radius:7px;
 }
-.rm-bag-kod { font-size:12px; font-weight:700; color:#7c3aed; font-family:monospace; }
-.rm-bag-alt { font-size:10px; color:var(--rm-t3); }
+.rm-bag-kart > div:first-child { flex:1; min-width:0; }
+.rm-bag-kod { font-size:12px; font-weight:700; color:var(--rm-t1); font-family:monospace; }
+.rm-bag-alt { font-size:10px; color:var(--rm-t3); margin-top:1px; }
+.rm-bag-uk  { font-size:11px; font-weight:700; color:#7c3aed; margin-top:5px; }
 .rm-bag-gecmis-wrap {
   margin-top:12px; padding-top:8px; border-top:1px dashed var(--rm-border);
 }
@@ -323,7 +369,7 @@
         <button class="rm-yeni-btn" onclick="rmSonrakiFaz('Yeni çalışma')">+ Yeni</button>
       </div>
       <div class="rm-ara-wrap">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" width="12" height="12">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" width="13" height="13">
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
           <input class="rm-ara-input" id="rm-ara-input"
@@ -372,7 +418,7 @@
         <div class="rm-ozet">
           <div class="rm-ozet-satir1">
             <span class="rm-ozet-ad" id="oz-ad">—</span>
-            <span class="rm-ozet-kodlar" id="oz-kodlar"></span>
+            <div class="rm-ozet-chips" id="oz-kodlar"></div>
           </div>
           <div class="rm-ozet-satir2" id="oz-alt"></div>
           <div class="rm-ozet-satir3">
@@ -441,6 +487,35 @@ let aktifRfId    = null;
 let rmFbSeciliIds = new Set();
 
 // ── yardımcı ─────────────────────────────────────────────────────────
+// Renk adından önizleme dairesi rengi
+function rmRenkDaire(rfAdi){
+  const ad=(rfAdi||'').toUpperCase();
+  // Anahtar kelime → {bg, fg}
+  const eslesme=[
+    [['SİYAH','SIYAH','BLACK'],          {bg:'#1a1a1a', fg:'#fff'}],
+    [['BEYAZ','WHITE','OPTİK','OPTIK'],  {bg:'#f5f5f5', fg:'#555'}],
+    [['GRİ','GRI','GRAY','GREY','FÜME','FUME','SILVER','GÜMÜŞ'], {bg:'#9ca3af', fg:'#fff'}],
+    [['PEMBE','PINK','ROSE'],            {bg:'#f9a8d4', fg:'#831843'}],
+    [['KIRMIZI','KIRIM','RED'],          {bg:'#ef4444', fg:'#fff'}],
+    [['MAVİ','MAVI','BLUE','LACIVERT'],  {bg:'#3b82f6', fg:'#fff'}],
+    [['YEŞİL','YESIL','GREEN'],          {bg:'#22c55e', fg:'#fff'}],
+    [['SARI','YELLOW','GOLD','ALTIN'],   {bg:'#fbbf24', fg:'#78350f'}],
+    [['TURUNCU','ORANGE'],               {bg:'#f97316', fg:'#fff'}],
+    [['MOR','PURPLE','VİOLE','VIOLE'],   {bg:'#a855f7', fg:'#fff'}],
+    [['KAHVE','BROWN','TABA','KREM','CREAM','BEJ','BEIGE'], {bg:'#d97706', fg:'#fff'}],
+    [['BAKLAVA','EKRU','EKRÜ'],          {bg:'#e8d5b7', fg:'#6b4226'}],
+    [['LACIVERT'],                       {bg:'#1e3a5f', fg:'#fff'}],
+  ];
+  for(const [keys,renk] of eslesme){
+    if(keys.some(k=>ad.includes(k))) return renk;
+  }
+  // Hiç eşleşme yoksa RF adından deterministik renk üret
+  let h=0;
+  for(let i=0;i<ad.length;i++) h=(h*31+ad.charCodeAt(i))&0xffffff;
+  const bg='#'+('000000'+(h&0xffffff).toString(16)).slice(-6);
+  return {bg, fg:'#fff'};
+}
+
 function rmE(s){
   if(s==null)return'';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -544,9 +619,9 @@ function rmBaglantiHtml(baglar, gecmis){
         ?`<button class="rm-btn rm-btn-arge" style="padding:4px 8px;font-size:9px;margin-left:auto"
              onclick="rmBaglantiKaldir(${b.uygunluk_id})">Kaldır</button>`:'';
       const uk=b.uretim_kodu
-        ?`<div style="font-size:10px;font-weight:700;color:#7c3aed;margin-top:4px;">Üretim Kodu: ${rmE(b.uretim_kodu)}</div>`:'';
+        ?`<div class="rm-bag-uk">Üretim Kodu: ${rmE(b.uretim_kodu)}</div>`:'';
       return `<div class="rm-bag-kart">
-        <div style="flex:1;min-width:0;">
+        <div>
           <div class="rm-bag-kod">${rmE(b.formul_kodu)}</div>
           <div class="rm-bag-alt">${rmE(b.formul_alt||b.formul_adi)}</div>
           ${uk}
@@ -635,14 +710,34 @@ function rmListeRender(kartlar){
       (seciliKart.rf_id&&k.rf_id===seciliKart.rf_id&&!k.arge_test_id)
     ));
     const rzCls=rmDurumRz(k.liste_grubu);
-    const kodStr=k.rf_kodu&&k.rf_kodu!=='—'?k.rf_kodu:(k.arge_kodu||'—');
+    const isNx = k.kart_tipi==='NX_AR';
+    const kodStr = isNx
+      ? ((k.test_no||'') ? k.test_no + (k.arge_kodu?(' · '+k.arge_kodu):'') : (k.arge_kodu||'—'))
+      : (k.rf_kodu&&k.rf_kodu!=='—'?k.rf_kodu:(k.arge_kodu||'—'));
+    // Cari: yalnız gerçek değer varsa göster
+    const cariGercek = k.cari_kodu && k.cari_kodu!=='—' && k.cari_kodu.trim()!=='';
+    const cariHtml = cariGercek ? `<div class="rm-rf-kart-meta">${rmE(k.cari_kodu)}</div>` : '';
+    // Chip'ler — tip · L/S · formül · pgm
+    const pgmChip = k.pigment_sayisi>0 ? `<span class="rm-rf-chip">${k.pigment_sayisi} pgm</span>` : '';
+    const grChip  = k.toplam_gr>0 ? `<span class="rm-rf-chip rm-rf-chip-bold">${rmGr(k.toplam_gr)}</span>` : '';
+    const fmlChip = k.bagli_formul_sayisi>0 ? `<span class="rm-rf-chip">${k.bagli_formul_sayisi} fml</span>` : '';
+    const tipEt = k.calisma_tipi_etiket || k.kaynak || '';
+    const nxChip  = isNx && tipEt ? `<span class="rm-rf-chip">${rmE(tipEt)}</span>` : '';
+    const boyChip = isNx && k.boyut_ozet && k.boyut_ozet!=='—' ? `<span class="rm-rf-chip">${rmE(k.boyut_ozet)}</span>` : '';
+    const formulChip = isNx&&k.ana_formul&&k.ana_formul!=='—' ? `<span class="rm-rf-chip">${rmE(k.ana_formul)}</span>` : '';
+    const chipsHtml = (pgmChip||grChip||fmlChip||nxChip||boyChip||formulChip) ? `<div class="rm-rf-kart-chips">${nxChip}${boyChip}${formulChip}${pgmChip}${grChip}${fmlChip}</div>` : '';
+    const dc = rmRenkDaire(k.rf_adi);
     return `<div class="rm-rf-kart${secilik?' aktif':''}"
                 onclick='rmKartSec(${JSON.stringify(k)})'>
-      <div class="rm-rf-kart-kod">${rmE(kodStr)}</div>
-      <div class="rm-rf-kart-ad">${rmE(k.rf_adi)}</div>
-      <div class="rm-rf-kart-meta">${rmE(k.cari_kodu)}</div>
-      <div class="rm-rf-kart-durum">
-        <span class="${rzCls}">${rmE(k.durum_etiketi)}</span>
+      <div class="rm-renk-daıre" style="background:${dc.bg};color:${dc.fg};border-color:${dc.bg==='#f5f5f5'?'#d1d5db':dc.bg}"></div>
+      <div class="rm-rf-kart-icerik">
+        <div class="rm-rf-kart-kod">${rmE(kodStr)}</div>
+        <div class="rm-rf-kart-durum">
+          <span class="rm-rf-kart-ad">${rmE(k.rf_adi)}</span>
+          <span class="${rzCls}">${rmE(k.durum_etiketi)}</span>
+        </div>
+        ${cariHtml}
+        ${chipsHtml}
       </div>
     </div>`;
   }).join('');
@@ -699,22 +794,37 @@ async function rmDetayYukle(k){
 // ══════════════════════════════════════════════════════════════════════
 //  RENDER
 // ══════════════════════════════════════════════════════════════════════
-const TL_ADIMLAR=['Talep','AR-GE','Ferhat','Onay','Aktif'];
+// Canvas adımları: Taslak / AR-GE Test / Enjeksiyon / Onaylı / Pasif
+const TL_ADIMLAR=[
+  {n:1,label:'Taslak'},
+  {n:2,label:'AR-GE Test'},
+  {n:3,label:'Enjeksiyon'},
+  {n:4,label:'Onaylı'},
+  {n:5,label:'Pasif'},
+];
 
 function rmTlHtml(grubu){
-  // Timeline adım durumlarını liste grubuna göre belirle
-  let tl=[0,0,0,0,0];
-  if(grubu==='AKTİF')          tl=[1,1,1,1,1];
-  else if(grubu==='PASİF')     tl=[1,1,1,1,0];
-  else                          tl=[1,1,1,2,0];  // BEKLEYEN/REVİZE
+  // doneCount = kaç adım yeşil tik
+  // AKTİF  → Taslak+AR-GE+Enjeksiyon yeşil (done=3), Onaylı turuncu (cur=3)
+  // PASİF  → tüm adımlar yeşil (done=5), cur=5 (yok)
+  // diğeri → Taslak+AR-GE yeşil (done=2), Enjeksiyon turuncu (cur=2)
+  const doneCount = grubu==='AKTİF' ? 3 : grubu==='PASİF' ? 5 : 2;
+  const curIdx    = doneCount < 5 ? doneCount : -1; // -1 = yok
 
   let h='';
   for(let i=0;i<TL_ADIMLAR.length;i++){
-    const s=tl[i];
-    const nc=s===1?'done':s===2?'cur':'';
-    h+=`<div class="rm-tl-adim ${nc}"><div class="rm-tl-dot ${nc}"></div>${s===1?'✓ ':''}${rmE(TL_ADIMLAR[i])}</div>`;
-    if(i<TL_ADIMLAR.length-1)
-      h+=`<div class="rm-tl-line${s===1?' done':''}"></div>`;
+    const done  = i < doneCount;
+    const aktif = i === curIdx;
+    const nc    = done ? 'done' : aktif ? 'cur' : '';
+
+    h+=`<div class="rm-tl-adim">
+      <div class="rm-tl-dot ${nc}">
+        ${done ? '<span style="font-size:13px;line-height:1;font-weight:700">✓</span>' : `<span style="font-size:11px;font-weight:700;color:${aktif?'#fff':'#9ca3af'}">${TL_ADIMLAR[i].n}</span>`}
+      </div>
+      <span class="rm-tl-label ${nc}">${rmE(TL_ADIMLAR[i].label)}</span>
+    </div>`;
+    if(i < TL_ADIMLAR.length - 1)
+      h+=`<div class="rm-tl-line${done?' done':''}"></div>`;
   }
   return h;
 }
@@ -726,28 +836,45 @@ function rmRender(kart, d){
   // Başlık
   document.getElementById('rm-hdr-ad').textContent=(oz.arge_kodu||'')+' — '+(oz.rf_adi||'');
 
-  // Özet
-  const kodStr=[oz.arge_kodu,oz.rf_kodu].filter(Boolean).join(' · ');
+  // Özet — chip'li başlık yapısı
   document.getElementById('oz-ad').textContent=oz.rf_adi||'—';
-  document.getElementById('oz-kodlar').textContent=kodStr;
-  document.getElementById('oz-alt').textContent=
-    [oz.cari,oz.ana_formul].filter(v=>v&&v!=='—').join(' · ');
+  // Kod + REV chip'leri
+  let chipHtml='';
+  if(oz.rf_kodu&&oz.rf_kodu!=='—')
+    chipHtml+=`<span class="rm-ozet-chip rm-ozet-chip-kod">${rmE(oz.rf_kodu)}</span>`;
+  else if(oz.arge_kodu)
+    chipHtml+=`<span class="rm-ozet-chip rm-ozet-chip-kod">${rmE(oz.arge_kodu)}</span>`;
+  chipHtml+=`<span class="rm-ozet-chip rm-ozet-chip-rev">REV-${oz.rev_no||1}</span>`;
+  document.getElementById('oz-kodlar').innerHTML=chipHtml;
+
+  // Alt satır: cari · ana formül
+  const altParcalar=[oz.cari,oz.ana_formul].filter(v=>v&&v!=='—');
+  document.getElementById('oz-alt').innerHTML=altParcalar.map(rmE).join('<span style="color:#cbd5e1;margin:0 4px">·</span>');
 
   const rzCls=rmDurumRz(grubu);
-  const revBadge=oz.rf_kodu&&oz.rf_kodu!=='—'
-    ?`<span class="rm-rozet rm-rozet-taslak" style="margin-left:4px">REV-1</span>`:'';
+  // Durum rozeti + pigment özet chip
+  const pigChip=`<span class="rm-rozet rm-rozet-taslak" style="font-size:9px;background:var(--rm-purple-bg);color:#7c3aed;border:1px solid #7c3aed20" id="oz-pig-chip"></span>`;
   document.getElementById('oz-durum').innerHTML=
-    `<span class="${rzCls}">${rmE(oz.durum_etiketi||oz.durum)}</span>${revBadge}`;
+    `<div style="display:flex;align-items:center;gap:6px"><span class="${rzCls}">${rmE(oz.durum_etiketi||oz.durum)}</span>${pigChip}</div>`;
+
+  // Onay tarihi — ikili satır
   document.getElementById('oz-onay').innerHTML=
     oz.onaylayan_id&&oz.onay_tarihi
-      ?`Onay tarihi: ${rmE(oz.onay_tarihi)}`:'';
+      ?`<span class="rm-ozet-onay-etiket">Onay tarihi</span><span class="rm-ozet-onay-tarih">${rmE(oz.onay_tarihi)}</span>`:'';
 
-  // Timeline
+  // Timeline — daire+çizgi stili
   document.getElementById('rm-tl').innerHTML=rmTlHtml(grubu);
 
   // Butonlar — duruma göre
+  // NX-AR: bu fazda RF oluşturma / onay yok — yalnız görüntüleme + bağlantı hazırlığı
+  const isNxAr = (kart.kart_tipi==='NX_AR') || (oz.kart_tipi==='NX_AR');
   let btnHtml='';
-  if(grubu==='BEKLEYEN'&&CAN_APPROVE&&d.calisma){
+  if(isNxAr && grubu==='BEKLEYEN'){
+    btnHtml=`<button class="rm-btn rm-btn-detay" disabled title="Sonraki faz">RF oluşturma sonraki faz</button>`;
+    if(oz.rf_kodu&&oz.rf_kodu!=='—'){
+      btnHtml=`<button class="rm-btn rm-btn-detay" disabled>RF bağlı: ${rmE(oz.rf_kodu)}</button>`;
+    }
+  } else if(grubu==='BEKLEYEN'&&CAN_APPROVE&&d.calisma){
     btnHtml=`
       <button class="rm-btn rm-btn-onay" onclick="rmOnayla(${kart.arge_test_id})">✓ ONAYLA VE AKTİF ET</button>
       <button class="rm-btn rm-btn-arge" onclick="rmSonrakiFaz('Revize Gönder')">↩ Revize Gönder</button>
@@ -816,7 +943,15 @@ function rmRender(kart, d){
   }
 
   let kararHtml='';
-  if(grubu==='BEKLEYEN'&&CAN_APPROVE&&c){
+  if(isNxAr && grubu==='BEKLEYEN'&&c){
+    kararHtml=`
+      <div class="rm-onay-kutu" style="grid-column:1/-1">
+        <div style="font-size:12px;color:var(--rm-t3);padding:8px 0">
+          NX-AR çalışma kartı listede. RF oluşturma / bağlama sonraki fazda yapılacak.
+          ${oz.rf_kodu&&oz.rf_kodu!=='—'?' Bağlı RF: '+rmE(oz.rf_kodu)+'.':''}
+        </div>
+      </div>`;
+  } else if(grubu==='BEKLEYEN'&&CAN_APPROVE&&c){
     kararHtml=`
       <div class="rm-onay-kutu" style="grid-column:1/-1">
         <div class="rm-onay-btns">
@@ -832,6 +967,12 @@ function rmRender(kart, d){
     `<div class="rm-2k">${solHtml}${sagHtml}${kararHtml}</div>`;
 
   // ─── PİGMENT sekmesi ───────────────────────────────────────────────
+  const pgVeri = rmPigmentVeriHazirla(d.pigmentler||[], d.pigment_ozet||d.ozet);
+  // Özet chip güncelle
+  const pgChipEl = document.getElementById('oz-pig-chip');
+  if(pgChipEl && pgVeri.kalemler.length){
+    pgChipEl.textContent = `${pgVeri.kalemler.length} pigment · ${rmGr(pgVeri.toplam)}`;
+  }
   document.getElementById('s-pigmentler').innerHTML=rmPigmentTabloHtml(
     d.pigmentler||[], d.pigment_ozet||d.ozet
   );

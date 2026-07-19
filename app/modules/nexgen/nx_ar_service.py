@@ -22,6 +22,18 @@ SAHA_NEDENLERI = frozenset({
 })
 ANA_GRUP = frozenset({'1BA', '2BA', '3BA'})
 
+# AT çalışma tipi harfi — R=Renk/RF, F=Formül, M=Müşteri renk talebi
+_AT_TIP_HARF = {
+    'MUSTERI_RENK': 'M',
+    'YENI_RF': 'R',
+    'YENI_FORMUL': 'F',
+}
+_CALISMA_TIP_ETIKET = {
+    'MUSTERI_RENK': 'Müşteri Renk Talebi',
+    'YENI_RF': 'Renk Denemesi',
+    'YENI_FORMUL': 'Formül Denemesi',
+}
+
 
 class NxArError(Exception):
     def __init__(self, message: str, status: int = 400, kod: str | None = None):
@@ -44,14 +56,33 @@ def _nx_ar_kod_uret(con) -> str:
     return f'NX-AR-{son + 1:04d}'
 
 
-def _test_no_uret(con) -> str:
+def at_tip_harf(calisma_tipi: str | None) -> str | None:
+    """calisma_tipi → AT harfi (R/F/M). Bilinmeyen tipte None."""
+    return _AT_TIP_HARF.get((calisma_tipi or '').strip().upper())
+
+
+def calisma_tipi_etiket(calisma_tipi: str | None) -> str:
+    return _CALISMA_TIP_ETIKET.get((calisma_tipi or '').strip().upper(), calisma_tipi or '—')
+
+
+def _test_no_uret(con, calisma_tipi: str) -> str:
+    """AT-{R|F|M}-YYYY-NNNN — tip bazlı sıra (MAX). Eski AT-YYYY-NNNN üretilmez."""
+    harf = at_tip_harf(calisma_tipi)
+    if not harf:
+        raise NxArError(
+            f'Geçersiz calisma_tipi için AT kodu üretilemez: {calisma_tipi}',
+            400,
+            'AT_TIP',
+        )
     yil = datetime.now().year
+    prefix = f'AT-{harf}-{yil}-'
     row = con.execute(
-        "SELECT COUNT(*) AS n FROM nexgen_arge_test WHERE test_no LIKE ?",
-        (f'AT-{yil}-%',),
+        "SELECT MAX(CAST(SUBSTR(test_no, -4) AS INTEGER)) AS son "
+        "FROM nexgen_arge_test WHERE test_no LIKE ?",
+        (prefix + '%',),
     ).fetchone()
-    n = int(row['n'] or 0) + 1
-    return f'AT-{yil}-{n:04d}'
+    son = int(row['son'] or 0) if row else 0
+    return f'{prefix}{son + 1:04d}'
 
 
 def _uv_cekirdek_bilgi(con, uv_id: int) -> dict:
@@ -338,13 +369,21 @@ def create_nx_ar(con, payload: dict, kullanici_id: int | None = None) -> dict:
     test_batch_kg = round(sum(k['test_miktar_kg'] for k in kalemler), 4)
     simdi = _now()
     arge_kodu = _nx_ar_kod_uret(con)
-    test_no = _test_no_uret(con)
+    test_no = _test_no_uret(con, calisma_tipi)
+    test_tipi = 'FORMUL_TEST' if calisma_tipi == 'YENI_FORMUL' else 'RENK_TEST'
     talep = (payload.get('talep_referansi') or '').strip() or None
     urun_ailesi = (payload.get('urun_ailesi') or '').strip() or None
     formul_grup_adi = (payload.get('formul_grup_adi') or '').strip() or None
     renk_kodu = (payload.get('renk_kodu') or '').strip() or None
     lot_no = (deneme_in.get('lot_no') or '').strip() or None
     genel_not = (deneme_in.get('genel_not') or '').strip() or None
+    renk_bilesenleri = payload.get('renk_bilesenleri')
+    renk_bilesenleri_json = None
+    if renk_bilesenleri is not None:
+        import json
+        if not isinstance(renk_bilesenleri, list):
+            raise NxArError('renk_bilesenleri liste olmalı.', 400)
+        renk_bilesenleri_json = json.dumps(renk_bilesenleri, ensure_ascii=False)
 
     try:
         con.execute('BEGIN IMMEDIATE')
@@ -359,9 +398,10 @@ def create_nx_ar(con, payload: dict, kullanici_id: int | None = None) -> dict:
                 calisma_tipi, guncelleme_tarihi, sorumlu_kullanici_id, oncelik,
                 urun_ailesi, formul_grup_adi, ana_formul_grup_kodu, renk_kodu,
                 yogunluk_hedef, saha_testi_gerekli_mi, saha_testi_nedeni,
-                saha_testi_karar_veren_id, saha_testi_karar_tarihi
+                saha_testi_karar_veren_id, saha_testi_karar_tarihi,
+                renk_bilesenleri_json
             ) VALUES (
-                ?, ?, 'RENK_TEST', '—',
+                ?, ?, ?, '—',
                 ?, 0, ?, ?, 'ARGE_HAZIR',
                 ?, ?, ?, ?,
                 ?, ?, 1, ?, ?,
@@ -369,12 +409,14 @@ def create_nx_ar(con, payload: dict, kullanici_id: int | None = None) -> dict:
                 ?, ?, ?, ?,
                 ?, ?, ?, ?,
                 ?, ?, ?,
-                ?, ?
+                ?, ?,
+                ?
             )
             """,
             (
                 primary_uv['kaynak_uretim_varyant_id'],
                 test_no,
+                test_tipi,
                 test_batch_kg,
                 hedef,
                 genel_not or talep,
@@ -399,6 +441,7 @@ def create_nx_ar(con, payload: dict, kullanici_id: int | None = None) -> dict:
                 saha_neden,
                 kullanici_id if saha_neden else None,
                 simdi if saha_neden else None,
+                renk_bilesenleri_json,
             ),
         )
         test_id = int(con.execute('SELECT last_insert_rowid()').fetchone()[0])

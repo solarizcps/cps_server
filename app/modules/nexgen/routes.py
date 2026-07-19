@@ -4181,17 +4181,10 @@ def api_recete_rf_detay(rf_id):
 #        Sadece nexgen_arge_test + nexgen_arge_test_kalem yazılır.
 # ─────────────────────────────────────────────────────────────
 
-def _arge_test_no_uret(con):
-    """AT-YYYY-NNNN formatında benzersiz test numarası üretir."""
-    from datetime import datetime
-    yil = datetime.now().strftime('%Y')
-    row = con.execute(
-        "SELECT MAX(CAST(SUBSTR(test_no, -4) AS INTEGER)) AS son "
-        "FROM nexgen_arge_test WHERE test_no LIKE ?",
-        (f'AT-{yil}-%',)
-    ).fetchone()
-    son = row['son'] if row and row['son'] else 0
-    return f'AT-{yil}-{son + 1:04d}'
+def _arge_test_no_uret(con, calisma_tipi='YENI_RF'):
+    """AT-R/F/M-YYYY-NNNN — nx_ar_service tek kaynak. Legacy AT-YYYY-NNNN üretilmez."""
+    from modules.nexgen.nx_ar_service import _test_no_uret as _nx_at
+    return _nx_at(con, calisma_tipi)
 
 
 def _arge_kaynak_uv_cekirdek_mi(con, kaynak_uv_id) -> dict:
@@ -4242,7 +4235,7 @@ def _arge_renk_calisma_kaydet(con, kaynak_uv_id, test_batch_kg, yeni_renk_adi, c
         raise ValueError("Kaynak batch KG sifir — recete gecersiz.")
 
     carpan = test_batch_kg / kaynak_batch_kg
-    test_no = _arge_test_no_uret(con)
+    test_no = _arge_test_no_uret(con, 'YENI_RF')
 
     from datetime import datetime
     yil = datetime.now().year
@@ -4470,9 +4463,8 @@ def api_tablet_yeni_renk_denemesi():
         else:
             test_batch_kg = round(master_kg * numune_orani / 100.0, 4)
 
-        # test_no: LEGACY — tablodan kaldırılmıyor, eski sistem uyumu için
-        test_no   = _arge_test_no_uret(con)
-        # arge_kodu: YENİ STANDART — NX-AR-NNNN (4 hane), kullanıcıya bu gösterilir
+        # test_no: AT-R-YYYY-NNNN (YENI_RF); arge_kodu: NX-AR-NNNN
+        test_no   = _arge_test_no_uret(con, 'YENI_RF')
         arge_kodu = _nx_ar_kod_uret(con)
 
         # Lot no
@@ -4630,8 +4622,11 @@ def api_arge_test_olustur():
         # Ölçekleme çarpanı
         carpan = test_batch_kg / kaynak_batch_kg
 
-        # Test no üret (LEGACY — tablodan kaldırılmıyor, eski kayıtlar için)
-        test_no = _arge_test_no_uret(con)
+        # AT tipi: müşteri RF talebi → M, formül denemesi → F, diğer → R
+        _at_tip = 'MUSTERI_RENK' if (test_tipi or '').upper() == 'RENK_TEST' else (
+            'YENI_FORMUL' if (test_tipi or '').upper() == 'FORMUL_TEST' else 'YENI_RF'
+        )
+        test_no = _arge_test_no_uret(con, _at_tip)
 
         # Yeni NX-RT kodu üret (MODÜL-01 Müşteri Renk Talebi standart kodu)
         nx_rt_kodu = _nx_rt_kod_uret(con)
@@ -6062,10 +6057,12 @@ def api_rm_liste():
             r[1] for r in con.execute("PRAGMA table_info(nexgen_arge_test)").fetchall()
         }
         if 'calisma_tipi' in nx_cols and 'arge_kodu' in nx_cols:
+            from modules.nexgen.nx_ar_service import calisma_tipi_etiket as _ct_etiket
             nx_rows = con.execute("""
                 SELECT
                     t.id AS arge_test_id,
                     t.arge_kodu,
+                    t.test_no,
                     t.durum,
                     t.calisma_tipi,
                     t.yeni_renk_adi,
@@ -6078,12 +6075,15 @@ def api_rm_liste():
                     rf.rf_kod,
                     rf.ad AS rf_adi,
                     rf.durum AS rf_durum,
-                    rf.aktif AS rf_aktif
+                    rf.aktif AS rf_aktif,
+                    (SELECT GROUP_CONCAT(ku.boyut, ',')
+                       FROM nexgen_arge_kaynak_uv ku
+                      WHERE ku.arge_test_id = t.id AND ku.aktif_mi = 1) AS kaynak_boyutlar
                 FROM nexgen_arge_test t
                 LEFT JOIN nexgen_cari c ON c.id = t.cari_id
                 LEFT JOIN nexgen_rf_renk rf ON rf.id = t.rf_renk_id
                 WHERE t.aktif = 1
-                  AND t.calisma_tipi IN ('MUSTERI_RENK', 'YENI_RF')
+                  AND t.calisma_tipi IN ('MUSTERI_RENK', 'YENI_RF', 'YENI_FORMUL')
                   AND t.arge_kodu LIKE 'NX-AR-%'
                 ORDER BY t.id DESC
             """).fetchall()
@@ -6099,17 +6099,32 @@ def api_rm_liste():
                     durum_etiketi = _nx_ar_durum_etiketi(rd.get('durum'))
                 cari = rd.get('cari_kodu') or rd.get('cari_adi') or '—'
                 rf_kodu = rd.get('rf_kod') or '—'
-                # Bağlantı hazırlığı: RF varsa kod görünür
+                boy_raw = (rd.get('kaynak_boyutlar') or '').upper()
+                boy_set = set(x.strip() for x in boy_raw.split(',') if x.strip())
+                if boy_set >= {'LARGE', 'SMALL'} or (
+                    'LARGE' in boy_set and 'SMALL' in boy_set
+                ):
+                    boyut_ozet = 'L/S'
+                elif 'MEDIUM' in boy_set:
+                    boyut_ozet = 'M'
+                elif 'LARGE' in boy_set:
+                    boyut_ozet = 'L'
+                elif 'SMALL' in boy_set:
+                    boyut_ozet = 'S'
+                else:
+                    boyut_ozet = '—'
+                tip = rd.get('calisma_tipi')
                 kartlar.append({
                     'kart_tipi':    'NX_AR',
                     'arge_test_id': rd['arge_test_id'],
                     'arge_kodu':    rd.get('arge_kodu'),
+                    'test_no':      rd.get('test_no'),
                     'rf_id':        rd.get('rf_renk_id'),
                     'rf_kodu':      rf_kodu,
                     'rf_adi':       rd.get('yeni_renk_adi') or rd.get('rf_adi') or rd.get('renk_kodu') or '—',
                     'cari_kodu':    cari,
                     'ana_formul':   rd.get('formul_grup_adi') or rd.get('ana_formul_grup_kodu') or '—',
-                    'kaynak':       rd.get('calisma_tipi') or 'NX-AR',
+                    'kaynak':       _ct_etiket(tip),
                     'durum_kodu':   rd.get('durum'),
                     'durum_etiketi': durum_etiketi,
                     'liste_grubu':  liste_grubu,
@@ -6117,7 +6132,9 @@ def api_rm_liste():
                     'pigment_sayisi': 0,
                     'toplam_gr':    0,
                     'bagli_formul_sayisi': 0,
-                    'calisma_tipi': rd.get('calisma_tipi'),
+                    'calisma_tipi': tip,
+                    'calisma_tipi_etiket': _ct_etiket(tip),
+                    'boyut_ozet':   boyut_ozet,
                 })
 
         sayilar = {
@@ -14670,8 +14687,7 @@ def tablet_arge_musteri_renk():
 @yetki_gerekli('nexgen.tablet.view', 'can_view')
 def tablet_arge_yeni_rf():
     """MODÜL-02 — Yeni RF Renk Geliştirme.
-    Vedat stok pigmentlerinden seçip gramaj girerek yeni RF denemesi oluşturur.
-    Backend API henüz bağlanmadı — frontend onayı bekleniyor.
+    L/S gruplu ana formül seçimi → NX-AR (varyant adımı yok).
     """
     con = _db()
     try:
@@ -14679,11 +14695,11 @@ def tablet_arge_yeni_rf():
             "SELECT id, cari_kod, unvan FROM nexgen_cari WHERE aktif=1 ORDER BY unvan"
         ).fetchall()]
 
-        # Yalnız çekirdek formüller (1BA/2BA/3BA) — legacy 575/627/675/810/FOR-001 yok
         formuller = [dict(r) for r in con.execute(f"""
-            SELECT DISTINCT f.id, f.kod, f.ad
+            SELECT DISTINCT f.id, f.kod, f.ad, f.urun_ailesi
             FROM nexgen_formul f
             JOIN nexgen_renk_varyant rv ON rv.formul_id = f.id AND rv.aktif = 1
+            JOIN nexgen_uretim_varyant uv ON uv.renk_varyant_id = rv.id AND uv.aktif = 1
             WHERE f.aktif = 1
               AND ({cekirdek_kod_sql_filter('f')})
             ORDER BY f.kod, f.ad
@@ -14701,10 +14717,10 @@ def tablet_arge_yeni_rf():
             ORDER BY rv.formul_id, rv.ad
         """).fetchall()]
 
-        # renk_varyant_id ve master_kg frontend'de uv_id çözümü + hesap için zorunlu
         varyantlar = [dict(r) for r in con.execute(f"""
             SELECT uv.id, uv.renk_varyant_id, uv.boyut, uv.recete_durum,
-                   rv.ad AS rv_ad, rv.formul_id,
+                   rv.id AS rv_id, rv.ad AS renk_ad, rv.formul_id,
+                   f.kod AS formul_kod, f.ad AS formul_ad, f.urun_ailesi,
                    ROUND(SUM(rk.miktar_kg), 3) AS master_kg
             FROM nexgen_uretim_varyant uv
             JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id AND rv.aktif = 1
@@ -14715,6 +14731,7 @@ def tablet_arge_yeni_rf():
             GROUP BY uv.id
             ORDER BY rv.formul_id, rv.ad, uv.boyut
         """).fetchall()]
+        formul_gruplar = formul_secim_gruplari_hazirla(varyantlar)
         uv_boyut_map = {
             int(v['formul_id']): v['boyut']
             for v in varyantlar
@@ -14724,9 +14741,6 @@ def tablet_arge_yeni_rf():
             formuller, uv_boyut_map=uv_boyut_map, harf_ekle=True,
         )
 
-        # Renk bileşenleri — renk_bileseni_mi=1 olan tüm kartlar
-        # (BOYA kategorisi + ATR-312 gibi çift rollü katkılar dahil)
-        # Liste: yeni_tanim - ad - kod formatında sıralanır
         stok_pigmentler = [dict(r) for r in con.execute("""
             SELECT id, kod, ad, kategori, yeni_tanim, tanim
             FROM nexgen_stok_kart
@@ -14742,6 +14756,7 @@ def tablet_arge_yeni_rf():
         active='nexgen',
         cariler=cariler,
         formuller=formuller,
+        formul_gruplar=formul_gruplar,
         renk_varyantlar=renk_varyantlar,
         varyantlar=varyantlar,
         stok_pigmentler=stok_pigmentler,
