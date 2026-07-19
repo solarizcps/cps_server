@@ -19651,12 +19651,17 @@ def api_batch_durum_guncelle(batch_kodu):
         mevcut = batch['durum']
         if mevcut == yeni_durum:
             if yeni_durum == 'BITTI':
+                # Idempotent BITTI: batch zaten bitmiş olsa bile plan/sipariş
+                # senkronunu yeniden dene (orphan URETIMDE header'ları iyileştirir).
+                _tua_plan_durum_sync(con, batch['plan_id'], 'BITTI')
+                con.commit()
                 return jsonify({
                     'ok': True,
                     'durum': yeni_durum,
                     'batch_kodu': batch_kodu,
                     'plan_id': batch['plan_id'],
                     'idempotent': True,
+                    'siparis_sync': True,
                 })
             return jsonify({
                 'ok': False,
