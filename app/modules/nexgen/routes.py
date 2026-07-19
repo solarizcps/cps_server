@@ -19932,7 +19932,15 @@ def _mpr_plan_uretim_parcalari_hesapla(con, plan_id, rf_renk_id=None, rf_rev_no=
 
 
 def _pzm_siparis_tamamlandi_sync(con, plan_id):
-    """Plan BITTI sonrası — tüm planlar bittiyse siparişi TAMAMLANDI yap."""
+    """Plan kapandıktan sonra sipariş durumunu senkronize et.
+
+    Kurallar (_PZM_DURUMLAR ile uyumlu):
+      - Açık plan varsa → dokunma
+      - Plan yoksa → dokunma
+      - Tüm planlar IPTAL → sipariş IPTAL (TAMAMLANDI değil)
+      - En az bir BITTI ve açık plan yok → sipariş TAMAMLANDI
+        (kalan planlar BITTI ve/veya IPTAL olabilir)
+    """
     if not plan_id or not _plan_planlama_siparis_kolonu_var(con):
         return {'ok': True, 'atlandi': True}
     if not _planlama_siparis_tablosu_var(con):
@@ -19944,19 +19952,45 @@ def _pzm_siparis_tamamlandi_sync(con, plan_id):
     if not row or not row['planlama_siparis_id']:
         return {'ok': True, 'atlandi': True}
     ps_id = row['planlama_siparis_id']
-    acik = con.execute("""
-        SELECT COUNT(*) AS c FROM nexgen_uretim_plan
-        WHERE planlama_siparis_id=? AND durum NOT IN ('BITTI','IPTAL')
+    counts = con.execute("""
+        SELECT
+            COUNT(*) AS plan_sayisi,
+            SUM(CASE WHEN durum='BITTI' THEN 1 ELSE 0 END) AS bitti,
+            SUM(CASE WHEN durum='IPTAL' THEN 1 ELSE 0 END) AS iptal,
+            SUM(CASE WHEN durum NOT IN ('BITTI','IPTAL') THEN 1 ELSE 0 END) AS acik
+        FROM nexgen_uretim_plan
+        WHERE planlama_siparis_id=?
     """, (ps_id,)).fetchone()
-    if acik and int(acik['c'] or 0) > 0:
-        return {'ok': True, 'atlandi': True, 'acik_plan_sayisi': int(acik['c'])}
+    plan_sayisi = int(counts['plan_sayisi'] or 0)
+    bitti = int(counts['bitti'] or 0)
+    iptal = int(counts['iptal'] or 0)
+    acik = int(counts['acik'] or 0)
+    if plan_sayisi <= 0:
+        return {'ok': True, 'atlandi': True, 'neden': 'plan_yok'}
+    if acik > 0:
+        return {
+            'ok': True, 'atlandi': True, 'acik_plan_sayisi': acik,
+            'plan_sayisi': plan_sayisi, 'bitti': bitti, 'iptal': iptal,
+        }
+    if bitti <= 0 and iptal == plan_sayisi:
+        hedef = 'IPTAL'
+    elif bitti > 0:
+        hedef = 'TAMAMLANDI'
+    else:
+        return {
+            'ok': True, 'atlandi': True, 'neden': 'belirsiz_plan_durumu',
+            'plan_sayisi': plan_sayisi, 'bitti': bitti, 'iptal': iptal,
+        }
     con.execute("""
         UPDATE nexgen_planlama_siparis
-        SET durum='TAMAMLANDI',
+        SET durum=?,
             guncelleme_tarihi=datetime('now','localtime')
         WHERE id=? AND durum NOT IN ('IPTAL','TAMAMLANDI')
-    """, (ps_id,))
-    return {'ok': True, 'siparis_id': ps_id, 'durum': 'TAMAMLANDI'}
+    """, (hedef, ps_id))
+    return {
+        'ok': True, 'siparis_id': ps_id, 'durum': hedef,
+        'plan_sayisi': plan_sayisi, 'bitti': bitti, 'iptal': iptal, 'acik': 0,
+    }
 
 
 def _plan_boyut_tablosu_var(con):
