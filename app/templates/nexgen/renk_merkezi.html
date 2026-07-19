@@ -789,16 +789,52 @@ async function rmDetayYukle(k){
   if(k.arge_test_id) params.set('arge_test_id',k.arge_test_id);
   else params.set('rf_id',k.rf_id);
 
+  const msgEl = (txt)=> {
+    document.getElementById('s-calisma').innerHTML=
+      '<div class="rm-yukleniyor">'+rmE(txt)+'</div>';
+  };
+
   try{
     const res=await fetch('/nexgen/api/renk-merkezi/detay?'+params.toString());
-    const d=await res.json();
-    if(!d.ok){
-      document.getElementById('s-calisma').innerHTML='<div class="rm-yukleniyor">Hata: '+rmE(d.hata)+'</div>';
+    const ct=(res.headers.get('content-type')||'').toLowerCase();
+    let d=null;
+    if(ct.includes('application/json')){
+      try { d=await res.json(); }
+      catch(parseErr){
+        console.error('RM detay JSON parse', res.status, parseErr);
+        msgEl(res.status>=500
+          ? 'Sunucu hatası ('+res.status+'). Detay açılamadı.'
+          : 'Yanıt okunamadı ('+res.status+').');
+        return;
+      }
+    } else {
+      const raw=await res.text();
+      console.error('RM detay non-JSON', res.status, raw.slice(0,300));
+      if(res.status===401||res.status===403){ msgEl('Yetki yok veya oturum süresi doldu.'); return; }
+      if(res.status===404){ msgEl('Kayıt bulunamadı (404).'); return; }
+      if(res.status>=500){ msgEl('Sunucu hatası ('+res.status+'). Detay açılamadı.'); return; }
+      msgEl('Beklenmeyen yanıt ('+res.status+').');
       return;
     }
-    rmRender(k, d);
+    if(!res.ok || !d || d.ok===false){
+      const hata=(d&&d.hata)||('HTTP '+res.status);
+      console.error('RM detay hata', res.status, d);
+      if(res.status===404) msgEl('Kayıt bulunamadı: '+hata);
+      else if(res.status===400) msgEl('Geçersiz istek: '+hata);
+      else if(res.status===403) msgEl('Yetki yok.');
+      else if(res.status>=500) msgEl('Sunucu hatası: '+hata);
+      else msgEl('Hata: '+hata);
+      return;
+    }
+    try{
+      rmRender(k, d);
+    }catch(renderErr){
+      console.error('RM detay render', renderErr);
+      msgEl('Detay gösterilemedi (ekran hatası).');
+    }
   }catch(err){
-    document.getElementById('s-calisma').innerHTML='<div class="rm-yukleniyor">Ağ hatası</div>';
+    console.error('RM detay ağ/fetch', err);
+    msgEl('Bağlantı kurulamadı. Ağ veya sunucu erişilemiyor.');
   }
 }
 
@@ -955,7 +991,7 @@ function rmRender(kart, d){
   if(isNxAr && c && (c.ferhat_genel_karar || (c.boyut_sonuclar&&c.boyut_sonuclar.length))){
     const bs=(c.boyut_sonuclar||[]).map(b=>
       `<div class="rm-bs"><span class="rm-be">${rmE(b.boyut||'')}</span>`+
-      `<span class="rm-bv">Shore ${b.shore_sonuc??'—'} · Pişme ${b.pisme_suresi_dk??'—'} · Sn ${b.enjeksiyon_saniye??'—'}</span></div>`
+      `<span class="rm-bv">Shore ${b.shore_sonuc!=null?b.shore_sonuc:'—'} · Pişme ${b.pisme_suresi_dk!=null?b.pisme_suresi_dk:'—'} · Sn ${b.enjeksiyon_saniye!=null?b.enjeksiyon_saniye:'—'}</span></div>`
     ).join('');
     sagHtml=`
       <div class="rm-bl">

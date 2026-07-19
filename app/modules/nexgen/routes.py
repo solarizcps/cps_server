@@ -38,7 +38,7 @@ from datetime import datetime, date
 from flask import (
     Blueprint, render_template, abort,
     request, jsonify, session, g,
-    Response, redirect, url_for, flash
+    Response, redirect, url_for, flash, current_app
 )
 from modules.auth import yetki_gerekli, yetki_var, login_gerekli
 from modules.nexgen.kod_uretici import (
@@ -6441,11 +6441,15 @@ def api_rm_detay():
             except Exception:
                 pass
 
-        if (rf or is_nx_ar) and pigment_ozet['kalem_sayisi']:
+        if pigment_ozet['kalem_sayisi'] and (rf or is_nx_ar):
             ozet['kalem_sayisi'] = pigment_ozet['kalem_sayisi']
             ozet['toplam_gr'] = pigment_ozet['toplam_gr']
             ozet['toplam_kg'] = pigment_ozet['toplam_kg']
-            ozet['revizyon_id'] = rf['aktif_rev_no'] or 1
+            # NX-AR henüz RF'siz olabilir — rf None iken subscript yasak
+            if rf is not None:
+                ozet['revizyon_id'] = rf['aktif_rev_no'] or 1
+            else:
+                ozet['revizyon_id'] = 1
 
         # D. Bağlantılar — çekirdek aktif / geçmiş ayrımı
         baglantilar = []
@@ -6547,21 +6551,28 @@ def api_rm_detay():
             except Exception:
                 olaylar = []
 
+        return jsonify({
+            'ok':         True,
+            'ozet':       ozet,
+            'calisma':    calisma,
+            'pigmentler': pigmentler,
+            'pigment_ozet': pigment_ozet,
+            'baglantilar': baglantilar,
+            'baglantilar_gecmis': baglantilar_gecmis,
+            'revizyonlar': revizyonlar,
+            'kullanim':   kullanim,
+            'olaylar':    olaylar,
+        })
+    except Exception as exc:
+        # HTML 500 yerine JSON — UI "Ağ hatası" sanmasın
+        current_app.logger.exception('renk-merkezi/detay hata: %s', exc)
+        return jsonify({
+            'ok': False,
+            'hata': 'Detay yüklenemedi.',
+            'kod': 'DETAY_HATA',
+        }), 500
     finally:
         con.close()
-
-    return jsonify({
-        'ok':         True,
-        'ozet':       ozet,
-        'calisma':    calisma,
-        'pigmentler': pigmentler,
-        'pigment_ozet': pigment_ozet,
-        'baglantilar': baglantilar,
-        'baglantilar_gecmis': baglantilar_gecmis,
-        'revizyonlar': revizyonlar,
-        'kullanim':   kullanim,
-        'olaylar':    olaylar,
-    })
 
 
 def _rm_rf_kullanim_say(con, rf_id: int) -> tuple[int, int]:
