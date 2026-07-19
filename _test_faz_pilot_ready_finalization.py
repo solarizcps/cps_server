@@ -299,8 +299,9 @@ with _app.test_client() as c:
         st = c.get(path).status_code
         ok(f"route {name} not 404/500", st not in (404, 500) and st < 500, str(st))
 
-print("\n[C] Omurga L/S (best-effort if data allows)")
-# Reuse patterns from NRFIX if formul exists
+print("\n[C] Omurga L/S")
+# UI/API zorunlu alan: kalem.termin_tarihi (ISO YYYY-MM-DD, bugünden önce olamaz)
+# Kanıt: _pzm_termin_dogrula + pazarlama_merkezi.html kalem payload
 try:
     fid = con.execute(
         "SELECT MIN(id) FROM nexgen_formul WHERE kod LIKE '1BA-FL01' AND aktif=1"
@@ -312,6 +313,7 @@ try:
         "WHERE u.aktif=1 AND f.kod LIKE '1BA-FL01' LIMIT 1"
     ).fetchone()
     if fid and cid and rf:
+        termin_kalem = (date.today() + timedelta(days=14)).isoformat()
         payload = {
             "cari_id": cid["id"],
             "siparis_tarihi": date.today().isoformat(),
@@ -325,17 +327,51 @@ try:
                 "miktar_l": 24,
                 "miktar_s": 24,
                 "miktar_m": None,
+                "termin_tarihi": termin_kalem,
             }],
         }
         with _app.test_client() as c:
             admin_sess(c)
-            # stok tamamla soft
-            for path in ["/nexgen/api/pazarlama/taslak-kaydet"]:
-                pass
+            # Stok (tmp) — malzeme ihtiyaç / üretime gönder için
+            ted = con.execute(
+                "SELECT id FROM nexgen_tedarikci WHERE aktif=1 LIMIT 1"
+            ).fetchone()
+            if ted:
+                for kod in ("NEX-03-03", "NEX-05-01", "NEX-05-08", "NEX-01-01", "NEX-01-03"):
+                    sk = con.execute(
+                        "SELECT id FROM nexgen_stok_kart WHERE kod=?", (kod,)
+                    ).fetchone()
+                    if sk:
+                        c.post("/nexgen/api/depo/mal-kabul", json={
+                            "tedarikci_id": ted["id"],
+                            "stok_kart_id": sk["id"],
+                            "miktar_kg": 2000.0,
+                            "aciklama": "PILOT_READY stok",
+                            "lot_no": f"PR35-{kod}",
+                        })
             d1 = c.post("/nexgen/api/pazarlama/taslak-kaydet", json=payload).get_json() or {}
             tid = d1.get("talep_id")
-            ok("E2E taslak", bool(tid), str(d1)[:100])
+            ok("E2E taslak", bool(tid), str(d1)[:120])
             if tid:
+                # Teslim tarihi DB kaydı (kalem veya header)
+                term_row = con.execute(
+                    """
+                    SELECT termin_tarihi FROM nexgen_planlama_siparis_kalem
+                     WHERE planlama_siparis_id=? ORDER BY id LIMIT 1
+                    """,
+                    (tid,),
+                ).fetchone()
+                if term_row is None:
+                    term_row = con.execute(
+                        "SELECT termin_tarihi FROM nexgen_planlama_siparis WHERE id=?",
+                        (tid,),
+                    ).fetchone()
+                ok(
+                    "E2E teslim tarihi kaydı",
+                    term_row is not None
+                    and str(term_row["termin_tarihi"] or "")[:10] == termin_kalem,
+                    str(dict(term_row) if term_row else None),
+                )
                 c.post("/nexgen/api/pazarlama/mpr-olustur", json={"talep_id": tid})
                 plan = con.execute(
                     "SELECT id FROM nexgen_uretim_plan WHERE planlama_siparis_id=? ORDER BY id DESC LIMIT 1",
@@ -344,29 +380,23 @@ try:
                 ok("E2E plan", plan is not None)
                 if plan:
                     pid = plan["id"]
-                    # mark PLANLANDI if column workflow needs
-                    try:
-                        con.execute(
-                            "UPDATE nexgen_uretim_plan SET durum='PLANLANDI' WHERE id=? AND durum!='BITTI'",
-                            (pid,),
-                        )
-                        con.commit()
-                    except Exception:
-                        pass
+                    c.post(f"/nexgen/api/uem/emir/{pid}/planlandi-yap")
                     r_ug = c.post(
                         f"/nexgen/api/pazarlama/siparis/{tid}/uretime-gonder",
                         json={"confirm": True},
                     )
                     dj = r_ug.get_json() or {}
-                    ok("E2E uretime gonder", dj.get("ok") is True or r_ug.status_code < 500, str(dj)[:120])
+                    ok("E2E uretime gonder", dj.get("ok") is True, str(dj)[:120])
                     bk_row = con.execute(
                         "SELECT batch_kodu FROM nexgen_uretim_batch WHERE plan_id=? ORDER BY id DESC LIMIT 1",
                         (pid,),
                     ).fetchone()
                     bk = bk_row["batch_kodu"] if bk_row else None
+                    ok("E2E batch", bool(bk), str(bk))
                     if bk:
                         parcalar = con.execute(
-                            "SELECT id, hedef_kg, notlar, durum FROM nexgen_uretim_parca WHERE batch_kodu=? ORDER BY id",
+                            "SELECT id, hedef_kg, notlar, durum, uretilen_kg "
+                            "FROM nexgen_uretim_parca WHERE batch_kodu=? ORDER BY id",
                             (bk,),
                         ).fetchall()
                         ok("E2E L/S 2 parça", len(parcalar) == 2, str(len(parcalar)))
@@ -375,29 +405,71 @@ try:
                                 "E2E boyut marker",
                                 all(_PARCA_BOYUT_UV_MARKER in (p["notlar"] or "") for p in parcalar),
                             )
-                            # bitir parçalar
+                            hedef = round(sum(float(p["hedef_kg"]) for p in parcalar), 2)
+                            # Operasyon sırası: batch DEVAM → depo hazırlık → parça bitir → BITTI
+                            # (NRFIX1 bitir_batch ile aynı; hazirlik olmadan uretilen_kg=0 kalır)
+                            c.post(f"/nexgen/api/batch/{bk}/durum", json={"durum": "DEVAM"})
+                            hid = con.execute(
+                                "SELECT id FROM nexgen_depo_hazirlik "
+                                "WHERE batch_kodu=? ORDER BY id DESC LIMIT 1",
+                                (bk,),
+                            ).fetchone()
+                            if hid:
+                                c.post(
+                                    f"/nexgen/api/depo/hazirlik/{hid['id']}/baslat",
+                                    json={},
+                                )
+                                c.post(
+                                    f"/nexgen/api/depo/hazirlik/{hid['id']}/hazir",
+                                    json={},
+                                )
                             for p in parcalar:
-                                c.post(f"/nexgen/api/batch/{bk}/parca/{p['id']}/baslat")
-                                c.post(f"/nexgen/api/batch/{bk}/parca/{p['id']}/bitir", json={})
-                            r_bad = c.post(f"/nexgen/api/batch/{bk}/durum", json={"durum": "BITTI"})
-                            # already may be auto — just set BITTI
-                            c.post(f"/nexgen/api/batch/{bk}/durum", json={"durum": "BITTI"})
+                                rb = c.post(
+                                    f"/nexgen/api/batch/{bk}/parca/{p['id']}/baslat"
+                                )
+                                rj = c.post(
+                                    f"/nexgen/api/batch/{bk}/parca/{p['id']}/bitir",
+                                    json={},
+                                )
+                            r_bit = c.post(
+                                f"/nexgen/api/batch/{bk}/durum", json={"durum": "BITTI"}
+                            )
+                            ok(
+                                "E2E batch bitir ok",
+                                (r_bit.get_json() or {}).get("ok") is True,
+                                str(r_bit.get_json())[:120],
+                            )
                             uret = float(
                                 con.execute(
-                                    "SELECT ROUND(COALESCE(SUM(uretilen_kg),0),3) FROM nexgen_uretim_parca WHERE batch_kodu=?",
+                                    "SELECT ROUND(COALESCE(SUM(uretilen_kg),0),3) "
+                                    "FROM nexgen_uretim_parca WHERE batch_kodu=?",
                                     (bk,),
                                 ).fetchone()[0]
                             )
-                            hedef = round(sum(float(p["hedef_kg"]) for p in parcalar), 2)
-                            ok("E2E fiili≈hedef", abs(uret - hedef) < 0.05 or uret > 0, f"u={uret} h={hedef}")
-                            pd = con.execute("SELECT durum FROM nexgen_uretim_plan WHERE id=?", (pid,)).fetchone()["durum"]
-                            sd = con.execute(
-                                "SELECT durum FROM nexgen_planlama_siparis WHERE id=?", (tid,)
+                            ok(
+                                "E2E fiili≈hedef",
+                                abs(uret - hedef) < 0.05,
+                                f"u={uret} h={hedef}",
+                            )
+                            ok(
+                                "E2E faturalanacak=fiili",
+                                abs(uret - hedef) < 0.05,
+                                f"uret={uret} hedef={hedef}",
+                            )
+                            pd = con.execute(
+                                "SELECT durum FROM nexgen_uretim_plan WHERE id=?", (pid,)
                             ).fetchone()["durum"]
+                            sd = con.execute(
+                                "SELECT durum FROM nexgen_planlama_siparis WHERE id=?",
+                                (tid,),
+                            ).fetchone()["durum"]
+                            bd = con.execute(
+                                "SELECT durum FROM nexgen_uretim_batch WHERE batch_kodu=?",
+                                (bk,),
+                            ).fetchone()["durum"]
+                            ok("E2E batch BITTI", bd == "BITTI", bd)
                             ok("E2E plan BITTI", pd == "BITTI", pd)
                             ok("E2E siparis TAMAMLANDI", sd == "TAMAMLANDI", sd)
-                    else:
-                        ok("E2E batch", False, "no batch")
     else:
         ok("E2E data available", False, "formul/cari/rf missing — skipped chain")
 except Exception as e:
