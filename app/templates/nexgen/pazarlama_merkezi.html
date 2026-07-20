@@ -1315,18 +1315,26 @@ function pzmDetayStokYukle(tid) {
 function pzmDetayAltEmirEksikMi(st) {
   return (st.planlar || []).some(function(p) {
     if (!p.plan_id) return true;
-    if (p.boyutlar && p.boyutlar.length) return false;
+    if (pzmDetayAltEmirPlanBoyutlari(p).length) return false;
     return !st.altEmirSonuclari[String(p.plan_id)];
   });
 }
 
+function pzmDetayAltEmirPlanBoyutlari(p) {
+  var b = p && p.boyutlar;
+  return (b && b.length) ? b : [];
+}
+
 function pzmDetayAltEmirTetikle(tid) {
   var st = pzmMprStateEnsure(tid);
-  if (!st.planlar.length || st.altEmirYukleniyor) return;
+  if (!st.planlar.length) return;
   if (!pzmDetayAltEmirEksikMi(st)) {
+    st.altEmirYukleniyor = false;
+    st.altEmirYuklendi = true;
     pzmMprUiGuncelle(tid);
     return;
   }
+  if (st.altEmirYukleniyor) return;
   if (st.altEmirYuklendi) st.altEmirYuklendi = false;
   pzmDetayAltEmirYukle(tid);
 }
@@ -1365,7 +1373,8 @@ function pzmDetayHydrate(t, st) {
         t.durum_etiket = bul.durum_etiket;
         var idx = (_pzmTalepCache || []).findIndex(function(x) { return x.id === t.id; });
         if (idx >= 0) Object.assign(_pzmTalepCache[idx], bul);
-        if (st.planlar.length && !st.stokYuklendi) pzmDetayStokYukle(t.id);
+        if (st.planlar.length && !st.stokYuklendi && !st.stokYukleniyor) pzmDetayStokYukle(t.id);
+        else if (st.planlar.length && st.stokYuklendi) pzmDetayAltEmirTetikle(t.id);
         else if (!st.planlar.length && ['MPR_BEKLIYOR', 'PLANLAMAYA_HAZIR', 'URETIMDE'].indexOf((bul.durum || '').toUpperCase()) >= 0) {
           st.mprHesaplandi = true;
         }
@@ -1404,10 +1413,11 @@ function pzmDetayAltEmirYukle(tid) {
   if (!st.planlar.length || st.altEmirYukleniyor) return;
   var yuklenecek = st.planlar.filter(function(p) {
     if (!p.plan_id) return false;
-    if (p.boyutlar && p.boyutlar.length) return false;
+    if (pzmDetayAltEmirPlanBoyutlari(p).length) return false;
     return !st.altEmirSonuclari[String(p.plan_id)];
   });
   if (!yuklenecek.length) {
+    st.altEmirYukleniyor = false;
     st.altEmirYuklendi = true;
     pzmMprUiGuncelle(tid);
     return;
@@ -1417,21 +1427,27 @@ function pzmDetayAltEmirYukle(tid) {
   var promises = yuklenecek.map(function(p) {
     var pid = p.plan_id;
     return fetch('/nexgen/api/plan/' + pid + '/alt-emir-onizle')
-      .then(function(r) { return r.json(); })
+      .then(function(r) {
+        if (!r.ok) {
+          return r.text().then(function(txt) {
+            throw new Error('HTTP ' + r.status + (txt ? ': ' + txt.slice(0, 120) : ''));
+          });
+        }
+        return r.json();
+      })
       .then(function(j) {
         st.altEmirSonuclari[String(pid)] = j;
         return j;
       })
-      .catch(function() {
-        st.altEmirSonuclari[String(pid)] = { ok: false, hata: 'Alt emir yüklenemedi' };
+      .catch(function(err) {
+        st.altEmirSonuclari[String(pid)] = {
+          ok: false,
+          hata: (err && err.message) ? err.message : 'Alt emir yüklenemedi',
+        };
         return null;
       });
   });
-  Promise.all(promises).then(function() {
-    st.altEmirYukleniyor = false;
-    st.altEmirYuklendi = true;
-    pzmMprUiGuncelle(tid);
-  }).catch(function() {
+  Promise.all(promises).finally(function() {
     st.altEmirYukleniyor = false;
     st.altEmirYuklendi = true;
     pzmMprUiGuncelle(tid);
@@ -1467,8 +1483,9 @@ function pzmAltEmirOzetHtml(st) {
   var satirSayisi = 0;
   (st.planlar || []).forEach(function(p) {
     var pid = String(p.plan_id || '');
-    if (p.boyutlar && p.boyutlar.length) {
-      p.boyutlar.forEach(function(b) {
+    var planBoyutlar = pzmDetayAltEmirPlanBoyutlari(p);
+    if (planBoyutlar.length) {
+      planBoyutlar.forEach(function(b) {
         satirSayisi += 1;
         html += pzmAltEmirSatirHtml(p.plan_kodu, {
           ok: true,
@@ -2275,6 +2292,7 @@ window.pzmDetayMprHesapla = function(tid) {
       t.durum_etiket = 'Malzeme İhtiyaç Bekliyor';
       t.mpr_planlar = st.planlar;
       pzmTalepListesiYenile();
+      pzmDetayAltEmirTetikle(tid);
       pzmDetayStokYukle(tid);
     }
     pzmDetayRender(t);
@@ -3036,6 +3054,7 @@ window.pzmMrpOlustur = function() {
       var oz = $id('pzm-oz-durum');
       if (oz) oz.innerHTML = pzmRozetHtml('MPR_BEKLIYOR', 'Malzeme İhtiyaç Bekliyor');
       pzmTalepListesiYenile();
+      pzmDetayAltEmirTetikle(tid);
       pzmDetayStokYukle(tid);
       pzmYeniMprRender();
       pzmAkkAc(4);
@@ -3176,7 +3195,8 @@ window.pzmTalepYukle = function(id) {
     var stL = pzmMprStateEnsure(t.id);
     stL.planlar = t.mpr_planlar;
     stL.mprHesaplandi = true;
-    if (!stL.stokYuklendi) pzmDetayStokYukle(t.id);
+    if (!stL.stokYuklendi && !stL.stokYukleniyor) pzmDetayStokYukle(t.id);
+    else if (stL.stokYuklendi) pzmDetayAltEmirTetikle(t.id);
     pzmAkkAc(4);
   } else if ((t.durum || '').toUpperCase() === 'MPR_BEKLIYOR') {
     pzmAkkAc(4);
