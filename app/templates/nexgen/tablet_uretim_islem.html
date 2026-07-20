@@ -22,50 +22,36 @@
 {% block content %}
 <div class="tui-sayfa">
 
-  {# ══ ÜST BAR ════════════════════════════════════════════════════ #}
-  <div class="tui-topbar">
-    <div class="tui-topbar-ic">
-      <a href="/nexgen/tablet" class="tui-geri-btn">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-             stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
-          <polyline points="15 18 9 12 15 6"/>
-        </svg>
-      </a>
-      <div>
-        <div class="tui-topbar-kucuk">NEXGEN TABLET — ÜRETİM İŞLEMİ</div>
-        <div class="tui-topbar-buyuk">
+  {# ══ ÜST BAR — Reçete Merkezi logo + kompakt başlık ══ #}
+  <div class="rm-page-hdr tui-page-hdr">
+    <div class="rm-page-hdr-sol tui-hdr-sol">
+      <img src="{{ url_for('static', filename='img/nexgen-logo.png') }}" alt="NexGen" class="rm-page-logo">
+      <div class="tui-hdr-metin">
+        <div class="tui-hdr-sayfa">ÜRETİM İŞLEMİ</div>
+        <div class="tui-hdr-sip">
           {{ batch.siparis_no or batch.batch_kodu }}
-          {% if kalem_no %}<span class="tui-topbar-kalem">K{{ kalem_no }}</span>{% endif %}
-          {% if secili_boyut or batch.boyut %}
-          <span class="tui-topbar-boyut tui-tb-{{ (secili_boyut or batch.boyut)|lower }}">{{ secili_boyut or batch.boyut }}</span>
-          {% endif %}
-        </div>
-        <div class="tui-topbar-meta">
-          <span>{{ batch.formul_ad or '—' }}</span>
-          {% if batch.renk_ad %}<span>· {{ batch.renk_ad }}</span>{% endif %}
-          {% if boyut_hedef_kg is not none %}
-          <span class="tui-topbar-kg">· {{ "{:,.0f}".format(boyut_uretilen_kg or 0) }} / {{ "{:,.0f}".format(boyut_hedef_kg) }} KG · Kalan {{ "{:,.0f}".format(boyut_kalan_kg or 0) }}</span>
-          {% endif %}
+          {% if kalem_no %}<span class="tui-hdr-kalem">K{{ kalem_no }}</span>{% endif %}
         </div>
       </div>
-      <div class="tui-topbar-saglar">
-        {# Aynı batch içinde boyut geçişi #}
-        {% if kardes_boyutlar|length > 1 %}
-        <div class="tui-boyut-toggle">
-          {% for kb in kardes_boyutlar %}
-          <a href="/nexgen/tablet/uretim-islem/{{ batch.batch_kodu }}?boyut={{ kb.boyut }}"
-             class="tui-boyut-toggle-btn{% if kb.aktif or (secili_boyut == kb.boyut) %} tui-boyut-toggle-aktif{% endif %}">
-            {{ kb.boyut }}
-          </a>
-          {% endfor %}
-        </div>
-        {% endif %}
-        <button class="tui-kaydet-cik-btn" onclick="kaydetCik()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-               width="13" height="13"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-          Kaydet ve Çık
-        </button>
+    </div>
+    <div class="tui-topbar-saglar">
+      {% if kardes_boyutlar|length > 1 %}
+      <div class="tui-boyut-toggle" role="tablist" aria-label="Boyut seçimi">
+        {% for kb in kardes_boyutlar %}
+        <a href="/nexgen/tablet/uretim-islem/{{ batch.batch_kodu }}?boyut={{ kb.boyut }}"
+           role="tab"
+           aria-selected="{{ 'true' if (kb.aktif or secili_boyut == kb.boyut) else 'false' }}"
+           class="tui-boyut-toggle-btn{% if kb.aktif or (secili_boyut == kb.boyut) %} tui-boyut-toggle-aktif{% endif %}">
+          {{ kb.boyut }}
+        </a>
+        {% endfor %}
       </div>
+      {% endif %}
+      <button type="button" class="tui-kaydet-cik-btn" onclick="kaydetCik()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             width="13" height="13"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Kaydet ve Çık
+      </button>
     </div>
   </div>
 
@@ -76,106 +62,86 @@
     {# ════ SOL PANELİ (30%) ══════════════════════════════════════════ #}
     <aside class="sol-panel">
 
-      {# Adım göstergesi — sol panelde kompakt #}
-      <div class="tui-adim-bar">
-        {% set adimlar = [
-          (1, 'Hazırlık'),
-          (2, 'Üretimde'),
-          (3, 'Beklemede'),
-          (4, 'Bitti'),
-          (5, 'Etiket')
-        ] %}
-        {% for no, ad in adimlar %}
-        {% set aktif = (no == adim_no) %}
-        {% set gecti = (no < adim_no) %}
-        <div class="tui-adim {% if aktif %}tui-adim-aktif{% elif gecti %}tui-adim-gecti{% endif %}"
-             data-adim-no="{{ no }}">
-          <div class="tui-adim-daire">
-            {% if gecti %}
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
-                 width="13" height="13"><polyline points="20 6 9 17 4 12"/></svg>
-            {% else %}{{ no }}{% endif %}
-          </div>
-          <div class="tui-adim-yazi">{{ ad }}</div>
-        </div>
-        {% if not loop.last %}
-        <div class="tui-adim-cizgi {% if no < adim_no %}tui-cizgi-gecti{% endif %}"
-             data-onceki-adim="{{ no }}"></div>
-        {% endif %}
-        {% endfor %}
-      </div>
-
-      {# Sipariş No #}
-      <div class="sol-sip-blok">
-        <div class="sol-etiket">{% if batch.uretim_kodu %}ÜRETİM KODU{% else %}SİPARİŞ NO{% endif %}</div>
-        <div class="sol-sip-no">{% if batch.uretim_kodu %}{{ batch.uretim_kodu }}{% else %}{{ batch.siparis_no or batch.batch_kodu }}{% endif %}</div>
-        {% if batch.uretim_kodu %}
-        <div class="sol-tarih">
-          {% if batch.ana_formul_kodu %}{{ batch.ana_formul_kodu }}{% endif %}
-          {% if batch.renk_kodu and batch.renk_ad %} · {{ batch.renk_kodu }} {{ batch.renk_ad }}{% elif batch.renk_ad %} · {{ batch.renk_ad }}{% endif %}
-        </div>
-        {% else %}
-        <div class="sol-tarih">{{ batch.plan_tarihi[:10] if batch.plan_tarihi else '—' }}</div>
-        {% endif %}
-      </div>
-
-      {# Cari #}
+      {# FAZ-URETIM-ISLEM-SOL-KIMLIK-1 — tek birleşik kimlik kartı #}
       {% set _tui_cad = batch.musteri_adi or '— Cari Yok —' %}{% if ' - ' in _tui_cad %}{% set _tui_pfx = _tui_cad.split(' - ', 1)[0] %}{% if '.' in _tui_pfx and ' ' not in _tui_pfx %}{% set _tui_cad = _tui_cad.split(' - ', 1)[1] %}{% endif %}{% endif %}
-      <div class="sol-cari-blok">
-        <div class="sol-etiket">CARİ</div>
-        <div class="sol-cari-ad">{{ _tui_cad }}</div>
-        <span class="tui-durum tui-d-{{ batch.durum|lower }}" id="tui-durum-rozet">{{ batch.durum }}</span>
-      </div>
-
-      {# Formül Kartı #}
-      <div class="sol-bilgi-liste">
-        <div class="sol-bilgi-satir">
-          <span class="sol-bilgi-et">FORMÜL</span>
-          <span class="sol-bilgi-val">{{ batch.formul_ad or '—' }}</span>
+      {% set _formul_ad = (batch.formul_ad or '—')|trim %}
+      {% set _rk = (rf_kod or '')|trim %}
+      {% set _ra = (rf_renk_ad or '')|trim %}
+      {% if not _ra %}{% set _ra = (batch.renk_ad or '')|trim %}{% endif %}
+      {% if _rk and _ra and _rk|upper == _ra|upper %}
+        {% set _renk_goster = _rk %}
+      {% elif _rk and _ra %}
+        {% set _renk_goster = _rk ~ ' ' ~ _ra %}
+      {% else %}
+        {% set _renk_goster = _rk or _ra or '—' %}
+      {% endif %}
+      {% set _hedef_kg = boyut_hedef_kg if boyut_hedef_kg is not none else uretilecek_kg %}
+      {% set _uretilen_kg = boyut_uretilen_kg if boyut_uretilen_kg is not none else toplam_uretilen_kg %}
+      {% set _kalan_kg = boyut_kalan_kg if boyut_kalan_kg is not none else kalan_uretim_kg %}
+      <div class="sol-kimlik">
+        <div class="sol-kim-blok">
+          <div class="sol-kim-lbl">Cari</div>
+          <div class="sol-kim-cari">{{ _tui_cad }}</div>
         </div>
-      </div>
-
-      {# Renk + Boyut — iki kart yan yana #}
-      <div class="sol-kart-iki">
-        <div class="sol-kart">
-          <span class="sol-bilgi-et">RENK</span>
-          <span class="sol-bilgi-val">{{ batch.renk_ad or '—' }}</span>
+        <div class="sol-kim-blok sol-kim-sip-satir">
+          <div>
+            <div class="sol-kim-lbl">Sipariş</div>
+            <div class="sol-kim-sip">{{ batch.siparis_no or batch.batch_kodu }}</div>
+          </div>
+          <span class="tui-durum tui-d-{{ batch.durum|lower }}" id="tui-durum-rozet">{{ batch.durum }}</span>
         </div>
-        <div class="sol-kart">
-          <span class="sol-bilgi-et">BOYUT</span>
-          <span class="sol-bilgi-val">{{ secili_boyut or batch.boyut or '—' }}</span>
+        <div class="sol-kim-blok sol-kim-urun">
+          <div class="sol-kim-formul">Formül · {{ _formul_ad }}</div>
+          <div class="sol-kim-renk">Renk · {{ _renk_goster }}</div>
         </div>
-      </div>
-
-      {# RF Renk Formülü #}
-      <div class="sol-rf-blok">
-        <div class="sol-etiket">RF RENK</div>
-        {% if rf_kod %}
-        <div class="sol-rf-kod">{{ rf_kod }}</div>
-        <div class="sol-rf-ad">{{ rf_renk_ad or batch.renk_ad or '—' }}</div>
-        {% else %}
-        <div class="sol-rf-yok">RF eşleşmesi yok</div>
+        {% if boyut_kirilim %}
+        <div class="sol-kim-boyutlar">
+          {% for oz in boyut_kirilim %}
+          {% set _b = oz.boyut %}
+          {% set _aktif = (secili_boyut == _b) or ((not secili_boyut) and (boyut_kirilim|length == 1)) %}
+          {% set _bkg = oz.uretilecek_kg if (oz.uretilecek_kg or 0) > 0 else oz.siparis_kg %}
+          {% set _bn = oz.parca_toplam if (oz.parca_toplam or 0) > 0 else (oz.batch_sayisi or 0) %}
+          <a href="/nexgen/tablet/uretim-islem/{{ batch.batch_kodu }}?boyut={{ _b }}"
+             class="sol-kim-boyut{% if _aktif %} sol-kim-boyut-aktif{% endif %}"
+             aria-current="{{ 'true' if _aktif else 'false' }}">
+            <div class="sol-kim-boyut-ad">{{ _b }}</div>
+            <div class="sol-kim-boyut-kg">{{ '{:,.0f}'.format((_bkg or 0)|round|int).replace(',', '.') }} KG</div>
+            <div class="sol-kim-boyut-n">{{ _bn }} formül</div>
+          </a>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% if batch.uretim_kodu %}
+        <div class="sol-kim-blok sol-kim-uk">
+          <div class="sol-kim-lbl">Üretim kodu</div>
+          <div class="sol-kim-uk-val">{{ batch.uretim_kodu }}</div>
+        </div>
         {% endif %}
       </div>
+
       {% if rf_uyari %}
       <div class="tui-rf-uyari">{{ rf_uyari }}</div>
       {% endif %}
 
-      {# FAZ-4E: Formül hazırlık kompakt kart + modal #}
+      {# FAZ-4E / FAZ-URETIM-ISLEM-FORMUL-BOYUT-1 — boyut bağlı + boya ayrı #}
       <div class="tui-formul-hazirlik" id="tui-formul-hazirlik">
-        <div class="tui-fh-baslik">FORMÜL HAZIRLIK</div>
+        <div class="tui-fh-baslik">FORMÜL HAZIRLIK{% if secili_boyut %} · {{ secili_boyut }}{% endif %}</div>
         <div class="tui-fh-kompakt">
           <div class="tui-fh-kompakt-satir">
-            <span class="tui-fh-k-label">RF</span>
-            <span class="tui-fh-k-val" id="tui-fh-rf">{{ rf_kod or '—' }}{% if rf_renk_ad %} / {{ rf_renk_ad }}{% endif %}</span>
+            <span class="tui-fh-k-label">Ana Formül KG</span>
+            <span class="tui-fh-k-val" id="tui-fh-ana-kg">—</span>
           </div>
           <div class="tui-fh-kompakt-satir">
-            <span class="tui-fh-k-label">Alt emir KG</span>
-            <span class="tui-fh-k-val" id="tui-fh-kg">—</span>
+            <span class="tui-fh-k-label">Boya KG</span>
+            <span class="tui-fh-k-val" id="tui-fh-boya-kg">—</span>
           </div>
           <div class="tui-fh-kompakt-satir">
-            <span class="tui-fh-k-label">Formül Batch</span>
+            <span class="tui-fh-k-label">Tam Formül Batch</span>
             <span class="tui-fh-k-val" id="tui-fh-batch-kg">{{ "%.2f"|format(formul_batch_kg) }} KG</span>
+          </div>
+          <div class="tui-fh-kompakt-satir">
+            <span class="tui-fh-k-label">Alt Emir KG</span>
+            <span class="tui-fh-k-val" id="tui-fh-kg">—</span>
           </div>
           <div class="tui-fh-kompakt-satir">
             <span class="tui-fh-k-label">Batch Sayısı</span>
@@ -187,88 +153,13 @@
           </div>
           <div class="tui-fh-kompakt-satir">
             <span class="tui-fh-k-label">Sipariş / Fazla</span>
-            <span class="tui-fh-k-val" id="tui-fh-siparis">{{ "{:,}".format(siparis_toplam_kg|int) }} / +{{ "{:,.1f}".format(fazla_kg) }}</span>
+            <span class="tui-fh-k-val" id="tui-fh-siparis">{{ "{:,}".format((boyut_hedef_kg if boyut_hedef_kg is not none else siparis_toplam_kg)|int) }} / +{{ "{:,.1f}".format(fazla_kg) }}</span>
           </div>
         </div>
+        <div class="tui-fh-hata" id="tui-fh-hata" style="display:none"></div>
         <button type="button" class="tui-fh-gor-btn" id="tui-formul-gor-btn" onclick="tuiFormulModalAc()">
           Formülü Gör
         </button>
-      </div>
-
-      {# FAZ-5B: Depo hazırlık durumu (bilgi — üretimi bloklamaz) #}
-      <div class="tui-depo-durum" id="tui-depo-durum">
-        <div class="tui-depo-etiket">DEPO HAZIRLIK</div>
-        {% if depo_hazirlik %}
-        <div class="tui-depo-val tui-depo-{{ depo_hazirlik.durum|lower }}">
-          {{ depo_hazirlik.durum }}
-        </div>
-        <div class="tui-depo-alt">{{ depo_hazirlik.hazirlik_no }}</div>
-        {% else %}
-        <div class="tui-depo-val tui-depo-yok">—</div>
-        {% endif %}
-      </div>
-
-      {% if stale_depo_var_mi %}
-      <div class="tui-stale-depo-uyari">
-        Depo hazırlık eski hesapla oluşturulmuş olabilir. Güncel ihtiyaç ile fark: {{ "{:,.1f}".format(stale_depo_fark_kg) }} KG
-      </div>
-      {% endif %}
-
-      {# Siparis master KG #}
-      {% set _hedef_kg = boyut_hedef_kg if boyut_hedef_kg is not none else uretilecek_kg %}
-      {% set _uretilen_kg = boyut_uretilen_kg if boyut_uretilen_kg is not none else toplam_uretilen_kg %}
-      {% set _kalan_kg = boyut_kalan_kg if boyut_kalan_kg is not none else kalan_uretim_kg %}
-      <div class="sol-kg-blok">
-        <div class="sol-etiket">SİPARİŞ / ÜRETİLECEK{% if secili_boyut %} ({{ secili_boyut }}){% endif %}</div>
-        <div class="sol-kg-rakam">
-          {{ "{:,}".format((boyut_hedef_kg if boyut_hedef_kg is not none else siparis_toplam_kg)|int) }}
-          <span class="sol-kg-birim">KG</span>
-        </div>
-        <div class="sol-kg-alt">
-          Üretilen: <strong>{{ "{:,.1f}".format(_uretilen_kg) }} KG</strong>
-          · Kalan: <strong>{{ "{:,.1f}".format(_kalan_kg) }} KG</strong>
-          {% if boyut_hedef_kg is none %}
-          · Üretilecek: <strong>{{ "{:,.1f}".format(uretilecek_kg) }} KG</strong>
-          ({{ batch_sayisi }}×{{ "%.2f"|format(formul_batch_kg) }})
-          {% if fazla_kg > 0 %} · Fazla: +{{ "{:,.1f}".format(fazla_kg) }}{% endif %}
-          {% endif %}
-        </div>
-      </div>
-
-      {# Batch / LOT / Tarih #}
-      <div class="sol-kod-blok">
-        <div class="sol-kod-satir">
-          <span class="sol-kod-et">Batch</span>
-          <span class="sol-kod-val">{{ batch.batch_kodu }}</span>
-          <button class="tui-kopyala-btn" onclick="kopyala('{{ batch.batch_kodu }}')" title="Kopyala">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
-              <rect x="9" y="9" width="13" height="13" rx="2"/>
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-            </svg>
-          </button>
-        </div>
-        {% if batch.lot_kodu %}
-        <div class="sol-kod-satir">
-          <span class="sol-kod-et">LOT</span>
-          <span class="sol-kod-val">{{ batch.lot_kodu }}</span>
-          <button class="tui-kopyala-btn" onclick="kopyala('{{ batch.lot_kodu }}')" title="Kopyala">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
-              <rect x="9" y="9" width="13" height="13" rx="2"/>
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-            </svg>
-          </button>
-        </div>
-        {% endif %}
-        <div class="sol-kod-satir">
-          <span class="sol-kod-et">Alındı</span>
-          <span class="sol-kod-val">{{ batch.olusturma_tarihi[:16].replace('T',' ') if batch.olusturma_tarihi else '—' }}</span>
-        </div>
-        {% if batch.notlar %}
-        <div class="sol-kod-satir sol-kod-not">
-          <span class="sol-kod-et">Not</span>
-          <span class="sol-kod-val">{{ batch.notlar }}</span>
-        </div>
-        {% endif %}
       </div>
 
       {# Durum butonları (üretim ana durum) — sol altta #}
@@ -321,26 +212,40 @@
     {# ══ ALT EMİRLER — OPERASYON EKRANI ═══════════════════════════════ #}
     <div class="pp-bolum">
 
-      {# ── Üst özet sayaçları ── #}
+      {# ── Üst özet sayaçları — referans kart dili ── #}
       <div class="pp-sayac-bant">
         <div class="pp-sayac-item">
+          <span class="pp-sayac-ikon pp-si-toplam" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V5"/><path d="M4 19h16"/><rect x="7" y="10" width="3" height="6" rx="0.5"/><rect x="12" y="7" width="3" height="9" rx="0.5"/><rect x="17" y="12" width="3" height="4" rx="0.5"/></svg>
+          </span>
           <span class="pp-sayac-sayi" id="pp-sc-toplam">{{ sayaclar.toplam }}</span>
           <span class="pp-sayac-et">Toplam</span>
         </div>
-        <div class="pp-sayac-ayrac"></div>
         <div class="pp-sayac-item">
+          <span class="pp-sayac-ikon pp-si-hazir" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg>
+          </span>
           <span class="pp-sayac-sayi pp-s-hazir" id="pp-sc-hazir">{{ sayaclar.hazir }}</span>
           <span class="pp-sayac-et">Hazır</span>
         </div>
         <div class="pp-sayac-item">
+          <span class="pp-sayac-ikon pp-si-devam" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          </span>
           <span class="pp-sayac-sayi pp-s-devam" id="pp-sc-devam">{{ sayaclar.devam }}</span>
           <span class="pp-sayac-et">Devam</span>
         </div>
         <div class="pp-sayac-item">
+          <span class="pp-sayac-ikon pp-si-bekleme" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          </span>
           <span class="pp-sayac-sayi pp-s-bekleme" id="pp-sc-bekleme">{{ sayaclar.bekleme }}</span>
           <span class="pp-sayac-et">Bekleyen</span>
         </div>
         <div class="pp-sayac-item">
+          <span class="pp-sayac-ikon pp-si-bitti" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m7 12 3 3 7-7"/><path d="m3 12 3 3"/></svg>
+          </span>
           <span class="pp-sayac-sayi pp-s-bitti" id="pp-sc-bitti">{{ sayaclar.bitti }}</span>
           <span class="pp-sayac-et">Biten</span>
         </div>
@@ -349,8 +254,6 @@
       {# ── İlerleme ── #}
       {% if kontrol_durum == 'ASIM' and kontrol_uyari %}
       <div class="pp-kontrol-uyari pp-kontrol-asim">{{ kontrol_uyari }}</div>
-      {% elif kontrol_durum == 'DEVAM' %}
-      <div class="pp-kontrol-uyari pp-kontrol-devam">Devam eden üretim</div>
       {% elif kontrol_durum == 'TAM' %}
       <div class="pp-kontrol-uyari pp-kontrol-tam">Sipariş hedefi tamamlandı</div>
       {% endif %}
@@ -362,11 +265,11 @@
             KG / {{ "{:,.1f}".format(_hedef_kg) }} KG
           </span>
         </div>
-        <div style="height:10px;border-radius:10px;background:#f3f4f6;overflow:hidden;border:1px solid #e5e7eb;">
+        <div class="pp-progress-track">
           {% set yuzde = ((_uretilen_kg / _hedef_kg) * 100) if _hedef_kg else 0 %}
           {% set yuzde_clip = [yuzde, 100]|min %}
-          <div id="pp-progress-dolu"
-               style="width:{{ yuzde_clip|int }}%;height:100%;background:linear-gradient(90deg,#16a34a,#22c55e);border-radius:10px;transition:width .4s;"></div>
+          <div id="pp-progress-dolu" class="pp-progress-dolu"
+               style="width:{{ yuzde_clip|int }}%;"></div>
         </div>
         <div class="pp-ilerleme-alt">
           <span class="pp-progress-yuzde" id="pp-progress-yuzde">{{ "%.1f"|format(yuzde_clip) }}%</span>
@@ -379,51 +282,49 @@
         </div>
       </div>
 
-      {# ── Toplu İşlem Araç Çubuğu ── #}
-      <div class="pp-toplu-bar">
-        <div class="pp-toplu-grup pp-tg-basla">
-          <div class="pp-tg-ust">
-            <span class="pp-tg-etiket">İlk X HAZIR Alt Emri Başlat</span>
+      {# Durum adımları — ilerleme altında (onaylı yerleşim) #}
+      <div class="tui-adim-bar tui-adim-bar-sag">
+        {% set adimlar = [
+          (1, 'Hazırlık'),
+          (2, 'Üretimde'),
+          (3, 'Beklemede'),
+          (4, 'Bitti'),
+          (5, 'Etiket')
+        ] %}
+        {% for no, ad in adimlar %}
+        {% set aktif = (no == adim_no) %}
+        {% set gecti = (no < adim_no) %}
+        <div class="tui-adim {% if aktif %}tui-adim-aktif{% elif gecti %}tui-adim-gecti{% endif %}"
+             data-adim-no="{{ no }}">
+          <div class="tui-adim-daire">
+            {% if gecti %}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+                 width="13" height="13"><polyline points="20 6 9 17 4 12"/></svg>
+            {% else %}{{ no }}{% endif %}
           </div>
-          <div class="pp-tg-alt">
-            <span class="pp-tg-kucuk">Örn. 10</span>
-            <input type="number" id="pp-baslat-adet" class="pp-toplu-input" value="10" min="1" max="500">
-            <span class="pp-tg-kucuk">adet</span>
-            <button class="pp-toplu-btn pp-toplu-basla" onclick="topluBaslat()">▶ Başlat</button>
-          </div>
+          <div class="tui-adim-yazi">{{ ad }}</div>
         </div>
-        <div class="pp-toplu-grup pp-tg-bitir">
-          <div class="pp-tg-ust">
-            <span class="pp-tg-etiket">İlk X DEVAM Alt Emri Bitir</span>
-          </div>
-          <div class="pp-tg-alt">
-            <span class="pp-tg-kucuk">Örn. 10</span>
-            <input type="number" id="pp-bitir-adet" class="pp-toplu-input" value="10" min="1" max="500">
-            <span class="pp-tg-kucuk">adet</span>
-            <button class="pp-toplu-btn pp-toplu-bitir" onclick="topluBitir()">■ Bitir</button>
-          </div>
-        </div>
-        <div class="pp-toplu-grup pp-tg-beklet">
-          <div class="pp-tg-ust">
-            <span class="pp-tg-etiket">İlk X DEVAM Alt Emri Beklet</span>
-          </div>
-          <div class="pp-tg-alt">
-            <span class="pp-tg-kucuk">Örn. 10</span>
-            <input type="number" id="pp-beklet-toplu-adet" class="pp-toplu-input" value="10" min="1" max="500">
-            <span class="pp-tg-kucuk">adet</span>
-            <button class="pp-toplu-btn pp-toplu-beklet" onclick="topluBeklet()">⏸ Beklet</button>
-          </div>
-        </div>
+        {% if not loop.last %}
+        <div class="tui-adim-cizgi {% if no < adim_no %}tui-cizgi-gecti{% endif %}"
+             data-onceki-adim="{{ no }}"></div>
+        {% endif %}
+        {% endfor %}
       </div>
 
-      {# ── Seçili İşlem Araç Çubuğu ── #}
+      {# FAZ-URETIM-ISLEM-AKSIYON-VE-TABLO-1 — İlk X kartları kaldırıldı; aksiyon = seçili bant #}
+      <div class="pp-canli-bilgi">
+        <span class="pp-canli-ikon" aria-hidden="true">ⓘ</span>
+        Veriler anlık olarak güncellenmektedir.
+      </div>
+
+      {# ── Seçili İşlem Araç Çubuğu — yalnız seçim varken görünür ── #}
       <div class="pp-secili-bar" id="pp-secili-bar" style="display:none">
         <span class="pp-secili-sayi" id="pp-secili-sayi">0 seçili</span>
         <div class="pp-secili-butonlar">
-          <button class="pp-secili-btn pp-secili-basla" onclick="seciliIsle('baslat')">▶ Başlat</button>
-          <button class="pp-secili-btn pp-secili-bitir" onclick="seciliIsle('bitir')">■ Bitir</button>
-          <button class="pp-secili-btn pp-secili-beklet" onclick="seciliIsle('beklet')">⏸ Beklet</button>
-          <button class="pp-secili-btn pp-secili-iptal" onclick="seciliTemizle()">✕</button>
+          <button type="button" class="pp-secili-btn pp-secili-basla" onclick="seciliIsle('baslat')">Başlat</button>
+          <button type="button" class="pp-secili-btn pp-secili-bitir" onclick="seciliIsle('bitir')">Bitir</button>
+          <button type="button" class="pp-secili-btn pp-secili-beklet" onclick="seciliIsle('beklet')">Beklet</button>
+          <button type="button" class="pp-secili-btn pp-secili-iptal" onclick="seciliTemizle()" title="Seçimi temizle" aria-label="Seçimi temizle">✕</button>
         </div>
       </div>
 
@@ -443,11 +344,14 @@
         </button>
       </div>
 
-      {# ── Tablo + Son Bitenler yan yana grid ── #}
+      {# ── Tablo + Son Bitenler yan yana (~64/36) ── #}
       <div class="pp-tablo-sb-grid">
 
       {# ── Alt Emir Tablosu ── #}
       <div class="pp-tablo-alan">
+      <div class="pp-kart-baslik">
+        Alt Üretim Emirleri{% if secili_boyut %} · {{ secili_boyut }}{% endif %}
+      </div>
       {% if not parca_tablosu %}
       <div class="pp-empty-info">
         Migration 072–073 henüz çalıştırılmadı.<br>
@@ -464,11 +368,8 @@
               <th class="pp-th">Alt Emir</th>
               <th class="pp-th pp-th-r">Formül KG</th>
               <th class="pp-th">Durum</th>
-              <th class="pp-th pp-th-r">Üretilen</th>
               <th class="pp-th">Başlangıç</th>
-              <th class="pp-th">Bitiş</th>
               <th class="pp-th">Operatör</th>
-              <th class="pp-th">Not</th>
               <th class="pp-th pp-th-islem">İşlem</th>
             </tr>
           </thead>
@@ -494,23 +395,11 @@
                 <div class="pp-td-sebep">{{ ae.bekleme_sebebi }}</div>
                 {% endif %}
               </td>
-              <td class="pp-td pp-td-r pp-td-uretilen" id="pp-uretilen-{{ ae.id }}">
-                {% if ae.durum == 'BITTI' %}{{ "{:,.1f}".format(ae.uretilen_kg) }}{% else %}—{% endif %}
-              </td>
               <td class="pp-td pp-td-zaman">
-                {% if ae.baslama_zamani %}{{ ae.baslama_zamani[11:16] }}<br>
-                <span class="pp-td-tarih">{{ ae.baslama_zamani[:10] }}</span>
-                {% else %}—{% endif %}
+                {% if ae.baslama_zamani %}{{ ae.baslama_zamani[11:16] }}{% else %}—{% endif %}
               </td>
-              <td class="pp-td pp-td-zaman">
-                {% if ae.bitis_zamani %}{{ ae.bitis_zamani[11:16] }}<br>
-                <span class="pp-td-tarih">{{ ae.bitis_zamani[:10] }}</span>
-                {% else %}—{% endif %}
-              </td>
-              <td class="pp-td pp-td-op">{{ ae.operator_ad or '—' }}</td>
-              <td class="pp-td pp-td-not">
-                <span id="pp-not-metin-{{ ae.id }}">{{ ae.notlar or '' }}</span>
-                <button class="pp-not-ekle-btn" onclick="notModalAc({{ ae.id }})" title="Not Ekle">✎</button>
+              <td class="pp-td pp-td-op">{{ ae.operator_ad or '—' }}
+                <span id="pp-not-metin-{{ ae.id }}" class="pp-not-gizli">{{ ae.notlar or '' }}</span>
               </td>
               <td class="pp-td pp-td-islem" id="pp-aksiyonlar-{{ ae.id }}">
                 {% if ae.durum == 'HAZIR' %}
@@ -521,6 +410,7 @@
                 {% elif ae.durum == 'BEKLEME' %}
                 <button class="pp-aksiyon-kucuk pp-ak-basla" onclick="altEmirBaslat({{ ae.id }})">▶</button>
                 {% else %}<span class="pp-td-bos">✓</span>{% endif %}
+                <button type="button" class="pp-not-ekle-btn" onclick="event.stopPropagation(); notModalAc({{ ae.id }})" title="Not">✎</button>
               </td>
             </tr>
             {% endfor %}
@@ -535,25 +425,41 @@
       {% endif %}
       </div>{# /pp-tablo-alan #}
 
-      {# ── Son Bitenler — sağ sütun ── #}
+      {# ── Son Bitenler — FAZ-SON-BITEN-KARMA-1: batch ortak geçmiş (boyut filtresi yok) ── #}
       <div class="pp-sb-kolon">
         <div class="pp-son-bitenler">
-          <div class="pp-sb-baslik">Son Biten Alt Emirler</div>
-          {% set son_bitenler = alt_emirler | selectattr('durum', 'equalto', 'BITTI') | list %}
+          <div class="pp-kart-baslik">
+            Son Biten Emirler
+          </div>
           {% if son_bitenler %}
-          <div class="pp-sb-liste">
-            {% for ae in son_bitenler | reverse | list %}
-            {% if loop.index <= 5 %}
-            <div class="pp-sb-satir">
-              <div class="pp-sb-no">{{ alt_emir_no(ae.parca_no) }}</div>
-              <div class="pp-sb-detay">
-                <span class="pp-sb-kg">{{ "{:,.1f}".format(ae.uretilen_kg) }} KG</span>
-                <span class="pp-sb-saat">{{ ae.bitis_zamani[11:16] if ae.bitis_zamani else '—' }}</span>
-                <span class="pp-sb-op">{{ ae.operator_ad or '—' }}</span>
-              </div>
-            </div>
-            {% endif %}
-            {% endfor %}
+          <div class="pp-sb-tablo-kap">
+            <table class="pp-sb-tablo">
+              <thead>
+                <tr>
+                  <th>Alt Emir</th>
+                  <th>Bitiş</th>
+                  <th class="pp-th-r">Üretilen</th>
+                  <th>Boyut</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for ae in son_bitenler %}
+                {% set _sb_b = ae.boyut or batch.boyut or '—' %}
+                {% if _sb_b == 'LARGE' %}{% set _sb_no = 'L' ~ ae.parca_no %}
+                {% elif _sb_b == 'SMALL' %}{% set _sb_no = 'S' ~ ae.parca_no %}
+                {% else %}{% set _sb_no = ae.parca_no %}
+                {% endif %}
+                <tr>
+                  <td class="pp-sb-no">{{ _sb_no }}</td>
+                  <td>{{ ae.bitis_zamani[11:16] if ae.bitis_zamani else '—' }}</td>
+                  <td class="pp-th-r">{{ "{:,.1f}".format(ae.uretilen_kg or 0) }}</td>
+                  <td>
+                    <span class="pp-sb-boyut pp-sb-boyut-{{ _sb_b|lower|replace('standart','medium') }}">{{ _sb_b }}</span>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
           </div>
           {% else %}
           <div class="pp-sb-bos">Henüz biten emir yok.</div>
@@ -621,7 +527,7 @@
      onclick="tuiFormulModalKapat(event)">
   <div class="tui-formul-modal" onclick="event.stopPropagation()">
     <div class="tui-fm-baslik">
-      <span class="tui-fm-baslik-yazi">FORMÜLÜ GÖR</span>
+      <span class="tui-fm-baslik-yazi" id="tui-fm-baslik-yazi">FORMÜLÜ GÖR</span>
       <button type="button" class="tui-fm-kapat" onclick="tuiFormulModalKapat()">✕</button>
     </div>
     <div class="tui-fm-ust" id="tui-fm-ust"></div>
@@ -658,13 +564,15 @@ var _uretilecek_kg   = {{ uretilecek_kg }};
 var _fazla_kg        = {{ fazla_kg }};
 var _batch_sayisi    = {{ batch_sayisi or 0 }};
 var _uretilen_kg     = {{ toplam_uretilen_kg }};
-var _boyut           = '{{ batch.boyut or "" }}';
+var _secili_boyut    = '{{ secili_boyut or "" }}';
+var _boyut           = '{{ secili_boyut or batch.boyut or "" }}';
 var _biten_adet      = {{ sayaclar.bitti }};
 var _aktif_beklet_id = null;
 var _aktif_not_id    = null;
 var _aktif_formul_parca_id = null;
 var _formul_api_cache = null;
 var _formul_aktif_sekme = 'parca';
+var _formul_yukleme_ok = false;
 
 /* ─── FAZ-4E: Formül hazırlık + modal ─────────────── */
 function tuiMiktarEtiket(k, rfBolum) {
@@ -724,12 +632,41 @@ function tuiFormulSekmeGec(sekme) {
   document.getElementById('tui-fm-sekme-depo').style.display = sekme === 'depo' ? 'block' : 'none';
 }
 
+function tuiFhHataGoster(msg) {
+  var el = document.getElementById('tui-fh-hata');
+  var btn = document.getElementById('tui-formul-gor-btn');
+  if (el) {
+    el.textContent = msg || '';
+    el.style.display = msg ? 'block' : 'none';
+  }
+  if (btn) {
+    btn.disabled = !!msg;
+    btn.classList.toggle('tui-fh-gor-btn-pasif', !!msg);
+  }
+  _formul_yukleme_ok = !msg;
+}
+
 function tuiFormulKompaktGuncelle(d) {
-  var rfTxt = d.rf_kod || '—';
-  if (d.rf_renk_ad) rfTxt += ' / ' + d.rf_renk_ad;
-  document.getElementById('tui-fh-rf').textContent = rfTxt;
-  document.getElementById('tui-fh-kg').textContent =
-    (d.parca && d.parca.kg != null ? parseFloat(d.parca.kg).toFixed(2) : '—') + ' KG';
+  if (!d || !d.ok) {
+    tuiFhHataGoster((d && d.hata) || 'Seçili boyut için reçete bulunamadı.');
+    return;
+  }
+  tuiFhHataGoster('');
+  var anaEl = document.getElementById('tui-fh-ana-kg');
+  if (anaEl) {
+    var ana = d.ana_formul_kg != null ? d.ana_formul_kg : d.ana_recete_kg;
+    anaEl.textContent = ana != null ? parseFloat(ana).toFixed(2) + ' KG' : '—';
+  }
+  var boyaEl = document.getElementById('tui-fh-boya-kg');
+  if (boyaEl) {
+    var boya = d.boya_kg != null ? d.boya_kg : d.rf_boya_kg;
+    boyaEl.textContent = boya != null ? parseFloat(boya).toFixed(2) + ' KG' : '—';
+  }
+  var kgEl = document.getElementById('tui-fh-kg');
+  if (kgEl) {
+    kgEl.textContent =
+      (d.parca && d.parca.kg != null ? parseFloat(d.parca.kg).toFixed(2) : '—') + ' KG';
+  }
   var topEl = document.getElementById('tui-fh-toplam');
   if (topEl && d.uretilecek_kg != null) {
     topEl.textContent = parseFloat(d.uretilecek_kg).toLocaleString('tr-TR', {maximumFractionDigits: 1}) + ' KG';
@@ -739,8 +676,9 @@ function tuiFormulKompaktGuncelle(d) {
   var batchEl = document.getElementById('tui-fh-batch-n');
   if (batchEl && d.batch_sayisi != null) batchEl.textContent = d.batch_sayisi;
   var batchKgEl = document.getElementById('tui-fh-batch-kg');
-  if (batchKgEl && d.formul_batch_kg != null) {
-    batchKgEl.textContent = parseFloat(d.formul_batch_kg).toFixed(2) + ' KG';
+  if (batchKgEl) {
+    var tam = d.tam_formul_kg != null ? d.tam_formul_kg : d.formul_batch_kg;
+    if (tam != null) batchKgEl.textContent = parseFloat(tam).toFixed(2) + ' KG';
   }
   var sipEl = document.getElementById('tui-fh-siparis');
   if (sipEl && d.siparis_kg != null) {
@@ -752,20 +690,33 @@ function tuiFormulKompaktGuncelle(d) {
 
 function tuiFormulModalIcerik(d) {
   if (!d || !d.ok) return;
+  var baslik = document.getElementById('tui-fm-baslik-yazi');
+  if (baslik) {
+    var fad = d.formul_ad || 'Formül';
+    var boy = d.boyut || _secili_boyut || _boyut || '';
+    baslik.textContent = boy ? (fad + ' — ' + boy) : fad;
+  }
   var rfTxt = d.rf_kod || '—';
   if (d.rf_renk_ad) rfTxt += ' ' + d.rf_renk_ad;
+  var ana = d.ana_formul_kg != null ? d.ana_formul_kg : d.ana_recete_kg;
+  var boya = d.boya_kg != null ? d.boya_kg : d.rf_boya_kg;
+  var tam = d.tam_formul_kg != null ? d.tam_formul_kg : d.formul_batch_kg;
   var parcaKg = d.parca && d.parca.kg != null ? parseFloat(d.parca.kg).toFixed(2) : '—';
   var depoKg = d.toplam_kg != null
     ? Math.round(parseFloat(d.toplam_kg)).toLocaleString('tr-TR') : '—';
   document.getElementById('tui-fm-ust').innerHTML =
     '<div class="tui-fm-ust-kompakt">' +
+    '<span class="tui-fm-ust-rf">' + (d.formul_ad || '—') +
+      (d.boyut ? ' — ' + d.boyut : '') + '</span>' +
+    '<span class="tui-fm-ust-ayrac">·</span>' +
     '<span class="tui-fm-ust-rf">' + rfTxt + '</span>' +
     '<span class="tui-fm-ust-ayrac">·</span>' +
-    '<span class="tui-fm-ust-sip">' + (d.siparis_no || '—') + '</span>' +
+    '<span class="tui-fm-ust-sip">Ana ' +
+      (ana != null ? parseFloat(ana).toFixed(2) : '—') + ' · Boya ' +
+      (boya != null ? parseFloat(boya).toFixed(2) : '—') + ' · Tam ' +
+      (tam != null ? parseFloat(tam).toFixed(2) : '—') + ' KG</span>' +
     '<span class="tui-fm-ust-ayrac">·</span>' +
     '<span class="tui-fm-ust-batch">' + (d.batch_kodu || '—') + '</span>' +
-    '<span class="tui-fm-ust-ayrac">·</span>' +
-    '<span class="tui-fm-ust-cari">' + (d.cari_ad || '—') + '</span>' +
     '</div>';
   document.getElementById('tui-fm-parca-kg').textContent = parcaKg + ' KG';
   document.getElementById('tui-fm-depo-kg').textContent = depoKg + ' KG';
@@ -777,9 +728,19 @@ function tuiFormulModalIcerik(d) {
 }
 
 function tuiFormulModalAc() {
+  if (!_formul_yukleme_ok || !_formul_api_cache || !_formul_api_cache.ok) {
+    tuiFhHataGoster('Seçili boyut için reçete bulunamadı.');
+    return;
+  }
+  if (_secili_boyut && _formul_api_cache.boyut &&
+      String(_formul_api_cache.boyut).toUpperCase() !== String(_secili_boyut).toUpperCase() &&
+      !(String(_secili_boyut).toUpperCase() === 'MEDIUM' &&
+        String(_formul_api_cache.boyut).toUpperCase() === 'STANDART')) {
+    tuiFhHataGoster('Seçili boyut için reçete bulunamadı.');
+    return;
+  }
   _formul_aktif_sekme = 'parca';
-  if (_formul_api_cache) tuiFormulModalIcerik(_formul_api_cache);
-  else tuiFormulSekmeGec('parca');
+  tuiFormulModalIcerik(_formul_api_cache);
   document.getElementById('tui-formul-modal').style.display = 'flex';
 }
 
@@ -791,15 +752,18 @@ function tuiFormulModalKapat(e) {
 
 async function tuiFormulYukle(parcaId) {
   var url = '/nexgen/api/batch/' + encodeURIComponent(_batch_kodu) + '/formul-icerik';
-  if (parcaId) url += '?parca_id=' + parcaId;
+  var q = [];
+  if (parcaId) q.push('parca_id=' + encodeURIComponent(parcaId));
+  if (_secili_boyut) q.push('boyut=' + encodeURIComponent(_secili_boyut));
+  if (q.length) url += '?' + q.join('&');
   try {
     var r = await fetch(url);
     var d = await r.json();
+    _formul_api_cache = d;
     if (!d.ok) {
-      document.getElementById('tui-fh-kg').textContent = d.hata || 'Hata';
+      tuiFormulKompaktGuncelle(d);
       return;
     }
-    _formul_api_cache = d;
     _aktif_formul_parca_id = d.parca_id;
     tuiFormulKompaktGuncelle(d);
     var modal = document.getElementById('tui-formul-modal');
@@ -811,7 +775,8 @@ async function tuiFormulYukle(parcaId) {
         parseInt(tr.dataset.parcaId, 10) === d.parca_id);
     });
   } catch (e) {
-    document.getElementById('tui-fh-kg').textContent = 'Bağlantı hatası';
+    _formul_api_cache = { ok: false, hata: 'Bağlantı hatası' };
+    tuiFhHataGoster('Bağlantı hatası');
   }
 }
 
@@ -921,8 +886,10 @@ async function durumGuncelle(yeniDurum) {
     if (j.ok) {
       _durum = j.durum;
       var rozet = document.getElementById('tui-durum-rozet');
-      rozet.textContent = j.durum;
-      rozet.className = 'tui-durum tui-d-' + j.durum.toLowerCase();
+      if (rozet) {
+        rozet.textContent = j.durum;
+        rozet.className = 'tui-durum tui-d-' + j.durum.toLowerCase();
+      }
       islemGridRender(j.durum);
       adimGuncelle(j.durum);
       if (j.durum === 'BITTI') {
@@ -1062,9 +1029,11 @@ function seciliIdleriAl() {
               .map(function(c) { return parseInt(c.value, 10); });
 }
 
-/* ─── Toplu Başlat ─────────────────────────────────── */
+/* ─── Toplu Başlat (İlk X UI kaldırıldı — null-safe; seçili bant kullan) ─── */
 async function topluBaslat() {
-  var adet = parseInt(document.getElementById('pp-baslat-adet').value, 10) || 10;
+  var adetEl = document.getElementById('pp-baslat-adet');
+  if (!adetEl) return;
+  var adet = parseInt(adetEl.value, 10) || 10;
   var btn  = document.querySelector('.pp-toplu-basla');
   if (btn) { btn.disabled = true; btn.textContent = '...'; }
 
@@ -1089,9 +1058,11 @@ async function topluBaslat() {
   }
 }
 
-/* ─── Toplu Beklet ─────────────────────────────────── */
+/* ─── Toplu Beklet (İlk X UI kaldırıldı — null-safe) ─── */
 async function topluBeklet() {
-  var adet = parseInt(document.getElementById('pp-beklet-toplu-adet').value, 10) || 10;
+  var adetEl = document.getElementById('pp-beklet-toplu-adet');
+  if (!adetEl) return;
+  var adet = parseInt(adetEl.value, 10) || 10;
   var btn  = document.querySelector('.pp-toplu-beklet');
   var sebep = null; /* toplu bekletmede sebep opsiyonel */
   if (btn) { btn.disabled = true; btn.textContent = '...'; }
@@ -1121,9 +1092,11 @@ async function topluBeklet() {
   }
 }
 
-/* ─── Toplu Bitir ──────────────────────────────────── */
+/* ─── Toplu Bitir (İlk X UI kaldırıldı — null-safe) ─── */
 async function topluBitir() {
-  var adet = parseInt(document.getElementById('pp-bitir-adet').value, 10) || 10;
+  var adetEl = document.getElementById('pp-bitir-adet');
+  if (!adetEl) return;
+  var adet = parseInt(adetEl.value, 10) || 10;
   var btn  = document.querySelector('.pp-toplu-bitir');
   if (btn) { btn.disabled = true; btn.textContent = '...'; }
 
@@ -1358,130 +1331,359 @@ document.addEventListener('keydown', function(e) {
 /* ───────────────────────────────────────────────────
    SAYFA TEMELI
 ─────────────────────────────────────────────────── */
-body { background: #f3f6fa; font-family: system-ui, -apple-system, sans-serif; }
+/* FAZ-URETIM-ISLEM-UI-BASE-1 — Reçete Merkezi token'ları */
+/* FAZ-URETIM-ISLEM-UI-COMPACT-1 — ölçek/padding/kontrast sıkıştırma */
+:root {
+  --rm-teal:        #006a8e;
+  --rm-teal-dark:   #005a7a;
+  --rm-gold:        #f6c343;
+  --rm-orange:      #f97316;
+  --rm-green:       #16a34a;
+  --rm-border:      #e2e8f0;
+  --rm-border2:     #cbd5e1;
+  --rm-bg:          #f8fafc;
+  --rm-bg2:         #f1f5f9;
+  /* Sayfa zemin — Reçete Merkezi --rm-bg */
+  --tui-page-bg:    var(--rm-bg);
+  --rm-t1:          #0f172a;
+  --rm-t2:          #374151;
+  --rm-t3:          #6b7280;
+  --rm-t4:          #9ca3af;
+  --rm-white:       #ffffff;
+  --rm-font:        'Inter', system-ui, -apple-system, sans-serif;
+  --tui-hdr-h:      50px;
+  --tui-pad-x:      clamp(12px, 1.6vw, 20px);
+  /* FAZ-URETIM-ISLEM-KOLON-ORAN-1 — sol ≈ son biten (~20–22%), ortada alt emirler */
+  --tui-sol-w:      minmax(300px, min(380px, 21%));
+  --tui-top-gap:    6px;
+  --tui-radius:     6px;
+  --tui-shadow:     0 1px 2px rgba(15, 23, 42, 0.035);
+}
+body,
+main,
+.app-body {
+  background: var(--rm-bg) !important;
+  font-family: var(--rm-font);
+  color: var(--rm-t1);
+}
 
 .tui-sayfa {
   min-height: 100vh; display: flex; flex-direction: column;
-  background: #f3f6fa;
+  background: var(--rm-bg);
   overflow-x: hidden;
+  font-family: var(--rm-font);
+  /* Yalnız: CPS sarı bar altında boşluk */
+  padding: var(--tui-top-gap) 0 8px;
+  gap: 4px;
+  margin: 0;
 }
-.tui-topbar { flex-shrink: 0; }
 
-/* ── TOPBAR: koyu lacivert (tablet ana ekranla özdeş) ─ */
-.tui-topbar {
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-  border-bottom: 2px solid #f6c343;
-  padding: 0; position: sticky; top: 0; z-index: 10;
-  height: 52px;
+/* ── ÜST HEADER — Pazarlama ile aynı sade beyaz bant ─ */
+.rm-page-hdr, .tui-page-hdr {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--tui-hdr-h);
+  min-height: var(--tui-hdr-h);
+  flex-shrink: 0;
+  background: var(--rm-white);
+  position: relative;
+  z-index: 20;
+  margin: 0 var(--tui-pad-x);
+  width: auto;
+  box-sizing: border-box;
+  padding: 0 6px;
+  gap: 8px;
+  flex-wrap: nowrap;
+  overflow: visible;
+  border: none;
+  border-bottom: 1px solid var(--rm-border);
+  border-radius: 0;
+  box-shadow: none;
 }
-.tui-topbar-ic {
-  max-width: 1400px; margin: 0 auto;
-  display: flex; align-items: center; gap: 12px; padding: 8px 20px;
-  min-height: 50px;
+.rm-page-hdr-sol, .tui-hdr-sol {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+  padding-left: 0;
 }
-.tui-geri-btn {
-  display: flex; align-items: center; justify-content: center;
-  width: 38px; height: 38px; border-radius: 8px;
-  background: rgba(255,255,255,.1); color: #e2e8f0;
-  flex-shrink: 0; text-decoration: none;
+.rm-page-logo {
+  width: 128px;
+  height: 50px;
+  display: block;
+  flex-shrink: 0;
+  object-fit: contain;
+  object-position: left center;
+  margin: 0;
+  padding: 0;
 }
-.tui-geri-btn:hover { background: rgba(255,255,255,.2); }
-.tui-topbar-kucuk { font-size: 10px; color: #f6c343; font-weight: 800; letter-spacing: 1px; }
-.tui-topbar-buyuk { font-size: 18px; font-weight: 900; color: #fff; }
-.tui-topbar-kalem {
-  font-size: 11px; font-weight: 800; color: #f6c343;
-  background: rgba(246,195,67,.15); border: 1px solid rgba(246,195,67,.35);
-  padding: 2px 7px; border-radius: 5px; margin-left: 6px; vertical-align: middle;
+.tui-hdr-metin {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  justify-content: center;
 }
-.tui-topbar-meta {
-  font-size: 11px; color: rgba(255,255,255,.75); font-weight: 600;
-  margin-top: 3px; display: flex; flex-wrap: wrap; gap: 4px;
+.tui-hdr-sayfa {
+  font-size: 10px; font-weight: 700; color: var(--rm-t2);
+  letter-spacing: .3px; text-transform: uppercase;
+  line-height: 1.1;
 }
-.tui-topbar-kg { color: #86efac; font-weight: 700; }
+.tui-hdr-sip {
+  font-size: 12px; font-weight: 700; color: var(--rm-t1); line-height: 1.15;
+  display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
+}
+.tui-hdr-kalem {
+  font-size: 10px; font-weight: 700; color: var(--rm-t1);
+  background: #fef9e7; border: 1px solid var(--rm-gold);
+  padding: 1px 6px; border-radius: 4px;
+}
+.tui-hdr-alt, .tui-hdr-kg, .rm-page-geri, .tui-geri-rm { display: none !important; }
+
 .tui-boyut-toggle {
-  display: flex; gap: 4px; background: rgba(0,0,0,.2);
-  padding: 3px; border-radius: 8px; border: 1px solid rgba(255,255,255,.12);
+  display: inline-flex; gap: 4px; background: transparent;
+  padding: 0; border: none; border-bottom: none;
 }
 .tui-boyut-toggle-btn {
-  font-size: 11px; font-weight: 800; letter-spacing: .3px;
-  padding: 5px 12px; border-radius: 6px; text-decoration: none;
-  color: rgba(255,255,255,.7); border: 1px solid transparent;
-  transition: all .12s;
+  font-size: 11px; font-weight: 700; letter-spacing: .2px;
+  padding: 6px 12px; min-height: 36px; min-width: 64px;
+  border-radius: 5px; text-decoration: none;
+  color: var(--rm-t2); border: 1px solid var(--rm-border);
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--rm-white); transition: background .12s, border-color .12s;
 }
-.tui-boyut-toggle-btn:hover { color: #fff; background: rgba(255,255,255,.1); }
+.tui-boyut-toggle-btn:hover { background: var(--rm-bg); color: var(--rm-t1); }
+.tui-boyut-toggle-btn:focus-visible {
+  outline: 2px solid var(--rm-teal); outline-offset: 2px;
+}
 .tui-boyut-toggle-aktif {
-  background: #f6c343 !important; color: #1a1a1a !important;
-  border-color: #e9b020 !important;
+  background: #fef9e7 !important; color: var(--rm-t1) !important;
+  border-color: var(--rm-gold) !important; font-weight: 800;
 }
-.tui-topbar-link {
-  margin-left: auto; font-size: 12px; color: #94a3b8;
-  text-decoration: none; white-space: nowrap;
-  padding: 6px 10px; border-radius: 8px;
+.tui-kaydet-cik-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 6px 12px; min-height: 36px; border-radius: 5px;
+  border: 1px solid var(--rm-border); background: var(--rm-white);
+  font-size: 11px; font-weight: 600; color: var(--rm-t2); cursor: pointer;
+  font-family: var(--rm-font);
 }
-.tui-topbar-link:hover { background: rgba(255,255,255,.1); color: #fff; }
+.tui-kaydet-cik-btn:hover { background: var(--rm-bg); color: var(--rm-t1); border-color: var(--rm-border2); }
+
+/* Eski topbar sınıfları — geri uyum (kullanılmıyorsa zararsız) */
+.tui-topbar { display: none; }
+.tui-topbar-link { display: none; }
 
 /* ═══════════════════════════════════════════════════════
    2 KOLON ANA LAYOUT — REFERANS GÖRSEL
 ═══════════════════════════════════════════════════════ */
-/* ── ANA CONTAINER ORTALAMA ─────────────────────── */
+/* ── ANA CONTAINER — logo altına hizalı, tam genişlik ─ */
 .tui-sayfa-icerik-wrap {
-  max-width: 1400px;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
   width: 100%;
+  padding: 0 var(--tui-pad-x);
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 /* ── ANA 2 KOLON GRID ─────────────────────────────── */
 .tui-icerik {
   display: grid;
-  grid-template-columns: 310px minmax(0, 1fr);
+  grid-template-columns: var(--tui-sol-w) minmax(0, 1fr);
   gap: 0;
   width: 100%;
   max-width: 100%;
-  overflow: hidden;
-  min-height: calc(100vh - 52px);
+  overflow: visible;
+  min-height: 0;
+  flex: 1 1 auto;
   align-items: start;
-  background: #f3f6fa;
+  background: var(--rm-bg);
+  padding: 0;
+  margin: 0;
 }
 
-/* ── SOL PANELİ — AÇIK TEMA ─────────────────────── */
+/* ── SOL PANELİ — logo ile aynı sol hat ─ */
 .sol-panel {
-  position: sticky;
-  top: 52px;
-  max-height: calc(100vh - 52px);
-  overflow-y: auto;
-  overflow-x: hidden;
-  scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 transparent;
-  background: #f3f6fa;
+  position: relative;
+  top: auto;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  overflow: visible;
+  align-self: start;
+  background: var(--rm-bg);
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
-  border-right: 1px solid #eff1f5;
-  width: 310px;
+  justify-content: flex-start;
+  align-items: stretch;
+  gap: 4px;
+  padding: 0 6px 8px 0;
+  margin: 0;
+  border-right: 1px solid var(--rm-border);
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  box-sizing: border-box;
   flex-shrink: 0;
+  font-family: var(--rm-font);
 }
-.sol-panel::-webkit-scrollbar { width: 4px; }
-.sol-panel::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.sol-panel > :first-child {
+  margin-top: 0;
+}
 
-/* Adım bar — sol panel içinde açık tema */
-.sol-panel .tui-adim-bar {
-  background: #fff;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
+/* FAZ-URETIM-ISLEM-SOL-KIMLIK-1 — birleşik kimlik kartı */
+.sol-kimlik {
+  background: var(--rm-white);
+  border: 1px solid var(--rm-border);
+  border-radius: var(--tui-radius);
   padding: 8px 10px;
-  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: var(--rm-font);
+  box-shadow: var(--tui-shadow);
+}
+.sol-kim-blok { min-width: 0; }
+.sol-kim-lbl {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--rm-t3);
+  letter-spacing: .35px;
+  margin-bottom: 1px;
+}
+.sol-kim-cari {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--rm-t1);
+  line-height: 1.25;
+  word-break: break-word;
+}
+.sol-kim-sip-satir {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+}
+.sol-kim-sip {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--rm-t1);
+  letter-spacing: .15px;
+}
+.sol-kimlik .tui-durum {
+  flex-shrink: 0;
+  margin-top: 1px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: .35px;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+.sol-kim-urun {
+  padding-top: 2px;
+  border-top: 1px solid #eef2f6;
+}
+.sol-kim-formul {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--rm-t1);
+  line-height: 1.25;
+}
+.sol-kim-renk {
+  margin-top: 2px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--rm-teal);
+  line-height: 1.25;
+}
+.sol-kim-boyutlar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 5px;
+}
+.sol-kim-boyut {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px 7px;
+  border: 1px solid var(--rm-border);
+  border-radius: 5px;
+  background: #fafbfc;
+  text-decoration: none;
+  color: inherit;
+  min-width: 0;
+  transition: border-color .12s, background .12s;
+}
+.sol-kim-boyut:hover {
+  border-color: var(--rm-border2);
+  background: #fff;
+}
+.sol-kim-boyut-aktif {
+  background: #fffbeb;
+  border-color: var(--rm-gold);
+  box-shadow: inset 0 0 0 1px rgba(246, 195, 67, 0.35);
+}
+.sol-kim-boyut-ad {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--rm-t2);
+  letter-spacing: .35px;
+}
+.sol-kim-boyut-aktif .sol-kim-boyut-ad { color: #92400e; }
+.sol-kim-boyut-kg {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--rm-t1);
+  letter-spacing: .1px;
+  font-variant-numeric: tabular-nums;
+}
+.sol-kim-boyut-n {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--rm-t3);
+}
+.sol-kim-uk {
+  padding-top: 5px;
+  border-top: 1px solid #eef2f6;
+}
+.sol-kim-uk-val {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--rm-t2);
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  letter-spacing: .2px;
+}
+
+/* Adım bar — sol panel içinde RM kart */
+.sol-panel .tui-adim-bar {
+  background: var(--rm-white);
+  border-radius: 10px;
+  border: 1px solid var(--rm-border);
+  padding: 8px 10px;
+  box-shadow: none;
+  margin: 0;
+  order: 0;
 }
 .sol-panel .tui-adim-daire {
-  width: 22px; height: 22px; font-size: 9px;
+  width: 24px; height: 24px; font-size: 10px;
 }
-.sol-panel .tui-adim-yazi { font-size: 8px; }
+.sol-panel .tui-adim-yazi {
+  font-size: 10px; color: var(--rm-t3); font-weight: 700;
+  font-family: var(--rm-font);
+}
 
-/* Kart bazlı bilgi blokları */
+/* Kart bazlı bilgi blokları — RM panel dili */
 .sol-kart {
-  background: #fff; border-radius: 8px;
-  border: 1px solid #e5e7eb; padding: 9px 11px;
-  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+  background: var(--rm-white); border-radius: 10px;
+  border: 1px solid var(--rm-border); padding: 10px 12px;
+  box-shadow: none;
   display: flex; flex-direction: column; gap: 3px;
 }
 .sol-kart-iki {
@@ -1493,72 +1695,118 @@ body { background: #f3f6fa; font-family: system-ui, -apple-system, sans-serif; }
 
 /* Sipariş No Bloğu */
 .sol-sip-blok {
-  background: #fff; border-radius: 8px;
-  border: 1px solid #e5e7eb; padding: 9px 11px;
-  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+  background: var(--rm-white); border-radius: 10px;
+  border: 1px solid var(--rm-border); padding: 10px 12px;
+  box-shadow: none;
 }
 .sol-etiket {
-  font-size: 9px; font-weight: 700; color: #64748b;
-  letter-spacing: 1px; margin-bottom: 4px; text-transform: uppercase;
+  font-size: 10px; font-weight: 700; color: var(--rm-t3);
+  letter-spacing: .6px; margin-bottom: 4px; text-transform: uppercase;
+  font-family: var(--rm-font);
 }
 .sol-sip-no {
-  font-size: 14px; font-weight: 900; color: #0f172a;
-  font-family: monospace; letter-spacing: .5px;
+  font-size: 14px; font-weight: 800; color: var(--rm-t1);
+  font-family: var(--rm-font); letter-spacing: .2px;
   margin-bottom: 2px;
 }
-.sol-tarih { font-size: 11px; color: #64748b; font-weight: 600; }
+.sol-tarih {
+  font-size: 11px; color: var(--rm-t3); font-weight: 600;
+  font-family: var(--rm-font);
+}
 
-/* Cari Bloğu */
+/* Cari Bloğu — Reçete Merkezi değer tipografisi */
 .sol-cari-blok {
-  background: #fff; border-radius: 8px;
-  border: 1px solid #e5e7eb; padding: 9px 11px;
-  box-shadow: 0 1px 3px rgba(0,0,0,.05);
+  background: var(--rm-white); border-radius: 10px;
+  border: 1px solid var(--rm-border); padding: 10px 12px;
+  box-shadow: none;
   display: flex; flex-direction: column; gap: 6px;
+  font-family: var(--rm-font);
 }
 .sol-cari-ad {
-  font-size: 13px; font-weight: 800; color: #0f172a;
-  line-height: 1.4;
+  font-size: 13px; font-weight: 800; color: var(--rm-t1);
+  font-family: var(--rm-font);
+  line-height: 1.35;
   word-break: break-word;
   overflow-wrap: break-word;
   hyphens: auto;
   max-width: 100%;
 }
 
+/* Formül · Renk · Boyut birleşik kart */
+.sol-meta-birlesik {
+  gap: 8px;
+  padding: 10px 12px;
+}
+.sol-meta-satir {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--rm-bg2);
+}
+.sol-meta-satir:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+.sol-meta-birlesik .sol-etiket {
+  margin-bottom: 0;
+}
+
 /* RF Bloğu */
 .sol-rf-blok {
-  background: #f0fdfa; border-radius: 8px;
-  border: 1px solid #99f6e4; padding: 9px 11px;
+  background: var(--rm-white); border-radius: 10px;
+  border: 1px solid var(--rm-border); padding: 10px 12px;
+  border-left: 3px solid var(--rm-teal);
 }
 .sol-rf-kod {
-  font-family: 'Courier New', monospace; font-size: 14px;
-  font-weight: 800; color: #0f766e;
+  font-family: var(--rm-font); font-size: 13px;
+  font-weight: 800; color: var(--rm-t1);
 }
-.sol-rf-ad { font-size: 12px; color: #475569; margin-top: 2px; font-weight: 600; }
+.sol-rf-ad {
+  font-size: 13px; color: var(--rm-t1); margin-top: 2px; font-weight: 800;
+  font-family: var(--rm-font); line-height: 1.35;
+}
 .sol-rf-yok { font-size: 12px; color: #dc2626; font-weight: 700; }
 .tui-rf-uyari {
   background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px;
   padding: 8px 10px; font-size: 11px; color: #991b1b; line-height: 1.4;
 }
 
-/* FAZ-4E Formül Hazırlık — kompakt kart */
+/* FAZ-4E Formül Hazırlık — RM kart + altın vurgu */
 .tui-formul-hazirlik {
-  background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px;
-  padding: 10px 11px; display: flex; flex-direction: column; gap: 8px;
+  background: var(--rm-white); border: 1px solid var(--rm-border); border-radius: var(--tui-radius);
+  border-left: 3px solid var(--rm-gold);
+  padding: 7px 9px; display: flex; flex-direction: column; gap: 5px;
+  box-shadow: var(--tui-shadow);
 }
 .tui-fh-baslik {
-  font-size: 10px; font-weight: 800; color: #92400e; letter-spacing: .8px;
+  font-size: 10.5px; font-weight: 600; color: var(--rm-t2); letter-spacing: .5px;
 }
-.tui-fh-kompakt { display: flex; flex-direction: column; gap: 5px; }
+.tui-fh-kompakt { display: flex; flex-direction: column; gap: 0; }
 .tui-fh-kompakt-satir {
-  display: flex; justify-content: space-between; gap: 8px; font-size: 12px;
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 8px; min-height: 26px; font-size: 12px;
+  border-bottom: 1px solid #f1f5f9;
 }
-.tui-fh-k-label { color: #64748b; font-weight: 600; }
-.tui-fh-k-val { color: #0f172a; font-weight: 800; text-align: right; }
+.tui-fh-kompakt-satir:last-child { border-bottom: none; }
+.tui-fh-k-label { color: var(--rm-t2); font-weight: 600; font-size: 11px; }
+.tui-fh-k-val { color: var(--rm-t1); font-weight: 600; text-align: right; font-size: 12px; }
+#tui-fh-boya-kg { color: #92400e; font-weight: 700; }
+.tui-fh-hata {
+  font-size: 11px; font-weight: 600; color: #991b1b;
+  background: #fef2f2; border: 1px solid #fecaca; border-radius: 5px;
+  padding: 5px 7px; line-height: 1.3;
+}
+.tui-fh-gor-btn-pasif,
+.tui-fh-gor-btn:disabled {
+  opacity: .45; cursor: not-allowed; pointer-events: none;
+}
 .tui-fh-gor-btn {
-  width: 100%; padding: 10px 12px; margin-top: 2px;
-  background: #f6c343; color: #1a1a1a; border: none; border-radius: 8px;
-  font-size: 13px; font-weight: 800; cursor: pointer;
-  box-shadow: 0 2px 6px rgba(246,195,67,.35);
+  width: 100%; padding: 8px 10px; margin-top: 1px; min-height: 40px;
+  background: var(--rm-gold); color: var(--rm-t1); border: none; border-radius: 5px;
+  font-family: var(--rm-font); font-weight: 700;
+  font-size: 12px; cursor: pointer;
+  box-shadow: 0 1px 3px rgba(246,195,67,.28);
 }
 .tui-fh-gor-btn:hover { background: #e9b020; }
 .pp-tr-formul-secili { background: #fffbeb !important; outline: 1px solid #f6c343; }
@@ -1704,34 +1952,39 @@ body { background: #f3f6fa; font-family: system-ui, -apple-system, sans-serif; }
 
 /* Bilgi Listesi (Formül) */
 .sol-bilgi-liste {
-  background: #fff; border-radius: 8px;
-  border: 1px solid #e5e7eb; padding: 9px 11px;
-  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+  background: var(--rm-white); border-radius: 10px;
+  border: 1px solid var(--rm-border); padding: 10px 12px;
+  box-shadow: none;
   display: flex; flex-direction: column; gap: 6px;
 }
 .sol-bilgi-satir { display: flex; flex-direction: column; gap: 2px; }
 .sol-bilgi-et {
-  font-size: 9px; font-weight: 700; color: #94a3b8; letter-spacing: .8px;
+  font-size: 10px; font-weight: 700; color: var(--rm-t3); letter-spacing: .6px;
+  font-family: var(--rm-font); text-transform: uppercase;
 }
-.sol-bilgi-val { font-size: 13px; font-weight: 700; color: #0f172a; }
+.sol-bilgi-val {
+  font-size: 13px; font-weight: 800; color: var(--rm-t1);
+  font-family: var(--rm-font); line-height: 1.35;
+}
 
 /* Plan KG */
 .sol-kg-blok {
-  background: #f0fdf4; border-radius: 8px;
-  border: 1px solid #86efac; padding: 9px 11px;
+  background: var(--rm-white); border-radius: 10px;
+  border: 1px solid var(--rm-border); border-left: 3px solid var(--rm-green);
+  padding: 10px 12px;
 }
 .sol-kg-rakam {
-  font-size: 24px; font-weight: 900; color: #15803d;
+  font-size: 24px; font-weight: 800; color: var(--rm-t1);
   display: flex; align-items: baseline; gap: 5px; margin-top: 4px;
 }
-.sol-kg-birim { font-size: 13px; font-weight: 600; color: #16a34a; }
-.sol-kg-alt { font-size: 11px; color: #64748b; margin-top: 6px; line-height: 1.4; }
+.sol-kg-birim { font-size: 13px; font-weight: 600; color: var(--rm-green); }
+.sol-kg-alt { font-size: 11px; color: var(--rm-t3); margin-top: 6px; line-height: 1.4; }
 
 /* Kod Satırları (Batch / LOT / Alındı) */
 .sol-kod-blok {
-  background: #fff; border-radius: 8px;
-  border: 1px solid #e5e7eb; padding: 7px 11px;
-  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+  background: var(--rm-white); border-radius: 10px;
+  border: 1px solid var(--rm-border); padding: 7px 12px;
+  box-shadow: none;
   display: flex; flex-direction: column;
 }
 .sol-kod-satir {
@@ -1759,21 +2012,23 @@ body { background: #f3f6fa; font-family: system-ui, -apple-system, sans-serif; }
 
 /* Durum butonları — sol panel içinde */
 .sol-panel .tui-islem-blok {
-  background: #fff; border: 1px solid #e5e7eb;
-  box-shadow: 0 1px 2px rgba(0,0,0,.04);
-  border-radius: 8px; padding: 9px 11px;
+  background: var(--rm-white); border: 1px solid var(--rm-border);
+  box-shadow: var(--tui-shadow);
+  border-radius: var(--tui-radius); padding: 7px 9px;
 }
-.sol-panel .tui-islem-baslik { color: #64748b; font-size: 9px; letter-spacing: 1px; }
-.sol-panel .tui-islem-btn { font-size: 13px; padding: 11px; }
+.sol-panel .tui-islem-baslik { color: var(--rm-t2); font-size: 10px; letter-spacing: .5px; margin-bottom: 6px; }
+.sol-panel .tui-islem-btn { font-size: 12.5px; font-weight: 700; padding: 8px; min-height: 40px; border-radius: 6px; }
+.sol-panel .tui-islem-grid { gap: 8px; }
 
 /* Sol alt butonlar */
 .sol-alt-butonlar {
-  display: flex; gap: 8px;
+  display: flex; gap: 6px;
 }
 .sol-btn {
-  flex: 1; padding: 10px 8px; border-radius: 8px; text-align: center;
-  font-size: 12px; font-weight: 800; text-decoration: none;
-  display: flex; align-items: center; justify-content: center; gap: 6px;
+  flex: 1; padding: 8px 6px; border-radius: 5px; text-align: center;
+  font-size: 11px; font-weight: 700; text-decoration: none;
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  min-height: 36px;
 }
 .sol-btn-etiket {
   background: #fff; color: #475569;
@@ -1787,51 +2042,56 @@ body { background: #f3f6fa; font-family: system-ui, -apple-system, sans-serif; }
 }
 .sol-btn-geri:hover { background: #e2e8f0; color: #1e293b; }
 
-/* ── SAĞ PANELİ ─────────────────────────────────── */
+/* ── SAĞ PANELİ ─── */
 .sag-panel {
-  display: flex; flex-direction: column;
-  background: #f3f6fa;
-  min-height: calc(100vh - 52px);
-  padding: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--tui-page-bg);
+  min-height: 0;
+  height: auto;
+  align-self: start;
+  padding: 0 0 0 6px;
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
-/* ── ADIM GÖSTERGESİ (standalone — artık sol panelde) ── */
-.tui-adim-bar {
+/* ── ADIM GÖSTERGESİ — ilerleme altında (sağ panel) ── */
+.tui-adim-bar,
+.tui-adim-bar-sag {
   display: flex; align-items: center;
-  background: #fff; border-radius: 12px;
-  padding: 14px 16px; gap: 0;
-  box-shadow: 0 1px 4px rgba(0,0,0,.07);
-  border: 1px solid #e2e8f0;
+  background: var(--rm-white); border-radius: var(--tui-radius);
+  padding: 6px 10px; gap: 0;
+  box-shadow: var(--tui-shadow);
+  border: 1px solid var(--rm-border);
+  margin-bottom: 0;
 }
 .tui-adim {
   display: flex; flex-direction: column; align-items: center;
-  gap: 4px; flex-shrink: 0;
+  gap: 2px; flex-shrink: 0;
 }
 .tui-adim-daire {
-  width: 28px; height: 28px; border-radius: 50%;
+  width: 22px; height: 22px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 800;
-  background: #f1f5f9; color: #94a3b8;
-  border: 2px solid #e2e8f0;
+  font-size: 10px; font-weight: 700;
+  background: var(--rm-bg2); color: var(--rm-t3);
+  border: 1.5px solid var(--rm-border2);
   transition: all .2s;
 }
 .tui-adim-yazi {
-  font-size: 9px; font-weight: 700; color: #94a3b8;
-  letter-spacing: .3px; white-space: nowrap;
+  font-size: 10px; font-weight: 600; color: var(--rm-t3);
+  letter-spacing: .2px; white-space: nowrap;
 }
 .tui-adim-aktif .tui-adim-daire {
-  background: #f6c343; color: #1e293b; border-color: #f6c343;
-  box-shadow: 0 0 0 3px rgba(246,195,67,.25);
+  background: var(--rm-gold); color: var(--rm-t1); border-color: var(--rm-gold);
+  box-shadow: none;
 }
-.tui-adim-aktif .tui-adim-yazi { color: #d97706; font-weight: 800; }
-.tui-adim-gecti .tui-adim-daire { background: #22c55e; color: #fff; border-color: #22c55e; }
-.tui-adim-gecti .tui-adim-yazi { color: #16a34a; }
+.tui-adim-aktif .tui-adim-yazi { color: var(--rm-t1); font-weight: 700; }
+.tui-adim-gecti .tui-adim-daire { background: var(--rm-green); color: #fff; border-color: var(--rm-green); }
+.tui-adim-gecti .tui-adim-yazi { color: var(--rm-green); }
 .tui-adim-cizgi {
-  flex: 1; height: 2px; background: #e2e8f0; margin: 0 4px; margin-bottom: 16px;
+  flex: 1; height: 1px; background: var(--rm-border); margin: 0 3px; margin-bottom: 12px;
 }
-.tui-cizgi-gecti { background: #22c55e; }
+.tui-cizgi-gecti { background: var(--rm-green); }
 
 /* Eski CARİ, BİLGİ, KOD kartları artık sol panelde — bu tanımlar geri uyum için kalıyor */
 .tui-cari-kart, .tui-bilgi-grid, .tui-kod-blok { display: none; }
@@ -1860,9 +2120,9 @@ body { background: #f3f6fa; font-family: system-ui, -apple-system, sans-serif; }
   padding: 14px; border-left: 3px solid #e2e8f0;
   box-shadow: 0 1px 3px rgba(0,0,0,.06);
 }
-.tui-k-formul { grid-column: 1 / -1; border-left-color: #f6c343; }
-.tui-k-renk   { border-left-color: #7c3aed; }
-.tui-k-boyut  { border-left-color: #64748b; }
+.tui-k-formul { grid-column: 1 / -1; border-left-color: var(--rm-gold); }
+.tui-k-renk   { border-left-color: var(--rm-teal); }
+.tui-k-boyut  { border-left-color: var(--rm-border2); }
 .tui-k-kg     { grid-column: 1 / -1; border-left-color: #22c55e; background: #f0fdf4; }
 .tui-bilgi-etiket { font-size: 10px; font-weight: 700; color: #94a3b8; letter-spacing: .8px; margin-bottom: 4px; }
 .tui-bilgi-deger  { font-size: 18px; font-weight: 800; color: #0f172a; }
@@ -1913,8 +2173,8 @@ body { background: #f3f6fa; font-family: system-ui, -apple-system, sans-serif; }
 .tui-islem-basla:hover { background: #16a34a; }
 .tui-islem-bekle { background: #f59e0b; color: #1e293b; box-shadow: 0 2px 8px rgba(245,158,11,.25); }
 .tui-islem-bekle:hover { background: #d97706; }
-.tui-islem-bitti { background: #6366f1; color: #fff; box-shadow: 0 2px 8px rgba(99,102,241,.25); }
-.tui-islem-bitti:hover { background: #4f46e5; }
+.tui-islem-bitti { background: var(--rm-green); color: #fff; box-shadow: none; }
+.tui-islem-bitti:hover { background: #15803d; }
 .tui-islem-kapali { font-size: 13px; color: #94a3b8; text-align: center; padding: 8px; }
 .tui-islem-kapali-bitti {
   display: flex; align-items: center; justify-content: center; gap: 6px;
@@ -1971,9 +2231,13 @@ body { background: #f3f6fa; font-family: system-ui, -apple-system, sans-serif; }
 ══════════════════════════════════════════════════ */
 .pp-bolum {
   background: transparent;
-  padding: 10px 12px 24px;
-  display: flex; flex-direction: column; gap: 14px;
-  flex: 1;
+  padding: 2px 4px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 0 1 auto;
+  min-height: 0;
+  height: auto;
 }
 
 .pp-bolum-ust {
@@ -1990,56 +2254,70 @@ body { background: #f3f6fa; font-family: system-ui, -apple-system, sans-serif; }
   border: 1px solid #e5e7eb;
 }
 
-/* Sayaç Bant — kart tarzı */
+/* Sayaç Bant — referans KPI kartları (COMPACT-1) */
 .pp-sayac-bant {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 6px;
-  background: #f9fafb;
-  border-bottom: 1px solid #e5e7eb;
-  padding: 10px 12px;
+  gap: 5px;
+  background: transparent;
+  border-bottom: none;
+  padding: 0;
 }
 .pp-sayac-ayrac { display: none; }
 .pp-sayac-item {
-  background: #fff; border-radius: 8px;
-  padding: 8px 6px; text-align: center;
-  border: 1px solid #e5e7eb;
-  box-shadow: 0 1px 2px rgba(0,0,0,.03);
+  background: var(--rm-white); border-radius: var(--tui-radius);
+  padding: 6px 6px 5px; text-align: center;
+  border: 1px solid var(--rm-border);
+  box-shadow: var(--tui-shadow);
   display: flex; flex-direction: column; align-items: center;
-  min-height: 58px; justify-content: center;
+  min-height: 64px; max-height: 72px; justify-content: center; gap: 1px;
 }
-.pp-sayac-sayi { font-size: 20px; font-weight: 900; color: #111827; line-height: 1; }
-.pp-sayac-et   { font-size: 9px; font-weight: 600; color: #9ca3af; letter-spacing: .3px; margin-top: 2px; }
-/* Renk sadece sayı üzerinde, etiket değil */
-.pp-s-hazir   { color: #16a34a; }
-.pp-s-devam   { color: #d97706; }   /* sarı/turuncu — CPS */
-.pp-s-bekleme { color: #92400e; }
-.pp-s-bitti   { color: #374151; }
+.pp-sayac-ikon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 15px; height: 15px; margin-bottom: 1px; opacity: .95;
+}
+.pp-sayac-ikon svg { width: 14px; height: 14px; }
+.pp-si-toplam { color: #6366f1; }
+.pp-si-hazir  { color: var(--rm-green); }
+.pp-si-devam  { color: var(--rm-orange); }
+.pp-si-bekleme{ color: #b45309; }
+.pp-si-bitti  { color: #2563eb; }
+.pp-sayac-sayi { font-size: 24px; font-weight: 700; color: var(--rm-t1); line-height: 1; }
+.pp-sayac-et   { font-size: 10.5px; font-weight: 600; color: var(--rm-t2); letter-spacing: .25px; margin-top: 1px; text-transform: uppercase; }
+.pp-s-hazir   { color: var(--rm-green); }
+.pp-s-devam   { color: var(--rm-orange); }
+.pp-s-bekleme { color: #9a3412; }
+.pp-s-bitti   { color: #1d4ed8; }
 
-/* Sekme Şeridi */
+/* Sekme Şeridi — RM sekme dili */
 .pp-sekme-serit {
-  display: flex; gap: 6px; overflow-x: auto;
-  scrollbar-width: none; padding-bottom: 2px;
+  display: flex; gap: 0; overflow-x: auto;
+  scrollbar-width: none; padding-bottom: 0;
+  border-bottom: 2px solid var(--rm-border); background: var(--rm-white);
+  border-radius: 10px 10px 0 0; padding: 0 8px;
 }
 .pp-sekme-serit::-webkit-scrollbar { display: none; }
 .pp-sekme {
-  flex-shrink: 0; padding: 7px 12px; border: 1px solid #e5e7eb;
-  border-radius: 6px; background: #f9fafb; cursor: pointer;
-  font-size: 11px; font-weight: 600; color: #6b7280;
+  flex-shrink: 0; padding: 10px 14px; min-height: 44px; border: none;
+  border-radius: 0; background: transparent; cursor: pointer;
+  font-size: 12px; font-weight: 600; color: var(--rm-t3);
   display: flex; align-items: center; gap: 5px;
-  white-space: nowrap;
+  white-space: nowrap; border-bottom: 2px solid transparent; margin-bottom: -2px;
+  font-family: var(--rm-font);
 }
-.pp-sekme:hover { background: #f3f4f6; border-color: #d1d5db; color: #374151; }
+.pp-sekme:hover { background: var(--rm-bg2); color: var(--rm-t1); }
+.pp-sekme:focus-visible { outline: 2px solid var(--rm-teal); outline-offset: 2px; }
 .pp-sekme-aktif {
-  background: #0f172a; border-color: #0f172a; color: #f6c343;
+  background: transparent; color: var(--rm-teal); border-bottom-color: var(--rm-gold);
+  font-weight: 800;
 }
-.pp-sekme-aktif:hover { background: #1e293b; }
+.pp-sekme-aktif:hover { background: #fef9e7; color: var(--rm-teal); }
 .pp-sekme-sayi {
-  font-size: 10px; font-weight: 900;
-  background: rgba(255,255,255,.25); padding: 1px 6px; border-radius: 10px;
+  font-size: 10px; font-weight: 800;
+  background: var(--rm-bg2); color: var(--rm-t2); padding: 1px 6px; border-radius: 10px;
 }
-.pp-sekme:not(.pp-sekme-aktif) .pp-sekme-sayi {
-  background: #e2e8f0; color: #475569;
+.pp-sekme-aktif .pp-sekme-sayi {
+  background: #fef9e7; color: var(--rm-t1);
 }
 
 /* KG Özet */
@@ -2060,170 +2338,282 @@ body { background: #f3f6fa; font-family: system-ui, -apple-system, sans-serif; }
 .pp-ozet-kalan    { background: #f9fafb; border: 1px solid #e5e7eb; }
 .pp-ozet-kalan .pp-ozet-deger    { color: #374151; }
 
-/* KG kontrol banner */
+/* KG kontrol banner — RM bilgi kartı */
 .pp-kontrol-uyari {
-  border-radius: 8px; padding: 8px 12px; margin-bottom: 10px;
-  font-size: 12px; font-weight: 700;
+  border-radius: 10px; padding: 8px 12px; margin-bottom: 0;
+  font-size: 12px; font-weight: 700; font-family: var(--rm-font);
 }
 .pp-kontrol-asim { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
-.pp-kontrol-devam { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+.pp-kontrol-devam {
+  background: var(--rm-white); color: var(--rm-teal);
+  border: 1px solid var(--rm-border); border-left: 3px solid var(--rm-teal);
+  padding: 6px 10px;
+}
 .pp-kontrol-tam { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
 
 /* İlerleme */
-.pp-progress-bar {
-  flex: 1; height: 10px; background: #e2e8f0;
-  border-radius: 10px; overflow: hidden;
+.pp-progress-bar,
+.pp-progress-track {
+  flex: 0 0 auto; height: 8px; min-height: 8px; width: 100%;
+  background: var(--rm-bg2);
+  border-radius: 5px; overflow: hidden; border: 1px solid var(--rm-border);
 }
 .pp-progress-dolu {
-  height: 100%; background: linear-gradient(90deg, #16a34a, #22c55e);
-  border-radius: 10px; transition: width .4s ease; min-width: 2px;
+  height: 100%; min-height: 8px; background: var(--rm-teal);
+  border-radius: 5px; transition: width .4s ease; min-width: 2px;
 }
 .pp-progress-yuzde {
-  font-size: 13px; font-weight: 800; color: #16a34a;
-  width: 44px; text-align: right; flex-shrink: 0;
+  font-size: 13px; font-weight: 700; color: var(--rm-green);
+  width: 40px; text-align: right; flex-shrink: 0;
 }
 
 /* ── İlerleme Blok ───────────────────────────────── */
 .pp-ilerleme-blok {
-  background: #fff; border-radius: 8px;
-  padding: 10px 12px; border: 1px solid #e5e7eb;
-  display: flex; flex-direction: column; gap: 6px;
-  box-shadow: 0 1px 2px rgba(0,0,0,.03);
+  background: var(--rm-white); border-radius: var(--tui-radius);
+  padding: 7px 10px; border: 1px solid var(--rm-border);
+  display: flex; flex-direction: column; gap: 4px;
+  box-shadow: var(--tui-shadow);
 }
 .pp-ilerleme-ust {
   display: flex; justify-content: space-between; align-items: center;
 }
 .pp-ilerleme-etiket {
-  font-size: 9px; font-weight: 700; color: #9ca3af; letter-spacing: .8px; text-transform: uppercase;
+  font-size: 10.5px; font-weight: 600; color: var(--rm-t2); letter-spacing: .45px; text-transform: uppercase;
 }
 .pp-ilerleme-kg {
-  font-size: 13px; font-weight: 700; color: #374151;
+  font-size: 14px; font-weight: 700; color: var(--rm-t1);
 }
 .pp-ilerleme-alt {
-  display: flex; justify-content: space-between; align-items: center;
+  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 2px;
 }
 .pp-ilerleme-kalan {
-  font-size: 12px; color: #475569;
+  font-size: 11px; color: var(--rm-t2); line-height: 1.3;
 }
 
-/* ── Toplu İşlem Bar — 3 kutu yan yana ─────────── */
-.pp-toplu-bar {
+/* ── Toplu İşlem — referans 3 ayrı kart (COMPACT-1) ─────────── */
+.pp-toplu-bar,
+.pp-toplu-bar-kartlar {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  overflow: visible;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
-.pp-toplu-grup {
-  background: #fff; border-radius: 8px; border: 1px solid #e5e7eb;
-  padding: 9px 10px; box-shadow: 0 1px 2px rgba(0,0,0,.03);
-  display: flex; flex-direction: column; gap: 6px;
+.pp-toplu-bar-kartlar .pp-toplu-grup {
+  background: var(--rm-white);
+  border: 1px solid var(--rm-border);
+  border-radius: var(--tui-radius);
+  padding: 7px 8px;
+  box-shadow: var(--tui-shadow);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  min-height: 0;
+  min-width: 0;
+  box-sizing: border-box;
 }
-.pp-tg-basla { border-top: 3px solid #16a34a; }
-.pp-tg-bitir { border-top: 3px solid #f97316; }
-.pp-tg-beklet { border-top: 3px solid #a78bfa; }
-.pp-tg-ust {}
-.pp-tg-etiket {
-  font-size: 9px; font-weight: 700; color: #9ca3af;
-  display: block; line-height: 1.2; text-transform: uppercase; letter-spacing: .4px;
+.pp-tg-basla { border-bottom: 2px solid var(--rm-gold); }
+.pp-tg-bitir { border-bottom: 2px solid var(--rm-green); }
+.pp-tg-beklet { border-bottom: 2px solid var(--rm-orange); }
+.pp-tg-baslik {
+  font-size: 10px; font-weight: 700; color: var(--rm-t2);
+  letter-spacing: .3px; text-transform: uppercase;
+  text-align: center; line-height: 1.25;
+  width: 100%;
 }
-.pp-tg-alt {
-  display: flex; align-items: center; gap: 5px; flex-wrap: nowrap;
-}
-.pp-tg-kucuk { font-size: 10px; color: #94a3b8; font-weight: 600; white-space: nowrap; }
+.pp-tg-etiket { display: none; }
+.pp-tg-ust, .pp-tg-alt, .pp-tg-kucuk { display: none; }
 .pp-toplu-input {
-  width: 42px; padding: 3px 5px; border: 1px solid #d1d5db;
-  border-radius: 5px; font-size: 13px; font-weight: 800;
-  color: #0f172a; text-align: center; background: #f9fafb;
-  outline: none; height: 28px;
+  width: 64px; max-width: 100%;
+  padding: 3px 5px; border: 1px solid transparent;
+  border-radius: 5px; font-size: 16px; font-weight: 700;
+  color: var(--rm-t1); text-align: center; background: transparent;
+  outline: none; height: 34px; font-family: var(--rm-font);
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
 }
-.pp-toplu-input:focus { border-color: #f6c343; background: #fff; outline: none; }
+.pp-toplu-input::-webkit-outer-spin-button,
+.pp-toplu-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.pp-toplu-input:hover { background: #f8fafc; border-color: var(--rm-border); }
+.pp-toplu-input:focus {
+  border-color: var(--rm-gold); background: #fffbeb; outline: none;
+}
 .pp-toplu-btn {
-  padding: 4px 10px; border: none; border-radius: 5px;
-  font-size: 11px; font-weight: 700; cursor: pointer;
-  white-space: nowrap; transition: opacity .15s;
-  height: 28px; margin-left: auto;
+  width: 100%; padding: 6px 8px; border: none; border-radius: 5px;
+  font-size: 11.5px; font-weight: 700; cursor: pointer;
+  white-space: nowrap; transition: opacity .15s, background .12s;
+  min-height: 34px; margin-left: 0; font-family: var(--rm-font);
+  flex: 0 0 auto;
 }
 .pp-toplu-btn:disabled { opacity: .4; cursor: not-allowed; }
-.pp-toplu-basla { background: #16a34a; color: #fff; }
-.pp-toplu-basla:hover { background: #15803d; }
-.pp-toplu-bitir { background: #ea580c; color: #fff; }
-.pp-toplu-bitir:hover { background: #c2410c; }
-.pp-toplu-beklet { background: #7c3aed; color: #fff; }
-.pp-toplu-beklet:hover { background: #6d28d9; }
+.pp-toplu-basla { background: #fef9e7; color: #92400e; border: 1px solid #fde68a; }
+.pp-toplu-basla:hover { background: #fef3c7; }
+.pp-toplu-bitir { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+.pp-toplu-bitir:hover { background: #dcfce7; }
+.pp-toplu-beklet { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+.pp-toplu-beklet:hover { background: #ffedd5; }
+.pp-canli-bilgi {
+  display: flex; align-items: center; gap: 6px;
+  background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 5px;
+  padding: 3px 10px; min-height: 26px; max-height: 30px;
+  font-size: 10.5px; font-weight: 600; color: var(--rm-t1);
+  line-height: 1.2;
+}
+.pp-canli-ikon { font-style: normal; opacity: .85; flex-shrink: 0; font-size: 11px; color: #1d4ed8; }
 
-/* ── Seçili İşlem Bar ────────────────────────────── */
+/* ── Seçili İşlem Bar — FAZ-AKSIYON-VE-TABLO-1 ────── */
 .pp-secili-bar {
-  display: flex; align-items: center; gap: 8px;
-  background: #0f172a; border-radius: 8px;
-  padding: 7px 12px; border: 1px solid #1e293b;
+  display: flex; align-items: center; gap: 10px;
+  background: #0f172a; border-radius: 6px;
+  padding: 6px 12px; border: 1px solid #1e293b;
+  min-height: 42px; max-height: 46px;
+  box-sizing: border-box;
 }
 .pp-secili-sayi {
-  font-size: 12px; font-weight: 800; color: #f6c343;
+  font-size: 13px; font-weight: 700; color: #f6c343;
   white-space: nowrap; flex-shrink: 0;
 }
-.pp-secili-butonlar { display: flex; gap: 6px; flex: 1; flex-wrap: wrap; }
-.pp-secili-btn {
-  padding: 6px 12px; border: none; border-radius: 6px;
-  font-size: 12px; font-weight: 700; cursor: pointer;
-  white-space: nowrap;
+.pp-secili-butonlar {
+  display: flex; align-items: center; gap: 6px; flex: 1; flex-wrap: nowrap;
+  min-width: 0;
 }
-.pp-secili-basla  { background: #f6c343; color: #1a1a1a; }
+.pp-secili-btn {
+  padding: 6px 14px; border: none; border-radius: 5px;
+  font-size: 12px; font-weight: 700; cursor: pointer;
+  white-space: nowrap; min-height: 34px; max-height: 38px;
+  font-family: var(--rm-font);
+}
+.pp-secili-basla  { background: var(--rm-gold); color: var(--rm-t1); }
 .pp-secili-basla:hover  { background: #e9b020; }
-.pp-secili-bitir  { background: #ea580c; color: #fff; }
-.pp-secili-bitir:hover  { background: #c2410c; }
-.pp-secili-beklet { background: #e5e7eb; color: #374151; }
-.pp-secili-beklet:hover { background: #d1d5db; }
-.pp-secili-iptal  { background: transparent; color: #94a3b8; border: 1px solid #334155; margin-left: auto; }
-.pp-secili-iptal:hover { background: #1e293b; color: #e2e8f0; }
+.pp-secili-bitir  { background: var(--rm-green); color: #fff; }
+.pp-secili-bitir:hover  { background: #15803d; }
+.pp-secili-beklet { background: #e5e7eb; color: var(--rm-t2); }
+.pp-secili-beklet:hover { background: #d1d5db; color: var(--rm-t1); }
+.pp-secili-iptal  {
+  background: transparent; color: #cbd5e1; border: 1px solid #334155;
+  margin-left: auto; min-width: 34px; padding: 6px 10px;
+}
+.pp-secili-iptal:hover { background: #1e293b; color: #f1f5f9; }
 
-/* ── Alt Emir Tablosu ────────────────────────────── */
+/* ── Alt Emir Tablosu — İlk X kalktı: daha fazla dikey alan ─── */
 .pp-tablo-kap {
   overflow-x: auto;
   overflow-y: auto;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-  background: #fff;
-  /* Topbar(56) + bolum-padding(32) + sayac(70) + ilerleme(60) + toplu(90) + sekme(42) + buffer(60) */
-  max-height: calc(100vh - 420px);
-  min-height: 240px;
+  border-radius: var(--tui-radius);
+  border: 1px solid var(--rm-border);
+  background: var(--rm-white);
+  flex: 0 1 auto;
+  min-height: 260px;
+  /* Üst alan: İlk X kartları yok → tabloya daha fazla yer */
+  max-height: calc(100vh - 200px);
+  height: auto;
 }
 .pp-tablo {
-  width: 100%; border-collapse: collapse; font-size: 12px;
-  min-width: 480px;
+  width: 100%; border-collapse: collapse; font-size: 11.5px;
+  min-width: 480px; font-family: var(--rm-font);
 }
-.pp-th-tr { background: #f9fafb; border-bottom: 1px solid #e5e7eb; }
+/* Kart başlık barı — Reçete Merkezi teal */
+.pp-kart-baslik {
+  background: var(--rm-teal);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  padding: 7px 10px;
+  min-height: 32px;
+  display: flex; align-items: center;
+  border-radius: var(--tui-radius) var(--tui-radius) 0 0;
+  border: 1px solid var(--rm-teal-dark);
+  border-bottom: none;
+  box-sizing: border-box;
+}
+.pp-tablo-alan .pp-kart-baslik,
+.pp-son-bitenler .pp-kart-baslik {
+  margin: 0;
+}
+.pp-son-bitenler { padding: 0; overflow: hidden; }
+.pp-son-bitenler .pp-sb-bos { padding: 10px 10px; }
+.pp-sb-tablo-kap { overflow: auto; max-height: calc(100vh - 230px); flex: 1 1 auto; }
+.pp-sb-tablo {
+  width: 100%; border-collapse: collapse; font-size: 11.5px; font-family: var(--rm-font);
+}
+/* Seçenek A — açık başlık + koyu yazı (kart teal bar ile çift lacivert yok) */
+.pp-sb-tablo thead th {
+  background: var(--rm-bg2);
+  color: var(--rm-t1);
+  font-size: 10.5px; font-weight: 600; letter-spacing: .2px;
+  text-transform: uppercase; text-align: left;
+  padding: 6px 8px; white-space: nowrap;
+  position: sticky; top: 0; z-index: 1;
+  border-bottom: 1px solid var(--rm-border2);
+}
+.pp-sb-tablo thead th.pp-th-r { text-align: right; }
+.pp-sb-tablo tbody td {
+  padding: 6px 8px; border-bottom: 1px solid var(--rm-bg2);
+  color: var(--rm-t2); vertical-align: middle;
+  height: 36px; box-sizing: border-box;
+}
+.pp-sb-tablo tbody td.pp-th-r { text-align: right; font-weight: 600; color: var(--rm-t1); }
+.pp-sb-tablo .pp-sb-no { font-weight: 600; color: var(--rm-t1); margin: 0; font-size: 11.5px; }
+.pp-sb-boyut {
+  display: inline-block; font-size: 9.5px; font-weight: 700;
+  letter-spacing: .04em; padding: 2px 6px; border-radius: 3px;
+  border: 1px solid var(--rm-border);
+}
+.pp-sb-boyut-large { background: #fffbeb; color: #92400e; border-color: var(--rm-gold); }
+.pp-sb-boyut-small { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+.pp-sb-boyut-medium { background: var(--rm-bg2); color: var(--rm-t2); border-color: var(--rm-border2); }
+.pp-not-gizli { display: none; }
+
+/* Seçenek A — açık zemin + koyu yazı (beyaz yazı yok) */
+.pp-th-tr {
+  background: var(--rm-bg2);
+  border-bottom: 1px solid var(--rm-border2);
+  position: sticky; top: 0; z-index: 2;
+}
 .pp-th {
   padding: 6px 8px; text-align: left;
-  font-size: 9px; font-weight: 700; color: #9ca3af;
-  letter-spacing: .4px; white-space: nowrap; text-transform: uppercase;
+  font-size: 10.5px; font-weight: 600; color: var(--rm-t1);
+  letter-spacing: .2px; white-space: nowrap; text-transform: uppercase;
+  background: var(--rm-bg2);
 }
 .pp-th-r { text-align: right; }
-.pp-th-chk { width: 26px; padding: 6px 4px; }
-.pp-th-islem { width: 64px; }
+.pp-th-chk { width: 28px; padding: 6px 4px; }
+.pp-th-islem { width: 96px; }
+.pp-th-tr input[type="checkbox"] { accent-color: var(--rm-teal); width: 14px; height: 14px; }
 
-.pp-tr { border-bottom: 1px solid #f3f4f6; transition: background .1s; }
-.pp-tr:hover { background: #f9fafb; }
-.pp-tr-hazir   { border-left: 3px solid #16a34a; }
-.pp-tr-devam   { border-left: 3px solid #f6c343; }
-.pp-tr-bekleme { border-left: 3px solid #f97316; }
-.pp-tr-bitti   { border-left: 3px solid #9ca3af; }
+.pp-tr { border-bottom: 1px solid var(--rm-bg2); transition: background .1s; height: 34px; }
+.pp-tr:hover { background: var(--rm-bg); }
+.pp-tr-hazir   { border-left: 3px solid var(--rm-green); }
+.pp-tr-devam   { border-left: 3px solid var(--rm-gold); }
+.pp-tr-bekleme { border-left: 3px solid var(--rm-orange); }
+.pp-tr-bitti   { border-left: 3px solid var(--rm-t4); }
 
-.pp-td { padding: 5px 8px; vertical-align: middle; }
-.pp-td-chk { width: 26px; padding: 5px 4px; }
+.pp-td { padding: 4px 7px; vertical-align: middle; font-size: 11.5px; color: var(--rm-t2); }
+.pp-td-chk { width: 28px; padding: 4px; }
+.pp-td-chk input[type="checkbox"] { width: 14px; height: 14px; min-width: 14px; cursor: pointer; }
 .pp-td-r { text-align: right; }
-.pp-td-no  { font-weight: 800; color: #0f172a; font-size: 12px; white-space: nowrap; }
-.pp-td-fkg { font-weight: 700; color: #475569; white-space: nowrap; }
-.pp-td-uretilen { font-weight: 800; color: #16a34a; white-space: nowrap; }
-.pp-td-zaman { font-size: 10px; color: #6b7280; line-height: 1.3; white-space: nowrap; }
-.pp-td-tarih { font-size: 9px; color: #9ca3af; display: block; }
-.pp-td-op { font-size: 11px; color: #6b7280; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pp-td-not { font-size: 10px; color: #9ca3af; max-width: 48px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pp-td-sebep { font-size: 9px; color: #d97706; margin-top: 1px; }
-.pp-td-bos { font-size: 12px; color: #22c55e; }
+.pp-td-no  { font-weight: 600; color: var(--rm-t1); font-size: 11.5px; white-space: nowrap; }
+.pp-td-fkg { font-weight: 600; color: var(--rm-t1); white-space: nowrap; }
+.pp-td-uretilen { font-weight: 700; color: #16a34a; white-space: nowrap; }
+.pp-td-zaman { font-size: 10.5px; color: var(--rm-t2); line-height: 1.25; white-space: nowrap; }
+.pp-td-tarih { font-size: 10px; color: var(--rm-t3); display: block; }
+.pp-td-op { font-size: 11px; color: var(--rm-t2); max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-td-not { font-size: 10.5px; color: var(--rm-t3); max-width: 48px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-td-sebep { font-size: 10px; color: #d97706; margin-top: 1px; }
+.pp-td-bos { font-size: 11.5px; color: #16a34a; }
 .pp-td-islem { white-space: nowrap; padding-left: 4px; padding-right: 4px; }
 
 .pp-rozet {
-  font-size: 9px; font-weight: 700; letter-spacing: .5px;
-  padding: 2px 8px; border-radius: 4px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: .4px;
+  padding: 2px 7px; border-radius: 3px;
 }
 /* HAZIR → yeşil, DEVAM → CPS sarı, BEKLEME → turuncu/gri, BITTI → yeşil/tamamlandı */
 .pp-rozet-hazir   { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
@@ -2232,9 +2622,10 @@ body { background: #f3f6fa; font-family: system-ui, -apple-system, sans-serif; }
 .pp-rozet-bitti   { background: #f0fdf4; color: #166534; border: 1px solid #86efac; }
 
 .pp-aksiyon-kucuk {
-  padding: 4px 8px; border: none; border-radius: 5px;
-  font-size: 12px; font-weight: 700; cursor: pointer;
+  padding: 4px 8px; border: none; border-radius: 4px;
+  font-size: 11px; font-weight: 700; cursor: pointer;
   margin-right: 3px; transition: opacity .15s;
+  min-height: 28px; min-width: 28px;
 }
 .pp-aksiyon-kucuk:disabled { opacity: .4; cursor: not-allowed; }
 .pp-ak-basla  { background: #f6c343; color: #1a1a1a; }
@@ -2250,29 +2641,67 @@ body { background: #f3f6fa; font-family: system-ui, -apple-system, sans-serif; }
 }
 .pp-not-ekle-btn:hover { background: #f9fafb; color: #374151; }
 
-/* ── Tablo + Son Bitenler Yan Yana Grid ────────── */
+/* ── Tablo + Son Bitenler — FAZ-KOLON-ORAN-1: ~72/28 sağ içi → sayfa ~57%/22% ─ */
 .pp-tablo-sb-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 210px;
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, min(380px, 28%));
+  gap: 6px;
   align-items: start;
-  overflow: hidden;
+  overflow: visible;
+  flex: 0 1 auto;
+  min-height: 0;
 }
-.pp-tablo-alan { min-width: 0; overflow: hidden; }
-.pp-sb-kolon { width: 210px; min-width: 0; }
+.pp-tablo-alan {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: auto;
+  max-height: calc(100vh - 200px);
+  background: var(--rm-white);
+  border: 1px solid var(--rm-border);
+  border-radius: var(--tui-radius);
+  box-shadow: var(--tui-shadow);
+}
+.pp-tablo-alan .pp-tablo-kap {
+  border: none;
+  border-radius: 0 0 var(--tui-radius) var(--tui-radius);
+  max-height: none;
+  flex: 1 1 auto;
+  min-height: 260px;
+}
+.pp-sb-kolon {
+  width: auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+}
 
 /* ── Son Bitenler Paneli ─────────────────────────── */
 .pp-son-bitenler {
-  background: #fff; border-radius: 8px;
-  padding: 9px 10px; border: 1px solid #e5e7eb;
-  box-shadow: 0 1px 2px rgba(0,0,0,.04);
-  position: sticky; top: 60px;
+  background: var(--rm-white);
+  border-radius: var(--tui-radius);
+  padding: 0;
+  border: 1px solid var(--rm-border);
+  box-shadow: var(--tui-shadow);
+  position: relative;
+  top: auto;
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: calc(100vh - 200px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: auto;
 }
 .pp-sb-baslik {
-  font-size: 9px; font-weight: 700; color: #6b7280;
-  letter-spacing: 1px; text-transform: uppercase;
+  font-size: 10px; font-weight: 700; color: var(--rm-t3);
+  letter-spacing: .06em; text-transform: uppercase;
   margin-bottom: 8px; padding-bottom: 6px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--rm-border);
 }
 .pp-sb-bos { font-size: 11px; color: #94a3b8; text-align: center; padding: 10px 0; }
 .pp-sb-liste { display: flex; flex-direction: column; gap: 8px; }
@@ -2415,8 +2844,8 @@ body { background: #f3f6fa; font-family: system-ui, -apple-system, sans-serif; }
 .pp-aksiyon-btn:disabled { opacity: .4; cursor: not-allowed; }
 .pp-aksiyon-basla { background: #22c55e; color: #fff; box-shadow: 0 2px 6px rgba(34,197,94,.3); }
 .pp-aksiyon-basla:hover  { background: #16a34a; }
-.pp-aksiyon-bitir { background: #6366f1; color: #fff; box-shadow: 0 2px 6px rgba(99,102,241,.25); }
-.pp-aksiyon-bitir:hover  { background: #4f46e5; }
+.pp-aksiyon-bitir { background: var(--rm-green); color: #fff; box-shadow: none; }
+.pp-aksiyon-bitir:hover  { background: #15803d; }
 .pp-aksiyon-beklet { background: #f59e0b; color: #1e293b; box-shadow: 0 2px 6px rgba(245,158,11,.25); }
 .pp-aksiyon-beklet:hover { background: #d97706; }
 
@@ -2444,72 +2873,73 @@ body { background: #f3f6fa; font-family: system-ui, -apple-system, sans-serif; }
 }
 .pp-modal-iptal  { background: #f1f5f9; color: #64748b; }
 .pp-modal-iptal:hover { background: #e2e8f0; color: #1e293b; }
-.pp-modal-onayla { background: #6366f1; color: #fff; }
-.pp-modal-onayla:hover { background: #4f46e5; }
+.pp-modal-onayla { background: var(--rm-teal); color: #fff; }
+.pp-modal-onayla:hover { background: var(--rm-teal-dark); }
 
-/* ── TOPBAR BOYUT ROZETİ + KAYDET/ÇIK ──────────────── */
+/* ── HEADER SAĞ ALAN + KAYDET/ÇIK ──────────────── */
 .tui-topbar-saglar {
   margin-left: auto;
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0; flex-wrap: wrap;
 }
-.tui-topbar-boyut {
-  font-size: 11px; font-weight: 700; letter-spacing: .5px;
-  padding: 3px 10px; border-radius: 6px;
-  display: inline-block; vertical-align: middle;
-}
-/* Seçili boyut rozeti: açık gri zemin + koyu yazı, üst bar içinde */
-.tui-tb-large { background: rgba(255,255,255,.18); color: #f6c343; border: 1px solid rgba(246,195,67,.4); }
-.tui-tb-small { background: rgba(255,255,255,.18); color: #f6c343; border: 1px solid rgba(246,195,67,.4); }
-.tui-tb-std, .tui-tb-standart { background: rgba(255,255,255,.12); color: #e2e8f0; border: 1px solid rgba(255,255,255,.15); }
-
-.tui-topbar-boyut-btn {
-  font-size: 11px; font-weight: 700; letter-spacing: .4px;
-  padding: 5px 12px; border-radius: 6px; text-decoration: none;
-  border: 1px solid rgba(255,255,255,.25); transition: all .15s;
-  white-space: nowrap; color: #e2e8f0; background: rgba(255,255,255,.1);
-  display: inline-flex; align-items: center; gap: 4px;
-}
-.tui-topbar-boyut-btn:hover { background: rgba(246,195,67,.2); color: #f6c343; border-color: rgba(246,195,67,.4); }
-
-.tui-kaydet-cik-btn {
-  display: flex; align-items: center; gap: 6px;
-  padding: 7px 16px; border: none;
-  border-radius: 8px; background: #f6c343;
-  color: #1a1a1a; font-size: 12px; font-weight: 700;
-  cursor: pointer; white-space: nowrap; transition: background .15s;
-}
-.tui-kaydet-cik-btn:hover { background: #e9b020; }
 .tui-kaydet-cik-btn:disabled { opacity: .5; cursor: not-allowed; }
 
 /* ── L/S SEÇİM BANNER — kaldırıldı, topbar'da gösterilir ── */
 
-/* ── BARKOD/SEVK ÖZET BLOĞU ─────────────────────────── */
+/* ── BARKOD/SEVK ÖZET BLOĞU (COMPACT-1) ─────────────────────────── */
 .sol-barkod-blok {
-  background: #f0fdf4; border-radius: 10px;
-  border: 1px solid #86efac; padding: 10px 14px;
+  background: #f0fdf4; border-radius: var(--tui-radius);
+  border: 1px solid #86efac; padding: 6px 9px;
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px;
+}
+.sol-barkod-blok .sol-etiket {
+  width: 100%; margin-bottom: 0; font-size: 10px; color: #166534;
 }
 .sol-barkod-satir {
-  display: flex; align-items: baseline; gap: 6px; margin-top: 4px;
+  display: flex; align-items: baseline; gap: 5px; margin-top: 0;
 }
 .sol-barkod-sayi {
-  font-size: 26px; font-weight: 900; color: #15803d;
+  font-size: 18px; font-weight: 800; color: #15803d; line-height: 1;
 }
 .sol-barkod-birim {
-  font-size: 12px; font-weight: 600; color: #16a34a;
+  font-size: 11px; font-weight: 600; color: #16a34a;
 }
 .sol-barkod-kg {
-  font-size: 13px; font-weight: 700; color: #166534; margin-top: 2px;
+  font-size: 12.5px; font-weight: 700; color: #166534; margin-top: 0;
 }
 .sol-barkod-not {
-  font-size: 10px; color: #4ade80; margin-top: 6px;
-  font-style: italic;
+  font-size: 9.5px; color: #15803d; margin-top: 0; width: 100%;
+  font-style: italic; opacity: .85;
 }
 
 /* ── RESPONSIVE ─────────────────────────────────────── */
+@media (max-width: 1366px) {
+  .pp-tablo-alan,
+  .pp-son-bitenler,
+  .pp-tablo-kap { max-height: calc(100vh - 190px); }
+  .pp-sb-tablo-kap { max-height: calc(100vh - 220px); }
+}
+@media (max-width: 1366px) and (min-width: 1025px) {
+  /* Dar ekranda min 300px zorlanmasın; oran korunur */
+  :root { --tui-sol-w: minmax(260px, 21%); }
+  .pp-tablo-sb-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(240px, min(340px, 28%));
+  }
+}
+@media (max-width: 1024px) {
+  .tui-topbar-saglar { justify-content: flex-end; }
+  .tui-boyut-toggle-btn { min-height: 40px; }
+  .tui-icerik { grid-template-columns: minmax(220px, 24%) minmax(0, 1fr); }
+  .pp-toplu-bar { grid-template-columns: repeat(2, 1fr); }
+  .pp-toplu-bar .pp-tg-beklet { grid-column: 1 / -1; }
+  .pp-tablo-sb-grid { grid-template-columns: 1fr; }
+  .pp-sb-kolon { width: 100%; }
+  .pp-sayac-bant { grid-template-columns: repeat(3, 1fr); }
+  .pp-sayac-item { min-height: 60px; }
+  .tui-islem-btn, .tui-fh-gor-btn { min-height: 42px; }
+  .pp-toplu-btn { min-height: 40px; }
+}
 @media (max-width: 1000px) {
-  .pp-toplu-bar { grid-template-columns: repeat(3, 1fr); }
-  .pp-tablo-sb-grid { grid-template-columns: minmax(0,1fr) 180px; }
-  .pp-sb-kolon { width: 180px; }
+  .pp-toplu-bar { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 860px) {
   .tui-icerik {
@@ -2518,19 +2948,31 @@ body { background: #f3f6fa; font-family: system-ui, -apple-system, sans-serif; }
   }
   .sol-panel {
     position: static;
+    min-height: 0;
     max-height: none;
     width: 100%;
     flex-direction: column;
     border-right: none;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid var(--rm-border);
+    overflow: visible;
   }
   .sol-kart-iki { grid-template-columns: repeat(3, 1fr); }
   .sag-panel { min-height: auto; }
   .pp-sayac-bant { grid-template-columns: repeat(3, 1fr); }
   .pp-toplu-bar { grid-template-columns: 1fr; }
+  .pp-toplu-bar .pp-tg-beklet { grid-column: auto; }
   .pp-tablo-sb-grid { grid-template-columns: 1fr; }
   .pp-sb-kolon { width: 100%; }
   .pp-tablo { min-width: 480px; }
+  .rm-page-logo { width: 118px; height: 46px; }
+}
+@media (max-width: 768px) {
+  .tui-hdr-sip { font-size: 12px; }
+  .tui-boyut-toggle { width: 100%; }
+  .tui-boyut-toggle-btn { flex: 1; min-height: 40px; }
+  .pp-toplu-btn { min-height: 40px; width: 100%; margin-left: 0; }
+  .sol-kim-boyutlar { grid-template-columns: 1fr 1fr; }
+  .tui-kaydet-cik-btn { min-height: 40px; }
 }
 @media (max-width: 600px) {
   .pp-sayac-bant { grid-template-columns: repeat(2, 1fr); }

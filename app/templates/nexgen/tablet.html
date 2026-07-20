@@ -38,15 +38,10 @@ var _PARCA_VAR = {% if devam_eden_batches and devam_eden_batches[0]['toplam_alt_
   <div class="rm-sekme-bar nxt-sekme-bar">
     {% if _ops %}
     <a class="rm-sekme aktif" href="/nexgen/tablet">Siparişler</a>
-    <a class="rm-sekme" href="/nexgen/tablet/uretim-isleri">Üretim İşleri</a>
     <a class="rm-sekme" href="/nexgen/tablet/devam-edenler">Devam Eden</a>
-    <a class="rm-sekme" href="/nexgen/tablet/uretim">Üretim</a>
     {% endif %}
     {% if _arge %}
     <a class="rm-sekme{% if not _ops %} aktif{% endif %}" href="/nexgen/tablet/arge">AR-GE</a>
-    {% endif %}
-    {% if _ops or _arge %}
-    <a class="rm-sekme" href="/nexgen/tablet/barkod">Barkod</a>
     {% endif %}
     {% if _ops %}
     <a class="rm-sekme" href="/nexgen/tablet/geri-donusum">Geri Dönüşüm</a>
@@ -127,8 +122,8 @@ var _PARCA_VAR = {% if devam_eden_batches and devam_eden_batches[0]['toplam_alt_
 {# ══ L/S SEÇİM MODALI ═══════════════════════════════════════════ #}
 <div class="nxt-modal-overlay" id="nxt-ls-modal" style="display:none" onclick="lsModalKapat(event)">
   <div class="nxt-modal">
-    <div class="nxt-modal-baslik">Hangi boyuta devam edeceksiniz?</div>
-    <div class="nxt-modal-altyazi">Aynı sipariş için LARGE ve SMALL üretimleri ayrı takip edilir.</div>
+    <div class="nxt-modal-baslik">Üretime hangi boyutla başlanacak?</div>
+    <div class="nxt-modal-altyazi">Bir boyut seçmeden devam edilemez. Diğer boyut beklemeye devam eder.</div>
     <div class="nxt-modal-butonlar" id="nxt-modal-butonlar"></div>
     <button class="nxt-modal-iptal" onclick="document.getElementById('nxt-ls-modal').style.display='none'">İptal</button>
   </div>
@@ -211,7 +206,7 @@ function siparisDurum(sip) {
 }
 
 function kalemOzet(kalem) {
-  var t = { baslayacak: 0, devam: 0, biten: 0, uretilen: 0, hedef: 0 };
+  var t = { baslayacak: 0, devam: 0, biten: 0, uretilen: 0, hedef: 0, toplam: 0 };
   boyutListesi(kalem).forEach(function(bk) {
     t.baslayacak += bk.parca_kalan != null ? bk.parca_kalan : (bk.parca_hazir || 0);
     t.devam += bk.parca_devam || 0;
@@ -219,23 +214,212 @@ function kalemOzet(kalem) {
     t.uretilen += parseFloat(bk.uretilen_kg) || 0;
     var hk = parseFloat(bk.uretilecek_kg) || parseFloat(bk.siparis_kg) || 0;
     t.hedef += hk;
+    t.toplam += bk.parca_toplam || 0;
   });
+  if (!t.toplam) t.toplam = t.baslayacak + t.devam + t.biten;
+  t.baslayan = t.devam + t.biten;
   t.kalan = Math.max(0, t.hedef - t.uretilen);
   return t;
 }
 
 function siparisOzet(sip) {
-  var t = { baslayacak: 0, devam: 0, biten: 0, uretilen: 0, hedef: 0, kalan: 0 };
+  var t = { baslayacak: 0, devam: 0, biten: 0, baslayan: 0, toplam: 0, uretilen: 0, hedef: 0, kalan: 0 };
   sip.kalemler.forEach(function(k) {
     var ko = kalemOzet(k);
     t.baslayacak += ko.baslayacak;
     t.devam += ko.devam;
     t.biten += ko.biten;
+    t.baslayan += ko.baslayan;
+    t.toplam += ko.toplam;
     t.uretilen += ko.uretilen;
     t.hedef += ko.hedef;
   });
+  if (!t.toplam) t.toplam = t.baslayacak + t.devam + t.biten;
   t.kalan = Math.max(0, t.hedef - t.uretilen);
   return t;
+}
+
+function aileEtiket(aile, formulAd) {
+  var a = String(aile || '').trim().toUpperCase();
+  if (a === 'TERLIK') return 'TERLİK';
+  if (a === 'TABAN') return 'TABAN';
+  if (a === 'DOKME' || a === 'DÖKME') return 'DÖKME';
+  if (a) return a;
+  var f = String(formulAd || '').toUpperCase();
+  if (f.indexOf('TERL') >= 0) return 'TERLİK';
+  if (f.indexOf('TABAN') >= 0) return 'TABAN';
+  if (f.indexOf('DOKME') >= 0 || f.indexOf('DÖKME') >= 0) return 'DÖKME';
+  return '';
+}
+
+function formulAktifAdim(oz) {
+  if (oz.toplam > 0 && oz.biten >= oz.toplam) return 3;
+  if (oz.devam > 0) return 2;
+  if (oz.baslayan > 0) return 1;
+  return 0;
+}
+
+function durumRozetHtml(gd) {
+  var vm = durumVm(gd);
+  return '<span class="nxt-durum-chip nxt-chip-' + vm.filtre + '">' +
+    '<span class="nxt-chip-dot"></span>' + esc(vm.etiket) + '</span>';
+}
+
+function kalemHazirParcaSayisi(kalem) {
+  var n = 0;
+  boyutListesi(kalem).forEach(function(bk) {
+    var h = parseInt(bk.parca_hazir, 10);
+    if (!isNaN(h) && h > 0) n += h;
+    else {
+      var t = parseInt(bk.parca_toplam, 10) || 0;
+      var bit = parseInt(bk.parca_biten, 10) || 0;
+      var kalan = t - bit;
+      if (kalan > 0) n += kalan;
+    }
+  });
+  return n;
+}
+
+function kalemUretimeHazirMi(kalem) {
+  return !!(kalem && kalem.batch_kodu && String(kalem.batch_kodu).trim() && kalemHazirParcaSayisi(kalem) > 0);
+}
+
+function uretimHazirDegilUyari(meta) {
+  try {
+    console.warn('[ALI-CTA] Bu iş henüz üretime hazır değil.', meta || {});
+  } catch (e) {}
+  alert('Bu iş henüz üretime hazır değil.');
+}
+
+function kalemCtaHtml(kalem) {
+  /* FAZ-ALI-CTA-LS-2: Ali yalnız mevcut batch/HAZIR parça ile üretir; planBasla yok. */
+  var kd = kalemDurum(kalem);
+  var cta = (kd === 'DEVAM' || kd === 'BEKLEME') ? 'Devam Et' : (kd === 'BITTI' ? 'Görüntüle' : 'Başlat');
+  var cls = 'nxt-durum-btn nxt-btn-' + durumVm(kd).filtre;
+  if (!kalemUretimeHazirMi(kalem)) {
+    try {
+      console.warn('[ALI-CTA] üretime hazır değil', {
+        plan_id: kalem.plan_id || null,
+        batch_kodu: kalem.batch_kodu || null,
+        kalem_no: kalem.kalem_no || null,
+        eksik_baglanti: !kalem.batch_kodu ? 'batch_yok' : 'hazir_parca_yok'
+      });
+    } catch (e) {}
+    return '<button type="button" class="' + cls + ' nxt-btn-disabled" disabled ' +
+      'title="Bu iş henüz üretime hazır değil." ' +
+      'onclick="uretimHazirDegilUyari({plan_id:' + (kalem.plan_id || 'null') +
+      ',eksik_baglanti:\'' + (!kalem.batch_kodu ? 'batch_yok' : 'hazir_parca_yok') + '\'})">' +
+      esc(cta) + '</button>';
+  }
+  var boyutlar = boyutListesi(kalem).filter(function(bk) {
+    var h = parseInt(bk.parca_hazir, 10) || 0;
+    var t = parseInt(bk.parca_toplam, 10) || 0;
+    return h > 0 || t > 0 || !!(bk.boyut && bk.boyut !== 'STANDART');
+  });
+  if (!boyutlar.length) boyutlar = boyutListesi(kalem);
+  if (boyutlar.length <= 1) {
+    var b0 = boyutlar[0] || { boyut: 'STANDART' };
+    var href = '/nexgen/tablet/uretim-islem/' + encodeURIComponent(kalem.batch_kodu) +
+      '?boyut=' + encodeURIComponent(b0.boyut);
+    return '<a href="' + href + '" class="' + cls + '">' + esc(cta) + '</a>';
+  }
+  return '<button type="button" class="' + cls + '" onclick="lsModalAc(\'' +
+    String(kalem.batch_kodu).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')">' + esc(cta) + '</button>';
+}
+
+function formulSayacHtml(ko) {
+  return '<div class="nxt-formul-sayac">' +
+    '<span class="nxt-fs-item"><span class="nxt-fs-lbl">Yapılacak</span><span class="nxt-fs-val">' + ko.toplam + '</span></span>' +
+    '<span class="nxt-fs-item"><span class="nxt-fs-lbl">Başlayan</span><span class="nxt-fs-val">' + ko.baslayan + '</span></span>' +
+    '<span class="nxt-fs-item"><span class="nxt-fs-lbl">Devam</span><span class="nxt-fs-val nxt-fs-devam">' + ko.devam + '</span></span>' +
+    '<span class="nxt-fs-item"><span class="nxt-fs-lbl">Biten</span><span class="nxt-fs-val nxt-fs-biten">' + ko.biten + '</span></span>' +
+    '<span class="nxt-fs-item"><span class="nxt-fs-lbl">Bekleyen</span><span class="nxt-fs-val">' + ko.baslayacak + '</span></span>' +
+  '</div>';
+}
+
+function boyutGirisOzet(kalem) {
+  /* KG = üretilecek (formül matematiği); formül adedi = parça / batch_sayisi */
+  var map = {
+    LARGE: { kg: 0, formul: 0, birim: 0 },
+    SMALL: { kg: 0, formul: 0, birim: 0 },
+    MEDIUM: { kg: 0, formul: 0, birim: 0 }
+  };
+  boyutListesi(kalem).forEach(function(bk) {
+    var b = String(bk.boyut || '').toUpperCase();
+    if (b === 'STANDART') b = 'MEDIUM';
+    if (!map[b]) return;
+    var uret = parseFloat(bk.uretilecek_kg) || 0;
+    var talep = parseFloat(bk.siparis_kg) || 0;
+    map[b].kg += uret > 0 ? uret : talep;
+    var formulN = bk.parca_toplam || bk.batch_sayisi || 0;
+    map[b].formul += formulN;
+    var birim = parseFloat(bk.formul_batch_kg) || 0;
+    if (birim > 0) map[b].birim = birim;
+  });
+  return map;
+}
+
+function boyutGirisHtml(kalem) {
+  var m = boyutGirisOzet(kalem);
+  var siralar = [
+    { key: 'LARGE', label: 'Large' },
+    { key: 'SMALL', label: 'Small' },
+    { key: 'MEDIUM', label: 'Medium' }
+  ];
+  var parts = [];
+  siralar.forEach(function(s) {
+    var row = m[s.key];
+    if (!row || (row.kg <= 0 && row.formul <= 0)) return;
+    var alt = row.formul > 0 ? ' · ' + row.formul + ' formül' : '';
+    parts.push(
+      '<span class="nxt-fs-item nxt-boyut-giris">' +
+        '<span class="nxt-fs-lbl">' + s.label + '</span>' +
+        '<span class="nxt-fs-val">' + fmt(row.kg) + ' KG</span>' +
+        (alt ? '<span class="nxt-fs-lbl nxt-boyut-formul">' + alt + '</span>' : '') +
+      '</span>'
+    );
+  });
+  if (!parts.length) return '';
+  return '<div class="nxt-formul-sayac nxt-boyut-satir-ozet">' + parts.join('') + '</div>';
+}
+
+function formulStepperHtml(oz) {
+  var aktif = formulAktifAdim(oz);
+  var adimlar = [
+    { label: 'Bekleyen', value: oz.baslayacak },
+    { label: 'Başlayan', value: oz.baslayan },
+    { label: 'Devam', value: oz.devam },
+    { label: 'Biten', value: oz.biten }
+  ];
+  /* Ufak düzeltme: kare kutular yok — toplam üstte düz yazı */
+  var html =
+    '<div class="nxt-sip-toplam-bar">' +
+      '<span class="nxt-sip-toplam-lbl">Toplam</span>' +
+      '<span class="nxt-sip-toplam-kg">' + fmt(oz.hedef) + ' KG</span>' +
+      '<span class="nxt-sip-toplam-ayrac">·</span>' +
+      '<span class="nxt-sip-toplam-lbl">Formül</span>' +
+      '<span class="nxt-sip-toplam-kg">' + oz.toplam + '</span>' +
+    '</div>' +
+    '<div class="nxt-stepper-wrap"><div class="nxt-stepper">';
+
+  adimlar.forEach(function(a, i) {
+    var done = i < aktif || (aktif === 3 && i === 3);
+    var current = i === aktif && aktif < 3;
+    var lastDone = aktif === 3 && i === 3;
+    var st = (done || lastDone) ? 'done' : (current ? 'current' : 'todo');
+    html += '<div class="nxt-step-node">' +
+      '<div class="nxt-step-circle nxt-step-' + st + '">' +
+        ((done || lastDone) ? '✓' : String(i + 1)) +
+      '</div>' +
+      '<div class="nxt-step-lbl nxt-step-lbl-' + st + '">' + esc(a.label) + '</div>' +
+      '<div class="nxt-step-val">' + a.value + '</div>' +
+    '</div>';
+    if (i < adimlar.length - 1) {
+      html += '<div class="nxt-step-line' + (i < aktif ? ' nxt-step-line-done' : '') + '"></div>';
+    }
+  });
+  html += '</div></div>';
+  return html;
 }
 
 function renkKimlikMetin(kalem) {
@@ -275,10 +459,12 @@ function veriGrupla() {
         key: key,
         siparis_no: meta.siparis_no,
         musteri_adi: meta.musteri_adi,
-        plan_tarihi: meta.plan_tarihi || '',
+        termin_tarihi: meta.termin_tarihi || '',
         kalemler: []
       };
       sira.push(key);
+    } else if (meta.termin_tarihi && !harita[key].termin_tarihi) {
+      harita[key].termin_tarihi = meta.termin_tarihi;
     }
     return harita[key];
   }
@@ -288,7 +474,7 @@ function veriGrupla() {
     var sip = ensureSip(key, {
       siparis_no: b.siparis_no || b.batch_kodu,
       musteri_adi: temizleCari(b.musteri_adi),
-      plan_tarihi: b.olusturma_tarihi || ''
+      termin_tarihi: (b.termin_tarihi || '').toString().substring(0, 10)
     });
     sip.kalemler.push({
       kalem_no: b.kalem_no || 1,
@@ -296,6 +482,7 @@ function veriGrupla() {
       batch_kodu: b.batch_kodu,
       durum: b.durum,
       formul_ad: b.formul_ad || '—',
+      urun_ailesi: b.urun_ailesi || '',
       renk_ad: b.renk_ad || '',
       rf_kod: b.rf_kod,
       rf_renk_ad: b.rf_renk_ad,
@@ -305,11 +492,19 @@ function veriGrupla() {
   });
 
   _PLAN_ISLER.forEach(function(p) {
+    /* Batch zaten varsa aynı plan/sipariş için planBasla CTA üretme. */
+    var batchVar = false;
+    _BATCHLER.forEach(function(b) {
+      if (b.plan_id && p.plan_id && b.plan_id === p.plan_id) batchVar = true;
+      else if ((b.siparis_no || '') === (p.siparis_no || '') &&
+               (b.kalem_no || 1) === (p.kalem_no || 1) && b.batch_kodu) batchVar = true;
+    });
+    if (batchVar) return;
     var key = p.siparis_no || ('plan_' + p.plan_id);
     var sip = ensureSip(key, {
       siparis_no: p.siparis_no || p.plan_kodu,
       musteri_adi: temizleCari(p.musteri_adi),
-      plan_tarihi: ''
+      termin_tarihi: (p.termin_tarihi || '').toString().substring(0, 10)
     });
     sip.kalemler.push({
       kalem_no: p.kalem_no || 1,
@@ -317,6 +512,7 @@ function veriGrupla() {
       batch_kodu: null,
       durum: 'PLANLI',
       formul_ad: p.formul_ad || '—',
+      urun_ailesi: p.urun_ailesi || '',
       renk_ad: p.renk_ad || '',
       rf_kod: p.rf_kod,
       rf_renk_ad: p.rf_renk_ad,
@@ -331,58 +527,36 @@ function veriGrupla() {
   _gruplar = sira.map(function(k) { return harita[k]; });
 }
 
-function boyutSatirHtml(kalem, bk) {
-  var yuzde = 0;
-  var hedef = parseFloat(bk.uretilecek_kg) || parseFloat(bk.siparis_kg) || 0;
-  var uret = parseFloat(bk.uretilen_kg) || 0;
-  if (hedef > 0) yuzde = Math.min(100, Math.round((uret / hedef) * 100));
-  var cta = boyutCtaYazi(bk);
-  var btnCls = (cta === 'Görüntüle') ? 'rm-btn rm-btn-arge nxt-cta-xs' : 'rm-yeni-btn nxt-cta-xs';
-  var href = kalem.batch_kodu
-    ? '/nexgen/tablet/uretim-islem/' + esc(kalem.batch_kodu) + '?boyut=' + encodeURIComponent(bk.boyut)
-    : '#';
-  var ctaHtml = kalem.batch_kodu
-    ? '<a href="' + href + '" class="' + btnCls + '">' + esc(cta) + '</a>'
-    : '<button type="button" class="rm-yeni-btn nxt-cta-xs" onclick="planBasla(' + kalem.plan_id + ',\'' + esc(kalem.formul_ad) + '\')">' + esc(cta) + '</button>';
-  var etiketHtml = kalem.batch_kodu
-    ? '<a href="/nexgen/tablet/etiket/uretim/' + esc(kalem.batch_kodu) + '" class="rm-btn rm-btn-onay nxt-cta-xs">Etiket</a>'
-    : '<span class="rm-btn rm-btn-onay nxt-cta-xs nxt-btn-disabled">Etiket</span>';
-  var emirTxt = 'Başlayacak ' + (bk.parca_kalan != null ? bk.parca_kalan : (bk.parca_hazir || 0)) +
-    ' · Devam ' + (bk.parca_devam || 0) + ' · Biten ' + (bk.parca_biten || 0);
-  return '<div class="nxt-boyut-satir">' +
-    '<span class="nxt-boyut-etiket">' + esc(bk.boyut) + '</span>' +
-    '<div class="nxt-boyut-kg">' +
-      '<span class="nxt-boyut-kg-val">' + fmt(uret) + ' / ' + fmt(hedef) + ' KG</span>' +
-      '<div class="nxt-progress-bar nxt-progress-thin"><div class="nxt-progress-dolu" style="width:' + yuzde + '%"></div></div>' +
-    '</div>' +
-    '<span class="nxt-boyut-emir">' + emirTxt + '</span>' +
-    '<div class="nxt-boyut-cta">' + ctaHtml + etiketHtml + '</div>' +
-  '</div>';
-}
-
-function kalemSatirHtml(kalem, opts) {
-  opts = opts || {};
+function kalemSatirHtml(kalem) {
   var kd = kalemDurum(kalem);
   var ko = kalemOzet(kalem);
   var renkMetin = renkKimlikMetin(kalem);
-  var lsOzet = lsOzetYazi(boyutListesi(kalem));
-  var kOpen = (kd === 'DEVAM' || kd === 'BEKLEME' || opts.forceOpen) ? ' nxt-acc-open' : '';
-  var boyutHtml = boyutListesi(kalem).map(function(bk) {
-    return boyutSatirHtml(kalem, bk);
-  }).join('');
-  var emirTxt = 'Başlayacak ' + ko.baslayacak + ' · Devam ' + ko.devam + ' · Biten ' + ko.biten;
-  return '<div class="nxt-kalem-satir nxt-acc' + kOpen + '" data-kalem-durum="' + kd.toLowerCase() + '">' +
-    '<div class="nxt-kalem-hdr nxt-acc-hdr" onclick="nxtAccToggle(this)">' +
-      '<span class="nxt-kalem-no">K' + (kalem.kalem_no || 1) + '</span>' +
-      '<span class="nxt-kalem-formul">' + esc(kalem.formul_ad) + '</span>' +
-      (renkMetin ? '<span class="nxt-kalem-renk">' + esc(renkMetin) + '</span>' : '') +
-      '<span class="nxt-kalem-ls">' + esc(lsOzet) + '</span>' +
-      '<span class="nxt-kalem-kg">' + fmt(ko.uretilen) + '/' + fmt(ko.hedef) + ' KG</span>' +
-      '<span class="nxt-durum-rozet ' + durumVm(kd).rozet + '">' + esc(durumVm(kd).etiket) + '</span>' +
-      '<span class="nxt-kalem-emir">' + emirTxt + '</span>' +
-      '<span class="nxt-acc-chevron">▾</span>' +
+  var formulAd = String(kalem.formul_ad || '—').trim() || '—';
+  var yuzde = ko.hedef > 0 ? Math.min(100, Math.round((ko.uretilen / ko.hedef) * 100)) : 0;
+  var bittiCls = kd === 'BITTI' ? ' nxt-kalem-bitti' : '';
+  var baslik =
+    '<span class="nxt-kalem-formul">Formül · ' + esc(formulAd) + '</span>' +
+    (renkMetin
+      ? '<span class="nxt-kalem-renk"> · Renk · ' + esc(renkMetin) + '</span>'
+      : '') +
+    (kd === 'BITTI' ? '<span class="nxt-renk-bitti"> · Renk bitti</span>' : '');
+  return '<div class="nxt-kalem-satir' + bittiCls + '" data-kalem-durum="' + kd.toLowerCase() + '">' +
+    '<div class="nxt-kalem-col nxt-kalem-col-kimlik">' +
+      '<div class="nxt-kalem-kimlik-ust">' +
+        '<span class="nxt-kalem-no">K' + (kalem.kalem_no || 1) + '</span>' +
+        '<div class="nxt-kalem-ust">' + baslik + '</div>' +
+      '</div>' +
+      boyutGirisHtml(kalem) +
     '</div>' +
-    '<div class="nxt-boyut-satirlar nxt-acc-body">' + boyutHtml + '</div>' +
+    '<div class="nxt-kalem-col nxt-kalem-col-sayac">' +
+      formulSayacHtml(ko) +
+    '</div>' +
+    '<div class="nxt-kalem-col nxt-kalem-col-kg">' +
+      '<div class="nxt-kalem-kg">' + fmt(ko.uretilen) + ' / ' + fmt(ko.hedef) + ' KG</div>' +
+      '<div class="nxt-kalem-kg-alt">Kalan ' + fmt(ko.kalan) + ' · %' + yuzde + '</div>' +
+      '<div class="nxt-progress-bar nxt-progress-thin"><div class="nxt-progress-dolu" style="width:' + yuzde + '%"></div></div>' +
+    '</div>' +
+    '<div class="nxt-kalem-col nxt-kalem-col-cta">' + kalemCtaHtml(kalem) + '</div>' +
   '</div>';
 }
 
@@ -390,14 +564,11 @@ function kartHtml(sip) {
   var gd = siparisDurum(sip);
   var vm = durumVm(gd);
   var oz = siparisOzet(sip);
-  var tarih = sip.plan_tarihi ? sip.plan_tarihi.substring(0, 10) : '';
-  var yuzde = oz.hedef > 0 ? Math.min(100, Math.round((oz.uretilen / oz.hedef) * 100)) : 0;
+  var termin = sip.termin_tarihi ? String(sip.termin_tarihi).substring(0, 10) : '';
   var sipOpen = (gd === 'DEVAM' || gd === 'BEKLEME') ? ' nxt-acc-open' : '';
   if (!sipOpen && gd !== 'BITTI' && sip.kalemler.length === 1) sipOpen = ' nxt-acc-open';
-  var forceKalem = sip.kalemler.length === 1 && gd !== 'BITTI';
-  var kalemHtml = sip.kalemler.map(function(k) {
-    return kalemSatirHtml(k, { forceOpen: forceKalem && kalemDurum(k) !== 'BITTI' });
-  }).join('');
+  if (!sipOpen && gd !== 'BITTI') sipOpen = ' nxt-acc-open';
+  var kalemHtml = sip.kalemler.map(function(k) { return kalemSatirHtml(k); }).join('');
 
   return '<div class="nxt-sip-kart nxt-acc ' + vm.sol + sipOpen + '" ' +
     'data-durum="' + gd.toLowerCase() + '" ' +
@@ -408,21 +579,73 @@ function kartHtml(sip) {
       '<div class="nxt-sip-hdr-sol">' +
         '<span class="nxt-sip-cari" title="' + esc(sip.musteri_adi) + '">' + esc(sip.musteri_adi) + '</span>' +
         '<span class="nxt-ust-sip-no">' + esc(sip.siparis_no) + '</span>' +
-        (tarih ? '<span class="nxt-ust-tarih">' + tarih + '</span>' : '') +
-        '<span class="nxt-durum-rozet ' + vm.rozet + '">' + esc(vm.etiket) + '</span>' +
+        (termin
+          ? '<span class="nxt-termin-rozet"><span class="nxt-termin-lbl">Termin</span><span class="nxt-termin-val">' + esc(termin) + '</span></span>'
+          : '') +
+        durumRozetHtml(gd) +
         '<span class="nxt-sip-kalem-sayi">' + sip.kalemler.length + ' Kalem</span>' +
       '</div>' +
       '<span class="nxt-acc-chevron">▾</span>' +
     '</div>' +
 
-    '<div class="nxt-sip-ozet">' +
-      '<span class="nxt-sip-ozet-kg">' + fmt(oz.uretilen) + ' / ' + fmt(oz.hedef) + ' KG</span>' +
-      '<span class="nxt-sip-ozet-kalan">Kalan ' + fmt(oz.kalan) + ' KG · %' + yuzde + '</span>' +
-      '<div class="nxt-progress-bar nxt-progress-thin"><div class="nxt-progress-dolu" style="width:' + yuzde + '%"></div></div>' +
-    '</div>' +
-
+    '<div class="nxt-sip-ozet">' + formulStepperHtml(oz) + '</div>' +
     '<div class="nxt-kalemler nxt-acc-body">' + kalemHtml + '</div>' +
   '</div>';
+}
+
+function lsModalAc(batchKodu) {
+  var kalem = null;
+  _gruplar.forEach(function(sip) {
+    sip.kalemler.forEach(function(k) {
+      if (k.batch_kodu === batchKodu) kalem = k;
+    });
+  });
+  if (!kalem) return;
+  if (!kalemUretimeHazirMi(kalem)) {
+    uretimHazirDegilUyari({
+      plan_id: kalem.plan_id, batch_kodu: batchKodu, eksik_baglanti: 'hazir_parca_yok'
+    });
+    return;
+  }
+  var box = document.getElementById('nxt-modal-butonlar');
+  if (!box) return;
+  var boyutlar = boyutListesi(kalem).filter(function(bk) {
+    return (parseInt(bk.parca_hazir, 10) || 0) > 0 || (parseInt(bk.parca_toplam, 10) || 0) > 0;
+  });
+  if (!boyutlar.length) boyutlar = boyutListesi(kalem);
+  if (boyutlar.length <= 1) {
+    var tek = boyutlar[0] || { boyut: 'STANDART' };
+    window.location.href = '/nexgen/tablet/uretim-islem/' + encodeURIComponent(batchKodu) +
+      '?boyut=' + encodeURIComponent(tek.boyut);
+    return;
+  }
+  box.innerHTML = boyutlar.map(function(bk) {
+    var href = '/nexgen/tablet/uretim-islem/' + encodeURIComponent(batchKodu) +
+      '?boyut=' + encodeURIComponent(bk.boyut);
+    var b = String(bk.boyut || '').toUpperCase();
+    var cls = 'nxt-modal-boyut-btn';
+    if (b === 'LARGE') cls += ' nxt-modal-btn-large';
+    else if (b === 'SMALL') cls += ' nxt-modal-btn-small';
+    else cls += ' nxt-modal-btn-medium';
+    var kg = parseFloat(bk.siparis_kg);
+    if (!(kg > 0)) kg = parseFloat(bk.uretilecek_kg) || 0;
+    var formul = parseInt(bk.parca_hazir, 10);
+    if (!(formul > 0)) formul = parseInt(bk.parca_toplam, 10) || 0;
+    var durum = bk.durum || 'HAZIR';
+    var alt =
+      (kg > 0 ? fmt(kg) + ' KG' : '') +
+      (formul > 0 ? (kg > 0 ? '\n' : '') + formul + ' üretim emri' : '') +
+      (durum ? ((kg > 0 || formul > 0) ? '\n' : '') + durum : '');
+    return '<a class="' + cls + '" href="' + href + '">' +
+      '<span class="nxt-modal-boyut-ad">' + esc(bk.boyut) + '</span>' +
+      (alt ? '<span class="nxt-modal-boyut-alt">' + esc(alt).replace(/\n/g, '<br>') + '</span>' : '') +
+      '</a>';
+  }).join('');
+  document.getElementById('nxt-ls-modal').style.display = 'flex';
+}
+function lsModalKapat(ev) {
+  if (ev && ev.target && ev.target.id !== 'nxt-ls-modal') return;
+  document.getElementById('nxt-ls-modal').style.display = 'none';
 }
 
 function nxtAccToggle(hdr) {
@@ -532,16 +755,13 @@ function sayfaGit(n) { _aktifSayfa = n; render(); window.scrollTo({ top: 0, beha
 function sayfaBoyutu(v) { _sayfaBoyutu = parseInt(v); _aktifSayfa = 1; render(); }
 function tumunuGoster() { _tumGoster = !_tumGoster; _aktifSayfa = 1; render(); }
 
+/* FAZ-ALI-CTA-FIX-2: Ali ekranı plan/batch/üretim kodu/stok üretmez. */
 async function planBasla(planId, ad) {
-  if (!confirm(ad + '\n\nBu iş için üretim kodu oluşturulsun mu?')) return;
-  try {
-    var r = await fetch('/nexgen/api/plan/' + planId + '/basla', {
-      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({})
-    });
-    var j = await r.json();
-    if (j.ok) window.location.href = '/nexgen/tablet/uretim-islem/' + j.batch_kodu;
-    else alert('HATA: ' + (j.hata || 'Bilinmeyen hata'));
-  } catch (e) { alert('Sunucu hatası.'); }
+  uretimHazirDegilUyari({
+    plan_id: planId,
+    formul_ad: ad || null,
+    eksik_baglanti: 'planBasla_engellendi'
+  });
 }
 
 function esc(s) {
@@ -736,7 +956,6 @@ a.rm-sekme.aktif, .rm-sekme.aktif {
 .nxt-sip-header .nxt-ust-sip-no {
   background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.18); color: #fff;
 }
-.nxt-sip-header .nxt-ust-tarih { color: #94a3b8; }
 .nxt-sip-header .nxt-sip-kalem-sayi {
   background: rgba(246,195,67,.2); color: var(--rm-gold); border: none;
 }
@@ -749,12 +968,8 @@ a.rm-sekme.aktif, .rm-sekme.aktif {
 }
 .nxt-acc-open > .nxt-acc-hdr .nxt-acc-chevron { transform: rotate(180deg); }
 .nxt-acc-body { display: none !important; }
-.nxt-acc-open > .nxt-acc-body { display: block !important; }
 .nxt-acc-open > .nxt-kalemler.nxt-acc-body {
   display: flex !important; flex-direction: column; gap: 6px;
-}
-.nxt-acc-open > .nxt-boyut-satirlar.nxt-acc-body {
-  display: flex !important; flex-direction: column; gap: 4px;
 }
 
 .nxt-sip-hdr-sol {
@@ -768,65 +983,180 @@ a.rm-sekme.aktif, .rm-sekme.aktif {
   font-size: 10px; font-weight: 700; color: var(--rm-t3);
   background: var(--rm-bg2); padding: 2px 7px; border-radius: 4px;
 }
-.nxt-sip-ozet {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
-  padding: 6px 12px 8px; border-bottom: 1px solid var(--rm-border);
-  font-size: 11px; color: var(--rm-t3); background: var(--rm-bg);
+.nxt-termin-rozet {
+  display: inline-flex; align-items: center; gap: 6px; margin-left: auto;
+  background: rgba(246,195,67,.18); border: 1px solid rgba(246,195,67,.45);
+  border-radius: 6px; padding: 4px 10px;
 }
-.nxt-sip-ozet-kg { font-weight: 800; color: var(--rm-t2); }
-.nxt-sip-ozet-kalan { font-weight: 600; }
-.nxt-progress-thin { flex: 1; min-width: 120px; height: 4px; margin: 0; }
+.nxt-termin-lbl {
+  font-size: 10px; font-weight: 700; letter-spacing: .4px;
+  color: var(--rm-gold); text-transform: uppercase;
+}
+.nxt-termin-val {
+  font-size: 13px; font-weight: 800; color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.nxt-sip-ozet {
+  padding: 8px 12px 10px; border-bottom: 1px solid var(--rm-border);
+  background: var(--rm-bg);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.nxt-sip-toplam-bar {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 8px;
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+}
+.nxt-sip-toplam-lbl {
+  font-size: 11px; font-weight: 700; color: var(--rm-t3);
+}
+.nxt-sip-toplam-kg {
+  font-size: 15px; font-weight: 800; color: var(--rm-t1);
+  font-variant-numeric: tabular-nums;
+}
+.nxt-sip-toplam-ayrac { color: var(--rm-t4); font-weight: 600; }
+.nxt-stepper-wrap { display: flex; justify-content: center; width: 100%; }
+.nxt-stepper {
+  display: flex; align-items: flex-start; width: 70%; max-width: 420px;
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+}
+.nxt-step-node {
+  display: flex; flex-direction: column; align-items: center; min-width: 48px;
+}
+.nxt-step-circle {
+  width: 20px; height: 20px; border-radius: 999px; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700;
+}
+.nxt-step-done { background: var(--rm-green); font-size: 11px; }
+.nxt-step-current {
+  background: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245,158,11,.25);
+}
+.nxt-step-todo { background: #d1d5db; }
+.nxt-step-lbl {
+  margin-top: 3px; font-size: 9px; font-weight: 600;
+  text-align: center; line-height: 1.15; white-space: nowrap; color: var(--rm-t3);
+}
+.nxt-step-lbl-current { color: #d97706; font-weight: 700; }
+.nxt-step-lbl-done { color: var(--rm-green); font-weight: 700; }
+.nxt-step-val {
+  font-size: 11px; font-weight: 700; color: var(--rm-t1);
+  font-variant-numeric: tabular-nums; margin-top: 1px;
+}
+.nxt-step-line {
+  flex: 1; height: 2px; margin: 9px 3px 0; border-radius: 2px;
+  background: #e5e7eb; min-width: 12px; align-self: flex-start;
+}
+.nxt-step-line-done { background: var(--rm-green); }
+
+.nxt-progress-thin { width: 100%; height: 4px; margin-top: 4px; }
 
 .nxt-kalemler { padding: 6px 8px 8px; display: flex; flex-direction: column; gap: 6px; }
-.nxt-kalem-satir { border: 1px solid #f1f5f9; border-radius: 8px; }
-.nxt-kalem-hdr {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
-  padding: 7px 10px; font-size: 11px;
+.nxt-kalem-satir {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.4fr) minmax(200px, 1.2fr) minmax(130px, 0.7fr) auto;
+  align-items: center;
+  column-gap: 20px;
+  row-gap: 8px;
+  border: 1px solid #f1f5f9; border-radius: 8px; padding: 12px 14px;
+  background: #fff;
+}
+.nxt-kalem-bitti { background: #fafafa; }
+.nxt-kalem-col { min-width: 0; }
+.nxt-kalem-kimlik-ust {
+  display: flex; align-items: flex-start; gap: 8px;
 }
 .nxt-kalem-no {
   font-size: 10px; font-weight: 900; color: var(--rm-gold); background: var(--rm-teal);
-  padding: 2px 6px; border-radius: 4px;
+  padding: 2px 6px; border-radius: 4px; flex-shrink: 0; margin-top: 2px;
 }
-.nxt-kalem-formul { font-size: 12px; font-weight: 800; color: var(--rm-t1); }
-.nxt-kalem-renk { font-size: 11px; font-weight: 700; color: #0f766e; font-family: 'Courier New', monospace; }
-.nxt-kalem-ls { font-size: 10px; color: var(--rm-t3); font-weight: 600; }
-.nxt-kalem-kg { font-size: 11px; font-weight: 700; color: var(--rm-t2); }
-.nxt-kalem-emir { font-size: 10px; color: var(--rm-t3); font-weight: 600; }
-
-.nxt-boyut-satirlar { padding: 0 8px 8px; display: flex; flex-direction: column; gap: 4px; }
-.nxt-boyut-satir {
-  display: grid; grid-template-columns: 72px 1fr auto auto;
-  align-items: center; gap: 8px;
-  padding: 6px 8px; background: var(--rm-bg); border-radius: 7px;
-  border: 1px solid #f1f5f9;
+.nxt-kalem-ust {
+  display: flex; align-items: baseline; gap: 4px 6px; flex-wrap: wrap; line-height: 1.35;
 }
-.nxt-boyut-etiket {
-  font-size: 10px; font-weight: 800; letter-spacing: .3px;
-  padding: 3px 8px; border-radius: 4px;
-  background: var(--rm-bg2); color: var(--rm-t2); text-align: center;
+.nxt-kalem-formul { font-size: 13px; font-weight: 800; color: var(--rm-t1); }
+.nxt-kalem-renk {
+  font-size: 13px; font-weight: 700; color: #0f766e;
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
 }
-.nxt-boyut-kg-val { font-size: 11px; font-weight: 700; color: var(--rm-t2); display: block; margin-bottom: 3px; }
-.nxt-boyut-emir { font-size: 10px; color: var(--rm-t3); font-weight: 600; white-space: nowrap; }
-.nxt-boyut-cta { display: flex; gap: 4px; flex-shrink: 0; }
+.nxt-renk-bitti { color: var(--rm-green); }
+.nxt-kalem-col-sayac {
+  padding: 0 4px;
+  border-left: 1px solid #f1f5f9;
+  border-right: 1px solid #f1f5f9;
+}
+.nxt-formul-sayac {
+  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-around;
+  gap: 8px 12px; width: 100%;
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  margin: 0; padding: 0; border: none;
+}
+.nxt-fs-item { display: inline-flex; align-items: baseline; gap: 5px; }
+.nxt-fs-lbl { font-size: 11px; font-weight: 600; color: var(--rm-t3); letter-spacing: .15px; }
+.nxt-fs-val {
+  font-size: 14px; font-weight: 700; color: var(--rm-t1);
+  font-variant-numeric: tabular-nums;
+}
+.nxt-fs-devam { color: #b45309; }
+.nxt-fs-biten { color: var(--rm-green); }
+/* L / S yan yana — kutu yok, onaylı satır dili */
+.nxt-boyut-satir-ozet {
+  display: flex; flex-direction: row; flex-wrap: nowrap;
+  align-items: baseline; gap: 16px;
+  margin-top: 5px; padding: 0; border: none;
+}
+.nxt-boyut-giris .nxt-fs-lbl { color: var(--rm-teal); font-weight: 700; }
+.nxt-boyut-formul { color: var(--rm-t3) !important; font-weight: 600 !important; }
+.nxt-kalem-col-kg { min-width: 120px; }
+.nxt-kalem-kg { font-size: 12px; font-weight: 700; color: var(--rm-t2); }
+.nxt-kalem-kg-alt { font-size: 10px; color: var(--rm-t3); margin-top: 2px; }
+.nxt-kalem-col-cta { display: flex; justify-content: flex-end; }
 
 .nxt-ust-sip-no {
   font-size: 11px; font-weight: 700; color: var(--rm-t2); font-family: monospace;
   background: var(--rm-bg); padding: 2px 8px; border-radius: 4px;
   border: 1px solid var(--rm-border); white-space: nowrap; flex-shrink: 0;
 }
-.nxt-ust-tarih { font-size: 11px; color: var(--rm-t4); white-space: nowrap; flex-shrink: 0; }
 
-.nxt-durum-rozet {
-  font-size: 9px; font-weight: 700; padding: 2px 8px; border-radius: 4px;
-  letter-spacing: .4px; white-space: nowrap; flex-shrink: 0;
+.nxt-durum-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  font-size: 11px; font-weight: 600; letter-spacing: .15px;
+  padding: 5px 10px 5px 8px; border-radius: 6px; white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(15,23,42,.04); flex-shrink: 0;
 }
-.nxt-sip-header .nxt-durum-rozet { border-color: transparent; }
-.nxt-d-hazir   { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
-.nxt-d-devam   { background: #fefce8; color: #854d0e; border: 1px solid #fde68a; }
-.nxt-d-bekleme { background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; }
-.nxt-d-bitti   { background: #dcfce7; color: #14532d; border: 1px solid #4ade80; }
-.nxt-d-planli  { background: #f3f4f6; color: #6b7280; border: 1px solid #e5e7eb; }
-.nxt-d-taslak  { background: #f9fafb; color: #9ca3af; border: 1px solid #e5e7eb; }
+.nxt-chip-dot { width: 7px; height: 7px; border-radius: 999px; flex-shrink: 0; }
+.nxt-chip-hazir {
+  background: #f0f9ff; color: #0c4a6e; border: 1px solid #0ea5e933; border-left: 3px solid #0ea5e9;
+}
+.nxt-chip-hazir .nxt-chip-dot { background: #0ea5e9; }
+.nxt-chip-devam {
+  background: #fffbeb; color: #92400e; border: 1px solid #f59e0b33; border-left: 3px solid #f59e0b;
+}
+.nxt-chip-devam .nxt-chip-dot { background: #f59e0b; }
+.nxt-chip-bekleme {
+  background: #fff7ed; color: #9a3412; border: 1px solid #f9731633; border-left: 3px solid #f97316;
+}
+.nxt-chip-bekleme .nxt-chip-dot { background: #f97316; }
+.nxt-chip-bitti {
+  background: #ecfdf5; color: #065f46; border: 1px solid #10b98133; border-left: 3px solid #10b981;
+}
+.nxt-chip-bitti .nxt-chip-dot { background: #10b981; }
+
+.nxt-durum-btn {
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  font-size: 12px; font-weight: 700; letter-spacing: .2px;
+  padding: 8px 14px; min-width: 96px; border-radius: 6px;
+  cursor: pointer; text-decoration: none; text-align: center;
+  display: inline-flex; align-items: center; justify-content: center;
+  box-shadow: 0 1px 2px rgba(15,23,42,.08); white-space: nowrap; flex-shrink: 0;
+}
+.nxt-btn-hazir { background: var(--rm-teal); color: #fff; border: 1px solid var(--rm-teal-dark); }
+.nxt-btn-devam, .nxt-btn-bekleme {
+  background: #f59e0b; color: #fff; border: 1px solid #d97706;
+}
+.nxt-btn-bitti { background: #f8fafc; color: #334155; border: 1px solid #cbd5e1; }
+
+.nxt-d-hazir, .nxt-d-devam, .nxt-d-bekleme, .nxt-d-bitti, .nxt-d-planli, .nxt-d-taslak { display: none; }
 
 .nxt-progress-bar {
   height: 4px; background: #e5e7eb; border-radius: 2px; overflow: hidden; border: none;
@@ -860,32 +1190,63 @@ a.rm-sekme.aktif, .rm-sekme.aktif {
 
 .nxt-modal-overlay {
   position: fixed; inset: 0; z-index: 100;
-  background: rgba(15,23,42,.45);
+  background: rgba(15,23,42,.5);
   display: flex; align-items: center; justify-content: center;
 }
 .nxt-modal {
   background: #fff; border-radius: 10px; border: 1px solid var(--rm-border);
-  padding: 24px; min-width: 300px; max-width: 400px;
-  box-shadow: 0 8px 30px rgba(15,23,42,.12);
-  display: flex; flex-direction: column; gap: 12px; font-family: var(--rm-font);
+  padding: 22px 24px; min-width: 320px; max-width: 400px;
+  box-shadow: 0 12px 36px rgba(15,23,42,.18);
+  display: flex; flex-direction: column; gap: 12px;
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
 }
-.nxt-modal-baslik { font-size: 14px; font-weight: 800; color: var(--rm-t1); }
-.nxt-modal-altyazi { font-size: 12px; color: var(--rm-t3); margin-top: -6px; }
+.nxt-modal-baslik { font-size: 15px; font-weight: 800; color: var(--rm-t1); }
+.nxt-modal-altyazi { font-size: 12px; color: var(--rm-t3); margin-top: -4px; line-height: 1.4; }
 .nxt-modal-butonlar { display: flex; flex-direction: column; gap: 8px; }
 .nxt-modal-boyut-btn {
-  display: block; padding: 10px 14px; background: var(--rm-gold); color: var(--rm-t1);
-  border-radius: 6px; font-size: 13px; font-weight: 800; text-decoration: none; text-align: center;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px; padding: 12px 14px; border-radius: 8px;
+  font-size: 14px; font-weight: 800; text-decoration: none; text-align: center;
+  border: 1px solid transparent; transition: background .12s, border-color .12s;
 }
+.nxt-modal-boyut-ad { letter-spacing: .4px; }
+.nxt-modal-boyut-alt { font-size: 11px; font-weight: 600; opacity: .9; line-height: 1.35; white-space: normal; }
+.nxt-modal-btn-large {
+  background: #006a8e; color: #fff; border-color: #005a7a;
+}
+.nxt-modal-btn-large:hover { background: #005a7a; color: #fff; }
+.nxt-modal-btn-small {
+  background: #f0f9ff; color: #0c4a6e; border-color: #7dd3fc;
+}
+.nxt-modal-btn-small:hover { background: #e0f2fe; color: #0c4a6e; }
+.nxt-modal-btn-medium {
+  background: #f8fafc; color: #334155; border-color: #cbd5e1;
+}
+.nxt-modal-btn-medium:hover { background: #f1f5f9; color: #0f172a; }
 .nxt-modal-iptal {
-  background: none; border: 1px solid var(--rm-border); border-radius: 6px; padding: 8px;
-  font-size: 12px; color: var(--rm-t3); cursor: pointer;
+  background: #fff; border: 1px solid var(--rm-border); border-radius: 8px; padding: 9px;
+  font-size: 12px; font-weight: 600; color: var(--rm-t3); cursor: pointer;
 }
+.nxt-modal-iptal:hover { background: var(--rm-bg); color: var(--rm-t2); }
 
+@media (max-width: 1100px) {
+  .nxt-kalem-satir {
+    grid-template-columns: minmax(200px, 1.2fr) minmax(180px, 1fr) auto auto;
+    column-gap: 14px;
+  }
+}
 @media (max-width: 900px) {
-  .nxt-boyut-satir { grid-template-columns: 1fr; gap: 4px; }
-  .nxt-boyut-cta { justify-content: flex-start; }
-  .nxt-kalem-hdr { flex-direction: column; align-items: flex-start; }
+  .nxt-kalem-satir {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+  .nxt-kalem-col-sayac { border: none; padding: 6px 0 0; border-top: 1px solid #f1f5f9; }
+  .nxt-boyut-satir-ozet { flex-wrap: wrap; }
+  .nxt-kalem-col-cta { justify-content: stretch; }
+  .nxt-durum-btn { width: 100%; }
+  .nxt-termin-rozet { margin-left: 0; }
   .rm-ara-wrap { margin-left: 0; flex: 1 1 100%; }
+  .nxt-stepper { width: 100%; max-width: none; flex-wrap: wrap; justify-content: center; gap: 6px 0; }
 }
 </style>
 {% include 'nexgen/_tablet_nofocus.html' %}

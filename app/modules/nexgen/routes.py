@@ -14056,6 +14056,7 @@ def tablet_uretim_islem(batch_kodu):
 
         # Alt Emirler (nexgen_uretim_parca) — Migration 072+ sonrası aktif
         alt_emirler = []
+        son_bitenler = []
         toplam_uretilen_kg = 0.0
         parca_tablosu = _parca_tablosu_var(con)
         formul_batch_kg = 0.0
@@ -14149,6 +14150,18 @@ def tablet_uretim_islem(batch_kodu):
             for oz in boyut_kirilim
         ]
 
+        # FAZ-URETIM-ISLEM-SON-BITEN-KARMA-1 — ortak geçmiş; boyut filtresi YOK
+        # batch içi tüm BITTI (LARGE/SMALL/MEDIUM), bitiş zamanına göre DESC
+        _son_biten_all = [
+            ae for ae in alt_emirler
+            if (ae.get('durum') or '').upper() == 'BITTI'
+        ]
+        _son_biten_all.sort(
+            key=lambda ae: (ae.get('bitis_zamani') or '', int(ae.get('id') or 0)),
+            reverse=True,
+        )
+        son_bitenler = _son_biten_all[:15]
+
         if secili_boyut and len(boyut_kirilim) > 1:
             alt_emirler = [ae for ae in alt_emirler if ae.get('boyut') == secili_boyut]
             sayaclar = {'toplam': 0, 'hazir': 0, 'devam': 0, 'bekleme': 0, 'bitti': 0}
@@ -14205,6 +14218,7 @@ def tablet_uretim_islem(batch_kodu):
         active='nexgen',
         batch=batch,
         alt_emirler=alt_emirler,
+        son_bitenler=son_bitenler,
         toplam_uretilen_kg=round(toplam_uretilen_kg, 3),
         siparis_toplam_kg=round(siparis_toplam_kg, 3),
         uretilecek_kg=round(uretilecek_kg, 3),
@@ -20305,9 +20319,15 @@ def _batch_boyut_ozet_list(con, batch_kodu, plan_id=None, batch_boyut=None):
             "PRAGMA table_info(nexgen_uretim_plan_boyut)"
         ).fetchall()]
         has_uretilecek = 'uretilecek_kg' in pb_cols
+        has_formul_batch = 'formul_batch_kg' in pb_cols
+        has_batch_sayisi = 'batch_sayisi' in pb_cols
         sel = 'boyut, siparis_kg'
         if has_uretilecek:
             sel += ', uretilecek_kg'
+        if has_formul_batch:
+            sel += ', formul_batch_kg'
+        if has_batch_sayisi:
+            sel += ', batch_sayisi'
         rows = con.execute(
             f"SELECT {sel} FROM nexgen_uretim_plan_boyut "
             "WHERE plan_id=? AND aktif=1 AND siparis_kg > 0 "
@@ -20320,6 +20340,12 @@ def _batch_boyut_ozet_list(con, batch_kodu, plan_id=None, batch_boyut=None):
                 'siparis_kg': float(r['siparis_kg'] or 0),
                 'uretilecek_kg': (
                     float(r['uretilecek_kg'] or 0) if has_uretilecek else None
+                ),
+                'formul_batch_kg': (
+                    float(r['formul_batch_kg'] or 0) if has_formul_batch else 0.0
+                ),
+                'batch_sayisi': (
+                    int(r['batch_sayisi'] or 0) if has_batch_sayisi else 0
                 ),
             }
 
@@ -20405,13 +20431,16 @@ def _batch_boyut_ozet_list(con, batch_kodu, plan_id=None, batch_boyut=None):
         ph = int(pa.get('parca_hazir') or 0)
         pk = max(0, pt - pb_cnt - pd)
         hedef = float(uretilecek_kg or 0) if float(uretilecek_kg or 0) > 0 else float(siparis_kg or 0)
+        formul_n = pt if pt > 0 else int(pb.get('batch_sayisi') or 0)
         result.append({
             'boyut': boyut,
             'siparis_kg': round(float(siparis_kg or 0), 3),
             'uretilecek_kg': round(float(uretilecek_kg or 0), 3),
             'uretilen_kg': uretilen_kg,
             'kalan_kg': round(max(0.0, hedef - uretilen_kg), 3),
-            'parca_toplam': pt,
+            'formul_batch_kg': round(float(pb.get('formul_batch_kg') or 0), 3),
+            'batch_sayisi': int(pb.get('batch_sayisi') or 0),
+            'parca_toplam': formul_n if pt == 0 and formul_n else pt,
             'parca_biten': pb_cnt,
             'parca_devam': pd,
             'parca_bekleme': pbe,
@@ -23606,11 +23635,21 @@ def api_plan_stok_durum(plan_id):
 @nexgen_bp.route('/api/batch/<batch_kodu>/formul-icerik')
 @login_gerekli
 def api_batch_formul_icerik(batch_kodu):
-    """Alt emir formül hazırlık listesi — salt okuma, FAZ-4B tüketim ile aynı hesap."""
+    """Alt emir formül hazırlık listesi — salt okuma, FAZ-4B tüketim ile aynı hesap.
+
+    FAZ-URETIM-ISLEM-FORMUL-BOYUT-1:
+    ?boyut=LARGE|SMALL|MEDIUM → yalnız o boyutun UV/reçetesi.
+    Boyut bulunamazsa LARGE'a fallback yok.
+    """
     if not yetki_var('nexgen.tablet.view', 'can_view'):
         return jsonify({'ok': False, 'hata': 'Yetki yok'}), 403
 
     parca_id = request.args.get('parca_id', type=int)
+    boyut_raw = (request.args.get('boyut') or '').strip().upper() or None
+    if boyut_raw == 'MEDIUM':
+        boyut_req = 'STANDART'
+    else:
+        boyut_req = _boyut_norm_etiket(boyut_raw) if boyut_raw else None
 
     con = _db()
     try:
@@ -23630,40 +23669,139 @@ def api_batch_formul_icerik(batch_kodu):
         if not _parca_tablosu_var(con):
             return jsonify({'ok': False, 'hata': 'Migration 072 çalıştırılmadı'}), 500
 
-        parca = _batch_formul_parca_sec(con, batch_kodu, parca_id=parca_id)
+        # ── UV çözümü: seçili boyut zorunluysa plan_boyut; fallback yok ──
+        uv_id = None
+        boyut_etiket = None
+        siparis_kg_boyut = None
+        plan_boyut_row = None
+
+        if parca_id:
+            parca_probe = con.execute(
+                "SELECT id, notlar FROM nexgen_uretim_parca "
+                "WHERE id=? AND batch_kodu=?",
+                (parca_id, batch_kodu),
+            ).fetchone()
+            if not parca_probe:
+                return jsonify({'ok': False, 'hata': 'Alt emir bulunamadı'}), 404
+            b_p, uv_p = _parca_boyut_uv_parse(parca_probe['notlar'])
+            if boyut_req and b_p and _boyut_norm_etiket(b_p) != boyut_req:
+                return jsonify({
+                    'ok': False,
+                    'hata': 'Seçili boyut için reçete bulunamadı.',
+                    'secili_boyut': boyut_req,
+                    'batch_kodu': batch_kodu,
+                    'siparis_no': batch['siparis_no'],
+                }), 404
+            if uv_p:
+                uv_id = int(uv_p)
+                boyut_etiket = _boyut_norm_etiket(b_p) if b_p else boyut_req
+
+        if uv_id is None and boyut_req:
+            plan_boyut_row = _plan_boyut_uv_coz(con, batch['plan_id'], boyut_req)
+            if not plan_boyut_row:
+                return jsonify({
+                    'ok': False,
+                    'hata': 'Seçili boyut için reçete bulunamadı.',
+                    'secili_boyut': boyut_req,
+                    'batch_kodu': batch_kodu,
+                    'siparis_no': batch['siparis_no'],
+                    'plan_id': batch['plan_id'],
+                }), 404
+            uv_id = int(plan_boyut_row['uretim_varyant_id'])
+            boyut_etiket = _boyut_norm_etiket(plan_boyut_row.get('boyut') or boyut_req)
+            siparis_kg_boyut = float(plan_boyut_row.get('siparis_kg') or 0)
+
+        if uv_id is None:
+            # Boyut belirtilmemiş — batch UV (tek boyutlu / eski çağrılar)
+            uv_id = int(batch['uretim_varyant_id'])
+            uv_row = con.execute(
+                "SELECT boyut FROM nexgen_uretim_varyant WHERE id=?", (uv_id,)
+            ).fetchone()
+            boyut_etiket = _boyut_norm_etiket(uv_row['boyut']) if uv_row else None
+
+        parca = _batch_formul_parca_sec(
+            con, batch_kodu, parca_id=parca_id, boyut=boyut_req or boyut_etiket,
+        )
         if not parca:
-            return jsonify({'ok': False, 'hata': 'Alt emir bulunamadı'}), 404
+            return jsonify({
+                'ok': False,
+                'hata': 'Seçili boyut için reçete bulunamadı.',
+                'secili_boyut': boyut_req or boyut_etiket,
+                'batch_kodu': batch_kodu,
+                'uv_id': uv_id,
+            }), 404
+
+        # Parça notlarındaki UV öncelikli (boyut tutarlılığı)
+        _, uv_from_parca = _parca_boyut_uv_parse(parca.get('notlar'))
+        if uv_from_parca:
+            if boyut_req and int(uv_from_parca) != int(uv_id):
+                return jsonify({
+                    'ok': False,
+                    'hata': 'Seçili boyut için reçete bulunamadı.',
+                    'secili_boyut': boyut_req,
+                    'batch_kodu': batch_kodu,
+                    'uv_id': uv_id,
+                }), 404
+            uv_id = int(uv_from_parca)
+
+        uv_meta = con.execute("""
+            SELECT uv.id, uv.boyut, f.ad AS formul_ad, f.kod AS formul_kod
+            FROM nexgen_uretim_varyant uv
+            JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
+            JOIN nexgen_formul f ON f.id = rv.formul_id
+            WHERE uv.id = ?
+        """, (uv_id,)).fetchone()
+        if not uv_meta:
+            return jsonify({
+                'ok': False,
+                'hata': 'Seçili boyut için reçete bulunamadı.',
+                'secili_boyut': boyut_req or boyut_etiket,
+                'uv_id': uv_id,
+            }), 404
+        boyut_etiket = _boyut_norm_etiket(uv_meta['boyut'] or boyut_etiket)
 
         parca_kg = round(float(parca['hedef_kg']), 3)
         rf_bilgi = _batch_plan_rf_bilgi(
             con,
             batch_kodu=batch_kodu,
             plan_id=batch['plan_id'],
-            uretim_varyant_id=batch['uretim_varyant_id'],
+            uretim_varyant_id=uv_id,
         )
         rf_renk_id = rf_bilgi.get('rf_renk_id') if rf_bilgi else batch['plan_rf_renk_id']
 
+        if siparis_kg_boyut is None or siparis_kg_boyut <= 0:
+            if plan_boyut_row is None and boyut_etiket:
+                plan_boyut_row = _plan_boyut_uv_coz(con, batch['plan_id'], boyut_etiket)
+            if plan_boyut_row:
+                siparis_kg_boyut = float(plan_boyut_row.get('siparis_kg') or 0)
+        if siparis_kg_boyut is None or siparis_kg_boyut <= 0:
+            siparis_kg_boyut = float(batch['planlanan_kg'] or 0)
+
         batch_meta = _batch_uretim_hesapla(
-            con, batch['uretim_varyant_id'], float(batch['planlanan_kg']),
-            rf_renk_id=rf_renk_id,
+            con, uv_id, siparis_kg_boyut, rf_renk_id=rf_renk_id,
         )
-        toplam_kg = batch_meta.get('uretilecek_kg') if batch_meta.get('ok') else float(batch['planlanan_kg'] or 0)
-        if toplam_kg <= 0:
-            row_sum = con.execute("""
-                SELECT COALESCE(SUM(hedef_kg), 0) AS s
-                FROM nexgen_uretim_parca WHERE batch_kodu=?
-            """, (batch_kodu,)).fetchone()
-            toplam_kg = float(row_sum['s'] or 0) if row_sum else parca_kg
-        toplam_kg = round(toplam_kg, 3)
+        if not batch_meta.get('ok'):
+            return jsonify({
+                'ok': False,
+                'hata': 'Seçili boyut için reçete bulunamadı.',
+                'secili_boyut': boyut_etiket,
+                'uv_id': uv_id,
+                'detay': batch_meta.get('hata'),
+            }), 404
+
+        toplam_kg = round(float(batch_meta.get('uretilecek_kg') or 0), 3)
+        ana_kg = round(float(batch_meta.get('ana_recete_kg') or 0), 3)
+        boya_kg = round(float(batch_meta.get('rf_boya_kg') or 0), 3)
+        tam_kg = round(float(batch_meta.get('tam_formul_kg') or batch_meta.get('formul_batch_kg') or 0), 3)
 
         ihtiyac_parca = _mpr_stok_ihtiyac_hesapla(
-            con, batch['uretim_varyant_id'], rf_renk_id, parca_kg,
+            con, uv_id, rf_renk_id, parca_kg,
         )
         if not ihtiyac_parca.get('ok'):
             return jsonify({'ok': False, 'hata': ihtiyac_parca.get('hata', 'Hesaplanamadı')}), 400
 
         ihtiyac_toplam = _mpr_stok_ihtiyac_hesapla(
-            con, batch['uretim_varyant_id'], rf_renk_id, float(batch['planlanan_kg']),
+            con, uv_id, rf_renk_id, toplam_kg if toplam_kg > 0 else siparis_kg_boyut,
         )
         if not ihtiyac_toplam.get('ok'):
             return jsonify({'ok': False, 'hata': ihtiyac_toplam.get('hata', 'Toplam hesaplanamadı')}), 400
@@ -23677,6 +23815,10 @@ def api_batch_formul_icerik(batch_kodu):
             'lot_kodu': batch['lot_kodu'],
             'cari_ad': batch['cari_ad'],
             'siparis_no': batch['siparis_no'],
+            'boyut': boyut_etiket,
+            'uretim_varyant_id': uv_id,
+            'formul_ad': uv_meta['formul_ad'],
+            'formul_kod': uv_meta['formul_kod'],
             'rf_kod': rf_bilgi.get('rf_kod') if rf_bilgi else None,
             'rf_renk_ad': rf_bilgi.get('renk_ad') if rf_bilgi else None,
             'rf_renk_id': rf_renk_id,
@@ -23684,8 +23826,13 @@ def api_batch_formul_icerik(batch_kodu):
             'parca_id': parca['id'],
             'parca_no': parca['parca_no'],
             'parca_durum': parca['durum'],
-            'siparis_kg': batch_meta.get('siparis_kg', float(batch['planlanan_kg'] or 0)),
-            'formul_batch_kg': batch_meta.get('formul_batch_kg'),
+            'siparis_kg': batch_meta.get('siparis_kg', siparis_kg_boyut),
+            'ana_formul_kg': ana_kg,
+            'ana_recete_kg': ana_kg,
+            'boya_kg': boya_kg,
+            'rf_boya_kg': boya_kg,
+            'tam_formul_kg': tam_kg,
+            'formul_batch_kg': tam_kg,
             'batch_sayisi': batch_meta.get('batch_sayisi'),
             'uretilecek_kg': toplam_kg,
             'fazla_kg': batch_meta.get('fazla_kg', 0),
