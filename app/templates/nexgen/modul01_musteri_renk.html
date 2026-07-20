@@ -819,11 +819,34 @@ html, body { height: 100%; overflow: hidden; }
    - Her kart tam tıklanabilir
 ───────────────────────────────────────── */
 
-function m1SwatchRenk(ad){
-  var s=String(ad||'');
+/* Reçete Merkezi / Renk Merkezi — rmRenkDaire ile aynı kaynak */
+function m1RenkDaire(rfAdi){
+  var ad=String(rfAdi||'').toUpperCase();
+  var eslesme=[
+    [['SİYAH','SIYAH','BLACK'],          {bg:'#1a1a1a', fg:'#fff'}],
+    [['BEYAZ','WHITE','OPTİK','OPTIK'],  {bg:'#f5f5f5', fg:'#555'}],
+    [['GRİ','GRI','GRAY','GREY','FÜME','FUME','SILVER','GÜMÜŞ'], {bg:'#9ca3af', fg:'#fff'}],
+    [['PEMBE','PINK','ROSE'],            {bg:'#f9a8d4', fg:'#831843'}],
+    [['KIRMIZI','KIRIM','RED'],          {bg:'#ef4444', fg:'#fff'}],
+    [['MAVİ','MAVI','BLUE','LACIVERT'],  {bg:'#3b82f6', fg:'#fff'}],
+    [['YEŞİL','YESIL','GREEN'],          {bg:'#22c55e', fg:'#fff'}],
+    [['SARI','YELLOW','GOLD','ALTIN'],   {bg:'#fbbf24', fg:'#78350f'}],
+    [['TURUNCU','ORANGE'],               {bg:'#f97316', fg:'#fff'}],
+    [['MOR','PURPLE','VİOLE','VIOLE'],   {bg:'#a855f7', fg:'#fff'}],
+    [['KAHVE','BROWN','TABA','KREM','CREAM','BEJ','BEIGE'], {bg:'#d97706', fg:'#fff'}],
+    [['BAKLAVA','EKRU','EKRÜ'],          {bg:'#e8d5b7', fg:'#6b4226'}],
+    [['LACIVERT'],                       {bg:'#1e3a5f', fg:'#fff'}]
+  ];
+  var i, j, keys, renk;
+  for(i=0;i<eslesme.length;i++){
+    keys=eslesme[i][0]; renk=eslesme[i][1];
+    for(j=0;j<keys.length;j++){
+      if(ad.indexOf(keys[j])>=0) return renk;
+    }
+  }
   var h=0;
-  for(var i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))>>>0;
-  return 'hsl('+(h%360)+' 55% 62%)';
+  for(i=0;i<ad.length;i++) h=(h*31+ad.charCodeAt(i))&0xffffff;
+  return {bg:'#'+('000000'+(h&0xffffff).toString(16)).slice(-6), fg:'#fff'};
 }
 
 /* ── Durum ── */
@@ -1179,9 +1202,9 @@ function adim4Html(){
     +'<div class="m1-liste" id="rf-liste">';
   RF_LISTE.forEach(function(r){
     var sec = S.rf_id===r.id ? ' secili' : '';
-    var sw = m1SwatchRenk(r.rf_ad||r.rf_kod||'');
+    var dc = m1RenkDaire(r.rf_ad||r.rf_kod||'');
     html += '<div class="m1-secim-item'+sec+'" data-tip="rf" data-id="'+r.id+'" data-ad="'+esc(r.rf_ad||'')+'" data-kod="'+esc(r.rf_kod||'')+'">'
-      +'<div class="m1-renk-daire" style="background:'+sw+';border-color:rgba(0,0,0,.12)"></div>'
+      +'<div class="m1-renk-daire" style="background:'+dc.bg+';color:'+dc.fg+';border-color:'+(dc.bg==='#f5f5f5'?'#d1d5db':dc.bg)+'"></div>'
       +'<div class="m1-si-metin">'
       +'<div class="m1-si-ad">'+esc(r.rf_kod||'')+'</div>'
       +'<div class="m1-si-alt">'+esc(r.rf_ad||'')+'</div>'
