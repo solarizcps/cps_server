@@ -1290,12 +1290,6 @@ function pzmMiAkisOzetHtml(st, kalemler) {
     ' → Fark <span>' + farkStr + '</span></div>';
 }
 
-function pzmMiDetayliAnalizLinkHtml() {
-  return '<div class="pzm-mi-bilgi-satir" style="margin-top:10px;">' +
-    '<a href="/nexgen/malzeme-ihtiyac-merkezi" class="pzm-btn pzm-btn-sm pzm-btn-outline" target="_blank" rel="noopener">' +
-    'Detaylı Malzeme İhtiyaç Analizi</a></div>';
-}
-
 function pzmStokOzetBirlestir(st) {
   var oz = {
     toplamKalem: 0, yeterliSayisi: 0, eksikSayisi: 0,
@@ -2106,19 +2100,20 @@ function pzmMiAnalizIcerikHtml(t, st, opts) {
     });
     var stokIcerik = pzmStokOzetHtml(st);
     if (stokIcerik) {
-      html += pzmMiKapanirPanelHtml('Hammadde Stok Durumu', stokIcerik, true);
+      html += '<div class="pzm-mi-bolum-baslik">Hammadde Stok Durumu</div>';
+      html += stokIcerik;
     } else if (st.stokYukleniyor) {
       html += '<div class="pzm-mi-bolum-baslik">Hammadde Stok Durumu</div>';
       html += '<div class="pzm-det-bilgi-kutu">Stok durumu kontrol ediliyor…</div>';
     }
     var aeIcerik = pzmAltEmirOzetHtml(st);
     if (aeIcerik) {
-      html += pzmMiKapanirPanelHtml('Alt Emir / Batch Detayları', aeIcerik, true);
+      html += '<div class="pzm-mi-bolum-baslik">Alt Emir / Batch Detayları</div>';
+      html += aeIcerik;
     } else if (st.stokYuklendi && st.altEmirYukleniyor) {
-      html += pzmMiKapanirPanelHtml('Alt Emir / Batch Detayları',
-        '<div class="pzm-det-bilgi-kutu" style="margin:0;">Alt emir verisi yükleniyor…</div>', true);
+      html += '<div class="pzm-mi-bolum-baslik">Alt Emir / Batch Detayları</div>';
+      html += '<div class="pzm-det-bilgi-kutu">Alt emir verisi yükleniyor…</div>';
     }
-    html += pzmMiDetayliAnalizLinkHtml();
     return html;
   }
 
