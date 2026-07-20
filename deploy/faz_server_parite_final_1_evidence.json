@@ -1,20 +1,20 @@
 {
   "git": {
-    "parity_worktree_head": "36883adbd5b8a4b5d6409317b471fe6d15b18591",
-    "origin_main": "36883adbd5b8a4b5d6409317b471fe6d15b18591",
+    "parity_worktree_head": "3ea7015d05a1f4a49b9a752003e089c0217d990f",
+    "origin_main": "3ea7015d05a1f4a49b9a752003e089c0217d990f",
     "github_esit": true,
     "parity_worktree_dirty": [
-      "?? _tmp_users.py",
-      "?? _verify_faz_server_parite_final_1.py",
-      "?? deploy/SERVER_APPLY_PACKAGE_36883ad/",
-      "?? deploy/faz_server_parite_final_1_evidence.json"
+      " M _verify_faz_server_parite_final_1.py",
+      " M deploy/faz_server_parite_final_1_evidence.json",
+      " M deploy/nexgen_master_data_package.json",
+      "?? deploy/SERVER_APPLY_PACKAGE_3ea7015/"
     ],
     "laptop_repo_head": "e6df710876fe0c907e5c62ab5f9981c093556fdf",
-    "laptop_origin_main": "36883adbd5b8a4b5d6409317b471fe6d15b18591",
+    "laptop_origin_main": "3ea7015d05a1f4a49b9a752003e089c0217d990f",
     "laptop_github_esit": false
   },
   "package": {
-    "sha256": "68ee2a3868e13734f9726318850c60579fc693e674852329a223be5ec38798c1",
+    "sha256": "3df2a26f44eaf5e580785a88bb23ea92acd4272f25c22b4b7a851ee1be621747",
     "formul_kodlari": [
       "1BA-FL01",
       "1BA-FL02",
@@ -399,7 +399,7 @@
       "rf_52_plus": true
     }
   },
-  "server_apply_package": "C:\\Solariz_CPS_PARITY_COMMIT\\deploy\\SERVER_APPLY_PACKAGE_36883ad",
+  "server_apply_package": "C:\\Solariz_CPS_PARITY_COMMIT\\deploy\\SERVER_APPLY_PACKAGE_3ea7015",
   "pass_checks": {
     "recete_9": true,
     "recete_detay": true,

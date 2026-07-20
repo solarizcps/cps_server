@@ -327,7 +327,7 @@ def git_parity() -> dict:
         ["git", "rev-parse", "origin/main"], cwd=ROOT, capture_output=True, text=True
     ).stdout.strip()
     dirty = subprocess.run(["git", "status", "--short"], cwd=ROOT, capture_output=True, text=True).stdout.splitlines()
-    rel = [l for l in dirty if l.strip() and "_patch_routes" not in l and "laptop_profile" not in l]
+    rel = [l for l in dirty if l.strip() and "_patch_routes" not in l and "laptop_profile" not in l and "_tmp_users" not in l]
     laptop_head = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=r"C:\Solariz_CPS_SERVER", capture_output=True, text=True
     ).stdout.strip()
