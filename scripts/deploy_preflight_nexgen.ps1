@@ -1,9 +1,14 @@
-# ================================================================
+﻿# ================================================================
 # deploy_preflight_nexgen.ps1
 # FAZ-DEPLOY-MIGRATION-KALICI-DUZELTME-1
 # Eksik migration varsa exit != 0 → restart YAPILMAMALI
 # ================================================================
 $ErrorActionPreference = "Stop"
+
+# Windows console: Turkish chars in migration prints must not break apply
+$env:PYTHONUTF8 = "1"
+$env:PYTHONIOENCODING = "utf-8"
+try { chcp 65001 | Out-Null } catch { }
 
 $root   = if ($env:CPS_ROOT) { $env:CPS_ROOT } else { "C:\Solariz_CPS_SERVER" }
 $appDir = Join-Path $root "app"

@@ -325,6 +325,13 @@ def verify(db: str) -> dict:
 
 
 def main(argv=None) -> int:
+    # Windows cp125x consoles choke on Turkish glyphs in migration prints
+    for _stream in (sys.stdout, sys.stderr):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, OSError):
+            pass
+
     ap = argparse.ArgumentParser(description="NexGen schema upgrade runner")
     ap.add_argument("--db", required=True, help="SQLite DB yolu (zorunlu)")
     ap.add_argument("--check", action="store_true")
