@@ -1419,7 +1419,7 @@ function pzmAltEmirOzetHtml(st) {
   return html;
 }
 
-
+function pzmDetayUretimBlokMesaj(st, t) {
   if (!st || !st.planlar.length) return 'Önce malzeme ihtiyacını analiz edin.';
   if (st.rfEksik) return 'Üretime göndermek için bekleyen kalemlerin tamamlanması gerekir.';
   if (st.stokYukleniyor) return 'Stok kontrolü devam ediyor…';
