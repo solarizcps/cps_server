@@ -176,6 +176,14 @@ def yetki_var(kod, action='can_view'):
     v2_tag = kod + ':' + action
     if v2_tag in yk:
         return True
+    # 2b) FAZ-ALI: can_uretim — kolon yok; can_view/can_update/can_manage ile eşdeğer
+    if action == 'can_uretim':
+        if ((kod + ':can_view') in yk
+                or (kod + ':can_update') in yk
+                or (kod + ':can_manage') in yk
+                or (kod + '.goruntule') in yk
+                or (kod + '.duzenle') in yk):
+            return True
     # 3) Eski fallback - SADECE can_view icin .goruntule (D3.1 - 16.05.2026)
     if action == 'can_view':
         if (kod + '.goruntule') in yk:
@@ -185,6 +193,53 @@ def yetki_var(kod, action='can_view'):
         if (kod + '.duzenle') in yk:
             return True
     # can_create, can_delete, can_approve, can_report, can_manage: SADECE V2 tag
+    return False
+
+
+# FAZ-ALI: NexGen üretim operatörü — login hedefi + URL allowlist
+_NEXGEN_URETIM_OP_ROL_ADLAR = (
+    'NexGen Üretim Operatörü',
+    'NexGen Uretim Operatoru',
+)
+_NEXGEN_URETIM_OP_HOME = '/nexgen/tablet'
+_NEXGEN_URETIM_OP_OK_PREFIXES = (
+    '/nexgen/tablet',
+    '/nexgen/api/batch',
+    '/nexgen/api/tablet/',
+    '/nexgen/api/etiket',
+    '/api/tasks/notifications',
+)
+_NEXGEN_URETIM_OP_DENY_PARTS = (
+    '/tablet/arge',
+    '/api/tablet/arge',
+    '/tablet/ferhat',
+)
+
+
+def is_nexgen_uretim_operator(user_dict):
+    """NexGen tablet üretim operatörü rolü (Ali vb.)."""
+    if not user_dict:
+        return False
+    ad = (user_dict.get('RolAd') or user_dict.get('Rol') or '').strip()
+    if ad in _NEXGEN_URETIM_OP_ROL_ADLAR:
+        return True
+    # RolAd session'da yoksa RolId ile doğrula (Türkçe karakter farkına karşı)
+    rid = user_dict.get('RolId')
+    if rid:
+        row = qone("SELECT Ad FROM sistem_rol WHERE Id=? AND Aktif=1", (rid,))
+        if row and (row.get('Ad') or '').strip() in _NEXGEN_URETIM_OP_ROL_ADLAR:
+            return True
+    return False
+
+
+def nexgen_uretim_op_path_ok(path):
+    path = path or '/'
+    for part in _NEXGEN_URETIM_OP_DENY_PARTS:
+        if part in path:
+            return False
+    for pref in _NEXGEN_URETIM_OP_OK_PREFIXES:
+        if path.startswith(pref):
+            return True
     return False
 
 
@@ -271,6 +326,9 @@ def login():
             # RolId=42 (migration_091) veya string kontrolü — server DB Türkçe karakter farkına karşı
             elif u.get('RolId') == 42 or _rol_ad in ('AR-GE Operatörü', 'AR-GE Operatoru'):
                 nxt = '/nexgen/tablet/arge'
+            # FAZ-ALI: NexGen Üretim Operatörü → /nexgen/tablet (next yok sayılır)
+            elif is_nexgen_uretim_operator(u):
+                nxt = _NEXGEN_URETIM_OP_HOME
             elif not nxt:
                 # Diğer sistem kullanıcıları: next varsa kullan, yoksa '/'
                 nxt = '/'
@@ -330,6 +388,8 @@ def sifre_degistir():
                 )
                 if _rol_ad == 'AR-GE Operatoru' or _rol_ad == 'AR-GE Operatörü':
                     return redirect('/nexgen/tablet/arge')
+                if is_nexgen_uretim_operator(session.get('kullanici') or u):
+                    return redirect(_NEXGEN_URETIM_OP_HOME)
                 if (u.get('KullaniciAdi') or '').lower() == 'ferhat':
                     return redirect('/nexgen/tablet/ferhat')
                 elif u.get('Tip') == 'personel':
@@ -387,18 +447,28 @@ def _tip_guard():
     # 3) Login yoksa: dokunma
     if not session.get('kullanici'):
         return
-    
+
+    _kul = session.get('kullanici') or {}
+
+    # >>> BEGIN YETKI_V2_SUPERADMIN_BYPASS_20260520
+    # SuperAdmin bypass (HIBRIT: RolId=1 Yönetim + Tip='usta' icin)
+    if is_superadmin(_kul):
+        return  # Yönetim her yere gidebilir, Tip kisitlamasi atlanir
+    # <<< END YETKI_V2_SUPERADMIN_BYPASS_20260520
+
+    # FAZ-ALI: NexGen üretim operatörü — tip=sistem olsa bile URL allowlist
+    if is_nexgen_uretim_operator(_kul):
+        if not nexgen_uretim_op_path_ok(path):
+            # API: 403 (redirect JSON bozar); sayfa: tablet ana
+            if path.startswith('/nexgen/api/') or path.startswith('/api/'):
+                abort(403)
+            return redirect(_NEXGEN_URETIM_OP_HOME)
+        return
+
     # 4) Tip al
     tip = session.get('kullanici_tip')
     if not tip or tip == 'sistem':
         return  # sistem icin engel yok
-    
-    # >>> BEGIN YETKI_V2_SUPERADMIN_BYPASS_20260520
-    # 4.5) SuperAdmin bypass (HIBRIT: RolId=1 Yönetim + Tip='usta' icin)
-    _kul = session.get('kullanici') or {}
-    if is_superadmin(_kul):
-        return  # Yönetim her yere gidebilir, Tip kisitlamasi atlanir
-    # <<< END YETKI_V2_SUPERADMIN_BYPASS_20260520
     
     # 5) Personel: sadece /uretim/*
     if tip == 'personel':

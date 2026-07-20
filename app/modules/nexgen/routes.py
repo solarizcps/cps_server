@@ -13772,6 +13772,20 @@ def _tablet_can_arge_ops():
     )
 
 
+@nexgen_bp.before_request
+def _nexgen_arge_tablet_backend_guard():
+    """FAZ-ALI: AR-GE tablet URL/API — yalnız _tablet_can_arge_ops.
+    Menü gizleme yetmez; elle URL / API de 403 olmalı.
+    """
+    path = request.path or ''
+    if '/tablet/arge' not in path and '/api/tablet/arge' not in path:
+        return
+    if not session.get('kullanici'):
+        return
+    if not _tablet_can_arge_ops():
+        abort(403)
+
+
 @nexgen_bp.route('/tablet')
 @yetki_gerekli('nexgen.tablet.view', 'can_view')
 def tablet_ana():
@@ -13942,6 +13956,8 @@ def tablet_devam_edenler():
 @yetki_gerekli('nexgen.tablet.view', 'can_view')
 def tablet_uretim_islem(batch_kodu):
     """Üretim işlem takip ekranı — operatör karışım/dolum sürecini buradan görür."""
+    if not _tablet_can_uretim_ops():
+        abort(403)
     depo_hazirlik = None
     secili_boyut = (request.args.get('boyut') or '').strip().upper() or None
     if secili_boyut == 'MEDIUM':
@@ -14486,6 +14502,8 @@ def api_tablet_barkod_bul():
 @nexgen_bp.route('/tablet/uretim')
 @yetki_gerekli('nexgen.tablet.view', 'can_view')
 def tablet_uretim():
+    if not _tablet_can_uretim_ops():
+        abort(403)
     con = _db()
     try:
         varyantlar = _uretime_acik_receteler(con)
