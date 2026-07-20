@@ -1,0 +1,22 @@
+{
+  "entity_counts": {
+    "nexgen_stok_kart": 13,
+    "nexgen_formul": 9,
+    "nexgen_renk_varyant": 9,
+    "nexgen_uretim_varyant": 9,
+    "nexgen_recete_kalem": 106,
+    "nexgen_rf_formul_uygunluk": 32
+  },
+  "total_records": 178,
+  "core_codes": [
+    "1BA-FL01",
+    "1BA-FS01",
+    "1BA-FL02",
+    "1BA-FS02",
+    "1BA-FL03",
+    "1BA-FS03",
+    "2BA-FL01",
+    "2BA-FS01",
+    "3BA-FM01"
+  ]
+}

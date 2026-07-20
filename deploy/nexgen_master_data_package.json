@@ -1,0 +1,4320 @@
+{
+  "package_version": 1,
+  "generated_at": "2026-07-20T09:04:07.964614+00:00",
+  "source_db": "C:\\Solariz_CPS_PARITY_COMMIT\\data\\tmp_parity_test\\source.db",
+  "core_codes": [
+    "1BA-FL01",
+    "1BA-FS01",
+    "1BA-FL02",
+    "1BA-FS02",
+    "1BA-FL03",
+    "1BA-FS03",
+    "2BA-FL01",
+    "2BA-FS01",
+    "3BA-FM01"
+  ],
+  "entity_counts": {
+    "nexgen_stok_kart": 13,
+    "nexgen_formul": 9,
+    "nexgen_renk_varyant": 9,
+    "nexgen_uretim_varyant": 9,
+    "nexgen_recete_kalem": 106,
+    "nexgen_rf_formul_uygunluk": 32
+  },
+  "record_count": 178,
+  "records": [
+    {
+      "entity_type": "nexgen_stok_kart",
+      "source_id": 7,
+      "natural_key": "NEX-01-01",
+      "payload": {
+        "kod": "NEX-01-01",
+        "ad": "EVA 18",
+        "kategori": "HAMMADDE",
+        "birim": "KG",
+        "minimum_stok": 0.0,
+        "kritik_stok": 100.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturan_id": 1,
+        "olusturma_tarihi": "2026-06-22 11:15:51",
+        "guncelleyen_id": 1,
+        "guncelleme_tarihi": "2026-06-22 18:59:39",
+        "renk": null,
+        "alt_kategori": "EVA",
+        "kalite_sinifi": null,
+        "shore_degeri": null,
+        "notlar": null,
+        "aile_id": 1,
+        "tanim": "ANA MALZEME",
+        "yeni_tanim": "N0A1",
+        "renk_bileseni_mi": 0,
+        "tedarikci_kodu": null,
+        "barkod": null,
+        "orijin": null,
+        "son_giris_tarihi": null,
+        "son_cikis_tarihi": null,
+        "stok_kod": "NEX-01-01"
+      },
+      "checksum": "12703ba55fccf5d20b2ac432c27e75e73fbd5f4d4b72e7958b3fcaa79f508679",
+      "dependencies": []
+    },
+    {
+      "entity_type": "nexgen_stok_kart",
+      "source_id": 8,
+      "natural_key": "NEX-01-02",
+      "payload": {
+        "kod": "NEX-01-02",
+        "ad": "EVA 22",
+        "kategori": "HAMMADDE",
+        "birim": "KG",
+        "minimum_stok": 0.0,
+        "kritik_stok": 0.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturan_id": 1,
+        "olusturma_tarihi": "2026-06-22 11:15:51",
+        "guncelleyen_id": null,
+        "guncelleme_tarihi": null,
+        "renk": null,
+        "alt_kategori": "EVA",
+        "kalite_sinifi": null,
+        "shore_degeri": null,
+        "notlar": null,
+        "aile_id": 1,
+        "tanim": "ANA MALZEME",
+        "yeni_tanim": "N0A1",
+        "renk_bileseni_mi": 0,
+        "tedarikci_kodu": null,
+        "barkod": null,
+        "orijin": null,
+        "son_giris_tarihi": null,
+        "son_cikis_tarihi": null,
+        "stok_kod": "NEX-01-02"
+      },
+      "checksum": "82ad003c306429592bc64fedfb6164d8bf8f05df0ec18671a71cf46dae6e2e55",
+      "dependencies": []
+    },
+    {
+      "entity_type": "nexgen_stok_kart",
+      "source_id": 9,
+      "natural_key": "NEX-01-03",
+      "payload": {
+        "kod": "NEX-01-03",
+        "ad": "EVA 28",
+        "kategori": "HAMMADDE",
+        "birim": "KG",
+        "minimum_stok": 0.0,
+        "kritik_stok": 0.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturan_id": 1,
+        "olusturma_tarihi": "2026-06-22 11:15:51",
+        "guncelleyen_id": null,
+        "guncelleme_tarihi": null,
+        "renk": null,
+        "alt_kategori": "EVA",
+        "kalite_sinifi": null,
+        "shore_degeri": null,
+        "notlar": null,
+        "aile_id": 1,
+        "tanim": "ANA MALZEME",
+        "yeni_tanim": "N0A1",
+        "renk_bileseni_mi": 0,
+        "tedarikci_kodu": null,
+        "barkod": null,
+        "orijin": null,
+        "son_giris_tarihi": null,
+        "son_cikis_tarihi": null,
+        "stok_kod": "NEX-01-03"
+      },
+      "checksum": "89a4f65206f12bd821188b26585269ff5c0717a51812ef24adaf7b2bbc16aeac",
+      "dependencies": []
+    },
+    {
+      "entity_type": "nexgen_stok_kart",
+      "source_id": 11,
+      "natural_key": "NEX-02-01",
+      "payload": {
+        "kod": "NEX-02-01",
+        "ad": "POE",
+        "kategori": "HAMMADDE",
+        "birim": "KG",
+        "minimum_stok": 0.0,
+        "kritik_stok": 0.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturan_id": 1,
+        "olusturma_tarihi": "2026-06-22 11:15:51",
+        "guncelleyen_id": null,
+        "guncelleme_tarihi": null,
+        "renk": null,
+        "alt_kategori": "POE",
+        "kalite_sinifi": null,
+        "shore_degeri": null,
+        "notlar": null,
+        "aile_id": 2,
+        "tanim": "ANA MALZEME",
+        "yeni_tanim": "N0A2",
+        "renk_bileseni_mi": 0,
+        "tedarikci_kodu": null,
+        "barkod": null,
+        "orijin": null,
+        "son_giris_tarihi": null,
+        "son_cikis_tarihi": null,
+        "stok_kod": "NEX-02-01"
+      },
+      "checksum": "87ac0146b5dd2cf507beb7d3bd8cc7c57ed2d8e2e3b25ba3b57952256cc46e64",
+      "dependencies": []
+    },
+    {
+      "entity_type": "nexgen_stok_kart",
+      "source_id": 15,
+      "natural_key": "NEX-04-02",
+      "payload": {
+        "kod": "NEX-04-02",
+        "ad": "DCP 99",
+        "kategori": "KATKI",
+        "birim": "KG",
+        "minimum_stok": 0.0,
+        "kritik_stok": 0.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturan_id": 1,
+        "olusturma_tarihi": "2026-06-22 11:15:51",
+        "guncelleyen_id": null,
+        "guncelleme_tarihi": null,
+        "renk": null,
+        "alt_kategori": "Peroksit",
+        "kalite_sinifi": null,
+        "shore_degeri": null,
+        "notlar": null,
+        "aile_id": 4,
+        "tanim": "Katki",
+        "yeni_tanim": "NK03",
+        "renk_bileseni_mi": 0,
+        "tedarikci_kodu": null,
+        "barkod": null,
+        "orijin": null,
+        "son_giris_tarihi": null,
+        "son_cikis_tarihi": null,
+        "stok_kod": "NEX-04-02"
+      },
+      "checksum": "cc428040b5f5b7fb9eb1b5e8fa7f9ca5d93b35ad6c6ade80965522bf0c764336",
+      "dependencies": []
+    },
+    {
+      "entity_type": "nexgen_stok_kart",
+      "source_id": 17,
+      "natural_key": "NEX-04-04",
+      "payload": {
+        "kod": "NEX-04-04",
+        "ad": "TAIC 70",
+        "kategori": "KATKI",
+        "birim": "KG",
+        "minimum_stok": 0.0,
+        "kritik_stok": 0.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturan_id": 1,
+        "olusturma_tarihi": "2026-06-22 11:15:51",
+        "guncelleyen_id": null,
+        "guncelleme_tarihi": null,
+        "renk": null,
+        "alt_kategori": "Ajan",
+        "kalite_sinifi": null,
+        "shore_degeri": null,
+        "notlar": null,
+        "aile_id": 4,
+        "tanim": "Katki",
+        "yeni_tanim": "NK10",
+        "renk_bileseni_mi": 0,
+        "tedarikci_kodu": null,
+        "barkod": null,
+        "orijin": null,
+        "son_giris_tarihi": null,
+        "son_cikis_tarihi": null,
+        "stok_kod": "NEX-04-04"
+      },
+      "checksum": "4e2544b113fb6530231f5ce06849103a8f9aa056f7e07ef1577e82ce66928b13",
+      "dependencies": []
+    },
+    {
+      "entity_type": "nexgen_stok_kart",
+      "source_id": 18,
+      "natural_key": "NEX-05-01",
+      "payload": {
+        "kod": "NEX-05-01",
+        "ad": "Pewax",
+        "kategori": "KATKI",
+        "birim": "KG",
+        "minimum_stok": 0.0,
+        "kritik_stok": 0.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturan_id": 1,
+        "olusturma_tarihi": "2026-06-22 11:15:51",
+        "guncelleyen_id": null,
+        "guncelleme_tarihi": null,
+        "renk": null,
+        "alt_kategori": "Parafin",
+        "kalite_sinifi": null,
+        "shore_degeri": null,
+        "notlar": null,
+        "aile_id": 5,
+        "tanim": "Katki",
+        "yeni_tanim": "NK06",
+        "renk_bileseni_mi": 0,
+        "tedarikci_kodu": null,
+        "barkod": null,
+        "orijin": null,
+        "son_giris_tarihi": null,
+        "son_cikis_tarihi": null,
+        "stok_kod": "NEX-05-01"
+      },
+      "checksum": "c8439aef53926bb93263cec38e325ce9312de45f3608cfe20732a02dfe3b4e07",
+      "dependencies": []
+    },
+    {
+      "entity_type": "nexgen_stok_kart",
+      "source_id": 19,
+      "natural_key": "NEX-05-02",
+      "payload": {
+        "kod": "NEX-05-02",
+        "ad": "Sterik Asit",
+        "kategori": "KATKI",
+        "birim": "KG",
+        "minimum_stok": 0.0,
+        "kritik_stok": 0.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturan_id": 1,
+        "olusturma_tarihi": "2026-06-22 11:15:51",
+        "guncelleyen_id": null,
+        "guncelleme_tarihi": null,
+        "renk": null,
+        "alt_kategori": "Yağlayıcı",
+        "kalite_sinifi": null,
+        "shore_degeri": null,
+        "notlar": null,
+        "aile_id": 5,
+        "tanim": "Katki",
+        "yeni_tanim": "NK07",
+        "renk_bileseni_mi": 0,
+        "tedarikci_kodu": null,
+        "barkod": null,
+        "orijin": null,
+        "son_giris_tarihi": null,
+        "son_cikis_tarihi": null,
+        "stok_kod": "NEX-05-02"
+      },
+      "checksum": "31d034d518b0cc9970e0f3f4836b46a580e6f8c5c7abe883fa458802ce2e783f",
+      "dependencies": []
+    },
+    {
+      "entity_type": "nexgen_stok_kart",
+      "source_id": 22,
+      "natural_key": "NEX-05-05",
+      "payload": {
+        "kod": "NEX-05-05",
+        "ad": "Çinko Sterat",
+        "kategori": "KATKI",
+        "birim": "KG",
+        "minimum_stok": 0.0,
+        "kritik_stok": 0.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturan_id": 1,
+        "olusturma_tarihi": "2026-06-22 11:15:51",
+        "guncelleyen_id": null,
+        "guncelleme_tarihi": null,
+        "renk": null,
+        "alt_kategori": "Yağlayıcı",
+        "kalite_sinifi": null,
+        "shore_degeri": null,
+        "notlar": null,
+        "aile_id": 5,
+        "tanim": "Katki",
+        "yeni_tanim": "NK12",
+        "renk_bileseni_mi": 0,
+        "tedarikci_kodu": null,
+        "barkod": null,
+        "orijin": null,
+        "son_giris_tarihi": null,
+        "son_cikis_tarihi": null,
+        "stok_kod": "NEX-05-05"
+      },
+      "checksum": "df8996e7c4f25e0e02806c6daf387da9fac773f9df64e09c8c071b613e5786fe",
+      "dependencies": []
+    },
+    {
+      "entity_type": "nexgen_stok_kart",
+      "source_id": 25,
+      "natural_key": "NEX-06-01",
+      "payload": {
+        "kod": "NEX-06-01",
+        "ad": "Kalsit",
+        "kategori": "KATKI",
+        "birim": "KG",
+        "minimum_stok": 0.0,
+        "kritik_stok": 0.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturan_id": 1,
+        "olusturma_tarihi": "2026-06-22 11:15:51",
+        "guncelleyen_id": null,
+        "guncelleme_tarihi": null,
+        "renk": null,
+        "alt_kategori": "Dolgu",
+        "kalite_sinifi": null,
+        "shore_degeri": null,
+        "notlar": null,
+        "aile_id": 6,
+        "tanim": "Katki",
+        "yeni_tanim": "NK04",
+        "renk_bileseni_mi": 0,
+        "tedarikci_kodu": null,
+        "barkod": null,
+        "orijin": null,
+        "son_giris_tarihi": null,
+        "son_cikis_tarihi": null,
+        "stok_kod": "NEX-06-01"
+      },
+      "checksum": "f79cd94dddf414e12de4a356568eecd7c4e58cd03c9d65ab9d6b87346deec418",
+      "dependencies": []
+    },
+    {
+      "entity_type": "nexgen_stok_kart",
+      "source_id": 26,
+      "natural_key": "NEX-07-01",
+      "payload": {
+        "kod": "NEX-07-01",
+        "ad": "Profor",
+        "kategori": "HAMMADDE",
+        "birim": "KG",
+        "minimum_stok": 0.0,
+        "kritik_stok": 0.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturan_id": 1,
+        "olusturma_tarihi": "2026-06-22 11:15:51",
+        "guncelleyen_id": null,
+        "guncelleme_tarihi": null,
+        "renk": null,
+        "alt_kategori": "Yağ",
+        "kalite_sinifi": null,
+        "shore_degeri": null,
+        "notlar": null,
+        "aile_id": 7,
+        "tanim": "ANA MALZEME",
+        "yeni_tanim": "N0A3",
+        "renk_bileseni_mi": 0,
+        "tedarikci_kodu": null,
+        "barkod": null,
+        "orijin": null,
+        "son_giris_tarihi": null,
+        "son_cikis_tarihi": null,
+        "stok_kod": "NEX-07-01"
+      },
+      "checksum": "c76bb03ffd77b00b0d95702452b8418b5a5e965ed04437ecd51b402fe7fd3da9",
+      "dependencies": []
+    },
+    {
+      "entity_type": "nexgen_stok_kart",
+      "source_id": 77,
+      "natural_key": "NEX-03-03",
+      "payload": {
+        "kod": "NEX-03-03",
+        "ad": "TPE 8201",
+        "kategori": "HAMMADDE",
+        "birim": "KG",
+        "minimum_stok": 0.0,
+        "kritik_stok": 0.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturan_id": null,
+        "olusturma_tarihi": "2026-06-23 16:56:37",
+        "guncelleyen_id": null,
+        "guncelleme_tarihi": null,
+        "renk": null,
+        "alt_kategori": "TPE",
+        "kalite_sinifi": null,
+        "shore_degeri": null,
+        "notlar": null,
+        "aile_id": null,
+        "tanim": "ANA MALZEME",
+        "yeni_tanim": "N0A7",
+        "renk_bileseni_mi": 0,
+        "tedarikci_kodu": null,
+        "barkod": null,
+        "orijin": null,
+        "son_giris_tarihi": null,
+        "son_cikis_tarihi": null,
+        "stok_kod": "NEX-03-03"
+      },
+      "checksum": "fd4aacc1bd92b8731f76d0bf9aee9f91159450e94b2d507932c884dae691891b",
+      "dependencies": []
+    },
+    {
+      "entity_type": "nexgen_stok_kart",
+      "source_id": 78,
+      "natural_key": "NEX-05-08",
+      "payload": {
+        "kod": "NEX-05-08",
+        "ad": "ZNO",
+        "kategori": "KATKI",
+        "birim": "KG",
+        "minimum_stok": 0.0,
+        "kritik_stok": 0.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturan_id": null,
+        "olusturma_tarihi": "2026-06-23 16:56:37",
+        "guncelleyen_id": null,
+        "guncelleme_tarihi": null,
+        "renk": null,
+        "alt_kategori": "Aktif Oksit",
+        "kalite_sinifi": null,
+        "shore_degeri": null,
+        "notlar": null,
+        "aile_id": null,
+        "tanim": "Katki",
+        "yeni_tanim": "NK11",
+        "renk_bileseni_mi": 0,
+        "tedarikci_kodu": null,
+        "barkod": null,
+        "orijin": null,
+        "son_giris_tarihi": null,
+        "son_cikis_tarihi": null,
+        "stok_kod": "NEX-05-08"
+      },
+      "checksum": "8ccd7cd6870fec37623c1e2c1710179b218252037affbb0dc9c288951449b285",
+      "dependencies": []
+    },
+    {
+      "entity_type": "nexgen_formul",
+      "source_id": 49,
+      "natural_key": "1BA-FL01",
+      "payload": {
+        "kod": "1BA-FL01",
+        "ad": "Terlik 18-28",
+        "aciklama": null,
+        "durum": "URETIME_ACIK",
+        "onay_durumu": "BEKLIYOR",
+        "olusturan_id": 1,
+        "onaylayan_id": null,
+        "onay_tarihi": null,
+        "onay_notu": null,
+        "notlar": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "guncelleme_tarihi": null,
+        "urun_ailesi": "TERLIK",
+        "formul_kod": "1BA-FL01"
+      },
+      "checksum": "a8082a97b75dcc56f04d574f8b50053d8456bab43dbf145732270c65d1f8766d",
+      "dependencies": []
+    },
+    {
+      "entity_type": "nexgen_formul",
+      "source_id": 51,
+      "natural_key": "1BA-FL02",
+      "payload": {
+        "kod": "1BA-FL02",
+        "ad": "Terlik 18-22",
+        "aciklama": null,
+        "durum": "URETIME_ACIK",
+        "onay_durumu": "BEKLIYOR",
+        "olusturan_id": 1,
+        "onaylayan_id": null,
+        "onay_tarihi": null,
+        "onay_notu": null,
+        "notlar": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "guncelleme_tarihi": null,
+        "urun_ailesi": "TERLIK",
+        "formul_kod": "1BA-FL02"
+      },
+      "checksum": "30f31f17fc9f6812b3bd3a5684d3533f3420c24bccb625731b6f59c008bc9f9e",
+      "dependencies": []
+    },
+    {
+      "entity_type": "nexgen_formul",
+      "source_id": 53,
+      "natural_key": "1BA-FL03",
+      "payload": {
+        "kod": "1BA-FL03",
+        "ad": "Terlik 18-Poe",
+        "aciklama": null,
+        "durum": "URETIME_ACIK",
+        "onay_durumu": "BEKLIYOR",
+        "olusturan_id": 1,
+        "onaylayan_id": null,
+        "onay_tarihi": null,
+        "onay_notu": null,
+        "notlar": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "guncelleme_tarihi": null,
+        "urun_ailesi": "TERLIK",
+        "formul_kod": "1BA-FL03"
+      },
+      "checksum": "b280f1af3ad49c928c578dca49c417dd6b04b14cd931ea066fd971e31977ff9f",
+      "dependencies": []
+    },
+    {
+      "entity_type": "nexgen_formul",
+      "source_id": 50,
+      "natural_key": "1BA-FS01",
+      "payload": {
+        "kod": "1BA-FS01",
+        "ad": "Terlik 18-28",
+        "aciklama": null,
+        "durum": "URETIME_ACIK",
+        "onay_durumu": "BEKLIYOR",
+        "olusturan_id": 1,
+        "onaylayan_id": null,
+        "onay_tarihi": null,
+        "onay_notu": null,
+        "notlar": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "guncelleme_tarihi": null,
+        "urun_ailesi": "TERLIK",
+        "formul_kod": "1BA-FS01"
+      },
+      "checksum": "8f9c80533855dc8d9c543e5f5a79e7ad11aeacdb681666dbd87e91d9e6c77fcd",
+      "dependencies": []
+    },
+    {
+      "entity_type": "nexgen_formul",
+      "source_id": 52,
+      "natural_key": "1BA-FS02",
+      "payload": {
+        "kod": "1BA-FS02",
+        "ad": "Terlik 18-22",
+        "aciklama": null,
+        "durum": "URETIME_ACIK",
+        "onay_durumu": "BEKLIYOR",
+        "olusturan_id": 1,
+        "onaylayan_id": null,
+        "onay_tarihi": null,
+        "onay_notu": null,
+        "notlar": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "guncelleme_tarihi": null,
+        "urun_ailesi": "TERLIK",
+        "formul_kod": "1BA-FS02"
+      },
+      "checksum": "0a3ba6f35691cc9948214a65eebc86c3a0556b01e641717c7f85155bb3212738",
+      "dependencies": []
+    },
+    {
+      "entity_type": "nexgen_formul",
+      "source_id": 54,
+      "natural_key": "1BA-FS03",
+      "payload": {
+        "kod": "1BA-FS03",
+        "ad": "Terlik 18-Poe",
+        "aciklama": null,
+        "durum": "URETIME_ACIK",
+        "onay_durumu": "BEKLIYOR",
+        "olusturan_id": 1,
+        "onaylayan_id": null,
+        "onay_tarihi": null,
+        "onay_notu": null,
+        "notlar": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "guncelleme_tarihi": null,
+        "urun_ailesi": "TERLIK",
+        "formul_kod": "1BA-FS03"
+      },
+      "checksum": "36db8abff311d2581e1b142db63009e645fe1a268d33969a21024dfcd19ff762",
+      "dependencies": []
+    },
+    {
+      "entity_type": "nexgen_formul",
+      "source_id": 55,
+      "natural_key": "2BA-FL01",
+      "payload": {
+        "kod": "2BA-FL01",
+        "ad": "ENJEKSİYON 18-28",
+        "aciklama": null,
+        "durum": "URETIME_ACIK",
+        "onay_durumu": "BEKLIYOR",
+        "olusturan_id": 1,
+        "onaylayan_id": null,
+        "onay_tarihi": null,
+        "onay_notu": null,
+        "notlar": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "guncelleme_tarihi": null,
+        "urun_ailesi": "TABAN",
+        "formul_kod": "2BA-FL01"
+      },
+      "checksum": "5cff3b7f5ba0a517ca9ca29582419d313eb722c9ffc26b056a84b1f325465da4",
+      "dependencies": []
+    },
+    {
+      "entity_type": "nexgen_formul",
+      "source_id": 56,
+      "natural_key": "2BA-FS01",
+      "payload": {
+        "kod": "2BA-FS01",
+        "ad": "ENJEKSİYON 18-28",
+        "aciklama": null,
+        "durum": "URETIME_ACIK",
+        "onay_durumu": "BEKLIYOR",
+        "olusturan_id": 1,
+        "onaylayan_id": null,
+        "onay_tarihi": null,
+        "onay_notu": null,
+        "notlar": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "guncelleme_tarihi": null,
+        "urun_ailesi": "TABAN",
+        "formul_kod": "2BA-FS01"
+      },
+      "checksum": "671fc5f6c536dcc153d02da0725af5b6f7636d8124223ec76fe7b06816a16d44",
+      "dependencies": []
+    },
+    {
+      "entity_type": "nexgen_formul",
+      "source_id": 57,
+      "natural_key": "3BA-FM01",
+      "payload": {
+        "kod": "3BA-FM01",
+        "ad": "DÖKME 18-28",
+        "aciklama": null,
+        "durum": "URETIME_ACIK",
+        "onay_durumu": "BEKLIYOR",
+        "olusturan_id": 1,
+        "onaylayan_id": null,
+        "onay_tarihi": null,
+        "onay_notu": null,
+        "notlar": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "guncelleme_tarihi": null,
+        "urun_ailesi": "TABAN",
+        "formul_kod": "3BA-FM01"
+      },
+      "checksum": "54d5d93fbd3f9ce7ffc838db4c772ab242c89b9d1e2168d8c91695af20e87b85",
+      "dependencies": []
+    },
+    {
+      "entity_type": "nexgen_renk_varyant",
+      "source_id": 73,
+      "natural_key": "1BA-FL01|1BA-FL01-RV-01",
+      "payload": {
+        "formul_id": 49,
+        "kod": "1BA-FL01-RV-01",
+        "ad": "18-28",
+        "renk": "18-28",
+        "notlar": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "formul_kod": "1BA-FL01",
+        "renk_varyant_key": "1BA-FL01|1BA-FL01-RV-01"
+      },
+      "checksum": "f69fadba3cd161108060dc69ecacf65488090769dc66ff71ef1d78582f4c8a32",
+      "dependencies": [
+        "nexgen_formul:1BA-FL01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_renk_varyant",
+      "source_id": 74,
+      "natural_key": "1BA-FS01|1BA-FS01-RV-01",
+      "payload": {
+        "formul_id": 50,
+        "kod": "1BA-FS01-RV-01",
+        "ad": "18-28",
+        "renk": "18-28",
+        "notlar": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "formul_kod": "1BA-FS01",
+        "renk_varyant_key": "1BA-FS01|1BA-FS01-RV-01"
+      },
+      "checksum": "be4028d7eb7761ce63e1f52e22015bd3e9fc7460869176ca6cec764a4715275c",
+      "dependencies": [
+        "nexgen_formul:1BA-FS01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_renk_varyant",
+      "source_id": 75,
+      "natural_key": "1BA-FL02|1BA-FL02-RV-01",
+      "payload": {
+        "formul_id": 51,
+        "kod": "1BA-FL02-RV-01",
+        "ad": "18-22",
+        "renk": "18-22",
+        "notlar": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "formul_kod": "1BA-FL02",
+        "renk_varyant_key": "1BA-FL02|1BA-FL02-RV-01"
+      },
+      "checksum": "268c494464c21e82e6f666e2aea53713a81aebb90a67f87154b487be51fe2ef8",
+      "dependencies": [
+        "nexgen_formul:1BA-FL02"
+      ]
+    },
+    {
+      "entity_type": "nexgen_renk_varyant",
+      "source_id": 76,
+      "natural_key": "1BA-FS02|1BA-FS02-RV-01",
+      "payload": {
+        "formul_id": 52,
+        "kod": "1BA-FS02-RV-01",
+        "ad": "18-22",
+        "renk": "18-22",
+        "notlar": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "formul_kod": "1BA-FS02",
+        "renk_varyant_key": "1BA-FS02|1BA-FS02-RV-01"
+      },
+      "checksum": "139d4262908db6840ea589fbda273dd4bce9a77f7f9ce4b668dc52c540919c45",
+      "dependencies": [
+        "nexgen_formul:1BA-FS02"
+      ]
+    },
+    {
+      "entity_type": "nexgen_renk_varyant",
+      "source_id": 77,
+      "natural_key": "1BA-FL03|1BA-FL03-RV-01",
+      "payload": {
+        "formul_id": 53,
+        "kod": "1BA-FL03-RV-01",
+        "ad": "18-POE",
+        "renk": "18-POE",
+        "notlar": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "formul_kod": "1BA-FL03",
+        "renk_varyant_key": "1BA-FL03|1BA-FL03-RV-01"
+      },
+      "checksum": "ca010a885b3b8c947f4503db0460686af8fd4baa0e60e3eb0199ed74f41c7324",
+      "dependencies": [
+        "nexgen_formul:1BA-FL03"
+      ]
+    },
+    {
+      "entity_type": "nexgen_renk_varyant",
+      "source_id": 78,
+      "natural_key": "1BA-FS03|1BA-FS03-RV-01",
+      "payload": {
+        "formul_id": 54,
+        "kod": "1BA-FS03-RV-01",
+        "ad": "18-POE",
+        "renk": "18-POE",
+        "notlar": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "formul_kod": "1BA-FS03",
+        "renk_varyant_key": "1BA-FS03|1BA-FS03-RV-01"
+      },
+      "checksum": "c732e018d4549029601f55d0c220200fc382d5ca673850bc3cdec0c63a6680a3",
+      "dependencies": [
+        "nexgen_formul:1BA-FS03"
+      ]
+    },
+    {
+      "entity_type": "nexgen_renk_varyant",
+      "source_id": 79,
+      "natural_key": "2BA-FL01|2BA-FL01-RV-01",
+      "payload": {
+        "formul_id": 55,
+        "kod": "2BA-FL01-RV-01",
+        "ad": "18-28",
+        "renk": "18-28",
+        "notlar": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "formul_kod": "2BA-FL01",
+        "renk_varyant_key": "2BA-FL01|2BA-FL01-RV-01"
+      },
+      "checksum": "0bc32c38f28df9f35654a5110af7c1c36995a4bf898204af2ccd3b8efd2068a9",
+      "dependencies": [
+        "nexgen_formul:2BA-FL01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_renk_varyant",
+      "source_id": 80,
+      "natural_key": "2BA-FS01|2BA-FS01-RV-01",
+      "payload": {
+        "formul_id": 56,
+        "kod": "2BA-FS01-RV-01",
+        "ad": "18-28",
+        "renk": "18-28",
+        "notlar": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "formul_kod": "2BA-FS01",
+        "renk_varyant_key": "2BA-FS01|2BA-FS01-RV-01"
+      },
+      "checksum": "d3dd1d0eb9dbe853c7b01581e6826fb3ef3d8e74b84219b5feaa9a2c7f91a37b",
+      "dependencies": [
+        "nexgen_formul:2BA-FS01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_renk_varyant",
+      "source_id": 81,
+      "natural_key": "3BA-FM01|3BA-FM01-RV-01",
+      "payload": {
+        "formul_id": 57,
+        "kod": "3BA-FM01-RV-01",
+        "ad": "18-28",
+        "renk": "18-28",
+        "notlar": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "formul_kod": "3BA-FM01",
+        "renk_varyant_key": "3BA-FM01|3BA-FM01-RV-01"
+      },
+      "checksum": "efbcb62de572dde51fb6e1cad9665dd301aae06066c8968d5001210a415a1109",
+      "dependencies": [
+        "nexgen_formul:3BA-FM01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_uretim_varyant",
+      "source_id": 10100,
+      "natural_key": "1BA-FL01|1BA-FL01-RV-01|LARGE",
+      "payload": {
+        "renk_varyant_id": 73,
+        "boyut": "LARGE",
+        "ad": "1BA-FL01 LARGE",
+        "onay_durumu": "BEKLIYOR",
+        "onaylayan_id": null,
+        "onay_tarihi": null,
+        "onay_notu": null,
+        "kaynak_varyant_id": null,
+        "notlar": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "recete_durum": "URETIME_ACIK",
+        "formul_batch_kg": 0.0,
+        "rev_no": 1,
+        "renk_varyant_key": "1BA-FL01|1BA-FL01-RV-01",
+        "uretim_varyant_key": "1BA-FL01|1BA-FL01-RV-01|LARGE"
+      },
+      "checksum": "e1055851a2ba362bd465351e0c478c8e071c42a18749517f4bf10000700a73e4",
+      "dependencies": [
+        "nexgen_renk_varyant:1BA-FL01|1BA-FL01-RV-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_uretim_varyant",
+      "source_id": 10101,
+      "natural_key": "1BA-FS01|1BA-FS01-RV-01|SMALL",
+      "payload": {
+        "renk_varyant_id": 74,
+        "boyut": "SMALL",
+        "ad": "1BA-FS01 SMALL",
+        "onay_durumu": "BEKLIYOR",
+        "onaylayan_id": null,
+        "onay_tarihi": null,
+        "onay_notu": null,
+        "kaynak_varyant_id": null,
+        "notlar": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "recete_durum": "URETIME_ACIK",
+        "formul_batch_kg": 0.0,
+        "rev_no": 1,
+        "renk_varyant_key": "1BA-FS01|1BA-FS01-RV-01",
+        "uretim_varyant_key": "1BA-FS01|1BA-FS01-RV-01|SMALL"
+      },
+      "checksum": "9eb0facd890a562305b52e66fe4c7546467808d13eb3a17df4a67d8f3a097f3c",
+      "dependencies": [
+        "nexgen_renk_varyant:1BA-FS01|1BA-FS01-RV-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_uretim_varyant",
+      "source_id": 10102,
+      "natural_key": "1BA-FL02|1BA-FL02-RV-01|LARGE",
+      "payload": {
+        "renk_varyant_id": 75,
+        "boyut": "LARGE",
+        "ad": "1BA-FL02 LARGE",
+        "onay_durumu": "BEKLIYOR",
+        "onaylayan_id": null,
+        "onay_tarihi": null,
+        "onay_notu": null,
+        "kaynak_varyant_id": null,
+        "notlar": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "recete_durum": "URETIME_ACIK",
+        "formul_batch_kg": 0.0,
+        "rev_no": 1,
+        "renk_varyant_key": "1BA-FL02|1BA-FL02-RV-01",
+        "uretim_varyant_key": "1BA-FL02|1BA-FL02-RV-01|LARGE"
+      },
+      "checksum": "733608c6195b8d05ef256bf85ec4b1097ba1194f52769f9c85d8c6acecdca4ea",
+      "dependencies": [
+        "nexgen_renk_varyant:1BA-FL02|1BA-FL02-RV-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_uretim_varyant",
+      "source_id": 10103,
+      "natural_key": "1BA-FS02|1BA-FS02-RV-01|SMALL",
+      "payload": {
+        "renk_varyant_id": 76,
+        "boyut": "SMALL",
+        "ad": "1BA-FS02 SMALL",
+        "onay_durumu": "BEKLIYOR",
+        "onaylayan_id": null,
+        "onay_tarihi": null,
+        "onay_notu": null,
+        "kaynak_varyant_id": null,
+        "notlar": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "recete_durum": "URETIME_ACIK",
+        "formul_batch_kg": 0.0,
+        "rev_no": 1,
+        "renk_varyant_key": "1BA-FS02|1BA-FS02-RV-01",
+        "uretim_varyant_key": "1BA-FS02|1BA-FS02-RV-01|SMALL"
+      },
+      "checksum": "b2faabcfb933c1aa7ab7074bbecad74c93cde1685657f6092dd5a0470e3973f7",
+      "dependencies": [
+        "nexgen_renk_varyant:1BA-FS02|1BA-FS02-RV-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_uretim_varyant",
+      "source_id": 10104,
+      "natural_key": "1BA-FL03|1BA-FL03-RV-01|LARGE",
+      "payload": {
+        "renk_varyant_id": 77,
+        "boyut": "LARGE",
+        "ad": "1BA-FL03 LARGE",
+        "onay_durumu": "BEKLIYOR",
+        "onaylayan_id": null,
+        "onay_tarihi": null,
+        "onay_notu": null,
+        "kaynak_varyant_id": null,
+        "notlar": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "recete_durum": "URETIME_ACIK",
+        "formul_batch_kg": 0.0,
+        "rev_no": 1,
+        "renk_varyant_key": "1BA-FL03|1BA-FL03-RV-01",
+        "uretim_varyant_key": "1BA-FL03|1BA-FL03-RV-01|LARGE"
+      },
+      "checksum": "3504bfeb1ed87e84ee1979753cc35e59d1f3514326b8a9f4541b827cb14b250a",
+      "dependencies": [
+        "nexgen_renk_varyant:1BA-FL03|1BA-FL03-RV-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_uretim_varyant",
+      "source_id": 10105,
+      "natural_key": "1BA-FS03|1BA-FS03-RV-01|SMALL",
+      "payload": {
+        "renk_varyant_id": 78,
+        "boyut": "SMALL",
+        "ad": "1BA-FS03 SMALL",
+        "onay_durumu": "BEKLIYOR",
+        "onaylayan_id": null,
+        "onay_tarihi": null,
+        "onay_notu": null,
+        "kaynak_varyant_id": null,
+        "notlar": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "recete_durum": "URETIME_ACIK",
+        "formul_batch_kg": 0.0,
+        "rev_no": 1,
+        "renk_varyant_key": "1BA-FS03|1BA-FS03-RV-01",
+        "uretim_varyant_key": "1BA-FS03|1BA-FS03-RV-01|SMALL"
+      },
+      "checksum": "0ca869009c38609ae984993b91dd48591614d41821e6951c3301e811b154ad0b",
+      "dependencies": [
+        "nexgen_renk_varyant:1BA-FS03|1BA-FS03-RV-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_uretim_varyant",
+      "source_id": 10106,
+      "natural_key": "2BA-FL01|2BA-FL01-RV-01|LARGE",
+      "payload": {
+        "renk_varyant_id": 79,
+        "boyut": "LARGE",
+        "ad": "2BA-FL01 LARGE",
+        "onay_durumu": "BEKLIYOR",
+        "onaylayan_id": null,
+        "onay_tarihi": null,
+        "onay_notu": null,
+        "kaynak_varyant_id": null,
+        "notlar": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "recete_durum": "URETIME_ACIK",
+        "formul_batch_kg": 0.0,
+        "rev_no": 1,
+        "renk_varyant_key": "2BA-FL01|2BA-FL01-RV-01",
+        "uretim_varyant_key": "2BA-FL01|2BA-FL01-RV-01|LARGE"
+      },
+      "checksum": "0953675765e20c6775a62c83d1610b452d89817d047d1cd74103ac87e43a54fd",
+      "dependencies": [
+        "nexgen_renk_varyant:2BA-FL01|2BA-FL01-RV-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_uretim_varyant",
+      "source_id": 10107,
+      "natural_key": "2BA-FS01|2BA-FS01-RV-01|SMALL",
+      "payload": {
+        "renk_varyant_id": 80,
+        "boyut": "SMALL",
+        "ad": "2BA-FS01 SMALL",
+        "onay_durumu": "BEKLIYOR",
+        "onaylayan_id": null,
+        "onay_tarihi": null,
+        "onay_notu": null,
+        "kaynak_varyant_id": null,
+        "notlar": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "recete_durum": "URETIME_ACIK",
+        "formul_batch_kg": 0.0,
+        "rev_no": 1,
+        "renk_varyant_key": "2BA-FS01|2BA-FS01-RV-01",
+        "uretim_varyant_key": "2BA-FS01|2BA-FS01-RV-01|SMALL"
+      },
+      "checksum": "a55d5633c32a6cf48dbca943a0e426302892109593655cb855005c7764aed41b",
+      "dependencies": [
+        "nexgen_renk_varyant:2BA-FS01|2BA-FS01-RV-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_uretim_varyant",
+      "source_id": 10108,
+      "natural_key": "3BA-FM01|3BA-FM01-RV-01|MEDIUM",
+      "payload": {
+        "renk_varyant_id": 81,
+        "boyut": "MEDIUM",
+        "ad": "3BA-FM01 MEDIUM",
+        "onay_durumu": "BEKLIYOR",
+        "onaylayan_id": null,
+        "onay_tarihi": null,
+        "onay_notu": null,
+        "kaynak_varyant_id": null,
+        "notlar": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "recete_durum": "URETIME_ACIK",
+        "formul_batch_kg": 0.0,
+        "rev_no": 1,
+        "renk_varyant_key": "3BA-FM01|3BA-FM01-RV-01",
+        "uretim_varyant_key": "3BA-FM01|3BA-FM01-RV-01|MEDIUM"
+      },
+      "checksum": "ba54d1eed05eba6d90998020f7c509ec46eb49d5d25467d88b49dd8cbbb97512",
+      "dependencies": [
+        "nexgen_renk_varyant:3BA-FM01|3BA-FM01-RV-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 517,
+      "natural_key": "1BA-FL01|1BA-FL01-RV-01|LARGE|NEX-01-03|1|25.0",
+      "payload": {
+        "uretim_varyant_id": 10100,
+        "stok_kart_id": 9,
+        "sira": 1,
+        "miktar_kg": 25.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-01-03",
+        "uretim_varyant_key": "1BA-FL01|1BA-FL01-RV-01|LARGE"
+      },
+      "checksum": "94fc3df43cd37ddc4bde71fae3e221e90b3698c492f40b7a0c3de71eb58fd8f1",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL01|1BA-FL01-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-01-03"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 518,
+      "natural_key": "1BA-FL01|1BA-FL01-RV-01|LARGE|NEX-01-01|2|28.0",
+      "payload": {
+        "uretim_varyant_id": 10100,
+        "stok_kart_id": 7,
+        "sira": 2,
+        "miktar_kg": 28.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-01-01",
+        "uretim_varyant_key": "1BA-FL01|1BA-FL01-RV-01|LARGE"
+      },
+      "checksum": "8a0b1e5ce9e58f2c5e2aa370e8e0920df3f8e0ac0e2b5fb21cf6ccc2acadeea3",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL01|1BA-FL01-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-01-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 519,
+      "natural_key": "1BA-FL01|1BA-FL01-RV-01|LARGE|NEX-02-01|3|4.0",
+      "payload": {
+        "uretim_varyant_id": 10100,
+        "stok_kart_id": 11,
+        "sira": 3,
+        "miktar_kg": 4.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-02-01",
+        "uretim_varyant_key": "1BA-FL01|1BA-FL01-RV-01|LARGE"
+      },
+      "checksum": "60268afaf9ed402dc41cefa009576b1f6afbb7567a170ece696bb331341b1e66",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL01|1BA-FL01-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-02-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 520,
+      "natural_key": "1BA-FL01|1BA-FL01-RV-01|LARGE|NEX-03-03|4|4.0",
+      "payload": {
+        "uretim_varyant_id": 10100,
+        "stok_kart_id": 77,
+        "sira": 4,
+        "miktar_kg": 4.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-03-03",
+        "uretim_varyant_key": "1BA-FL01|1BA-FL01-RV-01|LARGE"
+      },
+      "checksum": "599e5e018ea594e787e6b4566c56fddde9fac9dc9b8ff4c9782a1806aa1ffa01",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL01|1BA-FL01-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-03-03"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 521,
+      "natural_key": "1BA-FL01|1BA-FL01-RV-01|LARGE|NEX-06-01|5|17.0",
+      "payload": {
+        "uretim_varyant_id": 10100,
+        "stok_kart_id": 25,
+        "sira": 5,
+        "miktar_kg": 17.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-06-01",
+        "uretim_varyant_key": "1BA-FL01|1BA-FL01-RV-01|LARGE"
+      },
+      "checksum": "4b03b7115be6b78c04cf463a8f41af7293ec624711e1dd20089fac9252517541",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL01|1BA-FL01-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-06-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 522,
+      "natural_key": "1BA-FL01|1BA-FL01-RV-01|LARGE|NEX-05-08|6|0.85",
+      "payload": {
+        "uretim_varyant_id": 10100,
+        "stok_kart_id": 78,
+        "sira": 6,
+        "miktar_kg": 0.85,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-08",
+        "uretim_varyant_key": "1BA-FL01|1BA-FL01-RV-01|LARGE"
+      },
+      "checksum": "7359707324a8f54c561bd1462e05a5f937e2534a57393fc3598eed20cba98323",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL01|1BA-FL01-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-05-08"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 523,
+      "natural_key": "1BA-FL01|1BA-FL01-RV-01|LARGE|NEX-05-02|7|0.4",
+      "payload": {
+        "uretim_varyant_id": 10100,
+        "stok_kart_id": 19,
+        "sira": 7,
+        "miktar_kg": 0.4,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-02",
+        "uretim_varyant_key": "1BA-FL01|1BA-FL01-RV-01|LARGE"
+      },
+      "checksum": "1ce2e7a80e0ffbb874f3d244f62c3906ca05a76126c29d1f2317c1e2848bc2a0",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL01|1BA-FL01-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-05-02"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 524,
+      "natural_key": "1BA-FL01|1BA-FL01-RV-01|LARGE|NEX-05-05|8|0.65",
+      "payload": {
+        "uretim_varyant_id": 10100,
+        "stok_kart_id": 22,
+        "sira": 8,
+        "miktar_kg": 0.65,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-05",
+        "uretim_varyant_key": "1BA-FL01|1BA-FL01-RV-01|LARGE"
+      },
+      "checksum": "5845bf175adf2d59f0701fbc409db935c03ccc9c765433b3acfd1684bb21e50c",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL01|1BA-FL01-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-05-05"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 525,
+      "natural_key": "1BA-FL01|1BA-FL01-RV-01|LARGE|NEX-04-04|9|0.15",
+      "payload": {
+        "uretim_varyant_id": 10100,
+        "stok_kart_id": 17,
+        "sira": 9,
+        "miktar_kg": 0.15,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-04-04",
+        "uretim_varyant_key": "1BA-FL01|1BA-FL01-RV-01|LARGE"
+      },
+      "checksum": "f792372b0ed3870d961489b7c969c5a4a9a70d99a4a5c0224f1ad563de18abb4",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL01|1BA-FL01-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-04-04"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 526,
+      "natural_key": "1BA-FL01|1BA-FL01-RV-01|LARGE|NEX-05-01|10|0.8",
+      "payload": {
+        "uretim_varyant_id": 10100,
+        "stok_kart_id": 18,
+        "sira": 10,
+        "miktar_kg": 0.8,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-01",
+        "uretim_varyant_key": "1BA-FL01|1BA-FL01-RV-01|LARGE"
+      },
+      "checksum": "7cb2ae546565b2494a3494c3c994a01183700c1d56aeb5018a15ae7c8c13e775",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL01|1BA-FL01-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-05-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 527,
+      "natural_key": "1BA-FL01|1BA-FL01-RV-01|LARGE|NEX-04-02|11|0.7",
+      "payload": {
+        "uretim_varyant_id": 10100,
+        "stok_kart_id": 15,
+        "sira": 11,
+        "miktar_kg": 0.7,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-04-02",
+        "uretim_varyant_key": "1BA-FL01|1BA-FL01-RV-01|LARGE"
+      },
+      "checksum": "3dcaf5a92f05ce84e9ea49cf1451feb2b5e3a5a51f59625c23ef54ca43a494c8",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL01|1BA-FL01-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-04-02"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 528,
+      "natural_key": "1BA-FL01|1BA-FL01-RV-01|LARGE|NEX-07-01|12|1.9",
+      "payload": {
+        "uretim_varyant_id": 10100,
+        "stok_kart_id": 26,
+        "sira": 12,
+        "miktar_kg": 1.9,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-07-01",
+        "uretim_varyant_key": "1BA-FL01|1BA-FL01-RV-01|LARGE"
+      },
+      "checksum": "be9364801b74421fb73657497639c27105b9b77c85cc072fa3cc4b3bd68bb91e",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL01|1BA-FL01-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-07-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 529,
+      "natural_key": "1BA-FS01|1BA-FS01-RV-01|SMALL|NEX-01-03|1|25.0",
+      "payload": {
+        "uretim_varyant_id": 10101,
+        "stok_kart_id": 9,
+        "sira": 1,
+        "miktar_kg": 25.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-01-03",
+        "uretim_varyant_key": "1BA-FS01|1BA-FS01-RV-01|SMALL"
+      },
+      "checksum": "f064b2f212902c501e17d38f5f7c546b363037a4f98faeada1607931d4acfaa4",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS01|1BA-FS01-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-01-03"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 530,
+      "natural_key": "1BA-FS01|1BA-FS01-RV-01|SMALL|NEX-01-01|2|28.0",
+      "payload": {
+        "uretim_varyant_id": 10101,
+        "stok_kart_id": 7,
+        "sira": 2,
+        "miktar_kg": 28.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-01-01",
+        "uretim_varyant_key": "1BA-FS01|1BA-FS01-RV-01|SMALL"
+      },
+      "checksum": "a2a103458fbacb523cd29041de4d61f35bb2b60328e9d2b29bc358b3e2556244",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS01|1BA-FS01-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-01-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 531,
+      "natural_key": "1BA-FS01|1BA-FS01-RV-01|SMALL|NEX-02-01|3|4.0",
+      "payload": {
+        "uretim_varyant_id": 10101,
+        "stok_kart_id": 11,
+        "sira": 3,
+        "miktar_kg": 4.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-02-01",
+        "uretim_varyant_key": "1BA-FS01|1BA-FS01-RV-01|SMALL"
+      },
+      "checksum": "1e65176c1469de40bcca1d3ea26da78f343d8d33c4acc6654e10905fe64b96bb",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS01|1BA-FS01-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-02-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 532,
+      "natural_key": "1BA-FS01|1BA-FS01-RV-01|SMALL|NEX-03-03|4|4.0",
+      "payload": {
+        "uretim_varyant_id": 10101,
+        "stok_kart_id": 77,
+        "sira": 4,
+        "miktar_kg": 4.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-03-03",
+        "uretim_varyant_key": "1BA-FS01|1BA-FS01-RV-01|SMALL"
+      },
+      "checksum": "025bdf638742b675d11e4fd07548ee1ad5f5ec5d2aba92c8eb39278bfb75a9d3",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS01|1BA-FS01-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-03-03"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 533,
+      "natural_key": "1BA-FS01|1BA-FS01-RV-01|SMALL|NEX-06-01|5|17.0",
+      "payload": {
+        "uretim_varyant_id": 10101,
+        "stok_kart_id": 25,
+        "sira": 5,
+        "miktar_kg": 17.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-06-01",
+        "uretim_varyant_key": "1BA-FS01|1BA-FS01-RV-01|SMALL"
+      },
+      "checksum": "cbc2f750ba752fa6fb13343ea02ce84cbe4957f14e84d53391755c2fa85407c2",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS01|1BA-FS01-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-06-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 534,
+      "natural_key": "1BA-FS01|1BA-FS01-RV-01|SMALL|NEX-05-08|6|0.85",
+      "payload": {
+        "uretim_varyant_id": 10101,
+        "stok_kart_id": 78,
+        "sira": 6,
+        "miktar_kg": 0.85,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-08",
+        "uretim_varyant_key": "1BA-FS01|1BA-FS01-RV-01|SMALL"
+      },
+      "checksum": "138a8c35138945fe083a007e88b8fda7ac082bd16490c04cc55fd0e4920053eb",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS01|1BA-FS01-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-05-08"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 535,
+      "natural_key": "1BA-FS01|1BA-FS01-RV-01|SMALL|NEX-05-02|7|0.4",
+      "payload": {
+        "uretim_varyant_id": 10101,
+        "stok_kart_id": 19,
+        "sira": 7,
+        "miktar_kg": 0.4,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-02",
+        "uretim_varyant_key": "1BA-FS01|1BA-FS01-RV-01|SMALL"
+      },
+      "checksum": "fc1310ff61d597ed5194fd3ce98f2ac917285215549360adcd149c5a854b91da",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS01|1BA-FS01-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-05-02"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 536,
+      "natural_key": "1BA-FS01|1BA-FS01-RV-01|SMALL|NEX-05-05|8|0.65",
+      "payload": {
+        "uretim_varyant_id": 10101,
+        "stok_kart_id": 22,
+        "sira": 8,
+        "miktar_kg": 0.65,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-05",
+        "uretim_varyant_key": "1BA-FS01|1BA-FS01-RV-01|SMALL"
+      },
+      "checksum": "971ed17eebd5d961c4fdf64822ee41756dc20dba3abb8828ccfe6ac6c4e4e6dd",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS01|1BA-FS01-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-05-05"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 537,
+      "natural_key": "1BA-FS01|1BA-FS01-RV-01|SMALL|NEX-04-04|9|0.15",
+      "payload": {
+        "uretim_varyant_id": 10101,
+        "stok_kart_id": 17,
+        "sira": 9,
+        "miktar_kg": 0.15,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-04-04",
+        "uretim_varyant_key": "1BA-FS01|1BA-FS01-RV-01|SMALL"
+      },
+      "checksum": "b15decc0f2af6381fa07e507c316097b557b9fe8cf135b160e1b25fe8b904b56",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS01|1BA-FS01-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-04-04"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 538,
+      "natural_key": "1BA-FS01|1BA-FS01-RV-01|SMALL|NEX-05-01|10|0.8",
+      "payload": {
+        "uretim_varyant_id": 10101,
+        "stok_kart_id": 18,
+        "sira": 10,
+        "miktar_kg": 0.8,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-01",
+        "uretim_varyant_key": "1BA-FS01|1BA-FS01-RV-01|SMALL"
+      },
+      "checksum": "5a3dfe686dc8ea588ceae832593b8a3a1de1a6273b390d0628cdbc945073d0e0",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS01|1BA-FS01-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-05-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 539,
+      "natural_key": "1BA-FS01|1BA-FS01-RV-01|SMALL|NEX-04-02|11|0.7",
+      "payload": {
+        "uretim_varyant_id": 10101,
+        "stok_kart_id": 15,
+        "sira": 11,
+        "miktar_kg": 0.7,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-04-02",
+        "uretim_varyant_key": "1BA-FS01|1BA-FS01-RV-01|SMALL"
+      },
+      "checksum": "bdc8b0a5185787796085c153bb65d2bd1c38a8cacc9010b542795320ab5d6082",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS01|1BA-FS01-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-04-02"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 540,
+      "natural_key": "1BA-FS01|1BA-FS01-RV-01|SMALL|NEX-07-01|12|1.2",
+      "payload": {
+        "uretim_varyant_id": 10101,
+        "stok_kart_id": 26,
+        "sira": 12,
+        "miktar_kg": 1.2,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-07-01",
+        "uretim_varyant_key": "1BA-FS01|1BA-FS01-RV-01|SMALL"
+      },
+      "checksum": "026fced0bbc3eb2799a1456e82ca1a5c84dc7aae9908c17d82bcbd20912b9e34",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS01|1BA-FS01-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-07-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 541,
+      "natural_key": "1BA-FL02|1BA-FL02-RV-01|LARGE|NEX-01-02|1|36.0",
+      "payload": {
+        "uretim_varyant_id": 10102,
+        "stok_kart_id": 8,
+        "sira": 1,
+        "miktar_kg": 36.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-01-02",
+        "uretim_varyant_key": "1BA-FL02|1BA-FL02-RV-01|LARGE"
+      },
+      "checksum": "5b97dbdb734211b745459399a5d5418f3a48cda1e9a44956e3d965e3d6d9aa29",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL02|1BA-FL02-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-01-02"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 542,
+      "natural_key": "1BA-FL02|1BA-FL02-RV-01|LARGE|NEX-01-01|2|15.0",
+      "payload": {
+        "uretim_varyant_id": 10102,
+        "stok_kart_id": 7,
+        "sira": 2,
+        "miktar_kg": 15.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-01-01",
+        "uretim_varyant_key": "1BA-FL02|1BA-FL02-RV-01|LARGE"
+      },
+      "checksum": "c17b28926bcb4e4ee1216ad56477c6135ba2bbc9afb04962ee99b31cbd60a047",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL02|1BA-FL02-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-01-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 543,
+      "natural_key": "1BA-FL02|1BA-FL02-RV-01|LARGE|NEX-02-01|3|5.0",
+      "payload": {
+        "uretim_varyant_id": 10102,
+        "stok_kart_id": 11,
+        "sira": 3,
+        "miktar_kg": 5.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-02-01",
+        "uretim_varyant_key": "1BA-FL02|1BA-FL02-RV-01|LARGE"
+      },
+      "checksum": "fb8f0de9f06402e8d5c0ee0e0fc63c3af5a8b7a1181d21dadfbf60d2ad9c080a",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL02|1BA-FL02-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-02-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 544,
+      "natural_key": "1BA-FL02|1BA-FL02-RV-01|LARGE|NEX-03-03|4|5.0",
+      "payload": {
+        "uretim_varyant_id": 10102,
+        "stok_kart_id": 77,
+        "sira": 4,
+        "miktar_kg": 5.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-03-03",
+        "uretim_varyant_key": "1BA-FL02|1BA-FL02-RV-01|LARGE"
+      },
+      "checksum": "4801957cac9b311e00a37fd0c3b6338be04741baa8ac3b71384798c85067df18",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL02|1BA-FL02-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-03-03"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 545,
+      "natural_key": "1BA-FL02|1BA-FL02-RV-01|LARGE|NEX-06-01|5|17.0",
+      "payload": {
+        "uretim_varyant_id": 10102,
+        "stok_kart_id": 25,
+        "sira": 5,
+        "miktar_kg": 17.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-06-01",
+        "uretim_varyant_key": "1BA-FL02|1BA-FL02-RV-01|LARGE"
+      },
+      "checksum": "c19ab9a23943b14076e60c638d4b76c973b8213965da28dbe405e2dbe38406e2",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL02|1BA-FL02-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-06-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 546,
+      "natural_key": "1BA-FL02|1BA-FL02-RV-01|LARGE|NEX-05-08|6|0.85",
+      "payload": {
+        "uretim_varyant_id": 10102,
+        "stok_kart_id": 78,
+        "sira": 6,
+        "miktar_kg": 0.85,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-08",
+        "uretim_varyant_key": "1BA-FL02|1BA-FL02-RV-01|LARGE"
+      },
+      "checksum": "551be65d5fced5c5e6cad0ed94a32526d2ee8685f620ebf10ad6604cd4ceb052",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL02|1BA-FL02-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-05-08"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 547,
+      "natural_key": "1BA-FL02|1BA-FL02-RV-01|LARGE|NEX-05-02|7|0.4",
+      "payload": {
+        "uretim_varyant_id": 10102,
+        "stok_kart_id": 19,
+        "sira": 7,
+        "miktar_kg": 0.4,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-02",
+        "uretim_varyant_key": "1BA-FL02|1BA-FL02-RV-01|LARGE"
+      },
+      "checksum": "70f558fa332502cf1eb992c381b254e5fea49f4dc3b1d7d91894d561e810f91a",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL02|1BA-FL02-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-05-02"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 548,
+      "natural_key": "1BA-FL02|1BA-FL02-RV-01|LARGE|NEX-05-05|8|0.65",
+      "payload": {
+        "uretim_varyant_id": 10102,
+        "stok_kart_id": 22,
+        "sira": 8,
+        "miktar_kg": 0.65,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-05",
+        "uretim_varyant_key": "1BA-FL02|1BA-FL02-RV-01|LARGE"
+      },
+      "checksum": "4474a5fe2e72d46da8c11bff617d87fd5d57f58c39237d1f99746d0d25014df5",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL02|1BA-FL02-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-05-05"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 549,
+      "natural_key": "1BA-FL02|1BA-FL02-RV-01|LARGE|NEX-04-04|9|0.15",
+      "payload": {
+        "uretim_varyant_id": 10102,
+        "stok_kart_id": 17,
+        "sira": 9,
+        "miktar_kg": 0.15,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-04-04",
+        "uretim_varyant_key": "1BA-FL02|1BA-FL02-RV-01|LARGE"
+      },
+      "checksum": "322162c8db1968509dc195dda4fb20e9b942468a7d0b8e53f328001c2581b248",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL02|1BA-FL02-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-04-04"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 550,
+      "natural_key": "1BA-FL02|1BA-FL02-RV-01|LARGE|NEX-05-01|10|0.8",
+      "payload": {
+        "uretim_varyant_id": 10102,
+        "stok_kart_id": 18,
+        "sira": 10,
+        "miktar_kg": 0.8,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-01",
+        "uretim_varyant_key": "1BA-FL02|1BA-FL02-RV-01|LARGE"
+      },
+      "checksum": "abe4954686227b08585c4977746b8dad8057053ace6256f4bb6961386a0e4e08",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL02|1BA-FL02-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-05-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 551,
+      "natural_key": "1BA-FL02|1BA-FL02-RV-01|LARGE|NEX-04-02|11|0.7",
+      "payload": {
+        "uretim_varyant_id": 10102,
+        "stok_kart_id": 15,
+        "sira": 11,
+        "miktar_kg": 0.7,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-04-02",
+        "uretim_varyant_key": "1BA-FL02|1BA-FL02-RV-01|LARGE"
+      },
+      "checksum": "277bd0274a63f465582af4b6b2b4de17208f6c9d1f0cf8ea64e910251853b4ba",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL02|1BA-FL02-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-04-02"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 552,
+      "natural_key": "1BA-FL02|1BA-FL02-RV-01|LARGE|NEX-07-01|12|1.9",
+      "payload": {
+        "uretim_varyant_id": 10102,
+        "stok_kart_id": 26,
+        "sira": 12,
+        "miktar_kg": 1.9,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-07-01",
+        "uretim_varyant_key": "1BA-FL02|1BA-FL02-RV-01|LARGE"
+      },
+      "checksum": "b5adccd5be5823032e50559834670274df5e609eea8d284c082d9f219083e3ce",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL02|1BA-FL02-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-07-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 553,
+      "natural_key": "1BA-FS02|1BA-FS02-RV-01|SMALL|NEX-01-02|1|36.0",
+      "payload": {
+        "uretim_varyant_id": 10103,
+        "stok_kart_id": 8,
+        "sira": 1,
+        "miktar_kg": 36.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-01-02",
+        "uretim_varyant_key": "1BA-FS02|1BA-FS02-RV-01|SMALL"
+      },
+      "checksum": "9b491e1798b0273260a49afc532cbdd0f43838c0dae4abfcfa0c4e2a11c980bb",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS02|1BA-FS02-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-01-02"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 554,
+      "natural_key": "1BA-FS02|1BA-FS02-RV-01|SMALL|NEX-01-01|2|15.0",
+      "payload": {
+        "uretim_varyant_id": 10103,
+        "stok_kart_id": 7,
+        "sira": 2,
+        "miktar_kg": 15.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-01-01",
+        "uretim_varyant_key": "1BA-FS02|1BA-FS02-RV-01|SMALL"
+      },
+      "checksum": "7e495769fd7e766fe76ffd72165d2e215e924f20d09cf626348bbd9eb91a5d8b",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS02|1BA-FS02-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-01-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 555,
+      "natural_key": "1BA-FS02|1BA-FS02-RV-01|SMALL|NEX-02-01|3|5.0",
+      "payload": {
+        "uretim_varyant_id": 10103,
+        "stok_kart_id": 11,
+        "sira": 3,
+        "miktar_kg": 5.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-02-01",
+        "uretim_varyant_key": "1BA-FS02|1BA-FS02-RV-01|SMALL"
+      },
+      "checksum": "fd9d4b83adb1552740fadf5f3f9249cdc3737a80c0e0c682f4e50ae8db646e95",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS02|1BA-FS02-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-02-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 556,
+      "natural_key": "1BA-FS02|1BA-FS02-RV-01|SMALL|NEX-03-03|4|5.0",
+      "payload": {
+        "uretim_varyant_id": 10103,
+        "stok_kart_id": 77,
+        "sira": 4,
+        "miktar_kg": 5.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-03-03",
+        "uretim_varyant_key": "1BA-FS02|1BA-FS02-RV-01|SMALL"
+      },
+      "checksum": "3d406a2721af588dbd324f61bfc79f972faf20889569e185c41084312b59738e",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS02|1BA-FS02-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-03-03"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 557,
+      "natural_key": "1BA-FS02|1BA-FS02-RV-01|SMALL|NEX-06-01|5|17.0",
+      "payload": {
+        "uretim_varyant_id": 10103,
+        "stok_kart_id": 25,
+        "sira": 5,
+        "miktar_kg": 17.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-06-01",
+        "uretim_varyant_key": "1BA-FS02|1BA-FS02-RV-01|SMALL"
+      },
+      "checksum": "7a4eb411c2214059cc0b6ee398ac0ba014fadcfd5eb0751285a794af7329a907",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS02|1BA-FS02-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-06-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 558,
+      "natural_key": "1BA-FS02|1BA-FS02-RV-01|SMALL|NEX-05-08|6|0.85",
+      "payload": {
+        "uretim_varyant_id": 10103,
+        "stok_kart_id": 78,
+        "sira": 6,
+        "miktar_kg": 0.85,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-08",
+        "uretim_varyant_key": "1BA-FS02|1BA-FS02-RV-01|SMALL"
+      },
+      "checksum": "d9e46eac1df60564bc327ae282a102fc433381ba667f190a36ec93645e5a882a",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS02|1BA-FS02-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-05-08"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 559,
+      "natural_key": "1BA-FS02|1BA-FS02-RV-01|SMALL|NEX-05-02|7|0.4",
+      "payload": {
+        "uretim_varyant_id": 10103,
+        "stok_kart_id": 19,
+        "sira": 7,
+        "miktar_kg": 0.4,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-02",
+        "uretim_varyant_key": "1BA-FS02|1BA-FS02-RV-01|SMALL"
+      },
+      "checksum": "7960b5625aed594a89c8618d2ddfb810a0f196d4a88ebf09d9d5c7d6d8515761",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS02|1BA-FS02-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-05-02"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 560,
+      "natural_key": "1BA-FS02|1BA-FS02-RV-01|SMALL|NEX-05-05|8|0.65",
+      "payload": {
+        "uretim_varyant_id": 10103,
+        "stok_kart_id": 22,
+        "sira": 8,
+        "miktar_kg": 0.65,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-05",
+        "uretim_varyant_key": "1BA-FS02|1BA-FS02-RV-01|SMALL"
+      },
+      "checksum": "26c496bc598a9bde78011776fd6745492db231702398b9ebb14047843d5ad627",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS02|1BA-FS02-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-05-05"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 561,
+      "natural_key": "1BA-FS02|1BA-FS02-RV-01|SMALL|NEX-04-04|9|0.15",
+      "payload": {
+        "uretim_varyant_id": 10103,
+        "stok_kart_id": 17,
+        "sira": 9,
+        "miktar_kg": 0.15,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-04-04",
+        "uretim_varyant_key": "1BA-FS02|1BA-FS02-RV-01|SMALL"
+      },
+      "checksum": "468a6511af84bb49b5b078f93665e1e9b846a9d5bd815bb99d8796fef5d84a73",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS02|1BA-FS02-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-04-04"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 562,
+      "natural_key": "1BA-FS02|1BA-FS02-RV-01|SMALL|NEX-05-01|10|0.8",
+      "payload": {
+        "uretim_varyant_id": 10103,
+        "stok_kart_id": 18,
+        "sira": 10,
+        "miktar_kg": 0.8,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-01",
+        "uretim_varyant_key": "1BA-FS02|1BA-FS02-RV-01|SMALL"
+      },
+      "checksum": "aa7e8c19a724be52afa0a613fdc0c13f88c5b58cc717c026cc2ab72c844abd0b",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS02|1BA-FS02-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-05-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 563,
+      "natural_key": "1BA-FS02|1BA-FS02-RV-01|SMALL|NEX-04-02|11|0.7",
+      "payload": {
+        "uretim_varyant_id": 10103,
+        "stok_kart_id": 15,
+        "sira": 11,
+        "miktar_kg": 0.7,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-04-02",
+        "uretim_varyant_key": "1BA-FS02|1BA-FS02-RV-01|SMALL"
+      },
+      "checksum": "5819b3af3ec8bbe8166847769bb0e2c1c2676357fd8ef0cc5633cdec5f8f09e4",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS02|1BA-FS02-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-04-02"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 564,
+      "natural_key": "1BA-FS02|1BA-FS02-RV-01|SMALL|NEX-07-01|12|1.2",
+      "payload": {
+        "uretim_varyant_id": 10103,
+        "stok_kart_id": 26,
+        "sira": 12,
+        "miktar_kg": 1.2,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-07-01",
+        "uretim_varyant_key": "1BA-FS02|1BA-FS02-RV-01|SMALL"
+      },
+      "checksum": "a1fd662803fd004875656b3c00ceae5988c958a69b52c6701d615fe754afe63b",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS02|1BA-FS02-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-07-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 565,
+      "natural_key": "1BA-FL03|1BA-FL03-RV-01|LARGE|NEX-01-01|1|47.0",
+      "payload": {
+        "uretim_varyant_id": 10104,
+        "stok_kart_id": 7,
+        "sira": 1,
+        "miktar_kg": 47.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-01-01",
+        "uretim_varyant_key": "1BA-FL03|1BA-FL03-RV-01|LARGE"
+      },
+      "checksum": "97bbbafe60aa8b2c667ca0025539e34342cd751ea683b3720ea7e03f0bf74f61",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL03|1BA-FL03-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-01-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 566,
+      "natural_key": "1BA-FL03|1BA-FL03-RV-01|LARGE|NEX-02-01|2|10.0",
+      "payload": {
+        "uretim_varyant_id": 10104,
+        "stok_kart_id": 11,
+        "sira": 2,
+        "miktar_kg": 10.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-02-01",
+        "uretim_varyant_key": "1BA-FL03|1BA-FL03-RV-01|LARGE"
+      },
+      "checksum": "13a42616ac843831726805ccad9a6d3fdc857f4485ada6abcc1dbda314f2cf9e",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL03|1BA-FL03-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-02-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 567,
+      "natural_key": "1BA-FL03|1BA-FL03-RV-01|LARGE|NEX-03-03|3|4.0",
+      "payload": {
+        "uretim_varyant_id": 10104,
+        "stok_kart_id": 77,
+        "sira": 3,
+        "miktar_kg": 4.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-03-03",
+        "uretim_varyant_key": "1BA-FL03|1BA-FL03-RV-01|LARGE"
+      },
+      "checksum": "0c96cb8241cd8e3466a235d11327079c34a36e9a032a5007850da8dd153f7e1a",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL03|1BA-FL03-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-03-03"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 568,
+      "natural_key": "1BA-FL03|1BA-FL03-RV-01|LARGE|NEX-06-01|4|17.0",
+      "payload": {
+        "uretim_varyant_id": 10104,
+        "stok_kart_id": 25,
+        "sira": 4,
+        "miktar_kg": 17.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-06-01",
+        "uretim_varyant_key": "1BA-FL03|1BA-FL03-RV-01|LARGE"
+      },
+      "checksum": "c4a3806bcc4d429d675293b6b3f7ee536d42fc6225fb1cf73666e1304252f652",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL03|1BA-FL03-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-06-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 569,
+      "natural_key": "1BA-FL03|1BA-FL03-RV-01|LARGE|NEX-05-08|5|0.85",
+      "payload": {
+        "uretim_varyant_id": 10104,
+        "stok_kart_id": 78,
+        "sira": 5,
+        "miktar_kg": 0.85,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-08",
+        "uretim_varyant_key": "1BA-FL03|1BA-FL03-RV-01|LARGE"
+      },
+      "checksum": "717bbceaf1ee778aeea23fe98a099629fe1ca32cd3219f000b53689d6de67570",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL03|1BA-FL03-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-05-08"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 570,
+      "natural_key": "1BA-FL03|1BA-FL03-RV-01|LARGE|NEX-05-02|6|0.4",
+      "payload": {
+        "uretim_varyant_id": 10104,
+        "stok_kart_id": 19,
+        "sira": 6,
+        "miktar_kg": 0.4,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-02",
+        "uretim_varyant_key": "1BA-FL03|1BA-FL03-RV-01|LARGE"
+      },
+      "checksum": "43950d9b52db4a48354e221ed04fcd5558ef3385d89556e05f358c2f2c00b05b",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL03|1BA-FL03-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-05-02"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 571,
+      "natural_key": "1BA-FL03|1BA-FL03-RV-01|LARGE|NEX-05-05|7|0.65",
+      "payload": {
+        "uretim_varyant_id": 10104,
+        "stok_kart_id": 22,
+        "sira": 7,
+        "miktar_kg": 0.65,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-05",
+        "uretim_varyant_key": "1BA-FL03|1BA-FL03-RV-01|LARGE"
+      },
+      "checksum": "a68a7ad8820ac3639dda1eb0d0ad31ebb93ecf5b501d57acd5492958a54c6f68",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL03|1BA-FL03-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-05-05"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 572,
+      "natural_key": "1BA-FL03|1BA-FL03-RV-01|LARGE|NEX-04-04|8|0.15",
+      "payload": {
+        "uretim_varyant_id": 10104,
+        "stok_kart_id": 17,
+        "sira": 8,
+        "miktar_kg": 0.15,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-04-04",
+        "uretim_varyant_key": "1BA-FL03|1BA-FL03-RV-01|LARGE"
+      },
+      "checksum": "fb62490eb5b9ecdc5e57fb27b1430dfea727215e9f120c412846c045a7ffc77e",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL03|1BA-FL03-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-04-04"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 573,
+      "natural_key": "1BA-FL03|1BA-FL03-RV-01|LARGE|NEX-05-01|9|0.8",
+      "payload": {
+        "uretim_varyant_id": 10104,
+        "stok_kart_id": 18,
+        "sira": 9,
+        "miktar_kg": 0.8,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-01",
+        "uretim_varyant_key": "1BA-FL03|1BA-FL03-RV-01|LARGE"
+      },
+      "checksum": "e06bc22527ded9be86babf1f523ddbf6a539687e1766d97d176decc0d9136910",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL03|1BA-FL03-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-05-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 574,
+      "natural_key": "1BA-FL03|1BA-FL03-RV-01|LARGE|NEX-04-02|10|0.7",
+      "payload": {
+        "uretim_varyant_id": 10104,
+        "stok_kart_id": 15,
+        "sira": 10,
+        "miktar_kg": 0.7,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-04-02",
+        "uretim_varyant_key": "1BA-FL03|1BA-FL03-RV-01|LARGE"
+      },
+      "checksum": "c022acca857152777ef66f817caf0d1ee3e94a3d169b5d1b6115369d061fd62d",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL03|1BA-FL03-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-04-02"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 575,
+      "natural_key": "1BA-FL03|1BA-FL03-RV-01|LARGE|NEX-07-01|11|1.9",
+      "payload": {
+        "uretim_varyant_id": 10104,
+        "stok_kart_id": 26,
+        "sira": 11,
+        "miktar_kg": 1.9,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-07-01",
+        "uretim_varyant_key": "1BA-FL03|1BA-FL03-RV-01|LARGE"
+      },
+      "checksum": "b57c01ef2946a0ac6b81c073885bbcac70657b063f7030120cfdf8de7371772e",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FL03|1BA-FL03-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-07-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 576,
+      "natural_key": "1BA-FS03|1BA-FS03-RV-01|SMALL|NEX-01-01|1|47.0",
+      "payload": {
+        "uretim_varyant_id": 10105,
+        "stok_kart_id": 7,
+        "sira": 1,
+        "miktar_kg": 47.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-01-01",
+        "uretim_varyant_key": "1BA-FS03|1BA-FS03-RV-01|SMALL"
+      },
+      "checksum": "26e6c65fe8756ec8803ae6090b6e055276313bae93aaee21e5f104b4860bd571",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS03|1BA-FS03-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-01-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 577,
+      "natural_key": "1BA-FS03|1BA-FS03-RV-01|SMALL|NEX-02-01|2|10.0",
+      "payload": {
+        "uretim_varyant_id": 10105,
+        "stok_kart_id": 11,
+        "sira": 2,
+        "miktar_kg": 10.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-02-01",
+        "uretim_varyant_key": "1BA-FS03|1BA-FS03-RV-01|SMALL"
+      },
+      "checksum": "b536b6457dbaefffccfb45372868aef8d7fd60fb9f491ba6907a789aaf676228",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS03|1BA-FS03-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-02-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 578,
+      "natural_key": "1BA-FS03|1BA-FS03-RV-01|SMALL|NEX-03-03|3|4.0",
+      "payload": {
+        "uretim_varyant_id": 10105,
+        "stok_kart_id": 77,
+        "sira": 3,
+        "miktar_kg": 4.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-03-03",
+        "uretim_varyant_key": "1BA-FS03|1BA-FS03-RV-01|SMALL"
+      },
+      "checksum": "0e0e3863300a33e99187da890d7685b3dee95949eabdb833f6af4b90893dc3c0",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS03|1BA-FS03-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-03-03"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 579,
+      "natural_key": "1BA-FS03|1BA-FS03-RV-01|SMALL|NEX-06-01|4|17.0",
+      "payload": {
+        "uretim_varyant_id": 10105,
+        "stok_kart_id": 25,
+        "sira": 4,
+        "miktar_kg": 17.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-06-01",
+        "uretim_varyant_key": "1BA-FS03|1BA-FS03-RV-01|SMALL"
+      },
+      "checksum": "99fec38c58d66d072b0a098918fb17992f82bf4150eb72b6b523f72b0dd99599",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS03|1BA-FS03-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-06-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 580,
+      "natural_key": "1BA-FS03|1BA-FS03-RV-01|SMALL|NEX-05-08|5|0.85",
+      "payload": {
+        "uretim_varyant_id": 10105,
+        "stok_kart_id": 78,
+        "sira": 5,
+        "miktar_kg": 0.85,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-08",
+        "uretim_varyant_key": "1BA-FS03|1BA-FS03-RV-01|SMALL"
+      },
+      "checksum": "994e90204e464db03910c1775a1c2ba60cc025bfb5c25fb470bdf8b196bc26a2",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS03|1BA-FS03-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-05-08"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 581,
+      "natural_key": "1BA-FS03|1BA-FS03-RV-01|SMALL|NEX-05-02|6|0.4",
+      "payload": {
+        "uretim_varyant_id": 10105,
+        "stok_kart_id": 19,
+        "sira": 6,
+        "miktar_kg": 0.4,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-02",
+        "uretim_varyant_key": "1BA-FS03|1BA-FS03-RV-01|SMALL"
+      },
+      "checksum": "68bc53fb5aa8139b20507d9db498c4d57a00d82f92755b148332bd09a9268d45",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS03|1BA-FS03-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-05-02"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 582,
+      "natural_key": "1BA-FS03|1BA-FS03-RV-01|SMALL|NEX-05-05|7|0.65",
+      "payload": {
+        "uretim_varyant_id": 10105,
+        "stok_kart_id": 22,
+        "sira": 7,
+        "miktar_kg": 0.65,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-05",
+        "uretim_varyant_key": "1BA-FS03|1BA-FS03-RV-01|SMALL"
+      },
+      "checksum": "d094b622a7e670c305b180efb4c3206833f5b88367735a9ff070cc7043c62cc9",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS03|1BA-FS03-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-05-05"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 583,
+      "natural_key": "1BA-FS03|1BA-FS03-RV-01|SMALL|NEX-04-04|8|0.15",
+      "payload": {
+        "uretim_varyant_id": 10105,
+        "stok_kart_id": 17,
+        "sira": 8,
+        "miktar_kg": 0.15,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-04-04",
+        "uretim_varyant_key": "1BA-FS03|1BA-FS03-RV-01|SMALL"
+      },
+      "checksum": "f3a94ef581c0c1de7275508297d5fce3142aae926f3d7d50c320829ff9fb24c1",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS03|1BA-FS03-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-04-04"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 584,
+      "natural_key": "1BA-FS03|1BA-FS03-RV-01|SMALL|NEX-05-01|9|0.8",
+      "payload": {
+        "uretim_varyant_id": 10105,
+        "stok_kart_id": 18,
+        "sira": 9,
+        "miktar_kg": 0.8,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-01",
+        "uretim_varyant_key": "1BA-FS03|1BA-FS03-RV-01|SMALL"
+      },
+      "checksum": "46fe7bba59996f25ba7b407d6f2b6fa9e36120b5419092cb978bc6411592c35b",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS03|1BA-FS03-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-05-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 585,
+      "natural_key": "1BA-FS03|1BA-FS03-RV-01|SMALL|NEX-04-02|10|0.7",
+      "payload": {
+        "uretim_varyant_id": 10105,
+        "stok_kart_id": 15,
+        "sira": 10,
+        "miktar_kg": 0.7,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-04-02",
+        "uretim_varyant_key": "1BA-FS03|1BA-FS03-RV-01|SMALL"
+      },
+      "checksum": "156a494022726a7eda82a4c67a6a021d2613b81d34eb4368fd0e808e181368b8",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS03|1BA-FS03-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-04-02"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 586,
+      "natural_key": "1BA-FS03|1BA-FS03-RV-01|SMALL|NEX-07-01|11|1.2",
+      "payload": {
+        "uretim_varyant_id": 10105,
+        "stok_kart_id": 26,
+        "sira": 11,
+        "miktar_kg": 1.2,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-07-01",
+        "uretim_varyant_key": "1BA-FS03|1BA-FS03-RV-01|SMALL"
+      },
+      "checksum": "a35f579bcdeccfa22167ddcd466219896c87271e88111c4cb57fced35ea5ecaa",
+      "dependencies": [
+        "nexgen_uretim_varyant:1BA-FS03|1BA-FS03-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-07-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 587,
+      "natural_key": "2BA-FL01|2BA-FL01-RV-01|LARGE|NEX-01-03|1|18.0",
+      "payload": {
+        "uretim_varyant_id": 10106,
+        "stok_kart_id": 9,
+        "sira": 1,
+        "miktar_kg": 18.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-01-03",
+        "uretim_varyant_key": "2BA-FL01|2BA-FL01-RV-01|LARGE"
+      },
+      "checksum": "aded64249dc8eb142f2f8ba2244929b646249b9085add68feeae1b8ebb104976",
+      "dependencies": [
+        "nexgen_uretim_varyant:2BA-FL01|2BA-FL01-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-01-03"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 588,
+      "natural_key": "2BA-FL01|2BA-FL01-RV-01|LARGE|NEX-01-01|2|35.0",
+      "payload": {
+        "uretim_varyant_id": 10106,
+        "stok_kart_id": 7,
+        "sira": 2,
+        "miktar_kg": 35.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-01-01",
+        "uretim_varyant_key": "2BA-FL01|2BA-FL01-RV-01|LARGE"
+      },
+      "checksum": "18f059ffdb6c3d8c8eb7f1dcff8b991a1e2a7fcf3d372c51e1028428be1e2336",
+      "dependencies": [
+        "nexgen_uretim_varyant:2BA-FL01|2BA-FL01-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-01-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 589,
+      "natural_key": "2BA-FL01|2BA-FL01-RV-01|LARGE|NEX-02-01|3|6.0",
+      "payload": {
+        "uretim_varyant_id": 10106,
+        "stok_kart_id": 11,
+        "sira": 3,
+        "miktar_kg": 6.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-02-01",
+        "uretim_varyant_key": "2BA-FL01|2BA-FL01-RV-01|LARGE"
+      },
+      "checksum": "e374c69229e098284ca2c23d3d8c54396c416126ac682b2642c23844bcaaa2d2",
+      "dependencies": [
+        "nexgen_uretim_varyant:2BA-FL01|2BA-FL01-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-02-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 590,
+      "natural_key": "2BA-FL01|2BA-FL01-RV-01|LARGE|NEX-03-03|4|3.0",
+      "payload": {
+        "uretim_varyant_id": 10106,
+        "stok_kart_id": 77,
+        "sira": 4,
+        "miktar_kg": 3.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-03-03",
+        "uretim_varyant_key": "2BA-FL01|2BA-FL01-RV-01|LARGE"
+      },
+      "checksum": "e1eaba2517925d1610c94503cd5a9bb9a2bd6eee2a87f9f5c05bb87a954e333c",
+      "dependencies": [
+        "nexgen_uretim_varyant:2BA-FL01|2BA-FL01-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-03-03"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 591,
+      "natural_key": "2BA-FL01|2BA-FL01-RV-01|LARGE|NEX-06-01|5|17.0",
+      "payload": {
+        "uretim_varyant_id": 10106,
+        "stok_kart_id": 25,
+        "sira": 5,
+        "miktar_kg": 17.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-06-01",
+        "uretim_varyant_key": "2BA-FL01|2BA-FL01-RV-01|LARGE"
+      },
+      "checksum": "c8ee80e625d3c9fae6595f46df40673dabcb1e99f6ab8dcf3d8dc4075d450a09",
+      "dependencies": [
+        "nexgen_uretim_varyant:2BA-FL01|2BA-FL01-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-06-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 592,
+      "natural_key": "2BA-FL01|2BA-FL01-RV-01|LARGE|NEX-05-08|6|0.85",
+      "payload": {
+        "uretim_varyant_id": 10106,
+        "stok_kart_id": 78,
+        "sira": 6,
+        "miktar_kg": 0.85,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-08",
+        "uretim_varyant_key": "2BA-FL01|2BA-FL01-RV-01|LARGE"
+      },
+      "checksum": "1a3384e6bd0fb8d3c847ee7b25d696c07636a11b03387c278c01d239ea2e20fe",
+      "dependencies": [
+        "nexgen_uretim_varyant:2BA-FL01|2BA-FL01-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-05-08"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 593,
+      "natural_key": "2BA-FL01|2BA-FL01-RV-01|LARGE|NEX-05-02|7|0.65",
+      "payload": {
+        "uretim_varyant_id": 10106,
+        "stok_kart_id": 19,
+        "sira": 7,
+        "miktar_kg": 0.65,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-02",
+        "uretim_varyant_key": "2BA-FL01|2BA-FL01-RV-01|LARGE"
+      },
+      "checksum": "db4b20195c45f93c4c71cf5ae763222e7f0e04350dfcb80da693b25f491fa7a3",
+      "dependencies": [
+        "nexgen_uretim_varyant:2BA-FL01|2BA-FL01-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-05-02"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 594,
+      "natural_key": "2BA-FL01|2BA-FL01-RV-01|LARGE|NEX-05-05|8|0.4",
+      "payload": {
+        "uretim_varyant_id": 10106,
+        "stok_kart_id": 22,
+        "sira": 8,
+        "miktar_kg": 0.4,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-05",
+        "uretim_varyant_key": "2BA-FL01|2BA-FL01-RV-01|LARGE"
+      },
+      "checksum": "09e0de5d0ac7cc2cbadda4a1935a0cbae1e0613f37037f878b31e3c2c3481f5b",
+      "dependencies": [
+        "nexgen_uretim_varyant:2BA-FL01|2BA-FL01-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-05-05"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 595,
+      "natural_key": "2BA-FL01|2BA-FL01-RV-01|LARGE|NEX-04-04|9|0.15",
+      "payload": {
+        "uretim_varyant_id": 10106,
+        "stok_kart_id": 17,
+        "sira": 9,
+        "miktar_kg": 0.15,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-04-04",
+        "uretim_varyant_key": "2BA-FL01|2BA-FL01-RV-01|LARGE"
+      },
+      "checksum": "a62bc4a6eefd4632d671eb1ddc779e6bbe213fec3388b35701173fccdc611997",
+      "dependencies": [
+        "nexgen_uretim_varyant:2BA-FL01|2BA-FL01-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-04-04"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 596,
+      "natural_key": "2BA-FL01|2BA-FL01-RV-01|LARGE|NEX-05-01|10|0.8",
+      "payload": {
+        "uretim_varyant_id": 10106,
+        "stok_kart_id": 18,
+        "sira": 10,
+        "miktar_kg": 0.8,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-01",
+        "uretim_varyant_key": "2BA-FL01|2BA-FL01-RV-01|LARGE"
+      },
+      "checksum": "072a96ae6dd7728b8eb25a69607a3419e372a21e3a6695882a1b376eef81b617",
+      "dependencies": [
+        "nexgen_uretim_varyant:2BA-FL01|2BA-FL01-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-05-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 597,
+      "natural_key": "2BA-FL01|2BA-FL01-RV-01|LARGE|NEX-04-02|11|0.7",
+      "payload": {
+        "uretim_varyant_id": 10106,
+        "stok_kart_id": 15,
+        "sira": 11,
+        "miktar_kg": 0.7,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-04-02",
+        "uretim_varyant_key": "2BA-FL01|2BA-FL01-RV-01|LARGE"
+      },
+      "checksum": "7887ae7b0cdb4ed40a06e07f42e43ae4775381f3f4dffec063f71c0eb3ecd061",
+      "dependencies": [
+        "nexgen_uretim_varyant:2BA-FL01|2BA-FL01-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-04-02"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 598,
+      "natural_key": "2BA-FL01|2BA-FL01-RV-01|LARGE|NEX-07-01|12|1.6",
+      "payload": {
+        "uretim_varyant_id": 10106,
+        "stok_kart_id": 26,
+        "sira": 12,
+        "miktar_kg": 1.6,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-07-01",
+        "uretim_varyant_key": "2BA-FL01|2BA-FL01-RV-01|LARGE"
+      },
+      "checksum": "a30e9403148c831415eeb77c073d8b238cf432158d18a3b815c25e88751ab2ab",
+      "dependencies": [
+        "nexgen_uretim_varyant:2BA-FL01|2BA-FL01-RV-01|LARGE",
+        "nexgen_stok_kart:NEX-07-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 599,
+      "natural_key": "2BA-FS01|2BA-FS01-RV-01|SMALL|NEX-01-03|1|18.0",
+      "payload": {
+        "uretim_varyant_id": 10107,
+        "stok_kart_id": 9,
+        "sira": 1,
+        "miktar_kg": 18.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-01-03",
+        "uretim_varyant_key": "2BA-FS01|2BA-FS01-RV-01|SMALL"
+      },
+      "checksum": "a3e4097796cd8b72b00c0a32f5c3c064ab06abeef1a3e00f31fcaeea33f5c3c5",
+      "dependencies": [
+        "nexgen_uretim_varyant:2BA-FS01|2BA-FS01-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-01-03"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 600,
+      "natural_key": "2BA-FS01|2BA-FS01-RV-01|SMALL|NEX-01-01|2|35.0",
+      "payload": {
+        "uretim_varyant_id": 10107,
+        "stok_kart_id": 7,
+        "sira": 2,
+        "miktar_kg": 35.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-01-01",
+        "uretim_varyant_key": "2BA-FS01|2BA-FS01-RV-01|SMALL"
+      },
+      "checksum": "909a22ac070e258fed5c005dcd39e5dd6b852438391b92c30db9e32fa2168bb9",
+      "dependencies": [
+        "nexgen_uretim_varyant:2BA-FS01|2BA-FS01-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-01-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 601,
+      "natural_key": "2BA-FS01|2BA-FS01-RV-01|SMALL|NEX-02-01|3|6.0",
+      "payload": {
+        "uretim_varyant_id": 10107,
+        "stok_kart_id": 11,
+        "sira": 3,
+        "miktar_kg": 6.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-02-01",
+        "uretim_varyant_key": "2BA-FS01|2BA-FS01-RV-01|SMALL"
+      },
+      "checksum": "8dbdb59a1b0f8e9840d8773dd0d3da9f58a4f758257b1f4ecff0c1c00a511f71",
+      "dependencies": [
+        "nexgen_uretim_varyant:2BA-FS01|2BA-FS01-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-02-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 602,
+      "natural_key": "2BA-FS01|2BA-FS01-RV-01|SMALL|NEX-03-03|4|3.0",
+      "payload": {
+        "uretim_varyant_id": 10107,
+        "stok_kart_id": 77,
+        "sira": 4,
+        "miktar_kg": 3.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-03-03",
+        "uretim_varyant_key": "2BA-FS01|2BA-FS01-RV-01|SMALL"
+      },
+      "checksum": "59423dcb3ebc174368b23b3a62ff4f33abad528f7d2f7d35e599c83894b3dcc0",
+      "dependencies": [
+        "nexgen_uretim_varyant:2BA-FS01|2BA-FS01-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-03-03"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 603,
+      "natural_key": "2BA-FS01|2BA-FS01-RV-01|SMALL|NEX-06-01|5|17.0",
+      "payload": {
+        "uretim_varyant_id": 10107,
+        "stok_kart_id": 25,
+        "sira": 5,
+        "miktar_kg": 17.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-06-01",
+        "uretim_varyant_key": "2BA-FS01|2BA-FS01-RV-01|SMALL"
+      },
+      "checksum": "dd3aa0d29d2fc883505ccabd4aee50119551450d90d39a9d870165753357f08f",
+      "dependencies": [
+        "nexgen_uretim_varyant:2BA-FS01|2BA-FS01-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-06-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 604,
+      "natural_key": "2BA-FS01|2BA-FS01-RV-01|SMALL|NEX-05-08|6|0.85",
+      "payload": {
+        "uretim_varyant_id": 10107,
+        "stok_kart_id": 78,
+        "sira": 6,
+        "miktar_kg": 0.85,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-08",
+        "uretim_varyant_key": "2BA-FS01|2BA-FS01-RV-01|SMALL"
+      },
+      "checksum": "ef0bd13d3623a4ad873bbe21c7628a72a79ce6d1804227dba8e4bf03d9c40b05",
+      "dependencies": [
+        "nexgen_uretim_varyant:2BA-FS01|2BA-FS01-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-05-08"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 605,
+      "natural_key": "2BA-FS01|2BA-FS01-RV-01|SMALL|NEX-05-02|7|0.65",
+      "payload": {
+        "uretim_varyant_id": 10107,
+        "stok_kart_id": 19,
+        "sira": 7,
+        "miktar_kg": 0.65,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-02",
+        "uretim_varyant_key": "2BA-FS01|2BA-FS01-RV-01|SMALL"
+      },
+      "checksum": "c7e27f7f26dbcbcc3ce171ffb2eef2f0edd8e4d499317eb00d848d4498117916",
+      "dependencies": [
+        "nexgen_uretim_varyant:2BA-FS01|2BA-FS01-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-05-02"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 606,
+      "natural_key": "2BA-FS01|2BA-FS01-RV-01|SMALL|NEX-05-05|8|0.4",
+      "payload": {
+        "uretim_varyant_id": 10107,
+        "stok_kart_id": 22,
+        "sira": 8,
+        "miktar_kg": 0.4,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-05",
+        "uretim_varyant_key": "2BA-FS01|2BA-FS01-RV-01|SMALL"
+      },
+      "checksum": "5c71d3d6b9db6e2bb241d622349e8174470d3c244745c19e9a3ce754abc00f35",
+      "dependencies": [
+        "nexgen_uretim_varyant:2BA-FS01|2BA-FS01-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-05-05"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 607,
+      "natural_key": "2BA-FS01|2BA-FS01-RV-01|SMALL|NEX-04-04|9|0.15",
+      "payload": {
+        "uretim_varyant_id": 10107,
+        "stok_kart_id": 17,
+        "sira": 9,
+        "miktar_kg": 0.15,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-04-04",
+        "uretim_varyant_key": "2BA-FS01|2BA-FS01-RV-01|SMALL"
+      },
+      "checksum": "7bf7ed644ebdc62a8f3763360e83d96c07fb4fc1e018e75a5272d20a9e2ff152",
+      "dependencies": [
+        "nexgen_uretim_varyant:2BA-FS01|2BA-FS01-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-04-04"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 608,
+      "natural_key": "2BA-FS01|2BA-FS01-RV-01|SMALL|NEX-05-01|10|0.8",
+      "payload": {
+        "uretim_varyant_id": 10107,
+        "stok_kart_id": 18,
+        "sira": 10,
+        "miktar_kg": 0.8,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-01",
+        "uretim_varyant_key": "2BA-FS01|2BA-FS01-RV-01|SMALL"
+      },
+      "checksum": "1e67db845232a54d2194b9b7f958dbf330baf7c6764e93d854b78f72411fb973",
+      "dependencies": [
+        "nexgen_uretim_varyant:2BA-FS01|2BA-FS01-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-05-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 609,
+      "natural_key": "2BA-FS01|2BA-FS01-RV-01|SMALL|NEX-04-02|11|0.7",
+      "payload": {
+        "uretim_varyant_id": 10107,
+        "stok_kart_id": 15,
+        "sira": 11,
+        "miktar_kg": 0.7,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-04-02",
+        "uretim_varyant_key": "2BA-FS01|2BA-FS01-RV-01|SMALL"
+      },
+      "checksum": "5a51f277d4c322afa697a8b078c343856c0126c8fd6f645e7b2006a2bb28dda5",
+      "dependencies": [
+        "nexgen_uretim_varyant:2BA-FS01|2BA-FS01-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-04-02"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 610,
+      "natural_key": "2BA-FS01|2BA-FS01-RV-01|SMALL|NEX-07-01|12|0.9",
+      "payload": {
+        "uretim_varyant_id": 10107,
+        "stok_kart_id": 26,
+        "sira": 12,
+        "miktar_kg": 0.9,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-07-01",
+        "uretim_varyant_key": "2BA-FS01|2BA-FS01-RV-01|SMALL"
+      },
+      "checksum": "f2c9f78268720e5769a94d515c6859cda96d313703334273dadd05646afcf28b",
+      "dependencies": [
+        "nexgen_uretim_varyant:2BA-FS01|2BA-FS01-RV-01|SMALL",
+        "nexgen_stok_kart:NEX-07-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 611,
+      "natural_key": "3BA-FM01|3BA-FM01-RV-01|MEDIUM|NEX-01-03|1|37.0",
+      "payload": {
+        "uretim_varyant_id": 10108,
+        "stok_kart_id": 9,
+        "sira": 1,
+        "miktar_kg": 37.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-01-03",
+        "uretim_varyant_key": "3BA-FM01|3BA-FM01-RV-01|MEDIUM"
+      },
+      "checksum": "5f242d85080f7192462a7d4f029411328e11c4ab03a1c0399377c24ebc2f99e9",
+      "dependencies": [
+        "nexgen_uretim_varyant:3BA-FM01|3BA-FM01-RV-01|MEDIUM",
+        "nexgen_stok_kart:NEX-01-03"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 612,
+      "natural_key": "3BA-FM01|3BA-FM01-RV-01|MEDIUM|NEX-01-01|2|17.0",
+      "payload": {
+        "uretim_varyant_id": 10108,
+        "stok_kart_id": 7,
+        "sira": 2,
+        "miktar_kg": 17.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-01-01",
+        "uretim_varyant_key": "3BA-FM01|3BA-FM01-RV-01|MEDIUM"
+      },
+      "checksum": "ca63df3fd8d84bf7f3867561dc6b0f0d365d0e519f68af05ffe89eb6fc279085",
+      "dependencies": [
+        "nexgen_uretim_varyant:3BA-FM01|3BA-FM01-RV-01|MEDIUM",
+        "nexgen_stok_kart:NEX-01-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 613,
+      "natural_key": "3BA-FM01|3BA-FM01-RV-01|MEDIUM|NEX-02-01|3|7.0",
+      "payload": {
+        "uretim_varyant_id": 10108,
+        "stok_kart_id": 11,
+        "sira": 3,
+        "miktar_kg": 7.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-02-01",
+        "uretim_varyant_key": "3BA-FM01|3BA-FM01-RV-01|MEDIUM"
+      },
+      "checksum": "a348607313a5e7167cd0f9f163af10c72686d99ba491bf3966ad2c7a87470f35",
+      "dependencies": [
+        "nexgen_uretim_varyant:3BA-FM01|3BA-FM01-RV-01|MEDIUM",
+        "nexgen_stok_kart:NEX-02-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 614,
+      "natural_key": "3BA-FM01|3BA-FM01-RV-01|MEDIUM|NEX-03-03|4|3.0",
+      "payload": {
+        "uretim_varyant_id": 10108,
+        "stok_kart_id": 77,
+        "sira": 4,
+        "miktar_kg": 3.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-03-03",
+        "uretim_varyant_key": "3BA-FM01|3BA-FM01-RV-01|MEDIUM"
+      },
+      "checksum": "d42cc1825406d333d4aaedca826bb6f0a4f5a00bcc809b1c6c58d3b2b1599360",
+      "dependencies": [
+        "nexgen_uretim_varyant:3BA-FM01|3BA-FM01-RV-01|MEDIUM",
+        "nexgen_stok_kart:NEX-03-03"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 615,
+      "natural_key": "3BA-FM01|3BA-FM01-RV-01|MEDIUM|NEX-06-01|5|13.0",
+      "payload": {
+        "uretim_varyant_id": 10108,
+        "stok_kart_id": 25,
+        "sira": 5,
+        "miktar_kg": 13.0,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-06-01",
+        "uretim_varyant_key": "3BA-FM01|3BA-FM01-RV-01|MEDIUM"
+      },
+      "checksum": "b349e0f0a59e1bd2d3a391e93dda33b9472193adff3bd9c08dd625fddccdfc81",
+      "dependencies": [
+        "nexgen_uretim_varyant:3BA-FM01|3BA-FM01-RV-01|MEDIUM",
+        "nexgen_stok_kart:NEX-06-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 616,
+      "natural_key": "3BA-FM01|3BA-FM01-RV-01|MEDIUM|NEX-05-08|6|0.85",
+      "payload": {
+        "uretim_varyant_id": 10108,
+        "stok_kart_id": 78,
+        "sira": 6,
+        "miktar_kg": 0.85,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-08",
+        "uretim_varyant_key": "3BA-FM01|3BA-FM01-RV-01|MEDIUM"
+      },
+      "checksum": "22fb15b9450d40b9c0c98e951397cac53e360ca13549e4016239118f1be02073",
+      "dependencies": [
+        "nexgen_uretim_varyant:3BA-FM01|3BA-FM01-RV-01|MEDIUM",
+        "nexgen_stok_kart:NEX-05-08"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 617,
+      "natural_key": "3BA-FM01|3BA-FM01-RV-01|MEDIUM|NEX-05-02|7|0.65",
+      "payload": {
+        "uretim_varyant_id": 10108,
+        "stok_kart_id": 19,
+        "sira": 7,
+        "miktar_kg": 0.65,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-02",
+        "uretim_varyant_key": "3BA-FM01|3BA-FM01-RV-01|MEDIUM"
+      },
+      "checksum": "baa9bb95b33faad5bdf54ea2d7fa8314bc466e18879e1891d5df2ca8b625453f",
+      "dependencies": [
+        "nexgen_uretim_varyant:3BA-FM01|3BA-FM01-RV-01|MEDIUM",
+        "nexgen_stok_kart:NEX-05-02"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 618,
+      "natural_key": "3BA-FM01|3BA-FM01-RV-01|MEDIUM|NEX-05-05|8|0.4",
+      "payload": {
+        "uretim_varyant_id": 10108,
+        "stok_kart_id": 22,
+        "sira": 8,
+        "miktar_kg": 0.4,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-05",
+        "uretim_varyant_key": "3BA-FM01|3BA-FM01-RV-01|MEDIUM"
+      },
+      "checksum": "87ee26ef7ff19bb890cbac431cc4ea82aecc1f67b0c4d23cfca2a17633cff604",
+      "dependencies": [
+        "nexgen_uretim_varyant:3BA-FM01|3BA-FM01-RV-01|MEDIUM",
+        "nexgen_stok_kart:NEX-05-05"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 619,
+      "natural_key": "3BA-FM01|3BA-FM01-RV-01|MEDIUM|NEX-04-04|9|0.17",
+      "payload": {
+        "uretim_varyant_id": 10108,
+        "stok_kart_id": 17,
+        "sira": 9,
+        "miktar_kg": 0.17,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-04-04",
+        "uretim_varyant_key": "3BA-FM01|3BA-FM01-RV-01|MEDIUM"
+      },
+      "checksum": "f909a8bc172810e288ff1c38c445f1433db4f43c89c2c991418135e28891a30c",
+      "dependencies": [
+        "nexgen_uretim_varyant:3BA-FM01|3BA-FM01-RV-01|MEDIUM",
+        "nexgen_stok_kart:NEX-04-04"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 620,
+      "natural_key": "3BA-FM01|3BA-FM01-RV-01|MEDIUM|NEX-05-01|10|0.8",
+      "payload": {
+        "uretim_varyant_id": 10108,
+        "stok_kart_id": 18,
+        "sira": 10,
+        "miktar_kg": 0.8,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-05-01",
+        "uretim_varyant_key": "3BA-FM01|3BA-FM01-RV-01|MEDIUM"
+      },
+      "checksum": "a834383cd2f823de88ab290bbb6276d2a1ceaed9f06a7202e121196da78065ea",
+      "dependencies": [
+        "nexgen_uretim_varyant:3BA-FM01|3BA-FM01-RV-01|MEDIUM",
+        "nexgen_stok_kart:NEX-05-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 621,
+      "natural_key": "3BA-FM01|3BA-FM01-RV-01|MEDIUM|NEX-04-02|11|0.705",
+      "payload": {
+        "uretim_varyant_id": 10108,
+        "stok_kart_id": 15,
+        "sira": 11,
+        "miktar_kg": 0.705,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-04-02",
+        "uretim_varyant_key": "3BA-FM01|3BA-FM01-RV-01|MEDIUM"
+      },
+      "checksum": "236b3ce9bc4c759d6d855321181bbac5d8641879b4daf18af40f351b205016d6",
+      "dependencies": [
+        "nexgen_uretim_varyant:3BA-FM01|3BA-FM01-RV-01|MEDIUM",
+        "nexgen_stok_kart:NEX-04-02"
+      ]
+    },
+    {
+      "entity_type": "nexgen_recete_kalem",
+      "source_id": 622,
+      "natural_key": "3BA-FM01|3BA-FM01-RV-01|MEDIUM|NEX-07-01|12|1.05",
+      "payload": {
+        "uretim_varyant_id": 10108,
+        "stok_kart_id": 26,
+        "sira": 12,
+        "miktar_kg": 1.05,
+        "aciklama": null,
+        "aktif": 1,
+        "olusturma_tarihi": "2026-07-16 15:03:53",
+        "stok_kod": "NEX-07-01",
+        "uretim_varyant_key": "3BA-FM01|3BA-FM01-RV-01|MEDIUM"
+      },
+      "checksum": "490f47efbfa570b5dcd3b046ed5a79a3349cd7ff7eb343eb0d1409453a2ca862",
+      "dependencies": [
+        "nexgen_uretim_varyant:3BA-FM01|3BA-FM01-RV-01|MEDIUM",
+        "nexgen_stok_kart:NEX-07-01"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 49,
+      "natural_key": "0030 A.GRİ|1BA-FS01",
+      "payload": {
+        "rf_renk_id": 28,
+        "formul_id": 50,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-16 19:20:39",
+        "onay_tarihi": "2026-07-16 22:20:39",
+        "aktif": 1,
+        "uretim_kodu": "1BA-FS01-0030",
+        "ana_formul_kodu": "1BA-FS01",
+        "renk_kodu": "0030",
+        "rf_kod": "0030 A.GRİ",
+        "formul_kod": "1BA-FS01"
+      },
+      "checksum": "a2b3bb0983cd175c87a9d24b9fff122672695612c6e3577300f8f6be278728f4",
+      "dependencies": [
+        "nexgen_formul:1BA-FS01",
+        "nexgen_rf_renk:0030 A.GRİ"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 50,
+      "natural_key": "0030 A.GRİ|1BA-FL01",
+      "payload": {
+        "rf_renk_id": 28,
+        "formul_id": 49,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-16 19:21:01",
+        "onay_tarihi": "2026-07-16 22:21:01",
+        "aktif": 1,
+        "uretim_kodu": "1BA-FL01-0030",
+        "ana_formul_kodu": "1BA-FL01",
+        "renk_kodu": "0030",
+        "rf_kod": "0030 A.GRİ",
+        "formul_kod": "1BA-FL01"
+      },
+      "checksum": "8e40eb8189172510122ecb5e21c9c7518f3912748d1639cd2341e73edb3d36a5",
+      "dependencies": [
+        "nexgen_formul:1BA-FL01",
+        "nexgen_rf_renk:0030 A.GRİ"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 52,
+      "natural_key": "0031 BUZ GRİ|1BA-FL01",
+      "payload": {
+        "rf_renk_id": 37,
+        "formul_id": 49,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-16 19:41:46",
+        "onay_tarihi": "2026-07-16 22:41:46",
+        "aktif": 1,
+        "uretim_kodu": "1BA-FL01-0031",
+        "ana_formul_kodu": "1BA-FL01",
+        "renk_kodu": "0031",
+        "rf_kod": "0031 BUZ GRİ",
+        "formul_kod": "1BA-FL01"
+      },
+      "checksum": "bcb8e3747f0a25730a62e558ea51179e521f275aca3a42ffbe0887f0df327a0d",
+      "dependencies": [
+        "nexgen_formul:1BA-FL01",
+        "nexgen_rf_renk:0031 BUZ GRİ"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 53,
+      "natural_key": "0031 BUZ GRİ|1BA-FS01",
+      "payload": {
+        "rf_renk_id": 37,
+        "formul_id": 50,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-16 19:41:54",
+        "onay_tarihi": "2026-07-16 22:41:54",
+        "aktif": 1,
+        "uretim_kodu": "1BA-FS01-0031",
+        "ana_formul_kodu": "1BA-FS01",
+        "renk_kodu": "0031",
+        "rf_kod": "0031 BUZ GRİ",
+        "formul_kod": "1BA-FS01"
+      },
+      "checksum": "87d9bcf2595c052f561d704f2bfe55fb94fe5d5de9d88667efdd0b702443cc0b",
+      "dependencies": [
+        "nexgen_formul:1BA-FS01",
+        "nexgen_rf_renk:0031 BUZ GRİ"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 54,
+      "natural_key": "0221 ACIK PUDRA|1BA-FL01",
+      "payload": {
+        "rf_renk_id": 12,
+        "formul_id": 49,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-18 13:06:07",
+        "onay_tarihi": null,
+        "aktif": 1,
+        "uretim_kodu": "1BA-FL01-0221",
+        "ana_formul_kodu": "1BA-FL01",
+        "renk_kodu": "0221",
+        "rf_kod": "0221 ACIK PUDRA",
+        "formul_kod": "1BA-FL01"
+      },
+      "checksum": "2fde7d2c1979d392fdf77dbe6075d3a00fc893532feff16fc914b31c5b82450a",
+      "dependencies": [
+        "nexgen_formul:1BA-FL01",
+        "nexgen_rf_renk:0221 ACIK PUDRA"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 55,
+      "natural_key": "0241 CORAL|1BA-FL01",
+      "payload": {
+        "rf_renk_id": 30,
+        "formul_id": 49,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-18 13:06:07",
+        "onay_tarihi": null,
+        "aktif": 1,
+        "uretim_kodu": "1BA-FL01-0241",
+        "ana_formul_kodu": "1BA-FL01",
+        "renk_kodu": "0241",
+        "rf_kod": "0241 CORAL",
+        "formul_kod": "1BA-FL01"
+      },
+      "checksum": "017690019589fd7a199c1148e677de6b9748a18dbedef2939f52922ed19910e5",
+      "dependencies": [
+        "nexgen_formul:1BA-FL01",
+        "nexgen_rf_renk:0241 CORAL"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 56,
+      "natural_key": "0250 TURUNCU|1BA-FL01",
+      "payload": {
+        "rf_renk_id": 39,
+        "formul_id": 49,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-18 13:06:07",
+        "onay_tarihi": null,
+        "aktif": 1,
+        "uretim_kodu": "1BA-FL01-0250",
+        "ana_formul_kodu": "1BA-FL01",
+        "renk_kodu": "0250",
+        "rf_kod": "0250 TURUNCU",
+        "formul_kod": "1BA-FL01"
+      },
+      "checksum": "f34739b0735f2b2ddaae68bf656a364afe7fb8bf1f22509e77481ea839267e8f",
+      "dependencies": [
+        "nexgen_formul:1BA-FL01",
+        "nexgen_rf_renk:0250 TURUNCU"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 57,
+      "natural_key": "0030 A.GRİ|1BA-FL02",
+      "payload": {
+        "rf_renk_id": 28,
+        "formul_id": 51,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-18 13:06:07",
+        "onay_tarihi": null,
+        "aktif": 1,
+        "uretim_kodu": "1BA-FL02-0030",
+        "ana_formul_kodu": "1BA-FL02",
+        "renk_kodu": "0030",
+        "rf_kod": "0030 A.GRİ",
+        "formul_kod": "1BA-FL02"
+      },
+      "checksum": "db94a4be29f99284f5f9dcaaf6c627b6d6d8b189fface0942ab99f878049b50d",
+      "dependencies": [
+        "nexgen_formul:1BA-FL02",
+        "nexgen_rf_renk:0030 A.GRİ"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 58,
+      "natural_key": "0221 ACIK PUDRA|1BA-FL02",
+      "payload": {
+        "rf_renk_id": 12,
+        "formul_id": 51,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-18 13:06:07",
+        "onay_tarihi": null,
+        "aktif": 1,
+        "uretim_kodu": "1BA-FL02-0221",
+        "ana_formul_kodu": "1BA-FL02",
+        "renk_kodu": "0221",
+        "rf_kod": "0221 ACIK PUDRA",
+        "formul_kod": "1BA-FL02"
+      },
+      "checksum": "3feda4d9fa8f8488b6193d35d760c59c734282fc645106a18cd477eafa557cbb",
+      "dependencies": [
+        "nexgen_formul:1BA-FL02",
+        "nexgen_rf_renk:0221 ACIK PUDRA"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 59,
+      "natural_key": "0240 SOMON|1BA-FL02",
+      "payload": {
+        "rf_renk_id": 21,
+        "formul_id": 51,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-18 13:06:07",
+        "onay_tarihi": null,
+        "aktif": 1,
+        "uretim_kodu": "1BA-FL02-0240",
+        "ana_formul_kodu": "1BA-FL02",
+        "renk_kodu": "0240",
+        "rf_kod": "0240 SOMON",
+        "formul_kod": "1BA-FL02"
+      },
+      "checksum": "aba31e700121fd25e31a5631ad16e8a6198347bfca620705c5c4f189f7ae0823",
+      "dependencies": [
+        "nexgen_formul:1BA-FL02",
+        "nexgen_rf_renk:0240 SOMON"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 60,
+      "natural_key": "0241 CORAL|1BA-FL02",
+      "payload": {
+        "rf_renk_id": 30,
+        "formul_id": 51,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-18 13:06:07",
+        "onay_tarihi": null,
+        "aktif": 1,
+        "uretim_kodu": "1BA-FL02-0241",
+        "ana_formul_kodu": "1BA-FL02",
+        "renk_kodu": "0241",
+        "rf_kod": "0241 CORAL",
+        "formul_kod": "1BA-FL02"
+      },
+      "checksum": "26cb5c058e80f4804137061ad0a877570d94cccc205576536411e5ee7689e3bd",
+      "dependencies": [
+        "nexgen_formul:1BA-FL02",
+        "nexgen_rf_renk:0241 CORAL"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 61,
+      "natural_key": "0041 FÜME|1BA-FL03",
+      "payload": {
+        "rf_renk_id": 46,
+        "formul_id": 53,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-18 13:06:07",
+        "onay_tarihi": null,
+        "aktif": 1,
+        "uretim_kodu": "1BA-FL03-0041",
+        "ana_formul_kodu": "1BA-FL03",
+        "renk_kodu": "0041",
+        "rf_kod": "0041 FÜME",
+        "formul_kod": "1BA-FL03"
+      },
+      "checksum": "cbf9ee97a7cd286f1d64e249bdc32cba336d8b38019990d0a7c78674effb1c3a",
+      "dependencies": [
+        "nexgen_formul:1BA-FL03",
+        "nexgen_rf_renk:0041 FÜME"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 62,
+      "natural_key": "0041 FÜME|2BA-FL01",
+      "payload": {
+        "rf_renk_id": 46,
+        "formul_id": 55,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-18 13:06:07",
+        "onay_tarihi": null,
+        "aktif": 1,
+        "uretim_kodu": "2BA-FL01-0041",
+        "ana_formul_kodu": "2BA-FL01",
+        "renk_kodu": "0041",
+        "rf_kod": "0041 FÜME",
+        "formul_kod": "2BA-FL01"
+      },
+      "checksum": "24447a8d028763110180f645d8f588159d37c9ae41417e3a35608275bc04c9dc",
+      "dependencies": [
+        "nexgen_formul:2BA-FL01",
+        "nexgen_rf_renk:0041 FÜME"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 63,
+      "natural_key": "0221 ACIK PUDRA|1BA-FS01",
+      "payload": {
+        "rf_renk_id": 12,
+        "formul_id": 50,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-18 14:20:35",
+        "onay_tarihi": null,
+        "aktif": 1,
+        "uretim_kodu": "1BA-FS01-0221",
+        "ana_formul_kodu": "1BA-FS01",
+        "renk_kodu": "0221",
+        "rf_kod": "0221 ACIK PUDRA",
+        "formul_kod": "1BA-FS01"
+      },
+      "checksum": "3a81c02c23968fda858a4c2bd87b1d46168b992e5a069b1d619d209559e01291",
+      "dependencies": [
+        "nexgen_formul:1BA-FS01",
+        "nexgen_rf_renk:0221 ACIK PUDRA"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 64,
+      "natural_key": "0241 CORAL|1BA-FS01",
+      "payload": {
+        "rf_renk_id": 30,
+        "formul_id": 50,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-18 14:20:35",
+        "onay_tarihi": null,
+        "aktif": 1,
+        "uretim_kodu": "1BA-FS01-0241",
+        "ana_formul_kodu": "1BA-FS01",
+        "renk_kodu": "0241",
+        "rf_kod": "0241 CORAL",
+        "formul_kod": "1BA-FS01"
+      },
+      "checksum": "ed3c2b8cef0a271fad730fa240da6721e0248ab1e94e12fa3bd45509bf89d25d",
+      "dependencies": [
+        "nexgen_formul:1BA-FS01",
+        "nexgen_rf_renk:0241 CORAL"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 65,
+      "natural_key": "0250 TURUNCU|1BA-FS01",
+      "payload": {
+        "rf_renk_id": 39,
+        "formul_id": 50,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-18 14:20:35",
+        "onay_tarihi": null,
+        "aktif": 1,
+        "uretim_kodu": "1BA-FS01-0250",
+        "ana_formul_kodu": "1BA-FS01",
+        "renk_kodu": "0250",
+        "rf_kod": "0250 TURUNCU",
+        "formul_kod": "1BA-FS01"
+      },
+      "checksum": "546bad6994985fb55735a6606b2bbd4c751d3666562b274171b8ba62d7c74c50",
+      "dependencies": [
+        "nexgen_formul:1BA-FS01",
+        "nexgen_rf_renk:0250 TURUNCU"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 66,
+      "natural_key": "0030 A.GRİ|1BA-FS02",
+      "payload": {
+        "rf_renk_id": 28,
+        "formul_id": 52,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-18 14:20:35",
+        "onay_tarihi": null,
+        "aktif": 1,
+        "uretim_kodu": "1BA-FS02-0030",
+        "ana_formul_kodu": "1BA-FS02",
+        "renk_kodu": "0030",
+        "rf_kod": "0030 A.GRİ",
+        "formul_kod": "1BA-FS02"
+      },
+      "checksum": "4fb2a23358ca9540857160da4b56942fb698061e0b39ede36314dd785e6a2175",
+      "dependencies": [
+        "nexgen_formul:1BA-FS02",
+        "nexgen_rf_renk:0030 A.GRİ"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 67,
+      "natural_key": "0221 ACIK PUDRA|1BA-FS02",
+      "payload": {
+        "rf_renk_id": 12,
+        "formul_id": 52,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-18 14:20:35",
+        "onay_tarihi": null,
+        "aktif": 1,
+        "uretim_kodu": "1BA-FS02-0221",
+        "ana_formul_kodu": "1BA-FS02",
+        "renk_kodu": "0221",
+        "rf_kod": "0221 ACIK PUDRA",
+        "formul_kod": "1BA-FS02"
+      },
+      "checksum": "91d84e95b95ad17fe96ca70a87f9ec51bb5266bbaaa1ccb2c958f324ce70b245",
+      "dependencies": [
+        "nexgen_formul:1BA-FS02",
+        "nexgen_rf_renk:0221 ACIK PUDRA"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 68,
+      "natural_key": "0240 SOMON|1BA-FS02",
+      "payload": {
+        "rf_renk_id": 21,
+        "formul_id": 52,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-18 14:20:35",
+        "onay_tarihi": null,
+        "aktif": 1,
+        "uretim_kodu": "1BA-FS02-0240",
+        "ana_formul_kodu": "1BA-FS02",
+        "renk_kodu": "0240",
+        "rf_kod": "0240 SOMON",
+        "formul_kod": "1BA-FS02"
+      },
+      "checksum": "8e1e6fcf5a978c3526a04ddfc7e36e9b691736f3b0a8b901d7c8b35dde1f9195",
+      "dependencies": [
+        "nexgen_formul:1BA-FS02",
+        "nexgen_rf_renk:0240 SOMON"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 69,
+      "natural_key": "0241 CORAL|1BA-FS02",
+      "payload": {
+        "rf_renk_id": 30,
+        "formul_id": 52,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-18 14:20:35",
+        "onay_tarihi": null,
+        "aktif": 1,
+        "uretim_kodu": "1BA-FS02-0241",
+        "ana_formul_kodu": "1BA-FS02",
+        "renk_kodu": "0241",
+        "rf_kod": "0241 CORAL",
+        "formul_kod": "1BA-FS02"
+      },
+      "checksum": "c89fd5fb536b419ff8c93b3f8c601caaebb56bdbc77bb42a3b8720f35356f55e",
+      "dependencies": [
+        "nexgen_formul:1BA-FS02",
+        "nexgen_rf_renk:0241 CORAL"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 70,
+      "natural_key": "0041 FÜME|1BA-FS03",
+      "payload": {
+        "rf_renk_id": 46,
+        "formul_id": 54,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-18 14:20:35",
+        "onay_tarihi": null,
+        "aktif": 1,
+        "uretim_kodu": "1BA-FS03-0041",
+        "ana_formul_kodu": "1BA-FS03",
+        "renk_kodu": "0041",
+        "rf_kod": "0041 FÜME",
+        "formul_kod": "1BA-FS03"
+      },
+      "checksum": "31933b166bb0e4202a23384451da0a9b6300821072da53c97e8ffaf8414e5e66",
+      "dependencies": [
+        "nexgen_formul:1BA-FS03",
+        "nexgen_rf_renk:0041 FÜME"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 71,
+      "natural_key": "0041 FÜME|2BA-FS01",
+      "payload": {
+        "rf_renk_id": 46,
+        "formul_id": 56,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-18 14:20:35",
+        "onay_tarihi": null,
+        "aktif": 1,
+        "uretim_kodu": "2BA-FS01-0041",
+        "ana_formul_kodu": "2BA-FS01",
+        "renk_kodu": "0041",
+        "rf_kod": "0041 FÜME",
+        "formul_kod": "2BA-FS01"
+      },
+      "checksum": "334e1d67b5ece9e00890f0418b0fa1e04871d8400a8b36d2ede89f8ddb0a56ba",
+      "dependencies": [
+        "nexgen_formul:2BA-FS01",
+        "nexgen_rf_renk:0041 FÜME"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 72,
+      "natural_key": "0241 CORAL|2BA-FL01",
+      "payload": {
+        "rf_renk_id": 30,
+        "formul_id": 55,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-19 19:08:29",
+        "onay_tarihi": "datetime('now','localtime')",
+        "aktif": 1,
+        "uretim_kodu": "2BA-FL01-0241",
+        "ana_formul_kodu": "2BA-FL01",
+        "renk_kodu": "0241",
+        "rf_kod": "0241 CORAL",
+        "formul_kod": "2BA-FL01"
+      },
+      "checksum": "a73c40519de29d41791f6377312c15347308db430d7b56c06ea755c4ae0144e4",
+      "dependencies": [
+        "nexgen_formul:2BA-FL01",
+        "nexgen_rf_renk:0241 CORAL"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 73,
+      "natural_key": "0241 CORAL|2BA-FS01",
+      "payload": {
+        "rf_renk_id": 30,
+        "formul_id": 56,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-19 19:08:29",
+        "onay_tarihi": "datetime('now','localtime')",
+        "aktif": 1,
+        "uretim_kodu": "2BA-FS01-0241",
+        "ana_formul_kodu": "2BA-FS01",
+        "renk_kodu": "0241",
+        "rf_kod": "0241 CORAL",
+        "formul_kod": "2BA-FS01"
+      },
+      "checksum": "fbcc612d3d854cf2847f7a505bb82aa47ae364c37f8819890af5f83ed6eea0db",
+      "dependencies": [
+        "nexgen_formul:2BA-FS01",
+        "nexgen_rf_renk:0241 CORAL"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 74,
+      "natural_key": "0170 PEMBE|1BA-FL03",
+      "payload": {
+        "rf_renk_id": 20,
+        "formul_id": 53,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-19 19:16:39",
+        "onay_tarihi": "datetime('now','localtime')",
+        "aktif": 1,
+        "uretim_kodu": "1BA-FL03-0170",
+        "ana_formul_kodu": "1BA-FL03",
+        "renk_kodu": "0170",
+        "rf_kod": "0170 PEMBE",
+        "formul_kod": "1BA-FL03"
+      },
+      "checksum": "9cb594f8d82404fc6882b67029b2fc6eb26477c4c2d2104bf687cc1f2249f319",
+      "dependencies": [
+        "nexgen_formul:1BA-FL03",
+        "nexgen_rf_renk:0170 PEMBE"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 75,
+      "natural_key": "0170 PEMBE|1BA-FS03",
+      "payload": {
+        "rf_renk_id": 20,
+        "formul_id": 54,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-19 19:16:39",
+        "onay_tarihi": "datetime('now','localtime')",
+        "aktif": 1,
+        "uretim_kodu": "1BA-FS03-0170",
+        "ana_formul_kodu": "1BA-FS03",
+        "renk_kodu": "0170",
+        "rf_kod": "0170 PEMBE",
+        "formul_kod": "1BA-FS03"
+      },
+      "checksum": "fe1a56b8ac2b5db36d31600f10128b6958fcd4ca5c55cd862ea4eaf1209c511b",
+      "dependencies": [
+        "nexgen_formul:1BA-FS03",
+        "nexgen_rf_renk:0170 PEMBE"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 76,
+      "natural_key": "0041 FÜME|1BA-FL01",
+      "payload": {
+        "rf_renk_id": 46,
+        "formul_id": 49,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-20 03:19:08",
+        "onay_tarihi": "datetime('now','localtime')",
+        "aktif": 1,
+        "uretim_kodu": "1BA-FL01-0041",
+        "ana_formul_kodu": "1BA-FL01",
+        "renk_kodu": "0041",
+        "rf_kod": "0041 FÜME",
+        "formul_kod": "1BA-FL01"
+      },
+      "checksum": "44e83570073c80aeb70be14896751246f80efdebcfc9d0b9222068d26f508a30",
+      "dependencies": [
+        "nexgen_formul:1BA-FL01",
+        "nexgen_rf_renk:0041 FÜME"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 77,
+      "natural_key": "0041 FÜME|1BA-FS01",
+      "payload": {
+        "rf_renk_id": 46,
+        "formul_id": 50,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-20 03:19:08",
+        "onay_tarihi": "datetime('now','localtime')",
+        "aktif": 1,
+        "uretim_kodu": "1BA-FS01-0041",
+        "ana_formul_kodu": "1BA-FS01",
+        "renk_kodu": "0041",
+        "rf_kod": "0041 FÜME",
+        "formul_kod": "1BA-FS01"
+      },
+      "checksum": "fba7cd9c15925e80ab120700b04b36eec5d611ea2ca3a06fb1513ec029bbc982",
+      "dependencies": [
+        "nexgen_formul:1BA-FS01",
+        "nexgen_rf_renk:0041 FÜME"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 78,
+      "natural_key": "0030 A.GRİ|2BA-FL01",
+      "payload": {
+        "rf_renk_id": 28,
+        "formul_id": 55,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-20 06:30:53",
+        "onay_tarihi": "datetime('now','localtime')",
+        "aktif": 1,
+        "uretim_kodu": "2BA-FL01-0030",
+        "ana_formul_kodu": "2BA-FL01",
+        "renk_kodu": "0030",
+        "rf_kod": "0030 A.GRİ",
+        "formul_kod": "2BA-FL01"
+      },
+      "checksum": "781d386486fb640f7b106d57f5232eccafd8692f448b2e7f13980f3bd3e0248b",
+      "dependencies": [
+        "nexgen_formul:2BA-FL01",
+        "nexgen_rf_renk:0030 A.GRİ"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 79,
+      "natural_key": "0030 A.GRİ|2BA-FS01",
+      "payload": {
+        "rf_renk_id": 28,
+        "formul_id": 56,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-20 06:30:53",
+        "onay_tarihi": "datetime('now','localtime')",
+        "aktif": 1,
+        "uretim_kodu": "2BA-FS01-0030",
+        "ana_formul_kodu": "2BA-FS01",
+        "renk_kodu": "0030",
+        "rf_kod": "0030 A.GRİ",
+        "formul_kod": "2BA-FS01"
+      },
+      "checksum": "af8fd411f8025cc588c6e83cf14e0e016b6b914ac55f19af0eaa4fa67adf7004",
+      "dependencies": [
+        "nexgen_formul:2BA-FS01",
+        "nexgen_rf_renk:0030 A.GRİ"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 80,
+      "natural_key": "0041 FÜME|1BA-FL02",
+      "payload": {
+        "rf_renk_id": 46,
+        "formul_id": 51,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-20 06:30:53",
+        "onay_tarihi": "datetime('now','localtime')",
+        "aktif": 1,
+        "uretim_kodu": "1BA-FL02-0041",
+        "ana_formul_kodu": "1BA-FL02",
+        "renk_kodu": "0041",
+        "rf_kod": "0041 FÜME",
+        "formul_kod": "1BA-FL02"
+      },
+      "checksum": "ed954a8caa48145e7caeb7a892e5aadde76e6691a549ccfec7212b9ee294525a",
+      "dependencies": [
+        "nexgen_formul:1BA-FL02",
+        "nexgen_rf_renk:0041 FÜME"
+      ]
+    },
+    {
+      "entity_type": "nexgen_rf_formul_uygunluk",
+      "source_id": 81,
+      "natural_key": "0041 FÜME|1BA-FS02",
+      "payload": {
+        "rf_renk_id": 46,
+        "formul_id": 52,
+        "kaynak_arge_test_id": null,
+        "durum": "ONAYLI",
+        "ilk_talep_cari_id": null,
+        "shore_hedef": null,
+        "shore_sonuc": null,
+        "renk_sonucu": null,
+        "numune_sonucu": null,
+        "aciklama": null,
+        "olusturma_tarihi": "2026-07-20 06:30:53",
+        "onay_tarihi": "datetime('now','localtime')",
+        "aktif": 1,
+        "uretim_kodu": "1BA-FS02-0041",
+        "ana_formul_kodu": "1BA-FS02",
+        "renk_kodu": "0041",
+        "rf_kod": "0041 FÜME",
+        "formul_kod": "1BA-FS02"
+      },
+      "checksum": "fbf11bda21db34af908ec0c8d1a8aed88372ae51272644396cf1eaebe226c33f",
+      "dependencies": [
+        "nexgen_formul:1BA-FS02",
+        "nexgen_rf_renk:0041 FÜME"
+      ]
+    }
+  ]
+}
