@@ -378,6 +378,7 @@
             <tr class="pp-tr pp-tr-{{ ae.durum|lower }}"
                 id="pp-tr-{{ ae.id }}"
                 data-parca-id="{{ ae.id }}"
+                data-boyut="{{ ae.boyut }}"
                 onclick="tuiParcaFormulSec({{ ae.id }}, event)"
                 data-durum="{{ ae.durum|lower }}"
                 data-id="{{ ae.id }}">
@@ -733,9 +734,7 @@ function tuiFormulModalAc() {
     return;
   }
   if (_secili_boyut && _formul_api_cache.boyut &&
-      String(_formul_api_cache.boyut).toUpperCase() !== String(_secili_boyut).toUpperCase() &&
-      !(String(_secili_boyut).toUpperCase() === 'MEDIUM' &&
-        String(_formul_api_cache.boyut).toUpperCase() === 'STANDART')) {
+      !tuiFormulBoyutEslestir(_secili_boyut, _formul_api_cache.boyut)) {
     tuiFhHataGoster('Seçili boyut için reçete bulunamadı.');
     return;
   }
@@ -750,11 +749,32 @@ function tuiFormulModalKapat(e) {
   if (m) m.style.display = 'none';
 }
 
+function tuiFormulBoyutApi(parcaId) {
+  var ui = String(_secili_boyut || _boyut || '').trim().toUpperCase();
+  if (parcaId) {
+    var tr = document.getElementById('pp-tr-' + parcaId);
+    if (tr && tr.dataset.boyut) ui = String(tr.dataset.boyut).trim().toUpperCase();
+  }
+  if (!ui) return '';
+  if (ui === 'STANDART') return 'MEDIUM';
+  return ui;
+}
+
+function tuiFormulBoyutEslestir(a, b) {
+  a = String(a || '').trim().toUpperCase();
+  b = String(b || '').trim().toUpperCase();
+  if (!a || !b) return !a && !b;
+  if (a === b) return true;
+  var norm = function(x) { return x === 'STANDART' ? 'MEDIUM' : x; };
+  return norm(a) === norm(b);
+}
+
 async function tuiFormulYukle(parcaId) {
   var url = '/nexgen/api/batch/' + encodeURIComponent(_batch_kodu) + '/formul-icerik';
   var q = [];
   if (parcaId) q.push('parca_id=' + encodeURIComponent(parcaId));
-  if (_secili_boyut) q.push('boyut=' + encodeURIComponent(_secili_boyut));
+  var boyutApi = tuiFormulBoyutApi(parcaId);
+  if (boyutApi) q.push('boyut=' + encodeURIComponent(boyutApi));
   if (q.length) url += '?' + q.join('&');
   try {
     var r = await fetch(url);
