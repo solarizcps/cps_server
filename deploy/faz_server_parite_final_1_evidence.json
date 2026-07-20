@@ -1,20 +1,15 @@
 {
   "git": {
-    "parity_worktree_head": "3ea7015d05a1f4a49b9a752003e089c0217d990f",
-    "origin_main": "3ea7015d05a1f4a49b9a752003e089c0217d990f",
+    "parity_worktree_head": "1c479e672bc412d84d0c7d1850e2be2c694ac68e",
+    "origin_main": "1c479e672bc412d84d0c7d1850e2be2c694ac68e",
     "github_esit": true,
-    "parity_worktree_dirty": [
-      " M _verify_faz_server_parite_final_1.py",
-      " M deploy/faz_server_parite_final_1_evidence.json",
-      " M deploy/nexgen_master_data_package.json",
-      "?? deploy/SERVER_APPLY_PACKAGE_3ea7015/"
-    ],
+    "parity_worktree_dirty": [],
     "laptop_repo_head": "e6df710876fe0c907e5c62ab5f9981c093556fdf",
-    "laptop_origin_main": "3ea7015d05a1f4a49b9a752003e089c0217d990f",
+    "laptop_origin_main": "1c479e672bc412d84d0c7d1850e2be2c694ac68e",
     "laptop_github_esit": false
   },
   "package": {
-    "sha256": "3df2a26f44eaf5e580785a88bb23ea92acd4272f25c22b4b7a851ee1be621747",
+    "sha256": "68ee2a3868e13734f9726318850c60579fc693e674852329a223be5ec38798c1",
     "formul_kodlari": [
       "1BA-FL01",
       "1BA-FL02",
@@ -399,7 +394,7 @@
       "rf_52_plus": true
     }
   },
-  "server_apply_package": "C:\\Solariz_CPS_PARITY_COMMIT\\deploy\\SERVER_APPLY_PACKAGE_3ea7015",
+  "server_apply_package": "C:\\Solariz_CPS_PARITY_COMMIT\\deploy\\SERVER_APPLY_PACKAGE_1c479e6",
   "pass_checks": {
     "recete_9": true,
     "recete_detay": true,
@@ -409,7 +404,7 @@
     "github_esit": true
   },
   "FUNCTIONAL_PASS": true,
-  "GIT_RELEASE_PASS": false,
+  "GIT_RELEASE_PASS": true,
   "LAPTOP_DIRTY_WARN": true,
-  "OVERALL_PASS": false
+  "OVERALL_PASS": true
 }
