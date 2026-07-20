@@ -1249,6 +1249,53 @@ function pzmDetayOzetHesap(st, kalemler) {
   return o;
 }
 
+/** plan.boyutlar[] üzerinden formül-ağırlıklı ortalama / toplam metrikler */
+function pzmMiBoyutAgregasyon(st) {
+  var o = { anaRecete: 0, rfBoya: 0, tamFormul: 0, anaW: 0, rfW: 0, tamW: 0 };
+  (st.planlar || []).forEach(function(p) {
+    (p.boyutlar || []).forEach(function(b) {
+      var w = parseInt(b.formul_adedi || 0, 10) || 1;
+      if (b.ana_recete_kg != null) {
+        o.anaRecete += parseFloat(b.ana_recete_kg) * w;
+        o.anaW += w;
+      }
+      if (b.rf_boya_kg != null) {
+        o.rfBoya += parseFloat(b.rf_boya_kg) * w;
+        o.rfW += w;
+      }
+      if (b.tam_formul_kg != null) {
+        o.tamFormul += parseFloat(b.tam_formul_kg) * w;
+        o.tamW += w;
+      }
+    });
+  });
+  return {
+    anaReceteKg: o.anaW ? Math.round((o.anaRecete / o.anaW) * 1000) / 1000 : null,
+    rfBoyaKg: o.rfW ? Math.round((o.rfBoya / o.rfW) * 1000) / 1000 : null,
+    tamFormulKg: o.tamW ? Math.round((o.tamFormul / o.tamW) * 1000) / 1000 : null,
+  };
+}
+
+function pzmMiAkisOzetHtml(st, kalemler) {
+  if (!st || !st.mprHesaplandi || !st.planlar.length) return '';
+  var oz = pzmDetayOzetHesap(st, kalemler);
+  var bg = pzmMiBoyutAgregasyon(st);
+  var tamStr = bg.tamFormulKg != null ? pzmKgFmt(bg.tamFormulKg) : '—';
+  var farkStr = (oz.fark >= 0 ? '+' : '') + oz.fark.toLocaleString('tr') + ' kg';
+  return '<div class="pzm-mpr-ozet-satir">Talep <span>' + oz.talep.toLocaleString('tr') + ' kg</span>' +
+    ' → Tam Formül <span>' + tamStr + '</span>' +
+    ' → Batch <span>' + oz.formulAdedi + '</span>' +
+    ' → Üretilecek <span>' + oz.uret.toLocaleString('tr') + ' kg</span>' +
+    ' → Faturalanacak <span>' + oz.fatura.toLocaleString('tr') + ' kg</span>' +
+    ' → Fark <span>' + farkStr + '</span></div>';
+}
+
+function pzmMiDetayliAnalizLinkHtml() {
+  return '<div class="pzm-mi-bilgi-satir" style="margin-top:10px;">' +
+    '<a href="/nexgen/malzeme-ihtiyac-merkezi" class="pzm-btn pzm-btn-sm pzm-btn-outline" target="_blank" rel="noopener">' +
+    'Detaylı Malzeme İhtiyaç Analizi</a></div>';
+}
+
 function pzmStokOzetBirlestir(st) {
   var oz = {
     toplamKalem: 0, yeterliSayisi: 0, eksikSayisi: 0,
@@ -1331,7 +1378,6 @@ function pzmDetayAltEmirTetikle(tid) {
   if (!pzmDetayAltEmirEksikMi(st)) {
     st.altEmirYukleniyor = false;
     st.altEmirYuklendi = true;
-    pzmMprUiGuncelle(tid);
     return;
   }
   if (st.altEmirYukleniyor) return;
@@ -1343,14 +1389,18 @@ function pzmDetayHydrate(t, st) {
   if (!t || st.hydrating || st.loading) return;
   if (st.planlar.length) {
     if (st.mprHesaplandi && !st.stokYuklendi && !st.stokYukleniyor) pzmDetayStokYukle(t.id);
-    else if (st.stokYuklendi) pzmDetayAltEmirTetikle(t.id);
+    else if (st.stokYuklendi && !st.altEmirYuklendi) pzmDetayAltEmirTetikle(t.id);
     return;
   }
   if (t.mpr_planlar && t.mpr_planlar.length) {
     st.planlar = t.mpr_planlar;
     st.mprHesaplandi = true;
+    if (!pzmDetayAltEmirEksikMi(st)) {
+      st.altEmirYukleniyor = false;
+      st.altEmirYuklendi = true;
+    }
     if (!st.stokYuklendi && !st.stokYukleniyor) pzmDetayStokYukle(t.id);
-    else if (st.stokYuklendi) pzmDetayAltEmirTetikle(t.id);
+    else if (st.stokYuklendi && !st.altEmirYuklendi) pzmDetayAltEmirTetikle(t.id);
     return;
   }
   var d = (t.durum || '').toUpperCase();
@@ -1543,8 +1593,9 @@ function pzmDetayUretimAktif(st, t) {
 
 function pzmPlanBoyutTabloHtml(plan) {
   var html = '<div class="pzm-plan-kart-wrap"><table class="pzm-plan-boyut-tablo"><thead><tr>';
-  html += '<th>Boyut</th><th class="r">Talep</th><th class="r">Ana Reç.</th><th class="r">RF/Boya</th>';
-  html += '<th class="r">Tam Formül</th><th class="r">Adet</th><th class="r">Üretilecek</th><th class="r">Fark</th>';
+  html += '<th>Boyut</th><th class="r">Talep KG</th><th class="r">Ana Formül KG</th><th class="r">Boya KG</th>';
+  html += '<th class="r">Tam Formül KG</th><th class="r">Formül Adedi</th><th class="r">Üretilecek KG</th>';
+  html += '<th class="r">Faturalanacak KG</th><th class="r">Fark KG</th>';
   html += '</tr></thead><tbody>';
   (plan.boyutlar || []).forEach(function(b) {
     html += '<tr><td>' + pzmEsc(b.boyut || '—') + '</td>';
@@ -1554,6 +1605,7 @@ function pzmPlanBoyutTabloHtml(plan) {
     html += '<td class="r">' + (b.tam_formul_kg != null ? pzmKgFmt(b.tam_formul_kg) : '—') + '</td>';
     html += '<td class="r">' + (b.formul_adedi != null ? String(b.formul_adedi) : '—') + '</td>';
     html += '<td class="r">' + (b.uretilecek_kg != null ? pzmKgFmt(b.uretilecek_kg) : '—') + '</td>';
+    html += '<td class="r">' + pzmKgFmt(b.faturalanacak_kg != null ? b.faturalanacak_kg : b.uretilecek_kg) + '</td>';
     html += '<td class="r">' + (b.fazla_kg != null ? pzmKgFmt(b.fazla_kg) : '—') + '</td></tr>';
   });
   html += '</tbody></table></div>';
@@ -1927,7 +1979,16 @@ function pzmMiHazirKartHtml(item) {
   }
   html += '<div class="pzm-mi-kart-metrik-satir">';
   html += '<div class="pzm-mi-kart-metrik"><span>Talep KG</span><strong>' + (talepKg > 0 ? pzmKgFmt(talepKg) : '—') + '</strong></div>';
-  if (planMetrik) {
+  /* Plan metrikleri — plan.boyutlar[] özetinden */
+  if (item.plan && pzmDetayAltEmirPlanBoyutlari(item.plan).length) {
+    var bTop = pzmMiBoyutAgregasyon({ planlar: [item.plan] });
+    if (bTop.anaReceteKg != null) html += '<div class="pzm-mi-kart-metrik"><span>Ana Formül</span><strong>' + pzmKgFmt(bTop.anaReceteKg) + '</strong></div>';
+    if (bTop.rfBoyaKg != null) html += '<div class="pzm-mi-kart-metrik"><span>Boya</span><strong>' + pzmKgFmt(bTop.rfBoyaKg) + '</strong></div>';
+    if (bTop.tamFormulKg != null) html += '<div class="pzm-mi-kart-metrik"><span>Tam Formül</span><strong>' + pzmKgFmt(bTop.tamFormulKg) + '</strong></div>';
+    if (item.plan.formul_adedi != null) html += '<div class="pzm-mi-kart-metrik"><span>Formül Adedi</span><strong>' + item.plan.formul_adedi + '</strong></div>';
+    if (item.plan.uretilecek_kg != null) html += '<div class="pzm-mi-kart-metrik"><span>Üretilecek</span><strong>' + pzmKgFmt(item.plan.uretilecek_kg) + '</strong></div>';
+    if (item.plan.fazla_kg != null && Math.abs(item.plan.fazla_kg) >= 0.0005) html += '<div class="pzm-mi-kart-metrik"><span>Fark</span><strong>' + pzmKgFmt(item.plan.fazla_kg) + '</strong></div>';
+  } else if (planMetrik) {
     if (planMetrik.ana_recete_kg != null) html += '<div class="pzm-mi-kart-metrik"><span>Ana Reçete</span><strong>' + pzmKgFmt(planMetrik.ana_recete_kg) + '</strong></div>';
     if (planMetrik.rf_boya_kg != null) html += '<div class="pzm-mi-kart-metrik"><span>RF/Boya</span><strong>' + pzmKgFmt(planMetrik.rf_boya_kg) + '</strong></div>';
     if (planMetrik.tam_formul_kg != null) html += '<div class="pzm-mi-kart-metrik"><span>Tam Formül</span><strong>' + pzmKgFmt(planMetrik.tam_formul_kg) + '</strong></div>';
@@ -1942,6 +2003,7 @@ function pzmMiHazirKartHtml(item) {
 function pzmMiMetrikGridHtml(t, st) {
   var kalemler = t ? pzmMiKalemKaynak(t) : [];
   var oz = pzmDetayOzetHesap(st, kalemler);
+  var bg = pzmMiBoyutAgregasyon(st);
   var kd = t ? pzmMiKalemDurumlari(t, st) : { hazir: [], bekleyen: [] };
   var uretim = pzmMiUretimDurumu(st, t);
   var hazirSay = kd.hazir.length;
@@ -1952,40 +2014,39 @@ function pzmMiMetrikGridHtml(t, st) {
   }
   var rfEksikNot = '<div style="font-size:10px;color:var(--rm-t3);margin-top:2px;">Üretim reçetesi tamamlandığında hesaplanacak.</div>';
   var bekleniyorNot = '<div style="font-size:10px;color:var(--rm-t3);margin-top:2px;">Analiz tamamlandıktan sonra gösterilecek.</div>';
+  var hesaplandi = st.mprHesaplandi && st.planlar.length;
 
-  var html = '<div class="pzm-mpr-metrik-grid">';
-  /* Toplam Talep KG — her zaman göster */
-  html += pzmMprMetrikHtml('Toplam Talep KG', oz.talep > 0 ? pzmKgFmt(oz.talep) : '—', oz.talep === 0);
-  /* Üretilecek — plan yoksa RF not */
-  html += pzmMprMetrikHtml('Toplam Üretilecek KG',
-    st.mprHesaplandi ? pzmKgFmt(oz.uret) : (st.rfEksik ? '—' + rfEksikNot : bekleniyorNot),
-    !st.mprHesaplandi);
-  /* Faturalanacak */
-  html += pzmMprMetrikHtml('Toplam Faturalanacak KG',
-    st.mprHesaplandi ? pzmKgFmt(oz.fatura) : (st.rfEksik ? '—' + rfEksikNot : bekleniyorNot),
-    !st.mprHesaplandi);
-  /* Fark */
-  if (st.mprHesaplandi) {
-    html += pzmMprMetrikHtml('Toplam Fark KG', pzmKgFmt(oz.fark), false);
-  }
-  /* Formül Adedi */
-  if (st.mprHesaplandi && oz.formulAdedi > 0) {
-    html += pzmMprMetrikHtml('Toplam Formül Adedi', String(oz.formulAdedi), false);
-  }
-  /* Hammadde KG */
-  if (st.stokYuklendi && oz.hammaddeKg > 0) {
-    html += pzmMprMetrikHtml('Toplam Hammadde KG', pzmKgFmt(oz.hammaddeKg), false);
-  }
-  /* Hazır/Bekleyen */
-  html += pzmMprMetrikHtml('Hazır Kalem', String(hazirSay), hazirSay === 0 && bekleyenSay === 0);
-  html += pzmMprMetrikHtml('Bekleyen Kalem', String(bekleyenSay), bekleyenSay === 0 && hazirSay === 0);
-  /* Stok */
+  var html = '<div class="pzm-mi-bolum-baslik" style="margin-top:0;">Operasyon Özeti</div>';
+  html += '<div class="pzm-mpr-metrik-grid">';
+  html += pzmMprMetrikHtml('Talep KG',
+    hesaplandi ? pzmKgFmt(oz.talep) : (oz.talep > 0 ? pzmKgFmt(oz.talep) : '—'), !hesaplandi && oz.talep === 0);
+  html += pzmMprMetrikHtml('Ana Formül KG',
+    hesaplandi && bg.anaReceteKg != null ? pzmKgFmt(bg.anaReceteKg) : (st.rfEksik ? '—' + rfEksikNot : bekleniyorNot),
+    !hesaplandi);
+  html += pzmMprMetrikHtml('Boya KG',
+    hesaplandi && bg.rfBoyaKg != null ? pzmKgFmt(bg.rfBoyaKg) : (st.rfEksik ? '—' + rfEksikNot : bekleniyorNot),
+    !hesaplandi);
+  html += pzmMprMetrikHtml('Tam Formül KG',
+    hesaplandi && bg.tamFormulKg != null ? pzmKgFmt(bg.tamFormulKg) : (st.rfEksik ? '—' + rfEksikNot : bekleniyorNot),
+    !hesaplandi);
+  html += pzmMprMetrikHtml('Formül / Batch Adedi',
+    hesaplandi && oz.formulAdedi > 0 ? String(oz.formulAdedi) : (st.rfEksik ? '—' + rfEksikNot : bekleniyorNot),
+    !hesaplandi || oz.formulAdedi === 0);
+  html += pzmMprMetrikHtml('Üretilecek KG',
+    hesaplandi ? pzmKgFmt(oz.uret) : (st.rfEksik ? '—' + rfEksikNot : bekleniyorNot),
+    !hesaplandi);
+  html += pzmMprMetrikHtml('Faturalanacak KG',
+    hesaplandi ? pzmKgFmt(oz.fatura) : (st.rfEksik ? '—' + rfEksikNot : bekleniyorNot),
+    !hesaplandi);
+  html += pzmMprMetrikHtml('Fazla / Fark KG',
+    hesaplandi ? pzmKgFmt(oz.fark) : (st.rfEksik ? '—' + rfEksikNot : bekleniyorNot),
+    !hesaplandi);
   html += pzmMprMetrikHtml('Stok Durumu', pzmMiStokDurumuHtml(st), false);
-  /* Üretim */
   html += pzmMprMetrikHtml('Üretim Durumu',
     uretim.hazir ? '<span class="pzm-rf-rozet-hazir">' + uretim.lbl + '</span>'
       : '<span class="pzm-rf-rozet-eksik">' + uretim.lbl + '</span>', false);
   html += '</div>';
+  if (hesaplandi) html += pzmMiAkisOzetHtml(st, kalemler);
   return html;
 }
 
@@ -2035,12 +2096,7 @@ function pzmMiAnalizIcerikHtml(t, st, opts) {
   if (st.mprHesaplandi && st.planlar.length) {
     html += '<div class="pzm-det-sonuc-kutu">Analiz tamamlandı — ' + st.planlar.length + ' kalem için malzeme ihtiyacı hesaplandı.</div>';
     html += pzmMiMetrikGridHtml(t, st);
-    if (kd.hazir.length) {
-      html += '<div class="pzm-mi-bolum-baslik">Hazır Kalemler</div>';
-      html += '<div class="pzm-mi-kart-grid">';
-      kd.hazir.forEach(function(item) { html += pzmMiHazirKartHtml(item); });
-      html += '</div>';
-    }
+    html += '<div class="pzm-mi-bolum-baslik">Boyut Detayları</div>';
     st.planlar.forEach(function(p) {
       html += '<div class="pzm-plan-kart">';
       html += '<div class="pzm-plan-kart-hdr"><span>Kalem #' + (p.kalem_sira || '—') + ' · ' + pzmEsc(p.plan_kodu || '') + '</span>';
@@ -2048,17 +2104,21 @@ function pzmMiAnalizIcerikHtml(t, st, opts) {
       html += pzmPlanBoyutTabloHtml(p);
       html += '</div>';
     });
-    /* Hammadde stok durumu — kapanır panel, stok eksikse açık */
-    var stokAcik = !!(st.stokEksik && st.stokYuklendi);
     var stokIcerik = pzmStokOzetHtml(st);
-    if (stokIcerik) html += pzmMiKapanirPanelHtml('Hammadde Stok Durumu', stokIcerik, stokAcik);
-    /* Alt emir önizleme — kapanır panel, her şey hazırsa kapalı */
-    var aeIcerik = pzmAltEmirOzetHtml(st);
-    if (aeIcerik) html += pzmMiKapanirPanelHtml('Alt Emir / Batch Önizleme', aeIcerik, false);
-    else if (st.stokYuklendi && st.altEmirYukleniyor) {
-      html += pzmMiKapanirPanelHtml('Alt Emir / Batch Önizleme',
-        '<div class="pzm-det-bilgi-kutu" style="margin:0;">Alt emir verisi yükleniyor…</div>', false);
+    if (stokIcerik) {
+      html += pzmMiKapanirPanelHtml('Hammadde Stok Durumu', stokIcerik, true);
+    } else if (st.stokYukleniyor) {
+      html += '<div class="pzm-mi-bolum-baslik">Hammadde Stok Durumu</div>';
+      html += '<div class="pzm-det-bilgi-kutu">Stok durumu kontrol ediliyor…</div>';
     }
+    var aeIcerik = pzmAltEmirOzetHtml(st);
+    if (aeIcerik) {
+      html += pzmMiKapanirPanelHtml('Alt Emir / Batch Detayları', aeIcerik, true);
+    } else if (st.stokYuklendi && st.altEmirYukleniyor) {
+      html += pzmMiKapanirPanelHtml('Alt Emir / Batch Detayları',
+        '<div class="pzm-det-bilgi-kutu" style="margin:0;">Alt emir verisi yükleniyor…</div>', true);
+    }
+    html += pzmMiDetayliAnalizLinkHtml();
     return html;
   }
 
@@ -2075,25 +2135,61 @@ function pzmMiIslemOzetHtml(t, st) {
 
   var kd = pzmMiKalemDurumlari(t, st);
   var uretim = pzmMiUretimDurumu(st, t);
+  var kalemler = t ? pzmMiKalemKaynak(t) : [];
+  var oz = pzmDetayOzetHesap(st, kalemler);
   var html = '<div class="pzm-mi-islem-ozet">';
   html += '<div class="pzm-mi-bolum-baslik" style="margin-top:0;">İşlem Özeti</div>';
   html += '<div class="pzm-detay-satir"><span>Durum</span><strong>' + pzmEsc(uretim.lbl) + '</strong></div>';
+
+  if (t) {
+    html += '<div class="pzm-detay-satir"><span>Sipariş</span><strong>' + pzmEsc(t.siparis_no || ('T-' + t.id)) + '</strong></div>';
+    html += '<div class="pzm-detay-satir"><span>Kalem Sayısı</span><strong>' + pzmDetayKalemler(t).length + '</strong></div>';
+  }
 
   if (kd.bekleyen.length) {
     html += '<div class="pzm-detay-satir"><span>Hazır Kalem</span><strong>' + kd.hazir.length + '</strong></div>';
     html += '<div class="pzm-detay-satir"><span>Bekleyen Kalem</span><strong>' + kd.bekleyen.length + '</strong></div>';
     html += '<div class="pzm-detay-satir"><span>Sebep</span><strong>' +
       kd.bekleyen.length + ' kalemin üretim reçetesi eksik.</strong></div>';
+  } else if (st.mprHesaplandi && st.planlar.length) {
+    html += '<div class="pzm-detay-satir"><span>Hazır Kalem</span><strong>' + kd.hazir.length + '</strong></div>';
+    html += '<div class="pzm-detay-satir"><span>Bekleyen Kalem</span><strong>0</strong></div>';
+    html += '<div class="pzm-detay-satir"><span>Üretilecek KG</span><strong>' + pzmKgFmt(oz.uret) + '</strong></div>';
+    html += '<div class="pzm-detay-satir"><span>Faturalanacak KG</span><strong>' + pzmKgFmt(oz.fatura) + '</strong></div>';
+    html += '<div class="pzm-detay-satir"><span>Formül / Batch Adedi</span><strong>' + oz.formulAdedi + '</strong></div>';
+    if (st.stokYuklendi) html += '<div class="pzm-detay-satir"><span>Stok Durumu</span><strong style="color:var(--rm-green)">' + pzmMiStokDurumuHtml(st) + '</strong></div>';
+    else if (st.stokEksik && st.stokYuklendi) {
+      html += '<div class="pzm-detay-satir"><span>Stok Durumu</span><strong style="color:var(--rm-red)">Eksik</strong></div>';
+    }
+    html += '<div class="pzm-mi-bolum-baslik">Plan Özeti</div>';
+    st.planlar.forEach(function(p) {
+      var boyutMetin = (p.boyutlar || []).map(function(b) {
+        return pzmEsc(b.boyut || '—') + ' · ' + (b.formul_adedi != null ? b.formul_adedi + ' batch' : '—') +
+          ' · ' + pzmKgFmt(b.uretilecek_kg || 0);
+      }).join(' | ');
+      html += '<div class="pzm-detay-satir"><span>' + pzmEsc(p.plan_kodu || 'Plan') + '</span><strong>' +
+        pzmEsc(p.durum || '—') + (boyutMetin ? ' · ' + boyutMetin : '') + '</strong></div>';
+    });
+    if (st.sonUretimSonuc && st.sonUretimSonuc.ok) {
+      html += '<div class="pzm-mi-bolum-baslik">Üretime Gönder Sonucu</div>';
+      var sp = (st.sonUretimSonuc.planlar || [])[0] || {};
+      html += '<div class="pzm-detay-satir"><span>Batch</span><strong>' + pzmEsc(sp.batch_kodu || st.sonUretimSonuc.batch_kodu || '—') + '</strong></div>';
+      html += '<div class="pzm-detay-satir"><span>Plan Durumu</span><strong>Üretimde</strong></div>';
+      if ((st.sonUretimSonuc.planlar || []).length > 1) {
+        html += '<div class="pzm-det-bilgi-kutu" style="margin-top:6px;">' +
+          st.sonUretimSonuc.planlar.length + ' plan atomik olarak üretime gönderildi.</div>';
+      }
+    } else if ((t && (t.durum || '').toUpperCase() === 'URETIMDE') || st.planlar.some(function(p) {
+      return p.durum === 'URETIMDE' || p.durum === 'BITTI';
+    })) {
+      html += '<div class="pzm-mi-bolum-baslik">Üretime Gönder Sonucu</div>';
+      html += '<div class="pzm-detay-satir"><span>Plan Durumu</span><strong>Üretimde</strong></div>';
+    }
+    html += '<div class="pzm-detay-satir"><span>Özet</span><strong>' +
+      oz.planSayisi + ' kalem · ' + pzmKgFmt(oz.fatura) + ' faturalanacak</strong></div>';
   } else if (st.stokEksik && st.stokYuklendi) {
     html += '<div class="pzm-detay-satir"><span>Stok Durumu</span><strong style="color:var(--rm-red)">Eksik</strong></div>';
     html += '<div class="pzm-detay-satir"><span>Sebep</span><strong>Hammadde stokları yetersiz.</strong></div>';
-  } else if (st.mprHesaplandi && st.planlar.length) {
-    var oz = pzmDetayOzetHesap(st);
-    html += '<div class="pzm-detay-satir"><span>Hazır Kalem</span><strong>' + kd.hazir.length + '</strong></div>';
-    html += '<div class="pzm-detay-satir"><span>Bekleyen Kalem</span><strong>0</strong></div>';
-    if (st.stokYuklendi) html += '<div class="pzm-detay-satir"><span>Stok Durumu</span><strong style="color:var(--rm-green)">' + pzmMiStokDurumuHtml(st) + '</strong></div>';
-    html += '<div class="pzm-detay-satir"><span>Özet</span><strong>' +
-      oz.planSayisi + ' kalem · ' + pzmKgFmt(oz.fatura) + ' faturalanacak</strong></div>';
   }
 
   if (st.rfEksik) {
@@ -2377,6 +2473,7 @@ window.pzmDetayUretimeGonder = function(tid) {
         if (_pzmAktifEkran === 'yeni' && String(_pzmTalepId) === String(tid)) pzmYeniMprRender();
         return;
       }
+      st.sonUretimSonuc = d;
       st.planlar.forEach(function(p) { p.durum = 'URETIMDE'; });
       t.durum = 'URETIMDE';
       t.durum_etiket = 'Üretimde';
