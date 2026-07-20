@@ -23,6 +23,8 @@ var RENK_VARYANTLAR = {{ renk_varyantlar | tojson | safe }};  /* rv: alt formül
 var VARYANTLAR      = {{ varyantlar      | tojson | safe }};  /* uv: rv_id + boyut + uv_id */
 var RF_LISTE        = {{ rf_liste        | tojson | safe }};
 </script>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/nexgen_renk_daire.css') }}">
+<script src="{{ url_for('static', filename='js/nexgen_renk_daire.js') }}"></script>
 
 <div class="m1-shell">
 
@@ -372,22 +374,6 @@ html, body { height: 100%; overflow: hidden; }
 .m1-si-metin { flex: 1; min-width: 0; }
 .m1-si-ad   { font-size: 14px; font-weight: 700; color: var(--navy); }
 .m1-si-alt  { font-size: 11px; color: var(--muted); margin-top: 2px; }
-
-/* RF renk daire */
-.m1-renk-daire {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: 2px solid var(--border);
-  flex-shrink: 0;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--muted);
-}
 
 /* Boyut seçimi — büyük dokunmatik kartlar */
 .m1-boyut-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -819,32 +805,6 @@ html, body { height: 100%; overflow: hidden; }
    - Her kart tam tıklanabilir
 ───────────────────────────────────────── */
 
-function rmRenkDaire(rfAdi){
-  const ad=(rfAdi||'').toUpperCase();
-  const eslesme=[
-    [['SİYAH','SIYAH','BLACK'],          {bg:'#1a1a1a', fg:'#fff'}],
-    [['BEYAZ','WHITE','OPTİK','OPTIK'],  {bg:'#f5f5f5', fg:'#555'}],
-    [['GRİ','GRI','GRAY','GREY','FÜME','FUME','SILVER','GÜMÜŞ'], {bg:'#9ca3af', fg:'#fff'}],
-    [['PEMBE','PINK','ROSE'],            {bg:'#f9a8d4', fg:'#831843'}],
-    [['KIRMIZI','KIRIM','RED'],          {bg:'#ef4444', fg:'#fff'}],
-    [['MAVİ','MAVI','BLUE','LACIVERT'],  {bg:'#3b82f6', fg:'#fff'}],
-    [['YEŞİL','YESIL','GREEN'],          {bg:'#22c55e', fg:'#fff'}],
-    [['SARI','YELLOW','GOLD','ALTIN'],   {bg:'#fbbf24', fg:'#78350f'}],
-    [['TURUNCU','ORANGE'],               {bg:'#f97316', fg:'#fff'}],
-    [['MOR','PURPLE','VİOLE','VIOLE'],   {bg:'#a855f7', fg:'#fff'}],
-    [['KAHVE','BROWN','TABA','KREM','CREAM','BEJ','BEIGE'], {bg:'#d97706', fg:'#fff'}],
-    [['BAKLAVA','EKRU','EKRÜ'],          {bg:'#e8d5b7', fg:'#6b4226'}],
-    [['LACIVERT'],                       {bg:'#1e3a5f', fg:'#fff'}],
-  ];
-  for(const [keys,renk] of eslesme){
-    if(keys.some(k=>ad.includes(k))) return renk;
-  }
-  let h=0;
-  for(let i=0;i<ad.length;i++) h=(h*31+ad.charCodeAt(i))&0xffffff;
-  const bg='#'+('000000'+(h&0xffffff).toString(16)).slice(-6);
-  return {bg, fg:'#fff'};
-}
-
 /* ── Durum ── */
 var S = {
   adim: 1,   /* 1-8 */
@@ -1198,9 +1158,9 @@ function adim4Html(){
     +'<div class="m1-liste" id="rf-liste">';
   RF_LISTE.forEach(function(r){
     var sec = S.rf_id===r.id ? ' secili' : '';
-    var dc = rmRenkDaire(r.rf_ad||r.rf_kod||'');
+    var dc = rmRenkDaire(r.rf_ad || '');
     html += '<div class="m1-secim-item'+sec+'" data-tip="rf" data-id="'+r.id+'" data-ad="'+esc(r.rf_ad||'')+'" data-kod="'+esc(r.rf_kod||'')+'">'
-      +'<div class="m1-renk-daire" style="background:'+dc.bg+';color:'+dc.fg+';border-color:'+(dc.bg==='#f5f5f5'?'#d1d5db':dc.bg)+'"></div>'
+      +'<div class="nx-renk-daire" style="'+nxRenkDaireStyle(dc)+'"></div>'
       +'<div class="m1-si-metin">'
       +'<div class="m1-si-ad">'+esc(r.rf_kod||'')+'</div>'
       +'<div class="m1-si-alt">'+esc(r.rf_ad||'')+'</div>'

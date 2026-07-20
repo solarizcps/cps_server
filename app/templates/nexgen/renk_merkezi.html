@@ -2,6 +2,8 @@
 {% set page_title = "Renk Merkezi — NexGen" %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/nexgen_renk_daire.css') }}">
+<script src="{{ url_for('static', filename='js/nexgen_renk_daire.js') }}"></script>
 <style>
 /* Renk Merkezi — Reçete Merkezi ile aynı tasarım token'ları ve sınıflar */
 *{ box-sizing:border-box; }
@@ -101,13 +103,6 @@
 .rm-rf-kart:hover { background:var(--rm-bg); }
 .rm-rf-kart.aktif {
   background:#f0f7fb; border-left-color:var(--rm-teal);
-}
-/* Renk önizleme dairesi */
-.rm-renk-daıre {
-  width:28px; height:28px; border-radius:50%; flex-shrink:0;
-  border:1.5px solid rgba(0,0,0,.12); margin-top:2px;
-  display:flex; align-items:center; justify-content:center;
-  font-size:8px; font-weight:800; color:inherit; letter-spacing:0;
 }
 .rm-rf-kart-icerik { flex:1; min-width:0; }
 .rm-rf-kart-kod {
@@ -497,35 +492,6 @@ let aktifRfId    = null;
 let rmFbSeciliIds = new Set();
 
 // ── yardımcı ─────────────────────────────────────────────────────────
-// Renk adından önizleme dairesi rengi
-function rmRenkDaire(rfAdi){
-  const ad=(rfAdi||'').toUpperCase();
-  // Anahtar kelime → {bg, fg}
-  const eslesme=[
-    [['SİYAH','SIYAH','BLACK'],          {bg:'#1a1a1a', fg:'#fff'}],
-    [['BEYAZ','WHITE','OPTİK','OPTIK'],  {bg:'#f5f5f5', fg:'#555'}],
-    [['GRİ','GRI','GRAY','GREY','FÜME','FUME','SILVER','GÜMÜŞ'], {bg:'#9ca3af', fg:'#fff'}],
-    [['PEMBE','PINK','ROSE'],            {bg:'#f9a8d4', fg:'#831843'}],
-    [['KIRMIZI','KIRIM','RED'],          {bg:'#ef4444', fg:'#fff'}],
-    [['MAVİ','MAVI','BLUE','LACIVERT'],  {bg:'#3b82f6', fg:'#fff'}],
-    [['YEŞİL','YESIL','GREEN'],          {bg:'#22c55e', fg:'#fff'}],
-    [['SARI','YELLOW','GOLD','ALTIN'],   {bg:'#fbbf24', fg:'#78350f'}],
-    [['TURUNCU','ORANGE'],               {bg:'#f97316', fg:'#fff'}],
-    [['MOR','PURPLE','VİOLE','VIOLE'],   {bg:'#a855f7', fg:'#fff'}],
-    [['KAHVE','BROWN','TABA','KREM','CREAM','BEJ','BEIGE'], {bg:'#d97706', fg:'#fff'}],
-    [['BAKLAVA','EKRU','EKRÜ'],          {bg:'#e8d5b7', fg:'#6b4226'}],
-    [['LACIVERT'],                       {bg:'#1e3a5f', fg:'#fff'}],
-  ];
-  for(const [keys,renk] of eslesme){
-    if(keys.some(k=>ad.includes(k))) return renk;
-  }
-  // Hiç eşleşme yoksa RF adından deterministik renk üret
-  let h=0;
-  for(let i=0;i<ad.length;i++) h=(h*31+ad.charCodeAt(i))&0xffffff;
-  const bg='#'+('000000'+(h&0xffffff).toString(16)).slice(-6);
-  return {bg, fg:'#fff'};
-}
-
 function rmE(s){
   if(s==null)return'';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -757,7 +723,7 @@ function rmListeRender(kartlar){
     const dc = rmRenkDaire(k.rf_adi);
     return `<div class="rm-rf-kart${secilik?' aktif':''}"
                 onclick='rmKartSec(${JSON.stringify(k)})'>
-      <div class="rm-renk-daıre" style="background:${dc.bg};color:${dc.fg};border-color:${dc.bg==='#f5f5f5'?'#d1d5db':dc.bg}"></div>
+      <div class="nx-renk-daire" style="${nxRenkDaireStyle(dc)}"></div>
       <div class="rm-rf-kart-icerik">
         <div class="rm-rf-kart-kod">${rmE(anaKod)}</div>
         <div class="rm-rf-kart-durum">
