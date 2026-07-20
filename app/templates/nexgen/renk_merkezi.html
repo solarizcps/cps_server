@@ -1016,7 +1016,10 @@ function rmRender(kart, d){
   );
 
   // ─── BAĞLANTILAR sekmesi ────────────────────────────────────────────
-  document.getElementById('s-baglantilar').innerHTML=rmBaglantiHtml(
+  const bagGeciciNot = d.formul_uygunluk_gecici
+    ? '<div style="font-size:10px;color:var(--rm-t4);padding:0 0 10px 2px">Formül uygunluğu geçici olarak otomatik çözümlenmektedir.</div>'
+    : '';
+  document.getElementById('s-baglantilar').innerHTML = bagGeciciNot + rmBaglantiHtml(
     d.baglantilar||[], d.baglantilar_gecmis||[]
   );
 

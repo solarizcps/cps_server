@@ -70,6 +70,11 @@ from modules.nexgen.schema_guard import (
     schema_not_ready_html_flash,
     schema_not_ready_json,
 )
+from modules.nexgen.rf_formul_politika import (
+    rf_formul_gecici_hazir_mi,
+    rf_formul_uygunluk_zorunlu,
+    uretim_kodu_coz,
+)
 
 nexgen_bp = Blueprint('nexgen', __name__, url_prefix='/nexgen')
 
@@ -6573,6 +6578,7 @@ def api_rm_detay():
             'revizyonlar': revizyonlar,
             'kullanim':   kullanim,
             'olaylar':    olaylar,
+            'formul_uygunluk_gecici': not rf_formul_uygunluk_zorunlu(),
         })
     except Exception as exc:
         # HTML 500 yerine JSON — UI "Ağ hatası" sanmasın
@@ -17484,14 +17490,21 @@ def _pzm_rf_formul_uygunluk_var(con, rf_renk_id, formul_id) -> bool:
     if not kardes:
         return False
     ph = ','.join(['?'] * len(kardes))
-    return bool(con.execute(
+    if con.execute(
         f"""
         SELECT 1 FROM nexgen_rf_formul_uygunluk
         WHERE rf_renk_id = ? AND formul_id IN ({ph}) AND aktif = 1
         LIMIT 1
         """,
         [rf_renk_id, *kardes],
-    ).fetchone())
+    ).fetchone():
+        return True
+    if rf_formul_uygunluk_zorunlu():
+        return False
+    for fid in kardes:
+        if rf_formul_gecici_hazir_mi(con, rf_renk_id, fid):
+            return True
+    return False
 
 
 def _pzm_rf_cari_uygun(rf: dict, cari_id: int | None) -> bool:
@@ -20752,13 +20765,18 @@ def _rf_renk_formul_dogrula(con, rf_renk_id, renk_varyant_id):
         return None
 
     if cekirdek_formul_mu(rv['formul_kod']):
-        uygun = con.execute("""
-            SELECT id FROM nexgen_rf_formul_uygunluk
-            WHERE rf_renk_id=? AND formul_id=? AND aktif=1
-        """, (rf_renk_id, rv['formul_id'])).fetchone()
-        if not uygun:
+        if rf_formul_uygunluk_zorunlu():
+            uygun = con.execute("""
+                SELECT id FROM nexgen_rf_formul_uygunluk
+                WHERE rf_renk_id=? AND formul_id=? AND aktif=1
+            """, (rf_renk_id, rv['formul_id'])).fetchone()
+            if not uygun:
+                return None
+            if not _uretim_kodu_db_dolu_mi(con, rf_renk_id, rv['formul_id']):
+                return None
+        elif not rf_formul_gecici_hazir_mi(con, rf_renk_id, rv['formul_id']):
             return None
-        if not _uretim_kodu_db_dolu_mi(con, rf_renk_id, rv['formul_id']):
+        elif not uretim_kodu_coz(con, rf_renk_id, rv['formul_id']):
             return None
     return rf
 
@@ -27161,7 +27179,10 @@ def _uretim_kodu_cakisma_kontrol(con, uretim_kodu, rf_renk_id, formul_id) -> dic
 
 
 def _uretim_kodu_mevcut_bul(con, rf_renk_id, formul_id) -> dict | None:
-    """Aktif uygunluk kaydından mevcut üretim kodunu döner."""
+    """Aktif uygunluk kaydından veya geçici modda runtime üretim kodunu döner."""
+    uk = uretim_kodu_coz(con, rf_renk_id, formul_id)
+    if uk and uk.get('uretim_kodu'):
+        return uk
     cols = [c[1] for c in con.execute("PRAGMA table_info(nexgen_rf_formul_uygunluk)").fetchall()]
     sel_uk = 'uretim_kodu' if 'uretim_kodu' in cols else "NULL AS uretim_kodu"
     sel_af = 'ana_formul_kodu' if 'ana_formul_kodu' in cols else "NULL AS ana_formul_kodu"
@@ -27177,17 +27198,9 @@ def _uretim_kodu_mevcut_bul(con, rf_renk_id, formul_id) -> dict | None:
     d = dict(row)
     if d.get('uretim_kodu'):
         return d
-    rf = con.execute("SELECT rf_kod FROM nexgen_rf_renk WHERE id=?", (rf_renk_id,)).fetchone()
-    frm = con.execute("SELECT kod FROM nexgen_formul WHERE id=?", (formul_id,)).fetchone()
-    if rf and frm:
-        hesap = _uretim_kodu_girdi_dogrula({'rf_kod': rf['rf_kod'], 'aktif': 1, 'durum': 'ONAYLI'}, frm['kod'])
-        if hesap.get('ok'):
-            d.update({
-                'uretim_kodu': hesap['uretim_kodu'],
-                'ana_formul_kodu': hesap['ana_formul_kodu'],
-                'renk_kodu': hesap['renk_kodu'],
-            })
-    return d if d.get('uretim_kodu') else None
+    if rf_formul_uygunluk_zorunlu():
+        return None
+    return uk
 
 
 def _uretim_kodu_db_dolu_mi(con, rf_renk_id, formul_id) -> dict | None:
@@ -27207,21 +27220,30 @@ def _uretim_kodu_db_dolu_mi(con, rf_renk_id, formul_id) -> dict | None:
 
 
 def _yeni_plan_uretim_kodu_zorunlu_dogrula(con, formul_id, rf_renk_id) -> dict:
-    """Yeni çekirdek plan/MPR için DB'de dolu üretim kodu zorunluluğu."""
+    """Yeni çekirdek plan/MPR için üretim kodu zorunluluğu (DB veya geçici runtime)."""
     frm = con.execute("SELECT kod FROM nexgen_formul WHERE id=?", (formul_id,)).fetchone()
     if not frm or not cekirdek_formul_mu(frm['kod']):
         return {'ok': True, 'legacy': True}
-    uygun = con.execute("""
-        SELECT id FROM nexgen_rf_formul_uygunluk
-        WHERE rf_renk_id=? AND formul_id=? AND aktif=1
-    """, (rf_renk_id, formul_id)).fetchone()
-    if not uygun:
-        return {
-            'ok': False,
-            'hata': 'Seçilen formül ve renk için aktif üretim kodu bulunamadı.',
-            'status': 409,
-        }
-    uk = _uretim_kodu_db_dolu_mi(con, rf_renk_id, formul_id)
+    if rf_formul_uygunluk_zorunlu():
+        uygun = con.execute("""
+            SELECT id FROM nexgen_rf_formul_uygunluk
+            WHERE rf_renk_id=? AND formul_id=? AND aktif=1
+        """, (rf_renk_id, formul_id)).fetchone()
+        if not uygun:
+            return {
+                'ok': False,
+                'hata': 'Seçilen formül ve renk için aktif üretim kodu bulunamadı.',
+                'status': 409,
+            }
+        uk = _uretim_kodu_db_dolu_mi(con, rf_renk_id, formul_id)
+    else:
+        if not rf_formul_gecici_hazir_mi(con, rf_renk_id, formul_id):
+            return {
+                'ok': False,
+                'hata': 'Seçilen formül ve renk üretim için hazır değil.',
+                'status': 409,
+            }
+        uk = uretim_kodu_coz(con, rf_renk_id, formul_id)
     if not uk or not uretim_kodu_format_gecerli_mi(uk.get('uretim_kodu')):
         return {
             'ok': False,
@@ -27232,12 +27254,72 @@ def _yeni_plan_uretim_kodu_zorunlu_dogrula(con, formul_id, rf_renk_id) -> dict:
 
 
 def _cekirdek_formul_rf_secenekleri(con, formul_id, *, uretim_kodu_zorunlu=True) -> list[dict]:
-    """Seçili çekirdek formüle bağlı aktif uygunluk → onaylı çekirdek renk listesi."""
+    """Seçili çekirdek formüle uygun onaylı çekirdek renk listesi."""
     frm = con.execute(
-        "SELECT id, kod FROM nexgen_formul WHERE id=?", (formul_id,)
+        "SELECT id, kod, urun_ailesi FROM nexgen_formul WHERE id=?", (formul_id,)
     ).fetchone()
     if not frm or not cekirdek_formul_mu(frm['kod']):
         return []
+
+    if not rf_formul_uygunluk_zorunlu():
+        rows = con.execute("""
+            SELECT rf.id AS rf_renk_id, rf.rf_kod, rf.ad AS renk_adi, rf.durum, rf.aktif,
+                   rf.aktif_rev_no, rf.kaynak_arge_test_id, rf.cari_id,
+                   (SELECT COALESCE(SUM(k.miktar_kg), 0) FROM nexgen_rf_kalem k
+                    WHERE k.rf_renk_id = rf.id AND k.aktif = 1) AS toplam_kg
+            FROM nexgen_rf_renk rf
+            WHERE rf.aktif = 1 AND rf.durum = 'ONAYLI'
+              AND rf.rf_kod NOT LIKE 'RF-%' AND rf.rf_kod NOT LIKE 'NX-%'
+              AND rf.kaynak_arge_test_id IS NULL
+            ORDER BY rf.rf_kod
+        """).fetchall()
+        liste: list[dict] = []
+        for r in rows:
+            rf_dict = {
+                'rf_kod': r['rf_kod'],
+                'aktif': r['aktif'],
+                'durum': r['durum'],
+                'kaynak_arge_test_id': r['kaynak_arge_test_id'],
+            }
+            if not yeni_secimde_renk_gosterilebilir_mi(rf_dict):
+                continue
+            if not rf_formul_gecici_hazir_mi(con, r['rf_renk_id'], formul_id):
+                continue
+            uk_row = uretim_kodu_coz(con, r['rf_renk_id'], formul_id) or {}
+            uk = (uk_row.get('uretim_kodu') or '').strip()
+            af = (uk_row.get('ana_formul_kodu') or frm['kod'] or '').strip()
+            rk = (uk_row.get('renk_kodu') or renk_sayisal_onek(r['rf_kod']) or '').strip()
+            if uretim_kodu_zorunlu and (not uk or not uretim_kodu_format_gecerli_mi(uk)):
+                continue
+            rev_no = r['aktif_rev_no']
+            rev_id = None
+            if rev_no and _rf_revizyon_tablosu_var(con):
+                rev_row = con.execute(
+                    "SELECT id FROM nexgen_rf_revizyon WHERE rf_renk_id=? AND rev_no=? AND aktif=1",
+                    (r['rf_renk_id'], rev_no),
+                ).fetchone()
+                if rev_row:
+                    rev_id = rev_row['id']
+            toplam_kg = float(r['toplam_kg'] or 0)
+            liste.append({
+                'uygunluk_id': uk_row.get('uygunluk_id'),
+                'formul_id': formul_id,
+                'uretim_varyant_id': None,
+                'rf_renk_id': r['rf_renk_id'],
+                'id': r['rf_renk_id'],
+                'rf_kod': r['rf_kod'],
+                'ad': r['renk_adi'],
+                'renk_adi': r['renk_adi'],
+                'renk_kodu': rk,
+                'ana_formul_kodu': af,
+                'uretim_kodu': uk or None,
+                'rf_rev_no': rev_no,
+                'rf_revizyon_id': rev_id,
+                'toplam_kg': round(toplam_kg, 6),
+                'toplam_gr': _miktar_kg_to_gr(toplam_kg),
+                'cari_id': r['cari_id'],
+            })
+        return liste
 
     rows = con.execute("""
         SELECT u.id AS uygunluk_id, u.formul_id, u.rf_renk_id,
