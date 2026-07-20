@@ -1,0 +1,42 @@
+[
+  {
+    "path": "deploy/nexgen_master_data_package.json",
+    "sha256": "68ee2a3868e13734f9726318850c60579fc693e674852329a223be5ec38798c1"
+  },
+  {
+    "path": "deploy/nexgen_tam_server_parite_20260720_120416/expected_counts.json",
+    "sha256": "a2576f82d86fc874d39252948a8d260c518f1bffb9895c2d2ef8cc1f50ed8d60"
+  },
+  {
+    "path": "deploy/nexgen_tam_server_parite_20260720_120416/package.sha256",
+    "sha256": "f57985e53a1d563a336e59bc1dda9227ff31ebeadcbd6f946b61c4e03dc310c0"
+  },
+  {
+    "path": "deploy/nexgen_tam_server_parite_20260720_120416/server_runbook.ps1",
+    "sha256": "cd6e420c1aeae9101a72a3b8a0943b4e862439100e28d335ca50c75155c16baa"
+  },
+  {
+    "path": "deploy/nexgen_tam_server_parite_20260720_120416/rollback_runbook.ps1",
+    "sha256": "9a249ef9b5f581c7bd49fb8a25e3aafb6b6d4060ef004b2da18ca960e349e1a1"
+  },
+  {
+    "path": "app/tools/nexgen_master_data_sync.py",
+    "sha256": "c10dc844f12e75d6b1361d45654dffdc2a91951a2e55a79e15604bfd743b8261"
+  },
+  {
+    "path": "app/tools/nexgen_server_profile.py",
+    "sha256": "818761efc545af7310d7613d824d639ebb5f6b1e66f0e958815c41928c266ce6"
+  },
+  {
+    "path": "app/tools/nexgen_pazarlama_kalem_backfill.py",
+    "sha256": "dc7eb791b2398aef289a998bc0fb3e3a653534e2d501f430e7b186dd14b838c2"
+  },
+  {
+    "path": "app/tools/nexgen_schema_upgrade.py",
+    "sha256": "e62eeda1753d32051d3fdffa55b509a6b7c790f4ebcd0960fd39509a6a79c89b"
+  },
+  {
+    "path": "scripts/deploy_preflight_nexgen.ps1",
+    "sha256": "38941ec3ccf1bde5caa11fe81fcf7c1410f00a8593dbfdb195ec8b69647bae86"
+  }
+]

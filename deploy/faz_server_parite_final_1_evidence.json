@@ -1,0 +1,415 @@
+{
+  "git": {
+    "parity_worktree_head": "36883adbd5b8a4b5d6409317b471fe6d15b18591",
+    "origin_main": "36883adbd5b8a4b5d6409317b471fe6d15b18591",
+    "github_esit": true,
+    "parity_worktree_dirty": [
+      "?? _tmp_users.py",
+      "?? _verify_faz_server_parite_final_1.py",
+      "?? deploy/SERVER_APPLY_PACKAGE_36883ad/",
+      "?? deploy/faz_server_parite_final_1_evidence.json"
+    ],
+    "laptop_repo_head": "e6df710876fe0c907e5c62ab5f9981c093556fdf",
+    "laptop_origin_main": "36883adbd5b8a4b5d6409317b471fe6d15b18591",
+    "laptop_github_esit": false
+  },
+  "package": {
+    "sha256": "68ee2a3868e13734f9726318850c60579fc693e674852329a223be5ec38798c1",
+    "formul_kodlari": [
+      "1BA-FL01",
+      "1BA-FL02",
+      "1BA-FL03",
+      "1BA-FS01",
+      "1BA-FS02",
+      "1BA-FS03",
+      "2BA-FL01",
+      "2BA-FS01",
+      "3BA-FM01"
+    ],
+    "renk_varyant_keys": [
+      "1BA-FL01|1BA-FL01-RV-01",
+      "1BA-FL02|1BA-FL02-RV-01",
+      "1BA-FL03|1BA-FL03-RV-01",
+      "1BA-FS01|1BA-FS01-RV-01",
+      "1BA-FS02|1BA-FS02-RV-01",
+      "1BA-FS03|1BA-FS03-RV-01",
+      "2BA-FL01|2BA-FL01-RV-01",
+      "2BA-FS01|2BA-FS01-RV-01",
+      "3BA-FM01|3BA-FM01-RV-01"
+    ],
+    "uretim_varyantlar": [
+      {
+        "key": "1BA-FL01|1BA-FL01-RV-01|LARGE",
+        "boyut": "LARGE",
+        "formul_kod": null
+      },
+      {
+        "key": "1BA-FS01|1BA-FS01-RV-01|SMALL",
+        "boyut": "SMALL",
+        "formul_kod": null
+      },
+      {
+        "key": "1BA-FL02|1BA-FL02-RV-01|LARGE",
+        "boyut": "LARGE",
+        "formul_kod": null
+      },
+      {
+        "key": "1BA-FS02|1BA-FS02-RV-01|SMALL",
+        "boyut": "SMALL",
+        "formul_kod": null
+      },
+      {
+        "key": "1BA-FL03|1BA-FL03-RV-01|LARGE",
+        "boyut": "LARGE",
+        "formul_kod": null
+      },
+      {
+        "key": "1BA-FS03|1BA-FS03-RV-01|SMALL",
+        "boyut": "SMALL",
+        "formul_kod": null
+      },
+      {
+        "key": "2BA-FL01|2BA-FL01-RV-01|LARGE",
+        "boyut": "LARGE",
+        "formul_kod": null
+      },
+      {
+        "key": "2BA-FS01|2BA-FS01-RV-01|SMALL",
+        "boyut": "SMALL",
+        "formul_kod": null
+      },
+      {
+        "key": "3BA-FM01|3BA-FM01-RV-01|MEDIUM",
+        "boyut": "MEDIUM",
+        "formul_kod": null
+      }
+    ],
+    "recete_kalem_count": 106,
+    "stok_kart_count": 13,
+    "rf_uygunluk": [
+      {
+        "key": "0030 A.GRİ|1BA-FS01",
+        "formul_kod": "1BA-FS01",
+        "rf_kod": "0030 A.GRİ"
+      },
+      {
+        "key": "0030 A.GRİ|1BA-FL01",
+        "formul_kod": "1BA-FL01",
+        "rf_kod": "0030 A.GRİ"
+      },
+      {
+        "key": "0031 BUZ GRİ|1BA-FL01",
+        "formul_kod": "1BA-FL01",
+        "rf_kod": "0031 BUZ GRİ"
+      },
+      {
+        "key": "0031 BUZ GRİ|1BA-FS01",
+        "formul_kod": "1BA-FS01",
+        "rf_kod": "0031 BUZ GRİ"
+      },
+      {
+        "key": "0221 ACIK PUDRA|1BA-FL01",
+        "formul_kod": "1BA-FL01",
+        "rf_kod": "0221 ACIK PUDRA"
+      },
+      {
+        "key": "0241 CORAL|1BA-FL01",
+        "formul_kod": "1BA-FL01",
+        "rf_kod": "0241 CORAL"
+      },
+      {
+        "key": "0250 TURUNCU|1BA-FL01",
+        "formul_kod": "1BA-FL01",
+        "rf_kod": "0250 TURUNCU"
+      },
+      {
+        "key": "0030 A.GRİ|1BA-FL02",
+        "formul_kod": "1BA-FL02",
+        "rf_kod": "0030 A.GRİ"
+      },
+      {
+        "key": "0221 ACIK PUDRA|1BA-FL02",
+        "formul_kod": "1BA-FL02",
+        "rf_kod": "0221 ACIK PUDRA"
+      },
+      {
+        "key": "0240 SOMON|1BA-FL02",
+        "formul_kod": "1BA-FL02",
+        "rf_kod": "0240 SOMON"
+      },
+      {
+        "key": "0241 CORAL|1BA-FL02",
+        "formul_kod": "1BA-FL02",
+        "rf_kod": "0241 CORAL"
+      },
+      {
+        "key": "0041 FÜME|1BA-FL03",
+        "formul_kod": "1BA-FL03",
+        "rf_kod": "0041 FÜME"
+      },
+      {
+        "key": "0041 FÜME|2BA-FL01",
+        "formul_kod": "2BA-FL01",
+        "rf_kod": "0041 FÜME"
+      },
+      {
+        "key": "0221 ACIK PUDRA|1BA-FS01",
+        "formul_kod": "1BA-FS01",
+        "rf_kod": "0221 ACIK PUDRA"
+      },
+      {
+        "key": "0241 CORAL|1BA-FS01",
+        "formul_kod": "1BA-FS01",
+        "rf_kod": "0241 CORAL"
+      },
+      {
+        "key": "0250 TURUNCU|1BA-FS01",
+        "formul_kod": "1BA-FS01",
+        "rf_kod": "0250 TURUNCU"
+      },
+      {
+        "key": "0030 A.GRİ|1BA-FS02",
+        "formul_kod": "1BA-FS02",
+        "rf_kod": "0030 A.GRİ"
+      },
+      {
+        "key": "0221 ACIK PUDRA|1BA-FS02",
+        "formul_kod": "1BA-FS02",
+        "rf_kod": "0221 ACIK PUDRA"
+      },
+      {
+        "key": "0240 SOMON|1BA-FS02",
+        "formul_kod": "1BA-FS02",
+        "rf_kod": "0240 SOMON"
+      },
+      {
+        "key": "0241 CORAL|1BA-FS02",
+        "formul_kod": "1BA-FS02",
+        "rf_kod": "0241 CORAL"
+      },
+      {
+        "key": "0041 FÜME|1BA-FS03",
+        "formul_kod": "1BA-FS03",
+        "rf_kod": "0041 FÜME"
+      },
+      {
+        "key": "0041 FÜME|2BA-FS01",
+        "formul_kod": "2BA-FS01",
+        "rf_kod": "0041 FÜME"
+      },
+      {
+        "key": "0241 CORAL|2BA-FL01",
+        "formul_kod": "2BA-FL01",
+        "rf_kod": "0241 CORAL"
+      },
+      {
+        "key": "0241 CORAL|2BA-FS01",
+        "formul_kod": "2BA-FS01",
+        "rf_kod": "0241 CORAL"
+      },
+      {
+        "key": "0170 PEMBE|1BA-FL03",
+        "formul_kod": "1BA-FL03",
+        "rf_kod": "0170 PEMBE"
+      },
+      {
+        "key": "0170 PEMBE|1BA-FS03",
+        "formul_kod": "1BA-FS03",
+        "rf_kod": "0170 PEMBE"
+      },
+      {
+        "key": "0041 FÜME|1BA-FL01",
+        "formul_kod": "1BA-FL01",
+        "rf_kod": "0041 FÜME"
+      },
+      {
+        "key": "0041 FÜME|1BA-FS01",
+        "formul_kod": "1BA-FS01",
+        "rf_kod": "0041 FÜME"
+      },
+      {
+        "key": "0030 A.GRİ|2BA-FL01",
+        "formul_kod": "2BA-FL01",
+        "rf_kod": "0030 A.GRİ"
+      },
+      {
+        "key": "0030 A.GRİ|2BA-FS01",
+        "formul_kod": "2BA-FS01",
+        "rf_kod": "0030 A.GRİ"
+      },
+      {
+        "key": "0041 FÜME|1BA-FL02",
+        "formul_kod": "1BA-FL02",
+        "rf_kod": "0041 FÜME"
+      },
+      {
+        "key": "0041 FÜME|1BA-FS02",
+        "formul_kod": "1BA-FS02",
+        "rf_kod": "0041 FÜME"
+      }
+    ],
+    "rf_uygunluk_count": 32,
+    "total_records": 178
+  },
+  "db_after_master_apply_on_stripped_sim": {
+    "nexgen_formul": 16,
+    "nexgen_recete_kalem": 438,
+    "nexgen_rf_renk": 64,
+    "nexgen_rf_kalem": 323,
+    "nexgen_planlama_siparis": 32,
+    "nexgen_planlama_siparis_kalem": 11,
+    "nexgen_uretim_plan": 80,
+    "nexgen_uretim_batch": 15,
+    "nexgen_stok_hareket": 1640,
+    "cekirdek_kodlar": [
+      "1BA-FL01",
+      "1BA-FL02",
+      "1BA-FL03",
+      "1BA-FS01",
+      "1BA-FS02",
+      "1BA-FS03",
+      "2BA-FL01",
+      "2BA-FS01",
+      "3BA-FM01"
+    ],
+    "pzm": {
+      "total": 32,
+      "pzm_like": 7,
+      "empty_ref": 24
+    }
+  },
+  "rf_before": 64,
+  "rf_after": 64,
+  "rf_korundu": true,
+  "render": {
+    "recete_merkezi": {
+      "http": 200,
+      "cekirdek_agac_aile_sayisi": 0,
+      "kodlar_html": {
+        "1BA-FL01": true,
+        "1BA-FS01": true,
+        "1BA-FL02": true,
+        "1BA-FS02": true,
+        "1BA-FL03": true,
+        "1BA-FS03": true,
+        "2BA-FL01": true,
+        "2BA-FS01": true,
+        "3BA-FM01": true
+      },
+      "tum_kodlar_gorunur": true,
+      "detay_9_formul": {
+        "1BA-FL01": {
+          "http": 200,
+          "kalem_db": 12,
+          "sayfa_acildi": true,
+          "kalem_gorunur": true
+        },
+        "1BA-FS01": {
+          "http": 200,
+          "kalem_db": 12,
+          "sayfa_acildi": true,
+          "kalem_gorunur": true
+        },
+        "1BA-FL02": {
+          "http": 200,
+          "kalem_db": 12,
+          "sayfa_acildi": true,
+          "kalem_gorunur": true
+        },
+        "1BA-FS02": {
+          "http": 200,
+          "kalem_db": 12,
+          "sayfa_acildi": true,
+          "kalem_gorunur": true
+        },
+        "1BA-FL03": {
+          "http": 200,
+          "kalem_db": 11,
+          "sayfa_acildi": true,
+          "kalem_gorunur": true
+        },
+        "1BA-FS03": {
+          "http": 200,
+          "kalem_db": 11,
+          "sayfa_acildi": true,
+          "kalem_gorunur": true
+        },
+        "2BA-FL01": {
+          "http": 200,
+          "kalem_db": 12,
+          "sayfa_acildi": true,
+          "kalem_gorunur": true
+        },
+        "2BA-FS01": {
+          "http": 200,
+          "kalem_db": 12,
+          "sayfa_acildi": true,
+          "kalem_gorunur": true
+        },
+        "3BA-FM01": {
+          "http": 200,
+          "kalem_db": 12,
+          "sayfa_acildi": true,
+          "kalem_gorunur": true
+        }
+      }
+    },
+    "vedat_arge": {
+      "http": 200,
+      "formul_grup_sayisi": 5,
+      "basliklar": [
+        "TERLİK 18-28",
+        "TERLİK 18-22",
+        "TERLİK 18-POE",
+        "TABAN 18-28",
+        "DÖKME 18-28"
+      ],
+      "aile_kontrol": {
+        "TERLIK_18-28": true,
+        "TERLIK_18-22": true,
+        "TERLIK_18-POE": true,
+        "TABAN": true,
+        "DOKME": true
+      },
+      "bes_aile_tam": true,
+      "lsm_kutulari": true
+    },
+    "ali_uretim_islem": {
+      "http": 200,
+      "batch": "NG-PRD-2026-00015",
+      "sol_kimlik": true,
+      "kpi": true,
+      "barkoda_hazir": true,
+      "durum_guncellemesi": true,
+      "son_biten": true,
+      "rm_page_hdr": true,
+      "eski_depo_hazirlik_yok": true,
+      "eski_topbar_yok": true
+    },
+    "pazarlama": {
+      "api_http": 200,
+      "liste_sayisi": 7,
+      "filtre": "talep_referansi LIKE '__PZM_V%'",
+      "neden": "UI yalniz __PZM_V1__/V2__ ile isaretli header'lari gosterir; bos talep_referansi legacy kayitlar Siparisler=0 yapar",
+      "legacy_silinmez": true
+    },
+    "renk_merkezi": {
+      "http": 200,
+      "kart_sayisi": 55,
+      "rf_52_plus": true
+    }
+  },
+  "server_apply_package": "C:\\Solariz_CPS_PARITY_COMMIT\\deploy\\SERVER_APPLY_PACKAGE_36883ad",
+  "pass_checks": {
+    "recete_9": true,
+    "recete_detay": true,
+    "vedat_5": true,
+    "ali_ui": true,
+    "renk_52": true,
+    "github_esit": true
+  },
+  "FUNCTIONAL_PASS": true,
+  "GIT_RELEASE_PASS": false,
+  "LAPTOP_DIRTY_WARN": true,
+  "OVERALL_PASS": false
+}
