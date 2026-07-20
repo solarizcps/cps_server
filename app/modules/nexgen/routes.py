@@ -46,6 +46,7 @@ from modules.nexgen.kod_uretici import (
     yeni_rv_kodu_uret,
     uretim_kodu_uret,
     uretim_kodu_format_gecerli_mi,
+    uretim_kodu_parcala,
 )
 from modules.nexgen.nx_ar_service import NxArError, get_nx_ar
 from modules.nexgen.cekirdek_gorunum import (
@@ -22795,6 +22796,76 @@ def _refresh_depo_snapshot(con, batch_kodu):
     }
 
 
+def _batch_formul_uv_boyut_adaylari(boyut_req):
+    """Formül UV araması için boyut adayları (STANDART↔MEDIUM eşlemesi dahil)."""
+    bn = _boyut_norm_etiket(boyut_req) if boyut_req else 'STANDART'
+    adaylar = [bn]
+    if bn == 'STANDART':
+        adaylar.append('MEDIUM')
+    elif (boyut_req or '').strip().upper() == 'MEDIUM':
+        adaylar.append('STANDART')
+    seen = set()
+    out = []
+    for a in adaylar:
+        au = (a or '').strip().upper()
+        if au and au not in seen:
+            seen.add(au)
+            out.append(au)
+    return out
+
+
+def _batch_formul_ana_kod_coz(batch_row):
+    """Batch/plan snapshot'tan ana formül kodu."""
+    ana = (batch_row.get('ana_formul_kodu') or '').strip().upper()
+    if ana:
+        return ana
+    uk = (batch_row.get('uretim_kodu') or '').strip()
+    if uk:
+        parca = uretim_kodu_parcala(uk)
+        if parca and parca.get('ana_formul_kodu'):
+            return parca['ana_formul_kodu'].strip().upper()
+    return ''
+
+
+def _batch_formul_uv_master_coz(con, batch_row, boyut_req):
+    """Eski batch/plan UV boş reçeteli veya eksikse güncel master UV'yi çöz."""
+    ana_kod = _batch_formul_ana_kod_coz(batch_row)
+    if not ana_kod:
+        return None
+    boyutlar = _batch_formul_uv_boyut_adaylari(boyut_req)
+    frm = con.execute(
+        "SELECT id FROM nexgen_formul WHERE UPPER(kod)=? AND aktif=1",
+        (ana_kod,),
+    ).fetchone()
+    if not frm:
+        return None
+    ph = ','.join(['?'] * len(boyutlar))
+    row = con.execute(
+        f"""
+        SELECT uv.id
+        FROM nexgen_renk_varyant rv
+        JOIN nexgen_uretim_varyant uv ON uv.renk_varyant_id = rv.id AND uv.aktif = 1
+        JOIN nexgen_recete_kalem rk ON rk.uretim_varyant_id = uv.id AND rk.aktif = 1
+        WHERE rv.formul_id = ? AND rv.aktif = 1
+          AND UPPER(TRIM(uv.boyut)) IN ({ph})
+        GROUP BY uv.id
+        ORDER BY uv.id DESC
+        LIMIT 1
+        """,
+        (frm['id'], *boyutlar),
+    ).fetchone()
+    return int(row['id']) if row else None
+
+
+def _batch_parca_boyut_isaretli(con, batch_kodu):
+    """Parçalarda __BOYUT_UV__ işareti var mı (yeni batch)."""
+    rows = con.execute(
+        "SELECT notlar FROM nexgen_uretim_parca WHERE batch_kodu=?",
+        (batch_kodu,),
+    ).fetchall()
+    return any(_PARCA_BOYUT_UV_MARKER in (r['notlar'] or '') for r in rows)
+
+
 def _plan_boyut_uv_coz(con, plan_id, boyut):
     """Plan boyut satırından UV — bulunamazsa None (fallback yok)."""
     if not plan_id or not boyut:
@@ -22825,11 +22896,13 @@ def _batch_formul_parca_sec(con, batch_kodu, parca_id=None, boyut=None):
     """Formül önizleme için varsayılan parça: DEVAM → HAZIR → ilk kayıt.
 
     boyut verilirse yalnız o boyutun parçaları adaydır (LARGE↔SMALL karışmaz).
+    Eski batch'lerde parça boyut işareti yoksa boyut filtresi uygulanmaz.
     """
     boyut_n = _boyut_norm_etiket(boyut) if boyut else None
+    isaretli = bool(boyut_n and _batch_parca_boyut_isaretli(con, batch_kodu))
 
     def _boyut_uygun(notlar):
-        if not boyut_n:
+        if not boyut_n or not isaretli:
             return True
         b, _ = _parca_boyut_uv_parse(notlar)
         if not b:
@@ -23707,6 +23780,8 @@ def api_batch_formul_icerik(batch_kodu):
         batch = con.execute("""
             SELECT nb.batch_kodu, nb.lot_kodu, nb.uretim_varyant_id, nb.plan_id,
                    nb.planlanan_kg,
+                   COALESCE(nb.uretim_kodu, np.uretim_kodu) AS uretim_kodu,
+                   COALESCE(nb.ana_formul_kodu, np.ana_formul_kodu) AS ana_formul_kodu,
                    COALESCE(c.unvan, np.musteri_adi) AS cari_ad,
                    np.siparis_no, np.rf_renk_id AS plan_rf_renk_id
             FROM nexgen_uretim_batch nb
@@ -23749,18 +23824,30 @@ def api_batch_formul_icerik(batch_kodu):
 
         if uv_id is None and boyut_req:
             plan_boyut_row = _plan_boyut_uv_coz(con, batch['plan_id'], boyut_req)
-            if not plan_boyut_row:
-                return jsonify({
-                    'ok': False,
-                    'hata': 'Seçili boyut için reçete bulunamadı.',
-                    'secili_boyut': boyut_req,
-                    'batch_kodu': batch_kodu,
-                    'siparis_no': batch['siparis_no'],
-                    'plan_id': batch['plan_id'],
-                }), 404
-            uv_id = int(plan_boyut_row['uretim_varyant_id'])
-            boyut_etiket = _boyut_norm_etiket(plan_boyut_row.get('boyut') or boyut_req)
-            siparis_kg_boyut = float(plan_boyut_row.get('siparis_kg') or 0)
+            if plan_boyut_row:
+                uv_id = int(plan_boyut_row['uretim_varyant_id'])
+                boyut_etiket = _boyut_norm_etiket(
+                    plan_boyut_row.get('boyut') or boyut_req,
+                )
+                siparis_kg_boyut = float(plan_boyut_row.get('siparis_kg') or 0)
+            else:
+                uv_master = _batch_formul_uv_master_coz(con, dict(batch), boyut_req)
+                if not uv_master:
+                    return jsonify({
+                        'ok': False,
+                        'hata': 'Seçili boyut için reçete bulunamadı.',
+                        'secili_boyut': boyut_req,
+                        'batch_kodu': batch_kodu,
+                        'siparis_no': batch['siparis_no'],
+                        'plan_id': batch['plan_id'],
+                    }), 404
+                uv_id = uv_master
+                boyut_etiket = boyut_req
+
+        if uv_id is not None and boyut_req and _ana_recete_kg_hesapla(con, uv_id) <= 0:
+            uv_master = _batch_formul_uv_master_coz(con, dict(batch), boyut_req)
+            if uv_master:
+                uv_id = uv_master
 
         if uv_id is None:
             # Boyut belirtilmemiş — batch UV (tek boyutlu / eski çağrılar)

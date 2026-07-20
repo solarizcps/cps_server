@@ -32,7 +32,7 @@
       </button>
       {% if can_manage %}
       <button type="button" class="rm-yeni-btn pzm-nav-yeni" id="tab-btn-yeni"
-              onclick="pzmEkranGec('yeni')">+ Yeni Sipariş</button>
+              onclick="pzmYeniTalep();pzmEkranGec('yeni')">+ Yeni Sipariş</button>
       {% endif %}
       <a href="/nexgen/" class="rm-page-geri" title="Ana Menü">
         <span style="font-size:13px;">←</span>
@@ -1042,6 +1042,28 @@ function pzmBugun() {
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
 
+function pzmIsoTarih(val) {
+  if (val == null || val === '') return '';
+  var s = String(val).trim();
+  var iso = s.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    var y = parseInt(iso.slice(0, 4), 10);
+    if (y >= 1970 && y <= 2100) return iso;
+  }
+  var m = s.match(/^(\d{1,2})[\.\/-](\d{1,2})[\.\/-](\d{4})/);
+  if (m) {
+    var y2 = m[3], mo = String(m[2]).padStart(2, '0'), dd = String(m[1]).padStart(2, '0');
+    if (+y2 >= 1970 && +y2 <= 2100) return y2 + '-' + mo + '-' + dd;
+  }
+  return '';
+}
+
+function pzmTarihGoster(val) {
+  var iso = pzmIsoTarih(val);
+  if (!iso) return '—';
+  return iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' + iso.slice(0, 4);
+}
+
 function pzmKilit(id, ac) {
   var w = $id(id); if (!w) return;
   w.classList.toggle('pzm-kilitli', !ac);
@@ -1081,6 +1103,7 @@ window.pzmEkranGec = function(ekran) {
     if (btn) btn.classList.toggle('aktif', e === ekran);
   });
   _pzmAktifEkran = ekran;
+  if (ekran === 'yeni' && !_pzmTalepId) pzmYeniTalep();
   if (ekran === 'yeni') pzmYeniMprRender();
 };
 
@@ -1088,7 +1111,7 @@ window.pzmEkranGec = function(ekran) {
 function pzmTabloSatirHtml(t, idx) {
   var no    = t.siparis_no || ('T-' + t.id);
   var cari  = t.cari_unvan || '—';
-  var tarih = (t.olusturma_tarihi || '—').slice(0,10).replace(/-/g,'.').split('.').reverse().join('.');
+  var tarih = pzmTarihGoster(t.olusturma_tarihi);
   var term  = t.en_yakin_termin || t.termin_tarihi || '—';
   var topKg = parseFloat(t.toplam_kg || 0);
   if (!topKg && t.payload && t.payload.boyut_miktar) {
@@ -1154,9 +1177,11 @@ window.pzmFiltreSifirla = function() {
 };
 
 /* Badge güncelle */
-function pzmBadgeGuncelle() {
+function pzmBadgeGuncelle(force) {
   var b = $id('pzm-badge-say');
-  if (b) b.textContent = (_pzmTalepCache||[]).length;
+  if (!b) return;
+  var n = (_pzmTalepCache||[]).length;
+  if (force || n > 0) b.textContent = n;
 }
 
 /* ────────────── EKRAN 3: Detay — 4 Aşamalı MPR Accordion ────────────── */
@@ -2085,7 +2110,7 @@ function pzmDetayAsamaHtml(t, stage, st) {
   if (stage === 1) {
     var kalemler = pzmDetayKalemler(t);
     var topKg = parseFloat(t.toplam_kg || 0) || kalemler.reduce(function(a, k) { return a + pzmKalemTalepKg(k); }, 0);
-    var sipTarih = (t.olusturma_tarihi || '—').slice(0, 10).replace(/-/g, '.').split('.').reverse().join('.');
+    var sipTarih = pzmTarihGoster(t.olusturma_tarihi);
     if (pzmDetayReadonly(t)) {
       html += '<div class="pzm-readonly-bant">Bu sipariş salt okunur modda görüntülenmektedir.</div>';
     }
@@ -2780,7 +2805,7 @@ function pzmV2PayloadTopla() {
   return {
     talep_id: _pzmTalepId,
     cari_id: parseInt($id('pzm-cari')?.value, 10),
-    siparis_tarihi: $id('pzm-siparis-tarihi')?.value || pzmBugun(),
+    siparis_tarihi: pzmIsoTarih($id('pzm-siparis-tarihi')?.value) || pzmBugun(),
     genel_termin_tarihi: $id('pzm-genel-termin')?.value || null,
     genel_not: ($id('pzm-genel-not')?.value||'').trim() || null,
     kalemler: _pzmKalemler.map(function(k) {
@@ -3000,7 +3025,7 @@ function pzmTalepListesiYenile() {
       }
       _pzmTalepCache = d.liste || [];
       pzmTabloRender(_pzmTalepCache);
-      pzmBadgeGuncelle();
+      pzmBadgeGuncelle(true);
       if (d.schema_partial) {
         var bos = $id('pzm-bos-mesaj');
         if (bos && !_pzmTalepCache.length) {
@@ -3033,8 +3058,8 @@ window.pzmTalepYukle = function(id) {
   if ($id('pzm-cari')) $id('pzm-cari').value = t.cari_id || '';
   pzmCariDegisti();
   var st = $id('pzm-siparis-tarihi');
-  if (st) st.value = (t.payload && t.payload.siparis_tarihi) || (t.olusturma_tarihi||'').slice(0,10) || pzmBugun();
-  if ($id('pzm-genel-termin')) $id('pzm-genel-termin').value = t.termin_tarihi || '';
+  if (st) st.value = pzmIsoTarih((t.payload && t.payload.siparis_tarihi) || t.olusturma_tarihi) || pzmBugun();
+  if ($id('pzm-genel-termin')) $id('pzm-genel-termin').value = pzmIsoTarih(t.termin_tarihi || '');
   if ($id('pzm-genel-not')) $id('pzm-genel-not').value = t.notlar || '';
   _pzmKalemler = (t.kalemler || []).map(function(k) {
     return {
