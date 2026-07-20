@@ -1006,6 +1006,7 @@ button.rm-page-geri { appearance:none; }
 </style>
 
 {# ── JavaScript ───────────────────────────────────────────────────────────── #}
+<script type="application/json" id="pzm-talep-cache-json">{{ talepler | tojson }}</script>
 <script>
 (function() {
 'use strict';
@@ -1018,7 +1019,15 @@ var _pzmTalepId  = null;
 var _pzmKalemler = [];
 var _pzmDuzenIdx = null;
 var _pzmCanManage = {{ 'true' if can_manage else 'false' }};
-var _pzmTalepCache = {{ talepler | tojson }};
+var _pzmTalepCache = [];
+try {
+  var _pzmCacheEl = document.getElementById('pzm-talep-cache-json');
+  if (_pzmCacheEl && _pzmCacheEl.textContent) {
+    _pzmTalepCache = JSON.parse(_pzmCacheEl.textContent);
+  }
+} catch (e) {
+  _pzmTalepCache = [];
+}
 var _pzmAktifEkran = '';
 var _pzmDetayAktifId = null;
 var _pzmMprState = {};
@@ -2982,7 +2991,13 @@ function pzmTalepListesiYenile() {
       return r.json();
     })
     .then(function(d) {
-      if (!d || !d.ok) return;
+      if (!d || !d.ok) {
+        if (d && d.hata) {
+          var bosErr = $id('pzm-bos-mesaj');
+          if (bosErr) { bosErr.style.display = ''; bosErr.textContent = d.hata; }
+        }
+        return;
+      }
       _pzmTalepCache = d.liste || [];
       pzmTabloRender(_pzmTalepCache);
       pzmBadgeGuncelle();
@@ -3086,6 +3101,7 @@ window.pzmTalepYukle = function(id) {
   pzmOzetGuncelle();
   pzmYeniMprRender();
   pzmAkkSifirla();
+  pzmTalepListesiYenile();
 })();
 
 })();

@@ -17333,6 +17333,10 @@ def api_mpr_on_calisma_ekle():
 _PZM_JSON_PREFIX = '__PZM_V1__'
 _PZM_V2_JSON_PREFIX = '__PZM_V2__'
 _PZM_TALEP_LIKE = '__PZM_V%'
+_PZM_TALEP_WHERE = (
+    "(talep_referansi LIKE '\\_\\_PZM\\_V%' ESCAPE '\\' "
+    "OR siparis_no LIKE 'PZM-%')"
+)
 _PZM_AILELER = frozenset({'TERLIK', 'TABAN', 'DOKME'})
 _PZM_DURUMLAR = frozenset({
     'TASLAK', 'MPR_BEKLIYOR', 'PLANLAMAYA_HAZIR', 'URETIMDE', 'TAMAMLANDI', 'IPTAL',
@@ -17830,13 +17834,13 @@ def pazarlama_merkezi():
         ]
         talepler = []
         if _planlama_siparis_tablosu_var(con):
-            rows = con.execute("""
+            rows = con.execute(f"""
                 SELECT id, siparis_no, cari_id, cari_unvan, termin_tarihi,
                        durum, notlar, talep_referansi, olusturma_tarihi
                 FROM nexgen_planlama_siparis
-                WHERE talep_referansi LIKE ?
+                WHERE {_PZM_TALEP_WHERE}
                 ORDER BY id DESC LIMIT 30
-            """, (_PZM_TALEP_LIKE,)).fetchall()
+            """).fetchall()
             talepler = [_pzm_talep_satir_dict(r, con) for r in rows]
     finally:
         con.close()
@@ -17897,13 +17901,13 @@ def api_pazarlama_talepler():
                 ['tablo:nexgen_planlama_siparis'], 'pazarlama/talepler'
             )
         _miss_pzm = missing_for_pazarlama(con)
-        rows = con.execute("""
+        rows = con.execute(f"""
             SELECT id, siparis_no, cari_id, cari_unvan, termin_tarihi,
                    durum, notlar, talep_referansi, olusturma_tarihi
             FROM nexgen_planlama_siparis
-            WHERE talep_referansi LIKE ?
+            WHERE {_PZM_TALEP_WHERE}
             ORDER BY id DESC LIMIT 30
-        """, (_PZM_TALEP_LIKE,)).fetchall()
+        """).fetchall()
         payload = {
             'ok': True,
             'liste': [_pzm_talep_satir_dict(r, con) for r in rows],
@@ -22791,31 +22795,78 @@ def _refresh_depo_snapshot(con, batch_kodu):
     }
 
 
-def _batch_formul_parca_sec(con, batch_kodu, parca_id=None):
-    """Formül önizleme için varsayılan parça: DEVAM → HAZIR → ilk kayıt."""
+def _plan_boyut_uv_coz(con, plan_id, boyut):
+    """Plan boyut satırından UV — bulunamazsa None (fallback yok)."""
+    if not plan_id or not boyut:
+        return None
+    if not _plan_boyut_tablosu_var(con):
+        return None
+    boyut_n = _boyut_norm_etiket(boyut)
+    adaylar = [boyut_n]
+    if boyut_n == 'STANDART':
+        adaylar.append('MEDIUM')
+    elif (boyut or '').strip().upper() == 'MEDIUM':
+        adaylar.append('STANDART')
+    for aday in adaylar:
+        row = con.execute(
+            "SELECT uretim_varyant_id, siparis_kg, uretilecek_kg, "
+            "formul_batch_kg, batch_sayisi, fazla_kg, boyut "
+            "FROM nexgen_uretim_plan_boyut "
+            "WHERE plan_id=? AND aktif=1 AND UPPER(TRIM(boyut))=? "
+            "ORDER BY sira, id LIMIT 1",
+            (plan_id, aday),
+        ).fetchone()
+        if row and row['uretim_varyant_id']:
+            return dict(row)
+    return None
+
+
+def _batch_formul_parca_sec(con, batch_kodu, parca_id=None, boyut=None):
+    """Formül önizleme için varsayılan parça: DEVAM → HAZIR → ilk kayıt.
+
+    boyut verilirse yalnız o boyutun parçaları adaydır (LARGE↔SMALL karışmaz).
+    """
+    boyut_n = _boyut_norm_etiket(boyut) if boyut else None
+
+    def _boyut_uygun(notlar):
+        if not boyut_n:
+            return True
+        b, _ = _parca_boyut_uv_parse(notlar)
+        if not b:
+            return False
+        return _boyut_norm_etiket(b) == boyut_n
+
     if parca_id:
         row = con.execute(
-            "SELECT id, parca_no, hedef_kg, durum FROM nexgen_uretim_parca "
+            "SELECT id, parca_no, hedef_kg, durum, notlar FROM nexgen_uretim_parca "
             "WHERE id=? AND batch_kodu=?",
             (parca_id, batch_kodu),
         ).fetchone()
-        return dict(row) if row else None
+        if not row:
+            return None
+        if not _boyut_uygun(row['notlar']):
+            return None
+        return dict(row)
 
     for durum in ('DEVAM', 'HAZIR', 'BEKLEME'):
-        row = con.execute(
-            "SELECT id, parca_no, hedef_kg, durum FROM nexgen_uretim_parca "
-            "WHERE batch_kodu=? AND durum=? ORDER BY parca_no LIMIT 1",
+        rows = con.execute(
+            "SELECT id, parca_no, hedef_kg, durum, notlar FROM nexgen_uretim_parca "
+            "WHERE batch_kodu=? AND durum=? ORDER BY parca_no",
             (batch_kodu, durum),
-        ).fetchone()
-        if row:
-            return dict(row)
+        ).fetchall()
+        for row in rows:
+            if _boyut_uygun(row['notlar']):
+                return dict(row)
 
-    row = con.execute(
-        "SELECT id, parca_no, hedef_kg, durum FROM nexgen_uretim_parca "
-        "WHERE batch_kodu=? ORDER BY parca_no LIMIT 1",
+    rows = con.execute(
+        "SELECT id, parca_no, hedef_kg, durum, notlar FROM nexgen_uretim_parca "
+        "WHERE batch_kodu=? ORDER BY parca_no",
         (batch_kodu,),
-    ).fetchone()
-    return dict(row) if row else None
+    ).fetchall()
+    for row in rows:
+        if _boyut_uygun(row['notlar']):
+            return dict(row)
+    return None
 
 
 def _arge_formul_taban_onizle(con, uretim_varyant_id, test_kg):

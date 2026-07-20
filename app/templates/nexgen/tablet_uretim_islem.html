@@ -758,7 +758,14 @@ async function tuiFormulYukle(parcaId) {
   if (q.length) url += '?' + q.join('&');
   try {
     var r = await fetch(url);
-    var d = await r.json();
+    var d;
+    try {
+      d = await r.json();
+    } catch (parseErr) {
+      _formul_api_cache = { ok: false, hata: 'Bağlantı hatası' };
+      tuiFhHataGoster('Bağlantı hatası');
+      return;
+    }
     _formul_api_cache = d;
     if (!d.ok) {
       tuiFormulKompaktGuncelle(d);
