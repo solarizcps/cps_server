@@ -2962,12 +2962,37 @@ window.pzmBasariKapat = function() {
 
 function pzmTalepListesiYenile() {
   fetch('/nexgen/api/pazarlama/talepler')
-    .then(function(r){ return r.json(); })
+    .then(function(r){
+      if (!r.ok) {
+        var msg = 'Sunucu hatası';
+        if (r.status === 403) msg = 'Yetkiniz yok';
+        else if (r.status === 404) msg = 'İstenen servis bulunamadı';
+        else if (r.status === 503) msg = 'Sistem güncellemesi gerekiyor';
+        else if (r.status >= 500) msg = 'Sunucu hatası';
+        var bos = $id('pzm-bos-mesaj');
+        if (bos) { bos.style.display = ''; bos.textContent = msg; }
+        return r.json().catch(function(){ return { ok:false, hata: msg }; }).then(function(d){
+          if (d && d.hata) {
+            var b2 = $id('pzm-bos-mesaj');
+            if (b2) { b2.style.display = ''; b2.textContent = d.hata; }
+          }
+          return null;
+        });
+      }
+      return r.json();
+    })
     .then(function(d) {
-      if (!d.ok) return;
+      if (!d || !d.ok) return;
       _pzmTalepCache = d.liste || [];
       pzmTabloRender(_pzmTalepCache);
       pzmBadgeGuncelle();
+      if (d.schema_partial) {
+        var bos = $id('pzm-bos-mesaj');
+        if (bos && !_pzmTalepCache.length) {
+          bos.style.display = '';
+          bos.textContent = 'Şema kısmen güncel (migration 107). Liste sınırlı olabilir.';
+        }
+      }
       if (_pzmDetayAktifId) {
         var td = pzmTalepBul(_pzmDetayAktifId);
         if (td) {
@@ -2979,6 +3004,10 @@ function pzmTalepListesiYenile() {
           pzmDetayRender(td);
         }
       }
+    })
+    .catch(function(){
+      var bos = $id('pzm-bos-mesaj');
+      if (bos) { bos.style.display = ''; bos.textContent = 'Ağ bağlantısı hatası'; }
     });
 }
 

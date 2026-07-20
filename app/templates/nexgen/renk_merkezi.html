@@ -690,6 +690,23 @@ async function rmListeYukle(){
     const params=new URLSearchParams({filtre:aktifFiltre});
     if(araMetni) params.set('q',araMetni);
     const res=await fetch('/nexgen/api/renk-merkezi/liste?'+params.toString());
+    const ct=(res.headers.get('content-type')||'');
+    if(!res.ok){
+      let msg='Sunucu hatası';
+      if(res.status===403) msg='Yetkiniz yok';
+      else if(res.status===404) msg='İstenen servis bulunamadı';
+      else if(res.status===503) msg='Sistem güncellemesi gerekiyor';
+      else if(res.status>=500) msg='Sunucu hatası';
+      if(ct.indexOf('application/json')>=0){
+        try{ const ej=await res.json(); if(ej.hata) msg=ej.hata; }catch(_e){}
+      }
+      el.innerHTML='<div class="rm-yukleniyor">'+rmE(msg)+'</div>';
+      return;
+    }
+    if(ct.indexOf('application/json')<0){
+      el.innerHTML='<div class="rm-yukleniyor">Sunucu hatası (geçersiz yanıt)</div>';
+      return;
+    }
     const d=await res.json();
     if(!d.ok){el.innerHTML='<div class="rm-yukleniyor">Hata: '+rmE(d.hata)+'</div>';return;}
     tumKartlar=d.kartlar;
@@ -704,7 +721,7 @@ async function rmListeYukle(){
       if(hala) rmDetayYukle(hala);
     }
   }catch(err){
-    el.innerHTML='<div class="rm-yukleniyor">Ağ hatası</div>';
+    el.innerHTML='<div class="rm-yukleniyor">Ağ bağlantısı hatası</div>';
   }
 }
 

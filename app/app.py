@@ -9,7 +9,7 @@ Flask ana giriş noktası. Tüm modülleri kayıt eder, yetki sistemi aktif.
 Tarayıcıdan:
     http://127.0.0.1:5057/
 """
-from flask import Flask, render_template, session, g, redirect, url_for, request, flash
+from flask import Flask, render_template, session, g, redirect, url_for, request, flash, jsonify
 from datetime import timedelta, datetime, date
 from config import Config
 
@@ -260,18 +260,43 @@ def hata_403(e):
 
 @app.errorhandler(404)
 def hata_404(e):
-    # Referer varsa dön, yoksa panel
+    # FAZ-DEPLOY-MIGRATION-KALICI-DUZELTME-1: API/fetch → JSON; flash spam yok
+    path = request.path or ''
+    wants_json = (
+        path.startswith('/api/')
+        or path.startswith('/nexgen/api/')
+        or 'application/json' in (request.headers.get('Accept') or '')
+        or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    )
+    try:
+        app.logger.warning('404 path=%s ref=%s', path, request.referrer)
+    except Exception:
+        pass
+    if wants_json:
+        return jsonify({
+            'ok': False,
+            'error': 'NOT_FOUND',
+            'hata': 'İstenen servis bulunamadı.',
+            'path': path,
+        }), 404
+
     ref = request.referrer
     if ref and request.host in ref:
-        # Aynı site içinden geliyorsa ve loop riski yoksa dön
         try:
             from urllib.parse import urlparse
-            if urlparse(ref).path != request.path:
-                flash('⚠ Sayfa bulunamadı — önceki sayfaya döndünüz.', 'uyari')
+            ref_path = urlparse(ref).path
+            if ref_path != path:
+                # Aynı flash'ı oturumda biriktirme
+                msgs = session.get('_flashes') or []
+                already = any(
+                    (isinstance(m, tuple) and len(m) > 1 and 'Sayfa bulunamadı' in str(m[1]))
+                    for m in msgs
+                )
+                if not already:
+                    flash('⚠ Sayfa bulunamadı — önceki sayfaya döndünüz.', 'uyari')
                 return redirect(ref)
         except Exception:
             pass
-    # Referer yok veya aynı sayfaysa: hata sayfası (sidebar + ana link'ler ile)
     return render_template('hata.html',
                            kod=404, baslik='Sayfa Bulunamadı',
                            mesaj='Aradığınız sayfa bulunamadı.'), 404

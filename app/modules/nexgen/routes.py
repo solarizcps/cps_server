@@ -62,6 +62,13 @@ from modules.nexgen.cekirdek_gorunum import (
     yeni_secimde_gosterilebilir_mi,
     yeni_secimde_renk_gosterilebilir_mi,
 )
+from modules.nexgen.schema_guard import (
+    missing_for_pazarlama,
+    missing_for_renk_merkezi,
+    missing_for_tablet_arge,
+    schema_not_ready_html_flash,
+    schema_not_ready_json,
+)
 
 nexgen_bp = Blueprint('nexgen', __name__, url_prefix='/nexgen')
 
@@ -6026,6 +6033,9 @@ def api_rm_liste():
 
     con = _db()
     try:
+        _miss_rm = missing_for_renk_merkezi(con)
+        if _miss_rm:
+            return schema_not_ready_json(_miss_rm, 'renk-merkezi/liste')
         legacy_rf_rows = con.execute("""
             SELECT
                 rf.id           AS rf_id,
@@ -14623,6 +14633,10 @@ def tablet_arge():
         abort(403)
     con = _db()
     try:
+        _miss_arge = missing_for_tablet_arge(con)
+        if _miss_arge:
+            flash(schema_not_ready_html_flash(_miss_arge, 'tablet/arge'), 'hata')
+            return redirect('/nexgen/tablet')
         # Formüller (reçetesi olan, aktif)
         formuller_raw = con.execute(f"""
             SELECT DISTINCT f.id, f.kod, f.ad
@@ -17865,7 +17879,10 @@ def api_pazarlama_talepler():
     con = _db()
     try:
         if not _planlama_siparis_tablosu_var(con):
-            return jsonify({'ok': True, 'liste': []})
+            return schema_not_ready_json(
+                ['tablo:nexgen_planlama_siparis'], 'pazarlama/talepler'
+            )
+        _miss_pzm = missing_for_pazarlama(con)
         rows = con.execute("""
             SELECT id, siparis_no, cari_id, cari_unvan, termin_tarihi,
                    durum, notlar, talep_referansi, olusturma_tarihi
@@ -17873,7 +17890,15 @@ def api_pazarlama_talepler():
             WHERE talep_referansi LIKE ?
             ORDER BY id DESC LIMIT 30
         """, (_PZM_TALEP_LIKE,)).fetchall()
-        return jsonify({'ok': True, 'liste': [_pzm_talep_satir_dict(r, con) for r in rows]})
+        payload = {
+            'ok': True,
+            'liste': [_pzm_talep_satir_dict(r, con) for r in rows],
+            'schema_partial': bool(
+                _miss_pzm and any('107' in m for m in _miss_pzm)
+            ),
+            'missing': _miss_pzm if _miss_pzm else [],
+        }
+        return jsonify(payload)
     finally:
         con.close()
 
