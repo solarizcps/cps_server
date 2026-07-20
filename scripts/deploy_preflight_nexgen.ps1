@@ -13,8 +13,12 @@ $scriptRoot = Split-Path -Parent $PSScriptRoot
 $root   = if ($env:CPS_ROOT) { $env:CPS_ROOT } else { $scriptRoot }
 $appDir = Join-Path $root "app"
 $dbPath = Join-Path $appDir "mock_data.db"
-$py     = Join-Path $appDir ".venv\Scripts\python.exe"
-if (-not (Test-Path $py)) { $py = "python" }
+$pyCmd = Get-Command python -ErrorAction SilentlyContinue
+if (-not $pyCmd) {
+  Write-Host "[HATA] PATH icinde aktif python komutu bulunamadi (Get-Command python)" -ForegroundColor Red
+  exit 1
+}
+$py = $pyCmd.Source
 
 $ok = $true
 function Fail($m) { Write-Host "[HATA] $m" -ForegroundColor Red; $script:ok = $false }
