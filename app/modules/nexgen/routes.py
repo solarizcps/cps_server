@@ -17333,14 +17333,32 @@ def api_mpr_on_calisma_ekle():
 _PZM_JSON_PREFIX = '__PZM_V1__'
 _PZM_V2_JSON_PREFIX = '__PZM_V2__'
 _PZM_TALEP_LIKE = '__PZM_V%'
-_PZM_TALEP_WHERE = (
-    "(talep_referansi LIKE '\\_\\_PZM\\_V%' ESCAPE '\\' "
-    "OR siparis_no LIKE 'PZM-%')"
+_PZM_TALEP_WHERE_BASE = (
+    "talep_referansi LIKE '\\_\\_PZM\\_V%' ESCAPE '\\' "
+    "OR siparis_no LIKE 'PZM-%'"
 )
 _PZM_AILELER = frozenset({'TERLIK', 'TABAN', 'DOKME'})
 _PZM_DURUMLAR = frozenset({
     'TASLAK', 'MPR_BEKLIYOR', 'PLANLAMAYA_HAZIR', 'URETIMDE', 'TAMAMLANDI', 'IPTAL',
 })
+
+
+def _pzm_kalem_tablosu_var(con) -> bool:
+    return bool(con.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' "
+        "AND name='nexgen_planlama_siparis_kalem'"
+    ).fetchone())
+
+
+def _pzm_talep_where_clause(con) -> str:
+    """Pazarlama listesi — V2 referans, PZM no veya kalem tablosu kaydı."""
+    parts = [_PZM_TALEP_WHERE_BASE]
+    if _pzm_kalem_tablosu_var(con):
+        parts.append(
+            "EXISTS (SELECT 1 FROM nexgen_planlama_siparis_kalem k "
+            "WHERE k.planlama_siparis_id = nexgen_planlama_siparis.id)"
+        )
+    return "(" + " OR ".join(parts) + ")"
 
 
 def _pzm_payload_pack(data):
@@ -17834,11 +17852,12 @@ def pazarlama_merkezi():
         ]
         talepler = []
         if _planlama_siparis_tablosu_var(con):
+            pzm_where = _pzm_talep_where_clause(con)
             rows = con.execute(f"""
                 SELECT id, siparis_no, cari_id, cari_unvan, termin_tarihi,
                        durum, notlar, talep_referansi, olusturma_tarihi
                 FROM nexgen_planlama_siparis
-                WHERE {_PZM_TALEP_WHERE}
+                WHERE {pzm_where}
                 ORDER BY id DESC LIMIT 30
             """).fetchall()
             talepler = [_pzm_talep_satir_dict(r, con) for r in rows]
@@ -17901,11 +17920,12 @@ def api_pazarlama_talepler():
                 ['tablo:nexgen_planlama_siparis'], 'pazarlama/talepler'
             )
         _miss_pzm = missing_for_pazarlama(con)
+        pzm_where = _pzm_talep_where_clause(con)
         rows = con.execute(f"""
             SELECT id, siparis_no, cari_id, cari_unvan, termin_tarihi,
                    durum, notlar, talep_referansi, olusturma_tarihi
             FROM nexgen_planlama_siparis
-            WHERE {_PZM_TALEP_WHERE}
+            WHERE {pzm_where}
             ORDER BY id DESC LIMIT 30
         """).fetchall()
         payload = {
