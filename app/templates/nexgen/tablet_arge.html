@@ -1227,10 +1227,9 @@ function agKapat() {
 function agRevizeListeAc(e) {
   e.preventDefault();
   document.getElementById('ag-revize-overlay').style.display = 'flex';
-  /* Arama kutusunu sıfırla ve odakla */
+  /* Arama kutusunu sıfırla — autofocus yok (FAZ-NEXGEN-TUM-TABLET-AUTOFOCUS-KAPAT-1) */
   rzAramaTmizle();
   rzSekmeAc('ara');
-  setTimeout(function(){ var el=document.getElementById('rz-arama'); if(el) el.focus(); }, 80);
 }
 function agRevizeKapat(e) {
   if(e && e.target !== document.getElementById('ag-revize-overlay')) return;
@@ -1248,17 +1247,16 @@ function rzSekmeAc(sekme) {
     barkodPanel.style.display = 'none';
     araTab.classList.add('ag-rz-tab-aktif');
     barkodTab.classList.remove('ag-rz-tab-aktif');
-    setTimeout(function(){ var el=document.getElementById('rz-arama'); if(el) el.focus(); }, 50);
   } else {
     araPanel.style.display    = 'none';
     barkodPanel.style.display = 'block';
     araTab.classList.remove('ag-rz-tab-aktif');
     barkodTab.classList.add('ag-rz-tab-aktif');
-    /* Barkod sonuç alanını temizle */
+    /* Barkod sonuç alanını temizle — autofocus yok */
     var sonuc = document.getElementById('rz-barkod-sonuc');
     if (sonuc) { sonuc.style.display='none'; sonuc.textContent=''; sonuc.className='ag-rz-barkod-sonuc'; }
     var bi = document.getElementById('rz-barkod');
-    if (bi) { bi.value=''; bi.focus(); }
+    if (bi) { bi.value=''; }
   }
 }
 
@@ -1335,4 +1333,5 @@ document.addEventListener('keydown', function(e) {
 });
 </script>
 
+{% include 'nexgen/_tablet_nofocus.html' %}
 {% endblock %}

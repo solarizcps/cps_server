@@ -348,7 +348,7 @@ function tgdRenkSec(btn) {
   blok.style.display = 'block';
   document.getElementById('tgd-secili-band').textContent = btn.dataset.renk;
   document.getElementById('tgd-kg-input').value = '';
-  document.getElementById('tgd-kg-input').focus();
+  /* FAZ-NEXGEN-TUM-TABLET-AUTOFOCUS-KAPAT-1: kg alanına otomatik focus yok */
   document.getElementById('tgd-ekle-btn').disabled = true;
   tgdKgGuncelle();
   blok.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -455,4 +455,5 @@ function tgdKaydet() {
   });
 }
 </script>
+{% include 'nexgen/_tablet_nofocus.html' %}
 {% endblock %}

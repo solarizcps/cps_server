@@ -66,7 +66,6 @@
           autocorrect="off"
           autocapitalize="characters"
           spellcheck="false"
-          autofocus
         >
         <button type="submit" class="tbark-arat-btn">
           AÇ
@@ -218,9 +217,7 @@ document.getElementById('tbark-input').addEventListener('keydown', function(e) {
     document.getElementById('tbark-form').submit();
   }
 });
-/* Sayfa yüklenince inputa odaklan */
-window.addEventListener('load', function() {
-  document.getElementById('tbark-input').focus();
-});
+/* FAZ-NEXGEN-TUM-TABLET-AUTOFOCUS-KAPAT-1: sayfa açılışında focus yok */
 </script>
+{% include 'nexgen/_tablet_nofocus.html' %}
 {% endblock %}

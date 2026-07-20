@@ -1165,7 +1165,7 @@ function adimPostRender(no){
         el.style.display=(!q||ad.indexOf(q)>=0)?'':'none';
       });
     });
-    setTimeout(function(){ cAra.focus(); },60);
+    /* FAZ-NEXGEN-TUM-TABLET-AUTOFOCUS-KAPAT-1: cari arama autofocus yok */
   }
   /* Formül arama */
   var fAra=document.getElementById('m2-formul-ara');
@@ -1177,7 +1177,7 @@ function adimPostRender(no){
         el.style.display=(!q||txt.indexOf(q)>=0)?'':'none';
       });
     });
-    setTimeout(function(){ fAra.focus(); },60);
+    /* FAZ-NEXGEN-TUM-TABLET-AUTOFOCUS-KAPAT-1: formül arama autofocus yok */
   }
   /* Pigment arama input */
   var pAra=document.getElementById('m2-pigment-ara');
@@ -1187,7 +1187,7 @@ function adimPostRender(no){
       var sonEl=document.getElementById('m2-pigment-sonuclar');
       if(sonEl) sonEl.innerHTML=pigmentSonuclarHtml(this.value);
     });
-    setTimeout(function(){ pAra.focus(); },60);
+    /* FAZ-NEXGEN-TUM-TABLET-AUTOFOCUS-KAPAT-1: pigment arama autofocus yok */
   }
   /* Renk Adı + swatch */
   var rAdiEl=document.getElementById('m2-renk-adi');
@@ -1197,7 +1197,7 @@ function adimPostRender(no){
       var btn=document.getElementById('btn-4'); if(btn) btn.disabled=!S.renk_adi;
       var uyr=document.getElementById('m2-renk-adi-uyari'); if(uyr) uyr.style.display=S.renk_adi?'none':'';
     });
-    setTimeout(function(){ rAdiEl.focus(); },60);
+    /* FAZ-NEXGEN-TUM-TABLET-AUTOFOCUS-KAPAT-1: renk adı autofocus yok */
   }
   var rHexEl=document.getElementById('m2-renk-hex');
   if(rHexEl){
@@ -1240,7 +1240,7 @@ function adimPostRender(no){
       if(btn){btn.disabled=!dolu;btn.style.opacity=dolu?'1':'0.4';btn.style.cursor=dolu?'pointer':'not-allowed';}
       if(uyr) uyr.style.display=dolu?'none':'';
     });
-    setTimeout(function(){ notEl.focus(); },60);
+    /* FAZ-NEXGEN-TUM-TABLET-AUTOFOCUS-KAPAT-1: not autofocus yok */
   }
 }
 
@@ -1302,4 +1302,5 @@ function esc(s){
 render();
 initEvents();
 </script>
+{% include 'nexgen/_tablet_nofocus.html' %}
 {% endblock %}

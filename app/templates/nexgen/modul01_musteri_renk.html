@@ -1707,7 +1707,7 @@ function adimPostRender(no){
     var aramaEl = document.getElementById(aramaIdMap[no]);
     if(aramaEl){
       aramaEl.addEventListener('input', function(){ aramaYap(aramaEl); });
-      setTimeout(function(){ aramaEl.focus(); }, 60);
+      /* FAZ-NEXGEN-TUM-TABLET-AUTOFOCUS-KAPAT-1: adım açılışında focus yok */
     }
   }
 
@@ -1726,7 +1726,7 @@ function adimPostRender(no){
       }
       if(uyari) uyari.style.display = dolu ? 'none' : '';
     });
-    setTimeout(function(){ notEl.focus(); }, 60);
+    /* FAZ-NEXGEN-TUM-TABLET-AUTOFOCUS-KAPAT-1: not alanına otomatik focus yok */
   }
 
 }
@@ -2124,4 +2124,5 @@ function m5MesajTemizle(){
   el.textContent = '';
 }
 </script>
+{% include 'nexgen/_tablet_nofocus.html' %}
 {% endblock %}

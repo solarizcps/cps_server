@@ -1289,7 +1289,7 @@ function notModalAc(parcaId) {
   document.getElementById('pp-not-hata').style.display = 'none';
   document.getElementById('pp-not-modal').style.display = 'flex';
   document.getElementById('pp-not-kaydet-btn').onclick = notKaydet;
-  document.getElementById('pp-not-input').focus();
+  /* FAZ-NEXGEN-TUM-TABLET-AUTOFOCUS-KAPAT-1: modal açılışında focus yok */
 }
 
 function notModalKapat() {
@@ -2540,4 +2540,5 @@ body { background: #f3f6fa; font-family: system-ui, -apple-system, sans-serif; }
   .sol-kart-iki { grid-template-columns: 1fr 1fr; }
 }
 </style>
+{% include 'nexgen/_tablet_nofocus.html' %}
 {% endblock %}
