@@ -18427,6 +18427,12 @@ _UEM_BEKLET_MARKER = '__UEM_BEKLET__'
 _TUA_AKTIF_BATCH_DURUMLAR = ('HAZIR', 'DEVAM', 'BEKLEME')
 
 
+def _nexgen_uem_tablet_zorunlu_mu():
+    """Config.NEXGEN_UEM_TABLET_ZORUNLU — pilot varsayılan False."""
+    from config import Config
+    return bool(getattr(Config, 'NEXGEN_UEM_TABLET_ZORUNLU', False))
+
+
 def _tua_tablet_marker_var(notlar):
     return _UEM_TABLET_MARKER in (notlar or '')
 
@@ -18487,7 +18493,7 @@ def _tua_batch_bitir_kontrol(con, batch_kodu, mevcut_durum):
 
 
 def _tua_tablet_is_liste_sorgu(con):
-    """ÜEM'den tablete gönderilmiş aktif batch listesi."""
+    """Tablet üretim iş listesi — UEM marker opsiyonel (NEXGEN_UEM_TABLET_ZORUNLU)."""
     _cols = [c['name'] for c in con.execute(
         "PRAGMA table_info(nexgen_uretim_batch)"
     ).fetchall()]
@@ -18498,6 +18504,13 @@ def _tua_tablet_is_liste_sorgu(con):
     uk_sel = "np.uretim_kodu," if _kolon_var_chk(con, 'nexgen_uretim_plan', 'uretim_kodu') else "NULL AS uretim_kodu,"
     af_sel = "np.ana_formul_kodu," if _kolon_var_chk(con, 'nexgen_uretim_plan', 'ana_formul_kodu') else "NULL AS ana_formul_kodu,"
     rk_sel = "np.renk_kodu," if _kolon_var_chk(con, 'nexgen_uretim_plan', 'renk_kodu') else "NULL AS renk_kodu,"
+    durum_ph = ','.join(['?'] * len(_TUA_AKTIF_BATCH_DURUMLAR))
+    where_parts = [f"nb.durum IN ({durum_ph})"]
+    params = list(_TUA_AKTIF_BATCH_DURUMLAR)
+    if _nexgen_uem_tablet_zorunlu_mu():
+        where_parts.insert(0, "COALESCE(nb.notlar, '') LIKE ?")
+        params.insert(0, f'%{_UEM_TABLET_MARKER}%')
+    where_sql = ' AND '.join(where_parts)
     rows = con.execute(f"""
         SELECT nb.id, nb.batch_kodu, nb.planlanan_kg, nb.durum AS batch_durum,
                nb.notlar, nb.olusturma_tarihi,
@@ -18513,11 +18526,10 @@ def _tua_tablet_is_liste_sorgu(con):
         JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
         JOIN nexgen_formul f ON f.id = rv.formul_id
         {cari_join}
-        WHERE COALESCE(nb.notlar, '') LIKE ?
-          AND nb.durum IN ('HAZIR','DEVAM','BEKLEME')
+        WHERE {where_sql}
         ORDER BY np.oncelik_sira ASC, nb.id DESC
         LIMIT 100
-    """, (f'%{_UEM_TABLET_MARKER}%',)).fetchall()
+    """, params).fetchall()
     liste = []
     for r in rows:
         d = dict(r)
@@ -19232,7 +19244,7 @@ def _mpr_plan_uretime_gonder_tx(con, plan_id, uid, plan=None, uv=None):
                 )
                 parca_no += 1
 
-    _depo_hazirlik_olustur(
+    _depo_hazirlik_olustur_if_enabled(
         con,
         batch_kodu=batch_kodu,
         plan_id=plan_id,
@@ -22188,6 +22200,12 @@ def _formul_bolum_yap(con, ihtiyac, kg):
     }
 
 
+def _nexgen_depo_hazirlik_zorunlu_mu():
+    """Config.NEXGEN_DEPO_HAZIRLIK_ZORUNLU — pilot varsayılan False."""
+    from config import Config
+    return bool(getattr(Config, 'NEXGEN_DEPO_HAZIRLIK_ZORUNLU', False))
+
+
 def _depo_hazirlik_tablosu_var(con):
     return con.execute(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='nexgen_depo_hazirlik'"
@@ -22211,6 +22229,25 @@ def _depo_hazirlik_no_uret(con):
     else:
         son_no = 0
     return f"DH-{yil}-{son_no + 1:05d}"
+
+
+def _depo_hazirlik_olustur_if_enabled(con, batch_kodu, plan_id, uretim_varyant_id,
+                                      planlanan_kg, rf_renk_id=None, cari_id=None,
+                                      planlama_siparis_id=None, olusturan_id=None):
+    """NEXGEN_DEPO_HAZIRLIK_ZORUNLU=False iken depo hazırlık kaydı oluşturmaz."""
+    if not _nexgen_depo_hazirlik_zorunlu_mu():
+        return None
+    return _depo_hazirlik_olustur(
+        con,
+        batch_kodu=batch_kodu,
+        plan_id=plan_id,
+        uretim_varyant_id=uretim_varyant_id,
+        planlanan_kg=planlanan_kg,
+        rf_renk_id=rf_renk_id,
+        cari_id=cari_id,
+        planlama_siparis_id=planlama_siparis_id,
+        olusturan_id=olusturan_id,
+    )
 
 
 def _depo_hazirlik_olustur(con, batch_kodu, plan_id, uretim_varyant_id,
@@ -22289,6 +22326,13 @@ def _depo_hazirlik_batch_durum(con, batch_kodu):
 
 def _batch_depo_hazir_zorunlu(con, batch_kodu):
     """Parça bitirmeden önce batch için depo hazırlığının HAZIR olmasını zorunlu kılar."""
+    if not _nexgen_depo_hazirlik_zorunlu_mu():
+        return {
+            'ok': True,
+            'atlandi': True,
+            'feature_flag': 'NEXGEN_DEPO_HAZIRLIK_ZORUNLU',
+            'depo_hazirlik_zorunlu': False,
+        }
     if not _depo_hazirlik_tablosu_var(con):
         return {'ok': True, 'atlandi': True}
     dh = _depo_hazirlik_batch_durum(con, batch_kodu)
@@ -24404,7 +24448,7 @@ def api_plan_basla(plan_id):
                         """, (batch_id, batch_kodu, plan_id, no,
                               round(formul_batch_kg, 3), uid))
 
-        _depo_hazirlik_olustur(
+        _depo_hazirlik_olustur_if_enabled(
             con,
             batch_kodu=batch_kodu,
             plan_id=plan_id,

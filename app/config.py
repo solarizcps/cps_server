@@ -54,3 +54,17 @@ class Config:
     # Test modunu yalnızca geliştirme ortamında aktif et.
     # Production'da False olmalı — DB adı kontrolü KALDIRILDI (BR-G-06).
     MPR_TEST_MODE_ALLOWED = os.environ.get('MPR_TEST_MODE', 'false').lower() == 'true'
+
+    # ===================== NEXGEN DEPO HAZIRLIK =====================
+    # Pilot: False — Depo Hazırlık modülü geçici pasif; Bitir guard bypass, uretime-gonder kaydı yok.
+    # Tam workflow: True — FAZ-5B (BEKLIYOR kaydı + HAZIR zorunlu Bitir kapısı).
+    NEXGEN_DEPO_HAZIRLIK_ZORUNLU = os.environ.get(
+        'NEXGEN_DEPO_HAZIRLIK_ZORUNLU', 'false'
+    ).lower() == 'true'
+
+    # ===================== NEXGEN UEM TABLET =====================
+    # Pilot: False — Üretime Gönder sonrası batch tablet listelerinde görünür (marker zorunlu değil).
+    # Legacy: True — yalnız __UEM_TABLET__ marker'lı batch'ler uretim-isleri / ferhat / is-listesi'nde.
+    NEXGEN_UEM_TABLET_ZORUNLU = os.environ.get(
+        'NEXGEN_UEM_TABLET_ZORUNLU', 'false'
+    ).lower() == 'true'
