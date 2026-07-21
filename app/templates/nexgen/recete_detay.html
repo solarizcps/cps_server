@@ -2802,9 +2802,7 @@ function rfbListeYukle() {
         kart.dataset.rfId = item._rf_key;
         kart.onclick = function() { rfbDetayAc(item._rf_key); };
         var revEtiket = item.rev_no ? ('REV-' + item.rev_no) : '—';
-        var kgTxt = item.toplam_kg >= 0.001
-          ? item.toplam_kg.toFixed(3) + ' KG'
-          : (item.toplam_gr ? item.toplam_gr.toFixed(2) + ' GR' : '—');
+        var kgTxt = formatBoyaMiktari(item.toplam_kg);
         kart.innerHTML =
           '<div class="rfb-kart-ust">' +
             '<div><div class="rfb-kart-kod">' + (item.rf_kod || '—') + '</div>' +
@@ -2835,6 +2833,21 @@ function rfbListeYukle() {
     });
 }
 
+function formatBoyaMiktari(kg) {
+  var n = parseFloat(kg);
+  if (isNaN(n) || n < 0) return '—';
+  if (n === 0) return '0 gr';
+  if (n >= 1) {
+    var s = n.toLocaleString('tr-TR', {minimumFractionDigits: 0, maximumFractionDigits: 6});
+    if (s.indexOf(',') !== -1) s = s.replace(/0+$/, '').replace(/,$/, '');
+    return s + ' kg';
+  }
+  var gr = n * 1000;
+  var s = gr.toLocaleString('tr-TR', {minimumFractionDigits: 0, maximumFractionDigits: 4});
+  if (s.indexOf(',') !== -1) s = s.replace(/0+$/, '').replace(/,$/, '');
+  return s + ' gr';
+}
+
 function rfbDetayAc(rfId) {
   _rfbSeciliId = rfId;
   document.querySelectorAll('.rfb-kart').forEach(function(k) {
@@ -2863,9 +2876,8 @@ function rfbDetayAc(rfId) {
           '<td><span style="font-family:monospace;font-size:11px;font-weight:600">' + k.stok_kodu + '</span></td>' +
           '<td>' + (k.stok_ad || '—') + '</td>' +
           '<td><span class="' + katCls + '">' + (k.kategori || '—') + '</span></td>' +
-          '<td style="text-align:right;font-weight:600">' + k.miktar_kg.toFixed(6) + '</td>' +
-          '<td style="text-align:right;color:#6b7280">' + k.miktar_gr.toFixed(2) + ' gr</td>' +
-          '<td>' + (k.birim || 'KG') + '</td></tr>';
+          '<td style="text-align:right;font-weight:600;color:#0f172a">' + formatBoyaMiktari(k.miktar_kg) + '</td>' +
+          '</tr>';
       }).join('');
       detayEl.innerHTML =
         '<div class="rfb-detay-hdr">' +
@@ -2876,13 +2888,13 @@ function rfbDetayAc(rfId) {
           '<span>Durum <strong><span class="rfb-rozet ' + rfbDurumRozet(rf.durum) + '">' + rf.durum + '</span></strong></span>' +
           '<span>Revizyon <strong>' + revTxt + '</strong></span>' +
           '<span>Kalem <strong>' + rf.kalem_sayisi + '</strong></span>' +
-          '<span>Toplam <strong>' + rf.toplam_kg.toFixed(6) + ' KG</strong></span>' +
+          '<span>Toplam <strong>' + formatBoyaMiktari(rf.toplam_kg) + '</strong></span>' +
           (rf.masterbatch_sayisi ? '<span>MASTERBATCH <strong>' + rf.masterbatch_sayisi + '</strong></span>' : '') +
           '<span>Oluşturma <strong>' + (rf.olusturma_tarihi || '—') + '</strong></span>' +
         '</div>' +
         '<div style="font-size:11px;color:#6b7280;margin-bottom:6px">Formül uygunluk: ' + uyg + '</div>' +
         '<table class="rfb-detay-tablo"><thead><tr>' +
-          '<th>Stok</th><th>Ad</th><th>Kategori</th><th style="text-align:right">KG</th><th style="text-align:right">GR</th><th>Birim</th>' +
+          '<th>Stok</th><th>Ad</th><th>Kategori</th><th style="text-align:right">Miktar</th>' +
         '</tr></thead><tbody>' + rows + '</tbody></table>' +
         '<div class="rfb-fp-kutu"><span style="font-weight:700">Pigment fingerprint:</span> ' + (rf.pigment_fp || '—') + '</div>';
     })

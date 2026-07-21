@@ -579,12 +579,16 @@ var _formul_yukleme_ok = false;
 function tuiMiktarEtiket(k, rfBolum) {
   var kg = parseFloat(k.miktar_kg);
   if (!(kg >= 0)) return '—';
+  if (kg === 0) return '0 gr';
   if (rfBolum && kg < 1) {
     var gr = kg * 1000;
-    var s = gr >= 10 ? gr.toFixed(1) : gr.toFixed(2);
-    return s.replace(/\.?0+$/, '') + ' GR';
+    var s = gr.toLocaleString('tr-TR', {minimumFractionDigits: 0, maximumFractionDigits: 4});
+    if (s.indexOf(',') !== -1) s = s.replace(/0+$/, '').replace(/,$/, '');
+    return s + ' gr';
   }
-  return kg.toFixed(3).replace(/\.?0+$/, '') + ' KG';
+  var s = kg.toLocaleString('tr-TR', {minimumFractionDigits: 0, maximumFractionDigits: 6});
+  if (s.indexOf(',') !== -1) s = s.replace(/0+$/, '').replace(/,$/, '');
+  return s + ' kg';
 }
 
 function tuiFormulTabloHtml(kalemler, rfBolum) {
@@ -618,9 +622,9 @@ function tuiFormulBolumRender(bolum, rfVar) {
     (rf.length ? tuiFormulTabloHtml(rf, true) : rfUyari) +
     '</div>' +
     '<div class="tui-fm-toplamlar">' +
-    '<div><span>Ana hammadde</span><strong>' + (top.taban_kg != null ? top.taban_kg.toFixed(2) : '0') + ' KG</strong></div>' +
+    '<div><span>Ana hammadde</span><strong>' + (top.taban_kg != null ? top.taban_kg.toLocaleString('tr-TR',{minimumFractionDigits:0,maximumFractionDigits:3}) : '0') + ' kg</strong></div>' +
     '<div><span>Boya (RF)</span><strong>' + tuiMiktarEtiket({miktar_kg: top.rf_kg || 0}, true) + '</strong></div>' +
-    '<div class="tui-fm-genel"><span>Toplam</span><strong>' + (top.genel_kg != null ? top.genel_kg.toFixed(2) : '0') + ' KG</strong></div>' +
+    '<div class="tui-fm-genel"><span>Toplam</span><strong>' + (top.genel_kg != null ? top.genel_kg.toLocaleString('tr-TR',{minimumFractionDigits:0,maximumFractionDigits:3}) : '0') + ' kg</strong></div>' +
     '</div>';
 }
 

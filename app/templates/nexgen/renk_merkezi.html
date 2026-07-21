@@ -499,10 +499,16 @@ function rmE(s){
 function rmGr(v){
   const n=Number(v);
   if(isNaN(n)) return '—';
-  if(n===0) return '0 GR';
-  let s=n.toLocaleString('tr-TR',{minimumFractionDigits:0,maximumFractionDigits:6});
+  if(n===0) return '0 gr';
+  if(n>=1000){
+    const kg=n/1000;
+    let s=kg.toLocaleString('tr-TR',{minimumFractionDigits:0,maximumFractionDigits:6});
+    if(s.includes(',')) s=s.replace(/0+$/,'').replace(/,$/,'');
+    return s+' kg';
+  }
+  let s=n.toLocaleString('tr-TR',{minimumFractionDigits:0,maximumFractionDigits:4});
   if(s.includes(',')) s=s.replace(/0+$/,'').replace(/,$/,'');
-  return s+' GR';
+  return s+' gr';
 }
 function rmPct(v){
   const n=Number(v);

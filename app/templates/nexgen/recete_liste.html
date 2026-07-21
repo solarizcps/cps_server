@@ -1179,8 +1179,18 @@ function rmKg(v){
   return s;
 }
 function rmGr(v){
-  var s = rmKg(v);
-  return s === '0' ? '0 GR' : s + ' GR';
+  var n = parseFloat(v);
+  if(isNaN(n)) return '—';
+  if(n===0) return '0 gr';
+  if(n>=1000){
+    var kg=n/1000;
+    var s=kg.toLocaleString('tr-TR',{minimumFractionDigits:0,maximumFractionDigits:6});
+    if(s.indexOf(',')!==-1) s=s.replace(/0+$/,'').replace(/,$/,'');
+    return s+' kg';
+  }
+  var s=n.toLocaleString('tr-TR',{minimumFractionDigits:0,maximumFractionDigits:4});
+  if(s.indexOf(',')!==-1) s=s.replace(/0+$/,'').replace(/,$/,'');
+  return s+' gr';
 }
 function rmPct(v){
   var n = parseFloat(v)||0;

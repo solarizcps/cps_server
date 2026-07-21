@@ -1839,30 +1839,32 @@ function esc(s){
  * Backend / API / DB / hesap motoru kesinlikle değişmez.
  * ─────────────────────────────────────────────────────────────── */
 
-/* 1. Ana hammadde bölümü → her zaman KG, 3 ondalık */
+/* 1. Ana hammadde bölümü → KG, Türkçe virgül, gereksiz sıfır yok */
 function goster_kg(v){
   if(v === null || v === undefined || isNaN(v)) return '—';
-  return parseFloat(v).toFixed(3) + ' kg';
+  var n = parseFloat(v);
+  var s = n.toLocaleString('tr-TR', {minimumFractionDigits: 0, maximumFractionDigits: 3});
+  if(s.indexOf(',') !== -1) s = s.replace(/0+$/, '').replace(/,$/, '');
+  return s + ' kg';
 }
 
-/* 2. RF boya kalemleri → her zaman GR, laboratuvar formatı
- * Kural:
- *   Tam sayı (ondalık = .000) → sıfırları at   450 gr / 340 gr / 85 gr
- *   Ondalıklı                 → 3 hane koru    4.500 gr / 0.230 gr / 0.007 gr
- * Dönüşüm tablosu:
- *   0.450 kg → 450 gr   | 0.340 kg → 340 gr | 0.085 kg → 85 gr
- *   0.000230 kg → 0.230 gr | 0.000007 kg → 0.007 gr
+/* 2. RF boya kalemleri → GR, Türkçe virgül, maks 1 ondalık
+ * Kural: tam sayı ise sıfır yok, ondalık ise yalnız 1 hane
+ *   0.040 kg → 40 gr   | 0.085 kg → 8,5 gr | 0.0042 kg → 4,2 gr
+ *   0.250 kg → 250 gr  | 0.0085 kg → 8,5 gr
+ * Türkçe virgül kullanılır.
  */
 function goster_gr(v){
   if(v === null || v === undefined || isNaN(v)) return '—';
   var gr = parseFloat(v) * 1000;
-  /* 3 ondalıkla yuvarla (float hassasiyet gürültüsünü temizle) */
-  var gr3 = parseFloat(gr.toFixed(3));
-  /* Tam sayı mı? Math.floor karşılaştırması ile kontrol */
-  var sonuc = (gr3 === Math.floor(gr3))
-    ? String(gr3)           /* tam sayı: 450, 340, 85 */
-    : gr3.toFixed(3);       /* ondalıklı: 4.500, 0.230, 0.007 */
-  return sonuc + ' gr';
+  /* 1 ondalıkla yuvarla (float hassasiyet gürültüsünü temizle) */
+  var gr1 = parseFloat(gr.toFixed(1));
+  /* Tam sayı mı? */
+  if(gr1 === Math.floor(gr1)){
+    return String(Math.round(gr1)) + ' gr';
+  }
+  /* Ondalıklı: Türkçe virgülle göster */
+  return gr1.toLocaleString('tr-TR', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + ' gr';
 }
 
 /* Eski çağrılar için uyumluluk takma adı (kaldırılacak) */
