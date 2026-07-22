@@ -5,12 +5,73 @@ Pazarlama Merkezi BE-2 — Çok kalemli taslak kaydetme (V2 payload)
 from __future__ import annotations
 
 import json
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any
 
 from modules.nexgen.cekirdek_gorunum import cekirdek_formul_mu
 
 PZM_V2_JSON_PREFIX = '__PZM_V2__'
 PZM_AILELER = frozenset({'TERLIK', 'TABAN', 'DOKME'})
+PZM_PARA_BIRIMLERI = frozenset({'TRY', 'USD', 'EUR'})
+PZM_BIRIM_FIYAT_MAX = Decimal('999999.9999')
+
+
+def pzm_finans_kolonlari_var(con) -> bool:
+    cols = {c[1] for c in con.execute('PRAGMA table_info(nexgen_planlama_siparis)').fetchall()}
+    return (
+        'anlasma_para_birimi' in cols
+        and 'vade_gun' in cols
+        and 'anlasma_birim_fiyat' in cols
+    )
+
+
+def pzm_para_birimi_normalize(raw) -> str:
+    s = (raw or '').strip().upper()
+    if s == 'TL':
+        s = 'TRY'
+    return s
+
+
+def pzm_vade_gun_dogrula(raw) -> int:
+    if raw in (None, ''):
+        raise PzmWriteError('Vade günü zorunludur.')
+    if isinstance(raw, str):
+        s = raw.strip()
+        if not s.isdigit():
+            raise PzmWriteError('Vade günü 0 veya daha büyük tam sayı olmalıdır.')
+        raw = s
+    try:
+        v = int(raw)
+    except (TypeError, ValueError):
+        raise PzmWriteError('Vade günü 0 veya daha büyük tam sayı olmalıdır.')
+    if v < 0:
+        raise PzmWriteError('Vade günü 0 veya daha büyük tam sayı olmalıdır.')
+    return v
+
+
+def pzm_birim_fiyat_dogrula(raw) -> str:
+    """Decimal string döner — en fazla 4 ondalık, örn. 2.3500."""
+    if raw in (None, ''):
+        raise PzmWriteError('Anlaşma birim fiyatı zorunludur.')
+    s = str(raw).strip().replace(' ', '')
+    if not s:
+        raise PzmWriteError('Anlaşma birim fiyatı zorunludur.')
+    if s.count(',') > 1 or s.count('.') > 1:
+        raise PzmWriteError('Anlaşma birim fiyatı geçerli bir sayı olmalıdır.')
+    if ',' in s and '.' in s:
+        raise PzmWriteError('Anlaşma birim fiyatı geçerli bir sayı olmalıdır.')
+    s = s.replace(',', '.')
+    try:
+        d = Decimal(s)
+    except InvalidOperation:
+        raise PzmWriteError('Anlaşma birim fiyatı geçerli bir sayı olmalıdır.')
+    if not d.is_finite():
+        raise PzmWriteError('Anlaşma birim fiyatı geçerli bir sayı olmalıdır.')
+    if d <= 0:
+        raise PzmWriteError('Anlaşma birim fiyatı sıfırdan büyük olmalıdır.')
+    if d > PZM_BIRIM_FIYAT_MAX:
+        raise PzmWriteError('Anlaşma birim fiyatı geçerli bir sayı olmalıdır.')
+    return format(d.quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP), 'f')
 
 
 class PzmWriteError(Exception):
@@ -184,10 +245,19 @@ def pzm_v2_payload_dogrula(con, data: dict, cari_id: int) -> dict[str, Any]:
     genel_termin = data.get('genel_termin_tarihi')
     genel_not = (data.get('genel_not') or data.get('notlar') or '').strip() or None
 
-    if genel_termin:
-        ok, t_hata, genel_termin = _pzm_termin_dogrula(genel_termin)
-        if not ok:
-            raise PzmWriteError(t_hata)
+    if not genel_termin or not str(genel_termin).strip():
+        raise PzmWriteError('Genel termin tarihi zorunludur.')
+    ok, t_hata, genel_termin = _pzm_termin_dogrula(genel_termin)
+    if not ok:
+        raise PzmWriteError(t_hata or 'Genel termin tarihi zorunludur.')
+
+    pb = pzm_para_birimi_normalize(data.get('anlasma_para_birimi') or data.get('para_birimi'))
+    if pb not in PZM_PARA_BIRIMLERI:
+        raise PzmWriteError('Anlaşma para birimi zorunludur.')
+    vade_gun = pzm_vade_gun_dogrula(data.get('vade_gun'))
+    birim_fiyat = pzm_birim_fiyat_dogrula(
+        data.get('anlasma_birim_fiyat') or data.get('birim_fiyat')
+    )
 
     kalemler = []
     seen = set()
@@ -207,13 +277,16 @@ def pzm_v2_payload_dogrula(con, data: dict, cari_id: int) -> dict[str, Any]:
         kalemler.append(k)
 
     terminler = [k['termin_tarihi'] for k in kalemler if k.get('termin_tarihi')]
-    header_termin = genel_termin or (min(terminler) if terminler else None)
+    header_termin = genel_termin
 
     return {
         'cari': dict(cari),
         'siparis_tarihi': siparis_tarihi,
         'genel_termin': header_termin,
         'genel_not': genel_not,
+        'anlasma_para_birimi': pb,
+        'vade_gun': vade_gun,
+        'anlasma_birim_fiyat': birim_fiyat,
         'kalemler': kalemler,
     }
 
@@ -229,7 +302,7 @@ def pzm_v2_taslak_kaydet(con, data: dict, uid: int | None) -> dict[str, Any]:
     try:
         cari_id = int(data.get('cari_id'))
     except (TypeError, ValueError):
-        raise PzmWriteError('Cari seçimi zorunlu.')
+        raise PzmWriteError('Müşteri seçimi zorunludur.')
 
     hazir = pzm_v2_payload_dogrula(con, data, cari_id)
     cari = hazir['cari']
@@ -240,9 +313,13 @@ def pzm_v2_taslak_kaydet(con, data: dict, uid: int | None) -> dict[str, Any]:
         'v': 2,
         'siparis_tarihi': hazir['siparis_tarihi'],
         'genel_termin_tarihi': hazir['genel_termin'],
+        'anlasma_para_birimi': hazir['anlasma_para_birimi'],
+        'vade_gun': hazir['vade_gun'],
+        'anlasma_birim_fiyat': hazir['anlasma_birim_fiyat'],
         'kalem_sayisi': len(kalemler),
     }
     talep_ref = pzm_v2_header_pack(meta)
+    finans_kolon = pzm_finans_kolonlari_var(con)
 
     ps_id = data.get('talep_id')
     guncellendi = False
@@ -272,10 +349,19 @@ def pzm_v2_taslak_kaydet(con, data: dict, uid: int | None) -> dict[str, Any]:
                 SET cari_id=?, cari_unvan=?, termin_tarihi=?, notlar=?,
                     talep_referansi=?, durum='TASLAK',
                     guncelleme_tarihi=datetime('now','localtime')
+                    """
+                + (", anlasma_para_birimi=?, vade_gun=?, anlasma_birim_fiyat=?" if finans_kolon else "")
+                + """
                 WHERE id=?
                 """,
-                (cari['id'], cari['unvan'], hazir['genel_termin'], hazir['genel_not'],
-                 talep_ref, ps_id),
+                (
+                    (cari['id'], cari['unvan'], hazir['genel_termin'], hazir['genel_not'],
+                     talep_ref, hazir['anlasma_para_birimi'], hazir['vade_gun'],
+                     hazir['anlasma_birim_fiyat'], ps_id)
+                    if finans_kolon else
+                    (cari['id'], cari['unvan'], hazir['genel_termin'], hazir['genel_not'],
+                     talep_ref, ps_id)
+                ),
             )
             con.execute(
                 'DELETE FROM nexgen_planlama_siparis_kalem WHERE planlama_siparis_id=?',
@@ -291,11 +377,20 @@ def pzm_v2_taslak_kaydet(con, data: dict, uid: int | None) -> dict[str, Any]:
                 """
                 INSERT INTO nexgen_planlama_siparis
                     (siparis_no, cari_id, cari_unvan, termin_tarihi, talep_referansi,
-                     durum, notlar, olusturan_id)
-                VALUES (?, ?, ?, ?, ?, 'TASLAK', ?, ?)
-                """,
-                (siparis_no, cari['id'], cari['unvan'], hazir['genel_termin'],
-                 talep_ref, hazir['genel_not'], uid),
+                     durum, notlar, olusturan_id"""
+                + (", anlasma_para_birimi, vade_gun, anlasma_birim_fiyat" if finans_kolon else "")
+                + """)
+                VALUES (?, ?, ?, ?, ?, 'TASLAK', ?, ?"""
+                + (", ?, ?, ?" if finans_kolon else "")
+                + ")",
+                (
+                    (siparis_no, cari['id'], cari['unvan'], hazir['genel_termin'],
+                     talep_ref, hazir['genel_not'], uid,
+                     hazir['anlasma_para_birimi'], hazir['vade_gun'], hazir['anlasma_birim_fiyat'])
+                    if finans_kolon else
+                    (siparis_no, cari['id'], cari['unvan'], hazir['genel_termin'],
+                     talep_ref, hazir['genel_not'], uid)
+                ),
             )
             ps_id = cur.lastrowid
 
@@ -333,4 +428,8 @@ def pzm_v2_taslak_kaydet(con, data: dict, uid: int | None) -> dict[str, Any]:
         'kalem_sayisi': len(kalemler),
         'toplam_kg': toplam_kg,
         'guncellendi': guncellendi,
+        'anlasma_para_birimi': hazir['anlasma_para_birimi'],
+        'vade_gun': hazir['vade_gun'],
+        'anlasma_birim_fiyat': hazir['anlasma_birim_fiyat'],
+        'genel_termin_tarihi': hazir['genel_termin'],
     }

@@ -14808,8 +14808,13 @@ def tablet_arge():
             "WHERE aktif=1 AND date(olusturma_tarihi)=date('now')"
         ).fetchone()['c']
 
-        # Ana ekran — bekleyen (tablet aksiyon + legacy)
+        # Ana ekran — bekleyen (tablet aksiyon + numune talep BEKLEYEN)
         bekleyen_say = len(aksiyon_numuneler)
+        try:
+            from modules.nexgen.numune_talep_service import say_bekleyen_numune
+            bekleyen_say += say_bekleyen_numune(con)
+        except Exception:
+            pass
 
     finally:
         con.close()
@@ -17356,13 +17361,17 @@ def _pzm_payload_pack(data):
 
 
 def _pzm_payload_unpack(ref):
-    if not ref or not str(ref).startswith(_PZM_JSON_PREFIX):
+    if not ref:
         return None
     import json
-    try:
-        return json.loads(str(ref)[len(_PZM_JSON_PREFIX):])
-    except Exception:
-        return None
+    s = str(ref)
+    for prefix in (_PZM_JSON_PREFIX, '__PZM_V2__'):
+        if s.startswith(prefix):
+            try:
+                return json.loads(s[len(prefix):])
+            except Exception:
+                return None
+    return None
 
 
 def _pzm_siparis_no_uret(con):
@@ -17697,6 +17706,13 @@ def _pzm_talep_satir_dict(row, con=None):
     d = dict(row)
     payload = _pzm_payload_unpack(d.get('talep_referansi'))
     d['payload'] = payload
+    if payload:
+        if not d.get('anlasma_para_birimi'):
+            d['anlasma_para_birimi'] = payload.get('anlasma_para_birimi')
+        if d.get('vade_gun') in (None, ''):
+            d['vade_gun'] = payload.get('vade_gun')
+        if not d.get('anlasma_birim_fiyat'):
+            d['anlasma_birim_fiyat'] = payload.get('anlasma_birim_fiyat')
     d['durum_etiket'] = {
         'TASLAK': 'Taslak',
         'MPR_BEKLIYOR': 'MPR Bekliyor',
@@ -17835,17 +17851,26 @@ def _pzm_talep_payload_olustur(con, data):
     }, None
 
 
+def _pzm_aktif_cari_liste(con, q=None):
+    """Pazarlama Sipariş + Numune Talep ortak aktif cari kaynağı."""
+    sql = "SELECT id, cari_kod, unvan FROM nexgen_cari WHERE aktif=1"
+    params = []
+    q = (q or '').strip()
+    if q:
+        sql += " AND (unvan LIKE ? OR cari_kod LIKE ?)"
+        like = f'%{q}%'
+        params.extend([like, like])
+    sql += " ORDER BY unvan"
+    return [dict(r) for r in con.execute(sql, params).fetchall()]
+
+
 @nexgen_bp.route('/pazarlama')
 @yetki_gerekli('nexgen.plan.view', 'can_view')
 def pazarlama_merkezi():
     """Pazarlama personeli talep / MPR V1 ekranı."""
     con = _db()
     try:
-        cariler = [
-            dict(c) for c in con.execute(
-                "SELECT id, cari_kod, unvan FROM nexgen_cari WHERE aktif=1 ORDER BY unvan"
-            ).fetchall()
-        ]
+        cariler = _pzm_aktif_cari_liste(con)
         talepler = []
         if _planlama_siparis_tablosu_var(con):
             rows = con.execute(f"""
@@ -17865,6 +17890,19 @@ def pazarlama_merkezi():
         talepler=talepler,
         can_manage=yetki_var('nexgen.plan.manage', 'can_manage'),
     )
+
+
+@nexgen_bp.route('/api/pazarlama/cariler')
+@login_gerekli
+@yetki_gerekli('nexgen.plan.view', 'can_view')
+def api_pazarlama_cariler():
+    """Aktif cari listesi — Pazarlama / Numune Talep ortak kaynak."""
+    q = (request.args.get('q') or '').strip()
+    con = _db()
+    try:
+        return jsonify({'ok': True, 'cariler': _pzm_aktif_cari_liste(con, q or None)})
+    finally:
+        con.close()
 
 
 @nexgen_bp.route('/api/pazarlama/formuller')
@@ -18651,10 +18689,8 @@ def _uem_emir_dict(con, row):
     if durum == 'URETIMDE' and bk:
         if bd == 'BEKLEME':
             d['durum_etiket'] = 'Bekletildi'
-        elif bd == 'DEVAM':
+        elif bd in ('DEVAM', 'HAZIR') or d.get('tablet_gonderildi'):
             d['durum_etiket'] = 'Üretimde'
-        elif d.get('tablet_gonderildi'):
-            d['durum_etiket'] = 'Tablette'
         else:
             d['durum_etiket'] = 'Üretimde'
     elif durum == 'PLANLANDI':
@@ -18840,6 +18876,57 @@ def api_uem_beklet(plan_id):
         )
         con.commit()
         return jsonify({'ok': True, 'tip': 'plan', 'durum': 'BEKLET'})
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/uem/emir/<int:plan_id>/devam-et', methods=['POST'])
+@yetki_gerekli('nexgen.plan.manage', 'can_manage')
+def api_uem_devam_et(plan_id):
+    """Batch BEKLEME veya plan bekletme işaretini kaldır."""
+    con = _db()
+    try:
+        p = con.execute(
+            "SELECT id, durum, notlar, oncelik_sira FROM nexgen_uretim_plan WHERE id=?",
+            (plan_id,),
+        ).fetchone()
+        if not p:
+            return jsonify({'ok': False, 'hata': 'Plan bulunamadı'}), 404
+        if p['durum'] in ('BITTI', 'IPTAL'):
+            return jsonify({'ok': False, 'hata': 'Bu plan devam ettirilemez'}), 400
+
+        batch = con.execute(
+            "SELECT batch_kodu, durum FROM nexgen_uretim_batch "
+            "WHERE plan_id=? AND durum NOT IN ('IPTAL','BITTI') ORDER BY id DESC LIMIT 1",
+            (plan_id,),
+        ).fetchone()
+        if batch and batch['durum'] == 'BEKLEME':
+            con.execute(
+                "UPDATE nexgen_uretim_batch SET durum='DEVAM' WHERE batch_kodu=?",
+                (batch['batch_kodu'],),
+            )
+            con.commit()
+            return jsonify({
+                'ok': True,
+                'tip': 'batch',
+                'durum': 'DEVAM',
+                'batch_kodu': batch['batch_kodu'],
+            })
+
+        if _UEM_BEKLET_MARKER in (p['notlar'] or ''):
+            yeni_not = (p['notlar'] or '').replace(_UEM_BEKLET_MARKER, '').strip()
+            eski_oncelik = p['oncelik_sira'] if p['oncelik_sira'] not in (None, 999) else 10
+            con.execute(
+                "UPDATE nexgen_uretim_plan SET notlar=?, oncelik_sira=? WHERE id=?",
+                (yeni_not, eski_oncelik, plan_id),
+            )
+            con.commit()
+            return jsonify({'ok': True, 'tip': 'plan', 'durum': 'DEVAM'})
+
+        return jsonify({'ok': False, 'hata': 'Devam ettirilecek bekletme yok'}), 400
     except Exception as e:
         con.rollback()
         return jsonify({'ok': False, 'hata': str(e)}), 500

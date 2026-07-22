@@ -158,6 +158,22 @@ def kullanici_yetkileri(user_dict):
                    'can_approve', 'can_report', 'can_manage'):
             if r[_a]:
                 yetkiler.add(kod + ':' + _a)
+    # Kullanıcıya özel ek yetkiler (user_permission_override) — yalnız EK verir, kısıtlamaz
+    kullanici_id = user_dict.get('Id')
+    if kullanici_id:
+        ov_rows = q("""
+            SELECT y.Kod, upo.can_view, upo.can_create, upo.can_update, upo.can_delete,
+                   upo.can_approve, upo.can_report, upo.can_manage
+            FROM user_permission_override upo
+            JOIN sistem_yetki y ON y.Id = upo.YetkiId
+            WHERE upo.KullaniciId = ?
+        """, (kullanici_id,))
+        for r in ov_rows:
+            kod = r['Kod']
+            for _a in ('can_view', 'can_create', 'can_update', 'can_delete',
+                       'can_approve', 'can_report', 'can_manage'):
+                if r[_a]:
+                    yetkiler.add(kod + ':' + _a)
     return yetkiler
 
 

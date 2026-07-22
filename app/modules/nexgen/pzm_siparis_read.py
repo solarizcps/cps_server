@@ -40,6 +40,25 @@ def pzm_siparis_v2_mi(ref) -> bool:
     return bool(ref) and str(ref).startswith(PZM_V2_JSON_PREFIX)
 
 
+def pzm_siparis_finans_alanlari(hdr: dict, payload: dict | None = None) -> dict[str, Any]:
+    """DB kolonları veya V2 meta JSON'dan finans alanlarını birleştirir."""
+    pb = hdr.get('anlasma_para_birimi')
+    vg = hdr.get('vade_gun')
+    bf = hdr.get('anlasma_birim_fiyat')
+    if payload:
+        if not pb:
+            pb = payload.get('anlasma_para_birimi')
+        if vg in (None, ''):
+            vg = payload.get('vade_gun')
+        if not bf:
+            bf = payload.get('anlasma_birim_fiyat')
+    return {
+        'anlasma_para_birimi': pb,
+        'vade_gun': vg,
+        'anlasma_birim_fiyat': bf,
+    }
+
+
 def _miktar_to_boyut_dict(ml: float, ms: float, mm: float) -> dict[str, float]:
     out: dict[str, float] = {}
     if ml and ml > 0:
@@ -184,11 +203,14 @@ def pzm_siparis_ozet(kalemler: list[dict]) -> dict[str, Any]:
 
 
 def pzm_siparis_header_getir(con, siparis_id: int) -> dict | None:
+    cols = {c[1] for c in con.execute('PRAGMA table_info(nexgen_planlama_siparis)').fetchall()}
+    extra = [c for c in ('anlasma_para_birimi', 'vade_gun', 'anlasma_birim_fiyat') if c in cols]
+    extra_sql = (', ' + ', '.join(extra)) if extra else ''
     row = con.execute(
-        """
+        f"""
         SELECT id, siparis_no, cari_id, cari_unvan, termin_tarihi,
                talep_referansi, durum, notlar, olusturan_id,
-               olusturma_tarihi, guncelleme_tarihi
+               olusturma_tarihi, guncelleme_tarihi{extra_sql}
         FROM nexgen_planlama_siparis
         WHERE id=?
         """,
@@ -214,8 +236,10 @@ def pzm_siparis_oku(con, siparis_id: int) -> dict | None:
         ).fetchone()['n']
 
     ozet = pzm_siparis_ozet(kalemler)
+    finans = pzm_siparis_finans_alanlari(hdr, payload)
     return {
         **hdr,
+        **finans,
         'payload': payload,
         'kalemler': kalemler,
         'kalem_sayisi': ozet['kalem_sayisi'],
