@@ -366,6 +366,9 @@ window.__cpsRootMap = function(pathname) {
       {% if active == 'enjeksiyon' %}{% set aktif_grup = 'uretim' %}{% endif %}
       {# NEXGEN_FAZ1A: nexgen sayfasinda uretim grubu acik #}
       {% if active == 'nexgen' %}{% set aktif_grup = 'uretim' %}{% endif %}
+      {# FAZ-NUMUNE-NEXGEN-MENU-REV: Pazarlama + Numune NexGen grubunda #}
+      {% if '/nexgen/pazarlama' in rp or '/nexgen/numune-talep' in rp %}{% set aktif_grup = 'nexgen' %}{% endif %}
+      {% if '/saha/numune-talep' in rp %}{% set aktif_grup = 'enjeksiyon' %}{% endif %}
       {% if active == 'online-eticaret' %}{% set aktif_grup = 'ticaret' %}{% endif %}
 
 
@@ -815,12 +818,16 @@ window.__cpsRootMap = function(pathname) {
         <span class="sn-arrow">{% if aktif_grup in ('enjeksiyon', 'uretim') %}▼{% else %}►{% endif %}</span>
         <svg class="sn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10v4"/><path d="M11 10v4"/><path d="M15 10v4"/></svg>
         <span class="sn-baslik">Saha</span>
-        <span class="sn-count">1</span>
+        <span class="sn-count">2</span>
       </div>
       <div class="sn-grup{% if aktif_grup not in ('enjeksiyon', 'uretim') %} kapali{% endif %}" data-grup="ferhat">
         <a href="/enjeksiyon/" class="si {% if '/enjeksiyon' in rp %}active{% endif %}" title="Enjeksiyon">
           <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10v4"/><path d="M11 10v4"/><path d="M15 10v4"/></svg></span>
           <span class="sl">Enjeksiyon</span>
+        </a>
+        <a href="/saha/numune-talep" class="si {% if '/saha/numune-talep' in rp %}active{% endif %}" title="Numune Talep">
+          <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6"/><path d="M9 16h6"/></svg></span>
+          <span class="sl">Numune Talep</span>
         </a>
       </div>
       {% endif %}
@@ -899,18 +906,43 @@ window.__cpsRootMap = function(pathname) {
         </a>
         {% endif %}
 
-        
-
-
-
-
-
       </div>
 
 
       {% endif %}
 
 
+
+
+
+      
+      {# FAZ-NUMUNE-NEXGEN-MENU-REV: NexGen grubu — Pazarlama, Numune Talep, Numune Talepleri (pasif) #}
+      {% if (yetki('nexgen.view') and not yetki('yonetim')) or yetki('nexgen.plan.view', 'can_view') %}
+      <div class="sn-sec sn-toggle{% if aktif_grup == 'nexgen' %} acik{% endif %}" data-grup="nexgen" title="NexGen">
+        <span class="sn-arrow">{% if aktif_grup == 'nexgen' %}▼{% else %}►{% endif %}</span>
+        <svg class="sn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h7v7H3z"/><path d="M14 3h7v7h-7z"/><path d="M14 14h7v7h-7z"/><path d="M3 14h7v7H3z"/></svg>
+        <span class="sn-baslik">NexGen</span>
+        <span class="sn-count">3</span>
+      </div>
+      <div class="sn-grup{% if aktif_grup != 'nexgen' %} kapali{% endif %}" data-grup="nexgen">
+        {% if yetki('nexgen.view') and not yetki('yonetim') %}
+        <a href="/nexgen/pazarlama" class="si {% if '/nexgen/pazarlama' in rp %}active{% endif %}" title="Pazarlama &amp; Sipariş">
+          <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h7v7H3z"/><path d="M14 3h7v7h-7z"/><path d="M14 14h7v7h-7z"/><path d="M3 14h7v7H3z"/></svg></span>
+          <span class="sl">Pazarlama &amp; Sipariş</span>
+        </a>
+        {% endif %}
+        {% if yetki('nexgen.plan.view', 'can_view') %}
+        <a href="/nexgen/numune-talep/yeni" class="si {% if '/nexgen/numune-talep' in rp %}active{% endif %}" title="Numune Talep">
+          <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6"/><path d="M9 16h6"/></svg></span>
+          <span class="sl">Numune Talep</span>
+        </a>
+        <a href="#" class="si si-disabled" title="Numune Talepleri (yakında)" onclick="event.preventDefault(); return false;">
+          <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg></span>
+          <span class="sl">Numune Talepleri</span>
+        </a>
+        {% endif %}
+      </div>
+      {% endif %}
 
 
 

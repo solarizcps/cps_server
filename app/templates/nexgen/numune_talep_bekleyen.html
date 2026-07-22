@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% set page_title = "Bekleyen Numuneler — AR-GE" %}
+{% block content %}
+<style>
+.bn-sayfa{padding:12px;font-family:Inter,system-ui,sans-serif;}
+.bn-hdr{background:#006a8e;color:#f1f5f9;padding:8px 12px;border-radius:8px 8px 0 0;font-size:11px;font-weight:700;text-transform:uppercase;}
+.bn-kart{background:#fff;border:1px solid #e2e8f0;border-radius:0 0 8px 8px;padding:12px;}
+.bn-satir{padding:12px;border:2px solid #006a8e;border-radius:8px;background:#f0f7fb;margin-bottom:8px;cursor:pointer;text-decoration:none;color:inherit;display:block;}
+.bn-satir:hover{background:#e0f2fe;}
+.bn-kod{font-family:monospace;font-size:14px;font-weight:800;color:#006a8e;}
+.bn-badge{font-size:9px;font-weight:800;padding:2px 8px;border-radius:4px;background:#fef3c7;color:#92400e;}
+</style>
+<div class="bn-sayfa">
+  <div style="margin-bottom:8px;"><a href="/nexgen/tablet/arge" style="font-size:11px;color:#006a8e;">← AR-GE Tablet</a></div>
+  <div class="bn-hdr">Bekleyen Numuneler</div>
+  <div class="bn-kart">
+    <p style="font-size:11px;color:#64748b;margin:0 0 12px;">Müşteri Renk Talebi ile aynı kayıt — duplicate AR-GE kartı oluşturulmaz.</p>
+    {% if liste %}
+      {% for t in liste %}
+      <a class="bn-satir" href="/nexgen/tablet/arge/numune-talep/{{ t.id }}">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+          <span class="bn-kod">{{ t.talep_kodu }}</span>
+          <span class="bn-badge">{{ t.durum }}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:10px;">
+          <div><span style="color:#9ca3af;">Firma</span><br><strong>{{ t.cari_unvan or t.aday_firma_adi or '—' }}</strong></div>
+          <div><span style="color:#9ca3af;">Ürün</span><br><strong>{{ t.urun_tipi or '—' }}</strong></div>
+          <div><span style="color:#9ca3af;">Renk</span><br><strong>{{ t.renk_kodu or t.yeni_renk_aciklama or '—' }}</strong></div>
+          <div><span style="color:#9ca3af;">Talep Eden</span><br><strong>{{ t.talep_eden_ad or '—' }}</strong></div>
+          <div><span style="color:#9ca3af;">Öncelik</span><br><strong>{{ t.oncelik }}</strong></div>
+        </div>
+      </a>
+      {% endfor %}
+    {% else %}
+      <div style="text-align:center;color:#9ca3af;padding:24px;font-size:11px;">Bekleyen numune yok.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

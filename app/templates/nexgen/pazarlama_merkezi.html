@@ -31,6 +31,9 @@
         <span class="pzm-nav-badge" id="pzm-badge-say">{{ talepler|length }}</span>
       </button>
       {% if can_manage %}
+      <a href="/nexgen/numune-talep" class="rm-page-geri pzm-nav-btn" title="Numune Talep" style="border-color:#006a8e;color:#006a8e;">
+        <span>Numune Talep</span>
+      </a>
       <button type="button" class="rm-yeni-btn pzm-nav-yeni" id="tab-btn-yeni"
               onclick="pzmYeniTalep();pzmEkranGec('yeni')">+ Yeni Sipariş</button>
       {% endif %}
@@ -150,8 +153,33 @@
                 <input type="date" class="pzm-inp" id="pzm-siparis-tarihi" onchange="pzmOzetGuncelle()">
               </div>
               <div class="pzm-alan">
-                <label class="pzm-label">Genel Termin</label>
-                <input type="date" class="pzm-inp" id="pzm-genel-termin" onchange="pzmGenelTerminDegisti()">
+                <label class="pzm-label">Genel Termin <span class="pzm-z">*</span></label>
+                <input type="date" class="pzm-inp" id="pzm-genel-termin" required onchange="pzmGenelTerminDegisti()">
+              </div>
+            </div>
+            <div class="pzm-alan-grid pzm-alan-grid-3">
+              <div class="pzm-alan">
+                <label class="pzm-label">Anlaşma Para Birimi <span class="pzm-z">*</span></label>
+                <select class="pzm-inp" id="pzm-para-birimi" required onchange="pzmParaBirimiDegisti()">
+                  <option value="">— Seçin —</option>
+                  <option value="TRY">TL</option>
+                  <option value="USD">USD</option>
+                  <option value="EUR">EUR</option>
+                </select>
+              </div>
+              <div class="pzm-alan">
+                <label class="pzm-label">Anlaşma Birim Fiyatı <span class="pzm-z">*</span></label>
+                <div class="pzm-inp-suffix-wrap">
+                  <input type="text" class="pzm-inp" id="pzm-birim-fiyat" required
+                         inputmode="decimal" autocomplete="off" placeholder="Örn. 2,35"
+                         oninput="pzmAksiyonDurum()">
+                  <span class="pzm-inp-suffix" id="pzm-birim-fiyat-suffix">—/kg</span>
+                </div>
+              </div>
+              <div class="pzm-alan">
+                <label class="pzm-label">Vade Günü <span class="pzm-z">*</span></label>
+                <input type="number" class="pzm-inp" id="pzm-vade-gun" min="0" step="1" required
+                       placeholder="30" oninput="pzmAksiyonDurum()">
               </div>
             </div>
             <div class="pzm-alan pzm-alan-son">
@@ -589,7 +617,14 @@ button.rm-page-geri { appearance:none; }
 /* Form */
 .pzm-alan { margin-bottom:var(--pzm-gap); }
 .pzm-alan-grid { display:grid; grid-template-columns:1fr 1fr; gap:var(--pzm-gap); }
+.pzm-alan-grid-3 { grid-template-columns:1fr 1fr 1fr; }
 .pzm-alan-grid-kompakt { margin-bottom:0; }
+.pzm-inp-suffix-wrap { position:relative; }
+.pzm-inp-suffix-wrap .pzm-inp { padding-right:58px; }
+.pzm-inp-suffix {
+  position:absolute; right:10px; top:50%; transform:translateY(-50%);
+  font-size:11px; color:var(--rm-t3); pointer-events:none; white-space:nowrap;
+}
 .pzm-kilitli { opacity:.48; pointer-events:none; }
 .pzm-label {
   display:block; font-size:var(--pzm-fs-label); font-weight:700; color:var(--rm-t3);
@@ -655,6 +690,9 @@ button.rm-page-geri { appearance:none; }
   background:var(--rm-red-bg); border:1px solid rgba(220,38,38,.3);
   color:var(--rm-red); padding:var(--pzm-inp-pad); border-radius:6px;
   font-size:var(--pzm-fs-body); margin:var(--pzm-gap) 0;
+}
+.pzm-hata.pzm-ok {
+  background:var(--rm-green-bg); border-color:rgba(22,163,74,.25); color:#065f46;
 }
 
 /* Butonlar — rm-butonlar ölçeği */
@@ -1021,6 +1059,7 @@ button.rm-page-geri { appearance:none; }
   .pzm-sayfa { --pzm-inset-x:10px; }
   .pzm-container { padding-bottom:10px; }
   .pzm-alan-grid { grid-template-columns:1fr; }
+  .pzm-alan-grid-3 { grid-template-columns:1fr; }
   .pzm-boyut-ls, .pzm-boyut-ls.pzm-boyut-dokme { grid-template-columns:1fr; max-width:none; }
   .pzm-hdr-sag .rm-page-geri span:last-child { display:none; }
   .rm-btn { min-width:100%; flex:none !important; width:100%; }
@@ -1034,7 +1073,7 @@ button.rm-page-geri { appearance:none; }
 
 <div id="pzm-sonraki-modal" class="pzm-sonraki-overlay" style="display:none" onclick="pzmSonrakiKapat(event)">
   <div class="pzm-sonraki-kutu" onclick="event.stopPropagation()">
-    <div class="pzm-sonraki-baslik">Üretime Gönderildi — Sonraki Adımlar</div>
+    <div class="pzm-sonraki-baslik">Üretime Gönderildi</div>
     <div id="pzm-sonraki-icerik"></div>
     <div style="padding:12px 16px;border-top:1px solid #e5e7eb;text-align:right">
       <button type="button" class="rm-btn" onclick="pzmSonrakiKapat()">Kapat</button>
@@ -1116,8 +1155,138 @@ function pzmKilit(id, ac) {
 
 function pzmHata(msg) {
   var el = $id('pzm-hata'); if (!el) return;
-  if (msg) { el.textContent = msg; el.style.display = ''; }
-  else { el.style.display = 'none'; }
+  if (msg) {
+    el.textContent = msg;
+    el.classList.remove('pzm-ok');
+    el.style.display = '';
+  } else {
+    el.textContent = '';
+    el.classList.remove('pzm-ok');
+    el.style.display = 'none';
+  }
+}
+
+function pzmBilgi(msg) {
+  var el = $id('pzm-hata'); if (!el) return;
+  if (msg) {
+    el.textContent = msg;
+    el.classList.add('pzm-ok');
+    el.style.display = '';
+  } else {
+    pzmHata('');
+  }
+}
+
+function pzmParaBirimiGoster(pb) {
+  if (!pb) return '—';
+  var s = String(pb).toUpperCase();
+  return s === 'TRY' ? 'TL' : s;
+}
+
+function pzmParaBirimiSuffix(pb) {
+  var s = String(pb || '').toUpperCase();
+  if (s === 'TRY' || s === 'TL') return 'TL/kg';
+  if (s === 'USD') return 'USD/kg';
+  if (s === 'EUR') return 'EUR/kg';
+  return '—/kg';
+}
+
+function pzmFiyatSuffixGuncelle() {
+  var pb = ($id('pzm-para-birimi')?.value || '').trim();
+  var sfx = $id('pzm-birim-fiyat-suffix');
+  if (sfx) sfx.textContent = pzmParaBirimiSuffix(pb);
+}
+
+window.pzmParaBirimiDegisti = function() {
+  pzmFiyatSuffixGuncelle();
+  pzmAksiyonDurum();
+};
+
+function pzmBirimFiyatUiGoster(val) {
+  if (val === '' || val === null || val === undefined) return '';
+  return String(val).replace('.', ',');
+}
+
+function pzmBirimFiyatDogrula(raw) {
+  if (raw === '' || raw === null || raw === undefined) return 'Anlaşma birim fiyatı zorunludur.';
+  var s = String(raw).trim().replace(/\s/g, '');
+  if (!s) return 'Anlaşma birim fiyatı zorunludur.';
+  if ((s.match(/,/g) || []).length > 1 || (s.match(/\./g) || []).length > 1) {
+    return 'Anlaşma birim fiyatı geçerli bir sayı olmalıdır.';
+  }
+  if (s.indexOf(',') >= 0 && s.indexOf('.') >= 0) {
+    return 'Anlaşma birim fiyatı geçerli bir sayı olmalıdır.';
+  }
+  var norm = s.replace(',', '.');
+  if (!/^\d+(\.\d+)?$/.test(norm)) return 'Anlaşma birim fiyatı geçerli bir sayı olmalıdır.';
+  var n = parseFloat(norm);
+  if (!isFinite(n)) return 'Anlaşma birim fiyatı geçerli bir sayı olmalıdır.';
+  if (n <= 0) return 'Anlaşma birim fiyatı sıfırdan büyük olmalıdır.';
+  if (n > 999999.9999) return 'Anlaşma birim fiyatı geçerli bir sayı olmalıdır.';
+  return null;
+}
+
+function pzmBirimFiyatNormalize(raw) {
+  var hata = pzmBirimFiyatDogrula(raw);
+  if (hata) return null;
+  var s = String(raw).trim().replace(/\s/g, '').replace(',', '.');
+  return parseFloat(s).toFixed(4);
+}
+
+function pzmBirimFiyatGoster(fiyat, pb) {
+  if (!fiyat && fiyat !== 0) return '—';
+  return pzmBirimFiyatUiGoster(fiyat) + ' ' + pzmParaBirimiSuffix(pb);
+}
+
+function pzmSiparisBilgiOku() {
+  return {
+    siparis_tarihi: $id('pzm-siparis-tarihi')?.value || '',
+    genel_termin: $id('pzm-genel-termin')?.value || '',
+    para_birimi: $id('pzm-para-birimi')?.value || '',
+    birim_fiyat: ($id('pzm-birim-fiyat')?.value != null) ? String($id('pzm-birim-fiyat').value) : '',
+    vade_gun: ($id('pzm-vade-gun')?.value != null) ? String($id('pzm-vade-gun').value) : '',
+    genel_not: $id('pzm-genel-not')?.value || '',
+  };
+}
+
+function pzmSiparisBilgiYaz(s) {
+  if (!s) return;
+  if ($id('pzm-siparis-tarihi') && s.siparis_tarihi) $id('pzm-siparis-tarihi').value = s.siparis_tarihi;
+  if ($id('pzm-genel-termin') && s.genel_termin) $id('pzm-genel-termin').value = s.genel_termin;
+  if ($id('pzm-para-birimi') && s.para_birimi) $id('pzm-para-birimi').value = s.para_birimi;
+  if ($id('pzm-birim-fiyat') && s.birim_fiyat !== undefined) $id('pzm-birim-fiyat').value = s.birim_fiyat;
+  if ($id('pzm-vade-gun') && s.vade_gun !== '') $id('pzm-vade-gun').value = s.vade_gun;
+  if ($id('pzm-genel-not') && s.genel_not !== undefined) $id('pzm-genel-not').value = s.genel_not;
+  pzmFiyatSuffixGuncelle();
+}
+
+function pzmSiparisBilgiTamMi() {
+  if (!($id('pzm-cari')?.value)) return false;
+  if (!pzmIsoTarih($id('pzm-genel-termin')?.value)) return false;
+  var pb = ($id('pzm-para-birimi')?.value || '').trim();
+  if (!pb) return false;
+  if (pzmBirimFiyatDogrula($id('pzm-birim-fiyat')?.value)) return false;
+  var vgRaw = $id('pzm-vade-gun')?.value;
+  if (vgRaw === '' || vgRaw === null || vgRaw === undefined) return false;
+  var vg = parseInt(vgRaw, 10);
+  if (isNaN(vg) || vg < 0) return false;
+  if (String(vg) !== String(vgRaw).trim()) return false;
+  return true;
+}
+
+function pzmSiparisBilgiDogrula() {
+  if (!($id('pzm-cari')?.value)) return 'Müşteri seçimi zorunludur.';
+  if (!pzmIsoTarih($id('pzm-genel-termin')?.value)) return 'Genel termin tarihi zorunludur.';
+  var pb = ($id('pzm-para-birimi')?.value || '').trim();
+  if (!pb) return 'Anlaşma para birimi zorunludur.';
+  var fiyatHata = pzmBirimFiyatDogrula($id('pzm-birim-fiyat')?.value);
+  if (fiyatHata) return fiyatHata;
+  var vgRaw = $id('pzm-vade-gun')?.value;
+  if (vgRaw === '' || vgRaw === null || vgRaw === undefined) return 'Vade günü zorunludur.';
+  if (!/^\d+$/.test(String(vgRaw).trim())) return 'Vade günü 0 veya daha büyük tam sayı olmalıdır.';
+  var vg = parseInt(vgRaw, 10);
+  if (isNaN(vg) || vg < 0) return 'Vade günü 0 veya daha büyük tam sayı olmalıdır.';
+  return null;
 }
 
 function pzmRozetHtml(durum, etket) {
@@ -1137,6 +1306,7 @@ function pzmDurumEtiketUi(durum, etiket) {
 
 /* ────────────── Ekran Geçişi ────────────── */
 window.pzmEkranGec = function(ekran) {
+  var onceki = _pzmAktifEkran;
   ['liste','yeni','detay'].forEach(function(e) {
     var el = $id('ekran-' + e);
     if (el) el.style.display = e === ekran ? '' : 'none';
@@ -1146,7 +1316,7 @@ window.pzmEkranGec = function(ekran) {
     if (btn) btn.classList.toggle('aktif', e === ekran);
   });
   _pzmAktifEkran = ekran;
-  if (ekran === 'yeni' && !_pzmTalepId) pzmYeniTalep();
+  if (ekran === 'yeni' && !_pzmTalepId && onceki !== 'yeni') pzmYeniTalep();
   if (ekran === 'yeni') pzmYeniMprRender();
 };
 
@@ -1968,7 +2138,7 @@ function pzmYeniMprAksiyonRender() {
   if (!wrap || !_pzmCanManage) return;
   var key = pzmYeniMprStateKey();
   var st = pzmMprStateEnsure(key);
-  var cariOk = !!($id('pzm-cari')?.value);
+  var cariOk = pzmSiparisBilgiTamMi();
   var busy = st.loading || _pzmMprBusy;
   var html = '<div class="rm-butonlar pzm-alt-butonlar">';
   html += '<button type="button" class="rm-btn rm-btn-arge" onclick="pzmYeniTalep()"';
@@ -2517,7 +2687,10 @@ function pzmDetayAsamaHtml(t, stage, st) {
       satirHtml('Sipariş No', pzmEsc(t.siparis_no || ('T-' + t.id))),
       satirHtml('Cari', pzmEsc(t.cari_unvan || '—')),
       satirHtml('Sipariş Tarihi', sipTarih),
-      satirHtml('Termin', pzmEsc(t.en_yakin_termin || t.termin_tarihi || '—')),
+      satirHtml('Genel Termin', pzmEsc(t.en_yakin_termin || t.termin_tarihi || '—')),
+      satirHtml('Para Birimi', pzmEsc(pzmParaBirimiGoster(t.anlasma_para_birimi))),
+      satirHtml('Anlaşma Birim Fiyatı', pzmEsc(pzmBirimFiyatGoster(t.anlasma_birim_fiyat, t.anlasma_para_birimi))),
+      satirHtml('Vade Günü', (t.vade_gun != null && t.vade_gun !== '') ? (String(t.vade_gun) + ' gün') : '—'),
       satirHtml('Siparişi Açan', '—'),
       satirHtml('Toplam Kalem', String(kalemler.length)),
       satirHtml('Toplam Talep KG', pzmKgFmt(topKg)),
@@ -2643,28 +2816,36 @@ function pzmSiparisUretimeGonder(tid) {
 function pzmSonrakiAdimGoster(opts) {
   opts = opts || {};
   var batch = opts.batch_kodu || '';
-  var planId = opts.plan_id || '';
-  var depoUrl = '/nexgen/depo/?batch=' + encodeURIComponent(batch) + '#uretim-hazirlik';
-  var uemUrl = '/nexgen/uretim-emirleri' + (planId ? ('?vurgu=' + planId) : '');
+  var detayUrl = batch ? '/nexgen/tablet/uretim-islem/' + encodeURIComponent(batch) : '';
   var el = document.getElementById('pzm-sonraki-icerik');
   if (!el) return;
   el.innerHTML =
-    '<p style="margin:0 0 10px">Sipariş üretime gönderildi.'
-    + (batch ? ' Batch: <strong>' + pzmEsc(batch) + '</strong>.' : '') + '</p>'
-    + '<ul style="margin:0;padding:0;list-style:none">'
-    + '<li style="padding:8px 0;border-bottom:1px solid #f1f5f9"><span style="color:#16a34a;font-weight:800">✓</span> Depo hazırlığını tamamla</li>'
-    + '<li style="padding:8px 0"><span style="color:#16a34a;font-weight:800">✓</span> UEM\'den tablete gönder</li></ul>'
-    + '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">'
-    + '<a href="' + depoUrl + '" class="rm-btn rm-btn-gold" style="text-decoration:none">Depo Hazırlık →</a>'
-    + '<a href="' + uemUrl + '" class="rm-btn" style="text-decoration:none">UEM →</a></div>';
+    '<p style="margin:0 0 10px;font-weight:700">Üretime gönderildi.</p>' +
+    (batch ? '<p style="margin:0 0 8px">Plan/Batch: <strong>' + pzmEsc(batch) + '</strong></p>' : '') +
+    '<p style="margin:0;color:#6b7280">Üretim işi Ali Tablet ekranında doğrudan görüntülenebilir.</p>' +
+    (detayUrl
+      ? '<div style="margin-top:12px"><a href="' + detayUrl + '" class="rm-btn rm-btn-gold" style="text-decoration:none" target="_blank">Plan/Batch Detayını Aç</a></div>'
+      : '');
   document.getElementById('pzm-sonraki-modal').style.display = 'flex';
 }
 
 window.pzmSonrakiKapat = function(ev) {
+  // Overlay tıklaması: sadece overlay'in kendisine tıklandıysa kapat
   if (ev && ev.target && ev.target.id !== 'pzm-sonraki-modal') return;
   var m = document.getElementById('pzm-sonraki-modal');
   if (m) m.style.display = 'none';
+  // Kapat butonundan (ev=undefined) veya overlay'den çağrıldığında listeye dön
+  pzmSonrakiBasariKapat();
 };
+
+function pzmSonrakiBasariKapat() {
+  // State temizle: aktif talep/detay sıfırla
+  _pzmTalepId = null;
+  // Listeyi yenile (gönderdikten sonra durum değişti)
+  pzmTalepListesiYenile();
+  // Liste ekranına geç
+  pzmEkranGec('liste');
+}
 
 window.pzmDetayUretimeGonder = function(tid) {
   var t = pzmTalepBul(tid);
@@ -2673,20 +2854,6 @@ window.pzmDetayUretimeGonder = function(tid) {
   var blok = pzmDetayUretimBlokMesaj(st, t);
   if (blok) { alert(blok); return; }
   if (st.uretimeGonderiliyor) return;
-
-  var oz = pzmDetayOzetHesap(st);
-  var stokTxt = st.stokEksik ? 'Stok Eksik' : 'Stok Hazır';
-  var onay = confirm(
-    'Üretime gönderilsin mi?\n\n' +
-    'Talep KG: ' + oz.talep.toLocaleString('tr') + ' kg\n' +
-    'Üretilecek KG: ' + oz.uret.toLocaleString('tr') + ' kg\n' +
-    'Faturalanacak KG: ' + oz.fatura.toLocaleString('tr') + ' kg\n' +
-    'Fark KG: ' + (oz.fark >= 0 ? '+' : '') + oz.fark.toLocaleString('tr') + ' kg\n' +
-    'Plan sayısı: ' + oz.planSayisi + '\n' +
-    'Stok durumu: ' + stokTxt + '\n\n' +
-    (oz.planSayisi > 1 ? 'Tüm planlar birlikte (atomik) gönderilecek.' : '')
-  );
-  if (!onay) return;
 
   st.uretimeGonderiliyor = true;
   st.hata = null;
@@ -2879,7 +3046,7 @@ function pzmAkkSifirla() {
 }
 
 function pzmAkkCariSonrasi() {
-  pzmAkkKapat(1);
+  pzmAkkAc(1);
   pzmAkkAc(2);
 }
 
@@ -2897,6 +3064,10 @@ window.pzmYeniTalep = function() {
   if ($id('pzm-cari')) $id('pzm-cari').value = '';
   var st = $id('pzm-siparis-tarihi'); if (st) st.value = pzmBugun();
   var gt = $id('pzm-genel-termin'); if (gt) { gt.value = ''; gt.min = pzmBugun(); }
+  if ($id('pzm-para-birimi')) $id('pzm-para-birimi').value = '';
+  if ($id('pzm-birim-fiyat')) $id('pzm-birim-fiyat').value = '';
+  if ($id('pzm-vade-gun')) $id('pzm-vade-gun').value = '';
+  pzmFiyatSuffixGuncelle();
   if ($id('pzm-genel-not')) $id('pzm-genel-not').value = '';
   pzmKalemFormTemizle(true);
   pzmKilit('pzm-kalem-form-icerik', false);
@@ -2939,9 +3110,17 @@ function pzmKalemFormTemizle(tam) {
 }
 
 window.pzmCariDegisti = function() {
+  var bilgi = pzmSiparisBilgiOku();
   var cid = $id('pzm-cari')?.value;
   pzmKilit('pzm-kalem-form-icerik', !!cid);
-  if (!cid) { pzmYeniTalep(); return; }
+  if (!cid) {
+    pzmKalemFormTemizle(true);
+    pzmAkkKapat(2);
+    pzmOzetGuncelle();
+    pzmAksiyonDurum();
+    return;
+  }
+  pzmSiparisBilgiYaz(bilgi);
   pzmOzetGuncelle();
   pzmAksiyonDurum();
   pzmAkkCariSonrasi();
@@ -3227,7 +3406,11 @@ function pzmV2PayloadTopla() {
     talep_id: _pzmTalepId,
     cari_id: parseInt($id('pzm-cari')?.value, 10),
     siparis_tarihi: pzmIsoTarih($id('pzm-siparis-tarihi')?.value) || pzmBugun(),
-    genel_termin_tarihi: $id('pzm-genel-termin')?.value || null,
+    genel_termin_tarihi: pzmIsoTarih($id('pzm-genel-termin')?.value) || null,
+    anlasma_para_birimi: ($id('pzm-para-birimi')?.value || '').trim() || null,
+    anlasma_birim_fiyat: pzmBirimFiyatNormalize($id('pzm-birim-fiyat')?.value),
+    vade_gun: ($id('pzm-vade-gun')?.value !== '' && $id('pzm-vade-gun')?.value != null)
+      ? parseInt($id('pzm-vade-gun').value, 10) : null,
     genel_not: ($id('pzm-genel-not')?.value||'').trim() || null,
     kalemler: _pzmKalemler.map(function(k) {
       return {
@@ -3266,6 +3449,11 @@ window.pzmOzetGuncelle = function() {
 
 function pzmTaslakKaydetAsync() {
   return new Promise(function(resolve, reject) {
+    var bilgiHata = pzmSiparisBilgiDogrula();
+    if (bilgiHata) {
+      reject(new Error(bilgiHata));
+      return;
+    }
     if (_pzmKalemler.length < 1) {
       reject(new Error('En az bir kalem ekleyin.'));
       return;
@@ -3306,7 +3494,10 @@ window.pzmTaslakKaydet = function() {
   pzmTaslakKaydetAsync()
     .then(function(d) {
       _pzmMprBusy = false;
-      pzmBasariGoster(d);
+      pzmBasariKapat();
+      pzmAkkAc(3);
+      if (_pzmCanManage) pzmAkkAc(4);
+      pzmBilgi((d.siparis_no || '') + ' taslak olarak kaydedildi. Aynı ekranda malzeme ihtiyacı analizine devam edebilirsiniz.');
       pzmAksiyonDurum();
     })
     .catch(function(err) {
@@ -3318,6 +3509,8 @@ window.pzmTaslakKaydet = function() {
 
 window.pzmMrpOlustur = function() {
   pzmHata('');
+  var bilgiHata = pzmSiparisBilgiDogrula();
+  if (bilgiHata) { pzmHata(bilgiHata); return; }
   if (_pzmKalemler.length < 1) {
     pzmHata('En az bir kalem ekleyin.');
     return;
@@ -3411,7 +3604,8 @@ function pzmBasariGoster(d) {
   ].join('');
   if (btnAc) btnAc.onclick = function(){
     pzmBasariKapat();
-    if (d.talep_id) pzmDetayAc(d.talep_id);
+    if (_pzmAktifEkran !== 'yeni') pzmEkranGec('yeni');
+    pzmAkkAc(4);
   };
   if (panel) panel.style.display = 'flex';
 }
@@ -3486,7 +3680,20 @@ window.pzmTalepYukle = function(id) {
   pzmCariDegisti();
   var st = $id('pzm-siparis-tarihi');
   if (st) st.value = pzmIsoTarih((t.payload && t.payload.siparis_tarihi) || t.olusturma_tarihi) || pzmBugun();
-  if ($id('pzm-genel-termin')) $id('pzm-genel-termin').value = pzmIsoTarih(t.termin_tarihi || '');
+  if ($id('pzm-genel-termin')) $id('pzm-genel-termin').value = pzmIsoTarih(t.termin_tarihi || (t.payload && t.payload.genel_termin_tarihi) || '');
+  if ($id('pzm-para-birimi')) {
+    var pb = t.anlasma_para_birimi || (t.payload && t.payload.anlasma_para_birimi) || '';
+    $id('pzm-para-birimi').value = pb;
+  }
+  if ($id('pzm-birim-fiyat')) {
+    var bf = t.anlasma_birim_fiyat != null ? t.anlasma_birim_fiyat : (t.payload && t.payload.anlasma_birim_fiyat);
+    $id('pzm-birim-fiyat').value = pzmBirimFiyatUiGoster(bf);
+  }
+  pzmFiyatSuffixGuncelle();
+  if ($id('pzm-vade-gun')) {
+    var vg = t.vade_gun != null ? t.vade_gun : (t.payload && t.payload.vade_gun);
+    $id('pzm-vade-gun').value = (vg != null && vg !== '') ? String(vg) : '';
+  }
   if ($id('pzm-genel-not')) $id('pzm-genel-not').value = t.notlar || '';
   _pzmKalemler = (t.kalemler || []).map(function(k) {
     return {
@@ -3550,6 +3757,7 @@ window.pzmTalepYukle = function(id) {
   if (st) st.value = pzmBugun();
   var gt = $id('pzm-genel-termin');
   if (gt) gt.min = pzmBugun();
+  pzmFiyatSuffixGuncelle();
   pzmKalemTabloRender();
   pzmOzetGuncelle();
   pzmYeniMprRender();

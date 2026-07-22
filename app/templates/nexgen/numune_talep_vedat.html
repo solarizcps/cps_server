@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% set page_title = "Müşteri Renk Talebi — " ~ talep.talep_kodu %}
+{% block content %}
+<style>
+.vd-sayfa{padding:12px;font-family:Inter,system-ui,sans-serif;max-width:980px;}
+.vd-hdr{background:#006a8e;color:#f1f5f9;padding:8px 12px;border-radius:8px 8px 0 0;font-size:11px;font-weight:700;text-transform:uppercase;}
+.vd-kart{background:#fff;border:1px solid #e2e8f0;border-radius:0 0 8px 8px;padding:12px;margin-bottom:10px;}
+.vd-ro{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:6px 10px;font-size:11px;margin-bottom:6px;}
+.vd-grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.vd-inp{width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:11px;box-sizing:border-box;}
+.vd-lbl{font-size:10px;font-weight:700;color:#374151;margin-bottom:4px;display:block;}
+.vd-btn{padding:8px 16px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #e2e8f0;background:#fff;}
+.vd-btn-p{background:#006a8e;color:#fff;border-color:#005a7a;}
+.vd-gelisme{max-height:200px;overflow:auto;border:1px solid #e2e8f0;border-radius:6px;padding:8px 10px;background:#fafbfc;}
+.vd-gelisme-row{font-size:11px;padding:5px 0;border-bottom:1px dashed #e2e8f0;color:#475569;}
+.vd-gelisme-row:last-child{border-bottom:none;}
+.vd-durum{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;background:#fef3c7;color:#92400e;}
+</style>
+<div class="vd-sayfa">
+  <div style="margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <a href="/nexgen/tablet/arge" style="font-size:11px;color:#006a8e;">← AR-GE Ana Ekran</a>
+    <span style="font-family:monospace;font-weight:800;color:#006a8e;">{{ talep.talep_kodu }}</span>
+    <span class="vd-durum">{{ durum_etiket(talep.durum) }}</span>
+    {% if talep.isleme_alinma_tarihi %}
+    <span style="font-size:10px;color:#64748b;">İşleme alındı: {{ talep.isleme_alinma_tarihi[:16] }}</span>
+    {% endif %}
+  </div>
+
+  <div class="vd-hdr">Pazarlama talebi (readonly)</div>
+  <div class="vd-kart">
+    <div class="vd-grid2">
+      <div class="vd-ro"><strong>Müşteri:</strong> {{ talep.firma_goster or talep.cari_unvan or talep.aday_firma_adi or '—' }}</div>
+      <div class="vd-ro"><strong>Talep Eden:</strong> {{ talep.talep_eden_ad or talep.talep_eden_kadi or '—' }}</div>
+      <div class="vd-ro"><strong>Oluşturan:</strong> {{ talep.olusturan_ad or talep.olusturan_kadi or '—' }}</div>
+      <div class="vd-ro"><strong>Ürün:</strong> {{ talep.urun_tipi or '—' }} · {{ talep.urun_adi or '—' }}</div>
+      <div class="vd-ro"><strong>Renk:</strong> {{ talep.renk_goster or talep.renk_kodu or talep.yeni_renk_aciklama or '—' }}</div>
+      <div class="vd-ro"><strong>Öncelik / Hedef:</strong> {{ talep.oncelik or '—' }} · {{ talep.hedef_tarih or '—' }}</div>
+    </div>
+    <div class="vd-ro" style="margin-top:6px;"><strong>Yumuşaklık / Kaymazlık / Shore:</strong> {{ talep.yumusaklik or '—' }} · {{ talep.kaymazlik or '—' }} · {{ talep.shore_deger or '—' }}</div>
+    <div class="vd-ro"><strong>Talep Nedeni:</strong> {{ talep.talep_nedeni or '—' }}</div>
+    <div class="vd-ro"><strong>Açıklama:</strong> {{ talep.aciklama or '—' }}</div>
+    {% if talep.pisme_notu %}
+    <div class="vd-ro"><strong>Pişme / Üretim Notu:</strong> {{ talep.pisme_notu }}</div>
+    {% endif %}
+  </div>
+
+  <div class="vd-hdr" style="background:#005a7a;">Vedat — Müşteri Renk Talebi Çalışma Alanı</div>
+  <div class="vd-kart">
+    <div class="vd-grid2">
+      <div><span class="vd-lbl">Pigment / renk denemesi</span>
+        <input class="vd-inp" id="vedat_pigment" value="{{ talep.vedat_pigment or '' }}"></div>
+      <div><span class="vd-lbl">Numune miktarı</span>
+        <input class="vd-inp" id="vedat_miktar" value="{{ talep.vedat_numune_miktari or '' }}"></div>
+      <div><span class="vd-lbl">Deneme tarihi</span>
+        <input class="vd-inp" id="vedat_deneme_tarihi" type="date" value="{{ talep.vedat_deneme_tarihi or '' }}"></div>
+      <div><span class="vd-lbl">Sonuç</span>
+        <select class="vd-inp" id="vedat_sonuc_d">
+          <option value="">Çalışılıyor</option>
+          {% for s, lbl in [('Basarili','Başarılı'),('Revizyon','Revizyon gerekli'),('Red','Red')] %}
+          <option value="{{ s }}" {% if talep.vedat_sonuc==s %}selected{% endif %}>{{ lbl }}</option>
+          {% endfor %}
+        </select></div>
+    </div>
+    <span class="vd-lbl" style="margin-top:8px;">Numune sonucu</span>
+    <textarea class="vd-inp" id="vedat_sonuc" rows="2">{{ talep.vedat_numune_sonucu or '' }}</textarea>
+    <span class="vd-lbl" style="margin-top:8px;">Yapılan değişiklik</span>
+    <textarea class="vd-inp" id="vedat_degisiklik" rows="2">{{ talep.vedat_yapilan_degisiklik or '' }}</textarea>
+    <span class="vd-lbl" style="margin-top:8px;">Revizyon notu</span>
+    <textarea class="vd-inp" id="vedat_rev" rows="2">{{ talep.vedat_revizyon_notu or '' }}</textarea>
+    <label style="font-size:11px;margin-top:8px;display:block;"><input type="checkbox" id="vedat_ferhat" {% if talep.vedat_ferhat_testi %}checked{% endif %}> Ferhat testi gerekli</label>
+    <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end;">
+      <button type="button" class="vd-btn vd-btn-p" onclick="vdKaydet()">Kaydet</button>
+    </div>
+  </div>
+
+  <div class="vd-hdr" style="background:#64748b;">Gelişme Geçmişi</div>
+  <div class="vd-kart">
+    <div class="vd-gelisme">
+      {% if gelismeler %}
+      {% for g in gelismeler %}
+      <div class="vd-gelisme-row">
+        <strong>{{ (g.olay_tarihi or '')[:10] }}</strong> — {{ g.olay_metni }}
+      </div>
+      {% endfor %}
+      {% else %}
+      <div class="vd-gelisme-row">Henüz gelişme kaydı yok.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+<script>
+function vdKaydet(){
+  fetch('/nexgen/api/numune-talep/{{ talep.id }}/vedat',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      vedat_pigment: document.getElementById('vedat_pigment').value,
+      vedat_numune_miktari: document.getElementById('vedat_miktar').value,
+      vedat_deneme_tarihi: document.getElementById('vedat_deneme_tarihi').value,
+      vedat_numune_sonucu: document.getElementById('vedat_sonuc').value,
+      vedat_yapilan_degisiklik: document.getElementById('vedat_degisiklik').value,
+      vedat_revizyon_notu: document.getElementById('vedat_rev').value,
+      vedat_ferhat_testi: document.getElementById('vedat_ferhat').checked,
+      vedat_sonuc: document.getElementById('vedat_sonuc_d').value
+    })
+  }).then(function(r){return r.json();}).then(function(d){
+    if(d.ok){ alert('Kaydedildi — ' + (d.talep.durum_etiket || d.talep.durum)); location.reload(); }
+    else alert(d.hata||'Hata');
+  });
+}
+</script>
+{% endblock %}

@@ -161,7 +161,8 @@
       {# ═══════════════════════════════════════
          KART 5 — Bekleyen Numuneler (FULL WIDTH)
       ═══════════════════════════════════════ #}
-      <a href="#" class="ag-card ag-card-bekleyen" data-modul="bekleyen">
+      <a href="#" class="ag-card ag-card-bekleyen" id="ag-kart-bekleyen"
+         data-modul="bekleyen" onclick="agBekleyenAc(event)">
         <div class="ag-card-left-strip ag-strip-orange"></div>
         <div class="ag-card-ikon ag-ikon-bg-orange">
           <svg viewBox="0 0 28 28" fill="none" stroke="#F47920"
@@ -356,6 +357,78 @@
 
     </div>{# /ag-rz-icerik #}
   </div>{# /ag-modal-revize #}
+</div>
+
+</div>{# /ag-revize-overlay #}
+
+{# ═══════════════════════════════════════
+   OVERLAY — Bekleyen Numuneler (AT-M popup)
+═══════════════════════════════════════ #}
+<div id="ag-bekleyen-overlay" class="ag-overlay" style="display:none" onclick="agBekleyenKapat(event)">
+  <div class="ag-modal ag-modal-revize ag-modal-bekleyen" onclick="event.stopPropagation()">
+
+    <div class="ag-rz-top">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
+           stroke="rgba(255,255,255,.55)" stroke-width="2" stroke-linecap="round">
+        <line x1="5" y1="8" x2="19" y2="8"/><line x1="5" y1="14" x2="19" y2="14"/>
+        <line x1="5" y1="20" x2="14" y2="20"/>
+      </svg>
+      <span id="bn-baslik">BEKLEYEN NUMUNELER</span>
+      <button class="ag-modal-x" onclick="agBekleyenKapat()">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor"
+             stroke-width="2.2" stroke-linecap="round" width="16" height="16">
+          <path d="M4 4l12 12M16 4L4 16"/>
+        </svg>
+      </button>
+    </div>
+
+    <div id="bn-liste-view">
+      <div class="ag-rz-toolbar">
+        <div class="ag-rz-tabs">
+          <button class="ag-rz-tab ag-rz-tab-aktif" id="bn-tab-bekleyen" onclick="bnFiltreDegistir('bekleyen')">Bekleyen</button>
+          <button class="ag-rz-tab" id="bn-tab-calisiliyor" onclick="bnFiltreDegistir('calisiliyor')">Çalışılıyor</button>
+          <button class="ag-rz-tab" id="bn-tab-tamamlanan" onclick="bnFiltreDegistir('tamamlanan')">Tamamlanan</button>
+        </div>
+        <div class="ag-rz-panel">
+          <div class="ag-rz-arama-wrap">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                 stroke="#94A3B8" stroke-width="2" stroke-linecap="round" class="ag-rz-arama-ikon">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input type="text" id="bn-arama" class="ag-rz-arama-input"
+                   placeholder="Talep kodu, firma, renk, talep eden..."
+                   oninput="bnAramaYap()" autocomplete="off" spellcheck="false">
+          </div>
+        </div>
+      </div>
+      <div class="ag-rz-icerik">
+        <div class="ag-rz-bolum">
+          <div class="ag-rz-bolum-baslik" style="display:flex;justify-content:space-between;align-items:center">
+            <span>Numune Talepleri (AT-M)</span>
+            <span class="ag-rz-sayac" id="bn-sayac">—</span>
+          </div>
+          <div id="bn-liste"></div>
+          <div id="bn-bos" class="ag-rz-bos" style="display:none">Kayıt bulunamadı.</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="bn-detay-view" style="display:none">
+      <div class="ag-rz-icerik ag-bn-detay-icerik">
+        <div class="ag-bn-detay-kod" id="bn-detay-kod">—</div>
+        <div class="ag-bn-detay-grid" id="bn-detay-grid"></div>
+        <div class="ag-bn-detay-bolum">
+          <div class="ag-rz-bolum-baslik">Gelişme Geçmişi</div>
+          <div id="bn-detay-gelisme" class="ag-bn-gelisme-list"></div>
+        </div>
+      </div>
+      <div class="ag-bn-detay-alt">
+        <button type="button" class="ag-bn-btn" onclick="bnDetayGeri()">← Geri</button>
+        <button type="button" class="ag-bn-btn ag-bn-btn-primary" id="bn-isleme-al-btn" onclick="bnIslemeAl()">İşleme Al</button>
+      </div>
+    </div>
+
+  </div>
 </div>
 
 {# ═══════════════════════════════════════
@@ -1167,6 +1240,79 @@ html, body { height: 100%; overflow: hidden; }
 .ag-rd-taslak     { background:#EFF3FA;color:#4A6FA5; }
 .ag-rd-basarili   { background:#E8F5E9;color:#1E7C3D;border:1px solid #A5D6A7; }
 
+/* ── Bekleyen Numuneler popup ── */
+.ag-modal-bekleyen { max-width: min(720px, 92vw); }
+/* ── Bekleyen Numuneler modal scroll düzeltmesi ── */
+#ag-bekleyen-overlay.ag-overlay {
+  overflow: hidden;
+  align-items: center;
+}
+#ag-bekleyen-overlay .ag-modal-bekleyen {
+  max-height: min(87vh, calc(100dvh - 24px));
+  height: auto !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+#ag-bekleyen-overlay #bn-liste-view,
+#ag-bekleyen-overlay #bn-detay-view {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow: hidden;
+  flex-direction: column;
+}
+#ag-bekleyen-overlay .ag-bn-detay-icerik {
+  display: block !important;
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: scroll;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+#ag-bekleyen-overlay .ag-bn-detay-alt {
+  flex: 0 0 auto;
+}
+.ag-bn-detay-gorsel-wrap {
+  margin-top: 4px;
+  max-width: 100%;
+  overflow: hidden;
+}
+.ag-bn-detay-gorsel {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  max-height: min(240px, 30dvh);
+  object-fit: contain;
+  border-radius: 6px;
+  border: 1px solid #dde3ed;
+}
+.ag-bn-satir {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 10px 12px; border-bottom: 1px solid #EEF2F7; cursor: pointer;
+}
+.ag-bn-satir:hover { background: #FFF7F0; }
+.ag-bn-satir-kod { font-size: 13px; font-weight: 800; color: var(--navy); font-family: monospace; }
+.ag-bn-satir-firma { font-size: 12px; font-weight: 700; color: var(--steel); }
+.ag-bn-satir-alt { font-size: 11px; color: #64748B; line-height: 1.45; }
+.ag-bn-oncelik-acil { color: #DC2626; font-weight: 700; }
+.ag-bn-oncelik-kritik { color: #B45309; font-weight: 700; }
+.ag-bn-detay-kod { font-family: monospace; font-size: 14px; font-weight: 800; color: var(--orange); padding: 8px 14px 0; }
+.ag-bn-detay-grid { padding: 6px 14px 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 5px 10px; }
+.ag-bn-detay-item { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 5px 8px; }
+.ag-bn-detay-item.full { grid-column: 1 / -1; }
+.ag-bn-detay-k { font-size: 9px; text-transform: uppercase; color: #94A3B8; margin-bottom: 2px; }
+.ag-bn-detay-v { font-size: 11px; font-weight: 600; color: var(--navy); word-break: break-word; }
+.ag-bn-detay-bolum { padding: 0 14px 8px; }
+.ag-bn-gelisme-list { max-height: 100px; overflow: auto; }
+.ag-bn-gelisme-row { font-size: 10px; padding: 4px 0; border-bottom: 1px dashed #E2E8F0; color: #475569; }
+.ag-bn-detay-alt { display: flex; justify-content: space-between; gap: 10px; padding: 8px 14px 10px; border-top: 1px solid #E2E8F0; background: #FAFBFD; }
+.ag-bn-btn { padding: 8px 16px; border-radius: 8px; border: 1px solid #DDE3ED; background: #fff; font-size: 12px; font-weight: 700; cursor: pointer; color: var(--steel); }
+.ag-bn-btn-primary { background: var(--orange); border-color: #E87722; color: #fff; }
+.ag-bn-btn-primary:disabled { opacity: .45; cursor: not-allowed; }
+
 /* ── Responsive ── */
 @media (max-width: 680px) {
   .ag-bar      { padding: 0 14px; height: 56px; }
@@ -1211,8 +1357,9 @@ document.querySelectorAll('.ag-card').forEach(function(kart) {
     var href = this.getAttribute('href');
     /* Gerçek URL'e sahip kartlar — tarayıcı normal geçiş yapar */
     if(href && href !== '#') return;
-    /* MODÜL-04 — kendi onclick'i var, buraya gelirse atla */
+    /* MODÜL-04 / Bekleyen — kendi onclick'i var */
     if(id === 'revize' || this.id === 'ag-kart-revize') return;
+    if(id === 'bekleyen' || this.id === 'ag-kart-bekleyen') return;
     e.preventDefault();
     document.getElementById('ag-modal-baslik').textContent = MODUL_ADLARI[id] || id;
     document.getElementById('ag-overlay').style.display = 'flex';
@@ -1325,10 +1472,172 @@ function rzBarkodAra() {
     });
 }
 
+/* ── Bekleyen Numuneler popup ── */
+var BN = { filtre: 'bekleyen', seciliId: null, aramaTimer: null };
+
+function agBekleyenAc(e) {
+  if (e) e.preventDefault();
+  BN.filtre = 'bekleyen';
+  BN.seciliId = null;
+  document.getElementById('ag-bekleyen-overlay').style.display = 'flex';
+  document.getElementById('bn-liste-view').style.display = 'flex';
+  document.getElementById('bn-detay-view').style.display = 'none';
+  document.getElementById('bn-baslik').textContent = 'BEKLEYEN NUMUNELER';
+  var ar = document.getElementById('bn-arama');
+  if (ar) ar.value = '';
+  bnFiltreDegistir('bekleyen');
+}
+function agBekleyenKapat(e) {
+  if (e && e.target !== document.getElementById('ag-bekleyen-overlay')) return;
+  document.getElementById('ag-bekleyen-overlay').style.display = 'none';
+}
+function bnFiltreDegistir(f) {
+  BN.filtre = f;
+  ['bekleyen','calisiliyor','tamamlanan'].forEach(function(k){
+    var tab = document.getElementById('bn-tab-' + k);
+    if (tab) tab.classList.toggle('ag-rz-tab-aktif', k === f);
+  });
+  bnListeYukle();
+}
+function bnAramaYap() {
+  clearTimeout(BN.aramaTimer);
+  BN.aramaTimer = setTimeout(bnListeYukle, 250);
+}
+function bnEsc(s) {
+  if (!s) return '—';
+  var d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+function bnListeYukle() {
+  var q = (document.getElementById('bn-arama').value || '').trim();
+  var url = '/nexgen/api/numune-talep/bekleyen?filtre=' + encodeURIComponent(BN.filtre);
+  if (q) url += '&q=' + encodeURIComponent(q);
+  var listeEl = document.getElementById('bn-liste');
+  var bosEl = document.getElementById('bn-bos');
+  if (listeEl) listeEl.innerHTML = '<div class="ag-rz-bos">Yükleniyor...</div>';
+  fetch(url).then(function(r){ return r.json(); }).then(function(d){
+    if (!d.ok) throw new Error(d.hata || 'Liste alınamadı');
+    var rows = d.liste || [];
+    var sayac = document.getElementById('bn-sayac');
+    if (sayac) sayac.textContent = rows.length + ' kayıt';
+    if (!rows.length) {
+      if (listeEl) listeEl.innerHTML = '';
+      if (bosEl) bosEl.style.display = 'block';
+      return;
+    }
+    if (bosEl) bosEl.style.display = 'none';
+    var html = '';
+    rows.forEach(function(t){
+      var onc = (t.oncelik || 'NORMAL').toUpperCase();
+      var oncCls = onc === 'ACIL' ? 'ag-bn-oncelik-acil' : (onc === 'KRITIK' ? 'ag-bn-oncelik-kritik' : '');
+      html += '<div class="ag-bn-satir" onclick="bnDetayAc(' + t.id + ')">'
+        + '<div class="ag-bn-satir-kod">' + bnEsc(t.talep_kodu) + '</div>'
+        + '<div class="ag-bn-satir-firma">' + bnEsc(t.firma_goster || '—') + ' · ' + bnEsc(t.urun_tipi || '—') + '</div>'
+        + '<div class="ag-bn-satir-alt">Talep Eden: ' + bnEsc(t.talep_eden_ad || '—')
+        + ' · Renk: ' + bnEsc(t.renk_goster || '—')
+        + ' · <span class="' + oncCls + '">Öncelik: ' + bnEsc(onc) + '</span>'
+        + ' · Durum: ' + bnEsc(t.durum_etiket || t.durum || '—') + '</div></div>';
+    });
+    if (listeEl) listeEl.innerHTML = html;
+  }).catch(function(err){
+    if (listeEl) listeEl.innerHTML = '';
+    if (bosEl) { bosEl.textContent = err.message || 'Hata'; bosEl.style.display = 'block'; }
+  });
+}
+function bnDetayAlan(label, val, full) {
+  return '<div class="ag-bn-detay-item' + (full ? ' full' : '') + '"><div class="ag-bn-detay-k">'
+    + bnEsc(label) + '</div><div class="ag-bn-detay-v">' + bnEsc(val || '—') + '</div></div>';
+}
+function bnDetayAc(id) {
+  BN.seciliId = id;
+  fetch('/nexgen/api/numune-talep/' + id).then(function(r){ return r.json(); }).then(function(d){
+    if (!d.ok) throw new Error(d.hata || 'Detay alınamadı');
+    var t = d.talep || {};
+    document.getElementById('bn-liste-view').style.display = 'none';
+    document.getElementById('bn-detay-view').style.display = 'flex';
+    document.getElementById('bn-baslik').textContent = 'TALEP DETAYI';
+    document.getElementById('bn-detay-kod').textContent = t.talep_kodu || '—';
+    /* ── Müşteri / İletişim ── */
+    var grid = bnDetayAlan('Müşteri / Aday Firma', t.firma_goster, true)
+      + bnDetayAlan('Talep Eden', t.talep_eden_ad || t.talep_eden_kadi)
+      + bnDetayAlan('Oluşturan', t.olusturan_ad || t.olusturan_kadi)
+      + bnDetayAlan('Talep Kaynağı', t.talep_kaynagi)
+      + bnDetayAlan('İlgili Kişi', t.ilgili_kisi)
+      + bnDetayAlan('Telefon', t.telefon)
+      + bnDetayAlan('E-posta', t.eposta)
+      + bnDetayAlan('Şehir', t.sehir);
+    /* ── Ürün ── */
+    grid += bnDetayAlan('Ürün Tipi', t.urun_tipi)
+      + bnDetayAlan('Ürün / Model', t.urun_adi)
+      + bnDetayAlan('Ürün Açıklaması', t.urun_aciklama, true);
+    /* ── Renk ── */
+    var renkDetay = t.renk_goster || '—';
+    if (t.acik_koyu) renkDetay += ' · ' + t.acik_koyu;
+    if (t.mat_parlak) renkDetay += ' · ' + t.mat_parlak;
+    if (t.ref_renk_kodu) renkDetay += ' (Ref: ' + t.ref_renk_kodu + ')';
+    grid += bnDetayAlan('Renk Tipi', t.renk_tipi === 'MEVCUT' ? 'Mevcut Renk' : (t.renk_tipi === 'YENI' ? 'Yeni Renk' : t.renk_tipi))
+      + bnDetayAlan('Renk', renkDetay, true);
+    /* ── Teknik ── */
+    grid += bnDetayAlan('Yumuşaklık', t.yumusaklik)
+      + bnDetayAlan('Kaymazlık', t.kaymazlik)
+      + bnDetayAlan('Shore', t.shore_deger)
+      + bnDetayAlan('Pişme / Üretim Notu', t.pisme_notu, true);
+    /* ── Talep Detayı ── */
+    grid += bnDetayAlan('Talep Nedeni', t.talep_nedeni)
+      + bnDetayAlan('Öncelik', t.oncelik)
+      + bnDetayAlan('Hedef Tarih', t.hedef_tarih)
+      + bnDetayAlan('Durum', t.durum_etiket || t.durum)
+      + bnDetayAlan('Açıklama', t.aciklama, true)
+      + bnDetayAlan('Ek Not', t.ek_not, true);
+    /* ── Görsel ── */
+    if (t.urun_gorsel_belge_id) {
+      grid += '<div class="ag-bn-detay-item full"><div class="ag-bn-detay-k">Ürün Görseli</div><div class="ag-bn-detay-v">'
+        + '<div class="ag-bn-detay-gorsel-wrap"><img class="ag-bn-detay-gorsel" src="/nexgen/api/numune-talep/gorsel/'
+        + t.urun_gorsel_belge_id + '" alt="Ürün görseli"></div></div></div>';
+    }
+    document.getElementById('bn-detay-grid').innerHTML = grid;
+    var gelHtml = '';
+    (d.gelismeler || []).forEach(function(g){
+      var tarih = (g.olay_tarihi || '').slice(0, 10).split('-').reverse().join('.') || '—';
+      gelHtml += '<div class="ag-bn-gelisme-row"><strong>' + bnEsc(tarih) + '</strong> — ' + bnEsc(g.olay_metni) + '</div>';
+    });
+    document.getElementById('bn-detay-gelisme').innerHTML = gelHtml || '<div class="ag-bn-gelisme-row">Henüz gelişme kaydı yok.</div>';
+    var btn = document.getElementById('bn-isleme-al-btn');
+    if (btn) {
+      btn.style.display = (t.durum === 'BEKLEYEN_NUMUNE') ? 'inline-block' : 'none';
+      btn.disabled = false;
+      btn.textContent = 'İşleme Al';
+    }
+  }).catch(function(err){ alert(err.message || 'Detay yüklenemedi'); });
+}
+function bnDetayGeri() {
+  document.getElementById('bn-detay-view').style.display = 'none';
+  document.getElementById('bn-liste-view').style.display = 'flex';
+  document.getElementById('bn-baslik').textContent = 'BEKLEYEN NUMUNELER';
+  bnListeYukle();
+}
+function bnIslemeAl() {
+  if (!BN.seciliId) return;
+  var btn = document.getElementById('bn-isleme-al-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Alınıyor...'; }
+  fetch('/nexgen/api/numune-talep/' + BN.seciliId + '/isleme-al', { method: 'POST' })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d.ok) throw new Error(d.hata || 'İşleme alınamadı');
+      window.location.href = d.redirect_url || ('/nexgen/tablet/arge/numune-talep/' + BN.seciliId);
+    })
+    .catch(function(err){
+      alert(err.message || 'Hata');
+      if (btn) { btn.disabled = false; btn.textContent = 'İşleme Al'; }
+    });
+}
+
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
     agKapat();
     document.getElementById('ag-revize-overlay').style.display = 'none';
+    agBekleyenKapat();
   }
 });
 </script>

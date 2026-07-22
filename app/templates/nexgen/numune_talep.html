@@ -1,0 +1,1091 @@
+{% extends "base.html" %}
+{% set page_title = "Yeni Numune Talebi — NexGen" if yeni_route|default(false) else "Numune Talep — NexGen" %}
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/nexgen_renk_daire.css') }}">
+<style>
+:root{--rm-teal:#006a8e;--rm-border:#e2e8f0;--rm-bg:#f8fafc;--rm-t1:#0f172a;--rm-t2:#374151;--rm-t3:#6b7280;--rm-white:#fff;}
+.nt-sayfa{display:flex;flex-direction:column;gap:6px;font-family:'Inter',system-ui,sans-serif;}
+.nt-sayfa-icerik{width:100%;box-sizing:border-box;}
+.nt-layout{display:grid;grid-template-columns:1fr 268px;gap:12px;align-items:start;}
+.nt-form-kolon{min-width:0;}
+.nt-ozet-col{position:sticky;top:62px;align-self:start;max-height:calc(100vh - 70px);overflow-y:auto;width:268px;z-index:5;}
+@media (max-width:1023px){
+  .nt-layout{grid-template-columns:1fr;gap:10px;}
+  .nt-ozet-col{position:static;width:100%;max-width:100%;max-height:none;}
+}
+@media (min-width:1024px){
+  .nt-sayfa-icerik{
+    max-width:1520px;
+    margin-left:auto;
+    margin-right:auto;
+    padding-left:clamp(48px,4vw,80px);
+    padding-right:clamp(48px,4vw,80px);
+  }
+  .nt-layout{grid-template-columns:minmax(0,1fr) 268px;gap:16px;}
+  .nt-form-kolon{max-width:920px;}
+  .nt-grid2{grid-template-columns:repeat(2,minmax(0,1fr));max-width:840px;}
+  .nt-grid2 .full{grid-column:1/-1;}
+  .nt-grid2 .nt-fld-cari,
+  .nt-grid2 .nt-fld-aday,
+  .nt-grid2 .nt-fld-kaynak{max-width:560px;}
+  .nt-grid2 .nt-fld-talep-eden{max-width:420px;}
+  .nt-renk-secim-alan{max-width:840px;}
+}
+.nt-ozet{background:#fff;border:1px solid var(--rm-border);border-radius:10px;}
+.nt-ozet-hdr{padding:6px 10px;background:var(--rm-teal);}
+.nt-ozet-hdr span{font-size:10px;font-weight:700;color:#f1f5f9;text-transform:uppercase;letter-spacing:.3px;}
+.nt-ozet-body{padding:8px 10px 10px;font-size:10px;}
+.nt-oz-row{display:flex;flex-direction:column;gap:2px;padding:5px 0;border-bottom:1px solid #f1f5f9;}
+.nt-oz-row:last-child{border-bottom:none;}
+.nt-oz-k{font-size:9px;color:#9ca3af;text-transform:uppercase;line-height:1.2;}
+.nt-oz-v{font-size:10px;font-weight:600;color:var(--rm-t1);line-height:1.35;word-break:break-word;}
+.nt-oz-v.kod{font-family:monospace;color:var(--rm-teal);font-size:11px;font-weight:800;}
+.nt-oz-detay-btn{width:100%;margin-top:6px;padding:5px 8px;border-radius:6px;border:1px solid var(--rm-border);background:#f8fafc;font-size:10px;font-weight:700;color:var(--rm-t2);cursor:pointer;text-align:left;}
+.nt-oz-detay-btn:hover{background:#f1f5f9;}
+.nt-oz-detay{display:none;margin-top:6px;padding-top:4px;border-top:1px dashed #e2e8f0;}
+.nt-oz-detay.acik{display:block;}
+.nt-meta{padding:10px;background:#f8fafc;border:1px solid var(--rm-border);border-radius:7px;margin-bottom:10px;}
+.nt-meta-k{font-size:9px;color:#9ca3af;text-transform:uppercase;margin-bottom:2px;}
+.nt-meta-v{font-size:11px;font-weight:600;color:var(--rm-t1);}
+.nt-meta-v.kod{font-family:monospace;color:var(--rm-teal);font-size:13px;font-weight:800;}
+.nt-acc-hdr{display:flex;justify-content:space-between;align-items:center;padding:7px 12px;background:var(--rm-teal);cursor:pointer;user-select:none;}
+.nt-acc-hdr span{font-size:10px;font-weight:700;color:#f1f5f9;text-transform:uppercase;letter-spacing:.5px;}
+.nt-acc-body{padding:12px 14px;display:none;}
+.nt-acc.acik .nt-acc-body{display:block;}
+.nt-inp{width:100%;padding:7px 10px;border-radius:6px;border:1px solid var(--rm-border);font-size:11px;box-sizing:border-box;}
+.nt-lbl{font-size:10px;font-weight:700;color:var(--rm-t2);margin-bottom:4px;display:block;}
+.nt-grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.nt-grid2 .full{grid-column:1/-1;}
+@media (max-width:640px){
+  .nt-grid2{grid-template-columns:1fr;}
+  .nt-grid2 .full{grid-column:1;}
+}
+.nt-chip{display:inline-flex;padding:5px 12px;border-radius:6px;border:1px solid var(--rm-border);font-size:11px;font-weight:600;cursor:pointer;margin:0 6px 6px 0;background:#fff;}
+.nt-chip.on{background:var(--rm-teal);color:#fff;border-color:var(--rm-teal);}
+.nt-renk-wrap{display:flex;flex-wrap:wrap;gap:8px;}
+.nt-renk-secim-alan{margin-top:4px;}
+.nt-renk-trigger{width:100%;text-align:left;cursor:pointer;background:#fff;}
+.nt-renk-tabs{display:flex;gap:6px;margin:8px 0;}
+.nt-renk-tab{padding:5px 12px;border-radius:6px;border:1px solid var(--rm-border);font-size:10px;font-weight:700;cursor:pointer;background:#fff;color:var(--rm-t2);}
+.nt-renk-tab.on{background:var(--rm-teal);color:#fff;border-color:var(--rm-teal);}
+.nt-renk-secili{display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--rm-teal);border-radius:8px;background:#f0f7fb;margin-top:8px;}
+.nt-renk-secili-txt{font-size:11px;font-weight:700;color:var(--rm-t1);flex:1;}
+.nt-renk-secili-act{font-size:10px;font-weight:700;color:var(--rm-teal);cursor:pointer;border:none;background:none;padding:0 4px;}
+.nt-renk-secili-x{font-size:14px;font-weight:700;color:#dc2626;cursor:pointer;border:none;background:none;line-height:1;}
+.nt-renk-modal{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:9000;display:none;align-items:center;justify-content:center;padding:16px;}
+.nt-renk-modal.acik{display:flex;}
+.nt-renk-modal-box{background:#fff;border-radius:12px;width:min(720px,96vw);max-height:86vh;display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--rm-border);}
+.nt-renk-modal-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--rm-teal);color:#fff;}
+.nt-renk-modal-hdr span{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;}
+.nt-renk-modal-x{background:none;border:none;color:#fff;font-size:18px;cursor:pointer;line-height:1;}
+.nt-renk-modal-ara{padding:10px 14px;border-bottom:1px solid var(--rm-border);}
+.nt-renk-modal-grid{padding:12px 14px;overflow:auto;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;}
+.nt-renk-komp{padding:7px 8px;border-radius:7px;border:1px solid var(--rm-border);cursor:pointer;display:flex;align-items:center;gap:8px;font-size:10px;background:#fff;}
+.nt-renk-komp:hover,.nt-renk-komp.on{border-color:var(--rm-teal);background:#f0f7fb;}
+.nt-renk-komp .nexgen-renk-daire{width:14px;height:14px;flex-shrink:0;}
+.nt-renk-komp-metin{display:flex;flex-direction:column;gap:1px;min-width:0;}
+.nt-renk-komp-ad{font-size:11px;font-weight:700;color:var(--rm-t1);line-height:1.3;}
+.nt-renk-komp-kod{font-size:9px;color:#9ca3af;line-height:1.2;}
+.nt-yardim{font-size:9px;color:#9ca3af;margin-top:3px;line-height:1.35;}
+.nt-oz-row.nt-oz-gizli{display:none;}
+.nt-yeni-renk-blk{display:none;margin-top:10px;padding:10px;background:#fff7ed;border:1px solid #fed7aa;border-radius:7px;}
+.nt-cari-wrap{position:relative;}
+.nt-cari-drop{position:absolute;left:0;right:0;top:100%;margin-top:2px;background:#fff;border:1px solid var(--rm-border);border-radius:8px;max-height:220px;overflow:auto;z-index:50;box-shadow:0 8px 24px rgba(15,23,42,.12);}
+.nt-cari-item{padding:8px 10px;font-size:11px;cursor:pointer;border-bottom:1px solid #f1f5f9;}
+.nt-cari-item:hover,.nt-cari-item.on{background:#f0f7fb;}
+.nt-cari-item-kod{font-family:monospace;font-weight:700;color:var(--rm-teal);margin-right:6px;}
+.nt-cari-secili{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--rm-teal);border-radius:8px;background:#f0f7fb;margin-top:6px;font-size:11px;font-weight:600;}
+.nt-cari-secili-x{margin-left:auto;color:#dc2626;cursor:pointer;font-weight:800;border:none;background:none;}
+.nt-acc{background:var(--rm-white);border:1px solid var(--rm-border);border-radius:10px;overflow:hidden;margin-bottom:8px;}
+.nt-btn{height:36px;padding:0 18px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--rm-border);}
+.nt-btn-primary{background:var(--rm-teal);color:#fff;border-color:#005a7a;font-weight:700;}
+.nt-btn-taslak{background:#fff8f0;color:#7c4a00;border-color:#ddb88a;}
+.nt-gorsel{border:2px dashed #cbd5e1;border-radius:7px;padding:16px;text-align:center;cursor:pointer;font-size:11px;color:#9ca3af;min-height:72px;display:flex;align-items:center;justify-content:center;}
+.nt-gorsel.ok{border-color:#16a34a;background:#f0fdf4;color:#15803d;padding:8px;}
+.nt-gorsel img.nt-gorsel-oniz{max-width:100%;max-height:120px;border-radius:4px;display:block;margin:0 auto;}
+.rm-page-hdr{display:flex;align-items:center;justify-content:space-between;height:61px;border-bottom:1px solid var(--rm-border);}
+.rm-page-hdr-sol{display:flex;align-items:center;gap:12px;}
+.rm-page-logo{width:150px;height:61px;object-fit:contain;}
+.rm-page-geri{display:flex;align-items:center;gap:5px;padding:5px 12px;border-radius:6px;border:1px solid var(--rm-border);background:#fff;font-size:11px;font-weight:600;color:var(--rm-t2);text-decoration:none;}
+.nt-bildirim{display:none;transition:opacity .3s;}
+.nt-bildirim.acik{display:block;}
+.nt-bildirim-basari{background:#16a34a;color:#fff;}
+.nt-bildirim-hata{background:#dc2626;color:#fff;}
+.nt-bildirim-bilgi{background:#006a8e;color:#fff;}
+</style>
+
+<div class="nt-sayfa rm-sayfa">
+  <div class="nt-sayfa-icerik">
+  <div class="rm-page-hdr">
+    <div class="rm-page-hdr-sol">
+      <img src="{{ url_for('static', filename='img/nexgen-logo.png') }}" alt="NexGen" class="rm-page-logo">
+      <div>
+        <div style="font-size:10px;color:var(--rm-t3);">Pazarlama › {% if yeni_route|default(false) %}Yeni Numune Talebi{% else %}Numune Talep{% endif %}</div>
+        <div style="font-size:14px;font-weight:800;">{% if yeni_route|default(false) %}Yeni Numune Talebi{% else %}Numune Talep{% endif %}</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <a href="/nexgen/pazarlama" class="rm-page-geri">← Pazarlama</a>
+      <a href="/nexgen/" class="rm-page-geri">Ana Menü</a>
+    </div>
+  </div>
+
+  {% if talep and not duzenlenebilir|default(true) %}
+  <div style="padding:10px 12px;margin-bottom:8px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;font-size:11px;color:#991b1b;">
+    Bu talep gönderilmiş — yalnız görüntüleme modu. Düzenleme FAZ-2 Numune Talepleri ekranından yapılacak.
+  </div>
+  {% endif %}
+
+  <div class="nt-layout">
+    <div class="nt-form-kolon">
+      <div class="nt-acc acik" id="acc-a">
+        <div class="nt-acc-hdr" onclick="ntAccToggle('acc-a')"><span>A — Müşteri</span><span>▾</span></div>
+        <div class="nt-acc-body">
+          <div class="nt-grid2">
+            <div class="full">
+              <span class="nt-lbl">Müşteri tipi</span>
+              <button type="button" class="nt-chip on" id="tip-mevcut" onclick="ntMusteriTip('MEVCUT')">Mevcut Müşteri</button>
+              <button type="button" class="nt-chip" id="tip-aday" onclick="ntMusteriTip('ADAY')">Yeni Müşteri Adayı</button>
+            </div>
+            <div class="full nt-fld-cari" id="blk-cari">
+              <span class="nt-lbl">Cari seçimi</span>
+              <input type="hidden" id="cari_id" value="">
+              <div class="nt-cari-wrap" id="nt-cari-wrap">
+                <input class="nt-inp" id="cari_ara" placeholder="Cari ara (ad veya kod)…" autocomplete="off"
+                       onfocus="ntCariDropAc()" oninput="ntCariAra()" onkeydown="ntCariKey(event)">
+                <div class="nt-cari-drop" id="cari_drop" style="display:none;"></div>
+              </div>
+              <div class="nt-cari-secili" id="cari_secili" style="display:none;">
+                <span id="cari_secili_txt"></span>
+                <button type="button" class="nt-cari-secili-x" onclick="ntCariTemizle()" title="Temizle">×</button>
+              </div>
+            </div>
+            <div class="full nt-fld-aday" id="blk-aday" style="display:none;">
+              <span class="nt-lbl">Firma Adı</span>
+              <input class="nt-inp" id="aday_firma" placeholder="Yeni müşteri adayı">
+              <div style="font-size:9px;color:#9ca3af;margin-top:4px;">Yeni cari oluşturulmaz — yalnız numune talebi.</div>
+            </div>
+            <div class="full nt-fld-kaynak" id="blk-kaynak-aday" style="display:none;">
+              <span class="nt-lbl">Talep Kaynağı</span>
+              <select class="nt-inp" id="talep_kaynagi">
+                <option value="">Seçin…</option>
+                {% for k in ['Fuar','WhatsApp','Telefon','E-posta','Referans','Ziyaret','Bayi','Diğer'] %}
+                <option value="{{ k }}">{{ k }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div><span class="nt-lbl">Müşteri İlgili Kişisi</span><input class="nt-inp" id="ilgili_kisi"></div>
+            <div><span class="nt-lbl">Telefon</span><input class="nt-inp" id="telefon"></div>
+            <div><span class="nt-lbl">E-posta</span><input class="nt-inp" id="eposta"></div>
+            <div><span class="nt-lbl">Şehir</span><input class="nt-inp" id="sehir"></div>
+            <div class="nt-fld-talep-eden">
+              <span class="nt-lbl">Talep Eden Kişi</span>
+              <select class="nt-inp" id="talep_eden_id"></select>
+              <div style="font-size:9px;color:#9ca3af;margin-top:4px;">Oluşturan (audit): <strong id="olusturan_kadi">—</strong></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="nt-acc acik" id="acc-b">
+        <div class="nt-acc-hdr" onclick="ntAccToggle('acc-b')"><span>B — Ürün &amp; Numune Görseli</span><span>▾</span></div>
+        <div class="nt-acc-body">
+          <span class="nt-lbl">Ürün tipi</span>
+          <div style="margin-bottom:10px;">
+            {% for t in ['TERLİK','TABAN','DÖKME'] %}
+            <button type="button" class="nt-chip" data-urun="{{ t }}" onclick="ntUrunTip(this,'{{ t }}')">{{ t }}</button>
+            {% endfor %}
+          </div>
+          <div class="nt-grid2">
+            <div><span class="nt-lbl">Ürün adı / model</span><input class="nt-inp" id="urun_adi"></div>
+            <div>
+              <span class="nt-lbl">Ürün görseli</span>
+              <div class="nt-gorsel" id="gorsel_alan" onclick="document.getElementById('gorsel_inp').click()">Görsel yüklemek için tıklayın</div>
+              <input type="file" id="gorsel_inp" accept="image/*" style="display:none" onchange="ntGorselSec(this)">
+              <div class="nt-yardim">Yapılması istenen ürün veya model görseli</div>
+            </div>
+            <div class="full"><span class="nt-lbl">Ürün açıklaması</span><textarea class="nt-inp" id="urun_aciklama" rows="2"></textarea></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="nt-acc acik" id="acc-c">
+        <div class="nt-acc-hdr" onclick="ntAccToggle('acc-c')"><span>C — Müşteri Ne İstiyor?</span><span>▾</span></div>
+        <div class="nt-acc-body">
+          <div class="nt-grid2" style="margin-bottom:12px;">
+            <div class="full">
+              <span class="nt-lbl">Talep türünü seçin</span>
+              <div>
+                <button type="button" class="nt-chip" id="karsil-hazir" onclick="ntKarsilamaYolu('HAZIR_RF')">Hazır renk ile müşteri numunesi</button>
+                <button type="button" class="nt-chip" id="karsil-yeni-renk" onclick="ntKarsilamaYolu('YENI_RENK')">Yeni renk talebi</button>
+                <button type="button" class="nt-chip" id="karsil-yeni-formul" onclick="ntKarsilamaYolu('YENI_FORMUL')">Yeni hammadde / formül talebi</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- HAZIR_RF bloğu -->
+          <div id="blk-hazir-rf" style="display:none;">
+            <div style="font-size:9px;font-weight:700;color:#9ca3af;text-transform:uppercase;margin:0 0 8px;border-top:1px solid #f1f5f9;padding-top:8px;">Hazır Renk Bilgileri</div>
+            <div class="nt-grid2">
+              <div class="full nt-fld-cari">
+                <span class="nt-lbl">Müşterinin İstediği Renk</span>
+                <button type="button" class="nt-inp nt-renk-trigger" id="renk_trigger" onclick="ntRenkModalAc()" style="text-align:left;cursor:pointer;">Renk seçiniz… ▼</button>
+                <div class="nt-renk-secili" id="renk_secili" style="display:none;">
+                  <span class="nexgen-renk-daire" id="renk_secili_dot" data-renk-kod=""></span>
+                  <span class="nt-renk-secili-txt" id="renk_secili_txt"></span>
+                  <button type="button" class="nt-renk-secili-act" onclick="ntRenkModalAc()">Değiştir</button>
+                  <button type="button" class="nt-renk-secili-x" onclick="ntRenkTemizle()" title="Kaldır">×</button>
+                </div>
+              </div>
+              <div class="full">
+                <span class="nt-lbl">Müşteri Renk Notu</span>
+                <textarea class="nt-inp" id="pisme_notu_hazir" rows="2" oninput="ntOzetGuncelle()" placeholder="Renk ile ilgili müşteri notu, özel istek…"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- YENI_RENK bloğu -->
+          <div id="blk-yeni-renk" style="display:none;">
+            <div style="font-size:9px;font-weight:700;color:#9ca3af;text-transform:uppercase;margin:0 0 8px;border-top:1px solid #f1f5f9;padding-top:8px;">Yeni Renk Talebi</div>
+            <div class="nt-grid2">
+              <div class="full">
+                <span class="nt-lbl">İstenen Renk Açıklaması</span>
+                <input class="nt-inp" id="yeni_renk_aciklama" oninput="ntOzetGuncelle()" placeholder="Örn. turuncu mat, koyu lacivert…">
+              </div>
+              <div><span class="nt-lbl">Açık / Koyu</span>
+                <select class="nt-inp" id="acik_koyu" onchange="ntOzetGuncelle()">
+                  <option value="">—</option><option value="acik">Açık</option><option value="koyu">Koyu</option>
+                </select>
+              </div>
+              <div><span class="nt-lbl">Mat / Parlak</span>
+                <select class="nt-inp" id="mat_parlak" onchange="ntOzetGuncelle()">
+                  <option value="">—</option><option value="mat">Mat</option><option value="parlak">Parlak</option>
+                </select>
+              </div>
+              <div><span class="nt-lbl">Müşteri Renk Kodu / Referans</span>
+                <input class="nt-inp" id="ref_renk_kodu" placeholder="Örn. 0042, Pantone 185C" oninput="ntOzetGuncelle()">
+              </div>
+              <div>
+                <span class="nt-lbl">Referans Görsel</span>
+                <div class="nt-gorsel" id="ref_gorsel_alan" onclick="document.getElementById('ref_gorsel_inp').click()">Referans görsel yükle</div>
+                <input type="file" id="ref_gorsel_inp" accept="image/*" style="display:none" onchange="ntRefGorselSec(this)">
+                <div class="nt-yardim">Hedef renk, müşteri numunesi veya kıyas ürünü</div>
+              </div>
+              <div class="full">
+                <span class="nt-lbl">Renk Beklentisi</span>
+                <textarea class="nt-inp" id="pisme_notu_renk" rows="2" oninput="ntOzetGuncelle()" placeholder="Renk beklentisi, Pantone, fiziksel numune notu…"></textarea>
+              </div>
+              <div class="full">
+                <span class="nt-lbl">Müşteri Notu</span>
+                <textarea class="nt-inp" id="musteri_notu_renk" rows="2" oninput="ntOzetGuncelle()" placeholder="Müşteriden gelen ek renk notu…"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- YENI_FORMUL bloğu -->
+          <div id="blk-yeni-formul" style="display:none;">
+            <div style="font-size:9px;font-weight:700;color:#9ca3af;text-transform:uppercase;margin:0 0 8px;border-top:1px solid #f1f5f9;padding-top:8px;">Yeni Hammadde / Formül Talebi — Müşteri Beklentileri</div>
+            <div class="nt-grid2">
+              <div><span class="nt-lbl">Beklenen Sertlik (Shore)</span><input class="nt-inp" id="shore_deger" placeholder="Örn. 60A"></div>
+              <div><span class="nt-lbl">Yumuşaklık Beklentisi</span><input class="nt-inp" id="yumusaklik" placeholder="Örn. Çok yumuşak"></div>
+              <div><span class="nt-lbl">Kaymazlık Beklentisi</span><input class="nt-inp" id="kaymazlik" placeholder="Örn. Yüksek kaymazlık"></div>
+              <div><span class="nt-lbl">Renk Beklentisi</span><input class="nt-inp" id="yeni_renk_aciklama_f" oninput="ntOzetGuncelle()" placeholder="Örn. Şeffaf, siyah…"></div>
+              <div class="full"><span class="nt-lbl">Pişme / Üretim Beklentisi</span><textarea class="nt-inp" id="pisme_notu_f" rows="2" oninput="ntOzetGuncelle()" placeholder="Müşterinin üretim veya kullanım beklentisi…"></textarea></div>
+              <div>
+                <span class="nt-lbl">Referans Görsel</span>
+                <div class="nt-gorsel" id="ref_gorsel_alan_f" onclick="document.getElementById('ref_gorsel_inp_f').click()">Referans görsel yükle</div>
+                <input type="file" id="ref_gorsel_inp_f" accept="image/*" style="display:none" onchange="ntRefGorselSecF(this)">
+                <div class="nt-yardim">Hedef renk, müşteri numunesi veya kıyas ürünü</div>
+              </div>
+              <div class="full"><span class="nt-lbl">Diğer Beklentiler</span><textarea class="nt-inp" id="diger_beklentiler_metin" rows="2" oninput="ntOzetGuncelle()" placeholder="Yoğunluk, esneklik, özel gereksinim…"></textarea></div>
+              <div class="full"><span class="nt-lbl">Kullanım amacı</span><textarea class="nt-inp" id="kullanim_amaci" rows="2" placeholder="Numunenin kullanım amacı…"></textarea></div>
+              <div class="full"><span class="nt-lbl">Mevcut benzer ürün / numune bilgisi</span><input class="nt-inp" id="benzer_urun_numune" placeholder="Varsa benzer ürün veya referans numune"></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="nt-acc acik" id="acc-d">
+        <div class="nt-acc-hdr" onclick="ntAccToggle('acc-d')"><span>D — Talep &amp; Teslim Notları</span><span>▾</span></div>
+        <div class="nt-acc-body">
+          <div class="nt-grid2">
+            <div class="full">
+              <span class="nt-lbl">Talep Nedeni</span>
+              <select class="nt-inp" id="talep_nedeni">
+                <option value="">Seçin…</option>
+                {% for n in ['Müşteri numune istedi','Yeni model','Yeni sezon','Mevcut rengin alternatifi','Daha yumuşak / sert ürün istendi','Kalite iyileştirme','Diğer'] %}
+                <option value="{{ n }}">{{ n }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="full"><span class="nt-lbl">Açıklama</span><textarea class="nt-inp" id="aciklama" rows="3"></textarea></div>
+            <div><span class="nt-lbl">Talep Tarihi</span><input class="nt-inp" readonly id="talep_tarihi"></div>
+            <div><span class="nt-lbl">Hedef Tarih</span><input class="nt-inp" type="date" id="hedef_tarih"></div>
+            <div class="full">
+              <span class="nt-lbl">Öncelik</span>
+              {% for o in ['Normal','Acil','Kritik'] %}
+              <button type="button" class="nt-chip{% if o=='Normal' %} on{% endif %}" data-onc="{{ o }}" onclick="ntOncelik(this,'{{ o }}')">{{ o }}</button>
+              {% endfor %}
+            </div>
+            <div class="full"><span class="nt-lbl">Ek not</span><textarea class="nt-inp" id="ek_not" rows="2"></textarea></div>
+            <div><span class="nt-lbl">Numune adedi</span><input class="nt-inp" id="numune_adedi" type="number" min="1" placeholder="Örn. 2"></div>
+            <div><span class="nt-lbl">Beden / kalıp / model bilgisi</span><input class="nt-inp" id="beden_kalip" placeholder="Örn. 42, standart kalıp"></div>
+            <div class="full">
+              <span class="nt-lbl">Patch / baskı / aksesuar gerekiyor mu?</span>
+              <label style="display:flex;align-items:center;gap:8px;font-size:11px;margin-bottom:6px;">
+                <input type="checkbox" id="patch_aksesuar_var" onchange="ntPatchToggle()"> Patch, baskı veya aksesuar var
+              </label>
+              <div id="blk_patch_aciklama" style="display:none;">
+                <input class="nt-inp" id="patch_aksesuar_aciklama" placeholder="Patch / baskı / aksesuar açıklaması">
+              </div>
+            </div>
+            <div><span class="nt-lbl">Paketleme notu</span><textarea class="nt-inp" id="paketleme_notu" rows="2" placeholder="Paketleme beklentisi…"></textarea></div>
+            <div><span class="nt-lbl">Kargo / teslim notu</span><textarea class="nt-inp" id="kargo_teslim_notu" rows="2" placeholder="Teslimat veya kargo notu…"></textarea></div>
+          </div>
+        </div>
+      </div>
+
+      {% if can_manage %}
+      <div style="display:flex;gap:8px;justify-content:flex-end;padding:4px 0 12px;">
+        <button type="button" class="nt-btn nt-btn-taslak" onclick="ntKaydet('taslak')">Taslak Kaydet</button>
+        <button type="button" class="nt-btn nt-btn-primary" onclick="ntKaydet('gonder')">AR-GE'ye Gönder</button>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="nt-ozet-col">
+      <div class="nt-ozet">
+        <div class="nt-ozet-hdr"><span>Talep Özeti</span></div>
+        <div class="nt-ozet-body">
+          <div class="nt-oz-row"><span class="nt-oz-k">Talep Kodu</span><span class="nt-oz-v kod" id="oz_kod">Kayıt sonrası otomatik</span></div>
+          <div class="nt-oz-row"><span class="nt-oz-k">Müşteri</span><span class="nt-oz-v" id="oz_firma">—</span></div>
+          <div class="nt-oz-row"><span class="nt-oz-k">Ürün / Model</span><span class="nt-oz-v" id="oz_urun">—</span></div>
+          <div class="nt-oz-row"><span class="nt-oz-k">Talep Türü</span><span class="nt-oz-v" id="oz_karsilama">—</span></div>
+          <div class="nt-oz-row nt-oz-gizli" id="oz_row_hazir_renk"><span class="nt-oz-k">Hazır Renk</span><span class="nt-oz-v" id="oz_hazir_renk">—</span></div>
+          <div class="nt-oz-row nt-oz-gizli" id="oz_row_yeni_renk"><span class="nt-oz-k">İstenen Yeni Renk</span><span class="nt-oz-v" id="oz_yeni_renk">—</span></div>
+          <div class="nt-oz-row nt-oz-gizli" id="oz_row_formul"><span class="nt-oz-k">Hammadde / Formül Beklentisi</span><span class="nt-oz-v" id="oz_formul_beklenti">—</span></div>
+          <div class="nt-oz-row"><span class="nt-oz-k">Öncelik</span><span class="nt-oz-v" id="oz_oncelik">Normal</span></div>
+          <div class="nt-oz-row"><span class="nt-oz-k">Hedef Tarih</span><span class="nt-oz-v" id="oz_hedef">—</span></div>
+          <div class="nt-oz-row"><span class="nt-oz-k">Sonraki Adım</span><span class="nt-oz-v" id="oz_sonraki_adim">—</span></div>
+          <button type="button" class="nt-oz-detay-btn" id="oz_detay_btn" onclick="ntOzetDetayToggle()">Detay ▸</button>
+          <div class="nt-oz-detay" id="oz_detay">
+            <div class="nt-oz-row"><span class="nt-oz-k">Durum</span><span class="nt-oz-v" id="oz_durum">Yeni Talep</span></div>
+            <div class="nt-oz-row"><span class="nt-oz-k">Talep Eden</span><span class="nt-oz-v" id="oz_talep_eden">—</span></div>
+            <div class="nt-oz-row"><span class="nt-oz-k">Oluşturan</span><span class="nt-oz-v" id="oz_olusturan">—</span></div>
+            <div class="nt-oz-row"><span class="nt-oz-k">Müşteri Tipi</span><span class="nt-oz-v" id="oz_mtip">Mevcut Müşteri</span></div>
+            <div class="nt-oz-row"><span class="nt-oz-k">Talep Nedeni</span><span class="nt-oz-v" id="oz_neden">—</span></div>
+            <div class="nt-oz-row"><span class="nt-oz-k">Talep Kaynağı</span><span class="nt-oz-v" id="oz_kaynak">—</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div>
+</div>
+
+<div id="nt-bildirim" class="nt-bildirim" style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;padding:10px 20px;border-radius:8px;font-size:12px;font-weight:700;display:none;min-width:260px;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.18);"></div>
+
+<div class="nt-renk-modal" id="renk_modal" onclick="if(event.target===this)ntRenkModalKapat()">
+  <div class="nt-renk-modal-box">
+    <div class="nt-renk-modal-hdr">
+      <span>Müşterinin İstediği Renk</span>
+      <button type="button" class="nt-renk-modal-x" onclick="ntRenkModalKapat()">×</button>
+    </div>
+    <div class="nt-renk-modal-ara">
+      <input class="nt-inp" id="renk_modal_ara" placeholder="Renk adı ara…" oninput="ntRenkModalFiltre()">
+    </div>
+    <div class="nt-renk-modal-grid" id="renk_modal_grid"></div>
+  </div>
+</div>
+
+<script>
+var NT = {
+  id: {{ talep.id if talep else 'null' }},
+  musteriTip: 'MEVCUT',
+  urunTip: '',
+  oncelik: 'Normal',
+  renkTip: null,
+  renkTab: 'MEVCUT',
+  rfRenkId: null,
+  renkKod: '',
+  renkAd: '',
+  renkler: [],
+  cariler: {{ cariler | tojson }},
+  cariDropIdx: -1,
+  oturumId: {{ oturum_kullanici_id or 'null' }},
+  pazarlamacilar: [],
+  _taslakPromise: null,
+  karsilamaYolu: null,
+  _gonderimiyor: false,
+  refGorselBelgeId: null
+};
+
+function ntEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+
+function ntAccToggle(id){ document.getElementById(id).classList.toggle('acik'); }
+function ntMusteriTip(t){
+  NT.musteriTip = t;
+  document.getElementById('tip-mevcut').classList.toggle('on', t==='MEVCUT');
+  document.getElementById('tip-aday').classList.toggle('on', t==='ADAY');
+  document.getElementById('blk-cari').style.display = t==='MEVCUT' ? '' : 'none';
+  document.getElementById('blk-aday').style.display = t==='ADAY' ? '' : 'none';
+  document.getElementById('blk-kaynak-aday').style.display = t==='ADAY' ? '' : 'none';
+  document.getElementById('oz_mtip').textContent = t==='MEVCUT' ? 'Mevcut Müşteri' : 'Yeni Müşteri Adayı';
+  ntOzetGuncelle();
+}
+function ntUrunTip(el,t){ NT.urunTip=t; document.querySelectorAll('[data-urun]').forEach(function(b){b.classList.toggle('on', b.getAttribute('data-urun')===t);}); ntOzetGuncelle(); }
+function ntOncelik(el,o){ NT.oncelik=o; document.querySelectorAll('[data-onc]').forEach(function(b){b.classList.toggle('on', b.getAttribute('data-onc')===o);}); ntOzetGuncelle(); }
+
+function ntCariEtiket(c){ return (c.unvan||'') + ' (' + (c.cari_kod||'') + ')'; }
+
+function ntCarileriYukle(cb){
+  if (NT.cariler && NT.cariler.length) { if(cb) cb(); return; }
+  fetch('/nexgen/api/numune-talep/cariler')
+    .then(function(r){return r.json();})
+    .then(function(d){
+      NT.cariler = d.cariler || NT.cariler || [];
+      if(cb) cb();
+    })
+    .catch(function(){ if(cb) cb(); });
+}
+
+function ntCariDropAc(){
+  ntCariAra();
+  document.getElementById('cari_drop').style.display = '';
+}
+
+function ntCariDropKapat(){
+  document.getElementById('cari_drop').style.display = 'none';
+  NT.cariDropIdx = -1;
+}
+
+function ntCariAra(){
+  var q = (document.getElementById('cari_ara').value || '').trim().toLowerCase();
+  var list = NT.cariler.filter(function(c){
+    if(!q) return true;
+    return (c.unvan||'').toLowerCase().indexOf(q) >= 0 || (c.cari_kod||'').toLowerCase().indexOf(q) >= 0;
+  });
+  var h = '';
+  if(!list.length){
+    h = '<div class="nt-cari-item" style="color:#9ca3af;cursor:default;">Sonuç yok</div>';
+  } else {
+    list.slice(0, 80).forEach(function(c, i){
+      h += '<div class="nt-cari-item" data-idx="'+i+'" data-id="'+c.id+'" onclick="ntCariSec('+c.id+')">'
+        + '<span class="nt-cari-item-kod">'+ntEsc(c.cari_kod)+'</span>'+ntEsc(c.unvan)+'</div>';
+    });
+  }
+  document.getElementById('cari_drop').innerHTML = h;
+  NT.cariDropIdx = -1;
+}
+
+function ntCariKey(ev){
+  var items = document.querySelectorAll('#cari_drop .nt-cari-item[data-id]');
+  if(!items.length) return;
+  if(ev.key === 'ArrowDown'){ ev.preventDefault(); NT.cariDropIdx = Math.min(NT.cariDropIdx+1, items.length-1); }
+  else if(ev.key === 'ArrowUp'){ ev.preventDefault(); NT.cariDropIdx = Math.max(NT.cariDropIdx-1, 0); }
+  else if(ev.key === 'Enter'){
+    ev.preventDefault();
+    if(NT.cariDropIdx >= 0 && items[NT.cariDropIdx]) items[NT.cariDropIdx].click();
+    return;
+  } else if(ev.key === 'Escape'){ ntCariDropKapat(); return; }
+  else return;
+  items.forEach(function(el,i){ el.classList.toggle('on', i===NT.cariDropIdx); });
+}
+
+function ntCariSec(id){
+  var c = NT.cariler.find(function(x){ return String(x.id) === String(id); });
+  if(!c) return;
+  document.getElementById('cari_id').value = c.id;
+  document.getElementById('cari_ara').value = '';
+  document.getElementById('cari_secili_txt').textContent = ntCariEtiket(c);
+  document.getElementById('cari_secili').style.display = '';
+  document.getElementById('cari_ara').style.display = 'none';
+  ntCariDropKapat();
+  ntRenkleriYukle();
+  ntOzetGuncelle();
+}
+
+function ntCariTemizle(){
+  document.getElementById('cari_id').value = '';
+  document.getElementById('cari_ara').value = '';
+  document.getElementById('cari_ara').style.display = '';
+  document.getElementById('cari_secili').style.display = 'none';
+  ntRenkTemizle();
+  ntOzetGuncelle();
+}
+
+function ntRenkTab(t){
+  NT.renkTip = (t === 'YENI') ? 'YENI' : (NT.rfRenkId ? 'MEVCUT' : null);
+  ntOzetGuncelle();
+}
+
+function ntKarsilamaYolu(yol){
+  NT.karsilamaYolu = yol;
+  ['HAZIR_RF','YENI_RENK','YENI_FORMUL'].forEach(function(k){
+    var blkId = {'HAZIR_RF':'blk-hazir-rf','YENI_RENK':'blk-yeni-renk','YENI_FORMUL':'blk-yeni-formul'}[k];
+    var btnId = {'HAZIR_RF':'karsil-hazir','YENI_RENK':'karsil-yeni-renk','YENI_FORMUL':'karsil-yeni-formul'}[k];
+    document.getElementById(blkId).style.display = (yol === k) ? '' : 'none';
+    document.getElementById(btnId).classList.toggle('on', yol === k);
+  });
+  if(yol !== 'HAZIR_RF'){
+    NT.rfRenkId = null; NT.renkKod = ''; NT.renkAd = '';
+    var rs = document.getElementById('renk_secili');
+    if(rs) rs.style.display = 'none';
+    var rt = document.getElementById('renk_trigger');
+    if(rt) rt.textContent = 'Renk seçiniz… ▼';
+  }
+  ntOzetGuncelle();
+}
+
+function ntRenkModalAc(){
+  if(NT.renkTab !== 'MEVCUT') ntRenkTab('MEVCUT');
+  document.getElementById('renk_modal_ara').value = '';
+  ntRenkModalFiltre();
+  document.getElementById('renk_modal').classList.add('acik');
+  document.getElementById('renk_modal_ara').focus();
+}
+
+function ntRenkModalKapat(){
+  document.getElementById('renk_modal').classList.remove('acik');
+}
+
+function ntRenkEtiket(ad, kod){
+  if(ad && kod && ad !== kod) return ad + ' (' + kod + ')';
+  return ad || kod || '';
+}
+
+function ntRenkModalFiltre(){
+  var q = (document.getElementById('renk_modal_ara').value || '').trim().toLowerCase();
+  var list = NT.renkler.filter(function(r){
+    if(!q) return true;
+    return (r.kod||'').toLowerCase().indexOf(q) >= 0 || (r.ad||'').toLowerCase().indexOf(q) >= 0;
+  });
+  var h = '';
+  if(!list.length){
+    h = '<div style="grid-column:1/-1;color:#9ca3af;font-size:11px;padding:8px;">Renk bulunamadı</div>';
+  } else {
+    list.forEach(function(r){
+      var on = NT.rfRenkId === r.id ? ' on' : '';
+      var ad = ntEsc(r.ad || r.kod || '');
+      var kod = ntEsc(r.kod || '');
+      h += '<div class="nt-renk-komp'+on+'" onclick="ntRenkSec('+r.id+',\''+String(r.kod).replace(/'/g,"\\'")+'\',\''+String(r.ad).replace(/'/g,"\\'")+'\')">'
+        + '<span class="nexgen-renk-daire" data-renk-kod="'+kod+'"></span>'
+        + '<span class="nt-renk-komp-metin"><span class="nt-renk-komp-ad">'+ad+'</span>'
+        + (kod && kod !== ad ? '<span class="nt-renk-komp-kod">'+kod+'</span>' : '')
+        + '</span></div>';
+    });
+  }
+  document.getElementById('renk_modal_grid').innerHTML = h;
+  if(window.nexgenRenkDaireInit) nexgenRenkDaireInit(document.getElementById('renk_modal_grid'));
+}
+
+function ntRenkSec(id,kod,ad){
+  NT.renkTip='MEVCUT'; NT.rfRenkId=id; NT.renkKod=kod; NT.renkAd=ad;
+  var etiket = ntRenkEtiket(ad, kod);
+  document.getElementById('renk_secili_dot').setAttribute('data-renk-kod', kod||'');
+  document.getElementById('renk_secili_txt').textContent = etiket;
+  document.getElementById('renk_secili').style.display = '';
+  document.getElementById('renk_trigger').textContent = etiket || 'Renk seçiniz… ▼';
+  if(window.nexgenRenkDaireInit) nexgenRenkDaireInit(document.getElementById('renk_secili'));
+  ntRenkModalKapat();
+  ntOzetGuncelle();
+}
+
+function ntRenkTemizle(){
+  NT.renkTip=null; NT.rfRenkId=null; NT.renkKod=''; NT.renkAd='';
+  document.getElementById('renk_secili').style.display='none';
+  document.getElementById('renk_trigger').textContent='Renk seçiniz… ▼';
+  ntOzetGuncelle();
+}
+
+function ntPatchToggle(){
+  var on = document.getElementById('patch_aksesuar_var').checked;
+  var blk = document.getElementById('blk_patch_aciklama');
+  if(blk) blk.style.display = on ? '' : 'none';
+  if(!on){
+    var el = document.getElementById('patch_aksesuar_aciklama');
+    if(el) el.value = '';
+  }
+  ntOzetGuncelle();
+}
+
+function ntDbKyToJs(ky){
+  if(!ky) return null;
+  if(String(ky).toUpperCase() === 'HAZIR_RENK') return 'HAZIR_RF';
+  return String(ky).toUpperCase();
+}
+
+function ntSetVal(id, v){
+  var el = document.getElementById(id);
+  if(el && v != null && v !== undefined) el.value = v;
+}
+
+function ntHydrateFromTalep(t){
+  if(!t) return;
+  NT.id = t.id;
+  NT.musteriTip = t.musteri_tipi || 'MEVCUT';
+  ntMusteriTip(NT.musteriTip);
+  ntSetVal('aday_firma', t.aday_firma_adi);
+  ntSetVal('ilgili_kisi', t.ilgili_kisi);
+  ntSetVal('telefon', t.telefon);
+  ntSetVal('eposta', t.eposta);
+  ntSetVal('sehir', t.sehir);
+  ntSetVal('talep_kaynagi', t.talep_kaynagi);
+  if(t.talep_eden_kullanici_id){
+    var sel = document.getElementById('talep_eden_id');
+    if(sel) sel.value = String(t.talep_eden_kullanici_id);
+  }
+  if(t.olusturan_kadi) document.getElementById('olusturan_kadi').textContent = t.olusturan_kadi;
+  var utMap = {TERLIK:'TERLİK', TABAN:'TABAN', DOKME:'DÖKME'};
+  if(t.urun_tipi){
+    var ut = utMap[t.urun_tipi] || t.urun_tipi;
+    document.querySelectorAll('[data-urun]').forEach(function(b){
+      if(b.getAttribute('data-urun') === ut) ntUrunTip(b, ut);
+    });
+  }
+  ntSetVal('urun_adi', t.urun_adi);
+  ntSetVal('urun_aciklama', t.urun_aciklama);
+  ntSetVal('numune_adedi', t.numune_adedi);
+  ntSetVal('beden_kalip', t.beden_kalip);
+  var patchOn = !!t.patch_aksesuar_var;
+  document.getElementById('patch_aksesuar_var').checked = patchOn;
+  ntSetVal('patch_aksesuar_aciklama', t.patch_aksesuar_aciklama);
+  ntPatchToggle();
+  ntSetVal('paketleme_notu', t.paketleme_notu);
+  ntSetVal('kargo_teslim_notu', t.kargo_teslim_notu);
+  ntSetVal('talep_nedeni', t.talep_nedeni);
+  ntSetVal('aciklama', t.aciklama);
+  ntSetVal('hedef_tarih', t.hedef_tarih);
+  ntSetVal('ek_not', t.ek_not);
+  var om = {NORMAL:'Normal', ACIL:'Acil', KRITIK:'Kritik'};
+  NT.oncelik = om[(t.oncelik || 'NORMAL').toUpperCase()] || 'Normal';
+  document.querySelectorAll('[data-onc]').forEach(function(b){
+    b.classList.toggle('on', b.getAttribute('data-onc') === NT.oncelik);
+  });
+  document.getElementById('oz_kod').textContent = t.talep_kodu || '—';
+  document.getElementById('oz_durum').textContent = t.durum || '—';
+  if(t.olusturma_tarihi){
+    try{
+      document.getElementById('talep_tarihi').value = new Date(t.olusturma_tarihi.replace(' ','T')).toLocaleDateString('tr-TR');
+    }catch(e){}
+  }
+  var ky = ntDbKyToJs(t.karsilama_yolu);
+  if(ky){
+    ntKarsilamaYolu(ky);
+    if(ky === 'HAZIR_RF'){
+      NT.rfRenkId = t.rf_renk_id || null;
+      NT.renkKod = t.renk_kodu || '';
+      NT.renkAd = t.renk_kodu || '';
+      ntSetVal('pisme_notu_hazir', t.pisme_notu);
+      if(t.rf_renk_id){
+        ntRenkleriYukle(function(){
+          var r = NT.renkler.find(function(x){ return x.id === t.rf_renk_id; });
+          if(r) ntRenkSec(r.id, r.kod, r.ad);
+          else if(t.renk_kodu) ntRenkSec(t.rf_renk_id, t.renk_kodu, t.renk_kodu);
+        });
+      }
+    } else if(ky === 'YENI_RENK'){
+      ntSetVal('yeni_renk_aciklama', t.yeni_renk_aciklama);
+      ntSetVal('acik_koyu', t.acik_koyu);
+      ntSetVal('mat_parlak', t.mat_parlak);
+      ntSetVal('ref_renk_kodu', t.ref_renk_kodu);
+      var pn = (t.pisme_notu || '').split('\n');
+      ntSetVal('pisme_notu_renk', pn[0] || '');
+      ntSetVal('musteri_notu_renk', pn.slice(1).join('\n') || '');
+      if(t.ref_gorsel_belge_id){
+        ntGorselOnizleme('ref_gorsel_alan', t.ref_gorsel_belge_id, null);
+        NT.refGorselBelgeId = t.ref_gorsel_belge_id;
+      }
+    } else if(ky === 'YENI_FORMUL'){
+      ntSetVal('shore_deger', t.shore_deger);
+      ntSetVal('yumusaklik', t.yumusaklik);
+      ntSetVal('kaymazlik', t.kaymazlik);
+      ntSetVal('yeni_renk_aciklama_f', t.yeni_renk_aciklama);
+      ntSetVal('pisme_notu_f', t.pisme_notu);
+      ntSetVal('kullanim_amaci', t.kullanim_amaci);
+      ntSetVal('benzer_urun_numune', t.benzer_urun_numune);
+      var diger = t.diger_beklentiler || [];
+      if(typeof diger === 'string'){ try{diger=JSON.parse(diger);}catch(e){diger=[];} }
+      ntSetVal('diger_beklentiler_metin', (diger && diger.length) ? diger[0] : '');
+      if(t.ref_gorsel_belge_id){
+        ntGorselOnizleme('ref_gorsel_alan_f', t.ref_gorsel_belge_id, null);
+        NT.refGorselBelgeId = t.ref_gorsel_belge_id;
+      }
+    }
+  }
+  if(t.cari_id){
+    ntCarileriYukle(function(){
+      var c = NT.cariler.find(function(x){ return String(x.id) === String(t.cari_id); });
+      if(c) ntCariSec(c.id);
+      else document.getElementById('cari_id').value = t.cari_id;
+    });
+  }
+  if(t.urun_gorsel_belge_id){
+    ntGorselOnizleme('gorsel_alan', t.urun_gorsel_belge_id, null);
+  }
+  ntOzetGuncelle();
+}
+
+function ntPayload(){
+  var ky = NT.karsilamaYolu;
+  var yeniRenkAciklama = '';
+  var pismeNotuVal = '';
+  if(ky === 'HAZIR_RF'){
+    pismeNotuVal = document.getElementById('pisme_notu_hazir').value;
+  } else if(ky === 'YENI_RENK'){
+    yeniRenkAciklama = document.getElementById('yeni_renk_aciklama').value;
+    var bekl = (document.getElementById('pisme_notu_renk').value || '').trim();
+    var mnot = (document.getElementById('musteri_notu_renk').value || '').trim();
+    pismeNotuVal = [bekl, mnot].filter(Boolean).join('\n');
+  } else if(ky === 'YENI_FORMUL'){
+    yeniRenkAciklama = document.getElementById('yeni_renk_aciklama_f').value;
+    pismeNotuVal = document.getElementById('pisme_notu_f').value;
+  }
+  var digerBeklentiler = [];
+  if(ky === 'YENI_FORMUL'){
+    var db = (document.getElementById('diger_beklentiler_metin').value || '').trim();
+    if(db) digerBeklentiler = [db];
+  }
+  return {
+    id: NT.id,
+    musteri_tipi: NT.musteriTip,
+    cari_id: document.getElementById('cari_id').value || null,
+    aday_firma_adi: document.getElementById('aday_firma').value,
+    ilgili_kisi: document.getElementById('ilgili_kisi').value,
+    telefon: document.getElementById('telefon').value,
+    eposta: document.getElementById('eposta').value,
+    sehir: document.getElementById('sehir').value,
+    talep_kaynagi: document.getElementById('talep_kaynagi').value,
+    talep_eden_kullanici_id: document.getElementById('talep_eden_id').value,
+    urun_tipi: NT.urunTip,
+    urun_adi: document.getElementById('urun_adi').value,
+    urun_aciklama: document.getElementById('urun_aciklama').value,
+    karsilama_yolu: ky,
+    numune_adedi: document.getElementById('numune_adedi').value || null,
+    beden_kalip: document.getElementById('beden_kalip').value,
+    patch_aksesuar_var: document.getElementById('patch_aksesuar_var').checked ? 1 : 0,
+    patch_aksesuar_aciklama: document.getElementById('patch_aksesuar_var').checked ? document.getElementById('patch_aksesuar_aciklama').value : '',
+    kullanim_amaci: ky === 'YENI_FORMUL' ? document.getElementById('kullanim_amaci').value : null,
+    benzer_urun_numune: ky === 'YENI_FORMUL' ? document.getElementById('benzer_urun_numune').value : null,
+    paketleme_notu: document.getElementById('paketleme_notu').value,
+    kargo_teslim_notu: document.getElementById('kargo_teslim_notu').value,
+    renk_tipi: (ky === 'HAZIR_RF' || ky === 'YENI_RENK') ? (NT.rfRenkId ? 'MEVCUT' : (ky === 'YENI_RENK' ? 'YENI' : null)) : null,
+    rf_renk_id: (ky === 'HAZIR_RF') ? NT.rfRenkId : null,
+    renk_kodu: (ky === 'HAZIR_RF') ? NT.renkKod : null,
+    yeni_renk_aciklama: yeniRenkAciklama,
+    acik_koyu: ky === 'YENI_RENK' ? document.getElementById('acik_koyu').value : null,
+    mat_parlak: ky === 'YENI_RENK' ? document.getElementById('mat_parlak').value : null,
+    ref_renk_kodu: ky === 'YENI_RENK' ? document.getElementById('ref_renk_kodu').value : null,
+    yumusaklik: ky === 'YENI_FORMUL' ? document.getElementById('yumusaklik').value : null,
+    kaymazlik: ky === 'YENI_FORMUL' ? document.getElementById('kaymazlik').value : null,
+    shore_deger: ky === 'YENI_FORMUL' ? document.getElementById('shore_deger').value : null,
+    pisme_notu: pismeNotuVal,
+    diger_beklentiler: digerBeklentiler,
+    talep_nedeni: document.getElementById('talep_nedeni').value,
+    aciklama: document.getElementById('aciklama').value,
+    hedef_tarih: document.getElementById('hedef_tarih').value,
+    oncelik: NT.oncelik,
+    ek_not: document.getElementById('ek_not').value
+  };
+}
+function ntOzetDetayToggle(){
+  var el=document.getElementById('oz_detay');
+  var btn=document.getElementById('oz_detay_btn');
+  if(!el||!btn) return;
+  el.classList.toggle('acik');
+  btn.textContent = el.classList.contains('acik') ? 'Detay ▾' : 'Detay ▸';
+}
+function ntOzetSatirGoster(id, goster){
+  var el = document.getElementById(id);
+  if(el) el.classList.toggle('nt-oz-gizli', !goster);
+}
+function ntOzetGuncelle(){
+  var sel=document.getElementById('talep_eden_id');
+  var te=sel && sel.options[sel.selectedIndex];
+  document.getElementById('oz_talep_eden').textContent = te ? te.text : '—';
+  document.getElementById('oz_olusturan').textContent = document.getElementById('olusturan_kadi').textContent || '—';
+  var firma = '—';
+  if(NT.musteriTip==='MEVCUT'){
+    var cid=document.getElementById('cari_id').value;
+    var c=NT.cariler.find(function(x){ return String(x.id)===String(cid); });
+    firma = c ? c.unvan : '—';
+  } else {
+    firma = document.getElementById('aday_firma').value || '—';
+  }
+  document.getElementById('oz_firma').textContent = firma;
+  document.getElementById('oz_mtip').textContent = NT.musteriTip==='MEVCUT' ? 'Mevcut Müşteri' : 'Yeni Müşteri Adayı';
+  var urun = NT.urunTip || '—';
+  var urunAdi = (document.getElementById('urun_adi').value || '').trim();
+  if(urunAdi) urun = urun + ' · ' + urunAdi;
+  document.getElementById('oz_urun').textContent = urun;
+  var ky = NT.karsilamaYolu;
+  var karsilamaMetni = ky === 'HAZIR_RF' ? 'Hazır renk ile müşteri numunesi' : ky === 'YENI_RENK' ? 'Yeni renk talebi' : ky === 'YENI_FORMUL' ? 'Yeni hammadde / formül talebi' : '—';
+  document.getElementById('oz_karsilama').textContent = karsilamaMetni;
+  var sonrakiAdim = '—';
+  if(ky === 'HAZIR_RF') sonrakiAdim = 'Hazır renk müşteri numunesi değerlendirmesi';
+  else if(ky === 'YENI_RENK') sonrakiAdim = 'AR-GE yeni renk değerlendirmesi';
+  else if(ky === 'YENI_FORMUL') sonrakiAdim = 'AR-GE hammadde/formül değerlendirmesi';
+  document.getElementById('oz_sonraki_adim').textContent = sonrakiAdim;
+  ntOzetSatirGoster('oz_row_hazir_renk', ky === 'HAZIR_RF');
+  ntOzetSatirGoster('oz_row_yeni_renk', ky === 'YENI_RENK');
+  ntOzetSatirGoster('oz_row_formul', ky === 'YENI_FORMUL');
+  if(ky === 'HAZIR_RF'){
+    document.getElementById('oz_hazir_renk').textContent = NT.rfRenkId ? ntRenkEtiket(NT.renkAd, NT.renkKod) : '—';
+  } else if(ky === 'YENI_RENK'){
+    var yr = (document.getElementById('yeni_renk_aciklama').value || '').trim();
+    document.getElementById('oz_yeni_renk').textContent = yr || '—';
+  } else if(ky === 'YENI_FORMUL'){
+    var parcalar = [];
+    var shore = (document.getElementById('shore_deger').value || '').trim();
+    var yum = (document.getElementById('yumusaklik').value || '').trim();
+    var kay = (document.getElementById('kaymazlik').value || '').trim();
+    var renkB = (document.getElementById('yeni_renk_aciklama_f').value || '').trim();
+    if(shore) parcalar.push('Shore: ' + shore);
+    if(yum) parcalar.push('Yumuşaklık: ' + yum);
+    if(kay) parcalar.push('Kaymazlık: ' + kay);
+    if(renkB) parcalar.push('Renk: ' + renkB);
+    document.getElementById('oz_formul_beklenti').textContent = parcalar.length ? parcalar.join(' · ') : '—';
+  }
+  document.getElementById('oz_oncelik').textContent = NT.oncelik || 'Normal';
+  var ht = document.getElementById('hedef_tarih').value;
+  document.getElementById('oz_hedef').textContent = ht || '—';
+  document.getElementById('oz_neden').textContent = document.getElementById('talep_nedeni').value || '—';
+  document.getElementById('oz_kaynak').textContent = document.getElementById('talep_kaynagi').value || '—';
+}
+function ntRenkleriYukle(cb){
+  var cid=document.getElementById('cari_id').value;
+  fetch('/nexgen/api/numune-talep/renkler?cari_id='+encodeURIComponent(cid||''))
+    .then(function(r){return r.json();})
+    .then(function(d){
+      NT.renkler = d.renkler || [];
+      if(cb) cb();
+    });
+}
+function ntFormTemizle(){
+  NT.id = null; NT.musteriTip = 'MEVCUT'; NT.urunTip = ''; NT.oncelik = 'Normal';
+  NT.renkTip = null; NT.rfRenkId = null; NT.renkKod = ''; NT.renkAd = '';
+  NT.karsilamaYolu = null; NT.refGorselBelgeId = null;
+  ['cari_id','aday_firma','ilgili_kisi','telefon','eposta','sehir','urun_adi','urun_aciklama',
+   'yeni_renk_aciklama','ref_renk_kodu','pisme_notu_hazir','pisme_notu_renk','musteri_notu_renk',
+   'yeni_renk_aciklama_f','pisme_notu_f','diger_beklentiler_metin','shore_deger','yumusaklik','kaymazlik',
+   'talep_nedeni','aciklama','hedef_tarih','ek_not','acik_koyu','mat_parlak',
+   'numune_adedi','beden_kalip','patch_aksesuar_aciklama','paketleme_notu','kargo_teslim_notu',
+   'kullanim_amaci','benzer_urun_numune'].forEach(function(id){
+    var el = document.getElementById(id); if(el) el.value = '';
+  });
+  document.getElementById('patch_aksesuar_var').checked = false;
+  ntPatchToggle();
+  ntMusteriTip('MEVCUT');
+  document.querySelectorAll('[data-urun]').forEach(function(b){ b.classList.remove('on'); });
+  document.querySelectorAll('[data-onc]').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-onc') === 'Normal'); });
+  ['karsil-hazir','karsil-yeni-renk','karsil-yeni-formul'].forEach(function(id){ document.getElementById(id).classList.remove('on'); });
+  ['blk-hazir-rf','blk-yeni-renk','blk-yeni-formul'].forEach(function(id){ document.getElementById(id).style.display = 'none'; });
+  var rs = document.getElementById('renk_secili'); if(rs) rs.style.display = 'none';
+  var rt = document.getElementById('renk_trigger'); if(rt) rt.textContent = 'Renk seçiniz… ▼';
+  ntGorselVarsayilan('gorsel_alan');
+  ntRefGorselVarsayilan();
+  document.getElementById('oz_kod').textContent = 'Kayıt sonrası otomatik';
+  document.getElementById('oz_durum').textContent = 'Yeni Talep';
+  document.getElementById('talep_tarihi').value = new Date().toLocaleDateString('tr-TR');
+  ntOzetGuncelle();
+}
+function ntKaydet(mod){
+  if(NT._gonderimiyor) return;
+  NT._gonderimiyor = true;
+  var btnGonder = document.querySelector('.nt-btn-primary');
+  var btnTaslak = document.querySelector('.nt-btn-taslak');
+  if(btnGonder) btnGonder.disabled = true;
+  if(btnTaslak) btnTaslak.disabled = true;
+  var url = mod==='gonder' ? '/nexgen/api/numune-talep/gonder' : '/nexgen/api/numune-talep/taslak';
+  fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(ntPayload())})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!d.ok){
+        var msg = d.hata || 'Hata';
+        ntBildirim(msg, 'hata');
+        return;
+      }
+      NT.id = d.talep.id;
+      document.getElementById('oz_kod').textContent = d.talep.talep_kodu;
+      document.getElementById('oz_durum').textContent = d.talep.durum;
+      if(mod === 'gonder'){
+        ntBildirim('Talep gönderildi: ' + d.talep.talep_kodu, 'basari');
+        setTimeout(function(){
+          ntFormTemizle();
+          if(window.history && window.history.replaceState){
+            var p = window.location.pathname;
+            if(p.indexOf('numune-talep') >= 0) window.history.replaceState({}, '', p);
+          }
+        }, 1800);
+      } else {
+        ntBildirim('Taslak kaydedildi: ' + d.talep.talep_kodu, 'bilgi');
+        if(btnGonder) btnGonder.disabled = false;
+        if(btnTaslak) btnTaslak.disabled = false;
+        NT._gonderimiyor = false;
+      }
+    })
+    .catch(function(e){
+      ntBildirim('Bağlantı hatası', 'hata');
+      if(btnGonder) btnGonder.disabled = false;
+      if(btnTaslak) btnTaslak.disabled = false;
+      NT._gonderimiyor = false;
+    });
+}
+function ntBildirim(mesaj, tip){
+  var el = document.getElementById('nt-bildirim');
+  if(!el) return;
+  el.textContent = mesaj;
+  el.className = 'nt-bildirim nt-bildirim-' + (tip || 'bilgi') + ' acik';
+  clearTimeout(NT._bildirimTimer);
+  NT._bildirimTimer = setTimeout(function(){
+    el.classList.remove('acik');
+    var btnGonder = document.querySelector('.nt-btn-primary');
+    var btnTaslak = document.querySelector('.nt-btn-taslak');
+    if(btnGonder) btnGonder.disabled = false;
+    if(btnTaslak) btnTaslak.disabled = false;
+    NT._gonderimiyor = false;
+  }, 3000);
+}
+function ntTaslakGerekirse(){
+  if(NT.id) return Promise.resolve(NT.id);
+  if(NT._taslakPromise) return NT._taslakPromise;
+  NT._taslakPromise = fetch('/nexgen/api/numune-talep/taslak', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(ntPayload())
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    if(!d.ok) throw new Error(d.hata || 'Taslak oluşturulamadı');
+    NT.id = d.talep.id;
+    document.getElementById('oz_kod').textContent = d.talep.talep_kodu || '—';
+    document.getElementById('oz_durum').textContent = d.talep.durum || 'TASLAK';
+    return NT.id;
+  })
+  .finally(function(){ NT._taslakPromise = null; });
+  return NT._taslakPromise;
+}
+function ntGorselVarsayilan(alanId){
+  var el = document.getElementById(alanId);
+  if(!el) return;
+  el.classList.remove('ok');
+  el.textContent = 'Görsel yüklemek için tıklayın';
+}
+function ntRefGorselVarsayilan(){
+  ['ref_gorsel_alan','ref_gorsel_alan_f'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(!el) return;
+    el.classList.remove('ok');
+    el.textContent = 'Referans görsel yükle';
+  });
+}
+function ntRefGorselOnizle(belgeId, localUrl){
+  NT.refGorselBelgeId = belgeId || NT.refGorselBelgeId;
+  ['ref_gorsel_alan','ref_gorsel_alan_f'].forEach(function(alanId){
+    var el = document.getElementById(alanId);
+    if(!el) return;
+    el.classList.add('ok');
+    var src = localUrl || (belgeId ? '/nexgen/api/numune-talep/gorsel/' + belgeId : '');
+    if(src){
+      el.innerHTML = '<img class="nt-gorsel-oniz" src="' + src + '" alt="Referans görsel">';
+    } else {
+      el.textContent = '✓ Yüklendi';
+    }
+  });
+}
+function ntGorselOnizleme(alanId, belgeId, localUrl){
+  if(alanId === 'ref_gorsel_alan' || alanId === 'ref_gorsel_alan_f'){
+    ntRefGorselOnizle(belgeId, localUrl);
+    return;
+  }
+  var el = document.getElementById(alanId);
+  if(!el) return;
+  el.classList.add('ok');
+  var src = localUrl || (belgeId ? '/nexgen/api/numune-talep/gorsel/' + belgeId : '');
+  if(src){
+    el.innerHTML = '<img class="nt-gorsel-oniz" src="' + src + '" alt="Görsel">';
+  } else {
+    el.textContent = '✓ Yüklendi';
+  }
+}
+function ntDosyaGecerli(f){
+  if(!f) return false;
+  var extOk = /\.(jpe?g|png|gif|webp)$/i.test(f.name || '');
+  var mimeOk = !f.type || /^image\/(jpeg|png|gif|webp)$/i.test(f.type);
+  if(!extOk || !mimeOk){
+    ntBildirim('Yalnız JPG, PNG, GIF veya WEBP görsel yüklenebilir.', 'hata');
+    return false;
+  }
+  return true;
+}
+function ntGorselYukle(inp, alan, alanId){
+  var f = inp.files && inp.files[0];
+  if(!f) return;
+  if(!ntDosyaGecerli(f)){ inp.value=''; return; }
+  var localUrl = URL.createObjectURL(f);
+  ntGorselOnizleme(alanId, null, localUrl);
+  ntTaslakGerekirse()
+    .then(function(tid){
+      var fd = new FormData();
+      fd.append('dosya', f);
+      fd.append('alan', alan);
+      return fetch('/nexgen/api/numune-talep/' + tid + '/gorsel', {method:'POST', body:fd})
+        .then(function(r){ return r.json().then(function(d){ return {okHttp:r.ok, d:d}; }); });
+    })
+    .then(function(x){
+      if(!x.d.ok){
+        ntGorselVarsayilan(alanId);
+        throw new Error(x.d.hata || 'Görsel yüklenemedi');
+      }
+      ntGorselOnizleme(alanId, x.d.belge_id, localUrl);
+    })
+    .catch(function(err){
+      ntBildirim(err.message || 'Görsel yüklenemedi', 'hata');
+      inp.value='';
+    });
+}
+function ntGorselSec(inp){
+  ntGorselYukle(inp, 'urun_gorsel_belge_id', 'gorsel_alan');
+}
+function ntRefGorselSec(inp){
+  ntGorselYukle(inp, 'ref_gorsel_belge_id', 'ref_gorsel_alan');
+}
+function ntRefGorselSecF(inp){
+  ntGorselYukle(inp, 'ref_gorsel_belge_id', 'ref_gorsel_alan_f');
+}
+document.addEventListener('DOMContentLoaded', function(){
+  document.getElementById('talep_tarihi').value = new Date().toLocaleDateString('tr-TR');
+  fetch('/nexgen/api/numune-talep/pazarlamacilar').then(function(r){return r.json();}).then(function(d){
+    var sel=document.getElementById('talep_eden_id'); var h='';
+    (d.liste||[]).forEach(function(p){
+      h+='<option value="'+p.id+'"'+(p.id==NT.oturumId?' selected':'')+'>'+(p.ad||p.kullanici)+'</option>';
+      if(p.id==NT.oturumId) document.getElementById('olusturan_kadi').textContent=p.kullanici;
+    });
+    sel.innerHTML=h; sel.onchange=ntOzetGuncelle; ntOzetGuncelle();
+  });
+  ntCarileriYukle(function(){
+    {% if talep %}
+    ntHydrateFromTalep({{ talep | tojson }});
+    {% else %}
+    ntRenkleriYukle();
+    {% endif %}
+  });
+  document.addEventListener('click', function(ev){
+    var wrap = document.getElementById('nt-cari-wrap');
+    if(wrap && !wrap.contains(ev.target)) ntCariDropKapat();
+  });
+  ['aday_firma','talep_nedeni','aciklama','hedef_tarih','urun_adi','talep_kaynagi',
+   'pisme_notu_hazir','pisme_notu_renk','musteri_notu_renk','shore_deger','yumusaklik',
+   'kaymazlik','yeni_renk_aciklama_f','pisme_notu_f','diger_beklentiler_metin',
+   'numune_adedi','beden_kalip','patch_aksesuar_aciklama','paketleme_notu','kargo_teslim_notu',
+   'kullanim_amaci','benzer_urun_numune','yeni_renk_aciklama'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(!el) return;
+    el.addEventListener('input', ntOzetGuncelle);
+    el.addEventListener('change', ntOzetGuncelle);
+  });
+});
+</script>
+<script src="{{ url_for('static', filename='js/nexgen_renk_daire.js') }}"></script>
+{% endblock %}

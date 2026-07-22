@@ -7,7 +7,7 @@
   <div class="uem-header">
     <div>
       <h1 class="uem-baslik">Üretim Emirleri Merkezi</h1>
-      <p class="uem-alt">Planlamaya hazır kayıtlar · Batch · Tablet üretim</p>
+      <p class="uem-alt">Üretim emirleri · izleme · beklet · iptal</p>
     </div>
     <a href="/nexgen/mpr" class="uem-link-btn">MPR Merkezi →</a>
   </div>
@@ -19,9 +19,7 @@
       <option value="MPR Bekliyor">MPR Bekliyor</option>
       <option value="Planlandı">Planlandı</option>
       <option value="Üretimde">Üretimde</option>
-      <option value="Tablette">Tablette</option>
       <option value="Bekletildi">Bekletildi</option>
-      <option value="__tablet_bekliyor__">Tablete Gönderilmedi</option>
     </select>
   </div>
 
@@ -32,14 +30,10 @@
     {% for e in emirler %}
     <div class="uem-kart" data-id="{{ e.id }}"
          data-ara="{{ (e.emir_no ~ ' ' ~ e.cari_goster ~ ' ' ~ e.formul_goster ~ ' ' ~ (e.renk_ad or ''))|lower }}"
-         data-durum="{{ e.durum_etiket }}"
-         data-tablet-bekliyor="{{ '1' if e.batch_kodu and not e.tablet_gonderildi else '0' }}">
+         data-durum="{{ e.durum_etiket }}">
       <div class="uem-kart-ust">
         <span class="uem-emir-no">{{ e.emir_no }}</span>
         <div class="uem-kart-rozetler">
-          {% if e.batch_kodu and not e.tablet_gonderildi %}
-          <span class="uem-rozet-tablet-warn">TABLETE GÖNDERİLMEDİ</span>
-          {% endif %}
           <span class="uem-rozet uem-rozet-{{ e.durum|lower }}">{{ e.durum_etiket }}</span>
         </div>
       </div>
@@ -57,19 +51,12 @@
       {% if can_manage %}
       <div class="uem-aksiyonlar">
         <button type="button" class="uem-btn" onclick="uemIncele({{ e.id }})">İncele</button>
-        <a class="uem-btn" href="/nexgen/mpr" target="_blank">Planı Aç</a>
-        {% if e.durum == 'ON_CALISMA' and e.planlama_siparis_id %}
-        <button type="button" class="uem-btn uem-btn-gold" onclick="uemPlanlandiYap({{ e.id }})">Planla</button>
-        {% endif %}
-        {% if e.durum == 'PLANLANDI' and not e.batch_kodu %}
-        <button type="button" class="uem-btn uem-btn-gold" onclick="uemBatchOlustur({{ e.id }})">Batch Oluştur</button>
-        {% endif %}
-        {% if e.batch_kodu and not e.tablet_gonderildi %}
-        <button type="button" class="uem-btn uem-btn-gold" onclick="uemTabletGonder({{ e.id }})">Tablete Gönder</button>
-        {% elif e.tablet_gonderildi and e.batch_kodu %}
-        <a class="uem-btn" href="/nexgen/tablet/uretim-islem/{{ e.batch_kodu }}" target="_blank">Tableti Aç</a>
-        {% endif %}
+        {% if e.durum not in ('BITTI', 'IPTAL') %}
         <button type="button" class="uem-btn" onclick="uemBeklet({{ e.id }})">Beklet</button>
+        {% endif %}
+        {% if e.batch_durum == 'BEKLEME' or e.bekletildi %}
+        <button type="button" class="uem-btn uem-btn-gold" onclick="uemDevamEttir({{ e.id }})">Devam Ettir</button>
+        {% endif %}
         {% if e.durum not in ('URETIMDE',) or not e.batch_kodu %}
         <button type="button" class="uem-btn uem-btn-danger" onclick="uemIptal({{ e.id }})">İptal</button>
         {% endif %}
@@ -103,13 +90,6 @@
 .uem-kart { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
 .uem-kart-ust { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 10px; align-items: flex-start; flex-wrap: wrap; }
 .uem-kart-rozetler { display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-end; }
-.uem-rozet-tablet-warn { font-size:10px; font-weight:800; padding:3px 8px; border-radius:99px; background:#fef3c7; color:#92400e; border:1px solid #fcd34d; }
-.uem-sonraki-modal { max-width:480px; }
-.uem-sonraki-list { margin:0; padding:0; list-style:none; }
-.uem-sonraki-list li { display:flex; gap:10px; align-items:flex-start; padding:10px 0; border-bottom:1px solid #f3f4f6; font-size:13px; }
-.uem-sonraki-list li:last-child { border-bottom:none; }
-.uem-sonraki-ikon { color:#16a34a; font-weight:800; }
-.uem-sonraki-link { display:inline-block; margin-top:12px; font-size:12px; font-weight:700; color:#006a8e; text-decoration:none; }
 .uem-emir-no { font-family: monospace; font-size: 12px; font-weight: 700; color: #006a8e; }
 .uem-rozet { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 99px; }
 .uem-rozet-on_calisma { background: #f3f4f6; color: #4b5563; }
@@ -144,35 +124,10 @@ window.uemFiltrele = function() {
   document.querySelectorAll('.uem-kart').forEach(function(k) {
     var ara = k.dataset.ara || '';
     var dur = k.dataset.durum || '';
-    var tb = k.dataset.tabletBekliyor === '1';
     var okA = !q || ara.indexOf(q) >= 0;
-    var okD = !d || (d === '__tablet_bekliyor__' ? tb : dur === d);
+    var okD = !d || dur === d;
     k.style.display = (okA && okD) ? '' : 'none';
   });
-};
-
-window.uemSonrakiAdimGoster = function(opts) {
-  opts = opts || {};
-  var batch = opts.batch_kodu || '';
-  var planId = opts.plan_id || '';
-  var depoUrl = '/nexgen/depo/?batch=' + encodeURIComponent(batch) + '#uretim-hazirlik';
-  var uemUrl = '/nexgen/uretim-emirleri' + (planId ? ('?vurgu=' + planId) : '');
-  var html = '<p style="margin:0 0 10px;color:#374151">Batch <strong>' + (batch || '—') + '</strong> oluşturuldu.</p>'
-    + '<ul class="uem-sonraki-list">'
-    + '<li><span class="uem-sonraki-ikon">✓</span><span><strong>Depo hazırlığını tamamla</strong><br>'
-    + '<span style="color:#6b7280;font-size:12px">Üretim hazırlık kartını açıp hazır işaretleyin.</span></span></li>'
-    + '<li><span class="uem-sonraki-ikon">✓</span><span><strong>UEM\'den tablete gönder</strong><br>'
-    + '<span style="color:#6b7280;font-size:12px">Tablete Gönder butonu ile operatör ekranına iletin.</span></span></li>'
-    + '</ul>'
-    + '<a class="uem-btn uem-btn-gold uem-sonraki-link" href="' + depoUrl + '">Depo Hazırlık →</a> '
-    + '<a class="uem-btn uem-sonraki-link" href="' + uemUrl + '">UEM\'ye git →</a>';
-  document.getElementById('uem-sonraki-icerik').innerHTML = html;
-  document.getElementById('uem-sonraki-bg').style.display = 'flex';
-};
-
-window.uemSonrakiKapat = function(ev) {
-  if (ev && ev.target && ev.target.id !== 'uem-sonraki-bg') return;
-  document.getElementById('uem-sonraki-bg').style.display = 'none';
 };
 
 (function uemVurguBaslat() {
@@ -213,47 +168,22 @@ window.uemModalKapat = function(ev) {
   document.getElementById('uem-modal-bg').style.display = 'none';
 };
 
-window.uemPlanlandiYap = function(id) {
-  if (!confirm('Plan PLANLANDI durumuna alınsın mı?')) return;
-  fetch('/nexgen/api/uem/emir/' + id + '/planlandi-yap', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      if (!d.ok) { alert(d.hata || 'İşlem başarısız'); return; }
-      location.reload();
-    });
-};
-
-window.uemBatchOlustur = function(id) {
-  if (!confirm('Batch oluşturulsun mu?\n\nÜretim emri açılır; stok yetersizse engellenir.')) return;
-  fetch('/nexgen/api/mpr/' + id + '/uretime-gonder', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      if (!d.ok) {
-        var msg = d.hata || 'Batch oluşturulamadı';
-        if (d.stok_eksik) msg += '\n\nStok eksik: ' + (d.stok_eksik_sayisi || 0) + ' kalem';
-        alert(msg);
-        return;
-      }
-      uemSonrakiAdimGoster({ batch_kodu: d.batch_kodu, plan_id: id });
-    });
-};
-
-window.uemTabletGonder = function(id) {
-  fetch('/nexgen/api/uem/emir/' + id + '/tablet-gonder', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      if (!d.ok) { alert(d.hata || 'Gönderilemedi'); return; }
-      if (d.tablet_url) window.open(d.tablet_url, '_blank');
-      location.reload();
-    });
-};
-
 window.uemBeklet = function(id) {
   if (!confirm('Emir bekletilsin mi?')) return;
   fetch('/nexgen/api/uem/emir/' + id + '/beklet', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' })
     .then(function(r) { return r.json(); })
     .then(function(d) {
       if (!d.ok) { alert(d.hata || 'Bekletilemedi'); return; }
+      location.reload();
+    });
+};
+
+window.uemDevamEttir = function(id) {
+  if (!confirm('Emir / batch devam ettirilsin mi?')) return;
+  fetch('/nexgen/api/uem/emir/' + id + '/devam-et', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { alert(d.hata || 'Devam ettirilemedi'); return; }
       location.reload();
     });
 };
