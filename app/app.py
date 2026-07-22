@@ -30,6 +30,7 @@ from modules.planlama.routes import planlama_bp
 from modules.planlama.proses_takip import proses_takip_bp
 from modules.tasks import tasks_bp
 from modules.enjeksiyon import enjeksiyon_bp  # ENJ_F3_IMPORT
+from modules.saha import saha_bp  # SAHA_NUMUNE_TALEP_FAZ1
 from modules.online_eticaret import online_eticaret_bp  # OET_FAZ0
 from modules.fuar_crm import fuar_crm_bp  # FUAR_CRM_FAZ1
 from modules.nexgen import nexgen_bp  # NEXGEN_FAZ1A
@@ -60,6 +61,7 @@ app.register_blueprint(tasks_bp)
 app.register_blueprint(canli_saha_bp)  # CANLI_SAHA_BRIDGE
 app.register_blueprint(personel_giris_bp)  # PERSONEL_GIRIS_BRIDGE
 app.register_blueprint(enjeksiyon_bp)  # ENJ_F3_REGISTER
+app.register_blueprint(saha_bp)  # SAHA_NUMUNE_TALEP_FAZ1 (reload)
 app.register_blueprint(online_eticaret_bp)  # OET_FAZ0
 app.register_blueprint(fuar_crm_bp)  # FUAR_CRM_FAZ1
 app.register_blueprint(nexgen_bp)  # NEXGEN_FAZ1A

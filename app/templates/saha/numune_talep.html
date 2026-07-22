@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% set active = 'enjeksiyon' %}
+
+{% block title %}Saha › Numune Talep · Solariz CPS{% endblock %}
+
+{% block head %}
+<style>
+.snt-wrap { max-width: 960px; margin: 0 auto; padding: 16px 20px 32px; overflow-x: hidden; }
+.snt-head { margin-bottom: 20px; }
+.snt-head h1 { font-size: 22px; font-weight: 800; color: var(--text); margin: 0 0 4px; }
+.snt-head .snt-bc { font-size: 13px; color: var(--text3); }
+.snt-head .snt-bc b { color: var(--text2); font-weight: 600; }
+.snt-proto { background: var(--sol-light); border: 1px solid #fcd34d; color: var(--sol-text); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 13px; margin-bottom: 18px; }
+
+.snt-tabs { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+.snt-tab {
+  flex: 1 1 200px; min-height: 52px; padding: 12px 18px; border-radius: var(--radius);
+  border: 2px solid var(--border2); background: var(--bg2); font-size: 15px; font-weight: 700;
+  color: var(--text2); cursor: pointer; text-align: center; transition: .15s;
+}
+.snt-tab.active { border-color: var(--sol-dark); background: var(--sol-light); color: var(--sol-text); box-shadow: var(--shadow-sm); }
+.snt-tab:focus { outline: 2px solid var(--sol); outline-offset: 2px; }
+
+.snt-panel { display: none; }
+.snt-panel.active { display: block; }
+
+.snt-card {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 18px 20px; box-shadow: var(--shadow-sm); margin-bottom: 16px;
+}
+.snt-card h2 { font-size: 15px; font-weight: 800; color: var(--text); margin: 0 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+
+.snt-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+.snt-grid.snt-grid-1 { grid-template-columns: 1fr; }
+.snt-fld { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.snt-fld label { font-size: 12px; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: .02em; }
+.snt-fld input, .snt-fld select, .snt-fld textarea {
+  width: 100%; padding: 11px 12px; border: 1px solid var(--border2); border-radius: var(--radius-sm);
+  font-size: 15px; font-family: var(--sans); background: #fff; color: var(--text);
+}
+.snt-fld textarea { min-height: 72px; resize: vertical; }
+.snt-fld input[type="file"] { padding: 8px; font-size: 13px; }
+
+.snt-prio { display: flex; gap: 8px; flex-wrap: wrap; }
+.snt-prio-btn {
+  flex: 1 1 80px; min-height: 44px; border: 2px solid var(--border2); border-radius: var(--radius-sm);
+  background: #fff; font-size: 14px; font-weight: 700; cursor: pointer; color: var(--text2);
+}
+.snt-prio-btn.on { border-color: var(--sol-dark); background: var(--sol-light); color: var(--sol-text); }
+
+.snt-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+.snt-btn {
+  flex: 1 1 160px; min-height: 48px; border: none; border-radius: var(--radius-sm);
+  font-size: 15px; font-weight: 800; cursor: pointer; padding: 12px 20px;
+}
+.snt-btn-ghost { background: var(--bg4); color: var(--text2); border: 1px solid var(--border2); }
+.snt-btn-primary { background: var(--sol-dark); color: #fff; }
+.snt-btn-primary:hover { background: var(--accent2); }
+.snt-btn-ghost:hover { background: var(--border); }
+
+@media (max-width: 768px) {
+  .snt-wrap { padding: 12px 14px 24px; }
+  .snt-grid { grid-template-columns: 1fr; }
+  .snt-tab { font-size: 14px; min-height: 48px; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="snt-wrap">
+  <div class="snt-head">
+    <div class="snt-bc">Solariz CPS · <b>Saha</b> › Numune Talep</div>
+    <h1>Numune Talep</h1>
+  </div>
+
+  <div class="snt-proto">Bu ekran saha kullanımı için görsel taslaktır. Kayıt altyapısı henüz bağlanmadı; Enjeksiyon sisteminden bağımsızdır.</div>
+
+  <div class="snt-tabs" role="tablist">
+    <button type="button" class="snt-tab active" role="tab" aria-selected="true" data-tab="musteri" id="snt-tab-musteri">Müşteri Numunesi</button>
+    <button type="button" class="snt-tab" role="tab" aria-selected="false" data-tab="hammadde" id="snt-tab-hammadde">Hammadde Denemesi</button>
+  </div>
+
+  <!-- SEKME 1: MÜŞTERİ NUMUNESİ -->
+  <div class="snt-panel active" id="snt-panel-musteri" role="tabpanel" aria-labelledby="snt-tab-musteri">
+    <div class="snt-card">
+      <h2>Müşteri &amp; Ürün</h2>
+      <div class="snt-grid">
+        <div class="snt-fld"><label>Müşteri / firma</label><input type="text" placeholder="Firma adı"></div>
+        <div class="snt-fld"><label>Talep eden</label><input type="text" placeholder="Ad soyad"></div>
+        <div class="snt-fld"><label>Ürün tipi</label>
+          <select><option value="">Seçin…</option><option>Terlik</option><option>Taban</option><option>Diğer</option></select>
+        </div>
+        <div class="snt-fld"><label>Ürün / model</label><input type="text" placeholder="Model adı"></div>
+        <div class="snt-fld"><label>Numune adedi</label><input type="number" min="1" placeholder="Örn. 2"></div>
+        <div class="snt-fld"><label>Beden / kalıp</label><input type="text" placeholder="Örn. 42"></div>
+        <div class="snt-fld snt-grid-1" style="grid-column:1/-1"><label>Kullanılacak hazır renk</label><input type="text" placeholder="Renk kodu veya adı"></div>
+        <div class="snt-fld snt-grid-1" style="grid-column:1/-1"><label>Ürün görseli</label><input type="file" accept="image/*"></div>
+      </div>
+    </div>
+    <div class="snt-card">
+      <h2>Detay &amp; Teslim</h2>
+      <div class="snt-grid snt-grid-1">
+        <div class="snt-fld"><label>Patch / baskı / aksesuar notu</label><textarea placeholder="Varsa kısa not…"></textarea></div>
+        <div class="snt-fld"><label>Hedef tarih</label><input type="date"></div>
+        <div class="snt-fld"><label>Açıklama</label><textarea placeholder="Ek bilgi…"></textarea></div>
+        <div class="snt-fld">
+          <label>Öncelik</label>
+          <div class="snt-prio" data-prio="musteri">
+            <button type="button" class="snt-prio-btn on" data-v="normal">Normal</button>
+            <button type="button" class="snt-prio-btn" data-v="acil">Acil</button>
+            <button type="button" class="snt-prio-btn" data-v="kritik">Kritik</button>
+          </div>
+        </div>
+      </div>
+      <div class="snt-actions">
+        <button type="button" class="snt-btn snt-btn-ghost" data-proto="taslak">Taslak Kaydet</button>
+        <button type="button" class="snt-btn snt-btn-primary" data-proto="olustur">Talebi Oluştur</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SEKME 2: HAMMADDE DENEMESİ -->
+  <div class="snt-panel" id="snt-panel-hammadde" role="tabpanel" aria-labelledby="snt-tab-hammadde" hidden>
+    <div class="snt-card">
+      <h2>Çalışma &amp; Hammadde</h2>
+      <div class="snt-grid">
+        <div class="snt-fld"><label>Talep eden</label><input type="text" placeholder="Ad soyad"></div>
+        <div class="snt-fld"><label>İlgili çalışma / referans kodu</label><input type="text" placeholder="Örn. AR-2026-014"></div>
+        <div class="snt-fld snt-grid-1" style="grid-column:1/-1"><label>Hammadde / çalışma açıklaması</label><textarea placeholder="Denenecek hammadde veya renk…"></textarea></div>
+        <div class="snt-fld"><label>Ürün tipi</label>
+          <select><option value="">Seçin…</option><option>Terlik</option><option>Taban</option><option>Diğer</option></select>
+        </div>
+        <div class="snt-fld"><label>Ürün / model</label><input type="text" placeholder="Model adı"></div>
+        <div class="snt-fld"><label>Deneme adedi</label><input type="number" min="1" placeholder="Örn. 1"></div>
+        <div class="snt-fld"><label>Beden / kalıp</label><input type="text" placeholder="Örn. 42"></div>
+        <div class="snt-fld"><label>Beklenen Shore</label><input type="text" placeholder="Örn. 55A"></div>
+      </div>
+    </div>
+    <div class="snt-card">
+      <h2>Deneme Amacı &amp; Kontrol</h2>
+      <div class="snt-grid snt-grid-1">
+        <div class="snt-fld"><label>Deneme amacı</label><textarea placeholder="Ne test edilecek?"></textarea></div>
+        <div class="snt-fld"><label>Kontrol edilmesi istenen konular</label><textarea placeholder="Görsel, yumuşaklık, yapışma vb."></textarea></div>
+        <div class="snt-fld"><label>Referans görseli</label><input type="file" accept="image/*"></div>
+        <div class="snt-fld"><label>Hedef tarih</label><input type="date"></div>
+        <div class="snt-fld">
+          <label>Öncelik</label>
+          <div class="snt-prio" data-prio="hammadde">
+            <button type="button" class="snt-prio-btn on" data-v="normal">Normal</button>
+            <button type="button" class="snt-prio-btn" data-v="acil">Acil</button>
+            <button type="button" class="snt-prio-btn" data-v="kritik">Kritik</button>
+          </div>
+        </div>
+        <div class="snt-fld"><label>Ek not</label><textarea placeholder="Saha için kısa not…"></textarea></div>
+      </div>
+      <div class="snt-actions">
+        <button type="button" class="snt-btn snt-btn-ghost" data-proto="taslak">Taslak Kaydet</button>
+        <button type="button" class="snt-btn snt-btn-primary" data-proto="deneme">Deneme Talebi Oluştur</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var tabs = document.querySelectorAll('.snt-tab');
+  var panels = { musteri: document.getElementById('snt-panel-musteri'), hammadde: document.getElementById('snt-panel-hammadde') };
+  tabs.forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      var key = tab.getAttribute('data-tab');
+      tabs.forEach(function (t) { t.classList.toggle('active', t === tab); t.setAttribute('aria-selected', t === tab ? 'true' : 'false'); });
+      Object.keys(panels).forEach(function (k) {
+        var on = k === key;
+        panels[k].classList.toggle('active', on);
+        panels[k].hidden = !on;
+      });
+    });
+  });
+  document.querySelectorAll('.snt-prio').forEach(function (wrap) {
+    wrap.querySelectorAll('.snt-prio-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        wrap.querySelectorAll('.snt-prio-btn').forEach(function (b) { b.classList.remove('on'); });
+        btn.classList.add('on');
+      });
+    });
+  });
+  document.querySelectorAll('[data-proto]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      alert('Bu fazda yalnızca görsel taslak.\nKayıt altyapısı sonraki fazda bağlanacak.');
+    });
+  });
+})();
+</script>
+{% endblock %}
