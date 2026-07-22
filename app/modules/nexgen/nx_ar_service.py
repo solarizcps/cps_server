@@ -1070,6 +1070,94 @@ def ferhat_ac(con, arge_test_id: int, kullanici_id: int | None = None) -> dict:
     return get_nx_ar(con, arge_test_id)
 
 
+def _enj_kalip_row(con, kalip_id: int) -> dict:
+    row = con.execute(
+        """
+        SELECT id, kalip_kod, model_ad, model_kod, asorti, kalip_tipi, aktif,
+               COALESCE(kalip_durumu, 'AKTIF') AS kalip_durumu
+        FROM enj_kalip WHERE id=?
+        """,
+        (kalip_id,),
+    ).fetchone()
+    if not row:
+        raise NxArError('Kalıp bulunamadı.', 404, 'KALIP')
+    k = dict(row)
+    if int(k.get('aktif') or 0) != 1:
+        raise NxArError('Kalıp pasif.', 409, 'KALIP')
+    durum = (k.get('kalip_durumu') or 'AKTIF').strip().upper()
+    if durum not in ('AKTIF', ''):
+        raise NxArError(f'Kalıp kullanılamaz: {durum}', 409, 'KALIP')
+    return k
+
+
+def _deneme_kalip_kilitli(con, deneme_id: int) -> bool:
+    n = con.execute(
+        """
+        SELECT COUNT(*) FROM nexgen_arge_boyut_sonuc
+        WHERE deneme_id=? AND (
+            shore_sonuc IS NOT NULL OR gramaj_gr IS NOT NULL
+            OR enjeksiyon_saniye IS NOT NULL OR pisme_suresi_dk IS NOT NULL
+        )
+        """,
+        (deneme_id,),
+    ).fetchone()[0]
+    return int(n or 0) > 0
+
+
+def ferhat_kalip_kaydet(
+    con, arge_test_id: int, kalip_id: int, kullanici_id: int | None = None,
+) -> dict:
+    """Aktif denemeye kalıp FK + snapshot yazar."""
+    t = _nx_ar_row(con, arge_test_id)
+    if int(t.get('saha_testi_gerekli_mi') or 0) != 1:
+        raise NxArError('Enjeksiyon denemesi gerekli değil.', 409, 'SAHA')
+    eski_durum = (t.get('durum') or '').strip().upper()
+    if eski_durum not in ('FERHAT_BEKLIYOR', 'DENEMEDE'):
+        raise NxArError(f'Kalıp bu durumda seçilemez: {eski_durum}', 409, 'DURUM')
+    try:
+        kalip_id = int(kalip_id)
+    except (TypeError, ValueError):
+        raise NxArError('kalip_id geçersiz.', 400, 'KALIP')
+    k = _enj_kalip_row(con, kalip_id)
+    deneme_id = _aktif_deneme_id(con, arge_test_id)
+    if _deneme_kalip_kilitli(con, deneme_id):
+        raise NxArError('Sonuç kaydedilmiş denemenin kalıbı değiştirilmez.', 409, 'KALIP')
+
+    kod = (k.get('kalip_kod') or '').strip()
+    ad = (k.get('model_ad') or k.get('model_kod') or kod).strip()
+    beden = (k.get('asorti') or '').strip() or None
+    makine = (k.get('kalip_tipi') or '').strip() or None
+
+    eski = con.execute(
+        "SELECT kalip_id, kalip_kodu_snapshot FROM nexgen_arge_deneme WHERE id=?",
+        (deneme_id,),
+    ).fetchone()
+    eski_kalip_id = int(eski['kalip_id']) if eski and eski['kalip_id'] else None
+
+    simdi = _now()
+    con.execute(
+        """
+        UPDATE nexgen_arge_deneme SET
+            kalip_id=?,
+            kalip_kodu_snapshot=?,
+            kalip_adi_snapshot=?,
+            kalip_beden_snapshot=?,
+            kalip_makine_snapshot=?,
+            updated_at=?
+        WHERE id=?
+        """,
+        (kalip_id, kod, ad, beden, makine, simdi, deneme_id),
+    )
+    if eski_kalip_id != kalip_id:
+        _olay_yaz(
+            con, arge_test_id, kullanici_id, eski_durum, eski_durum,
+            'FERHAT_KALIP',
+            f'kalip_id={kalip_id}; kod={kod}; eski_id={eski_kalip_id or "—"}',
+        )
+    con.commit()
+    return get_nx_ar(con, arge_test_id)
+
+
 def ferhat_sonuc_kaydet(con, arge_test_id: int, payload: dict, kullanici_id: int | None = None) -> dict:
     """Boyut sonuçları + genel karar → aynı AT kartı."""
     t = _nx_ar_row(con, arge_test_id)
@@ -1089,6 +1177,27 @@ def ferhat_sonuc_kaydet(con, arge_test_id: int, payload: dict, kullanici_id: int
     boyutlar_payload = payload.get('boyut_sonuclar') or payload.get('boyutlar') or []
     if not isinstance(boyutlar_payload, list) or not boyutlar_payload:
         raise NxArError('boyut_sonuclar zorunlu.', 400)
+
+    deneme_id = _aktif_deneme_id(con, arge_test_id)
+    kalip_id_payload = payload.get('kalip_id')
+    if kalip_id_payload not in (None, ''):
+        try:
+            kalip_id_payload = int(kalip_id_payload)
+        except (TypeError, ValueError):
+            raise NxArError('kalip_id geçersiz.', 400, 'KALIP')
+    else:
+        kalip_id_payload = None
+
+    deneme_kalip = con.execute(
+        "SELECT kalip_id FROM nexgen_arge_deneme WHERE id=?",
+        (deneme_id,),
+    ).fetchone()
+    mevcut_kalip_id = int(deneme_kalip['kalip_id']) if deneme_kalip and deneme_kalip['kalip_id'] else None
+    hedef_kalip_id = kalip_id_payload or mevcut_kalip_id
+    if not hedef_kalip_id:
+        raise NxArError('Kalıp seçimi zorunlu.', 400, 'KALIP')
+    if _deneme_kalip_kilitli(con, deneme_id) and kalip_id_payload and kalip_id_payload != mevcut_kalip_id:
+        raise NxArError('Sonuç kaydedilmiş denemenin kalıbı değiştirilmez.', 409, 'KALIP')
 
     kaynak_boyutlar = {
         str(r[0]).upper()
@@ -1126,21 +1235,33 @@ def ferhat_sonuc_kaydet(con, arge_test_id: int, payload: dict, kullanici_id: int
         pisme = item.get('pisme_suresi_dk')
         sn = item.get('enjeksiyon_saniye')
         yog = item.get('yogunluk')
+        gramaj = item.get('gramaj_gr')
         try:
             shore_f = float(shore) if shore not in (None, '') else None
             pisme_f = float(pisme) if pisme not in (None, '') else None
             sn_i = int(sn) if sn not in (None, '') else None
             yog_f = float(yog) if yog not in (None, '') else None
+            gramaj_f = float(gramaj) if gramaj not in (None, '') else None
         except (TypeError, ValueError):
             raise NxArError(f'{b}: sayısal alan geçersiz.', 400)
-        if karar == 'BASARILI' and (shore_f is None or pisme_f is None or sn_i is None):
-            raise NxArError(f'{b}: Shore, pişme ve saniye zorunlu.', 400)
+        if karar == 'BASARILI':
+            if shore_f is None or pisme_f is None or sn_i is None:
+                raise NxArError(f'{b}: Shore, pişme ve enjeksiyon saniyesi zorunlu.', 400)
+            if gramaj_f is None or gramaj_f <= 0:
+                raise NxArError(f'{b}: Gramaj (gr) pozitif olmalı.', 400)
+            if pisme_f <= 0:
+                raise NxArError(f'{b}: Pişme süresi pozitif olmalı.', 400)
+            if sn_i <= 0:
+                raise NxArError(f'{b}: Enjeksiyon saniyesi pozitif olmalı.', 400)
+            if shore_f < 15 or shore_f > 95:
+                raise NxArError(f'{b}: Shore 15–95 aralığında olmalı.', 400)
         normalized.append({
             'boyut': b,
             'shore_sonuc': shore_f,
             'pisme_suresi_dk': pisme_f,
             'enjeksiyon_saniye': sn_i,
             'yogunluk': yog_f,
+            'gramaj_gr': gramaj_f,
             'kalip_sonucu': (item.get('kalip_sonucu') or '').strip() or None,
             'renk_sonucu': (item.get('renk_sonucu') or '').strip() or None,
             'kalite_sorunu_var': kalite_var,
@@ -1167,21 +1288,56 @@ def ferhat_sonuc_kaydet(con, arge_test_id: int, payload: dict, kullanici_id: int
     simdi = _now()
     try:
         con.execute('BEGIN IMMEDIATE')
-        deneme_id = _aktif_deneme_id(con, arge_test_id)
+        if kalip_id_payload and kalip_id_payload != mevcut_kalip_id:
+            k = _enj_kalip_row(con, kalip_id_payload)
+            kod = (k.get('kalip_kod') or '').strip()
+            ad = (k.get('model_ad') or k.get('model_kod') or kod).strip()
+            beden = (k.get('asorti') or '').strip() or None
+            makine = (k.get('kalip_tipi') or '').strip() or None
+            con.execute(
+                """
+                UPDATE nexgen_arge_deneme SET
+                    kalip_id=?, kalip_kodu_snapshot=?, kalip_adi_snapshot=?,
+                    kalip_beden_snapshot=?, kalip_makine_snapshot=?, updated_at=?
+                WHERE id=?
+                """,
+                (kalip_id_payload, kod, ad, beden, makine, simdi, deneme_id),
+            )
+            _olay_yaz(
+                con, arge_test_id, kullanici_id, eski, eski,
+                'FERHAT_KALIP',
+                f'kalip_id={kalip_id_payload}; kod={kod}; kaynak=sonuc',
+            )
+        elif not mevcut_kalip_id:
+            k = _enj_kalip_row(con, hedef_kalip_id)
+            kod = (k.get('kalip_kod') or '').strip()
+            ad = (k.get('model_ad') or k.get('model_kod') or kod).strip()
+            beden = (k.get('asorti') or '').strip() or None
+            makine = (k.get('kalip_tipi') or '').strip() or None
+            con.execute(
+                """
+                UPDATE nexgen_arge_deneme SET
+                    kalip_id=?, kalip_kodu_snapshot=?, kalip_adi_snapshot=?,
+                    kalip_beden_snapshot=?, kalip_makine_snapshot=?, updated_at=?
+                WHERE id=?
+                """,
+                (hedef_kalip_id, kod, ad, beden, makine, simdi, deneme_id),
+            )
         for item in normalized:
             con.execute(
                 """
                 INSERT INTO nexgen_arge_boyut_sonuc (
                     deneme_id, arge_test_id, boyut,
-                    shore_sonuc, pisme_suresi_dk, yogunluk,
+                    shore_sonuc, pisme_suresi_dk, yogunluk, gramaj_gr,
                     renk_sonucu, kalip_sonucu, basarili_mi, saha_notu,
                     enjeksiyon_saniye, kalite_sorunu_var, kalite_aciklama,
                     created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(deneme_id, boyut) DO UPDATE SET
                     shore_sonuc=excluded.shore_sonuc,
                     pisme_suresi_dk=excluded.pisme_suresi_dk,
                     yogunluk=excluded.yogunluk,
+                    gramaj_gr=excluded.gramaj_gr,
                     renk_sonucu=excluded.renk_sonucu,
                     kalip_sonucu=excluded.kalip_sonucu,
                     basarili_mi=excluded.basarili_mi,
@@ -1194,6 +1350,7 @@ def ferhat_sonuc_kaydet(con, arge_test_id: int, payload: dict, kullanici_id: int
                 (
                     deneme_id, arge_test_id, item['boyut'],
                     item['shore_sonuc'], item['pisme_suresi_dk'], item['yogunluk'],
+                    item['gramaj_gr'],
                     item['renk_sonucu'], item['kalip_sonucu'], item['basarili_mi'],
                     item['saha_notu'], item['enjeksiyon_saniye'],
                     item['kalite_sorunu_var'], item['kalite_aciklama'],

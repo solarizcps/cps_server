@@ -865,6 +865,16 @@ function rmTlHtml(grubu){
   return h;
 }
 
+function rmNxArFerhatPanelGoster(c){
+  if(!c) return false;
+  if(c.ferhat_genel_karar) return true;
+  if(c.ferhat_hydrate_dolu) return true;
+  if(c.kalip && c.kalip.kalip_kodu) return true;
+  if(c.boyut_sonuclar && c.boyut_sonuclar.length) return true;
+  if(c.ferhat_fotograflar && c.ferhat_fotograflar.length) return true;
+  return false;
+}
+
 function rmRender(kart, d){
   window._rmSonDetay = d;
   const oz=d.ozet;
@@ -972,23 +982,59 @@ function rmRender(kart, d){
         ${c.genel_aciklama?`<div class="rm-bs"><span class="rm-be">Genel</span><span class="rm-bv">${rmE(c.genel_aciklama)}</span></div>`:''}
         ${c.sonuc_notu?`<div class="rm-bs"><span class="rm-be">Sonuç notu</span><span class="rm-bv" style="font-weight:400;color:var(--rm-t3)">${rmE(c.sonuc_notu)}</span></div>`:''}
       </div>`;
-  } else if(c){
+  } else if(c && !(isNxAr && rmNxArFerhatPanelGoster(c))){
     sagHtml=`<div class="rm-bl"><div class="rm-bl-bas">Enjeksiyon Deneme Sonucu</div><div style="font-size:11px;color:var(--rm-t4);padding:8px 0">Enjeksiyon deneme sonucu henüz girilmedi.</div></div>`;
   }
 
   // NX-AR enjeksiyon özeti (boyut sonuçları)
-  if(isNxAr && c && (c.ferhat_genel_karar || (c.boyut_sonuclar&&c.boyut_sonuclar.length))){
-    const bs=(c.boyut_sonuclar||[]).map(b=>
-      `<div class="rm-bs"><span class="rm-be">${rmE(b.boyut||'')}</span>`+
-      `<span class="rm-bv">Shore ${b.shore_sonuc!=null?b.shore_sonuc:'—'} · Pişme ${b.pisme_suresi_dk!=null?b.pisme_suresi_dk:'—'} · Sn ${b.enjeksiyon_saniye!=null?b.enjeksiyon_saniye:'—'}</span></div>`
-    ).join('');
+  if(isNxAr && c && rmNxArFerhatPanelGoster(c)){
+    const kalip=c.kalip||{};
+    const kalipHtml=kalip.kalip_kodu?`
+      <div class="rm-bs" style="grid-column:1/-1;margin-bottom:6px">
+        <span class="rm-be">Kullanılan Kalıp</span>
+        <span class="rm-bv" style="font-family:ui-monospace,monospace">${rmE(kalip.kalip_kodu)}</span>
+      </div>
+      <div class="rm-bs" style="grid-column:1/-1;margin-bottom:8px">
+        <span class="rm-be">Kalıp Adı</span>
+        <span class="rm-bv">${rmE(kalip.kalip_adi||'—')}${kalip.beden_araligi?' · '+rmE(kalip.beden_araligi):''}</span>
+      </div>`:'';
+    const bs=(c.boyut_sonuclar||[]).map(b=>{
+      const pismeSn=b.pisme_suresi_dk!=null?Math.round(Number(b.pisme_suresi_dk)*60):null;
+      return `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--rm-line)">
+        <div style="font-size:11px;font-weight:900;color:var(--rm-t2);margin-bottom:6px">${rmE(b.boyut||'')}</div>
+        <div class="rm-bs"><span class="rm-be">Shore</span><span class="rm-bv">${b.shore_sonuc!=null?b.shore_sonuc:'—'}</span></div>
+        <div class="rm-bs"><span class="rm-be">Pişme</span><span class="rm-bv">${pismeSn!=null?pismeSn+' sn':'—'}</span></div>
+        <div class="rm-bs"><span class="rm-be">Enjeksiyon</span><span class="rm-bv">${b.enjeksiyon_saniye!=null?b.enjeksiyon_saniye+' sn':'—'}</span></div>
+        <div class="rm-bs"><span class="rm-be">Gramaj</span><span class="rm-bv">${b.gramaj_gr!=null?b.gramaj_gr+' gr':'—'}</span></div>
+        <div class="rm-bs"><span class="rm-be">Renk</span><span class="rm-bv">${rmE(b.renk_sonucu||'—')}</span></div>
+        <div class="rm-bs"><span class="rm-be">Yüzey</span><span class="rm-bv">${rmE(b.kalite_aciklama||'—')}</span></div>
+        <div class="rm-bs"><span class="rm-be">Kalıptan Çıkma</span><span class="rm-bv">${rmE(b.kalip_sonucu||'—')}</span></div>
+        ${b.saha_notu?`<div class="rm-bs"><span class="rm-be">Not</span><span class="rm-bv">${rmE(b.saha_notu)}</span></div>`:''}
+      </div>`;
+    }).join('');
+    const fotHtml=(c.ferhat_fotograflar&&c.ferhat_fotograflar.length)?`
+      <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--rm-line)">
+        <div style="font-size:11px;font-weight:900;color:var(--rm-t2);margin-bottom:8px">Fotoğraflar</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          ${c.ferhat_fotograflar.map(f=>{
+            const u=f.url||('/yonetim/belge/'+(f.Id||f.id||''));
+            return u?`<a href="${rmE(u)}" target="_blank" rel="noopener" title="${rmE(f.OrijinalAd||'Fotoğraf')}">
+              <img src="${rmE(u)}" alt="${rmE(f.OrijinalAd||'')}" loading="lazy"
+                style="width:72px;height:72px;object-fit:cover;border-radius:6px;border:1px solid var(--rm-line);background:#f8fafc">
+            </a>`:'';
+          }).join('')}
+        </div>
+      </div>`:'';
     sagHtml=`
       <div class="rm-bl">
         <div class="rm-bl-bas">Enjeksiyon Deneme Sonucu</div>
+        ${kalipHtml}
         <div class="rm-bs"><span class="rm-be">Karar</span><span class="rm-bv">${rmE(c.ferhat_genel_karar||'—')}</span></div>
-        ${c.ferhat_genel_not?`<div class="rm-bs"><span class="rm-be">Not</span><span class="rm-bv">${rmE(c.ferhat_genel_not)}</span></div>`:''}
+        ${c.ferhat_genel_not?`<div class="rm-bs"><span class="rm-be">Usta Notu</span><span class="rm-bv">${rmE(c.ferhat_genel_not)}</span></div>`:''}
         ${c.ferhat_adi?`<div class="rm-bs"><span class="rm-be">Sonucu giren</span><span class="rm-bv">${rmE(c.ferhat_adi)}</span></div>`:''}
+        ${c.ferhat_kayit_tarihi?`<div class="rm-bs"><span class="rm-be">Tamamlanma</span><span class="rm-bv">${rmE((c.ferhat_kayit_tarihi||'').substring(0,16))}</span></div>`:''}
         ${bs||'<div style="font-size:11px;color:var(--rm-t4);padding:6px 0">Boyut sonucu yok.</div>'}
+        ${fotHtml}
       </div>`;
   }
 

@@ -6023,6 +6023,120 @@ def _nx_ar_liste_grubu(durum: str | None, rf_id, rf_aktif, rf_durum) -> str:
     return 'BEKLEYEN'
 
 
+_RM_BOYUT_SIRA = {'LARGE': 0, 'SMALL': 1}
+
+
+def _rm_ferhat_hydrate(con, arge_id: int) -> dict:
+    """Renk Merkezi detay — aktif deneme + boyut sonuçları + Ferhat fotoğrafları."""
+    out = {
+        'boyut_sonuclar': [],
+        'ferhat_fotograflar': [],
+        'ferhat_hydrate_dolu': False,
+    }
+    den = con.execute(
+        """
+        SELECT id, kalip_id, kalip_kodu_snapshot, kalip_adi_snapshot,
+               kalip_beden_snapshot, kalip_makine_snapshot
+        FROM nexgen_arge_deneme
+        WHERE arge_test_id=? AND aktif_mi=1
+        ORDER BY deneme_no DESC LIMIT 1
+        """,
+        (arge_id,),
+    ).fetchone()
+    if not den:
+        return out
+
+    den_id = int(den['id'])
+    if den['kalip_id'] or den['kalip_kodu_snapshot']:
+        out['kalip'] = {
+            'kalip_id': den['kalip_id'],
+            'kalip_kodu': den['kalip_kodu_snapshot'],
+            'kalip_adi': den['kalip_adi_snapshot'],
+            'beden_araligi': den['kalip_beden_snapshot'],
+            'makine': den['kalip_makine_snapshot'],
+        }
+
+    boyutlar = [
+        str(r[0]).upper()
+        for r in con.execute(
+            """
+            SELECT boyut FROM nexgen_arge_kaynak_uv
+            WHERE arge_test_id=? AND aktif_mi=1
+            ORDER BY sira_no, id
+            """,
+            (arge_id,),
+        ).fetchall()
+        if r[0]
+    ]
+
+    boyut_map: dict[str, dict] = {}
+    for r in con.execute(
+        """
+        SELECT id, deneme_id, arge_test_id, boyut,
+               shore_sonuc, pisme_suresi_dk, yogunluk, gramaj_gr,
+               renk_sonucu, kalip_sonucu, basarili_mi, saha_notu,
+               enjeksiyon_saniye, kalite_sorunu_var, kalite_aciklama,
+               created_at, updated_at
+        FROM nexgen_arge_boyut_sonuc
+        WHERE deneme_id=?
+        ORDER BY boyut
+        """,
+        (den_id,),
+    ).fetchall():
+        boyut_map[str(r['boyut']).upper()] = dict(r)
+
+    if not boyutlar and boyut_map:
+        boyutlar = sorted(boyut_map.keys(), key=lambda x: _RM_BOYUT_SIRA.get(x, 9))
+
+    out['boyut_sonuclar'] = []
+    for b in sorted(boyutlar, key=lambda x: _RM_BOYUT_SIRA.get(x, 9)):
+        mevcut = boyut_map.get(b)
+        if mevcut:
+            out['boyut_sonuclar'].append(mevcut)
+        else:
+            out['boyut_sonuclar'].append({
+                'boyut': b,
+                'shore_sonuc': None,
+                'pisme_suresi_dk': None,
+                'enjeksiyon_saniye': None,
+                'gramaj_gr': None,
+                'renk_sonucu': None,
+                'kalip_sonucu': None,
+                'kalite_aciklama': None,
+                'saha_notu': None,
+            })
+
+    fotograflar = []
+    for r in con.execute(
+        """
+        SELECT Id, OrijinalAd, DiskYol, MimeType, YuklemeTarih
+        FROM sistem_belge
+        WHERE Modul='nexgen' AND AltModul='arge_ferhat'
+          AND KayitId=? AND Aktif=1 AND BelgeTipi='GORSEL'
+        ORDER BY YuklemeTarih DESC
+        """,
+        (arge_id,),
+    ).fetchall():
+        foto = dict(r)
+        belge_id = foto.get('Id')
+        if belge_id:
+            foto['url'] = f'/yonetim/belge/{belge_id}'
+        fotograflar.append(foto)
+    out['ferhat_fotograflar'] = fotograflar
+
+    out['ferhat_hydrate_dolu'] = bool(
+        (out.get('kalip') or {}).get('kalip_kodu')
+        or any(
+            row.get('shore_sonuc') is not None
+            or row.get('gramaj_gr') is not None
+            or row.get('enjeksiyon_saniye') is not None
+            for row in out['boyut_sonuclar']
+        )
+        or fotograflar
+    )
+    return out
+
+
 @nexgen_bp.route('/api/renk-merkezi/liste')
 @yetki_gerekli('nexgen.recete.view', 'can_view')
 def api_rm_liste():
@@ -6356,25 +6470,10 @@ def api_rm_detay():
                 'ferhat_genel_not': arge['ferhat_genel_not'] if 'ferhat_genel_not' in arge.keys() else None,
                 'renk_kodu': arge['renk_kodu'] if 'renk_kodu' in arge.keys() else None,
             }
-            # NX-AR boyut sonuçları (aktif deneme)
-            try:
-                den = con.execute(
-                    """
-                    SELECT id FROM nexgen_arge_deneme
-                    WHERE arge_test_id=? AND aktif_mi=1
-                    ORDER BY deneme_no DESC LIMIT 1
-                    """,
-                    (arge['id'],),
-                ).fetchone()
-                if den:
-                    calisma['boyut_sonuclar'] = [
-                        dict(r) for r in con.execute(
-                            "SELECT * FROM nexgen_arge_boyut_sonuc WHERE deneme_id=? ORDER BY boyut",
-                            (den['id'],),
-                        ).fetchall()
-                    ]
-            except Exception:
-                calisma['boyut_sonuclar'] = []
+            # NX-AR enjeksiyon hydrate (aktif deneme + boyut iskeleti + fotoğraflar)
+            calisma.update(_rm_ferhat_hydrate(con, int(arge['id'])))
+            if 'ferhat_kayit_tarihi' in arge.keys():
+                calisma['ferhat_kayit_tarihi'] = arge['ferhat_kayit_tarihi']
 
         # C. Pigmentler — tek normalize payload
         pigmentler = []

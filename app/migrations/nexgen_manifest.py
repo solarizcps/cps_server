@@ -158,6 +158,17 @@ MANIFEST: tuple[MigEntry, ...] = (
             ("nexgen_numune_talep", "numune_adedi"),
         ),
     ),
+    MigEntry(
+        116, "116_nexgen_ferhat_deneme_kalip_gramaj",
+        "116_nexgen_ferhat_deneme_kalip_gramaj.py",
+        "Ferhat deneme kalip snapshot + gramaj_gr + saha.ferhat_islem",
+        dependencies=(106, 109),
+        required_columns=(
+            ("nexgen_arge_deneme", "kalip_id"),
+            ("nexgen_arge_boyut_sonuc", "gramaj_gr"),
+        ),
+        risk="permission",
+    ),
 )
 
 BY_VERSION = {m.version: m for m in MANIFEST}
