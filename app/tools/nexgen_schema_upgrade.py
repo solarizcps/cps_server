@@ -170,7 +170,7 @@ def _run_one(entry, db: str) -> tuple[bool, str]:
             if hasattr(mod, "calistir"):
                 mod.calistir(os.path.abspath(db), kuru_calisma=False)
                 return True, "ok"
-        if entry.version in (106, 107, 108, 109, 110):
+        if entry.version in (106, 107, 108, 109, 110, 111, 112, 113, 114, 115):
             if hasattr(mod, "run"):
                 import inspect
                 sig = inspect.signature(mod.run)
@@ -284,12 +284,10 @@ def apply(db: str, dry_run: bool = False) -> dict:
                 con.commit()
                 # verify schema when required
                 if entry.required_tables or entry.required_columns:
-                    if not schema_satisfies(con, entry) and entry.version != 108:
-                        # 108 checked differently
-                        if entry.version != 108:
-                            ok = False
-                            detail = "post-verify schema fail"
-                    if entry.version == 108 and not detect_applied_by_schema(con, entry):
+                    if not schema_satisfies(con, entry) and entry.version not in (108, 112):
+                        ok = False
+                        detail = "post-verify schema fail"
+                    if entry.version in (108, 112) and not detect_applied_by_schema(con, entry):
                         ok = False
                         detail = "post-verify permission fail"
         finally:

@@ -121,10 +121,55 @@ MANIFEST: tuple[MigEntry, ...] = (
         required_tables=("nexgen_import_batch", "nexgen_import_item_log"),
         legacy_aliases=(),  # eski 100 kaydi formul icin kullanilir; import ayri tespit
     ),
+    MigEntry(
+        111, "111_nexgen_planlama_siparis_finans", "111_nexgen_planlama_siparis_finans.py",
+        "planlama siparis finans kolonlari",
+        required_columns=(
+            ("nexgen_planlama_siparis", "anlasma_para_birimi"),
+            ("nexgen_planlama_siparis", "vade_gun"),
+            ("nexgen_planlama_siparis", "anlasma_birim_fiyat"),
+        ),
+    ),
+    MigEntry(
+        112, "112_nexgen_planlama_mehmet_yetki", "112_nexgen_planlama_mehmet_yetki.py",
+        "Mehmet NexGen permission overrides",
+        risk="permission",
+    ),
+    MigEntry(
+        113, "113_nexgen_numune_talep", "113_nexgen_numune_talep.py",
+        "nexgen_numune_talep tablosu",
+        required_tables=("nexgen_numune_talep",),
+    ),
+    MigEntry(
+        114, "114_nexgen_numune_talep_arge_birlestirme",
+        "114_nexgen_numune_talep_arge_birlestirme.py",
+        "numune talep arge birlestirme",
+        dependencies=(113,),
+        required_tables=("nexgen_numune_talep_gelisme",),
+        required_columns=(("nexgen_numune_talep", "isleme_alan_kullanici_id"),),
+    ),
+    MigEntry(
+        115, "115_nexgen_numune_talep_mehmet_musteri_alanlari",
+        "115_nexgen_numune_talep_mehmet_musteri_alanlari.py",
+        "numune talep mehmet musteri alanlari",
+        dependencies=(113, 114),
+        required_columns=(
+            ("nexgen_numune_talep", "karsilama_yolu"),
+            ("nexgen_numune_talep", "numune_adedi"),
+        ),
+    ),
 )
 
 BY_VERSION = {m.version: m for m in MANIFEST}
 EXPECTED_VERSIONS = tuple(m.version for m in MANIFEST)
+
+MEHMET_KADI = 'mehmet'
+# (Kod, can_view, can_create, can_update, can_delete, can_approve, can_report, can_manage)
+MEHMET_OVERRIDE_SPECS: tuple[tuple[str, int, int, int, int, int, int, int], ...] = (
+    ('nexgen.view', 1, 0, 0, 0, 0, 1, 0),
+    ('nexgen.plan.view', 1, 0, 0, 0, 0, 1, 0),
+    ('nexgen.plan.manage', 0, 0, 0, 0, 0, 0, 1),
+)
 
 
 def tablo_var(cur, tablo: str) -> bool:
@@ -141,6 +186,47 @@ def kolon_var(cur, tablo: str, kolon: str) -> bool:
     return kolon in [c[1] for c in cur.execute(f"PRAGMA table_info({tablo})").fetchall()]
 
 
+def _override_flags_ok(row, spec: tuple[str, int, int, int, int, int, int, int]) -> bool:
+    _, cv, cc, cu, cd, ca, cr, cm = spec
+    return (
+        int(row['can_view'] or 0) == cv
+        and int(row['can_create'] or 0) == cc
+        and int(row['can_update'] or 0) == cu
+        and int(row['can_delete'] or 0) == cd
+        and int(row['can_approve'] or 0) == ca
+        and int(row['can_report'] or 0) == cr
+        and int(row['can_manage'] or 0) == cm
+    )
+
+
+def mehmet_nexgen_overrides_ok(cur) -> bool:
+    """Migration 112 tamamlandı mı — KullaniciAdi/Kod üzerinden."""
+    if not tablo_var(cur, 'user_permission_override'):
+        return False
+    mehmet = cur.execute(
+        "SELECT Id FROM sistem_kullanici WHERE KullaniciAdi=? AND Aktif=1",
+        (MEHMET_KADI,),
+    ).fetchone()
+    if not mehmet:
+        return False
+    mid = int(mehmet['Id'])
+    for spec in MEHMET_OVERRIDE_SPECS:
+        kod = spec[0]
+        row = cur.execute(
+            """
+            SELECT upo.can_view, upo.can_create, upo.can_update, upo.can_delete,
+                   upo.can_approve, upo.can_report, upo.can_manage
+            FROM user_permission_override upo
+            JOIN sistem_yetki y ON y.Id = upo.YetkiId
+            WHERE upo.KullaniciId=? AND y.Kod=?
+            """,
+            (mid, kod),
+        ).fetchone()
+        if not row or not _override_flags_ok(row, spec):
+            return False
+    return True
+
+
 def schema_satisfies(cur, entry: MigEntry) -> bool:
     for t in entry.required_tables:
         if not tablo_var(cur, t):
@@ -148,6 +234,8 @@ def schema_satisfies(cur, entry: MigEntry) -> bool:
     for t, c in entry.required_columns:
         if not kolon_var(cur, t, c):
             return False
+    if entry.version == 112:
+        return mehmet_nexgen_overrides_ok(cur)
     # 108 permission: schema marker yok — version kaydı veya yetki satırı
     if entry.version == 108:
         row = cur.execute(
@@ -166,7 +254,7 @@ def schema_satisfies(cur, entry: MigEntry) -> bool:
 
 def detect_applied_by_schema(cur, entry: MigEntry) -> bool:
     """Migration kaydı olmasa bile şemadan uygulanmış mı?"""
-    if entry.version == 108:
+    if entry.version in (108, 112):
         return schema_satisfies(cur, entry)
     if entry.required_tables or entry.required_columns:
         for t in entry.required_tables:
