@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+{% set page_title = "Müşteri Sevkiyat" %}
+
+{% block content %}
+<div class="ng-sayfa" style="padding:16px 20px;">
+  <div class="ng-baslik-blok" style="margin-bottom:16px;">
+    <div class="ng-baslik">
+      <a href="/nexgen/" class="ng-bc-link">NexGen</a>
+      <span class="ng-bc-sep">›</span>
+      <span class="ng-baslik-metin">Müşteri Sevkiyat</span>
+    </div>
+    <div style="font-size:12px;color:#64748b;margin-top:4px;">
+      Depo / sevkiyat operasyon — gerçek müşteri mal çıkışı.
+    </div>
+  </div>
+
+  <div class="svk-sekmeler" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+    <button type="button" class="pzm-btn pzm-btn-sm svk-tab active" data-tab="hazir">Sevkiyata Hazır</button>
+    <button type="button" class="pzm-btn pzm-btn-outline pzm-btn-sm svk-tab" data-tab="hazirlananlar">Hazırlananlar</button>
+    <button type="button" class="pzm-btn pzm-btn-outline pzm-btn-sm svk-tab" data-tab="yuklenenler">Yüklenenler</button>
+    <button type="button" class="pzm-btn pzm-btn-outline pzm-btn-sm svk-tab" data-tab="yolda">Yolda</button>
+    <button type="button" class="pzm-btn pzm-btn-outline pzm-btn-sm svk-tab" data-tab="teslim">Teslim Edilenler</button>
+    <button type="button" class="pzm-btn pzm-btn-outline pzm-btn-sm svk-tab" data-tab="tumu">Tümü</button>
+    <button type="button" class="pzm-btn pzm-btn-outline pzm-btn-sm" onclick="svkYukle()" style="margin-left:auto;">Yenile</button>
+  </div>
+
+  <div class="pzm-kart" style="overflow:auto;">
+    <table class="pzm-tablo" id="svk-tablo">
+      <thead id="svk-thead"></thead>
+      <tbody id="svk-tbody"></tbody>
+    </table>
+    <div id="svk-bos" style="padding:24px;text-align:center;color:#94a3b8;display:none;">Kayıt yok.</div>
+  </div>
+</div>
+
+<div id="svk-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:9000;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:10px;max-width:920px;width:96%;max-height:92vh;overflow:auto;padding:20px;box-shadow:0 12px 40px rgba(0,0,0,.15);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <strong id="svk-modal-baslik">Sevkiyat Oluştur</strong>
+      <button type="button" onclick="svkModalKapat()" style="border:none;background:none;font-size:20px;cursor:pointer;">×</button>
+    </div>
+    <div id="svk-modal-ust" style="font-size:12px;margin-bottom:12px;"></div>
+    <div style="overflow:auto;margin-bottom:12px;">
+      <table class="pzm-tablo" id="svk-kalem-tablo">
+        <thead>
+          <tr>
+            <th class="pzm-th">Ürün</th>
+            <th class="pzm-th">Renk</th>
+            <th class="pzm-th">Formül</th>
+            <th class="pzm-th">Sipariş</th>
+            <th class="pzm-th">Önceki sevk</th>
+            <th class="pzm-th">Kalan</th>
+            <th class="pzm-th">Bu sevkiyat</th>
+          </tr>
+        </thead>
+        <tbody id="svk-kalem-tbody"></tbody>
+      </table>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px;">
+      <label>Hazırlık / Sevkiyat tarihi<input type="date" id="svk-hazirlik" class="pzm-inp" style="width:100%;margin-top:4px;"></label>
+      <label>İrsaliye no<input type="text" id="svk-irsaliye" class="pzm-inp" style="width:100%;margin-top:4px;"></label>
+      <label>Araç plakası<input type="text" id="svk-plaka" class="pzm-inp" style="width:100%;margin-top:4px;"></label>
+      <label>Şoför<input type="text" id="svk-sofor" class="pzm-inp" style="width:100%;margin-top:4px;"></label>
+      <label>Kargo / nakliye<input type="text" id="svk-kargo" class="pzm-inp" style="width:100%;margin-top:4px;"></label>
+      <label>Teslim alacak kişi<input type="text" id="svk-teslim-alan" class="pzm-inp" style="width:100%;margin-top:4px;"></label>
+      <label>Teslim adresi<input type="text" id="svk-adres" class="pzm-inp" style="width:100%;margin-top:4px;"></label>
+      <label>Telefon<input type="text" id="svk-telefon" class="pzm-inp" style="width:100%;margin-top:4px;"></label>
+      <label style="grid-column:1/-1;">Açıklama<textarea id="svk-not" rows="2" class="pzm-inp" style="width:100%;margin-top:4px;font-family:inherit;"></textarea></label>
+    </div>
+    {% if can_yaz %}
+    <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
+      <button type="button" class="pzm-btn pzm-btn-outline pzm-btn-sm" onclick="svkModalKapat()">İptal</button>
+      <button type="button" class="pzm-btn pzm-btn-lacivert pzm-btn-sm" onclick="svkKaydet()">Sevkiyat Oluştur (HAZIRLANIYOR)</button>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+var _svkTab = 'hazir';
+var _svkCanYaz = {{ 'true' if can_yaz else 'false' }};
+var _svkFormSiparisId = null;
+
+function svkEsc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function svkTabSec(tab, el) {
+  _svkTab = tab;
+  document.querySelectorAll('.svk-tab').forEach(function(b) {
+    b.classList.remove('active', 'pzm-btn-lacivert');
+    b.classList.add('pzm-btn-outline');
+  });
+  el.classList.add('active');
+  el.classList.remove('pzm-btn-outline');
+  el.classList.add('pzm-btn-lacivert');
+  svkYukle();
+}
+
+document.querySelectorAll('.svk-tab').forEach(function(btn) {
+  btn.addEventListener('click', function() { svkTabSec(btn.getAttribute('data-tab'), btn); });
+});
+
+function svkThead() {
+  var th = document.getElementById('svk-thead');
+  if (_svkTab === 'hazir') {
+    th.innerHTML = '<tr><th class="pzm-th">Sipariş no</th><th class="pzm-th">Müşteri</th><th class="pzm-th">Ürün</th><th class="pzm-th">Sipariş kg</th><th class="pzm-th">Sevk edilen</th><th class="pzm-th">Kalan</th><th class="pzm-th">Termin</th><th class="pzm-th">Durum</th><th class="pzm-th">İşlem</th></tr>';
+  } else {
+    th.innerHTML = '<tr><th class="pzm-th">Sevkiyat no</th><th class="pzm-th">Sipariş no</th><th class="pzm-th">Müşteri</th><th class="pzm-th">Ürün</th><th class="pzm-th">Sevk kg</th><th class="pzm-th">Termin</th><th class="pzm-th">Durum</th><th class="pzm-th">Termin durumu</th><th class="pzm-th">İşlem</th></tr>';
+  }
+}
+
+function svkYukle() {
+  svkThead();
+  fetch('/nexgen/api/sevkiyat-operasyon/liste?tab=' + encodeURIComponent(_svkTab))
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var tb = document.getElementById('svk-tbody');
+      var bos = document.getElementById('svk-bos');
+      tb.innerHTML = '';
+      if (!d.ok || !d.liste || !d.liste.length) {
+        bos.style.display = 'block';
+        return;
+      }
+      bos.style.display = 'none';
+      d.liste.forEach(function(row) {
+        var tr = document.createElement('tr');
+        if (_svkTab === 'hazir') {
+          var btn = _svkCanYaz
+            ? '<button type="button" class="pzm-btn pzm-btn-lacivert pzm-btn-sm" onclick="svkOlusturAc(' + row.siparis_id + ')">Sevkiyat Oluştur</button>'
+            : '—';
+          tr.innerHTML = '<td>' + svkEsc(row.siparis_no) + '</td><td>' + svkEsc(row.musteri) + '</td><td>' + svkEsc(row.urun_ozet) + '</td>'
+            + '<td>' + svkEsc(row.siparis_kg) + '</td><td>' + svkEsc(row.sevk_edilen_kg) + '</td><td>' + svkEsc(row.kalan_kg) + '</td>'
+            + '<td>' + svkEsc(row.verilen_termin) + '</td><td>' + svkEsc(row.durum_etiket) + '</td><td>' + btn + '</td>';
+        } else {
+          tr.innerHTML = '<td>' + svkEsc(row.sevkiyat_no) + '</td><td>' + svkEsc(row.siparis_no) + '</td><td>' + svkEsc(row.cari_unvan) + '</td>'
+            + '<td>' + svkEsc(row.urun_ozet) + '</td><td>' + svkEsc(row.sevk_kg) + '</td><td>' + svkEsc(row.verilen_termin) + '</td>'
+            + '<td>' + svkEsc(row.durum_etiket) + '</td><td>' + svkEsc(row.termin_durum) + '</td>'
+            + '<td><a href="/nexgen/sevkiyat/' + row.id + '" class="pzm-btn pzm-btn-outline pzm-btn-sm">Detay</a></td>';
+        }
+        tb.appendChild(tr);
+      });
+    });
+}
+
+function svkModalKapat() {
+  document.getElementById('svk-modal').style.display = 'none';
+  _svkFormSiparisId = null;
+}
+
+function svkOlusturAc(siparisId) {
+  _svkFormSiparisId = siparisId;
+  fetch('/nexgen/api/sevkiyat-operasyon/siparis/' + siparisId + '/form')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { alert(d.mesaj || 'Form yüklenemedi'); return; }
+      var f = d.form;
+      document.getElementById('svk-modal-baslik').textContent = 'Sevkiyat Oluştur — ' + (f.siparis_no || '');
+      document.getElementById('svk-modal-ust').innerHTML =
+        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">'
+        + '<div><b>Sipariş:</b> ' + svkEsc(f.siparis_no) + '</div>'
+        + '<div><b>Müşteri:</b> ' + svkEsc(f.musteri) + '</div>'
+        + '<div><b>Cari kod:</b> ' + svkEsc(f.cari_kod) + '</div>'
+        + '<div><b>Müşteri termin:</b> ' + svkEsc(f.musteri_termin) + '</div>'
+        + '<div><b>Verilen termin:</b> ' + svkEsc(f.verilen_termin) + '</div>'
+        + '<div><b>Sevk edilebilir:</b> ' + svkEsc(f.sevk_edilebilir_kg) + ' kg</div>'
+        + '<div><b>Sipariş kg:</b> ' + svkEsc(f.siparis_kg) + '</div>'
+        + '<div><b>Sevk edilen:</b> ' + svkEsc(f.sevk_edilen_kg) + '</div>'
+        + '<div><b>Kalan:</b> ' + svkEsc(f.kalan_kg) + '</div>'
+        + '</div>';
+      var kb = document.getElementById('svk-kalem-tbody');
+      kb.innerHTML = '';
+      (f.kalemler || []).forEach(function(k, i) {
+        if ((k.kalan_kg || 0) <= 0) return;
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td>' + svkEsc(k.urun_adi) + '</td><td>' + svkEsc(k.renk_ad) + '</td><td>' + svkEsc(k.formul_ad) + '</td>'
+          + '<td>' + svkEsc(k.siparis_kg) + '</td><td>' + svkEsc(k.sevk_edilen_kg) + '</td><td>' + svkEsc(k.kalan_kg) + '</td>'
+          + '<td><input type="number" step="0.001" min="0" max="' + k.kalan_kg + '" class="pzm-inp svk-kg" data-kid="' + svkEsc(k.siparis_kalem_id) + '" data-kalan="' + k.kalan_kg + '" data-urun="' + svkEsc(k.urun_adi) + '" data-renk="' + svkEsc(k.renk_ad) + '" data-formul="' + svkEsc(k.formul_ad) + '" style="width:90px;" value="' + k.kalan_kg + '"></td>';
+        kb.appendChild(tr);
+      });
+      var today = new Date().toISOString().slice(0, 10);
+      document.getElementById('svk-hazirlik').value = today;
+      document.getElementById('svk-irsaliye').value = '';
+      document.getElementById('svk-plaka').value = '';
+      document.getElementById('svk-sofor').value = '';
+      document.getElementById('svk-kargo').value = '';
+      document.getElementById('svk-teslim-alan').value = '';
+      document.getElementById('svk-adres').value = '';
+      document.getElementById('svk-telefon').value = '';
+      document.getElementById('svk-not').value = '';
+      document.getElementById('svk-modal').style.display = 'flex';
+    });
+}
+
+function svkKaydet() {
+  if (!_svkFormSiparisId) return;
+  var kalemler = [];
+  document.querySelectorAll('.svk-kg').forEach(function(inp) {
+    var kg = parseFloat(inp.value || '0');
+    if (kg > 0) {
+      kalemler.push({
+        siparis_kalem_id: parseInt(inp.getAttribute('data-kid'), 10),
+        miktar_kg: kg,
+        urun_adi: inp.getAttribute('data-urun'),
+        renk_ad: inp.getAttribute('data-renk'),
+        formul_ad: inp.getAttribute('data-formul')
+      });
+    }
+  });
+  if (!kalemler.length) { alert('En az bir kalem miktarı girin.'); return; }
+  var notParca = [];
+  var adr = document.getElementById('svk-adres').value.trim();
+  var tel = document.getElementById('svk-telefon').value.trim();
+  var nt = document.getElementById('svk-not').value.trim();
+  if (adr) notParca.push('Adres: ' + adr);
+  if (tel) notParca.push('Tel: ' + tel);
+  if (nt) notParca.push(nt);
+  var payload = {
+    siparis_id: _svkFormSiparisId,
+    idempotency_key: 'ui-' + _svkFormSiparisId + '-' + Date.now(),
+    hazirlik_tarihi: document.getElementById('svk-hazirlik').value,
+    irsaliye_no: document.getElementById('svk-irsaliye').value,
+    arac_plaka: document.getElementById('svk-plaka').value,
+    sofor: document.getElementById('svk-sofor').value,
+    kargo_firmasi: document.getElementById('svk-kargo').value,
+    teslim_alan: document.getElementById('svk-teslim-alan').value,
+    notlar: notParca.join(' | '),
+    kalemler: kalemler
+  };
+  fetch('/nexgen/api/mo-sevkiyat', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (!d.ok) { alert(d.mesaj || 'Kayıt hatası'); return; }
+    svkModalKapat();
+    window.location.href = '/nexgen/sevkiyat/' + d.sevkiyat.id;
+  });
+}
+
+svkYukle();
+</script>
+{% endblock %}

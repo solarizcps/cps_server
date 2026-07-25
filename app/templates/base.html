@@ -367,7 +367,7 @@ window.__cpsRootMap = function(pathname) {
       {# NEXGEN_FAZ1A: nexgen sayfasinda uretim grubu acik #}
       {% if active == 'nexgen' %}{% set aktif_grup = 'uretim' %}{% endif %}
       {# FAZ-NUMUNE-NEXGEN-MENU-REV: Pazarlama + Numune NexGen grubunda #}
-      {% if '/nexgen/pazarlama' in rp or '/nexgen/numune-talep' in rp or '/nexgen/recete' in rp or '/nexgen/renk-merkezi' in rp or '/nexgen/uretim-emirleri' in rp %}{% set aktif_grup = 'nexgen' %}{% endif %}
+      {% if '/nexgen/pazarlama' in rp or '/nexgen/sevkiyat' in rp or '/nexgen/numune-talep' in rp or '/nexgen/recete' in rp or '/nexgen/renk-merkezi' in rp or '/nexgen/uretim-emirleri' in rp %}{% set aktif_grup = 'nexgen' %}{% endif %}
       {% if '/saha/numune-talep' in rp %}{% set aktif_grup = 'enjeksiyon' %}{% endif %}
       {% if active == 'online-eticaret' %}{% set aktif_grup = 'ticaret' %}{% endif %}
 
@@ -951,6 +951,12 @@ window.__cpsRootMap = function(pathname) {
         <a href="/nexgen/uretim-emirleri" class="si {% if '/nexgen/uretim-emirleri' in rp %}active{% endif %}" title="Üretim Emirleri">
           <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 14l2 2 4-4"/></svg></span>
           <span class="sl">Üretim Emirleri</span>
+        </a>
+        {% endif %}
+        {% if yetki('nexgen.sevkiyat.view', 'can_view') or yetki('nexgen.sevkiyat.write', 'can_create') or yetki('nexgen.sevkiyat.write', 'can_update') or yetki('nexgen.plan.manage', 'can_manage') %}
+        <a href="/nexgen/sevkiyat" class="si {% if '/nexgen/sevkiyat' in rp %}active{% endif %}" title="Müşteri Sevkiyat">
+          <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></span>
+          <span class="sl">Müşteri Sevkiyat</span>
         </a>
         {% endif %}
       </div>

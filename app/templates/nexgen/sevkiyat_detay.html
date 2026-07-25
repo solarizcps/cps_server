@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+{% set page_title = "Sevkiyat Detay" %}
+
+{% block content %}
+<div class="ng-sayfa" style="padding:16px 20px;">
+  <div class="ng-baslik-blok" style="margin-bottom:16px;">
+    <div class="ng-baslik">
+      <a href="/nexgen/" class="ng-bc-link">NexGen</a>
+      <span class="ng-bc-sep">›</span>
+      <a href="/nexgen/sevkiyat" class="ng-bc-link">Müşteri Sevkiyat</a>
+      <span class="ng-bc-sep">›</span>
+      <span class="ng-baslik-metin" id="svkd-baslik">Sevkiyat</span>
+    </div>
+  </div>
+
+  <div id="svkd-yukleniyor" style="padding:24px;color:#64748b;">Yükleniyor…</div>
+  <div id="svkd-icerik" style="display:none;">
+    <div class="pzm-kart" style="padding:16px;margin-bottom:12px;font-size:12px;">
+      <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-bottom:12px;">
+        <div><span style="color:#64748b;">Durum</span><br><strong id="svkd-durum"></strong></div>
+        <div><span style="color:#64748b;">Sevkiyat no</span><br><strong id="svkd-no"></strong></div>
+        <div><span style="color:#64748b;">Sipariş</span><br><strong id="svkd-siparis"></strong></div>
+        <div><span style="color:#64748b;">Müşteri</span><br><strong id="svkd-musteri"></strong></div>
+        <div><span style="color:#64748b;">Toplam kg</span><br><strong id="svkd-kg"></strong></div>
+        {% if can_yaz %}
+        <div style="margin-left:auto;">
+          <button type="button" id="svkd-durum-btn" class="pzm-btn pzm-btn-lacivert pzm-btn-sm" onclick="svkdDurumAc()" style="display:none;"></button>
+        </div>
+        {% endif %}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;border-top:1px solid #e2e8f0;padding-top:12px;">
+        <div><b>Hazırlık</b><br><span id="svkd-hazirlik">—</span></div>
+        <div><b>Sevk tarihi</b><br><span id="svkd-sevk">—</span></div>
+        <div><b>Teslim tarihi</b><br><span id="svkd-teslim">—</span></div>
+        <div><b>İrsaliye</b><br><span id="svkd-irsaliye">—</span></div>
+        <div><b>Plaka</b><br><span id="svkd-plaka">—</span></div>
+        <div><b>Şoför</b><br><span id="svkd-sofor">—</span></div>
+        <div><b>Kargo</b><br><span id="svkd-kargo">—</span></div>
+        <div><b>Teslim alan</b><br><span id="svkd-teslim-alan">—</span></div>
+      </div>
+      <div id="svkd-notlar" style="margin-top:10px;color:#475569;"></div>
+    </div>
+
+    <div class="pzm-kart" style="padding:16px;margin-bottom:12px;font-size:12px;">
+      <strong>Termin karşılaştırması</strong>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:8px;">
+        <div>Müşteri termin<br><span id="svkd-mt">—</span></div>
+        <div>Verilen termin<br><span id="svkd-vt">—</span></div>
+        <div>Gerçek sevk<br><span id="svkd-gs">—</span></div>
+        <div>Gerçek teslim<br><span id="svkd-gt">—</span></div>
+        <div>Durum<br><strong id="svkd-td">—</strong></div>
+      </div>
+    </div>
+
+    <div class="pzm-kart" style="padding:16px;margin-bottom:12px;font-size:12px;" id="svkd-tahsilat-blok">
+      <strong>Tahsilat (sipariş bazlı plan)</strong>
+      <div id="svkd-tahsilat" style="margin-top:8px;color:#475569;"></div>
+    </div>
+
+    <div class="pzm-kart" style="overflow:auto;">
+      <table class="pzm-tablo">
+        <thead>
+          <tr>
+            <th class="pzm-th">Ürün</th>
+            <th class="pzm-th">Renk</th>
+            <th class="pzm-th">Formül</th>
+            <th class="pzm-th">Miktar kg</th>
+          </tr>
+        </thead>
+        <tbody id="svkd-kalemler"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div id="svkd-durum-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:9000;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:10px;max-width:480px;width:94%;padding:20px;">
+    <strong id="svkd-dm-baslik">Durum güncelle</strong>
+    <div id="svkd-dm-alanlar" style="margin-top:12px;font-size:12px;"></div>
+    <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
+      <button type="button" class="pzm-btn pzm-btn-outline pzm-btn-sm" onclick="svkdDurumKapat()">İptal</button>
+      <button type="button" class="pzm-btn pzm-btn-lacivert pzm-btn-sm" onclick="svkdDurumKaydet()">Onayla</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var _svkdId = {{ sevkiyat_id }};
+var _svkdCanYaz = {{ 'true' if can_yaz else 'false' }};
+var _svkdSonraki = null;
+var _svkdPaket = null;
+
+function svkdEsc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+var DURUM_LBL = {
+  YUKLENIYOR: 'Yükleniyor olarak işaretle',
+  SEVK_EDILDI: 'Sevk edildi',
+  TESLIM_EDILDI: 'Teslim edildi',
+  TAMAMLANDI: 'Tamamlandı'
+};
+
+function svkdYukle() {
+  fetch('/nexgen/api/sevkiyat-operasyon/' + _svkdId + '/paket')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) {
+        document.getElementById('svkd-yukleniyor').textContent = d.mesaj || 'Yüklenemedi';
+        return;
+      }
+      var s = d.sevkiyat;
+      _svkdPaket = s;
+      _svkdSonraki = s.sonraki_durum;
+      document.getElementById('svkd-yukleniyor').style.display = 'none';
+      document.getElementById('svkd-icerik').style.display = 'block';
+      document.getElementById('svkd-baslik').textContent = s.sevkiyat_no || ('#' + s.id);
+      document.getElementById('svkd-durum').textContent = s.durum_etiket || s.durum;
+      document.getElementById('svkd-no').textContent = s.sevkiyat_no || '—';
+      document.getElementById('svkd-siparis').textContent = s.siparis_no || s.siparis_id;
+      document.getElementById('svkd-musteri').textContent = s.cari_unvan || '—';
+      document.getElementById('svkd-kg').textContent = s.toplam_kg;
+      document.getElementById('svkd-hazirlik').textContent = (s.hazirlik_tarihi || '—').slice(0, 10);
+      document.getElementById('svkd-sevk').textContent = (s.sevk_tarihi || '—').slice(0, 10);
+      document.getElementById('svkd-teslim').textContent = (s.teslim_tarihi || '—').slice(0, 10);
+      document.getElementById('svkd-irsaliye').textContent = s.irsaliye_no || '—';
+      document.getElementById('svkd-plaka').textContent = s.arac_plaka || '—';
+      document.getElementById('svkd-sofor').textContent = s.sofor || '—';
+      document.getElementById('svkd-kargo').textContent = s.kargo_firmasi || '—';
+      document.getElementById('svkd-teslim-alan').textContent = s.teslim_alan || '—';
+      if (s.notlar) document.getElementById('svkd-notlar').textContent = 'Not: ' + s.notlar;
+
+      var t = s.termin || {};
+      document.getElementById('svkd-mt').textContent = t.musteri_termin || '—';
+      document.getElementById('svkd-vt').textContent = t.verilen_termin || '—';
+      document.getElementById('svkd-gs').textContent = t.gercek_sevk_tarihi || '—';
+      document.getElementById('svkd-gt').textContent = t.gercek_teslim_tarihi || '—';
+      document.getElementById('svkd-td').textContent = s.termin_durum || '—';
+
+      var th = s.tahsilat || {};
+      if (th.tahsilat_kurali) {
+        document.getElementById('svkd-tahsilat').innerHTML =
+          'Kural: <b>' + svkdEsc(th.tahsilat_kurali) + '</b> · Plan: ' + svkdEsc(th.planlanan_tahsilat_tarihi || '—')
+          + ' · Kaynak: ' + svkdEsc(th.tahsilat_tarih_kaynagi || '—')
+          + '<br><span style="font-size:11px;">' + svkdEsc(th.tahsilat_kural_notu || '') + '</span>';
+      } else {
+        document.getElementById('svkd-tahsilat-blok').style.display = 'none';
+      }
+
+      var kb = document.getElementById('svkd-kalemler');
+      kb.innerHTML = '';
+      (s.kalemler || []).forEach(function(k) {
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td>' + svkdEsc(k.urun_adi) + '</td><td>' + svkdEsc(k.renk_ad) + '</td><td>' + svkdEsc(k.formul_ad) + '</td><td>' + svkdEsc(k.miktar_kg) + '</td>';
+        kb.appendChild(tr);
+      });
+
+      var btn = document.getElementById('svkd-durum-btn');
+      if (btn) {
+        if (_svkdCanYaz && _svkdSonraki) {
+          btn.style.display = 'inline-block';
+          btn.disabled = false;
+          btn.textContent = DURUM_LBL[_svkdSonraki] || ('→ ' + _svkdSonraki);
+        } else {
+          btn.style.display = 'none';
+          btn.disabled = true;
+        }
+      }
+    });
+}
+
+function svkdDurumAc() {
+  if (!_svkdSonraki) return;
+  document.getElementById('svkd-dm-baslik').textContent = DURUM_LBL[_svkdSonraki] || _svkdSonraki;
+  var alan = document.getElementById('svkd-dm-alanlar');
+  var today = new Date().toISOString().slice(0, 10);
+  alan.innerHTML = '';
+  if (_svkdSonraki === 'SEVK_EDILDI') {
+    alan.innerHTML = '<label>Sevk tarihi<input type="date" id="svkd-sevk-t" class="pzm-inp" value="' + today + '" style="width:100%;margin-top:4px;"></label>';
+  } else if (_svkdSonraki === 'TESLIM_EDILDI') {
+    alan.innerHTML = '<label>Teslim tarihi<input type="date" id="svkd-teslim-t" class="pzm-inp" value="' + today + '" style="width:100%;margin-top:4px;"></label>'
+      + '<label style="display:block;margin-top:8px;">Teslim alan<input type="text" id="svkd-ta" class="pzm-inp" style="width:100%;margin-top:4px;"></label>'
+      + '<label style="display:block;margin-top:8px;">Teslim notu<textarea id="svkd-tn" rows="2" class="pzm-inp" style="width:100%;margin-top:4px;font-family:inherit;"></textarea></label>';
+  } else {
+    alan.innerHTML = '<p>Bu adıma geçilsin mi?</p>';
+  }
+  document.getElementById('svkd-durum-modal').style.display = 'flex';
+}
+
+function svkdDurumKapat() {
+  document.getElementById('svkd-durum-modal').style.display = 'none';
+}
+
+function svkdDurumKaydet() {
+  var payload = { durum: _svkdSonraki };
+  if (_svkdSonraki === 'SEVK_EDILDI') {
+    payload.sevk_tarihi = document.getElementById('svkd-sevk-t').value;
+  }
+  if (_svkdSonraki === 'TESLIM_EDILDI') {
+    payload.teslim_tarihi = document.getElementById('svkd-teslim-t').value;
+    payload.teslim_alan = document.getElementById('svkd-ta').value;
+    payload.teslim_durumu = document.getElementById('svkd-tn').value;
+  }
+  var btn = document.getElementById('svkd-durum-btn');
+  if (btn) { btn.disabled = true; btn.style.display = 'none'; }
+  fetch('/nexgen/api/mo-sevkiyat/' + _svkdId + '/durum', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (!d.ok) { alert(d.mesaj || 'Güncellenemedi'); return; }
+    svkdDurumKapat();
+    svkdYukle();
+  });
+}
+
+svkdYukle();
+</script>
+{% endblock %}

@@ -1,0 +1,48 @@
+# -*- coding: utf-8 -*-
+"""MO sipariş tahsilat planı sabitleri."""
+from __future__ import annotations
+
+KAYNAK_MUSTERI_OPERASYONU = 'MUSTERI_OPERASYONU'
+
+ODEME_SEKILLERI = frozenset({'NAKIT', 'HAVALE', 'CEK', 'SENET', 'DIGER'})
+ODEME_SEKLI_ETIKET = {
+    'NAKIT': 'Nakit',
+    'HAVALE': 'Havale',
+    'CEK': 'Çek',
+    'SENET': 'Senet',
+    'DIGER': 'Diğer',
+}
+
+TAHSILAT_KURALLARI = frozenset({
+    'SIPARIS_TARIHINDE',
+    'SEVKTEN_ONCE',
+    'SEVKTE',
+    'SEVKTEN_SONRA',
+    'SABIT_TARIH',
+})
+TAHSILAT_KURAL_ETIKET = {
+    'SIPARIS_TARIHINDE': 'Sipariş tarihinde',
+    'SEVKTEN_ONCE': 'Sevkten önce',
+    'SEVKTE': 'Sevkte',
+    'SEVKTEN_SONRA': 'Sevkten sonra',
+    'SABIT_TARIH': 'Sabit tarihte',
+}
+
+# Sipariş tahsilat plan durumları (nexgen_planlama_siparis.tahsilat_durumu)
+PLAN_DURUM_SEVK_BEKLIYOR = 'SEVK_BEKLIYOR'
+PLAN_DURUM_SEVK_ONCESI = 'SEVK_ONCESI_BEKLIYOR'
+PLAN_DURUM_PLANLANDI = 'PLANLANDI'
+PLAN_DURUM_KAYIT_GIRILDI = 'KAYIT_GIRILDI'
+PLAN_DURUM_MUHASEBE_BEKLIYOR = 'MUHASEBE_BEKLIYOR'
+PLAN_DURUM_TAMAMLANDI = 'TAMAMLANDI'
+
+# Tahsilat kayıt durumları (mo_tahsilat_kayit.durum)
+KAYIT_DURUM_TASLAK = 'TASLAK'
+KAYIT_DURUM_MUHASEBE_BEKLIYOR = 'MUHASEBE_ONAY_BEKLIYOR'
+KAYIT_DURUM_REVIZYON = 'REVIZYON_ISTENDI'
+KAYIT_DURUM_REDDEDILDI = 'REDDEDILDI'
+KAYIT_DURUM_ONAYLANDI = 'ONAYLANDI'
+
+KAYIT_DUZENLENEBILIR = frozenset({KAYIT_DURUM_TASLAK, KAYIT_DURUM_REVIZYON})
+
+CARI_ENTEGRASYON_AKTIF = False

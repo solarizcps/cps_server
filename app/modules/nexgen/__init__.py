@@ -9,8 +9,10 @@ from .routes import (
 )
 from .nx_ar_api import register_nx_ar_routes
 from .numune_talep_routes import register_numune_talep_routes
+from .mo_sevkiyat_routes import register_mo_sevkiyat_routes
 
 register_nx_ar_routes(nexgen_bp, _db, _kullanici_id)
+register_mo_sevkiyat_routes(nexgen_bp, _db, _kullanici_id)
 
 register_numune_talep_routes(
     nexgen_bp,

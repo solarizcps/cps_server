@@ -169,6 +169,24 @@ MANIFEST: tuple[MigEntry, ...] = (
         ),
         risk="permission",
     ),
+    MigEntry(
+        126, "126_mo_tahsilat_plani",
+        "126_mo_tahsilat_plani.py",
+        "MO sipariş tahsilat planı + mo_tahsilat_kayit",
+        dependencies=(116,),
+        required_tables=("mo_tahsilat_kayit",),
+        required_columns=(
+            ("nexgen_planlama_siparis", "tahsilat_kurali"),
+            ("nexgen_planlama_siparis", "tahsilat_durumu"),
+        ),
+    ),
+    MigEntry(
+        127, "127_mo_musteri_sevkiyat",
+        "127_mo_musteri_sevkiyat.py",
+        "Gerçek outbound müşteri sevkiyat entity",
+        dependencies=(126,),
+        required_tables=("mo_musteri_sevkiyat", "mo_musteri_sevkiyat_kalem"),
+    ),
 )
 
 BY_VERSION = {m.version: m for m in MANIFEST}
@@ -181,7 +199,6 @@ MEHMET_OVERRIDE_SPECS: tuple[tuple[str, int, int, int, int, int, int, int], ...]
     ('nexgen.plan.view', 1, 0, 0, 0, 0, 1, 0),
     ('nexgen.plan.manage', 0, 0, 0, 0, 0, 0, 1),
 )
-
 
 def tablo_var(cur, tablo: str) -> bool:
     return bool(
