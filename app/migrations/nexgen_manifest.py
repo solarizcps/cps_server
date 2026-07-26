@@ -187,6 +187,36 @@ MANIFEST: tuple[MigEntry, ...] = (
         dependencies=(126,),
         required_tables=("mo_musteri_sevkiyat", "mo_musteri_sevkiyat_kalem"),
     ),
+    MigEntry(
+        128, "128_finans_belgesi",
+        "128_finans_belgesi.py",
+        "Finans Merkezi — finans_belgesi entity (SATIS_SEVKIYAT, TAHSILAT)",
+        dependencies=(127,),
+        required_tables=("finans_belgesi",),
+    ),
+    MigEntry(
+        129, "129_finans_belgesi_posting_kopru",
+        "129_finans_belgesi_posting_kopru.py",
+        "Finans Belgesi kaynak/posting köprü kolonları",
+        dependencies=(128,),
+        required_columns=(
+            ("finans_belgesi", "kaynak_tipi"),
+            ("finans_belgesi", "posting_durumu"),
+        ),
+    ),
+    MigEntry(
+        130, "130_finans_yetkileri",
+        "130_finans_yetkileri.py",
+        "Finans Merkezi yetki kodları (view/review/approve/post/reject)",
+        dependencies=(129,),
+    ),
+    MigEntry(
+        131, "131_finans_cari_kimlik_kopru",
+        "131_finans_cari_kimlik_kopru.py",
+        "Finans cari kimlik köprüsü + tedarikci_eslestirme + yetkiler",
+        dependencies=(130,),
+        required_tables=("finans_cari_kimlik", "tedarikci_eslestirme"),
+    ),
 )
 
 BY_VERSION = {m.version: m for m in MANIFEST}

@@ -10,9 +10,13 @@ from .routes import (
 from .nx_ar_api import register_nx_ar_routes
 from .numune_talep_routes import register_numune_talep_routes
 from .mo_sevkiyat_routes import register_mo_sevkiyat_routes
+from .finans_routes import register_finans_routes
+from .finans_cari_kimlik_routes import register_finans_cari_kimlik_routes
 
 register_nx_ar_routes(nexgen_bp, _db, _kullanici_id)
 register_mo_sevkiyat_routes(nexgen_bp, _db, _kullanici_id)
+register_finans_routes(nexgen_bp, _db, _kullanici_id)
+register_finans_cari_kimlik_routes(nexgen_bp, _db, _kullanici_id)
 
 register_numune_talep_routes(
     nexgen_bp,
