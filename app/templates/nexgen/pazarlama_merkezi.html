@@ -3114,11 +3114,12 @@ function pzmDetayAdminSilBtnGuncelle(t) {
     return;
   }
   var d = (t.durum || '').toUpperCase();
-  var aktif = (d === 'TASLAK' || d === 'MPR_BEKLIYOR' || d === 'URETIMDE');
+  // FAZ-1B: allowlist yok — yalnız sonuç durumları UI'da pasif
+  var aktif = (d !== 'BITTI' && d !== 'SEVK_EDILDI' && d !== 'TAMAMLANDI');
   btn.style.display = '';
   btn.disabled = !aktif;
   btn.title = aktif
-    ? 'Siparişi kalıcı sil (ADMIN)'
+    ? 'Siparişi kalıcı sil (ADMIN) — finans/sevkiyat/stok ilişkisi varsa engellenir'
     : ('Bu durumdaki sipariş silinemez: ' + (t.durum || '—'));
 }
 
@@ -3319,7 +3320,7 @@ window.pzmSilModalAc = function(tid) {
   var t = pzmTalepBul(tid);
   if (!t) return;
   var d = (t.durum || '').toUpperCase();
-  if (d !== 'TASLAK' && d !== 'MPR_BEKLIYOR' && d !== 'URETIMDE') {
+  if (d === 'BITTI' || d === 'SEVK_EDILDI' || d === 'TAMAMLANDI') {
     alert('Bu durumdaki sipariş silinemez: ' + (t.durum || '—'));
     return;
   }

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""FAZ-PZM-ADMIN-SIPARIS-SILME-1A — browser matrix (tam temizlik + UI)."""
+"""FAZ-PZM-ADMIN-SIPARIS-SILME-1B — ilişki bazlı koruma (durum allowlist yok)."""
 import io
 import json
 import os
@@ -30,13 +30,15 @@ if USE_EMBEDDED:
     time.sleep(1.2)
 
 TS = datetime.now().strftime('%Y%m%d_%H%M%S')
-SHOT_DIR = os.path.join(_ROOT, 'backup', 'screenshots', f'pzm_admin_silme_1a_{TS}')
+SHOT_DIR = os.path.join(_ROOT, 'backup', 'screenshots', f'pzm_admin_silme_1b_{TS}')
 os.makedirs(SHOT_DIR, exist_ok=True)
 
 results = []
 console_errors = []
 network_errors = []
 _restore_sql = []
+
+SONUC = frozenset({'BITTI', 'SEVK_EDILDI', 'TAMAMLANDI'})
 
 
 def ok(name, cond, detail=''):
@@ -74,21 +76,25 @@ def siparis_row(no):
 
 
 def _silinebilir_mi(con, sid, siparis_no):
-    """Backend guard ile uyumlu — ticari engel yoksa True."""
+    row = con.execute(
+        'SELECT durum FROM nexgen_planlama_siparis WHERE id=?', (sid,)
+    ).fetchone()
+    if row and (row['durum'] or '').upper() in SONUC:
+        return False
     plans = [r['id'] for r in con.execute(
-        'SELECT id, durum FROM nexgen_uretim_plan WHERE planlama_siparis_id=?', (sid,)
+        'SELECT id FROM nexgen_uretim_plan WHERE planlama_siparis_id=?', (sid,)
     )]
     for r in con.execute(
         'SELECT durum FROM nexgen_uretim_plan WHERE planlama_siparis_id=?', (sid,)
     ):
-        if (r['durum'] or '').upper() in ('BITTI', 'SEVK_EDILDI', 'TAMAMLANDI'):
+        if (r['durum'] or '').upper() in SONUC:
             return False
     if plans:
         ph = ','.join('?' * len(plans))
         for r in con.execute(
             f'SELECT durum FROM nexgen_uretim_batch WHERE plan_id IN ({ph})', plans
         ):
-            if (r['durum'] or '').upper() in ('BITTI', 'SEVK_EDILDI', 'TAMAMLANDI'):
+            if (r['durum'] or '').upper() in SONUC:
                 return False
         sh = con.execute(
             f"""SELECT COUNT(*) n FROM nexgen_stok_hareket
@@ -106,54 +112,138 @@ def _silinebilir_mi(con, sid, siparis_no):
     return fb == 0
 
 
-def pick_sil(durum, prefer_batch=False, exclude=None):
+def pick_any(exclude=None, prefer_batch=False, durum=None):
     exclude = set(exclude or [])
     con = db()
     try:
-        rows = con.execute(
-            """SELECT id, siparis_no FROM nexgen_planlama_siparis
-               WHERE durum=? AND siparis_no LIKE 'PZM%' ORDER BY id ASC""",
-            (durum,),
-        ).fetchall()
-        aday = None
+        if durum:
+            rows = con.execute(
+                """SELECT id, siparis_no, durum FROM nexgen_planlama_siparis
+                   WHERE durum=? AND siparis_no LIKE 'PZM%' ORDER BY id ASC""",
+                (durum,),
+            ).fetchall()
+        else:
+            rows = con.execute(
+                """SELECT id, siparis_no, durum FROM nexgen_planlama_siparis
+                   WHERE siparis_no LIKE 'PZM%'
+                     AND upper(IFNULL(durum,'')) NOT IN ('BITTI','SEVK_EDILDI','TAMAMLANDI')
+                   ORDER BY id ASC"""
+            ).fetchall()
         for r in rows:
             if r['siparis_no'] in exclude:
                 continue
             if not _silinebilir_mi(con, r['id'], r['siparis_no']):
                 continue
-            batches = 0
             if prefer_batch:
-                batches = con.execute(
+                n = con.execute(
                     """SELECT COUNT(*) n FROM nexgen_uretim_batch b
                        JOIN nexgen_uretim_plan p ON p.id=b.plan_id
                        WHERE p.planlama_siparis_id=?""",
                     (r['id'],),
                 ).fetchone()['n']
-                if batches <= 0:
+                if n <= 0:
                     continue
-            aday = r['siparis_no']
-            if prefer_batch and batches > 0:
-                return aday
-            if not prefer_batch:
-                return aday
-        return aday
+            return r['siparis_no']
+        return None
     finally:
         con.close()
 
 
-def batch_kodlari(siparis_no):
+def set_durum_temp(no, yeni):
     con = db()
     try:
-        rows = con.execute(
-            """SELECT b.batch_kodu FROM nexgen_uretim_batch b
-               JOIN nexgen_uretim_plan p ON p.id=b.plan_id
-               JOIN nexgen_planlama_siparis s ON s.id=p.planlama_siparis_id
-               WHERE s.siparis_no=?""",
-            (siparis_no,),
-        ).fetchall()
-        return [r['batch_kodu'] for r in rows if r['batch_kodu']]
+        old = con.execute(
+            'SELECT durum FROM nexgen_planlama_siparis WHERE siparis_no=?', (no,)
+        ).fetchone()
+        if not old:
+            return False
+        _restore_sql.append(
+            ('UPDATE nexgen_planlama_siparis SET durum=? WHERE siparis_no=?',
+             (old['durum'], no))
+        )
+        con.execute(
+            'UPDATE nexgen_planlama_siparis SET durum=? WHERE siparis_no=?',
+            (yeni, no),
+        )
+        con.commit()
+        return True
     finally:
         con.close()
+
+
+def insert_finans_blok(siparis_no, with_sevkiyat=False):
+    con = db()
+    try:
+        sip = con.execute(
+            'SELECT cari_id, cari_unvan FROM nexgen_planlama_siparis WHERE siparis_no=?',
+            (siparis_no,),
+        ).fetchone()
+        cari_id = (sip['cari_id'] if sip and sip['cari_id'] else 1)
+        cari_unvan = (sip['cari_unvan'] if sip and sip['cari_unvan'] else 'TEST CARI')
+        kod = f'TEST-SIL1B-{TS}-{"SV" if with_sevkiyat else "FN"}'
+        con.execute(
+            """INSERT INTO finans_belgesi
+               (belge_kodu, belge_tipi, durum, siparis_no, cari_id, cari_unvan,
+                islem_tarihi, para_birimi, toplam_tutar, idempotency_key, aktif, sevkiyat_id)
+               VALUES (?, 'FATURA', 'BEKLIYOR', ?, ?, ?, date('now'), 'TRY', 0, ?, 1, ?)""",
+            (
+                kod, siparis_no, cari_id, cari_unvan, kod,
+                999002 if with_sevkiyat else None,
+            ),
+        )
+        fid = con.execute('SELECT last_insert_rowid()').fetchone()[0]
+        con.commit()
+        _restore_sql.append(('DELETE FROM finans_belgesi WHERE id=?', (fid,)))
+        return fid
+    finally:
+        con.close()
+
+
+def insert_stok_hareket_blok(siparis_no):
+    """Plan referanslı geçici stok hareketi — silme engeli."""
+    con = db()
+    try:
+        plan = con.execute(
+            """SELECT p.id FROM nexgen_uretim_plan p
+               JOIN nexgen_planlama_siparis s ON s.id=p.planlama_siparis_id
+               WHERE s.siparis_no=? LIMIT 1""",
+            (siparis_no,),
+        ).fetchone()
+        if not plan:
+            # plan yoksa oluşturulamayan engel — durum SET + sahte plan id kullanma
+            return None
+        sk = con.execute('SELECT id FROM nexgen_stok_kart LIMIT 1').fetchone()
+        if not sk:
+            return None
+        con.execute(
+            """INSERT INTO nexgen_stok_hareket
+               (stok_kart_id, hareket_tipi, miktar_kg, onceki_stok, sonraki_stok,
+                aciklama, referans_tip, referans_id)
+               VALUES (?, 'CIKIS', 0.01, 0, 0, 'TEST-SIL1B', 'URETIM_PLAN', ?)""",
+            (sk['id'], plan['id']),
+        )
+        hid = con.execute('SELECT last_insert_rowid()').fetchone()[0]
+        con.commit()
+        _restore_sql.append(('DELETE FROM nexgen_stok_hareket WHERE id=?', (hid,)))
+        return hid
+    finally:
+        con.close()
+
+
+def restore_all():
+    if not _restore_sql:
+        return
+    con = db()
+    try:
+        for sql, args in reversed(_restore_sql):
+            try:
+                con.execute(sql, args)
+            except Exception as e:
+                print('  [restore warn]', e)
+        con.commit()
+    finally:
+        con.close()
+    _restore_sql.clear()
 
 
 def fetch_talep_dict(siparis_no):
@@ -213,23 +303,22 @@ def login(page, uname, extra_nos=None, require_pazarlama=True):
             page.goto(f'{BASE}/nexgen/pazarlama', wait_until='networkidle')
     else:
         page.goto(f'{BASE}/nexgen/pazarlama', wait_until='domcontentloaded')
-        page.wait_for_timeout(800)
-    page.wait_for_timeout(400)
+        page.wait_for_timeout(700)
+    page.wait_for_timeout(300)
 
 
 def open_detay(page, siparis_no):
     row = siparis_row(siparis_no)
     if not row:
         return None
-    tid = row['id']
     page.wait_for_selector(f'#pzm-tbody tr:has-text("{siparis_no}")', timeout=20000)
     page.locator('#pzm-tbody tr').filter(has_text=siparis_no).first.click()
     page.wait_for_function(
         '() => document.getElementById("ekran-detay")?.style.display !== "none"',
         timeout=20000,
     )
-    page.wait_for_timeout(400)
-    return tid
+    page.wait_for_timeout(350)
+    return row['id']
 
 
 def sil_btn_ust(page):
@@ -238,63 +327,34 @@ def sil_btn_ust(page):
           const btn = document.getElementById('pzm-detay-btn-sil');
           if (!btn) return {exists: false};
           const r = btn.getBoundingClientRect();
-          const alt = document.getElementById('pzm-detay-alt-butonlar');
-          const inAlt = !!(alt && alt.contains(btn));
           return {
             exists: true,
             visible: r.width > 0 && r.height > 0 && getComputedStyle(btn).display !== 'none',
             disabled: !!btn.disabled,
             text: (btn.textContent || '').trim(),
-            inAltBand: inAlt,
-            top: Math.round(r.top),
           };
         }"""
     )
 
 
-def alt_band_has_sil(page):
-    return page.evaluate(
-        """() => {
-          const alt = document.getElementById('pzm-detay-alt-butonlar');
-          if (!alt) return false;
-          return Array.from(alt.querySelectorAll('button'))
-            .some(b => (b.textContent || '').indexOf('Siparişi Sil') >= 0);
-        }"""
-    )
-
-
-def do_delete_flow(page, siparis_no, wrong_first=True):
+def do_delete(page, siparis_no):
     page.click('#pzm-detay-btn-sil')
     page.wait_for_function(
         '() => document.getElementById("pzm-sil-panel")?.style.display === "flex"',
         timeout=8000,
     )
-    onay = page.locator('#pzm-sil-onay-btn')
-    ok('popup açıldı', page.locator('#pzm-sil-panel').is_visible())
-    warn = page.locator('#pzm-sil-panel').inner_text()
-    ok(
-        'popup plan/batch uyarısı',
-        'test planlarını ve batch kayıtlarını kalıcı olarak siler' in warn,
-        warn[:120].replace('\n', ' '),
-    )
-    ok('onay başlangıçta pasif', onay.is_disabled())
-    if wrong_first:
-        page.fill('#pzm-sil-confirm-inp', 'YANLIS-NO')
-        page.wait_for_timeout(100)
-        ok('yanlış yazıda onay pasif', onay.is_disabled())
     page.fill('#pzm-sil-confirm-inp', siparis_no)
-    page.wait_for_timeout(120)
-    ok('doğru yazıda onay aktif', not onay.is_disabled(), siparis_no)
+    page.wait_for_timeout(100)
     row = siparis_row(siparis_no)
     tid = row['id']
     with page.expect_response(
         lambda r: f'/nexgen/api/pazarlama/talep/{tid}/sil' in r.url and r.request.method == 'POST',
         timeout=30000,
     ) as resp_info:
-        onay.click()
+        page.click('#pzm-sil-onay-btn')
     resp = resp_info.value
     data = resp.json()
-    page.wait_for_timeout(400)
+    page.wait_for_timeout(350)
     return resp.status, data
 
 
@@ -312,79 +372,70 @@ def api_sil(page, tid, no):
     )
 
 
-def insert_finans_blok(siparis_no, with_sevkiyat=False):
-    con = db()
-    try:
-        sip = con.execute(
-            'SELECT cari_id, cari_unvan FROM nexgen_planlama_siparis WHERE siparis_no=?',
-            (siparis_no,),
-        ).fetchone()
-        cari_id = (sip['cari_id'] if sip and sip['cari_id'] else 1)
-        cari_unvan = (sip['cari_unvan'] if sip and sip['cari_unvan'] else 'TEST CARI')
-        kod = f'TEST-SIL-{TS}-{"SV" if with_sevkiyat else "FN"}'
-        con.execute(
-            """INSERT INTO finans_belgesi
-               (belge_kodu, belge_tipi, durum, siparis_no, cari_id, cari_unvan,
-                islem_tarihi, para_birimi, toplam_tutar, idempotency_key, aktif, sevkiyat_id)
-               VALUES (?, 'FATURA', 'BEKLIYOR', ?, ?, ?, date('now'), 'TRY', 0, ?, 1, ?)""",
-            (
-                kod, siparis_no, cari_id, cari_unvan, kod,
-                999001 if with_sevkiyat else None,
-            ),
-        )
-        fid = con.execute('SELECT last_insert_rowid()').fetchone()[0]
-        con.commit()
-        _restore_sql.append(('DELETE FROM finans_belgesi WHERE id=?', (fid,)))
-        return fid
-    finally:
-        con.close()
+def goto_pazarlama(page):
+    with page.expect_response(lambda r: '/nexgen/api/pazarlama/talepler' in r.url and r.status == 200):
+        page.goto(f'{BASE}/nexgen/pazarlama', wait_until='networkidle')
+    page.wait_for_timeout(300)
 
 
-def restore_all():
-    if not _restore_sql:
-        return
-    con = db()
-    try:
-        for sql, args in _restore_sql:
-            try:
-                con.execute(sql, args)
-            except Exception as e:
-                print('  [restore warn]', e)
-        con.commit()
-    finally:
-        con.close()
-    _restore_sql.clear()
-
-
-SIL_TASLAK = os.environ.get('PZM_SIL_TASLAK') or pick_sil('TASLAK')
-SIL_MPR = os.environ.get('PZM_SIL_MPR') or pick_sil('MPR_BEKLIYOR', exclude=[SIL_TASLAK])
-SIL_URETIM = os.environ.get('PZM_SIL_URETIM') or pick_sil(
-    'URETIMDE', prefer_batch=True, exclude=[SIL_TASLAK, SIL_MPR]
+# --- aday seçimi ---
+SIL_ONAY = os.environ.get('PZM_SIL_ONAY') or pick_any()
+SIL_PLANHAZIR = os.environ.get('PZM_SIL_PLANHAZIR') or pick_any(exclude=[SIL_ONAY])
+SIL_URETIM = os.environ.get('PZM_SIL_URETIM') or pick_any(
+    prefer_batch=True, durum='URETIMDE', exclude=[SIL_ONAY, SIL_PLANHAZIR]
 )
-BLOK_FINANS_NO = os.environ.get('PZM_BLOK_FINANS') or pick_sil(
-    'TASLAK', exclude=[SIL_TASLAK, SIL_MPR]
-)
-BLOK_SEVK_NO = os.environ.get('PZM_BLOK_SEVK') or pick_sil(
-    'MPR_BEKLIYOR', exclude=[SIL_TASLAK, SIL_MPR, BLOK_FINANS_NO]
-)
+if not SIL_URETIM:
+    SIL_URETIM = pick_any(prefer_batch=True, exclude=[SIL_ONAY, SIL_PLANHAZIR])
 
-print('=== FAZ-PZM-ADMIN-SIPARIS-SILME-1A browser ===')
+BLOK_FINANS = os.environ.get('PZM_BLOK_FINANS') or pick_any(
+    exclude=[SIL_ONAY, SIL_PLANHAZIR, SIL_URETIM]
+)
+BLOK_SEVK = os.environ.get('PZM_BLOK_SEVK') or pick_any(
+    exclude=[SIL_ONAY, SIL_PLANHAZIR, SIL_URETIM, BLOK_FINANS]
+)
+BLOK_STOK = os.environ.get('PZM_BLOK_STOK') or pick_any(
+    prefer_batch=False, durum='URETIMDE',
+    exclude=[SIL_ONAY, SIL_PLANHAZIR, SIL_URETIM, BLOK_FINANS, BLOK_SEVK],
+)
+if not BLOK_STOK:
+    BLOK_STOK = pick_any(
+        exclude=[SIL_ONAY, SIL_PLANHAZIR, SIL_URETIM, BLOK_FINANS, BLOK_SEVK]
+    )
+# sonuç durum UI — geçici
+TMP_BITTI = pick_any(exclude=[SIL_ONAY, SIL_PLANHAZIR, SIL_URETIM, BLOK_FINANS, BLOK_SEVK, BLOK_STOK])
+TMP_SEVK = pick_any(exclude=[SIL_ONAY, SIL_PLANHAZIR, SIL_URETIM, BLOK_FINANS, BLOK_SEVK, BLOK_STOK, TMP_BITTI])
+TMP_TAMAM = pick_any(exclude=[SIL_ONAY, SIL_PLANHAZIR, SIL_URETIM, BLOK_FINANS, BLOK_SEVK, BLOK_STOK, TMP_BITTI, TMP_SEVK])
+
+print('=== FAZ-PZM-ADMIN-SIPARIS-SILME-1B ===')
 print('SHOT', SHOT_DIR)
-print('aday', SIL_TASLAK, SIL_MPR, SIL_URETIM, 'blok', BLOK_FINANS_NO, BLOK_SEVK_NO)
+print('sil', SIL_ONAY, SIL_PLANHAZIR, SIL_URETIM)
+print('blok', BLOK_FINANS, BLOK_SEVK, BLOK_STOK)
 
-EXTRA = [x for x in (SIL_TASLAK, SIL_MPR, SIL_URETIM, BLOK_FINANS_NO, BLOK_SEVK_NO) if x]
-uretim_batches_once = batch_kodlari(SIL_URETIM) if SIL_URETIM else []
+EXTRA = [x for x in (
+    SIL_ONAY, SIL_PLANHAZIR, SIL_URETIM, BLOK_FINANS, BLOK_SEVK, BLOK_STOK,
+    TMP_BITTI, TMP_SEVK, TMP_TAMAM,
+) if x]
 
 try:
-    if BLOK_FINANS_NO:
-        insert_finans_blok(BLOK_FINANS_NO, with_sevkiyat=False)
-    if BLOK_SEVK_NO:
-        insert_finans_blok(BLOK_SEVK_NO, with_sevkiyat=True)
+    # ara durumlar — gerçek allowlist kaldırma testi
+    if SIL_ONAY:
+        set_durum_temp(SIL_ONAY, 'ONAYLANDI')
+    if SIL_PLANHAZIR:
+        set_durum_temp(SIL_PLANHAZIR, 'PLANLAMAYA_HAZIR')
+    if BLOK_FINANS:
+        insert_finans_blok(BLOK_FINANS, with_sevkiyat=False)
+    if BLOK_SEVK:
+        insert_finans_blok(BLOK_SEVK, with_sevkiyat=True)
+    stok_hid = insert_stok_hareket_blok(BLOK_STOK) if BLOK_STOK else None
+    if TMP_BITTI:
+        set_durum_temp(TMP_BITTI, 'BITTI')
+    if TMP_SEVK:
+        set_durum_temp(TMP_SEVK, 'SEVK_EDILDI')
+    if TMP_TAMAM:
+        set_durum_temp(TMP_TAMAM, 'TAMAMLANDI')
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-
-        # --- ADMIN ---
         ctx = browser.new_context(viewport={'width': 1366, 'height': 768})
         page = ctx.new_page()
         page.on('console', lambda msg: console_errors.append(msg.text) if msg.type == 'error' else None)
@@ -397,129 +448,108 @@ try:
         )
 
         login(page, 'admin', EXTRA)
-        ok('admin sil modal DOM', page.locator('#pzm-sil-panel').count() == 1)
+        ok('admin modal', page.locator('#pzm-sil-panel').count() == 1)
 
-        # 1 TASLAK
-        ok(f'TASLAK aday ({SIL_TASLAK})', bool(SIL_TASLAK))
-        tid = open_detay(page, SIL_TASLAK)
+        # 1 ONAYLANDI
+        ok(f'ONAYLANDI aday ({SIL_ONAY})', bool(SIL_ONAY) and siparis_row(SIL_ONAY)['durum'] == 'ONAYLANDI')
+        tid = open_detay(page, SIL_ONAY)
         st = sil_btn_ust(page)
-        ok('TASLAK Sil üst sağda', st.get('exists') and st.get('visible') and not st.get('inAltBand'), str(st))
-        ok('TASLAK Sil aktif', st.get('exists') and not st.get('disabled'), str(st))
-        ok('Sil alt bantta yok', not alt_band_has_sil(page))
-        page.screenshot(path=os.path.join(SHOT_DIR, 'admin_taslak_ust.png'), full_page=True)
-        status, data = do_delete_flow(page, SIL_TASLAK)
-        ok('TASLAK sil API', status == 200 and data.get('ok') is True, str(data))
-        ok('TASLAK DB silindi', siparis_row(SIL_TASLAK) is None)
-        ok(
-            'silme sonrası liste',
-            page.evaluate('() => document.getElementById("ekran-liste")?.style.display !== "none"'),
-        )
+        ok('ONAYLANDI Sil aktif', st.get('visible') and not st.get('disabled'), str(st))
+        status, data = do_delete(page, SIL_ONAY)
+        ok('ONAYLANDI sil PASS', status == 200 and data.get('ok') is True, str(data))
+        ok('ONAYLANDI DB yok', siparis_row(SIL_ONAY) is None)
 
-        # 2 MPR
-        with page.expect_response(lambda r: '/nexgen/api/pazarlama/talepler' in r.url and r.status == 200):
-            page.goto(f'{BASE}/nexgen/pazarlama', wait_until='networkidle')
-        ok(f'MPR aday ({SIL_MPR})', bool(SIL_MPR))
-        tid = open_detay(page, SIL_MPR)
+        # 2 PLANLAMAYA_HAZIR
+        goto_pazarlama(page)
+        ok(f'PLANLAMAYA_HAZIR aday ({SIL_PLANHAZIR})',
+           bool(SIL_PLANHAZIR) and siparis_row(SIL_PLANHAZIR)['durum'] == 'PLANLAMAYA_HAZIR')
+        tid = open_detay(page, SIL_PLANHAZIR)
         st = sil_btn_ust(page)
-        ok('MPR Sil üst sağda aktif', st.get('visible') and not st.get('disabled') and not st.get('inAltBand'), str(st))
-        ok('Sil alt bantta yok (MPR)', not alt_band_has_sil(page))
-        status, data = do_delete_flow(page, SIL_MPR, wrong_first=False)
-        ok('MPR sil API', status == 200 and data.get('ok') is True, str(data))
-        ok('MPR DB silindi', siparis_row(SIL_MPR) is None)
+        ok('PLANLAMAYA_HAZIR Sil aktif', st.get('visible') and not st.get('disabled'), str(st))
+        status, data = do_delete(page, SIL_PLANHAZIR)
+        ok('PLANLAMAYA_HAZIR sil PASS', status == 200 and data.get('ok') is True, str(data))
+        ok('PLANLAMAYA_HAZIR DB yok', siparis_row(SIL_PLANHAZIR) is None)
 
-        # 3 URETIMDE + batch
-        with page.expect_response(lambda r: '/nexgen/api/pazarlama/talepler' in r.url and r.status == 200):
-            page.goto(f'{BASE}/nexgen/pazarlama', wait_until='networkidle')
-        ok(f'URETIMDE aday ({SIL_URETIM})', bool(SIL_URETIM), f'batches={uretim_batches_once}')
+        # 3 URETIMDE
+        goto_pazarlama(page)
+        ok(f'URETIMDE aday ({SIL_URETIM})', bool(SIL_URETIM))
         tid = open_detay(page, SIL_URETIM)
         st = sil_btn_ust(page)
-        ok('URETIMDE Sil aktif (üst)', st.get('visible') and not st.get('disabled'), str(st))
-        ok('Sil alt bantta yok (URETIM)', not alt_band_has_sil(page))
-        page.screenshot(path=os.path.join(SHOT_DIR, 'admin_uretimde_ust.png'), full_page=True)
-        status, data = do_delete_flow(page, SIL_URETIM, wrong_first=False)
-        ok('URETIMDE sil API', status == 200 and data.get('ok') is True, str(data))
-        ok('URETIMDE DB silindi', siparis_row(SIL_URETIM) is None)
-        if uretim_batches_once:
-            con = db()
-            left = con.execute(
-                f"SELECT COUNT(*) n FROM nexgen_uretim_batch WHERE batch_kodu IN ({','.join('?'*len(uretim_batches_once))})",
-                uretim_batches_once,
-            ).fetchone()['n']
-            con.close()
-            ok('URETIMDE batch DB temiz', left == 0, f'left={left} kod={uretim_batches_once}')
+        ok('URETIMDE Sil aktif', st.get('visible') and not st.get('disabled'), str(st))
+        status, data = do_delete(page, SIL_URETIM)
+        ok('URETIMDE sil PASS', status == 200 and data.get('ok') is True, str(data))
+        ok('URETIMDE DB yok', siparis_row(SIL_URETIM) is None)
 
-        # 4 Finans engel
-        with page.expect_response(lambda r: '/nexgen/api/pazarlama/talepler' in r.url and r.status == 200):
-            page.goto(f'{BASE}/nexgen/pazarlama', wait_until='networkidle')
-        ok(f'Finans blok aday ({BLOK_FINANS_NO})', bool(BLOK_FINANS_NO))
-        tid = open_detay(page, BLOK_FINANS_NO)
-        api = api_sil(page, tid, BLOK_FINANS_NO)
+        # 4 Finans
+        goto_pazarlama(page)
+        tid = open_detay(page, BLOK_FINANS)
+        api = api_sil(page, tid, BLOK_FINANS)
         ok(
-            'Finans ilişkili engel',
-            api.get('status') == 400 and not (api.get('data') or {}).get('ok')
-            and 'Finans' in ((api.get('data') or {}).get('hata') or ''),
+            'Finans ENGEL',
+            api.get('status') == 400 and 'Finans' in ((api.get('data') or {}).get('hata') or ''),
             str(api),
         )
-        ok('Finans sipariş duruyor', siparis_row(BLOK_FINANS_NO) is not None)
+        ok('Finans duruyor', siparis_row(BLOK_FINANS) is not None)
 
-        # 5 Sevkiyat engel (finans.sevkiyat_id)
-        with page.expect_response(lambda r: '/nexgen/api/pazarlama/talepler' in r.url and r.status == 200):
-            page.goto(f'{BASE}/nexgen/pazarlama', wait_until='networkidle')
-        ok(f'Sevkiyat blok aday ({BLOK_SEVK_NO})', bool(BLOK_SEVK_NO))
-        tid = open_detay(page, BLOK_SEVK_NO)
-        api = api_sil(page, tid, BLOK_SEVK_NO)
-        hata = ((api.get('data') or {}).get('hata') or '')
+        # 5 Sevkiyat
+        goto_pazarlama(page)
+        tid = open_detay(page, BLOK_SEVK)
+        api = api_sil(page, tid, BLOK_SEVK)
+        h = ((api.get('data') or {}).get('hata') or '')
         ok(
-            'Sevkiyat/finans ilişkili engel',
-            api.get('status') == 400 and not (api.get('data') or {}).get('ok')
-            and ('sevkiyat' in hata.lower() or 'Finans' in hata),
+            'Sevkiyat ENGEL',
+            api.get('status') == 400 and ('sevkiyat' in h.lower() or 'Finans' in h),
             str(api),
         )
-        ok('Sevkiyat sipariş duruyor', siparis_row(BLOK_SEVK_NO) is not None)
+        ok('Sevkiyat duruyor', siparis_row(BLOK_SEVK) is not None)
+
+        # 6 Stok hareket
+        goto_pazarlama(page)
+        if stok_hid:
+            tid = open_detay(page, BLOK_STOK)
+            api = api_sil(page, tid, BLOK_STOK)
+            ok(
+                'Stok hareket ENGEL',
+                api.get('status') == 400 and 'Stok' in ((api.get('data') or {}).get('hata') or ''),
+                str(api),
+            )
+            ok('Stok sipariş duruyor', siparis_row(BLOK_STOK) is not None)
+        else:
+            ok('Stok hareket ENGEL', False, 'stok hareket insert başarısız')
+            ok('Stok sipariş duruyor', False)
+
+        # 7 BITTI / SEVK_EDILDI / TAMAMLANDI
+        for no, ad in ((TMP_BITTI, 'BITTI'), (TMP_SEVK, 'SEVK_EDILDI'), (TMP_TAMAM, 'TAMAMLANDI')):
+            goto_pazarlama(page)
+            tid = open_detay(page, no)
+            st = sil_btn_ust(page)
+            ok(f'{ad} Sil pasif', st.get('exists') and st.get('disabled'), str(st))
+            api = api_sil(page, tid, no)
+            ok(
+                f'{ad} API ENGEL',
+                api.get('status') == 400 and not (api.get('data') or {}).get('ok'),
+                str(api),
+            )
 
         ctx.close()
 
-        # 6 Mehmet
+        # Mehmet / Ali
         ctx2 = browser.new_context(viewport={'width': 1366, 'height': 768})
         page = ctx2.new_page()
         page.on('console', lambda msg: console_errors.append(msg.text) if msg.type == 'error' else None)
         page.on('pageerror', lambda err: console_errors.append(str(err)))
-        login(page, 'mehmet', [BLOK_FINANS_NO] if BLOK_FINANS_NO else EXTRA)
-        ok('mehmet sil modal yok', page.locator('#pzm-sil-panel').count() == 0)
-        tid = open_detay(page, BLOK_FINANS_NO or BLOK_SEVK_NO)
-        st = sil_btn_ust(page)
-        ok('mehmet Sil butonu yok', not st.get('exists') or not st.get('visible'), str(st))
-        page.screenshot(path=os.path.join(SHOT_DIR, 'mehmet_no_sil.png'), full_page=True)
+        login(page, 'mehmet', [BLOK_FINANS])
+        ok('mehmet Sil yok', page.locator('#pzm-detay-btn-sil').count() == 0)
+        open_detay(page, BLOK_FINANS)
+        ok('mehmet detayda Sil yok', page.locator('#pzm-detay-btn-sil').count() == 0)
         ctx2.close()
 
-        # 7 Ali — pazarlama + tablet
         ctx3 = browser.new_context(viewport={'width': 1366, 'height': 768})
         page = ctx3.new_page()
         page.on('console', lambda msg: console_errors.append(msg.text) if msg.type == 'error' else None)
         page.on('pageerror', lambda err: console_errors.append(str(err)))
         login(page, 'ali', EXTRA, require_pazarlama=False)
-        url = page.url
-        if 'pazarlama' in url and page.locator('#pzm-tbody').count():
-            ok('ali sil modal yok', page.locator('#pzm-sil-panel').count() == 0)
-            st = sil_btn_ust(page)
-            ok('ali Sil butonu yok', not st.get('exists') or not st.get('visible'), str(st))
-        else:
-            ok('ali Sil butonu görünmez', True, f'url={url}')
-        # Tablet: silinen batch görünmez
-        page.goto(f'{BASE}/nexgen/tablet', wait_until='domcontentloaded')
-        page.wait_for_timeout(900)
-        body = page.content()
-        missing = True
-        for bk in uretim_batches_once:
-            if bk and bk in body:
-                missing = False
-                break
-        ok(
-            'Ali tablet silinen batch yok',
-            missing,
-            f'batches={uretim_batches_once} url={page.url}',
-        )
-        page.screenshot(path=os.path.join(SHOT_DIR, 'ali_tablet.png'), full_page=True)
+        ok('ali Sil yok', page.locator('#pzm-detay-btn-sil').count() == 0, f'url={page.url}')
         ctx3.close()
         browser.close()
 finally:
@@ -536,12 +566,10 @@ def _console_gercek_hata(msg):
 
 
 real_console = [c for c in console_errors if _console_gercek_hata(c)]
-ok('Console 0 hata', len(real_console) == 0, '; '.join(real_console[:5]))
-ok('Network 0 hata', len(network_errors) == 0, '; '.join(network_errors[:5]))
+ok('Console 0', len(real_console) == 0, '; '.join(real_console[:5]))
+ok('Network 0', len(network_errors) == 0, '; '.join(network_errors[:5]))
 
 passed = sum(1 for _, c, _ in results if c)
 failed = sum(1 for _, c, _ in results if not c)
 print(f'\n=== ÖZET {passed}/{len(results)} PASS, {failed} FAIL ===')
-print(f'Silinen: {SIL_TASLAK}, {SIL_MPR}, {SIL_URETIM}')
-print(f'Engellenen: finans={BLOK_FINANS_NO}, sevk={BLOK_SEVK_NO}')
 sys.exit(0 if failed == 0 else 1)

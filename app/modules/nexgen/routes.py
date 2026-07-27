@@ -19278,9 +19278,7 @@ def api_pazarlama_talep_iptal(talep_id):
         con.close()
 
 
-# Admin test temizliği: TASLAK / MPR_BEKLIYOR / URETIMDE
-_PZM_SILINEBILIR_DURUMLAR = frozenset({'TASLAK', 'MPR_BEKLIYOR', 'URETIMDE'})
-# Ticari sonuç — hard delete engeli (plan/batch/tablet tek başına engel değil)
+# FAZ-1B: durum allowlist YOK — yalnız ticari/sonuç ilişkileri engeller
 _PZM_SILINEMEZ_SONUC_DURUMLAR = frozenset({
     'BITTI', 'SEVK_EDILDI', 'TAMAMLANDI',
 })
@@ -19293,18 +19291,12 @@ def _pzm_tablo_var(con, name):
 
 
 def _pzm_siparis_sil_blok_nedenleri(con, talep_id, siparis_no, durum):
-    """Silme öncesi güvenlik kontrolleri — neden listesi (boş = serbest)."""
+    """İlişki bazlı güvenlik — durum adı (ONAYLANDI vb.) tek başına engel değil."""
     nedenler = []
     d = (durum or '').upper()
     if d in _PZM_SILINEMEZ_SONUC_DURUMLAR:
         nedenler.append(
             f"Sipariş durumu '{durum}' ticari/sonuç durumundadır; kalıcı silinemez."
-        )
-        return nedenler
-    if d not in _PZM_SILINEBILIR_DURUMLAR:
-        nedenler.append(
-            f"Sipariş durumu '{durum}' silmeye uygun değil. "
-            "Yalnız TASLAK, MPR_BEKLIYOR ve URETIMDE (test) silinebilir."
         )
         return nedenler
 
@@ -19346,7 +19338,7 @@ def _pzm_siparis_sil_blok_nedenleri(con, talep_id, siparis_no, durum):
         if fb:
             nedenler.append(f"Finans belgesi / fatura / açık kalem ilişkisi var ({fb}).")
 
-    # Gerçek sevkiyat: sipariş/plan SEVK veya finans belgesinde sevkiyat_id
+    # Gerçek sevkiyat: finans belgesinde sevkiyat_id (MO siparis_id ile karıştırılmaz)
     if (siparis_no or '').strip() and _pzm_tablo_var(con, 'finans_belgesi'):
         sv_fin = con.execute(
             "SELECT COUNT(*) AS n FROM finans_belgesi "
