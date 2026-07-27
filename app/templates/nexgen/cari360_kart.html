@@ -1,0 +1,458 @@
+{% extends "base.html" %}
+{% set page_title = "Cari Kart — " ~ (data.cari.unvan or '')[:40] %}
+
+{% block content %}
+{% set c = data.cari %}
+<div class="ckart" id="ckart"
+     data-cari-id="{{ cari_id }}"
+     data-can-write="{{ '1' if data.can_write_yetkili else '0' }}">
+
+  <header class="ckart-ust">
+    <div class="ckart-ust-sol">
+      <a href="/nexgen/yonetim#cari" class="ckart-back">← Yönetim Merkezi’ne Dön</a>
+      <div class="ckart-kod">{{ c.cari_kod }}</div>
+      <h1 class="ckart-unvan">{{ c.unvan }}</h1>
+      <div class="ckart-meta">
+        {% if c.aktif %}
+        <span class="ckart-badge ckart-badge-aktif">AKTİF</span>
+        {% else %}
+        <span class="ckart-badge ckart-badge-pasif">PASİF</span>
+        {% endif %}
+        <span class="ckart-meta-item">İç sorumlu:
+          <strong>{{ data.sorumlu_adi or '—' }}</strong>
+        </span>
+        <span class="ckart-meta-item">Eşleşme:
+          <strong class="ckart-es">{{ data.eslestirme_durumu }}</strong>
+        </span>
+      </div>
+    </div>
+  </header>
+
+  {% if data.test_banner %}
+  <div class="ckart-banner" role="status">
+    Test cari — finans eşleşmesi yok.
+  </div>
+  {% endif %}
+
+  <nav class="ckart-sekme-bar" aria-label="Cari Kart sekmeleri">
+    <button type="button" class="ckart-sekme{% if aktif_tab == 'genel' %} aktif{% endif %}"
+            data-tab="genel" onclick="ckartTab('genel')">Genel Bilgiler</button>
+    <button type="button" class="ckart-sekme{% if aktif_tab == 'yetkililer' %} aktif{% endif %}"
+            data-tab="yetkililer" onclick="ckartTab('yetkililer')">Yetkililer</button>
+  </nav>
+
+  <section id="ckart-panel-genel" class="ckart-panel"{% if aktif_tab != 'genel' %} style="display:none"{% endif %}>
+    <h2 class="ckart-h2">Genel Bilgiler</h2>
+    <dl class="ckart-dl">
+      <div><dt>Cari kodu</dt><dd>{{ c.cari_kod }}</dd></div>
+      <div><dt>Cari unvanı</dt><dd>{{ c.unvan }}</dd></div>
+      <div><dt>Durum</dt><dd>{% if c.aktif %}Aktif{% else %}Pasif{% endif %}</dd></div>
+      <div><dt>Oluşturma</dt><dd>{{ c.created_at or '—' }}</dd></div>
+      <div><dt>Güncelleme</dt><dd>{{ c.updated_at or '—' }}</dd></div>
+      <div><dt>İç sorumlu pazarlamacı</dt><dd>{{ data.sorumlu_adi or '—' }}</dd></div>
+      <div><dt>Finans eşleşme durumu</dt><dd><strong>{{ data.eslestirme_durumu }}</strong></dd></div>
+    </dl>
+  </section>
+
+  <section id="ckart-panel-yetkililer" class="ckart-panel"{% if aktif_tab != 'yetkililer' %} style="display:none"{% endif %}>
+    <div class="ckart-panel-bas">
+      <h2 class="ckart-h2">Müşteri Yetkilileri</h2>
+      {% if data.can_write_yetkili %}
+      <button type="button" class="ckart-btn-birincil" onclick="ckartYetkiliYeni()">Yeni Yetkili</button>
+      {% endif %}
+    </div>
+    <div class="ckart-tablo-wrap">
+      <table class="ckart-tablo" id="ckart-yetkili-tablo">
+        <thead>
+          <tr>
+            <th>Ad Soyad</th>
+            <th>Ünvan</th>
+            <th>Departman</th>
+            <th>Telefon</th>
+            <th>Cep</th>
+            <th>E-posta</th>
+            <th>Ana</th>
+            <th>Durum</th>
+            <th>Notlar</th>
+            <th style="text-align:right">İşlem</th>
+          </tr>
+        </thead>
+        <tbody id="ckart-yetkili-tbody">
+          <tr><td colspan="10" class="ckart-muted">Yükleniyor…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+{# Global overlay — display:none parent altında değil #}
+<div id="ckart-modal-overlay" class="ckart-overlay" aria-hidden="true">
+  <div class="ckart-modal" role="dialog" aria-modal="true" aria-labelledby="ckart-modal-baslik">
+    <div class="ckart-modal-head">
+      <h3 id="ckart-modal-baslik">Yetkili</h3>
+      <button type="button" class="ckart-modal-x" onclick="ckartModalKapat()" aria-label="Kapat">×</button>
+    </div>
+    <div class="ckart-modal-body">
+      <input type="hidden" id="ckart-y-id" value="">
+      <label class="ckart-lbl">Ad Soyad <span class="ckart-req">*</span>
+        <input type="text" id="ckart-y-ad" class="ckart-inp" autocomplete="off">
+      </label>
+      <div class="ckart-grid2">
+        <label class="ckart-lbl">Ünvan<input type="text" id="ckart-y-unvan" class="ckart-inp"></label>
+        <label class="ckart-lbl">Departman<input type="text" id="ckart-y-dep" class="ckart-inp"></label>
+        <label class="ckart-lbl">Telefon<input type="text" id="ckart-y-tel" class="ckart-inp"></label>
+        <label class="ckart-lbl">Cep Telefonu<input type="text" id="ckart-y-cep" class="ckart-inp"></label>
+      </div>
+      <label class="ckart-lbl">E-posta<input type="email" id="ckart-y-eposta" class="ckart-inp"></label>
+      <label class="ckart-chk"><input type="checkbox" id="ckart-y-ana"> Ana Yetkili</label>
+      <label class="ckart-lbl">Notlar<textarea id="ckart-y-notlar" class="ckart-inp ckart-ta" rows="2"></textarea></label>
+      <p id="ckart-modal-hata" class="ckart-hata" style="display:none"></p>
+    </div>
+    <div class="ckart-modal-foot">
+      <button type="button" class="ckart-btn-ikincil" onclick="ckartModalKapat()">İptal</button>
+      <button type="button" class="ckart-btn-birincil" onclick="ckartYetkiliKaydet()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<style>
+.ckart { max-width: 1100px; margin: 0 auto 32px; padding: 0 12px 24px; }
+.ckart-ust {
+  position: relative;
+  z-index: 1;
+  background: #fff;
+  border: 1px solid rgba(17,24,39,0.07);
+  border-radius: 12px;
+  padding: 16px 18px 14px;
+  box-shadow: 0 1px 4px rgba(15,23,42,0.04);
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+.ckart-back {
+  display: inline-block; font-size: 12px; color: #92400e; text-decoration: none;
+  font-weight: 600; margin-bottom: 8px;
+}
+.ckart-back:hover { text-decoration: underline; }
+.ckart-kod {
+  font-size: 12px; font-weight: 700; color: #92400e; letter-spacing: .4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.ckart-unvan {
+  margin: 4px 0 10px; font-size: 20px; line-height: 1.3; color: #111827; font-weight: 700;
+  overflow-wrap: anywhere; word-break: break-word; max-width: 100%;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.ckart-meta { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; font-size: 13px; color: #4b5563; }
+.ckart-meta-item strong { color: #111827; font-weight: 600; }
+.ckart-badge {
+  display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: .4px;
+  padding: 3px 8px; border-radius: 999px;
+}
+.ckart-badge-aktif { background: #ecfdf5; color: #047857; }
+.ckart-badge-pasif { background: #f3f4f6; color: #6b7280; }
+.ckart-es { color: #92400e; }
+.ckart-banner {
+  background: #fff7ed; border: 1px solid #fdba74; color: #9a3412;
+  border-radius: 10px; padding: 10px 14px; font-size: 13px; font-weight: 600;
+  margin-bottom: 10px;
+}
+.ckart-sekme-bar {
+  position: relative;
+  z-index: 2;
+  display: flex; gap: 2px; flex-wrap: wrap;
+  background: #fff; border: 1px solid rgba(17,24,39,0.07);
+  border-radius: 10px 10px 0 0; padding: 6px 8px;
+  box-shadow: 0 1px 4px rgba(15,23,42,0.04);
+  clear: both;
+}
+.ckart-sekme {
+  border: none; background: transparent; color: #6b7280;
+  padding: 8px 16px; border-radius: 7px; font-size: 13px; font-weight: 500; cursor: pointer;
+}
+.ckart-sekme:hover { background: #f9fafb; color: #374151; }
+.ckart-sekme.aktif { background: #fef3c7; color: #92400e; font-weight: 700; }
+.ckart-panel {
+  background: #fff; border: 1px solid rgba(17,24,39,0.07); border-top: none;
+  border-radius: 0 0 12px 12px; padding: 18px 18px 22px;
+  box-shadow: 0 2px 8px rgba(15,23,42,0.04);
+}
+.ckart-h2 { margin: 0 0 14px; font-size: 15px; color: #111827; font-weight: 700; }
+.ckart-panel-bas { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
+.ckart-panel-bas .ckart-h2 { margin: 0; }
+.ckart-dl {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px 18px; margin: 0;
+}
+.ckart-dl dt { font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 3px; }
+.ckart-dl dd { margin: 0; font-size: 14px; color: #111827; }
+.ckart-tablo-wrap { overflow-x: auto; border: 1px solid #f0f1f3; border-radius: 10px; }
+.ckart-tablo { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ckart-tablo th {
+  text-align: left; background: #f9fafb; padding: 9px 10px; font-size: 11px;
+  color: #6b7280; text-transform: uppercase; letter-spacing: .3px; border-bottom: 1px solid #f0f1f3;
+  white-space: nowrap;
+}
+.ckart-tablo td { padding: 10px; border-bottom: 1px solid #f3f4f6; vertical-align: top; color: #111827; }
+.ckart-tablo tr:last-child td { border-bottom: none; }
+.ckart-muted { color: #9ca3af; text-align: center; padding: 20px !important; }
+.ckart-btn-birincil, .ckart-btn-ikincil, .ckart-btn-mini {
+  border: none; border-radius: 8px; cursor: pointer; font-weight: 600;
+}
+.ckart-btn-birincil {
+  background: #f59e0b; color: #111827; padding: 8px 14px; font-size: 13px;
+}
+.ckart-btn-birincil:hover { background: #d97706; color: #fff; }
+.ckart-btn-ikincil {
+  background: #f3f4f6; color: #374151; padding: 8px 14px; font-size: 13px;
+}
+.ckart-btn-mini {
+  background: #fff; border: 1px solid #e5e7eb; color: #374151;
+  padding: 3px 8px; font-size: 11px; margin-left: 4px; border-radius: 6px;
+}
+.ckart-btn-mini:hover { border-color: #f59e0b; color: #92400e; }
+.ckart-pill-ana { color: #0f766e; font-weight: 700; font-size: 11px; }
+.ckart-pill-pasif { color: #9ca3af; font-size: 11px; }
+
+/* Global modal overlay */
+.ckart-overlay {
+  display: none; position: fixed; inset: 0; z-index: 10050;
+  background: rgba(15, 23, 42, 0.45);
+  align-items: center; justify-content: center; padding: 16px;
+}
+.ckart-overlay.acik { display: flex; }
+.ckart-modal {
+  width: min(520px, 100%); background: #fff; border-radius: 12px;
+  box-shadow: 0 20px 50px rgba(15,23,42,0.25); max-height: 92vh; overflow: auto;
+}
+.ckart-modal-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 16px; border-bottom: 1px solid #f1f5f9;
+}
+.ckart-modal-head h3 { margin: 0; font-size: 16px; color: #111827; }
+.ckart-modal-x {
+  border: none; background: transparent; font-size: 22px; line-height: 1;
+  cursor: pointer; color: #6b7280; padding: 0 4px;
+}
+.ckart-modal-body { padding: 14px 16px; }
+.ckart-modal-foot {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 12px 16px; border-top: 1px solid #f1f5f9;
+}
+.ckart-lbl { display: block; font-size: 12px; font-weight: 600; color: #4b5563; margin-bottom: 10px; }
+.ckart-req { color: #b45309; }
+.ckart-inp {
+  display: block; width: 100%; margin-top: 4px; box-sizing: border-box;
+  border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 10px; font-size: 13px;
+}
+.ckart-inp:focus { outline: none; border-color: #f59e0b; }
+.ckart-ta { resize: vertical; min-height: 56px; }
+.ckart-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.ckart-chk { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 10px; color: #374151; }
+.ckart-hata { color: #b91c1c; font-size: 12px; margin: 0 0 6px; }
+
+@media (max-width: 720px) {
+  .ckart-unvan { font-size: 18px; }
+  .ckart-grid2 { grid-template-columns: 1fr; }
+  .ckart-panel-bas { flex-direction: column; align-items: flex-start; }
+}
+</style>
+
+<script>
+(function(){
+  var root = document.getElementById('ckart');
+  if (!root) return;
+  var CARI_ID = parseInt(root.getAttribute('data-cari-id'), 10);
+  var CAN_WRITE = root.getAttribute('data-can-write') === '1';
+  var _cache = [];
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;');
+  }
+
+  window.ckartTab = function(tab) {
+    document.querySelectorAll('.ckart-sekme').forEach(function(b){
+      b.classList.toggle('aktif', b.getAttribute('data-tab') === tab);
+    });
+    document.getElementById('ckart-panel-genel').style.display = tab === 'genel' ? '' : 'none';
+    document.getElementById('ckart-panel-yetkililer').style.display = tab === 'yetkililer' ? '' : 'none';
+    try {
+      var u = new URL(window.location.href);
+      u.searchParams.set('tab', tab);
+      history.replaceState(null, '', u.toString());
+    } catch (e) {}
+    if (tab === 'yetkililer') ckartYetkiliYukle();
+  };
+
+  window.ckartYetkiliYukle = function() {
+    var tb = document.getElementById('ckart-yetkili-tbody');
+    if (!tb) return;
+    tb.innerHTML = '<tr><td colspan="10" class="ckart-muted">Yükleniyor…</td></tr>';
+    fetch('/nexgen/api/yonetim/cari-yetkili?cari_id=' + encodeURIComponent(CARI_ID))
+      .then(function(r){ return r.json().then(function(d){ return {status:r.status, d:d}; }); })
+      .then(function(x){
+        if (!x.d || !x.d.ok) {
+          tb.innerHTML = '<tr><td colspan="10" class="ckart-muted">' + esc((x.d && x.d.hata) || 'Yüklenemedi') + '</td></tr>';
+          return;
+        }
+        if (typeof x.d.can_write === 'boolean') CAN_WRITE = x.d.can_write;
+        _cache = x.d.yetkililer || [];
+        if (!_cache.length) {
+          tb.innerHTML = '<tr><td colspan="10" class="ckart-muted">Henüz müşteri yetkilisi yok.</td></tr>';
+          return;
+        }
+        tb.innerHTML = _cache.map(function(y){
+          var ana = (y.ana_yetkili == 1 && y.aktif == 1) ? '<span class="ckart-pill-ana">ANA</span>' : '—';
+          var durum = y.aktif == 1 ? 'Aktif' : '<span class="ckart-pill-pasif">Pasif</span>';
+          var btns = '';
+          if (CAN_WRITE) {
+            btns += '<button type="button" class="ckart-btn-mini" onclick="ckartYetkiliDuzenle('+y.id+')">Düzenle</button>';
+            if (y.aktif == 1) {
+              btns += '<button type="button" class="ckart-btn-mini" onclick="ckartYetkiliAna('+y.id+')">Ana Yap</button>';
+              btns += '<button type="button" class="ckart-btn-mini" onclick="ckartYetkiliAktif('+y.id+',0)">Pasifleştir</button>';
+            } else {
+              btns += '<button type="button" class="ckart-btn-mini" onclick="ckartYetkiliAktif('+y.id+',1)">Aktifleştir</button>';
+            }
+          }
+          return '<tr>'
+            + '<td><strong>'+esc(y.ad_soyad)+'</strong></td>'
+            + '<td>'+esc(y.unvan||'—')+'</td>'
+            + '<td>'+esc(y.departman||'—')+'</td>'
+            + '<td>'+esc(y.telefon||'—')+'</td>'
+            + '<td>'+esc(y.cep_telefonu||'—')+'</td>'
+            + '<td>'+esc(y.eposta||'—')+'</td>'
+            + '<td>'+ana+'</td>'
+            + '<td>'+durum+'</td>'
+            + '<td>'+esc(y.notlar||'—')+'</td>'
+            + '<td style="text-align:right;white-space:nowrap">'+btns+'</td>'
+            + '</tr>';
+        }).join('');
+      })
+      .catch(function(){
+        tb.innerHTML = '<tr><td colspan="10" class="ckart-muted">Bağlantı hatası</td></tr>';
+      });
+  };
+
+  function formTemizle() {
+    document.getElementById('ckart-y-id').value = '';
+    document.getElementById('ckart-y-ad').value = '';
+    document.getElementById('ckart-y-unvan').value = '';
+    document.getElementById('ckart-y-dep').value = '';
+    document.getElementById('ckart-y-tel').value = '';
+    document.getElementById('ckart-y-cep').value = '';
+    document.getElementById('ckart-y-eposta').value = '';
+    document.getElementById('ckart-y-ana').checked = false;
+    document.getElementById('ckart-y-ana').disabled = false;
+    document.getElementById('ckart-y-notlar').value = '';
+    var h = document.getElementById('ckart-modal-hata');
+    h.style.display = 'none'; h.textContent = '';
+  }
+
+  window.ckartModalKapat = function() {
+    var ov = document.getElementById('ckart-modal-overlay');
+    ov.classList.remove('acik');
+    ov.setAttribute('aria-hidden', 'true');
+  };
+
+  function modalAc(baslik) {
+    document.getElementById('ckart-modal-baslik').textContent = baslik;
+    var ov = document.getElementById('ckart-modal-overlay');
+    ov.classList.add('acik');
+    ov.setAttribute('aria-hidden', 'false');
+  }
+
+  window.ckartYetkiliYeni = function() {
+    if (!CAN_WRITE) return;
+    formTemizle();
+    modalAc('Yeni Yetkili');
+    setTimeout(function(){ document.getElementById('ckart-y-ad').focus(); }, 50);
+  };
+
+  window.ckartYetkiliDuzenle = function(id) {
+    var y = _cache.find(function(x){ return x.id == id; });
+    if (!y) return;
+    formTemizle();
+    document.getElementById('ckart-y-id').value = y.id;
+    document.getElementById('ckart-y-ad').value = y.ad_soyad || '';
+    document.getElementById('ckart-y-unvan').value = y.unvan || '';
+    document.getElementById('ckart-y-dep').value = y.departman || '';
+    document.getElementById('ckart-y-tel').value = y.telefon || '';
+    document.getElementById('ckart-y-cep').value = y.cep_telefonu || '';
+    document.getElementById('ckart-y-eposta').value = y.eposta || '';
+    document.getElementById('ckart-y-ana').checked = false;
+    document.getElementById('ckart-y-ana').disabled = true; /* ana ayrı aksiyon */
+    document.getElementById('ckart-y-notlar').value = y.notlar || '';
+    modalAc('Yetkili Düzenle');
+  };
+
+  window.ckartYetkiliKaydet = function() {
+    var editId = document.getElementById('ckart-y-id').value;
+    var ad = document.getElementById('ckart-y-ad').value.trim();
+    var h = document.getElementById('ckart-modal-hata');
+    if (!ad) { h.textContent = 'Ad Soyad zorunludur.'; h.style.display = 'block'; return; }
+    var payload = {
+      cari_id: CARI_ID,
+      ad_soyad: ad,
+      unvan: document.getElementById('ckart-y-unvan').value.trim(),
+      departman: document.getElementById('ckart-y-dep').value.trim(),
+      telefon: document.getElementById('ckart-y-tel').value.trim(),
+      cep_telefonu: document.getElementById('ckart-y-cep').value.trim(),
+      eposta: document.getElementById('ckart-y-eposta').value.trim(),
+      notlar: document.getElementById('ckart-y-notlar').value.trim()
+    };
+    var url = '/nexgen/api/yonetim/cari-yetkili-ekle';
+    if (editId) {
+      url = '/nexgen/api/yonetim/cari-yetkili-guncelle';
+      payload.id = parseInt(editId, 10);
+    } else {
+      payload.ana_yetkili = document.getElementById('ckart-y-ana').checked ? 1 : 0;
+    }
+    fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) })
+      .then(function(r){ return r.json().then(function(d){ return {status:r.status, d:d}; }); })
+      .then(function(x){
+        if (x.d && x.d.ok) { ckartModalKapat(); ckartYetkiliYukle(); return; }
+        h.textContent = (x.d && x.d.hata) || ('Hata ('+x.status+')');
+        h.style.display = 'block';
+      })
+      .catch(function(){ h.textContent = 'Bağlantı hatası'; h.style.display = 'block'; });
+  };
+
+  window.ckartYetkiliAna = function(id) {
+    fetch('/nexgen/api/yonetim/cari-yetkili-ana', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({id: id})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.ok) ckartYetkiliYukle();
+      else alert(d.hata || 'Hata');
+    })
+    .catch(function(){ alert('Bağlantı hatası'); });
+  };
+
+  window.ckartYetkiliAktif = function(id, aktif) {
+    var msg = aktif ? 'Bu yetkiliyi aktifleştir?' : 'Bu yetkiliyi pasifleştir?';
+    if (!confirm(msg)) return;
+    fetch('/nexgen/api/yonetim/cari-yetkili-aktif', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({id: id, aktif: aktif})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.ok) ckartYetkiliYukle();
+      else alert(d.hata || 'Hata');
+    })
+    .catch(function(){ alert('Bağlantı hatası'); });
+  };
+
+  document.getElementById('ckart-modal-overlay').addEventListener('click', function(e){
+    if (e.target === this) ckartModalKapat();
+  });
+
+  if (document.getElementById('ckart-panel-yetkililer').style.display !== 'none') {
+    ckartYetkiliYukle();
+  }
+})();
+</script>
+{% endblock %}
