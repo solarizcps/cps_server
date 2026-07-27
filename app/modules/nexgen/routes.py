@@ -13352,6 +13352,213 @@ def api_cari_sorumlu_pasif():
         con.close()
 
 
+# ─────────────────────────────────────────────────────────────
+# FAZ-CARI-YETKILI-MODEL-1 — müşteri yetkilileri (cari_yetkili)
+# ─────────────────────────────────────────────────────────────
+
+def _cari_yetkili_auth(con, cari_id: int, *, write: bool = False):
+    """Returns (ok_response_or_None, uid, yk)."""
+    from modules.auth import kullanici_yetkileri
+    from modules.nexgen.cari_yetkili_service import can_read_yetkili, can_write_yetkili
+
+    u = session.get('kullanici') or {}
+    yk = kullanici_yetkileri(u)
+    uid = _kullanici_id()
+    if not uid:
+        return (jsonify({'ok': False, 'hata': 'Oturum gerekli'}), 401), None, yk
+    if write:
+        if not can_write_yetkili(con, uid, cari_id, yk):
+            return (jsonify({'ok': False, 'hata': 'Yetki yok'}), 403), uid, yk
+    else:
+        if not can_read_yetkili(con, uid, cari_id, yk):
+            return (jsonify({'ok': False, 'hata': 'Yetki yok'}), 403), uid, yk
+    return None, uid, yk
+
+
+@nexgen_bp.route('/api/yonetim/cari-yetkili', methods=['GET'])
+@login_gerekli
+def api_cari_yetkili_liste():
+    """Cari müşteri yetkilileri listesi."""
+    from modules.nexgen.cari_yetkili_service import can_write_yetkili, list_cari_yetkilileri
+
+    cari_id = request.args.get('cari_id', type=int)
+    if not cari_id:
+        return jsonify({'ok': False, 'hata': 'cari_id gerekli'}), 400
+    sadece_aktif = request.args.get('aktif', type=int)
+    con = _db()
+    try:
+        err, uid, yk = _cari_yetkili_auth(con, cari_id, write=False)
+        if err:
+            return err
+        kayit = con.execute('SELECT id FROM nexgen_cari WHERE id=?', (cari_id,)).fetchone()
+        if not kayit:
+            return jsonify({'ok': False, 'hata': 'Cari bulunamadı'}), 404
+        liste = list_cari_yetkilileri(
+            con, cari_id, sadece_aktif=(sadece_aktif == 1),
+        )
+        return jsonify({
+            'ok': True,
+            'yetkililer': liste,
+            'can_write': can_write_yetkili(con, uid, cari_id, yk),
+        })
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/yonetim/cari-yetkili-ekle', methods=['POST'])
+@login_gerekli
+def api_cari_yetkili_ekle():
+    from modules.nexgen.cari_yetkili_service import yetkili_ekle
+
+    d = request.get_json(silent=True) or {}
+    cari_id = d.get('cari_id')
+    if not cari_id:
+        return jsonify({'ok': False, 'hata': 'cari_id zorunlu'}), 400
+    cari_id = int(cari_id)
+    con = _db()
+    try:
+        err, uid, _yk = _cari_yetkili_auth(con, cari_id, write=True)
+        if err:
+            return err
+        r = yetkili_ekle(
+            con,
+            cari_id,
+            d.get('ad_soyad') or '',
+            unvan=d.get('unvan'),
+            departman=d.get('departman'),
+            telefon=d.get('telefon'),
+            cep_telefonu=d.get('cep_telefonu'),
+            eposta=d.get('eposta'),
+            ana_yetkili=int(d.get('ana_yetkili') or 0),
+            notlar=d.get('notlar'),
+            kullanici_id=uid,
+        )
+        if not r.get('ok'):
+            return jsonify(r), 400
+        con.commit()
+        return jsonify(r)
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/yonetim/cari-yetkili-guncelle', methods=['POST'])
+@login_gerekli
+def api_cari_yetkili_guncelle():
+    from modules.nexgen.cari_yetkili_service import get_yetkili, yetkili_guncelle
+
+    d = request.get_json(silent=True) or {}
+    yetkili_id = d.get('id')
+    if not yetkili_id:
+        return jsonify({'ok': False, 'hata': 'id zorunlu'}), 400
+    con = _db()
+    try:
+        row = get_yetkili(con, int(yetkili_id))
+        if not row:
+            return jsonify({'ok': False, 'hata': 'Yetkili bulunamadı'}), 404
+        cari_id = int(row['cari_id'])
+        if d.get('cari_id') is not None and int(d['cari_id']) != cari_id:
+            return jsonify({'ok': False, 'hata': 'Başka carinin yetkilisi güncellenemez'}), 403
+        err, uid, _yk = _cari_yetkili_auth(con, cari_id, write=True)
+        if err:
+            return err
+        r = yetkili_guncelle(
+            con,
+            int(yetkili_id),
+            ad_soyad=d.get('ad_soyad'),
+            unvan=d.get('unvan'),
+            departman=d.get('departman'),
+            telefon=d.get('telefon'),
+            cep_telefonu=d.get('cep_telefonu'),
+            eposta=d.get('eposta'),
+            notlar=d.get('notlar'),
+            kullanici_id=uid,
+            beklenen_cari_id=cari_id,
+        )
+        if not r.get('ok'):
+            return jsonify(r), 400
+        con.commit()
+        return jsonify(r)
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/yonetim/cari-yetkili-aktif', methods=['POST'])
+@login_gerekli
+def api_cari_yetkili_aktif():
+    from modules.nexgen.cari_yetkili_service import get_yetkili, yetkili_aktif_ayarla
+
+    d = request.get_json(silent=True) or {}
+    yetkili_id = d.get('id')
+    if yetkili_id is None or 'aktif' not in d:
+        return jsonify({'ok': False, 'hata': 'id ve aktif zorunlu'}), 400
+    con = _db()
+    try:
+        row = get_yetkili(con, int(yetkili_id))
+        if not row:
+            return jsonify({'ok': False, 'hata': 'Yetkili bulunamadı'}), 404
+        cari_id = int(row['cari_id'])
+        err, uid, _yk = _cari_yetkili_auth(con, cari_id, write=True)
+        if err:
+            return err
+        r = yetkili_aktif_ayarla(
+            con,
+            int(yetkili_id),
+            int(d.get('aktif') or 0),
+            kullanici_id=uid,
+            beklenen_cari_id=cari_id,
+        )
+        if not r.get('ok'):
+            return jsonify(r), 400
+        con.commit()
+        return jsonify(r)
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/yonetim/cari-yetkili-ana', methods=['POST'])
+@login_gerekli
+def api_cari_yetkili_ana():
+    from modules.nexgen.cari_yetkili_service import ana_yetkili_yap, get_yetkili
+
+    d = request.get_json(silent=True) or {}
+    yetkili_id = d.get('id')
+    if not yetkili_id:
+        return jsonify({'ok': False, 'hata': 'id zorunlu'}), 400
+    con = _db()
+    try:
+        row = get_yetkili(con, int(yetkili_id))
+        if not row:
+            return jsonify({'ok': False, 'hata': 'Yetkili bulunamadı'}), 404
+        cari_id = int(row['cari_id'])
+        err, uid, _yk = _cari_yetkili_auth(con, cari_id, write=True)
+        if err:
+            return err
+        r = ana_yetkili_yap(
+            con,
+            int(yetkili_id),
+            kullanici_id=uid,
+            beklenen_cari_id=cari_id,
+        )
+        if not r.get('ok'):
+            return jsonify(r), 400
+        con.commit()
+        return jsonify(r)
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
 # =============================================================
 # FAZ-3A — NexGen Depo Mal Kabul
 # =============================================================

@@ -302,6 +302,13 @@ MANIFEST: tuple[MigEntry, ...] = (
             ("Cari_Har", "kaynak_sistem"),
         ),
     ),
+    MigEntry(
+        133, "133_cari_yetkili",
+        "133_cari_yetkili.py",
+        "cari_yetkili — müşteri yetkili modeli (nexgen_cari)",
+        dependencies=(121,),
+        required_tables=("cari_yetkili",),
+    ),
 )
 
 BY_VERSION = {m.version: m for m in MANIFEST}

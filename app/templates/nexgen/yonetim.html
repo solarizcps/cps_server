@@ -402,6 +402,33 @@
           <button type="button" class="ngsk-btn-kaydet" style="font-size:12px;padding:6px 14px;" onclick="cariSorumluAta()">Sorumlu Ata</button>
         </div>
       </div>
+      {# FAZ-CARI-YETKILI-MODEL-1 — müşteri yetkilileri (minimal doğrulama UI) #}
+      <div id="cari-yetkili-panel" style="display:none;border-top:1px solid #e5e7eb;padding-top:14px;margin-top:4px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <span style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;">
+            Müşteri Yetkilileri
+          </span>
+        </div>
+        <div id="cari-yetkili-liste" style="font-size:13px;color:#374151;min-height:24px;">
+          <span style="color:#9ca3af;">Yükleniyor…</span>
+        </div>
+        <div id="cari-yetkili-aksiyon" style="display:none;margin-top:12px;padding-top:12px;border-top:1px dashed #e5e7eb;">
+          <input type="hidden" id="cari-yetkili-edit-id" value="">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+            <input type="text" id="cari-yetkili-ad" class="ngsk-inp" placeholder="Ad Soyad *" style="font-size:13px;">
+            <input type="text" id="cari-yetkili-unvan" class="ngsk-inp" placeholder="Ünvan" style="font-size:13px;">
+            <input type="text" id="cari-yetkili-dep" class="ngsk-inp" placeholder="Departman" style="font-size:13px;">
+            <input type="text" id="cari-yetkili-tel" class="ngsk-inp" placeholder="Telefon" style="font-size:13px;">
+            <input type="text" id="cari-yetkili-cep" class="ngsk-inp" placeholder="Cep Telefonu" style="font-size:13px;">
+            <input type="text" id="cari-yetkili-eposta" class="ngsk-inp" placeholder="E-posta" style="font-size:13px;">
+          </div>
+          <label style="font-size:12px;display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+            <input type="checkbox" id="cari-yetkili-ana"> Ana yetkili
+          </label>
+          <button type="button" class="ngsk-btn-kaydet" style="font-size:12px;padding:6px 14px;" onclick="cariYetkiliKaydet()">Yetkili Kaydet</button>
+          <button type="button" class="ngsk-btn-iptal" style="font-size:12px;padding:6px 14px;margin-left:6px;" onclick="cariYetkiliFormTemizle()">Temizle</button>
+        </div>
+      </div>
     </div>
     <div class="ngsk-modal-footer">
       <button class="ngsk-btn-iptal" onclick="ngymKapat('cari')">İptal</button>
@@ -1194,6 +1221,8 @@ function cariYeniModalAc() {
   document.getElementById('cari-modal-unvan').value = '';
   var sp = document.getElementById('cari-sorumlu-panel');
   if (sp) sp.style.display = 'none';
+  var yp = document.getElementById('cari-yetkili-panel');
+  if (yp) yp.style.display = 'none';
   kodInp.value = '';
   kodInp.readOnly = true;
   document.getElementById('cari-modal-baslik').textContent = 'Yeni Cari';
@@ -1234,6 +1263,8 @@ function cariDuzenleModalAc(id, kod, unvan) {
   document.getElementById('ngym-cari-overlay').classList.add('acik');
   var sp = document.getElementById('cari-sorumlu-panel');
   if (sp) { sp.style.display = 'block'; cariSorumluYukle(id); }
+  var yp = document.getElementById('cari-yetkili-panel');
+  if (yp) { yp.style.display = 'block'; cariYetkiliYukle(id); }
   setTimeout(function(){ document.getElementById('cari-modal-unvan').focus(); }, 200);
 }
 
@@ -1349,6 +1380,140 @@ function cariSorumluRolDegistir(atamaId, rol) {
   .then(function(r){ return r.json(); })
   .then(function(d){
     if (d.ok) cariSorumluYukle(cariId);
+    else alert(d.hata || 'Hata');
+  })
+  .catch(function(){ alert('Bağlantı hatası'); });
+}
+
+var _cariYetkiliCanWrite = false;
+
+function cariYetkiliFormTemizle() {
+  document.getElementById('cari-yetkili-edit-id').value = '';
+  document.getElementById('cari-yetkili-ad').value = '';
+  document.getElementById('cari-yetkili-unvan').value = '';
+  document.getElementById('cari-yetkili-dep').value = '';
+  document.getElementById('cari-yetkili-tel').value = '';
+  document.getElementById('cari-yetkili-cep').value = '';
+  document.getElementById('cari-yetkili-eposta').value = '';
+  document.getElementById('cari-yetkili-ana').checked = false;
+}
+
+function cariYetkiliYukle(cariId) {
+  var liste = document.getElementById('cari-yetkili-liste');
+  var aks = document.getElementById('cari-yetkili-aksiyon');
+  if (!liste) return;
+  liste.innerHTML = '<span style="color:#9ca3af;">Yükleniyor…</span>';
+  fetch('/nexgen/api/yonetim/cari-yetkili?cari_id=' + encodeURIComponent(cariId))
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d.ok) { liste.textContent = d.hata || 'Yüklenemedi'; return; }
+      _cariYetkiliCanWrite = !!d.can_write;
+      var rows = d.yetkililer || [];
+      if (!rows.length) {
+        liste.innerHTML = '<span style="color:#9ca3af;">Henüz müşteri yetkilisi yok.</span>';
+      } else {
+        liste.innerHTML = rows.map(function(y){
+          var badge = (y.ana_yetkili == 1 && y.aktif == 1)
+            ? ' <span style="color:#0f766e;font-weight:700;">(Ana)</span>' : '';
+          var pasif = (y.aktif != 1)
+            ? ' <span style="color:#9ca3af;">(Pasif)</span>' : '';
+          var btns = '';
+          if (_cariYetkiliCanWrite) {
+            btns = '<button type="button" style="font-size:11px;margin-left:6px;" onclick="cariYetkiliDuzenle('+y.id+')">Düzenle</button>';
+            if (y.aktif == 1) {
+              btns += '<button type="button" style="font-size:11px;margin-left:4px;" onclick="cariYetkiliAna('+y.id+')">Ana Yap</button>';
+              btns += '<button type="button" style="font-size:11px;margin-left:4px;" onclick="cariYetkiliPasif('+y.id+')">Pasifleştir</button>';
+            }
+          }
+          return '<div style="padding:6px 0;border-bottom:1px solid #f1f5f9;">'
+            + '<strong>' + (y.ad_soyad || '') + '</strong>' + badge + pasif
+            + (y.unvan ? (' · ' + y.unvan) : '')
+            + (y.telefon ? (' · ' + y.telefon) : '')
+            + (y.eposta ? (' · ' + y.eposta) : '')
+            + btns + '</div>';
+        }).join('');
+      }
+      if (aks) aks.style.display = _cariYetkiliCanWrite ? 'block' : 'none';
+      if (_cariYetkiliCanWrite) cariYetkiliFormTemizle();
+    })
+    .catch(function(){ liste.textContent = 'Bağlantı hatası'; });
+}
+
+function cariYetkiliDuzenle(id) {
+  var cariId = document.getElementById('cari-modal-id').value;
+  fetch('/nexgen/api/yonetim/cari-yetkili?cari_id=' + encodeURIComponent(cariId))
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var y = (d.yetkililer || []).find(function(x){ return x.id == id; });
+      if (!y) return;
+      document.getElementById('cari-yetkili-edit-id').value = y.id;
+      document.getElementById('cari-yetkili-ad').value = y.ad_soyad || '';
+      document.getElementById('cari-yetkili-unvan').value = y.unvan || '';
+      document.getElementById('cari-yetkili-dep').value = y.departman || '';
+      document.getElementById('cari-yetkili-tel').value = y.telefon || '';
+      document.getElementById('cari-yetkili-cep').value = y.cep_telefonu || '';
+      document.getElementById('cari-yetkili-eposta').value = y.eposta || '';
+      document.getElementById('cari-yetkili-ana').checked = false;
+    });
+}
+
+function cariYetkiliKaydet() {
+  var cariId = document.getElementById('cari-modal-id').value;
+  var editId = document.getElementById('cari-yetkili-edit-id').value;
+  var ad = document.getElementById('cari-yetkili-ad').value.trim();
+  if (!cariId || !ad) { alert('Ad Soyad zorunlu.'); return; }
+  var payload = {
+    cari_id: parseInt(cariId, 10),
+    ad_soyad: ad,
+    unvan: document.getElementById('cari-yetkili-unvan').value.trim(),
+    departman: document.getElementById('cari-yetkili-dep').value.trim(),
+    telefon: document.getElementById('cari-yetkili-tel').value.trim(),
+    cep_telefonu: document.getElementById('cari-yetkili-cep').value.trim(),
+    eposta: document.getElementById('cari-yetkili-eposta').value.trim(),
+    ana_yetkili: document.getElementById('cari-yetkili-ana').checked ? 1 : 0
+  };
+  var url = '/nexgen/api/yonetim/cari-yetkili-ekle';
+  if (editId) {
+    url = '/nexgen/api/yonetim/cari-yetkili-guncelle';
+    payload.id = parseInt(editId, 10);
+    delete payload.ana_yetkili;
+  }
+  fetch(url, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    if (d.ok) { cariYetkiliYukle(cariId); }
+    else alert(d.hata || 'Hata');
+  })
+  .catch(function(){ alert('Bağlantı hatası'); });
+}
+
+function cariYetkiliAna(id) {
+  var cariId = document.getElementById('cari-modal-id').value;
+  fetch('/nexgen/api/yonetim/cari-yetkili-ana', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({id: id})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    if (d.ok) cariYetkiliYukle(cariId);
+    else alert(d.hata || 'Hata');
+  })
+  .catch(function(){ alert('Bağlantı hatası'); });
+}
+
+function cariYetkiliPasif(id) {
+  if (!confirm('Bu yetkiliyi pasifleştir?')) return;
+  var cariId = document.getElementById('cari-modal-id').value;
+  fetch('/nexgen/api/yonetim/cari-yetkili-aktif', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({id: id, aktif: 0})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    if (d.ok) cariYetkiliYukle(cariId);
     else alert(d.hata || 'Hata');
   })
   .catch(function(){ alert('Bağlantı hatası'); });
