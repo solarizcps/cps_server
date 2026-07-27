@@ -97,7 +97,7 @@
           <tr>
             <th class="pzm-th">Sipariş No</th>
             <th class="pzm-th">Müşteri</th>
-            <th class="pzm-th">Tarih</th>
+            <th class="pzm-th">Sipariş Tarihi</th>
             <th class="pzm-th pzm-th-r">Top. Miktar</th>
             <th class="pzm-th">Termin</th>
             <th class="pzm-th">Durum</th>
@@ -1393,7 +1393,7 @@ window.pzmEkranGec = function(ekran) {
 function pzmTabloSatirHtml(t, idx) {
   var no    = t.siparis_no || ('T-' + t.id);
   var cari  = t.cari_unvan || '—';
-  var tarih = pzmTarihGoster(t.olusturma_tarihi);
+  var tarih = pzmTarihGoster(t.siparis_tarihi || t.olusturma_tarihi);
   var term  = t.en_yakin_termin ? pzmTarihGoster(t.en_yakin_termin) : '—';
   var topKg = parseFloat(t.toplam_kg || 0);
   if (!topKg && t.payload && t.payload.boyut_miktar) {

@@ -235,6 +235,15 @@ def pzm_siparis_termin_coz(
     return pzm_en_erken_gecerli_termin(kalem_termins)
 
 
+def pzm_siparis_tarihi_coz(payload, olusturma_tarihi) -> str | None:
+    """Liste/form için normalize iş sipariş tarihi."""
+    if payload:
+        iso = pzm_iso_tarih(payload.get('siparis_tarihi'))
+        if iso:
+            return iso
+    return pzm_iso_tarih(olusturma_tarihi)
+
+
 def pzm_siparis_ozet(
     kalemler: list[dict],
     header_termin=None,

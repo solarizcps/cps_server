@@ -18516,6 +18516,8 @@ def _pzm_talep_satir_dict(row, con=None):
             d['vade_gun'] = payload.get('vade_gun')
         if not d.get('anlasma_birim_fiyat'):
             d['anlasma_birim_fiyat'] = payload.get('anlasma_birim_fiyat')
+    from modules.nexgen.pzm_siparis_read import pzm_siparis_tarihi_coz
+    d['siparis_tarihi'] = pzm_siparis_tarihi_coz(payload, d.get('olusturma_tarihi'))
     d['durum_etiket'] = {
         'TASLAK': 'Taslak',
         'ONAY_BEKLIYOR': 'Onay Bekliyor',
