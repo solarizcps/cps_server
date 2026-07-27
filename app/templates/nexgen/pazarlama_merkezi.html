@@ -3296,6 +3296,11 @@ function pzmDetayAdminSilBtnGuncelle(t) {
   // FAZ-1B: allowlist yok — yalnız sonuç durumları UI'da pasif
   var aktif = (d !== 'BITTI' && d !== 'SEVK_EDILDI' && d !== 'TAMAMLANDI');
   btn.style.display = '';
+  if (t.sevkiyat_bagli) {
+    btn.disabled = true;
+    btn.title = 'Bu siparişe bağlı sevkiyat kaydı bulunduğu için silinemez.';
+    return;
+  }
   btn.disabled = !aktif;
   btn.title = aktif
     ? 'Siparişi kalıcı sil (ADMIN) — finans/sevkiyat/stok ilişkisi varsa engellenir'

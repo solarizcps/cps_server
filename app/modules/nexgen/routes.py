@@ -18636,6 +18636,19 @@ def _pzm_talep_satir_dict(row, con=None):
                 d['onay_snapshot'] = snap
         except Exception:
             d.setdefault('onay_kayitli', False)
+        # FAZ-PZM-ADMIN-SILME-SEVKIYAT-GUARD: UI ipucu (backend guard asıl engel)
+        try:
+            if _pzm_tablo_var(con, 'mo_musteri_sevkiyat'):
+                d['sevkiyat_bagli'] = bool(con.execute(
+                    "SELECT EXISTS("
+                    "  SELECT 1 FROM mo_musteri_sevkiyat WHERE siparis_id=?"
+                    ") AS n",
+                    (d['id'],),
+                ).fetchone()['n'])
+            else:
+                d['sevkiyat_bagli'] = False
+        except Exception:
+            d.setdefault('sevkiyat_bagli', False)
     if con is not None and d.get('id'):
         gorunen, gerekce = _pzm_siparis_gorunen_durum(con, d['id'], d.get('durum'))
         if gorunen and gorunen != (d.get('durum') or '').upper():
@@ -19418,6 +19431,19 @@ def _pzm_siparis_sil_blok_nedenleri(con, talep_id, siparis_no, durum):
             )
             break
 
+    # FAZ-PZM-ADMIN-SILME-SEVKIYAT-GUARD: doğrudan mo_musteri_sevkiyat.siparis_id
+    if _pzm_tablo_var(con, 'mo_musteri_sevkiyat'):
+        sv_mo = con.execute(
+            "SELECT EXISTS("
+            "  SELECT 1 FROM mo_musteri_sevkiyat WHERE siparis_id=?"
+            ") AS n",
+            (talep_id,),
+        ).fetchone()['n']
+        if sv_mo:
+            nedenler.append(
+                'Bu siparişe bağlı sevkiyat kaydı bulunduğu için silinemez.'
+            )
+
     # finans: yalnız siparis_no (siparis_id MO/PZM id çakışmasına açık)
     if _pzm_tablo_var(con, 'finans_belgesi') and (siparis_no or '').strip():
         fb = con.execute(
@@ -19479,7 +19505,14 @@ def _pzm_siparis_sil_transaction(con, talep_id, confirm_no):
         con, talep_id, siparis_no, row['durum'],
     )
     if nedenler:
-        return {'ok': False, 'hata': ' '.join(nedenler), 'nedenler': nedenler, 'status': 400}
+        # Sevkiyat ilişkisi = conflict (409); diğer guard'lar mevcut 400 sözleşmesi
+        status = 409 if any('sevkiyat kaydı bulunduğu' in (n or '') for n in nedenler) else 400
+        return {
+            'ok': False,
+            'hata': ' '.join(nedenler),
+            'nedenler': nedenler,
+            'status': status,
+        }
 
     plan_ids = [
         r['id'] for r in con.execute(
