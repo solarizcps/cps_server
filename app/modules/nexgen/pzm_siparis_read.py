@@ -8,6 +8,7 @@ kalem tablosu boşsa sanal kalem üretilir.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 PZM_JSON_PREFIX = '__PZM_V1__'
@@ -191,6 +192,33 @@ def pzm_siparis_kalemleri_getir(con, planlama_siparis_id: int) -> list[dict[str,
     return [pzm_kalem_dict_from_payload(payload, uretim_plan_id=plan_id)]
 
 
+def pzm_iso_tarih(val) -> str | None:
+    """Geçerli ISO tarih (1970–2100) veya None."""
+    if val is None or val == '':
+        return None
+    s = str(val).strip()
+    iso = s[:10]
+    if re.match(r'^\d{4}-\d{2}-\d{2}$', iso):
+        y = int(iso[:4])
+        if 1970 <= y <= 2100:
+            return iso
+    m = re.match(r'^(\d{1,2})[\.\/-](\d{1,2})[\.\/-](\d{4})$', s)
+    if m:
+        y = int(m.group(3))
+        if 1970 <= y <= 2100:
+            return f'{y}-{m.group(2).zfill(2)}-{m.group(1).zfill(2)}'
+    return None
+
+
+def pzm_en_erken_gecerli_termin(degerler) -> str | None:
+    gecerli = []
+    for v in degerler:
+        iso = pzm_iso_tarih(v)
+        if iso:
+            gecerli.append(iso)
+    return min(gecerli) if gecerli else None
+
+
 def pzm_siparis_ozet(kalemler: list[dict]) -> dict[str, Any]:
     toplam = round(sum(float(k.get('toplam_kg') or 0) for k in kalemler), 3)
     terlik = taban = dokme = 0.0
@@ -204,16 +232,16 @@ def pzm_siparis_ozet(kalemler: list[dict]) -> dict[str, Any]:
             dokme += float(k.get('miktar_m') or kg)
         elif aile == 'TABAN':
             taban += kg
-        t = k.get('termin_tarihi')
-        if t:
-            terminler.append(str(t)[:10])
+        iso = pzm_iso_tarih(k.get('termin_tarihi'))
+        if iso:
+            terminler.append(iso)
     return {
         'kalem_sayisi': len(kalemler),
         'toplam_kg': toplam,
         'terlik_kg': round(terlik, 3),
         'taban_kg': round(taban, 3),
         'dokme_kg': round(dokme, 3),
-        'en_yakin_termin': min(terminler) if terminler else None,
+        'en_yakin_termin': pzm_en_erken_gecerli_termin(terminler),
     }
 
 

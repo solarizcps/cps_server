@@ -1154,6 +1154,17 @@ function pzmTarihGoster(val) {
   return iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' + iso.slice(0, 4);
 }
 
+function pzmEnErkenGecerliTermin(degerler) {
+  var gecerli = [];
+  (degerler || []).forEach(function(v) {
+    var iso = pzmIsoTarih(v);
+    if (iso) gecerli.push(iso);
+  });
+  if (!gecerli.length) return '';
+  gecerli.sort();
+  return gecerli[0];
+}
+
 function pzmKilit(id, ac) {
   var w = $id(id); if (!w) return;
   w.classList.toggle('pzm-kilitli', !ac);
@@ -3045,12 +3056,13 @@ function pzmOzetHesapla() {
     if (a === 'TERLIK') oz.terlik += tk;
     else if (a === 'TABAN') oz.taban += tk;
     else if (a === 'DOKME') oz.dokme += parseFloat(k.miktar_m)||0;
-    if (k.termin_tarihi) oz.terminler.push(k.termin_tarihi);
+    var kt = pzmIsoTarih(k.termin_tarihi);
+    if (kt) oz.terminler.push(kt);
   });
   oz.toplam = Math.round(oz.toplam * 1000) / 1000;
-  var genelTerm = $id('pzm-genel-termin')?.value;
+  var genelTerm = pzmIsoTarih($id('pzm-genel-termin')?.value);
   if (genelTerm) oz.terminler.push(genelTerm);
-  oz.enYakin = oz.terminler.length ? oz.terminler.sort()[0] : null;
+  oz.enYakin = pzmEnErkenGecerliTermin(oz.terminler) || null;
   return oz;
 }
 
@@ -3766,7 +3778,6 @@ window.pzmTalepYukle = function(id) {
   pzmCariDegisti();
   var st = $id('pzm-siparis-tarihi');
   if (st) st.value = pzmIsoTarih((t.payload && t.payload.siparis_tarihi) || t.olusturma_tarihi) || pzmBugun();
-  if ($id('pzm-genel-termin')) $id('pzm-genel-termin').value = pzmIsoTarih(t.termin_tarihi || (t.payload && t.payload.genel_termin_tarihi) || '');
   if ($id('pzm-para-birimi')) {
     var pb = t.anlasma_para_birimi || (t.payload && t.payload.anlasma_para_birimi) || '';
     $id('pzm-para-birimi').value = pb;
@@ -3797,6 +3808,11 @@ window.pzmTalepYukle = function(id) {
       notlar: k.notlar,
     };
   });
+  var genelTerm = pzmIsoTarih(t.termin_tarihi || (t.payload && t.payload.genel_termin_tarihi) || '');
+  if (!genelTerm) {
+    genelTerm = pzmEnErkenGecerliTermin(_pzmKalemler.map(function(k) { return k.termin_tarihi; }));
+  }
+  if ($id('pzm-genel-termin')) $id('pzm-genel-termin').value = genelTerm || '';
   var fn = $id('pzm-form-no'); if (fn) fn.textContent = t.siparis_no || String(t.id);
   var oz = $id('pzm-oz-durum');
   if (oz) oz.innerHTML = pzmRozetHtml(t.durum, t.durum_etiket || t.durum);
