@@ -19292,6 +19292,149 @@ def api_pazarlama_siparis_uretime_gonder(talep_id):
         con.close()
 
 
+def _pzm_mi_excel_num(v):
+    """Excel hücresi — yuvarlama yok; gerçek decimal koru."""
+    if v is None or v == '':
+        return None
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, (int, float)):
+        return float(v)
+    try:
+        s = str(v).strip().replace(',', '.')
+        if not s:
+            return None
+        return float(s)
+    except (TypeError, ValueError):
+        return str(v)
+
+
+@nexgen_bp.route('/api/pazarlama/mi-excel', methods=['POST'])
+@yetki_gerekli('nexgen.plan.view', 'can_view')
+def api_pazarlama_mi_excel():
+    """FAZ-PZM-MI-EXCEL — UI'deki MI rapor payload'ını xlsx olarak döner (yeniden hesap yok)."""
+    from io import BytesIO
+    from datetime import datetime
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, Alignment
+    except ImportError:
+        return jsonify({'ok': False, 'hata': 'openpyxl yüklü değil'}), 500
+
+    data = request.get_json(silent=True) or {}
+    siparis_no = (data.get('siparis_no') or 'PZM').strip() or 'PZM'
+    toplu = data.get('toplu') if isinstance(data.get('toplu'), list) else []
+    detay = data.get('detay') if isinstance(data.get('detay'), list) else []
+    alt_emir = data.get('alt_emir') if isinstance(data.get('alt_emir'), list) else []
+    if not toplu and not detay and not alt_emir:
+        return jsonify({'ok': False, 'hata': 'Aktarılacak malzeme ihtiyaç verisi yok.'}), 400
+
+    wb = openpyxl.Workbook()
+    hdr_font = Font(bold=True)
+
+    # Sayfa 1 — Toplu
+    ws1 = wb.active
+    ws1.title = 'Toplu Malzeme Ihtiyac'
+    h1 = ['Malzeme Kodu', 'Malzeme Adı', 'Toplam İhtiyaç', 'Stok', 'Eksik', 'Birim', 'Durum']
+    ws1.append(h1)
+    for c in ws1[1]:
+        c.font = hdr_font
+    for r in toplu:
+        if not isinstance(r, dict):
+            continue
+        gerekli = r.get('gerekli_kg')
+        if gerekli is None:
+            gerekli = r.get('toplam_gerekli_kg')
+        net = r.get('net_eksik_kg')
+        try:
+            net_f = float(net or 0)
+        except (TypeError, ValueError):
+            net_f = 0.0
+        durum = r.get('durum') or r.get('malzeme_durumu')
+        if not durum:
+            yeterli = r.get('yeterli')
+            if yeterli is None:
+                yeterli = net_f <= 0.001
+            durum = 'Yeterli' if yeterli else 'Eksik'
+        ws1.append([
+            r.get('stok_kod') or '',
+            r.get('stok_ad') or r.get('pigment_ad') or '',
+            _pzm_mi_excel_num(gerekli),
+            _pzm_mi_excel_num(r.get('kullanilabilir_kg')),
+            _pzm_mi_excel_num(net),
+            r.get('birim') or 'KG',
+            str(durum),
+        ])
+
+    # Sayfa 2 — Detay
+    ws2 = wb.create_sheet('Detayli Malzeme Ihtiyac')
+    h2 = [
+        'Sipariş No', 'Kalem', 'Plan', 'Ürün', 'Formül', 'Renk',
+        'Malzeme Kodu', 'Malzeme Adı', 'İhtiyaç', 'Birim',
+    ]
+    ws2.append(h2)
+    for c in ws2[1]:
+        c.font = hdr_font
+    for r in detay:
+        if not isinstance(r, dict):
+            continue
+        ws2.append([
+            siparis_no,
+            r.get('kalem_sira') or r.get('sira_no') or r.get('kalem') or '',
+            r.get('plan_kodu') or r.get('plan_id') or '',
+            r.get('urun') or r.get('urun_ailesi') or r.get('boyut') or '',
+            r.get('formul_kod') or r.get('formul_ad') or '',
+            r.get('rv_ad') or r.get('renk') or '',
+            r.get('stok_kod') or '',
+            r.get('stok_ad') or r.get('pigment_ad') or '',
+            _pzm_mi_excel_num(r.get('gerekli_kg')),
+            r.get('birim') or 'KG',
+        ])
+
+    # Sayfa 3 — Alt Emir / Plan
+    ws3 = wb.create_sheet('Alt Emir Plan')
+    h3 = [
+        'Plan Kodu', 'Boyut', 'Tam Formül KG', 'Formül Adedi',
+        'Toplam Üretim KG', 'Fazla KG', 'Durum',
+    ]
+    ws3.append(h3)
+    for c in ws3[1]:
+        c.font = hdr_font
+    for r in alt_emir:
+        if not isinstance(r, dict):
+            continue
+        ws3.append([
+            r.get('plan_kodu') or r.get('formul_ad') or '',
+            r.get('boyut') or '',
+            _pzm_mi_excel_num(r.get('tam_formul_kg') if r.get('tam_formul_kg') is not None
+                              else r.get('formul_batch_kg')),
+            _pzm_mi_excel_num(r.get('formul_adedi')),
+            _pzm_mi_excel_num(r.get('uretilecek_kg') if r.get('uretilecek_kg') is not None
+                              else r.get('toplam_uretim_kg')),
+            _pzm_mi_excel_num(r.get('fazla_kg')),
+            r.get('durum') or r.get('uyari') or ('Hazır' if r.get('ok') is not False else 'Hata'),
+        ])
+
+    for ws in (ws1, ws2, ws3):
+        for col in ws.columns:
+            letter = col[0].column_letter
+            ws.column_dimensions[letter].width = 16
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+    safe_no = ''.join(ch if (ch.isalnum() or ch in '-_') else '_' for ch in siparis_no)[:48]
+    dosya = f'{safe_no}_Malzeme_Ihtiyac_{ts}.xlsx'
+    from flask import send_file
+    return send_file(
+        buf,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=dosya,
+    )
+
+
 # ═════════════════════════════════════════════════════════════
 # ÜRETİM EMİRLERİ MERKEZİ V1 — plan → batch → tablet
 # ═════════════════════════════════════════════════════════════

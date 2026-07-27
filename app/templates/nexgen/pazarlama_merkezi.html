@@ -1041,8 +1041,9 @@ button.rm-page-geri { appearance:none; }
 .pzm-mi-rapor-excel {
   display:block; width:100%; padding:12px 14px; border:none; border-top:1px solid var(--rm-border);
   background:var(--rm-gold, #f6c343); color:var(--rm-t1, #0f172a);
-  font-size:12px; font-weight:800; cursor:not-allowed; opacity:.85;
+  font-size:12px; font-weight:800; cursor:pointer; opacity:1;
 }
+.pzm-mi-rapor-excel[disabled] { cursor:not-allowed; opacity:.85; }
 .pzm-detay-kalem-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
 .pzm-plan-kart-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
 .pzm-mpr-aksiyon-wrap {
@@ -1660,7 +1661,19 @@ function pzmMiRaporKartShell(tid, tab, topluHtml, detayHtml) {
   html += '</div>';
   html += '<div class="pzm-mi-rapor-panel' + (tab === 'toplu' ? ' aktif' : '') + '">' + topluHtml + '</div>';
   html += '<div class="pzm-mi-rapor-panel' + (tab === 'detay' ? ' aktif' : '') + '">' + detayHtml + '</div>';
-  html += '<button type="button" class="pzm-mi-rapor-excel" disabled title="Excel dışa aktarma sonraki fazda etkinleştirilecek.">Excel\'e Aktar</button>';
+  var stExcel = pzmMprStateEnsure(tid);
+  var excelOk = !!(stExcel.miRaporPayload && (
+    (stExcel.miRaporPayload.toplu && stExcel.miRaporPayload.toplu.length) ||
+    (stExcel.miRaporPayload.detay && stExcel.miRaporPayload.detay.length)
+  ));
+  var tidArg = (typeof tid === 'number') ? String(tid) : ("'" + String(tid).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'");
+  html += '<button type="button" class="pzm-mi-rapor-excel" id="pzm-mi-excel-btn-' + pzmEsc(String(tid)) + '"';
+  if (excelOk) {
+    html += ' onclick="pzmMiExcelAktar(' + tidArg + ')" title="Malzeme ihtiyaç raporunu Excel\'e aktar"';
+  } else {
+    html += ' disabled title="Önce malzeme ihtiyacı analizini tamamlayın"';
+  }
+  html += '>Excel\'e Aktar</button>';
   html += '</div>';
   return html;
 }
@@ -1761,6 +1774,94 @@ window.pzmMiRaporTabDegist = function(tid, tab) {
   var st = pzmMprStateEnsure(tid);
   st.miRaporTab = tab === 'detay' ? 'detay' : 'toplu';
   pzmMprUiGuncelle(tid);
+};
+
+function pzmMiExcelAltEmirSatirlari(st) {
+  var rows = [];
+  (st.planlar || []).forEach(function(p) {
+    var planBoyutlar = pzmDetayAltEmirPlanBoyutlari(p);
+    if (planBoyutlar.length) {
+      planBoyutlar.forEach(function(b) {
+        rows.push({
+          plan_kodu: p.plan_kodu || '',
+          boyut: b.boyut || '',
+          tam_formul_kg: b.tam_formul_kg,
+          formul_adedi: b.formul_adedi,
+          uretilecek_kg: b.uretilecek_kg,
+          fazla_kg: b.fazla_kg,
+          durum: 'Hazır',
+          ok: true,
+        });
+      });
+      return;
+    }
+    var ae = st.altEmirSonuclari[String(p.plan_id || '')];
+    if (!ae) return;
+    rows.push({
+      plan_kodu: p.plan_kodu || (ae.formul_ad || ''),
+      formul_ad: ae.formul_ad,
+      boyut: ae.boyut || '',
+      tam_formul_kg: ae.tam_formul_kg != null ? ae.tam_formul_kg : ae.formul_batch_kg,
+      formul_adedi: ae.formul_adedi,
+      uretilecek_kg: ae.uretilecek_kg != null ? ae.uretilecek_kg : ae.toplam_uretim_kg,
+      fazla_kg: ae.fazla_kg,
+      durum: ae.ok === false ? (ae.hata || 'Hata') : (ae.uyari || 'Hazır'),
+      ok: ae.ok !== false,
+      uyari: ae.uyari,
+    });
+  });
+  return rows;
+}
+
+window.pzmMiExcelAktar = function(tid) {
+  var st = pzmMprStateEnsure(tid);
+  var payload = st.miRaporPayload;
+  if (!payload || (!(payload.toplu || []).length && !(payload.detay || []).length)) {
+    alert('Aktarılacak malzeme ihtiyaç verisi yok. Önce analizi tamamlayın.');
+    return;
+  }
+  var t = pzmTalepBul(tid) || {};
+  var siparisNo = t.siparis_no || ('T-' + tid);
+  var btn = document.getElementById('pzm-mi-excel-btn-' + tid);
+  if (btn) { btn.disabled = true; btn.textContent = 'Excel hazırlanıyor…'; }
+  fetch('/nexgen/api/pazarlama/mi-excel', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      siparis_no: siparisNo,
+      talep_id: t.id || tid,
+      toplu: payload.toplu || [],
+      detay: payload.detay || [],
+      alt_emir: pzmMiExcelAltEmirSatirlari(st),
+    }),
+  })
+  .then(function(r) {
+    var ct = (r.headers.get('Content-Type') || '');
+    if (!r.ok || ct.indexOf('json') >= 0) {
+      return r.json().then(function(d) {
+        throw new Error((d && d.hata) || ('Excel oluşturulamadı (' + r.status + ')'));
+      });
+    }
+    var disp = r.headers.get('Content-Disposition') || '';
+    var m = disp.match(/filename\*?=(?:UTF-8'')?["']?([^"';\n]+)/i);
+    var fname = m ? decodeURIComponent(m[1]) : (siparisNo + '_Malzeme_Ihtiyac.xlsx');
+    return r.blob().then(function(blob) { return { blob: blob, fname: fname }; });
+  })
+  .then(function(res) {
+    var url = URL.createObjectURL(res.blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = res.fname;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function() { URL.revokeObjectURL(url); a.remove(); }, 1500);
+  })
+  .catch(function(err) {
+    alert(err.message || 'Excel aktarımı başarısız');
+  })
+  .finally(function() {
+    if (btn) { btn.disabled = false; btn.textContent = "Excel'e Aktar"; }
+  });
 };
 
 function pzmDetayMiRaporYukle(tid) {
