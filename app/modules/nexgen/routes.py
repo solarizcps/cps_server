@@ -23492,16 +23492,16 @@ def _mpr_stok_ihtiyac_coklu_plan(con, plan_ids, exclude_batch_kodu=None):
         }
 
     birim_map = {}
+    kategori_map = {}
     if merged_talep:
         sid_list = list(merged_talep.keys())
         placeholders = ','.join(['?'] * len(sid_list))
-        birim_map = {
-            r['id']: r['birim'] or 'KG'
-            for r in con.execute(
-                f"SELECT id, birim FROM nexgen_stok_kart WHERE id IN ({placeholders})",
-                sid_list,
-            ).fetchall()
-        }
+        for r in con.execute(
+            f"SELECT id, birim, kategori FROM nexgen_stok_kart WHERE id IN ({placeholders})",
+            sid_list,
+        ).fetchall():
+            birim_map[r['id']] = r['birim'] or 'KG'
+            kategori_map[r['id']] = (r['kategori'] or '').strip()
 
     eksik_stok_ids = set()
     toplu = []
@@ -23532,6 +23532,7 @@ def _mpr_stok_ihtiyac_coklu_plan(con, plan_ids, exclude_batch_kodu=None):
             'pigment_ad': meta.get('pigment_ad') or meta['stok_ad'],
             'stok_eslesmis': True,
             'birim': birim_map.get(sid, 'KG'),
+            'kategori': kategori_map.get(sid) or '',
             'gerekli_kg': gerekli,
             'toplam_gerekli_kg': gerekli,
             'fiziksel_kg': bak['fiziksel_kg'],

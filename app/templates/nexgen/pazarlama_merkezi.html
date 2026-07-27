@@ -1865,8 +1865,31 @@ function pzmMiRaporKartShell(tid, tab, topluHtml, detayHtml) {
   return html;
 }
 
+/* Görüntü sırası: 1 Ana Hammadde → 2 Katkı → 3 Pigment/Boya (hesap değişmez) */
+function pzmMiHammaddeSiraGrup(r) {
+  var k = String((r && r.kategori) || '').toUpperCase();
+  if (k === 'BOYA' || k === 'MASTERBATCH') return 3;
+  if (k === 'KATKI') return 2;
+  if (k === 'HAMMADDE' || k === 'MAMUL_COMPOUND' || k === 'RECYCLE') return 1;
+  var kt = String((r && r.kaynak_turu) || '').toUpperCase();
+  if (kt === 'BOYA_RECETESI') return 3;
+  if (kt === 'ANA_RECETE' || kt === 'HER_IKISI') return 1;
+  return 4;
+}
+
+function pzmMiTopluSatirSirala(rows) {
+  return (rows || []).slice().sort(function(a, b) {
+    var ga = pzmMiHammaddeSiraGrup(a);
+    var gb = pzmMiHammaddeSiraGrup(b);
+    if (ga !== gb) return ga - gb;
+    var ka = String((a && a.stok_kod) || '');
+    var kb = String((b && b.stok_kod) || '');
+    return ka.localeCompare(kb, 'tr');
+  });
+}
+
 function pzmMiRaporTopluTabloHtml(payload) {
-  var rows = (payload && payload.toplu) || [];
+  var rows = pzmMiTopluSatirSirala((payload && payload.toplu) || []);
   var detay = (payload && payload.detay) || [];
   if (!rows.length) {
     return '<div class="pzm-det-bilgi-kutu" style="margin:12px;">Toplu ihtiyaç kaydı yok.</div>';
@@ -1901,6 +1924,8 @@ function pzmMiRaporTopluTabloHtml(payload) {
   return html;
 }
 window.pzmMiFormulKullanimOzet = pzmMiFormulKullanimOzet;
+window.pzmMiHammaddeSiraGrup = pzmMiHammaddeSiraGrup;
+window.pzmMiTopluSatirSirala = pzmMiTopluSatirSirala;
 window.pzmMiRaporTopluTabloHtml = pzmMiRaporTopluTabloHtml;
 
 function pzmMiRaporDetayTabloHtml(payload, st) {
