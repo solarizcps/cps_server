@@ -19685,6 +19685,40 @@ def _pzm_mi_excel_num(v):
         return str(v)
 
 
+def _pzm_mi_excel_formul_kullanim(detay, stok_kart_id=None, stok_kod=None):
+    """Detay.bir_formulde_kg → tekilleştirilmiş 'a + b' metni (yeniden hesap yok)."""
+    vals = []
+    seen = set()
+    for d in detay or []:
+        if not isinstance(d, dict):
+            continue
+        sid = d.get('stok_kart_id')
+        sk = d.get('stok_kod')
+        match = False
+        if stok_kart_id is not None and sid is not None and str(sid) == str(stok_kart_id):
+            match = True
+        elif stok_kod and sk and str(sk) == str(stok_kod):
+            match = True
+        if not match:
+            continue
+        raw = d.get('bir_formulde_kg')
+        if raw is None or raw == '':
+            continue
+        try:
+            n = float(raw)
+        except (TypeError, ValueError):
+            continue
+        key = f'{n:.6f}'
+        if key in seen:
+            continue
+        seen.add(key)
+        vals.append(n)
+    if not vals:
+        return None
+    vals.sort()
+    return ' + '.join(str(v) for v in vals)
+
+
 @nexgen_bp.route('/api/pazarlama/mi-excel', methods=['POST'])
 @yetki_gerekli('nexgen.plan.view', 'can_view')
 def api_pazarlama_mi_excel():
@@ -19708,10 +19742,13 @@ def api_pazarlama_mi_excel():
     wb = openpyxl.Workbook()
     hdr_font = Font(bold=True)
 
-    # Sayfa 1 — Toplu
+    # Sayfa 1 — Toplu (Sipariş İhtiyacı = gerekli_kg; Toplam İhtiyaç tekrar edilmez)
     ws1 = wb.active
     ws1.title = 'Toplu Malzeme Ihtiyac'
-    h1 = ['Malzeme Kodu', 'Malzeme Adı', 'Toplam İhtiyaç', 'Stok', 'Eksik', 'Birim', 'Durum']
+    h1 = [
+        'Malzeme Kodu', 'Malzeme Adı', 'Mevcut Stok', 'Formülde Kullanılan',
+        'Sipariş İhtiyacı', 'Eksik', 'Birim', 'Durum',
+    ]
     ws1.append(h1)
     for c in ws1[1]:
         c.font = hdr_font
@@ -19732,11 +19769,17 @@ def api_pazarlama_mi_excel():
             if yeterli is None:
                 yeterli = net_f <= 0.001
             durum = 'Yeterli' if yeterli else 'Eksik'
+        formul_txt = r.get('formulde_kullanilan')
+        if not formul_txt:
+            formul_txt = _pzm_mi_excel_formul_kullanim(
+                detay, r.get('stok_kart_id'), r.get('stok_kod'),
+            )
         ws1.append([
             r.get('stok_kod') or '',
             r.get('stok_ad') or r.get('pigment_ad') or '',
-            _pzm_mi_excel_num(gerekli),
             _pzm_mi_excel_num(r.get('kullanilabilir_kg')),
+            formul_txt if formul_txt is not None else '',
+            _pzm_mi_excel_num(gerekli),
             _pzm_mi_excel_num(net),
             r.get('birim') or 'KG',
             str(durum),

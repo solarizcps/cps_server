@@ -1050,8 +1050,10 @@ button.rm-page-geri { appearance:none; }
 .pzm-mi-rapor-panel.aktif { display:block; }
 .pzm-mi-rapor-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }
 .pzm-mi-rapor-tablo {
-  width:100%; border-collapse:collapse; font-size:11px; min-width:720px;
+  width:100%; border-collapse:collapse; font-size:11px; min-width:980px;
 }
+.pzm-mi-rapor-tablo th.pzm-mi-col-yolda,
+.pzm-mi-rapor-tablo td.pzm-mi-col-yolda { max-width:72px; }
 .pzm-mi-rapor-tablo th {
   text-align:left; padding:8px 8px; background:var(--rm-bg2, #f1f5f9); color:var(--rm-t3);
   font-size:10px; font-weight:800; text-transform:uppercase;
@@ -1783,7 +1785,56 @@ function pzmMiMalzemeDurumRozet(r) {
 function pzmMiRaporKgHucre(v) {
   var n = parseFloat(v);
   if (isNaN(n)) return '—';
-  return n.toLocaleString('tr', { minimumFractionDigits: 0, maximumFractionDigits: 3 }) + ' kg';
+  return pzmMiRaporNumMetin(n) + ' kg';
+}
+
+/* Küçük decimal korunur (0.035 vb.); fazla sıfır basılmaz */
+function pzmMiRaporNumMetin(v) {
+  var n = parseFloat(v);
+  if (isNaN(n)) return '—';
+  return n.toLocaleString('tr', { minimumFractionDigits: 0, maximumFractionDigits: 6 });
+}
+
+/**
+ * Formülde Kullanılan — detay.bir_formulde_kg'den türetir.
+ * Aynı değerleri tekilleştirir; farklıysa "a + b"; title'da plan/formül kırılımı.
+ */
+function pzmMiFormulKullanimOzet(detayRows, stokKartId, stokKod) {
+  var rows = (detayRows || []).filter(function(d) {
+    if (!d) return false;
+    if (stokKartId != null && d.stok_kart_id != null && String(d.stok_kart_id) === String(stokKartId)) {
+      return true;
+    }
+    if (stokKod && d.stok_kod && String(d.stok_kod) === String(stokKod)) return true;
+    return false;
+  });
+  var uniq = [];
+  var uniqKey = {};
+  var tipLines = [];
+  rows.forEach(function(d) {
+    var raw = d.bir_formulde_kg;
+    if (raw == null || raw === '') return;
+    var n = parseFloat(raw);
+    if (isNaN(n)) return;
+    var key = n.toFixed(6);
+    if (!uniqKey[key]) {
+      uniqKey[key] = true;
+      uniq.push(n);
+    }
+    tipLines.push(
+      (d.plan_kodu || ('Plan ' + (d.plan_id || '—'))) +
+      ' · ' + (d.formul_kod || '—') +
+      ' · ' + pzmMiRaporNumMetin(n) + ' kg'
+    );
+  });
+  if (!uniq.length) {
+    return { text: '—', title: '' };
+  }
+  uniq.sort(function(a, b) { return a - b; });
+  return {
+    text: uniq.map(pzmMiRaporNumMetin).join(' + '),
+    title: tipLines.join(' | '),
+  };
 }
 
 function pzmMiRaporKartShell(tid, tab, topluHtml, detayHtml) {
@@ -1816,27 +1867,41 @@ function pzmMiRaporKartShell(tid, tab, topluHtml, detayHtml) {
 
 function pzmMiRaporTopluTabloHtml(payload) {
   var rows = (payload && payload.toplu) || [];
+  var detay = (payload && payload.detay) || [];
   if (!rows.length) {
     return '<div class="pzm-det-bilgi-kutu" style="margin:12px;">Toplu ihtiyaç kaydı yok.</div>';
   }
   var html = '<div class="pzm-mi-rapor-scroll"><table class="pzm-mi-rapor-tablo"><thead><tr>';
-  html += '<th>Stok Kodu</th><th>Hammadde</th><th class="r">Toplam Gerekli</th>';
-  html += '<th class="r">Kullanılabilir</th><th class="r">Yolda</th><th class="r">Net Eksik</th><th>Durum</th>';
+  html += '<th>Hammadde Kodu</th><th>Hammadde Adı</th>';
+  html += '<th class="r">Mevcut Stok</th><th class="r">Formülde Kullanılan</th>';
+  html += '<th class="r">Sipariş İhtiyacı</th>';
+  html += '<th class="r pzm-mi-col-yolda">Yolda</th>';
+  html += '<th class="r">Eksik</th><th>Birim</th><th>Durum</th>';
   html += '</tr></thead><tbody>';
   rows.forEach(function(r) {
     var net = Math.max(0, parseFloat(r.net_eksik_kg || 0) || 0);
     var gerekli = r.gerekli_kg != null ? r.gerekli_kg : r.toplam_gerekli_kg;
+    var formul = pzmMiFormulKullanimOzet(detay, r.stok_kart_id, r.stok_kod);
+    var birim = (r.birim || 'KG');
     html += '<tr><td>' + pzmEsc(r.stok_kod || '—') + '</td>';
     html += '<td>' + pzmEsc(r.stok_ad || r.pigment_ad || '—') + '</td>';
-    html += '<td class="r">' + (gerekli != null && !isNaN(parseFloat(gerekli)) ? pzmMiRaporKgHucre(gerekli) : '—') + '</td>';
     html += '<td class="r">' + pzmMiRaporKgHucre(r.kullanilabilir_kg) + '</td>';
-    html += '<td class="r">' + (parseFloat(r.yolda_kg || 0) > 0.0005 ? pzmMiRaporKgHucre(r.yolda_kg) : '—') + '</td>';
+    html += '<td class="r"';
+    if (formul.title) html += ' title="' + pzmEsc(formul.title) + '"';
+    html += '>' + pzmEsc(formul.text);
+    if (formul.text !== '—') html += ' ' + pzmEsc(String(birim).toLowerCase() === 'kg' ? 'kg' : birim);
+    html += '</td>';
+    html += '<td class="r">' + (gerekli != null && !isNaN(parseFloat(gerekli)) ? pzmMiRaporKgHucre(gerekli) : '—') + '</td>';
+    html += '<td class="r pzm-mi-col-yolda">' + (parseFloat(r.yolda_kg || 0) > 0.0005 ? pzmMiRaporKgHucre(r.yolda_kg) : '—') + '</td>';
     html += '<td class="r">' + (net > 0.0005 ? pzmMiRaporKgHucre(net) : '—') + '</td>';
+    html += '<td>' + pzmEsc(birim) + '</td>';
     html += '<td>' + pzmMiMalzemeDurumRozet(r) + '</td></tr>';
   });
   html += '</tbody></table></div>';
   return html;
 }
+window.pzmMiFormulKullanimOzet = pzmMiFormulKullanimOzet;
+window.pzmMiRaporTopluTabloHtml = pzmMiRaporTopluTabloHtml;
 
 function pzmMiRaporDetayTabloHtml(payload, st) {
   var rows = (payload && payload.detay) || [];
