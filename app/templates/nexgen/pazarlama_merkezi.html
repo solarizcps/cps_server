@@ -2859,14 +2859,6 @@ function pzmMiAnalizIcerikHtml(t, st, opts) {
   if (st.mprHesaplandi && st.planlar.length) {
     html += '<div class="pzm-det-sonuc-kutu">Analiz tamamlandı — ' + st.planlar.length + ' kalem için malzeme ihtiyacı hesaplandı.</div>';
     html += pzmMiMetrikGridHtml(t, st);
-    html += '<div class="pzm-mi-bolum-baslik">Boyut Detayları</div>';
-    st.planlar.forEach(function(p) {
-      html += '<div class="pzm-plan-kart">';
-      html += '<div class="pzm-plan-kart-hdr"><span>Kalem #' + (p.kalem_sira || '—') + ' · ' + pzmEsc(p.plan_kodu || '') + '</span>';
-      html += '<span>' + pzmEsc(p.durum || '') + '</span></div>';
-      html += pzmPlanBoyutTabloHtml(p);
-      html += '</div>';
-    });
     var stokIcerik = pzmMiRaporBlokHtml(st, t);
     html += stokIcerik;
     var aeIcerik = pzmAltEmirOzetHtml(st);
