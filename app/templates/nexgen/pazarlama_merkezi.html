@@ -28,7 +28,7 @@
           <line x1="3" y1="18" x2="3.01" y2="18"/>
         </svg>
         <span>Siparişler</span>
-        <span class="pzm-nav-badge" id="pzm-badge-say">{{ talepler|length }}</span>
+        <span class="pzm-nav-badge" id="pzm-badge-say">{{ talep_total if talep_total is defined else talepler|length }}</span>
       </button>
       {% if can_manage %}
       <a href="/nexgen/numune-talep" class="rm-page-geri pzm-nav-btn" title="Numune Talep" style="border-color:#006a8e;color:#006a8e;">
@@ -66,15 +66,15 @@
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
           <input type="text" id="pzm-ara" class="pzm-ara-inp"
-                 placeholder="Sipariş no, müşteri ara…" oninput="pzmFiltrele()">
+                 placeholder="Sipariş no, müşteri ara…" oninput="pzmFiltreDebounce()">
         </div>
-        <select id="pzm-fil-cari" class="pzm-fil-sel" onchange="pzmFiltrele()" autocomplete="off">
+        <select id="pzm-fil-cari" class="pzm-fil-sel" onchange="pzmListeYukle(1)" autocomplete="off">
           <option value="">Tüm Müşteriler</option>
           {% for c in cariler %}
           <option value="{{ c.id }}">{{ c.unvan }}</option>
           {% endfor %}
         </select>
-        <select id="pzm-fil-durum" class="pzm-fil-sel" onchange="pzmFiltrele()" autocomplete="off">
+        <select id="pzm-fil-durum" class="pzm-fil-sel" onchange="pzmListeYukle(1)" autocomplete="off">
           <option value="">Tüm Durumlar</option>
           <option value="TASLAK">Taslak</option>
           <option value="ONAY_BEKLIYOR">Onay Bekliyor</option>
@@ -83,6 +83,7 @@
           <option value="REDDEDILDI">Reddedildi</option>
           <option value="MPR_BEKLIYOR">Malzeme İhtiyaç Bekliyor</option>
           <option value="PLANLAMAYA_HAZIR">Planlamaya Hazır</option>
+          <option value="URETIMDE">Üretimde</option>
           <option value="IPTAL">İptal</option>
         </select>
         <button type="button" class="pzm-fil-temizle" id="pzm-fil-temizle"
@@ -118,6 +119,13 @@
           Sipariş kaydı için yetkili kullanıcıya başvurun.
           {% endif %}
         </div>
+      </div>
+      <div id="pzm-pager" class="pzm-pager" style="display:none;">
+        <button type="button" class="pzm-btn pzm-btn-outline pzm-pager-btn" id="pzm-pager-prev"
+                onclick="pzmListeSayfa(-1)">← Önceki</button>
+        <span class="pzm-pager-meta" id="pzm-pager-meta">—</span>
+        <button type="button" class="pzm-btn pzm-btn-outline pzm-pager-btn" id="pzm-pager-next"
+                onclick="pzmListeSayfa(1)">Sonraki →</button>
       </div>
     </div>
   </div>
@@ -614,6 +622,12 @@ button.rm-page-geri { appearance:none; }
 }
 .pzm-btn-ac:hover { background:var(--rm-teal); color:#fff; }
 .pzm-bos { text-align:center; padding:20px; font-size:var(--pzm-fs-body); color:var(--rm-t4); font-style:italic; }
+.pzm-pager {
+  display:flex; align-items:center; justify-content:flex-end; gap:10px;
+  padding:10px 12px; border-top:1px solid var(--rm-border, #e5e7eb);
+}
+.pzm-pager-btn { font-size:11px !important; padding:4px 10px !important; min-height:0 !important; }
+.pzm-pager-meta { font-size:11px; color:var(--rm-t2); font-weight:600; white-space:nowrap; }
 
 /* Rozet */
 .pzm-rozet {
@@ -1170,6 +1184,12 @@ var _pzmDuzenIdx = null;
 var _pzmCanManage = {{ 'true' if can_manage else 'false' }};
 var _pzmCanAdmin = {{ 'true' if can_admin else 'false' }};
 var _pzmTalepCache = [];
+var _pzmListePage = {{ talep_page if talep_page is defined else 1 }};
+var _pzmListePages = {{ talep_pages if talep_pages is defined else 1 }};
+var _pzmListeTotal = {{ talep_total if talep_total is defined else 0 }};
+var _pzmListePerPage = {{ talep_per_page if talep_per_page is defined else 30 }};
+var _pzmListeBusy = false;
+var _pzmFiltreTimer = null;
 try {
   var _pzmCacheEl = document.getElementById('pzm-talep-cache-json');
   if (_pzmCacheEl && _pzmCacheEl.textContent) {
@@ -1177,6 +1197,9 @@ try {
   }
 } catch (e) {
   _pzmTalepCache = [];
+}
+if (!_pzmListeTotal && _pzmTalepCache.length) {
+  _pzmListeTotal = _pzmTalepCache.length;
 }
 var _pzmAktifEkran = '';
 var _pzmDetayAktifId = null;
@@ -1586,41 +1609,115 @@ function pzmTabloRender(liste) {
   }
   if (bos) bos.style.display = 'none';
   tbody.innerHTML = liste.map(pzmTabloSatirHtml).join('');
-  var say = $id('pzm-filtre-say');
-  if (say) say.textContent = liste.length + ' kayıt';
 }
 
-window.pzmFiltrele = function() {
-  var ara   = ($id('pzm-ara')?.value||'').toLowerCase().trim();
-  var cari  = $id('pzm-fil-cari')?.value||'';
-  var durum = $id('pzm-fil-durum')?.value||'';
-  var temizle = $id('pzm-fil-temizle');
-  if (temizle) temizle.style.display = (ara||cari||durum) ? '' : 'none';
+function pzmListeFiltreParams() {
+  return {
+    q: ($id('pzm-ara') && $id('pzm-ara').value || '').trim(),
+    cari: $id('pzm-fil-cari') ? ($id('pzm-fil-cari').value || '') : '',
+    durum: $id('pzm-fil-durum') ? ($id('pzm-fil-durum').value || '') : '',
+  };
+}
 
-  var filtreli = (_pzmTalepCache||[]).filter(function(t) {
-    var noMatch    = !ara || (t.siparis_no||'').toLowerCase().includes(ara) || (t.cari_unvan||'').toLowerCase().includes(ara);
-    var cariMatch  = !cari  || String(t.cari_id) === cari;
-    var durumMatch = !durum || t.durum === durum;
-    return noMatch && cariMatch && durumMatch;
-  });
-  pzmTabloRender(filtreli);
+function pzmListeTemizleBtn() {
+  var f = pzmListeFiltreParams();
+  var temizle = $id('pzm-fil-temizle');
+  if (temizle) temizle.style.display = (f.q || f.cari || f.durum) ? '' : 'none';
+}
+
+function pzmListePagerGuncelle() {
+  var pager = $id('pzm-pager');
+  var meta = $id('pzm-pager-meta');
+  var prev = $id('pzm-pager-prev');
+  var next = $id('pzm-pager-next');
+  var total = _pzmListeTotal || 0;
+  var page = _pzmListePage || 1;
+  var pages = _pzmListePages || 1;
+  if (pager) pager.style.display = total > 0 ? 'flex' : 'none';
+  if (meta) {
+    meta.textContent = 'Sayfa ' + page + ' / ' + pages + ' · Toplam ' + total + ' PZM sipariş';
+  }
+  if (prev) prev.disabled = page <= 1 || _pzmListeBusy;
+  if (next) next.disabled = page >= pages || _pzmListeBusy;
+  var fs = $id('pzm-filtre-say');
+  if (fs) fs.textContent = total ? (total + ' sipariş') : '—';
+}
+
+/* Badge = filtre sonrası gerçek PZM toplamı (LIMIT değil) */
+function pzmBadgeGuncelle(force) {
+  var b = $id('pzm-badge-say');
+  if (!b) return;
+  if (force || _pzmListeTotal >= 0) b.textContent = String(_pzmListeTotal || 0);
+}
+
+window.pzmListeYukle = function(page) {
+  if (_pzmListeBusy) return;
+  var f = pzmListeFiltreParams();
+  pzmListeTemizleBtn();
+  if (page == null || page < 1) page = _pzmListePage || 1;
+  var qs = new URLSearchParams();
+  qs.set('page', String(page));
+  qs.set('per_page', String(_pzmListePerPage || 30));
+  if (f.q) qs.set('q', f.q);
+  if (f.cari) qs.set('cari_id', f.cari);
+  if (f.durum) qs.set('durum', f.durum);
+  _pzmListeBusy = true;
+  pzmListePagerGuncelle();
+  fetch('/nexgen/api/pazarlama/talepler?' + qs.toString())
+    .then(function(r) {
+      if (!r.ok) {
+        var msg = 'Sunucu hatası';
+        if (r.status === 403) msg = 'Yetkiniz yok';
+        else if (r.status === 404) msg = 'İstenen servis bulunamadı';
+        else if (r.status === 503) msg = 'Sistem güncellemesi gerekiyor';
+        var bos = $id('pzm-bos-mesaj');
+        if (bos) { bos.style.display = ''; bos.textContent = msg; }
+        return null;
+      }
+      return r.json();
+    })
+    .then(function(d) {
+      if (!d || !d.ok) return;
+      _pzmTalepCache = d.liste || [];
+      _pzmListeTotal = d.total != null ? d.total : _pzmTalepCache.length;
+      _pzmListePage = d.page || page;
+      _pzmListePages = d.pages || 1;
+      _pzmListePerPage = d.per_page || _pzmListePerPage;
+      pzmTabloRender(_pzmTalepCache);
+      pzmBadgeGuncelle(true);
+      pzmListePagerGuncelle();
+      if (_pzmDetayAktifId) {
+        var td = pzmTalepBul(_pzmDetayAktifId);
+        if (td) pzmDetayRender(td);
+      }
+    })
+    .finally(function() {
+      _pzmListeBusy = false;
+      pzmListePagerGuncelle();
+    });
 };
+
+window.pzmListeSayfa = function(delta) {
+  var next = (_pzmListePage || 1) + (delta || 0);
+  if (next < 1 || next > (_pzmListePages || 1)) return;
+  pzmListeYukle(next);
+};
+
+window.pzmFiltreDebounce = function() {
+  pzmListeTemizleBtn();
+  if (_pzmFiltreTimer) clearTimeout(_pzmFiltreTimer);
+  _pzmFiltreTimer = setTimeout(function() { pzmListeYukle(1); }, 350);
+};
+
+window.pzmFiltrele = function() { pzmListeYukle(1); };
 
 window.pzmFiltreSifirla = function() {
   var ara = $id('pzm-ara'); if (ara) ara.value = '';
   var fc = $id('pzm-fil-cari'); if (fc) fc.value = '';
   var fd = $id('pzm-fil-durum'); if (fd) fd.value = '';
   var temizle = $id('pzm-fil-temizle'); if (temizle) temizle.style.display = 'none';
-  pzmTabloRender(_pzmTalepCache||[]);
+  pzmListeYukle(1);
 };
-
-/* Badge güncelle */
-function pzmBadgeGuncelle(force) {
-  var b = $id('pzm-badge-say');
-  if (!b) return;
-  var n = (_pzmTalepCache||[]).length;
-  if (force || n > 0) b.textContent = n;
-}
 
 /* ────────────── EKRAN 3: Detay — 4 Aşamalı MPR Accordion ────────────── */
 
@@ -3380,7 +3477,6 @@ window.pzmSilOnayla = function() {
       pzmSilConfirmGuncelle();
       return;
     }
-    _pzmTalepCache = (_pzmTalepCache || []).filter(function(x) { return x.id !== tid; });
     if (_pzmMprState && _pzmMprState[tid]) delete _pzmMprState[tid];
     _pzmDetayAktifId = null;
     _pzmTalepId = null;
@@ -3394,10 +3490,9 @@ window.pzmSilOnayla = function() {
     if (altBtns) altBtns.innerHTML = '';
     var altBand = $id('pzm-detay-alt-band');
     if (altBand) altBand.style.display = 'none';
-    pzmTabloRender(_pzmTalepCache);
-    pzmBadgeGuncelle(true);
     pzmSilModalKapat();
     pzmEkranGec('liste');
+    pzmListeYukle(_pzmListePage || 1);
   })
   .catch(function() {
     var hata3 = $id('pzm-sil-hata');
@@ -4128,60 +4223,7 @@ window.pzmBasariKapat = function() {
 };
 
 function pzmTalepListesiYenile() {
-  fetch('/nexgen/api/pazarlama/talepler')
-    .then(function(r){
-      if (!r.ok) {
-        var msg = 'Sunucu hatası';
-        if (r.status === 403) msg = 'Yetkiniz yok';
-        else if (r.status === 404) msg = 'İstenen servis bulunamadı';
-        else if (r.status === 503) msg = 'Sistem güncellemesi gerekiyor';
-        else if (r.status >= 500) msg = 'Sunucu hatası';
-        var bos = $id('pzm-bos-mesaj');
-        if (bos) { bos.style.display = ''; bos.textContent = msg; }
-        return r.json().catch(function(){ return { ok:false, hata: msg }; }).then(function(d){
-          if (d && d.hata) {
-            var b2 = $id('pzm-bos-mesaj');
-            if (b2) { b2.style.display = ''; b2.textContent = d.hata; }
-          }
-          return null;
-        });
-      }
-      return r.json();
-    })
-    .then(function(d) {
-      if (!d || !d.ok) {
-        if (d && d.hata) {
-          var bosErr = $id('pzm-bos-mesaj');
-          if (bosErr) { bosErr.style.display = ''; bosErr.textContent = d.hata; }
-        }
-        return;
-      }
-      _pzmTalepCache = d.liste || [];
-      pzmTabloRender(_pzmTalepCache);
-      pzmBadgeGuncelle(true);
-      if (d.schema_partial) {
-        var bos = $id('pzm-bos-mesaj');
-        if (bos && !_pzmTalepCache.length) {
-          bos.style.display = '';
-          bos.textContent = 'Şema kısmen güncel (migration 107). Liste sınırlı olabilir.';
-        }
-      }
-      if (_pzmDetayAktifId) {
-        var td = pzmTalepBul(_pzmDetayAktifId);
-        if (td) {
-          var stD = pzmMprStateEnsure(td.id);
-          if (td.mpr_planlar && td.mpr_planlar.length && !stD.planlar.length) {
-            stD.planlar = td.mpr_planlar;
-            stD.mprHesaplandi = true;
-          }
-          pzmDetayRender(td);
-        }
-      }
-    })
-    .catch(function(){
-      var bos = $id('pzm-bos-mesaj');
-      if (bos) { bos.style.display = ''; bos.textContent = 'Ağ bağlantısı hatası'; }
-    });
+  pzmListeYukle(_pzmListePage || 1);
 }
 
 window.pzmTalepYukle = function(id) {
@@ -4269,7 +4311,8 @@ window.pzmTalepYukle = function(id) {
 
   // Tablo başlangıç doldur
   pzmTabloRender(_pzmTalepCache || []);
-  pzmBadgeGuncelle();
+  pzmBadgeGuncelle(true);
+  pzmListePagerGuncelle();
   // Varsayılan ekran: Siparişler Listesi
   pzmEkranGec('liste');
   var st = $id('pzm-siparis-tarihi');

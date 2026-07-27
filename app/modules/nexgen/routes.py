@@ -18145,11 +18145,103 @@ _PZM_TALEP_WHERE = (
     "OR siparis_no LIKE 'MO-S-%' "
     "OR kaynak_modul='MUSTERI_OPERASYONU')"
 )
+# FAZ-PZM-LISTE: ana Sipariş Merkezi listesi — yalnız gerçek PZM (MO-S hariç)
+# Kanıt: PZM → siparis_no PZM-% + kaynak null + __PZM_V*; MO-S → MO-S-% + MUSTERI_OPERASYONU
+_PZM_LISTE_WHERE = (
+    "("
+    "  siparis_no LIKE 'PZM-%'"
+    "  OR ("
+    "    talep_referansi LIKE '\\_\\_PZM\\_V%' ESCAPE '\\'"
+    "    AND IFNULL(kaynak_modul,'') != 'MUSTERI_OPERASYONU'"
+    "  )"
+    ")"
+    " AND siparis_no NOT LIKE 'MO-S-%'"
+    " AND IFNULL(kaynak_modul,'') != 'MUSTERI_OPERASYONU'"
+)
+_PZM_LISTE_PER_PAGE_DEFAULT = 30
+_PZM_LISTE_PER_PAGE_MAX = 100
 _PZM_AILELER = frozenset({'TERLIK', 'TABAN', 'DOKME'})
 _PZM_DURUMLAR = frozenset({
     'TASLAK', 'ONAY_BEKLIYOR', 'ONAYLANDI', 'REVIZYON', 'REDDEDILDI',
     'MPR_BEKLIYOR', 'PLANLAMAYA_HAZIR', 'URETIMDE', 'TAMAMLANDI', 'IPTAL',
 })
+
+
+def _pzm_liste_select_cols():
+    return (
+        "id, siparis_no, cari_id, cari_unvan, termin_tarihi, "
+        "durum, notlar, talep_referansi, olusturma_tarihi, "
+        "olusturan_id, kaynak_modul, anlasma_para_birimi, "
+        "vade_gun, anlasma_birim_fiyat, musteri_termin, "
+        "onerilen_termin, teslim_sekli, revizyon_gerekce"
+    )
+
+
+def _pzm_liste_filtre_sql(q=None, durum=None, cari_id=None):
+    """PZM-only WHERE + opsiyonel filtreler. Dönüş: (where_sql, params)."""
+    clauses = [_PZM_LISTE_WHERE]
+    params = []
+    q = (q or '').strip()
+    if q:
+        clauses.append("(siparis_no LIKE ? OR IFNULL(cari_unvan,'') LIKE ?)")
+        like = f'%{q}%'
+        params.extend([like, like])
+    durum = (durum or '').strip().upper()
+    if durum:
+        clauses.append("upper(IFNULL(durum,'')) = ?")
+        params.append(durum)
+    if cari_id not in (None, '', 0, '0'):
+        try:
+            cid = int(cari_id)
+            clauses.append("cari_id = ?")
+            params.append(cid)
+        except (TypeError, ValueError):
+            pass
+    return ' AND '.join(clauses), params
+
+
+def _pzm_liste_sayfala(con, q=None, durum=None, cari_id=None, page=1, per_page=None):
+    """Server-side PZM listesi. {liste, total, page, per_page, pages}."""
+    if not _planlama_siparis_tablosu_var(con):
+        return {
+            'liste': [], 'total': 0, 'page': 1,
+            'per_page': _PZM_LISTE_PER_PAGE_DEFAULT, 'pages': 1,
+        }
+    try:
+        page = max(1, int(page or 1))
+    except (TypeError, ValueError):
+        page = 1
+    try:
+        per_page = int(per_page if per_page is not None else _PZM_LISTE_PER_PAGE_DEFAULT)
+    except (TypeError, ValueError):
+        per_page = _PZM_LISTE_PER_PAGE_DEFAULT
+    per_page = max(1, min(per_page, _PZM_LISTE_PER_PAGE_MAX))
+
+    where_sql, params = _pzm_liste_filtre_sql(q=q, durum=durum, cari_id=cari_id)
+    total = con.execute(
+        f"SELECT COUNT(1) AS n FROM nexgen_planlama_siparis WHERE {where_sql}",
+        params,
+    ).fetchone()['n']
+    pages = max(1, (total + per_page - 1) // per_page) if total else 1
+    if page > pages:
+        page = pages
+    offset = (page - 1) * per_page
+    rows = con.execute(
+        f"""SELECT {_pzm_liste_select_cols()}
+            FROM nexgen_planlama_siparis
+            WHERE {where_sql}
+            ORDER BY id DESC
+            LIMIT ? OFFSET ?""",
+        params + [per_page, offset],
+    ).fetchall()
+    liste = [_pzm_talep_satir_dict(r, con) for r in rows]
+    return {
+        'liste': liste,
+        'total': total,
+        'page': page,
+        'per_page': per_page,
+        'pages': pages,
+    }
 
 
 def _pzm_payload_pack(data):
@@ -18697,19 +18789,10 @@ def pazarlama_merkezi():
     con = _db()
     try:
         cariler = _pzm_aktif_cari_liste(con)
-        talepler = []
-        if _planlama_siparis_tablosu_var(con):
-            rows = con.execute(f"""
-                SELECT id, siparis_no, cari_id, cari_unvan, termin_tarihi,
-                       durum, notlar, talep_referansi, olusturma_tarihi,
-                       olusturan_id, kaynak_modul, anlasma_para_birimi,
-                       vade_gun, anlasma_birim_fiyat, musteri_termin,
-                       onerilen_termin, teslim_sekli, revizyon_gerekce
-                FROM nexgen_planlama_siparis
-                WHERE {_PZM_TALEP_WHERE}
-                ORDER BY id DESC LIMIT 30
-            """).fetchall()
-            talepler = [_pzm_talep_satir_dict(r, con) for r in rows]
+        sayfa = _pzm_liste_sayfala(con, page=1, per_page=_PZM_LISTE_PER_PAGE_DEFAULT)
+        talepler = sayfa['liste']
+        talep_total = sayfa['total']
+        talep_pages = sayfa['pages']
     finally:
         con.close()
     return render_template(
@@ -18717,6 +18800,10 @@ def pazarlama_merkezi():
         active='nexgen',
         cariler=cariler,
         talepler=talepler,
+        talep_total=talep_total,
+        talep_page=1,
+        talep_pages=talep_pages,
+        talep_per_page=_PZM_LISTE_PER_PAGE_DEFAULT,
         can_manage=yetki_var('nexgen.plan.manage', 'can_manage'),
         can_admin=is_superadmin(session.get('kullanici')),
     )
@@ -18776,6 +18863,7 @@ def api_pazarlama_renk_boyut():
 @nexgen_bp.route('/api/pazarlama/talepler')
 @yetki_gerekli('nexgen.plan.view', 'can_view')
 def api_pazarlama_talepler():
+    """PZM sipariş listesi — server-side arama/filtre/sayfalama (MO-S hariç)."""
     con = _db()
     try:
         if not _planlama_siparis_tablosu_var(con):
@@ -18783,19 +18871,21 @@ def api_pazarlama_talepler():
                 ['tablo:nexgen_planlama_siparis'], 'pazarlama/talepler'
             )
         _miss_pzm = missing_for_pazarlama(con)
-        rows = con.execute(f"""
-            SELECT id, siparis_no, cari_id, cari_unvan, termin_tarihi,
-                   durum, notlar, talep_referansi, olusturma_tarihi,
-                   olusturan_id, kaynak_modul, anlasma_para_birimi,
-                   vade_gun, anlasma_birim_fiyat, musteri_termin,
-                   onerilen_termin, teslim_sekli, revizyon_gerekce
-            FROM nexgen_planlama_siparis
-            WHERE {_PZM_TALEP_WHERE}
-            ORDER BY id DESC LIMIT 30
-        """).fetchall()
+        sayfa = _pzm_liste_sayfala(
+            con,
+            q=request.args.get('q'),
+            durum=request.args.get('durum'),
+            cari_id=request.args.get('cari_id'),
+            page=request.args.get('page', 1),
+            per_page=request.args.get('per_page', _PZM_LISTE_PER_PAGE_DEFAULT),
+        )
         payload = {
             'ok': True,
-            'liste': [_pzm_talep_satir_dict(r, con) for r in rows],
+            'liste': sayfa['liste'],
+            'total': sayfa['total'],
+            'page': sayfa['page'],
+            'per_page': sayfa['per_page'],
+            'pages': sayfa['pages'],
             'schema_partial': bool(
                 _miss_pzm and any('107' in m for m in _miss_pzm)
             ),
