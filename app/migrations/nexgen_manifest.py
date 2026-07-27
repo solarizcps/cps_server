@@ -12,6 +12,7 @@ Version 100 çakışması çözümü:
 """
 from __future__ import annotations
 
+import importlib
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
@@ -274,6 +275,7 @@ MANIFEST: tuple[MigEntry, ...] = (
         "130_finans_yetkileri.py",
         "Finans Merkezi yetki kodları (view/review/approve/post/reject)",
         dependencies=(129,),
+        risk="permission",
     ),
     MigEntry(
         131, "131_finans_cari_kimlik_kopru",
@@ -337,15 +339,14 @@ def kolon_var(cur, tablo: str, kolon: str) -> bool:
 
 def _override_flags_ok(row, spec: tuple[str, int, int, int, int, int, int, int]) -> bool:
     _, cv, cc, cu, cd, ca, cr, cm = spec
-    return (
-        int(row['can_view'] or 0) == cv
-        and int(row['can_create'] or 0) == cc
-        and int(row['can_update'] or 0) == cu
-        and int(row['can_delete'] or 0) == cd
-        and int(row['can_approve'] or 0) == ca
-        and int(row['can_report'] or 0) == cr
-        and int(row['can_manage'] or 0) == cm
-    )
+    keys = ('can_view', 'can_create', 'can_update', 'can_delete', 'can_approve', 'can_report', 'can_manage')
+    vals = []
+    for i, key in enumerate(keys):
+        if hasattr(row, 'keys'):
+            vals.append(int(row[key] or 0))
+        else:
+            vals.append(int(row[i] or 0))
+    return vals == [cv, cc, cu, cd, ca, cr, cm]
 
 
 def mehmet_nexgen_overrides_ok(cur) -> bool:
@@ -376,6 +377,51 @@ def mehmet_nexgen_overrides_ok(cur) -> bool:
     return True
 
 
+def _rol_yetki_flags_ok(cur, rol_id: int, kod: str, flags: tuple[int, ...]) -> bool:
+    row = cur.execute(
+        """
+        SELECT ry.can_view, ry.can_create, ry.can_update, ry.can_delete,
+               ry.can_approve, ry.can_report, ry.can_manage
+        FROM sistem_rol_yetki ry
+        JOIN sistem_yetki y ON y.Id = ry.YetkiId
+        WHERE ry.RolId=? AND y.Kod=?
+        """,
+        (rol_id, kod),
+    ).fetchone()
+    if not row:
+        return False
+    spec = ('', *flags)
+    return _override_flags_ok(row, spec)
+
+
+def finans_yetkileri_ok(cur) -> bool:
+    """Migration 130 — finans yetki kodları + rol atamaları (130_finans_yetkileri sözleşmesi)."""
+    if not tablo_var(cur, 'sistem_yetki') or not tablo_var(cur, 'sistem_rol_yetki'):
+        return False
+    m130 = importlib.import_module('migrations.130_finans_yetkileri')
+    for spec in m130.YENI_YETKILER:
+        kod = spec[0]
+        if not cur.execute('SELECT 1 FROM sistem_yetki WHERE Kod=?', (kod,)).fetchone():
+            return False
+    yonetim = cur.execute(
+        'SELECT 1 FROM sistem_rol WHERE Id=? AND Aktif=1', (m130.YONETIM_ROL_ID,),
+    ).fetchone()
+    if yonetim:
+        for kod, flags in m130.YONETIM_ATAMA.items():
+            if not _rol_yetki_flags_ok(cur, m130.YONETIM_ROL_ID, kod, flags):
+                return False
+    muhasebe = cur.execute(
+        'SELECT Ad FROM sistem_rol WHERE Id=? AND Aktif=1', (m130.MUHASEBE_ROL_ID,),
+    ).fetchone()
+    if muhasebe:
+        ad = (muhasebe['Ad'] or '')
+        if ad.casefold() in ('muhasebe', 'finans', 'muhasebe / finans'):
+            for kod, flags in m130.MUHASEBE_ATAMA.items():
+                if not _rol_yetki_flags_ok(cur, m130.MUHASEBE_ROL_ID, kod, flags):
+                    return False
+    return True
+
+
 def schema_satisfies(cur, entry: MigEntry) -> bool:
     for t in entry.required_tables:
         if not tablo_var(cur, t):
@@ -385,6 +431,8 @@ def schema_satisfies(cur, entry: MigEntry) -> bool:
             return False
     if entry.version == 112:
         return mehmet_nexgen_overrides_ok(cur)
+    if entry.version == 130:
+        return finans_yetkileri_ok(cur)
     # 108 permission: schema marker yok — version kaydı veya yetki satırı
     if entry.version == 108:
         row = cur.execute(
@@ -396,14 +444,14 @@ def schema_satisfies(cur, entry: MigEntry) -> bool:
         ).fetchone()
         return bool(row)
     # 96, 105: soft yoksa version kaydı ile yetin (aşağıda)
-    if not entry.required_tables and not entry.required_columns and entry.version not in (108,):
+    if not entry.required_tables and not entry.required_columns and entry.version not in (108, 130):
         return True  # index/view — version kaydı yeterli; verify ayrı
     return True
 
 
 def detect_applied_by_schema(cur, entry: MigEntry) -> bool:
     """Migration kaydı olmasa bile şemadan uygulanmış mı?"""
-    if entry.version in (108, 112):
+    if entry.version in (108, 112, 130):
         return schema_satisfies(cur, entry)
     if entry.required_tables or entry.required_columns:
         for t in entry.required_tables:
