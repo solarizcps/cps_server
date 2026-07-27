@@ -24,12 +24,24 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
     def _yk():
         return kullanici_yetkileri(session.get('kullanici') or {})
 
-    @bp.route('/cari360')
+    @bp.route('/cari360', strict_slashes=False)
     @login_gerekli
     def cari360_liste_sayfa():
-        """Eski dijital dosya listesi — ayrı yetki; Cari Kart Yönetim'den açılır."""
+        """Liste (opsiyonel). Trailing slash (/cari360/) 404 olmamalı.
+
+        Yönetim Merkezi Cari Kart linkleri her zaman /cari360/<id> kullanır.
+        Boş /cari360/ isteğinde Yönetim cari sekmesine yönlendir.
+        """
+        from flask import redirect
+
+        # /cari360/ → id yok; kart değil. Yönetim'e dön (404 yerine).
+        path = (request.path or '').rstrip('/')
+        if path.endswith('/cari360') and request.path.endswith('/'):
+            return redirect('/nexgen/yonetim/#cari', code=302)
+
         if not can_cari360_dosya_ekrani(_yk()):
-            abort(403)
+            # Liste yetkisi yoksa yine Yönetim'e yönlendir (404 değil)
+            return redirect('/nexgen/yonetim/#cari', code=302)
         con = db_fn()
         try:
             cariler = cari_liste(con, kullanici_id_fn(), _yk())
@@ -39,7 +51,7 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
             con.close()
         return render_template('nexgen/cari360_liste.html', cariler=cariler)
 
-    @bp.route('/cari360/<int:cari_id>')
+    @bp.route('/cari360/<int:cari_id>', strict_slashes=False)
     @login_gerekli
     def cari360_dosya_sayfa(cari_id):
         """Cari Kart shell — Genel Bilgiler + Yetkililer."""

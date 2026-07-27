@@ -10,9 +10,16 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
-from modules.nexgen.cari_sorumlu_service import can_view_cari, list_aktif_cari_sorumlulari
+from modules.nexgen.cari360_yetki import (
+    can_cari360_crm_write,
+    can_cari360_view_all,
+    can_cari360_view_own,
+)
+from modules.nexgen.cari_sorumlu_service import can_view_cari, load_kullanici_yetkileri
 from modules.nexgen.cari_yetkili_service import can_write_yetkili
 from modules.nexgen.finans_cari_provision_service import is_test_kayit
+
+SORUMLU_ATANMAMIS = 'Atanmamış'
 
 
 class Cari360KartError(Exception):
@@ -61,26 +68,131 @@ def _eslestirme_durumu(con: sqlite3.Connection, cari_id: int, cari_kod: str, unv
     return 'BEKLIYOR'
 
 
+def _is_planlamaci_kullanici(con: sqlite3.Connection, kullanici_id: int | None) -> bool:
+    """Planlamacı (Mehmet) iç sorumlu pazarlamacı olarak gösterilmez — DB değiştirilmez."""
+    if not kullanici_id:
+        return False
+    row = con.execute(
+        """
+        SELECT sk.KullaniciAdi, sk.RolId, sr.Ad AS rol_adi
+        FROM sistem_kullanici sk
+        LEFT JOIN sistem_rol sr ON sr.Id = sk.RolId
+        WHERE sk.Id=?
+        """,
+        (int(kullanici_id),),
+    ).fetchone()
+    if not row:
+        return False
+    rol = (row['rol_adi'] or '').casefold()
+    if 'planlama' in rol:
+        return True
+    yrow = con.execute(
+        """
+        SELECT 1
+        FROM user_permission_override upo
+        JOIN sistem_yetki y ON y.Id = upo.YetkiId
+        WHERE upo.KullaniciId=? AND y.Kod='nexgen.plan.manage'
+          AND COALESCE(upo.can_manage, 0)=1
+        LIMIT 1
+        """,
+        (int(kullanici_id),),
+    ).fetchone()
+    return bool(yrow)
+
+
+def _is_gecerli_ic_pazarlamaci(con: sqlite3.Connection, kullanici_id: int) -> bool:
+    """Gerçek pazarlama / müşteri operasyon kullanıcısı mı? (read-only karar)."""
+    if _is_planlamaci_kullanici(con, kullanici_id):
+        return False
+    yk = load_kullanici_yetkileri(con, kullanici_id)
+    if '*' in yk:
+        return False  # admin fallback yok
+    # Saf yönetim (tüm cari) ama CRM yazma yok → pazarlamacı sayma
+    if can_cari360_view_all(yk) and not can_cari360_crm_write(yk):
+        return False
+    return can_cari360_crm_write(yk) or can_cari360_view_own(yk)
+
+
+def _sorumlu_gorunen_ad(con: sqlite3.Connection, kullanici_id: int | None, fallback: str | None) -> str | None:
+    if not kullanici_id:
+        return (fallback or '').strip() or None
+    row = con.execute(
+        'SELECT KullaniciAdi, AdSoyad FROM sistem_kullanici WHERE Id=?',
+        (int(kullanici_id),),
+    ).fetchone()
+    if not row:
+        return (fallback or '').strip() or None
+    adsoyad = (row['AdSoyad'] or '').strip()
+    kadi = (row['KullaniciAdi'] or '').strip()
+    if adsoyad:
+        return adsoyad
+    return kadi or ((fallback or '').strip() or None)
+
+
 def _sorumlu_ozet(con: sqlite3.Connection, cari_id: int) -> dict[str, Any]:
+    """cari_sorumlu read-only. Yazma/pasifleştirme/otomatik atama YOK.
+
+    Geçerli pazarlamacı yoksa ana_adi = 'Atanmamış'.
+    Planlamacı hatalı atansa bile DB'ye dokunulmaz; ekranda Atanmamış.
+    """
     if not _tablo_var(con, 'cari_sorumlu'):
-        return {'ana_adi': None, 'liste': []}
-    aktif = list_aktif_cari_sorumlulari(con, cari_id)
-    ana_adi = None
-    for s in aktif:
-        if (s.get('sorumluluk_rolu') or '').upper() == 'ANA':
-            ana_adi = s.get('kullanici_adi')
+        return {'ana_adi': SORUMLU_ATANMAMIS, 'liste': []}
+
+    rows = con.execute(
+        """
+        SELECT cs.id, cs.kullanici_id, cs.sorumluluk_rolu, cs.aktif,
+               sk.KullaniciAdi AS kullanici_adi, sk.AdSoyad AS ad_soyad,
+               sr.Ad AS rol_adi
+        FROM cari_sorumlu cs
+        JOIN sistem_kullanici sk ON sk.Id = cs.kullanici_id
+        LEFT JOIN sistem_rol sr ON sr.Id = sk.RolId
+        WHERE cs.cari_id=? AND cs.aktif=1
+          AND (cs.bitis_tarihi IS NULL OR cs.bitis_tarihi=''
+               OR cs.bitis_tarihi > datetime('now','localtime'))
+        ORDER BY
+          CASE cs.sorumluluk_rolu
+            WHEN 'ANA' THEN 0
+            WHEN 'YEDEK' THEN 1
+            WHEN 'DESTEK' THEN 2
+            WHEN 'YONETICI' THEN 3
+            ELSE 9
+          END,
+          cs.baslangic_tarihi
+        """,
+        (cari_id,),
+    ).fetchall()
+
+    gecerli: list[dict[str, Any]] = []
+    liste: list[dict[str, Any]] = []
+    for r in rows:
+        kid = int(r['kullanici_id'])
+        plan = _is_planlamaci_kullanici(con, kid)
+        ok = (not plan) and _is_gecerli_ic_pazarlamaci(con, kid)
+        item = {
+            'kullanici_id': kid,
+            'kullanici_adi': r['kullanici_adi'],
+            'ad_soyad': r['ad_soyad'],
+            'rol': r['sorumluluk_rolu'],
+            'planlamaci': plan,
+            'gecerli_pazarlamaci': ok,
+        }
+        liste.append(item)
+        if ok:
+            gecerli.append(item)
+
+    ana_adi = SORUMLU_ATANMAMIS
+    for s in gecerli:
+        if (s.get('rol') or '').upper() == 'ANA':
+            ana_adi = _sorumlu_gorunen_ad(con, s['kullanici_id'], s.get('kullanici_adi')) or SORUMLU_ATANMAMIS
             break
-    if ana_adi is None and aktif:
-        ana_adi = aktif[0].get('kullanici_adi')
+    else:
+        if gecerli:
+            s0 = gecerli[0]
+            ana_adi = _sorumlu_gorunen_ad(con, s0['kullanici_id'], s0.get('kullanici_adi')) or SORUMLU_ATANMAMIS
+
     return {
         'ana_adi': ana_adi,
-        'liste': [
-            {
-                'kullanici_adi': s.get('kullanici_adi'),
-                'rol': s.get('sorumluluk_rolu'),
-            }
-            for s in aktif
-        ],
+        'liste': liste,
     }
 
 

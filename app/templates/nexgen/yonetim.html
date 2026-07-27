@@ -307,6 +307,7 @@
         <tbody id="cariTbody">
           {% for c in cariler %}
           <tr class="ngsd-hrt-satir cari-satir {{ '' if c.aktif else 'pasif-satir' }}"
+              data-cari-id="{{ c.id }}"
               data-kod="{{ c.cari_kod|lower }}"
               data-unvan="{{ c.unvan|lower }}">
             <td>
@@ -322,7 +323,9 @@
             </td>
             <td style="text-align:right">
               <div class="ngym-islem-grup">
-                <a class="ngym-islem-btn" href="/nexgen/cari360/{{ c.id }}" title="Cari Kart">Cari Kart</a>
+                {% if c.id %}
+                <a class="ngym-islem-btn" href="/nexgen/cari360/{{ c.id|int }}" title="Cari Kart">Cari Kart</a>
+                {% endif %}
                 <button class="ngym-islem-btn"
                         onclick="cariDuzenleModalAc({{ c.id }}, '{{ c.cari_kod }}', '{{ c.unvan|replace("'","\\'")|e }}')">
                   Düzenle

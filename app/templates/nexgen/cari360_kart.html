@@ -19,7 +19,7 @@
         <span class="ckart-badge ckart-badge-pasif">PASİF</span>
         {% endif %}
         <span class="ckart-meta-item">İç sorumlu:
-          <strong>{{ data.sorumlu_adi or '—' }}</strong>
+          <strong>{{ data.sorumlu_adi or 'Atanmamış' }}</strong>
         </span>
         <span class="ckart-meta-item">Eşleşme:
           <strong class="ckart-es">{{ data.eslestirme_durumu }}</strong>
@@ -49,7 +49,7 @@
       <div><dt>Durum</dt><dd>{% if c.aktif %}Aktif{% else %}Pasif{% endif %}</dd></div>
       <div><dt>Oluşturma</dt><dd>{{ c.created_at or '—' }}</dd></div>
       <div><dt>Güncelleme</dt><dd>{{ c.updated_at or '—' }}</dd></div>
-      <div><dt>İç sorumlu pazarlamacı</dt><dd>{{ data.sorumlu_adi or '—' }}</dd></div>
+      <div><dt>İç sorumlu pazarlamacı</dt><dd>{{ data.sorumlu_adi or 'Atanmamış' }}</dd></div>
       <div><dt>Finans eşleşme durumu</dt><dd><strong>{{ data.eslestirme_durumu }}</strong></dd></div>
     </dl>
   </section>
