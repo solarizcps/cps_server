@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import os
 
-from flask import abort, flash, jsonify, redirect, render_template, request, send_file
+from flask import abort, flash, jsonify, redirect, render_template, request, send_file, session
 
-from modules.auth import login_gerekli, yetki_gerekli, yetki_var
+from modules.auth import login_gerekli, kullanici_yetkileri, yetki_gerekli, yetki_var
+from modules.nexgen.cari360_yetki import can_musteri_pazarlama_menu
 from modules.belge import belge_tam_yol, belge_tek, belge_yukle
 from modules.nexgen.numune_talep_service import (
     NumuneTalepError,
@@ -14,12 +15,15 @@ from modules.nexgen.numune_talep_service import (
     durum_etiket,
     gelisme_liste,
     get_talep,
+    get_takip_liste_readonly,
     gonder_arge,
     isleme_al,
+    isleme_al_redirect_url,
     kaydet_taslak,
     liste_bekleyen,
     liste_pazarlama,
     vedat_kaydet,
+    DUZENLENEBILIR_DURUMLAR,
 )
 
 
@@ -45,6 +49,17 @@ def register_numune_talep_routes(bp, db_factory, kullanici_id_fn, *, renk_kart_f
 
     def _can_vedat():
         return yetki_var('nexgen.tablet.view', 'can_view') and tablet_arge_guard()
+
+    def _mo_pazarlamaci_block():
+        """MO pazarlamacı Mehmet numune route'larına erişemez."""
+        yk = kullanici_yetkileri(session.get('kullanici') or {})
+        if can_musteri_pazarlama_menu(yk) and not yetki_var('nexgen.plan.manage', 'can_manage'):
+            abort(403)
+
+    @bp.before_request
+    def _nt_mo_route_guard():
+        if 'numune-talep' in (request.path or ''):
+            _mo_pazarlamaci_block()
 
     def _render_numune_talep_sayfa(*, talep_id: int | None = None, yeni_route: bool = False):
         con = _con()
@@ -89,6 +104,7 @@ def register_numune_talep_routes(bp, db_factory, kullanici_id_fn, *, renk_kart_f
     @login_gerekli
     @yetki_gerekli('nexgen.plan.view', 'can_view')
     def api_nt_cariler():
+        """Yönetim Cari Kartları ile aynı kaynak (_nexgen_cari_kart_liste)."""
         q = (request.args.get('q') or '').strip()
         con = _con()
         try:
@@ -175,7 +191,12 @@ def register_numune_talep_routes(bp, db_factory, kullanici_id_fn, *, renk_kart_f
         con = _con()
         try:
             out = gonder_arge(con, payload, _uid(), tid)
-            return jsonify({'ok': True, 'talep': out, 'mesaj': 'Bekleyen Numuneler listesine gönderildi.'})
+            return jsonify({
+                'ok': True,
+                'talep': out,
+                'arge_test_id': out.get('arge_test_id'),
+                'mesaj': 'AR-GE\'ye gönderildi — Renk Merkezi listesine düştü.',
+            })
         except NumuneTalepError as e:
             return _err(e)
         finally:
@@ -211,22 +232,49 @@ def register_numune_talep_routes(bp, db_factory, kullanici_id_fn, *, renk_kart_f
 
     @bp.route('/api/numune-talep/<int:talep_id>/gorsel', methods=['POST'])
     @login_gerekli
+    @yetki_gerekli('nexgen.plan.manage', 'can_manage')
     def api_nt_gorsel_yukle(talep_id):
-        if not (_can_pzm_write() or _can_vedat()):
-            abort(403)
         alan = (request.form.get('alan') or 'urun_gorsel_belge_id').strip()
+        if alan not in ('urun_gorsel_belge_id', 'ref_gorsel_belge_id', 'vedat_sonuc_gorsel_belge_id'):
+            return jsonify({'ok': False, 'hata': 'Geçersiz alan.'}), 400
         f = request.files.get('dosya')
         if not f:
             return jsonify({'ok': False, 'hata': 'Dosya gerekli.'}), 400
         con = _con()
         try:
+            row = con.execute(
+                "SELECT id, durum FROM nexgen_numune_talep WHERE id=? AND aktif=1",
+                (talep_id,),
+            ).fetchone()
+            if not row:
+                return jsonify({'ok': False, 'hata': 'Talep bulunamadı.'}), 404
+            if (row['durum'] or '').upper() not in DUZENLENEBILIR_DURUMLAR:
+                return jsonify({'ok': False, 'hata': 'Bu talep düzenlenemez — görsel yüklenemez.'}), 409
             belge_id = belge_yukle('nexgen', 'numune_talep', talep_id, f, belge_tipi='GORSEL')
             belge_id_guncelle(con, talep_id, alan, belge_id)
             return jsonify({'ok': True, 'belge_id': belge_id})
+        except NumuneTalepError as e:
+            return _err(e)
         except Exception as e:
             return jsonify({'ok': False, 'hata': str(e)}), 400
         finally:
             con.close()
+
+    @bp.route('/numune-talep/bekleyen-numuneler')
+    @login_gerekli
+    @yetki_gerekli('nexgen.plan.view', 'can_view')
+    def pazarlama_bekleyen_numuneler():
+        con = _con()
+        try:
+            liste = liste_bekleyen(con)
+        finally:
+            con.close()
+        return render_template(
+            'nexgen/numune_talep_bekleyen.html',
+            active='nexgen',
+            liste=liste,
+            geri_url='/nexgen/pazarlama',
+        )
 
     @bp.route('/tablet/arge/bekleyen-numuneler')
     @login_gerekli
@@ -243,6 +291,7 @@ def register_numune_talep_routes(bp, db_factory, kullanici_id_fn, *, renk_kart_f
             'nexgen/numune_talep_bekleyen.html',
             active='nexgen',
             liste=liste,
+            geri_url='/nexgen/tablet/arge',
         )
 
     @bp.route('/tablet/arge/numune-talep/<int:talep_id>')
@@ -317,6 +366,24 @@ def register_numune_talep_routes(bp, db_factory, kullanici_id_fn, *, renk_kart_f
         finally:
             con.close()
 
+    @bp.route('/api/numune-talep/takip-listesi')
+    @login_gerekli
+    @yetki_gerekli('nexgen.plan.view', 'can_view')
+    def api_nt_takip_liste():
+        """Mehmet toplu Numune Takip listesi — yalnız SELECT."""
+        filtre = request.args.get('durum') or 'tumu'
+        q = request.args.get('q') or request.args.get('arama')
+        limit = min(max(request.args.get('limit', 100, type=int), 1), 200)
+        offset = max(request.args.get('offset', 0, type=int), 0)
+        admin = _can_pzm_write()
+        con = _con()
+        try:
+            return jsonify(get_takip_liste_readonly(
+                con, _uid(), admin=admin, filtre=filtre, q=q, limit=limit, offset=offset,
+            ))
+        finally:
+            con.close()
+
     @bp.route('/api/numune-talep/<int:talep_id>/isleme-al', methods=['POST'])
     @login_gerekli
     @yetki_gerekli('nexgen.tablet.view', 'can_view')
@@ -325,11 +392,22 @@ def register_numune_talep_routes(bp, db_factory, kullanici_id_fn, *, renk_kart_f
             abort(403)
         con = _con()
         try:
+            once = get_talep(con, talep_id)
+            zaten = once.get('durum') in ('CALISILIYOR', 'REVIZYONDA')
             out = isleme_al(con, talep_id, _uid())
+            redirect_url = isleme_al_redirect_url(out)
             return jsonify({
                 'ok': True,
                 'talep': out,
-                'redirect_url': f'/nexgen/tablet/arge/numune-talep/{talep_id}',
+                'arge_test_id': out.get('arge_test_id'),
+                'talep_kodu': out.get('talep_kodu'),
+                'zaten_islemede': zaten,
+                'redirect_url': redirect_url,
+                'mesaj': (
+                    'Zaten işleme alınmış — mevcut AR-GE kaydı açılıyor.'
+                    if zaten else
+                    'İşleme alındı — mevcut Yeni Renk Çalışması açılıyor.'
+                ),
             })
         except NumuneTalepError as e:
             return _err(e)

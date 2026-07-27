@@ -161,14 +161,14 @@ def _validate_payload(payload: dict, *, zorunlu_gonder: bool = False) -> dict:
             raise NumuneTalepError('Geçersiz talep kaynağı.', 400)
 
     talep_eden = payload.get('talep_eden_kullanici_id') or payload.get('talep_eden_id')
-    if zorunlu_gonder and not talep_eden:
-        raise NumuneTalepError('Talep eden kişi zorunlu.', 400)
 
     renk_tipi = (payload.get('renk_tipi') or '').strip().upper() or None
     if renk_tipi and renk_tipi not in RENK_TIPLERI:
         raise NumuneTalepError('renk_tipi MEVCUT veya YENI olmalı.', 400)
 
     karsilama_yolu = _norm_karsilama_yolu(payload.get('karsilama_yolu'))
+    if zorunlu_gonder and not karsilama_yolu:
+        raise NumuneTalepError('Talep türü seçimi zorunlu.', 400)
     if karsilama_yolu == 'YENI_FORMUL':
         renk_tipi = None
     elif karsilama_yolu == 'HAZIR_RENK':
@@ -182,10 +182,13 @@ def _validate_payload(payload: dict, *, zorunlu_gonder: bool = False) -> dict:
             raise NumuneTalepError('Yeni renk için açıklama zorunlu.', 400)
 
     if zorunlu_gonder:
-        if not (payload.get('talep_nedeni') or '').strip():
-            raise NumuneTalepError('Talep nedeni zorunlu.', 400)
-        if not (payload.get('aciklama') or '').strip():
-            raise NumuneTalepError('Açıklama zorunlu.', 400)
+        if karsilama_yolu == 'HAZIR_RENK' and not payload.get('rf_renk_id'):
+            raise NumuneTalepError('Hazır renk için katalog renk seçimi zorunlu.', 400)
+        if karsilama_yolu == 'YENI_FORMUL':
+            if not (payload.get('yeni_renk_aciklama') or '').strip():
+                raise NumuneTalepError('Yeni formül için istenen özellik zorunlu.', 400)
+        if not _norm_urun_tipi(payload.get('urun_tipi')):
+            raise NumuneTalepError('Ürün tipi seçimi zorunlu.', 400)
 
     diger = payload.get('diger_beklentiler') or []
     if not isinstance(diger, list):
@@ -280,6 +283,13 @@ def _apply_karsilama_isolation(data: dict) -> dict:
             'mat_parlak': None,
             'ref_renk_kodu': None,
             'renk_tipi': None,
+            'shore_deger': None,
+            'yumusaklik': None,
+            'kaymazlik': None,
+            'pisme_notu': None,
+            'diger_beklentiler_json': bos_json,
+            'kullanim_amaci': None,
+            'benzer_urun_numune': None,
         })
     return data
 
@@ -366,6 +376,8 @@ def _insert_fields(data: dict) -> tuple[str, list]:
 
 def kaydet_taslak(con, payload: dict, olusturan_id: int, talep_id: int | None = None) -> dict:
     norm = _validate_payload(payload, zorunlu_gonder=False)
+    if not norm.get('talep_eden_kullanici_id'):
+        norm['talep_eden_kullanici_id'] = olusturan_id
     now = _now()
     if talep_id:
         row = con.execute(
@@ -406,9 +418,365 @@ def kaydet_taslak(con, payload: dict, olusturan_id: int, talep_id: int | None = 
     return get_talep(con, tid)
 
 
+def _ana_grup_from_formul_kod(kod: str | None) -> str | None:
+    k = (kod or '').strip().upper()
+    for g in ('1BA', '2BA', '3BA'):
+        if k.startswith(g + '-') or k == g:
+            return g
+    return None
+
+
+def _uv_set_for_ana_grup(con, ana_grup: str) -> list[dict]:
+    """Aynı ana gruptan reçeteli LARGE+SMALL veya MEDIUM seti (hardcode ID yok)."""
+    ana = (ana_grup or '').strip().upper()
+    if ana not in ('1BA', '2BA', '3BA'):
+        raise NumuneTalepError('ana_formul_grup_kodu 1BA/2BA/3BA olmalı.', 400, 'ANA_GRUP')
+    rows = con.execute(
+        """
+        SELECT uv.id AS uv_id, uv.boyut, f.kod
+        FROM nexgen_uretim_varyant uv
+        JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id
+        JOIN nexgen_formul f ON f.id = rv.formul_id
+        WHERE uv.aktif=1 AND f.kod LIKE ?
+          AND uv.boyut IN ('LARGE','SMALL','MEDIUM')
+          AND EXISTS (
+            SELECT 1 FROM nexgen_recete_kalem rk
+            WHERE rk.uretim_varyant_id=uv.id AND rk.aktif=1
+          )
+        ORDER BY f.kod, uv.boyut, uv.id
+        """,
+        (ana + '-%',),
+    ).fetchall()
+    by_boyut: dict[str, int] = {}
+    for r in rows:
+        b = (r['boyut'] or '').upper()
+        if b not in by_boyut:
+            by_boyut[b] = int(r['uv_id'])
+    if 'LARGE' in by_boyut and 'SMALL' in by_boyut:
+        return [
+            {'boyut': 'LARGE', 'kaynak_uretim_varyant_id': by_boyut['LARGE'], 'sira_no': 1},
+            {'boyut': 'SMALL', 'kaynak_uretim_varyant_id': by_boyut['SMALL'], 'sira_no': 2},
+        ]
+    if 'MEDIUM' in by_boyut:
+        return [
+            {'boyut': 'MEDIUM', 'kaynak_uretim_varyant_id': by_boyut['MEDIUM'], 'sira_no': 1},
+        ]
+    raise NumuneTalepError(
+        f'{ana} için reçeteli kaynak UV seti bulunamadı (LARGE+SMALL veya MEDIUM).',
+        400,
+        'KAYNAK_UV',
+    )
+
+
+def _resolve_kaynak_from_rf(con, rf_renk_id: int) -> tuple[str, list[dict]]:
+    """RF formul uygunluğundan ana grup + gerçek UV seti."""
+    uyg = con.execute(
+        """
+        SELECT u.formul_id, u.ana_formul_kodu, f.kod
+        FROM nexgen_rf_formul_uygunluk u
+        LEFT JOIN nexgen_formul f ON f.id = u.formul_id
+        WHERE u.rf_renk_id=? AND IFNULL(u.aktif,1)=1
+        ORDER BY u.id
+        """,
+        (rf_renk_id,),
+    ).fetchall()
+    if not uyg:
+        raise NumuneTalepError(
+            'Seçili RF için formül uygunluğu yok; kaynak UV çözülemedi.',
+            400,
+            'RF_UYGUNLUK',
+        )
+    ana = None
+    for r in uyg:
+        ana = _ana_grup_from_formul_kod(r['ana_formul_kodu']) or _ana_grup_from_formul_kod(r['kod'])
+        if ana:
+            break
+    if not ana:
+        raise NumuneTalepError(
+            'RF formül kodundan ana grup (1BA/2BA/3BA) çıkarılamadı.',
+            400,
+            'ANA_GRUP',
+        )
+    return ana, _uv_set_for_ana_grup(con, ana)
+
+
+def _rf_renk_bilesenleri(con, rf_renk_id: int) -> list[dict]:
+    """Mevcut RF pigment kalemleri — placeholder değil, katalog RF kaydı."""
+    rows = con.execute(
+        """
+        SELECT stok_kart_id, pigment_ad, miktar_kg, sira
+        FROM nexgen_rf_kalem
+        WHERE rf_renk_id=? AND IFNULL(aktif,1)=1 AND miktar_kg > 0
+        ORDER BY sira, id
+        """,
+        (rf_renk_id,),
+    ).fetchall()
+    out = []
+    for r in rows:
+        kg = float(r['miktar_kg'] or 0)
+        if kg <= 0 or not r['stok_kart_id']:
+            continue
+        out.append({
+            'stok_kart_id': int(r['stok_kart_id']),
+            'ad': (r['pigment_ad'] or '').strip() or None,
+            'gram': round(kg * 1000.0, 4),
+            'kg': kg,
+        })
+    return out
+
+
+def _resolve_nx_ar_kaynak(con, row, gonder_payload: dict | None) -> tuple[str, list[dict], list | None]:
+    """
+    Kaynak UV sırası:
+      1) gonder payload.kaynak_uvler + ana_formul_grup_kodu (kullanıcı)
+      2) talep.rf_renk_id → RF uygunluk + UV seti (gerçek bağlantı)
+      3) yoksa anlaşılır validasyon
+    Hardcode UV ID yok. Otomatik pigment yok (YENI_RENK).
+    HAZIR_RENK + RF kalemi varsa gerçek RF pigmentlerini renk_bilesenleri olarak taşır.
+    """
+    payload = gonder_payload if isinstance(gonder_payload, dict) else {}
+    ham_uv = payload.get('kaynak_uvler')
+    ana = (payload.get('ana_formul_grup_kodu') or '').strip().upper() or None
+    renk_bilesenleri = None
+
+    if isinstance(ham_uv, list) and ham_uv:
+        if not ana or ana not in ('1BA', '2BA', '3BA'):
+            raise NumuneTalepError(
+                'kaynak_uvler ile birlikte ana_formul_grup_kodu (1BA/2BA/3BA) zorunlu.',
+                400,
+                'ANA_GRUP',
+            )
+        kaynak = []
+        for i, item in enumerate(ham_uv):
+            if not isinstance(item, dict):
+                raise NumuneTalepError(f'kaynak_uvler[{i}] geçersiz.', 400)
+            try:
+                uv_id = int(item.get('kaynak_uretim_varyant_id'))
+            except (TypeError, ValueError):
+                raise NumuneTalepError('kaynak_uretim_varyant_id geçersiz.', 400)
+            boyut = (item.get('boyut') or '').strip().upper()
+            if boyut not in ('LARGE', 'SMALL', 'MEDIUM'):
+                raise NumuneTalepError(f'Geçersiz boyut: {boyut}', 400)
+            kaynak.append({
+                'boyut': boyut,
+                'kaynak_uretim_varyant_id': uv_id,
+                'sira_no': int(item.get('sira_no') or (i + 1)),
+            })
+        if isinstance(payload.get('renk_bilesenleri'), list):
+            renk_bilesenleri = payload.get('renk_bilesenleri')
+        return ana, kaynak, renk_bilesenleri
+
+    rf_id = row['rf_renk_id'] if 'rf_renk_id' in row.keys() else None
+    if rf_id:
+        ana, kaynak = _resolve_kaynak_from_rf(con, int(rf_id))
+        # HAZIR_RENK: mevcut RF pigmentleri gerçek kaynaktır
+        bilesen = _rf_renk_bilesenleri(con, int(rf_id))
+        return ana, kaynak, (bilesen or None)
+
+    raise NumuneTalepError(
+        'Kaynak formül/UV seçilmeden AR-GE kartı oluşturulamaz. '
+        'Hazır RF seçin veya kaynak_uvler + ana_formul_grup_kodu gönderin.',
+        400,
+        'KAYNAK_BOS',
+    )
+
+
+def _ensure_nx_ar_for_talep(
+    con, talep_id: int, olusturan_id: int, gonder_payload: dict | None = None,
+) -> int:
+    """
+    Numune talep → tek MUSTERI_RENK köprüsü (FAZ-1D4-B).
+    Kaynak çözülemezse kaynaksız skeleton (kaynak UV NULL).
+    Ferhat/pigment/RF otomatik oluşmaz. Placeholder UV yok.
+    """
+    from modules.nexgen.nx_ar_service import (
+        NxArError, create_nx_ar, create_musteri_renk_skeleton,
+    )
+
+    row = con.execute(
+        """
+        SELECT id, talep_kodu, arge_test_id, cari_id, oncelik,
+               renk_kodu, yeni_renk_aciklama, urun_adi, urun_tipi,
+               shore_deger, ek_not, pisme_notu, karsilama_yolu, rf_renk_id
+        FROM nexgen_numune_talep WHERE id=? AND aktif=1
+        """,
+        (talep_id,),
+    ).fetchone()
+    if not row:
+        raise NumuneTalepError('Talep bulunamadı.', 404)
+    if row['arge_test_id']:
+        return int(row['arge_test_id'])
+
+    talep_kodu = row['talep_kodu']
+    # Idempotent: aynı AT-M ile mevcut köprü varsa yalnız bağla
+    existing = con.execute(
+        """
+        SELECT id FROM nexgen_arge_test
+        WHERE aktif=1 AND test_no=? AND calisma_tipi='MUSTERI_RENK'
+        """,
+        (talep_kodu,),
+    ).fetchone()
+    if existing:
+        arge_id = int(existing['id'])
+        other = con.execute(
+            """
+            SELECT id FROM nexgen_numune_talep
+            WHERE aktif=1 AND arge_test_id=? AND id!=?
+            """,
+            (arge_id, talep_id),
+        ).fetchone()
+        if other:
+            raise NumuneTalepError(
+                'Bu AT-M AR-GE kaydı başka talebe bağlı.', 409, 'ARGE_CONFLICT',
+            )
+        con.execute(
+            """
+            UPDATE nexgen_numune_talep SET arge_test_id=?, guncelleme_tarihi=?
+            WHERE id=? AND (arge_test_id IS NULL OR arge_test_id=0)
+            """,
+            (arge_id, _now(), talep_id),
+        )
+        try:
+            gelisme_ekle(
+                con, talep_id,
+                f'Renk Merkezi AR-GE kartı bağlandı (arge_test_id={arge_id})',
+                olay_tipi='ARGE_BAGLANDI', kullanici_id=olusturan_id,
+            )
+        except sqlite3.OperationalError:
+            pass
+        con.commit()
+        return arge_id
+
+    hedef = (
+        (row['yeni_renk_aciklama'] or '').strip()
+        or (row['renk_kodu'] or '').strip()
+        or (row['urun_adi'] or '').strip()
+        or talep_kodu
+    )
+    # FAZ-3A reopen: teknik id kullanıcı notuna yazılmaz (talep_id/arge_test_id ayrı saklanır)
+    notlar = ' · '.join(
+        x for x in (
+            (row['ek_not'] or '').strip(),
+            (row['pisme_notu'] or '').strip(),
+        ) if x
+    )
+    shore = None
+    if row['shore_deger'] not in (None, ''):
+        try:
+            shore = float(str(row['shore_deger']).replace(',', '.').rstrip('AaSs'))
+        except (TypeError, ValueError):
+            shore = None
+
+    kaynaksiz = False
+    ana = None
+    kaynak_uvler: list | None = None
+    renk_bilesenleri = None
+    try:
+        ana, kaynak_uvler, renk_bilesenleri = _resolve_nx_ar_kaynak(
+            con, row, gonder_payload,
+        )
+    except NumuneTalepError as e:
+        if (e.kod or '') in ('KAYNAK_BOS', 'KAYNAK_UV', 'ANA_GRUP', 'RF_UYGUNLUK'):
+            kaynaksiz = True
+        else:
+            raise
+
+    if kaynaksiz or not kaynak_uvler:
+        try:
+            nx = create_musteri_renk_skeleton(
+                con,
+                talep_kodu=talep_kodu,
+                cari_id=row['cari_id'],
+                hedef_renk_adi=hedef,
+                kullanici_id=olusturan_id,
+                oncelik=(row['oncelik'] or 'NORMAL'),
+                urun_ailesi=(row['urun_tipi'] or '').strip() or None,
+                renk_kodu=(row['renk_kodu'] or '').strip() or None,
+                shore_hedef=shore,
+                genel_not=notlar or None,
+            )
+        except NxArError as e:
+            raise NumuneTalepError(
+                f'AR-GE kartı oluşturulamadı: {e.message}',
+                getattr(e, 'status', 500) or 500,
+                getattr(e, 'kod', None) or 'NXAR',
+            ) from e
+        arge_id = int(nx['arge_test_id'])
+    else:
+        nx_payload = {
+            'calisma_tipi': 'MUSTERI_RENK',
+            'ana_formul_grup_kodu': ana,
+            'cari_id': row['cari_id'],
+            'hedef_renk_adi': hedef,
+            'renk_kodu': (row['renk_kodu'] or '').strip() or None,
+            'oncelik': (row['oncelik'] or 'NORMAL'),
+            'saha_testi_gerekli_mi': 0,
+            'talep_referansi': talep_kodu,
+            'urun_ailesi': (row['urun_tipi'] or '').strip() or None,
+            'shore_hedef': shore,
+            'kaynak_uvler': kaynak_uvler,
+            'deneme': {
+                'numune_orani': 10.0,
+                'genel_not': notlar or None,
+            },
+        }
+        if renk_bilesenleri:
+            nx_payload['renk_bilesenleri'] = renk_bilesenleri
+        try:
+            nx = create_nx_ar(con, nx_payload, kullanici_id=olusturan_id)
+        except NxArError as e:
+            raise NumuneTalepError(
+                f'AR-GE kartı oluşturulamadı: {e.message}',
+                getattr(e, 'status', 500) or 500,
+                getattr(e, 'kod', None) or 'NXAR',
+            ) from e
+
+        arge_id = int(nx['arge_test_id'])
+        conflict = con.execute(
+            "SELECT id FROM nexgen_arge_test WHERE test_no=? AND id!=?",
+            (talep_kodu, arge_id),
+        ).fetchone()
+        if not conflict:
+            con.execute(
+                "UPDATE nexgen_arge_test SET test_no=?, guncelleme_tarihi=? WHERE id=?",
+                (talep_kodu, _now(), arge_id),
+            )
+
+    con.execute(
+        """
+        UPDATE nexgen_numune_talep SET
+            arge_test_id=?,
+            guncelleme_tarihi=?
+        WHERE id=?
+        """,
+        (arge_id, _now(), talep_id),
+    )
+    try:
+        gelisme_ekle(
+            con, talep_id,
+            f'Renk Merkezi AR-GE kartı bağlandı (arge_test_id={arge_id})',
+            olay_tipi='ARGE_BAGLANDI', kullanici_id=olusturan_id,
+        )
+    except sqlite3.OperationalError:
+        pass
+    con.commit()
+    return arge_id
+
+
+def _preflight_gonder_kaynak(con, norm: dict) -> None:
+    """Commit öncesi zorunlu alan — kaynak UV çözümü _ensure_nx_ar_for_talep'te (kaynaksiz fallback)."""
+    ky = norm.get('karsilama_yolu')
+    if ky == 'HAZIR_RENK' and not norm.get('rf_renk_id'):
+        raise NumuneTalepError('Hazır renk için katalog renk seçimi zorunlu.', 400)
+
+
 def gonder_arge(con, payload: dict, olusturan_id: int, talep_id: int | None = None) -> dict:
     norm = _validate_payload(payload, zorunlu_gonder=True)
+    if not norm.get('talep_eden_kullanici_id'):
+        norm['talep_eden_kullanici_id'] = olusturan_id
+    _preflight_gonder_kaynak(con, norm)
     now = _now()
+    bekleyen_kopru_tamamla = False
     if talep_id:
         row = con.execute(
             'SELECT id, talep_kodu, durum, arge_test_id FROM nexgen_numune_talep WHERE id=? AND aktif=1',
@@ -416,20 +784,24 @@ def gonder_arge(con, payload: dict, olusturan_id: int, talep_id: int | None = No
         ).fetchone()
         if not row:
             raise NumuneTalepError('Talep bulunamadı.', 404)
-        if row['durum'] not in DUZENLENEBILIR_DURUMLAR:
+        durum = (row['durum'] or '').strip().upper()
+        if durum == 'BEKLEYEN_NUMUNE':
+            if row['arge_test_id']:
+                return get_talep(con, talep_id)
+            # Önceki gönderim commit oldu ama NX-AR köprüsü tamamlanmadı — yeniden dene
+            bekleyen_kopru_tamamla = True
+            tid = talep_id
+        elif durum not in DUZENLENEBILIR_DURUMLAR:
             raise NumuneTalepError('Yalnız taslak talepler gönderilebilir.', 409)
-        if row['arge_test_id']:
-            raise NumuneTalepError('Duplicate AR-GE kartı oluşturulamaz.', 409)
-        kod = row['talep_kodu']
-        norm['guncelleme_tarihi'] = now
-        norm['durum'] = 'BEKLEYEN_NUMUNE'
-        sets = ','.join(f'{k}=?' for k in norm)
-        con.execute(f'UPDATE nexgen_numune_talep SET {sets} WHERE id=?', [*norm.values(), talep_id])
-        tid = talep_id
+        else:
+            norm['guncelleme_tarihi'] = now
+            norm['durum'] = 'BEKLEYEN_NUMUNE'
+            sets = ','.join(f'{k}=?' for k in norm)
+            con.execute(f'UPDATE nexgen_numune_talep SET {sets} WHERE id=?', [*norm.values(), talep_id])
+            tid = talep_id
     else:
-        kod = uret_talep_kodu(con)
         norm.update({
-            'talep_kodu': kod,
+            'talep_kodu': uret_talep_kodu(con),
             'durum': 'BEKLEYEN_NUMUNE',
             'olusturan_kullanici_id': olusturan_id,
             'olusturma_tarihi': now,
@@ -441,14 +813,17 @@ def gonder_arge(con, payload: dict, olusturan_id: int, talep_id: int | None = No
         cols, vals = _insert_fields(norm)
         cur = con.execute(f'INSERT INTO nexgen_numune_talep ({cols}) VALUES ({",".join(["?"]*len(vals))})', vals)
         tid = int(cur.lastrowid)
-    try:
-        gelisme_ekle(
-            con, tid, _olusturan_gelisme_metni(con, olusturan_id),
-            olay_tipi='TALEP_OLUSTURULDU', kullanici_id=olusturan_id,
-        )
-    except sqlite3.OperationalError:
-        pass
-    con.commit()
+    if not bekleyen_kopru_tamamla:
+        try:
+            gelisme_ekle(
+                con, tid, _olusturan_gelisme_metni(con, olusturan_id),
+                olay_tipi='TALEP_OLUSTURULDU', kullanici_id=olusturan_id,
+            )
+        except sqlite3.OperationalError:
+            pass
+        con.commit()
+    # Mehmet → Vedat köprüsü: tek NX-AR + arge_test_id (Ferhat'a otomatik gitmez)
+    _ensure_nx_ar_for_talep(con, tid, olusturan_id, gonder_payload=payload)
     return get_talep(con, tid)
 
 
@@ -497,12 +872,20 @@ def liste_bekleyen(con, limit: int = 50, filtre: str | None = None, q: str | Non
                nt.urun_tipi, nt.urun_adi, nt.renk_kodu, nt.yeni_renk_aciklama,
                nt.rf_renk_id, nt.renk_tipi,
                nt.musteri_tipi, nt.aday_firma_adi,
+               nt.kaynak_modul, nt.mo_gorusme_id, nt.karsilama_yolu,
                c.unvan AS cari_unvan,
                te.AdSoyad AS talep_eden_ad
         FROM nexgen_numune_talep nt
         LEFT JOIN nexgen_cari c ON c.id = nt.cari_id
         LEFT JOIN sistem_kullanici te ON te.Id = nt.talep_eden_kullanici_id
-        WHERE nt.aktif=1 AND nt.durum IN ({ph})
+        WHERE nt.aktif=1 AND (
+            nt.durum IN ({ph})
+            OR (
+                nt.kaynak_modul='MUSTERI_OPERASYONU'
+                AND nt.durum='ONAYLANDI'
+                AND (nt.arge_test_id IS NULL OR nt.arge_test_id=0)
+            )
+        )
     """
     params: list[Any] = list(durumlar)
     qn = (q or '').strip()
@@ -543,19 +926,230 @@ def liste_pazarlama(con, kullanici_id: int | None, limit: int = 100) -> list[dic
     return [_row_to_dict(r) for r in rows]
 
 
-def isleme_al(con, talep_id: int, kullanici_id: int) -> dict:
+def _ensure_isleme_al_musteri_renk_bridge(con, talep_id: int, kullanici_id: int) -> int:
+    """
+    FAZ-2C — İşleme Al akıllı köprü (yalnız MUSTERI_RENK skeleton).
+    arge_test_id varsa doğrular; yoksa / kırıkysa aynı AT-M ile temel kayıt.
+    UV / pigment / RF / Ferhat / barkod / placeholder YOK.
+    """
+    from modules.nexgen.nx_ar_service import NxArError, create_musteri_renk_skeleton
+
     row = con.execute(
-        'SELECT id, durum, arge_test_id, talep_kodu FROM nexgen_numune_talep WHERE id=? AND aktif=1',
+        """
+        SELECT id, talep_kodu, arge_test_id, cari_id, oncelik,
+               renk_kodu, yeni_renk_aciklama, urun_adi, urun_tipi,
+               shore_deger, ek_not, pisme_notu
+        FROM nexgen_numune_talep WHERE id=? AND aktif=1
+        """,
         (talep_id,),
     ).fetchone()
     if not row:
         raise NumuneTalepError('Talep bulunamadı.', 404)
+
     if row['arge_test_id']:
-        raise NumuneTalepError('Duplicate AR-GE kartı — mevcut kayıt kullanılmalı.', 409)
+        arge = con.execute(
+            """
+            SELECT id, test_no, aktif FROM nexgen_arge_test WHERE id=?
+            """,
+            (int(row['arge_test_id']),),
+        ).fetchone()
+        if arge and int(arge['aktif'] or 0):
+            return int(arge['id'])
+        # Kırık bağ — sessizce yeniden kur
+        con.execute(
+            """
+            UPDATE nexgen_numune_talep
+            SET arge_test_id=NULL, guncelleme_tarihi=?
+            WHERE id=?
+            """,
+            (_now(), talep_id),
+        )
+        con.commit()
+
+    talep_kodu = (row['talep_kodu'] or '').strip()
+    if not talep_kodu:
+        raise NumuneTalepError('Talep kodu yok.', 409)
+
+    existing = con.execute(
+        """
+        SELECT id FROM nexgen_arge_test
+        WHERE aktif=1 AND test_no=? AND calisma_tipi='MUSTERI_RENK'
+        """,
+        (talep_kodu,),
+    ).fetchone()
+    if existing:
+        arge_id = int(existing['id'])
+        other = con.execute(
+            """
+            SELECT id FROM nexgen_numune_talep
+            WHERE aktif=1 AND arge_test_id=? AND id!=?
+            """,
+            (arge_id, talep_id),
+        ).fetchone()
+        if other:
+            raise NumuneTalepError(
+                'Bu AT-M AR-GE kaydı başka talebe bağlı.', 409, 'ARGE_CONFLICT',
+            )
+        con.execute(
+            """
+            UPDATE nexgen_numune_talep SET arge_test_id=?, guncelleme_tarihi=?
+            WHERE id=? AND (arge_test_id IS NULL OR arge_test_id=0)
+            """,
+            (arge_id, _now(), talep_id),
+        )
+        try:
+            gelisme_ekle(
+                con, talep_id,
+                f'Renk Merkezi AR-GE kartı bağlandı (arge_test_id={arge_id})',
+                olay_tipi='ARGE_BAGLANDI', kullanici_id=kullanici_id,
+            )
+        except sqlite3.OperationalError:
+            pass
+        con.commit()
+        return arge_id
+
+    hedef = (
+        (row['yeni_renk_aciklama'] or '').strip()
+        or (row['renk_kodu'] or '').strip()
+        or (row['urun_adi'] or '').strip()
+        or talep_kodu
+    )
+    # FAZ-3A reopen: teknik id kullanıcı notuna yazılmaz
+    notlar = ' · '.join(
+        x for x in (
+            (row['ek_not'] or '').strip(),
+            (row['pisme_notu'] or '').strip(),
+        ) if x
+    )
+    shore = None
+    if row['shore_deger'] not in (None, ''):
+        try:
+            shore = float(str(row['shore_deger']).replace(',', '.').rstrip('AaSs'))
+        except (TypeError, ValueError):
+            shore = None
+
+    try:
+        nx = create_musteri_renk_skeleton(
+            con,
+            talep_kodu=talep_kodu,
+            cari_id=row['cari_id'],
+            hedef_renk_adi=hedef,
+            kullanici_id=kullanici_id,
+            oncelik=(row['oncelik'] or 'NORMAL'),
+            urun_ailesi=(row['urun_tipi'] or '').strip() or None,
+            renk_kodu=(row['renk_kodu'] or '').strip() or None,
+            shore_hedef=shore,
+            genel_not=notlar or None,
+        )
+    except NxArError as e:
+        raise NumuneTalepError(
+            f'AR-GE kartı oluşturulamadı: {e.message}',
+            getattr(e, 'status', 500) or 500,
+            getattr(e, 'kod', None) or 'NXAR',
+        ) from e
+
+    arge_id = int(nx['arge_test_id'])
+    con.execute(
+        """
+        UPDATE nexgen_numune_talep SET arge_test_id=?, guncelleme_tarihi=?
+        WHERE id=?
+        """,
+        (arge_id, _now(), talep_id),
+    )
+    try:
+        gelisme_ekle(
+            con, talep_id,
+            f'Renk Merkezi AR-GE kartı bağlandı (arge_test_id={arge_id})',
+            olay_tipi='ARGE_BAGLANDI', kullanici_id=kullanici_id,
+        )
+    except sqlite3.OperationalError:
+        pass
+    con.commit()
+    return arge_id
+
+
+def talep_yeni_renk_mi(talep: dict) -> bool:
+    """
+    İşleme Al / hydrate: YENI renk talebi mi?
+    - karsilama_yolu=YENI_RENK → evet
+    - HAZIR_* / YENI_FORMUL → hayır
+    - Legacy: karsilama_yolu boş + renk_tipi=YENI → evet
+      (AT-M-2026-0029 vb. eski Mehmet talepleri)
+    """
+    ky = (talep.get('karsilama_yolu') or '').strip().upper()
+    if ky == 'YENI_RENK':
+        return True
+    if ky in ('HAZIR_RENK', 'HAZIR_RF', 'YENI_FORMUL'):
+        return False
+    return (talep.get('renk_tipi') or '').strip().upper() == 'YENI'
+
+
+def isleme_al_redirect_url(talep: dict) -> str:
+    """
+    FAZ-2B/2D/2E — talep türüne göre mevcut ekran.
+    YENI_RENK (veya legacy renk_tipi=YENI) → MODÜL-02 yeni-rf hydrate.
+    HAZIR_RENK → MODÜL-01 musteri-renk hydrate.
+    """
+    arge_id = talep.get('arge_test_id')
+    tid = talep.get('id')
+    if not arge_id or not tid:
+        # isleme_al köprüyü kurmuş olmalı
+        raise NumuneTalepError('İşleme alınamadı.', 409)
+    if talep_yeni_renk_mi(talep):
+        return (
+            f'/nexgen/tablet/arge/yeni-rf'
+            f'?arge_test_id={int(arge_id)}&talep_id={int(tid)}'
+        )
+    return (
+        f'/nexgen/tablet/arge/musteri-renk'
+        f'?arge_test_id={int(arge_id)}&talep_id={int(tid)}'
+    )
+
+
+def isleme_al(con, talep_id: int, kullanici_id: int) -> dict:
+    """
+    FAZ-2C — İşleme Al akıllı giriş.
+    Köprü yoksa aynı AT-M ile MUSTERI_RENK skeleton oluşturur (UV/pigment yok).
+    Mevcut arge_test_id korunur; idempotent.
+    """
+    row = con.execute(
+        """
+        SELECT id, durum, arge_test_id, talep_kodu, karsilama_yolu, kaynak_modul
+        FROM nexgen_numune_talep WHERE id=? AND aktif=1
+        """,
+        (talep_id,),
+    ).fetchone()
+    if not row:
+        raise NumuneTalepError('Talep bulunamadı.', 404)
+
+    mo_onaylandi = (
+        (row['kaynak_modul'] or '') == 'MUSTERI_OPERASYONU'
+        and (row['durum'] or '') == 'ONAYLANDI'
+    )
+
+    # Akıllı köprü: Vedat teknik popup görmez
+    arge_id = _ensure_isleme_al_musteri_renk_bridge(con, talep_id, kullanici_id)
+
+    row = con.execute(
+        """
+        SELECT id, durum, arge_test_id, talep_kodu, kaynak_modul
+        FROM nexgen_numune_talep WHERE id=? AND aktif=1
+        """,
+        (talep_id,),
+    ).fetchone()
+    if not row or int(row['arge_test_id'] or 0) != int(arge_id):
+        raise NumuneTalepError('Talep bulunamadı.', 404)
+
+    from modules.nexgen.nx_ar_service import ensure_nx_ar_teknik_kodu
+    ensure_nx_ar_teknik_kodu(con, arge_id, kullanici_id)
+
+    # Idempotent: zaten işleme alınmış (NX-AR teknik kod repair dahil)
     if row['durum'] in ('CALISILIYOR', 'REVIZYONDA'):
         return get_talep(con, talep_id)
-    if row['durum'] != 'BEKLEYEN_NUMUNE':
+
+    if row['durum'] != 'BEKLEYEN_NUMUNE' and not mo_onaylandi:
         raise NumuneTalepError('Yalnız bekleyen numune işleme alınabilir.', 409)
+
     now = _now()
     con.execute(
         """
@@ -564,9 +1158,13 @@ def isleme_al(con, talep_id: int, kullanici_id: int) -> dict:
             isleme_alan_kullanici_id=?,
             isleme_alinma_tarihi=?,
             guncelleme_tarihi=?
-        WHERE id=?
+        WHERE id=? AND arge_test_id=?
         """,
-        (kullanici_id, now, now, talep_id),
+        (kullanici_id, now, now, talep_id, arge_id),
+    )
+    con.execute(
+        "UPDATE nexgen_arge_test SET guncelleme_tarihi=? WHERE id=?",
+        (now, arge_id),
     )
     try:
         gelisme_ekle(
@@ -580,25 +1178,10 @@ def isleme_al(con, talep_id: int, kullanici_id: int) -> dict:
 
 
 def vedat_calisma_baslat(con, talep_id: int, kullanici_id: int | None = None) -> dict:
-    if kullanici_id:
-        return isleme_al(con, talep_id, kullanici_id)
-    row = con.execute(
-        'SELECT id, durum, arge_test_id FROM nexgen_numune_talep WHERE id=? AND aktif=1',
-        (talep_id,),
-    ).fetchone()
-    if not row:
-        raise NumuneTalepError('Talep bulunamadı.', 404)
-    if row['arge_test_id']:
-        raise NumuneTalepError('Duplicate AR-GE kartı — mevcut kayıt kullanılmalı.', 409)
-    if row['durum'] not in ('BEKLEYEN_NUMUNE', 'CALISILIYOR', 'REVIZYONDA'):
-        raise NumuneTalepError('Bu durumda çalışma başlatılamaz.', 409)
-    if row['durum'] == 'BEKLEYEN_NUMUNE':
-        con.execute(
-            "UPDATE nexgen_numune_talep SET durum='CALISILIYOR', guncelleme_tarihi=? WHERE id=?",
-            (_now(), talep_id),
-        )
-        con.commit()
-    return get_talep(con, talep_id)
+    """İşleme Al ile aynı — yeni AR-GE kaydı üretmez."""
+    if not kullanici_id:
+        raise NumuneTalepError('Kullanıcı gerekli.', 400)
+    return isleme_al(con, talep_id, kullanici_id)
 
 
 def vedat_kaydet(con, talep_id: int, payload: dict) -> dict:
@@ -682,10 +1265,12 @@ def belge_id_guncelle(con, talep_id: int, alan: str, belge_id: int) -> None:
     izin = {'urun_gorsel_belge_id', 'ref_gorsel_belge_id', 'vedat_sonuc_gorsel_belge_id'}
     if alan not in izin:
         raise NumuneTalepError('Geçersiz belge alanı.', 400)
-    con.execute(
+    cur = con.execute(
         f'UPDATE nexgen_numune_talep SET {alan}=?, guncelleme_tarihi=? WHERE id=? AND aktif=1',
         (belge_id, _now(), talep_id),
     )
+    if cur.rowcount < 1:
+        raise NumuneTalepError('Talep bulunamadı — belge ilişkilendirilemedi.', 404)
     con.commit()
 
 
@@ -702,3 +1287,309 @@ def durum_etiket(durum: str | None) -> str:
         'RECETE_MERKEZINE_AKTARILDI': 'Reçete Merkezine Aktarıldı',
     }
     return m.get((durum or '').upper(), durum or '—')
+
+
+def _karsilama_etiket(ky: str | None) -> str:
+    m = {
+        'HAZIR_RENK': 'Katalogdan Renk Seç',
+        'HAZIR_RF': 'Katalogdan Renk Seç',
+        'YENI_RENK': 'Yeni Renk Talebi',
+        'YENI_FORMUL': 'Yeni Hammadde / Formül Talebi',
+    }
+    return m.get((ky or '').strip().upper(), (ky or '—'))
+
+
+def _oncelik_etiket(v: str | None) -> str:
+    m = {'NORMAL': 'Normal', 'ACIL': 'Acil', 'KRITIK': 'Kritik'}
+    return m.get((v or 'NORMAL').upper(), v or 'Normal')
+
+
+def _arge_durum_etiket(durum: str | None, saha: int | None = None) -> str:
+    d = (durum or '').upper()
+    if int(saha or 0) == 1 and d in ('ARGE_HAZIR', 'SAHA_BEKLIYOR', 'FERHAT_BEKLIYOR'):
+        if d == 'DENEMEDE':
+            return 'Enjeksiyon Denemesi Devam Ediyor'
+        return 'Enjeksiyon Denemesi Bekliyor'
+    m = {
+        'ARGE_HAZIR': 'AR-GE Test',
+        'DENEMEDE': 'Enjeksiyon Denemesi Devam Ediyor',
+        'REVIZYON_GEREKLI': 'Revizyon Gerekli',
+        'ONAY_BEKLIYOR': 'Onay Bekliyor',
+        'ONAYA_GONDERILDI': 'Onay Bekliyor',
+        'ONAYLANDI': 'Onaylandı',
+        'FERHAT_BEKLIYOR': 'Enjeksiyon Denemesi Bekliyor',
+        'REDDEDILDI': 'Reddedildi',
+    }
+    return m.get(d, d or '—')
+
+
+TAKIP_FILTRE_ANAHTARLARI = (
+    'tumu', 'bekleyen', 'vedat', 'ferhat', 'renk_merkezi',
+    'onay_bekleyen', 'tamamlanan', 'iptal_red',
+)
+
+
+def _takip_son_tarih(talep: dict, arge: dict | None) -> str:
+    aday = [
+        (talep.get('guncelleme_tarihi') or '').strip(),
+        (talep.get('olusturma_tarihi') or '').strip(),
+    ]
+    if arge:
+        aday.append((arge.get('guncelleme_tarihi') or '').strip())
+        aday.append((arge.get('ferhat_kayit_tarihi') or '').strip())
+    aday = [a for a in aday if a]
+    return max(aday)[:16] if aday else '—'
+
+
+def _takip_kart_cozumle(talep: dict, arge: dict | None) -> dict:
+    """Tek talep için takip kartı alanları — salt okunur."""
+    td = (talep.get('durum') or '').upper()
+    ad = (arge.get('durum') if arge else '') or ''
+    adu = ad.upper()
+    saha = int(arge.get('saha_testi_gerekli_mi') or 0) if arge else 0
+    gonderildi = td not in ('YENI_TALEP', 'TASLAK')
+    vedat_bitti = bool(arge and adu in (
+        'ONAY_BEKLIYOR', 'ONAYA_GONDERILDI', 'ONAYLANDI', 'FERHAT_BEKLIYOR',
+        'DENEMEDE', 'REDDEDILDI',
+    ))
+    ferhat_atlandi = bool(arge and saha == 0 and gonderildi)
+    ferhat_bitti = bool(
+        arge and (
+            ferhat_atlandi
+            or (arge.get('ferhat_genel_karar') or arge.get('ferhat_kayit_tarihi'))
+            or adu in ('ONAY_BEKLIYOR', 'ONAYA_GONDERILDI', 'ONAYLANDI', 'REDDEDILDI')
+        )
+    )
+    rm_bitti = bool(arge and adu in ('ONAY_BEKLIYOR', 'ONAYA_GONDERILDI', 'ONAYLANDI', 'REDDEDILDI'))
+    admin_bitti = adu == 'ONAYLANDI' or td in ('ONAYLANDI', 'RECETE_MERKEZINE_AKTARILDI')
+
+    def _step(label: str, durum: str, notu: str = '') -> dict:
+        return {'label': label, 'durum': durum, 'not': notu}
+
+    surec = [
+        _step('Mehmet', 'tamam' if gonderildi else 'aktif', ''),
+        _step('Vedat', 'tamam' if vedat_bitti else ('aktif' if gonderildi and not vedat_bitti else 'bekle'), ''),
+    ]
+    if ferhat_atlandi:
+        surec.append(_step('Ferhat', 'atlandi', 'Atlandı'))
+    elif saha == 1:
+        fd = 'tamam' if ferhat_bitti else ('aktif' if vedat_bitti and not ferhat_bitti else 'bekle')
+        fn = (arge.get('ferhat_genel_karar') if arge else '') or ''
+        surec.append(_step('Ferhat', fd, fn))
+    surec.append(_step(
+        'Renk Merkezi',
+        'tamam' if rm_bitti else ('aktif' if ferhat_bitti and not rm_bitti else 'bekle'),
+        '',
+    ))
+    surec.append(_step(
+        'Admin Onay',
+        'tamam' if admin_bitti else ('aktif' if adu in ('ONAY_BEKLIYOR', 'ONAYA_GONDERILDI') else 'bekle'),
+        '',
+    ))
+
+    grup = 'bekleyen'
+    rozet = 'BEKLEYEN'
+    if adu == 'REDDEDILDI' or td == 'REDDEDILDI':
+        grup, rozet = 'iptal_red', 'RED'
+    elif admin_bitti:
+        grup, rozet = 'tamamlanan', 'TAMAMLANDI'
+    elif td == 'ONAY_BEKLIYOR' or adu in ('ONAY_BEKLIYOR', 'ONAYA_GONDERILDI'):
+        grup, rozet = 'onay_bekleyen', 'ONAY BEKLİYOR'
+    elif td == 'FERHAT_TESTINDE' or (arge and saha == 1 and not ferhat_bitti):
+        grup, rozet = 'ferhat', 'FERHAT\'TA'
+    elif arge and gonderildi and ferhat_bitti and not rm_bitti:
+        grup, rozet = 'renk_merkezi', 'RENK MERKEZİ'
+    elif td == 'BEKLEYEN_NUMUNE':
+        grup, rozet = 'bekleyen', 'BEKLEYEN'
+    elif td == 'REVIZYONDA':
+        grup, rozet = 'vedat', 'REVİZYON'
+    elif td == 'CALISILIYOR':
+        grup, rozet = 'vedat', 'VEDAT\'TA'
+    elif not gonderildi:
+        grup, rozet = 'taslak', 'TASLAK'
+    elif td in ('YENI_TALEP', 'TASLAK'):
+        grup, rozet = 'taslak', 'TASLAK'
+
+    if not gonderildi:
+        kimde = 'Mehmet'
+        guncel = 'Taslak — henüz gönderilmedi'
+        siradaki = "AR-GE'ye gönderilmeyi bekliyor"
+    elif td == 'BEKLEYEN_NUMUNE':
+        kimde = 'Vedat'
+        guncel = 'Vedat AR-GE değerlendirmesinde'
+        siradaki = 'Vedat işleme alacak'
+    elif td in ('CALISILIYOR', 'REVIZYONDA') and not rm_bitti:
+        kimde = 'Vedat'
+        guncel = durum_etiket(td)
+        siradaki = 'AR-GE renk çalışması devam ediyor'
+    elif arge and saha == 1 and not ferhat_bitti:
+        kimde = 'Ferhat'
+        guncel = _arge_durum_etiket(ad, saha)
+        siradaki = 'Enjeksiyon denemesi'
+    elif arge and adu in ('ONAY_BEKLIYOR', 'ONAYA_GONDERILDI'):
+        kimde = 'Renk Merkezi / Admin'
+        guncel = 'Onay bekliyor'
+        siradaki = 'Renk / formül onayı'
+    elif admin_bitti:
+        kimde = 'Tamamlandı'
+        guncel = 'Onaylandı'
+        siradaki = 'Süreç tamamlandı'
+    elif grup == 'renk_merkezi':
+        kimde = 'Renk Merkezi'
+        guncel = _arge_durum_etiket(ad, saha) if arge else durum_etiket(td)
+        siradaki = 'Renk Merkezi değerlendirmesi'
+    else:
+        kimde = durum_etiket(td)
+        guncel = _arge_durum_etiket(ad, saha) if arge else durum_etiket(td)
+        siradaki = '—'
+
+    ferhat_karar = '—'
+    if arge:
+        if ferhat_atlandi:
+            ferhat_karar = 'Atlandı — Enjeksiyon gerekli değil'
+        elif arge.get('ferhat_genel_karar'):
+            ferhat_karar = str(arge.get('ferhat_genel_karar'))
+
+    renk_kodu = (arge.get('renk_kodu') if arge else None) or talep.get('renk_kodu') or '—'
+    at_kodu = (arge.get('test_no') if arge else None) or talep.get('talep_kodu') or '—'
+
+    return {
+        'grup': grup,
+        'rozet': rozet,
+        'kimde': kimde,
+        'guncel_durum': guncel,
+        'siradaki_islem': siradaki,
+        'son_islem_tarihi': _takip_son_tarih(talep, arge),
+        'at_kodu': at_kodu,
+        'ferhat_karar': ferhat_karar,
+        'renk_kodu': renk_kodu,
+        'enjeksiyon_gerekli': bool(saha == 1) if arge else False,
+        'surec': surec,
+    }
+
+
+def get_takip_liste_readonly(
+    con,
+    kullanici_id: int | None,
+    *,
+    admin: bool = False,
+    filtre: str | None = None,
+    q: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> dict:
+    """Mehmet toplu Numune Takip listesi — yalnız SELECT."""
+    uid = None if admin else kullanici_id
+    sql = """
+        SELECT nt.*,
+               c.unvan AS cari_unvan, c.cari_kod,
+               t.id AS arge_row_id, t.test_no, t.arge_kodu, t.durum AS arge_durum,
+               t.saha_testi_gerekli_mi, t.ferhat_genel_karar, t.ferhat_kayit_tarihi,
+               t.renk_kodu AS arge_renk_kodu, t.guncelleme_tarihi AS arge_guncelleme
+        FROM nexgen_numune_talep nt
+        LEFT JOIN nexgen_cari c ON c.id = nt.cari_id
+        LEFT JOIN nexgen_arge_test t ON t.id = nt.arge_test_id AND t.aktif=1
+        WHERE nt.aktif=1
+          AND (nt.olusturan_kullanici_id=? OR nt.talep_eden_kullanici_id=? OR ? IS NULL)
+    """
+    params: list[Any] = [uid, uid, uid]
+    qn = (q or '').strip()
+    if qn:
+        like = f'%{qn}%'
+        sql += """
+          AND (
+            nt.talep_kodu LIKE ? OR t.test_no LIKE ? OR c.unvan LIKE ?
+            OR c.cari_kod LIKE ? OR nt.aday_firma_adi LIKE ?
+            OR nt.urun_adi LIKE ? OR nt.urun_tipi LIKE ?
+            OR nt.renk_kodu LIKE ? OR nt.yeni_renk_aciklama LIKE ?
+          )
+        """
+        params.extend([like] * 9)
+    sql += ' ORDER BY nt.guncelleme_tarihi DESC, nt.id DESC'
+    rows = con.execute(sql, params).fetchall()
+
+    kartlar: list[dict] = []
+    sayilar = {k: 0 for k in TAKIP_FILTRE_ANAHTARLARI}
+    sayilar['tumu'] = 0
+
+    for row in rows:
+        d = _liste_satir_zengin(row)
+        arge = None
+        if row['arge_row_id']:
+            arge = {
+                'test_no': row['test_no'],
+                'arge_kodu': row['arge_kodu'],
+                'durum': row['arge_durum'],
+                'saha_testi_gerekli_mi': row['saha_testi_gerekli_mi'],
+                'ferhat_genel_karar': row['ferhat_genel_karar'],
+                'ferhat_kayit_tarihi': row['ferhat_kayit_tarihi'],
+                'renk_kodu': row['arge_renk_kodu'],
+                'guncelleme_tarihi': row['arge_guncelleme'],
+            }
+        coz = _takip_kart_cozumle(d, arge)
+        grup = coz['grup']
+        sayilar['tumu'] += 1
+        if grup in ('taslak', 'bekleyen'):
+            sayilar['bekleyen'] += 1
+        elif grup == 'vedat':
+            sayilar['vedat'] += 1
+        elif grup == 'ferhat':
+            sayilar['ferhat'] += 1
+        elif grup == 'renk_merkezi':
+            sayilar['renk_merkezi'] += 1
+        elif grup == 'onay_bekleyen':
+            sayilar['onay_bekleyen'] += 1
+        elif grup == 'tamamlanan':
+            sayilar['tamamlanan'] += 1
+        elif grup == 'iptal_red':
+            sayilar['iptal_red'] += 1
+
+        kart = {
+            'id': d['id'],
+            'at_kodu': coz['at_kodu'],
+            'talep_kodu': d.get('talep_kodu') or '—',
+            'musteri_unvan': d.get('firma_goster') or '—',
+            'cari_kod': d.get('cari_kod') or '—',
+            'urun_model': f"{(d.get('urun_tipi') or '').strip()} · {(d.get('urun_adi') or '—').strip()}".strip(' ·'),
+            'talep_turu': _karsilama_etiket(d.get('karsilama_yolu')),
+            'renk_goster': d.get('renk_goster') or '—',
+            'oncelik': _oncelik_etiket(d.get('oncelik')),
+            'acilis_tarihi': (d.get('olusturma_tarihi') or '—')[:10],
+            'kimde': coz['kimde'],
+            'guncel_durum': coz['guncel_durum'],
+            'son_islem_tarihi': coz['son_islem_tarihi'],
+            'rozet': coz['rozet'],
+            'grup': grup,
+            'siradaki_islem': coz['siradaki_islem'],
+            'ferhat_karar': coz['ferhat_karar'],
+            'renk_kodu': coz['renk_kodu'],
+            'enjeksiyon_gerekli': coz['enjeksiyon_gerekli'],
+            'surec': coz['surec'],
+        }
+        kartlar.append(kart)
+
+    filtre_key = (filtre or 'tumu').strip().lower()
+    if filtre_key not in TAKIP_FILTRE_ANAHTARLARI:
+        filtre_key = 'tumu'
+
+    def _filtre_esles(k: dict) -> bool:
+        g = k['grup']
+        if filtre_key == 'tumu':
+            return True
+        if filtre_key == 'bekleyen':
+            return g in ('taslak', 'bekleyen')
+        return g == filtre_key
+
+    filtrelenmis = [k for k in kartlar if _filtre_esles(k)]
+    toplam = len(filtrelenmis)
+    sayfa = filtrelenmis[offset: offset + limit]
+
+    return {
+        'ok': True,
+        'sayilar': sayilar,
+        'talepler': sayfa,
+        'toplam': toplam,
+        'filtre': filtre_key,
+        'offset': offset,
+        'limit': limit,
+    }

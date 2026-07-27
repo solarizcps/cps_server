@@ -6,6 +6,12 @@
 {% block head %}
 <style>
 /* FAZ-SAHA-FERHAT-CANVAS-VISUAL-REDESIGN-2 */
+main:has(> .fg-page) {
+  background: #eef2f7;
+  padding: 16px 20px;
+  min-height: calc(100vh - 72px);
+  box-sizing: border-box;
+}
 .fg-page {
   --fg-bg: #eef2f7;
   --fg-card: #fff;
@@ -30,9 +36,9 @@
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", "Segoe UI", sans-serif;
   max-width: 1120px;
   margin: 0 auto;
-  padding: 16px 20px;
-  background: var(--fg-bg);
-  min-height: calc(100vh - 72px);
+  padding: 0;
+  background: transparent;
+  min-height: calc(100vh - 104px);
   box-sizing: border-box;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
@@ -42,11 +48,8 @@
 .fg-view { display: none; }
 .fg-view.on { display: block; }
 #fg-detail.on {
-  display: flex;
-  flex-direction: column;
-  height: calc(100vh - 104px);
-  max-height: calc(100vh - 104px);
-  padding-bottom: 0;
+  display: block;
+  padding-bottom: 16px;
 }
 
 /* ── LIST ── */
@@ -203,15 +206,14 @@
 /* Wizard nav */
 .fg-wnav-wrap {
   flex-shrink: 0;
-  background: rgba(238,242,247,.92);
-  backdrop-filter: blur(8px);
+  background: transparent;
   padding-bottom: 10px;
   margin-bottom: 0;
   z-index: 2;
 }
 .fg-wnav {
   display: flex;
-  background: #e4e9f0;
+  background: rgba(26, 39, 68, 0.06);
   border-radius: 999px;
   padding: 4px;
   gap: 3px;
@@ -243,38 +245,49 @@
 .fg-wnav-btn:disabled { opacity: .45; cursor: default; }
 
 .fg-wbody {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
+  overflow: visible;
   position: relative;
 }
 .fg-wstep {
   display: none;
-  height: 100%;
   animation: fgFade .22s ease;
 }
-.fg-wstep.on { display: flex; flex-direction: column; }
+.fg-wstep.on { display: block; }
 @keyframes fgFade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
 .fg-wstep-inner {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 4px 2px 8px;
-  scrollbar-width: thin;
+  overflow: visible;
+  padding: 4px 2px 12px;
 }
 
 .fg-wfoot {
   flex-shrink: 0;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 0 4px;
-  background: linear-gradient(180deg, rgba(238,242,247,0) 0%, rgba(238,242,247,.95) 20%, #eef2f7 100%);
+  padding: 12px 0 8px;
+  background: linear-gradient(180deg, rgba(238,242,247,0) 0%, rgba(238,242,247,.95) 20%, var(--fg-bg) 100%);
   border-top: 1px solid var(--fg-line);
   margin-top: auto;
+  z-index: 3;
 }
+.fg-wfoot-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.fg-wfoot-hint {
+  font-size: 12px;
+  color: #b45309;
+  text-align: right;
+  line-height: 1.45;
+  max-width: 420px;
+}
+.fg-wfoot-hint.ok { color: var(--fg-green); }
 .fg-wfoot-spacer { flex: 1; }
 .fg-btn {
   min-height: 48px;
@@ -334,8 +347,10 @@
 }
 .fg-info-ico svg { width: 18px; height: 18px; }
 .fg-info-lbl { font-size: 10px; font-weight: 500; color: var(--fg-muted); letter-spacing: .04em; text-transform: uppercase; margin-bottom: 3px; }
-.fg-info-val { font-size: 15px; font-weight: 600; color: var(--fg-navy); line-height: 1.35; }
+.fg-info > div:not(.fg-info-ico) { min-width: 0; flex: 1; }
+.fg-info-val { font-size: 15px; font-weight: 600; color: var(--fg-navy); line-height: 1.4; word-break: break-word; overflow-wrap: anywhere; white-space: normal; }
 .fg-info.span2 { grid-column: 1 / -1; }
+.fg-info-cari .fg-info-val { line-height: 1.45; }
 
 /* Measurements */
 .fg-measure-row {
@@ -496,9 +511,13 @@
 .fg-note textarea {
   width: 100%; border: none; background: transparent;
   font-size: 15px; font-weight: 400; color: var(--fg-navy);
-  min-height: 44px; max-height: 80px; resize: none;
+  min-height: 44px; max-height: 120px; resize: vertical;
   font-family: inherit; outline: none;
 }
+.fg-karar-not-wrap { margin-top: 14px; }
+.fg-karar-not-wrap[hidden] { display: none !important; }
+.fg-field-error { font-size: 12px; color: #b91c1c; margin-top: 6px; font-weight: 500; }
+.fg-field-error[hidden] { display: none !important; }
 
 /* Result */
 .fg-summary {
@@ -515,30 +534,55 @@
 .fg-summary-item .v { font-size: 18px; font-weight: 600; color: var(--fg-navy); }
 .fg-summary-item .l { font-size: 10px; color: var(--fg-muted); margin-top: 2px; }
 
-.fg-result-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.fg-result-row { display: grid; grid-template-columns: 1fr; gap: 10px; }
 .fg-result {
-  min-height: 130px;
+  min-height: 72px;
   border-radius: var(--fg-r);
   border: 2px solid var(--fg-line);
   background: var(--fg-card);
-  padding: 18px 14px;
+  padding: 16px 18px;
   cursor: pointer;
-  text-align: center;
+  text-align: left;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
+  gap: 14px;
   box-shadow: var(--fg-sh);
   transition: all .15s;
+  width: 100%;
 }
-.fg-result-ico { font-size: 28px; line-height: 1; }
-.fg-result-title { font-size: 14px; font-weight: 600; color: var(--fg-navy); }
-.fg-result-sub { font-size: 12px; font-weight: 400; color: var(--fg-muted); }
+.fg-result-ico {
+  font-size: 22px;
+  line-height: 1;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #f4f6fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.fg-result-body { min-width: 0; flex: 1; }
+.fg-result-title { font-size: 16px; font-weight: 700; color: var(--fg-navy); letter-spacing: .02em; }
+.fg-result-sub { font-size: 12px; font-weight: 400; color: var(--fg-muted); margin-top: 2px; line-height: 1.35; }
 .fg-result.on.ok { background: var(--fg-green-bg); border-color: var(--fg-green); box-shadow: 0 6px 20px rgba(34,197,94,.15); }
 .fg-result.on.ok .fg-result-title { color: #15803d; }
+.fg-result.on.ok .fg-result-ico { background: #dcfce7; color: #15803d; }
+.fg-result.on.warn { background: var(--fg-orange-bg); border-color: var(--fg-orange); box-shadow: 0 6px 20px rgba(249,115,22,.12); }
+.fg-result.on.warn .fg-result-title { color: #c2410c; }
+.fg-result.on.warn .fg-result-ico { background: #ffedd5; color: #c2410c; }
 .fg-result.on.bad { background: var(--fg-red-bg); border-color: var(--fg-red); box-shadow: 0 6px 20px rgba(239,68,68,.12); }
 .fg-result.on.bad .fg-result-title { color: #b91c1c; }
+.fg-result.on.bad .fg-result-ico { background: #fee2e2; color: #b91c1c; }
+.fg-result-pick-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-bottom: 10px;
+}
 
 .fg-toast {
   position: fixed;
@@ -559,53 +603,245 @@
 }
 .fg-toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
 
-.fg-copy-btn:active { opacity: .85; }
+.fg-copy-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 48px;
+  margin-top: 12px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1.5px solid var(--fg-line);
+  background: var(--fg-card);
+  color: var(--fg-navy2);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--fg-sh);
+  transition: background .15s, border-color .15s, transform .1s;
+}
+.fg-copy-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
+.fg-copy-btn:active { transform: scale(.98); background: #f4f6fa; }
 .fg-btabs { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
 .fg-btab {
-  border: 1px solid var(--fg-line); background: #fff; border-radius: 999px;
-  padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--fg-navy2);
+  border: 1.5px solid var(--fg-line);
+  background: #fff;
+  border-radius: 14px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--fg-muted);
+  min-height: 44px;
+  min-width: 52px;
+  transition: background .15s, color .15s, border-color .15s, box-shadow .15s;
 }
-.fg-btab.on { background: var(--fg-navy); color: #fff; border-color: var(--fg-navy); }
+.fg-btab.on {
+  background: var(--fg-navy);
+  color: #fff;
+  border-color: var(--fg-navy);
+  box-shadow: 0 4px 14px rgba(26,39,68,.18);
+}
+.fg-olcum-step-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg-navy);
+  margin-bottom: 10px;
+}
+.fg-oran-box {
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid var(--fg-line);
+  border-radius: var(--fg-rs);
+  background: var(--fg-card);
+}
+.fg-oran-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-bottom: 12px;
+}
+.fg-oran-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.fg-oran-row:last-child { margin-bottom: 0; }
+.fg-oran-lbl { font-size: 14px; font-weight: 600; color: var(--fg-navy2); }
+.fg-oran-input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1.5px solid var(--fg-line);
+  font-size: 16px;
+  font-weight: 600;
+  text-align: left;
+  min-height: 48px;
+}
+.fg-oran-input:focus { outline: none; border-color: var(--fg-navy); }
+.fg-oran-hint { font-size: 11px; color: var(--fg-muted); margin-top: 8px; line-height: 1.4; }
+.fg-step2-hint { font-size: 12px; color: #b91c1c; margin-top: 10px; line-height: 1.45; }
 .fg-kalip-box {
   background: var(--fg-card); border: 1px solid var(--fg-line); border-radius: var(--fg-rs);
   padding: 16px; margin-top: 12px;
 }
 .fg-kalip-box label { display: block; font-size: 12px; font-weight: 600; color: var(--fg-muted); margin-bottom: 6px; }
 .fg-kalip-box select {
-  width: 100%; padding: 12px; border-radius: 12px; border: 1.5px solid var(--fg-line);
-  font-size: 14px; background: #fff;
+  width: 100%;
+  padding: 12px 36px 12px 12px;
+  border-radius: 12px;
+  border: 1.5px solid var(--fg-line);
+  font-size: 14px;
+  background: #fff;
+  min-height: 48px;
+  line-height: 1.35;
 }
-.fg-kalip-preview { margin-top: 10px; font-size: 13px; color: var(--fg-navy2); line-height: 1.5; }
+.fg-kalip-hint { font-size: 12px; color: var(--fg-muted); line-height: 1.45; }
+.fg-kalip-selected {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid var(--fg-line);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg-navy2);
+  line-height: 1.45;
+  word-break: break-word;
+}
+.fg-kalip-preview { margin-top: 0; }
+.fg-kalip-preview:empty { display: none; }
+.fg-upload-note {
+  font-size: 11px;
+  color: var(--fg-muted);
+  margin: -4px 0 12px;
+  line-height: 1.4;
+}
+.fg-fail-karar {
+  background: var(--fg-card);
+  border: 1px solid var(--fg-line);
+  border-radius: var(--fg-rs);
+  padding: 14px 16px;
+  margin-top: 12px;
+  box-shadow: var(--fg-sh);
+}
+.fg-fail-karar-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-bottom: 10px;
+}
+.fg-fail-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1.5px solid var(--fg-line);
+  margin-bottom: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--fg-navy2);
+}
+.fg-fail-opt:last-child { margin-bottom: 0; }
+.fg-fail-opt input { accent-color: var(--fg-navy); width: 18px; height: 18px; }
+.fg-fail-opt.on { border-color: var(--fg-orange); background: var(--fg-orange-bg); }
+.fg-summary-kalip {
+  grid-column: 1 / -1;
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--fg-navy2);
+}
+.fg-summary-kalip strong { color: var(--fg-navy); font-size: 14px; }
 .fg-boyut-not { margin-top: 12px; }
 .fg-boyut-not label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--fg-muted); }
 .fg-boyut-not textarea {
   width: 100%; border-radius: 12px; border: 1.5px solid var(--fg-line);
   padding: 10px; font-size: 14px; box-sizing: border-box;
 }
-.fg-save-wrap { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; max-width: 320px; }
-.fg-save-hint { font-size: 11px; color: var(--fg-muted); text-align: right; line-height: 1.4; }
-.fg-save-errors { font-size: 12px; color: #b91c1c; text-align: right; line-height: 1.45; }
+.fg-save-wrap { display: flex; flex-direction: column; align-items: stretch; gap: 6px; flex: 1; min-width: 0; }
+.fg-save-hint {
+  font-size: 12px;
+  color: #b45309;
+  text-align: right;
+  line-height: 1.45;
+  padding: 8px 12px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 12px;
+}
+.fg-save-errors { font-size: 12px; color: #b91c1c; text-align: right; line-height: 1.45; padding: 8px 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; }
 .fg-save-errors div + div { margin-top: 2px; }
+.fg-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.fg-modal.show { display: flex; }
+.fg-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(26,39,68,.45);
+}
+.fg-modal-panel {
+  position: relative;
+  background: var(--fg-card);
+  border-radius: var(--fg-r);
+  padding: 24px 22px;
+  max-width: 420px;
+  width: 100%;
+  box-shadow: 0 20px 50px rgba(26,39,68,.25);
+  text-align: center;
+}
+.fg-modal-panel h3 { margin: 0 0 12px; font-size: 20px; font-weight: 600; color: var(--fg-navy); }
+.fg-modal-panel p { margin: 0 0 8px; font-size: 14px; color: var(--fg-navy2); line-height: 1.45; }
+.fg-modal-panel .fg-modal-btn {
+  margin-top: 16px;
+  width: 100%;
+  min-height: 48px;
+  border: none;
+  border-radius: 999px;
+  background: var(--fg-navy);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
 
 @media (max-width: 900px) {
   .fg-job { grid-template-columns: 1fr; }
   .fg-open-btn { width: 100%; justify-content: center; }
   .fg-measure-row { grid-template-columns: 1fr; }
+  .fg-measure { padding: 14px 12px; }
   .fg-vis-row { grid-template-columns: 1fr; }
-  .fg-result-row { grid-template-columns: 1fr; }
   .fg-info-grid { grid-template-columns: 1fr; }
   .fg-info.span2 { grid-column: auto; }
   .fg-summary-grid { grid-template-columns: 1fr; }
-  #fg-detail.on { height: auto; max-height: none; }
-  .fg-wbody { overflow: visible; }
+  .fg-wfoot { flex-wrap: wrap; }
+  .fg-save-wrap { width: 100%; }
 }
 @media (max-width: 768px) {
   .fg-page { padding: 12px 14px; }
   .fg-kpi-row { grid-template-columns: 1fr; }
   .fg-wnav-btn { font-size: 11px; padding: 8px 6px; }
-}
-@media (min-width: 901px) {
-  .fg-wstep-inner { overflow-y: auto; max-height: calc(100vh - 320px); }
 }
 </style>
 {% endblock %}
@@ -659,7 +895,7 @@
     <div class="fg-wnav-wrap">
       <div class="fg-wnav" id="fg-wnav">
         <button type="button" class="fg-wnav-btn active" data-step="1">İş Bilgisi</button>
-        <button type="button" class="fg-wnav-btn" data-step="2" disabled>Ölçümler</button>
+        <button type="button" class="fg-wnav-btn" data-step="2" disabled>Ölçümler ve Oranlar</button>
         <button type="button" class="fg-wnav-btn" data-step="3" disabled>Görsel Kontrol</button>
         <button type="button" class="fg-wnav-btn" data-step="4" disabled>Sonuç</button>
       </div>
@@ -688,9 +924,14 @@
       <!-- Step 2 -->
       <div class="fg-wstep" data-step="2">
         <div class="fg-wstep-inner">
-          <div class="fg-btabs" id="fg-olcum-tabs"></div>
+          <div class="fg-olcum-step-title" id="fg-olcum-step-title">Deneme Ölçümleri</div>
           <div id="fg-olcum-panel"></div>
-          <button type="button" class="fg-copy-btn" id="fg-copy-olcum" style="display:none">Bu ölçümleri diğer boyuta kopyala</button>
+          <div class="fg-oran-box" id="fg-oran-box">
+            <div class="fg-oran-title">Kullanım Oranı</div>
+            <div id="fg-oran-rows"></div>
+            <div class="fg-oran-hint">Virgül veya nokta kullanılabilir (ör. 1,5 veya 1.50). Değer 0'dan büyük olmalıdır.</div>
+          </div>
+          <div class="fg-step2-hint" id="fg-step2-hint" role="status" style="display:none"></div>
         </div>
         <div class="fg-wfoot">
           <button type="button" class="fg-btn fg-btn-ghost" data-goto="1">Geri</button>
@@ -705,8 +946,7 @@
       <!-- Step 3 -->
       <div class="fg-wstep" data-step="3">
         <div class="fg-wstep-inner">
-          <div class="fg-btabs" id="fg-vis-tabs"></div>
-          <div id="fg-vis-boyut-label" style="font-size:13px;font-weight:600;color:var(--fg-navy2);margin-bottom:10px"></div>
+          <div class="fg-olcum-step-title">Görsel Kontrol</div>
           <div class="fg-vis-block" data-group="renk">
             <div class="fg-vis-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/></svg> Renk</div>
             <div class="fg-vis-row">
@@ -731,10 +971,6 @@
               <button type="button" class="fg-vis-opt" data-tone="bad" data-value="itici-izi" role="button" tabindex="0" aria-pressed="false"><span class="fg-vis-mark" aria-hidden="true">✕</span><span class="fg-vis-txt">İtici İzi Var</span></button>
             </div>
           </div>
-          <div class="fg-boyut-not">
-            <label for="fg-boyut-notu">Boyut Notu</label>
-            <textarea id="fg-boyut-notu" placeholder="Bu boyut için gözlem" rows="2"></textarea>
-          </div>
           <div class="fg-upload" id="fg-upload">
             <input type="file" accept="image/*" capture="environment">
             <div class="fg-upload-empty">
@@ -749,18 +985,17 @@
               </div>
             </div>
           </div>
-          <div class="fg-note">
-            <label for="fg-usta-notu">Usta Notu</label>
-            <textarea id="fg-usta-notu" placeholder="Gözlem veya sorun varsa yazın" rows="2"></textarea>
-          </div>
+          <div class="fg-upload-note">Fotoğraf tüm deneme için saklanır.</div>
         </div>
         <div class="fg-wfoot">
           <button type="button" class="fg-btn fg-btn-ghost" data-goto="2">Geri</button>
-          <span class="fg-wfoot-spacer"></span>
-          <button type="button" class="fg-btn fg-btn-primary" id="fg-next-3">
-            Sonuca Geç
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
-          </button>
+          <div class="fg-wfoot-right">
+            <div class="fg-wfoot-hint" id="fg-vis-next-hint" role="status"></div>
+            <button type="button" class="fg-btn fg-btn-primary" id="fg-next-3">
+              Sonuca Geç
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -768,20 +1003,38 @@
       <div class="fg-wstep" data-step="4">
         <div class="fg-wstep-inner">
           <div class="fg-summary">
-            <div class="fg-summary-title">Girilen Ölçümler</div>
+            <div class="fg-summary-title">Deneme Özeti</div>
+            <div id="fg-summary-kalip" class="fg-summary-kalip"></div>
             <div class="fg-summary-grid" id="fg-summary-grid"></div>
           </div>
-          <div class="fg-result-row">
-            <button type="button" class="fg-result ok" data-v="uygun">
+          <div class="fg-result-pick-title">Deneme Sonucu Seçin</div>
+          <div class="fg-result-row" id="fg-result-row">
+            <button type="button" class="fg-result ok" data-v="BASARILI">
               <div class="fg-result-ico">✓</div>
-              <div class="fg-result-title">BU LOT UYGUNDUR</div>
-              <div class="fg-result-sub">Seri üretime geçilebilir</div>
+              <div class="fg-result-body">
+                <div class="fg-result-title">BAŞARILI</div>
+                <div class="fg-result-sub" id="fg-result-ok-sub">Renk Merkezi onayına gönderilecek</div>
+              </div>
             </button>
-            <button type="button" class="fg-result bad" data-v="hatali">
+            <button type="button" class="fg-result warn" data-v="REVIZYON_GEREKLI">
+              <div class="fg-result-ico">!</div>
+              <div class="fg-result-body">
+                <div class="fg-result-title">REVİZYON</div>
+                <div class="fg-result-sub" id="fg-result-rev-sub">Revizyon için Renk Merkezi'ne gönderilecek</div>
+              </div>
+            </button>
+            <button type="button" class="fg-result bad" data-v="RED">
               <div class="fg-result-ico">✕</div>
-              <div class="fg-result-title">BU LOT HATALIDIR</div>
-              <div class="fg-result-sub">Kabul edilmedi</div>
+              <div class="fg-result-body">
+                <div class="fg-result-title">RED</div>
+                <div class="fg-result-sub" id="fg-result-red-sub">Red kararı Renk Merkezi'ne gönderilecek</div>
+              </div>
             </button>
+          </div>
+          <div class="fg-note fg-karar-not-wrap" id="fg-karar-not-wrap" hidden>
+            <label for="fg-genel-notu" id="fg-karar-not-label">Açıklama</label>
+            <textarea id="fg-genel-notu" placeholder="" rows="3" aria-describedby="fg-karar-not-error"></textarea>
+            <div class="fg-field-error" id="fg-karar-not-error" role="alert" hidden></div>
           </div>
         </div>
         <div class="fg-wfoot">
@@ -798,6 +1051,17 @@
   </div>
 
   <div class="fg-toast" id="fg-toast"></div>
+
+  <div class="fg-modal" id="fg-success-modal" aria-hidden="true" role="dialog" aria-labelledby="fg-success-title">
+    <div class="fg-modal-backdrop" id="fg-success-backdrop"></div>
+    <div class="fg-modal-panel">
+      <h3 id="fg-success-title">Deneme Tamamlandı</h3>
+      <p id="fg-success-at">—</p>
+      <p id="fg-success-sonuc">—</p>
+      <p>Sonuç Renk Merkezi değerlendirmesine gönderildi.</p>
+      <button type="button" class="fg-modal-btn" id="fg-success-back">İş Listesine Dön</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -813,8 +1077,8 @@
   var maxStep = 1;
   var measureTouched = false;
   var KALIPLAR = [];
-  var boyutData = {};
-  var activeBoyut = null;
+  var olcumData = { pisme: 245, enjeksiyon: 12, shore: 42, gramaj: 182 };
+  var oranData = {};
   var selectedKalipId = null;
   var visState = { renk: null, yuzey: null, kalip: null };
   var VIS_GROUPS = ['renk', 'yuzey', 'kalip'];
@@ -823,10 +1087,43 @@
   var visStepEl = document.querySelector('.fg-wstep[data-step="3"] .fg-wstep-inner');
   var visNextBtn = document.getElementById('fg-next-3');
   var kalipSelect = document.getElementById('fg-kalip-select');
-  var boyutNotEl = document.getElementById('fg-boyut-notu');
+  var genelNotEl = document.getElementById('fg-genel-notu');
+  var step2HintEl = document.getElementById('fg-step2-hint');
   var saveErrEl = document.getElementById('fg-save-errors');
   var saveHintEl = document.getElementById('fg-save-hint');
   var saveInFlight = false;
+  var visNextHintEl = document.getElementById('fg-vis-next-hint');
+  var successModalEl = document.getElementById('fg-success-modal');
+  var successRedirectTimer = null;
+  var DEFAULT_SONUC_METIN = {
+    basarili_alt: 'Renk Merkezi onayına gönderilecek',
+    revizyon_alt: 'Revizyon için Renk Merkezi\'ne gönderilecek',
+    red_alt: 'Red kararı Renk Merkezi\'ne gönderilecek'
+  };
+
+  var SONUC_LABELS = {
+    BASARILI: 'BAŞARILI',
+    REVIZYON_GEREKLI: 'REVİZYON',
+    RED: 'RED'
+  };
+
+  function showToast(msg) {
+    var toast = document.getElementById('fg-toast');
+    if (!toast) return;
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(function () { toast.classList.remove('show'); }, 2400);
+  }
+
+  function applySonucMetinleri(m) {
+    m = m || DEFAULT_SONUC_METIN;
+    var okS = document.getElementById('fg-result-ok-sub');
+    var revS = document.getElementById('fg-result-rev-sub');
+    var redS = document.getElementById('fg-result-red-sub');
+    if (okS) okS.textContent = m.basarili_alt || DEFAULT_SONUC_METIN.basarili_alt;
+    if (revS) revS.textContent = m.revizyon_alt || m.basarisiz_alt || DEFAULT_SONUC_METIN.revizyon_alt;
+    if (redS) redS.textContent = m.red_alt || DEFAULT_SONUC_METIN.red_alt;
+  }
 
   function boyutShort(b) {
     var m = { LARGE: 'L', SMALL: 'S', MEDIUM: 'M' };
@@ -870,81 +1167,117 @@
     if (!el) return;
     var id = kalipSelect ? parseInt(kalipSelect.value, 10) : null;
     selectedKalipId = id || null;
-    if (!id) { el.textContent = 'Deneme başlamadan kalıp seçimi zorunludur.'; return; }
+    if (!id) {
+      el.innerHTML = '<span class="fg-kalip-hint">Deneme başlamadan kalıp seçimi zorunludur.</span>';
+      return;
+    }
     var k = KALIPLAR.find(function (x) { return x.kalip_id === id; });
-    if (!k) { el.textContent = ''; return; }
-    el.innerHTML = '<strong>' + esc(k.kalip_kodu) + '</strong><br>'
-      + esc(k.kalip_adi || '') + (k.beden_araligi ? ' · ' + esc(k.beden_araligi) : '');
+    if (k) {
+      el.innerHTML = '<div class="fg-kalip-selected">'
+        + esc(k.kalip_kodu) + ' — ' + esc(k.kalip_adi || '—')
+        + (k.beden_araligi ? ' · ' + esc(k.beden_araligi) : '')
+        + '</div>';
+    } else {
+      el.innerHTML = '';
+    }
   }
 
   if (kalipSelect) {
     kalipSelect.addEventListener('change', updateKalipPreview);
   }
 
-  function initBoyutState(boyutlar, defaults) {
-    boyutData = {};
-    (boyutlar || ['LARGE']).forEach(function (b, idx) {
-      boyutData[b] = {
-        pisme: defaults.pisme != null ? defaults.pisme : 245,
-        enjeksiyon: defaults.enjeksiyon != null ? defaults.enjeksiyon : 12,
-        shore: defaults.shore != null ? defaults.shore : 42,
-        gramaj: defaults.gramaj != null ? defaults.gramaj : (182 + idx * 30),
-        renk: null, yuzey: null, kalip: null,
-        not: ''
+  function boyutLabel(b) {
+    var m = { LARGE: 'LARGE', SMALL: 'SMALL', MEDIUM: 'MEDIUM' };
+    return m[(b || '').toUpperCase()] || b;
+  }
+
+  function parseOranInput(raw) {
+    if (raw == null || String(raw).trim() === '') return null;
+    var s = String(raw).trim().replace(',', '.');
+    var v = parseFloat(s);
+    if (!isFinite(v) || v <= 0 || v > 10) return null;
+    return Math.round(v * 10000) / 10000;
+  }
+
+  function formatOranDisplay(v) {
+    if (v == null || !isFinite(v)) return '';
+    return String(v).replace('.', ',');
+  }
+
+  function initTrialState(boyutlar, defaults, existingOranlar, existingOlcum) {
+    var d = defaults || {};
+    var o = existingOlcum || {};
+    olcumData = {
+      pisme: o.pisme_suresi_sn != null ? o.pisme_suresi_sn : (d.pisme != null ? d.pisme : 245),
+      enjeksiyon: o.enjeksiyon_saniye != null ? o.enjeksiyon_saniye : (d.enjeksiyon != null ? d.enjeksiyon : 12),
+      shore: o.shore_sonuc != null ? o.shore_sonuc : (d.shore != null ? d.shore : 42),
+      gramaj: o.gramaj_gr != null ? o.gramaj_gr : (d.gramaj != null ? d.gramaj : 182)
+    };
+    oranData = {};
+    var oranMap = {};
+    (existingOranlar || []).forEach(function (item) {
+      if (item && item.boyut) {
+        oranMap[String(item.boyut).toUpperCase()] = item.kullanim_orani != null ? item.kullanim_orani : item.oran;
+      }
+    });
+    (boyutlar || ['LARGE']).forEach(function (b) {
+      var key = String(b).toUpperCase();
+      oranData[key] = oranMap[key] != null ? oranMap[key] : 1;
+    });
+    if (o.renk_sonucu || o.yuzey_sonucu || o.kalip_sonucu) {
+      visState = {
+        renk: visValueFromLabel('renk', o.renk_sonucu),
+        yuzey: visValueFromLabel('yuzey', o.yuzey_sonucu || o.kalite_aciklama),
+        kalip: visValueFromLabel('kalip', o.kalip_sonucu)
       };
-    });
-    activeBoyut = boyutlar[0] || 'LARGE';
+    } else {
+      visState = { renk: null, yuzey: null, kalip: null };
+    }
+    if (genelNotEl && (o.genel_not || o.saha_notu)) {
+      genelNotEl.value = o.genel_not || o.saha_notu || '';
+    }
   }
 
-  function renderBoyutTabs(which) {
-    var tabsEl = document.getElementById(which === 'vis' ? 'fg-vis-tabs' : 'fg-olcum-tabs');
-    if (!tabsEl || !activeJob) return;
-    var boys = activeJob.boyutlar || ['LARGE'];
-    tabsEl.innerHTML = boys.map(function (b) {
-      return '<button type="button" class="fg-btab' + (b === activeBoyut ? ' on' : '') + '" data-boyut="' + esc(b) + '">'
-        + esc(boyutShort(b)) + '</button>';
-    }).join('');
-    tabsEl.querySelectorAll('.fg-btab').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        if (which === 'vis') saveCurrentBoyutVis();
-        else saveCurrentBoyutOlcum();
-        activeBoyut = btn.getAttribute('data-boyut');
-        renderBoyutTabs('olcum');
-        renderBoyutTabs('vis');
-        if (which === 'vis' || currentStep === 3) loadCurrentBoyutVis();
-        if (which === 'olcum' || currentStep === 2) renderOlcumPanel();
-        updateCopyBtn();
-      });
-    });
-    var lbl = document.getElementById('fg-vis-boyut-label');
-    if (lbl) lbl.textContent = activeBoyut ? (boyutShort(activeBoyut) + ' — Görsel Kontrol') : '';
-  }
-
-  function saveCurrentBoyutOlcum() {
-    if (!activeBoyut || !boyutData[activeBoyut]) return;
+  function saveOlcumFromPanel() {
     var panel = document.getElementById('fg-olcum-panel');
     if (!panel) return;
     ['pisme', 'enjeksiyon', 'shore', 'gramaj'].forEach(function (key) {
       var m = panel.querySelector('[data-measure="' + key + '"]');
-      if (m) boyutData[activeBoyut][key] = parseInt(m.getAttribute('data-value'), 10);
+      if (m) olcumData[key] = parseInt(m.getAttribute('data-value'), 10);
     });
   }
 
-  function saveCurrentBoyutVis() {
-    if (!activeBoyut || !boyutData[activeBoyut]) return;
-    boyutData[activeBoyut].renk = visState.renk;
-    boyutData[activeBoyut].yuzey = visState.yuzey;
-    boyutData[activeBoyut].kalip = visState.kalip;
-    if (boyutNotEl) boyutData[activeBoyut].not = boyutNotEl.value.trim();
+  function saveOranFromInputs() {
+    var wrap = document.getElementById('fg-oran-rows');
+    if (!wrap) return;
+    wrap.querySelectorAll('[data-oran-boyut]').forEach(function (inp) {
+      var b = inp.getAttribute('data-oran-boyut');
+      var v = parseOranInput(inp.value);
+      if (b && v != null) oranData[b] = v;
+    });
   }
 
-  function loadCurrentBoyutVis() {
-    if (!activeBoyut || !boyutData[activeBoyut]) return;
-    var d = boyutData[activeBoyut];
-    visState = { renk: d.renk, yuzey: d.yuzey, kalip: d.kalip };
-    if (boyutNotEl) boyutNotEl.value = d.not || '';
-    hydrateVisUI();
-    updateVisNextState();
+  function renderOranInputs() {
+    var wrap = document.getElementById('fg-oran-rows');
+    if (!wrap || !activeJob) return;
+    var boys = activeJob.boyutlar || ['LARGE'];
+    wrap.innerHTML = boys.map(function (b) {
+      var key = String(b).toUpperCase();
+      var val = oranData[key] != null ? formatOranDisplay(oranData[key]) : '1';
+      return '<div class="fg-oran-row">'
+        + '<span class="fg-oran-lbl">' + esc(boyutLabel(key)) + '</span>'
+        + '<input type="text" inputmode="decimal" class="fg-oran-input" data-oran-boyut="' + esc(key) + '" value="' + esc(val) + '" placeholder="1,00">'
+        + '</div>';
+    }).join('');
+    wrap.querySelectorAll('.fg-oran-input').forEach(function (inp) {
+      inp.addEventListener('input', function () {
+        var b = inp.getAttribute('data-oran-boyut');
+        var v = parseOranInput(inp.value);
+        if (b && v != null) oranData[b] = v;
+        updateStep2Hint();
+        updateSaveState();
+      });
+    });
   }
 
   function measureBlock(key, label, unit, min, max, step, val) {
@@ -960,8 +1293,8 @@
 
   function renderOlcumPanel() {
     var panel = document.getElementById('fg-olcum-panel');
-    if (!panel || !activeBoyut || !boyutData[activeBoyut]) return;
-    var d = boyutData[activeBoyut];
+    if (!panel) return;
+    var d = olcumData;
     panel.innerHTML = '<div class="fg-measure-row">'
       + measureBlock('pisme', 'Pişme Süresi', 'sn', 0, 600, 5, d.pisme)
       + measureBlock('enjeksiyon', 'Enj. Hammadde Verme', 'sn', 1, 120, 1, d.enjeksiyon)
@@ -979,6 +1312,8 @@
         wrap.setAttribute('data-value', v);
         disp.textContent = v;
         measureTouched = true;
+        updateStep2Hint();
+        updateSaveState();
       }
       wrap.querySelectorAll('.fg-step').forEach(function (btn) {
         btn.addEventListener('click', function () {
@@ -988,28 +1323,40 @@
     });
   }
 
-  function updateCopyBtn() {
-    var btn = document.getElementById('fg-copy-olcum');
-    if (!btn || !activeJob) return;
-    var boys = activeJob.boyutlar || [];
-    btn.style.display = boys.length > 1 ? 'block' : 'none';
+  function olcumValidationMessages() {
+    saveOlcumFromPanel();
+    saveOranFromInputs();
+    var msgs = [];
+    var d = olcumData;
+    if (!d.pisme || d.pisme <= 0) msgs.push('Pişme süresi girin.');
+    if (!d.enjeksiyon || d.enjeksiyon <= 0) msgs.push('Enjeksiyon süresi girin.');
+    if (d.shore == null || d.shore < 15 || d.shore > 95) msgs.push('Shore 15–95 aralığında olmalı.');
+    if (!d.gramaj || d.gramaj <= 0) msgs.push('Gramaj girin.');
+    (activeJob && activeJob.boyutlar ? activeJob.boyutlar : ['LARGE']).forEach(function (b) {
+      var key = String(b).toUpperCase();
+      var v = oranData[key];
+      if (v == null || v <= 0 || v > 10) {
+        msgs.push(boyutLabel(key) + ' kullanım oranı 0–10 aralığında olmalı.');
+      }
+    });
+    return msgs;
   }
 
-  document.getElementById('fg-copy-olcum').addEventListener('click', function () {
-    if (!activeBoyut || !activeJob) return;
-    saveCurrentBoyutOlcum();
-    var src = boyutData[activeBoyut];
-    var others = (activeJob.boyutlar || []).filter(function (b) { return b !== activeBoyut; });
-    if (!others.length || !confirm(boyutShort(activeBoyut) + ' ölçümleri diğer boyuta kopyalansın mı?')) return;
-    others.forEach(function (b) {
-      if (!boyutData[b]) return;
-      boyutData[b].pisme = src.pisme;
-      boyutData[b].enjeksiyon = src.enjeksiyon;
-      boyutData[b].shore = src.shore;
-      boyutData[b].gramaj = src.gramaj;
-    });
-    alert('Kopyalandı. Her boyutu kontrol edin.');
-  });
+  function updateStep2Hint() {
+    if (!step2HintEl) return;
+    if (currentStep !== 2) {
+      step2HintEl.style.display = 'none';
+      return;
+    }
+    var msgs = olcumValidationMessages();
+    if (!msgs.length) {
+      step2HintEl.style.display = 'none';
+      step2HintEl.textContent = '';
+      return;
+    }
+    step2HintEl.style.display = 'block';
+    step2HintEl.innerHTML = msgs.map(function (m) { return esc(m); }).join('<br>');
+  }
 
   function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
   function durumClass(d) { return d === 'devam' ? 'fg-rozet-devam' : d === 'tamam' ? 'fg-rozet-tamam' : 'fg-rozet-bekliyor'; }
@@ -1071,33 +1418,57 @@
     return icons[type] || icons.aciklama;
   }
 
-  function renderInfo(info) {
+  function renderInfo(info, kod) {
     var rows = [
+      ['lot', 'AT Kodu', kod || '—'],
       ['hammadde', 'Formül', info.formul || info.hammadde],
       ['tedarikci', 'Renk', info.renk || '—'],
-      ['gonderen', 'Cari', info.tedarikci],
-      ['lot', 'Boyut', info.boyut || '—'],
+      ['gonderen', 'Cari', info.tedarikci, false, true],
+      ['aciklama', 'Boyut', info.boyut || '—'],
       ['aciklama', 'Açıklama', info.aciklama, true]
     ];
     document.getElementById('fg-info-grid').innerHTML = rows.map(function (r) {
-      return '<div class="fg-info' + (r[3] ? ' span2' : '') + '">'
+      var extraClass = (r[3] ? ' span2' : '') + (r[4] ? ' fg-info-cari' : '');
+      return '<div class="fg-info' + extraClass + '">'
         + '<div class="fg-info-ico">' + infoIcon(r[0]) + '</div>'
         + '<div><div class="fg-info-lbl">' + esc(r[1]) + '</div><div class="fg-info-val">' + esc(r[2]) + '</div></div></div>';
     }).join('');
   }
 
   function updateSummary() {
-    saveCurrentBoyutOlcum();
-    saveCurrentBoyutVis();
-    var html = '';
+    saveOlcumFromPanel();
+    saveOranFromInputs();
+    var kalipHtml = '—';
+    if (selectedKalipId) {
+      var k = KALIPLAR.find(function (x) { return x.kalip_id === selectedKalipId; });
+      if (k) {
+        kalipHtml = '<strong>' + esc(k.kalip_kodu) + '</strong><br>'
+          + esc(k.kalip_adi || '—')
+          + (k.beden_araligi ? ' · ' + esc(k.beden_araligi) : '');
+      }
+    }
+    var kalipBox = document.getElementById('fg-summary-kalip');
+    if (kalipBox) {
+      kalipBox.innerHTML = '<div style="font-size:10px;font-weight:600;color:var(--fg-muted);text-transform:uppercase;margin-bottom:4px">Kullanılan Kalıp</div>' + kalipHtml;
+    }
+    var d = olcumData;
+    var html = ''
+      + '<div class="fg-summary-item" style="grid-column:1/-1;font-weight:600;margin-top:4px;background:#eef2f7">Deneme Ölçümleri</div>'
+      + '<div class="fg-summary-item"><div class="v">' + (d.pisme || '—') + ' sn</div><div class="l">Pişme</div></div>'
+      + '<div class="fg-summary-item"><div class="v">' + (d.enjeksiyon || '—') + ' sn</div><div class="l">Enjeksiyon</div></div>'
+      + '<div class="fg-summary-item"><div class="v">' + (d.shore || '—') + ' As</div><div class="l">Shore</div></div>'
+      + '<div class="fg-summary-item"><div class="v">' + (d.gramaj || '—') + ' gr</div><div class="l">Gramaj</div></div>'
+      + '<div class="fg-summary-item" style="grid-column:1/-1;font-weight:600;margin-top:8px;background:#eef2f7">Kullanım Oranları</div>';
     (activeJob.boyutlar || ['LARGE']).forEach(function (b) {
-      var d = boyutData[b] || {};
-      html += '<div class="fg-summary-item" style="grid-column:1/-1;font-weight:600;margin-top:8px">' + esc(boyutShort(b)) + '</div>'
-        + '<div class="fg-summary-item"><div class="v">' + (d.pisme || '—') + ' sn</div><div class="l">Pişme</div></div>'
-        + '<div class="fg-summary-item"><div class="v">' + (d.enjeksiyon || '—') + ' sn</div><div class="l">Enjeksiyon</div></div>'
-        + '<div class="fg-summary-item"><div class="v">' + (d.shore || '—') + ' As</div><div class="l">Shore</div></div>'
-        + '<div class="fg-summary-item"><div class="v">' + (d.gramaj || '—') + ' gr</div><div class="l">Gramaj</div></div>';
+      var key = String(b).toUpperCase();
+      var oran = oranData[key];
+      html += '<div class="fg-summary-item"><div class="v">' + (oran != null ? formatOranDisplay(oran) : '—') + '</div><div class="l">' + esc(boyutLabel(key)) + '</div></div>';
     });
+    html += '<div class="fg-summary-item" style="grid-column:1/-1;font-weight:600;margin-top:8px;background:#eef2f7">Görsel Sonuç</div>'
+      + '<div class="fg-summary-item"><div class="v" style="font-size:12px">' + esc(visLabelFromValue('renk', visState.renk) || '—') + '</div><div class="l">Renk</div></div>'
+      + '<div class="fg-summary-item"><div class="v" style="font-size:12px">' + esc(visLabelFromValue('yuzey', visState.yuzey) || '—') + '</div><div class="l">Yüzey</div></div>'
+      + '<div class="fg-summary-item"><div class="v" style="font-size:12px">' + esc(visLabelFromValue('kalip', visState.kalip) || '—') + '</div><div class="l">Kalıptan Çıkma</div></div>'
+      + '<div class="fg-summary-item" style="grid-column:1/-1;text-align:left;padding:10px 12px"><div class="l">Genel Deneme Notu</div><div class="v" style="font-size:13px;text-align:left;margin-top:4px">' + esc((genelNotEl && genelNotEl.value.trim()) || '—') + '</div></div>';
     document.getElementById('fg-summary-grid').innerHTML = html;
   }
 
@@ -1112,8 +1483,8 @@
       btn.classList.toggle('done', s < n);
       btn.disabled = s > maxStep;
     });
-    if (n === 3) { renderBoyutTabs('vis'); loadCurrentBoyutVis(); }
-    if (n === 2) { renderBoyutTabs('olcum'); renderOlcumPanel(); updateCopyBtn(); }
+    if (n === 3) { hydrateVisUI(); updateVisNextState(); }
+    if (n === 2) { renderOlcumPanel(); renderOranInputs(); updateStep2Hint(); }
     if (n === 4) updateSummary();
     updateVisNextState();
     updateSaveState();
@@ -1129,6 +1500,7 @@
     activeJob = j;
     document.getElementById('fg-det-kod').textContent = j.kod || '—';
     document.getElementById('fg-det-baslik').textContent = j.detayBaslik || 'Enjeksiyon Denemesi';
+    applySonucMetinleri(j.sonucMetinleri);
     var dr = document.getElementById('fg-det-durum');
     dr.textContent = j.durumLbl || 'Bekliyor';
     dr.className = 'fg-rozet ' + durumClass(j.durum);
@@ -1136,24 +1508,23 @@
     info.formul = j.formul || info.hammadde;
     info.renk = j.renk || j.urun;
     info.boyut = info.boyut || (j.boyutlar || []).map(boyutShort).join(' / ');
-    renderInfo(info);
+    renderInfo(info, j.kod);
+    resetDetailForm();
     var olcum = j.olcum_defaults || { pisme: 245, enjeksiyon: 12, shore: 42, gramaj: 182 };
-    initBoyutState(j.boyutlar || ['LARGE'], olcum);
+    initTrialState(j.boyutlar || ['LARGE'], olcum, j.boyut_kullanim_oranlari, j.deneme_olcum);
     renderKalipSelect(j.kalip || null);
     if (j.kalip && j.kalip.kilitli) {
       kalipSelect.disabled = true;
     } else {
       kalipSelect.disabled = false;
     }
-    resetDetailForm();
     measureTouched = false;
     clearSaveFeedback();
     var nxDurum = (j.nx_durum || '').toUpperCase();
     if (nxDurum === 'DENEMEDE' && j.kalip && j.kalip.kalip_id) {
       maxStep = 2;
-      renderBoyutTabs('olcum');
       renderOlcumPanel();
-      updateCopyBtn();
+      renderOranInputs();
       setStep(2);
     } else {
       currentStep = 1;
@@ -1226,7 +1597,6 @@
     if (!group || !value) return;
     visState[group] = value;
     applyVisOpt(btn, true);
-    saveCurrentBoyutVis();
     updateVisNextState();
   }
 
@@ -1234,18 +1604,20 @@
     visState = { renk: null, yuzey: null, kalip: null };
     document.querySelectorAll('.fg-vis-opt').forEach(resetVisOpt);
     document.querySelectorAll('.fg-result.on').forEach(function (b) { b.classList.remove('on'); });
-    document.getElementById('fg-usta-notu').value = '';
-    if (boyutNotEl) boyutNotEl.value = '';
+    if (genelNotEl) genelNotEl.value = '';
+    updateKararNotUI();
     clearPhoto();
+    if (successRedirectTimer) {
+      clearTimeout(successRedirectTimer);
+      successRedirectTimer = null;
+    }
+    if (successModalEl) successModalEl.classList.remove('show');
     updateVisNextState();
     updateSaveState();
   }
 
   function visCompleteAll() {
-    return (activeJob.boyutlar || ['LARGE']).every(function (b) {
-      var d = boyutData[b];
-      return d && d.renk && d.yuzey && d.kalip;
-    });
+    return !!(visState.renk && visState.yuzey && visState.kalip);
   }
 
   function clearSaveFeedback() {
@@ -1253,6 +1625,50 @@
       saveErrEl.style.display = 'none';
       saveErrEl.textContent = '';
     }
+  }
+
+  function kararNotRequiredMessage(karar) {
+    if (karar === 'RED') return 'Başarısızlık nedeni zorunludur.';
+    if (karar === 'REVIZYON_GEREKLI') return 'Revizyon nedeni zorunludur.';
+    return '';
+  }
+
+  function updateKararNotInlineError() {
+    var errEl = document.getElementById('fg-karar-not-error');
+    var sonucBtn = document.querySelector('.fg-result.on');
+    if (!errEl || !genelNotEl) return;
+    var karar = sonucBtn ? sonucBtn.getAttribute('data-v') : '';
+    var genelNot = genelNotEl.value.trim();
+    if ((karar === 'REVIZYON_GEREKLI' || karar === 'RED') && !genelNot) {
+      errEl.textContent = kararNotRequiredMessage(karar);
+      errEl.hidden = false;
+    } else {
+      errEl.hidden = true;
+      errEl.textContent = '';
+    }
+  }
+
+  function updateKararNotUI() {
+    var wrap = document.getElementById('fg-karar-not-wrap');
+    var label = document.getElementById('fg-karar-not-label');
+    var sonucBtn = document.querySelector('.fg-result.on');
+    if (!wrap || !genelNotEl) return;
+    var karar = sonucBtn ? sonucBtn.getAttribute('data-v') : '';
+    if (karar === 'REVIZYON_GEREKLI') {
+      wrap.hidden = false;
+      if (label) label.textContent = 'Revizyon Nedeni';
+      genelNotEl.placeholder = 'Revizyon nedenini yazın (zorunlu)';
+      genelNotEl.setAttribute('aria-required', 'true');
+    } else if (karar === 'RED') {
+      wrap.hidden = false;
+      if (label) label.textContent = 'Başarısızlık Nedeni';
+      genelNotEl.placeholder = 'Başarısızlık nedenini yazın (zorunlu)';
+      genelNotEl.setAttribute('aria-required', 'true');
+    } else {
+      wrap.hidden = true;
+      genelNotEl.removeAttribute('aria-required');
+    }
+    updateKararNotInlineError();
   }
 
   function showSaveErrors(messages) {
@@ -1269,39 +1685,60 @@
     if (saveHintEl) saveHintEl.style.display = 'none';
   }
 
+  function visMissingMessages() {
+    var msgs = [];
+    var missing = [];
+    if (!visState.renk) missing.push('Renk');
+    if (!visState.yuzey) missing.push('Yüzey');
+    if (!visState.kalip) missing.push('Kalıptan Çıkma');
+    if (missing.length) {
+      msgs.push('Devam etmek için ' + missing.join(', ') + ' seçimi yapın.');
+    }
+    return msgs;
+  }
+
   function validateSonucForm() {
-    saveCurrentBoyutOlcum();
-    saveCurrentBoyutVis();
-    var errors = [];
+    saveOlcumFromPanel();
+    saveOranFromInputs();
+    var errors = olcumValidationMessages();
     var sonucBtn = document.querySelector('.fg-result.on');
     if (!sonucBtn) {
-      errors.push('Genel karar seçin: BU LOT UYGUNDUR veya BU LOT HATALIDIR.');
+      errors.push('Sonuç seçiniz.');
+    } else {
+      var karar = sonucBtn.getAttribute('data-v');
+      var genelNot = genelNotEl ? genelNotEl.value.trim() : '';
+      if ((karar === 'REVIZYON_GEREKLI' || karar === 'RED') && !genelNot) {
+        errors.push(kararNotRequiredMessage(karar));
+      }
     }
+    updateKararNotInlineError();
     if (!selectedKalipId) {
       errors.push('Kalıp seçimi zorunlu.');
     }
-    var boyutlar = (activeJob && activeJob.boyutlar && activeJob.boyutlar.length)
-      ? activeJob.boyutlar.slice() : ['LARGE'];
-    boyutlar.forEach(function (b) {
-      var d = boyutData[b] || {};
-      var bs = boyutShort(b);
-      if (d.shore == null || d.shore < 15 || d.shore > 95) {
-        errors.push(bs + ': Shore 15–95 aralığında olmalı.');
-      }
-      if (!d.pisme || d.pisme <= 0) {
-        errors.push(bs + ': Pişme süresi girin.');
-      }
-      if (!d.enjeksiyon || d.enjeksiyon <= 0) {
-        errors.push(bs + ': Enjeksiyon süresi girin.');
-      }
-      if (!d.gramaj || d.gramaj <= 0) {
-        errors.push(bs + ': Gramaj girin.');
-      }
-      if (!d.renk || !d.yuzey || !d.kalip) {
-        errors.push(bs + ': Görsel kontroller (renk, yüzey, kalıptan çıkma) tamamlanmalı.');
-      }
-    });
+    if (!visState.renk || !visState.yuzey || !visState.kalip) {
+      errors.push('Görsel değerlendirmeyi tamamlayınız.');
+    }
     return errors;
+  }
+
+  function saveBlockingReason() {
+    if (currentStep !== 4 || saveInFlight) return null;
+    saveOlcumFromPanel();
+    saveOranFromInputs();
+    var olcumErrs = olcumValidationMessages();
+    if (olcumErrs.length) return olcumErrs[0];
+    if (!selectedKalipId) return 'Kalıp seçimi zorunlu.';
+    if (!visState.renk || !visState.yuzey || !visState.kalip) {
+      return 'Görsel değerlendirmeyi tamamlayınız.';
+    }
+    var sonucBtn = document.querySelector('.fg-result.on');
+    if (!sonucBtn) return 'Sonuç seçiniz.';
+    var karar = sonucBtn.getAttribute('data-v');
+    var genelNot = genelNotEl ? genelNotEl.value.trim() : '';
+    if ((karar === 'REVIZYON_GEREKLI' || karar === 'RED') && !genelNot) {
+      return kararNotRequiredMessage(karar);
+    }
+    return null;
   }
 
   document.getElementById('fg-next-1').addEventListener('click', function () {
@@ -1311,9 +1748,8 @@
       return;
     }
     if ((activeJob.nx_durum || '').toUpperCase() === 'DENEMEDE' && selectedKalipId) {
-      renderBoyutTabs('olcum');
       renderOlcumPanel();
-      updateCopyBtn();
+      renderOranInputs();
       advanceStep(2);
       return;
     }
@@ -1346,24 +1782,31 @@
         var dr = document.getElementById('fg-det-durum');
         dr.textContent = x.ac.durumLbl;
         dr.className = 'fg-rozet ' + durumClass(x.ac.durum);
-        renderBoyutTabs('olcum');
         renderOlcumPanel();
-        updateCopyBtn();
+        renderOranInputs();
         advanceStep(2);
       })
       .catch(function () { btn.disabled = false; alert('Bağlantı hatası'); });
   });
   document.getElementById('fg-next-2').addEventListener('click', function () {
-    saveCurrentBoyutOlcum();
+    var msgs = olcumValidationMessages();
+    if (msgs.length) {
+      if (step2HintEl) {
+        step2HintEl.style.display = 'block';
+        step2HintEl.innerHTML = msgs.map(function (m) { return esc(m); }).join('<br>');
+      } else {
+        alert(msgs.join('\n'));
+      }
+      return;
+    }
     if (!measureTouched) measureTouched = true;
-    renderBoyutTabs('vis');
-    loadCurrentBoyutVis();
+    hydrateVisUI();
     advanceStep(3);
   });
   document.getElementById('fg-next-3').addEventListener('click', function () {
-    saveCurrentBoyutVis();
     if (!visCompleteAll()) {
-      alert('Her boyut için renk, yüzey ve kalıptan çıkma seçin.');
+      var msgs = visMissingMessages();
+      alert(msgs.join('\n') || 'Renk, yüzey ve kalıptan çıkma seçin.');
       return;
     }
     advanceStep(4);
@@ -1382,19 +1825,31 @@
     });
   });
 
-  function visLabelFromData(d, group) {
-    var val = d[group];
-    if (!val) return '';
-    var map = {
+  function visLabelMaps() {
+    return {
       renk: { 'tam-ton': 'Tam Ton / Düzgün', 'hafif-ton': 'Hafif Ton Farkı', 'renk-hatali': 'Renk Hatalı' },
       yuzey: { 'temiz': 'Temiz / Pürüzsüz', 'capak': 'Çapak / Çöküntü Var', 'gaz-izi': 'Gaz İzi / Leke' },
       kalip: { 'rahat': 'Rahat Çıkıyor', 'yapisma': 'Yapışma Yapıyor', 'itici-izi': 'İtici İzi Var' }
     };
-    return (map[group] && map[group][val]) || val;
   }
 
-  function visToneFromData(d, group) {
-    var val = d[group];
+  function visLabelFromValue(group, val) {
+    if (!val) return '';
+    var map = visLabelMaps()[group] || {};
+    return map[val] || val;
+  }
+
+  function visValueFromLabel(group, label) {
+    if (!label) return null;
+    var map = visLabelMaps()[group] || {};
+    var keys = Object.keys(map);
+    for (var i = 0; i < keys.length; i++) {
+      if (map[keys[i]] === label) return keys[i];
+    }
+    return null;
+  }
+
+  function visToneFromValue(group, val) {
     var tones = {
       renk: { 'tam-ton': 'ok', 'hafif-ton': 'warn', 'renk-hatali': 'bad' },
       yuzey: { 'temiz': 'ok', 'capak': 'warn', 'gaz-izi': 'bad' },
@@ -1404,36 +1859,38 @@
   }
 
   function buildSonucPayload() {
-    saveCurrentBoyutOlcum();
-    saveCurrentBoyutVis();
+    saveOlcumFromPanel();
+    saveOranFromInputs();
     var sonucBtn = document.querySelector('.fg-result.on');
-    var karar = sonucBtn && sonucBtn.getAttribute('data-v') === 'uygun' ? 'BASARILI' : 'RED';
-    var genelNot = document.getElementById('fg-usta-notu').value.trim();
-    if (karar === 'RED' && !genelNot) genelNot = 'Enjeksiyon denemesi başarısız.';
+    var karar = sonucBtn ? sonucBtn.getAttribute('data-v') : '';
+    if (!karar) throw new Error('Sonuç seçiniz.');
+    var genelNot = genelNotEl ? genelNotEl.value.trim() : '';
+    if ((karar === 'REVIZYON_GEREKLI' || karar === 'RED') && !genelNot) {
+      throw new Error(kararNotRequiredMessage(karar));
+    }
+    var yuzeyTone = visToneFromValue('yuzey', visState.yuzey);
     var boyutlar = (activeJob && activeJob.boyutlar && activeJob.boyutlar.length)
       ? activeJob.boyutlar.slice() : ['LARGE'];
-    var boyut_sonuclar = boyutlar.map(function (b) {
-      var d = boyutData[b] || {};
-      var yuzeyTone = visToneFromData(d, 'yuzey');
-      return {
-        boyut: b,
-        shore_sonuc: d.shore,
-        pisme_suresi_dk: d.pisme / 60,
-        enjeksiyon_saniye: d.enjeksiyon,
-        gramaj_gr: d.gramaj,
-        renk_sonucu: visLabelFromData(d, 'renk'),
-        kalip_sonucu: visLabelFromData(d, 'kalip'),
-        kalite_sorunu_var: (yuzeyTone === 'warn' || yuzeyTone === 'bad') ? 1 : 0,
-        kalite_aciklama: visLabelFromData(d, 'yuzey'),
-        saha_notu: d.not || genelNot || null,
-        basarili_mi: karar === 'BASARILI' ? 1 : 0
-      };
-    });
     return {
       kalip_id: selectedKalipId,
       ferhat_genel_karar: karar,
       ferhat_genel_not: genelNot || null,
-      boyut_sonuclar: boyut_sonuclar
+      deneme_olcum: {
+        shore_sonuc: olcumData.shore,
+        pisme_suresi_dk: olcumData.pisme / 60,
+        enjeksiyon_saniye: olcumData.enjeksiyon,
+        gramaj_gr: olcumData.gramaj,
+        renk_sonucu: visLabelFromValue('renk', visState.renk),
+        yuzey_sonucu: visLabelFromValue('yuzey', visState.yuzey),
+        kalip_sonucu: visLabelFromValue('kalip', visState.kalip),
+        kalite_sorunu_var: (yuzeyTone === 'warn' || yuzeyTone === 'bad') ? 1 : 0,
+        kalite_aciklama: visLabelFromValue('yuzey', visState.yuzey),
+        saha_notu: genelNot || null
+      },
+      boyut_kullanim_oranlari: boyutlar.map(function (b) {
+        var key = String(b).toUpperCase();
+        return { boyut: key, kullanim_orani: oranData[key] };
+      })
     };
   }
   if (visStepEl) {
@@ -1457,27 +1914,87 @@
       document.querySelectorAll('.fg-result').forEach(function (b) { b.classList.remove('on'); });
       btn.classList.add('on');
       clearSaveFeedback();
+      updateKararNotUI();
       updateSaveState();
     });
   });
 
-  function updateVisNextState() {
-    saveCurrentBoyutVis();
-    if (visNextBtn) visNextBtn.disabled = !visCompleteAll();
-  }
-
   function updateSaveState() {
-    var sonuc = document.querySelector('.fg-result.on');
-    var canSave = currentStep === 4 && sonuc && !saveInFlight;
+    updateKararNotInlineError();
+    var reason = saveBlockingReason();
+    var canSave = currentStep === 4 && !reason && !saveInFlight;
     document.getElementById('fg-save').disabled = !canSave;
     if (saveHintEl) {
-      if (currentStep === 4 && !sonuc && !saveInFlight) {
-        saveHintEl.textContent = 'Kaydetmek için genel karar seçin.';
+      if (currentStep === 4 && reason && !saveInFlight) {
+        saveHintEl.textContent = reason;
         saveHintEl.style.display = 'block';
       } else {
         saveHintEl.style.display = 'none';
       }
     }
+  }
+
+  function sonucLabelFromKarar(karar) {
+    return SONUC_LABELS[karar] || karar || '—';
+  }
+
+  function finishSuccessAndReturnList(kod, karar) {
+    if (successRedirectTimer) {
+      clearTimeout(successRedirectTimer);
+      successRedirectTimer = null;
+    }
+    saveInFlight = false;
+    var goList = function () {
+      if (successModalEl) successModalEl.classList.remove('show');
+      showList();
+      loadJobs();
+    };
+    if (successModalEl) {
+      var atEl = document.getElementById('fg-success-at');
+      var sonucEl = document.getElementById('fg-success-sonuc');
+      if (atEl) atEl.textContent = 'AT: ' + (kod || '—');
+      if (sonucEl) sonucEl.textContent = 'Sonuç: ' + sonucLabelFromKarar(karar);
+      successModalEl.classList.add('show');
+      successRedirectTimer = setTimeout(goList, 3200);
+    } else {
+      goList();
+    }
+  }
+
+  document.getElementById('fg-success-back').addEventListener('click', function () {
+    if (successRedirectTimer) {
+      clearTimeout(successRedirectTimer);
+      successRedirectTimer = null;
+    }
+    if (successModalEl) successModalEl.classList.remove('show');
+    showList();
+    loadJobs();
+  });
+  document.getElementById('fg-success-backdrop').addEventListener('click', function () {
+    if (successRedirectTimer) {
+      clearTimeout(successRedirectTimer);
+      successRedirectTimer = null;
+    }
+    if (successModalEl) successModalEl.classList.remove('show');
+    showList();
+    loadJobs();
+  });
+
+  function updateVisNextState() {
+    var complete = visCompleteAll();
+    if (visNextBtn) visNextBtn.disabled = !complete;
+    if (visNextHintEl) {
+      if (complete) {
+        visNextHintEl.textContent = '';
+        visNextHintEl.className = 'fg-wfoot-hint ok';
+      } else {
+        visNextHintEl.className = 'fg-wfoot-hint';
+        visNextHintEl.innerHTML = visMissingMessages().map(function (m) {
+          return esc(m);
+        }).join('<br>');
+      }
+    }
+    updateSaveState();
   }
 
   var upload = document.getElementById('fg-upload');
@@ -1493,9 +2010,13 @@
   document.getElementById('fg-upload-change').addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); fileInp.click(); });
   document.getElementById('fg-upload-remove').addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); clearPhoto(); });
 
-  if (boyutNotEl) {
-    boyutNotEl.addEventListener('input', saveCurrentBoyutVis);
+  if (genelNotEl) {
+    genelNotEl.addEventListener('input', function () {
+      updateKararNotInlineError();
+      updateSaveState();
+    });
   }
+  updateKararNotUI();
 
   function uploadPhotoIfAny(argeTestId) {
     var f = fileInp.files && fileInp.files[0];
@@ -1504,7 +2025,16 @@
     fd.append('file', f);
     return fetch('/saha/api/gelen-isler/' + argeTestId + '/gorsel', { method: 'POST', body: fd })
       .then(function (r) { return r.json(); })
-      .catch(function () { return null; });
+      .then(function (d) {
+        if (!d || d.ok === false) {
+          showToast((d && d.hata) || 'Fotoğraf yüklenemedi.');
+        }
+        return d;
+      })
+      .catch(function () {
+        showToast('Fotoğraf yüklenemedi.');
+        return null;
+      });
   }
 
   document.getElementById('fg-save').addEventListener('click', function (e) {
@@ -1525,7 +2055,7 @@
       payload = buildSonucPayload();
     } catch (err) {
       saveInFlight = false;
-      showSaveErrors(['Form verisi okunamadı.']);
+      showSaveErrors([(err && err.message) || 'Form verisi okunamadı.']);
       updateSaveState();
       return;
     }
@@ -1547,15 +2077,8 @@
           return;
         }
         return uploadPhotoIfAny(activeJob.arge_test_id).then(function () {
-          var toast = document.getElementById('fg-toast');
-          toast.textContent = 'Sonuç kaydedildi — ' + (activeJob.kod || '');
-          toast.classList.add('show');
-          setTimeout(function () {
-            toast.classList.remove('show');
-            saveInFlight = false;
-            showList();
-            loadJobs();
-          }, 1400);
+          var karar = payload.ferhat_genel_karar;
+          finishSuccessAndReturnList(activeJob.kod, karar);
         });
       })
       .catch(function () {
@@ -1566,6 +2089,7 @@
   });
 
   loadKaliplar().then(loadJobs);
+  applySonucMetinleri(DEFAULT_SONUC_METIN);
 })();
 </script>
 {% endblock %}
