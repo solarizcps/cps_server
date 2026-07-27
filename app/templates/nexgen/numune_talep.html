@@ -31,6 +31,7 @@
   .nt-grid2 .nt-fld-talep-eden{max-width:420px;}
   .nt-renk-secim-alan{max-width:840px;}
 }
+.nt-req{color:#b91c1c;font-weight:700;margin-left:2px;}
 .nt-ozet{background:#fff;border:1px solid var(--rm-border);border-radius:10px;}
 .nt-ozet-hdr{padding:6px 10px;background:var(--rm-teal);}
 .nt-ozet-hdr span{font-size:10px;font-weight:700;color:#f1f5f9;text-transform:uppercase;letter-spacing:.3px;}
@@ -206,7 +207,7 @@
               <button type="button" class="nt-chip" id="tip-aday" onclick="ntMusteriTip('ADAY')">Yeni Müşteri Adayı</button>
             </div>
             <div class="full nt-fld-cari" id="blk-cari">
-              <span class="nt-lbl">Cari seçimi</span>
+              <span class="nt-lbl">Cari seçimi <span class="nt-req" id="cari-req" title="Zorunlu">*</span></span>
               <input type="hidden" id="cari_id" value="">
               <div class="nt-cari-wrap" id="nt-cari-wrap">
                 <input class="nt-inp" id="cari_ara" placeholder="Cari ara (ad veya kod)…" autocomplete="off"
@@ -217,6 +218,7 @@
                 <span id="cari_secili_txt"></span>
                 <button type="button" class="nt-cari-secili-x" onclick="ntCariTemizle()" title="Temizle">×</button>
               </div>
+              <div class="nt-hint" id="cari-zorunlu-hint" style="font-size:9px;color:#9ca3af;margin-top:4px;">Mevcut müşteri için cari seçimi zorunludur.</div>
             </div>
             <div class="full nt-fld-aday" id="blk-aday" style="display:none;">
               <span class="nt-lbl">Firma Adı</span>
@@ -1061,10 +1063,16 @@ function ntFormTemizle(){
   document.getElementById('oz_durum').textContent = 'Yeni Talep';
   ntOzetGuncelle();
 }
-function ntGonderimHazirMi(){
+function ntMevcutCariZorunluMu(){
+  /* FAZ-NUMUNE-MEVCUT-CARI-ZORUNLU-VALIDASYON-1 — taslak + gönder */
   if(NT.musteriTip === 'MEVCUT' && !(document.getElementById('cari_id').value || '').trim()){
-    return 'Mevcut müşteri için cari seçimi zorunlu.';
+    return 'Mevcut müşteri için cari seçimi zorunludur.';
   }
+  return null;
+}
+function ntGonderimHazirMi(){
+  var cariHata = ntMevcutCariZorunluMu();
+  if(cariHata) return cariHata;
   if(NT.musteriTip === 'ADAY'){
     if(!(document.getElementById('aday_firma').value || '').trim()) return 'Aday müşteri için firma adı zorunlu.';
     if(!(document.getElementById('talep_kaynagi').value || '').trim()) return 'Aday müşteri için talep kaynağı zorunlu.';
@@ -1099,6 +1107,10 @@ function ntKaydet(mod){
     ntRenkModalKapat();
     var vhata = ntGonderimHazirMi();
     if(vhata){ ntBildirim(vhata, 'hata'); return; }
+  } else {
+    /* Taslak: MEVCUT için cari zorunlu; ADAY serbest */
+    var thata = ntMevcutCariZorunluMu();
+    if(thata){ ntBildirim(thata, 'hata'); return; }
   }
   NT._gonderimiyor = true;
   var btnGonder = ntBtnGonder();

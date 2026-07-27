@@ -31,6 +31,8 @@ VEDAT_SONUCLAR = frozenset({'Basarili', 'Revizyon', 'Red', 'Calisiliyor'})
 KARSILAMA_YOLLARI = frozenset({'HAZIR_RENK', 'YENI_RENK', 'YENI_FORMUL'})
 KARSILAMA_YOLLARI_JS = frozenset({'HAZIR_RF', 'HAZIR_RENK', 'YENI_RENK', 'YENI_FORMUL'})
 DUZENLENEBILIR_DURUMLAR = frozenset({'YENI_TALEP', 'TASLAK'})
+# FAZ-NUMUNE-MEVCUT-CARI-ZORUNLU-VALIDASYON-1
+MSG_MEVCUT_CARI_ZORUNLU = 'Mevcut müşteri için cari seçimi zorunludur.'
 
 FILTRE_DURUMLAR = {
     'bekleyen': ('BEKLEYEN_NUMUNE',),
@@ -148,8 +150,9 @@ def _validate_payload(payload: dict, *, zorunlu_gonder: bool = False) -> dict:
             cari_id = int(payload.get('cari_id') or 0)
         except (TypeError, ValueError):
             cari_id = 0
-        if zorunlu_gonder and not cari_id:
-            raise NumuneTalepError('Mevcut müşteri için cari seçimi zorunlu.', 400)
+        # Taslak + gönder: MEVCUT için cari_id her yazmada zorunlu
+        if not cari_id:
+            raise NumuneTalepError(MSG_MEVCUT_CARI_ZORUNLU, 400)
     else:
         firma = (payload.get('aday_firma_adi') or payload.get('firma_adi') or '').strip()
         kaynak = (payload.get('talep_kaynagi') or '').strip()
@@ -374,8 +377,25 @@ def _insert_fields(data: dict) -> tuple[str, list]:
     return ','.join(cols), [data[c] for c in cols]
 
 
+def _assert_mevcut_cari_aktif(con, musteri_tipi: str | None, cari_id: int | None) -> None:
+    """MEVCUT yazmalarında cari_id aktif nexgen_cari olmalı (ADAY etkilenmez)."""
+    if (musteri_tipi or '').strip().upper() != 'MEVCUT':
+        return
+    if not cari_id:
+        raise NumuneTalepError(MSG_MEVCUT_CARI_ZORUNLU, 400)
+    row = con.execute(
+        'SELECT id, aktif FROM nexgen_cari WHERE id=?',
+        (int(cari_id),),
+    ).fetchone()
+    if not row:
+        raise NumuneTalepError('Seçilen cari bulunamadı.', 400)
+    if int(row['aktif'] or 0) != 1:
+        raise NumuneTalepError('Seçilen cari aktif değil.', 400)
+
+
 def kaydet_taslak(con, payload: dict, olusturan_id: int, talep_id: int | None = None) -> dict:
     norm = _validate_payload(payload, zorunlu_gonder=False)
+    _assert_mevcut_cari_aktif(con, norm.get('musteri_tipi'), norm.get('cari_id'))
     if not norm.get('talep_eden_kullanici_id'):
         norm['talep_eden_kullanici_id'] = olusturan_id
     now = _now()
@@ -772,6 +792,7 @@ def _preflight_gonder_kaynak(con, norm: dict) -> None:
 
 def gonder_arge(con, payload: dict, olusturan_id: int, talep_id: int | None = None) -> dict:
     norm = _validate_payload(payload, zorunlu_gonder=True)
+    _assert_mevcut_cari_aktif(con, norm.get('musteri_tipi'), norm.get('cari_id'))
     if not norm.get('talep_eden_kullanici_id'):
         norm['talep_eden_kullanici_id'] = olusturan_id
     _preflight_gonder_kaynak(con, norm)
