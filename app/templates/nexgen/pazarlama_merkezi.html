@@ -343,6 +343,7 @@
         </div>
       </div>
     </div>
+
   </div>
 
   {# ══════════════════════════════════════════════════════════════════════
@@ -353,9 +354,16 @@
       <button type="button" class="rm-page-geri pzm-detay-liste-btn" onclick="pzmEkranGec('liste')">
         <span>←</span><span>Sipariş Listesi</span>
       </button>
-      <div class="pzm-detay-ust-meta">
-        <span class="pzm-detay-ust-lbl">Sipariş</span>
-        <span class="pzm-sip-no" id="pzm-detay-no">—</span>
+      <div class="pzm-detay-ust-right">
+        <div class="pzm-detay-ust-meta">
+          <span class="pzm-detay-ust-lbl">Sipariş</span>
+          <span class="pzm-sip-no" id="pzm-detay-no">—</span>
+        </div>
+        {% if can_admin %}
+        <button type="button" class="pzm-btn pzm-btn-red-outline pzm-admin-sil-btn"
+                id="pzm-detay-btn-sil" style="display:none;"
+                onclick="pzmSilModalAc()">Siparişi Sil</button>
+        {% endif %}
       </div>
     </div>
     <div class="pzm-detay-wrap">
@@ -867,7 +875,14 @@ button.rm-page-geri { appearance:none; }
   margin-bottom:var(--pzm-gap); flex-wrap:wrap;
 }
 .pzm-detay-liste-btn { font-size:var(--pzm-fs-body); }
+.pzm-detay-ust-right {
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-left:auto;
+}
 .pzm-detay-ust-meta { display:flex; align-items:baseline; gap:8px; min-width:0; }
+.pzm-admin-sil-btn {
+  font-size:11px !important; padding:4px 10px !important; min-height:0 !important;
+  line-height:1.2 !important; white-space:nowrap;
+}
 .pzm-detay-ust-lbl {
   font-size:var(--pzm-fs-label); font-weight:700; color:var(--rm-t3);
   text-transform:uppercase; letter-spacing:.4px;
@@ -1109,6 +1124,29 @@ button.rm-page-geri { appearance:none; }
     </div>
   </div>
 </div>
+
+{% if can_admin %}
+<div id="pzm-sil-panel" class="pzm-basari-panel" style="display:none;" role="dialog" aria-modal="true">
+  <div class="pzm-basari-kart" style="text-align:left;max-width:460px;">
+    <div class="pzm-basari-baslik" style="color:var(--rm-red);">Siparişi Kalıcı Sil</div>
+    <div style="font-size:12px;color:var(--rm-t2);line-height:1.5;margin:8px 0 12px;">
+      Bu işlem geri alınamaz. Bu işlem siparişe bağlı test planlarını ve batch kayıtlarını kalıcı olarak siler.
+      Silmek için sipariş numarasını aynen yazın:
+      <strong id="pzm-sil-hedef-no" style="display:block;margin-top:6px;font-size:13px;color:var(--rm-t1);"></strong>
+    </div>
+    <input type="text" id="pzm-sil-confirm-inp" class="pzm-inp" autocomplete="off"
+           placeholder="Sipariş numarasını yazın"
+           style="width:100%;margin-bottom:10px;"
+           oninput="pzmSilConfirmGuncelle()">
+    <div id="pzm-sil-hata" class="pzm-hata" style="display:none;margin-bottom:8px;"></div>
+    <div class="pzm-aksiyon" style="justify-content:flex-end;gap:8px;">
+      <button type="button" class="pzm-btn pzm-btn-outline" onclick="pzmSilModalKapat()">Vazgeç</button>
+      <button type="button" class="pzm-btn pzm-btn-red-outline" id="pzm-sil-onay-btn" disabled
+              onclick="pzmSilOnayla()">Kalıcı Sil</button>
+    </div>
+  </div>
+</div>
+{% endif %}
 <style>
 .pzm-sonraki-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:9500; display:flex; align-items:center; justify-content:center; padding:16px; }
 .pzm-sonraki-kutu { background:#fff; border-radius:12px; max-width:480px; width:100%; box-shadow:0 10px 40px rgba(0,0,0,.15); }
@@ -1130,6 +1168,7 @@ var _pzmTalepId  = null;
 var _pzmKalemler = [];
 var _pzmDuzenIdx = null;
 var _pzmCanManage = {{ 'true' if can_manage else 'false' }};
+var _pzmCanAdmin = {{ 'true' if can_admin else 'false' }};
 var _pzmTalepCache = [];
 try {
   var _pzmCacheEl = document.getElementById('pzm-talep-cache-json');
@@ -3067,6 +3106,22 @@ window.pzmDetayAc = function(id) {
   pzmEkranGec('detay');
 };
 
+function pzmDetayAdminSilBtnGuncelle(t) {
+  var btn = $id('pzm-detay-btn-sil');
+  if (!btn) return;
+  if (!_pzmCanAdmin || !t) {
+    btn.style.display = 'none';
+    return;
+  }
+  var d = (t.durum || '').toUpperCase();
+  var aktif = (d === 'TASLAK' || d === 'MPR_BEKLIYOR' || d === 'URETIMDE');
+  btn.style.display = '';
+  btn.disabled = !aktif;
+  btn.title = aktif
+    ? 'Siparişi kalıcı sil (ADMIN)'
+    : ('Bu durumdaki sipariş silinemez: ' + (t.durum || '—'));
+}
+
 function pzmDetayRender(t) {
   if (!t) return;
   var st = pzmMprStateEnsure(t.id);
@@ -3075,6 +3130,7 @@ function pzmDetayRender(t) {
   var no = t.siparis_no || ('T-' + t.id);
   var noEl = $id('pzm-detay-no');
   if (noEl) noEl.textContent = no;
+  pzmDetayAdminSilBtnGuncelle(t);
 
   var wrap = $id('pzm-detay-asamalar');
   if (!wrap) return;
@@ -3251,6 +3307,114 @@ window.pzmIptal = function(id) {
       pzmTabloRender(_pzmTalepCache||[]);
       pzmEkranGec('liste');
     });
+};
+
+/* ADMIN — kalıcı silme */
+var _pzmSilTid = null;
+var _pzmSilNo = '';
+
+window.pzmSilModalAc = function(tid) {
+  if (!_pzmCanAdmin) return;
+  tid = tid || _pzmDetayAktifId;
+  var t = pzmTalepBul(tid);
+  if (!t) return;
+  var d = (t.durum || '').toUpperCase();
+  if (d !== 'TASLAK' && d !== 'MPR_BEKLIYOR' && d !== 'URETIMDE') {
+    alert('Bu durumdaki sipariş silinemez: ' + (t.durum || '—'));
+    return;
+  }
+  _pzmSilTid = tid;
+  _pzmSilNo = (t.siparis_no || '').trim();
+  var panel = $id('pzm-sil-panel');
+  var hedef = $id('pzm-sil-hedef-no');
+  var inp = $id('pzm-sil-confirm-inp');
+  var hata = $id('pzm-sil-hata');
+  if (hedef) hedef.textContent = _pzmSilNo;
+  if (inp) inp.value = '';
+  if (hata) { hata.style.display = 'none'; hata.textContent = ''; }
+  pzmSilConfirmGuncelle();
+  if (panel) panel.style.display = 'flex';
+  if (inp) setTimeout(function() { inp.focus(); }, 50);
+};
+
+window.pzmSilModalKapat = function() {
+  var panel = $id('pzm-sil-panel');
+  if (panel) panel.style.display = 'none';
+  _pzmSilTid = null;
+  _pzmSilNo = '';
+};
+
+window.pzmSilConfirmGuncelle = function() {
+  var inp = $id('pzm-sil-confirm-inp');
+  var btn = $id('pzm-sil-onay-btn');
+  if (!btn) return;
+  var ok = !!(inp && _pzmSilNo && inp.value.trim() === _pzmSilNo);
+  btn.disabled = !ok;
+};
+
+window.pzmSilOnayla = function() {
+  if (!_pzmCanAdmin || !_pzmSilTid) return;
+  var inp = $id('pzm-sil-confirm-inp');
+  var yazilan = inp ? inp.value.trim() : '';
+  if (yazilan !== _pzmSilNo) {
+    var hata = $id('pzm-sil-hata');
+    if (hata) {
+      hata.style.display = '';
+      hata.textContent = 'Sipariş numarası eşleşmiyor.';
+    }
+    pzmSilConfirmGuncelle();
+    return;
+  }
+  var btn = $id('pzm-sil-onay-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Siliniyor…'; }
+  var tid = _pzmSilTid;
+  var no = _pzmSilNo;
+  fetch('/nexgen/api/pazarlama/talep/' + tid + '/sil', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ siparis_no: no }),
+  })
+  .then(function(r) { return r.json().then(function(d) { return { status: r.status, data: d }; }); })
+  .then(function(res) {
+    var d = res.data || {};
+    if (!d.ok) {
+      var hata2 = $id('pzm-sil-hata');
+      if (hata2) {
+        hata2.style.display = '';
+        hata2.textContent = d.hata || 'Silme başarısız.';
+      }
+      if (btn) { btn.textContent = 'Kalıcı Sil'; }
+      pzmSilConfirmGuncelle();
+      return;
+    }
+    _pzmTalepCache = (_pzmTalepCache || []).filter(function(x) { return x.id !== tid; });
+    if (_pzmMprState && _pzmMprState[tid]) delete _pzmMprState[tid];
+    _pzmDetayAktifId = null;
+    _pzmTalepId = null;
+    var noEl = $id('pzm-detay-no');
+    if (noEl) noEl.textContent = '—';
+    var silBtn = $id('pzm-detay-btn-sil');
+    if (silBtn) silBtn.style.display = 'none';
+    var asamalar = $id('pzm-detay-asamalar');
+    if (asamalar) asamalar.innerHTML = '';
+    var altBtns = $id('pzm-detay-alt-butonlar');
+    if (altBtns) altBtns.innerHTML = '';
+    var altBand = $id('pzm-detay-alt-band');
+    if (altBand) altBand.style.display = 'none';
+    pzmTabloRender(_pzmTalepCache);
+    pzmBadgeGuncelle(true);
+    pzmSilModalKapat();
+    pzmEkranGec('liste');
+  })
+  .catch(function() {
+    var hata3 = $id('pzm-sil-hata');
+    if (hata3) {
+      hata3.style.display = '';
+      hata3.textContent = 'Bağlantı hatası.';
+    }
+    if (btn) { btn.textContent = 'Kalıcı Sil'; }
+    pzmSilConfirmGuncelle();
+  });
 };
 
 /* ────────────── EKRAN 2: Çok Kalemli Form ────────────── */

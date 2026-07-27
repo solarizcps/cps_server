@@ -18718,6 +18718,7 @@ def pazarlama_merkezi():
         cariler=cariler,
         talepler=talepler,
         can_manage=yetki_var('nexgen.plan.manage', 'can_manage'),
+        can_admin=is_superadmin(session.get('kullanici')),
     )
 
 
@@ -19270,6 +19271,299 @@ def api_pazarlama_talep_iptal(talep_id):
         """, (talep_id,))
         con.commit()
         return jsonify({'ok': True, 'durum': 'IPTAL'})
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+# Admin test temizliği: TASLAK / MPR_BEKLIYOR / URETIMDE
+_PZM_SILINEBILIR_DURUMLAR = frozenset({'TASLAK', 'MPR_BEKLIYOR', 'URETIMDE'})
+# Ticari sonuç — hard delete engeli (plan/batch/tablet tek başına engel değil)
+_PZM_SILINEMEZ_SONUC_DURUMLAR = frozenset({
+    'BITTI', 'SEVK_EDILDI', 'TAMAMLANDI',
+})
+
+
+def _pzm_tablo_var(con, name):
+    return bool(con.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
+    ).fetchone())
+
+
+def _pzm_siparis_sil_blok_nedenleri(con, talep_id, siparis_no, durum):
+    """Silme öncesi güvenlik kontrolleri — neden listesi (boş = serbest)."""
+    nedenler = []
+    d = (durum or '').upper()
+    if d in _PZM_SILINEMEZ_SONUC_DURUMLAR:
+        nedenler.append(
+            f"Sipariş durumu '{durum}' ticari/sonuç durumundadır; kalıcı silinemez."
+        )
+        return nedenler
+    if d not in _PZM_SILINEBILIR_DURUMLAR:
+        nedenler.append(
+            f"Sipariş durumu '{durum}' silmeye uygun değil. "
+            "Yalnız TASLAK, MPR_BEKLIYOR ve URETIMDE (test) silinebilir."
+        )
+        return nedenler
+
+    plan_rows = con.execute(
+        "SELECT id, durum FROM nexgen_uretim_plan WHERE planlama_siparis_id=?",
+        (talep_id,),
+    ).fetchall()
+    plan_ids = [r['id'] for r in plan_rows]
+    for pr in plan_rows:
+        pd = (pr['durum'] or '').upper()
+        if pd in _PZM_SILINEMEZ_SONUC_DURUMLAR:
+            nedenler.append(
+                f"Tamamlanmış / sevk edilmiş üretim planı var ({pd})."
+            )
+            break
+
+    batch_rows = []
+    if plan_ids and _pzm_tablo_var(con, 'nexgen_uretim_batch'):
+        ph = ','.join('?' * len(plan_ids))
+        batch_rows = con.execute(
+            f"SELECT id, batch_kodu, durum FROM nexgen_uretim_batch WHERE plan_id IN ({ph})",
+            plan_ids,
+        ).fetchall()
+    for br in batch_rows:
+        bd = (br['durum'] or '').upper()
+        if bd in _PZM_SILINEMEZ_SONUC_DURUMLAR:
+            nedenler.append(
+                f"Tamamlanmış üretim sonucu (batch {br['batch_kodu'] or br['id']}: {bd})."
+            )
+            break
+
+    # finans: yalnız siparis_no (siparis_id MO/PZM id çakışmasına açık)
+    if _pzm_tablo_var(con, 'finans_belgesi') and (siparis_no or '').strip():
+        fb = con.execute(
+            "SELECT COUNT(*) AS n FROM finans_belgesi "
+            "WHERE IFNULL(aktif,1)=1 AND IFNULL(siparis_no,'')=?",
+            (siparis_no.strip(),),
+        ).fetchone()['n']
+        if fb:
+            nedenler.append(f"Finans belgesi / fatura / açık kalem ilişkisi var ({fb}).")
+
+    # Gerçek sevkiyat: sipariş/plan SEVK veya finans belgesinde sevkiyat_id
+    if (siparis_no or '').strip() and _pzm_tablo_var(con, 'finans_belgesi'):
+        sv_fin = con.execute(
+            "SELECT COUNT(*) AS n FROM finans_belgesi "
+            "WHERE IFNULL(aktif,1)=1 AND IFNULL(siparis_no,'')=? "
+            "AND sevkiyat_id IS NOT NULL AND sevkiyat_id != 0",
+            (siparis_no.strip(),),
+        ).fetchone()['n']
+        if sv_fin:
+            nedenler.append(f"Finans üzerinden sevkiyat ilişkisi var ({sv_fin}).")
+
+    if plan_ids and _pzm_tablo_var(con, 'nexgen_stok_hareket'):
+        ph = ','.join('?' * len(plan_ids))
+        sh = con.execute(
+            f"""SELECT COUNT(*) AS n FROM nexgen_stok_hareket
+                WHERE (referans_tip IN ('URETIM_PLAN','PLAN','MPR_PLAN') AND referans_id IN ({ph}))
+                   OR (referans_tip IN ('URETIM_BATCH','BATCH') AND referans_id IN (
+                        SELECT id FROM nexgen_uretim_batch WHERE plan_id IN ({ph})
+                   ))""",
+            plan_ids + plan_ids,
+        ).fetchone()['n']
+        if sh:
+            nedenler.append(f"Stok tüketim / hareket kaydı var ({sh}).")
+
+    # plan/batch/tablet/depo/rezerv — engel değil; transaction içinde temizlenir
+    return nedenler
+
+
+def _pzm_siparis_sil_transaction(con, talep_id, confirm_no):
+    """Admin hard-delete — transaction; yarım silme yok."""
+    if not _planlama_siparis_tablosu_var(con):
+        return {'ok': False, 'hata': 'Planlama sipariş tablosu yok.', 'status': 400}
+    row = con.execute(
+        f"""SELECT id, siparis_no, durum, talep_referansi
+            FROM nexgen_planlama_siparis
+            WHERE id=? AND {_PZM_TALEP_WHERE}""",
+        (talep_id,),
+    ).fetchone()
+    if not row:
+        return {'ok': False, 'hata': 'Sipariş bulunamadı.', 'status': 404}
+    siparis_no = (row['siparis_no'] or '').strip()
+    if (confirm_no or '').strip() != siparis_no:
+        return {
+            'ok': False,
+            'hata': 'Sipariş numarası doğrulanamadı. Silmek için numarayı aynen yazın.',
+            'status': 400,
+        }
+    nedenler = _pzm_siparis_sil_blok_nedenleri(
+        con, talep_id, siparis_no, row['durum'],
+    )
+    if nedenler:
+        return {'ok': False, 'hata': ' '.join(nedenler), 'nedenler': nedenler, 'status': 400}
+
+    plan_ids = [
+        r['id'] for r in con.execute(
+            "SELECT id FROM nexgen_uretim_plan WHERE planlama_siparis_id=?",
+            (talep_id,),
+        ).fetchall()
+    ]
+    batch_ids = []
+    batch_kodlari = []
+    if plan_ids and _pzm_tablo_var(con, 'nexgen_uretim_batch'):
+        ph = ','.join('?' * len(plan_ids))
+        for br in con.execute(
+            f"SELECT id, batch_kodu FROM nexgen_uretim_batch WHERE plan_id IN ({ph})",
+            plan_ids,
+        ).fetchall():
+            batch_ids.append(br['id'])
+            if br['batch_kodu']:
+                batch_kodlari.append(br['batch_kodu'])
+
+    # FK NO ACTION — çocuklardan başa doğru temizle
+    if _pzm_tablo_var(con, 'nexgen_planlama_siparis_kalem'):
+        con.execute(
+            "UPDATE nexgen_planlama_siparis_kalem SET uretim_plan_id=NULL "
+            "WHERE planlama_siparis_id=?",
+            (talep_id,),
+        )
+
+    if _pzm_tablo_var(con, 'nexgen_stok_rezerv'):
+        con.execute(
+            "DELETE FROM nexgen_stok_rezerv WHERE planlama_siparis_id=?",
+            (talep_id,),
+        )
+        if plan_ids:
+            ph = ','.join('?' * len(plan_ids))
+            con.execute(
+                f"DELETE FROM nexgen_stok_rezerv WHERE plan_id IN ({ph})",
+                plan_ids,
+            )
+        if batch_kodlari:
+            phb = ','.join('?' * len(batch_kodlari))
+            con.execute(
+                f"DELETE FROM nexgen_stok_rezerv WHERE batch_kodu IN ({phb})",
+                batch_kodlari,
+            )
+
+    if _pzm_tablo_var(con, 'nexgen_depo_hazirlik'):
+        if _pzm_tablo_var(con, 'nexgen_depo_hazirlik_kalem'):
+            con.execute(
+                "DELETE FROM nexgen_depo_hazirlik_kalem WHERE hazirlik_id IN ("
+                "SELECT id FROM nexgen_depo_hazirlik WHERE planlama_siparis_id=?)",
+                (talep_id,),
+            )
+            if plan_ids:
+                ph = ','.join('?' * len(plan_ids))
+                con.execute(
+                    f"DELETE FROM nexgen_depo_hazirlik_kalem WHERE hazirlik_id IN ("
+                    f"SELECT id FROM nexgen_depo_hazirlik WHERE plan_id IN ({ph}))",
+                    plan_ids,
+                )
+        con.execute(
+            "DELETE FROM nexgen_depo_hazirlik WHERE planlama_siparis_id=?",
+            (talep_id,),
+        )
+        if plan_ids:
+            ph = ','.join('?' * len(plan_ids))
+            con.execute(
+                f"DELETE FROM nexgen_depo_hazirlik WHERE plan_id IN ({ph})",
+                plan_ids,
+            )
+
+    # Tablet / RF kullanım — batch ve session üzerinden (siparis_id MO çakışmasından kaçın)
+    if _pzm_tablo_var(con, 'nexgen_rf_kullanim'):
+        if batch_ids:
+            ph = ','.join('?' * len(batch_ids))
+            con.execute(
+                f"DELETE FROM nexgen_rf_kullanim WHERE uretim_emir_id IN ({ph})",
+                batch_ids,
+            )
+        if batch_kodlari:
+            phb = ','.join('?' * len(batch_kodlari))
+            con.execute(
+                f"DELETE FROM nexgen_rf_kullanim WHERE tablet_session_id IN ({phb})",
+                batch_kodlari,
+            )
+
+    if batch_ids and _pzm_tablo_var(con, 'nexgen_uretim_parca'):
+        ph = ','.join('?' * len(batch_ids))
+        con.execute(
+            f"DELETE FROM nexgen_uretim_parca WHERE batch_id IN ({ph})",
+            batch_ids,
+        )
+    if plan_ids and _pzm_tablo_var(con, 'nexgen_uretim_parca'):
+        ph = ','.join('?' * len(plan_ids))
+        con.execute(
+            f"DELETE FROM nexgen_uretim_parca WHERE plan_id IN ({ph})",
+            plan_ids,
+        )
+
+    if batch_ids and _pzm_tablo_var(con, 'nexgen_fiyat_batch_detay'):
+        ph = ','.join('?' * len(batch_ids))
+        con.execute(
+            f"DELETE FROM nexgen_fiyat_batch_detay WHERE batch_id IN ({ph})",
+            batch_ids,
+        )
+    if batch_ids and _pzm_tablo_var(con, 'nexgen_hammadde_fiyat'):
+        ph = ','.join('?' * len(batch_ids))
+        # yalnız bu batch'e bağlı satırlar
+        try:
+            con.execute(
+                f"DELETE FROM nexgen_hammadde_fiyat WHERE batch_id IN ({ph})",
+                batch_ids,
+            )
+        except Exception:
+            pass
+
+    if plan_ids and _pzm_tablo_var(con, 'nexgen_uretim_batch'):
+        ph = ','.join('?' * len(plan_ids))
+        con.execute(
+            f"DELETE FROM nexgen_uretim_batch WHERE plan_id IN ({ph})",
+            plan_ids,
+        )
+
+    if plan_ids:
+        ph = ','.join('?' * len(plan_ids))
+        if _pzm_tablo_var(con, 'nexgen_uretim_plan_boyut'):
+            con.execute(
+                f"DELETE FROM nexgen_uretim_plan_boyut WHERE plan_id IN ({ph})",
+                plan_ids,
+            )
+        con.execute(
+            f"DELETE FROM nexgen_uretim_plan WHERE id IN ({ph})",
+            plan_ids,
+        )
+
+    if _pzm_tablo_var(con, 'nexgen_planlama_siparis_kalem'):
+        con.execute(
+            "DELETE FROM nexgen_planlama_siparis_kalem WHERE planlama_siparis_id=?",
+            (talep_id,),
+        )
+    con.execute("DELETE FROM nexgen_planlama_siparis WHERE id=?", (talep_id,))
+    return {
+        'ok': True,
+        'silinen_id': talep_id,
+        'siparis_no': siparis_no,
+        'plan_silinen': len(plan_ids),
+        'batch_silinen': len(batch_ids),
+    }
+
+
+@nexgen_bp.route('/api/pazarlama/talep/<int:talep_id>/sil', methods=['POST'])
+@login_gerekli
+def api_pazarlama_talep_sil(talep_id):
+    """FAZ-PZM-ADMIN-SIPARIS-SILME — yalnız superadmin; hard delete + guard."""
+    if not is_superadmin(session.get('kullanici')):
+        return jsonify({'ok': False, 'hata': 'Sipariş silme yalnız ADMIN yetkisindedir.'}), 403
+    data = request.get_json(silent=True) or {}
+    confirm_no = data.get('siparis_no') or data.get('confirm_siparis_no') or ''
+    con = _db()
+    try:
+        sonuc = _pzm_siparis_sil_transaction(con, talep_id, confirm_no)
+        if not sonuc.get('ok'):
+            status = sonuc.pop('status', 400)
+            con.rollback()
+            return jsonify(sonuc), status
+        con.commit()
+        return jsonify(sonuc)
     except Exception as e:
         con.rollback()
         return jsonify({'ok': False, 'hata': str(e)}), 500
