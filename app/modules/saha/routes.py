@@ -36,6 +36,10 @@ from modules.nexgen.nx_ar_service import (
 
     ferhat_sonuc_kaydet,
 
+    ferhat_wizard_baslik,
+
+    ferhat_wizard_sonuc_metinleri,
+
     get_nx_ar,
 
 )
@@ -242,7 +246,9 @@ def _liste_kart(row: dict) -> dict:
 
     ui_lbl = 'Devam Ediyor' if durum == 'DENEMEDE' else 'Bekliyor'
 
-    tip = row.get('calisma_tipi_etiket') or calisma_tipi_etiket(row.get('calisma_tipi'))
+    ct = row.get('calisma_tipi')
+
+    wiz_lbl = ferhat_wizard_baslik(ct, durum=durum)
 
     return {
 
@@ -250,7 +256,7 @@ def _liste_kart(row: dict) -> dict:
 
         'kod': row.get('test_no') or '—',
 
-        'turLbl': tip or 'ENJEKSİYON DOĞRULAMA',
+        'turLbl': wiz_lbl,
 
         'urun': row.get('hedef_renk_adi') or row.get('formul_grup_adi') or '—',
 
@@ -262,7 +268,9 @@ def _liste_kart(row: dict) -> dict:
 
         'durumLbl': ui_lbl,
 
-        'detayBaslik': (tip or 'Enjeksiyon') + ' Denemesi',
+        'detayBaslik': wiz_lbl,
+
+        'calisma_tipi': ct,
 
         'nx_durum': durum,
 
@@ -276,7 +284,11 @@ def _detay_dto(kart: dict) -> dict:
 
     deneme = kart.get('deneme') or {}
 
-    tip = calisma_tipi_etiket(kart.get('calisma_tipi'))
+    ct = kart.get('calisma_tipi')
+
+    nx_durum_raw = (kart.get('durum') or '').upper()
+
+    wiz_lbl = ferhat_wizard_baslik(ct, durum=nx_durum_raw)
 
     shore_hedef = kart.get('shore_hedef')
 
@@ -318,9 +330,13 @@ def _detay_dto(kart: dict) -> dict:
 
         'nx_durum': kart.get('durum'),
 
-        'detayBaslik': (tip or 'Enjeksiyon') + ' Denemesi',
+        'detayBaslik': wiz_lbl,
 
-        'turLbl': tip or 'ENJEKSİYON DOĞRULAMA',
+        'turLbl': wiz_lbl,
+
+        'calisma_tipi': ct,
+
+        'sonucMetinleri': ferhat_wizard_sonuc_metinleri(ct),
 
         'urun': kart.get('hedef_renk_adi') or kart.get('formul_grup_adi') or '—',
 
@@ -363,6 +379,10 @@ def _detay_dto(kart: dict) -> dict:
             'gramaj': 182,
 
         },
+
+        'deneme_olcum': kart.get('deneme_olcum'),
+
+        'boyut_kullanim_oranlari': kart.get('boyut_kullanim_oranlari') or [],
 
     }
 

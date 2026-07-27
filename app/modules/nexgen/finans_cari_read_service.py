@@ -19,6 +19,7 @@ from modules.nexgen.finans_belgesi_repository import (
     resolve_golden_cari_kart,
     tablo_var,
 )
+from modules.nexgen.finans_ledger_standard import bakiye_float_dict, compute_bakiye
 
 BAKIYE_UYUM_TOLERANSI = 0.01
 
@@ -197,61 +198,9 @@ def cari_golden_durum_paket(con: sqlite3.Connection, cari_id: int) -> dict[str, 
 
 
 def cari_hareket_ozet(con: sqlite3.Connection, ckod: str) -> dict[str, Any]:
-    if not tablo_var(con, 'Cari_Har') or not ckod:
-        return {
-            'hareket_sayisi': 0,
-            'toplam_borc': 0.0,
-            'toplam_alacak': 0.0,
-            'bakiye': 0.0,
-            'ilk_islem_tarihi': None,
-            'son_islem_tarihi': None,
-            'cari_har_bakiye': 0.0,
-            'cari_kart_bakiye': None,
-            'bakiye_farki': None,
-            'uyumlu': True,
-            'kaynak': 'Cari_Har',
-        }
-
-    row = con.execute(
-        """
-        SELECT
-            COUNT(*) AS hareket_sayisi,
-            COALESCE(SUM(Borc), 0) AS toplam_borc,
-            COALESCE(SUM(Alacak), 0) AS toplam_alacak,
-            COALESCE(SUM(Borc - Alacak), 0) AS bakiye,
-            MIN(Tarih) AS ilk_islem,
-            MAX(Tarih) AS son_islem
-        FROM Cari_Har WHERE CKod=?
-        """,
-        (ckod,),
-    ).fetchone()
-    d = dict(row) if row else {}
-    har_bakiye = round(_float(d.get('bakiye')), 2)
-    kart_bakiye = None
-    if tablo_var(con, 'Cari_Kart'):
-        kr = con.execute('SELECT Bakiye FROM Cari_Kart WHERE CKod=?', (ckod,)).fetchone()
-        if kr:
-            kart_bakiye = round(_float(kr['Bakiye']), 2)
-
-    fark = None
-    uyumlu = True
-    if kart_bakiye is not None:
-        fark = round(har_bakiye - kart_bakiye, 2)
-        uyumlu = abs(fark) <= BAKIYE_UYUM_TOLERANSI
-
-    return {
-        'hareket_sayisi': int(d.get('hareket_sayisi') or 0),
-        'toplam_borc': round(_float(d.get('toplam_borc')), 2),
-        'toplam_alacak': round(_float(d.get('toplam_alacak')), 2),
-        'bakiye': har_bakiye,
-        'ilk_islem_tarihi': d.get('ilk_islem'),
-        'son_islem_tarihi': d.get('son_islem'),
-        'cari_har_bakiye': har_bakiye,
-        'cari_kart_bakiye': kart_bakiye,
-        'bakiye_farki': fark,
-        'uyumlu': uyumlu,
-        'kaynak': 'Cari_Har',
-    }
+    if not ckod:
+        return bakiye_float_dict(compute_bakiye(con, None))
+    return bakiye_float_dict(compute_bakiye(con, ckod))
 
 
 def cari_hareket_liste(

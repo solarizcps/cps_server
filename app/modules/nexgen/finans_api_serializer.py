@@ -90,10 +90,41 @@ def belge_liste_satir(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def kalem_satir(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        'satir': row.get('satir'),
+        'aciklama': row.get('aciklama'),
+        'kaynak': row.get('kaynak'),
+        'miktar': _kg(row.get('miktar')),
+        'birim': row.get('birim'),
+        'birim_fiyat': _money(row.get('birim_fiyat')),
+        'para_birimi': row.get('para_birimi'),
+        'tutar': _money(row.get('tutar')),
+        'durum': row.get('durum'),
+    }
+
+
+def siparis_ozet_satir(row: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not row:
+        return None
+    return {
+        'siparis_id': row.get('id'),
+        'siparis_no': row.get('siparis_no'),
+        'siparis_tarihi': _iso_tarih(row.get('olusturma_tarihi')),
+        'termin': _iso_tarih(row.get('termin_tarihi') or row.get('musteri_termin')),
+        'talep_kg': _kg(row.get('talep_kg')),
+        'fiili_uretim_kg': _kg(row.get('fiili_uretim_kg')),
+        'cari_unvan': row.get('cari_unvan'),
+        'durum': row.get('durum'),
+    }
+
+
 def belge_detay_satir(
     belge: dict[str, Any],
     *,
     kaynak_ozet: dict[str, Any] | None = None,
+    siparis_ozet: dict[str, Any] | None = None,
+    kalemler: list[dict[str, Any]] | None = None,
     audit: list[dict[str, Any]] | None = None,
     durum_gecisleri: list[str] | None = None,
     aksiyonlar: dict[str, bool] | None = None,
@@ -123,6 +154,8 @@ def belge_detay_satir(
             'irsaliye_no': belge.get('irsaliye_no'),
         },
         'kaynak_ozet': kaynak_ozet or {},
+        'siparis_ozet': siparis_ozet_satir(siparis_ozet) if siparis_ozet else None,
+        'kalemler': [kalem_satir(k) for k in (kalemler or [])],
         'audit': audit if audit is not None else _audit_parse(belge.get('audit_json')),
         'durum_gecisleri': durum_gecisleri or [],
         'aksiyonlar': aksiyonlar or {},

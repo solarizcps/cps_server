@@ -1,0 +1,1279 @@
+{% extends "base.html" %}
+{% set page_title = "Finans Belgeleri — NexGen" %}
+
+{% block content %}
+{% include 'nexgen/_finans_shared_styles.html' %}
+{% set fm_hdr_title = 'Finans Belgeleri' %}
+{% set fm_hdr_subtitle = 'Finans belgelerini inceleyin, durumlarını takip edin ve bağlantılı operasyon kayıtlarına ulaşın.' %}
+{% set fm_hdr_crumb = 'Finans Belgeleri' %}
+{% set fm_guncelleme_id = 'fm-son-guncelleme' %}
+{% set fm_refresh_onclick = 'fmYukle()' %}
+<div class="rm-sayfa fm-sayfa fm-modul-sayfa erp-ic-page">
+  {% include 'nexgen/_finans_erp_ic_header.html' %}
+  <div class="fm-container fm-container-unified">
+
+    {% include 'nexgen/_finans_ic_nav.html' %}
+
+    <div class="erp-ozet-band" id="fm-kpi-bar">
+      <div class="erp-ozet-item"><span class="erp-ozet-val" id="fm-kpi-toplam">—</span><span class="erp-ozet-lbl">Toplam</span></div>
+      <div class="erp-ozet-item"><span class="erp-ozet-val" id="fm-kpi-bekleyen">—</span><span class="erp-ozet-lbl">Bekleyen</span></div>
+      <div class="erp-ozet-item"><span class="erp-ozet-val" id="fm-kpi-onay">—</span><span class="erp-ozet-lbl">Onaylanan</span></div>
+      <div class="erp-ozet-item"><span class="erp-ozet-val" id="fm-kpi-posting">—</span><span class="erp-ozet-lbl">Muhasebeye Hazır</span></div>
+      <div class="erp-ozet-item"><span class="erp-ozet-val" id="fm-kpi-eksik">—</span><span class="erp-ozet-lbl">Eksik</span></div>
+    </div>
+
+    <div class="erp-toolbar" id="fm-filtre-toolbar">
+      <div class="erp-toolbar-satir">
+        <div class="fm-ara-wrap">
+          <input type="text" id="fm-hizli-ara" class="fm-ara-input" placeholder="Belge no, cari, sipariş…" autocomplete="off">
+        </div>
+        <div class="fm-ara-wrap">
+          <input type="text" id="fm-arama" class="fm-ara-input" placeholder="Detaylı arama…" autocomplete="off">
+        </div>
+        <select id="fm-fil-tip" class="fm-fil-sel" title="Belge Tipi">
+          <option value="">Belge Tipi</option>
+          <option value="SATIS_SEVKIYAT">Satış Sevkiyat</option>
+          <option value="TAHSILAT">Tahsilat</option>
+        </select>
+        <select id="fm-fil-durum" class="fm-fil-sel" title="Finans Durumu">
+          <option value="">Finans Durumu</option>
+          <option value="BEKLIYOR">Finans Bekliyor</option>
+          <option value="EKSIK_BILGI">Eksik Bilgi</option>
+          <option value="INCELEMEDE">İncelemede</option>
+          <option value="DUZELTME_BEKLIYOR">Düzeltme Bekliyor</option>
+          <option value="ONAYLANDI">Onaylandı</option>
+          <option value="POST_EDILDI">Muhasebeleşti</option>
+          <option value="REDDEDILDI">Reddedildi</option>
+          <option value="KAPANDI">Kapandı</option>
+        </select>
+        <select id="fm-fil-posting" class="fm-fil-sel" title="Muhasebe Durumu">
+          <option value="">Muhasebe Durumu</option>
+          <option value="BEKLIYOR">Muhasebe Bekliyor</option>
+          <option value="VALIDASYON_HATASI">Validasyon Hatası</option>
+          <option value="HAZIR">Muhasebeye Hazır</option>
+          <option value="POST_EDILDI">Muhasebeleşti</option>
+          <option value="BASARISIZ">Başarısız</option>
+        </select>
+        <input type="date" id="fm-fil-tarih-bas" class="fm-fil-sel fm-tarih-inp" title="Başlangıç Tarihi">
+        <input type="date" id="fm-fil-tarih-bit" class="fm-fil-sel fm-tarih-inp" title="Bitiş Tarihi">
+        <button type="button" class="erp-toolbar-btn erp-toolbar-btn-primary" onclick="fmHizliAra()">Uygula</button>
+        <button type="button" class="fm-fil-temizle" onclick="fmFiltreTemizle()">Temizle</button>
+      </div>
+    </div>
+
+    <div class="erp-ic-shell fm-layout-liste">
+      <div class="erp-ic-shell-hdr">
+        <span class="rm-panel-baslik">Finans Belgeleri</span>
+        <span class="rm-panel-hdr-alt" id="fm-liste-sayi">—</span>
+      </div>
+      <div class="erp-ic-grid-wrap">
+        <table class="fm-tablo erp-ic-grid" id="fm-tablo">
+          <thead>
+            <tr>
+              <th class="fm-th">Belge No</th>
+              <th class="fm-th">Tür</th>
+              <th class="fm-th">Cari</th>
+              <th class="fm-th fm-th-r">Tutar</th>
+              <th class="fm-th">Vade</th>
+              <th class="fm-th">Finans Durumu</th>
+              <th class="fm-th">Muhasebe Durumu</th>
+              <th class="fm-th">Oluşturma</th>
+              <th class="fm-th fm-th-r">İşlem</th>
+            </tr>
+          </thead>
+          <tbody id="fm-tbody"></tbody>
+        </table>
+        <div class="erp-ic-empty" id="fm-bos" style="display:none;">
+          <div class="erp-ic-empty-title">Kayıt bulunamadı</div>
+          <div class="erp-ic-empty-desc">Seçilen filtrelere uygun finans belgesi bulunamadı.</div>
+        </div>
+      </div>
+      <div class="fm-sayfalama" id="fm-sayfalama">
+        <button type="button" class="fm-sayfa-btn" id="fm-onceki" onclick="fmSayfa(-1)">‹ Önceki</button>
+        <span id="fm-sayfa-metin">Sayfa 1 / 1</span>
+        <button type="button" class="fm-sayfa-btn" id="fm-sonraki" onclick="fmSayfa(1)">Sonraki ›</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="fm-toast" id="fm-toast" style="display:none;"></div>
+
+<style>
+/* Ortak tokenlar ve iskelet: _finans_shared_styles.html */
+.fm-satir-islem {
+  font-size: 10px; padding: 3px 8px; border-radius: 5px; border: 1px solid var(--rm-border);
+  background: var(--rm-white); color: var(--rm-teal); cursor: pointer; font-weight: 600;
+}
+.fm-satir-islem:hover { background: var(--rm-bg); }
+
+/* ── Liste sayfa (workspace'e yönlendirme) ── */
+.fm-layout-liste { min-width: 0; }
+.fm-tablo { width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed; }
+.fm-th {
+  padding: 7px 8px; text-align: left; font-size: 9px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .4px; color: var(--rm-t3);
+  background: var(--rm-bg); border-bottom: 1px solid var(--rm-border); white-space: nowrap;
+}
+.fm-th-r { text-align: right; }
+.fm-tablo td { padding: 7px 8px; border-bottom: 1px solid #f1f5f9; vertical-align: top; overflow: hidden; }
+.fm-tablo tr.fm-satir { cursor: pointer; transition: background .1s; }
+.fm-tablo tr.fm-satir:hover { background: #f8fafc; }
+.fm-tablo tr.fm-satir-secili {
+  background: #fef9e7; border-left: 3px solid var(--rm-gold);
+}
+.fm-tablo tr.fm-satir-secili td:first-child { padding-left: 5px; }
+.fm-kod { font-size: 10px; font-family: 'Courier New', monospace; letter-spacing: .2px; color: var(--rm-t2); }
+.fm-alt-satir { display: block; font-size: 9px; color: var(--rm-t4); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fm-bos {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; padding: 32px 12px; color: var(--rm-t4); font-size: 11px;
+}
+.fm-sayfalama {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  padding: 8px 10px; font-size: 10px; color: var(--rm-t3); border-top: 1px solid var(--rm-border);
+}
+.fm-sayfa-btn {
+  border: 1px solid var(--rm-border2); background: var(--rm-white); border-radius: 5px;
+  padding: 4px 10px; font-size: 10px; cursor: pointer;
+}
+.fm-sayfa-btn:disabled { opacity: .45; cursor: default; }
+
+/* ── Detay panel ── */
+.fm-detay-kart { max-height: calc(100vh - 280px); }
+.fm-detay-bos.rm-bos { padding: 48px 16px; text-align: center; flex: 1; }
+.fm-detay-icerik { display: flex; flex-direction: column; min-height: 0; flex: 1; overflow: hidden; }
+.fm-detay-baslik {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;
+  padding: 10px 12px 8px; border-bottom: 1px solid var(--rm-border);
+}
+.fm-detay-no { font-weight: 800; font-size: 13px; color: var(--rm-t1); font-family: 'Courier New', monospace; letter-spacing: .2px; }
+.fm-detay-tip { font-size: 10px; color: var(--rm-t3); margin-top: 2px; }
+.fm-detay-rozetler { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+
+.rm-sekme-bar {
+  display: flex; gap: 0; padding: 0 10px; border-bottom: 2px solid var(--rm-border);
+  flex-shrink: 0; background: var(--rm-white); overflow-x: auto;
+}
+.rm-sekme {
+  padding: 6px 10px; font-size: 10px; font-weight: 600; color: var(--rm-t3);
+  cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; white-space: nowrap;
+}
+.rm-sekme:hover { color: var(--rm-t1); }
+.rm-sekme.aktif { color: var(--rm-teal); border-bottom-color: var(--rm-teal); }
+.fm-tab-body { flex: 1; overflow-y: auto; min-height: 120px; max-height: calc(100vh - 460px); padding: 0; }
+.fm-tab-panel { display: none; padding: 10px 12px; }
+.fm-tab-panel.aktif { display: block; }
+
+.fm-ozet-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; font-size: 11px; }
+.fm-ozet-satir span { display: block; color: var(--rm-t4); font-size: 9px; text-transform: uppercase; letter-spacing: .3px; }
+.fm-ozet-satir strong { color: var(--rm-t2); font-weight: 600; word-break: break-word; }
+.fm-kaynak-metin { font-size: 11px; color: var(--rm-t2); line-height: 1.55; }
+
+/* ── Rozetler ── */
+.fm-rozet {
+  display: inline-block; font-size: 9px; font-weight: 700; padding: 2px 8px;
+  border-radius: 999px; border: 1px solid transparent; white-space: nowrap;
+}
+.fm-rozet-bekliyor { color: #a16207; background: #fefce8; border-color: rgba(202,138,4,.35); }
+.fm-rozet-eksik { color: #c2410c; background: #fff7ed; border-color: rgba(234,88,12,.3); }
+.fm-rozet-inceleme { color: #1d4ed8; background: #eff6ff; border-color: rgba(37,99,235,.3); }
+.fm-rozet-onay { color: #15803d; background: #f0fdf4; border-color: rgba(22,163,74,.3); }
+.fm-rozet-post { color: #6d28d9; background: #f5f3ff; border-color: rgba(124,58,237,.3); }
+.fm-rozet-red { color: #b91c1c; background: #fef2f2; border-color: rgba(220,38,38,.3); }
+.fm-rozet-nötr { color: var(--rm-t3); background: var(--rm-bg); border-color: var(--rm-border); }
+
+/* ── Muhasebe önizleme ── */
+.fm-posting-panel { padding: 10px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; text-align: center; margin-bottom: 10px; border: 1px solid transparent; }
+.fm-posting-panel-hazir { background: #f0fdf4; color: #15803d; border-color: rgba(22,163,74,.35); }
+.fm-posting-panel-inceleme { background: #fefce8; color: #a16207; border-color: rgba(202,138,4,.35); }
+.fm-posting-panel-red { background: #fef2f2; color: #b91c1c; border-color: rgba(220,38,38,.35); }
+.fm-posting-panel-nötr { background: var(--rm-bg); color: var(--rm-t3); border-color: var(--rm-border); font-weight: 500; font-size: 11px; }
+.fm-muh-grid { margin-bottom: 10px; }
+.fm-golden-blok { font-size: 11px; color: var(--rm-t2); margin-bottom: 8px; line-height: 1.55; padding: 8px 10px; background: var(--rm-bg); border-radius: 6px; border: 1px solid var(--rm-border); }
+.fm-hata-liste { list-style: none; margin: 0 0 10px; padding: 0; font-size: 11px; }
+.fm-hata-liste li { color: #b91c1c; padding: 3px 0; }
+.fm-hata-liste li::before { content: '✕ '; font-weight: 700; }
+.fm-posting-ozet-blok { font-size: 11px; background: #fffbeb; border: 1px solid rgba(202,138,4,.25); border-radius: 6px; padding: 10px; margin-bottom: 10px; line-height: 1.6; color: var(--rm-t2); }
+.fm-dryrun-not { display: block; font-size: 10px; color: var(--rm-t3); margin-top: 6px; }
+.fm-flag-uyari { font-size: 10px; color: #a16207; background: #fefce8; border: 1px solid rgba(202,138,4,.3); border-radius: 6px; padding: 8px 10px; margin-top: 8px; }
+.fm-post-basarili { font-size: 11px; color: #15803d; background: #f0fdf4; border: 1px solid rgba(22,163,74,.3); border-radius: 6px; padding: 10px; margin-top: 8px; line-height: 1.5; }
+.fm-audit-list { font-size: 11px; max-height: 280px; overflow-y: auto; }
+.fm-audit-satir { padding: 6px 0; border-bottom: 1px solid #f1f5f9; }
+.fm-audit-olay { font-weight: 600; color: var(--rm-t2); }
+.fm-audit-meta { font-size: 10px; color: var(--rm-t4); margin-top: 2px; }
+
+/* ── Aksiyon bandı ── */
+.fm-aksiyon-band {
+  display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px;
+  border-top: 1px solid var(--rm-border); background: var(--rm-bg); flex-shrink: 0;
+}
+.fm-btn {
+  font-size: 10px; font-weight: 700; padding: 6px 12px; border-radius: 6px;
+  border: 1px solid transparent; cursor: pointer; white-space: nowrap;
+}
+.fm-btn:disabled { opacity: .5; cursor: default; }
+.fm-btn-altin { background: var(--rm-gold); color: var(--rm-t1); border-color: #eab308; }
+.fm-btn-altin:hover:not(:disabled) { background: #fde68a; }
+.fm-btn-yesil { background: #16a34a; color: #fff; }
+.fm-btn-yesil:hover:not(:disabled) { background: #15803d; }
+.fm-btn-turuncu { background: #fff7ed; color: #c2410c; border-color: rgba(234,88,12,.4); }
+.fm-btn-turuncu:hover:not(:disabled) { background: #ffedd5; }
+.fm-btn-kirmizi { background: #fef2f2; color: #b91c1c; border-color: rgba(220,38,38,.35); }
+.fm-btn-kirmizi:hover:not(:disabled) { background: #fee2e2; }
+.fm-btn-navy { background: var(--rm-teal); color: #fff; }
+.fm-btn-navy:hover:not(:disabled) { background: var(--rm-teal-dark); }
+
+/* ── Cari Hesap sekmesi ── */
+.fm-cari-link { color: var(--rm-teal); font-weight: 600; text-decoration: none; }
+.fm-cari-link:hover { text-decoration: underline; }
+.fm-golden-rozet {
+  display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 6px;
+  border-radius: 4px; text-transform: uppercase; letter-spacing: .3px; margin-top: 2px;
+}
+.fm-golden-yesil { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+.fm-golden-mavi { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
+.fm-golden-sari { background: #fef9c3; color: #854d0e; border: 1px solid #fde047; }
+.fm-golden-kirmizi { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+.fm-golden-gri { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+.fm-golden-turuncu { background: #ffedd5; color: #c2410c; border: 1px solid #fdba74; }
+.fm-cari-kpi-bar { display: flex; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
+.fm-cari-kpi {
+  flex: 1; min-width: 100px; padding: 8px 10px; border-radius: 6px;
+  background: #f8fafc; border: 1px solid var(--rm-border); border-left: 3px solid var(--rm-teal);
+}
+.fm-cari-kpi-borc { border-left-color: #f97316; }
+.fm-cari-kpi-alacak { border-left-color: #22c55e; }
+.fm-cari-kpi-bakiye { border-left-color: var(--rm-gold); }
+.fm-cari-kpi-sayi { font-size: 20px; font-weight: 800; color: var(--rm-t1); line-height: 1; }
+.fm-cari-kpi-etiket { font-size: 10px; font-weight: 600; color: #64748b; text-transform: uppercase; margin-top: 4px; letter-spacing: .4px; }
+.fm-cari-kaynak-not { font-size: 10px; color: var(--rm-t3); margin-top: 4px; }
+.fm-cari-bolum { margin-top: 10px; }
+.fm-cari-bolum-baslik { font-size: 11px; font-weight: 700; color: var(--rm-t2); }
+.fm-cari-meta { font-size: 10px; color: var(--rm-t3); margin-top: 2px; }
+.fm-cari-link-wrap { margin: 6px 0; }
+.fm-cari-legacy-wrap { margin: 2px 0; font-size: 10px; color: var(--rm-t3); }
+.fm-cari-golden-row { margin: 6px 0; font-size: 11px; color: var(--rm-t2); }
+.fm-cari-uyari {
+  padding: 8px 10px; margin: 6px 0; border-radius: 6px; font-size: 11px;
+  background: #fffbeb; border: 1px solid #fde68a; color: #92400e;
+}
+.fm-cari-uyari-kirmizi { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+.fm-cari-hareket-tbl { width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 6px; }
+.fm-cari-hareket-tbl th, .fm-cari-hareket-tbl td { padding: 4px 6px; border-bottom: 1px solid var(--rm-border); text-align: left; }
+.fm-cari-hareket-tbl th { color: var(--rm-t3); font-weight: 700; text-transform: uppercase; font-size: 9px; }
+.fm-cari-hareket-tbl .fm-th-r { text-align: right; }
+.fm-cari-bos { color: var(--rm-t4); font-size: 11px; font-style: italic; padding: 12px 4px; }
+.fm-cari-belge-list { margin-top: 6px; font-size: 10px; }
+.fm-cari-belge-satir { padding: 4px 0; border-bottom: 1px dashed var(--rm-border); }
+
+/* ── Modal / toast ── */
+.ngsk-overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 9000; align-items: center; justify-content: center; }
+.ngsk-overlay.acik { display: flex; }
+.fm-modal-kutu { background: var(--rm-white); border-radius: 10px; max-width: 480px; width: 94%; box-shadow: 0 12px 40px rgba(0,0,0,.15); overflow: hidden; }
+.fm-modal-hdr { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--rm-border); font-weight: 700; font-size: 13px; }
+.ngsk-modal-kapat { border: none; background: none; font-size: 20px; cursor: pointer; color: var(--rm-t3); line-height: 1; }
+.fm-modal-body { padding: 14px 16px; font-size: 12px; }
+.fm-modal-ozet { margin-bottom: 10px; line-height: 1.55; color: var(--rm-t2); }
+.fm-modal-uyari { background: #fff7ed; border: 1px solid rgba(234,88,12,.35); color: #c2410c; padding: 8px 10px; border-radius: 6px; font-size: 11px; margin-bottom: 10px; }
+.fm-modal-uyari.fm-modal-uyari-red { background: #fef2f2; border-color: rgba(220,38,38,.35); color: #b91c1c; }
+.fm-modal-lbl { display: block; font-size: 11px; font-weight: 700; margin-bottom: 4px; color: var(--rm-t2); }
+.fm-modal-textarea, .fm-modal-input { width: 100%; box-sizing: border-box; font-size: 12px; padding: 8px; border: 1px solid var(--rm-border2); border-radius: 6px; }
+.fm-modal-hata { color: #b91c1c; font-size: 11px; margin-top: 8px; }
+.fm-modal-ftr { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--rm-border); }
+.fm-geri-ok { font-size: 13px; line-height: 1; }
+.fm-audit-bos { color: var(--rm-t4); font-size: 11px; font-style: italic; }
+.fm-posting-meta { font-size: 10px; color: var(--rm-t3); margin-top: 4px; }
+.fm-posting-sebep { color: #b91c1c; margin-top: 4px; font-size: 11px; }
+.fm-posting-ok-li { color: #15803d; list-style: none; font-size: 11px; }
+.fm-dryrun-sim-not { margin-top: 6px; font-size: 10px; color: var(--rm-t3); }
+.fm-toast { position: fixed; bottom: 24px; right: 24px; z-index: 9500; background: var(--rm-t1); color: #fff; padding: 12px 16px; border-radius: 8px; font-size: 12px; max-width: 360px; box-shadow: 0 8px 24px rgba(0,0,0,.2); font-family: var(--rm-font); }
+.fm-toast.fm-toast-ok { background: #15803d; }
+.fm-toast.fm-toast-hata { background: #b91c1c; }
+
+@media (max-width: 1200px) {
+  .fm-layout { grid-template-columns: 1fr; }
+  .fm-tablo-scroll { max-height: 320px; }
+  .fm-detay-kart { max-height: none; }
+  .fm-tab-body { max-height: none; }
+}
+@media (min-width: 1920px) {
+  .fm-sayfa { max-width: 1860px; margin: 0 auto; }
+}
+</style>
+
+<script>
+var _fmPage = 1;
+var _fmTotalPages = 1;
+var _fmSeciliId = null;
+var _fmDebounce = null;
+var _fmAktifBelge = null;
+var _fmModalTip = null;
+var _fmModalBusy = false;
+var _fmToastTimer = null;
+var _fmDryRunBusy = false;
+var _fmLastDryRun = null;
+var _fmLivePostBusy = false;
+var _fmCariEntegrasyonAktif = {{ 'true' if cari_entegrasyon_aktif else 'false' }};
+var _fmCari360Erisim = false;
+var _fmAktifCariHesap = null;
+var _fmUrlSenkron = true;
+var _fmCanCariYonetimi = {{ can_cari_yonetimi|tojson }};
+
+function fmEsc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function fmGoldenRozet(golden) {
+  golden = golden || {};
+  var renk = golden.ui_renk || 'gri';
+  var cls = 'fm-golden-' + renk;
+  return '<span class="fm-golden-rozet ' + cls + '">' + fmEsc(golden.ui_etiket || '—') + '</span>';
+}
+
+function fmCariUnvanHtml(row) {
+  var unvan = fmEsc(row.cari_unvan || '—');
+  var kod = row.nexgen_cari_kod || row.cari_kodu || '';
+  var alt = kod ? ('<span class="fm-alt-satir">' + fmEsc(kod) + '</span>') : '';
+  if (_fmCari360Erisim && row.cari_id) {
+    return '<a href="/nexgen/cari360/' + parseInt(row.cari_id, 10) + '" class="fm-cari-link" onclick="event.stopPropagation()">' +
+      unvan + '</a>' + alt;
+  }
+  return unvan + alt;
+}
+
+function fmFmtPara(n) {
+  if (n == null || n === '') return '—';
+  var x = parseFloat(n);
+  if (isNaN(x)) return fmEsc(n);
+  return x.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmTipLbl(t) {
+  if (t === 'SATIS_SEVKIYAT') return 'Satış Sevkiyat';
+  if (t === 'TAHSILAT') return 'Tahsilat';
+  return t || '—';
+}
+
+function fmDurumRozet(d, lbl) {
+  var cls = 'fm-rozet-nötr';
+  var dU = (d || '').toUpperCase();
+  if (dU === 'BEKLIYOR' || dU === 'DUZELTME_BEKLIYOR') cls = 'fm-rozet-bekliyor';
+  else if (dU === 'EKSIK_BILGI') cls = 'fm-rozet-eksik';
+  else if (dU === 'INCELEMEDE') cls = 'fm-rozet-inceleme';
+  else if (dU === 'ONAYLANDI' || dU === 'POST_EDILDI') cls = 'fm-rozet-onay';
+  else if (dU === 'REDDEDILDI') cls = 'fm-rozet-red';
+  return '<span class="fm-rozet ' + cls + '">' + fmEsc(lbl || d) + '</span>';
+}
+
+function fmPostingRozet(d, lbl) {
+  if (!d) return '<span class="fm-rozet fm-rozet-nötr">—</span>';
+  lbl = fmMuhasebeLbl(d, lbl);
+  var cls = 'fm-rozet-nötr';
+  if (d === 'HAZIR') cls = 'fm-rozet-onay';
+  else if (d === 'VALIDASYON_HATASI' || d === 'BASARISIZ') cls = 'fm-rozet-red';
+  else if (d === 'POST_EDILDI') cls = 'fm-rozet-post';
+  return '<span class="fm-rozet ' + cls + '">' + fmEsc(lbl || d) + '</span>';
+}
+
+function fmMuhasebeLbl(d, lbl) {
+  var map = {
+    BEKLIYOR: 'Muhasebe Bekliyor',
+    VALIDASYON_HATASI: 'Validasyon Hatası',
+    HAZIR: 'Muhasebeye Hazır',
+    POST_EDILDI: 'Muhasebeleşti',
+    BASARISIZ: 'Başarısız'
+  };
+  if (d && map[d]) return map[d];
+  if (lbl === 'Dry-Run Hazır' || lbl === 'Posting Bekliyor') return fmMuhasebeLbl(d, null) || lbl;
+  if (lbl === 'Post Edildi') return 'Muhasebeleşti';
+  return lbl || d || '—';
+}
+
+function fmFmtTutar(t, pb) {
+  if (t == null || t === '') return '—';
+  return fmEsc(t) + (pb ? ' ' + fmEsc(pb) : '');
+}
+
+function fmFiltreParams() {
+  var p = new URLSearchParams();
+  p.set('page', String(_fmPage));
+  p.set('page_size', '25');
+  var q = document.getElementById('fm-arama').value.trim();
+  if (q) p.set('arama', q);
+  var tip = document.getElementById('fm-fil-tip').value;
+  if (tip) p.set('belge_tipi', tip);
+  var dur = document.getElementById('fm-fil-durum').value;
+  if (dur) p.set('durum', dur);
+  var post = document.getElementById('fm-fil-posting').value;
+  if (post) p.set('posting_durumu', post);
+  var tb = document.getElementById('fm-fil-tarih-bas').value;
+  if (tb) p.set('tarih_bas', tb);
+  var tt = document.getElementById('fm-fil-tarih-bit').value;
+  if (tt) p.set('tarih_bit', tt);
+  return p;
+}
+
+function fmKpiGuncelle(oz) {
+  oz = oz || {};
+  document.getElementById('fm-kpi-toplam').textContent = oz.toplam != null ? oz.toplam : '—';
+  document.getElementById('fm-kpi-bekleyen').textContent = oz.bekleyen != null ? oz.bekleyen : '—';
+  document.getElementById('fm-kpi-eksik').textContent = oz.eksik_bilgi != null ? oz.eksik_bilgi : '—';
+  document.getElementById('fm-kpi-onay').textContent = oz.onaylandi != null ? oz.onaylandi : '—';
+  document.getElementById('fm-kpi-posting').textContent = oz.posting_hazir != null ? oz.posting_hazir : '—';
+}
+
+function fmSayfalamaGuncelle(sp) {
+  sp = sp || {};
+  _fmTotalPages = sp.total_pages || 1;
+  _fmPage = sp.page || 1;
+  document.getElementById('fm-sayfa-metin').textContent =
+    'Sayfa ' + _fmPage + ' / ' + _fmTotalPages + ' (' + (sp.total || 0) + ' kayıt)';
+  var ls = document.getElementById('fm-liste-sayi');
+  if (ls) ls.textContent = (sp.total != null ? sp.total : 0) + ' kayıt';
+  document.getElementById('fm-onceki').disabled = _fmPage <= 1;
+  document.getElementById('fm-sonraki').disabled = _fmPage >= _fmTotalPages;
+}
+
+function fmKaynakAlt(row) {
+  if (row.belge_tipi === 'SATIS_SEVKIYAT') {
+    var p = [];
+    if (row.siparis_no) p.push('Sipariş ' + row.siparis_no);
+    if (row.sevkiyat_id) p.push('Sevkiyat #' + row.sevkiyat_id);
+    if (row.gercek_miktar_kg) p.push(row.gercek_miktar_kg + ' KG');
+    return p.join(' · ') || (row.kaynak_no || '—');
+  }
+  if (row.belge_tipi === 'TAHSILAT') {
+    return row.kaynak_no ? ('Tahsilat ' + row.kaynak_no) : ('Tahsilat #' + (row.tahsilat_kayit_id || '—'));
+  }
+  return row.kaynak_no || '—';
+}
+
+function fmListeCiz(liste) {
+  var tbody = document.getElementById('fm-tbody');
+  var bos = document.getElementById('fm-bos');
+  if (!liste || !liste.length) {
+    tbody.innerHTML = '';
+    bos.style.display = 'flex';
+    return;
+  }
+  bos.style.display = 'none';
+  tbody.innerHTML = liste.map(function(row) {
+    var olusturma = (row.olusturma_tarihi || '').slice(0, 16);
+    return '<tr class="fm-satir" data-id="' + row.id + '" onclick="fmBelgeAc(' + row.id + ')">' +
+      '<td><code class="fm-kod">' + fmEsc(row.belge_no) + '</code>' +
+        '<span class="fm-alt-satir">' + fmEsc(fmKaynakAlt(row)) + '</span></td>' +
+      '<td>' + fmEsc(fmTipLbl(row.belge_tipi)) + '</td>' +
+      '<td title="' + fmEsc(row.cari_unvan) + '">' + fmCariUnvanHtml(row) + '</td>' +
+      '<td class="fm-th-r">' + fmFmtTutar(row.toplam_tutar, row.para_birimi) + '</td>' +
+      '<td>' + fmEsc(row.vade_tarihi || '—') + '</td>' +
+      '<td>' + fmDurumRozet(row.durum, row.durum_etiket) + '</td>' +
+      '<td>' + fmPostingRozet(row.posting_durumu, row.posting_durumu_etiket) + '</td>' +
+      '<td>' + fmEsc(olusturma || '—') + '</td>' +
+      '<td class="fm-th-r"><button type="button" class="fm-satir-islem" onclick="event.stopPropagation(); fmBelgeAc(' + row.id + ')">İncele</button></td>' +
+      '</tr>';
+  }).join('');
+}
+
+function fmReturnQs() {
+  var p = fmFiltreParams().toString();
+  return p ? ('?return=' + encodeURIComponent('/nexgen/finans/belgeler?' + p)) : '';
+}
+
+function fmBelgeAc(id) {
+  window.location.href = '/nexgen/finans/belge/' + id + fmReturnQs();
+}
+
+function fmSekme(btn) {
+  var tab = btn.getAttribute('data-tab');
+  document.querySelectorAll('#fm-sekme-bar .rm-sekme').forEach(function(el) {
+    el.classList.toggle('aktif', el === btn);
+  });
+  document.querySelectorAll('.fm-tab-panel').forEach(function(el) {
+    el.classList.toggle('aktif', el.id === 'fm-tab-' + tab);
+  });
+}
+
+function fmHizliAra() {
+  var q = (document.getElementById('fm-hizli-ara').value || '').trim();
+  document.getElementById('fm-arama').value = q;
+  _fmPage = 1;
+  _fmSeciliId = null;
+  fmYukle();
+}
+document.getElementById('fm-hizli-ara').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') fmHizliAra();
+});
+
+function fmUrlSenkronize() {
+  if (!_fmUrlSenkron) return;
+  var p = fmFiltreParams();
+  var qs = p.toString();
+  var url = window.location.pathname + (qs ? ('?' + qs) : '');
+  if (window.location.pathname + window.location.search !== url) {
+    window.history.replaceState({}, '', url);
+  }
+}
+
+function fmCalismaModuEtiket(b) {
+  var d = (b.durum || '').toUpperCase();
+  var cls = 'fm-cm-goruntuleme', lbl = 'Görüntüleme';
+  if (d === 'BEKLIYOR' || d === 'DUZELTME_BEKLIYOR') { cls = 'fm-cm-inceleme'; lbl = 'İnceleme Bekliyor'; }
+  else if (d === 'INCELEMEDE') { cls = 'fm-cm-inceleme'; lbl = 'İnceleme Bekliyor'; }
+  else if (d === 'ONAYLANDI') { cls = 'fm-cm-onay'; lbl = 'Onaylandı'; }
+  else if (d === 'POST_EDILDI' || (b.posting_durumu || '') === 'HAZIR') { cls = 'fm-cm-muhasebe'; lbl = 'Muhasebeye Hazır'; }
+  if (d === 'KAPANDI' || d === 'REDDEDILDI' || d === 'IPTAL') { cls = 'fm-cm-kilit'; lbl = 'Kilitli/Pasif'; }
+  return '<span class="fm-calisma-modu ' + cls + '">' + lbl + '</span>';
+}
+
+function fmSurecAdimDurum(tip, b) {
+  var ko = b.kaynak_ozet || {};
+  if (tip === 'siparis') {
+    if (!b.siparis_id && !b.siparis_no) return 'yok';
+    return 'tamam';
+  }
+  if (tip === 'uretim') return 'yok';
+  if (tip === 'sevkiyat') {
+    if (b.belge_tipi === 'TAHSILAT') return 'yok';
+    if (b.sevkiyat_id || ko.sevkiyat) return 'tamam';
+    return 'eksik';
+  }
+  if (tip === 'belge') return b.id ? 'tamam' : 'yok';
+  if (tip === 'kontrol') {
+    var d = (b.durum || '').toUpperCase();
+    if (d === 'EKSIK_BILGI') return 'eksik';
+    if (d === 'ONAYLANDI' || d === 'POST_EDILDI' || d === 'KAPANDI') return 'tamam';
+    if (d === 'INCELEMEDE' || d === 'BEKLIYOR' || d === 'DUZELTME_BEKLIYOR') return 'aktif';
+    return 'bekliyor';
+  }
+  if (tip === 'muhasebe') {
+    var pd = (b.posting_durumu || '').toUpperCase();
+    if (pd === 'POST_EDILDI') return 'tamam';
+    if (pd === 'HAZIR') return 'aktif';
+    if (pd === 'VALIDASYON_HATASI' || pd === 'BASARISIZ') return 'eksik';
+    return 'bekliyor';
+  }
+  return 'bekliyor';
+}
+
+function fmSurecMiniGoster(b) {
+  var el = document.getElementById('fm-d-surec-mini');
+  var adimlar = [
+    ['siparis', 'Sipariş'], ['uretim', 'Üretim'], ['sevkiyat', 'Sevkiyat'],
+    ['belge', 'Finans Belgesi'], ['kontrol', 'Finans Kontrolü'], ['muhasebe', 'Muhasebe']
+  ];
+  el.innerHTML = adimlar.map(function(pair) {
+    var st = fmSurecAdimDurum(pair[0], b);
+    var cls = 'fm-surec-adim-mini';
+    if (st === 'tamam') cls += ' fm-sm-tamam';
+    else if (st === 'aktif') cls += ' fm-sm-aktif';
+    else if (st === 'eksik') cls += ' fm-sm-eksik';
+    else if (st === 'yok') cls += ' fm-sm-yok';
+    else cls += ' fm-sm-bekliyor';
+    var ikon = st === 'tamam' ? '✓' : (st === 'aktif' ? '●' : (st === 'eksik' ? '!' : (st === 'yok' ? '—' : '○')));
+    return '<span class="' + cls + '">' + pair[1] + ' ' + ikon + '</span>';
+  }).join('');
+}
+
+function fmBaglantiSatir(tip, kod, unvan, durum, href, acLabel) {
+  var aksiyon = href
+    ? '<a href="' + fmEsc(href) + '" class="fm-baglanti-link">' + fmEsc(acLabel || 'Aç') + ' →</a>'
+    : '<span class="fm-baglanti-metin">' + fmEsc(unvan || '—') + '</span>';
+  return '<div class="fm-baglanti-satir"><div class="fm-baglanti-tip">' + fmEsc(tip) + '</div>' +
+    '<div><div class="fm-baglanti-kod">' + fmEsc(kod || '—') + '</div>' +
+    (unvan && href ? ('<div class="fm-baglanti-unvan">' + fmEsc(unvan) + '</div>') : '') +
+    (durum ? ('<div class="fm-baglanti-unvan">' + fmEsc(durum) + '</div>') : '') + '</div>' + aksiyon + '</div>';
+}
+
+function fmBaglantiKayitlariGoster(b, cariHesap) {
+  var rows = [];
+  var nav = (cariHesap && cariHesap.navigasyon) || {};
+  var nc = (cariHesap && cariHesap.nexgen_cari) || {};
+  if (b.cari_id) {
+    var cariHref = (nav.cari360_erisim && nav.cari360_url) ? nav.cari360_url : null;
+    rows.push(fmBaglantiSatir('Cari', nc.cari_kod || b.nexgen_cari_kod || ('#' + b.cari_id), b.cari_unvan, null, cariHref, 'Cariyi Aç'));
+  }
+  if (b.siparis_id || b.siparis_no) {
+    rows.push(fmBaglantiSatir('Sipariş', b.siparis_no || ('#' + b.siparis_id), b.cari_unvan || '—', null, null, null));
+  }
+  if (b.sevkiyat_id) {
+    rows.push(fmBaglantiSatir('Sevkiyat', (b.kaynak_ozet && b.kaynak_ozet.sevkiyat && b.kaynak_ozet.sevkiyat.sevkiyat_no) || ('#' + b.sevkiyat_id), b.cari_unvan, (b.kaynak_ozet && b.kaynak_ozet.sevkiyat && b.kaynak_ozet.sevkiyat.durum) || null, '/nexgen/sevkiyat/' + b.sevkiyat_id, 'Sevkiyatı Aç'));
+  }
+  var ko = b.kaynak_ozet || {};
+  if (ko.tahsilat) {
+    rows.push(fmBaglantiSatir('Kaynak', ko.tahsilat.kayit_kodu || ('#' + ko.tahsilat.id), 'Tahsilat kaydı', ko.tahsilat.durum, null, null));
+  } else if (ko.sevkiyat) {
+    rows.push(fmBaglantiSatir('Kaynak', ko.sevkiyat.sevkiyat_no || ('#' + ko.sevkiyat.id), 'Sevkiyat kaydı', ko.sevkiyat.durum, b.sevkiyat_id ? ('/nexgen/sevkiyat/' + b.sevkiyat_id) : null, b.sevkiyat_id ? 'Kaynağı Aç' : null));
+  }
+  if (_fmCanCariYonetimi && b.cari_id && nc.cari_kod) {
+    rows.push(fmBaglantiSatir('Cari Yönetimi', nc.cari_kod, 'Eşleşme kaydı', null, '/nexgen/finans/cari-kimlik-koprusu?arama=' + encodeURIComponent(nc.cari_kod), 'Cari Yönetimi'));
+  }
+  rows.push(fmBaglantiSatir('Finans Belgesi', b.belge_no, fmTipLbl(b.belge_tipi), b.durum_etiket || b.durum, '/nexgen/finans/belgeler?belge_id=' + b.id, 'Belgeyi Aç'));
+  document.getElementById('fm-d-baglanti').innerHTML = rows.length
+    ? rows.join('')
+    : '<div class="fm-empty-compact"><div class="fm-empty-desc">Bağlantılı kayıt bulunamadı.</div></div>';
+}
+
+function fmDetayGoster(b, cariHesap) {
+  _fmAktifBelge = b;
+  _fmAktifCariHesap = cariHesap || null;
+  document.getElementById('fm-detay-bos').style.display = 'none';
+  document.getElementById('fm-detay-icerik').style.display = 'flex';
+
+  document.getElementById('fm-d-belge-no').innerHTML = fmEsc(b.belge_no || '—') + fmCalismaModuEtiket(b);
+  document.getElementById('fm-d-tip').textContent = fmTipLbl(b.belge_tipi);
+  document.getElementById('fm-d-hdr-alt').textContent = b.belge_no || '—';
+  document.getElementById('fm-d-rozetler').innerHTML =
+    fmDurumRozet(b.durum, b.durum_etiket) + fmPostingRozet(b.posting_durumu, b.posting_durumu_etiket);
+  fmSurecMiniGoster(b);
+  fmBaglantiKayitlariGoster(b, cariHesap);
+
+  var snap = b.snapshot || {};
+  var sevkNo = (b.kaynak_ozet && b.kaynak_ozet.sevkiyat && b.kaynak_ozet.sevkiyat.sevkiyat_no) || b.sevkiyat_no || '—';
+  var tahsilatNo = (b.kaynak_ozet && b.kaynak_ozet.tahsilat && b.kaynak_ozet.tahsilat.kayit_kodu) || b.kaynak_no || '—';
+  document.getElementById('fm-d-ozet').innerHTML =
+    fmOzetSatir('Cari', fmEsc(b.cari_unvan)) +
+    fmOzetSatir('Sipariş No', fmEsc(b.siparis_no || '—')) +
+    fmOzetSatir('Sevkiyat / Tahsilat', fmEsc(b.belge_tipi === 'TAHSILAT' ? tahsilatNo : sevkNo)) +
+    fmOzetSatir('İrsaliye No', fmEsc(snap.irsaliye_no || b.irsaliye_no || '—')) +
+    fmOzetSatir('Para Birimi', fmEsc(b.para_birimi || snap.para_birimi || '—')) +
+    fmOzetSatir('Tutar', fmFmtTutar(b.toplam_tutar, b.para_birimi)) +
+    fmOzetSatir('Gerçek Sevk KG', fmEsc(b.gercek_miktar_kg || snap.toplam_kg || '—')) +
+    fmOzetSatir('Vade Tarihi', fmEsc(b.vade_tarihi || '—')) +
+    fmOzetSatir('Oluşturma Tarihi', fmEsc((b.olusturma_tarihi || '').slice(0, 19)));
+
+  var kaynakHtml = '—';
+  var ko = b.kaynak_ozet || {};
+  if (ko.sevkiyat) {
+    var s = ko.sevkiyat;
+    kaynakHtml = 'Sevkiyat <code>' + fmEsc(s.sevkiyat_no || ('#' + s.id)) + '</code><br>' +
+      'Durum: ' + fmEsc(s.durum) + ' · Tarih: ' + fmEsc(s.sevk_tarihi || '—') + '<br>' +
+      'KG: ' + fmEsc(s.toplam_kg != null ? s.toplam_kg : '—') +
+      (s.irsaliye_no ? (' · İrsaliye: ' + fmEsc(s.irsaliye_no)) : '');
+  } else if (ko.tahsilat) {
+    var t = ko.tahsilat;
+    kaynakHtml = 'Tahsilat <code>' + fmEsc(t.kayit_kodu || ('#' + t.id)) + '</code><br>' +
+      'Tutar: ' + fmEsc(t.alinan_tutar) + ' · ' + fmEsc(t.odeme_tipi || '') + '<br>' +
+      'Tarih: ' + fmEsc(t.alinan_tarih || '—');
+  }
+  document.getElementById('fm-d-kaynak').innerHTML = kaynakHtml;
+
+  document.getElementById('fm-d-snapshot').innerHTML =
+    fmOzetSatir('Birim Fiyat', fmEsc(snap.birim_fiyat)) +
+    fmOzetSatir('Para Birimi', fmEsc(snap.para_birimi)) +
+    fmOzetSatir('Toplam KG', fmEsc(snap.toplam_kg)) +
+    fmOzetSatir('Toplam Tutar', fmEsc(snap.toplam_tutar)) +
+    fmOzetSatir('Vade Gün', fmEsc(snap.vade_gun)) +
+    fmOzetSatir('İrsaliye', fmEsc(snap.irsaliye_no || '—'));
+
+  var po = b.posting_onizleme || {};
+  fmPostingOnizlemeGoster(b, po, _fmLastDryRun);
+  fmDryRunBtnGuncelle(b.aksiyonlar || {}, po);
+  fmLivePostBtnGuncelle(b.aksiyonlar || {}, po, b);
+
+  var audit = b.audit || [];
+  if (!audit.length) {
+    document.getElementById('fm-d-audit').innerHTML = '<div class="fm-audit-bos">Kayıt yok</div>';
+  } else {
+    document.getElementById('fm-d-audit').innerHTML = audit.map(function(a) {
+      return '<div class="fm-audit-satir">' +
+        '<div class="fm-audit-olay">' + fmEsc(a.olay || a.islem || '—') + '</div>' +
+        '<div class="fm-audit-meta">' + fmEsc((a.tarih || a.zaman || '').slice(0, 19)) +
+        (a.kullanici_id ? (' · K#' + a.kullanici_id) : '') +
+        (a.not ? (' · ' + fmEsc(a.not)) : '') + '</div></div>';
+    }).join('');
+  }
+  fmAksiyonBandGuncelle(b.aksiyonlar || {});
+  fmCariHesapGoster(cariHesap, b);
+}
+
+function fmCariHesapGoster(ch, belge) {
+  var el = document.getElementById('fm-d-cari-icerik');
+  if (!ch) {
+    el.innerHTML = '<div class="fm-cari-bos">Cari hesap bilgisi yüklenemedi.</div>';
+    return;
+  }
+  var nc = ch.nexgen_cari || {};
+  var g = ch.golden || {};
+  var bk = ch.bakiye || {};
+  var ab = ch.acik_belgeler || {};
+  var nav = ch.navigasyon || {};
+  var html = '';
+
+  html += '<div class="fm-cari-kimlik">';
+  html += fmOzetSatir('Cari Kodu', fmEsc(nc.cari_kod));
+  html += fmOzetSatir('Cari Unvan', fmEsc(nc.unvan));
+  if (nav.cari360_erisim && nav.cari360_url) {
+    html += '<div class="fm-cari-link-wrap"><a href="' + fmEsc(nav.cari360_url) + '" class="fm-cari-link">Cari 360 →</a></div>';
+  }
+  if (nav.legacy_cari_url) {
+    html += '<div class="fm-cari-legacy-wrap"><a href="' + fmEsc(nav.legacy_cari_url) + '" target="_blank" rel="noopener">ERP Cari Detay (legacy)</a></div>';
+  }
+  html += '<div class="fm-cari-golden-row">Golden CKod: <code class="fm-kod">' + fmEsc(g.cari_kart_ckod || '—') + '</code> ' + fmGoldenRozet(g) + '</div>';
+  if (g.aciklama) html += '<div class="fm-cari-meta">' + fmEsc(g.aciklama) + '</div>';
+  html += '</div>';
+
+  if (belge && (belge.durum || '') === 'ONAYLANDI' && !g.posting_uygun) {
+    html += '<div class="fm-cari-uyari fm-cari-uyari-kirmizi">Belge onaylıdır ancak cari eşleşmesi tamamlanmadığı için muhasebe kaydı oluşturulamaz.</div>';
+  }
+
+  html += '<div class="fm-cari-kpi-bar">';
+  html += '<div class="fm-cari-kpi fm-cari-kpi-borc"><div class="fm-cari-kpi-sayi">' + fmFmtPara(bk.toplam_borc) + '</div><div class="fm-cari-kpi-etiket">Toplam Borç</div></div>';
+  html += '<div class="fm-cari-kpi fm-cari-kpi-alacak"><div class="fm-cari-kpi-sayi">' + fmFmtPara(bk.toplam_alacak) + '</div><div class="fm-cari-kpi-etiket">Toplam Alacak</div></div>';
+  html += '<div class="fm-cari-kpi fm-cari-kpi-bakiye"><div class="fm-cari-kpi-sayi">' + fmFmtPara(bk.bakiye) + '</div><div class="fm-cari-kpi-etiket">Güncel Bakiye</div></div>';
+  html += '</div>';
+  html += '<div class="fm-cari-kaynak-not">Kaynak: Cari_Har hareketleri</div>';
+
+  html += '<div class="fm-cari-bolum"><div class="fm-cari-bolum-baslik">Açık Finans Belgeleri</div></div>';
+  html += '<div class="fm-cari-belge-list">';
+  html += fmOzetSatir('Aktif belge sayısı', String(ab.aktif_belge_sayisi != null ? ab.aktif_belge_sayisi : 0));
+  html += fmOzetSatir('Aktif belge toplamı', fmFmtPara(ab.aktif_belge_tutar_toplami) + ' TRY');
+  html += fmOzetSatir('Vadesi geçen', String(ab.vadesi_gecen_belge_sayisi || 0) + ' · ' + fmFmtPara(ab.vadesi_gecen_tutar) + ' TRY');
+  html += '</div>';
+  html += '<div class="fm-cari-uyari">Aktif belge tutarı, NexGen finans belgelerinin workflow durumunu gösterir. Gerçek cari açık hesap bakiyesi değildir. Borç kapama eşleştirmesi henüz uygulanmamıştır.</div>';
+
+  var hareketler = ch.son_hareketler || [];
+  html += '<div class="fm-cari-bolum"><div class="fm-cari-bolum-baslik">Son Hareketler</div></div>';
+  if (!g.cari_kart_ckod) {
+    html += '<div class="fm-cari-bos">Golden eşleşme olmadan Cari_Har hareketleri gösterilemez.</div>';
+  } else if (!hareketler.length) {
+    html += '<div class="fm-cari-bos">Bu cari için muhasebe hareketi bulunamadı.</div>';
+  } else {
+    html += '<table class="fm-cari-hareket-tbl"><thead><tr><th>Tarih</th><th>Belge</th><th>Açıklama</th><th class="fm-th-r">Borç</th><th class="fm-th-r">Alacak</th><th class="fm-th-r">Bakiye</th></tr></thead><tbody>';
+    hareketler.forEach(function(h) {
+      html += '<tr><td>' + fmEsc(h.tarih) + '</td><td>' + fmEsc(h.belge_no || h.belge_tip) + '</td><td>' + fmEsc(h.aciklama) + '</td>';
+      html += '<td class="fm-th-r">' + fmFmtPara(h.borc) + '</td><td class="fm-th-r">' + fmFmtPara(h.alacak) + '</td><td class="fm-th-r">' + fmFmtPara(h.bakiye_sonrasi) + '</td></tr>';
+    });
+    html += '</tbody></table>';
+  }
+
+  (ch.uyarilar || []).forEach(function(u) {
+    html += '<div class="fm-cari-uyari">' + fmEsc(u.mesaj) + '</div>';
+  });
+
+  if (!ab.aktif_belge_sayisi) {
+    html += '<div class="fm-cari-bos">Aktif finans belgesi bulunmuyor.</div>';
+  }
+
+  el.innerHTML = html;
+}
+
+function fmPostingPanelClass(panel) {
+  if (panel === 'HAZIR') return 'fm-posting-panel-hazir';
+  if (panel === 'INCELEME_GEREKLI') return 'fm-posting-panel-inceleme';
+  if (panel === 'MUHASEBELESTIRILEMEZ') return 'fm-posting-panel-red';
+  return 'fm-posting-panel-nötr';
+}
+
+function fmPostingOnizlemeGoster(b, po, dryRunSonuc) {
+  po = po || {};
+  var panel = document.getElementById('fm-d-posting-panel');
+  panel.className = 'fm-posting-panel ' + fmPostingPanelClass(po.durum_panel);
+  panel.textContent = po.durum_panel_etiket || (po.hazir ? 'Hazır' : '—');
+
+  var oz = po.muhasebe_ozet || {};
+  var grid = document.getElementById('fm-d-muh-ozet');
+  grid.innerHTML =
+    fmOzetSatir('Belge Tipi', fmEsc(fmTipLbl(oz.belge_tipi || b.belge_tipi))) +
+    fmOzetSatir('İşlem', fmEsc(oz.islem || '—')) +
+    fmOzetSatir('Cari', fmEsc(oz.cari_unvan || b.cari_unvan)) +
+    fmOzetSatir('Cari Kodu', fmEsc(oz.cari_kart_ckod || '—')) +
+    fmOzetSatir('Belge No', fmEsc(oz.belge_no || b.belge_no)) +
+    fmOzetSatir('Kaynak', fmEsc(oz.kaynak_no || b.kaynak_no || '—')) +
+    fmOzetSatir('Sevkiyat', fmEsc(oz.sevkiyat_id ? ('#' + oz.sevkiyat_id) : '—')) +
+    fmOzetSatir('Sipariş', fmEsc(oz.siparis_no || b.siparis_no || '—')) +
+    fmOzetSatir('Tutar', fmFmtTutar(oz.tutar || b.toplam_tutar, oz.para_birimi || b.para_birimi)) +
+    fmOzetSatir('Para Birimi', fmEsc(oz.para_birimi || b.para_birimi || '—')) +
+    fmOzetSatir('Vade', fmEsc(oz.vade_tarihi || b.vade_tarihi || '—')) +
+    fmOzetSatir('Muhasebe Kaydı', po.muhasebe_ozet && po.muhasebe_ozet.muhasebe_kaydi_olusturulacak ? 'Dry-run simülasyon' : 'Hayır') +
+    fmOzetSatir('Muhasebeye Hazır', po.hazir ? 'Evet' : 'Hayır') +
+    fmOzetSatir('Hata Sayısı', String(po.hata_sayisi != null ? po.hata_sayisi : (po.hatalar || []).length));
+
+  var ga = po.golden_analiz || {};
+  var ghtml = '<div><strong>Golden Cari Analizi</strong></div>';
+  ghtml += '<div>Cari bulundu: ' + (ga.cari_bulundu ? 'Evet' : 'Hayır') + '</div>';
+  ghtml += '<div>Golden mapping: ' + (ga.golden_mapping_bulundu ? 'Evet' : 'Hayır') +
+    (po.golden_cari_kart_ckod ? (' (<code>' + fmEsc(po.golden_cari_kart_ckod) + '</code>)') : '') + '</div>';
+  ghtml += '<div>Cari_Har yazılabilir: ' + (ga.cari_har_yazilabilir ? 'Evet (simülasyon)' : 'Hayır') + '</div>';
+  if (ga.sebep) ghtml += '<div class="fm-posting-sebep">Sebep: ' + fmEsc(ga.sebep) + '</div>';
+  if (po.gercek_posting_kapali) {
+    ghtml += '<div class="fm-posting-meta">Gerçek posting kapalı — CARI_ENTEGRASYON_AKTIF=False</div>';
+  }
+  document.getElementById('fm-d-golden').innerHTML = ghtml;
+
+  var hList = document.getElementById('fm-d-hatalar');
+  var hatalar = po.hatalar || [];
+  if (!hatalar.length) {
+    hList.innerHTML = '<li class="fm-posting-ok-li">✓ Engelleme yok</li>';
+    hList.style.display = '';
+  } else {
+    hList.innerHTML = hatalar.map(function(h) {
+      return '<li>' + fmEsc(h.mesaj || h.kod) + '</li>';
+    }).join('');
+    hList.style.display = '';
+  }
+
+  var wp = dryRunSonuc && dryRunSonuc.would_post;
+  var ozBlok = document.getElementById('fm-d-posting-ozet');
+  if (wp) {
+    var borc = parseFloat(wp.Borc || 0);
+    var alacak = parseFloat(wp.Alacak || 0);
+    var tipIslem = borc > 0 ? 'BORÇ' : (alacak > 0 ? 'ALACAK' : (oz.islem || '—'));
+    ozBlok.innerHTML =
+      '<div><strong>Muhasebeleştirilirse (dry-run sonucu):</strong></div>' +
+      '<div>Cari_Har <strong>' + fmEsc(tipIslem) + '</strong> oluşturulacak</div>' +
+      '<div>Belge No: <code>' + fmEsc(wp.BelgeNo) + '</code></div>' +
+      '<div>Tutar: <strong>' + fmEsc(String(borc || alacak)) + '</strong> ' + fmEsc(oz.para_birimi || '') + '</div>' +
+      '<div>Cari Kodu: <code>' + fmEsc(wp.CKod) + '</code></div>' +
+      '<div>Açıklama: ' + fmEsc(wp.Aciklama) + '</div>' +
+      '<div class="fm-dryrun-sim-not">Cari_Har tablosuna yazılmadı — simülasyon.</div>';
+    ozBlok.style.display = '';
+  } else if (oz.islem && oz.islem !== '—') {
+    ozBlok.innerHTML =
+      '<div><strong>Muhasebeleştirilirse:</strong></div>' +
+      '<div>Cari_Har <strong>' + fmEsc(oz.islem) + '</strong> oluşturulacak</div>' +
+      '<div>Belge No: <code>' + fmEsc(oz.belge_no) + '</code></div>' +
+      '<div>Tutar: <strong>' + fmEsc(oz.tutar) + '</strong> ' + fmEsc(oz.para_birimi || '') + '</div>' +
+      '<div>Açıklama: ' + fmEsc(oz.aciklama || '—') + '</div>';
+    ozBlok.style.display = po.hazir ? '' : 'none';
+  } else {
+    ozBlok.style.display = 'none';
+  }
+}
+
+function fmDryRunBtnGuncelle(ak, po) {
+  var btn = document.getElementById('fm-btn-dryrun');
+  var show = ak.can_post === true;
+  btn.style.display = show ? '' : 'none';
+  var not = document.getElementById('fm-dryrun-not');
+  if (po && po.posting_durumu === 'HAZIR') {
+    not.textContent = 'Son dry-run: posting durumu HAZIR';
+  } else if (po && po.hazir) {
+    not.textContent = 'Dry-run çalıştırılabilir';
+  } else {
+    not.textContent = show ? 'Ön koşullar tamamlanmadan dry-run önerilmez' : '';
+  }
+}
+
+function fmLivePostBtnGuncelle(ak, po, b) {
+  var btn = document.getElementById('fm-btn-live-post');
+  var flagUyari = document.getElementById('fm-flag-uyari');
+  var basarili = document.getElementById('fm-post-basarili');
+  var showLive = ak.can_live_post === true;
+  btn.style.display = showLive ? '' : 'none';
+  flagUyari.style.display = (ak.can_post && ! _fmCariEntegrasyonAktif && (b.durum || '') === 'ONAYLANDI') ? 'block' : 'none';
+  if ((b.durum || '') === 'POST_EDILDI' && b.cari_har_id) {
+    basarili.style.display = 'block';
+    basarili.innerHTML =
+      '<div><strong>Muhasebe kaydı oluşturuldu.</strong></div>' +
+      '<div>Cari_Har ID: <code>' + fmEsc(String(b.cari_har_id)) + '</code></div>' +
+      '<div>Belge No: <code>' + fmEsc(b.belge_no || b.cari_har_belge_no) + '</code></div>' +
+      '<div>Muhasebe: ' + fmEsc(fmMuhasebeLbl(b.posting_durumu, b.posting_durumu_etiket)) + '</div>' +
+      (b.posting_tarihi ? ('<div>Tarih: ' + fmEsc(String(b.posting_tarihi).slice(0, 19)) + '</div>') : '');
+  } else {
+    basarili.style.display = 'none';
+    basarili.innerHTML = '';
+  }
+}
+
+function fmPostingLiveModalAc() {
+  if (!_fmAktifBelge || _fmLivePostBusy) return;
+  var ak = (_fmAktifBelge.aksiyonlar || {});
+  if (!ak.can_live_post) return;
+  fmModalAc('posting');
+}
+
+function fmPostingLiveModalOzet(b, po) {
+  var oz = (po && po.muhasebe_ozet) || {};
+  var islem = oz.islem || '—';
+  return '<div><strong>Finans Belgesini Muhasebeleştir</strong></div>' +
+    '<div style="margin-top:8px;">Belge: <code>' + fmEsc(b.belge_no) + '</code></div>' +
+    '<div>Cari: ' + fmEsc(b.cari_unvan) + '</div>' +
+    '<div>İşlem: <strong>' + fmEsc(islem) + '</strong> · Tutar: ' +
+    fmFmtTutar(b.toplam_tutar, b.para_birimi) + '</div>' +
+    '<div>Vade/Tarih: ' + fmEsc(b.vade_tarihi || b.islem_tarihi || '—') + '</div>' +
+    '<div style="margin-top:8px;padding:8px;background:#fef2f2;border-radius:6px;color:#b91c1c;font-size:11px;">' +
+    'Bu işlem geri alınamaz. Cari_Har finansal kaydı oluşturulacaktır.</div>';
+}
+
+function fmPostingDryRun() {
+  if (!_fmAktifBelge || _fmDryRunBusy) return;
+  var ak = (_fmAktifBelge.aksiyonlar || {});
+  if (!ak.can_post) return;
+  _fmDryRunBusy = true;
+  var btn = document.getElementById('fm-btn-dryrun');
+  btn.disabled = true;
+  btn.textContent = 'Dry-run…';
+  fetch('/nexgen/api/finans-belgesi/' + _fmAktifBelge.id + '/posting-dry-run', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  })
+    .then(function(r) { return r.json().then(function(j) { return { status: r.status, body: j }; }); })
+    .then(function(res) {
+      _fmDryRunBusy = false;
+      btn.disabled = false;
+      btn.textContent = 'Muhasebe Önizleme';
+      if (!res.body.ok) {
+        fmToast(res.body.mesaj || 'Dry-run başarısız.', 'hata');
+        return;
+      }
+      _fmLastDryRun = (res.body.sonuc || {});
+      if (res.body.belge) {
+        fmDetayGoster(res.body.belge, res.body.cari_hesap);
+      } else {
+        fmDetayYenile();
+      }
+      fmToast('Muhasebe önizlemesi tamamlandı. Kayıt yazılmadı.', 'ok');
+      fmYukle();
+    })
+    .catch(function() {
+      _fmDryRunBusy = false;
+      btn.disabled = false;
+      btn.textContent = 'Muhasebe Önizleme';
+      fmToast('Bağlantı hatası.', 'hata');
+    });
+}
+
+function fmAksiyonBandGuncelle(ak) {
+  ak = ak || {};
+  var band = document.getElementById('fm-aksiyon-band');
+  var any = ak.can_review || ak.can_approve || ak.can_duzeltme || ak.can_reject || ak.can_post || ak.can_live_post;
+  band.style.display = any ? 'flex' : 'none';
+  document.getElementById('fm-btn-inceleme').style.display = ak.can_review ? '' : 'none';
+  document.getElementById('fm-btn-onay').style.display = ak.can_approve ? '' : 'none';
+  document.getElementById('fm-btn-duzeltme').style.display = ak.can_duzeltme ? '' : 'none';
+  document.getElementById('fm-btn-red').style.display = ak.can_reject ? '' : 'none';
+  fmDryRunBtnGuncelle(ak, (_fmAktifBelge && _fmAktifBelge.posting_onizleme) || {});
+  fmLivePostBtnGuncelle(ak, (_fmAktifBelge && _fmAktifBelge.posting_onizleme) || {}, _fmAktifBelge || {});
+}
+
+function fmToast(msg, tip) {
+  var el = document.getElementById('fm-toast');
+  el.textContent = msg;
+  el.className = 'fm-toast' + (tip === 'ok' ? ' fm-toast-ok' : (tip === 'hata' ? ' fm-toast-hata' : ''));
+  el.style.display = 'block';
+  if (_fmToastTimer) clearTimeout(_fmToastTimer);
+  _fmToastTimer = setTimeout(function() { el.style.display = 'none'; }, 4500);
+}
+
+function fmModalOzetHtml(b) {
+  var kg = (b.snapshot && b.snapshot.toplam_kg) || b.gercek_miktar_kg || '—';
+  return '<div><strong>' + fmEsc(b.belge_no) + '</strong> · ' + fmEsc(b.cari_unvan) + '</div>' +
+    '<div style="margin-top:6px;">Tip: ' + fmEsc(fmTipLbl(b.belge_tipi)) +
+    ' · Tutar: ' + fmFmtTutar(b.toplam_tutar, b.para_birimi) + '</div>' +
+    (b.belge_tipi === 'SATIS_SEVKIYAT' ? ('<div>Sevk KG: ' + fmEsc(kg) + '</div>') : '') +
+    '<div>Vade: ' + fmEsc(b.vade_tarihi || '—') + ' · Durum: ' + fmEsc(b.durum_etiket || b.durum) + '</div>';
+}
+
+function fmModalAc(tip) {
+  if (!_fmAktifBelge || _fmModalBusy) return;
+  _fmModalTip = tip;
+  var b = _fmAktifBelge;
+  var ak = b.aksiyonlar || {};
+  if (tip === 'inceleme' && !ak.can_review) return;
+  if (tip === 'onay' && !ak.can_approve) return;
+  if (tip === 'duzeltme' && !ak.can_duzeltme) return;
+  if (tip === 'red' && !ak.can_reject) return;
+  if (tip === 'posting' && !ak.can_live_post) return;
+
+  var baslik = 'İşlem';
+  var cta = 'Tamamla';
+  var lbl = 'Not';
+  var zorunlu = false;
+  var minLen = 0;
+  var uyari = document.getElementById('fm-modal-uyari');
+  uyari.style.display = 'none';
+  uyari.className = 'fm-modal-uyari';
+
+  if (tip === 'inceleme') {
+    baslik = 'İncelemeye Al';
+    cta = 'İncelemeye Al';
+    lbl = 'Not (isteğe bağlı)';
+  } else if (tip === 'onay') {
+    baslik = 'Finans Belgesini Onayla';
+    cta = 'Onayı Tamamla';
+    lbl = 'Not (isteğe bağlı)';
+    var po = b.posting_onizleme || {};
+    if (!po.hazir && (po.hatalar || []).length) {
+      uyari.style.display = 'block';
+      uyari.textContent = 'Muhasebe önizleme uyarısı: ' +
+        (po.hatalar || []).map(function(h) { return h.mesaj || h.kod; }).join('; ');
+    }
+  } else if (tip === 'duzeltme') {
+    baslik = 'Düzeltme Talebi';
+    cta = 'Düzeltmeye Gönder';
+    lbl = 'Düzeltme gerekçesi';
+    zorunlu = true;
+    minLen = 5;
+    document.getElementById('fm-modal-not').placeholder =
+      'Örn: Fiyat bilgisi kontrol edilmeli, para birimi eksik…';
+  } else if (tip === 'red') {
+    baslik = 'Belgeyi Reddet';
+    cta = 'Belgeyi Reddet';
+    lbl = 'Red gerekçesi';
+    zorunlu = true;
+    minLen = 5;
+    uyari.style.display = 'block';
+    uyari.className = 'fm-modal-uyari fm-modal-uyari-red';
+    uyari.textContent = 'Bu işlem geri alınamaz. Belge reddedilecek ve posting yapılamayacaktır.';
+    document.getElementById('fm-modal-not').placeholder = 'Red gerekçesini yazın…';
+  } else if (tip === 'posting') {
+    baslik = 'Finans Belgesini Muhasebeleştir';
+    cta = 'Muhasebe Kaydını Oluştur';
+    lbl = 'Not (isteğe bağlı)';
+    document.getElementById('fm-modal-not').placeholder = 'İsteğe bağlı muhasebe notu…';
+    uyari.style.display = 'block';
+    uyari.className = 'fm-modal-uyari fm-modal-uyari-red';
+    uyari.textContent = 'Bu işlem geri alınamaz. Cari_Har finansal kaydı oluşturulacaktır.';
+  }
+
+  var dogrulamaLbl = document.getElementById('fm-modal-dogrulama-lbl');
+  var dogrulamaInp = document.getElementById('fm-modal-dogrulama');
+  var notLbl = document.getElementById('fm-modal-lbl');
+  var notTa = document.getElementById('fm-modal-not');
+  if (tip === 'posting') {
+    dogrulamaLbl.style.display = '';
+    dogrulamaInp.style.display = '';
+    dogrulamaLbl.textContent = 'Doğrulama: MUHASEBELESTIR yazın *';
+    notLbl.style.display = '';
+    notTa.style.display = '';
+    document.getElementById('fm-modal-ozet').innerHTML =
+      fmPostingLiveModalOzet(b, b.posting_onizleme || {});
+  } else {
+    dogrulamaLbl.style.display = 'none';
+    dogrulamaInp.style.display = 'none';
+    dogrulamaInp.value = '';
+    notLbl.style.display = '';
+    notTa.style.display = '';
+    document.getElementById('fm-modal-ozet').innerHTML = fmModalOzetHtml(b);
+  }
+  document.getElementById('fm-modal-baslik').textContent = baslik;
+  document.getElementById('fm-modal-cta').textContent = cta;
+  document.getElementById('fm-modal-lbl').textContent = lbl + (zorunlu ? ' *' : '');
+  document.getElementById('fm-modal-not').value = '';
+  if (tip === 'posting') dogrulamaInp.value = '';
+  document.getElementById('fm-modal-hata').style.display = 'none';
+  document.getElementById('fm-modal-cta').disabled = false;
+  document.getElementById('fm-modal-iptal').disabled = false;
+  document.getElementById('fm-modal-x').disabled = false;
+
+  document.getElementById('fm-modal').classList.add('acik');
+  document.getElementById('fm-modal').style.display = 'flex';
+  document.getElementById('fm-modal-kutu').dataset.zorunlu = zorunlu ? '1' : '0';
+  document.getElementById('fm-modal-kutu').dataset.minlen = String(minLen);
+}
+
+function fmModalKapat() {
+  if (_fmModalBusy) return;
+  document.getElementById('fm-modal').classList.remove('acik');
+  document.getElementById('fm-modal').style.display = 'none';
+  _fmModalTip = null;
+}
+
+function fmModalHata(msg) {
+  var el = document.getElementById('fm-modal-hata');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function fmModalSubmit() {
+  if (_fmModalBusy || !_fmAktifBelge || !_fmModalTip) return;
+  var kut = document.getElementById('fm-modal-kutu');
+  var zorunlu = kut.dataset.zorunlu === '1';
+  var minLen = parseInt(kut.dataset.minlen || '0', 10);
+  var not = document.getElementById('fm-modal-not').value.trim();
+  if (zorunlu && not.length < minLen) {
+    fmModalHata('En az ' + minLen + ' karakter gerekli.');
+    return;
+  }
+
+  var url = '';
+  var body = {};
+  if (_fmModalTip === 'inceleme') {
+    url = '/nexgen/api/finans-belgesi/' + _fmAktifBelge.id + '/incelemeye-al';
+    if (not) body.not = not;
+  } else if (_fmModalTip === 'onay') {
+    url = '/nexgen/api/finans-belgesi/' + _fmAktifBelge.id + '/onayla';
+    if (not) body.not = not;
+  } else if (_fmModalTip === 'duzeltme') {
+    url = '/nexgen/api/finans-belgesi/' + _fmAktifBelge.id + '/duzeltmeye-gonder';
+    body.not = not;
+  } else if (_fmModalTip === 'red') {
+    url = '/nexgen/api/finans-belgesi/' + _fmAktifBelge.id + '/reddet';
+    body.gerekce = not;
+  } else if (_fmModalTip === 'posting') {
+    var dogrulama = document.getElementById('fm-modal-dogrulama').value.trim();
+    if (dogrulama !== 'MUHASEBELESTIR') {
+      fmModalHata('Doğrulama metni hatalı. MUHASEBELESTIR yazın.');
+      return;
+    }
+    url = '/nexgen/api/finans-belgesi/' + _fmAktifBelge.id + '/posting';
+    if (not) body.not = not;
+  }
+
+  if (!url) return;
+
+  _fmModalBusy = true;
+  document.getElementById('fm-modal-cta').disabled = true;
+  document.getElementById('fm-modal-iptal').disabled = true;
+  document.getElementById('fm-modal-x').disabled = true;
+  document.getElementById('fm-modal-hata').style.display = 'none';
+
+  fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+    .then(function(r) { return r.json().then(function(j) { return { status: r.status, body: j }; }); })
+    .then(function(res) {
+      _fmModalBusy = false;
+      if (!res.body.ok) {
+        fmModalHata(res.body.mesaj || res.body.hata || 'İşlem başarısız.');
+        document.getElementById('fm-modal-cta').disabled = false;
+        document.getElementById('fm-modal-iptal').disabled = false;
+        document.getElementById('fm-modal-x').disabled = false;
+        return;
+      }
+      var tip = _fmModalTip;
+      fmModalKapat();
+      if (tip === 'posting') {
+        _fmLastDryRun = null;
+        var sonuc = res.body.sonuc || {};
+        var bel = res.body.belge || {};
+        fmToast('Muhasebe kaydı oluşturuldu.', 'ok');
+        if (bel.id) {
+          fmDetayGoster(bel, res.body.cari_hesap);
+          _fmSeciliId = bel.id;
+        } else {
+          fmDetayYenile();
+        }
+        fmYukle();
+        return;
+      }
+      if (tip === 'onay') {
+        fmToast('Finans belgesi onaylandı. Muhasebe kaydı henüz oluşturulmadı.', 'ok');
+      } else if (tip === 'inceleme') {
+        fmToast('Belge incelemeye alındı.', 'ok');
+      } else if (tip === 'duzeltme') {
+        fmToast('Düzeltme talebi kaydedildi.', 'ok');
+      } else if (tip === 'red') {
+        fmToast('Belge reddedildi.', 'ok');
+      }
+      fmDetayYenile();
+      fmYukle();
+    })
+    .catch(function() {
+      _fmModalBusy = false;
+      fmModalHata('Bağlantı hatası. Tekrar deneyin.');
+      document.getElementById('fm-modal-cta').disabled = false;
+      document.getElementById('fm-modal-iptal').disabled = false;
+      document.getElementById('fm-modal-x').disabled = false;
+    });
+}
+
+function fmDetayYenile() {
+  if (!_fmSeciliId) return;
+  fetch('/nexgen/api/finans-belgesi/' + _fmSeciliId)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.ok && d.belge) fmDetayGoster(d.belge, d.cari_hesap);
+    });
+}
+
+function fmDetaySec(id) {
+  if (_fmSeciliId !== id) _fmLastDryRun = null;
+  _fmSeciliId = id;
+  fmUrlSenkronize();
+  document.querySelectorAll('.fm-satir').forEach(function(tr) {
+    tr.classList.toggle('fm-satir-secili', parseInt(tr.getAttribute('data-id'), 10) === id);
+  });
+  var sel = document.querySelector('.fm-satir-secili');
+  if (sel && sel.scrollIntoView) sel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  fetch('/nexgen/api/finans-belgesi/' + id)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok || !d.belge) {
+        fmToast((d && d.mesaj) || 'Detay alınamadı', 'hata');
+        return;
+      }
+      fmDetayGoster(d.belge, d.cari_hesap);
+    });
+}
+
+function fmYukle() {
+  return fetch('/nexgen/api/finans-belgeleri?' + fmFiltreParams().toString())
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) {
+        fmToast((d && d.mesaj) || 'Liste alınamadı', 'hata');
+        return d;
+      }
+      _fmCari360Erisim = !!d.cari360_erisim;
+      fmKpiGuncelle(d.ozet);
+      fmSayfalamaGuncelle(d.sayfalama);
+      fmListeCiz(d.liste || []);
+      fmUrlSenkronize();
+      document.getElementById('fm-son-guncelleme').textContent =
+        'Son güncelleme: ' + new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+      return d;
+    });
+}
+
+function fmSayfa(delta) {
+  var yeni = _fmPage + delta;
+  if (yeni < 1 || yeni > _fmTotalPages) return;
+  _fmPage = yeni;
+  fmYukle();
+}
+
+function fmFiltreTemizle() {
+  document.getElementById('fm-arama').value = '';
+  document.getElementById('fm-fil-tip').value = '';
+  document.getElementById('fm-fil-durum').value = '';
+  document.getElementById('fm-fil-posting').value = '';
+  document.getElementById('fm-fil-tarih-bas').value = '';
+  document.getElementById('fm-fil-tarih-bit').value = '';
+  _fmPage = 1;
+  fmYukle();
+}
+
+function fmFiltreDegisti() {
+  _fmPage = 1;
+  if (_fmDebounce) clearTimeout(_fmDebounce);
+  _fmDebounce = setTimeout(fmYukle, 350);
+}
+
+document.getElementById('fm-arama').addEventListener('input', fmFiltreDegisti);
+['fm-fil-tip','fm-fil-durum','fm-fil-posting','fm-fil-tarih-bas','fm-fil-tarih-bit'].forEach(function(id) {
+  document.getElementById(id).addEventListener('change', function() {
+    _fmPage = 1;
+    fmYukle();
+  });
+});
+
+function fmUrlFiltreUygula() {
+  var q = new URLSearchParams(window.location.search);
+  if (q.get('arama')) {
+    document.getElementById('fm-arama').value = q.get('arama');
+    var ha = document.getElementById('fm-hizli-ara');
+    if (ha) ha.value = q.get('arama');
+  }
+  if (q.get('belge_tipi')) document.getElementById('fm-fil-tip').value = q.get('belge_tipi');
+  if (q.get('durum')) document.getElementById('fm-fil-durum').value = q.get('durum');
+  if (q.get('posting_durumu')) document.getElementById('fm-fil-posting').value = q.get('posting_durumu');
+  if (q.get('tarih_bas')) document.getElementById('fm-fil-tarih-bas').value = q.get('tarih_bas');
+  if (q.get('tarih_bit')) document.getElementById('fm-fil-tarih-bit').value = q.get('tarih_bit');
+  if (q.get('belge_id')) {
+    var bid = parseInt(q.get('belge_id'), 10);
+    if (bid) {
+      window.location.replace('/nexgen/finans/belge/' + bid + fmReturnQs());
+      return;
+    }
+  }
+}
+
+fmUrlFiltreUygula();
+fmYukle();
+</script>
+{% endblock %}

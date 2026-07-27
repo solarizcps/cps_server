@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% set page_title = "Cari 360" %}
+
+{% block content %}
+<div class="c36l">
+  <header class="c36l-hdr">
+    <h1>CARİ 360</h1>
+    <p>Müşteri dijital dosyası — müşteri seçin</p>
+  </header>
+  <input type="search" id="c36l-ara" class="c36l-ara" placeholder="Kod veya unvan ara…">
+  <div class="c36l-tablo-wrap">
+    <table class="c36l-tablo">
+      <thead><tr><th>Kod</th><th>Unvan</th><th>Durum</th><th></th></tr></thead>
+      <tbody>
+        {% for c in cariler %}
+        <tr class="c36l-satir" data-kod="{{ (c.cari_kod or '')|lower }}" data-unvan="{{ (c.unvan or '')|lower }}">
+          <td><code>{{ c.cari_kod }}</code></td>
+          <td>{{ c.unvan }}</td>
+          <td>{% if c.aktif %}Aktif{% else %}Pasif{% endif %}</td>
+          <td><a href="/nexgen/cari360/{{ c.id }}">Dosyayı aç</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="c36l-bos">Kayıt yok.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<style>
+.c36l{padding:16px 20px 32px;background:#f4f6f9;min-height:calc(100vh - 48px);max-width:960px;margin:0 auto}
+.c36l-hdr h1{margin:0;font-size:20px;font-weight:800;letter-spacing:.08em;color:#0f172a}
+.c36l-hdr p{margin:4px 0 14px;font-size:13px;color:#64748b}
+.c36l-ara{width:100%;max-width:320px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;margin-bottom:12px;font-size:13px}
+.c36l-tablo-wrap{background:#fff;border:1px solid #e2e8f0;border-radius:8px;overflow:auto}
+.c36l-tablo{width:100%;border-collapse:collapse;font-size:13px}
+.c36l-tablo th,.c36l-tablo td{padding:10px 12px;border-bottom:1px solid #f1f5f9;text-align:left}
+.c36l-tablo th{background:#f8fafc;color:#64748b;font-weight:600}
+.c36l-bos{text-align:center;color:#94a3b8}
+</style>
+<script>
+(function(){var i=document.getElementById('c36l-ara');if(!i)return;i.oninput=function(){var q=i.value.toLowerCase();document.querySelectorAll('.c36l-satir').forEach(function(r){r.style.display=(!q||r.dataset.kod.indexOf(q)>=0||r.dataset.unvan.indexOf(q)>=0)?'':'none';});};})();
+</script>
+{% endblock %}

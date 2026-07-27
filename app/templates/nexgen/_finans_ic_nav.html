@@ -1,0 +1,20 @@
+{# Finans Merkezi iç navigasyon #}
+<nav class="fm-ic-nav" aria-label="Finans modül navigasyonu">
+  <a href="/nexgen/finans" class="rm-sekme fm-ic-nav-link{% if fm_tab == 'genel' %} aktif{% endif %}">Genel Bakış</a>
+  <a href="/nexgen/finans/belgeler" class="rm-sekme fm-ic-nav-link{% if fm_tab == 'belgeler' %} aktif{% endif %}">Finans Belgeleri</a>
+  <a href="/nexgen/finans/cari-hesaplar" class="rm-sekme fm-ic-nav-link{% if fm_tab == 'cari_hesaplar' %} aktif{% endif %}">Cari Hesaplar</a>
+  {% if can_cari_yonetimi %}
+  <a href="/nexgen/finans/cari-kimlik-koprusu" class="rm-sekme fm-ic-nav-link{% if fm_tab == 'cari_eslestirme' %} aktif{% endif %}">Cari Kart Teknik Kontrol</a>
+  {% endif %}
+  <span class="fm-ic-nav-spacer"></span>
+  <span class="fm-ic-nav-diger" title="Henüz aktif değil">
+    <span class="fm-ic-nav-diger-lbl">Diğer Modüller</span>
+    <span class="fm-ic-nav-diger-items">
+      <span>Tahsilatlar</span>
+      <span>Ödemeler</span>
+      <span>Genel Giderler</span>
+      <span>Sözleşmeler</span>
+      <span>Raporlar</span>
+    </span>
+  </span>
+</nav>

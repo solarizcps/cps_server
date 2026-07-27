@@ -1,0 +1,327 @@
+{% extends "base.html" %}
+{% set page_title = "Cari 360 — " ~ (data.kimlik.unvan or '')[:36] %}
+
+{% block content %}
+<div class="c36d" id="c36d" data-cari-id="{{ cari_id }}">
+
+  <section class="c36d-kimlik">
+    <div class="c36d-kimlik-ust">
+      <a href="/nexgen/cari360" class="c36d-back">← Cari 360 listesi</a>
+      <span class="c36d-etiket">MÜŞTERİ DİJİTAL DOSYASI</span>
+    </div>
+    <h1>{{ data.kimlik.unvan }}</h1>
+    <div class="c36d-meta">
+      <span>{{ data.kimlik.cari_kod }}</span>
+      <span>Sorumlu: {{ data.kimlik.sorumlu }}</span>
+      <span>İlk çalışma: {{ data.kimlik.ilk_calisma }}</span>
+    </div>
+    <div class="c36d-meta2">
+      <span>Son görüşme: {{ data.kimlik.son_gorusme }}</span>
+      <span>Son ziyaret: {{ data.kimlik.son_ziyaret }}</span>
+      <span>Son sipariş: {{ data.kimlik.son_siparis }}</span>
+      <span>Son tahsilat: {{ data.kimlik.son_tahsilat }}</span>
+    </div>
+  </section>
+
+  <section class="c36d-durum">
+    <div class="c36d-dchip"><span>Açık sipariş</span><strong>{{ data.durum.acik_siparis }}</strong></div>
+    <div class="c36d-dchip"><span>Açık numune</span><strong>{{ data.durum.acik_numune }}</strong></div>
+    <div class="c36d-dchip"><span>Beklenen tahsilat</span><strong>{{ data.durum.beklenen_tahsilat }}</strong></div>
+    <div class="c36d-dchip c36d-warn"><span>Geciken tahsilat</span><strong>{{ data.durum.geciken_tahsilat }}</strong></div>
+    <div class="c36d-dchip"><span>Ort. vade</span><strong>{{ data.durum.ortalama_vade }}</strong></div>
+    <div class="c36d-dchip"><span>En uzun vade</span><strong>{{ data.durum.en_uzun_vade }}</strong></div>
+    <div class="c36d-dchip"><span>Son siparişten</span><strong>{% if data.durum.son_siparis_gun != '—' %}{{ data.durum.son_siparis_gun }} gün{% else %}—{% endif %}</strong></div>
+    <div class="c36d-dchip"><span>Son görüşmeden</span><strong>{% if data.durum.son_gorusme_gun != '—' %}{{ data.durum.son_gorusme_gun }} gün{% else %}—{% endif %}</strong></div>
+  </section>
+
+  <div class="c36d-govde">
+    <main class="c36d-hafiza-alan">
+      <div class="c36d-baslik-row">
+        <h2>MÜŞTERİ HAFIZASI</h2>
+        <div class="c36d-filtre">
+          <button type="button" class="c36d-f on" data-k="tumu">Tümü</button>
+          <button type="button" class="c36d-f" data-k="gorusmeler">Görüşmeler</button>
+          <button type="button" class="c36d-f" data-k="siparisler">Siparişler</button>
+          <button type="button" class="c36d-f" data-k="numuneler">Numuneler</button>
+          <button type="button" class="c36d-f" data-k="tahsilatlar">Tahsilatlar</button>
+          <button type="button" class="c36d-f" data-k="sozler">Sözler</button>
+          <select id="c36d-tarih"><option value="tumu">Tümü</option><option value="30">30 gün</option><option value="90">90 gün</option><option value="yil">Bu yıl</option></select>
+          <input type="search" id="c36d-ara" placeholder="Ara…">
+        </div>
+      </div>
+      <div class="c36d-hafiza" id="c36d-hafiza">
+        {% for ev in hafiza %}
+        <button type="button" class="c36d-satir{% if ev.test_kayit %} c36d-test{% endif %}" data-ev='{{ ev | tojson }}'>
+          <time>{{ (ev.event_date or '')[:16].replace('T',' ') }}</time>
+          <div class="c36d-satir-ic">
+            <div class="c36d-satir-tip">{{ ev.hareket_turu }}</div>
+            <div class="c36d-satir-bas">{{ ev.title }}</div>
+            <div class="c36d-satir-oz">{{ ev.short_description or '—' }}</div>
+            <div class="c36d-satir-alt">
+              <span>{{ ev.status }}</span>
+              {% if ev.kayit_no %}<span>#{{ ev.kayit_no }}</span>{% endif %}
+              {% if ev.tutar %}<span>{{ ev.tutar }}</span>{% endif %}
+              {% if ev.termin %}<span>Termin: {{ ev.termin }}</span>{% endif %}
+              {% if ev.test_kayit %}<span class="c36d-test-et">TEST</span>{% endif %}
+            </div>
+          </div>
+        </button>
+        {% else %}
+        <p class="c36d-bos">Kayıt yok.</p>
+        {% endfor %}
+      </div>
+    </main>
+
+    <aside class="c36d-sag">
+      <section class="c36d-panel">
+        <h3>SON GÖRÜŞMELER</h3>
+        {% for g in data.son_gorusmeler %}
+        <div class="c36d-mini{% if g.test %} c36d-test{% endif %}">
+          <strong>{{ g.tarih }}</strong> · {{ g.tip }}
+          <div>{{ g.not or '—' }}</div>
+          {% if g.takip %}<div class="c36d-muted">Takip: {{ g.takip[:10] }}</div>{% endif %}
+        </div>
+        {% else %}<p class="c36d-muted">—</p>{% endfor %}
+      </section>
+
+      <section class="c36d-panel">
+        <h3>MÜŞTERİNİN VERDİĞİ SÖZLER</h3>
+        {% for s in data.musteri_sozleri[:8] %}
+        <div class="c36d-soz{% if s.durum == 'geçti' %} c36d-soz-gec{% endif %}{% if s.test %} c36d-test{% endif %}">
+          <div>{{ s.soz }}</div>
+          <div class="c36d-muted">{{ s.verilen_tarih }}{% if s.hedef_tarih %} → {{ s.hedef_tarih }}{% endif %} · {{ s.durum }}</div>
+        </div>
+        {% else %}<p class="c36d-muted">—</p>{% endfor %}
+      </section>
+
+      <section class="c36d-panel">
+        <h3>BİZİM VERDİĞİMİZ SÖZLER</h3>
+        {% for s in data.bizim_sozlerimiz[:8] %}
+        <div class="c36d-soz{% if s.durum == 'geçti' %} c36d-soz-gec{% endif %}{% if s.test %} c36d-test{% endif %}">
+          <div>{{ s.soz }}</div>
+          <div class="c36d-muted">{{ s.verilen_tarih }}{% if s.hedef_tarih %} → {{ s.hedef_tarih }}{% endif %} · {{ s.durum }}</div>
+        </div>
+        {% else %}<p class="c36d-muted">—</p>{% endfor %}
+      </section>
+
+      <section class="c36d-panel">
+        <h3>TAHSİLAT / VADE</h3>
+        <dl class="c36d-dl">
+          <dt>Planlanan</dt><dd>{{ data.tahsilat_vade.planlanan }}</dd>
+          <dt>Bugün</dt><dd>{{ data.tahsilat_vade.bugun }}</dd>
+          <dt>Yaklaşan</dt><dd>{{ data.tahsilat_vade.yaklasan }}</dd>
+          <dt>Geciken</dt><dd>{{ data.tahsilat_vade.geciken }}</dd>
+          <dt>Tahsil edildi</dt><dd>{{ data.tahsilat_vade.tahsil_edildi }}</dd>
+          <dt>Ort. vade</dt><dd>{{ data.tahsilat_vade.ortalama_vade }}</dd>
+          <dt>En uzun vade</dt><dd>{{ data.tahsilat_vade.en_uzun_vade }}</dd>
+        </dl>
+        {% if data.tahsilat_vade.son_odeme_sozu != '—' %}<p class="c36d-muted">Son ödeme sözü: {{ data.tahsilat_vade.son_odeme_sozu }}</p>{% endif %}
+        {% if data.tahsilat_vade.vade_uyari %}<p class="c36d-uyari">{{ data.tahsilat_vade.vade_uyari }}</p>{% endif %}
+      </section>
+
+      <section class="c36d-panel">
+        <h3>AÇIK NUMUNELER</h3>
+        <p>{{ data.acik_numune.adet }} adet{% if data.acik_numune.en_eski != '—' %} · En eski: {{ data.acik_numune.en_eski }}{% endif %}</p>
+        {% for a in data.acik_numune.asamalar %}<span class="c36d-rozet">{{ a }}</span>{% endfor %}
+      </section>
+
+      <section class="c36d-panel">
+        <h3>AÇIK SİPARİŞLER</h3>
+        <p>{{ data.acik_siparis.adet }} adet · {{ data.acik_siparis.tutar }}</p>
+        {% for a in data.acik_siparis.durumlar %}<span class="c36d-rozet">{{ a }}</span>{% endfor %}
+      </section>
+
+      {% if data.urun_renk %}
+      <section class="c36d-panel">
+        <h3>ÜRÜN ÖZET</h3>
+        <p>En çok: {{ data.urun_renk.en_cok_urun }} ({{ data.urun_renk.adet }})</p>
+      </section>
+      {% endif %}
+    </aside>
+  </div>
+
+  <section class="c36d-alt">
+    <div class="c36d-sekme-bar">
+      <button type="button" class="c36d-sekme on" data-tab="satis">Satış</button>
+      <button type="button" class="c36d-sekme" data-tab="numune">Numune</button>
+      <button type="button" class="c36d-sekme" data-tab="tahsilat">Tahsilat</button>
+    </div>
+    <div class="c36d-tablo-wrap" id="c36d-tab-satis">
+      <table class="c36d-tablo">
+        <thead><tr><th>Sipariş</th><th>Tarih</th><th>Ürün</th><th>Miktar</th><th>Tutar</th><th>Termin</th><th>Vade</th><th>Durum</th></tr></thead>
+        <tbody>
+          {% for r in data.tab_satis %}
+          <tr><td>{{ r.siparis_no }}</td><td>{{ r.tarih }}</td><td>{{ r.urun }}</td><td>{{ r.miktar }}</td><td>{{ r.tutar }}</td><td>{{ r.termin }}</td><td>{{ r.vade }}</td><td>{{ r.durum }}</td></tr>
+          {% else %}<tr><td colspan="8" class="c36d-bos">—</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="c36d-tablo-wrap" id="c36d-tab-numune" hidden>
+      <table class="c36d-tablo">
+        <thead><tr><th>Kod</th><th>Tarih</th><th>Ürün</th><th>Tip</th><th>Durum</th><th>Sonuç</th><th>Siparişe dönüşüm</th></tr></thead>
+        <tbody>
+          {% for r in data.tab_numune %}
+          <tr><td>{{ r.kod }}</td><td>{{ r.tarih }}</td><td>{{ r.urun }}</td><td>{{ r.tip }}</td><td>{{ r.durum }}</td><td>{{ r.sonuc }}</td><td>{{ r.siparise_donustu }}</td></tr>
+          {% else %}<tr><td colspan="7" class="c36d-bos">—</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="c36d-tablo-wrap" id="c36d-tab-tahsilat" hidden>
+      <table class="c36d-tablo">
+        <thead><tr><th>Sipariş</th><th>Plan tarih</th><th>Beklenen</th><th>Alınan</th><th>Kalan</th><th>Ödeme</th><th>Muhasebe</th></tr></thead>
+        <tbody>
+          {% for r in data.tab_tahsilat %}
+          <tr><td>{{ r.siparis }}</td><td>{{ r.plan_tarih }}</td><td>{{ r.beklenen }}</td><td>{{ r.alinan }}</td><td>{{ r.kalan }}</td><td>{{ r.odeme_tipi }}</td><td>{{ r.muhasebe }}</td></tr>
+          {% else %}<tr><td colspan="7" class="c36d-bos">—</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<div class="c36d-drawer" id="c36d-drawer" hidden>
+  <div class="c36d-drawer-ic">
+    <header><strong id="c36d-drawer-baslik">Detay</strong><button type="button" id="c36d-drawer-x">×</button></header>
+    <div id="c36d-drawer-body"></div>
+  </div>
+</div>
+
+<style>
+.c36d{padding:14px 18px 28px;background:#eef2f7;min-height:calc(100vh - 48px)}
+.c36d-kimlik,.c36d-durum,.c36d-panel,.c36d-hafiza-alan,.c36d-alt{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin-bottom:12px}
+.c36d-back{font-size:12px;color:#1e40af;text-decoration:none}
+.c36d-etiket{float:right;font-size:10px;font-weight:800;letter-spacing:.1em;color:#1e40af}
+.c36d-kimlik h1{margin:8px 0 4px;font-size:22px;color:#0f172a}
+.c36d-meta,.c36d-meta2{font-size:12px;color:#64748b;display:flex;flex-wrap:wrap;gap:12px}
+.c36d-meta2{margin-top:6px}
+.c36d-durum{display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px}
+.c36d-dchip{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:6px 10px;min-width:110px}
+.c36d-dchip span{display:block;font-size:10px;color:#64748b;text-transform:uppercase}
+.c36d-dchip strong{font-size:13px;color:#0f172a}
+.c36d-warn{border-color:#fecaca;background:#fef2f2}
+.c36d-govde{display:grid;grid-template-columns:1fr 300px;gap:12px;align-items:start}
+@media(max-width:1100px){.c36d-govde{grid-template-columns:1fr}}
+.c36d-baslik-row{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.c36d-baslik-row h2{margin:0;font-size:13px;letter-spacing:.06em;color:#475569}
+.c36d-filtre{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.c36d-f{border:1px solid #cbd5e1;background:#fff;border-radius:999px;padding:3px 10px;font-size:11px;cursor:pointer}
+.c36d-f.on{background:#1e40af;color:#fff;border-color:#1e40af}
+.c36d-filtre select,.c36d-filtre input{font-size:11px;padding:4px 6px;border:1px solid #cbd5e1;border-radius:4px}
+.c36d-hafiza{display:flex;flex-direction:column;gap:6px;max-height:58vh;overflow:auto}
+.c36d-satir{display:grid;grid-template-columns:108px 1fr;gap:10px;width:100%;text-align:left;border:1px solid #e2e8f0;border-radius:6px;padding:10px;background:#fff;cursor:pointer}
+.c36d-satir:hover{border-color:#93c5fd;background:#f8fafc}
+.c36d-satir time{font-size:11px;color:#64748b;font-family:monospace}
+.c36d-satir-tip{font-size:10px;color:#1e40af;font-weight:600;text-transform:uppercase}
+.c36d-satir-bas{font-size:13px;font-weight:600;color:#0f172a}
+.c36d-satir-oz{font-size:11px;color:#64748b;margin-top:2px}
+.c36d-satir-alt{font-size:10px;color:#94a3b8;display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.c36d-test{opacity:.85;border-style:dashed}
+.c36d-test-et{color:#b45309;font-weight:700}
+.c36d-sag{display:flex;flex-direction:column;gap:10px}
+.c36d-panel h3{margin:0 0 8px;font-size:11px;letter-spacing:.05em;color:#64748b}
+.c36d-mini,.c36d-soz{font-size:12px;padding:6px 0;border-bottom:1px solid #f1f5f9}
+.c36d-soz-gec{background:#fef3c7;border-radius:4px;padding:6px;margin-bottom:4px}
+.c36d-muted{font-size:11px;color:#94a3b8;margin:0}
+.c36d-dl{display:grid;grid-template-columns:1fr auto;gap:4px 8px;font-size:12px;margin:0}
+.c36d-dl dt{color:#64748b}.c36d-dl dd{margin:0;font-weight:600;text-align:right}
+.c36d-uyari{font-size:11px;color:#b45309;margin-top:6px}
+.c36d-rozet{display:inline-block;font-size:10px;background:#e2e8f0;border-radius:999px;padding:2px 8px;margin:2px 4px 0 0}
+.c36d-sekme-bar{display:flex;gap:6px;margin-bottom:8px}
+.c36d-sekme{border:1px solid #cbd5e1;background:#fff;border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer}
+.c36d-sekme.on{background:#1e40af;color:#fff;border-color:#1e40af}
+.c36d-tablo{width:100%;border-collapse:collapse;font-size:12px}
+.c36d-tablo th,.c36d-tablo td{padding:8px 10px;border-bottom:1px solid #f1f5f9;text-align:left}
+.c36d-tablo th{background:#f8fafc;color:#64748b;font-weight:600}
+.c36d-bos{color:#94a3b8;text-align:center;padding:12px}
+.c36d-drawer{position:fixed;inset:0;background:rgba(15,23,42,.35);z-index:9500;display:flex;justify-content:flex-end}
+.c36d-drawer[hidden]{display:none!important}
+.c36d-drawer-ic{width:min(420px,94vw);background:#fff;height:100%;padding:16px;overflow:auto}
+.c36d-drawer-ic header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.c36d-drawer-ic header button{border:none;background:none;font-size:22px;cursor:pointer}
+.c36d-drawer-ic dl{display:grid;grid-template-columns:110px 1fr;gap:6px;font-size:12px}
+.c36d-drawer-ic dt{color:#64748b}.c36d-drawer-ic dd{margin:0}
+@media(max-width:640px){.c36d-satir{grid-template-columns:1fr}.c36d-durum{flex-direction:column}}
+</style>
+
+<script>
+(function(){
+  var cid={{ cari_id }};
+  var kat='tumu';
+  var drawer=document.getElementById('c36d-drawer');
+  var dbody=document.getElementById('c36d-drawer-body');
+  var dbas=document.getElementById('c36d-drawer-baslik');
+  function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  function bindRows(){
+    document.querySelectorAll('.c36d-satir[data-ev]').forEach(function(btn){
+      btn.onclick=function(){
+        try{
+          var ev=JSON.parse(btn.getAttribute('data-ev'));
+          dbas.textContent=ev.title||'Detay';
+          var h='<dl>';
+          h+='<dt>Tür</dt><dd>'+esc(ev.hareket_turu)+'</dd>';
+          h+='<dt>Tarih</dt><dd>'+esc(ev.event_date)+'</dd>';
+          h+='<dt>Durum</dt><dd>'+esc(ev.status)+'</dd>';
+          h+='<dt>Kaynak</dt><dd>'+esc(ev.source_type)+' #'+esc(ev.source_id)+'</dd>';
+          if(ev.kayit_no)h+='<dt>Kayıt no</dt><dd>'+esc(ev.kayit_no)+'</dd>';
+          if(ev.short_description)h+='<dt>Özet</dt><dd>'+esc(ev.short_description)+'</dd>';
+          var m=ev.metadata||{};
+          Object.keys(m).forEach(function(k){if(m[k])h+='<dt>'+esc(k)+'</dt><dd>'+esc(m[k])+'</dd>';});
+          if(ev.audit_events&&ev.audit_events.length){
+            h+='<dt>Audit</dt><dd><ul style="margin:0;padding-left:14px">';
+            ev.audit_events.forEach(function(a){h+='<li>'+esc(JSON.stringify(a))+'</li>';});
+            h+='</ul></dd>';
+          }
+          h+='</dl>';
+          dbody.innerHTML=h;
+          drawer.hidden=false;
+        }catch(e){}
+      };
+    });
+  }
+  bindRows();
+  document.getElementById('c36d-drawer-x').onclick=function(){drawer.hidden=true;};
+  drawer.onclick=function(e){if(e.target===drawer)drawer.hidden=true;};
+  function yukle(){
+    var tarih=document.getElementById('c36d-tarih').value;
+    var q=document.getElementById('c36d-ara').value.trim();
+    var url='/nexgen/api/cari360/'+cid+'/hafiza?kategori='+encodeURIComponent(kat)+'&tarih='+encodeURIComponent(tarih)+(q?'&q='+encodeURIComponent(q):'');
+    fetch(url).then(function(r){return r.json();}).then(function(d){
+      if(!d.ok)return;
+      var box=document.getElementById('c36d-hafiza');
+      var evs=d.events||[];
+      if(!evs.length){box.innerHTML='<p class="c36d-bos">Kayıt yok.</p>';return;}
+      box.innerHTML=evs.map(function(ev){
+        var tc=ev.test_kayit?' c36d-test':'';
+        return '<button type="button" class="c36d-satir'+tc+'" data-ev=\''+JSON.stringify(ev).replace(/'/g,'&#39;')+'\'>'+
+          '<time>'+esc((ev.event_date||'').slice(0,16))+'</time>'+
+          '<div class="c36d-satir-ic"><div class="c36d-satir-tip">'+esc(ev.hareket_turu)+'</div>'+
+          '<div class="c36d-satir-bas">'+esc(ev.title)+'</div>'+
+          '<div class="c36d-satir-oz">'+esc(ev.short_description||'—')+'</div>'+
+          '<div class="c36d-satir-alt"><span>'+esc(ev.status)+'</span>'+
+          (ev.kayit_no?'<span>#'+esc(ev.kayit_no)+'</span>':'')+
+          (ev.tutar?'<span>'+esc(ev.tutar)+'</span>':'')+
+          (ev.test_kayit?'<span class="c36d-test-et">TEST</span>':'')+'</div></div></button>';
+      }).join('');
+      bindRows();
+    });
+  }
+  document.querySelectorAll('.c36d-f').forEach(function(b){
+    b.onclick=function(){
+      document.querySelectorAll('.c36d-f').forEach(function(x){x.classList.remove('on');});
+      b.classList.add('on');kat=b.getAttribute('data-k');yukle();
+    };
+  });
+  document.getElementById('c36d-tarih').onchange=yukle;
+  document.getElementById('c36d-ara').oninput=function(){clearTimeout(window._c36a);window._c36a=setTimeout(yukle,350);};
+  document.querySelectorAll('.c36d-sekme').forEach(function(btn){
+    btn.onclick=function(){
+      document.querySelectorAll('.c36d-sekme').forEach(function(x){x.classList.remove('on');});
+      btn.classList.add('on');
+      ['satis','numune','tahsilat'].forEach(function(t){
+        document.getElementById('c36d-tab-'+t).hidden=btn.getAttribute('data-tab')!==t;
+      });
+    };
+  });
+})();
+</script>
+{% endblock %}

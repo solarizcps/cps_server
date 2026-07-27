@@ -72,6 +72,80 @@ def _kaynak_ozet(con: sqlite3.Connection, belge: dict[str, Any]) -> dict[str, An
     return {}
 
 
+def _siparis_ozet(con: sqlite3.Connection, siparis_id: int | None) -> dict[str, Any] | None:
+    if not siparis_id or not tablo_var(con, 'nexgen_planlama_siparis'):
+        return None
+    try:
+        row = con.execute(
+            """
+            SELECT id, siparis_no, cari_id, cari_unvan, termin_tarihi, musteri_termin,
+                   durum, olusturma_tarihi
+            FROM nexgen_planlama_siparis WHERE id=?
+            """,
+            (int(siparis_id),),
+        ).fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        if tablo_var(con, 'nexgen_planlama_siparis_kalem'):
+            cols = {c[1] for c in con.execute('PRAGMA table_info(nexgen_planlama_siparis_kalem)').fetchall()}
+            if 'miktar_kg' in cols:
+                tr = con.execute(
+                    'SELECT COALESCE(SUM(miktar_kg),0) FROM nexgen_planlama_siparis_kalem WHERE siparis_id=?',
+                    (int(siparis_id),),
+                ).fetchone()
+                d['talep_kg'] = float(tr[0] or 0) if tr else None
+        if tablo_var(con, 'nexgen_uretim_plan'):
+            ucols = {c[1] for c in con.execute('PRAGMA table_info(nexgen_uretim_plan)').fetchall()}
+            if 'planlanan_kg' in ucols:
+                ur = con.execute(
+                    'SELECT COALESCE(SUM(planlanan_kg),0) FROM nexgen_uretim_plan WHERE siparis_id=? AND aktif=1',
+                    (int(siparis_id),),
+                ).fetchone()
+                d['fiili_uretim_kg'] = float(ur[0] or 0) if ur else None
+        return d
+    except Exception:
+        return None
+
+
+def _belge_kalemleri(con: sqlite3.Connection, belge: dict[str, Any]) -> list[dict[str, Any]]:
+    """Finans belgesi satır grid — yalnız gerçek kaynak kalemleri."""
+    tip = belge.get('belge_tipi')
+    pb = belge.get('para_birimi') or 'TRY'
+    bf = belge.get('birim_fiyat')
+    sevkiyat_id = belge.get('sevkiyat_id')
+    if tip == BELGE_TIP_SATIS_SEVKIYAT and sevkiyat_id and tablo_var(con, 'mo_musteri_sevkiyat_kalem'):
+        rows = con.execute(
+            """
+            SELECT id, urun_adi, renk_ad, formul_ad, miktar_kg, miktar_adet, notlar
+            FROM mo_musteri_sevkiyat_kalem WHERE sevkiyat_id=? ORDER BY id
+            """,
+            (int(sevkiyat_id),),
+        ).fetchall()
+        kalemler: list[dict[str, Any]] = []
+        for i, row in enumerate(rows, start=1):
+            r = dict(row)
+            aciklama = ' · '.join(
+                x for x in (r.get('urun_adi'), r.get('renk_ad'), r.get('formul_ad')) if x
+            ) or (r.get('notlar') or '—')
+            miktar = float(r.get('miktar_kg') or 0)
+            birim_fiyat = float(bf) if bf not in (None, '') else None
+            tutar = round(miktar * birim_fiyat, 2) if birim_fiyat is not None and miktar else None
+            kalemler.append({
+                'satir': i,
+                'aciklama': aciklama,
+                'kaynak': 'Sevkiyat',
+                'miktar': miktar,
+                'birim': 'KG',
+                'birim_fiyat': birim_fiyat,
+                'para_birimi': pb,
+                'tutar': tutar,
+                'durum': None,
+            })
+        return kalemler
+    return []
+
+
 def _liste_where(
     *,
     belge_tipi: str | None = None,
@@ -262,9 +336,12 @@ def detay_paket(
             )
         except FinansCariReadError:
             cari_hesap = None
+    siparis_id = belge.get('siparis_id')
     return {
         'belge': belge,
         'kaynak_ozet': _kaynak_ozet(con, belge),
+        'siparis_ozet': _siparis_ozet(con, int(siparis_id) if siparis_id else None),
+        'kalemler': _belge_kalemleri(con, belge),
         'audit': _audit_list(belge),
         'durum_gecisleri': gecisler,
         'aksiyonlar': finans_aksiyonlar(belge, yk),

@@ -56,8 +56,9 @@
 .rm-panel {
   background:var(--rm-white); border:1px solid var(--rm-border); border-radius:10px;
   display:flex; flex-direction:column; overflow:visible;
-  max-height:calc(100vh - 80px);
 }
+.rm-panel.rm-sol { max-height:calc(100vh - 80px); }
+.rm-panel.rm-sag { max-height:none; }
 .rm-panel-hdr {
   display:flex; align-items:center; gap:8px; padding:7px 12px;
   background:var(--rm-teal); flex-shrink:0; border-radius:10px 10px 0 0;
@@ -95,6 +96,92 @@
 .rm-fb:hover { background:var(--rm-bg2); color:var(--rm-t1); }
 .rm-fb.aktif { background:var(--rm-teal); color:#fff; border-color:var(--rm-teal); }
 .rm-rf-liste { flex:1; overflow-y:auto; min-height:0; }
+.rm-rf-kart-cb {
+  flex-shrink:0; margin-top:4px; width:15px; height:15px; cursor:pointer;
+  accent-color:var(--rm-teal);
+}
+.rm-rf-kilit {
+  flex-shrink:0; margin-top:2px; font-size:8px; font-weight:700; color:#6b7280;
+  background:#f3f4f6; border:1px solid #e5e7eb; border-radius:4px;
+  padding:2px 5px; line-height:1.3; white-space:nowrap; cursor:help;
+  max-width:72px; overflow:hidden; text-overflow:ellipsis;
+}
+.rm-rf-kilit:hover { background:#e5e7eb; color:#374151; }
+.rm-fb-silinebilir { color:#15803d; border-color:#bbf7d0; }
+.rm-fb-silinebilir.aktif { background:#15803d; border-color:#15803d; }
+.rm-rf-kilit-wrap {
+  flex-shrink:0; display:flex; flex-direction:column; gap:2px; max-width:78px;
+}
+.rm-rf-bagl-incele {
+  font-size:7px; font-weight:700; color:var(--rm-teal); background:transparent;
+  border:none; padding:0; cursor:pointer; text-align:left; text-decoration:underline;
+  line-height:1.2;
+}
+.rm-fb-baglanti { color:#7c3aed; border-color:#ddd6fe; }
+.rm-fb-baglanti.aktif { background:#7c3aed; border-color:#7c3aed; color:#fff; }
+.rm-bagl-dep-row { display:flex; justify-content:space-between; font-size:10px; padding:3px 0; border-bottom:1px solid #f1f5f9; }
+.rm-bagl-dep-etiket { color:var(--rm-t3); }
+.rm-bagl-dep-deger { color:var(--rm-t1); font-weight:600; text-align:right; max-width:62%; }
+.rm-toplu-band-btns .rm-btn-bagl { background:#7c3aed; color:#fff; border-color:#7c3aed; }
+.rm-toplu-band-btns .rm-btn-bagl:disabled { opacity:.45; cursor:not-allowed; }
+.rm-toplu-band {
+  display:none; flex-shrink:0; padding:8px 10px; border-top:1px solid var(--rm-border);
+  background:var(--rm-bg); flex-direction:column; gap:6px;
+}
+.rm-toplu-band.goster { display:flex; }
+.rm-toplu-band-metin { font-size:11px; font-weight:700; color:var(--rm-t1); }
+.rm-toplu-band-btns {
+  display:grid; grid-template-columns:1fr 1fr; gap:6px; align-items:stretch;
+}
+.rm-toplu-band-btns .rm-btn {
+  width:100%; min-width:0; height:30px; font-size:10px; padding:0 8px;
+  white-space:nowrap; justify-content:center; text-align:center;
+}
+.rm-toplu-band-btns .rm-btn-sil { background:#dc2626; color:#fff; border-color:#dc2626; }
+.rm-toplu-band-btns .rm-btn-sil:disabled { opacity:.45; cursor:not-allowed; }
+.rm-ts-modal-liste { max-height:160px; overflow-y:auto; margin:8px 0; font-size:11px; }
+.rm-ts-modal-item { padding:5px 0; border-bottom:1px solid #f1f5f9; }
+.rm-ts-modal-item:last-child { border-bottom:none; }
+.rm-ts-modal-engel { color:#b91c1c; font-size:10px; }
+.rm-ts-modal-uyari { font-size:10px; color:#b45309; background:#fffbeb; padding:8px; border-radius:6px; margin:8px 0; }
+.rm-ts-sil-input {
+  width:100%; padding:6px 8px; border:1px solid var(--rm-border); border-radius:6px;
+  font-size:12px; font-weight:700; letter-spacing:2px; text-transform:uppercase;
+}
+.rm-bagl-sil-popup { width:650px !important; max-width:96vw !important; }
+.rm-bagl-dep-grid { display:grid; grid-template-columns:1fr 1fr; gap:0 16px; margin-top:6px; }
+.rm-bagl-kayit-bas { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; margin-bottom:4px; }
+.rm-bagl-kayit-bas-kod { font-size:12px; font-weight:800; font-family:monospace; color:var(--rm-t1); }
+.rm-bagl-kayit-bas-rf { font-size:10px; color:var(--rm-t3); margin-top:2px; }
+.rm-bagl-badge-etki {
+  display:inline-block; font-size:9px; font-weight:700; padding:2px 7px; border-radius:10px;
+  background:#f1f5f9; color:#475569; border:1px solid #e2e8f0;
+}
+.rm-bagl-badge-info {
+  display:inline-flex; align-items:center; gap:4px; font-size:9px; font-weight:600;
+  color:#0369a1; background:#e0f2fe; border:1px solid #bae6fd;
+  padding:3px 8px; border-radius:10px; margin-bottom:10px;
+}
+.rm-bagl-at-ro {
+  display:block; width:100%; padding:6px 8px; margin:4px 0 2px; box-sizing:border-box;
+  background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px;
+  font-size:12px; font-weight:700; font-family:monospace; color:#334155;
+}
+.rm-bagl-at-etiket {
+  font-size:9px; font-weight:700; color:var(--rm-t4); text-transform:uppercase;
+  letter-spacing:.4px; margin-top:8px;
+}
+.rm-bagl-input-at {
+  width:100%; padding:6px 8px; border:1px solid var(--rm-border); border-radius:6px;
+  font-size:12px; font-weight:600; font-family:monospace; letter-spacing:0; box-sizing:border-box;
+}
+.rm-bagl-input-sil {
+  width:100%; padding:6px 8px; border:1px solid var(--rm-border); border-radius:6px;
+  font-size:12px; font-weight:700; letter-spacing:1px; text-transform:uppercase; box-sizing:border-box;
+}
+.rm-bagl-dogrulama-blok { margin-top:10px; padding-top:8px; border-top:1px dashed #e2e8f0; }
+.rm-bagl-kayit-wrap { margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid #e5e7eb; }
+.rm-bagl-kayit-wrap:last-of-type { border-bottom:none; margin-bottom:8px; }
 .rm-rf-kart {
   padding:8px 10px; border-bottom:1px solid #f1f5f9; cursor:pointer;
   background:#fff; border-left:3px solid transparent;
@@ -138,12 +225,12 @@
 .rm-rozet-taslak { background:#f1f5f9; color:#4b5563; }
 .rm-rozet-pasif  { background:#f3f4f6; color:#6b7280; }
 .rm-rozet-onay-bek { background:#fef9c3; color:#7c5a00; }
-.rm-sag-ic { display:flex; flex-direction:column; flex:1; min-height:0; overflow:hidden; }
+.rm-sag-ic { display:block; overflow:visible; }
 .rm-bos { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; color:var(--rm-t4); }
 .rm-bos-buyuk { padding:52px 24px; }
 .rm-bos svg { opacity:.2; }
 .rm-bos span { font-size:12px; }
-.rm-ozet { padding:12px 16px 10px; border-bottom:1px solid var(--rm-border); flex-shrink:0; }
+.rm-ozet { padding:8px 14px 6px; border-bottom:1px solid var(--rm-border); flex-shrink:0; }
 .rm-ozet-satir1 { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:4px; }
 .rm-ozet-ad { font-size:18px; font-weight:800; color:var(--rm-t1); line-height:1.2; }
 /* RF kodu + REV chip grubu */
@@ -170,7 +257,7 @@
 }
 .rm-rf-chip-bold { font-weight:600; color:var(--rm-t2); }
 .rm-tl {
-  display:flex; align-items:center; justify-content:center; padding:10px 16px;
+  display:flex; align-items:center; justify-content:center; padding:6px 14px;
   border-bottom:1px solid var(--rm-border); flex-shrink:0; background:var(--rm-bg);
 }
 /* Daire stili timeline */
@@ -189,10 +276,10 @@
 }
 .rm-tl-label.done { color:#15803d; }
 .rm-tl-label.cur  { color:var(--rm-orange); font-weight:700; }
-.rm-tl-line { width:36px; height:2px; background:var(--rm-border); margin:0 4px; margin-bottom:18px; flex-shrink:0; }
+.rm-tl-line { width:36px; height:2px; background:var(--rm-border); margin:0 4px; margin-bottom:14px; flex-shrink:0; }
 .rm-tl-line.done { background:#16c25a; }
 .rm-butonlar {
-  display:flex; gap:8px; padding:10px 16px; flex-shrink:0;
+  display:flex; gap:6px; padding:6px 14px; flex-shrink:0;
   border-bottom:1px solid var(--rm-border); background:var(--rm-white); flex-wrap:wrap;
   align-items:center;
 }
@@ -220,9 +307,62 @@
 }
 .rm-sekme:hover { color:var(--rm-t1); }
 .rm-sekme.aktif { color:var(--rm-teal); border-bottom-color:var(--rm-teal); }
-.rm-sek-ic { flex:1; overflow-y:auto; min-height:0; padding:12px 14px; display:none; flex-direction:column; gap:10px; }
-.rm-sek-ic.goster { display:flex; }
+.rm-sek-ic { overflow:visible; padding:8px 14px 10px; display:none; }
+.rm-sek-ic.goster { display:block; }
 .rm-2k { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+/* Ürün Kimliği — 2 kolon masonry grid */
+.rm-kimlik-grid {
+  display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; align-items:start;
+}
+@media (max-width:900px) { .rm-kimlik-grid { grid-template-columns:1fr; } }
+.rm-kimlik-kart {
+  background:#f9fafb; border:1px solid #e5e7eb; border-radius:10px;
+  padding:12px; display:flex; flex-direction:column;
+}
+.rm-kimlik-kart.tam-genis { grid-column:1 / -1; }
+.rm-kimlik-kart-bas {
+  display:flex; align-items:center; gap:8px;
+  font-size:11px; font-weight:700; color:#374151;
+  text-transform:uppercase; letter-spacing:.5px;
+  border-bottom:1px solid #e5e7eb; padding-bottom:6px; margin-bottom:8px;
+}
+.rm-kimlik-kart-ikon { width:15px; height:15px; flex-shrink:0; color:var(--rm-teal); }
+.rm-kimlik-satir {
+  display:flex; justify-content:space-between; align-items:flex-start; gap:14px;
+  padding:4px 0; font-size:11px; border-bottom:1px solid #f3f4f6;
+}
+.rm-kimlik-satir:last-child { border-bottom:none; }
+.rm-kimlik-etiket { color:#6b7280; font-size:11px; font-weight:600; min-width:108px; flex-shrink:0; }
+.rm-kimlik-deger { color:var(--rm-t1); font-weight:600; text-align:right; flex:1; line-height:1.35; }
+.rm-kimlik-deger-stack { text-align:right; flex:1; }
+.rm-kimlik-deger-alt { font-size:10px; color:var(--rm-t3); font-weight:500; margin-top:2px; }
+.rm-kimlik-oran-wrap { display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-end; }
+.rm-kimlik-oran-badge {
+  display:inline-block; font-size:10px; font-weight:700; padding:3px 9px;
+  border-radius:8px; background:var(--rm-purple-bg); color:#7c3aed; border:1px solid #ddd6fe;
+}
+.rm-kimlik-durum-bas { font-size:13px; font-weight:800; color:var(--rm-t1); line-height:1.3; }
+.rm-kimlik-durum-alt { font-size:11px; color:var(--rm-t3); line-height:1.45; margin-top:4px; }
+.rm-kimlik-revizyon-alan {
+  margin-top:6px; padding-top:6px; font-size:10px; color:var(--rm-t4);
+  border-top:1px dashed #e5e7eb;
+}
+.rm-onay-kutu {
+  background:#fff; border:1px solid var(--rm-border); border-radius:10px; padding:14px 16px;
+}
+.rm-onay-btns { display:flex; gap:8px; flex-wrap:wrap; }
+.rm-onay-not { font-size:11px; color:var(--rm-t3); line-height:1.45; margin-top:8px; }
+.rm-btn-green { background:#f0fdf4; color:#15803d; border:1px solid #86efac; }
+.rm-btn-orange { background:#fff8f0; color:#7c4a00; border:1px solid #ddb88a; }
+.rm-btn-red { background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; }
+.rm-sek-bas { font-size:10px; font-weight:700; color:var(--rm-t3); text-transform:uppercase; letter-spacing:.4px; margin-bottom:8px; }
+.rm-hg { padding:6px 0; border-bottom:1px solid #f1f5f9; font-size:11px; }
+.rm-hg-i { font-weight:600; color:var(--rm-t1); display:block; }
+.rm-hg-k { color:var(--rm-t3); display:block; font-size:10px; }
+.rm-hg-t { color:var(--rm-t4); font-size:10px; }
+.rm-input {
+  width:100%; padding:6px 8px; border:1px solid var(--rm-border); border-radius:6px; font-size:11px;
+}
 .rm-bl-bas { font-size:9px; font-weight:700; color:var(--rm-t3); letter-spacing:.5px; text-transform:uppercase; margin-bottom:5px; padding-bottom:4px; border-bottom:1px solid var(--rm-border); }
 .rm-bs { display:grid; grid-template-columns:110px 1fr; gap:4px; padding:3px 0; font-size:11px; border-bottom:1px solid #f8fafc; }
 .rm-be { color:var(--rm-t3); font-size:10px; }
@@ -371,7 +511,7 @@
           <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/>
         </svg>
         <span class="rm-panel-baslik">Renk Formülleri</span>
-        <button class="rm-yeni-btn" onclick="rmSonrakiFaz('Yeni çalışma')">+ Yeni</button>
+        <button class="rm-yeni-btn" onclick="location.href='/nexgen/tablet/arge/yeni-rf'" title="Vedat doğrudan yeni renk çalışması (YENI_RF)">+ Yeni</button>
       </div>
       <div class="rm-ara-wrap">
           <svg viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" width="13" height="13">
@@ -387,9 +527,26 @@
           <button class="rm-fb"       data-f="AKTİF"    onclick="rmFiltre(this)">Aktif</button>
           <button class="rm-fb"       data-f="REVİZE"   onclick="rmFiltre(this)">Revize</button>
           <button class="rm-fb"       data-f="PASİF"    onclick="rmFiltre(this)">Pasif</button>
+          {% if is_admin %}
+          <button class="rm-fb rm-fb-silinebilir" data-f="SILINEBILIR" onclick="rmFiltre(this)">Silinebilir</button>
+          <button class="rm-fb rm-fb-baglanti" data-f="BAGLANTILI_TEST" onclick="rmFiltre(this)">Bağlantılı Testler</button>
+          {% endif %}
         </div>
         <div class="rm-rf-liste" id="rm-liste">
           <div class="rm-yukleniyor">Yükleniyor…</div>
+        </div>
+        <div class="rm-toplu-band" id="rm-toplu-band">
+          <div class="rm-toplu-band-metin" id="rm-toplu-band-metin">0 kayıt seçildi</div>
+          <div class="rm-toplu-band-btns">
+            <button type="button" class="rm-btn rm-btn-arge" id="rm-btn-tum-temiz" onclick="rmTopluTumSilinebilirSec()">Tümünü Seç</button>
+            <button type="button" class="rm-btn rm-btn-arge" id="rm-btn-tum-bagl" onclick="rmTopluTumBaglantiliSec()" style="display:none">Tümünü Seç</button>
+            <button type="button" class="rm-btn rm-btn-arge" onclick="rmTopluSecimTemizle()">Seçimi Temizle</button>
+            <button type="button" class="rm-btn rm-btn-arge" id="rm-btn-bagl-incele" style="display:none" onclick="rmBaglInceleModalAc()">Bağlantıları İncele</button>
+            <button type="button" class="rm-btn rm-btn-sil" id="rm-btn-temiz-sil" onclick="rmTopluSilModalAc()">Seçilenleri Sil</button>
+            <button type="button" class="rm-btn rm-btn-bagl" id="rm-btn-bagl-sil" style="display:none"
+              title="Seçilen test kayıtlarını güvenli bağlantılarıyla birlikte sil"
+              onclick="rmBaglSilModalAc()">Bağlantılarıyla Sil</button>
+          </div>
         </div>
     </div>
 
@@ -401,7 +558,7 @@
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
           <polyline points="14 2 14 8 20 8"/>
         </svg>
-        <span class="rm-panel-baslik">DETAY</span>
+        <span class="rm-panel-baslik">ÜRÜN KİMLİĞİ</span>
         <span id="rm-hdr-ad" class="rm-panel-hdr-alt">Bir çalışma seçin</span>
       </div>
 
@@ -475,6 +632,57 @@
   </div>
 </div>
 
+<!-- Toplu Silme Onay Modal -->
+<div id="rm-ts-modal-bg" class="rm-popup-bg" style="display:none" onclick="rmTsModalBgClick(event)">
+  <div class="rm-popup" style="max-width:480px" onclick="event.stopPropagation()">
+    <div class="rm-popup-hdr">
+      <span class="rm-popup-baslik-metin">Toplu Silme Onayı</span>
+      <button class="rm-popup-kapat" onclick="rmTsModalKapat()">✕</button>
+    </div>
+    <div class="rm-popup-icerik" id="rm-ts-modal-icerik">
+      <div class="rm-yukleniyor">Ön kontrol yapılıyor…</div>
+    </div>
+    <div class="rm-popup-footer" id="rm-ts-modal-footer">
+      <button class="rm-btn rm-btn-arge" onclick="rmTsModalKapat()">İptal</button>
+      <button class="rm-btn rm-btn-sil" id="rm-ts-sil-btn" disabled onclick="rmTopluSilUygula()">Sil</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bağlantılı Silme — İncele Modal -->
+<div id="rm-bagl-incele-bg" class="rm-popup-bg" style="display:none" onclick="rmBaglInceleBgClick(event)">
+  <div class="rm-popup" style="max-width:520px" onclick="event.stopPropagation()">
+    <div class="rm-popup-hdr">
+      <span class="rm-popup-baslik-metin">Bağlantı Özeti</span>
+      <button class="rm-popup-kapat" onclick="rmBaglInceleKapat()">✕</button>
+    </div>
+    <div class="rm-popup-icerik" id="rm-bagl-incele-icerik">
+      <div class="rm-yukleniyor">Yükleniyor…</div>
+    </div>
+    <div class="rm-popup-footer">
+      <button class="rm-btn rm-btn-arge" onclick="rmBaglInceleKapat()">Kapat</button>
+      <button class="rm-btn rm-btn-bagl" id="rm-bagl-incele-sil-btn" style="display:none" onclick="rmBaglSilModalAc()">Bağlantılarıyla Birlikte Sil</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bağlantılı Silme Onay Modal -->
+<div id="rm-bagl-sil-bg" class="rm-popup-bg" style="display:none" onclick="rmBaglSilBgClick(event)">
+  <div class="rm-popup rm-bagl-sil-popup" onclick="event.stopPropagation()">
+    <div class="rm-popup-hdr">
+      <span class="rm-popup-baslik-metin">Bağlantılarıyla Birlikte Sil — Onay</span>
+      <button class="rm-popup-kapat" onclick="rmBaglSilKapat()">✕</button>
+    </div>
+    <div class="rm-popup-icerik" id="rm-bagl-sil-icerik">
+      <div class="rm-yukleniyor">Hazırlanıyor…</div>
+    </div>
+    <div class="rm-popup-footer">
+      <button class="rm-btn rm-btn-arge" onclick="rmBaglSilKapat()">İptal</button>
+      <button class="rm-btn rm-btn-bagl" id="rm-bagl-sil-btn" disabled onclick="rmBaglSilUygula()">Sil</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast -->
 <div id="rm-toast" class="rm-toast"></div>
 
@@ -484,12 +692,18 @@
 // ══════════════════════════════════════════════════════════════════════
 const CAN_APPROVE = {{ 'true' if (can_approve or can_manage) else 'false' }};
 const CAN_MANAGE  = {{ 'true' if can_manage else 'false' }};
+const IS_ADMIN    = {{ 'true' if is_admin else 'false' }};
 let aktifFiltre  = 'TUMU';
 let araMetni     = '';
 let seciliKart   = null;
 let tumKartlar   = [];
 let aktifRfId    = null;
 let rmFbSeciliIds = new Set();
+let rmTopluSecim  = new Set();
+let rmTsOnkontrol = null;
+let rmBaglIncele  = null;
+let rmBaglOnkontrol = null;
+let rmCariUnvanMap = null;
 
 // ── yardımcı ─────────────────────────────────────────────────────────
 function rmE(s){
@@ -635,7 +849,10 @@ function rmDurumRz(grubu){
 }
 function rmFiltreSayilariGuncelle(sayilar){
   if(!sayilar) return;
-  const etiket={'TUMU':'Tümü','BEKLEYEN':'Bekleyen','AKTİF':'Aktif','REVİZE':'Revize','PASİF':'Pasif'};
+  const etiket={
+    'TUMU':'Tümü','BEKLEYEN':'Bekleyen','AKTİF':'Aktif','REVİZE':'Revize',
+    'PASİF':'Pasif','SILINEBILIR':'Silinebilir','BAGLANTILI_TEST':'Bağlantılı Testler'
+  };
   document.querySelectorAll('#rm-filtre-bar .rm-fb').forEach(b=>{
     const f=b.dataset.f;
     const n=f==='TUMU'?sayilar.toplam:(sayilar[f]||0);
@@ -683,6 +900,9 @@ async function rmListeYukle(){
     if(!d.ok){el.innerHTML='<div class="rm-yukleniyor">Hata: '+rmE(d.hata)+'</div>';return;}
     tumKartlar=d.kartlar;
     rmFiltreSayilariGuncelle(d.sayilar);
+    const gorunurIds=new Set(tumKartlar.filter(rmTopluCheckboxGoster).map(k=>Number(k.arge_test_id)));
+    for(const id of [...rmTopluSecim]){ if(!gorunurIds.has(id)) rmTopluSecim.delete(id); }
+    rmTopluBandGuncelle();
     rmListeRender(tumKartlar);
     // Önceki seçimi koru
     if(seciliKart){
@@ -691,10 +911,110 @@ async function rmListeYukle(){
         (seciliKart.rf_id && k.rf_id===seciliKart.rf_id && !k.arge_test_id)
       );
       if(hala) rmDetayYukle(hala);
+      else rmDetayTemizle();
     }
   }catch(err){
     el.innerHTML='<div class="rm-yukleniyor">Ağ bağlantısı hatası</div>';
   }
+}
+
+function rmKartByArgeId(id){
+  return tumKartlar.find(k=>Number(k.arge_test_id)===Number(id));
+}
+function rmTopluCheckboxGoster(k){
+  if(!IS_ADMIN) return false;
+  return k.kart_tipi==='NX_AR'&&k.arge_test_id&&(
+    k.toplu_sil_silinebilir===true||k.toplu_sil_baglantili===true
+  );
+}
+function rmTopluKilitGoster(k){
+  if(!IS_ADMIN) return false;
+  return k.kart_tipi==='NX_AR'&&k.arge_test_id&&k.toplu_sil_kesin_engel===true&&k.toplu_sil_engel_rozet;
+}
+function rmBaglInceleLinkGoster(k){
+  if(!IS_ADMIN) return false;
+  return k.kart_tipi==='NX_AR'&&k.arge_test_id&&k.toplu_sil_baglantili===true;
+}
+function rmSecimTemizIds(){
+  return [...rmTopluSecim].filter(id=>{const k=rmKartByArgeId(id);return k&&k.toplu_sil_silinebilir;});
+}
+function rmSecimBaglIds(){
+  return [...rmTopluSecim].filter(id=>{const k=rmKartByArgeId(id);return k&&k.toplu_sil_baglantili;});
+}
+function rmTopluTumSilinebilirSec(){
+  if(!IS_ADMIN) return;
+  tumKartlar.filter(k=>k.toplu_sil_silinebilir===true).forEach(k=>rmTopluSecim.add(Number(k.arge_test_id)));
+  rmTopluBandGuncelle();
+  rmListeRender(tumKartlar);
+}
+function rmTopluTumBaglantiliSec(){
+  if(!IS_ADMIN) return;
+  tumKartlar.filter(k=>k.toplu_sil_baglantili===true).forEach(k=>rmTopluSecim.add(Number(k.arge_test_id)));
+  rmTopluBandGuncelle();
+  rmListeRender(tumKartlar);
+}
+function rmTopluSilinebilirSayisi(){
+  return tumKartlar.filter(k=>k.toplu_sil_silinebilir===true).length;
+}
+function rmTopluBaglantiliSayisi(){
+  return tumKartlar.filter(k=>k.toplu_sil_baglantili===true).length;
+}
+function rmTopluBandGuncelle(){
+  const band=document.getElementById('rm-toplu-band');
+  const metin=document.getElementById('rm-toplu-band-metin');
+  const silBtn=document.getElementById('rm-btn-temiz-sil');
+  const baglIncele=document.getElementById('rm-btn-bagl-incele');
+  const baglSil=document.getElementById('rm-btn-bagl-sil');
+  const tumTemiz=document.getElementById('rm-btn-tum-temiz');
+  const tumBagl=document.getElementById('rm-btn-tum-bagl');
+  if(!IS_ADMIN||!band) return;
+  const n=rmTopluSecim.size;
+  const nTemiz=rmSecimTemizIds().length;
+  const nBagl=rmSecimBaglIds().length;
+  const temizVar=rmTopluSilinebilirSayisi()>0;
+  const baglVar=rmTopluBaglantiliSayisi()>0;
+  const karisik=nTemiz>0&&nBagl>0;
+  if(temizVar||baglVar){
+    band.classList.add('goster');
+    metin.textContent=n>0?(n+' kayıt seçildi'):'Kayıt seçin';
+    if(tumTemiz) tumTemiz.style.display=temizVar?'':'none';
+    if(tumBagl) tumBagl.style.display=baglVar?'':'none';
+    if(silBtn){
+      silBtn.style.display=nTemiz>0&&!karisik?'':'none';
+      silBtn.disabled=nTemiz<1;
+    }
+    if(baglIncele){
+      baglIncele.style.display=nBagl>0&&!karisik?'':'none';
+      baglIncele.disabled=nBagl<1;
+    }
+    if(baglSil){
+      baglSil.style.display=nBagl>0&&!karisik?'':'none';
+      baglSil.disabled=nBagl<1;
+    }
+    if(karisik) metin.textContent=n+' kayıt — temiz ve bağlantılı karışık seçilemez';
+  }else{
+    band.classList.remove('goster');
+    metin.textContent='0 kayıt seçildi';
+  }
+}
+function rmTopluSecimTemizle(render=true){
+  rmTopluSecim.clear();
+  rmTopluBandGuncelle();
+  if(render&&tumKartlar.length) rmListeRender(tumKartlar);
+}
+function rmTopluCheckboxToggle(ev, argeTestId){
+  ev.stopPropagation();
+  const id=Number(argeTestId);
+  if(rmTopluSecim.has(id)) rmTopluSecim.delete(id);
+  else rmTopluSecim.add(id);
+  rmTopluBandGuncelle();
+}
+function rmDetayTemizle(){
+  seciliKart=null;
+  aktifRfId=null;
+  document.getElementById('rm-detay').style.display='none';
+  document.getElementById('rm-bos').style.display='flex';
+  document.getElementById('rm-hdr-ad').textContent='Bir çalışma seçin';
 }
 
 function rmListeRender(kartlar){
@@ -708,6 +1028,22 @@ function rmListeRender(kartlar){
       (seciliKart.arge_test_id&&k.arge_test_id===seciliKart.arge_test_id)||
       (seciliKart.rf_id&&k.rf_id===seciliKart.rf_id&&!k.arge_test_id)
     ));
+    const cbGoster=rmTopluCheckboxGoster(k);
+    const cbSecili=cbGoster&&rmTopluSecim.has(Number(k.arge_test_id));
+    const kilitGoster=rmTopluKilitGoster(k);
+    const baglLink=rmBaglInceleLinkGoster(k);
+    const cbHtml=cbGoster
+      ?`<input type="checkbox" class="rm-rf-kart-cb"${cbSecili?' checked':''}
+           onclick="rmTopluCheckboxToggle(event,${k.arge_test_id})"
+           aria-label="Seç">`:'';
+    const kilitHtml=kilitGoster
+      ?`<span class="rm-rf-kilit" title="${rmE(k.toplu_sil_engel_tooltip||'')}"
+             onclick="event.stopPropagation()">🔒 ${rmE(k.toplu_sil_engel_rozet)}</span>`:'';
+    const baglHtml=baglLink
+      ?`<div class="rm-rf-kilit-wrap" onclick="event.stopPropagation()">
+           <span class="rm-rf-kilit" title="${rmE(k.toplu_sil_engel_tooltip||'')}">🔒 ${rmE(k.toplu_sil_engel_rozet||'Bağlı')}</span>
+           <button type="button" class="rm-rf-bagl-incele" onclick="rmBaglInceleAc([${k.arge_test_id}])">Bağlantıları İncele</button>
+         </div>`:'';
     const rzCls=rmDurumRz(k.liste_grubu);
     const isNx = k.kart_tipi==='NX_AR';
     /* Kullanıcıya yalnız AT (test_no); NX-AR UI'de gösterilmez */
@@ -729,6 +1065,7 @@ function rmListeRender(kartlar){
     const dc = rmRenkDaire(k.rf_adi);
     return `<div class="rm-rf-kart${secilik?' aktif':''}"
                 onclick='rmKartSec(${JSON.stringify(k)})'>
+      ${cbHtml}${baglHtml||kilitHtml}
       <div class="nx-renk-daire" style="${nxRenkDaireStyle(dc)}"></div>
       <div class="rm-rf-kart-icerik">
         <div class="rm-rf-kart-kod">${rmE(anaKod)}</div>
@@ -747,12 +1084,14 @@ function rmFiltre(btn){
   document.querySelectorAll('#rm-filtre-bar .rm-fb').forEach(b=>b.classList.remove('aktif'));
   btn.classList.add('aktif');
   aktifFiltre=btn.dataset.f;
+  rmTopluSecimTemizle(false);
   rmListeYukle();
 }
 
 function rmAra(v){
   araMetni=v.trim();
   clearTimeout(rmAra._t);
+  rmTopluSecimTemizle(false);
   rmAra._t=setTimeout(rmListeYukle,300);
 }
 
@@ -771,8 +1110,9 @@ function rmKartSec(k){
 async function rmDetayYukle(k){
   document.getElementById('rm-bos').style.display='none';
   const detayEl=document.getElementById('rm-detay');
-  detayEl.style.display='flex';
+  detayEl.style.display='block';
   document.getElementById('s-calisma').innerHTML='<div class="rm-yukleniyor">Yükleniyor…</div>';
+  await rmCariUnvanYukle();
 
   const params=new URLSearchParams();
   if(k.arge_test_id) params.set('arge_test_id',k.arge_test_id);
@@ -868,11 +1208,293 @@ function rmTlHtml(grubu){
 function rmNxArFerhatPanelGoster(c){
   if(!c) return false;
   if(c.ferhat_genel_karar) return true;
-  if(c.ferhat_hydrate_dolu) return true;
+  if(c.sonuc_modeli==='TEK_DENEME' && c.deneme_olcum && c.deneme_olcum.shore_sonuc!=null) return true;
+  if((c.sonuc_modeli==='LEGACY'||c.sonuc_modeli==='BOYUT_BAZLI_ESKI') && c.boyut_sonuclar && c.boyut_sonuclar.some(function(b){
+    return b.shore_sonuc!=null || b.gramaj_gr!=null || b.enjeksiyon_saniye!=null;
+  })) return true;
   if(c.kalip && c.kalip.kalip_kodu) return true;
-  if(c.boyut_sonuclar && c.boyut_sonuclar.length) return true;
   if(c.ferhat_fotograflar && c.ferhat_fotograflar.length) return true;
   return false;
+}
+
+function rmNxArFerhatTamamlandi(c){
+  if(!c) return false;
+  if(c.ferhat_genel_karar) return true;
+  if(c.sonuc_modeli==='TEK_DENEME' && c.deneme_olcum && c.deneme_olcum.shore_sonuc!=null) return true;
+  if((c.sonuc_modeli==='LEGACY'||c.sonuc_modeli==='BOYUT_BAZLI_ESKI') && c.boyut_sonuclar && c.boyut_sonuclar.some(function(b){
+    return b.shore_sonuc!=null || b.gramaj_gr!=null;
+  })) return true;
+  return false;
+}
+
+function rmBoyutEtiket(b){
+  var m={LARGE:'LARGE',SMALL:'SMALL',MEDIUM:'MEDIUM'};
+  return m[(b||'').toUpperCase()]||b||'—';
+}
+
+function rmKimlikIkon(d){
+  return `<svg class="rm-kimlik-kart-ikon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+}
+function rmKimlikKartBas(title, iconPath){
+  return `<div class="rm-kimlik-kart-bas">${rmKimlikIkon(iconPath)}<span>${rmE(title)}</span></div>`;
+}
+function rmKimlikSatir(etiket, deger, alt){
+  const valHtml=alt
+    ?`<div class="rm-kimlik-deger-stack"><div class="rm-kimlik-deger" style="display:inline;text-align:right">${deger}</div><div class="rm-kimlik-deger-alt">${rmE(alt)}</div></div>`
+    :`<span class="rm-kimlik-deger">${deger}</span>`;
+  return `<div class="rm-kimlik-satir"><span class="rm-kimlik-etiket">${rmE(etiket)}</span>${valHtml}</div>`;
+}
+function rmKimlikCariAyir(oz){
+  const raw=(oz.cari||'').trim();
+  if(!raw||raw==='—') return {musteri:'—', cari:'—'};
+  const isKod=/^\d{2,3}\.[A-Z0-9][A-Z0-9.-]*$/i.test(raw);
+  if(isKod){
+    const unvan=(rmCariUnvanMap&&rmCariUnvanMap[raw])||'—';
+    return {musteri:unvan, cari:raw};
+  }
+  return {musteri:raw, cari:'—'};
+}
+async function rmCariUnvanYukle(){
+  if(rmCariUnvanMap!==null) return rmCariUnvanMap;
+  rmCariUnvanMap={};
+  try{
+    const res=await fetch('/nexgen/api/pazarlama/cariler');
+    if(res.ok){
+      const d=await res.json();
+      (d.cariler||[]).forEach(x=>{
+        const k=(x.cari_kod||'').trim();
+        if(k) rmCariUnvanMap[k]=x.unvan||'';
+      });
+    }
+  }catch(e){}
+  return rmCariUnvanMap;
+}
+function rmKimlikTalepAcan(d){
+  for(const o of (d.olaylar||[])){
+    if(!o.aciklama) continue;
+    try{
+      const j=JSON.parse(o.aciklama);
+      if(j.kullanici && j.kullanici!=='—') return j.kullanici;
+    }catch(e){}
+  }
+  return '—';
+}
+function rmKimlikDenemeTarihi(c){
+  if(!c) return '—';
+  const t=c.ferhat_tarihi||c.ferhat_kayit_tarihi||c.olusturma_tarihi;
+  return t?String(t).substring(0,16):'—';
+}
+function rmKimlikSonrakiAciklama(oz, c){
+  const du=((c&&c.durum)||oz.durum||'').toUpperCase();
+  if(du==='ONAY_BEKLIYOR') return 'Renk onayında sistem otomatik renk kodu üretir. Formül onayında kod kullanıcı tarafından belirlenir.';
+  if(du==='FERHAT_BEKLIYOR') return 'Enjeksiyon denemesi bekleniyor. Tamamlandığında onay sürecine aktarılır.';
+  if(du==='DENEMEDE') return 'Enjeksiyon denemesi devam ediyor.';
+  if(du==='ARGE_HAZIR'||du==='REVIZYON_GEREKLI') return 'AR-GE kararı verildikten sonra enjeksiyon veya onay aşamasına geçilir.';
+  if(du==='ONAYLANDI') return 'Onaylandı. RF aktifleşir ve Reçete Merkezi, Pazarlama ve üretim seçimlerinde kullanılabilir.';
+  if(du==='REDDEDILDI') return 'Kayıt reddedildi.';
+  if(du==='ONAYLI'||(oz.durum_etiketi||'').indexOf('AKTİF')>=0) return 'Aktif renk formülü — üretim ve planlamada kullanılabilir.';
+  return '';
+}
+function rmKimlikOlcumVeri(c, isNxAr){
+  if(isNxAr&&c&&c.sonuc_modeli==='TEK_DENEME'&&c.deneme_olcum){
+    const o=c.deneme_olcum;
+    const pismeSn=o.pisme_suresi_sn!=null?o.pisme_suresi_sn:(o.pisme_suresi_dk!=null?Math.round(Number(o.pisme_suresi_dk)*60):null);
+    return {
+      shore:o.shore_sonuc!=null?o.shore_sonuc+' As':'—',
+      pisme:pismeSn!=null?pismeSn+' sn':'—',
+      enj:o.enjeksiyon_saniye!=null?o.enjeksiyon_saniye+' sn':'—',
+      gramaj:o.gramaj_gr!=null?o.gramaj_gr+' gr':'—',
+    };
+  }
+  if(c&&c.shore_degeri!=null){
+    const pisme=c.pisme_suresi_dk!=null?c.pisme_suresi_dk+' dk':'—';
+    return {
+      shore:String(c.shore_degeri).replace('.',','),
+      pisme,
+      enj:'—',
+      gramaj:'—',
+    };
+  }
+  if(isNxAr&&c&&c.boyut_sonuclar&&c.boyut_sonuclar.length){
+    const b=c.boyut_sonuclar[0];
+    const pismeSn=b.pisme_suresi_dk!=null?Math.round(Number(b.pisme_suresi_dk)*60):null;
+    return {
+      shore:b.shore_sonuc!=null?b.shore_sonuc:'—',
+      pisme:pismeSn!=null?pismeSn+' sn':'—',
+      enj:b.enjeksiyon_saniye!=null?b.enjeksiyon_saniye+' sn':'—',
+      gramaj:b.gramaj_gr!=null?b.gramaj_gr+' gr':'—',
+    };
+  }
+  return {shore:'—', pisme:'—', enj:'—', gramaj:'—'};
+}
+function rmKimlikGorselVeri(c, isNxAr){
+  if(isNxAr&&c&&c.sonuc_modeli==='TEK_DENEME'&&c.deneme_olcum){
+    const o=c.deneme_olcum;
+    return {renk:o.renk_sonucu||'—', yuzey:o.yuzey_sonucu||'—', kalip:o.kalip_sonucu||'—'};
+  }
+  if(c&&c.renk_tuttu!=null){
+    const ok=c.renk_tuttu===1||c.renk_tuttu===true;
+    return {renk:ok?'UYGUN':'UYGUN DEĞİL', yuzey:c.kopurme_notu||'—', kalip:c.genel_aciklama||'—'};
+  }
+  if(isNxAr&&c&&c.boyut_sonuclar&&c.boyut_sonuclar.length){
+    const b=c.boyut_sonuclar[0];
+    return {renk:b.renk_sonucu||'—', yuzey:b.kalite_aciklama||'—', kalip:b.kalip_sonucu||'—'};
+  }
+  return {renk:'—', yuzey:'—', kalip:'—'};
+}
+function rmKimlikCalismaHtml(kart, oz, c, d, isNxAr, grubu, canApprove){
+  const cc=rmKimlikCariAyir(oz);
+  let h=`<div class="rm-kimlik-grid">`;
+  h+=`<div class="rm-kimlik-kart">${rmKimlikKartBas('Ürün Kimliği', '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>')}`;
+  h+=rmKimlikSatir('Müşteri', rmE(cc.musteri));
+  h+=rmKimlikSatir('Cari', cc.cari!=='—'?rmE(cc.cari):'—');
+  h+=rmKimlikSatir('RF Adı', rmE(oz.rf_adi||'—'));
+  h+=rmKimlikSatir('Ana Formül', rmE(oz.ana_formul||'—'));
+  h+=rmKimlikSatir('Çalışma Kodu', rmE((c&&c.test_no)||oz.test_no||'—'));
+  h+=rmKimlikSatir('Talebi Açan', rmE(rmKimlikTalepAcan(d)));
+  h+=rmKimlikSatir('Denemeyi Yapan', rmE((c&&c.ferhat_adi)||'—'));
+  h+=rmKimlikSatir('Deneme Tarihi', rmE(rmKimlikDenemeTarihi(c)));
+  if(c&&c.notlar) h+=rmKimlikSatir('Not', `<span style="font-weight:500;color:var(--rm-t2)">${rmE(c.notlar)}</span>`);
+  else if(c&&c.talep_referansi) h+=rmKimlikSatir('Not', `<span style="font-weight:500;color:var(--rm-t2)">${rmE(c.talep_referansi)}</span>`);
+  h+=`</div>`;
+
+  const olcum=rmKimlikOlcumVeri(c, isNxAr);
+  h+=`<div class="rm-kimlik-kart">${rmKimlikKartBas('Deneme Ölçüleri', '<path d="M2 12h20"/><path d="M12 2v20"/>')}`;
+  h+=rmKimlikSatir('Shore', rmE(olcum.shore));
+  h+=rmKimlikSatir('Pişme', rmE(olcum.pisme));
+  h+=rmKimlikSatir('Enjeksiyon', rmE(olcum.enj));
+  h+=rmKimlikSatir('Gramaj', rmE(olcum.gramaj));
+  h+=`</div>`;
+
+  const gorsel=rmKimlikGorselVeri(c, isNxAr);
+  h+=`<div class="rm-kimlik-kart">${rmKimlikKartBas('Görsel Sonuç', '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>')}`;
+  h+=rmKimlikSatir('Renk', rmE(gorsel.renk));
+  h+=rmKimlikSatir('Yüzey', rmE(gorsel.yuzey));
+  h+=rmKimlikSatir('Kalıptan Çıkma', rmE(gorsel.kalip));
+  if(isNxAr&&c&&c.ferhat_fotograflar&&c.ferhat_fotograflar.length){
+    h+=`<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px">`;
+    c.ferhat_fotograflar.forEach(f=>{
+      const u=f.url||('/yonetim/belge/'+(f.Id||f.id||''));
+      if(u) h+=`<a href="${rmE(u)}" target="_blank" rel="noopener"><img src="${rmE(u)}" alt="" loading="lazy" style="width:52px;height:52px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb"></a>`;
+    });
+    h+=`</div>`;
+  }
+  h+=`</div>`;
+
+  const oranlar=(c&&c.boyut_kullanim_oranlari)||[];
+  h+=`<div class="rm-kimlik-kart">${rmKimlikKartBas('Kullanım Oranları', '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>')}`;
+  if(oranlar.length){
+    h+=`<div class="rm-kimlik-satir"><span class="rm-kimlik-etiket">Large / Small</span><span class="rm-kimlik-deger"><span class="rm-kimlik-oran-wrap">`;
+    h+=oranlar.map(o=>`<span class="rm-kimlik-oran-badge">${rmBoyutEtiket(o.boyut)} ${o.kullanim_orani!=null?Number(o.kullanim_orani).toFixed(2):'—'}</span>`).join('');
+    h+=`</span></span></div>`;
+  }else{
+    h+=rmKimlikSatir('Large / Small', '—');
+  }
+  h+=`</div>`;
+
+  h+=`<div class="rm-kimlik-kart">${rmKimlikKartBas('Ferhat Kararı', '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>')}`;
+  h+=rmKimlikSatir('Karar', rmE((c&&c.ferhat_genel_karar)||'—'));
+  h+=rmKimlikSatir('Tamamlanma', rmE(c&&c.ferhat_kayit_tarihi?String(c.ferhat_kayit_tarihi).substring(0,16):'—'));
+  h+=`<div class="rm-kimlik-revizyon-alan">Revizyon sayısı: ${(d.revizyonlar||[]).length}</div>`;
+  h+=`</div>`;
+
+  const sonrAcik=rmKimlikSonrakiAciklama(oz, c);
+  h+=`<div class="rm-kimlik-kart">${rmKimlikKartBas('Sonraki Durum', '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>')}`;
+  h+=`<div class="rm-kimlik-durum-bas">${rmE(oz.durum_etiketi||oz.durum||'—')}</div>`;
+  if(sonrAcik) h+=`<div class="rm-kimlik-durum-alt">${rmE(sonrAcik)}</div>`;
+  h+=`</div>`;
+
+  if(isNxAr&&c){
+    const sahaHtml=rmNxArSahaPanelHtml(kart, oz, c, canApprove);
+    if(sahaHtml) h+=`<div class="rm-kimlik-kart tam-genis">${sahaHtml}</div>`;
+  }
+  h+=`</div>`;
+  return h;
+}
+
+function rmNxArFerhatSonucHtml(c){
+  const kalip=c.kalip||{};
+  const kalipHtml=kalip.kalip_kodu?`
+    <div style="margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--rm-line)">
+      <div style="font-size:10px;font-weight:800;color:var(--rm-t3);margin-bottom:4px">Kullanılan Kalıp</div>
+      <div style="font-family:ui-monospace,monospace;font-weight:700;color:var(--rm-t1)">${rmE(kalip.kalip_kodu)}</div>
+      <div style="font-size:12px;color:var(--rm-t2);margin-top:2px">${rmE(kalip.kalip_adi||'—')}${kalip.beden_araligi?' · '+rmE(kalip.beden_araligi):''}</div>
+    </div>`:'';
+
+  if(!rmNxArFerhatTamamlandi(c)){
+    const oranlar=(c.boyut_kullanim_oranlari||[]);
+    const oranHtml=oranlar.length?`<div style="margin-top:10px">
+      <div style="font-size:10px;font-weight:800;color:var(--rm-t3);margin-bottom:4px">Kullanım Oranları</div>
+      ${oranlar.map(function(o){
+        return `<div class="rm-bs"><span class="rm-be">${rmBoyutEtiket(o.boyut)}</span><span class="rm-bv">${o.kullanim_orani!=null?Number(o.kullanim_orani).toFixed(2):'—'}</span></div>`;
+      }).join('')}
+    </div>`:'';
+    return `<div class="rm-bl">
+      <div class="rm-bl-bas">Enjeksiyon Deneme Sonucu</div>
+      <div style="font-size:12px;color:var(--rm-t4);padding:8px 0">Enjeksiyon denemesi henüz tamamlanmadı.</div>
+      ${kalipHtml}${oranHtml}
+    </div>`;
+  }
+
+  if(c.sonuc_modeli==='TEK_DENEME'){
+    const o=c.deneme_olcum||{};
+    const pismeSn=o.pisme_suresi_sn!=null?o.pisme_suresi_sn:(o.pisme_suresi_dk!=null?Math.round(Number(o.pisme_suresi_dk)*60):null);
+    const oranHtml=(c.boyut_kullanim_oranlari||[]).map(function(r){
+      return `<div class="rm-bs"><span class="rm-be">${rmBoyutEtiket(r.boyut)}</span><span class="rm-bv">${r.kullanim_orani!=null?Number(r.kullanim_orani).toFixed(2):'—'}</span></div>`;
+    }).join('');
+    const fotHtml=(c.ferhat_fotograflar&&c.ferhat_fotograflar.length)?`
+      <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--rm-line)">
+        <div style="font-size:11px;font-weight:900;color:var(--rm-t2);margin-bottom:8px">Fotoğraflar</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          ${c.ferhat_fotograflar.map(function(f){
+            const u=f.url||('/yonetim/belge/'+(f.Id||f.id||''));
+            return u?`<a href="${rmE(u)}" target="_blank" rel="noopener"><img src="${rmE(u)}" alt="" loading="lazy" style="width:72px;height:72px;object-fit:cover;border-radius:6px;border:1px solid var(--rm-line)"></a>`:'';
+          }).join('')}
+        </div>
+      </div>`:'';
+    return `<div class="rm-bl">
+      <div class="rm-bl-bas">Enjeksiyon Deneme Sonucu</div>
+      ${kalipHtml}
+      <div style="font-size:10px;font-weight:800;color:var(--rm-t3);margin:8px 0 4px">Deneme Ölçümleri</div>
+      <div class="rm-bs"><span class="rm-be">Shore</span><span class="rm-bv">${o.shore_sonuc!=null?o.shore_sonuc+' As':'—'}</span></div>
+      <div class="rm-bs"><span class="rm-be">Pişme</span><span class="rm-bv">${pismeSn!=null?pismeSn+' sn':'—'}</span></div>
+      <div class="rm-bs"><span class="rm-be">Enjeksiyon</span><span class="rm-bv">${o.enjeksiyon_saniye!=null?o.enjeksiyon_saniye+' sn':'—'}</span></div>
+      <div class="rm-bs"><span class="rm-be">Gramaj</span><span class="rm-bv">${o.gramaj_gr!=null?o.gramaj_gr+' gr':'—'}</span></div>
+      <div style="font-size:10px;font-weight:800;color:var(--rm-t3);margin:10px 0 4px">Kullanım Oranları</div>
+      ${oranHtml||'<div style="font-size:11px;color:var(--rm-t4)">—</div>'}
+      <div style="font-size:10px;font-weight:800;color:var(--rm-t3);margin:10px 0 4px">Görsel Sonuç</div>
+      <div class="rm-bs"><span class="rm-be">Renk</span><span class="rm-bv">${rmE(o.renk_sonucu||'—')}</span></div>
+      <div class="rm-bs"><span class="rm-be">Yüzey</span><span class="rm-bv">${rmE(o.yuzey_sonucu||'—')}</span></div>
+      <div class="rm-bs"><span class="rm-be">Kalıptan Çıkma</span><span class="rm-bv">${rmE(o.kalip_sonucu||'—')}</span></div>
+      ${o.genel_not?`<div class="rm-bs"><span class="rm-be">Genel Not</span><span class="rm-bv">${rmE(o.genel_not)}</span></div>`:''}
+      <div style="font-size:10px;font-weight:800;color:var(--rm-t3);margin:10px 0 4px">Ferhat Kararı</div>
+      <div class="rm-bs"><span class="rm-be">Karar</span><span class="rm-bv">${rmE(c.ferhat_genel_karar||'—')}</span></div>
+      ${c.ferhat_genel_not?`<div class="rm-bs"><span class="rm-be">Not</span><span class="rm-bv">${rmE(c.ferhat_genel_not)}</span></div>`:''}
+      ${c.ferhat_kayit_tarihi?`<div class="rm-bs"><span class="rm-be">Tamamlanma</span><span class="rm-bv">${rmE((c.ferhat_kayit_tarihi||'').substring(0,16))}</span></div>`:''}
+      ${fotHtml}
+    </div>`;
+  }
+
+  // LEGACY — geriye uyum (eski L/S boyut sonuçları)
+  const bs=(c.boyut_sonuclar||[]).map(function(b){
+    const pismeSn=b.pisme_suresi_dk!=null?Math.round(Number(b.pisme_suresi_dk)*60):null;
+    return `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--rm-line)">
+      <div style="font-size:11px;font-weight:900;color:var(--rm-t2);margin-bottom:6px">${rmE(b.boyut||'')}</div>
+      <div class="rm-bs"><span class="rm-be">Shore</span><span class="rm-bv">${b.shore_sonuc!=null?b.shore_sonuc:'—'}</span></div>
+      <div class="rm-bs"><span class="rm-be">Pişme</span><span class="rm-bv">${pismeSn!=null?pismeSn+' sn':'—'}</span></div>
+      <div class="rm-bs"><span class="rm-be">Enjeksiyon</span><span class="rm-bv">${b.enjeksiyon_saniye!=null?b.enjeksiyon_saniye+' sn':'—'}</span></div>
+      <div class="rm-bs"><span class="rm-be">Gramaj</span><span class="rm-bv">${b.gramaj_gr!=null?b.gramaj_gr+' gr':'—'}</span></div>
+      <div class="rm-bs"><span class="rm-be">Renk</span><span class="rm-bv">${rmE(b.renk_sonucu||'—')}</span></div>
+      <div class="rm-bs"><span class="rm-be">Yüzey</span><span class="rm-bv">${rmE(b.kalite_aciklama||'—')}</span></div>
+      <div class="rm-bs"><span class="rm-be">Kalıptan Çıkma</span><span class="rm-bv">${rmE(b.kalip_sonucu||'—')}</span></div>
+    </div>`;
+  }).join('');
+  return `<div class="rm-bl">
+    <div class="rm-bl-bas">Enjeksiyon Deneme Sonucu</div>
+    ${kalipHtml}
+    <div class="rm-bs"><span class="rm-be">Karar</span><span class="rm-bv">${rmE(c.ferhat_genel_karar||'—')}</span></div>
+    ${bs}
+  </div>`;
 }
 
 function rmRender(kart, d){
@@ -946,115 +1568,9 @@ function rmRender(kart, d){
   document.querySelectorAll('.rm-sekme').forEach((b,i)=>b.classList.toggle('aktif',i===0));
   document.querySelectorAll('.rm-sek-ic').forEach((el,i)=>el.classList.toggle('goster',i===0));
 
-  // ─── ÇALIŞMA sekmesi ────────────────────────────────────────────────
+  // ─── ÇALIŞMA sekmesi — Ürün Kimliği grid ─────────────────────────────
   const c=d.calisma;
-  let solHtml='';
-  if(c){
-    solHtml=`
-      <div class="rm-bl">
-        <div class="rm-bl-bas">Talep Bilgisi</div>
-        <div class="rm-bs"><span class="rm-be">Çalışma türü</span><span class="rm-bv">${rmE(oz.kaynak)}</span></div>
-        <div class="rm-bs"><span class="rm-be">Cari</span><span class="rm-bv">${rmE(oz.cari)}</span></div>
-        <div class="rm-bs"><span class="rm-be">RF adı</span><span class="rm-bv">${rmE(oz.rf_adi)}</span></div>
-        <div class="rm-bs"><span class="rm-be">Ana formül</span><span class="rm-bv">${rmE(oz.ana_formul)}</span></div>
-        <div class="rm-bs"><span class="rm-be">Çalışma Kodu</span><span class="rm-bv">${rmE(c.test_no||'—')}</span></div>
-        <div class="rm-bs"><span class="rm-be">Tarih</span><span class="rm-bv">${rmE((c.olusturma_tarihi||'—').substring(0,10))}</span></div>
-        <div class="rm-bs"><span class="rm-be">Numune</span><span class="rm-bv">${c.test_batch_kg||'—'} KG</span></div>
-        ${c.notlar?`<div class="rm-bs"><span class="rm-be">Not</span><span class="rm-bv" style="font-weight:400;color:var(--rm-t3)">${rmE(c.notlar)}</span></div>`:''}
-      </div>`;
-  } else {
-    solHtml='<div class="rm-bl"><div class="rm-bl-bas">Talep Bilgisi</div><div style="font-size:11px;color:var(--rm-t4);padding:8px 0">AR-GE verisi yok (Legacy RF).</div></div>';
-  }
-
-  let sagHtml='';
-  if(c&&(c.shore_degeri!=null||c.renk_tuttu!=null||c.ferhat_adi)){
-    const renkOk=c.renk_tuttu===1||c.renk_tuttu===true;
-    sagHtml=`
-      <div class="rm-bl">
-        <div class="rm-bl-bas">Enjeksiyon Deneme Sonucu</div>
-        ${c.ferhat_adi?`<div class="rm-bs"><span class="rm-be">Denemeyi yapan</span><span class="rm-bv">${rmE(c.ferhat_adi)}</span></div>`:''}
-        ${c.ferhat_tarihi?`<div class="rm-bs"><span class="rm-be">Tarih</span><span class="rm-bv">${rmE(c.ferhat_tarihi)}</span></div>`:''}
-        ${c.shore_hedef!=null?`<div class="rm-bs"><span class="rm-be">Shore hedef</span><span class="rm-bv">${c.shore_hedef}</span></div>`:''}
-        ${c.shore_degeri!=null?`<div class="rm-bs"><span class="rm-be">Shore sonuç</span><span class="rm-bv ${renkOk?'iyi':'kotu'}">${String(c.shore_degeri).replace('.',',')}</span></div>`:''}
-        ${c.pisme_suresi_dk!=null?`<div class="rm-bs"><span class="rm-be">Pişme</span><span class="rm-bv">${c.pisme_suresi_dk} dk</span></div>`:''}
-        ${c.renk_tuttu!=null?`<div class="rm-bs"><span class="rm-be">Renk</span><span class="rm-bv ${renkOk?'iyi':'kotu'}">${renkOk?'UYGUN':'UYGUN DEĞİL'}</span></div>`:''}
-        ${c.kopurme_notu?`<div class="rm-bs"><span class="rm-be">Köpürme</span><span class="rm-bv">${rmE(c.kopurme_notu)}</span></div>`:''}
-        ${c.genel_aciklama?`<div class="rm-bs"><span class="rm-be">Genel</span><span class="rm-bv">${rmE(c.genel_aciklama)}</span></div>`:''}
-        ${c.sonuc_notu?`<div class="rm-bs"><span class="rm-be">Sonuç notu</span><span class="rm-bv" style="font-weight:400;color:var(--rm-t3)">${rmE(c.sonuc_notu)}</span></div>`:''}
-      </div>`;
-  } else if(c && !(isNxAr && rmNxArFerhatPanelGoster(c))){
-    sagHtml=`<div class="rm-bl"><div class="rm-bl-bas">Enjeksiyon Deneme Sonucu</div><div style="font-size:11px;color:var(--rm-t4);padding:8px 0">Enjeksiyon deneme sonucu henüz girilmedi.</div></div>`;
-  }
-
-  // NX-AR enjeksiyon özeti (boyut sonuçları)
-  if(isNxAr && c && rmNxArFerhatPanelGoster(c)){
-    const kalip=c.kalip||{};
-    const kalipHtml=kalip.kalip_kodu?`
-      <div class="rm-bs" style="grid-column:1/-1;margin-bottom:6px">
-        <span class="rm-be">Kullanılan Kalıp</span>
-        <span class="rm-bv" style="font-family:ui-monospace,monospace">${rmE(kalip.kalip_kodu)}</span>
-      </div>
-      <div class="rm-bs" style="grid-column:1/-1;margin-bottom:8px">
-        <span class="rm-be">Kalıp Adı</span>
-        <span class="rm-bv">${rmE(kalip.kalip_adi||'—')}${kalip.beden_araligi?' · '+rmE(kalip.beden_araligi):''}</span>
-      </div>`:'';
-    const bs=(c.boyut_sonuclar||[]).map(b=>{
-      const pismeSn=b.pisme_suresi_dk!=null?Math.round(Number(b.pisme_suresi_dk)*60):null;
-      return `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--rm-line)">
-        <div style="font-size:11px;font-weight:900;color:var(--rm-t2);margin-bottom:6px">${rmE(b.boyut||'')}</div>
-        <div class="rm-bs"><span class="rm-be">Shore</span><span class="rm-bv">${b.shore_sonuc!=null?b.shore_sonuc:'—'}</span></div>
-        <div class="rm-bs"><span class="rm-be">Pişme</span><span class="rm-bv">${pismeSn!=null?pismeSn+' sn':'—'}</span></div>
-        <div class="rm-bs"><span class="rm-be">Enjeksiyon</span><span class="rm-bv">${b.enjeksiyon_saniye!=null?b.enjeksiyon_saniye+' sn':'—'}</span></div>
-        <div class="rm-bs"><span class="rm-be">Gramaj</span><span class="rm-bv">${b.gramaj_gr!=null?b.gramaj_gr+' gr':'—'}</span></div>
-        <div class="rm-bs"><span class="rm-be">Renk</span><span class="rm-bv">${rmE(b.renk_sonucu||'—')}</span></div>
-        <div class="rm-bs"><span class="rm-be">Yüzey</span><span class="rm-bv">${rmE(b.kalite_aciklama||'—')}</span></div>
-        <div class="rm-bs"><span class="rm-be">Kalıptan Çıkma</span><span class="rm-bv">${rmE(b.kalip_sonucu||'—')}</span></div>
-        ${b.saha_notu?`<div class="rm-bs"><span class="rm-be">Not</span><span class="rm-bv">${rmE(b.saha_notu)}</span></div>`:''}
-      </div>`;
-    }).join('');
-    const fotHtml=(c.ferhat_fotograflar&&c.ferhat_fotograflar.length)?`
-      <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--rm-line)">
-        <div style="font-size:11px;font-weight:900;color:var(--rm-t2);margin-bottom:8px">Fotoğraflar</div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px">
-          ${c.ferhat_fotograflar.map(f=>{
-            const u=f.url||('/yonetim/belge/'+(f.Id||f.id||''));
-            return u?`<a href="${rmE(u)}" target="_blank" rel="noopener" title="${rmE(f.OrijinalAd||'Fotoğraf')}">
-              <img src="${rmE(u)}" alt="${rmE(f.OrijinalAd||'')}" loading="lazy"
-                style="width:72px;height:72px;object-fit:cover;border-radius:6px;border:1px solid var(--rm-line);background:#f8fafc">
-            </a>`:'';
-          }).join('')}
-        </div>
-      </div>`:'';
-    sagHtml=`
-      <div class="rm-bl">
-        <div class="rm-bl-bas">Enjeksiyon Deneme Sonucu</div>
-        ${kalipHtml}
-        <div class="rm-bs"><span class="rm-be">Karar</span><span class="rm-bv">${rmE(c.ferhat_genel_karar||'—')}</span></div>
-        ${c.ferhat_genel_not?`<div class="rm-bs"><span class="rm-be">Usta Notu</span><span class="rm-bv">${rmE(c.ferhat_genel_not)}</span></div>`:''}
-        ${c.ferhat_adi?`<div class="rm-bs"><span class="rm-be">Sonucu giren</span><span class="rm-bv">${rmE(c.ferhat_adi)}</span></div>`:''}
-        ${c.ferhat_kayit_tarihi?`<div class="rm-bs"><span class="rm-be">Tamamlanma</span><span class="rm-bv">${rmE((c.ferhat_kayit_tarihi||'').substring(0,16))}</span></div>`:''}
-        ${bs||'<div style="font-size:11px;color:var(--rm-t4);padding:6px 0">Boyut sonucu yok.</div>'}
-        ${fotHtml}
-      </div>`;
-  }
-
-  let kararHtml='';
-  if(isNxAr && c){
-    kararHtml = rmNxArKararHtml(kart, oz, c, CAN_APPROVE);
-  } else if(grubu==='BEKLEYEN'&&CAN_APPROVE&&c){
-    kararHtml=`
-      <div class="rm-onay-kutu" style="grid-column:1/-1">
-        <div class="rm-onay-btns">
-          <button class="rm-btn rm-btn-green" onclick="rmOnayla(${kart.arge_test_id})">✓ ONAYLA VE AKTİF ET</button>
-          <button class="rm-btn rm-btn-orange" onclick="rmSonrakiFaz('Revize Gönder')">↩ Revize Gönder</button>
-          <button class="rm-btn rm-btn-red"    onclick="rmSonrakiFaz('Reddet')">✕ Reddet</button>
-        </div>
-        <div class="rm-onay-not">Onaylandığında RF aktifleşir ve Reçete Merkezi, Pazarlama ve üretim seçimlerinde kullanılabilir.</div>
-      </div>`;
-  }
-
-  document.getElementById('s-calisma').innerHTML=
-    `<div class="rm-2k">${solHtml}${sagHtml}${kararHtml}</div>`;
+  document.getElementById('s-calisma').innerHTML=rmKimlikCalismaHtml(kart, oz, c, d, isNxAr, grubu, CAN_APPROVE);
 
   // ─── PİGMENT sekmesi ───────────────────────────────────────────────
   const pgVeri = rmPigmentVeriHazirla(d.pigmentler||[], d.pigment_ozet||d.ozet);
@@ -1142,12 +1658,53 @@ function rmNxArBtnHtml(kart, oz, c, canApprove){
   return '';
 }
 
+function rmNxArSahaPanelHtml(kart, oz, c, canApprove){
+  const durum=(c.durum||oz.durum||'').toUpperCase();
+  if(!canApprove || (durum!=='ARGE_HAZIR'&&durum!=='REVIZYON_GEREKLI')) return '';
+  const tid=kart.arge_test_id;
+  const sahaGerekli=parseInt(c.saha_testi_gerekli_mi||0,10)===1;
+  if(sahaGerekli){
+    return `<div class="rm-onay-kutu" id="rm-nx-saha" style="border:none;padding:0;background:transparent">
+      <div class="rm-onay-not">Enjeksiyon denemesi gerekli — Ferhat operasyonu bekleniyor.</div>
+    </div>`;
+  }
+  let h=`<div class="rm-onay-kutu" id="rm-nx-saha" style="border:none;padding:0;background:transparent">`;
+  h+=`<div style="font-size:13px;font-weight:800;margin-bottom:4px">AR-GE Kararı</div>`;
+  h+=`<div style="font-size:12px;font-weight:600;color:var(--rm-t3);margin-bottom:8px">Enjeksiyon denemesi gerekli mi?</div>`;
+  h+=`<div class="rm-onay-btns" style="flex-wrap:wrap;gap:8px">
+    <button class="rm-btn rm-btn-green" onclick="rmNxSahaKarar(${tid},'ONAYA_GONDER')">Gerekli Değil — Onaya Gönder</button>
+    <button class="rm-btn rm-btn-orange" onclick="rmNxSahaKarar(${tid},'ENJEKSIYON')">Gerekli — Enjeksiyon Denemesine Gönder</button>
+    ${durum==='ARGE_HAZIR'?`<button class="rm-btn rm-btn-detay" onclick="rmNxSahaKarar(${tid},'BIRAK')">Karar Vermeden Bırak</button>`:''}
+  </div>`;
+  h+=`<div style="margin-top:10px" id="rm-nx-neden-wrap">
+    <div style="font-size:11px;font-weight:700;margin-bottom:4px">Enjeksiyon nedeni <span style="font-weight:500;color:var(--rm-t4)">(yalnız enjeksiyon seçiminde zorunlu)</span></div>
+    <select id="rm-nx-saha-neden" class="rm-input" style="max-width:340px"
+      onchange="var a=document.getElementById('rm-nx-saha-ack'); if(a) a.style.display=this.value==='DIGER'?'block':'none'">
+      <option value="">Neden seçin…</option>
+      <option value="YENI_FORMUL">Yeni Formül</option>
+      <option value="YENI_RENK">Yeni Renk</option>
+      <option value="SHORE_RISKI">Shore Kontrolü</option>
+      <option value="PISME_RISKI">Pişme Süresi Kontrolü</option>
+      <option value="KALIP_RISKI">Kalıp Davranışı</option>
+      <option value="YOGUNLUK_RISKI">Ürün Kalite Kontrolü</option>
+      <option value="MUSTERI_TALEBI">Müşteri Talebi</option>
+      <option value="DIGER">Diğer</option>
+    </select>
+    <textarea id="rm-nx-saha-ack" class="rm-input" rows="2" style="margin-top:6px;max-width:340px;display:none"
+      placeholder="Diğer seçildiğinde açıklama zorunlu"></textarea>
+  </div>`;
+  h+=`</div>`;
+  return h;
+}
+
 function rmNxArKararHtml(kart, oz, c, canApprove){
   const durum=(c.durum||oz.durum||'').toUpperCase();
   const tid=kart.arge_test_id;
   let h=`<div class="rm-onay-kutu" style="grid-column:1/-1" id="rm-nx-saha">`;
   h+=`<div style="font-size:11px;font-weight:800;color:var(--rm-t3);margin-bottom:8px">Çalışma: ${rmE(c.test_no||oz.test_no||'—')} · ${rmE(oz.durum_etiketi||durum)}</div>`;
   if(canApprove && (durum==='ARGE_HAZIR'||durum==='REVIZYON_GEREKLI')){
+    const sahaGerekli = parseInt(c.saha_testi_gerekli_mi||0,10)===1;
+    if(!sahaGerekli){
     h+=`
       <div style="font-size:13px;font-weight:800;margin-bottom:4px">AR-GE Kararı</div>
       <div style="font-size:12px;font-weight:600;color:var(--rm-t3);margin-bottom:8px">Enjeksiyon denemesi gerekli mi?</div>
@@ -1173,6 +1730,9 @@ function rmNxArKararHtml(kart, oz, c, canApprove){
         <textarea id="rm-nx-saha-ack" class="rm-input" rows="2" style="margin-top:6px;max-width:340px;display:none"
           placeholder="Diğer seçildiğinde açıklama zorunlu"></textarea>
       </div>`;
+    } else {
+      h+=`<div class="rm-onay-not">Enjeksiyon denemesi gerekli — Ferhat operasyonu bekleniyor.</div>`;
+    }
   } else if(durum==='FERHAT_BEKLIYOR'){
     h+=`<div class="rm-onay-not">Enjeksiyon denemesi bekliyor.
       <a href="/nexgen/tablet/arge/enjeksiyon-deneme/${tid}">Enjeksiyon deneme formunu aç</a></div>`;
@@ -1460,8 +2020,377 @@ function rmSekme(btn){
 }
 
 // ══════════════════════════════════════════════════════════════════════
+//  TOPLU SİLME (Admin)
+// ══════════════════════════════════════════════════════════════════════
+function rmTsModalKapat(){
+  document.getElementById('rm-ts-modal-bg').style.display='none';
+  rmTsOnkontrol=null;
+  const btn=document.getElementById('rm-ts-sil-btn');
+  if(btn){ btn.disabled=true; btn.textContent='Sil'; }
+}
+function rmTsModalBgClick(ev){
+  if(ev.target.id==='rm-ts-modal-bg') rmTsModalKapat();
+}
+function rmTsSilBtnGuncelle(){
+  const inp=document.getElementById('rm-ts-sil-dogrula');
+  const btn=document.getElementById('rm-ts-sil-btn');
+  if(!inp||!btn||!rmTsOnkontrol) return;
+  const n=rmTsOnkontrol.silinebilir_sayisi||0;
+  btn.disabled=(inp.value.trim().toUpperCase()!=='SIL'||n<1);
+  btn.textContent=n>0?(n+' Kaydı Sil'):'Sil';
+}
+function rmTsModalIcerikHtml(d){
+  const sil=d.silinebilir||[];
+  const eng=d.engelli||[];
+  let h=`<div style="font-size:12px;font-weight:700;margin-bottom:4px">${sil.length} kayıt silinecek</div>`;
+  h+=`<div style="font-size:11px;color:var(--rm-t2);margin-bottom:8px">
+    <span style="color:#15803d;font-weight:700">${sil.length} kayıt silinebilir</span>`;
+  if(eng.length){
+    h+=` · <span style="color:#b91c1c;font-weight:700">${eng.length} kayıt silinemez</span>`;
+  }else{
+    h+=` · <span style="color:#15803d;font-weight:600">0 kayıt engelli</span>`;
+  }
+  h+=`</div>`;
+  h+=`<div class="rm-ts-modal-uyari">Bu işlem geri alınamaz. Yalnız silinebilir kayıtlar işlenecektir.</div>`;
+  if(sil.length){
+    h+=`<div class="rm-ts-modal-liste">${sil.map(k=>`
+        <div class="rm-ts-modal-item">
+          <div><strong>${rmE(k.at_kodu||'—')}</strong> — ${rmE(k.rf_adi||'—')}</div>
+          <div style="font-size:10px;color:var(--rm-t3)">Tahmini etki: ${k.toplam_etki_satir||0} satır</div>
+        </div>`).join('')}</div>`;
+  }
+  if(eng.length){
+    h+=`<div style="font-size:10px;font-weight:700;color:#b91c1c;margin-top:6px">Silinemez</div>
+      <div class="rm-ts-modal-liste">${eng.map(k=>`
+        <div class="rm-ts-modal-item">
+          <div><strong>${rmE(k.at_kodu||'—')}</strong> — ${rmE(k.rf_adi||'—')}</div>
+          <div class="rm-ts-modal-engel">${rmE((k.engel_nedenleri||[]).join('; '))}</div>
+        </div>`).join('')}</div>`;
+  }
+  if(sil.length){
+    h+=`<div style="font-size:10px;color:var(--rm-t3);margin-top:10px">Onaylamak için <strong>SIL</strong> yazın:</div>
+      <input type="text" class="rm-ts-sil-input" id="rm-ts-sil-dogrula"
+             placeholder="SIL" autocomplete="off"
+             oninput="rmTsSilBtnGuncelle()">`;
+  }
+  return h;
+}
+async function rmTopluSilModalAc(){
+  const ids=rmSecimTemizIds();
+  if(!IS_ADMIN||!ids.length) return;
+  const bg=document.getElementById('rm-ts-modal-bg');
+  const ic=document.getElementById('rm-ts-modal-icerik');
+  bg.style.display='flex';
+  ic.innerHTML='<div class="rm-yukleniyor">Ön kontrol yapılıyor…</div>';
+  document.getElementById('rm-ts-sil-btn').disabled=true;
+  try{
+    const res=await fetch('/nexgen/api/renk-merkezi/toplu-sil-onkontrol',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':rmCsrf()},
+      body:JSON.stringify({arge_test_ids:ids}),
+    });
+    const d=await res.json();
+    if(!res.ok||!d.ok){
+      ic.innerHTML='<div class="rm-yukleniyor">'+rmE(d.hata||'Ön kontrol başarısız')+'</div>';
+      return;
+    }
+    if((d.engelli_sayisi||0)>0){
+      rmTsModalKapat();
+      rmToast('Seçilen kayıtlardan '+(d.engelli_sayisi)+' adet artık silinemiyor. Liste yenileniyor.','hata');
+      rmTopluSecimTemizle(false);
+      await rmListeYukle();
+      return;
+    }
+    rmTsOnkontrol=d;
+    ic.innerHTML=rmTsModalIcerikHtml(d);
+    rmTsSilBtnGuncelle();
+  }catch(err){
+    ic.innerHTML='<div class="rm-yukleniyor">Ağ hatası</div>';
+  }
+}
+async function rmTopluSilUygula(){
+  if(!IS_ADMIN||!rmTsOnkontrol) return;
+  const inp=document.getElementById('rm-ts-sil-dogrula');
+  if(!inp||inp.value.trim().toUpperCase()!=='SIL') return;
+  const ids=(rmTsOnkontrol.silinebilir||[]).map(k=>k.arge_test_id);
+  if(!ids.length) return;
+  const btn=document.getElementById('rm-ts-sil-btn');
+  btn.disabled=true;
+  btn.textContent='Siliniyor…';
+  try{
+    const res=await fetch('/nexgen/api/renk-merkezi/toplu-sil',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':rmCsrf()},
+      body:JSON.stringify({arge_test_ids:ids}),
+    });
+    const d=await res.json();
+    if(!res.ok||!d.ok){
+      rmToast(d.hata||d.engel_detay?.join(' ')||'Silme başarısız.','hata');
+      btn.disabled=false;
+      rmTsSilBtnGuncelle();
+      return;
+    }
+    rmTsModalKapat();
+    rmTopluSecimTemizle(false);
+    if(seciliKart&&seciliKart.arge_test_id&&ids.indexOf(seciliKart.arge_test_id)>=0){
+      rmDetayTemizle();
+    }
+    rmToast(d.mesaj||(`${d.silinen_sayisi||ids.length} test kaydı silindi.`),'basari');
+    await rmListeYukle();
+  }catch(err){
+    rmToast('Ağ hatası','hata');
+    btn.disabled=false;
+    rmTsSilBtnGuncelle();
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  BAĞLANTILI SİLME (Admin — hazırlık modu)
+// ══════════════════════════════════════════════════════════════════════
+function rmBaglDepSatir(etiket, deger, html){
+  const val=html?deger:rmE(deger);
+  return `<div class="rm-bagl-dep-row"><span class="rm-bagl-dep-etiket">${rmE(etiket)}</span><span class="rm-bagl-dep-deger">${val}</span></div>`;
+}
+function rmBaglNormAt(s){
+  return String(s||'').trim()
+    .replace(/[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D]/g,'-')
+    .toUpperCase();
+}
+function rmBaglNormSil(s){
+  return String(s||'').trim().toUpperCase();
+}
+function rmBaglKayitHtml(k, opts){
+  opts=opts||{};
+  const b=k.bagimlilik||{};
+  const nt=(b.numune_talep||[]).map(x=>x.talep_kodu||x.id).join(', ')||'—';
+  const rf=(b.rf_baglantilar||[]).map(x=>x.rf_kod||x.id).join(', ')||'—';
+  const etki=k.toplam_etki_satir||0;
+  let h=`<div class="rm-bagl-kayit-wrap">
+    <div class="rm-bagl-kayit-bas">
+      <div>
+        <div class="rm-bagl-kayit-bas-kod">${rmE(k.at_kodu||'—')}</div>
+        <div class="rm-bagl-kayit-bas-rf">${rmE(k.rf_adi||'—')}</div>
+      </div>
+    </div>
+    <div class="rm-bagl-dep-grid">
+      <div class="rm-bagl-dep-col">
+        ${rmBaglDepSatir('Numune Talebi', nt)}
+        ${rmBaglDepSatir('Ferhat Sonucu', b.ferhat_karar||'—')}
+        ${rmBaglDepSatir('Deneme', String(b.deneme_sayisi||0))}
+        ${rmBaglDepSatir('UV', String(b.uv_sayisi||0))}
+        ${rmBaglDepSatir('Olay', String(b.olay_sayisi||0))}
+      </div>
+      <div class="rm-bagl-dep-col">
+        ${rmBaglDepSatir('RF', rf)}
+        ${rmBaglDepSatir('Plan', String(b.plan_kalem||0))}
+        ${rmBaglDepSatir('Üretim', String(b.uretim_baglanti||0))}
+        ${rmBaglDepSatir('Tahmini Etki', `<span class="rm-bagl-badge-etki">${etki} satır</span>`, true)}
+      </div>
+    </div>`;
+  if(opts.dogrulama){
+    h+=`<div class="rm-bagl-dogrulama-blok">
+      <div class="rm-bagl-at-etiket">Beklenen AT</div>
+      <div class="rm-bagl-at-ro">${rmE(k.at_kodu||'—')}</div>
+      <div class="rm-bagl-at-etiket">AT kodunu tekrar yazın</div>
+      <input type="text" class="rm-bagl-input-at" data-bagl-at="${k.arge_test_id}"
+             autocomplete="off" spellcheck="false">
+    </div>`;
+  }
+  h+='</div>';
+  return h;
+}
+function rmBaglInceleKapat(){
+  document.getElementById('rm-bagl-incele-bg').style.display='none';
+}
+function rmBaglInceleBgClick(ev){
+  if(ev.target.id==='rm-bagl-incele-bg') rmBaglInceleKapat();
+}
+async function rmBaglInceleAc(ids){
+  if(!IS_ADMIN||!ids||!ids.length) return;
+  const bg=document.getElementById('rm-bagl-incele-bg');
+  const ic=document.getElementById('rm-bagl-incele-icerik');
+  const silBtn=document.getElementById('rm-bagl-incele-sil-btn');
+  bg.style.display='flex';
+  ic.innerHTML='<div class="rm-yukleniyor">Bağlantılar yükleniyor…</div>';
+  if(silBtn) silBtn.style.display='none';
+  try{
+    const res=await fetch('/nexgen/api/renk-merkezi/baglantili-sil-incele',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':rmCsrf()},
+      body:JSON.stringify({arge_test_ids:ids}),
+    });
+    const d=await res.json();
+    if(!res.ok||!d.ok){
+      ic.innerHTML='<div class="rm-yukleniyor">'+rmE(d.hata||'Yüklenemedi')+'</div>';
+      return;
+    }
+    rmBaglIncele=d;
+    const uygun=d.uygun||[];
+    const eng=d.engelli||[];
+    let h='';
+    if(uygun.length){
+      h+=`<div style="font-size:11px;font-weight:700;color:#15803d;margin-bottom:8px">${uygun.length} kayıt bağlantılı silinebilir</div>`;
+      h+=uygun.map(rmBaglKayitHtml).join('');
+    }
+    if(eng.length){
+      h+=`<div style="font-size:11px;font-weight:700;color:#b91c1c;margin-bottom:8px">${eng.length} kayıt kesin engelli</div>`;
+      h+=eng.map(k=>`<div class="rm-ts-modal-engel">${rmE(k.at_kodu||'—')}: ${rmE((k.kesin_engel_nedenleri||[]).join('; '))}</div>`).join('');
+    }
+    ic.innerHTML=h||'<div class="rm-yukleniyor">Kayıt yok</div>';
+    if(silBtn&&uygun.length&&!eng.length) silBtn.style.display='';
+  }catch(err){
+    ic.innerHTML='<div class="rm-yukleniyor">Ağ hatası</div>';
+  }
+}
+function rmBaglInceleModalAc(){
+  const ids=rmSecimBaglIds();
+  if(ids.length) rmBaglInceleAc(ids);
+}
+function rmBaglSilKapat(){
+  document.getElementById('rm-bagl-sil-bg').style.display='none';
+  rmBaglOnkontrol=null;
+  const btn=document.getElementById('rm-bagl-sil-btn');
+  if(btn){ btn.disabled=true; btn.setAttribute('disabled',''); btn.textContent='Sil'; }
+}
+function rmBaglSilBgClick(ev){
+  if(ev.target.id==='rm-bagl-sil-bg') rmBaglSilKapat();
+}
+function rmBaglSilKeyHandler(ev){
+  const bg=document.getElementById('rm-bagl-sil-bg');
+  if(!bg||bg.style.display==='none') return;
+  if(ev.key==='Escape'){ ev.preventDefault(); rmBaglSilKapat(); return; }
+  if(ev.key==='Enter'){
+    const t=ev.target;
+    if(t&&(t.classList.contains('rm-bagl-input-at')||t.classList.contains('rm-bagl-input-sil'))){
+      ev.preventDefault();
+    }
+  }
+}
+function rmBaglSilModalBindEvents(){
+  const ic=document.getElementById('rm-bagl-sil-icerik');
+  if(!ic) return;
+  ic.querySelectorAll('.rm-bagl-input-at, .rm-bagl-input-sil').forEach(el=>{
+    el.addEventListener('input', rmBaglSilBtnGuncelle);
+    el.addEventListener('keyup', rmBaglSilBtnGuncelle);
+    el.addEventListener('paste', ()=>setTimeout(rmBaglSilBtnGuncelle,0));
+  });
+  if(!window._rmBaglSilKeyBound){
+    document.addEventListener('keydown', rmBaglSilKeyHandler);
+    window._rmBaglSilKeyBound=true;
+  }
+}
+function rmBaglSilBtnGuncelle(){
+  const btn=document.getElementById('rm-bagl-sil-btn');
+  if(!btn||!rmBaglOnkontrol) return;
+  const uygun=rmBaglOnkontrol.uygun||[];
+  let ok=uygun.length>0;
+  uygun.forEach(k=>{
+    const inp=document.querySelector('[data-bagl-at="'+k.arge_test_id+'"]');
+    const bek=rmBaglNormAt(k.at_kodu||'');
+    const gir=rmBaglNormAt(inp&&inp.value||'');
+    if(!bek||gir!==bek) ok=false;
+  });
+  const silInp=document.getElementById('rm-bagl-sil-dogrula');
+  if(!silInp||rmBaglNormSil(silInp.value)!=='SIL') ok=false;
+  btn.disabled=!ok;
+  if(ok) btn.removeAttribute('disabled');
+  else btn.setAttribute('disabled','');
+  btn.textContent=ok?(uygun.length+' Kaydı Sil'):'Sil';
+}
+function rmBaglSilIcerikHtml(d){
+  const uygun=d.uygun||[];
+  let h='';
+  if(d.hazirlik_modu){
+    h+=`<div class="rm-bagl-badge-info">ℹ Hazırlık modu — silme simülasyonu</div>`;
+  }else{
+    h+=`<div class="rm-bagl-badge-info">ℹ Bu işlem geri alınamaz. Numune talepleri IPTAL/pasif yapılır.</div>`;
+  }
+  h+=`<div style="font-size:11px;font-weight:700;margin-bottom:8px">${uygun.length} kayıt silinecek · 0 kesin engel</div>`;
+  h+=uygun.map(k=>rmBaglKayitHtml(k,{dogrulama:true})).join('');
+  h+=`<div class="rm-bagl-dogrulama-blok">
+    <div class="rm-bagl-at-etiket">SIL yazın</div>
+    <input type="text" class="rm-bagl-input-sil" id="rm-bagl-sil-dogrula"
+           placeholder="SIL" autocomplete="off" spellcheck="false">
+  </div>`;
+  return h;
+}
+async function rmBaglSilModalAc(){
+  const ids=rmBaglIncele&&(rmBaglIncele.uygun||[]).length
+    ? (rmBaglIncele.uygun||[]).map(k=>k.arge_test_id)
+    : rmSecimBaglIds();
+  if(!IS_ADMIN||!ids.length) return;
+  rmBaglInceleKapat();
+  const bg=document.getElementById('rm-bagl-sil-bg');
+  const ic=document.getElementById('rm-bagl-sil-icerik');
+  bg.style.display='flex';
+  ic.innerHTML='<div class="rm-yukleniyor">Ön kontrol…</div>';
+  document.getElementById('rm-bagl-sil-btn').disabled=true;
+  try{
+    const res=await fetch('/nexgen/api/renk-merkezi/baglantili-sil-onkontrol',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':rmCsrf()},
+      body:JSON.stringify({arge_test_ids:ids}),
+    });
+    const d=await res.json();
+    if(!res.ok||!d.ok){
+      ic.innerHTML='<div class="rm-yukleniyor">'+rmE(d.hata||'Ön kontrol başarısız')+'</div>';
+      return;
+    }
+    rmBaglOnkontrol=d;
+    ic.innerHTML=rmBaglSilIcerikHtml(d);
+    rmBaglSilModalBindEvents();
+    rmBaglSilBtnGuncelle();
+  }catch(err){
+    ic.innerHTML='<div class="rm-yukleniyor">Ağ hatası</div>';
+  }
+}
+async function rmBaglSilUygula(){
+  if(!IS_ADMIN||!rmBaglOnkontrol) return;
+  const uygun=rmBaglOnkontrol.uygun||[];
+  const at_dogrulama={};
+  uygun.forEach(k=>{
+    const inp=document.querySelector('[data-bagl-at="'+k.arge_test_id+'"]');
+    at_dogrulama[k.arge_test_id]=inp?inp.value:'';
+  });
+  const silInp=document.getElementById('rm-bagl-sil-dogrula');
+  if(!silInp||rmBaglNormSil(silInp.value)!=='SIL') return;
+  const btn=document.getElementById('rm-bagl-sil-btn');
+  btn.disabled=true;
+  btn.textContent='Planlanıyor…';
+  try{
+    const res=await fetch('/nexgen/api/renk-merkezi/baglantili-sil',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':rmCsrf()},
+      body:JSON.stringify({
+        arge_test_ids:uygun.map(k=>k.arge_test_id),
+        at_dogrulama,
+        apply:true,
+      }),
+    });
+    const d=await res.json();
+    if(!res.ok||!d.ok){
+      rmToast(d.hata||'İşlem başarısız','hata');
+      rmBaglSilBtnGuncelle();
+      return;
+    }
+    rmBaglSilKapat();
+    rmTopluSecimTemizle(false);
+    if(seciliKart&&seciliKart.arge_test_id){
+      const silinen=uygun.map(k=>k.arge_test_id);
+      if(silinen.indexOf(seciliKart.arge_test_id)>=0) rmDetayTemizle();
+    }
+    rmToast(d.mesaj||'Baglantili silme tamamlandi.','basari');
+    await rmListeYukle();
+  }catch(err){
+    rmToast('Ağ hatası','hata');
+    rmBaglSilBtnGuncelle();
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
 //  BAŞLAT
 // ══════════════════════════════════════════════════════════════════════
+rmCariUnvanYukle();
 rmListeYukle();
 </script>
 {% endblock %}

@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+{% set page_title = "Cari Seç — NexGen Finans" %}
+
+{% block content %}
+{% include 'nexgen/_finans_shared_styles.html' %}
+{% set fm_hdr_title = 'Cari Hesaplar' %}
+{% set fm_hdr_subtitle = 'Cari kod veya ünvan ile arayın; Enter veya çift tık ile kartı açın.' %}
+{% set fm_hdr_crumb = 'Cari Seç' %}
+{% set fm_guncelleme_id = 'fcs-son-guncelleme' %}
+{% set fm_refresh_onclick = 'fcsYenile()' %}
+<div class="rm-sayfa fm-sayfa fm-modul-sayfa erp-ic-page fcs-sayfa">
+  {% include 'nexgen/_finans_erp_ic_header.html' %}
+  <div class="fm-container fm-container-unified">
+    {% include 'nexgen/_finans_ic_nav.html' %}
+
+    <div class="fcs-panel">
+      <div class="fcs-toolbar">
+        <div class="fm-sub-nav fcs-tip-sekme">
+          <div class="rm-sekme aktif" data-tip="MUSTERI" id="fcs-sek-musteri">Müşteri</div>
+          <div class="rm-sekme" data-tip="TEDARIKCI" id="fcs-sek-tedarikci">Tedarikçi</div>
+        </div>
+        <div class="fcs-ara-wrap">
+          <input type="text" id="fcs-arama" class="fm-ara-input fcs-ara" placeholder="Cari kod veya ünvan…" autocomplete="off" autofocus>
+        </div>
+        <select id="fcs-fil-aktif" class="fm-fil-sel">
+          <option value="">Aktif — Tümü</option>
+          <option value="1">Yalnız aktif</option>
+          <option value="0">Yalnız pasif</option>
+        </select>
+        <button type="button" class="fcs-btn" id="fcs-yenile">Yenile</button>
+        <span class="fcs-sayi" id="fcs-sayi"></span>
+        {% if finans_demo_modu %}<span class="fcs-demo-rozet">DEMO VERİ</span>{% endif %}
+      </div>
+      <div class="fcs-tablo-wrap">
+        <table class="fm-tablo fcs-tablo" id="fcs-tablo">
+          <thead>
+            <tr>
+              <th class="fm-th">Cari Kodu</th>
+              <th class="fm-th">Cari İsmi</th>
+              <th class="fm-th">Firma Ünvanı</th>
+              <th class="fm-th">Tip</th>
+              <th class="fm-th">PB</th>
+              <th class="fm-th">Aktif</th>
+              <th class="fm-th fm-th-r">Borç</th>
+              <th class="fm-th fm-th-r">Alacak</th>
+              <th class="fm-th fm-th-r">Net Bakiye</th>
+            </tr>
+          </thead>
+          <tbody id="fcs-tbody"></tbody>
+        </table>
+        <div class="erp-ic-empty" id="fcs-bos" style="display:none;">
+          <div class="erp-ic-empty-desc">Arama kriterine uygun cari bulunamadı.</div>
+        </div>
+      </div>
+      <div class="fcs-footer">
+        <button type="button" class="fcs-btn" id="fcs-onceki" disabled>Önceki</button>
+        <span id="fcs-sayfalama"></span>
+        <button type="button" class="fcs-btn" id="fcs-sonraki" disabled>Sonraki</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="fm-toast" id="fcs-toast" style="display:none;"></div>
+
+<script>
+(function(){
+  var _demoMode = {{ finans_demo_modu|default(false)|tojson }};
+  var SK = 'fcs_state_v1';
+  var _tip = 'MUSTERI', _offset = 0, _limit = 60, _toplam = 0, _rows = [], _selIdx = -1, _debounce = null;
+
+  function esc(s){ var d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
+  function fmtT(n,pb){ if(n==null||n==='') return '—'; return esc(Number(n).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}))+(pb?' '+esc(pb):''); }
+  function toast(msg,t){ var el=document.getElementById('fcs-toast'); el.textContent=msg; el.className='fm-toast fm-toast-'+(t||'ok'); el.style.display='block'; setTimeout(function(){el.style.display='none';},4000); }
+  function apiErr(j){ return (j&&j.mesaj)||(j&&j.error&&j.error.message)||'İşlem başarısız.'; }
+  function demoQ(){ return _demoMode ? '&demo=1' : ''; }
+
+  function stateLoad(){
+    try { return JSON.parse(sessionStorage.getItem(SK)||'{}'); } catch(e){ return {}; }
+  }
+  function stateSave(){
+    sessionStorage.setItem(SK, JSON.stringify({
+      tip: _tip,
+      arama: document.getElementById('fcs-arama').value,
+      aktif: document.getElementById('fcs-fil-aktif').value,
+      offset: _offset,
+      scrollTop: document.querySelector('.fcs-tablo-wrap').scrollTop
+    }));
+  }
+
+  function params(){
+    var p = new URLSearchParams();
+    p.set('tip', _tip);
+    p.set('limit', String(_limit));
+    p.set('offset', String(_offset));
+    var ar = document.getElementById('fcs-arama').value.trim();
+    if (ar) p.set('arama', ar);
+    var ak = document.getElementById('fcs-fil-aktif').value;
+    if (ak) p.set('aktif', ak);
+    return p.toString();
+  }
+
+  function kartAc(row){
+    if (!row) return;
+    stateSave();
+    sessionStorage.setItem('fcs_last_ids', JSON.stringify(_rows.map(function(r){ return {tip:r.cari_tipi,id:r.operasyonel_id}; })));
+    location.href = '/nexgen/finans/cari-hesaplar/' + row.cari_tipi + '/' + row.operasyonel_id + (_demoMode?'?demo=1':'');
+  }
+
+  function renderRows(){
+    var tb = document.getElementById('fcs-tbody');
+    var bos = document.getElementById('fcs-bos');
+    tb.innerHTML = '';
+    if (!_rows.length){ bos.style.display='block'; return; }
+    bos.style.display='none';
+    _rows.forEach(function(row, i){
+      var tr = document.createElement('tr');
+      tr.className = 'fcs-satir' + (i===_selIdx?' secili':'');
+      tr.dataset.idx = String(i);
+      var tipLbl = row.cari_tipi==='MUSTERI' ? 'Müşteri' : 'Tedarikçi';
+      var borcTxt = row.bakiye_mevcut ? fmtT(row.toplam_borc, row.para_birimi||'TRY') : '—';
+      var alacTxt = row.bakiye_mevcut ? fmtT(row.toplam_alacak, row.para_birimi||'TRY') : '—';
+      var bakTxt = row.bakiye_mevcut ? fmtT(row.bakiye, row.para_birimi||'TRY') : '—';
+      tr.innerHTML =
+        '<td><code>'+esc(row.kod)+'</code></td>'+
+        '<td>'+esc(row.unvan)+'</td>'+
+        '<td>'+esc(row.firma_unvani||row.unvan)+'</td>'+
+        '<td>'+esc(tipLbl)+'</td>'+
+        '<td>'+esc(row.para_birimi||'TRY')+'</td>'+
+        '<td>'+(row.aktif?'Aktif':'Pasif')+'</td>'+
+        '<td class="fm-th-r">'+borcTxt+'</td>'+
+        '<td class="fm-th-r">'+alacTxt+'</td>'+
+        '<td class="fm-th-r">'+bakTxt+'</td>';
+      tr.addEventListener('dblclick', function(){ kartAc(row); });
+      tr.addEventListener('click', function(){ _selIdx=i; renderRows(); });
+      tb.appendChild(tr);
+    });
+    document.getElementById('fcs-sayi').textContent = _toplam + ' kayıt';
+    document.getElementById('fcs-sayfalama').textContent = (_offset+1)+'–'+Math.min(_offset+_rows.length,_toplam)+' / '+_toplam;
+    document.getElementById('fcs-onceki').disabled = _offset <= 0;
+    document.getElementById('fcs-sonraki').disabled = (_offset + _limit) >= _toplam;
+    document.getElementById('fcs-son-guncelleme').textContent = new Date().toLocaleTimeString('tr-TR');
+  }
+
+  function listeYukle(keepSel){
+    fetch('/nexgen/api/finans/cari-hesaplar?' + params() + demoQ())
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        if (!j.ok){ toast(apiErr(j),'hata'); return; }
+        var d = j.data || {};
+        _rows = d.kayitlar || [];
+        _toplam = d.toplam || 0;
+        if (!keepSel) _selIdx = _rows.length ? 0 : -1;
+        renderRows();
+        stateSave();
+      }).catch(function(){ toast('Bağlantı hatası.','hata'); });
+  }
+
+  document.getElementById('fcs-sek-musteri').addEventListener('click', function(){
+    _tip='MUSTERI'; _offset=0;
+    document.getElementById('fcs-sek-musteri').classList.add('aktif');
+    document.getElementById('fcs-sek-tedarikci').classList.remove('aktif');
+    listeYukle();
+  });
+  document.getElementById('fcs-sek-tedarikci').addEventListener('click', function(){
+    _tip='TEDARIKCI'; _offset=0;
+    document.getElementById('fcs-sek-tedarikci').classList.add('aktif');
+    document.getElementById('fcs-sek-musteri').classList.remove('aktif');
+    listeYukle();
+  });
+  document.getElementById('fcs-arama').addEventListener('input', function(){
+    clearTimeout(_debounce); _debounce=setTimeout(function(){ _offset=0; listeYukle(); }, 250);
+  });
+  document.getElementById('fcs-fil-aktif').addEventListener('change', function(){ _offset=0; listeYukle(); });
+  document.getElementById('fcs-yenile').addEventListener('click', function(){ listeYukle(true); });
+  document.getElementById('fcs-onceki').addEventListener('click', function(){ _offset=Math.max(0,_offset-_limit); listeYukle(); });
+  document.getElementById('fcs-sonraki').addEventListener('click', function(){ _offset+=_limit; listeYukle(); });
+
+  document.addEventListener('keydown', function(e){
+    if (e.target && (e.target.tagName==='INPUT' || e.target.tagName==='SELECT') && e.key !== 'Enter' && e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    if (e.key==='ArrowDown' && _rows.length){ e.preventDefault(); _selIdx=Math.min(_selIdx+1,_rows.length-1); renderRows(); }
+    if (e.key==='ArrowUp' && _rows.length){ e.preventDefault(); _selIdx=Math.max(_selIdx-1,0); renderRows(); }
+    if (e.key==='Enter' && _selIdx>=0 && _rows[_selIdx]){ e.preventDefault(); kartAc(_rows[_selIdx]); }
+  });
+
+  window.fcsYenile = function(){ listeYukle(true); };
+
+  (function init(){
+    var st = stateLoad();
+    if (st.tip){ _tip=st.tip; if(_tip==='TEDARIKCI'){
+      document.getElementById('fcs-sek-tedarikci').classList.add('aktif');
+      document.getElementById('fcs-sek-musteri').classList.remove('aktif');
+    }}
+    if (st.arama) document.getElementById('fcs-arama').value = st.arama;
+    if (st.aktif) document.getElementById('fcs-fil-aktif').value = st.aktif;
+    if (st.offset) _offset = st.offset;
+    listeYukle();
+    if (st.scrollTop) setTimeout(function(){
+      document.querySelector('.fcs-tablo-wrap').scrollTop = st.scrollTop;
+    }, 300);
+  })();
+})();
+</script>
+{% endblock %}

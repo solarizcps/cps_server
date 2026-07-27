@@ -217,3 +217,69 @@ def eslestirme_adaylari(
         if len(adaylar) >= limit:
             break
     return adaylar
+
+
+def _saglikli_kimlik(con: sqlite3.Connection, kimlik: dict[str, Any]) -> bool:
+    paket = _resolve_paket(con, kimlik)
+    if not paket.get('operasyonel_aktif'):
+        return True
+    if paket.get('durum') in ('CAKISMA', 'IPTAL'):
+        return False
+    if (
+        paket.get('durum') in ('DOGRULANDI', 'MANUEL')
+        and paket.get('cari_kart_ckod')
+        and paket.get('posting_uygun')
+        and paket.get('ctip_uygun')
+    ):
+        return True
+    return False
+
+
+def liste_teknik_kontrol(
+    con: sqlite3.Connection,
+    *,
+    kimlik_tipi: str | None = None,
+    arama: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> dict[str, Any]:
+    """Yalnız gerçek teknik istisnalar — sağlıklı cariler listelenmez."""
+    _ensure(con)
+    rows = [dict(r) for r in con.execute('SELECT * FROM finans_cari_kimlik ORDER BY updated_at DESC, id DESC').fetchall()]
+    istisna: list[dict[str, Any]] = []
+    for r in rows:
+        if kimlik_tipi and (r.get('kimlik_tipi') or '').upper() != kimlik_tipi.upper():
+            continue
+        if _saglikli_kimlik(con, r):
+            continue
+        satir = _liste_satir(con, r)
+        satir['istisna_turu'] = satir.get('posting_engel_kodu') or satir.get('durum') or 'TEKNIK'
+        istisna.append(satir)
+
+    if arama:
+        a = arama.strip().casefold()
+        istisna = [
+            x for x in istisna
+            if a in ' '.join(filter(None, [
+                str(x.get('kod') or ''), str(x.get('unvan') or ''),
+                str(x.get('cari_kart_ckod') or ''), str(x.get('istisna_turu') or ''),
+            ])).casefold()
+        ]
+
+    total = len(istisna)
+    page = istisna[int(offset): int(offset) + int(limit)]
+    return {'toplam': total, 'limit': limit, 'offset': offset, 'kayitlar': page}
+
+
+def kpi_teknik_kontrol(con: sqlite3.Connection) -> dict[str, int]:
+    paket = liste_teknik_kontrol(con, limit=10000, offset=0)
+    kayitlar = paket.get('kayitlar') or []
+    return {
+        'toplam': len(kayitlar),
+        'musteri': sum(1 for k in kayitlar if k.get('kimlik_tipi') == 'MUSTERI'),
+        'tedarikci': sum(1 for k in kayitlar if k.get('kimlik_tipi') == 'TEDARIKCI'),
+        'cakisma': sum(1 for k in kayitlar if k.get('durum') == 'CAKISMA'),
+        'pasif_kart': sum(1 for k in kayitlar if 'PASIF' in str(k.get('istisna_turu') or '').upper()),
+        'veri_eksik': sum(1 for k in kayitlar if not k.get('cari_kart_ckod')),
+        'teknik_istisna': len(kayitlar),
+    }

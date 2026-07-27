@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
@@ -23,8 +24,36 @@ from modules.nexgen.finans_belgesi_repository import (
     resolve_golden_cari_kart,
     tablo_var,
 )
+from modules.nexgen.finans_core_config import KAYNAK_SISTEM_LEGACY, idempotency_hareket_post
+from modules.nexgen.finans_ledger_standard import validate_hareket_tutarlari
 from modules.nexgen.finance_workflow_service import FinanceWorkflowService
 from modules.nexgen.mo_tahsilat_config import CARI_ENTEGRASYON_AKTIF
+
+
+class FinancialPostingError(Exception):
+    def __init__(self, mesaj: str, kod: int = 409, hata_kodu: str = 'POSTING_HATA'):
+        self.mesaj = mesaj
+        self.kod = kod
+        self.hata_kodu = hata_kodu
+        super().__init__(mesaj)
+
+
+@dataclass
+class LegacyHareketRequest:
+    ckod: str
+    tarih: str
+    belge_no: str
+    belge_tip: str
+    aciklama: str
+    borc: float
+    alacak: float
+    kaynak_sistem: str = KAYNAK_SISTEM_LEGACY
+    kaynak_tur: str | None = None
+    kaynak_id: int | None = None
+    olay_turu: str | None = None
+    idempotency_key: str | None = None
+    kullanici: str | None = None
+    legacy_caller: str | None = None
 
 
 class FinancialPostingService:
@@ -48,6 +77,142 @@ class FinancialPostingService:
             raise FinansBelgesiError(
                 f'Test fault injection: {point}', 500, 'TEST_FAULT',
             )
+
+    @staticmethod
+    def _insert_cari_har_row(con: sqlite3.Connection, payload: dict[str, Any]) -> int:
+        """Tek izinli Cari_Har INSERT noktası."""
+        validate_hareket_tutarlari(payload['Borc'], payload['Alacak'])
+        cur = con.execute(
+            """
+            INSERT INTO Cari_Har (CKod, Tarih, BelgeNo, BelgeTip, Aciklama, Borc, Alacak)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                payload['CKod'], payload['Tarih'], payload['BelgeNo'], payload['BelgeTip'],
+                payload['Aciklama'], payload['Borc'], payload['Alacak'],
+            ),
+        )
+        return int(cur.lastrowid)
+
+    @classmethod
+    def _legacy_idempotent_lookup(
+        cls,
+        con: sqlite3.Connection,
+        req: LegacyHareketRequest,
+    ) -> int | None:
+        if req.idempotency_key and tablo_var(con, 'finans_hareket'):
+            idem = idempotency_hareket_post(req.idempotency_key)
+            row = con.execute(
+                'SELECT cari_har_id FROM finans_hareket WHERE idempotency_key=?',
+                (idem,),
+            ).fetchone()
+            if row:
+                return int(row['cari_har_id'])
+        row = con.execute(
+            """
+            SELECT Id FROM Cari_Har
+            WHERE CKod=? AND BelgeNo=? AND BelgeTip=?
+            ORDER BY Id DESC LIMIT 1
+            """,
+            (req.ckod, req.belge_no, req.belge_tip),
+        ).fetchone()
+        return int(row['Id']) if row else None
+
+    @classmethod
+    def post_legacy_hareket(
+        cls,
+        con: sqlite3.Connection,
+        req: LegacyHareketRequest,
+        *,
+        legacy_compat_mode: bool = False,
+    ) -> dict[str, Any]:
+        """Legacy finans modülü uyum — commit yapmaz, metadata opsiyonel."""
+        if not legacy_compat_mode:
+            raise FinancialPostingError(
+                'Legacy hareket yalnız legacy_compat_mode=True ile çağrılabilir.',
+                403, 'LEGACY_MODE_GEREKLI',
+            )
+        mevcut = cls._legacy_idempotent_lookup(con, req)
+        if mevcut:
+            return {
+                'ok': True,
+                'idempotent': True,
+                'cari_har_id': mevcut,
+                'legacy_compat_mode': True,
+                'metadata_written': False,
+            }
+
+        payload = {
+            'CKod': req.ckod,
+            'Tarih': (req.tarih or datetime.now().strftime('%Y-%m-%d'))[:10],
+            'BelgeNo': req.belge_no,
+            'BelgeTip': req.belge_tip,
+            'Aciklama': req.aciklama,
+            'Borc': round(float(req.borc or 0), 2),
+            'Alacak': round(float(req.alacak or 0), 2),
+        }
+        cls._check_fault('before_insert')
+        har_id = cls._insert_cari_har_row(con, payload)
+        cls._check_fault('after_insert')
+
+        metadata_written = False
+        if req.idempotency_key and tablo_var(con, 'finans_hareket'):
+            try:
+                from modules.nexgen.finans_ledger_service import create_metadata
+                from modules.nexgen.finans_posting_context import PostingContext
+
+                ctx = PostingContext(
+                    transaction_id=f'legacy-{req.kaynak_tur or "LEGACY"}-{req.kaynak_id or 0}',
+                    idempotency_key=req.idempotency_key,
+                    kaynak_sistem=req.kaynak_sistem,
+                    kaynak_tur=req.kaynak_tur,
+                    kaynak_id=req.kaynak_id,
+                    olay_turu=req.olay_turu,
+                )
+                islem = 'ALACAK' if payload['Alacak'] > 0 else 'BORC'
+                create_metadata(
+                    con,
+                    cari_har_id=har_id,
+                    ckod=req.ckod,
+                    ctx=ctx,
+                    islem_tipi=islem,
+                    kaynak_entity='LEGACY',
+                    kaynak_entity_id=req.kaynak_id,
+                )
+                metadata_written = True
+            except Exception:
+                metadata_written = False
+
+        return {
+            'ok': True,
+            'idempotent': False,
+            'cari_har_id': har_id,
+            'legacy_compat_mode': True,
+            'legacy_caller': req.legacy_caller,
+            'metadata_written': metadata_written,
+            'metadata_skipped': not metadata_written,
+        }
+
+    @classmethod
+    def delete_legacy_hareket(
+        cls,
+        con: sqlite3.Connection,
+        cari_har_id: int,
+        *,
+        legacy_compat_mode: bool = False,
+    ) -> bool:
+        """Legacy geri-al uyumu — yalnız legacy_compat_mode. Teknik borç."""
+        if not legacy_compat_mode:
+            raise FinancialPostingError(
+                'Legacy silme yalnız legacy_compat_mode=True ile çağrılabilir.',
+                403, 'LEGACY_MODE_GEREKLI',
+            )
+        if not cari_har_id:
+            return False
+        cur = con.execute('DELETE FROM Cari_Har WHERE Id=?', (int(cari_har_id),))
+        if tablo_var(con, 'finans_hareket'):
+            con.execute('DELETE FROM finans_hareket WHERE cari_har_id=?', (int(cari_har_id),))
+        return cur.rowcount > 0
 
     @classmethod
     def _existing_posted_result(
@@ -175,17 +340,7 @@ class FinancialPostingService:
         cls._check_fault('before_insert')
         posting_idempotency_dogrula(con, post_key, belge_id)
 
-        cur = con.execute(
-            """
-            INSERT INTO Cari_Har (CKod, Tarih, BelgeNo, BelgeTip, Aciklama, Borc, Alacak)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                payload['CKod'], payload['Tarih'], payload['BelgeNo'], payload['BelgeTip'],
-                payload['Aciklama'], payload['Borc'], payload['Alacak'],
-            ),
-        )
-        har_id = int(cur.lastrowid)
+        har_id = cls._insert_cari_har_row(con, payload)
         cls._check_fault('after_insert')
 
         guncel = FinanceWorkflowService.posting_sonrasi_isaretle(

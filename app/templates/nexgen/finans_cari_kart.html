@@ -1,0 +1,471 @@
+{% extends "base.html" %}
+{% set page_title = "Cari Kart — NexGen Finans" %}
+
+{% block content %}
+{% include 'nexgen/_finans_shared_styles.html' %}
+{% set fm_hdr_title = 'Cari Kart' %}
+{% set fm_hdr_subtitle = 'Seçili carinin finans ve ticari çalışma alanı.' %}
+{% set fm_hdr_crumb = 'Cari Kart' %}
+{% set fm_guncelleme_id = 'fck-son-guncelleme' %}
+{% set fm_refresh_onclick = 'fckYenile()' %}
+<div class="rm-sayfa fm-sayfa fm-modul-sayfa erp-ic-page fck2-sayfa">
+  {% include 'nexgen/_finans_erp_ic_header.html' %}
+  <div class="fm-container fm-container-unified">
+    {% include 'nexgen/_finans_ic_nav.html' %}
+
+    <div class="fck2-kimlik" id="fck2-kimlik">
+      <div class="fck2-kimlik-sol">
+        <div class="fck2-kimlik-baslik" id="fck2-unvan">—</div>
+        <div class="fck2-kimlik-meta" id="fck2-meta"></div>
+        {% if finans_demo_modu %}<span class="fcs-demo-rozet" id="fck2-demo-rozet">DEMO VERİ</span>{% endif %}
+      </div>
+      <div class="fck2-kimlik-sag">
+        <a class="fck2-geri" href="/nexgen/finans/cari-hesaplar{% if finans_demo_modu %}?demo=1{% endif %}" id="fck2-listeye-don">← Liste</a>
+        <button type="button" class="fck2-nav-btn" id="fck2-onceki-cari" title="Önceki cari">‹</button>
+        <button type="button" class="fck2-nav-btn" id="fck2-sonraki-cari" title="Sonraki cari">›</button>
+        <button type="button" class="fck2-btn" onclick="fckYenile()">Yenile</button>
+      </div>
+    </div>
+
+    <div class="fck2-sekme-bar" id="fck2-sekme-bar">
+      <div class="rm-sekme" data-sek="genel_bilgiler">Genel Bilgiler</div>
+      <div class="rm-sekme" data-sek="genel_durum">Genel Durum</div>
+      <div class="rm-sekme aktif" data-sek="hesap_detaylari">Hesap Detayları</div>
+      <div class="rm-sekme" data-sek="aylik_durum">Aylık Durum</div>
+      <div class="rm-sekme" data-sek="siparisler">Siparişler</div>
+      <div class="rm-sekme" data-sek="sevkiyatlar">Sevkiyatlar</div>
+      <div class="rm-sekme" data-sek="risk">Risk Raporu</div>
+      <div class="rm-sekme" data-sek="fiyatlar">Fiyat Listesi</div>
+      <div class="rm-sekme" data-sek="kapanmamis">Kapanmamış Borçlar</div>
+      <div class="rm-sekme" data-sek="iletisim">Yetkililer</div>
+    </div>
+
+    <div class="fck2-icerik fck2-calisma">
+      <div class="fck2-tab-panel" id="fck2-tab-genel_bilgiler"><div class="fck2-tab-ic" id="fck2-ic-genel_bilgiler"></div></div>
+      <div class="fck2-tab-panel" id="fck2-tab-genel_durum"><div class="fck2-tab-ic" id="fck2-ic-genel_durum"></div></div>
+      <div class="fck2-tab-panel aktif" id="fck2-tab-hesap_detaylari">
+        <div class="fck2-tab-toolbar" id="fck2-hd-toolbar"></div>
+        <div class="fck2-tab-ic fck2-tab-ic-dense" id="fck2-ic-hesap_detaylari"></div>
+      </div>
+      <div class="fck2-tab-panel" id="fck2-tab-aylik_durum"><div class="fck2-tab-ic" id="fck2-ic-aylik_durum"></div></div>
+      <div class="fck2-tab-panel" id="fck2-tab-siparisler"><div class="fck2-tab-ic" id="fck2-ic-siparisler"></div></div>
+      <div class="fck2-tab-panel" id="fck2-tab-sevkiyatlar"><div class="fck2-tab-ic" id="fck2-ic-sevkiyatlar"></div></div>
+      <div class="fck2-tab-panel" id="fck2-tab-risk"><div class="fck2-tab-ic" id="fck2-ic-risk"></div></div>
+      <div class="fck2-tab-panel" id="fck2-tab-fiyatlar"><div class="fck2-tab-ic" id="fck2-ic-fiyatlar"></div></div>
+      <div class="fck2-tab-panel" id="fck2-tab-kapanmamis"><div class="fck2-tab-toolbar" id="fck2-kap-toolbar"></div><div class="fck2-tab-ic" id="fck2-ic-kapanmamis"></div></div>
+      <div class="fck2-tab-panel" id="fck2-tab-iletisim"><div class="fck2-tab-ic" id="fck2-ic-iletisim"></div></div>
+    </div>
+  </div>
+</div>
+<div class="fm-toast" id="fck2-toast" style="display:none;"></div>
+
+<script>
+(function(){
+  var _tip = {{ cari_tipi|tojson }};
+  var _oid = {{ operasyonel_id|tojson }};
+  var _sekme = {{ varsayilan_sekme|tojson }} || 'hesap_detaylari';
+  var _kapGorunum = 'borclar';
+  var _cache = {};
+  var _yukleniyor = {};
+  var _reqSeq = 0;
+  var _hdFiltre = { tarih_bas: '', tarih_bit: '', islem_turu: '', belge_no: '', tutar_min: '', tutar_max: '' };
+  var _kimlikYuklendi = false;
+
+  function esc(s){ var d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
+  function fmtT(n,pb){ if(n==null||n==='') return '—'; return esc(Number(n).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}))+(pb?' '+esc(pb):''); }
+  function toast(msg,t){ var el=document.getElementById('fck2-toast'); el.textContent=msg; el.className='fm-toast fm-toast-'+(t||'ok'); el.style.display='block'; setTimeout(function(){el.style.display='none';},4000); }
+  function apiErr(j){ return (j&&j.mesaj)||(j&&j.error&&j.error.message)||'İşlem başarısız.'; }
+  var _demoMode = {{ finans_demo_modu|tojson }};
+  function apiUrl(path){
+    var url = apiBase() + path;
+    if (!_demoMode) return url;
+    return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'demo=1';
+  }
+  function apiBase(){ return '/nexgen/api/finans/cari-hesap/'+_tip+'/'+_oid; }
+
+  function demoBanner(d){ return (d&&d.demo_modu&&d.demo_etiket)?'<div class="fck2-demo-banner">'+esc(d.demo_etiket)+'</div>':(_demoMode?'<div class="fck2-demo-banner">DEMO VERİ</div>':''); }
+
+  function tabloBaslik(cols){ return '<div class="erp-ic-grid-wrap"><table class="fm-tablo erp-ic-grid fck2-erp-tablo"><thead><tr>'+cols.map(function(c){return '<th class="fm-th">'+esc(c)+'</th>';}).join('')+'</tr></thead>'; }
+  function bosDurum(title, desc){ return '<div class="fck2-bos"><div class="fck2-bos-title">'+esc(title)+'</div><div class="fck2-bos-desc">'+esc(desc)+'</div></div>'; }
+
+  function urlSenkron(){
+    var q = [];
+    if (_sekme !== 'hesap_detaylari') q.push('sekme='+encodeURIComponent(_sekme));
+    if (_demoMode) q.push('demo=1');
+    history.replaceState({tip:_tip,id:_oid,sekme:_sekme}, '', location.pathname + (q.length?'?'+q.join('&'):''));
+  }
+
+  function belgeAc(id){
+    if (!id) return;
+    var ret = encodeURIComponent(location.pathname + location.search);
+    location.href = '/nexgen/finans/belge/' + id + '?return=' + ret;
+  }
+
+  function kimlikYukle(force){
+    if (_kimlikYuklendi && !force) return;
+    fetch(apiUrl('/kart-kimlik')).then(function(r){ return r.json(); }).then(function(j){
+      if (!j.ok){ toast(apiErr(j),'hata'); return; }
+      var d = j.data||{};
+      _cache.kimlik = d;
+      _kimlikYuklendi = true;
+      document.getElementById('fck2-unvan').textContent = d.firma_unvani || d.unvan || '—';
+      document.getElementById('fck2-meta').innerHTML =
+        '<span><code>'+esc(d.kod)+'</code></span>'+
+        '<span>'+esc(d.unvan)+'</span>'+
+        '<span>'+esc(d.cari_tipi_etiket)+'</span>'+
+        '<span>'+(d.aktif?'Aktif':'Pasif')+'</span>'+
+        '<span>'+esc(d.para_birimi||'TRY')+'</span>'+
+        (d.kart_acilis_tarihi?'<span>Açılış: '+esc(d.kart_acilis_tarihi)+'</span>':'')+
+        (d.bakiye_durumu_etiket?'<span class="fck2-bd">'+esc(d.bakiye_durumu_etiket)+' · '+fmtT(d.bakiye,d.para_birimi)+'</span>':'');
+      document.getElementById('fck-son-guncelleme').textContent = new Date().toLocaleTimeString('tr-TR');
+    });
+  }
+
+  function sekmeAktif(sek){
+    _sekme = sek;
+    document.querySelectorAll('#fck2-sekme-bar .rm-sekme').forEach(function(el){
+      el.classList.toggle('aktif', el.getAttribute('data-sek')===sek);
+    });
+    document.querySelectorAll('.fck2-tab-panel').forEach(function(el){
+      el.classList.toggle('aktif', el.id==='fck2-tab-'+sek);
+    });
+    urlSenkron();
+  }
+
+  function borcSatir(h, pb){
+    var leg = h.onceki_donem ? ' fck2-legacy-row' : '';
+    var clk = h.tiklanabilir ? ' class="fm-satir'+leg+'" style="cursor:pointer" data-belge="'+h.finans_belgesi_id+'"' : ' class="'+leg.trim()+'"';
+    return '<tr'+clk+'><td>'+esc(h.tarih||'—')+'</td><td>'+esc(h.islem_turu||'—')+'</td><td>'+esc(h.evrak_no||'—')+'</td>'+
+      '<td>'+esc(h.vade_tarihi||'—')+'</td><td class="fm-th-r">'+fmtT(h.tutar,pb)+'</td><td>'+esc(h.para_birimi||pb)+'</td><td>'+esc(h.aciklama||'—')+'</td></tr>';
+  }
+  function alacSatir(h, pb){
+    return borcSatir(h, pb);
+  }
+
+  function hdToolbar(){
+    var f = _hdFiltre;
+    document.getElementById('fck2-hd-toolbar').innerHTML =
+      '<div class="fck2-filtre fck2-hd-filtre">'+
+      '<label>Başlangıç <input type="date" id="fck-hd-bas" value="'+esc(f.tarih_bas)+'"></label>'+
+      '<label>Bitiş <input type="date" id="fck-hd-bit" value="'+esc(f.tarih_bit)+'"></label>'+
+      '<label>İşlem Türü <input type="text" id="fck-hd-islem" placeholder="Fatura, Nakit…" value="'+esc(f.islem_turu)+'"></label>'+
+      '<label>Evrak No <input type="text" id="fck-hd-evrak" value="'+esc(f.belge_no)+'"></label>'+
+      '<label>Min <input type="number" step="0.01" id="fck-hd-min" class="fck2-filtre-kisa" value="'+esc(f.tutar_min)+'"></label>'+
+      '<label>Max <input type="number" step="0.01" id="fck-hd-max" class="fck2-filtre-kisa" value="'+esc(f.tutar_max)+'"></label>'+
+      '<button type="button" class="fck2-btn" id="fck-hd-yenile">Yenile</button></div>';
+    document.getElementById('fck-hd-yenile').addEventListener('click', function(){
+      _hdFiltre.tarih_bas = document.getElementById('fck-hd-bas').value;
+      _hdFiltre.tarih_bit = document.getElementById('fck-hd-bit').value;
+      _hdFiltre.islem_turu = document.getElementById('fck-hd-islem').value.trim();
+      _hdFiltre.belge_no = document.getElementById('fck-hd-evrak').value.trim();
+      _hdFiltre.tutar_min = document.getElementById('fck-hd-min').value;
+      _hdFiltre.tutar_max = document.getElementById('fck-hd-max').value;
+      tabHesapDetay(true);
+    });
+  }
+
+  function tabHesapDetay(force){
+    if (_yukleniyor.hd && !force) return;
+    hdToolbar();
+    _yukleniyor.hd = true;
+    var seq = ++_reqSeq;
+    var p = new URLSearchParams();
+    p.set('kaynak','TUMU');
+    if (_hdFiltre.tarih_bas) p.set('tarih_bas', _hdFiltre.tarih_bas);
+    if (_hdFiltre.tarih_bit) p.set('tarih_bit', _hdFiltre.tarih_bit);
+    if (_hdFiltre.islem_turu) p.set('islem_turu', _hdFiltre.islem_turu);
+    if (_hdFiltre.belge_no) p.set('belge_no', _hdFiltre.belge_no);
+    if (_hdFiltre.tutar_min) p.set('tutar_min', _hdFiltre.tutar_min);
+    if (_hdFiltre.tutar_max) p.set('tutar_max', _hdFiltre.tutar_max);
+    fetch(apiUrl('/hesap-detay?'+p.toString())).then(function(r){ return r.json(); }).then(function(j){
+      if (seq !== _reqSeq || _sekme !== 'hesap_detaylari') return;
+      _yukleniyor.hd = false;
+      var el = document.getElementById('fck2-ic-hesap_detaylari');
+      if (!j.ok){ el.innerHTML='<div class="fch-tab-uyari">'+esc(apiErr(j))+'</div>'; return; }
+      var d = j.data||{};
+      var pb = 'TRY';
+      var html = _demoMode ? demoBanner(d) : '';
+      if (d.uyari) html += '<div class="fch-tab-uyari">'+esc(d.uyari)+'</div>';
+      html += '<div class="fck2-hesap-grid">';
+      html += '<div class="fck2-hesap-kolon"><div class="fck2-kolon-baslik">BORÇ</div>';
+      var borc = d.borclar||[];
+      if (!borc.length) html += '<div class="erp-ic-empty-desc">Borç hareketi yok.</div>';
+      else {
+        html += '<div class="fck2-tablo-scroll">'+tabloBaslik(['Tarih','İşlem Türü','Evrak No','Vade','Borç','PB','Açıklama']);
+        html += '<tbody>'+borc.map(function(h){ return borcSatir(h,pb); }).join('')+'</tbody></table></div>';
+      }
+      html += '<div class="fck2-kolon-footer"><span>Devir: <strong>'+fmtT(d.devir_borc,pb)+'</strong></span>'+
+        '<span>Dönem: <strong>'+fmtT(d.donem_borc,pb)+'</strong></span>'+
+        '<span>Toplam: <strong>'+fmtT(d.toplam_borc,pb)+'</strong></span></div></div>';
+      html += '<div class="fck2-hesap-kolon"><div class="fck2-kolon-baslik">ALACAK</div>';
+      var alac = d.alacaklar||[];
+      if (!alac.length) html += '<div class="erp-ic-empty-desc">Alacak hareketi yok.</div>';
+      else {
+        html += '<div class="fck2-tablo-scroll">'+tabloBaslik(['Tarih','İşlem Türü','Evrak No','Vade','Alacak','PB','Açıklama']);
+        html += '<tbody>'+alac.map(function(h){ return alacSatir(h,pb); }).join('')+'</tbody></table></div>';
+      }
+      html += '<div class="fck2-kolon-footer"><span>Devir: <strong>'+fmtT(d.devir_alacak,pb)+'</strong></span>'+
+        '<span>Dönem: <strong>'+fmtT(d.donem_alacak,pb)+'</strong></span>'+
+        '<span>Toplam: <strong>'+fmtT(d.toplam_alacak,pb)+'</strong></span></div></div>';
+      html += '</div>';
+      html += '<div class="fck2-hesap-net">Net Bakiye: <strong>'+fmtT(d.net_bakiye,pb)+'</strong></div>';
+      el.innerHTML = html;
+      el.querySelectorAll('[data-belge]').forEach(function(tr){
+        tr.addEventListener('click', function(){ belgeAc(tr.getAttribute('data-belge')); });
+      });
+    });
+  }
+
+  function kapToolbar(){
+    var g = [['borclar','Borçlar'],['alacaklar','Alacaklar'],['aciklar','Tüm Açıklar'],['kapananlar','Kapananlar']];
+    document.getElementById('fck2-kap-toolbar').innerHTML = '<div class="fch-hes-gorunum">'+
+      g.map(function(x){ return '<div class="rm-sekme'+(_kapGorunum===x[0]?' aktif':'')+'" data-gorunum="'+x[0]+'">'+esc(x[1])+'</div>'; }).join('')+'</div>';
+    document.querySelectorAll('#fck2-kap-toolbar .rm-sekme').forEach(function(el){
+      el.addEventListener('click', function(){ _kapGorunum=el.getAttribute('data-gorunum'); tabKapanmamis(); });
+    });
+  }
+
+  function tabKapanmamis(){
+    kapToolbar();
+    fetch(apiUrl('/hesap?gorunum='+_kapGorunum)).then(function(r){ return r.json(); }).then(function(j){
+      var el = document.getElementById('fck2-ic-kapanmamis');
+      if (!j.ok){ el.innerHTML='<div class="fch-tab-uyari">'+esc(apiErr(j))+'</div>'; return; }
+      var d = j.data||{}; var pb = d.para_birimi||'TRY';
+      var html = d.uyari ? '<div class="fch-tab-uyari">'+esc(d.uyari)+'</div>' : '';
+      var rows = d.kalemler||[];
+      if (!rows.length) html += bosDurum('Kapanmamış borç yok', 'Open item kaydı bulunmuyor.');
+      else {
+        html += tabloBaslik(['Fiş No','Tarih','Evrak No','Vade','İlk Tutar','Kapanan','Kalan','PB','Durum','Gecikme','Kaynak']);
+        html += '<tbody>'+rows.map(function(k){
+          var clk = k.tiklanabilir ? ' class="fm-satir" style="cursor:pointer" data-belge="'+k.finans_belgesi_id+'"' : '';
+          var gec = k.vadesi_gecmis ? ' fch-vade-gecmis' : '';
+          return '<tr'+clk+gec+'><td>'+esc(k.fis_no||'—')+'</td><td>'+esc(k.tarih||'—')+'</td><td>'+esc(k.evrak_belge_no||'—')+'</td>'+
+            '<td>'+esc(k.vade_tarihi||'—')+'</td><td class="fm-th-r">'+fmtT(k.ilk_tutar,pb)+'</td><td class="fm-th-r">'+fmtT(k.kapanan_tutar,pb)+'</td>'+
+            '<td class="fm-th-r">'+fmtT(k.kalan_tutar,pb)+'</td><td>'+esc(k.para_birimi||pb)+'</td><td>'+esc(k.durum_etiket||'—')+'</td>'+
+            '<td>'+(k.vadesi_gecmis?'Vadesi geçmiş':'—')+'</td><td>'+esc(k.kaynak_etiket||'—')+'</td></tr>';
+        }).join('')+'</tbody></table></div>';
+      }
+      var od = d.onceki_donem||{};
+      if (od.mevcut && (od.kalemler||[]).length){
+        html += '<div class="fch-hes-onceki-wrap"><div class="erp-ic-bolum-baslik">Önceki Dönem</div><div class="fch-legacy-banner">Legacy kayıtlarda kapanan/kalan tutar gösterilmez.</div>';
+        html += tabloBaslik(['Fiş No','Tarih','Evrak No','Vade','İlk Tutar','Kapanan','Kalan','PB','Durum','Kaynak']);
+        html += '<tbody>'+(od.kalemler||[]).map(function(k){
+          return '<tr class="fck2-legacy-row"><td>'+esc(k.fis_no)+'</td><td>'+esc(k.tarih||'—')+'</td><td>'+esc(k.evrak_belge_no||'—')+'</td>'+
+            '<td>—</td><td class="fm-th-r">'+fmtT(k.ilk_tutar,pb)+'</td><td>—</td><td>—</td><td>'+esc(k.para_birimi||pb)+'</td>'+
+            '<td>Önceki Dönem</td><td><span class="fch-legacy-badge">Önceki dönem</span></td></tr>';
+        }).join('')+'</tbody></table></div></div>';
+      }
+      el.innerHTML = html;
+      el.querySelectorAll('[data-belge]').forEach(function(tr){
+        tr.addEventListener('click', function(){ belgeAc(tr.getAttribute('data-belge')); });
+      });
+    });
+  }
+
+  function tabGenelDurum(){
+    fetch(apiUrl('/genel-durum')).then(function(r){ return r.json(); }).then(function(j){
+      var el = document.getElementById('fck2-ic-genel_durum');
+      if (!j.ok){ el.innerHTML='<div class="fch-tab-uyari">'+esc(apiErr(j))+'</div>'; return; }
+      var d = j.data||{}; var pb = d.para_birimi||'TRY';
+      var html = demoBanner(d);
+      if (d.uyari && !(d.satirlar||[]).length) html += '<div class="fch-tab-uyari">'+esc(d.uyari)+'</div>';
+      var rows = d.satirlar||[];
+      if (!rows.length) html += bosDurum('Genel durum yok', d.uyari||'Hareket bulunmuyor.');
+      else {
+        html += tabloBaslik(['İşlem Türü','Borç','Alacak','Borç Bakiyesi','Alacak Bakiyesi','Hareket Adedi']);
+        html += '<tbody>'+rows.map(function(s){
+          return '<tr><td>'+esc(s.islem_turu)+'</td><td class="fm-th-r">'+fmtT(s.borc,pb)+'</td><td class="fm-th-r">'+fmtT(s.alacak,pb)+'</td>'+
+            '<td class="fm-th-r">'+fmtT(s.borc_bakiye,pb)+'</td><td class="fm-th-r">'+fmtT(s.alacak_bakiye,pb)+'</td><td class="fm-th-r">'+esc(s.hareket_adedi)+'</td></tr>';
+        }).join('');
+        var t = d.toplam||{};
+        html += '<tr class="fck2-toplam-satir"><td>'+esc(t.islem_turu||'Toplam')+'</td><td class="fm-th-r">'+fmtT(t.borc,pb)+'</td><td class="fm-th-r">'+fmtT(t.alacak,pb)+'</td>'+
+          '<td class="fm-th-r">'+fmtT(t.borc_bakiye,pb)+'</td><td class="fm-th-r">'+fmtT(t.alacak_bakiye,pb)+'</td><td class="fm-th-r">'+esc(t.hareket_adedi)+'</td></tr></tbody></table></div>';
+      }
+      el.innerHTML = html;
+    });
+  }
+
+  function tabAylikDurum(){
+    var yil = new Date().getFullYear();
+    fetch(apiUrl('/aylik-durum?yil='+yil)).then(function(r){ return r.json(); }).then(function(j){
+      var el = document.getElementById('fck2-ic-aylik_durum');
+      if (!j.ok){ el.innerHTML='<div class="fch-tab-uyari">'+esc(apiErr(j))+'</div>'; return; }
+      var d = j.data||{}; var pb = d.para_birimi||'TRY';
+      var html = demoBanner(d)+'<div class="fck2-ozet-bar"><span>Yıl: <strong>'+esc(d.yil)+'</strong></span><span>PB: <strong>'+esc(pb)+'</strong></span></div>';
+      var rows = d.satirlar||[];
+      if (!rows.length) html += bosDurum('Aylık durum yok', d.uyari||'Kayıt bulunmuyor.');
+      else {
+        html += tabloBaslik(['Dönem','Borç','Alacak','Borç Bakiyesi','Alacak Bakiyesi']);
+        html += '<tbody>'+rows.map(function(s){
+          var cls = s.donem==='Toplam'?' class="fck2-toplam-satir"':'';
+          return '<tr'+cls+'><td>'+esc(s.donem)+'</td><td class="fm-th-r">'+fmtT(s.borc,pb)+'</td><td class="fm-th-r">'+fmtT(s.alacak,pb)+'</td>'+
+            '<td class="fm-th-r">'+fmtT(s.borc_bakiye,pb)+'</td><td class="fm-th-r">'+fmtT(s.alacak_bakiye,pb)+'</td></tr>';
+        }).join('')+'</tbody></table></div>';
+      }
+      el.innerHTML = html;
+    });
+  }
+
+  function tabRisk(){
+    fetch(apiUrl('/risk')).then(function(r){ return r.json(); }).then(function(j){
+      var el = document.getElementById('fck2-ic-risk');
+      if (!j.ok){ el.innerHTML='<div class="fch-tab-uyari">'+esc(apiErr(j))+'</div>'; return; }
+      var d = j.data||{}; var pb = d.para_birimi||'TRY';
+      var html = demoBanner(d);
+      var oz = d.ozet||{};
+      html += '<div class="fck2-detay-toplam">'+
+        '<span>Cari Bakiye: <strong>'+fmtT(oz.cari_bakiye,pb)+'</strong></span>'+
+        '<span>Risk Limiti: <strong>'+(d.risk_limiti!=null?fmtT(d.risk_limiti,pb):'—')+'</strong></span>'+
+        '<span>Toplam Risk: <strong>'+(oz.toplam_risk!=null?fmtT(oz.toplam_risk,pb):'—')+'</strong></span></div>';
+      if (d.mesaj && !d.demo_modu) html += '<div class="fch-tab-uyari">'+esc(d.mesaj)+'</div>';
+      var rows = d.cek_senetler||[];
+      if (rows.length){
+        html += tabloBaslik(['Konum','Durum','Tarih','Bordro No','Vade','Tutar','Tür','Açıklama']);
+        html += '<tbody>'+rows.map(function(c){
+          return '<tr><td>'+esc(c.konum)+'</td><td>'+esc(c.durum)+'</td><td>'+esc(c.tarih)+'</td><td>'+esc(c.bordro_no)+'</td>'+
+            '<td>'+esc(c.vade_tarihi)+'</td><td class="fm-th-r">'+fmtT(c.tutar,pb)+'</td><td>'+esc(c.tur)+'</td><td>'+esc(c.aciklama)+'</td></tr>';
+        }).join('')+'</tbody></table></div>';
+      } else if (!d.demo_modu) html += bosDurum('Risk detayı yok', d.mesaj||'Çek/senet domaini henüz aktif değil.');
+      el.innerHTML = html;
+    });
+  }
+
+  function tabFiyatlar(){
+    fetch(apiUrl('/fiyatlar')).then(function(r){ return r.json(); }).then(function(j){
+      var el = document.getElementById('fck2-ic-fiyatlar');
+      if (!j.ok){ el.innerHTML='<div class="fch-tab-uyari">'+esc(apiErr(j))+'</div>'; return; }
+      var d = j.data||{}; var html = demoBanner(d);
+      var rows = d.fiyatlar||[];
+      if (!rows.length) html += bosDurum('Fiyat yok', d.mesaj||'Kayıt bulunmuyor.');
+      else {
+        html += tabloBaslik(['Stok Kodu','Stok Tanımı','Fiyat','PB','Fiyat Tarihi','İskonto','Aktif']);
+        html += '<tbody>'+rows.map(function(f){
+          return '<tr><td><code>'+esc(f.stok_kodu)+'</code></td><td>'+esc(f.stok_tanimi)+'</td><td class="fm-th-r">'+fmtT(f.fiyat,f.para_birimi)+'</td>'+
+            '<td>'+esc(f.para_birimi)+'</td><td>'+esc(f.fiyat_tarihi)+'</td><td class="fm-th-r">'+(f.iskonto!=null?esc(f.iskonto)+'%':'—')+'</td><td>'+(f.aktif?'Evet':'Hayır')+'</td></tr>';
+        }).join('')+'</tbody></table></div>';
+      }
+      el.innerHTML = html;
+    });
+  }
+
+  function tabIletisim(){
+    fetch(apiUrl('/yetkililer')).then(function(r){ return r.json(); }).then(function(j){
+      var el = document.getElementById('fck2-ic-iletisim');
+      if (!j.ok){ el.innerHTML='<div class="fch-tab-uyari">'+esc(apiErr(j))+'</div>'; return; }
+      var d = j.data||{}; var html = demoBanner(d);
+      var rows = d.yetkililer||[];
+      if (!rows.length) html += bosDurum('Yetkili yok', d.mesaj||'Kayıt bulunmuyor.');
+      else rows.forEach(function(y){
+        html += '<div class="fck2-yetkili-kart"><div class="fck2-yetkili-ad">'+esc(y.yetkili)+' <span style="font-weight:400;color:var(--rm-t3)">· '+esc(y.unvan)+'</span></div>'+
+          '<div>Tel: '+esc(y.telefon||'—')+' · Cep: '+esc(y.cep||'—')+' · '+esc(y.email||'—')+'</div>'+
+          (y.not?'<div style="margin-top:4px;color:var(--rm-t3)">'+esc(y.not)+'</div>':'')+
+          '<div style="margin-top:4px;font-size:12px">'+(y.sms_yetkili?'SMS ✓':'')+' '+(y.mail_yetkili?'Mail ✓':'')+'</div></div>';
+      });
+      if (d.odeme_plani&&d.odeme_plani.mevcut) html += '<div class="fck2-ozet-bar">Ödeme Planı: '+esc(d.odeme_plani.aciklama)+'</div>';
+      if (d.notlar) html += '<div class="fch-tab-uyari">'+esc(d.notlar)+'</div>';
+      el.innerHTML = html;
+    });
+  }
+
+  function tabGenelBilgiler(){
+    fetch(apiUrl('/bilgiler')).then(function(r){ return r.json(); }).then(function(j){
+      var el = document.getElementById('fck2-ic-genel_bilgiler');
+      if (!j.ok){ el.innerHTML='<div class="fch-tab-uyari">'+esc(apiErr(j))+'</div>'; return; }
+      var d = j.data||{};
+      var pairs = [['Cari Kodu',d.kod],['Ünvan',d.unvan],['Tip',d.cari_tipi==='MUSTERI'?'Müşteri':'Tedarikçi'],
+        ['Aktiflik',d.aktif?'Aktif':'Pasif'],['Para Birimi',d.para_birimi||'TRY']];
+      el.innerHTML = pairs.map(function(p){
+        return '<div class="erp-form-satir"><div class="erp-form-etiket">'+esc(p[0])+'</div><div class="erp-form-deger">'+esc(p[1])+'</div></div>';
+      }).join('');
+    });
+  }
+
+  function tabSiparisler(){
+    fetch(apiUrl('/siparisler')).then(function(r){ return r.json(); }).then(function(j){
+      var el = document.getElementById('fck2-ic-siparisler');
+      var d = (j.data)||{};
+      var html = d.uyari && !(d.siparisler||[]).length ? '<div class="fch-tab-uyari">'+esc(d.uyari)+'</div>' : '';
+      var rows = d.siparisler||[];
+      if (!rows.length) html += bosDurum('Sipariş yok', d.uyari||'Kayıt bulunmuyor.');
+      else {
+        html += tabloBaslik(['Sipariş No','Tarih','Termin','Durum','']);
+        html += '<tbody>'+rows.map(function(s){
+          return '<tr class="fm-satir" style="cursor:pointer" data-href="'+esc(s.siparis_url)+'"><td>'+esc(s.siparis_no)+'</td><td>'+esc(s.siparis_tarihi||'—')+'</td>'+
+            '<td>'+esc(s.termin_tarihi||'—')+'</td><td>'+esc(s.durum||'—')+'</td><td><span class="fm-baglanti-link">Aç</span></td></tr>';
+        }).join('')+'</tbody></table></div>';
+      }
+      el.innerHTML = html;
+      el.querySelectorAll('[data-href]').forEach(function(tr){
+        tr.addEventListener('click', function(){ location.href=tr.getAttribute('data-href'); });
+      });
+    });
+  }
+
+  function tabSevkiyatlar(){
+    fetch(apiUrl('/sevkiyatlar')).then(function(r){ return r.json(); }).then(function(j){
+      var el = document.getElementById('fck2-ic-sevkiyatlar');
+      var d = (j.data)||{}; var html = '';
+      var rows = d.sevkiyatlar||[];
+      if (!rows.length) html = bosDurum('Sevkiyat yok', 'Kayıt bulunmuyor.');
+      else {
+        html += tabloBaslik(['Sevkiyat No','Sevk Tarihi','Durum','Tutar']);
+        html += '<tbody>'+rows.map(function(s){
+          return '<tr><td>'+esc(s.sevkiyat_no)+'</td><td>'+esc((s.sevk_tarihi||'').slice(0,10))+'</td><td>'+esc(s.muhasebe_durumu||s.durum)+'</td><td class="fm-th-r">'+fmtT(s.tutar,s.para_birimi)+'</td></tr>';
+        }).join('')+'</tbody></table></div>';
+      }
+      el.innerHTML = html;
+    });
+  }
+
+  function tabBos(id, title, desc){
+    document.getElementById('fck2-ic-'+id).innerHTML = bosDurum(title, desc);
+  }
+
+  function sekmeYukle(sek){
+    sekmeAktif(sek);
+    if (sek==='hesap_detaylari') tabHesapDetay();
+    else if (sek==='genel_durum') tabGenelDurum();
+    else if (sek==='genel_bilgiler') tabGenelBilgiler();
+    else if (sek==='kapanmamis') tabKapanmamis();
+    else if (sek==='siparisler') tabSiparisler();
+    else if (sek==='sevkiyatlar') tabSevkiyatlar();
+    else if (sek==='aylik_durum') tabAylikDurum();
+    else if (sek==='risk') tabRisk();
+    else if (sek==='fiyatlar') tabFiyatlar();
+    else if (sek==='iletisim') tabIletisim();
+  }
+
+  document.querySelectorAll('#fck2-sekme-bar .rm-sekme').forEach(function(el){
+    el.addEventListener('click', function(){ sekmeYukle(el.getAttribute('data-sek')); });
+  });
+
+  function komsuCari(delta){
+    try {
+      var list = JSON.parse(sessionStorage.getItem('fcs_last_ids')||'[]');
+      var idx = list.findIndex(function(x){ return x.tip===_tip && x.id===_oid; });
+      if (idx < 0) return;
+      var n = list[idx + delta];
+      if (n) location.href = '/nexgen/finans/cari-hesaplar/' + n.tip + '/' + n.id + '?sekme=' + encodeURIComponent(_sekme) + (_demoMode?'&demo=1':'');
+    } catch(e){}
+  }
+  document.getElementById('fck2-onceki-cari').addEventListener('click', function(){ komsuCari(-1); });
+  document.getElementById('fck2-sonraki-cari').addEventListener('click', function(){ komsuCari(1); });
+
+  window.fckYenile = function(){
+    _cache = {}; _yukleniyor = {};
+    kimlikYukle(true);
+    sekmeYukle(_sekme);
+  };
+
+  window.addEventListener('popstate', function(e){
+    if (e.state && e.state.sekme) sekmeYukle(e.state.sekme);
+  });
+
+  var qs = new URLSearchParams(location.search);
+  if (qs.get('sekme')) _sekme = qs.get('sekme');
+  kimlikYukle();
+  if (_sekme === 'hesap' || _sekme === 'ozet') _sekme = 'hesap_detaylari';
+  sekmeYukle(_sekme);
+})();
+</script>
+{% endblock %}

@@ -233,34 +233,10 @@ def gercek_sevk_tarihi(con, siparis_id: int) -> str | None:
     return (row['sevk_tarihi'] or '')[:10] or None if row else None
 
 
-def _uretilen_kg_siparis(con: sqlite3.Connection, planlama_siparis_id: int) -> float:
-    """planlama_siparis_id için rf_kullanim toplamı (geçici sevk edilebilir üst sınır)."""
-    if not _tablo_var(con, 'nexgen_rf_kullanim'):
-        return 0.0
-    cols = []
-    if _tablo_var(con, 'nexgen_uretim_plan'):
-        cols = [c[1] for c in con.execute('PRAGMA table_info(nexgen_uretim_plan)').fetchall()]
-    if 'planlama_siparis_id' in cols:
-        row = con.execute(
-            """
-            SELECT ROUND(COALESCE(SUM(k.miktar_kg), 0), 3) AS kg
-            FROM nexgen_rf_kullanim k
-            JOIN nexgen_uretim_plan np ON np.id = k.siparis_id
-            WHERE k.aktif = 1 AND np.planlama_siparis_id = ?
-            """,
-            (planlama_siparis_id,),
-        ).fetchone()
-        if row and float(row['kg'] or 0) > 0:
-            return float(row['kg'])
-    row = con.execute(
-        """
-        SELECT ROUND(COALESCE(SUM(miktar_kg), 0), 3) AS kg
-        FROM nexgen_rf_kullanim
-        WHERE aktif = 1 AND siparis_id = ?
-        """,
-        (planlama_siparis_id,),
-    ).fetchone()
-    return float(row['kg'] or 0) if row else 0.0
+from modules.nexgen.mo_uretim_kg_read import uretilen_kg_siparis
+
+# Geriye uyumluluk (test / eski import)
+_uretilen_kg_siparis = uretilen_kg_siparis
 
 
 def _kalem_tablosu_var(con) -> bool:
@@ -397,7 +373,7 @@ def _validate_kalemler(
         })
         toplam_kg += kg
     sevk_edilen = sevk_edilmis_kg(con, siparis_id)
-    uretilen = _uretilen_kg_siparis(con, siparis_id)
+    uretilen = uretilen_kg_siparis(con, siparis_id)
     sevk_edilebilir = round(max(0.0, uretilen - sevk_edilen), 3)
     if uretilen > 0.001 and toplam_kg > sevk_edilebilir + 0.001:
         raise MoSevkiyatError(
@@ -405,6 +381,103 @@ def _validate_kalemler(
             409,
         )
     return norm
+
+
+def _normalize_irsaliye(irsaliye_no: str | None) -> str | None:
+    if irsaliye_no is None:
+        return None
+    s = str(irsaliye_no).strip()
+    return s.upper() if s else None
+
+
+def _audit_parse(raw: str | None) -> list[dict[str, Any]]:
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw)
+        if isinstance(data, list):
+            return [x for x in data if isinstance(x, dict)]
+        if isinstance(data, dict):
+            return [data]
+    except (TypeError, ValueError, json.JSONDecodeError):
+        pass
+    return []
+
+
+def _kullanici_ad(con: sqlite3.Connection, kullanici_id: int) -> str | None:
+    row = con.execute(
+        'SELECT AdSoyad, KullaniciAdi FROM sistem_kullanici WHERE Id=?',
+        (kullanici_id,),
+    ).fetchone()
+    if not row:
+        return None
+    return (row['AdSoyad'] or row['KullaniciAdi'] or '').strip() or None
+
+
+def _audit_append(
+    con: sqlite3.Connection,
+    sevkiyat_id: int,
+    olay: str,
+    *,
+    onceki_durum: str | None,
+    yeni_durum: str | None,
+    kullanici_id: int,
+    siparis_id: int | None = None,
+    sevk_tarihi: str | None = None,
+    aciklama: str | None = None,
+) -> None:
+    row = con.execute(
+        'SELECT audit_json, siparis_id, sevk_tarihi FROM mo_musteri_sevkiyat WHERE id=?',
+        (sevkiyat_id,),
+    ).fetchone()
+    if not row:
+        return
+    hist = _audit_parse(row['audit_json'])
+    entry: dict[str, Any] = {
+        'olay': olay,
+        'onceki_durum': onceki_durum,
+        'yeni_durum': yeni_durum,
+        'islem_tarihi': _now(),
+        'kullanici_id': kullanici_id,
+        'kullanici_ad': _kullanici_ad(con, kullanici_id),
+        'sevkiyat_id': sevkiyat_id,
+        'siparis_id': siparis_id if siparis_id is not None else row['siparis_id'],
+    }
+    st = sevk_tarihi or row['sevk_tarihi']
+    if st:
+        entry['sevk_tarihi'] = st
+    if aciklama:
+        entry['aciklama'] = aciklama
+    hist.append(entry)
+    con.execute(
+        'UPDATE mo_musteri_sevkiyat SET audit_json=? WHERE id=?',
+        (json.dumps(hist, ensure_ascii=False), sevkiyat_id),
+    )
+
+
+def _irsaliye_duplicate_kontrol(
+    con: sqlite3.Connection,
+    irsaliye_no: str | None,
+    *,
+    haric_sevkiyat_id: int | None = None,
+) -> None:
+    norm = _normalize_irsaliye(irsaliye_no)
+    if not norm:
+        return
+    rows = con.execute(
+        """
+        SELECT id, sevkiyat_no, irsaliye_no FROM mo_musteri_sevkiyat
+        WHERE aktif=1 AND irsaliye_no IS NOT NULL AND TRIM(irsaliye_no) != ''
+        """,
+    ).fetchall()
+    for r in rows:
+        if haric_sevkiyat_id and int(r['id']) == int(haric_sevkiyat_id):
+            continue
+        if _normalize_irsaliye(r['irsaliye_no']) == norm:
+            raise MoSevkiyatError(
+                f'Bu irsaliye numarası zaten kullanılıyor ({r["sevkiyat_no"]}).',
+                409,
+            )
 
 
 def _tahsilat_sevk_sonrasi_guncelle(con, siparis_id: int, sevkiyat_id: int) -> None:
@@ -481,6 +554,8 @@ def sevkiyat_olustur(
     sip = _siparis_guard(con, siparis_id)
     cari_id = int(sip['cari_id'])
     kalemler = _validate_kalemler(con, siparis_id, payload.get('kalemler') or [])
+    irsaliye_raw = (payload.get('irsaliye_no') or '').strip() or None
+    _irsaliye_duplicate_kontrol(con, irsaliye_raw)
 
     now = _now()
     cur = con.execute(
@@ -497,14 +572,14 @@ def sevkiyat_olustur(
             (payload.get('hazirlik_tarihi') or _today())[:10],
             (payload.get('arac_plaka') or payload.get('arac') or '').strip() or None,
             (payload.get('sofor') or '').strip() or None,
-            (payload.get('irsaliye_no') or '').strip() or None,
+            irsaliye_raw,
             (payload.get('kargo_firmasi') or payload.get('kargo') or '').strip() or None,
             (payload.get('kargo_takip_no') or '').strip() or None,
             (payload.get('teslim_alan') or '').strip() or None,
             (payload.get('teslim_durumu') or '').strip() or None,
             (payload.get('notlar') or '').strip() or None,
             idem, kullanici_id, now, now,
-            json.dumps({'islem': 'OLUSTUR', 'kullanici_id': kullanici_id}, ensure_ascii=False),
+            '[]',
         ),
     )
     sid = int(cur.lastrowid)
@@ -527,6 +602,12 @@ def sevkiyat_olustur(
                 k['miktar_kg'], adet, k['notlar'],
             ),
         )
+    _audit_append(
+        con, sid, 'SEVKIYAT_OLUSTURULDU',
+        onceki_durum=None, yeni_durum='HAZIRLANIYOR',
+        kullanici_id=kullanici_id, siparis_id=siparis_id,
+        aciklama=(payload.get('notlar') or '').strip() or None,
+    )
     con.commit()
     det = _detay(con, sid)
     det['cari360_olay'] = cari360_olay_sozlesmesi(OLAY_SEVK_HAZIR, det)
@@ -584,6 +665,13 @@ def durum_guncelle(
     con.execute(
         f'UPDATE mo_musteri_sevkiyat SET {set_sql} WHERE id=?',
         [*updates.values(), sevkiyat_id],
+    )
+    _audit_append(
+        con, sevkiyat_id, yeni,
+        onceki_durum=mevcut, yeni_durum=yeni,
+        kullanici_id=kullanici_id,
+        siparis_id=int(row['siparis_id']),
+        sevk_tarihi=updates.get('sevk_tarihi'),
     )
     if yeni == 'SEVK_EDILDI':
         _tahsilat_sevk_sonrasi_guncelle(con, int(row['siparis_id']), sevkiyat_id)

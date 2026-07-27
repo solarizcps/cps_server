@@ -21,7 +21,9 @@ var M2_FORMULLER       = {{ formuller       | tojson | safe }};
 var M2_FORMUL_GRUPLAR  = {{ (formul_gruplar or []) | tojson | safe }};
 var M2_RENK_VARYANTLAR = {{ renk_varyantlar | tojson | safe }};
 var M2_VARYANTLAR      = {{ varyantlar      | tojson | safe }};
+var M2_UV_KALEMLER     = {{ (uv_recete_kalemler or {}) | tojson | safe }};
 var M2_STOK_PIGMENTLER = {{ stok_pigmentler | tojson | safe }};
+var HYDRATE            = {{ (hydrate or none) | tojson | safe }};
 </script>
 
 <div class="m2-shell">
@@ -42,7 +44,7 @@ var M2_STOK_PIGMENTLER = {{ stok_pigmentler | tojson | safe }};
     <div class="m2-bar-divider"></div>
     <div class="m2-bar-title">
       <span class="m2-bar-label">YENİ RENK DENEMESİ</span>
-      <span class="m2-bar-name">Renk Geliştirme</span>
+      <span class="m2-bar-name">{% if hydrate %}{{ hydrate.test_no }}{% else %}Renk Geliştirme{% endif %}</span>
     </div>
     <div class="m2-bar-sag">
       <div class="m2-clock-wrap">
@@ -206,29 +208,32 @@ html,body{height:100%;overflow:hidden;}
 .m2-pigment-iptal{display:flex;align-items:center;justify-content:center;width:100%;padding:8px;margin-top:8px;background:transparent;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;}
 .m2-pigment-iptal:hover{background:var(--border);}
 
-/* ÖNIZLEME TABLOSU */
-.m2-onizleme-tablo{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:4px;}
-.m2-onizleme-tablo th{padding:7px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid var(--border);background:var(--light);}
-.m2-onizleme-tablo td{padding:8px 10px;border-bottom:1px solid var(--border);color:var(--navy);font-weight:600;}
-.m2-onizleme-tablo tr.rf-baslik td{background:var(--ob);font-weight:800;color:var(--navy);font-size:11px;letter-spacing:.4px;text-transform:uppercase;}
-.m2-onizleme-tablo tr.rf-satir td{background:#FFFBF7;}
-.m2-onizleme-toplam{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-radius:9px;margin-top:5px;font-size:13px;font-weight:700;}
-.m2-onizleme-toplam.taban{background:var(--sb);}
-.m2-onizleme-toplam.rf{background:var(--ob);color:var(--navy);}
-.m2-onizleme-toplam.genel{background:var(--navy);color:#fff;font-size:14px;font-weight:900;margin-top:8px;}
-
-/* META KUTU */
-.m2-meta-kutu{display:flex;align-items:center;gap:0;background:var(--light);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:14px;flex-wrap:wrap;gap:8px;}
-.m2-meta-item{display:flex;flex-direction:column;gap:2px;flex:1;min-width:80px;}
-.m2-meta-item span{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
-.m2-meta-item strong{font-size:13px;font-weight:900;color:var(--navy);}
-.m2-meta-item strong.aksan{color:var(--orange);}
-.m2-meta-arrow{color:var(--border);font-size:16px;font-weight:300;flex-shrink:0;align-self:center;}
-
-/* UYARI KUTUSU */
-.m2-uyari-kutu{display:flex;align-items:flex-start;gap:8px;background:#FFFBEB;border:1.5px solid #FDE68A;border-radius:9px;padding:10px 12px;margin-bottom:12px;}
-.m2-uyari-kutu svg{flex-shrink:0;margin-top:1px;}
-.m2-uyari-kutu p{font-size:11px;font-weight:600;color:#92400E;line-height:1.5;}
+/* ÖNİZLEME — MOD-01 m1-recete-* parity (Müşteri Renk referans) */
+.m1-adim-kart-baslik{font-size:16px;font-weight:900;color:var(--navy);margin-bottom:4px;}
+.m1-adim-kart-alt{font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.45;}
+.m1-recete-blok{margin-bottom:16px;border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.m1-recete-baslik{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--navy);color:#fff;font-size:12px;font-weight:800;letter-spacing:.3px;}
+.m1-recete-baslik .m1-rb-boyut{font-size:13px;font-weight:900;text-transform:uppercase;}
+.m1-recete-baslik .m1-rb-kg{margin-left:auto;font-size:12px;color:rgba(255,255,255,.65);font-weight:700;}
+.m1-recete-tablo{width:100%;border-collapse:collapse;}
+.m1-recete-tablo th{padding:7px 12px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border);background:#F8FAFC;}
+.m1-recete-tablo th:last-child{text-align:right;}
+.m1-recete-tablo td{padding:8px 12px;font-size:13px;font-weight:600;color:var(--navy);border-bottom:1px solid #F1F5F9;}
+.m1-recete-tablo td:last-child{text-align:right;font-variant-numeric:tabular-nums;}
+.m1-recete-tablo tr:last-child td{border-bottom:none;}
+.m1-recete-tablo tr.boya-row td{color:#6D28D9;background:#FAF5FF;}
+.m1-recete-tablo tr.ara-row td{background:#F8FAFC;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+.m1-recete-toplam{display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:#F8FAFC;border-top:2px solid var(--border);}
+.m1-recete-toplam span:first-child{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+.m1-recete-toplam span:last-child{font-size:15px;font-weight:900;color:var(--navy);font-variant-numeric:tabular-nums;}
+.m1-recete-genel{display:flex;justify-content:space-between;align-items:center;padding:10px 13px;background:var(--ob);border:1px solid rgba(244,121,32,.25);border-radius:9px;margin-top:8px;}
+.m1-recete-genel span:first-child{font-size:11px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.4px;}
+.m1-recete-genel span:last-child{font-size:16px;font-weight:900;color:var(--orange);font-variant-numeric:tabular-nums;}
+.m1-recete-bilgi{padding:12px;font-size:12px;font-weight:600;color:#92400E;line-height:1.5;background:#FFFBEB;}
+.m1-recete-ana{padding:10px 12px 12px;line-height:1.55;}
+.m1-recete-ana-ad{font-size:14px;font-weight:800;color:var(--navy);}
+.m1-recete-ana-kod{font-size:11px;color:var(--muted);margin-top:2px;}
+.m1-recete-ana-oran{font-size:12px;font-weight:700;color:var(--orange);margin-top:8px;}
 
 /* İLERİ BUTONU */
 .m2-ileri-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:var(--arge-btn-h);margin-top:14px;background:var(--orange);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:800;cursor:pointer;letter-spacing:.3px;transition:background .12s;-webkit-tap-highlight-color:transparent;}
@@ -345,6 +350,7 @@ var ADIM_ADLARI = ['','Cari Seç','Ana Formül Seç','Varyant Seç','Renk Adı &
 var TOPLAM_ADIM = 7;
 var ADIM_GIZLI = {3: true};  /* Varyant adımı kaldırıldı */
 var BOYUT_ETIKET = {LARGE:'L', SMALL:'S', MEDIUM:'M', STANDART:'STD'};
+var M2_BOYUT_SIRA = ['LARGE','SMALL','MEDIUM','STANDART'];
 
 /* ─────────────────────────────────────────────────
    STATE — Gramajlar YALNIZCA buradan okunup yazılır.
@@ -371,6 +377,8 @@ var S = {
   _pigment_ara_metin: '',
   onizleme: null,
   not: '',
+  saha_testi_gerekli_mi: 0,
+  saha_testi_nedeni: null,
   _kaydedilen_test_id: null,
   _kayit_kilit: false,
 };
@@ -475,6 +483,35 @@ function adim1Html(){
 }
 function adim1Ileri(){ if(S.cari_id){ S.adim=2; render(); } }
 
+/* FAZ-2D — Mehmet talep özeti (mevcut m2-ozet sınıfları, yeni CSS yok) */
+function m2HydrateOzetHtml(){
+  if(!HYDRATE || !HYDRATE.arge_test_id) return '';
+  var urun = m2UiUrunTipi(HYDRATE.urun_tipi)
+    + (HYDRATE.urun_adi && HYDRATE.urun_adi !== '—' ? ' · '+HYDRATE.urun_adi : '');
+  var musteri = (HYDRATE.musteri || '—');
+  var rows = [
+    ['Talep No', HYDRATE.test_no || HYDRATE.talep_kodu || '—'],
+    ['Müşteri', musteri],
+    ['Ürün', urun],
+    ['Renk talebi', HYDRATE.renk || '—'],
+    ['Öncelik', HYDRATE.oncelik || 'NORMAL'],
+    ['Talep notu', m2UiNotTemizle(HYDRATE.notlar) || '—'],
+  ];
+  var h = '<div style="margin-bottom:14px">';
+  rows.forEach(function(r){
+    h += '<div class="m2-ozet-satir">'
+      +'<span class="m2-ozet-etiket">'+esc(r[0])+'</span>'
+      +'<span class="m2-ozet-deger">'+esc(r[1])+'</span>'
+      +'</div>';
+  });
+  h += '<div class="m2-ozet-satir">'
+    +'<span class="m2-ozet-etiket">Kayıt</span>'
+    +'<span style="font-size:11px;font-weight:600;color:var(--muted);font-style:italic">'
+    +'Mevcut çalışma yüklendi. Yeni kayıt oluşturulmaz.'
+    +'</span></div></div>';
+  return h;
+}
+
 /* ══════════════════════════════
    ADIM 2 — ANA FORMÜL (L/S gruplu) — Varyant adımı yok
 ══════════════════════════════ */
@@ -514,7 +551,8 @@ function m2AnaFormulGrupKodu(){
   return m?m[1]:'';
 }
 function adim2Html(){
-  var h = '<div class="m2-adim-baslik">Ana Formül Seç</div>'
+  var h = m2HydrateOzetHtml()
+    +'<div class="m2-adim-baslik">Ana Formül Seç</div>'
     +'<div class="m2-adim-alt">L ve S aynı formülün boyutlarıdır — tek kart. Seçince L/S otomatik bağlanır; ayrı varyant adımı yoktur.</div>'
     +'<div class="m2-ara-wrap">'
     +'<svg class="m2-ara-ikon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><circle cx="8" cy="8" r="5"/><line x1="13" y1="13" x2="18" y2="18"/></svg>'
@@ -543,15 +581,94 @@ function adim2Html(){
     });
   }
   h += '</div>'
+    +'<div id="m2-ana-formul-hata" class="m2-hata" style="display:none;margin-top:10px"></div>'
     +'<button class="m2-ileri-btn" id="btn-2" '+(S.formul_grup_key && S.boyutlar.length?'':'disabled')+' onclick="adim2Ileri()">'
-    +'Devam <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10h10M12 6l4 4-4 4"/></svg>'
+    +(HYDRATE && HYDRATE.arge_test_id
+      ? 'Kaydet <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10h10M12 6l4 4-4 4"/></svg>'
+      : 'Devam <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10h10M12 6l4 4-4 4"/></svg>')
     +'</button>';
   return h;
+}
+function m2HydrateFormulUygula(){
+  /* FAZ-3 bugfix: kayıtlı ana formülü state'e yükle (refresh) */
+  if(!HYDRATE || !HYDRATE.arge_test_id) return false;
+  if(!HYDRATE.kaynak_uretim_varyant_id && !(HYDRATE.kaynak_uvler||[]).length) return false;
+  var uvIds = {};
+  (HYDRATE.kaynak_uvler||[]).forEach(function(k){
+    if(k && k.kaynak_uretim_varyant_id) uvIds[String(k.kaynak_uretim_varyant_id)] = 1;
+  });
+  if(HYDRATE.kaynak_uretim_varyant_id) uvIds[String(HYDRATE.kaynak_uretim_varyant_id)] = 1;
+  var hit = null;
+  (M2_FORMUL_GRUPLAR||[]).forEach(function(g){
+    if(hit) return;
+    (g.secenekler||[]).forEach(function(s){
+      if(uvIds[String(s.uv_id)]) hit = g;
+    });
+    if(!hit && HYDRATE.formul_grup_adi && g.baslik === HYDRATE.formul_grup_adi) hit = g;
+  });
+  if(!hit) return false;
+  S.formul_grup_key = hit.grup_key;
+  S.boyutlar = (hit.secenekler||[]).map(function(s){ return s.boyut; });
+  m2FormulGrupUygula();
+  return !!(S.formul_id && S.boyutlar.length);
+}
+function m2AnaFormulKaydetHydrate(){
+  /* FAZ-3: aynı arge_test_id üzerine ana formül + UV — yeni AT yok */
+  if(!HYDRATE || !HYDRATE.arge_test_id) return;
+  m2FormulGrupUygula();
+  if(!S.formul_id || !S.boyutlar.length) return;
+  var anaGrup = m2AnaFormulGrupKodu(); /* boş olabilir (legacy TERLİK) */
+  var g = m2FormulGrupBul(S.formul_grup_key);
+  var kaynak = [];
+  S.boyutlar.forEach(function(b, i){
+    var meta = S.uv_by_boyut[b];
+    if(!meta || !meta.uv_id) return;
+    kaynak.push({boyut:b, kaynak_uretim_varyant_id:meta.uv_id, sira_no:i+1});
+  });
+  if(!kaynak.length){ alert('Ana formül kaydı tamamlanamadı.'); return; }
+  var btn = document.getElementById('btn-2');
+  var he = document.getElementById('m2-ana-formul-hata');
+  if(btn){ btn.disabled = true; btn.textContent = 'Kaydediliyor…'; }
+  if(he){ he.style.display='none'; he.textContent=''; }
+  var payload = {
+    ana_formul_grup_kodu: anaGrup || null,
+    formul_grup_adi: S.formul_ad || (g && g.baslik) || null,
+    urun_ailesi: (g && g.aile) ? g.aile : (HYDRATE.urun_tipi || null),
+    kaynak_uvler: kaynak
+  };
+  fetch('/nexgen/api/arge/nx-ar/'+HYDRATE.arge_test_id+'/ana-formul', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  })
+  .then(function(r){ return r.json().then(function(j){ return {status:r.status, j:j}; }); })
+  .then(function(res){
+    var data = res.j || {};
+    if(res.status >= 400 || data.ok === false || data.hata){
+      if(he){ he.style.display='block'; he.textContent = m2UiHataMesaji(data.hata) || 'Kayıt başarısız.'; }
+      if(btn){ btn.disabled = false; btn.textContent = 'Kaydet'; }
+      return;
+    }
+    S._kaydedilen_test_id = data.arge_test_id || HYDRATE.arge_test_id;
+    S._kaydedilen_test_no = data.test_no || HYDRATE.test_no || '';
+    /* FAZ-3 bugfix: 2 tamam → 3. görünür adım = Renk Adı (S.adim=4, varyant gizli) */
+    S.adim = 4;
+    render();
+  })
+  .catch(function(err){
+    if(he){ he.style.display='block'; he.textContent = 'Bağlantı hatası. Lütfen tekrar deneyin.'; }
+    if(btn){ btn.disabled = false; btn.textContent = 'Kaydet'; }
+  });
 }
 function adim2Ileri(){
   if(!S.formul_grup_key || !S.boyutlar.length) return;
   m2FormulGrupUygula();
   if(!S.formul_id) return;
+  /* FAZ-3: hydrate → Kaydet (aynı AT); parametresiz → Devam */
+  if(HYDRATE && HYDRATE.arge_test_id){
+    m2AnaFormulKaydetHydrate();
+    return;
+  }
   S.adim=4; render(); /* Varyant atlandı → Renk Adı */
 }
 function adim3Html(){ return '<div class="m2-adim-baslik">Atlandı</div>'; }
@@ -585,7 +702,7 @@ function adim4Html(){
     +'<div class="m2-form-label">AR-GE Kodu</div>'
     +'<div style="display:flex;align-items:center;gap:8px;padding:11px 14px;background:var(--light);border:1.5px dashed var(--border);border-radius:9px;">'
     +'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="15" height="15" style="color:var(--muted);flex-shrink:0"><circle cx="10" cy="10" r="8"/><line x1="10" y1="7" x2="10" y2="10"/><circle cx="10" cy="13.5" r=".6" fill="currentColor" stroke="none"/></svg>'
-    +'<span style="font-size:12px;font-weight:600;color:var(--muted)">Kaydedildiğinde backend tarafından otomatik oluşturulacaktır.</span>'
+    +'<span style="font-size:12px;font-weight:600;color:var(--muted)">Kayıt sırasında otomatik oluşturulacaktır.</span>'
     +'</div>'
     +'</div>'
 
@@ -789,152 +906,349 @@ function pigmentSonuclarHtml(metin){
 
 /* ══════════════════════════════
    ADIM 6 — REÇETE ÖNİZLEME
-   %10 otomatik, tüm bileşenler görünür
+   %10 otomatik, boyut blokları ayrı (L/S birleşmez)
 ══════════════════════════════ */
-function hesaplaOnizleme(){
-  /* 1. DOM → state sync */
-  gramajSyncDom();
+function m2BoyutSirala(boyutlar){
+  var set = {};
+  (boyutlar || []).forEach(function(b){ set[String(b).toUpperCase()] = b; });
+  return M2_BOYUT_SIRA.filter(function(b){ return set[b]; }).map(function(b){ return set[b]; });
+}
 
-  /* 2. Master KG: M2_VARYANTLAR listesinden uv_id'ye göre al */
-  var masterKg = 82.0;   /* fallback */
-  if(S.uv_id){
-    var uvObj = M2_VARYANTLAR.find(function(v){ return v.id === S.uv_id; });
+function m2BoyutKullanimOranMap(){
+  var map = {};
+  var src = (HYDRATE && HYDRATE.boyut_kullanim_oranlari) || [];
+  src.forEach(function(item){
+    if(!item || !item.boyut) return;
+    var b = String(item.boyut).toUpperCase();
+    var raw = item.kullanim_orani != null ? item.kullanim_orani : item.oran;
+    if(raw != null && isFinite(parseFloat(raw))) map[b] = parseFloat(raw);
+  });
+  return map;
+}
+
+function m2BoyutKullanimOran(boyut, oranMap){
+  var b = String(boyut).toUpperCase();
+  if(oranMap[b] != null) return oranMap[b];
+  return null; /* yalnızca nexgen_arge_deneme_boyut_oran (Ferhat) */
+}
+
+function m2FerhatOranMesajiGerekli(oranMap){
+  var boyutlar = m2BoyutSirala(S.boyutlar || []);
+  var hasLS = boyutlar.some(function(b){ return b === 'LARGE' || b === 'SMALL'; });
+  if(!hasLS) return false;
+  return boyutlar.some(function(boyut){
+    if(boyut !== 'LARGE' && boyut !== 'SMALL') return false;
+    return m2BoyutKullanimOran(boyut, oranMap) == null;
+  });
+}
+
+function m2TemelPigmentler(){
+  return (S.pigmentler || []).map(function(p){
+    var gramStr = (p.gram_str || '0').replace(',', '.');
+    var temelGr = parseFloat(gramStr) || 0;
+    var temelKg = temelGr / 1000;
+    return {
+      stok_id: p.stok_id,
+      ad: p.ad,
+      kod: p.kod,
+      gram_str: p.gram_str,
+      temel_gr: temelGr,
+      temel_kg: temelKg,
+    };
+  });
+}
+
+function m2UvMasterKg(uvId){
+  var masterKg = 0;
+  if(uvId){
+    var uvObj = M2_VARYANTLAR.find(function(v){ return v.id === uvId; });
     if(uvObj && uvObj.master_kg && parseFloat(uvObj.master_kg) > 0){
       masterKg = parseFloat(uvObj.master_kg);
     }
   }
-  var numune_orani = VARSAYILAN_ORAN / 100;
-  var numune_kg    = masterKg * numune_orani;
+  return masterKg;
+}
 
-  /* 3. Bileşenler: kullanıcı GR giriyor
-     gram_str → GR (float) → kg = GR / 1000
-     stok_id  → payload için taşınır
-     Kural: 340 gr / 1000 = 0.340 kg   (DOĞRU)
-            0.001 gr / 1000 = 0.000001 kg  (DOĞRU) */
+function m2ReceteKalemleriBoyut(boyut){
+  var oran = VARSAYILAN_ORAN / 100;
+  var meta = (S.uv_by_boyut || {})[boyut];
+  if(!meta || !meta.uv_id) return [];
+  var kalemler = (M2_UV_KALEMLER && (M2_UV_KALEMLER[meta.uv_id] || M2_UV_KALEMLER[String(meta.uv_id)])) || [];
+  return kalemler.map(function(k){
+    var master = parseFloat(k.miktar_kg) || 0;
+    return {
+      stok_kod: k.stok_kod || '',
+      stok_ad: k.stok_ad || '',
+      master_kg: master,
+      numune_kg: master * oran,
+      birim: k.birim || 'kg',
+    };
+  });
+}
+
+function m2PigmentlerBoyut(boyut, kullanimOran){
+  if(kullanimOran == null) return null;
+  return (S.pigmentler || []).map(function(p){
+    var gramStr = (p.gram_str || '0').replace(',', '.');
+    var temelGr = parseFloat(gramStr) || 0;
+    var temelKg = temelGr / 1000;
+    var hazirGr = temelGr * kullanimOran;
+    var hazirKg = hazirGr / 1000;
+    return {
+      stok_id: p.stok_id,
+      ad: p.ad,
+      kod: p.kod,
+      gram_str: p.gram_str,
+      temel_gr: temelGr,
+      temel_kg: temelKg,
+      kullanim_oran: kullanimOran,
+      hazirlanacak_gr: hazirGr,
+      hazirlanacak_kg: hazirKg,
+    };
+  });
+}
+
+function m2ReceteBlokOlustur(boyut, oranMap){
+  var meta = (S.uv_by_boyut || {})[boyut] || {};
+  var masterKg = m2UvMasterKg(meta.uv_id);
+  var numuneOran = VARSAYILAN_ORAN;
+  var numuneKg = masterKg * (numuneOran / 100);
+  var hammadde = m2ReceteKalemleriBoyut(boyut);
+  var kullanimOran = m2BoyutKullanimOran(boyut, oranMap);
+  var pigmentler = m2PigmentlerBoyut(boyut, kullanimOran);
+  var rfTopGr = pigmentler
+    ? pigmentler.reduce(function(t, p){ return t + (p.hazirlanacak_gr || 0); }, 0)
+    : 0;
+  var rfTopKg = rfTopGr / 1000;
+  var genelTop = numuneKg + (pigmentler ? rfTopKg : 0);
+  return {
+    boyut: boyut,
+    formul_kod: meta.formul_kod || '',
+    master_kg: masterKg,
+    numune_oran: numuneOran,
+    numune_kg: parseFloat(numuneKg.toFixed(4)),
+    hammadde_kalemler: hammadde,
+    pigmentler: pigmentler,
+    rf_top_gr: rfTopGr,
+    rf_top_kg: rfTopKg,
+    genel_top: genelTop,
+    kullanim_oran: kullanimOran,
+    oran_eksik: kullanimOran == null,
+  };
+}
+
+function hesaplaOnizleme(){
+  gramajSyncDom();
+
+  var oranMap = m2BoyutKullanimOranMap();
+  var boyutBloklari = m2BoyutSirala(S.boyutlar || []).map(function(boyut){
+    return m2ReceteBlokOlustur(boyut, oranMap);
+  });
+  var temelPigmentler = m2TemelPigmentler();
+  var temelRfTopGr = temelPigmentler.reduce(function(t, p){ return t + (p.temel_gr || 0); }, 0);
+  var ferhatOranHazir = boyutBloklari.length > 0
+    && boyutBloklari.every(function(b){ return b.kullanim_oran != null; });
+  var ferhatOranMesaji = m2FerhatOranMesajiGerekli(oranMap);
+
+  /* Kayıt payload için temel pigment listesi (boyut oranı uygulanmaz) */
   var bileskenler = S.pigmentler.map(function(p){
     var gramStr = (p.gram_str || '0').replace(',', '.');
-    var gr  = parseFloat(gramStr) || 0;   /* GR — kullanıcının girdiği */
-    var kg  = gr / 1000;                  /* KG = gr ÷ 1000 */
+    var gr  = parseFloat(gramStr) || 0;
+    var kg  = gr / 1000;
     return {
-      stok_id:  p.stok_id,   /* payload için */
+      stok_id:  p.stok_id,
       ad:       p.ad,
       kod:      p.kod,
       gram_str: p.gram_str,
-      gr:       gr,          /* GR — gösterim ve toplam için */
-      kg:       kg,          /* KG — maliyet ve toplam için */
+      gr:       gr,
+      kg:       kg,
     };
   });
 
-  /* 4. Toplam
-     rfTopGr: tüm bileşenlerin GR toplamı (örn: 340.001 gr)
-     rfTopKg: rfTopGr / 1000               (örn: 0.340001 kg) */
-  var rfTopGr = bileskenler.reduce(function(t, b){ return t + b.gr; }, 0);
+  var masterKg = boyutBloklari.length ? boyutBloklari[0].master_kg : m2UvMasterKg(S.uv_id);
+  var numuneKg = boyutBloklari.reduce(function(t, b){ return t + (b.numune_kg || 0); }, 0);
+  var rfTopGr = ferhatOranHazir
+    ? boyutBloklari.reduce(function(t, b){ return t + (b.rf_top_gr || 0); }, 0)
+    : temelRfTopGr;
   var rfTopKg = rfTopGr / 1000;
+  var genelTop = ferhatOranHazir
+    ? boyutBloklari.reduce(function(t, b){ return t + (b.genel_top || 0); }, 0)
+    : numuneKg + (temelRfTopGr / 1000);
 
-  /* 5. Genel toplam: ana formül numune KG + renk bileşeni KG */
-  var genelTop = numune_kg + rfTopKg;
-
-  /* 6. Debug */
   console.log('[M02 hesaplaOnizleme]',
-    'bileşen:', bileskenler.length,
+    'blok:', boyutBloklari.length,
     '| rfTopGr:', rfTopGr.toFixed(3)+'gr',
-    '| rfTopKg:', rfTopKg.toFixed(6)+'kg',
-    '| numune_kg:', numune_kg.toFixed(3)+'kg',
+    '| numune_kg:', numuneKg.toFixed(3)+'kg',
     '| genelTop:', genelTop.toFixed(6)+'kg'
   );
 
   return {
     master_kg:   masterKg,
     numune_oran: VARSAYILAN_ORAN,
-    numune_kg:   parseFloat(numune_kg.toFixed(4)),
-    rf_top_gr:   rfTopGr,                          /* GR toplam */
-    rf_top_kg:   rfTopKg,                          /* KG toplam (= rfTopGr/1000) */
-    genel_top:   genelTop,                         /* KG toplam */
+    numune_kg:   parseFloat(numuneKg.toFixed(4)),
+    rf_top_gr:   rfTopGr,
+    rf_top_kg:   rfTopKg,
+    genel_top:   genelTop,
     pigmentler:  bileskenler,
+    temel_pigmentler: temelPigmentler,
+    temel_rf_top_gr: temelRfTopGr,
+    ferhat_oran_hazir: ferhatOranHazir,
+    ferhat_oran_mesaji: ferhatOranMesaji,
+    boyut_bloklari: boyutBloklari,
+    hammadde_kalemler: boyutBloklari.reduce(function(a, b){
+      return a.concat((b.hammadde_kalemler || []).map(function(k){
+        return Object.assign({boyut: b.boyut}, k);
+      }));
+    }, []),
   };
 }
 
+function goster_kg_m2(v){
+  if(v === null || v === undefined || isNaN(v)) return '—';
+  var n = parseFloat(v);
+  var s = n.toLocaleString('tr-TR', {minimumFractionDigits: 0, maximumFractionDigits: 3});
+  if(s.indexOf(',') !== -1) s = s.replace(/0+$/, '').replace(/,$/, '');
+  return s + ' kg';
+}
+
+function m2BoyutBaslikEt(boyut){
+  var b = String(boyut || '').toUpperCase();
+  if(b === 'LARGE') return 'Large Hammaddeler';
+  if(b === 'SMALL') return 'Small Hammaddeler';
+  if(b === 'MEDIUM') return 'Medium Hammaddeler';
+  return esc(boyut) + ' Hammaddeler';
+}
+
+function m2ReceteAnaFormulHtml(anaAd, anaKod, numuneOran){
+  return '<div class="m1-recete-blok">'
+    +'<div class="m1-recete-baslik"><span class="m1-rb-boyut">Ana Formül</span></div>'
+    +'<div class="m1-recete-ana">'
+    +'<div class="m1-recete-ana-ad">'+esc(anaAd)+'</div>'
+    +'<div class="m1-recete-ana-kod">'+esc(anaKod)+'</div>'
+    +'<div class="m1-recete-ana-oran">Numune oranı: %'+numuneOran+' — Otomatik</div>'
+    +'</div></div>';
+}
+
+function m2BoyutToplamEtiket(boyut){
+  var b = String(boyut || '').toUpperCase();
+  if(b === 'LARGE') return 'LARGE Numune Toplamı';
+  if(b === 'SMALL') return 'SMALL Numune Toplamı';
+  if(b === 'MEDIUM') return 'MEDIUM Numune Toplamı';
+  return esc(boyut) + ' Numune Toplamı';
+}
+
+function m2ReceteHammaddeBlokHtml(blok){
+  var baslik = m2BoyutBaslikEt(blok.boyut);
+  var h = '<div class="m1-recete-blok">'
+    +'<div class="m1-recete-baslik">'
+    +'<span class="m1-rb-boyut">'+baslik+'</span>'
+    +'</div>';
+  if(blok.formul_kod){
+    h += '<div class="m1-recete-ana" style="margin-bottom:6px"><div class="m1-recete-ana-kod">'+esc(blok.formul_kod)+'</div></div>';
+  }
+  h += '<table class="m1-recete-tablo">'
+    +'<thead><tr><th>Hammadde</th><th>Numune</th></tr></thead><tbody>';
+  (blok.hammadde_kalemler || []).forEach(function(k){
+    h += '<tr><td>'+esc(k.stok_ad)
+      +'<span style="font-size:10px;color:var(--muted);margin-left:6px">'+esc(k.stok_kod)+'</span></td>'
+      +'<td>'+goster_kg_m2(k.numune_kg)+'</td></tr>';
+  });
+  if(blok.pigmentler && blok.pigmentler.length){
+    blok.pigmentler.forEach(function(p){
+      h += '<tr class="boya-row"><td>Boya: '+esc(p.ad)
+        +'<span style="font-size:10px;color:var(--muted);margin-left:6px">'+esc(p.kod)+'</span></td>'
+        +'<td>'+goster_pigment_gr_m2(p.hazirlanacak_gr)+'</td></tr>';
+    });
+  } else if(blok.oran_eksik && (S.pigmentler || []).length){
+    (S.pigmentler || []).forEach(function(p){
+      var gramStr = (p.gram_str || '0').replace(',', '.');
+      var temelGr = parseFloat(gramStr) || 0;
+      if(temelGr <= 0) return;
+      h += '<tr class="boya-row"><td>Boya: '+esc(p.ad)
+        +'<span style="font-size:10px;color:var(--muted);margin-left:6px">'+esc(p.kod)+'</span></td>'
+        +'<td>'+goster_pigment_gr_m2(temelGr)+'</td></tr>';
+    });
+  }
+  h += '</tbody></table>';
+  var toplamKg = blok.oran_eksik ? blok.numune_kg : blok.genel_top;
+  h += '<div class="m1-recete-toplam"><span>'+m2BoyutToplamEtiket(blok.boyut)+'</span><span>'+goster_kg_m2(toplamKg)+'</span></div>'
+    +'</div>';
+  return h;
+}
+
+function m2ReceteTemelPigmentHtml(temelPigmentler){
+  var h = '<div class="m1-recete-blok">'
+    +'<div class="m1-recete-baslik"><span class="m1-rb-boyut">Temel Pigment Reçetesi</span></div>'
+    +'<table class="m1-recete-tablo"><thead><tr><th>Bileşen</th><th>Temel</th></tr></thead><tbody>';
+  var topGr = 0;
+  (temelPigmentler || []).forEach(function(p){
+    topGr += p.temel_gr || 0;
+    h += '<tr class="boya-row"><td>'+esc(p.ad)
+      +'<span style="font-size:10px;color:var(--muted);margin-left:6px">'+esc(p.kod)+'</span></td>'
+      +'<td>'+goster_gr_m2(p.temel_kg)+'</td></tr>';
+  });
+  h += '</tbody></table>'
+    +'<div class="m1-recete-toplam" style="background:#F5F3FF;border-top:1px solid #DDD6FE">'
+    +'<span>Temel Toplam</span><span>'+goster_gr_m2(topGr / 1000)+'</span></div>'
+    +'</div>';
+  return h;
+}
+
+function m2ReceteFerhatHtml(oz, bloklar){
+  if(oz.ferhat_oran_mesaji){
+    return '<div class="m1-recete-blok">'
+      +'<div class="m1-recete-baslik"><span class="m1-rb-boyut">Ferhat Oranı</span></div>'
+      +'<div class="m1-recete-bilgi">LARGE / SMALL kullanım oranı Ferhat enjeksiyon denemesinde belirlenecek.</div>'
+      +'</div>';
+  }
+  var h = '<div class="m1-recete-blok">'
+    +'<div class="m1-recete-baslik"><span class="m1-rb-boyut">Hazırlanacak Pigment</span></div>'
+    +'<table class="m1-recete-tablo"><thead><tr><th>Boyut × Oran</th><th>Hazırlanacak</th></tr></thead><tbody>';
+  bloklar.forEach(function(blok){
+    if(!blok.pigmentler || blok.kullanim_oran == null) return;
+    var boyutEt = blok.boyut || '—';
+    var oranStr = blok.kullanim_oran.toFixed(2).replace('.', ',');
+    h += '<tr class="ara-row"><td colspan="2">'+esc(boyutEt)+' × '+oranStr+'</td></tr>';
+    blok.pigmentler.forEach(function(p){
+      h += '<tr class="boya-row"><td>'+esc(p.ad)
+        +'<span style="font-size:10px;color:var(--muted);margin-left:6px">'+esc(p.kod)+'</span></td>'
+        +'<td>'+goster_gr_m2(p.hazirlanacak_kg)+'</td></tr>';
+    });
+    h += '<tr><td style="font-weight:800">'+esc(boyutEt)+' toplam</td><td style="font-weight:800">'
+      +goster_gr_m2(blok.rf_top_kg)+'</td></tr>';
+  });
+  h += '</tbody></table></div>';
+  return h;
+}
+
 function adim6Html(){
-  /* Her render'da taze hesapla — adım 5'te bileşen eklenip çıkarılmış olabilir */
   var oz = hesaplaOnizleme();
   S.onizleme = oz;
 
-  var h = '<div class="m2-adim-baslik">Reçete Önizleme</div>'
-    +'<div class="m2-adim-alt">Kaydetmeden önce son kontrol. Renk bileşeni miktarlarını teyit edin.</div>'
+  var anaAd = (S.formul_ad || '').trim() || '—';
+  var anaKod = (S.formul_kod || '').trim() || '—';
+  var bloklar = oz.boyut_bloklari || [];
+  var temelPigmentler = oz.temel_pigmentler || [];
 
-    /* Meta kutu */
-    +'<div class="m2-meta-kutu">'
-    +'<div class="m2-meta-item"><span>Master KG</span><strong>'+oz.master_kg.toFixed(3)+' kg</strong></div>'
-    +'<div class="m2-meta-arrow">→</div>'
-    +'<div class="m2-meta-item"><span>Numune Oranı</span><strong>%'+oz.numune_oran+' — Otomatik</strong></div>'
-    +'<div class="m2-meta-arrow">→</div>'
-    +'<div class="m2-meta-item"><span>Üretilecek KG</span><strong class="aksan">'+oz.numune_kg.toFixed(3)+' kg</strong></div>'
-    +'</div>'
+  var h = '<div class="m1-adim-kart-baslik">Reçete Önizleme</div>'
+    +'<div class="m1-adim-kart-alt">Hazırlanacak numune reçetesi — boyut bazlı hammadde ve pigment listesi.</div>'
+    +m2ReceteAnaFormulHtml(anaAd, anaKod, oz.numune_oran);
 
-    /* Hassas tartım uyarısı */
-    +'<div class="m2-uyari-kutu">'
-    +'<svg viewBox="0 0 20 20" fill="none" stroke="#D97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="10" cy="10" r="8"/><line x1="10" y1="6" x2="10" y2="10"/><circle cx="10" cy="14" r="0.5" fill="#D97706"/></svg>'
-    +'<p>Renk bileşenlerini hassas terazi ile tartın. ATR gibi büyük bileşenleri gram, Yellow / Blue gibi mikro bileşenleri miligram hassasiyetiyle ölçün. Yuvarlama hatası renk sonucunu etkiler.</p>'
-    +'</div>'
-
-    /* Pigment tablosu */
-    +'<table class="m2-onizleme-tablo">'
-    +'<thead><tr><th>Renk Bileşeni</th><th style="text-align:right">Gramaj</th></tr></thead>'
-    +'<tbody>'
-    +'<tr class="rf-baslik"><td colspan="2">Renk Bileşenleri ('+oz.pigmentler.length+' adet)</td></tr>';
-
-  /* TÜM bileşenler — goster_gr_m2 KG alır, p.kg = gr/1000 */
-  oz.pigmentler.forEach(function(p){
-    h += '<tr class="rf-satir">'
-      +'<td>'+esc(p.ad)+'<span style="font-size:10px;color:var(--muted);margin-left:6px">'+esc(p.kod)+'</span></td>'
-      +'<td style="text-align:right;font-variant-numeric:tabular-nums">'+goster_gr_m2(p.kg)+'</td>'
-      +'</tr>';
+  bloklar.forEach(function(blok){
+    h += m2ReceteHammaddeBlokHtml(blok);
   });
 
-  /* ── Renk Bileşeni Toplam: her zaman tam kg değeri göster ── */
-  var rfKgTam;   /* kaç ondalık basamak gerekiyorsa o kadar göster */
-  if(oz.rf_top_kg === 0){
-    rfKgTam = '0 kg';
-  } else if(oz.rf_top_kg >= 0.001){
-    rfKgTam = oz.rf_top_kg.toFixed(3) + ' kg';
-  } else {
-    /* 0.001 kg altı: 6 ondalık basamakla göster, gereksiz sıfırları at */
-    var kgStr6 = parseFloat(oz.rf_top_kg.toFixed(6));
-    rfKgTam = kgStr6 + ' kg';
+  if(oz.ferhat_oran_mesaji){
+    h += '<div class="m1-recete-blok">'
+      +'<div class="m1-recete-baslik"><span class="m1-rb-boyut">Ferhat Oranı</span></div>'
+      +'<div class="m1-recete-bilgi">LARGE / SMALL kullanım oranı Ferhat enjeksiyon denemesinde belirlenecek.</div>'
+      +'</div>';
   }
 
-  var genelTopStr = oz.genel_top.toFixed(3) + ' kg';
-  /* Mikro bilgi: renk bileşeni toplamı 0.001 kg altındaysa uyarı */
-  var mikroBilgi = oz.rf_top_kg > 0 && oz.rf_top_kg < 0.001;
-  var mikroBilgiMetin = mikroBilgi
-    ? 'Toplam içinde ' + goster_gr_m2(oz.rf_top_kg) + ' renk bileşeni bulunmaktadır. '
-      + 'Mikro değerler toplam kg\'yi 3 ondalık gösterimde değiştirmeyebilir.'
-    : '';
-
-  /* Tahmini Toplam gösterimi:
-     Ana Formül Numune + renk bileşeni açık yazılır, gerçek toplam alt satırda */
-  var rfGrGoster   = goster_gr_m2(oz.rf_top_kg);          /* örn: "340 gr" veya "0.001 gr" */
-  var toplamSatir  = oz.numune_kg.toFixed(3)+' kg + '+rfGrGoster+' renk bileşeni';
-  var gercekToplam = 'Gerçek toplam: '+oz.genel_top.toFixed(6).replace(/0+$/, '').replace(/\.$/, '')+' kg';
-
-  h += '</tbody></table>'
-    +'<div class="m2-onizleme-toplam rf">'
-    +'<span>Renk Bileşeni Toplam</span>'
-    +'<span style="font-variant-numeric:tabular-nums;text-align:right;line-height:1.7">'
-    +rfGrGoster
-    +'<br><span style="font-size:11px;font-weight:600;opacity:.7">('+rfKgTam+')</span>'
-    +'</span>'
-    +'</div>'
-    +'<div class="m2-onizleme-toplam taban">'
-    +'<span>Ana Formül Numune</span><span>'+oz.numune_kg.toFixed(3)+' kg</span>'
-    +'</div>'
-    /* Tahmini Toplam: iki satır — formül + gerçek değer */
-    +'<div class="m2-onizleme-toplam genel" style="flex-direction:column;align-items:flex-start;gap:3px">'
-    +'<div style="display:flex;justify-content:space-between;width:100%">'
-    +'<span>Tahmini Toplam</span>'
-    +'<span style="font-size:13px">'+toplamSatir+'</span>'
-    +'</div>'
-    +'<div style="font-size:11px;font-weight:600;opacity:.75;align-self:flex-end">'+gercekToplam+'</div>'
+  var altToplam = oz.ferhat_oran_hazir ? oz.genel_top : oz.numune_kg;
+  h += '<div class="m1-recete-genel">'
+    +'<span>Toplam Hazırlanacak Numune</span>'
+    +'<span>'+goster_kg_m2(altToplam)+'</span>'
     +'</div>'
     +'<button class="m2-ileri-btn" onclick="adim6Ileri()">'
     +'Reçete Onaylandı — Nota Geç '
@@ -959,9 +1273,8 @@ function adim7Html(){
   var ozet = [
     ['Cari',           S.cari_ad],
     ['Formül',         S.formul_kod+' '+S.formul_ad],
-    ['Varyant',        S.rv_ad],
     ['Renk Adı',       S.renk_adi],
-    ['AR-GE Kodu',     'Kayıt sırasında backend tarafından oluşturulacak'],
+    ['Renk Kodu',      'Kayıt sırasında otomatik oluşturulacaktır'],
     ['Batch',          oz.numune_kg.toFixed(3)+' kg  (%'+oz.numune_oran+' Otomatik)'],
     ['Durum',          'Yeni Renk Denemesi / Onay Bekliyor'],
   ];
@@ -969,7 +1282,7 @@ function adim7Html(){
     +'<div class="m2-adim-alt">Son kontrol — AR-GE notunu yaz ve kaydet.</div>'
     +'<div style="margin-bottom:14px">';
   ozet.forEach(function(r){
-    if(r[0] === 'AR-GE Kodu'){
+    if(r[0] === 'Renk Kodu'){
       /* AR-GE kodu henüz yok — farklı stil, kod gösterilmez */
       h += '<div class="m2-ozet-satir">'
         +'<span class="m2-ozet-etiket">'+r[0]+'</span>'
@@ -1000,6 +1313,8 @@ function adim7Html(){
     +'</div>'
     +'</div></div>';
   h += '</div>'
+    /* Enjeksiyon denemesi */
+    + m2SahaEnjeksiyonHtml()
     +'<div class="m2-form-grup">'
     +'<div class="m2-form-label">AR-GE NOTU <span class="zorunlu">ZORUNLU</span></div>'
     +'<textarea class="m2-textarea" id="m2-arge-notu" rows="3" maxlength="400"'
@@ -1031,17 +1346,54 @@ function adim7Html(){
   return h;
 }
 
-/* ══ Kaydet — NX-AR (tek kart, L/S kaynak UV) ══ */
-function kaydet(){
-  if(S._kayit_kilit) return;
-  if(!(S.not && S.not.trim())) return;
-  if(!S.renk_adi) return;
-  if(!S.boyutlar.length || !Object.keys(S.uv_by_boyut||{}).length){
-    alert('Ana formül seçimi eksik.'); return;
-  }
-  var anaGrup = m2AnaFormulGrupKodu();
-  if(!anaGrup){ alert('Çekirdek formül grubu (1BA/2BA/3BA) çözülemedi.'); return; }
+function m2SahaNedenler(){
+  return [
+    ['BILINEN_RECETE','Bilinen reçete'],
+    ['BILINEN_RENK','Bilinen renk'],
+    ['YENI_RENK','Yeni renk'],
+    ['YENI_FORMUL','Yeni formül'],
+    ['SHORE_RISKI','Shore riski'],
+    ['PISME_RISKI','Pişme riski'],
+    ['YOGUNLUK_RISKI','Yoğunluk riski'],
+    ['KALIP_RISKI','Kalıp riski'],
+    ['YONETICI_KARARI','Yönetici kararı'],
+    ['DIGER','Diğer']
+  ];
+}
 
+function m2SahaEnjeksiyonHtml(){
+  var sahaGerekli = !!S.saha_testi_gerekli_mi;
+  var html = '<div style="margin-bottom:14px;padding:12px;border:1px solid var(--border);border-radius:10px;background:#f8fafc">'
+    +'<div style="font-size:12px;font-weight:800;color:var(--navy);margin-bottom:8px">ENJEKSİYON DENEMESİ</div>'
+    +'<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;margin-bottom:6px;cursor:pointer">'
+    +'<input type="radio" name="m2-saha-gerekli" value="0" '+(sahaGerekli?'':'checked')+' onchange="m2SahaSecimDegisti(0)"> Gerekli değil — Onaya gönderilebilir'
+    +'</label>'
+    +'<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;margin-bottom:8px;cursor:pointer">'
+    +'<input type="radio" name="m2-saha-gerekli" value="1" '+(sahaGerekli?'checked':'')+' onchange="m2SahaSecimDegisti(1)"> Gerekli — Enjeksiyon denemesine gönder'
+    +'</label>'
+    +'<div id="m2-saha-neden-wrap" style="'+(sahaGerekli?'':'display:none')+'">'
+    +'<label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">Neden (zorunlu)</label>'
+    +'<select id="m2-saha-neden" class="m2-textarea" style="height:40px;padding:8px 10px" onchange="S.saha_testi_nedeni=this.value||null">'
+    +'<option value="">Seçiniz…</option>';
+  m2SahaNedenler().forEach(function(n){
+    html += '<option value="'+n[0]+'" '+(S.saha_testi_nedeni===n[0]?'selected':'')+'>'+esc(n[1])+'</option>';
+  });
+  html += '</select></div></div>';
+  return html;
+}
+
+function m2SahaSecimDegisti(v){
+  S.saha_testi_gerekli_mi = v ? 1 : 0;
+  if(!v){ S.saha_testi_nedeni = null; }
+  else if(!S.saha_testi_nedeni){ S.saha_testi_nedeni = 'YENI_RENK'; }
+  var wrap = document.getElementById('m2-saha-neden-wrap');
+  if(wrap) wrap.style.display = v ? '' : 'none';
+  var sel = document.getElementById('m2-saha-neden');
+  if(sel && v && S.saha_testi_nedeni){ sel.value = S.saha_testi_nedeni; }
+}
+
+/* ══ Kaydet — hydrate: mevcut AT güncelle; parametresiz: yeni NX-AR ══ */
+function m2NumunePayload(){
   gramajSyncDom();
   var oz = hesaplaOnizleme();
   S.onizleme = oz;
@@ -1052,21 +1404,19 @@ function kaydet(){
     if(!meta || !meta.uv_id) return;
     kaynak.push({boyut:b, kaynak_uretim_varyant_id:meta.uv_id, sira_no:i+1});
   });
-  if(!kaynak.length){ alert('Kaynak UV bulunamadı.'); return; }
-
   var renk_bilesenleri = (oz.pigmentler||[]).map(function(p){
     return {stok_kart_id:p.stok_id, stok_kodu:p.kod, ad:p.ad, gram:p.gr, kg:p.kg};
   });
-  var payload = {
-    calisma_tipi: 'YENI_RF',
+  return {
     cari_id: S.cari_id,
-    oncelik: 'NORMAL',
-    urun_ailesi: (g && g.aile) ? g.aile : null,
+    oncelik: S.oncelik || (HYDRATE && HYDRATE.oncelik) || 'NORMAL',
+    urun_ailesi: (g && g.aile) ? g.aile : (HYDRATE && HYDRATE.urun_tipi) || null,
     formul_grup_adi: S.formul_ad || (g && g.baslik) || null,
-    ana_formul_grup_kodu: anaGrup,
+    ana_formul_grup_kodu: m2AnaFormulGrupKodu() || null,
     hedef_renk_adi: S.renk_adi,
     talep_referansi: S.musteri_notu || S.not,
-    saha_testi_gerekli_mi: 0,
+    saha_testi_gerekli_mi: S.saha_testi_gerekli_mi ? 1 : 0,
+    saha_testi_nedeni: S.saha_testi_gerekli_mi ? (S.saha_testi_nedeni || null) : null,
     kaynak_uvler: kaynak,
     renk_bilesenleri: renk_bilesenleri,
     deneme: {
@@ -1075,6 +1425,30 @@ function kaydet(){
       genel_not: [S.renk_aciklama, S.renk_hex ? ('HEX '+S.renk_hex) : '', S.not].filter(Boolean).join(' | ') || null
     }
   };
+}
+function kaydet(){
+  if(S._kayit_kilit) return;
+  if(!(S.not && S.not.trim())) return;
+  if(!S.renk_adi) return;
+  if(!S.boyutlar.length || !Object.keys(S.uv_by_boyut||{}).length){
+    alert('Ana formül seçimi eksik.'); return;
+  }
+  if(S.saha_testi_gerekli_mi){
+    var nedenEl = document.getElementById('m2-saha-neden');
+    if(nedenEl) S.saha_testi_nedeni = nedenEl.value || null;
+    if(!S.saha_testi_nedeni){
+      var he = document.getElementById('m2-kaydet-hata');
+      if(he){ he.style.display='block'; he.textContent='Enjeksiyon denemesi için neden seçiniz.'; }
+      return;
+    }
+  }
+  var anaGrup = m2AnaFormulGrupKodu();
+  /* hydrate legacy formülde anaGrup boş olabilir; parametresizde zorunlu */
+  if(!HYDRATE && !anaGrup){ alert('Ana formül seçimi geçersiz.'); return; }
+
+  var payload = m2NumunePayload();
+  if(!payload.kaynak_uvler.length){ alert('Ana formül kaydı tamamlanamadı.'); return; }
+  if(!(payload.renk_bilesenleri||[]).length){ alert('En az bir renk bileşeni giriniz.'); return; }
 
   var btn  = document.getElementById('m2-kaydet-btn');
   var spin = document.getElementById('m2-kaydet-spinner');
@@ -1084,7 +1458,15 @@ function kaydet(){
   if(hataEl){ hataEl.style.display = 'none'; hataEl.textContent = ''; }
   S._kayit_kilit = true;
 
-  fetch('/nexgen/api/arge/nx-ar', {
+  /* FAZ-4: hydrate → mevcut AT güncelle; parametresiz → yeni oluştur */
+  var url = (HYDRATE && HYDRATE.arge_test_id)
+    ? ('/nexgen/api/arge/nx-ar/'+HYDRATE.arge_test_id+'/numune-kaydet')
+    : '/nexgen/api/arge/nx-ar';
+  if(!(HYDRATE && HYDRATE.arge_test_id)){
+    payload.calisma_tipi = 'YENI_RF';
+  }
+
+  fetch(url, {
     method:  'POST',
     headers: {'Content-Type': 'application/json'},
     body:    JSON.stringify(payload),
@@ -1095,17 +1477,16 @@ function kaydet(){
     var data = res.j || {};
     if(res.status >= 400 || data.ok === false || data.hata){
       S._kayit_kilit = false;
-      if(hataEl){ hataEl.style.display = 'block'; hataEl.textContent = data.hata || data.message || 'Kayıt başarısız.'; }
+      if(hataEl){ hataEl.style.display = 'block'; hataEl.textContent = m2UiHataMesaji(data.hata || data.message) || 'Kayıt başarısız.'; }
       if(btn) btn.style.display = 'flex';
       return;
     }
     var kart = data.kart || data;
-    S._kaydedilen_test_id  = kart.arge_test_id || kart.id || data.arge_test_id;
+    S._kaydedilen_test_id  = kart.arge_test_id || kart.id || data.arge_test_id || (HYDRATE && HYDRATE.arge_test_id);
     S._kaydedilen_arge_kodu = kart.arge_kodu || data.arge_kodu;
-    S._kaydedilen_test_no = kart.test_no || data.test_no;
+    S._kaydedilen_test_no = kart.test_no || data.test_no || (HYDRATE && HYDRATE.test_no);
     var noEl = document.getElementById('m2-basari-no');
     if(noEl){
-      /* Kullanıcıya yalnız AT kodu */
       noEl.textContent = S._kaydedilen_test_no || 'OK';
       noEl.style.display = 'block';
     }
@@ -1115,7 +1496,7 @@ function kaydet(){
   .catch(function(err){
     S._kayit_kilit = false;
     if(spin) spin.style.display = 'none';
-    if(hataEl){ hataEl.style.display = 'block'; hataEl.textContent = 'Bağlantı hatası: ' + err.message; }
+    if(hataEl){ hataEl.style.display = 'block'; hataEl.textContent = 'Bağlantı hatası. Lütfen tekrar deneyin.'; }
     if(btn) btn.style.display = 'flex';
   });
 }
@@ -1130,7 +1511,8 @@ function yeniBaslat(){
      rv_id:null,rv_ad:'',uv_id:null,boyutlar:[],uv_by_boyut:{},
      renk_adi:'',renk_aciklama:'',musteri_notu:'',
      pigmentler:[],_pigment_ara_acik:false,_pigment_ara_metin:'',
-     onizleme:null,not:'',_kaydedilen_test_id:null,_kayit_kilit:false};
+     onizleme:null,not:'',saha_testi_gerekli_mi:0,saha_testi_nedeni:null,
+     _kaydedilen_test_id:null,_kayit_kilit:false};
   render();
 }
 
@@ -1145,6 +1527,12 @@ function saatGuncelle(){
 setInterval(saatGuncelle,1000); saatGuncelle();
 
 /* ══ Gösterim Fonksiyonları — DS v2.0 ══ */
+function goster_pigment_gr_m2(gr_val){
+  if(gr_val===null||gr_val===undefined||isNaN(gr_val)) return '—';
+  var gr=parseFloat(gr_val);
+  var sonuc=(gr===Math.floor(gr)) ? String(gr) : parseFloat(gr.toFixed(3)).toString().replace(/\.?0+$/,'');
+  return sonuc+' gr';
+}
 function goster_gr_m2(kg_val){
   if(kg_val===null||kg_val===undefined||isNaN(kg_val)) return '—';
   var gr=parseFloat(kg_val)*1000;
@@ -1209,14 +1597,9 @@ function adimPostRender(no){
   }
   /* Gramaj değişince btn-5 güncelle + diagnostic panel */
   function diagGuncelle(){
+    /* FAZ-P0-1: debug paneli operatöre gösterilmez */
     var diagEl = document.getElementById('m2-diag');
-    if(!diagEl) return;
-    var satirlar = S.pigmentler.map(function(p,i){
-      return (i+1)+'. '+p.ad+' | stok_id='+p.stok_id+' | gram_str="'+p.gram_str+'"';
-    });
-    diagEl.style.display = 'block';
-    diagEl.innerHTML = '<strong>S.pigmentler ('+S.pigmentler.length+' adet):</strong><br>'
-      + (satirlar.length ? satirlar.join('<br>') : '<em>boş</em>');
+    if(diagEl){ diagEl.style.display = 'none'; diagEl.innerHTML = ''; }
   }
   diagGuncelle();
 
@@ -1291,14 +1674,85 @@ function initEvents(){
   });
 }
 
-function adimeGit(no){ if(no<S.adim){ S.adim=no; render(); } }
+function adimeGit(no){
+  /* FAZ-2D: hydrate — Cari Seç adımına dönülmez */
+  if(HYDRATE && HYDRATE.arge_test_id && no === 1) return;
+  if(no<S.adim){ S.adim=no; render(); }
+}
 
 function esc(s){
   if(s===null||s===undefined) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+/* FAZ-P0-1: teknik id / debug metinleri kullanıcıya gösterilmez */
+function m2UiNotTemizle(s){
+  var t = String(s==null?'':s).trim();
+  if(!t || t==='—') return '';
+  t = t.replace(/(?:^|[\s·|,;]+)numune_talep_id\s*=\s*\d+/gi, '');
+  t = t.replace(/(?:^|[\s·|,;]+)arge_test_id\s*=\s*\d+/gi, '');
+  t = t.replace(/(?:^|[\s·|,;]+)talep_id\s*=\s*\d+/gi, '');
+  if(/^kaynaksiz_kopru\b/i.test(t)) return '';
+  t = t.replace(/^kaynaksiz_kopru\s+\S+/i, '').trim();
+  t = t.replace(/^[\s·|,;]+|[\s·|,;]+$/g, '').trim();
+  t = t.replace(/\s*[·|]\s*[·|]\s*/g, ' · ').trim();
+  return t;
+}
+function m2UiUrunTipi(tip){
+  var t = String(tip||'').trim().toUpperCase().replace(/İ/g,'I').replace(/Ö/g,'O');
+  if(t==='TERLIK') return 'Terlik';
+  if(t==='TABAN') return 'Taban';
+  if(t==='DOKME') return 'Dökme';
+  return tip || '—';
+}
+function m2UiHataMesaji(raw){
+  var m = String(raw||'').trim();
+  if(!m) return 'İşlem tamamlanamadı. Lütfen tekrar deneyin.';
+  if(/numune_talep_id|arge_test_id|talep_id\s*=|MUSTERI_RENK|YENI_RENK|YENI_RF|ARGE_HAZIR|FERHAT_BEKLIYOR|ONAY_BEKLIYOR|uv_id|stok_id|formul_id|1BA|2BA|3BA|NX-AR|backend|debug|mock/i.test(m)){
+    return 'İşlem tamamlanamadı. Lütfen tekrar deneyin.';
+  }
+  return m;
+}
 
 /* ── Başlat ── */
+if(HYDRATE && HYDRATE.arge_test_id){
+  S.cari_id = HYDRATE.cari_id != null ? parseInt(HYDRATE.cari_id, 10) : null;
+  if(isNaN(S.cari_id)) S.cari_id = null;
+  S.cari_ad = HYDRATE.musteri || '';
+  S.renk_adi = (HYDRATE.renk && HYDRATE.renk !== '—') ? String(HYDRATE.renk) : '';
+  S.oncelik = HYDRATE.oncelik || 'NORMAL';
+  S._kaydedilen_test_id = HYDRATE.arge_test_id;
+  S._kaydedilen_test_no = HYDRATE.test_no || '';
+  /* FAZ-P0-4: hydrate AR-GE notu boş; Renk Açıklaması talep alanından (teknik not değil). */
+  var hn = m2UiNotTemizle(HYDRATE.arge_not_ui || '');
+  var hexM = hn.match(/HEX\s*(#[0-9A-Fa-f]{6})/);
+  if(hexM) S.renk_hex = hexM[1];
+  S.renk_aciklama = m2UiNotTemizle(HYDRATE.renk_aciklama || '');
+  S.not = '';
+  S.musteri_notu = m2UiNotTemizle(S.musteri_notu) || '';
+  S.saha_testi_gerekli_mi = HYDRATE.saha_testi_gerekli_mi ? 1 : 0;
+  S.saha_testi_nedeni = HYDRATE.saha_testi_nedeni || null;
+  if(HYDRATE.renk_bilesenleri && HYDRATE.renk_bilesenleri.length){
+    S.pigmentler = HYDRATE.renk_bilesenleri.map(function(p){
+      var gr = p.gram != null ? p.gram : (p.kg != null ? (Number(p.kg)*1000) : '');
+      return {
+        stok_id: p.stok_kart_id || p.stok_id,
+        kod: p.stok_kodu || p.kod || '',
+        ad: p.ad || '',
+        yeni_tanim: p.yeni_tanim || '',
+        gram_str: (gr !== '' && gr != null) ? String(gr) : ''
+      };
+    });
+  }
+  if(m2HydrateFormulUygula()){
+    if(HYDRATE.numune_kayitli){
+      S.adim = 7; /* kayıtlı → AR-GE Notu / kaydet özeti */
+    } else {
+      S.adim = 4; /* Formül var → Renk Adı */
+    }
+  } else {
+    S.adim = 2;
+  }
+}
 render();
 initEvents();
 </script>

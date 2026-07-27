@@ -5,6 +5,8 @@ NX-AR API — FAZ-ARGE-2D2 + FAZ-RENK-MERKEZI-ONAY-1
 POST /nexgen/api/arge/nx-ar
 GET  /nexgen/api/arge/nx-ar
 GET  /nexgen/api/arge/nx-ar/<id>
+POST /nexgen/api/arge/nx-ar/<id>/ana-formul
+POST /nexgen/api/arge/nx-ar/<id>/numune-kaydet
 POST /nexgen/api/arge/nx-ar/<id>/saha-karar
 GET  /nexgen/api/arge/nx-ar/ferhat-bekleyen
 POST /nexgen/api/arge/nx-ar/<id>/ferhat-ac
@@ -19,11 +21,13 @@ from flask import jsonify, request
 from modules.auth import yetki_gerekli, yetki_var, login_gerekli
 from modules.nexgen.nx_ar_service import (
     NxArError,
+    attach_ana_formul,
     create_nx_ar,
     ferhat_ac,
     ferhat_bekleyen_liste,
     ferhat_sonuc_kaydet,
     get_nx_ar,
+    kaydet_mevcut_numune,
     list_nx_ar,
     olay_liste,
     saha_karar_kaydet,
@@ -110,6 +114,36 @@ def register_nx_ar_routes(bp, db_factory, kullanici_id_fn):
         con = _con()
         try:
             return jsonify(get_nx_ar(con, arge_test_id))
+        except Exception as e:
+            return _err(e)
+        finally:
+            con.close()
+
+    @bp.route('/api/arge/nx-ar/<int:arge_test_id>/ana-formul', methods=['POST'])
+    @yetki_gerekli('nexgen.tablet.view', 'can_view')
+    def api_nx_ar_ana_formul(arge_test_id):
+        """FAZ-3 — Mevcut AT üzerine ana formül + kaynak UV (yeni kayıt yok)."""
+        data = request.get_json(silent=True) or {}
+        con = _con()
+        try:
+            return jsonify(
+                attach_ana_formul(con, arge_test_id, data, kullanici_id=_uid())
+            )
+        except Exception as e:
+            return _err(e)
+        finally:
+            con.close()
+
+    @bp.route('/api/arge/nx-ar/<int:arge_test_id>/numune-kaydet', methods=['POST'])
+    @yetki_gerekli('nexgen.tablet.view', 'can_view')
+    def api_nx_ar_numune_kaydet(arge_test_id):
+        """FAZ-4 — NUMUNE KAYDET: mevcut AT / arge_test_id güncelle (yeni kart yok)."""
+        data = request.get_json(silent=True) or {}
+        con = _con()
+        try:
+            return jsonify(
+                kaydet_mevcut_numune(con, arge_test_id, data, kullanici_id=_uid())
+            )
         except Exception as e:
             return _err(e)
         finally:

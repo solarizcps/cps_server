@@ -1,0 +1,23 @@
+{# Ortak Finans sayfa başlığı — fm_hdr_title, fm_hdr_subtitle, fm_hdr_crumb, fm_guncelleme_id, fm_refresh_onclick zorunlu değil #}
+<div class="rm-page-hdr fm-page-hdr-unified">
+  <div class="rm-page-hdr-sol">
+    <img src="{{ url_for('static', filename='img/nexgen-logo.png') }}" alt="NexGen" class="rm-page-logo">
+    <div class="fm-hdr-meta">
+      <div class="rm-page-bc">
+        <span>NexGen</span><span class="rm-page-bc-sep">›</span>
+        <span>Finans / Muhasebe Merkezi</span>
+        {% if fm_hdr_crumb %}<span class="rm-page-bc-sep">›</span><span class="rm-page-bc-cur">{{ fm_hdr_crumb }}</span>{% endif %}
+      </div>
+      <div class="fm-hdr-baslik">{{ fm_hdr_title }}</div>
+      <div class="fm-hdr-alt">{{ fm_hdr_subtitle }}</div>
+    </div>
+  </div>
+  <div class="fm-hdr-sag">
+    {% if fm_guncelleme_id %}<span class="fm-guncelleme" id="{{ fm_guncelleme_id }}">—</span>{% endif %}
+    {% if fm_refresh_onclick %}<button type="button" class="rm-yeni-btn fm-btn-yenile" onclick="{{ fm_refresh_onclick }}">Yenile</button>{% endif %}
+    {% if fm_tab != 'genel' %}
+    <a href="/nexgen/finans" class="rm-page-geri" title="Finans Ana Sayfa"><span class="fm-geri-ok">←</span><span>Finans Ana Sayfa</span></a>
+    {% endif %}
+    <a href="/nexgen/" class="rm-page-geri" title="Ana Menü"><span class="fm-geri-ok">←</span><span>Ana Menü</span></a>
+  </div>
+</div>

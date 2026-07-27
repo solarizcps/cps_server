@@ -1,0 +1,191 @@
+{# NexGen Ortak ERP Belge Çalışma Alanı — stiller (FAZ-ERP-WORKSPACE-STANDARD-1) #}
+<style>
+/* erp-ws-* = NexGen ERP Workspace standardı — tüm belge modülleri için */
+.erp-ws-page { min-height: calc(100vh - 100px); }
+.erp-ws-topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 6px 0 8px; border-bottom: 1px solid var(--rm-border); margin-bottom: 8px;
+}
+.erp-ws-topbar-sol { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.erp-ws-topbar-sol img { height: 28px; }
+.erp-ws-modul-baslik { font-size: 13px; font-weight: 800; color: var(--rm-t1); }
+.erp-ws-modul-alt { font-size: 10px; color: var(--rm-t3); margin-top: 1px; }
+.erp-ws-guncelleme { font-size: 10px; color: var(--rm-t3); }
+
+/* Belge kimliği — ERP form başlığı */
+.erp-ws-kimlik {
+  background: var(--rm-white); border: 1px solid var(--rm-border); border-radius: var(--fm-radius-sm);
+  padding: 10px 14px; margin-bottom: 8px;
+}
+.erp-ws-kimlik-ust {
+  display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px;
+  margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--rm-border);
+}
+.erp-ws-belge-no { font-size: 18px; font-weight: 800; color: var(--rm-t1); font-family: 'Courier New', monospace; letter-spacing: .3px; }
+.erp-ws-belge-tip { font-size: 10px; color: var(--rm-t3); margin-top: 2px; }
+.erp-ws-toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.erp-ws-kimlik-grid {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 12px;
+}
+.erp-ws-kimlik-alan label {
+  display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .35px;
+  color: var(--rm-t4); margin-bottom: 2px;
+}
+.erp-ws-kimlik-alan .erp-ws-deger { font-size: 11px; font-weight: 600; color: var(--rm-t1); word-break: break-word; }
+
+/* Ana layout — liste + workspace */
+.erp-ws-layout { display: grid; grid-template-columns: 1fr; gap: 8px; align-items: start; min-width: 0; transition: grid-template-columns .2s; }
+.erp-ws-layout.liste-acik { grid-template-columns: minmax(180px, 22%) minmax(0, 1fr); }
+.erp-ws-liste-panel {
+  display: none; flex-direction: column; max-height: calc(100vh - 200px);
+  background: var(--rm-white); border: 1px solid var(--rm-border); border-radius: var(--fm-radius-sm); overflow: hidden;
+}
+.erp-ws-layout.liste-acik .erp-ws-liste-panel { display: flex; }
+.erp-ws-liste-hdr {
+  display: flex; align-items: center; justify-content: space-between; padding: 6px 10px;
+  border-bottom: 1px solid var(--rm-border); background: var(--rm-bg); font-size: 10px; font-weight: 700;
+}
+.erp-ws-liste-toggle { font-size: 9px; color: var(--rm-teal); cursor: pointer; border: none; background: none; font-weight: 600; }
+.erp-ws-liste-body { overflow: auto; flex: 1; min-height: 120px; }
+.erp-ws-liste-item {
+  display: block; padding: 7px 10px; border-bottom: 1px solid #f1f5f9; text-decoration: none; color: inherit;
+  cursor: pointer; transition: background .1s;
+}
+.erp-ws-liste-item:hover { background: #f8fafc; }
+.erp-ws-liste-item.aktif { background: #fef9e7; border-left: 3px solid var(--rm-gold); padding-left: 7px; }
+.erp-ws-li-kod { font-size: 10px; font-weight: 700; font-family: 'Courier New', monospace; color: var(--rm-t2); }
+.erp-ws-li-alt { font-size: 9px; color: var(--rm-t3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Workspace ana gövde */
+.erp-ws-main {
+  display: flex; flex-direction: column; min-width: 0; min-height: calc(100vh - 240px);
+  background: var(--rm-white); border: 1px solid var(--rm-border); border-radius: var(--fm-radius-sm); overflow: hidden;
+}
+.erp-ws-sekme-bar {
+  display: flex; gap: 0; padding: 0 10px; border-bottom: 2px solid var(--rm-border);
+  flex-shrink: 0; background: var(--rm-white); overflow-x: auto;
+}
+.erp-ws-sekme-bar .rm-sekme {
+  padding: 7px 12px; font-size: 10px; font-weight: 600; color: var(--rm-t3);
+  cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; white-space: nowrap;
+}
+.erp-ws-sekme-bar .rm-sekme:hover { color: var(--rm-t1); }
+.erp-ws-sekme-bar .rm-sekme.aktif { color: var(--rm-teal); border-bottom-color: var(--rm-teal); }
+.erp-ws-icerik { flex: 1; overflow-y: auto; min-height: 0; }
+.erp-ws-tab-panel { display: none; padding: 14px 16px; }
+.erp-ws-tab-panel.aktif { display: block; }
+
+/* ERP form alanları — kart değil form */
+.erp-ws-form {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; max-width: 900px;
+}
+.erp-ws-form.erp-ws-form-tek { grid-template-columns: 1fr; max-width: 640px; }
+.erp-ws-alan label {
+  display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .35px;
+  color: var(--rm-t4); margin-bottom: 3px;
+}
+.erp-ws-alan .erp-ws-deger {
+  font-size: 12px; font-weight: 500; color: var(--rm-t1); padding: 6px 8px;
+  background: var(--rm-bg); border: 1px solid var(--rm-border); border-radius: 5px; min-height: 18px;
+}
+.erp-ws-alan-tam { grid-column: 1 / -1; }
+.erp-ws-form-baslik {
+  grid-column: 1 / -1; font-size: 11px; font-weight: 700; color: var(--rm-t2);
+  padding-bottom: 4px; border-bottom: 1px solid var(--rm-border); margin-bottom: 2px;
+}
+.erp-ws-teknik {
+  margin-top: 14px; padding: 10px 12px; background: var(--rm-bg2); border: 1px dashed var(--rm-border);
+  border-radius: 6px; font-size: 10px; color: var(--rm-t3);
+}
+.erp-ws-teknik-baslik { font-size: 9px; font-weight: 700; text-transform: uppercase; color: var(--rm-t4); margin-bottom: 6px; }
+
+/* İlişkili belgeler zinciri */
+.erp-ws-iliskili {
+  border-top: 1px solid var(--rm-border); padding: 10px 14px; background: var(--rm-bg); flex-shrink: 0;
+}
+.erp-ws-iliskili-baslik { font-size: 10px; font-weight: 700; color: var(--rm-t2); margin-bottom: 8px; }
+.erp-ws-zincir { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 2px; }
+.erp-ws-zincir-adim {
+  display: inline-flex; align-items: center; gap: 4px; font-size: 10px; padding: 4px 8px;
+  background: var(--rm-white); border: 1px solid var(--rm-border); border-radius: 5px; color: var(--rm-t2);
+}
+.erp-ws-zincir-adim a { color: var(--rm-teal); font-weight: 600; text-decoration: none; }
+.erp-ws-zincir-adim a:hover { text-decoration: underline; }
+.erp-ws-zincir-adim.pasif { opacity: .5; border-style: dashed; }
+.erp-ws-zincir-ok { color: var(--rm-t4); font-size: 10px; padding: 0 2px; }
+
+/* Alt işlemler */
+.erp-ws-footer {
+  display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px;
+  border-top: 1px solid var(--rm-border); background: var(--rm-bg); flex-shrink: 0;
+}
+.erp-ws-footer .fm-btn { font-size: 10px; }
+
+/* Timeline */
+.erp-ws-timeline { position: relative; padding-left: 18px; margin: 4px 0; max-width: 480px; }
+.erp-ws-timeline::before { content: ''; position: absolute; left: 5px; top: 4px; bottom: 4px; width: 2px; background: var(--rm-border); }
+.erp-ws-tl-adim { position: relative; padding: 0 0 16px 12px; font-size: 11px; }
+.erp-ws-tl-adim::before {
+  content: ''; position: absolute; left: -15px; top: 4px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--rm-border2); border: 2px solid var(--rm-white);
+}
+.erp-ws-tl-adim.tamam::before { background: var(--rm-green); }
+.erp-ws-tl-adim.aktif::before { background: var(--rm-teal); box-shadow: 0 0 0 2px #bae6fd; }
+.erp-ws-tl-baslik { font-weight: 700; color: var(--rm-t1); }
+.erp-ws-tl-tarih { font-size: 10px; color: var(--rm-t3); margin-top: 2px; }
+.erp-ws-bos { text-align: center; padding: 28px 16px; color: var(--rm-t3); font-size: 11px; }
+
+@media (max-width: 1100px) {
+  .erp-ws-kimlik-grid { grid-template-columns: repeat(2, 1fr); }
+  .erp-ws-layout.liste-acik { grid-template-columns: 1fr; }
+  .erp-ws-liste-panel { max-height: 200px; }
+  .erp-ws-form { grid-template-columns: 1fr; }
+}
+@media (min-width: 1920px) {
+  .erp-ws-page { max-width: 1860px; margin: 0 auto; }
+}
+</style>
+
+<script>
+/* NexGen ERP Workspace — ortak yardımcılar */
+window.NexGenErpWs = window.NexGenErpWs || {};
+NexGenErpWs.esc = function(s) {
+  return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+};
+NexGenErpWs.alan = function(lbl, val, tam) {
+  return '<div class="erp-ws-alan' + (tam ? ' erp-ws-alan-tam' : '') + '"><label>' + NexGenErpWs.esc(lbl) +
+    '</label><div class="erp-ws-deger">' + (val || '—') + '</div></div>';
+};
+NexGenErpWs.kimlikAlan = function(lbl, val) {
+  return '<div class="erp-ws-kimlik-alan"><label>' + NexGenErpWs.esc(lbl) +
+    '</label><div class="erp-ws-deger">' + (val || '—') + '</div></div>';
+};
+NexGenErpWs.sekme = function(barId, panelPrefix, tab) {
+  var bar = document.getElementById(barId);
+  if (!bar) return;
+  bar.querySelectorAll('.rm-sekme').forEach(function(el) {
+    el.classList.toggle('aktif', el.getAttribute('data-tab') === tab);
+  });
+  document.querySelectorAll('[id^="' + panelPrefix + '"]').forEach(function(el) {
+    if (el.classList.contains('erp-ws-tab-panel')) {
+      el.classList.toggle('aktif', el.id === panelPrefix + tab);
+    }
+  });
+};
+NexGenErpWs.sekmeBind = function(barId, panelPrefix) {
+  var bar = document.getElementById(barId);
+  if (!bar) return;
+  bar.querySelectorAll('.rm-sekme').forEach(function(el) {
+    el.addEventListener('click', function() {
+      NexGenErpWs.sekme(barId, panelPrefix, el.getAttribute('data-tab'));
+    });
+  });
+};
+NexGenErpWs.listeToggle = function(layoutId, btnId) {
+  var layout = document.getElementById(layoutId);
+  var btn = document.getElementById(btnId);
+  if (!layout) return;
+  var acik = layout.classList.toggle('liste-acik');
+  if (btn) btn.textContent = acik ? 'Listeyi Gizle' : 'Listeyi Göster';
+};
+</script>

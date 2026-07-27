@@ -166,6 +166,21 @@ def pzm_siparis_kalemleri_getir(con, planlama_siparis_id: int) -> list[dict[str,
 
     payload = pzm_payload_unpack(hdr['talep_referansi'])
     if not payload:
+        try:
+            from modules.nexgen.mo_siparis_talep_service import mo_siparis_payload_unpack
+            mo_p = mo_siparis_payload_unpack(hdr['talep_referansi'])
+            if mo_p:
+                mk = float(mo_p.get('miktar') or 0)
+                payload = {
+                    'urun_ailesi': mo_p.get('urun_grubu'),
+                    'formul_ad': mo_p.get('urun_adi'),
+                    'boyut_miktar': {'STANDART': mk} if mk > 0 else {},
+                    'termin_tarihi': mo_p.get('onerilen_termin') or mo_p.get('musteri_termin'),
+                    'notlar': mo_p.get('musteri_notu'),
+                }
+        except Exception:
+            payload = None
+    if not payload:
         return []
 
     plan_row = con.execute(

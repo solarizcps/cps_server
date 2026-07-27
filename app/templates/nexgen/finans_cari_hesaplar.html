@@ -1,0 +1,600 @@
+{% extends "base.html" %}
+{% set page_title = "Cari Hesaplar — NexGen Finans" %}
+
+{% block content %}
+{% include 'nexgen/_finans_shared_styles.html' %}
+{% set fm_hdr_title = 'Cari Hesaplar' %}
+{% set fm_hdr_subtitle = 'Cari seçin; kart merkezli hesap çalışma alanında borç, alacak ve open item kalemlerini izleyin.' %}
+{% set fm_hdr_crumb = 'Cari Hesaplar' %}
+{% set fm_guncelleme_id = 'fch-son-guncelleme' %}
+{% set fm_refresh_onclick = 'fchYenile()' %}
+<div class="rm-sayfa fm-sayfa fm-modul-sayfa erp-ic-page fch-sayfa">
+  {% include 'nexgen/_finans_erp_ic_header.html' %}
+  <div class="fm-container fm-container-unified">
+    {% include 'nexgen/_finans_ic_nav.html' %}
+
+    <div class="fch-layout">
+      <div class="fch-sol">
+        <div class="fch-sol-hdr">Cari Seçici</div>
+        <div class="fch-sol-filtre">
+          <div class="fm-sub-nav fch-tip-sekme">
+            <div class="rm-sekme aktif" data-tip="MUSTERI" id="fch-sek-musteri">Müşteri</div>
+            <div class="rm-sekme" data-tip="TEDARIKCI" id="fch-sek-tedarikci">Tedarikçi</div>
+          </div>
+          <div class="fm-ara-wrap">
+            <input type="text" id="fch-arama" class="fm-ara-input" placeholder="Kod, unvan…" autocomplete="off">
+          </div>
+          <select id="fch-fil-aktif" class="fm-fil-sel">
+            <option value="">Aktif — Tümü</option>
+            <option value="1">Yalnız aktif</option>
+            <option value="0">Yalnız pasif</option>
+          </select>
+          <select id="fch-fil-bakiye" class="fm-fil-sel">
+            <option value="">Bakiye — Tümü</option>
+            <option value="BORCLU">Borçlu</option>
+            <option value="ALACAKLI">Alacaklı</option>
+            <option value="SIFIR">Bakiyesi sıfır</option>
+          </select>
+          <label class="fck-chk"><input type="checkbox" id="fch-fil-eslesme"> Teknik kart hatası</label>
+        </div>
+        <div class="fch-cari-liste" id="fch-cari-liste"></div>
+        <div class="erp-ic-empty" id="fch-liste-bos" style="display:none;">
+          <div class="erp-ic-empty-desc">Seçilen filtrelere uygun cari bulunamadı.</div>
+        </div>
+      </div>
+
+      <div class="fch-sag" id="fch-sag-panel">
+        <div class="fch-sag-bos" id="fch-sag-bos">
+          <div class="erp-ic-empty">
+            <div class="erp-ic-empty-title">Cari hesap kartı</div>
+            <div class="erp-ic-empty-desc">Soldan bir müşteri veya tedarikçi seçin. Seçilen firmanın tam finansal hesabı burada açılır.</div>
+          </div>
+        </div>
+        <div id="fch-sag-icerik" style="display:none;" class="fch-kart">
+          <div class="fch-kart-header" id="fch-kart-header"></div>
+          <div class="fch-kart-metrikler" id="fch-kart-metrikler"></div>
+          <div class="fch-kart-not" id="fch-kart-not" style="display:none;"></div>
+          <div class="fch-kart-body">
+            <div class="fch-sekme-bar" id="fch-sekme-bar" aria-label="Cari hesap kartı sekmeleri">
+              <div class="rm-sekme aktif" data-sek="hesap">Hesap</div>
+              <div class="rm-sekme" data-sek="hareketler">Cari Hareketleri</div>
+              <div class="rm-sekme" data-sek="belgeler">Finans Belgeleri</div>
+              <div class="rm-sekme" data-sek="sevkiyatlar">Sevkiyatlar</div>
+              <div class="rm-sekme" data-sek="tahsilatlar">Tahsilatlar</div>
+              <div class="rm-sekme" data-sek="odemeler">Ödemeler</div>
+              <div class="rm-sekme" data-sek="cek_alinan">Alınan Çekler</div>
+              <div class="rm-sekme" data-sek="cek_verilen">Verilen Çekler</div>
+              <div class="rm-sekme" data-sek="avanslar">Avanslar</div>
+              <div class="rm-sekme" data-sek="vadeler">Vadeler</div>
+              <div class="rm-sekme" data-sek="risk">Risk</div>
+              <div class="rm-sekme" data-sek="odeme_plani">Ödeme Planı</div>
+              <div class="rm-sekme" data-sek="bilgiler">Cari Bilgileri</div>
+            </div>
+            <div class="fch-tab-panel aktif" id="fch-tab-hesap"><div class="fch-tab-toolbar" id="fch-hes-toolbar"></div><div class="fch-tab-icerik" id="fch-tab-hesap-ic"></div></div>
+            <div class="fch-tab-panel" id="fch-tab-hareketler"><div class="fch-tab-toolbar" id="fch-har-toolbar"></div><div class="fch-tab-icerik" id="fch-tab-hareketler-ic"></div></div>
+            <div class="fch-tab-panel" id="fch-tab-belgeler"><div class="fch-tab-icerik" id="fch-tab-belgeler-ic"></div></div>
+            <div class="fch-tab-panel" id="fch-tab-sevkiyatlar"><div class="fch-tab-icerik" id="fch-tab-sevkiyatlar-ic"></div></div>
+            <div class="fch-tab-panel" id="fch-tab-tahsilatlar"><div class="fch-tab-icerik" id="fch-tab-tahsilatlar-ic"></div></div>
+            <div class="fch-tab-panel" id="fch-tab-odemeler"><div class="fch-tab-icerik" id="fch-tab-odemeler-ic"></div></div>
+            <div class="fch-tab-panel" id="fch-tab-cek_alinan"><div class="fch-tab-icerik" id="fch-tab-cek_alinan-ic"></div></div>
+            <div class="fch-tab-panel" id="fch-tab-cek_verilen"><div class="fch-tab-icerik" id="fch-tab-cek_verilen-ic"></div></div>
+            <div class="fch-tab-panel" id="fch-tab-avanslar"><div class="fch-tab-icerik" id="fch-tab-avanslar-ic"></div></div>
+            <div class="fch-tab-panel" id="fch-tab-vadeler"><div class="fch-tab-icerik" id="fch-tab-vadeler-ic"></div></div>
+            <div class="fch-tab-panel" id="fch-tab-risk"><div class="fch-tab-icerik" id="fch-tab-risk-ic"></div></div>
+            <div class="fch-tab-panel" id="fch-tab-odeme_plani"><div class="fch-tab-icerik" id="fch-tab-odeme_plani-ic"></div></div>
+            <div class="fch-tab-panel" id="fch-tab-bilgiler"><div class="fch-tab-icerik" id="fch-tab-bilgiler-ic"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="fm-toast" id="fch-toast" style="display:none;"></div>
+
+<script>
+(function(){
+  var CAN_KART_BAGLANTISI = {{ (can_cari_eslestirme or can_cari_yonetimi)|tojson }};
+  var _tip = 'MUSTERI', _oid = null, _sekme = 'hesap', _hesGorunum = 'aciklar', _debounce = null, _cache = {}, _harKaynak = 'NEXGEN';
+
+  function esc(s){ var d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
+  function fmtT(n,pb){ if(n==null||n==='') return '—'; return esc(Number(n).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}))+(pb?' '+esc(pb):''); }
+  function toast(msg,t){ var el=document.getElementById('fch-toast'); el.textContent=msg; el.className='fm-toast fm-toast-'+(t||'ok'); el.style.display='block'; setTimeout(function(){el.style.display='none';},4000); }
+  function apiErr(j){ return (j&&j.mesaj)||(j&&j.error&&j.error.message)||'İşlem başarısız.'; }
+  function bakiyeCls(d){ if(d==='BORCLU') return 'borclu'; if(d==='ALACAKLI') return 'alacakli'; return ''; }
+
+  function params(){
+    var p = new URLSearchParams();
+    p.set('tip', _tip);
+    var ar = document.getElementById('fch-arama').value.trim();
+    if (ar) p.set('arama', ar);
+    var ak = document.getElementById('fch-fil-aktif').value;
+    if (ak) p.set('aktif', ak);
+    var bk = document.getElementById('fch-fil-bakiye').value;
+    if (bk) p.set('bakiye', bk);
+    if (document.getElementById('fch-fil-eslesme').checked) p.set('eslesme_eksik','1');
+    return p.toString();
+  }
+
+  function urlSenkron(){
+    if (!_oid) { history.replaceState({}, '', location.pathname); return; }
+    var q = new URLSearchParams();
+    q.set('tip', _tip); q.set('id', String(_oid));
+    if (_sekme !== 'hesap') q.set('sekme', _sekme);
+    if (_sekme === 'hesap' && _hesGorunum !== 'aciklar') q.set('gorunum', _hesGorunum);
+    history.replaceState({}, '', location.pathname + '?' + q.toString());
+  }
+
+  function domainEmpty(title, desc){
+    return '<div class="fch-domain-empty"><div class="fch-domain-empty-title">'+esc(title)+'</div><div class="fch-domain-empty-desc">'+esc(desc)+'</div></div>';
+  }
+
+  function tabloBaslik(cols){ return '<div class="erp-ic-grid-wrap"><table class="fm-tablo erp-ic-grid"><thead><tr>'+cols.map(function(c){return '<th class="fm-th">'+esc(c)+'</th>';}).join('')+'</tr></thead>'; }
+
+  function listeYukle(){
+    fetch('/nexgen/api/finans/cari-hesaplar?' + params())
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        if (!j.ok){ toast(apiErr(j),'hata'); return; }
+        var d = j.data || {};
+        var list = document.getElementById('fch-cari-liste');
+        var bos = document.getElementById('fch-liste-bos');
+        list.innerHTML = '';
+        if (!d.kayitlar || !d.kayitlar.length){ bos.style.display='block'; return; }
+        bos.style.display='none';
+        d.kayitlar.forEach(function(row){
+          var div = document.createElement('div');
+          div.className = 'fch-cari-satir' + (_oid===row.operasyonel_id && _tip===row.cari_tipi ? ' secili':'');
+          div.dataset.tip = row.cari_tipi;
+          div.dataset.id = row.operasyonel_id;
+          var bakTxt = row.bakiye_mevcut ? fmtT(row.bakiye, row.para_birimi) : '—';
+          div.innerHTML = '<div class="fch-cari-kod">'+esc(row.kod)+
+            (row.kart_baglanti_eksik ? '<span class="fch-kart-link-icon" title="Kart bağlantısı eksik">⚠</span>' : '')+
+            '</div>'+
+            '<div class="fch-cari-unvan">'+esc(row.unvan)+'</div>'+
+            '<div class="fch-cari-meta">'+
+              '<span>'+(row.cari_tipi==='MUSTERI'?'Müşteri':'Tedarikçi')+'</span>'+
+              '<span class="fch-bakiye '+bakiyeCls(row.bakiye_durumu)+'">'+bakTxt+'</span>'+
+              (row.bakiye_durumu_etiket && row.bakiye_mevcut ? '<span>'+esc(row.bakiye_durumu_etiket)+'</span>' : '')+
+            '</div>';
+          div.addEventListener('click', function(){ cariSec(row.cari_tipi, row.operasyonel_id); });
+          list.appendChild(div);
+        });
+        document.getElementById('fch-son-guncelleme').textContent = new Date().toLocaleTimeString('tr-TR');
+      }).catch(function(){ toast('Bağlantı hatası.','hata'); });
+  }
+
+  function cariSec(tip, id, sekme){
+    _tip = tip; _oid = id;
+    if (sekme) _sekme = sekme;
+    document.querySelectorAll('.fch-cari-satir').forEach(function(el){
+      el.classList.toggle('secili', el.dataset.tip===tip && parseInt(el.dataset.id,10)===id);
+    });
+    document.getElementById('fch-sag-bos').style.display='none';
+    document.getElementById('fch-sag-icerik').style.display='flex';
+    urlSenkron();
+    ozetYukle();
+    sekmeYukle(_sekme, true);
+  }
+
+  function kartHeader(d){
+    var tipLbl = d.cari_tipi==='MUSTERI' ? 'Müşteri' : 'Tedarikçi';
+    var bdCls = bakiyeCls(d.bakiye_durumu);
+    var aktifLbl = d.aktif ? 'Aktif' : 'Pasif';
+    var aktifCls = d.aktif ? 'aktif' : 'pasif';
+    var actions = '<button type="button" onclick="fchYenile()">Yenile</button>';
+    document.getElementById('fch-kart-header').innerHTML =
+      '<div><div class="fch-kart-id-unvan">'+esc(d.unvan)+'</div>'+
+      '<div class="fch-kart-id-meta">'+
+        '<span><code>'+esc(d.kod)+'</code></span>'+
+        (d.cari_kart_ckod ? '<span>Cari Kart: <code>'+esc(d.cari_kart_ckod)+'</code></span>' : '')+
+        '<span class="fch-kart-badge">'+esc(tipLbl)+'</span>'+
+        '<span class="fch-kart-badge '+aktifCls+'">'+esc(aktifLbl)+'</span>'+
+        (d.bakiye_durumu_etiket ? '<span class="fch-kart-badge '+bdCls+'">'+esc(d.bakiye_durumu_etiket)+'</span>' : '')+
+        '<span>'+esc(d.para_birimi||'TRY')+'</span>'+
+      '</div></div>'+
+      '<div class="fch-kart-actions">'+actions+'</div>';
+  }
+
+  function km(lbl, val, cls){ return '<div class="fch-km"><div class="fch-km-val'+(cls?' '+cls:'')+'">'+val+'</div><div class="fch-km-lbl">'+esc(lbl)+'</div></div>'; }
+
+  function kartMetrikler(d){
+    var pb = d.para_birimi || 'TRY';
+    var bdCls = bakiyeCls(d.bakiye_durumu);
+    var riskVal = (d.risk && d.risk.mevcut) ? fmtT(d.risk.tutar, pb) : '<span class="fch-km-val muted">—</span>';
+    var cekA = (d.cek_alinan && d.cek_alinan.mevcut) ? fmtT(d.cek_alinan.tutar, pb) : '<span class="fch-km-val muted">—</span>';
+    var avansVal = (d.avans && d.avans.mevcut) ? fmtT(d.avans.tutar, pb) : '<span class="fch-km-val muted">—</span>';
+    var planVal = (d.odeme_plani && d.odeme_plani.mevcut) ? String(d.odeme_plani.sayi||'—') : '<span class="fch-km-val muted">—</span>';
+    document.getElementById('fch-kart-metrikler').innerHTML =
+      km('Toplam Borç', d.bakiye_mevcut ? fmtT(d.toplam_borc, pb) : '—')+
+      km('Toplam Alacak', d.bakiye_mevcut ? fmtT(d.toplam_alacak, pb) : '—')+
+      km('Net Bakiye', d.bakiye_mevcut ? fmtT(d.bakiye, pb) : '—', bdCls)+
+      km('Açık Belge', d.acik_belge_sayisi!=null ? String(d.acik_belge_sayisi) : '—')+
+      km('Vadesi Geçmiş', fmtT(d.vadesi_gecmis_tutar, pb))+
+      km('Risk', riskVal)+
+      km('Alınan Çek', cekA)+
+      km('Avans', avansVal)+
+      km('Ödeme Planı', planVal);
+
+    var notEl = document.getElementById('fch-kart-not');
+    if (d.kart_baglanti_eksik){
+      notEl.innerHTML = 'Cari kart verisi kontrol edilmeli.';
+      notEl.style.display='block';
+    } else if ((d.legacy_hareket_sayisi||0) > 0 && (d.nexgen_hareket_sayisi||0) === 0){
+      notEl.innerHTML = 'Bu caride yalnız önceki dönem (legacy) hareketler var. NexGen finans belgesine bağlı hareket bulunmuyor.';
+      notEl.style.display='block';
+    } else {
+      notEl.style.display='none';
+    }
+  }
+
+  function ozetYukle(){
+    fetch('/nexgen/api/finans/cari-hesap/'+_tip+'/'+_oid+'/ozet')
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        if (!j.ok){ toast(apiErr(j),'hata'); return; }
+        var d = j.data || {};
+        _cache.ozet = d;
+        kartHeader(d);
+        kartMetrikler(d);
+        if (_sekme==='hesap') tabHesap();
+      });
+  }
+
+  function sekmeAktif(sek){
+    _sekme = sek;
+    document.querySelectorAll('#fch-sekme-bar .rm-sekme').forEach(function(el){
+      el.classList.toggle('aktif', el.getAttribute('data-sek')===sek);
+    });
+    document.querySelectorAll('.fch-tab-panel').forEach(function(el){
+      el.classList.toggle('aktif', el.id==='fch-tab-'+sek);
+    });
+    urlSenkron();
+  }
+
+  function sekmeYukle(sek){
+    sekmeAktif(sek);
+    if (sek==='hesap') tabHesap();
+    else if (sek==='hareketler') tabHareketler();
+    else if (sek==='belgeler') tabBelgeler();
+    else if (sek==='sevkiyatlar') tabSevkiyatlar();
+    else if (sek==='tahsilatlar') tabTahsilatlar();
+    else if (sek==='odemeler') tabOdemeler();
+    else if (sek==='cek_alinan') tabDomain('cek_alinan', _cache.ozet && _cache.ozet.cek_alinan);
+    else if (sek==='cek_verilen') tabDomain('cek_verilen', _cache.ozet && _cache.ozet.cek_verilen);
+    else if (sek==='avanslar') tabDomain('avanslar', _cache.ozet && _cache.ozet.avans);
+    else if (sek==='vadeler') tabVadeler();
+    else if (sek==='risk') tabDomain('risk', _cache.ozet && _cache.ozet.risk);
+    else if (sek==='odeme_plani') tabDomain('odeme_plani', _cache.ozet && _cache.ozet.odeme_plani);
+    else if (sek==='bilgiler') tabBilgiler();
+  }
+
+  function tabDomain(sek, info){
+    var el = document.getElementById('fch-tab-'+sek+'-ic');
+    var title = {'cek_alinan':'Alınan Çekler','cek_verilen':'Verilen Çekler','avanslar':'Avanslar','risk':'Risk','odeme_plani':'Ödeme Planı'}[sek] || sek;
+    el.innerHTML = domainEmpty(title, (info && info.mesaj) || 'Kayıt bulunmuyor.');
+  }
+
+  function ozetKutu(lbl, val, sub){
+    return '<div class="fch-ozet-kutu"><div class="fch-ozet-kutu-lbl">'+esc(lbl)+'</div><div class="fch-ozet-kutu-val">'+val+'</div>'+(sub?'<div class="fch-ozet-kutu-sub">'+esc(sub)+'</div>':'')+'</div>';
+  }
+
+  function hesToolbar(){
+    var gorunumler = [
+      ['borclar','Borçlar'],
+      ['alacaklar','Alacaklar'],
+      ['aciklar','Tüm Açıklar'],
+      ['kapananlar','Kapananlar']
+    ];
+    document.getElementById('fch-hes-toolbar').innerHTML =
+      '<div class="fch-hes-gorunum">'+
+      gorunumler.map(function(g){
+        return '<div class="rm-sekme'+(_hesGorunum===g[0]?' aktif':'')+'" data-gorunum="'+g[0]+'">'+esc(g[1])+'</div>';
+      }).join('')+
+      '</div>';
+    document.querySelectorAll('#fch-hes-toolbar .rm-sekme').forEach(function(el){
+      el.addEventListener('click', function(){
+        _hesGorunum = el.getAttribute('data-gorunum');
+        urlSenkron();
+        tabHesap();
+      });
+    });
+  }
+
+  function hesTutar(val, pb, guvenilir){
+    if (val==null && guvenilir===false) return '<span class="fch-tutar-belirsiz" title="Güvenilir veri yok">—</span>';
+    if (val==null || val==='') return '—';
+    return fmtT(val, pb);
+  }
+
+  function hesSatirHtml(k, pb){
+    var legCls = k.satir_tipi==='ONCEKI_DONEM' ? ' fch-legacy-row' : '';
+    var vadeCls = k.vadesi_gecmis ? ' fch-vade-gecmis' : '';
+    var click = k.tiklanabilir && k.finans_belgesi_id ? ' class="fm-satir'+legCls+'" style="cursor:pointer" data-belge="'+k.finans_belgesi_id+'"' : ' class="'+legCls.trim()+'"';
+    var kaynakHtml = k.satir_tipi==='ONCEKI_DONEM'
+      ? '<span class="fch-legacy-badge">Önceki dönem</span>'
+      : esc(k.kaynak_etiket||k.kaynak||'—');
+    return '<tr'+click+'>'+
+      '<td>'+esc(k.fis_no||'—')+'</td>'+
+      '<td>'+esc(k.tarih||'—')+'</td>'+
+      '<td>'+esc(k.evrak_belge_no||'—')+'</td>'+
+      '<td>'+esc(k.belge_turu_etiket||k.belge_turu||'—')+'</td>'+
+      '<td class="'+vadeCls.trim()+'">'+esc(k.vade_tarihi||'—')+'</td>'+
+      '<td class="fm-th-r">'+hesTutar(k.ilk_tutar, k.para_birimi||pb)+'</td>'+
+      '<td class="fm-th-r">'+hesTutar(k.kapanan_tutar, k.para_birimi||pb, k.kapanan_tutar_guvenilir!==false)+'</td>'+
+      '<td class="fm-th-r">'+hesTutar(k.kalan_tutar, k.para_birimi||pb, k.kalan_tutar_guvenilir!==false)+'</td>'+
+      '<td>'+esc(k.para_birimi||pb||'TRY')+'</td>'+
+      '<td>'+esc(k.durum_etiket||k.durum||'—')+'</td>'+
+      '<td>'+kaynakHtml+'</td></tr>';
+  }
+
+  function tabHesap(){
+    hesToolbar();
+    var q = new URLSearchParams({gorunum:_hesGorunum, limit:'200'});
+    fetch('/nexgen/api/finans/cari-hesap/'+_tip+'/'+_oid+'/hesap?'+q.toString())
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        var el = document.getElementById('fch-tab-hesap-ic');
+        if (!j.ok){ el.innerHTML='<div class="fch-tab-uyari">'+esc(apiErr(j))+'</div>'; return; }
+        var d = j.data || {};
+        var pb = d.para_birimi || 'TRY';
+        var oz = d.ozet || {};
+        var html = '<div class="fch-hes-ozet-band">'+
+          ozetKutu('Açık Borç Kalemi', String(oz.borc_acik_sayisi!=null?oz.borc_acik_sayisi:'—'))+
+          ozetKutu('Açık Alacak Kalemi', String(oz.alacak_acik_sayisi!=null?oz.alacak_acik_sayisi:'—'))+
+          ozetKutu('Kapanan Kalemler', String(oz.kapanan_sayisi!=null?oz.kapanan_sayisi:'—'))+
+          ozetKutu('Açık Borç Toplam', fmtT(oz.acik_toplam_borc, pb))+
+          ozetKutu('Açık Alacak Toplam', fmtT(oz.acik_toplam_alacak, pb))+
+          '</div>';
+        if (d.uyari) html += '<div class="fch-tab-uyari">'+esc(d.uyari)+'</div>';
+        var rows = d.kalemler || [];
+        html += '<div class="erp-ic-bolum-baslik">Hesap Kalemleri (Open Item)</div>';
+        if (!rows.length){
+          html += '<div class="erp-ic-empty-desc">Seçilen görünümde open item kalemi bulunmuyor.</div>';
+        } else {
+          html += tabloBaslik(['Fiş No','Tarih','Evrak/Belge No','Belge Türü','Vade','İlk Tutar','Kapanan','Kalan','PB','Durum','Kaynak']);
+          html += '<tbody>'+rows.map(function(k){ return hesSatirHtml(k, pb); }).join('')+'</tbody></table></div>';
+        }
+        var od = d.onceki_donem || {};
+        if (od.mevcut){
+          html += '<div class="fch-hes-onceki-wrap"><div class="erp-ic-bolum-baslik">Önceki Dönem ('+esc(String(od.sayisi||0))+' kayıt)</div>'+
+            '<div class="fch-legacy-banner">Legacy Cari_Har hareketleri open item gibi gösterilmez. Kapanan/kalan tutar bilgisi uydurulmaz.</div>';
+          var oRows = od.kalemler || [];
+          if (oRows.length){
+            html += tabloBaslik(['Fiş No','Tarih','Evrak/Belge No','Belge Türü','Vade','İlk Tutar','Kapanan','Kalan','PB','Durum','Kaynak']);
+            html += '<tbody>'+oRows.map(function(k){ return hesSatirHtml(k, pb); }).join('')+'</tbody></table></div>';
+          }
+          if ((od.sayisi||0) > oRows.length){
+            html += '<div class="fch-legacy-banner"><a href="#" onclick="fchLegacyGoster();return false;">Tüm önceki dönem hareketlerini Cari Hareketleri sekmesinde aç</a></div>';
+          }
+          html += '</div>';
+        }
+        el.innerHTML = html;
+        el.querySelectorAll('[data-belge]').forEach(function(tr){
+          tr.addEventListener('click', function(){ belgeAc(tr.getAttribute('data-belge')); });
+        });
+      });
+  }
+
+  window.fchLegacyGoster = function(){
+    _harKaynak = 'LEGACY';
+    sekmeYukle('hareketler');
+  };
+
+  function harToolbar(){
+    document.getElementById('fch-har-toolbar').innerHTML =
+      '<label><input type="radio" name="fch-kaynak" value="NEXGEN"'+( _harKaynak==='NEXGEN'?' checked':'')+'> NexGen hareketler</label>'+
+      '<label><input type="radio" name="fch-kaynak" value="LEGACY"'+(_harKaynak==='LEGACY'?' checked':'')+'> Önceki dönem</label>'+
+      '<label><input type="radio" name="fch-kaynak" value="TUMU"'+(_harKaynak==='TUMU'?' checked':'')+'> Tümü</label>'+
+      '<input type="date" id="fch-har-bas" title="Başlangıç">'+
+      '<input type="date" id="fch-har-bit" title="Bitiş">'+
+      '<button type="button" id="fch-har-filtre">Filtrele</button>';
+    document.querySelectorAll('#fch-har-toolbar input[name=fch-kaynak]').forEach(function(r){
+      r.addEventListener('change', function(){ _harKaynak = r.value; tabHareketler(); });
+    });
+    document.getElementById('fch-har-filtre').addEventListener('click', tabHareketler);
+  }
+
+  function tabHareketler(){
+    harToolbar();
+    var q = new URLSearchParams({limit:'200', kaynak:_harKaynak});
+    var bas = document.getElementById('fch-har-bas');
+    var bit = document.getElementById('fch-har-bit');
+    if (bas && bas.value) q.set('tarih_bas', bas.value);
+    if (bit && bit.value) q.set('tarih_bit', bit.value);
+    fetch('/nexgen/api/finans/cari-hesap/'+_tip+'/'+_oid+'/hareketler?'+q.toString())
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        var el = document.getElementById('fch-tab-hareketler-ic');
+        if (!j.ok){ el.innerHTML='<div class="fch-tab-uyari">'+esc(apiErr(j))+'</div>'; return; }
+        var d = j.data || {};
+        var html = d.uyari ? '<div class="fch-tab-uyari">'+esc(d.uyari)+'</div>' : '';
+        if (d.legacy_sayisi > 0 && _harKaynak === 'NEXGEN'){
+          html += '<div class="fch-legacy-banner">Önceki dönem: '+d.legacy_sayisi+' · NexGen: '+d.nexgen_sayisi+'</div>';
+        }
+        var rows = d.hareketler || [];
+        if (!rows.length) html += '<div class="erp-ic-empty-desc">Seçilen filtreye uygun hareket bulunamadı.</div>';
+        else {
+          html += tabloBaslik(['Tarih','Belge No','Tür','Açıklama','Kaynak','Borç','Alacak','Bakiye','Durum']);
+          html += '<tbody>'+rows.map(function(h){
+            var legCls = h.legacy_kaynak ? ' fch-legacy-row' : '';
+            return '<tr class="'+legCls.trim()+'"'+(h.finans_belgesi_id?' style="cursor:pointer" data-belge="'+h.finans_belgesi_id+'"':'')+'>'+
+              '<td>'+esc((h.tarih||'').slice(0,10))+'</td><td>'+esc(h.belge_no||'—')+'</td><td>'+esc(h.islem_turu||'—')+'</td><td>'+esc(h.aciklama||'—')+'</td>'+
+              '<td>'+(h.legacy_kaynak?'<span class="fch-legacy-badge">Önceki dönem</span>':esc(h.kaynak))+'</td>'+
+              '<td class="fm-th-r">'+fmtT(h.borc)+'</td><td class="fm-th-r">'+fmtT(h.alacak)+'</td><td class="fm-th-r">'+fmtT(h.bakiye)+'</td><td>'+esc(h.durum)+'</td></tr>';
+          }).join('')+'</tbody></table></div>';
+        }
+        el.innerHTML = html;
+        el.querySelectorAll('[data-belge]').forEach(function(tr){
+          tr.addEventListener('dblclick', function(){ belgeAc(tr.getAttribute('data-belge')); });
+        });
+      });
+  }
+
+  function tabBelgeler(){
+    fetch('/nexgen/api/finans/cari-hesap/'+_tip+'/'+_oid+'/belgeler')
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        var el = document.getElementById('fch-tab-belgeler-ic');
+        if (!j.ok){ el.innerHTML='<div class="fch-tab-uyari">'+esc(apiErr(j))+'</div>'; return; }
+        var d = j.data || {};
+        var html = d.uyari ? '<div class="fch-tab-uyari">'+esc(d.uyari)+'</div>' : '';
+        var rows = d.liste || [];
+        if (!rows.length) html += '<div class="erp-ic-empty-desc">Finans belgesi bulunmuyor.</div>';
+        else {
+          html += tabloBaslik(['Belge No','Tür','Tutar','Vade','Finans Durumu','Muhasebe Durumu','Tarih','']);
+          html += '<tbody>'+rows.map(function(b){
+            return '<tr class="fm-satir" style="cursor:pointer" data-belge="'+b.id+'"><td><code class="fm-kod">'+esc(b.belge_no)+'</code></td><td>'+esc(b.belge_tipi_etiket||b.belge_tipi)+'</td>'+
+              '<td class="fm-th-r">'+fmtT(b.toplam_tutar,b.para_birimi)+'</td><td>'+esc(b.vade_tarihi||'—')+'</td><td>'+esc(b.durum_etiket||b.durum)+'</td><td>'+esc(b.posting_durumu_etiket||b.posting_durumu||'—')+'</td>'+
+              '<td>'+esc((b.olusturma_tarihi||'').slice(0,10))+'</td><td><button type="button" class="fm-satir-islem">İncele</button></td></tr>';
+          }).join('')+'</tbody></table></div>';
+        }
+        el.innerHTML = html;
+        el.querySelectorAll('[data-belge]').forEach(function(tr){
+          tr.addEventListener('dblclick', function(){ belgeAc(tr.getAttribute('data-belge')); });
+          var btn = tr.querySelector('button'); if(btn) btn.addEventListener('click', function(e){ e.stopPropagation(); belgeAc(tr.getAttribute('data-belge')); });
+        });
+      });
+  }
+
+  function tabSevkiyatlar(){
+    fetch('/nexgen/api/finans/cari-hesap/'+_tip+'/'+_oid+'/sevkiyatlar')
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        var el = document.getElementById('fch-tab-sevkiyatlar-ic');
+        var d = (j.data)||{};
+        var html = d.uyari ? '<div class="fch-tab-uyari">'+esc(d.uyari)+'</div>' : '';
+        var rows = d.sevkiyatlar || [];
+        if (!rows.length) html += '<div class="erp-ic-empty-desc">Sevkiyat kaydı bulunmuyor.</div>';
+        else {
+          html += tabloBaslik(['Sevkiyat No','Sipariş','Sevk Tarihi','KG','Finans Belgesi','Muhasebe Durumu','Tutar','']);
+          html += '<tbody>'+rows.map(function(s){
+            return '<tr><td>'+esc(s.sevkiyat_no)+'</td><td>'+esc(s.siparis_no||s.siparis_id)+'</td><td>'+esc((s.sevk_tarihi||'').slice(0,10))+'</td><td class="fm-th-r">'+fmtT(s.toplam_kg)+'</td>'+
+              '<td>'+esc(s.finans_belgesi_kodu||'—')+'</td><td>'+esc(s.muhasebe_durumu)+'</td><td class="fm-th-r">'+fmtT(s.tutar,s.para_birimi)+'</td>'+
+              '<td>'+(s.sevkiyat_url?'<a class="fm-baglanti-link" href="'+esc(s.sevkiyat_url)+'">Aç</a>':'—')+'</td></tr>';
+          }).join('')+'</tbody></table></div>';
+        }
+        el.innerHTML = html;
+      });
+  }
+
+  function tabTahsilatlar(){
+    fetch('/nexgen/api/finans/cari-hesap/'+_tip+'/'+_oid+'/tahsilatlar')
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        var el = document.getElementById('fch-tab-tahsilatlar-ic');
+        var d = (j.data)||{};
+        var html = d.uyari ? '<div class="fch-tab-uyari">'+esc(d.uyari)+'</div>' : '';
+        var rows = d.tahsilatlar || [];
+        if (!rows.length) html += '<div class="erp-ic-empty-desc">Bu cari için tahsilat kaydı bulunmuyor.</div>';
+        else {
+          html += tabloBaslik(['Tahsilat No','Tarih','Tutar','Yöntem','Bağlı Belge','Durum','Açıklama']);
+          html += '<tbody>'+rows.map(function(t){
+            return '<tr><td>'+esc(t.tahsilat_no)+'</td><td>'+esc((t.tarih||'').slice(0,10))+'</td><td class="fm-th-r">'+fmtT(t.tutar,t.para_birimi)+'</td><td>'+esc(t.odeme_yontemi)+'</td>'+
+              '<td>'+esc(t.bagli_belge_kodu||'—')+'</td><td>'+esc(t.durum)+'</td><td>'+esc(t.aciklama||'—')+'</td></tr>';
+          }).join('')+'</tbody></table></div>';
+        }
+        el.innerHTML = html;
+      });
+  }
+
+  function tabOdemeler(){
+    fetch('/nexgen/api/finans/cari-hesap/'+_tip+'/'+_oid+'/odemeler')
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        var d = (j.data)||{};
+        document.getElementById('fch-tab-odemeler-ic').innerHTML =
+          domainEmpty('Ödemeler', d.uyari || 'Bu cari için ödeme kaydı bulunmuyor.');
+      });
+  }
+
+  function tabVadeler(){
+    fetch('/nexgen/api/finans/cari-hesap/'+_tip+'/'+_oid+'/vadeler')
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        var d = (j.data)||{};
+        var el = document.getElementById('fch-tab-vadeler-ic');
+        var html = d.uyari ? '<div class="fch-tab-uyari">'+esc(d.uyari)+'</div>' : '';
+        var rows = d.vadeler || [];
+        if (!rows.length) html += '<div class="erp-ic-empty-desc">Açık vade kalemi bulunmuyor.</div>';
+        else {
+          html += tabloBaslik(['Belge No','Vade','Gün','Açık Tutar','Durum']);
+          html += '<tbody>'+rows.map(function(v){
+            return '<tr><td>'+esc(v.belge_no)+'</td><td>'+esc(v.vade_tarihi)+'</td><td>'+esc(v.gun_sayisi)+'</td><td class="fm-th-r">'+fmtT(v.acik_tutar,v.para_birimi)+'</td><td>'+esc(v.vade_durumu)+'</td></tr>';
+          }).join('')+'</tbody></table></div>';
+        }
+        el.innerHTML = html;
+      });
+  }
+
+  function tabBilgiler(){
+    fetch('/nexgen/api/finans/cari-hesap/'+_tip+'/'+_oid+'/bilgiler')
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        if (!j.ok){ document.getElementById('fch-tab-bilgiler-ic').innerHTML='<div class="fch-tab-uyari">'+esc(apiErr(j))+'</div>'; return; }
+        var d = j.data||{};
+        var pairs = [
+          ['Cari Kodu', d.kod], ['Ünvan', d.unvan], ['Cari Tipi', d.cari_tipi==='MUSTERI'?'Müşteri':'Tedarikçi'],
+          ['Aktiflik', d.aktif?'Aktif':'Pasif'], ['Para Birimi', d.para_birimi||'TRY'],
+          ['Cari Kart Kodu', d.cari_kart_ckod||'—'], ['Cari Kart Ünvanı', d.cari_kart_unvan||'—'],
+          ['Finans Kimlik Durumu', d.finans_kimlik_durumu||'—'],
+          ['Muhasebe Uygunluğu', d.muhasebe_uygunlugu?'Evet':'Hayır']
+        ];
+        document.getElementById('fch-tab-bilgiler-ic').innerHTML = pairs.map(function(p){
+          return '<div class="erp-form-satir"><div class="erp-form-etiket">'+esc(p[0])+'</div><div class="erp-form-deger">'+esc(p[1])+'</div></div>';
+        }).join('');
+      });
+  }
+
+  function belgeAc(id){
+    if (!id) return;
+    var ret = encodeURIComponent('/nexgen/finans/cari-hesaplar?tip='+_tip+'&id='+_oid+'&sekme=hesap&gorunum='+_hesGorunum);
+    window.location.href = '/nexgen/finans/belge/' + id + '?return=' + ret;
+  }
+
+  document.getElementById('fch-sek-musteri').addEventListener('click', function(){
+    _tip='MUSTERI'; _oid=null; _harKaynak='NEXGEN';
+    document.getElementById('fch-sek-musteri').classList.add('aktif');
+    document.getElementById('fch-sek-tedarikci').classList.remove('aktif');
+    document.getElementById('fch-sag-bos').style.display='flex';
+    document.getElementById('fch-sag-icerik').style.display='none';
+    listeYukle(); urlSenkron();
+  });
+  document.getElementById('fch-sek-tedarikci').addEventListener('click', function(){
+    _tip='TEDARIKCI'; _oid=null; _harKaynak='NEXGEN';
+    document.getElementById('fch-sek-tedarikci').classList.add('aktif');
+    document.getElementById('fch-sek-musteri').classList.remove('aktif');
+    document.getElementById('fch-sag-bos').style.display='flex';
+    document.getElementById('fch-sag-icerik').style.display='none';
+    listeYukle(); urlSenkron();
+  });
+  document.getElementById('fch-arama').addEventListener('input', function(){
+    clearTimeout(_debounce); _debounce=setTimeout(listeYukle, 300);
+  });
+  ['fch-fil-aktif','fch-fil-bakiye','fch-fil-eslesme'].forEach(function(id){
+    document.getElementById(id).addEventListener('change', listeYukle);
+  });
+  document.querySelectorAll('#fch-sekme-bar .rm-sekme').forEach(function(el){
+    el.addEventListener('click', function(){ if(_oid) sekmeYukle(el.getAttribute('data-sek')); });
+  });
+
+  window.fchYenile = function(){ listeYukle(); if(_oid){ ozetYukle(); sekmeYukle(_sekme); } };
+
+  (function initUrl(){
+    var q = new URLSearchParams(location.search);
+    if (q.get('tip')) _tip = q.get('tip').toUpperCase();
+    if (_tip==='TEDARIKCI'){
+      document.getElementById('fch-sek-tedarikci').classList.add('aktif');
+      document.getElementById('fch-sek-musteri').classList.remove('aktif');
+    }
+    if (q.get('sekme')) {
+      var sk = q.get('sekme');
+      _sekme = (sk === 'ozet') ? 'hesap' : sk;
+    }
+    if (q.get('gorunum')) _hesGorunum = q.get('gorunum');
+    listeYukle();
+    var id = parseInt(q.get('id')||'0',10);
+    if (id) cariSec(_tip, id, _sekme);
+  })();
+})();
+</script>
+{% endblock %}

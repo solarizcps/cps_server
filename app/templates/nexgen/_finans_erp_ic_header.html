@@ -1,0 +1,22 @@
+{# Kompakt ERP iç sayfa başlığı — Finans Belgesi formu ile aynı dil #}
+<div class="erp-ic-hdr">
+  <div class="erp-ic-hdr-sol">
+    <img src="{{ url_for('static', filename='img/nexgen-logo.png') }}" alt="NexGen">
+    <div class="erp-ic-hdr-meta">
+      <div class="erp-ic-hdr-bc">
+        Finans <span>›</span>
+        {% if fm_hdr_crumb %}{{ fm_hdr_crumb }}{% else %}{{ fm_hdr_title }}{% endif %}
+      </div>
+      <div class="erp-ic-hdr-baslik">{{ fm_hdr_title }}</div>
+      {% if fm_hdr_subtitle %}<div class="erp-ic-hdr-alt">{{ fm_hdr_subtitle }}</div>{% endif %}
+    </div>
+  </div>
+  <div class="erp-ic-hdr-sag">
+    {% if fm_guncelleme_id %}<span class="fm-guncelleme" id="{{ fm_guncelleme_id }}">—</span>{% endif %}
+    {% if fm_refresh_onclick %}<button type="button" class="rm-yeni-btn fm-btn-yenile" onclick="{{ fm_refresh_onclick }}">Yenile</button>{% endif %}
+    {% if fm_tab != 'genel' %}
+    <a href="/nexgen/finans" class="rm-page-geri erp-ic-geri" title="Finans Ana Sayfa"><span class="fm-geri-ok">←</span><span>Finans Ana Sayfa</span></a>
+    {% endif %}
+    <a href="/nexgen/" class="rm-page-geri erp-ic-geri" title="Ana Menü"><span class="fm-geri-ok">←</span><span>Ana Menü</span></a>
+  </div>
+</div>

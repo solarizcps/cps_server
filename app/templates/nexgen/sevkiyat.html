@@ -1,151 +1,876 @@
 {% extends "base.html" %}
-{% set page_title = "Müşteri Sevkiyat" %}
+{% set page_title = "Sevkiyat Operasyonu" %}
 
 {% block content %}
-<div class="ng-sayfa" style="padding:16px 20px;">
-  <div class="ng-baslik-blok" style="margin-bottom:16px;">
+<div class="ng-sayfa">
+
+  <div class="svk-page-brand">
+    <img src="{{ url_for('static', filename='img/nexgen-logo.png') }}" alt="" class="rm-page-logo">
+  </div>
+
+  <div class="ng-baslik-blok">
+    {% if depo_sade_mod %}
+    <div class="svk-depo-nav">
+      <a href="/nexgen/depo/" class="svk-depo-nav-link">Mal Kabul</a>
+      <span class="svk-depo-nav-sep">|</span>
+      <a href="/nexgen/sevkiyat" class="svk-depo-nav-link active">Sevkiyat Operasyonu</a>
+    </div>
+    <h1 class="svk-depo-sayfa-baslik">SEVKİYAT OPERASYONU</h1>
+    {% else %}
     <div class="ng-baslik">
-      <a href="/nexgen/" class="ng-bc-link">NexGen</a>
-      <span class="ng-bc-sep">›</span>
-      <span class="ng-baslik-metin">Müşteri Sevkiyat</span>
+      <span class="ng-baslik-metin">Sevkiyat Operasyonu</span>
     </div>
-    <div style="font-size:12px;color:#64748b;margin-top:4px;">
-      Depo / sevkiyat operasyon — gerçek müşteri mal çıkışı.
+    {% endif %}
+    <div class="ng-baslik-aciklama">
+      Üretimi tamamlanan müşteri hammaddelerinin sevk ve kg takibi. Operasyonel sevkiyat — finans kaydı oluşturmaz.
     </div>
   </div>
 
-  <div class="svk-sekmeler" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
-    <button type="button" class="pzm-btn pzm-btn-sm svk-tab active" data-tab="hazir">Sevkiyata Hazır</button>
-    <button type="button" class="pzm-btn pzm-btn-outline pzm-btn-sm svk-tab" data-tab="hazirlananlar">Hazırlananlar</button>
-    <button type="button" class="pzm-btn pzm-btn-outline pzm-btn-sm svk-tab" data-tab="yuklenenler">Yüklenenler</button>
-    <button type="button" class="pzm-btn pzm-btn-outline pzm-btn-sm svk-tab" data-tab="yolda">Yolda</button>
-    <button type="button" class="pzm-btn pzm-btn-outline pzm-btn-sm svk-tab" data-tab="teslim">Teslim Edilenler</button>
-    <button type="button" class="pzm-btn pzm-btn-outline pzm-btn-sm svk-tab" data-tab="tumu">Tümü</button>
-    <button type="button" class="pzm-btn pzm-btn-outline pzm-btn-sm" onclick="svkYukle()" style="margin-left:auto;">Yenile</button>
+  <div class="ngsk-kpi-bar" id="svk-kpi-bar">
+    <div class="ngsk-kpi">
+      <span class="ngsk-kpi-deger" id="svk-kpi-acik">—</span>
+      <span class="ngsk-kpi-etiket">Açık Sipariş KG</span>
+    </div>
+    <div class="ngsk-kpi">
+      <span class="ngsk-kpi-deger ngsk-kpi-sari" id="svk-kpi-bugun-hazir">—</span>
+      <span class="ngsk-kpi-etiket">Bugün Sevke Hazır KG</span>
+    </div>
+    <div class="ngsk-kpi">
+      <span class="ngsk-kpi-deger ngsk-kpi-yesil" id="svk-kpi-bugun-kg">—</span>
+      <span class="ngsk-kpi-etiket">Bugün Sevk Edilen KG</span>
+    </div>
+    <div class="ngsk-kpi">
+      <span class="ngsk-kpi-deger" id="svk-kpi-kismi">—</span>
+      <span class="ngsk-kpi-etiket">Kısmi Sevkiyat</span>
+    </div>
+    <div class="ngsk-kpi">
+      <span class="ngsk-kpi-deger" id="svk-kpi-bekleyen">—</span>
+      <span class="ngsk-kpi-etiket">Bekleyen Sevkiyat</span>
+    </div>
   </div>
 
-  <div class="pzm-kart" style="overflow:auto;">
-    <table class="pzm-tablo" id="svk-tablo">
+  <div class="ngsa-toolbar">
+    <div class="ngsa-toolbar-sol">
+      <div class="ngsk-ara-wrap">
+        <svg class="ngsk-ara-ikon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input type="text" id="svk-arama" class="ngsk-ara-input"
+               placeholder="Sipariş no, cari, ürün, stok, renk, plaka, irsaliye…" autocomplete="off">
+      </div>
+      <select id="svk-filtre-durum" class="ngsk-select">
+        <option value="">Tüm Durumlar</option>
+        <option value="Sevke Hazır">Sevke Hazır</option>
+        <option value="Kısmi Sevk">Kısmi Sevk</option>
+        <option value="Sevk Edildi">Sevk Edildi</option>
+        <option value="Tamamlandı">Tamamlandı</option>
+      </select>
+      {% if not depo_sade_mod %}
+      <select id="svk-filtre-termin" class="ngsk-select">
+        <option value="">Tüm Terminler</option>
+        <option value="Gecikti">Gecikti</option>
+        <option value="Yaklaşıyor">Yaklaşıyor</option>
+        <option value="Zamanında">Zamanında</option>
+        <option value="Termin Yok">Termin Yok</option>
+      </select>
+      {% endif %}
+    </div>
+    <div class="ngsa-toolbar-sag">
+      <button type="button" class="ngsk-btn-yeni svk-btn-yenile" onclick="svkYukle()">Yenile</button>
+    </div>
+  </div>
+
+  <div class="svk-sekme-bar" id="svk-sekme-bar">
+    <button type="button" class="svk-sekme active" data-tab="hazir">Sevke Hazır <span class="svk-rozet-sayi" data-say="hazir">0</span></button>
+    <button type="button" class="svk-sekme" data-tab="gonderilenler">Gönderilenler <span class="svk-rozet-sayi" data-say="gonderilenler">0</span></button>
+    <button type="button" class="svk-sekme" data-tab="tumu">Tümü <span class="svk-rozet-sayi" data-say="tumu">0</span></button>
+  </div>
+
+  <div class="ngsk-tablo-cerceve">
+    <table class="ngsk-tablo" id="svk-tablo">
       <thead id="svk-thead"></thead>
       <tbody id="svk-tbody"></tbody>
     </table>
-    <div id="svk-bos" style="padding:24px;text-align:center;color:#94a3b8;display:none;">Kayıt yok.</div>
+    <div class="ngsk-bos" id="svk-bos" style="display:none;">Kayıt bulunamadı.</div>
   </div>
 </div>
 
-<div id="svk-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:9000;align-items:center;justify-content:center;">
-  <div style="background:#fff;border-radius:10px;max-width:920px;width:96%;max-height:92vh;overflow:auto;padding:20px;box-shadow:0 12px 40px rgba(0,0,0,.15);">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-      <strong id="svk-modal-baslik">Sevkiyat Oluştur</strong>
-      <button type="button" onclick="svkModalKapat()" style="border:none;background:none;font-size:20px;cursor:pointer;">×</button>
+<div class="ngsk-overlay" id="svk-modal">
+  <div class="ngsk-modal svk-modal-genis svk-modal-operasyon">
+    <div class="ngsk-modal-baslik svk-modal-hdr svk-modal-brand-hdr">
+      <img src="{{ url_for('static', filename='img/nexgen-logo.png') }}" alt="" class="rm-page-logo svk-modal-logo">
+      <span id="svk-modal-baslik" class="svk-modal-baslik-metin">Sevkiyat Oluştur</span>
+      <button type="button" class="ngsk-modal-kapat" onclick="svkModalKapat()">×</button>
     </div>
-    <div id="svk-modal-ust" style="font-size:12px;margin-bottom:12px;"></div>
-    <div style="overflow:auto;margin-bottom:12px;">
-      <table class="pzm-tablo" id="svk-kalem-tablo">
-        <thead>
-          <tr>
-            <th class="pzm-th">Ürün</th>
-            <th class="pzm-th">Renk</th>
-            <th class="pzm-th">Formül</th>
-            <th class="pzm-th">Sipariş</th>
-            <th class="pzm-th">Önceki sevk</th>
-            <th class="pzm-th">Kalan</th>
-            <th class="pzm-th">Bu sevkiyat</th>
-          </tr>
-        </thead>
-        <tbody id="svk-kalem-tbody"></tbody>
-      </table>
+
+    <div class="svk-modal-body">
+      <div class="ngsk-bolum-baslik">Sipariş ve üretim özeti</div>
+      <div class="svk-ozet-grid svk-modal-ozet-grid" id="svk-modal-ozet"></div>
+
+      <div class="ngsk-bolum-baslik">Mevcut sevkiyatlar</div>
+      <div class="svk-gecmis-wrap svk-modal-tablo-wrap" id="svk-gecmis-wrap">
+        <table class="ngsk-tablo svk-gecmis-tablo svk-modal-tablo">
+          <thead>
+            <tr>
+              <th class="svk-g-col-no">Sevkiyat No</th>
+              <th class="svk-g-col-trh">Tarih</th>
+              <th class="svk-g-col-arac">Araç</th>
+              <th class="svk-g-col-irs">İrsaliye</th>
+              <th class="ngsk-th-r svk-g-col-kg">Net KG</th>
+              <th class="svk-g-col-dur">Durum</th>
+            </tr>
+          </thead>
+          <tbody id="svk-gecmis-tbody"></tbody>
+        </table>
+        <div class="svk-gecmis-bos" id="svk-gecmis-bos">Henüz sevkiyat yok.</div>
+      </div>
+
+      <div class="ngsk-bolum-baslik">Yeni sevkiyat kalemleri</div>
+      <div class="svk-kalem-wrap svk-modal-tablo-wrap">
+        <table class="ngsk-tablo svk-modal-tablo" id="svk-kalem-tablo">
+          <thead>
+            <tr>
+              <th class="svk-k-col-urun">Ürün</th>
+              <th class="ngsk-th-r svk-k-col-kg">Sipariş KG</th>
+              <th class="ngsk-th-r svk-k-col-kg">Önceki Sevk</th>
+              <th class="ngsk-th-r svk-k-col-kg">Kalan</th>
+              <th class="ngsk-th-r svk-k-col-inp">Bu Sevkiyat KG</th>
+            </tr>
+          </thead>
+          <tbody id="svk-kalem-tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="ngsk-bolum-baslik">Araç ve sevk bilgileri</div>
+      <div class="ngsk-form-grid svk-modal-form-grid">
+        <div class="ngsk-fg">
+          <label>Planlanan yükleme kg</label>
+          <input type="number" step="0.001" min="0" id="svk-planlanan-kg" readonly>
+          <small>Toplam kalem miktarından hesaplanır</small>
+        </div>
+        <div class="ngsk-fg">
+          <label>Sevk tarihi</label>
+          <input type="date" id="svk-hazirlik">
+        </div>
+        <div class="ngsk-fg">
+          <label>İrsaliye no</label>
+          <input type="text" id="svk-irsaliye" autocomplete="off">
+        </div>
+        <div class="ngsk-fg">
+          <label>Araç plakası</label>
+          <input type="text" id="svk-plaka" autocomplete="off">
+        </div>
+        <div class="ngsk-fg">
+          <label>Şoför</label>
+          <input type="text" id="svk-sofor" autocomplete="off">
+        </div>
+        <div class="ngsk-fg">
+          <label>{% if depo_sade_mod %}Araç{% else %}Nakliye firması{% endif %}</label>
+          <input type="text" id="svk-kargo" autocomplete="off">
+        </div>
+        {% if not depo_sade_mod %}
+        <div class="ngsk-fg">
+          <label>Teslim alacak kişi</label>
+          <input type="text" id="svk-teslim-alan" autocomplete="off">
+        </div>
+        <div class="ngsk-fg ngsk-fg-genis">
+          <label>Teslim adresi</label>
+          <input type="text" id="svk-adres" autocomplete="off">
+          <small>Notlar alanına kaydedilir (ayrı kolon yok)</small>
+        </div>
+        <div class="ngsk-fg ngsk-fg-genis">
+          <label>Açıklama</label>
+          <textarea id="svk-not" class="svk-modal-textarea" rows="2"></textarea>
+        </div>
+        {% endif %}
+      </div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px;">
-      <label>Hazırlık / Sevkiyat tarihi<input type="date" id="svk-hazirlik" class="pzm-inp" style="width:100%;margin-top:4px;"></label>
-      <label>İrsaliye no<input type="text" id="svk-irsaliye" class="pzm-inp" style="width:100%;margin-top:4px;"></label>
-      <label>Araç plakası<input type="text" id="svk-plaka" class="pzm-inp" style="width:100%;margin-top:4px;"></label>
-      <label>Şoför<input type="text" id="svk-sofor" class="pzm-inp" style="width:100%;margin-top:4px;"></label>
-      <label>Kargo / nakliye<input type="text" id="svk-kargo" class="pzm-inp" style="width:100%;margin-top:4px;"></label>
-      <label>Teslim alacak kişi<input type="text" id="svk-teslim-alan" class="pzm-inp" style="width:100%;margin-top:4px;"></label>
-      <label>Teslim adresi<input type="text" id="svk-adres" class="pzm-inp" style="width:100%;margin-top:4px;"></label>
-      <label>Telefon<input type="text" id="svk-telefon" class="pzm-inp" style="width:100%;margin-top:4px;"></label>
-      <label style="grid-column:1/-1;">Açıklama<textarea id="svk-not" rows="2" class="pzm-inp" style="width:100%;margin-top:4px;font-family:inherit;"></textarea></label>
-    </div>
+
     {% if can_yaz %}
-    <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
-      <button type="button" class="pzm-btn pzm-btn-outline pzm-btn-sm" onclick="svkModalKapat()">İptal</button>
-      <button type="button" class="pzm-btn pzm-btn-lacivert pzm-btn-sm" onclick="svkKaydet()">Sevkiyat Oluştur (HAZIRLANIYOR)</button>
+    <div class="ngsk-modal-footer svk-modal-ftr">
+      <button type="button" class="ngsk-btn-iptal" onclick="svkModalKapat()">İptal</button>
+      <button type="button" class="ngsk-btn-kaydet" id="svk-kaydet-btn" onclick="svkKaydet()">{% if depo_sade_mod %}SEVK ET{% else %}Sevkiyat Oluştur{% endif %}</button>
     </div>
     {% endif %}
   </div>
 </div>
 
+<style>
+/* Kurumsal layout — satinalma_index.html / stok_kartlari.html ile aynı dil */
+.ng-sayfa {
+  padding: 22px 28px;
+  background: #f6f7f9;
+  min-height: 100vh;
+  width: 100%;
+  box-sizing: border-box;
+}
+/* Reçete Merkezi — rm-page-logo / üst logo bandı */
+.svk-page-brand {
+  display: flex;
+  align-items: center;
+  height: 61px;
+  padding: 0;
+  border-bottom: 1px solid #e5e7eb;
+  margin: -22px -28px 12px -28px;
+  flex-shrink: 0;
+  overflow: visible;
+  box-sizing: border-box;
+}
+.rm-page-logo {
+  width: 150px;
+  height: 61px;
+  display: block;
+  flex-shrink: 0;
+  object-fit: contain;
+  object-position: left center;
+  margin-left: 0;
+}
+.ng-baslik-blok { margin-bottom: 16px; }
+.ng-baslik { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.ng-baslik-metin { font-size: 20px; font-weight: 700; color: #111827; }
+.svk-depo-nav { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 13.5px; font-weight: 600; }
+.svk-depo-nav-link { color: #6b7280; text-decoration: none; padding: 4px 0; border-bottom: 2px solid transparent; }
+.svk-depo-nav-link:hover { color: #111827; }
+.svk-depo-nav-link.active { color: #111827; border-bottom-color: #f59e0b; }
+.svk-depo-nav-sep { color: #d1d5db; user-select: none; }
+.svk-depo-sayfa-baslik {
+  font-size: 20px; font-weight: 700; color: #111827;
+  margin: 0 0 4px 0; padding: 0; letter-spacing: 0.03em;
+  text-transform: uppercase; line-height: 1.25;
+}
+.ng-baslik-aciklama { font-size: 13px; color: #6b7280; }
+
+.ngsk-kpi-bar {
+  display: flex; gap: 12px; flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.ngsk-kpi {
+  background: #fff; border: 1px solid rgba(17,24,39,0.07);
+  border-radius: 10px; padding: 10px 18px;
+  display: flex; flex-direction: column; align-items: center;
+  min-width: 90px; flex: 1 1 0;
+}
+.ngsk-kpi-deger { font-size: 22px; font-weight: 700; color: #111827; }
+.ngsk-kpi-etiket { font-size: 11px; color: #6b7280; margin-top: 2px; text-align: center; }
+.ngsk-kpi-sari { color: #d97706; }
+.ngsk-kpi-yesil { color: #16a34a; }
+
+.ngsa-toolbar {
+  display: flex; flex-direction: column; gap: 8px;
+  margin-bottom: 14px; width: 100%; box-sizing: border-box;
+}
+.ngsa-toolbar-sol {
+  display: flex; align-items: center; gap: 8px;
+  flex-wrap: wrap; width: 100%;
+}
+.ngsa-toolbar-sag {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.ngsk-ara-wrap {
+  display: flex; align-items: center; gap: 8px;
+  background: #fff; border: 1px solid #e5e7eb;
+  border-radius: 8px; padding: 6px 12px;
+  flex: 1 1 120px; min-width: 120px; max-width: 240px;
+}
+.ngsk-ara-input {
+  border: none; outline: none; font-size: 13.5px;
+  color: #374151; background: transparent; width: 100%;
+}
+.ngsk-select {
+  background: #fff; border: 1px solid #e5e7eb;
+  border-radius: 8px; padding: 7px 28px 7px 10px;
+  font-size: 13px; color: #374151; outline: none; appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 8px center;
+}
+.ngsk-btn-yeni {
+  display: flex; align-items: center; gap: 6px;
+  background: #f59e0b; color: #fff;
+  border: none; border-radius: 8px;
+  padding: 7px 16px; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: background 0.12s; white-space: nowrap;
+}
+.ngsk-btn-yeni:hover { background: #d97706; }
+.svk-btn-yenile { background: #fff; color: #374151; border: 1px solid #e5e7eb; }
+.svk-btn-yenile:hover { background: #f9fafb; }
+
+.svk-sekme-bar {
+  display: flex; gap: 4px; flex-wrap: wrap;
+  margin-bottom: 12px; border-bottom: 1px solid #e5e7eb; padding-bottom: 0;
+}
+.svk-sekme {
+  background: transparent; border: none; border-bottom: 2px solid transparent;
+  padding: 8px 14px; font-size: 13px; font-weight: 600; color: #6b7280;
+  cursor: pointer; margin-bottom: -1px;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.svk-sekme:hover { color: #111827; background: #fff; border-radius: 6px 6px 0 0; }
+.svk-sekme.active { color: #92400e; border-bottom-color: #f59e0b; background: #fff; border-radius: 6px 6px 0 0; }
+.svk-rozet-sayi {
+  font-size: 10px; font-weight: 700; background: #f3f4f6; color: #6b7280;
+  padding: 1px 6px; border-radius: 10px; min-width: 18px; text-align: center;
+}
+.svk-sekme.active .svk-rozet-sayi { background: #fef3c7; color: #92400e; }
+
+.ngsk-tablo-cerceve {
+  background: #fff; border: 1px solid rgba(17,24,39,0.06);
+  border-radius: 12px; overflow-x: auto;
+  box-shadow: 0 2px 8px rgba(15,23,42,0.04);
+}
+.ngsk-tablo {
+  width: 100%;
+  border-collapse: separate; border-spacing: 0;
+  font-size: 13.5px; color: #111827;
+}
+.ngsk-tablo thead th {
+  background: #f9fafb; padding: 10px 14px;
+  font-size: 11.5px; font-weight: 600; color: #6b7280;
+  text-transform: uppercase; letter-spacing: 0.4px;
+  border-bottom: 1px solid #f0f1f3; white-space: nowrap;
+}
+.ngsk-th-r { text-align: right; }
+.ngsk-th-wrap { white-space: normal; display: inline-block; line-height: 1.25; text-align: right; }
+.ngsk-tablo tbody tr {
+  border-bottom: 1px solid #f3f4f6;
+  transition: background 0.1s;
+}
+.ngsk-tablo tbody tr:last-child { border-bottom: none; }
+.ngsk-tablo tbody tr:hover { background: #fffbeb; }
+.ngsk-tablo td { padding: 9px 14px; vertical-align: middle; }
+.ngsk-td-r { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ngsk-td-kod { font-weight: 700; font-size: 13px; color: #374151; }
+.ngsk-alt-bilgi { font-size: 11px; color: #9ca3af; margin-top: 1px; }
+.ngsk-birim { font-size: 11px; color: #9ca3af; margin-left: 2px; }
+
+.svk-clamp2 {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; line-height: 1.35; word-break: break-word;
+}
+.svk-sip-no {
+  font-size: 12.5px; font-weight: 700; color: #6366f1;
+  white-space: nowrap;
+}
+.svk-termin-satir {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin-top: 3px;
+}
+.svk-sevk-ozet { font-size: 11px; color: #6b7280; margin-top: 2px; }
+
+.svk-col-sip { min-width: 148px; }
+.svk-col-stok { min-width: 120px; }
+.svk-col-kg { min-width: 72px; }
+.svk-col-fe { min-width: 88px; }
+.svk-col-dur-op { min-width: 118px; }
+.svk-col-islem { min-width: 118px; white-space: nowrap; }
+
+.svk-kg-vurgu { font-weight: 700; color: #d97706; font-size: 13.5px; }
+.svk-fe-blok {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 2px; line-height: 1.3;
+}
+.svk-fe-lbl { font-size: 11px; color: #9ca3af; }
+.svk-fe-badge {
+  display: inline-block; padding: 2px 8px;
+  border-radius: 20px; font-size: 11px; font-weight: 600;
+  white-space: nowrap; border: 1px solid transparent;
+}
+.svk-fe-badge.fazla { background: #d1fae5; color: #059669; border-color: #a7f3d0; }
+.svk-fe-badge.eksik { background: #fee2e2; color: #dc2626; border-color: #fecaca; }
+.svk-fe-badge.dengeli { background: #f3f4f6; color: #6b7280; border-color: #e5e7eb; }
+
+.svk-dur-op-blok { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.svk-rozet {
+  display: inline-block; padding: 2px 8px;
+  border-radius: 20px; font-size: 11px; font-weight: 600;
+  white-space: nowrap; border: 1px solid transparent;
+}
+.svk-rozet-acik { background: #d1fae5; color: #059669; border-color: #a7f3d0; }
+.svk-rozet-bek { background: #fef3c7; color: #d97706; border-color: #fde68a; }
+.svk-rozet-yuk { background: #fff7ed; color: #f97316; border-color: #fed7aa; }
+.svk-rozet-yol { background: #eff6ff; color: #3b82f6; border-color: #bfdbfe; }
+.svk-rozet-tam { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0; }
+.svk-rozet-pas { background: #f3f4f6; color: #6b7280; border-color: #e5e7eb; }
+.svk-rozet-op { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+
+.svk-btn-olustur {
+  background: #f59e0b; color: #fff; border: none; border-radius: 8px;
+  padding: 6px 12px; font-size: 12px; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+}
+.svk-btn-olustur:hover { background: #d97706; }
+.svk-btn-olustur:disabled, .svk-btn-pasif { background: #e5e7eb; color: #9ca3af; cursor: not-allowed; }
+.svk-btn-detay {
+  background: #f3f4f6; color: #374151; border: none; border-radius: 8px;
+  padding: 6px 12px; font-size: 12px; font-weight: 600;
+  text-decoration: none; display: inline-block;
+}
+.svk-btn-detay:hover { background: #fef3c7; color: #92400e; }
+
+.ngsk-bos {
+  padding: 48px 24px; text-align: center;
+  color: #9ca3af; font-size: 14px;
+}
+.ngsk-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.45); z-index: 1000;
+  align-items: center; justify-content: center;
+}
+.ngsk-overlay.acik { display: flex; }
+.svk-modal-operasyon.svk-modal-genis {
+  background: #fff;
+  border-radius: 14px;
+  width: min(1120px, calc(100vw - 48px));
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.18);
+}
+.svk-modal-hdr {
+  flex: 0 0 auto;
+  position: relative;
+  top: auto;
+}
+.svk-modal-brand-hdr.ngsk-modal-baslik {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  height: 61px;
+  min-height: 61px;
+  max-height: 61px;
+  padding: 0 16px 0 12px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fff;
+  box-sizing: border-box;
+}
+.svk-modal-brand-hdr .svk-modal-logo {
+  width: 150px;
+  height: 61px;
+  display: block;
+  flex-shrink: 0;
+  object-fit: contain;
+  object-position: left center;
+}
+.svk-modal-brand-hdr .svk-modal-baslik-metin {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: auto;
+  text-align: right;
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-right: 4px;
+}
+.svk-modal-brand-hdr .ngsk-modal-kapat {
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+.svk-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: visible;
+}
+.svk-modal-ftr {
+  flex: 0 0 auto;
+  position: relative;
+  bottom: auto;
+  z-index: 2;
+}
+.ngsk-modal-baslik {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 16px 20px; border-bottom: 1px solid #f0f1f3;
+  font-size: 16px; font-weight: 700; color: #111827;
+  background: #fff; gap: 8px;
+}
+.ngsk-modal-baslik:not(.svk-modal-brand-hdr) span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ngsk-modal-kapat {
+  background: none; border: none; cursor: pointer;
+  font-size: 20px; color: #9ca3af; line-height: 1; flex-shrink: 0;
+}
+.ngsk-bolum-baslik {
+  padding: 12px 20px 4px;
+  font-size: 11px; font-weight: 700; color: #6b7280;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.svk-modal-ozet-grid.svk-ozet-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px 16px;
+  padding: 8px 20px 12px;
+  font-size: 13px;
+}
+.svk-ozet-item { min-width: 0; }
+.svk-ozet-item b {
+  display: block; font-size: 11px; color: #9ca3af;
+  text-transform: uppercase; margin-bottom: 2px;
+}
+.svk-ozet-deger { font-size: 13px; color: #111827; }
+.svk-modal-tablo-wrap {
+  padding: 0 20px 12px;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.svk-modal-tablo {
+  width: 100%;
+  table-layout: fixed;
+  font-size: 13.5px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.svk-modal-tablo td,
+.svk-modal-tablo th { overflow: hidden; min-width: 0; }
+.svk-g-col-no { width: 14%; }
+.svk-g-col-trh { width: 11%; }
+.svk-g-col-arac { width: 18%; }
+.svk-g-col-irs { width: 18%; }
+.svk-g-col-kg { width: 12%; }
+.svk-g-col-dur { width: 27%; }
+.svk-k-col-urun { width: 36%; }
+.svk-k-col-kg { width: 13%; }
+.svk-k-col-inp { width: 17%; }
+.svk-gecmis-bos { font-size: 12px; color: #9ca3af; padding: 8px 0; display: none; }
+.svk-kg-input {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #e5e7eb;
+  border-radius: 7px;
+  padding: 7px 10px;
+  font-size: 13.5px;
+  text-align: right;
+}
+.svk-modal-form-grid.ngsk-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  padding: 12px 20px 16px;
+}
+.svk-modal-form-grid .ngsk-fg { min-width: 0; }
+.svk-modal-form-grid .ngsk-fg input,
+.svk-modal-form-grid .ngsk-fg textarea { width: 100%; box-sizing: border-box; }
+.svk-modal-textarea {
+  border: 1px solid #e5e7eb;
+  border-radius: 7px;
+  padding: 7px 10px;
+  font-size: 13.5px;
+  font-family: inherit;
+  color: #111827;
+  outline: none;
+  resize: vertical;
+  min-height: 64px;
+}
+.ngsk-fg { display: flex; flex-direction: column; gap: 4px; }
+.ngsk-fg label { font-size: 12.5px; font-weight: 600; color: #374151; }
+.ngsk-fg input {
+  border: 1px solid #e5e7eb; border-radius: 7px;
+  padding: 7px 10px; font-size: 13.5px; color: #111827; outline: none;
+}
+.ngsk-fg small { font-size: 11px; color: #9ca3af; }
+.ngsk-fg-genis { grid-column: 1 / -1; }
+.ngsk-modal-footer {
+  display: flex; justify-content: flex-end; gap: 10px;
+  padding: 14px 20px; border-top: 1px solid #f0f1f3;
+  background: #fff;
+}
+.ngsk-btn-iptal {
+  background: #f3f4f6; color: #374151; border: none;
+  border-radius: 8px; padding: 8px 18px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.ngsk-btn-kaydet {
+  background: #f59e0b; color: #fff; border: none;
+  border-radius: 8px; padding: 8px 20px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+@media (max-width: 900px) {
+  .ng-sayfa { padding: 14px 12px; }
+  .svk-modal-ozet-grid.svk-ozet-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .svk-modal-form-grid.ngsk-form-grid { grid-template-columns: 1fr; }
+}
+</style>
+
 <script>
 var _svkTab = 'hazir';
 var _svkCanYaz = {{ 'true' if can_yaz else 'false' }};
+var _svkDepoMod = {{ 'true' if depo_sade_mod else 'false' }};
+
+function svkIsDepoMod() {
+  return _svkDepoMod || !!document.querySelector('.svk-depo-nav');
+}
 var _svkFormSiparisId = null;
+var _svkListeHam = [];
+var _svkFinansKolon = {};
 
 function svkEsc(s) {
-  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function svkFmtKg(v) {
+  var n = parseFloat(v);
+  if (isNaN(n)) return '—';
+  return n.toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+}
+
+function svkFmtKgKpi(v) {
+  var n = parseFloat(v);
+  if (isNaN(n)) return '—';
+  if (Math.abs(n - Math.round(n)) < 0.005) return Math.round(n).toLocaleString('tr-TR');
+  return n.toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
+function svkFmtKgCell(v, vurgu) {
+  if (v == null || v === '' || isNaN(parseFloat(v))) return '—';
+  var cls = vurgu ? ' class="svk-kg-vurgu"' : '';
+  return '<span' + cls + '>' + svkFmtKg(v) + '<span class="ngsk-birim">KG</span></span>';
+}
+
+function svkClampHtml(text, full) {
+  var t = String(text || '—');
+  return '<div class="svk-clamp2" title="' + svkEsc(full || t) + '">' + svkEsc(t) + '</div>';
+}
+
+function svkCariAcikEtiket(row) {
+  var n = parseInt(row.cari_acik_siparis || 0, 10);
+  if (n <= 1) return '';
+  return n + ' açık sipariş · ' + svkFmtKg(row.cari_acik_kg || 0) + ' KG';
+}
+
+function svkSevkOzetEtiket(row) {
+  var cnt = parseInt(row.sevkiyat_sayisi || 0, 10);
+  if (cnt <= 0) return '';
+  var s = cnt + ' sevkiyat';
+  var d = row.son_sevkiyat_tarihi;
+  if (d && d !== '—' && String(d).length >= 10) {
+    d = String(d).slice(8, 10) + '.' + String(d).slice(5, 7) + '.' + String(d).slice(0, 4);
+    s += ' · Son ' + d;
+  }
+  return s;
+}
+
+function svkFmtTutar(v) {
+  var n = parseFloat(v);
+  if (isNaN(n)) return '—';
+  return n.toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
+function svkFinansTutarMetin(row) {
+  var sevk = parseFloat(row.sevk_edilen_kg || row.sevk_edilen_toplam || 0);
+  if (sevk <= 0.001) return '—';
+  var fh = row.finans_hazirlik || {};
+  if (fh.toplam_tutar_sevk == null || fh.toplam_tutar_sevk === '') return '—';
+  var pb = fh.para_birimi || '';
+  return svkFmtTutar(fh.toplam_tutar_sevk) + (pb ? ' ' + pb : '');
+}
+
+function svkFinansTutarForm(f) {
+  var sevk = parseFloat(f.sevk_edilen_kg || 0);
+  if (sevk <= 0.001) return '—';
+  var fh = f.finans_hazirlik || {};
+  if (fh.toplam_tutar_sevk == null || fh.toplam_tutar_sevk === '') return '—';
+  var pb = fh.para_birimi || '';
+  return svkFmtTutar(fh.toplam_tutar_sevk) + (pb ? ' ' + pb : '');
+}
+
+function svkFeModalEtiket(f) {
+  var tip = f.fazla_eksik_tip || 'dengeli';
+  var et = f.fazla_eksik_etiket || '0 KG';
+  var lbl = tip === 'fazla' ? 'Fazla Üretim' : (tip === 'eksik' ? 'Eksik Üretim' : 'Dengeli');
+  return lbl + ' · ' + et;
+}
+
+function svkDurumRozet(etiket) {
+  var e = String(etiket || '');
+  var cls = 'svk-rozet-pas';
+  if (e.indexOf('Hazır') >= 0 || e.indexOf('hazır') >= 0) cls = 'svk-rozet-acik';
+  else if (e.indexOf('Hazırlan') >= 0) cls = 'svk-rozet-bek';
+  else if (e.indexOf('Yüklen') >= 0) cls = 'svk-rozet-yuk';
+  else if (e.indexOf('Yolda') >= 0) cls = 'svk-rozet-yol';
+  else if (e.indexOf('Teslim') >= 0 || e.indexOf('Tamam') >= 0 || e.indexOf('Sevk Edildi') >= 0) cls = 'svk-rozet-tam';
+  else if (e.indexOf('Kısmi') >= 0) cls = 'svk-rozet-yuk';
+  return '<span class="svk-rozet ' + cls + '">' + svkEsc(e) + '</span>';
+}
+
+function svkTerminRozet(t) {
+  var cls = 'svk-rozet-pas';
+  if (t === 'Gecikti') cls = 'svk-rozet-pas';
+  else if (t === 'Yaklaşıyor') cls = 'svk-rozet-bek';
+  else if (t === 'Zamanında') cls = 'svk-rozet-acik';
+  return '<span class="svk-rozet ' + cls + '">' + svkEsc(t || '—') + '</span>';
+}
+
+function svkFeHtml(row) {
+  var tip = row.fazla_eksik_tip || 'dengeli';
+  var et = row.fazla_eksik_etiket || '0 KG';
+  var lbl = tip === 'fazla' ? 'Fazla Üretim' : (tip === 'eksik' ? 'Eksik Üretim' : 'Dengeli');
+  return '<div class="svk-fe-blok"><span class="svk-fe-lbl">' + lbl + '</span>'
+    + '<span class="svk-fe-badge ' + tip + '">' + svkEsc(et) + '</span></div>';
+}
+
+function svkOperasyonRozet(d) {
+  var dur = String(d || 'Sevke Hazır');
+  return '<span class="svk-rozet svk-rozet-op" title="Operasyonel sevk durumu — finans kaydı değil">' + svkEsc(dur) + '</span>';
 }
 
 function svkTabSec(tab, el) {
   _svkTab = tab;
-  document.querySelectorAll('.svk-tab').forEach(function(b) {
-    b.classList.remove('active', 'pzm-btn-lacivert');
-    b.classList.add('pzm-btn-outline');
-  });
+  document.querySelectorAll('.svk-sekme').forEach(function(b) { b.classList.remove('active'); });
   el.classList.add('active');
-  el.classList.remove('pzm-btn-outline');
-  el.classList.add('pzm-btn-lacivert');
   svkYukle();
 }
 
-document.querySelectorAll('.svk-tab').forEach(function(btn) {
+document.querySelectorAll('.svk-sekme').forEach(function(btn) {
   btn.addEventListener('click', function() { svkTabSec(btn.getAttribute('data-tab'), btn); });
 });
 
-function svkThead() {
-  var th = document.getElementById('svk-thead');
-  if (_svkTab === 'hazir') {
-    th.innerHTML = '<tr><th class="pzm-th">Sipariş no</th><th class="pzm-th">Müşteri</th><th class="pzm-th">Ürün</th><th class="pzm-th">Sipariş kg</th><th class="pzm-th">Sevk edilen</th><th class="pzm-th">Kalan</th><th class="pzm-th">Termin</th><th class="pzm-th">Durum</th><th class="pzm-th">İşlem</th></tr>';
-  } else {
-    th.innerHTML = '<tr><th class="pzm-th">Sevkiyat no</th><th class="pzm-th">Sipariş no</th><th class="pzm-th">Müşteri</th><th class="pzm-th">Ürün</th><th class="pzm-th">Sevk kg</th><th class="pzm-th">Termin</th><th class="pzm-th">Durum</th><th class="pzm-th">Termin durumu</th><th class="pzm-th">İşlem</th></tr>';
-  }
-}
+document.getElementById('svk-arama').addEventListener('input', svkFiltreUygula);
+document.getElementById('svk-filtre-durum').addEventListener('change', svkFiltreUygula);
+var _svkFiltreTermin = document.getElementById('svk-filtre-termin');
+if (_svkFiltreTermin) _svkFiltreTermin.addEventListener('change', svkFiltreUygula);
 
-function svkYukle() {
-  svkThead();
-  fetch('/nexgen/api/sevkiyat-operasyon/liste?tab=' + encodeURIComponent(_svkTab))
+function svkOzetYukle() {
+  fetch('/nexgen/api/sevkiyat-operasyon/ozet')
     .then(function(r) { return r.json(); })
     .then(function(d) {
-      var tb = document.getElementById('svk-tbody');
-      var bos = document.getElementById('svk-bos');
-      tb.innerHTML = '';
-      if (!d.ok || !d.liste || !d.liste.length) {
-        bos.style.display = 'block';
-        return;
-      }
-      bos.style.display = 'none';
-      d.liste.forEach(function(row) {
-        var tr = document.createElement('tr');
-        if (_svkTab === 'hazir') {
-          var btn = _svkCanYaz
-            ? '<button type="button" class="pzm-btn pzm-btn-lacivert pzm-btn-sm" onclick="svkOlusturAc(' + row.siparis_id + ')">Sevkiyat Oluştur</button>'
-            : '—';
-          tr.innerHTML = '<td>' + svkEsc(row.siparis_no) + '</td><td>' + svkEsc(row.musteri) + '</td><td>' + svkEsc(row.urun_ozet) + '</td>'
-            + '<td>' + svkEsc(row.siparis_kg) + '</td><td>' + svkEsc(row.sevk_edilen_kg) + '</td><td>' + svkEsc(row.kalan_kg) + '</td>'
-            + '<td>' + svkEsc(row.verilen_termin) + '</td><td>' + svkEsc(row.durum_etiket) + '</td><td>' + btn + '</td>';
-        } else {
-          tr.innerHTML = '<td>' + svkEsc(row.sevkiyat_no) + '</td><td>' + svkEsc(row.siparis_no) + '</td><td>' + svkEsc(row.cari_unvan) + '</td>'
-            + '<td>' + svkEsc(row.urun_ozet) + '</td><td>' + svkEsc(row.sevk_kg) + '</td><td>' + svkEsc(row.verilen_termin) + '</td>'
-            + '<td>' + svkEsc(row.durum_etiket) + '</td><td>' + svkEsc(row.termin_durum) + '</td>'
-            + '<td><a href="/nexgen/sevkiyat/' + row.id + '" class="pzm-btn pzm-btn-outline pzm-btn-sm">Detay</a></td>';
-        }
-        tb.appendChild(tr);
+      if (!d.ok) return;
+      var o = d.ozet || {};
+      document.getElementById('svk-kpi-acik').textContent = svkFmtKgKpi(o.acik_siparis_kg || 0);
+      document.getElementById('svk-kpi-bugun-hazir').textContent = svkFmtKgKpi(o.bugun_sevke_hazir_kg || 0);
+      document.getElementById('svk-kpi-bugun-kg').textContent = svkFmtKgKpi(o.bugun_sevk_edilen_kg || 0);
+      document.getElementById('svk-kpi-kismi').textContent = o.kismi_sevkiyat != null ? o.kismi_sevkiyat : 0;
+      document.getElementById('svk-kpi-bekleyen').textContent = o.bekleyen_sevkiyat != null ? o.bekleyen_sevkiyat : 0;
+      var ts = d.tab_sayilari || {};
+      document.querySelectorAll('.svk-rozet-sayi').forEach(function(el) {
+        var k = el.getAttribute('data-say');
+        el.textContent = ts[k] != null ? ts[k] : 0;
       });
     });
 }
 
+function svkThead() {
+  var th = document.getElementById('svk-thead');
+  th.innerHTML = '<tr>'
+    + '<th class="svk-col-sip">Sipariş / Cari</th>'
+    + '<th class="svk-col-stok">Stok Kartı</th>'
+    + '<th class="ngsk-th-r svk-col-kg">Sipariş KG</th>'
+    + '<th class="ngsk-th-r svk-col-kg">Üretilen KG</th>'
+    + '<th class="ngsk-th-r svk-col-kg">Sevk Edilen KG</th>'
+    + '<th class="ngsk-th-r svk-col-kg">Sevke Hazır KG</th>'
+    + '<th class="ngsk-th-r svk-col-kg">Sipariş Kalan KG</th>'
+    + '<th class="ngsk-th-r svk-col-fe">Fazla / Eksik</th>'
+    + '<th class="svk-col-dur-op">Durum / Operasyon</th>'
+    + '<th class="svk-col-islem">İşlem</th></tr>';
+}
+
+function svkDurumOperasyonHtml(row) {
+  var html = svkDurumRozet(row.durum_etiket);
+  if (!svkIsDepoMod()) {
+    html += svkOperasyonRozet(row.finans_devir_durum || row.operasyon_durum);
+  }
+  return '<div class="svk-dur-op-blok">' + html + '</div>';
+}
+
+function svkTerminSiparisHtml(row) {
+  var trm = row.verilen_termin;
+  if (!trm || trm === '—') return '';
+  var td = row.termin_durum ? svkTerminRozet(row.termin_durum) : '';
+  return '<div class="svk-termin-satir"><span class="ngsk-alt-bilgi">Termin: ' + svkEsc(trm) + '</span>' + td + '</div>';
+}
+
+function svkSatirMetin(row) {
+  var parts = [
+    row.siparis_no, row.musteri, row.cari_unvan, row.urun_ozet, row.stok_kart, row.urun, row.renk,
+    row.sevkiyat_no, row.arac_plaka, row.irsaliye_no, row.durum_etiket, row.termin_durum
+  ];
+  return parts.map(function(p) { return String(p || '').toLowerCase(); }).join(' ');
+}
+
+function svkFiltreUygula() {
+  var q = (document.getElementById('svk-arama').value || '').trim().toLowerCase();
+  var fd = document.getElementById('svk-filtre-durum').value;
+  var ftEl = document.getElementById('svk-filtre-termin');
+  var ft = ftEl ? ftEl.value : '';
+  var filtre = _svkListeHam.filter(function(row) {
+    if (q && svkSatirMetin(row).indexOf(q) < 0) return false;
+    if (fd && String(row.durum_etiket || '') !== fd) return false;
+    if (ft && String(row.termin_durum || '') !== ft) return false;
+    return true;
+  });
+  svkTabloCiz(filtre);
+}
+
+function svkFinansSatirEk(row) { return ''; }
+
+function svkTabloCiz(liste) {
+  var tb = document.getElementById('svk-tbody');
+  var bos = document.getElementById('svk-bos');
+  tb.innerHTML = '';
+  if (!liste.length) {
+    bos.style.display = 'block';
+    return;
+  }
+  bos.style.display = 'none';
+  liste.forEach(function(row) {
+    var tr = document.createElement('tr');
+    var hazir = parseFloat(row.sevk_edilebilir_kg || 0);
+    var btn = '';
+    if (_svkCanYaz && hazir > 0.001) {
+      btn = '<button type="button" class="svk-btn-olustur" onclick="svkOlusturAc(' + row.siparis_id + ')">Sevkiyat Oluştur</button>';
+    } else {
+      btn = '<span class="ngsk-alt-bilgi">—</span>';
+    }
+    var cariAcik = svkCariAcikEtiket(row);
+    if (!cariAcik && row.cari_acik_etiket) cariAcik = row.cari_acik_etiket;
+    var sevkOz = svkSevkOzetEtiket(row);
+    var musteri = row.musteri || row.cari_unvan || '—';
+    tr.innerHTML = ''
+      + '<td class="svk-col-sip"><div class="svk-sip-no">' + svkEsc(row.siparis_no) + '</div>'
+      + svkClampHtml(musteri, musteri)
+      + (svkIsDepoMod() ? '' : svkTerminSiparisHtml(row))
+      + (cariAcik ? '<div class="ngsk-alt-bilgi" title="' + svkEsc(cariAcik) + '">' + svkEsc(cariAcik) + '</div>' : '')
+      + (sevkOz ? '<div class="svk-sevk-ozet">' + svkEsc(sevkOz) + '</div>' : '') + '</td>'
+      + '<td class="svk-col-stok">' + svkClampHtml(row.stok_kart || row.urun_ozet, (row.stok_kart || '') + ' ' + (row.renk || ''))
+      + (row.renk && row.renk !== '—' ? '<div class="ngsk-alt-bilgi">' + svkEsc(row.renk) + '</div>' : '') + '</td>'
+      + '<td class="ngsk-td-r svk-col-kg">' + svkFmtKgCell(row.siparis_kg) + '</td>'
+      + '<td class="ngsk-td-r svk-col-kg">' + svkFmtKgCell(row.uretilen_kg) + '</td>'
+      + '<td class="ngsk-td-r svk-col-kg">' + svkFmtKgCell(row.sevk_edilen_kg) + '</td>'
+      + '<td class="ngsk-td-r svk-col-kg">' + svkFmtKgCell(row.sevk_edilebilir_kg, true) + '</td>'
+      + '<td class="ngsk-td-r svk-col-kg">' + svkFmtKgCell(row.kalan_kg) + '</td>'
+      + '<td class="ngsk-td-r svk-col-fe">' + svkFeHtml(row) + '</td>'
+      + '<td class="svk-col-dur-op">' + svkDurumOperasyonHtml(row) + '</td>'
+      + '<td class="svk-col-islem">' + btn + '</td>';
+    tb.appendChild(tr);
+  });
+}
+
+function svkYukle() {
+  svkOzetYukle();
+  fetch('/nexgen/api/sevkiyat-operasyon/liste?tab=' + encodeURIComponent(_svkTab))
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      _svkListeHam = (d.ok && d.liste) ? d.liste : [];
+      _svkFinansKolon = d.finans_kolonlari || {};
+      svkThead();
+      svkFiltreUygula();
+    });
+}
+
 function svkModalKapat() {
-  document.getElementById('svk-modal').style.display = 'none';
+  document.getElementById('svk-modal').classList.remove('acik');
   _svkFormSiparisId = null;
+}
+
+function svkPlanlananGuncelle() {
+  var top = 0;
+  document.querySelectorAll('.svk-kg').forEach(function(inp) {
+    top += parseFloat(inp.value || '0') || 0;
+  });
+  document.getElementById('svk-planlanan-kg').value = top > 0 ? top.toFixed(3) : '';
 }
 
 function svkOlusturAc(siparisId) {
@@ -156,39 +881,71 @@ function svkOlusturAc(siparisId) {
       if (!d.ok) { alert(d.mesaj || 'Form yüklenemedi'); return; }
       var f = d.form;
       document.getElementById('svk-modal-baslik').textContent = 'Sevkiyat Oluştur — ' + (f.siparis_no || '');
-      document.getElementById('svk-modal-ust').innerHTML =
-        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">'
-        + '<div><b>Sipariş:</b> ' + svkEsc(f.siparis_no) + '</div>'
-        + '<div><b>Müşteri:</b> ' + svkEsc(f.musteri) + '</div>'
-        + '<div><b>Cari kod:</b> ' + svkEsc(f.cari_kod) + '</div>'
-        + '<div><b>Müşteri termin:</b> ' + svkEsc(f.musteri_termin) + '</div>'
-        + '<div><b>Verilen termin:</b> ' + svkEsc(f.verilen_termin) + '</div>'
-        + '<div><b>Sevk edilebilir:</b> ' + svkEsc(f.sevk_edilebilir_kg) + ' kg</div>'
-        + '<div><b>Sipariş kg:</b> ' + svkEsc(f.siparis_kg) + '</div>'
-        + '<div><b>Sevk edilen:</b> ' + svkEsc(f.sevk_edilen_kg) + '</div>'
-        + '<div><b>Kalan:</b> ' + svkEsc(f.kalan_kg) + '</div>'
-        + '</div>';
+      var ozetItems = [
+        ['Sipariş', f.siparis_no], ['Cari', f.musteri], ['Ürün', f.urun || f.stok_kart],
+        ['Sipariş KG', svkFmtKg(f.siparis_kg) + ' KG'], ['Üretilen KG', svkFmtKg(f.uretilen_kg) + ' KG'],
+        ['Sevk Edilen KG', svkFmtKg(f.sevk_edilen_kg) + ' KG'], ['Sevke Hazır KG', svkFmtKg(f.sevk_edilebilir_kg) + ' KG'],
+        ['Sipariş Kalan KG', svkFmtKg(f.kalan_kg) + ' KG'], ['Fazla / Eksik', svkFeModalEtiket(f)]
+      ];
+      if (!svkIsDepoMod()) {
+        ozetItems.push(['Finansal Tutar (sevk)', svkFinansTutarForm(f)], ['Sevkiyat Sayısı', f.sevkiyat_sayisi || 0]);
+      }
+      document.getElementById('svk-modal-ozet').innerHTML = ozetItems.map(function(it) {
+        var val = String(it[1] == null ? '—' : it[1]);
+        var longTxt = (it[0] === 'Cari' || it[0] === 'Ürün');
+        var valHtml = longTxt
+          ? '<div class="svk-clamp2 svk-ozet-deger" title="' + svkEsc(val) + '">' + svkEsc(val) + '</div>'
+          : '<div class="svk-ozet-deger">' + svkEsc(val) + '</div>';
+        return '<div class="svk-ozet-item"><b>' + svkEsc(it[0]) + '</b>' + valHtml + '</div>';
+      }).join('');
+
+      var gt = document.getElementById('svk-gecmis-tbody');
+      gt.innerHTML = '';
+      var gecmis = f.sevkiyat_gecmisi || [];
+      document.getElementById('svk-gecmis-bos').style.display = gecmis.length ? 'none' : 'block';
+      gecmis.forEach(function(g) {
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td class="svk-g-col-no"><span class="svk-sip-no">' + svkEsc(g.sevkiyat_no) + '</span></td>'
+          + '<td class="svk-g-col-trh">' + svkEsc(g.tarih) + '</td>'
+          + '<td class="svk-g-col-arac">' + svkClampHtml(g.arac, g.arac) + '</td>'
+          + '<td class="svk-g-col-irs">' + svkClampHtml(g.irsaliye_no, g.irsaliye_no) + '</td>'
+          + '<td class="ngsk-td-r svk-g-col-kg">' + svkFmtKg(g.net_kg) + '</td>'
+          + '<td class="svk-g-col-dur">' + svkDurumRozet(g.durum_etiket) + '</td>';
+        gt.appendChild(tr);
+      });
+
       var kb = document.getElementById('svk-kalem-tbody');
       kb.innerHTML = '';
-      (f.kalemler || []).forEach(function(k, i) {
+      (f.kalemler || []).forEach(function(k) {
         if ((k.kalan_kg || 0) <= 0) return;
         var tr = document.createElement('tr');
-        tr.innerHTML = '<td>' + svkEsc(k.urun_adi) + '</td><td>' + svkEsc(k.renk_ad) + '</td><td>' + svkEsc(k.formul_ad) + '</td>'
-          + '<td>' + svkEsc(k.siparis_kg) + '</td><td>' + svkEsc(k.sevk_edilen_kg) + '</td><td>' + svkEsc(k.kalan_kg) + '</td>'
-          + '<td><input type="number" step="0.001" min="0" max="' + k.kalan_kg + '" class="pzm-inp svk-kg" data-kid="' + svkEsc(k.siparis_kalem_id) + '" data-kalan="' + k.kalan_kg + '" data-urun="' + svkEsc(k.urun_adi) + '" data-renk="' + svkEsc(k.renk_ad) + '" data-formul="' + svkEsc(k.formul_ad) + '" style="width:90px;" value="' + k.kalan_kg + '"></td>';
+        tr.innerHTML = '<td class="svk-k-col-urun">' + svkClampHtml(k.urun_adi, k.urun_adi)
+          + (k.renk_ad ? '<div class="ngsk-alt-bilgi">' + svkEsc(k.renk_ad) + '</div>' : '')
+          + (k.formul_ad ? '<div class="ngsk-alt-bilgi">' + svkEsc(k.formul_ad) + '</div>' : '') + '</td>'
+          + '<td class="ngsk-td-r svk-k-col-kg">' + svkFmtKg(k.siparis_kg) + '</td>'
+          + '<td class="ngsk-td-r svk-k-col-kg">' + svkFmtKg(k.sevk_edilen_kg) + '</td>'
+          + '<td class="ngsk-td-r svk-k-col-kg">' + svkFmtKg(k.kalan_kg) + '</td>'
+          + '<td class="ngsk-td-r svk-k-col-inp"><input type="number" step="0.001" min="0" max="' + k.kalan_kg + '" class="svk-kg svk-kg-input" data-kid="' + svkEsc(k.siparis_kalem_id) + '" data-kalan="' + k.kalan_kg + '" data-urun="' + svkEsc(k.urun_adi) + '" data-renk="' + svkEsc(k.renk_ad) + '" data-formul="' + svkEsc(k.formul_ad) + '" value="' + k.kalan_kg + '"></td>';
         kb.appendChild(tr);
       });
+      document.querySelectorAll('.svk-kg').forEach(function(inp) {
+        inp.addEventListener('input', svkPlanlananGuncelle);
+      });
+
       var today = new Date().toISOString().slice(0, 10);
       document.getElementById('svk-hazirlik').value = today;
       document.getElementById('svk-irsaliye').value = '';
       document.getElementById('svk-plaka').value = '';
       document.getElementById('svk-sofor').value = '';
       document.getElementById('svk-kargo').value = '';
-      document.getElementById('svk-teslim-alan').value = '';
-      document.getElementById('svk-adres').value = '';
-      document.getElementById('svk-telefon').value = '';
-      document.getElementById('svk-not').value = '';
-      document.getElementById('svk-modal').style.display = 'flex';
+      var teslimAlan = document.getElementById('svk-teslim-alan');
+      if (teslimAlan) teslimAlan.value = '';
+      var adr = document.getElementById('svk-adres');
+      if (adr) adr.value = '';
+      var nt = document.getElementById('svk-not');
+      if (nt) nt.value = '';
+      svkPlanlananGuncelle();
+      document.getElementById('svk-modal').classList.add('acik');
     });
 }
 
@@ -209,11 +966,11 @@ function svkKaydet() {
   });
   if (!kalemler.length) { alert('En az bir kalem miktarı girin.'); return; }
   var notParca = [];
-  var adr = document.getElementById('svk-adres').value.trim();
-  var tel = document.getElementById('svk-telefon').value.trim();
-  var nt = document.getElementById('svk-not').value.trim();
+  var adrEl = document.getElementById('svk-adres');
+  var ntEl = document.getElementById('svk-not');
+  var adr = adrEl ? adrEl.value.trim() : '';
+  var nt = ntEl ? ntEl.value.trim() : '';
   if (adr) notParca.push('Adres: ' + adr);
-  if (tel) notParca.push('Tel: ' + tel);
   if (nt) notParca.push(nt);
   var payload = {
     siparis_id: _svkFormSiparisId,
@@ -223,18 +980,52 @@ function svkKaydet() {
     arac_plaka: document.getElementById('svk-plaka').value,
     sofor: document.getElementById('svk-sofor').value,
     kargo_firmasi: document.getElementById('svk-kargo').value,
-    teslim_alan: document.getElementById('svk-teslim-alan').value,
+    teslim_alan: (document.getElementById('svk-teslim-alan') || {}).value || '',
     notlar: notParca.join(' | '),
     kalemler: kalemler
   };
+  var btn = document.getElementById('svk-kaydet-btn');
+  if (btn) btn.disabled = true;
   fetch('/nexgen/api/mo-sevkiyat', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(payload)
   }).then(function(r) { return r.json(); }).then(function(d) {
-    if (!d.ok) { alert(d.mesaj || 'Kayıt hatası'); return; }
-    svkModalKapat();
-    window.location.href = '/nexgen/sevkiyat/' + d.sevkiyat.id;
+    if (!d.ok) {
+      if (btn) btn.disabled = false;
+      alert(d.mesaj || 'Kayıt hatası');
+      return;
+    }
+    if (svkIsDepoMod()) {
+      var sevkTarih = document.getElementById('svk-hazirlik').value || new Date().toISOString().slice(0, 10);
+      return fetch('/nexgen/api/mo-sevkiyat/' + d.sevkiyat.id + '/durum', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ durum: 'YUKLENIYOR' })
+      }).then(function(r2) { return r2.json(); }).then(function(d2) {
+        if (!d2.ok) throw new Error(d2.mesaj || 'Yükleme durumu güncellenemedi');
+        return fetch('/nexgen/api/mo-sevkiyat/' + d.sevkiyat.id + '/durum', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ durum: 'SEVK_EDILDI', sevk_tarihi: sevkTarih })
+        });
+      }).then(function(r3) { return r3.json(); }).then(function(d3) {
+        if (btn) btn.disabled = false;
+        if (!d3.ok) { alert(d3.mesaj || 'Sevk durumu güncellenemedi'); return; }
+        svkModalKapat();
+        svkYukle();
+      }).catch(function(err) {
+        if (btn) btn.disabled = false;
+        alert(err && err.message ? err.message : 'Sevk tamamlanamadı');
+      });
+    } else {
+      if (btn) btn.disabled = false;
+      svkModalKapat();
+      window.location.href = '/nexgen/sevkiyat/' + d.sevkiyat.id;
+    }
+  }).catch(function() {
+    if (btn) btn.disabled = false;
+    alert('Bağlantı hatası');
   });
 }
 

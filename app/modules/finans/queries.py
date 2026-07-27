@@ -10,6 +10,11 @@ Yeni şema:
 from db import q, qone, qscalar, qexec, get_conn
 from datetime import datetime, timedelta
 from modules import audit
+from modules.finans.legacy_posting_adapter import (
+    geri_al_odeme_plan_hareket,
+    post_avans_hareket,
+    post_odeme_plan_tahsilat,
+)
 
 
 # ============================================================
@@ -453,13 +458,15 @@ def anlasma_olustur(veri, modeller, avanslar, plan_satirlari, kullanici='sistem'
             ))
             av_id = cur.lastrowid
 
-            # Cari_Har'a avans kaydı
-            cur.execute("""
-                INSERT INTO Cari_Har (CKod, Tarih, BelgeNo, BelgeTip, Aciklama, Borc, Alacak)
-                VALUES (?, ?, ?, 'AVANS', ?, 0, ?)
-            """, (veri['CKod'], av['AvansTarih'], f"AV{av_id:04d}",
-                  f"{veri['ProjeKod']} - Ön avans",
-                  float(av.get('Tutar') or 0)))
+            post_avans_hareket(
+                conn,
+                ckod=veri['CKod'],
+                avans_tarih=av['AvansTarih'],
+                avans_id=int(av_id),
+                proje_kod=veri['ProjeKod'],
+                tutar=float(av.get('Tutar') or 0),
+                kullanici=kullanici,
+            )
 
             for j, mh in enumerate(av.get('mahsuplar') or [], 1):
                 cur.execute("""
@@ -799,33 +806,45 @@ def odeme_plan_gerceklesti(plan_id, gerc_tarih, gerc_tutar, kullanici='sistem'):
     if not p or p['Durum'] == 'GELDI':
         return False
 
-    qexec("""
-        INSERT INTO Cari_Har (CKod, Tarih, BelgeNo, BelgeTip, Aciklama, Borc, Alacak)
-        VALUES (?, ?, ?, 'TAHSILAT', ?, 0, ?)
-    """, (p['CKod'], gerc_tarih, f"OP{plan_id:04d}",
-          f"{p['ProjeKod']} - {p.get('Aciklama') or p['OdemeTipi']}", gerc_tutar))
-    cari_har_id = qscalar("SELECT last_insert_rowid()")
+    conn = get_conn()
+    try:
+        cari_har_id = post_odeme_plan_tahsilat(
+            conn,
+            ckod=p['CKod'],
+            plan_id=int(plan_id),
+            proje_kod=p['ProjeKod'],
+            gerc_tarih=gerc_tarih,
+            gerc_tutar=float(gerc_tutar or 0),
+            aciklama=f"{p['ProjeKod']} - {p.get('Aciklama') or p['OdemeTipi']}",
+            kullanici=kullanici,
+        )
+        conn.execute("""
+            UPDATE finans_odeme_plan
+            SET Durum = 'GELDI', GerceklesenTarih = ?, GerceklesenTutar = ?, CariHarId = ?
+            WHERE Id = ?
+        """, (gerc_tarih, gerc_tutar, cari_har_id, plan_id))
 
-    qexec("""
-        UPDATE finans_odeme_plan
-        SET Durum = 'GELDI', GerceklesenTarih = ?, GerceklesenTutar = ?, CariHarId = ?
-        WHERE Id = ?
-    """, (gerc_tarih, gerc_tutar, cari_har_id, plan_id))
+        audit.log(kullanici, 'ODEME_GELDI', 'finans_odeme_plan', plan_id,
+                  anlasma_id=p['AnlasmaId'],
+                  aciklama=f"Ödeme tahsil edildi: {gerc_tutar:,.0f} ₺ ({gerc_tarih}) — {p.get('Aciklama') or p['OdemeTipi']}",
+                  conn=conn)
 
-    audit.log(kullanici, 'ODEME_GELDI', 'finans_odeme_plan', plan_id,
-              anlasma_id=p['AnlasmaId'],
-              aciklama=f"Ödeme tahsil edildi: {gerc_tutar:,.0f} ₺ ({gerc_tarih}) — {p.get('Aciklama') or p['OdemeTipi']}")
+        kalan = conn.execute("""
+            SELECT COUNT(*) FROM finans_odeme_plan
+            WHERE AnlasmaId = ? AND Durum != 'GELDI'
+        """, (p['AnlasmaId'],)).fetchone()[0] or 0
+        kalan_mahsup = conn.execute("""
+            SELECT COUNT(*) FROM finans_avans_mahsup m
+            JOIN finans_avans av ON av.Id = m.AvansId
+            WHERE av.AnlasmaId = ? AND m.Durum = 'BEKLIYOR'
+        """, (p['AnlasmaId'],)).fetchone()[0] or 0
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
-    # Tamamlandı kontrolü
-    kalan = qscalar("""
-        SELECT COUNT(*) FROM finans_odeme_plan
-        WHERE AnlasmaId = ? AND Durum != 'GELDI'
-    """, (p['AnlasmaId'],)) or 0
-    kalan_mahsup = qscalar("""
-        SELECT COUNT(*) FROM finans_avans_mahsup m
-        JOIN finans_avans av ON av.Id = m.AvansId
-        WHERE av.AnlasmaId = ? AND m.Durum = 'BEKLIYOR'
-    """, (p['AnlasmaId'],)) or 0
     if kalan == 0 and kalan_mahsup == 0:
         anlasma_durum_guncelle(p['AnlasmaId'], 'TAMAMLANDI', kullanici)
     return True
@@ -835,16 +854,25 @@ def odeme_plan_geri_al(plan_id, kullanici='sistem'):
     p = qone("SELECT * FROM finans_odeme_plan WHERE Id = ?", (plan_id,))
     if not p or p['Durum'] != 'GELDI':
         return False
-    if p['CariHarId']:
-        qexec("DELETE FROM Cari_Har WHERE Id = ?", (p['CariHarId'],))
-    qexec("""
-        UPDATE finans_odeme_plan
-        SET Durum = 'BEKLIYOR', GerceklesenTarih = NULL, GerceklesenTutar = NULL, CariHarId = NULL
-        WHERE Id = ?
-    """, (plan_id,))
-    audit.log(kullanici, 'ODEME_GERI', 'finans_odeme_plan', plan_id,
-              anlasma_id=p['AnlasmaId'],
-              aciklama=f"Tahsilat geri alındı: {p.get('Tutar', 0):,.0f} ₺")
+    conn = get_conn()
+    try:
+        if p['CariHarId']:
+            geri_al_odeme_plan_hareket(conn, int(p['CariHarId']))
+        conn.execute("""
+            UPDATE finans_odeme_plan
+            SET Durum = 'BEKLIYOR', GerceklesenTarih = NULL, GerceklesenTutar = NULL, CariHarId = NULL
+            WHERE Id = ?
+        """, (plan_id,))
+        audit.log(kullanici, 'ODEME_GERI', 'finans_odeme_plan', plan_id,
+                  anlasma_id=p['AnlasmaId'],
+                  aciklama=f"Tahsilat geri alındı: {p.get('Tutar', 0):,.0f} ₺",
+                  conn=conn)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
     return True
 
 

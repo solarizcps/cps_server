@@ -40,7 +40,7 @@ from flask import (
     request, jsonify, session, g,
     Response, redirect, url_for, flash, current_app
 )
-from modules.auth import yetki_gerekli, yetki_var, login_gerekli
+from modules.auth import yetki_gerekli, yetki_var, login_gerekli, is_superadmin, kullanici_yetkileri
 from modules.nexgen.kod_uretici import (
     yeni_formul_kodu_uret,
     yeni_rv_kodu_uret,
@@ -55,6 +55,7 @@ from modules.nexgen.cekirdek_gorunum import (
     cekirdek_kod_sql_filter,
     formul_secim_gosterim_uygula,
     formul_secim_gruplari_hazirla,
+    modul02_rc_formul_gruplari_hazirla,
     rc_cekirdek_agac_hazirla,
     renk_kart_tekillestir,
     renk_liste_grubu,
@@ -652,11 +653,23 @@ def index():
     can_depo    = yetki_var('nexgen.depo.view', 'can_view')
     can_recete  = yetki_var('nexgen.recete.view', 'can_view')
     can_tablet  = yetki_var('nexgen.tablet.view', 'can_view')
+    can_sevkiyat = (
+        yetki_var('nexgen.sevkiyat.view', 'can_view')
+        or yetki_var('nexgen.sevkiyat.write', 'can_create')
+        or yetki_var('nexgen.sevkiyat.write', 'can_update')
+        or yetki_var('nexgen.plan.manage', 'can_manage')
+    )
+    from modules.nexgen.finans_yetki import can_finans_menu
+    _u = session.get('kullanici') or {}
+    _yk = kullanici_yetkileri(_u)
+    can_finans = can_finans_menu(_u, _yk)
     return render_template('nexgen/index.html', active='nexgen',
                            can_yonetim=can_yonetim,
                            can_depo=can_depo,
                            can_recete=can_recete,
-                           can_tablet=can_tablet)
+                           can_tablet=can_tablet,
+                           can_sevkiyat=can_sevkiyat,
+                           can_finans=can_finans)
 
 
 @nexgen_bp.route('/formuller')
@@ -1823,6 +1836,30 @@ def _rc_uv_kalem_maliyet(con, uv_id: int, toplam_kg: float) -> tuple[list, float
         })
     kg_maliyet = round(mal / toplam_kg, 2) if toplam_kg > 0 else 0.0
     return kalemler_liste, kg_maliyet
+
+
+def _rc_uv_recete_kalemleri(con, uv_id: int) -> list[dict]:
+    """Reçete Merkezi ile aynı kaynak: nexgen_recete_kalem + stok_kart."""
+    rows = con.execute(
+        """
+        SELECT rk.miktar_kg, sk.kod AS stok_kod, sk.ad AS stok_ad, sk.kategori
+        FROM nexgen_recete_kalem rk
+        JOIN nexgen_stok_kart sk ON sk.id = rk.stok_kart_id
+        WHERE rk.uretim_varyant_id = ? AND rk.aktif = 1
+        ORDER BY rk.sira, rk.id
+        """,
+        (uv_id,),
+    ).fetchall()
+    return [
+        {
+            'stok_kod': r['stok_kod'],
+            'stok_ad': r['stok_ad'],
+            'kategori': r['kategori'] or '',
+            'miktar_kg': round(float(r['miktar_kg']), 3),
+            'birim': 'kg',
+        }
+        for r in rows
+    ]
 
 
 def _rc_arge_kaynak_tipi(arge: dict | None, test_kalem_say: int = 0) -> str | None:
@@ -5966,10 +6003,12 @@ def renk_merkezi():
     """Renk Merkezi V1 ana sayfası."""
     can_approve = yetki_var('nexgen.recete.approve', 'can_approve')
     can_manage  = yetki_var('nexgen.recete.manage',  'can_manage')
+    is_admin    = is_superadmin(session.get('kullanici'))
     return render_template(
         'nexgen/renk_merkezi.html',
         can_approve=can_approve,
         can_manage=can_manage,
+        is_admin=is_admin,
     )
 
 
@@ -6003,6 +6042,19 @@ def _nx_ar_durum_etiketi(durum: str | None) -> str:
         'FERHAT_BEKLIYOR': 'ENJEKSİYON DENEMESİ BEKLİYOR',
         'REDDEDILDI': 'REDDEDİLDİ',
     }.get(d, d or 'AR-GE TEST')
+
+
+def _nx_ar_durum_etiketi_goster(
+    durum: str | None,
+    *,
+    saha_testi_gerekli_mi: int | None = None,
+) -> str:
+    """Enjeksiyon gerekli kayıtlarda AR-GE TEST yerine enjeksiyon etiketi."""
+    d = (durum or '').upper()
+    saha = int(saha_testi_gerekli_mi or 0) == 1
+    if saha and d in ('ARGE_HAZIR', 'SAHA_BEKLIYOR'):
+        return 'ENJEKSİYON DENEMESİ BEKLİYOR'
+    return _nx_ar_durum_etiketi(durum)
 
 
 def _nx_ar_liste_grubu(durum: str | None, rf_id, rf_aktif, rf_durum) -> str:
@@ -6126,6 +6178,7 @@ def _rm_ferhat_hydrate(con, arge_id: int) -> dict:
 
     out['ferhat_hydrate_dolu'] = bool(
         (out.get('kalip') or {}).get('kalip_kodu')
+        or out.get('sonuc_modeli') == 'TEK_DENEME'
         or any(
             row.get('shore_sonuc') is not None
             or row.get('gramaj_gr') is not None
@@ -6134,6 +6187,17 @@ def _rm_ferhat_hydrate(con, arge_id: int) -> dict:
         )
         or fotograflar
     )
+
+    try:
+        from modules.nexgen.nx_ar_service import _ferhat_deneme_hydrate
+        den_id = int(den['id'])
+        extra = _ferhat_deneme_hydrate(con, den_id, boyutlar)
+        out.update(extra)
+        if extra.get('sonuc_modeli') == 'TEK_DENEME' and extra.get('deneme_olcum'):
+            out['ferhat_hydrate_dolu'] = True
+    except Exception:
+        pass
+
     return out
 
 
@@ -6150,6 +6214,7 @@ def api_rm_liste():
     """
     filtre = request.args.get('filtre', 'TUMU').upper()
     q = (request.args.get('q') or '').strip().lower()
+    rm_admin = is_superadmin(session.get('kullanici'))
 
     con = _db()
     try:
@@ -6297,15 +6362,27 @@ def api_rm_liste():
                     'boyut_ozet':   boyut_ozet,
                 })
 
+        if rm_admin:
+            from modules.nexgen.rm_baglantili_silme_service import liste_silme_ux_meta
+            for k in kartlar:
+                if k.get('kart_tipi') == 'NX_AR' and k.get('arge_test_id'):
+                    k.update(liste_silme_ux_meta(con, int(k['arge_test_id'])))
+
         sayilar = {
             'toplam':   len(kartlar),
             'BEKLEYEN': sum(1 for k in kartlar if k['liste_grubu'] == 'BEKLEYEN'),
             'AKTİF':    sum(1 for k in kartlar if k['liste_grubu'] == 'AKTİF'),
             'REVİZE':   sum(1 for k in kartlar if k['liste_grubu'] == 'REVİZE'),
             'PASİF':    sum(1 for k in kartlar if k['liste_grubu'] == 'PASİF'),
+            'SILINEBILIR': sum(1 for k in kartlar if k.get('toplu_sil_silinebilir')),
+            'BAGLANTILI_TEST': sum(1 for k in kartlar if k.get('toplu_sil_baglanti_test')),
         }
 
-        if filtre != 'TUMU':
+        if filtre == 'SILINEBILIR':
+            kartlar = [k for k in kartlar if k.get('toplu_sil_silinebilir')]
+        elif filtre == 'BAGLANTILI_TEST':
+            kartlar = [k for k in kartlar if k.get('toplu_sil_baglanti_test')]
+        elif filtre != 'TUMU':
             kartlar = [k for k in kartlar if k['liste_grubu'] == filtre]
 
         if q:
@@ -6415,7 +6492,16 @@ def api_rm_detay():
         durum_ham = (rf['durum'] if rf else arge_durum) or '—'
         durum_etiketi = (
             'ONAYLI / AKTİF' if rf and rf['durum'] == 'ONAYLI' and rf['aktif']
-            else (_nx_ar_durum_etiketi(arge_durum) if is_nx_ar else durum_ham)
+            else (
+                _nx_ar_durum_etiketi_goster(
+                    arge_durum,
+                    saha_testi_gerekli_mi=(
+                        arge['saha_testi_gerekli_mi']
+                        if arge and 'saha_testi_gerekli_mi' in arge.keys() else 0
+                    ),
+                )
+                if is_nx_ar else durum_ham
+            )
         )
         ozet = {
             'arge_kodu':    (arge['arge_kodu'] if arge else None),
@@ -7002,6 +7088,132 @@ def api_rm_aktife_al():
     except Exception as e:
         con.rollback()
         return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+def _rm_admin_zorunlu():
+    """Renk Merkezi toplu silme — yalnız SuperAdmin."""
+    if not is_superadmin(session.get('kullanici')):
+        return jsonify({'ok': False, 'hata': 'Yalnız Admin.'}), 403
+    return None
+
+
+@nexgen_bp.route('/api/renk-merkezi/toplu-sil-onkontrol', methods=['POST'])
+@yetki_gerekli('nexgen.recete.view', 'can_view')
+def api_rm_toplu_sil_onkontrol():
+    """Seçilen NX-AR kayıtları için silme ön kontrolü (Admin)."""
+    denied = _rm_admin_zorunlu()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    ids = data.get('arge_test_ids') or []
+    from modules.nexgen.rm_toplu_silme_service import toplu_sil_onkontrol
+    con = _db()
+    try:
+        out = toplu_sil_onkontrol(con, ids, is_admin=True)
+        http = out.pop('http', 200)
+        if not out.get('ok'):
+            return jsonify(out), http
+        return jsonify(out)
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/renk-merkezi/toplu-sil', methods=['POST'])
+@yetki_gerekli('nexgen.recete.view', 'can_view')
+def api_rm_toplu_sil():
+    """Atomik toplu silme — batch içinde engel varsa hiçbiri silinmez (Admin)."""
+    denied = _rm_admin_zorunlu()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    ids = data.get('arge_test_ids') or []
+    from modules.nexgen.rm_toplu_silme_service import toplu_sil_uygula
+    con = _db()
+    try:
+        out = toplu_sil_uygula(
+            con, ids,
+            is_admin=True,
+            kullanici_id=_kullanici_id(),
+            kullanici_ad=_kullanici_ad(),
+        )
+        http = out.pop('http', 200 if out.get('ok') else 500)
+        if not out.get('ok'):
+            return jsonify(out), http
+        return jsonify(out)
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/renk-merkezi/baglantili-sil-incele', methods=['POST'])
+@yetki_gerekli('nexgen.recete.view', 'can_view')
+def api_rm_baglantili_sil_incele():
+    """Bağlantılı silme — dependency özeti (Admin, dry-run)."""
+    denied = _rm_admin_zorunlu()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    ids = data.get('arge_test_ids') or []
+    from modules.nexgen.rm_baglantili_silme_service import baglantili_sil_incele
+    con = _db()
+    try:
+        out = baglantili_sil_incele(con, ids, is_admin=True)
+        http = out.pop('http', 200)
+        if not out.get('ok'):
+            return jsonify(out), http
+        return jsonify(out)
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/renk-merkezi/baglantili-sil-onkontrol', methods=['POST'])
+@yetki_gerekli('nexgen.recete.view', 'can_view')
+def api_rm_baglantili_sil_onkontrol():
+    """Bağlantılı silme ön kontrol (Admin, hazırlık)."""
+    denied = _rm_admin_zorunlu()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    ids = data.get('arge_test_ids') or []
+    from modules.nexgen.rm_baglantili_silme_service import baglantili_sil_onkontrol
+    con = _db()
+    try:
+        out = baglantili_sil_onkontrol(con, ids, is_admin=True)
+        http = out.pop('http', 200)
+        if not out.get('ok'):
+            return jsonify(out), http
+        return jsonify(out)
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/renk-merkezi/baglantili-sil', methods=['POST'])
+@yetki_gerekli('nexgen.recete.view', 'can_view')
+def api_rm_baglantili_sil():
+    """Bağlantılı silme — Faz-1 yalnız dry-run plan, DB değişmez (Admin)."""
+    denied = _rm_admin_zorunlu()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    ids = data.get('arge_test_ids') or []
+    at_dogrulama = data.get('at_dogrulama') or {}
+    apply_flag = bool(data.get('apply'))
+    from modules.nexgen.rm_baglantili_silme_service import baglantili_sil_uygula
+    con = _db()
+    try:
+        out = baglantili_sil_uygula(
+            con, ids,
+            is_admin=True,
+            kullanici_id=_kullanici_id(),
+            kullanici_ad=_kullanici_ad(),
+            at_dogrulama=at_dogrulama,
+            apply=apply_flag,
+        )
+        http = out.pop('http', 200 if out.get('ok') else 500)
+        if not out.get('ok'):
+            return jsonify(out), http
+        return jsonify(out)
     finally:
         con.close()
 
@@ -8953,6 +9165,8 @@ def api_satinalma_siparis_durum():
                     guncelleyen_id=?, guncelleme_tarihi=datetime('now')
                 WHERE id=?
             """, (_kullanici_id(), siparis_id))
+            from modules.nexgen.onay_satinalma_adapter import satin_onaya_gonder_shadow
+            satin_onaya_gonder_shadow(con, int(siparis_id), _kullanici_id())
 
         elif eylem == 'ONAYLA':
             if mevcut_onay != 'ONAY_BEKLIYOR':
@@ -8964,6 +9178,8 @@ def api_satinalma_siparis_durum():
                     guncelleyen_id=?, guncelleme_tarihi=datetime('now')
                 WHERE id=?
             """, (_kullanici_id(), _kullanici_id(), siparis_id))
+            from modules.nexgen.onay_satinalma_adapter import satin_onay_senkron
+            satin_onay_senkron(con, int(siparis_id), 'ONAYLANDI')
 
         elif eylem == 'REDDET':
             if mevcut_onay != 'ONAY_BEKLIYOR':
@@ -8975,6 +9191,8 @@ def api_satinalma_siparis_durum():
                     guncelleyen_id=?, guncelleme_tarihi=datetime('now')
                 WHERE id=?
             """, (_kullanici_id(), _kullanici_id(), siparis_id))
+            from modules.nexgen.onay_satinalma_adapter import satin_onay_senkron
+            satin_onay_senkron(con, int(siparis_id), 'REDDEDILDI')
 
         elif eylem == 'IPTAL':
             if mevcut_durum == 'TAMAMLANDI':
@@ -9046,6 +9264,7 @@ def api_tedarikci_ekle():
         if mevcut:
             return jsonify({"ok": False, "hata": f"'{kod}' kodu zaten mevcut."}), 409
 
+        con.execute('BEGIN IMMEDIATE')
         con.execute("""
             INSERT INTO nexgen_tedarikci
               (kod, ad, ulke, para_birimi, varsayilan_vade,
@@ -9055,10 +9274,22 @@ def api_tedarikci_ekle():
         """, (kod, ad, ulke, pb, vade,
               iletisim_ad, iletisim_tel, iletisim_email, notlar,
               _kullanici_id()))
-        yeni_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+        yeni_id = int(con.execute("SELECT last_insert_rowid()").fetchone()[0])
+        from modules.nexgen.finans_cari_provision_service import (
+            FinansCariProvisionError,
+            provision_yeni_tedarikci,
+        )
+        provision_yeni_tedarikci(
+            con, yeni_id,
+            kullanici_id=_kullanici_id(),
+            owns_transaction=False,
+        )
         con.commit()
     except Exception as e:
+        from modules.nexgen.finans_cari_provision_service import FinansCariProvisionError
         con.rollback()
+        if isinstance(e, FinansCariProvisionError):
+            return jsonify({"ok": False, "hata": e.mesaj, "kod": e.hata_kodu}), int(e.kod or 409)
         return jsonify({"ok": False, "hata": str(e)}), 500
     finally:
         con.close()
@@ -12624,6 +12855,24 @@ def api_fiyat_pasife_al(fiyat_id):
 # FAZ-2.8 — NexGen Yönetim Merkezi
 # =============================================================
 
+def _nexgen_cari_kart_liste(con, q=None, *, sadece_aktif=False):
+    """Yönetim Cari Kartları + Numune Talep ortak cari kaynağı (nexgen_cari)."""
+    sql = "SELECT id, cari_kod, unvan, aktif FROM nexgen_cari"
+    params = []
+    where = []
+    if sadece_aktif:
+        where.append("aktif=1")
+    q = (q or '').strip()
+    if q:
+        where.append("(unvan LIKE ? OR cari_kod LIKE ?)")
+        like = f'%{q}%'
+        params.extend([like, like])
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY aktif DESC, cari_kod"
+    return [dict(r) for r in con.execute(sql, params).fetchall()]
+
+
 # ─────────────────────────────────────────────────────────────
 # Yönetim Merkezi Ana Sayfa
 # GET /nexgen/yonetim/
@@ -12678,12 +12927,9 @@ def yonetim_merkezi():
             "SELECT id, aa_kodu, ad FROM nexgen_stok_aile WHERE aktif=1 ORDER BY sira"
         ).fetchall()
 
-        # Cari listesi
+        # Cari listesi — ortak kaynak
         try:
-            cariler_raw = con.execute(
-                "SELECT id, cari_kod, unvan, aktif FROM nexgen_cari ORDER BY aktif DESC, cari_kod"
-            ).fetchall()
-            cariler = [dict(c) for c in cariler_raw]
+            cariler = _nexgen_cari_kart_liste(con)
         except Exception:
             cariler = []
 
@@ -12698,6 +12944,7 @@ def yonetim_merkezi():
         eslesme_listesi=[dict(e) for e in eslesme_raw],
         aileler=[dict(a) for a in aileler_raw],
         cariler=cariler,
+        can_sorumlu_manage=yetki_var('cari360.sorumlu.manage', 'can_manage'),
     )
 
 
@@ -12902,15 +13149,28 @@ def api_cari_ekle():
         mev = con.execute("SELECT id FROM nexgen_cari WHERE cari_kod=?", (kod,)).fetchone()
         if mev:
             return jsonify({'ok': False, 'hata': f"'{kod}' kodu zaten mevcut"}), 400
+        con.execute('BEGIN IMMEDIATE')
         con.execute(
             "INSERT INTO nexgen_cari(cari_kod, unvan, aktif) VALUES(?,?,1)",
             (kod, unvan)
         )
+        yeni_id = int(con.execute("SELECT last_insert_rowid()").fetchone()[0])
+        from modules.nexgen.finans_cari_provision_service import (
+            FinansCariProvisionError,
+            provision_yeni_musteri,
+        )
+        provision_yeni_musteri(
+            con, yeni_id,
+            kullanici_id=_kullanici_id(),
+            owns_transaction=False,
+        )
         con.commit()
-        yeni_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
         return jsonify({'ok': True, 'id': yeni_id})
     except Exception as e:
+        from modules.nexgen.finans_cari_provision_service import FinansCariProvisionError
         con.rollback()
+        if isinstance(e, FinansCariProvisionError):
+            return jsonify({'ok': False, 'hata': e.mesaj, 'kod': e.hata_kodu}), int(e.kod or 409)
         return jsonify({'ok': False, 'hata': str(e)}), 500
     finally:
         con.close()
@@ -12970,6 +13230,128 @@ def api_cari_durum():
         con.close()
 
 
+# ─────────────────────────────────────────────────────────────
+# CARİ SORUMLU API — FAZ-CARI-SORUMLU-F1C
+# ─────────────────────────────────────────────────────────────
+
+@nexgen_bp.route('/api/yonetim/cari-sorumlu', methods=['GET'])
+@login_gerekli
+def api_cari_sorumlu_liste():
+    """Cari pazarlama sorumluları listesi."""
+    from modules.nexgen.cari_sorumlu_service import (
+        can_manage_sorumlu,
+        list_cari_sorumlulari,
+        load_kullanici_yetkileri,
+    )
+    from modules.auth import kullanici_yetkileri
+
+    cari_id = request.args.get('cari_id', type=int)
+    if not cari_id:
+        return jsonify({'ok': False, 'hata': 'cari_id gerekli'}), 400
+
+    u = session.get('kullanici') or {}
+    yk = kullanici_yetkileri(u)
+    con = _db()
+    try:
+        kayit = con.execute('SELECT id FROM nexgen_cari WHERE id=?', (cari_id,)).fetchone()
+        if not kayit:
+            return jsonify({'ok': False, 'hata': 'Cari bulunamadı'}), 404
+        liste = list_cari_sorumlulari(con, cari_id)
+        return jsonify({
+            'ok': True,
+            'sorumlular': liste,
+            'can_manage': can_manage_sorumlu(yk),
+        })
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/yonetim/cari-sorumlu-adaylar', methods=['GET'])
+@yetki_gerekli('cari360.sorumlu.manage', 'can_manage')
+def api_cari_sorumlu_adaylar():
+    from modules.nexgen.cari_sorumlu_service import list_pazarlamaci_adaylari
+
+    con = _db()
+    try:
+        return jsonify({'ok': True, 'kullanicilar': list_pazarlamaci_adaylari(con)})
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/yonetim/cari-sorumlu-ata', methods=['POST'])
+@yetki_gerekli('cari360.sorumlu.manage', 'can_manage')
+def api_cari_sorumlu_ata():
+    from modules.nexgen.cari_sorumlu_service import atama_ekle
+
+    d = request.get_json(silent=True) or {}
+    cari_id = d.get('cari_id')
+    kullanici_id = d.get('kullanici_id')
+    rol = (d.get('sorumluluk_rolu') or 'ANA').upper()
+    notu = (d.get('atama_notu') or '').strip() or None
+    if not cari_id or not kullanici_id:
+        return jsonify({'ok': False, 'hata': 'cari_id ve kullanici_id zorunlu'}), 400
+    con = _db()
+    try:
+        uid = _kullanici_id()
+        r = atama_ekle(con, int(cari_id), int(kullanici_id), rol, uid, notu)
+        if not r.get('ok'):
+            return jsonify(r), 400
+        con.commit()
+        return jsonify(r)
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/yonetim/cari-sorumlu-rol', methods=['POST'])
+@yetki_gerekli('cari360.sorumlu.manage', 'can_manage')
+def api_cari_sorumlu_rol():
+    from modules.nexgen.cari_sorumlu_service import rol_degistir
+
+    d = request.get_json(silent=True) or {}
+    atama_id = d.get('id')
+    rol = d.get('sorumluluk_rolu')
+    if not atama_id or not rol:
+        return jsonify({'ok': False, 'hata': 'id ve sorumluluk_rolu zorunlu'}), 400
+    con = _db()
+    try:
+        r = rol_degistir(con, int(atama_id), rol)
+        if not r.get('ok'):
+            return jsonify(r), 400
+        con.commit()
+        return jsonify(r)
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/yonetim/cari-sorumlu-pasif', methods=['POST'])
+@yetki_gerekli('cari360.sorumlu.manage', 'can_manage')
+def api_cari_sorumlu_pasif():
+    from modules.nexgen.cari_sorumlu_service import pasife_al
+
+    d = request.get_json(silent=True) or {}
+    atama_id = d.get('id')
+    if not atama_id:
+        return jsonify({'ok': False, 'hata': 'id zorunlu'}), 400
+    con = _db()
+    try:
+        r = pasife_al(con, int(atama_id))
+        if not r.get('ok'):
+            return jsonify(r), 400
+        con.commit()
+        return jsonify(r)
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
 # =============================================================
 # FAZ-3A — NexGen Depo Mal Kabul
 # =============================================================
@@ -12987,8 +13369,16 @@ def depo_slash_yonlendir():
 # Yetki: nexgen.depo.view can_view
 # ─────────────────────────────────────────────────────────────
 @nexgen_bp.route('/depo/')
-@yetki_gerekli('nexgen.depo.view', 'can_view')
+@login_gerekli
 def depo():
+    from modules.nexgen.mo_depo_yetki import is_nexgen_depo_sade_kullanici
+    u = session.get('kullanici') or {}
+    if not (
+        is_nexgen_depo_sade_kullanici(u)
+        or yetki_var('nexgen.depo.view', 'can_view')
+        or yetki_var('nexgen.depo.giris', 'can_create')
+    ):
+        abort(403)
     can_giris = yetki_var('nexgen.depo.giris', 'can_create')
     uretim_hazirlik = []
     uretim_hazirlik_aktif = 0
@@ -14940,9 +15330,159 @@ def tablet_arge_musteri_renk():
     """MODÜL-01 — Müşteri Renk Talebi.
     Müşterinin karteladan seçtiği onaylı RF rengi ile numune hazırlama.
     Adımlar: Cari → Formül → RF → Boyut → Miktar → Reçete Önizleme → Kaydet & Barkod
+    Query arge_test_id+talep_id: mevcut kayıt hydrate (yeni INSERT yok).
     """
+    hydrate_arge_id = request.args.get('arge_test_id', type=int)
+    hydrate_talep_id = request.args.get('talep_id', type=int)
+    hydrate = None
+
     con = _db()
     try:
+        # FAZ-1B: mevcut talep+AR-GE hydrate (çapraz eşleşme engeli)
+        if hydrate_arge_id is not None or hydrate_talep_id is not None:
+            if not hydrate_arge_id or not hydrate_talep_id:
+                abort(400)
+            from modules.nexgen.numune_talep_service import (
+                durum_etiket as _nt_durum_etiket,
+                _ana_grup_from_formul_kod as _nt_ana_grup_from_kod,
+            )
+            talep = con.execute(
+                """
+                SELECT nt.id, nt.talep_kodu, nt.durum, nt.arge_test_id, nt.cari_id,
+                       nt.urun_tipi, nt.urun_adi, nt.renk_kodu, nt.yeni_renk_aciklama,
+                       nt.aciklama, nt.ek_not, nt.talep_nedeni, nt.pisme_notu,
+                       nt.urun_gorsel_belge_id, nt.musteri_tipi, nt.aday_firma_adi,
+                       nt.karsilama_yolu, nt.rf_renk_id,
+                       c.unvan AS cari_unvan, c.cari_kod
+                FROM nexgen_numune_talep nt
+                LEFT JOIN nexgen_cari c ON c.id = nt.cari_id
+                WHERE nt.id=? AND nt.aktif=1
+                """,
+                (hydrate_talep_id,),
+            ).fetchone()
+            if not talep:
+                abort(404)
+            arge = con.execute(
+                """
+                SELECT id, test_no, calisma_tipi, durum, yeni_renk_adi, cari_id,
+                       talep_referansi, aktif, ana_formul_grup_kodu, renk_kodu
+                FROM nexgen_arge_test WHERE id=?
+                """,
+                (hydrate_arge_id,),
+            ).fetchone()
+            if not arge or not int(arge['aktif'] or 0):
+                abort(404)
+            # Tek bağ: talep.arge_test_id == arge.id (çapraz eşleşme engeli)
+            if int(talep['arge_test_id'] or 0) != int(hydrate_arge_id):
+                abort(409)
+            firma = (talep['cari_unvan'] or talep['aday_firma_adi'] or '').strip() or '—'
+            ky = (talep['karsilama_yolu'] or '').strip().upper()
+            # FAZ-2B: HAZIR → gerçek RF/formül/renk_kod; YENI_RENK → uydurma üretim kimliği yok
+            formul_kod = None
+            renk_kodu = None
+            rf_kod = None
+            rf_ad = None
+            ana_formul_grup_kodu = None
+            rf_renk_id_h = None
+            if ky == 'HAZIR_RENK':
+                renk_kodu = (talep['renk_kodu'] or '').strip() or None
+                rf_id = talep['rf_renk_id']
+                rf_renk_id_h = int(rf_id) if rf_id else None
+                if rf_id:
+                    rf = con.execute(
+                        """
+                        SELECT id, rf_kod, ad
+                        FROM nexgen_rf_renk
+                        WHERE id=? AND IFNULL(aktif,1)=1
+                        """,
+                        (int(rf_id),),
+                    ).fetchone()
+                    if rf:
+                        rf_kod = (rf['rf_kod'] or '').strip() or None
+                        rf_ad = (rf['ad'] or '').strip() or None
+                    uyg = con.execute(
+                        """
+                        SELECT u.ana_formul_kodu, f.kod AS formul_kod
+                        FROM nexgen_rf_formul_uygunluk u
+                        LEFT JOIN nexgen_formul f ON f.id = u.formul_id
+                        WHERE u.rf_renk_id=? AND IFNULL(u.aktif,1)=1
+                        ORDER BY u.id
+                        """,
+                        (int(rf_id),),
+                    ).fetchall()
+                    for urow in uyg:
+                        cand = (
+                            (urow['ana_formul_kodu'] or '').strip()
+                            or (urow['formul_kod'] or '').strip()
+                        )
+                        if cand and not formul_kod:
+                            formul_kod = cand
+                        grp = _nt_ana_grup_from_kod(urow['ana_formul_kodu']) or _nt_ana_grup_from_kod(
+                            urow['formul_kod']
+                        )
+                        if grp and not ana_formul_grup_kodu:
+                            ana_formul_grup_kodu = grp
+                if not ana_formul_grup_kodu:
+                    ana_formul_grup_kodu = (
+                        (arge['ana_formul_grup_kodu'] or '').strip().upper() or None
+                    )
+                if not formul_kod:
+                    formul_kod = ana_formul_grup_kodu
+                if not renk_kodu:
+                    renk_kodu = (arge['renk_kodu'] or '').strip() or None
+                if not renk_kodu:
+                    renk_kodu = rf_kod
+            renk = (
+                (talep['yeni_renk_aciklama'] or '').strip()
+                or (renk_kodu if ky == 'HAZIR_RENK' else None)
+                or (talep['renk_kodu'] or '').strip()
+                or (arge['yeni_renk_adi'] or '').strip()
+                or '—'
+            )
+            notlar = ' · '.join(
+                x for x in (
+                    (talep['talep_nedeni'] or '').strip(),
+                    (talep['aciklama'] or '').strip(),
+                    (talep['ek_not'] or '').strip(),
+                    (talep['pisme_notu'] or '').strip(),
+                ) if x
+            ) or '—'
+            gorsel_url = None
+            if talep['urun_gorsel_belge_id']:
+                gorsel_url = f"/nexgen/api/numune-talep/gorsel/{int(talep['urun_gorsel_belge_id'])}"
+            # Üretim kimliği yalnız gerçek formül+renk birlikteliğinde
+            uretim_kimligi = None
+            if formul_kod and renk_kodu:
+                uretim_kimligi = f'{formul_kod} · {renk_kodu}'
+            hydrate = {
+                'mod': 'MEVCUT_TALEP',
+                'arge_test_id': int(arge['id']),
+                'talep_id': int(talep['id']),
+                'test_no': arge['test_no'],
+                'talep_kodu': talep['talep_kodu'],
+                'calisma_tipi': arge['calisma_tipi'],
+                'karsilama_yolu': ky or None,
+                'musteri': firma,
+                'cari_kod': talep['cari_kod'],
+                'cari_id': talep['cari_id'],
+                'urun_tipi': talep['urun_tipi'] or '—',
+                'urun_adi': talep['urun_adi'] or '—',
+                'renk': renk,
+                'formul_kod': formul_kod,
+                'renk_kodu': renk_kodu,
+                'rf_kod': rf_kod,
+                'rf_ad': rf_ad,
+                'uretim_kimligi': uretim_kimligi,
+                'notlar': notlar,
+                'talep_kaynagi': 'Mehmet / Müşteri Talebi',
+                'durum': talep['durum'],
+                'durum_etiket': _nt_durum_etiket(talep['durum']),
+                'gorsel_url': gorsel_url,
+                'rf_renk_id': rf_renk_id_h,
+                'ana_formul_grup_kodu': ana_formul_grup_kodu,
+                'hazir_renk_wizard': ky == 'HAZIR_RENK',
+            }
+
         # Cariler
         cariler = [dict(r) for r in con.execute(
             "SELECT id, cari_kod, unvan FROM nexgen_cari WHERE aktif=1 ORDER BY unvan"
@@ -15034,6 +15574,7 @@ def tablet_arge_musteri_renk():
         varyantlar=varyantlar,
         rf_liste=rf_liste,
         kullanici_ad=_kullanici_ad(),
+        hydrate=hydrate,
     )
 
 
@@ -15042,58 +15583,191 @@ def tablet_arge_musteri_renk():
 def tablet_arge_yeni_rf():
     """MODÜL-02 — Yeni RF Renk Geliştirme.
     L/S gruplu ana formül seçimi → NX-AR (varyant adımı yok).
+    Query arge_test_id+talep_id: YENI_RENK hydrate (yeni INSERT yok).
     """
+    hydrate_arge_id = request.args.get('arge_test_id', type=int)
+    hydrate_talep_id = request.args.get('talep_id', type=int)
+    hydrate = None
+
     con = _db()
     try:
+        # FAZ-2D: Mehmet YENI_RENK → mevcut AT-M / arge_test_id hydrate
+        if hydrate_arge_id is not None or hydrate_talep_id is not None:
+            if not hydrate_arge_id or not hydrate_talep_id:
+                abort(400)
+            from modules.nexgen.numune_talep_service import (
+                durum_etiket as _nt_durum_etiket,
+                talep_yeni_renk_mi as _nt_yeni_renk_mi,
+            )
+            talep = con.execute(
+                """
+                SELECT nt.id, nt.talep_kodu, nt.durum, nt.arge_test_id, nt.cari_id,
+                       nt.urun_tipi, nt.urun_adi, nt.renk_kodu, nt.yeni_renk_aciklama,
+                       nt.aciklama, nt.ek_not, nt.talep_nedeni, nt.pisme_notu,
+                       nt.karsilama_yolu, nt.renk_tipi, nt.oncelik,
+                       nt.musteri_tipi, nt.aday_firma_adi,
+                       c.unvan AS cari_unvan, c.cari_kod
+                FROM nexgen_numune_talep nt
+                LEFT JOIN nexgen_cari c ON c.id = nt.cari_id
+                WHERE nt.id=? AND nt.aktif=1
+                """,
+                (hydrate_talep_id,),
+            ).fetchone()
+            if not talep:
+                abort(404)
+            # FAZ-2E: legacy karsilama_yolu NULL + renk_tipi=YENI de YENI_RENK sayılır
+            if not _nt_yeni_renk_mi(dict(talep)):
+                abort(409)
+            arge = con.execute(
+                """
+                SELECT id, test_no, calisma_tipi, durum, yeni_renk_adi, cari_id, aktif,
+                       kaynak_uretim_varyant_id, formul_grup_adi, ana_formul_grup_kodu,
+                       urun_ailesi, notlar, renk_bilesenleri_json,
+                       saha_testi_gerekli_mi, saha_testi_nedeni, oncelik
+                FROM nexgen_arge_test WHERE id=?
+                """,
+                (hydrate_arge_id,),
+            ).fetchone()
+            if not arge or not int(arge['aktif'] or 0):
+                abort(404)
+            if int(talep['arge_test_id'] or 0) != int(hydrate_arge_id):
+                abort(409)
+            firma = (talep['cari_unvan'] or talep['aday_firma_adi'] or '').strip() or '—'
+            renk = (
+                (arge['yeni_renk_adi'] or '').strip()
+                or (talep['yeni_renk_aciklama'] or '').strip()
+                or (talep['renk_kodu'] or '').strip()
+                or '—'
+            )
+            # FAZ-3A reopen: Talep notu = müşteri/talep alanları.
+            # arge.notlar teknik (numune_talep_id=…) sızdırılmaz.
+            import re as _re_nt
+
+            def _m2_ui_not_temizle(s: str) -> str:
+                t = (s or '').strip()
+                if not t:
+                    return ''
+                for pat in (
+                    r'(?:^|[\s·|,;]+)numune_talep_id\s*=\s*\d+',
+                    r'(?:^|[\s·|,;]+)arge_test_id\s*=\s*\d+',
+                    r'(?:^|[\s·|,;]+)talep_id\s*=\s*\d+',
+                ):
+                    t = _re_nt.sub(pat, '', t, flags=_re_nt.IGNORECASE)
+                t = _re_nt.sub(r'^[\s·|,;]+|[\s·|,;]+$', '', t).strip()
+                t = _re_nt.sub(r'\s*[·|]\s*[·|]\s*', ' · ', t).strip()
+                return t
+
+            notlar = ' · '.join(
+                x for x in (
+                    (talep['talep_nedeni'] or '').strip(),
+                    (talep['aciklama'] or '').strip(),
+                    (talep['ek_not'] or '').strip(),
+                    (talep['pisme_notu'] or '').strip(),
+                ) if x
+            )
+            notlar = _m2_ui_not_temizle(notlar) or '—'
+            arge_not_ui = _m2_ui_not_temizle(arge['notlar'] or '')
+            kaynak_uv_rows = [
+                dict(r) for r in con.execute(
+                    """
+                    SELECT boyut, kaynak_uretim_varyant_id, sira_no
+                    FROM nexgen_arge_kaynak_uv
+                    WHERE arge_test_id=? AND aktif_mi=1
+                    ORDER BY sira_no, id
+                    """,
+                    (hydrate_arge_id,),
+                ).fetchall()
+            ]
+            import json as _json
+            try:
+                renk_bilesenleri = _json.loads(arge['renk_bilesenleri_json'] or '[]')
+            except Exception:
+                renk_bilesenleri = []
+            if not isinstance(renk_bilesenleri, list):
+                renk_bilesenleri = []
+            boyut_kullanim_oranlari = [
+                {
+                    'boyut': r['boyut'],
+                    'kullanim_orani': float(r['kullanim_orani']),
+                }
+                for r in con.execute(
+                    """
+                    SELECT bo.boyut, bo.kullanim_orani
+                    FROM nexgen_arge_deneme_boyut_oran bo
+                    INNER JOIN nexgen_arge_deneme d ON d.id = bo.deneme_id
+                    WHERE d.arge_test_id=? AND d.aktif_mi=1
+                    ORDER BY bo.boyut
+                    """,
+                    (int(arge['id']),),
+                ).fetchall()
+            ]
+            hydrate = {
+                'mod': 'MEVCUT_TALEP',
+                'arge_test_id': int(arge['id']),
+                'talep_id': int(talep['id']),
+                'test_no': arge['test_no'],
+                'talep_kodu': talep['talep_kodu'],
+                'calisma_tipi': arge['calisma_tipi'],
+                'karsilama_yolu': 'YENI_RENK',
+                'musteri': firma,
+                'cari_kod': talep['cari_kod'],
+                'cari_id': talep['cari_id'],
+                'urun_tipi': talep['urun_tipi'] or '—',
+                'urun_adi': talep['urun_adi'] or '—',
+                'renk': renk,
+                'renk_aciklama': (talep['yeni_renk_aciklama'] or '').strip() or None,
+                'notlar': notlar,
+                'arge_not_ui': arge_not_ui,
+                'oncelik': (arge['oncelik'] or talep['oncelik'] or 'NORMAL'),
+                'talep_kaynagi': 'Mehmet / Müşteri Talebi',
+                'durum': talep['durum'],
+                'durum_etiket': _nt_durum_etiket(talep['durum']),
+                'arge_durum': arge['durum'],
+                'kaynak_uretim_varyant_id': arge['kaynak_uretim_varyant_id'],
+                'formul_grup_adi': arge['formul_grup_adi'],
+                'ana_formul_grup_kodu': arge['ana_formul_grup_kodu'],
+                'kaynak_uvler': kaynak_uv_rows,
+                'renk_bilesenleri': renk_bilesenleri,
+                'boyut_kullanim_oranlari': boyut_kullanim_oranlari,
+                'saha_testi_gerekli_mi': int(arge['saha_testi_gerekli_mi'] or 0),
+                'saha_testi_nedeni': arge['saha_testi_nedeni'],
+                'numune_kayitli': bool(renk_bilesenleri) and bool(arge['kaynak_uretim_varyant_id']),
+            }
+
+        def _aile_norm_m2(v):
+            a = (v or '').strip().upper().replace('İ', 'I').replace('Ö', 'O')
+            if a in ('TERLIK', 'TERLİK'):
+                return 'TERLIK'
+            if a == 'TABAN':
+                return 'TABAN'
+            if a in ('DOKME', 'DÖKME'):
+                return 'DOKME'
+            return a
+
+        # FAZ-3 bugfix: hydrate + ürün tipi → tüm aktif aile formülleri (çekirdek dışı dahil)
+        tip_n = None
+        if hydrate and (hydrate.get('urun_tipi') or '').strip():
+            tip_n = _aile_norm_m2(hydrate.get('urun_tipi'))
+
         cariler = [dict(r) for r in con.execute(
             "SELECT id, cari_kod, unvan FROM nexgen_cari WHERE aktif=1 ORDER BY unvan"
         ).fetchall()]
 
-        formuller = [dict(r) for r in con.execute(f"""
-            SELECT DISTINCT f.id, f.kod, f.ad, f.urun_ailesi
-            FROM nexgen_formul f
-            JOIN nexgen_renk_varyant rv ON rv.formul_id = f.id AND rv.aktif = 1
-            JOIN nexgen_uretim_varyant uv ON uv.renk_varyant_id = rv.id AND uv.aktif = 1
-            WHERE f.aktif = 1
-              AND ({cekirdek_kod_sql_filter('f')})
-            ORDER BY f.kod, f.ad
-        """).fetchall()]
-
-        renk_varyantlar = [dict(r) for r in con.execute(f"""
-            SELECT rv.id, rv.formul_id, rv.ad,
-                   GROUP_CONCAT(DISTINCT uv.boyut) AS boyutlar
-            FROM nexgen_renk_varyant rv
-            JOIN nexgen_formul f ON f.id = rv.formul_id AND f.aktif = 1
-            LEFT JOIN nexgen_uretim_varyant uv ON uv.renk_varyant_id = rv.id AND uv.aktif = 1
-            WHERE rv.aktif = 1
-              AND ({cekirdek_kod_sql_filter('f')})
-            GROUP BY rv.id
-            ORDER BY rv.formul_id, rv.ad
-        """).fetchall()]
-
-        varyantlar = [dict(r) for r in con.execute(f"""
-            SELECT uv.id, uv.renk_varyant_id, uv.boyut, uv.recete_durum,
-                   rv.id AS rv_id, rv.ad AS renk_ad, rv.formul_id,
-                   f.kod AS formul_kod, f.ad AS formul_ad, f.urun_ailesi,
-                   ROUND(SUM(rk.miktar_kg), 3) AS master_kg
-            FROM nexgen_uretim_varyant uv
-            JOIN nexgen_renk_varyant rv ON rv.id = uv.renk_varyant_id AND rv.aktif = 1
-            JOIN nexgen_formul f ON f.id = rv.formul_id AND f.aktif = 1
-            LEFT JOIN nexgen_recete_kalem rk ON rk.uretim_varyant_id = uv.id AND rk.aktif = 1
-            WHERE uv.aktif = 1
-              AND ({cekirdek_kod_sql_filter('f')})
-            GROUP BY uv.id
-            ORDER BY rv.formul_id, rv.ad, uv.boyut
-        """).fetchall()]
-        formul_gruplar = formul_secim_gruplari_hazirla(varyantlar)
-        uv_boyut_map = {
-            int(v['formul_id']): v['boyut']
-            for v in varyantlar
-            if v.get('formul_id') and v.get('boyut')
-        }
-        formuller = formul_secim_gosterim_uygula(
-            formuller, uv_boyut_map=uv_boyut_map, harf_ekle=True,
+        # FAZ-P0-2: Ana Formül listesi = Reçete Merkezi ağacı (birebir görünürlük)
+        formuller_guncel, _, _ = _rc_liste_veri_hazirla(con)
+        formul_gruplar, varyantlar, formuller = modul02_rc_formul_gruplari_hazirla(
+            formuller_guncel, tip_n=tip_n,
         )
+        renk_varyantlar: list[dict] = []
+
+        uv_recete_kalemler: dict[int, list[dict]] = {}
+        for v in varyantlar:
+            try:
+                uv_id = int(v.get('id'))
+            except (TypeError, ValueError):
+                continue
+            if uv_id not in uv_recete_kalemler:
+                uv_recete_kalemler[uv_id] = _rc_uv_recete_kalemleri(con, uv_id)
 
         stok_pigmentler = [dict(r) for r in con.execute("""
             SELECT id, kod, ad, kategori, yeni_tanim, tanim
@@ -15113,8 +15787,10 @@ def tablet_arge_yeni_rf():
         formul_gruplar=formul_gruplar,
         renk_varyantlar=renk_varyantlar,
         varyantlar=varyantlar,
+        uv_recete_kalemler=uv_recete_kalemler,
         stok_pigmentler=stok_pigmentler,
         kullanici_ad=_kullanici_ad(),
+        hydrate=hydrate,
     )
 
 
@@ -16576,6 +17252,24 @@ def _mpr_plan_insert(con, meta):
     if _plan_planlama_siparis_kolonu_var(con) and 'planlama_siparis_id' in meta:
         cols.append('planlama_siparis_id')
         vals.append(meta['planlama_siparis_id'])
+    elif (
+        _plan_planlama_siparis_kolonu_var(con)
+        and _planlama_siparis_tablosu_var(con)
+        and meta.get('siparis_no')
+        and 'planlama_siparis_id' not in meta
+    ):
+        ps_id = _planlama_siparis_bul_veya_olustur(
+            con,
+            meta.get('siparis_no'),
+            meta.get('cari_id'),
+            meta.get('musteri_adi'),
+            termin_tarihi=meta.get('termin_tarihi'),
+            notlar=meta.get('notlar'),
+            olusturan_id=meta.get('created_by'),
+        )
+        if ps_id is not None:
+            cols.append('planlama_siparis_id')
+            vals.append(ps_id)
 
     if _plan_rf_renk_kolonu_var(con) and 'rf_renk_id' in meta:
         cols.append('rf_renk_id')
@@ -17446,11 +18140,15 @@ _PZM_V2_JSON_PREFIX = '__PZM_V2__'
 _PZM_TALEP_LIKE = '__PZM_V%'
 _PZM_TALEP_WHERE = (
     "(talep_referansi LIKE '\\_\\_PZM\\_V%' ESCAPE '\\' "
-    "OR siparis_no LIKE 'PZM-%')"
+    "OR talep_referansi LIKE '\\_\\_MO\\_SIP\\_%' ESCAPE '\\' "
+    "OR siparis_no LIKE 'PZM-%' "
+    "OR siparis_no LIKE 'MO-S-%' "
+    "OR kaynak_modul='MUSTERI_OPERASYONU')"
 )
 _PZM_AILELER = frozenset({'TERLIK', 'TABAN', 'DOKME'})
 _PZM_DURUMLAR = frozenset({
-    'TASLAK', 'MPR_BEKLIYOR', 'PLANLAMAYA_HAZIR', 'URETIMDE', 'TAMAMLANDI', 'IPTAL',
+    'TASLAK', 'ONAY_BEKLIYOR', 'ONAYLANDI', 'REVIZYON', 'REDDEDILDI',
+    'MPR_BEKLIYOR', 'PLANLAMAYA_HAZIR', 'URETIMDE', 'TAMAMLANDI', 'IPTAL',
 })
 
 
@@ -17804,6 +18502,12 @@ def _pzm_siparis_gorunen_durum(con, siparis_id, kayitli_durum):
 def _pzm_talep_satir_dict(row, con=None):
     d = dict(row)
     payload = _pzm_payload_unpack(d.get('talep_referansi'))
+    if not payload:
+        try:
+            from modules.nexgen.mo_siparis_talep_service import mo_siparis_payload_unpack
+            payload = mo_siparis_payload_unpack(d.get('talep_referansi'))
+        except Exception:
+            payload = None
     d['payload'] = payload
     if payload:
         if not d.get('anlasma_para_birimi'):
@@ -17814,6 +18518,10 @@ def _pzm_talep_satir_dict(row, con=None):
             d['anlasma_birim_fiyat'] = payload.get('anlasma_birim_fiyat')
     d['durum_etiket'] = {
         'TASLAK': 'Taslak',
+        'ONAY_BEKLIYOR': 'Onay Bekliyor',
+        'ONAYLANDI': 'Onaylandı',
+        'REVIZYON': 'Revizyon',
+        'REDDEDILDI': 'Reddedildi',
         'MPR_BEKLIYOR': 'MPR Bekliyor',
         'PLANLAMAYA_HAZIR': 'Planlamaya Hazır',
         'ON_CALISMA': 'Ön Çalışma',
@@ -17823,11 +18531,27 @@ def _pzm_talep_satir_dict(row, con=None):
         'IPTAL': 'İptal',
     }.get(d.get('durum'), d.get('durum') or '—')
     if con is not None and d.get('id'):
+        try:
+            from modules.nexgen.onay_satis_adapter import (
+                siparis_detay_snapshot,
+                siparis_onay_kayitli_mi,
+            )
+            d['onay_kayitli'] = siparis_onay_kayitli_mi(con, d['id'])
+            snap = siparis_detay_snapshot(con, d['id'])
+            if snap:
+                d['onay_snapshot'] = snap
+        except Exception:
+            d.setdefault('onay_kayitli', False)
+    if con is not None and d.get('id'):
         gorunen, gerekce = _pzm_siparis_gorunen_durum(con, d['id'], d.get('durum'))
         if gorunen and gorunen != (d.get('durum') or '').upper():
             d['gorunen_durum'] = gorunen
             d['durum_etiket'] = {
                 'TASLAK': 'Taslak',
+                'ONAY_BEKLIYOR': 'Onay Bekliyor',
+                'ONAYLANDI': 'Onaylandı',
+                'REVIZYON': 'Revizyon',
+                'REDDEDILDI': 'Reddedildi',
                 'MPR_BEKLIYOR': 'MPR Bekliyor',
                 'PLANLAMAYA_HAZIR': 'Planlamaya Hazır',
                 'ON_CALISMA': 'Ön Çalışma',
@@ -17852,10 +18576,19 @@ def _pzm_talep_satir_dict(row, con=None):
         d['dokme_kg'] = ozet.get('dokme_kg', 0)
         d['en_yakin_termin'] = ozet.get('en_yakin_termin') or d.get('termin_tarihi')
         sip_durum = (d.get('durum') or '').upper()
-        if sip_durum in ('MPR_BEKLIYOR', 'PLANLAMAYA_HAZIR', 'URETIMDE'):
+        if sip_durum in ('ONAYLANDI', 'MPR_BEKLIYOR', 'PLANLAMAYA_HAZIR', 'URETIMDE'):
             d['mpr_planlar'] = _pzm_siparis_mpr_planlar(con, d['id'])
         else:
             d['mpr_planlar'] = []
+    if con is not None and d.get('olusturan_id'):
+        sk = con.execute(
+            'SELECT KullaniciAdi FROM sistem_kullanici WHERE Id=?',
+            (d['olusturan_id'],),
+        ).fetchone()
+        if sk:
+            d['olusturan_ad'] = sk['KullaniciAdi']
+    if d.get('kaynak_modul') == 'MUSTERI_OPERASYONU':
+        d['kaynak_etiket'] = 'Müşteri Operasyonu'
     return d
 
 
@@ -17951,16 +18684,8 @@ def _pzm_talep_payload_olustur(con, data):
 
 
 def _pzm_aktif_cari_liste(con, q=None):
-    """Pazarlama Sipariş + Numune Talep ortak aktif cari kaynağı."""
-    sql = "SELECT id, cari_kod, unvan FROM nexgen_cari WHERE aktif=1"
-    params = []
-    q = (q or '').strip()
-    if q:
-        sql += " AND (unvan LIKE ? OR cari_kod LIKE ?)"
-        like = f'%{q}%'
-        params.extend([like, like])
-    sql += " ORDER BY unvan"
-    return [dict(r) for r in con.execute(sql, params).fetchall()]
+    """Pazarlama Sipariş — yalnız aktif cariler (ortak _nexgen_cari_kart_liste)."""
+    return _nexgen_cari_kart_liste(con, q, sadece_aktif=True)
 
 
 @nexgen_bp.route('/pazarlama')
@@ -17974,7 +18699,10 @@ def pazarlama_merkezi():
         if _planlama_siparis_tablosu_var(con):
             rows = con.execute(f"""
                 SELECT id, siparis_no, cari_id, cari_unvan, termin_tarihi,
-                       durum, notlar, talep_referansi, olusturma_tarihi
+                       durum, notlar, talep_referansi, olusturma_tarihi,
+                       olusturan_id, kaynak_modul, anlasma_para_birimi,
+                       vade_gun, anlasma_birim_fiyat, musteri_termin,
+                       onerilen_termin, teslim_sekli, revizyon_gerekce
                 FROM nexgen_planlama_siparis
                 WHERE {_PZM_TALEP_WHERE}
                 ORDER BY id DESC LIMIT 30
@@ -17995,7 +18723,7 @@ def pazarlama_merkezi():
 @login_gerekli
 @yetki_gerekli('nexgen.plan.view', 'can_view')
 def api_pazarlama_cariler():
-    """Aktif cari listesi — Pazarlama / Numune Talep ortak kaynak."""
+    """Aktif cari listesi — Pazarlama (Numune Talep: /api/numune-talep/cariler aynı kaynak)."""
     q = (request.args.get('q') or '').strip()
     con = _db()
     try:
@@ -18054,7 +18782,10 @@ def api_pazarlama_talepler():
         _miss_pzm = missing_for_pazarlama(con)
         rows = con.execute(f"""
             SELECT id, siparis_no, cari_id, cari_unvan, termin_tarihi,
-                   durum, notlar, talep_referansi, olusturma_tarihi
+                   durum, notlar, talep_referansi, olusturma_tarihi,
+                   olusturan_id, kaynak_modul, anlasma_para_birimi,
+                   vade_gun, anlasma_birim_fiyat, musteri_termin,
+                   onerilen_termin, teslim_sekli, revizyon_gerekce
             FROM nexgen_planlama_siparis
             WHERE {_PZM_TALEP_WHERE}
             ORDER BY id DESC LIMIT 30
@@ -18241,6 +18972,10 @@ def _pzm_v2_mpr_olustur(con, talep_id):
         return {'ok': False, 'hata': 'Talep bulunamadı.', 'status': 404}
     if hdr['durum'] == 'IPTAL':
         return {'ok': False, 'hata': 'İptal edilmiş talep.', 'status': 400}
+    from modules.nexgen.onay_satis_adapter import pzm_mpr_uretim_izinli
+    izin, mesaj = pzm_mpr_uretim_izinli(con, talep_id)
+    if not izin:
+        return {'ok': False, 'hata': mesaj or 'Onay tamamlanmadan MPR başlatılamaz.', 'status': 400}
     if not pzm_siparis_v2_mi(hdr['talep_referansi']):
         return None
 
@@ -19485,6 +20220,11 @@ def _pzm_siparis_uretime_gonder_atomik(con, talep_id, uid, confirm=False):
         return {'ok': False, 'hata': 'İptal edilmiş sipariş üretime gönderilemez.', 'status': 400}
     if hdr['durum'] == 'URETIMDE':
         return {'ok': False, 'hata': 'Sipariş zaten üretimde.', 'status': 400}
+
+    from modules.nexgen.onay_satis_adapter import pzm_mpr_uretim_izinli
+    izin, mesaj = pzm_mpr_uretim_izinli(con, talep_id)
+    if not izin:
+        return {'ok': False, 'hata': mesaj or 'Onay tamamlanmadan üretime gönderilemez.', 'status': 400}
 
     plan_rows = con.execute("""
         SELECT id, plan_kodu, durum

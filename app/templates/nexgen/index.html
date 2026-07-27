@@ -128,8 +128,8 @@
       </div>
     </div>
 
-    {# 5 — Sevk & Barkod #}
-    <div class="ng-kart ng-kart-pasif">
+    {# 5 — Sevkiyat Operasyonu #}
+    <div class="ng-kart{% if not can_sevkiyat %} ng-kart-pasif{% endif %}">
       <div class="ng-kart-ikon ng-ikon-sari">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
              stroke-linecap="round" stroke-linejoin="round" width="28" height="28">
@@ -139,11 +139,16 @@
         </svg>
       </div>
       <div class="ng-kart-icerik">
-        <div class="ng-kart-baslik">Sevk & Barkod</div>
-        <div class="ng-kart-aciklama">Ürün sevkiyat süreçleri ve barkod yönetim merkezi.</div>
+        <div class="ng-kart-baslik">Sevkiyat Operasyonu</div>
+        <div class="ng-kart-aciklama">Üretimi tamamlanan müşteri hammaddelerinin sevk ve kg takibi.</div>
         <div class="ng-kart-alt">
-          <span class="ng-yakinda">Yakında</span>
-          <span class="ng-btn ng-btn-pasif">Aç</span>
+          {% if can_sevkiyat %}
+            <span class="ng-rozet-aktif">Aktif</span>
+            <a href="/nexgen/sevkiyat" class="ng-btn ng-btn-aktif">Aç</a>
+          {% else %}
+            <span class="ng-yakinda">Yetki Gerekli</span>
+            <span class="ng-btn ng-btn-pasif">Aç</span>
+          {% endif %}
         </div>
       </div>
     </div>
@@ -216,6 +221,11 @@
     <a href="/nexgen/pazarlama" class="ng-diger-item ng-diger-aktif">
       <span>Pazarlama Merkezi</span><span class="ng-aktif-kucuk">Yeni ›</span>
     </a>
+    {% if can_finans %}
+    <a href="/nexgen/finans" class="ng-diger-item ng-diger-aktif">
+      <span>Finans / Muhasebe Merkezi</span><span class="ng-aktif-kucuk">Yeni ›</span>
+    </a>
+    {% endif %}
     <a href="/nexgen/uretim-emirleri" class="ng-diger-item ng-diger-aktif">
       <span>Üretim Emirleri Merkezi</span><span class="ng-aktif-kucuk">Yeni ›</span>
     </a>

@@ -22,6 +22,7 @@ var FORMUL_GRUPLAR  = {{ formul_gruplar  | tojson | safe }};  /* L/S gruplu seç
 var RENK_VARYANTLAR = {{ renk_varyantlar | tojson | safe }};  /* rv: alt formül/model */
 var VARYANTLAR      = {{ varyantlar      | tojson | safe }};  /* uv: rv_id + boyut + uv_id */
 var RF_LISTE        = {{ rf_liste        | tojson | safe }};
+var HYDRATE         = {{ (hydrate or none) | tojson | safe }};
 </script>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/nexgen_renk_daire.css') }}">
 <script src="{{ url_for('static', filename='js/nexgen_renk_daire.js') }}"></script>
@@ -44,7 +45,7 @@ var RF_LISTE        = {{ rf_liste        | tojson | safe }};
     <div class="m1-bar-divider"></div>
     <div class="m1-bar-title">
       <span class="m1-bar-label">MÜŞTERİ RENK TALEBİ</span>
-      <span class="m1-bar-name">Yeni Numune</span>
+      <span class="m1-bar-name" id="m1-bar-name">{% if hydrate %}{{ hydrate.test_no }}{% else %}Yeni Numune{% endif %}</span>
     </div>
     <div class="m1-bar-sag">
       <div class="m1-clock-wrap">
@@ -58,6 +59,75 @@ var RF_LISTE        = {{ rf_liste        | tojson | safe }};
     </div>
   </header>
 
+  {% if hydrate and not hydrate.hazir_renk_wizard %}
+  {# FAZ-1B: mevcut talep+AR-GE özet paneli (yeni kayıt yok) — HAZIR_RENK wizard'da gizli #}
+  <div class="m1-hydrate" id="m1-hydrate" aria-live="polite">
+    <div class="m1-hydrate-top">
+      <div class="m1-hydrate-kod">{{ hydrate.test_no }}</div>
+      <span class="m1-hydrate-badge">{{ hydrate.durum_etiket }}</span>
+    </div>
+    <div class="m1-hydrate-grid">
+      <div class="m1-hydrate-item">
+        <span class="m1-hydrate-lbl">Müşteri</span>
+        <span class="m1-hydrate-val">{{ hydrate.musteri }}{% if hydrate.cari_kod %} · {{ hydrate.cari_kod }}{% endif %}</span>
+      </div>
+      <div class="m1-hydrate-item">
+        <span class="m1-hydrate-lbl">Ürün</span>
+        <span class="m1-hydrate-val">{{ hydrate.urun_tipi }}{% if hydrate.urun_adi and hydrate.urun_adi != '—' %} · {{ hydrate.urun_adi }}{% endif %}</span>
+      </div>
+      <div class="m1-hydrate-item">
+        <span class="m1-hydrate-lbl">Renk talebi</span>
+        <span class="m1-hydrate-val">{{ hydrate.renk }}</span>
+      </div>
+      {% if hydrate.formul_kod %}
+      <div class="m1-hydrate-item">
+        <span class="m1-hydrate-lbl">Formül kodu</span>
+        <span class="m1-hydrate-val">{{ hydrate.formul_kod }}</span>
+      </div>
+      {% endif %}
+      {% if hydrate.renk_kodu %}
+      <div class="m1-hydrate-item">
+        <span class="m1-hydrate-lbl">Renk kodu</span>
+        <span class="m1-hydrate-val">{{ hydrate.renk_kodu }}</span>
+      </div>
+      {% endif %}
+      {% if hydrate.rf_kod or hydrate.rf_ad %}
+      <div class="m1-hydrate-item">
+        <span class="m1-hydrate-lbl">RF</span>
+        <span class="m1-hydrate-val">{% if hydrate.rf_kod %}{{ hydrate.rf_kod }}{% endif %}{% if hydrate.rf_kod and hydrate.rf_ad %} · {% endif %}{% if hydrate.rf_ad %}{{ hydrate.rf_ad }}{% endif %}</span>
+      </div>
+      {% endif %}
+      {% if hydrate.uretim_kimligi %}
+      <div class="m1-hydrate-item">
+        <span class="m1-hydrate-lbl">Üretim kimliği</span>
+        <span class="m1-hydrate-val">{{ hydrate.uretim_kimligi }}</span>
+      </div>
+      {% endif %}
+      <div class="m1-hydrate-item">
+        <span class="m1-hydrate-lbl">Talep kaynağı</span>
+        <span class="m1-hydrate-val">{{ hydrate.talep_kaynagi }}</span>
+      </div>
+      <div class="m1-hydrate-item m1-hydrate-wide">
+        <span class="m1-hydrate-lbl">Talep notu</span>
+        <span class="m1-hydrate-val">{{ hydrate.notlar }}</span>
+      </div>
+      {% if hydrate.gorsel_url %}
+      <div class="m1-hydrate-item">
+        <span class="m1-hydrate-lbl">Ürün görseli</span>
+        <a class="m1-hydrate-link" href="{{ hydrate.gorsel_url }}" target="_blank" rel="noopener">Görseli aç</a>
+      </div>
+      {% endif %}
+      <div class="m1-hydrate-item">
+        <span class="m1-hydrate-lbl">Talep</span>
+        <span class="m1-hydrate-val">{{ hydrate.talep_kodu }} · #{{ hydrate.talep_id }}</span>
+      </div>
+    </div>
+    <p class="m1-hydrate-hint">Mevcut AR-GE kaydı yüklendi. Yeni kayıt oluşturulmaz.</p>
+  </div>
+  {% endif %}
+
+  {# FAZ-1C + HAZIR_RENK: hazır renk talebinde wizard; üst özet paneli yok #}
+  {% if not hydrate or hydrate.hazir_renk_wizard %}
   {# ══ İÇERİK ══ #}
   <div class="m1-body">
 
@@ -77,6 +147,7 @@ var RF_LISTE        = {{ rf_liste        | tojson | safe }};
     </main>
 
   </div>
+  {% endif %}
 </div>
 
 {# ══ CSS ══ #}
@@ -117,6 +188,82 @@ html, body { height: 100%; overflow: hidden; }
   flex-direction: column;
   background: var(--light);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+}
+
+/* FAZ-1B — mevcut talep hydrate paneli */
+.m1-hydrate {
+  flex: 0 0 auto;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 20px 10px;
+}
+.m1-hydrate-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.m1-hydrate-kod {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--navy);
+  letter-spacing: .2px;
+  line-height: 1.2;
+}
+.m1-hydrate-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .3px;
+  background: var(--ob);
+  color: var(--orange);
+  border: 1px solid rgba(244,121,32,.35);
+}
+.m1-hydrate-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px 16px;
+}
+.m1-hydrate-item { min-width: 0; }
+.m1-hydrate-wide { grid-column: 1 / -1; }
+.m1-hydrate-lbl {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .4px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+.m1-hydrate-val {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--navy);
+  line-height: 1.35;
+  word-break: break-word;
+}
+.m1-hydrate-link {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--orange);
+  text-decoration: none;
+}
+.m1-hydrate-hint {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.3;
+}
+@media (max-width: 1100px) {
+  .m1-hydrate-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .m1-hydrate-grid { grid-template-columns: 1fr; }
+  .m1-hydrate-kod { font-size: 16px; }
 }
 
 /* ════ ÜST BAR ════ */
@@ -837,9 +984,14 @@ var S = {
   7 Kaydet & Barkod
 */
 /* FAZ-1: Numune Oranı adımı kaldırıldı. Sistem otomatik %10 kullanır. */
+var M1_HAZIR_HYDRATE = !!(HYDRATE && HYDRATE.hazir_renk_wizard);
 var ADIM_ADLARI = ['Cari Seç','Ana Formül Seç','Varyant Seç','RF Renk Seç','Boyut Seç','Reçete Önizleme','Kaydet & Barkod'];
+var ADIM_ADLARI_HAZIR = ['Hazır Renk Reçetesi','Reçete Önizleme','Numune Hazır','Enjeksiyon Gerekli mi?'];
 /* Varyant/Boyut adımları kaldırıldı — L/S grup seçiminde otomatik; sol menüde gizli */
 var ADIM_GIZLI = {3: true, 5: true};
+function m1AdimAdlari(){ return M1_HAZIR_HYDRATE ? ADIM_ADLARI_HAZIR : ADIM_ADLARI; }
+function m1AdimSayisi(){ return M1_HAZIR_HYDRATE ? ADIM_ADLARI_HAZIR.length : ADIM_ADLARI.length; }
+function m1AdimGizli(i){ return M1_HAZIR_HYDRATE ? false : !!ADIM_GIZLI[i]; }
 var VARSAYILAN_ORAN = 10; /* %10 — sistem ayarlarından değiştirilebilir (ileride) */
 var BOYUTLAR = ['LARGE','SMALL','MEDIUM','STANDART'];
 var BOYUT_ETIKET = {LARGE:'LARGE · L', SMALL:'SMALL · S', MEDIUM:'MEDIUM · M', STANDART:'STANDART'};
@@ -865,10 +1017,11 @@ function render(){
 function renderSidebar(){
   var adimlar = document.getElementById('m1-adimlar');
   var html = '';
-  var toplamAdim = ADIM_ADLARI.length;
+  var adimlarListe = m1AdimAdlari();
+  var toplamAdim = m1AdimSayisi();
   var gorunenNo = 0;
   for(var i=1;i<=toplamAdim;i++){
-    if(ADIM_GIZLI[i]) continue;
+    if(m1AdimGizli(i)) continue;
     gorunenNo++;
     var durum = i < S.adim ? 'tamam' : (i===S.adim ? 'aktif' : 'bekliyor');
     var ikon = durum==='tamam'
@@ -879,7 +1032,7 @@ function renderSidebar(){
       var deger = adimDeger(i);
       if(deger) degerHtml = '<span class="m1-adim-deger">'+esc(deger)+'</span>';
     }
-    var adimAd = ADIM_ADLARI[i-1] || '';
+    var adimAd = adimlarListe[i-1] || '';
     if(!adimAd) continue;
     html += '<div class="m1-adim durum-'+durum+'">'
       +'<div class="m1-adim-ikon">'+ikon+'</div>'
@@ -893,6 +1046,13 @@ function renderSidebar(){
 }
 
 function adimDeger(i){
+  if(M1_HAZIR_HYDRATE){
+    var h = HYDRATE || {};
+    if(i===1) return h.renk_kodu || S.rf_ad || '';
+    if(i===2) return S.onizleme.length ? 'Hesaplandı' : '';
+    if(i===3) return S._numune_hazir_onay ? 'Onaylandı' : '';
+    return '';
+  }
   if(i===1) return S.cari_ad;
   if(i===2){
     if(!S.formul_ad) return '';
@@ -916,17 +1076,19 @@ function renderIcerik(){
 
   /* Tamamlanan adımların özet satırları (otomatik adımlar gizli) */
   var ozetNo = 0;
+  var adimlarListe = m1AdimAdlari();
   for(var i=1; i < S.adim; i++){
-    if(ADIM_GIZLI[i]) continue;
+    if(m1AdimGizli(i)) continue;
     ozetNo++;
     var deger = adimDeger(i);
-    html += '<div class="m1-ozet-satir" onclick="adimeGit('+i+')" title="Düzenlemek için tıkla">'
+    var ozetExtra = M1_HAZIR_HYDRATE ? '' : ' onclick="adimeGit('+i+')" title="Düzenlemek için tıkla"';
+    html += '<div class="m1-ozet-satir"'+ozetExtra+'>'
       +'<div class="m1-ozet-check"><svg viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="10" height="10"><polyline points="2 8 6 12 14 4"/></svg></div>'
       +'<span class="m1-ozet-no">'+ozetNo+'</span>'
-      +'<span class="m1-ozet-ad">'+ADIM_ADLARI[i-1]+'</span>'
+      +'<span class="m1-ozet-ad">'+adimlarListe[i-1]+'</span>'
       +'<div class="m1-ozet-sep"></div>'
       +'<span class="m1-ozet-val">'+esc(deger||'—')+'</span>'
-      +'<div class="m1-ozet-edit"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M11 2l3 3-9 9H2v-3L11 2z"/></svg></div>'
+      +(M1_HAZIR_HYDRATE ? '' : '<div class="m1-ozet-edit"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M11 2l3 3-9 9H2v-3L11 2z"/></svg></div>')
       +'</div>';
   }
 
@@ -941,6 +1103,13 @@ function renderIcerik(){
 }
 
 function adimIcerik(no){
+  if(M1_HAZIR_HYDRATE){
+    if(no===1) return m1HrAdim1Html();
+    if(no===2) return m1HrAdim2Html();
+    if(no===3) return m1HrAdim3Html();
+    if(no===4) return m1HrAdim4Html();
+    return '';
+  }
   if(no===1) return adim1Html();
   if(no===2) return adim2Html();
   if(no===3) return adim3Html();  /* Varyant Seç */
@@ -1352,10 +1521,15 @@ function adim7HtmlIcerik(){
         +'</div>';
     }
 
-    html += '<button class="m1-ileri-btn" onclick="adim6Ileri()">'
-      +'Reçete Onaylandı — Kaydet &amp; Barkod '
-      +'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10h10M12 6l4 4-4 4"/></svg>'
-      +'</button>';
+    html += M1_HAZIR_HYDRATE && S.adim===2
+      ? '<button class="m1-ileri-btn" id="btn-hr-2">'
+        +'Reçete Onaylandı — Numune Hazır '
+        +'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10h10M12 6l4 4-4 4"/></svg>'
+        +'</button>'
+      : '<button class="m1-ileri-btn" onclick="adim6Ileri()">'
+        +'Reçete Onaylandı — Kaydet &amp; Barkod '
+        +'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10h10M12 6l4 4-4 4"/></svg>'
+        +'</button>';
   }
   return html;
 }
@@ -1383,10 +1557,17 @@ function receteYukle(){
   Promise.all(promises).then(function(results){
     S.onizleme = results.filter(function(r){ return r.ok; });
     var kart = document.getElementById('aktif-kart');
-    if(kart) kart.innerHTML = adim7HtmlIcerik();
+    if(kart){
+      if(M1_HAZIR_HYDRATE && S.adim===2) kart.innerHTML = m1HrAdim2Html();
+      else kart.innerHTML = adim7HtmlIcerik();
+    }
   }).catch(function(err){
     var kart = document.getElementById('aktif-kart');
-    if(kart) kart.innerHTML = adim7HtmlIcerik()+'<div class="m1-hata">Bağlantı hatası: '+esc(err.message)+'</div>';
+    if(kart){
+      var ek = '<div class="m1-hata">Bağlantı hatası: '+esc(err.message)+'</div>';
+      if(M1_HAZIR_HYDRATE && S.adim===2) kart.innerHTML = m1HrAdim2Html()+ek;
+      else kart.innerHTML = adim7HtmlIcerik()+ek;
+    }
   });
 }
 
@@ -1510,7 +1691,7 @@ function adim7Html(){
 function sahaSecimDegisti(v){
   S.saha_testi_gerekli_mi = v ? 1 : 0;
   if(!v){ S.saha_testi_nedeni = null; }
-  else if(!S.saha_testi_nedeni){ S.saha_testi_nedeni = 'YENI_RENK'; }
+  else if(!S.saha_testi_nedeni){ S.saha_testi_nedeni = M1_HAZIR_HYDRATE ? 'BILINEN_RENK' : 'YENI_RENK'; }
   var wrap = document.getElementById('saha-neden-wrap');
   if(wrap) wrap.style.display = v ? '' : 'none';
   var sel = document.getElementById('saha-neden');
@@ -1577,6 +1758,21 @@ function nxArPayloadOlustur(){
 
 function kaydet(){
   if(S._kayit_kilit){ return; }
+  if(HYDRATE && HYDRATE.hazir_renk_wizard && HYDRATE.arge_test_id){
+    m1HazirRenkKaydet();
+    return;
+  }
+  /* FAZ-1B: diğer hydrate — yeni NX-AR INSERT engeli */
+  if(HYDRATE && HYDRATE.arge_test_id){
+    var hEl = document.getElementById('kaydet-hata');
+    if(hEl){
+      hEl.style.display = 'block';
+      hEl.textContent = 'Mevcut AR-GE kaydı açık ('+(HYDRATE.test_no||'')+'). Yeni kayıt oluşturulmaz.';
+    } else {
+      alert('Mevcut AR-GE kaydı açık. Yeni kayıt oluşturulmaz.');
+    }
+    return;
+  }
   if(!(S.not && S.not.trim())){ return; }
   if(!S.boyutlar.length || !Object.keys(S.uv_by_boyut||{}).length){
     alert('Formül ve boyut seçimi eksik.'); return;
@@ -1674,12 +1870,18 @@ function barkodYazdir(){
 /* ══ GENEL YARDIMCILAR ══ */
 function adimeGit(no){
   if(no >= S.adim) return;
+  if(M1_HAZIR_HYDRATE){ S.adim = no; render(); return; }
   /* Varyant/Boyut adımları grup seçiminde çözülüyor — düzenleme formül adımına döner */
   if(no===3 || no===5){ S.adim = 2; render(); return; }
   S.adim = no; render();
 }
 
 function adimPostRender(no){
+  if(M1_HAZIR_HYDRATE){
+    if(no===1 && !S._rf_recete_yuklendi){ m1HrReceteYukle(function(){ renderIcerik(); }); }
+    if(no===2 && !S.onizleme.length){ receteYukle(); }
+    return;
+  }
   /* Arama kutusu: RF adımı artık 4 numaralı */
   var aramaIdMap = {1:'cari-ara', 2:'formul-ara', 4:'rf-ara'};
   if(aramaIdMap[no]){
@@ -1779,6 +1981,16 @@ function initEvents(){
       return;
     }
 
+    /* HAZIR_RENK hydrate — seçim adımı yok, yalnız ileri */
+    var hrBtn = e.target.closest('.m1-ileri-btn[id^="btn-hr-"]');
+    if(hrBtn && !hrBtn.disabled){
+      var hrId = hrBtn.getAttribute('id');
+      if     (hrId==='btn-hr-1'){ m1HrAdim1Ileri(); }
+      else if(hrId==='btn-hr-2'){ m1HrAdim2Ileri(); }
+      else if(hrId==='btn-hr-3'){ m1HrAdim3Ileri(); }
+      return;
+    }
+
     /* İleri butonları */
     var btn = e.target.closest('.m1-ileri-btn[id^="btn-"]');
     if(btn && !btn.disabled){
@@ -1870,9 +2082,258 @@ function goster_gr(v){
 /* Eski çağrılar için uyumluluk takma adı (kaldırılacak) */
 function miktar_goster(v){ return goster_kg(v); }
 
+/* HAZIR_RENK hydrate — 4 adım, seçim yok (MOD-01 rolü); mevcut kart/CSS */
+function m1OzetSatir(lbl, val){
+  return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">'
+    +'<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;min-width:76px;flex-shrink:0">'+esc(lbl)+'</span>'
+    +'<span style="font-size:13px;font-weight:700;color:var(--navy)">'+esc(val||'—')+'</span>'
+    +'</div>';
+}
+function m1HrIleriBtn(id, label){
+  return '<button class="m1-ileri-btn" id="'+id+'">'+esc(label)
+    +' <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10h10M12 6l4 4-4 4"/></svg></button>';
+}
+function m1HrAdim1Html(){
+  var html = '<div class="m1-adim-kart-baslik">Hazır Renk Reçetesi</div>'
+    +'<div class="m1-adim-kart-alt">Katalog renginin onaylı pigment reçetesi — manuel giriş yok.</div>';
+  if(!S._rf_recete_yuklendi){
+    html += '<div class="m1-yukleniyor"><div class="m1-spin"></div> Reçete yükleniyor…</div>';
+  } else if(!(S.rf_bilesenleri||[]).length){
+    html += '<div class="m1-hata">Pigment reçetesi bulunamadı.</div>';
+  } else {
+    html += '<table class="m1-recete-tablo"><thead><tr><th>Pigment</th><th>Master</th></tr></thead><tbody>';
+    S.rf_bilesenleri.forEach(function(p){
+      html += '<tr class="boya-row"><td>'+esc(p.ad||'—')+'</td><td>'+goster_gr(p.kg)+'</td></tr>';
+    });
+    html += '</tbody></table>';
+  }
+  return html + m1HrIleriBtn('btn-hr-1', 'Devam — Reçete Önizleme');
+}
+function m1HrAdim2Html(){
+  return adim7HtmlIcerik();
+}
+function m1HrAdim3Html(){
+  var boyStr = S.boyutlar.join(' + ') || '—';
+  return '<div class="m1-adim-kart-baslik">Numune Hazır</div>'
+    +'<div class="m1-adim-kart-alt">Reçete kontrolü tamam — numuneyi hazırladığınızı onaylayın.</div>'
+    +'<div style="margin-bottom:14px">'
+    +m1OzetSatir('AT', HYDRATE.test_no)
+    +m1OzetSatir('Renk', S.rf_ad || HYDRATE.renk)
+    +m1OzetSatir('Formül', (S.formul_kod||'')+' '+(S.formul_ad||''))
+    +m1OzetSatir('Boyut', boyStr)
+    +m1OzetSatir('Oran', '%'+S.oran+' (Otomatik)')
+    +'</div>'
+    +m1HrIleriBtn('btn-hr-3', 'Numune Hazır — Enjeksiyon Kararı');
+}
+function m1HrAdim4Html(){
+  var sahaGerekli = !!S.saha_testi_gerekli_mi;
+  var nedenler = [
+    ['BILINEN_RECETE','Bilinen reçete'],['BILINEN_RENK','Bilinen renk'],['YENI_RENK','Yeni renk'],
+    ['YENI_FORMUL','Yeni formül'],['SHORE_RISKI','Shore riski'],['PISME_RISKI','Pişme riski'],
+    ['YOGUNLUK_RISKI','Yoğunluk riski'],['KALIP_RISKI','Kalıp riski'],
+    ['YONETICI_KARARI','Yönetici kararı'],['DIGER','Diğer']
+  ];
+  var html = '<div class="m1-adim-kart-baslik">Enjeksiyon Gerekli mi?</div>'
+    +'<div class="m1-adim-kart-alt">Aynı AT kaydı üzerinden devam edilir.</div>'
+    +'<div style="margin-bottom:14px;padding:12px;border:1px solid var(--border);border-radius:10px;background:#f8fafc">'
+    +'<div style="font-size:12px;font-weight:800;color:var(--navy);margin-bottom:8px">ENJEKSİYON DENEMESİ</div>'
+    +'<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;margin-bottom:6px;cursor:pointer">'
+    +'<input type="radio" name="saha-gerekli" value="0" '+(sahaGerekli?'':'checked')+' onchange="sahaSecimDegisti(0)"> Gerekli değil — Onaya gönderilebilir'
+    +'</label>'
+    +'<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;margin-bottom:8px;cursor:pointer">'
+    +'<input type="radio" name="saha-gerekli" value="1" '+(sahaGerekli?'checked':'')+' onchange="sahaSecimDegisti(1)"> Gerekli — Enjeksiyon denemesine gönder'
+    +'</label>'
+    +'<div id="saha-neden-wrap" style="'+(sahaGerekli?'':'display:none')+'">'
+    +'<label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">Neden (zorunlu)</label>'
+    +'<select id="saha-neden" class="m1-textarea" style="height:40px;padding:8px 10px" onchange="S.saha_testi_nedeni=this.value||null">'
+    +'<option value="">Seçiniz…</option>';
+  nedenler.forEach(function(n){
+    html += '<option value="'+n[0]+'" '+(S.saha_testi_nedeni===n[0]?'selected':'')+'>'+esc(n[1])+'</option>';
+  });
+  html += '</select></div></div>'
+    +'<button class="m1-kaydet-btn" id="kaydet-btn" onclick="kaydet()">'
+    +'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M17 3H7L3 7v10h14V3z"/><rect x="7" y="13" width="6" height="4" rx="1"/><rect x="6" y="3" width="8" height="5" rx="1"/></svg>'
+    +'KAYDET VE TAMAMLA</button>'
+    +'<div id="kaydet-spinner" style="display:none" class="m1-yukleniyor"><div class="m1-spin"></div> Kaydediliyor…</div>'
+    +'<div id="kaydet-hata" class="m1-hata" style="display:none"></div>'
+    +'<div id="kaydet-basari" class="m1-basari" style="display:none">'
+    +'<div class="m1-basari-check">✓</div><div class="m1-basari-no" id="kaydet-no"></div>'
+    +'<div class="m1-basari-alt" id="kaydet-ozet">Numune kaydı güncellendi.</div>'
+    +'<button class="m1-barkod-btn" id="barkod-btn" disabled style="opacity:.45;cursor:not-allowed">Etiket Bas</button>'
+    +'<a href="/nexgen/tablet/arge" class="m1-yeni-btn" style="margin-top:8px;text-decoration:none;text-align:center;display:block">Tablet Ana Ekrana Dön</a>'
+    +'</div>';
+  return html;
+}
+function m1HrAdim1Ileri(){
+  if(!S._rf_recete_yuklendi){ m1HrReceteYukle(function(){ m1HrAdim1Ileri(); }); return; }
+  S.adim=2; S.onizleme=[]; render(); receteYukle();
+}
+function m1HrAdim2Ileri(){
+  if(!S.onizleme.length) return;
+  S.adim=3; render();
+}
+function m1HrAdim3Ileri(){
+  S._numune_hazir_onay = true;
+  S.adim=4; render();
+}
+function m1HrReceteYukle(done){
+  if(S._rf_recete_yuklendi && (S.rf_bilesenleri||[]).length){ if(done) done(); return; }
+  if(!S.rf_id || !S.boyutlar.length){ S._rf_recete_yuklendi=true; if(done) done(); return; }
+  var uv = uvNesneBul(S.boyutlar[0]);
+  if(!uv || !uv.id){ S._rf_recete_yuklendi=true; if(done) done(); return; }
+  fetch('/nexgen/api/tablet/arge/recete-onizle?uv_id='+uv.id+'&rf_id='+S.rf_id+'&oran=100&debug=1')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      S.rf_bilesenleri = [];
+      if(d.ok && d._audit && d._audit.boya_audit){
+        S.rf_bilesenleri = d._audit.boya_audit.filter(function(b){ return !b.atildi; }).map(function(b){
+          return {stok_kart_id:b.stok_kart_id, ad:b.ad, kg:b.master_kg};
+        });
+      }
+      S._rf_recete_yuklendi = true;
+      if(done) done();
+    }).catch(function(){ S._rf_recete_yuklendi = true; if(done) done(); });
+}
+
+/* HAZIR_RENK hydrate — otomatik doldurma, Adım 1 Hazır Renk Reçetesi */
+function m1NormTip(s){
+  return String(s||'').toUpperCase().replace(/İ/g,'I').replace(/Ö/g,'O').trim();
+}
+function m1HydrateBoyutlarFromUrunTipi(urunTipi){
+  var tip = m1NormTip(urunTipi);
+  if(tip.indexOf('DOKME')>=0) return ['MEDIUM'];
+  return ['LARGE','SMALL'];
+}
+function m1HydrateAileFromUrunTipi(urunTipi){
+  var tip = m1NormTip(urunTipi);
+  if(tip.indexOf('TABAN')>=0) return 'TABAN';
+  if(tip.indexOf('DOKME')>=0) return 'DÖKME';
+  if(tip.indexOf('TERLIK')>=0) return 'TERLİK';
+  return '';
+}
+function m1FormulGrupKeyFromHydrate(h){
+  var aile = m1HydrateAileFromUrunTipi(h.urun_tipi);
+  var hedefBoyutlar = m1HydrateBoyutlarFromUrunTipi(h.urun_tipi);
+  var anaOnek = String(h.ana_formul_grup_kodu||'').trim().toUpperCase();
+  var gruplar = FORMUL_GRUPLAR || [];
+  for(var i=0;i<gruplar.length;i++){
+    var g = gruplar[i];
+    if(aile && g.aile !== aile) continue;
+    var boyutlar = (g.secenekler||[]).map(function(s){ return s.boyut; });
+    if(!hedefBoyutlar.every(function(b){ return boyutlar.indexOf(b)>=0; })) continue;
+    if(anaOnek){
+      var kodMatch = (g.secenekler||[]).some(function(s){
+        return String(s.formul_kod||'').toUpperCase().indexOf(anaOnek)===0;
+      });
+      if(!kodMatch) continue;
+    }
+    return g.grup_key;
+  }
+  if(aile){
+    for(var j=0;j<gruplar.length;j++){
+      var g2 = gruplar[j];
+      if(g2.aile !== aile) continue;
+      var b2 = (g2.secenekler||[]).map(function(s){ return s.boyut; });
+      if(hedefBoyutlar.every(function(b){ return b2.indexOf(b)>=0; })) return g2.grup_key;
+    }
+  }
+  return null;
+}
+function m1RfBilesenleriFromOnizleme(){
+  m1HrReceteYukle(function(){});
+}
+function m1HydrateHazirRenkBaslat(){
+  var h = HYDRATE || {};
+  var grupKey = m1FormulGrupKeyFromHydrate(h);
+  if(grupKey){
+    S.formul_grup_key = grupKey;
+    S.boyutlar = m1HydrateBoyutlarFromUrunTipi(h.urun_tipi).slice();
+    formulGrupSecimUygula();
+  }
+  if(h.rf_renk_id){
+    S.rf_id = parseInt(h.rf_renk_id, 10);
+    var rf = (RF_LISTE||[]).filter(function(r){ return r.id === S.rf_id; })[0];
+    S.rf_ad = rf ? (rf.rf_ad||rf.ad||'') : (h.rf_ad || h.renk || '');
+    S.saha_testi_gerekli_mi = 0;
+    S.saha_testi_nedeni = 'BILINEN_RENK';
+  }
+  S.oran = VARSAYILAN_ORAN;
+  S.adim = 1;
+  S.onizleme = [];
+  S._rf_recete_yuklendi = false;
+  S._numune_hazir_onay = false;
+  render();
+  initEvents();
+}
+function m1HazirRenkKaydet(){
+  if(S.saha_testi_gerekli_mi){
+    var nedenEl = document.getElementById('saha-neden');
+    if(nedenEl) S.saha_testi_nedeni = nedenEl.value || null;
+    if(!S.saha_testi_nedeni){
+      document.getElementById('kaydet-hata').style.display = 'block';
+      document.getElementById('kaydet-hata').textContent = 'Enjeksiyon denemesi için neden seçiniz.';
+      return;
+    }
+  }
+  if(!S.onizleme.length){
+    document.getElementById('kaydet-hata').style.display = 'block';
+    document.getElementById('kaydet-hata').textContent = 'Önce reçete önizlemesi yüklenmelidir.';
+    return;
+  }
+  var payload = nxArPayloadOlustur();
+  payload.hedef_renk_adi = S.rf_ad || HYDRATE.renk || HYDRATE.renk_kodu;
+  if(S.rf_bilesenleri && S.rf_bilesenleri.length){
+    payload.renk_bilesenleri = S.rf_bilesenleri;
+  }
+  if(!(payload.renk_bilesenleri||[]).length){
+    document.getElementById('kaydet-hata').style.display = 'block';
+    document.getElementById('kaydet-hata').textContent = 'Hazır renk pigment reçetesi yüklenemedi.';
+    return;
+  }
+  payload.deneme = payload.deneme || {};
+  if(!payload.deneme.genel_not){
+    payload.deneme.genel_not = S.not || (HYDRATE.notlar !== '—' ? HYDRATE.notlar : '') || null;
+  }
+  S._kayit_kilit = true;
+  var btn = document.getElementById('kaydet-btn');
+  if(btn){ btn.disabled = true; btn.style.display = 'none'; }
+  document.getElementById('kaydet-spinner').style.display = 'flex';
+  document.getElementById('kaydet-hata').style.display = 'none';
+  fetch('/nexgen/api/arge/nx-ar/'+HYDRATE.arge_test_id+'/numune-kaydet', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
+  })
+  .then(function(r){ return r.json().then(function(d){ if(!r.ok||!d.ok) throw new Error(d.hata||('HTTP '+r.status)); return d; }); })
+  .then(function(d){
+    document.getElementById('kaydet-spinner').style.display='none';
+    var kart = d.kart || d;
+    S._kaydedilen_test_id = kart.arge_test_id || HYDRATE.arge_test_id;
+    S._kaydedilen_no = kart.test_no || HYDRATE.test_no;
+    document.getElementById('kaydet-no').textContent = S._kaydedilen_no;
+    document.getElementById('kaydet-ozet').textContent = 'Durum: '+(kart.durum||d.durum||'—');
+    document.getElementById('kaydet-basari').style.display='block';
+    var bBtn = document.getElementById('barkod-btn');
+    if(bBtn){ bBtn.disabled=false; bBtn.style.opacity=''; bBtn.style.cursor='pointer'; bBtn.classList.add('aktif'); bBtn.onclick=function(){ m1EtiketAc(); }; }
+  })
+  .catch(function(err){
+    S._kayit_kilit = false;
+    if(btn){ btn.disabled=false; btn.style.display='flex'; }
+    document.getElementById('kaydet-spinner').style.display='none';
+    document.getElementById('kaydet-hata').style.display='block';
+    document.getElementById('kaydet-hata').textContent = err.message || 'Kayıt hatası';
+  });
+}
+
 /* ── Başlat ── */
-render();
-initEvents();
+if(HYDRATE && HYDRATE.arge_test_id){
+  S._kaydedilen_test_id = HYDRATE.arge_test_id;
+  S._kaydedilen_no = HYDRATE.test_no || '';
+  if(HYDRATE.cari_id){ S.cari_id = HYDRATE.cari_id; S.cari_ad = HYDRATE.musteri || ''; }
+  if(HYDRATE.notlar && HYDRATE.notlar !== '—'){ S.not = HYDRATE.notlar; }
+  if(HYDRATE.hazir_renk_wizard){ m1HydrateHazirRenkBaslat(); }
+} else {
+  render();
+  initEvents();
+}
 </script>
 
 {# ════════════════════════════════════════════════════════════════

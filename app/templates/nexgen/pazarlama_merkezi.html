@@ -77,7 +77,11 @@
         <select id="pzm-fil-durum" class="pzm-fil-sel" onchange="pzmFiltrele()" autocomplete="off">
           <option value="">Tüm Durumlar</option>
           <option value="TASLAK">Taslak</option>
-          <option value="MRP_BEKLIYOR">MRP Bekliyor</option>
+          <option value="ONAY_BEKLIYOR">Onay Bekliyor</option>
+          <option value="ONAYLANDI">Onaylandı</option>
+          <option value="REVIZYON">Revizyon</option>
+          <option value="REDDEDILDI">Reddedildi</option>
+          <option value="MPR_BEKLIYOR">Malzeme İhtiyaç Bekliyor</option>
           <option value="PLANLAMAYA_HAZIR">Planlamaya Hazır</option>
           <option value="IPTAL">İptal</option>
         </select>
@@ -609,6 +613,10 @@ button.rm-page-geri { appearance:none; }
   border-radius:4px; letter-spacing:.4px; text-transform:uppercase;
 }
 .pzm-rozet-taslak { color:var(--rm-gray); background:#f8fafc; border:1px solid rgba(100,116,139,.3); }
+.pzm-rozet-onay_bekliyor { color:#a16207; background:#fefce8; border:1px solid rgba(202,138,4,.35); }
+.pzm-rozet-onaylandi { color:var(--rm-green); background:var(--rm-green-bg); border:1px solid rgba(22,163,74,.3); }
+.pzm-rozet-revizyon { color:#c2410c; background:#fff7ed; border:1px solid rgba(234,88,12,.3); }
+.pzm-rozet-reddedildi { color:var(--rm-red); background:var(--rm-red-bg); border:1px solid rgba(220,38,38,.3); }
 .pzm-rozet-mrp_bekliyor, .pzm-rozet-mpr_bekliyor { color:var(--rm-yellow); background:var(--rm-yellow-bg); border:1px solid rgba(202,138,4,.3); }
 .pzm-rozet-planlamaya_hazir { color:var(--rm-green); background:var(--rm-green-bg); border:1px solid rgba(22,163,74,.3); }
 .pzm-rozet-uretimde { color:var(--rm-purple); background:var(--rm-purple-bg); border:1px solid rgba(124,58,237,.3); }
@@ -1298,11 +1306,61 @@ function pzmRozetHtml(durum, etket) {
 function pzmDurumEtiketUi(durum, etiket) {
   var d = (durum || '').toUpperCase();
   if (d === 'MPR_BEKLIYOR') return 'Malzeme İhtiyaç Bekliyor';
+  if (d === 'ONAY_BEKLIYOR') return 'Onay Bekliyor';
+  if (d === 'ONAYLANDI') return 'Onaylandı';
   if (etiket && /MPR/i.test(String(etiket))) {
     return String(etiket).replace(/MPR/gi, 'Malzeme İhtiyaç');
   }
   return etiket || durum || '—';
 }
+
+function pzmOnayKayitli(t) {
+  if (!t) return false;
+  if (t.onay_kayitli) return true;
+  var d = (t.durum || '').toUpperCase();
+  return ['ONAY_BEKLIYOR', 'ONAYLANDI', 'REVIZYON', 'REDDEDILDI'].indexOf(d) >= 0;
+}
+
+function pzmMprBlokMesaj(t) {
+  if (!t) return null;
+  var d = (t.durum || '').toUpperCase();
+  if (d === 'ONAY_BEKLIYOR') return 'Merkezi onay tamamlanmadan malzeme ihtiyacı analizi yapılamaz.';
+  if (pzmOnayKayitli(t) && ['ONAYLANDI', 'MPR_BEKLIYOR', 'PLANLAMAYA_HAZIR', 'URETIMDE'].indexOf(d) < 0) {
+    return 'Önce merkezi onay tamamlanmalı veya revizyon sonrası yeniden gönderilmeli.';
+  }
+  return null;
+}
+
+function pzmOnayaGonderIzinli(t) {
+  if (!t || !_pzmCanManage) return false;
+  var d = (t.durum || '').toUpperCase();
+  return ['TASLAK', 'REVIZYON', 'REDDEDILDI'].indexOf(d) >= 0;
+}
+
+window.pzmOnayaGonder = function(tid) {
+  var t = pzmTalepBul(tid);
+  if (!t || !pzmOnayaGonderIzinli(t)) return;
+  if (!confirm('Sipariş Merkezi Onay\'a gönderilsin mi? Onay tamamlanana kadar üretim başlatılamaz.')) return;
+  fetch('/nexgen/api/pazarlama/siparis/' + tid + '/onaya-gonder', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  })
+  .then(function(r) { return r.json().then(function(d) { return { status: r.status, data: d }; }); })
+  .then(function(res) {
+    var d = res.data || {};
+    if (!d.ok) {
+      alert(d.hata || 'Onaya gönderilemedi.');
+      return;
+    }
+    t.durum = d.durum || 'ONAY_BEKLIYOR';
+    t.durum_etiket = 'Onay Bekliyor';
+    t.onay_kayitli = true;
+    pzmTalepListesiYenile();
+    if (_pzmDetayAktifId === tid) pzmDetayRender(t);
+    alert((d.talep_kod || 'Onay talebi') + ' oluşturuldu.');
+  })
+  .catch(function() { alert('Bağlantı hatası.'); });
+};
 
 /* ────────────── Ekran Geçişi ────────────── */
 window.pzmEkranGec = function(ekran) {
@@ -1972,6 +2030,8 @@ function pzmAltEmirOzetHtml(st) {
 
 function pzmDetayUretimBlokMesaj(st, t) {
   if (!st || !st.planlar.length) return 'Önce malzeme ihtiyacını analiz edin.';
+  var onayBlok = pzmMprBlokMesaj(t);
+  if (onayBlok) return onayBlok;
   if (st.rfEksik) return 'Üretime göndermek için bekleyen kalemlerin tamamlanması gerekir.';
   if (st.stokYukleniyor) return 'Stok kontrolü devam ediyor…';
   if (st.stokEksik) return 'Üretime göndermek için stok eksiklerinin tamamlanması gerekir.';
@@ -2147,8 +2207,13 @@ function pzmYeniMprAksiyonRender() {
   html += '<button type="button" class="rm-btn rm-btn-taslak" id="pzm-btn-taslak" onclick="pzmTaslakKaydet()"';
   html += (!cariOk || _pzmKalemler.length < 1 || busy) ? ' disabled' : '';
   html += '>Taslak Kaydet</button>';
+  var tLive = _pzmTalepId ? pzmTalepBul(_pzmTalepId) : null;
+  if (tLive && pzmOnayaGonderIzinli(tLive)) {
+    html += '<button type="button" class="rm-btn rm-btn-detay" onclick="pzmOnayaGonder(' + _pzmTalepId + ')">Merkezi Onay\'a Gönder</button>';
+  }
   html += '<button type="button" class="rm-btn rm-btn-detay" id="pzm-btn-mrp" onclick="pzmMrpOlustur()"';
-  var mprDis = !cariOk || _pzmKalemler.length < 1 || busy || st.planlar.length > 0;
+  var mprBlok = tLive ? pzmMprBlokMesaj(tLive) : null;
+  var mprDis = !cariOk || _pzmKalemler.length < 1 || busy || st.planlar.length > 0 || !!mprBlok;
   html += mprDis ? ' disabled' : '';
   html += '>Malzeme İhtiyacını Analiz Et</button>';
   if (_pzmTalepId && st.mprHesaplandi && st.planlar.length) {
@@ -2233,6 +2298,7 @@ function pzmDetayKalemler(t) {
 
 function pzmDetayReadonly(t) {
   var d = (t.durum || '').toUpperCase();
+  if (d === 'ONAY_BEKLIYOR') return true;
   if (d === 'URETIMDE' || d === 'IPTAL') return true;
   var st = _pzmMprState[String(t.id)];
   if (st && st.planlar.length && st.planlar.every(function(p) {
@@ -2244,11 +2310,11 @@ function pzmDetayReadonly(t) {
 function pzmDetayAsamaAcik(t, stage, st) {
   var d = (t.durum || '').toUpperCase();
   if (d === 'IPTAL') return stage <= 2;
-  if (d === 'URETIMDE' || d === 'PLANLAMAYA_HAZIR') return stage <= 4;
+  if (d === 'URETIMDE' || d === 'PLANLAMAYA_HAZIR' || d === 'ONAYLANDI') return stage <= 4;
   if (d === 'MPR_BEKLIYOR') return stage <= 4;
   if (stage <= 2) return true;
   if (stage === 3) return true;
-  if (stage === 4) return st.mprHesaplandi || st.rfEksik || d === 'MPR_BEKLIYOR';
+  if (stage === 4) return st.mprHesaplandi || st.rfEksik || d === 'MPR_BEKLIYOR' || d === 'ONAYLANDI';
   return false;
 }
 
@@ -2256,7 +2322,7 @@ function pzmDetayAsamaAcikBaslangic(t, stage, st) {
   var d = (t.durum || '').toUpperCase();
   if (stage === 1 || stage === 2) return true;
   if (stage === 3) return d !== 'IPTAL';
-  if (stage === 4) return st.mprHesaplandi || st.rfEksik || d === 'MPR_BEKLIYOR';
+  if (stage === 4) return st.mprHesaplandi || st.rfEksik || d === 'MPR_BEKLIYOR' || d === 'ONAYLANDI';
   return false;
 }
 
@@ -2609,12 +2675,16 @@ window.pzmDetayAkkToggle = function(tid, stage) {
 function pzmDetayAsama3Icerik(t, st) {
   var html = pzmMiAnalizIcerikHtml(t, st, { bosMsg: 'Malzeme ihtiyacı henüz analiz edilmedi.' });
   var hasPlans = st.planlar.length > 0;
-  var mprDisabled = !_pzmCanManage || st.loading || st.hydrating || pzmDetayReadonly(t) || hasPlans;
+  var mprBlok = pzmMprBlokMesaj(t);
+  var mprDisabled = !_pzmCanManage || st.loading || st.hydrating || pzmDetayReadonly(t) || hasPlans || !!mprBlok;
   html += '<div class="pzm-aksiyon" style="padding-top:0;">';
   html += '<button type="button" class="pzm-btn pzm-btn-lacivert pzm-btn-sm" id="pzm-det-' + t.id + '-btn-mpr"';
   html += mprDisabled ? ' disabled' : '';
+  if (mprBlok) html += ' title="' + pzmEsc(mprBlok) + '"';
   html += ' onclick="pzmDetayMprHesapla(' + t.id + ')">Analiz Et</button>';
-  if (hasPlans) {
+  if (mprBlok) {
+    html += ' <span style="font-size:10px;color:var(--rm-t3);margin-left:8px;">' + pzmEsc(mprBlok) + '</span>';
+  } else if (hasPlans) {
     html += ' <span style="font-size:10px;color:var(--rm-t3);margin-left:8px;">Analiz tamamlandı — tekrar çalıştırılamaz.</span>';
   }
   html += '</div>';
@@ -2632,6 +2702,10 @@ function pzmDetayAltBand(t, st) {
   band.style.display = '';
   var readonly = pzmDetayReadonly(t);
   var html = '';
+
+  if (pzmOnayaGonderIzinli(t)) {
+    html += '<button type="button" class="pzm-btn pzm-btn-lacivert pzm-btn-blk" onclick="pzmOnayaGonder(' + t.id + ')">Merkezi Onay\'a Gönder</button>';
+  }
 
   if (!readonly && _pzmCanManage) {
     html += '<button type="button" class="pzm-btn pzm-btn-outline pzm-btn-blk" onclick="pzmSipariseDondur(' + t.id + ')">Siparişe Döndür</button>';
@@ -2683,6 +2757,13 @@ function pzmDetayAsamaHtml(t, stage, st) {
     if (pzmDetayReadonly(t)) {
       html += '<div class="pzm-readonly-bant">Bu sipariş salt okunur modda görüntülenmektedir.</div>';
     }
+    if ((t.durum || '').toUpperCase() === 'ONAYLANDI' && t.onay_snapshot) {
+      html += '<div class="pzm-readonly-bant" style="background:#f0fdf4;border-color:rgba(22,163,74,.25);">Onaylı snapshot aktif — fiyat, vade ve kalem bilgileri onay anındaki haliyle gösterilir.</div>';
+    }
+    if (t.kaynak_modul === 'MUSTERI_OPERASYONU' || (t.siparis_no || '').indexOf('MO-S-') === 0) {
+      html += '<div class="pzm-readonly-bant" style="background:#f0f9ff;border-color:rgba(0,106,142,.25);">Kaynak: Müşteri Operasyonu' +
+        (t.olusturan_ad ? ' · Pazarlamacı: ' + pzmEsc(t.olusturan_ad) : '') + '</div>';
+    }
     html += [
       satirHtml('Sipariş No', pzmEsc(t.siparis_no || ('T-' + t.id))),
       satirHtml('Cari', pzmEsc(t.cari_unvan || '—')),
@@ -2691,7 +2772,7 @@ function pzmDetayAsamaHtml(t, stage, st) {
       satirHtml('Para Birimi', pzmEsc(pzmParaBirimiGoster(t.anlasma_para_birimi))),
       satirHtml('Anlaşma Birim Fiyatı', pzmEsc(pzmBirimFiyatGoster(t.anlasma_birim_fiyat, t.anlasma_para_birimi))),
       satirHtml('Vade Günü', (t.vade_gun != null && t.vade_gun !== '') ? (String(t.vade_gun) + ' gün') : '—'),
-      satirHtml('Siparişi Açan', '—'),
+      satirHtml('Siparişi Açan', pzmEsc(t.olusturan_ad || '—')),
       satirHtml('Toplam Kalem', String(kalemler.length)),
       satirHtml('Toplam Talep KG', pzmKgFmt(topKg)),
       satirHtml('Durum', pzmRozetHtml(t.durum, t.durum_etiket)),
@@ -3511,6 +3592,11 @@ window.pzmMrpOlustur = function() {
   pzmHata('');
   var bilgiHata = pzmSiparisBilgiDogrula();
   if (bilgiHata) { pzmHata(bilgiHata); return; }
+  if (_pzmTalepId) {
+    var tCheck = pzmTalepBul(_pzmTalepId);
+    var mprBlok = pzmMprBlokMesaj(tCheck);
+    if (mprBlok) { pzmHata(mprBlok); return; }
+  }
   if (_pzmKalemler.length < 1) {
     pzmHata('En az bir kalem ekleyin.');
     return;

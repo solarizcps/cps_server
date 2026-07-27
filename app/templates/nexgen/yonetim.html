@@ -322,6 +322,7 @@
             </td>
             <td style="text-align:right">
               <div class="ngym-islem-grup">
+                <a class="ngym-islem-btn" href="/nexgen/cari360/{{ c.id }}" title="Cari 360">Cari 360</a>
                 <button class="ngym-islem-btn"
                         onclick="cariDuzenleModalAc({{ c.id }}, '{{ c.cari_kod }}', '{{ c.unvan|replace("'","\\'")|e }}')">
                   Düzenle
@@ -348,7 +349,7 @@
 
 {# ── Cari Modal ── #}
 <div id="ngym-cari-overlay" class="ngsk-overlay" onclick="ngymKapat('cari',event)">
-  <div class="ngsk-modal" onclick="event.stopPropagation()" style="max-width:480px">
+  <div class="ngsk-modal" onclick="event.stopPropagation()" style="max-width:560px">
     <div class="ngsk-modal-baslik">
       <span id="cari-modal-baslik">Yeni Cari</span>
       <button class="ngsk-modal-kapat" onclick="ngymKapat('cari')">&times;</button>
@@ -374,6 +375,32 @@
         </label>
         <input type="text" id="cari-modal-unvan" class="ngsk-inp"
                placeholder="Firma Adı San.Tic.Ltd.Şti." autocomplete="off">
+      </div>
+      {# F1C — Pazarlama Sorumluları (yalnız düzenleme modunda) #}
+      <div id="cari-sorumlu-panel" style="display:none;border-top:1px solid #e5e7eb;padding-top:14px;margin-top:4px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <span style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;">
+            Pazarlama Sorumluları
+          </span>
+        </div>
+        <div id="cari-sorumlu-liste" style="font-size:13px;color:#374151;min-height:24px;">
+          <span style="color:#9ca3af;">Yükleniyor…</span>
+        </div>
+        <div id="cari-sorumlu-aksiyon" style="display:none;margin-top:12px;padding-top:12px;border-top:1px dashed #e5e7eb;">
+          <div style="display:grid;grid-template-columns:1fr 110px;gap:8px;margin-bottom:8px;">
+            <select id="cari-sorumlu-kullanici" class="ngsk-inp" style="font-size:13px;">
+              <option value="">Kullanıcı seç…</option>
+            </select>
+            <select id="cari-sorumlu-rol" class="ngsk-inp" style="font-size:13px;">
+              <option value="ANA">Ana</option>
+              <option value="YEDEK">Yedek</option>
+              <option value="DESTEK">Destek</option>
+              <option value="YONETICI">Yönetici</option>
+            </select>
+          </div>
+          <input type="text" id="cari-sorumlu-not" class="ngsk-inp" placeholder="Atama notu (opsiyonel)" style="font-size:13px;margin-bottom:8px;">
+          <button type="button" class="ngsk-btn-kaydet" style="font-size:12px;padding:6px 14px;" onclick="cariSorumluAta()">Sorumlu Ata</button>
+        </div>
       </div>
     </div>
     <div class="ngsk-modal-footer">
@@ -823,6 +850,8 @@
 
 <script>
 const SEKMELER_YM = ['stok', 'tedarikci', 'eslestirme', 'import', 'cari'];
+var CAN_SORUMLU_MANAGE = {{ 'true' if can_sorumlu_manage else 'false' }};
+var _cariSorumluAdaylar = null;
 
 function sekmeGec(hedef) {
   SEKMELER_YM.forEach(function(s) {
@@ -1163,6 +1192,8 @@ function cariYeniModalAc() {
   var yukl    = document.getElementById('cari-kod-yukleniyor');
   document.getElementById('cari-modal-id').value = '';
   document.getElementById('cari-modal-unvan').value = '';
+  var sp = document.getElementById('cari-sorumlu-panel');
+  if (sp) sp.style.display = 'none';
   kodInp.value = '';
   kodInp.readOnly = true;
   document.getElementById('cari-modal-baslik').textContent = 'Yeni Cari';
@@ -1201,7 +1232,126 @@ function cariDuzenleModalAc(id, kod, unvan) {
   document.getElementById('cari-kaydet-btn').disabled = false;
   ngymHataTemizle('cari');
   document.getElementById('ngym-cari-overlay').classList.add('acik');
+  var sp = document.getElementById('cari-sorumlu-panel');
+  if (sp) { sp.style.display = 'block'; cariSorumluYukle(id); }
   setTimeout(function(){ document.getElementById('cari-modal-unvan').focus(); }, 200);
+}
+
+function cariSorumluRolEtiket(rol) {
+  var m = {ANA:'Ana Sorumlu', YEDEK:'Yedek', DESTEK:'Destek', YONETICI:'Yönetici'};
+  return m[rol] || rol;
+}
+
+function cariSorumluAdaylariYukle(cb) {
+  if (_cariSorumluAdaylar) { if (cb) cb(); return; }
+  fetch('/nexgen/api/yonetim/cari-sorumlu-adaylar')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.ok) _cariSorumluAdaylar = d.kullanicilar || [];
+      if (cb) cb();
+    })
+    .catch(function(){ if (cb) cb(); });
+}
+
+function cariSorumluSelectDoldur() {
+  var sel = document.getElementById('cari-sorumlu-kullanici');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Kullanıcı seç…</option>';
+  (_cariSorumluAdaylar || []).forEach(function(k){
+    var o = document.createElement('option');
+    o.value = k.Id;
+    o.textContent = (k.KullaniciAdi || '') + (k.rol_adi ? (' (' + k.rol_adi + ')') : '');
+    sel.appendChild(o);
+  });
+}
+
+function cariSorumluYukle(cariId) {
+  var liste = document.getElementById('cari-sorumlu-liste');
+  var aks = document.getElementById('cari-sorumlu-aksiyon');
+  if (!liste) return;
+  liste.innerHTML = '<span style="color:#9ca3af;">Yükleniyor…</span>';
+  fetch('/nexgen/api/yonetim/cari-sorumlu?cari_id=' + encodeURIComponent(cariId))
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d.ok) { liste.textContent = d.hata || 'Yüklenemedi'; return; }
+      var aktif = (d.sorumlular || []).filter(function(s){ return s.aktif == 1 && !s.bitis_tarihi; });
+      if (!aktif.length) {
+        liste.innerHTML = '<span style="color:#9ca3af;">Henüz sorumlu atanmadı.</span>';
+      } else {
+        liste.innerHTML = aktif.map(function(s){
+          var pasifBtn = (d.can_manage && CAN_SORUMLU_MANAGE)
+            ? '<button type="button" style="font-size:11px;margin-left:6px;" onclick="cariSorumluPasif('+s.id+')">Pasife Al</button>'
+            : '';
+          var rolSel = (d.can_manage && CAN_SORUMLU_MANAGE)
+            ? '<select style="font-size:11px;margin-left:4px;" onchange="cariSorumluRolDegistir('+s.id+',this.value)">'
+              + ['ANA','YEDEK','DESTEK','YONETICI'].map(function(r){
+                  return '<option value="'+r+'"'+(s.sorumluluk_rolu===r?' selected':'')+'>'+r+'</option>';
+                }).join('') + '</select>'
+            : cariSorumluRolEtiket(s.sorumluluk_rolu);
+          return '<div style="padding:6px 0;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;flex-wrap:wrap;gap:4px;">'
+            + '<strong>' + (s.kullanici_adi || ('#'+s.kullanici_id)) + '</strong>'
+            + ' · ' + rolSel
+            + ' · ' + (s.baslangic_tarihi || '')
+            + pasifBtn + '</div>';
+        }).join('');
+      }
+      if (aks) {
+        if (d.can_manage && CAN_SORUMLU_MANAGE) {
+          aks.style.display = 'block';
+          cariSorumluAdaylariYukle(cariSorumluSelectDoldur);
+        } else {
+          aks.style.display = 'none';
+        }
+      }
+    })
+    .catch(function(){ liste.textContent = 'Bağlantı hatası'; });
+}
+
+function cariSorumluAta() {
+  var cariId = document.getElementById('cari-modal-id').value;
+  var kid = document.getElementById('cari-sorumlu-kullanici').value;
+  var rol = document.getElementById('cari-sorumlu-rol').value;
+  var notu = document.getElementById('cari-sorumlu-not').value.trim();
+  if (!cariId || !kid) { alert('Kullanıcı seçin.'); return; }
+  fetch('/nexgen/api/yonetim/cari-sorumlu-ata', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({cari_id: parseInt(cariId), kullanici_id: parseInt(kid), sorumluluk_rolu: rol, atama_notu: notu})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    if (d.ok) cariSorumluYukle(cariId);
+    else alert(d.hata || 'Hata');
+  })
+  .catch(function(){ alert('Bağlantı hatası'); });
+}
+
+function cariSorumluPasif(atamaId) {
+  if (!confirm('Bu atamayı pasife al?')) return;
+  var cariId = document.getElementById('cari-modal-id').value;
+  fetch('/nexgen/api/yonetim/cari-sorumlu-pasif', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({id: atamaId})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    if (d.ok) cariSorumluYukle(cariId);
+    else alert(d.hata || 'Hata');
+  })
+  .catch(function(){ alert('Bağlantı hatası'); });
+}
+
+function cariSorumluRolDegistir(atamaId, rol) {
+  var cariId = document.getElementById('cari-modal-id').value;
+  fetch('/nexgen/api/yonetim/cari-sorumlu-rol', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({id: atamaId, sorumluluk_rolu: rol})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    if (d.ok) cariSorumluYukle(cariId);
+    else alert(d.hata || 'Hata');
+  })
+  .catch(function(){ alert('Bağlantı hatası'); });
 }
 
 function cariKaydet() {

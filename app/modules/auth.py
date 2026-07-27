@@ -212,7 +212,6 @@ def yetki_var(kod, action='can_view'):
     return False
 
 
-# FAZ-ALI: NexGen üretim operatörü — login hedefi + URL allowlist
 _NEXGEN_URETIM_OP_ROL_ADLAR = (
     'NexGen Üretim Operatörü',
     'NexGen Uretim Operatoru',
@@ -345,9 +344,17 @@ def login():
             # FAZ-ALI: NexGen Üretim Operatörü → /nexgen/tablet (next yok sayılır)
             elif is_nexgen_uretim_operator(u):
                 nxt = _NEXGEN_URETIM_OP_HOME
-            elif not nxt:
-                # Diğer sistem kullanıcıları: next varsa kullan, yoksa '/'
-                nxt = '/'
+            if not nxt:
+                from modules.nexgen.mo_depo_yetki import is_nexgen_depo_sade_kullanici, nexgen_depo_sade_home
+                if is_nexgen_depo_sade_kullanici(u):
+                    nxt = nexgen_depo_sade_home()
+            if not nxt:
+                from modules.nexgen.cari360_yetki import is_pazarlamaci_home_user
+                yk = kullanici_yetkileri(u)
+                if is_pazarlamaci_home_user(yk):
+                    nxt = '/nexgen/musteri-pazarlama'
+                else:
+                    nxt = '/'
 
             return redirect(nxt)
         hata = 'Kullanıcı adı veya şifre hatalı.'
@@ -479,6 +486,21 @@ def _tip_guard():
             if path.startswith('/nexgen/api/') or path.startswith('/api/'):
                 abort(403)
             return redirect(_NEXGEN_URETIM_OP_HOME)
+        return
+
+    from modules.nexgen.mo_depo_yetki import (
+        is_nexgen_depo_sade_kullanici,
+        nexgen_depo_sade_home,
+        nexgen_depo_sade_path_ok,
+        nexgen_depo_sade_sevkiyat_detay_yasak,
+    )
+    if is_nexgen_depo_sade_kullanici(_kul):
+        if not nexgen_depo_sade_path_ok(path):
+            if path.startswith('/nexgen/api/') or path.startswith('/api/'):
+                abort(403)
+            if nexgen_depo_sade_sevkiyat_detay_yasak(path):
+                return redirect('/nexgen/sevkiyat')
+            return redirect(nexgen_depo_sade_home())
         return
 
     # 4) Tip al

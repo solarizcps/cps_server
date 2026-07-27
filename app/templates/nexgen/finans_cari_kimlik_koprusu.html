@@ -1,93 +1,77 @@
 {% extends "base.html" %}
-{% set page_title = "Cari Kimlik Köprüsü — NexGen Finans" %}
+{% set page_title = "Cari Yönetimi — NexGen Finans" %}
 
 {% block content %}
-<div class="rm-sayfa fm-sayfa fck-sayfa">
+{% include 'nexgen/_finans_shared_styles.html' %}
+{% set fm_hdr_title = 'Cari Kart Teknik Kontrol' %}
+{% set fm_hdr_subtitle = 'Yalnızca gerçek teknik istisnalar — günlük eşleştirme ekranı değildir.' %}
+{% set fm_hdr_crumb = 'Cari Kart Teknik Kontrol' %}
+{% set fm_guncelleme_id = 'fck-son-guncelleme' %}
+{% set fm_refresh_onclick = 'fckYenile()' %}
+<div class="rm-sayfa fm-sayfa fm-modul-sayfa erp-ic-page fck-sayfa">
+  {% include 'nexgen/_finans_erp_ic_header.html' %}
+  <div class="fm-container fm-container-unified">
+    {% include 'nexgen/_finans_ic_nav.html' %}
 
-  <div class="rm-page-hdr">
-    <div class="rm-page-hdr-sol">
-      <img src="{{ url_for('static', filename='img/nexgen-logo.png') }}" alt="NexGen" class="rm-page-logo">
-      <div class="fm-hdr-meta">
-        <div class="rm-page-bc">
-          <span>NexGen</span><span class="rm-page-bc-sep">›</span>
-          <span>Finans</span><span class="rm-page-bc-sep">›</span>
-          <span class="rm-page-bc-cur">Cari Kimlik Köprüsü</span>
-        </div>
-        <div class="fm-hdr-baslik">Cari Kimlik Köprüsü</div>
-        <div class="fm-hdr-alt">Operasyonel müşteri ve tedarikçi kayıtlarının muhasebe Cari Kart karşılıklarını yönetin.</div>
-      </div>
-    </div>
-    <div class="fm-hdr-sag">
-      <span class="fm-guncelleme" id="fck-son-guncelleme">—</span>
-      <button type="button" class="rm-yeni-btn fm-btn-yenile" id="fck-btn-yenile">Yenile</button>
-      <a href="/nexgen/finans" class="rm-page-geri" title="Finans Merkezi"><span class="fm-geri-ok">←</span><span>Finans Merkezi</span></a>
-    </div>
-  </div>
-
-  <div class="fm-container">
-    <div class="rm-kpi-bar" id="fck-kpi-bar">
-      <div class="rm-kpi rm-kpi-gold"><div class="rm-kpi-sayi" id="fck-kpi-toplam">—</div><div class="rm-kpi-etiket">Toplam Kimlik</div></div>
-      <div class="rm-kpi rm-kpi-green"><div class="rm-kpi-sayi" id="fck-kpi-dogrulandi">—</div><div class="rm-kpi-etiket">Doğrulanmış</div></div>
-      <div class="rm-kpi rm-kpi-yellow"><div class="rm-kpi-sayi" id="fck-kpi-bekleyen">—</div><div class="rm-kpi-etiket">Bekleyen</div></div>
-      <div class="rm-kpi rm-kpi-orange"><div class="rm-kpi-sayi" id="fck-kpi-manuel">—</div><div class="rm-kpi-etiket">Manuel</div></div>
-      <div class="rm-kpi rm-kpi-purple"><div class="rm-kpi-sayi" id="fck-kpi-posting">—</div><div class="rm-kpi-etiket">Posting Engelli</div></div>
-      <div class="rm-kpi rm-kpi-gold"><div class="rm-kpi-sayi" id="fck-kpi-musteri">—</div><div class="rm-kpi-etiket">Müşteri</div></div>
-      <div class="rm-kpi rm-kpi-gold"><div class="rm-kpi-sayi" id="fck-kpi-tedarikci">—</div><div class="rm-kpi-etiket">Tedarikçi</div></div>
+    <div class="erp-ozet-band" id="fck-kpi-bar">
+      <div class="erp-ozet-item"><span class="erp-ozet-val" id="fck-kpi-toplam">—</span><span class="erp-ozet-lbl">Toplam</span></div>
+      <div class="erp-ozet-item"><span class="erp-ozet-val" id="fck-kpi-musteri">—</span><span class="erp-ozet-lbl">Müşteri</span></div>
+      <div class="erp-ozet-item"><span class="erp-ozet-val" id="fck-kpi-tedarikci">—</span><span class="erp-ozet-lbl">Tedarikçi</span></div>
+      <div class="erp-ozet-item"><span class="erp-ozet-val" id="fck-kpi-dogrulandi">—</span><span class="erp-ozet-lbl">Teknik İstisna</span></div>
+      <div class="erp-ozet-item"><span class="erp-ozet-val" id="fck-kpi-bekleyen">—</span><span class="erp-ozet-lbl">Veri Eksik</span></div>
     </div>
 
-    <div class="rm-sekme-bar fck-tip-sekme">
+    <div class="fm-sub-nav fck-tip-sekme">
       <div class="rm-sekme aktif" data-tip="MUSTERI" id="fck-sek-musteri">Müşteriler</div>
       <div class="rm-sekme" data-tip="TEDARIKCI" id="fck-sek-tedarikci">Tedarikçiler</div>
     </div>
 
-    <div class="rm-panel fm-filtre-kart">
-      <div class="rm-panel-hdr fm-filtre-hdr">
-        <svg class="rm-panel-ikon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
-        <span class="rm-panel-baslik">Filtreler</span>
-      </div>
-      <div class="fm-filtre-satir">
+    <div class="erp-toolbar" id="fck-filtre-toolbar">
+      <div class="erp-toolbar-satir">
         <div class="fm-ara-wrap">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" width="13" height="13"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input type="text" id="fck-arama" class="fm-ara-input" placeholder="Operasyonel kod, unvan, CKod…" autocomplete="off">
+          <input type="text" id="fck-arama" class="fm-ara-input" placeholder="Kod, unvan veya cari kart…" autocomplete="off">
         </div>
-        <select id="fck-fil-durum" class="fm-fil-sel">
-          <option value="">Tüm Durumlar</option>
+        <select id="fck-fil-durum" class="fm-fil-sel" title="Durum">
+          <option value="">Durum</option>
           <option value="DOGRULANDI">Doğrulandı</option>
-          <option value="BEKLIYOR">Bekliyor</option>
-          <option value="MANUEL">Manuel</option>
+          <option value="BEKLIYOR">Eşleşme Bekliyor</option>
+          <option value="MANUEL">Manuel Eşleşme</option>
           <option value="IPTAL">Pasif</option>
-          <option value="CAKISMA">Çakışma</option>
+          <option value="CAKISMA">Eşleşme Çakışması</option>
         </select>
-        <label class="fck-chk"><input type="checkbox" id="fck-fil-eksik"> Yalnız eksik eşleşmeler</label>
+        <label class="fck-chk"><input type="checkbox" id="fck-fil-eksik"> Yalnız eşleşme bekleyenler</label>
+        <button type="button" class="erp-toolbar-btn erp-toolbar-btn-primary" id="fck-fil-uygula">Uygula</button>
         <button type="button" class="fm-fil-temizle" id="fck-fil-temizle">Temizle</button>
+        <button type="button" class="erp-toolbar-btn" id="fck-toolbar-yenile">Yenile</button>
       </div>
     </div>
 
-    <div class="fm-layout">
-      <div class="rm-panel fm-liste-kart">
-        <div class="rm-panel-hdr">
-          <span class="rm-panel-baslik" id="fck-liste-baslik">Müşteri Kimlikleri</span>
+    <div class="erp-ic-master fm-layout-unified">
+      <div class="erp-ic-shell">
+        <div class="erp-ic-shell-hdr">
+          <span class="rm-panel-baslik" id="fck-liste-baslik">Müşteriler</span>
           <span class="rm-panel-hdr-alt" id="fck-liste-sayi">—</span>
         </div>
-        <div class="fm-tablo-scroll">
-          <table class="fm-tablo" id="fck-tablo">
+        <div class="erp-ic-grid-wrap">
+          <table class="fm-tablo erp-ic-grid" id="fck-tablo">
             <thead>
               <tr>
                 <th class="fm-th">Tip</th>
-                <th class="fm-th">Op. Kod</th>
-                <th class="fm-th">Op. Unvan</th>
-                <th class="fm-th">CKod</th>
+                <th class="fm-th">Kod</th>
+                <th class="fm-th">Ünvan</th>
                 <th class="fm-th">Cari Kart</th>
-                <th class="fm-th">CTip</th>
-                <th class="fm-th">Durum</th>
-                <th class="fm-th">Posting</th>
-                <th class="fm-th">Güncelleme</th>
+                <th class="fm-th">Eşleşme Durumu</th>
+                <th class="fm-th">Muhasebe Durumu</th>
+                <th class="fm-th">Son Güncelleme</th>
               </tr>
             </thead>
             <tbody id="fck-tbody"></tbody>
           </table>
           <div class="fm-bos rm-yukleniyor" id="fck-yukleniyor" style="display:none;">Yükleniyor…</div>
-          <div class="fm-bos" id="fck-bos" style="display:none;">Kayıt bulunamadı.</div>
+          <div class="erp-ic-empty" id="fck-bos" style="display:none;">
+            <div class="erp-ic-empty-title">Kayıt bulunamadı</div>
+            <div class="erp-ic-empty-desc">Seçilen filtrelere uygun cari bulunamadı.</div>
+          </div>
         </div>
         <div class="fm-sayfalama">
           <button type="button" class="fm-sayfa-btn" id="fck-onceki">‹ Önceki</button>
@@ -96,220 +80,115 @@
         </div>
       </div>
 
-      <div class="rm-panel fm-detay-kart" id="fck-detay-panel">
-        <div class="rm-panel-hdr">
-          <span class="rm-panel-baslik">Detay</span>
-          <span class="rm-panel-hdr-alt" id="fck-d-hdr-alt">Kayıt seçin</span>
+      <div class="erp-ic-detay" id="fck-detay-panel">
+        <div class="erp-ic-shell-hdr">
+          <span class="rm-panel-baslik">Cari Detayı</span>
+          <span class="rm-panel-hdr-alt" id="fck-d-hdr-alt">Kayıt seçilmedi</span>
         </div>
-        <div class="fm-detay-bos rm-bos" id="fck-detay-bos">
-          <span>Detay görmek için listeden bir kimlik seçin.</span>
+        <div class="erp-ic-empty" id="fck-detay-bos">
+          <div class="erp-ic-empty-title">Kayıt seçilmedi</div>
+          <div class="erp-ic-empty-desc">Detayları görmek için listeden bir cari seçin.</div>
         </div>
-        <div class="fm-detay-icerik" id="fck-detay-icerik" style="display:none;">
-          <div class="fm-detay-baslik">
-            <div>
-              <div class="fm-detay-no" id="fck-d-kod">—</div>
-              <div class="fm-detay-tip" id="fck-d-unvan">—</div>
-            </div>
-            <div class="fm-detay-rozetler" id="fck-d-rozetler"></div>
+        <div class="fm-detay-icerik erp-ic-detay-icerik" id="fck-detay-icerik" style="display:none;">
+          <div class="erp-ic-detay-rozetler" id="fck-d-rozetler"></div>
+          <div class="erp-form-baslik">
+            <div class="erp-form-kolon" id="fck-d-sol"></div>
+            <div class="erp-form-kolon" id="fck-d-sag"></div>
           </div>
-          <div class="fm-tab-body fck-detay-body">
-            <div class="fck-detay-bolum">
-              <div class="fck-bolum-baslik">Operasyonel Kimlik</div>
-              <div class="fm-ozet-grid" id="fck-d-op"></div>
+          <div class="erp-ic-detay-scroll">
+            <div class="erp-ic-detay-bolum">
+              <div class="erp-ic-bolum-baslik">Kayıt Geçmişi</div>
+              <div id="fck-d-kayit"></div>
             </div>
-            <div class="fck-detay-bolum">
-              <div class="fck-bolum-baslik">Cari Kart Bağlantısı</div>
-              <div class="fm-ozet-grid" id="fck-d-ck"></div>
-              <div class="fck-eslesme-yok" id="fck-d-eslesme-yok" style="display:none;">Cari Kart eşleşmesi bulunamadı.</div>
-            </div>
-            <div class="fck-detay-bolum">
-              <div class="fck-bolum-baslik">Finans Durumu</div>
-              <div class="fm-ozet-grid" id="fck-d-fin"></div>
-            </div>
-            <div class="fck-detay-bolum">
-              <div class="fck-bolum-baslik">Kayıt Bilgisi</div>
-              <div class="fm-ozet-grid" id="fck-d-kayit"></div>
-            </div>
-            <div class="fck-detay-bolum">
-              <div class="fck-bolum-baslik">İşlemler</div>
-              <div class="fck-aksiyon-band" id="fck-aksiyon-band"></div>
-            </div>
+            <div class="fck-eslesme-yok" id="fck-d-eslesme-yok" style="display:none;">Bu cari için uygun Cari Kart eşleşmesi bulunamadı.</div>
           </div>
+          <div class="erp-ic-aksiyon fck-aksiyon-band" id="fck-aksiyon-band"></div>
         </div>
       </div>
     </div>
   </div>
 </div>
 
-<div class="fck-toast" id="fck-toast" style="display:none;"></div>
+<div class="fm-toast" id="fck-toast" style="display:none;"></div>
 
-<div class="ngsk-overlay" id="fck-modal-aday" style="display:none;">
-  <div class="ngsk-modal fm-modal-kutu fck-modal-genis">
-    <div class="ngsk-modal-baslik fm-modal-hdr">
+<div class="fm-modal-overlay" id="fck-modal-aday" style="display:none;">
+  <div class="fm-modal-kutu fm-modal-kutu-genis">
+    <div class="fm-modal-hdr">
       <span>Cari Kart Adayları</span>
-      <button type="button" class="ngsk-modal-kapat" data-fck-kapat="aday">×</button>
+      <button type="button" class="fm-modal-kapat" data-fck-kapat="aday">×</button>
     </div>
     <div class="fm-modal-body">
       <div class="fm-ara-wrap fck-modal-ara">
-        <input type="text" id="fck-aday-ara" class="fm-ara-input" placeholder="CKod veya unvan ara…">
+        <input type="text" id="fck-aday-ara" class="fm-ara-input" placeholder="Cari kart kodu veya unvan ara…">
       </div>
-      <div class="fck-aday-liste" id="fck-aday-liste"></div>
-      <div class="fm-bos" id="fck-aday-bos" style="display:none;">Eşleşme adayı bulunamadı.</div>
+      <div class="erp-aday-grid-wrap">
+        <div class="erp-aday-grid-hdr">
+          <span>Cari Kart Kodu</span><span>Ünvan</span><span>Cari Tipi</span><span>Kullanım</span><span>Uygunluk</span><span>Engel Nedeni</span><span></span>
+        </div>
+        <div class="fck-aday-liste" id="fck-aday-liste"></div>
+      </div>
+      <div class="erp-ic-empty" id="fck-aday-bos" style="display:none;">
+        <div class="erp-ic-empty-title">Eşleşme Adayı Bulunamadı</div>
+        <div class="erp-ic-empty-desc">Bu cari için uygun Cari Kart eşleşmesi bulunamadı.</div>
+      </div>
     </div>
-    <div class="ngsk-modal-footer fm-modal-ftr">
-      <button type="button" class="pzm-btn pzm-btn-outline pzm-btn-sm" data-fck-kapat="aday">Kapat</button>
+    <div class="fm-modal-ftr">
+      <button type="button" class="fm-btn" data-fck-kapat="aday">Kapat</button>
     </div>
   </div>
 </div>
 
 {% if can_manuel_override %}
-<div class="ngsk-overlay" id="fck-modal-override" style="display:none;">
-  <div class="ngsk-modal fm-modal-kutu">
-    <div class="ngsk-modal-baslik fm-modal-hdr">
-      <span>Manuel Override</span>
-      <button type="button" class="ngsk-modal-kapat" data-fck-kapat="override">×</button>
+<div class="fm-modal-overlay" id="fck-modal-override" style="display:none;">
+  <div class="fm-modal-kutu">
+    <div class="fm-modal-hdr">
+      <span>Manuel Eşleştirme</span>
+      <button type="button" class="fm-modal-kapat" data-fck-kapat="override">×</button>
     </div>
     <div class="fm-modal-body">
-      <div class="fm-modal-uyari fm-modal-uyari-red">Bu işlem CTip uyumsuzluğunu yönetim kararıyla aşar. İşlem audit bilgisiyle kaydedilecektir.</div>
+      <div class="fm-modal-uyari fm-modal-uyari-red">Bu işlem cari tipi uyuşmazlığını yönetim kararıyla aşar. İşlem denetim kaydıyla saklanır.</div>
       <div class="fm-ozet-grid" id="fck-ov-ozet"></div>
-      <button type="button" class="fck-btn fck-btn-teal" id="fck-ov-aday-btn" style="margin-bottom:8px;">Aday Kart Seç</button>
-      <label class="fm-modal-lbl" for="fck-ov-reason">Override gerekçesi *</label>
+      <button type="button" class="fm-btn fm-btn-teal" id="fck-ov-aday-btn" style="margin-bottom:8px;">Aday Kart Seç</button>
+      <label class="fm-modal-lbl" for="fck-ov-reason">Eşleştirme gerekçesi *</label>
       <textarea id="fck-ov-reason" class="fm-modal-textarea" rows="3" maxlength="500"></textarea>
       <label class="fm-modal-lbl" for="fck-ov-not">Ek not</label>
       <textarea id="fck-ov-not" class="fm-modal-textarea" rows="2" maxlength="500"></textarea>
       <div class="fm-modal-hata" id="fck-ov-hata" style="display:none;"></div>
     </div>
-    <div class="ngsk-modal-footer fm-modal-ftr">
-      <button type="button" class="pzm-btn pzm-btn-outline pzm-btn-sm" data-fck-kapat="override">İptal</button>
-      <button type="button" class="pzm-btn pzm-btn-lacivert pzm-btn-sm" id="fck-ov-gonder">Override Uygula</button>
+    <div class="fm-modal-ftr">
+      <button type="button" class="fm-btn" data-fck-kapat="override">İptal</button>
+      <button type="button" class="fm-btn fm-btn-primary" id="fck-ov-gonder">Eşleştirmeyi Uygula</button>
     </div>
   </div>
 </div>
 {% endif %}
 
-<div class="ngsk-overlay" id="fck-modal-pasif" style="display:none;">
-  <div class="ngsk-modal fm-modal-kutu">
-    <div class="ngsk-modal-baslik fm-modal-hdr">
-      <span>Kimliği Pasife Al</span>
-      <button type="button" class="ngsk-modal-kapat" data-fck-kapat="pasif">×</button>
+<div class="fm-modal-overlay" id="fck-modal-pasif" style="display:none;">
+  <div class="fm-modal-kutu">
+    <div class="fm-modal-hdr">
+      <span>Cariyi Pasife Al</span>
+      <button type="button" class="fm-modal-kapat" data-fck-kapat="pasif">×</button>
     </div>
     <div class="fm-modal-body">
-      <div class="fm-modal-uyari">Kimlik fiziksel olarak silinmez; pasif duruma alınır.</div>
+      <div class="fm-modal-uyari">Kayıt silinmez; pasif duruma alınır.</div>
       <label class="fm-modal-lbl" for="fck-pasif-reason">Gerekçe *</label>
       <textarea id="fck-pasif-reason" class="fm-modal-textarea" rows="3" maxlength="500"></textarea>
       <div class="fm-modal-hata" id="fck-pasif-hata" style="display:none;"></div>
     </div>
-    <div class="ngsk-modal-footer fm-modal-ftr">
-      <button type="button" class="pzm-btn pzm-btn-outline pzm-btn-sm" data-fck-kapat="pasif">İptal</button>
-      <button type="button" class="pzm-btn pzm-btn-lacivert pzm-btn-sm" id="fck-pasif-gonder">Pasife Al</button>
+    <div class="fm-modal-ftr">
+      <button type="button" class="fm-btn" data-fck-kapat="pasif">İptal</button>
+      <button type="button" class="fm-btn fm-btn-danger" id="fck-pasif-gonder">Pasife Al</button>
     </div>
   </div>
 </div>
 
 <style>
-:root {
-  --rm-teal:#006a8e; --rm-teal-dark:#005a7a; --rm-gold:#f6c343; --rm-orange:#f97316;
-  --rm-green:#16a34a; --rm-blue:#2563eb; --rm-purple:#7c3aed;
-  --rm-border:#e2e8f0; --rm-border2:#cbd5e1; --rm-bg:#f8fafc; --rm-bg2:#f1f5f9;
-  --rm-t1:#0f172a; --rm-t2:#374151; --rm-t3:#6b7280; --rm-t4:#9ca3af; --rm-white:#fff;
-  --rm-font:'Inter',system-ui,-apple-system,sans-serif;
-}
-.fck-sayfa,.fck-sayfa .fm-sayfa{font-family:var(--rm-font);}
-.rm-page-hdr{display:flex;align-items:center;justify-content:space-between;height:61px;border-bottom:1px solid var(--rm-border);margin:0 -12px;padding:0 12px;}
-.rm-page-hdr-sol{display:flex;align-items:center;gap:12px;min-width:0;}
-.rm-page-logo{width:150px;height:61px;object-fit:contain;object-position:left center;}
-.rm-page-bc{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--rm-t3);}
-.rm-page-bc-sep{color:var(--rm-border2);}
-.rm-page-bc-cur{font-size:12px;font-weight:700;color:var(--rm-t1);}
-.fm-hdr-baslik{font-size:14px;font-weight:800;color:var(--rm-t1);}
-.fm-hdr-alt{font-size:10px;color:var(--rm-t3);max-width:520px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.fm-hdr-sag{display:flex;align-items:center;gap:8px;}
-.fm-guncelleme{font-size:10px;color:var(--rm-t4);}
-.rm-page-geri{display:flex;align-items:center;gap:5px;padding:5px 12px;border-radius:6px;border:1px solid var(--rm-border);background:var(--rm-white);font-size:11px;font-weight:600;color:var(--rm-t2);text-decoration:none;}
-.rm-yeni-btn{font-size:10px;font-weight:700;padding:5px 12px;background:var(--rm-gold);color:var(--rm-t1);border:none;border-radius:5px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;}
-.fm-container{display:flex;flex-direction:column;gap:6px;padding:0 12px 12px;}
-.rm-kpi-bar{display:flex;gap:8px;flex-wrap:wrap;}
-.rm-kpi{flex:1;min-width:90px;border-radius:10px;padding:10px 14px;border:1px solid var(--rm-border);border-left-width:3px;background:var(--rm-white);}
-.rm-kpi-gold{background:#fef9e7;border-left-color:#f6c343;}
-.rm-kpi-green{background:#f0fdf4;border-left-color:#22c55e;}
-.rm-kpi-yellow{background:#fefce8;border-left-color:#eab308;}
-.rm-kpi-orange{background:#fff7ed;border-left-color:#f97316;}
-.rm-kpi-purple{background:#faf5ff;border-left-color:#a855f7;}
-.rm-kpi-sayi{font-size:20px;font-weight:800;color:var(--rm-t1);line-height:1;}
-.rm-kpi-etiket{font-size:10px;font-weight:600;color:#64748b;margin-top:4px;text-transform:uppercase;letter-spacing:.4px;}
-.rm-sekme-bar{display:flex;border-bottom:2px solid var(--rm-border);background:var(--rm-white);padding:0 10px;}
-.rm-sekme{padding:6px 12px;font-size:10px;font-weight:600;color:var(--rm-t3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;}
-.rm-sekme.aktif{color:var(--rm-teal);border-bottom-color:var(--rm-teal);}
-.rm-panel{background:var(--rm-white);border:1px solid var(--rm-border);border-radius:10px;display:flex;flex-direction:column;}
-.rm-panel-hdr{display:flex;align-items:center;gap:8px;padding:7px 12px;background:var(--rm-teal);border-radius:10px 10px 0 0;}
-.rm-panel-baslik{font-size:10px;font-weight:700;color:#f1f5f9;letter-spacing:.5px;text-transform:uppercase;flex:1;}
-.rm-panel-hdr-alt{font-size:10px;color:#94a3b8;}
-.rm-panel-ikon{width:13px;height:13px;stroke:#f6c343;}
-.fm-filtre-satir{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 10px;}
-.fm-ara-wrap{display:flex;align-items:center;gap:6px;flex:1 1 160px;min-width:120px;padding:5px 9px;border:1px solid var(--rm-border2);border-radius:6px;background:var(--rm-bg);}
-.fm-ara-input{flex:1;border:none;outline:none;font-size:10px;background:transparent;font-family:var(--rm-font);}
-.fm-fil-sel{font-size:10px;padding:5px 8px;border:1px solid var(--rm-border2);border-radius:6px;height:30px;font-family:var(--rm-font);}
-.fm-fil-temizle{font-size:10px;font-weight:600;padding:5px 10px;border:1px solid var(--rm-border2);border-radius:6px;background:var(--rm-white);cursor:pointer;}
-.fck-chk{font-size:10px;color:var(--rm-t2);display:flex;align-items:center;gap:4px;}
-.fm-layout{display:grid;grid-template-columns:62fr 38fr;gap:6px;align-items:start;}
-.fm-tablo-scroll{overflow:auto;max-height:calc(100vh - 360px);min-height:180px;}
-.fm-tablo{width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed;}
-.fm-th{padding:7px 8px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;color:var(--rm-t3);background:var(--rm-bg);border-bottom:1px solid var(--rm-border);}
-.fm-tablo td{padding:7px 8px;border-bottom:1px solid #f1f5f9;vertical-align:top;overflow:hidden;text-overflow:ellipsis;}
-.fm-tablo tr.fck-satir{cursor:pointer;}
-.fm-tablo tr.fck-satir:hover{background:#f8fafc;}
-.fm-tablo tr.fck-satir-secili{background:#fef9e7;border-left:3px solid var(--rm-gold);}
-.fm-bos{display:flex;flex-direction:column;align-items:center;padding:32px 12px;color:var(--rm-t4);font-size:11px;}
-.fm-sayfalama{display:flex;align-items:center;justify-content:center;gap:10px;padding:8px;font-size:10px;border-top:1px solid var(--rm-border);}
-.fm-sayfa-btn{border:1px solid var(--rm-border2);background:var(--rm-white);border-radius:5px;padding:4px 10px;font-size:10px;cursor:pointer;}
-.fm-sayfa-btn:disabled{opacity:.45;cursor:default;}
-.fm-detay-kart{max-height:calc(100vh - 280px);}
-.fm-detay-bos{padding:48px 16px;text-align:center;}
-.fm-detay-icerik{display:flex;flex-direction:column;overflow:hidden;}
-.fm-detay-baslik{display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--rm-border);}
-.fm-detay-no{font-weight:800;font-size:13px;font-family:'Courier New',monospace;}
-.fm-detay-tip{font-size:10px;color:var(--rm-t3);margin-top:2px;}
-.fck-detay-body{overflow-y:auto;max-height:calc(100vh - 420px);padding:10px 12px;}
-.fck-detay-bolum{margin-bottom:12px;}
-.fck-bolum-baslik{font-size:9px;font-weight:700;text-transform:uppercase;color:var(--rm-teal);margin-bottom:6px;letter-spacing:.4px;}
-.fm-ozet-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;font-size:11px;}
-.fm-ozet-satir span{display:block;color:var(--rm-t4);font-size:9px;text-transform:uppercase;}
-.fm-ozet-satir strong{color:var(--rm-t2);font-weight:600;word-break:break-word;}
-.fck-eslesme-yok{font-size:11px;color:var(--rm-orange);background:#fff7ed;border:1px solid rgba(249,115,22,.3);padding:8px 10px;border-radius:6px;margin-top:6px;}
-.fck-aksiyon-band{display:flex;flex-wrap:wrap;gap:6px;}
-.fck-btn{font-size:10px;font-weight:600;padding:5px 10px;border-radius:6px;border:1px solid var(--rm-border2);background:var(--rm-white);cursor:pointer;font-family:var(--rm-font);}
-.fck-btn:disabled{opacity:.45;cursor:not-allowed;}
-.fck-btn-teal{background:var(--rm-teal);color:#fff;border-color:var(--rm-teal);}
-.fck-btn-warn{background:#fff7ed;color:#c2410c;border-color:rgba(234,88,12,.35);}
-.fm-rozet{display:inline-block;font-size:9px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid transparent;}
-.fm-rozet-dogrulandi{color:#15803d;background:#f0fdf4;border-color:rgba(22,163,74,.3);}
-.fm-rozet-bekliyor{color:#a16207;background:#fefce8;border-color:rgba(202,138,4,.35);}
-.fm-rozet-manuel{color:#1d4ed8;background:#eff6ff;border-color:rgba(37,99,235,.3);}
-.fm-rozet-pasif{color:#64748b;background:#f1f5f9;border-color:var(--rm-border2);}
-.fm-rozet-cakisma{color:#b91c1c;background:#fef2f2;border-color:rgba(220,38,38,.3);}
-.fm-rozet-post-ok{color:#15803d;background:#f0fdf4;}
-.fm-rozet-post-no{color:#c2410c;background:#fff7ed;}
-.fck-toast{position:fixed;bottom:16px;right:16px;z-index:9500;padding:10px 14px;border-radius:8px;font-size:11px;max-width:360px;box-shadow:0 4px 16px rgba(0,0,0,.12);}
-.fck-toast-ok{background:#f0fdf4;color:#15803d;border:1px solid rgba(22,163,74,.3);}
-.fck-toast-hata{background:#fef2f2;color:#b91c1c;border:1px solid rgba(220,38,38,.3);}
-.ngsk-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:9000;align-items:center;justify-content:center;}
-.ngsk-overlay.acik{display:flex;}
-.fm-modal-kutu{background:var(--rm-white);border-radius:10px;max-width:480px;width:94%;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;}
-.fck-modal-genis{max-width:640px;}
-.fm-modal-hdr{display:flex;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--rm-border);font-weight:700;font-size:13px;}
-.ngsk-modal-kapat{background:none;border:none;font-size:20px;cursor:pointer;color:var(--rm-t3);}
-.fm-modal-body{padding:14px 16px;overflow-y:auto;font-size:12px;}
-.fm-modal-uyari{background:#fff7ed;border:1px solid rgba(234,88,12,.35);color:#c2410c;padding:8px 10px;border-radius:6px;font-size:11px;margin-bottom:10px;}
-.fm-modal-uyari-red{background:#fef2f2;border-color:rgba(220,38,38,.35);color:#b91c1c;}
-.fm-modal-lbl{display:block;font-size:11px;font-weight:700;margin:8px 0 4px;}
-.fm-modal-textarea{width:100%;box-sizing:border-box;font-size:12px;padding:8px;border:1px solid var(--rm-border2);border-radius:6px;font-family:var(--rm-font);}
-.fm-modal-hata{color:#b91c1c;font-size:11px;margin-top:8px;}
-.ngsk-modal-footer,.fm-modal-ftr{display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid var(--rm-border);}
-.fck-aday-liste{max-height:320px;overflow-y:auto;margin-top:8px;}
-.fck-aday-satir{display:grid;grid-template-columns:80px 1fr 60px 70px 80px;gap:6px;padding:8px;border-bottom:1px solid #f1f5f9;font-size:11px;align-items:center;}
-.fck-aday-satir.disabled{opacity:.5;}
-.fck-aday-satir .fck-btn{padding:3px 8px;font-size:9px;}
-@media(max-width:1366px){.fm-layout{grid-template-columns:1fr;}.fck-aday-satir{grid-template-columns:1fr;}}
+/* Sayfa özel — ortak ERP IC: _finans_shared_styles.html */
+.fck-chk { font-size: 10px; color: var(--rm-t2); display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.erp-ic-detay-icerik { display: flex; flex-direction: column; min-height: 0; flex: 1; overflow: hidden; }
+.fck-eslesme-yok { font-size: 10px; color: var(--rm-orange); background: #fff7ed; border: 1px solid rgba(249,115,22,.3); padding: 6px 10px; margin: 8px 10px; border-radius: 4px; }
+.fm-tablo tr.fck-satir-secili { background: #fef9e7; border-left: 3px solid var(--rm-gold); }
+.fck-modal-ara { margin-bottom: 6px; }
 </style>
 
 <script>
@@ -322,15 +201,41 @@
   var _tip = 'MUSTERI', _offset = 0, _limit = 50, _toplam = 0, _secili = null, _detay = null;
   var _busy = false, _debounce = null, _ovCkod = null, _adayMode = 'eslestir';
 
-  var DURUM = {DOGRULANDI:'Doğrulandı',BEKLIYOR:'Bekliyor',MANUEL:'Manuel',IPTAL:'Pasif',CAKISMA:'Çakışma'};
+  var DURUM = {DOGRULANDI:'Doğrulandı',BEKLIYOR:'Eşleşme Bekliyor',MANUEL:'Manuel Eşleşme',IPTAL:'Pasif',CAKISMA:'Çakışma'};
   var TIP = {MUSTERI:'Müşteri',TEDARIKCI:'Tedarikçi'};
+  var ENGEL = {
+    CKOD_YOK:'Cari Kart Eşleşmesi Yok',
+    CTIP_MISMATCH:'Cari Tipi Uyuşmuyor',
+    NO_MATCHING_CARI_KART:'Eşleşme Adayı Bulunamadı'
+  };
+
+  function cariKartTipLbl(raw) {
+    if (raw == null || raw === '') return '—';
+    var s = String(raw).toUpperCase();
+    if (s.indexOf('M') >= 0 && s.indexOf('T') < 0) return 'Müşteri';
+    if (s.indexOf('T') >= 0 && s.indexOf('M') < 0) return 'Tedarikçi';
+    if (s.indexOf('M') >= 0 && s.indexOf('T') >= 0) return 'Müşteri / Tedarikçi';
+    return 'Tanımsız';
+  }
+  function kullanimLbl(a) {
+    if (a.baska_aktif_kimlikte) return 'Kullanımda';
+    if (a.kullanan_kimlik_tipi) return 'Başka kayıtta';
+    return 'Müsait';
+  }
+  function engelKullanici(aciklama) {
+    if (!aciklama) return '—';
+    if (aciklama.indexOf('CTip') >= 0 || aciklama.indexOf('ctip') >= 0) return 'Cari Tipi Uyuşmuyor';
+    if (aciklama.indexOf('CKod') >= 0 || aciklama.indexOf('kimliginde') >= 0) return 'Eşleşme Çakışması';
+    return aciklama;
+  }
 
   function esc(s){var d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
   function apiErr(j){return (j&&j.error&&j.error.message)||'İşlem başarısız.';}
-  function toast(msg,tip){var el=document.getElementById('fck-toast');el.textContent=msg;el.className='fck-toast fck-toast-'+(tip||'ok');el.style.display='block';setTimeout(function(){el.style.display='none';},4500);}
+  function toast(msg,tip){var el=document.getElementById('fck-toast');el.textContent=msg;el.className='fm-toast fm-toast-'+(tip||'ok');el.style.display='block';setTimeout(function(){el.style.display='none';},4500);}
+  function engelLbl(k){ return ENGEL[k] || k || '—'; }
 
   function rozetDurum(d){var c='fm-rozet-bekliyor';if(d==='DOGRULANDI')c='fm-rozet-dogrulandi';else if(d==='MANUEL')c='fm-rozet-manuel';else if(d==='IPTAL')c='fm-rozet-pasif';else if(d==='CAKISMA')c='fm-rozet-cakisma';return '<span class="fm-rozet '+c+'">'+(DURUM[d]||d)+'</span>';}
-  function rozetPosting(ok,kod){if(ok)return '<span class="fm-rozet fm-rozet-post-ok">Uygun</span>';var t=kod?(' title="'+esc(kod)+'"'):'';return '<span class="fm-rozet fm-rozet-post-no"'+t+'>Engelli</span>';}
+  function rozetPosting(ok,kod){if(ok)return '<span class="fm-rozet fm-rozet-post-ok">Muhasebeye Uygun</span>';var t=kod?(' title="'+esc(engelLbl(kod))+'"'):'';return '<span class="fm-rozet fm-rozet-post-no"'+t+'>Muhasebe Engelli</span>';}
 
   function params(){
     var p = new URLSearchParams();
@@ -361,14 +266,12 @@
         document.getElementById('fck-kpi-toplam').textContent = kpi.toplam != null ? kpi.toplam : '—';
         document.getElementById('fck-kpi-dogrulandi').textContent = kpi.dogrulanmis != null ? kpi.dogrulanmis : '—';
         document.getElementById('fck-kpi-bekleyen').textContent = kpi.bekleyen != null ? kpi.bekleyen : '—';
-        document.getElementById('fck-kpi-manuel').textContent = kpi.manuel != null ? kpi.manuel : '—';
-        document.getElementById('fck-kpi-posting').textContent = kpi.posting_engelli != null ? kpi.posting_engelli : '—';
         document.getElementById('fck-kpi-musteri').textContent = kpi.musteri != null ? kpi.musteri : '—';
         document.getElementById('fck-kpi-tedarikci').textContent = kpi.tedarikci != null ? kpi.tedarikci : '—';
         var items = d.items || [];
         _toplam = (d.pagination && d.pagination.toplam) || items.length;
         document.getElementById('fck-liste-sayi').textContent = _toplam + ' kayıt';
-        document.getElementById('fck-liste-baslik').textContent = _tip === 'MUSTERI' ? 'Müşteri Kimlikleri' : 'Tedarikçi Kimlikleri';
+        document.getElementById('fck-liste-baslik').textContent = _tip === 'MUSTERI' ? 'Müşteriler' : 'Tedarikçiler';
         var tb = document.getElementById('fck-tbody');
         tb.innerHTML = '';
         if (!items.length){ document.getElementById('fck-bos').style.display = 'flex'; return; }
@@ -380,8 +283,6 @@
             '<td class="fm-kod">'+esc(row.kod||'—')+'</td>'+
             '<td><span class="fm-alt-satir">'+esc(row.unvan||'—')+'</span></td>'+
             '<td class="fm-kod">'+esc(row.cari_kart_ckod||'—')+'</td>'+
-            '<td>'+esc(row.cari_kart_unvan||'—')+'</td>'+
-            '<td>'+esc(row.ctip_raw!=null?row.ctip_raw:'—')+'</td>'+
             '<td>'+rozetDurum(row.durum)+'</td>'+
             '<td>'+rozetPosting(row.posting_uygun,row.posting_engel_kodu)+'</td>'+
             '<td>'+esc((row.updated_at||'').slice(0,16))+'</td>';
@@ -399,7 +300,9 @@
   }
 
   function ozetGrid(el, pairs){
-    el.innerHTML = pairs.map(function(p){ return '<div class="fm-ozet-satir"><span>'+esc(p[0])+'</span><strong>'+esc(p[1])+'</strong></div>'; }).join('');
+    el.innerHTML = pairs.map(function(p){
+      return '<div class="erp-form-satir"><div class="erp-form-etiket">'+esc(p[0])+'</div><div class="erp-form-deger">'+esc(p[1])+'</div></div>';
+    }).join('');
   }
 
   function detayYukle(id){
@@ -413,32 +316,29 @@
         var d = _detay;
         document.getElementById('fck-detay-bos').style.display = 'none';
         document.getElementById('fck-detay-icerik').style.display = 'flex';
-        document.getElementById('fck-d-hdr-alt').textContent = '#'+d.id;
-        document.getElementById('fck-d-kod').textContent = d.operasyonel_kod || '—';
-        document.getElementById('fck-d-unvan').textContent = d.unvan_snapshot || d.operasyonel_unvan || '—';
+        document.getElementById('fck-d-hdr-alt').textContent = d.operasyonel_kod || d.unvan_snapshot || 'Seçili kayıt';
         document.getElementById('fck-d-rozetler').innerHTML = rozetDurum(d.durum) + rozetPosting(d.posting_uygun, d.posting_engel_kodu);
-        ozetGrid(document.getElementById('fck-d-op'), [
-          ['Tip', TIP[d.kimlik_tipi]||d.kimlik_tipi], ['ID', d.operasyonel_id],
-          ['Kod', d.operasyonel_kod||'—'], ['Unvan', d.operasyonel_unvan||d.unvan_snapshot||'—'],
-          ['Aktif', d.operasyonel_aktif ? 'Evet' : 'Hayır']
+        ozetGrid(document.getElementById('fck-d-sol'), [
+          ['Cari Tipi', TIP[d.kimlik_tipi]||d.kimlik_tipi],
+          ['Operasyonel Kod', d.operasyonel_kod||'—'],
+          ['Ünvan', d.operasyonel_unvan||d.unvan_snapshot||'—'],
+          ['Aktiflik', d.operasyonel_aktif !== false ? 'Aktif' : 'Pasif'],
+          ['Eşleşme Durumu', DURUM[d.durum]||d.durum]
         ]);
-        ozetGrid(document.getElementById('fck-d-ck'), [
-          ['CKod', d.cari_kart_ckod||'—'], ['Cari Kart Unvanı', d.cari_kart_unvan||'—'],
-          ['CTip ham', d.ctip_raw!=null?d.ctip_raw:'—'], ['Normalize', (d.ctip_normalized||[]).join(', ')||'—'],
-          ['Uygunluk', d.ctip_uygun ? 'Uygun' : 'Uyumsuz']
+        ozetGrid(document.getElementById('fck-d-sag'), [
+          ['Cari Kart Kodu', d.cari_kart_ckod||'—'],
+          ['Cari Kart Ünvanı', d.cari_kart_unvan||'—'],
+          ['Cari Tipi Uygunluğu', d.ctip_uygun ? 'Uygun' : 'Uyumsuz'],
+          ['Muhasebe Uygunluğu', d.posting_uygun ? 'Muhasebeye Uygun' : 'Muhasebe Engelli'],
+          ['Engel Nedeni', engelLbl(d.posting_engel_kodu)]
         ]);
         var eksik = !d.cari_kart_ckod;
         var msgEl = document.getElementById('fck-d-eslesme-yok');
         msgEl.style.display = eksik ? 'block' : 'none';
-        msgEl.textContent = _tip === 'TEDARIKCI' ? 'Eşleşme adayı bulunamadı.' : 'Cari Kart eşleşmesi bulunamadı.';
-        ozetGrid(document.getElementById('fck-d-fin'), [
-          ['Kimlik durumu', DURUM[d.durum]||d.durum],
-          ['Posting', d.posting_uygun ? 'Uygun' : 'Engelli'],
-          ['Engel kodu', d.posting_engel_kodu||'—'],
-          ['Uyarılar', (d.uyarilar||[]).join('; ')||'—']
-        ]);
+        msgEl.textContent = 'Bu cari için uygun Cari Kart eşleşmesi bulunamadı.';
         ozetGrid(document.getElementById('fck-d-kayit'), [
-          ['Oluşturma', d.created_at||'—'], ['Güncelleme', d.updated_at||'—'],
+          ['Oluşturma', d.created_at||'—'],
+          ['Güncelleme', d.updated_at||'—'],
           ['Notlar', d.notlar||'—']
         ]);
         aksiyonBand(d);
@@ -450,24 +350,24 @@
     band.innerHTML = '';
     function btn(lbl, cls, fn, dis, hint){
       var b = document.createElement('button');
-      b.type = 'button'; b.className = 'fck-btn ' + (cls||''); b.textContent = lbl;
+      b.type = 'button'; b.className = 'fm-btn ' + (cls||''); b.textContent = lbl;
       if (dis){ b.disabled = true; if(hint) b.title = hint; }
       else b.addEventListener('click', fn);
       band.appendChild(b);
     }
-    btn('Adayları İncele', 'fck-btn-teal', function(){ adayAc('eslestir'); }, false);
+    btn('Adayları İncele', 'fm-btn-teal', function(){ adayAc('eslestir'); }, false);
     if (d.kimlik_tipi === 'MUSTERI' && CFG.canWriteMusteri && d.durum !== 'IPTAL'){
       btn('Mevcut Eşleşmeyi Senkronize Et', '', musteriSync, d.durum==='DOGRULANDI' && d.cari_kart_ckod);
     }
     if (d.kimlik_tipi === 'TEDARIKCI' && CFG.canWriteTedarikci && d.durum !== 'IPTAL'){
-      btn('CKod Seç / Eşleştir', 'fck-btn-teal', function(){ adayAc('eslestir'); }, false);
+      btn('Eşleştir', 'fm-btn-teal', function(){ adayAc('eslestir'); }, false);
     }
     if (CFG.canManuelOverride && d.durum !== 'IPTAL'){
-      btn('Manuel Override', 'fck-btn-warn', overrideAc, false);
+      btn('Manuel Eşleştirme', 'fm-btn-danger', overrideAc, false);
     }
     if ((d.kimlik_tipi==='MUSTERI'&&CFG.canWriteMusteri)||(d.kimlik_tipi==='TEDARIKCI'&&CFG.canWriteTedarikci)){
-      if (d.aktif !== false && d.durum !== 'IPTAL') btn('Pasife Al', 'fck-btn-warn', pasifAc, false);
-      if (d.durum === 'IPTAL') btn('Yeniden Aktif Et', 'fck-btn-teal', yenidenAktif, false);
+      if (d.aktif !== false && d.durum !== 'IPTAL') btn('Pasife Al', 'fm-btn-danger', pasifAc, false);
+      if (d.durum === 'IPTAL') btn('Yeniden Aktif Et', 'fm-btn-teal', yenidenAktif, false);
     }
   }
 
@@ -489,24 +389,34 @@
       var bos = document.getElementById('fck-aday-bos');
       list.innerHTML = '';
       var adaylar = (j.data&&j.data.adaylar)||[];
-      if (!j.ok || !adaylar.length){ bos.style.display='block'; bos.textContent='Eşleşme adayı bulunamadı.'; return; }
+      if (!j.ok || !adaylar.length){
+        bos.style.display='block';
+        bos.querySelector('.erp-ic-empty-title').textContent='Eşleşme Adayı Bulunamadı';
+        bos.querySelector('.erp-ic-empty-desc').textContent='Bu cari için uygun Cari Kart eşleşmesi bulunamadı.';
+        return;
+      }
       bos.style.display = 'none';
       adaylar.forEach(function(a){
         var row = document.createElement('div');
         row.className = 'fck-aday-satir' + (a.secilebilir ? '' : ' disabled');
-        row.innerHTML = '<div class="fm-kod">'+esc(a.cari_kart_ckod)+'</div><div>'+esc(a.cari_kart_unvan)+'</div><div>'+esc(a.ctip_raw)+'</div><div>'+(a.uyumlu?'Uygun':'Uyumsuz')+'</div><div></div>';
+        row.innerHTML = '<div class="fm-kod">'+esc(a.cari_kart_ckod)+'</div>'+
+          '<div>'+esc(a.cari_kart_unvan)+'</div>'+
+          '<div>'+esc(cariKartTipLbl(a.ctip_raw))+'</div>'+
+          '<div>'+esc(kullanimLbl(a))+'</div>'+
+          '<div>'+(a.uyumlu?'Uygun':'Uyumsuz')+'</div>'+
+          '<div class="fm-alt-satir">'+esc(engelKullanici(a.engel_aciklama))+'</div><div></div>';
         var act = row.lastElementChild;
         var canSec = false;
         if (_adayMode === 'override' && CFG.canManuelOverride && a.secilebilir) canSec = true;
         if (_adayMode === 'eslestir' && _detay.kimlik_tipi === 'TEDARIKCI' && CFG.canWriteTedarikci && a.secilebilir) canSec = true;
         if (canSec){
           var sb = document.createElement('button');
-          sb.className = 'fck-btn fck-btn-teal'; sb.textContent = 'Seç';
+          sb.className = 'fm-btn fm-btn-teal'; sb.textContent = 'Seç';
           sb.addEventListener('click', function(){
             if (_adayMode === 'override') {
               _ovCkod = a.cari_kart_ckod;
               ozetGrid(document.getElementById('fck-ov-ozet'), [
-                ['CKod', a.cari_kart_ckod], ['Unvan', a.cari_kart_unvan||'—'], ['CTip', a.ctip_raw!=null?a.ctip_raw:'—']
+                ['Cari Kart Kodu', a.cari_kart_ckod], ['Cari Kart Ünvanı', a.cari_kart_unvan||'—'], ['Cari Tipi', cariKartTipLbl(a.ctip_raw)]
               ]);
               modalKapat('fck-modal-aday');
               modalAc('fck-modal-override');
@@ -559,7 +469,7 @@
     document.getElementById('fck-ov-not').value = '';
     document.getElementById('fck-ov-hata').style.display = 'none';
     ozetGrid(document.getElementById('fck-ov-ozet'), [
-      ['CKod', _ovCkod||'(aday seçin)'], ['Unvan', _detay.cari_kart_unvan||'—'], ['CTip', _detay.ctip_raw!=null?_detay.ctip_raw:'—']
+      ['Cari Kart Kodu', _ovCkod||'(aday seçin)'], ['Cari Kart Ünvanı', _detay.cari_kart_unvan||'—'], ['Cari Tipi', cariKartTipLbl(_detay.ctip_raw)]
     ]);
     modalAc('fck-modal-override');
   }
@@ -577,7 +487,7 @@
     }).then(function(r){return r.json();}).then(function(j){
       if (!j.ok){ document.getElementById('fck-ov-hata').textContent=apiErr(j); document.getElementById('fck-ov-hata').style.display='block'; return; }
       modalKapat('fck-modal-override');
-      toast('Manuel override uygulandı.','ok');
+      toast('Manuel eşleştirme uygulandı.','ok');
       yukle(); detayYukle(_detay.id);
     });
   }
@@ -589,14 +499,14 @@
     fetch('/nexgen/api/finans-cari-kimlik/'+_detay.id+'/pasife-al', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({reason:reason})})
       .then(function(r){return r.json();}).then(function(j){
         if (!j.ok){ document.getElementById('fck-pasif-hata').textContent=apiErr(j); document.getElementById('fck-pasif-hata').style.display='block'; return; }
-        modalKapat('fck-modal-pasif'); toast('Kimlik pasife alındı.','ok'); yukle(); detayYukle(_detay.id);
+        modalKapat('fck-modal-pasif'); toast('Cari pasife alındı.','ok'); yukle(); detayYukle(_detay.id);
       });
   }
   function yenidenAktif(){
     fetch('/nexgen/api/finans-cari-kimlik/'+_detay.id+'/yeniden-aktif', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'})
       .then(function(r){return r.json();}).then(function(j){
         if (!j.ok){ toast(apiErr(j),'hata'); return; }
-        toast('Kimlik yeniden aktif.','ok'); yukle(); detayYukle(_detay.id);
+        toast('Cari yeniden aktif.','ok'); yukle(); detayYukle(_detay.id);
       });
   }
 
@@ -605,7 +515,7 @@
     document.getElementById('fck-sek-musteri').classList.add('aktif');
     document.getElementById('fck-sek-tedarikci').classList.remove('aktif');
     document.getElementById('fck-detay-icerik').style.display='none';
-    document.getElementById('fck-detay-bos').style.display='flex';
+    document.getElementById('fck-detay-bos').style.display='block';
     yukle();
   });
   document.getElementById('fck-sek-tedarikci').addEventListener('click', function(){
@@ -613,14 +523,15 @@
     document.getElementById('fck-sek-tedarikci').classList.add('aktif');
     document.getElementById('fck-sek-musteri').classList.remove('aktif');
     document.getElementById('fck-detay-icerik').style.display='none';
-    document.getElementById('fck-detay-bos').style.display='flex';
+    document.getElementById('fck-detay-bos').style.display='block';
     yukle();
   });
-  document.getElementById('fck-btn-yenile').addEventListener('click', yukle);
   document.getElementById('fck-fil-temizle').addEventListener('click', function(){
     document.getElementById('fck-arama').value=''; document.getElementById('fck-fil-durum').value='';
     document.getElementById('fck-fil-eksik').checked=false; _offset=0; yukle();
   });
+  document.getElementById('fck-fil-uygula').addEventListener('click', function(){ _offset=0; yukle(); });
+  document.getElementById('fck-toolbar-yenile').addEventListener('click', yukle);
   document.getElementById('fck-onceki').addEventListener('click', function(){ if(_offset>=_limit){_offset-=_limit;yukle();} });
   document.getElementById('fck-sonraki').addEventListener('click', function(){ if(_offset+_limit<_toplam){_offset+=_limit;yukle();} });
   document.getElementById('fck-arama').addEventListener('input', function(){
@@ -637,6 +548,16 @@
   var ovBtn = document.getElementById('fck-ov-gonder');
   if (ovBtn) ovBtn.addEventListener('click', overrideGonder);
   document.getElementById('fck-pasif-gonder').addEventListener('click', pasifGonder);
+
+  window.fckYenile = yukle;
+
+  function fckUrlFiltreUygula() {
+    var q = new URLSearchParams(window.location.search);
+    if (q.get('durum')) document.getElementById('fck-fil-durum').value = q.get('durum');
+    if (q.get('yalniz_eksik') === '1') document.getElementById('fck-fil-eksik').checked = true;
+    if (q.get('arama')) document.getElementById('fck-arama').value = q.get('arama');
+  }
+  fckUrlFiltreUygula();
 
   yukle();
 })();

@@ -137,6 +137,8 @@ def register_finans_cari_kimlik_routes(bp, db_fn, kullanici_id_fn):
         return render_template(
             'nexgen/finans_cari_kimlik_koprusu.html',
             active='nexgen',
+            fm_tab='cari_eslestirme',
+            can_cari_yonetimi=True,
             can_write_musteri=can_cari_kimlik_write_musteri(yk),
             can_write_tedarikci=can_cari_kimlik_write_tedarikci(yk),
             can_manuel_override=can_cari_kimlik_manuel_override(yk),
@@ -155,18 +157,33 @@ def register_finans_cari_kimlik_routes(bp, db_fn, kullanici_id_fn):
         offset = _int_arg(args, 'offset', 0) or 0
         offset = max(0, offset)
         yalniz_eksik = str(args.get('yalniz_eksik') or '').lower() in ('1', 'true', 'yes')
+        teknik_mod = str(args.get('tum') or '').lower() not in ('1', 'true', 'yes')
         con = db_fn()
         try:
-            paket = liste(
-                con,
-                kimlik_tipi=kimlik_tipi,
-                durum=(args.get('durum') or '').strip().upper() or None,
-                arama=(args.get('arama') or '').strip() or None,
-                yalniz_eksik=yalniz_eksik,
-                limit=limit,
-                offset=offset,
-            )
-            kp = kpi(con)
+            if teknik_mod:
+                from modules.nexgen.finans_cari_kimlik_read_service import (
+                    kpi_teknik_kontrol,
+                    liste_teknik_kontrol,
+                )
+                paket = liste_teknik_kontrol(
+                    con,
+                    kimlik_tipi=kimlik_tipi,
+                    arama=(args.get('arama') or '').strip() or None,
+                    limit=limit,
+                    offset=offset,
+                )
+                kp = kpi_teknik_kontrol(con)
+            else:
+                paket = liste(
+                    con,
+                    kimlik_tipi=kimlik_tipi,
+                    durum=(args.get('durum') or '').strip().upper() or None,
+                    arama=(args.get('arama') or '').strip() or None,
+                    yalniz_eksik=yalniz_eksik,
+                    limit=limit,
+                    offset=offset,
+                )
+                kp = kpi(con)
             return _api_ok(
                 data={
                     'items': paket['kayitlar'],

@@ -75,8 +75,10 @@ def _cekirdek_aile(kod: str) -> tuple[str, str]:
     k = kod.upper()
     if k.startswith('1BA-'):
         return 'TERLIK', 'TERLİK'
-    if k.startswith('2BA-') or k.startswith('3BA-'):
+    if k.startswith('2BA-'):
         return 'TABAN', 'TABAN'
+    if k.startswith('3BA-'):
+        return 'DOKME', 'DÖKME'
     return 'DIGER', 'DİĞER'
 
 
@@ -154,6 +156,115 @@ def rc_cekirdek_agac_hazirla(formuller_guncel: list[dict]) -> list[dict]:
                 'varyantlar': varyant_list,
             })
     return agac
+
+
+def _modul02_aile_norm(v: str | None) -> str:
+    a = (v or '').strip().upper().replace('İ', 'I').replace('Ö', 'O')
+    if a in ('TERLIK', 'TERLİK'):
+        return 'TERLIK'
+    if a == 'TABAN':
+        return 'TABAN'
+    if a in ('DOKME', 'DÖKME'):
+        return 'DOKME'
+    return a
+
+
+def modul02_rc_formul_gruplari_hazirla(
+    formuller_guncel: list[dict],
+    *,
+    tip_n: str | None = None,
+) -> tuple[list[dict], list[dict], list[dict]]:
+    """Reçete Merkezi ağacından MOD-02 Ana Formül grupları (birebir görünürlük)."""
+    agac = rc_cekirdek_agac_hazirla(formuller_guncel)
+    kod_map = {int(f['id']): f for f in formuller_guncel if f.get('id') is not None}
+
+    formul_gruplar: list[dict] = []
+    varyantlar: list[dict] = []
+    formul_by_id: dict[int, dict] = {}
+
+    for aile_node in agac:
+        aile_key = aile_node.get('aile_key') or ''
+        aile_etiket = aile_node.get('aile') or ''
+        if tip_n and _modul02_aile_norm(aile_key) != tip_n:
+            continue
+        for var in aile_node.get('varyantlar') or []:
+            baslik = (var.get('baslik') or '').strip()
+            if not baslik:
+                continue
+            secenekler_map: dict[str, dict] = {}
+            rv_ad = ''
+            for b in var.get('boyutlar') or []:
+                boyut = (b.get('boyut') or '').upper()
+                try:
+                    uv_id = int(b.get('uv_id'))
+                    formul_id = int(b.get('formul_id'))
+                    rv_id = int(b.get('rv_id')) if b.get('rv_id') is not None else None
+                except (TypeError, ValueError):
+                    continue
+                if not boyut or boyut in secenekler_map:
+                    continue
+                kod = (b.get('kod') or '').strip()
+                f_rec = kod_map.get(formul_id) or {}
+                renk_ad = ''
+                master_kg = 0.0
+                for rv in f_rec.get('rv_ozet') or []:
+                    if rv.get('rv_id') == rv_id:
+                        renk_ad = (rv.get('ad') or '').strip()
+                        for uv in rv.get('varyantlar') or []:
+                            if uv.get('uv_id') == uv_id:
+                                master_kg = float(uv.get('toplam_kg') or 0)
+                                break
+                        break
+                if not rv_ad:
+                    rv_ad = baslik
+                secenekler_map[boyut] = {
+                    'boyut': boyut,
+                    'boyut_harf': boyut_kisaltma(boyut),
+                    'formul_id': formul_id,
+                    'formul_kod': kod,
+                    'uv_id': uv_id,
+                    'rv_id': rv_id,
+                }
+                varyantlar.append({
+                    'id': uv_id,
+                    'renk_varyant_id': rv_id,
+                    'boyut': boyut,
+                    'recete_durum': b.get('recete_durum') or 'TASLAK',
+                    'rv_id': rv_id,
+                    'renk_ad': renk_ad,
+                    'formul_id': formul_id,
+                    'formul_kod': kod,
+                    'formul_ad': f_rec.get('ad') or kod,
+                    'urun_ailesi': f_rec.get('urun_ailesi') or aile_etiket,
+                    'master_kg': round(master_kg, 3),
+                })
+                if formul_id not in formul_by_id:
+                    formul_by_id[formul_id] = {
+                        'id': formul_id,
+                        'kod': kod,
+                        'ad': baslik,
+                        'urun_ailesi': f_rec.get('urun_ailesi') or aile_etiket,
+                    }
+            secenekler = [
+                secenekler_map[b]
+                for b in _BOYUT_SIRA_SECIM
+                if b in secenekler_map
+            ]
+            if not secenekler:
+                continue
+            formul_gruplar.append({
+                'grup_key': f'{aile_etiket}|{baslik}',
+                'baslik': baslik,
+                'aile': aile_etiket,
+                'rv_ad': rv_ad,
+                'secenekler': secenekler,
+            })
+
+    formuller = sorted(
+        formul_by_id.values(),
+        key=lambda f: (f.get('kod') or '', f.get('ad') or ''),
+    )
+    return formul_gruplar, varyantlar, formuller
 
 
 # ── Renk çekirdek görünürlük ─────────────────────────────────────────────
@@ -403,27 +514,54 @@ def _secim_model_anahtari(rv_ad: str | None, baslik: str | None) -> str:
     return parcalar[-1] if parcalar else b
 
 
-def formul_secim_gruplari_hazirla(uv_satirlari: list[dict]) -> list[dict]:
+def formul_secim_gruplari_hazirla(
+    uv_satirlari: list[dict],
+    *,
+    include_non_cekirdek: bool = False,
+) -> list[dict]:
     """Aynı ana formülün LARGE/SMALL UV kayıtlarını tek seçim grubunda birleştirir.
 
     Grup anahtarı: urun_ailesi + secim_adi (DB formul.ad kardeşleri aynı adı paylaşır;
     gösterim adı ENJEKSİYON yerine TABAN/DÖKME olur).
     Boyut seçenekleri nexgen_uretim_varyant.boyut üzerinden gelir.
+
+    include_non_cekirdek=True: aktif urun_ailesi dolu legacy formülleri de gruplar
+    (FAZ-3 hydrate TERLİK tam liste — yalnız 1BA üçlüsü değil).
     """
     buckets: dict[str, dict[str, Any]] = {}
     for uv in uv_satirlari:
         kod = (uv.get('formul_kod') or uv.get('kod') or '').strip()
-        if not cekirdek_formul_mu(kod):
-            continue
         boyut = (uv.get('boyut') or '').strip().upper()
         if not boyut:
             continue
-        g = cekirdek_formul_gosterim(kod, uv.get('formul_ad'), uv_boyut=boyut)
-        baslik = g.get('secim_adi') or ''
-        if not baslik:
-            continue
         aile_db = (uv.get('urun_ailesi') or '').strip().upper()
-        aile = aile_db or (g.get('aile') or '').upper().replace('İ', 'I')
+        if cekirdek_formul_mu(kod):
+            g = cekirdek_formul_gosterim(kod, uv.get('formul_ad'), uv_boyut=boyut)
+            baslik = g.get('secim_adi') or ''
+            if not baslik:
+                continue
+            aile = aile_db or (g.get('aile') or '').upper().replace('İ', 'I')
+            boyut_harf = g.get('boyut_harf') or boyut_kisaltma(boyut)
+        else:
+            if not include_non_cekirdek:
+                continue
+            # Legacy / NX aktif ana formül — aile yoksa ad/koddan çıkar
+            baslik = (uv.get('formul_ad') or uv.get('ad') or kod).strip()
+            if not baslik:
+                continue
+            if not aile_db:
+                ad_u = baslik.upper().replace('İ', 'I').replace('Ö', 'O')
+                if 'TERLIK' in ad_u:
+                    aile_db = 'TERLIK'
+                elif 'DOKME' in ad_u:
+                    aile_db = 'DOKME'
+                elif 'TABAN' in ad_u:
+                    aile_db = 'TABAN'
+            if not aile_db:
+                continue
+            aile = aile_db
+            boyut_harf = boyut_kisaltma(boyut)
+            g = {'secim_adi': baslik, 'aile': aile, 'boyut_harf': boyut_harf}
         if baslik.upper().startswith('DÖKME') or baslik.upper().startswith('DOKME'):
             aile_grup = 'DÖKME'
         elif aile in ('TERLIK', 'TERLİK'):
@@ -453,7 +591,7 @@ def formul_secim_gruplari_hazirla(uv_satirlari: list[dict]) -> list[dict]:
             continue
         bucket['secenekler_map'][boyut] = {
             'boyut': boyut,
-            'boyut_harf': g.get('boyut_harf') or boyut_kisaltma(boyut),
+            'boyut_harf': boyut_harf,
             'formul_id': formul_id,
             'formul_kod': kod,
             'uv_id': uv_id,

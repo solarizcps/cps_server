@@ -4,6 +4,14 @@
 {% block content %}
 <div class="ng-sayfa" style="padding:16px 20px;">
   <div class="ng-baslik-blok" style="margin-bottom:16px;">
+    {% if depo_sade_mod %}
+    <div class="svk-depo-nav">
+      <a href="/nexgen/depo/" class="svk-depo-nav-link">Mal Kabul</a>
+      <span class="svk-depo-nav-sep">|</span>
+      <a href="/nexgen/sevkiyat" class="svk-depo-nav-link active">Sevkiyat Operasyonu</a>
+    </div>
+    <h1 class="svk-depo-sayfa-baslik" id="svkd-baslik">Sevkiyat</h1>
+    {% else %}
     <div class="ng-baslik">
       <a href="/nexgen/" class="ng-bc-link">NexGen</a>
       <span class="ng-bc-sep">›</span>
@@ -11,6 +19,7 @@
       <span class="ng-bc-sep">›</span>
       <span class="ng-baslik-metin" id="svkd-baslik">Sevkiyat</span>
     </div>
+    {% endif %}
   </div>
 
   <div id="svkd-yukleniyor" style="padding:24px;color:#64748b;">Yükleniyor…</div>

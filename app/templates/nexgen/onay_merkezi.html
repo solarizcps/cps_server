@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% set page_title = "Merkezi Onay" %}
+
+{% block content %}
+<div class="ng-sayfa" style="padding:16px 20px;">
+  <div class="ng-baslik-blok" style="margin-bottom:16px;">
+    <div class="ng-baslik">
+      <a href="/nexgen/" class="ng-bc-link">NexGen</a>
+      <span class="ng-bc-sep">›</span>
+      <span class="ng-baslik-metin">Merkezi Onay</span>
+    </div>
+    <div style="font-size:12px;color:#64748b;margin-top:4px;">
+      Satış, satın alma ve numune onay talepleri — karar verme merkezi.
+    </div>
+  </div>
+
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+    <select id="om-fil-tip" class="pzm-inp" style="max-width:220px;" onchange="omListeYukle()">
+      <option value="">Tüm Tipler</option>
+      <option value="SATIS_SIPARISI">Satış Siparişi</option>
+      <option value="NUMUNE_TALEBI">Numune Talebi</option>
+      <option value="TAHSILAT_KAYDI">Tahsilat Kaydı</option>
+    </select>
+    <button type="button" class="pzm-btn pzm-btn-outline pzm-btn-sm" onclick="omListeYukle()">Yenile</button>
+  </div>
+
+  <div class="pzm-kart" style="overflow:auto;">
+    <table class="pzm-tablo" id="om-tablo">
+      <thead>
+        <tr>
+          <th class="pzm-th">Kod</th>
+          <th class="pzm-th">Tip</th>
+          <th class="pzm-th">Kaynak</th>
+          <th class="pzm-th">Cari</th>
+          <th class="pzm-th">Durum</th>
+          <th class="pzm-th">Tarih</th>
+          <th class="pzm-th">İşlem</th>
+        </tr>
+      </thead>
+      <tbody id="om-tbody"></tbody>
+    </table>
+    <div id="om-bos" style="padding:24px;text-align:center;color:#94a3b8;display:none;">Bekleyen talep yok.</div>
+  </div>
+</div>
+
+<div id="om-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:9000;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:10px;max-width:720px;width:94%;max-height:90vh;overflow:auto;padding:20px;box-shadow:0 12px 40px rgba(0,0,0,.15);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <strong id="om-modal-baslik">Onay Detayı</strong>
+      <button type="button" onclick="omModalKapat()" style="border:none;background:none;font-size:20px;cursor:pointer;">×</button>
+    </div>
+    <div id="om-modal-icerik" style="font-size:12px;"></div>
+    {% if can_karar %}
+    <div style="margin-top:16px;border-top:1px solid #e2e8f0;padding-top:12px;">
+      <label style="display:block;font-size:11px;font-weight:700;margin-bottom:4px;">Not (revizyon/red için zorunlu)</label>
+      <textarea id="om-karar-not" rows="3" style="width:100%;font-family:inherit;font-size:12px;padding:8px;border:1px solid #cbd5e1;border-radius:6px;"></textarea>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <button type="button" class="pzm-btn pzm-btn-lacivert pzm-btn-sm" onclick="omKarar('ONAYLA')">Onayla</button>
+        <button type="button" class="pzm-btn pzm-btn-outline pzm-btn-sm" onclick="omKarar('BEKLET')">Beklet</button>
+        <button type="button" class="pzm-btn pzm-btn-outline pzm-btn-sm" onclick="omKarar('REVIZYON')">Revizyon</button>
+        <button type="button" class="pzm-btn pzm-btn-red-outline pzm-btn-sm" onclick="omKarar('REDDET')">Reddet</button>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+var _omAktifId = null;
+var _omCanKarar = {{ 'true' if can_karar else 'false' }};
+
+function omEsc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function omTipLbl(t) {
+  if (t === 'SATIS_SIPARISI') return 'Satış';
+  if (t === 'SATIN_ALMA_SIPARISI') return 'Satın Alma';
+  if (t === 'NUMUNE_TALEBI') return 'Numune Talebi';
+  if (t === 'TAHSILAT_KAYDI') return 'Tahsilat Kaydı';
+  return t || '—';
+}
+
+function omListeYukle() {
+  var tip = document.getElementById('om-fil-tip').value;
+  var url = '/nexgen/api/onay-merkezi/liste' + (tip ? ('?talep_tipi=' + encodeURIComponent(tip)) : '');
+  fetch(url).then(function(r) { return r.json(); }).then(function(d) {
+    var tbody = document.getElementById('om-tbody');
+    var bos = document.getElementById('om-bos');
+    var liste = (d && d.liste) || [];
+    if (!liste.length) {
+      tbody.innerHTML = '';
+      bos.style.display = '';
+      return;
+    }
+    bos.style.display = 'none';
+    tbody.innerHTML = liste.map(function(row) {
+      return '<tr>' +
+        '<td class="pzm-td"><code>' + omEsc(row.talep_kod) + '</code></td>' +
+        '<td class="pzm-td">' + omEsc(omTipLbl(row.talep_tipi)) + '</td>' +
+        '<td class="pzm-td">' + omEsc(row.kaynak_kod || row.kaynak_id) + '</td>' +
+        '<td class="pzm-td">' + omEsc(row.cari_unvan_snapshot || '—') + '</td>' +
+        '<td class="pzm-td">' + omEsc(row.durum) + '</td>' +
+        '<td class="pzm-td">' + omEsc((row.talep_tarihi || '').slice(0, 16)) + '</td>' +
+        '<td class="pzm-td"><button class="pzm-btn-ac" onclick="omDetay(' + row.id + ')">Detay</button></td>' +
+        '</tr>';
+    }).join('');
+  });
+}
+
+function omModalKapat() {
+  document.getElementById('om-modal').style.display = 'none';
+  _omAktifId = null;
+}
+
+function omDetay(id) {
+  _omAktifId = id;
+  fetch('/nexgen/api/onay-merkezi/' + id).then(function(r) { return r.json(); }).then(function(d) {
+    if (!d.ok) { alert(d.hata || 'Detay alınamadı'); return; }
+    var t = d.talep || {};
+    var snap = d.snapshot || {};
+    var html = '<div><strong>' + omEsc(t.talep_kod) + '</strong> · ' + omEsc(omTipLbl(t.talep_tipi)) + '</div>';
+    html += '<div style="margin-top:8px;">Kaynak: <code>' + omEsc(t.kaynak_kod) + '</code></div>';
+    html += '<div>Cari: ' + omEsc(t.cari_unvan_snapshot || snap.cari_unvan_snapshot || '—') + '</div>';
+    if (snap.fiyat != null) html += '<div>Fiyat: ' + omEsc(snap.fiyat) + ' ' + omEsc(snap.para_birimi || '') + '</div>';
+    if (snap.vade_gun != null) html += '<div>Vade: ' + omEsc(snap.vade_gun) + ' gün</div>';
+    if (t.talep_tipi === 'NUMUNE_TALEBI') {
+      html += '<div style="margin-top:10px;font-weight:700;">Numune Özeti</div>';
+      html += '<div>Pazarlamacı: ' + omEsc(snap.pazarlamaci_adi || '—') + '</div>';
+      html += '<div>Ürün: ' + omEsc(snap.urun_tipi) + ' — ' + omEsc(snap.urun_adi) + '</div>';
+      html += '<div>Talep türü: ' + omEsc(snap.talep_turu) + '</div>';
+      html += '<div>Termin: ' + omEsc(snap.hedef_tarih) + ' · Öncelik: ' + omEsc(snap.oncelik) + '</div>';
+      html += '<div>Müşteri talebi: ' + omEsc(snap.musteri_talebi) + '</div>';
+      if (snap.onay_notu) html += '<div>Onay notu: ' + omEsc(snap.onay_notu) + '</div>';
+      if (snap.acik_numune_sayisi != null) html += '<div>Açık numune: ' + omEsc(snap.acik_numune_sayisi) + '</div>';
+      if (snap.son_siparis_tarihi) html += '<div>Son sipariş: ' + omEsc(snap.son_siparis_tarihi) + '</div>';
+      if (snap.bagli_gorusme) html += '<div>Bağlı görüşme: ' + omEsc(snap.bagli_gorusme.gorusme_tipi) + ' — ' + omEsc(snap.bagli_gorusme.kisa_not) + '</div>';
+    }
+    if (t.talep_tipi === 'TAHSILAT_KAYDI') {
+      html += '<div style="margin-top:10px;font-weight:700;">Tahsilat Özeti</div>';
+      html += '<div>Pazarlamacı: ' + omEsc(snap.pazarlamaci_adi || '—') + '</div>';
+      html += '<div>Sipariş: ' + omEsc(snap.siparis_no || '—') + '</div>';
+      html += '<div>Beklenen: ' + omEsc(snap.beklenen_tutar) + ' · Alınan: ' + omEsc(snap.alinan_tutar) + '</div>';
+      html += '<div>Ödeme: ' + omEsc(snap.odeme_tipi) + ' · Tarih: ' + omEsc(snap.alinan_tarih) + '</div>';
+      if (snap.odeme_referansi) html += '<div>Referans: ' + omEsc(snap.odeme_referansi) + '</div>';
+      if (snap.kalan_tutar != null) html += '<div>Kalan: ' + omEsc(snap.kalan_tutar) + '</div>';
+      if (snap.aciklama) html += '<div>Açıklama: ' + omEsc(snap.aciklama) + '</div>';
+      if (snap.cari_entegrasyon_aktif === false) html += '<div><em>Cari entegrasyonu bekliyor</em></div>';
+    }
+    if (snap.tahsilat_kurali) {
+      html += '<div style="margin-top:10px;font-weight:700;">Tahsilat Planı</div>';
+      html += '<div>Ödeme: ' + omEsc(snap.tahsilat_odeme_sekli_etiket || snap.tahsilat_odeme_sekli) + '</div>';
+      html += '<div>Kural: ' + omEsc(snap.tahsilat_kural_etiket || snap.tahsilat_kurali) + '</div>';
+      if (snap.tahsilat_gun_sayisi != null) html += '<div>Gün: ' + omEsc(snap.tahsilat_gun_sayisi) + '</div>';
+      if (snap.tahsilat_sabit_tarih) html += '<div>Sabit tarih: ' + omEsc(snap.tahsilat_sabit_tarih) + '</div>';
+      if (snap.planlanan_tahsilat_tarihi) html += '<div>Planlanan: ' + omEsc(snap.planlanan_tahsilat_tarihi) + '</div>';
+      else if (snap.tahsilat_durum_metin) html += '<div>Durum: ' + omEsc(snap.tahsilat_durum_metin) + '</div>';
+      if (snap.tahsilat_sozu) html += '<div>Söz: ' + omEsc(snap.tahsilat_sozu) + '</div>';
+      if (snap.cek_teslim_tarihi) html += '<div>Çek teslim: ' + omEsc(snap.cek_teslim_tarihi) + '</div>';
+      if (snap.cek_vadesi) html += '<div>Çek vadesi: ' + omEsc(snap.cek_vadesi) + '</div>';
+    }
+    if (d.adimlar && d.adimlar.length) {
+      html += '<div style="margin-top:12px;font-weight:700;">Adımlar</div><ul style="margin:6px 0;padding-left:18px;">';
+      d.adimlar.forEach(function(a) {
+        html += '<li>' + omEsc(a.rol_adi || a.adim_tipi) + ' — ' + omEsc(a.durum) + '</li>';
+      });
+      html += '</ul>';
+    }
+    document.getElementById('om-modal-baslik').textContent = t.talep_kod || 'Onay Detayı';
+    document.getElementById('om-modal-icerik').innerHTML = html;
+    document.getElementById('om-karar-not').value = '';
+    document.getElementById('om-modal').style.display = 'flex';
+  });
+}
+
+function omKarar(karar) {
+  if (!_omAktifId || !_omCanKarar) return;
+  var notu = document.getElementById('om-karar-not').value.trim();
+  fetch('/nexgen/api/onay-merkezi/' + _omAktifId + '/karar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ karar: karar, not: notu }),
+  }).then(function(r) { return r.json().then(function(d) { return { status: r.status, data: d }; }); })
+  .then(function(res) {
+    if (!res.data.ok) { alert(res.data.hata || 'Karar kaydedilemedi'); return; }
+    omModalKapat();
+    omListeYukle();
+    alert('Karar kaydedildi: ' + (res.data.durum || karar));
+  });
+}
+
+document.addEventListener('DOMContentLoaded', omListeYukle);
+</script>
+{% endblock %}

@@ -1,5 +1,9 @@
 {% extends "base.html" %}
+{% if depo_sade_mod %}
+{% set page_title = "Depo — Mal Kabul" %}
+{% else %}
 {% set page_title = "NexGen Depo — Mal Kabul" %}
+{% endif %}
 {% macro _kg(v) %}{% set n = v | float %}{% set f = "{:,.3f}".format(n).replace(",", ".") %}{{ f.rstrip('0').rstrip('.') }}{% endmacro %}
 
 {% block content %}
@@ -7,10 +11,21 @@
 
   {# ── Breadcrumb ─────────────────────────────────────────── #}
   <div class="ng-baslik-blok">
+    {% if depo_sade_mod %}
+    <div class="svk-depo-nav">
+      <a href="/nexgen/depo/" class="svk-depo-nav-link active">Mal Kabul</a>
+      <span class="svk-depo-nav-sep">|</span>
+      <a href="/nexgen/sevkiyat" class="svk-depo-nav-link">Sevkiyat Operasyonu</a>
+    </div>
+    {% endif %}
     <div class="ng-baslik">
+      {% if depo_sade_mod %}
+      <span class="ng-baslik-metin">Depo — Mal Kabul</span>
+      {% else %}
       <a href="/nexgen/" class="ng-bc-link">NexGen</a>
       <span class="ng-bc-sep">›</span>
       <span class="ng-baslik-metin">Depo — Mal Kabul</span>
+      {% endif %}
       <span class="ngdp-rozet-depo">Depo</span>
     </div>
     <div class="ngdp-baslik-aciklama">
@@ -455,11 +470,21 @@
 /* ── Genel ── */
 .ng-sayfa { padding:22px 28px; background:#f6f7f9; min-height:100vh; box-sizing:border-box; }
 .ng-baslik-blok { margin-bottom:16px; }
+{% if not depo_sade_mod %}
 .ng-baslik { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .ng-bc-link { color:#f59e0b; text-decoration:none; font-size:13px; font-weight:500; }
 .ng-bc-link:hover { text-decoration:underline; }
 .ng-bc-sep { color:#9ca3af; font-size:13px; }
 .ng-baslik-metin { font-size:20px; font-weight:700; color:#111827; }
+{% else %}
+.ng-baslik { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:4px; }
+.ng-baslik-metin { font-size:20px; font-weight:700; color:#111827; }
+{% endif %}
+.svk-depo-nav { display:flex; align-items:center; gap:10px; margin-bottom:8px; font-size:13.5px; font-weight:600; }
+.svk-depo-nav-link { color:#6b7280; text-decoration:none; padding:4px 0; border-bottom:2px solid transparent; }
+.svk-depo-nav-link:hover { color:#111827; }
+.svk-depo-nav-link.active { color:#111827; border-bottom-color:#f59e0b; }
+.svk-depo-nav-sep { color:#d1d5db; user-select:none; }
 .ngdp-rozet-depo {
   display:inline-block; padding:2px 10px; border-radius:10px;
   font-size:11px; font-weight:700;

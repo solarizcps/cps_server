@@ -15,6 +15,7 @@ from config import Config
 
 # Blueprint'ler
 from modules.auth import auth_bp, kullanici_yetkileri, yetki_var
+from modules.nexgen.mo_depo_yetki import is_nexgen_depo_sade_kullanici
 from modules.finans import finans_bp
 from modules.yonetim import yonetim_bp
 from modules.grafik import grafik_bp
@@ -119,6 +120,7 @@ def inject_globals():
         'g_user':     u,
         'g_yetkiler': yetkiler,
         'yetki':      yetki_var,
+        'depo_sade_mod': is_nexgen_depo_sade_kullanici(u) if u else False,
     }
 
 
