@@ -5,7 +5,8 @@
 {% set c = data.cari %}
 <div class="ckart" id="ckart"
      data-cari-id="{{ cari_id }}"
-     data-can-write="{{ '1' if data.can_write_yetkili else '0' }}">
+     data-can-write="{{ '1' if data.can_write_yetkili else '0' }}"
+     data-can-write-gorusme="{{ '1' if data.can_write_gorusme else '0' }}">
 
   <header class="ckart-ust">
     <div class="ckart-ust-sol">
@@ -39,6 +40,10 @@
             data-tab="genel" onclick="ckartTab('genel')">Genel Bilgiler</button>
     <button type="button" class="ckart-sekme{% if aktif_tab == 'yetkililer' %} aktif{% endif %}"
             data-tab="yetkililer" onclick="ckartTab('yetkililer')">Yetkililer</button>
+    <button type="button" class="ckart-sekme{% if aktif_tab == 'gorusmeler' %} aktif{% endif %}"
+            data-tab="gorusmeler" onclick="ckartTab('gorusmeler')">
+      Görüşmeler{% if acik_takip %}<span class="ckart-sekme-badge" id="ckart-acik-badge">{{ acik_takip }}</span>{% endif %}
+    </button>
   </nav>
 
   <section id="ckart-panel-genel" class="ckart-panel"{% if aktif_tab != 'genel' %} style="display:none"{% endif %}>
@@ -83,6 +88,41 @@
       </table>
     </div>
   </section>
+
+  <section id="ckart-panel-gorusmeler" class="ckart-panel"{% if aktif_tab != 'gorusmeler' %} style="display:none"{% endif %}>
+    <div class="ckart-panel-bas">
+      <h2 class="ckart-h2">Görüşmeler
+        <span class="ckart-muted" style="font-weight:500;font-size:12px" id="ckart-gorusme-ozet">
+          Açık takip: {{ acik_takip or 0 }}
+        </span>
+      </h2>
+      {% if data.can_write_gorusme %}
+      <button type="button" class="ckart-btn-birincil" onclick="ckartGorusmeYeni()">Yeni Görüşme</button>
+      {% endif %}
+    </div>
+    <div class="ckart-tablo-wrap">
+      <table class="ckart-tablo" id="ckart-gorusme-tablo">
+        <thead>
+          <tr>
+            <th>Tarih</th>
+            <th>Yapan</th>
+            <th>Yetkili</th>
+            <th>Tür</th>
+            <th>Konu</th>
+            <th>Not</th>
+            <th>Sonuç</th>
+            <th>Aksiyon</th>
+            <th>Takip</th>
+            <th>Kaynak</th>
+            <th style="text-align:right">İşlem</th>
+          </tr>
+        </thead>
+        <tbody id="ckart-gorusme-tbody">
+          <tr><td colspan="11" class="ckart-muted">Yükleniyor…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
 </div>
 
 {# Global overlay — display:none parent altında değil #}
@@ -111,6 +151,57 @@
     <div class="ckart-modal-foot">
       <button type="button" class="ckart-btn-ikincil" onclick="ckartModalKapat()">İptal</button>
       <button type="button" class="ckart-btn-birincil" onclick="ckartYetkiliKaydet()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<div id="ckart-gorusme-overlay" class="ckart-overlay" aria-hidden="true">
+  <div class="ckart-modal" role="dialog" aria-modal="true" aria-labelledby="ckart-g-baslik" style="width:min(560px,100%)">
+    <div class="ckart-modal-head">
+      <h3 id="ckart-g-baslik">Yeni Görüşme</h3>
+      <button type="button" class="ckart-modal-x" onclick="ckartGorusmeModalKapat()" aria-label="Kapat">×</button>
+    </div>
+    <div class="ckart-modal-body">
+      <input type="hidden" id="ckart-g-id" value="">
+      <label class="ckart-lbl">Müşteri Yetkilisi
+        <select id="ckart-g-yetkili" class="ckart-inp">
+          <option value="">— Bilinmiyor / seçilmedi —</option>
+        </select>
+      </label>
+      <div class="ckart-grid2">
+        <label class="ckart-lbl">Görüşme Türü <span class="ckart-req">*</span>
+          <select id="ckart-g-tip" class="ckart-inp">
+            <option value="">Seçin</option>
+            {% for t in gorusme_tipleri %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="ckart-lbl">Görüşme Tarihi <span class="ckart-req">*</span>
+          <input type="datetime-local" id="ckart-g-tarih" class="ckart-inp">
+        </label>
+      </div>
+      <label class="ckart-lbl">Konu<input type="text" id="ckart-g-konu" class="ckart-inp" maxlength="200"></label>
+      <label class="ckart-lbl">Görüşme Notu <span class="ckart-req">*</span>
+        <textarea id="ckart-g-not" class="ckart-inp ckart-ta" rows="2"></textarea>
+      </label>
+      <div class="ckart-grid2">
+        <label class="ckart-lbl">Sonuç <span class="ckart-req">*</span>
+          <select id="ckart-g-sonuc" class="ckart-inp">
+            <option value="">Seçin</option>
+            {% for s in sonuc_tipleri %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="ckart-lbl">Takip Tarihi
+          <input type="date" id="ckart-g-takip" class="ckart-inp">
+        </label>
+      </div>
+      <label class="ckart-lbl">Sonraki Aksiyon
+        <input type="text" id="ckart-g-aksiyon" class="ckart-inp" maxlength="200">
+      </label>
+      <p id="ckart-g-hata" class="ckart-hata" style="display:none"></p>
+    </div>
+    <div class="ckart-modal-foot">
+      <button type="button" class="ckart-btn-ikincil" onclick="ckartGorusmeModalKapat()">İptal</button>
+      <button type="button" class="ckart-btn-birincil" id="ckart-g-kaydet" onclick="ckartGorusmeKaydet()">Kaydet</button>
     </div>
   </div>
 </div>
@@ -212,6 +303,14 @@
 .ckart-btn-mini:hover { border-color: #f59e0b; color: #92400e; }
 .ckart-pill-ana { color: #0f766e; font-weight: 700; font-size: 11px; }
 .ckart-pill-pasif { color: #9ca3af; font-size: 11px; }
+.ckart-sekme-badge {
+  display: inline-block; margin-left: 6px; min-width: 18px; padding: 1px 6px;
+  border-radius: 999px; background: #f59e0b; color: #111827;
+  font-size: 11px; font-weight: 700; line-height: 1.4; vertical-align: middle;
+}
+.ckart-takip-acik { color: #b45309; font-weight: 700; font-size: 11px; }
+.ckart-takip-ok { color: #059669; font-size: 11px; }
+.ckart-link { color: #92400e; text-decoration: underline; font-size: 11px; }
 
 /* Global modal overlay */
 .ckart-overlay {
@@ -263,12 +362,21 @@
   if (!root) return;
   var CARI_ID = parseInt(root.getAttribute('data-cari-id'), 10);
   var CAN_WRITE = root.getAttribute('data-can-write') === '1';
+  var CAN_WRITE_G = root.getAttribute('data-can-write-gorusme') === '1';
   var _cache = [];
+  var _gorusmeCache = [];
+  var _gIdem = null;
 
   function esc(s) {
     return String(s == null ? '' : s)
       .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
       .replace(/"/g,'&quot;');
+  }
+
+  function nowLocal() {
+    var d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 16);
   }
 
   window.ckartTab = function(tab) {
@@ -277,12 +385,14 @@
     });
     document.getElementById('ckart-panel-genel').style.display = tab === 'genel' ? '' : 'none';
     document.getElementById('ckart-panel-yetkililer').style.display = tab === 'yetkililer' ? '' : 'none';
+    document.getElementById('ckart-panel-gorusmeler').style.display = tab === 'gorusmeler' ? '' : 'none';
     try {
       var u = new URL(window.location.href);
       u.searchParams.set('tab', tab);
       history.replaceState(null, '', u.toString());
     } catch (e) {}
     if (tab === 'yetkililer') ckartYetkiliYukle();
+    if (tab === 'gorusmeler') ckartGorusmeYukle();
   };
 
   window.ckartYetkiliYukle = function() {
@@ -450,8 +560,221 @@
     if (e.target === this) ckartModalKapat();
   });
 
+  function loadGorusmeYetkililer(selectedId) {
+    var sel = document.getElementById('ckart-g-yetkili');
+    sel.innerHTML = '<option value="">— Bilinmiyor / seçilmedi —</option>';
+    return fetch('/nexgen/api/yonetim/cari-yetkili?cari_id=' + encodeURIComponent(CARI_ID) + '&aktif=1')
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        (d.yetkililer || []).forEach(function(y){
+          if (y.aktif != 1) return;
+          var o = document.createElement('option');
+          o.value = String(y.id);
+          o.textContent = y.ad_soyad + (y.unvan ? ' — ' + y.unvan : '');
+          if (selectedId && String(selectedId) === String(y.id)) o.selected = true;
+          sel.appendChild(o);
+        });
+      });
+  }
+
+  window.ckartGorusmeYukle = function() {
+    var tb = document.getElementById('ckart-gorusme-tbody');
+    if (!tb) return;
+    tb.innerHTML = '<tr><td colspan="11" class="ckart-muted">Yükleniyor…</td></tr>';
+    fetch('/nexgen/api/cari360/' + CARI_ID + '/gorusme')
+      .then(function(r){ return r.json().then(function(d){ return {status:r.status, d:d}; }); })
+      .then(function(x){
+        if (!x.d || !x.d.ok) {
+          tb.innerHTML = '<tr><td colspan="11" class="ckart-muted">' + esc((x.d && x.d.mesaj) || 'Yüklenemedi') + '</td></tr>';
+          return;
+        }
+        if (typeof x.d.can_write === 'boolean') CAN_WRITE_G = x.d.can_write;
+        var badge = document.getElementById('ckart-acik-badge');
+        var ozet = document.getElementById('ckart-gorusme-ozet');
+        var acik = x.d.acik_takip || 0;
+        if (ozet) ozet.textContent = 'Açık takip: ' + acik;
+        if (badge) {
+          if (acik) { badge.textContent = acik; badge.style.display = ''; }
+          else { badge.style.display = 'none'; }
+        }
+        _gorusmeCache = x.d.liste || [];
+        if (!_gorusmeCache.length) {
+          tb.innerHTML = '<tr><td colspan="11" class="ckart-muted">Henüz görüşme kaydı yok.</td></tr>';
+          return;
+        }
+        tb.innerHTML = _gorusmeCache.map(function(g){
+          var takip = '—';
+          if (g.sonraki_takip_tarihi) {
+            var td = (g.takip_durumu || 'ACIK');
+            var cls = td === 'ACIK' ? 'ckart-takip-acik' : 'ckart-takip-ok';
+            takip = '<span class="'+cls+'">' + esc((g.sonraki_takip_tarihi||'').slice(0,10)) + ' · ' + esc(td) + '</span>';
+          }
+          var kaynak = '';
+          if (g.kaynak_numune_talep_id) kaynak += '<a class="ckart-link" href="/nexgen/numune-talep?id='+g.kaynak_numune_talep_id+'">Numune#'+g.kaynak_numune_talep_id+'</a> ';
+          if (g.kaynak_siparis_id) kaynak += '<a class="ckart-link" href="/nexgen/pazarlama-merkezi?siparis='+g.kaynak_siparis_id+'">Sipariş#'+g.kaynak_siparis_id+'</a>';
+          if (!kaynak) kaynak = '—';
+          var btns = '';
+          if (CAN_WRITE_G) {
+            btns += '<button type="button" class="ckart-btn-mini" onclick="ckartGorusmeDuzenle('+g.id+')">Düzenle</button>';
+            if (g.takip_durumu === 'ACIK') {
+              btns += '<button type="button" class="ckart-btn-mini" onclick="ckartTakipTamamla('+g.id+')">Takip Tamamla</button>';
+            }
+          }
+          return '<tr>'
+            + '<td>'+esc((g.gorusme_tarihi||'').slice(0,16))+'</td>'
+            + '<td>'+esc(g.kullanici_adi||'—')+'</td>'
+            + '<td>'+esc(g.yetkili_adi||'—')+'</td>'
+            + '<td>'+esc(g.gorusme_tipi||'—')+'</td>'
+            + '<td>'+esc(g.konu||'—')+'</td>'
+            + '<td>'+esc((g.kisa_not||'').slice(0,80))+'</td>'
+            + '<td>'+esc(g.sonuc_tipi||'—')+'</td>'
+            + '<td>'+esc(g.sonraki_aksiyon||'—')+'</td>'
+            + '<td>'+takip+'</td>'
+            + '<td>'+kaynak+'</td>'
+            + '<td style="text-align:right;white-space:nowrap">'+btns+'</td>'
+            + '</tr>';
+        }).join('');
+      })
+      .catch(function(){
+        tb.innerHTML = '<tr><td colspan="11" class="ckart-muted">Bağlantı hatası</td></tr>';
+      });
+  };
+
+  function gorusmeFormTemizle() {
+    document.getElementById('ckart-g-id').value = '';
+    document.getElementById('ckart-g-tip').value = '';
+    document.getElementById('ckart-g-tarih').value = nowLocal();
+    document.getElementById('ckart-g-konu').value = '';
+    document.getElementById('ckart-g-not').value = '';
+    document.getElementById('ckart-g-sonuc').value = '';
+    document.getElementById('ckart-g-aksiyon').value = '';
+    document.getElementById('ckart-g-takip').value = '';
+    var h = document.getElementById('ckart-g-hata');
+    h.style.display = 'none'; h.textContent = '';
+  }
+
+  window.ckartGorusmeModalKapat = function() {
+    var ov = document.getElementById('ckart-gorusme-overlay');
+    ov.classList.remove('acik');
+    ov.setAttribute('aria-hidden', 'true');
+  };
+
+  window.ckartGorusmeYeni = function() {
+    if (!CAN_WRITE_G) return;
+    gorusmeFormTemizle();
+    _gIdem = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
+    document.getElementById('ckart-g-baslik').textContent = 'Yeni Görüşme';
+    loadGorusmeYetkililer(null).then(function(){
+      var ov = document.getElementById('ckart-gorusme-overlay');
+      ov.classList.add('acik');
+      ov.setAttribute('aria-hidden', 'false');
+    });
+  };
+
+  window.ckartGorusmeDuzenle = function(id) {
+    var g = _gorusmeCache.find(function(x){ return x.id == id; });
+    if (!g || !CAN_WRITE_G) return;
+    gorusmeFormTemizle();
+    document.getElementById('ckart-g-id').value = g.id;
+    document.getElementById('ckart-g-baslik').textContent = 'Görüşme Düzenle';
+    document.getElementById('ckart-g-tip').value = g.gorusme_tipi || '';
+    var gt = (g.gorusme_tarihi || '').replace(' ', 'T').slice(0, 16);
+    document.getElementById('ckart-g-tarih').value = gt;
+    document.getElementById('ckart-g-konu').value = g.konu || '';
+    document.getElementById('ckart-g-not').value = g.kisa_not || '';
+    document.getElementById('ckart-g-sonuc').value = g.sonuc_tipi || '';
+    document.getElementById('ckart-g-aksiyon').value = g.sonraki_aksiyon || '';
+    document.getElementById('ckart-g-takip').value = (g.sonraki_takip_tarihi || '').slice(0, 10);
+    loadGorusmeYetkililer(g.yetkili_id).then(function(){
+      // Pasif yetkili eski kayıtta — listeye ekle
+      if (g.yetkili_id && g.yetkili_adi) {
+        var sel = document.getElementById('ckart-g-yetkili');
+        var found = false;
+        for (var i = 0; i < sel.options.length; i++) {
+          if (sel.options[i].value === String(g.yetkili_id)) { found = true; break; }
+        }
+        if (!found) {
+          var o = document.createElement('option');
+          o.value = String(g.yetkili_id);
+          o.textContent = g.yetkili_adi + ' (pasif)';
+          o.selected = true;
+          sel.appendChild(o);
+        }
+      }
+      var ov = document.getElementById('ckart-gorusme-overlay');
+      ov.classList.add('acik');
+      ov.setAttribute('aria-hidden', 'false');
+    });
+  };
+
+  window.ckartGorusmeKaydet = function() {
+    var h = document.getElementById('ckart-g-hata');
+    var tip = document.getElementById('ckart-g-tip').value;
+    var sonuc = document.getElementById('ckart-g-sonuc').value;
+    var notu = document.getElementById('ckart-g-not').value.trim();
+    var tarih = document.getElementById('ckart-g-tarih').value;
+    if (!tip || !sonuc || notu.length < 3 || !tarih) {
+      h.textContent = 'Tür, tarih, sonuç ve en az 3 karakter not zorunlu.';
+      h.style.display = 'block';
+      return;
+    }
+    var editId = document.getElementById('ckart-g-id').value;
+    var payload = {
+      gorusme_tipi: tip,
+      sonuc_tipi: sonuc,
+      kisa_not: notu,
+      konu: document.getElementById('ckart-g-konu').value.trim(),
+      sonraki_aksiyon: document.getElementById('ckart-g-aksiyon').value.trim(),
+      sonraki_takip_tarihi: document.getElementById('ckart-g-takip').value || null,
+      gorusme_tarihi: tarih.length === 16 ? tarih.replace('T', ' ') + ':00' : tarih,
+      kaynak: 'CARI_KART'
+    };
+    var yid = document.getElementById('ckart-g-yetkili').value;
+    if (yid) payload.yetkili_id = parseInt(yid, 10);
+    else payload.yetkili_id = null;
+    var url, method = 'POST';
+    if (editId) {
+      url = '/nexgen/api/cari360/' + CARI_ID + '/gorusme/' + editId;
+    } else {
+      payload.idempotency_key = _gIdem;
+      url = '/nexgen/api/cari360/' + CARI_ID + '/gorusme';
+    }
+    var btn = document.getElementById('ckart-g-kaydet');
+    btn.disabled = true;
+    fetch(url, { method: method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) })
+      .then(function(r){ return r.json().then(function(d){ return {status:r.status, d:d}; }); })
+      .then(function(x){
+        btn.disabled = false;
+        if (x.d && x.d.ok) { ckartGorusmeModalKapat(); ckartGorusmeYukle(); return; }
+        h.textContent = (x.d && x.d.mesaj) || ('Hata ('+x.status+')');
+        h.style.display = 'block';
+      })
+      .catch(function(){ btn.disabled = false; h.textContent = 'Bağlantı hatası'; h.style.display = 'block'; });
+  };
+
+  window.ckartTakipTamamla = function(id) {
+    if (!confirm('Takibi tamamlandı olarak işaretle?')) return;
+    fetch('/nexgen/api/cari360/' + CARI_ID + '/gorusme/' + id + '/takip', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({takip_durumu: 'TAMAMLANDI'})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.ok) ckartGorusmeYukle();
+      else alert(d.mesaj || 'Hata');
+    })
+    .catch(function(){ alert('Bağlantı hatası'); });
+  };
+
+  document.getElementById('ckart-gorusme-overlay').addEventListener('click', function(e){
+    if (e.target === this) ckartGorusmeModalKapat();
+  });
+
   if (document.getElementById('ckart-panel-yetkililer').style.display !== 'none') {
     ckartYetkiliYukle();
+  }
+  if (document.getElementById('ckart-panel-gorusmeler').style.display !== 'none') {
+    ckartGorusmeYukle();
   }
 })();
 </script>

@@ -17,6 +17,7 @@ from modules.nexgen.cari360_yetki import (
 )
 from modules.nexgen.cari_sorumlu_service import can_view_cari, load_kullanici_yetkileri
 from modules.nexgen.cari_yetkili_service import can_write_yetkili
+from modules.nexgen.mo_gorusme_service import can_mo_gorusme_yaz
 from modules.nexgen.finans_cari_provision_service import is_test_kayit
 
 SORUMLU_ATANMAMIS = 'Atanmamış'
@@ -237,4 +238,5 @@ def load_cari_kart(
         'test_cari': test_cari,
         'test_banner': bool(test_cari and es_durum == 'TEST_NO_LINK'),
         'can_write_yetkili': can_write_yetkili(con, kullanici_id, cari_id, yk),
+        'can_write_gorusme': can_mo_gorusme_yaz(con, kullanici_id, cari_id, yk),
     }

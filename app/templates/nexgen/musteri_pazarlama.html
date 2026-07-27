@@ -340,29 +340,43 @@
     <form id="mp-gorusme-form" class="mp-modal-form">
       <input type="hidden" name="cari_id" id="mp-f-cari-id">
       <div class="mp-fld">
-        <label for="mp-f-tip">Görüşme tipi *</label>
+        <label for="mp-f-yetkili">Müşteri Yetkilisi</label>
+        <select id="mp-f-yetkili" name="yetkili_id">
+          <option value="">— Bilinmiyor / seçilmedi —</option>
+        </select>
+      </div>
+      <div class="mp-fld">
+        <label for="mp-f-tip">Görüşme Türü *</label>
         <select id="mp-f-tip" name="gorusme_tipi" required>
           <option value="">Seçin</option>
           {% for t in gorusme_tipleri %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
         </select>
       </div>
       <div class="mp-fld">
-        <label for="mp-f-sonuc">Konu / sonuç *</label>
+        <label for="mp-f-tarih">Görüşme Tarihi *</label>
+        <input type="datetime-local" id="mp-f-tarih" name="gorusme_tarihi" required>
+      </div>
+      <div class="mp-fld">
+        <label for="mp-f-konu">Konu</label>
+        <input type="text" id="mp-f-konu" name="konu" maxlength="200" placeholder="Görüşme konusu…">
+      </div>
+      <div class="mp-fld">
+        <label for="mp-f-not">Görüşme Notu *</label>
+        <textarea id="mp-f-not" name="kisa_not" rows="2" required minlength="3" placeholder="Görüşme özeti…"></textarea>
+      </div>
+      <div class="mp-fld">
+        <label for="mp-f-sonuc">Sonuç *</label>
         <select id="mp-f-sonuc" name="sonuc_tipi" required>
           <option value="">Seçin</option>
           {% for s in sonuc_tipleri %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
         </select>
       </div>
       <div class="mp-fld">
-        <label for="mp-f-tarih">Görüşme tarihi *</label>
-        <input type="datetime-local" id="mp-f-tarih" name="gorusme_tarihi" required>
+        <label for="mp-f-aksiyon">Sonraki Aksiyon</label>
+        <input type="text" id="mp-f-aksiyon" name="sonraki_aksiyon" maxlength="200" placeholder="Örn. Teklif gönder, ziyaret planla…">
       </div>
       <div class="mp-fld">
-        <label for="mp-f-not">Kısa not *</label>
-        <textarea id="mp-f-not" name="kisa_not" rows="2" required minlength="3" placeholder="Görüşme özeti…"></textarea>
-      </div>
-      <div class="mp-fld">
-        <label for="mp-f-takip">Sonraki takip tarihi</label>
+        <label for="mp-f-takip">Takip Tarihi</label>
         <input type="date" id="mp-f-takip" name="sonraki_takip_tarihi">
       </div>
       <details class="mp-opsiyonel">
@@ -859,6 +873,25 @@
   var submitting = false;
   var aktifCariId = null;
 
+  function loadMpYetkililer(cariId) {
+    var sel = document.getElementById('mp-f-yetkili');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— Bilinmiyor / seçilmedi —</option>';
+    if (!cariId) return;
+    fetch('/nexgen/api/yonetim/cari-yetkili?cari_id=' + encodeURIComponent(cariId) + '&aktif=1')
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (!d || !d.ok) return;
+        (d.yetkililer || []).forEach(function(y){
+          if (y.aktif != 1) return;
+          var o = document.createElement('option');
+          o.value = String(y.id);
+          o.textContent = y.ad_soyad + (y.unvan ? ' — ' + y.unvan : '');
+          sel.appendChild(o);
+        });
+      }).catch(function(){});
+  }
+
   function openModal(name, cariId, unvan, kod) {
     var ov = modals[name];
     if (!ov) return;
@@ -875,6 +908,7 @@
         '<strong>' + esc(unvan || meta.unvan || 'Müşteri seçin') + '</strong>' +
         (cariId ? '<span>Cari: ' + esc(kod || meta.kod || '—') + '</span>' : '') +
         '<span>Kaydı giren: {{ kullanici_ad|e }}</span>';
+      loadMpYetkililer(cariId);
       if (cariId) {
         fetch('/nexgen/api/musteri-pazarlama/gorusme?cari_id=' + cariId).then(function(r){ return r.json(); }).then(function(d){
           var el = document.getElementById('mp-modal-meta');
@@ -1595,7 +1629,9 @@
       var wrap = document.getElementById('mp-modal-gecmis');
       if (!d.ok || !d.liste.length) { box.innerHTML = '<p>Kayıt yok.</p>'; wrap.hidden = false; return; }
       box.innerHTML = d.liste.map(function(g){
-        return '<div class="mp-drawer-satir">' + esc((g.gorusme_tarihi||'').slice(0,10)) + ' · ' + esc(g.gorusme_tipi) + ' — ' + esc(g.kisa_not) + '</div>';
+        var yet = g.yetkili_adi ? (' · ' + esc(g.yetkili_adi)) : '';
+        var konu = g.konu ? (' · ' + esc(g.konu)) : '';
+        return '<div class="mp-drawer-satir">' + esc((g.gorusme_tarihi||'').slice(0,10)) + ' · ' + esc(g.gorusme_tipi) + yet + konu + ' — ' + esc(g.kisa_not) + '</div>';
       }).join('');
       wrap.hidden = false;
     });
@@ -1613,6 +1649,9 @@
     fd.forEach(function(v,k){ if (v !== '') payload[k] = v; });
     payload.cari_id = parseInt(document.getElementById('mp-f-cari-id').value, 10);
     payload.idempotency_key = idempotencyKey;
+    payload.kaynak = 'MUSTERI_OPERASYONU';
+    if (payload.yetkili_id) payload.yetkili_id = parseInt(payload.yetkili_id, 10);
+    else delete payload.yetkili_id;
     if (payload.gorusme_tarihi && payload.gorusme_tarihi.length === 16) payload.gorusme_tarihi = payload.gorusme_tarihi.replace('T', ' ') + ':00';
     fetch('/nexgen/api/musteri-pazarlama/gorusme', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) })
       .then(function(r){ return r.json().then(function(j){ return {body:j}; }); })

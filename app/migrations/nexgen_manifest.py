@@ -309,6 +309,16 @@ MANIFEST: tuple[MigEntry, ...] = (
         dependencies=(121,),
         required_tables=("cari_yetkili",),
     ),
+    MigEntry(
+        134, "134_musteri_operasyon_gorusme_yetkili",
+        "134_musteri_operasyon_gorusme_yetkili.py",
+        "musteri_operasyon_gorusme yetkili_id/konu/takip_durumu",
+        dependencies=(123, 133),
+        required_columns=(
+            ("musteri_operasyon_gorusme", "yetkili_id"),
+            ("musteri_operasyon_gorusme", "takip_durumu"),
+        ),
+    ),
 )
 
 BY_VERSION = {m.version: m for m in MANIFEST}

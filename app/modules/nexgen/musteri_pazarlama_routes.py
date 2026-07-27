@@ -9,10 +9,13 @@ from modules.nexgen.cari360_yetki import can_cari360_view_all, can_musteri_pazar
 from modules.nexgen.mo_gorusme_config import GORUSME_TIPLERI, ONCELIKLER, SONUC_TIPLERI
 from modules.nexgen.mo_gorusme_service import (
     MoGorusmeError,
+    acik_takip_sayisi,
     can_mo_gorusme_yaz,
+    gorusme_guncelle,
     gorusme_kaydet,
     list_gorusmeler,
     sorumlu_pazarlamaci_adi,
+    takip_durum_ayarla,
 )
 from modules.nexgen.musteri_pazarlama_service import dashboard_ozet
 from modules.nexgen.mo_numune_talep_service import (
@@ -79,12 +82,48 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
     @bp.route('/api/musteri-pazarlama/gorusme', methods=['POST'])
     @login_gerekli
     def api_mo_gorusme_kaydet():
+        """Tek kayıt servisi — Müşteri Pazarlama + Cari Kart ortak."""
         _yetki_kontrol()
         payload = request.get_json(silent=True) or {}
         con = db_fn()
         try:
             kayit = gorusme_kaydet(con, payload, kullanici_id_fn(), kullanici_yetkileri(session.get('kullanici') or {}))
             return jsonify({'ok': True, 'kayit': kayit, 'mesaj': 'Görüşme kaydı oluşturuldu.'})
+        except MoGorusmeError as e:
+            return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod
+        finally:
+            con.close()
+
+    @bp.route('/api/musteri-pazarlama/gorusme/<int:gorusme_id>', methods=['POST', 'PUT', 'PATCH'])
+    @login_gerekli
+    def api_mo_gorusme_guncelle(gorusme_id):
+        _yetki_kontrol()
+        payload = request.get_json(silent=True) or {}
+        con = db_fn()
+        try:
+            kayit = gorusme_guncelle(
+                con, gorusme_id, payload, kullanici_id_fn(),
+                kullanici_yetkileri(session.get('kullanici') or {}),
+            )
+            return jsonify({'ok': True, 'kayit': kayit, 'mesaj': 'Görüşme güncellendi.'})
+        except MoGorusmeError as e:
+            return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod
+        finally:
+            con.close()
+
+    @bp.route('/api/musteri-pazarlama/gorusme/<int:gorusme_id>/takip', methods=['POST'])
+    @login_gerekli
+    def api_mo_gorusme_takip(gorusme_id):
+        _yetki_kontrol()
+        payload = request.get_json(silent=True) or {}
+        durum = payload.get('takip_durumu') or payload.get('durum') or 'TAMAMLANDI'
+        con = db_fn()
+        try:
+            kayit = takip_durum_ayarla(
+                con, gorusme_id, durum, kullanici_id_fn(),
+                kullanici_yetkileri(session.get('kullanici') or {}),
+            )
+            return jsonify({'ok': True, 'kayit': kayit, 'mesaj': 'Takip durumu güncellendi.'})
         except MoGorusmeError as e:
             return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod
         finally:
@@ -99,12 +138,17 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
             return jsonify({'ok': False, 'mesaj': 'cari_id zorunlu.'}), 400
         con = db_fn()
         try:
-            liste = list_gorusmeler(
-                con, cari_id, kullanici_id_fn(),
-                kullanici_yetkileri(session.get('kullanici') or {}),
-            )
+            yk = kullanici_yetkileri(session.get('kullanici') or {})
+            uid = kullanici_id_fn()
+            liste = list_gorusmeler(con, cari_id, uid, yk)
             sorumlu = sorumlu_pazarlamaci_adi(con, cari_id)
-            return jsonify({'ok': True, 'liste': liste, 'sorumlu_pazarlamaci': sorumlu})
+            return jsonify({
+                'ok': True,
+                'liste': liste,
+                'sorumlu_pazarlamaci': sorumlu,
+                'acik_takip': acik_takip_sayisi(con, cari_id),
+                'can_write': can_mo_gorusme_yaz(con, uid, cari_id, yk),
+            })
         except MoGorusmeError as e:
             return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod
         finally:

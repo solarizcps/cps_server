@@ -18,6 +18,16 @@ from modules.nexgen.cari360_dosya_service import (
 )
 from modules.nexgen.cari360_yetki import can_cari360_dosya_ekrani
 from modules.nexgen.cari_sorumlu_service import can_view_cari
+from modules.nexgen.mo_gorusme_config import GORUSME_TIPLERI, SONUC_TIPLERI
+from modules.nexgen.mo_gorusme_service import (
+    MoGorusmeError,
+    acik_takip_sayisi,
+    can_mo_gorusme_yaz,
+    gorusme_guncelle,
+    gorusme_kaydet,
+    list_gorusmeler,
+    takip_durum_ayarla,
+)
 
 
 def register_cari360_routes(bp, db_fn, kullanici_id_fn):
@@ -62,19 +72,96 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
         con = db_fn()
         try:
             data = load_cari_kart(con, cari_id, uid, yk)
+            acik_takip = acik_takip_sayisi(con, cari_id)
         except Cari360KartError as e:
             abort(e.kod)
         finally:
             con.close()
         tab = (request.args.get('tab') or 'genel').strip().lower()
-        if tab not in ('genel', 'yetkililer'):
+        if tab not in ('genel', 'yetkililer', 'gorusmeler'):
             tab = 'genel'
         return render_template(
             'nexgen/cari360_kart.html',
             cari_id=cari_id,
             data=data,
             aktif_tab=tab,
+            acik_takip=acik_takip,
+            gorusme_tipleri=GORUSME_TIPLERI,
+            sonuc_tipleri=SONUC_TIPLERI,
         )
+
+    @bp.route('/api/cari360/<int:cari_id>/gorusme', methods=['GET'])
+    @login_gerekli
+    def api_cari360_gorusme_liste(cari_id):
+        """Aynı list_gorusmeler servisi — Cari Kart Görüşmeler."""
+        yk = _yk()
+        uid = kullanici_id_fn()
+        con = db_fn()
+        try:
+            liste = list_gorusmeler(con, cari_id, uid, yk)
+            return jsonify({
+                'ok': True,
+                'liste': liste,
+                'acik_takip': acik_takip_sayisi(con, cari_id),
+                'can_write': can_mo_gorusme_yaz(con, uid, cari_id, yk),
+            })
+        except MoGorusmeError as e:
+            return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod
+        finally:
+            con.close()
+
+    @bp.route('/api/cari360/<int:cari_id>/gorusme', methods=['POST'])
+    @login_gerekli
+    def api_cari360_gorusme_kaydet(cari_id):
+        """Aynı gorusme_kaydet servisi — tek DB kaydı."""
+        yk = _yk()
+        uid = kullanici_id_fn()
+        payload = request.get_json(silent=True) or {}
+        payload['cari_id'] = cari_id
+        payload.setdefault('kaynak', 'CARI_KART')
+        con = db_fn()
+        try:
+            kayit = gorusme_kaydet(con, payload, uid, yk)
+            return jsonify({'ok': True, 'kayit': kayit, 'mesaj': 'Görüşme kaydı oluşturuldu.'})
+        except MoGorusmeError as e:
+            return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod
+        finally:
+            con.close()
+
+    @bp.route('/api/cari360/<int:cari_id>/gorusme/<int:gorusme_id>', methods=['POST'])
+    @login_gerekli
+    def api_cari360_gorusme_guncelle(cari_id, gorusme_id):
+        yk = _yk()
+        uid = kullanici_id_fn()
+        payload = request.get_json(silent=True) or {}
+        con = db_fn()
+        try:
+            kayit = gorusme_guncelle(con, gorusme_id, payload, uid, yk)
+            if int(kayit.get('cari_id') or 0) != int(cari_id):
+                return jsonify({'ok': False, 'mesaj': 'Başka carinin görüşmesi.'}), 403
+            return jsonify({'ok': True, 'kayit': kayit})
+        except MoGorusmeError as e:
+            return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod
+        finally:
+            con.close()
+
+    @bp.route('/api/cari360/<int:cari_id>/gorusme/<int:gorusme_id>/takip', methods=['POST'])
+    @login_gerekli
+    def api_cari360_gorusme_takip(cari_id, gorusme_id):
+        yk = _yk()
+        uid = kullanici_id_fn()
+        payload = request.get_json(silent=True) or {}
+        durum = payload.get('takip_durumu') or payload.get('durum') or 'TAMAMLANDI'
+        con = db_fn()
+        try:
+            kayit = takip_durum_ayarla(con, gorusme_id, durum, uid, yk)
+            if int(kayit.get('cari_id') or 0) != int(cari_id):
+                return jsonify({'ok': False, 'mesaj': 'Başka carinin görüşmesi.'}), 403
+            return jsonify({'ok': True, 'kayit': kayit})
+        except MoGorusmeError as e:
+            return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod
+        finally:
+            con.close()
 
     @bp.route('/api/cari360/<int:cari_id>/hafiza')
     @login_gerekli

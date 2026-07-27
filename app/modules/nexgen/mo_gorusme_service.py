@@ -7,8 +7,15 @@ import sqlite3
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from modules.nexgen.cari_sorumlu_service import can_view_cari, load_kullanici_yetkileri
-from modules.nexgen.cari360_yetki import can_cari360_view_all, can_cari360_view_own
+from modules.nexgen.cari_sorumlu_service import (
+    can_view_cari,
+    can_write_crm,
+    load_kullanici_yetkileri,
+)
+from modules.nexgen.cari360_yetki import (
+    _yk_has,
+    can_cari360_view_all,
+)
 from modules.nexgen.mo_gorusme_config import (
     GORUSME_GUN_ESIK,
     GORUSME_TIPLERI,
@@ -18,6 +25,9 @@ from modules.nexgen.mo_gorusme_config import (
     SONUC_TIPLERI,
     TABLO,
 )
+
+TAKIP_DURUMLARI: tuple[str, ...] = ('ACIK', 'TAMAMLANDI', 'IPTAL')
+KAYNAK_CARI_KART = 'CARI_KART'
 
 
 class MoGorusmeError(Exception):
@@ -60,15 +70,49 @@ def can_mo_gorusme_yaz(
     cari_id: int,
     yk: set[str] | None = None,
 ) -> bool:
+    """CRM yazma + planlamacı engeli (Mehmet read-only)."""
     if yk is None:
         yk = load_kullanici_yetkileri(con, kullanici_id)
-    if not can_view_cari(con, kullanici_id, cari_id, yk):
+    # Planlamacı (Mehmet) CRM yazamaz — read-only geçmiş
+    if (
+        _yk_has(yk, 'nexgen.plan.manage', 'can_manage')
+        and not can_cari360_view_all(yk)
+        and '*' not in yk
+    ):
         return False
-    if can_cari360_view_all(yk):
-        return True
-    if can_cari360_view_own(yk):
-        return _kullanici_cari_atanmis(con, kullanici_id, cari_id)
-    return False
+    return can_write_crm(con, kullanici_id, cari_id, yk)
+
+
+def _kolon_var(con, tablo: str, kolon: str) -> bool:
+    return any(c[1] == kolon for c in con.execute(f'PRAGMA table_info({tablo})').fetchall())
+
+
+def _assert_yetkili_uygun(
+    con: sqlite3.Connection,
+    cari_id: int,
+    yetkili_id: int | None,
+    *,
+    yeni_gorusme: bool = True,
+) -> int | None:
+    if yetkili_id in (None, '', 0):
+        return None
+    try:
+        yid = int(yetkili_id)
+    except (TypeError, ValueError):
+        raise MoGorusmeError('yetkili_id geçersiz.', 400)
+    if not _tablo_var(con, 'cari_yetkili'):
+        raise MoGorusmeError('cari_yetkili tablosu yok (migration 133).', 503)
+    row = con.execute(
+        'SELECT id, cari_id, aktif, ad_soyad FROM cari_yetkili WHERE id=?',
+        (yid,),
+    ).fetchone()
+    if not row:
+        raise MoGorusmeError('Yetkili bulunamadı.', 404)
+    if int(row['cari_id']) != int(cari_id):
+        raise MoGorusmeError('Başka carinin yetkilisi seçilemez.', 400)
+    if yeni_gorusme and int(row['aktif'] or 0) != 1:
+        raise MoGorusmeError('Pasif yetkili yeni görüşmede seçilemez.', 400)
+    return yid
 
 
 def timeline_olay_sozlesmesi(kayit: dict[str, Any]) -> dict[str, Any]:
@@ -88,10 +132,35 @@ def timeline_olay_sozlesmesi(kayit: dict[str, Any]) -> dict[str, Any]:
 def _row_dict(r) -> dict[str, Any]:
     d = dict(r)
     d['kullanici_adi'] = d.get('kullanici_adi') or ''
+    d['yetkili_adi'] = d.get('yetkili_adi') or ''
     return d
 
 
-def _validate_payload(payload: dict) -> dict[str, Any]:
+def _enrich_baglantilar(con: sqlite3.Connection, d: dict[str, Any]) -> dict[str, Any]:
+    """Numune/sipariş mo_gorusme_id bağlarını bozmadan okur."""
+    gid = d.get('id')
+    if not gid:
+        return d
+    d['kaynak_numune_talep_id'] = None
+    d['kaynak_siparis_id'] = None
+    if _tablo_var(con, 'nexgen_numune_talep') and _kolon_var(con, 'nexgen_numune_talep', 'mo_gorusme_id'):
+        nr = con.execute(
+            'SELECT id FROM nexgen_numune_talep WHERE mo_gorusme_id=? ORDER BY id DESC LIMIT 1',
+            (gid,),
+        ).fetchone()
+        if nr:
+            d['kaynak_numune_talep_id'] = int(nr['id'] if hasattr(nr, 'keys') else nr[0])
+    if _tablo_var(con, 'nexgen_planlama_siparis') and _kolon_var(con, 'nexgen_planlama_siparis', 'mo_gorusme_id'):
+        sr = con.execute(
+            'SELECT id FROM nexgen_planlama_siparis WHERE mo_gorusme_id=? ORDER BY id DESC LIMIT 1',
+            (gid,),
+        ).fetchone()
+        if sr:
+            d['kaynak_siparis_id'] = int(sr['id'] if hasattr(sr, 'keys') else sr[0])
+    return d
+
+
+def _validate_payload(payload: dict, *, require_idem: bool = True) -> dict[str, Any]:
     tip = (payload.get('gorusme_tipi') or '').strip()
     if tip not in GORUSME_TIPLERI:
         raise MoGorusmeError('Geçerli görüşme tipi seçin.', 400)
@@ -115,7 +184,7 @@ def _validate_payload(payload: dict) -> dict[str, Any]:
         oncelik = 'NORMAL'
 
     idem = (payload.get('idempotency_key') or '').strip()
-    if not idem:
+    if require_idem and not idem:
         raise MoGorusmeError('idempotency_key zorunlu.', 400)
 
     cari_id = payload.get('cari_id')
@@ -138,14 +207,29 @@ def _validate_payload(payload: dict) -> dict[str, Any]:
         except (TypeError, ValueError):
             return None
 
+    takip = (payload.get('sonraki_takip_tarihi') or payload.get('takip_tarihi') or '').strip() or None
+    takip_durum = (payload.get('takip_durumu') or '').strip().upper() or None
+    if takip and not takip_durum:
+        takip_durum = 'ACIK'
+    if takip_durum and takip_durum not in TAKIP_DURUMLARI:
+        raise MoGorusmeError('takip_durumu geçersiz (ACIK/TAMAMLANDI/IPTAL).', 400)
+
+    kaynak = (payload.get('kaynak') or KAYNAK_MUSTERI_OPERASYONU).strip().upper()
+    if kaynak not in (KAYNAK_MUSTERI_OPERASYONU, KAYNAK_CARI_KART):
+        kaynak = KAYNAK_MUSTERI_OPERASYONU
+
     return {
         'cari_id': int(cari_id),
         'gorusme_tipi': tip,
         'sonuc_tipi': sonuc,
         'sonuc_etiketler': json.dumps(payload.get('sonuc_etiketler') or [], ensure_ascii=False),
         'kisa_not': kisa,
+        'konu': (payload.get('konu') or '').strip() or None,
+        'sonraki_aksiyon': (payload.get('sonraki_aksiyon') or '').strip() or None,
+        'yetkili_id': payload.get('yetkili_id'),
         'gorusme_tarihi': gt,
-        'sonraki_takip_tarihi': (payload.get('sonraki_takip_tarihi') or '').strip() or None,
+        'sonraki_takip_tarihi': takip,
+        'takip_durumu': takip_durum,
         'oncelik': oncelik,
         'tahmini_siparis_tutari': _opt_float(payload.get('tahmini_siparis_tutari')),
         'tahmini_siparis_tarihi': (payload.get('tahmini_siparis_tarihi') or '').strip() or None,
@@ -156,6 +240,7 @@ def _validate_payload(payload: dict) -> dict[str, Any]:
         'detay_not': (payload.get('detay_not') or '').strip() or None,
         'dosya_ref': (payload.get('dosya_ref') or '').strip() or None,
         'idempotency_key': idem,
+        'kaynak': kaynak,
     }
 
 
@@ -186,32 +271,62 @@ def gorusme_kaydet(
     if not cari:
         raise MoGorusmeError('Cari bulunamadı.', 404)
 
+    yetkili_id = _assert_yetkili_uygun(
+        con, norm['cari_id'], norm.get('yetkili_id'), yeni_gorusme=True,
+    )
+
     audit = json.dumps({
         'islem': 'OLUSTUR',
         'kullanici_id': kullanici_id,
         'tarih': _now(),
     }, ensure_ascii=False)
 
-    cur = con.execute(
-        f"""
-        INSERT INTO {TABLO} (
-            cari_id, kullanici_id, kaynak, gorusme_tipi, sonuc_tipi, sonuc_etiketler,
-            kisa_not, gorusme_tarihi, sonraki_takip_tarihi, oncelik,
-            tahmini_siparis_tutari, tahmini_siparis_tarihi, istenen_vade_gun,
-            cek_alim_tarihi, rakip_firma, makina_notu, detay_not, dosya_ref,
-            idempotency_key, olusturan_kullanici_id, audit_json
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-        """,
-        (
-            norm['cari_id'], kullanici_id, KAYNAK_MUSTERI_OPERASYONU,
-            norm['gorusme_tipi'], norm['sonuc_tipi'], norm['sonuc_etiketler'],
-            norm['kisa_not'], norm['gorusme_tarihi'], norm['sonraki_takip_tarihi'],
-            norm['oncelik'], norm['tahmini_siparis_tutari'], norm['tahmini_siparis_tarihi'],
-            norm['istenen_vade_gun'], norm['cek_alim_tarihi'], norm['rakip_firma'],
-            norm['makina_notu'], norm['detay_not'], norm['dosya_ref'],
-            norm['idempotency_key'], kullanici_id, audit,
-        ),
-    )
+    has_yetkili = _kolon_var(con, TABLO, 'yetkili_id')
+    if has_yetkili:
+        cur = con.execute(
+            f"""
+            INSERT INTO {TABLO} (
+                cari_id, kullanici_id, kaynak, gorusme_tipi, sonuc_tipi, sonuc_etiketler,
+                kisa_not, konu, sonraki_aksiyon, yetkili_id,
+                gorusme_tarihi, sonraki_takip_tarihi, takip_durumu, oncelik,
+                tahmini_siparis_tutari, tahmini_siparis_tarihi, istenen_vade_gun,
+                cek_alim_tarihi, rakip_firma, makina_notu, detay_not, dosya_ref,
+                idempotency_key, olusturan_kullanici_id, guncelleyen_kullanici_id,
+                guncelleme_tarihi, audit_json
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                norm['cari_id'], kullanici_id, norm['kaynak'],
+                norm['gorusme_tipi'], norm['sonuc_tipi'], norm['sonuc_etiketler'],
+                norm['kisa_not'], norm['konu'], norm['sonraki_aksiyon'], yetkili_id,
+                norm['gorusme_tarihi'], norm['sonraki_takip_tarihi'], norm['takip_durumu'],
+                norm['oncelik'], norm['tahmini_siparis_tutari'], norm['tahmini_siparis_tarihi'],
+                norm['istenen_vade_gun'], norm['cek_alim_tarihi'], norm['rakip_firma'],
+                norm['makina_notu'], norm['detay_not'], norm['dosya_ref'],
+                norm['idempotency_key'], kullanici_id, kullanici_id, _now(), audit,
+            ),
+        )
+    else:
+        cur = con.execute(
+            f"""
+            INSERT INTO {TABLO} (
+                cari_id, kullanici_id, kaynak, gorusme_tipi, sonuc_tipi, sonuc_etiketler,
+                kisa_not, gorusme_tarihi, sonraki_takip_tarihi, oncelik,
+                tahmini_siparis_tutari, tahmini_siparis_tarihi, istenen_vade_gun,
+                cek_alim_tarihi, rakip_firma, makina_notu, detay_not, dosya_ref,
+                idempotency_key, olusturan_kullanici_id, audit_json
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                norm['cari_id'], kullanici_id, norm['kaynak'],
+                norm['gorusme_tipi'], norm['sonuc_tipi'], norm['sonuc_etiketler'],
+                norm['kisa_not'], norm['gorusme_tarihi'], norm['sonraki_takip_tarihi'],
+                norm['oncelik'], norm['tahmini_siparis_tutari'], norm['tahmini_siparis_tarihi'],
+                norm['istenen_vade_gun'], norm['cek_alim_tarihi'], norm['rakip_firma'],
+                norm['makina_notu'], norm['detay_not'], norm['dosya_ref'],
+                norm['idempotency_key'], kullanici_id, audit,
+            ),
+        )
     con.commit()
     gid = int(cur.lastrowid)
     detay = gorusme_detay(con, gid, kullanici_id, yk)
@@ -225,11 +340,17 @@ def gorusme_detay(
     kullanici_id: int,
     yk: set[str] | None = None,
 ) -> dict[str, Any]:
+    yetkili_join = ''
+    yetkili_sel = "'' AS yetkili_adi"
+    if _tablo_var(con, 'cari_yetkili') and _kolon_var(con, TABLO, 'yetkili_id'):
+        yetkili_join = 'LEFT JOIN cari_yetkili cy ON cy.id = g.yetkili_id'
+        yetkili_sel = 'cy.ad_soyad AS yetkili_adi'
     row = con.execute(
         f"""
-        SELECT g.*, sk.KullaniciAdi AS kullanici_adi
+        SELECT g.*, sk.KullaniciAdi AS kullanici_adi, {yetkili_sel}
         FROM {TABLO} g
         LEFT JOIN sistem_kullanici sk ON sk.Id = g.kullanici_id
+        {yetkili_join}
         WHERE g.id=? AND g.aktif=1
         """,
         (gorusme_id,),
@@ -238,7 +359,7 @@ def gorusme_detay(
         raise MoGorusmeError('Görüşme kaydı bulunamadı.', 404)
     if not can_view_cari(con, kullanici_id, int(row['cari_id']), yk):
         raise MoGorusmeError('Görüntüleme yetkiniz yok.', 403)
-    return _row_dict(row)
+    return _enrich_baglantilar(con, _row_dict(row))
 
 
 def list_gorusmeler(
@@ -252,18 +373,136 @@ def list_gorusmeler(
         raise MoGorusmeError('Görüntüleme yetkiniz yok.', 403)
     if not _tablo_var(con, TABLO):
         return []
+    yetkili_join = ''
+    yetkili_sel = "'' AS yetkili_adi"
+    if _tablo_var(con, 'cari_yetkili') and _kolon_var(con, TABLO, 'yetkili_id'):
+        yetkili_join = 'LEFT JOIN cari_yetkili cy ON cy.id = g.yetkili_id'
+        yetkili_sel = 'cy.ad_soyad AS yetkili_adi'
+    # Açık takipler önce, sonra tarih DESC
+    order = 'g.gorusme_tarihi DESC, g.id DESC'
+    if _kolon_var(con, TABLO, 'takip_durumu'):
+        order = (
+            "CASE WHEN g.takip_durumu='ACIK' THEN 0 ELSE 1 END, "
+            "g.gorusme_tarihi DESC, g.id DESC"
+        )
     rows = con.execute(
         f"""
-        SELECT g.*, sk.KullaniciAdi AS kullanici_adi
+        SELECT g.*, sk.KullaniciAdi AS kullanici_adi, {yetkili_sel}
         FROM {TABLO} g
         LEFT JOIN sistem_kullanici sk ON sk.Id = g.kullanici_id
+        {yetkili_join}
         WHERE g.cari_id=? AND g.aktif=1
-        ORDER BY g.gorusme_tarihi DESC, g.id DESC
+        ORDER BY {order}
         LIMIT ?
         """,
         (cari_id, limit),
     ).fetchall()
-    return [_row_dict(r) for r in rows]
+    return [_enrich_baglantilar(con, _row_dict(r)) for r in rows]
+
+
+def gorusme_guncelle(
+    con: sqlite3.Connection,
+    gorusme_id: int,
+    payload: dict,
+    kullanici_id: int,
+    yk: set[str] | None = None,
+) -> dict[str, Any]:
+    mevcut = gorusme_detay(con, gorusme_id, kullanici_id, yk)
+    cari_id = int(mevcut['cari_id'])
+    if not can_mo_gorusme_yaz(con, kullanici_id, cari_id, yk):
+        raise MoGorusmeError('Bu cari için görüşme yazma yetkiniz yok.', 403)
+
+    tip = (payload.get('gorusme_tipi') or mevcut.get('gorusme_tipi') or '').strip()
+    sonuc = (payload.get('sonuc_tipi') or mevcut.get('sonuc_tipi') or '').strip()
+    kisa = (payload.get('kisa_not') if 'kisa_not' in payload else mevcut.get('kisa_not') or '')
+    kisa = (kisa or '').strip()
+    if tip not in GORUSME_TIPLERI:
+        raise MoGorusmeError('Geçerli görüşme tipi seçin.', 400)
+    if sonuc not in SONUC_TIPLERI:
+        raise MoGorusmeError('Geçerli görüşme sonucu seçin.', 400)
+    if len(kisa) < 3:
+        raise MoGorusmeError('Kısa görüşme notu zorunlu (en az 3 karakter).', 400)
+
+    yetkili_raw = payload['yetkili_id'] if 'yetkili_id' in payload else mevcut.get('yetkili_id')
+    # Güncellemede mevcut pasif yetkili korunabilir; yeni seçimde aktif zorunlu
+    if 'yetkili_id' in payload and yetkili_raw not in (None, '', 0):
+        yetkili_id = _assert_yetkili_uygun(con, cari_id, yetkili_raw, yeni_gorusme=True)
+    elif yetkili_raw in (None, '', 0):
+        yetkili_id = None
+    else:
+        yetkili_id = _assert_yetkili_uygun(con, cari_id, yetkili_raw, yeni_gorusme=False)
+
+    takip = payload.get('sonraki_takip_tarihi') if 'sonraki_takip_tarihi' in payload else mevcut.get('sonraki_takip_tarihi')
+    takip = (takip or '').strip() or None
+    takip_durum = payload.get('takip_durumu') if 'takip_durumu' in payload else mevcut.get('takip_durumu')
+    takip_durum = (takip_durum or '').strip().upper() or None
+    if takip and not takip_durum:
+        takip_durum = 'ACIK'
+    if takip_durum and takip_durum not in TAKIP_DURUMLARI:
+        raise MoGorusmeError('takip_durumu geçersiz.', 400)
+
+    gt = (payload.get('gorusme_tarihi') or mevcut.get('gorusme_tarihi') or '').strip()
+    if gt and len(gt) == 10:
+        gt = gt + ' 12:00:00'
+
+    konu = payload.get('konu') if 'konu' in payload else mevcut.get('konu')
+    aksiyon = payload.get('sonraki_aksiyon') if 'sonraki_aksiyon' in payload else mevcut.get('sonraki_aksiyon')
+
+    if not _kolon_var(con, TABLO, 'yetkili_id'):
+        raise MoGorusmeError('Migration 134 gerekli.', 503)
+
+    con.execute(
+        f"""
+        UPDATE {TABLO} SET
+            gorusme_tipi=?, sonuc_tipi=?, kisa_not=?, konu=?, sonraki_aksiyon=?,
+            yetkili_id=?, gorusme_tarihi=?, sonraki_takip_tarihi=?, takip_durumu=?,
+            guncelleme_tarihi=?, guncelleyen_kullanici_id=?
+        WHERE id=? AND aktif=1
+        """,
+        (
+            tip, sonuc, kisa, (konu or '').strip() or None,
+            (aksiyon or '').strip() or None, yetkili_id, gt, takip, takip_durum,
+            _now(), kullanici_id, gorusme_id,
+        ),
+    )
+    con.commit()
+    return gorusme_detay(con, gorusme_id, kullanici_id, yk)
+
+
+def takip_durum_ayarla(
+    con: sqlite3.Connection,
+    gorusme_id: int,
+    durum: str,
+    kullanici_id: int,
+    yk: set[str] | None = None,
+) -> dict[str, Any]:
+    d = (durum or '').strip().upper()
+    if d not in TAKIP_DURUMLARI:
+        raise MoGorusmeError('takip_durumu geçersiz.', 400)
+    mevcut = gorusme_detay(con, gorusme_id, kullanici_id, yk)
+    if not can_mo_gorusme_yaz(con, kullanici_id, int(mevcut['cari_id']), yk):
+        raise MoGorusmeError('Bu cari için görüşme yazma yetkiniz yok.', 403)
+    if not _kolon_var(con, TABLO, 'takip_durumu'):
+        raise MoGorusmeError('Migration 134 gerekli.', 503)
+    con.execute(
+        f"""
+        UPDATE {TABLO}
+        SET takip_durumu=?, guncelleme_tarihi=?, guncelleyen_kullanici_id=?
+        WHERE id=? AND aktif=1
+        """,
+        (d, _now(), kullanici_id, gorusme_id),
+    )
+    con.commit()
+    return gorusme_detay(con, gorusme_id, kullanici_id, yk)
+
+
+def acik_takip_sayisi(con: sqlite3.Connection, cari_id: int) -> int:
+    if not _tablo_var(con, TABLO) or not _kolon_var(con, TABLO, 'takip_durumu'):
+        return 0
+    return int(con.execute(
+        f"SELECT COUNT(*) FROM {TABLO} WHERE cari_id=? AND aktif=1 AND takip_durumu='ACIK'",
+        (cari_id,),
+    ).fetchone()[0] or 0)
 
 
 def son_gorusme_ozet_map(
