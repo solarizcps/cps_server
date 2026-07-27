@@ -1394,7 +1394,7 @@ function pzmTabloSatirHtml(t, idx) {
   var no    = t.siparis_no || ('T-' + t.id);
   var cari  = t.cari_unvan || '—';
   var tarih = pzmTarihGoster(t.olusturma_tarihi);
-  var term  = t.en_yakin_termin || t.termin_tarihi || '—';
+  var term  = t.en_yakin_termin ? pzmTarihGoster(t.en_yakin_termin) : '—';
   var topKg = parseFloat(t.toplam_kg || 0);
   if (!topKg && t.payload && t.payload.boyut_miktar) {
     topKg = Object.values(t.payload.boyut_miktar).reduce(function(a,v){ return a + (parseFloat(v)||0); }, 0);

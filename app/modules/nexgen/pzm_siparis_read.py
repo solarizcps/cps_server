@@ -219,10 +219,28 @@ def pzm_en_erken_gecerli_termin(degerler) -> str | None:
     return min(gecerli) if gecerli else None
 
 
-def pzm_siparis_ozet(kalemler: list[dict]) -> dict[str, Any]:
+def pzm_siparis_termin_coz(
+    header_termin,
+    kalemler: list[dict] | None,
+) -> str | None:
+    """Header geçerliyse header; değilse kalemlerden en erken geçerli termin."""
+    header_iso = pzm_iso_tarih(header_termin)
+    if header_iso:
+        return header_iso
+    kalem_termins = [
+        k.get('termin_tarihi')
+        for k in (kalemler or [])
+        if k.get('termin_tarihi')
+    ]
+    return pzm_en_erken_gecerli_termin(kalem_termins)
+
+
+def pzm_siparis_ozet(
+    kalemler: list[dict],
+    header_termin=None,
+) -> dict[str, Any]:
     toplam = round(sum(float(k.get('toplam_kg') or 0) for k in kalemler), 3)
     terlik = taban = dokme = 0.0
-    terminler: list[str] = []
     for k in kalemler:
         aile = (k.get('urun_ailesi') or '').upper()
         kg = float(k.get('toplam_kg') or 0)
@@ -232,16 +250,13 @@ def pzm_siparis_ozet(kalemler: list[dict]) -> dict[str, Any]:
             dokme += float(k.get('miktar_m') or kg)
         elif aile == 'TABAN':
             taban += kg
-        iso = pzm_iso_tarih(k.get('termin_tarihi'))
-        if iso:
-            terminler.append(iso)
     return {
         'kalem_sayisi': len(kalemler),
         'toplam_kg': toplam,
         'terlik_kg': round(terlik, 3),
         'taban_kg': round(taban, 3),
         'dokme_kg': round(dokme, 3),
-        'en_yakin_termin': pzm_en_erken_gecerli_termin(terminler),
+        'en_yakin_termin': pzm_siparis_termin_coz(header_termin, kalemler),
     }
 
 
@@ -278,7 +293,7 @@ def pzm_siparis_oku(con, siparis_id: int) -> dict | None:
             (siparis_id,),
         ).fetchone()['n']
 
-    ozet = pzm_siparis_ozet(kalemler)
+    ozet = pzm_siparis_ozet(kalemler, header_termin=hdr.get('termin_tarihi'))
     finans = pzm_siparis_finans_alanlari(hdr, payload)
     return {
         **hdr,

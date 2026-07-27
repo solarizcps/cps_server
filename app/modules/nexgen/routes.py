@@ -18567,14 +18567,14 @@ def _pzm_talep_satir_dict(row, con=None):
             pzm_siparis_ozet,
         )
         kalemler = pzm_siparis_kalemleri_getir(con, d['id'])
-        ozet = pzm_siparis_ozet(kalemler)
+        ozet = pzm_siparis_ozet(kalemler, header_termin=d.get('termin_tarihi'))
         d['kalemler'] = kalemler
         d['kalem_sayisi'] = ozet['kalem_sayisi']
         d['toplam_kg'] = ozet['toplam_kg']
         d['terlik_kg'] = ozet.get('terlik_kg', 0)
         d['taban_kg'] = ozet.get('taban_kg', 0)
         d['dokme_kg'] = ozet.get('dokme_kg', 0)
-        d['en_yakin_termin'] = ozet.get('en_yakin_termin') or d.get('termin_tarihi')
+        d['en_yakin_termin'] = ozet.get('en_yakin_termin')
         sip_durum = (d.get('durum') or '').upper()
         if sip_durum in ('ONAYLANDI', 'MPR_BEKLIYOR', 'PLANLAMAYA_HAZIR', 'URETIMDE'):
             d['mpr_planlar'] = _pzm_siparis_mpr_planlar(con, d['id'])
