@@ -297,8 +297,8 @@
             <div class="pzm-kart-body" id="pzm-yeni-mpr-icerik">
               <div class="pzm-mrp-kutu pzm-mrp-bekliyor">Malzeme ihtiyacı analizi için önce en az bir sipariş kalemi ekleyin.</div>
             </div>
-            <div class="pzm-mpr-aksiyon-wrap" id="pzm-yeni-mpr-aksiyon"></div>
           </div>
+            <div class="pzm-mpr-aksiyon-wrap" id="pzm-yeni-mpr-aksiyon"></div>
         </div>
         {% endif %}
       </div>
@@ -1048,6 +1048,9 @@ button.rm-page-geri { appearance:none; }
 .pzm-mpr-aksiyon-wrap {
   border-top:1px solid var(--rm-border); padding:10px 12px 12px;
   background:var(--rm-bg2);
+}
+.pzm-adim-4 > .pzm-mpr-aksiyon-wrap {
+  position:sticky; bottom:0; z-index:21;
 }
 .pzm-mpr-aksiyon-wrap .rm-butonlar { flex-wrap:wrap; gap:8px; }
 .pzm-mpr-aksiyon-wrap .rm-btn { flex:1; min-width:120px; }
@@ -1935,6 +1938,8 @@ function pzmDetayStokYukle(tid) {
     st.stokOzet = pzmStokOzetBirlestir(st);
     st.stokEksik = !st.stokOzet.yeterliMi;
     pzmMprUiGuncelle(tid);
+    if (_pzmAktifEkran === 'yeni' && String(_pzmTalepId) === String(tid)) pzmYeniMprAksiyonRender();
+    pzmAksiyonBandScroll(tid);
     pzmDetayMiRaporYukle(tid);
     pzmDetayAltEmirTetikle(tid);
   });
@@ -2302,6 +2307,18 @@ function pzmMprUiGuncelle(tid) {
   if (_pzmAktifEkran === 'yeni' && String(_pzmTalepId) === String(tid)) pzmYeniMprRender();
 }
 
+function pzmAksiyonBandScroll(tid) {
+  var el = (_pzmAktifEkran === 'yeni')
+    ? $id('pzm-yeni-mpr-aksiyon')
+    : $id('pzm-detay-alt-band');
+  if (!el || el.offsetParent === null) return;
+  try {
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch (e) {
+    el.scrollIntoView(false);
+  }
+}
+
 function pzmMprOzetSatirHtml(oz) {
   var farkStr = (oz.fark >= 0 ? '+' : '') + oz.fark.toLocaleString('tr');
   return '<div class="pzm-mpr-ozet-satir">Talep <span>' + oz.talep.toLocaleString('tr') + ' kg</span>' +
@@ -2346,7 +2363,7 @@ function pzmYeniMprAksiyonRender() {
   var mprDis = !cariOk || _pzmKalemler.length < 1 || busy || st.planlar.length > 0 || !!mprBlok;
   html += mprDis ? ' disabled' : '';
   html += '>Malzeme İhtiyacını Analiz Et</button>';
-  if (_pzmTalepId && st.mprHesaplandi && st.planlar.length) {
+  if (_pzmTalepId) {
     var tFake = pzmTalepBul(_pzmTalepId) || { id: _pzmTalepId, durum: 'MPR_BEKLIYOR' };
     var uretimAktif = pzmDetayUretimAktif(st, tFake);
     var uretimTitle = pzmDetayUretimBlokMesaj(st, tFake) || '';
@@ -2355,6 +2372,12 @@ function pzmYeniMprAksiyonRender() {
     html += (uretimAktif && !st.uretimeGonderiliyor) ? '' : ' disabled';
     if (uretimTitle) html += ' title="' + pzmEsc(uretimTitle) + '"';
     html += '>' + (st.uretimeGonderiliyor ? 'Gönderiliyor…' : 'Üretime Gönder') + '</button>';
+    if (!uretimAktif || st.uretimeGonderiliyor) {
+      var ipucuY = uretimTitle || pzmDetayUretimIpucu(st, tFake);
+      if (ipucuY) html += '<div class="pzm-mi-uretim-ipucu">' + pzmEsc(ipucuY) + '</div>';
+    } else {
+      html += '<div class="pzm-mi-uretim-ipucu" style="color:var(--rm-green);">Üretime gönderilebilir</div>';
+    }
   }
   html += '</div>';
   wrap.innerHTML = html;
@@ -2857,6 +2880,8 @@ function pzmDetayAltBand(t, st) {
   if (!uretimAktif) {
     var ipucu = pzmDetayUretimIpucu(st, t);
     if (ipucu) html += '<div class="pzm-mi-uretim-ipucu">' + pzmEsc(ipucu) + '</div>';
+  } else if (!st.uretimeGonderiliyor) {
+    html += '<div class="pzm-mi-uretim-ipucu" style="color:var(--rm-green);">Üretime gönderilebilir</div>';
   }
 
   if (t.durum !== 'IPTAL' && !readonly && _pzmCanManage) {
@@ -3807,6 +3832,7 @@ window.pzmMrpOlustur = function() {
       pzmDetayAltEmirTetikle(tid);
       pzmDetayStokYukle(tid);
       pzmYeniMprRender();
+      pzmAksiyonBandScroll(tid);
       pzmAkkAc(4);
     })
     .catch(function(err) {
