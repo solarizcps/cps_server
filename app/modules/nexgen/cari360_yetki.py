@@ -167,12 +167,14 @@ def can_musteri_pazarlama_menu(yk: set[str] | frozenset[str]) -> bool:
 
 
 def is_pazarlamaci_home_user(yk: set[str] | frozenset[str]) -> bool:
-    """Login varsayılan ekranı — yalnız kendi-carisi pazarlamacı (yönetim hariç)."""
+    """Login varsayılan ekranı — yalnız kendi-carisi pazarlamacı (yönetim/planlama hariç)."""
     if '*' in yk:
         return False
     if can_cari360_view_all(yk):
         return False
     if _yk_has(yk, YETKI_CARI360_SORUMLU_MANAGE, 'can_manage'):
+        return False
+    if _yk_has(yk, 'nexgen.plan.manage', 'can_manage'):
         return False
     return can_cari360_view_own(yk)
 
