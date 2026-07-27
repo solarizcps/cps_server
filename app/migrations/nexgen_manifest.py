@@ -170,6 +170,71 @@ MANIFEST: tuple[MigEntry, ...] = (
         risk="permission",
     ),
     MigEntry(
+        117, "117_nexgen_ferhat_tek_deneme_oran",
+        "117_nexgen_ferhat_tek_deneme_oran.py",
+        "Ferhat tek deneme olcum + boyut kullanim orani tablosu",
+        dependencies=(116,),
+        required_tables=("nexgen_arge_deneme_boyut_oran",),
+        required_columns=(
+            ("nexgen_arge_deneme", "sonuc_modeli"),
+            ("nexgen_arge_deneme", "olcum_shore"),
+        ),
+    ),
+    MigEntry(
+        119, "119_nexgen_arge_kaynak_uv_nullable",
+        "119_nexgen_arge_kaynak_uv_nullable.py",
+        "nexgen_arge_test.kaynak_uretim_varyant_id NULLABLE (rebuild)",
+        dependencies=(117,),
+        required_columns=(("nexgen_arge_test", "kaynak_uretim_varyant_id"),),
+        risk="high",
+    ),
+    MigEntry(
+        120, "120_cari_eslestirme_golden_master",
+        "120_cari_eslestirme_golden_master.py",
+        "cari_eslestirme tablosu + cari360/finans/onay yetkileri",
+        dependencies=(119,),
+        required_tables=("cari_eslestirme",),
+        risk="permission",
+    ),
+    MigEntry(
+        121, "121_cari_sorumlu",
+        "121_cari_sorumlu.py",
+        "cari_sorumlu tablosu + cari360.sorumlu.manage",
+        dependencies=(120,),
+        required_tables=("cari_sorumlu",),
+        risk="permission",
+    ),
+    MigEntry(
+        122, "122_onay_merkezi_mvp",
+        "122_onay_merkezi_mvp.py",
+        "onay_talep/adim/adapter_log + planlama onay_snapshot_json",
+        dependencies=(121,),
+        required_tables=("onay_talep", "onay_talep_adim", "onay_adapter_log"),
+        required_columns=(("nexgen_planlama_siparis", "onay_snapshot_json"),),
+        risk="permission",
+    ),
+    MigEntry(
+        123, "123_musteri_operasyon_gorusme",
+        "123_musteri_operasyon_gorusme.py",
+        "musteri_operasyon_gorusme tablosu",
+        dependencies=(122,),
+        required_tables=("musteri_operasyon_gorusme",),
+    ),
+    MigEntry(
+        124, "124_mo_numune_talep_kopru",
+        "124_mo_numune_talep_kopru.py",
+        "nexgen_numune_talep MO kopru kolonlari",
+        dependencies=(123,),
+        required_columns=(("nexgen_numune_talep", "kaynak_modul"),),
+    ),
+    MigEntry(
+        125, "125_mo_siparis_talep_kopru",
+        "125_mo_siparis_talep_kopru.py",
+        "nexgen_planlama_siparis MO kopru kolonlari",
+        dependencies=(124,),
+        required_columns=(("nexgen_planlama_siparis", "kaynak_modul"),),
+    ),
+    MigEntry(
         126, "126_mo_tahsilat_plani",
         "126_mo_tahsilat_plani.py",
         "MO sipariş tahsilat planı + mo_tahsilat_kayit",
@@ -217,6 +282,24 @@ MANIFEST: tuple[MigEntry, ...] = (
         dependencies=(130,),
         required_tables=("finans_cari_kimlik", "tedarikci_eslestirme"),
     ),
+    MigEntry(
+        132, "132_finans_f1_core_database",
+        "132_finans_f1_core_database.py",
+        "Finans F1 çekirdek DB — cari_kart, belge_satir, hareket, open_item, audit",
+        dependencies=(131,),
+        required_tables=(
+            "finans_cari_kart",
+            "finans_belge_satir",
+            "finans_hareket",
+            "finans_open_item",
+            "finans_audit",
+        ),
+        required_columns=(
+            ("finans_belgesi", "kaynak_sistem"),
+            ("finans_belgesi", "versiyon"),
+            ("Cari_Har", "kaynak_sistem"),
+        ),
+    ),
 )
 
 BY_VERSION = {m.version: m for m in MANIFEST}
@@ -228,6 +311,14 @@ MEHMET_OVERRIDE_SPECS: tuple[tuple[str, int, int, int, int, int, int, int], ...]
     ('nexgen.view', 1, 0, 0, 0, 0, 1, 0),
     ('nexgen.plan.view', 1, 0, 0, 0, 0, 1, 0),
     ('nexgen.plan.manage', 0, 0, 0, 0, 0, 0, 1),
+)
+
+# F1B — Pazarlamacı (Mehmet) Cari 360 override'ları
+MEHMET_CARI360_OVERRIDE_SPECS: tuple[tuple[str, int, int, int, int, int, int, int], ...] = (
+    ('cari360.view_own', 1, 0, 0, 0, 0, 0, 0),
+    ('cari360.finans.view', 1, 0, 0, 0, 0, 0, 0),
+    ('cari360.crm.write', 1, 1, 1, 0, 0, 0, 0),
+    ('cari360.makina.write', 1, 1, 1, 0, 0, 0, 0),
 )
 
 def tablo_var(cur, tablo: str) -> bool:
