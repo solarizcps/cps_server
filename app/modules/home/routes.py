@@ -121,3 +121,49 @@ def api_home_korgun_proses_detay():
             'error': 'Korgun bağlantısı kurulamadı',
             'source': 'Korgun Solariz22 / Urt_con_gch',
         }), 503
+
+
+def _home_nexgen_izinli():
+    """Ana Özet: oturum + (Korgun allowlist / admin / NexGen view). Depo-sade yok."""
+    try:
+        from modules.nexgen.mo_depo_yetki import is_nexgen_depo_sade_kullanici
+        if is_nexgen_depo_sade_kullanici():
+            return False
+    except Exception:
+        pass
+    if _home_korgun_izinli():
+        return True
+    if yetki_var('nexgen.recete.view', 'can_view'):
+        return True
+    if yetki_var('nexgen.pazarlama.view', 'can_view'):
+        return True
+    if yetki_var('nexgen.planlama.view', 'can_view'):
+        return True
+    return False
+
+
+def home_nexgen_gerekli(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get('kullanici'):
+            return jsonify({'ok': False, 'error': 'Oturum gerekli'}), 401
+        if not _home_nexgen_izinli():
+            return jsonify({'ok': False, 'error': 'Yetkisiz'}), 403
+        return f(*args, **kwargs)
+    return wrapper
+
+
+@home_bp.route('/api/home/nexgen/ozet', methods=['GET'])
+@home_nexgen_gerekli
+def api_home_nexgen_ozet():
+    """GET /api/home/nexgen/ozet — salt okunur NexGen Ana Özet aggregator."""
+    from modules.home.nexgen_ozet_service import get_nexgen_ana_ozet, NexgenOzetError
+    try:
+        payload = get_nexgen_ana_ozet()
+        if not payload.get('ok'):
+            return jsonify(payload), 503
+        return jsonify(payload)
+    except NexgenOzetError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 503
+    except Exception:
+        return jsonify({'ok': False, 'error': 'NexGen özet alınamadı'}), 503
