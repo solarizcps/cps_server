@@ -456,18 +456,20 @@
   }
 
   /**
-   * Aktif operasyon seçim kuralı:
-   * 1) Açık + üretimde (aktif slot) — aktif vardiya
-   * 2) Aynı aktif vardiyada en güncel açık rapor (boş taslak, gerçek üretimli kaydı ezmez)
-   * 3) Bugün tamamlanan en son operasyon
-   * 4) Yoksa null (kapalı / veri yok)
+   * Aynı makine + tarih + vardiya için rapor seçimi (tek zincir).
+   * 1) Açık + aktif slot (üretimde)
+   * 2) Aynı vardiyada üretim bulunan en güncel açık rapor
+   * 3) Aynı vardiyada tamamlanmış en son dolu rapor
+   * 4) Yalnız boş/taslak
+   * 5) Yok
+   * Boş taslak, dolu raporun önüne geçmez.
    */
-  async function pickDisplayReport(makineId, vardiya, tarihBugun, now) {
-    var dayList = await fetchRaporlar(makineId, tarihBugun, tarihBugun, null);
+  async function pickReportForDayShift(makineId, vardiya, tarih, now) {
+    var dayList = await fetchRaporlar(makineId, tarih, tarih, null);
     var shiftList = dayList.filter(function (r) { return r.vardiya === vardiya; }).sort(byRecent);
     var warn = [];
     if (shiftList.length > 1) {
-      warn.push('M' + makineId + ' aktif vardiyada ' + shiftList.length + ' açık/rapor kaydı');
+      warn.push('M' + makineId + ' ' + tarih + '/' + vardiya + ' çoklu rapor: ' + shiftList.map(function (r) { return r.id; }).join(','));
     }
 
     var detCache = {};
@@ -478,47 +480,39 @@
       return detCache[r.id];
     }
 
-    /* 1: açık + üretimde */
+    /* 1) Yalnız vardiyası henüz bitmemiş açık + aktif slot */
     for (var i = 0; i < shiftList.length; i++) {
       var r1 = shiftList[i];
       if (isRaporKapali(r1)) continue;
+      if (isVardiyaBitti(r1.vardiya, r1.tarih, now)) continue;
       var d1 = await detOf(r1);
       if (hasAktifSlot(d1 && d1.slotlar)) {
         return { rapor: r1, detay: d1, finished: false, reason: 'aktif_uretim', warn: warn, dayList: dayList };
       }
     }
 
-    /* 2: aktif vardiya açık rapor — önce üretimli, sonra güncel açık (boş taslak üretimliyi ezmez) */
-    var openShift = shiftList.filter(function (r) { return !isRaporKapali(r); }).sort(byRecent);
-    var openProd = [];
-    for (var j = 0; j < openShift.length; j++) {
-      if (hasProduction(openShift[j].ozet)) openProd.push(openShift[j]);
-    }
+    /* 2) Aynı vardiyada (bitmemiş) açık + üretimli */
+    var openLive = shiftList.filter(function (r) {
+      return !isRaporKapali(r) && !isVardiyaBitti(r.vardiya, r.tarih, now);
+    }).sort(byRecent);
+    var openProd = openLive.filter(function (r) { return hasProduction(r.ozet); });
     if (openProd.length) {
       var rp = openProd[0];
       return { rapor: rp, detay: await detOf(rp), finished: false, reason: 'vardiya_acik_uretim', warn: warn, dayList: dayList };
     }
 
-    /* 3: bugün tamamlanan (kapanış veya vardiya bitmiş) — en güncel, üretimli öncelikli */
-    var completed = dayList.filter(function (r) {
+    /* 3) Vardiya bitmiş veya kapalı + üretimli (stale AKTIF slot olsa bile finished) */
+    var completed = shiftList.filter(function (r) {
       return isRaporKapali(r) || isVardiyaBitti(r.vardiya, r.tarih, now);
     }).sort(byRecent);
     var compProd = completed.filter(function (r) { return hasProduction(r.ozet); });
-    var pick3 = compProd[0] || completed[0] || null;
-    if (pick3) {
-      /* boş aktif vardiya taslağı, tamamlanmış üretimli operasyonun önüne geçmesin */
-      return {
-        rapor: pick3,
-        detay: await detOf(pick3),
-        finished: true,
-        reason: 'bugun_tamamlanan',
-        warn: warn,
-        dayList: dayList,
-        emptyShiftFallback: openShift[0] || null
-      };
+    if (compProd.length) {
+      var rc = compProd[0];
+      return { rapor: rc, detay: await detOf(rc), finished: true, reason: 'vardiya_tamamlanan_dolu', warn: warn, dayList: dayList };
     }
 
-    /* 4: yalnız boş aktif vardiya taslağı kaldıysa onu göster (kapalı/veri yok bağlamı) */
+    var openShift = shiftList.filter(function (r) { return !isRaporKapali(r); }).sort(byRecent);
+
     if (openShift.length) {
       var re = openShift[0];
       return { rapor: re, detay: await detOf(re), finished: false, reason: 'vardiya_taslak_bos', warn: warn, dayList: dayList };
@@ -528,6 +522,76 @@
       return { rapor: rs, detay: await detOf(rs), finished: isRaporKapali(rs), reason: 'vardiya_kayit', warn: warn, dayList: dayList };
     }
     return { rapor: null, detay: null, finished: false, reason: 'yok', warn: warn, dayList: dayList };
+  }
+
+  async function pickDisplayReport(makineId, vardiya, tarihBugun, now) {
+    return pickReportForDayShift(makineId, vardiya, tarihBugun, now);
+  }
+
+  async function buildShiftView(makineId, tarih, vardiya, now, label) {
+    var picked = await pickReportForDayShift(makineId, vardiya, tarih, now);
+    if (picked.warn && picked.warn.length) console.warn('[home-enj]', picked.warn.join('; '));
+    var r = picked.rapor;
+    var det = picked.detay;
+    var finished = !!picked.finished;
+    var pl = r ? await fetchPlanlamaMakine(makineId, r.tarih, r.vardiya) : null;
+    if (pl && r && pl.rapor_id && pl.rapor_id !== r.id) {
+      console.warn('[home-enj] planlama rapor_id=' + pl.rapor_id + ' != secilen=' + r.id);
+    }
+    var ab = r ? await fetchAb(r.id) : null;
+    var slotlar = (pl && pl.slotlar) || (det && det.slotlar) || [];
+    /* Bitmiş vardiyada DB'de kalan AKTIF slot → Operasyon Bitti (stale slot yüzünden Üretimde deme) */
+    if (r && isVardiyaBitti(r.vardiya, r.tarih, now)) finished = true;
+    var status = pl ? statusFromAnlik(pl.anlik_durum, finished) : statusFromSlots(slotlar, finished);
+    if (finished && hasAktifSlot(slotlar) && r && !isVardiyaBitti(r.vardiya, r.tarih, now)) {
+      status = statusFromAnlik(pl && pl.anlik_durum, false);
+      finished = false;
+    }
+    var plU = (pl && pl.uretim) || null;
+    var ozet = (det && det.ozet) || (r && r.ozet) || {};
+    var fire = null, net = null, verim = null;
+    if (plU) {
+      if (plU.fire_cift != null) fire = Number(plU.fire_cift);
+      if (plU.net_cift != null) net = Number(plU.net_cift);
+      if (plU.verim_yuzde != null) verim = Math.round(Number(plU.verim_yuzde));
+    } else if (r) {
+      fire = Number(ozet.fire != null ? ozet.fire : 0);
+      if (ozet.net != null) net = Number(ozet.net);
+      else if (ozet.toplam_uretim != null) net = Number(ozet.toplam_uretim) - fire;
+      if (ozet.verim_yuzde != null && ozet.verim_yuzde !== '') verim = Math.round(Number(ozet.verim_yuzde));
+    }
+    var aktifSlot = slotlar.filter(slotAktifMi).length;
+    var istasyonAktif = {};
+    slotlar.forEach(function (s) { if (slotAktifMi(s)) istasyonAktif[s.istasyon_no] = true; });
+    var personel = (pl && pl.personel_sayisi) || (r && r.personel_sayisi) || 0;
+    var saatlik = (pl && pl.saatlik) || (det && det.saatlik);
+    var meta = vardiyaMeta(vardiya);
+    var seriesFull = cumSeries(saatlik, meta.slots);
+    var hasSeries = seriesFull.some(function (v) { return v > 0; });
+    return {
+      label: label,
+      raporId: r ? r.id : null,
+      raporTarih: r ? r.tarih : tarih,
+      raporVardiya: r ? r.vardiya : vardiya,
+      pickReason: picked.reason,
+      finished: finished,
+      tamamlanma: finished && r ? (r.kapanis_tarih || r.son_guncelleme || null) : null,
+      status: status,
+      aktifSlot: aktifSlot,
+      istasyonSay: Object.keys(istasyonAktif).length,
+      istasyonKapasite: (pl && pl.istasyon_sayisi) || 0,
+      personel: personel || 0,
+      a: sideFromSources('A', plU, ab, ozet, slotlar),
+      b: sideFromSources('B', plU, ab, ozet, slotlar),
+      net: r ? net : null,
+      fire: r ? fire : null,
+      verim: r ? verim : null,
+      hasRapor: !!r,
+      hasSeries: hasSeries,
+      seriesFull: seriesFull,
+      chartMeta: meta,
+      plRaporId: pl && pl.rapor_id
+    };
   }
 
   function sideFromSources(slot, plUretim, abj, ozet, slotlar) {
@@ -563,10 +627,9 @@
       if (s.kod === 'Veri yok') s.kod = sl.kalip_kod || (sl.kalip && sl.kalip.kod) || s.kod;
       if (s.renk === 'Veri yok') s.renk = sl.renk_ad || sl.renk || s.renk;
       s.durum = slotAktifMi(sl) ? 'Aktif' : (sl.durum || 'Kapalı');
-    } else if (s.cift != null && s.cift > 0) {
+    } else if (s.cift != null && Number(s.cift) > 0) {
+      /* Slot yok; üretim kaydı var — makine durumunu üretim=0 ile KAPALI yapma */
       s.durum = 'Üretim';
-    } else if (s.cift != null) {
-      s.durum = 'Kapalı';
     }
     if (s.tur == null) s.tur = 0;
     if (s.cift == null) s.cift = 0;
@@ -581,94 +644,20 @@
     var tarihDun = ymd(addDays(parseYmd(tarihBugun), -1));
     var slotIdx = currentSlotIndex(vardiya, now);
 
-    var picked = await pickDisplayReport(makineId, vardiya, tarihBugun, now);
-    if (picked.warn && picked.warn.length) {
-      state.multiOpenWarn = (state.multiOpenWarn || []).concat(picked.warn);
-      console.warn('[home-enj]', picked.warn.join('; '));
+    var viewBugun = await buildShiftView(makineId, tarihBugun, vardiya, now, 'Şu an / Bugün');
+    var viewDun = await buildShiftView(makineId, tarihDun, vardiya, now, 'Dün');
+    if (!viewBugun.istasyonKapasite || !viewDun.istasyonKapasite) {
+      var m0 = state.machines.find(function (x) { return x.id === makineId; });
+      var kap = m0 ? m0.istasyon_sayisi : 0;
+      if (!viewBugun.istasyonKapasite) viewBugun.istasyonKapasite = kap;
+      if (!viewDun.istasyonKapasite) viewDun.istasyonKapasite = kap;
     }
 
-    var todayR = picked.rapor;
-    var todayDet = picked.detay;
-    var finished = !!picked.finished;
-    var raporTarih = todayR ? todayR.tarih : tarihBugun;
-    var raporVardiya = todayR ? todayR.vardiya : vardiya;
-
-    /* Operasyon Raporu ile aynı kaynak */
-    var pl = todayR ? await fetchPlanlamaMakine(makineId, raporTarih, raporVardiya) : null;
-    if (pl && pl.rapor_id && todayR && pl.rapor_id !== todayR.id) {
-      console.warn('[home-enj] rapor_id uyuşmazlığı planlama=' + pl.rapor_id + ' secilen=' + todayR.id);
-    }
-
-    var ydayList = await fetchRaporlar(makineId, tarihDun, tarihDun, vardiya);
-    ydayList.sort(byRecent);
-    var ydayR = ydayList.filter(function (r) { return hasProduction(r.ozet); })[0] || ydayList[0] || null;
-    var ydayDet = ydayR ? await fetchDetay(ydayR.id) : null;
-    var plY = ydayR ? await fetchPlanlamaMakine(makineId, ydayR.tarih, ydayR.vardiya) : null;
+    var seriesTodayCut = cutAt(viewBugun.seriesFull, slotIdx);
+    var seriesYdayCut = cutAt(viewDun.seriesFull, slotIdx);
+    var dunAyniSaat = (viewDun.hasSeries && slotIdx >= 0) ? (viewDun.seriesFull[slotIdx] || 0) : null;
 
     var dayFullY = await fetchRaporlar(makineId, tarihDun, tarihDun, null);
-    var ab = todayR ? await fetchAb(todayR.id) : null;
-
-    var slotlar = (pl && pl.slotlar) || (todayDet && todayDet.slotlar) || [];
-    var status = pl
-      ? statusFromAnlik(pl.anlik_durum, finished)
-      : statusFromSlots(slotlar, finished);
-    /* Biten operasyon ama yeni aktif yoksa done; aktif üretimdeyse on */
-    if (finished && hasAktifSlot(slotlar) && raporVardiya === vardiya && raporTarih === tarihBugun) {
-      status = statusFromAnlik(pl && pl.anlik_durum, false);
-      finished = false;
-    }
-
-    var aktifSlot = slotlar.filter(slotAktifMi).length;
-    var istasyonAktif = {};
-    slotlar.forEach(function (s) {
-      if (slotAktifMi(s)) istasyonAktif[s.istasyon_no] = true;
-    });
-    var istasyonSay = Object.keys(istasyonAktif).length;
-
-    var personel = (pl && pl.personel_sayisi) || (todayR && todayR.personel_sayisi) || 0;
-    if (!personel && ab && ab.A && ab.A.personel_sayisi) personel = ab.A.personel_sayisi;
-
-    var plU = (pl && pl.uretim) || null;
-    var ozetT = (todayDet && todayDet.ozet) || (todayR && todayR.ozet) || {};
-    var ozetY = (ydayDet && ydayDet.ozet) || (ydayR && ydayR.ozet) || {};
-    var plUy = (plY && plY.uretim) || null;
-
-    /* Operasyon Raporu (planlama) net/fire/verim öncelikli; null ise "Veri yok" (0 uydurma) */
-    var fireT = null, netT = null, verimT = null;
-    if (plU) {
-      if (plU.fire_cift != null) fireT = Number(plU.fire_cift);
-      if (plU.net_cift != null) netT = Number(plU.net_cift);
-      if (plU.verim_yuzde != null) verimT = Math.round(Number(plU.verim_yuzde));
-    } else if (todayR) {
-      fireT = Number(ozetT.fire != null ? ozetT.fire : 0);
-      if (ozetT.net != null) netT = Number(ozetT.net);
-      else if (ozetT.toplam_uretim != null) netT = Number(ozetT.toplam_uretim) - fireT;
-      if (ozetT.verim_yuzde != null && ozetT.verim_yuzde !== '') verimT = Math.round(Number(ozetT.verim_yuzde));
-    }
-    var fireY = null, netY = null;
-    if (plUy) {
-      if (plUy.fire_cift != null) fireY = Number(plUy.fire_cift);
-      if (plUy.net_cift != null) netY = Number(plUy.net_cift);
-    } else if (ydayR) {
-      fireY = Number(ozetY.fire != null ? ozetY.fire : 0);
-      if (ozetY.net != null) netY = Number(ozetY.net);
-      else if (ozetY.toplam_uretim != null) netY = Number(ozetY.toplam_uretim) - fireY;
-    }
-
-    var saatlikT = (pl && pl.saatlik) || (todayDet && todayDet.saatlik);
-    var saatlikY = (plY && plY.saatlik) || (ydayDet && ydayDet.saatlik);
-    /* Grafik: gösterilen raporun vardiya meta'sı (tamamlanan farklı vardiya olabilir) */
-    var chartMeta = vardiyaMeta(raporVardiya);
-    var chartSlotIdx = (raporVardiya === vardiya && raporTarih === tarihBugun)
-      ? slotIdx
-      : (chartMeta.slots.length - 1);
-
-    var seriesToday = cumSeries(saatlikT, chartMeta.slots);
-    var seriesYdayFull = cumSeries(saatlikY, meta.slots);
-    var seriesYdayCut = cutAt(seriesYdayFull, slotIdx);
-    var seriesTodayCut = cutAt(seriesToday, chartSlotIdx);
-    var dunAyniSaat = slotIdx >= 0 ? (seriesYdayFull[slotIdx] || 0) : 0;
-
     var gunduzY = 0, geceY = 0, fireYdayTotal = 0, teorikY = 0, netYdaySum = 0;
     dayFullY.forEach(function (r) {
       var n = Number((r.ozet && (r.ozet.net != null ? r.ozet.net : r.ozet.toplam_uretim)) || 0);
@@ -724,61 +713,101 @@
     var week = dayBuckets(weekRows, weekStart, ymd(now));
     var month = dayBuckets(monthRows, monthStart, ymd(now));
 
-    var m = state.machines.find(function (x) { return x.id === makineId; });
-    if (m) m.status = status;
-
-    var hasTodaySeries = seriesToday.some(function (v) { return v > 0; });
-    var hasYdaySeries = seriesYdayFull.some(function (v) { return v > 0; });
-    var tamamlanma = null;
-    if (finished && todayR) {
-      tamamlanma = todayR.kapanis_tarih || todayR.son_guncelleme || null;
+    /* Haftalık/aylık üst görünüm: son üretimli rapor (aynı makine) */
+    var lastProd = null;
+    weekRows.concat(monthRows).sort(byRecent).forEach(function (r) {
+      if (!lastProd && hasProduction(r.ozet)) lastProd = r;
+    });
+    var viewOzet = null;
+    if (lastProd) {
+      viewOzet = await buildShiftView(makineId, lastProd.tarih, lastProd.vardiya, now, 'Son dolu rapor');
+    } else {
+      viewOzet = Object.assign({}, viewBugun, { label: 'Özet (rapor yok)' });
     }
+
+    var m = state.machines.find(function (x) { return x.id === makineId; });
+    if (m) m.status = viewBugun.status;
 
     return {
       makineId: makineId,
       kod: m ? m.kod : ('M' + makineId),
       ad: m ? m.ad : '',
-      status: status,
-      finished: finished,
-      tamamlanma: tamamlanma,
-      pickReason: picked.reason,
-      raporId: todayR ? todayR.id : (pl && pl.rapor_id) || null,
-      raporTarih: raporTarih,
-      raporVardiya: raporVardiya,
       vardiya: vardiya,
       meta: meta,
-      chartMeta: chartMeta,
       tarihBugun: tarihBugun,
       tarihDun: tarihDun,
       slotIdx: slotIdx,
-      aktifSlot: aktifSlot,
-      istasyonSay: istasyonSay,
-      istasyonKapasite: (pl && pl.istasyon_sayisi) || (m ? m.istasyon_sayisi : 0),
-      personel: personel || 0,
-      a: sideFromSources('A', plU, ab, ozetT, slotlar),
-      b: sideFromSources('B', plU, ab, ozetT, slotlar),
-      net: todayR ? netT : null,
-      fire: todayR ? fireT : null,
-      verim: todayR ? verimT : null,
-      dunVardiya: ydayR ? netY : null,
-      dunAyniSaat: (ydayR && (netY != null || seriesYdayFull.some(function (v) { return v > 0; }))) ? dunAyniSaat : null,
+      views: { bugun: viewBugun, dun: viewDun, ozet: viewOzet },
+      /* geri uyum alanları — activeView ile doldurulur */
+      status: viewBugun.status,
+      finished: viewBugun.finished,
+      tamamlanma: viewBugun.tamamlanma,
+      pickReason: viewBugun.pickReason,
+      raporId: viewBugun.raporId,
+      raporTarih: viewBugun.raporTarih,
+      raporVardiya: viewBugun.raporVardiya,
+      chartMeta: viewBugun.chartMeta,
+      aktifSlot: viewBugun.aktifSlot,
+      istasyonSay: viewBugun.istasyonSay,
+      istasyonKapasite: viewBugun.istasyonKapasite,
+      personel: viewBugun.personel,
+      a: viewBugun.a,
+      b: viewBugun.b,
+      net: viewBugun.net,
+      fire: viewBugun.fire,
+      verim: viewBugun.verim,
+      dunVardiya: viewDun.net,
+      dunAyniSaat: dunAyniSaat,
       seriesTodayCut: seriesTodayCut,
       seriesYdayCut: seriesYdayCut,
-      seriesYdayFull: seriesYdayFull,
-      hasTodayRapor: !!todayR,
-      hasYdayRapor: !!ydayR,
-      hasTodaySeries: hasTodaySeries,
-      hasYdaySeries: hasYdaySeries,
+      seriesYdayFull: viewDun.seriesFull,
+      hasTodayRapor: viewBugun.hasRapor,
+      hasYdayRapor: viewDun.hasRapor,
+      hasTodaySeries: viewBugun.hasSeries,
+      hasYdaySeries: viewDun.hasSeries,
       dunku: {
         net: dayFullY.length ? (gunduzY + geceY) : null,
         fire: dayFullY.length ? fireYdayTotal : null,
         gunduz: dayFullY.length ? gunduzY : null,
         gece: dayFullY.length ? geceY : null,
-        verim: verimYday
+        verim: verimYday,
+        shiftNet: viewDun.net,
+        shiftFire: viewDun.fire,
+        shiftVerim: viewDun.verim,
+        raporId: viewDun.raporId
       },
       week: week,
       month: month
     };
+  }
+
+  function activeView(bundle) {
+    if (state.range === 'dun') return bundle.views.dun;
+    if (state.range === 'haftalik' || state.range === 'aylik') return bundle.views.ozet;
+    return bundle.views.bugun;
+  }
+
+  function applyViewToBundle(bundle) {
+    var v = activeView(bundle);
+    bundle.status = v.status;
+    bundle.finished = v.finished;
+    bundle.tamamlanma = v.tamamlanma;
+    bundle.pickReason = v.pickReason;
+    bundle.raporId = v.raporId;
+    bundle.raporTarih = v.raporTarih;
+    bundle.raporVardiya = v.raporVardiya;
+    bundle.chartMeta = v.chartMeta;
+    bundle.aktifSlot = v.aktifSlot;
+    bundle.istasyonSay = v.istasyonSay;
+    bundle.istasyonKapasite = v.istasyonKapasite;
+    bundle.personel = v.personel;
+    bundle.a = v.a;
+    bundle.b = v.b;
+    bundle.net = v.net;
+    bundle.fire = v.fire;
+    bundle.verim = v.verim;
+    bundle.viewLabel = v.label;
+    return bundle;
   }
 
   function maxOfSeries() {
@@ -801,14 +830,15 @@
 
     if (range === 'bugun') {
       title = 'Bugün aktif vardiya kümülatif net · dün aynı saate kadar';
-      labels = (bundle.chartMeta || bundle.meta).slots.map(function (s) { return s.slice(0, 2); });
+      labels = (bundle.views.bugun.chartMeta || bundle.meta).slots.map(function (s) { return s.slice(0, 2); });
       seriesA = bundle.seriesTodayCut;
       seriesB = bundle.seriesYdayCut;
-      if (!bundle.hasTodayRapor && !bundle.hasYdayRapor) emptyMsg = 'Bugün / dün için vardiya raporu yok';
-      else if (!bundle.hasTodaySeries && !bundle.hasYdaySeries) emptyMsg = 'Saatlik dağılım kaydı yok';
+      /* Bugün saatlik yoksa grafik boş — dünkü seri A/B boş kartla karışmasın */
+      if (!bundle.hasTodayRapor) emptyMsg = 'Bugün için vardiya raporu yok';
+      else if (!bundle.hasTodaySeries) emptyMsg = 'Saatlik dağılım kaydı yok';
     } else if (range === 'dun') {
-      title = 'Dün ' + bundle.meta.ad + ' vardiyası · tam kümülatif net';
-      labels = bundle.meta.slots.map(function (s) { return s.slice(0, 2); });
+      title = 'Dün ' + bundle.meta.ad + ' vardiyası · rapor #' + (bundle.views.dun.raporId || 'yok');
+      labels = (bundle.views.dun.chartMeta || bundle.meta).slots.map(function (s) { return s.slice(0, 2); });
       seriesA = bundle.seriesYdayFull;
       seriesB = null;
       if (!bundle.hasYdayRapor) emptyMsg = 'Dün için bu vardiyada rapor yok';
@@ -915,19 +945,21 @@
       return '<div><div class="k-l">'+l+'</div><div class="k-v '+(cls||'')+'">'+v+'</div>'+(u?'<div class="k-u">'+u+'</div>':'')+'</div>';
     }
     if (r === 'bugun') {
-      return cell('Vardiya Net', fmtOrYok(bundle.net, bundle.hasTodayRapor), 'çift') +
-        cell('Fire', fmtOrYok(bundle.fire, bundle.hasTodayRapor), 'çift', (bundle.fire > 0 ? 'bad' : '')) +
-        cell('Verim', (!bundle.hasTodayRapor || bundle.verim == null) ? 'Veri yok' : ('%' + bundle.verim), '', bundle.verim >= 95 ? 'ok' : '') +
-        cell('Dün Vardiya', fmtOrYok(bundle.dunVardiya, bundle.hasYdayRapor), 'çift') +
-        cell('Dün Aynı Saat', fmtOrYok(bundle.dunAyniSaat, bundle.hasYdayRapor), 'çift');
+      var vb = bundle.views.bugun;
+      return cell('Vardiya Net', fmtOrYok(vb.net, vb.hasRapor), 'çift') +
+        cell('Fire', fmtOrYok(vb.fire, vb.hasRapor), 'çift', (vb.fire > 0 ? 'bad' : '')) +
+        cell('Verim', (!vb.hasRapor || vb.verim == null) ? 'Veri yok' : ('%' + vb.verim), '', vb.verim >= 95 ? 'ok' : '') +
+        cell('Dün Vardiya (karşılaştırma)', fmtOrYok(bundle.dunVardiya, bundle.hasYdayRapor), 'çift') +
+        cell('Dün Aynı Saat (karşılaştırma)', fmtOrYok(bundle.dunAyniSaat, bundle.hasYdayRapor), 'çift');
     }
     if (r === 'dun') {
-      var has = bundle.dunku.net != null;
-      return cell('Dün Net', fmtOrYok(bundle.dunku.net, has), 'çift') +
-        cell('Dün Fire', fmtOrYok(bundle.dunku.fire, has), 'çift') +
-        cell('Dün Verim', bundle.dunku.verim == null ? 'Veri yok' : ('%' + bundle.dunku.verim), '') +
-        cell('Gündüz', fmtOrYok(bundle.dunku.gunduz, has), 'çift') +
-        cell('Gece', fmtOrYok(bundle.dunku.gece, has), 'çift');
+      var hasShift = !!bundle.views.dun.hasRapor;
+      var hasDay = bundle.dunku.net != null;
+      return cell('Vardiya Net', fmtOrYok(bundle.views.dun.net, hasShift), 'çift') +
+        cell('Fire', fmtOrYok(bundle.views.dun.fire, hasShift), 'çift') +
+        cell('Verim', (!hasShift || bundle.views.dun.verim == null) ? 'Veri yok' : ('%' + bundle.views.dun.verim), '') +
+        cell('Gündüz', fmtOrYok(bundle.dunku.gunduz, hasDay), 'çift') +
+        cell('Gece', fmtOrYok(bundle.dunku.gece, hasDay), 'çift');
     }
     if (r === 'haftalik') {
       var vals = bundle.week.values || [];
@@ -977,13 +1009,13 @@
   }
 
   function renderBody(bundle) {
+    applyViewToBundle(bundle);
     var st = bundle.status;
     var body = document.getElementById('homeEnjBody');
     body.style.display = 'block';
     document.getElementById('homeEnjLoading').style.display = 'none';
 
     var detUrl = detailHref(bundle);
-    var detCls = bundle.raporId ? 'home-enj-detail' : 'home-enj-detail';
     var detStyle = bundle.raporId ? '' : ' style="opacity:.45"';
     var detTitle = bundle.raporId
       ? ('title="Rapor #' + bundle.raporId + '"')
@@ -997,20 +1029,25 @@
     else if (st === 'fault') opChip = '<span class="home-enj-chip" style="color:#b91c1c">Arıza</span>';
     else opChip = '<span class="home-enj-chip" style="color:#b91c1c">Kapalı</span>';
 
+    var periodLbl = bundle.viewLabel || 'Şu an / Bugün';
+    var shiftLbl = (state.range === 'dun')
+      ? ('DÜN · ' + vardiyaMeta(bundle.raporVardiya).ad)
+      : ((state.range === 'haftalik' || state.range === 'aylik')
+        ? ('ÖZET · ' + (bundle.raporId ? (bundle.raporTarih + ' ' + vardiyaMeta(bundle.raporVardiya).ad) : 'veri yok'))
+        : ('AKTİF VARDİYA · ' + bundle.meta.ad));
+
     body.innerHTML =
       '<div class="home-enj-hd">' +
         '<div class="home-enj-name">'+bundle.kod+' · '+bundle.ad+
-          '<small>rapor '+(bundle.raporId ? ('#'+bundle.raporId+' · ') : '')+bundle.raporTarih+'</small></div>' +
+          '<small>'+periodLbl+' · rapor '+(bundle.raporId ? ('#'+bundle.raporId+' · ') : '')+bundle.raporTarih+'</small></div>' +
         '<div style="display:flex;align-items:center;gap:10px;">' +
           '<span class="home-enj-badge '+st+'">'+STATUS_LABEL[st]+'</span>' +
-          '<a class="'+detCls+'" href="'+detUrl+'"'+detStyle+' '+detTitle+'>Detay →</a>' +
+          '<a class="home-enj-detail" href="'+detUrl+'"'+detStyle+' '+detTitle+'>Detay →</a>' +
         '</div>' +
       '</div>' +
       '<div class="home-enj-shift">' +
-        '<span><span class="lbl">Aktif vardiya</span> · '+bundle.meta.ad+
-          (bundle.raporVardiya !== bundle.vardiya ? (' · gösterilen: ' + vardiyaMeta(bundle.raporVardiya).ad) : '') +
-        '</span>' +
-        '<span>'+bundle.meta.aralik+'</span>' +
+        '<span><span class="lbl">'+periodLbl+'</span> · '+shiftLbl+'</span>' +
+        '<span>'+vardiyaMeta(bundle.raporVardiya).aralik+'</span>' +
       '</div>' +
       '<div class="home-enj-meta">' +
         '<span class="home-enj-chip">'+bundle.aktifSlot+' slot aktif</span>' +
@@ -1046,11 +1083,7 @@
       btn.classList.toggle('active', btn.getAttribute('data-range') === state.range);
       btn.addEventListener('click', function () {
         state.range = btn.getAttribute('data-range');
-        Array.prototype.forEach.call(document.querySelectorAll('#homeEnjRange button'), function (b) {
-          b.classList.toggle('active', b === btn);
-        });
-        renderChart(document.getElementById('chartSvg'), document.getElementById('chartEmpty'), bundle);
-        document.getElementById('homeEnjKpi').innerHTML = kpiHtml(bundle);
+        renderBody(bundle);
       });
     });
 
@@ -1059,11 +1092,19 @@
 
     var foot = document.getElementById('homeEnjFoot');
     if (foot) {
-      foot.textContent = 'Kaynak: planlama/operasyon + enjeksiyon API · rapor #' +
-        (bundle.raporId || 'yok') + ' · ' + bundle.raporTarih + ' / ' + bundle.raporVardiya +
+      foot.textContent = 'Kaynak: tek zincir · ' + (bundle.viewLabel || '') +
+        ' · rapor #' + (bundle.raporId || 'yok') +
+        ' · ' + bundle.raporTarih + ' / ' + bundle.raporVardiya +
         ' · seçim: ' + (bundle.pickReason || '—') +
-        ' · sahte grafik yok';
+        ' · Detay=aynı rapor_id · sahte grafik yok';
     }
+    try {
+      console.info('[home-enj] view', {
+        range: state.range, raporId: bundle.raporId, reason: bundle.pickReason,
+        net: bundle.net, fire: bundle.fire, a: bundle.a.cift, b: bundle.b.cift,
+        bugunId: bundle.views.bugun.raporId, dunId: bundle.views.dun.raporId
+      });
+    } catch (e0) {}
   }
 
   async function refreshSelected() {
