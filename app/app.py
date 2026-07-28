@@ -35,6 +35,7 @@ from modules.saha import saha_bp  # SAHA_NUMUNE_TALEP_FAZ1
 from modules.online_eticaret import online_eticaret_bp  # OET_FAZ0
 from modules.fuar_crm import fuar_crm_bp  # FUAR_CRM_FAZ1
 from modules.nexgen import nexgen_bp  # NEXGEN_FAZ1A
+from modules.home import home_bp  # HOME_KORGUN_BITEN
 
 
 app = Flask(__name__)
@@ -66,6 +67,7 @@ app.register_blueprint(saha_bp)  # SAHA_NUMUNE_TALEP_FAZ1 (reload)
 app.register_blueprint(online_eticaret_bp)  # OET_FAZ0
 app.register_blueprint(fuar_crm_bp)  # FUAR_CRM_FAZ1
 app.register_blueprint(nexgen_bp)  # NEXGEN_FAZ1A
+app.register_blueprint(home_bp)  # HOME_KORGUN_BITEN
 
 
 # ============================================================

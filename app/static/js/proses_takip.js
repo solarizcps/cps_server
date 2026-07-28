@@ -268,4 +268,13 @@ function pt_sifirla(){
 document.addEventListener('DOMContentLoaded', function(){
   pt_log('proses_takip.js loaded');
   pt_set_kaynak('-','');
+  /* HOME_KORGUN deep-link: ?period=bugun|hafta|ay */
+  try {
+    var q = new URLSearchParams(window.location.search || '');
+    var p = (q.get('period') || '').toLowerCase();
+    if (p === 'bugun' || p === 'hafta' || p === 'ay') {
+      var btn = document.querySelector('.pt-period-btn[data-period="' + p + '"]');
+      if (btn) pt_set_period(btn);
+    }
+  } catch (e0) {}
 });

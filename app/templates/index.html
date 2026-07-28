@@ -3,19 +3,345 @@
 
 {% block head %}
 {# HOME_ENJ_SINGLE_V1 — tek kart, makine/zaman seçimi; scoped CSS #}
+{# HOME_KORGUN_BITEN_V1 — sağ kart; .home-enj-* dokunulmaz #}
 <style>
-.home-enj-sec {
-  margin-top: 2px;
-  max-width: 660px;
-  width: 100%;
-  margin-left: 0;
-  margin-right: auto;
+/* HOME_HIZLI_SCALE15 — scale25 sonrası ~%10 küçültme; scoped */
+.home-dashboard {
+  --h-ink: #1A2332;
+  --h-ink2: #2C3A4F;
+  --h-muted: #757575;
+  --h-muted2: #5F6B7A;
+  --h-line: #E0E0E0;
+  --h-line2: #EEEEEE;
+  --h-orange: #FF6A00;
+  --h-orange2: #E85D00;
+  --h-orange-soft: #FFF9F2;
+  --h-orange-mid: #FFE3C2;
+  --h-card-sh: 0 1px 2px rgba(15, 23, 42, .04);
+  --h-card-sh2: none;
+  width: calc(100% - 36px); max-width: 1400px; margin: 0 auto; box-sizing: border-box;
+  padding: 0 7px;
 }
+.home-dashboard > .page-header { margin-bottom: 7px; }
+.home-dashboard > .page-header .page-title {
+  font-size: 20px; font-weight: 700; letter-spacing: -.2px; color: var(--h-ink);
+}
+.home-dashboard > .page-header .page-sub { margin-top: 2px; color: var(--h-muted); font-weight: 500; font-size: 13px; }
+/* KPI şeridi — sekmelerin ÜSTÜNDE (master mockup) */
+.home-dash-kpis-wrap {
+  background: #fff; border: 1px solid var(--h-line); border-radius: 6px;
+  box-shadow: var(--h-card-sh); padding: 7px; margin-bottom: 9px;
+}
+.home-dash-kpis {
+  display: flex; flex-wrap: nowrap; gap: 6px; align-items: stretch;
+}
+.home-dash-kpi {
+  background: #fff; border: 1px solid var(--h-line); border-radius: 6px;
+  padding: 7px 9px; min-width: 0; flex: 1 1 0;
+}
+.home-dash-kpi.date { flex: 1.15 1 0; }
+.home-dash-kpi .l {
+  font-size: 10px; font-weight: 600; color: var(--h-muted);
+  text-transform: uppercase; letter-spacing: .25px; line-height: 1.2;
+}
+.home-dash-kpi .v {
+  font-size: 16px; font-weight: 700; color: var(--h-ink); margin-top: 2px; letter-spacing: -.2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.home-dash-kpi .u { font-size: 11px; font-weight: 500; color: var(--h-muted); margin-top: 0; }
+.home-dash-kpi.accent .v { color: var(--h-orange); }
+/* Hızlı Erişim — ince sekme şeridi */
+.home-hizli {
+  background: #fff; border: 1px solid var(--h-line); border-radius: 6px;
+  box-shadow: var(--h-card-sh); padding: 7px 9px 0; margin-bottom: 9px;
+}
+.home-hizli-title {
+  font-size: 11px; font-weight: 700; color: var(--h-ink2);
+  text-transform: uppercase; letter-spacing: .55px; margin-bottom: 4px;
+}
+.home-hizli-tabs {
+  display: grid; grid-template-columns: repeat(4, minmax(130px, 1fr)); gap: 0;
+}
+.home-hizli-tabs button {
+  font-family: var(--sans); text-align: left; cursor: pointer;
+  min-height: 49px; min-width: 0; width: 100%;
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 11px 9px; border-radius: 0;
+  border: 0; background: transparent; color: var(--h-muted2);
+  border-bottom: 2px solid transparent;
+  box-shadow: none;
+  transition: color .12s, border-color .12s, background .12s;
+}
+.home-hizli-tabs button:hover {
+  border-color: transparent; color: var(--h-ink); background: var(--h-orange-soft);
+  border-bottom-color: #FFC999;
+}
+.home-hizli-tabs button.active {
+  border-color: transparent; border-bottom-color: var(--h-orange);
+  background: var(--h-orange-soft); color: var(--h-orange);
+  box-shadow: none;
+}
+.home-hizli-tabs button .ico {
+  flex: 0 0 28px; width: 28px; height: 28px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent; color: #8A94A6;
+}
+.home-hizli-tabs button.active .ico {
+  background: transparent; color: var(--h-orange);
+}
+.home-hizli-tabs button .ico svg { width: 17px; height: 17px; display: block; stroke-width: 2; }
+.home-hizli-tabs button .tx { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.home-hizli-tabs button .lbl {
+  font-size: 14px; font-weight: 600; line-height: 1.15; color: inherit;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.home-hizli-tabs button:not(.active) .lbl { color: var(--h-ink2); font-weight: 600; }
+.home-hizli-tabs button .sub {
+  font-size: 11px; font-weight: 400; color: var(--h-muted); line-height: 1.15;
+}
+.home-hizli-tabs button.active .sub { color: var(--h-orange2); font-weight: 500; }
+.home-workspace {
+  width: 100%; min-width: 0;
+  background: #fff; border: 1px solid var(--h-line); border-radius: 6px;
+  box-shadow: var(--h-card-sh); padding: 9px 11px 9px;
+  box-sizing: border-box;
+}
+.home-panel { display: none; width: 100%; min-width: 0; }
+.home-panel.active { display: block; }
+.home-enj-sec { margin: 0; width: 100%; max-width: none; min-width: 0; }
+.home-korgun-sec { margin: 0; width: 100%; min-width: 0; max-width: none; }
+.home-placeholder { padding: 48px 20px; text-align: center; }
+.home-placeholder .ph-t {
+  font-size: 19px; font-weight: 700; color: var(--h-ink); margin-bottom: 5px;
+}
+.home-placeholder .ph-s { font-size: 14px; font-weight: 500; color: var(--h-muted); }
+@media (max-width: 1100px) {
+  .home-hizli-tabs { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
+  .home-dash-kpis { flex-wrap: wrap; }
+  .home-dash-kpi { flex: 1 1 30%; min-width: 140px; }
+}
+@media (max-width: 700px) {
+  .home-hizli-tabs { grid-template-columns: 1fr; }
+  .home-dash-kpi { flex: 1 1 45%; }
+}
+/* 1366: taşmayı önlemek için büyütmeyi biraz geri al */
+@media (max-width: 1450px) {
+  .home-dashboard { width: calc(100% - 24px); max-width: 1240px; padding: 0 6px; }
+  .home-dashboard > .page-header .page-title { font-size: 18px; }
+  .home-dashboard > .page-header .page-sub { font-size: 12px; }
+  .home-dash-kpi { padding: 6px 8px; }
+  .home-dash-kpi .l { font-size: 9px; }
+  .home-dash-kpi .v { font-size: 15px; }
+  .home-dash-kpi .u { font-size: 10px; }
+  .home-hizli-tabs button { min-height: 46px; padding: 6px 9px 8px; gap: 8px; }
+  .home-hizli-tabs button .lbl { font-size: 13px; }
+  .home-hizli-tabs button .sub { font-size: 10px; }
+  .home-hizli-tabs button .ico { flex: 0 0 26px; width: 26px; height: 26px; }
+  .home-hizli-tabs button .ico svg { width: 16px; height: 16px; }
+  .home-korgun-htag { font-size: 13px; }
+  .home-korgun-pcard .pn { font-size: 11px; }
+  .home-korgun-pcard .pv { font-size: 12px; }
+  .home-korgun-daybars { height: 96px; background-size: 100% 74px; }
+}
+.home-korgun-htag {
+  font-size: 14px; font-weight: 700; color: var(--h-ink); margin-bottom: 4px; line-height: 1.2;
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+}
+.home-korgun-htag small {
+  display: block; font-size: 12px; font-weight: 500; color: var(--h-muted); margin-top: 2px;
+}
+.home-korgun-detail {
+  font-size: 13px; font-weight: 600; color: var(--h-orange); text-decoration: none; white-space: nowrap;
+}
+.home-korgun-detail:hover { color: var(--h-orange2); }
+.home-korgun-card {
+  background: transparent; border: 0; border-radius: 0; overflow: visible; box-shadow: none;
+}
+.home-korgun-range {
+  display: flex; gap: 5px; padding: 0 0 7px; flex-wrap: wrap;
+  border-bottom: 1px solid var(--h-line2); margin-bottom: 3px;
+}
+.home-korgun-range button {
+  font-family: var(--sans); font-size: 12px; font-weight: 600;
+  letter-spacing: .2px; text-transform: uppercase;
+  border: 1px solid var(--h-line); background: #fff; color: var(--h-muted);
+  border-radius: 5px; padding: 4px 10px; cursor: pointer;
+}
+.home-korgun-range button.active {
+  background: var(--h-orange-soft); border-color: var(--h-orange); color: var(--h-orange);
+}
+.home-korgun-kpi {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px;
+  border-bottom: 1px solid var(--h-line2); padding: 8px 0 10px;
+}
+.home-korgun-kpi > div {
+  padding: 7px 10px; text-align: left; border: 1px solid var(--h-line);
+  border-radius: 6px; background: #fff; min-width: 0;
+}
+.home-korgun-kpi .k-l {
+  font-size: 11px; font-weight: 600; color: var(--h-muted);
+  text-transform: uppercase; letter-spacing: .2px; line-height: 1.15;
+}
+.home-korgun-kpi .k-v {
+  font-size: 17px; font-weight: 700; color: var(--h-ink);
+  margin-top: 2px; letter-spacing: -.15px; line-height: 1.15;
+}
+.home-korgun-kpi .k-v.sm { font-size: 14px; color: var(--h-orange); font-weight: 700; }
+.home-korgun-kpi .k-u { font-size: 12px; color: var(--h-muted); font-weight: 500; margin-top: 0; }
+.home-korgun-pcards-wrap {
+  display: flex; align-items: stretch; gap: 5px;
+  border-bottom: 1px solid var(--h-line2); padding: 8px 0 10px;
+}
+.home-korgun-pnav-side {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  flex: 0 0 30px;
+}
+.home-korgun-pnav-side .pg {
+  font-size: 11px; font-weight: 600; color: var(--h-muted); text-align: center;
+}
+.home-korgun-pnav-side button {
+  font-family: var(--sans); font-size: 14px; font-weight: 700; line-height: 1;
+  width: 28px; height: 28px; padding: 0;
+  border: 0; background: var(--h-orange); color: #fff;
+  border-radius: 999px; cursor: pointer;
+  box-shadow: none;
+}
+.home-korgun-pnav-side button:hover:not(:disabled) { background: var(--h-orange2); }
+.home-korgun-pnav-side button:disabled {
+  opacity: .4; cursor: default; background: #D0D5DD; color: #8A94A6; box-shadow: none;
+}
+.home-korgun-pcards {
+  display: flex; flex: 1 1 auto; gap: 5px; min-width: 0; overflow: hidden;
+}
+.home-korgun-pcard {
+  text-align: left; cursor: pointer; background: #fff;
+  border: 1px solid var(--h-line); border-radius: 6px; padding: 7px 8px;
+  font-family: var(--sans); min-width: 0; flex: 1 1 0;
+}
+.home-korgun-pcard:hover { border-color: #FFB366; }
+.home-korgun-pcard.active {
+  border-color: var(--h-orange); background: var(--h-orange-soft);
+  box-shadow: none; border-left: 2px solid var(--h-orange);
+}
+.home-korgun-pcard .pi {
+  width: 24px; height: 24px; border-radius: 5px; background: #F3F4F6; color: #6B7280;
+  display: flex; align-items: center; justify-content: center; margin-bottom: 4px;
+}
+.home-korgun-pcard.active .pi { background: var(--h-orange-mid); color: var(--h-orange); }
+.home-korgun-pcard .pi svg { width: 14px; height: 14px; display: block; stroke-width: 2; }
+.home-korgun-pcard .pn {
+  font-size: 12px; font-weight: 600; color: var(--h-ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.home-korgun-pcard .pv { font-size: 13px; font-weight: 700; color: var(--h-ink); margin-top: 2px; }
+.home-korgun-pcard .pp { font-size: 10px; font-weight: 500; color: var(--h-muted); margin-top: 1px; }
+.home-korgun-pcard .pbar {
+  margin-top: 5px; height: 3px; background: #ECEFF3; border-radius: 99px; overflow: hidden;
+}
+.home-korgun-pcard .pbar > i {
+  display: block; height: 100%; background: var(--h-orange); border-radius: 99px;
+}
+.home-korgun-pcard.active .pbar > i { background: var(--h-orange); }
+.home-korgun-det {
+  display: grid; grid-template-columns: 1.25fr .95fr; gap: 12px;
+  border-top: 1px solid var(--h-line2); padding-top: 10px; margin-top: 3px;
+}
+.home-korgun-det-l, .home-korgun-det-r { min-width: 0; }
+.home-korgun-det-l { border-right: 0; padding-right: 2px; }
+.home-korgun-det-h {
+  padding: 0 0 5px; font-size: 12px; font-weight: 700; color: var(--h-ink);
+  text-transform: uppercase; letter-spacing: .25px;
+}
+.home-korgun-skpi {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 0 0 8px;
+}
+.home-korgun-all-emir {
+  display: block; margin: 8px 0 0; text-align: center;
+  font-size: 13px; font-weight: 600; color: var(--h-orange); text-decoration: none;
+  border: 1px solid var(--h-orange); border-radius: 6px; padding: 7px 10px; background: #fff;
+}
+.home-korgun-all-emir:hover { color: #fff; border-color: var(--h-orange); background: var(--h-orange); }
+.home-korgun-skpi > div {
+  background: #fff; border: 1px solid var(--h-line); border-radius: 6px; padding: 6px 8px;
+}
+.home-korgun-skpi .k-l {
+  font-size: 11px; font-weight: 600; color: var(--h-muted); text-transform: uppercase;
+}
+.home-korgun-skpi .k-v { font-size: 14px; font-weight: 700; color: var(--h-ink); margin-top: 2px; }
+.home-korgun-skpi .k-u { font-size: 11px; color: var(--h-muted); font-weight: 500; }
+.home-korgun-chart-wrap { padding: 0; }
+.home-korgun-chart-lbl {
+  font-size: 12px; font-weight: 600; color: var(--h-ink2);
+  text-transform: uppercase; letter-spacing: .3px; margin-bottom: 5px;
+  display: flex; justify-content: space-between; align-items: center; gap: 7px;
+}
+.home-korgun-chart-lbl .chtog { display: flex; gap: 4px; }
+.home-korgun-chart-lbl .chtog button {
+  font-family: var(--sans); font-size: 11px; font-weight: 600; text-transform: uppercase;
+  border: 1px solid var(--h-line); background: #fff; color: var(--h-muted);
+  border-radius: 5px; padding: 3px 7px; cursor: pointer;
+}
+.home-korgun-chart-lbl .chtog button.active {
+  background: var(--h-orange-soft); border-color: var(--h-orange); color: var(--h-orange);
+}
+.home-korgun-daybars {
+  display: flex; align-items: flex-end; gap: 5px; height: 100px;
+  border-bottom: 1px solid var(--h-line2); padding-bottom: 3px;
+  background-image: repeating-linear-gradient(
+    to top, transparent, transparent 20px, rgba(148, 163, 184, .14) 20px, rgba(148, 163, 184, .14) 21px
+  );
+  background-position: bottom; background-size: 100% 78px; background-repeat: no-repeat;
+}
+.home-korgun-daybars .db {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; height: 100%;
+  justify-content: flex-end;
+}
+.home-korgun-daybars .db .dv {
+  font-size: 11px; font-weight: 600; color: var(--h-ink2); margin-bottom: 2px; white-space: nowrap;
+}
+.home-korgun-daybars .db .col {
+  width: 100%; max-width: 26px; background: var(--h-orange); border-radius: 2px 2px 1px 1px; min-height: 2px;
+}
+.home-korgun-daybars .db .dl {
+  font-size: 11px; font-weight: 500; color: var(--h-muted); margin-top: 3px; white-space: nowrap;
+}
+.home-korgun-list-h {
+  padding: 0 0 5px; font-size: 12px; font-weight: 700; color: var(--h-ink);
+  text-transform: uppercase; letter-spacing: .3px;
+}
+.home-korgun-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--h-line); border-radius: 6px; overflow: hidden; }
+.home-korgun-list li {
+  padding: 8px 10px; border-top: 1px solid var(--h-line2);
+  font-size: 13px; font-weight: 500; color: var(--h-muted2); background: #fff;
+}
+.home-korgun-list li:first-child { border-top: 0; }
+.home-korgun-list .l1 { display: flex; justify-content: space-between; gap: 7px; font-weight: 700; color: var(--h-ink); }
+.home-korgun-list .l2 { display: flex; justify-content: space-between; gap: 7px; margin-top: 3px; font-size: 12px; color: var(--h-muted); font-weight: 400; }
+.home-korgun-list .mk { color: var(--h-ink); font-weight: 700; }
+.home-korgun-empty, .home-korgun-err, .home-korgun-loading {
+  padding: 14px 10px; text-align: center; color: var(--h-muted); font-size: 14px; font-weight: 500;
+}
+.home-korgun-err { color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; }
+.home-korgun-note {
+  padding: 8px 0 0; font-size: 12px; color: var(--h-muted); font-weight: 400;
+  border-top: 1px solid var(--h-line2); margin-top: 10px;
+}
+@media (max-width: 520px) {
+  .home-korgun-det { grid-template-columns: 1fr; }
+  .home-korgun-det-l { border-right: none; border-bottom: 0.5px solid var(--bg4); }
+  .home-korgun-skpi { grid-template-columns: repeat(2, 1fr); }
+}
+/* Enjeksiyon tam genişlik çalışma alanı */
+.home-enj-sec .home-enj-mtab { padding: 5px 8px; font-size: 12px; }
 .home-enj-htag {
-  font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 4px; line-height: 1.25;
+  font-size: 16px; font-weight: 700; color: #1A2332; margin-bottom: 5px; line-height: 1.2;
 }
 .home-enj-htag small {
-  display: block; font-size: 10px; font-weight: 600; color: var(--text3); margin-top: 1px;
+  display: block; font-size: 12px; font-weight: 500; color: #757575; margin-top: 2px;
+}
+@media (max-width: 1500px) {
+  .home-enj-htag { font-size: 14px; }
+  .home-enj-htag small { font-size: 11px; }
 }
 .home-enj-mtabs {
   display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-bottom: 6px;
@@ -183,28 +509,202 @@
 
 {% block content %}
 
-<div class="page-header">
-  <div>
+<div class="home-dashboard" id="homeDashboard">
+  <div class="page-header">
     <div class="page-title">Solariz CPS — Özet</div>
     <div class="page-sub">
       Hoş geldin, {{ g_user.AdSoyad or g_user.KullaniciAdi }}!
       {% if g_user.RolAd %}<span class="rol-pill" style="background:var(--sol-light); color:var(--sol-dark); padding:2px 8px; border-radius:999px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px; margin-left:6px;">{{ g_user.RolAd }}</span>{% endif %}
     </div>
   </div>
+
+  <div class="home-dash-kpis-wrap">
+    <div class="home-dash-kpis" id="homeDashKpis" aria-label="Sekmeye göre KPI"></div>
+  </div>
+
+  <div class="home-hizli" id="homeHizli">
+    <div class="home-hizli-title">Hızlı Erişim Paneli</div>
+    <div class="home-hizli-tabs" id="homeHizliTabs" role="tablist">
+      <button type="button" role="tab" data-panel="enjeksiyon" class="active">
+        <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 7l3 3-3 3"/><path d="M4 12h13"/><rect x="3" y="4" width="6" height="16" rx="1"/></svg></span>
+        <span class="tx"><span class="lbl">Enjeksiyon</span><span class="sub">Operasyon izleme</span></span>
+      </button>
+      <button type="button" role="tab" data-panel="korgun">
+        <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10l8-6 8 6v10"/><path d="M9 20v-6h6v6"/></svg></span>
+        <span class="tx"><span class="lbl">Korgun</span><span class="sub">Biten prosesler</span></span>
+      </button>
+      <button type="button" role="tab" data-panel="nexgen">
+        <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg></span>
+        <span class="tx"><span class="lbl">NexGen</span><span class="sub">Yakında</span></span>
+      </button>
+      <button type="button" role="tab" data-panel="hedef">
+        <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg></span>
+        <span class="tx"><span class="lbl">Hedef CPS</span><span class="sub">Yakında</span></span>
+      </button>
+    </div>
+  </div>
+
+  <div class="home-workspace" id="homeWorkspace">
+    <section class="home-panel home-enj-sec active" id="homeEnjSec" aria-label="Enjeksiyon Operasyonu">
+      <div class="home-enj-htag">
+        Enjeksiyon Operasyonu
+        <small id="homeEnjShiftBanner">AKTİF VARDİYA: —</small>
+      </div>
+      <div class="home-enj-mtabs" id="homeEnjMtabs"></div>
+      <div class="home-enj-card" id="homeEnjCard">
+        <div class="home-enj-loading" id="homeEnjLoading">Veriler yükleniyor…</div>
+        <div id="homeEnjBody" style="display:none"></div>
+      </div>
+      <div class="home-enj-foot" id="homeEnjFoot">Kaynak: /enjeksiyon API · vardiya 07:00–17:00 / 17:00–07:00 · sahte grafik yok</div>
+    </section>
+
+    <section class="home-panel home-korgun-sec" id="homeKorgunSec" aria-label="Korgun Biten Prosesler">
+      <div class="home-korgun-htag">
+        <div>
+          KORGUN — BİTEN PROSESLER
+          <small>Proses bazında tamamlanan çift · takvim günü</small>
+        </div>
+        <a class="home-korgun-detail" id="homeKorgunDetail" href="/planlama/proses-takip?period=bugun">Detay →</a>
+      </div>
+      <div class="home-korgun-card" id="homeKorgunCard">
+        <div class="home-korgun-range" id="homeKorgunRange">
+          <button type="button" data-period="bugun">Bugün</button>
+          <button type="button" data-period="dun">Dün</button>
+          <button type="button" data-period="hafta" class="active">7 Gün</button>
+          <button type="button" data-period="ay">Bu Ay</button>
+        </div>
+        <div class="home-korgun-loading" id="homeKorgunLoading">Yükleniyor…</div>
+        <div id="homeKorgunBody" style="display:none"></div>
+      </div>
+    </section>
+
+    <section class="home-panel home-placeholder" id="homeNexgenSec" aria-label="NexGen">
+      <div class="ph-t">NexGen</div>
+      <div class="ph-s">Yakında — bu çalışma alanına eklenecek</div>
+    </section>
+
+    <section class="home-panel home-placeholder" id="homeHedefSec" aria-label="Hedef CPS">
+      <div class="ph-t">Hedef CPS</div>
+      <div class="ph-s">Yakında — bu çalışma alanına eklenecek</div>
+    </section>
+  </div>
 </div>
 
-<section class="home-enj-sec" id="homeEnjSec" aria-label="Enjeksiyon Operasyonu">
-  <div class="home-enj-htag">
-    Enjeksiyon Operasyonu
-    <small id="homeEnjShiftBanner">AKTİF VARDİYA: —</small>
-  </div>
-  <div class="home-enj-mtabs" id="homeEnjMtabs"></div>
-  <div class="home-enj-card" id="homeEnjCard">
-    <div class="home-enj-loading" id="homeEnjLoading">Veriler yükleniyor…</div>
-    <div id="homeEnjBody" style="display:none"></div>
-  </div>
-  <div class="home-enj-foot" id="homeEnjFoot">Kaynak: /enjeksiyon API · vardiya 07:00–17:00 / 17:00–07:00 · sahte grafik yok</div>
-</section>
+<script>
+/* HOME_HIZLI_PANEL — sekme + dinamik KPI; SPA show/hide */
+(function () {
+  var LS_KEY = 'solariz_home_panel';
+  var PANELS = {
+    enjeksiyon: 'homeEnjSec',
+    korgun: 'homeKorgunSec',
+    nexgen: 'homeNexgenSec',
+    hedef: 'homeHedefSec'
+  };
+  var TR_AY = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+  var TR_GUN = ['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'];
+  var store = {
+    panel: 'enjeksiyon',
+    enjAktif: null,
+    korgun: null
+  };
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+  function fmt(n) {
+    if (n == null || n === '') return 'Veri yok';
+    n = Math.round(Number(n) || 0);
+    return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  }
+  function clockParts() {
+    var d = new Date();
+    var tarih = d.getDate() + ' ' + TR_AY[d.getMonth()] + ' ' + d.getFullYear() + ', ' + TR_GUN[d.getDay()];
+    var hh = String(d.getHours()).padStart(2, '0');
+    var mm = String(d.getMinutes()).padStart(2, '0');
+    return { tarih: tarih, saat: hh + ':' + mm };
+  }
+  function kpiCard(label, value, unit, isDate, accent) {
+    return '<div class="home-dash-kpi' + (isDate ? ' date' : '') + (accent ? ' accent' : '') + '">' +
+      '<div class="l">' + esc(label) + '</div>' +
+      '<div class="v"' + (isDate ? ' style="font-size:13px;line-height:1.2;font-weight:600"' : '') + '>' + value + '</div>' +
+      (unit ? ('<div class="u">' + esc(unit) + '</div>') : '') +
+    '</div>';
+  }
+  function renderKpis() {
+    var el = document.getElementById('homeDashKpis');
+    if (!el) return;
+    var clk = clockParts();
+    var html = '';
+    var p = store.panel;
+    if (p === 'enjeksiyon') {
+      html += kpiCard('Bugün Toplam Üretim', 'Veri yok', 'çift');
+      html += kpiCard('Son 7 Gün Toplam Üretim', 'Veri yok', 'çift');
+      html += kpiCard('Bu Ay Toplam Üretim', 'Veri yok', 'çift');
+      html += kpiCard('Aktif Makine', store.enjAktif == null ? 'Veri yok' : esc(String(store.enjAktif)), '');
+    } else if (p === 'korgun') {
+      var q = (store.korgun && store.korgun.qty_by_period) || {};
+      var s = (store.korgun && store.korgun.summary) || {};
+      var en = s.en_yogun_proses;
+      html += kpiCard('Bugün Toplam Biten', fmt(q.bugun_cift), 'çift');
+      html += kpiCard('Son 7 Gün Toplam Biten', fmt(q.hafta_cift), 'çift');
+      html += kpiCard('Bu Ay Toplam Biten', fmt(q.ay_cift), 'çift');
+      html += kpiCard('Proses Türü', s.proses_turu_sayisi == null ? 'Veri yok' : fmt(s.proses_turu_sayisi), 'tür');
+      html += kpiCard('En Yoğun Proses', en ? esc(en.proses_adi || '—') : 'Veri yok', en ? (fmt(en.toplam_cift) + ' çift') : '', false, true);
+    } else if (p === 'nexgen') {
+      html += kpiCard('Günlük Batch', 'Veri yok', '');
+      html += kpiCard('Bekleyen', 'Veri yok', '');
+      html += kpiCard('Tamamlanan', 'Veri yok', '');
+      html += kpiCard('Sevkiyat', 'Veri yok', '');
+    } else {
+      html += kpiCard('Hedef', 'Veri yok', '');
+      html += kpiCard('Gerçekleşen', 'Veri yok', '');
+      html += kpiCard('Sapma', 'Veri yok', '');
+      html += kpiCard('Durum', 'Yakında', '');
+    }
+    html += kpiCard('Tarih / Saat', esc(clk.tarih), clk.saat, true);
+    el.innerHTML = html;
+  }
+  function applyPanel(name, persist) {
+    if (!PANELS[name]) name = 'enjeksiyon';
+    store.panel = name;
+    Array.prototype.forEach.call(document.querySelectorAll('#homeHizliTabs button'), function (b) {
+      b.classList.toggle('active', b.getAttribute('data-panel') === name);
+    });
+    Object.keys(PANELS).forEach(function (key) {
+      var sec = document.getElementById(PANELS[key]);
+      if (sec) sec.classList.toggle('active', key === name);
+    });
+    renderKpis();
+    if (persist !== false) {
+      try { localStorage.setItem(LS_KEY, name); } catch (e) {}
+    }
+  }
+  window.__homeSetAktifMakine = function (n) {
+    store.enjAktif = n;
+    if (store.panel === 'enjeksiyon') renderKpis();
+  };
+  window.__homeSetKorgunDash = function (data) {
+    store.korgun = data || null;
+    if (store.panel === 'korgun') renderKpis();
+  };
+  window.__homeGetPanel = function () { return store.panel; };
+
+  var saved = null;
+  try { saved = localStorage.getItem(LS_KEY); } catch (e) {}
+  applyPanel(saved || 'enjeksiyon', false);
+
+  Array.prototype.forEach.call(document.querySelectorAll('#homeHizliTabs button'), function (btn) {
+    btn.addEventListener('click', function () {
+      applyPanel(btn.getAttribute('data-panel'), true);
+    });
+  });
+  setInterval(function () {
+    if (document.getElementById('homeDashKpis')) renderKpis();
+  }, 30000);
+})();
+</script>
 
 <script>
 (function () {
@@ -1006,6 +1506,8 @@
         refreshSelected();
       });
     });
+    var aktif = state.machines.filter(function (m) { return m.status === 'on'; }).length;
+    if (typeof window.__homeSetAktifMakine === 'function') window.__homeSetAktifMakine(aktif);
   }
 
   function renderBody(bundle) {
@@ -1166,5 +1668,370 @@
 })();
 </script>
 
+<script>
+/* HOME_KORGUN_SEL — tıklanabilir proses + seçili detay; Enjeksiyon bağımsız */
+(function () {
+  var PAGE_SIZE = 8;
+  var state = {
+    period: 'hafta',
+    chartMode: 'hafta',
+    selectedKod: null,
+    cardPage: 0,
+    summary: null,
+    detay: null,
+    loadingSummary: false,
+    loadingDetay: false,
+    detaySeq: 0
+  };
+  var DETAIL_PERIOD = { bugun: 'bugun', dun: 'bugun', hafta: 'hafta', ay: 'ay' };
+
+  function updateDashFromKorgun(data) {
+    if (typeof window.__homeSetKorgunDash === 'function') window.__homeSetKorgunDash(data);
+  }
+
+  function fmt(n) {
+    if (n == null || n === '') return '—';
+    n = Math.round(Number(n) || 0);
+    return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  }
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+  function bitisLbl(iso) {
+    if (!iso) return '—';
+    var s = String(iso);
+    if (s.length >= 16) {
+      var d = s.slice(0, 10).split('-');
+      if (d.length === 3) return d[2] + '.' + d[1] + '.' + d[0] + ' ' + s.slice(11, 16);
+    }
+    return s;
+  }
+  function gunLbl(ymd) {
+    if (!ymd || ymd.length < 10) return '—';
+    var m = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
+    var p = ymd.split('-');
+    var mi = parseInt(p[1], 10) - 1;
+    return parseInt(p[2], 10) + ' ' + (m[mi] || p[1]);
+  }
+  function setLoading(on) {
+    var loading = document.getElementById('homeKorgunLoading');
+    var body = document.getElementById('homeKorgunBody');
+    if (loading) loading.style.display = on ? 'block' : 'none';
+    if (body && on) body.style.display = 'none';
+  }
+  function showErr(msg) {
+    setLoading(false);
+    var body = document.getElementById('homeKorgunBody');
+    if (!body) return;
+    body.style.display = 'block';
+    body.innerHTML = '<div class="home-korgun-err">' + esc(msg) + '</div>';
+  }
+  function pageCount(n) {
+    return Math.max(1, Math.ceil((n || 0) / PAGE_SIZE));
+  }
+  function clampPage(all) {
+    var maxP = pageCount(all.length) - 1;
+    if (state.cardPage < 0) state.cardPage = 0;
+    if (state.cardPage > maxP) state.cardPage = maxP;
+  }
+  function pageOfKod(all, kod) {
+    for (var i = 0; i < all.length; i++) {
+      if (String(all[i].proses_kodu) === String(kod)) return Math.floor(i / PAGE_SIZE);
+    }
+    return -1;
+  }
+  function prosesIco(ad, kod) {
+    var k = String(kod || '').toUpperCase();
+    var a = String(ad || '').toLowerCase();
+    var svg = '';
+    if (a.indexOf('planlama') >= 0 || a.indexOf('depo') >= 0 || k === '40') {
+      svg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10l8-6 8 6v10"/><path d="M9 20v-6h6v6"/></svg>';
+    } else if (a.indexOf('kesim') >= 0 || k === '02') {
+      svg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>';
+    } else if (a.indexOf('şilte') >= 0 || a.indexOf('silte') >= 0) {
+      svg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="4" rx="1"/><rect x="3" y="12" width="18" height="4" rx="1"/><rect x="3" y="18" width="18" height="3" rx="1"/></svg>';
+    } else if (a.indexOf('serigraf') >= 0 || a.indexOf('digital') >= 0 || a.indexOf('flok') >= 0) {
+      svg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>';
+    } else if (a.indexOf('lazer') >= 0) {
+      svg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>';
+    } else if (a.indexOf('monta') >= 0 || k === '30') {
+      svg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9c.3.6.9 1 1.5 1H21a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.5 1z"/></svg>';
+    } else if (a.indexOf('temiz') >= 0 || k === '35') {
+      svg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 22h12"/><path d="M14 22V8a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v14"/><path d="M14 6V4a2 2 0 0 0-2-2h-1"/><path d="M18 8l3 3-7 7H11v-3l7-7z"/></svg>';
+    } else if (a.indexOf('enjeksiyon') >= 0 || k === '26') {
+      svg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 7l3 3-3 3"/><path d="M4 12h13"/><rect x="3" y="4" width="6" height="16" rx="1"/></svg>';
+    } else if (a.indexOf('say') >= 0 || a.indexOf('kontrol') >= 0 || k === '12') {
+      svg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>';
+    } else {
+      svg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>';
+    }
+    return svg;
+  }
+  function cardsHtml(list) {
+    var all = list || [];
+    if (!all.length) {
+      return '<div class="home-korgun-empty">Seçili dönemde biten proses yok (üretim akış lokasyonları).</div>';
+    }
+    clampPage(all);
+    var pages = pageCount(all.length);
+    var start = state.cardPage * PAGE_SIZE;
+    var shown = all.slice(start, start + PAGE_SIZE);
+    var html = '<div class="home-korgun-pcards-wrap">';
+    html += '<div class="home-korgun-pnav-side">' +
+      '<button type="button" id="homeKorgunPrev" aria-label="Önceki prosesler"' +
+        (state.cardPage <= 0 ? ' disabled' : '') + '>◀</button>' +
+      '<span class="pg">' + (state.cardPage + 1) + '/' + pages + '</span>' +
+    '</div>';
+    html += '<div class="home-korgun-pcards">' + shown.map(function (p) {
+      var akt = (String(p.proses_kodu) === String(state.selectedKod)) ? ' active' : '';
+      var pay = (p.pay_yuzde != null) ? p.pay_yuzde : 0;
+      var w = Math.max(0, Math.min(100, Number(pay) || 0));
+      var ad = p.proses_adi || p.proses_kodu || '';
+      return '<button type="button" class="home-korgun-pcard' + akt + '" data-kod="' + esc(p.proses_kodu) + '">' +
+        '<div class="pi" aria-hidden="true">' + prosesIco(ad, p.proses_kodu) + '</div>' +
+        '<div class="pn" title="' + esc(ad) + '">' + esc(ad) + '</div>' +
+        '<div class="pv">' + fmt(p.toplam_cift) + ' çift</div>' +
+        '<div class="pp">%' + String(pay).replace('.', ',') + ' pay</div>' +
+        '<div class="pbar"><i style="width:' + w + '%"></i></div>' +
+      '</button>';
+    }).join('') + '</div>';
+    html += '<div class="home-korgun-pnav-side">' +
+      '<button type="button" id="homeKorgunNext" aria-label="Sonraki prosesler"' +
+        (state.cardPage >= pages - 1 ? ' disabled' : '') + '>▶</button>' +
+    '</div></div>';
+    return html;
+  }
+  function dayBarsHtml(seri, chartMode) {
+    var rows = seri || [];
+    if (!rows.length) return '<div class="home-korgun-empty">Grafik verisi yok</div>';
+    var mx = 1;
+    rows.forEach(function (r) { if (Number(r.toplam_cift) > mx) mx = Number(r.toplam_cift); });
+    var tot = 0;
+    rows.forEach(function (r) { tot += Number(r.toplam_cift) || 0; });
+    var bars = '<div class="home-korgun-daybars">' + rows.map(function (r) {
+      var v = Number(r.toplam_cift) || 0;
+      var h = v <= 0 ? 2 : Math.max(3, Math.round((v / mx) * 68));
+      return '<div class="db" title="' + esc(r.tarih) + ': ' + fmt(v) + ' çift">' +
+        (v > 0 ? ('<div class="dv">' + fmt(v) + '</div>') : '<div class="dv">&nbsp;</div>') +
+        '<div class="col" style="height:' + h + 'px;opacity:' + (v <= 0 ? '.25' : '1') + '"></div>' +
+        '<div class="dl">' + esc(gunLbl(r.tarih)) + '</div>' +
+      '</div>';
+    }).join('') + '</div>';
+    var lbl = chartMode === 'ay' ? 'Bu Ay Toplam' : 'Son 7 Gün Toplam';
+    return bars + '<div class="home-korgun-note" style="border:0;padding:6px 0 0;margin:0">' +
+      esc(lbl) + ': ' + fmt(tot) + ' çift</div>';
+  }
+  function listHtml(rows, period) {
+    if (!rows || !rows.length) {
+      var msg = (period === 'bugun')
+        ? 'Bugün tamamlanan emir yok'
+        : 'Seçili dönemde tamamlanan emir yok';
+      return '<div class="home-korgun-empty">' + msg + '</div>';
+    }
+    return '<ul class="home-korgun-list">' + rows.map(function (r) {
+      return '<li>' +
+        '<div class="l1"><span>' + esc(r.emir_no) + ' · ' + esc(r.cari || '-') + '</span>' +
+          '<span class="mk">' + fmt(r.miktar) + ' çift</span></div>' +
+        '<div class="l2"><span>' + esc(r.proses_adi || r.proses_kodu) +
+          (r.siparis_no ? (' · Sip ' + esc(r.siparis_no)) : '') + '</span>' +
+          '<span>' + esc(bitisLbl(r.bitis_zamani)) + '</span></div>' +
+      '</li>';
+    }).join('') + '</ul>';
+  }
+  function detailHtml() {
+    var d = state.detay;
+    if (state.loadingDetay && !d) {
+      return '<div class="home-korgun-empty">Proses detayı yükleniyor…</div>';
+    }
+    if (!d) {
+      return '<div class="home-korgun-empty">Proses seçin</div>';
+    }
+    if (d.ok === false) {
+      return '<div class="home-korgun-err">' + esc(d.error || 'Detay yüklenemedi') + '</div>';
+    }
+    var k = d.kpi || {};
+    var ad = (d.proses && d.proses.ad) || state.selectedKod || '—';
+    var detHref = '/planlama/proses-takip?period=' + encodeURIComponent(DETAIL_PERIOD[state.period] || 'bugun');
+    return '<div class="home-korgun-det">' +
+      '<div class="home-korgun-det-l">' +
+        '<div class="home-korgun-det-h">' + esc(ad) + ' PROSESİ DETAYI</div>' +
+        '<div class="home-korgun-skpi">' +
+          '<div><div class="k-l">Bugün</div><div class="k-v">' + fmt(k.bugun_cift) + ' çift</div><div class="k-u">' + fmt(k.bugun_emir) + ' emir</div></div>' +
+          '<div><div class="k-l">Dün</div><div class="k-v">' + fmt(k.dun_cift) + ' çift</div><div class="k-u">' + fmt(k.dun_emir) + ' emir</div></div>' +
+          '<div><div class="k-l">Son 7 Gün</div><div class="k-v">' + fmt(k.hafta_cift) + ' çift</div><div class="k-u">' + fmt(k.hafta_emir) + ' emir</div></div>' +
+          '<div><div class="k-l">Bu Ay</div><div class="k-v">' + fmt(k.ay_cift) + ' çift</div><div class="k-u">' + fmt(k.ay_emir) + ' emir</div></div>' +
+        '</div>' +
+        '<div class="home-korgun-chart-wrap">' +
+          '<div class="home-korgun-chart-lbl"><span>Günlük biten çift</span>' +
+            '<span class="chtog">' +
+              '<button type="button" data-chart="hafta"' + (state.chartMode === 'hafta' ? ' class="active"' : '') + '>7 Gün</button>' +
+              '<button type="button" data-chart="ay"' + (state.chartMode === 'ay' ? ' class="active"' : '') + '>Bu Ay</button>' +
+            '</span>' +
+          '</div>' +
+          dayBarsHtml(d.gunluk_seri || [], state.chartMode) +
+        '</div>' +
+      '</div>' +
+      '<div class="home-korgun-det-r">' +
+        '<div class="home-korgun-list-h">Son Biten Emirler (' + esc(ad) + ')</div>' +
+        listHtml(d.son_biten_emirler || [], state.period) +
+        '<a class="home-korgun-all-emir" href="' + esc(detHref) + '">TÜM EMİRLERİ GÖRÜNTÜLE →</a>' +
+      '</div>' +
+    '</div>';
+  }
+  function bindBodyEvents() {
+    var body = document.getElementById('homeKorgunBody');
+    if (!body) return;
+    Array.prototype.forEach.call(body.querySelectorAll('.home-korgun-pcard'), function (btn) {
+      btn.addEventListener('click', function () {
+        var kod = btn.getAttribute('data-kod');
+        if (!kod || kod === state.selectedKod) return;
+        state.selectedKod = kod;
+        paint();
+        loadDetay();
+      });
+    });
+    var prev = document.getElementById('homeKorgunPrev');
+    var next = document.getElementById('homeKorgunNext');
+    if (prev) {
+      prev.addEventListener('click', function () {
+        if (state.cardPage <= 0) return;
+        state.cardPage -= 1;
+        paint();
+      });
+    }
+    if (next) {
+      next.addEventListener('click', function () {
+        var all = (state.summary && (state.summary.proses_kartlari || state.summary.proses_toplamlari)) || [];
+        if (state.cardPage >= pageCount(all.length) - 1) return;
+        state.cardPage += 1;
+        paint();
+      });
+    }
+    Array.prototype.forEach.call(body.querySelectorAll('.chtog button'), function (btn) {
+      btn.addEventListener('click', function () {
+        var m = btn.getAttribute('data-chart');
+        if (!m || m === state.chartMode) return;
+        state.chartMode = m;
+        loadDetay();
+      });
+    });
+  }
+  function paint() {
+    setLoading(false);
+    var body = document.getElementById('homeKorgunBody');
+    if (!body || !state.summary) return;
+    body.style.display = 'block';
+    var data = state.summary;
+    var s = data.summary || {};
+    var en = s.en_yogun_proses || null;
+    var enAd = en ? (en.proses_adi || '—') : '—';
+    var enCift = en ? fmt(en.toplam_cift) : '—';
+    var period = data.period || state.period;
+    var det = document.getElementById('homeKorgunDetail');
+    if (det) {
+      det.href = '/planlama/proses-takip?period=' + encodeURIComponent(DETAIL_PERIOD[period] || 'bugun');
+    }
+    var kartlar = data.proses_kartlari || data.proses_toplamlari || [];
+    var scope = data.location_scope || {};
+    body.innerHTML =
+      '<div class="home-korgun-kpi">' +
+        '<div><div class="k-l">Toplam Biten</div><div class="k-v">' + fmt(s.toplam_cift) + '</div><div class="k-u">çift</div></div>' +
+        '<div><div class="k-l">Proses Türü</div><div class="k-v">' + fmt(s.proses_turu_sayisi) + '</div><div class="k-u">tür</div></div>' +
+        '<div><div class="k-l">Biten Emir</div><div class="k-v">' + fmt(s.biten_emir_sayisi) + '</div><div class="k-u">emir</div></div>' +
+        '<div><div class="k-l">En Yoğun</div><div class="k-v sm">' + esc(enAd) + '</div><div class="k-u">' + enCift + ' çift</div></div>' +
+      '</div>' +
+      cardsHtml(kartlar) +
+      detailHtml() +
+      '<div class="home-korgun-note">Kaynak: ' + esc(data.source || 'Korgun') +
+        ' · lokasyon whitelist: ' + esc((scope.included || []).join(', ') || '—') +
+        ' · ' + esc((data.period_range && data.period_range.bas) || '') +
+        ' → ' + esc((data.period_range && data.period_range.bit) || '') + '</div>';
+    bindBodyEvents();
+  }
+  function loadDetay() {
+    if (!state.selectedKod) return;
+    var seq = ++state.detaySeq;
+    state.loadingDetay = true;
+    paint();
+    var url = '/api/home/korgun/proses-detay?proses=' + encodeURIComponent(state.selectedKod) +
+      '&period=' + encodeURIComponent(state.period) +
+      '&chart=' + encodeURIComponent(state.chartMode);
+    fetch(url, { credentials: 'same-origin' })
+      .then(function (r) {
+        return r.json().then(function (j) { return { status: r.status, j: j }; });
+      })
+      .then(function (x) {
+        if (seq !== state.detaySeq) return;
+        state.loadingDetay = false;
+        if (!x.j || x.j.ok !== true) {
+          state.detay = { ok: false, error: (x.j && x.j.error) || 'Detay yüklenemedi' };
+        } else {
+          state.detay = x.j;
+        }
+        paint();
+      })
+      .catch(function () {
+        if (seq !== state.detaySeq) return;
+        state.loadingDetay = false;
+        state.detay = { ok: false, error: 'Detay yüklenemedi' };
+        paint();
+      });
+  }
+  function loadSummary(period) {
+    if (state.loadingSummary) return;
+    state.period = period || state.period || 'hafta';
+    state.loadingSummary = true;
+    state.detay = null;
+    setLoading(true);
+    Array.prototype.forEach.call(document.querySelectorAll('#homeKorgunRange button'), function (b) {
+      b.classList.toggle('active', b.getAttribute('data-period') === state.period);
+    });
+    fetch('/api/home/korgun/biten-prosesler?period=' + encodeURIComponent(state.period), {
+      credentials: 'same-origin'
+    })
+      .then(function (r) {
+        return r.json().then(function (j) { return { status: r.status, j: j }; });
+      })
+      .then(function (x) {
+        state.loadingSummary = false;
+        if (!x.j || x.j.ok !== true) {
+          showErr((x.j && x.j.error) || 'Korgun verisine ulaşılamadı');
+          return;
+        }
+        state.summary = x.j;
+        updateDashFromKorgun(x.j);
+        var kartlar = x.j.proses_kartlari || x.j.proses_toplamlari || [];
+        if (!state.selectedKod) {
+          state.selectedKod = kartlar.length ? kartlar[0].proses_kodu : null;
+          state.cardPage = 0;
+        } else {
+          /* dönem değişince seçili proses korunur (0 olsa bile); sayfa seçiliyi gösterecek şekilde hizalanabilir */
+          var pg = pageOfKod(kartlar, state.selectedKod);
+          if (pg >= 0) state.cardPage = pg;
+          else clampPage(kartlar);
+        }
+        paint();
+        if (state.selectedKod) loadDetay();
+      })
+      .catch(function () {
+        state.loadingSummary = false;
+        showErr('Korgun verisine ulaşılamadı');
+      });
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('#homeKorgunRange button'), function (btn) {
+    btn.addEventListener('click', function () {
+      loadSummary(btn.getAttribute('data-period'));
+    });
+  });
+  /* varsayılan: onaylı mockup ile 7 Gün */
+  Array.prototype.forEach.call(document.querySelectorAll('#homeKorgunRange button'), function (b) {
+    b.classList.toggle('active', b.getAttribute('data-period') === 'hafta');
+  });
+  loadSummary('hafta');
+})();
+</script>
+
 {% endblock %}
-)
+
