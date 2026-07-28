@@ -63,15 +63,64 @@
   </nav>
 
   <section id="ckart-panel-genel" class="ckart-panel"{% if aktif_tab != 'genel' %} style="display:none"{% endif %}>
-    <h2 class="ckart-h2">Genel Bilgiler</h2>
-    <dl class="ckart-dl">
-      <div><dt>Cari kodu</dt><dd>{{ c.cari_kod }}</dd></div>
-      <div><dt>Firma ünvanı</dt><dd>{{ c.unvan }}</dd></div>
-      <div><dt>Durum</dt><dd>{% if c.aktif %}Aktif{% else %}Pasif{% endif %}</dd></div>
-      <div><dt>İç sorumlu pazarlamacı</dt><dd>{{ data.sorumlu_adi or 'Atanmamış' }}</dd></div>
-      <div><dt>Oluşturma tarihi</dt><dd>{{ c.created_at or '—' }}</dd></div>
-      <div><dt>Son güncelleme</dt><dd>{{ c.updated_at or '—' }}</dd></div>
-    </dl>
+    <div class="ckart-panel-bas">
+      <h2 class="ckart-h2">Genel Bilgiler</h2>
+      {% if data.can_edit_genel %}
+      <a class="ckart-btn-birincil" href="/nexgen/yonetim#cari?edit={{ cari_id }}" style="text-decoration:none;display:inline-block">Bilgileri Düzenle</a>
+      {% endif %}
+    </div>
+    <div class="ckart-genel-grid">
+      <div class="ckart-genel-kol">
+        <h3 class="ckart-h3">Firma Bilgileri</h3>
+        <dl class="ckart-dl ckart-dl-stack">
+          <div><dt>Cari kodu</dt><dd>{{ c.cari_kod or '—' }}</dd></div>
+          <div><dt>Cari kısa adı</dt><dd>{{ c.kisa_ad or '—' }}</dd></div>
+          <div><dt>Firma ünvanı</dt><dd class="ckart-wrap">{{ c.unvan or '—' }}</dd></div>
+          <div><dt>Cari tipi</dt><dd>{{ c.cari_tipi_label or '—' }}</dd></div>
+          <div><dt>Kategori</dt><dd>{{ c.kategori or '—' }}</dd></div>
+          <div><dt>Durum</dt><dd>{% if c.aktif %}Aktif{% else %}Pasif{% endif %}</dd></div>
+          <div><dt>Yurtiçi / Yurtdışı</dt><dd>{{ c.yurt_durumu_label or '—' }}</dd></div>
+          <div><dt>Kart açılış tarihi</dt><dd>{{ c.created_at or '—' }}</dd></div>
+        </dl>
+      </div>
+      <div class="ckart-genel-kol">
+        <h3 class="ckart-h3">İletişim ve Adres</h3>
+        <dl class="ckart-dl ckart-dl-stack">
+          <div><dt>Telefon</dt><dd>{{ c.telefon or '—' }}</dd></div>
+          <div><dt>Telefon 2</dt><dd>{{ c.telefon2 or '—' }}</dd></div>
+          <div><dt>E-posta</dt><dd class="ckart-wrap">{{ c.eposta or '—' }}</dd></div>
+          <div><dt>Web</dt><dd class="ckart-wrap">{{ c.web or '—' }}</dd></div>
+          <div><dt>KEP</dt><dd class="ckart-wrap">{{ c.kep or '—' }}</dd></div>
+          <div><dt>Fax</dt><dd>{{ c.fax or '—' }}</dd></div>
+          <div><dt>Ülke</dt><dd>{{ c.ulke or '—' }}</dd></div>
+          <div><dt>Şehir</dt><dd>{{ c.sehir or '—' }}</dd></div>
+          <div><dt>İlçe</dt><dd>{{ c.ilce or '—' }}</dd></div>
+          <div><dt>Açık adres</dt><dd class="ckart-wrap">{{ c.acik_adres or '—' }}</dd></div>
+        </dl>
+      </div>
+      <div class="ckart-genel-kol">
+        <h3 class="ckart-h3">Ticari / Resmi Bilgiler</h3>
+        <dl class="ckart-dl ckart-dl-stack">
+          <div><dt>Vergi dairesi</dt><dd>{{ c.vergi_dairesi or '—' }}</dd></div>
+          <div><dt>Vergi numarası</dt><dd>{{ c.vergi_no or '—' }}</dd></div>
+          <div><dt>TC kimlik no</dt><dd>{{ c.tc_kimlik_no or '—' }}</dd></div>
+          <div><dt>Ticaret sicil no</dt><dd>{{ c.ticaret_sicil_no or '—' }}</dd></div>
+          <div><dt>Mersis no</dt><dd>{{ c.mersis_no or '—' }}</dd></div>
+          <div><dt>E-Fatura mükellefi</dt><dd>{% if c.e_fatura_mukellefi == 1 %}Evet{% elif c.e_fatura_mukellefi == 0 %}Hayır{% else %}—{% endif %}</dd></div>
+          <div><dt>E-İrsaliye mükellefi</dt><dd>{% if c.e_irsaliye_mukellefi == 1 %}Evet{% elif c.e_irsaliye_mukellefi == 0 %}Hayır{% else %}—{% endif %}</dd></div>
+          <div><dt>Para birimi</dt><dd>{{ c.para_birimi or '—' }}</dd></div>
+          <div><dt>Ödeme vadesi</dt><dd>{% if c.odeme_vadesi_gun is not none %}{{ c.odeme_vadesi_gun }} gün{% else %}—{% endif %}</dd></div>
+          <div><dt>Fiyat grubu</dt><dd>{{ c.fiyat_grubu or '—' }}</dd></div>
+          <div><dt>İskonto oranı</dt><dd>{% if c.iskonto_orani is not none %}{{ c.iskonto_orani }} %{% else %}—{% endif %}</dd></div>
+          <div><dt>Minimum sipariş</dt><dd>{% if c.minimum_siparis_kg is not none %}{{ c.minimum_siparis_kg }} kg{% else %}—{% endif %}</dd></div>
+          <div><dt>Teslim şekli</dt><dd>{{ c.teslim_sekli or '—' }}</dd></div>
+          <div><dt>Dil</dt><dd>{{ c.dil or '—' }}</dd></div>
+          <div><dt>İç sorumlu pazarlamacı</dt><dd>{{ data.sorumlu_adi or 'Atanmamış' }}</dd></div>
+          <div><dt>Oluşturma tarihi</dt><dd>{{ c.created_at or '—' }}</dd></div>
+          <div><dt>Son güncelleme</dt><dd>{{ c.updated_at or '—' }}</dd></div>
+        </dl>
+      </div>
+    </div>
   </section>
 
   <section id="ckart-panel-yetkililer" class="ckart-panel"{% if aktif_tab != 'yetkililer' %} style="display:none"{% endif %}>

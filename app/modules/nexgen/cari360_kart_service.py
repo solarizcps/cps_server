@@ -16,11 +16,22 @@ from modules.nexgen.cari360_yetki import (
     can_cari360_view_own,
 )
 from modules.nexgen.cari_sorumlu_service import can_view_cari, load_kullanici_yetkileri
+from modules.nexgen.cari_genel_bilgi_service import GENEL_EDIT_FIELDS, can_edit_cari_genel
 from modules.nexgen.cari_yetkili_service import can_write_yetkili
 from modules.nexgen.mo_gorusme_service import can_mo_gorusme_yaz
 from modules.nexgen.finans_cari_provision_service import is_test_kayit
 
 SORUMLU_ATANMAMIS = 'Atanmamış'
+
+_CARI_TIPI_LABEL = {
+    'MUSTERI': 'Müşteri',
+    'TEDARIKCI': 'Tedarikçi',
+    'HER_IKISI': 'Her İkisi',
+}
+_YURT_LABEL = {
+    'YURTICI': 'Yurtiçi',
+    'YURTDISI': 'Yurtdışı',
+}
 
 
 class Cari360KartError(Exception):
@@ -231,9 +242,12 @@ def load_cari_kart(
 
     assert_cari_yetkili_schema(con)
 
+    cols = {c[1] for c in con.execute('PRAGMA table_info(nexgen_cari)').fetchall()}
+    base = ['id', 'cari_kod', 'unvan', 'aktif', 'created_at', 'updated_at']
+    extra = [c for c in GENEL_EDIT_FIELDS if c in cols]
+    sel = base + extra
     row = con.execute(
-        'SELECT id, cari_kod, unvan, aktif, created_at, updated_at '
-        'FROM nexgen_cari WHERE id=?',
+        f"SELECT {', '.join(sel)} FROM nexgen_cari WHERE id=?",
         (cid,),
     ).fetchone()
     if not row:
@@ -241,26 +255,66 @@ def load_cari_kart(
 
     cari_kod = row['cari_kod'] or ''
     unvan = row['unvan'] or ''
-    # Eşleşme hesaplanır (geriye uyum) ama operasyon kartında gösterilmez.
     es_durum = _eslestirme_durumu(con, cid, cari_kod, unvan)
     test_cari = is_test_kayit(cari_kod, unvan)
     sorumlu = _sorumlu_ozet(con, cid)
     sorumlu_adi = (sorumlu['ana_adi'] or '').strip() or SORUMLU_ATANMAMIS
 
+    def _g(name, default=None):
+        if name not in row.keys():
+            return default
+        return row[name]
+
+    tip = (_g('cari_tipi') or '').strip().upper()
+    yurt = (_g('yurt_durumu') or '').strip().upper()
+
+    cari = {
+        'id': int(row['id']),
+        'cari_kod': cari_kod,
+        'unvan': unvan,
+        'aktif': int(row['aktif'] or 0),
+        'created_at': _fmt_dt(row['created_at']) or '—',
+        'updated_at': _fmt_dt(row['updated_at']) or '—',
+        'kisa_ad': _g('kisa_ad'),
+        'cari_tipi': tip or None,
+        'cari_tipi_label': _CARI_TIPI_LABEL.get(tip),
+        'kategori': _g('kategori'),
+        'yurt_durumu': yurt or None,
+        'yurt_durumu_label': _YURT_LABEL.get(yurt),
+        'vergi_dairesi': _g('vergi_dairesi'),
+        'vergi_no': _g('vergi_no'),
+        'tc_kimlik_no': _g('tc_kimlik_no'),
+        'ticaret_sicil_no': _g('ticaret_sicil_no'),
+        'mersis_no': _g('mersis_no'),
+        'e_fatura_mukellefi': _g('e_fatura_mukellefi'),
+        'e_irsaliye_mukellefi': _g('e_irsaliye_mukellefi'),
+        'telefon': _g('telefon'),
+        'telefon2': _g('telefon2'),
+        'eposta': _g('eposta'),
+        'web': _g('web'),
+        'kep': _g('kep'),
+        'fax': _g('fax'),
+        'ulke': _g('ulke'),
+        'sehir': _g('sehir'),
+        'ilce': _g('ilce'),
+        'acik_adres': _g('acik_adres'),
+        'para_birimi': _g('para_birimi'),
+        'odeme_vadesi_gun': _g('odeme_vadesi_gun'),
+        'fiyat_grubu': _g('fiyat_grubu'),
+        'iskonto_orani': _g('iskonto_orani'),
+        'minimum_siparis_kg': _g('minimum_siparis_kg'),
+        'teslim_sekli': _g('teslim_sekli'),
+        'dil': _g('dil'),
+    }
+
     return {
-        'cari': {
-            'id': int(row['id']),
-            'cari_kod': cari_kod,
-            'unvan': unvan,
-            'aktif': int(row['aktif'] or 0),
-            'created_at': _fmt_dt(row['created_at']) or '—',
-            'updated_at': _fmt_dt(row['updated_at']) or '—',
-        },
+        'cari': cari,
         'sorumlu_adi': sorumlu_adi,
         'sorumlular': sorumlu['liste'],
         'eslestirme_durumu': es_durum,
         'test_cari': test_cari,
-        'test_banner': False,  # finans eşleşme banner'ı operasyon kartında yok
+        'test_banner': False,
         'can_write_yetkili': can_write_yetkili(con, kullanici_id, cid, yk),
         'can_write_gorusme': can_mo_gorusme_yaz(con, kullanici_id, cid, yk),
+        'can_edit_genel': can_edit_cari_genel(con, kullanici_id, cid, yk),
     }

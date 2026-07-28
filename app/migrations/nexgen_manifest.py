@@ -319,6 +319,18 @@ MANIFEST: tuple[MigEntry, ...] = (
             ("musteri_operasyon_gorusme", "takip_durumu"),
         ),
     ),
+    MigEntry(
+        135, "135_nexgen_cari_genel_bilgiler",
+        "135_nexgen_cari_genel_bilgiler.py",
+        "nexgen_cari genel/operasyon bilgi kolonları (nullable)",
+        dependencies=(70,),
+        required_columns=(
+            ("nexgen_cari", "kisa_ad"),
+            ("nexgen_cari", "cari_tipi"),
+            ("nexgen_cari", "minimum_siparis_kg"),
+            ("nexgen_cari", "acik_adres"),
+        ),
+    ),
 )
 
 BY_VERSION = {m.version: m for m in MANIFEST}

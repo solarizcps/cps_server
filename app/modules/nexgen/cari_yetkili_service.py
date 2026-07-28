@@ -14,7 +14,6 @@ from datetime import datetime
 from typing import Any
 
 from modules.nexgen.cari360_yetki import (
-    _yk_has,
     can_cari360_crm_write,
     can_cari360_view_all,
 )
@@ -58,20 +57,12 @@ def can_read_yetkili(con, kullanici_id: int, cari_id: int, yk: set[str] | None =
 def can_write_yetkili(con, kullanici_id: int, cari_id: int, yk: set[str] | None = None) -> bool:
     """Admin (view_all) veya atanmış CRM yazma yetkilisi.
 
-    Planlama (Mehmet / nexgen.plan.manage) bu fazda yetkili yazamaz — read-only.
+    FAZ-YONETIM-CARI360-GENEL-BILGILER-TAMAMLAMA-1:
+    cari360.crm.write + atama varsa yetkili yazılabilir (plan.manage engeli kaldırıldı).
     """
     if yk is None:
         yk = load_kullanici_yetkileri(con, kullanici_id)
-    if not can_write_crm(con, kullanici_id, cari_id, yk):
-        return False
-    # Planlama read-only (admin/view_all hariç)
-    if (
-        _yk_has(yk, 'nexgen.plan.manage', 'can_manage')
-        and not can_cari360_view_all(yk)
-        and '*' not in yk
-    ):
-        return False
-    return True
+    return can_write_crm(con, kullanici_id, cari_id, yk)
 
 
 def list_cari_yetkilileri(

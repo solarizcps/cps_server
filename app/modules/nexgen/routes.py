@@ -12879,60 +12879,74 @@ def _nexgen_cari_kart_liste(con, q=None, *, sadece_aktif=False):
 # Yetki: nexgen.yonetim.manage can_view
 # ─────────────────────────────────────────────────────────────
 @nexgen_bp.route('/yonetim/')
-@yetki_gerekli('nexgen.yonetim.manage', 'can_view')
+@login_gerekli
 def yonetim_merkezi():
+    """Yönetim Merkezi — tam yönetici veya cari listesi (CRM) erişimi."""
+    from modules.auth import kullanici_yetkileri
+    from modules.nexgen.cari_genel_bilgi_service import can_access_cari_listesi, is_cari_admin
+    from modules.nexgen.cari_sorumlu_service import get_kullanici_cari_kapsami
+
+    yk = kullanici_yetkileri(session.get('kullanici') or {})
+    full_yonetim = yetki_var('nexgen.yonetim.manage', 'can_view')
+    cari_list_ok = can_access_cari_listesi(yk)
+    if not full_yonetim and not cari_list_ok:
+        abort(403)
+
+    cari_admin = is_cari_admin(yk)
+    uid = _kullanici_id()
     con = _db()
     try:
-        # Stok kartları — aile adıyla birlikte
-        kartlar_raw = con.execute("""
-            SELECT k.id, k.kod, k.ad, k.kategori, k.birim,
-                   k.minimum_stok, k.kritik_stok, k.aktif,
-                   k.renk, k.alt_kategori, k.kalite_sinifi,
-                   k.shore_degeri, k.notlar, k.aile_id,
-                   a.ad AS aile_ad, a.aa_kodu AS aile_aa,
-                   COALESCE(SUM(h.miktar_kg), 0) AS mevcut_stok
-            FROM nexgen_stok_kart k
-            LEFT JOIN nexgen_stok_aile a ON a.id = k.aile_id
-            LEFT JOIN nexgen_stok_hareket h ON h.stok_kart_id = k.id
-            GROUP BY k.id
-            ORDER BY a.sira NULLS LAST, k.kod
-        """).fetchall()
+        kartlar_raw = []
+        tedarikciler_raw = []
+        eslesme_raw = []
+        aileler_raw = []
+        if full_yonetim:
+            kartlar_raw = con.execute("""
+                SELECT k.id, k.kod, k.ad, k.kategori, k.birim,
+                       k.minimum_stok, k.kritik_stok, k.aktif,
+                       k.renk, k.alt_kategori, k.kalite_sinifi,
+                       k.shore_degeri, k.notlar, k.aile_id,
+                       a.ad AS aile_ad, a.aa_kodu AS aile_aa,
+                       COALESCE(SUM(h.miktar_kg), 0) AS mevcut_stok
+                FROM nexgen_stok_kart k
+                LEFT JOIN nexgen_stok_aile a ON a.id = k.aile_id
+                LEFT JOIN nexgen_stok_hareket h ON h.stok_kart_id = k.id
+                GROUP BY k.id
+                ORDER BY a.sira NULLS LAST, k.kod
+            """).fetchall()
+            tedarikciler_raw = con.execute("""
+                SELECT t.id, t.kod, t.ad, t.ulke, t.para_birimi,
+                       t.varsayilan_vade, t.iletisim_ad, t.iletisim_tel,
+                       t.iletisim_email, t.notlar, t.aktif,
+                       COUNT(ts.id) AS esleme_sayisi
+                FROM nexgen_tedarikci t
+                LEFT JOIN nexgen_tedarikci_stok ts ON ts.tedarikci_id = t.id AND ts.aktif=1
+                GROUP BY t.id
+                ORDER BY t.aktif DESC, t.ad
+            """).fetchall()
+            eslesme_raw = con.execute("""
+                SELECT ts.id, ts.tedarikci_id, ts.stok_kart_id,
+                       ts.tercih_sirasi, ts.aktif, ts.notlar,
+                       t.kod  AS ted_kod,  t.ad  AS ted_ad,
+                       sk.kod AS stok_kod, sk.ad AS stok_ad
+                FROM nexgen_tedarikci_stok ts
+                JOIN nexgen_tedarikci  t  ON t.id  = ts.tedarikci_id
+                JOIN nexgen_stok_kart  sk ON sk.id = ts.stok_kart_id
+                ORDER BY t.ad, ts.tercih_sirasi, sk.kod
+            """).fetchall()
+            aileler_raw = con.execute(
+                "SELECT id, aa_kodu, ad FROM nexgen_stok_aile WHERE aktif=1 ORDER BY sira"
+            ).fetchall()
 
-        # Tedarikçiler — bağlı hammadde sayısıyla
-        tedarikciler_raw = con.execute("""
-            SELECT t.id, t.kod, t.ad, t.ulke, t.para_birimi,
-                   t.varsayilan_vade, t.iletisim_ad, t.iletisim_tel,
-                   t.iletisim_email, t.notlar, t.aktif,
-                   COUNT(ts.id) AS esleme_sayisi
-            FROM nexgen_tedarikci t
-            LEFT JOIN nexgen_tedarikci_stok ts ON ts.tedarikci_id = t.id AND ts.aktif=1
-            GROUP BY t.id
-            ORDER BY t.aktif DESC, t.ad
-        """).fetchall()
-
-        # Eşleştirmeler — tümü
-        eslesme_raw = con.execute("""
-            SELECT ts.id, ts.tedarikci_id, ts.stok_kart_id,
-                   ts.tercih_sirasi, ts.aktif, ts.notlar,
-                   t.kod  AS ted_kod,  t.ad  AS ted_ad,
-                   sk.kod AS stok_kod, sk.ad AS stok_ad
-            FROM nexgen_tedarikci_stok ts
-            JOIN nexgen_tedarikci  t  ON t.id  = ts.tedarikci_id
-            JOIN nexgen_stok_kart  sk ON sk.id = ts.stok_kart_id
-            ORDER BY t.ad, ts.tercih_sirasi, sk.kod
-        """).fetchall()
-
-        # Stok aile listesi (yeni kart modalında dropdown için)
-        aileler_raw = con.execute(
-            "SELECT id, aa_kodu, ad FROM nexgen_stok_aile WHERE aktif=1 ORDER BY sira"
-        ).fetchall()
-
-        # Cari listesi — ortak kaynak
         try:
             cariler = _nexgen_cari_kart_liste(con)
         except Exception:
             cariler = []
-
+        if not cari_admin and not yetki_var('cari360.view', 'can_view'):
+            kapsam = get_kullanici_cari_kapsami(con, uid, yk)
+            if not kapsam.get('tumunu_gorebilir_mi'):
+                izinli = set(kapsam.get('cari_id_listesi') or [])
+                cariler = [c for c in cariler if int(c.get('id') or 0) in izinli]
     finally:
         con.close()
 
@@ -12945,6 +12959,11 @@ def yonetim_merkezi():
         aileler=[dict(a) for a in aileler_raw],
         cariler=cariler,
         can_sorumlu_manage=yetki_var('cari360.sorumlu.manage', 'can_manage'),
+        can_full_yonetim=full_yonetim,
+        can_cari_admin=cari_admin,
+        can_cari_create=cari_admin and yetki_var('nexgen.yonetim.manage', 'can_create'),
+        can_cari_durum=cari_admin and yetki_var('nexgen.yonetim.manage', 'can_update'),
+        default_sekme='cari' if (cari_list_ok and not full_yonetim) else 'stok',
     )
 
 
@@ -13135,26 +13154,54 @@ def api_cari_sonraki_kod():
         con.close()
 
 
-@nexgen_bp.route('/api/yonetim/cari-ekle', methods=['POST'])
-@yetki_gerekli('nexgen.yonetim.manage', 'can_create')
-def api_cari_ekle():
-    """Yeni cari ekle."""
-    d = request.get_json(silent=True) or {}
-    kod   = (d.get('cari_kod') or '').strip()
-    unvan = (d.get('unvan') or '').strip()
-    if not kod or not unvan:
-        return jsonify({'ok': False, 'hata': 'cari_kod ve unvan zorunlu'}), 400
+@nexgen_bp.route('/api/yonetim/cari-detay/<int:cari_id>', methods=['GET'])
+@login_gerekli
+def api_cari_detay(cari_id):
+    """Cari genel bilgi detayı — id üzerinden."""
+    from modules.auth import kullanici_yetkileri
+    from modules.nexgen.cari_genel_bilgi_service import (
+        CariGenelError,
+        can_edit_cari_genel,
+        is_cari_admin,
+        load_cari_genel,
+    )
+
+    yk = kullanici_yetkileri(session.get('kullanici') or {})
+    uid = _kullanici_id()
     con = _db()
     try:
-        mev = con.execute("SELECT id FROM nexgen_cari WHERE cari_kod=?", (kod,)).fetchone()
-        if mev:
-            return jsonify({'ok': False, 'hata': f"'{kod}' kodu zaten mevcut"}), 400
+        kayit = load_cari_genel(con, cari_id, uid, yk)
+        return jsonify({
+            'ok': True,
+            'cari': kayit,
+            'can_edit': can_edit_cari_genel(con, uid, cari_id, yk),
+            'can_admin': is_cari_admin(yk),
+        })
+    except CariGenelError as e:
+        return jsonify({'ok': False, 'hata': e.mesaj}), e.kod
+    except Exception as e:
+        return jsonify({'ok': False, 'hata': 'Cari detay yüklenemedi.', 'detay': str(e)[:200]}), 500
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/yonetim/cari-ekle', methods=['POST'])
+@login_gerekli
+def api_cari_ekle():
+    """Yeni cari ekle — yalnız yönetici."""
+    from modules.auth import kullanici_yetkileri
+    from modules.nexgen.cari_genel_bilgi_service import CariGenelError, insert_cari_with_genel, is_cari_admin
+
+    yk = kullanici_yetkileri(session.get('kullanici') or {})
+    if not is_cari_admin(yk) or not yetki_var('nexgen.yonetim.manage', 'can_create'):
+        return jsonify({'ok': False, 'hata': 'Cari oluşturma yetkiniz yok.'}), 403
+    d = request.get_json(silent=True) or {}
+    kod = (d.get('cari_kod') or '').strip()
+    unvan = (d.get('unvan') or '').strip()
+    con = _db()
+    try:
         con.execute('BEGIN IMMEDIATE')
-        con.execute(
-            "INSERT INTO nexgen_cari(cari_kod, unvan, aktif) VALUES(?,?,1)",
-            (kod, unvan)
-        )
-        yeni_id = int(con.execute("SELECT last_insert_rowid()").fetchone()[0])
+        yeni_id = insert_cari_with_genel(con, kod, unvan, d, _kullanici_id(), yk)
         from modules.nexgen.finans_cari_provision_service import (
             FinansCariProvisionError,
             provision_yeni_musteri,
@@ -13166,6 +13213,9 @@ def api_cari_ekle():
         )
         con.commit()
         return jsonify({'ok': True, 'id': yeni_id})
+    except CariGenelError as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': e.mesaj}), e.kod
     except Exception as e:
         from modules.nexgen.finans_cari_provision_service import FinansCariProvisionError
         con.rollback()
@@ -13177,25 +13227,29 @@ def api_cari_ekle():
 
 
 @nexgen_bp.route('/api/yonetim/cari-guncelle', methods=['POST'])
-@yetki_gerekli('nexgen.yonetim.manage', 'can_update')
+@login_gerekli
 def api_cari_guncelle():
-    """Cari unvan güncelle."""
+    """Cari genel bilgi güncelle — yönetici tüm alan; pazarlamacı whitelist."""
+    from modules.auth import kullanici_yetkileri
+    from modules.nexgen.cari_genel_bilgi_service import CariGenelError, is_cari_admin, update_cari_genel
+
+    yk = kullanici_yetkileri(session.get('kullanici') or {})
     d = request.get_json(silent=True) or {}
     cari_id = d.get('id')
-    unvan   = (d.get('unvan') or '').strip()
-    if not cari_id or not unvan:
-        return jsonify({'ok': False, 'hata': 'id ve unvan zorunlu'}), 400
+    if not cari_id:
+        return jsonify({'ok': False, 'hata': 'id zorunlu'}), 400
+    # Admin unvan zorunlu tutar; pazarlamacı unvan göndermeyebilir
+    if is_cari_admin(yk):
+        if not (d.get('unvan') or '').strip():
+            return jsonify({'ok': False, 'hata': 'unvan zorunlu'}), 400
     con = _db()
     try:
-        kayit = con.execute("SELECT id FROM nexgen_cari WHERE id=?", (cari_id,)).fetchone()
-        if not kayit:
-            return jsonify({'ok': False, 'hata': 'Cari bulunamadı'}), 404
-        con.execute(
-            "UPDATE nexgen_cari SET unvan=?, updated_at=datetime('now','localtime') WHERE id=?",
-            (unvan, cari_id)
-        )
+        kayit = update_cari_genel(con, int(cari_id), d, _kullanici_id(), yk)
         con.commit()
-        return jsonify({'ok': True})
+        return jsonify({'ok': True, 'cari': kayit})
+    except CariGenelError as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': e.mesaj}), e.kod
     except Exception as e:
         con.rollback()
         return jsonify({'ok': False, 'hata': str(e)}), 500
@@ -13203,10 +13257,32 @@ def api_cari_guncelle():
         con.close()
 
 
+@nexgen_bp.route('/api/yonetim/cari-sil', methods=['POST'])
+@login_gerekli
+def api_cari_sil():
+    """Fiziksel silme kapalı — yalnız yönetici 400; diğerleri 403."""
+    from modules.auth import kullanici_yetkileri
+    from modules.nexgen.cari_genel_bilgi_service import is_cari_admin
+
+    yk = kullanici_yetkileri(session.get('kullanici') or {})
+    if not is_cari_admin(yk):
+        return jsonify({'ok': False, 'hata': 'Cari silme yetkiniz yok.'}), 403
+    return jsonify({
+        'ok': False,
+        'hata': 'Fiziksel silme kapalı. Cariyi pasife alınız.',
+    }), 400
+
+
 @nexgen_bp.route('/api/yonetim/cari-durum', methods=['POST'])
-@yetki_gerekli('nexgen.yonetim.manage', 'can_update')
+@login_gerekli
 def api_cari_durum():
-    """Cari aktif/pasif toggle."""
+    """Cari aktif/pasif toggle — yalnız yönetici."""
+    from modules.auth import kullanici_yetkileri
+    from modules.nexgen.cari_genel_bilgi_service import is_cari_admin
+
+    yk = kullanici_yetkileri(session.get('kullanici') or {})
+    if not is_cari_admin(yk) or not yetki_var('nexgen.yonetim.manage', 'can_update'):
+        return jsonify({'ok': False, 'hata': 'Cari durumunu değiştirme yetkiniz yok.'}), 403
     d = request.get_json(silent=True) or {}
     cari_id = d.get('id')
     if not cari_id:
