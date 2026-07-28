@@ -570,8 +570,8 @@
         <div class="home-korgun-range" id="homeKorgunRange">
           <button type="button" data-period="bugun">Bugün</button>
           <button type="button" data-period="dun">Dün</button>
-          <button type="button" data-period="hafta" class="active">7 Gün</button>
-          <button type="button" data-period="ay">Bu Ay</button>
+          <button type="button" data-period="hafta">7 Gün</button>
+          <button type="button" data-period="ay" class="active">Bu Ay</button>
         </div>
         <div class="home-korgun-loading" id="homeKorgunLoading">Yükleniyor…</div>
         <div id="homeKorgunBody" style="display:none"></div>
@@ -1759,8 +1759,9 @@
 (function () {
   var PAGE_SIZE = 8;
   var state = {
-    period: 'hafta',
-    chartMode: 'hafta',
+    /* Excel Temmuz uzlastirma: varsayilan Bu Ay (kart = donem toplami) */
+    period: 'ay',
+    chartMode: 'ay',
     selectedKod: null,
     cardPage: 0,
     summary: null,
@@ -1770,6 +1771,13 @@
     detaySeq: 0
   };
   var DETAIL_PERIOD = { bugun: 'bugun', dun: 'bugun', hafta: 'hafta', ay: 'ay' };
+  var PERIOD_QTY_KEY = {
+    bugun: 'bugun_cift',
+    dun: 'dun_cift',
+    hafta: 'hafta_cift',
+    ay: 'ay_cift'
+  };
+  var PERIOD_LBL = { bugun: 'Bugun', dun: 'Dun', hafta: '7 Gun', ay: 'Bu Ay' };
 
   function updateDashFromKorgun(data) {
     if (typeof window.__homeSetKorgunDash === 'function') window.__homeSetKorgunDash(data);
@@ -1784,6 +1792,67 @@
     return String(s == null ? '' : s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
+  }
+  /* API alanlari: proses_kodu / toplam_cift — group_key veya ad ile lookup YAPMA */
+  function qtyFrom(p) {
+    if (!p) return 0;
+    var v = p.toplam_cift;
+    if (v == null) v = p.cift;
+    if (v == null) v = p.miktar;
+    if (v == null || v === '') return 0;
+    var n = Number(v);
+    return isFinite(n) ? n : 0;
+  }
+  function kodFrom(p) {
+    if (!p) return '';
+    var k = p.proses_kodu;
+    if (k == null || k === '') k = p.kod;
+    return String(k == null ? '' : k).trim();
+  }
+  function normalizeKartlar(list) {
+    return (list || []).map(function (p) {
+      var kod = kodFrom(p);
+      var adi = String((p && (p.proses_adi || p.ad)) || kod || '').trim();
+      return {
+        proses_kodu: kod,
+        proses_adi: adi,
+        group_key: (p && p.group_key) || null,
+        toplam_cift: qtyFrom(p),
+        emir_sayisi: p && p.emir_sayisi != null ? Number(p.emir_sayisi) || 0 : 0,
+        biten_proses_sayisi: p && p.biten_proses_sayisi != null ? Number(p.biten_proses_sayisi) || 0 : 0,
+        pay_yuzde: p && p.pay_yuzde != null ? Number(p.pay_yuzde) || 0 : 0,
+        birim: (p && p.birim) || 'CIFT'
+      };
+    }).filter(function (p) { return !!p.proses_kodu; });
+  }
+  function buildLookup(kartlar) {
+    var map = {};
+    (kartlar || []).forEach(function (p) {
+      map[String(p.proses_kodu)] = p;
+      if (p.group_key) map['gk:' + String(p.group_key)] = p;
+      if (p.proses_adi) map['ad:' + String(p.proses_adi).toLowerCase()] = p;
+    });
+    return map;
+  }
+  function debugKorgunRender(tag, apiJson, kartlar) {
+    try {
+      var map = buildLookup(kartlar);
+      console.log('[home-korgun] ' + tag + ' API', apiJson);
+      console.log('[home-korgun] Kart', kartlar);
+      console.log('[home-korgun] Lookup', map);
+      (kartlar || []).forEach(function (p) {
+        var hit = map[String(p.proses_kodu)];
+        console.log('[home-korgun] render', {
+          period: state.period,
+          proses_kodu: p.proses_kodu,
+          proses_adi: p.proses_adi,
+          group_key: p.group_key,
+          api_toplam_cift: p.toplam_cift,
+          eslesen_kart: hit || null,
+          render_deger: fmt(p.toplam_cift)
+        });
+      });
+    } catch (e0) {}
   }
   function bitisLbl(iso) {
     if (!iso) return '—';
@@ -1856,7 +1925,7 @@
     return svg;
   }
   function cardsHtml(list) {
-    var all = list || [];
+    var all = normalizeKartlar(list);
     if (!all.length) {
       return '<div class="home-korgun-empty">Seçili dönemde biten proses yok (üretim akış lokasyonları).</div>';
     }
@@ -1864,6 +1933,7 @@
     var pages = pageCount(all.length);
     var start = state.cardPage * PAGE_SIZE;
     var shown = all.slice(start, start + PAGE_SIZE);
+    var plbl = PERIOD_LBL[state.period] || state.period;
     var html = '<div class="home-korgun-pcards-wrap">';
     html += '<div class="home-korgun-pnav-side">' +
       '<button type="button" id="homeKorgunPrev" aria-label="Önceki prosesler"' +
@@ -1871,15 +1941,17 @@
       '<span class="pg">' + (state.cardPage + 1) + '/' + pages + '</span>' +
     '</div>';
     html += '<div class="home-korgun-pcards">' + shown.map(function (p) {
-      var akt = (String(p.proses_kodu) === String(state.selectedKod)) ? ' active' : '';
+      var kod = kodFrom(p);
+      var akt = (String(kod) === String(state.selectedKod || '').trim()) ? ' active' : '';
       var pay = (p.pay_yuzde != null) ? p.pay_yuzde : 0;
       var w = Math.max(0, Math.min(100, Number(pay) || 0));
-      var ad = p.proses_adi || p.proses_kodu || '';
-      return '<button type="button" class="home-korgun-pcard' + akt + '" data-kod="' + esc(p.proses_kodu) + '">' +
-        '<div class="pi" aria-hidden="true">' + prosesIco(ad, p.proses_kodu) + '</div>' +
-        '<div class="pn" title="' + esc(ad) + '">' + esc(ad) + '</div>' +
-        '<div class="pv">' + fmt(p.toplam_cift) + ' çift</div>' +
-        '<div class="pp">%' + String(pay).replace('.', ',') + ' pay</div>' +
+      var ad = p.proses_adi || kod || '';
+      var qty = qtyFrom(p);
+      return '<button type="button" class="home-korgun-pcard' + akt + '" data-kod="' + esc(kod) + '">' +
+        '<div class="pi" aria-hidden="true">' + prosesIco(ad, kod) + '</div>' +
+        '<div class="pn" title="' + esc(ad) + ' · kod ' + esc(kod) + '">' + esc(ad) + '</div>' +
+        '<div class="pv">' + fmt(qty) + ' çift</div>' +
+        '<div class="pp">' + esc(plbl) + ' · %' + String(pay).replace('.', ',') + '</div>' +
         '<div class="pbar"><i style="width:' + w + '%"></i></div>' +
       '</button>';
     }).join('') + '</div>';
@@ -1940,14 +2012,26 @@
     var k = d.kpi || {};
     var ad = (d.proses && d.proses.ad) || state.selectedKod || '—';
     var detHref = '/planlama/proses-takip?period=' + encodeURIComponent(DETAIL_PERIOD[state.period] || 'bugun');
+    /* Secili donem KPI'sini one al — Bugun=0 iken karttaki ay/hafta degerini 0 sanma */
+    var pk = PERIOD_QTY_KEY[state.period] || 'ay_cift';
+    var primaryQty = k[pk];
+    var primaryLbl = PERIOD_LBL[state.period] || 'Donem';
+    function skpiCell(lbl, qtyKey, emirKey, primary) {
+      var cls = primary ? ' style="outline:1px solid #FF6A00;border-radius:6px"' : '';
+      return '<div' + cls + '><div class="k-l">' + esc(lbl) + (primary ? ' · secili' : '') +
+        '</div><div class="k-v">' + fmt(k[qtyKey]) + ' çift</div>' +
+        '<div class="k-u">' + fmt(k[emirKey]) + ' emir</div></div>';
+    }
     return '<div class="home-korgun-det">' +
       '<div class="home-korgun-det-l">' +
-        '<div class="home-korgun-det-h">' + esc(ad) + ' PROSESİ DETAYI</div>' +
+        '<div class="home-korgun-det-h">' + esc(ad) + ' PROSESİ DETAYI' +
+          '<div style="font-size:12px;font-weight:600;color:#FF6A00;margin-top:4px">' +
+            esc(primaryLbl) + ': ' + fmt(primaryQty) + ' çift</div></div>' +
         '<div class="home-korgun-skpi">' +
-          '<div><div class="k-l">Bugün</div><div class="k-v">' + fmt(k.bugun_cift) + ' çift</div><div class="k-u">' + fmt(k.bugun_emir) + ' emir</div></div>' +
-          '<div><div class="k-l">Dün</div><div class="k-v">' + fmt(k.dun_cift) + ' çift</div><div class="k-u">' + fmt(k.dun_emir) + ' emir</div></div>' +
-          '<div><div class="k-l">Son 7 Gün</div><div class="k-v">' + fmt(k.hafta_cift) + ' çift</div><div class="k-u">' + fmt(k.hafta_emir) + ' emir</div></div>' +
-          '<div><div class="k-l">Bu Ay</div><div class="k-v">' + fmt(k.ay_cift) + ' çift</div><div class="k-u">' + fmt(k.ay_emir) + ' emir</div></div>' +
+          skpiCell('Bugün', 'bugun_cift', 'bugun_emir', state.period === 'bugun') +
+          skpiCell('Dün', 'dun_cift', 'dun_emir', state.period === 'dun') +
+          skpiCell('Son 7 Gün', 'hafta_cift', 'hafta_emir', state.period === 'hafta') +
+          skpiCell('Bu Ay', 'ay_cift', 'ay_emir', state.period === 'ay') +
         '</div>' +
         '<div class="home-korgun-chart-wrap">' +
           '<div class="home-korgun-chart-lbl"><span>Günlük biten çift</span>' +
@@ -1971,9 +2055,16 @@
     if (!body) return;
     Array.prototype.forEach.call(body.querySelectorAll('.home-korgun-pcard'), function (btn) {
       btn.addEventListener('click', function () {
-        var kod = btn.getAttribute('data-kod');
-        if (!kod || kod === state.selectedKod) return;
+        var kod = String(btn.getAttribute('data-kod') || '').trim();
+        if (!kod || kod === String(state.selectedKod || '').trim()) return;
         state.selectedKod = kod;
+        try {
+          console.log('[home-korgun] card click', {
+            proses_kodu: kod,
+            period: state.period,
+            card_text: (btn.textContent || '').replace(/\s+/g, ' ').trim()
+          });
+        } catch (e1) {}
         paint();
         loadDetay();
       });
@@ -2019,11 +2110,12 @@
     if (det) {
       det.href = '/planlama/proses-takip?period=' + encodeURIComponent(DETAIL_PERIOD[period] || 'bugun');
     }
-    var kartlar = data.proses_kartlari || data.proses_toplamlari || [];
+    var kartlar = normalizeKartlar(data.proses_kartlari || data.proses_toplamlari || []);
     var scope = data.location_scope || {};
+    debugKorgunRender('paint', data, kartlar);
     body.innerHTML =
       '<div class="home-korgun-kpi">' +
-        '<div><div class="k-l">Toplam Biten</div><div class="k-v">' + fmt(s.toplam_cift) + '</div><div class="k-u">çift</div></div>' +
+        '<div><div class="k-l">Toplam Biten</div><div class="k-v">' + fmt(s.toplam_cift) + '</div><div class="k-u">çift · ' + esc(PERIOD_LBL[state.period] || '') + '</div></div>' +
         '<div><div class="k-l">Proses Türü</div><div class="k-v">' + fmt(s.proses_turu_sayisi) + '</div><div class="k-u">tür</div></div>' +
         '<div><div class="k-l">Biten Emir</div><div class="k-v">' + fmt(s.biten_emir_sayisi) + '</div><div class="k-u">emir</div></div>' +
         '<div><div class="k-l">En Yoğun</div><div class="k-v sm">' + esc(enAd) + '</div><div class="k-u">' + enCift + ' çift</div></div>' +
@@ -2031,9 +2123,10 @@
       cardsHtml(kartlar) +
       detailHtml() +
       '<div class="home-korgun-note">Kaynak: ' + esc(data.source || 'Korgun') +
+        ' · kart anahtari: proses_kodu · donem: ' + esc(PERIOD_LBL[state.period] || state.period) +
         ' · lokasyon whitelist: ' + esc((scope.included || []).join(', ') || '—') +
         ' · ' + esc((data.period_range && data.period_range.bas) || '') +
-        ' → ' + esc((data.period_range && data.period_range.bit) || '') + '</div>';
+        ' -> ' + esc((data.period_range && data.period_range.bit) || '') + '</div>';
     bindBodyEvents();
   }
   function loadDetay() {
@@ -2074,26 +2167,33 @@
     Array.prototype.forEach.call(document.querySelectorAll('#homeKorgunRange button'), function (b) {
       b.classList.toggle('active', b.getAttribute('data-period') === state.period);
     });
-    fetch('/api/home/korgun/biten-prosesler?period=' + encodeURIComponent(state.period), {
-      credentials: 'same-origin'
-    })
+    var url = '/api/home/korgun/biten-prosesler?period=' + encodeURIComponent(state.period);
+    fetch(url, { credentials: 'same-origin' })
       .then(function (r) {
-        return r.json().then(function (j) { return { status: r.status, j: j }; });
+        return r.json().then(function (j) { return { status: r.status, url: url, j: j }; });
       })
       .then(function (x) {
         state.loadingSummary = false;
+        try {
+          console.log('[home-korgun] endpoint', x.url, 'HTTP', x.status);
+          console.log('[home-korgun] API', x.j);
+        } catch (e2) {}
         if (!x.j || x.j.ok !== true) {
           showErr((x.j && x.j.error) || 'Korgun verisine ulaşılamadı');
           return;
         }
         state.summary = x.j;
         updateDashFromKorgun(x.j);
-        var kartlar = x.j.proses_kartlari || x.j.proses_toplamlari || [];
+        var kartlar = normalizeKartlar(x.j.proses_kartlari || x.j.proses_toplamlari || []);
+        debugKorgunRender('loadSummary', x.j, kartlar);
+        /* summary icine normalize edilmis kartlari yaz — paint ayni kaynagi kullansin */
+        state.summary.proses_kartlari = kartlar;
+        state.summary.proses_toplamlari = kartlar;
         if (!state.selectedKod) {
           state.selectedKod = kartlar.length ? kartlar[0].proses_kodu : null;
           state.cardPage = 0;
         } else {
-          /* dönem değişince seçili proses korunur (0 olsa bile); sayfa seçiliyi gösterecek şekilde hizalanabilir */
+          state.selectedKod = String(state.selectedKod).trim();
           var pg = pageOfKod(kartlar, state.selectedKod);
           if (pg >= 0) state.cardPage = pg;
           else clampPage(kartlar);
@@ -2101,8 +2201,9 @@
         paint();
         if (state.selectedKod) loadDetay();
       })
-      .catch(function () {
+      .catch(function (err) {
         state.loadingSummary = false;
+        try { console.log('[home-korgun] fetch error', err); } catch (e3) {}
         showErr('Korgun verisine ulaşılamadı');
       });
   }
@@ -2111,11 +2212,11 @@
       loadSummary(btn.getAttribute('data-period'));
     });
   });
-  /* varsayılan: onaylı mockup ile 7 Gün */
+  /* varsayilan: Bu Ay — Excel aylik uzlastirma ile ayni donem */
   Array.prototype.forEach.call(document.querySelectorAll('#homeKorgunRange button'), function (b) {
-    b.classList.toggle('active', b.getAttribute('data-period') === 'hafta');
+    b.classList.toggle('active', b.getAttribute('data-period') === 'ay');
   });
-  loadSummary('hafta');
+  loadSummary('ay');
 })();
 </script>
 
