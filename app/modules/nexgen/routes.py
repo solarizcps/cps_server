@@ -19383,6 +19383,14 @@ def _pzm_v2_mpr_olustur(con, talep_id):
                 _plan_boyut_satir_ensure(
                     con, plan_id, uv_b, bkg, boyut, rf_renk_id=rf_renk_id,
                 )
+            # Omurga: kalem ↔ üretim planı (nexgen_cari.id zinciri)
+            kalem_db_id = k.get('id')
+            if kalem_db_id:
+                try:
+                    from modules.nexgen.cari360_omurga_link import kalem_uretim_plan_yaz
+                    kalem_uretim_plan_yaz(con, int(kalem_db_id), int(plan_id), int(talep_id))
+                except Exception:
+                    pass
 
         con.commit()
     except Exception as e:

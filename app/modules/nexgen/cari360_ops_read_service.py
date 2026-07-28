@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-Cari 360 — read-only operasyon özeti (FAZ-YONETIM-CARI360-A-READONLY-OPERASYON-1).
+Cari 360 — read-only operasyon özeti.
 
 Kaynaklar (doğrulanmış):
 - nexgen_cari.id
 - nexgen_planlama_siparis.cari_id → nexgen_cari.id
 - nexgen_planlama_siparis_kalem.planlama_siparis_id → nexgen_planlama_siparis.id
+- nexgen_uretim_plan.cari_id / planlama_siparis_id
+- nexgen_uretim_batch.plan_id → nexgen_uretim_parca (alt emir)
 - mo_musteri_sevkiyat.cari_id → nexgen_cari.id
 - mo_musteri_sevkiyat_kalem.sevkiyat_id → mo_musteri_sevkiyat.id
 - musteri_operasyon_gorusme.cari_id (mevcut)
@@ -17,6 +19,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
+from modules.nexgen.cari360_omurga_link import backfill_kalem_uretim_planlari
 from modules.nexgen.cari_sorumlu_service import can_view_cari
 
 # Sonuçlanmış sipariş durumları — mock dağılım + sistemde görülen kapanış kodları.
@@ -224,9 +227,22 @@ def load_cari360_siparisler(
     if not _tablo_var(con, 'nexgen_planlama_siparis'):
         return {'liste': [], 'count': 0}
 
+    # Soft repair: kalem↔plan (NULL olanlar)
+    try:
+        backfill_kalem_uretim_planlari(con, cari_id=cid, limit=200)
+        con.commit()
+    except Exception:
+        try:
+            con.rollback()
+        except Exception:
+            pass
+
     has_kalem = _tablo_var(con, 'nexgen_planlama_siparis_kalem')
     has_sevk = _tablo_var(con, 'mo_musteri_sevkiyat')
     has_sevk_kalem = _tablo_var(con, 'mo_musteri_sevkiyat_kalem')
+    has_plan = _tablo_var(con, 'nexgen_uretim_plan')
+    has_batch = _tablo_var(con, 'nexgen_uretim_batch')
+    has_parca = _tablo_var(con, 'nexgen_uretim_parca')
 
     rows = con.execute(
         """
@@ -283,6 +299,41 @@ def load_cari360_siparisler(
                 ).fetchone()
                 sevk_kg = _fmt_num(kg_row[0] or 0)
 
+        plan_sayisi = 0
+        batch_sayisi = 0
+        uretilen_kg = None
+        if has_plan:
+            plan_sayisi = int(con.execute(
+                """
+                SELECT COUNT(*) FROM nexgen_uretim_plan
+                WHERE planlama_siparis_id=?
+                  AND COALESCE(durum, '') NOT IN ('IPTAL')
+                """,
+                (sid,),
+            ).fetchone()[0])
+            if has_batch and plan_sayisi:
+                batch_sayisi = int(con.execute(
+                    """
+                    SELECT COUNT(*) FROM nexgen_uretim_batch b
+                    JOIN nexgen_uretim_plan p ON p.id = b.plan_id
+                    WHERE p.planlama_siparis_id=?
+                      AND COALESCE(p.durum, '') NOT IN ('IPTAL')
+                    """,
+                    (sid,),
+                ).fetchone()[0])
+            if has_parca and plan_sayisi:
+                uk = con.execute(
+                    """
+                    SELECT COALESCE(SUM(pr.uretilen_kg), 0)
+                    FROM nexgen_uretim_parca pr
+                    JOIN nexgen_uretim_plan p ON p.id = pr.plan_id
+                    WHERE p.planlama_siparis_id=?
+                      AND COALESCE(p.durum, '') NOT IN ('IPTAL')
+                    """,
+                    (sid,),
+                ).fetchone()
+                uretilen_kg = _fmt_num(uk[0] or 0)
+
         liste.append({
             'id': sid,
             'siparis_no': r['siparis_no'] or '',
@@ -291,10 +342,14 @@ def load_cari360_siparisler(
             'termin': _fmt_dt(termin),
             'toplam_kg': toplam_kg,
             'kalem_sayisi': kalem_sayisi,
+            'plan_sayisi': plan_sayisi,
+            'batch_sayisi': batch_sayisi,
+            'uretilen_kg': uretilen_kg,
             'son_sevkiyat_tarihi': _fmt_dt(son_sevk),
             'sevk_edilen_kg': sevk_kg,
             'kalan_kg': kalan_kg,
-            'detay_url': None,  # güvenli HTML detay route yok
+            'detay_url': f'/nexgen/pazarlama?siparis={sid}',
+            'cari360_url': f'/nexgen/cari360/{cid}?tab=siparisler',
         })
 
     return {'liste': liste, 'count': len(liste)}
@@ -367,6 +422,18 @@ def load_cari360_sevkiyatlar(
 
         # Tablo satırı: ilk kalem + expand için tüm kalemler
         ilk = kalemler[0] if kalemler else {'urun': '—', 'renk': '—', 'sevk_kg': 0}
+        batch_sayisi = 0
+        if siparis_id and _tablo_var(con, 'nexgen_uretim_plan') and _tablo_var(con, 'nexgen_uretim_batch'):
+            batch_sayisi = int(con.execute(
+                """
+                SELECT COUNT(*) FROM nexgen_uretim_batch b
+                JOIN nexgen_uretim_plan p ON p.id = b.plan_id
+                WHERE p.planlama_siparis_id=?
+                  AND COALESCE(p.durum, '') NOT IN ('IPTAL')
+                """,
+                (int(siparis_id),),
+            ).fetchone()[0])
+
         liste.append({
             'id': sevk_id,
             'sevkiyat_no': r['sevkiyat_no'] or '',
@@ -374,6 +441,10 @@ def load_cari360_sevkiyatlar(
             'tarih': _fmt_dt(r['sevk_tarihi'] or r['olusturma_tarihi']),
             'siparis_id': int(siparis_id) if siparis_id else None,
             'siparis_no': siparis_no or '',
+            'siparis_url': (
+                f'/nexgen/pazarlama?siparis={int(siparis_id)}' if siparis_id else None
+            ),
+            'batch_sayisi': batch_sayisi,
             'urun': ilk['urun'],
             'renk': ilk['renk'],
             'sevk_kg': _fmt_num(sevk_toplam_kg) or 0,
@@ -456,6 +527,122 @@ def load_cari360_urunler(
             'sevkiyat_sayisi': int(r['sevkiyat_sayisi'] or 0),
             'son_alis_tarihi': _fmt_dt(son_tarih),
             'son_alinan_kg': son_kg if son_kg is not None else 0,
+        })
+
+    return {'liste': liste, 'count': len(liste)}
+
+
+def load_cari360_uretim(
+    con: sqlite3.Connection,
+    cari_id: int,
+    kullanici_id: int,
+    yk: set[str] | None,
+    *,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """Üretim planı / batch / alt emir (parça) — cari_id üzerinden read-only."""
+    _assert_cari(con, cari_id, kullanici_id, yk)
+    cid = int(cari_id)
+    limit = max(1, min(int(limit or 50), 100))
+
+    try:
+        backfill_kalem_uretim_planlari(con, cari_id=cid, limit=200)
+        con.commit()
+    except Exception:
+        try:
+            con.rollback()
+        except Exception:
+            pass
+
+    if not _tablo_var(con, 'nexgen_uretim_plan'):
+        return {'liste': [], 'count': 0}
+
+    has_batch = _tablo_var(con, 'nexgen_uretim_batch')
+    has_parca = _tablo_var(con, 'nexgen_uretim_parca')
+    has_sip = _tablo_var(con, 'nexgen_planlama_siparis')
+    has_kalem = _tablo_var(con, 'nexgen_planlama_siparis_kalem')
+
+    rows = con.execute(
+        """
+        SELECT id, plan_kodu, durum, planlanan_kg, planlama_siparis_id,
+               siparis_no, rf_renk_id, renk_kodu, created_at, plan_tarihi
+        FROM nexgen_uretim_plan
+        WHERE cari_id=?
+          AND COALESCE(durum, '') NOT IN ('IPTAL')
+        ORDER BY COALESCE(plan_tarihi, created_at, '') DESC, id DESC
+        LIMIT ?
+        """,
+        (cid, limit),
+    ).fetchall()
+
+    liste: list[dict[str, Any]] = []
+    for r in rows:
+        pid = int(r['id'])
+        sid = r['planlama_siparis_id']
+        siparis_no = r['siparis_no'] or ''
+        if sid and has_sip and not siparis_no:
+            sn = con.execute(
+                'SELECT siparis_no FROM nexgen_planlama_siparis WHERE id=?',
+                (int(sid),),
+            ).fetchone()
+            if sn:
+                siparis_no = sn['siparis_no'] or ''
+
+        kalem_bagli = False
+        if has_kalem:
+            kalem_bagli = bool(con.execute(
+                'SELECT 1 FROM nexgen_planlama_siparis_kalem WHERE uretim_plan_id=? LIMIT 1',
+                (pid,),
+            ).fetchone())
+
+        batch_sayisi = 0
+        batch_kodlari: list[str] = []
+        if has_batch:
+            brows = con.execute(
+                """
+                SELECT id, batch_kodu FROM nexgen_uretim_batch
+                WHERE plan_id=? ORDER BY id
+                """,
+                (pid,),
+            ).fetchall()
+            batch_sayisi = len(brows)
+            batch_kodlari = [(b['batch_kodu'] or f"#{b['id']}") for b in brows[:3]]
+
+        alt_emir_sayisi = 0
+        hedef_kg = None
+        uretilen_kg = None
+        if has_parca:
+            pr = con.execute(
+                """
+                SELECT COUNT(*) AS n,
+                       COALESCE(SUM(hedef_kg), 0) AS hedef,
+                       COALESCE(SUM(uretilen_kg), 0) AS uretilen
+                FROM nexgen_uretim_parca
+                WHERE plan_id=?
+                """,
+                (pid,),
+            ).fetchone()
+            alt_emir_sayisi = int(pr['n'] or 0)
+            hedef_kg = _fmt_num(pr['hedef'])
+            uretilen_kg = _fmt_num(pr['uretilen'])
+
+        liste.append({
+            'id': pid,
+            'plan_kodu': r['plan_kodu'] or '',
+            'durum': r['durum'] or '',
+            'planlanan_kg': _fmt_num(r['planlanan_kg']),
+            'siparis_id': int(sid) if sid else None,
+            'siparis_no': siparis_no,
+            'renk': r['renk_kodu'] or '',
+            'rf_renk_id': r['rf_renk_id'],
+            'kalem_bagli': kalem_bagli,
+            'batch_sayisi': batch_sayisi,
+            'batch_kodlari': batch_kodlari,
+            'alt_emir_sayisi': alt_emir_sayisi,
+            'hedef_kg': hedef_kg,
+            'uretilen_kg': uretilen_kg,
+            'tarih': _fmt_dt(r['plan_tarihi'] or r['created_at']),
+            'siparis_url': f'/nexgen/pazarlama?siparis={int(sid)}' if sid else None,
         })
 
     return {'liste': liste, 'count': len(liste)}

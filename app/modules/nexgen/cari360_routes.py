@@ -21,6 +21,7 @@ from modules.nexgen.cari360_ops_read_service import (
     load_cari360_ozet,
     load_cari360_sevkiyatlar,
     load_cari360_siparisler,
+    load_cari360_uretim,
     load_cari360_urunler,
 )
 from modules.nexgen.cari360_yetki import can_cari360_dosya_ekrani
@@ -37,7 +38,7 @@ from modules.nexgen.mo_gorusme_service import (
 )
 
 _CARI360_TABS = (
-    'genel', 'yetkililer', 'siparisler', 'sevkiyatlar', 'urunler', 'gorusmeler',
+    'genel', 'yetkililer', 'siparisler', 'uretim', 'sevkiyatlar', 'urunler', 'gorusmeler',
 )
 
 
@@ -151,6 +152,11 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
     @login_gerekli
     def api_cari360_siparisler(cari_id):
         return _ops_json(load_cari360_siparisler, cari_id)
+
+    @bp.route('/api/cari360/<int:cari_id>/uretim', methods=['GET'])
+    @login_gerekli
+    def api_cari360_uretim(cari_id):
+        return _ops_json(load_cari360_uretim, cari_id)
 
     @bp.route('/api/cari360/<int:cari_id>/sevkiyatlar', methods=['GET'])
     @login_gerekli

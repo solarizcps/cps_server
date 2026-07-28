@@ -50,6 +50,8 @@
     </button>
     <button type="button" class="ckart-sekme{% if aktif_tab == 'siparisler' %} aktif{% endif %}"
             data-tab="siparisler" onclick="ckartTab('siparisler')">Sipariş Geçmişi</button>
+    <button type="button" class="ckart-sekme{% if aktif_tab == 'uretim' %} aktif{% endif %}"
+            data-tab="uretim" onclick="ckartTab('uretim')">Üretim</button>
     <button type="button" class="ckart-sekme{% if aktif_tab == 'sevkiyatlar' %} aktif{% endif %}"
             data-tab="sevkiyatlar" onclick="ckartTab('sevkiyatlar')">Sevkiyatlar</button>
     <button type="button" class="ckart-sekme{% if aktif_tab == 'urunler' %} aktif{% endif %}"
@@ -112,14 +114,40 @@
             <th>Sipariş Tarihi</th>
             <th>Durum</th>
             <th>Termin</th>
-            <th>Toplam KG</th>
+            <th>Plan</th>
+            <th>Batch</th>
+            <th>Üretilen KG</th>
             <th>Kalem</th>
             <th>Son Sevkiyat</th>
             <th>Sevk KG</th>
-            <th>Kalan KG</th>
+            <th style="text-align:right">İşlem</th>
           </tr>
         </thead>
         <tbody id="ckart-siparis-tbody">
+          <tr><td colspan="11" class="ckart-muted">Sekme açıldığında yüklenecek.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="ckart-panel-uretim" class="ckart-panel"{% if aktif_tab != 'uretim' %} style="display:none"{% endif %}>
+    <h2 class="ckart-h2">Üretim</h2>
+    <div class="ckart-tablo-wrap">
+      <table class="ckart-tablo" id="ckart-uretim-tablo">
+        <thead>
+          <tr>
+            <th>Plan</th>
+            <th>Sipariş</th>
+            <th>Durum</th>
+            <th>Batch</th>
+            <th>Alt Emir</th>
+            <th>Hedef KG</th>
+            <th>Üretilen KG</th>
+            <th>Kalem Bağ</th>
+            <th style="text-align:right">İşlem</th>
+          </tr>
+        </thead>
+        <tbody id="ckart-uretim-tbody">
           <tr><td colspan="9" class="ckart-muted">Sekme açıldığında yüklenecek.</td></tr>
         </tbody>
       </table>
@@ -135,6 +163,7 @@
             <th>Sevkiyat / İrsaliye</th>
             <th>Tarih</th>
             <th>Sipariş No</th>
+            <th>Batch</th>
             <th>Ürün</th>
             <th>Renk</th>
             <th>Sevk KG</th>
@@ -142,7 +171,7 @@
           </tr>
         </thead>
         <tbody id="ckart-sevk-tbody">
-          <tr><td colspan="7" class="ckart-muted">Sekme açıldığında yüklenecek.</td></tr>
+          <tr><td colspan="8" class="ckart-muted">Sekme açıldığında yüklenecek.</td></tr>
         </tbody>
       </table>
     </div>
@@ -462,7 +491,7 @@
   var _cache = [];
   var _gorusmeCache = [];
   var _gIdem = null;
-  var _opsLoaded = { siparisler: false, sevkiyatlar: false, urunler: false };
+  var _opsLoaded = { siparisler: false, uretim: false, sevkiyatlar: false, urunler: false };
 
   function esc(s) {
     return String(s == null ? '' : s)
@@ -555,48 +584,95 @@
     var tb = document.getElementById('ckart-siparis-tbody');
     if (!tb) return;
     if (_opsLoaded.siparisler && !force) return;
-    tb.innerHTML = '<tr><td colspan="9" class="ckart-muted">Yükleniyor…</td></tr>';
+    tb.innerHTML = '<tr><td colspan="11" class="ckart-muted">Yükleniyor…</td></tr>';
     ckartFetchJson('/nexgen/api/cari360/' + CARI_ID + '/siparisler')
       .then(function(d) {
         if (!d || !d.ok) throw new Error((d && d.mesaj) || 'Yüklenemedi');
         var liste = d.liste || [];
         _opsLoaded.siparisler = true;
         if (!liste.length) {
-          tb.innerHTML = '<tr><td colspan="9" class="ckart-muted">Bu cari için sipariş kaydı yok.</td></tr>';
+          tb.innerHTML = '<tr><td colspan="11" class="ckart-muted">Bu cari için sipariş kaydı yok.</td></tr>';
           return;
         }
         tb.innerHTML = liste.map(function(s) {
+          var link = s.detay_url
+            ? '<a class="ckart-link" href="' + esc(s.detay_url) + '">Pazarlama</a>'
+            : '—';
           return '<tr>'
             + '<td><strong>' + esc(s.siparis_no || '—') + '</strong></td>'
             + '<td>' + esc(dash(s.siparis_tarihi)) + '</td>'
             + '<td>' + esc(dash(s.durum)) + '</td>'
             + '<td>' + esc(dash(s.termin)) + '</td>'
-            + '<td>' + esc(dash(s.toplam_kg)) + '</td>'
+            + '<td>' + esc(s.plan_sayisi != null ? s.plan_sayisi : 0) + '</td>'
+            + '<td>' + esc(s.batch_sayisi != null ? s.batch_sayisi : 0) + '</td>'
+            + '<td>' + esc(dash(s.uretilen_kg)) + '</td>'
             + '<td>' + esc(s.kalem_sayisi != null ? s.kalem_sayisi : 0) + '</td>'
             + '<td>' + esc(dash(s.son_sevkiyat_tarihi)) + '</td>'
             + '<td>' + esc(dash(s.sevk_edilen_kg)) + '</td>'
-            + '<td>' + esc(dash(s.kalan_kg)) + '</td>'
+            + '<td style="text-align:right;white-space:nowrap">' + link + '</td>'
             + '</tr>';
         }).join('');
       })
       .catch(function(e) {
         console.error('Cari360 siparişler', e);
-        tb.innerHTML = '<tr><td colspan="9" class="ckart-muted">Sipariş geçmişi yüklenemedi. Lütfen yeniden deneyin.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="11" class="ckart-muted">Sipariş geçmişi yüklenemedi. Lütfen yeniden deneyin.</td></tr>';
       });
   };
+
+  window.ckartUretimYukle = function(force) {
+    var tb = document.getElementById('ckart-uretim-tbody');
+    if (!tb) return;
+    if (_opsLoaded.uretim && !force) return;
+    tb.innerHTML = '<tr><td colspan="9" class="ckart-muted">Yükleniyor…</td></tr>';
+    ckartFetchJson('/nexgen/api/cari360/' + CARI_ID + '/uretim')
+      .then(function(d) {
+        if (!d || !d.ok) throw new Error((d && d.mesaj) || 'Yüklenemedi');
+        var liste = d.liste || [];
+        _opsLoaded.uretim = true;
+        if (!liste.length) {
+          tb.innerHTML = '<tr><td colspan="9" class="ckart-muted">Bu cari için üretim planı yok.</td></tr>';
+          return;
+        }
+        tb.innerHTML = liste.map(function(u) {
+          var batch = (u.batch_sayisi || 0);
+          if ((u.batch_kodlari || []).length) {
+            batch = batch + ' <span class="ckart-pill-pasif">' + esc((u.batch_kodlari || []).join(', ')) + '</span>';
+          }
+          var link = u.siparis_url
+            ? '<a class="ckart-link" href="' + esc(u.siparis_url) + '">Sipariş</a>'
+            : '—';
+          return '<tr>'
+            + '<td><strong>' + esc(u.plan_kodu || '—') + '</strong></td>'
+            + '<td>' + esc(dash(u.siparis_no)) + '</td>'
+            + '<td>' + esc(dash(u.durum)) + '</td>'
+            + '<td>' + batch + '</td>'
+            + '<td>' + esc(u.alt_emir_sayisi != null ? u.alt_emir_sayisi : 0) + '</td>'
+            + '<td>' + esc(dash(u.hedef_kg != null ? u.hedef_kg : u.planlanan_kg)) + '</td>'
+            + '<td><strong>' + esc(dash(u.uretilen_kg)) + '</strong></td>'
+            + '<td>' + (u.kalem_bagli ? 'Evet' : '—') + '</td>'
+            + '<td style="text-align:right">' + link + '</td>'
+            + '</tr>';
+        }).join('');
+      })
+      .catch(function(e) {
+        console.error('Cari360 üretim', e);
+        tb.innerHTML = '<tr><td colspan="9" class="ckart-muted">Üretim yüklenemedi. Lütfen yeniden deneyin.</td></tr>';
+      });
+  };
+
 
   window.ckartSevkYukle = function(force) {
     var tb = document.getElementById('ckart-sevk-tbody');
     if (!tb) return;
     if (_opsLoaded.sevkiyatlar && !force) return;
-    tb.innerHTML = '<tr><td colspan="7" class="ckart-muted">Yükleniyor…</td></tr>';
+    tb.innerHTML = '<tr><td colspan="8" class="ckart-muted">Yükleniyor…</td></tr>';
     ckartFetchJson('/nexgen/api/cari360/' + CARI_ID + '/sevkiyatlar')
       .then(function(d) {
         if (!d || !d.ok) throw new Error((d && d.mesaj) || 'Yüklenemedi');
         var liste = d.liste || [];
         _opsLoaded.sevkiyatlar = true;
         if (!liste.length) {
-          tb.innerHTML = '<tr><td colspan="7" class="ckart-muted">Bu cari için sevkiyat kaydı yok.</td></tr>';
+          tb.innerHTML = '<tr><td colspan="8" class="ckart-muted">Bu cari için sevkiyat kaydı yok.</td></tr>';
           return;
         }
         var html = [];
@@ -608,10 +684,15 @@
           if ((s.kalem_sayisi || 0) > 1) {
             urun += ' <span class="ckart-pill-pasif">+' + (s.kalem_sayisi - 1) + ' kalem</span>';
           }
+          var sipHtml = esc(dash(s.siparis_no));
+          if (s.siparis_url) {
+            sipHtml = '<a class="ckart-link" href="' + esc(s.siparis_url) + '">' + esc(dash(s.siparis_no)) + '</a>';
+          }
           html.push('<tr>'
             + '<td><strong>' + no + '</strong></td>'
             + '<td>' + esc(dash(s.tarih)) + '</td>'
-            + '<td>' + esc(dash(s.siparis_no)) + '</td>'
+            + '<td>' + sipHtml + '</td>'
+            + '<td>' + esc(s.batch_sayisi != null ? s.batch_sayisi : 0) + '</td>'
             + '<td>' + urun + '</td>'
             + '<td>' + renk + '</td>'
             + '<td><strong>' + esc(dash(s.sevk_kg)) + '</strong></td>'
@@ -620,7 +701,7 @@
           if ((s.kalemler || []).length > 1) {
             s.kalemler.forEach(function(k) {
               html.push('<tr class="ckart-sevk-sub">'
-                + '<td></td><td></td><td></td>'
+                + '<td></td><td></td><td></td><td></td>'
                 + '<td>' + esc(k.urun || '—') + '</td>'
                 + '<td>' + esc(k.renk || '—') + '</td>'
                 + '<td>' + esc(dash(k.sevk_kg)) + '</td>'
@@ -632,7 +713,7 @@
       })
       .catch(function(e) {
         console.error('Cari360 sevkiyatlar', e);
-        tb.innerHTML = '<tr><td colspan="7" class="ckart-muted">Sevkiyatlar yüklenemedi. Lütfen yeniden deneyin.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="8" class="ckart-muted">Sevkiyatlar yüklenemedi. Lütfen yeniden deneyin.</td></tr>';
       });
   };
 
@@ -675,6 +756,7 @@
       genel: 'ckart-panel-genel',
       yetkililer: 'ckart-panel-yetkililer',
       siparisler: 'ckart-panel-siparisler',
+      uretim: 'ckart-panel-uretim',
       sevkiyatlar: 'ckart-panel-sevkiyatlar',
       urunler: 'ckart-panel-urunler',
       gorusmeler: 'ckart-panel-gorusmeler'
@@ -691,6 +773,7 @@
     if (tab === 'yetkililer') ckartYetkiliYukle();
     if (tab === 'gorusmeler') ckartGorusmeYukle();
     if (tab === 'siparisler') ckartSiparisYukle();
+    if (tab === 'uretim') ckartUretimYukle();
     if (tab === 'sevkiyatlar') ckartSevkYukle();
     if (tab === 'urunler') ckartUrunYukle();
   };
@@ -699,6 +782,7 @@
   try {
     var initTab = (new URL(window.location.href)).searchParams.get('tab') || '{{ aktif_tab }}';
     if (initTab === 'siparisler') ckartSiparisYukle();
+    if (initTab === 'uretim') ckartUretimYukle();
     if (initTab === 'sevkiyatlar') ckartSevkYukle();
     if (initTab === 'urunler') ckartUrunYukle();
   } catch (e) {}

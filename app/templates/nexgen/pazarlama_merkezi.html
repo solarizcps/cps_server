@@ -3314,7 +3314,14 @@ function pzmDetayRender(t) {
 
   var no = t.siparis_no || ('T-' + t.id);
   var noEl = $id('pzm-detay-no');
-  if (noEl) noEl.textContent = no;
+  if (noEl) {
+    noEl.textContent = no;
+    if (t.cari_id) {
+      var c360 = '/nexgen/cari360/' + t.cari_id + '?tab=siparisler';
+      noEl.innerHTML = pzmEsc(no)
+        + ' <a class="pzm-link" href="' + c360 + '" title="Cari 360" style="margin-left:8px;font-size:12px;font-weight:600;color:#92400e;text-decoration:underline">Cari 360 →</a>';
+    }
+  }
   pzmDetayAdminSilBtnGuncelle(t);
 
   var wrap = $id('pzm-detay-asamalar');
@@ -4404,6 +4411,15 @@ window.pzmTalepYukle = function(id) {
   var fd  = $id('pzm-fil-durum'); if (fd)  fd.value   = '';
   var tk  = $id('pzm-fil-temizle'); if (tk) tk.style.display = 'none';
 
+  // Cari360 deep-link query
+  var deepSiparis = null;
+  try {
+    var qs = new URLSearchParams(window.location.search || '');
+    deepSiparis = parseInt(qs.get('siparis') || qs.get('talep') || '', 10) || null;
+    var deepCari = parseInt(qs.get('cari_id') || '', 10) || null;
+    if (deepCari && fc) fc.value = String(deepCari);
+  } catch (e) {}
+
   // Tablo başlangıç doldur
   pzmTabloRender(_pzmTalepCache || []);
   pzmBadgeGuncelle(true);
@@ -4420,6 +4436,28 @@ window.pzmTalepYukle = function(id) {
   pzmYeniMprRender();
   pzmAkkSifirla();
   pzmTalepListesiYenile();
+
+  if (deepSiparis) {
+    var tries = 0;
+    var tmr = setInterval(function() {
+      tries += 1;
+      if (_pzmListeBusy && tries < 60) return;
+      clearInterval(tmr);
+      var hit = pzmTalepBul(deepSiparis);
+      if (hit) { pzmDetayAc(deepSiparis); return; }
+      fetch('/nexgen/api/pazarlama/talepler?per_page=50&q=' + encodeURIComponent(String(deepSiparis)))
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          if (!d || !d.ok) return;
+          var t0 = (d.liste || []).find(function(x){ return Number(x.id) === deepSiparis; });
+          if (t0) {
+            if (!pzmTalepBul(t0.id)) _pzmTalepCache.unshift(t0);
+            pzmDetayAc(t0.id);
+          }
+        })
+        .catch(function(){});
+    }, 150);
+  }
 })();
 
 })();
