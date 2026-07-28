@@ -504,6 +504,315 @@
   .home-enj-kpi > div:nth-child(2n) { border-right: none; }
   .home-enj-mtabs { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* HOME_NEXGEN_ANA_OZET_V4 — referans 3 kolon dashboard iskeleti; scoped */
+.home-dashboard:has(#homeNexgenSec.active) {
+  max-width: 1580px;
+  width: calc(100% - 24px);
+}
+/* Üst KPI ↔ dashboard: ~16–20 px dikey kazanım */
+.home-dashboard:has(#homeNexgenSec.active) .home-hizli { margin-bottom: 3px; }
+.home-dashboard:has(#homeNexgenSec.active) .home-workspace { padding-top: 3px; padding-bottom: 8px; }
+.home-nx-sec {
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  --nx-ink: #172033;
+  --nx-muted: #667085;
+  --nx-bg: #F3F5F7;
+  --nx-card: #FFFFFF;
+  --nx-line: #DDE2E7;
+  --nx-accent: #FF6A00;
+  --nx-ok: #12B76A;
+  --nx-purple: #7A5AF8;
+  --nx-blue: #2E90FA;
+  --nx-warn: #F04438;
+  --nx-sh: 0 2px 8px rgba(25, 35, 45, .06);
+  background: var(--nx-bg);
+  border: 1px solid var(--nx-line);
+  border-radius: 10px;
+  padding: 8px 14px 10px;
+  box-sizing: border-box;
+}
+.home-nx-loading, .home-nx-err {
+  padding: 40px 16px; text-align: center; color: var(--nx-muted); font-size: 13px; font-weight: 500;
+}
+.home-nx-err { color: var(--nx-warn); }
+
+/* Alt / genel nx-kpi kart dili (üst şerit homeDashKpis; içeride tekrar yok) */
+.nx-kpi {
+  background: var(--nx-card); border: 1px solid var(--nx-line); border-radius: 8px;
+  box-shadow: var(--nx-sh); padding: 12px 12px 11px; min-height: 98px; box-sizing: border-box;
+}
+.nx-kpi-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.nx-kpi-ico {
+  width: 28px; height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center;
+  background: #FFF4EB; color: var(--nx-accent); flex-shrink: 0;
+}
+.nx-kpi.a-green .nx-kpi-ico { background: #ECFDF3; color: var(--nx-ok); }
+.nx-kpi.a-purple .nx-kpi-ico { background: #F4F3FF; color: var(--nx-purple); }
+.nx-kpi.a-blue .nx-kpi-ico { background: #EFF8FF; color: var(--nx-blue); }
+.nx-kpi.a-red .nx-kpi-ico { background: #FEF3F2; color: var(--nx-warn); }
+.nx-kpi.a-orange .nx-kpi-ico { background: #FFF4EB; color: var(--nx-accent); }
+.nx-kpi-ico svg { width: 14px; height: 14px; }
+.nx-kpi-l { font-size: 11px; font-weight: 600; color: var(--nx-muted); line-height: 1.2; }
+.nx-kpi-v { font-size: 24px; font-weight: 700; color: var(--nx-ink); letter-spacing: -.35px; line-height: 1.1; }
+.nx-kpi-s { font-size: 11px; color: var(--nx-muted); margin-top: 4px; line-height: 1.3; }
+.nx-kpi-s .up { color: var(--nx-ok); font-weight: 600; }
+.nx-kpi-s .down { color: var(--nx-warn); font-weight: 600; }
+/* NexGen aktif: üst şerit 6 KPI + tarih — daha güçlü kart */
+.home-dashboard:has(#homeNexgenSec.active) .home-dash-kpi {
+  padding: 12px 10px 11px; min-height: 74px; box-sizing: border-box;
+}
+.home-dashboard:has(#homeNexgenSec.active) .home-dash-kpi .l {
+  font-size: 10px; font-weight: 700; letter-spacing: .2px; color: #475467;
+  display: flex; align-items: center; gap: 6px; line-height: 1.2;
+}
+.home-dashboard:has(#homeNexgenSec.active) .home-dash-kpi .l .di {
+  width: 18px; height: 18px; border-radius: 5px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #FFF4EB; color: #FF6A00;
+}
+.home-dashboard:has(#homeNexgenSec.active) .home-dash-kpi .l .di svg { width: 11px; height: 11px; display: block; }
+.home-dashboard:has(#homeNexgenSec.active) .home-dash-kpi.a-purple .l .di { background: #F4F3FF; color: #7A5AF8; }
+.home-dashboard:has(#homeNexgenSec.active) .home-dash-kpi.a-blue .l .di { background: #EFF8FF; color: #2E90FA; }
+.home-dashboard:has(#homeNexgenSec.active) .home-dash-kpi.a-green .l .di { background: #ECFDF3; color: #12B76A; }
+.home-dashboard:has(#homeNexgenSec.active) .home-dash-kpi.a-red .l .di { background: #FEF3F2; color: #F04438; }
+.home-dashboard:has(#homeNexgenSec.active) .home-dash-kpi .v {
+  font-size: 18px; font-weight: 800; margin-top: 5px; letter-spacing: -.3px;
+}
+.home-dashboard:has(#homeNexgenSec.active) .home-dash-kpi .u {
+  font-size: 10px; color: #98A2B3; margin-top: 2px;
+}
+.home-dashboard:has(#homeNexgenSec.active) .home-dash-kpi .u .up { color: var(--h-ok, #12B76A); font-weight: 600; }
+.home-dashboard:has(#homeNexgenSec.active) .home-dash-kpi .u .down { color: #F04438; font-weight: 600; }
+
+/* C) Ana 3 kolon — sol ~31 / orta ~43 / sağ ~26 */
+.nx-ops {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.45fr) minmax(0, .90fr);
+  gap: 12px; margin-bottom: 12px; align-items: stretch;
+}
+.nx-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.nx-panel {
+  background: var(--nx-card); border: 1px solid var(--nx-line); border-radius: 8px;
+  box-shadow: var(--nx-sh); padding: 14px 14px 12px; box-sizing: border-box;
+}
+.nx-panel-hero { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 340px; }
+.nx-panel-title {
+  margin: 0 0 12px; font-size: 15px; font-weight: 600; color: var(--nx-ink);
+  text-transform: uppercase; letter-spacing: .2px; line-height: 1.3;
+}
+.nx-col-left .nx-panel-title,
+.nx-col-right .nx-panel-title,
+.nx-col-mid .nx-panel-title {
+  font-size: 15px; font-weight: 600; letter-spacing: .2px; margin-bottom: 14px;
+}
+.nx-col-mid .nx-panel-hero .nx-panel-title {
+  font-size: 16px; font-weight: 600; letter-spacing: .2px; margin-bottom: 14px;
+}
+.nx-empty {
+  font-size: 13px; color: var(--nx-muted); padding: 28px 8px; text-align: center; line-height: 1.45;
+}
+
+.nx-vbars {
+  display: flex; align-items: flex-end; justify-content: center; gap: 8px;
+  height: 148px; padding: 6px 6px 0; max-width: 100%; margin: 0 auto;
+}
+.nx-vbars .c {
+  flex: 1; min-width: 0; max-width: 42px; height: 100%; display: flex; flex-direction: column;
+  align-items: center; justify-content: flex-end;
+}
+.nx-vbars .val { font-size: 11px; font-weight: 600; color: var(--nx-ink); margin-bottom: 3px; }
+.nx-vbars .b {
+  width: 100%; max-width: 36px; min-height: 3px; border-radius: 4px 4px 1px 1px; background: #FDBA74;
+}
+.nx-vbars .c.is-today .b { background: var(--nx-accent); }
+.nx-vbars .d { font-size: 11px; color: var(--nx-muted); margin-top: 6px; white-space: nowrap; }
+
+/* Donut + legend */
+.nx-donut-wrap {
+  display: flex; gap: 16px; align-items: center; justify-content: center;
+  padding: 2px 4px 4px;
+}
+.nx-donut {
+  width: 131px; height: 131px; border-radius: 50%; flex-shrink: 0;
+  background: conic-gradient(#ccc 0 100%);
+  -webkit-mask: radial-gradient(circle 46px at center, transparent 98%, #000 100%);
+  mask: radial-gradient(circle 46px at center, transparent 98%, #000 100%);
+}
+.nx-legend { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.nx-legend .row {
+  display: grid; grid-template-columns: 9px minmax(0, 1fr) auto minmax(36px, auto);
+  align-items: baseline; gap: 8px; font-size: 13px; color: var(--nx-ink);
+}
+.nx-legend .sw { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; align-self: center; }
+.nx-legend .nm {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600;
+}
+.nx-legend .kg { font-weight: 800; white-space: nowrap; color: var(--nx-ink); }
+.nx-legend .pc {
+  color: var(--nx-muted); white-space: nowrap; font-size: 12px; font-weight: 600;
+  text-align: right; justify-self: end;
+}
+
+/* Timeline — ekranın merkezi */
+.nx-tl { list-style: none; margin: 0; padding: 2px 0 0; flex: 1; overflow: auto; max-height: 400px; }
+.nx-panel-hero .nx-tl { max-height: none; }
+.nx-tl li {
+  display: grid; grid-template-columns: 54px 26px minmax(0, 1fr) auto;
+  gap: 10px; align-items: start; padding: 0 0 26px;
+}
+.nx-tl li:last-child { padding-bottom: 2px; }
+.nx-tl .tm {
+  width: 54px; font-size: 12px; font-weight: 700; color: #667085;
+  text-align: right; font-variant-numeric: tabular-nums; padding-top: 5px; letter-spacing: .25px;
+}
+.nx-tl .rail { position: relative; display: flex; justify-content: center; }
+.nx-tl .rail::before {
+  content: ''; position: absolute; top: 14px; bottom: -26px; left: 50%; width: 3px;
+  background: #D0D5DD; transform: translateX(-50%);
+}
+.nx-tl li:last-child .rail::before { display: none; }
+.nx-tl .dot {
+  width: 13px; height: 13px; border-radius: 50%; margin-top: 5px; z-index: 1;
+  background: var(--nx-accent); box-shadow: 0 0 0 4px #FFF4EB;
+}
+.nx-tl .dot.t-uretim { background: var(--nx-accent); box-shadow: 0 0 0 4px #FFF4EB; }
+.nx-tl .dot.t-sevk { background: var(--nx-ok); box-shadow: 0 0 0 4px #ECFDF3; }
+.nx-tl .dot.t-rf { background: var(--nx-purple); box-shadow: 0 0 0 4px #F4F3FF; }
+.nx-tl .dot.t-numune { background: var(--nx-blue); box-shadow: 0 0 0 4px #EFF8FF; }
+.nx-tl .tt { font-size: 17px; font-weight: 800; color: var(--nx-ink); line-height: 1.28; letter-spacing: -.25px; }
+.nx-tl .st { font-size: 10px; color: #98A2B3; margin-top: 3px; line-height: 1.35; }
+.nx-tl .tag {
+  font-size: 7.5px; font-weight: 600; border-radius: 4px; padding: 1px 4px; white-space: nowrap;
+  color: var(--nx-muted); background: #F2F4F7; margin-top: 5px; line-height: 1.25;
+  letter-spacing: .05px;
+}
+.nx-tl .tag.t-uretim { color: #B54708; background: #FFF4EB; }
+.nx-tl .tag.t-sevk { color: #027A48; background: #ECFDF3; }
+.nx-tl .tag.t-rf { color: #5925DC; background: #F4F3FF; }
+.nx-tl .tag.t-numune { color: #175CD3; background: #EFF8FF; }
+
+/* Üretim zinciri */
+.nx-chain {
+  display: flex; flex-wrap: nowrap; align-items: stretch; gap: 6px; overflow-x: auto;
+}
+.nx-chain .step {
+  flex: 1 1 0; min-width: 95px; text-align: center;
+  background: #F8FAFC; border: 1px solid #D0D5DD; border-radius: 8px; padding: 14px 6px 12px;
+}
+.nx-chain .n { font-size: 26px; font-weight: 800; color: var(--nx-ink); letter-spacing: -.5px; line-height: 1.05; }
+.nx-chain .lb { font-size: 11px; font-weight: 700; color: var(--nx-ink); margin-top: 5px; }
+.nx-chain .nt { font-size: 8.5px; color: #98A2B3; margin-top: 2px; line-height: 1.2; }
+.nx-chain .arr {
+  flex: 0 0 auto; align-self: center; color: #344054; font-size: 19px; font-weight: 800;
+  padding: 0 3px; line-height: 1;
+}
+
+/* Sağ kolon */
+.nx-stat { display: flex; flex-direction: column; }
+.nx-stat .row {
+  display: grid; grid-template-columns: 26px minmax(0, 1fr) minmax(80px, max-content);
+  gap: 8px; align-items: center; padding: 11px 0;
+  border-bottom: 1px solid #EEF1F4;
+}
+.nx-stat .row:first-child { padding-top: 0; }
+.nx-stat .row:last-child { border-bottom: 0; padding-bottom: 0; }
+.nx-stat .ic {
+  width: 26px; height: 26px; border-radius: 6px; background: #F2F4F7;
+  display: flex; align-items: center; justify-content: center; color: var(--nx-muted);
+}
+.nx-stat .ic svg { width: 13px; height: 13px; }
+.nx-stat .ic.ok { background: #ECFDF3; color: var(--nx-ok); }
+.nx-stat .ic.accent { background: #FFF4EB; color: var(--nx-accent); }
+.nx-stat .lb { font-size: 14px; font-weight: 700; color: var(--nx-ink); }
+.nx-stat .ss { font-size: 11px; color: #98A2B3; margin-top: 2px; }
+.nx-stat .vv {
+  font-size: 16px; font-weight: 800; color: var(--nx-ink); text-align: right; white-space: nowrap;
+  font-variant-numeric: tabular-nums; justify-self: end; min-width: 80px;
+}
+
+/* G) Alt 6 KPI */
+.nx-bot {
+  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-bottom: 8px;
+}
+.nx-bot .nx-kpi { min-height: 110px; padding: 15px 11px 13px; }
+.nx-bot .nx-kpi-head { margin-bottom: 12px; }
+.nx-bot .nx-kpi-v { font-size: 24px; }
+.nx-bot .nx-kpi.crit .nx-kpi-v { color: var(--nx-warn); }
+
+.home-nx-foot {
+  font-size: 11px; color: var(--nx-muted); text-align: center; padding: 6px 0 2px; line-height: 1.4;
+}
+
+@media (max-width: 1200px) {
+  .nx-bot { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .nx-ops { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .nx-col-right { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+}
+@media (max-width: 900px) {
+  .nx-bot { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .nx-ops { grid-template-columns: 1fr; }
+  .nx-col-right { grid-template-columns: 1fr; }
+}
+
+/* NEXGEN TYPOGRAPHY HIERARCHY — Inter only */
+.home-nx-sec {
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  --nx-ink: #172033;
+  --nx-muted: #667085;
+  --nx-hint: #7A8597;
+  color: var(--nx-ink);
+}
+.home-dashboard:has(#homeNexgenSec.active) .home-dash-kpis,
+.home-dashboard:has(#homeNexgenSec.active) .home-dash-kpi {
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+}
+.home-dashboard:has(#homeNexgenSec.active) .home-dash-kpi {
+  padding: 12px 11px 12px; min-height: 86px; box-sizing: border-box;
+}
+.home-dashboard:has(#homeNexgenSec.active) .home-dash-kpi .l {
+  font-size: 12px; font-weight: 600; letter-spacing: 0; color: #667085;
+  text-transform: none; display: flex; align-items: center; gap: 6px; line-height: 1.25;
+}
+.home-dashboard:has(#homeNexgenSec.active) .home-dash-kpi .v {
+  font-size: 28px; font-weight: 700; color: #172033; margin-top: 8px;
+  letter-spacing: -.4px; line-height: 1.15;
+}
+.home-dashboard:has(#homeNexgenSec.active) .home-dash-kpi.date .v {
+  font-size: 13px; font-weight: 600; line-height: 1.25; letter-spacing: 0; margin-top: 8px;
+}
+.home-dashboard:has(#homeNexgenSec.active) .home-dash-kpi .u {
+  font-size: 12px; font-weight: 400; color: #7A8597; margin-top: 6px; line-height: 1.3;
+}
+.nx-panel-title,
+.nx-col-left .nx-panel-title,
+.nx-col-right .nx-panel-title,
+.nx-col-mid .nx-panel-title {
+  font-size: 15px; font-weight: 600; color: #172033;
+  text-transform: uppercase; letter-spacing: .2px; line-height: 1.3;
+}
+.nx-col-mid .nx-panel-hero .nx-panel-title { font-size: 16px; font-weight: 600; letter-spacing: .2px; }
+.nx-kpi-l { font-size: 12px; font-weight: 600; color: #667085; text-transform: none; letter-spacing: 0; }
+.nx-kpi-v { font-size: 28px; font-weight: 700; color: #172033; letter-spacing: -.4px; line-height: 1.15; }
+.nx-kpi-s { font-size: 12px; font-weight: 400; color: #7A8597; margin-top: 6px; }
+.nx-bot .nx-kpi { min-height: 112px; padding: 14px 12px 13px; }
+.nx-bot .nx-kpi-head { margin-bottom: 10px; }
+.nx-bot .nx-kpi-v { font-size: 28px; font-weight: 700; }
+.nx-bot .nx-kpi-s { font-size: 11px; font-weight: 400; color: #7A8597; margin-top: 6px; }
+.nx-tl .tm { font-size: 13px; font-weight: 600; color: #667085; letter-spacing: 0; }
+.nx-tl .tt { font-size: 15px; font-weight: 600; color: #172033; letter-spacing: 0; line-height: 1.3; }
+.nx-tl .st { font-size: 12px; font-weight: 400; color: #667085; margin-top: 4px; }
+.nx-stat .lb { font-size: 13px; font-weight: 600; color: #172033; }
+.nx-stat .ss { font-size: 12px; font-weight: 400; color: #7A8597; }
+.nx-stat .vv { font-size: 20px; font-weight: 700; color: #172033; letter-spacing: -.3px; }
+.nx-chain .n { font-size: 28px; font-weight: 700; color: #172033; letter-spacing: -.4px; }
+.nx-chain .lb { font-size: 12px; font-weight: 600; color: #172033; }
+.nx-chain .nt { font-size: 11px; font-weight: 400; color: #7A8597; }
+.nx-legend .nm { font-weight: 600; font-size: 13px; color: #172033; }
+.nx-legend .kg { font-weight: 700; font-size: 13px; color: #172033; }
+.nx-legend .pc { font-weight: 400; font-size: 12px; color: #7A8597; }
+.home-nx-foot { font-size: 12px; font-weight: 400; color: #7A8597; }
+
 </style>
 {% endblock %}
 
@@ -535,7 +844,7 @@
       </button>
       <button type="button" role="tab" data-panel="nexgen">
         <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg></span>
-        <span class="tx"><span class="lbl">NexGen</span><span class="sub">Yakında</span></span>
+        <span class="tx"><span class="lbl">NexGen</span><span class="sub">Ana Özet</span></span>
       </button>
       <button type="button" role="tab" data-panel="hedef">
         <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg></span>
@@ -578,9 +887,10 @@
       </div>
     </section>
 
-    <section class="home-panel home-placeholder" id="homeNexgenSec" aria-label="NexGen">
-      <div class="ph-t">NexGen</div>
-      <div class="ph-s">Yakında — bu çalışma alanına eklenecek</div>
+    <section class="home-panel home-nx-sec" id="homeNexgenSec" aria-label="NexGen Ana Özet">
+      <div class="home-nx-loading" id="homeNxLoading">NexGen özeti yükleniyor…</div>
+      <div class="home-nx-err" id="homeNxErr" hidden></div>
+      <div id="homeNxBody" style="display:none"></div>
     </section>
 
     <section class="home-panel home-placeholder" id="homeHedefSec" aria-label="Hedef CPS">
@@ -610,8 +920,13 @@
     enjAy: null,
     enjErr: false,
     enjLoaded: false,
-    korgun: null
+    korgun: null,
+    nexgen: null,
+    nexgenErr: false,
+    nexgenLoaded: false,
+    nexgenLoading: false
   };
+  var NX_COLORS = ['#FF6A00', '#6366F1', '#0EA5E9', '#12B76A', '#98A2B3', '#F59E0B'];
 
   function esc(s) {
     return String(s == null ? '' : s)
@@ -643,7 +958,32 @@
       (unit ? ('<div class="u">' + esc(unit) + '</div>') : '') +
     '</div>';
   }
-  function renderKpis() {
+    function nxIco(kind) {
+    var paths = {
+      factory: '<path d="M3 21h18M5 21V10l4 3V10l4 3V7h6v14"/>',
+      cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+      cube: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/>',
+      doc: '<path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>',
+      check: '<circle cx="12" cy="12" r="9"/><path d="M8 12l2.5 2.5L16 9"/>',
+      truck: '<path d="M3 7h11v10H3zM14 10h4l3 3v4h-7"/><circle cx="7" cy="18" r="1.5"/><circle cx="17" cy="18" r="1.5"/>',
+      palette: '<path d="M12 4a8 8 0 1 0 0 16h1.2a2.2 2.2 0 0 0 0-4.4H12"/><circle cx="8" cy="10" r="1"/><circle cx="10.5" cy="7.5" r="1"/><circle cx="14" cy="8" r="1"/>',
+      flask: '<path d="M9 3h6M10 3v5l-5 9a3 3 0 0 0 2.6 4.5h8.8A3 3 0 0 0 19 17l-5-9V3"/>',
+      book: '<path d="M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2V5z"/><path d="M6 19a2 2 0 0 1 2-2h10"/>',
+      tube: '<path d="M9 3h6M10 3v7l-3 8a3 3 0 0 0 2.8 4h4.4A3 3 0 0 0 17 18l-3-8V3"/>',
+      sync: '<path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/>',
+      alert: '<path d="M12 4l9 16H3L12 4z"/><path d="M12 10v4M12 16.5v.5"/>',
+      ship: '<path d="M4 14l8-4 8 4-8 5-8-5z"/><path d="M4 14v4l8 4 8-4v-4"/>'
+    };
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' + (paths[kind] || paths.doc) + '</svg>';
+  }
+  function nxKpiCard(label, value, subHtml, accent, ico) {
+    return '<div class="nx-kpi a-' + accent + '">' +
+      '<div class="nx-kpi-head"><span class="nx-kpi-ico" aria-hidden="true">' + nxIco(ico) + '</span>' +
+      '<span class="nx-kpi-l">' + esc(label) + '</span></div>' +
+      '<div class="nx-kpi-v">' + value + '</div>' +
+      '<div class="nx-kpi-s">' + subHtml + '</div></div>';
+  }
+function renderKpis() {
     var el = document.getElementById('homeDashKpis');
     if (!el) return;
     var clk = clockParts();
@@ -666,10 +1006,42 @@
       html += kpiCard('Proses Türü', s.proses_turu_sayisi == null ? 'Veri yok' : fmt(s.proses_turu_sayisi), 'tür');
       html += kpiCard('En Yoğun Proses', en ? esc(en.proses_adi || '—') : 'Veri yok', en ? (fmt(en.toplam_cift) + ' çift') : '', false, true);
     } else if (p === 'nexgen') {
-      html += kpiCard('Günlük Batch', 'Veri yok', '');
-      html += kpiCard('Bekleyen', 'Veri yok', '');
-      html += kpiCard('Tamamlanan', 'Veri yok', '');
-      html += kpiCard('Sevkiyat', 'Veri yok', '');
+      var nx = store.nexgen;
+      var pd = nx && nx.production && nx.production.available ? nx.production.data : null;
+      var sh = nx && nx.shipment && nx.shipment.available ? nx.shipment.data : null;
+      function nxTopVal(v) {
+        if (store.nexgenErr) return 'Veri alınamadı';
+        if (!store.nexgenLoaded) return '…';
+        if (v == null || v === '') return 'Veri yok';
+        return v;
+      }
+      function nxSubDelta(pct, fallback) {
+        if (pct == null) return fallback || '';
+        var n = Number(pct);
+        if (!isFinite(n)) return fallback || '';
+        var arrow = n >= 0 ? '↑' : '↓';
+        var txt = arrow + ' %' + Math.abs(n).toLocaleString('tr-TR', { maximumFractionDigits: 1 });
+        return fallback ? (txt + ' ' + fallback) : txt;
+      }
+      function nxDashKpi(label, value, unit, accent, ico) {
+        return '<div class="home-dash-kpi a-' + (accent || 'orange') + '">' +
+          '<div class="l"><span class="di" aria-hidden="true">' + nxIco(ico || 'factory') + '</span><span>' + esc(label) + '</span></div>' +
+          '<div class="v">' + value + '</div>' +
+          (unit ? ('<div class="u">' + unit + '</div>') : '') +
+        '</div>';
+      }
+      html += nxDashKpi('Bugün Üretim', nxTopVal(pd ? fmtTon(pd.bugun && pd.bugun.kg) : null),
+        esc(pd ? nxSubDelta(pd.bugun_vs_dun_pct, pd.bugun_vs_dun_pct != null ? 'dünden' : 'Gerçek üretim') : ''), 'orange', 'factory');
+      html += nxDashKpi('Bu Ay Üretim', nxTopVal(pd ? fmtTon(pd.ay && pd.ay.kg) : null),
+        esc(pd ? nxSubDelta(pd.ay_vs_onceki_pct, pd.ay_vs_onceki_pct != null ? 'geçen aya' : 'Gerçek üretim') : ''), 'orange', 'cal');
+      html += nxDashKpi('Aktif Batch', nxTopVal(pd && pd.aktif_batch != null ? fmt(pd.aktif_batch) : null),
+        esc(pd ? 'Devam eden üretim' : ''), 'purple', 'cube');
+      html += nxDashKpi('Devam Eden Alt Emir', nxTopVal(pd && pd.devam_eden_alt_emir != null ? fmt(pd.devam_eden_alt_emir) : null),
+        esc(pd ? 'Üretimde olan' : ''), 'blue', 'doc');
+      html += nxDashKpi('Tamamlanan Alt Emir', nxTopVal(pd && pd.tamamlanan_alt_emir_bugun != null ? fmt(pd.tamamlanan_alt_emir_bugun) : null),
+        esc(pd ? 'Bugün biten' : ''), 'green', 'check');
+      html += nxDashKpi('Bugün Sevkiyat', nxTopVal(sh ? fmtTon(sh.bugun_sevk && sh.bugun_sevk.kg) : null),
+        esc(sh && sh.bugun_sevkiyat_adet != null ? (fmt(sh.bugun_sevkiyat_adet) + ' sevkiyat') : (sh ? 'Gerçek sevkiyat' : '')), 'red', 'truck');
     } else {
       html += kpiCard('Hedef', 'Veri yok', '');
       html += kpiCard('Gerçekleşen', 'Veri yok', '');
@@ -678,6 +1050,333 @@
     }
     html += kpiCard('Tarih / Saat', esc(clk.tarih), clk.saat, true);
     el.innerHTML = html;
+  }
+  function fmtTon(kg) {
+    if (kg == null || kg === '') return null;
+    var t = Number(kg) / 1000;
+    if (!isFinite(t)) return null;
+    return t.toLocaleString('tr-TR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' ton';
+  }
+  function fmtKgShort(kg) {
+    var t = Number(kg) / 1000;
+    if (!isFinite(t)) return '—';
+    return t.toLocaleString('tr-TR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' t';
+  }
+  function fmtPctDelta(p) {
+    if (p == null || p === '') return '';
+    var n = Number(p);
+    if (!isFinite(n)) return '';
+    var arrow = n >= 0 ? '↑' : '↓';
+    var cls = n >= 0 ? 'up' : 'down';
+    return '<span class="s ' + cls + '">' + arrow + ' %' + Math.abs(n).toLocaleString('tr-TR', { maximumFractionDigits: 1 }) + '</span>';
+  }
+  function secData(sec) {
+    return (sec && sec.available && sec.data != null) ? sec.data : null;
+  }
+    function nxIco(kind) {
+    var paths = {
+      factory: '<path d="M3 21h18M5 21V10l4 3V10l4 3V7h6v14"/>',
+      cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+      cube: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/>',
+      doc: '<path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>',
+      check: '<circle cx="12" cy="12" r="9"/><path d="M8 12l2.5 2.5L16 9"/>',
+      truck: '<path d="M3 7h11v10H3zM14 10h4l3 3v4h-7"/><circle cx="7" cy="18" r="1.5"/><circle cx="17" cy="18" r="1.5"/>',
+      palette: '<path d="M12 4a8 8 0 1 0 0 16h1.2a2.2 2.2 0 0 0 0-4.4H12"/><circle cx="8" cy="10" r="1"/><circle cx="10.5" cy="7.5" r="1"/><circle cx="14" cy="8" r="1"/>',
+      flask: '<path d="M9 3h6M10 3v5l-5 9a3 3 0 0 0 2.6 4.5h8.8A3 3 0 0 0 19 17l-5-9V3"/>',
+      book: '<path d="M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2V5z"/><path d="M6 19a2 2 0 0 1 2-2h10"/>',
+      tube: '<path d="M9 3h6M10 3v7l-3 8a3 3 0 0 0 2.8 4h4.4A3 3 0 0 0 17 18l-3-8V3"/>',
+      sync: '<path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/>',
+      alert: '<path d="M12 4l9 16H3L12 4z"/><path d="M12 10v4M12 16.5v.5"/>',
+      ship: '<path d="M4 14l8-4 8 4-8 5-8-5z"/><path d="M4 14v4l8 4 8-4v-4"/>'
+    };
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' + (paths[kind] || paths.doc) + '</svg>';
+  }
+  function nxKpiCard(label, value, subHtml, accent, ico) {
+    return '<div class="nx-kpi a-' + accent + '">' +
+      '<div class="nx-kpi-head"><span class="nx-kpi-ico" aria-hidden="true">' + nxIco(ico) + '</span>' +
+      '<span class="nx-kpi-l">' + esc(label) + '</span></div>' +
+      '<div class="nx-kpi-v">' + value + '</div>' +
+      '<div class="nx-kpi-s">' + subHtml + '</div></div>';
+  }
+  function nxDonut(items) {
+    items = items || [];
+    if (!items.length) return '<div class="nx-empty">Bu dönemde üretim kaydı yok</div>';
+    var total = 0;
+    items.forEach(function (it) { total += Number(it.uretim_kg || 0); });
+    if (total <= 0) return '<div class="nx-empty">Bu dönemde üretim kaydı yok</div>';
+    var parts = [];
+    var acc = 0;
+    items.forEach(function (it, i) {
+      var pct = (Number(it.uretim_kg || 0) / total) * 100;
+      var c = NX_COLORS[i % NX_COLORS.length];
+      parts.push(c + ' ' + acc.toFixed(2) + '% ' + (acc + pct).toFixed(2) + '%');
+      acc += pct;
+    });
+    var legend = items.map(function (it, i) {
+      var nm = it.cari_adi || it.urun_tipi_label || it.urun_tipi || '—';
+      return '<div class="row"><span class="sw" style="background:' + NX_COLORS[i % NX_COLORS.length] + '"></span>' +
+        '<span class="nm" title="' + esc(nm) + '">' + esc(nm) + '</span>' +
+        '<span class="kg">' + esc(fmtTon(it.uretim_kg) || '0,0 ton') + '</span>' +
+        '<span class="pc">%' + Number(it.pay_yuzde || 0).toLocaleString('tr-TR', { maximumFractionDigits: 1 }) + '</span></div>';
+    }).join('');
+    return '<div class="nx-donut-wrap"><div class="nx-donut" style="background:conic-gradient(' + parts.join(',') + ')"></div>' +
+      '<div class="nx-legend">' + legend + '</div></div>';
+  }
+  function nxTrendBars(trend) {
+    trend = trend || [];
+    var max = 0;
+    trend.forEach(function (d) { max = Math.max(max, Number(d.kg || 0)); });
+    if (!trend.length || max <= 0) return '<div class="nx-empty">Bu dönemde üretim kaydı yok</div>';
+    var today = (store.nexgen && store.nexgen.period && store.nexgen.period.today) || '';
+    return '<div class="nx-vbars">' + trend.map(function (d) {
+      var h = Math.max(4, Math.round((Number(d.kg || 0) / max) * 100));
+      var isT = d.tarih === today;
+      var lbl = '';
+      try {
+        var p = String(d.tarih || '').split('-');
+        lbl = (p[2] || '') + ' ' + (TR_AY[Number(p[1]) - 1] || '').slice(0, 3);
+      } catch (e) { lbl = d.tarih; }
+      return '<div class="c' + (isT ? ' is-today' : '') + '">' +
+        '<div class="val">' + esc(fmtTon(d.kg) || '0,0 ton') + '</div>' +
+        '<div class="b" style="height:' + h + '%"></div>' +
+        '<div class="d">' + esc(lbl) + '</div></div>';
+    }).join('') + '</div>';
+  }
+  function nxEventTone(type) {
+    type = String(type || '');
+    if (type.indexOf('sevk') >= 0) return 't-sevk';
+    if (type.indexOf('rf') >= 0 || type.indexOf('renk') >= 0) return 't-rf';
+    if (type.indexOf('numune') >= 0) return 't-numune';
+    return 't-uretim';
+  }
+  function nxEventBadge(type) {
+    type = String(type || '');
+    if (type.indexOf('sevk') >= 0) return 'Sevkiyat';
+    if (type.indexOf('rf') >= 0) return 'RF';
+    if (type.indexOf('renk') >= 0) return 'Renk';
+    if (type.indexOf('numune') >= 0) return 'Numune';
+    if (type.indexOf('alt_emir') >= 0) return 'Alt Emir';
+    return 'Üretim';
+  }
+  
+  function nxShortName(name, maxLen) {
+    name = String(name || '').trim();
+    if (!name) return '';
+    maxLen = maxLen || 32;
+    return name.length > maxLen ? (name.slice(0, maxLen - 1) + '…') : name;
+  }
+  function nxEventTitle(ev) {
+    var t = String(ev.event_type || '');
+    var cari = nxShortName(ev.cari, 34);
+    var kg = Number(ev.amount_kg || 0);
+    if (t.indexOf('sevk') >= 0) return cari ? (cari + ' sevkiyatı tamamlandı') : 'Sevkiyat tamamlandı';
+    if (t.indexOf('rf') >= 0) return 'RF formülü onaylandı';
+    if (t.indexOf('numune') >= 0) return 'Numune talebi güncellendi';
+    if (t.indexOf('alt_emir') >= 0) return cari ? (cari + ' alt emri tamamlandı') : 'Alt emir tamamlandı';
+    if (cari) return cari + ' üretimi kaydedildi';
+    if (kg > 0) {
+      var ton = fmtTon(kg);
+      return ton ? (ton + ' üretim kaydı alındı') : 'Üretim kaydı alındı';
+    }
+    return 'Üretim kaydı alındı';
+  }
+  function nxEventSub(ev) {
+    var parts = [];
+    var ref = String(ev.reference_code || ev.subtitle || '').trim();
+    if (ref) parts.push(ref);
+    var kg = Number(ev.amount_kg || 0);
+    if (kg > 0 && String(ev.event_type || '').indexOf('uretim') < 0) {
+      var ton = fmtTon(kg);
+      if (ton) parts.push(ton);
+    } else if (kg > 0 && ev.cari) {
+      var ton2 = fmtTon(kg);
+      if (ton2) parts.push(ton2);
+    }
+    return parts.join(' · ');
+  }
+  function nxRenderBody(payload) {
+    var body = document.getElementById('homeNxBody');
+    var loading = document.getElementById('homeNxLoading');
+    var errEl = document.getElementById('homeNxErr');
+    if (!body) return;
+    if (loading) loading.style.display = 'none';
+    if (!payload || !payload.ok) {
+      if (errEl) {
+        errEl.hidden = false;
+        errEl.textContent = (payload && payload.error) || 'NexGen özet alınamadı';
+      }
+      body.style.display = 'none';
+      return;
+    }
+    if (errEl) errEl.hidden = true;
+    var prod = secData(payload.production) || {};
+    var plan = secData(payload.planning) || {};
+    var ship = secData(payload.shipment) || {};
+    var arge = secData(payload.arge) || {};
+    var chain = secData(payload.chain) || {};
+    var companies = secData(payload.company_distribution) || [];
+    var products = secData(payload.product_distribution) || [];
+    var events = secData(payload.recent_events) || [];
+
+    var left = '<div class="nx-col nx-col-left">' +
+      '<div class="nx-panel" id="nxTrendPanel"><div class="nx-panel-title">Üretim Trendi (Son 7 Gün)</div>' +
+        (payload.production && payload.production.available === false
+          ? '<div class="nx-empty">Üretim verisi alınamadı</div>' : nxTrendBars(prod.trend_7g)) +
+      '</div>' +
+      '<div class="nx-panel" id="nxFirmaPanel"><div class="nx-panel-title">Firma Bazında Üretim (Bu Ay)</div>' +
+        (payload.company_distribution && payload.company_distribution.available === false
+          ? '<div class="nx-empty">Firma dağılımı alınamadı</div>' : nxDonut(companies)) +
+      '</div>' +
+      '<div class="nx-panel" id="nxUrunPanel"><div class="nx-panel-title">Ürün Tipine Göre Üretim (Bu Ay)</div>' +
+        (payload.product_distribution && payload.product_distribution.available === false
+          ? '<div class="nx-empty">Ürün tipi dağılımı alınamadı</div>' : nxDonut(products)) +
+      '</div></div>';
+
+    var tlHtml;
+    if (!events.length) {
+      tlHtml = '<div class="nx-empty">Kayıtlı olay yok</div>';
+    } else {
+      tlHtml = '<ul class="nx-tl" id="nxTimeline">' + events.map(function (ev) {
+        var raw = String(ev.event_time || '').replace('T', ' ');
+        var tm = '—';
+        if (raw.length >= 16 && raw.charAt(10) === ' ') tm = raw.slice(11, 16);
+        else if (raw.length >= 10) tm = raw.slice(8, 10) + '.' + raw.slice(5, 7);
+        var tone = nxEventTone(ev.event_type);
+        var amt = Number(ev.amount_kg || 0) > 0 ? (fmtTon(ev.amount_kg) || '') : '';
+        var subParts = [ev.subtitle || ev.reference_code, ev.cari, amt].filter(Boolean);
+        return '<li><div class="tm">' + esc(tm) + '</div>' +
+          '<div class="rail"><span class="dot ' + tone + '"></span></div>' +
+          '<div class="body"><div class="tt">' + esc(nxEventTitle(ev)) + '</div>' +
+          ((function(){ var sub = nxEventSub(ev); return sub ? '<div class="st">' + esc(sub) + '</div>' : ''; })()) +
+          '</div><div class="tag ' + tone + '">' + esc(nxEventBadge(ev.event_type)) + '</div></li>';
+      }).join('') + '</ul>';
+    }
+
+    var steps = (chain.steps || []);
+    var chainHtml = !steps.length
+      ? '<div class="nx-empty">Zincir verisi yok</div>'
+      : '<div class="nx-chain" id="nxFlowBand">' + steps.map(function (st, i) {
+          return (i ? '<div class="arr">→</div>' : '') +
+            '<div class="step"><div class="n">' + fmt(st.value) + '</div>' +
+            '<div class="lb">' + esc(st.label) + '</div>' +
+            '<div class="nt">' + esc(st.note || '') + '</div></div>';
+        }).join('') + '</div>';
+
+    var mid = '<div class="nx-col nx-col-mid">' +
+      '<div class="nx-panel nx-panel-hero" id="nxOpsHero">' +
+      '<div class="nx-panel-title">Bugün Fabrikada Ne Oldu?</div>' + tlHtml + '</div>' +
+      '<div class="nx-panel"><div class="nx-panel-title">Üretim Zinciri</div>' + chainHtml + '</div></div>';
+
+    function statRow(label, value, sub, icClass, ico) {
+      return '<div class="row"><div class="ic ' + (icClass || '') + '" aria-hidden="true">' + nxIco(ico || 'doc') + '</div>' +
+        '<div><div class="lb">' + esc(label) + '</div>' +
+        (sub ? '<div class="ss">' + esc(sub) + '</div>' : '') + '</div>' +
+        '<div class="vv">' + value + '</div></div>';
+    }
+    var shipHtml = '<div class="nx-stat">';
+    if (payload.shipment && payload.shipment.available) {
+      shipHtml += statRow('Bugün Sevk Edilen', esc(fmtTon(ship.bugun_sevk && ship.bugun_sevk.kg) || '0,0 ton'),
+        ship.bugun_sevkiyat_adet != null ? (fmt(ship.bugun_sevkiyat_adet) + ' sevkiyat') : 'Gerçek sevkiyat', 'ok', 'truck');
+      shipHtml += statRow('Sevk Bekleyen',
+        Number(ship.bekleyen_kg || 0) > 0 ? esc(fmtTon(ship.bekleyen_kg) || '—') : '0,0 ton',
+        ship.bekleyen_adet != null ? (fmt(ship.bekleyen_adet) + ' kayıt') : '', 'accent', 'ship');
+      if (ship.sevke_hazir_siparis != null) {
+        shipHtml += statRow('Hazır Sevkiyat', fmt(ship.sevke_hazir_siparis) + ' sipariş',
+          ship.sevke_hazir_kg != null ? (fmtTon(ship.sevke_hazir_kg) || '') : 'Sevke hazır', '', 'check');
+      }
+    } else {
+      shipHtml += '<div class="nx-empty">Sevkiyat verisi alınamadı</div>';
+    }
+    shipHtml += '</div>';
+
+    var planHtml = '<div class="nx-stat">';
+    if (payload.planning && payload.planning.available) {
+      planHtml += statRow('Açık Sipariş', fmt(plan.acik_siparis_sayisi),
+        plan.acik_siparis_kg != null ? (fmtTon(plan.acik_siparis_kg) || '') : '', 'accent', 'doc');
+      planHtml += statRow('Planlanan KG', esc(fmtTon(plan.planlanan_kg) || '0,0 ton'), 'Onaylanmış plan', '', 'cal');
+      planHtml += statRow('Bekleyen Plan', fmt(plan.bekleyen_plan), 'İmalata hazır', '', 'cube');
+      planHtml += statRow('Aktif Plan', fmt(plan.aktif_plan), 'Üretimde olan', 'ok', 'factory');
+    } else {
+      planHtml += '<div class="nx-empty">Planlama verisi alınamadı</div>';
+    }
+    planHtml += '</div>';
+
+    var right = '<div class="nx-col nx-col-right">' +
+      '<div class="nx-panel" id="nxShipPanel"><div class="nx-panel-title">Sevkiyat Durumu</div>' + shipHtml + '</div>' +
+      '<div class="nx-panel" id="nxPlanPanel"><div class="nx-panel-title">Planlama Özeti</div>' + planHtml + '</div></div>';
+
+    var botCards = [];
+    if (arge.onayli_renk != null) botCards.push(['Onaylı Renk', fmt(arge.onayli_renk), 'Aktif renk kodu', 'purple', 'palette', false]);
+    if (arge.onayli_rf != null) botCards.push(['Onaylı RF', fmt(arge.onayli_rf), 'Aktif RF formül', 'purple', 'flask', false]);
+    if (arge.aktif_recete != null) botCards.push(['Aktif Reçete', fmt(arge.aktif_recete), 'Üretime açık', 'green', 'book', false]);
+    if (arge.bekleyen_numune != null) botCards.push(['Bekleyen Numune', fmt(arge.bekleyen_numune), 'Numune talebi', 'blue', 'tube', false]);
+    if (arge.revizyonda != null) botCards.push(['Revizyonda', fmt(arge.revizyonda), 'Devam eden revizyon', 'orange', 'sync', false]);
+    if (arge.kritik_stok_available && arge.kritik_stok != null) {
+      botCards.push(['Kritik Stok', fmt(arge.kritik_stok), 'Kritik stok kartı', 'red', 'alert', true]);
+    }
+    var bot = '<div class="nx-bot" id="nxBotKpi">' + botCards.map(function (c) {
+      return '<div class="nx-kpi a-' + c[3] + (c[5] ? ' crit' : '') + '">' +
+        '<div class="nx-kpi-head"><span class="nx-kpi-ico" aria-hidden="true">' + nxIco(c[4]) + '</span>' +
+        '<span class="nx-kpi-l">' + esc(c[0]) + '</span></div>' +
+        '<div class="nx-kpi-v">' + c[1] + '</div>' +
+        '<div class="nx-kpi-s">' + esc(c[2]) + '</div></div>';
+    }).join('') + '</div>';
+
+    body.innerHTML =
+      '<div class="nx-ops" id="nxOpsGrid">' + left + mid + right + '</div>' +
+      bot +
+      '<div class="home-nx-foot">Not: Veriler NexGen modüllerinden anlık olarak alınmaktadır.</div>';
+    body.style.display = '';
+  }
+  function loadNexgenOzet(force) {
+    if (store.nexgenLoading) return;
+    if (store.nexgenLoaded && store.nexgen && !force) {
+      nxRenderBody(store.nexgen);
+      return;
+    }
+    store.nexgenLoading = true;
+    var loading = document.getElementById('homeNxLoading');
+    var errEl = document.getElementById('homeNxErr');
+    var body = document.getElementById('homeNxBody');
+    if (loading) loading.style.display = '';
+    if (errEl) { errEl.hidden = true; errEl.textContent = ''; }
+    if (body && !store.nexgen) body.style.display = 'none';
+    fetch('/api/home/nexgen/ozet', { credentials: 'same-origin' })
+      .then(function (r) {
+        return r.json().then(function (j) { return { status: r.status, body: j }; });
+      })
+      .then(function (res) {
+        store.nexgenLoading = false;
+        store.nexgenLoaded = true;
+        if (res.status === 401 || res.status === 403) {
+          store.nexgenErr = true;
+          store.nexgen = null;
+          nxRenderBody({ ok: false, error: (res.body && res.body.error) || 'Yetkisiz' });
+        } else if (!res.body || !res.body.ok) {
+          store.nexgenErr = true;
+          store.nexgen = res.body || null;
+          nxRenderBody(res.body || { ok: false, error: 'NexGen özet alınamadı' });
+        } else {
+          store.nexgenErr = false;
+          store.nexgen = res.body;
+          if (typeof console !== 'undefined' && console.debug) {
+            console.debug('[home-nx-ozet]', {
+              elapsed_ms: res.body.elapsed_ms,
+              warnings: res.body.warnings,
+              sources: res.body.sources
+            });
+          }
+          nxRenderBody(res.body);
+        }
+        if (store.panel === 'nexgen') renderKpis();
+      })
+      .catch(function () {
+        store.nexgenLoading = false;
+        store.nexgenLoaded = true;
+        store.nexgenErr = true;
+        nxRenderBody({ ok: false, error: 'NexGen özet bağlantı hatası' });
+        if (store.panel === 'nexgen') renderKpis();
+      });
   }
   function applyPanel(name, persist) {
     if (!PANELS[name]) name = 'enjeksiyon';
@@ -690,6 +1389,7 @@
       if (sec) sec.classList.toggle('active', key === name);
     });
     renderKpis();
+    if (name === 'nexgen') loadNexgenOzet(false);
     if (persist !== false) {
       try { localStorage.setItem(LS_KEY, name); } catch (e) {}
     }
@@ -717,6 +1417,15 @@
     store.korgun = data || null;
     if (store.panel === 'korgun') renderKpis();
   };
+  window.__homeSetNexgenDash = function (data) {
+    store.nexgen = data || null;
+    store.nexgenLoaded = true;
+    store.nexgenErr = !(data && data.ok);
+    if (store.panel === 'nexgen') {
+      nxRenderBody(data);
+      renderKpis();
+    }
+  };
   window.__homeGetPanel = function () { return store.panel; };
 
   var saved = null;
@@ -737,33 +1446,22 @@
 <script>
 (function () {
   var STATUS_LABEL = {
-    on: 'Üretimde',
-    off: 'Kapalı',
-    fault: 'Arıza',
-    setup: 'Kalıp Değişim',
-    done: 'Operasyon Bitti'
+    on: 'Çalışıyor', off: 'Kapalı', fault: 'Arıza', setup: 'Kalıp Değişim'
   };
 
   var state = {
     machines: [],
     selectedId: null,
-    range: 'bugun',
+    range: 'bugun', /* bugun | dun | haftalik | aylik */
     cache: {},
     vardiya: null,
-    meta: null,
-    multiOpenWarn: []
+    meta: null
   };
 
   function pad(n) { return (n < 10 ? '0' : '') + n; }
   function fmt(n) {
-    if (n == null || n === '') return 'Veri yok';
     n = Math.round(Number(n) || 0);
     return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  }
-  function fmtOrYok(n, has) {
-    if (has === false) return 'Veri yok';
-    if (n == null || n === '') return 'Veri yok';
-    return fmt(n);
   }
   function ymd(d) {
     return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
@@ -806,113 +1504,32 @@
     var key = pad(h) + ':00';
     var idx = meta.slots.indexOf(key);
     if (idx < 0) {
+      /* vardiya dışı / tam sınır */
       if (vardiya === 'gunduz') return h < 7 ? -1 : meta.slots.length - 1;
       return meta.slots.length - 1;
     }
     return idx;
   }
 
-  function isRaporKapali(r) {
-    if (!r) return false;
-    if (r.kapanis_tarih) return true;
-    var d = String(r.durum || '').toLowerCase();
-    return d === 'kapandi' || d === 'kapali' || d === 'kapatildi' || d === 'tamamlandi' || d === 'bitti';
-  }
-
-  function isVardiyaBitti(vardiya, raporTarih, now) {
-    now = now || new Date();
-    var d = parseYmd(raporTarih);
-    if (vardiya === 'gunduz') {
-      var end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 17, 0, 0);
-      return now.getTime() >= end.getTime();
-    }
-    /* gece: rapor günü 17:00 → ertesi 07:00 */
-    var endG = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 7, 0, 0);
-    return now.getTime() >= endG.getTime();
-  }
-
-  function ozetUretim(ozet) {
-    if (!ozet) return 0;
-    return Number(ozet.toplam_uretim || 0) ||
-      ((Number(ozet.toplam_uretim_a || 0) || 0) + (Number(ozet.toplam_uretim_b || 0) || 0));
-  }
-
-  function hasProduction(ozet) {
-    return ozetUretim(ozet) > 0 || Number((ozet && ozet.net) || 0) > 0;
-  }
-
-  function slotAktifMi(s) {
-    if (!s) return false;
-    if (s.aktif === 1 || s.aktif === true) return true;
-    var d = String(s.durum || '').toUpperCase();
-    return d === 'AKTIF' || d.indexOf('CALIS') >= 0 || d.indexOf('ÇALIŞ') >= 0;
-  }
-
-  function hasAktifSlot(slotlar) {
-    return (slotlar || []).some(slotAktifMi);
-  }
-
-  function hasArizaSlot(slotlar) {
-    return (slotlar || []).some(function (s) {
-      var d = String(s.durum || '').toUpperCase();
-      return d.indexOf('ARIZA') >= 0;
-    });
-  }
-
-  function hasSetupSlot(slotlar) {
-    return (slotlar || []).some(function (s) {
-      var d = String(s.durum || '').toUpperCase();
-      return d.indexOf('SETUP') >= 0 || d.indexOf('KALIP') >= 0;
-    });
-  }
-
-  function byRecent(a, b) {
-    var sa = a.son_guncelleme || a.olusturma_tarih || '';
-    var sb = b.son_guncelleme || b.olusturma_tarih || '';
-    if (sa !== sb) return sb < sa ? -1 : (sb > sa ? 1 : 0);
-    return (b.id || 0) - (a.id || 0);
-  }
-
-  function statusFromAnlik(anlik, finished) {
-    if (finished) return 'done';
-    if (!anlik || !anlik.tip) return 'off';
-    var tip = String(anlik.tip).toUpperCase();
-    var say = anlik.sayim || {};
-    if (tip.indexOf('ARIZA') >= 0) return 'fault';
-    if (tip.indexOf('SETUP') >= 0) return 'setup';
-    if (tip === 'TUMUYLA_AKTIF' || tip === 'HIBRIT') return 'on';
-    if ((say.AKTIF || 0) > 0) return 'on';
-    if (tip === 'TUMUYLA_KAPALI' || tip === 'DURUYOR') return 'off';
-    return 'off';
-  }
-
-  function statusFromSlots(slotlar, finished) {
-    if (finished) return 'done';
+  function statusFromSlots(slotlar) {
     if (!slotlar || !slotlar.length) return 'off';
-    if (hasArizaSlot(slotlar)) return 'fault';
-    if (hasSetupSlot(slotlar)) return 'setup';
-    if (hasAktifSlot(slotlar)) return 'on';
-    return 'off';
-  }
-
-  function normalizeSaatlik(saatlik) {
-    if (!saatlik) return [];
-    if (Array.isArray(saatlik)) return saatlik;
-    var det = saatlik.detaylar || [];
-    return det.map(function (d) {
-      return {
-        saat_baslangic: d.saat || d.saat_baslangic || '',
-        uretilen_a: d.uretilen_a,
-        uretilen_b: d.uretilen_b
-      };
+    var hasSetup = false, hasFault = false, hasOn = false;
+    slotlar.forEach(function (s) {
+      var d = String(s.durum || '').toUpperCase();
+      if (d.indexOf('SETUP') >= 0 || d.indexOf('KALIP') >= 0) hasSetup = true;
+      if (d.indexOf('ARIZA') >= 0) hasFault = true;
+      if (s.aktif || d.indexOf('CALIS') >= 0 || d.indexOf('ÇALIŞ') >= 0 || d === 'CLŞ' || d.indexOf('CLS') >= 0) hasOn = true;
     });
+    if (hasFault) return 'fault';
+    if (hasSetup) return 'setup';
+    if (hasOn) return 'on';
+    return 'off';
   }
 
   function cumSeries(saatlik, slots) {
     var map = {};
-    normalizeSaatlik(saatlik).forEach(function (s) {
+    (saatlik || []).forEach(function (s) {
       var k = (s.saat_baslangic || '').slice(0, 5);
-      if (!k) return;
       var u = (Number(s.uretilen_a) || 0) + (Number(s.uretilen_b) || 0);
       map[k] = (map[k] || 0) + u;
     });
@@ -924,6 +1541,11 @@
     return out;
   }
 
+  function truncateSeries(arr, uptoIdx) {
+    if (uptoIdx < 0) return arr.map(function () { return 0; });
+    return arr.map(function (v, i) { return i <= uptoIdx ? v : (i === 0 ? 0 : arr[uptoIdx]); });
+    /* better: only keep values up to idx, rest = last known for line end? User wants "same hour" comparison — truncate */
+  }
   function cutAt(arr, uptoIdx) {
     var out = [];
     for (var i = 0; i < arr.length; i++) {
@@ -955,16 +1577,8 @@
   async function fetchAb(raporId) {
     if (!raporId) return null;
     try {
-      return await apiGet('/enjeksiyon/api/rapor/' + raporId + '/ab-ozet');
-    } catch (e) { return null; }
-  }
-
-  async function fetchPlanlamaMakine(makineId, tarih, vardiya) {
-    if (!makineId || !tarih || !vardiya) return null;
-    try {
-      var j = await apiGet('/planlama/api/operasyon/makine/' + makineId +
-        '?tarih=' + encodeURIComponent(tarih) + '&vardiya=' + encodeURIComponent(vardiya));
-      return j.ok ? j.makine : null;
+      var j = await apiGet('/enjeksiyon/api/rapor/' + raporId + '/ab-ozet');
+      return j;
     } catch (e) { return null; }
   }
 
@@ -1023,187 +1637,6 @@
     }
   }
 
-  /**
-   * Aynı makine + tarih + vardiya için rapor seçimi (tek zincir).
-   * 1) Açık + aktif slot (üretimde)
-   * 2) Aynı vardiyada üretim bulunan en güncel açık rapor
-   * 3) Aynı vardiyada tamamlanmış en son dolu rapor
-   * 4) Yalnız boş/taslak
-   * 5) Yok
-   * Boş taslak, dolu raporun önüne geçmez.
-   */
-  async function pickReportForDayShift(makineId, vardiya, tarih, now) {
-    var dayList = await fetchRaporlar(makineId, tarih, tarih, null);
-    var shiftList = dayList.filter(function (r) { return r.vardiya === vardiya; }).sort(byRecent);
-    var warn = [];
-    if (shiftList.length > 1) {
-      warn.push('M' + makineId + ' ' + tarih + '/' + vardiya + ' çoklu rapor: ' + shiftList.map(function (r) { return r.id; }).join(','));
-    }
-
-    var detCache = {};
-    async function detOf(r) {
-      if (!r) return null;
-      if (detCache[r.id]) return detCache[r.id];
-      detCache[r.id] = await fetchDetay(r.id);
-      return detCache[r.id];
-    }
-
-    /* 1) Yalnız vardiyası henüz bitmemiş açık + aktif slot */
-    for (var i = 0; i < shiftList.length; i++) {
-      var r1 = shiftList[i];
-      if (isRaporKapali(r1)) continue;
-      if (isVardiyaBitti(r1.vardiya, r1.tarih, now)) continue;
-      var d1 = await detOf(r1);
-      if (hasAktifSlot(d1 && d1.slotlar)) {
-        return { rapor: r1, detay: d1, finished: false, reason: 'aktif_uretim', warn: warn, dayList: dayList };
-      }
-    }
-
-    /* 2) Aynı vardiyada (bitmemiş) açık + üretimli */
-    var openLive = shiftList.filter(function (r) {
-      return !isRaporKapali(r) && !isVardiyaBitti(r.vardiya, r.tarih, now);
-    }).sort(byRecent);
-    var openProd = openLive.filter(function (r) { return hasProduction(r.ozet); });
-    if (openProd.length) {
-      var rp = openProd[0];
-      return { rapor: rp, detay: await detOf(rp), finished: false, reason: 'vardiya_acik_uretim', warn: warn, dayList: dayList };
-    }
-
-    /* 3) Vardiya bitmiş veya kapalı + üretimli (stale AKTIF slot olsa bile finished) */
-    var completed = shiftList.filter(function (r) {
-      return isRaporKapali(r) || isVardiyaBitti(r.vardiya, r.tarih, now);
-    }).sort(byRecent);
-    var compProd = completed.filter(function (r) { return hasProduction(r.ozet); });
-    if (compProd.length) {
-      var rc = compProd[0];
-      return { rapor: rc, detay: await detOf(rc), finished: true, reason: 'vardiya_tamamlanan_dolu', warn: warn, dayList: dayList };
-    }
-
-    var openShift = shiftList.filter(function (r) { return !isRaporKapali(r); }).sort(byRecent);
-
-    if (openShift.length) {
-      var re = openShift[0];
-      return { rapor: re, detay: await detOf(re), finished: false, reason: 'vardiya_taslak_bos', warn: warn, dayList: dayList };
-    }
-    if (shiftList.length) {
-      var rs = shiftList[0];
-      return { rapor: rs, detay: await detOf(rs), finished: isRaporKapali(rs), reason: 'vardiya_kayit', warn: warn, dayList: dayList };
-    }
-    return { rapor: null, detay: null, finished: false, reason: 'yok', warn: warn, dayList: dayList };
-  }
-
-  async function pickDisplayReport(makineId, vardiya, tarihBugun, now) {
-    return pickReportForDayShift(makineId, vardiya, tarihBugun, now);
-  }
-
-  async function buildShiftView(makineId, tarih, vardiya, now, label) {
-    var picked = await pickReportForDayShift(makineId, vardiya, tarih, now);
-    if (picked.warn && picked.warn.length) console.warn('[home-enj]', picked.warn.join('; '));
-    var r = picked.rapor;
-    var det = picked.detay;
-    var finished = !!picked.finished;
-    var pl = r ? await fetchPlanlamaMakine(makineId, r.tarih, r.vardiya) : null;
-    if (pl && r && pl.rapor_id && pl.rapor_id !== r.id) {
-      console.warn('[home-enj] planlama rapor_id=' + pl.rapor_id + ' != secilen=' + r.id);
-    }
-    var ab = r ? await fetchAb(r.id) : null;
-    var slotlar = (pl && pl.slotlar) || (det && det.slotlar) || [];
-    /* Bitmiş vardiyada DB'de kalan AKTIF slot → Operasyon Bitti (stale slot yüzünden Üretimde deme) */
-    if (r && isVardiyaBitti(r.vardiya, r.tarih, now)) finished = true;
-    var status = pl ? statusFromAnlik(pl.anlik_durum, finished) : statusFromSlots(slotlar, finished);
-    if (finished && hasAktifSlot(slotlar) && r && !isVardiyaBitti(r.vardiya, r.tarih, now)) {
-      status = statusFromAnlik(pl && pl.anlik_durum, false);
-      finished = false;
-    }
-    var plU = (pl && pl.uretim) || null;
-    var ozet = (det && det.ozet) || (r && r.ozet) || {};
-    var fire = null, net = null, verim = null;
-    if (plU) {
-      if (plU.fire_cift != null) fire = Number(plU.fire_cift);
-      if (plU.net_cift != null) net = Number(plU.net_cift);
-      if (plU.verim_yuzde != null) verim = Math.round(Number(plU.verim_yuzde));
-    } else if (r) {
-      fire = Number(ozet.fire != null ? ozet.fire : 0);
-      if (ozet.net != null) net = Number(ozet.net);
-      else if (ozet.toplam_uretim != null) net = Number(ozet.toplam_uretim) - fire;
-      if (ozet.verim_yuzde != null && ozet.verim_yuzde !== '') verim = Math.round(Number(ozet.verim_yuzde));
-    }
-    var aktifSlot = slotlar.filter(slotAktifMi).length;
-    var istasyonAktif = {};
-    slotlar.forEach(function (s) { if (slotAktifMi(s)) istasyonAktif[s.istasyon_no] = true; });
-    var personel = (pl && pl.personel_sayisi) || (r && r.personel_sayisi) || 0;
-    var saatlik = (pl && pl.saatlik) || (det && det.saatlik);
-    var meta = vardiyaMeta(vardiya);
-    var seriesFull = cumSeries(saatlik, meta.slots);
-    var hasSeries = seriesFull.some(function (v) { return v > 0; });
-    return {
-      label: label,
-      raporId: r ? r.id : null,
-      raporTarih: r ? r.tarih : tarih,
-      raporVardiya: r ? r.vardiya : vardiya,
-      pickReason: picked.reason,
-      finished: finished,
-      tamamlanma: finished && r ? (r.kapanis_tarih || r.son_guncelleme || null) : null,
-      status: status,
-      aktifSlot: aktifSlot,
-      istasyonSay: Object.keys(istasyonAktif).length,
-      istasyonKapasite: (pl && pl.istasyon_sayisi) || 0,
-      personel: personel || 0,
-      a: sideFromSources('A', plU, ab, ozet, slotlar),
-      b: sideFromSources('B', plU, ab, ozet, slotlar),
-      net: r ? net : null,
-      fire: r ? fire : null,
-      verim: r ? verim : null,
-      hasRapor: !!r,
-      hasSeries: hasSeries,
-      seriesFull: seriesFull,
-      chartMeta: meta,
-      plRaporId: pl && pl.rapor_id
-    };
-  }
-
-  function sideFromSources(slot, plUretim, abj, ozet, slotlar) {
-    var s = { kod: 'Veri yok', renk: 'Veri yok', tur: null, cift: null, durum: 'Veri yok' };
-    var ko = null;
-    if (plUretim) {
-      s.tur = slot === 'A' ? plUretim.tur_a : plUretim.tur_b;
-      s.cift = slot === 'A' ? plUretim.uretilen_a : plUretim.uretilen_b;
-      ko = slot === 'A' ? plUretim.a_kalip_ozet : plUretim.b_kalip_ozet;
-      if (ko) {
-        s.kod = ko.kod || s.kod;
-        s.renk = ko.renk_ad || ko.renk_kod || s.renk;
-      }
-    }
-    if (ozet) {
-      if (s.tur == null) s.tur = slot === 'A' ? (ozet.toplam_tur_a || 0) : (ozet.toplam_tur_b || 0);
-      if (s.cift == null) s.cift = slot === 'A' ? (ozet.toplam_uretim_a || 0) : (ozet.toplam_uretim_b || 0);
-    }
-    if (abj) {
-      var block = (slot === 'A' ? abj.A : abj.B) || null;
-      if (block) {
-        if (!ko || !ko.kod) s.kod = block.kalip_kod || block.model_kod || block.kod || s.kod;
-        if (s.renk === 'Veri yok') s.renk = block.renk || block.renk_ad || s.renk;
-      }
-    }
-    var sl = (slotlar || []).filter(function (x) {
-      return String(x.slot || '').toUpperCase() === slot && slotAktifMi(x);
-    })[0];
-    if (!sl) {
-      sl = (slotlar || []).filter(function (x) { return String(x.slot || '').toUpperCase() === slot; })[0];
-    }
-    if (sl) {
-      if (s.kod === 'Veri yok') s.kod = sl.kalip_kod || (sl.kalip && sl.kalip.kod) || s.kod;
-      if (s.renk === 'Veri yok') s.renk = sl.renk_ad || sl.renk || s.renk;
-      s.durum = slotAktifMi(sl) ? 'Aktif' : (sl.durum || 'Kapalı');
-    } else if (s.cift != null && Number(s.cift) > 0) {
-      /* Slot yok; üretim kaydı var — makine durumunu üretim=0 ile KAPALI yapma */
-      s.durum = 'Üretim';
-    }
-    if (s.tur == null) s.tur = 0;
-    if (s.cift == null) s.cift = 0;
-    return s;
-  }
-
   async function buildMachineBundle(makineId) {
     var now = new Date();
     var vardiya = aktifVardiya(now);
@@ -1212,50 +1645,117 @@
     var tarihDun = ymd(addDays(parseYmd(tarihBugun), -1));
     var slotIdx = currentSlotIndex(vardiya, now);
 
-    var viewBugun = await buildShiftView(makineId, tarihBugun, vardiya, now, 'Şu an / Bugün');
-    var viewDun = await buildShiftView(makineId, tarihDun, vardiya, now, 'Dün');
-    if (!viewBugun.istasyonKapasite || !viewDun.istasyonKapasite) {
-      var m0 = state.machines.find(function (x) { return x.id === makineId; });
-      var kap = m0 ? m0.istasyon_sayisi : 0;
-      if (!viewBugun.istasyonKapasite) viewBugun.istasyonKapasite = kap;
-      if (!viewDun.istasyonKapasite) viewDun.istasyonKapasite = kap;
+    var todayList = await fetchRaporlar(makineId, tarihBugun, tarihBugun, vardiya);
+    var ydayList = await fetchRaporlar(makineId, tarihDun, tarihDun, vardiya);
+    var dayFullY = await fetchRaporlar(makineId, tarihDun, tarihDun, null);
+
+    var todayR = todayList[0] || null;
+    var ydayR = ydayList[0] || null;
+
+    var todayDet = todayR ? await fetchDetay(todayR.id) : null;
+    var ydayDet = ydayR ? await fetchDetay(ydayR.id) : null;
+    var ab = todayR ? await fetchAb(todayR.id) : null;
+
+    var slotlar = (todayDet && todayDet.slotlar) || [];
+    var status = todayR ? statusFromSlots(slotlar) : 'off';
+    if (todayR && todayDet && todayDet.ozet) {
+      var prod = Number(todayDet.ozet.toplam_uretim || 0);
+      if (prod <= 0 && status === 'on') {
+        /* taslak / üretim yok ama slot aktif değilse kapalı say */
+        var anyAktif = slotlar.some(function (s) { return s.aktif; });
+        if (!anyAktif) status = 'off';
+      }
     }
 
-    var seriesTodayCut = cutAt(viewBugun.seriesFull, slotIdx);
-    var seriesYdayCut = cutAt(viewDun.seriesFull, slotIdx);
-    var dunAyniSaat = (viewDun.hasSeries && slotIdx >= 0) ? (viewDun.seriesFull[slotIdx] || 0) : null;
+    var aktifSlot = slotlar.filter(function (s) { return s.aktif; }).length;
+    var istasyonAktif = {};
+    slotlar.forEach(function (s) {
+      if (s.aktif) istasyonAktif[s.istasyon_no] = true;
+    });
+    var istasyonSay = Object.keys(istasyonAktif).length;
 
-    var dayFullY = await fetchRaporlar(makineId, tarihDun, tarihDun, null);
-    var gunduzY = 0, geceY = 0, fireYdayTotal = 0, teorikY = 0, netYdaySum = 0;
+    var personel = (todayR && todayR.personel_sayisi) || (ab && ab.personel_sayisi) || 0;
+    if (!personel && ab && ab.A && ab.A.personel_sayisi) personel = ab.A.personel_sayisi;
+    if (!personel && ab && ab.ayar) {
+      /* ignore */
+    }
+
+    function sideFrom(abj, slot, ozet, slotlar) {
+      var s = { kod: '—', renk: '—', tur: 0, cift: 0, durum: '—' };
+      if (ozet) {
+        s.tur = slot === 'A' ? (ozet.toplam_tur_a || 0) : (ozet.toplam_tur_b || 0);
+        s.cift = slot === 'A' ? (ozet.toplam_uretim_a || 0) : (ozet.toplam_uretim_b || 0);
+      }
+      if (abj && abj.ok !== false) {
+        var block = abj[slot] || (abj.ayar && abj.ayar[slot]) || null;
+        /* ab-ozet şekilleri değişebilir */
+        if (abj.A && slot === 'A') block = abj.A;
+        if (abj.B && slot === 'B') block = abj.B;
+        if (block) {
+          s.kod = block.kalip_kod || block.model_kod || block.kod || s.kod;
+          s.renk = block.renk || s.renk;
+        }
+      }
+      var sl = (slotlar || []).filter(function (x) { return x.slot === slot && x.aktif; })[0];
+      if (sl) {
+        s.kod = sl.kalip_kod || s.kod;
+        s.renk = sl.renk || s.renk;
+        s.durum = sl.durum || (sl.aktif ? 'Aktif' : 'Kapalı');
+      } else {
+        s.durum = s.cift > 0 ? 'Üretim' : 'Kapalı';
+      }
+      if (!s.kod) s.kod = '—';
+      if (!s.renk) s.renk = '—';
+      return s;
+    }
+
+    var ozetT = (todayDet && todayDet.ozet) || (todayR && todayR.ozet) || {};
+    var ozetY = (ydayDet && ydayDet.ozet) || (ydayR && ydayR.ozet) || {};
+    var fireT = Number((todayR && (todayR.toplam_fire_cift != null ? todayR.toplam_fire_cift : (todayR.ozet && todayR.ozet.fire))) || ozetT.fire || 0);
+    var fireY = Number((ydayR && (ydayR.toplam_fire_cift != null ? ydayR.toplam_fire_cift : (ydayR.ozet && ydayR.ozet.fire))) || ozetY.fire || 0);
+    if (ozetT.fire != null) fireT = Number(ozetT.fire);
+    if (ozetY.fire != null) fireY = Number(ozetY.fire);
+
+    var netT = Number(ozetT.net != null ? ozetT.net : ((ozetT.toplam_uretim || 0) - fireT));
+    var netY = Number(ozetY.net != null ? ozetY.net : ((ozetY.toplam_uretim || 0) - fireY));
+    var verimT = (ozetT.verim_yuzde != null && ozetT.verim_yuzde !== '')
+      ? Math.round(Number(ozetT.verim_yuzde))
+      : (todayR ? 0 : null);
+
+    var seriesToday = cumSeries(todayDet && todayDet.saatlik, meta.slots);
+    var seriesYdayFull = cumSeries(ydayDet && ydayDet.saatlik, meta.slots);
+    var seriesYdayCut = seriesYdayFull.map(function (v, i) { return i <= slotIdx ? v : null; });
+    var seriesTodayCut = seriesToday.map(function (v, i) { return i <= slotIdx ? v : null; });
+    var dunAyniSaat = slotIdx >= 0 ? (seriesYdayFull[slotIdx] || 0) : 0;
+
+    var gunduzY = 0, geceY = 0, fireYdayTotal = 0;
     dayFullY.forEach(function (r) {
       var n = Number((r.ozet && (r.ozet.net != null ? r.ozet.net : r.ozet.toplam_uretim)) || 0);
       var f = Number((r.ozet && r.ozet.fire) || r.toplam_fire_cift || 0);
-      var t = Number((r.ozet && r.ozet.teorik) || 0);
       fireYdayTotal += f;
-      teorikY += t;
-      netYdaySum += n;
       if (r.vardiya === 'gunduz') gunduzY += n;
       if (r.vardiya === 'gece') geceY += n;
     });
-    var verimYday = teorikY > 0 ? Math.round((netYdaySum / teorikY) * 100) : null;
 
+    /* Haftalık / aylık: gerçek raporlardan günlük net (Gündüz+Gece) */
     var weekStart = ymd(addDays(now, -6));
     var monthStart = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-01';
     var weekRows = await fetchRaporlar(makineId, weekStart, ymd(now), null);
     var monthRows = await fetchRaporlar(makineId, monthStart, ymd(now), null);
 
     function dayBuckets(rows, fromDate, toDate) {
-      var labels = [], values = [], fireSum = 0, netSum = 0, teorikSum = 0, hasAny = false;
+      var labels = [], values = [], fireSum = 0, verimAcc = [], hasAny = false;
       var map = {};
       rows.forEach(function (r) {
         var n = Number((r.ozet && (r.ozet.net != null ? r.ozet.net : r.ozet.toplam_uretim)) || 0);
         var f = Number((r.ozet && r.ozet.fire) || r.toplam_fire_cift || 0);
-        var t = Number((r.ozet && r.ozet.teorik) || 0);
-        if (!map[r.tarih]) map[r.tarih] = { net: 0, fire: 0, teorik: 0 };
+        var u = Number((r.ozet && r.ozet.toplam_uretim) || 0);
+        if (!map[r.tarih]) map[r.tarih] = { net: 0, fire: 0, uret: 0, n: 0 };
         map[r.tarih].net += n;
         map[r.tarih].fire += f;
-        map[r.tarih].teorik += t;
-        if (n > 0 || f > 0) hasAny = true;
+        map[r.tarih].uret += u;
+        map[r.tarih].n += 1;
+        if (n > 0 || f > 0 || u > 0) hasAny = true;
       });
       var d = parseYmd(fromDate), end = parseYmd(toDate);
       while (d <= end) {
@@ -1265,117 +1765,57 @@
         values.push(b ? b.net : 0);
         if (b) {
           fireSum += b.fire;
-          netSum += b.net;
-          teorikSum += b.teorik;
+          if (b.uret > 0) verimAcc.push(Math.round((b.net / b.uret) * 100));
         }
         d = addDays(d, 1);
       }
-      var verimW = teorikSum > 0 ? Math.round((netSum / teorikSum) * 100) : null;
-      return {
-        labels: labels, values: values, fireSum: fireSum,
-        verimWeighted: verimW, hasAny: hasAny, recordCount: rows.length,
-        netSum: netSum, teorikSum: teorikSum
-      };
+      return { labels: labels, values: values, fireSum: fireSum, verimAcc: verimAcc, hasAny: hasAny, recordCount: rows.length };
     }
 
     var week = dayBuckets(weekRows, weekStart, ymd(now));
     var month = dayBuckets(monthRows, monthStart, ymd(now));
 
-    /* Haftalık/aylık üst görünüm: son üretimli rapor (aynı makine) */
-    var lastProd = null;
-    weekRows.concat(monthRows).sort(byRecent).forEach(function (r) {
-      if (!lastProd && hasProduction(r.ozet)) lastProd = r;
-    });
-    var viewOzet = null;
-    if (lastProd) {
-      viewOzet = await buildShiftView(makineId, lastProd.tarih, lastProd.vardiya, now, 'Son dolu rapor');
-    } else {
-      viewOzet = Object.assign({}, viewBugun, { label: 'Özet (rapor yok)' });
-    }
-
     var m = state.machines.find(function (x) { return x.id === makineId; });
-    if (m) m.status = viewBugun.status;
+    if (m) m.status = status;
 
     return {
       makineId: makineId,
       kod: m ? m.kod : ('M' + makineId),
       ad: m ? m.ad : '',
+      status: status,
       vardiya: vardiya,
       meta: meta,
       tarihBugun: tarihBugun,
       tarihDun: tarihDun,
       slotIdx: slotIdx,
-      views: { bugun: viewBugun, dun: viewDun, ozet: viewOzet },
-      /* geri uyum alanları — activeView ile doldurulur */
-      status: viewBugun.status,
-      finished: viewBugun.finished,
-      tamamlanma: viewBugun.tamamlanma,
-      pickReason: viewBugun.pickReason,
-      raporId: viewBugun.raporId,
-      raporTarih: viewBugun.raporTarih,
-      raporVardiya: viewBugun.raporVardiya,
-      chartMeta: viewBugun.chartMeta,
-      aktifSlot: viewBugun.aktifSlot,
-      istasyonSay: viewBugun.istasyonSay,
-      istasyonKapasite: viewBugun.istasyonKapasite,
-      personel: viewBugun.personel,
-      a: viewBugun.a,
-      b: viewBugun.b,
-      net: viewBugun.net,
-      fire: viewBugun.fire,
-      verim: viewBugun.verim,
-      dunVardiya: viewDun.net,
+      aktifSlot: aktifSlot,
+      istasyonSay: istasyonSay,
+      istasyonKapasite: m ? m.istasyon_sayisi : 0,
+      personel: personel || 0,
+      a: sideFrom(ab, 'A', ozetT, slotlar),
+      b: sideFrom(ab, 'B', ozetT, slotlar),
+      net: netT,
+      fire: fireT,
+      verim: verimT,
+      dunVardiya: netY,
       dunAyniSaat: dunAyniSaat,
       seriesTodayCut: seriesTodayCut,
       seriesYdayCut: seriesYdayCut,
-      seriesYdayFull: viewDun.seriesFull,
-      hasTodayRapor: viewBugun.hasRapor,
-      hasYdayRapor: viewDun.hasRapor,
-      hasTodaySeries: viewBugun.hasSeries,
-      hasYdaySeries: viewDun.hasSeries,
+      seriesYdayFull: seriesYdayFull,
+      hasTodayRapor: !!todayR,
+      hasYdayRapor: !!ydayR,
+      hasTodaySeries: seriesToday.some(function (v) { return v > 0; }),
+      hasYdaySeries: seriesYdayFull.some(function (v) { return v > 0; }),
       dunku: {
-        net: dayFullY.length ? (gunduzY + geceY) : null,
-        fire: dayFullY.length ? fireYdayTotal : null,
-        gunduz: dayFullY.length ? gunduzY : null,
-        gece: dayFullY.length ? geceY : null,
-        verim: verimYday,
-        shiftNet: viewDun.net,
-        shiftFire: viewDun.fire,
-        shiftVerim: viewDun.verim,
-        raporId: viewDun.raporId
+        net: gunduzY + geceY,
+        fire: fireYdayTotal,
+        gunduz: gunduzY,
+        gece: geceY,
+        verim: null
       },
       week: week,
       month: month
     };
-  }
-
-  function activeView(bundle) {
-    if (state.range === 'dun') return bundle.views.dun;
-    if (state.range === 'haftalik' || state.range === 'aylik') return bundle.views.ozet;
-    return bundle.views.bugun;
-  }
-
-  function applyViewToBundle(bundle) {
-    var v = activeView(bundle);
-    bundle.status = v.status;
-    bundle.finished = v.finished;
-    bundle.tamamlanma = v.tamamlanma;
-    bundle.pickReason = v.pickReason;
-    bundle.raporId = v.raporId;
-    bundle.raporTarih = v.raporTarih;
-    bundle.raporVardiya = v.raporVardiya;
-    bundle.chartMeta = v.chartMeta;
-    bundle.aktifSlot = v.aktifSlot;
-    bundle.istasyonSay = v.istasyonSay;
-    bundle.istasyonKapasite = v.istasyonKapasite;
-    bundle.personel = v.personel;
-    bundle.a = v.a;
-    bundle.b = v.b;
-    bundle.net = v.net;
-    bundle.fire = v.fire;
-    bundle.verim = v.verim;
-    bundle.viewLabel = v.label;
-    return bundle;
   }
 
   function maxOfSeries() {
@@ -1398,19 +1838,18 @@
 
     if (range === 'bugun') {
       title = 'Bugün aktif vardiya kümülatif net · dün aynı saate kadar';
-      labels = (bundle.views.bugun.chartMeta || bundle.meta).slots.map(function (s) { return s.slice(0, 2); });
+      labels = bundle.meta.slots.map(function (s) { return s.slice(0, 2); });
       seriesA = bundle.seriesTodayCut;
       seriesB = bundle.seriesYdayCut;
-      /* Bugün saatlik yoksa grafik boş — dünkü seri A/B boş kartla karışmasın */
-      if (!bundle.hasTodayRapor) emptyMsg = 'Bugün için vardiya raporu yok';
-      else if (!bundle.hasTodaySeries) emptyMsg = 'Saatlik dağılım kaydı yok';
+      if (!bundle.hasTodayRapor && !bundle.hasYdayRapor) emptyMsg = 'Bugün / dün için vardiya raporu yok';
+      else if (!bundle.hasTodaySeries && !bundle.hasYdaySeries) emptyMsg = 'Saatlik üretim verisi yok (kayıtlar boş veya taslak)';
     } else if (range === 'dun') {
-      title = 'Dün ' + bundle.meta.ad + ' vardiyası · rapor #' + (bundle.views.dun.raporId || 'yok');
-      labels = (bundle.views.dun.chartMeta || bundle.meta).slots.map(function (s) { return s.slice(0, 2); });
+      title = 'Dün ' + bundle.meta.ad + ' vardiyası · tam kümülatif net';
+      labels = bundle.meta.slots.map(function (s) { return s.slice(0, 2); });
       seriesA = bundle.seriesYdayFull;
       seriesB = null;
       if (!bundle.hasYdayRapor) emptyMsg = 'Dün için bu vardiyada rapor yok';
-      else if (!bundle.hasYdaySeries) emptyMsg = 'Saatlik dağılım kaydı yok';
+      else if (!bundle.hasYdaySeries) emptyMsg = 'Dünkü saatlik üretim verisi yok';
     } else if (range === 'haftalik') {
       title = 'Son 7 gün · günlük net toplam (Gündüz+Gece)';
       labels = bundle.week.labels;
@@ -1487,6 +1926,7 @@
       }
       if (seriesB) html += poly(seriesB, '#6b7280', true);
       html += poly(seriesA, '#F97316', false);
+      /* uç noktalar */
       function lastPoint(arr, color) {
         for (var i = arr.length - 1; i >= 0; i--) {
           if (arr[i] != null) {
@@ -1497,9 +1937,9 @@
       }
       if (seriesB) lastPoint(seriesB, '#6b7280');
       lastPoint(seriesA, '#F97316');
-      var step2 = Math.max(1, Math.floor(labels.length / 8));
+      var step = Math.max(1, Math.floor(labels.length / 8));
       labels.forEach(function (lb, i) {
-        if (i % step2 && i !== labels.length - 1) return;
+        if (i % step && i !== labels.length - 1) return;
         html += '<text x="'+x(i).toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" fill="#9ca3af" font-size="9" font-family="Segoe UI,sans-serif">'+lb+'</text>';
       });
     }
@@ -1513,50 +1953,50 @@
       return '<div><div class="k-l">'+l+'</div><div class="k-v '+(cls||'')+'">'+v+'</div>'+(u?'<div class="k-u">'+u+'</div>':'')+'</div>';
     }
     if (r === 'bugun') {
-      var vb = bundle.views.bugun;
-      return cell('Vardiya Net', fmtOrYok(vb.net, vb.hasRapor), 'çift') +
-        cell('Fire', fmtOrYok(vb.fire, vb.hasRapor), 'çift', (vb.fire > 0 ? 'bad' : '')) +
-        cell('Verim', (!vb.hasRapor || vb.verim == null) ? 'Veri yok' : ('%' + vb.verim), '', vb.verim >= 95 ? 'ok' : '') +
-        cell('Dün Vardiya (karşılaştırma)', fmtOrYok(bundle.dunVardiya, bundle.hasYdayRapor), 'çift') +
-        cell('Dün Aynı Saat (karşılaştırma)', fmtOrYok(bundle.dunAyniSaat, bundle.hasYdayRapor), 'çift');
+      return cell('Vardiya Net', fmt(bundle.net), 'çift') +
+        cell('Fire', fmt(bundle.fire), 'çift', bundle.fire > 0 ? 'bad' : '') +
+        cell('Verim', bundle.verim == null ? '—' : ('%' + bundle.verim), '', bundle.verim >= 95 ? 'ok' : '') +
+        cell('Dün Vardiya', fmt(bundle.dunVardiya), 'çift') +
+        cell('Dün Aynı Saat', fmt(bundle.dunAyniSaat), 'çift');
     }
     if (r === 'dun') {
-      var hasShift = !!bundle.views.dun.hasRapor;
-      var hasDay = bundle.dunku.net != null;
-      return cell('Vardiya Net', fmtOrYok(bundle.views.dun.net, hasShift), 'çift') +
-        cell('Fire', fmtOrYok(bundle.views.dun.fire, hasShift), 'çift') +
-        cell('Verim', (!hasShift || bundle.views.dun.verim == null) ? 'Veri yok' : ('%' + bundle.views.dun.verim), '') +
-        cell('Gündüz', fmtOrYok(bundle.dunku.gunduz, hasDay), 'çift') +
-        cell('Gece', fmtOrYok(bundle.dunku.gece, hasDay), 'çift');
+      var verim = null;
+      if (bundle.dunku.net + bundle.dunku.fire > 0) {
+        var uret = bundle.dunku.net + bundle.dunku.fire;
+        verim = uret > 0 ? Math.round((bundle.dunku.net / uret) * 100) : 0;
+      }
+      return cell('Dün Net', fmt(bundle.dunku.net), 'çift') +
+        cell('Dün Fire', fmt(bundle.dunku.fire), 'çift') +
+        cell('Dün Verim', verim == null ? '—' : ('%' + verim), '') +
+        cell('Gündüz', fmt(bundle.dunku.gunduz), 'çift') +
+        cell('Gece', fmt(bundle.dunku.gece), 'çift');
     }
     if (r === 'haftalik') {
       var vals = bundle.week.values || [];
       var tot = vals.reduce(function (a, b) { return a + b; }, 0);
       var avg = vals.length ? Math.round(tot / vals.length) : 0;
       var mx = vals.length ? Math.max.apply(null, vals) : 0;
-      return cell('7 Gün Toplam', bundle.week.recordCount ? fmt(tot) : 'Veri yok', 'çift') +
-        cell('Günlük Ort.', bundle.week.recordCount ? fmt(avg) : 'Veri yok', 'çift') +
-        cell('En Yüksek Gün', bundle.week.recordCount ? fmt(mx) : 'Veri yok', 'çift') +
-        cell('Toplam Fire', bundle.week.recordCount ? fmt(bundle.week.fireSum) : 'Veri yok', 'çift') +
-        cell('Ort. Verim', bundle.week.verimWeighted == null ? 'Veri yok' : ('%' + bundle.week.verimWeighted), '');
+      var vAvg = bundle.week.verimAcc.length
+        ? Math.round(bundle.week.verimAcc.reduce(function (a, b) { return a + b; }, 0) / bundle.week.verimAcc.length)
+        : null;
+      return cell('7 Gün Toplam', fmt(tot), 'çift') +
+        cell('Günlük Ort.', fmt(avg), 'çift') +
+        cell('En Yüksek Gün', fmt(mx), 'çift') +
+        cell('Toplam Fire', fmt(bundle.week.fireSum), 'çift') +
+        cell('Ort. Verim', vAvg == null ? '—' : ('%' + vAvg), '');
     }
     var valsM = bundle.month.values || [];
     var totM = valsM.reduce(function (a, b) { return a + b; }, 0);
     var avgM = valsM.length ? Math.round(totM / valsM.length) : 0;
     var mxM = valsM.length ? Math.max.apply(null, valsM) : 0;
-    return cell('Ay Toplamı', bundle.month.recordCount ? fmt(totM) : 'Veri yok', 'çift') +
-      cell('Günlük Ort.', bundle.month.recordCount ? fmt(avgM) : 'Veri yok', 'çift') +
-      cell('En İyi Gün', bundle.month.recordCount ? fmt(mxM) : 'Veri yok', 'çift') +
-      cell('Toplam Fire', bundle.month.recordCount ? fmt(bundle.month.fireSum) : 'Veri yok', 'çift') +
-      cell('Ort. Verim', bundle.month.verimWeighted == null ? 'Veri yok' : ('%' + bundle.month.verimWeighted), '');
-  }
-
-  function detailHref(bundle) {
-    if (!bundle.raporId) return '/planlama/operasyon-raporu';
-    return '/planlama/operasyon-raporu?tarih=' + encodeURIComponent(bundle.raporTarih) +
-      '&vardiya=' + encodeURIComponent(bundle.raporVardiya) +
-      '&makine=' + bundle.makineId +
-      '&rapor_id=' + bundle.raporId;
+    var vAvgM = bundle.month.verimAcc.length
+      ? Math.round(bundle.month.verimAcc.reduce(function (a, b) { return a + b; }, 0) / bundle.month.verimAcc.length)
+      : null;
+    return cell('Ay Toplamı', fmt(totM), 'çift') +
+      cell('Günlük Ort.', fmt(avgM), 'çift') +
+      cell('En İyi Gün', fmt(mxM), 'çift') +
+      cell('Toplam Fire', fmt(bundle.month.fireSum), 'çift') +
+      cell('Ort. Verim', vAvgM == null ? '—' : ('%' + vAvgM), '');
   }
 
   function renderTabs() {
@@ -1579,51 +2019,31 @@
   }
 
   function renderBody(bundle) {
-    applyViewToBundle(bundle);
     var st = bundle.status;
     var body = document.getElementById('homeEnjBody');
     body.style.display = 'block';
     document.getElementById('homeEnjLoading').style.display = 'none';
 
-    var detUrl = detailHref(bundle);
-    var detStyle = bundle.raporId ? '' : ' style="opacity:.45"';
-    var detTitle = bundle.raporId
-      ? ('title="Rapor #' + bundle.raporId + '"')
-      : 'title="Rapor yok — listeye git"';
-
-    var opChip = '';
-    if (st === 'on') opChip = '<span class="home-enj-chip ok">Üretimde</span>';
-    else if (st === 'done') opChip = '<span class="home-enj-chip">Operasyon Bitti' +
-      (bundle.tamamlanma ? (' · ' + String(bundle.tamamlanma).slice(11, 16)) : '') + '</span>';
-    else if (st === 'setup') opChip = '<span class="home-enj-chip" style="color:#c2410c">Kalıp Değişim</span>';
-    else if (st === 'fault') opChip = '<span class="home-enj-chip" style="color:#b91c1c">Arıza</span>';
-    else opChip = '<span class="home-enj-chip" style="color:#b91c1c">Kapalı</span>';
-
-    var periodLbl = bundle.viewLabel || 'Şu an / Bugün';
-    var shiftLbl = (state.range === 'dun')
-      ? ('DÜN · ' + vardiyaMeta(bundle.raporVardiya).ad)
-      : ((state.range === 'haftalik' || state.range === 'aylik')
-        ? ('ÖZET · ' + (bundle.raporId ? (bundle.raporTarih + ' ' + vardiyaMeta(bundle.raporVardiya).ad) : 'veri yok'))
-        : ('AKTİF VARDİYA · ' + bundle.meta.ad));
-
     body.innerHTML =
       '<div class="home-enj-hd">' +
         '<div class="home-enj-name">'+bundle.kod+' · '+bundle.ad+
-          '<small>'+periodLbl+' · rapor '+(bundle.raporId ? ('#'+bundle.raporId+' · ') : '')+bundle.raporTarih+'</small></div>' +
+          '<small>Seçili makine · rapor '+bundle.tarihBugun+'</small></div>' +
         '<div style="display:flex;align-items:center;gap:10px;">' +
           '<span class="home-enj-badge '+st+'">'+STATUS_LABEL[st]+'</span>' +
-          '<a class="home-enj-detail" href="'+detUrl+'"'+detStyle+' '+detTitle+'>Detay →</a>' +
+          '<a class="home-enj-detail" href="/enjeksiyon/?makine='+bundle.makineId+'">Detay →</a>' +
         '</div>' +
       '</div>' +
       '<div class="home-enj-shift">' +
-        '<span><span class="lbl">'+periodLbl+'</span> · '+shiftLbl+'</span>' +
-        '<span>'+vardiyaMeta(bundle.raporVardiya).aralik+'</span>' +
+        '<span><span class="lbl">Aktif vardiya</span> · '+bundle.meta.ad+'</span>' +
+        '<span>'+bundle.meta.aralik+'</span>' +
       '</div>' +
       '<div class="home-enj-meta">' +
         '<span class="home-enj-chip">'+bundle.aktifSlot+' slot aktif</span>' +
         '<span class="home-enj-chip">'+bundle.istasyonSay+' / '+bundle.istasyonKapasite+' istasyon</span>' +
         '<span class="home-enj-chip">'+bundle.personel+' personel</span>' +
-        opChip +
+        (st === 'on' ? '<span class="home-enj-chip ok">Üretimde</span>' : '') +
+        (st === 'off' || st === 'fault' ? '<span class="home-enj-chip" style="color:#b91c1c">Üretim yok</span>' : '') +
+        (st === 'setup' ? '<span class="home-enj-chip" style="color:#c2410c">Setup</span>' : '') +
       '</div>' +
       '<div class="home-enj-ab">' +
         '<div class="home-enj-ab-block"><span class="ab a">A</span><span class="code">'+bundle.a.kod+'</span>' +
@@ -1653,28 +2073,16 @@
       btn.classList.toggle('active', btn.getAttribute('data-range') === state.range);
       btn.addEventListener('click', function () {
         state.range = btn.getAttribute('data-range');
-        renderBody(bundle);
+        Array.prototype.forEach.call(document.querySelectorAll('#homeEnjRange button'), function (b) {
+          b.classList.toggle('active', b === btn);
+        });
+        renderChart(document.getElementById('chartSvg'), document.getElementById('chartEmpty'), bundle);
+        document.getElementById('homeEnjKpi').innerHTML = kpiHtml(bundle);
       });
     });
 
     renderChart(document.getElementById('chartSvg'), document.getElementById('chartEmpty'), bundle);
     document.getElementById('homeEnjKpi').innerHTML = kpiHtml(bundle);
-
-    var foot = document.getElementById('homeEnjFoot');
-    if (foot) {
-      foot.textContent = 'Kaynak: tek zincir · ' + (bundle.viewLabel || '') +
-        ' · rapor #' + (bundle.raporId || 'yok') +
-        ' · ' + bundle.raporTarih + ' / ' + bundle.raporVardiya +
-        ' · seçim: ' + (bundle.pickReason || '—') +
-        ' · Detay=aynı rapor_id · sahte grafik yok';
-    }
-    try {
-      console.info('[home-enj] view', {
-        range: state.range, raporId: bundle.raporId, reason: bundle.pickReason,
-        net: bundle.net, fire: bundle.fire, a: bundle.a.cift, b: bundle.b.cift,
-        bugunId: bundle.views.bugun.raporId, dunId: bundle.views.dun.raporId
-      });
-    } catch (e0) {}
   }
 
   async function refreshSelected() {
@@ -1692,34 +2100,25 @@
       renderBody(bundle);
     } catch (e) {
       document.getElementById('homeEnjLoading').textContent =
-        'Veri yüklenemedi: ' + (e.message || e) + ' — Enjeksiyon/Planlama yetkisi / API kontrol edin';
+        'Veri yüklenemedi: ' + (e.message || e) + ' — Enjeksiyon yetkisi / API kontrol edin';
     }
-  }
-
-  async function resolveMachineStatus(makineId) {
-    var now = new Date();
-    var v = aktifVardiya(now);
-    var t = raporTarihForVardiya(v, now);
-    var picked = await pickDisplayReport(makineId, v, t, now);
-    if (!picked.rapor) return 'off';
-    var pl = await fetchPlanlamaMakine(makineId, picked.rapor.tarih, picked.rapor.vardiya);
-    if (pl) return statusFromAnlik(pl.anlik_durum, !!picked.finished);
-    return statusFromSlots(picked.detay && picked.detay.slotlar, !!picked.finished);
   }
 
   async function warmStatus() {
-    var prevSel = state.selectedId;
+    /* diğer makinelerin sekme renkleri için hafif durum */
+    var now = new Date();
+    var v = aktifVardiya(now);
+    var t = raporTarihForVardiya(v, now);
     await Promise.all(state.machines.map(async function (m) {
       if (m.id === state.selectedId) return;
-      try { m.status = await resolveMachineStatus(m.id); }
-      catch (e) { m.status = 'off'; }
+      try {
+        var list = await fetchRaporlar(m.id, t, t, v);
+        if (!list.length) { m.status = 'off'; return; }
+        var det = await fetchDetay(list[0].id);
+        m.status = statusFromSlots(det && det.slotlar);
+      } catch (e) { m.status = 'off'; }
     }));
-    /* Kullanıcı seçimini sıfırlama */
-    state.selectedId = prevSel;
     renderTabs();
-    if (typeof window.__homeSetAktifMakine === 'function') {
-      window.__homeSetAktifMakine(state.machines.filter(function (m) { return m.status === 'on'; }).length);
-    }
   }
 
   async function boot() {
@@ -1729,24 +2128,15 @@
         document.getElementById('homeEnjLoading').textContent = 'Makine listesi boş';
         return;
       }
-      /* Önce tüm makinelerin durumunu çöz — üretimde olanı varsayılan seç */
-      await Promise.all(state.machines.map(async function (m) {
-        try { m.status = await resolveMachineStatus(m.id); }
-        catch (e) { m.status = 'off'; }
-      }));
-      var stillValid = state.selectedId && state.machines.some(function (m) {
-        return m.id === state.selectedId;
-      });
-      if (!stillValid) state.selectedId = pickDefaultMachineId();
+      if (state.selectedId == null) {
+        state.selectedId = pickDefaultMachineId();
+      }
       renderTabs();
       await refreshSelected();
-      await updateEnjDashTotals();
+      warmStatus();
     } catch (e) {
       document.getElementById('homeEnjLoading').textContent =
         'Başlatılamadı: ' + (e.message || e);
-      if (typeof window.__homeSetEnjDash === 'function') {
-        window.__homeSetEnjDash({ err: true });
-      }
     }
   }
 
