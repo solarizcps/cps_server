@@ -49,6 +49,59 @@ ALWAYS_VISIBLE_PROSES = (
     '12',  # Sayım-Kontrol
 )
 
+# Kararlı grup anahtarları — kodlar yalnız SELECT ile kanıtlanmış olanlar.
+# Kanıtsız proses için codes boş bırakılır; server teşhis scripti keşfeder.
+# Kart eşlemesi display label ile değil group_key / proses_kodu ile yapılır.
+PROCESS_GROUPS = {
+    'montaj': {
+        'codes': ('30',),  # Proses_M: Monta
+        'label_aliases': ('monta', 'montaj'),
+    },
+    'temizleme': {
+        'codes': ('35',),
+        'label_aliases': ('temizleme',),
+    },
+    'enjeksiyon': {
+        'codes': ('26',),
+        'label_aliases': ('enjeksiyon',),
+    },
+    'kesim': {
+        # modules.common.korgun._PROSES_TANIM ile aynı kanıtlı kod
+        'codes': ('02', '2'),
+        'label_aliases': ('kesim',),
+    },
+    'silte': {
+        'codes': (),
+        'label_aliases': ('şilte', 'silte'),
+    },
+    'digital': {
+        'codes': (),
+        'label_aliases': ('digital', 'serigraf'),
+    },
+    'lazer': {
+        'codes': (),
+        'label_aliases': ('lazer',),
+    },
+    'planlama_depo': {
+        'codes': (),
+        'label_aliases': ('planlama-depo', 'planlama depo', 'planlama'),
+    },
+}
+
+
+def resolve_proses_group(proses_kodu, proses_adi=None):
+    """proses_kodu öncelikli; ad yalnız alias yedek. Bilinmeyen → None."""
+    kod = str(proses_kodu or '').strip()
+    ad = (proses_adi or '').strip().lower()
+    for key, meta in PROCESS_GROUPS.items():
+        codes = {str(c).strip() for c in meta.get('codes') or ()}
+        if kod in codes:
+            return key
+        for alias in meta.get('label_aliases') or ():
+            if ad and alias in ad:
+                return key
+    return None
+
 
 class KorgunBitenBagError(Exception):
     def __init__(self, message='Korgun bağlantısı kurulamadı'):
@@ -63,7 +116,13 @@ class KorgunBitenPeriodError(ValueError):
 _BASE_WHERE_G = """
     g.Cikan > 0
     AND g.EndTarih IS NOT NULL
-    AND LTRIM(RTRIM(ISNULL(g.Birim, ''))) = 'CIFT'
+    AND UPPER(LTRIM(RTRIM(ISNULL(g.Birim, '')))) = 'CIFT'
+"""
+
+_PROSES_JOIN = """
+    LEFT JOIN Proses_M pm WITH (NOLOCK)
+      ON LTRIM(RTRIM(CAST(pm.Pro AS VARCHAR(20))))
+       = LTRIM(RTRIM(CAST(g.Proses AS VARCHAR(20))))
 """
 
 
@@ -181,7 +240,7 @@ def _proses_toplamlari(cur, bas, bit):
             COUNT(DISTINCT CAST(g.EmirNo AS VARCHAR(20)) + '|' + LTRIM(RTRIM(CAST(g.Proses AS VARCHAR(20))))) AS biten_proses_sayisi
         FROM Urt_con_gch g WITH (NOLOCK)
         INNER JOIN Urt_Emir ue WITH (NOLOCK) ON ue.EmirNo = g.EmirNo
-        LEFT JOIN Proses_M pm WITH (NOLOCK) ON pm.Pro = g.Proses
+        {_PROSES_JOIN}
         WHERE {_BASE_WHERE_G}
           AND CAST(g.EndTarih AS DATE) >= CAST(%s AS DATE)
           AND CAST(g.EndTarih AS DATE) <= CAST(%s AS DATE)
@@ -198,9 +257,12 @@ def _proses_toplamlari(cur, bas, bit):
     for r in rows:
         cift = _num(r.get('toplam_cift'))
         pay = round((float(cift) / toplam) * 100, 1) if toplam > 0 else 0.0
+        kod = str(r.get('proses_kodu') or '')
+        adi = (r.get('proses_adi') or '').strip() or kod
         out.append({
-            'proses_kodu': str(r.get('proses_kodu') or ''),
-            'proses_adi': (r.get('proses_adi') or '').strip() or str(r.get('proses_kodu') or ''),
+            'proses_kodu': kod,
+            'proses_adi': adi,
+            'group_key': resolve_proses_group(kod, adi),
             'toplam_cift': cift,
             'emir_sayisi': int(r.get('emir_sayisi') or 0),
             'biten_proses_sayisi': int(r.get('biten_proses_sayisi') or 0),
@@ -239,9 +301,11 @@ def _build_proses_kartlari(cur, bas, bit, today):
     look_bas = min(bas, today - timedelta(days=90), today.replace(day=1))
     for kod in _proses_kodlari_lookback(cur, look_bas, today):
         if kod not in by_kod:
+            adi = _proses_adi(cur, kod)
             by_kod[kod] = {
                 'proses_kodu': kod,
-                'proses_adi': _proses_adi(cur, kod),
+                'proses_adi': adi,
+                'group_key': resolve_proses_group(kod, adi),
                 'toplam_cift': 0,
                 'emir_sayisi': 0,
                 'biten_proses_sayisi': 0,
@@ -252,9 +316,11 @@ def _build_proses_kartlari(cur, bas, bit, today):
     for kod in ALWAYS_VISIBLE_PROSES:
         kod = str(kod).strip()
         if kod not in by_kod:
+            adi = _proses_adi(cur, kod)
             by_kod[kod] = {
                 'proses_kodu': kod,
-                'proses_adi': _proses_adi(cur, kod),
+                'proses_adi': adi,
+                'group_key': resolve_proses_group(kod, adi),
                 'toplam_cift': 0,
                 'emir_sayisi': 0,
                 'biten_proses_sayisi': 0,
@@ -263,13 +329,17 @@ def _build_proses_kartlari(cur, bas, bit, today):
             }
         else:
             # ad güncelle (pin isimleri Proses_M)
-            by_kod[kod]['proses_adi'] = _proses_adi(cur, kod) or by_kod[kod]['proses_adi']
+            adi = _proses_adi(cur, kod) or by_kod[kod]['proses_adi']
+            by_kod[kod]['proses_adi'] = adi
+            by_kod[kod]['group_key'] = resolve_proses_group(kod, adi)
 
     toplam = float(period_toplam or 0)
     out = list(by_kod.values())
     for p in out:
         cift = float(p.get('toplam_cift') or 0)
         p['pay_yuzde'] = round((cift / toplam) * 100, 1) if toplam > 0 else 0.0
+        if not p.get('group_key'):
+            p['group_key'] = resolve_proses_group(p.get('proses_kodu'), p.get('proses_adi'))
     out.sort(key=lambda p: (-float(p.get('toplam_cift') or 0), (p.get('proses_adi') or '').lower()))
     return out, _num(toplam)
 
@@ -320,7 +390,7 @@ def _son_bitenler(cur, bas, bit, limit=5, proses_kodu=None):
             MAX(g.EndTarih) AS bitis_zamani
         FROM Urt_con_gch g WITH (NOLOCK)
         INNER JOIN Urt_Emir ue WITH (NOLOCK) ON ue.EmirNo = g.EmirNo
-        LEFT JOIN Proses_M pm WITH (NOLOCK) ON pm.Pro = g.Proses
+        {_PROSES_JOIN}
         LEFT JOIN Siparis_Kay sk WITH (NOLOCK) ON sk.SipNo = g.FisNo
         LEFT JOIN Cari_Kart ck WITH (NOLOCK) ON ck.CKod = sk.CariKod
         WHERE {_BASE_WHERE_G}

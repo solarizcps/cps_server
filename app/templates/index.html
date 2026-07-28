@@ -605,6 +605,11 @@
   var store = {
     panel: 'enjeksiyon',
     enjAktif: null,
+    enjBugun: null,
+    enjHafta: null,
+    enjAy: null,
+    enjErr: false,
+    enjLoaded: false,
     korgun: null
   };
 
@@ -617,6 +622,12 @@
     if (n == null || n === '') return 'Veri yok';
     n = Math.round(Number(n) || 0);
     return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  }
+  /* null=henüz yok · hata=Veri alınamadı · 0=0 (Veri yok değil) */
+  function fmtEnjDash(n) {
+    if (store.enjErr) return 'Veri alınamadı';
+    if (!store.enjLoaded || n == null || n === '') return '…';
+    return fmt(n);
   }
   function clockParts() {
     var d = new Date();
@@ -639,10 +650,12 @@
     var html = '';
     var p = store.panel;
     if (p === 'enjeksiyon') {
-      html += kpiCard('Bugün Toplam Üretim', 'Veri yok', 'çift');
-      html += kpiCard('Son 7 Gün Toplam Üretim', 'Veri yok', 'çift');
-      html += kpiCard('Bu Ay Toplam Üretim', 'Veri yok', 'çift');
-      html += kpiCard('Aktif Makine', store.enjAktif == null ? 'Veri yok' : esc(String(store.enjAktif)), '');
+      html += kpiCard('Bugün Toplam Üretim', fmtEnjDash(store.enjBugun), 'çift');
+      html += kpiCard('Son 7 Gün Toplam Üretim', fmtEnjDash(store.enjHafta), 'çift');
+      html += kpiCard('Bu Ay Toplam Üretim', fmtEnjDash(store.enjAy), 'çift');
+      html += kpiCard('Aktif Makine',
+        store.enjErr ? 'Veri alınamadı'
+          : (store.enjAktif == null ? '…' : esc(String(store.enjAktif))), '');
     } else if (p === 'korgun') {
       var q = (store.korgun && store.korgun.qty_by_period) || {};
       var s = (store.korgun && store.korgun.summary) || {};
@@ -683,6 +696,21 @@
   }
   window.__homeSetAktifMakine = function (n) {
     store.enjAktif = n;
+    if (store.panel === 'enjeksiyon') renderKpis();
+  };
+  window.__homeSetEnjDash = function (data) {
+    data = data || {};
+    if (data.err) {
+      store.enjErr = true;
+      store.enjLoaded = true;
+    } else {
+      store.enjErr = false;
+      store.enjLoaded = true;
+      if (data.bugun != null) store.enjBugun = data.bugun;
+      if (data.hafta != null) store.enjHafta = data.hafta;
+      if (data.ay != null) store.enjAy = data.ay;
+      if (data.aktif != null) store.enjAktif = data.aktif;
+    }
     if (store.panel === 'enjeksiyon') renderKpis();
   };
   window.__homeSetKorgunDash = function (data) {
@@ -733,7 +761,7 @@
     return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   }
   function fmtOrYok(n, has) {
-    if (!has) return 'Veri yok';
+    if (has === false) return 'Veri yok';
     if (n == null || n === '') return 'Veri yok';
     return fmt(n);
   }
@@ -952,7 +980,47 @@
         status: 'off'
       };
     });
-    if (!state.selectedId && state.machines.length) state.selectedId = state.machines[0].id;
+    /* selectedId burada atanmaz — önce üretimde makine çözülür */
+  }
+
+  function pickDefaultMachineId() {
+    var onM = state.machines.find(function (m) { return m.status === 'on'; });
+    if (onM) return onM.id;
+    return state.machines.length ? state.machines[0].id : null;
+  }
+
+  function netFromRapor(r) {
+    if (!r || !r.ozet) return 0;
+    if (r.ozet.net != null) return Number(r.ozet.net) || 0;
+    return Number(r.ozet.toplam_uretim) || 0;
+  }
+
+  async function updateEnjDashTotals() {
+    try {
+      var now = new Date();
+      var vardiya = aktifVardiya(now);
+      var tarihBugun = raporTarihForVardiya(vardiya, now);
+      var weekStart = ymd(addDays(now, -6));
+      var monthStart = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-01';
+      var todayEnd = ymd(now);
+      var bugun = 0, hafta = 0, ay = 0;
+      await Promise.all(state.machines.map(async function (m) {
+        var dayRows = await fetchRaporlar(m.id, tarihBugun, tarihBugun, null);
+        dayRows.forEach(function (r) { bugun += netFromRapor(r); });
+        var weekRows = await fetchRaporlar(m.id, weekStart, todayEnd, null);
+        weekRows.forEach(function (r) { hafta += netFromRapor(r); });
+        var monthRows = await fetchRaporlar(m.id, monthStart, todayEnd, null);
+        monthRows.forEach(function (r) { ay += netFromRapor(r); });
+      }));
+      var aktif = state.machines.filter(function (m) { return m.status === 'on'; }).length;
+      if (typeof window.__homeSetEnjDash === 'function') {
+        window.__homeSetEnjDash({ bugun: bugun, hafta: hafta, ay: ay, aktif: aktif, err: false });
+      }
+    } catch (e) {
+      if (typeof window.__homeSetEnjDash === 'function') {
+        window.__homeSetEnjDash({ err: true });
+      }
+    }
   }
 
   /**
@@ -1640,12 +1708,18 @@
   }
 
   async function warmStatus() {
+    var prevSel = state.selectedId;
     await Promise.all(state.machines.map(async function (m) {
       if (m.id === state.selectedId) return;
       try { m.status = await resolveMachineStatus(m.id); }
       catch (e) { m.status = 'off'; }
     }));
+    /* Kullanıcı seçimini sıfırlama */
+    state.selectedId = prevSel;
     renderTabs();
+    if (typeof window.__homeSetAktifMakine === 'function') {
+      window.__homeSetAktifMakine(state.machines.filter(function (m) { return m.status === 'on'; }).length);
+    }
   }
 
   async function boot() {
@@ -1655,12 +1729,24 @@
         document.getElementById('homeEnjLoading').textContent = 'Makine listesi boş';
         return;
       }
+      /* Önce tüm makinelerin durumunu çöz — üretimde olanı varsayılan seç */
+      await Promise.all(state.machines.map(async function (m) {
+        try { m.status = await resolveMachineStatus(m.id); }
+        catch (e) { m.status = 'off'; }
+      }));
+      var stillValid = state.selectedId && state.machines.some(function (m) {
+        return m.id === state.selectedId;
+      });
+      if (!stillValid) state.selectedId = pickDefaultMachineId();
       renderTabs();
       await refreshSelected();
-      warmStatus();
+      await updateEnjDashTotals();
     } catch (e) {
       document.getElementById('homeEnjLoading').textContent =
         'Başlatılamadı: ' + (e.message || e);
+      if (typeof window.__homeSetEnjDash === 'function') {
+        window.__homeSetEnjDash({ err: true });
+      }
     }
   }
 
