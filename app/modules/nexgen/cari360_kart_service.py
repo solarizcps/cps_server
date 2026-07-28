@@ -30,6 +30,21 @@ class Cari360KartError(Exception):
         super().__init__(mesaj)
 
 
+def _fmt_dt(v) -> str | None:
+    if v is None:
+        return None
+    s = str(v).strip()
+    if not s:
+        return None
+    if 'T' in s:
+        s = s.replace('T', ' ', 1)
+    if len(s) >= 16 and s[10] == ' ':
+        return s[:16]
+    if len(s) >= 10:
+        return s[:10]
+    return s
+
+
 def _tablo_var(con: sqlite3.Connection, name: str) -> bool:
     return bool(con.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,),
@@ -204,7 +219,14 @@ def load_cari_kart(
     yk: set[str] | None,
 ) -> dict[str, Any]:
     """Cari Kart shell verisi — ağır modül sorgusu yok."""
-    if not can_view_cari(con, kullanici_id, cari_id, yk):
+    try:
+        cid = int(cari_id)
+    except (TypeError, ValueError):
+        raise Cari360KartError('Geçersiz cari id.', 400)
+    if cid <= 0:
+        raise Cari360KartError('Geçersiz cari id.', 400)
+
+    if not can_view_cari(con, kullanici_id, cid, yk):
         raise Cari360KartError('Bu cari için görüntüleme yetkiniz yok.', 403)
 
     assert_cari_yetkili_schema(con)
@@ -212,16 +234,18 @@ def load_cari_kart(
     row = con.execute(
         'SELECT id, cari_kod, unvan, aktif, created_at, updated_at '
         'FROM nexgen_cari WHERE id=?',
-        (cari_id,),
+        (cid,),
     ).fetchone()
     if not row:
         raise Cari360KartError('Cari bulunamadı.', 404)
 
     cari_kod = row['cari_kod'] or ''
     unvan = row['unvan'] or ''
-    es_durum = _eslestirme_durumu(con, cari_id, cari_kod, unvan)
+    # Eşleşme hesaplanır (geriye uyum) ama operasyon kartında gösterilmez.
+    es_durum = _eslestirme_durumu(con, cid, cari_kod, unvan)
     test_cari = is_test_kayit(cari_kod, unvan)
-    sorumlu = _sorumlu_ozet(con, cari_id)
+    sorumlu = _sorumlu_ozet(con, cid)
+    sorumlu_adi = (sorumlu['ana_adi'] or '').strip() or SORUMLU_ATANMAMIS
 
     return {
         'cari': {
@@ -229,14 +253,14 @@ def load_cari_kart(
             'cari_kod': cari_kod,
             'unvan': unvan,
             'aktif': int(row['aktif'] or 0),
-            'created_at': row['created_at'],
-            'updated_at': row['updated_at'],
+            'created_at': _fmt_dt(row['created_at']) or '—',
+            'updated_at': _fmt_dt(row['updated_at']) or '—',
         },
-        'sorumlu_adi': sorumlu['ana_adi'],
+        'sorumlu_adi': sorumlu_adi,
         'sorumlular': sorumlu['liste'],
         'eslestirme_durumu': es_durum,
         'test_cari': test_cari,
-        'test_banner': bool(test_cari and es_durum == 'TEST_NO_LINK'),
-        'can_write_yetkili': can_write_yetkili(con, kullanici_id, cari_id, yk),
-        'can_write_gorusme': can_mo_gorusme_yaz(con, kullanici_id, cari_id, yk),
+        'test_banner': False,  # finans eşleşme banner'ı operasyon kartında yok
+        'can_write_yetkili': can_write_yetkili(con, kullanici_id, cid, yk),
+        'can_write_gorusme': can_mo_gorusme_yaz(con, kullanici_id, cid, yk),
     }

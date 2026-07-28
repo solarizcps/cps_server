@@ -16,6 +16,13 @@ from modules.nexgen.cari360_dosya_service import (
     cari_liste,
     hafiza_liste,
 )
+from modules.nexgen.cari360_ops_read_service import (
+    Cari360OpsError,
+    load_cari360_ozet,
+    load_cari360_sevkiyatlar,
+    load_cari360_siparisler,
+    load_cari360_urunler,
+)
 from modules.nexgen.cari360_yetki import can_cari360_dosya_ekrani
 from modules.nexgen.cari_sorumlu_service import can_view_cari
 from modules.nexgen.mo_gorusme_config import GORUSME_TIPLERI, SONUC_TIPLERI
@@ -27,6 +34,10 @@ from modules.nexgen.mo_gorusme_service import (
     gorusme_kaydet,
     list_gorusmeler,
     takip_durum_ayarla,
+)
+
+_CARI360_TABS = (
+    'genel', 'yetkililer', 'siparisler', 'sevkiyatlar', 'urunler', 'gorusmeler',
 )
 
 
@@ -64,7 +75,7 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
     @bp.route('/cari360/<int:cari_id>', strict_slashes=False)
     @login_gerekli
     def cari360_dosya_sayfa(cari_id):
-        """Cari Kart shell — Genel Bilgiler + Yetkililer."""
+        """Cari Kart shell — operasyon görünümü (read-only ops + mevcut sekmeler)."""
         yk = _yk()
         uid = kullanici_id_fn()
         if not uid:
@@ -73,12 +84,30 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
         try:
             data = load_cari_kart(con, cari_id, uid, yk)
             acik_takip = acik_takip_sayisi(con, cari_id)
+            yetkili_sayisi = 0
+            gorusme_sayisi = 0
+            try:
+                yetkili_sayisi = int(con.execute(
+                    'SELECT COUNT(*) FROM cari_yetkili '
+                    'WHERE cari_id=? AND COALESCE(aktif, 1)=1',
+                    (cari_id,),
+                ).fetchone()[0])
+            except Exception:
+                yetkili_sayisi = 0
+            try:
+                gorusme_sayisi = int(con.execute(
+                    'SELECT COUNT(*) FROM musteri_operasyon_gorusme '
+                    'WHERE cari_id=? AND COALESCE(aktif, 1)=1',
+                    (cari_id,),
+                ).fetchone()[0])
+            except Exception:
+                gorusme_sayisi = 0
         except Cari360KartError as e:
             abort(e.kod)
         finally:
             con.close()
         tab = (request.args.get('tab') or 'genel').strip().lower()
-        if tab not in ('genel', 'yetkililer', 'gorusmeler'):
+        if tab not in _CARI360_TABS:
             tab = 'genel'
         return render_template(
             'nexgen/cari360_kart.html',
@@ -86,9 +115,52 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
             data=data,
             aktif_tab=tab,
             acik_takip=acik_takip,
+            yetkili_sayisi=yetkili_sayisi,
+            gorusme_sayisi=gorusme_sayisi,
             gorusme_tipleri=GORUSME_TIPLERI,
             sonuc_tipleri=SONUC_TIPLERI,
         )
+
+    def _ops_json(fn, cari_id, **kwargs):
+        """Read-only ops API — yetki + JSON hata (HTML değil)."""
+        yk = _yk()
+        uid = kullanici_id_fn()
+        if not uid:
+            return jsonify({'ok': False, 'mesaj': 'Oturum gerekli.'}), 401
+        con = db_fn()
+        try:
+            data = fn(con, cari_id, uid, yk, **kwargs)
+            return jsonify({'ok': True, **data})
+        except Cari360OpsError as e:
+            return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod
+        except Exception as e:
+            return jsonify({
+                'ok': False,
+                'mesaj': 'Operasyon verisi yüklenemedi.',
+                'hata': str(e)[:200],
+            }), 500
+        finally:
+            con.close()
+
+    @bp.route('/api/cari360/<int:cari_id>/ozet', methods=['GET'])
+    @login_gerekli
+    def api_cari360_ozet(cari_id):
+        return _ops_json(load_cari360_ozet, cari_id)
+
+    @bp.route('/api/cari360/<int:cari_id>/siparisler', methods=['GET'])
+    @login_gerekli
+    def api_cari360_siparisler(cari_id):
+        return _ops_json(load_cari360_siparisler, cari_id)
+
+    @bp.route('/api/cari360/<int:cari_id>/sevkiyatlar', methods=['GET'])
+    @login_gerekli
+    def api_cari360_sevkiyatlar(cari_id):
+        return _ops_json(load_cari360_sevkiyatlar, cari_id)
+
+    @bp.route('/api/cari360/<int:cari_id>/urunler', methods=['GET'])
+    @login_gerekli
+    def api_cari360_urunler(cari_id):
+        return _ops_json(load_cari360_urunler, cari_id)
 
     @bp.route('/api/cari360/<int:cari_id>/gorusme', methods=['GET'])
     @login_gerekli
@@ -96,17 +168,38 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
         """Aynı list_gorusmeler servisi — Cari Kart Görüşmeler."""
         yk = _yk()
         uid = kullanici_id_fn()
+        if not uid:
+            return jsonify({'ok': False, 'mesaj': 'Oturum gerekli.'}), 401
         con = db_fn()
         try:
+            if not can_view_cari(con, uid, cari_id, yk):
+                return jsonify({'ok': False, 'mesaj': 'Bu cari için görüntüleme yetkiniz yok.'}), 403
+            row = con.execute(
+                'SELECT id FROM nexgen_cari WHERE id=?', (cari_id,),
+            ).fetchone()
+            if not row:
+                return jsonify({'ok': False, 'mesaj': 'Cari bulunamadı.'}), 404
             liste = list_gorusmeler(con, cari_id, uid, yk)
+            gorusme_sayisi = int(con.execute(
+                'SELECT COUNT(*) FROM musteri_operasyon_gorusme '
+                'WHERE cari_id=? AND COALESCE(aktif, 1)=1',
+                (cari_id,),
+            ).fetchone()[0])
             return jsonify({
                 'ok': True,
                 'liste': liste,
+                'count': gorusme_sayisi,
                 'acik_takip': acik_takip_sayisi(con, cari_id),
                 'can_write': can_mo_gorusme_yaz(con, uid, cari_id, yk),
             })
         except MoGorusmeError as e:
             return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod
+        except Exception as e:
+            return jsonify({
+                'ok': False,
+                'mesaj': 'Görüşmeler yüklenemedi.',
+                'hata': str(e)[:200],
+            }), 500
         finally:
             con.close()
 

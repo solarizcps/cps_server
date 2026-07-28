@@ -19,30 +19,44 @@
         {% else %}
         <span class="ckart-badge ckart-badge-pasif">PASİF</span>
         {% endif %}
-        <span class="ckart-meta-item">İç sorumlu:
+        <span class="ckart-meta-item">İç sorumlu pazarlamacı:
           <strong>{{ data.sorumlu_adi or 'Atanmamış' }}</strong>
         </span>
-        <span class="ckart-meta-item">Eşleşme:
-          <strong class="ckart-es">{{ data.eslestirme_durumu }}</strong>
+        <span class="ckart-meta-item">Oluşturma tarihi:
+          <strong>{{ c.created_at or '—' }}</strong>
+        </span>
+        <span class="ckart-meta-item">Son güncelleme:
+          <strong>{{ c.updated_at or '—' }}</strong>
         </span>
       </div>
     </div>
   </header>
 
-  {% if data.test_banner %}
-  <div class="ckart-banner" role="status">
-    Test cari — finans eşleşmesi yok.
+  <div class="ckart-kpi" id="ckart-kpi" aria-label="Operasyon özeti">
+    <div class="ckart-kpi-item"><span class="ckart-kpi-lbl">Toplam Sipariş</span><strong id="kpi-toplam-siparis">…</strong></div>
+    <div class="ckart-kpi-item"><span class="ckart-kpi-lbl">Aktif Sipariş</span><strong id="kpi-aktif-siparis">…</strong></div>
+    <div class="ckart-kpi-item"><span class="ckart-kpi-lbl">Toplam Sevkiyat</span><strong id="kpi-toplam-sevkiyat">…</strong></div>
+    <div class="ckart-kpi-item"><span class="ckart-kpi-lbl">Toplam Sevk KG</span><strong id="kpi-toplam-sevk-kg">…</strong></div>
+    <div class="ckart-kpi-item"><span class="ckart-kpi-lbl">Son Sevkiyat</span><strong id="kpi-son-sevkiyat">…</strong></div>
+    <div class="ckart-kpi-item"><span class="ckart-kpi-lbl">Son Görüşme</span><strong id="kpi-son-gorusme">…</strong></div>
   </div>
-  {% endif %}
 
   <nav class="ckart-sekme-bar" aria-label="Cari Kart sekmeleri">
     <button type="button" class="ckart-sekme{% if aktif_tab == 'genel' %} aktif{% endif %}"
             data-tab="genel" onclick="ckartTab('genel')">Genel Bilgiler</button>
     <button type="button" class="ckart-sekme{% if aktif_tab == 'yetkililer' %} aktif{% endif %}"
-            data-tab="yetkililer" onclick="ckartTab('yetkililer')">Yetkililer</button>
+            data-tab="yetkililer" onclick="ckartTab('yetkililer')">
+      Yetkililer{% if yetkili_sayisi %}<span class="ckart-sekme-badge" id="ckart-yetkili-badge">{{ yetkili_sayisi }}</span>{% else %}<span class="ckart-sekme-badge" id="ckart-yetkili-badge" style="display:none"></span>{% endif %}
+    </button>
+    <button type="button" class="ckart-sekme{% if aktif_tab == 'siparisler' %} aktif{% endif %}"
+            data-tab="siparisler" onclick="ckartTab('siparisler')">Sipariş Geçmişi</button>
+    <button type="button" class="ckart-sekme{% if aktif_tab == 'sevkiyatlar' %} aktif{% endif %}"
+            data-tab="sevkiyatlar" onclick="ckartTab('sevkiyatlar')">Sevkiyatlar</button>
+    <button type="button" class="ckart-sekme{% if aktif_tab == 'urunler' %} aktif{% endif %}"
+            data-tab="urunler" onclick="ckartTab('urunler')">Son Aldığı Ürünler</button>
     <button type="button" class="ckart-sekme{% if aktif_tab == 'gorusmeler' %} aktif{% endif %}"
             data-tab="gorusmeler" onclick="ckartTab('gorusmeler')">
-      Görüşmeler{% if acik_takip %}<span class="ckart-sekme-badge" id="ckart-acik-badge">{{ acik_takip }}</span>{% endif %}
+      Görüşmeler{% if gorusme_sayisi %}<span class="ckart-sekme-badge" id="ckart-gorusme-badge">{{ gorusme_sayisi }}</span>{% else %}<span class="ckart-sekme-badge" id="ckart-gorusme-badge" style="display:none"></span>{% endif %}
     </button>
   </nav>
 
@@ -50,12 +64,11 @@
     <h2 class="ckart-h2">Genel Bilgiler</h2>
     <dl class="ckart-dl">
       <div><dt>Cari kodu</dt><dd>{{ c.cari_kod }}</dd></div>
-      <div><dt>Cari unvanı</dt><dd>{{ c.unvan }}</dd></div>
+      <div><dt>Firma ünvanı</dt><dd>{{ c.unvan }}</dd></div>
       <div><dt>Durum</dt><dd>{% if c.aktif %}Aktif{% else %}Pasif{% endif %}</dd></div>
-      <div><dt>Oluşturma</dt><dd>{{ c.created_at or '—' }}</dd></div>
-      <div><dt>Güncelleme</dt><dd>{{ c.updated_at or '—' }}</dd></div>
       <div><dt>İç sorumlu pazarlamacı</dt><dd>{{ data.sorumlu_adi or 'Atanmamış' }}</dd></div>
-      <div><dt>Finans eşleşme durumu</dt><dd><strong>{{ data.eslestirme_durumu }}</strong></dd></div>
+      <div><dt>Oluşturma tarihi</dt><dd>{{ c.created_at or '—' }}</dd></div>
+      <div><dt>Son güncelleme</dt><dd>{{ c.updated_at or '—' }}</dd></div>
     </dl>
   </section>
 
@@ -84,6 +97,73 @@
         </thead>
         <tbody id="ckart-yetkili-tbody">
           <tr><td colspan="10" class="ckart-muted">Yükleniyor…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="ckart-panel-siparisler" class="ckart-panel"{% if aktif_tab != 'siparisler' %} style="display:none"{% endif %}>
+    <h2 class="ckart-h2">Sipariş Geçmişi</h2>
+    <div class="ckart-tablo-wrap">
+      <table class="ckart-tablo" id="ckart-siparis-tablo">
+        <thead>
+          <tr>
+            <th>Sipariş No</th>
+            <th>Sipariş Tarihi</th>
+            <th>Durum</th>
+            <th>Termin</th>
+            <th>Toplam KG</th>
+            <th>Kalem</th>
+            <th>Son Sevkiyat</th>
+            <th>Sevk KG</th>
+            <th>Kalan KG</th>
+          </tr>
+        </thead>
+        <tbody id="ckart-siparis-tbody">
+          <tr><td colspan="9" class="ckart-muted">Sekme açıldığında yüklenecek.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="ckart-panel-sevkiyatlar" class="ckart-panel"{% if aktif_tab != 'sevkiyatlar' %} style="display:none"{% endif %}>
+    <h2 class="ckart-h2">Sevkiyatlar</h2>
+    <div class="ckart-tablo-wrap">
+      <table class="ckart-tablo" id="ckart-sevk-tablo">
+        <thead>
+          <tr>
+            <th>Sevkiyat / İrsaliye</th>
+            <th>Tarih</th>
+            <th>Sipariş No</th>
+            <th>Ürün</th>
+            <th>Renk</th>
+            <th>Sevk KG</th>
+            <th>Durum</th>
+          </tr>
+        </thead>
+        <tbody id="ckart-sevk-tbody">
+          <tr><td colspan="7" class="ckart-muted">Sekme açıldığında yüklenecek.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="ckart-panel-urunler" class="ckart-panel"{% if aktif_tab != 'urunler' %} style="display:none"{% endif %}>
+    <h2 class="ckart-h2">Son Aldığı Ürünler</h2>
+    <div class="ckart-tablo-wrap">
+      <table class="ckart-tablo" id="ckart-urun-tablo">
+        <thead>
+          <tr>
+            <th>Ürün</th>
+            <th>Renk</th>
+            <th>Toplam Alınan KG</th>
+            <th>Sevkiyat Sayısı</th>
+            <th>Son Alış Tarihi</th>
+            <th>Son Alınan KG</th>
+          </tr>
+        </thead>
+        <tbody id="ckart-urun-tbody">
+          <tr><td colspan="6" class="ckart-muted">Sekme açıldığında yüklenecek.</td></tr>
         </tbody>
       </table>
     </div>
@@ -241,12 +321,24 @@
 }
 .ckart-badge-aktif { background: #ecfdf5; color: #047857; }
 .ckart-badge-pasif { background: #f3f4f6; color: #6b7280; }
-.ckart-es { color: #92400e; }
-.ckart-banner {
-  background: #fff7ed; border: 1px solid #fdba74; color: #9a3412;
-  border-radius: 10px; padding: 10px 14px; font-size: 13px; font-weight: 600;
-  margin-bottom: 10px;
+.ckart-kpi {
+  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px; margin: 0 0 12px;
 }
+.ckart-kpi-item {
+  background: #fff; border: 1px solid rgba(17,24,39,0.07); border-radius: 10px;
+  padding: 10px 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.04);
+  min-width: 0;
+}
+.ckart-kpi-lbl {
+  display: block; font-size: 10px; font-weight: 700; color: #6b7280;
+  text-transform: uppercase; letter-spacing: .35px; margin-bottom: 4px;
+}
+.ckart-kpi-item strong {
+  display: block; font-size: 15px; color: #111827; font-weight: 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ckart-sevk-sub td { background: #fafafa; font-size: 12px; color: #4b5563; }
 .ckart-sekme-bar {
   position: relative;
   z-index: 2;
@@ -349,10 +441,14 @@
 .ckart-chk { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 10px; color: #374151; }
 .ckart-hata { color: #b91c1c; font-size: 12px; margin: 0 0 6px; }
 
+@media (max-width: 1100px) {
+  .ckart-kpi { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 @media (max-width: 720px) {
   .ckart-unvan { font-size: 18px; }
   .ckart-grid2 { grid-template-columns: 1fr; }
   .ckart-panel-bas { flex-direction: column; align-items: flex-start; }
+  .ckart-kpi { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 </style>
 
@@ -366,11 +462,17 @@
   var _cache = [];
   var _gorusmeCache = [];
   var _gIdem = null;
+  var _opsLoaded = { siparisler: false, sevkiyatlar: false, urunler: false };
 
   function esc(s) {
     return String(s == null ? '' : s)
       .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
       .replace(/"/g,'&quot;');
+  }
+
+  function dash(v) {
+    if (v == null || v === '') return '—';
+    return String(v);
   }
 
   function nowLocal() {
@@ -379,13 +481,208 @@
     return d.toISOString().slice(0, 16);
   }
 
+  function ckartFetchJson(url) {
+    return fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+      .then(function(r) {
+        var ct = (r.headers.get('content-type') || '').toLowerCase();
+        if (!r.ok) {
+          if (ct.indexOf('application/json') === -1) {
+            return r.text().then(function(t) {
+              console.error('Cari360 API HTML/non-JSON', url, r.status, t.slice(0, 200));
+              throw new Error('Yanıt JSON değil (HTTP ' + r.status + ')');
+            });
+          }
+          return r.json().then(function(d) {
+            var msg = (d && (d.mesaj || d.hata)) || ('HTTP ' + r.status);
+            var err = new Error(msg);
+            err.status = r.status;
+            err.data = d;
+            throw err;
+          });
+        }
+        if (ct.indexOf('application/json') === -1) {
+          return r.text().then(function(t) {
+            console.error('Cari360 API unexpected body', url, t.slice(0, 200));
+            throw new Error('Beklenmeyen yanıt formatı');
+          });
+        }
+        return r.json();
+      });
+  }
+
+  function setText(id, v) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = v;
+  }
+
+  function setBadge(id, n) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var v = parseInt(n, 10) || 0;
+    if (v > 0) {
+      el.textContent = String(v);
+      el.style.display = '';
+    } else {
+      el.textContent = '';
+      el.style.display = 'none';
+    }
+  }
+
+  function ckartOzetYukle() {
+    ckartFetchJson('/nexgen/api/cari360/' + CARI_ID + '/ozet')
+      .then(function(d) {
+        if (!d || !d.ok || !d.kpi) throw new Error((d && d.mesaj) || 'Özet yok');
+        var k = d.kpi;
+        setText('kpi-toplam-siparis', k.toplam_siparis != null ? k.toplam_siparis : 0);
+        setText('kpi-aktif-siparis', k.aktif_siparis != null ? k.aktif_siparis : 0);
+        setText('kpi-toplam-sevkiyat', k.toplam_sevkiyat != null ? k.toplam_sevkiyat : 0);
+        setText('kpi-toplam-sevk-kg', k.toplam_sevk_kg != null ? k.toplam_sevk_kg : 0);
+        setText('kpi-son-sevkiyat', dash(k.son_sevkiyat_tarihi));
+        setText('kpi-son-gorusme', dash(k.son_gorusme_tarihi));
+        if (d.yetkili_sayisi != null) setBadge('ckart-yetkili-badge', d.yetkili_sayisi);
+        if (d.gorusme_sayisi != null) setBadge('ckart-gorusme-badge', d.gorusme_sayisi);
+      })
+      .catch(function(e) {
+        console.error('Cari360 özet', e);
+        ['kpi-toplam-siparis','kpi-aktif-siparis','kpi-toplam-sevkiyat',
+         'kpi-toplam-sevk-kg','kpi-son-sevkiyat','kpi-son-gorusme'].forEach(function(id){
+          setText(id, '—');
+        });
+      });
+  }
+
+  window.ckartSiparisYukle = function(force) {
+    var tb = document.getElementById('ckart-siparis-tbody');
+    if (!tb) return;
+    if (_opsLoaded.siparisler && !force) return;
+    tb.innerHTML = '<tr><td colspan="9" class="ckart-muted">Yükleniyor…</td></tr>';
+    ckartFetchJson('/nexgen/api/cari360/' + CARI_ID + '/siparisler')
+      .then(function(d) {
+        if (!d || !d.ok) throw new Error((d && d.mesaj) || 'Yüklenemedi');
+        var liste = d.liste || [];
+        _opsLoaded.siparisler = true;
+        if (!liste.length) {
+          tb.innerHTML = '<tr><td colspan="9" class="ckart-muted">Bu cari için sipariş kaydı yok.</td></tr>';
+          return;
+        }
+        tb.innerHTML = liste.map(function(s) {
+          return '<tr>'
+            + '<td><strong>' + esc(s.siparis_no || '—') + '</strong></td>'
+            + '<td>' + esc(dash(s.siparis_tarihi)) + '</td>'
+            + '<td>' + esc(dash(s.durum)) + '</td>'
+            + '<td>' + esc(dash(s.termin)) + '</td>'
+            + '<td>' + esc(dash(s.toplam_kg)) + '</td>'
+            + '<td>' + esc(s.kalem_sayisi != null ? s.kalem_sayisi : 0) + '</td>'
+            + '<td>' + esc(dash(s.son_sevkiyat_tarihi)) + '</td>'
+            + '<td>' + esc(dash(s.sevk_edilen_kg)) + '</td>'
+            + '<td>' + esc(dash(s.kalan_kg)) + '</td>'
+            + '</tr>';
+        }).join('');
+      })
+      .catch(function(e) {
+        console.error('Cari360 siparişler', e);
+        tb.innerHTML = '<tr><td colspan="9" class="ckart-muted">Sipariş geçmişi yüklenemedi. Lütfen yeniden deneyin.</td></tr>';
+      });
+  };
+
+  window.ckartSevkYukle = function(force) {
+    var tb = document.getElementById('ckart-sevk-tbody');
+    if (!tb) return;
+    if (_opsLoaded.sevkiyatlar && !force) return;
+    tb.innerHTML = '<tr><td colspan="7" class="ckart-muted">Yükleniyor…</td></tr>';
+    ckartFetchJson('/nexgen/api/cari360/' + CARI_ID + '/sevkiyatlar')
+      .then(function(d) {
+        if (!d || !d.ok) throw new Error((d && d.mesaj) || 'Yüklenemedi');
+        var liste = d.liste || [];
+        _opsLoaded.sevkiyatlar = true;
+        if (!liste.length) {
+          tb.innerHTML = '<tr><td colspan="7" class="ckart-muted">Bu cari için sevkiyat kaydı yok.</td></tr>';
+          return;
+        }
+        var html = [];
+        liste.forEach(function(s) {
+          var no = esc(s.sevkiyat_no || '—');
+          if (s.irsaliye_no) no += '<div class="ckart-muted" style="padding:0!important;text-align:left">İrs: ' + esc(s.irsaliye_no) + '</div>';
+          var urun = esc(s.urun || '—');
+          var renk = esc(s.renk || '—');
+          if ((s.kalem_sayisi || 0) > 1) {
+            urun += ' <span class="ckart-pill-pasif">+' + (s.kalem_sayisi - 1) + ' kalem</span>';
+          }
+          html.push('<tr>'
+            + '<td><strong>' + no + '</strong></td>'
+            + '<td>' + esc(dash(s.tarih)) + '</td>'
+            + '<td>' + esc(dash(s.siparis_no)) + '</td>'
+            + '<td>' + urun + '</td>'
+            + '<td>' + renk + '</td>'
+            + '<td><strong>' + esc(dash(s.sevk_kg)) + '</strong></td>'
+            + '<td>' + esc(dash(s.durum)) + '</td>'
+            + '</tr>');
+          if ((s.kalemler || []).length > 1) {
+            s.kalemler.forEach(function(k) {
+              html.push('<tr class="ckart-sevk-sub">'
+                + '<td></td><td></td><td></td>'
+                + '<td>' + esc(k.urun || '—') + '</td>'
+                + '<td>' + esc(k.renk || '—') + '</td>'
+                + '<td>' + esc(dash(k.sevk_kg)) + '</td>'
+                + '<td></td></tr>');
+            });
+          }
+        });
+        tb.innerHTML = html.join('');
+      })
+      .catch(function(e) {
+        console.error('Cari360 sevkiyatlar', e);
+        tb.innerHTML = '<tr><td colspan="7" class="ckart-muted">Sevkiyatlar yüklenemedi. Lütfen yeniden deneyin.</td></tr>';
+      });
+  };
+
+  window.ckartUrunYukle = function(force) {
+    var tb = document.getElementById('ckart-urun-tbody');
+    if (!tb) return;
+    if (_opsLoaded.urunler && !force) return;
+    tb.innerHTML = '<tr><td colspan="6" class="ckart-muted">Yükleniyor…</td></tr>';
+    ckartFetchJson('/nexgen/api/cari360/' + CARI_ID + '/urunler')
+      .then(function(d) {
+        if (!d || !d.ok) throw new Error((d && d.mesaj) || 'Yüklenemedi');
+        var liste = d.liste || [];
+        _opsLoaded.urunler = true;
+        if (!liste.length) {
+          tb.innerHTML = '<tr><td colspan="6" class="ckart-muted">Bu cari için alınan ürün kaydı yok.</td></tr>';
+          return;
+        }
+        tb.innerHTML = liste.map(function(u) {
+          return '<tr>'
+            + '<td><strong>' + esc(u.urun || '—') + '</strong></td>'
+            + '<td>' + esc(u.renk || '—') + '</td>'
+            + '<td>' + esc(dash(u.toplam_alinan_kg)) + '</td>'
+            + '<td>' + esc(u.sevkiyat_sayisi != null ? u.sevkiyat_sayisi : 0) + '</td>'
+            + '<td>' + esc(dash(u.son_alis_tarihi)) + '</td>'
+            + '<td>' + esc(dash(u.son_alinan_kg)) + '</td>'
+            + '</tr>';
+        }).join('');
+      })
+      .catch(function(e) {
+        console.error('Cari360 ürünler', e);
+        tb.innerHTML = '<tr><td colspan="6" class="ckart-muted">Ürün özeti yüklenemedi. Lütfen yeniden deneyin.</td></tr>';
+      });
+  };
+
   window.ckartTab = function(tab) {
     document.querySelectorAll('.ckart-sekme').forEach(function(b){
       b.classList.toggle('aktif', b.getAttribute('data-tab') === tab);
     });
-    document.getElementById('ckart-panel-genel').style.display = tab === 'genel' ? '' : 'none';
-    document.getElementById('ckart-panel-yetkililer').style.display = tab === 'yetkililer' ? '' : 'none';
-    document.getElementById('ckart-panel-gorusmeler').style.display = tab === 'gorusmeler' ? '' : 'none';
+    var panels = {
+      genel: 'ckart-panel-genel',
+      yetkililer: 'ckart-panel-yetkililer',
+      siparisler: 'ckart-panel-siparisler',
+      sevkiyatlar: 'ckart-panel-sevkiyatlar',
+      urunler: 'ckart-panel-urunler',
+      gorusmeler: 'ckart-panel-gorusmeler'
+    };
+    Object.keys(panels).forEach(function(k) {
+      var el = document.getElementById(panels[k]);
+      if (el) el.style.display = (k === tab) ? '' : 'none';
+    });
     try {
       var u = new URL(window.location.href);
       u.searchParams.set('tab', tab);
@@ -393,21 +690,33 @@
     } catch (e) {}
     if (tab === 'yetkililer') ckartYetkiliYukle();
     if (tab === 'gorusmeler') ckartGorusmeYukle();
+    if (tab === 'siparisler') ckartSiparisYukle();
+    if (tab === 'sevkiyatlar') ckartSevkYukle();
+    if (tab === 'urunler') ckartUrunYukle();
   };
+
+  ckartOzetYukle();
+  try {
+    var initTab = (new URL(window.location.href)).searchParams.get('tab') || '{{ aktif_tab }}';
+    if (initTab === 'siparisler') ckartSiparisYukle();
+    if (initTab === 'sevkiyatlar') ckartSevkYukle();
+    if (initTab === 'urunler') ckartUrunYukle();
+  } catch (e) {}
 
   window.ckartYetkiliYukle = function() {
     var tb = document.getElementById('ckart-yetkili-tbody');
     if (!tb) return;
     tb.innerHTML = '<tr><td colspan="10" class="ckart-muted">Yükleniyor…</td></tr>';
-    fetch('/nexgen/api/yonetim/cari-yetkili?cari_id=' + encodeURIComponent(CARI_ID))
-      .then(function(r){ return r.json().then(function(d){ return {status:r.status, d:d}; }); })
-      .then(function(x){
-        if (!x.d || !x.d.ok) {
-          tb.innerHTML = '<tr><td colspan="10" class="ckart-muted">' + esc((x.d && x.d.hata) || 'Yüklenemedi') + '</td></tr>';
+    ckartFetchJson('/nexgen/api/yonetim/cari-yetkili?cari_id=' + encodeURIComponent(CARI_ID))
+      .then(function(d){
+        if (!d || !d.ok) {
+          tb.innerHTML = '<tr><td colspan="10" class="ckart-muted">' + esc((d && (d.hata || d.mesaj)) || 'Yüklenemedi') + '</td></tr>';
           return;
         }
-        if (typeof x.d.can_write === 'boolean') CAN_WRITE = x.d.can_write;
-        _cache = x.d.yetkililer || [];
+        if (typeof d.can_write === 'boolean') CAN_WRITE = d.can_write;
+        _cache = d.yetkililer || [];
+        var aktifN = _cache.filter(function(y){ return y.aktif == 1; }).length;
+        setBadge('ckart-yetkili-badge', aktifN);
         if (!_cache.length) {
           tb.innerHTML = '<tr><td colspan="10" class="ckart-muted">Henüz müşteri yetkilisi yok.</td></tr>';
           return;
@@ -439,8 +748,9 @@
             + '</tr>';
         }).join('');
       })
-      .catch(function(){
-        tb.innerHTML = '<tr><td colspan="10" class="ckart-muted">Bağlantı hatası</td></tr>';
+      .catch(function(e){
+        console.error('Cari360 yetkililer', e);
+        tb.innerHTML = '<tr><td colspan="10" class="ckart-muted">Yetkililer yüklenemedi. Lütfen yeniden deneyin.</td></tr>';
       });
   };
 
@@ -518,42 +828,65 @@
     } else {
       payload.ana_yetkili = document.getElementById('ckart-y-ana').checked ? 1 : 0;
     }
-    fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) })
-      .then(function(r){ return r.json().then(function(d){ return {status:r.status, d:d}; }); })
+    fetch(url, {
+      method:'POST', credentials:'same-origin',
+      headers:{'Content-Type':'application/json', 'Accept':'application/json'},
+      body: JSON.stringify(payload)
+    })
+      .then(function(r){
+        var ct = (r.headers.get('content-type') || '').toLowerCase();
+        if (ct.indexOf('application/json') === -1) {
+          return r.text().then(function(t){
+            console.error('Yetkili kaydet non-JSON', r.status, t.slice(0,200));
+            throw new Error('Yanıt JSON değil');
+          });
+        }
+        return r.json().then(function(d){ return {status:r.status, d:d}; });
+      })
       .then(function(x){
         if (x.d && x.d.ok) { ckartModalKapat(); ckartYetkiliYukle(); return; }
         h.textContent = (x.d && x.d.hata) || ('Hata ('+x.status+')');
         h.style.display = 'block';
       })
-      .catch(function(){ h.textContent = 'Bağlantı hatası'; h.style.display = 'block'; });
+      .catch(function(e){ console.error(e); h.textContent = 'Kayıt yapılamadı. Lütfen yeniden deneyin.'; h.style.display = 'block'; });
   };
 
   window.ckartYetkiliAna = function(id) {
     fetch('/nexgen/api/yonetim/cari-yetkili-ana', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({id: id})
+      method:'POST', credentials:'same-origin',
+      headers:{'Content-Type':'application/json', 'Accept':'application/json'},
+      body: JSON.stringify({id: id, cari_id: CARI_ID})
     })
-    .then(function(r){ return r.json(); })
+    .then(function(r){
+      var ct = (r.headers.get('content-type') || '').toLowerCase();
+      if (ct.indexOf('application/json') === -1) throw new Error('non-json');
+      return r.json();
+    })
     .then(function(d){
       if (d.ok) ckartYetkiliYukle();
       else alert(d.hata || 'Hata');
     })
-    .catch(function(){ alert('Bağlantı hatası'); });
+    .catch(function(e){ console.error(e); alert('İşlem yapılamadı'); });
   };
 
   window.ckartYetkiliAktif = function(id, aktif) {
     var msg = aktif ? 'Bu yetkiliyi aktifleştir?' : 'Bu yetkiliyi pasifleştir?';
     if (!confirm(msg)) return;
     fetch('/nexgen/api/yonetim/cari-yetkili-aktif', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({id: id, aktif: aktif})
+      method:'POST', credentials:'same-origin',
+      headers:{'Content-Type':'application/json', 'Accept':'application/json'},
+      body: JSON.stringify({id: id, aktif: aktif, cari_id: CARI_ID})
     })
-    .then(function(r){ return r.json(); })
+    .then(function(r){
+      var ct = (r.headers.get('content-type') || '').toLowerCase();
+      if (ct.indexOf('application/json') === -1) throw new Error('non-json');
+      return r.json();
+    })
     .then(function(d){
       if (d.ok) ckartYetkiliYukle();
       else alert(d.hata || 'Hata');
     })
-    .catch(function(){ alert('Bağlantı hatası'); });
+    .catch(function(e){ console.error(e); alert('İşlem yapılamadı'); });
   };
 
   document.getElementById('ckart-modal-overlay').addEventListener('click', function(e){
@@ -581,23 +914,18 @@
     var tb = document.getElementById('ckart-gorusme-tbody');
     if (!tb) return;
     tb.innerHTML = '<tr><td colspan="11" class="ckart-muted">Yükleniyor…</td></tr>';
-    fetch('/nexgen/api/cari360/' + CARI_ID + '/gorusme')
-      .then(function(r){ return r.json().then(function(d){ return {status:r.status, d:d}; }); })
-      .then(function(x){
-        if (!x.d || !x.d.ok) {
-          tb.innerHTML = '<tr><td colspan="11" class="ckart-muted">' + esc((x.d && x.d.mesaj) || 'Yüklenemedi') + '</td></tr>';
+    ckartFetchJson('/nexgen/api/cari360/' + CARI_ID + '/gorusme')
+      .then(function(d){
+        if (!d || !d.ok) {
+          tb.innerHTML = '<tr><td colspan="11" class="ckart-muted">' + esc((d && d.mesaj) || 'Yüklenemedi') + '</td></tr>';
           return;
         }
-        if (typeof x.d.can_write === 'boolean') CAN_WRITE_G = x.d.can_write;
-        var badge = document.getElementById('ckart-acik-badge');
+        if (typeof d.can_write === 'boolean') CAN_WRITE_G = d.can_write;
         var ozet = document.getElementById('ckart-gorusme-ozet');
-        var acik = x.d.acik_takip || 0;
+        var acik = d.acik_takip || 0;
         if (ozet) ozet.textContent = 'Açık takip: ' + acik;
-        if (badge) {
-          if (acik) { badge.textContent = acik; badge.style.display = ''; }
-          else { badge.style.display = 'none'; }
-        }
-        _gorusmeCache = x.d.liste || [];
+        setBadge('ckart-gorusme-badge', d.count != null ? d.count : (d.liste || []).length);
+        _gorusmeCache = d.liste || [];
         if (!_gorusmeCache.length) {
           tb.innerHTML = '<tr><td colspan="11" class="ckart-muted">Henüz görüşme kaydı yok.</td></tr>';
           return;
@@ -635,8 +963,9 @@
             + '</tr>';
         }).join('');
       })
-      .catch(function(){
-        tb.innerHTML = '<tr><td colspan="11" class="ckart-muted">Bağlantı hatası</td></tr>';
+      .catch(function(e){
+        console.error('Cari360 görüşmeler', e);
+        tb.innerHTML = '<tr><td colspan="11" class="ckart-muted">Görüşmeler yüklenemedi. Lütfen yeniden deneyin.</td></tr>';
       });
   };
 
