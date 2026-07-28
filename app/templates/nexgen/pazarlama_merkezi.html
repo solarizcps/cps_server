@@ -249,9 +249,15 @@
               <label class="pzm-label">Kalem Termini <span class="pzm-z">*</span></label>
               <input type="date" class="pzm-inp" id="pzm-kalem-termin" onchange="pzmAksiyonDurum()" disabled>
             </div>
-            <div class="pzm-alan pzm-alan-son">
+            <div class="pzm-alan">
               <label class="pzm-label">Kalem Notu</label>
               <input type="text" class="pzm-inp" id="pzm-kalem-not" placeholder="Opsiyonel" disabled>
+            </div>
+            <div class="pzm-alan pzm-alan-son">
+              <label class="pzm-label">Kaynak Numune</label>
+              <select class="pzm-inp" id="pzm-kalem-numune" disabled>
+                <option value="">— Opsiyonel —</option>
+              </select>
             </div>
             <div class="pzm-kalem-ekle-bar">
               <button type="button" class="rm-yeni-btn pzm-btn-kalem-ana" id="pzm-btn-kalem-ekle"
@@ -279,7 +285,7 @@
                 <tr>
                   <th>#</th><th>Ürün</th><th>Formül</th><th>Renk</th>
                   <th class="r">L</th><th class="r">S</th><th class="r">M</th>
-                  <th class="r">Toplam</th><th>Termin</th><th>İşlem</th>
+                  <th class="r">Toplam</th><th>Termin</th><th>Numune</th><th>İşlem</th>
                 </tr>
               </thead>
               <tbody id="pzm-kalem-tbody"></tbody>
@@ -3623,7 +3629,7 @@ function pzmKalemTabloRender() {
   if (!tbody) return;
   if (badge) badge.textContent = _pzmKalemler.length + ' kalem';
   if (!_pzmKalemler.length) {
-    tbody.innerHTML = '<tr class="pzm-kalem-bos"><td colspan="10">Henüz kalem eklenmedi. Formu doldurup «+ Sipariş Kalemi Ekle» butonuna basın.</td></tr>';
+    tbody.innerHTML = '<tr class="pzm-kalem-bos"><td colspan="11">Henüz kalem eklenmedi. Formu doldurup «+ Sipariş Kalemi Ekle» butonuna basın.</td></tr>';
     return;
   }
   tbody.innerHTML = _pzmKalemler.map(function(k, idx) {
@@ -3638,6 +3644,7 @@ function pzmKalemTabloRender() {
       '<td class="r">' + (k.miktar_m ? parseFloat(k.miktar_m).toLocaleString('tr') : '—') + '</td>',
       '<td class="r pzm-kg-hucre">' + tk.toLocaleString('tr') + ' kg</td>',
       '<td>' + pzmEsc(k.termin_tarihi||'—') + '</td>',
+      '<td>' + pzmEsc(k.numune_talep_kodu || (k.numune_talep_id ? ('#' + k.numune_talep_id) : '—')) + '</td>',
       '<td><div class="pzm-kalem-islem">',
       '<button type="button" class="pzm-btn-ac" onclick="pzmKalemDuzenle(' + idx + ')">Düzenle</button>',
       '<button type="button" class="pzm-btn-sil" onclick="pzmKalemSil(' + idx + ')">Sil</button>',
@@ -3801,17 +3808,44 @@ function pzmKalemFormTemizle(tam) {
   }
   if ($id('pzm-kalem-termin')) $id('pzm-kalem-termin').value = '';
   if ($id('pzm-kalem-not')) $id('pzm-kalem-not').value = '';
+  if ($id('pzm-kalem-numune')) $id('pzm-kalem-numune').value = '';
   var dag = $id('pzm-dagitim-btns'); if (dag) dag.style.display = 'none';
   _pzmRenkler = []; _pzmRfId = null; _pzmDuzenIdx = null;
   if (_pzmAile) {
     pzmFormullerYukle();
   } else {
-    ['pzm-formul','pzm-renk','pzm-kalem-termin','pzm-kalem-not'].forEach(function(id) {
+    ['pzm-formul','pzm-renk','pzm-kalem-termin','pzm-kalem-not','pzm-kalem-numune'].forEach(function(id) {
       var el = $id(id); if (el) el.disabled = true;
     });
   }
   var btnK = $id('pzm-btn-kalem-ekle');
   if (btnK) { btnK.textContent = '+ Sipariş Kalemi Ekle'; btnK.disabled = true; }
+}
+
+function pzmCariNumuneYukle(seciliId) {
+  var sel = $id('pzm-kalem-numune');
+  if (!sel) return;
+  var cid = $id('pzm-cari')?.value;
+  sel.innerHTML = '<option value="">— Opsiyonel —</option>';
+  if (!cid) { sel.disabled = true; return; }
+  sel.disabled = false;
+  fetch('/nexgen/api/pazarlama/cari-numuneler?cari_id=' + encodeURIComponent(cid))
+    .then(function(r) {
+      var ct = (r.headers.get('content-type') || '');
+      if (!r.ok || ct.indexOf('application/json') < 0) throw new Error('Numune listesi alınamadı');
+      return r.json();
+    })
+    .then(function(d) {
+      if (!d || !d.ok) return;
+      (d.liste || []).forEach(function(n) {
+        var o = document.createElement('option');
+        o.value = String(n.id);
+        o.textContent = n.etiket || n.talep_kodu || ('#' + n.id);
+        sel.appendChild(o);
+      });
+      if (seciliId) sel.value = String(seciliId);
+    })
+    .catch(function() { /* sessiz — opsiyonel alan */ });
 }
 
 window.pzmCariDegisti = function() {
@@ -3820,12 +3854,14 @@ window.pzmCariDegisti = function() {
   pzmKilit('pzm-kalem-form-icerik', !!cid);
   if (!cid) {
     pzmKalemFormTemizle(true);
+    pzmCariNumuneYukle();
     pzmAkkKapat(2);
     pzmOzetGuncelle();
     pzmAksiyonDurum();
     return;
   }
   pzmSiparisBilgiYaz(bilgi);
+  pzmCariNumuneYukle();
   pzmOzetGuncelle();
   pzmAksiyonDurum();
   pzmAkkCariSonrasi();
@@ -4025,6 +4061,14 @@ function pzmKalemFormdanOku() {
     miktar_m: mm || null,
     termin_tarihi: $id('pzm-kalem-termin')?.value,
     notlar: ($id('pzm-kalem-not')?.value||'').trim() || null,
+    numune_talep_id: ($id('pzm-kalem-numune')?.value)
+      ? parseInt($id('pzm-kalem-numune').value, 10) : null,
+    numune_talep_kodu: (function() {
+      var s = $id('pzm-kalem-numune');
+      if (!s || !s.value) return null;
+      var t = (s.options[s.selectedIndex].text || '').split(' · ')[0];
+      return t || null;
+    })(),
   };
 }
 
@@ -4095,6 +4139,7 @@ window.pzmKalemDuzenle = function(idx) {
         });
         if ($id('pzm-kalem-termin')) $id('pzm-kalem-termin').value = k.termin_tarihi || '';
         if ($id('pzm-kalem-not')) $id('pzm-kalem-not').value = k.notlar || '';
+        pzmCariNumuneYukle(k.numune_talep_id || null);
         var btnK = $id('pzm-btn-kalem-ekle');
         if (btnK) btnK.textContent = 'Kalemi Güncelle';
         pzmToplamGuncelle();
@@ -4127,6 +4172,7 @@ function pzmV2PayloadTopla() {
         miktar_m: k.miktar_m,
         termin_tarihi: k.termin_tarihi,
         notlar: k.notlar,
+        numune_talep_id: k.numune_talep_id || null,
       };
     }),
   };
@@ -4364,8 +4410,11 @@ window.pzmTalepYukle = function(id) {
       miktar_m: k.miktar_m || null,
       termin_tarihi: k.termin_tarihi,
       notlar: k.notlar,
+      numune_talep_id: k.numune_talep_id || null,
+      numune_talep_kodu: k.numune_talep_kodu || null,
     };
   });
+  pzmCariNumuneYukle();
   var genelTerm = pzmIsoTarih(t.termin_tarihi || (t.payload && t.payload.genel_termin_tarihi) || '');
   if (!genelTerm) {
     genelTerm = pzmEnErkenGecerliTermin(_pzmKalemler.map(function(k) { return k.termin_tarihi; }));

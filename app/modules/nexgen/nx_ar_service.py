@@ -2792,6 +2792,63 @@ def _dogrula_onay_onkosul(con, arge_test_id: int, t: dict) -> None:
         raise NxArError('Onay için teknik NX-AR kodu zorunlu.', 409, 'NXAR_KOD')
 
 
+def _sync_numune_rf_from_arge(con, arge_test_id: int, simdi: str | None = None) -> dict:
+    """ONAYLANDI: numune.rf boş + arge.rf dolu → kopyala.
+
+    - Mevcut dolu numune.rf üzerine yazılmaz.
+    - Farklı RF → sessiz değiştirme yok; conflict listelenir.
+    - Toplu backfill yok; yalnız bağlı aktif numune satırları.
+    """
+    simdi = simdi or _now()
+    ar = con.execute(
+        'SELECT rf_renk_id FROM nexgen_arge_test WHERE id=?',
+        (int(arge_test_id),),
+    ).fetchone()
+    if not ar or ar['rf_renk_id'] is None:
+        return {'ok': True, 'filled': 0, 'conflicts': [], 'action': 'skip_no_arge_rf'}
+
+    arge_rf = int(ar['rf_renk_id'])
+    rows = con.execute(
+        """
+        SELECT id, rf_renk_id FROM nexgen_numune_talep
+        WHERE arge_test_id=? AND COALESCE(aktif, 1)=1
+        """,
+        (int(arge_test_id),),
+    ).fetchall()
+
+    filled = 0
+    conflicts: list[dict] = []
+    for r in rows:
+        nid = int(r['id'])
+        nrf = r['rf_renk_id']
+        if nrf is None:
+            con.execute(
+                """
+                UPDATE nexgen_numune_talep
+                SET rf_renk_id=?, guncelleme_tarihi=?
+                WHERE id=? AND rf_renk_id IS NULL
+                """,
+                (arge_rf, simdi, nid),
+            )
+            filled += 1
+        elif int(nrf) != arge_rf:
+            conflicts.append({
+                'numune_talep_id': nid,
+                'numune_rf_renk_id': int(nrf),
+                'arge_rf_renk_id': arge_rf,
+            })
+            try:
+                _olay_yaz(
+                    con, int(arge_test_id), None, None, None,
+                    'NUMUNE_RF_CONFLICT',
+                    f'numune={nid} numune_rf={int(nrf)} arge_rf={arge_rf}',
+                )
+            except Exception:
+                pass
+
+    return {'ok': True, 'filled': filled, 'conflicts': conflicts, 'arge_rf': arge_rf}
+
+
 def _sync_numune_talep_arge_durum(con, arge_test_id: int, arge_durum: str, simdi: str) -> None:
     """Bağlı numune talep durumunu AR-GE kararı ile hizala."""
     td_map = {
@@ -2810,6 +2867,8 @@ def _sync_numune_talep_arge_durum(con, arge_test_id: int, arge_durum: str, simdi
         """,
         (td, simdi, arge_test_id),
     )
+    if td == 'ONAYLANDI':
+        _sync_numune_rf_from_arge(con, arge_test_id, simdi)
 
 
 def yonetim_karar(con, arge_test_id: int, payload: dict, kullanici_id: int | None = None) -> dict:
@@ -2886,7 +2945,17 @@ def yonetim_karar(con, arge_test_id: int, payload: dict, kullanici_id: int | Non
 
     # ONAY
     if eski == 'ONAYLANDI' and t.get('rf_renk_id'):
-        return get_nx_ar(con, arge_test_id)  # idempotent
+        # Idempotent: RF referansı numuneye taşınmamışsa tamamla
+        try:
+            con.execute('BEGIN IMMEDIATE')
+            _sync_numune_rf_from_arge(con, arge_test_id)
+            con.commit()
+        except Exception:
+            try:
+                con.rollback()
+            except Exception:
+                pass
+        return get_nx_ar(con, arge_test_id)
     if eski != 'ONAY_BEKLIYOR':
         raise NxArError(f'Onay yalnız ONAY_BEKLIYOR durumunda: {eski}', 409, 'DURUM')
     if int(t.get('saha_testi_gerekli_mi') or 0) == 1:
@@ -2942,6 +3011,7 @@ def yonetim_karar(con, arge_test_id: int, payload: dict, kullanici_id: int | Non
                 con, arge_test_id, kullanici_id, eski, 'ONAYLANDI',
                 'YONETIM_ONAY_FORMUL', f'{formul_kod} / {formul_ad} / id={fid}',
             )
+            _sync_numune_talep_arge_durum(con, arge_test_id, 'ONAYLANDI', simdi)
         else:
             # AT-R / AT-M — renk kodu + RF
             if t.get('rf_renk_id'):
@@ -2954,6 +3024,7 @@ def yonetim_karar(con, arge_test_id: int, payload: dict, kullanici_id: int | Non
                     (kullanici_id, simdi, simdi, arge_test_id),
                 )
                 _olay_yaz(con, arge_test_id, kullanici_id, eski, 'ONAYLANDI', 'YONETIM_ONAY_IDEM', None)
+                _sync_numune_talep_arge_durum(con, arge_test_id, 'ONAYLANDI', simdi)
                 con.commit()
                 return get_nx_ar(con, arge_test_id)
 

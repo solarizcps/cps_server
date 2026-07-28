@@ -18,6 +18,7 @@ from modules.nexgen.cari360_dosya_service import (
 )
 from modules.nexgen.cari360_ops_read_service import (
     Cari360OpsError,
+    load_cari360_numuneler,
     load_cari360_ozet,
     load_cari360_sevkiyatlar,
     load_cari360_siparisler,
@@ -38,7 +39,8 @@ from modules.nexgen.mo_gorusme_service import (
 )
 
 _CARI360_TABS = (
-    'genel', 'yetkililer', 'siparisler', 'uretim', 'sevkiyatlar', 'urunler', 'gorusmeler',
+    'genel', 'yetkililer', 'siparisler', 'uretim', 'sevkiyatlar', 'urunler',
+    'numuneler', 'gorusmeler',
 )
 
 
@@ -103,6 +105,15 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
                 ).fetchone()[0])
             except Exception:
                 gorusme_sayisi = 0
+            numune_sayisi = 0
+            try:
+                numune_sayisi = int(con.execute(
+                    'SELECT COUNT(*) FROM nexgen_numune_talep '
+                    'WHERE cari_id=? AND COALESCE(aktif, 1)=1',
+                    (cari_id,),
+                ).fetchone()[0])
+            except Exception:
+                numune_sayisi = 0
         except Cari360KartError as e:
             abort(e.kod)
         finally:
@@ -118,6 +129,7 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
             acik_takip=acik_takip,
             yetkili_sayisi=yetkili_sayisi,
             gorusme_sayisi=gorusme_sayisi,
+            numune_sayisi=numune_sayisi,
             gorusme_tipleri=GORUSME_TIPLERI,
             sonuc_tipleri=SONUC_TIPLERI,
         )
@@ -168,6 +180,11 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
     def api_cari360_urunler(cari_id):
         return _ops_json(load_cari360_urunler, cari_id)
 
+    @bp.route('/api/cari360/<int:cari_id>/numuneler', methods=['GET'])
+    @login_gerekli
+    def api_cari360_numuneler(cari_id):
+        return _ops_json(load_cari360_numuneler, cari_id)
+
     @bp.route('/api/cari360/<int:cari_id>/gorusme', methods=['GET'])
     @login_gerekli
     def api_cari360_gorusme_liste(cari_id):
@@ -212,18 +229,31 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
     @bp.route('/api/cari360/<int:cari_id>/gorusme', methods=['POST'])
     @login_gerekli
     def api_cari360_gorusme_kaydet(cari_id):
-        """Aynı gorusme_kaydet servisi — tek DB kaydı."""
+        """Aynı gorusme_kaydet servisi — tek DB kaydı. kullanici_id oturumdan."""
         yk = _yk()
         uid = kullanici_id_fn()
+        if not uid:
+            return jsonify({'ok': False, 'mesaj': 'Oturum gerekli.'}), 401
         payload = request.get_json(silent=True) or {}
+        # Frontend kullanıcı spoof yok sayılır
+        payload.pop('kullanici_id', None)
+        payload.pop('created_by', None)
+        payload.pop('olusturan_kullanici_id', None)
         payload['cari_id'] = cari_id
         payload.setdefault('kaynak', 'CARI_KART')
         con = db_fn()
         try:
+            row = con.execute(
+                'SELECT id FROM nexgen_cari WHERE id=?', (cari_id,),
+            ).fetchone()
+            if not row:
+                return jsonify({'ok': False, 'mesaj': 'Cari bulunamadı.'}), 404
             kayit = gorusme_kaydet(con, payload, uid, yk)
             return jsonify({'ok': True, 'kayit': kayit, 'mesaj': 'Görüşme kaydı oluşturuldu.'})
         except MoGorusmeError as e:
             return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod
+        except Exception as e:
+            return jsonify({'ok': False, 'mesaj': 'Görüşme kaydedilemedi.', 'hata': str(e)[:200]}), 500
         finally:
             con.close()
 
@@ -232,15 +262,23 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
     def api_cari360_gorusme_guncelle(cari_id, gorusme_id):
         yk = _yk()
         uid = kullanici_id_fn()
+        if not uid:
+            return jsonify({'ok': False, 'mesaj': 'Oturum gerekli.'}), 401
         payload = request.get_json(silent=True) or {}
+        payload.pop('kullanici_id', None)
+        payload.pop('created_by', None)
         con = db_fn()
         try:
-            kayit = gorusme_guncelle(con, gorusme_id, payload, uid, yk)
-            if int(kayit.get('cari_id') or 0) != int(cari_id):
+            from modules.nexgen.mo_gorusme_service import gorusme_detay
+            mevcut = gorusme_detay(con, gorusme_id, uid, yk)
+            if int(mevcut.get('cari_id') or 0) != int(cari_id):
                 return jsonify({'ok': False, 'mesaj': 'Başka carinin görüşmesi.'}), 403
+            kayit = gorusme_guncelle(con, gorusme_id, payload, uid, yk)
             return jsonify({'ok': True, 'kayit': kayit})
         except MoGorusmeError as e:
             return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod
+        except Exception as e:
+            return jsonify({'ok': False, 'mesaj': 'Görüşme güncellenemedi.', 'hata': str(e)[:200]}), 500
         finally:
             con.close()
 
@@ -249,16 +287,26 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
     def api_cari360_gorusme_takip(cari_id, gorusme_id):
         yk = _yk()
         uid = kullanici_id_fn()
+        if not uid:
+            return jsonify({'ok': False, 'mesaj': 'Oturum gerekli.'}), 401
         payload = request.get_json(silent=True) or {}
         durum = payload.get('takip_durumu') or payload.get('durum') or 'TAMAMLANDI'
         con = db_fn()
         try:
-            kayit = takip_durum_ayarla(con, gorusme_id, durum, uid, yk)
-            if int(kayit.get('cari_id') or 0) != int(cari_id):
+            from modules.nexgen.mo_gorusme_service import gorusme_detay
+            mevcut = gorusme_detay(con, gorusme_id, uid, yk)
+            if int(mevcut.get('cari_id') or 0) != int(cari_id):
                 return jsonify({'ok': False, 'mesaj': 'Başka carinin görüşmesi.'}), 403
-            return jsonify({'ok': True, 'kayit': kayit})
+            kayit = takip_durum_ayarla(con, gorusme_id, durum, uid, yk)
+            return jsonify({
+                'ok': True,
+                'kayit': kayit,
+                'acik_takip': acik_takip_sayisi(con, cari_id),
+            })
         except MoGorusmeError as e:
             return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod
+        except Exception as e:
+            return jsonify({'ok': False, 'mesaj': 'Takip güncellenemedi.', 'hata': str(e)[:200]}), 500
         finally:
             con.close()
 

@@ -19118,6 +19118,62 @@ def api_pazarlama_cariler():
         con.close()
 
 
+@nexgen_bp.route('/api/pazarlama/cari-numuneler')
+@login_gerekli
+@yetki_gerekli('nexgen.plan.view', 'can_view')
+def api_pazarlama_cari_numuneler():
+    """Sipariş kalemi Kaynak Numune seçimi — yalnız seçili carinin aktif numuneleri.
+
+    Tercihen ONAYLANDI önce; diğer durumlar da seçilebilir (zorunlu filtre yok).
+    """
+    try:
+        cari_id = int(request.args.get('cari_id'))
+    except (TypeError, ValueError):
+        return jsonify({'ok': False, 'hata': 'cari_id zorunlu.'}), 400
+    con = _db()
+    try:
+        cari = con.execute(
+            'SELECT id FROM nexgen_cari WHERE id=? AND aktif=1', (cari_id,),
+        ).fetchone()
+        if not cari:
+            return jsonify({'ok': False, 'hata': 'Cari bulunamadı.'}), 404
+        if not con.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='nexgen_numune_talep'"
+        ).fetchone():
+            return jsonify({'ok': True, 'liste': []})
+        rows = con.execute(
+            """
+            SELECT id, talep_kodu, durum, urun_adi, renk_kodu
+            FROM nexgen_numune_talep
+            WHERE cari_id=? AND COALESCE(aktif, 1)=1
+            ORDER BY
+              CASE WHEN UPPER(COALESCE(durum,''))='ONAYLANDI' THEN 0 ELSE 1 END,
+              COALESCE(guncelleme_tarihi, olusturma_tarihi, '') DESC,
+              id DESC
+            LIMIT 100
+            """,
+            (cari_id,),
+        ).fetchall()
+        liste = []
+        for r in rows:
+            tid = int(r['id'])
+            kod = r['talep_kodu'] or f'#{tid}'
+            etiket = kod
+            if r['durum']:
+                etiket += f" · {r['durum']}"
+            if r['urun_adi']:
+                etiket += f" · {r['urun_adi']}"
+            liste.append({
+                'id': tid,
+                'talep_kodu': kod,
+                'durum': r['durum'],
+                'etiket': etiket,
+            })
+        return jsonify({'ok': True, 'liste': liste})
+    finally:
+        con.close()
+
+
 @nexgen_bp.route('/api/pazarlama/formuller')
 @yetki_gerekli('nexgen.plan.view', 'can_view')
 def api_pazarlama_formuller():

@@ -210,6 +210,23 @@ def pzm_v2_kalem_dogrula(con, kalem_raw: dict, sira: int, cari_id: int | None = 
     notlar = (kalem_raw.get('notlar') or '').strip() or None
     renk_ad = _pzm_renk_etiketi(rf_row['rf_kod'], rf_row['ad'])
 
+    # Opsiyonel kaynak numune — gerçek FK; tahmini eşleştirme yok
+    numune_talep_id = None
+    raw_nt = kalem_raw.get('numune_talep_id')
+    if raw_nt not in (None, '', 0, '0'):
+        try:
+            numune_talep_id = int(raw_nt)
+        except (TypeError, ValueError):
+            raise PzmWriteError(f'Kalem {sira}: numune_talep_id geçersiz.')
+        nt = con.execute(
+            'SELECT id, cari_id, aktif, durum FROM nexgen_numune_talep WHERE id=?',
+            (numune_talep_id,),
+        ).fetchone()
+        if not nt or not int(nt['aktif'] or 0):
+            raise PzmWriteError(f'Kalem {sira}: numune talebi bulunamadı.')
+        if nt['cari_id'] is None or int(nt['cari_id']) != int(cari_id or 0):
+            raise PzmWriteError(f'Kalem {sira}: numune bu cariye ait değil.', 403)
+
     return {
         'sira_no': int(kalem_raw.get('sira_no') or sira),
         'urun_ailesi': urun_ailesi,
@@ -223,6 +240,7 @@ def pzm_v2_kalem_dogrula(con, kalem_raw: dict, sira: int, cari_id: int | None = 
         'miktar_m': mm,
         'termin_tarihi': termin,
         'notlar': notlar,
+        'numune_talep_id': numune_talep_id,
     }
 
 
@@ -394,23 +412,45 @@ def pzm_v2_taslak_kaydet(con, data: dict, uid: int | None) -> dict[str, Any]:
             )
             ps_id = cur.lastrowid
 
+        has_numune_col = bool(con.execute(
+            "SELECT 1 FROM pragma_table_info('nexgen_planlama_siparis_kalem') "
+            "WHERE name='numune_talep_id'"
+        ).fetchone())
         for k in kalemler:
-            con.execute(
-                """
-                INSERT INTO nexgen_planlama_siparis_kalem
-                    (planlama_siparis_id, sira_no, urun_ailesi, formul_id, formul_ad,
-                     renk_varyant_id, renk_ad, rf_renk_id,
-                     miktar_l, miktar_s, miktar_m, termin_tarihi, notlar,
-                     durum, legacy_kaynak)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'AKTIF', 0)
-                """,
-                (
-                    ps_id, k['sira_no'], k['urun_ailesi'], k['formul_id'], k['formul_ad'],
-                    k['renk_varyant_id'], k['renk_ad'], k['rf_renk_id'],
-                    k['miktar_l'], k['miktar_s'], k['miktar_m'],
-                    k['termin_tarihi'], k['notlar'],
-                ),
-            )
+            if has_numune_col:
+                con.execute(
+                    """
+                    INSERT INTO nexgen_planlama_siparis_kalem
+                        (planlama_siparis_id, sira_no, urun_ailesi, formul_id, formul_ad,
+                         renk_varyant_id, renk_ad, rf_renk_id,
+                         miktar_l, miktar_s, miktar_m, termin_tarihi, notlar,
+                         numune_talep_id, durum, legacy_kaynak)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'AKTIF', 0)
+                    """,
+                    (
+                        ps_id, k['sira_no'], k['urun_ailesi'], k['formul_id'], k['formul_ad'],
+                        k['renk_varyant_id'], k['renk_ad'], k['rf_renk_id'],
+                        k['miktar_l'], k['miktar_s'], k['miktar_m'],
+                        k['termin_tarihi'], k['notlar'], k.get('numune_talep_id'),
+                    ),
+                )
+            else:
+                con.execute(
+                    """
+                    INSERT INTO nexgen_planlama_siparis_kalem
+                        (planlama_siparis_id, sira_no, urun_ailesi, formul_id, formul_ad,
+                         renk_varyant_id, renk_ad, rf_renk_id,
+                         miktar_l, miktar_s, miktar_m, termin_tarihi, notlar,
+                         durum, legacy_kaynak)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'AKTIF', 0)
+                    """,
+                    (
+                        ps_id, k['sira_no'], k['urun_ailesi'], k['formul_id'], k['formul_ad'],
+                        k['renk_varyant_id'], k['renk_ad'], k['rf_renk_id'],
+                        k['miktar_l'], k['miktar_s'], k['miktar_m'],
+                        k['termin_tarihi'], k['notlar'],
+                    ),
+                )
 
         con.commit()
     except PzmWriteError:

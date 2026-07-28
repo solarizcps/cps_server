@@ -331,6 +331,24 @@ MANIFEST: tuple[MigEntry, ...] = (
             ("nexgen_cari", "acik_adres"),
         ),
     ),
+    MigEntry(
+        136, "136_musteri_operasyon_gorusme_numune_talep",
+        "136_musteri_operasyon_gorusme_numune_talep.py",
+        "musteri_operasyon_gorusme.numune_talep_id nullable FK",
+        dependencies=(123, 134),
+        required_columns=(
+            ("musteri_operasyon_gorusme", "numune_talep_id"),
+        ),
+    ),
+    MigEntry(
+        137, "137_nexgen_planlama_siparis_kalem_numune",
+        "137_nexgen_planlama_siparis_kalem_numune.py",
+        "nexgen_planlama_siparis_kalem.numune_talep_id nullable FK",
+        dependencies=(107,),
+        required_columns=(
+            ("nexgen_planlama_siparis_kalem", "numune_talep_id"),
+        ),
+    ),
 )
 
 BY_VERSION = {m.version: m for m in MANIFEST}

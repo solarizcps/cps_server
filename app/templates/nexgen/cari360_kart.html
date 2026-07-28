@@ -56,6 +56,10 @@
             data-tab="sevkiyatlar" onclick="ckartTab('sevkiyatlar')">Sevkiyatlar</button>
     <button type="button" class="ckart-sekme{% if aktif_tab == 'urunler' %} aktif{% endif %}"
             data-tab="urunler" onclick="ckartTab('urunler')">Son Aldığı Ürünler</button>
+    <button type="button" class="ckart-sekme{% if aktif_tab == 'numuneler' %} aktif{% endif %}"
+            data-tab="numuneler" onclick="ckartTab('numuneler')">
+      Numuneler{% if numune_sayisi %}<span class="ckart-sekme-badge" id="ckart-numune-badge">{{ numune_sayisi }}</span>{% else %}<span class="ckart-sekme-badge" id="ckart-numune-badge" style="display:none"></span>{% endif %}
+    </button>
     <button type="button" class="ckart-sekme{% if aktif_tab == 'gorusmeler' %} aktif{% endif %}"
             data-tab="gorusmeler" onclick="ckartTab('gorusmeler')">
       Görüşmeler{% if gorusme_sayisi %}<span class="ckart-sekme-badge" id="ckart-gorusme-badge">{{ gorusme_sayisi }}</span>{% else %}<span class="ckart-sekme-badge" id="ckart-gorusme-badge" style="display:none"></span>{% endif %}
@@ -167,13 +171,14 @@
             <th>Batch</th>
             <th>Üretilen KG</th>
             <th>Kalem</th>
+            <th>Numune</th>
             <th>Son Sevkiyat</th>
             <th>Sevk KG</th>
             <th style="text-align:right">İşlem</th>
           </tr>
         </thead>
         <tbody id="ckart-siparis-tbody">
-          <tr><td colspan="11" class="ckart-muted">Sekme açıldığında yüklenecek.</td></tr>
+          <tr><td colspan="12" class="ckart-muted">Sekme açıldığında yüklenecek.</td></tr>
         </tbody>
       </table>
     </div>
@@ -247,6 +252,34 @@
     </div>
   </section>
 
+  <section id="ckart-panel-numuneler" class="ckart-panel"{% if aktif_tab != 'numuneler' %} style="display:none"{% endif %}>
+    <h2 class="ckart-h2">Numuneler</h2>
+    <div id="ckart-numune-ozet" class="ckart-numune-ozet ckart-muted" style="display:none;margin:0 0 10px;font-size:12px;"></div>
+    <div class="ckart-tablo-wrap">
+      <table class="ckart-tablo" id="ckart-numune-tablo">
+        <thead>
+          <tr>
+            <th>Talep No</th>
+            <th>Tarih</th>
+            <th>Talep Eden</th>
+            <th>Ürün Tipi</th>
+            <th>Ürün / Model</th>
+            <th>Renk</th>
+            <th>Talep Türü</th>
+            <th>RF</th>
+            <th>Durum</th>
+            <th>Bağlı Siparişler</th>
+            <th>Son Güncelleme</th>
+            <th style="text-align:right">İşlem</th>
+          </tr>
+        </thead>
+        <tbody id="ckart-numune-tbody">
+          <tr><td colspan="12" class="ckart-muted">Sekme açıldığında yüklenecek.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
   <section id="ckart-panel-gorusmeler" class="ckart-panel"{% if aktif_tab != 'gorusmeler' %} style="display:none"{% endif %}>
     <div class="ckart-panel-bas">
       <h2 class="ckart-h2">Görüşmeler
@@ -263,20 +296,19 @@
         <thead>
           <tr>
             <th>Tarih</th>
-            <th>Yapan</th>
+            <th>Pazarlamacı</th>
             <th>Yetkili</th>
             <th>Tür</th>
             <th>Konu</th>
-            <th>Not</th>
+            <th>Numune</th>
             <th>Sonuç</th>
-            <th>Aksiyon</th>
+            <th>Sonraki Aksiyon</th>
             <th>Takip</th>
-            <th>Kaynak</th>
             <th style="text-align:right">İşlem</th>
           </tr>
         </thead>
         <tbody id="ckart-gorusme-tbody">
-          <tr><td colspan="11" class="ckart-muted">Yükleniyor…</td></tr>
+          <tr><td colspan="10" class="ckart-muted">Yükleniyor…</td></tr>
         </tbody>
       </table>
     </div>
@@ -314,16 +346,21 @@
 </div>
 
 <div id="ckart-gorusme-overlay" class="ckart-overlay" aria-hidden="true">
-  <div class="ckart-modal" role="dialog" aria-modal="true" aria-labelledby="ckart-g-baslik" style="width:min(560px,100%)">
+  <div class="ckart-modal" role="dialog" aria-modal="true" aria-labelledby="ckart-g-baslik" style="width:min(520px,100%)">
     <div class="ckart-modal-head">
       <h3 id="ckart-g-baslik">Yeni Görüşme</h3>
       <button type="button" class="ckart-modal-x" onclick="ckartGorusmeModalKapat()" aria-label="Kapat">×</button>
     </div>
     <div class="ckart-modal-body">
       <input type="hidden" id="ckart-g-id" value="">
-      <label class="ckart-lbl">Müşteri Yetkilisi
+      <label class="ckart-lbl">Yetkili
         <select id="ckart-g-yetkili" class="ckart-inp">
-          <option value="">— Bilinmiyor / seçilmedi —</option>
+          <option value="">—</option>
+        </select>
+      </label>
+      <label class="ckart-lbl">İlgili Numune
+        <select id="ckart-g-numune" class="ckart-inp">
+          <option value="">— (opsiyonel)</option>
         </select>
       </label>
       <div class="ckart-grid2">
@@ -333,28 +370,29 @@
             {% for t in gorusme_tipleri %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
           </select>
         </label>
-        <label class="ckart-lbl">Görüşme Tarihi <span class="ckart-req">*</span>
-          <input type="datetime-local" id="ckart-g-tarih" class="ckart-inp">
-        </label>
-      </div>
-      <label class="ckart-lbl">Konu<input type="text" id="ckart-g-konu" class="ckart-inp" maxlength="200"></label>
-      <label class="ckart-lbl">Görüşme Notu <span class="ckart-req">*</span>
-        <textarea id="ckart-g-not" class="ckart-inp ckart-ta" rows="2"></textarea>
-      </label>
-      <div class="ckart-grid2">
-        <label class="ckart-lbl">Sonuç <span class="ckart-req">*</span>
+        <label class="ckart-lbl">Sonuç
           <select id="ckart-g-sonuc" class="ckart-inp">
-            <option value="">Seçin</option>
-            {% for s in sonuc_tipleri %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+            <option value="Genel Görüşme">Genel Görüşme</option>
+            {% for s in sonuc_tipleri %}{% if s != 'Genel Görüşme' %}<option value="{{ s }}">{{ s }}</option>{% endif %}{% endfor %}
           </select>
         </label>
-        <label class="ckart-lbl">Takip Tarihi
-          <input type="date" id="ckart-g-takip" class="ckart-inp">
-        </label>
       </div>
-      <label class="ckart-lbl">Sonraki Aksiyon
-        <input type="text" id="ckart-g-aksiyon" class="ckart-inp" maxlength="200">
+      <label class="ckart-lbl">Konu
+        <input type="text" id="ckart-g-konu" class="ckart-inp" maxlength="200" placeholder="Kısa başlık">
       </label>
+      <label class="ckart-lbl">Not
+        <textarea id="ckart-g-not" class="ckart-inp ckart-ta" rows="3" placeholder="Görüşme detayı"></textarea>
+      </label>
+      <label class="ckart-lbl">Sonraki Aksiyon
+        <input type="text" id="ckart-g-aksiyon" class="ckart-inp" maxlength="200" list="ckart-g-aksiyon-list" placeholder="Örn. Tekrar ara">
+        <datalist id="ckart-g-aksiyon-list">
+        </datalist>
+      </label>
+      <label class="ckart-chk"><input type="checkbox" id="ckart-g-takip-gerekli" onchange="ckartTakipGerekliToggle()"> Takip gerekli</label>
+      <label class="ckart-lbl" id="ckart-g-takip-wrap" style="display:none">Takip Tarihi
+        <input type="date" id="ckart-g-takip" class="ckart-inp">
+      </label>
+      <input type="hidden" id="ckart-g-tarih" value="">
       <p id="ckart-g-hata" class="ckart-hata" style="display:none"></p>
     </div>
     <div class="ckart-modal-foot">
@@ -446,6 +484,20 @@
 }
 .ckart-dl dt { font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 3px; }
 .ckart-dl dd { margin: 0; font-size: 14px; color: #111827; }
+.ckart-genel-grid {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px 20px;
+}
+.ckart-genel-kol { min-width: 0; }
+.ckart-h3 {
+  margin: 0 0 10px; font-size: 13px; font-weight: 700; color: #92400e;
+  border-bottom: 1px solid #f3f4f6; padding-bottom: 6px;
+}
+.ckart-dl-stack { grid-template-columns: 1fr; gap: 10px; }
+.ckart-wrap { overflow-wrap: anywhere; word-break: break-word; }
+@media (max-width: 1100px) {
+  .ckart-genel-grid { grid-template-columns: 1fr; }
+}
 .ckart-tablo-wrap { overflow-x: auto; border: 1px solid #f0f1f3; border-radius: 10px; }
 .ckart-tablo { width: 100%; border-collapse: collapse; font-size: 13px; }
 .ckart-tablo th {
@@ -455,6 +507,18 @@
 }
 .ckart-tablo td { padding: 10px; border-bottom: 1px solid #f3f4f6; vertical-align: top; color: #111827; }
 .ckart-tablo tr:last-child td { border-bottom: none; }
+.ckart-konu-cell { max-width: 200px; }
+.ckart-konu-baslik { font-weight: 600; color: #111827; line-height: 1.25; }
+.ckart-not-2 {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden; margin-top: 3px; font-size: 12px; color: #6b7280; line-height: 1.3;
+  max-width: 220px; white-space: normal;
+}
+.ckart-yetkili-cell { line-height: 1.25; }
+.ckart-yetkili-unvan { display: block; font-size: 11px; color: #6b7280; margin-top: 2px; }
+.ckart-takip-acik { color: #b45309; font-weight: 600; font-size: 12px; }
+.ckart-takip-gecikti { color: #b91c1c; font-weight: 700; font-size: 12px; }
+.ckart-takip-ok { color: #047857; font-weight: 600; font-size: 12px; }
 .ckart-muted { color: #9ca3af; text-align: center; padding: 20px !important; }
 .ckart-btn-birincil, .ckart-btn-ikincil, .ckart-btn-mini {
   border: none; border-radius: 8px; cursor: pointer; font-weight: 600;
@@ -478,8 +542,6 @@
   border-radius: 999px; background: #f59e0b; color: #111827;
   font-size: 11px; font-weight: 700; line-height: 1.4; vertical-align: middle;
 }
-.ckart-takip-acik { color: #b45309; font-weight: 700; font-size: 11px; }
-.ckart-takip-ok { color: #059669; font-size: 11px; }
 .ckart-link { color: #92400e; text-decoration: underline; font-size: 11px; }
 
 /* Global modal overlay */
@@ -540,7 +602,7 @@
   var _cache = [];
   var _gorusmeCache = [];
   var _gIdem = null;
-  var _opsLoaded = { siparisler: false, uretim: false, sevkiyatlar: false, urunler: false };
+  var _opsLoaded = { siparisler: false, uretim: false, sevkiyatlar: false, urunler: false, numuneler: false };
 
   function esc(s) {
     return String(s == null ? '' : s)
@@ -633,20 +695,33 @@
     var tb = document.getElementById('ckart-siparis-tbody');
     if (!tb) return;
     if (_opsLoaded.siparisler && !force) return;
-    tb.innerHTML = '<tr><td colspan="11" class="ckart-muted">Yükleniyor…</td></tr>';
+    tb.innerHTML = '<tr><td colspan="12" class="ckart-muted">Yükleniyor…</td></tr>';
     ckartFetchJson('/nexgen/api/cari360/' + CARI_ID + '/siparisler')
       .then(function(d) {
         if (!d || !d.ok) throw new Error((d && d.mesaj) || 'Yüklenemedi');
         var liste = d.liste || [];
         _opsLoaded.siparisler = true;
         if (!liste.length) {
-          tb.innerHTML = '<tr><td colspan="11" class="ckart-muted">Bu cari için sipariş kaydı yok.</td></tr>';
+          tb.innerHTML = '<tr><td colspan="12" class="ckart-muted">Bu cari için sipariş kaydı yok.</td></tr>';
           return;
         }
         tb.innerHTML = liste.map(function(s) {
           var link = s.detay_url
             ? '<a class="ckart-link" href="' + esc(s.detay_url) + '">Pazarlama</a>'
             : '—';
+          var nums = s.bagli_numuneler || [];
+          var numHtml = '—';
+          if (nums.length) {
+            numHtml = nums.map(function(n) {
+              var t = esc(n.talep_kodu || ('#' + n.id));
+              return n.detay_url
+                ? '<a class="ckart-link" href="' + esc(n.detay_url) + '">' + t + '</a>'
+                : t;
+            }).join(', ');
+            if (s.bagli_numune_sayisi != null) {
+              numHtml = '<span class="ckart-muted">(' + esc(s.bagli_numune_sayisi) + ')</span> ' + numHtml;
+            }
+          }
           return '<tr>'
             + '<td><strong>' + esc(s.siparis_no || '—') + '</strong></td>'
             + '<td>' + esc(dash(s.siparis_tarihi)) + '</td>'
@@ -656,6 +731,7 @@
             + '<td>' + esc(s.batch_sayisi != null ? s.batch_sayisi : 0) + '</td>'
             + '<td>' + esc(dash(s.uretilen_kg)) + '</td>'
             + '<td>' + esc(s.kalem_sayisi != null ? s.kalem_sayisi : 0) + '</td>'
+            + '<td class="ckart-wrap">' + numHtml + '</td>'
             + '<td>' + esc(dash(s.son_sevkiyat_tarihi)) + '</td>'
             + '<td>' + esc(dash(s.sevk_edilen_kg)) + '</td>'
             + '<td style="text-align:right;white-space:nowrap">' + link + '</td>'
@@ -664,7 +740,7 @@
       })
       .catch(function(e) {
         console.error('Cari360 siparişler', e);
-        tb.innerHTML = '<tr><td colspan="11" class="ckart-muted">Sipariş geçmişi yüklenemedi. Lütfen yeniden deneyin.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="12" class="ckart-muted">Sipariş geçmişi yüklenemedi. Lütfen yeniden deneyin.</td></tr>';
       });
   };
 
@@ -708,7 +784,6 @@
         tb.innerHTML = '<tr><td colspan="9" class="ckart-muted">Üretim yüklenemedi. Lütfen yeniden deneyin.</td></tr>';
       });
   };
-
 
   window.ckartSevkYukle = function(force) {
     var tb = document.getElementById('ckart-sevk-tbody');
@@ -797,6 +872,71 @@
       });
   };
 
+  window.ckartNumuneYukle = function(force) {
+    var tb = document.getElementById('ckart-numune-tbody');
+    if (!tb) return;
+    if (_opsLoaded.numuneler && !force) return;
+    tb.innerHTML = '<tr><td colspan="12" class="ckart-muted">Yükleniyor…</td></tr>';
+    ckartFetchJson('/nexgen/api/cari360/' + CARI_ID + '/numuneler')
+      .then(function(d) {
+        if (!d || !d.ok) throw new Error((d && d.mesaj) || 'Yüklenemedi');
+        var liste = d.liste || [];
+        var oz = d.ozet || {};
+        _opsLoaded.numuneler = true;
+        setBadge('ckart-numune-badge', d.count != null ? d.count : liste.length);
+        var ozEl = document.getElementById('ckart-numune-ozet');
+        if (ozEl) {
+          ozEl.style.display = '';
+          ozEl.textContent =
+            'Toplam: ' + (oz.toplam != null ? oz.toplam : 0)
+            + ' · Aktif: ' + (oz.aktif != null ? oz.aktif : 0)
+            + ' · Onaylanan: ' + (oz.onaylanan != null ? oz.onaylanan : 0)
+            + ' · Revizyonda: ' + (oz.revizyonda != null ? oz.revizyonda : 0)
+            + ' · Reddedilen: ' + (oz.reddedilen != null ? oz.reddedilen : 0);
+        }
+        if (!liste.length) {
+          tb.innerHTML = '<tr><td colspan="12" class="ckart-muted">Bu cari için numune talebi yok.</td></tr>';
+          return;
+        }
+        tb.innerHTML = liste.map(function(n) {
+          var link = n.detay_url
+            ? '<a class="ckart-link" href="' + esc(n.detay_url) + '">Aç</a>'
+            : '—';
+          var sips = n.bagli_siparisler || [];
+          var sipHtml = '—';
+          if (sips.length) {
+            sipHtml = sips.map(function(s) {
+              var t = esc(s.siparis_no || ('#' + s.id));
+              return s.detay_url
+                ? '<a class="ckart-link" href="' + esc(s.detay_url) + '">' + t + '</a>'
+                : t;
+            }).join(', ');
+            if (n.bagli_siparis_sayisi != null) {
+              sipHtml = '<span class="ckart-muted">(' + esc(n.bagli_siparis_sayisi) + ')</span> ' + sipHtml;
+            }
+          }
+          return '<tr>'
+            + '<td><strong>' + esc(n.talep_kodu || '—') + '</strong></td>'
+            + '<td>' + esc(dash(n.tarih)) + '</td>'
+            + '<td>' + esc(dash(n.talep_eden)) + '</td>'
+            + '<td>' + esc(dash(n.urun_tipi)) + '</td>'
+            + '<td class="ckart-wrap">' + esc(dash(n.urun_adi)) + '</td>'
+            + '<td>' + esc(dash(n.renk)) + '</td>'
+            + '<td>' + esc(dash(n.talep_turu)) + '</td>'
+            + '<td>' + esc(dash(n.rf)) + '</td>'
+            + '<td>' + esc(dash(n.durum)) + '</td>'
+            + '<td class="ckart-wrap">' + sipHtml + '</td>'
+            + '<td>' + esc(dash(n.son_guncelleme)) + '</td>'
+            + '<td style="text-align:right">' + link + '</td>'
+            + '</tr>';
+        }).join('');
+      })
+      .catch(function(e) {
+        console.error('Cari360 numuneler', e);
+        tb.innerHTML = '<tr><td colspan="12" class="ckart-muted">Numuneler yüklenemedi. Lütfen yeniden deneyin.</td></tr>';
+      });
+  };
+
   window.ckartTab = function(tab) {
     document.querySelectorAll('.ckart-sekme').forEach(function(b){
       b.classList.toggle('aktif', b.getAttribute('data-tab') === tab);
@@ -808,6 +948,7 @@
       uretim: 'ckart-panel-uretim',
       sevkiyatlar: 'ckart-panel-sevkiyatlar',
       urunler: 'ckart-panel-urunler',
+      numuneler: 'ckart-panel-numuneler',
       gorusmeler: 'ckart-panel-gorusmeler'
     };
     Object.keys(panels).forEach(function(k) {
@@ -825,6 +966,7 @@
     if (tab === 'uretim') ckartUretimYukle();
     if (tab === 'sevkiyatlar') ckartSevkYukle();
     if (tab === 'urunler') ckartUrunYukle();
+    if (tab === 'numuneler') ckartNumuneYukle();
   };
 
   ckartOzetYukle();
@@ -834,6 +976,7 @@
     if (initTab === 'uretim') ckartUretimYukle();
     if (initTab === 'sevkiyatlar') ckartSevkYukle();
     if (initTab === 'urunler') ckartUrunYukle();
+    if (initTab === 'numuneler') ckartNumuneYukle();
   } catch (e) {}
 
   window.ckartYetkiliYukle = function() {
@@ -1028,7 +1171,7 @@
 
   function loadGorusmeYetkililer(selectedId) {
     var sel = document.getElementById('ckart-g-yetkili');
-    sel.innerHTML = '<option value="">— Bilinmiyor / seçilmedi —</option>';
+    sel.innerHTML = '<option value="">—</option>';
     return fetch('/nexgen/api/yonetim/cari-yetkili?cari_id=' + encodeURIComponent(CARI_ID) + '&aktif=1')
       .then(function(r){ return r.json(); })
       .then(function(d){
@@ -1043,14 +1186,34 @@
       });
   }
 
+  function takipEtiket(g) {
+    var tg = g.takip_gorunum || g.takip_durumu || '';
+    if (!g.sonraki_takip_tarihi && !tg) return '—';
+    if (!tg && g.sonraki_takip_tarihi) tg = 'ACIK';
+    var lbl = tg === 'GECIKTI' ? 'GECİKTİ' : tg;
+    var cls = 'ckart-takip-ok';
+    if (tg === 'ACIK') cls = 'ckart-takip-acik';
+    if (tg === 'GECIKTI') cls = 'ckart-takip-gecikti';
+    var t = (g.sonraki_takip_tarihi || '').slice(0, 10) || '—';
+    return '<span class="'+cls+'" title="'+esc(lbl)+'">'+esc(t)+' · '+esc(lbl)+'</span>';
+  }
+
+
+  window.ckartTakipGerekliToggle = function() {
+    var on = document.getElementById('ckart-g-takip-gerekli').checked;
+    var wrap = document.getElementById('ckart-g-takip-wrap');
+    wrap.style.display = on ? '' : 'none';
+    if (!on) document.getElementById('ckart-g-takip').value = '';
+  };
+
   window.ckartGorusmeYukle = function() {
     var tb = document.getElementById('ckart-gorusme-tbody');
     if (!tb) return;
-    tb.innerHTML = '<tr><td colspan="11" class="ckart-muted">Yükleniyor…</td></tr>';
+    tb.innerHTML = '<tr><td colspan="9" class="ckart-muted">Yükleniyor…</td></tr>';
     ckartFetchJson('/nexgen/api/cari360/' + CARI_ID + '/gorusme')
       .then(function(d){
         if (!d || !d.ok) {
-          tb.innerHTML = '<tr><td colspan="11" class="ckart-muted">' + esc((d && d.mesaj) || 'Yüklenemedi') + '</td></tr>';
+          tb.innerHTML = '<tr><td colspan="9" class="ckart-muted">' + esc((d && d.mesaj) || 'Yüklenemedi') + '</td></tr>';
           return;
         }
         if (typeof d.can_write === 'boolean') CAN_WRITE_G = d.can_write;
@@ -1060,47 +1223,80 @@
         setBadge('ckart-gorusme-badge', d.count != null ? d.count : (d.liste || []).length);
         _gorusmeCache = d.liste || [];
         if (!_gorusmeCache.length) {
-          tb.innerHTML = '<tr><td colspan="11" class="ckart-muted">Henüz görüşme kaydı yok.</td></tr>';
+          tb.innerHTML = '<tr><td colspan="10" class="ckart-muted">Henüz görüşme kaydı yok.</td></tr>';
           return;
         }
         tb.innerHTML = _gorusmeCache.map(function(g){
-          var takip = '—';
-          if (g.sonraki_takip_tarihi) {
-            var td = (g.takip_durumu || 'ACIK');
-            var cls = td === 'ACIK' ? 'ckart-takip-acik' : 'ckart-takip-ok';
-            takip = '<span class="'+cls+'">' + esc((g.sonraki_takip_tarihi||'').slice(0,10)) + ' · ' + esc(td) + '</span>';
+          var konu = (g.konu || '').trim() || '—';
+          var notu = (g.kisa_not || '').trim();
+          var konuHtml = '<div class="ckart-konu-cell"><div class="ckart-konu-baslik" title="'+esc(konu)+'">'+esc(konu)+'</div>';
+          if (notu) {
+            konuHtml += '<div class="ckart-not-2" title="'+esc(notu)+'">'+esc(notu)+'</div>';
           }
-          var kaynak = '';
-          if (g.kaynak_numune_talep_id) kaynak += '<a class="ckart-link" href="/nexgen/numune-talep?id='+g.kaynak_numune_talep_id+'">Numune#'+g.kaynak_numune_talep_id+'</a> ';
-          if (g.kaynak_siparis_id) kaynak += '<a class="ckart-link" href="/nexgen/pazarlama-merkezi?siparis='+g.kaynak_siparis_id+'">Sipariş#'+g.kaynak_siparis_id+'</a>';
-          if (!kaynak) kaynak = '—';
+          konuHtml += '</div>';
+          var yetHtml = '—';
+          if (g.yetkili_adi) {
+            yetHtml = '<div class="ckart-yetkili-cell">'+esc(g.yetkili_adi);
+            if (g.yetkili_unvan) yetHtml += '<span class="ckart-yetkili-unvan">'+esc(g.yetkili_unvan)+'</span>';
+            yetHtml += '</div>';
+          }
+          var numHtml = '—';
+          if (g.kaynak_numune_kodu && g.kaynak_numune_url) {
+            numHtml = '<a class="ckart-link" href="'+esc(g.kaynak_numune_url)+'">'+esc(g.kaynak_numune_kodu)+'</a>';
+          } else if (g.kaynak_numune_kodu) {
+            numHtml = esc(g.kaynak_numune_kodu);
+          }
           var btns = '';
-          if (CAN_WRITE_G) {
+          if (g.can_edit) {
             btns += '<button type="button" class="ckart-btn-mini" onclick="ckartGorusmeDuzenle('+g.id+')">Düzenle</button>';
-            if (g.takip_durumu === 'ACIK') {
-              btns += '<button type="button" class="ckart-btn-mini" onclick="ckartTakipTamamla('+g.id+')">Takip Tamamla</button>';
-            }
+          }
+          var tg = g.takip_gorunum || g.takip_durumu || '';
+          if (CAN_WRITE_G && (tg === 'ACIK' || tg === 'GECIKTI' || g.takip_durumu === 'ACIK')) {
+            btns += '<button type="button" class="ckart-btn-mini" onclick="ckartTakipTamamla('+g.id+')">Takip Tamamla</button>';
           }
           return '<tr>'
-            + '<td>'+esc((g.gorusme_tarihi||'').slice(0,16))+'</td>'
-            + '<td>'+esc(g.kullanici_adi||'—')+'</td>'
-            + '<td>'+esc(g.yetkili_adi||'—')+'</td>'
+            + '<td style="white-space:nowrap">'+esc((g.gorusme_tarihi||'').slice(0,16))+'</td>'
+            + '<td>'+esc(g.pazarlamaci_adi || g.kullanici_adi || '—')+'</td>'
+            + '<td>'+yetHtml+'</td>'
             + '<td>'+esc(g.gorusme_tipi||'—')+'</td>'
-            + '<td>'+esc(g.konu||'—')+'</td>'
-            + '<td>'+esc((g.kisa_not||'').slice(0,80))+'</td>'
+            + '<td>'+konuHtml+'</td>'
+            + '<td>'+numHtml+'</td>'
             + '<td>'+esc(g.sonuc_tipi||'—')+'</td>'
             + '<td>'+esc(g.sonraki_aksiyon||'—')+'</td>'
-            + '<td>'+takip+'</td>'
-            + '<td>'+kaynak+'</td>'
+            + '<td>'+takipEtiket(g)+'</td>'
             + '<td style="text-align:right;white-space:nowrap">'+btns+'</td>'
             + '</tr>';
         }).join('');
       })
       .catch(function(e){
         console.error('Cari360 görüşmeler', e);
-        tb.innerHTML = '<tr><td colspan="11" class="ckart-muted">Görüşmeler yüklenemedi. Lütfen yeniden deneyin.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="10" class="ckart-muted">Görüşmeler yüklenemedi. Lütfen yeniden deneyin.</td></tr>';
       });
   };
+
+  function loadGorusmeNumuneler(selectedId) {
+    var sel = document.getElementById('ckart-g-numune');
+    if (!sel) return Promise.resolve();
+    sel.innerHTML = '<option value="">— (opsiyonel)</option>';
+    return ckartFetchJson('/nexgen/api/cari360/' + CARI_ID + '/numuneler')
+      .then(function(d) {
+        (d.liste || []).forEach(function(n) {
+          var o = document.createElement('option');
+          o.value = String(n.id);
+          o.textContent = (n.talep_kodu || ('#' + n.id)) + (n.durum ? ' · ' + n.durum : '');
+          if (selectedId && String(selectedId) === String(n.id)) o.selected = true;
+          sel.appendChild(o);
+        });
+        if (selectedId && sel.value !== String(selectedId)) {
+          var ox = document.createElement('option');
+          ox.value = String(selectedId);
+          ox.textContent = '#' + selectedId;
+          ox.selected = true;
+          sel.appendChild(ox);
+        }
+      })
+      .catch(function(){ /* select boş kalır */ });
+  }
 
   function gorusmeFormTemizle() {
     document.getElementById('ckart-g-id').value = '';
@@ -1108,9 +1304,13 @@
     document.getElementById('ckart-g-tarih').value = nowLocal();
     document.getElementById('ckart-g-konu').value = '';
     document.getElementById('ckart-g-not').value = '';
-    document.getElementById('ckart-g-sonuc').value = '';
+    document.getElementById('ckart-g-sonuc').value = 'Genel Görüşme';
     document.getElementById('ckart-g-aksiyon').value = '';
     document.getElementById('ckart-g-takip').value = '';
+    document.getElementById('ckart-g-takip-gerekli').checked = false;
+    var ns = document.getElementById('ckart-g-numune');
+    if (ns) ns.value = '';
+    ckartTakipGerekliToggle();
     var h = document.getElementById('ckart-g-hata');
     h.style.display = 'none'; h.textContent = '';
   }
@@ -1126,7 +1326,7 @@
     gorusmeFormTemizle();
     _gIdem = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
     document.getElementById('ckart-g-baslik').textContent = 'Yeni Görüşme';
-    loadGorusmeYetkililer(null).then(function(){
+    Promise.all([loadGorusmeYetkililer(null), loadGorusmeNumuneler(null)]).then(function(){
       var ov = document.getElementById('ckart-gorusme-overlay');
       ov.classList.add('acik');
       ov.setAttribute('aria-hidden', 'false');
@@ -1135,20 +1335,24 @@
 
   window.ckartGorusmeDuzenle = function(id) {
     var g = _gorusmeCache.find(function(x){ return x.id == id; });
-    if (!g || !CAN_WRITE_G) return;
+    if (!g || !g.can_edit) return;
     gorusmeFormTemizle();
     document.getElementById('ckart-g-id').value = g.id;
     document.getElementById('ckart-g-baslik').textContent = 'Görüşme Düzenle';
-    document.getElementById('ckart-g-tip').value = g.gorusme_tipi || '';
-    var gt = (g.gorusme_tarihi || '').replace(' ', 'T').slice(0, 16);
-    document.getElementById('ckart-g-tarih').value = gt;
+    var tipSel = document.getElementById('ckart-g-tip');
+    tipSel.value = g.gorusme_tipi || '';
+    document.getElementById('ckart-g-tarih').value = (g.gorusme_tarihi || '').replace(' ', 'T').slice(0, 16);
     document.getElementById('ckart-g-konu').value = g.konu || '';
     document.getElementById('ckart-g-not').value = g.kisa_not || '';
-    document.getElementById('ckart-g-sonuc').value = g.sonuc_tipi || '';
+    var sonucSel = document.getElementById('ckart-g-sonuc');
+    sonucSel.value = g.sonuc_tipi || 'Genel Görüşme';
     document.getElementById('ckart-g-aksiyon').value = g.sonraki_aksiyon || '';
+    var hasTakip = !!(g.sonraki_takip_tarihi) && (g.takip_durumu || '') !== 'TAMAMLANDI';
+    document.getElementById('ckart-g-takip-gerekli').checked = hasTakip;
     document.getElementById('ckart-g-takip').value = (g.sonraki_takip_tarihi || '').slice(0, 10);
-    loadGorusmeYetkililer(g.yetkili_id).then(function(){
-      // Pasif yetkili eski kayıtta — listeye ekle
+    ckartTakipGerekliToggle();
+    var numuneSelId = g.numune_talep_id || g.kaynak_numune_talep_id || null;
+    Promise.all([loadGorusmeYetkililer(g.yetkili_id), loadGorusmeNumuneler(numuneSelId)]).then(function(){
       if (g.yetkili_id && g.yetkili_adi) {
         var sel = document.getElementById('ckart-g-yetkili');
         var found = false;
@@ -1172,29 +1376,54 @@
   window.ckartGorusmeKaydet = function() {
     var h = document.getElementById('ckart-g-hata');
     var tip = document.getElementById('ckart-g-tip').value;
-    var sonuc = document.getElementById('ckart-g-sonuc').value;
+    var sonuc = document.getElementById('ckart-g-sonuc').value || 'Genel Görüşme';
     var notu = document.getElementById('ckart-g-not').value.trim();
-    var tarih = document.getElementById('ckart-g-tarih').value;
-    if (!tip || !sonuc || notu.length < 3 || !tarih) {
-      h.textContent = 'Tür, tarih, sonuç ve en az 3 karakter not zorunlu.';
+    var konu = document.getElementById('ckart-g-konu').value.trim();
+    if (!tip || (notu.length < 3 && konu.length < 2)) {
+      h.textContent = 'Tür ve konu veya not gerekli.';
       h.style.display = 'block';
       return;
     }
+    var takipOn = document.getElementById('ckart-g-takip-gerekli').checked;
+    var takipT = document.getElementById('ckart-g-takip').value || null;
+    if (takipOn && !takipT) {
+      h.textContent = 'Takip seçildiyse tarih zorunlu.';
+      h.style.display = 'block';
+      return;
+    }
+    var tarih = document.getElementById('ckart-g-tarih').value || nowLocal();
     var editId = document.getElementById('ckart-g-id').value;
     var payload = {
       gorusme_tipi: tip,
       sonuc_tipi: sonuc,
       kisa_not: notu,
-      konu: document.getElementById('ckart-g-konu').value.trim(),
+      konu: konu,
       sonraki_aksiyon: document.getElementById('ckart-g-aksiyon').value.trim(),
-      sonraki_takip_tarihi: document.getElementById('ckart-g-takip').value || null,
       gorusme_tarihi: tarih.length === 16 ? tarih.replace('T', ' ') + ':00' : tarih,
       kaynak: 'CARI_KART'
     };
+    if (takipOn) {
+      payload.sonraki_takip_tarihi = takipT;
+      payload.takip_durumu = 'ACIK';
+    } else if (!editId) {
+      payload.sonraki_takip_tarihi = null;
+      payload.takip_durumu = null;
+    } else {
+      var mevcutG = _gorusmeCache.find(function(x){ return String(x.id) === String(editId); });
+      var md = (mevcutG && mevcutG.takip_durumu) || '';
+      if (md === 'TAMAMLANDI' || md === 'IPTAL') {
+        /* tamamlanan takip korunur */
+      } else {
+        payload.sonraki_takip_tarihi = null;
+        payload.takip_durumu = null;
+      }
+    }
     var yid = document.getElementById('ckart-g-yetkili').value;
-    if (yid) payload.yetkili_id = parseInt(yid, 10);
-    else payload.yetkili_id = null;
-    var url, method = 'POST';
+    payload.yetkili_id = yid ? parseInt(yid, 10) : null;
+    var nidEl = document.getElementById('ckart-g-numune');
+    var nid = nidEl ? nidEl.value : '';
+    payload.numune_talep_id = nid ? parseInt(nid, 10) : null;
+    var url;
     if (editId) {
       url = '/nexgen/api/cari360/' + CARI_ID + '/gorusme/' + editId;
     } else {
@@ -1203,26 +1432,37 @@
     }
     var btn = document.getElementById('ckart-g-kaydet');
     btn.disabled = true;
-    fetch(url, { method: method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) })
-      .then(function(r){ return r.json().then(function(d){ return {status:r.status, d:d}; }); })
+    fetch(url, {
+      method: 'POST', credentials: 'same-origin',
+      headers: {'Content-Type':'application/json', 'Accept':'application/json'},
+      body: JSON.stringify(payload)
+    })
+      .then(function(r){
+        var ct = (r.headers.get('content-type') || '').toLowerCase();
+        if (ct.indexOf('application/json') === -1) {
+          return r.text().then(function(t){ throw new Error('JSON değil: ' + t.slice(0,80)); });
+        }
+        return r.json().then(function(d){ return {status:r.status, d:d}; });
+      })
       .then(function(x){
         btn.disabled = false;
-        if (x.d && x.d.ok) { ckartGorusmeModalKapat(); ckartGorusmeYukle(); return; }
+        if (x.d && x.d.ok) { ckartGorusmeModalKapat(); ckartGorusmeYukle(true); return; }
         h.textContent = (x.d && x.d.mesaj) || ('Hata ('+x.status+')');
         h.style.display = 'block';
       })
-      .catch(function(){ btn.disabled = false; h.textContent = 'Bağlantı hatası'; h.style.display = 'block'; });
+      .catch(function(e){ console.error(e); btn.disabled = false; h.textContent = 'Kayıt yapılamadı.'; h.style.display = 'block'; });
   };
 
   window.ckartTakipTamamla = function(id) {
     if (!confirm('Takibi tamamlandı olarak işaretle?')) return;
     fetch('/nexgen/api/cari360/' + CARI_ID + '/gorusme/' + id + '/takip', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
+      method: 'POST', credentials: 'same-origin',
+      headers: {'Content-Type':'application/json', 'Accept':'application/json'},
       body: JSON.stringify({takip_durumu: 'TAMAMLANDI'})
     })
     .then(function(r){ return r.json(); })
     .then(function(d){
-      if (d.ok) ckartGorusmeYukle();
+      if (d.ok) ckartGorusmeYukle(true);
       else alert(d.mesaj || 'Hata');
     })
     .catch(function(){ alert('Bağlantı hatası'); });

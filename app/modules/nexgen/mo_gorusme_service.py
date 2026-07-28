@@ -136,20 +136,73 @@ def _row_dict(r) -> dict[str, Any]:
     return d
 
 
+
+def _assert_numune_uygun(
+    con: sqlite3.Connection,
+    cari_id: int,
+    numune_talep_id: Any,
+) -> int | None:
+    """Numune id opsiyonel; varsa aynı cariye ait ve aktif olmalı."""
+    if numune_talep_id in (None, '', 0, '0'):
+        return None
+    try:
+        nid = int(numune_talep_id)
+    except (TypeError, ValueError):
+        raise MoGorusmeError('numune_talep_id geçersiz.', 400)
+    if nid <= 0:
+        return None
+    if not _tablo_var(con, 'nexgen_numune_talep'):
+        raise MoGorusmeError('Numune tablosu hazır değil.', 503)
+    row = con.execute(
+        'SELECT id, cari_id, aktif, talep_kodu FROM nexgen_numune_talep WHERE id=?',
+        (nid,),
+    ).fetchone()
+    if not row or not int(row['aktif'] or 0):
+        raise MoGorusmeError('Numune talebi bulunamadı.', 404)
+    if row['cari_id'] is None or int(row['cari_id']) != int(cari_id):
+        raise MoGorusmeError('Numune bu cariye ait değil.', 403)
+    return nid
+
 def _enrich_baglantilar(con: sqlite3.Connection, d: dict[str, Any]) -> dict[str, Any]:
-    """Numune/sipariş mo_gorusme_id bağlarını bozmadan okur."""
+    """Numune/sipariş bağları.
+
+    Ana: gorusme.numune_talep_id (migration 136).
+    Geçiş: ters numune.mo_gorusme_id (bozulmaz).
+    """
     gid = d.get('id')
     if not gid:
         return d
     d['kaynak_numune_talep_id'] = None
+    d['kaynak_numune_kodu'] = None
+    d['kaynak_numune_url'] = None
     d['kaynak_siparis_id'] = None
-    if _tablo_var(con, 'nexgen_numune_talep') and _kolon_var(con, 'nexgen_numune_talep', 'mo_gorusme_id'):
+
+    nid = None
+    if _kolon_var(con, TABLO, 'numune_talep_id') and d.get('numune_talep_id') not in (None, ''):
+        try:
+            nid = int(d['numune_talep_id'])
+        except (TypeError, ValueError):
+            nid = None
+    if nid is None and _tablo_var(con, 'nexgen_numune_talep') and _kolon_var(
+        con, 'nexgen_numune_talep', 'mo_gorusme_id'
+    ):
         nr = con.execute(
             'SELECT id FROM nexgen_numune_talep WHERE mo_gorusme_id=? ORDER BY id DESC LIMIT 1',
             (gid,),
         ).fetchone()
         if nr:
-            d['kaynak_numune_talep_id'] = int(nr['id'] if hasattr(nr, 'keys') else nr[0])
+            nid = int(nr['id'] if hasattr(nr, 'keys') else nr[0])
+    if nid:
+        d['kaynak_numune_talep_id'] = nid
+        d['numune_talep_id'] = nid
+        d['kaynak_numune_url'] = f'/nexgen/numune-talep?id={nid}'
+        if _tablo_var(con, 'nexgen_numune_talep'):
+            nk = con.execute(
+                'SELECT talep_kodu FROM nexgen_numune_talep WHERE id=?', (nid,),
+            ).fetchone()
+            if nk:
+                d['kaynak_numune_kodu'] = nk['talep_kodu'] or f'#{nid}'
+
     if _tablo_var(con, 'nexgen_planlama_siparis') and _kolon_var(con, 'nexgen_planlama_siparis', 'mo_gorusme_id'):
         sr = con.execute(
             'SELECT id FROM nexgen_planlama_siparis WHERE mo_gorusme_id=? ORDER BY id DESC LIMIT 1',
@@ -227,6 +280,7 @@ def _validate_payload(payload: dict, *, require_idem: bool = True) -> dict[str, 
         'konu': (payload.get('konu') or '').strip() or None,
         'sonraki_aksiyon': (payload.get('sonraki_aksiyon') or '').strip() or None,
         'yetkili_id': payload.get('yetkili_id'),
+        'numune_talep_id': payload.get('numune_talep_id'),
         'gorusme_tarihi': gt,
         'sonraki_takip_tarihi': takip,
         'takip_durumu': takip_durum,
@@ -274,6 +328,7 @@ def gorusme_kaydet(
     yetkili_id = _assert_yetkili_uygun(
         con, norm['cari_id'], norm.get('yetkili_id'), yeni_gorusme=True,
     )
+    numune_id = _assert_numune_uygun(con, norm['cari_id'], norm.get('numune_talep_id'))
 
     audit = json.dumps({
         'islem': 'OLUSTUR',
@@ -327,8 +382,13 @@ def gorusme_kaydet(
                 norm['idempotency_key'], kullanici_id, audit,
             ),
         )
-    con.commit()
     gid = int(cur.lastrowid)
+    if numune_id is not None and _kolon_var(con, TABLO, 'numune_talep_id'):
+        con.execute(
+            f'UPDATE {TABLO} SET numune_talep_id=? WHERE id=?',
+            (numune_id, gid),
+        )
+    con.commit()
     detay = gorusme_detay(con, gid, kullanici_id, yk)
     detay['timeline_sozlesme'] = timeline_olay_sozlesmesi(detay)
     return detay
@@ -451,20 +511,40 @@ def gorusme_guncelle(
     if not _kolon_var(con, TABLO, 'yetkili_id'):
         raise MoGorusmeError('Migration 134 gerekli.', 503)
 
-    con.execute(
-        f"""
-        UPDATE {TABLO} SET
-            gorusme_tipi=?, sonuc_tipi=?, kisa_not=?, konu=?, sonraki_aksiyon=?,
-            yetkili_id=?, gorusme_tarihi=?, sonraki_takip_tarihi=?, takip_durumu=?,
-            guncelleme_tarihi=?, guncelleyen_kullanici_id=?
-        WHERE id=? AND aktif=1
-        """,
-        (
-            tip, sonuc, kisa, (konu or '').strip() or None,
-            (aksiyon or '').strip() or None, yetkili_id, gt, takip, takip_durum,
-            _now(), kullanici_id, gorusme_id,
-        ),
-    )
+    numune_id = mevcut.get('numune_talep_id') or mevcut.get('kaynak_numune_talep_id')
+    if 'numune_talep_id' in payload:
+        numune_id = _assert_numune_uygun(con, cari_id, payload.get('numune_talep_id'))
+
+    if _kolon_var(con, TABLO, 'numune_talep_id'):
+        con.execute(
+            f"""
+            UPDATE {TABLO} SET
+                gorusme_tipi=?, sonuc_tipi=?, kisa_not=?, konu=?, sonraki_aksiyon=?,
+                yetkili_id=?, numune_talep_id=?, gorusme_tarihi=?, sonraki_takip_tarihi=?,
+                takip_durumu=?, guncelleme_tarihi=?, guncelleyen_kullanici_id=?
+            WHERE id=? AND aktif=1
+            """,
+            (
+                tip, sonuc, kisa, (konu or '').strip() or None,
+                (aksiyon or '').strip() or None, yetkili_id, numune_id, gt, takip,
+                takip_durum, _now(), kullanici_id, gorusme_id,
+            ),
+        )
+    else:
+        con.execute(
+            f"""
+            UPDATE {TABLO} SET
+                gorusme_tipi=?, sonuc_tipi=?, kisa_not=?, konu=?, sonraki_aksiyon=?,
+                yetkili_id=?, gorusme_tarihi=?, sonraki_takip_tarihi=?, takip_durumu=?,
+                guncelleme_tarihi=?, guncelleyen_kullanici_id=?
+            WHERE id=? AND aktif=1
+            """,
+            (
+                tip, sonuc, kisa, (konu or '').strip() or None,
+                (aksiyon or '').strip() or None, yetkili_id, gt, takip, takip_durum,
+                _now(), kullanici_id, gorusme_id,
+            ),
+        )
     con.commit()
     return gorusme_detay(con, gorusme_id, kullanici_id, yk)
 

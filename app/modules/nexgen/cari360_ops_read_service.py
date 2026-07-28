@@ -262,12 +262,39 @@ def load_cari360_siparisler(
         termin = r['termin_tarihi'] or r['musteri_termin'] or r['onerilen_termin']
 
         kalem_sayisi = 0
+        bagli_numune_sayisi = 0
+        bagli_numuneler: list[dict[str, Any]] = []
         if has_kalem:
             kalem_sayisi = int(con.execute(
                 'SELECT COUNT(*) FROM nexgen_planlama_siparis_kalem '
                 'WHERE planlama_siparis_id=?',
                 (sid,),
             ).fetchone()[0])
+            has_nt_col = 'numune_talep_id' in {
+                c[1] for c in con.execute(
+                    'PRAGMA table_info(nexgen_planlama_siparis_kalem)'
+                ).fetchall()
+            }
+            if has_nt_col and _tablo_var(con, 'nexgen_numune_talep'):
+                nrows = con.execute(
+                    """
+                    SELECT DISTINCT k.numune_talep_id AS nid, n.talep_kodu
+                    FROM nexgen_planlama_siparis_kalem k
+                    JOIN nexgen_numune_talep n ON n.id = k.numune_talep_id
+                    WHERE k.planlama_siparis_id=?
+                      AND k.numune_talep_id IS NOT NULL
+                    ORDER BY n.talep_kodu, k.numune_talep_id
+                    """,
+                    (sid,),
+                ).fetchall()
+                for nr in nrows:
+                    nid = int(nr['nid'])
+                    bagli_numuneler.append({
+                        'id': nid,
+                        'talep_kodu': nr['talep_kodu'] or f'#{nid}',
+                        'detay_url': f'/nexgen/numune-talep?id={nid}',
+                    })
+                bagli_numune_sayisi = len(bagli_numuneler)
 
         # Sipariş kaleminde kg kolonu yok (L/S/M). Toplam KG uydurulmaz.
         toplam_kg = None
@@ -342,6 +369,8 @@ def load_cari360_siparisler(
             'termin': _fmt_dt(termin),
             'toplam_kg': toplam_kg,
             'kalem_sayisi': kalem_sayisi,
+            'bagli_numune_sayisi': bagli_numune_sayisi,
+            'bagli_numuneler': bagli_numuneler,
             'plan_sayisi': plan_sayisi,
             'batch_sayisi': batch_sayisi,
             'uretilen_kg': uretilen_kg,
@@ -530,6 +559,197 @@ def load_cari360_urunler(
         })
 
     return {'liste': liste, 'count': len(liste)}
+
+
+_NUMUNE_KY_LABEL = {
+    'HAZIR_RENK': 'Hazır Renk',
+    'YENI_RENK': 'Yeni Renk',
+    'YENI_FORMUL': 'Yeni Formül',
+}
+_NUMUNE_AKTIF_DURUM = frozenset({
+    'BEKLEYEN_NUMUNE', 'CALISILIYOR', 'REVIZYONDA', 'ONAY_BEKLIYOR',
+    'FERHAT_TESTINDE', 'FERHAT_BEKLIYOR', 'DENEMEDE',
+})
+
+
+def _numune_rf_label(con: sqlite3.Connection, rf_id: Any) -> str | None:
+    if rf_id is None:
+        return None
+    try:
+        rid = int(rf_id)
+    except (TypeError, ValueError):
+        return None
+    if rid <= 0 or not _tablo_var(con, 'nexgen_rf_renk'):
+        return None
+    row = con.execute(
+        'SELECT rf_kod, ad FROM nexgen_rf_renk WHERE id=?', (rid,),
+    ).fetchone()
+    if not row:
+        return None
+    kod = (row['rf_kod'] or '').strip()
+    ad = (row['ad'] or '').strip()
+    if kod and ad and kod != ad:
+        return f'{kod} — {ad}'
+    return kod or ad or None
+
+
+def load_cari360_numuneler(
+    con: sqlite3.Connection,
+    cari_id: int,
+    kullanici_id: int,
+    yk: set[str] | None,
+    *,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """Numune talepleri — yalnız nexgen_numune_talep.cari_id = nexgen_cari.id.
+
+    cari_id NULL (ADAY) kayıtlar gelmez. RF: numune.rf → arge.rf → —.
+    """
+    _assert_cari(con, cari_id, kullanici_id, yk)
+    cid = int(cari_id)
+    limit = max(1, min(int(limit or 50), 50))
+
+    empty = {
+        'liste': [], 'count': 0,
+        'ozet': {
+            'toplam': 0, 'aktif': 0, 'onaylanan': 0,
+            'revizyonda': 0, 'reddedilen': 0,
+        },
+    }
+    if not _tablo_var(con, 'nexgen_numune_talep'):
+        return empty
+
+    has_arge = _tablo_var(con, 'nexgen_arge_test')
+    has_user = _tablo_var(con, 'sistem_kullanici')
+
+    # Özet — tüm aktif kayıtlar (limit dışı)
+    ozet = {
+        'toplam': 0, 'aktif': 0, 'onaylanan': 0,
+        'revizyonda': 0, 'reddedilen': 0,
+    }
+    for dr in con.execute(
+        """
+        SELECT durum, COUNT(*) AS n
+        FROM nexgen_numune_talep
+        WHERE cari_id=? AND COALESCE(aktif, 1)=1
+        GROUP BY durum
+        """,
+        (cid,),
+    ).fetchall():
+        n = int(dr['n'] or 0)
+        ozet['toplam'] += n
+        d = (dr['durum'] or '').strip().upper()
+        if d in _NUMUNE_AKTIF_DURUM:
+            ozet['aktif'] += n
+        if d == 'ONAYLANDI':
+            ozet['onaylanan'] += n
+        if d == 'REVIZYONDA':
+            ozet['revizyonda'] += n
+        if d == 'REDDEDILDI':
+            ozet['reddedilen'] += n
+
+    rows = con.execute(
+        """
+        SELECT id, talep_kodu, olusturma_tarihi, guncelleme_tarihi,
+               urun_tipi, urun_adi, renk_kodu, yeni_renk_aciklama, renk_tipi,
+               talep_nedeni, talep_kaynagi, karsilama_yolu, durum, aktif,
+               rf_renk_id, arge_test_id, talep_eden_kullanici_id
+        FROM nexgen_numune_talep
+        WHERE cari_id=? AND COALESCE(aktif, 1)=1
+        ORDER BY COALESCE(guncelleme_tarihi, olusturma_tarihi, '') DESC, id DESC
+        LIMIT ?
+        """,
+        (cid, limit),
+    ).fetchall()
+
+    liste: list[dict[str, Any]] = []
+    for r in rows:
+        tid = int(r['id'])
+        renk = (r['renk_kodu'] or '').strip() or (r['yeni_renk_aciklama'] or '').strip() or None
+
+        ky = (r['karsilama_yolu'] or '').strip().upper()
+        talep_turu = _NUMUNE_KY_LABEL.get(ky)
+        if not talep_turu:
+            talep_turu = (r['talep_nedeni'] or '').strip() or None
+        if not talep_turu:
+            rt = (r['renk_tipi'] or '').strip().upper()
+            if rt == 'YENI':
+                talep_turu = 'Yeni Renk'
+            elif rt == 'MEVCUT':
+                talep_turu = 'Hazır Renk'
+
+        rf_id = r['rf_renk_id']
+        rf_kaynak = 'numune' if rf_id else None
+        if rf_id is None and has_arge and r['arge_test_id']:
+            ar = con.execute(
+                'SELECT rf_renk_id FROM nexgen_arge_test WHERE id=?',
+                (int(r['arge_test_id']),),
+            ).fetchone()
+            if ar and ar['rf_renk_id'] is not None:
+                rf_id = ar['rf_renk_id']
+                rf_kaynak = 'arge'
+        rf_label = _numune_rf_label(con, rf_id)
+
+        talep_eden = None
+        if has_user and r['talep_eden_kullanici_id']:
+            ur = con.execute(
+                'SELECT AdSoyad, KullaniciAdi FROM sistem_kullanici WHERE Id=?',
+                (int(r['talep_eden_kullanici_id']),),
+            ).fetchone()
+            if ur:
+                talep_eden = (ur['AdSoyad'] or ur['KullaniciAdi'] or '').strip() or None
+
+        # Bağlı siparişler — yalnız gerçek kalem.numune_talep_id FK
+        bagli_siparisler: list[dict[str, Any]] = []
+        has_kalem_nt = (
+            _tablo_var(con, 'nexgen_planlama_siparis_kalem')
+            and 'numune_talep_id' in {
+                c[1] for c in con.execute(
+                    'PRAGMA table_info(nexgen_planlama_siparis_kalem)'
+                ).fetchall()
+            }
+            and _tablo_var(con, 'nexgen_planlama_siparis')
+        )
+        if has_kalem_nt:
+            srows = con.execute(
+                """
+                SELECT DISTINCT s.id, s.siparis_no
+                FROM nexgen_planlama_siparis_kalem k
+                JOIN nexgen_planlama_siparis s ON s.id = k.planlama_siparis_id
+                WHERE k.numune_talep_id=?
+                  AND s.cari_id=?
+                ORDER BY s.id DESC
+                """,
+                (tid, cid),
+            ).fetchall()
+            for sr in srows:
+                sid = int(sr['id'])
+                bagli_siparisler.append({
+                    'id': sid,
+                    'siparis_no': sr['siparis_no'] or f'#{sid}',
+                    'detay_url': f'/nexgen/pazarlama?siparis={sid}',
+                })
+
+        liste.append({
+            'id': tid,
+            'talep_kodu': r['talep_kodu'] or f'#{tid}',
+            'tarih': _fmt_dt(r['olusturma_tarihi']),
+            'talep_eden': talep_eden,
+            'urun_tipi': r['urun_tipi'] or None,
+            'urun_adi': r['urun_adi'] or None,
+            'renk': renk,
+            'talep_turu': talep_turu,
+            'rf': rf_label,
+            'rf_renk_id': int(rf_id) if rf_id is not None else None,
+            'rf_kaynak': rf_kaynak,
+            'durum': r['durum'] or None,
+            'son_guncelleme': _fmt_dt(r['guncelleme_tarihi'] or r['olusturma_tarihi']),
+            'bagli_siparis_sayisi': len(bagli_siparisler),
+            'bagli_siparisler': bagli_siparisler,
+            'detay_url': f'/nexgen/numune-talep?id={tid}',
+        })
+
+    return {'liste': liste, 'count': ozet['toplam'], 'ozet': ozet}
 
 
 def load_cari360_uretim(

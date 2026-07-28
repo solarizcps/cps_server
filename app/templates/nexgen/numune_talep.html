@@ -183,6 +183,7 @@
       </div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;">
+      <a id="nt-cari360-link" href="#" class="rm-page-geri" style="display:none;">Cari 360 →</a>
       <button type="button" class="nt-takip-hdr-btn" onclick="ntTakipListeAc()">Numune Takip</button>
       <a href="/nexgen/pazarlama" class="rm-page-geri">← Pazarlama</a>
       <a href="/nexgen/" class="rm-page-geri">Ana Menü</a>
@@ -738,6 +739,19 @@ function ntCariKey(ev){
   items.forEach(function(el,i){ el.classList.toggle('on', i===NT.cariDropIdx); });
 }
 
+function ntCari360LinkGuncelle(cariId){
+  var a = document.getElementById('nt-cari360-link');
+  if(!a) return;
+  var cid = parseInt(cariId, 10);
+  if(cid > 0){
+    a.href = '/nexgen/cari360/' + cid + '?tab=numuneler';
+    a.style.display = '';
+  } else {
+    a.href = '#';
+    a.style.display = 'none';
+  }
+}
+
 function ntCariSec(id){
   var c = NT.cariler.find(function(x){ return String(x.id) === String(id); });
   if(!c) return;
@@ -747,6 +761,7 @@ function ntCariSec(id){
   document.getElementById('cari_secili').style.display = '';
   document.getElementById('cari_ara').style.display = 'none';
   ntCariDropKapat();
+  ntCari360LinkGuncelle(c.id);
   ntRenkleriYukle();
   ntOzetGuncelle();
 }
@@ -756,6 +771,7 @@ function ntCariTemizle(){
   document.getElementById('cari_ara').value = '';
   document.getElementById('cari_ara').style.display = '';
   document.getElementById('cari_secili').style.display = 'none';
+  ntCari360LinkGuncelle(null);
   ntRenkTemizle();
   ntOzetGuncelle();
 }
@@ -916,8 +932,13 @@ function ntHydrateFromTalep(t){
     ntCarileriYukle(function(){
       var c = NT.cariler.find(function(x){ return String(x.id) === String(t.cari_id); });
       if(c) ntCariSec(c.id);
-      else document.getElementById('cari_id').value = t.cari_id;
+      else {
+        document.getElementById('cari_id').value = t.cari_id;
+        ntCari360LinkGuncelle(t.cari_id);
+      }
     });
+  } else {
+    ntCari360LinkGuncelle(null);
   }
   if(t.urun_gorsel_belge_id){
     NT.urunGorselBelgeId = t.urun_gorsel_belge_id;

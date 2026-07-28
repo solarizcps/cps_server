@@ -142,13 +142,18 @@ def pzm_kalem_dict_from_payload(
 def pzm_siparis_kalemleri_getir(con, planlama_siparis_id: int) -> list[dict[str, Any]]:
     """Sipariş kalemlerini döndürür. Kalem yoksa legacy JSON'dan sanal kalem üretir."""
     if pzm_kalem_tablosu_var(con):
+        has_numune = bool(con.execute(
+            "SELECT 1 FROM pragma_table_info('nexgen_planlama_siparis_kalem') "
+            "WHERE name='numune_talep_id'"
+        ).fetchone())
+        numune_sel = ', numune_talep_id' if has_numune else ''
         rows = con.execute(
-            """
+            f"""
             SELECT id, planlama_siparis_id, sira_no, urun_ailesi,
                    formul_id, formul_ad, renk_varyant_id, renk_ad, rf_renk_id,
                    miktar_l, miktar_s, miktar_m, termin_tarihi, notlar,
                    uretim_plan_id, durum, legacy_kaynak,
-                   olusturma_tarihi, guncelleme_tarihi
+                   olusturma_tarihi, guncelleme_tarihi{numune_sel}
             FROM nexgen_planlama_siparis_kalem
             WHERE planlama_siparis_id=?
             ORDER BY sira_no, id
@@ -156,7 +161,19 @@ def pzm_siparis_kalemleri_getir(con, planlama_siparis_id: int) -> list[dict[str,
             (planlama_siparis_id,),
         ).fetchall()
         if rows:
-            return [pzm_kalem_dict_from_row(r) for r in rows]
+            out = [pzm_kalem_dict_from_row(r) for r in rows]
+            if has_numune:
+                for d in out:
+                    nid = d.get('numune_talep_id')
+                    d['numune_talep_kodu'] = None
+                    if nid:
+                        nr = con.execute(
+                            'SELECT talep_kodu FROM nexgen_numune_talep WHERE id=?',
+                            (int(nid),),
+                        ).fetchone()
+                        if nr:
+                            d['numune_talep_kodu'] = nr['talep_kodu'] or f'#{int(nid)}'
+            return out
 
     hdr = con.execute(
         'SELECT talep_referansi FROM nexgen_planlama_siparis WHERE id=?',
