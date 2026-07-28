@@ -939,7 +939,7 @@ function renderDetay(m) {
     var btn = $("or-btn-yenile");
     if (btn && !sessiz) btn.classList.add("donuyor");
     
-    apiGenel(state.tarih, state.vardiya)
+    return apiGenel(state.tarih, state.vardiya)
       .then(function(data) {
         if (!data.ok) throw new Error(data.hata || "Bilinmeyen hata");
         state.genel = data;
@@ -958,11 +958,13 @@ function renderDetay(m) {
             })
             .catch(function() {});
         }
+        return data;
       })
       .catch(function(e) {
         if (!sessiz) {
           $("or-makine-grid").innerHTML = '<div class="or-yukleniyor" style="color:#a32d2d;">Hata: ' + e.message + "</div>";
         }
+        throw e;
       })
       .finally(function() {
         if (btn) btn.classList.remove("donuyor");
@@ -981,8 +983,17 @@ function renderDetay(m) {
   // INIT
   // ============================================================
   function init() {
-    state.tarih = bugun_iso();
-    state.vardiya = aktif_vardiya();
+    // Ana sayfa Detay → deep-link: ?tarih=&vardiya=&makine=&rapor_id=
+    var params = new URLSearchParams(window.location.search || "");
+    var qTarih = (params.get("tarih") || "").trim();
+    var qVardiya = (params.get("vardiya") || "").trim();
+    var qMakine = parseInt(params.get("makine") || params.get("makine_id") || "", 10);
+    var qRaporId = parseInt(params.get("rapor_id") || "", 10);
+
+    state.tarih = /^\d{4}-\d{2}-\d{2}$/.test(qTarih) ? qTarih : bugun_iso();
+    state.vardiya = (qVardiya === "gunduz" || qVardiya === "gece" || qVardiya === "mesai")
+      ? qVardiya
+      : aktif_vardiya();
     $("or-tarih").value = state.tarih;
     $("or-vardiya").value = state.vardiya;
     
@@ -1025,7 +1036,27 @@ function renderDetay(m) {
       }
     });
     
-    ana_yukle();
+    ana_yukle()
+      .then(function(data) {
+        if (!qMakine || qMakine < 1 || qMakine > 4) return;
+        if (qRaporId) {
+          var list = (data && data.makineler) || [];
+          var found = null;
+          for (var i = 0; i < list.length; i++) {
+            if (list[i].makine_id === qMakine) { found = list[i]; break; }
+          }
+          if (found && found.rapor_id && found.rapor_id !== qRaporId) {
+            console.warn("[operasyon-raporu] rapor_id uyuşmazlığı query=" + qRaporId +
+              " filtre=" + found.rapor_id + " (tarih/vardiya filtresi esas alınır)");
+          }
+          if (found && !found.rapor_id) {
+            console.warn("[operasyon-raporu] makine için rapor yok; detay açılmadı");
+            return;
+          }
+        }
+        detayAc(qMakine);
+      })
+      .catch(function() { /* ana_yukle hata UI'si zaten yazdı */ });
   }
 
   if (document.readyState === "loading") {

@@ -1,6 +1,186 @@
 {% extends "base.html" %}
 {% block title %}Özet — Solariz CPS{% endblock %}
 
+{% block head %}
+{# HOME_ENJ_SINGLE_V1 — tek kart, makine/zaman seçimi; scoped CSS #}
+<style>
+.home-enj-sec {
+  margin-top: 2px;
+  max-width: 660px;
+  width: 100%;
+  margin-left: 0;
+  margin-right: auto;
+}
+.home-enj-htag {
+  font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 4px; line-height: 1.25;
+}
+.home-enj-htag small {
+  display: block; font-size: 10px; font-weight: 600; color: var(--text3); margin-top: 1px;
+}
+.home-enj-mtabs {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-bottom: 6px;
+}
+.home-enj-mtab {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  padding: 5px 8px; background: #fff; border: 1px solid var(--border);
+  border-radius: 7px; cursor: pointer; font-size: 12px; font-weight: 700; color: var(--text2);
+}
+.home-enj-mtab .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.home-enj-mtab.on .dot { background: #16a34a; }
+.home-enj-mtab.off .dot,
+.home-enj-mtab.fault .dot { background: #dc2626; }
+.home-enj-mtab.setup .dot { background: #F97316; }
+.home-enj-mtab.active-tab {
+  border-color: #FBBF24; box-shadow: 0 0 0 2px rgba(251,191,36,.35);
+  background: #fffbeb; color: var(--text);
+}
+.home-enj-mtab .stxt {
+  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .2px; color: var(--text3);
+}
+.home-enj-mtab.on .stxt { color: #15803d; }
+.home-enj-mtab.off .stxt,
+.home-enj-mtab.fault .stxt { color: #b91c1c; }
+.home-enj-mtab.setup .stxt { color: #c2410c; }
+
+.home-enj-card {
+  background: var(--bg2); border: 0.5px solid var(--border);
+  border-radius: 10px; overflow: hidden; box-shadow: var(--shadow-sm);
+}
+.home-enj-hd {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  padding: 6px 10px; border-bottom: 0.5px solid var(--bg4);
+}
+.home-enj-name { font-size: 13px; font-weight: 800; color: var(--text); line-height: 1.2; }
+.home-enj-name small { display: none; } /* dikey tasarruf — rapor tarihi shift satırında */
+.home-enj-badge {
+  font-size: 9px; font-weight: 800; letter-spacing: .3px; text-transform: uppercase;
+  padding: 2px 6px; border-radius: 999px; white-space: nowrap;
+}
+.home-enj-badge.on { background: rgba(22,163,74,.10); color: #15803d; border: 1px solid rgba(22,163,74,.25); }
+.home-enj-badge.off,
+.home-enj-badge.fault { background: rgba(220,38,38,.08); color: #b91c1c; border: 1px solid rgba(220,38,38,.22); }
+.home-enj-badge.setup { background: rgba(249,115,22,.10); color: #c2410c; border: 1px solid rgba(249,115,22,.28); }
+.home-enj-detail {
+  font-size: 11px; font-weight: 700; color: var(--sol-dark); text-decoration: none;
+}
+.home-enj-detail:hover { color: var(--accent2); }
+
+.home-enj-shift {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 4px 10px; background: var(--bg3); border-bottom: 0.5px solid var(--bg4);
+  font-size: 10px; font-weight: 700; color: var(--text2);
+}
+.home-enj-shift .lbl {
+  color: var(--sol-text); letter-spacing: .4px; text-transform: uppercase; font-size: 9px;
+}
+.home-enj-meta {
+  display: flex; flex-wrap: nowrap; gap: 4px; padding: 5px 10px;
+  border-bottom: 0.5px solid var(--bg4); overflow-x: auto;
+}
+.home-enj-chip {
+  font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px;
+  background: #fff; border: 1px solid var(--border); color: var(--text2); white-space: nowrap;
+}
+.home-enj-chip.ok { background: rgba(22,163,74,.08); border-color: rgba(22,163,74,.22); color: #15803d; }
+
+.home-enj-ab {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+  padding: 6px 10px; border-bottom: 0.5px solid var(--bg4);
+}
+.home-enj-ab-block {
+  border: 0.5px solid var(--border); border-radius: 6px; padding: 5px 8px; background: #fff; min-width: 0;
+}
+.home-enj-ab .ab {
+  display: inline-flex; width: 16px; height: 16px; border-radius: 3px;
+  align-items: center; justify-content: center; font-size: 9px; font-weight: 800; color: #fff;
+  margin-right: 4px; vertical-align: middle;
+}
+.home-enj-ab .ab.a { background: #16a34a; }
+.home-enj-ab .ab.b { background: #FBBF24; color: #78350f; }
+.home-enj-ab .code { font-size: 12px; font-weight: 800; color: var(--text); }
+.home-enj-ab .rn { font-size: 10px; color: var(--text3); font-weight: 600; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-enj-ab .nums { font-size: 11px; color: var(--text2); font-weight: 700; margin-top: 2px; }
+.home-enj-ab .nums b { color: var(--text); font-size: 11px; }
+.home-enj-ab .dst { font-size: 9px; font-weight: 700; margin-top: 1px; color: var(--text3); text-transform: uppercase; }
+
+.home-enj-range {
+  display: flex; gap: 4px; padding: 5px 10px 2px; flex-wrap: wrap;
+}
+.home-enj-range button {
+  font-family: var(--sans); font-size: 10px; font-weight: 700;
+  letter-spacing: .3px; text-transform: uppercase;
+  border: 1px solid var(--border); background: #fff; color: var(--text3);
+  border-radius: 5px; padding: 3px 8px; cursor: pointer;
+}
+.home-enj-range button.active {
+  background: var(--sol-light); border-color: #FBBF24; color: var(--sol-text);
+}
+
+.home-enj-chart-wrap { padding: 2px 10px 4px; }
+.home-enj-chart-lbl {
+  font-size: 9px; font-weight: 700; color: var(--text3);
+  text-transform: uppercase; letter-spacing: .4px; margin-bottom: 3px;
+}
+.home-enj-chart {
+  width: 100%; height: 130px; border: 0.5px solid var(--border); border-radius: 6px;
+  background: #fff; position: relative; overflow: hidden;
+  box-sizing: border-box;
+}
+.home-enj-chart svg { width: 100%; height: 100%; display: block; }
+.home-enj-chart-empty {
+  width: 100%; height: 105px; border: 0.5px dashed var(--border2); border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text3); font-size: 12px; font-weight: 600; background: var(--bg3);
+  box-sizing: border-box; padding: 8px; text-align: center;
+}
+.home-enj-leg {
+  display: flex; gap: 12px; margin-top: 3px; font-size: 10px; color: var(--text3); font-weight: 600;
+  min-height: 0;
+}
+.home-enj-leg:empty { display: none; margin: 0; }
+.home-enj-leg i {
+  display: inline-block; width: 12px; height: 2px; border-radius: 2px;
+  margin-right: 4px; vertical-align: middle;
+}
+.home-enj-leg .t { background: #F97316; }
+.home-enj-leg .y { background: #6b7280; }
+
+.home-enj-kpi {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 0;
+  border-top: 0.5px solid var(--bg4); margin-top: 0;
+}
+.home-enj-kpi > div {
+  padding: 5px 4px; text-align: center; border-right: 0.5px solid var(--bg4); min-width: 0;
+}
+.home-enj-kpi > div:last-child { border-right: none; }
+.home-enj-kpi .k-l {
+  font-size: 8px; font-weight: 700; color: var(--text3);
+  text-transform: uppercase; letter-spacing: .2px; line-height: 1.15;
+}
+.home-enj-kpi .k-v {
+  font-size: 14px; font-weight: 800; color: var(--text);
+  margin-top: 1px; letter-spacing: -.2px; line-height: 1.1;
+}
+.home-enj-kpi .k-v.ok { color: #15803d; }
+.home-enj-kpi .k-v.bad { color: #b91c1c; }
+.home-enj-kpi .k-u { font-size: 9px; color: var(--text3); font-weight: 600; margin-top: 0; }
+
+.home-enj-foot {
+  padding: 3px 2px 0; font-size: 9px; color: var(--text3); letter-spacing: .2px;
+  border-top: none; margin-top: 4px;
+}
+.home-enj-loading {
+  padding: 16px 10px; text-align: center; color: var(--text3); font-size: 12px; font-weight: 600;
+}
+@media (max-width: 800px) {
+  .home-enj-ab { grid-template-columns: 1fr; }
+  .home-enj-kpi { grid-template-columns: repeat(2, 1fr); }
+  .home-enj-kpi > div:nth-child(2n) { border-right: none; }
+  .home-enj-mtabs { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+{% endblock %}
+
 {% block content %}
 
 <div class="page-header">
@@ -13,105 +193,937 @@
   </div>
 </div>
 
-<div class="ozet-grid">
-  <div class="ozet-kart sol">
-    <div class="sayi">Faz 1</div>
-    <div class="etiket">Aktif Geliştirme</div>
-    <div class="alt">Yetki + Kur + Belge + Audit</div>
+<section class="home-enj-sec" id="homeEnjSec" aria-label="Enjeksiyon Operasyonu">
+  <div class="home-enj-htag">
+    Enjeksiyon Operasyonu
+    <small id="homeEnjShiftBanner">AKTİF VARDİYA: —</small>
   </div>
-  <div class="ozet-kart yesil">
-    <div class="sayi">{{ db_mode.upper() }}</div>
-    <div class="etiket">DB Modu</div>
-    <div class="alt">{% if db_mode == 'mock' %}SQLite lokal{% else %}MSSQL Solariz22{% endif %}</div>
+  <div class="home-enj-mtabs" id="homeEnjMtabs"></div>
+  <div class="home-enj-card" id="homeEnjCard">
+    <div class="home-enj-loading" id="homeEnjLoading">Veriler yükleniyor…</div>
+    <div id="homeEnjBody" style="display:none"></div>
   </div>
-  <div class="ozet-kart mavi">
-    <div class="sayi">5057</div>
-    <div class="etiket">Port</div>
-    <div class="alt">127.0.0.1</div>
-  </div>
-  <div class="ozet-kart mor">
-    <div class="sayi">v0.2</div>
-    <div class="etiket">Sürüm</div>
-    <div class="alt">dev build (Faz 1)</div>
-  </div>
-</div>
+  <div class="home-enj-foot" id="homeEnjFoot">Kaynak: /enjeksiyon API · vardiya 07:00–17:00 / 17:00–07:00 · sahte grafik yok</div>
+</section>
 
-<div class="oz-card">
-  <div class="oz-hdr"><span class="oz-hdr-t">Modüller</span></div>
-  <div class="oz-body">
-    <div class="hk-grid">
+<script>
+(function () {
+  var STATUS_LABEL = {
+    on: 'Üretimde',
+    off: 'Kapalı',
+    fault: 'Arıza',
+    setup: 'Kalıp Değişim',
+    done: 'Operasyon Bitti'
+  };
 
-      {% if yetki('finans') or g_user.RolAd == 'Yönetim' or g_user.KullaniciAdi == 'admin' %}
-      <a href="/finans/" class="hk-i">
-        <div class="hk-ic" style="background:#fef3c7; color:var(--sol-dark);">💰</div>
-        <div class="hk-ad">Finans</div>
-        <div class="hk-sub">Cari, çek, anlaşma, plan</div>
-      </a>
-      {% endif %}
+  var state = {
+    machines: [],
+    selectedId: null,
+    range: 'bugun',
+    cache: {},
+    vardiya: null,
+    meta: null,
+    multiOpenWarn: []
+  };
 
-      {% if yetki('grafik.numune') or g_user.RolAd == 'Yönetim' %}
-      <div class="hk-i disabled">
-        <div class="hk-ic" style="background:#ede9fe; color:#6d28d9;">🎨</div>
-        <div class="hk-ad">Grafik (Faz 2)</div>
-        <div class="hk-sub">Numune, Çin sipariş, maliyet</div>
-      </div>
-      {% endif %}
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function fmt(n) {
+    if (n == null || n === '') return 'Veri yok';
+    n = Math.round(Number(n) || 0);
+    return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  }
+  function fmtOrYok(n, has) {
+    if (!has) return 'Veri yok';
+    if (n == null || n === '') return 'Veri yok';
+    return fmt(n);
+  }
+  function ymd(d) {
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+  function parseYmd(s) {
+    var p = (s || '').split('-');
+    return new Date(+p[0], +p[1] - 1, +p[2]);
+  }
+  function addDays(d, n) {
+    var x = new Date(d.getTime()); x.setDate(x.getDate() + n); return x;
+  }
 
-      {% if g_user.RolAd == 'Yönetim' or g_user.KullaniciAdi == 'admin' %}
-      <a href="/yonetim/" class="hk-i">
-        <div class="hk-ic" style="background:#dbeafe; color:#2563eb;">⚙</div>
-        <div class="hk-ad">Yönetim</div>
-        <div class="hk-sub">Kullanıcı, rol, kur, log</div>
-      </a>
-      {% endif %}
+  /* CPS routes.py vardiya_otomatik ile aynı */
+  function aktifVardiya(now) {
+    var h = (now || new Date()).getHours();
+    return (h >= 7 && h < 17) ? 'gunduz' : 'gece';
+  }
+  /* Gece 00:00–07:00 → rapor tarihi bir önceki gün */
+  function raporTarihForVardiya(vardiya, now) {
+    now = now || new Date();
+    if (vardiya === 'gece' && now.getHours() < 7) return ymd(addDays(now, -1));
+    return ymd(now);
+  }
+  function vardiyaMeta(v) {
+    if (v === 'gece') {
+      return {
+        ad: 'GECE', aralik: '17:00–07:00',
+        slots: ['17:00','18:00','19:00','20:00','21:00','22:00','23:00','00:00','01:00','02:00','03:00','04:00','05:00','06:00']
+      };
+    }
+    return {
+      ad: 'GÜNDÜZ', aralik: '07:00–17:00',
+      slots: ['07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00']
+    };
+  }
+  function currentSlotIndex(vardiya, now) {
+    now = now || new Date();
+    var h = now.getHours();
+    var meta = vardiyaMeta(vardiya);
+    var key = pad(h) + ':00';
+    var idx = meta.slots.indexOf(key);
+    if (idx < 0) {
+      if (vardiya === 'gunduz') return h < 7 ? -1 : meta.slots.length - 1;
+      return meta.slots.length - 1;
+    }
+    return idx;
+  }
 
-      <div class="hk-i disabled">
-        <div class="hk-ic" style="background:#dcfce7;">📦</div>
-        <div class="hk-ad">Üretim Takip</div>
-        <div class="hk-sub">Faz 3+ (mevcut port 5055)</div>
-      </div>
+  function isRaporKapali(r) {
+    if (!r) return false;
+    if (r.kapanis_tarih) return true;
+    var d = String(r.durum || '').toLowerCase();
+    return d === 'kapandi' || d === 'kapali' || d === 'kapatildi' || d === 'tamamlandi' || d === 'bitti';
+  }
 
-      <div class="hk-i disabled">
-        <div class="hk-ic" style="background:#fee2e2;">📊</div>
-        <div class="hk-ad">Korgun Dashboard</div>
-        <div class="hk-sub">Port 5056</div>
-      </div>
+  function isVardiyaBitti(vardiya, raporTarih, now) {
+    now = now || new Date();
+    var d = parseYmd(raporTarih);
+    if (vardiya === 'gunduz') {
+      var end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 17, 0, 0);
+      return now.getTime() >= end.getTime();
+    }
+    /* gece: rapor günü 17:00 → ertesi 07:00 */
+    var endG = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 7, 0, 0);
+    return now.getTime() >= endG.getTime();
+  }
 
-    </div>
-  </div>
-</div>
+  function ozetUretim(ozet) {
+    if (!ozet) return 0;
+    return Number(ozet.toplam_uretim || 0) ||
+      ((Number(ozet.toplam_uretim_a || 0) || 0) + (Number(ozet.toplam_uretim_b || 0) || 0));
+  }
 
-<!-- Kullanıcı özel notu -->
-<div class="oz-card" style="margin-top:14px;">
-  <div class="oz-hdr"><span class="oz-hdr-t">Faz 1 Durum</span></div>
-  <div class="oz-body">
-    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:10px;">
-      <div style="padding:12px; background:rgba(22,163,74,0.08); border-radius:8px; border:1px solid rgba(22,163,74,0.25);">
-        <div style="font-size:11px; color:var(--green); font-weight:700; text-transform:uppercase; letter-spacing:1.5px;">✓ Tamamlandı</div>
-        <div style="font-size:13px; margin-top:4px;">Kullanıcı / Rol / Yetki sistemi</div>
-      </div>
-      <div style="padding:12px; background:rgba(22,163,74,0.08); border-radius:8px; border:1px solid rgba(22,163,74,0.25);">
-        <div style="font-size:11px; color:var(--green); font-weight:700; text-transform:uppercase; letter-spacing:1.5px;">✓ Tamamlandı</div>
-        <div style="font-size:13px; margin-top:4px;">Kur tablosu (USD/EUR/CNY)</div>
-      </div>
-      <div style="padding:12px; background:rgba(22,163,74,0.08); border-radius:8px; border:1px solid rgba(22,163,74,0.25);">
-        <div style="font-size:11px; color:var(--green); font-weight:700; text-transform:uppercase; letter-spacing:1.5px;">✓ Tamamlandı</div>
-        <div style="font-size:13px; margin-top:4px;">Belge servisi (sistem_belge)</div>
-      </div>
-      <div style="padding:12px; background:rgba(22,163,74,0.08); border-radius:8px; border:1px solid rgba(22,163,74,0.25);">
-        <div style="font-size:11px; color:var(--green); font-weight:700; text-transform:uppercase; letter-spacing:1.5px;">✓ Tamamlandı</div>
-        <div style="font-size:13px; margin-top:4px;">Audit log modül/alt_modul</div>
-      </div>
-      <div style="padding:12px; background:rgba(245,158,11,0.08); border-radius:8px; border:1px solid rgba(245,158,11,0.25);">
-        <div style="font-size:11px; color:var(--sol-dark); font-weight:700; text-transform:uppercase; letter-spacing:1.5px;">⋯ Faz 2'de</div>
-        <div style="font-size:13px; margin-top:4px;">Tedarikçi + Ürün yönetimi</div>
-      </div>
-      <div style="padding:12px; background:rgba(245,158,11,0.08); border-radius:8px; border:1px solid rgba(245,158,11,0.25);">
-        <div style="font-size:11px; color:var(--sol-dark); font-weight:700; text-transform:uppercase; letter-spacing:1.5px;">⋯ Faz 2'de</div>
-        <div style="font-size:13px; margin-top:4px;">Grafik modülü (numune/sipariş/maliyet)</div>
-      </div>
-    </div>
-  </div>
-</div>
+  function hasProduction(ozet) {
+    return ozetUretim(ozet) > 0 || Number((ozet && ozet.net) || 0) > 0;
+  }
+
+  function slotAktifMi(s) {
+    if (!s) return false;
+    if (s.aktif === 1 || s.aktif === true) return true;
+    var d = String(s.durum || '').toUpperCase();
+    return d === 'AKTIF' || d.indexOf('CALIS') >= 0 || d.indexOf('ÇALIŞ') >= 0;
+  }
+
+  function hasAktifSlot(slotlar) {
+    return (slotlar || []).some(slotAktifMi);
+  }
+
+  function hasArizaSlot(slotlar) {
+    return (slotlar || []).some(function (s) {
+      var d = String(s.durum || '').toUpperCase();
+      return d.indexOf('ARIZA') >= 0;
+    });
+  }
+
+  function hasSetupSlot(slotlar) {
+    return (slotlar || []).some(function (s) {
+      var d = String(s.durum || '').toUpperCase();
+      return d.indexOf('SETUP') >= 0 || d.indexOf('KALIP') >= 0;
+    });
+  }
+
+  function byRecent(a, b) {
+    var sa = a.son_guncelleme || a.olusturma_tarih || '';
+    var sb = b.son_guncelleme || b.olusturma_tarih || '';
+    if (sa !== sb) return sb < sa ? -1 : (sb > sa ? 1 : 0);
+    return (b.id || 0) - (a.id || 0);
+  }
+
+  function statusFromAnlik(anlik, finished) {
+    if (finished) return 'done';
+    if (!anlik || !anlik.tip) return 'off';
+    var tip = String(anlik.tip).toUpperCase();
+    var say = anlik.sayim || {};
+    if (tip.indexOf('ARIZA') >= 0) return 'fault';
+    if (tip.indexOf('SETUP') >= 0) return 'setup';
+    if (tip === 'TUMUYLA_AKTIF' || tip === 'HIBRIT') return 'on';
+    if ((say.AKTIF || 0) > 0) return 'on';
+    if (tip === 'TUMUYLA_KAPALI' || tip === 'DURUYOR') return 'off';
+    return 'off';
+  }
+
+  function statusFromSlots(slotlar, finished) {
+    if (finished) return 'done';
+    if (!slotlar || !slotlar.length) return 'off';
+    if (hasArizaSlot(slotlar)) return 'fault';
+    if (hasSetupSlot(slotlar)) return 'setup';
+    if (hasAktifSlot(slotlar)) return 'on';
+    return 'off';
+  }
+
+  function normalizeSaatlik(saatlik) {
+    if (!saatlik) return [];
+    if (Array.isArray(saatlik)) return saatlik;
+    var det = saatlik.detaylar || [];
+    return det.map(function (d) {
+      return {
+        saat_baslangic: d.saat || d.saat_baslangic || '',
+        uretilen_a: d.uretilen_a,
+        uretilen_b: d.uretilen_b
+      };
+    });
+  }
+
+  function cumSeries(saatlik, slots) {
+    var map = {};
+    normalizeSaatlik(saatlik).forEach(function (s) {
+      var k = (s.saat_baslangic || '').slice(0, 5);
+      if (!k) return;
+      var u = (Number(s.uretilen_a) || 0) + (Number(s.uretilen_b) || 0);
+      map[k] = (map[k] || 0) + u;
+    });
+    var out = [], run = 0;
+    slots.forEach(function (k) {
+      run += (map[k] || 0);
+      out.push(run);
+    });
+    return out;
+  }
+
+  function cutAt(arr, uptoIdx) {
+    var out = [];
+    for (var i = 0; i < arr.length; i++) {
+      out.push(i <= uptoIdx ? arr[i] : null);
+    }
+    return out;
+  }
+
+  async function apiGet(url) {
+    var r = await fetch(url, { credentials: 'same-origin' });
+    if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + url);
+    return r.json();
+  }
+
+  async function fetchRaporlar(makineId, t0, t1, vardiya) {
+    var q = '/enjeksiyon/api/raporlar?makine_id=' + makineId +
+      '&tarih_baslangic=' + t0 + '&tarih_bitis=' + t1 + '&limit=200';
+    if (vardiya) q += '&vardiya=' + vardiya;
+    var j = await apiGet(q);
+    return j.ok ? (j.kayitlar || []) : [];
+  }
+
+  async function fetchDetay(raporId) {
+    if (!raporId) return null;
+    var j = await apiGet('/enjeksiyon/api/raporlar/' + raporId + '/detay');
+    return j.ok ? j : null;
+  }
+
+  async function fetchAb(raporId) {
+    if (!raporId) return null;
+    try {
+      return await apiGet('/enjeksiyon/api/rapor/' + raporId + '/ab-ozet');
+    } catch (e) { return null; }
+  }
+
+  async function fetchPlanlamaMakine(makineId, tarih, vardiya) {
+    if (!makineId || !tarih || !vardiya) return null;
+    try {
+      var j = await apiGet('/planlama/api/operasyon/makine/' + makineId +
+        '?tarih=' + encodeURIComponent(tarih) + '&vardiya=' + encodeURIComponent(vardiya));
+      return j.ok ? j.makine : null;
+    } catch (e) { return null; }
+  }
+
+  async function loadMachines() {
+    var j = await apiGet('/enjeksiyon/api/makine');
+    var rows = j.veri || j.kayitlar || [];
+    state.machines = rows.map(function (m) {
+      return {
+        id: m.id,
+        kod: m.kod || ('M' + m.id),
+        ad: m.ad || '',
+        istasyon_sayisi: m.istasyon_sayisi || 0,
+        status: 'off'
+      };
+    });
+    if (!state.selectedId && state.machines.length) state.selectedId = state.machines[0].id;
+  }
+
+  /**
+   * Aktif operasyon seçim kuralı:
+   * 1) Açık + üretimde (aktif slot) — aktif vardiya
+   * 2) Aynı aktif vardiyada en güncel açık rapor (boş taslak, gerçek üretimli kaydı ezmez)
+   * 3) Bugün tamamlanan en son operasyon
+   * 4) Yoksa null (kapalı / veri yok)
+   */
+  async function pickDisplayReport(makineId, vardiya, tarihBugun, now) {
+    var dayList = await fetchRaporlar(makineId, tarihBugun, tarihBugun, null);
+    var shiftList = dayList.filter(function (r) { return r.vardiya === vardiya; }).sort(byRecent);
+    var warn = [];
+    if (shiftList.length > 1) {
+      warn.push('M' + makineId + ' aktif vardiyada ' + shiftList.length + ' açık/rapor kaydı');
+    }
+
+    var detCache = {};
+    async function detOf(r) {
+      if (!r) return null;
+      if (detCache[r.id]) return detCache[r.id];
+      detCache[r.id] = await fetchDetay(r.id);
+      return detCache[r.id];
+    }
+
+    /* 1: açık + üretimde */
+    for (var i = 0; i < shiftList.length; i++) {
+      var r1 = shiftList[i];
+      if (isRaporKapali(r1)) continue;
+      var d1 = await detOf(r1);
+      if (hasAktifSlot(d1 && d1.slotlar)) {
+        return { rapor: r1, detay: d1, finished: false, reason: 'aktif_uretim', warn: warn, dayList: dayList };
+      }
+    }
+
+    /* 2: aktif vardiya açık rapor — önce üretimli, sonra güncel açık (boş taslak üretimliyi ezmez) */
+    var openShift = shiftList.filter(function (r) { return !isRaporKapali(r); }).sort(byRecent);
+    var openProd = [];
+    for (var j = 0; j < openShift.length; j++) {
+      if (hasProduction(openShift[j].ozet)) openProd.push(openShift[j]);
+    }
+    if (openProd.length) {
+      var rp = openProd[0];
+      return { rapor: rp, detay: await detOf(rp), finished: false, reason: 'vardiya_acik_uretim', warn: warn, dayList: dayList };
+    }
+
+    /* 3: bugün tamamlanan (kapanış veya vardiya bitmiş) — en güncel, üretimli öncelikli */
+    var completed = dayList.filter(function (r) {
+      return isRaporKapali(r) || isVardiyaBitti(r.vardiya, r.tarih, now);
+    }).sort(byRecent);
+    var compProd = completed.filter(function (r) { return hasProduction(r.ozet); });
+    var pick3 = compProd[0] || completed[0] || null;
+    if (pick3) {
+      /* boş aktif vardiya taslağı, tamamlanmış üretimli operasyonun önüne geçmesin */
+      return {
+        rapor: pick3,
+        detay: await detOf(pick3),
+        finished: true,
+        reason: 'bugun_tamamlanan',
+        warn: warn,
+        dayList: dayList,
+        emptyShiftFallback: openShift[0] || null
+      };
+    }
+
+    /* 4: yalnız boş aktif vardiya taslağı kaldıysa onu göster (kapalı/veri yok bağlamı) */
+    if (openShift.length) {
+      var re = openShift[0];
+      return { rapor: re, detay: await detOf(re), finished: false, reason: 'vardiya_taslak_bos', warn: warn, dayList: dayList };
+    }
+    if (shiftList.length) {
+      var rs = shiftList[0];
+      return { rapor: rs, detay: await detOf(rs), finished: isRaporKapali(rs), reason: 'vardiya_kayit', warn: warn, dayList: dayList };
+    }
+    return { rapor: null, detay: null, finished: false, reason: 'yok', warn: warn, dayList: dayList };
+  }
+
+  function sideFromSources(slot, plUretim, abj, ozet, slotlar) {
+    var s = { kod: 'Veri yok', renk: 'Veri yok', tur: null, cift: null, durum: 'Veri yok' };
+    var ko = null;
+    if (plUretim) {
+      s.tur = slot === 'A' ? plUretim.tur_a : plUretim.tur_b;
+      s.cift = slot === 'A' ? plUretim.uretilen_a : plUretim.uretilen_b;
+      ko = slot === 'A' ? plUretim.a_kalip_ozet : plUretim.b_kalip_ozet;
+      if (ko) {
+        s.kod = ko.kod || s.kod;
+        s.renk = ko.renk_ad || ko.renk_kod || s.renk;
+      }
+    }
+    if (ozet) {
+      if (s.tur == null) s.tur = slot === 'A' ? (ozet.toplam_tur_a || 0) : (ozet.toplam_tur_b || 0);
+      if (s.cift == null) s.cift = slot === 'A' ? (ozet.toplam_uretim_a || 0) : (ozet.toplam_uretim_b || 0);
+    }
+    if (abj) {
+      var block = (slot === 'A' ? abj.A : abj.B) || null;
+      if (block) {
+        if (!ko || !ko.kod) s.kod = block.kalip_kod || block.model_kod || block.kod || s.kod;
+        if (s.renk === 'Veri yok') s.renk = block.renk || block.renk_ad || s.renk;
+      }
+    }
+    var sl = (slotlar || []).filter(function (x) {
+      return String(x.slot || '').toUpperCase() === slot && slotAktifMi(x);
+    })[0];
+    if (!sl) {
+      sl = (slotlar || []).filter(function (x) { return String(x.slot || '').toUpperCase() === slot; })[0];
+    }
+    if (sl) {
+      if (s.kod === 'Veri yok') s.kod = sl.kalip_kod || (sl.kalip && sl.kalip.kod) || s.kod;
+      if (s.renk === 'Veri yok') s.renk = sl.renk_ad || sl.renk || s.renk;
+      s.durum = slotAktifMi(sl) ? 'Aktif' : (sl.durum || 'Kapalı');
+    } else if (s.cift != null && s.cift > 0) {
+      s.durum = 'Üretim';
+    } else if (s.cift != null) {
+      s.durum = 'Kapalı';
+    }
+    if (s.tur == null) s.tur = 0;
+    if (s.cift == null) s.cift = 0;
+    return s;
+  }
+
+  async function buildMachineBundle(makineId) {
+    var now = new Date();
+    var vardiya = aktifVardiya(now);
+    var meta = vardiyaMeta(vardiya);
+    var tarihBugun = raporTarihForVardiya(vardiya, now);
+    var tarihDun = ymd(addDays(parseYmd(tarihBugun), -1));
+    var slotIdx = currentSlotIndex(vardiya, now);
+
+    var picked = await pickDisplayReport(makineId, vardiya, tarihBugun, now);
+    if (picked.warn && picked.warn.length) {
+      state.multiOpenWarn = (state.multiOpenWarn || []).concat(picked.warn);
+      console.warn('[home-enj]', picked.warn.join('; '));
+    }
+
+    var todayR = picked.rapor;
+    var todayDet = picked.detay;
+    var finished = !!picked.finished;
+    var raporTarih = todayR ? todayR.tarih : tarihBugun;
+    var raporVardiya = todayR ? todayR.vardiya : vardiya;
+
+    /* Operasyon Raporu ile aynı kaynak */
+    var pl = todayR ? await fetchPlanlamaMakine(makineId, raporTarih, raporVardiya) : null;
+    if (pl && pl.rapor_id && todayR && pl.rapor_id !== todayR.id) {
+      console.warn('[home-enj] rapor_id uyuşmazlığı planlama=' + pl.rapor_id + ' secilen=' + todayR.id);
+    }
+
+    var ydayList = await fetchRaporlar(makineId, tarihDun, tarihDun, vardiya);
+    ydayList.sort(byRecent);
+    var ydayR = ydayList.filter(function (r) { return hasProduction(r.ozet); })[0] || ydayList[0] || null;
+    var ydayDet = ydayR ? await fetchDetay(ydayR.id) : null;
+    var plY = ydayR ? await fetchPlanlamaMakine(makineId, ydayR.tarih, ydayR.vardiya) : null;
+
+    var dayFullY = await fetchRaporlar(makineId, tarihDun, tarihDun, null);
+    var ab = todayR ? await fetchAb(todayR.id) : null;
+
+    var slotlar = (pl && pl.slotlar) || (todayDet && todayDet.slotlar) || [];
+    var status = pl
+      ? statusFromAnlik(pl.anlik_durum, finished)
+      : statusFromSlots(slotlar, finished);
+    /* Biten operasyon ama yeni aktif yoksa done; aktif üretimdeyse on */
+    if (finished && hasAktifSlot(slotlar) && raporVardiya === vardiya && raporTarih === tarihBugun) {
+      status = statusFromAnlik(pl && pl.anlik_durum, false);
+      finished = false;
+    }
+
+    var aktifSlot = slotlar.filter(slotAktifMi).length;
+    var istasyonAktif = {};
+    slotlar.forEach(function (s) {
+      if (slotAktifMi(s)) istasyonAktif[s.istasyon_no] = true;
+    });
+    var istasyonSay = Object.keys(istasyonAktif).length;
+
+    var personel = (pl && pl.personel_sayisi) || (todayR && todayR.personel_sayisi) || 0;
+    if (!personel && ab && ab.A && ab.A.personel_sayisi) personel = ab.A.personel_sayisi;
+
+    var plU = (pl && pl.uretim) || null;
+    var ozetT = (todayDet && todayDet.ozet) || (todayR && todayR.ozet) || {};
+    var ozetY = (ydayDet && ydayDet.ozet) || (ydayR && ydayR.ozet) || {};
+    var plUy = (plY && plY.uretim) || null;
+
+    /* Operasyon Raporu (planlama) net/fire/verim öncelikli; null ise "Veri yok" (0 uydurma) */
+    var fireT = null, netT = null, verimT = null;
+    if (plU) {
+      if (plU.fire_cift != null) fireT = Number(plU.fire_cift);
+      if (plU.net_cift != null) netT = Number(plU.net_cift);
+      if (plU.verim_yuzde != null) verimT = Math.round(Number(plU.verim_yuzde));
+    } else if (todayR) {
+      fireT = Number(ozetT.fire != null ? ozetT.fire : 0);
+      if (ozetT.net != null) netT = Number(ozetT.net);
+      else if (ozetT.toplam_uretim != null) netT = Number(ozetT.toplam_uretim) - fireT;
+      if (ozetT.verim_yuzde != null && ozetT.verim_yuzde !== '') verimT = Math.round(Number(ozetT.verim_yuzde));
+    }
+    var fireY = null, netY = null;
+    if (plUy) {
+      if (plUy.fire_cift != null) fireY = Number(plUy.fire_cift);
+      if (plUy.net_cift != null) netY = Number(plUy.net_cift);
+    } else if (ydayR) {
+      fireY = Number(ozetY.fire != null ? ozetY.fire : 0);
+      if (ozetY.net != null) netY = Number(ozetY.net);
+      else if (ozetY.toplam_uretim != null) netY = Number(ozetY.toplam_uretim) - fireY;
+    }
+
+    var saatlikT = (pl && pl.saatlik) || (todayDet && todayDet.saatlik);
+    var saatlikY = (plY && plY.saatlik) || (ydayDet && ydayDet.saatlik);
+    /* Grafik: gösterilen raporun vardiya meta'sı (tamamlanan farklı vardiya olabilir) */
+    var chartMeta = vardiyaMeta(raporVardiya);
+    var chartSlotIdx = (raporVardiya === vardiya && raporTarih === tarihBugun)
+      ? slotIdx
+      : (chartMeta.slots.length - 1);
+
+    var seriesToday = cumSeries(saatlikT, chartMeta.slots);
+    var seriesYdayFull = cumSeries(saatlikY, meta.slots);
+    var seriesYdayCut = cutAt(seriesYdayFull, slotIdx);
+    var seriesTodayCut = cutAt(seriesToday, chartSlotIdx);
+    var dunAyniSaat = slotIdx >= 0 ? (seriesYdayFull[slotIdx] || 0) : 0;
+
+    var gunduzY = 0, geceY = 0, fireYdayTotal = 0, teorikY = 0, netYdaySum = 0;
+    dayFullY.forEach(function (r) {
+      var n = Number((r.ozet && (r.ozet.net != null ? r.ozet.net : r.ozet.toplam_uretim)) || 0);
+      var f = Number((r.ozet && r.ozet.fire) || r.toplam_fire_cift || 0);
+      var t = Number((r.ozet && r.ozet.teorik) || 0);
+      fireYdayTotal += f;
+      teorikY += t;
+      netYdaySum += n;
+      if (r.vardiya === 'gunduz') gunduzY += n;
+      if (r.vardiya === 'gece') geceY += n;
+    });
+    var verimYday = teorikY > 0 ? Math.round((netYdaySum / teorikY) * 100) : null;
+
+    var weekStart = ymd(addDays(now, -6));
+    var monthStart = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-01';
+    var weekRows = await fetchRaporlar(makineId, weekStart, ymd(now), null);
+    var monthRows = await fetchRaporlar(makineId, monthStart, ymd(now), null);
+
+    function dayBuckets(rows, fromDate, toDate) {
+      var labels = [], values = [], fireSum = 0, netSum = 0, teorikSum = 0, hasAny = false;
+      var map = {};
+      rows.forEach(function (r) {
+        var n = Number((r.ozet && (r.ozet.net != null ? r.ozet.net : r.ozet.toplam_uretim)) || 0);
+        var f = Number((r.ozet && r.ozet.fire) || r.toplam_fire_cift || 0);
+        var t = Number((r.ozet && r.ozet.teorik) || 0);
+        if (!map[r.tarih]) map[r.tarih] = { net: 0, fire: 0, teorik: 0 };
+        map[r.tarih].net += n;
+        map[r.tarih].fire += f;
+        map[r.tarih].teorik += t;
+        if (n > 0 || f > 0) hasAny = true;
+      });
+      var d = parseYmd(fromDate), end = parseYmd(toDate);
+      while (d <= end) {
+        var key = ymd(d);
+        labels.push(pad(d.getDate()) + '.' + pad(d.getMonth() + 1));
+        var b = map[key];
+        values.push(b ? b.net : 0);
+        if (b) {
+          fireSum += b.fire;
+          netSum += b.net;
+          teorikSum += b.teorik;
+        }
+        d = addDays(d, 1);
+      }
+      var verimW = teorikSum > 0 ? Math.round((netSum / teorikSum) * 100) : null;
+      return {
+        labels: labels, values: values, fireSum: fireSum,
+        verimWeighted: verimW, hasAny: hasAny, recordCount: rows.length,
+        netSum: netSum, teorikSum: teorikSum
+      };
+    }
+
+    var week = dayBuckets(weekRows, weekStart, ymd(now));
+    var month = dayBuckets(monthRows, monthStart, ymd(now));
+
+    var m = state.machines.find(function (x) { return x.id === makineId; });
+    if (m) m.status = status;
+
+    var hasTodaySeries = seriesToday.some(function (v) { return v > 0; });
+    var hasYdaySeries = seriesYdayFull.some(function (v) { return v > 0; });
+    var tamamlanma = null;
+    if (finished && todayR) {
+      tamamlanma = todayR.kapanis_tarih || todayR.son_guncelleme || null;
+    }
+
+    return {
+      makineId: makineId,
+      kod: m ? m.kod : ('M' + makineId),
+      ad: m ? m.ad : '',
+      status: status,
+      finished: finished,
+      tamamlanma: tamamlanma,
+      pickReason: picked.reason,
+      raporId: todayR ? todayR.id : (pl && pl.rapor_id) || null,
+      raporTarih: raporTarih,
+      raporVardiya: raporVardiya,
+      vardiya: vardiya,
+      meta: meta,
+      chartMeta: chartMeta,
+      tarihBugun: tarihBugun,
+      tarihDun: tarihDun,
+      slotIdx: slotIdx,
+      aktifSlot: aktifSlot,
+      istasyonSay: istasyonSay,
+      istasyonKapasite: (pl && pl.istasyon_sayisi) || (m ? m.istasyon_sayisi : 0),
+      personel: personel || 0,
+      a: sideFromSources('A', plU, ab, ozetT, slotlar),
+      b: sideFromSources('B', plU, ab, ozetT, slotlar),
+      net: todayR ? netT : null,
+      fire: todayR ? fireT : null,
+      verim: todayR ? verimT : null,
+      dunVardiya: ydayR ? netY : null,
+      dunAyniSaat: (ydayR && (netY != null || seriesYdayFull.some(function (v) { return v > 0; }))) ? dunAyniSaat : null,
+      seriesTodayCut: seriesTodayCut,
+      seriesYdayCut: seriesYdayCut,
+      seriesYdayFull: seriesYdayFull,
+      hasTodayRapor: !!todayR,
+      hasYdayRapor: !!ydayR,
+      hasTodaySeries: hasTodaySeries,
+      hasYdaySeries: hasYdaySeries,
+      dunku: {
+        net: dayFullY.length ? (gunduzY + geceY) : null,
+        fire: dayFullY.length ? fireYdayTotal : null,
+        gunduz: dayFullY.length ? gunduzY : null,
+        gece: dayFullY.length ? geceY : null,
+        verim: verimYday
+      },
+      week: week,
+      month: month
+    };
+  }
+
+  function maxOfSeries() {
+    var mx = 1;
+    Array.prototype.forEach.call(arguments, function (arr) {
+      if (!arr) return;
+      arr.forEach(function (v) {
+        if (v != null && v > mx) mx = v;
+      });
+    });
+    return mx;
+  }
+
+  function renderChart(svgEl, emptyEl, bundle) {
+    var range = state.range;
+    var title = '';
+    var labels = [];
+    var seriesA = null, seriesB = null, mode = 'lines';
+    var emptyMsg = null;
+
+    if (range === 'bugun') {
+      title = 'Bugün aktif vardiya kümülatif net · dün aynı saate kadar';
+      labels = (bundle.chartMeta || bundle.meta).slots.map(function (s) { return s.slice(0, 2); });
+      seriesA = bundle.seriesTodayCut;
+      seriesB = bundle.seriesYdayCut;
+      if (!bundle.hasTodayRapor && !bundle.hasYdayRapor) emptyMsg = 'Bugün / dün için vardiya raporu yok';
+      else if (!bundle.hasTodaySeries && !bundle.hasYdaySeries) emptyMsg = 'Saatlik dağılım kaydı yok';
+    } else if (range === 'dun') {
+      title = 'Dün ' + bundle.meta.ad + ' vardiyası · tam kümülatif net';
+      labels = bundle.meta.slots.map(function (s) { return s.slice(0, 2); });
+      seriesA = bundle.seriesYdayFull;
+      seriesB = null;
+      if (!bundle.hasYdayRapor) emptyMsg = 'Dün için bu vardiyada rapor yok';
+      else if (!bundle.hasYdaySeries) emptyMsg = 'Saatlik dağılım kaydı yok';
+    } else if (range === 'haftalik') {
+      title = 'Son 7 gün · günlük net toplam (Gündüz+Gece)';
+      labels = bundle.week.labels;
+      seriesA = bundle.week.values;
+      mode = 'bars';
+      if (!bundle.week.recordCount) emptyMsg = 'Tarihsel veri yok';
+      else if (!bundle.week.hasAny) emptyMsg = 'Son 7 günde üretim kaydı yok (toplamlar 0)';
+    } else {
+      title = 'Seçili ay · günlük net toplam (Gündüz+Gece)';
+      labels = bundle.month.labels;
+      seriesA = bundle.month.values;
+      mode = 'bars';
+      if (!bundle.month.recordCount) emptyMsg = 'Tarihsel veri yok';
+      else if (!bundle.month.hasAny) emptyMsg = 'Bu ayda üretim kaydı yok (toplamlar 0)';
+    }
+
+    document.getElementById('chartLbl').textContent = title;
+    var leg = document.getElementById('chartLeg');
+    var chartBox = svgEl.parentElement;
+    if (emptyMsg) {
+      if (chartBox) chartBox.style.display = 'none';
+      emptyEl.style.display = 'flex';
+      emptyEl.textContent = emptyMsg;
+      leg.innerHTML = '';
+      return;
+    }
+    if (chartBox) chartBox.style.display = 'block';
+    emptyEl.style.display = 'none';
+    svgEl.style.display = 'block';
+
+    if (range === 'bugun') {
+      leg.innerHTML = '<span><i class="t"></i>Bugün</span><span><i class="y"></i>Dün aynı saate kadar</span>';
+    } else if (range === 'dun') {
+      leg.innerHTML = '<span><i class="t"></i>Dün vardiya</span>';
+    } else {
+      leg.innerHTML = '<span><i class="t"></i>Günlük net</span>';
+    }
+
+    var W = 640, H = 130, padL = 36, padR = 10, padT = 8, padB = 20;
+    var plotW = W - padL - padR, plotH = H - padT - padB;
+    var mx = maxOfSeries(seriesA, seriesB);
+    var n = (seriesA || []).length || 1;
+    function x(i) { return padL + (n <= 1 ? 0 : (i / (n - 1)) * plotW); }
+    function y(v) { return padT + plotH - (v / mx) * plotH; }
+
+    var html = '';
+    html += '<line x1="'+padL+'" y1="'+padT+'" x2="'+(W-padR)+'" y2="'+padT+'" stroke="#eef0f4"/>';
+    html += '<line x1="'+padL+'" y1="'+(padT+plotH/2)+'" x2="'+(W-padR)+'" y2="'+(padT+plotH/2)+'" stroke="#eef0f4"/>';
+    html += '<line x1="'+padL+'" y1="'+(padT+plotH)+'" x2="'+(W-padR)+'" y2="'+(padT+plotH)+'" stroke="#e8eaed"/>';
+    html += '<text x="'+(padL-4)+'" y="'+(padT+4)+'" text-anchor="end" fill="#9ca3af" font-size="10" font-family="Segoe UI,sans-serif">'+(mx>=1000?(Math.round(mx/100)/10)+'k':mx)+'</text>';
+    html += '<text x="'+(padL-4)+'" y="'+(padT+plotH+3)+'" text-anchor="end" fill="#9ca3af" font-size="10" font-family="Segoe UI,sans-serif">0</text>';
+
+    if (mode === 'bars') {
+      var gap = 2, bw = Math.max(3, (plotW / n) - gap);
+      seriesA.forEach(function (v, i) {
+        var bh = (v / mx) * plotH;
+        var bx = padL + i * (plotW / n) + gap / 2;
+        html += '<rect x="'+bx.toFixed(1)+'" y="'+(padT+plotH-bh).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+Math.max(bh,1).toFixed(1)+'" fill="'+(v===0?'#e5e7eb':'#F97316')+'" rx="1"/>';
+      });
+      var step = labels.length > 16 ? 4 : (labels.length > 10 ? 2 : 1);
+      labels.forEach(function (lb, i) {
+        if (i % step && i !== labels.length - 1) return;
+        html += '<text x="'+(padL + i*(plotW/n) + bw/2).toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" fill="#9ca3af" font-size="9" font-family="Segoe UI,sans-serif">'+lb+'</text>';
+      });
+    } else {
+      function poly(arr, color, dash) {
+        var pts = [];
+        arr.forEach(function (v, i) {
+          if (v == null) return;
+          pts.push(x(i).toFixed(1) + ',' + y(v).toFixed(1));
+        });
+        if (!pts.length) return '';
+        return '<polyline fill="none" stroke="'+color+'" stroke-width="'+(dash?2:2.6)+'" '+(dash?'stroke-dasharray="5 4"':'')+' points="'+pts.join(' ')+'"/>';
+      }
+      if (seriesB) html += poly(seriesB, '#6b7280', true);
+      html += poly(seriesA, '#F97316', false);
+      function lastPoint(arr, color) {
+        for (var i = arr.length - 1; i >= 0; i--) {
+          if (arr[i] != null) {
+            html += '<circle cx="'+x(i).toFixed(1)+'" cy="'+y(arr[i]).toFixed(1)+'" r="3" fill="'+color+'"/>';
+            break;
+          }
+        }
+      }
+      if (seriesB) lastPoint(seriesB, '#6b7280');
+      lastPoint(seriesA, '#F97316');
+      var step2 = Math.max(1, Math.floor(labels.length / 8));
+      labels.forEach(function (lb, i) {
+        if (i % step2 && i !== labels.length - 1) return;
+        html += '<text x="'+x(i).toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" fill="#9ca3af" font-size="9" font-family="Segoe UI,sans-serif">'+lb+'</text>';
+      });
+    }
+    svgEl.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    svgEl.innerHTML = html;
+  }
+
+  function kpiHtml(bundle) {
+    var r = state.range;
+    function cell(l, v, u, cls) {
+      return '<div><div class="k-l">'+l+'</div><div class="k-v '+(cls||'')+'">'+v+'</div>'+(u?'<div class="k-u">'+u+'</div>':'')+'</div>';
+    }
+    if (r === 'bugun') {
+      return cell('Vardiya Net', fmtOrYok(bundle.net, bundle.hasTodayRapor), 'çift') +
+        cell('Fire', fmtOrYok(bundle.fire, bundle.hasTodayRapor), 'çift', (bundle.fire > 0 ? 'bad' : '')) +
+        cell('Verim', (!bundle.hasTodayRapor || bundle.verim == null) ? 'Veri yok' : ('%' + bundle.verim), '', bundle.verim >= 95 ? 'ok' : '') +
+        cell('Dün Vardiya', fmtOrYok(bundle.dunVardiya, bundle.hasYdayRapor), 'çift') +
+        cell('Dün Aynı Saat', fmtOrYok(bundle.dunAyniSaat, bundle.hasYdayRapor), 'çift');
+    }
+    if (r === 'dun') {
+      var has = bundle.dunku.net != null;
+      return cell('Dün Net', fmtOrYok(bundle.dunku.net, has), 'çift') +
+        cell('Dün Fire', fmtOrYok(bundle.dunku.fire, has), 'çift') +
+        cell('Dün Verim', bundle.dunku.verim == null ? 'Veri yok' : ('%' + bundle.dunku.verim), '') +
+        cell('Gündüz', fmtOrYok(bundle.dunku.gunduz, has), 'çift') +
+        cell('Gece', fmtOrYok(bundle.dunku.gece, has), 'çift');
+    }
+    if (r === 'haftalik') {
+      var vals = bundle.week.values || [];
+      var tot = vals.reduce(function (a, b) { return a + b; }, 0);
+      var avg = vals.length ? Math.round(tot / vals.length) : 0;
+      var mx = vals.length ? Math.max.apply(null, vals) : 0;
+      return cell('7 Gün Toplam', bundle.week.recordCount ? fmt(tot) : 'Veri yok', 'çift') +
+        cell('Günlük Ort.', bundle.week.recordCount ? fmt(avg) : 'Veri yok', 'çift') +
+        cell('En Yüksek Gün', bundle.week.recordCount ? fmt(mx) : 'Veri yok', 'çift') +
+        cell('Toplam Fire', bundle.week.recordCount ? fmt(bundle.week.fireSum) : 'Veri yok', 'çift') +
+        cell('Ort. Verim', bundle.week.verimWeighted == null ? 'Veri yok' : ('%' + bundle.week.verimWeighted), '');
+    }
+    var valsM = bundle.month.values || [];
+    var totM = valsM.reduce(function (a, b) { return a + b; }, 0);
+    var avgM = valsM.length ? Math.round(totM / valsM.length) : 0;
+    var mxM = valsM.length ? Math.max.apply(null, valsM) : 0;
+    return cell('Ay Toplamı', bundle.month.recordCount ? fmt(totM) : 'Veri yok', 'çift') +
+      cell('Günlük Ort.', bundle.month.recordCount ? fmt(avgM) : 'Veri yok', 'çift') +
+      cell('En İyi Gün', bundle.month.recordCount ? fmt(mxM) : 'Veri yok', 'çift') +
+      cell('Toplam Fire', bundle.month.recordCount ? fmt(bundle.month.fireSum) : 'Veri yok', 'çift') +
+      cell('Ort. Verim', bundle.month.verimWeighted == null ? 'Veri yok' : ('%' + bundle.month.verimWeighted), '');
+  }
+
+  function detailHref(bundle) {
+    if (!bundle.raporId) return '/planlama/operasyon-raporu';
+    return '/planlama/operasyon-raporu?tarih=' + encodeURIComponent(bundle.raporTarih) +
+      '&vardiya=' + encodeURIComponent(bundle.raporVardiya) +
+      '&makine=' + bundle.makineId +
+      '&rapor_id=' + bundle.raporId;
+  }
+
+  function renderTabs() {
+    var el = document.getElementById('homeEnjMtabs');
+    el.innerHTML = state.machines.map(function (m) {
+      var st = m.status || 'off';
+      var act = m.id === state.selectedId ? ' active-tab' : '';
+      return '<button type="button" class="home-enj-mtab '+st+act+'" data-mid="'+m.id+'">' +
+        '<span><span class="dot"></span> '+m.kod+'</span>' +
+        '<span class="stxt">'+STATUS_LABEL[st]+'</span></button>';
+    }).join('');
+    Array.prototype.forEach.call(el.querySelectorAll('.home-enj-mtab'), function (btn) {
+      btn.addEventListener('click', function () {
+        state.selectedId = Number(btn.getAttribute('data-mid'));
+        refreshSelected();
+      });
+    });
+  }
+
+  function renderBody(bundle) {
+    var st = bundle.status;
+    var body = document.getElementById('homeEnjBody');
+    body.style.display = 'block';
+    document.getElementById('homeEnjLoading').style.display = 'none';
+
+    var detUrl = detailHref(bundle);
+    var detCls = bundle.raporId ? 'home-enj-detail' : 'home-enj-detail';
+    var detStyle = bundle.raporId ? '' : ' style="opacity:.45"';
+    var detTitle = bundle.raporId
+      ? ('title="Rapor #' + bundle.raporId + '"')
+      : 'title="Rapor yok — listeye git"';
+
+    var opChip = '';
+    if (st === 'on') opChip = '<span class="home-enj-chip ok">Üretimde</span>';
+    else if (st === 'done') opChip = '<span class="home-enj-chip">Operasyon Bitti' +
+      (bundle.tamamlanma ? (' · ' + String(bundle.tamamlanma).slice(11, 16)) : '') + '</span>';
+    else if (st === 'setup') opChip = '<span class="home-enj-chip" style="color:#c2410c">Kalıp Değişim</span>';
+    else if (st === 'fault') opChip = '<span class="home-enj-chip" style="color:#b91c1c">Arıza</span>';
+    else opChip = '<span class="home-enj-chip" style="color:#b91c1c">Kapalı</span>';
+
+    body.innerHTML =
+      '<div class="home-enj-hd">' +
+        '<div class="home-enj-name">'+bundle.kod+' · '+bundle.ad+
+          '<small>rapor '+(bundle.raporId ? ('#'+bundle.raporId+' · ') : '')+bundle.raporTarih+'</small></div>' +
+        '<div style="display:flex;align-items:center;gap:10px;">' +
+          '<span class="home-enj-badge '+st+'">'+STATUS_LABEL[st]+'</span>' +
+          '<a class="'+detCls+'" href="'+detUrl+'"'+detStyle+' '+detTitle+'>Detay →</a>' +
+        '</div>' +
+      '</div>' +
+      '<div class="home-enj-shift">' +
+        '<span><span class="lbl">Aktif vardiya</span> · '+bundle.meta.ad+
+          (bundle.raporVardiya !== bundle.vardiya ? (' · gösterilen: ' + vardiyaMeta(bundle.raporVardiya).ad) : '') +
+        '</span>' +
+        '<span>'+bundle.meta.aralik+'</span>' +
+      '</div>' +
+      '<div class="home-enj-meta">' +
+        '<span class="home-enj-chip">'+bundle.aktifSlot+' slot aktif</span>' +
+        '<span class="home-enj-chip">'+bundle.istasyonSay+' / '+bundle.istasyonKapasite+' istasyon</span>' +
+        '<span class="home-enj-chip">'+bundle.personel+' personel</span>' +
+        opChip +
+      '</div>' +
+      '<div class="home-enj-ab">' +
+        '<div class="home-enj-ab-block"><span class="ab a">A</span><span class="code">'+bundle.a.kod+'</span>' +
+          '<div class="rn">'+bundle.a.renk+'</div>' +
+          '<div class="nums">'+fmt(bundle.a.tur)+' tur · <b>'+fmt(bundle.a.cift)+'</b> çift</div>' +
+          '<div class="dst">'+bundle.a.durum+'</div></div>' +
+        '<div class="home-enj-ab-block"><span class="ab b">B</span><span class="code">'+bundle.b.kod+'</span>' +
+          '<div class="rn">'+bundle.b.renk+'</div>' +
+          '<div class="nums">'+fmt(bundle.b.tur)+' tur · <b>'+fmt(bundle.b.cift)+'</b> çift</div>' +
+          '<div class="dst">'+bundle.b.durum+'</div></div>' +
+      '</div>' +
+      '<div class="home-enj-range" id="homeEnjRange">' +
+        '<button type="button" data-range="bugun">Bugün</button>' +
+        '<button type="button" data-range="dun">Dün</button>' +
+        '<button type="button" data-range="haftalik">Haftalık</button>' +
+        '<button type="button" data-range="aylik">Aylık</button>' +
+      '</div>' +
+      '<div class="home-enj-chart-wrap">' +
+        '<div class="home-enj-chart-lbl" id="chartLbl"></div>' +
+        '<div class="home-enj-chart"><svg id="chartSvg"></svg></div>' +
+        '<div class="home-enj-chart-empty" id="chartEmpty" style="display:none"></div>' +
+        '<div class="home-enj-leg" id="chartLeg"></div>' +
+      '</div>' +
+      '<div class="home-enj-kpi" id="homeEnjKpi"></div>';
+
+    Array.prototype.forEach.call(document.querySelectorAll('#homeEnjRange button'), function (btn) {
+      btn.classList.toggle('active', btn.getAttribute('data-range') === state.range);
+      btn.addEventListener('click', function () {
+        state.range = btn.getAttribute('data-range');
+        Array.prototype.forEach.call(document.querySelectorAll('#homeEnjRange button'), function (b) {
+          b.classList.toggle('active', b === btn);
+        });
+        renderChart(document.getElementById('chartSvg'), document.getElementById('chartEmpty'), bundle);
+        document.getElementById('homeEnjKpi').innerHTML = kpiHtml(bundle);
+      });
+    });
+
+    renderChart(document.getElementById('chartSvg'), document.getElementById('chartEmpty'), bundle);
+    document.getElementById('homeEnjKpi').innerHTML = kpiHtml(bundle);
+
+    var foot = document.getElementById('homeEnjFoot');
+    if (foot) {
+      foot.textContent = 'Kaynak: planlama/operasyon + enjeksiyon API · rapor #' +
+        (bundle.raporId || 'yok') + ' · ' + bundle.raporTarih + ' / ' + bundle.raporVardiya +
+        ' · seçim: ' + (bundle.pickReason || '—') +
+        ' · sahte grafik yok';
+    }
+  }
+
+  async function refreshSelected() {
+    document.getElementById('homeEnjLoading').style.display = 'block';
+    document.getElementById('homeEnjBody').style.display = 'none';
+    try {
+      var bundle = await buildMachineBundle(state.selectedId);
+      state.cache[state.selectedId] = bundle;
+      state.vardiya = bundle.vardiya;
+      state.meta = bundle.meta;
+      document.getElementById('homeEnjShiftBanner').textContent =
+        'AKTİF VARDİYA: ' + bundle.meta.ad + ' · ' + bundle.meta.aralik +
+        ' · rapor tarihi ' + bundle.tarihBugun;
+      renderTabs();
+      renderBody(bundle);
+    } catch (e) {
+      document.getElementById('homeEnjLoading').textContent =
+        'Veri yüklenemedi: ' + (e.message || e) + ' — Enjeksiyon/Planlama yetkisi / API kontrol edin';
+    }
+  }
+
+  async function resolveMachineStatus(makineId) {
+    var now = new Date();
+    var v = aktifVardiya(now);
+    var t = raporTarihForVardiya(v, now);
+    var picked = await pickDisplayReport(makineId, v, t, now);
+    if (!picked.rapor) return 'off';
+    var pl = await fetchPlanlamaMakine(makineId, picked.rapor.tarih, picked.rapor.vardiya);
+    if (pl) return statusFromAnlik(pl.anlik_durum, !!picked.finished);
+    return statusFromSlots(picked.detay && picked.detay.slotlar, !!picked.finished);
+  }
+
+  async function warmStatus() {
+    await Promise.all(state.machines.map(async function (m) {
+      if (m.id === state.selectedId) return;
+      try { m.status = await resolveMachineStatus(m.id); }
+      catch (e) { m.status = 'off'; }
+    }));
+    renderTabs();
+  }
+
+  async function boot() {
+    try {
+      await loadMachines();
+      if (!state.machines.length) {
+        document.getElementById('homeEnjLoading').textContent = 'Makine listesi boş';
+        return;
+      }
+      renderTabs();
+      await refreshSelected();
+      warmStatus();
+    } catch (e) {
+      document.getElementById('homeEnjLoading').textContent =
+        'Başlatılamadı: ' + (e.message || e);
+    }
+  }
+
+  boot();
+})();
+</script>
 
 {% endblock %}
+)
