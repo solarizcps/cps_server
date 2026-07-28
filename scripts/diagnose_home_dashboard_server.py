@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-SELECT-only teşhis: Ana Özet Enjeksiyon + Korgun zinciri.
+SELECT-only teshis: Ana Ozet Enjeksiyon + Korgun zinciri.
 
-Kullanım (server):
-  python scripts/diagnose_home_dashboard_server.py \\
-    --date 2026-07-28 --shift GUNDUZ --month 2026-06 --month2 2026-07
+Kullanim:
+  python scripts/diagnose_home_dashboard_server.py ^
+    --date 2026-07-28 --shift GUNDUZ --month 2026-06 --month2 2026-07 ^
+    --order 33595 --emirs 110362,110363,110364,110365,110366,110367
 
-KESİNLİKLE YAZMA YOK: INSERT/UPDATE/DELETE/migration yok.
-Şifre asla yazılmaz.
+YAZMA YOK. Sifre yazilmaz. Unicode ok isareti yok (ASCII).
 """
 from __future__ import annotations
 
@@ -21,13 +21,10 @@ import traceback
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
-# app/ kökünü path'e al
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _APP = os.path.join(_ROOT, 'app')
 if _APP not in sys.path:
     sys.path.insert(0, _APP)
-if _ROOT not in sys.path:
-    sys.path.insert(0, _ROOT)
 
 
 def _mask_host(host: str) -> str:
@@ -60,7 +57,6 @@ def _parse_ymd(s: str) -> date:
 
 
 def _parse_ym(s: str) -> Tuple[date, date]:
-    """YYYY-MM → ay başı/sonu (veya bugün ay içiyse bugün)."""
     y, m = s.strip().split('-')
     bas = date(int(y), int(m), 1)
     if m == '12':
@@ -75,14 +71,13 @@ def _parse_ym(s: str) -> Tuple[date, date]:
 
 
 def _norm_shift(s: str) -> str:
-    u = (s or 'GUNDUZ').strip().upper()
+    u = (s or 'GUNDUZ').strip().upper().replace('U', 'U')
     if u in ('GUNDUZ', 'GUNDÜZ', 'DAY'):
         return 'gunduz'
     if u in ('GECE', 'NIGHT'):
         return 'gece'
-    if u in ('GUNDUZ',) or u.lower() == 'gunduz':
-        return 'gunduz'
-    return u.lower() if u.lower() in ('gunduz', 'gece') else 'gunduz'
+    low = (s or '').strip().lower()
+    return low if low in ('gunduz', 'gece') else 'gunduz'
 
 
 def _print_section(title: str) -> None:
@@ -97,21 +92,13 @@ def section_ortam() -> Dict[str, Any]:
     from config import Config
 
     host = getattr(Config, 'KORGUN_HOST', '') or ''
-    db = getattr(Config, 'KORGUN_DB', 'Solariz22')
-    cfg_src = getattr(Config, '__module__', 'config')
-    env_name = (
-        os.environ.get('FLASK_ENV')
-        or os.environ.get('CPS_ENV')
-        or getattr(Config, 'ENV', None)
-        or 'unknown'
-    )
     info = {
         'hostname': socket.gethostname(),
         'git_sha': _git_sha(),
-        'flask_env': env_name,
-        'config_source': str(cfg_src),
+        'flask_env': os.environ.get('FLASK_ENV') or os.environ.get('CPS_ENV') or 'unknown',
+        'config_source': str(getattr(Config, '__module__', 'config')),
         'korgun_host_masked': _mask_host(host),
-        'korgun_db': db,
+        'korgun_db': getattr(Config, 'KORGUN_DB', 'Solariz22'),
         'korgun_port': getattr(Config, 'KORGUN_PORT', 1433),
         'cwd': os.getcwd(),
         'app_path': _APP,
@@ -139,16 +126,13 @@ def _row_net(ozet: Optional[dict]) -> float:
 def section_enjeksiyon(rapor_tarih: date, shift: str) -> Dict[str, Any]:
     _print_section('B) ENJEKSIYON')
     print(f'  tarih={rapor_tarih.isoformat()} shift={shift}')
-
     import app as flask_mod
     flask_app = flask_mod.app
-
     out: Dict[str, Any] = {
         'date': rapor_tarih.isoformat(),
         'shift': shift,
         'machines': {},
         'totals': {},
-        'api': {},
     }
     t0 = rapor_tarih.isoformat()
     dun = (rapor_tarih - timedelta(days=1)).isoformat()
@@ -156,23 +140,13 @@ def section_enjeksiyon(rapor_tarih: date, shift: str) -> Dict[str, Any]:
     month_start = rapor_tarih.replace(day=1).isoformat()
 
     with flask_app.test_client() as c:
-        # Makine listesi
         r = c.get('/enjeksiyon/api/makine')
-        out['api']['makine'] = {'status': r.status_code}
-        try:
-            mj = r.get_json(silent=True) or {}
-        except Exception:
-            mj = {}
+        mj = r.get_json(silent=True) or {}
         machines = mj.get('veri') or mj.get('kayitlar') or []
-        print(f'  GET /enjeksiyon/api/makine → {r.status_code} n={len(machines)}')
-
+        print(f'  GET /enjeksiyon/api/makine -> {r.status_code} n={len(machines)}')
         bugun_tot = hafta_tot = ay_tot = 0.0
         aktif_n = 0
-
         for mid in (1, 2, 3, 4):
-            mrow = next((m for m in machines if int(m.get('id') or 0) == mid), None)
-            mkod = (mrow or {}).get('kod') or f'M{mid}'
-
             q = (
                 f'/enjeksiyon/api/raporlar?makine_id={mid}'
                 f'&tarih_baslangic={t0}&tarih_bitis={t0}&limit=50'
@@ -182,364 +156,303 @@ def section_enjeksiyon(rapor_tarih: date, shift: str) -> Dict[str, Any]:
             kayitlar = rj.get('kayitlar') or [] if rj.get('ok') else []
             shift_list = [x for x in kayitlar if (x.get('vardiya') or '') == shift]
             shift_list.sort(
-                key=lambda x: (x.get('son_guncelleme') or x.get('olusturma_tarih') or '', x.get('id') or 0),
+                key=lambda x: (
+                    x.get('son_guncelleme') or x.get('olusturma_tarih') or '',
+                    x.get('id') or 0,
+                ),
                 reverse=True,
             )
             rapor = shift_list[0] if shift_list else (kayitlar[0] if kayitlar else None)
             rapor_id = rapor.get('id') if rapor else None
-
             det = None
-            ab = None
             pl = None
-            det_status = None
-            pl_status = None
             if rapor_id:
                 dr = c.get(f'/enjeksiyon/api/raporlar/{rapor_id}/detay')
-                det_status = dr.status_code
                 det = dr.get_json(silent=True) or {}
-                ar = c.get(f'/enjeksiyon/api/rapor/{rapor_id}/ab-ozet')
-                ab = ar.get_json(silent=True) if ar.status_code < 500 else None
                 pr = c.get(
-                    f'/planlama/api/operasyon/makine/{mid}'
-                    f'?tarih={t0}&vardiya={shift}'
+                    f'/planlama/api/operasyon/makine/{mid}?tarih={t0}&vardiya={shift}'
                 )
-                pl_status = pr.status_code
                 plj = pr.get_json(silent=True) or {}
                 pl = plj.get('makine') if plj.get('ok') else None
-
             slotlar = (det or {}).get('slotlar') or []
             aktif_slot = 0
             for s in slotlar:
                 d = str(s.get('durum') or '').upper()
-                if s.get('aktif') in (1, True) or d == 'AKTIF' or 'CALIS' in d or 'ÇALIŞ' in d:
+                if s.get('aktif') in (1, True) or d == 'AKTIF' or 'CALIS' in d:
                     aktif_slot += 1
-
             anlik = (pl or {}).get('anlik_durum') or {}
             tip = str(anlik.get('tip') or '')
-            durum = tip or ('rapor_yok' if not rapor_id else (rapor.get('durum') or '?'))
             if tip.upper() in ('TUMUYLA_AKTIF', 'HIBRIT') or (anlik.get('sayim') or {}).get('AKTIF', 0) > 0:
                 aktif_n += 1
-
             ozet = (det or {}).get('ozet') or (rapor or {}).get('ozet') or {}
-            uretim_pl = (pl or {}).get('uretim') or {}
-            personel = (rapor or {}).get('personel_sayisi')
-            if personel is None and pl:
-                personel = pl.get('personel_sayisi') or pl.get('personel')
-
-            a_cift = uretim_pl.get('uretilen_a')
-            b_cift = uretim_pl.get('uretilen_b')
-            if a_cift is None:
-                a_cift = ozet.get('toplam_uretim_a')
-            if b_cift is None:
-                b_cift = ozet.get('toplam_uretim_b')
-            tur_a = uretim_pl.get('tur_a', ozet.get('toplam_tur_a'))
-            tur_b = uretim_pl.get('tur_b', ozet.get('toplam_tur_b'))
             net = _row_net(ozet)
-
-            # dönem toplamları (makine)
             for label, a, b in (
                 ('bugun', t0, t0),
                 ('hafta', week_start, t0),
                 ('ay', month_start, t0),
-                ('dun', dun, dun),
             ):
                 qr = c.get(
                     f'/enjeksiyon/api/raporlar?makine_id={mid}'
                     f'&tarih_baslangic={a}&tarih_bitis={b}&limit=200'
                 )
-                qj = qr.get_json(silent=True) or {}
-                rows = qj.get('kayitlar') or [] if qj.get('ok') else []
+                rows = ((qr.get_json(silent=True) or {}).get('kayitlar') or [])
                 ssum = sum(_row_net(x.get('ozet')) for x in rows)
                 if label == 'bugun':
                     bugun_tot += ssum
                 elif label == 'hafta':
                     hafta_tot += ssum
-                elif label == 'ay':
+                else:
                     ay_tot += ssum
-
-            # dün aynı vardiya
             qr_dun = c.get(
                 f'/enjeksiyon/api/raporlar?makine_id={mid}'
                 f'&tarih_baslangic={dun}&tarih_bitis={dun}&vardiya={shift}&limit=50'
             )
-            dun_rows = (qr_dun.get_json(silent=True) or {}).get('kayitlar') or []
-            dun_vardiya = sum(_row_net(x.get('ozet')) for x in dun_rows)
-
-            row = {
-                'kod': mkod,
-                'durum': durum,
+            dun_vardiya = sum(
+                _row_net(x.get('ozet'))
+                for x in ((qr_dun.get_json(silent=True) or {}).get('kayitlar') or [])
+            )
+            print(
+                f'  M{mid}: tip={tip or "-"} aktif_slot={aktif_slot}/{len(slotlar)} '
+                f'net={net} rapor_id={rapor_id} dun_vardiya={dun_vardiya}'
+            )
+            out['machines'][f'M{mid}'] = {
+                'tip': tip,
                 'aktif_slot': aktif_slot,
                 'toplam_slot': len(slotlar),
-                'personel': personel,
-                'tur_a': tur_a,
-                'tur_b': tur_b,
-                'uretim_a': a_cift,
-                'uretim_b': b_cift,
                 'net': net,
                 'report_id': rapor_id,
-                'detay_status': det_status,
-                'planlama_status': pl_status,
                 'dun_vardiya': dun_vardiya,
-                'endpoint_raporlar': q,
-                'endpoint_planlama': f'/planlama/api/operasyon/makine/{mid}?tarih={t0}&vardiya={shift}',
             }
-            out['machines'][f'M{mid}'] = row
-            print(
-                f"  M{mid}({mkod}): durum={durum} aktif_slot={aktif_slot}/{len(slotlar)} "
-                f"personel={personel} net={net} rapor_id={rapor_id} "
-                f"A={a_cift} B={b_cift} dun_vardiya={dun_vardiya}"
-            )
-
         out['totals'] = {
             'bugun': bugun_tot,
             'hafta': hafta_tot,
             'ay': ay_tot,
             'aktif_makine': aktif_n,
-            'note': 'dun_ayni_saat saatlik kesim UI tarafinda; burada toplam net doner',
         }
-        print(f"  TOPLAM bugun={bugun_tot} hafta={hafta_tot} ay={ay_tot} aktif={aktif_n}")
+        print(f'  TOPLAM bugun={bugun_tot} hafta={hafta_tot} ay={ay_tot} aktif={aktif_n}')
     return out
 
 
-def _sum_cikan(cur, bas: date, bit: date, codes: List[str], locs: Optional[List[str]]) -> float:
-    if not codes:
-        return 0.0
-    ph_c = ','.join(['%s'] * len(codes))
-    params: List[Any] = [bas.isoformat(), bit.isoformat()] + [str(c).strip() for c in codes]
-    loc_sql = ''
-    if locs is not None:
-        ph_l = ','.join(['%s'] * len(locs))
-        loc_sql = f" AND LTRIM(RTRIM(ISNULL(ue.Location,''))) IN ({ph_l}) "
-        params.extend(locs)
-        join = " INNER JOIN Urt_Emir ue WITH (NOLOCK) ON ue.EmirNo = g.EmirNo "
-    else:
-        join = ''
-    cur.execute(
-        f"""
-        SELECT COALESCE(SUM(ISNULL(g.Cikan,0)),0)
-        FROM Urt_con_gch g WITH (NOLOCK)
-        {join}
-        WHERE g.Cikan > 0 AND g.EndTarih IS NOT NULL
-          AND UPPER(LTRIM(RTRIM(ISNULL(g.Birim,'')))) = 'CIFT'
-          AND CAST(g.EndTarih AS DATE) >= CAST(%s AS DATE)
-          AND CAST(g.EndTarih AS DATE) <= CAST(%s AS DATE)
-          AND LTRIM(RTRIM(CAST(g.Proses AS VARCHAR(20)))) IN ({ph_c})
-          {loc_sql}
-        """,
-        tuple(params),
+def section_order_trace(order: int, emirs: List[int]) -> Dict[str, Any]:
+    _print_section('C) SIPARIS/EMIR SATIR IZI (filtre kaybi)')
+    from modules.common.korgun_biten_proses import (
+        ALLOWED_PRODUCTION_LOCATIONS,
+        _BASE_WHERE_G,
+        _EMIR_JOINS,
+        _GCH_UNION,
+        _LOC_EXPR,
+        _baglan,
     )
-    row = cur.fetchone()
-    return float(row[0] or 0) if row else 0.0
 
+    out: Dict[str, Any] = {'order': order, 'emirs': emirs, 'rows': [], 'funnel': {}}
+    print(f'  order={order} emirs={emirs}')
+    wl = list(ALLOWED_PRODUCTION_LOCATIONS)
+    ph_e = ','.join(['%s'] * len(emirs)) if emirs else 'NULL'
+    ph_l = ','.join(['%s'] * len(wl))
 
-def _discover_codes(cur, aliases: Tuple[str, ...]) -> List[Tuple[str, str]]:
-    """Proses_M'den alias ile kod keşfi (SELECT)."""
-    found: List[Tuple[str, str]] = []
-    for alias in aliases:
-        like = f'%{alias}%'
+    con = _baglan()
+    cur = con.cursor()
+    try:
+        # Table presence counts
+        for label, sql, params in (
+            ('Urt_con_gch', f'SELECT COUNT(*) FROM Urt_con_gch WITH (NOLOCK) WHERE EmirNo IN ({ph_e})', tuple(emirs)),
+            ('Urtx_con_gch', f'SELECT COUNT(*) FROM Urtx_con_gch WITH (NOLOCK) WHERE EmirNo IN ({ph_e})', tuple(emirs)),
+            ('Urt_Emir', f'SELECT COUNT(*) FROM Urt_Emir WITH (NOLOCK) WHERE EmirNo IN ({ph_e})', tuple(emirs)),
+            ('Urtx_Emir', f'SELECT COUNT(*) FROM Urtx_Emir WITH (NOLOCK) WHERE EmirNo IN ({ph_e})', tuple(emirs)),
+        ):
+            cur.execute(sql, params)
+            n = int(cur.fetchone()[0] or 0)
+            out['funnel'][label] = n
+            print(f'  {label}: {n}')
+
+        # Funnel steps on UNION
+        steps = [
+            ('Ham UNION emir', f"""
+                SELECT COUNT(*) FROM {_GCH_UNION}
+                WHERE g.EmirNo IN ({ph_e})
+            """, tuple(emirs)),
+            ('Cikan>0 EndTarih NOT NULL', f"""
+                SELECT COUNT(*) FROM {_GCH_UNION}
+                WHERE g.EmirNo IN ({ph_e}) AND g.Cikan > 0 AND g.EndTarih IS NOT NULL
+            """, tuple(emirs)),
+            ('Birim CIFT', f"""
+                SELECT COUNT(*) FROM {_GCH_UNION}
+                WHERE g.EmirNo IN ({ph_e}) AND {_BASE_WHERE_G}
+            """, tuple(emirs)),
+            ('FisNo=order', f"""
+                SELECT COUNT(*) FROM {_GCH_UNION}
+                WHERE g.EmirNo IN ({ph_e}) AND {_BASE_WHERE_G} AND g.FisNo = %s
+            """, tuple(emirs) + (order,)),
+            ('Emir INNER Urt_Emir only', f"""
+                SELECT COUNT(*) FROM {_GCH_UNION}
+                INNER JOIN Urt_Emir ue WITH (NOLOCK) ON ue.EmirNo = g.EmirNo
+                WHERE g.EmirNo IN ({ph_e}) AND {_BASE_WHERE_G}
+            """, tuple(emirs)),
+            ('Emir COALESCE Urt+Urtx', f"""
+                SELECT COUNT(*) FROM {_GCH_UNION}
+                {_EMIR_JOINS}
+                WHERE g.EmirNo IN ({ph_e}) AND {_BASE_WHERE_G}
+                  AND {_LOC_EXPR} <> ''
+            """, tuple(emirs)),
+            ('Location whitelist', f"""
+                SELECT COUNT(*) FROM {_GCH_UNION}
+                {_EMIR_JOINS}
+                WHERE g.EmirNo IN ({ph_e}) AND {_BASE_WHERE_G}
+                  AND {_LOC_EXPR} IN ({ph_l})
+            """, tuple(emirs) + tuple(wl)),
+            ('FULL dashboard filter', f"""
+                SELECT COUNT(*) FROM {_GCH_UNION}
+                {_EMIR_JOINS}
+                WHERE g.EmirNo IN ({ph_e}) AND {_BASE_WHERE_G}
+                  AND {_LOC_EXPR} IN ({ph_l})
+            """, tuple(emirs) + tuple(wl)),
+        ]
+        print('\n  | Adim | Kalan satir |')
+        print('  |---|---:|')
+        for name, sql, params in steps:
+            cur.execute(sql, params)
+            n = int(cur.fetchone()[0] or 0)
+            out['funnel'][name] = n
+            print(f'  | {name} | {n} |')
+
+        # Per aggregated Excel-like row
         cur.execute(
-            """
-            SELECT LTRIM(RTRIM(CAST(Pro AS VARCHAR(20)))), ISNULL(Tanim,'')
-            FROM Proses_M WITH (NOLOCK)
-            WHERE LOWER(ISNULL(Tanim,'')) LIKE LOWER(%s)
-            ORDER BY Pro
+            f"""
+            SELECT g.EmirNo,
+                   LTRIM(RTRIM(CAST(g.Proses AS VARCHAR(20)))) AS proses,
+                   ISNULL(MAX(pm.Tanim), '') AS proses_adi,
+                   MAX(g.AltProses) AS alt,
+                   MAX(g.Birim) AS birim,
+                   SUM(ISNULL(g.Cikan,0)) AS cikan,
+                   SUM(ISNULL(g.Giren,0)) AS giren,
+                   SUM(ISNULL(g.Fire,0)) AS fire,
+                   MIN(g.StartTarih) AS start_t,
+                   MAX(g.EndTarih) AS end_t,
+                   MAX(g.FisNo) AS fis,
+                   MAX(LTRIM(RTRIM(COALESCE(ue.Location, uxe.Location, '')))) AS loc,
+                   MAX(CASE WHEN ue.EmirNo IS NULL THEN 0 ELSE 1 END) AS has_urt_emir,
+                   MAX(CASE WHEN uxe.EmirNo IS NULL THEN 0 ELSE 1 END) AS has_urtx_emir,
+                   MAX(CASE WHEN pm.Pro IS NULL THEN 0 ELSE 1 END) AS pm_match
+            FROM {_GCH_UNION}
+            {_EMIR_JOINS}
+            LEFT JOIN Proses_M pm WITH (NOLOCK)
+              ON LTRIM(RTRIM(CAST(pm.Pro AS VARCHAR(20))))
+               = LTRIM(RTRIM(CAST(g.Proses AS VARCHAR(20))))
+            WHERE g.EmirNo IN ({ph_e})
+              AND (g.FisNo = %s OR %s = 0)
+            GROUP BY g.EmirNo, LTRIM(RTRIM(CAST(g.Proses AS VARCHAR(20))))
+            ORDER BY g.EmirNo, 2
             """,
-            (like,),
+            tuple(emirs) + (order, order),
         )
-        for kod, tanim in cur.fetchall() or []:
-            k = str(kod or '').strip()
-            if k and (k, str(tanim or '').strip()) not in found:
-                found.append((k, str(tanim or '').strip()))
-    return found
+        print('\n  | Emir | Proses | Biten(=Cikan) | Cikan | Birim | Location | Tarih(End) | Dashboard dahil mi | Elenme nedeni |')
+        print('  |---|---|---:|---:|---|---|---|---|---|')
+        for r in cur.fetchall():
+            emir, proses, padi, alt, birim, cikan, giren, fire, st, et, fis, loc, hu, hx, pm = r
+            reasons = []
+            ok = True
+            if not (cikan and float(cikan) > 0):
+                ok = False
+                reasons.append('Cikan<=0')
+            if et is None:
+                ok = False
+                reasons.append('EndTarih NULL')
+            if str(birim or '').strip().upper() != 'CIFT':
+                ok = False
+                reasons.append('Birim!=' + repr(birim))
+            if int(hu or 0) == 0 and int(hx or 0) == 0:
+                ok = False
+                reasons.append('Emir yok (Urt+Urtx)')
+            elif str(loc or '').strip() not in wl:
+                ok = False
+                reasons.append('Location not WL:' + repr(loc))
+            # table source note
+            src = 'Urtx_con_gch' if int(hx or 0) or True else 'Urt_con_gch'
+            row = {
+                'emir': int(emir),
+                'proses': str(proses),
+                'proses_adi': str(padi or ''),
+                'biten_excel_equiv': float(cikan or 0),
+                'cikan': float(cikan or 0),
+                'giren': float(giren or 0),
+                'birim': birim,
+                'location': loc,
+                'end_tarih': str(et)[:19] if et else None,
+                'start_tarih': str(st)[:19] if st else None,
+                'siparis': fis,
+                'dashboard_dahil': ok,
+                'elenme': '; '.join(reasons) or '-',
+                'has_urt_emir': bool(hu),
+                'has_urtx_emir': bool(hx),
+                'pm_match': bool(pm),
+                'table': src,
+            }
+            out['rows'].append(row)
+            print(
+                f'  | {emir} | {proses} {padi} | {float(cikan or 0):.0f} | {float(cikan or 0):.0f} | '
+                f'{birim} | {loc or "-"} | {str(et)[:10] if et else "-"} | '
+                f'{"EVET" if ok else "HAYIR"} | {row["elenme"]} |'
+            )
+
+        # Siparis tarihi
+        cur.execute(
+            "SELECT SipNo, SipTar FROM Siparis_Kay WITH (NOLOCK) WHERE SipNo = %s",
+            (order,),
+        )
+        sk = cur.fetchone()
+        out['siparis_kay'] = {
+            'SipNo': sk[0] if sk else None,
+            'SipTar': str(sk[1])[:19] if sk and sk[1] else None,
+        }
+        print(f"\n  Siparis_Kay.SipTar={out['siparis_kay']['SipTar']} (Excel 'Siparis Tarihi' alani)")
+        print('  Dashboard donem filtresi: EndTarih (bitis), SipTar DEGIL')
+        print('  Excel Biten = SUM(Cikan); Giren bu ornekte Cikan ile ayni')
+    finally:
+        con.close()
+    return out
 
 
 def section_korgun(months: List[str]) -> Dict[str, Any]:
-    _print_section('C) KORGUN')
+    _print_section('D) KORGUN DONEM OZET')
     from modules.common.korgun_biten_proses import (
         ALLOWED_PRODUCTION_LOCATIONS,
         PROCESS_GROUPS,
         get_home_biten_prosesler,
-        _baglan,
     )
 
-    targets = [
-        ('montaj', 'Montaj'),
-        ('temizleme', 'Temizleme'),
-        ('enjeksiyon', 'Enjeksiyon'),
-        ('kesim', 'Kesim'),
-        ('silte', 'Şilte'),
-        ('digital', 'Digital'),
-        ('lazer', 'Lazer'),
-        ('planlama_depo', 'Planlama-Depo'),
-    ]
-
     out: Dict[str, Any] = {'months': {}, 'whitelist': list(ALLOWED_PRODUCTION_LOCATIONS)}
-    print('  whitelist:', ', '.join(ALLOWED_PRODUCTION_LOCATIONS))
-
-    con = None
-    try:
-        con = _baglan()
-        cur = con.cursor()
-    except Exception as e:
-        print('  KORGUN BAGLANTI HATASI:', type(e).__name__, str(e)[:200])
-        out['error'] = f'{type(e).__name__}: {e}'
-        return out
-
-    try:
-        for ym in months:
-            bas, bit = _parse_ym(ym)
-            print(f'\n  --- month {ym} ({bas} .. {bit}) ---')
-            month_block: Dict[str, Any] = {}
-
-            # API (servis katmanı — HTTP auth bypass; aynı hesap)
-            api_by_kod: Dict[str, float] = {}
-            api_err = None
-            try:
-                # period=ay için today'i ay sonuna sabitle (diagnose)
-                api = get_home_biten_prosesler(period='ay', today=bit)
-                for p in api.get('proses_kartlari') or []:
-                    api_by_kod[str(p.get('proses_kodu'))] = float(p.get('toplam_cift') or 0)
-            except Exception as e:
-                api_err = f'{type(e).__name__}: {e}'
-                print('  API hata:', api_err)
-
-            for gkey, label in targets:
-                meta = PROCESS_GROUPS.get(gkey) or {}
-                codes = [str(c) for c in (meta.get('codes') or ())]
-                aliases = tuple(meta.get('label_aliases') or ())
-                discovered = _discover_codes(cur, aliases)
-                for kod, _ad in discovered:
-                    if kod not in codes:
-                        codes.append(kod)
-                codes = list(dict.fromkeys(codes))
-
-                # lokasyon / birim dağılımı
-                loc_dist: List[Any] = []
-                birim_dist: List[Any] = []
-                names: List[str] = []
-                if codes:
-                    ph = ','.join(['%s'] * len(codes))
-                    cur.execute(
-                        f"""
-                        SELECT LTRIM(RTRIM(CAST(Pro AS VARCHAR(20)))), ISNULL(Tanim,'')
-                        FROM Proses_M WITH (NOLOCK)
-                        WHERE LTRIM(RTRIM(CAST(Pro AS VARCHAR(20)))) IN ({ph})
-                        """,
-                        tuple(codes),
-                    )
-                    names = [f'{a}={b}' for a, b in (cur.fetchall() or [])]
-
-                    cur.execute(
-                        f"""
-                        SELECT LTRIM(RTRIM(ISNULL(ue.Location,''))), COUNT(*), SUM(ISNULL(g.Cikan,0))
-                        FROM Urt_con_gch g WITH (NOLOCK)
-                        INNER JOIN Urt_Emir ue WITH (NOLOCK) ON ue.EmirNo = g.EmirNo
-                        WHERE g.Cikan > 0 AND g.EndTarih IS NOT NULL
-                          AND UPPER(LTRIM(RTRIM(ISNULL(g.Birim,'')))) = 'CIFT'
-                          AND CAST(g.EndTarih AS DATE) >= CAST(%s AS DATE)
-                          AND CAST(g.EndTarih AS DATE) <= CAST(%s AS DATE)
-                          AND LTRIM(RTRIM(CAST(g.Proses AS VARCHAR(20)))) IN ({ph})
-                        GROUP BY LTRIM(RTRIM(ISNULL(ue.Location,'')))
-                        ORDER BY SUM(ISNULL(g.Cikan,0)) DESC
-                        """,
-                        (bas.isoformat(), bit.isoformat()) + tuple(codes),
-                    )
-                    loc_dist = [
-                        {'loc': r[0], 'n': int(r[1] or 0), 'qty': float(r[2] or 0)}
-                        for r in (cur.fetchall() or [])
-                    ]
-
-                    cur.execute(
-                        f"""
-                        SELECT UPPER(LTRIM(RTRIM(ISNULL(g.Birim,'')))), COUNT(*), SUM(ISNULL(g.Cikan,0))
-                        FROM Urt_con_gch g WITH (NOLOCK)
-                        WHERE g.Cikan > 0 AND g.EndTarih IS NOT NULL
-                          AND CAST(g.EndTarih AS DATE) >= CAST(%s AS DATE)
-                          AND CAST(g.EndTarih AS DATE) <= CAST(%s AS DATE)
-                          AND LTRIM(RTRIM(CAST(g.Proses AS VARCHAR(20)))) IN ({ph})
-                        GROUP BY UPPER(LTRIM(RTRIM(ISNULL(g.Birim,''))))
-                        ORDER BY SUM(ISNULL(g.Cikan,0)) DESC
-                        """,
-                        (bas.isoformat(), bit.isoformat()) + tuple(codes),
-                    )
-                    birim_dist = [
-                        {'birim': r[0], 'n': int(r[1] or 0), 'qty': float(r[2] or 0)}
-                        for r in (cur.fetchall() or [])
-                    ]
-
-                filtresiz = _sum_cikan(cur, bas, bit, codes, None) if codes else 0.0
-                filtreli = (
-                    _sum_cikan(cur, bas, bit, codes, list(ALLOWED_PRODUCTION_LOCATIONS))
-                    if codes else 0.0
-                )
-                api_val = sum(api_by_kod.get(c, 0.0) for c in codes) if codes else None
-                fark = (None if api_val is None else (filtreli - float(api_val)))
-
-                block = {
-                    'label': label,
-                    'group_key': gkey,
-                    'codes': codes,
-                    'proses_adlari': names,
-                    'discovered': [{'kod': a, 'ad': b} for a, b in discovered],
-                    'lokasyon_dagilimi': loc_dist[:12],
-                    'birim_dagilimi': birim_dist[:12],
-                    'filtresiz_sum_cikan': filtresiz,
-                    'filtreli_sum_cikan': filtreli,
-                    'api_value': api_val,
-                    'fark_filtreli_minus_api': fark,
-                    'api_error': api_err,
-                }
-                month_block[gkey] = block
-                print(
-                    f"  {label:14} codes={codes or '-'} filtresiz={filtresiz:.0f} "
-                    f"filtreli={filtreli:.0f} api={api_val} fark={fark}"
-                )
-                if loc_dist[:5]:
-                    print('    loc_top:', ', '.join(f"{x['loc']}={x['qty']:.0f}" for x in loc_dist[:5]))
-
-            out['months'][ym] = month_block
-    except Exception as e:
-        out['error'] = f'{type(e).__name__}: {e}'
-        print('  EXCEPTION:', out['error'])
-        traceback.print_exc()
-    finally:
-        if con is not None:
-            try:
-                con.close()
-            except Exception:
-                pass
-    return out
-
-
-def section_api_home(period: str = 'hafta') -> Dict[str, Any]:
-    _print_section('D) API HOME KORGUN')
-    import app as flask_mod
-    flask_app = flask_mod.app
-
-    out: Dict[str, Any] = {}
-    with flask_app.test_client() as c:
-        # Oturumsuz — 401 beklenir; servis zaten C'de çağrıldı
-        r = c.get(f'/api/home/korgun/biten-prosesler?period={period}')
-        body = r.get_json(silent=True) or {}
-        out['http_status'] = r.status_code
-        out['ok'] = body.get('ok')
-        out['error'] = body.get('error')
-        out['summary_keys'] = list((body.get('summary') or {}).keys())
-        out['kart_n'] = len(body.get('proses_kartlari') or [])
-        print(f'  GET /api/home/korgun/biten-prosesler?period={period} → {r.status_code}')
-        print(f'  ok={body.get("ok")} error={body.get("error")} kart_n={out["kart_n"]}')
-        if r.status_code == 401:
-            print('  not: oturum yok (beklenen); servis katmani C bolumunde dogrulandi')
+    targets = [
+        'monta_baslayacak', 'montaj', 'temizleme', 'enjeksiyon',
+        'kesim', 'silte', 'digital', 'lazer', 'planlama_depo',
+    ]
+    for ym in months:
+        bas, bit = _parse_ym(ym)
+        print(f'\n  --- month {ym} ({bas} .. {bit}) ---')
+        try:
+            api = get_home_biten_prosesler(period='ay', today=bit)
+            by = {p['proses_kodu']: p['toplam_cift'] for p in api.get('proses_kartlari') or []}
+        except Exception as e:
+            print('  API ERR', type(e).__name__, str(e)[:160])
+            by = {}
+        month_block = {}
+        for gkey in targets:
+            codes = list((PROCESS_GROUPS.get(gkey) or {}).get('codes') or ())
+            val = sum(float(by.get(c, 0) or 0) for c in codes) if codes else None
+            month_block[gkey] = {'codes': codes, 'api_value': val}
+            print(f'  {gkey:18} codes={codes or "-"} api={val}')
+        out['months'][ym] = month_block
     return out
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description='Home dashboard SELECT-only diagnose')
-    ap.add_argument('--date', default=date.today().isoformat(), help='YYYY-MM-DD')
-    ap.add_argument('--shift', default='GUNDUZ', help='GUNDUZ|GECE')
-    ap.add_argument('--month', default=None, help='YYYY-MM (Korgun)')
-    ap.add_argument('--month2', default=None, help='YYYY-MM ikinci ay')
-    ap.add_argument('--json-out', default='', help='JSON ozet dosya yolu (opsiyonel)')
+    ap.add_argument('--date', default=date.today().isoformat())
+    ap.add_argument('--shift', default='GUNDUZ')
+    ap.add_argument('--month', default=None)
+    ap.add_argument('--month2', default=None)
+    ap.add_argument('--order', type=int, default=0, help='Coklu siparis / FisNo ornegin 33595')
+    ap.add_argument('--emirs', default='', help='Virgullu EmirNo listesi')
+    ap.add_argument('--json-out', default='')
     args = ap.parse_args()
 
     rapor_tarih = _parse_ymd(args.date)
@@ -553,46 +466,48 @@ def main() -> int:
         t = date.today()
         months = [t.strftime('%Y-%m'), (t.replace(day=1) - timedelta(days=1)).strftime('%Y-%m')]
 
-    print('diagnose_home_dashboard_server.py — SELECT-only')
+    emirs: List[int] = []
+    if args.emirs.strip():
+        emirs = [int(x.strip()) for x in args.emirs.split(',') if x.strip()]
+    elif args.order:
+        emirs = [110362, 110363, 110364, 110365, 110366, 110367]
+
+    print('diagnose_home_dashboard_server.py - SELECT-only')
     print('started', datetime.now().isoformat(timespec='seconds'))
 
     summary: Dict[str, Any] = {}
     try:
         summary['ortam'] = section_ortam()
     except Exception as e:
-        print('ORTAM HATA', e)
         traceback.print_exc()
         summary['ortam'] = {'error': str(e)}
 
     try:
         summary['enjeksiyon'] = section_enjeksiyon(rapor_tarih, shift)
     except Exception as e:
-        print('ENJEKSIYON HATA', e)
         traceback.print_exc()
         summary['enjeksiyon'] = {'error': f'{type(e).__name__}: {e}'}
+
+    if args.order or emirs:
+        try:
+            summary['order_trace'] = section_order_trace(int(args.order or 0), emirs)
+        except Exception as e:
+            traceback.print_exc()
+            summary['order_trace'] = {'error': f'{type(e).__name__}: {e}'}
 
     try:
         summary['korgun'] = section_korgun(months)
     except Exception as e:
-        print('KORGUN HATA', e)
         traceback.print_exc()
         summary['korgun'] = {'error': f'{type(e).__name__}: {e}'}
 
-    try:
-        summary['api'] = section_api_home('hafta')
-    except Exception as e:
-        print('API HATA', e)
-        traceback.print_exc()
-        summary['api'] = {'error': f'{type(e).__name__}: {e}'}
-
     _print_section('JSON OZET')
-    text = json.dumps(summary, ensure_ascii=False, indent=2, default=str)
-    print(text[:8000] + ('\n... truncated ...' if len(text) > 8000 else ''))
+    text = json.dumps(summary, ensure_ascii=True, indent=2, default=str)
+    print(text[:6000] + ('\n... truncated ...' if len(text) > 6000 else ''))
     if args.json_out:
         with open(args.json_out, 'w', encoding='utf-8') as f:
             f.write(text)
         print('wrote', args.json_out)
-
     print('\nDONE', datetime.now().isoformat(timespec='seconds'))
     return 0
 

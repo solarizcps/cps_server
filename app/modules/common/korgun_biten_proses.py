@@ -2,10 +2,18 @@
 """
 Korgun — Biten Prosesler (salt okunur home özet)
 
-Kaynak: Solariz22 / Urt_con_gch + Urt_Emir.Location
+Kaynak: Solariz22 / Urt_con_gch UNION ALL Urtx_con_gch
+        + Urt_Emir / Urtx_Emir.Location (COALESCE)
 Kural: Cikan > 0 AND EndTarih IS NOT NULL AND Birim = 'CIFT'
-Lokasyon: whitelist (yalnız üretim sahaları)
+       Excel "Biten" = SUM(Cikan) (SELECT kanit 33595)
+Lokasyon: whitelist (yalniz uretim sahalari)
 Yazma yok.
+
+SELECT kanit (2026-07-28, Siparis 33595 / Emir 110362-110367):
+- Urt_con_gch: 0 satir
+- Urtx_con_gch: Emir+Proses SUM(Cikan)=480 = Excel Biten
+- Urt_Emir: yok; Urtx_Emir.Location=SA001
+Bu nedenle yalniz canli tablo okuyan sorgu Temmuz Monta/Temizleme=0 uretiyordu.
 """
 from __future__ import annotations
 
@@ -13,23 +21,13 @@ from datetime import date, datetime, timedelta
 
 VALID_PERIODS = ('bugun', 'dun', 'hafta', 'ay')
 
-# Gerçek biten proses (Urt_con_gch CIFT kapanış) akış lokasyonları.
-# SELECT kanıtı (2026-07-28):
-# - Son 7g Planlama-Depo/Kesim vb. YPM03+SU002 (Tip=Y) üzerinde.
-# - Monta(30) son 12ay CIFT: YP001(720)+SA001(400) — Tip=M emir lokasyonu.
-# - Temizleme(35) son 12ay CIFT: SA001(400) — Tip=M.
-# - Enjeksiyon(26) son 12ay CIFT: SU002(5360) — whitelist içinde.
-# Eski varsayım "SA001/YP001 = müşteri, üretim değil" Monta/Temizleme CIFT
-# kapanışlarını %100 düşürüyordu → UI 0. Tip=M olsa da CIFT EndTarih kapanışı
-# üretim bitişi sayılır; bu iki lokasyon whitelist'e alındı.
-# Not: "Şahin Taban" Cari_Kart.CName olabilir; lokasyon kodu SA001 ile karıştırılmaz.
 ALLOWED_PRODUCTION_LOCATIONS = (
-    'YPM03',   # Pera - Yarı Mamul Depo — ana proses kapanış (Tip=Y)
-    'SU002',   # Yarı Mamul Depo — Enjeksiyon/Digital vb.
-    'SU001',   # Üretim Saha
-    'SARGE',   # Arge Ürün
-    'YP001',   # Monta CIFT kapanışları (SELECT: 12ay 720 çift)
-    'SA001',   # Monta + Temizleme CIFT kapanışları (SELECT: Monta 400, Temizleme 400)
+    'YPM03',   # Pera - Yari Mamul Depo
+    'SU002',   # Yari Mamul Depo
+    'SU001',   # Uretim Saha
+    'SARGE',   # Arge Urun
+    'YP001',   # Monta CIFT (canli + arsiv)
+    'SA001',   # Monta + Temizleme CIFT (Urtx_Emir kanit)
 )
 
 EXCLUDED_LOCATION_EXAMPLES = (
@@ -43,19 +41,27 @@ EXCLUDED_LOCATION_EXAMPLES = (
 # Ana sayfa kartında dönem 0 olsa bile erişilebilir kalsın (Proses_M kodları).
 # Tüm master zorunlu değil; operasyonel önemli prosesler.
 ALWAYS_VISIBLE_PROSES = (
-    '30',  # Monta (Montaj)
+    '28',  # Monta Baslayacak (Excel ayri satir; Monta ile birlestirilmez)
+    '30',  # Monta
     '35',  # Temizleme
     '26',  # Enjeksiyon
-    '12',  # Sayım-Kontrol
+    '02',  # Kesim
+    '04',  # Silte
+    '08',  # Digital
+    '40',  # Planlama-Depo
+    '12',  # Sayim-Kontrol
 )
 
-# Kararlı grup anahtarları — kodlar yalnız SELECT ile kanıtlanmış olanlar.
-# Kanıtsız proses için codes boş bırakılır; server teşhis scripti keşfeder.
-# Kart eşlemesi display label ile değil group_key / proses_kodu ile yapılır.
+# Kararli grup anahtarlari — kodlar SELECT ile kanitlanmis.
+# 28 ve 30 AYRI grup; otomatik Montaj toplami yok.
 PROCESS_GROUPS = {
+    'monta_baslayacak': {
+        'codes': ('28',),
+        'label_aliases': ('monta baslayacak', 'monta başlayacak', 'montabaslayacak'),
+    },
     'montaj': {
-        'codes': ('30',),  # Proses_M: Monta
-        'label_aliases': ('monta', 'montaj'),
+        'codes': ('30',),
+        'label_aliases': ('montaj',),
     },
     'temizleme': {
         'codes': ('35',),
@@ -66,16 +72,15 @@ PROCESS_GROUPS = {
         'label_aliases': ('enjeksiyon',),
     },
     'kesim': {
-        # modules.common.korgun._PROSES_TANIM ile aynı kanıtlı kod
         'codes': ('02', '2'),
         'label_aliases': ('kesim',),
     },
     'silte': {
-        'codes': (),
+        'codes': ('04', '4'),
         'label_aliases': ('şilte', 'silte'),
     },
     'digital': {
-        'codes': (),
+        'codes': ('08', '8'),
         'label_aliases': ('digital', 'serigraf'),
     },
     'lazer': {
@@ -83,7 +88,7 @@ PROCESS_GROUPS = {
         'label_aliases': ('lazer',),
     },
     'planlama_depo': {
-        'codes': (),
+        'codes': ('40',),
         'label_aliases': ('planlama-depo', 'planlama depo', 'planlama'),
     },
 }
@@ -119,6 +124,24 @@ _BASE_WHERE_G = """
     AND UPPER(LTRIM(RTRIM(ISNULL(g.Birim, '')))) = 'CIFT'
 """
 
+# Canli + arsiv hareket (Excel/Hedef ile ayni kaynak modeli)
+_GCH_UNION = """(
+    SELECT EmirNo, Proses, AltProses, Birim, Cikan, Giren, Fire,
+           EndTarih, StartTarih, FisNo, SKOD, Personel, WMakNum
+    FROM Urt_con_gch WITH (NOLOCK)
+    UNION ALL
+    SELECT EmirNo, Proses, AltProses, Birim, Cikan, Giren, Fire,
+           EndTarih, StartTarih, FisNo, SKOD, Personel, WMakNum
+    FROM Urtx_con_gch WITH (NOLOCK)
+) g"""
+
+_EMIR_JOINS = """
+    LEFT JOIN Urt_Emir ue WITH (NOLOCK) ON ue.EmirNo = g.EmirNo
+    LEFT JOIN Urtx_Emir uxe WITH (NOLOCK) ON uxe.EmirNo = g.EmirNo
+"""
+
+_LOC_EXPR = "LTRIM(RTRIM(COALESCE(ue.Location, uxe.Location, '')))"
+
 _PROSES_JOIN = """
     LEFT JOIN Proses_M pm WITH (NOLOCK)
       ON LTRIM(RTRIM(CAST(pm.Pro AS VARCHAR(20))))
@@ -149,7 +172,10 @@ def _baglan():
 def location_scope_meta():
     return {
         'mode': 'whitelist',
-        'source': 'Urt_Emir.Location',
+        'source': 'COALESCE(Urt_Emir.Location, Urtx_Emir.Location)',
+        'movement_source': 'Urt_con_gch UNION ALL Urtx_con_gch',
+        'quantity_field': 'Cikan',
+        'excel_biten_equiv': 'SUM(Cikan)',
         'included': list(ALLOWED_PRODUCTION_LOCATIONS),
         'excluded_examples': list(EXCLUDED_LOCATION_EXAMPLES),
     }
@@ -185,12 +211,12 @@ def _count_emir_proses(cur, bas, bit):
         f"""
         SELECT COUNT(*) FROM (
             SELECT g.EmirNo, LTRIM(RTRIM(CAST(g.Proses AS VARCHAR(20)))) AS Proses
-            FROM Urt_con_gch g WITH (NOLOCK)
-            INNER JOIN Urt_Emir ue WITH (NOLOCK) ON ue.EmirNo = g.EmirNo
+            FROM {_GCH_UNION}
+            {_EMIR_JOINS}
             WHERE {_BASE_WHERE_G}
               AND CAST(g.EndTarih AS DATE) >= CAST(%s AS DATE)
               AND CAST(g.EndTarih AS DATE) <= CAST(%s AS DATE)
-              AND LTRIM(RTRIM(ISNULL(ue.Location, ''))) IN ({ph})
+              AND {_LOC_EXPR} IN ({ph})
             GROUP BY g.EmirNo, LTRIM(RTRIM(CAST(g.Proses AS VARCHAR(20))))
         ) t
         """,
@@ -208,12 +234,12 @@ def _period_summary_counts(cur, bas, bit):
             COALESCE(SUM(ISNULL(g.Cikan, 0)), 0) AS toplam_cift,
             COUNT(DISTINCT g.EmirNo) AS biten_emir_sayisi,
             COUNT(DISTINCT LTRIM(RTRIM(CAST(g.Proses AS VARCHAR(20))))) AS proses_turu_sayisi
-        FROM Urt_con_gch g WITH (NOLOCK)
-        INNER JOIN Urt_Emir ue WITH (NOLOCK) ON ue.EmirNo = g.EmirNo
+        FROM {_GCH_UNION}
+        {_EMIR_JOINS}
         WHERE {_BASE_WHERE_G}
           AND CAST(g.EndTarih AS DATE) >= CAST(%s AS DATE)
           AND CAST(g.EndTarih AS DATE) <= CAST(%s AS DATE)
-          AND LTRIM(RTRIM(ISNULL(ue.Location, ''))) IN ({ph})
+          AND {_LOC_EXPR} IN ({ph})
         """,
         (_ymd(bas), _ymd(bit)) + locs,
     )
@@ -238,13 +264,13 @@ def _proses_toplamlari(cur, bas, bit):
             SUM(ISNULL(g.Cikan, 0)) AS toplam_cift,
             COUNT(DISTINCT g.EmirNo) AS emir_sayisi,
             COUNT(DISTINCT CAST(g.EmirNo AS VARCHAR(20)) + '|' + LTRIM(RTRIM(CAST(g.Proses AS VARCHAR(20))))) AS biten_proses_sayisi
-        FROM Urt_con_gch g WITH (NOLOCK)
-        INNER JOIN Urt_Emir ue WITH (NOLOCK) ON ue.EmirNo = g.EmirNo
+        FROM {_GCH_UNION}
+        {_EMIR_JOINS}
         {_PROSES_JOIN}
         WHERE {_BASE_WHERE_G}
           AND CAST(g.EndTarih AS DATE) >= CAST(%s AS DATE)
           AND CAST(g.EndTarih AS DATE) <= CAST(%s AS DATE)
-          AND LTRIM(RTRIM(ISNULL(ue.Location, ''))) IN ({ph})
+          AND {_LOC_EXPR} IN ({ph})
         GROUP BY LTRIM(RTRIM(CAST(g.Proses AS VARCHAR(20))))
         ORDER BY SUM(ISNULL(g.Cikan, 0)) DESC
         """,
@@ -278,12 +304,12 @@ def _proses_kodlari_lookback(cur, bas, bit):
     cur.execute(
         f"""
         SELECT DISTINCT LTRIM(RTRIM(CAST(g.Proses AS VARCHAR(20)))) AS proses_kodu
-        FROM Urt_con_gch g WITH (NOLOCK)
-        INNER JOIN Urt_Emir ue WITH (NOLOCK) ON ue.EmirNo = g.EmirNo
+        FROM {_GCH_UNION}
+        {_EMIR_JOINS}
         WHERE {_BASE_WHERE_G}
           AND CAST(g.EndTarih AS DATE) >= CAST(%s AS DATE)
           AND CAST(g.EndTarih AS DATE) <= CAST(%s AS DATE)
-          AND LTRIM(RTRIM(ISNULL(ue.Location, ''))) IN ({ph})
+          AND {_LOC_EXPR} IN ({ph})
         """,
         (_ymd(bas), _ymd(bit)) + locs,
     )
@@ -388,8 +414,8 @@ def _son_bitenler(cur, bas, bit, limit=5, proses_kodu=None):
             SUM(ISNULL(g.Cikan, 0)) AS miktar,
             'CIFT' AS birim,
             MAX(g.EndTarih) AS bitis_zamani
-        FROM Urt_con_gch g WITH (NOLOCK)
-        INNER JOIN Urt_Emir ue WITH (NOLOCK) ON ue.EmirNo = g.EmirNo
+        FROM {_GCH_UNION}
+        {_EMIR_JOINS}
         {_PROSES_JOIN}
         LEFT JOIN Siparis_Kay sk WITH (NOLOCK) ON sk.SipNo = g.FisNo
         LEFT JOIN Cari_Kart ck WITH (NOLOCK) ON ck.CKod = sk.CariKod
@@ -397,7 +423,7 @@ def _son_bitenler(cur, bas, bit, limit=5, proses_kodu=None):
           AND CAST(g.EndTarih AS DATE) >= CAST(%s AS DATE)
           AND CAST(g.EndTarih AS DATE) <= CAST(%s AS DATE)
           {proses_sql}
-          AND LTRIM(RTRIM(ISNULL(ue.Location, ''))) IN ({ph})
+          AND {_LOC_EXPR} IN ({ph})
         GROUP BY g.EmirNo, LTRIM(RTRIM(CAST(g.Proses AS VARCHAR(20))))
         ORDER BY MAX(g.EndTarih) DESC
         """
@@ -434,13 +460,13 @@ def _proses_kpi_window(cur, proses_kodu, bas, bit):
         SELECT
             COALESCE(SUM(ISNULL(g.Cikan, 0)), 0) AS cift,
             COUNT(DISTINCT g.EmirNo) AS emir
-        FROM Urt_con_gch g WITH (NOLOCK)
-        INNER JOIN Urt_Emir ue WITH (NOLOCK) ON ue.EmirNo = g.EmirNo
+        FROM {_GCH_UNION}
+        {_EMIR_JOINS}
         WHERE {_BASE_WHERE_G}
           AND CAST(g.EndTarih AS DATE) >= CAST(%s AS DATE)
           AND CAST(g.EndTarih AS DATE) <= CAST(%s AS DATE)
           AND LTRIM(RTRIM(CAST(g.Proses AS VARCHAR(20)))) = %s
-          AND LTRIM(RTRIM(ISNULL(ue.Location, ''))) IN ({ph})
+          AND {_LOC_EXPR} IN ({ph})
         """,
         (_ymd(bas), _ymd(bit), str(proses_kodu).strip()) + locs,
     )
@@ -456,13 +482,13 @@ def _gunluk_seri(cur, proses_kodu, bas, bit):
             CONVERT(date, g.EndTarih) AS tarih,
             COALESCE(SUM(ISNULL(g.Cikan, 0)), 0) AS toplam_cift,
             COUNT(DISTINCT g.EmirNo) AS emir_sayisi
-        FROM Urt_con_gch g WITH (NOLOCK)
-        INNER JOIN Urt_Emir ue WITH (NOLOCK) ON ue.EmirNo = g.EmirNo
+        FROM {_GCH_UNION}
+        {_EMIR_JOINS}
         WHERE {_BASE_WHERE_G}
           AND CAST(g.EndTarih AS DATE) >= CAST(%s AS DATE)
           AND CAST(g.EndTarih AS DATE) <= CAST(%s AS DATE)
           AND LTRIM(RTRIM(CAST(g.Proses AS VARCHAR(20)))) = %s
-          AND LTRIM(RTRIM(ISNULL(ue.Location, ''))) IN ({ph})
+          AND {_LOC_EXPR} IN ({ph})
         GROUP BY CONVERT(date, g.EndTarih)
         """,
         (_ymd(bas), _ymd(bit), str(proses_kodu).strip()) + locs,
@@ -570,7 +596,7 @@ def get_home_biten_prosesler(period='bugun', today=None):
     return {
         'ok': True,
         'generated_at': datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
-        'source': 'Korgun Solariz22 / Urt_con_gch',
+        'source': 'Korgun Solariz22 / Urt_con_gch UNION ALL Urtx_con_gch',
         'period': period,
         'period_range': {'bas': _ymd(bas), 'bit': _ymd(bit)},
         'location_scope': location_scope_meta(),
@@ -659,7 +685,7 @@ def get_proses_detay(proses_kodu, period='hafta', chart_mode='hafta', today=None
     return {
         'ok': True,
         'generated_at': datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
-        'source': 'Korgun Solariz22 / Urt_con_gch',
+        'source': 'Korgun Solariz22 / Urt_con_gch UNION ALL Urtx_con_gch',
         'location_scope': location_scope_meta(),
         'period': period,
         'period_range': {'bas': _ymd(bas_list), 'bit': _ymd(bit_list)},
