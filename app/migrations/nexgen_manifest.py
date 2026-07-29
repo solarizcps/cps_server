@@ -349,6 +349,41 @@ MANIFEST: tuple[MigEntry, ...] = (
             ("nexgen_planlama_siparis_kalem", "numune_talep_id"),
         ),
     ),
+    MigEntry(
+        138, "138_nexgen_planlama_siparis_odeme_tipi",
+        "138_nexgen_planlama_siparis_odeme_tipi.py",
+        "siparis.odeme_tipi + odeme_notu nullable (NAKIT/VADELI)",
+        dependencies=(111,),
+        required_columns=(
+            ("nexgen_planlama_siparis", "odeme_tipi"),
+            ("nexgen_planlama_siparis", "odeme_notu"),
+        ),
+    ),
+    MigEntry(
+        139, "139_nexgen_planlama_siparis_kalem_fiyat",
+        "139_nexgen_planlama_siparis_kalem_fiyat.py",
+        "kalem birim_fiyat/iskonto snapshot nullable",
+        dependencies=(107, 138),
+        required_columns=(
+            ("nexgen_planlama_siparis_kalem", "birim_fiyat"),
+            ("nexgen_planlama_siparis_kalem", "iskonto_orani"),
+            ("nexgen_planlama_siparis_kalem", "net_birim_fiyat"),
+            ("nexgen_planlama_siparis_kalem", "satir_tutari"),
+        ),
+    ),
+    MigEntry(
+        140, "140_nexgen_planlama_siparis_kur_snapshot",
+        "140_nexgen_planlama_siparis_kur_snapshot.py",
+        "siparis kur snapshot + kalem TRY karsilik nullable",
+        dependencies=(139,),
+        required_columns=(
+            ("nexgen_planlama_siparis", "kur"),
+            ("nexgen_planlama_siparis", "kur_tarihi"),
+            ("nexgen_planlama_siparis", "kur_kaynagi"),
+            ("nexgen_planlama_siparis_kalem", "net_birim_fiyat_try"),
+            ("nexgen_planlama_siparis_kalem", "satir_tutari_try"),
+        ),
+    ),
 )
 
 BY_VERSION = {m.version: m for m in MANIFEST}

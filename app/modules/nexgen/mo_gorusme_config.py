@@ -1,24 +1,66 @@
 # -*- coding: utf-8 -*-
-"""Müşteri Operasyonu görüşme sabitleri — tek kaynak."""
+"""Müşteri Operasyonu görüşme sabitleri — tek kaynak.
+
+FAZ-YONETIM-CARI360-GORUSMELER-OPERASYONEL-TAMAMLAMA-1
+"""
 
 GORUSME_GUN_ESIK = 45
 SIPARIS_ZIYARET_ESIK_GUN = 90
 
+# Yeni kayıt / UI seçenekleri
 GORUSME_TIPLERI: tuple[str, ...] = (
-    'Ziyaret', 'Telefon', 'WhatsApp', 'E-posta', 'Toplantı', 'Diğer',
+    'Telefon',
+    'WhatsApp',
+    'E-posta',
+    'Fabrika Ziyareti',
+    'Ofis Ziyareti',
+    'Online Toplantı',
+    'Fuar',
+    'Numune Görüşmesi',
+    'Diğer',
 )
 
+# Eski kayıtlar bozulmadan okunur / güncellemede korunabilir
+GORUSME_TIPLERI_LEGACY: tuple[str, ...] = (
+    'Ziyaret',
+    'Toplantı',
+)
+
+GORUSME_TIPLERI_ALL: tuple[str, ...] = GORUSME_TIPLERI + GORUSME_TIPLERI_LEGACY
+
 SONUC_TIPLERI: tuple[str, ...] = (
-    'Sipariş Bekleniyor',
+    'Genel Görüşme',
     'Numune İstedi',
     'Fiyat İstedi',
+    'Teklif Gönderilecek',
+    'Sipariş Bekleniyor',
+    'Sipariş Verecek',
+    'Dönüş Bekleniyor',
+    'Olumlu',
+    'Olumsuz',
+    'Beklemede',
+    'Tamamlandı',
+)
+
+# Eski serbest / önceki kontrollü sonuçlar
+SONUC_TIPLERI_LEGACY: tuple[str, ...] = (
     'Vade İstedi',
     'Çek / Tahsilat Görüşüldü',
     'Şikayet',
     'Rakip Bilgisi',
     'Makina / Yatırım',
-    'Genel Görüşme',
     'Diğer',
+)
+
+SONUC_TIPLERI_ALL: tuple[str, ...] = SONUC_TIPLERI + SONUC_TIPLERI_LEGACY
+
+SONRAKI_AKSIYON_ORNEKLERI: tuple[str, ...] = (
+    'Numune gönder',
+    'Fiyat çalışması hazırla',
+    'Tekrar ara',
+    'Teklif gönder',
+    'Ziyaret planla',
+    'Dönüş bekle',
 )
 
 ONCELIKLER: tuple[str, ...] = ('NORMAL', 'ACIL', 'KRITIK')

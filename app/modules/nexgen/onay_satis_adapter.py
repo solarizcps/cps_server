@@ -116,9 +116,14 @@ def satis_snapshot_olustur(con, siparis_id: int) -> dict[str, Any]:
         'pazarlamaci_adi': hdr['olusturan_ad'],
         'kalemler': kalemler,
         'termin_tarihi': hdr['termin_tarihi'],
-        'fiyat': fin.get('anlasma_birim_fiyat'),
+        'fiyat': fin.get('anlasma_birim_fiyat'),  # tek kalem geçiş; çok kalemde kalem snapshot
         'para_birimi': fin.get('anlasma_para_birimi'),
         'vade_gun': fin.get('vade_gun'),
+        'odeme_tipi': fin.get('odeme_tipi'),  # NAKIT|VADELI — tahsilat_odeme_sekli değil
+        'odeme_notu': fin.get('odeme_notu'),
+        'kur': fin.get('kur'),
+        'kur_tarihi': fin.get('kur_tarihi'),
+        'kur_kaynagi': fin.get('kur_kaynagi'),
         'odeme_sekli': (payload or {}).get('odeme_sekli'),
         'cek_sayisi': (payload or {}).get('cek_sayisi'),
         'cek_tarihleri': (payload or {}).get('cek_tarihleri'),
@@ -136,6 +141,48 @@ def satis_snapshot_olustur(con, siparis_id: int) -> dict[str, Any]:
         snap['formul_id'] = k0.get('formul_id')
         snap['renk_kodu'] = k0.get('renk_kodu') or k0.get('renk_ad')
         snap['rf_renk_id'] = k0.get('rf_renk_id')
+        # T2: tutar kalem satir_tutari toplamından (yanıltıcı başlık ortalaması yok)
+        satir_toplam = 0.0
+        satir_var = False
+        for k in kalemler:
+            st = k.get('satir_tutari')
+            if st not in (None, ''):
+                try:
+                    satir_toplam += float(st)
+                    satir_var = True
+                except (TypeError, ValueError):
+                    pass
+        if satir_var:
+            snap['toplam_tutar'] = round(satir_toplam, 4)
+            if len(kalemler) == 1:
+                snap['fiyat'] = k0.get('birim_fiyat') or snap.get('fiyat')
+            else:
+                snap['fiyat'] = None  # çok kalem: birim fiyat başlıktan okunmaz
+        snap['kalem_fiyatlar'] = [
+            {
+                'sira_no': k.get('sira_no'),
+                'birim_fiyat': k.get('birim_fiyat'),
+                'iskonto_orani': k.get('iskonto_orani'),
+                'net_birim_fiyat': k.get('net_birim_fiyat'),
+                'satir_tutari': k.get('satir_tutari'),
+                'net_birim_fiyat_try': k.get('net_birim_fiyat_try'),
+                'satir_tutari_try': k.get('satir_tutari_try'),
+                'fiyat_kaynagi': k.get('fiyat_kaynagi'),
+            }
+            for k in kalemler
+        ]
+        try_toplam = 0.0
+        try_var = False
+        for k in kalemler:
+            stt = k.get('satir_tutari_try')
+            if stt not in (None, ''):
+                try:
+                    try_toplam += float(stt)
+                    try_var = True
+                except (TypeError, ValueError):
+                    pass
+        if try_var:
+            snap['toplam_tutar_try'] = round(try_toplam, 4)
     else:
         snap['urun_ozet'] = None
         snap['miktar'] = None
@@ -225,6 +272,22 @@ def satis_onaya_gonder(con, siparis_id: int, talep_eden_id: int, revizyon_no: in
     if durum not in ('TASLAK', 'REVIZYON', 'REDDEDILDI'):
         return {'ok': False, 'hata': f'Onaya gönderilemez: {durum}'}
 
+    # T1: Gönder öncesi cari + ticari şart zorunlu (JSON 400/403/404)
+    try:
+        from modules.nexgen.pzm_siparis_write import (
+            PzmWriteError,
+            pzm_cari_dogrula,
+            pzm_gonder_ticari_hazir_mi,
+        )
+        pzm_gonder_ticari_hazir_mi(con, siparis_id)
+        row_c = con.execute(
+            'SELECT cari_id FROM nexgen_planlama_siparis WHERE id=?', (siparis_id,),
+        ).fetchone()
+        if row_c and row_c['cari_id'] is not None:
+            pzm_cari_dogrula(con, row_c['cari_id'], uid=talep_eden_id)
+    except PzmWriteError as e:
+        return {'ok': False, 'hata': e.message, 'status': e.status}
+
     if aktif_talep_var(con, KAYNAK_MODUL, siparis_id, TALEP_TIPI):
         return {'ok': False, 'hata': 'Aktif onay talebi zaten var.', 'code': 'DUPLICATE'}
 
@@ -243,7 +306,11 @@ def satis_onaya_gonder(con, siparis_id: int, talep_eden_id: int, revizyon_no: in
         etki=etki,
         cari_id=snap.get('cari_id'),
         cari_unvan=snap.get('cari_unvan_snapshot'),
-        tutar=float(snap['fiyat']) if snap.get('fiyat') not in (None, '') else None,
+        tutar=(
+            float(snap['toplam_tutar'])
+            if snap.get('toplam_tutar') not in (None, '')
+            else (float(snap['fiyat']) if snap.get('fiyat') not in (None, '') else None)
+        ),
         para_birimi=snap.get('para_birimi'),
         vade_gun=int(snap['vade_gun']) if snap.get('vade_gun') not in (None, '') else None,
         idempotency_key=idem,

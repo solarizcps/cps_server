@@ -20,7 +20,7 @@ import sqlite3
 from typing import Any
 
 from modules.nexgen.cari360_omurga_link import backfill_kalem_uretim_planlari
-from modules.nexgen.cari_sorumlu_service import can_view_cari
+from modules.nexgen.cari_sorumlu_service import can_view_cari, can_view_cari_ticari
 
 # Sonuçlanmış sipariş durumları — mock dağılım + sistemde görülen kapanış kodları.
 # ONAYLANDI / URETIMDE vb. hâlâ süreçte → aktif sayılır.
@@ -381,7 +381,11 @@ def load_cari360_siparisler(
             'cari360_url': f'/nexgen/cari360/{cid}?tab=siparisler',
         })
 
-    return {'liste': liste, 'count': len(liste)}
+    # T4: hassas ticari alanlar yalnız can_view_cari_ticari ile
+    from modules.nexgen.cari360_ticari_ozet_service import enrich_siparis_listesi_ticari
+    ticari_ok = can_view_cari_ticari(con, kullanici_id, cid, yk)
+    liste = enrich_siparis_listesi_ticari(con, liste, ticari_gorunur=ticari_ok)
+    return {'liste': liste, 'count': len(liste), 'ticari_gorunur': ticari_ok}
 
 
 def load_cari360_sevkiyatlar(

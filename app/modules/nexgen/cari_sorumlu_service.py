@@ -19,8 +19,10 @@ from modules.nexgen.cari360_yetki import (
     YETKI_CARI360_VIEW_OWN,
     _yk_has,
     can_cari360_crm_write,
+    can_cari360_finans_view,
     can_cari360_finans_write,
     can_cari360_view_all,
+    can_cari360_view_own,
     can_physical_delete,
     can_siparis_onaya_gonder,
 )
@@ -175,6 +177,39 @@ def can_view_cari(
     if kapsam['tumunu_gorebilir_mi']:
         return True
     return cari_id in kapsam['cari_id_listesi']
+
+
+def can_view_cari_ticari(
+    con,
+    kullanici_id: int,
+    cari_id: int,
+    yk: set[str] | None = None,
+) -> bool:
+    """
+    T4 — fiyat / iskonto / vade / tutar görünümü.
+    Yeni DB yetkisi yok; mevcut helper birleşimi:
+    A) admin / view_all / *
+    B) view_own + cari kapsamında (atanmış)
+    C) finans.view + cari görüntüleyebilir
+    D) sorumlu_manage (yönetim kapsamı)
+    """
+    if yk is None:
+        yk = load_kullanici_yetkileri(con, kullanici_id)
+    if not can_view_cari(con, kullanici_id, cari_id, yk):
+        return False
+    if '*' in yk or can_cari360_view_all(yk):
+        return True
+    if _yk_has(yk, YETKI_CARI360_SORUMLU_MANAGE, 'can_manage'):
+        return True
+    if can_cari360_finans_view(yk):
+        return True
+    if can_cari360_view_own(yk):
+        kapsam = get_kullanici_cari_kapsami(con, kullanici_id, yk)
+        if int(cari_id) in set(kapsam.get('cari_id_listesi') or []):
+            return True
+    if can_siparis_onaya_gonder(yk) and _kullanici_cari_atanmis(con, kullanici_id, cari_id):
+        return True
+    return False
 
 
 def can_write_crm(

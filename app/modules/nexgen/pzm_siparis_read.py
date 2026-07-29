@@ -46,6 +46,11 @@ def pzm_siparis_finans_alanlari(hdr: dict, payload: dict | None = None) -> dict[
     pb = hdr.get('anlasma_para_birimi')
     vg = hdr.get('vade_gun')
     bf = hdr.get('anlasma_birim_fiyat')
+    ot = hdr.get('odeme_tipi')
+    on = hdr.get('odeme_notu')
+    kur = hdr.get('kur')
+    kur_tarihi = hdr.get('kur_tarihi')
+    kur_kaynagi = hdr.get('kur_kaynagi')
     if payload:
         if not pb:
             pb = payload.get('anlasma_para_birimi')
@@ -53,10 +58,26 @@ def pzm_siparis_finans_alanlari(hdr: dict, payload: dict | None = None) -> dict[
             vg = payload.get('vade_gun')
         if not bf:
             bf = payload.get('anlasma_birim_fiyat')
+        if not ot:
+            ot = payload.get('odeme_tipi')
+        if not on:
+            on = payload.get('odeme_notu')
+        if kur in (None, ''):
+            kur = payload.get('kur')
+        if not kur_tarihi:
+            kur_tarihi = payload.get('kur_tarihi')
+        if not kur_kaynagi:
+            kur_kaynagi = payload.get('kur_kaynagi')
     return {
         'anlasma_para_birimi': pb,
         'vade_gun': vg,
         'anlasma_birim_fiyat': bf,
+        'odeme_tipi': ot,
+        'odeme_notu': on,
+        'kur': kur,
+        'kur_tarihi': kur_tarihi,
+        'kur_kaynagi': kur_kaynagi,
+        'para_birimi': pb,
     }
 
 
@@ -75,7 +96,7 @@ def _toplam_kg(ml: float, ms: float, mm: float) -> float:
     return round(float(ml or 0) + float(ms or 0) + float(mm or 0), 3)
 
 
-def pzm_kalem_dict_from_row(row) -> dict[str, Any]:
+def pzm_kalem_dict_from_row(row, hdr: dict | None = None) -> dict[str, Any]:
     """DB satırını API sözlüğüne çevirir."""
     d = dict(row)
     ml = float(d.get('miktar_l') or 0)
@@ -84,6 +105,20 @@ def pzm_kalem_dict_from_row(row) -> dict[str, Any]:
     d['boyut_miktar'] = _miktar_to_boyut_dict(ml, ms, mm)
     d['toplam_kg'] = _toplam_kg(ml, ms, mm)
     d['kaynak'] = 'KALEM' if not d.get('legacy_kaynak') else 'KALEM_LEGACY'
+    # T2 fiyat snapshot / eski başlık fallback (yalnız görüntü — DB yazılmaz)
+    bf = d.get('birim_fiyat')
+    if bf not in (None, ''):
+        d['fiyat_kaynagi'] = 'KALEM_SNAPSHOT'
+    else:
+        hdr_bf = (hdr or {}).get('anlasma_birim_fiyat')
+        # Çok kalemde başlık fiyatını dağıtma
+        kalem_sayisi = (hdr or {}).get('_kalem_sayisi')
+        if hdr_bf not in (None, '') and kalem_sayisi == 1:
+            d['birim_fiyat'] = hdr_bf
+            d['iskonto_orani'] = d.get('iskonto_orani') if d.get('iskonto_orani') not in (None, '') else '0'
+            d['fiyat_kaynagi'] = 'ESKI_BASLIK_FIYATI'
+        else:
+            d['fiyat_kaynagi'] = 'BELIRTILMEMIS'
     return d
 
 
@@ -142,10 +177,18 @@ def pzm_kalem_dict_from_payload(
 def pzm_siparis_kalemleri_getir(con, planlama_siparis_id: int) -> list[dict[str, Any]]:
     """Sipariş kalemlerini döndürür. Kalem yoksa legacy JSON'dan sanal kalem üretir."""
     if pzm_kalem_tablosu_var(con):
-        has_numune = bool(con.execute(
-            "SELECT 1 FROM pragma_table_info('nexgen_planlama_siparis_kalem') "
-            "WHERE name='numune_talep_id'"
-        ).fetchone())
+        kcols = {c[1] for c in con.execute(
+            "PRAGMA table_info(nexgen_planlama_siparis_kalem)"
+        ).fetchall()}
+        has_numune = 'numune_talep_id' in kcols
+        fiyat_sel = ''
+        if 'birim_fiyat' in kcols:
+            fiyat_sel = (
+                ', birim_fiyat, iskonto_orani, iskonto_tutari, '
+                'net_birim_fiyat, satir_tutari'
+            )
+        if 'net_birim_fiyat_try' in kcols:
+            fiyat_sel += ', net_birim_fiyat_try, satir_tutari_try'
         numune_sel = ', numune_talep_id' if has_numune else ''
         rows = con.execute(
             f"""
@@ -153,7 +196,7 @@ def pzm_siparis_kalemleri_getir(con, planlama_siparis_id: int) -> list[dict[str,
                    formul_id, formul_ad, renk_varyant_id, renk_ad, rf_renk_id,
                    miktar_l, miktar_s, miktar_m, termin_tarihi, notlar,
                    uretim_plan_id, durum, legacy_kaynak,
-                   olusturma_tarihi, guncelleme_tarihi{numune_sel}
+                   olusturma_tarihi, guncelleme_tarihi{numune_sel}{fiyat_sel}
             FROM nexgen_planlama_siparis_kalem
             WHERE planlama_siparis_id=?
             ORDER BY sira_no, id
@@ -161,7 +204,15 @@ def pzm_siparis_kalemleri_getir(con, planlama_siparis_id: int) -> list[dict[str,
             (planlama_siparis_id,),
         ).fetchall()
         if rows:
-            out = [pzm_kalem_dict_from_row(r) for r in rows]
+            hdr_row = con.execute(
+                'SELECT anlasma_birim_fiyat FROM nexgen_planlama_siparis WHERE id=?',
+                (planlama_siparis_id,),
+            ).fetchone()
+            hdr = {
+                'anlasma_birim_fiyat': hdr_row['anlasma_birim_fiyat'] if hdr_row else None,
+                '_kalem_sayisi': len(rows),
+            }
+            out = [pzm_kalem_dict_from_row(r, hdr) for r in rows]
             if has_numune:
                 for d in out:
                     nid = d.get('numune_talep_id')
@@ -288,7 +339,13 @@ def pzm_siparis_ozet(
 
 def pzm_siparis_header_getir(con, siparis_id: int) -> dict | None:
     cols = {c[1] for c in con.execute('PRAGMA table_info(nexgen_planlama_siparis)').fetchall()}
-    extra = [c for c in ('anlasma_para_birimi', 'vade_gun', 'anlasma_birim_fiyat') if c in cols]
+    extra = [
+        c for c in (
+            'anlasma_para_birimi', 'vade_gun', 'anlasma_birim_fiyat',
+            'odeme_tipi', 'odeme_notu',
+            'kur', 'kur_tarihi', 'kur_kaynagi',
+        ) if c in cols
+    ]
     extra_sql = (', ' + ', '.join(extra)) if extra else ''
     row = con.execute(
         f"""

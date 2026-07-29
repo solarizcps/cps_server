@@ -18450,14 +18450,30 @@ _PZM_DURUMLAR = frozenset({
 })
 
 
-def _pzm_liste_select_cols():
-    return (
+def _pzm_liste_select_cols(con=None):
+    base = (
         "id, siparis_no, cari_id, cari_unvan, termin_tarihi, "
         "durum, notlar, talep_referansi, olusturma_tarihi, "
         "olusturan_id, kaynak_modul, anlasma_para_birimi, "
         "vade_gun, anlasma_birim_fiyat, musteri_termin, "
         "onerilen_termin, teslim_sekli, revizyon_gerekce"
     )
+    if con is None:
+        return base
+    try:
+        cols = {c[1] for c in con.execute('PRAGMA table_info(nexgen_planlama_siparis)').fetchall()}
+        extra = []
+        if 'odeme_tipi' in cols:
+            extra.append('odeme_tipi')
+        if 'odeme_notu' in cols:
+            extra.append('odeme_notu')
+        if 'kur' in cols:
+            extra.extend(['kur', 'kur_tarihi', 'kur_kaynagi'])
+        if extra:
+            return base + ', ' + ', '.join(extra)
+    except Exception:
+        pass
+    return base
 
 
 def _pzm_liste_filtre_sql(q=None, durum=None, cari_id=None):
@@ -18510,7 +18526,7 @@ def _pzm_liste_sayfala(con, q=None, durum=None, cari_id=None, page=1, per_page=N
         page = pages
     offset = (page - 1) * per_page
     rows = con.execute(
-        f"""SELECT {_pzm_liste_select_cols()}
+        f"""SELECT {_pzm_liste_select_cols(con)}
             FROM nexgen_planlama_siparis
             WHERE {where_sql}
             ORDER BY id DESC
@@ -18891,6 +18907,10 @@ def _pzm_talep_satir_dict(row, con=None):
             d['vade_gun'] = payload.get('vade_gun')
         if not d.get('anlasma_birim_fiyat'):
             d['anlasma_birim_fiyat'] = payload.get('anlasma_birim_fiyat')
+        if not d.get('odeme_tipi'):
+            d['odeme_tipi'] = payload.get('odeme_tipi')
+        if not d.get('odeme_notu'):
+            d['odeme_notu'] = payload.get('odeme_notu')
     from modules.nexgen.pzm_siparis_read import pzm_siparis_tarihi_coz
     d['siparis_tarihi'] = pzm_siparis_tarihi_coz(payload, d.get('olusturma_tarihi'))
     d['durum_etiket'] = {

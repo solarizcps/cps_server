@@ -25,9 +25,14 @@ from modules.nexgen.cari360_ops_read_service import (
     load_cari360_uretim,
     load_cari360_urunler,
 )
+from modules.nexgen.cari360_ticari_ozet_service import load_cari360_ticari_ozet
 from modules.nexgen.cari360_yetki import can_cari360_dosya_ekrani
 from modules.nexgen.cari_sorumlu_service import can_view_cari
-from modules.nexgen.mo_gorusme_config import GORUSME_TIPLERI, SONUC_TIPLERI
+from modules.nexgen.mo_gorusme_config import (
+    GORUSME_TIPLERI,
+    SONRAKI_AKSIYON_ORNEKLERI,
+    SONUC_TIPLERI,
+)
 from modules.nexgen.mo_gorusme_service import (
     MoGorusmeError,
     acik_takip_sayisi,
@@ -132,6 +137,7 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
             numune_sayisi=numune_sayisi,
             gorusme_tipleri=GORUSME_TIPLERI,
             sonuc_tipleri=SONUC_TIPLERI,
+            sonraki_aksiyon_ornekleri=SONRAKI_AKSIYON_ORNEKLERI,
         )
 
     def _ops_json(fn, cari_id, **kwargs):
@@ -164,6 +170,12 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
     @login_gerekli
     def api_cari360_siparisler(cari_id):
         return _ops_json(load_cari360_siparisler, cari_id)
+
+    @bp.route('/api/cari360/<int:cari_id>/ticari-ozet', methods=['GET'])
+    @login_gerekli
+    def api_cari360_ticari_ozet(cari_id):
+        """T4 Ticari Özet — JSON only; yetkisiz 403 JSON."""
+        return _ops_json(load_cari360_ticari_ozet, cari_id)
 
     @bp.route('/api/cari360/<int:cari_id>/uretim', methods=['GET'])
     @login_gerekli
@@ -313,24 +325,33 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
     @bp.route('/api/cari360/<int:cari_id>/hafiza')
     @login_gerekli
     def api_cari360_hafiza(cari_id):
-        """Eski hafıza API — Cari Kart shell kullanmaz; geriye uyum."""
-        if not can_cari360_dosya_ekrani(_yk()):
-            abort(403)
+        """Federasyon hafıza — Cari Kart Son Hareketler + Tümünü Gör (JSON)."""
         con = db_fn()
         try:
-            if not can_view_cari(con, kullanici_id_fn(), cari_id, _yk()):
-                abort(403)
+            uid = kullanici_id_fn()
+            if not uid:
+                return jsonify({'ok': False, 'mesaj': 'Oturum gerekli.'}), 401
+            if not can_view_cari(con, uid, cari_id, _yk()):
+                return jsonify({'ok': False, 'mesaj': 'Bu cari için görüntüleme yetkiniz yok.'}), 403
+            nc = con.execute('SELECT id FROM nexgen_cari WHERE id=?', (cari_id,)).fetchone()
+            if not nc:
+                return jsonify({'ok': False, 'mesaj': 'Cari bulunamadı.'}), 404
             kategori = (request.args.get('kategori') or 'tumu').strip()
             tarih = (request.args.get('tarih') or 'tumu').strip()
             arama = (request.args.get('q') or '').strip() or None
+            lim_raw = (request.args.get('limit') or '').strip()
+            limit = int(lim_raw) if lim_raw.isdigit() else None
             events = hafiza_liste(
-                con, cari_id, kullanici_id_fn(), _yk(),
+                con, cari_id, uid, _yk(),
                 kategori=None if kategori == 'tumu' else kategori,
                 tarih_preset=None if tarih == 'tumu' else tarih,
                 arama=arama,
+                limit=limit,
             )
             return jsonify({'ok': True, 'events': events, 'count': len(events)})
         except Cari360DosyaError as e:
             return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod
+        except Exception as e:
+            return jsonify({'ok': False, 'mesaj': 'Hafıza yüklenemedi.', 'hata': str(e)[:200]}), 500
         finally:
             con.close()

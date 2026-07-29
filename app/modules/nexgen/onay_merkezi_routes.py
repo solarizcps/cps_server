@@ -159,8 +159,11 @@ def register_onay_merkezi_routes(bp, db_fn, kullanici_id_fn):
             r = satis_onaya_gonder(con, siparis_id, kullanici_id_fn(), int(rev or 1))
             if not r.get('ok'):
                 con.rollback()
-                st = 409 if r.get('code') == 'DUPLICATE' else 400
-                return jsonify(r), st
+                if r.get('code') == 'DUPLICATE':
+                    st = 409
+                else:
+                    st = int(r.get('status') or 400)
+                return jsonify({'ok': False, 'hata': r.get('hata') or 'Onaya gönderilemedi.'}), st
             con.commit()
             return jsonify(r)
         except Exception as e:
