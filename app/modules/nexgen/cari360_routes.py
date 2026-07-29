@@ -18,6 +18,7 @@ from modules.nexgen.cari360_dosya_service import (
 )
 from modules.nexgen.cari360_ops_read_service import (
     Cari360OpsError,
+    enrich_gorusmeler_bagli_numuneler,
     load_cari360_numuneler,
     load_cari360_ozet,
     load_cari360_sevkiyatlar,
@@ -215,6 +216,7 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
             if not row:
                 return jsonify({'ok': False, 'mesaj': 'Cari bulunamadı.'}), 404
             liste = list_gorusmeler(con, cari_id, uid, yk)
+            liste = enrich_gorusmeler_bagli_numuneler(con, cari_id, liste)
             gorusme_sayisi = int(con.execute(
                 'SELECT COUNT(*) FROM musteri_operasyon_gorusme '
                 'WHERE cari_id=? AND COALESCE(aktif, 1)=1',

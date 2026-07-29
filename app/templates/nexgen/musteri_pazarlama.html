@@ -415,6 +415,7 @@
     </div>
     <form id="mp-numune-form" class="mp-modal-form">
       <input type="hidden" name="talep_id" id="mp-n-talep-id" value="">
+      <input type="hidden" name="mo_gorusme_id" id="mp-n-mo-gorusme-id" value="">
       <div id="mp-numune-adim-form">
         <div class="mp-fld"><label>Müşteri *</label>
           <select id="mp-n-cari" name="cari_id" required>
@@ -916,9 +917,10 @@
         }).catch(function(){});
       }
     } else if (name === 'numune') {
-      resetNumuneModal(cariId, unvan);
+      var gorusmeIdArg = arguments.length > 4 ? arguments[4] : null;
+      resetNumuneModal(cariId, unvan, gorusmeIdArg);
       var savedDraft = cariId ? sessionStorage.getItem('mo_numune_draft_' + cariId) : null;
-      if (savedDraft) hydrateNumuneDraft(parseInt(savedDraft, 10));
+      if (savedDraft && !gorusmeIdArg) hydrateNumuneDraft(parseInt(savedDraft, 10));
     } else if (name === 'siparis') {
       resetSiparisModal(cariId, unvan);
       var savedSip = cariId ? sessionStorage.getItem('mo_siparis_draft_' + cariId) : null;
@@ -1195,11 +1197,13 @@
       }).catch(function(){});
   }
 
-  function resetNumuneModal(cariId, unvan) {
+  function resetNumuneModal(cariId, unvan, gorusmeId) {
     numuneForm.reset();
     numuneIdemKey = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + '-n');
     numuneTalepId = null;
     document.getElementById('mp-n-talep-id').value = '';
+    var gidEl = document.getElementById('mp-n-mo-gorusme-id');
+    gidEl.value = gorusmeId ? String(gorusmeId) : '';
     document.getElementById('mp-numune-adim-form').hidden = false;
     document.getElementById('mp-numune-adim-ozet').hidden = true;
     var sel = document.getElementById('mp-n-cari');
@@ -1213,7 +1217,7 @@
     var fd = new FormData(numuneForm);
     var cariSel = numuneForm.querySelector('[name="cari_id"]');
     var cariVal = (cariSel && cariSel.value) ? cariSel.value : fd.get('cari_id');
-    return {
+    var payload = {
       idempotency_key: numuneIdemKey,
       talep_id: numuneTalepId,
       cari_id: cariVal,
@@ -1230,6 +1234,9 @@
       not: fd.get('not'),
       onay_notu: fd.get('onay_notu')
     };
+    var gid = (document.getElementById('mp-n-mo-gorusme-id').value || '').trim();
+    if (gid) payload.mo_gorusme_id = parseInt(gid, 10);
+    return payload;
   }
 
   function saveNumuneTaslak(cb) {
@@ -1656,10 +1663,37 @@
     fetch('/nexgen/api/musteri-pazarlama/gorusme', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) })
       .then(function(r){ return r.json().then(function(j){ return {body:j}; }); })
       .then(function(res){
-        if (res.body.ok) { toast(res.body.mesaj || 'Kaydedildi'); closeModal('gorusme'); location.reload(); }
+        if (res.body.ok) {
+          toast(res.body.mesaj || 'Kaydedildi');
+          var kayit = res.body.kayit || {};
+          // Görüşme sonucu Numune İstedi → gizli context ile numune modalına taşı (yeni buton yok)
+          if (payload.sonuc_tipi === 'Numune İstedi' && kayit.id) {
+            sessionStorage.setItem('mo_numune_from_gorusme', JSON.stringify({
+              gorusme_id: kayit.id,
+              cari_id: payload.cari_id,
+              unvan: (musteriData[payload.cari_id] && musteriData[payload.cari_id].unvan) || ''
+            }));
+          }
+          closeModal('gorusme');
+          location.reload();
+        }
         else { toast(res.body.mesaj || 'Hata'); submitting = false; kaydetBtn.disabled = false; kaydetBtn.textContent = 'Kaydet'; }
       }).catch(function(){ toast('Bağlantı hatası'); submitting = false; kaydetBtn.disabled = false; kaydetBtn.textContent = 'Kaydet'; });
   });
+
+  // Sayfa yükünde: görüşmeden gelen numune context'i (hidden mo_gorusme_id)
+  try {
+    var _pendingNg = sessionStorage.getItem('mo_numune_from_gorusme');
+    if (_pendingNg) {
+      sessionStorage.removeItem('mo_numune_from_gorusme');
+      var _png = JSON.parse(_pendingNg);
+      if (_png && _png.gorusme_id && _png.cari_id) {
+        setTimeout(function(){
+          openModal('numune', _png.cari_id, _png.unvan || '', '', _png.gorusme_id);
+        }, 200);
+      }
+    }
+  } catch (e) {}
 
   document.querySelectorAll('.mp-chip').forEach(function(chip){
     chip.addEventListener('click', function(){

@@ -4603,6 +4603,14 @@ def api_arge_test_olustur():
     # MODÜL-01 ek alanlar
     rf_renk_id_in   = data.get('rf_renk_id') or None
     numune_orani_in = data.get('numune_orani')   # % değeri, ör: 10.0
+    # FAZ-1B: canonical numune ID (opsiyonel; yoksa legacy text yolu)
+    _ntp_raw = data.get('numune_talep_id')
+    numune_talep_id_in = None
+    if _ntp_raw not in (None, ''):
+        try:
+            numune_talep_id_in = int(_ntp_raw)
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "hata": "numune_talep_id geçersiz."}), 400
 
     try:
         shore_hedef = float(data['shore_hedef']) if data.get('shore_hedef') not in (None, '') else None
@@ -4629,6 +4637,75 @@ def api_arge_test_olustur():
     kullanici_id = _kullanici_id()
     con = _db()
     try:
+        from modules.nexgen.numune_talep_service import (
+            NumuneTalepError as _NtErr,
+            sync_numune_arge_baglantisi as _sync_nt_arge,
+        )
+
+        # FAZ-1B: numune_talep_id verilmişse canonical idempotent yol
+        if numune_talep_id_in:
+            nt_row = con.execute(
+                """
+                SELECT id, cari_id, arge_test_id, talep_kodu, aktif
+                FROM nexgen_numune_talep WHERE id=?
+                """,
+                (numune_talep_id_in,),
+            ).fetchone()
+            if not nt_row or not int(nt_row['aktif'] or 0):
+                return jsonify({"ok": False, "hata": "Numune talebi bulunamadı."}), 404
+            # cari kaynağı numune — payload cari güvenilmez
+            if nt_row['cari_id'] not in (None, 0):
+                cari_id = int(nt_row['cari_id'])
+            if not talep_referansi:
+                talep_referansi = (nt_row['talep_kodu'] or '').strip() or None
+            if nt_row['arge_test_id']:
+                existing_id = int(nt_row['arge_test_id'])
+                try:
+                    _sync_nt_arge(con, numune_talep_id_in, existing_id)
+                    con.commit()
+                except _NtErr as e:
+                    con.rollback()
+                    return jsonify({"ok": False, "hata": e.message, "kod": e.kod}), e.status
+                return jsonify({
+                    "ok": True,
+                    "test_id": existing_id,
+                    "numune_talep_id": numune_talep_id_in,
+                    "idempotent": True,
+                    "mesaj": "Mevcut AR-GE kaydı döndürüldü.",
+                })
+            # reverse dolu mu?
+            arge_cols = {c[1] for c in con.execute('PRAGMA table_info(nexgen_arge_test)')}
+            if 'numune_talep_id' in arge_cols:
+                ex_ntp = con.execute(
+                    """
+                    SELECT id FROM nexgen_arge_test
+                    WHERE aktif=1 AND numune_talep_id=?
+                    ORDER BY id DESC LIMIT 1
+                    """,
+                    (numune_talep_id_in,),
+                ).fetchone()
+                if ex_ntp:
+                    existing_id = int(ex_ntp['id'])
+                    try:
+                        _sync_nt_arge(con, numune_talep_id_in, existing_id)
+                        con.commit()
+                    except _NtErr as e:
+                        con.rollback()
+                        return jsonify({"ok": False, "hata": e.message, "kod": e.kod}), e.status
+                    return jsonify({
+                        "ok": True,
+                        "test_id": existing_id,
+                        "numune_talep_id": numune_talep_id_in,
+                        "idempotent": True,
+                        "mesaj": "Mevcut AR-GE kaydı döndürüldü.",
+                    })
+        else:
+            print(
+                '[ARGE_LEGACY] api_arge_test_olustur numune_talep_id yok — '
+                'legacy text/talep_referansi yolu',
+                flush=True,
+            )
+
         # Kaynak varyant var mı?
         uv = con.execute(
             "SELECT id, ad FROM nexgen_uretim_varyant WHERE id=? AND aktif=1",
@@ -4709,6 +4786,12 @@ def api_arge_test_olustur():
               rf_renk_id_in, numune_orani_val, nx_rt_kodu,
               kullanici_id))
         test_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+        if numune_talep_id_in:
+            try:
+                _sync_nt_arge(con, numune_talep_id_in, int(test_id))
+            except _NtErr as e:
+                con.rollback()
+                return jsonify({"ok": False, "hata": e.message, "kod": e.kod}), e.status
 
         # Test kalemleri — REAL hassasiyet, round(x, 4) yeterli
         test_kalemler = []

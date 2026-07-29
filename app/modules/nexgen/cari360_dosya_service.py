@@ -135,6 +135,11 @@ def _hafiza_satir(
     sonraki_asama: str = '',
     gecikme: str = '',
     dedupe_suffix: str = '',
+    entity_type: str | None = None,
+    entity_id: int | str | None = None,
+    parent_type: str | None = None,
+    parent_id: int | str | None = None,
+    cari_id: int | None = None,
 ) -> dict[str, Any]:
     dk = f'{source_type}:{source_id}:{kategori}:{hareket_turu}'
     if dedupe_suffix:
@@ -159,6 +164,11 @@ def _hafiza_satir(
         'oncelik': oncelik,
         'sonraki_asama': sonraki_asama or '',
         'gecikme': gecikme or '',
+        'entity_type': entity_type or source_type,
+        'entity_id': entity_id if entity_id is not None else source_id,
+        'parent_type': parent_type,
+        'parent_id': parent_id,
+        'cari_id': cari_id,
     }
 
 
@@ -427,18 +437,24 @@ def hafiza_liste(
                 metadata={
                     'musteri_sozu': d.get('musteri_sozu'), 'bizim_sozumuz': d.get('bizim_sozumuz'),
                     'sonraki_takip': d.get('sonraki_takip_tarihi'),
+                    'numune_talep_id': d.get('numune_talep_id'),
                 },
                 detay_url=f'{kart_base}?tab=gorusmeler',
                 oncelik=90,
                 sonraki_asama='Takip' if takip else '',
                 gecikme=_gecikme_etiket(takip) if takip else '',
+                entity_type='musteri_operasyon_gorusme',
+                entity_id=d['id'],
+                parent_type=None,
+                parent_id=None,
+                cari_id=int(cari_id),
             ))
 
     # --- Numune + gelişme ---
     if _tablo_var(con, 'nexgen_numune_talep'):
         cols = ['id', 'talep_kodu', 'durum', 'urun_adi', 'urun_tipi', 'olusturma_tarihi',
                 'guncelleme_tarihi', 'revizyon_gerekce', 'hedef_tarih', 'arge_test_id']
-        for o in ('aciklama', 'ek_not', 'idempotency_key', 'isleme_alinma_tarihi'):
+        for o in ('aciklama', 'ek_not', 'idempotency_key', 'isleme_alinma_tarihi', 'mo_gorusme_id'):
             if _kolon_var(con, 'nexgen_numune_talep', o):
                 cols.append(o)
         sql = f"SELECT {', '.join(cols)} FROM nexgen_numune_talep WHERE cari_id=? AND aktif=1"
@@ -448,6 +464,7 @@ def hafiza_liste(
             kod = d.get('talep_kodu') or str(d['id'])
             bas, st = _numune_durum_metin(d.get('durum'))
             termin = (d.get('hedef_tarih') or '')[:10]
+            parent_g = d.get('mo_gorusme_id')
             _add(_hafiza_satir(
                 event_date=d.get('guncelleme_tarihi') or d.get('olusturma_tarihi') or '',
                 hareket_turu='Numune',
@@ -460,11 +477,20 @@ def hafiza_liste(
                 termin=termin,
                 kategori='numuneler',
                 test=test,
-                metadata={'revizyon_gerekce': d.get('revizyon_gerekce'), 'arge_test_id': d.get('arge_test_id')},
+                metadata={
+                    'revizyon_gerekce': d.get('revizyon_gerekce'),
+                    'arge_test_id': d.get('arge_test_id'),
+                    'mo_gorusme_id': parent_g,
+                },
                 detay_url=f'{kart_base}?tab=numuneler',
                 oncelik=88,
                 sonraki_asama=_numune_sonraki(d.get('durum')),
                 gecikme=_gecikme_etiket(termin),
+                entity_type='nexgen_numune_talep',
+                entity_id=d['id'],
+                parent_type='musteri_operasyon_gorusme' if parent_g else None,
+                parent_id=int(parent_g) if parent_g not in (None, '', 0) else None,
+                cari_id=int(cari_id),
             ))
             if d.get('olusturma_tarihi') and (d.get('guncelleme_tarihi') or '')[:16] != (d.get('olusturma_tarihi') or '')[:16]:
                 _add(_hafiza_satir(
@@ -481,6 +507,11 @@ def hafiza_liste(
                     detay_url=f'{kart_base}?tab=numuneler',
                     oncelik=85,
                     dedupe_suffix='open',
+                    entity_type='nexgen_numune_talep',
+                    entity_id=d['id'],
+                    parent_type='musteri_operasyon_gorusme' if parent_g else None,
+                    parent_id=int(parent_g) if parent_g not in (None, '', 0) else None,
+                    cari_id=int(cari_id),
                 ))
 
         if _tablo_var(con, 'nexgen_numune_talep_gelisme'):

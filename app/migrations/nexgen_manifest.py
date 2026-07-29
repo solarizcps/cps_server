@@ -384,6 +384,15 @@ MANIFEST: tuple[MigEntry, ...] = (
             ("nexgen_planlama_siparis_kalem", "satir_tutari_try"),
         ),
     ),
+    MigEntry(
+        141, "141_nexgen_arge_test_numune_talep_id",
+        "141_nexgen_arge_test_numune_talep_id.py",
+        "nexgen_arge_test.numune_talep_id nullable + index (no hard FK/unique)",
+        dependencies=(140, 106, 113),
+        required_columns=(
+            ("nexgen_arge_test", "numune_talep_id"),
+        ),
+    ),
 )
 
 BY_VERSION = {m.version: m for m in MANIFEST}

@@ -87,6 +87,76 @@ def _mo_row_guard(row) -> None:
         raise MoNumuneError('Bu kayıt Müşteri Operasyonu numune talebi değil.', 403)
 
 
+def _assert_mo_gorusme_bag(
+    con: sqlite3.Connection,
+    mo_gorusme_id: int,
+    payload_cari_id: int,
+) -> dict[str, Any]:
+    """Görüşmeden numune: görüşme ID zorunlu doğrulama + cari eşleşmesi.
+
+    Dönüş: görüşme satırı (cari_id zorunlu kaynak).
+    """
+    if not _tablo_var(con, 'musteri_operasyon_gorusme'):
+        raise MoNumuneError('Görüşme tablosu hazır değil.', 503)
+    g = con.execute(
+        """
+        SELECT id, cari_id, aktif, numune_talep_id
+        FROM musteri_operasyon_gorusme WHERE id=?
+        """,
+        (int(mo_gorusme_id),),
+    ).fetchone()
+    if not g:
+        raise MoNumuneError('Bağlı görüşme bulunamadı.', 404)
+    if int(g['aktif'] or 0) != 1:
+        raise MoNumuneError('Pasif görüşmeye numune bağlanamaz.', 409)
+    gc = int(g['cari_id'] or 0)
+    if not gc:
+        raise MoNumuneError('Görüşme cari_id eksik.', 409)
+    if int(payload_cari_id) != gc:
+        raise MoNumuneError(
+            'Numune cari_id görüşme cari_id ile uyuşmuyor.', 400,
+        )
+    return dict(g)
+
+
+def _reverse_gorusme_numune_pointer(
+    con: sqlite3.Connection,
+    gorusme_id: int,
+    numune_talep_id: int,
+) -> None:
+    """gorusme.numune_talep_id = son/aktif pointer (overwrite yok).
+
+    - NULL ise yaz
+    - aynı id ise no-op
+    - farklı id ise 409 (veri kaybı yok)
+    """
+    if not _kolon_var(con, 'musteri_operasyon_gorusme', 'numune_talep_id'):
+        return
+    row = con.execute(
+        'SELECT numune_talep_id FROM musteri_operasyon_gorusme WHERE id=?',
+        (int(gorusme_id),),
+    ).fetchone()
+    if not row:
+        raise MoNumuneError('Bağlı görüşme bulunamadı.', 404)
+    cur = row['numune_talep_id']
+    if cur in (None, 0, ''):
+        con.execute(
+            """
+            UPDATE musteri_operasyon_gorusme
+            SET numune_talep_id=?, guncelleme_tarihi=?
+            WHERE id=? AND (numune_talep_id IS NULL OR numune_talep_id=0)
+            """,
+            (int(numune_talep_id), _now(), int(gorusme_id)),
+        )
+        return
+    if int(cur) == int(numune_talep_id):
+        return
+    raise MoNumuneError(
+        f'Bu görüşmeye bağlı numune zaten var (id={int(cur)}).',
+        409,
+    )
+
+
 def can_mo_numune_yaz(
     con: sqlite3.Connection,
     kullanici_id: int,
@@ -198,6 +268,35 @@ def taslak_kaydet(
         raise MoNumuneError('Migration 124 uygulanmamış.', 503)
 
     norm = _validate_mo_payload(payload, zorunlu_onay=False)
+
+    # Görüşme bağlıysa: cari görüşmeden gelir; mismatch reddedilir
+    gorusme_row = None
+    if norm.get('mo_gorusme_id'):
+        gorusme_row = _assert_mo_gorusme_bag(
+            con, int(norm['mo_gorusme_id']), int(norm['cari_id']),
+        )
+        # reverse dolu + farklı numune → yeni kayıt açma (idempotent/409)
+        rev = gorusme_row.get('numune_talep_id')
+        if rev not in (None, 0, '') and not talep_id:
+            mevcut_rev = con.execute(
+                """
+                SELECT id, idempotency_key, mo_gorusme_id, cari_id, aktif
+                FROM nexgen_numune_talep WHERE id=? AND aktif=1
+                """,
+                (int(rev),),
+            ).fetchone()
+            if mevcut_rev:
+                if (
+                    (mevcut_rev['idempotency_key'] or '') == (norm['idempotency_key'] or '')
+                    or int(mevcut_rev['mo_gorusme_id'] or 0) == int(norm['mo_gorusme_id'])
+                ):
+                    # aynı görüşme / aynı idem → mevcut kaydı dön (200 davranışı)
+                    return mo_talep_detay(con, int(mevcut_rev['id']), kullanici_id, yk)
+                raise MoNumuneError(
+                    f'Bu görüşmeye bağlı numune zaten var (id={int(rev)}).',
+                    409,
+                )
+
     if not can_mo_numune_yaz(con, kullanici_id, int(norm['cari_id']), yk):
         raise MoNumuneError('Bu cari için numune talebi açma yetkiniz yok.', 403)
 
@@ -206,19 +305,34 @@ def taslak_kaydet(
 
     mevcut_idem = con.execute(
         """
-        SELECT id FROM nexgen_numune_talep
+        SELECT id, mo_gorusme_id, cari_id FROM nexgen_numune_talep
         WHERE idempotency_key=? AND aktif=1 AND kaynak_modul=?
         """,
         (norm['idempotency_key'], KAYNAK_MODUL),
     ).fetchone()
     if mevcut_idem and not talep_id:
-        return mo_talep_detay(con, int(mevcut_idem['id']), kullanici_id, yk)
+        if norm.get('mo_gorusme_id') and int(mevcut_idem['mo_gorusme_id'] or 0) not in (
+            0, int(norm['mo_gorusme_id']),
+        ):
+            raise MoNumuneError(
+                'idempotency_key başka görüşmeye bağlı numune ile çakışıyor.', 409,
+            )
+        if int(mevcut_idem['cari_id'] or 0) != int(norm['cari_id']):
+            raise MoNumuneError(
+                'idempotency_key başka cariye bağlı numune ile çakışıyor.', 409,
+            )
+        tid_idem = int(mevcut_idem['id'])
+        if norm.get('mo_gorusme_id'):
+            _reverse_gorusme_numune_pointer(con, int(norm['mo_gorusme_id']), tid_idem)
+            con.commit()
+        return mo_talep_detay(con, tid_idem, kullanici_id, yk)
 
     now = _now()
     if talep_id:
         row = con.execute(
             """
-            SELECT id, durum, arge_test_id, kaynak_modul, talep_eden_kullanici_id
+            SELECT id, durum, arge_test_id, kaynak_modul, talep_eden_kullanici_id,
+                   mo_gorusme_id
             FROM nexgen_numune_talep WHERE id=? AND aktif=1
             """,
             (talep_id,),
@@ -232,6 +346,14 @@ def taslak_kaydet(
             con, kullanici_id, int(norm['cari_id']), yk
         ):
             raise MoNumuneError('Yalnız kendi taslağınızı düzenleyebilirsiniz.', 403)
+
+        # Güncellemede görüşme bağını zayıflatma: mevcut bağ korunur
+        if row['mo_gorusme_id'] and not norm.get('mo_gorusme_id'):
+            norm['mo_gorusme_id'] = int(row['mo_gorusme_id'])
+        if norm.get('mo_gorusme_id'):
+            _assert_mo_gorusme_bag(
+                con, int(norm['mo_gorusme_id']), int(norm['cari_id']),
+            )
 
         norm['guncelleme_tarihi'] = now
         norm['durum'] = 'TASLAK' if row['durum'] == 'TASLAK' else row['durum']
@@ -267,6 +389,9 @@ def taslak_kaydet(
         _shadow_olay(con, 'MUSTERI_NUMUNE_TASLAK_OLUSTU', numune_olay_sozlesmesi(
             'MUSTERI_NUMUNE_TASLAK_OLUSTU', {'id': tid, 'cari_id': norm['cari_id'], 'talep_kodu': norm['talep_kodu'], 'durum': 'TASLAK'},
         ))
+
+    if norm.get('mo_gorusme_id'):
+        _reverse_gorusme_numune_pointer(con, int(norm['mo_gorusme_id']), tid)
 
     con.commit()
     return mo_talep_detay(con, tid, kullanici_id, yk)

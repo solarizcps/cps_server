@@ -574,6 +574,17 @@ _NUMUNE_AKTIF_DURUM = frozenset({
     'BEKLEYEN_NUMUNE', 'CALISILIYOR', 'REVIZYONDA', 'ONAY_BEKLIYOR',
     'FERHAT_TESTINDE', 'FERHAT_BEKLIYOR', 'DENEMEDE',
 })
+_MULTI_LEGACY_EXCLUDE = 'AT-M-2026-0147'
+
+
+def _kolonlar(con: sqlite3.Connection, table: str) -> set[str]:
+    if not _tablo_var(con, table):
+        return set()
+    return {c[1] for c in con.execute(f'PRAGMA table_info({table})').fetchall()}
+
+
+def _norm_kod(v: Any) -> str:
+    return (str(v) if v is not None else '').strip()
 
 
 def _numune_rf_label(con: sqlite3.Connection, rf_id: Any) -> str | None:
@@ -595,6 +606,403 @@ def _numune_rf_label(con: sqlite3.Connection, rf_id: Any) -> str | None:
     if kod and ad and kod != ad:
         return f'{kod} — {ad}'
     return kod or ad or None
+
+
+def _rf_map_batch(con: sqlite3.Connection, rf_ids: set[int]) -> dict[int, dict[str, Any]]:
+    out: dict[int, dict[str, Any]] = {}
+    ids = [i for i in rf_ids if i and i > 0]
+    if not ids or not _tablo_var(con, 'nexgen_rf_renk'):
+        return out
+    ph = ','.join('?' * len(ids))
+    for r in con.execute(
+        f"""
+        SELECT id, rf_kod, ad, durum, aktif, aktif_rev_no
+        FROM nexgen_rf_renk WHERE id IN ({ph})
+        """,
+        ids,
+    ):
+        rid = int(r['id'])
+        kod = (r['rf_kod'] or '').strip()
+        ad = (r['ad'] or '').strip()
+        label = f'{kod} — {ad}' if kod and ad and kod != ad else (kod or ad or None)
+        out[rid] = {
+            'rf_renk_id': rid,
+            'rf_kod': kod or None,
+            'rf_adi': ad or None,
+            'rf_label': label,
+            'rf_durum': r['durum'] or None,
+            'rf_aktif': int(r['aktif'] or 0),
+            'aktif_rev_no': r['aktif_rev_no'],
+        }
+    return out
+
+
+def _arge_card(
+    r: sqlite3.Row | dict,
+    *,
+    baglanti_kaynagi: str,
+    legacy: bool,
+    rf_info: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    d = dict(r) if not isinstance(r, dict) else r
+    aid = int(d['id'])
+    rf = rf_info or {}
+    return {
+        'id': aid,
+        'test_no': d.get('test_no') or f'#{aid}',
+        'durum': d.get('durum') or None,
+        'aktif': int(d.get('aktif') or 0),
+        'calisma_tipi': d.get('calisma_tipi') or None,
+        'olusturma_tarihi': _fmt_dt(d.get('olusturma_tarihi')),
+        'rf_renk_id': int(d['rf_renk_id']) if d.get('rf_renk_id') not in (None, '') else None,
+        'talep_referansi': d.get('talep_referansi') or None,
+        'renk_kodu': d.get('renk_kodu') or None,
+        'yeni_renk_adi': d.get('yeni_renk_adi') or None,
+        'formul_grup_adi': d.get('formul_grup_adi') or None,
+        'ana_formul_grup_kodu': d.get('ana_formul_grup_kodu') or None,
+        'rf_kod': rf.get('rf_kod'),
+        'rf_adi': rf.get('rf_adi'),
+        'rf_label': rf.get('rf_label'),
+        'rf_durum': rf.get('rf_durum'),
+        'legacy_baglanti': bool(legacy),
+        'baglanti_kaynagi': baglanti_kaynagi,
+        'detay_url': f'/nexgen/tablet/arge/musteri-renk?arge_test_id={aid}',
+    }
+
+
+def _numune_card_for_gorusme(
+    r: sqlite3.Row | dict,
+    *,
+    baglanti_kaynagi: str,
+    legacy: bool,
+) -> dict[str, Any]:
+    d = dict(r) if not isinstance(r, dict) else r
+    tid = int(d['id'])
+    return {
+        'id': tid,
+        'talep_kodu': d.get('talep_kodu') or f'#{tid}',
+        'durum': d.get('durum') or None,
+        'olusturma_tarihi': _fmt_dt(d.get('olusturma_tarihi')),
+        'urun_tipi': d.get('urun_tipi') or None,
+        'urun_adi': d.get('urun_adi') or None,
+        'arge_test_id': int(d['arge_test_id']) if d.get('arge_test_id') not in (None, 0, '') else None,
+        'legacy_baglanti': bool(legacy),
+        'baglanti_kaynagi': baglanti_kaynagi,
+        'detay_url': f'/nexgen/numune-talep?id={tid}',
+    }
+
+
+def enrich_gorusmeler_bagli_numuneler(
+    con: sqlite3.Connection,
+    cari_id: int,
+    liste: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Görüşme listesine bagli_numuneler ekler (toplu sorgu, N+1 yok)."""
+    if not liste:
+        return liste
+    for d in liste:
+        d.setdefault('bagli_numuneler', [])
+    if not _tablo_var(con, 'nexgen_numune_talep'):
+        return liste
+
+    cid = int(cari_id)
+    gids = [int(d['id']) for d in liste if d.get('id') is not None]
+    if not gids:
+        return liste
+
+    by_g: dict[int, list[dict[str, Any]]] = {g: [] for g in gids}
+    seen: dict[int, set[int]] = {g: set() for g in gids}
+    ncols = _kolonlar(con, 'nexgen_numune_talep')
+
+    def _add(gid: int, card: dict[str, Any]) -> None:
+        nid = int(card['id'])
+        if nid in seen.get(gid, set()):
+            return
+        # başka cari leak koruması card içinde cari kontrolü ile geldi
+        seen.setdefault(gid, set()).add(nid)
+        by_g.setdefault(gid, []).append(card)
+
+    ph = ','.join('?' * len(gids))
+    if 'mo_gorusme_id' in ncols:
+        for r in con.execute(
+            f"""
+            SELECT id, talep_kodu, durum, olusturma_tarihi, urun_tipi, urun_adi,
+                   arge_test_id, mo_gorusme_id, cari_id
+            FROM nexgen_numune_talep
+            WHERE COALESCE(aktif,1)=1
+              AND mo_gorusme_id IN ({ph})
+              AND cari_id=?
+            ORDER BY id DESC
+            """,
+            (*gids, cid),
+        ):
+            _add(
+                int(r['mo_gorusme_id']),
+                _numune_card_for_gorusme(r, baglanti_kaynagi='MO_GORUSME_ID', legacy=False),
+            )
+
+    # Legacy reverse: gorusme.numune_talep_id — yalnız mo_gorusme_id boşsa
+    gcols = _kolonlar(con, 'musteri_operasyon_gorusme')
+    if 'numune_talep_id' in gcols:
+        rev_pairs: list[tuple[int, int]] = []
+        for d in liste:
+            gid = int(d['id'])
+            nid = d.get('numune_talep_id') or d.get('kaynak_numune_talep_id')
+            if nid in (None, '', 0):
+                continue
+            if seen.get(gid):
+                # canonical zaten varsa reverse ekleme (aynı id duplicate olmasın)
+                if int(nid) in seen[gid]:
+                    continue
+            # mo bağlı başka numune yoksa VEYA bu reverse henüz listede değilse ekle
+            # kural: yalnız mo_gorusme_id boş olan numune için reverse
+            rev_pairs.append((gid, int(nid)))
+        if rev_pairs:
+            nids = list({n for _, n in rev_pairs})
+            phn = ','.join('?' * len(nids))
+            nmap = {
+                int(r['id']): r
+                for r in con.execute(
+                    f"""
+                    SELECT id, talep_kodu, durum, olusturma_tarihi, urun_tipi, urun_adi,
+                           arge_test_id, mo_gorusme_id, cari_id
+                    FROM nexgen_numune_talep
+                    WHERE id IN ({phn}) AND COALESCE(aktif,1)=1 AND cari_id=?
+                    """,
+                    (*nids, cid),
+                )
+            }
+            for gid, nid in rev_pairs:
+                r = nmap.get(nid)
+                if not r:
+                    continue
+                if r['mo_gorusme_id'] not in (None, 0, ''):
+                    # canonical mo dolu — reverse fallback kullanma
+                    continue
+                _add(
+                    gid,
+                    _numune_card_for_gorusme(
+                        r, baglanti_kaynagi='GORUSME_REVERSE_LEGACY', legacy=True,
+                    ),
+                )
+
+    for d in liste:
+        gid = int(d['id'])
+        d['bagli_numuneler'] = by_g.get(gid, [])
+    return liste
+
+
+def _batch_load_arge_for_numuneler(
+    con: sqlite3.Connection,
+    cari_id: int,
+    numune_rows: list[sqlite3.Row],
+) -> tuple[dict[int, list[dict]], dict[int, dict | None], dict[str, Any]]:
+    """numune_id → AR-GE kartları; aktif pointer; meta (query stats / multi flags)."""
+    cid = int(cari_id)
+    tids = [int(r['id']) for r in numune_rows]
+    by_nt: dict[int, list[dict[str, Any]]] = {t: [] for t in tids}
+    aktif: dict[int, dict | None] = {t: None for t in tids}
+    multi_flags: dict[int, bool] = {t: False for t in tids}
+    stats = {'q_canonical': 0, 'q_pointer': 0, 'q_legacy': 0, 'q_rf': 0}
+
+    if not tids or not _tablo_var(con, 'nexgen_arge_test'):
+        return by_nt, aktif, {'stats': stats, 'multi_flags': multi_flags}
+
+    acols = _kolonlar(con, 'nexgen_arge_test')
+    has_ntp = 'numune_talep_id' in acols
+    seen_aide: dict[int, set[int]] = {t: set() for t in tids}
+    arge_by_id: dict[int, dict] = {}
+
+    def _remember(aid: int, rowdict: dict) -> None:
+        arge_by_id[aid] = rowdict
+
+    sel = (
+        'id, test_no, durum, aktif, calisma_tipi, olusturma_tarihi, '
+        'rf_renk_id, talep_referansi, cari_id, renk_kodu, yeni_renk_adi, '
+        'formul_grup_adi, ana_formul_grup_kodu'
+    )
+    if has_ntp:
+        sel += ', numune_talep_id'
+
+    # 1) canonical numune_talep_id
+    if has_ntp:
+        ph = ','.join('?' * len(tids))
+        rows = list(con.execute(
+            f"""
+            SELECT {sel}
+            FROM nexgen_arge_test
+            WHERE COALESCE(aktif,1)=1 AND numune_talep_id IN ({ph})
+            ORDER BY id DESC
+            """,
+            tids,
+        ))
+        stats['q_canonical'] = 1
+        for r in rows:
+            # cari leak: arge.cari doluysa cari ile uyumlu olmalı; boşsa numune cari zaten filtrelendi
+            if r['cari_id'] not in (None, 0) and int(r['cari_id']) != cid:
+                continue
+            nid = int(r['numune_talep_id'])
+            aid = int(r['id'])
+            _remember(aid, dict(r))
+            seen_aide[nid].add(aid)
+
+    # 2) aktif pointer
+    ptr_ids = [
+        int(r['arge_test_id'])
+        for r in numune_rows
+        if r['arge_test_id'] not in (None, 0, '')
+    ]
+    ptr_ids = list({i for i in ptr_ids if i > 0})
+    if ptr_ids:
+        ph = ','.join('?' * len(ptr_ids))
+        for r in con.execute(
+            f'SELECT {sel} FROM nexgen_arge_test WHERE id IN ({ph})',
+            ptr_ids,
+        ):
+            if int(r['aktif'] or 0) != 1:
+                continue
+            if r['cari_id'] not in (None, 0) and int(r['cari_id']) != cid:
+                continue
+            _remember(int(r['id']), dict(r))
+        stats['q_pointer'] = 1
+
+    # 3) legacy exact text — yalnız canonical+pointer boş olanlar
+    need_legacy: list[sqlite3.Row] = []
+    for r in numune_rows:
+        tid = int(r['id'])
+        if seen_aide[tid]:
+            continue
+        if r['arge_test_id'] not in (None, 0, '') and int(r['arge_test_id']) in arge_by_id:
+            continue
+        kod = _norm_kod(r['talep_kodu'])
+        if not kod or kod == _MULTI_LEGACY_EXCLUDE:
+            if kod == _MULTI_LEGACY_EXCLUDE:
+                multi_flags[tid] = True
+            continue
+        need_legacy.append(r)
+
+    if need_legacy:
+        kodlar = list({_norm_kod(r['talep_kodu']) for r in need_legacy})
+        # multi sayımı
+        ph = ','.join('?' * len(kodlar))
+        cnt_rows = con.execute(
+            f"""
+            SELECT talep_referansi AS kod, COUNT(*) AS n
+            FROM nexgen_arge_test
+            WHERE COALESCE(aktif,1)=1 AND talep_referansi IN ({ph})
+            GROUP BY talep_referansi
+            """,
+            kodlar,
+        ).fetchall()
+        cnt_map = {_norm_kod(x['kod']): int(x['n']) for x in cnt_rows}
+        single_kods = [k for k, n in cnt_map.items() if n == 1]
+        ar_by_kod: dict[str, dict] = {}
+        if single_kods:
+            phs = ','.join('?' * len(single_kods))
+            for ar in con.execute(
+                f"""
+                SELECT {sel} FROM nexgen_arge_test
+                WHERE COALESCE(aktif,1)=1 AND talep_referansi IN ({phs})
+                """,
+                single_kods,
+            ):
+                ar_by_kod[_norm_kod(ar['talep_referansi'])] = dict(ar)
+        for r in need_legacy:
+            tid = int(r['id'])
+            kod = _norm_kod(r['talep_kodu'])
+            n = cnt_map.get(kod, 0)
+            if n > 1:
+                multi_flags[tid] = True
+                continue
+            if n != 1:
+                continue
+            ar = ar_by_kod.get(kod)
+            if not ar:
+                continue
+            if ar['cari_id'] not in (None, 0) and int(ar['cari_id']) != cid:
+                continue
+            if has_ntp and ar.get('numune_talep_id') not in (None, 0) and int(ar['numune_talep_id']) != tid:
+                continue
+            aid = int(ar['id'])
+            rd = dict(ar)
+            rd['_legacy'] = True
+            _remember(aid, rd)
+            seen_aide[tid].add(aid)
+        stats['q_legacy'] = 2 if need_legacy else 0
+
+    # RF batch
+    rf_ids: set[int] = set()
+    for ad in arge_by_id.values():
+        if ad.get('rf_renk_id') not in (None, ''):
+            try:
+                rf_ids.add(int(ad['rf_renk_id']))
+            except (TypeError, ValueError):
+                pass
+    for r in numune_rows:
+        if r['rf_renk_id'] not in (None, ''):
+            try:
+                rf_ids.add(int(r['rf_renk_id']))
+            except (TypeError, ValueError):
+                pass
+    rf_map = _rf_map_batch(con, rf_ids)
+    stats['q_rf'] = 1 if rf_ids else 0
+
+    # assemble
+    for r in numune_rows:
+        tid = int(r['id'])
+        cards: list[dict[str, Any]] = []
+        order_aids: list[int] = []
+        # canonical first
+        if has_ntp:
+            for aid, ad in arge_by_id.items():
+                if ad.get('numune_talep_id') not in (None, 0) and int(ad['numune_talep_id']) == tid:
+                    if aid not in order_aids:
+                        order_aids.append(aid)
+        # pointer
+        if r['arge_test_id'] not in (None, 0, ''):
+            pid = int(r['arge_test_id'])
+            if pid in arge_by_id and pid not in order_aids:
+                order_aids.append(pid)
+        # legacy leftovers in seen
+        for aid in seen_aide[tid]:
+            if aid not in order_aids:
+                order_aids.append(aid)
+
+        for aid in order_aids:
+            ad = arge_by_id[aid]
+            legacy = bool(ad.get('_legacy'))
+            if legacy:
+                src = 'TALEP_REFERANSI_LEGACY'
+            elif has_ntp and ad.get('numune_talep_id') not in (None, 0) and int(ad['numune_talep_id']) == tid:
+                src = 'NUMUNE_TALEP_ID'
+            elif r['arge_test_id'] not in (None, 0, '') and int(r['arge_test_id']) == aid:
+                src = 'AKTIF_ARGE_POINTER'
+            else:
+                src = 'NUMUNE_TALEP_ID'
+            rf_id = ad.get('rf_renk_id')
+            rf_info = rf_map.get(int(rf_id)) if rf_id not in (None, '') else None
+            cards.append(_arge_card(ad, baglanti_kaynagi=src, legacy=legacy, rf_info=rf_info))
+        by_nt[tid] = cards
+
+        # aktif pointer card
+        if r['arge_test_id'] not in (None, 0, ''):
+            pid = int(r['arge_test_id'])
+            for c in cards:
+                if c['id'] == pid:
+                    aktif[tid] = c
+                    break
+            if aktif[tid] is None and pid in arge_by_id:
+                ad = arge_by_id[pid]
+                rf_id = ad.get('rf_renk_id')
+                rf_info = rf_map.get(int(rf_id)) if rf_id not in (None, '') else None
+                aktif[tid] = _arge_card(
+                    ad, baglanti_kaynagi='AKTIF_ARGE_POINTER', legacy=False, rf_info=rf_info,
+                )
+        elif cards:
+            # canonical ilk aktif
+            aktif[tid] = cards[0]
+
+    return by_nt, aktif, {'stats': stats, 'multi_flags': multi_flags, 'rf_map': rf_map}
 
 
 def load_cari360_numuneler(
@@ -652,12 +1060,15 @@ def load_cari360_numuneler(
         if d == 'REDDEDILDI':
             ozet['reddedilen'] += n
 
+    ncols = _kolonlar(con, 'nexgen_numune_talep')
+    mo_sel = ', mo_gorusme_id' if 'mo_gorusme_id' in ncols else ', NULL AS mo_gorusme_id'
     rows = con.execute(
-        """
+        f"""
         SELECT id, talep_kodu, olusturma_tarihi, guncelleme_tarihi,
                urun_tipi, urun_adi, renk_kodu, yeni_renk_aciklama, renk_tipi,
                talep_nedeni, talep_kaynagi, karsilama_yolu, durum, aktif,
                rf_renk_id, arge_test_id, talep_eden_kullanici_id
+               {mo_sel}
         FROM nexgen_numune_talep
         WHERE cari_id=? AND COALESCE(aktif, 1)=1
         ORDER BY COALESCE(guncelleme_tarihi, olusturma_tarihi, '') DESC, id DESC
@@ -665,6 +1076,64 @@ def load_cari360_numuneler(
         """,
         (cid, limit),
     ).fetchall()
+
+    # Toplu AR-GE / RF (N+1 yok)
+    arge_by_nt: dict[int, list[dict]] = {}
+    aktif_by_nt: dict[int, dict | None] = {}
+    multi_flags: dict[int, bool] = {}
+    rf_map: dict[int, dict] = {}
+    qstats: dict[str, Any] = {}
+    if has_arge and rows:
+        arge_by_nt, aktif_by_nt, meta = _batch_load_arge_for_numuneler(con, cid, list(rows))
+        multi_flags = meta.get('multi_flags') or {}
+        rf_map = meta.get('rf_map') or {}
+        qstats = meta.get('stats') or {}
+
+    # Toplu kullanıcı
+    user_map: dict[int, str] = {}
+    if has_user and rows:
+        uids = list({
+            int(r['talep_eden_kullanici_id'])
+            for r in rows
+            if r['talep_eden_kullanici_id'] not in (None, 0, '')
+        })
+        if uids:
+            ph = ','.join('?' * len(uids))
+            for ur in con.execute(
+                f'SELECT Id, AdSoyad, KullaniciAdi FROM sistem_kullanici WHERE Id IN ({ph})',
+                uids,
+            ):
+                user_map[int(ur['Id'])] = (
+                    (ur['AdSoyad'] or ur['KullaniciAdi'] or '').strip() or None
+                ) or ''
+
+    # Toplu bağlı siparişler
+    siparis_by_nt: dict[int, list[dict[str, Any]]] = {int(r['id']): [] for r in rows}
+    has_kalem_nt = (
+        _tablo_var(con, 'nexgen_planlama_siparis_kalem')
+        and 'numune_talep_id' in _kolonlar(con, 'nexgen_planlama_siparis_kalem')
+        and _tablo_var(con, 'nexgen_planlama_siparis')
+    )
+    if has_kalem_nt and rows:
+        tids = [int(r['id']) for r in rows]
+        ph = ','.join('?' * len(tids))
+        for sr in con.execute(
+            f"""
+            SELECT DISTINCT k.numune_talep_id AS nid, s.id, s.siparis_no
+            FROM nexgen_planlama_siparis_kalem k
+            JOIN nexgen_planlama_siparis s ON s.id = k.planlama_siparis_id
+            WHERE k.numune_talep_id IN ({ph}) AND s.cari_id=?
+            ORDER BY s.id DESC
+            """,
+            (*tids, cid),
+        ):
+            nid = int(sr['nid'])
+            sid = int(sr['id'])
+            siparis_by_nt.setdefault(nid, []).append({
+                'id': sid,
+                'siparis_no': sr['siparis_no'] or f'#{sid}',
+                'detay_url': f'/nexgen/pazarlama?siparis={sid}',
+            })
 
     liste: list[dict[str, Any]] = []
     for r in rows:
@@ -682,57 +1151,22 @@ def load_cari360_numuneler(
             elif rt == 'MEVCUT':
                 talep_turu = 'Hazır Renk'
 
+        aktif_arge = aktif_by_nt.get(tid) if has_arge else None
+        bagli_arge = arge_by_nt.get(tid, []) if has_arge else []
+
         rf_id = r['rf_renk_id']
         rf_kaynak = 'numune' if rf_id else None
-        if rf_id is None and has_arge and r['arge_test_id']:
-            ar = con.execute(
-                'SELECT rf_renk_id FROM nexgen_arge_test WHERE id=?',
-                (int(r['arge_test_id']),),
-            ).fetchone()
-            if ar and ar['rf_renk_id'] is not None:
-                rf_id = ar['rf_renk_id']
-                rf_kaynak = 'arge'
-        rf_label = _numune_rf_label(con, rf_id)
+        if rf_id is None and aktif_arge and aktif_arge.get('rf_renk_id') is not None:
+            rf_id = aktif_arge['rf_renk_id']
+            rf_kaynak = 'arge'
+        rf_info = rf_map.get(int(rf_id)) if rf_id not in (None, '') else None
+        rf_label = (rf_info or {}).get('rf_label') or _numune_rf_label(con, rf_id)
 
         talep_eden = None
-        if has_user and r['talep_eden_kullanici_id']:
-            ur = con.execute(
-                'SELECT AdSoyad, KullaniciAdi FROM sistem_kullanici WHERE Id=?',
-                (int(r['talep_eden_kullanici_id']),),
-            ).fetchone()
-            if ur:
-                talep_eden = (ur['AdSoyad'] or ur['KullaniciAdi'] or '').strip() or None
+        if r['talep_eden_kullanici_id'] and int(r['talep_eden_kullanici_id']) in user_map:
+            talep_eden = user_map[int(r['talep_eden_kullanici_id'])] or None
 
-        # Bağlı siparişler — yalnız gerçek kalem.numune_talep_id FK
-        bagli_siparisler: list[dict[str, Any]] = []
-        has_kalem_nt = (
-            _tablo_var(con, 'nexgen_planlama_siparis_kalem')
-            and 'numune_talep_id' in {
-                c[1] for c in con.execute(
-                    'PRAGMA table_info(nexgen_planlama_siparis_kalem)'
-                ).fetchall()
-            }
-            and _tablo_var(con, 'nexgen_planlama_siparis')
-        )
-        if has_kalem_nt:
-            srows = con.execute(
-                """
-                SELECT DISTINCT s.id, s.siparis_no
-                FROM nexgen_planlama_siparis_kalem k
-                JOIN nexgen_planlama_siparis s ON s.id = k.planlama_siparis_id
-                WHERE k.numune_talep_id=?
-                  AND s.cari_id=?
-                ORDER BY s.id DESC
-                """,
-                (tid, cid),
-            ).fetchall()
-            for sr in srows:
-                sid = int(sr['id'])
-                bagli_siparisler.append({
-                    'id': sid,
-                    'siparis_no': sr['siparis_no'] or f'#{sid}',
-                    'detay_url': f'/nexgen/pazarlama?siparis={sid}',
-                })
+        bagli_siparisler = siparis_by_nt.get(tid, [])
 
         liste.append({
             'id': tid,
@@ -746,14 +1180,26 @@ def load_cari360_numuneler(
             'rf': rf_label,
             'rf_renk_id': int(rf_id) if rf_id is not None else None,
             'rf_kaynak': rf_kaynak,
+            'rf_kod': (rf_info or {}).get('rf_kod'),
+            'formul_grup_adi': (aktif_arge or {}).get('formul_grup_adi'),
+            'ana_formul_grup_kodu': (aktif_arge or {}).get('ana_formul_grup_kodu'),
             'durum': r['durum'] or None,
             'son_guncelleme': _fmt_dt(r['guncelleme_tarihi'] or r['olusturma_tarihi']),
+            'mo_gorusme_id': int(r['mo_gorusme_id']) if r['mo_gorusme_id'] not in (None, 0, '') else None,
+            'arge_test_id': int(r['arge_test_id']) if r['arge_test_id'] not in (None, 0, '') else None,
+            'bagli_arge_testleri': bagli_arge,
+            'aktif_arge_testi': aktif_arge,
+            'legacy_multi_manuel': bool(multi_flags.get(tid)),
             'bagli_siparis_sayisi': len(bagli_siparisler),
             'bagli_siparisler': bagli_siparisler,
             'detay_url': f'/nexgen/numune-talep?id={tid}',
         })
 
-    return {'liste': liste, 'count': ozet['toplam'], 'ozet': ozet}
+    # opsiyonel debug — response kökünde; istemciye zorunlu değil
+    out = {'liste': liste, 'count': ozet['toplam'], 'ozet': ozet}
+    if qstats:
+        out['query_stats'] = qstats
+    return out
 
 
 def load_cari360_uretim(

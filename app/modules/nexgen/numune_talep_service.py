@@ -601,6 +601,84 @@ def _resolve_nx_ar_kaynak(con, row, gonder_payload: dict | None) -> tuple[str, l
     )
 
 
+def _arge_cols(con) -> set[str]:
+    return {c[1] for c in con.execute('PRAGMA table_info(nexgen_arge_test)').fetchall()}
+
+
+def sync_numune_arge_baglantisi(con, talep_id: int, arge_id: int) -> int:
+    """
+    FAZ-1B — numune.arge_test_id ↔ arge.numune_talep_id tutarlılığı.
+    cari kaynağı: numune. Sessiz cari değiştirme yok.
+    Migration 141 yoksa 503.
+    """
+    if 'numune_talep_id' not in _arge_cols(con):
+        raise NumuneTalepError(
+            'Migration 141 uygulanmamış (arge.numune_talep_id).',
+            503, 'MIG141',
+        )
+    nt = con.execute(
+        """
+        SELECT id, cari_id, arge_test_id, aktif
+        FROM nexgen_numune_talep WHERE id=?
+        """,
+        (int(talep_id),),
+    ).fetchone()
+    if not nt or not int(nt['aktif'] or 0):
+        raise NumuneTalepError('Talep bulunamadı.', 404)
+    ar = con.execute(
+        """
+        SELECT id, cari_id, numune_talep_id, aktif
+        FROM nexgen_arge_test WHERE id=?
+        """,
+        (int(arge_id),),
+    ).fetchone()
+    if not ar or not int(ar['aktif'] or 0):
+        raise NumuneTalepError('AR-GE kaydı bulunamadı.', 404)
+
+    if ar['numune_talep_id'] not in (None, 0) and int(ar['numune_talep_id']) != int(talep_id):
+        raise NumuneTalepError(
+            'Bu AR-GE kaydı başka numune talebine bağlı.', 409, 'ARGE_CONFLICT',
+        )
+    if nt['arge_test_id'] not in (None, 0) and int(nt['arge_test_id']) != int(arge_id):
+        raise NumuneTalepError(
+            'Bu numune başka AR-GE kaydına bağlı.', 409, 'ARGE_CONFLICT',
+        )
+
+    nc = nt['cari_id']
+    ac = ar['cari_id']
+    if nc not in (None, 0):
+        if ac not in (None, 0) and int(ac) != int(nc):
+            raise NumuneTalepError(
+                'AR-GE cari_id numune ile uyuşmuyor.', 409, 'CARI_MISMATCH',
+            )
+        if ac in (None, 0):
+            con.execute(
+                'UPDATE nexgen_arge_test SET cari_id=? WHERE id=?',
+                (int(nc), int(arge_id)),
+            )
+
+    now = _now()
+    if ar['numune_talep_id'] in (None, 0):
+        con.execute(
+            """
+            UPDATE nexgen_arge_test
+            SET numune_talep_id=?, guncelleme_tarihi=?
+            WHERE id=? AND (numune_talep_id IS NULL OR numune_talep_id=0)
+            """,
+            (int(talep_id), now, int(arge_id)),
+        )
+    if nt['arge_test_id'] in (None, 0):
+        con.execute(
+            """
+            UPDATE nexgen_numune_talep
+            SET arge_test_id=?, guncelleme_tarihi=?
+            WHERE id=? AND (arge_test_id IS NULL OR arge_test_id=0)
+            """,
+            (int(arge_id), now, int(talep_id)),
+        )
+    return int(arge_id)
+
+
 def _ensure_nx_ar_for_talep(
     con, talep_id: int, olusturan_id: int, gonder_payload: dict | None = None,
 ) -> int:
@@ -625,10 +703,28 @@ def _ensure_nx_ar_for_talep(
     if not row:
         raise NumuneTalepError('Talep bulunamadı.', 404)
     if row['arge_test_id']:
-        return int(row['arge_test_id'])
+        arge_id = int(row['arge_test_id'])
+        sync_numune_arge_baglantisi(con, talep_id, arge_id)
+        con.commit()
+        return arge_id
+
+    # Canonical: numune_talep_id ile mevcut AR-GE
+    if 'numune_talep_id' in _arge_cols(con):
+        by_ntp = con.execute(
+            """
+            SELECT id FROM nexgen_arge_test
+            WHERE aktif=1 AND numune_talep_id=?
+            ORDER BY id DESC LIMIT 1
+            """,
+            (int(talep_id),),
+        ).fetchone()
+        if by_ntp:
+            arge_id = sync_numune_arge_baglantisi(con, talep_id, int(by_ntp['id']))
+            con.commit()
+            return arge_id
 
     talep_kodu = row['talep_kodu']
-    # Idempotent: aynı AT-M ile mevcut köprü varsa yalnız bağla
+    # Idempotent legacy fallback: aynı AT-M ile mevcut köprü varsa yalnız bağla
     existing = con.execute(
         """
         SELECT id FROM nexgen_arge_test
@@ -649,13 +745,7 @@ def _ensure_nx_ar_for_talep(
             raise NumuneTalepError(
                 'Bu AT-M AR-GE kaydı başka talebe bağlı.', 409, 'ARGE_CONFLICT',
             )
-        con.execute(
-            """
-            UPDATE nexgen_numune_talep SET arge_test_id=?, guncelleme_tarihi=?
-            WHERE id=? AND (arge_test_id IS NULL OR arge_test_id=0)
-            """,
-            (arge_id, _now(), talep_id),
-        )
+        sync_numune_arge_baglantisi(con, talep_id, arge_id)
         try:
             gelisme_ekle(
                 con, talep_id,
@@ -762,15 +852,7 @@ def _ensure_nx_ar_for_talep(
                 (talep_kodu, _now(), arge_id),
             )
 
-    con.execute(
-        """
-        UPDATE nexgen_numune_talep SET
-            arge_test_id=?,
-            guncelleme_tarihi=?
-        WHERE id=?
-        """,
-        (arge_id, _now(), talep_id),
-    )
+    sync_numune_arge_baglantisi(con, talep_id, arge_id)
     try:
         gelisme_ekle(
             con, talep_id,
@@ -975,7 +1057,9 @@ def _ensure_isleme_al_musteri_renk_bridge(con, talep_id: int, kullanici_id: int)
             (int(row['arge_test_id']),),
         ).fetchone()
         if arge and int(arge['aktif'] or 0):
-            return int(arge['id'])
+            arge_id = sync_numune_arge_baglantisi(con, talep_id, int(arge['id']))
+            con.commit()
+            return arge_id
         # Kırık bağ — sessizce yeniden kur
         con.execute(
             """
@@ -986,6 +1070,20 @@ def _ensure_isleme_al_musteri_renk_bridge(con, talep_id: int, kullanici_id: int)
             (_now(), talep_id),
         )
         con.commit()
+
+    if 'numune_talep_id' in _arge_cols(con):
+        by_ntp = con.execute(
+            """
+            SELECT id FROM nexgen_arge_test
+            WHERE aktif=1 AND numune_talep_id=?
+            ORDER BY id DESC LIMIT 1
+            """,
+            (int(talep_id),),
+        ).fetchone()
+        if by_ntp:
+            arge_id = sync_numune_arge_baglantisi(con, talep_id, int(by_ntp['id']))
+            con.commit()
+            return arge_id
 
     talep_kodu = (row['talep_kodu'] or '').strip()
     if not talep_kodu:
@@ -1011,13 +1109,7 @@ def _ensure_isleme_al_musteri_renk_bridge(con, talep_id: int, kullanici_id: int)
             raise NumuneTalepError(
                 'Bu AT-M AR-GE kaydı başka talebe bağlı.', 409, 'ARGE_CONFLICT',
             )
-        con.execute(
-            """
-            UPDATE nexgen_numune_talep SET arge_test_id=?, guncelleme_tarihi=?
-            WHERE id=? AND (arge_test_id IS NULL OR arge_test_id=0)
-            """,
-            (arge_id, _now(), talep_id),
-        )
+        sync_numune_arge_baglantisi(con, talep_id, arge_id)
         try:
             gelisme_ekle(
                 con, talep_id,
@@ -1069,14 +1161,7 @@ def _ensure_isleme_al_musteri_renk_bridge(con, talep_id: int, kullanici_id: int)
             getattr(e, 'kod', None) or 'NXAR',
         ) from e
 
-    arge_id = int(nx['arge_test_id'])
-    con.execute(
-        """
-        UPDATE nexgen_numune_talep SET arge_test_id=?, guncelleme_tarihi=?
-        WHERE id=?
-        """,
-        (arge_id, _now(), talep_id),
-    )
+    arge_id = sync_numune_arge_baglantisi(con, talep_id, int(nx['arge_test_id']))
     try:
         gelisme_ekle(
             con, talep_id,
