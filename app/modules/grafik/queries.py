@@ -359,13 +359,12 @@ def numune_liste(arama=None, durum=None, tedarikci_id=None, musteri_ckod=None):
     where = " AND ".join(ks)
     return q(f"""
         SELECT n.*,
-               COALESCE(c.CName, nc.unvan) AS MusteriAd,
+               c.CName AS MusteriAd,
                t.Ad    AS TedarikciAd, t.Kod AS TedarikciKod, t.Ulke AS TedarikciUlke,
                u.Kod   AS UrunKod,     u.Ad  AS UrunAd,
                (SELECT COUNT(*) FROM grafik_numune_iterasyon i WHERE i.NumuneId = n.Id) AS IterasyonSayi
         FROM grafik_numune n
-        LEFT JOIN Cari_Kart       c  ON c.CKod = n.MusteriCKod
-        LEFT JOIN nexgen_cari     nc ON nc.cari_kod = n.MusteriCKod AND IFNULL(nc.aktif,1)=1
+        LEFT JOIN Cari_Kart       c ON c.CKod = n.MusteriCKod
         LEFT JOIN grafik_tedarikci t ON t.Id   = n.TedarikciId
         LEFT JOIN grafik_urun      u ON u.Id   = n.UrunId
         WHERE {where}
@@ -376,12 +375,11 @@ def numune_liste(arama=None, durum=None, tedarikci_id=None, musteri_ckod=None):
 def numune_tek(numune_id):
     return qone("""
         SELECT n.*,
-               COALESCE(c.CName, nc.unvan) AS MusteriAd,
+               c.CName AS MusteriAd,
                t.Ad    AS TedarikciAd, t.Kod AS TedarikciKod, t.Ulke AS TedarikciUlke,
                u.Kod   AS UrunKod,     u.Ad  AS UrunAd
         FROM grafik_numune n
-        LEFT JOIN Cari_Kart       c  ON c.CKod = n.MusteriCKod
-        LEFT JOIN nexgen_cari     nc ON nc.cari_kod = n.MusteriCKod AND IFNULL(nc.aktif,1)=1
+        LEFT JOIN Cari_Kart       c ON c.CKod = n.MusteriCKod
         LEFT JOIN grafik_tedarikci t ON t.Id   = n.TedarikciId
         LEFT JOIN grafik_urun      u ON u.Id   = n.UrunId
         WHERE n.Id = ?
@@ -511,41 +509,8 @@ def iterasyon_sil(iter_id, kullanici):
 
 
 def musteri_liste_secimlik():
-    """Legacy müşteri listesi — Cari_Kart CTip=1 (sipariş/teklif ekranları).
-
-    Numune Takip (/grafik/numune) bu fonksiyonu kullanmaz;
-    bkz. numune_musteri_liste_secimlik().
-    """
+    """Numune formu için müşteri (Cari_Kart CTip=1) listesi."""
     return q("SELECT CKod, CName FROM Cari_Kart WHERE CTip=1 ORDER BY CName")
-
-
-def numune_musteri_liste_secimlik():
-    """Numune Takip müşteri select — Yönetim SoT: nexgen_cari aktif.
-
-    Ortak helper: modules.nexgen.routes._nexgen_cari_kart_liste(sadece_aktif=True).
-    Template uyumu: CKod=cari_kod, CName=unvan (form alanı MusteriCKod bozulmaz).
-    Cari_Kart kopyası / backfill yok. Request-time okuma (cache yok).
-    """
-    from modules.nexgen.routes import _nexgen_cari_kart_liste
-
-    con = get_conn()
-    try:
-        rows = _nexgen_cari_kart_liste(con, sadece_aktif=True)
-    finally:
-        con.close()
-    # Unvana göre sıralı gösterim; value = cari_kod (legacy MusteriCKod kolonu)
-    out = [
-        {
-            'CKod': (r.get('cari_kod') or '').strip(),
-            'CName': (r.get('unvan') or '').strip(),
-            'Id': r.get('id'),
-            'aktif': r.get('aktif', 1),
-        }
-        for r in rows
-        if (r.get('cari_kod') or '').strip()
-    ]
-    out.sort(key=lambda x: ((x['CName'] or '').casefold(), x['CKod'] or ''))
-    return out
 
 
 # ============================================================
