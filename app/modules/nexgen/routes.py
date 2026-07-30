@@ -5124,7 +5124,10 @@ def arge_test_detay(test_id):
             if row:
                 olusan_uv = dict(row)
 
-        rf_renk = _arge_rf_mevcut_bul(con, test_id, test_row)
+        try:
+            rf_renk = _arge_rf_mevcut_bul(con, test_id, test_row, sync=False)
+        except Exception:
+            rf_renk = None
 
     finally:
         con.close()
@@ -5484,43 +5487,55 @@ def api_arge_onay_islem():
     return jsonify({"ok": True, "test_id": test_id, "yeni_durum": yeni_durum})
 
 
-def _arge_rf_mevcut_bul(con, test_id, test_row=None):
-    """Test için mevcut RF kaydını döner; test.rf_renk_id ile senkron eksikse tamamlar."""
+def _arge_rf_mevcut_bul(con, test_id, test_row=None, *, sync=False):
+    """Mevcut RF (idempotent). FAZ-2B: multi kaynak 409.
+
+    sync=True → write yollarında arge/numune/kaynak pointer tamamla.
+    sync=False → yalnız oku (GET detay); yazma yok.
+    RfArgeSyncError fırlatabilir — write caller rollback etmeli.
+    """
+    from modules.nexgen.rf_arge_sync_service import (
+        resolve_existing_rf_for_arge,
+        sync_arge_rf_pointers,
+    )
+
     if test_row is None:
         test_row = con.execute(
-            "SELECT id, rf_renk_id FROM nexgen_arge_test WHERE id=? AND aktif=1",
+            "SELECT id, rf_renk_id, cari_id FROM nexgen_arge_test WHERE id=? AND aktif=1",
             (test_id,)
         ).fetchone()
     if not test_row:
         return None
-    rf_id = test_row['rf_renk_id']
-    if rf_id:
-        rf = con.execute(
-            "SELECT id, rf_kod, ad, durum, cari_id, ilk_talep_cari_id "
-            "FROM nexgen_rf_renk WHERE id=? AND aktif=1",
-            (rf_id,)
-        ).fetchone()
-        if rf:
-            return dict(rf)
-    rf = con.execute(
-        "SELECT id, rf_kod, ad, durum, cari_id, ilk_talep_cari_id "
-        "FROM nexgen_rf_renk WHERE kaynak_arge_test_id=? AND aktif=1",
-        (test_id,)
-    ).fetchone()
-    if rf and not test_row['rf_renk_id']:
-        con.execute(
-            "UPDATE nexgen_arge_test SET rf_renk_id=? WHERE id=?",
-            (rf['id'], test_id)
+
+    rf = resolve_existing_rf_for_arge(
+        con, int(test_id), test_row['rf_renk_id'] if 'rf_renk_id' in test_row.keys() else None,
+    )
+    if not rf:
+        return None
+    if sync:
+        sync_arge_rf_pointers(
+            con, int(test_id), int(rf['id']),
+            arge_cari_id=test_row['cari_id'] if 'cari_id' in test_row.keys() else None,
         )
-    return dict(rf) if rf else None
+    return rf
 
 
 def _arge_rf_olustur_core(con, test_id, cari_id_override=None, siparis_id_override=None):
-    """ONAYLANDI testten RF oluşturur veya mevcut RF döner. commit yapmaz."""
+    """ONAYLANDI testten RF oluşturur veya mevcut RF döner. commit yapmaz.
+
+    FAZ-2B: pointer sync + formul uygunluk ID guard + multi RF conflict.
+    """
+    from modules.nexgen.rf_arge_sync_service import (
+        RfArgeSyncError,
+        ensure_rf_formul_uygunluk,
+        sync_arge_rf_pointers,
+    )
+
     test = con.execute("""
         SELECT t.*,
                rv.ad AS kaynak_renk_ad,
-               f.id AS formul_id, f.kod AS formul_kod, f.ad AS formul_ad
+               f.id AS formul_id, f.kod AS formul_kod, f.ad AS formul_ad,
+               f.aktif AS formul_aktif
         FROM nexgen_arge_test t
         JOIN nexgen_uretim_varyant uv ON uv.id = t.kaynak_uretim_varyant_id
         JOIN nexgen_renk_varyant rv   ON rv.id = uv.renk_varyant_id
@@ -5529,20 +5544,52 @@ def _arge_rf_olustur_core(con, test_id, cari_id_override=None, siparis_id_overri
     """, (test_id,)).fetchone()
     if not test:
         return {'ok': False, 'hata': 'Test kaydi bulunamadi.', 'status': 404}
-    if test['durum'] != 'ONAYLANDI':
+    durum_u = (test['durum'] or '').strip().upper()
+    if durum_u in ('REDDEDILDI', 'RED', 'IPTAL', 'İPTAL'):
+        return {
+            'ok': False,
+            'hata': f'{test["durum"]} durumundaki AR-GE için RF oluşturulamaz.',
+            'status': 400,
+            'kod': 'ARGE_DURUM',
+        }
+    if durum_u != 'ONAYLANDI':
         return {
             'ok': False,
             'hata': f"Sadece ONAYLANDI testlerden RF olusturulabilir. Mevcut: {test['durum']}",
             'status': 400,
+            'kod': 'ARGE_DURUM',
         }
 
-    mevcut = _arge_rf_mevcut_bul(con, test_id, test)
+    try:
+        mevcut = _arge_rf_mevcut_bul(con, test_id, test, sync=True)
+    except RfArgeSyncError as e:
+        return {
+            'ok': False, 'hata': e.message, 'status': e.status,
+            'kod': e.kod, **(e.extra or {}),
+        }
     if mevcut:
+        try:
+            uyg = ensure_rf_formul_uygunluk(
+                con, int(mevcut['id']), int(test['formul_id']),
+                arge_id=int(test_id),
+                ilk_talep_cari_id=test['cari_id'],
+                shore_hedef=test['shore_hedef'],
+                shore_sonuc=test['shore_degeri'],
+                renk_sonucu=test['renk_tuttu'],
+                numune_sonucu=test['cekme_problemi'],
+                onay_tarihi=test['onay_tarihi'],
+            )
+        except RfArgeSyncError as e:
+            return {
+                'ok': False, 'hata': e.message, 'status': e.status,
+                'kod': e.kod, **(e.extra or {}),
+            }
         return {
             'ok': True, 'mevcut': True, 'test_id': test_id,
             'rf_renk_id': mevcut['id'], 'rf_kod': mevcut['rf_kod'],
             'rf_ad': mevcut['ad'], 'formul_id': test['formul_id'],
             'formul_ad': test['formul_ad'],
+            'formul_uygunluk_mevcut': uyg.get('mevcut'),
             'cari_id': mevcut.get('cari_id'), 'siparis_id': None,
             'boya_kalem_sayisi': con.execute(
                 "SELECT COUNT(*) FROM nexgen_rf_kalem WHERE rf_renk_id=? AND aktif=1",
@@ -5606,6 +5653,14 @@ def _arge_rf_olustur_core(con, test_id, cari_id_override=None, siparis_id_overri
     if not rf_ad:
         return {'ok': False, 'hata': 'RF renk adi belirlenemedi.', 'status': 400}
 
+    if not int(test['formul_aktif'] or 0):
+        return {
+            'ok': False,
+            'hata': f"Kaynak formül pasif (id={test['formul_id']}).",
+            'status': 400,
+            'kod': 'FORMUL_PASIF',
+        }
+
     rf_kod = _rf_kod_uret(con)
     carpan = kaynak_batch_kg / test_batch_kg
     aciklama = (test['genel_aciklama'] or test['sonuc_notu'] or '').strip() or None
@@ -5631,20 +5686,25 @@ def _arge_rf_olustur_core(con, test_id, cari_id_override=None, siparis_id_overri
             VALUES (?, ?, ?, ?, ?, 1)
         """, (rf_renk_id, k['stok_kart_id'], miktar_kg, k['sira'], k['aciklama']))
 
-    con.execute("""
-        INSERT INTO nexgen_rf_formul_uygunluk
-            (rf_renk_id, formul_id, kaynak_arge_test_id, durum,
-             ilk_talep_cari_id, shore_hedef, shore_sonuc,
-             renk_sonucu, numune_sonucu, onay_tarihi, aktif)
-        VALUES (?, ?, ?, 'ONAYLI', ?, ?, ?, ?, ?, ?, 1)
-    """, (rf_renk_id, test['formul_id'], test_id, ilk_cari,
-          test['shore_hedef'], test['shore_degeri'],
-          test['renk_tuttu'], test['cekme_problemi'], test['onay_tarihi']))
-
-    con.execute(
-        "UPDATE nexgen_arge_test SET rf_renk_id=? WHERE id=?",
-        (rf_renk_id, test_id)
-    )
+    try:
+        uyg = ensure_rf_formul_uygunluk(
+            con, int(rf_renk_id), int(test['formul_id']),
+            arge_id=int(test_id),
+            ilk_talep_cari_id=ilk_cari,
+            shore_hedef=test['shore_hedef'],
+            shore_sonuc=test['shore_degeri'],
+            renk_sonucu=test['renk_tuttu'],
+            numune_sonucu=test['cekme_problemi'],
+            onay_tarihi=test['onay_tarihi'],
+        )
+        sync_arge_rf_pointers(
+            con, int(test_id), int(rf_renk_id), arge_cari_id=cari_id,
+        )
+    except RfArgeSyncError as e:
+        return {
+            'ok': False, 'hata': e.message, 'status': e.status,
+            'kod': e.kod, **(e.extra or {}),
+        }
 
     # ── FAZ-BOYA-RECETESI-02B: REV-1 otomatik olustur ─────────────────
     _rf_revizyon_ilk_olustur(con, rf_renk_id, boya_kalemler, carpan,
@@ -5656,6 +5716,7 @@ def _arge_rf_olustur_core(con, test_id, cari_id_override=None, siparis_id_overri
         'ok': True, 'mevcut': False, 'test_id': test_id,
         'rf_renk_id': rf_renk_id, 'rf_kod': rf_kod, 'rf_ad': rf_ad,
         'formul_id': test['formul_id'], 'formul_ad': test['formul_ad'],
+        'formul_uygunluk_mevcut': uyg.get('mevcut'),
         'cari_id': cari_id, 'siparis_id': siparis_id,
         'boya_kalem_sayisi': len(boya_kalemler),
     }
@@ -5687,7 +5748,13 @@ def api_arge_rf_olustur():
         )
         if not sonuc.get('ok'):
             con.rollback()
-            return jsonify({"ok": False, "hata": sonuc.get('hata')}), sonuc.get('status', 400)
+            body = {"ok": False, "hata": sonuc.get('hata')}
+            if sonuc.get('kod'):
+                body['kod'] = sonuc['kod']
+            for k in ('mevcut_rf', 'yeni_rf', 'rf_ids', 'numune_talep_id', 'arge_id'):
+                if k in sonuc:
+                    body[k] = sonuc[k]
+            return jsonify(body), sonuc.get('status', 400)
         con.commit()
     except Exception as e:
         con.rollback()
@@ -5857,8 +5924,15 @@ def _renk_merkezi_arge_onayla_core(con, arge_test_id, onaylayan_id):
             "status": 400,
         }
 
-    # 3. Idempotency: zaten RF bağlı mı?
-    mevcut = _arge_rf_mevcut_bul(con, arge_test_id, test)
+    # 3. Idempotency: zaten RF bağlı mı? (FAZ-2B pointer sync)
+    from modules.nexgen.rf_arge_sync_service import RfArgeSyncError
+    try:
+        mevcut = _arge_rf_mevcut_bul(con, arge_test_id, test, sync=True)
+    except RfArgeSyncError as e:
+        return {
+            "ok": False, "hata": e.message, "status": e.status,
+            "kod": e.kod, **(e.extra or {}),
+        }
     if mevcut:
         # AR-GE durumunu yine de güncelle (önceki onayda atlanmış olabilir)
         if test["durum"] != "ONAYLANDI":
@@ -5940,22 +6014,31 @@ def _renk_merkezi_arge_onayla_core(con, arge_test_id, onaylayan_id):
             VALUES (?, ?, ?, ?, ?, 1)
         """, (rf_renk_id, k["stok_kart_id"], miktar_kg, k["sira"], k["aciklama"]))
 
-    # ── Formül uygunluk bağlantısı (duplicate korumalı) ─────────────
-    mevcut_uyg = con.execute(
-        "SELECT id FROM nexgen_rf_formul_uygunluk "
-        "WHERE rf_renk_id=? AND formul_id=? AND aktif=1",
-        (rf_renk_id, test["formul_id"])
-    ).fetchone()
-    if not mevcut_uyg:
-        con.execute("""
-            INSERT INTO nexgen_rf_formul_uygunluk
-                (rf_renk_id, formul_id, kaynak_arge_test_id, durum,
-                 ilk_talep_cari_id, shore_hedef, shore_sonuc,
-                 renk_sonucu, numune_sonucu, onay_tarihi, aktif)
-            VALUES (?, ?, ?, 'ONAYLI', ?, ?, ?, ?, ?, datetime('now','localtime'), 1)
-        """, (rf_renk_id, test["formul_id"], arge_test_id, ilk_cari,
-              test["shore_hedef"], test["shore_degeri"],
-              test["renk_tuttu"], test["cekme_problemi"]))
+    # ── Formül uygunluk + pointer sync (FAZ-2B) ─────────────────────
+    from modules.nexgen.rf_arge_sync_service import (
+        RfArgeSyncError,
+        ensure_rf_formul_uygunluk,
+        sync_arge_rf_pointers,
+    )
+    try:
+        ensure_rf_formul_uygunluk(
+            con, int(rf_renk_id), int(test["formul_id"]),
+            arge_id=int(arge_test_id),
+            ilk_talep_cari_id=ilk_cari,
+            shore_hedef=test["shore_hedef"],
+            shore_sonuc=test["shore_degeri"],
+            renk_sonucu=test["renk_tuttu"],
+            numune_sonucu=test["cekme_problemi"],
+            onay_tarihi=None,
+        )
+        sync_arge_rf_pointers(
+            con, int(arge_test_id), int(rf_renk_id), arge_cari_id=ilk_cari,
+        )
+    except RfArgeSyncError as e:
+        return {
+            "ok": False, "hata": e.message, "status": e.status,
+            "kod": e.kod, **(e.extra or {}),
+        }
 
     _rf_onay_sonrasi_kardes_uygunluk(
         con, rf_renk_id, test["formul_id"], arge_test_id, ilk_cari, test,
@@ -5970,6 +6053,7 @@ def _renk_merkezi_arge_onayla_core(con, arge_test_id, onaylayan_id):
     )
 
     # ── AR-GE kaydını güncelle ───────────────────────────────────────
+    # rf_renk_id sync_arge_rf_pointers ile yazıldı; durum/onay alanları burada
     con.execute("""
         UPDATE nexgen_arge_test
         SET durum         = 'ONAYLANDI',

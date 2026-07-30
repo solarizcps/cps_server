@@ -19,8 +19,16 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
-from modules.nexgen.cari360_omurga_link import backfill_kalem_uretim_planlari
 from modules.nexgen.cari_sorumlu_service import can_view_cari, can_view_cari_ticari
+from modules.nexgen.cari360_relation_policy import (
+    classify_gorusme_root,
+    classify_mo_gorusme_parent,
+    classify_siparis_parent,
+    load_gorusme_cari_map,
+    load_siparis_cari_map,
+    resolve_tek_sorumlu,
+    siparis_operasyon_uyarilari,
+)
 
 # Sonuçlanmış sipariş durumları — mock dağılım + sistemde görülen kapanış kodları.
 # ONAYLANDI / URETIMDE vb. hâlâ süreçte → aktif sayılır.
@@ -227,15 +235,8 @@ def load_cari360_siparisler(
     if not _tablo_var(con, 'nexgen_planlama_siparis'):
         return {'liste': [], 'count': 0}
 
-    # Soft repair: kalem↔plan (NULL olanlar)
-    try:
-        backfill_kalem_uretim_planlari(con, cari_id=cid, limit=200)
-        con.commit()
-    except Exception:
-        try:
-            con.rollback()
-        except Exception:
-            pass
+    # FAZ-3C: Cari360 GET read-only — soft-write/backfill çağrılmaz
+    # (backfill_kalem_uretim_planlari omurga_link içinde kalır; yazma ekranları kullanabilir)
 
     has_kalem = _tablo_var(con, 'nexgen_planlama_siparis_kalem')
     has_sevk = _tablo_var(con, 'mo_musteri_sevkiyat')
@@ -244,10 +245,13 @@ def load_cari360_siparisler(
     has_batch = _tablo_var(con, 'nexgen_uretim_batch')
     has_parca = _tablo_var(con, 'nexgen_uretim_parca')
 
+    scols = _kolonlar(con, 'nexgen_planlama_siparis')
+    mo_sel = ', mo_gorusme_id' if 'mo_gorusme_id' in scols else ', NULL AS mo_gorusme_id'
     rows = con.execute(
-        """
+        f"""
         SELECT id, siparis_no, olusturma_tarihi, durum,
                termin_tarihi, musteri_termin, onerilen_termin
+               {mo_sel}
         FROM nexgen_planlama_siparis
         WHERE cari_id=?
         ORDER BY COALESCE(olusturma_tarihi, '') DESC, id DESC
@@ -256,12 +260,21 @@ def load_cari360_siparisler(
         (cid, limit),
     ).fetchall()
 
+    gorusme_ids = {
+        int(r['mo_gorusme_id'])
+        for r in rows
+        if r['mo_gorusme_id'] not in (None, '', 0)
+    }
+    gorusme_by_id = load_gorusme_cari_map(con, gorusme_ids)
+    sorumlu_meta = resolve_tek_sorumlu(con, cid)
+
     liste: list[dict[str, Any]] = []
     for r in rows:
         sid = int(r['id'])
         termin = r['termin_tarihi'] or r['musteri_termin'] or r['onerilen_termin']
 
         kalem_sayisi = 0
+        rf_kalem_sayisi = 0
         bagli_numune_sayisi = 0
         bagli_numuneler: list[dict[str, Any]] = []
         if has_kalem:
@@ -270,6 +283,12 @@ def load_cari360_siparisler(
                 'WHERE planlama_siparis_id=?',
                 (sid,),
             ).fetchone()[0])
+            if 'rf_renk_id' in _kolonlar(con, 'nexgen_planlama_siparis_kalem'):
+                rf_kalem_sayisi = int(con.execute(
+                    'SELECT COUNT(*) FROM nexgen_planlama_siparis_kalem '
+                    'WHERE planlama_siparis_id=? AND rf_renk_id IS NOT NULL AND rf_renk_id!=0',
+                    (sid,),
+                ).fetchone()[0])
             has_nt_col = 'numune_talep_id' in {
                 c[1] for c in con.execute(
                     'PRAGMA table_info(nexgen_planlama_siparis_kalem)'
@@ -361,6 +380,16 @@ def load_cari360_siparisler(
                 ).fetchone()
                 uretilen_kg = _fmt_num(uk[0] or 0)
 
+        rel = classify_mo_gorusme_parent(
+            r['mo_gorusme_id'], cid, gorusme_by_id, kind='SIPARIS',
+        )
+        op_uyari = siparis_operasyon_uyarilari(
+            durum=r['durum'],
+            kalem_sayisi=kalem_sayisi,
+            rf_kalem_sayisi=rf_kalem_sayisi,
+            uretim_plan_sayisi=plan_sayisi,
+        )
+        zincir_uy = list(rel['zincir_uyarilari']) + op_uyari
         liste.append({
             'id': sid,
             'siparis_no': r['siparis_no'] or '',
@@ -379,13 +408,32 @@ def load_cari360_siparisler(
             'kalan_kg': kalan_kg,
             'detay_url': f'/nexgen/pazarlama?siparis={sid}',
             'cari360_url': f'/nexgen/cari360/{cid}?tab=siparisler',
+            'mo_gorusme_id': (
+                int(r['mo_gorusme_id'])
+                if r['mo_gorusme_id'] not in (None, '', 0) else None
+            ),
+            'parent_type': rel['parent_type'],
+            'parent_id': rel['parent_id'],
+            'baslangic_tipi': rel['baslangic_tipi'],
+            'zincir_eksik': rel['zincir_eksik'],
+            'zincir_uyarilari': zincir_uy,
+            'baglanti_kaynagi': rel['baglanti_kaynagi'],
+            'dogrudan_operasyon': rel['dogrudan_operasyon'],
+            'manuel_inceleme': rel['manuel_inceleme'],
         })
 
     # T4: hassas ticari alanlar yalnız can_view_cari_ticari ile
     from modules.nexgen.cari360_ticari_ozet_service import enrich_siparis_listesi_ticari
     ticari_ok = can_view_cari_ticari(con, kullanici_id, cid, yk)
     liste = enrich_siparis_listesi_ticari(con, liste, ticari_gorunur=ticari_ok)
-    return {'liste': liste, 'count': len(liste), 'ticari_gorunur': ticari_ok}
+    return {
+        'liste': liste,
+        'count': len(liste),
+        'ticari_gorunur': ticari_ok,
+        'sorumlu': sorumlu_meta.get('sorumlu'),
+        'sorumlu_uyarilari': sorumlu_meta.get('sorumlu_uyarilari') or [],
+        'sorumlu_atanmamis': bool(sorumlu_meta.get('sorumlu_atanmamis')),
+    }
 
 
 def load_cari360_sevkiyatlar(
@@ -418,6 +466,12 @@ def load_cari360_sevkiyatlar(
         """,
         (cid, limit),
     ).fetchall()
+
+    sip_ids = {
+        int(r['siparis_id']) for r in rows if r['siparis_id'] not in (None, '', 0)
+    }
+    sip_cari_map = load_siparis_cari_map(con, sip_ids)
+    sorumlu_meta = resolve_tek_sorumlu(con, cid)
 
     liste: list[dict[str, Any]] = []
     for r in rows:
@@ -467,6 +521,13 @@ def load_cari360_sevkiyatlar(
                 (int(siparis_id),),
             ).fetchone()[0])
 
+        rel = classify_siparis_parent(
+            siparis_id, cid, sip_cari_map, null_tipi='DOGRUDAN_SEVKIYAT',
+        )
+        uretim_var = bool(batch_sayisi)
+        zincir_uy = list(rel['zincir_uyarilari'])
+        if siparis_id and not uretim_var:
+            zincir_uy.append('URETIM_BILGISI_YOK')  # hata değil
         liste.append({
             'id': sevk_id,
             'sevkiyat_no': r['sevkiyat_no'] or '',
@@ -485,9 +546,24 @@ def load_cari360_sevkiyatlar(
             'durum': r['durum'] or '',
             'kalem_sayisi': len(kalemler),
             'kalemler': kalemler,
+            'parent_type': rel['parent_type'] or 'SIPARIS',
+            'parent_id': rel['parent_id'],
+            'baslangic_tipi': 'SEVKIYAT',
+            'zincir_eksik': rel['zincir_eksik'],
+            'zincir_uyarilari': zincir_uy,
+            'baglanti_kaynagi': rel['baglanti_kaynagi'],
+            'dogrudan_operasyon': rel['dogrudan_operasyon'],
+            'manuel_inceleme': rel['manuel_inceleme'],
+            'uretim_bilgisi_var': uretim_var,
         })
 
-    return {'liste': liste, 'count': len(liste)}
+    return {
+        'liste': liste,
+        'count': len(liste),
+        'sorumlu': sorumlu_meta.get('sorumlu'),
+        'sorumlu_uyarilari': sorumlu_meta.get('sorumlu_uyarilari') or [],
+        'sorumlu_atanmamis': bool(sorumlu_meta.get('sorumlu_atanmamis')),
+    }
 
 
 def load_cari360_urunler(
@@ -608,33 +684,361 @@ def _numune_rf_label(con: sqlite3.Connection, rf_id: Any) -> str | None:
     return kod or ad or None
 
 
+def _rf_row_to_payload(
+    r: sqlite3.Row | dict,
+    *,
+    baglanti_kaynagi: str,
+    legacy_baglanti: bool = False,
+) -> dict[str, Any]:
+    """Canonical RF response card (FAZ-2D)."""
+    d = dict(r) if not isinstance(r, dict) else r
+    rid = int(d['id'])
+    kod = (d.get('rf_kod') or '').strip() or None
+    ad = (d.get('ad') or '').strip() or None
+    label = f'{kod} — {ad}' if kod and ad and kod != ad else (kod or ad)
+    return {
+        'id': rid,
+        'rf_renk_id': rid,
+        'rf_kod': kod,
+        'ad': ad,
+        'rf_adi': ad,
+        'rf_label': label,
+        'durum': d.get('durum') or None,
+        'rf_durum': d.get('durum') or None,
+        'aktif': int(d.get('aktif') or 0),
+        'rf_aktif': int(d.get('aktif') or 0),
+        'rev_no': d.get('aktif_rev_no'),
+        'aktif_rev_no': d.get('aktif_rev_no'),
+        'kaynak_arge_test_id': (
+            int(d['kaynak_arge_test_id'])
+            if d.get('kaynak_arge_test_id') not in (None, '', 0)
+            else None
+        ),
+        'ilk_talep_cari_id': (
+            int(d['ilk_talep_cari_id'])
+            if d.get('ilk_talep_cari_id') not in (None, '', 0)
+            else None
+        ),
+        'cari_id': (
+            int(d['cari_id']) if d.get('cari_id') not in (None, '', 0) else None
+        ),
+        'baglanti_kaynagi': baglanti_kaynagi,
+        'legacy_baglanti': bool(legacy_baglanti),
+        'pointer_uyumsuzlugu': False,
+    }
+
+
 def _rf_map_batch(con: sqlite3.Connection, rf_ids: set[int]) -> dict[int, dict[str, Any]]:
     out: dict[int, dict[str, Any]] = {}
     ids = [i for i in rf_ids if i and i > 0]
     if not ids or not _tablo_var(con, 'nexgen_rf_renk'):
         return out
     ph = ','.join('?' * len(ids))
+    cols = _kolonlar(con, 'nexgen_rf_renk')
+    extra = ''
+    for c in ('kaynak_arge_test_id', 'ilk_talep_cari_id', 'cari_id'):
+        if c in cols:
+            extra += f', {c}'
+        else:
+            extra += f', NULL AS {c}'
     for r in con.execute(
         f"""
-        SELECT id, rf_kod, ad, durum, aktif, aktif_rev_no
+        SELECT id, rf_kod, ad, durum, aktif, aktif_rev_no{extra}
         FROM nexgen_rf_renk WHERE id IN ({ph})
         """,
         ids,
     ):
-        rid = int(r['id'])
-        kod = (r['rf_kod'] or '').strip()
-        ad = (r['ad'] or '').strip()
-        label = f'{kod} — {ad}' if kod and ad and kod != ad else (kod or ad or None)
+        out[int(r['id'])] = _rf_row_to_payload(r, baglanti_kaynagi='RF_ID')
+    return out
+
+
+def _rf_by_kaynak_arge_batch(
+    con: sqlite3.Connection,
+    arge_ids: list[int],
+    cari_id: int,
+) -> dict[int, dict[str, Any]]:
+    """arge_id → tek aktif RF (kaynak_arge_test_id). Multi → atla."""
+    out: dict[int, dict[str, Any]] = {}
+    aids = [i for i in arge_ids if i and i > 0]
+    if not aids or not _tablo_var(con, 'nexgen_rf_renk'):
+        return out
+    cols = _kolonlar(con, 'nexgen_rf_renk')
+    if 'kaynak_arge_test_id' not in cols:
+        return out
+    ph = ','.join('?' * len(aids))
+    buckets: dict[int, list[sqlite3.Row]] = {}
+    for r in con.execute(
+        f"""
+        SELECT id, rf_kod, ad, durum, aktif, aktif_rev_no,
+               kaynak_arge_test_id, ilk_talep_cari_id, cari_id
+        FROM nexgen_rf_renk
+        WHERE COALESCE(aktif,1)=1 AND kaynak_arge_test_id IN ({ph})
+        ORDER BY id
+        """,
+        aids,
+    ):
+        # leak: RF cari doluysa bu cari ile uyumlu olmalı
+        if r['cari_id'] not in (None, 0) and int(r['cari_id']) != int(cari_id):
+            continue
+        kid = int(r['kaynak_arge_test_id'])
+        buckets.setdefault(kid, []).append(r)
+    for kid, rows in buckets.items():
+        if len(rows) != 1:
+            continue
+        out[kid] = _rf_row_to_payload(
+            rows[0], baglanti_kaynagi='RF_KAYNAK_ARGE_TEST_ID',
+        )
+    return out
+
+
+def _formul_uygunluk_batch(
+    con: sqlite3.Connection,
+    rf_ids: set[int],
+) -> dict[int, dict[str, Any]]:
+    """rf_id → bagli_formuller / tekil_formul / formul_belirsiz (FAZ-2D)."""
+    empty_tpl = {
+        'bagli_formuller': [],
+        'formul_sayisi': 0,
+        'tekil_formul': None,
+        'formul_belirsiz': False,
+        'uygunluk_durumu': None,
+    }
+    out: dict[int, dict[str, Any]] = {i: dict(empty_tpl) for i in rf_ids if i}
+    ids = [i for i in rf_ids if i and i > 0]
+    if not ids:
+        return out
+    if not _tablo_var(con, 'nexgen_rf_formul_uygunluk') or not _tablo_var(con, 'nexgen_formul'):
+        return out
+    ph = ','.join('?' * len(ids))
+    by_rf: dict[int, list[dict[str, Any]]] = {i: [] for i in ids}
+    for r in con.execute(
+        f"""
+        SELECT u.id AS uygunluk_id, u.rf_renk_id, u.formul_id, u.durum AS uygunluk_durum,
+               u.aktif AS uygunluk_aktif, u.kaynak_arge_test_id, u.ilk_talep_cari_id,
+               f.kod AS formul_kod, f.ad AS formul_ad, f.aktif AS formul_aktif,
+               f.durum AS formul_durum
+        FROM nexgen_rf_formul_uygunluk u
+        JOIN nexgen_formul f ON f.id = u.formul_id
+        WHERE u.rf_renk_id IN ({ph}) AND COALESCE(u.aktif,1)=1
+        ORDER BY u.id
+        """,
+        ids,
+    ):
+        rid = int(r['rf_renk_id'])
+        fid = int(r['formul_id'])
+        by_rf.setdefault(rid, []).append({
+            'id': fid,
+            'kod': (r['formul_kod'] or '').strip() or None,
+            'ad': (r['formul_ad'] or '').strip() or None,
+            'aktif': int(r['formul_aktif'] or 0),
+            'durum': r['formul_durum'] or None,
+            'uygunluk_id': int(r['uygunluk_id']),
+            'uygunluk_durumu': r['uygunluk_durum'] or None,
+            'uygunluk_aktif': int(r['uygunluk_aktif'] or 0),
+            'kaynak_arge_test_id': (
+                int(r['kaynak_arge_test_id'])
+                if r['kaynak_arge_test_id'] not in (None, 0) else None
+            ),
+            'ilk_talep_cari_id': (
+                int(r['ilk_talep_cari_id'])
+                if r['ilk_talep_cari_id'] not in (None, 0) else None
+            ),
+            'baglanti_kaynagi': 'RF_FORMUL_UYGUNLUK',
+            'pasif_formul': int(r['formul_aktif'] or 0) != 1,
+        })
+    for rid, flist in by_rf.items():
+        n = len(flist)
         out[rid] = {
-            'rf_renk_id': rid,
-            'rf_kod': kod or None,
-            'rf_adi': ad or None,
-            'rf_label': label,
-            'rf_durum': r['durum'] or None,
-            'rf_aktif': int(r['aktif'] or 0),
-            'aktif_rev_no': r['aktif_rev_no'],
+            'bagli_formuller': flist,
+            'formul_sayisi': n,
+            'tekil_formul': flist[0] if n == 1 else None,
+            'formul_belirsiz': n > 1,
+            'uygunluk_durumu': (flist[0].get('uygunluk_durumu') if n == 1 else None),
         }
     return out
+
+
+def _rf_revizyon_batch(
+    con: sqlite3.Connection,
+    rf_ids: set[int],
+) -> dict[int, list[dict[str, Any]]]:
+    out: dict[int, list[dict[str, Any]]] = {i: [] for i in rf_ids if i}
+    ids = [i for i in rf_ids if i and i > 0]
+    if not ids or not _tablo_var(con, 'nexgen_rf_revizyon'):
+        return out
+    ph = ','.join('?' * len(ids))
+    cols = _kolonlar(con, 'nexgen_rf_revizyon')
+    # esnek kolon seçimi
+    sel = ['id', 'rf_renk_id', 'rev_no', 'durum', 'aktif']
+    for c in ('formul_id', 'olusturma_tarihi', 'onay_tarihi', 'aciklama', 'kilitli_mi'):
+        if c in cols:
+            sel.append(c)
+    for r in con.execute(
+        f"""
+        SELECT {', '.join(sel)}
+        FROM nexgen_rf_revizyon
+        WHERE rf_renk_id IN ({ph}) AND COALESCE(aktif,1)=1
+        ORDER BY rf_renk_id, rev_no DESC, id DESC
+        """,
+        ids,
+    ):
+        rid = int(r['rf_renk_id'])
+        item = {
+            'id': int(r['id']),
+            'rf_renk_id': rid,
+            'rev_no': r['rev_no'],
+            'durum': r['durum'] or None,
+            'aktif': int(r['aktif'] or 0),
+            'formul_id': (
+                int(r['formul_id']) if 'formul_id' in r.keys() and r['formul_id'] not in (None, 0) else None
+            ),
+            'tarih': _fmt_dt(
+                r['onay_tarihi'] if 'onay_tarihi' in r.keys() and r['onay_tarihi']
+                else (r['olusturma_tarihi'] if 'olusturma_tarihi' in r.keys() else None)
+            ),
+            'aciklama': (
+                (r['aciklama'] or None) if 'aciklama' in r.keys() else None
+            ),
+            'kilitli_mi': (
+                int(r['kilitli_mi'] or 0) if 'kilitli_mi' in r.keys() else None
+            ),
+        }
+        out.setdefault(rid, []).append(item)
+    return out
+
+
+def _attach_formul_rev(
+    rf_payload: dict[str, Any] | None,
+    formul_map: dict[int, dict[str, Any]],
+    rev_map: dict[int, list[dict[str, Any]]],
+) -> dict[str, Any] | None:
+    if not rf_payload:
+        return None
+    rid = int(rf_payload['id'])
+    fm = formul_map.get(rid) or {
+        'bagli_formuller': [], 'formul_sayisi': 0,
+        'tekil_formul': None, 'formul_belirsiz': False, 'uygunluk_durumu': None,
+    }
+    revs = rev_map.get(rid) or []
+    out = dict(rf_payload)
+    out['bagli_formuller'] = fm['bagli_formuller']
+    out['formul_sayisi'] = fm['formul_sayisi']
+    out['tekil_formul'] = fm['tekil_formul']
+    out['formul_belirsiz'] = fm['formul_belirsiz']
+    out['uygunluk_durumu'] = fm.get('uygunluk_durumu')
+    out['rf_revizyonlari'] = revs
+    out['son_revizyon'] = revs[0] if revs else None
+    return out
+
+
+def _resolve_rf_bundle_for_numune(
+    *,
+    numune_rf_id: Any,
+    arge_rf_id: Any,
+    arge_id: Any,
+    rf_map: dict[int, dict[str, Any]],
+    rf_by_kaynak: dict[int, dict[str, Any]],
+    formul_map: dict[int, dict[str, Any]],
+    rev_map: dict[int, list[dict[str, Any]]],
+    legacy_renk: str | None,
+    legacy_formul: str | None,
+) -> dict[str, Any]:
+    """FAZ-2D RF resolve — mismatch'te tek sonuç seçilmez."""
+    def _iid(v: Any) -> int | None:
+        if v in (None, '', 0, '0'):
+            return None
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return None
+
+    n_rf = _iid(numune_rf_id)
+    a_rf = _iid(arge_rf_id)
+    aid = _iid(arge_id)
+
+    numune_rf = None
+    if n_rf and n_rf in rf_map:
+        numune_rf = _attach_formul_rev(
+            {**rf_map[n_rf], 'baglanti_kaynagi': 'NUMUNE_RF_RENK_ID'},
+            formul_map, rev_map,
+        )
+    arge_rf = None
+    if a_rf and a_rf in rf_map:
+        arge_rf = _attach_formul_rev(
+            {**rf_map[a_rf], 'baglanti_kaynagi': 'ARGE_RF_RENK_ID'},
+            formul_map, rev_map,
+        )
+
+    mismatch = bool(n_rf and a_rf and n_rf != a_rf)
+    if mismatch:
+        return {
+            'aktif_rf': None,
+            'numune_rf': numune_rf,
+            'arge_rf': arge_rf,
+            'bagli_formuller': [],
+            'tekil_formul': None,
+            'formul_belirsiz': False,
+            'rf_revizyonlari': [],
+            'pointer_uyumsuzlugu': True,
+            'manuel_inceleme': True,
+            'legacy_baglanti': False,
+            'baglanti_kaynagi': None,
+            'legacy_rf_text': None,
+            'legacy_formul_text': None,
+        }
+
+    # öncelik: AR-GE → numune → kaynak reverse
+    aktif = None
+    kaynak = None
+    if arge_rf:
+        aktif = arge_rf
+        kaynak = 'ARGE_RF_RENK_ID'
+    elif numune_rf:
+        aktif = numune_rf
+        kaynak = 'NUMUNE_RF_RENK_ID'
+    elif aid and aid in rf_by_kaynak:
+        aktif = _attach_formul_rev(
+            dict(rf_by_kaynak[aid]), formul_map, rev_map,
+        )
+        kaynak = 'RF_KAYNAK_ARGE_TEST_ID'
+
+    if aktif:
+        aktif = dict(aktif)
+        aktif['baglanti_kaynagi'] = kaynak
+        aktif['legacy_baglanti'] = False
+        return {
+            'aktif_rf': aktif,
+            'numune_rf': numune_rf,
+            'arge_rf': arge_rf or (aktif if kaynak == 'ARGE_RF_RENK_ID' else None),
+            'bagli_formuller': aktif.get('bagli_formuller') or [],
+            'tekil_formul': aktif.get('tekil_formul'),
+            'formul_belirsiz': bool(aktif.get('formul_belirsiz')),
+            'rf_revizyonlari': aktif.get('rf_revizyonlari') or [],
+            'pointer_uyumsuzlugu': False,
+            'manuel_inceleme': False,
+            'legacy_baglanti': False,
+            'baglanti_kaynagi': kaynak,
+            'legacy_rf_text': None,
+            'legacy_formul_text': None,
+        }
+
+    # legacy text — canonical yok
+    has_leg = bool((legacy_renk or '').strip() or (legacy_formul or '').strip())
+    return {
+        'aktif_rf': None,
+        'numune_rf': None,
+        'arge_rf': None,
+        'bagli_formuller': [],
+        'tekil_formul': None,
+        'formul_belirsiz': False,
+        'rf_revizyonlari': [],
+        'pointer_uyumsuzlugu': False,
+        'manuel_inceleme': False,
+        'legacy_baglanti': has_leg,
+        'baglanti_kaynagi': 'LEGACY_TEXT' if has_leg else None,
+        'legacy_rf_text': (legacy_renk or '').strip() or None,
+        'legacy_formul_text': (legacy_formul or '').strip() or None,
+    }
 
 
 def _arge_card(
@@ -792,6 +1196,70 @@ def enrich_gorusmeler_bagli_numuneler(
     return liste
 
 
+def enrich_gorusmeler_zincir_flags(
+    con: sqlite3.Connection,
+    cari_id: int,
+    liste: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """FAZ-3C: görüşme zincir alanları + gorusmeyi_yapan / cari_sorumlusu ayrımı."""
+    cid = int(cari_id)
+    root = classify_gorusme_root(cid)
+    sm = resolve_tek_sorumlu(con, cid)
+    cari_sorumlusu = sm.get('sorumlu')
+    nt_ptrs = {
+        int(d['numune_talep_id'])
+        for d in liste
+        if d.get('numune_talep_id') not in (None, '', 0)
+    }
+    nt_cari: dict[int, int | None] = {}
+    if nt_ptrs and _tablo_var(con, 'nexgen_numune_talep'):
+        ph = ','.join('?' * len(nt_ptrs))
+        for r in con.execute(
+            f'SELECT id, cari_id FROM nexgen_numune_talep WHERE id IN ({ph})',
+            list(nt_ptrs),
+        ):
+            nt_cari[int(r['id'])] = int(r['cari_id']) if r['cari_id'] is not None else None
+    for d in liste:
+        d.update({
+            'parent_type': root['parent_type'],
+            'parent_id': root['parent_id'],
+            'baslangic_tipi': root['baslangic_tipi'],
+            'zincir_eksik': False,
+            'zincir_uyarilari': [],
+            'baglanti_kaynagi': root['baglanti_kaynagi'],
+            'dogrudan_operasyon': False,
+            'manuel_inceleme': False,
+            'cari_sorumlusu': cari_sorumlusu,
+            'sorumlu_uyarilari': sm.get('sorumlu_uyarilari') or [],
+        })
+        gy_id = d.get('kullanici_id') or d.get('olusturan_kullanici_id')
+        gy_ad = (
+            d.get('kullanici_adi') or d.get('olusturan_adi')
+            or d.get('pazarlamaci') or d.get('talep_eden')
+        )
+        d['gorusmeyi_yapan'] = {
+            'kullanici_id': int(gy_id) if gy_id not in (None, '', 0) else None,
+            'ad_soyad': gy_ad,
+        }
+        uyarilar: list[str] = []
+        for n in (d.get('bagli_numuneler') or []):
+            if n.get('legacy_baglanti'):
+                uyarilar.append('LEGACY_NUMUNE_BAGLANTI')
+        nt_ptr = d.get('numune_talep_id')
+        if nt_ptr not in (None, '', 0):
+            nid = int(nt_ptr)
+            if nid not in nt_cari:
+                uyarilar.append('CHILD_NUMUNE_BULUNAMADI')
+                d['zincir_eksik'] = True
+                d['manuel_inceleme'] = True
+            elif nt_cari[nid] is not None and nt_cari[nid] != cid:
+                uyarilar.append('CHILD_NUMUNE_BASKA_CARI')
+                d['zincir_eksik'] = True
+                d['manuel_inceleme'] = True
+        d['zincir_uyarilari'] = uyarilar
+    return liste, sm
+
+
 def _batch_load_arge_for_numuneler(
     con: sqlite3.Connection,
     cari_id: int,
@@ -930,7 +1398,7 @@ def _batch_load_arge_for_numuneler(
             seen_aide[tid].add(aid)
         stats['q_legacy'] = 2 if need_legacy else 0
 
-    # RF batch
+    # RF batch (+ kaynak reverse)
     rf_ids: set[int] = set()
     for ad in arge_by_id.values():
         if ad.get('rf_renk_id') not in (None, ''):
@@ -944,8 +1412,17 @@ def _batch_load_arge_for_numuneler(
                 rf_ids.add(int(r['rf_renk_id']))
             except (TypeError, ValueError):
                 pass
+    arge_id_list = list(arge_by_id.keys())
+    rf_by_kaynak = _rf_by_kaynak_arge_batch(con, arge_id_list, cid)
+    for rp in rf_by_kaynak.values():
+        rf_ids.add(int(rp['id']))
     rf_map = _rf_map_batch(con, rf_ids)
+    formul_map = _formul_uygunluk_batch(con, rf_ids)
+    rev_map = _rf_revizyon_batch(con, rf_ids)
     stats['q_rf'] = 1 if rf_ids else 0
+    stats['q_formul'] = 1 if rf_ids else 0
+    stats['q_revizyon'] = 1 if rf_ids else 0
+    stats['q_rf_kaynak'] = 1 if arge_id_list else 0
 
     # assemble
     for r in numune_rows:
@@ -981,7 +1458,25 @@ def _batch_load_arge_for_numuneler(
                 src = 'NUMUNE_TALEP_ID'
             rf_id = ad.get('rf_renk_id')
             rf_info = rf_map.get(int(rf_id)) if rf_id not in (None, '') else None
-            cards.append(_arge_card(ad, baglanti_kaynagi=src, legacy=legacy, rf_info=rf_info))
+            if rf_info is None and aid in rf_by_kaynak:
+                rf_info = rf_by_kaynak[aid]
+            rf_full = _attach_formul_rev(rf_info, formul_map, rev_map) if rf_info else None
+            card = _arge_card(ad, baglanti_kaynagi=src, legacy=legacy, rf_info=rf_info)
+            # FAZ-2D opsiyonel RF/formül alanları
+            card['aktif_rf'] = rf_full
+            card['bagli_formuller'] = (rf_full or {}).get('bagli_formuller') or []
+            card['tekil_formul'] = (rf_full or {}).get('tekil_formul')
+            card['formul_belirsiz'] = bool((rf_full or {}).get('formul_belirsiz'))
+            card['rf_revizyonlari'] = (rf_full or {}).get('rf_revizyonlari') or []
+            if rf_full is None and not legacy:
+                leg_r = (ad.get('yeni_renk_adi') or ad.get('renk_kodu') or '').strip()
+                leg_f = (ad.get('formul_grup_adi') or ad.get('ana_formul_grup_kodu') or '').strip()
+                if leg_r or leg_f:
+                    card['legacy_baglanti'] = True
+                    card['baglanti_kaynagi_rf'] = 'LEGACY_TEXT'
+                    card['legacy_rf_text'] = leg_r or None
+                    card['legacy_formul_text'] = leg_f or None
+            cards.append(card)
         by_nt[tid] = cards
 
         # aktif pointer card
@@ -1002,7 +1497,14 @@ def _batch_load_arge_for_numuneler(
             # canonical ilk aktif
             aktif[tid] = cards[0]
 
-    return by_nt, aktif, {'stats': stats, 'multi_flags': multi_flags, 'rf_map': rf_map}
+    return by_nt, aktif, {
+        'stats': stats,
+        'multi_flags': multi_flags,
+        'rf_map': rf_map,
+        'rf_by_kaynak': rf_by_kaynak,
+        'formul_map': formul_map,
+        'rev_map': rev_map,
+    }
 
 
 def load_cari360_numuneler(
@@ -1077,17 +1579,36 @@ def load_cari360_numuneler(
         (cid, limit),
     ).fetchall()
 
-    # Toplu AR-GE / RF (N+1 yok)
+    # Toplu AR-GE / RF / formül / revizyon (N+1 yok)
     arge_by_nt: dict[int, list[dict]] = {}
     aktif_by_nt: dict[int, dict | None] = {}
     multi_flags: dict[int, bool] = {}
     rf_map: dict[int, dict] = {}
+    rf_by_kaynak: dict[int, dict] = {}
+    formul_map: dict[int, dict] = {}
+    rev_map: dict[int, list] = {}
     qstats: dict[str, Any] = {}
     if has_arge and rows:
         arge_by_nt, aktif_by_nt, meta = _batch_load_arge_for_numuneler(con, cid, list(rows))
         multi_flags = meta.get('multi_flags') or {}
         rf_map = meta.get('rf_map') or {}
+        rf_by_kaynak = meta.get('rf_by_kaynak') or {}
+        formul_map = meta.get('formul_map') or {}
+        rev_map = meta.get('rev_map') or {}
         qstats = meta.get('stats') or {}
+    elif rows:
+        # AR-GE tablosu yoksa yine de numune RF master okunabilir
+        rf_ids: set[int] = set()
+        for r in rows:
+            if r['rf_renk_id'] not in (None, ''):
+                try:
+                    rf_ids.add(int(r['rf_renk_id']))
+                except (TypeError, ValueError):
+                    pass
+        rf_map = _rf_map_batch(con, rf_ids)
+        formul_map = _formul_uygunluk_batch(con, rf_ids)
+        rev_map = _rf_revizyon_batch(con, rf_ids)
+        qstats = {'q_rf': 1 if rf_ids else 0, 'q_formul': 1 if rf_ids else 0, 'q_revizyon': 1 if rf_ids else 0}
 
     # Toplu kullanıcı
     user_map: dict[int, str] = {}
@@ -1135,6 +1656,16 @@ def load_cari360_numuneler(
                 'detay_url': f'/nexgen/pazarlama?siparis={sid}',
             })
 
+    gorusme_by_id = load_gorusme_cari_map(
+        con,
+        {
+            int(x['mo_gorusme_id'])
+            for x in rows
+            if x['mo_gorusme_id'] not in (None, '', 0)
+        },
+    )
+    sorumlu_meta = resolve_tek_sorumlu(con, cid)
+
     liste: list[dict[str, Any]] = []
     for r in rows:
         tid = int(r['id'])
@@ -1154,19 +1685,67 @@ def load_cari360_numuneler(
         aktif_arge = aktif_by_nt.get(tid) if has_arge else None
         bagli_arge = arge_by_nt.get(tid, []) if has_arge else []
 
-        rf_id = r['rf_renk_id']
-        rf_kaynak = 'numune' if rf_id else None
-        if rf_id is None and aktif_arge and aktif_arge.get('rf_renk_id') is not None:
-            rf_id = aktif_arge['rf_renk_id']
+        arge_rf_id = (aktif_arge or {}).get('rf_renk_id') if aktif_arge else None
+        # aktif_arge kartında nested aktif_rf varsa oradan da
+        if arge_rf_id is None and aktif_arge and (aktif_arge.get('aktif_rf') or {}).get('id'):
+            arge_rf_id = aktif_arge['aktif_rf']['id']
+        leg_renk = None
+        leg_formul = None
+        if aktif_arge:
+            leg_renk = (aktif_arge.get('yeni_renk_adi') or aktif_arge.get('renk_kodu') or '').strip() or None
+            leg_formul = (
+                aktif_arge.get('formul_grup_adi') or aktif_arge.get('ana_formul_grup_kodu') or ''
+            ).strip() or None
+        if not leg_renk:
+            leg_renk = renk
+
+        bundle = _resolve_rf_bundle_for_numune(
+            numune_rf_id=r['rf_renk_id'],
+            arge_rf_id=arge_rf_id,
+            arge_id=(aktif_arge or {}).get('id') or r['arge_test_id'],
+            rf_map=rf_map,
+            rf_by_kaynak=rf_by_kaynak,
+            formul_map=formul_map,
+            rev_map=rev_map,
+            legacy_renk=leg_renk,
+            legacy_formul=leg_formul,
+        )
+        aktif_rf = bundle.get('aktif_rf')
+        rf_id = (aktif_rf or {}).get('id') if aktif_rf else None
+        if rf_id is None and not bundle.get('pointer_uyumsuzlugu'):
+            # backward: eski tek id alanı
+            if r['rf_renk_id'] not in (None, ''):
+                try:
+                    rf_id = int(r['rf_renk_id'])
+                except (TypeError, ValueError):
+                    rf_id = None
+        rf_label = (aktif_rf or {}).get('rf_label')
+        if not rf_label and rf_id and not bundle.get('pointer_uyumsuzlugu'):
+            rf_label = (rf_map.get(int(rf_id)) or {}).get('rf_label')
+        if bundle.get('pointer_uyumsuzlugu'):
+            rf_label = None  # tek sonuç üretme
+        rf_kaynak = None
+        if bundle.get('baglanti_kaynagi') == 'ARGE_RF_RENK_ID':
             rf_kaynak = 'arge'
-        rf_info = rf_map.get(int(rf_id)) if rf_id not in (None, '') else None
-        rf_label = (rf_info or {}).get('rf_label') or _numune_rf_label(con, rf_id)
+        elif bundle.get('baglanti_kaynagi') == 'NUMUNE_RF_RENK_ID':
+            rf_kaynak = 'numune'
+        elif bundle.get('baglanti_kaynagi'):
+            rf_kaynak = bundle.get('baglanti_kaynagi')
 
         talep_eden = None
         if r['talep_eden_kullanici_id'] and int(r['talep_eden_kullanici_id']) in user_map:
             talep_eden = user_map[int(r['talep_eden_kullanici_id'])] or None
 
         bagli_siparisler = siparis_by_nt.get(tid, [])
+
+        rel = classify_mo_gorusme_parent(
+            r['mo_gorusme_id'], cid, gorusme_by_id, kind='NUMUNE',
+        )
+        manuel = bool(bundle.get('manuel_inceleme') or rel['manuel_inceleme'])
+        zincir_uy = list(rel['zincir_uyarilari'])
+        if bundle.get('pointer_uyumsuzlugu'):
+            zincir_uy.append('RF_POINTER_UYUSMAZLIGI')
+            manuel = True
 
         liste.append({
             'id': tid,
@@ -1180,7 +1759,7 @@ def load_cari360_numuneler(
             'rf': rf_label,
             'rf_renk_id': int(rf_id) if rf_id is not None else None,
             'rf_kaynak': rf_kaynak,
-            'rf_kod': (rf_info or {}).get('rf_kod'),
+            'rf_kod': (aktif_rf or {}).get('rf_kod'),
             'formul_grup_adi': (aktif_arge or {}).get('formul_grup_adi'),
             'ana_formul_grup_kodu': (aktif_arge or {}).get('ana_formul_grup_kodu'),
             'durum': r['durum'] or None,
@@ -1190,13 +1769,40 @@ def load_cari360_numuneler(
             'bagli_arge_testleri': bagli_arge,
             'aktif_arge_testi': aktif_arge,
             'legacy_multi_manuel': bool(multi_flags.get(tid)),
+            # FAZ-2D opsiyonel alanlar
+            'aktif_rf': aktif_rf,
+            'numune_rf': bundle.get('numune_rf'),
+            'arge_rf': bundle.get('arge_rf'),
+            'bagli_formuller': bundle.get('bagli_formuller') or [],
+            'tekil_formul': bundle.get('tekil_formul'),
+            'formul_belirsiz': bool(bundle.get('formul_belirsiz')),
+            'rf_revizyonlari': bundle.get('rf_revizyonlari') or [],
+            'pointer_uyumsuzlugu': bool(bundle.get('pointer_uyumsuzlugu')),
+            'manuel_inceleme': manuel,
+            'legacy_baglanti': bool(bundle.get('legacy_baglanti')),
+            'baglanti_kaynagi': rel.get('baglanti_kaynagi') or bundle.get('baglanti_kaynagi'),
+            'legacy_rf_text': bundle.get('legacy_rf_text'),
+            'legacy_formul_text': bundle.get('legacy_formul_text'),
             'bagli_siparis_sayisi': len(bagli_siparisler),
             'bagli_siparisler': bagli_siparisler,
             'detay_url': f'/nexgen/numune-talep?id={tid}',
+            # FAZ-3C zincir
+            'parent_type': rel['parent_type'],
+            'parent_id': rel['parent_id'],
+            'baslangic_tipi': rel['baslangic_tipi'],
+            'zincir_eksik': bool(rel['zincir_eksik'] or bundle.get('pointer_uyumsuzlugu')),
+            'zincir_uyarilari': zincir_uy,
+            'dogrudan_operasyon': rel['dogrudan_operasyon'],
         })
 
-    # opsiyonel debug — response kökünde; istemciye zorunlu değil
-    out = {'liste': liste, 'count': ozet['toplam'], 'ozet': ozet}
+    out = {
+        'liste': liste,
+        'count': ozet['toplam'],
+        'ozet': ozet,
+        'sorumlu': sorumlu_meta.get('sorumlu'),
+        'sorumlu_uyarilari': sorumlu_meta.get('sorumlu_uyarilari') or [],
+        'sorumlu_atanmamis': bool(sorumlu_meta.get('sorumlu_atanmamis')),
+    }
     if qstats:
         out['query_stats'] = qstats
     return out
@@ -1215,14 +1821,7 @@ def load_cari360_uretim(
     cid = int(cari_id)
     limit = max(1, min(int(limit or 50), 100))
 
-    try:
-        backfill_kalem_uretim_planlari(con, cari_id=cid, limit=200)
-        con.commit()
-    except Exception:
-        try:
-            con.rollback()
-        except Exception:
-            pass
+    # FAZ-3C: GET soft-write yok
 
     if not _tablo_var(con, 'nexgen_uretim_plan'):
         return {'liste': [], 'count': 0}
@@ -1244,6 +1843,14 @@ def load_cari360_uretim(
         """,
         (cid, limit),
     ).fetchall()
+
+    sip_ids = {
+        int(r['planlama_siparis_id'])
+        for r in rows
+        if r['planlama_siparis_id'] not in (None, '', 0)
+    }
+    sip_cari_map = load_siparis_cari_map(con, sip_ids)
+    sorumlu_meta = resolve_tek_sorumlu(con, cid)
 
     liste: list[dict[str, Any]] = []
     for r in rows:
@@ -1296,6 +1903,9 @@ def load_cari360_uretim(
             hedef_kg = _fmt_num(pr['hedef'])
             uretilen_kg = _fmt_num(pr['uretilen'])
 
+        rel = classify_siparis_parent(
+            sid, cid, sip_cari_map, null_tipi='LEGACY_URETIM',
+        )
         liste.append({
             'id': pid,
             'plan_kodu': r['plan_kodu'] or '',
@@ -1313,6 +1923,20 @@ def load_cari360_uretim(
             'uretilen_kg': uretilen_kg,
             'tarih': _fmt_dt(r['plan_tarihi'] or r['created_at']),
             'siparis_url': f'/nexgen/pazarlama?siparis={int(sid)}' if sid else None,
+            'parent_type': rel['parent_type'],
+            'parent_id': rel['parent_id'],
+            'baslangic_tipi': rel['baslangic_tipi'],
+            'zincir_eksik': rel['zincir_eksik'],
+            'zincir_uyarilari': rel['zincir_uyarilari'],
+            'baglanti_kaynagi': rel['baglanti_kaynagi'],
+            'dogrudan_operasyon': rel['dogrudan_operasyon'],
+            'manuel_inceleme': rel['manuel_inceleme'],
         })
 
-    return {'liste': liste, 'count': len(liste)}
+    return {
+        'liste': liste,
+        'count': len(liste),
+        'sorumlu': sorumlu_meta.get('sorumlu'),
+        'sorumlu_uyarilari': sorumlu_meta.get('sorumlu_uyarilari') or [],
+        'sorumlu_atanmamis': bool(sorumlu_meta.get('sorumlu_atanmamis')),
+    }

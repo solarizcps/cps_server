@@ -16,6 +16,7 @@ from modules.nexgen.cari360_yetki import (
     can_cari360_view_own,
 )
 from modules.nexgen.cari_sorumlu_service import can_view_cari, load_kullanici_yetkileri
+from modules.nexgen.cari360_relation_policy import resolve_tek_sorumlu
 from modules.nexgen.cari_genel_bilgi_service import GENEL_EDIT_FIELDS, can_edit_cari_genel
 from modules.nexgen.cari_yetkili_service import can_write_yetkili
 from modules.nexgen.mo_gorusme_service import can_mo_gorusme_yaz
@@ -257,8 +258,13 @@ def load_cari_kart(
     unvan = row['unvan'] or ''
     es_durum = _eslestirme_durumu(con, cid, cari_kod, unvan)
     test_cari = is_test_kayit(cari_kod, unvan)
-    sorumlu = _sorumlu_ozet(con, cid)
-    sorumlu_adi = (sorumlu['ana_adi'] or '').strip() or SORUMLU_ATANMAMIS
+    # FAZ-3C: V1 tek sorumlu politikası (timeline/ops ile aynı)
+    tek = resolve_tek_sorumlu(con, cid)
+    sorumlu = _sorumlu_ozet(con, cid)  # legacy liste (YEDEK görünmez V1 ana adında)
+    if tek.get('sorumlu'):
+        sorumlu_adi = (tek['sorumlu'].get('ad_soyad') or tek['sorumlu'].get('kullanici_adi') or '').strip() or SORUMLU_ATANMAMIS
+    else:
+        sorumlu_adi = SORUMLU_ATANMAMIS
 
     def _g(name, default=None):
         if name not in row.keys():
@@ -311,6 +317,10 @@ def load_cari_kart(
         'cari': cari,
         'sorumlu_adi': sorumlu_adi,
         'sorumlular': sorumlu['liste'],
+        # FAZ-3C opsiyonel — V1 tek sorumlu
+        'sorumlu': tek.get('sorumlu'),
+        'sorumlu_atanmamis': bool(tek.get('sorumlu_atanmamis')),
+        'sorumlu_uyarilari': tek.get('sorumlu_uyarilari') or [],
         'eslestirme_durumu': es_durum,
         'test_cari': test_cari,
         'test_banner': False,

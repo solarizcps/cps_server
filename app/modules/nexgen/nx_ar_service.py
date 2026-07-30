@@ -3116,6 +3116,18 @@ def yonetim_karar(con, arge_test_id: int, payload: dict, kullanici_id: int | Non
                 """,
                 (rf_id, renk_kod, kullanici_id, simdi, simdi, simdi, arge_test_id),
             )
+            # FAZ-2B: numune.rf_renk_id + kaynak pointer sync (overwrite yok)
+            try:
+                from modules.nexgen.rf_arge_sync_service import (
+                    RfArgeSyncError,
+                    sync_arge_rf_pointers,
+                )
+                sync_arge_rf_pointers(
+                    con, int(arge_test_id), int(rf_id),
+                    arge_cari_id=t.get('cari_id'),
+                )
+            except RfArgeSyncError as e:
+                raise NxArError(e.message, e.status, e.kod or 'RF_SYNC') from e
             _olay_yaz(
                 con, arge_test_id, kullanici_id, eski, 'ONAYLANDI',
                 'YONETIM_ONAY_RENK', f'{renk_kod} / {rf_kod}',

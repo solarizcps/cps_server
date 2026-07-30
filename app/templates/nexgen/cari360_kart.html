@@ -21,6 +21,11 @@
         {% endif %}
         <span class="ckart-meta-item">İç sorumlu pazarlamacı:
           <strong>{{ data.sorumlu_adi or 'Atanmamış' }}</strong>
+          {% if data.sorumlu_atanmamis %}
+          <span class="ckart-chip ckart-chip-warn" title="Bu müşteri için aktif pazarlamacı atanmamış.">Sorumlu Atanmamış</span>
+          {% elif data.sorumlu_uyarilari and 'COKLU_AKTIF_SORUMLU' in data.sorumlu_uyarilari %}
+          <span class="ckart-chip ckart-chip-warn" title="Birden fazla aktif sorumlu kaydı var; V1’de yalnız seçilen tek kişi gösterilir.">Kontrol Gerekli</span>
+          {% endif %}
         </span>
         <span class="ckart-meta-item">Oluşturma tarihi:
           <strong>{{ c.created_at or '—' }}</strong>
@@ -119,7 +124,17 @@
           <div><dt>Minimum sipariş</dt><dd>{% if c.minimum_siparis_kg is not none %}{{ c.minimum_siparis_kg }} kg{% else %}—{% endif %}</dd></div>
           <div><dt>Teslim şekli</dt><dd>{{ c.teslim_sekli or '—' }}</dd></div>
           <div><dt>Dil</dt><dd>{{ c.dil or '—' }}</dd></div>
-          <div><dt>İç sorumlu pazarlamacı</dt><dd>{{ data.sorumlu_adi or 'Atanmamış' }}</dd></div>
+          <div><dt>İç sorumlu pazarlamacı</dt><dd>
+            {{ data.sorumlu_adi or 'Atanmamış' }}
+            {% if data.sorumlu and data.sorumlu.baslangic_tarihi %}
+            <span class="ckart-muted" style="font-size:11px;display:inline;padding:0!important"> · {{ data.sorumlu.baslangic_tarihi[:10] }}</span>
+            {% endif %}
+            {% if data.sorumlu_atanmamis %}
+            <span class="ckart-chip ckart-chip-warn" title="Bu müşteri için aktif pazarlamacı atanmamış.">Sorumlu Atanmamış</span>
+            {% elif data.sorumlu_uyarilari and 'COKLU_AKTIF_SORUMLU' in data.sorumlu_uyarilari %}
+            <span class="ckart-chip ckart-chip-warn" title="Birden fazla aktif sorumlu kaydı var; V1’de yalnız seçilen tek kişi gösterilir.">Kontrol Gerekli</span>
+            {% endif %}
+          </dd></div>
           <div><dt>Oluşturma tarihi</dt><dd>{{ c.created_at or '—' }}</dd></div>
           <div><dt>Son güncelleme</dt><dd>{{ c.updated_at or '—' }}</dd></div>
         </dl>
@@ -501,6 +516,17 @@
 }
 .ckart-badge-aktif { background: #ecfdf5; color: #047857; }
 .ckart-badge-pasif { background: #f3f4f6; color: #6b7280; }
+/* FAZ-3D: operasyon zinciri etiketleri — mevcut badge diline uyumlu */
+.ckart-chip {
+  display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .2px;
+  padding: 2px 7px; border-radius: 999px; margin-left: 4px; vertical-align: middle;
+  white-space: nowrap; line-height: 1.4;
+}
+.ckart-chip-info { background: #f3f4f6; color: #4b5563; }
+.ckart-chip-ok { background: #ecfdf5; color: #047857; }
+.ckart-chip-warn { background: #fff7ed; color: #c2410c; }
+.ckart-chip-danger { background: #fef2f2; color: #b91c1c; }
+.ckart-chip-wrap { display: inline-flex; flex-wrap: wrap; gap: 3px; align-items: center; max-width: 100%; }
 .ckart-kpi {
   display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px; margin: 0 0 12px;
@@ -726,6 +752,88 @@
     return String(v);
   }
 
+  /* FAZ-3D: API alanlarından etiket — backend politikasını yeniden hesaplamaz */
+  var CKART_ZINCIR_LABEL = {
+    DOGRUDAN_NUMUNE: { text: 'Doğrudan Numune', cls: 'ckart-chip-info',
+      tip: 'Bu numune talebi bir görüşmeye bağlanmadan doğrudan müşteri üzerinden açıldı.' },
+    GORUSMEDEN_NUMUNE: { text: 'Görüşmeden Numune', cls: 'ckart-chip-ok',
+      tip: 'Bu numune talebi bir görüşme kaydına bağlı açıldı.' },
+    DOGRUDAN_SIPARIS: { text: 'Doğrudan Sipariş', cls: 'ckart-chip-info',
+      tip: 'Bu sipariş talebi bir görüşmeye bağlanmadan doğrudan müşteri üzerinden açıldı.' },
+    GORUSMEDEN_SIPARIS: { text: 'Görüşmeden Sipariş', cls: 'ckart-chip-ok',
+      tip: 'Bu sipariş talebi bir görüşme kaydına bağlı açıldı.' },
+    ZINCIR_KOPUK: { text: 'Eksik Bağ', cls: 'ckart-chip-warn',
+      tip: 'Kayıtta bir üst işlem referansı bulunuyor ancak ilgili kayıt bulunamadı veya başka müşteriye ait.' },
+    LEGACY_URETIM: { text: 'Önceki Sistem', cls: 'ckart-chip-info',
+      tip: 'Bu üretim kaydı sipariş bağlantısı olmadan veya eski sistemden gelmiş olabilir.' },
+    URETIM_BILGISI_YOK: { text: 'Üretim Bilgisi Yok', cls: 'ckart-chip-info',
+      tip: 'Bu sevkiyat için bağlı üretim planı/batch bilgisi bulunamadı; hata olmayabilir.' },
+    RF_POINTER_UYUSMAZLIGI: { text: 'RF Kontrol Gerekli', cls: 'ckart-chip-danger',
+      tip: 'Numune ve AR-GE farklı RF kayıtlarını gösteriyor.' },
+    COKLU_AKTIF_SORUMLU: { text: 'Kontrol Gerekli', cls: 'ckart-chip-warn',
+      tip: 'Birden fazla aktif sorumlu kaydı var; V1’de yalnız seçilen tek kişi gösterilir.' },
+    SORUMLU_ATANMAMIS: { text: 'Sorumlu Atanmamış', cls: 'ckart-chip-warn',
+      tip: 'Bu müşteri için aktif pazarlamacı atanmamış.' },
+    RF_CREATED: { text: 'RF Oluşturuldu', cls: 'ckart-chip-info',
+      tip: 'RF kaydı oluşturuldu.' },
+    RF_APPROVED: { text: 'RF Onaylandı', cls: 'ckart-chip-ok',
+      tip: 'RF kaydı onaylandı.' },
+    LEGACY_RF: { text: 'Önceki Sistem', cls: 'ckart-chip-info',
+      tip: 'RF bağlantısı metin/legacy kaynaklı; canonical ID yok.' },
+    LEGACY_ARGE: { text: 'Önceki Sistem', cls: 'ckart-chip-info',
+      tip: 'AR-GE kaydı legacy referans ile ilişkilendirilmiş.' }
+  };
+
+  function ckartChipHtml(key) {
+    var def = CKART_ZINCIR_LABEL[key];
+    if (!def) return '';
+    return '<span class="ckart-chip ' + def.cls + '" title="' + esc(def.tip) + '">' + esc(def.text) + '</span>';
+  }
+
+  /** row: API kaydı veya hafıza olayı. max 3 etiket. Politikayı yeniden hesaplamaz. */
+  function ckartZincirChipHtml(row, opts) {
+    opts = opts || {};
+    if (!row || typeof row !== 'object') return '';
+    var keys = [];
+    var tip = row.baslangic_tipi || null;
+    var uyarilar = row.zincir_uyarilari || [];
+    if (!Array.isArray(uyarilar)) uyarilar = [];
+    var olay = row.olay_kodu || null;
+
+    function push(k) {
+      if (!k || keys.indexOf(k) >= 0) return;
+      if (!CKART_ZINCIR_LABEL[k]) return;
+      keys.push(k);
+    }
+
+    // 1) kritik
+    if (row.zincir_eksik || tip === 'ZINCIR_KOPUK' || uyarilar.indexOf('ZINCIR_KOPUK') >= 0) {
+      push('ZINCIR_KOPUK');
+    }
+    if (!opts.skipRf && (row.pointer_uyumsuzlugu || uyarilar.indexOf('RF_POINTER_UYUSMAZLIGI') >= 0)) {
+      push('RF_POINTER_UYUSMAZLIGI');
+    }
+    // 2) başlangıç / olay
+    if (tip && tip !== 'ZINCIR_KOPUK') push(tip);
+    if (olay === 'RF_APPROVED') push('RF_APPROVED');
+    else if (olay === 'RF_CREATED') push('RF_CREATED');
+    // 3) operasyonel bilgi (hata değil)
+    if (uyarilar.indexOf('URETIM_BILGISI_YOK') >= 0 || row.uretim_bilgisi_yok) {
+      push('URETIM_BILGISI_YOK');
+    }
+    if (!opts.skipRf && row.legacy_baglanti && !row.rf && !row.aktif_rf) {
+      push('LEGACY_RF');
+    }
+
+    var max = opts.max != null ? opts.max : 3;
+    keys = keys.slice(0, max);
+    if (!keys.length) return '';
+    return '<span class="ckart-chip-wrap">' + keys.map(ckartChipHtml).join('') + '</span>';
+  }
+
+  window.ckartZincirChipHtml = ckartZincirChipHtml;
+  window.CKART_ZINCIR_LABEL = CKART_ZINCIR_LABEL;
+
   function nowLocal() {
     var d = new Date();
     d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -835,7 +943,14 @@
       var wrap = document.createElement('div');
       wrap.innerHTML = ckartHafizaSatirHtml(ev);
       var li = wrap.firstChild;
-      li.querySelector('.ckart-hafiza-bas').textContent = ev.title || ev.hareket_turu || '—';
+      var basEl = li.querySelector('.ckart-hafiza-bas');
+      basEl.textContent = ev.title || ev.hareket_turu || '—';
+      var chipHtml = ckartZincirChipHtml(ev, { max: 3 });
+      if (chipHtml) {
+        var chipHost = document.createElement('span');
+        chipHost.innerHTML = chipHtml;
+        basEl.appendChild(chipHost);
+      }
       li.querySelector('.ckart-hafiza-oz').textContent = ev.short_description || '—';
       var metaEl = li.querySelector('.ckart-hafiza-meta');
       var bits = [];
@@ -1138,7 +1253,8 @@
               + '<td>' + esc(ckartTicariKaynakEtiket(s.fiyat_durumu)) + '</td>';
           }
           return '<tr>'
-            + '<td><strong>' + esc(s.siparis_no || '—') + '</strong></td>'
+            + '<td><strong>' + esc(s.siparis_no || '—') + '</strong> '
+            + ckartZincirChipHtml(s, { max: 2 }) + '</td>'
             + '<td>' + esc(dash(s.siparis_tarihi)) + '</td>'
             + '<td>' + esc(dash(s.durum)) + '</td>'
             + ticariCells
@@ -1183,7 +1299,8 @@
             ? '<a class="ckart-link" href="' + esc(u.siparis_url) + '">Sipariş</a>'
             : '—';
           return '<tr>'
-            + '<td><strong>' + esc(u.plan_kodu || '—') + '</strong></td>'
+            + '<td><strong>' + esc(u.plan_kodu || '—') + '</strong> '
+            + ckartZincirChipHtml(u, { max: 2 }) + '</td>'
             + '<td>' + esc(dash(u.siparis_no)) + '</td>'
             + '<td>' + esc(dash(u.durum)) + '</td>'
             + '<td>' + batch + '</td>'
@@ -1229,7 +1346,8 @@
             sipHtml = '<a class="ckart-link" href="' + esc(s.siparis_url) + '">' + esc(dash(s.siparis_no)) + '</a>';
           }
           html.push('<tr>'
-            + '<td><strong>' + no + '</strong></td>'
+            + '<td><strong>' + no + '</strong> '
+            + ckartZincirChipHtml(s, { max: 2 }) + '</td>'
             + '<td>' + esc(dash(s.tarih)) + '</td>'
             + '<td>' + sipHtml + '</td>'
             + '<td>' + esc(s.batch_sayisi != null ? s.batch_sayisi : 0) + '</td>'
@@ -1331,15 +1449,34 @@
               sipHtml = '<span class="ckart-muted">(' + esc(n.bagli_siparis_sayisi) + ')</span> ' + sipHtml;
             }
           }
+          /* FAZ-2D/3D: RF hücresi + satır zincir etiketleri */
+          var rfCell = esc(dash(n.rf));
+          if (n.pointer_uyumsuzlugu) {
+            rfCell = ckartChipHtml('RF_POINTER_UYUSMAZLIGI');
+            if (n.numune_rf || n.arge_rf) {
+              rfCell += '<div class="ckart-muted" style="font-size:11px">'
+                + esc(dash(n.numune_rf || n.rf)) + ' / ' + esc(dash(n.arge_rf)) + '</div>';
+            }
+          } else if (n.legacy_baglanti && !n.rf) {
+            rfCell = ckartChipHtml('LEGACY_RF')
+              + '<div class="ckart-muted" style="font-size:11px">'
+              + esc(dash(n.legacy_rf_text || 'legacy text')) + '</div>';
+          } else if (n.tekil_formul && (n.tekil_formul.kod || n.tekil_formul.ad)) {
+            rfCell = rfCell + '<div class="ckart-muted" style="font-size:11px">'
+              + esc(n.tekil_formul.kod || n.tekil_formul.ad) + '</div>';
+          } else if (n.formul_belirsiz) {
+            rfCell = rfCell + '<div class="ckart-muted" style="font-size:11px">Birden Fazla Formül</div>';
+          }
           return '<tr>'
-            + '<td><strong>' + esc(n.talep_kodu || '—') + '</strong></td>'
+            + '<td><strong>' + esc(n.talep_kodu || '—') + '</strong> '
+            + ckartZincirChipHtml(n, { max: 2, skipRf: true }) + '</td>'
             + '<td>' + esc(dash(n.tarih)) + '</td>'
             + '<td>' + esc(dash(n.talep_eden)) + '</td>'
             + '<td>' + esc(dash(n.urun_tipi)) + '</td>'
             + '<td class="ckart-wrap">' + esc(dash(n.urun_adi)) + '</td>'
             + '<td>' + esc(dash(n.renk)) + '</td>'
             + '<td>' + esc(dash(n.talep_turu)) + '</td>'
-            + '<td>' + esc(dash(n.rf)) + '</td>'
+            + '<td class="ckart-wrap">' + rfCell + '</td>'
             + '<td>' + esc(dash(n.durum)) + '</td>'
             + '<td class="ckart-wrap">' + sipHtml + '</td>'
             + '<td>' + esc(dash(n.son_guncelleme)) + '</td>'

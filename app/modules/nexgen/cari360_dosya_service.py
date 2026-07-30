@@ -12,7 +12,6 @@ from modules.nexgen.cari_sorumlu_service import can_view_cari, list_aktif_cari_s
 from modules.nexgen.cari360_yetki import can_cari360_finans_view
 from modules.nexgen.cari_yetkili_service import list_cari_yetkilileri
 from modules.nexgen.mo_gorusme_config import KAYNAK_MUSTERI_OPERASYONU, TABLO as GORUSME_TABLO
-from modules.nexgen.mo_gorusme_service import timeline_olay_sozlesmesi
 from modules.nexgen.mo_tahsilat_config import PLAN_DURUM_SEVK_BEKLIYOR
 from modules.nexgen.mo_tahsilat_plan_service import plan_hatirlatma_grubu, tahsilat_kural_etiket
 
@@ -140,6 +139,8 @@ def _hafiza_satir(
     parent_type: str | None = None,
     parent_id: int | str | None = None,
     cari_id: int | None = None,
+    result_type: str | None = None,
+    result_id: int | str | None = None,
 ) -> dict[str, Any]:
     dk = f'{source_type}:{source_id}:{kategori}:{hareket_turu}'
     if dedupe_suffix:
@@ -169,6 +170,8 @@ def _hafiza_satir(
         'parent_type': parent_type,
         'parent_id': parent_id,
         'cari_id': cari_id,
+        'result_type': result_type,
+        'result_id': result_id,
     }
 
 
@@ -304,13 +307,21 @@ def hafiza_liste(
     arama: str | None = None,
     limit: int | None = None,
     include_test: bool = False,
-) -> list[dict[str, Any]]:
-    """Federasyon read-model — nexgen_cari.id üzerinden; append-only tablo yok."""
+    return_meta: bool = False,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    entity_type: str | None = None,
+) -> list[dict[str, Any]] | tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Federasyon read-model — nexgen_cari.id üzerinden; append-only tablo yok.
+
+    FAZ-3B/3C: operasyon zinciri timeline (SELECT-only). Soft-write yok.
+    """
     _erisim(con, cari_id, uid, yk)
     events: list[dict] = []
     seen: set[str] = set()
     finans_ok = can_cari360_finans_view(yk or set())
     kart_base = f'/nexgen/cari360/{cari_id}'
+    ops_meta: dict[str, Any] = {}
 
     def _add(ev: dict):
         if ev.get('test_kayit') and not include_test:
@@ -359,186 +370,45 @@ def hafiza_liste(
                     dedupe_suffix='update',
                 ))
 
-    # --- Sorumlu pazarlamacı ---
-    if _tablo_var(con, 'cari_sorumlu'):
+    # --- FAZ-3B operasyon timeline (SELECT-only; soft-write yok) ---
+    from modules.nexgen.cari360_timeline_service import build_ops_timeline
+    _ops_events, ops_meta = build_ops_timeline(
+        con, int(cari_id), include_test=include_test,
+    )
+    for ev in _ops_events:
+        _add(ev)
+
+    # --- Numune gelişme (timeline create dışında ek hareketler) ---
+    if _tablo_var(con, 'nexgen_numune_talep_gelisme') and _tablo_var(con, 'nexgen_numune_talep'):
         for r in con.execute(
-            """SELECT cs.*, sk.KullaniciAdi FROM cari_sorumlu cs
-               LEFT JOIN sistem_kullanici sk ON sk.Id=cs.kullanici_id
-               WHERE cs.cari_id=? ORDER BY cs.baslangic_tarihi DESC, cs.id DESC""",
+            """SELECT g.*, nt.talep_kodu, nt.cari_id FROM nexgen_numune_talep_gelisme g
+               JOIN nexgen_numune_talep nt ON nt.id=g.talep_id
+               WHERE nt.cari_id=? AND COALESCE(g.aktif,1)=1 AND COALESCE(nt.aktif,1)=1
+               ORDER BY g.olay_tarihi DESC""",
             (cari_id,),
         ).fetchall():
             d = dict(r)
-            rol = d.get('sorumluluk_rolu') or 'SORUMLU'
-            aktif = int(d.get('aktif') or 0) == 1
-            bas = 'Sorumlu pazarlamacı atandı' if aktif else 'Sorumlu pazarlamacı değişti/sonlandı'
+            tip = (d.get('olay_tipi') or 'Gelişme').replace('_', ' ')
             _add(_hafiza_satir(
-                event_date=d.get('baslangic_tarihi') or d.get('created_at') or '',
-                hareket_turu='Sorumlu',
-                baslik=bas,
-                aciklama=f"{d.get('KullaniciAdi') or d.get('kullanici_id')} · {rol}"
-                         + (f" · {d.get('atama_notu')}" if d.get('atama_notu') else ''),
-                durum='Aktif' if aktif else 'Pasif',
-                source_type='cari_sorumlu',
+                event_date=d.get('olay_tarihi') or '',
+                hareket_turu='Numune gelişme',
+                baslik=f'Numune — {tip}',
+                aciklama=(d.get('olay_metni') or d.get('talep_kodu') or '')[:300],
+                durum=tip,
+                source_type='nexgen_numune_talep_gelisme',
                 source_id=d['id'],
-                kayit_no=str(d['id']),
-                kategori='cari',
-                detay_url=f'{kart_base}?tab=genel',
-                oncelik=55,
-            ))
-
-    # --- Yetkililer ---
-    if _tablo_var(con, 'cari_yetkili'):
-        for y in list_cari_yetkilileri(con, cari_id, sadece_aktif=False):
-            ad = y.get('ad_soyad') or y.get('ad') or 'Yetkili'
-            ts = y.get('created_at') or y.get('updated_at') or ''
-            if not ts:
-                continue
-            _add(_hafiza_satir(
-                event_date=ts,
-                hareket_turu='Yetkili',
-                baslik='Yetkili kaydı',
-                aciklama=f"{ad} · {y.get('unvan') or y.get('departman') or ''}".strip(' ·'),
-                durum='Aktif' if int(y.get('aktif') or 0) == 1 else 'Pasif',
-                source_type='cari_yetkili',
-                source_id=y['id'],
-                kayit_no=str(y['id']),
-                kategori='cari',
-                detay_url=f'{kart_base}?tab=yetkililer',
-                oncelik=35,
-            ))
-
-    # --- Görüşme / takip ---
-    if _tablo_var(con, GORUSME_TABLO):
-        for r in con.execute(
-            f"""SELECT g.*, sk.KullaniciAdi FROM {GORUSME_TABLO} g
-                LEFT JOIN sistem_kullanici sk ON sk.Id=g.kullanici_id
-                WHERE g.cari_id=? AND g.aktif=1 ORDER BY g.gorusme_tarihi DESC""",
-            (cari_id,),
-        ).fetchall():
-            d = dict(r)
-            test = _test_mi(d.get('kisa_not'), d.get('idempotency_key'))
-            soz = timeline_olay_sozlesmesi(d)
-            tip = d.get('gorusme_tipi') or 'Görüşme'
-            kat = 'sozler' if d.get('musteri_sozu') or d.get('bizim_sozumuz') else 'gorusmeler'
-            takip = (d.get('sonraki_takip_tarihi') or '')[:10]
-            _add(_hafiza_satir(
-                event_date=d.get('gorusme_tarihi') or d.get('olusturma_tarihi') or '',
-                hareket_turu=tip,
-                baslik=soz.get('baslik') or f'{tip}',
-                aciklama=soz.get('ozet') or d.get('kisa_not') or '',
-                durum=d.get('sonuc_tipi') or '—',
-                source_type='musteri_operasyon_gorusme',
-                source_id=d['id'],
-                kayit_no=str(d['id']),
-                termin=takip,
-                kategori=kat,
-                test=test,
-                audit=[{'kullanici': d.get('KullaniciAdi'), 'not': d.get('kisa_not')}],
-                metadata={
-                    'musteri_sozu': d.get('musteri_sozu'), 'bizim_sozumuz': d.get('bizim_sozumuz'),
-                    'sonraki_takip': d.get('sonraki_takip_tarihi'),
-                    'numune_talep_id': d.get('numune_talep_id'),
-                },
-                detay_url=f'{kart_base}?tab=gorusmeler',
-                oncelik=90,
-                sonraki_asama='Takip' if takip else '',
-                gecikme=_gecikme_etiket(takip) if takip else '',
-                entity_type='musteri_operasyon_gorusme',
-                entity_id=d['id'],
-                parent_type=None,
-                parent_id=None,
-                cari_id=int(cari_id),
-            ))
-
-    # --- Numune + gelişme ---
-    if _tablo_var(con, 'nexgen_numune_talep'):
-        cols = ['id', 'talep_kodu', 'durum', 'urun_adi', 'urun_tipi', 'olusturma_tarihi',
-                'guncelleme_tarihi', 'revizyon_gerekce', 'hedef_tarih', 'arge_test_id']
-        for o in ('aciklama', 'ek_not', 'idempotency_key', 'isleme_alinma_tarihi', 'mo_gorusme_id'):
-            if _kolon_var(con, 'nexgen_numune_talep', o):
-                cols.append(o)
-        sql = f"SELECT {', '.join(cols)} FROM nexgen_numune_talep WHERE cari_id=? AND aktif=1"
-        for r in con.execute(sql, (cari_id,)).fetchall():
-            d = dict(r)
-            test = _test_mi(d.get('talep_kodu'), d.get('aciklama'), d.get('idempotency_key'))
-            kod = d.get('talep_kodu') or str(d['id'])
-            bas, st = _numune_durum_metin(d.get('durum'))
-            termin = (d.get('hedef_tarih') or '')[:10]
-            parent_g = d.get('mo_gorusme_id')
-            _add(_hafiza_satir(
-                event_date=d.get('guncelleme_tarihi') or d.get('olusturma_tarihi') or '',
-                hareket_turu='Numune',
-                baslik=bas,
-                aciklama=f"{kod} · {d.get('urun_adi') or d.get('urun_tipi') or ''}",
-                durum=st,
-                source_type='nexgen_numune_talep',
-                source_id=d['id'],
-                kayit_no=kod,
-                termin=termin,
+                kayit_no=d.get('talep_kodu') or str(d.get('talep_id')),
                 kategori='numuneler',
-                test=test,
-                metadata={
-                    'revizyon_gerekce': d.get('revizyon_gerekce'),
-                    'arge_test_id': d.get('arge_test_id'),
-                    'mo_gorusme_id': parent_g,
-                },
                 detay_url=f'{kart_base}?tab=numuneler',
-                oncelik=88,
-                sonraki_asama=_numune_sonraki(d.get('durum')),
-                gecikme=_gecikme_etiket(termin),
-                entity_type='nexgen_numune_talep',
+                oncelik=87,
+                entity_type='nexgen_numune_talep_gelisme',
                 entity_id=d['id'],
-                parent_type='musteri_operasyon_gorusme' if parent_g else None,
-                parent_id=int(parent_g) if parent_g not in (None, '', 0) else None,
+                parent_type='nexgen_numune_talep',
+                parent_id=d.get('talep_id'),
                 cari_id=int(cari_id),
             ))
-            if d.get('olusturma_tarihi') and (d.get('guncelleme_tarihi') or '')[:16] != (d.get('olusturma_tarihi') or '')[:16]:
-                _add(_hafiza_satir(
-                    event_date=d['olusturma_tarihi'],
-                    hareket_turu='Numune',
-                    baslik='Numune — Talep açıldı',
-                    aciklama=f"{kod} · {d.get('urun_adi') or ''}",
-                    durum='Talep açıldı',
-                    source_type='nexgen_numune_talep',
-                    source_id=d['id'],
-                    kayit_no=kod,
-                    kategori='numuneler',
-                    test=test,
-                    detay_url=f'{kart_base}?tab=numuneler',
-                    oncelik=85,
-                    dedupe_suffix='open',
-                    entity_type='nexgen_numune_talep',
-                    entity_id=d['id'],
-                    parent_type='musteri_operasyon_gorusme' if parent_g else None,
-                    parent_id=int(parent_g) if parent_g not in (None, '', 0) else None,
-                    cari_id=int(cari_id),
-                ))
 
-        if _tablo_var(con, 'nexgen_numune_talep_gelisme'):
-            for r in con.execute(
-                """SELECT g.*, nt.talep_kodu, nt.cari_id FROM nexgen_numune_talep_gelisme g
-                   JOIN nexgen_numune_talep nt ON nt.id=g.talep_id
-                   WHERE nt.cari_id=? AND COALESCE(g.aktif,1)=1 AND COALESCE(nt.aktif,1)=1
-                   ORDER BY g.olay_tarihi DESC""",
-                (cari_id,),
-            ).fetchall():
-                d = dict(r)
-                tip = (d.get('olay_tipi') or 'Gelişme').replace('_', ' ')
-                _add(_hafiza_satir(
-                    event_date=d.get('olay_tarihi') or '',
-                    hareket_turu='Numune gelişme',
-                    baslik=f'Numune — {tip}',
-                    aciklama=(d.get('olay_metni') or d.get('talep_kodu') or '')[:300],
-                    durum=tip,
-                    source_type='nexgen_numune_talep_gelisme',
-                    source_id=d['id'],
-                    kayit_no=d.get('talep_kodu') or str(d.get('talep_id')),
-                    kategori='numuneler',
-                    detay_url=f'{kart_base}?tab=numuneler',
-                    oncelik=87,
-                ))
-
-    # --- AR-GE olayları (cari_id FK veya numune köprüsü) ---
+    # --- AR-GE olay log (create timeline dışında; debug hariç) ---
     if _tablo_var(con, 'nexgen_arge_olay') and _tablo_var(con, 'nexgen_arge_test'):
         rows = con.execute(
             """SELECT o.*, a.test_no, a.cari_id AS arge_cari_id
@@ -578,43 +448,18 @@ def hafiza_liste(
                 oncelik=86,
             ))
 
-    # --- Sipariş (+ tahsilat planı; finans yetkisine bağlı) ---
-    if _tablo_var(con, 'nexgen_planlama_siparis'):
+    # --- Sipariş tahsilat planı (finans; ana sipariş create timeline'da) ---
+    if finans_ok and _tablo_var(con, 'nexgen_planlama_siparis'):
         sql = """SELECT id, siparis_no, durum, notlar, olusturma_tarihi, guncelleme_tarihi,
-                 anlasma_birim_fiyat, vade_gun, musteri_termin, revizyon_gerekce,
-                 tahsilat_kurali, planlanan_tahsilat_tarihi, tahsilat_durumu, tahsilat_sozu,
-                 idempotency_key, talep_referansi FROM nexgen_planlama_siparis WHERE cari_id=?"""
+                 anlasma_birim_fiyat, tahsilat_kurali, planlanan_tahsilat_tarihi, tahsilat_durumu,
+                 tahsilat_sozu, idempotency_key
+                 FROM nexgen_planlama_siparis WHERE cari_id=?"""
         for r in con.execute(sql, (cari_id,)).fetchall():
             d = dict(r)
             test = _test_mi(d.get('notlar'), d.get('idempotency_key'), d.get('siparis_no'))
             no = d.get('siparis_no') or str(d['id'])
-            termin = (d.get('musteri_termin') or '')[:10]
-            surec = _siparis_canli_surec(con, int(d['id']), d.get('durum'), d.get('tahsilat_durumu'), termin)
-            bas = f"Sipariş — {surec['durum']}"
-            tutar = _fmt_tl(float(d.get('anlasma_birim_fiyat') or 0)) if finans_ok else ''
-            acik = f"{no} · {d.get('notlar') or d.get('talep_referansi') or ''}"[:200]
-            if surec.get('ozet'):
-                acik = f"{acik} · {surec['ozet']}"[:300]
-            _add(_hafiza_satir(
-                event_date=d.get('guncelleme_tarihi') or d.get('olusturma_tarihi') or '',
-                hareket_turu='Sipariş',
-                baslik=bas,
-                aciklama=acik,
-                durum=surec['durum'],
-                source_type='nexgen_planlama_siparis',
-                source_id=d['id'],
-                kayit_no=no,
-                tutar=tutar if tutar and tutar != '—' else '',
-                termin=termin,
-                kategori='siparisler',
-                test=test,
-                metadata={'vade_gun': d.get('vade_gun'), 'revizyon_gerekce': d.get('revizyon_gerekce')},
-                detay_url=f'{kart_base}?tab=siparisler',
-                oncelik=92,
-                sonraki_asama=surec.get('sonraki') or '',
-                gecikme=surec.get('gecikme') or '',
-            ))
-            if finans_ok and d.get('tahsilat_kurali'):
+            tutar = _fmt_tl(float(d.get('anlasma_birim_fiyat') or 0))
+            if d.get('tahsilat_kurali'):
                 td = (d.get('tahsilat_durumu') or '').upper()
                 if td == PLAN_DURUM_SEVK_BEKLIYOR:
                     tb, ts = 'Tahsilat — Gerçek sevk bekleniyor', 'Sevk bekleniyor'
@@ -640,159 +485,6 @@ def hafiza_liste(
                     oncelik=70,
                     dedupe_suffix='tahsilat-plan',
                 ))
-
-    # --- Üretim planı ---
-    if _tablo_var(con, 'nexgen_uretim_plan'):
-        for r in con.execute(
-            """SELECT p.*, sk.KullaniciAdi FROM nexgen_uretim_plan p
-               LEFT JOIN sistem_kullanici sk ON sk.Id=p.created_by
-               WHERE p.cari_id=? ORDER BY COALESCE(p.created_at, p.plan_tarihi) DESC""",
-            (cari_id,),
-        ).fetchall():
-            d = dict(r)
-            kod = d.get('plan_kodu') or str(d['id'])
-            _add(_hafiza_satir(
-                event_date=d.get('created_at') or d.get('plan_tarihi') or '',
-                hareket_turu='Üretim planı',
-                baslik='Üretim planı oluşturuldu',
-                aciklama=f"{kod} · {d.get('siparis_no') or ''} · {d.get('notlar') or ''}"[:250],
-                durum=(d.get('durum') or '—').replace('_', ' '),
-                source_type='nexgen_uretim_plan',
-                source_id=d['id'],
-                kayit_no=kod,
-                termin=(d.get('termin_tarihi') or '')[:10],
-                kategori='uretim',
-                audit=[{'kullanici': d.get('KullaniciAdi')}],
-                detay_url=f'{kart_base}?tab=uretim',
-                oncelik=91,
-                sonraki_asama='Batch / üretim',
-                gecikme=_gecikme_etiket(d.get('termin_tarihi')),
-            ))
-
-    # --- Batch + Ali başladı (parça MIN baslama) + son hareket ---
-    if _tablo_var(con, 'nexgen_uretim_batch') and _tablo_var(con, 'nexgen_uretim_plan'):
-        for r in con.execute(
-            """SELECT b.*, p.cari_id AS plan_cari_id, p.plan_kodu, p.siparis_no AS plan_siparis_no
-               FROM nexgen_uretim_batch b
-               JOIN nexgen_uretim_plan p ON p.id=b.plan_id
-               WHERE p.cari_id=?""",
-            (cari_id,),
-        ).fetchall():
-            d = dict(r)
-            if int(d.get('plan_cari_id') or 0) != int(cari_id):
-                continue
-            bk = d.get('batch_kodu') or str(d['id'])
-            _add(_hafiza_satir(
-                event_date=d.get('olusturma_tarihi') or '',
-                hareket_turu='Batch',
-                baslik='Batch oluştu',
-                aciklama=f"{bk} · plan {d.get('plan_kodu') or d.get('plan_id')} · {d.get('plan_siparis_no') or ''}"[:250],
-                durum=(d.get('durum') or '—').replace('_', ' '),
-                source_type='nexgen_uretim_batch',
-                source_id=d['id'],
-                kayit_no=bk,
-                kategori='uretim',
-                detay_url=f'{kart_base}?tab=uretim',
-                oncelik=93,
-                sonraki_asama='Üretim başlangıcı',
-            ))
-
-            if not _tablo_var(con, 'nexgen_uretim_parca'):
-                continue
-            first = con.execute(
-                """SELECT p.id, p.baslama_zamani, p.operator_id, p.parca_no, p.durum,
-                          sk.KullaniciAdi
-                   FROM nexgen_uretim_parca p
-                   LEFT JOIN sistem_kullanici sk ON sk.Id=p.operator_id
-                   WHERE p.batch_id=? AND p.baslama_zamani IS NOT NULL AND TRIM(p.baslama_zamani)!=''
-                   ORDER BY p.baslama_zamani ASC, p.id ASC LIMIT 1""",
-                (d['id'],),
-            ).fetchone()
-            if first:
-                fd = dict(first)
-                op = fd.get('KullaniciAdi') or (f"op#{fd['operator_id']}" if fd.get('operator_id') else '—')
-                _add(_hafiza_satir(
-                    event_date=fd['baslama_zamani'],
-                    hareket_turu='Üretim',
-                    baslik='Üretim başladı',
-                    aciklama=f"{bk} · parça {fd.get('parca_no')} · {op}",
-                    durum='Üretimde',
-                    source_type='nexgen_uretim_parca',
-                    source_id=fd['id'],
-                    kayit_no=bk,
-                    kategori='uretim',
-                    audit=[{'kullanici': op, 'operator_id': fd.get('operator_id')}],
-                    metadata={
-                        'batch_id': d['id'],
-                        'dedupe': 'batch_first_start',
-                        'baslama_zamani': fd['baslama_zamani'],
-                    },
-                    detay_url=f'{kart_base}?tab=uretim',
-                    oncelik=95,
-                    sonraki_asama='Üretim tamamlanması / sevkiyat',
-                    dedupe_suffix=f"batch-start-{d['id']}",
-                ))
-                # Aynı batch için ikinci "başladı" üretme: dedupe_suffix batch-start-{id}
-                last = con.execute(
-                    """SELECT p.id, p.updated_at, p.baslama_zamani, p.durum, p.uretilen_kg, p.parca_no
-                       FROM nexgen_uretim_parca p
-                       WHERE p.batch_id=? AND (
-                         UPPER(COALESCE(p.durum,'')) IN ('DEVAM','BASLADI','URETIMDE')
-                         OR (p.baslama_zamani IS NOT NULL AND (p.bitis_zamani IS NULL OR TRIM(p.bitis_zamani)=''))
-                       )
-                       ORDER BY COALESCE(p.updated_at, p.baslama_zamani) DESC, p.id DESC LIMIT 1""",
-                    (d['id'],),
-                ).fetchone()
-                if last:
-                    ld = dict(last)
-                    last_ts = ld.get('updated_at') or ld.get('baslama_zamani') or ''
-                    if last_ts and last_ts[:16] != (fd.get('baslama_zamani') or '')[:16]:
-                        _add(_hafiza_satir(
-                            event_date=last_ts,
-                            hareket_turu='Üretim',
-                            baslik='Üretim — son hareket',
-                            aciklama=f"{bk} · parça {ld.get('parca_no')} · {(ld.get('durum') or '')}",
-                            durum=(ld.get('durum') or 'DEVAM').replace('_', ' '),
-                            source_type='nexgen_uretim_parca',
-                            source_id=ld['id'],
-                            kayit_no=bk,
-                            kategori='uretim',
-                            detay_url=f'{kart_base}?tab=uretim',
-                            oncelik=80,
-                            dedupe_suffix=f"batch-last-{d['id']}",
-                        ))
-
-    # --- Sevkiyat ---
-    if _tablo_var(con, 'mo_musteri_sevkiyat'):
-        for r in con.execute(
-            """SELECT s.*, ps.siparis_no FROM mo_musteri_sevkiyat s
-               LEFT JOIN nexgen_planlama_siparis ps ON ps.id=s.siparis_id AND ps.cari_id=s.cari_id
-               WHERE s.cari_id=? AND s.aktif=1 ORDER BY COALESCE(s.sevk_tarihi, s.olusturma_tarihi) DESC""",
-            (cari_id,),
-        ).fetchall():
-            d = dict(r)
-            if int(d.get('cari_id') or 0) != int(cari_id):
-                continue
-            st = (d.get('durum') or '').upper()
-            if st in ('SEVK_EDILDI', 'TESLIM_EDILDI', 'TAMAMLANDI'):
-                bas = 'Sevk edildi'
-            elif st in ('HAZIRLANIYOR', 'HAZIR', 'BEKLIYOR'):
-                bas = 'Sevkiyat bekliyor'
-            else:
-                bas = f'Sevkiyat — {st.replace("_", " ")}'
-            _add(_hafiza_satir(
-                event_date=d.get('sevk_tarihi') or d.get('guncelleme_tarihi') or d.get('olusturma_tarihi') or '',
-                hareket_turu='Sevkiyat',
-                baslik=bas,
-                aciklama=f"{d.get('sevkiyat_no') or d['id']} · {d.get('siparis_no') or ''}"[:200],
-                durum=st.replace('_', ' ') or '—',
-                source_type='mo_musteri_sevkiyat',
-                source_id=d['id'],
-                kayit_no=d.get('sevkiyat_no') or str(d['id']),
-                kategori='sevkiyatlar',
-                detay_url=f'{kart_base}?tab=sevkiyatlar',
-                oncelik=94,
-            ))
 
     # --- Tahsilat kaydı (finans yetkisi) ---
     if finans_ok and _tablo_var(con, 'mo_tahsilat_kayit'):
@@ -865,6 +557,11 @@ def hafiza_liste(
             ))
 
     bas, bit = _tarih_araligi(tarih_preset)
+    # FAZ-3C: date_from/date_to ISO override (preset ile AND)
+    if date_from:
+        bas = date_from if (not bas or date_from > bas) else bas
+    if date_to:
+        bit = date_to if (not bit or date_to < bit) else bit
     out = []
     for e in events:
         if kategori and kategori != 'tumu':
@@ -873,7 +570,11 @@ def hafiza_liste(
                     continue
             elif kategori != 'sozler' and e['category'] != kategori:
                 continue
-        d = (e.get('event_date') or '')[:10]
+        if entity_type:
+            et = (e.get('entity_type') or e.get('source_type') or '')
+            if et != entity_type and e.get('olay_kodu') != entity_type:
+                continue
+        d = (e.get('event_date') or e.get('olay_tarihi') or '')[:10]
         if bas and d and d < bas:
             continue
         if bit and d and d > bit:
@@ -883,9 +584,18 @@ def hafiza_liste(
             if arama.lower() not in blob:
                 continue
         out.append(e)
-    out.sort(key=lambda x: (x.get('event_date') or '', x.get('oncelik') or 0), reverse=True)
+    out.sort(
+        key=lambda x: (
+            x.get('event_date') or x.get('olay_tarihi') or '',
+            x.get('oncelik') or 0,
+            int(x['entity_id']) if str(x.get('entity_id', '')).isdigit() else 0,
+        ),
+        reverse=True,
+    )
     if limit is not None and limit > 0:
         out = out[:limit]
+    if return_meta:
+        return out, ops_meta
     return out
 
 

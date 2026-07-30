@@ -19,12 +19,19 @@ from modules.nexgen.cari360_dosya_service import (
 from modules.nexgen.cari360_ops_read_service import (
     Cari360OpsError,
     enrich_gorusmeler_bagli_numuneler,
+    enrich_gorusmeler_zincir_flags,
     load_cari360_numuneler,
     load_cari360_ozet,
     load_cari360_sevkiyatlar,
     load_cari360_siparisler,
     load_cari360_uretim,
     load_cari360_urunler,
+)
+from modules.nexgen.cari360_relation_policy import (
+    clamp_limit,
+    clamp_offset,
+    parse_iso_date,
+    resolve_tek_sorumlu,
 )
 from modules.nexgen.cari360_ticari_ozet_service import load_cari360_ticari_ozet
 from modules.nexgen.cari360_yetki import can_cari360_dosya_ekrani
@@ -217,6 +224,7 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
                 return jsonify({'ok': False, 'mesaj': 'Cari bulunamadı.'}), 404
             liste = list_gorusmeler(con, cari_id, uid, yk)
             liste = enrich_gorusmeler_bagli_numuneler(con, cari_id, liste)
+            liste, sm = enrich_gorusmeler_zincir_flags(con, cari_id, liste)
             gorusme_sayisi = int(con.execute(
                 'SELECT COUNT(*) FROM musteri_operasyon_gorusme '
                 'WHERE cari_id=? AND COALESCE(aktif, 1)=1',
@@ -228,6 +236,9 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
                 'count': gorusme_sayisi,
                 'acik_takip': acik_takip_sayisi(con, cari_id),
                 'can_write': can_mo_gorusme_yaz(con, uid, cari_id, yk),
+                'sorumlu': sm.get('sorumlu'),
+                'sorumlu_uyarilari': sm.get('sorumlu_uyarilari') or [],
+                'sorumlu_atanmamis': bool(sm.get('sorumlu_atanmamis')),
             })
         except MoGorusmeError as e:
             return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod
@@ -341,16 +352,56 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
             kategori = (request.args.get('kategori') or 'tumu').strip()
             tarih = (request.args.get('tarih') or 'tumu').strip()
             arama = (request.args.get('q') or '').strip() or None
-            lim_raw = (request.args.get('limit') or '').strip()
-            limit = int(lim_raw) if lim_raw.isdigit() else None
-            events = hafiza_liste(
+            entity_type = (request.args.get('entity_type') or '').strip() or None
+            try:
+                date_from = parse_iso_date(request.args.get('date_from'), field='date_from')
+                date_to = parse_iso_date(request.args.get('date_to'), field='date_to')
+            except ValueError as e:
+                return jsonify({'ok': False, 'mesaj': str(e)}), 400
+            if date_from and date_to and date_from > date_to:
+                return jsonify({
+                    'ok': False,
+                    'mesaj': 'date_from date_to değerinden büyük olamaz.',
+                }), 400
+            limit = clamp_limit(request.args.get('limit'), default=50, maximum=200)
+            offset = clamp_offset(request.args.get('offset'))
+            events, ops_meta = hafiza_liste(
                 con, cari_id, uid, _yk(),
                 kategori=None if kategori == 'tumu' else kategori,
                 tarih_preset=None if tarih == 'tumu' else tarih,
                 arama=arama,
-                limit=limit,
+                limit=None,  # pagination route tarafında
+                return_meta=True,
+                date_from=date_from,
+                date_to=date_to,
+                entity_type=entity_type,
             )
-            return jsonify({'ok': True, 'events': events, 'count': len(events)})
+            toplam = len(events)
+            page = events[offset:offset + limit]
+            has_more = (offset + limit) < toplam
+            sm = resolve_tek_sorumlu(con, cari_id)
+            # FAZ-3B/3C: mevcut events/count + pagination
+            return jsonify({
+                'ok': True,
+                'events': page,
+                'count': len(page),
+                'olaylar': page,
+                'toplam': toplam,
+                'limit': limit,
+                'offset': offset,
+                'has_more': has_more,
+                'zincir_uyari_sayisi': int(ops_meta.get('zincir_uyari_sayisi') or 0),
+                'dogrudan_numune_sayisi': int(ops_meta.get('dogrudan_numune_sayisi') or 0),
+                'dogrudan_siparis_sayisi': int(ops_meta.get('dogrudan_siparis_sayisi') or 0),
+                'sorumlu': sm.get('sorumlu') or ops_meta.get('sorumlu'),
+                'sorumlu_uyarilari': sm.get('sorumlu_uyarilari') or ops_meta.get('sorumlu_uyarilari') or [],
+                'sorumlu_atanmamis': bool(
+                    sm.get('sorumlu_atanmamis')
+                    if sm.get('sorumlu') is None
+                    else sm.get('sorumlu_atanmamis')
+                ),
+                'query_stats': ops_meta.get('query_stats') or {},
+            })
         except Cari360DosyaError as e:
             return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod
         except Exception as e:
