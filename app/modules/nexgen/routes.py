@@ -20448,28 +20448,59 @@ def _tua_tablet_marker_satir(kullanici_id=None, kullanici_ad=None):
 
 
 def _tua_plan_durum_sync(con, plan_id, batch_durum):
-    """Tablet batch durumuna göre plan durumunu günceller (tek plan)."""
+    """Tablet batch durumuna göre plan durumunu günceller (tek plan).
+
+    FAZ-NEXGEN-URETIM-KAPANIS-ZINCIRI-FIX-1:
+    Plan BITTI yalnız tüm gerçek batch'ler kapalıysa (≥1 BITTI, açık=0).
+    IPTAL batch kapanışı engellemez. Çok batch'li planda bir batch BITTI,
+    diğeri HAZIR/DEVAM ise plan açık kalır.
+    """
     if not plan_id:
-        return
+        return {'ok': True, 'atlandi': True, 'neden': 'plan_yok'}
     if batch_durum == 'DEVAM':
         con.execute(
             "UPDATE nexgen_uretim_plan SET durum='URETIMDE' "
             "WHERE id=? AND durum IN ('PLANLANDI','URETIMDE','BASLADI')",
             (plan_id,),
         )
-    elif batch_durum == 'BEKLEME':
+        return {'ok': True, 'plan_durum': 'URETIMDE'}
+    if batch_durum == 'BEKLEME':
         con.execute(
             "UPDATE nexgen_uretim_plan SET durum='URETIMDE' "
             "WHERE id=? AND durum IN ('PLANLANDI','URETIMDE','BASLADI')",
             (plan_id,),
         )
-    elif batch_durum == 'BITTI':
-        con.execute(
-            "UPDATE nexgen_uretim_plan SET durum='BITTI' "
-            "WHERE id=? AND durum IN ('BASLADI','URETIMDE')",
-            (plan_id,),
-        )
-        _pzm_siparis_tamamlandi_sync(con, plan_id)
+        return {'ok': True, 'plan_durum': 'URETIMDE'}
+    if batch_durum != 'BITTI':
+        return {'ok': True, 'atlandi': True, 'neden': 'batch_durum'}
+
+    counts = con.execute("""
+        SELECT
+            COUNT(*) AS toplam,
+            SUM(CASE WHEN durum='BITTI' THEN 1 ELSE 0 END) AS bitti,
+            SUM(CASE WHEN durum NOT IN ('BITTI','IPTAL') THEN 1 ELSE 0 END) AS acik
+        FROM nexgen_uretim_batch
+        WHERE plan_id=?
+    """, (plan_id,)).fetchone()
+    toplam = int(counts['toplam'] or 0)
+    bitti = int(counts['bitti'] or 0)
+    acik = int(counts['acik'] or 0)
+    if toplam <= 0 or acik > 0 or bitti <= 0:
+        return {
+            'ok': True, 'atlandi': True, 'neden': 'acik_veya_eksik_batch',
+            'toplam': toplam, 'bitti': bitti, 'acik': acik,
+        }
+
+    con.execute(
+        "UPDATE nexgen_uretim_plan SET durum='BITTI' "
+        "WHERE id=? AND durum IN ('BASLADI','URETIMDE')",
+        (plan_id,),
+    )
+    sip = _pzm_siparis_tamamlandi_sync(con, plan_id)
+    return {
+        'ok': True, 'plan_durum': 'BITTI', 'siparis_sync': sip,
+        'toplam': toplam, 'bitti': bitti, 'acik': 0,
+    }
 
 
 def _tua_batch_bitir_kontrol(con, batch_kodu, mevcut_durum):
@@ -20493,6 +20524,93 @@ def _tua_batch_bitir_kontrol(con, batch_kodu, mevcut_durum):
                 f'Tüm alt emirler bitmeden batch kapatılamaz ({acik} açık parça).'
             )
     return True, None
+
+
+def _batch_auto_kapat_if_ready(con, batch_kodu):
+    """FAZ-NEXGEN-URETIM-KAPANIS-ZINCIRI-FIX-1: açık gerçek parça yoksa batch BITTI.
+
+    Kurallar:
+      - IPTAL → dokunma
+      - zaten BITTI → plan/sipariş sync idempotent dene
+      - açık parça (NOT IN BITTI,IPTAL) = 0 ve ≥1 BITTI
+      - kapatma: mevcut _tua_batch_bitir_kontrol + plan sync + RF tamamlandi
+    Stok/rezerv hareketi üretmez.
+    """
+    if not batch_kodu:
+        return {'ok': True, 'atlandi': True, 'neden': 'batch_yok'}
+    batch = con.execute(
+        "SELECT batch_kodu, durum, plan_id FROM nexgen_uretim_batch WHERE batch_kodu=?",
+        (batch_kodu,),
+    ).fetchone()
+    if not batch:
+        return {'ok': True, 'atlandi': True, 'neden': 'batch_bulunamadi'}
+
+    mevcut = (batch['durum'] or '').upper()
+    if mevcut == 'IPTAL':
+        return {'ok': True, 'atlandi': True, 'neden': 'iptal', 'batch_kodu': batch_kodu}
+    if mevcut == 'BITTI':
+        plan_sync = _tua_plan_durum_sync(con, batch['plan_id'], 'BITTI')
+        return {
+            'ok': True, 'atlandi': True, 'neden': 'zaten_bitti',
+            'batch_kodu': batch_kodu, 'plan_sync': plan_sync,
+        }
+
+    if not _parca_tablosu_var(con):
+        return {'ok': True, 'atlandi': True, 'neden': 'parca_tablo_yok'}
+
+    sayac = con.execute("""
+        SELECT COUNT(*) AS toplam,
+               SUM(CASE WHEN durum='BITTI' THEN 1 ELSE 0 END) AS bitti,
+               SUM(CASE WHEN durum NOT IN ('BITTI','IPTAL') THEN 1 ELSE 0 END) AS acik
+        FROM nexgen_uretim_parca WHERE batch_kodu=?
+    """, (batch_kodu,)).fetchone()
+    toplam = int(sayac['toplam'] or 0)
+    bitti = int(sayac['bitti'] or 0)
+    acik = int(sayac['acik'] or 0)
+    if toplam <= 0:
+        return {'ok': True, 'atlandi': True, 'neden': 'parca_yok', 'batch_kodu': batch_kodu}
+    if acik > 0:
+        return {
+            'ok': True, 'atlandi': True, 'neden': 'acik_parca',
+            'batch_kodu': batch_kodu, 'acik': acik, 'bitti': bitti,
+        }
+    if bitti <= 0:
+        return {'ok': True, 'atlandi': True, 'neden': 'bitti_yok', 'batch_kodu': batch_kodu}
+
+    uygun, hata = _tua_batch_bitir_kontrol(con, batch_kodu, mevcut)
+    if not uygun:
+        return {
+            'ok': True, 'atlandi': True, 'neden': 'kontrol',
+            'hata': hata, 'batch_kodu': batch_kodu,
+        }
+
+    con.execute(
+        "UPDATE nexgen_uretim_batch SET durum=? WHERE batch_kodu=? AND durum=?",
+        ('BITTI', batch_kodu, mevcut),
+    )
+    if con.total_changes == 0:
+        return {'ok': True, 'atlandi': True, 'neden': 'yaris', 'batch_kodu': batch_kodu}
+
+    plan_sync = _tua_plan_durum_sync(con, batch['plan_id'], 'BITTI')
+    # Manuel batch BITTI ile aynı: RF durum=TAMAMLANDI, miktar yeniden hesaplanır
+    _rf_kullanim_tablet_sync(con, batch_kodu, tamamlandi=True)
+    return {
+        'ok': True, 'kapandi': True,
+        'batch_kodu': batch_kodu, 'plan_id': batch['plan_id'],
+        'plan_sync': plan_sync,
+    }
+
+
+def _batch_auto_kapat_etkilenenler(con, batch_kodlari):
+    """Toplu/seçili bitir sonrası etkilenen batch'leri tekilleştirerek kapat."""
+    sonuclar = []
+    seen = set()
+    for bk in batch_kodlari or []:
+        if not bk or bk in seen:
+            continue
+        seen.add(bk)
+        sonuclar.append(_batch_auto_kapat_if_ready(con, bk))
+    return sonuclar
 
 
 def _tua_tablet_is_liste_sorgu(con):
@@ -25671,7 +25789,11 @@ def _parca_bitir_uygula(con, parca_id, hedef_kg, notlar=None):
     if not row:
         return {'ok': False, 'hata': 'Alt emir bulunamadı'}
     if row['durum'] == 'BITTI':
-        return {'ok': True, 'atlandi': True, 'uretilen_kg': round(float(hedef_kg), 3)}
+        return {
+            'ok': True, 'atlandi': True,
+            'uretilen_kg': round(float(hedef_kg), 3),
+            'batch_kodu': row['batch_kodu'],
+        }
     if row['durum'] not in ('DEVAM', 'HAZIR'):
         return {'ok': False, 'hata': f'{row["durum"]} durumundaki alt emir bitirilemez'}
 
@@ -25715,6 +25837,7 @@ def _parca_bitir_uygula(con, parca_id, hedef_kg, notlar=None):
     return {
         'ok': True,
         'uretilen_kg': uretilen_kg,
+        'batch_kodu': row['batch_kodu'],
         'stok_atlandi': stok.get('atlandi'),
         'rezerv_atlandi': rezerv.get('atlandi'),
         'hareket_sayisi': stok.get('hareket_sayisi', 0),
@@ -27304,6 +27427,8 @@ def api_parca_bitir(batch_kodu, parca_id):
         uretilen_kg = bitir['uretilen_kg']
 
         _rf_kullanim_tablet_sync(con, batch_kodu, uretim_emir_id=parca_id)
+        # RF sync sonrası: son gerçek parça ise batch→plan→sipariş (RF=TAMAMLANDI)
+        kapat = _batch_auto_kapat_if_ready(con, batch_kodu)
 
         con.commit()
         snap = _nexgen_batch_snapshot(con, batch_kodu)
@@ -27317,6 +27442,7 @@ def api_parca_bitir(batch_kodu, parca_id):
             **payload,
             'toplam_emir': snap['parca_toplam'] if snap else 0,
             'biten_emir': snap['parca_biten'] if snap else 0,
+            'batch_auto_kapat': bool(kapat.get('kapandi')),
         })
     except Exception as e:
         con.rollback()
@@ -27627,6 +27753,8 @@ def api_parca_toplu_bitir(batch_kodu):
             con, batch_kodu,
             uretim_emir_id=hedefler[-1]['id'] if hedefler else None
         )
+        # Tek batch — kapanış bir kez (döngü içinde değil)
+        kapat = _batch_auto_kapat_if_ready(con, batch_kodu)
 
         con.commit()
 
@@ -27638,6 +27766,7 @@ def api_parca_toplu_bitir(batch_kodu):
             'biten': len(hedefler),
             'biten_kg': round(biten_kg, 3),
             **payload,
+            'batch_auto_kapat': bool(kapat.get('kapandi')),
         })
     except Exception as e:
         con.rollback()
@@ -27689,6 +27818,7 @@ def api_parca_secili_isle(batch_kodu):
 
         islenen = 0
         atlanan = 0
+        bitir_batchleri = []
         for p in parcalar:
             pid   = p['id']
             durum = p['durum']
@@ -27710,6 +27840,8 @@ def api_parca_secili_isle(batch_kodu):
                 if not bitir.get('ok'):
                     con.rollback()
                     return _parca_stok_yetersiz_response(bitir)
+                if bitir.get('batch_kodu'):
+                    bitir_batchleri.append(bitir['batch_kodu'])
 
             elif islem == 'beklet':
                 if durum != 'DEVAM':
@@ -27742,6 +27874,12 @@ def api_parca_secili_isle(batch_kodu):
             son_id = ids[0] if ids else None
             _rf_kullanim_tablet_sync(con, batch_kodu, uretim_emir_id=son_id)
 
+        kapat_sonuclar = []
+        if islem == 'bitir' and islenen:
+            # Tekilleştirilmiş batch kapanış (aynı batch N kez çağrılmaz)
+            targets = bitir_batchleri or [batch_kodu]
+            kapat_sonuclar = _batch_auto_kapat_etkilenenler(con, targets)
+
         con.commit()
 
         snap = _nexgen_batch_snapshot(con, batch_kodu)
@@ -27752,6 +27890,7 @@ def api_parca_secili_isle(batch_kodu):
             'islenen': islenen,
             'atlanan': atlanan,
             **payload,
+            'batch_auto_kapat': any(s.get('kapandi') for s in kapat_sonuclar),
         })
     except Exception as e:
         con.rollback()
