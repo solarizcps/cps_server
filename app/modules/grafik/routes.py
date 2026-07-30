@@ -275,7 +275,7 @@ def numune_liste():
                                                      tedarikci_id=ted_id, musteri_ckod=musteri),
                            tedarikciler=qr.tedarikci_liste(),
                            urunler=qr.urun_liste(),
-                           musteriler=qr.musteri_liste_secimlik(),
+                           musteriler=qr.numune_musteri_liste_secimlik(),
                            kpi=qr.numune_kpi(),
                            durumlar=qr.NUMUNE_DURUMLARI,
                            arama=arama, durum=durum, ted_id=ted_id, musteri=musteri)
@@ -313,7 +313,7 @@ def numune_detay(numune_id):
                            iterasyonlar=qr.numune_iterasyonlar(numune_id),
                            tedarikciler=qr.tedarikci_liste(),
                            urunler=qr.urun_liste(),
-                           musteriler=qr.musteri_liste_secimlik(),
+                           musteriler=qr.numune_musteri_liste_secimlik(),
                            durumlar=qr.NUMUNE_DURUMLARI,
                            iter_durumlari=qr.ITERASYON_DURUMLARI,
                            dhl_sevkiyatlari=qr.numune_dhl_sevkiyatlari(numune_id),
