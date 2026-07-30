@@ -104,11 +104,15 @@ def register_numune_talep_routes(bp, db_factory, kullanici_id_fn, *, renk_kart_f
     @login_gerekli
     @yetki_gerekli('nexgen.plan.view', 'can_view')
     def api_nt_cariler():
-        """Yönetim Cari Kartları ile aynı kaynak (_nexgen_cari_kart_liste)."""
-        q = (request.args.get('q') or '').strip()
+        """Aktif nexgen_cari tam liste — Yönetim SoT (_pzm_aktif_cari_liste).
+
+        FAZ-NEXGEN-NUMUNE-TALEP-CARI-ARAMA-TR-NORMALIZE-FIX-1:
+        q parametresi SQL LIKE ile filtrelenmez (ş/s kırığı).
+        Arama yalnız frontend'de TR-normalize ile yapılır.
+        """
         con = _con()
         try:
-            return jsonify({'ok': True, 'cariler': cari_liste_fn(con, q or None)})
+            return jsonify({'ok': True, 'cariler': cari_liste_fn(con, None)})
         finally:
             con.close()
 

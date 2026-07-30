@@ -645,21 +645,42 @@ function ntCariAktif(c){
   return c && c.aktif !== 0 && c.aktif !== false && String(c.aktif) !== '0';
 }
 
+/* FAZ-NEXGEN-NUMUNE-TALEP-CARI-ARAMA-TR-NORMALIZE-FIX-1 — yalnız arama; DB unvan değişmez */
+function ntTrNorm(s){
+  s = String(s == null ? '' : s).trim().replace(/\s+/g, ' ');
+  s = s
+    .replace(/Ş/g,'s').replace(/ş/g,'s')
+    .replace(/Ğ/g,'g').replace(/ğ/g,'g')
+    .replace(/Ü/g,'u').replace(/ü/g,'u')
+    .replace(/Ö/g,'o').replace(/ö/g,'o')
+    .replace(/Ç/g,'c').replace(/ç/g,'c')
+    .replace(/İ/g,'i').replace(/I/g,'i').replace(/ı/g,'i')
+    .replace(/Â/g,'a').replace(/â/g,'a')
+    .replace(/Î/g,'i').replace(/î/g,'i')
+    .replace(/Û/g,'u').replace(/û/g,'u');
+  return s.toLowerCase();
+}
+
+function ntCariAramaMetni(c){
+  return ntTrNorm([c.unvan || '', c.cari_kod || '', c.kisa_ad || ''].join(' '));
+}
+
 function ntCarileriYukle(cb, opts){
   opts = opts || {};
   var sessiz = !!opts.sessiz;
   var zorla = !!opts.zorla;
-  var q = (document.getElementById('cari_ara') && document.getElementById('cari_ara').value || '').trim();
-  var url = '/nexgen/api/numune-talep/cariler' + (q ? ('?q=' + encodeURIComponent(q)) : '');
+  /* Tam aktif liste — q ile SQL filtre yok; arama client TR-normalize */
+  var cacheKey = '__aktif_all__';
+  var url = '/nexgen/api/numune-talep/cariler';
   var now = Date.now();
-  if(!zorla && NT._cariSonQ === q && NT._cariSonTs && (now - NT._cariSonTs < 15000) && NT.cariler && NT.cariler.length){
+  if(!zorla && NT._cariSonQ === cacheKey && NT._cariSonTs && (now - NT._cariSonTs < 15000) && NT.cariler && NT.cariler.length){
     if(cb) cb();
     return Promise.resolve();
   }
-  if(NT._cariFetchPromise && NT._cariFetchQ === q && !zorla){
+  if(NT._cariFetchPromise && NT._cariFetchQ === cacheKey && !zorla){
     return NT._cariFetchPromise.then(function(){ if(cb) cb(); });
   }
-  NT._cariFetchQ = q;
+  NT._cariFetchQ = cacheKey;
   NT._cariYukleniyor = true;
   NT._cariFetchPromise = fetch(url)
     .then(function(r){
@@ -669,7 +690,7 @@ function ntCarileriYukle(cb, opts){
     .then(function(d){
       if(d.ok === false) throw new Error(d.hata || 'Cari listesi alınamadı');
       NT.cariler = d.cariler || [];
-      NT._cariSonQ = q;
+      NT._cariSonQ = cacheKey;
       NT._cariSonTs = Date.now();
       if(cb) cb();
     })
@@ -705,11 +726,12 @@ function ntCariDropKapat(){
 function ntCariAra(acik){
   var drop = document.getElementById('cari_drop');
   if(!drop) return;
-  var q = (document.getElementById('cari_ara').value || '').trim().toLowerCase();
+  var qRaw = (document.getElementById('cari_ara').value || '');
+  var q = ntTrNorm(qRaw);
   var list = NT.cariler.filter(function(c){
     if(!ntCariAktif(c)) return false;
     if(!q) return true;
-    return (c.unvan||'').toLowerCase().indexOf(q) >= 0 || (c.cari_kod||'').toLowerCase().indexOf(q) >= 0;
+    return ntCariAramaMetni(c).indexOf(q) >= 0;
   });
   var h = '';
   if(!list.length){
