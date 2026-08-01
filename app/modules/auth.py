@@ -7,6 +7,76 @@ from modules import audit
 
 auth_bp = Blueprint('auth', __name__)
 
+AUTH_1B_SESSION_MESSAGE = (
+    'Oturumunuz kullanıcı veya yetki değişikliği nedeniyle sona erdi. '
+    'Lütfen tekrar giriş yapın.'
+)
+
+
+def _safe_session_user(user_row, rol_ad=None):
+    """Return the minimal, non-sensitive user payload stored in the session."""
+    if not user_row:
+        return None
+
+    payload = {
+        'Id': user_row.get('Id'),
+        'KullaniciAdi': user_row.get('KullaniciAdi'),
+        'AdSoyad': user_row.get('AdSoyad'),
+        'Tip': user_row.get('Tip') or 'sistem',
+        'RolId': user_row.get('RolId'),
+        'RolAd': rol_ad if rol_ad is not None else user_row.get('RolAd'),
+        'ZorunluSifreDegistir': 1 if user_row.get('ZorunluSifreDegistir') else 0,
+    }
+
+    # AUTH-1B may add this column later. Preserve it only when it already exists.
+    if user_row.get('AuthVersion') is not None:
+        payload['AuthVersion'] = user_row.get('AuthVersion')
+
+    # These fields are required only by the existing personnel persona flows.
+    if payload['Tip'] == 'personel':
+        if user_row.get('Sicil') is not None:
+            payload['Sicil'] = user_row.get('Sicil')
+        if user_row.get('Birim') is not None:
+            payload['Birim'] = user_row.get('Birim')
+
+    return payload
+
+
+def sistem_session_gecerli_mi(session_user):
+    """Validate a system-user session against current user and role state."""
+    if not session_user:
+        return False
+    if (session_user.get('Tip') or 'sistem') != 'sistem':
+        return True
+
+    user = qone("""
+        SELECT Id, KullaniciAdi, AdSoyad, RolId, Aktif,
+               ZorunluSifreDegistir, AuthVersion
+          FROM sistem_kullanici
+         WHERE Id = ?
+    """, (session_user.get('Id'),))
+    if not user or user.get('Aktif') != 1:
+        return False
+    if user.get('KullaniciAdi') != session_user.get('KullaniciAdi'):
+        return False
+    if user.get('RolId') != session_user.get('RolId'):
+        return False
+    if user.get('AuthVersion') != session_user.get('AuthVersion'):
+        return False
+
+    rol_id = user.get('RolId')
+    if not rol_id:
+        return False
+    rol = qone("SELECT Id, Ad, Aktif FROM sistem_rol WHERE Id = ?", (rol_id,))
+    if not rol or rol.get('Aktif') != 1:
+        return False
+
+    # Refresh only non-sensitive, authoritative values used downstream.
+    session_user['AdSoyad'] = user.get('AdSoyad')
+    session_user['RolAd'] = rol.get('Ad')
+    session_user['ZorunluSifreDegistir'] = 1 if user.get('ZorunluSifreDegistir') else 0
+    return True
+
 
 def login_kullanici(kadi, sifre):
     """FAZ 5.1: 3 tabloyu sirayla dener.
@@ -17,7 +87,9 @@ def login_kullanici(kadi, sifre):
     """
     # 1) sistem_kullanici (mock_data.db, duz metin)
     u = qone("""
-        SELECT * FROM sistem_kullanici
+        SELECT Id, KullaniciAdi, AdSoyad, Sifre, RolId, Aktif,
+               ZorunluSifreDegistir, AuthVersion, Tip
+          FROM sistem_kullanici
         WHERE KullaniciAdi = ? AND Sifre = ? AND Aktif = 1
     """, (kadi, sifre))
     if u:
@@ -295,7 +367,7 @@ def login():
             else:
                 u['RolAd'] = None
 
-            session['kullanici'] = dict(u)
+            session['kullanici'] = _safe_session_user(u, u.get('RolAd'))
             session['kullanici_tip'] = u.get('Tip') or 'sistem'  # FAZ 5.1
             session.permanent = True
 
@@ -396,13 +468,16 @@ def sifre_degistir():
                 hata = 'Mevcut şifre hatalı.'
             else:
                 qexec("""UPDATE sistem_kullanici
-                         SET Sifre = ?, ZorunluSifreDegistir = 0
+                         SET Sifre = ?, ZorunluSifreDegistir = 0,
+                             AuthVersion = AuthVersion + 1
                          WHERE Id = ?""", (yeni, u['Id']))
                 audit.log(u['KullaniciAdi'], 'SIFRE_DEGISTIR', 'sistem_kullanici',
                           u['Id'], aciklama='Şifre değiştirildi',
                           modul='yonetim', alt_modul='kullanici')
-                session['kullanici']['Sifre'] = yeni
                 session['kullanici']['ZorunluSifreDegistir'] = 0
+                session['kullanici']['AuthVersion'] = int(
+                    session['kullanici'].get('AuthVersion') or 1
+                ) + 1
                 basarili = True
                 # Sifre degistirme sonrasi rol bazli yonlendirme
                 _rol_ad = u.get('RolAd') or (

@@ -202,7 +202,8 @@ def kullanici_guncelle(kullanici_id, veri, kullanici):
     }
     qexec("""
         UPDATE sistem_kullanici
-           SET AdSoyad=?, Email=?, RolId=?, Rol=?, Aktif=?
+           SET AdSoyad=?, Email=?, RolId=?, Rol=?, Aktif=?,
+               AuthVersion = AuthVersion + 1
          WHERE Id=?
     """, (yeni['AdSoyad'], yeni['Email'], yeni['RolId'], yeni['Rol'], yeni['Aktif'],
           kullanici_id))
@@ -214,7 +215,9 @@ def kullanici_guncelle(kullanici_id, veri, kullanici):
 
 def kullanici_sifre_sifirla(kullanici_id, yeni_sifre, kullanici, zorunlu_degistir=True):
     qexec("""
-        UPDATE sistem_kullanici SET Sifre=?, ZorunluSifreDegistir=? WHERE Id=?
+        UPDATE sistem_kullanici
+           SET Sifre=?, ZorunluSifreDegistir=?, AuthVersion=AuthVersion+1
+         WHERE Id=?
     """, (yeni_sifre, 1 if zorunlu_degistir else 0, kullanici_id))
     audit.log_olay(kullanici, 'SIFRE_SIFIRLA', 'sistem_kullanici', kullanici_id,
                    aciklama="Şifre sıfırlandı",
@@ -222,13 +225,19 @@ def kullanici_sifre_sifirla(kullanici_id, yeni_sifre, kullanici, zorunlu_degisti
 
 
 def kullanici_pasif(kullanici_id, kullanici, aktif=False):
-    qexec("UPDATE sistem_kullanici SET Aktif=? WHERE Id=?",
+    qexec("UPDATE sistem_kullanici SET Aktif=?, AuthVersion=AuthVersion+1 WHERE Id=?",
           (1 if aktif else 0, kullanici_id))
     audit.log_olay(kullanici,
                    'AKTIF' if aktif else 'PASIF',
                    'sistem_kullanici', kullanici_id,
                    aciklama=f"Kullanıcı {'aktif' if aktif else 'pasif'} edildi",
                    modul='yonetim', alt_modul='kullanici')
+
+
+def kullanici_oturumlarini_gecersiz_kil(kullanici_id):
+    """Security helper for an explicit global logout of one system user."""
+    qexec("UPDATE sistem_kullanici SET AuthVersion=AuthVersion+1 WHERE Id=?",
+          (kullanici_id,))
 
 
 # ============================================================

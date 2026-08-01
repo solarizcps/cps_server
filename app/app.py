@@ -14,7 +14,8 @@ from datetime import timedelta, datetime, date
 from config import Config
 
 # Blueprint'ler
-from modules.auth import auth_bp, kullanici_yetkileri, yetki_var
+from modules.auth import (auth_bp, kullanici_yetkileri, yetki_var,
+                          sistem_session_gecerli_mi, AUTH_1B_SESSION_MESSAGE)
 from modules.nexgen.mo_depo_yetki import is_nexgen_depo_sade_kullanici
 from modules.finans import finans_bp
 from modules.yonetim import yonetim_bp
@@ -77,18 +78,24 @@ app.register_blueprint(home_bp)  # HOME_KORGUN_BITEN
 def oturum_kontrol():
     g.user = session.get('kullanici')
 
+    yol = request.path
+    acik = (yol.startswith('/static')
+            or yol.startswith('/giris')
+            or yol.startswith('/personel-giris')
+            or yol == '/favicon.ico')
+
+    if g.user and not acik and not sistem_session_gecerli_mi(g.user):
+        session.clear()
+        flash(AUTH_1B_SESSION_MESSAGE, 'uyari')
+        return redirect(url_for('auth.login'))
+
     # Yetki cache
     if g.user:
         g.yetkiler = kullanici_yetkileri(g.user)
     else:
         g.yetkiler = set()
 
-    yol = request.path
     # Login gerektirmeyen
-    acik = (yol.startswith('/static')
-            or yol.startswith('/giris')
-            or yol.startswith('/personel-giris')
-            or yol == '/favicon.ico')
     if acik:
         return
 
