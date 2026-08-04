@@ -98,7 +98,7 @@
     <div class="ky-stats" id="ky-toplam">Yükleniyor...</div>
   </div>
 
-  <div class="ky-info">ℹ️ Görsel önerilen ölçü: <b>300×300px</b> (kare). Format: JPG/PNG/WEBP. Max boyut: 2MB.</div>
+  <div class="ky-info">ℹ️ Görsel önerilen ölçü: <b>300×300px</b> (kare). Format: JPG/PNG/WEBP. Max boyut: 5MB.</div>
 
   <div class="ky-toolbar">
     <input type="text" class="ky-search" id="ky-arama" placeholder="🔍 Kalıp kodu, model veya renk ara...">
@@ -184,7 +184,7 @@
     </div>
     <div class="ky-ekle-row">
       <label>Kalıp Başı Çift (KBÇ)</label>
-      <input type="number" id="ky-ekle-kbc" min="1" max="10" value="1" style="width:100px">
+      <input type="number" id="ky-ekle-kbc" min="1" max="20" value="1" style="width:100px">
     </div>
     <div class="ky-ekle-row">
       <label>Kapasite (Çift) <span style="color:#6b7280;font-weight:400;font-size:12px">— toplam kalıp kapasitesi</span></label>
@@ -271,11 +271,11 @@
 
       return '<tr data-id="' + k.id + '">' +
         '<td class="ky-gorsel-cell">' + gorselHTML + gorselAd +
-          '<button class="ky-upload-btn" data-upload title="Önerilen: 300×300px JPG/PNG max 2MB">📂 Yükle</button>' +
+          '<button class="ky-upload-btn" data-upload title="Önerilen: 300×300px JPG/PNG/WEBP max 5MB">📂 Yükle</button>' +
         '</td>' +
         '<td><strong>' + escapeHtml(k.kalip_kod) + '</strong></td>' +
         '<td>' + escapeHtml(k.model_kod || '-') + (k.model_ad ? ' · ' + escapeHtml(k.model_ad) : '') + '</td>' +
-        '<td><input type="number" class="ky-kbc-input" min="1" max="10" value="' + (k.kalip_basi_cift||1) + '" data-field="kalip_basi_cift" data-orig="' + (k.kalip_basi_cift||1) + '"></td>' +
+        '<td><input type="number" class="ky-kbc-input" min="1" max="20" value="' + (k.kalip_basi_cift||1) + '" data-field="kalip_basi_cift" data-orig="' + (k.kalip_basi_cift||1) + '"></td>' +
         '<td><input type="number" class="ky-kbc-input" min="1" max="9999" value="' + (k.kapasite_cift||'') + '" data-field="kapasite_cift" data-orig="' + (k.kapasite_cift||'') + '" placeholder="—" title="Toplam kalıp kapasitesi (çift)"></td>' +
         '<td><input type="number" class="ky-kbc-input" min="0.1" max="9999" step="0.1" value="' + (k.cift_agirlik_gr||'') + '" data-field="cift_agirlik_gr" data-orig="' + (k.cift_agirlik_gr||'') + '" placeholder="—" title="Çift başı ağırlık (gr)" style="width:65px"></td>' +
         '<td><input type="number" class="ky-kbc-input" min="1" max="9999" value="' + (k.pisme_suresi_sn||'') + '" data-field="pisme_suresi_sn" data-orig="' + (k.pisme_suresi_sn||'') + '" placeholder="—" title="Önerilen pişme süresi (sn)" style="width:60px"></td>' +
@@ -530,8 +530,8 @@
     if (!id) { mesaj('❌ Kalıp ID yok', 'hata'); return; }
 
     const kb = (file.size/1024).toFixed(0);
-    if (file.size > 2 * 1024 * 1024) {
-      mesaj('❌ Dosya 2MB üstü (' + kb + ' KB)', 'hata');
+    if (file.size > 5 * 1024 * 1024) {
+      mesaj('❌ Dosya 5MB üstü (' + kb + ' KB)', 'hata');
       return;
     }
 
@@ -596,7 +596,7 @@
     const model_ad = document.getElementById('ky-ekle-model-ad').value.trim();
     const asorti = document.getElementById('ky-ekle-asorti').value.trim();
     const renk = document.getElementById('ky-ekle-renk').value.trim();
-    const kalip_basi_cift = parseInt(document.getElementById('ky-ekle-kbc').value, 10) || 1;
+    const kalip_basi_cift = parseInt(document.getElementById('ky-ekle-kbc').value, 10);
     const kapasite_cift = parseInt(document.getElementById('ky-ekle-kapasite-cift').value, 10) || 1;
     const varsayilan_bagli_kalip = parseInt(document.getElementById('ky-ekle-vbk').value, 10) || 8;
     const cift_agirlik_gr = parseFloat(document.getElementById('ky-ekle-gramaj').value) || null;
@@ -604,6 +604,11 @@
 
     if (!kalip_kod) { mesaj('❌ Kalıp kodu zorunlu', 'hata'); document.getElementById('ky-ekle-kod').focus(); return; }
     if (!model_kod) { mesaj('❌ Model kodu zorunlu', 'hata'); document.getElementById('ky-ekle-model-kod').focus(); return; }
+    if (!Number.isInteger(kalip_basi_cift) || kalip_basi_cift < 1 || kalip_basi_cift > 20) {
+      mesaj('❌ KBÇ 1-20 arasında tam sayı olmalı', 'hata');
+      document.getElementById('ky-ekle-kbc').focus();
+      return;
+    }
 
     const btn = this;
     btn.disabled = true;

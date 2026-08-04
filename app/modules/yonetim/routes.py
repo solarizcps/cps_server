@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """CPS DEV - Yönetim Routes"""
 from flask import (Blueprint, render_template, request, redirect, url_for,
-                   session, abort, send_file, flash, jsonify)
+                   session, abort, send_file, flash, jsonify, current_app)
 from functools import wraps
 import os
 
@@ -886,12 +886,82 @@ def ky_kalip_yetki(f):
 import sqlite3 as _sqlite3_ky
 from flask import jsonify as _jsonify_ky
 import os as _os_ky
+import math as _math_ky
+import tempfile as _tempfile_ky
+import uuid as _uuid_ky
+from PIL import Image as _PIL_Image, UnidentifiedImageError as _PIL_UnidentifiedImageError
 
 
 def _ky_db_path():
     """CPS standart DB yolu - app/mock_data.db"""
     base = _os_ky.path.dirname(_os_ky.path.dirname(_os_ky.path.dirname(_os_ky.path.abspath(__file__))))
     return _os_ky.path.join(base, 'mock_data.db')
+
+
+def _ky_tam_sayi(body, alan, *, zorunlu=False, minimum=None, maksimum=None):
+    ham = body.get(alan)
+    if ham is None or ham == '':
+        if zorunlu:
+            raise ValueError(alan + ' zorunlu')
+        return None
+    if isinstance(ham, bool):
+        raise ValueError(alan + ' tam sayi olmali')
+    try:
+        deger = int(ham)
+    except (TypeError, ValueError):
+        raise ValueError(alan + ' tam sayi olmali')
+    if str(ham).strip() not in (str(deger), '+' + str(deger)):
+        raise ValueError(alan + ' tam sayi olmali')
+    if minimum is not None and deger < minimum:
+        raise ValueError(alan + ' en az ' + str(minimum) + ' olmali')
+    if maksimum is not None and deger > maksimum:
+        raise ValueError(alan + ' en fazla ' + str(maksimum) + ' olmali')
+    return deger
+
+
+def _ky_sonlu_sayi(body, alan, *, minimum=0):
+    ham = body.get(alan)
+    if ham is None or ham == '':
+        return None
+    if isinstance(ham, bool):
+        raise ValueError(alan + ' sayisal olmali')
+    try:
+        deger = float(ham)
+    except (TypeError, ValueError):
+        raise ValueError(alan + ' sayisal olmali')
+    if not _math_ky.isfinite(deger):
+        raise ValueError(alan + ' sonlu bir sayi olmali')
+    if deger < minimum:
+        raise ValueError(alan + ' en az ' + str(minimum) + ' olmali')
+    return deger
+
+
+def _ky_aktif_durum_tutarliligi(guncel, mevcut_aktif=1, mevcut_durum='AKTIF'):
+    aktif_verildi = 'aktif' in guncel
+    durum_verildi = 'kalip_durumu' in guncel
+    if not aktif_verildi and not durum_verildi:
+        return
+    if aktif_verildi:
+        guncel['aktif'] = 1 if guncel['aktif'] not in (0, '0', False) else 0
+    if durum_verildi:
+        guncel['kalip_durumu'] = str(guncel['kalip_durumu']).strip().upper()
+        if guncel['kalip_durumu'] not in _KY_KALIP_DURUMU_SECENEKLER:
+            raise ValueError('kalip_durumu AKTIF/BAKIMDA/ARIZALI/PASIF olmali')
+    if aktif_verildi and durum_verildi:
+        if (guncel['aktif'] == 0) != (guncel['kalip_durumu'] == 'PASIF'):
+            raise ValueError('aktif ve kalip_durumu birbiriyle tutarli olmali')
+    elif aktif_verildi:
+        guncel['kalip_durumu'] = 'PASIF' if guncel['aktif'] == 0 else ('AKTIF' if mevcut_durum == 'PASIF' else mevcut_durum)
+    elif durum_verildi:
+        guncel['aktif'] = 0 if guncel['kalip_durumu'] == 'PASIF' else 1
+
+
+def _ky_audit_guvenli(islem, kayit_id, aciklama):
+    try:
+        audit.log(_u(), islem, 'enj_kalip', kayit_id,
+                  aciklama=aciklama, modul='yonetim', alt_modul='kalip')
+    except Exception:
+        current_app.logger.exception('Kalip audit kaydi yazilamadi: %s id=%s', islem, kayit_id)
 
 
 @yonetim_bp.route('/kalip-yonetimi', methods=['GET'])
@@ -958,40 +1028,44 @@ _KY_KALIP_DURUMU_SECENEKLER = {'AKTIF', 'BAKIMDA', 'ARIZALI', 'PASIF'}
 @yetki_gerekli('planlama.enjeksiyon.kalip', 'can_update')  # KALIP_FAZ_A: merkezi yetki sistemine alindi
 def ky_api_kalip_patch(kalip_id):
     """Kalip duzenleme - master data update."""
+    con = None
     try:
         body = request.get_json(silent=True) or {}
         guncel = {k: body[k] for k in _KY_PATCH_WHITELIST if k in body}
         if not guncel:
             return _jsonify_ky({'ok': False, 'hata': 'guncellenecek alan yok'}), 400
+        istenen_alanlar = list(guncel.keys())
         
         # Validasyon
-        if 'kalip_basi_cift' in guncel:
-            try:
-                v = int(guncel['kalip_basi_cift'])
-                if v < 1 or v > 20:
-                    return _jsonify_ky({'ok': False, 'hata': 'KBC 1-20 arasinda olmali'}), 400
-                guncel['kalip_basi_cift'] = v
-            except (ValueError, TypeError):
-                return _jsonify_ky({'ok': False, 'hata': 'KBC sayisal olmali'}), 400
-        
-        if 'aktif' in guncel:
-            guncel['aktif'] = 1 if guncel['aktif'] else 0
-        
+        try:
+            if 'kalip_basi_cift' in guncel:
+                guncel['kalip_basi_cift'] = _ky_tam_sayi(
+                    guncel, 'kalip_basi_cift', zorunlu=True, minimum=1, maksimum=20)
+            if 'varsayilan_bagli_kalip' in guncel:
+                guncel['varsayilan_bagli_kalip'] = _ky_tam_sayi(
+                    guncel, 'varsayilan_bagli_kalip', zorunlu=True, minimum=1)
+            if 'kapasite_cift' in guncel:
+                guncel['kapasite_cift'] = _ky_tam_sayi(guncel, 'kapasite_cift', minimum=1)
+            if 'pisme_suresi_sn' in guncel:
+                guncel['pisme_suresi_sn'] = _ky_tam_sayi(guncel, 'pisme_suresi_sn', minimum=1)
+            if 'cift_agirlik_gr' in guncel:
+                guncel['cift_agirlik_gr'] = _ky_sonlu_sayi(guncel, 'cift_agirlik_gr')
+        except ValueError as exc:
+            return _jsonify_ky({'ok': False, 'hata': str(exc)}), 400
+
         if 'kalip_tipi' in guncel and guncel['kalip_tipi'] not in ('GOVDE', 'ATKI'):
             return _jsonify_ky({'ok': False, 'hata': 'kalip_tipi GOVDE veya ATKI olmali'}), 400
-
-        if 'kalip_durumu' in guncel:
-            guncel['kalip_durumu'] = str(guncel['kalip_durumu']).strip().upper()
-            if guncel['kalip_durumu'] not in _KY_KALIP_DURUMU_SECENEKLER:
-                return _jsonify_ky({'ok': False, 'hata': 'kalip_durumu AKTIF/BAKIMDA/ARIZALI/PASIF olmali'}), 400
         
         con = _sqlite3_ky.connect(_ky_db_path())
         cur = con.cursor()
-        cur.execute('SELECT id, kalip_kod FROM enj_kalip WHERE id = ?', (kalip_id,))
+        cur.execute('SELECT id, kalip_kod, aktif, kalip_durumu FROM enj_kalip WHERE id = ?', (kalip_id,))
         eski = cur.fetchone()
         if not eski:
-            con.close()
             return _jsonify_ky({'ok': False, 'hata': 'kalip bulunamadi'}), 404
+        try:
+            _ky_aktif_durum_tutarliligi(guncel, eski[2], eski[3] or 'AKTIF')
+        except ValueError as exc:
+            return _jsonify_ky({'ok': False, 'hata': str(exc)}), 400
         
         set_parts = [k + ' = ?' for k in guncel.keys()]
         params = list(guncel.values()) + [kalip_id]
@@ -1011,7 +1085,6 @@ def ky_api_kalip_patch(kalip_id):
             FROM enj_kalip WHERE id = ?
         """, (kalip_id,))
         r = cur.fetchone()
-        con.close()
         
         guncel_kayit = {
             'id': r[0], 'kalip_kod': r[1], 'kalip_tipi': r[2], 'model_kod': r[3],
@@ -1022,31 +1095,42 @@ def ky_api_kalip_patch(kalip_id):
             'cift_agirlik_gr': r[14], 'pisme_suresi_sn': r[15],
         }
         
-        # Audit log
-        try:
-            audit.log(_u(), 'kalip_guncelle', f'kalip_id={kalip_id} kod={eski[1]} alanlar={list(guncel.keys())}')
-        except Exception:
-            pass
+        _ky_audit_guvenli(
+            'KALIP_UPDATE', kalip_id,
+            f'kod={eski[1]} alanlar={list(guncel.keys())}')
         
         return _jsonify_ky({
             'ok': True,
             'guncellenen': affected,
             'kayit': guncel_kayit,
-            'guncellenen_alanlar': list(guncel.keys())
+            'guncellenen_alanlar': istenen_alanlar
         })
-    except Exception as e:
-        return _jsonify_ky({'ok': False, 'hata': str(e)}), 500
+    except Exception:
+        if con is not None:
+            try:
+                con.rollback()
+            except Exception:
+                current_app.logger.exception('Kalip PATCH rollback tamamlanamadi: id=%s', kalip_id)
+        current_app.logger.exception('Kalip guncelleme tamamlanamadi: id=%s', kalip_id)
+        return _jsonify_ky({'ok': False, 'hata': 'Kalıp güncellenemedi. Lütfen tekrar deneyin.'}), 500
+    finally:
+        if con is not None:
+            try:
+                con.close()
+            except Exception:
+                current_app.logger.exception('Kalip PATCH connection kapatilamadi: id=%s', kalip_id)
 
 # === BEGIN: F_KALIP_EKLE ===
 @yonetim_bp.route('/api/kalip/ekle', methods=['POST'])
 @yetki_gerekli('planlama.enjeksiyon.kalip', 'can_create')
 def ky_api_kalip_ekle():
     """Yeni kalip olustur. Zorunlu: kalip_kod, kalip_tipi, model_kod."""
+    con = None
     try:
         body = request.get_json(silent=True) or {}
 
         kalip_kod = (body.get('kalip_kod') or '').strip()
-        kalip_tipi = (body.get('kalip_tipi') or 'GOVDE').strip().upper()
+        kalip_tipi = (body.get('kalip_tipi') or '').strip().upper()
         model_kod = (body.get('model_kod') or '').strip()
 
         if not kalip_kod:
@@ -1061,39 +1145,30 @@ def ky_api_kalip_ekle():
         renk = (body.get('renk') or '').strip() or None
 
         try:
-            kalip_basi_cift = int(body.get('kalip_basi_cift') or 1)
-            if kalip_basi_cift < 1:
-                kalip_basi_cift = 1
-        except (ValueError, TypeError):
-            kalip_basi_cift = 1
-
-        try:
-            varsayilan_bagli_kalip = int(body.get('varsayilan_bagli_kalip') or 8)
-        except (ValueError, TypeError):
-            varsayilan_bagli_kalip = 8
-
-        try:
-            kapasite_cift = int(body.get('kapasite_cift') or 0) or None
-        except (ValueError, TypeError):
-            kapasite_cift = None
-
-        try:
-            cift_agirlik_gr = float(body.get('cift_agirlik_gr') or 0) or None
-        except (ValueError, TypeError):
-            cift_agirlik_gr = None
-
-        try:
-            pisme_suresi_sn = int(body.get('pisme_suresi_sn') or 0) or None
-        except (ValueError, TypeError):
-            pisme_suresi_sn = None
-
-        aktif = 1 if body.get('aktif', 1) not in (0, '0', False) else 0
+            kalip_basi_cift = _ky_tam_sayi(
+                body, 'kalip_basi_cift', zorunlu=True, minimum=1, maksimum=20)
+            varsayilan_bagli_kalip = _ky_tam_sayi(
+                body, 'varsayilan_bagli_kalip', minimum=1)
+            if varsayilan_bagli_kalip is None:
+                varsayilan_bagli_kalip = 8
+            kapasite_cift = _ky_tam_sayi(body, 'kapasite_cift', minimum=1)
+            cift_agirlik_gr = _ky_sonlu_sayi(body, 'cift_agirlik_gr')
+            pisme_suresi_sn = _ky_tam_sayi(body, 'pisme_suresi_sn', minimum=1)
+            durum = {
+                'aktif': body.get('aktif', 1),
+                'kalip_durumu': body.get('kalip_durumu', 'AKTIF'),
+            }
+            _ky_aktif_durum_tutarliligi(durum)
+            aktif = durum['aktif']
+            kalip_durumu = durum['kalip_durumu']
+        except ValueError as exc:
+            return _jsonify_ky({'ok': False, 'hata': str(exc)}), 400
 
         con = _sqlite3_ky.connect(_ky_db_path())
         cur = con.cursor()
 
         existing = cur.execute(
-            'SELECT id FROM enj_kalip WHERE kalip_kod = ?', (kalip_kod,)
+            'SELECT id FROM enj_kalip WHERE kalip_kod = ? COLLATE NOCASE', (kalip_kod,)
         ).fetchone()
         if existing:
             con.close()
@@ -1107,15 +1182,13 @@ def ky_api_kalip_ekle():
             INSERT INTO enj_kalip
             (kalip_kod, kalip_tipi, model_kod, model_ad, asorti,
              kalip_basi_cift, varsayilan_bagli_kalip, renk, kapasite_cift, aktif,
-             cift_agirlik_gr, pisme_suresi_sn,
+             cift_agirlik_gr, pisme_suresi_sn, kalip_durumu,
              olusturma_tarihi, guncelleme_tarihi)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         """, (kalip_kod, kalip_tipi, model_kod, model_ad, asorti,
               kalip_basi_cift, varsayilan_bagli_kalip, renk, kapasite_cift, aktif,
-              cift_agirlik_gr, pisme_suresi_sn))
-        con.commit()
+              cift_agirlik_gr, pisme_suresi_sn, kalip_durumu))
         yeni_id = cur.lastrowid
-
         r = cur.execute("""
             SELECT id, kalip_kod, kalip_tipi, model_kod, model_ad, asorti,
                    kalip_basi_cift, varsayilan_bagli_kalip, renk, gorsel_dosya, aktif,
@@ -1123,7 +1196,9 @@ def ky_api_kalip_ekle():
                    cift_agirlik_gr, pisme_suresi_sn
             FROM enj_kalip WHERE id = ?
         """, (yeni_id,)).fetchone()
+        con.commit()
         con.close()
+        con = None
 
         kayit = {
             'id': r[0], 'kalip_kod': r[1], 'kalip_tipi': r[2], 'model_kod': r[3],
@@ -1133,12 +1208,32 @@ def ky_api_kalip_ekle():
             'kalip_durumu': r[12] or 'AKTIF', 'aciklama': r[13],
             'cift_agirlik_gr': r[14], 'pisme_suresi_sn': r[15],
         }
-        audit.log(_u(), 'kalip_ekle', 'enj_kalip', yeni_id,
-                  aciklama=f'kod={kalip_kod} tip={kalip_tipi}')
+        _ky_audit_guvenli(
+            'KALIP_CREATE', yeni_id,
+            f'kod={kalip_kod} tip={kalip_tipi}')
         return _jsonify_ky({'ok': True, 'kalip': kayit, 'id': yeni_id}), 201
 
-    except Exception as e:
-        return _jsonify_ky({'ok': False, 'hata': str(e)}), 500
+    except _sqlite3_ky.IntegrityError as exc:
+        if con is not None:
+            try:
+                con.rollback()
+            finally:
+                con.close()
+        if getattr(exc, 'sqlite_errorname', '') in (
+                'SQLITE_CONSTRAINT_UNIQUE', 'SQLITE_CONSTRAINT_PRIMARYKEY'):
+            return _jsonify_ky({
+                'ok': False, 'hata': 'Bu kalıp kodu zaten mevcut.',
+                'tip': 'DUPLICATE_KOD'}), 400
+        current_app.logger.exception('Yeni kalip DB butunluk hatasi')
+        return _jsonify_ky({'ok': False, 'hata': 'Kalıp oluşturulamadı. Lütfen tekrar deneyin.'}), 500
+    except Exception:
+        if con is not None:
+            try:
+                con.rollback()
+            finally:
+                con.close()
+        current_app.logger.exception('Yeni kalip olusturma tamamlanamadi')
+        return _jsonify_ky({'ok': False, 'hata': 'Kalıp oluşturulamadı. Lütfen tekrar deneyin.'}), 500
 # === END: F_KALIP_EKLE ===
 
 
@@ -1149,8 +1244,6 @@ def ky_api_kalip_ekle():
 # F_KALIP_GORSEL_UPLOAD - Kalip gorsel yukleme
 # Tarih: 20260522
 from werkzeug.utils import secure_filename as _ky_secure
-import datetime as _ky_dt
-import re as _ky_re
 
 
 _KY_IMG_KLASOR = None
@@ -1165,13 +1258,45 @@ def _ky_img_klasor():
 
 
 def _ky_uzanti_ok(ad):
-    return ad.lower().rsplit('.', 1)[-1] in ('jpg', 'jpeg', 'png', 'webp', 'gif')
+    return '.' in ad and ad.lower().rsplit('.', 1)[-1] in ('jpg', 'jpeg', 'png', 'webp')
+
+
+_KY_IMG_MAX_BYTES = 5 * 1024 * 1024
+_KY_IMG_MIME = {
+    'jpg': ('image/jpeg', 'JPEG'),
+    'jpeg': ('image/jpeg', 'JPEG'),
+    'png': ('image/png', 'PNG'),
+    'webp': ('image/webp', 'WEBP'),
+}
+
+
+def _ky_yonetilen_gorsel_yolu(dosya_adi):
+    if not dosya_adi or _os_ky.path.basename(dosya_adi) != dosya_adi:
+        return None
+    kok = _os_ky.path.realpath(_ky_img_klasor())
+    hedef = _os_ky.path.realpath(_os_ky.path.join(kok, dosya_adi))
+    if _os_ky.path.commonpath((kok, hedef)) != kok:
+        return None
+    return hedef
+
+
+def _ky_dosya_temizle(*yollar):
+    for yol in yollar:
+        if yol and _os_ky.path.isfile(yol):
+            try:
+                _os_ky.remove(yol)
+            except OSError:
+                current_app.logger.exception('Kalip upload dosyasi temizlenemedi')
 
 
 @yonetim_bp.route('/api/kalip/<int:kalip_id>/gorsel', methods=['POST'])
-@yetki_gerekli('planlama.enjeksiyon.kalip', 'can_create')  # KALIP_FAZ_A: merkezi yetki sistemine alindi
+@yetki_gerekli('planlama.enjeksiyon.kalip', 'can_update')
 def ky_api_kalip_gorsel_upload(kalip_id):
-    """Kalip gorsel yukle. Eski gorseli korur (asla silmez)."""
+    """Kalip gorselini dogrulayarak yukle veya degistir."""
+    con = None
+    gecici_yol = None
+    yeni_yol = None
+    committed = False
     try:
         if 'file' not in request.files:
             return _jsonify_ky({'ok': False, 'hata': 'dosya yok (file alani)'}), 400
@@ -1179,44 +1304,71 @@ def ky_api_kalip_gorsel_upload(kalip_id):
         if not f or not f.filename:
             return _jsonify_ky({'ok': False, 'hata': 'dosya secilmedi'}), 400
         if not _ky_uzanti_ok(f.filename):
-            return _jsonify_ky({'ok': False, 'hata': 'sadece jpg/jpeg/png/webp/gif'}), 400
-        
+            return _jsonify_ky({'ok': False, 'hata': 'Yalnız JPG, JPEG, PNG veya WEBP yüklenebilir.'}), 400
+
+        uzanti = f.filename.rsplit('.', 1)[-1].lower()
+        beklenen_mime, beklenen_format = _KY_IMG_MIME[uzanti]
+        if (f.mimetype or '').lower() != beklenen_mime:
+            return _jsonify_ky({'ok': False, 'hata': 'Dosya türü ile uzantısı uyuşmuyor.'}), 400
+
         # Kalip bilgisi al
         con = _sqlite3_ky.connect(_ky_db_path())
         cur = con.cursor()
-        cur.execute('SELECT kalip_kod, kalip_tipi FROM enj_kalip WHERE id = ?', (kalip_id,))
+        cur.execute('SELECT kalip_kod, kalip_tipi, gorsel_dosya FROM enj_kalip WHERE id = ?', (kalip_id,))
         r = cur.fetchone()
         if not r:
             con.close()
             return _jsonify_ky({'ok': False, 'hata': 'kalip bulunamadi'}), 404
-        kalip_kod, kalip_tipi = r[0], r[1]
-        
-        # Yeni dosya adi: {kod}_{timestamp}.{ext}
-        uzanti = f.filename.rsplit('.', 1)[-1].lower()
-        ts = _ky_dt.datetime.now().strftime('%Y%m%d_%H%M%S')
-        # kod icindeki ozel karakterleri temizle
-        kod_safe = _ky_re.sub(r'[^A-Za-z0-9_-]', '_', kalip_kod or 'kalip')
-        yeni_ad = f'{kod_safe}_{ts}.{uzanti}'
-        
+        kalip_kod, kalip_tipi, eski_ad = r[0], r[1], r[2]
+
         klasor = _ky_img_klasor()
-        tam_yol = _os_ky.path.join(klasor, yeni_ad)
-        f.save(tam_yol)
-        
-        # DB guncelle
+        with _tempfile_ky.NamedTemporaryFile(
+                mode='wb', prefix='.kalip-upload-', suffix='.' + uzanti,
+                dir=klasor, delete=False) as gecici:
+            gecici_yol = gecici.name
+            toplam = 0
+            while True:
+                parca = f.stream.read(64 * 1024)
+                if not parca:
+                    break
+                toplam += len(parca)
+                if toplam > _KY_IMG_MAX_BYTES:
+                    raise ValueError('Görsel en fazla 5 MB olabilir.')
+                gecici.write(parca)
+
+        try:
+            with _PIL_Image.open(gecici_yol) as img:
+                img.verify()
+                gercek_format = img.format
+            with _PIL_Image.open(gecici_yol) as img:
+                img.load()
+        except (_PIL_UnidentifiedImageError, OSError, ValueError):
+            raise ValueError('Dosya geçerli bir görüntü değil.')
+        if gercek_format != beklenen_format:
+            raise ValueError('Dosyanın gerçek biçimi uzantısıyla uyuşmuyor.')
+
+        yeni_ad = _ky_secure(_uuid_ky.uuid4().hex + '.' + uzanti)
+        yeni_yol = _ky_yonetilen_gorsel_yolu(yeni_ad)
+        if not yeni_yol:
+            raise ValueError('Görsel dosya adı güvenli değil.')
+
+        # Response kaydi commit oncesi okunur; commit sonrasi cleanup final dosyaya dokunmaz.
         cur.execute(
             'UPDATE enj_kalip SET gorsel_dosya = ?, guncelleme_tarihi = CURRENT_TIMESTAMP WHERE id = ?',
             (yeni_ad, kalip_id)
         )
-        con.commit()
-        
-        # Guncel kayit
         cur.execute("""
             SELECT id, kalip_kod, kalip_tipi, model_kod, model_ad, asorti,
                    kalip_basi_cift, varsayilan_bagli_kalip, renk, gorsel_dosya, aktif
             FROM enj_kalip WHERE id = ?
         """, (kalip_id,))
         r2 = cur.fetchone()
+        _os_ky.replace(gecici_yol, yeni_yol)
+        gecici_yol = None
+        con.commit()
+        committed = True
         con.close()
+        con = None
         
         kayit = {
             'id': r2[0], 'kalip_kod': r2[1], 'kalip_tipi': r2[2], 'model_kod': r2[3],
@@ -1225,14 +1377,45 @@ def ky_api_kalip_gorsel_upload(kalip_id):
             'aktif': r2[10],
         }
         
-        try:
-            audit.log(_u(), 'kalip_gorsel_yukle', f'kalip_id={kalip_id} kod={kalip_kod} dosya={yeni_ad}')
-        except Exception:
-            pass
-        
+        islem = 'KALIP_GORSEL_CHANGE' if eski_ad else 'KALIP_GORSEL_UPLOAD'
+        _ky_audit_guvenli(
+            islem, kalip_id,
+            f'kod={kalip_kod} yeni_dosya={yeni_ad}')
+
+        if eski_ad and eski_ad != yeni_ad:
+            try:
+                paylasan = _sqlite3_ky.connect(_ky_db_path())
+                try:
+                    adet = paylasan.execute(
+                        'SELECT COUNT(*) FROM enj_kalip WHERE gorsel_dosya=? AND id<>?',
+                        (eski_ad, kalip_id)).fetchone()[0]
+                finally:
+                    paylasan.close()
+                eski_yol = _ky_yonetilen_gorsel_yolu(eski_ad)
+                if adet == 0 and eski_yol and _os_ky.path.isfile(eski_yol):
+                    _os_ky.remove(eski_yol)
+            except Exception:
+                current_app.logger.exception(
+                    'Eski kalip gorseli temizlenemedi: kalip_id=%s', kalip_id)
+
         return _jsonify_ky({'ok': True, 'gorsel_dosya': yeni_ad, 'kayit': kayit})
-    except Exception as e:
-        return _jsonify_ky({'ok': False, 'hata': str(e)}), 500
+    except ValueError as exc:
+        if con is not None:
+            con.rollback()
+            con.close()
+        if not committed:
+            _ky_dosya_temizle(gecici_yol, yeni_yol)
+        return _jsonify_ky({'ok': False, 'hata': str(exc)}), 400
+    except Exception:
+        if con is not None:
+            try:
+                con.rollback()
+            finally:
+                con.close()
+        if not committed:
+            _ky_dosya_temizle(gecici_yol, yeni_yol)
+        current_app.logger.exception('Kalip gorseli yuklenemedi: id=%s', kalip_id)
+        return _jsonify_ky({'ok': False, 'hata': 'Görsel yüklenemedi. Lütfen tekrar deneyin.'}), 500
 
 # === END: F_KALIP_GORSEL_UPLOAD ===
 
