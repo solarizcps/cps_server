@@ -949,8 +949,10 @@ def pzm_v2_payload_dogrula(
     }
 
 
-def pzm_v2_taslak_kaydet(con, data: dict, uid: int | None) -> dict[str, Any]:
-    """Header + kalemler tek transaction."""
+def pzm_v2_taslak_kaydet(
+    con, data: dict, uid: int | None, *, commit: bool = True,
+) -> dict[str, Any]:
+    """Header + kalemler tek transaction; commit=False uses an outer transaction."""
     from modules.nexgen.pzm_siparis_read import pzm_kalem_tablosu_var
     from modules.nexgen.routes import _pzm_siparis_no_uret
 
@@ -987,9 +989,15 @@ def pzm_v2_taslak_kaydet(con, data: dict, uid: int | None) -> dict[str, Any]:
 
     ps_id = data.get('talep_id')
     guncellendi = False
+    own_tx = False
 
     try:
-        con.execute('BEGIN IMMEDIATE')
+        if commit:
+            try:
+                con.execute('BEGIN IMMEDIATE')
+                own_tx = True
+            except Exception:
+                pass
 
         if ps_id:
             try:
@@ -1124,12 +1132,21 @@ def pzm_v2_taslak_kaydet(con, data: dict, uid: int | None) -> dict[str, Any]:
                 tuple(vals_k),
             )
 
-        con.commit()
+        if own_tx:
+            con.commit()
     except PzmWriteError:
-        con.rollback()
+        if own_tx:
+            try:
+                con.rollback()
+            except Exception:
+                pass
         raise
     except Exception as e:
-        con.rollback()
+        if own_tx:
+            try:
+                con.rollback()
+            except Exception:
+                pass
         raise PzmWriteError(str(e), 500) from e
 
     return {

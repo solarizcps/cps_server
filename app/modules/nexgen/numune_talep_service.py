@@ -393,7 +393,9 @@ def _assert_mevcut_cari_aktif(con, musteri_tipi: str | None, cari_id: int | None
         raise NumuneTalepError('Seçilen cari aktif değil.', 400)
 
 
-def kaydet_taslak(con, payload: dict, olusturan_id: int, talep_id: int | None = None) -> dict:
+def kaydet_taslak(
+    con, payload: dict, olusturan_id: int, talep_id: int | None = None, *, commit: bool = True,
+) -> dict:
     norm = _validate_payload(payload, zorunlu_gonder=False)
     _assert_mevcut_cari_aktif(con, norm.get('musteri_tipi'), norm.get('cari_id'))
     if not norm.get('talep_eden_kullanici_id'):
@@ -434,7 +436,8 @@ def kaydet_taslak(con, payload: dict, olusturan_id: int, talep_id: int | None = 
         cols, vals = _insert_fields(norm)
         cur = con.execute(f'INSERT INTO nexgen_numune_talep ({cols}) VALUES ({",".join(["?"]*len(vals))})', vals)
         tid = int(cur.lastrowid)
-    con.commit()
+    if commit:
+        con.commit()
     return get_talep(con, tid)
 
 
