@@ -393,6 +393,86 @@ MANIFEST: tuple[MigEntry, ...] = (
             ("nexgen_arge_test", "numune_talep_id"),
         ),
     ),
+    MigEntry(
+        142, "142_nexgen_musteri_aday",
+        "142_nexgen_musteri_aday.py",
+        "nexgen_musteri_aday + gorusme.musteri_aday_id + cari_id nullable",
+        dependencies=(123, 136),
+        required_tables=("nexgen_musteri_aday",),
+        required_columns=(
+            ("musteri_operasyon_gorusme", "musteri_aday_id"),
+        ),
+    ),
+    MigEntry(
+        143, "143_musteri_operasyon_gorusme_yetkili_metin",
+        "143_musteri_operasyon_gorusme_yetkili_metin.py",
+        "musteri_operasyon_gorusme.yetkili_metin serbest metin (kart oluşturmaz)",
+        dependencies=(134, 142),
+        required_columns=(
+            ("musteri_operasyon_gorusme", "yetkili_metin"),
+        ),
+    ),
+    MigEntry(
+        144, "144_musteri_operasyon_gorusme_fiyat_snapshot",
+        "144_musteri_operasyon_gorusme_fiyat_snapshot.py",
+        "gorusme fiyat/odeme snapshot (fiyat_verildi + ticari alanlar)",
+        dependencies=(123, 143),
+        required_columns=(
+            ("musteri_operasyon_gorusme", "fiyat_verildi"),
+            ("musteri_operasyon_gorusme", "verilen_fiyat"),
+            ("musteri_operasyon_gorusme", "odeme_tipi"),
+        ),
+    ),
+    MigEntry(
+        145, "145_musteri_operasyon_gorusme_konusulan_tonaj",
+        "145_musteri_operasyon_gorusme_konusulan_tonaj.py",
+        "gorusme.konusulan_tonaj REAL NULL (ticari snapshot)",
+        dependencies=(144,),
+        required_columns=(
+            ("musteri_operasyon_gorusme", "konusulan_tonaj"),
+        ),
+    ),
+    MigEntry(
+        146, "146_nexgen_musteri_temsilcisi_talep",
+        "146_nexgen_musteri_temsilcisi_talep.py",
+        "musteri temsilcisi talep + kalem omurga (F1-F2)",
+        dependencies=(142, 145),
+        required_tables=(
+            "nexgen_musteri_temsilcisi_talep",
+            "nexgen_musteri_temsilcisi_talep_kalem",
+        ),
+    ),
+    MigEntry(
+        147, "147_nexgen_mtt_kalem_numune_pointer",
+        "147_nexgen_mtt_kalem_numune_pointer.py",
+        "MTT kalem numune pointer + KISMEN_NUMUNEYE_DONUSTU (F5B)",
+        dependencies=(146,),
+        required_tables=(
+            "nexgen_musteri_temsilcisi_talep",
+            "nexgen_musteri_temsilcisi_talep_kalem",
+            "nexgen_mtt_numune_donusum_idem",
+        ),
+        required_columns=(
+            ("nexgen_musteri_temsilcisi_talep_kalem", "donusturulen_numune_talep_id"),
+            ("nexgen_musteri_temsilcisi_talep_kalem", "donusturme_durumu"),
+        ),
+    ),
+    MigEntry(
+        148, "148_nexgen_onay_merkezi",
+        "148_nexgen_onay_merkezi.py",
+        "Genel Onay Merkezi omurga + MTT ONAY_BEKLIYOR",
+        dependencies=(147,),
+        required_tables=("nexgen_onay",),
+    ),
+    MigEntry(
+        149, "149_nexgen_planlama_siparis_kalem_mtt_pointer",
+        "149_nexgen_planlama_siparis_kalem_mtt_pointer.py",
+        "siparis_kalem mtt_kalem_id pointer (MTT donusum FAZ-149)",
+        dependencies=(148,),
+        required_columns=(
+            ("nexgen_planlama_siparis_kalem", "mtt_kalem_id"),
+        ),
+    ),
 )
 
 BY_VERSION = {m.version: m for m in MANIFEST}
