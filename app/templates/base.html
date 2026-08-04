@@ -386,7 +386,7 @@ window.__cpsRootMap = function(pathname) {
       {# NEXGEN_FAZ1A: nexgen sayfasinda uretim grubu acik #}
       {% if active == 'nexgen' %}{% set aktif_grup = 'uretim' %}{% endif %}
       {# FAZ-NUMUNE-NEXGEN-MENU-REV: Pazarlama + Numune NexGen grubunda #}
-      {% if '/nexgen/pazarlama' in rp or '/nexgen/sevkiyat' in rp or '/nexgen/numune-talep' in rp or '/nexgen/recete' in rp or '/nexgen/renk-merkezi' in rp or '/nexgen/uretim-emirleri' in rp %}{% set aktif_grup = 'nexgen' %}{% endif %}
+      {% if '/nexgen/pazarlama' in rp or '/nexgen/musteri-pazarlama' in rp or '/nexgen/sevkiyat' in rp or '/nexgen/numune-talep' in rp or '/nexgen/recete' in rp or '/nexgen/renk-merkezi' in rp or '/nexgen/uretim-emirleri' in rp %}{% set aktif_grup = 'nexgen' %}{% endif %}
       {% if '/saha/numune-talep' in rp %}{% set aktif_grup = 'enjeksiyon' %}{% endif %}
       {% if active == 'online-eticaret' %}{% set aktif_grup = 'ticaret' %}{% endif %}
 
@@ -952,6 +952,12 @@ window.__cpsRootMap = function(pathname) {
         <a href="/nexgen/renk-merkezi" class="si {% if '/nexgen/renk-merkezi' in rp %}active{% endif %}" title="Renk Merkezi">
           <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="8" cy="10" r="1.5" fill="currentColor" stroke="none"/><circle cx="14" cy="8" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="14" r="1.5" fill="currentColor" stroke="none"/></svg></span>
           <span class="sl">Renk Merkezi</span>
+        </a>
+        {% endif %}
+        {% if can_musteri_operasyonu_menu %}
+        <a href="/nexgen/musteri-pazarlama" class="si {% if '/nexgen/musteri-pazarlama' in rp %}active{% endif %}" title="Müşteri Operasyonu">
+          <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+          <span class="sl">Müşteri Operasyonu</span>
         </a>
         {% endif %}
         {% if yetki('nexgen.plan.view', 'can_view') %}

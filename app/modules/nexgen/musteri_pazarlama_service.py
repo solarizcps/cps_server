@@ -7,7 +7,10 @@ import sqlite3
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from modules.nexgen.cari_sorumlu_service import get_kullanici_cari_kapsami, load_kullanici_yetkileri
+from modules.nexgen.cari_sorumlu_service import (
+    get_musteri_operasyonu_kapsami,
+    load_kullanici_yetkileri,
+)
 from modules.nexgen.mo_gorusme_config import SIPARIS_ZIYARET_ESIK_GUN, TABLO
 from modules.nexgen.mo_gorusme_service import (
     bugunun_gorusme_sayaclari,
@@ -452,9 +455,11 @@ def _musteri_kartlari(
     riskli_ids: set[int],
     kullanici_id: int,
     yk: set[str],
+    atanmamis_ids: set[int] | None = None,
 ) -> list[dict[str, Any]]:
     if not cari_ids:
         return []
+    atanmamis_ids = atanmamis_ids or set()
     ph, params = _in_ph(cari_ids)
     rows = con.execute(
         f"""
@@ -473,6 +478,7 @@ def _musteri_kartlari(
     kartlar: list[dict[str, Any]] = []
     for r in rows:
         cid = int(r['id'])
+        atanmamis = cid in atanmamis_ids
         son_siparis = None
         son_numune = None
         vade = None
@@ -528,9 +534,13 @@ def _musteri_kartlari(
             })
 
         kartlar.append({
+            'entity_type': 'CARI',
             'cari_id': cid,
+            'aday_id': None,
             'cari_kod': r['cari_kod'],
             'unvan': r['unvan'],
+            'atanmamis': atanmamis,
+            'sorumlu_etiket': 'Atanmamış' if atanmamis else None,
             'son_siparis': (
                 f"{son_siparis['siparis_no']} ({son_siparis['durum']})"
                 if son_siparis else None
@@ -544,7 +554,80 @@ def _musteri_kartlari(
             'risk': risk,
             'vade': f"{vade} gün" if vade not in (None, '') else None,
             'durum': durum,
+            'olusturan_adi': None,
+            'yetkili_adi': None,
+            'telefon': None,
             'gorusme_yazabilir': can_mo_gorusme_yaz(con, kullanici_id, cid, yk),
+        })
+    return kartlar
+
+
+def _aday_kartlari(
+    con: sqlite3.Connection,
+    kullanici_id: int,
+    yk: set[str],
+) -> list[dict[str, Any]]:
+    from modules.nexgen.musteri_aday_service import DURUM_ADAY, aday_listele, can_aday_yaz
+    from modules.nexgen.mo_gorusme_config import TABLO as GORUSME_TABLO
+
+    if not _tablo_var(con, 'nexgen_musteri_aday'):
+        return []
+    yazabilir = can_aday_yaz(con, kullanici_id, yk)
+    kartlar: list[dict[str, Any]] = []
+    for a in aday_listele(con, kullanici_id, yk, durum=DURUM_ADAY, limit=60):
+        aid = int(a['id'])
+        son_gorusme_metin = None
+        gecmis: list[dict[str, Any]] = []
+        if _tablo_var(con, GORUSME_TABLO):
+            rows = con.execute(
+                f"""
+                SELECT gorusme_tarihi, gorusme_tipi, sonuc_tipi, kisa_not
+                FROM {GORUSME_TABLO}
+                WHERE musteri_aday_id=? AND aktif=1
+                ORDER BY gorusme_tarihi DESC, id DESC
+                LIMIT 3
+                """,
+                (aid,),
+            ).fetchall()
+            if rows:
+                sg = rows[0]
+                son_gorusme_metin = (
+                    f"{(sg['gorusme_tarihi'] or '')[:10]} — "
+                    f"{sg['gorusme_tipi']} ({sg['sonuc_tipi']})"
+                )
+                for g in rows:
+                    gecmis.append({
+                        'tarih': (g['gorusme_tarihi'] or '')[:10],
+                        'tip': g['gorusme_tipi'],
+                        'sonuc': g['sonuc_tipi'],
+                        'not': (g['kisa_not'] or '')[:80],
+                    })
+        kisa = []
+        if a.get('yetkili_adi'):
+            kisa.append(str(a['yetkili_adi']))
+        if a.get('telefon'):
+            kisa.append(str(a['telefon']))
+        kartlar.append({
+            'entity_type': 'ADAY',
+            'cari_id': None,
+            'aday_id': aid,
+            'cari_kod': None,
+            'unvan': a.get('firma_adi') or '—',
+            'atanmamis': False,
+            'sorumlu_etiket': None,
+            'son_siparis': None,
+            'son_gorusme': son_gorusme_metin,
+            'son_gorusmeler': gecmis,
+            'numune': None,
+            'risk': None,
+            'vade': None,
+            'durum': a.get('durum') or DURUM_ADAY,
+            'olusturan_adi': a.get('olusturan_adi') or '—',
+            'yetkili_adi': a.get('yetkili_adi'),
+            'telefon': a.get('telefon'),
+            'sehir': a.get('sehir'),
+            'kisa_bilgi': ' · '.join(kisa) if kisa else None,
+            'gorusme_yazabilir': yazabilir,
         })
     return kartlar
 
@@ -623,7 +706,10 @@ def _oncelikli_isler_flat(oneriler: list[dict[str, Any]], limit: int = 4) -> lis
             alt = f"{o['tahmini_gun']} gündür"
         item = dict(o)
         item['alt_metin'] = alt
-        item['is_durum'] = f"{o.get('surec_tipi') or 'İş'} · {o.get('surec_asama') or '—'}"
+        item['is_turu'] = o.get('surec_tipi') or o.get('baslik') or 'İş'
+        item['durum_ozet'] = o.get('surec_asama') or o.get('neden') or '—'
+        item['bekleme_ozet'] = alt or '—'
+        item['is_durum'] = f"{item['is_turu']} · {item['durum_ozet']}"
         tip = (o.get('surec_tipi') or 'İş')[:1].upper()
         item['tip_isaret'] = {'T': '₺', 'N': '◆', 'Z': '◎', 'S': '▣'}.get(tip, '•')
         out.append(item)
@@ -632,12 +718,20 @@ def _oncelikli_isler_flat(oneriler: list[dict[str, Any]], limit: int = 4) -> lis
     return out
 
 
-def _asama_grup_ozet(items: list[dict[str, Any]]) -> str:
+def _asama_etiketler(items: list[dict[str, Any]], limit: int = 3) -> list[dict[str, Any]]:
+    """Açık süreç özetini kısa etiketlere böler (UI okunabilirlik)."""
     sayac: dict[str, int] = {}
     for it in items:
-        a = it.get('surec_asama') or '—'
+        a = (it.get('surec_asama') or '—').strip() or '—'
         sayac[a] = sayac.get(a, 0) + 1
-    return ' · '.join(f"{n} {a}" for a, n in sorted(sayac.items(), key=lambda x: -x[1])[:3])
+    return [
+        {'adet': n, 'etiket': a}
+        for a, n in sorted(sayac.items(), key=lambda x: -x[1])[:limit]
+    ]
+
+
+def _asama_grup_ozet(items: list[dict[str, Any]]) -> str:
+    return ' · '.join(f"{x['adet']} {x['etiket']}" for x in _asama_etiketler(items))
 
 
 def _numune_gruplu_ozet(liste: list[dict[str, Any]], limit: int = 4) -> list[dict[str, Any]]:
@@ -649,11 +743,15 @@ def _numune_gruplu_ozet(liste: list[dict[str, Any]], limit: int = 4) -> list[dic
         buckets.setdefault(int(cid), []).append(n)
     out: list[dict[str, Any]] = []
     for cid, items in sorted(buckets.items(), key=lambda x: -len(x[1])):
+        etiketler = _asama_etiketler(items)
+        son = items[-1] if items else {}
         out.append({
             'cari_id': cid,
             'musteri': items[0].get('musteri') or '—',
             'toplam': len(items),
             'asama_ozet': _asama_grup_ozet(items),
+            'asama_etiketler': etiketler,
+            'son_durum': son.get('surec_asama') or '—',
             'timeline': items[0].get('timeline'),
             'aksiyon': items[0].get('aksiyon') or 'Detayı Aç',
         })
@@ -678,11 +776,15 @@ def _siparis_gruplu_ozet(bekleyenler: dict[str, list], limit: int = 4) -> list[d
         buckets.setdefault(int(cid), []).append(s)
     out: list[dict[str, Any]] = []
     for cid, items in sorted(buckets.items(), key=lambda x: -len(x[1])):
+        etiketler = _asama_etiketler(items)
+        son = items[-1] if items else {}
         out.append({
             'cari_id': cid,
             'musteri': items[0].get('musteri') or '—',
             'toplam': len(items),
             'asama_ozet': _asama_grup_ozet(items),
+            'asama_etiketler': etiketler,
+            'son_durum': son.get('surec_asama') or '—',
             'timeline': items[0].get('timeline'),
             'aksiyon': 'Detayı Aç',
         })
@@ -930,23 +1032,32 @@ def _tahsilat_takibi(
     return kayitlar
 
 
-def dashboard_ozet(con, kullanici_id: int, yk: set[str] | None = None) -> dict[str, Any]:
+def dashboard_ozet(
+    con,
+    kullanici_id: int,
+    yk: set[str] | None = None,
+    *,
+    karar_seen_ts: str | None = None,
+) -> dict[str, Any]:
     if yk is None:
         yk = load_kullanici_yetkileri(con, kullanici_id)
-    kapsam = get_kullanici_cari_kapsami(con, kullanici_id, yk)
+    kapsam = get_musteri_operasyonu_kapsami(con, kullanici_id, yk)
     cari_ids = kapsam['cari_id_listesi']
+    atanmamis_ids = set(kapsam.get('atanmamis_cari_ids') or [])
 
     bugunun = {
         'bugun_cek_alinacak': _is_gorevi('Bugün çek alınacak', 0),
         'bugun_ziyaret': _is_gorevi('Bugün ziyaret', 0),
-        'bugun_aranacak': _is_gorevi('Bugün aranacak', 0),
-        'onay_bekleyen': _is_gorevi('Onay bekleyen', 0),
+        'bugun_aranacak': _is_gorevi('Takip Bekleyen', 0),
+        'onay_bekleyen': _is_gorevi('Yeni Kararlar', 0),
         'riskli_musteri': _is_gorevi('Riskli müşteri', 0),
-        'numune_sonucu_geldi': _is_gorevi('Numune sonucu geldi', 0),
-        'siparis_onaylandi': _is_gorevi('Sipariş onaylandı', 0),
+        'numune_sonucu_geldi': _is_gorevi('Numune Süreçleri', 0),
+        'siparis_onaylandi': _is_gorevi('Sipariş Süreçleri', 0),
     }
 
     if not cari_ids and not kapsam['tumunu_gorebilir_mi']:
+        from modules.nexgen.musteri_aday_service import aday_havuz_liste
+        aday_kartlar = aday_havuz_liste(con, kullanici_id, yk)
         return {
             'bugunun_isleri': bugunun,
             'akilli_oneriler': [],
@@ -958,9 +1069,11 @@ def dashboard_ozet(con, kullanici_id: int, yk: set[str] | None = None) -> dict[s
             'siparis_gruplu': [],
             'genel_bugun_sayi': 0,
             'musteriler': [],
+            'adaylar': aday_kartlar,
             'numune_bekleyenler': [],
             'siparis_bekleyenler': {'onay_bekleyen': [], 'revizyon_bekleyen': [], 'red_kayit': [], 'onaylandi': [], 'uretim_bekleyen': []},
-            'kapsam_bos': True,
+            'kapsam_bos': not bool(aday_kartlar),
+            'coklu_sorumlu_cari_ids': kapsam.get('coklu_sorumlu_cari_ids') or [],
         }
 
     cari_map = _cari_unvan_map(con, cari_ids)
@@ -970,37 +1083,15 @@ def dashboard_ozet(con, kullanici_id: int, yk: set[str] | None = None) -> dict[s
     if cari_ids:
         c_ph, _ = _in_ph(cari_ids)
 
-        if _tablo_var(con, 'onay_talep'):
-            ob = _sayac(con, f"""
-                SELECT COUNT(*) FROM onay_talep ot
-                WHERE ot.aktif=1 AND ot.durum IN ('BEKLIYOR','BEKLETILDI')
-                  AND ot.talep_tipi='SATIS_SIPARISI' AND ot.cari_id IN ({c_ph})
-            """, cari_ids)
-            bugunun['onay_bekleyen']['sayi'] = ob
-
-        if _tablo_var(con, 'nexgen_numune_talep'):
-            n_ph = ','.join(['?'] * len(_NUMUNE_SONUC_GELDI))
-            ns = _sayac(con, f"""
-                SELECT COUNT(*) FROM nexgen_numune_talep nt
-                WHERE nt.aktif=1 AND nt.durum IN ({n_ph}) AND nt.cari_id IN ({c_ph})
-            """, [*_NUMUNE_SONUC_GELDI, *cari_ids])
-            bugunun['numune_sonucu_geldi']['sayi'] = ns
-
-        if _tablo_var(con, 'nexgen_planlama_siparis'):
-            s_ph = ','.join(['?'] * len(_SIPARIS_ONAYLANDI))
-            so = _sayac(con, f"""
-                SELECT COUNT(*) FROM nexgen_planlama_siparis ps
-                WHERE ps.siparis_no LIKE 'PZM-%' AND ps.durum IN ({s_ph})
-                  AND ps.cari_id IN ({c_ph})
-            """, [*_SIPARIS_ONAYLANDI, *cari_ids])
-            bugunun['siparis_onaylandi']['sayi'] = so
-            if bugunun['onay_bekleyen']['sayi'] == 0:
-                o_ph = ','.join(['?'] * len(_SIPARIS_ONAY_BEKLEYEN))
-                bugunun['onay_bekleyen']['sayi'] = _sayac(con, f"""
-                    SELECT COUNT(*) FROM nexgen_planlama_siparis ps
-                    WHERE ps.siparis_no LIKE 'PZM-%' AND ps.durum IN ({o_ph})
-                      AND ps.cari_id IN ({c_ph})
-                """, [*_SIPARIS_ONAY_BEKLEYEN, *cari_ids])
+        # Yeni Kararlar: yalnız okunmamış Onaylandı/Reddedildi (session seen)
+        try:
+            from modules.nexgen.onay_service import pazarlamaci_okunmamis_karar_sayisi
+            bugunun['onay_bekleyen']['sayi'] = pazarlamaci_okunmamis_karar_sayisi(
+                con, kullanici_id, karar_seen_ts,
+            )
+            bugunun['onay_bekleyen']['baslik'] = 'Yeni Kararlar'
+        except Exception:
+            bugunun['onay_bekleyen']['sayi'] = 0
 
         gs = bugunun_gorusme_sayaclari(con, cari_ids)
         bugunun['bugun_cek_alinacak']['sayi'] = max(
@@ -1012,12 +1103,29 @@ def dashboard_ozet(con, kullanici_id: int, yk: set[str] | None = None) -> dict[s
         bugunun['bugun_aranacak']['sayi'] = max(
             bugunun['bugun_aranacak']['sayi'], gs['bugun_aranacak']
         )
+        bugunun['bugun_aranacak']['baslik'] = 'Takip Bekleyen'
 
-    musteriler = _musteri_kartlari(con, cari_ids, riskli_ids, kullanici_id, yk)
+    musteriler = _musteri_kartlari(
+        con, cari_ids, riskli_ids, kullanici_id, yk, atanmamis_ids=atanmamis_ids,
+    )
+    # Cariler ve adaylar karışmaz — payload entity_type kesin
+    from modules.nexgen.musteri_aday_service import aday_havuz_liste
+    adaylar = aday_havuz_liste(con, kullanici_id, yk)
     oneriler = _akilli_oneriler(con, cari_ids, riskli_ids, cari_map)
     numune_bek = _numune_bekleyenler(con, cari_ids, cari_map)
     siparis_bek = _siparis_bekleyenler(con, cari_ids, cari_map)
-    genel_bugun = sum(v.get('sayi', 0) for v in bugunun.values())
+    # Ana şerit sayaçları = panel listeleri ile aynı sorgu politikası
+    bugunun['numune_sonucu_geldi']['sayi'] = len(numune_bek)
+    bugunun['numune_sonucu_geldi']['baslik'] = 'Numune Süreçleri'
+    siparis_acik = sum(len(v or []) for v in (siparis_bek or {}).values())
+    bugunun['siparis_onaylandi']['sayi'] = siparis_acik
+    bugunun['siparis_onaylandi']['baslik'] = 'Sipariş Süreçleri'
+    genel_bugun = (
+        int(bugunun['bugun_aranacak'].get('sayi') or 0)
+        + int(bugunun['onay_bekleyen'].get('sayi') or 0)
+        + int(bugunun['numune_sonucu_geldi'].get('sayi') or 0)
+        + int(bugunun['siparis_onaylandi'].get('sayi') or 0)
+    )
     return {
         'bugunun_isleri': bugunun,
         'akilli_oneriler': oneriler,
@@ -1029,7 +1137,9 @@ def dashboard_ozet(con, kullanici_id: int, yk: set[str] | None = None) -> dict[s
         'siparis_gruplu': _siparis_gruplu_ozet(siparis_bek, 4),
         'genel_bugun_sayi': genel_bugun,
         'musteriler': musteriler,
+        'adaylar': adaylar,
         'numune_bekleyenler': numune_bek,
         'siparis_bekleyenler': siparis_bek,
         'kapsam_bos': False,
+        'coklu_sorumlu_cari_ids': kapsam.get('coklu_sorumlu_cari_ids') or [],
     }

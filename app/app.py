@@ -122,6 +122,14 @@ def index():
 def inject_globals():
     u = session.get('kullanici')
     yetkiler = g.get('yetkiler', set()) if u else set()
+    can_mo_menu = False
+    if u:
+        try:
+            from modules.auth import kullanici_yetkileri
+            from modules.nexgen.cari360_yetki import can_musteri_pazarlama_menu
+            can_mo_menu = bool(can_musteri_pazarlama_menu(kullanici_yetkileri(u)))
+        except Exception:
+            can_mo_menu = False
     return {
         'DB_MODE':    Config.DB_MODE,
         'APP_NAME':   'CPS Dev',
@@ -130,6 +138,7 @@ def inject_globals():
         'g_yetkiler': yetkiler,
         'yetki':      yetki_var,
         'depo_sade_mod': is_nexgen_depo_sade_kullanici(u) if u else False,
+        'can_musteri_operasyonu_menu': can_mo_menu,
     }
 
 
