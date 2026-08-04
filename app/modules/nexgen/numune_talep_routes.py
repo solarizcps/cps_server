@@ -58,7 +58,12 @@ def register_numune_talep_routes(bp, db_factory, kullanici_id_fn, *, renk_kart_f
 
     @bp.before_request
     def _nt_mo_route_guard():
-        if 'numune-talep' in (request.path or ''):
+        # Yalnız Mehmet/PZM /numune-talep* modülü.
+        # MO /musteri-pazarlama/numune-* yolları burada 403 olmamalı (legacy 410 ayrı).
+        path = request.path or ''
+        if '/musteri-pazarlama/' in path:
+            return
+        if 'numune-talep' in path:
             _mo_pazarlamaci_block()
 
     def _render_numune_talep_sayfa(*, talep_id: int | None = None, yeni_route: bool = False):
@@ -175,6 +180,24 @@ def register_numune_talep_routes(bp, db_factory, kullanici_id_fn, *, renk_kart_f
             tid = None
         con = _con()
         try:
+            mtt_raw = payload.get('kaynak_mtt_talep_id')
+            if mtt_raw not in (None, '', 0, '0') and tid is None:
+                from flask import session
+                from modules.auth import kullanici_yetkileri
+                from modules.nexgen.musteri_temsilcisi_talep_service import (
+                    MusteriTemsilcisiTalepError,
+                )
+                from modules.nexgen.mtt_donusum_service import numune_mtt_ile_kaydet
+                yk = kullanici_yetkileri(session.get('kullanici') or {})
+                try:
+                    out = numune_mtt_ile_kaydet(
+                        con, int(mtt_raw), payload, _uid(), yk,
+                    )
+                    return jsonify(out)
+                except MusteriTemsilcisiTalepError as e:
+                    return jsonify({
+                        'ok': False, 'mesaj': e.mesaj, 'hata': e.mesaj, **e.ekstra,
+                    }), e.kod
             out = kaydet_taslak(con, payload, _uid(), tid)
             return jsonify({'ok': True, 'talep': out})
         except NumuneTalepError as e:

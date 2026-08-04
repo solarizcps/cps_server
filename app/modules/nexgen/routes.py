@@ -19276,6 +19276,18 @@ def pazarlama_merkezi():
         talepler = sayfa['liste']
         talep_total = sayfa['total']
         talep_pages = sayfa['pages']
+        mtt_kuyruk = 0
+        mtt_okunmamis = 0
+        try:
+            from modules.nexgen.musteri_temsilcisi_talep_service import kuyruk_sayaci
+            from modules.nexgen.onay_service import mehmet_okunmamis_yeni_sayisi
+            mtt_kuyruk = kuyruk_sayaci(con)
+            mtt_okunmamis = mehmet_okunmamis_yeni_sayisi(
+                con, session.get('mtt_ux_kuyruk_seen'),
+            )
+        except Exception:
+            mtt_kuyruk = 0
+            mtt_okunmamis = 0
     finally:
         con.close()
     return render_template(
@@ -19289,6 +19301,8 @@ def pazarlama_merkezi():
         talep_per_page=_PZM_LISTE_PER_PAGE_DEFAULT,
         can_manage=yetki_var('nexgen.plan.manage', 'can_manage'),
         can_admin=is_superadmin(session.get('kullanici')),
+        mtt_kuyruk_sayisi=mtt_kuyruk,
+        mtt_okunmamis_yeni=mtt_okunmamis,
     )
 
 
@@ -19449,9 +19463,29 @@ def api_pazarlama_taslak_kaydet():
 
         if pzm_is_v2_payload(data):
             try:
+                mtt_raw = data.get('kaynak_mtt_talep_id')
+                if mtt_raw not in (None, '', 0, '0'):
+                    from modules.nexgen.musteri_temsilcisi_talep_service import (
+                        MusteriTemsilcisiTalepError,
+                    )
+                    from modules.nexgen.mtt_donusum_service import siparis_mtt_ile_kaydet
+                    yk = kullanici_yetkileri(session.get('kullanici') or {})
+                    sonuc = siparis_mtt_ile_kaydet(
+                        con, int(mtt_raw), data, _kullanici_id(), yk,
+                    )
+                    return jsonify(sonuc)
                 sonuc = pzm_v2_taslak_kaydet(con, data, _kullanici_id())
-            except PzmWriteError as e:
-                return jsonify({'ok': False, 'hata': e.message}), e.status
+            except Exception as e:
+                from modules.nexgen.musteri_temsilcisi_talep_service import (
+                    MusteriTemsilcisiTalepError,
+                )
+                if isinstance(e, MusteriTemsilcisiTalepError):
+                    return jsonify({
+                        'ok': False, 'hata': e.mesaj, 'mesaj': e.mesaj, **e.ekstra,
+                    }), e.kod
+                if isinstance(e, PzmWriteError):
+                    return jsonify({'ok': False, 'hata': e.message}), e.status
+                raise
             return jsonify(sonuc)
 
         hazir, hata = _pzm_talep_payload_olustur(con, data)
