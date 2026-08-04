@@ -685,6 +685,7 @@ def enj_api_rapor_patch(rapor_id):
 @enjeksiyon_bp.route("/api/saatlik/<int:saatlik_id>", methods=["PATCH"])
 def enj_api_saatlik_patch(saatlik_id):
     """Saatlik kaydi guncelle (tur_adet, durum, aksama_sebep_id, aciklama)."""
+    con = None
     try:
         body = request.get_json(silent=True) or {}
         if not isinstance(body, dict):
@@ -779,21 +780,23 @@ def enj_api_saatlik_patch(saatlik_id):
         cur.execute(f"UPDATE enj_saatlik_kayit SET {', '.join(set_parts)} WHERE id = ?", params)
         # ENJ_TIME_SETUP_SNAPSHOT TS1: tur girisinde kapasite snapshot dondur (0-yaz yasagi icinde)
         if has_cevrim_a or has_cevrim_b or "cevrim_a" in guncellenecek or "cevrim_b" in guncellenecek:
-            try:
-                _setup_db.freeze_saatlik_snapshot(cur, saatlik_id)
-            except Exception:
-                pass
+            _setup_db.freeze_saatlik_snapshot(cur, saatlik_id)
         # ENJ_AB_FAZ1_V1 - hesap motoru
-        try:
-            _ab_hesapla_saatlik(cur, saatlik_id)
-        except Exception:
-            pass
+        _ab_hesapla_saatlik(cur, saatlik_id)
         con.commit()
         con.close()
+        con = None
 
         return jsonify({"ok": True, "guncellenen": list(guncellenecek.keys())})
     except Exception as e:
-        return jsonify({"ok": False, "hata": str(e)}), 500
+        if con is not None:
+            try:
+                con.rollback()
+            finally:
+                con.close()
+        from flask import current_app
+        current_app.logger.exception("Saatlik uretim hesabi tamamlanamadi; kayit geri alindi")
+        return jsonify({"ok": False, "hata": "Saatlik üretim hesabı tamamlanamadı. Kayıt geri alındı."}), 500
 
 
 @enjeksiyon_bp.route("/api/istasyon/<int:istasyon_id>", methods=["PATCH"])
