@@ -66,3 +66,11 @@ SONRAKI_AKSIYON_ORNEKLERI: tuple[str, ...] = (
 ONCELIKLER: tuple[str, ...] = ('NORMAL', 'ACIL', 'KRITIK')
 KAYNAK_MUSTERI_OPERASYONU = 'MUSTERI_OPERASYONU'
 TABLO = 'musteri_operasyon_gorusme'
+
+# Görüşme fiyat/ödeme snapshot (finans kaydı değil)
+FIYAT_PARA_BIRIMLERI: tuple[str, ...] = ('TRY', 'USD', 'EUR')
+FIYAT_BIRIMI_KG = 'KG'
+# Eski kayıtlarda CIFT/ADET okunabilir; yeni UI seçim almaz
+FIYAT_BIRIMLERI: tuple[str, ...] = (FIYAT_BIRIMI_KG, 'CIFT', 'ADET')
+ODEME_TIPLERI: tuple[str, ...] = ('NAKIT', 'VADELI', 'CEK')
+VADE_GUN_MAX = 730

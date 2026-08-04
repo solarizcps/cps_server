@@ -151,6 +151,108 @@ def get_kullanici_cari_kapsami(
     }
 
 
+def _atanmamis_aktif_cari_ids(con) -> list[int]:
+    """Aktif nexgen_cari — hiçbir aktif sorumlusu olmayanlar (yalnız id)."""
+    rows = con.execute(
+        f"""
+        SELECT c.id
+        FROM nexgen_cari c
+        WHERE c.aktif=1
+          AND NOT EXISTS (
+            SELECT 1 FROM cari_sorumlu cs
+            WHERE cs.cari_id = c.id AND {_AKTIF_WHERE}
+          )
+        ORDER BY c.id
+        """
+    ).fetchall()
+    return [int(r[0]) for r in rows]
+
+
+def _coklu_aktif_sorumlu_cari_ids(con) -> list[int]:
+    """Veri kalitesi: birden fazla aktif sorumlu satırı olan cariler."""
+    rows = con.execute(
+        """
+        SELECT cs.cari_id
+        FROM cari_sorumlu cs
+        JOIN nexgen_cari c ON c.id = cs.cari_id AND c.aktif=1
+        WHERE cs.aktif=1
+          AND (cs.bitis_tarihi IS NULL OR cs.bitis_tarihi=''
+               OR cs.bitis_tarihi > datetime('now','localtime'))
+        GROUP BY cs.cari_id
+        HAVING COUNT(*) > 1
+        """
+    ).fetchall()
+    return [int(r[0]) for r in rows]
+
+
+def cari_aktif_atanmamis_mi(con, cari_id: int) -> bool:
+    row = con.execute(
+        f"""
+        SELECT 1 FROM nexgen_cari c
+        WHERE c.id=? AND c.aktif=1
+          AND NOT EXISTS (
+            SELECT 1 FROM cari_sorumlu cs
+            WHERE cs.cari_id = c.id AND {_AKTIF_WHERE}
+          )
+        """,
+        (cari_id,),
+    ).fetchone()
+    return bool(row)
+
+
+def get_musteri_operasyonu_kapsami(
+    con,
+    kullanici_id: int,
+    yk: set[str] | None = None,
+) -> dict[str, Any]:
+    """MO liste kapsamı: atanmış ∪ sorumlusuz aktif (başkasının atadığı hariç).
+
+    Cari360 / diğer ekranların get_kullanici_cari_kapsami davranışını değiştirmez.
+    """
+    if yk is None:
+        yk = load_kullanici_yetkileri(con, kullanici_id)
+    base = get_kullanici_cari_kapsami(con, kullanici_id, yk)
+    atanmamis = _atanmamis_aktif_cari_ids(con)
+    coklu = _coklu_aktif_sorumlu_cari_ids(con)
+    if base['tumunu_gorebilir_mi']:
+        atanmis = [i for i in base['cari_id_listesi'] if i not in set(atanmamis)]
+        return {
+            **base,
+            'atanmis_cari_ids': atanmis,
+            'atanmamis_cari_ids': atanmamis,
+            'coklu_sorumlu_cari_ids': coklu,
+        }
+    atanmis = list(base['cari_id_listesi'])
+    cari_ids = sorted(set(atanmis) | set(atanmamis))
+    return {
+        **base,
+        'cari_id_listesi': cari_ids,
+        'atanmis_cari_ids': atanmis,
+        'atanmamis_cari_ids': atanmamis,
+        'coklu_sorumlu_cari_ids': coklu,
+    }
+
+
+def can_mo_view_cari(
+    con,
+    kullanici_id: int,
+    cari_id: int,
+    yk: set[str] | None = None,
+) -> bool:
+    """MO okuma: klasik kapsam veya sorumlusuz aktif cari (view_own)."""
+    from modules.nexgen.cari360_yetki import can_musteri_pazarlama_menu
+
+    if yk is None:
+        yk = load_kullanici_yetkileri(con, kullanici_id)
+    if not can_musteri_pazarlama_menu(yk):
+        return False
+    if can_view_cari(con, kullanici_id, cari_id, yk):
+        return True
+    if can_cari360_view_own(yk) and cari_aktif_atanmamis_mi(con, cari_id):
+        return True
+    return False
+
+
 def _kullanici_cari_atanmis(con, kullanici_id: int, cari_id: int) -> bool:
     row = con.execute(
         f"""

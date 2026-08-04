@@ -158,12 +158,22 @@ def can_siparis_onaya_gonder(yk: set[str] | frozenset[str]) -> bool:
 
 
 def can_musteri_pazarlama_menu(yk: set[str] | frozenset[str]) -> bool:
-    """MÜŞTERİ OPERASYONU menüsü — pazarlamacı + yönetim."""
-    return (
-        can_cari360_view_own(yk)
-        or can_cari360_view_all(yk)
-        or _yk_has(yk, YETKI_CARI360_SORUMLU_MANAGE, 'can_manage')
-    )
+    """Müşteri Operasyonu menü + route — yönetim / gerçek pazarlamacı.
+
+    FAZ-NEXGEN-MUSTERI-OPERASYONU-AKTIFLESTIRME-VE-KAPSAM-FIX-1:
+    - admin / cari360.view / sorumlu.manage → görünür
+    - yalnız cari360.view_own (pazarlamacı) → görünür
+    - nexgen.plan.manage taşıyan planlamacı (ör. Mehmet) → görünmez
+    """
+    if '*' in yk:
+        return True
+    if can_cari360_view_all(yk):
+        return True
+    if _yk_has(yk, YETKI_CARI360_SORUMLU_MANAGE, 'can_manage'):
+        return True
+    if _yk_has(yk, 'nexgen.plan.manage', 'can_manage'):
+        return False
+    return can_cari360_view_own(yk)
 
 
 def is_pazarlamaci_home_user(yk: set[str] | frozenset[str]) -> bool:
