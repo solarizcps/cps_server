@@ -33,9 +33,14 @@ def pzm_finans_kolonlari_var(con) -> bool:
     )
 
 
-def pzm_odeme_kolonlari_var(con) -> bool:
+def pzm_odeme_tipi_kolonu_var(con) -> bool:
     cols = {c[1] for c in con.execute('PRAGMA table_info(nexgen_planlama_siparis)').fetchall()}
-    return 'odeme_tipi' in cols and 'odeme_notu' in cols
+    return 'odeme_tipi' in cols
+
+
+def pzm_odeme_notu_kolonu_var(con) -> bool:
+    cols = {c[1] for c in con.execute('PRAGMA table_info(nexgen_planlama_siparis)').fetchall()}
+    return 'odeme_notu' in cols
 
 
 def pzm_cek_vadesi_kolonu_var(con) -> bool:
@@ -1339,7 +1344,8 @@ def pzm_v2_taslak_kaydet(
             pass
     talep_ref = pzm_v2_header_pack(meta)
     finans_kolon = pzm_finans_kolonlari_var(con)
-    odeme_kolon = pzm_odeme_kolonlari_var(con)
+    odeme_tipi_kolon = pzm_odeme_tipi_kolonu_var(con)
+    odeme_notu_kolon = pzm_odeme_notu_kolonu_var(con)
     cek_kolon = pzm_cek_vadesi_kolonu_var(con)
 
     ps_id = data.get('talep_id')
@@ -1390,9 +1396,12 @@ def pzm_v2_taslak_kaydet(
                 params.extend([
                     hazir['anlasma_para_birimi'], hazir['vade_gun'], hazir['anlasma_birim_fiyat'],
                 ])
-            if odeme_kolon:
-                set_parts.extend(['odeme_tipi=?', 'odeme_notu=?'])
-                params.extend([hazir.get('odeme_tipi'), hazir.get('odeme_notu')])
+            if odeme_tipi_kolon:
+                set_parts.append('odeme_tipi=?')
+                params.append(hazir.get('odeme_tipi'))
+            if odeme_notu_kolon:
+                set_parts.append('odeme_notu=?')
+                params.append(hazir.get('odeme_notu'))
             if cek_kolon:
                 set_parts.append('cek_vadesi=?')
                 params.append(hazir.get('cek_vadesi'))
@@ -1430,9 +1439,12 @@ def pzm_v2_taslak_kaydet(
                 vals.extend([
                     hazir['anlasma_para_birimi'], hazir['vade_gun'], hazir['anlasma_birim_fiyat'],
                 ])
-            if odeme_kolon:
-                cols.extend(['odeme_tipi', 'odeme_notu'])
-                vals.extend([hazir.get('odeme_tipi'), hazir.get('odeme_notu')])
+            if odeme_tipi_kolon:
+                cols.append('odeme_tipi')
+                vals.append(hazir.get('odeme_tipi'))
+            if odeme_notu_kolon:
+                cols.append('odeme_notu')
+                vals.append(hazir.get('odeme_notu'))
             if cek_kolon:
                 cols.append('cek_vadesi')
                 vals.append(hazir.get('cek_vadesi'))
