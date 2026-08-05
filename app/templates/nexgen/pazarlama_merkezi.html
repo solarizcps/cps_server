@@ -7886,7 +7886,7 @@ window.mttHydrateSiparisForm = function(d) {
     }
     return {
       sira_no: k.sira_no || (i + 1),
-      mtt_kalem_id: k.mtt_kalem_id || null,
+      mtt_kalem_id: k.mtt_kalem_id || k.id || null,
       urun_ailesi: aile || k.urun_ailesi || null,
       formul_id: null,
       rf_renk_id: null,
