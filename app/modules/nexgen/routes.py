@@ -660,16 +660,19 @@ def index():
         or yetki_var('nexgen.plan.manage', 'can_manage')
     )
     from modules.nexgen.finans_yetki import can_finans_menu
+    from modules.nexgen.cari360_yetki import can_musteri_pazarlama_menu
     _u = session.get('kullanici') or {}
     _yk = kullanici_yetkileri(_u)
     can_finans = can_finans_menu(_u, _yk)
+    can_musteri_pazarlama = can_musteri_pazarlama_menu(_yk)
     return render_template('nexgen/index.html', active='nexgen',
                            can_yonetim=can_yonetim,
                            can_depo=can_depo,
                            can_recete=can_recete,
                            can_tablet=can_tablet,
                            can_sevkiyat=can_sevkiyat,
-                           can_finans=can_finans)
+                           can_finans=can_finans,
+                           can_musteri_pazarlama=can_musteri_pazarlama)
 
 
 @nexgen_bp.route('/formuller')
@@ -19644,6 +19647,25 @@ def _pzm_v2_mpr_olustur(con, talep_id):
         return {'ok': False, 'hata': mesaj or 'Onay tamamlanmadan MPR başlatılamaz.', 'status': 400}
     if not pzm_siparis_v2_mi(hdr['talep_referansi']):
         return None
+
+    # UX V2: ticari / fiyat / termin tamamlanmadan MRP yok
+    try:
+        from modules.nexgen.pzm_siparis_write import (
+            PzmWriteError as _PzmWE,
+            pzm_gonder_ticari_hazir_mi,
+            pzm_operasyon_eksikleri,
+        )
+        eksikler = pzm_operasyon_eksikleri(con, talep_id)
+        if eksikler:
+            return {
+                'ok': False,
+                'hata': eksikler[0],
+                'eksikler': eksikler,
+                'status': 400,
+            }
+        pzm_gonder_ticari_hazir_mi(con, talep_id)
+    except _PzmWE as e:
+        return {'ok': False, 'hata': str(e), 'status': getattr(e, 'status', 400) or 400}
 
     kalemler = pzm_siparis_kalemleri_getir(con, talep_id)
     if not kalemler:

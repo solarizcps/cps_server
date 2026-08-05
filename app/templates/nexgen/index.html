@@ -218,6 +218,11 @@
     <a href="/nexgen/mpr" class="ng-diger-item ng-diger-aktif">
       <span>Üretim Planlama Merkezi</span><span class="ng-aktif-kucuk">Ana Merkez ›</span>
     </a>
+    {% if can_musteri_pazarlama %}
+    <a href="/nexgen/musteri-pazarlama" class="ng-diger-item ng-diger-aktif">
+      <span>Müşteri Pazarlama</span><span class="ng-aktif-kucuk">CRM ›</span>
+    </a>
+    {% endif %}
     <a href="/nexgen/pazarlama" class="ng-diger-item ng-diger-aktif">
       <span>Pazarlama Merkezi</span><span class="ng-aktif-kucuk">Yeni ›</span>
     </a>

@@ -9,17 +9,20 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any
 
 from modules.nexgen.cekirdek_gorunum import cekirdek_formul_mu
+from modules.nexgen.mo_gorusme_config import VADE_GUN_MAX
 
 PZM_V2_JSON_PREFIX = '__PZM_V2__'
 PZM_AILELER = frozenset({'TERLIK', 'TABAN', 'DOKME'})
 # Cari kart / Pazarlama / Finans ortak whitelist (CNY satınalmada var — bu fazda eklenmez)
 PZM_PARA_BIRIMLERI = frozenset({'TRY', 'USD', 'EUR', 'GBP'})
-PZM_ODEME_TIPLERI = frozenset({'NAKIT', 'VADELI'})
+PZM_ODEME_TIPLERI = frozenset({'NAKIT', 'VADELI', 'CEK'})
+PZM_TESLIM_SEKILLERI = frozenset({'FABRIKA_TESLIM', 'MUSTERIYE_SEVK'})
+PZM_SIPARIS_ONCELIKLERI = frozenset({'NORMAL', 'ACIL', 'YUKSEK'})
+PZM_KDV_DURUMLARI = frozenset({'RESMI', 'GAYRI_RESMI', 'GAYRI'})
 PZM_ODEME_NOTU_MAX = 500
 PZM_BIRIM_FIYAT_MAX = Decimal('999999.9999')
 PZM_KUR_MAX = Decimal('999999.9999')
 PZM_KUR_KAYNAKLARI = frozenset({'SISTEM', 'MANUEL'})
-
 
 def pzm_finans_kolonlari_var(con) -> bool:
     cols = {c[1] for c in con.execute('PRAGMA table_info(nexgen_planlama_siparis)').fetchall()}
@@ -33,6 +36,68 @@ def pzm_finans_kolonlari_var(con) -> bool:
 def pzm_odeme_kolonlari_var(con) -> bool:
     cols = {c[1] for c in con.execute('PRAGMA table_info(nexgen_planlama_siparis)').fetchall()}
     return 'odeme_tipi' in cols and 'odeme_notu' in cols
+
+
+def pzm_cek_vadesi_kolonu_var(con) -> bool:
+    cols = {c[1] for c in con.execute('PRAGMA table_info(nexgen_planlama_siparis)').fetchall()}
+    return 'cek_vadesi' in cols
+
+
+def pzm_teslim_sekli_kolonu_var(con) -> bool:
+    cols = {c[1] for c in con.execute('PRAGMA table_info(nexgen_planlama_siparis)').fetchall()}
+    return 'teslim_sekli' in cols
+
+
+def pzm_teslim_sekli_normalize(raw: Any) -> str | None:
+    v = (raw or '').strip().upper() if raw not in (None, '') else ''
+    if v in PZM_TESLIM_SEKILLERI:
+        return v
+    return None
+
+
+def pzm_siparis_onceligi_normalize(raw: Any) -> str | None:
+    v = (raw or '').strip().upper() if raw not in (None, '') else ''
+    if v in PZM_SIPARIS_ONCELIKLERI:
+        return v
+    return None
+
+
+def pzm_kdv_durumu_normalize(raw: Any) -> str | None:
+    v = (raw or '').strip().upper() if raw not in (None, '') else ''
+    if v == 'GAYRI':
+        v = 'GAYRI_RESMI'
+    if v in PZM_KDV_DURUMLARI:
+        return 'GAYRI_RESMI' if v == 'GAYRI' else v
+    return None
+
+
+def pzm_baslik_operasyon_alanlari_dogrula(
+    data: dict,
+    *,
+    zorunlu: bool = False,
+) -> dict[str, Any]:
+    """Başlık teslim / öncelik / KDV / istenen termin — operasyon kaydında zorunlu olabilir."""
+    teslim = pzm_teslim_sekli_normalize(data.get('teslim_sekli'))
+    if zorunlu and not teslim:
+        raise PzmWriteError('Teslim şekli zorunludur.')
+    oncelik = pzm_siparis_onceligi_normalize(
+        data.get('siparis_onceligi') or data.get('oncelik'),
+    )
+    if zorunlu and not oncelik:
+        raise PzmWriteError('Sipariş önceliği zorunludur.')
+    kdv = pzm_kdv_durumu_normalize(data.get('kdv_durumu'))
+    if zorunlu and not kdv:
+        raise PzmWriteError('KDV durumu zorunludur.')
+    istenen = (data.get('istenen_termin') or data.get('genel_termin_tarihi') or '')
+    istenen = str(istenen).strip()[:10] or None
+    if zorunlu and not istenen:
+        raise PzmWriteError('Talep edilen termin zorunludur.')
+    return {
+        'teslim_sekli': teslim,
+        'siparis_onceligi': oncelik,
+        'kdv_durumu': kdv,
+        'istenen_termin': istenen,
+    }
 
 
 def pzm_kalem_fiyat_kolonlari_var(con) -> bool:
@@ -57,6 +122,83 @@ def pzm_kalem_try_kolonlari_var(con) -> bool:
         "PRAGMA table_info(nexgen_planlama_siparis_kalem)"
     ).fetchall()}
     return 'net_birim_fiyat_try' in cols and 'satir_tutari_try' in cols
+
+
+def pzm_mtt_kalem_id_kolonu_var(con) -> bool:
+    cols = {c[1] for c in con.execute(
+        "PRAGMA table_info(nexgen_planlama_siparis_kalem)"
+    ).fetchall()}
+    return 'mtt_kalem_id' in cols
+
+
+def pzm_mtt_kalem_pointer_dogrula(
+    con,
+    kalemler: list[dict],
+    kaynak_mtt_talep_id: Any,
+    *,
+    guncelleme_siparis_id: int | None = None,
+) -> None:
+    """MTT dönüşümünde kalem pointer kuralları (migration 149)."""
+    mtt_id = None
+    if kaynak_mtt_talep_id not in (None, '', 0, '0'):
+        try:
+            mtt_id = int(kaynak_mtt_talep_id)
+        except (TypeError, ValueError):
+            mtt_id = None
+    is_mtt = mtt_id is not None and mtt_id > 0
+
+    if not is_mtt:
+        for i, k in enumerate(kalemler, start=1):
+            if k.get('mtt_kalem_id') not in (None, '', 0, '0'):
+                raise PzmWriteError(
+                    f'Kalem {i}: MTT olmayan siparişte mtt_kalem_id kullanılamaz.',
+                )
+        return
+
+    if not pzm_mtt_kalem_id_kolonu_var(con):
+        raise PzmWriteError(
+            'MTT kalem pointer kolonu yok — migration 149 gerekli.', 500,
+        )
+
+    seen: set[int] = set()
+    for i, k in enumerate(kalemler, start=1):
+        raw = k.get('mtt_kalem_id')
+        if raw in (None, '', 0, '0'):
+            raise PzmWriteError(f'Kalem {i}: MTT dönüşümünde mtt_kalem_id zorunlu.')
+        try:
+            mid = int(raw)
+        except (TypeError, ValueError):
+            raise PzmWriteError(f'Kalem {i}: mtt_kalem_id geçersiz.')
+        if mid <= 0:
+            raise PzmWriteError(f'Kalem {i}: mtt_kalem_id geçersiz.')
+        if mid in seen:
+            raise PzmWriteError(f'Kalem {i}: aynı mtt_kalem_id tekrar kullanılamaz.')
+        seen.add(mid)
+
+        row = con.execute(
+            'SELECT id, talep_id FROM nexgen_musteri_temsilcisi_talep_kalem WHERE id=?',
+            (mid,),
+        ).fetchone()
+        if not row:
+            raise PzmWriteError(f'Kalem {i}: MTT kalem bulunamadı.')
+        if int(row['talep_id']) != int(mtt_id):
+            raise PzmWriteError(
+                f'Kalem {i}: mtt_kalem_id bu MTT talebine ait değil.', 403,
+            )
+
+        dup_sql = (
+            'SELECT id, planlama_siparis_id FROM nexgen_planlama_siparis_kalem '
+            "WHERE mtt_kalem_id=? AND COALESCE(durum,'AKTIF')='AKTIF'"
+        )
+        dup_params: list[Any] = [mid]
+        if guncelleme_siparis_id:
+            dup_sql += ' AND planlama_siparis_id != ?'
+            dup_params.append(int(guncelleme_siparis_id))
+        existing = con.execute(dup_sql, tuple(dup_params)).fetchone()
+        if existing:
+            raise PzmWriteError(
+                f'Kalem {i}: MTT kalem zaten siparişe dönüştürülmüş.', 409,
+            )
 
 
 def pzm_ticari_miktar_kg(miktar_l, miktar_s, miktar_m) -> Decimal:
@@ -317,6 +459,8 @@ def pzm_odeme_tipi_normalize(raw) -> str | None:
         return 'NAKIT'
     if s == 'VADELI':
         return 'VADELI'
+    if s in ('CEK', 'ÇEK'):
+        return 'CEK'
     return s or None
 
 
@@ -367,6 +511,10 @@ def pzm_vade_gun_dogrula(raw, *, odeme_tipi: str | None = None, zorunlu: bool = 
             raise PzmWriteError('Vadeli siparişlerde vade günü en az 1 olmalıdır.')
         return v
 
+    if tip == 'CEK':
+        # Çek: vade_gun kullanılmaz; cek_vadesi ayrı doğrulanır
+        return None
+
     # odeme_tipi yok (eski / taslak yumuşak)
     if raw in (None, ''):
         if zorunlu:
@@ -386,6 +534,36 @@ def pzm_vade_gun_dogrula(raw, *, odeme_tipi: str | None = None, zorunlu: bool = 
     return v
 
 
+def pzm_cek_vade_gun_dogrula(
+    raw, *, odeme_tipi: str | None = None, zorunlu: bool = True,
+) -> int | None:
+    """Çek vade gününü başlık snapshot'ı için pozitif tam sayı olarak doğrula."""
+    tip = pzm_odeme_tipi_normalize(odeme_tipi) if odeme_tipi is not None else None
+    if tip != 'CEK':
+        return None
+    if raw in (None, ''):
+        if zorunlu:
+            raise PzmWriteError('Çek ödeme tipinde çek vadesi gün sayısı zorunludur.')
+        return None
+    if isinstance(raw, bool):
+        raise PzmWriteError('Çek vadesi gün sayısı pozitif tam sayı olmalıdır.')
+    if isinstance(raw, str):
+        raw = raw.strip()
+        if not raw.isdigit():
+            raise PzmWriteError('Çek vadesi gün sayısı pozitif tam sayı olmalıdır.')
+    elif not isinstance(raw, int):
+        raise PzmWriteError('Çek vadesi gün sayısı pozitif tam sayı olmalıdır.')
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        raise PzmWriteError('Çek vadesi gün sayısı pozitif tam sayı olmalıdır.')
+    if value < 1 or value > VADE_GUN_MAX:
+        raise PzmWriteError(
+            f'Çek vadesi gün sayısı 1-{VADE_GUN_MAX} arasında olmalıdır.'
+        )
+    return value
+
+
 def pzm_ticari_sartlar_dogrula(
     data: dict,
     *,
@@ -396,7 +574,7 @@ def pzm_ticari_sartlar_dogrula(
     if zorunlu and not tip:
         raise PzmWriteError('Ödeme tipi seçimi zorunludur.')
     if tip and tip not in PZM_ODEME_TIPLERI:
-        raise PzmWriteError('Ödeme tipi NAKIT veya VADELI olmalıdır.')
+        raise PzmWriteError('Ödeme tipi NAKIT, VADELI veya CEK olmalıdır.')
 
     pb = pzm_para_birimi_normalize(data.get('anlasma_para_birimi') or data.get('para_birimi'))
     if zorunlu or pb:
@@ -410,11 +588,23 @@ def pzm_ticari_sartlar_dogrula(
         data.get('vade_gun'), odeme_tipi=tip, zorunlu=vade_zorunlu,
     )
     odeme_notu = pzm_odeme_notu_normalize(data.get('odeme_notu'))
+    cek_vadesi = None
+    cek_vade_gun = None
+    if tip == 'CEK':
+        cek_vade_gun = pzm_cek_vade_gun_dogrula(
+            data.get('cek_vade_gun'), odeme_tipi=tip, zorunlu=zorunlu,
+        )
+        raw_cv = (data.get('cek_vadesi') or '').strip()[:10] if data.get('cek_vadesi') not in (None, '') else ''
+        if zorunlu and not raw_cv:
+            raise PzmWriteError('Çek vadesi zorunludur.')
+        cek_vadesi = raw_cv or None
     return {
         'odeme_tipi': tip,
         'vade_gun': vade_gun,
         'anlasma_para_birimi': pb,
         'odeme_notu': odeme_notu,
+        'cek_vadesi': cek_vadesi,
+        'cek_vade_gun': cek_vade_gun,
     }
 
 
@@ -463,6 +653,79 @@ def pzm_cari_dogrula(con, cari_id_raw, uid: int | None = None) -> dict[str, Any]
             raise
         except Exception:
             pass
+    return dict(cari)
+
+
+def pzm_mtt_donusum_cari_dogrula(
+    con, cari_id: int, uid: int | None, data: dict,
+) -> dict[str, Any]:
+    """
+    Onaylı MTT dönüşüm yolunda cari scope bypass — dar koşullar.
+    Normal Yeni Sipariş cari kuralları etkilenmez.
+    """
+    from modules.nexgen.mtt_donusum_service import talep_detay_getir
+
+    mtt_raw = data.get('kaynak_mtt_talep_id')
+    try:
+        mtt_id = int(mtt_raw)
+    except (TypeError, ValueError):
+        raise PzmWriteError('MTT dönüşüm kaynağı geçersiz.', 400)
+    if mtt_id <= 0:
+        raise PzmWriteError('MTT dönüşüm kaynağı geçersiz.', 400)
+
+    talep = talep_detay_getir(con, mtt_id, kullanici_id=uid)
+    if not talep:
+        raise PzmWriteError('MTT talep bulunamadı.', 404)
+
+    onay = con.execute(
+        "SELECT id, durum FROM nexgen_onay "
+        "WHERE kaynak_turu='MUSTERI_TEMSILCISI_TALEP' AND kaynak_id=?",
+        (mtt_id,),
+    ).fetchone()
+    if not onay or (onay['durum'] or '').upper() != 'ONAYLANDI':
+        raise PzmWriteError(
+            'Yalnız yönetim onaylı MTT siparişe dönüştürülebilir.', 403,
+        )
+
+    try:
+        mtt_cari_id = int(talep.get('cari_id') or 0)
+    except (TypeError, ValueError):
+        mtt_cari_id = 0
+    if mtt_cari_id <= 0:
+        raise PzmWriteError('MTT cari_id geçersiz.', 400)
+    if int(cari_id) != mtt_cari_id:
+        raise PzmWriteError(
+            'Sipariş cari_id onaylı MTT cari ile eşleşmeli.', 403,
+        )
+
+    mtt_durum = (talep.get('durum') or '').upper()
+    donus_sip = talep.get('donusturulen_siparis_id')
+    raw_ps = data.get('talep_id')
+    if mtt_durum == 'SIPARISE_DONUSTU' and donus_sip:
+        if raw_ps not in (None, '', 0, '0'):
+            try:
+                if int(raw_ps) != int(donus_sip):
+                    raise PzmWriteError('Talep zaten başka siparişe dönüştürülmüş.', 409)
+            except PzmWriteError:
+                raise
+            except (TypeError, ValueError):
+                raise PzmWriteError('Talep zaten siparişe dönüştürülmüş.', 409)
+        else:
+            raise PzmWriteError('Talep zaten siparişe dönüştürülmüş.', 409)
+    elif mtt_durum != 'ISLEME_ALINDI':
+        raise PzmWriteError(
+            f'Yalnız ISLEME_ALINDI talepler siparişe dönüştürülebilir (şu an: {mtt_durum}).',
+            409,
+        )
+
+    cari = con.execute(
+        "SELECT id, unvan, aktif FROM nexgen_cari WHERE id=?",
+        (cari_id,),
+    ).fetchone()
+    if not cari:
+        raise PzmWriteError('Seçilen cari bulunamadı.', 404)
+    if not cari['aktif']:
+        raise PzmWriteError('Seçilen cari bulunamadı.', 404)
     return dict(cari)
 
 
@@ -523,84 +786,114 @@ def pzm_ticari_kilitli_mi(con, siparis_id: int) -> tuple[bool, str | None]:
     return False, None
 
 
-def pzm_gonder_ticari_hazir_mi(con, siparis_id: int) -> None:
-    """Gönder / onaya-gonder öncesi zorunlu ticari + cari kontrolü."""
+def pzm_operasyon_eksikleri(con, siparis_id: int) -> list[str]:
+    """
+    MRP / Üretime Gönder / kesin işlem öncesi eksik alan listesi.
+    Kullanıcıya genel hata yerine açık mesajlar döner.
+    """
+    eksik: list[str] = []
     cols = {c[1] for c in con.execute('PRAGMA table_info(nexgen_planlama_siparis)').fetchall()}
-    select_cols = ['id', 'cari_id', 'durum', 'anlasma_para_birimi', 'vade_gun', 'anlasma_birim_fiyat']
+    select_cols = ['id', 'cari_id', 'anlasma_para_birimi', 'vade_gun']
     if 'odeme_tipi' in cols:
         select_cols.append('odeme_tipi')
-    if 'odeme_notu' in cols:
-        select_cols.append('odeme_notu')
+    if 'cek_vadesi' in cols:
+        select_cols.append('cek_vadesi')
     if 'kur' in cols:
-        select_cols.extend(['kur', 'kur_tarihi', 'kur_kaynagi'])
+        select_cols.append('kur')
+    if 'teslim_sekli' in cols:
+        select_cols.append('teslim_sekli')
     row = con.execute(
         f"SELECT {', '.join(select_cols)} FROM nexgen_planlama_siparis WHERE id=?",
         (siparis_id,),
     ).fetchone()
     if not row:
-        raise PzmWriteError('Sipariş bulunamadı.', 404)
+        return ['Sipariş bulunamadı.']
     if row['cari_id'] in (None, ''):
-        raise PzmWriteError('Cari seçimi zorunludur.', 400)
-    pzm_cari_dogrula(con, row['cari_id'], uid=None)
+        eksik.append('Cari seçimi zorunludur.')
 
-    tip = row['odeme_tipi'] if 'odeme_tipi' in row.keys() else None
+    tip = None
+    if 'odeme_tipi' in row.keys():
+        tip = pzm_odeme_tipi_normalize(row['odeme_tipi'])
     if not tip:
-        raise PzmWriteError('Ödeme tipi seçimi zorunludur.', 400)
-    tip = pzm_odeme_tipi_normalize(tip)
-    if tip not in PZM_ODEME_TIPLERI:
-        raise PzmWriteError('Ödeme tipi seçimi zorunludur.', 400)
+        eksik.append('Ödeme tipi seçilmemiş.')
+    else:
+        pb = pzm_para_birimi_normalize(row['anlasma_para_birimi'])
+        if pb not in PZM_PARA_BIRIMLERI:
+            eksik.append('Para birimi seçilmemiş.')
+        if tip == 'VADELI':
+            try:
+                vg = int(row['vade_gun']) if row['vade_gun'] not in (None, '') else None
+            except (TypeError, ValueError):
+                vg = None
+            if vg is None or vg < 1:
+                eksik.append('Vadeli siparişte vade günü zorunludur.')
+        elif tip == 'CEK':
+            cv = row['cek_vadesi'] if 'cek_vadesi' in row.keys() else None
+            if not cv:
+                eksik.append('Çek ödeme tipinde çek vadesi zorunludur.')
 
+    if 'teslim_sekli' in row.keys():
+        ts = pzm_teslim_sekli_normalize(row['teslim_sekli'])
+        if not ts:
+            eksik.append('Teslim şekli zorunludur.')
+
+    kalemler = con.execute(
+        """
+        SELECT sira_no, birim_fiyat, termin_tarihi, formul_id, rf_renk_id,
+               miktar_l, miktar_s, miktar_m
+        FROM nexgen_planlama_siparis_kalem
+        WHERE planlama_siparis_id=? AND IFNULL(durum,'AKTIF')='AKTIF'
+        ORDER BY sira_no
+        """,
+        (siparis_id,),
+    ).fetchall()
+    if not kalemler:
+        eksik.append('En az bir sipariş kalemi zorunlu.')
+        return eksik
+
+    fiyat_var = pzm_kalem_fiyat_kolonlari_var(con)
+    for k in kalemler:
+        sira = k['sira_no']
+        if k['formul_id'] in (None, ''):
+            eksik.append(f'{sira}. kalemin formülü eksik.')
+        if k['rf_renk_id'] in (None, ''):
+            eksik.append(f'{sira}. kalemin teknik rengi eksik.')
+        ml = float(k['miktar_l'] or 0)
+        ms = float(k['miktar_s'] or 0)
+        mm = float(k['miktar_m'] or 0)
+        if (ml + ms + mm) <= 0:
+            eksik.append(f'{sira}. kalemin miktarı eksik.')
+        if not k['termin_tarihi']:
+            eksik.append(f'{sira}. kalemin termini eksik.')
+        if fiyat_var and k['birim_fiyat'] in (None, ''):
+            eksik.append(f'{sira}. kalemin birim fiyatı eksik.')
+    return eksik
+
+
+def pzm_gonder_ticari_hazir_mi(con, siparis_id: int) -> None:
+    """Gönder / onaya-gonder / MRP öncesi zorunlu ticari + fiyat + termin."""
+    eksikler = pzm_operasyon_eksikleri(con, siparis_id)
+    if eksikler:
+        raise PzmWriteError(eksikler[0], 400)
+    # TRY kur snapshot tutarlılığı (operasyon listesinde ayrıntı yok)
+    cols = {c[1] for c in con.execute('PRAGMA table_info(nexgen_planlama_siparis)').fetchall()}
+    if 'kur' not in cols:
+        return
+    row = con.execute(
+        'SELECT anlasma_para_birimi, kur FROM nexgen_planlama_siparis WHERE id=?',
+        (siparis_id,),
+    ).fetchone()
+    if not row:
+        return
     pb = pzm_para_birimi_normalize(row['anlasma_para_birimi'])
-    if pb not in PZM_PARA_BIRIMLERI:
-        raise PzmWriteError('Anlaşma para birimi zorunludur.', 400)
-
-    pzm_vade_gun_dogrula(row['vade_gun'], odeme_tipi=tip, zorunlu=True)
-
-    # T3: kur snapshot — TRY=1; dövizde >0 zorunlu
-    if 'kur' in cols:
-        if pb == 'TRY':
-            if row['kur'] in (None, ''):
-                raise PzmWriteError('TRY siparişte kur snapshot eksik (1 olmalı).', 400)
-            try:
-                if Decimal(str(row['kur'])) != Decimal('1'):
-                    raise PzmWriteError('TRY siparişte kur 1 olmalıdır.', 400)
-            except (InvalidOperation, ValueError):
+    if pb == 'TRY':
+        if row['kur'] in (None, ''):
+            raise PzmWriteError('TRY siparişte kur snapshot eksik (1 olmalı).', 400)
+        try:
+            if Decimal(str(row['kur'])) != Decimal('1'):
                 raise PzmWriteError('TRY siparişte kur 1 olmalıdır.', 400)
-        else:
-            if row['kur'] in (None, ''):
-                raise PzmWriteError('Dövizli siparişte kur zorunludur.', 400)
-            pzm_kur_deger_dogrula(row['kur'])
-
-    # T2: kalem fiyat snapshot zorunlu; yoksa başlık fallback (eski)
-    if pzm_kalem_fiyat_kolonlari_var(con):
-        kalemler = con.execute(
-            """
-            SELECT sira_no, birim_fiyat, durum
-            FROM nexgen_planlama_siparis_kalem
-            WHERE planlama_siparis_id=? AND IFNULL(durum,'AKTIF')='AKTIF'
-            ORDER BY sira_no
-            """,
-            (siparis_id,),
-        ).fetchall()
-        if not kalemler:
-            raise PzmWriteError('En az bir sipariş kalemi zorunlu.', 400)
-        for k in kalemler:
-            if k['birim_fiyat'] in (None, ''):
-                raise PzmWriteError(
-                    f"{k['sira_no']}. kalem için birim fiyat zorunludur.", 400,
-                )
-            try:
-                bf = Decimal(str(k['birim_fiyat']))
-            except (InvalidOperation, ValueError):
-                raise PzmWriteError(
-                    f"{k['sira_no']}. kalem birim fiyatı sıfırdan büyük olmalıdır.", 400,
-                )
-            if bf <= 0:
-                raise PzmWriteError(
-                    f"{k['sira_no']}. kalem birim fiyatı sıfırdan büyük olmalıdır.", 400,
-                )
-    elif row['anlasma_birim_fiyat'] in (None, ''):
-        raise PzmWriteError('Anlaşma birim fiyatı zorunludur.', 400)
+        except (InvalidOperation, ValueError):
+            raise PzmWriteError('TRY siparişte kur 1 olmalıdır.', 400)
 
 
 def pzm_birim_fiyat_dogrula(raw) -> str:
@@ -673,6 +966,7 @@ def pzm_v2_kalem_dogrula(
     cari_id: int | None = None,
     *,
     fiyat_zorunlu: bool = False,
+    termin_zorunlu: bool = True,
 ) -> dict[str, Any]:
     """Tek kalem doğrulama — taslak: renk kartı yeterli, RF uygunluk MRP'de."""
     from modules.nexgen.routes import (
@@ -740,9 +1034,15 @@ def pzm_v2_kalem_dogrula(
         if ml <= 0 and ms <= 0:
             raise PzmWriteError(f'Kalem {sira}: en az bir LARGE veya SMALL miktar girin.')
 
-    ok, t_hata, termin = _pzm_termin_dogrula(kalem_raw.get('termin_tarihi'))
-    if not ok:
-        raise PzmWriteError(f'Kalem {sira}: {t_hata}')
+    raw_termin = kalem_raw.get('termin_tarihi')
+    if raw_termin in (None, ''):
+        if termin_zorunlu:
+            raise PzmWriteError(f'{sira}. kalemin termini eksik.')
+        termin = None
+    else:
+        ok, t_hata, termin = _pzm_termin_dogrula(raw_termin)
+        if not ok:
+            raise PzmWriteError(f'Kalem {sira}: {t_hata}')
 
     boyutlar = _pzm_formul_boyutlari(con, formul_id)
     boyut_rv = {b['boyut']: int(b['rv_id']) for b in boyutlar}
@@ -788,6 +1088,16 @@ def pzm_v2_kalem_dogrula(
         if nt['cari_id'] is None or int(nt['cari_id']) != int(cari_id or 0):
             raise PzmWriteError(f'Kalem {sira}: numune bu cariye ait değil.', 403)
 
+    mtt_kalem_id = None
+    raw_mtt = kalem_raw.get('mtt_kalem_id')
+    if raw_mtt not in (None, '', 0, '0'):
+        try:
+            mtt_kalem_id = int(raw_mtt)
+        except (TypeError, ValueError):
+            raise PzmWriteError(f'Kalem {sira}: mtt_kalem_id geçersiz.')
+        if mtt_kalem_id <= 0:
+            raise PzmWriteError(f'Kalem {sira}: mtt_kalem_id geçersiz.')
+
     ticari = pzm_kalem_ticari_hesapla(
         kalem_raw.get('birim_fiyat'),
         kalem_raw.get('iskonto_orani'),
@@ -810,6 +1120,7 @@ def pzm_v2_kalem_dogrula(
         'termin_tarihi': termin,
         'notlar': notlar,
         'numune_talep_id': numune_talep_id,
+        'mtt_kalem_id': mtt_kalem_id,
         'birim_fiyat': ticari['birim_fiyat'],
         'iskonto_orani': ticari['iskonto_orani'],
         'iskonto_tutari': ticari['iskonto_tutari'],
@@ -830,59 +1141,76 @@ def pzm_v2_payload_dogrula(
     """V2 payload tam doğrulama."""
     from modules.nexgen.routes import _pzm_termin_dogrula
 
-    cari = pzm_cari_dogrula(con, cari_id, uid=uid)
+    mtt_raw = data.get('kaynak_mtt_talep_id')
+    if mtt_raw not in (None, '', 0, '0'):
+        cari = pzm_mtt_donusum_cari_dogrula(con, cari_id, uid, data)
+    else:
+        cari = pzm_cari_dogrula(con, cari_id, uid=uid)
 
     kalemler_raw = data.get('kalemler')
     if not isinstance(kalemler_raw, list) or len(kalemler_raw) < 1:
         raise PzmWriteError('En az bir sipariş kalemi zorunlu.')
 
     siparis_tarihi = (data.get('siparis_tarihi') or '').strip()[:10] or None
-    genel_termin = data.get('genel_termin_tarihi')
     genel_not = (data.get('genel_not') or data.get('notlar') or '').strip() or None
 
-    if not genel_termin or not str(genel_termin).strip():
-        raise PzmWriteError('Genel termin tarihi zorunludur.')
-    ok, t_hata, genel_termin = _pzm_termin_dogrula(genel_termin)
-    if not ok:
-        raise PzmWriteError(t_hata or 'Genel termin tarihi zorunludur.')
+    # Genel termin UI yok — dolu kalem terminlerinden türetilir (taslakta boş olabilir)
+    termler = []
+    for kr0 in kalemler_raw:
+        if not isinstance(kr0, dict):
+            continue
+        tt = (kr0.get('termin_tarihi') or '')
+        tt = str(tt).strip()[:10]
+        if tt:
+            termler.append(tt)
+    genel_termin = None
+    if termler:
+        genel_termin = min(termler)
+        ok, t_hata, genel_termin = _pzm_termin_dogrula(genel_termin)
+        if not ok:
+            raise PzmWriteError(t_hata or 'Kalem termini geçersiz.')
+    elif ticari_zorunlu:
+        raise PzmWriteError('En az bir kalem termini zorunludur.')
 
-    # Taslak: odeme_tipi eksik kalabilir; seçildiyse kurallar uygulanır.
-    # Gönder: ticari_zorunlu=True.
+    # Taslak: ticari alanlar boş kalabilir. Gönder: ticari_zorunlu=True.
     tip_raw = pzm_odeme_tipi_normalize(data.get('odeme_tipi'))
-    ticari = pzm_ticari_sartlar_dogrula(
-        data,
-        zorunlu=bool(ticari_zorunlu or tip_raw),
-    )
-    # Taslakta odeme_tipi yoksa PB+vade yine mevcut form akışı için istenir
-    if not tip_raw and not ticari_zorunlu:
-        pb = pzm_para_birimi_normalize(
+    if ticari_zorunlu or tip_raw:
+        ticari = pzm_ticari_sartlar_dogrula(
+            data,
+            zorunlu=bool(ticari_zorunlu or tip_raw),
+        )
+    else:
+        # UX V2: ilk oluşturmada ticari şartlar sonra tamamlanır
+        pb_raw = pzm_para_birimi_normalize(
             data.get('anlasma_para_birimi') or data.get('para_birimi')
         )
-        if pb not in PZM_PARA_BIRIMLERI:
-            raise PzmWriteError('Anlaşma para birimi zorunludur.')
-        vade_gun = pzm_vade_gun_dogrula(data.get('vade_gun'), odeme_tipi=None, zorunlu=True)
         ticari = {
             'odeme_tipi': None,
-            'vade_gun': vade_gun,
-            'anlasma_para_birimi': pb,
+            'vade_gun': None,
+            'anlasma_para_birimi': pb_raw if pb_raw in PZM_PARA_BIRIMLERI else None,
             'odeme_notu': pzm_odeme_notu_normalize(data.get('odeme_notu')),
+            'cek_vadesi': None,
+            'cek_vade_gun': None,
         }
+
+    op_alan = pzm_baslik_operasyon_alanlari_dogrula(
+        data,
+        zorunlu=bool(ticari_zorunlu),
+    )
 
     kalem_fiyat_var = pzm_kalem_fiyat_kolonlari_var(con)
     # Gönder: kalem fiyat zorunlu. Taslak: boş olabilir.
     fiyat_zorunlu = bool(ticari_zorunlu and kalem_fiyat_var)
+    termin_zorunlu = bool(ticari_zorunlu)
 
     kalemler = []
     seen = set()
     for i, kr in enumerate(kalemler_raw, start=1):
-        # Geçiş: tek kalemde başlık fiyatı kaleme düşürülebilir
-        if kalem_fiyat_var and kr.get('birim_fiyat') in (None, '') and len(kalemler_raw) == 1:
-            hdr_bf = data.get('anlasma_birim_fiyat') or data.get('birim_fiyat')
-            if hdr_bf not in (None, ''):
-                kr = dict(kr)
-                kr['birim_fiyat'] = hdr_bf
+        # Başlık fiyatı kaleme düşürülmez — fiyat tek kaynağı kalem
         k = pzm_v2_kalem_dogrula(
-            con, kr, i, cari_id, fiyat_zorunlu=fiyat_zorunlu,
+            con, kr, i, cari_id,
+            fiyat_zorunlu=fiyat_zorunlu,
+            termin_zorunlu=termin_zorunlu,
         )
         anahtar = (
             k['formul_id'],
@@ -897,24 +1225,30 @@ def pzm_v2_payload_dogrula(
         k['sira_no'] = i
         kalemler.append(k)
 
-    # Başlık anlasma_birim_fiyat geçiş:
-    # - tek kalem: kalem fiyatına senkron
-    # - çok kalem: ortalama yazılmaz; boş bırakılır (yanıltıcı olmasın)
-    # - eski yol: kalem fiyat kolonu yoksa eski zorunlu başlık fiyatı
+    guncelleme_id = None
+    raw_ps = data.get('talep_id')
+    if raw_ps not in (None, '', 0, '0'):
+        try:
+            guncelleme_id = int(raw_ps)
+        except (TypeError, ValueError):
+            guncelleme_id = None
+    pzm_mtt_kalem_pointer_dogrula(
+        con,
+        kalemler,
+        data.get('kaynak_mtt_talep_id'),
+        guncelleme_siparis_id=guncelleme_id,
+    )
+
+    # Başlık anlasma_birim_fiyat yalnız tek kalem senkron kolonu (kaynak = kalem)
     if kalem_fiyat_var:
         if len(kalemler) == 1 and kalemler[0].get('birim_fiyat'):
             birim_fiyat = kalemler[0]['birim_fiyat']
-        elif len(kalemler) > 1:
-            birim_fiyat = None
         else:
-            raw_bf = data.get('anlasma_birim_fiyat') or data.get('birim_fiyat')
-            if raw_bf in (None, ''):
-                birim_fiyat = None
-            else:
-                birim_fiyat = pzm_birim_fiyat_dogrula(raw_bf)
+            birim_fiyat = None
         if ticari_zorunlu and any(not k.get('birim_fiyat') for k in kalemler):
             raise PzmWriteError('Tüm aktif kalemlerde birim fiyat zorunludur.')
     else:
+        # Legacy şema (kalem fiyat kolonu yok) — tek istisna
         birim_fiyat = pzm_birim_fiyat_dogrula(
             data.get('anlasma_birim_fiyat') or data.get('birim_fiyat')
         )
@@ -924,7 +1258,7 @@ def pzm_v2_payload_dogrula(
     if pzm_kur_kolonlari_var(con):
         kur_snap = pzm_kur_snapshot_hazirla(
             con, data, ticari['anlasma_para_birimi'],
-            kur_zorunlu=bool(ticari_zorunlu),
+            kur_zorunlu=False,
         )
         if pzm_kalem_try_kolonlari_var(con):
             for k in kalemler:
@@ -942,6 +1276,12 @@ def pzm_v2_payload_dogrula(
         'anlasma_birim_fiyat': birim_fiyat,
         'odeme_tipi': ticari['odeme_tipi'],
         'odeme_notu': ticari['odeme_notu'],
+        'cek_vadesi': ticari.get('cek_vadesi'),
+        'cek_vade_gun': ticari.get('cek_vade_gun'),
+        'teslim_sekli': op_alan.get('teslim_sekli'),
+        'siparis_onceligi': op_alan.get('siparis_onceligi'),
+        'kdv_durumu': op_alan.get('kdv_durumu'),
+        'istenen_termin': op_alan.get('istenen_termin'),
         'kur': kur_snap.get('kur'),
         'kur_tarihi': kur_snap.get('kur_tarihi'),
         'kur_kaynagi': kur_snap.get('kur_kaynagi'),
@@ -952,7 +1292,7 @@ def pzm_v2_payload_dogrula(
 def pzm_v2_taslak_kaydet(
     con, data: dict, uid: int | None, *, commit: bool = True,
 ) -> dict[str, Any]:
-    """Header + kalemler tek transaction; commit=False uses an outer transaction."""
+    """Header + kalemler tek transaction. commit=False → dış TX (MTT dönüşüm)."""
     from modules.nexgen.pzm_siparis_read import pzm_kalem_tablosu_var
     from modules.nexgen.routes import _pzm_siparis_no_uret
 
@@ -964,9 +1304,10 @@ def pzm_v2_taslak_kaydet(
     except (TypeError, ValueError):
         raise PzmWriteError('Cari seçimi zorunludur.', 400)
 
-    # Taslak: odeme_tipi zorunlu değil; seçildiyse kurallar uygulanır
+    # Taslak: odeme_tipi zorunlu değil; operasyon/MRP yolunda ticari zorunlu
+    operasyon = bool(data.get('operasyon'))
     hazir = pzm_v2_payload_dogrula(
-        con, data, cari_id, uid=uid, ticari_zorunlu=False,
+        con, data, cari_id, uid=uid, ticari_zorunlu=operasyon,
     )
     cari = hazir['cari']
     kalemler = hazir['kalemler']
@@ -981,11 +1322,24 @@ def pzm_v2_taslak_kaydet(
         'anlasma_birim_fiyat': hazir['anlasma_birim_fiyat'],
         'odeme_tipi': hazir.get('odeme_tipi'),
         'odeme_notu': hazir.get('odeme_notu'),
+        'cek_vadesi': hazir.get('cek_vadesi'),
+        'cek_vade_gun': hazir.get('cek_vade_gun'),
+        'teslim_sekli': hazir.get('teslim_sekli'),
+        'siparis_onceligi': hazir.get('siparis_onceligi'),
+        'kdv_durumu': hazir.get('kdv_durumu'),
+        'istenen_termin': hazir.get('istenen_termin'),
         'kalem_sayisi': len(kalemler),
     }
+    mtt_id = data.get('kaynak_mtt_talep_id')
+    if mtt_id not in (None, '', 0, '0'):
+        try:
+            meta['kaynak_mtt_talep_id'] = int(mtt_id)
+        except (TypeError, ValueError):
+            pass
     talep_ref = pzm_v2_header_pack(meta)
     finans_kolon = pzm_finans_kolonlari_var(con)
     odeme_kolon = pzm_odeme_kolonlari_var(con)
+    cek_kolon = pzm_cek_vadesi_kolonu_var(con)
 
     ps_id = data.get('talep_id')
     guncellendi = False
@@ -1038,6 +1392,12 @@ def pzm_v2_taslak_kaydet(
             if odeme_kolon:
                 set_parts.extend(['odeme_tipi=?', 'odeme_notu=?'])
                 params.extend([hazir.get('odeme_tipi'), hazir.get('odeme_notu')])
+            if cek_kolon:
+                set_parts.append('cek_vadesi=?')
+                params.append(hazir.get('cek_vadesi'))
+            if pzm_teslim_sekli_kolonu_var(con):
+                set_parts.append('teslim_sekli=?')
+                params.append(hazir.get('teslim_sekli'))
             if pzm_kur_kolonlari_var(con):
                 set_parts.extend(['kur=?', 'kur_tarihi=?', 'kur_kaynagi=?'])
                 params.extend([hazir.get('kur'), hazir.get('kur_tarihi'), hazir.get('kur_kaynagi')])
@@ -1072,6 +1432,12 @@ def pzm_v2_taslak_kaydet(
             if odeme_kolon:
                 cols.extend(['odeme_tipi', 'odeme_notu'])
                 vals.extend([hazir.get('odeme_tipi'), hazir.get('odeme_notu')])
+            if cek_kolon:
+                cols.append('cek_vadesi')
+                vals.append(hazir.get('cek_vadesi'))
+            if pzm_teslim_sekli_kolonu_var(con):
+                cols.append('teslim_sekli')
+                vals.append(hazir.get('teslim_sekli'))
             if pzm_kur_kolonlari_var(con):
                 cols.extend(['kur', 'kur_tarihi', 'kur_kaynagi'])
                 vals.extend([hazir.get('kur'), hazir.get('kur_tarihi'), hazir.get('kur_kaynagi')])
@@ -1086,6 +1452,7 @@ def pzm_v2_taslak_kaydet(
             "PRAGMA table_info(nexgen_planlama_siparis_kalem)"
         ).fetchall()}
         has_numune_col = 'numune_talep_id' in kalem_cols
+        has_mtt_col = 'mtt_kalem_id' in kalem_cols
         has_fiyat_col = (
             'birim_fiyat' in kalem_cols and 'iskonto_orani' in kalem_cols
             and 'net_birim_fiyat' in kalem_cols and 'satir_tutari' in kalem_cols
@@ -1108,6 +1475,9 @@ def pzm_v2_taslak_kaydet(
             if has_numune_col:
                 cols_k.append('numune_talep_id')
                 vals_k.append(k.get('numune_talep_id'))
+            if has_mtt_col:
+                cols_k.append('mtt_kalem_id')
+                vals_k.append(k.get('mtt_kalem_id'))
             if has_fiyat_col:
                 cols_k.extend([
                     'birim_fiyat', 'iskonto_orani', 'iskonto_tutari',
@@ -1131,6 +1501,25 @@ def pzm_v2_taslak_kaydet(
                 f"VALUES ({ph})",
                 tuple(vals_k),
             )
+
+        # MTT / görüşme kaynak bağları (kolon varsa)
+        ps_cols = {c[1] for c in con.execute('PRAGMA table_info(nexgen_planlama_siparis)').fetchall()}
+        if 'mo_gorusme_id' in ps_cols and data.get('mo_gorusme_id'):
+            try:
+                con.execute(
+                    'UPDATE nexgen_planlama_siparis SET mo_gorusme_id=? WHERE id=?',
+                    (int(data['mo_gorusme_id']), ps_id),
+                )
+            except Exception:
+                pass
+        if 'kaynak_modul' in ps_cols and data.get('kaynak_modul'):
+            try:
+                con.execute(
+                    'UPDATE nexgen_planlama_siparis SET kaynak_modul=? WHERE id=?',
+                    (str(data['kaynak_modul'])[:80], ps_id),
+                )
+            except Exception:
+                pass
 
         if own_tx:
             con.commit()
