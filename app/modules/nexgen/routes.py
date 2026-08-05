@@ -13064,6 +13064,9 @@ def yonetim_merkezi():
 
     cari_admin = is_cari_admin(yk)
     uid = _kullanici_id()
+    can_onay = False
+    can_onay_aksiyon = False
+    onay_bekleyen = 0
     con = _db()
     try:
         kartlar_raw = []
@@ -13117,6 +13120,21 @@ def yonetim_merkezi():
             if not kapsam.get('tumunu_gorebilir_mi'):
                 izinli = set(kapsam.get('cari_id_listesi') or [])
                 cariler = [c for c in cariler if int(c.get('id') or 0) in izinli]
+        if full_yonetim:
+            try:
+                from modules.nexgen.onay_service import (
+                    can_onay_karar,
+                    can_onay_liste_gor,
+                    onay_kuyruk_sayaci,
+                )
+                can_onay = can_onay_liste_gor(yk)
+                can_onay_aksiyon = can_onay_karar(yk)
+                if can_onay:
+                    onay_bekleyen = onay_kuyruk_sayaci(con)
+            except Exception:
+                can_onay = False
+                can_onay_aksiyon = False
+                onay_bekleyen = 0
     finally:
         con.close()
 
@@ -13133,6 +13151,9 @@ def yonetim_merkezi():
         can_cari_admin=cari_admin,
         can_cari_create=cari_admin and yetki_var('nexgen.yonetim.manage', 'can_create'),
         can_cari_durum=cari_admin and yetki_var('nexgen.yonetim.manage', 'can_update'),
+        can_onay_sekme=full_yonetim and can_onay,
+        can_onay_aksiyon=full_yonetim and can_onay_aksiyon,
+        onay_bekleyen_sayisi=onay_bekleyen,
         default_sekme='cari' if (cari_list_ok and not full_yonetim) else 'stok',
     )
 

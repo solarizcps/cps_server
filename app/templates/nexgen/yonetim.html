@@ -49,6 +49,12 @@
       Cariler
       <span class="ngsd-sekme-sayac">{{ cariler|selectattr('aktif','eq',1)|list|length }}</span>
     </button>
+    {% if can_onay_sekme %}
+    <button class="ngsd-sekme-btn" data-sekme="onay" onclick="sekmeGec('onay')">
+      Onay Merkezi
+      <span class="ngsd-sekme-sayac" id="ym-onay-badge">{{ onay_bekleyen_sayisi if onay_bekleyen_sayisi is defined else 0 }}</span>
+    </button>
+    {% endif %}
   </div>
 
   {# ═══════════════════════════════════════════════════════════ #}
@@ -360,6 +366,58 @@
     </div>
 
   </div>
+
+  {# ═══════════════════════════════════════════════════════════ #}
+  {# SEKME: ONAY MERKEZİ (V1 — MTT)                              #}
+  {# ═══════════════════════════════════════════════════════════ #}
+  {% if can_onay_sekme %}
+  <div id="ngsd-sekme-onay" class="ngsd-sekme-icerik" style="display:none;">
+    <div class="ngym-toolbar">
+      <div class="ngym-toolbar-sol">
+        <input type="text" id="onayAra" placeholder="Onay no / firma / talep ara..."
+               class="ngym-ara" oninput="onayListeYukle()">
+        <select id="onayFilDurum" class="ngym-select" onchange="onayListeYukle()">
+          <option value="ONAY_BEKLIYOR" selected>Onay Bekliyor</option>
+          <option value="">Tümü</option>
+          <option value="ONAYLANDI">Onaylandı</option>
+          <option value="REDDEDILDI">Reddedildi</option>
+        </select>
+        <span style="font-size:12px;color:#64748b;font-weight:600;">Kaynak: Müşteri Temsilcisi Talepleri</span>
+      </div>
+    </div>
+    <div class="ngsd-hrt-cerceve">
+      <table class="ngsd-hrt-tablo" id="onayTablo">
+        <thead>
+          <tr>
+            <th>Onay No</th>
+            <th>Firma</th>
+            <th>Tür</th>
+            <th>Ürün Türü</th>
+            <th>Renk</th>
+            <th>Kg / Tonaj</th>
+            <th>Fiyat</th>
+            <th>Vade</th>
+            <th>Öncelik</th>
+            <th>İlk Ürün</th>
+            <th>Durum</th>
+            <th>İşlem</th>
+          </tr>
+        </thead>
+        <tbody id="onayTbody">
+          <tr><td colspan="12" style="text-align:center;color:#9ca3af;padding:20px;">Yükleniyor…</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="onay-detay-panel" style="display:none;margin-top:14px;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px;background:#f8fafc;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+        <strong id="onay-detay-baslik">Detay</strong>
+        <button type="button" class="ngym-islem-btn" onclick="onayDetayKapat()">Kapat</button>
+      </div>
+      <div id="onay-detay-body"></div>
+      <div id="onay-detay-aksiyon" style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;"></div>
+    </div>
+  </div>
+  {% endif %}
 
 </div>{# /.ng-sayfa #}
 
@@ -951,9 +1009,11 @@
 </style>
 
 <script>
-const SEKMELER_YM = ['stok', 'tedarikci', 'eslestirme', 'import', 'cari'];
+const SEKMELER_YM = ['stok', 'tedarikci', 'eslestirme', 'import', 'cari', 'onay'];
 var CAN_SORUMLU_MANAGE = {{ 'true' if can_sorumlu_manage else 'false' }};
+var CAN_ONAY_AKSIYON = {{ 'true' if can_onay_aksiyon else 'false' }};
 var _cariSorumluAdaylar = null;
+var _onayAktifId = null;
 
 function sekmeGec(hedef) {
   SEKMELER_YM.forEach(function(s) {
@@ -965,6 +1025,224 @@ function sekmeGec(hedef) {
   });
   try { history.replaceState(null, '', '#' + hedef); } catch(e) {}
   if (hedef === 'eslestirme') eslGoster(aktifTedId);
+  if (hedef === 'onay') onayListeYukle();
+}
+
+function onayEsc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function onayMoMetaParse(aciklama, kisaNot) {
+  var meta = {};
+  var ac = aciklama || '';
+  var kn = kisaNot || '';
+  var m = ac.match(/Termin:\s*(\d{4}-\d{2}-\d{2})/);
+  if (m) meta.termin = m[1];
+  m = ac.match(/Teslim:\s*([^|]+)/);
+  if (m) meta.teslim = m[1].trim();
+  m = ac.match(/KDV:(GAYRI|RESMI)\|oran:(\d+)\|ara:([\d.]+)\|kdv:([\d.]+)\|genel:([\d.]+)(?:\|pb:(\w+))?/);
+  if (m) {
+    meta.kdv = m[1] === 'RESMI' ? ('Resmi +' + m[2] + '%') : 'Gayri Resmi';
+    meta.ara = m[3]; meta.kdvTutar = m[4]; meta.genel = m[5];
+    if (m[6]) meta.para = m[6].toUpperCase();
+  }
+  m = kn.match(/Çek alınacak:\s*(\d{4}-\d{2}-\d{2})/);
+  if (m) meta.cekTarih = m[1];
+  return meta;
+}
+
+function onayOncelikEtiket(c) {
+  c = (c || 'NORMAL').toUpperCase();
+  if (c === 'ACIL') return 'Acil';
+  if (c === 'YUKSEK') return 'Kritik';
+  return 'Normal';
+}
+
+function onayDurumRozet(d) {
+  var map = {
+    ONAY_BEKLIYOR: '#b45309',
+    ONAYLANDI: '#15803d',
+    REDDEDILDI: '#b91c1c',
+    IPTAL: '#64748b'
+  };
+  var c = map[d] || '#64748b';
+  return '<span style="font-size:11px;font-weight:800;color:' + c + ';">' + onayEsc(d) + '</span>';
+}
+
+function onayListeYukle() {
+  var tb = document.getElementById('onayTbody');
+  if (!tb) return;
+  var q = (document.getElementById('onayAra') || {}).value || '';
+  var durum = (document.getElementById('onayFilDurum') || {}).value || '';
+  var url = '/nexgen/api/yonetim/onaylar?kaynak_turu=MUSTERI_TEMSILCISI_TALEP';
+  if (durum) url += '&durum=' + encodeURIComponent(durum);
+  if (q) url += '&q=' + encodeURIComponent(q);
+  fetch(url, { credentials: 'same-origin' })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d || !d.ok) { tb.innerHTML = '<tr><td colspan="12" style="text-align:center;color:#b91c1c;padding:16px;">' + onayEsc((d&&d.mesaj)||'Hata') + '</td></tr>'; return; }
+      var badge = document.getElementById('ym-onay-badge');
+      if (badge && d.kuyruk_sayisi != null) badge.textContent = String(d.kuyruk_sayisi);
+      var liste = d.liste || [];
+      if (!liste.length) {
+        tb.innerHTML = '<tr><td colspan="12" style="text-align:center;color:#9ca3af;padding:20px;">Kayıt yok.</td></tr>';
+        return;
+      }
+      tb.innerHTML = liste.map(function(o){
+        var fiyat = '—';
+        if (o.verilen_fiyat != null && o.verilen_fiyat !== '') {
+          fiyat = String(o.verilen_fiyat).replace('.', ',') + (o.para_birimi ? (' ' + o.para_birimi) : '');
+        }
+        var vade = (o.vade_gun != null && o.vade_gun !== '') ? (o.vade_gun + ' Gün') : '—';
+        return '<tr>' +
+          '<td><span class="ngsd-kod-rozet">' + onayEsc(o.onay_no) + '</span></td>' +
+          '<td>' + onayEsc(o.firma_adi || '—') + '</td>' +
+          '<td>' + onayEsc(o.tur_etiket || o.talep_turu || '—') + '</td>' +
+          '<td><strong>' + onayEsc(o.urun_ailesi_etiket || o.urun_ailesi || '—') + '</strong></td>' +
+          '<td>' + onayEsc(o.renk_gosterim || '—') + '</td>' +
+          '<td>' + onayEsc(o.miktar_gosterim || '—') + '</td>' +
+          '<td>' + onayEsc(fiyat) + '</td>' +
+          '<td>' + onayEsc(vade) + '</td>' +
+          '<td>' + onayEsc(o.oncelik || '—') + '</td>' +
+          '<td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + onayEsc(o.urun_aciklama || '—') + '</td>' +
+          '<td>' + onayDurumRozet(o.durum) + '</td>' +
+          '<td><button type="button" class="ngym-islem-btn" onclick="onayDetayAc(' + o.id + ')">Detay</button></td>' +
+          '</tr>';
+      }).join('');
+    })
+    .catch(function(){
+      tb.innerHTML = '<tr><td colspan="12" style="text-align:center;color:#b91c1c;padding:16px;">Bağlantı hatası</td></tr>';
+    });
+}
+
+function onayDetayKapat() {
+  _onayAktifId = null;
+  var p = document.getElementById('onay-detay-panel');
+  if (p) p.style.display = 'none';
+}
+
+function onayDetayAc(id) {
+  _onayAktifId = id;
+  fetch('/nexgen/api/yonetim/onay/' + id, { credentials: 'same-origin' })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d || !d.ok) { alert((d && d.mesaj) || 'Detay alınamadı'); return; }
+      var o = d.kayit || {};
+      var m = o.mtt || {};
+      var snap = m.gorusme_snapshot || {};
+      var kalemler = m.kalemler || [];
+      var moMeta = onayMoMetaParse(m.aciklama, m.gorusme_notu || snap.kisa_not);
+      var pb = (m.para_birimi || snap.para_birimi || moMeta.para || '').toString().toUpperCase();
+      var panel = document.getElementById('onay-detay-panel');
+      var body = document.getElementById('onay-detay-body');
+      var aks = document.getElementById('onay-detay-aksiyon');
+      var bas = document.getElementById('onay-detay-baslik');
+      if (bas) bas.textContent = (o.onay_no || '') + ' · ' + (o.durum_etiket || o.durum || '');
+      var kalHtml = kalemler.length
+        ? '<table class="ngsd-hrt-tablo" style="font-size:12px;margin-top:6px;"><thead><tr><th>#</th><th>Ürün</th><th>Aile</th><th>Renk</th><th>Kg</th><th>Fiyat</th><th>Tutar</th><th>Not</th></tr></thead><tbody>' +
+          kalemler.map(function(k){
+            var kg = k.miktar_kg != null ? k.miktar_kg : (k.konusulan_tonaj != null ? k.konusulan_tonaj : null);
+            var fiyat = k.verilen_fiyat != null ? k.verilen_fiyat : '—';
+            var tutar = '—';
+            try {
+              if (kg != null && k.verilen_fiyat != null) tutar = (Number(kg) * Number(k.verilen_fiyat)).toLocaleString('tr-TR');
+            } catch (eT) {}
+            return '<tr><td>' + onayEsc(k.sira_no) + '</td><td>' + onayEsc(k.urun_aciklama) + '</td><td>' +
+              onayEsc(k.urun_ailesi||'—') + '</td><td>' + onayEsc(k.renk_aciklama||'—') + '</td><td>' +
+              onayEsc(kg != null ? kg : '—') + '</td><td>' + onayEsc(fiyat) + '</td><td>' +
+              onayEsc(tutar) + '</td><td>' + onayEsc(k.kalem_notu || '—') + '</td></tr>';
+          }).join('') + '</tbody></table>'
+        : '<div style="color:#94a3b8;font-size:12px;">Kalem yok</div>';
+      var cekGun = m.cek_vade_gun != null ? m.cek_vade_gun : (snap.cek_vade_gun != null ? snap.cek_vade_gun : null);
+      if (cekGun == null && kalemler.length) {
+        for (var ci = 0; ci < kalemler.length; ci++) {
+          if (kalemler[ci].cek_vade_gun != null) { cekGun = kalemler[ci].cek_vade_gun; break; }
+        }
+      }
+      if (body) {
+        body.innerHTML =
+          '<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px 12px;font-size:12px;">' +
+            '<div><label style="color:#64748b;font-size:10px;font-weight:700;">Firma</label><div>' + onayEsc(o.firma_adi || m.firma_adi || '—') + '</div></div>' +
+            '<div><label style="color:#64748b;font-size:10px;font-weight:700;">Pazarlamacı</label><div>' + onayEsc(m.pazarlamaci_adi || o.olusturan_adi || '—') + '</div></div>' +
+            '<div><label style="color:#64748b;font-size:10px;font-weight:700;">Talep Tarihi</label><div>' + onayEsc(m.talep_tarihi || o.olusturma_tarihi || '—') + '</div></div>' +
+            '<div><label style="color:#64748b;font-size:10px;font-weight:700;">Talep</label><div>' + onayEsc(m.talep_no || o.talep_no || '—') + ' · ' + onayEsc(m.tur_etiket || m.talep_turu || '') + ' · ' + onayEsc(String(kalemler.length)) + ' kalem</div></div>' +
+            '<div><label style="color:#64748b;font-size:10px;font-weight:700;">Para Birimi</label><div>' + onayEsc(pb || '—') + '</div></div>' +
+            '<div><label style="color:#64748b;font-size:10px;font-weight:700;">Ödeme</label><div>' + onayEsc(m.odeme_tipi || snap.odeme_tipi || '—') + '</div></div>' +
+            '<div><label style="color:#64748b;font-size:10px;font-weight:700;">Çek Vadesi Gün</label><div>' + onayEsc(cekGun != null ? cekGun : '—') + '</div></div>' +
+            '<div><label style="color:#64748b;font-size:10px;font-weight:700;">Çek Alınacak</label><div>' + onayEsc(moMeta.cekTarih || '—') + '</div></div>' +
+            '<div><label style="color:#64748b;font-size:10px;font-weight:700;">Termin</label><div>' + onayEsc(moMeta.termin || '—') + '</div></div>' +
+            '<div><label style="color:#64748b;font-size:10px;font-weight:700;">Teslim</label><div>' + onayEsc(moMeta.teslim || '—') + '</div></div>' +
+            '<div><label style="color:#64748b;font-size:10px;font-weight:700;">Öncelik</label><div>' + onayEsc(onayOncelikEtiket(m.oncelik)) + '</div></div>' +
+            '<div><label style="color:#64748b;font-size:10px;font-weight:700;">KDV</label><div>' + onayEsc(moMeta.kdv || '—') + '</div></div>' +
+            '<div><label style="color:#64748b;font-size:10px;font-weight:700;">Ara Toplam</label><div>' + onayEsc(moMeta.ara || '—') + (pb ? ' ' + onayEsc(pb) : '') + '</div></div>' +
+            '<div><label style="color:#64748b;font-size:10px;font-weight:700;">KDV Tutarı</label><div>' + onayEsc(moMeta.kdvTutar || '—') + (pb ? ' ' + onayEsc(pb) : '') + '</div></div>' +
+            '<div><label style="color:#64748b;font-size:10px;font-weight:700;">Genel Toplam</label><div>' + onayEsc(moMeta.genel || '—') + (pb ? ' ' + onayEsc(pb) : '') + '</div></div>' +
+          '</div>' +
+          (m.gorusme_notu || snap.kisa_not ? '<div style="margin-top:10px;font-size:12px;"><label style="color:#64748b;font-size:10px;font-weight:700;">Görüşme Notu</label><div style="white-space:pre-wrap;">' + onayEsc(m.gorusme_notu || snap.kisa_not) + '</div></div>' : '') +
+          (m.musteri_notu ? '<div style="margin-top:8px;font-size:12px;"><label style="color:#64748b;font-size:10px;font-weight:700;">Genel Not</label><div style="white-space:pre-wrap;">' + onayEsc(m.musteri_notu) + '</div></div>' : '') +
+          (o.red_nedeni ? '<div style="margin-top:8px;font-size:12px;color:#b91c1c;"><label style="font-size:10px;font-weight:700;">Red Nedeni</label><div>' + onayEsc(o.red_nedeni) + '</div></div>' : '') +
+          '<div style="margin-top:10px;"><label style="color:#64748b;font-size:10px;font-weight:700;">Kalemler (' + kalemler.length + ')</label>' + kalHtml + '</div>';
+      }
+      if (aks) {
+        if (o.durum === 'ONAY_BEKLIYOR' && CAN_ONAY_AKSIYON) {
+          aks.innerHTML =
+            '<button type="button" class="ngsk-btn-kaydet" onclick="onayOnayla(' + o.id + ')">ONAYLA</button>' +
+            '<button type="button" class="ngsk-btn-iptal" style="border:1px solid #fecaca;color:#b91c1c;" onclick="onayReddet(' + o.id + ')">REDDET</button>';
+        } else {
+          aks.innerHTML = '<span style="font-size:12px;color:#64748b;">Yalnız detay — aksiyon yok.</span>';
+        }
+      }
+      if (panel) panel.style.display = 'block';
+      try { panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e1) {}
+    });
+}
+
+function onayOnayla(id) {
+  if (!confirm('Bu talebi onaylamak istiyor musunuz? Mehmet kuyruğuna düşecek.')) return;
+  fetch('/nexgen/api/yonetim/onay/' + id + '/onayla', {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}'
+  }).then(function(r){
+    return r.text().then(function(txt){
+      var d = null;
+      try { d = txt ? JSON.parse(txt) : null; }
+      catch (eJson) { throw new Error('Sunucu geçersiz JSON döndürdü (HTTP ' + r.status + ').'); }
+      if (!r.ok) throw new Error((d && d.mesaj) || ('Onay başarısız (HTTP ' + r.status + ').'));
+      return d;
+    });
+  }).then(function(d){
+    if (!d || !d.ok) throw new Error((d && d.mesaj) || 'Onay başarısız.');
+    var onay = d.kayit || {};
+    var mtt = onay.mtt || {};
+    if (onay.durum !== 'ONAYLANDI' || mtt.durum !== 'YENI') {
+      throw new Error('Onay cevabı doğrulanamadı: ONY=' + (onay.durum || '—') + ', MTT=' + (mtt.durum || '—'));
+    }
+    return Promise.all([onayListeYukle(), onayDetayAc(id)]).then(function(){
+      alert('Onay tamamlandı: ' + (onay.onay_no || ('#' + id)) + ' ONAYLANDI, ' +
+        (mtt.talep_no || 'MTT') + ' YENI.');
+    });
+  }).catch(function(err){
+    alert((err && err.message) || 'Onay isteği tamamlanamadı.');
+    try { onayListeYukle(); } catch (eList) {}
+    try { onayDetayAc(id); } catch (eDetail) {}
+  });
+}
+
+function onayReddet(id) {
+  var neden = prompt('Red nedeni (zorunlu):');
+  if (neden == null) return;
+  if (!String(neden).trim()) { alert('Red nedeni zorunlu'); return; }
+  fetch('/nexgen/api/yonetim/onay/' + id + '/reddet', {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ red_nedeni: String(neden).trim() })
+  }).then(function(r){ return r.json(); }).then(function(d){
+    if (!d || !d.ok) { alert((d && d.mesaj) || 'Red başarısız'); return; }
+    onayListeYukle();
+    onayDetayAc(id);
+  });
 }
 (function() {
   const hash = (location.hash || '#stok').replace('#', '');
