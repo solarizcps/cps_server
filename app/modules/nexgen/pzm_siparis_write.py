@@ -837,9 +837,11 @@ def pzm_operasyon_eksikleri(con, siparis_id: int) -> list[str]:
         if not ts:
             eksik.append('Teslim şekli zorunludur.')
 
+    fiyat_var = pzm_kalem_fiyat_kolonlari_var(con)
+    fiyat_sel = 'birim_fiyat' if fiyat_var else 'NULL AS birim_fiyat'
     kalemler = con.execute(
-        """
-        SELECT sira_no, birim_fiyat, termin_tarihi, formul_id, rf_renk_id,
+        f"""
+        SELECT sira_no, {fiyat_sel}, termin_tarihi, formul_id, rf_renk_id,
                miktar_l, miktar_s, miktar_m
         FROM nexgen_planlama_siparis_kalem
         WHERE planlama_siparis_id=? AND IFNULL(durum,'AKTIF')='AKTIF'
@@ -851,7 +853,6 @@ def pzm_operasyon_eksikleri(con, siparis_id: int) -> list[str]:
         eksik.append('En az bir sipariş kalemi zorunlu.')
         return eksik
 
-    fiyat_var = pzm_kalem_fiyat_kolonlari_var(con)
     for k in kalemler:
         sira = k['sira_no']
         if k['formul_id'] in (None, ''):
