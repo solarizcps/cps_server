@@ -14744,7 +14744,14 @@ def _tablet_can_uretim_ops():
 
 
 def _tablet_can_arge_ops():
-    """AR-GE tablet menü/route — reçete yetkisi veya yönetim (kullanıcı adı hardcode yok)."""
+    """AR-GE tablet menü/route — reçete yetkisi, yönetim veya AR-GE Operatörü rolü."""
+    from modules.nexgen.mo_arge_tablet_yetki import is_nexgen_arge_tablet_kullanici
+    if is_nexgen_arge_tablet_kullanici(session.get('kullanici')):
+        return True
+    u = session.get('kullanici')
+    if u:
+        if is_nexgen_arge_tablet_kullanici(u):
+            return True
     return (
         yetki_var('nexgen.recete.view', 'can_view')
         or yetki_var('nexgen.recete.create', 'can_create')
@@ -14761,6 +14768,9 @@ def _nexgen_arge_tablet_backend_guard():
     if '/tablet/arge' not in path and '/api/tablet/arge' not in path:
         return
     if not session.get('kullanici'):
+        return
+    from modules.nexgen.mo_arge_tablet_yetki import is_nexgen_arge_tablet_kullanici
+    if is_nexgen_arge_tablet_kullanici(session.get('kullanici')):
         return
     if not _tablet_can_arge_ops():
         abort(403)

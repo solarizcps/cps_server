@@ -17,6 +17,7 @@ from config import Config
 from modules.auth import (auth_bp, kullanici_yetkileri, yetki_var,
                           sistem_session_gecerli_mi, AUTH_1B_SESSION_MESSAGE)
 from modules.nexgen.mo_depo_yetki import is_nexgen_depo_sade_kullanici
+from modules.nexgen.mo_arge_tablet_yetki import is_nexgen_arge_tablet_kullanici
 from modules.finans import finans_bp
 from modules.yonetim import yonetim_bp
 from modules.grafik import grafik_bp
@@ -106,12 +107,23 @@ def oturum_kontrol():
     if g.user.get('ZorunluSifreDegistir') and yol not in ('/sifre-degistir', '/cikis'):
         return redirect(url_for('auth.sifre_degistir'))
 
+    # VEDAT_APP_GUARD: AR-GE tablet kullanıcısı için app-level URL kilidi
+    if is_nexgen_arge_tablet_kullanici(g.user):
+        from modules.nexgen.mo_arge_tablet_yetki import nexgen_arge_tablet_path_ok
+        if not nexgen_arge_tablet_path_ok(yol):
+            if yol.startswith('/nexgen/api/') or yol.startswith('/api/'):
+                from flask import jsonify
+                return jsonify(error='Yetkisiz'), 403
+            return redirect('/nexgen/tablet/arge')
+
 
 # ============================================================
 # ROUTES
 # ============================================================
 @app.route('/')
 def index():
+    if session.get('kullanici') and is_nexgen_arge_tablet_kullanici(session.get('kullanici')):
+        return redirect('/nexgen/tablet/arge')
     return render_template('index.html', db_mode=Config.DB_MODE)
 
 
@@ -138,6 +150,7 @@ def inject_globals():
         'g_yetkiler': yetkiler,
         'yetki':      yetki_var,
         'depo_sade_mod': is_nexgen_depo_sade_kullanici(u) if u else False,
+        'arge_tablet_mod': is_nexgen_arge_tablet_kullanici(session.get('kullanici')) if session.get('kullanici') else False,
         'can_musteri_operasyonu_menu': can_mo_menu,
     }
 
@@ -257,8 +270,32 @@ def format_boyut(b):
 # ============================================================
 # HATA SAYFALARI
 # ============================================================
+def _wants_json_error_response() -> bool:
+    """API/fetch isteklerinde HTML hata sayfası / referer redirect JSON'u bozar.
+
+    FAZ-GLOBAL-UNEXPECTED-TOKEN-HTML-ROOTCAUSE-FIX:
+    /yonetim/api/*, /enjeksiyon/api/* vb. path.startswith('/api/') ile
+    yakalanmıyordu; 404/500 → Referer HTML → Unexpected token '<'.
+    """
+    path = request.path or ''
+    if '/api/' in path:
+        return True
+    accept = (request.headers.get('Accept') or '')
+    if 'application/json' in accept:
+        return True
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return True
+    return False
+
+
 @app.errorhandler(413)
 def hata_413(e):
+    if _wants_json_error_response():
+        return jsonify({
+            'ok': False,
+            'error': 'PAYLOAD_TOO_LARGE',
+            'hata': 'Yüklenen dosya boyut limitini aşıyor.',
+        }), 413
     ref = request.referrer
     if ref and request.host in ref:
         try:
@@ -275,6 +312,12 @@ def hata_413(e):
 
 @app.errorhandler(403)
 def hata_403(e):
+    if _wants_json_error_response():
+        return jsonify({
+            'ok': False,
+            'error': 'FORBIDDEN',
+            'hata': 'Bu işlem için yetkiniz yok.',
+        }), 403
     return render_template('hata.html',
                            kod=403, baslik='Yetkisiz Erişim',
                            mesaj='Bu sayfaya erişim yetkiniz yok.'), 403
@@ -282,19 +325,13 @@ def hata_403(e):
 
 @app.errorhandler(404)
 def hata_404(e):
-    # FAZ-DEPLOY-MIGRATION-KALICI-DUZELTME-1: API/fetch → JSON; flash spam yok
+    # FAZ-DEPLOY-MIGRATION-KALICI-DUZELTME-1 + GLOBAL-UNEXPECTED-TOKEN fix
     path = request.path or ''
-    wants_json = (
-        path.startswith('/api/')
-        or path.startswith('/nexgen/api/')
-        or 'application/json' in (request.headers.get('Accept') or '')
-        or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
-    )
     try:
         app.logger.warning('404 path=%s ref=%s', path, request.referrer)
     except Exception:
         pass
-    if wants_json:
+    if _wants_json_error_response():
         return jsonify({
             'ok': False,
             'error': 'NOT_FOUND',
@@ -339,7 +376,16 @@ def hata_500(e):
         # Log kendi hata verdiyse (audit tablosu down olabilir) sessiz geç
         pass
 
-    # 2) Kullanıcıya friendly mesaj + referer varsa geri yönlendir
+    # 2) API/fetch → JSON (Referer HTML redirect JSON.parse'i bozar)
+    if _wants_json_error_response():
+        return jsonify({
+            'ok': False,
+            'error': 'SERVER_ERROR',
+            'hata': 'Beklenmedik bir sunucu hatası oluştu.',
+            'path': request.path or '',
+        }), 500
+
+    # 3) Sayfa istekleri: friendly mesaj + referer varsa geri yönlendir
     ref = request.referrer
     if ref and request.host in ref:
         try:

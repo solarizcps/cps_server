@@ -72,6 +72,9 @@ window.__cpsRootMap = function(pathname) {
 (function(){
 
 
+  window.__cpsArgeTabletMod = {{ arge_tablet_mod | tojson }};
+
+
   // localStorage'dan tab listesini al, aktif sayfayi otomatik ekle
 
 
@@ -79,6 +82,24 @@ window.__cpsRootMap = function(pathname) {
 
 
   var MAX = 8;
+
+
+  window._cpsTabsKey = KEY;
+
+
+  window._cpsTabsMax = MAX;
+
+
+  if (window.__cpsArgeTabletMod) {
+
+
+    try { localStorage.removeItem(KEY); } catch (e) {}
+
+
+    return;
+
+
+  }
 
 
   function _curKey(){
@@ -151,15 +172,6 @@ window.__cpsRootMap = function(pathname) {
 
 
   }
-
-
-  // Window'a expose et
-
-
-  window._cpsTabsKey = KEY;
-
-
-  window._cpsTabsMax = MAX;
 
 
 })();
@@ -256,8 +268,8 @@ window.__cpsRootMap = function(pathname) {
 
 
 
-    {# FERHAT_TAB_GIZLE_V1 (15.05.2026): Enjeksiyon rolu icin tab gizli #}
-    {% if g_user.RolAd != 'Enjeksiyon' %}
+    {# FERHAT_TAB_GIZLE_V1 (15.05.2026): Enjeksiyon + AR-GE tablet icin tab gizli #}
+    {% if not arge_tablet_mod and g_user and g_user.RolAd != 'Enjeksiyon' %}
     <div id="dynNavTabs" class="nav-tabs"></div>
     {% endif %}
 
@@ -329,15 +341,27 @@ window.__cpsRootMap = function(pathname) {
 
       {# FAZ 5.2: Tip bazli sidebar filtresi #}
       {% set _tip = session.get('kullanici_tip') or 'sistem' %}
-      {% if _tip == 'sistem' %}
+      {% set active = request.path.split('/')[1] or 'home' %}
+      {% set rp = request.path %}
+
+      {% if arge_tablet_mod %}
+      {% set aktif_grup = 'nexgen' %}
+      <div class="sn-sec sn-toggle acik" data-grup="nexgen" title="AR-GE Tablet">
+        <span class="sn-arrow">▼</span>
+        <svg class="sn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>
+        <span class="sn-baslik">AR-GE Tablet</span>
+        <span class="sn-count">1</span>
+      </div>
+      <div class="sn-grup" data-grup="nexgen">
+        <a href="/nexgen/tablet/arge" class="si {% if '/nexgen/tablet/arge' in rp %}active{% endif %}" title="AR-GE Tablet">
+          <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg></span>
+          <span class="sl">AR-GE Tablet</span>
+        </a>
+      </div>
+      {% elif _tip == 'sistem' %}
 {# FAZ UI CLEANUP: SIDEBAR_2A1 #}
 
 
-
-      {% set active = request.path.split('/')[1] or 'home' %}
-
-
-      {% set rp = request.path %}
 
       {% if depo_sade_mod %}
       {% set aktif_grup = 'nexgen' %}
@@ -2564,7 +2588,16 @@ window.__cpsRootMap = function(pathname) {
   var MAX = window._cpsTabsMax || 8;
 
 
+  if (window.__cpsArgeTabletMod) {
 
+
+    try { localStorage.removeItem(KEY); } catch (e) {}
+
+
+    return;
+
+
+  }
 
 
   function _load(){
@@ -2706,6 +2739,9 @@ window.__cpsRootMap = function(pathname) {
 
 
   function _render(){
+
+
+    if (window.__cpsArgeTabletMod) return;
 
 
     var box = document.getElementById('dynNavTabs');
