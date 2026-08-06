@@ -2393,8 +2393,23 @@ window.pzmKalemOdemeTipiDegisti = function() {
   pzmAksiyonDurum();
 };
 
+function pzmKalemTerminDegerOku() {
+  var kt = pzmIsoTarih($id('pzm-kalem-termin')?.value);
+  if (kt) return kt;
+  return pzmIsoTarih($id('pzm-istenen-termin')?.value) || '';
+}
+
+function pzmKalemBirimFiyatDegerOku() {
+  var el = $id('pzm-kalem-birim-fiyat');
+  return el ? String(el.value || '').trim() : '';
+}
+
+function pzmOdemeTipiDegerOku() {
+  return ($id('pzm-odeme-tipi')?.value || $id('pzm-kalem-odeme-tipi')?.value || '').trim().toUpperCase();
+}
+
 function pzmKalemOdemeFormDogrula() {
-  var tip = ($id('pzm-odeme-tipi')?.value || '').trim().toUpperCase();
+  var tip = pzmOdemeTipiDegerOku();
   if (!tip) return 'Ödeme şekli zorunludur.';
   if (tip === 'CEK') {
     var g = parseInt($id('pzm-cek-vade-gun')?.value, 10);
@@ -5963,8 +5978,8 @@ function pzmMttKalemFormHazirMi() {
   if (!_pzmAile) return false;
   if (!$id('pzm-formul')?.value) return false;
   if (!$id('pzm-renk')?.value) return false;
-  if (!pzmIsoTarih($id('pzm-kalem-termin')?.value)) return false;
-  if (pzmBirimFiyatDogrula($id('pzm-kalem-birim-fiyat')?.value)) return false;
+  if (!pzmKalemTerminDegerOku()) return false;
+  if (pzmBirimFiyatDogrula(pzmKalemBirimFiyatDegerOku())) return false;
   if (pzmBoyutToplam() <= 0) return false;
   return pzmMttBoyutEslesiyorMu();
 }
@@ -5975,9 +5990,9 @@ function pzmKalemFormHazirMi() {
   if (!_pzmAile) return false;
   if (!$id('pzm-formul')?.value) return false;
   if (!$id('pzm-renk')?.value) return false;
-  if (!pzmIsoTarih($id('pzm-kalem-termin')?.value)) return false;
-  if (pzmBirimFiyatDogrula($id('pzm-kalem-birim-fiyat')?.value)) return false;
-  if (pzmKalemOdemeFormDogrula()) return false;
+  if (!pzmKalemTerminDegerOku()) return false;
+  if (pzmBirimFiyatDogrula(pzmKalemBirimFiyatDegerOku())) return false;
+  if (!pzmOdemeTipiDegerOku()) return false;
   return pzmBoyutToplam() > 0;
 }
 
@@ -6436,7 +6451,7 @@ function pzmKalemFormdanOku() {
     miktar_l: ml || null,
     miktar_s: ms || null,
     miktar_m: mm || null,
-    termin_tarihi: $id('pzm-kalem-termin')?.value,
+    termin_tarihi: pzmKalemTerminDegerOku() || null,
     notlar: ($id('pzm-kalem-not')?.value||'').trim() || null,
     numune_talep_id: ($id('pzm-kalem-numune')?.value)
       ? parseInt($id('pzm-kalem-numune').value, 10) : null,
@@ -6446,27 +6461,27 @@ function pzmKalemFormdanOku() {
       var t = (s.options[s.selectedIndex].text || '').split(' · ')[0];
       return t || null;
     })(),
-    birim_fiyat: pzmBirimFiyatNormalize($id('pzm-kalem-birim-fiyat')?.value) || null,
+    birim_fiyat: pzmBirimFiyatNormalize(pzmKalemBirimFiyatDegerOku()) || null,
     iskonto_orani: (function() {
       var raw = $id('pzm-kalem-iskonto')?.value;
       if (raw === '' || raw == null) return 0;
       var n = parseFloat(String(raw).replace(',', '.'));
       return isNaN(n) ? 0 : n;
     })(),
-    odeme_tipi: ($id('pzm-odeme-tipi')?.value || '').trim().toUpperCase() || null,
+    odeme_tipi: pzmOdemeTipiDegerOku() || null,
     cek_vade_gun: (function() {
-      var tip = ($id('pzm-odeme-tipi')?.value || '').trim().toUpperCase();
+      var tip = pzmOdemeTipiDegerOku();
       if (tip !== 'CEK') return null;
       var g = parseInt($id('pzm-cek-vade-gun')?.value, 10);
       return (!g || g < 1) ? null : g;
     })(),
     cek_vadesi: (function() {
-      var tip = ($id('pzm-odeme-tipi')?.value || '').trim().toUpperCase();
+      var tip = pzmOdemeTipiDegerOku();
       if (tip !== 'CEK') return null;
       return pzmIsoTarih($id('pzm-cek-vadesi')?.value) || null;
     })(),
     vade_gun: (function() {
-      var tip = ($id('pzm-odeme-tipi')?.value || '').trim().toUpperCase();
+      var tip = pzmOdemeTipiDegerOku();
       if (tip === 'NAKIT') return 0;
       if (tip === 'KREDI_KARTI') {
         var v = parseInt($id('pzm-vade-gun')?.value, 10);
