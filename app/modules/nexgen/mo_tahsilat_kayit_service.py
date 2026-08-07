@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""MO tahsilat kaydı servisi — taslak, muhasebe onayı, idempotency."""
+"""MO tahsilat kaydı servisi — taslak, yönetim onayı, idempotency."""
 from __future__ import annotations
 
 import json
@@ -11,6 +11,7 @@ from modules.nexgen.mo_gorusme_service import can_mo_gorusme_yaz
 from modules.nexgen.mo_siparis_talep_service import can_mo_siparis_yaz, mo_siparis_payload_unpack
 from modules.nexgen.mo_tahsilat_config import (
     CARI_ENTEGRASYON_AKTIF,
+    KAYIT_DURUM_ETIKET,
     KAYNAK_MUSTERI_OPERASYONU,
     KAYIT_DURUM_MUHASEBE_BEKLIYOR,
     KAYIT_DURUM_ONAYLANDI,
@@ -60,6 +61,7 @@ def _kayit_kodu_uret(con) -> str:
 
 
 def can_muhasebe_onay(yk: set[str] | None) -> bool:
+    """Yönetim/onay kararı verebilen kullanıcılar tahsilat kaydı açamaz."""
     if not yk:
         return False
     if '*' in yk:
@@ -67,6 +69,7 @@ def can_muhasebe_onay(yk: set[str] | None) -> bool:
     return (
         'onay.merkez.karar:can_approve' in yk
         or 'onay.finans.karar:can_approve' in yk
+        or 'onay.yonetim.karar:can_approve' in yk
         or 'finans.tahsilat.write:can_approve' in yk
     )
 
@@ -188,6 +191,7 @@ def kayit_detay(con, kayit_id: int, kullanici_id: int, yk: set[str] | None = Non
     if cid and not can_mo_gorusme_yaz(con, kullanici_id, cid, yk) and not can_muhasebe_onay(yk):
         raise MoTahsilatError('Bu kaydı görüntüleme yetkiniz yok.', 403)
     d = dict(row)
+    d['durum_etiket'] = KAYIT_DURUM_ETIKET.get(d.get('durum'), (d.get('durum') or '').replace('_', ' '))
     d['cari_entegrasyon_mesaj'] = (
         'Cari entegrasyonu bekliyor'
         if d.get('durum') == KAYIT_DURUM_ONAYLANDI and d.get('cari_entegrasyon_durumu') != 'YAZILDI'
@@ -314,7 +318,7 @@ def onaya_gonder(
     if int(row['olusturan_id'] or 0) != kullanici_id:
         raise MoTahsilatError('Yalnız kendi kaydınızı gönderebilirsiniz.', 403)
     if can_muhasebe_onay(yk):
-        raise MoTahsilatError('Muhasebe kullanıcısı tahsilat kaydı açamaz/onaylayamaz.', 403)
+        raise MoTahsilatError('Onay yetkisi olan kullanıcı tahsilat kaydı açamaz.', 403)
 
     r = tahsilat_onaya_gonder(con, kayit_id, kullanici_id)
     if not r.get('ok'):
@@ -341,18 +345,23 @@ def onaya_gonder(
 
 
 def karar_sonrasi(con, kayit_id: int, sonuc: dict) -> None:
-    """Muhasebe onay sonrası — cari hareket YAZILMAZ (entegrasyon kapalı)."""
+    """Yönetim onay sonrası — cari hareket YAZILMAZ (entegrasyon kapalı)."""
     durum = sonuc.get('durum')
     now = _now()
     if durum == 'ONAYLANDI' and sonuc.get('tamamlandi'):
         ent = 'YAZILDI' if CARI_ENTEGRASYON_AKTIF else 'BEKLIYOR'
+        # Gerçek karar bilgisini onay_talep_adim'den oku (karar veren + tarihi)
+        _onaylayan_id = sonuc.get('kullanici_id') or None
+        _karar_tarihi = sonuc.get('karar_tarihi') or now
+        _karar_notu = sonuc.get('not') or None
         con.execute(
             """
             UPDATE mo_tahsilat_kayit
-            SET durum=?, cari_entegrasyon_durumu=?, guncelleme_tarihi=?
+            SET durum=?, cari_entegrasyon_durumu=?,
+                onaylayan_id=?, onay_notu=?, guncelleme_tarihi=?
             WHERE id=?
             """,
-            (KAYIT_DURUM_ONAYLANDI, ent, now, kayit_id),
+            (KAYIT_DURUM_ONAYLANDI, ent, _onaylayan_id, _karar_notu, _karar_tarihi, kayit_id),
         )
         row = con.execute('SELECT siparis_id, kalan_tutar FROM mo_tahsilat_kayit WHERE id=?', (kayit_id,)).fetchone()
         if row and row['siparis_id']:

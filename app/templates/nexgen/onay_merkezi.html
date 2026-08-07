@@ -14,17 +14,31 @@
     </div>
   </div>
 
+  {# Sekmeler #}
+  <div style="display:flex;gap:0;border-bottom:2px solid #e2e8f0;margin-bottom:14px;">
+    <button id="om-tab-bekleyen" type="button" onclick="omTabSec('bekleyen')"
+      style="padding:8px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid #1e40af;color:#1e40af;margin-bottom:-2px;">
+      Bekleyen
+    </button>
+    <button id="om-tab-gecmis" type="button" onclick="omTabSec('gecmis')"
+      style="padding:8px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;color:#64748b;margin-bottom:-2px;">
+      Karar Geçmişi
+    </button>
+  </div>
+
+  {# Ortak tip filtresi #}
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
-    <select id="om-fil-tip" class="pzm-inp" style="max-width:220px;" onchange="omListeYukle()">
+    <select id="om-fil-tip" class="pzm-inp" style="max-width:220px;" onchange="omAktifYukle()">
       <option value="">Tüm Tipler</option>
       <option value="SATIS_SIPARISI">Satış Siparişi</option>
       <option value="NUMUNE_TALEBI">Numune Talebi</option>
       <option value="TAHSILAT_KAYDI">Tahsilat Kaydı</option>
     </select>
-    <button type="button" class="pzm-btn pzm-btn-outline pzm-btn-sm" onclick="omListeYukle()">Yenile</button>
+    <button type="button" class="pzm-btn pzm-btn-outline pzm-btn-sm" onclick="omAktifYukle()">Yenile</button>
   </div>
 
-  <div class="pzm-kart" style="overflow:auto;">
+  {# Bekleyen tablosu #}
+  <div id="om-panel-bekleyen" class="pzm-kart" style="overflow:auto;">
     <table class="pzm-tablo" id="om-tablo">
       <thead>
         <tr>
@@ -33,13 +47,33 @@
           <th class="pzm-th">Kaynak</th>
           <th class="pzm-th">Cari</th>
           <th class="pzm-th">Durum</th>
-          <th class="pzm-th">Tarih</th>
+          <th class="pzm-th">Talep Tarihi</th>
           <th class="pzm-th">İşlem</th>
         </tr>
       </thead>
       <tbody id="om-tbody"></tbody>
     </table>
     <div id="om-bos" style="padding:24px;text-align:center;color:#94a3b8;display:none;">Bekleyen talep yok.</div>
+  </div>
+
+  {# Geçmiş tablosu #}
+  <div id="om-panel-gecmis" class="pzm-kart" style="overflow:auto;display:none;">
+    <table class="pzm-tablo" id="om-gecmis-tablo">
+      <thead>
+        <tr>
+          <th class="pzm-th">Talep No</th>
+          <th class="pzm-th">Tip</th>
+          <th class="pzm-th">Cari</th>
+          <th class="pzm-th">Durum</th>
+          <th class="pzm-th">Karar Veren</th>
+          <th class="pzm-th">Karar Tarihi</th>
+          <th class="pzm-th">Karar Notu</th>
+          <th class="pzm-th">İşlem</th>
+        </tr>
+      </thead>
+      <tbody id="om-gecmis-tbody"></tbody>
+    </table>
+    <div id="om-gecmis-bos" style="padding:24px;text-align:center;color:#94a3b8;display:none;">Karar geçmişi yok.</div>
   </div>
 </div>
 
@@ -68,6 +102,7 @@
 <script>
 var _omAktifId = null;
 var _omCanKarar = {{ 'true' if can_karar else 'false' }};
+var _omAktifTab = 'bekleyen';
 
 function omEsc(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -79,6 +114,38 @@ function omTipLbl(t) {
   if (t === 'NUMUNE_TALEBI') return 'Numune Talebi';
   if (t === 'TAHSILAT_KAYDI') return 'Tahsilat Kaydı';
   return t || '—';
+}
+
+var _OM_DURUM_RENK = {
+  'BEKLIYOR': '#d97706', 'BEKLETILDI': '#7c3aed',
+  'ONAYLANDI': '#16a34a', 'REDDEDILDI': '#dc2626', 'REVIZYON': '#ea580c',
+};
+function omDurumBadge(d) {
+  var renk = _OM_DURUM_RENK[d] || '#64748b';
+  return '<span style="font-size:11px;font-weight:600;color:' + renk + ';">' + omEsc(d) + '</span>';
+}
+
+function omTabSec(tab) {
+  _omAktifTab = tab;
+  var bBtn = document.getElementById('om-tab-bekleyen');
+  var gBtn = document.getElementById('om-tab-gecmis');
+  var bPanel = document.getElementById('om-panel-bekleyen');
+  var gPanel = document.getElementById('om-panel-gecmis');
+  var aktifStyle = 'border-bottom:2px solid #1e40af;color:#1e40af;margin-bottom:-2px;';
+  var pasifStyle = 'border-bottom:2px solid transparent;color:#64748b;margin-bottom:-2px;';
+  bBtn.style.cssText = 'padding:8px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;' + (tab === 'bekleyen' ? aktifStyle : pasifStyle);
+  gBtn.style.cssText = 'padding:8px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;' + (tab === 'gecmis' ? aktifStyle : pasifStyle);
+  bPanel.style.display = tab === 'bekleyen' ? '' : 'none';
+  gPanel.style.display = tab === 'gecmis' ? '' : 'none';
+  omAktifYukle();
+}
+
+function omAktifYukle() {
+  if (_omAktifTab === 'bekleyen') {
+    omListeYukle();
+  } else {
+    omGecmisYukle();
+  }
 }
 
 function omListeYukle() {
@@ -100,8 +167,36 @@ function omListeYukle() {
         '<td class="pzm-td">' + omEsc(omTipLbl(row.talep_tipi)) + '</td>' +
         '<td class="pzm-td">' + omEsc(row.kaynak_kod || row.kaynak_id) + '</td>' +
         '<td class="pzm-td">' + omEsc(row.cari_unvan_snapshot || '—') + '</td>' +
-        '<td class="pzm-td">' + omEsc(row.durum) + '</td>' +
+        '<td class="pzm-td">' + omDurumBadge(row.durum) + '</td>' +
         '<td class="pzm-td">' + omEsc((row.talep_tarihi || '').slice(0, 16)) + '</td>' +
+        '<td class="pzm-td"><button class="pzm-btn-ac" onclick="omDetay(' + row.id + ')">Detay</button></td>' +
+        '</tr>';
+    }).join('');
+  });
+}
+
+function omGecmisYukle() {
+  var tip = document.getElementById('om-fil-tip').value;
+  var url = '/nexgen/api/onay-merkezi/gecmis' + (tip ? ('?talep_tipi=' + encodeURIComponent(tip)) : '');
+  fetch(url).then(function(r) { return r.json(); }).then(function(d) {
+    var tbody = document.getElementById('om-gecmis-tbody');
+    var bos = document.getElementById('om-gecmis-bos');
+    var liste = (d && d.liste) || [];
+    if (!liste.length) {
+      tbody.innerHTML = '';
+      bos.style.display = '';
+      return;
+    }
+    bos.style.display = 'none';
+    tbody.innerHTML = liste.map(function(row) {
+      return '<tr>' +
+        '<td class="pzm-td"><code>' + omEsc(row.talep_kod) + '</code></td>' +
+        '<td class="pzm-td">' + omEsc(omTipLbl(row.talep_tipi)) + '</td>' +
+        '<td class="pzm-td" style="max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + omEsc(row.cari_unvan_snapshot || '—') + '</td>' +
+        '<td class="pzm-td">' + omDurumBadge(row.durum) + '</td>' +
+        '<td class="pzm-td">' + omEsc(row.karar_veren || '—') + '</td>' +
+        '<td class="pzm-td" style="white-space:nowrap;">' + omEsc((row.karar_tarihi || '').slice(0, 16)) + '</td>' +
+        '<td class="pzm-td" style="max-width:200px;color:#64748b;font-size:11px;">' + omEsc(row.karar_notu || '—') + '</td>' +
         '<td class="pzm-td"><button class="pzm-btn-ac" onclick="omDetay(' + row.id + ')">Detay</button></td>' +
         '</tr>';
     }).join('');
@@ -189,6 +284,6 @@ function omKarar(karar) {
   });
 }
 
-document.addEventListener('DOMContentLoaded', omListeYukle);
+document.addEventListener('DOMContentLoaded', function() { omTabSec('bekleyen'); });
 </script>
 {% endblock %}

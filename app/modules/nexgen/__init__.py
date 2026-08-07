@@ -14,6 +14,7 @@ from .finans_routes import register_finans_routes
 from .finans_cari_kimlik_routes import register_finans_cari_kimlik_routes
 from .musteri_pazarlama_routes import register_musteri_pazarlama_routes
 from .cari360_routes import register_cari360_routes
+from .onay_merkezi_routes import register_onay_merkezi_routes
 
 register_nx_ar_routes(nexgen_bp, _db, _kullanici_id)
 register_mo_sevkiyat_routes(nexgen_bp, _db, _kullanici_id)
@@ -21,6 +22,7 @@ register_finans_routes(nexgen_bp, _db, _kullanici_id)
 register_finans_cari_kimlik_routes(nexgen_bp, _db, _kullanici_id)
 register_musteri_pazarlama_routes(nexgen_bp, _db, _kullanici_id)
 register_cari360_routes(nexgen_bp, _db, _kullanici_id)
+register_onay_merkezi_routes(nexgen_bp, _db, _kullanici_id)
 
 register_numune_talep_routes(
     nexgen_bp,

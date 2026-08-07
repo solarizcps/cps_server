@@ -6,6 +6,7 @@ from flask import abort, jsonify, render_template, request, session
 
 from modules.auth import login_gerekli, kullanici_yetkileri
 from modules.nexgen.cari360_yetki import can_cari360_view_all, can_musteri_pazarlama_menu
+from modules.nexgen.cari_sorumlu_service import can_mo_view_cari
 from modules.nexgen.mo_gorusme_config import GORUSME_TIPLERI, ONCELIKLER, SONUC_TIPLERI
 from modules.nexgen.mo_gorusme_service import (
     MoGorusmeError,
@@ -68,13 +69,14 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
             uid = kullanici_id_fn()
             seen = session.get('mtt_ux_karar_seen')
             ozet = dashboard_ozet(con, uid, yk, karar_seen_ts=seen)
+            from modules.nexgen.musteri_pazarlama_service import dashboard_v2
+            v2 = dashboard_v2(con, uid, yk)
             from modules.nexgen.onay_service import (
                 pazarlamaci_karar_listele,
                 pazarlamaci_okunmamis_karar_sayisi,
             )
             talep_sonuclari = pazarlamaci_karar_listele(con, uid, limit=30)
             okunmamis = pazarlamaci_okunmamis_karar_sayisi(con, uid, seen)
-            # Popup yalnız gerçekten okunmamış kayıttan; eski geçmişe düşmesin
             popup_karar = None
             if okunmamis > 0:
                 yeniler = pazarlamaci_karar_listele(con, uid, limit=1, after_ts=seen)
@@ -85,6 +87,7 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
             'nexgen/musteri_pazarlama.html',
             active='nexgen',
             ozet=ozet,
+            v2=v2,
             kullanici_ad=u.get('KullaniciAdi') or '',
             gorusme_tipleri=GORUSME_TIPLERI,
             sonuc_tipleri=SONUC_TIPLERI,
@@ -126,6 +129,33 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
                 'liste': liste,
                 'okunmamis': pazarlamaci_okunmamis_karar_sayisi(con, uid, seen),
             })
+        finally:
+            con.close()
+
+    @bp.route('/api/musteri-pazarlama/bildirimler', methods=['GET'])
+    @login_gerekli
+    def api_musteri_pazarlama_bildirimler():
+        _yetki_kontrol()
+        con = db_fn()
+        try:
+            from modules.nexgen.onay_service import pazarlamaci_bildirimler
+            uid = kullanici_id_fn()
+            liste = pazarlamaci_bildirimler(con, uid, limit=15)
+            return jsonify({'ok': True, 'liste': liste, 'toplam': len(liste)})
+        finally:
+            con.close()
+
+    @bp.route('/api/musteri-pazarlama/dashboard-v2', methods=['GET'])
+    @login_gerekli
+    def api_musteri_pazarlama_dashboard_v2():
+        """ERHAN UI-3A — read-only finans/tahsilat/çek/üretim/KPI paketi."""
+        u, yk = _yetki_kontrol()
+        con = db_fn()
+        try:
+            from modules.nexgen.musteri_pazarlama_service import dashboard_v2
+            uid = kullanici_id_fn()
+            data = dashboard_v2(con, uid, yk)
+            return jsonify({'ok': True, **data})
         finally:
             con.close()
 
@@ -529,7 +559,7 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
     @bp.route('/api/musteri-pazarlama/tahsilat-acik-planlar')
     @login_gerekli
     def api_mo_tahsilat_acik_planlar():
-        _yetki_kontrol()
+        u, yk = _yetki_kontrol()
         cid = request.args.get('cari_id')
         try:
             cari_id = int(cid or 0)
@@ -537,8 +567,11 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
             cari_id = 0
         if not cari_id:
             return jsonify({'ok': False, 'mesaj': 'cari_id gerekli.'}), 400
+        uid = kullanici_id_fn()
         con = db_fn()
         try:
+            if not can_mo_view_cari(con, uid, cari_id, yk):
+                return jsonify({'ok': False, 'mesaj': 'Bu müşteri için erişim yetkiniz yok.'}), 403
             planlar = acik_planlar(con, [cari_id])
             return jsonify({'ok': True, 'planlar': planlar})
         finally:

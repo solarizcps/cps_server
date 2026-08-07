@@ -77,7 +77,7 @@ def tahsilat_onaya_gonder(con, kayit_id: int, talep_eden_id: int) -> dict[str, A
 
     idem = f'mo-tahsilat-onay-{kayit_id}-{snap.get("snapshot_hash", "")[:16]}'
     adimlar = [
-        {'sira': 1, 'adim_tipi': 'MUHASEBE_ONAY', 'kademe': 'K2', 'rol_adi': 'Muhasebe', 'durum': 'BEKLIYOR'},
+        {'sira': 1, 'adim_tipi': 'YONETIM_ONAY', 'kademe': 'K3', 'rol_adi': 'Yönetim', 'durum': 'BEKLIYOR'},
     ]
     r = talep_olustur(
         con,
@@ -115,14 +115,20 @@ def karar_sonrasi_adapter(con, talep_id: int, sonuc: dict) -> None:
     if not talep or talep['kaynak_modul'] != KAYNAK_MODUL:
         return
     kid = int(talep['kaynak_id'])
-    notu = ''
-    if sonuc.get('durum') in ('REVIZYON', 'REDDEDILDI'):
-        adim = con.execute(
-            "SELECT karar_notu FROM onay_talep_adim WHERE talep_id=? AND durum=? ORDER BY id DESC LIMIT 1",
-            (talep_id, sonuc.get('durum')),
-        ).fetchone()
-        notu = (adim['karar_notu'] if adim else '') or ''
-    karar_sonrasi(con, kid, {**sonuc, 'not': notu})
+    # Gerçek karar adımını oku: kullanici_id, tarih, karar_notu
+    _durum_ara = sonuc.get('durum')
+    _adim_durum = {
+        'ONAYLANDI': 'TAMAMLANDI', 'REVIZYON': 'REVIZYON', 'REDDEDILDI': 'REDDEDILDI',
+    }.get(_durum_ara, _durum_ara)
+    adim = con.execute(
+        "SELECT kullanici_id, tarih, karar_notu FROM onay_talep_adim "
+        "WHERE talep_id=? AND durum=? ORDER BY id DESC LIMIT 1",
+        (talep_id, _adim_durum),
+    ).fetchone()
+    notu = (adim['karar_notu'] if adim else '') or ''
+    uid = int(adim['kullanici_id']) if adim and adim['kullanici_id'] else None
+    ktarih = str(adim['tarih']) if adim and adim['tarih'] else None
+    karar_sonrasi(con, kid, {**sonuc, 'not': notu, 'kullanici_id': uid, 'karar_tarihi': ktarih})
     adapter_log(
         con, talep_id=talep_id, adapter_kodu=ADAPTER,
         kaynak_modul=KAYNAK_MODUL, islem=f"KARAR_{sonuc.get('durum')}", sonuc='OK',

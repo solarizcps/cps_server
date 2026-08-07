@@ -43,374 +43,219 @@
   </div>
 
   {# A — Beyaz sayfa başlığı (global sarı barın altında) #}
-  <header class="mp-page-hdr">
+  {# div kullanılıyor — header tag global z-index:100 alır ve dropdown'un önüne geçer #}
+  <div class="mp-page-hdr">
     <div class="mp-page-hdr-sol">
       <div class="mp-logo-wrap">
         <img src="{{ url_for('static', filename='img/nexgen-logo.png') }}" alt="NexGen" class="mp-page-logo">
       </div>
       <h1 class="mp-page-title">MÜŞTERİ OPERASYONU</h1>
     </div>
-  </header>
+  </div>
 
   {# B — Ana sayaç şeridi (4 + isteğe bağlı Genel) #}
   {% set chip_sira = [
-    ('bugun_aranacak', 'Takip Bekleyen'),
-    ('onay_bekleyen', 'Yeni Kararlar'),
-    ('numune_sonucu_geldi', 'Numune Süreçleri'),
-    ('siparis_onaylandi', 'Sipariş Süreçleri')
+    ('bugun_aranacak', 'Takip Bekleyen', ''),
+    ('onay_bekleyen', 'Yeni Kararlar', ''),
+    ('numune_sonucu_geldi', 'Numune Süreçleri', 'MO kaynaklı açık numune talepleri (aktif süreçler)'),
+    ('siparis_onaylandi', 'Sipariş Süreçleri', 'MO kaynaklı açık sipariş süreçleri (onay/üretim bekleyen)')
   ] %}
   <section class="mp-filtre" id="mp-bugun">
     <button type="button" class="mp-chip mp-chip-genel mp-chip-secili" data-filter="genel" id="mp-chip-genel">Genel Bugün <strong>{{ ozet.genel_bugun_sayi|default(0) }}</strong></button>
-    {% for key, lbl in chip_sira %}
+    {% for key, lbl, tip in chip_sira %}
     {% set g = ozet.bugunun_isleri.get(key) %}
     {% if g %}
     {% set kritik = (key == 'onay_bekleyen' and (mp_karar_okunmamis|default(0)) > 0) %}
     <button type="button"
       class="mp-chip{% if g.sayi > 0 %} mp-chip-aktif{% if kritik %} mp-chip-kritik{% elif key == 'bugun_aranacak' %} mp-chip-uyari{% elif key in ('numune_sonucu_geldi','siparis_onaylandi') %} mp-chip-surec{% endif %}{% else %} mp-chip-sifir{% endif %}"
       data-filter="{{ key }}"
+      {% if tip %}title="{{ tip }}"{% endif %}
       id="{% if key == 'onay_bekleyen' %}mp-chip-kararlar{% elif key == 'bugun_aranacak' %}mp-chip-takip{% elif key == 'numune_sonucu_geldi' %}mp-chip-numune{% else %}mp-chip-siparis{% endif %}">{{ lbl }} <strong>{{ g.sayi }}</strong></button>
     {% endif %}
     {% endfor %}
   </section>
 
-  {# C — Günlük çalışma düzeni #}
-  <div class="mp-layout">
-        <section class="mp-panel mp-panel-kisa mp-grid-oncelik" id="mp-oneri-bolum">
-          <div class="mp-panel-ust">
-            <h2 class="mp-baslik-kucuk">Bugün Yapılacaklar</h2>
-          </div>
-          {% if not ozet.oncelikli_isler %}
-          <div class="mp-bos">Bugün için aksiyon yok.</div>
-          {% else %}
-          <div class="mp-is-liste" id="mp-oneri-kisa">
-            {% for o in ozet.oncelikli_isler %}
-            <article class="mp-is mp-is-gunluk">
-              <div class="mp-is-govde">
-                <button type="button" class="mp-is-musteri mp-detay-ac" data-cari-id="{{ o.cari_id }}" title="{{ o.musteri }}">{{ o.musteri }}</button>
-                <div class="mp-is-tur">{{ o.is_turu or o.surec_tipi or 'İş' }}</div>
-                <div class="mp-is-durum">{{ o.durum_ozet or o.surec_asama or '—' }}</div>
-                <div class="mp-is-alt">{{ o.bekleme_ozet or o.alt_metin or '—' }}</div>
-              </div>
-              <div class="mp-is-aksiyon">
-                {% if o.aksiyon_tip in ('gorusme', 'bilgilendir') %}
-                <button type="button" class="mp-btn mp-btn-xs mp-btn-teal mp-btn-gorusme" data-cari-id="{{ o.cari_id }}" data-unvan="{{ o.musteri|e }}" data-kod="">{{ o.aksiyon or 'Müşteriyi Bilgilendir' }}</button>
-                {% else %}
-                <button type="button" class="mp-btn mp-btn-xs mp-btn-outline mp-surec-ac" data-cari-id="{{ o.cari_id }}" {% if o.timeline %}data-timeline='{{ o.timeline|tojson }}'{% endif %}>{{ o.aksiyon or 'Süreci Aç' }}</button>
-                {% endif %}
-              </div>
-            </article>
-            {% endfor %}
-          </div>
-          {% if ozet.oncelikli_isler_tum|length > ozet.oncelikli_isler|length %}
-          <div class="mp-is-liste mp-genislet" id="mp-oneri-tum" hidden>
-            {% for o in ozet.oncelikli_isler_tum[ozet.oncelikli_isler|length:] %}
-            <article class="mp-is mp-is-gunluk">
-              <div class="mp-is-govde">
-                <span class="mp-is-musteri-txt" title="{{ o.musteri }}">{{ o.musteri }}</span>
-                <div class="mp-is-tur">{{ o.is_turu or o.surec_tipi or 'İş' }}</div>
-                <div class="mp-is-durum">{{ o.durum_ozet or o.surec_asama or '—' }}</div>
-              </div>
-              <button type="button" class="mp-btn mp-btn-xs mp-btn-outline mp-surec-ac" data-cari-id="{{ o.cari_id }}" {% if o.timeline %}data-timeline='{{ o.timeline|tojson }}'{% endif %}>Süreci Aç</button>
-            </article>
-            {% endfor %}
-          </div>
-          <button type="button" class="mp-tumunu mp-toggle-genislet" data-target="mp-oneri-tum">Tümünü Gör</button>
-          {% endif %}
-          {% endif %}
-        </section>
+  {# C — v2 Ana Layout: Sol İçerik + Sağ KPI Kolonu #}
+  <div class="mp-v2-layout">
 
-        <section class="mp-panel mp-panel-kisa mp-grid-ziyaret" id="mp-ziyaret-bolum">
-          <div class="mp-panel-ust"><h2 class="mp-baslik-kucuk">Bu Haftanın Görüşmeleri</h2></div>
-          {% if not ozet.hafta_ziyaretleri %}
-          <div class="mp-bos">Bu hafta plan yok.</div>
-          {% else %}
-          <div class="mp-ziyaret-liste">
-            {% for z in ozet.hafta_ziyaretleri[:4] %}
-            <div class="mp-ziyaret">
-              <div class="mp-z-tarih"><span class="mp-z-gun">{{ z.gun_kisa }}</span><span class="mp-z-ay">{{ z.tarih_kisa }}</span></div>
-              <div class="mp-z-icerik">
-                <div class="mp-z-musteri" title="{{ z.musteri }}">{{ z.musteri }}</div>
-                <div class="mp-z-amac">{{ z.amac }}</div>
-              </div>
-              <span class="mp-z-saat">{{ z.saat }}</span>
-              <details class="mp-z-menu">
-                <summary class="mp-btn-ghost" aria-label="Menü">⋯</summary>
-                <div class="mp-z-drop">
-                  <button type="button" class="mp-btn-gorusme" data-cari-id="{{ z.cari_id }}" data-unvan="{{ z.musteri|e }}" data-kod="">Görüşme</button>
-                  <button type="button" class="mp-detay-ac" data-cari-id="{{ z.cari_id }}">Detay</button>
-                </div>
-              </details>
-            </div>
-            {% endfor %}
-          </div>
-          {% endif %}
-        </section>
+    {# ── SOL ── #}
+    <div class="mp-v2-sol">
 
-    <aside class="mp-sag mp-sag-hizli">
-      <section class="mp-panel mp-hizli-panel mp-panel-kisa" id="mp-hizli-panel">
-        <h2 class="mp-baslik-kucuk">Hızlı İşlemler</h2>
-        <div class="mp-aksiyon-grid">
-          <button type="button" class="mp-aksiyon-btn mp-hizli-btn mp-aksiyon-birincil" data-modal="gorusme">
-            <span class="mp-aksiyon-ico" aria-hidden="true">◎</span>
-            <span class="mp-aksiyon-txt">Görüşme</span>
-          </button>
-          <button type="button" class="mp-aksiyon-btn mp-hizli-btn" data-modal="siparis">
-            <span class="mp-aksiyon-ico" aria-hidden="true">▣</span>
-            <span class="mp-aksiyon-txt">Sipariş Talebi</span>
-          </button>
-          <button type="button" class="mp-aksiyon-btn mp-hizli-btn" data-modal="numune">
-            <span class="mp-aksiyon-ico" aria-hidden="true">◆</span>
-            <span class="mp-aksiyon-txt">Numune Talebi</span>
-          </button>
-          <button type="button" class="mp-aksiyon-btn mp-hizli-btn" data-modal="tahsilat">
-            <span class="mp-aksiyon-ico" aria-hidden="true">₺</span>
-            <span class="mp-aksiyon-txt">Tahsilat Kaydı</span>
-          </button>
-        </div>
-      </section>
-    </aside>
-
-    <section class="mp-panel mp-panel-kisa mp-grid-acik" id="mp-acik-panel">
+      {# C1: Bugün Benim İşim #}
+      <section class="mp-panel mp-panel-kisa" id="mp-oneri-bolum">
         <div class="mp-panel-ust">
-          <h2 class="mp-baslik-kucuk">Açık Numune ve Siparişler</h2>
-          <div class="mp-sekmeler">
-            <button type="button" class="mp-sekme mp-sekme-aktif" data-tab="n">Numuneler</button>
-            <button type="button" class="mp-sekme" data-tab="s">Siparişler</button>
-          </div>
-        </div>
-        <div id="mp-tab-n">
-          {% if not ozet.numune_gruplu %}
-          <div class="mp-bos">Açık numune yok.</div>
-          {% else %}
-          {% for g in ozet.numune_gruplu %}
-          <div class="mp-g-satir">
-            <div class="mp-g-sol">
-              <div class="mp-g-musteri mp-ellipsis" title="{{ g.musteri }}">{{ g.musteri }}</div>
-              <div class="mp-g-etiketler">
-                <span class="mp-g-badge">{{ g.toplam }} Açık</span>
-                {% for e in (g.asama_etiketler or [])[:3] %}
-                <span class="mp-g-badge mp-g-badge-soft">{{ e.adet }} {{ e.etiket }}</span>
-                {% endfor %}
-              </div>
-              <div class="mp-g-ozet">Son: {{ g.son_durum or '—' }}</div>
-            </div>
-            <button type="button" class="mp-btn mp-btn-xs mp-btn-outline mp-surec-ac" data-cari-id="{{ g.cari_id }}" {% if g.timeline %}data-timeline='{{ g.timeline|tojson }}'{% endif %}>Detayı Aç</button>
-          </div>
-          {% endfor %}
-          {% if ozet.numune_bekleyenler|length > ozet.numune_gruplu|length %}
-          <div class="mp-genislet" id="mp-numune-tum" hidden>
-            {% for n in ozet.numune_bekleyenler %}
-            <div class="mp-g-satir mp-g-satir-ince">
-              <span>{{ n.musteri }}</span><span>{{ n.surec_asama }}</span><span>{{ n.bekleme_gun }} gün</span>
-            </div>
-            {% endfor %}
-          </div>
-          <button type="button" class="mp-tumunu mp-toggle-genislet" data-target="mp-numune-tum">Tümünü Gör</button>
-          {% endif %}
+          <h2 class="mp-baslik-kucuk">Bugün Benim İşim</h2>
+          {% if ozet.oncelikli_isler_tum|length > 4 %}
+          <button type="button" class="mp-tumunu-link mp-toggle-genislet" data-target="mp-oneri-tum-v2">Tümünü Gör →</button>
           {% endif %}
         </div>
-        <div id="mp-tab-s" hidden>
-          {% if not ozet.siparis_gruplu %}
-          <div class="mp-bos">Açık sipariş yok.</div>
-          {% else %}
-          {% for g in ozet.siparis_gruplu %}
-          <div class="mp-g-satir">
-            <div class="mp-g-sol">
-              <div class="mp-g-musteri mp-ellipsis" title="{{ g.musteri }}">{{ g.musteri }}</div>
-              <div class="mp-g-etiketler">
-                <span class="mp-g-badge">{{ g.toplam }} Açık</span>
-                {% for e in (g.asama_etiketler or [])[:3] %}
-                <span class="mp-g-badge mp-g-badge-soft">{{ e.adet }} {{ e.etiket }}</span>
-                {% endfor %}
-              </div>
-              <div class="mp-g-ozet">Son: {{ g.son_durum or '—' }}</div>
-            </div>
-            <button type="button" class="mp-btn mp-btn-xs mp-btn-outline mp-surec-ac" data-cari-id="{{ g.cari_id }}" {% if g.timeline %}data-timeline='{{ g.timeline|tojson }}'{% endif %}>Detayı Aç</button>
-          </div>
-          {% endfor %}
-          {% set sip_list = ozet.siparis_bekleyenler.onay_bekleyen + ozet.siparis_bekleyenler.revizyon_bekleyen + ozet.siparis_bekleyenler.red_kayit + ozet.siparis_bekleyenler.onaylandi + ozet.siparis_bekleyenler.uretim_bekleyen %}
-          {% if sip_list|length > ozet.siparis_gruplu|length %}
-          <div class="mp-genislet" id="mp-siparis-tum" hidden>
-            {% for s in sip_list %}
-            <div class="mp-g-satir mp-g-satir-ince"><span>{{ s.musteri }}</span><span>{{ s.surec_asama }}</span></div>
-            {% endfor %}
-          </div>
-          <button type="button" class="mp-tumunu mp-toggle-genislet" data-target="mp-siparis-tum">Tümünü Gör</button>
-          {% endif %}
-          {% endif %}
-        </div>
-    </section>
-
-    <section class="mp-panel mp-panel-kisa mp-grid-karar" id="mp-talep-sonuclari">
-        <div class="mp-panel-ust" style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-          <h2 class="mp-baslik-kucuk" style="margin:0;">Son Talep Kararları</h2>
-          {% if (mp_karar_okunmamis|default(0)) > 0 %}
-          <span class="mp-chip-kritik mp-karar-yeni-badge" id="mp-karar-yeni-badge" style="padding:2px 8px;border-radius:999px;font-size:10px;font-weight:800;">{{ mp_karar_okunmamis }} yeni</span>
-          {% endif %}
-        </div>
-        {% set ts_list = talep_sonuclari|default([]) %}
-        {% if not ts_list %}
-        <p class="mp-bos mp-bos-tek">Henüz sonuç yok.</p>
+        {% if not ozet.oncelikli_isler %}
+        <div class="mp-bos">Bugün için aksiyon yok.</div>
         {% else %}
-        <div class="mp-sonuc-liste" id="mp-sonuc-liste">
-          {% for k in ts_list[:5] %}
-          {% set onayli = k.durum == 'ONAYLANDI' %}
-          {% set reddi = k.durum == 'REDDEDILDI' %}
-          <article class="mp-karar-kart{% if onayli %} mp-karar-onay{% elif reddi %} mp-karar-red{% else %} mp-karar-pasif{% endif %}">
-            <div class="mp-karar-rozet">{% if onayli %}ONAYLANDI{% elif reddi %}REDDEDİLDİ{% else %}{{ k.durum_etiket or k.durum }}{% endif %}</div>
-            <div class="mp-karar-no">{{ k.talep_no or '—' }}</div>
-            <div class="mp-karar-firma mp-ellipsis" title="{{ k.firma_adi or '' }}">{{ k.firma_adi or '—' }}</div>
-            <div class="mp-karar-meta">{{ k.tur_etiket or ('Sipariş Talebi' if k.talep_turu == 'SIPARIS' else 'Numune Talebi' if k.talep_turu == 'NUMUNE' else 'Talep') }}</div>
-            <div class="mp-karar-tarih">{{ (k.karar_tarihi or k.updated_at or '')[:16]|replace('-', '.') }}</div>
-            {% if reddi and k.red_nedeni %}
-            <div class="mp-karar-red-neden mp-ellipsis" title="{{ k.red_nedeni }}">{{ k.red_nedeni }}</div>
-            {% endif %}
-            <button type="button" class="mp-btn mp-btn-xs mp-btn-outline mp-talep-sonuc-ac"
-                    data-talep-id="{{ k.kaynak_id or '' }}"
-                    data-talep-no="{{ k.talep_no or '' }}"
-                    data-onay-id="{{ k.id }}">Talebi Aç</button>
-          </article>
-          {% endfor %}
-        </div>
-        {% if ts_list|length > 5 %}
-        <button type="button" class="mp-tumunu" id="mp-tum-kararlar" data-scroll="mp-talep-sonuclari">Tüm Kararları Gör</button>
-        {% else %}
-        <button type="button" class="mp-tumunu" id="mp-tum-kararlar" hidden>Tüm Kararları Gör</button>
-        {% endif %}
-        {% endif %}
-    </section>
-
-    <div class="mp-alt-ucuncu">
-      <section class="mp-panel mp-tahsilat-panel mp-panel-kisa">
-        <h2 class="mp-baslik-kucuk">Tahsilat Takibi</h2>
-        {% set tah_bugun = namespace(items=[]) %}
-        {% set tah_gec = namespace(items=[]) %}
-        {% set tah_diger = namespace(items=[]) %}
-        {% for t in ozet.tahsilat_takibi %}
-          {% if t.grup == 'geciken' %}{% set _ = tah_gec.items.append(t) %}
-          {% elif t.grup == 'bugun' %}{% set _ = tah_bugun.items.append(t) %}
-          {% else %}{% set _ = tah_diger.items.append(t) %}
-          {% endif %}
-        {% endfor %}
-        {% if not tah_bugun.items and not tah_gec.items and not tah_diger.items %}
-        <p class="mp-bos mp-bos-tek">Tahsilat sözü bulunmuyor.</p>
-        {% else %}
-        {% if tah_bugun.items %}
-        <div class="mp-tah-blok">
-          <div class="mp-tah-etiket">Bugün alınacak</div>
-          {% for t in tah_bugun.items[:2] %}
-          <div class="mp-tah-satir">
-            <div class="mp-tah-sol">
-              <button type="button" class="mp-tah-musteri mp-detay-ac" data-cari-id="{{ t.cari_id }}">{{ t.musteri }}</button>
-              <div class="mp-tah-not">{% if t.tahsilat_sozu_tarihi %}{{ t.tahsilat_sozu_tarihi[8:10] }}.{{ t.tahsilat_sozu_tarihi[5:7] }}{% else %}{{ t.durum_metin }}{% endif %}{% if t.tutar_metin %} · {{ t.tutar_metin }}{% endif %}</div>
+        <div class="mp-v2-is-liste" id="mp-oneri-kisa">
+          {% for o in ozet.oncelikli_isler %}
+          <div class="mp-v2-is-satir">
+            <div class="mp-v2-is-tur-ico mp-v2-ico-{{ o.tip or 'diger' }}">
+              {% if o.tip == 'tahsilat' %}₺
+              {% elif o.tip == 'numune' %}◆
+              {% elif o.tip == 'risk' %}⚠
+              {% else %}◎{% endif %}
             </div>
-            <button type="button" class="mp-btn mp-btn-xs mp-btn-outline mp-tah-kayit-ac"
-              data-cari-id="{{ t.cari_id }}"
-              {% if t.siparis_id %}data-siparis-id="{{ t.siparis_id }}"{% endif %}
-              {% if t.tahsilat_sozu_tarihi %}data-plan-tarih="{{ t.tahsilat_sozu_tarihi[:10] }}"{% endif %}
-              {% if t.beklenen_tutar %}data-beklenen="{{ t.beklenen_tutar }}"{% endif %}>Tahsilat</button>
-            <span class="mp-rozet mp-rozet-bugun">Bugün</span>
+            <div class="mp-v2-is-govde">
+              <button type="button" class="mp-v2-is-musteri mp-detay-ac" data-cari-id="{{ o.cari_id }}">{{ o.musteri }}</button>
+              <div class="mp-v2-is-aciklama">{{ o.neden or o.surec_asama or '—' }}</div>
+            </div>
+            <div class="mp-v2-is-durum">
+              <span class="mp-v2-durum-chip mp-v2-durum-{{ (o.surec_asama or 'bekleyen')|lower|replace(' ','-') }}">{{ o.surec_asama or 'Bekleyen' }}</span>
+            </div>
+            <div class="mp-v2-is-aks">
+              {% if o.aksiyon_tip in ('gorusme', 'bilgilendir') %}
+              <button type="button" class="mp-btn mp-btn-xs mp-btn-teal mp-btn-gorusme" data-cari-id="{{ o.cari_id }}" data-unvan="{{ o.musteri|e }}" data-kod="">{{ o.aksiyon or 'Görüşme' }}</button>
+              {% else %}
+              <button type="button" class="mp-btn mp-btn-xs mp-btn-outline mp-surec-ac" data-cari-id="{{ o.cari_id }}" {% if o.timeline %}data-timeline='{{ o.timeline|tojson }}'{% endif %}>{{ o.aksiyon or 'Aç' }}</button>
+              {% endif %}
+            </div>
           </div>
           {% endfor %}
         </div>
-        {% endif %}
-        {% if tah_gec.items %}
-        <div class="mp-tah-blok">
-          <div class="mp-tah-etiket">Geciken</div>
-          {% for t in tah_gec.items[:2] %}
-          <div class="mp-tah-satir">
-            <div class="mp-tah-sol">
-              <button type="button" class="mp-tah-musteri mp-detay-ac" data-cari-id="{{ t.cari_id }}">{{ t.musteri }}</button>
-              <div class="mp-tah-not">{% if t.tahsilat_sozu_tarihi %}{{ t.tahsilat_sozu_tarihi[8:10] }}.{{ t.tahsilat_sozu_tarihi[5:7] }}{% else %}{{ t.durum_metin }}{% endif %}{% if t.tutar_metin %} · {{ t.tutar_metin }}{% endif %}</div>
+        {% if ozet.oncelikli_isler_tum|length > ozet.oncelikli_isler|length %}
+        <div class="mp-v2-is-liste mp-genislet" id="mp-oneri-tum-v2" hidden>
+          {% for o in ozet.oncelikli_isler_tum[ozet.oncelikli_isler|length:] %}
+          <div class="mp-v2-is-satir">
+            <div class="mp-v2-is-tur-ico mp-v2-ico-{{ o.tip or 'diger' }}">◎</div>
+            <div class="mp-v2-is-govde">
+              <span class="mp-v2-is-musteri-txt">{{ o.musteri }}</span>
+              <div class="mp-v2-is-aciklama">{{ o.neden or o.surec_asama or '—' }}</div>
             </div>
-            <button type="button" class="mp-btn mp-btn-xs mp-btn-outline mp-tah-kayit-ac"
-              data-cari-id="{{ t.cari_id }}"
-              {% if t.siparis_id %}data-siparis-id="{{ t.siparis_id }}"{% endif %}
-              {% if t.tahsilat_sozu_tarihi %}data-plan-tarih="{{ t.tahsilat_sozu_tarihi[:10] }}"{% endif %}
-              {% if t.beklenen_tutar %}data-beklenen="{{ t.beklenen_tutar }}"{% endif %}>Tahsilat</button>
-            <span class="mp-rozet mp-rozet-gecik">{{ (t.gun_fark * -1) if t.gun_fark < 0 else 0 }} gün</span>
+            <div class="mp-v2-is-aks">
+              <button type="button" class="mp-btn mp-btn-xs mp-btn-outline mp-surec-ac" data-cari-id="{{ o.cari_id }}" {% if o.timeline %}data-timeline='{{ o.timeline|tojson }}'{% endif %}>Aç</button>
+            </div>
           </div>
           {% endfor %}
         </div>
-        {% endif %}
-        {% set tah_toplam = tah_bugun.items|length + tah_gec.items|length + tah_diger.items|length %}
-        {% set tah_gosterilen = (tah_bugun.items[:2]|length) + (tah_gec.items[:2]|length) %}
-        {% if tah_toplam > tah_gosterilen or tah_diger.items %}
-        <div class="mp-genislet" id="mp-tah-tum" hidden>
-          {% for t in tah_bugun.items[2:] %}
-          <div class="mp-tah-satir mp-tah-satir-ince"><span>{{ t.musteri }}</span><span>{{ t.tutar_metin or '—' }}</span></div>
-          {% endfor %}
-          {% for t in tah_gec.items[2:] %}
-          <div class="mp-tah-satir mp-tah-satir-ince"><span>{{ t.musteri }}</span><span>{{ (t.gun_fark * -1) if t.gun_fark < 0 else 0 }} gün</span></div>
-          {% endfor %}
-          {% for t in tah_diger.items %}
-          <div class="mp-tah-satir mp-tah-satir-ince"><span>{{ t.musteri }}</span><span>{{ t.durum_metin or '—' }}</span></div>
-          {% endfor %}
-        </div>
-        <button type="button" class="mp-tumunu mp-toggle-genislet" data-target="mp-tah-tum">Tümünü Gör</button>
         {% endif %}
         {% endif %}
       </section>
 
+      {# C2: Müşterilerim — Bakiye ve Vade Durumu #}
       <section class="mp-panel mp-panel-kisa" id="mp-musteri-panel">
         <div class="mp-panel-ust mp-panel-ust-sekme">
-          <h2 class="mp-baslik-kucuk">Müşterilerim</h2>
-          <div class="mp-sekme" role="tablist">
-            <button type="button" class="mp-sekme-btn mp-sekme-aktif" data-mp-view="cari" id="mp-sekme-cari">Cariler</button>
-            <button type="button" class="mp-sekme-btn" data-mp-view="aday" id="mp-sekme-aday">Yeni Müşteriler{% if ozet.adaylar %}<span class="mp-sekme-sayi">{{ ozet.adaylar|length }}</span>{% endif %}</button>
+          <h2 class="mp-baslik-kucuk">Müşterilerim — Bakiye ve Vade Durumu</h2>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <input type="text" id="mp-v2-musteri-ara" placeholder="Müşteri ara..." class="mp-v2-ara-input" style="font-size:12px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px;outline:none;width:140px;">
+            <div class="mp-sekme" role="tablist">
+              <button type="button" class="mp-sekme-btn mp-sekme-aktif" data-mp-view="cari" id="mp-sekme-cari">Cariler</button>
+              <button type="button" class="mp-sekme-btn" data-mp-view="aday" id="mp-sekme-aday">Yeni Müşteriler{% if ozet.adaylar %}<span class="mp-sekme-sayi">{{ ozet.adaylar|length }}</span>{% endif %}</button>
+            </div>
           </div>
         </div>
 
-        {# ——— Cariler ——— #}
+        {# ——— v2 Cari Tablosu ——— #}
         <div id="mp-view-cari" class="mp-view">
-        {% if ozet.kapsam_bos and not ozet.musteriler %}
-        <div class="mp-bos">Kapsam yok.</div>
-        {% elif not ozet.musteriler %}
-        <div class="mp-bos">Cari müşteri yok.</div>
+        {% set v2m = v2.musteriler if v2 is defined else [] %}
+        {% if not v2m %}
+        <div class="mp-bos">Müşteri yok.</div>
         {% else %}
-        <div class="mp-m-tablo-wrap">
-          <table class="mp-m-tablo">
+        <div class="mp-m-tablo-wrap mp-v2-musteri-wrap">
+          <table class="mp-m-tablo mp-v2-musteri-tablo" id="mp-v2-musteri-tablo">
+            <colgroup>
+              <col class="mp-v2-col-musteri">
+              <col class="mp-v2-col-bakiye">
+              <col class="mp-v2-col-yon">
+              <col class="mp-v2-col-tah">
+              <col class="mp-v2-col-tah">
+              <col class="mp-v2-col-cek">
+              <col class="mp-v2-col-vade">
+              <col class="mp-v2-col-son">
+              <col class="mp-v2-col-aks">
+            </colgroup>
             <thead>
               <tr>
-                <th>Müşteri</th><th>Son görüşme</th><th>Son sipariş</th><th>Açık numune</th><th>Tahsilat</th><th>İşlem</th>
+                <th>Müşteri</th>
+                <th class="mp-v2-th-sag">Muhasebe<br>Bakiye</th>
+                <th class="mp-v2-th-ort">Yön</th>
+                <th class="mp-v2-th-sag">Beklenen<br>Tah.</th>
+                <th class="mp-v2-th-sag">Kalan<br>Tah.</th>
+                <th class="mp-v2-th-ort" title="Müşteri/operasyon planı — muhasebe çek kaydı değildir.">Planlanan<br>Çek ⓘ</th>
+                <th class="mp-v2-th-ort">En Yakın<br>Vade</th>
+                <th class="mp-v2-th-ort">Son<br>İşlem</th>
+                <th class="mp-v2-th-ort">Aksiyon</th>
               </tr>
             </thead>
-            <tbody id="mp-musteri-kisa">
-              {% for m in ozet.musteriler[:5] %}
-              <tr class="mp-m-satir" data-entity="CARI" data-cari-id="{{ m.cari_id }}" id="mp-kart-{{ m.cari_id }}">
-                <td><button type="button" class="mp-m-ad mp-detay-ac" data-cari-id="{{ m.cari_id }}">{{ m.unvan }}</button>{% if m.atanmamis %} <span class="mp-atanmamis" title="Sorumlu atanmamış">Atanmamış</span>{% endif %}</td>
-                <td>{{ (m.son_gorusme or '—')[:18] }}</td>
-                <td>{{ (m.son_siparis or '—')[:18] }}</td>
-                <td>{{ (m.numune or '—')[:16] }}</td>
-                <td>{{ m.vade or '—' }}{% if m.risk %} · {{ m.risk }}{% endif %}</td>
-                <td class="mp-m-aks">
-                  {% if m.gorusme_yazabilir %}<button type="button" class="mp-btn mp-btn-xs mp-btn-teal mp-btn-gorusme" data-cari-id="{{ m.cari_id }}" data-unvan="{{ m.unvan|e }}" data-kod="{{ m.cari_kod or ''|e }}">Görüşme</button>{% endif %}
-                  <button type="button" class="mp-btn mp-btn-xs mp-btn-outline mp-btn-numune" data-cari-id="{{ m.cari_id }}" data-unvan="{{ m.unvan|e }}">Numune</button>
-                  <button type="button" class="mp-btn mp-btn-xs mp-btn-outline mp-btn-siparis" data-cari-id="{{ m.cari_id }}" data-unvan="{{ m.unvan|e }}">Sipariş</button>
-                  <button type="button" class="mp-btn-ghost mp-detay-ac" data-cari-id="{{ m.cari_id }}">⋯</button>
-                </td>
-              </tr>
+            <tbody>
+            {% set v2_tah_map = {} %}
+            {% if v2 is defined %}
+              {% for k in v2.tahsilat_kayitlar %}
+                {% if k.cari_id not in v2_tah_map %}
+                  {% set _ = v2_tah_map.update({k.cari_id: k}) %}
+                {% endif %}
               {% endfor %}
-            </tbody>
-            {% if ozet.musteriler|length > 5 %}
-            <tbody id="mp-musteri-tum" hidden>
-              {% for m in ozet.musteriler[5:] %}
-              <tr class="mp-m-satir" data-entity="CARI" data-cari-id="{{ m.cari_id }}">
-                <td><button type="button" class="mp-m-ad mp-detay-ac" data-cari-id="{{ m.cari_id }}">{{ m.unvan }}</button>{% if m.atanmamis %} <span class="mp-atanmamis" title="Sorumlu atanmamış">Atanmamış</span>{% endif %}</td>
-                <td>{{ (m.son_gorusme or '—')[:18] }}</td>
-                <td>{{ (m.son_siparis or '—')[:18] }}</td>
-                <td>{{ (m.numune or '—')[:16] }}</td>
-                <td>{{ m.vade or '—' }}</td>
-                <td class="mp-m-aks"><button type="button" class="mp-btn-ghost mp-detay-ac" data-cari-id="{{ m.cari_id }}">⋯</button></td>
-              </tr>
-              {% endfor %}
-            </tbody>
             {% endif %}
+            {% set v2_cek_map = {} %}
+            {% if v2 is defined %}
+              {% for c in v2.cek_sozleri %}
+                {% if c.cari_id not in v2_cek_map %}
+                  {% set _ = v2_cek_map.update({c.cari_id: c}) %}
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+            {% set v2_vade_map = {} %}
+            {% if v2 is defined %}
+              {% for grp, items in v2.vade_takvimi.items() %}
+                {% for item in items %}
+                  {% if item.cari_id not in v2_vade_map or grp == 'VADESI_GECEN' or grp == 'BUGUN' %}
+                    {% set _ = v2_vade_map.update({item.cari_id: {'grup': grp, 'tarih': item.tarih, 'gecikme': item.gecikme_gun}}) %}
+                  {% endif %}
+                {% endfor %}
+              {% endfor %}
+            {% endif %}
+            {% for m in v2m %}
+            {% set tah = v2_tah_map.get(m.cari_id) %}
+            {% set cek = v2_cek_map.get(m.cari_id) %}
+            {% set vd = v2_vade_map.get(m.cari_id) %}
+            <tr class="mp-m-satir mp-v2-m-satir" data-entity="CARI" data-cari-id="{{ m.cari_id }}" data-unvan="{{ (m.unvan or '')|lower }}">
+              <td class="mp-v2-td-musteri">
+                <button type="button" class="mp-m-ad mp-detay-ac mp-v2-musteri-ad" data-cari-id="{{ m.cari_id }}" title="{{ m.unvan }}">{{ m.unvan or '—' }}</button>
+              </td>
+              <td class="mp-v2-sayi {% if m.bakiye_yonu == 'BORC' %}mp-v2-borc{% elif m.bakiye_yonu == 'ALACAK' %}mp-v2-alacak{% endif %}">
+                {% if m.muhasebe_bakiye is not none %}{{ '{:,.2f}'.format(m.muhasebe_bakiye|float) }} ₺{% else %}—{% endif %}
+              </td>
+              <td style="text-align:center">
+                {% if m.bakiye_yonu == 'BORC' %}<span class="mp-v2-yon-chip mp-v2-yon-borc">Borç</span>
+                {% elif m.bakiye_yonu == 'ALACAK' %}<span class="mp-v2-yon-chip mp-v2-yon-alacak">Alacak</span>
+                {% elif m.bakiye_yonu == 'SIFIR' %}<span class="mp-v2-yon-chip mp-v2-yon-sifir">Sıfır</span>
+                {% else %}<span style="color:#94a3b8;font-size:11px">—</span>{% endif %}
+              </td>
+              <td class="mp-v2-sayi">{% if tah and tah.beklenen_tutar %}{{ '{:,.0f}'.format(tah.beklenen_tutar|float) }} ₺{% else %}—{% endif %}</td>
+              <td class="mp-v2-sayi">{% if tah and tah.kalan_tutar %}{{ '{:,.0f}'.format(tah.kalan_tutar|float) }} ₺{% else %}—{% endif %}</td>
+              <td style="text-align:center;font-size:11px">
+                {% if cek %}
+                <span class="mp-v2-cek-chip" title="Müşteri/operasyon planı — muhasebe çek kaydı değildir.">
+                  Çek Sözü
+                  {% if cek.cek_adedi %}({{ cek.cek_adedi }}){% endif %}
+                </span>
+                {% else %}—{% endif %}
+              </td>
+              <td style="text-align:center;font-size:11px">
+                {% if vd %}
+                  {% if vd.grup == 'VADESI_GECEN' %}<span class="mp-v2-vade-gecik" title="{{ vd.tarih }}">{{ vd.gecikme }} gün gecik.</span>
+                  {% elif vd.grup == 'BUGUN' %}<span class="mp-v2-vade-bugun">Bugün</span>
+                  {% else %}<span class="mp-v2-vade-normal">{{ (vd.tarih or '—')[:10] }}</span>{% endif %}
+                {% else %}—{% endif %}
+              </td>
+              <td style="text-align:center;font-size:11px;color:#64748b">{{ (m.son_hareket_tarihi or '—')[:10] }}</td>
+              <td class="mp-m-aks">
+                <button type="button" class="mp-btn mp-btn-xs mp-btn-teal mp-btn-gorusme" data-cari-id="{{ m.cari_id }}" data-unvan="{{ (m.unvan or '')|e }}" data-kod="{{ (m.cari_kod or '')|e }}">Görüşme</button>
+                <button type="button" class="mp-btn-ghost mp-detay-ac" data-cari-id="{{ m.cari_id }}" title="Detay">⋯</button>
+              </td>
+            </tr>
+            {% endfor %}
+            </tbody>
           </table>
         </div>
-        {% if ozet.musteriler|length > 5 %}
-        <button type="button" class="mp-tumunu mp-toggle-genislet" data-target="mp-musteri-tum">Tümünü Gör ({{ ozet.musteriler|length }})</button>
-        {% endif %}
+        <div style="padding:6px 0 2px;font-size:11px;color:#94a3b8;">
+          Bakiye: Cari_Har gerçek hareket toplamı (DOGRULANDI eşleşmesi olanlar). Planlanan Çek: operasyonel söz, muhasebe kaydı değildir.
+        </div>
         {% endif %}
         </div>
 
@@ -453,8 +298,284 @@
           </div>
         </div>
       </section>
-    </div>
-  </div>
+
+      {# C3: Vade Takvimi #}
+      {% if v2 is defined and v2.vade_ozet %}
+      <section class="mp-panel mp-panel-kisa" id="mp-vade-takvim">
+        <div class="mp-panel-ust">
+          <h2 class="mp-baslik-kucuk">Vade Takvimi (Önemli)</h2>
+          <a href="#mp-musteri-panel" class="mp-tumunu-link" style="font-size:11px;color:#006a8e;text-decoration:none;">Tüm Tahsilat →</a>
+        </div>
+        <div class="mp-v2-vade-grid">
+          {% set vade_sirasi = [('VADESI_GECEN','Vadesi Geçen','mp-v2-vg-gecen'),('BUGUN','Bugün','mp-v2-vg-bugun'),('1_2_GUN','1-2 Gün','mp-v2-vg-yakin'),('3_5_GUN','3-5 Gün','mp-v2-vg-orta'),('6_7_GUN','6-7 Gün','mp-v2-vg-uzak'),('8_10_GUN','8-10 Gün','mp-v2-vg-uzak'),('TARIHI_YOK','Tarihi Yok','mp-v2-vg-yok')] %}
+          {% for grup_key, grup_lbl, grup_cls in vade_sirasi %}
+          {% set oz = v2.vade_ozet.get(grup_key, {}) %}
+          {% if oz.get('sayi', 0) > 0 %}
+          <div class="mp-v2-vade-kart {{ grup_cls }}">
+            <div class="mp-v2-vg-baslik">{{ grup_lbl }}</div>
+            <div class="mp-v2-vg-sayi">{{ oz.sayi }}</div>
+            {% if oz.toplam_tutar %}<div class="mp-v2-vg-tutar">{{ '{:,.0f}'.format(oz.toplam_tutar) }} ₺</div>{% endif %}
+            <div class="mp-v2-vg-cariler">
+              {% for item in v2.vade_takvimi.get(grup_key, [])[:2] %}
+              {% set ci = item.cari_id %}
+              {% for mm in v2.musteriler %}{% if mm.cari_id == ci %}
+              <button type="button" class="mp-v2-vg-cari mp-detay-ac" data-cari-id="{{ ci }}">{{ (mm.unvan or '—')[:22] }}</button>
+              {% endif %}{% endfor %}
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
+
+      {# C4: Numuneler #}
+      {% if v2 is defined and v2.numuneler %}
+      <section class="mp-panel mp-panel-kisa" id="mp-acik-panel">
+        <div class="mp-panel-ust">
+          <h2 class="mp-baslik-kucuk">Açık Numuneler</h2>
+          <div class="mp-sekmeler">
+            <button type="button" class="mp-sekme mp-sekme-aktif" data-tab="n" title="Scope içi tüm açık numune talepleri">Açık Numuneler ({{ v2.numuneler|length }})</button>
+            <button type="button" class="mp-sekme" data-tab="s" title="Scope içi tüm açık siparişler (taslak/red/iptal hariç)">Tüm Açık Siparişler ({{ v2.siparisler|length }})</button>
+          </div>
+        </div>
+        <div id="mp-tab-n">
+        <div class="mp-m-tablo-wrap">
+          <table class="mp-m-tablo" style="font-size:12px;">
+            <thead>
+              <tr><th>Müşteri</th><th>Talep No</th><th>Ürün</th><th>Renk</th><th>Durum</th><th>AR-GE</th><th>Tarih</th></tr>
+            </thead>
+            <tbody>
+            {% for n in v2.numuneler[:8] %}
+            <tr>
+              <td>
+                <button type="button" class="mp-m-ad mp-detay-ac" data-cari-id="{{ n.cari_id }}" style="font-size:11px">{{ (n.cari_unvan or '—')[:25] }}</button>
+              </td>
+              <td style="font-size:11px;color:#0f766e;font-weight:700">{{ n.talep_no or '—' }}</td>
+              <td style="font-size:11px">{{ (n.urun_adi or n.urun_tipi or '—')[:20] }}</td>
+              <td style="font-size:11px">{{ (n.renk or '—')[:18] }}</td>
+              <td><span class="mp-v2-durum-chip mp-v2-n-{{ (n.durum or '')|lower|replace('_','-') }}">{{ (n.durum or '—')|replace('_',' ') }}</span></td>
+              <td style="font-size:11px;color:#64748b">{{ n.arge_durum or '—' }}</td>
+              <td style="font-size:11px;color:#94a3b8">{{ n.olusturma_tarihi or '—' }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if v2.numuneler|length > 8 %}
+        <div class="mp-genislet" id="mp-numune-v2-tum" hidden>
+          <div class="mp-m-tablo-wrap">
+            <table class="mp-m-tablo" style="font-size:12px;">
+              <tbody>
+              {% for n in v2.numuneler[8:] %}
+              <tr>
+                <td><button type="button" class="mp-m-ad mp-detay-ac" data-cari-id="{{ n.cari_id }}" style="font-size:11px">{{ (n.cari_unvan or '—')[:25] }}</button></td>
+                <td style="font-size:11px;color:#0f766e;font-weight:700">{{ n.talep_no or '—' }}</td>
+                <td style="font-size:11px">{{ (n.urun_adi or '—')[:20] }}</td>
+                <td style="font-size:11px">{{ (n.renk or '—')[:18] }}</td>
+                <td><span class="mp-v2-durum-chip">{{ (n.durum or '—')|replace('_',' ') }}</span></td>
+                <td style="font-size:11px;color:#64748b">{{ n.arge_durum or '—' }}</td>
+                <td style="font-size:11px;color:#94a3b8">{{ n.olusturma_tarihi or '—' }}</td>
+              </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <button type="button" class="mp-tumunu mp-toggle-genislet" data-target="mp-numune-v2-tum">Tümünü Gör ({{ v2.numuneler|length }})</button>
+        {% endif %}
+        </div>
+        <div id="mp-tab-s" hidden>
+        {# C5: Sipariş → Üretim → Sevk #}
+        {% if not v2.siparisler %}
+        <div class="mp-bos">Aktif sipariş yok.</div>
+        {% else %}
+        <div class="mp-m-tablo-wrap">
+          <table class="mp-m-tablo" style="font-size:12px;">
+            <thead>
+              <tr><th>Müşteri</th><th>Sipariş No</th><th>Sipariş</th><th>Üretim</th><th>Sevk</th><th>Sevk Tarihi</th></tr>
+            </thead>
+            <tbody>
+            {% for s in v2.siparisler[:10] %}
+            <tr>
+              <td><button type="button" class="mp-m-ad mp-detay-ac" data-cari-id="{{ s.cari_id }}" style="font-size:11px">{{ (s.cari_unvan or '—')[:24] }}</button></td>
+              <td style="font-size:11px;color:#0f766e;font-weight:700">{{ s.siparis_no or '—' }}</td>
+              <td><span class="mp-v2-durum-chip mp-v2-s-{{ (s.siparis_durum or '')|lower|replace('_','-') }}">{{ (s.siparis_durum or '—')|replace('_',' ') }}</span></td>
+              <td style="font-size:11px;color:#64748b">{{ s.uretim_durum or 'Üretim bilgisi yok' }}</td>
+              <td style="font-size:11px;color:#64748b">{{ s.sevk_durum or '—' }}</td>
+              <td style="font-size:11px;color:#94a3b8">{{ s.sevk_tarihi or '—' }}</td>
+            </tr>
+            {% endfor %}
+            {% if v2.siparisler|length > 10 %}
+            <tr><td colspan="6" style="text-align:center;padding:8px;font-size:11px;color:#94a3b8">+{{ v2.siparisler|length - 10 }} sipariş daha</td></tr>
+            {% endif %}
+            </tbody>
+          </table>
+        </div>
+        {% endif %}
+        </div>
+      </section>
+      {% else %}
+      {# Numune yoksa mevcut eski panel #}
+      <section class="mp-panel mp-panel-kisa" id="mp-acik-panel">
+        <div class="mp-panel-ust">
+          <h2 class="mp-baslik-kucuk">Açık Numune ve Siparişler</h2>
+          <div class="mp-sekmeler">
+            <button type="button" class="mp-sekme mp-sekme-aktif" data-tab="n">Numuneler</button>
+            <button type="button" class="mp-sekme" data-tab="s">Siparişler</button>
+          </div>
+        </div>
+        <div id="mp-tab-n"><div class="mp-bos">Açık numune yok.</div></div>
+        <div id="mp-tab-s" hidden><div class="mp-bos">Açık sipariş yok.</div></div>
+      </section>
+      {% endif %}
+
+    </div>{# /mp-v2-sol #}
+
+    {# ── SAĞ KPI KOLONU ── #}
+    <aside class="mp-v2-sag">
+
+      {# Hızlı İşlemler #}
+      <section class="mp-panel mp-panel-kisa" id="mp-hizli-panel">
+        <div class="mp-v2-hizli-grid">
+          <button type="button" class="mp-v2-hizli-btn mp-v2-hizli-ana" data-modal="gorusme">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+            + Görüşme
+          </button>
+          <button type="button" class="mp-v2-hizli-btn" data-modal="siparis">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+            + Sipariş Talebi
+          </button>
+          <button type="button" class="mp-v2-hizli-btn" data-modal="numune">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
+            + Numune Talebi
+          </button>
+          <button type="button" class="mp-v2-hizli-btn" data-modal="tahsilat">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            + Tahsilat Kaydı
+          </button>
+        </div>
+      </section>
+
+      {# Bu Ay Özeti #}
+      {% if v2 is defined and v2.kpi %}
+      {% set kpi = v2.kpi %}
+      <section class="mp-panel mp-panel-kisa" id="mp-kpi-panel">
+        <div class="mp-panel-ust">
+          <h2 class="mp-baslik-kucuk">Bu Ay Özeti</h2>
+          <span style="font-size:10px;color:#94a3b8">{{ kpi.ay or '' }}</span>
+        </div>
+        <div class="mp-v2-kpi-grid">
+          <div class="mp-v2-kpi-kart mp-v2-kpi-siparis">
+            <div class="mp-v2-kpi-ikon">
+              <svg width="18" height="18" fill="none" stroke="#006a8e" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/></svg>
+            </div>
+            <div>
+              <div class="mp-v2-kpi-deger">{{ kpi.bu_ay_siparis_adedi or 0 }}</div>
+              <div class="mp-v2-kpi-lbl">Siparişler</div>
+              {% if kpi.bu_ay_siparis_tutari is not none %}<div class="mp-v2-kpi-sub">{{ '{:,.0f}'.format(kpi.bu_ay_siparis_tutari) }} ₺</div>{% endif %}
+            </div>
+          </div>
+          <div class="mp-v2-kpi-kart mp-v2-kpi-numune">
+            <div class="mp-v2-kpi-ikon">
+              <svg width="18" height="18" fill="none" stroke="#7c3aed" stroke-width="2" viewBox="0 0 24 24"><path d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517"/></svg>
+            </div>
+            <div>
+              <div class="mp-v2-kpi-deger">{{ kpi.bu_ay_numune_adedi or 0 }}</div>
+              <div class="mp-v2-kpi-lbl">Numuneler</div>
+            </div>
+          </div>
+          <div class="mp-v2-kpi-kart mp-v2-kpi-tahsilat">
+            <div class="mp-v2-kpi-ikon">
+              <svg width="18" height="18" fill="none" stroke="#059669" stroke-width="2" viewBox="0 0 24 24"><path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2"/></svg>
+            </div>
+            <div>
+              <div class="mp-v2-kpi-deger">{{ '{:,.0f}'.format(kpi.bu_ay_alinan_tahsilat or 0) }} ₺</div>
+              <div class="mp-v2-kpi-lbl">Tahsilat</div>
+            </div>
+          </div>
+          <div class="mp-v2-kpi-kart mp-v2-kpi-gorusme">
+            <div class="mp-v2-kpi-ikon">
+              <svg width="18" height="18" fill="none" stroke="#d97706" stroke-width="2" viewBox="0 0 24 24"><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8"/></svg>
+            </div>
+            <div>
+              <div class="mp-v2-kpi-deger">{{ kpi.bu_ay_gorusme_adedi or 0 }}</div>
+              <div class="mp-v2-kpi-lbl">Görüşmeler</div>
+            </div>
+          </div>
+        </div>
+        <div class="mp-v2-kpi-tah-satir">
+          <div class="mp-v2-kpi-tah-item">
+            <span class="mp-v2-kpi-tah-lbl">Bekleyen Tahsilat</span>
+            <span class="mp-v2-kpi-tah-deger">{{ '{:,.0f}'.format(kpi.bekleyen_tahsilat or 0) }} ₺</span>
+          </div>
+          <div class="mp-v2-kpi-tah-item">
+            <span class="mp-v2-kpi-tah-lbl" style="color:#dc2626">Geciken Tahsilat</span>
+            <span class="mp-v2-kpi-tah-deger" style="color:#dc2626">{{ '{:,.0f}'.format(kpi.geciken_tahsilat or 0) }} ₺</span>
+          </div>
+        </div>
+      </section>
+      {% endif %}
+
+      {# Bu Ay Sipariş Trendi #}
+      {% if v2 is defined and v2.trendler %}
+      <section class="mp-panel mp-panel-kisa">
+        <div class="mp-panel-ust"><h2 class="mp-baslik-kucuk">Bu Ay Alınan Siparişler</h2></div>
+        <div class="mp-v2-chart-wrap mp-v2-chart-wrap--siparis">
+          <canvas id="mp-v2-chart-siparis"></canvas>
+        </div>
+        <script type="application/json" id="mp-v2-trend-siparis">{{ v2.trendler.siparis | tojson }}</script>
+      </section>
+
+      {# Kısa Bakış (Numune + Tahsilat) #}
+      <section class="mp-panel mp-panel-kisa">
+        <div class="mp-panel-ust"><h2 class="mp-baslik-kucuk">Kısa Bakış (Bu Ay)</h2></div>
+        <div class="mp-v2-kisa-grid">
+          <div class="mp-v2-chart-cell">
+            <div style="font-size:11px;color:#64748b;margin-bottom:4px">Numuneler</div>
+            <div class="mp-v2-chart-wrap mp-v2-chart-wrap--kisa">
+              <canvas id="mp-v2-chart-numune"></canvas>
+            </div>
+            <script type="application/json" id="mp-v2-trend-numune">{{ v2.trendler.numune | tojson }}</script>
+          </div>
+          <div class="mp-v2-chart-cell">
+            <div style="font-size:11px;color:#64748b;margin-bottom:4px">Tahsilat</div>
+            <div class="mp-v2-chart-wrap mp-v2-chart-wrap--kisa">
+              <canvas id="mp-v2-chart-tahsilat"></canvas>
+            </div>
+            <script type="application/json" id="mp-v2-trend-tahsilat">{{ v2.trendler.tahsilat | tojson }}</script>
+          </div>
+        </div>
+      </section>
+      {% endif %}
+
+      {# Hızlı Erişim #}
+      <section class="mp-panel mp-panel-kisa">
+        <h2 class="mp-baslik-kucuk">Hızlı Erişim</h2>
+        <div class="mp-v2-erisim-grid">
+          <button type="button" class="mp-v2-erisim-btn mp-detay-ac" data-cari-id="">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0"/></svg>
+            <span>Cari Listesi</span>
+          </button>
+          <button type="button" class="mp-v2-erisim-btn" onclick="document.getElementById('mp-acik-panel')?.scrollIntoView({behavior:'smooth'})">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            <span>Raporlar</span>
+          </button>
+          <button type="button" class="mp-v2-erisim-btn" onclick="document.getElementById('mp-oneri-bolum')?.scrollIntoView({behavior:'smooth'})">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            <span>Ajanda</span>
+          </button>
+          <button type="button" class="mp-v2-erisim-btn" onclick="document.getElementById('mp-vade-takvim')?.scrollIntoView({behavior:'smooth'})">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+            <span>Arşiv</span>
+          </button>
+        </div>
+      </section>
+
+    </aside>{# /mp-v2-sag #}
+
+  </div>{# /mp-v2-layout #}
 </div>
 
 {# Sağ detay paneli #}
@@ -706,7 +827,7 @@
           </select>
         </div>
         <div class="mp-fld"><label>Ürün adı / model *</label><input type="text" name="urun_adi" required></div>
-        <div class="mp-fld"><label>Talep türü *</label>
+        <div class="mp-fld"><label>Numune Çalışma Türü *</label>
           <select name="talep_turu" required>
             <option value="HAZIR_RENK">Hazır renk</option>
             <option value="YENI_RENK">Yeni renk</option>
@@ -725,19 +846,19 @@
         <div class="mp-fld"><label>Müşteri ürün kodu</label><input type="text" name="musteri_urun_kodu"></div>
         <div class="mp-fld"><label>Referans renk açıklaması</label><input type="text" name="referans_renk"></div>
         <div class="mp-fld"><label>Ek not</label><textarea name="not" rows="2"></textarea></div>
-        <div class="mp-fld"><label>Onay notu</label><textarea name="onay_notu" rows="2" placeholder="Merkezi onay için kısa not"></textarea></div>
-        <p class="mp-modal-not">Onaya gönderildiğinde görüşme + MTT + Yönetim Onay Merkezi kaydı birlikte oluşur.</p>
-        <div class="mp-modal-footer">
+        <div class="mp-fld"><label>Onay notu</label><textarea name="onay_notu" rows="2" placeholder="Yönetim onayı için kısa not"></textarea></div>
+        <p class="mp-modal-not">Yönetim onayına gönderildiğinde MTT numune talebi oluşur. Görüşmeden bağlı açılışta kaynak görüşme ilişkilendirilir.</p>
+        <div class="mp-modal-footer mp-modal-footer-sticky">
           <button type="button" class="mp-btn mp-btn-outline" data-close="numune">İptal</button>
-          <button type="button" class="mp-btn mp-btn-teal" id="mp-numune-ozet-btn">Onaya Gönder</button>
+          <button type="button" class="mp-btn mp-btn-teal" id="mp-numune-ozet-btn">Özeti Gör</button>
         </div>
       </div>
       <div id="mp-numune-adim-ozet" hidden>
         <div class="mp-ozet-kutu" id="mp-numune-ozet-ic"></div>
         <div class="mp-fld"><label>Onay notu (son)</label><textarea id="mp-numune-ozet-onay-notu" rows="2"></textarea></div>
-        <div class="mp-modal-footer">
+        <div class="mp-modal-footer mp-modal-footer-sticky">
           <button type="button" class="mp-btn mp-btn-outline" id="mp-numune-ozet-geri">Geri Düzenle</button>
-          <button type="button" class="mp-btn mp-btn-teal" id="mp-numune-onay-gonder-btn">Müşteri onaya gönder</button>
+          <button type="button" class="mp-btn mp-btn-teal" id="mp-numune-onay-gonder-btn">YÖNETİM ONAYINA GÖNDER</button>
         </div>
       </div>
     </form>
@@ -921,12 +1042,12 @@
       <div class="mp-fld"><label>Kalan tutar</label><input type="number" step="0.01" name="kalan_tutar" id="mp-t-kalan" readonly></div>
       <div class="mp-fld"><label>Çek / havale / senet referansı</label><input type="text" name="odeme_referansi"></div>
       <div class="mp-fld"><label>Açıklama</label><textarea name="aciklama" rows="2"></textarea></div>
-      <div class="mp-fld"><label>Muhasebe onay notu</label><textarea name="onay_notu" rows="2"></textarea></div>
-      <p class="mp-modal-not">Muhasebe onayı sonrası cari hareket yalnız entegrasyon hazırsa yazılır. Şu an: Cari entegrasyonu bekliyor.</p>
-      <div class="mp-modal-footer">
+      <div class="mp-fld"><label>Onay Notu</label><textarea name="onay_notu" rows="2"></textarea></div>
+      <p class="mp-modal-not">Onay sonrası cari hareket yalnız entegrasyon aktifse yazılır. Şu an: Cari entegrasyonu bekliyor.</p>
+      <div class="mp-modal-footer mp-modal-footer-sticky">
         <button type="button" class="mp-btn mp-btn-outline" data-close="tahsilat">İptal</button>
         <button type="button" class="mp-btn mp-btn-teal" id="mp-tahsilat-taslak-btn">Taslak Kaydet</button>
-        <button type="button" class="mp-btn mp-btn-teal" id="mp-tahsilat-gonder-btn">MUHASEBE ONAYINA GÖNDER</button>
+        <button type="button" class="mp-btn mp-btn-teal" id="mp-tahsilat-gonder-btn">YÖNETİM ONAYINA GÖNDER</button>
       </div>
     </form>
   </div>
@@ -943,7 +1064,12 @@
 }
 .mp-sayfa {
   background: var(--bg); padding: 0 16px 32px; max-width: 1400px; margin: 0 auto;
+  /* UI-3D: MO içerik katmanı global header (z-index:100) altında kalmalı */
+  position: relative;
+  z-index: 0;
 }
+/* style.css `header{z-index:100}` — mp-page-hdr yanlışlıkla <header> olursa dropdown kesilir */
+header.mp-page-hdr { z-index: 0; }
 .mp-page-hdr {
   display: flex; align-items: center; justify-content: space-between;
   min-height: 56px; margin: 0 -16px 10px; padding: 8px 16px;
@@ -1167,7 +1293,12 @@
 .mp-fld textarea { min-height: 54px; resize: vertical; }
 .mp-fld-ikili { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .mp-modal-not { font-size: 10px; color: #94a3b8; margin: 0; line-height: 1.4; }
-.mp-modal-genis { max-width: 520px; }
+.mp-modal-genis { max-width: 520px; display: flex; flex-direction: column; max-height: 88vh; overflow: hidden; }
+.mp-modal-genis .mp-modal-form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 0 12px 8px; }
+.mp-modal-genis #mp-numune-adim-form,
+.mp-modal-genis #mp-numune-adim-ozet { overflow-y: auto; flex: 1 1 auto; min-height: 0; -webkit-overflow-scrolling: touch; }
+#mp-modal-tahsilat .mp-modal { display: flex; flex-direction: column; max-height: 88vh; overflow: hidden; }
+#mp-modal-tahsilat .mp-modal-form { overflow-y: auto; flex: 1 1 auto; min-height: 0; padding: 0 12px 8px; -webkit-overflow-scrolling: touch; }
 .mp-modal-siparis { max-width: min(920px, 96vw); width: 100%; }
 .mp-st-scroll { max-height: calc(88vh - 56px); overflow-y: auto; padding: 0 2px 8px; }
 .mp-st-grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 8px 10px 0; }
@@ -1282,6 +1413,214 @@ input.mp-hata-alan, select.mp-hata-alan, textarea.mp-hata-alan {
   .mp-modal { border-radius: 14px; max-height: 88vh; }
   .mp-modal-gorusme { max-height: 88vh; }
 }
+/* ── v2 Layout ── */
+.mp-v2-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 14px;
+  align-items: start;
+}
+.mp-v2-sol { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.mp-v2-sag { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+/* Hızlı işlemler */
+.mp-v2-hizli-grid {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.mp-v2-hizli-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 9px 10px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--white); cursor: pointer; font-size: 12px; font-weight: 600;
+  color: var(--text); font-family: inherit; transition: background .12s;
+  white-space: nowrap;
+}
+.mp-v2-hizli-btn:hover { background: #f0f9ff; border-color: var(--teal); color: var(--teal); }
+.mp-v2-hizli-ana { background: var(--teal); color: #fff; border-color: var(--teal-d); }
+.mp-v2-hizli-ana:hover { background: var(--teal-d); color: #fff; }
+.mp-v2-hizli-btn svg { flex-shrink: 0; opacity: .8; }
+
+/* Bugün İşler */
+.mp-v2-is-liste { display: flex; flex-direction: column; gap: 6px; }
+.mp-v2-is-satir {
+  display: grid; grid-template-columns: 28px 1fr auto auto;
+  align-items: center; gap: 8px;
+  padding: 8px 10px; border-radius: 7px; background: #f8fafc;
+  border: 1px solid #f1f5f9;
+}
+.mp-v2-is-tur-ico {
+  width: 28px; height: 28px; border-radius: 6px; display: flex;
+  align-items: center; justify-content: center; font-size: 12px;
+  background: #e0f2fe; color: var(--teal); font-weight: 800; flex-shrink: 0;
+}
+.mp-v2-ico-tahsilat { background: #dcfce7; color: #15803d; }
+.mp-v2-ico-risk { background: #fef3c7; color: #d97706; }
+.mp-v2-ico-numune { background: #ede9fe; color: #7c3aed; }
+.mp-v2-is-govde { min-width: 0; }
+.mp-v2-is-musteri {
+  display: block; font-size: 12px; font-weight: 700; color: var(--text);
+  background: none; border: none; cursor: pointer; padding: 0;
+  text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px;
+}
+.mp-v2-is-musteri:hover { color: var(--teal); text-decoration: underline; }
+.mp-v2-is-musteri-txt { font-size: 12px; font-weight: 700; color: var(--text); }
+.mp-v2-is-aciklama { font-size: 11px; color: var(--muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+.mp-v2-is-durum { }
+.mp-v2-is-aks { flex-shrink: 0; }
+.mp-v2-durum-chip {
+  display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 7px;
+  border-radius: 4px; background: #f1f5f9; color: #475569;
+  text-transform: uppercase; letter-spacing: .02em;
+}
+.mp-v2-durum-chip.mp-v2-ico-risk { background: #fef3c7; color: #92400e; }
+.mp-tumunu-link { font-size:11px; color:var(--teal); background:none; border:none; cursor:pointer; text-decoration:none; }
+.mp-tumunu-link:hover { text-decoration:underline; }
+
+/* Müşteri tablosu v2 — kompakt, scrollbar yok */
+.mp-v2-musteri-wrap { overflow-x: hidden; }
+.mp-v2-musteri-tablo { table-layout: fixed; width: 100%; }
+.mp-v2-musteri-tablo th,
+.mp-v2-musteri-tablo td { padding: 5px 4px; overflow: hidden; vertical-align: middle; }
+.mp-v2-musteri-tablo th { font-size: 10px; white-space: normal; line-height: 1.25; }
+.mp-v2-th-sag { text-align: right; }
+.mp-v2-th-ort { text-align: center; }
+.mp-v2-col-musteri { width: 26%; }
+.mp-v2-col-bakiye { width: 12%; }
+.mp-v2-col-yon { width: 6%; }
+.mp-v2-col-tah { width: 10%; }
+.mp-v2-col-cek { width: 9%; }
+.mp-v2-col-vade { width: 9%; }
+.mp-v2-col-son { width: 8%; }
+.mp-v2-col-aks { width: 10%; }
+.mp-v2-td-musteri { max-width: 0; }
+.mp-v2-musteri-ad {
+  display: block; width: 100%; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 11px;
+}
+.mp-v2-musteri-tablo .mp-v2-sayi { font-size: 11px; white-space: nowrap; }
+.mp-v2-musteri-tablo .mp-m-aks { justify-content: center; gap: 2px; }
+.mp-v2-musteri-tablo .mp-m-aks .mp-btn-xs { padding: 3px 5px; font-size: 9px; min-height: 22px; }
+.mp-v2-musteri-tablo td { font-size: 11px; }
+.mp-v2-m-satir[style*="display:none"] { display: none; }
+.mp-v2-kod { font-size: 11px; color: #94a3b8; font-family: monospace; }
+.mp-v2-sayi { text-align: right; font-variant-numeric: tabular-nums; }
+.mp-v2-borc { color: #dc2626; font-weight: 700; }
+.mp-v2-alacak { color: #059669; font-weight: 700; }
+.mp-v2-yon-chip {
+  display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 6px;
+  border-radius: 4px; text-transform: uppercase;
+}
+.mp-v2-yon-borc { background: #fef2f2; color: #dc2626; }
+.mp-v2-yon-alacak { background: #f0fdf4; color: #059669; }
+.mp-v2-yon-sifir { background: #f8fafc; color: #94a3b8; }
+.mp-v2-cek-chip {
+  display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 6px;
+  border-radius: 4px; background: #fef3c7; color: #92400e; cursor: help;
+}
+.mp-v2-vade-gecik { color: #dc2626; font-weight: 700; }
+.mp-v2-vade-bugun { color: #d97706; font-weight: 700; }
+.mp-v2-vade-normal { color: #475569; }
+
+/* Vade takvimi */
+.mp-v2-vade-grid {
+  display: flex; flex-wrap: wrap; gap: 8px; padding-top: 4px;
+}
+.mp-v2-vade-kart {
+  flex: 1 1 120px; min-width: 100px;
+  border: 1px solid #e2e8f0; border-radius: 8px;
+  padding: 10px 12px; background: #fff;
+}
+.mp-v2-vg-gecen { border-color: #fecaca; background: #fef2f2; }
+.mp-v2-vg-bugun { border-color: #fde68a; background: #fffbeb; }
+.mp-v2-vg-yakin { border-color: #bfdbfe; background: #eff6ff; }
+.mp-v2-vg-orta { border-color: #e2e8f0; background: #f8fafc; }
+.mp-v2-vg-uzak { border-color: #e2e8f0; background: #f8fafc; }
+.mp-v2-vg-yok { border-color: #f1f5f9; background: #f8fafc; }
+.mp-v2-vg-baslik { font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+.mp-v2-vg-gecen .mp-v2-vg-baslik { color: #dc2626; }
+.mp-v2-vg-bugun .mp-v2-vg-baslik { color: #d97706; }
+.mp-v2-vg-sayi { font-size: 20px; font-weight: 800; color: #0f172a; line-height: 1.1; }
+.mp-v2-vg-tutar { font-size: 11px; color: #64748b; margin-top: 2px; }
+.mp-v2-vg-cariler { margin-top: 6px; display: flex; flex-direction: column; gap: 2px; }
+.mp-v2-vg-cari {
+  font-size: 10px; color: var(--teal); background: none; border: none;
+  cursor: pointer; padding: 0; text-align: left; text-overflow: ellipsis;
+  overflow: hidden; white-space: nowrap; max-width: 100%;
+}
+.mp-v2-vg-cari:hover { text-decoration: underline; }
+
+/* KPI sağ kolon */
+.mp-v2-kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.mp-v2-kpi-kart {
+  border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 10px;
+  display: flex; align-items: center; gap: 10px; background: #fff;
+}
+.mp-v2-kpi-siparis { border-left: 3px solid #006a8e; }
+.mp-v2-kpi-numune  { border-left: 3px solid #7c3aed; }
+.mp-v2-kpi-tahsilat { border-left: 3px solid #059669; }
+.mp-v2-kpi-gorusme { border-left: 3px solid #d97706; }
+.mp-v2-kpi-ikon { flex-shrink: 0; opacity: .85; }
+.mp-v2-kpi-deger { font-size: 18px; font-weight: 800; color: #0f172a; line-height: 1.1; }
+.mp-v2-kpi-lbl { font-size: 10px; color: #64748b; margin-top: 1px; }
+.mp-v2-kpi-sub { font-size: 10px; color: #006a8e; font-weight: 600; margin-top: 1px; }
+.mp-v2-kpi-tah-satir { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; padding-top: 8px; border-top: 1px solid #f1f5f9; }
+.mp-v2-kpi-tah-item { display: flex; justify-content: space-between; align-items: center; }
+.mp-v2-kpi-tah-lbl { font-size: 11px; color: #64748b; }
+.mp-v2-kpi-tah-deger { font-size: 12px; font-weight: 700; color: #0f172a; }
+
+/* Kısa bakış çift grafik */
+.mp-v2-kisa-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; min-width: 0; }
+.mp-v2-chart-cell { min-width: 0; overflow: hidden; }
+.mp-v2-chart-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+.mp-v2-chart-wrap--siparis { height: 72px; }
+.mp-v2-chart-wrap--kisa { height: 48px; }
+.mp-v2-chart-wrap canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100%;
+}
+
+/* Hızlı erişim */
+.mp-v2-erisim-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
+.mp-v2-erisim-btn {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; padding: 12px 8px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--white);
+  cursor: pointer; font-size: 11px; font-weight: 600; color: #475569;
+  font-family: inherit; transition: background .12s;
+}
+.mp-v2-erisim-btn:hover { background: #f0f9ff; color: var(--teal); border-color: var(--teal); }
+
+/* Numune durum badge renkleri */
+.mp-v2-n-onaylandi { background: #d1fae5; color: #065f46; }
+.mp-v2-n-calisiliyor { background: #dbeafe; color: #1e40af; }
+.mp-v2-n-revizyon-istendi { background: #fef3c7; color: #92400e; }
+.mp-v2-n-reddedildi { background: #fee2e2; color: #991b1b; }
+
+/* Sipariş durum badge */
+.mp-v2-s-onaylandi { background: #d1fae5; color: #065f46; }
+.mp-v2-s-mpr-bekliyor { background: #fef3c7; color: #92400e; }
+.mp-v2-s-planlamaya-hazir { background: #dbeafe; color: #1e40af; }
+.mp-v2-s-reddedildi { background: #fee2e2; color: #991b1b; }
+
+/* Ara input focus */
+.mp-v2-ara-input:focus { border-color: var(--teal); box-shadow: 0 0 0 2px rgba(0,106,142,.15); }
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .mp-v2-layout { grid-template-columns: minmax(0, 1fr) 280px; }
+}
+@media (max-width: 960px) {
+  .mp-v2-layout { grid-template-columns: 1fr; }
+  .mp-v2-sag { position: static; }
+}
 </style>
 
 <script>
@@ -1364,6 +1703,11 @@ input.mp-hata-alan, select.mp-hata-alan, textarea.mp-hata-alan {
     siparis: document.getElementById('mp-modal-siparis'),
     tahsilat: document.getElementById('mp-modal-tahsilat')
   };
+  try {
+    Object.keys(sessionStorage).forEach(function(k){
+      if (k.indexOf('mo_numune_draft_') === 0) sessionStorage.removeItem(k);
+    });
+  } catch (eSs) {}
   var form = document.getElementById('mp-gorusme-form');
   var kaydetBtn = document.getElementById('mp-kaydet-btn');
   var idempotencyKey = null;
@@ -1385,6 +1729,36 @@ input.mp-hata-alan, select.mp-hata-alan, textarea.mp-hata-alan {
   function talepSecim() {
     var el = document.querySelector('input[name="mp_talep_secim"]:checked');
     return el ? el.value : 'YOK';
+  }
+
+  var SONUC_TALEP_MAP = {
+    'Numune İstedi': 'NUMUNE',
+    'Sipariş Verecek': 'SIPARIS',
+    'Sipariş Bekleniyor': 'SIPARIS'
+  };
+
+  function syncSonucTalep() {
+    var sonuc = (document.getElementById('mp-f-sonuc') || {}).value || '';
+    var need = SONUC_TALEP_MAP[sonuc];
+    if (!need) return;
+    var radio = document.querySelector('input[name="mp_talep_secim"][value="' + need + '"]');
+    if (radio && !radio.checked) {
+      radio.checked = true;
+      syncTalepDetay();
+    }
+  }
+
+  function validateSonucTalep() {
+    var sonuc = (document.getElementById('mp-f-sonuc') || {}).value || '';
+    var need = SONUC_TALEP_MAP[sonuc];
+    if (!need) return null;
+    if (talepSecim() !== need) {
+      if (need === 'NUMUNE') {
+        return 'Sonuç «Numune İstedi» için Talep Oluştur bölümünde Numune Talebi seçilmelidir.';
+      }
+      return 'Sonuç «' + sonuc + '» için Talep Oluştur bölümünde Sipariş Talebi seçilmelidir.';
+    }
+    return null;
   }
 
   function showTalepHata(msg) {
@@ -1676,6 +2050,8 @@ input.mp-hata-alan, select.mp-hata-alan, textarea.mp-hata-alan {
   document.querySelectorAll('input[name="mp_talep_secim"]').forEach(function(r){
     r.addEventListener('change', syncTalepDetay);
   });
+  var sonucSel = document.getElementById('mp-f-sonuc');
+  if (sonucSel) sonucSel.addEventListener('change', syncSonucTalep);
   var btnKalemEkle = document.getElementById('mp-talep-kalem-ekle');
   if (btnKalemEkle) btnKalemEkle.addEventListener('click', function(){ addTalepKalem(false); });
 
@@ -1751,18 +2127,25 @@ input.mp-hata-alan, select.mp-hata-alan, textarea.mp-hata-alan {
       if (g.temsilci_talep && g.temsilci_talep.talep_no) {
         var td = g.temsilci_talep.durum || '';
         var rozCls = 'mp-mtt-rozet-diger';
-        var rozTxt = g.temsilci_talep.durum_etiket || td || '';
-        if (td === 'ONAY_BEKLIYOR') { rozCls = 'mp-mtt-rozet-bekliyor'; rozTxt = 'Onay Bekliyor'; }
-        else if (td === 'ONAYLANDI' || td === 'YENI' || td === 'ISLEME_ALINDI' || td === 'KISMEN_NUMUNEYE_DONUSTU' || td === 'SIPARISE_DONUSTU' || td === 'NUMUNEYE_DONUSTU') {
-          /* Onaylandı sonrası kuyruk/dönüşüm — rozet Onaylandı */
-          if (td === 'YENI' || td === 'ISLEME_ALINDI' || td === 'KISMEN_NUMUNEYE_DONUSTU' || td === 'SIPARISE_DONUSTU' || td === 'NUMUNEYE_DONUSTU') {
-            rozCls = 'mp-mtt-rozet-onaylandi'; rozTxt = 'Onaylandı';
-          }
+        // islem_durumu_etiket: Erhan için yaşam döngüsü etiketi (API'dan gelir)
+        var rozTxt = g.temsilci_talep.islem_durumu_etiket || g.temsilci_talep.durum_etiket || td || '';
+        if (td === 'ONAY_BEKLIYOR') { rozCls = 'mp-mtt-rozet-bekliyor'; }
+        else if (td === 'REDDEDILDI') { rozCls = 'mp-mtt-rozet-red'; }
+        else if (td === 'YENI' || td === 'ISLEME_ALINDI' ||
+                 td === 'SIPARISE_DONUSTU' || td === 'NUMUNEYE_DONUSTU' ||
+                 td === 'KISMEN_NUMUNEYE_DONUSTU') {
+          rozCls = 'mp-mtt-rozet-onaylandi';
         }
-        if (td === 'REDDEDILDI') { rozCls = 'mp-mtt-rozet-red'; rozTxt = 'Reddedildi'; }
+        // Dönüşüm kodu göster
+        var donusumBilgi = '';
+        if (g.temsilci_talep.donusum_kodu) {
+          var donLbl = (td === 'SIPARISE_DONUSTU') ? 'Sipariş' : 'Numune';
+          donusumBilgi = '<div class="mp-mtt-donusum">' + esc(donLbl + ': ' + g.temsilci_talep.donusum_kodu) + '</div>';
+        }
         tt = '<div class="mp-gecmis-talep">' +
           '<span>' + esc((g.temsilci_talep.talep_turu_etiket || g.temsilci_talep.talep_turu || '') + ' · ' + (g.temsilci_talep.talep_no || '')) + '</span>' +
           '<span class="mp-mtt-rozet ' + rozCls + '">' + esc(rozTxt) + '</span>' +
+          donusumBilgi +
           '</div>';
       }
       return '<div class="mp-gecmis-satir">' +
@@ -1904,8 +2287,10 @@ input.mp-hata-alan, select.mp-hata-alan, textarea.mp-hata-alan {
     } else if (name === 'numune') {
       var gorusmeIdArg = arguments.length > 4 ? arguments[4] : null;
       resetNumuneModal(cariId, unvan, gorusmeIdArg);
-      var savedDraft = cariId ? sessionStorage.getItem('mo_numune_draft_' + cariId) : null;
-      if (savedDraft && !gorusmeIdArg) hydrateNumuneDraft(parseInt(savedDraft, 10));
+      /* Eski nexgen_numune_talep sessionStorage hydrate kapatıldı — yalnız MTT akışı */
+      if (cariId) {
+        try { sessionStorage.removeItem('mo_numune_draft_' + cariId); } catch (eNd) {}
+      }
     } else if (name === 'siparis') {
       resetSiparisModal(cariId, unvan);
       var savedSip = cariId ? sessionStorage.getItem('mo_siparis_draft_' + cariId) : null;
@@ -1987,6 +2372,10 @@ input.mp-hata-alan, select.mp-hata-alan, textarea.mp-hata-alan {
   });
 
   document.querySelectorAll('.mp-hizli-btn[data-modal]').forEach(function(btn){
+    btn.addEventListener('click', function(){ openModal(btn.getAttribute('data-modal')); });
+  });
+  // v2 Hızlı İşlem butonları — aynı openModal fonksiyonunu kullan
+  document.querySelectorAll('.mp-v2-hizli-btn[data-modal]').forEach(function(btn){
     btn.addEventListener('click', function(){ openModal(btn.getAttribute('data-modal')); });
   });
 
@@ -2185,7 +2574,7 @@ input.mp-hata-alan, select.mp-hata-alan, textarea.mp-hata-alan {
       tahsilatSubmitting = false;
       btn.disabled = false;
       if (!res2 || !res2.d.ok) { toast((res2 && res2.d.mesaj) || 'Onaya gönderilemedi'); return; }
-      toast('Muhasebe onayına gönderildi.');
+      toast('Yönetim onayına gönderildi.');
       closeModal('tahsilat');
       setTimeout(function(){ location.reload(); }, 800);
     }).catch(function(){
@@ -2202,35 +2591,6 @@ input.mp-hata-alan, select.mp-hata-alan, textarea.mp-hata-alan {
   var numuneSubmitting = false;
   var numuneCariLocked = false;
   var numuneTalepId = null;
-
-  function hydrateNumuneDraft(talepId) {
-    if (!talepId) return;
-    fetch('/nexgen/api/musteri-pazarlama/numune-talep/' + talepId)
-      .then(function(r){ return r.json(); })
-      .then(function(d){
-        if (!d.ok || !d.kayit) return;
-        var k = d.kayit;
-        if (k.durum !== 'TASLAK' && k.durum !== 'REVIZYON_ISTENDI') return;
-        numuneTalepId = k.id;
-        document.getElementById('mp-n-talep-id').value = String(k.id);
-        var sel = document.getElementById('mp-n-cari');
-        if (k.cari_id) sel.value = String(k.cari_id);
-        var setByName = function(name, val){
-          var el = numuneForm.querySelector('[name="' + name + '"]');
-          if (el && val != null && val !== '') el.value = val;
-        };
-        setByName('urun_tipi', k.urun_tipi);
-        setByName('urun_adi', k.urun_adi);
-        setByName('talep_turu', k.karsilama_yolu);
-        setByName('musteri_talebi', k.aciklama || k.talep_nedeni);
-        setByName('istenen_termin', k.hedef_tarih);
-        setByName('oncelik', k.oncelik || 'NORMAL');
-        setByName('musteri_urun_kodu', k.musteri_urun_kodu);
-        setByName('referans_renk', k.ref_renk_kodu);
-        setByName('onay_notu', k.onay_notu);
-        if (k.cari_id) sessionStorage.setItem('mo_numune_draft_' + k.cari_id, String(k.id));
-      }).catch(function(){});
-  }
 
   function resetNumuneModal(cariId, unvan, gorusmeId) {
     numuneForm.reset();
@@ -2292,7 +2652,7 @@ input.mp-hata-alan, select.mp-hata-alan, textarea.mp-hata-alan {
     var html = '';
     html += '<div><strong>Müşteri</strong> ' + esc(unvan) + '</div>';
     html += '<div><strong>Ürün</strong> ' + esc(p.urun_tipi) + ' — ' + esc(p.urun_adi) + '</div>';
-    html += '<div><strong>Talep türü</strong> ' + esc(turMap[p.talep_turu] || p.talep_turu) + '</div>';
+    html += '<div><strong>Numune çalışma türü</strong> ' + esc(turMap[p.talep_turu] || p.talep_turu) + '</div>';
     html += '<div><strong>Termin</strong> ' + esc(p.istenen_termin) + '</div>';
     html += '<div><strong>Öncelik</strong> ' + esc(p.oncelik) + '</div>';
     html += '<div><strong>Müşteri talebi</strong> ' + esc(p.musteri_talebi) + '</div>';
@@ -3150,6 +3510,12 @@ input.mp-hata-alan, select.mp-hata-alan, textarea.mp-hata-alan {
     } else if (!adayId && !cariIdVal) {
       toast('Müşteri seçin'); return;
     }
+    var sonucErr = validateSonucTalep();
+    if (sonucErr) {
+      showTalepHata(sonucErr);
+      toast(sonucErr);
+      return;
+    }
     var talepPart = collectTalepPayload();
     if (talepPart && talepPart.error) {
       showTalepHata(talepPart.error === 'tonaj' || talepPart.error === 'kg' || talepPart.error === 'fiyat'
@@ -3226,12 +3592,8 @@ input.mp-hata-alan, select.mp-hata-alan, textarea.mp-hata-alan {
           var lines = [res.body.mesaj || 'Görüşme kaydedildi.'];
           if (res.body.aciklama) lines.push(res.body.aciklama);
 
-          // Eski otomatik numune popup kanalı kapatıldı — Talep Oluştur / Numune popup MTT+Onay kullanır
-          var numunePrompt = false;
+          // Talep Oluştur ile MTT oluşturulduysa mesaj backend'den gelir
           var mttVar = !!res.body.talep_olusturuldu;
-          if (!mttVar && !talepPart && payload.sonuc_tipi === 'Numune İstedi') {
-            lines.push('Numune için «Talep Oluştur → Numune Talebi» veya Numune kısayolunu kullanın.');
-          }
           if (mttVar && res.body.talep_turu === 'NUMUNE' && res.body.mesaj) {
             lines = [res.body.mesaj];
           }
@@ -3364,12 +3726,20 @@ input.mp-hata-alan, select.mp-hata-alan, textarea.mp-hata-alan {
           }
           var k = res.body.kayit;
           var html = '';
-          html += '<div><span class="mp-mtt-rozet ' +
-            ((k.durum === 'REDDEDILDI') ? 'mp-mtt-rozet-red' : (k.durum === 'ONAY_BEKLIYOR' ? 'mp-mtt-rozet-bekliyor' : 'mp-mtt-rozet-onaylandi')) +
-            '">' + esc(k.durum_etiket || k.durum || '—') + '</span></div>';
+          var mttRozCls = (k.durum === 'REDDEDILDI') ? 'mp-mtt-rozet-red' :
+                          (k.durum === 'ONAY_BEKLIYOR') ? 'mp-mtt-rozet-bekliyor' :
+                          'mp-mtt-rozet-onaylandi';
+          // İşlem Durumu: Erhan için yaşam döngüsü etiketi
+          var islemLbl = k.islem_durumu_etiket || k.durum_etiket || k.durum || '—';
+          html += '<div><span class="mp-mtt-rozet ' + mttRozCls + '">' + esc(islemLbl) + '</span></div>';
           html += '<div><strong>Talep:</strong> ' + esc(k.talep_no || '—') + '</div>';
           html += '<div><strong>Firma:</strong> <span class="mp-ellipsis" title="' + esc(k.firma_adi || '') + '">' + esc(k.firma_adi || '—') + '</span></div>';
           html += '<div><strong>Tür:</strong> ' + esc(k.tur_etiket || k.talep_turu || '—') + '</div>';
+          if (k.onay_no) html += '<div><strong>Onay No:</strong> ' + esc(k.onay_no) + ' <span style="opacity:.7">(' + esc(k.onay_durum_etiket || k.onay_durum || '') + ')</span></div>';
+          if (k.donusum_kodu) {
+            var donLabel = (k.durum === 'SIPARISE_DONUSTU') ? 'Sipariş' : 'Numune';
+            html += '<div><strong>' + esc(donLabel) + ':</strong> <span style="font-weight:600">' + esc(k.donusum_kodu) + '</span></div>';
+          }
           if (k.gorusme_id) html += '<div><strong>Kaynak görüşme:</strong> #' + esc(String(k.gorusme_id)) + '</div>';
           if (k.red_nedeni) html += '<div style="color:#b91c1c;"><strong>Red nedeni:</strong> ' + esc(k.red_nedeni) + '</div>';
           if (mttGovde) mttGovde.innerHTML = html;
@@ -3449,8 +3819,8 @@ input.mp-hata-alan, select.mp-hata-alan, textarea.mp-hata-alan {
         if (bolum) bolum.scrollIntoView({ behavior: 'smooth' });
       }
       if (f === 'onay_bekleyen') {
-        var kararBox = document.getElementById('mp-talep-sonuclari');
-        if (kararBox) kararBox.scrollIntoView({ behavior: 'smooth' });
+        var acikPanel = document.getElementById('mp-acik-panel');
+        if (acikPanel) acikPanel.scrollIntoView({ behavior: 'smooth' });
       }
       if (f === 'numune_sonucu_geldi' || f === 'siparis_onaylandi') {
         var acik = document.getElementById('mp-acik-panel');
@@ -3471,6 +3841,75 @@ input.mp-hata-alan, select.mp-hata-alan, textarea.mp-hata-alan {
       document.getElementById('mp-tab-s').hidden = btn.getAttribute('data-tab') !== 's';
     });
   });
+})();
+</script>
+
+{# ── v2 Grafik + Müşteri arama JS ── #}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+  // Müşteri satırı arama filtresi
+  var araInput = document.getElementById('mp-v2-musteri-ara');
+  if (araInput) {
+    araInput.addEventListener('input', function() {
+      var q = this.value.trim().toLowerCase();
+      document.querySelectorAll('#mp-v2-musteri-tablo tbody tr.mp-v2-m-satir').forEach(function(tr) {
+        tr.style.display = (!q || (tr.dataset.unvan || '').includes(q)) ? '' : 'none';
+      });
+    });
+  }
+
+  // v2 hızlı butonlar — openModal birinci IIFE içinde bağlandı, burada duplicate listener yok
+
+  // Chart.js grafik render
+  function _renderChart(canvasId, jsonId, renk, label) {
+    var canvas = document.getElementById(canvasId);
+    var jsonEl = document.getElementById(jsonId);
+    if (!canvas || !jsonEl) return;
+    var data;
+    try { data = JSON.parse(jsonEl.textContent || '[]'); } catch(e) { return; }
+    if (!data || !data.length) return;
+    var labels = data.map(function(d) { return (d.tarih || '').slice(5); }); // MM-DD
+    var values = data.map(function(d) { return d.deger || 0; });
+    new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: label,
+          data: values,
+          borderColor: renk,
+          backgroundColor: renk + '18',
+          borderWidth: 1.5,
+          pointRadius: 0,
+          fill: true,
+          tension: 0.3,
+          clip: true
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: { left: 2, right: 2, top: 2, bottom: 0 } },
+        plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+        scales: {
+          x: { display: false, offset: true },
+          y: { display: false, beginAtZero: true }
+        }
+      }
+    });
+  }
+
+  if (typeof Chart !== 'undefined') {
+    _renderChart('mp-v2-chart-siparis', 'mp-v2-trend-siparis', '#006a8e', 'Sipariş');
+    _renderChart('mp-v2-chart-numune',  'mp-v2-trend-numune',  '#7c3aed', 'Numune');
+    _renderChart('mp-v2-chart-tahsilat','mp-v2-trend-tahsilat','#059669', 'Tahsilat');
+  } else {
+    // Chart.js yüklenmediyse sadece canvas'ları gizle
+    ['mp-v2-chart-siparis','mp-v2-chart-numune','mp-v2-chart-tahsilat'].forEach(function(id){
+      var c = document.getElementById(id); if(c) c.style.display = 'none';
+    });
+  }
 })();
 </script>
 {% endblock %}

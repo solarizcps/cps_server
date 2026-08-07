@@ -165,7 +165,7 @@ def plan_durum_etiket(grup: str | None, durum_metin: str | None = None) -> str:
         'yaklasan': 'Yaklaşıyor',
         'gecikti': 'Gecikti',
         'kayit_girildi': 'Tahsilat kaydı girildi',
-        'muhasebe_bekliyor': 'Muhasebe onayı bekliyor',
+        'muhasebe_bekliyor': 'Onay bekliyor',
         'tamamlandi': 'Tahsil edildi',
         'sevk_bekleyen': 'Gerçek sevk bekleniyor',
         'planli': 'Planlandı',

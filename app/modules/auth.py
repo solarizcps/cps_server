@@ -421,12 +421,9 @@ def login():
                 if is_nexgen_depo_sade_kullanici(u):
                     nxt = nexgen_depo_sade_home()
             if not nxt:
-                from modules.nexgen.cari360_yetki import is_pazarlamaci_home_user
-                yk = kullanici_yetkileri(u)
-                if is_pazarlamaci_home_user(yk):
-                    nxt = '/nexgen/musteri-pazarlama'
-                else:
-                    nxt = '/'
+                from modules.nexgen.cari360_yetki import pazarlamaci_home_redirect
+                nxt = pazarlamaci_home_redirect(kullanici_yetkileri(u)) or '/'
+
 
             return redirect(nxt)
         hata = 'Kullanıcı adı veya şifre hatalı.'

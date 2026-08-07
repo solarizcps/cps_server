@@ -205,7 +205,7 @@ window.__cpsRootMap = function(pathname) {
   <header>
 
 
-    <a href="/" class="header-brand">
+    <a href="{{ home_landing_url }}" class="header-brand">
 
 
       <div class="header-brand-logo">
@@ -291,6 +291,297 @@ window.__cpsRootMap = function(pathname) {
 
       {% endif %}
 
+
+      {% if g_user and yetki('onay.merkez.view', 'can_view') %}
+      {# ── Onay Bekliyor badge + dropdown ── #}
+      <div id="onay-bildirim-kap" style="position:relative;display:inline-block;margin-right:8px">
+        <button id="onay-bildirim-btn"
+                onclick="onayBildirimToggle(event)"
+                style="background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:6px;
+                       display:flex;align-items:center;gap:5px;color:#1a1a1a;font-size:13px;
+                       transition:background .15s"
+                title="Bekleyen onaylar">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" style="opacity:.7">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+          </svg>
+          <span id="onay-bildirim-etiket" style="font-size:12px;color:#374151">Onaylar</span>
+          <span id="onay-bildirim-sayi"
+                style="display:none;background:#dc2626;color:#fff;font-size:10px;font-weight:700;
+                       padding:1px 5px;border-radius:10px;min-width:16px;text-align:center;line-height:16px">0</span>
+        </button>
+        <div id="onay-bildirim-dropdown"
+             style="display:none;position:absolute;right:0;top:calc(100% + 6px);width:360px;
+                    background:#fff;border:1px solid #e5e7eb;border-radius:10px;
+                    box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:9999;overflow:hidden">
+          <div style="padding:10px 14px 8px;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:12px;font-weight:600;color:#374151">Bekleyen Onaylar</span>
+            <a href="/nexgen/onay-merkezi" style="font-size:11px;color:#b45309;text-decoration:none" onclick="onayDropdownKapat()">Tümünü Gör →</a>
+          </div>
+          <div id="onay-bildirim-liste" style="max-height:320px;overflow-y:auto">
+            <p style="padding:12px 14px;font-size:12px;color:#9ca3af;margin:0">Yükleniyor…</p>
+          </div>
+        </div>
+      </div>
+
+      {# ERHAN-UI-2: Pazarlamacı sonuç bildirimleri (salt-okunur, karar butonu yok) #}
+      {% elif g_user and yetki('cari360.view_own', 'can_view') %}
+      <div id="pzm-bildirim-kap" style="position:relative;display:inline-block;margin-right:8px">
+        <button id="pzm-bildirim-btn"
+                onclick="pzmBildirimToggle(event)"
+                style="background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:6px;
+                       display:flex;align-items:center;gap:5px;color:#1a1a1a;font-size:13px;
+                       transition:background .15s"
+                title="Talep sonuçları">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" style="opacity:.7">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+          </svg>
+          <span id="pzm-bildirim-etiket" style="font-size:12px;color:#374151">Bildirimler</span>
+          <span id="pzm-bildirim-sayi"
+                style="display:none;background:#0891b2;color:#fff;font-size:10px;font-weight:700;
+                       padding:1px 5px;border-radius:10px;min-width:16px;text-align:center;line-height:16px">0</span>
+        </button>
+        <div id="pzm-bildirim-dropdown"
+             style="display:none;position:absolute;right:0;top:calc(100% + 6px);width:340px;
+                    background:#fff;border:1px solid #e5e7eb;border-radius:10px;
+                    box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:9999;overflow:hidden">
+          <div style="padding:10px 14px 8px;border-bottom:1px solid #f3f4f6">
+            <span style="font-size:12px;font-weight:600;color:#374151">Talep Sonuçları</span>
+          </div>
+          <div id="pzm-bildirim-liste" style="max-height:340px;overflow-y:auto">
+            <p style="padding:12px 14px;font-size:12px;color:#9ca3af;margin:0">Yükleniyor…</p>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      {# ── Global Onay Detay Popup (sayfadan bağımsız) ── #}
+      <div id="gop-overlay"
+           style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:20000;overflow-y:auto;padding:24px 12px"
+           onclick="gopKapat(event)">
+        <div id="gop-modal"
+             style="background:#fff;border-radius:10px;max-width:980px;margin:0 auto;
+                    box-shadow:0 20px 60px rgba(0,0,0,.28);overflow:hidden;position:relative"
+             onclick="event.stopPropagation()">
+          {# ── Başlık ── #}
+          <div style="padding:12px 16px 10px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;background:#f9fafb">
+            <div>
+              <div id="gop-baslik" style="font-size:15px;font-weight:700;color:#111;letter-spacing:-.3px"></div>
+              <div id="gop-alt-baslik" style="font-size:11px;color:#6b7280;margin-top:1px"></div>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center">
+              <a id="gop-cari-ac-btn" href="#" target="_blank"
+                 style="font-size:11px;padding:3px 10px;border:1px solid #d1d5db;border-radius:5px;
+                        color:#374151;text-decoration:none;white-space:nowrap;background:#fff">Cariyi Aç →</a>
+              <button onclick="gopKapat()" style="background:none;border:none;cursor:pointer;font-size:18px;color:#9ca3af;padding:2px 6px;line-height:1">✕</button>
+            </div>
+          </div>
+          {# ── Yükleniyor ── #}
+          <div id="gop-yukleniyor" style="padding:28px;text-align:center;color:#9ca3af;font-size:13px">Yükleniyor…</div>
+          {# ── İçerik (MTT Sipariş / MTT Numune) ── #}
+          <div id="gop-icerik-mtt" style="display:none">
+            <div style="padding:12px 16px 0">
+              {# Temel bilgiler 3-kolon #}
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px 14px;font-size:12px;margin-bottom:10px">
+                <div><span style="display:block;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:1px">Müşteri</span><span id="gop-m-musteri" style="font-weight:600;color:#111"></span></div>
+                <div><span style="display:block;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:1px">Cari Kodu</span><span id="gop-m-cari-kod" style="color:#374151;font-family:monospace"></span></div>
+                <div><span style="display:block;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:1px">Talep No</span><span id="gop-m-talep-no" style="font-weight:600;font-family:monospace;color:#111"></span></div>
+                <div><span style="display:block;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:1px">Talep Tarihi</span><span id="gop-m-tarih" style="color:#374151"></span></div>
+                <div><span style="display:block;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:1px">Talep Eden</span><span id="gop-m-talep-eden" style="color:#374151"></span></div>
+                <div><span style="display:block;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:1px">Talep Tipi</span><span id="gop-m-talep-tipi" style="color:#374151"></span></div>
+                <div id="gop-m-odeme-tipi-blok"><span style="display:block;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:1px">Ödeme Türü</span><span id="gop-m-odeme-tipi" style="color:#374151"></span></div>
+                <div id="gop-m-vade-blok"><span style="display:block;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:1px">Vade</span><span id="gop-m-vade" style="color:#374151"></span></div>
+              </div>
+              {# Görüşme/Müşteri Notu #}
+              <div id="gop-m-not-blok" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:7px 11px;margin-bottom:8px;font-size:12px">
+                <span style="font-size:10px;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.4px">Görüşme / Müşteri Notu</span>
+                <div id="gop-m-not-icerik" style="color:#374151;margin-top:3px;line-height:1.5;white-space:pre-wrap"></div>
+              </div>
+              {# Kalemler tablosu — sipariş #}
+              <div id="gop-m-sip-kalem-blok" style="display:none;margin-bottom:8px">
+                <div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Sipariş Kalemleri</div>
+                <div style="overflow-x:auto">
+                  <table id="gop-m-sip-kalem-tablo" style="width:100%;border-collapse:collapse;font-size:11.5px">
+                    <thead><tr style="background:#f3f4f6">
+                      <th style="padding:4px 7px;text-align:left;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb">#</th>
+                      <th style="padding:4px 7px;text-align:left;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb">Ürün</th>
+                      <th style="padding:4px 7px;text-align:left;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb">Aile</th>
+                      <th style="padding:4px 7px;text-align:left;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb">Renk</th>
+                      <th style="padding:4px 7px;text-align:right;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb">Miktar</th>
+                      <th style="padding:4px 7px;text-align:right;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb">B.Fiyat</th>
+                      <th style="padding:4px 7px;text-align:right;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb">Toplam</th>
+                    </tr></thead>
+                    <tbody id="gop-m-sip-kalem-tbody"></tbody>
+                  </table>
+                </div>
+              </div>
+              {# Kalemler tablosu — numune #}
+              <div id="gop-m-num-kalem-blok" style="display:none;margin-bottom:8px">
+                <div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Numune Kalemleri</div>
+                <div style="overflow-x:auto">
+                  <table id="gop-m-num-kalem-tablo" style="width:100%;border-collapse:collapse;font-size:11.5px">
+                    <thead><tr style="background:#f3f4f6">
+                      <th style="padding:4px 7px;text-align:left;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb">#</th>
+                      <th style="padding:4px 7px;text-align:left;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb">Ürün</th>
+                      <th style="padding:4px 7px;text-align:left;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb">Aile</th>
+                      <th style="padding:4px 7px;text-align:left;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb">Renk</th>
+                      <th style="padding:4px 7px;text-align:right;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb">Miktar</th>
+                      <th style="padding:4px 7px;text-align:left;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb">Açıklama</th>
+                    </tr></thead>
+                    <tbody id="gop-m-num-kalem-tbody"></tbody>
+                  </table>
+                </div>
+              </div>
+              {# Meta (termin, teslim, kdv, toplam) #}
+              <div id="gop-m-meta-blok" style="display:none;margin-bottom:8px">
+                <div style="display:grid;grid-template-columns:repeat(3,auto) 1fr;gap:6px 18px;font-size:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:7px 11px" id="gop-m-meta-grid"></div>
+              </div>
+            </div>
+            {# Karar alanı MTT #}
+            <div style="border-top:1px solid #e5e7eb;padding:10px 16px">
+              <div id="gop-m-sonuc" style="display:none;padding:8px 12px;border-radius:6px;font-size:13px;font-weight:600;margin-bottom:8px;text-align:center"></div>
+              <div id="gop-m-yetki-bilgi" style="display:none;background:#eff6ff;border:1px solid #bfdbfe;border-radius:7px;padding:10px 12px;margin-bottom:8px;font-size:12px;font-weight:600;color:#1e40af;text-align:center"></div>
+              <div id="gop-m-karar-blok" style="display:none">
+                <div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Onay Bilgisi · Karar Notu</div>
+                <textarea id="gop-m-karar-notu" placeholder="Red için neden zorunlu…"
+                          style="width:100%;font-size:12px;padding:7px;border:1px solid #e5e7eb;border-radius:6px;
+                                 resize:vertical;height:80px;box-sizing:border-box;color:#111;line-height:1.45"></textarea>
+                <div style="display:flex;gap:7px;margin-top:8px">
+                  <button id="gop-m-btn-onayla" onclick="gopKararVer('ONAYLA')"
+                          style="flex:1;padding:8px;background:#16a34a;color:#fff;border:none;border-radius:6px;
+                                 font-size:13px;font-weight:600;cursor:pointer"
+                          onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">✓ Onayla</button>
+                  <button id="gop-m-btn-reddet" onclick="gopKararVer('REDDET')"
+                          style="flex:1;padding:8px;background:#dc2626;color:#fff;border:none;border-radius:6px;
+                                 font-size:13px;font-weight:600;cursor:pointer"
+                          onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">✕ Reddet</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          {# ── İçerik (TAHSİLAT ONAYI) ── #}
+          <div id="gop-icerik-tah" style="display:none">
+            <div style="padding:12px 16px 0">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 20px;font-size:12px;margin-bottom:10px">
+                {# Müşteri #}
+                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;padding:8px 11px">
+                  <div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Müşteri</div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px">
+                    <div><span style="display:block;font-size:10px;color:#6b7280;margin-bottom:1px">Cari</span><span id="gop-t-musteri" style="font-weight:600;color:#111"></span></div>
+                    <div><span style="display:block;font-size:10px;color:#6b7280;margin-bottom:1px">Cari Kodu</span><span id="gop-t-cari-kod" style="color:#374151;font-family:monospace"></span></div>
+                  </div>
+                </div>
+                {# Tahsilat Bilgileri #}
+                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;padding:8px 11px">
+                  <div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Tahsilat Bilgileri</div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px">
+                    <div><span style="display:block;font-size:10px;color:#6b7280;margin-bottom:1px">Tahsilat No</span><span id="gop-t-no" style="font-weight:600;font-family:monospace;color:#111"></span></div>
+                    <div><span style="display:block;font-size:10px;color:#6b7280;margin-bottom:1px">Kayıt Tarihi</span><span id="gop-t-kayit-tarihi" style="color:#374151"></span></div>
+                    <div><span style="display:block;font-size:10px;color:#6b7280;margin-bottom:1px">Kayıt Eden</span><span id="gop-t-kayit-eden" style="color:#374151"></span></div>
+                    <div><span style="display:block;font-size:10px;color:#6b7280;margin-bottom:1px">Tahsilat Tarihi</span><span id="gop-t-tah-tarihi" style="color:#374151"></span></div>
+                  </div>
+                </div>
+                {# Bağlı Sipariş #}
+                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;padding:8px 11px">
+                  <div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Bağlı Sipariş</div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px">
+                    <div><span style="display:block;font-size:10px;color:#6b7280;margin-bottom:1px">Sipariş No</span><span id="gop-t-sip-no" style="font-weight:600;font-family:monospace;color:#111"></span></div>
+                    <div id="gop-t-sip-tarihi-blok"><span style="display:block;font-size:10px;color:#6b7280;margin-bottom:1px">Sipariş Tarihi</span><span id="gop-t-sip-tarihi" style="color:#374151"></span></div>
+                  </div>
+                </div>
+                {# Tutar Özeti #}
+                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;padding:8px 11px">
+                  <div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Tutar Özeti</div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px 12px">
+                    <div><span style="display:block;font-size:10px;color:#6b7280;margin-bottom:1px">Beklenen</span><span id="gop-t-beklenen" style="color:#374151;font-weight:600"></span></div>
+                    <div><span style="display:block;font-size:10px;color:#6b7280;margin-bottom:1px">Alınan</span><span id="gop-t-alinan" style="color:#374151;font-weight:600"></span></div>
+                    <div><span style="display:block;font-size:10px;color:#6b7280;margin-bottom:1px">Kalan</span><span id="gop-t-kalan" style="font-size:13px;font-weight:700;color:#dc2626"></span></div>
+                  </div>
+                </div>
+              </div>
+              {# Ödeme Bilgileri #}
+              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;padding:8px 11px;margin-bottom:8px;font-size:12px">
+                <div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Ödeme Bilgileri</div>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px 14px">
+                  <div><span style="display:block;font-size:10px;color:#6b7280;margin-bottom:1px">Ödeme Tipi</span><span id="gop-t-odeme-tipi" style="font-weight:600;color:#111"></span></div>
+                  <div id="gop-t-cek-no-blok" style="display:none"><span style="display:block;font-size:10px;color:#6b7280;margin-bottom:1px">Çek No</span><span id="gop-t-cek-no" style="font-family:monospace;color:#374151"></span></div>
+                  <div id="gop-t-cek-vade-blok" style="display:none"><span style="display:block;font-size:10px;color:#6b7280;margin-bottom:1px">Çek Vadesi</span><span id="gop-t-cek-vade" style="color:#374151"></span></div>
+                </div>
+                <div id="gop-t-aciklama-blok" style="display:none;margin-top:6px;padding-top:6px;border-top:1px solid #e5e7eb">
+                  <span style="display:block;font-size:10px;color:#6b7280;margin-bottom:2px">Açıklama / Not</span>
+                  <div id="gop-t-aciklama" style="color:#374151;line-height:1.45;white-space:pre-wrap"></div>
+                </div>
+              </div>
+            </div>
+            {# Karar alanı Tahsilat #}
+            <div style="border-top:1px solid #e5e7eb;padding:10px 16px">
+              <div id="gop-t-sonuc" style="display:none;padding:8px 12px;border-radius:6px;font-size:13px;font-weight:600;margin-bottom:8px;text-align:center"></div>
+              <div id="gop-t-yetki-bilgi" style="display:none;background:#eff6ff;border:1px solid #bfdbfe;border-radius:7px;padding:10px 12px;margin-bottom:8px;font-size:12px;font-weight:600;color:#1e40af;text-align:center"></div>
+              <div id="gop-t-karar-blok" style="display:none">
+                <div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Onay Bilgisi · Karar Notu</div>
+                <textarea id="gop-t-karar-notu" placeholder="Not ekleyin (Red/Revizyon için zorunlu)…"
+                          style="width:100%;font-size:12px;padding:7px;border:1px solid #e5e7eb;border-radius:6px;
+                                 resize:vertical;height:80px;box-sizing:border-box;color:#111;line-height:1.45"></textarea>
+                <div style="display:flex;gap:7px;margin-top:8px">
+                  <button id="gop-t-btn-onayla" onclick="gopKararVer('ONAYLA')"
+                          style="flex:1;padding:8px;background:#16a34a;color:#fff;border:none;border-radius:6px;
+                                 font-size:13px;font-weight:600;cursor:pointer"
+                          onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">✓ Onayla</button>
+                  <button id="gop-t-btn-revizyon" onclick="gopKararVer('REVIZYON')"
+                          style="flex:1;padding:8px;background:#d97706;color:#fff;border:none;border-radius:6px;
+                                 font-size:13px;font-weight:600;cursor:pointer"
+                          onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">↩ Revizyon</button>
+                  <button id="gop-t-btn-reddet" onclick="gopKararVer('REDDET')"
+                          style="flex:1;padding:8px;background:#dc2626;color:#fff;border:none;border-radius:6px;
+                                 font-size:13px;font-weight:600;cursor:pointer"
+                          onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">✕ Reddet</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          {# ── İçerik (Normal ONAY_TALEP — eski blok korunur) ── #}
+          <div id="gop-icerik" style="display:none;padding:14px 16px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px 16px;margin-bottom:12px;font-size:12px">
+              <div><span style="color:#6b7280;display:block;font-size:10px;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Talep No</span><span id="gop-talep-kod" style="font-weight:600;font-family:monospace;color:#111"></span></div>
+              <div><span style="color:#6b7280;display:block;font-size:10px;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Tip</span><span id="gop-tipi" style="font-weight:600;color:#111"></span></div>
+              <div><span style="color:#6b7280;display:block;font-size:10px;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Müşteri</span><span id="gop-musteri" style="font-weight:600;color:#111"></span></div>
+              <div><span style="color:#6b7280;display:block;font-size:10px;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Kaynak Belge</span><span id="gop-kaynak" style="color:#374151"></span></div>
+              <div><span style="color:#6b7280;display:block;font-size:10px;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Tutar / PB</span><span id="gop-tutar" style="font-weight:600;color:#111"></span></div>
+              <div><span style="color:#6b7280;display:block;font-size:10px;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Vade</span><span id="gop-vade" style="color:#374151"></span></div>
+            </div>
+            <div id="gop-tahsilat-blok" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:7px 11px;margin-bottom:10px;font-size:12px">
+              <span style="font-size:10px;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.4px">Tahsilat / Görüşme Notu</span>
+              <div id="gop-tahsilat-icerik" style="color:#374151;margin-top:3px;line-height:1.5"></div>
+            </div>
+            <div id="gop-mtt-blok" style="display:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:7px 11px;margin-bottom:10px;font-size:12px;line-height:1.55;color:#374151"></div>
+            <div style="margin-bottom:12px">
+              <div id="gop-adimlar-baslik" style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px">Onay Adımları</div>
+              <div id="gop-adimlar" style="font-size:12px;line-height:1.6"></div>
+            </div>
+            <div id="gop-sonuc" style="display:none;padding:8px 12px;border-radius:6px;font-size:13px;font-weight:600;margin-bottom:10px;text-align:center"></div>
+            <div id="gop-yetki-bilgi" style="display:none;background:#eff6ff;border:1px solid #bfdbfe;border-radius:7px;padding:10px 12px;margin-bottom:10px;font-size:12px;font-weight:600;color:#1e40af;text-align:center"></div>
+            <div id="gop-karar-blok" style="display:none;border-top:1px solid #f3f4f6;padding-top:12px">
+              <div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Karar Notu</div>
+              <textarea id="gop-karar-notu" placeholder="Not ekleyin (Red/Revizyon için zorunlu)…"
+                        style="width:100%;font-size:12px;padding:7px;border:1px solid #e5e7eb;border-radius:6px;
+                               resize:vertical;min-height:56px;box-sizing:border-box;color:#111;line-height:1.45"></textarea>
+              <div style="display:flex;gap:7px;margin-top:8px">
+                <button id="gop-btn-onayla" onclick="gopKararVer('ONAYLA')"
+                        style="flex:1;padding:8px;background:#16a34a;color:#fff;border:none;border-radius:6px;
+                               font-size:13px;font-weight:600;cursor:pointer"
+                        onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">✓ Onayla</button>
+                <button id="gop-btn-revizyon" onclick="gopKararVer('REVIZYON')"
+                        style="flex:1;padding:8px;background:#d97706;color:#fff;border:none;border-radius:6px;
+                               font-size:13px;font-weight:600;cursor:pointer"
+                        onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">↩ Revizyon İste</button>
+                <button id="gop-btn-reddet" onclick="gopKararVer('REDDET')"
+                        style="flex:1;padding:8px;background:#dc2626;color:#fff;border:none;border-radius:6px;
+                               font-size:13px;font-weight:600;cursor:pointer"
+                        onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">✕ Reddet</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {% if g_user %}
 
@@ -430,8 +721,8 @@ window.__cpsRootMap = function(pathname) {
 
 
       <!-- ============ GENEL ============ -->
-
-
+      {% set _genel_goster = not pazarlamaci_home_user or yetki('tasks') %}
+      {% if _genel_goster %}
       {# tasks yetkisi varsa (AR-GE operatoru gibi) Genel grubu her zaman acik #}
       {% set _genel_acik = aktif_grup == 'genel' or (yetki('tasks') and not yetki('yonetim')) %}
       <div class="sn-sec sn-toggle{% if _genel_acik %} acik{% endif %}" data-grup="genel">
@@ -446,7 +737,7 @@ window.__cpsRootMap = function(pathname) {
         <span class="sn-baslik">Genel</span>
 
 
-        <span class="sn-count">{% if yetki('tasks') %}2{% else %}1{% endif %}</span>
+        <span class="sn-count">{% if yetki('tasks') %}{% if pazarlamaci_home_user %}1{% else %}2{% endif %}{% else %}1{% endif %}</span>
 
 
       </div>
@@ -454,7 +745,7 @@ window.__cpsRootMap = function(pathname) {
 
       <div class="sn-grup{% if not _genel_acik %} kapali{% endif %}" data-grup="genel">
 
-
+        {% if not pazarlamaci_home_user %}
         <a href="/" class="si {% if active == 'home' %}active{% endif %}" title="Özet">
 
 
@@ -465,19 +756,23 @@ window.__cpsRootMap = function(pathname) {
 
 
         </a>
+        {% endif %}
 {% if yetki('tasks') %}
 <a href="/tasks" class="si {% if active == 'tasks' %}active{% endif %}" title="G&#246;revler">
 <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
 <span class="sl">G&#246;revler</span>
 </a>
 {% endif %}
+{% if not pazarlamaci_home_user %}
 <a href="#" class="si si-disabled" title="Bildirimler (yak&#305;nda)" onclick="event.preventDefault(); return false;">
 <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span>
 <span class="sl">Bildirimler</span>
 </a>
+{% endif %}
 
 
       </div>
+      {% endif %}
 
 
 
@@ -3071,8 +3366,894 @@ window.__cpsRootMap = function(pathname) {
 
 
   {# === FAZ 3 GLOBAL TASK LISTENER === #}
-  {% if g_user %}
+  {% if g_user and yetki('tasks') %}
   <script src="{{ url_for('static', filename='js/global_task_listener.js') }}"></script>
+  {% endif %}
+
+  {% if g_user and yetki('onay.merkez.view', 'can_view') %}
+  <script>
+  (function() {
+    /* ─── Sabitler ─── */
+    var _TIP = { SATIS_SIPARISI:'Sipariş', NUMUNE_TALEBI:'Numune', TAHSILAT_KAYDI:'Tahsilat', SATIN_ALMA_SIPARISI:'Satın Alma',
+      SIPARIS_TALEBI_ONAY:'NexGen Sipariş Talebi', NUMUNE_TALEBI_ONAY:'NexGen Numune Talebi', SIPARIS:'Sipariş', NUMUNE:'Numune' };
+    var _DURUM_TR = { BEKLIYOR:'Bekliyor', BEKLETILDI:'Bekletildi', ONAYLANDI:'Onaylandı', REDDEDILDI:'Reddedildi', REVIZYON:'Revizyon İstendi', IPTAL:'İptal',
+      ONAY_BEKLIYOR:'Onay Bekliyor' };
+    var _ADIM_TR = { MERKEZI_ONAY:'Merkezi Onay', MUDUR_ONAY:'Müdür Onayı', FINANS_ONAY:'Finans Onayı', YONETIM_ONAY:'Yönetim Onayı', OTOMATIK:'Otomatik', SISTEM:'Sistem' };
+    var _AD_CSS = { BEKLIYOR:'background:#dbeafe;color:#1e40af', TAMAMLANDI:'background:#d1fae5;color:#065f46',
+      ONAYLANDI:'background:#d1fae5;color:#065f46', REDDEDILDI:'background:#fee2e2;color:#991b1b',
+      REVIZYON:'background:#fef3c7;color:#92400e', BEKLETILDI:'background:#f3f4f6;color:#374151' };
+    var _GOP_UID = {{ g_user.Id|default(0)|int }};
+    var _GOP_YK = {{ (g_yetkiler|list)|tojson }};
+
+    function _gopYkVar(kod, eylem) {
+      if (_GOP_YK.indexOf('*') !== -1) return true;
+      return _GOP_YK.indexOf(kod + ':' + eylem) !== -1;
+    }
+    function _gopRouteKararYetkisi() {
+      return _gopYkVar('onay.merkez.karar', 'can_approve')
+        || _gopYkVar('onay.finans.karar', 'can_approve')
+        || _gopYkVar('onay.satinalma.karar', 'can_approve')
+        || _gopYkVar('onay.yonetim.karar', 'can_approve');
+    }
+    function _gopKademeYetkiKodu(kademe, talepTipi) {
+      if (talepTipi === 'TAHSILAT_KAYDI') return 'onay.yonetim.karar';
+      if (talepTipi === 'NUMUNE_TALEBI') return 'onay.merkez.karar';
+      if (kademe === 'K2') return 'onay.finans.karar';
+      if (kademe === 'K3' || kademe === 'K4') return 'onay.yonetim.karar';
+      if (talepTipi === 'SATIN_ALMA_SIPARISI') return 'onay.satinalma.karar';
+      return 'onay.satis.karar';
+    }
+    function _gopKullaniciKararYetkisi(kademe, talepTipi) {
+      if (_GOP_YK.indexOf('*') !== -1) return true;
+      var kod = _gopKademeYetkiKodu(kademe, talepTipi);
+      return _gopYkVar(kod, 'can_approve') || _gopYkVar(kod, 'can_manage')
+        || _gopYkVar('onay.merkez.karar', 'can_approve');
+    }
+    function _gopBekleyenAdim(adimlar) {
+      for (var i = 0; i < (adimlar || []).length; i++) {
+        if (adimlar[i].durum === 'BEKLIYOR') return adimlar[i];
+      }
+      return null;
+    }
+    function _gopKararDurumu(t, adimlar) {
+      var bekAdim = _gopBekleyenAdim(adimlar);
+      if (!bekAdim) {
+        return { canKarar: false, mesaj: 'Bekleyen onay adımı bulunmuyor.' };
+      }
+      if (!_gopRouteKararYetkisi()) {
+        return { canKarar: false, mesaj: 'Bu talebi onaylama yetkiniz bulunmuyor.' };
+      }
+      if (!_gopKullaniciKararYetkisi(bekAdim.kademe, t.talep_tipi)) {
+        var rol = bekAdim.rol_adi || _ADIM_TR[bekAdim.adim_tipi] || bekAdim.kademe || 'ilgili';
+        return { canKarar: false, mesaj: 'Bu onay ' + rol + ' kademesini bekliyor.' };
+      }
+      var talepEden = parseInt(t.talep_eden_id, 10) || 0;
+      var canOnayla = _GOP_UID !== talepEden;
+      return {
+        canKarar: true,
+        canOnayla: canOnayla,
+        canReddet: true,
+        canRevizyon: true,
+        mesaj: canOnayla ? '' : 'Kendi talebinizi onaylayamazsınız.',
+      };
+    }
+    function _gopYetkiBilgiGoster(mesaj) {
+      var el = document.getElementById('gop-yetki-bilgi');
+      if (!el) return;
+      if (mesaj) { el.textContent = mesaj; el.style.display = ''; }
+      else { el.textContent = ''; el.style.display = 'none'; }
+    }
+    function _gopSonucGoster(ok, msg) {
+      /* Aktif paneldeki sonuç alanını bul */
+      var src = _gopAktifSource || 'ONAY_TALEP';
+      var sonucId = src === 'MTT' ? 'gop-m-sonuc'
+                  : (document.getElementById('gop-icerik-tah') && document.getElementById('gop-icerik-tah').style.display !== 'none') ? 'gop-t-sonuc'
+                  : 'gop-sonuc';
+      var sonucEl = document.getElementById(sonucId);
+      if (!sonucEl) return;
+      sonucEl.style.cssText = 'display:block;padding:8px 12px;border-radius:6px;font-size:13px;font-weight:600;margin-bottom:8px;text-align:center;' +
+        (ok ? 'background:#d1fae5;color:#065f46' : 'background:#fee2e2;color:#991b1b;border:1px solid #fca5a5');
+      sonucEl.textContent = msg;
+    }
+    function _gopKararButonlariSifirla(kd) {
+      var btnOnayla = document.getElementById('gop-btn-onayla');
+      var btnRev = document.getElementById('gop-btn-revizyon');
+      var btnRed = document.getElementById('gop-btn-reddet');
+      if (btnOnayla) { btnOnayla.style.display = (kd && kd.canOnayla) ? '' : 'none'; btnOnayla.disabled = false; }
+      if (btnRev) { btnRev.style.display = (kd && kd.canRevizyon) ? '' : 'none'; btnRev.disabled = false; }
+      if (btnRed) { btnRed.style.display = (kd && kd.canReddet) ? '' : 'none'; btnRed.disabled = false; }
+    }
+
+    /* ─── Dropdown ─── */
+    var _ddAcik = false;
+
+    function onayBildirimToggle(e) {
+      e.stopPropagation();
+      var dd = document.getElementById('onay-bildirim-dropdown');
+      if (!dd) return;
+      _ddAcik = !_ddAcik;
+      dd.style.display = _ddAcik ? '' : 'none';
+      if (_ddAcik) _ddYukle();
+    }
+    window.onayBildirimToggle = onayBildirimToggle;
+
+    function onayDropdownKapat() {
+      var dd = document.getElementById('onay-bildirim-dropdown');
+      if (dd) dd.style.display = 'none';
+      _ddAcik = false;
+    }
+    window.onayDropdownKapat = onayDropdownKapat;
+
+    document.addEventListener('click', function(e) {
+      var kap = document.getElementById('onay-bildirim-kap');
+      if (kap && !kap.contains(e.target)) onayDropdownKapat();
+    });
+
+    /* Modül etiket haritası — ileride yeni modüller buraya eklenir */
+    var _MOD_ETIKET = {
+      SATIS_SIPARISI: 'NexGen Sipariş',
+      NUMUNE_TALEBI: 'NexGen Numune',
+      TAHSILAT_KAYDI: 'NexGen Tahsilat',
+      SATIN_ALMA_SIPARISI: 'Satın Alma',
+      DEPO_TALEP: 'Depo',
+      SEVKIYAT_TALEP: 'Sevkiyat',
+      SIPARIS_TALEBI_ONAY: 'NexGen Sipariş Talebi',
+      NUMUNE_TALEBI_ONAY: 'NexGen Numune Talebi',
+    };
+
+    function _beklemeSuresi(tarihStr) {
+      if (!tarihStr) return null;
+      var t = new Date(tarihStr.replace(' ', 'T'));
+      if (isNaN(t)) return null;
+      var gun = Math.floor((Date.now() - t.getTime()) / 86400000);
+      if (gun <= 0) return 'bugün';
+      if (gun === 1) return '1 gündür bekliyor';
+      return gun + ' gündür bekliyor';
+    }
+
+    function _ddYukle() {
+      var liste = document.getElementById('onay-bildirim-liste');
+      if (liste) liste.innerHTML = '<p style="padding:12px 14px;font-size:12px;color:#9ca3af;margin:0">Yükleniyor…</p>';
+      fetch('/nexgen/api/onay-merkezi/bekleyen-ozet', { credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          onayBildirimBadgeGuncelle(d.bekleyen_sayi || 0);
+          if (!liste) return;
+          if (!d.ok || !d.liste || !d.liste.length) {
+            liste.innerHTML = '<p style="padding:12px 14px;font-size:12px;color:#9ca3af;margin:0">Bekleyen onay yok.</p>';
+            return;
+          }
+          var html = '';
+          d.liste.forEach(function(r) {
+            var src = r.source || 'ONAY_TALEP';
+            var modEtiket = r.talep_tipi_etiket || _MOD_ETIKET[r.talep_tipi] || _TIP[r.talep_tipi] || r.talep_tipi || '—';
+            var musteri = (r.cari_unvan_snapshot || '—');
+            if (musteri.length > 32) musteri = musteri.slice(0, 32) + '…';
+            var tarihStr = r.talep_tarihi || r.created_at || '';
+            var sure = _beklemeSuresi(tarihStr);
+            var tarihKisa = tarihStr.slice(0, 10);
+            var durumLbl = (src === 'MTT')
+              ? (r.durum_etiket || 'Onay Bekliyor')
+              : 'Bekliyor';
+            var altSatir = '';
+            if (src === 'MTT') {
+              var kod = r.mtt_kod || r.talep_kod || '';
+              var eden = r.talep_eden || '';
+              altSatir = '<div style="font-size:11px;color:#6b7280;margin-bottom:2px">' +
+                (kod ? ('<span style="font-family:monospace">' + kod + '</span>') : '') +
+                (kod && eden ? ' · ' : '') +
+                (eden ? ('Talep: ' + eden) : '') +
+                '</div>';
+            }
+            html += '<div role="button" tabindex="0" data-tid="' + r.id + '" data-source="' + src + '"' +
+              ' style="display:block;padding:10px 14px;border-bottom:1px solid #f3f4f6;cursor:pointer;transition:background .1s"' +
+              ' onmouseover="this.style.background=\'#f9fafb\'" onmouseout="this.style.background=\'\'"' +
+              ' onclick="gopAc(' + r.id + ',' + (r.cari_id||'null') + ',\'' + src + '\')">' +
+              '<div style="margin-bottom:3px">' +
+                '<span style="display:inline-block;font-size:10px;font-weight:700;' +
+                  'background:#eff6ff;color:#1d4ed8;padding:1px 7px;border-radius:4px;' +
+                  'letter-spacing:.3px;text-transform:uppercase">' + modEtiket + '</span>' +
+              '</div>' +
+              '<div style="font-size:12px;font-weight:600;color:#111827;margin-bottom:2px">' + musteri + '</div>' +
+              altSatir +
+              '<div style="display:flex;justify-content:space-between;align-items:center">' +
+                '<span style="font-size:11px;color:#6b7280">' + durumLbl + '</span>' +
+                '<span style="font-size:10px;color:' + (sure && sure.indexOf('gün') !== -1 && parseInt(sure) >= 3 ? '#b45309' : '#9ca3af') + '">' +
+                  (sure || tarihKisa) +
+                  (sure && sure !== 'bugün' ? ' <span style="color:#cbd5e1">· ' + tarihKisa + '</span>' : '') +
+                '</span>' +
+              '</div>' +
+              '</div>';
+          });
+          liste.innerHTML = html;
+        })
+        .catch(function() {
+          if (liste) liste.innerHTML = '<p style="padding:12px 14px;font-size:12px;color:#dc2626;margin:0">Yüklenemedi.</p>';
+        });
+    }
+    window.onayBildirimYukle = _ddYukle;
+
+    /* ─── Badge ─── */
+    function onayBildirimBadgeGuncelle(n) {
+      var sayi = document.getElementById('onay-bildirim-sayi');
+      var etiket = document.getElementById('onay-bildirim-etiket');
+      if (!sayi) return;
+      if (n > 0) {
+        sayi.textContent = n > 99 ? '99+' : String(n);
+        sayi.style.display = '';
+        if (etiket) etiket.textContent = 'Onaylar (' + n + ')';
+      } else {
+        sayi.style.display = 'none';
+        if (etiket) etiket.textContent = 'Onaylar';
+      }
+    }
+    window.onayBildirimBadgeGuncelle = onayBildirimBadgeGuncelle;
+
+    /* ─── Global Onay Popup ─── */
+    var _gopAktifId = null;
+    var _gopCariId = null;
+    var _gopAktifSource = 'ONAY_TALEP';
+
+    function _gopMttKararDurumu(k) {
+      /* MTT akışı: pazarlamacı talep eder, yönetici onaylar.
+         Rol farkı mimariye gömülüdür; aynı kullanıcı engeli burada uygulanmaz. */
+      var can = _GOP_YK.indexOf('*') !== -1
+        || _gopYkVar('nexgen.yonetim.manage', 'can_approve')
+        || _gopYkVar('nexgen.yonetim.manage', 'can_manage')
+        || _gopYkVar('nexgen.yonetim.manage', 'can_update')
+        || _gopYkVar('cari360.view', 'can_view');
+      if (!can) {
+        return { canKarar: false, mesaj: 'Bu talebi onaylama yetkiniz bulunmuyor.' };
+      }
+      return {
+        canKarar: true,
+        canOnayla: true,
+        canReddet: true,
+        canRevizyon: false,
+        mesaj: '',
+      };
+    }
+
+    function _gopEsc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    /* ─── Yardımcı: tutar formatla ─── */
+    function _gopTutarFmt(val, pb) {
+      if (val == null || val === '' || val === 0 && pb == null) return null;
+      var n = parseFloat(val);
+      if (isNaN(n)) return null;
+      return n.toLocaleString('tr-TR', {minimumFractionDigits: 2}) + (pb ? ' ' + pb : '');
+    }
+
+    /* ─── MTT Sipariş / Numune popup doldur ─── */
+    function _gopMttDoldur(k) {
+      var mtt = k.mtt || {};
+      var isSiparis = (k.talep_turu === 'SIPARIS' || k.onay_turu === 'SIPARIS_TALEBI_ONAY');
+      var tipEtiket = k.tur_etiket || (isSiparis ? 'Sipariş Talebi' : 'Numune Talebi');
+      var durumTR = _DURUM_TR[k.durum] || k.durum_etiket || k.durum || 'ONAY BEKLİYOR';
+
+      /* Başlık */
+      _gopStat('gop-baslik', k.talep_no || k.onay_no || ('#' + k.id));
+      _gopStat('gop-alt-baslik', tipEtiket.toUpperCase() + ' · ' + durumTR.toUpperCase());
+
+      /* Temel bilgiler */
+      _gopStat('gop-m-musteri', k.firma_adi || mtt.firma_adi || '—');
+      _gopStat('gop-m-cari-kod', k.cari_kod || mtt.cari_kod || '—');
+      _gopStat('gop-m-talep-no', k.talep_no || k.onay_no || '—');
+      _gopStat('gop-m-tarih', (k.created_at || mtt.created_at || '').slice(0, 16) || '—');
+      _gopStat('gop-m-talep-eden', k.olusturan_adi || mtt.olusturan_adi || '—');
+      _gopStat('gop-m-talep-tipi', tipEtiket);
+
+      /* Ödeme tipi ve vade — sadece sipariş için anlamlı */
+      var otBlok = document.getElementById('gop-m-odeme-tipi-blok');
+      var vdBlok = document.getElementById('gop-m-vade-blok');
+      if (isSiparis) {
+        _gopStat('gop-m-odeme-tipi', k.odeme_tipi || '—');
+        _gopStat('gop-m-vade', k.vade_gun ? (k.vade_gun + ' gün') : '—');
+        if (otBlok) otBlok.style.display = '';
+        if (vdBlok) vdBlok.style.display = '';
+      } else {
+        if (otBlok) otBlok.style.display = 'none';
+        if (vdBlok) vdBlok.style.display = 'none';
+      }
+
+      /* Görüşme / Müşteri Notu */
+      var gorusmeTx = (mtt.gorusme_snapshot && mtt.gorusme_snapshot.kisa_not)
+        || mtt.gorusme_notu || k.gorusme_notu || '';
+      var musteriNotu = mtt.musteri_notu || k.musteri_notu || '';
+      var notBlok = document.getElementById('gop-m-not-blok');
+      var notIc = document.getElementById('gop-m-not-icerik');
+      if (notBlok) {
+        var notTx = [gorusmeTx, musteriNotu ? 'Müşteri Notu: ' + musteriNotu : ''].filter(Boolean).join('\n');
+        if (notTx) {
+          notBlok.style.display = '';
+          if (notIc) notIc.textContent = notTx;
+        } else {
+          notBlok.style.display = 'none';
+        }
+      }
+
+      /* Kalemler */
+      var kalemler = k.kalemler || (mtt.kalemler) || [];
+      var sipBlok = document.getElementById('gop-m-sip-kalem-blok');
+      var numBlok = document.getElementById('gop-m-num-kalem-blok');
+      if (isSiparis) {
+        if (numBlok) numBlok.style.display = 'none';
+        if (sipBlok && kalemler.length) {
+          sipBlok.style.display = '';
+          var tbody = document.getElementById('gop-m-sip-kalem-tbody');
+          if (tbody) {
+            tbody.innerHTML = kalemler.map(function(km, i) {
+              var fiyat = km.verilen_fiyat != null ? _gopTutarFmt(km.verilen_fiyat, km.para_birimi) : null;
+              var toplam = (km.verilen_fiyat != null && km.miktar_gosterim)
+                ? null : null; /* satır toplamı backend'den yok — gösterme */
+              return '<tr style="border-bottom:1px solid #f3f4f6;' + (i % 2 ? 'background:#fafafa' : '') + '">' +
+                '<td style="padding:4px 7px;color:#6b7280">' + (km.sira_no || i + 1) + '</td>' +
+                '<td style="padding:4px 7px">' + _gopEsc(km.urun_aciklama || '—') + '</td>' +
+                '<td style="padding:4px 7px;color:#6b7280">' + _gopEsc(km.urun_ailesi_etiket || km.urun_ailesi || '—') + '</td>' +
+                '<td style="padding:4px 7px">' + _gopEsc(km.renk_aciklama || '—') + '</td>' +
+                '<td style="padding:4px 7px;text-align:right">' + _gopEsc(km.miktar_gosterim || '—') + '</td>' +
+                '<td style="padding:4px 7px;text-align:right">' + (fiyat ? _gopEsc(fiyat) : '—') + '</td>' +
+                '<td style="padding:4px 7px;text-align:right">—</td>' +
+                '</tr>';
+            }).join('');
+          }
+        } else if (sipBlok) {
+          sipBlok.style.display = 'none';
+        }
+      } else {
+        if (sipBlok) sipBlok.style.display = 'none';
+        if (numBlok && kalemler.length) {
+          numBlok.style.display = '';
+          var tbody2 = document.getElementById('gop-m-num-kalem-tbody');
+          if (tbody2) {
+            tbody2.innerHTML = kalemler.map(function(km, i) {
+              return '<tr style="border-bottom:1px solid #f3f4f6;' + (i % 2 ? 'background:#fafafa' : '') + '">' +
+                '<td style="padding:4px 7px;color:#6b7280">' + (km.sira_no || i + 1) + '</td>' +
+                '<td style="padding:4px 7px">' + _gopEsc(km.urun_aciklama || '—') + '</td>' +
+                '<td style="padding:4px 7px;color:#6b7280">' + _gopEsc(km.urun_ailesi_etiket || km.urun_ailesi || '—') + '</td>' +
+                '<td style="padding:4px 7px">' + _gopEsc(km.renk_aciklama || '—') + '</td>' +
+                '<td style="padding:4px 7px;text-align:right">' + _gopEsc(km.miktar_gosterim || '—') + '</td>' +
+                '<td style="padding:4px 7px">' + _gopEsc(km.kalem_notu || '—') + '</td>' +
+                '</tr>';
+            }).join('');
+          }
+        } else if (numBlok) {
+          numBlok.style.display = 'none';
+        }
+      }
+
+      /* Meta: termin, teslim, KDV, toplam */
+      var meta = k.siparis_meta || {};
+      var metaGrid = document.getElementById('gop-m-meta-grid');
+      var metaBlok = document.getElementById('gop-m-meta-blok');
+      if (metaBlok && metaGrid) {
+        var metaItems = [];
+        if (meta.istenen_termin) metaItems.push(['Termin', meta.istenen_termin]);
+        if (meta.teslim_sekli_etiket) metaItems.push(['Teslim', meta.teslim_sekli_etiket]);
+        if (meta.kdv_durumu) metaItems.push(['KDV', meta.kdv_durumu + (meta.kdv_orani != null ? ' %' + meta.kdv_orani : '')]);
+        if (meta.genel_toplam != null) {
+          var pb2 = meta.para_birimi || k.para_birimi || '';
+          metaItems.push(['Genel Toplam', _gopTutarFmt(meta.genel_toplam, pb2) || String(meta.genel_toplam)]);
+        }
+        if (k.onay_no) metaItems.push(['Onay No', k.onay_no]);
+        if (metaItems.length) {
+          metaBlok.style.display = '';
+          metaGrid.innerHTML = metaItems.map(function(pair) {
+            return '<div><span style="display:block;font-size:10px;color:#6b7280;margin-bottom:1px">' +
+              _gopEsc(pair[0]) + '</span><span style="font-weight:600;color:#111">' + _gopEsc(pair[1]) + '</span></div>';
+          }).join('');
+        } else {
+          metaBlok.style.display = 'none';
+        }
+      }
+
+      /* Cariyi Aç */
+      var cariId = (mtt.cari_id) || null;
+      _gopCariId = cariId || _gopCariId;
+      var caBtn = document.getElementById('gop-cari-ac-btn');
+      if (caBtn) {
+        if (_gopCariId) { caBtn.href = '/nexgen/cari360/' + _gopCariId + '?tab=onaylar'; caBtn.style.display = ''; }
+        else caBtn.style.display = 'none';
+      }
+
+      /* Karar bloğu */
+      var bekliyor = (k.durum || '') === 'ONAY_BEKLIYOR';
+      var karEl = document.getElementById('gop-m-karar-blok');
+      var notEl = document.getElementById('gop-m-karar-notu');
+      var ybEl = document.getElementById('gop-m-yetki-bilgi');
+      if (!bekliyor) {
+        if (karEl) karEl.style.display = 'none';
+        if (ybEl) { ybEl.style.display = 'none'; ybEl.textContent = ''; }
+      } else {
+        var kd = _gopMttKararDurumu(k);
+        if (!kd.canKarar) {
+          if (karEl) karEl.style.display = 'none';
+          if (ybEl) { ybEl.style.display = ''; ybEl.textContent = kd.mesaj || 'Bu talebi onaylama yetkiniz bulunmuyor.'; }
+        } else {
+          if (karEl) karEl.style.display = '';
+          if (ybEl) { ybEl.style.display = 'none'; ybEl.textContent = ''; }
+        }
+      }
+      if (notEl) { notEl.value = ''; }
+    }
+
+    /* ─── Tahsilat popup doldur ─── */
+    function _gopTahsilatDoldur(t, snap, adimlar) {
+      _gopStat('gop-baslik', snap.kayit_kodu || t.talep_kod || ('#' + t.id));
+      _gopStat('gop-alt-baslik', 'TAHSİLAT ONAYI · ' + (_DURUM_TR[t.durum] || t.durum || '').toUpperCase());
+
+      _gopStat('gop-t-musteri', snap.cari_unvan_snapshot || t.cari_unvan_snapshot || '—');
+      _gopStat('gop-t-cari-kod', snap.cari_kod_snapshot || '—');
+      _gopStat('gop-t-no', snap.kayit_kodu || t.talep_kod || '—');
+      _gopStat('gop-t-kayit-tarihi', (snap.kayit_tarihi || t.created_at || '').slice(0, 10) || '—');
+      _gopStat('gop-t-kayit-eden', snap.pazarlamaci_adi || t.olusturan_adi || '—');
+      _gopStat('gop-t-tah-tarihi', (snap.alinan_tarih || snap.planlanan_tahsilat_tarihi || '').slice(0, 10) || '—');
+
+      /* Bağlı sipariş */
+      _gopStat('gop-t-sip-no', snap.siparis_no || '—');
+      var sipTarBlok = document.getElementById('gop-t-sip-tarihi-blok');
+      if (snap.siparis_tarihi) {
+        _gopStat('gop-t-sip-tarihi', String(snap.siparis_tarihi).slice(0, 10));
+        if (sipTarBlok) sipTarBlok.style.display = '';
+      } else {
+        if (sipTarBlok) sipTarBlok.style.display = 'none';
+      }
+
+      /* Tutar özeti */
+      var beklFmt = _gopTutarFmt(snap.beklenen_tutar, 'TL');
+      var alinFmt = _gopTutarFmt(snap.alinan_tutar, 'TL');
+      var kalanFmt = _gopTutarFmt(snap.kalan_tutar, 'TL');
+      _gopStat('gop-t-beklenen', beklFmt || '—');
+      _gopStat('gop-t-alinan', alinFmt || '—');
+      _gopStat('gop-t-kalan', kalanFmt != null ? kalanFmt : '—');
+
+      /* Ödeme bilgileri */
+      var odTipi = (snap.odeme_tipi || '').toUpperCase();
+      _gopStat('gop-t-odeme-tipi', odTipi || '—');
+      var cekNoBlok = document.getElementById('gop-t-cek-no-blok');
+      var cekVadeBlok = document.getElementById('gop-t-cek-vade-blok');
+      if (odTipi === 'CEK' || odTipi === 'ÇEK') {
+        _gopStat('gop-t-cek-no', snap.odeme_referansi || '—');
+        if (cekNoBlok) cekNoBlok.style.display = '';
+        if (snap.cek_vade_tarihi) {
+          _gopStat('gop-t-cek-vade', String(snap.cek_vade_tarihi).slice(0, 10));
+          if (cekVadeBlok) cekVadeBlok.style.display = '';
+        } else if (cekVadeBlok) {
+          cekVadeBlok.style.display = 'none';
+        }
+      } else {
+        if (cekNoBlok) cekNoBlok.style.display = 'none';
+        if (cekVadeBlok) cekVadeBlok.style.display = 'none';
+      }
+
+      /* Açıklama */
+      var acBlok = document.getElementById('gop-t-aciklama-blok');
+      var acEl = document.getElementById('gop-t-aciklama');
+      var acTx = snap.aciklama || snap.onay_notu || t.aciklama || '';
+      if (acBlok) {
+        if (acTx) { acBlok.style.display = ''; if (acEl) acEl.textContent = acTx; }
+        else acBlok.style.display = 'none';
+      }
+
+      /* Cariyi Aç */
+      var cariId = snap.cari_id || null;
+      _gopCariId = cariId || _gopCariId;
+      var caBtn = document.getElementById('gop-cari-ac-btn');
+      if (caBtn) {
+        if (_gopCariId) { caBtn.href = '/nexgen/cari360/' + _gopCariId + '?tab=onaylar'; caBtn.style.display = ''; }
+        else caBtn.style.display = 'none';
+      }
+
+      /* Karar bloğu */
+      var bekliyor = t.durum && (t.durum === 'BEKLIYOR' || t.durum === 'BEKLETILDI');
+      var karEl = document.getElementById('gop-t-karar-blok');
+      var notEl = document.getElementById('gop-t-karar-notu');
+      var ybEl = document.getElementById('gop-t-yetki-bilgi');
+      if (!bekliyor) {
+        if (karEl) karEl.style.display = 'none';
+        if (ybEl) { ybEl.style.display = 'none'; ybEl.textContent = ''; }
+      } else {
+        var kd2 = _gopKararDurumu(t, adimlar);
+        if (!kd2.canKarar) {
+          if (karEl) karEl.style.display = 'none';
+          if (ybEl) { ybEl.style.display = ''; ybEl.textContent = kd2.mesaj || 'Bu talebi onaylama yetkiniz bulunmuyor.'; }
+        } else {
+          if (karEl) karEl.style.display = '';
+          if (ybEl) { ybEl.style.display = 'none'; ybEl.textContent = ''; }
+          /* Revizyon butonu — diğer talep türlerinde olduğu gibi */
+          var btnRev = document.getElementById('gop-t-btn-revizyon');
+          if (btnRev) btnRev.style.display = kd2.canRevizyon ? '' : 'none';
+        }
+      }
+      if (notEl) { notEl.value = ''; }
+    }
+
+    function gopAc(talepId, cariId, source) {
+      _gopAktifId = talepId;
+      _gopCariId = cariId || null;
+      _gopAktifSource = (source || 'ONAY_TALEP');
+      onayDropdownKapat();
+      var ov = document.getElementById('gop-overlay');
+      if (!ov) return;
+      ov.style.display = '';
+
+      /* Panelleri sıfırla */
+      var icMtt = document.getElementById('gop-icerik-mtt');
+      var icTah = document.getElementById('gop-icerik-tah');
+      var icOt  = document.getElementById('gop-icerik');
+      var yuk   = document.getElementById('gop-yukleniyor');
+      if (icMtt) icMtt.style.display = 'none';
+      if (icTah) icTah.style.display = 'none';
+      if (icOt)  icOt.style.display  = 'none';
+      if (yuk)  { yuk.style.display = ''; yuk.textContent = 'Yükleniyor…'; }
+
+      /* "Cariyi Aç" butonu ön-hazırlık */
+      var caBtn = document.getElementById('gop-cari-ac-btn');
+      if (caBtn) {
+        if (cariId) { caBtn.href = '/nexgen/cari360/' + cariId + '?tab=onaylar'; caBtn.style.display = ''; }
+        else caBtn.style.display = 'none';
+      }
+
+      /* ─── MTT ─── */
+      if (_gopAktifSource === 'MTT') {
+        fetch('/nexgen/api/yonetim/onay/' + talepId, { credentials: 'same-origin' })
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            if (yuk) yuk.style.display = 'none';
+            if (!d.ok) { if (yuk) { yuk.style.display = ''; yuk.textContent = d.mesaj || 'Yüklenemedi.'; } return; }
+            if (icMtt) icMtt.style.display = '';
+            _gopMttDoldur(d.kayit || {});
+          })
+          .catch(function(err) {
+            if (yuk) { yuk.style.display = ''; yuk.textContent = 'Hata: ' + (err.message || 'bilinmiyor'); }
+          });
+        return;
+      }
+
+      /* ─── ONAY_TALEP (Tahsilat + diğer) ─── */
+      fetch('/nexgen/api/onay-merkezi/' + talepId, { credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          if (yuk) yuk.style.display = 'none';
+          if (!d.ok) { if (yuk) { yuk.style.display = ''; yuk.textContent = 'Yüklenemedi.'; } return; }
+          var t = d.talep || {};
+          var snap = d.snapshot || {};
+          var adimlar = d.adimlar || [];
+
+          if (t.talep_tipi === 'TAHSILAT_KAYDI') {
+            /* ─── Tahsilat paneli ─── */
+            if (icTah) icTah.style.display = '';
+            _gopTahsilatDoldur(t, snap, adimlar);
+          } else {
+            /* ─── Normal ONAY_TALEP paneli ─── */
+            if (icOt) icOt.style.display = '';
+
+            var adBaslik = document.getElementById('gop-adimlar-baslik');
+            if (adBaslik) adBaslik.textContent = 'Onay Adımları';
+            var tahBaslik = document.querySelector('#gop-tahsilat-blok > span');
+            if (tahBaslik) tahBaslik.textContent = 'Tahsilat / Görüşme Notu';
+            var notEl0 = document.getElementById('gop-karar-notu');
+            if (notEl0) notEl0.placeholder = 'Not ekleyin (Red/Revizyon için zorunlu)…';
+
+            _gopStat('gop-baslik', t.talep_kod || ('#' + talepId));
+            _gopStat('gop-alt-baslik', (_TIP[t.talep_tipi] || t.talep_tipi || '') + (t.durum ? ' · ' + (_DURUM_TR[t.durum] || t.durum) : ''));
+            _gopStat('gop-talep-kod', t.talep_kod || ('#' + talepId));
+            _gopStat('gop-tipi', _TIP[t.talep_tipi] || t.talep_tipi || '—');
+            _gopStat('gop-musteri', t.cari_unvan_snapshot || '—');
+            var _MOD_TR = { nexgen_siparis:'Sipariş', nexgen_numune:'Numune', nexgen_tahsilat:'Tahsilat',
+              mo_siparis:'Sipariş', satin_alma:'Satın Alma' };
+            var modEtiket = t.kaynak_modul ? (_MOD_TR[t.kaynak_modul] || t.kaynak_modul.replace('nexgen_','').replace('mo_','').replace(/_/g,' ')) : '';
+            _gopStat('gop-kaynak', (t.kaynak_kod || '') + (modEtiket ? ' (' + modEtiket + ')' : '') || '—');
+            var tutar = t.tutar ? parseFloat(t.tutar).toLocaleString('tr-TR', {minimumFractionDigits:2}) + ' ' + (t.para_birimi || '') : '—';
+            _gopStat('gop-tutar', tutar);
+            var vadeStr = t.vade_gun ? t.vade_gun + ' gün' : '—';
+            var cekVade = snap.cek_vade || snap.cek_vadesi || snap.vade_tarihi || null;
+            if (cekVade) vadeStr += ' (Çek: ' + String(cekVade).slice(0,10) + ')';
+            _gopStat('gop-vade', vadeStr);
+
+            var tahTx = snap.tahsilat_sozu || snap.gorusme_notu || snap.tahsilat_notu || snap.odeme_notu || null;
+            var tahEl = document.getElementById('gop-tahsilat-blok');
+            var tahIc = document.getElementById('gop-tahsilat-icerik');
+            if (tahEl) {
+              if (tahTx) { tahEl.style.display = ''; if (tahIc) tahIc.textContent = tahTx; }
+              else tahEl.style.display = 'none';
+            }
+            var mttBlokOt = document.getElementById('gop-mtt-blok');
+            if (mttBlokOt) { mttBlokOt.style.display = 'none'; mttBlokOt.innerHTML = ''; }
+
+            var adEl = document.getElementById('gop-adimlar');
+            if (adEl) {
+              if (!adimlar.length) {
+                adEl.innerHTML = '<span style="color:#9ca3af">Adım yok.</span>';
+              } else {
+                adEl.innerHTML = adimlar.map(function(a) {
+                  var css = _AD_CSS[a.durum] || 'background:#f3f4f6;color:#374151';
+                  var kim = a.kullanici_ad_snapshot || a.kullanici_adi || '';
+                  var not = a.karar_notu ? '<div style="color:#6b7280;margin-top:2px;padding-left:4px;border-left:2px solid #e5e7eb">' + a.karar_notu + '</div>' : '';
+                  return '<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid #f9fafb">' +
+                    '<span style="' + css + ';padding:1px 7px;border-radius:4px;font-size:10px;font-weight:600;white-space:nowrap;align-self:flex-start;margin-top:1px">' + (a.durum||'?') + '</span>' +
+                    '<div><span style="font-size:12px;color:#374151">' + (a.rol_adi || _ADIM_TR[a.adim_tipi] || a.adim_tipi || 'Onay Adımı') + (kim ? ' — ' + kim : '') + '</span>' + not + '</div>' +
+                    '</div>';
+                }).join('');
+              }
+            }
+
+            var bekliyor2 = t.durum && (t.durum === 'BEKLIYOR' || t.durum === 'BEKLETILDI');
+            var karEl = document.getElementById('gop-karar-blok');
+            var notEl = document.getElementById('gop-karar-notu');
+            if (!bekliyor2) {
+              if (karEl) karEl.style.display = 'none';
+              _gopYetkiBilgiGoster('');
+            } else {
+              var kd3 = _gopKararDurumu(t, adimlar);
+              if (!kd3.canKarar) {
+                if (karEl) karEl.style.display = 'none';
+                _gopYetkiBilgiGoster(kd3.mesaj || 'Bu talebi onaylama yetkiniz bulunmuyor.');
+              } else {
+                if (karEl) karEl.style.display = '';
+                _gopYetkiBilgiGoster(kd3.mesaj || '');
+                _gopKararButonlariSifirla(kd3);
+              }
+            }
+            if (notEl) notEl.value = '';
+          }
+        })
+        .catch(function(err) {
+          if (yuk) { yuk.style.display = ''; yuk.textContent = 'Hata: ' + (err.message || 'bilinmiyor'); }
+        });
+    }
+    window.gopAc = gopAc;
+
+    function gopKapat(e) {
+      if (e && e.target !== document.getElementById('gop-overlay')) return;
+      document.getElementById('gop-overlay').style.display = 'none';
+      _gopAktifId = null;
+      _gopAktifSource = 'ONAY_TALEP';
+    }
+    window.gopKapat = gopKapat;
+
+    function gopKararVer(eylem) {
+      var talepId = _gopAktifId;
+      if (!talepId) return;
+      var src = _gopAktifSource || 'ONAY_TALEP';
+      /* Aktif panele göre nota bak */
+      var notId = src === 'MTT' ? 'gop-m-karar-notu'
+                : (src === 'ONAY_TALEP' && document.getElementById('gop-icerik-tah') && document.getElementById('gop-icerik-tah').style.display !== 'none') ? 'gop-t-karar-notu'
+                : 'gop-karar-notu';
+      var notu = (document.getElementById(notId) || {}).value || '';
+      if (src === 'MTT' && eylem === 'REVIZYON') {
+        alert('MTT taleplerinde Revizyon desteklenmiyor.'); return;
+      }
+      if ((eylem === 'REDDET' || eylem === 'REVIZYON') && !notu.trim()) {
+        alert(src === 'MTT' ? 'Red için neden zorunlu.' : 'Red / Revizyon için karar notu zorunlu.'); return;
+      }
+      /* Butonları devre dışı bırak */
+      var btns = document.querySelectorAll('#gop-m-karar-blok button, #gop-t-karar-blok button, #gop-karar-blok button');
+      btns.forEach(function(b) { b.disabled = true; });
+
+      var url, body;
+      if (src === 'MTT') {
+        if (eylem === 'ONAYLA') {
+          url = '/nexgen/api/yonetim/onay/' + talepId + '/onayla';
+          body = {};
+        } else {
+          url = '/nexgen/api/yonetim/onay/' + talepId + '/reddet';
+          body = { red_nedeni: notu };
+        }
+      } else {
+        url = '/nexgen/api/onay-merkezi/' + talepId + '/karar';
+        body = { karar: eylem, not: notu };
+      }
+
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(body),
+      })
+        .then(function(r) {
+          return r.text().then(function(txt) {
+            var d = {};
+            try { d = txt ? JSON.parse(txt) : {}; } catch (_) {}
+            return { httpOk: r.ok, status: r.status, data: d };
+          });
+        })
+        .then(function(res) {
+          var d = res.data || {};
+          var ok = !!(res.httpOk && d.ok);
+          var msg;
+          if (ok) {
+            msg = eylem === 'ONAYLA' ? '✓ Onaylandı.' : eylem === 'REVIZYON' ? '↩ Revizyon istendi.' : '✕ Reddedildi.';
+          } else {
+            msg = d.hata || d.mesaj || d.error || d.message || '';
+            if (!msg && res.status === 403) msg = 'Karar yetkisi yok.';
+            else if (!msg && res.status === 400) msg = 'Geçersiz istek.';
+            else if (!msg && res.status >= 500) msg = 'Sunucu hatası.';
+            else if (!msg) msg = 'Karar verilemedi.';
+          }
+          _gopSonucGoster(ok, msg);
+          if (ok) {
+            /* Aktif karar bloğunu gizle */
+            ['gop-m-karar-blok', 'gop-t-karar-blok', 'gop-karar-blok'].forEach(function(id) {
+              var el = document.getElementById(id); if (el) el.style.display = 'none';
+            });
+            _gopYetkiBilgiGoster('');
+            /* Badge ve dropdown yenile */
+            _badgeYenile();
+            /* Cari360 Onaylar tablosunu yenile (eğer sayfada açıksa) */
+            try { if (window._ckartOnaylarGetir) window._ckartOnaylarGetir(); } catch(_) {}
+            /* Timeline cache'ini sıfırla — bir sonraki açılışta taze veri yüklensin */
+            try { window._ckartHafizaTabYuklendi = false; } catch(_) {}
+            /* Son Hareketler panelini de yenile (Timeline ile ayrı cache) */
+            try { if (window.ckartSonHareketlerYukle) window.ckartSonHareketlerYukle(); } catch(_) {}
+            /* 2 saniye sonra popup kapat */
+            setTimeout(function() {
+              var ov = document.getElementById('gop-overlay');
+              if (ov) ov.style.display = 'none';
+              _gopAktifId = null;
+              _gopAktifSource = 'ONAY_TALEP';
+            }, 2000);
+          } else {
+            btns.forEach(function(b) { b.disabled = false; });
+          }
+        })
+        .catch(function(err) {
+          _gopSonucGoster(false, err && err.message ? err.message : 'Bağlantı hatası.');
+          btns.forEach(function(b) { b.disabled = false; });
+        });
+    }
+    window.gopKararVer = gopKararVer;
+
+    /* ─── Badge yenile ─── */
+    function _badgeYenile() {
+      fetch('/nexgen/api/onay-merkezi/bekleyen-ozet', { credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          if (d && d.ok) onayBildirimBadgeGuncelle(d.bekleyen_sayi || 0);
+          if (_ddAcik) _ddYukle();
+        })
+        .catch(function() {});
+    }
+
+    function _gopStat(id, val) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = val || '—';
+    }
+
+    /* ─── İlk yükleme ─── */
+    fetch('/nexgen/api/onay-merkezi/bekleyen-ozet', { credentials: 'same-origin' })
+      .then(function(r) { return r.json(); })
+      .then(function(d) { if (d && d.ok) onayBildirimBadgeGuncelle(d.bekleyen_sayi || 0); })
+      .catch(function() {});
+
+    /* 90 sn periyodik yenileme */
+    setInterval(_badgeYenile, 90000);
+  })();
+  </script>
+  {% endif %}
+
+  {# ERHAN-UI-2: Pazarlamacı sonuç bildirim JS (salt-okunur, karar butonu yok) #}
+  {% if g_user and yetki('cari360.view_own', 'can_view') and not yetki('onay.merkez.view', 'can_view') %}
+  <script>
+  (function() {
+    var _pzmAcik = false;
+
+    var _TIP_STIL = {
+      MTT_ONAYLANDI:        { col: '#065f46' },
+      MTT_REDDEDILDI:       { col: '#991b1b' },
+      MTT_SIPARISE_DONUSTU: { col: '#1e40af' },
+      MTT_NUMUNEYE_DONUSTU: { col: '#1e40af' },
+      MTT_ISLEME_ALINDI:    { col: '#92400e' },
+      TAHSILAT_ONAYLANDI:   { col: '#065f46' },
+      TAHSILAT_REDDEDILDI:  { col: '#991b1b' },
+    };
+
+    function _esc(s) {
+      return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+    }
+
+    function _pzmSatirHtml(r) {
+      var st = _TIP_STIL[r.tip] || { col: '#374151' };
+      var baslik = _esc(r.baslik || r.tip || '—');
+      var kod = _esc(r.talep_no || '—');
+      var firma = _esc(r.firma_adi || '—');
+      if (firma.length > 36) firma = firma.slice(0, 36) + '…';
+      var tarih = _esc((r.tarih || '').replace('T', ' ').slice(0, 16).replace(/-/g, '.'));
+      var tutar = r.tutar ? Number(r.tutar).toLocaleString('tr-TR') + ' ₺' : '';
+      var urun = r.urun_ozet ? '<div style="font-size:11px;color:#475569;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + _esc(r.urun_ozet) + '">' + _esc(r.urun_ozet) + '</div>' : '';
+      var donusum = '';
+      if (r.donusum_kodu && r.talep_no) {
+        donusum = '<div style="font-size:11px;color:#1d4ed8;margin-top:2px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' +
+          _esc(r.talep_no) + ' → ' + _esc(r.donusum_kodu) + '</div>';
+      }
+      var red = (r.red_nedeni)
+        ? '<div style="font-size:11px;color:#b91c1c;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + _esc(r.red_nedeni) + '">Neden: ' + _esc(r.red_nedeni) + '</div>'
+        : '';
+      var tutarSatir = (tutar && r.talep_turu === 'TAHSILAT')
+        ? '<div style="font-size:11px;color:#0f766e;font-weight:600;margin-top:2px">' + _esc(tutar) + '</div>'
+        : '';
+      return '<div style="padding:10px 14px;border-bottom:1px solid #f3f4f6">' +
+        '<div style="font-size:11px;font-weight:800;color:' + st.col + ';letter-spacing:.02em;line-height:1.3">' + baslik + '</div>' +
+        '<div style="font-size:11px;font-weight:600;color:#0f766e;margin-top:3px;font-family:ui-monospace,monospace">' + kod + '</div>' +
+        '<div style="font-size:11px;color:#6b7280;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + firma + '">' + firma + '</div>' +
+        urun + tutarSatir + donusum + red +
+        (tarih ? '<div style="font-size:10px;color:#9ca3af;margin-top:3px">' + tarih + '</div>' : '') +
+        '</div>';
+    }
+
+    function _pzmYukle() {
+      var liste = document.getElementById('pzm-bildirim-liste');
+      if (liste) liste.innerHTML = '<p style="padding:12px 14px;font-size:12px;color:#9ca3af;margin:0">Yükleniyor…</p>';
+      fetch('/nexgen/api/musteri-pazarlama/bildirimler', { credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          var sayi = document.getElementById('pzm-bildirim-sayi');
+          var etiket = document.getElementById('pzm-bildirim-etiket');
+          if (d && d.ok && d.toplam) {
+            if (sayi) { sayi.textContent = d.toplam > 99 ? '99+' : String(d.toplam); sayi.style.display = ''; }
+            if (etiket) etiket.textContent = 'Bildirimler (' + d.toplam + ')';
+          } else {
+            if (sayi) sayi.style.display = 'none';
+            if (etiket) etiket.textContent = 'Bildirimler';
+          }
+          if (!liste) return;
+          if (!d || !d.ok || !d.liste || !d.liste.length) {
+            liste.innerHTML = '<p style="padding:12px 14px;font-size:12px;color:#9ca3af;margin:0">Henüz sonuç yok.</p>';
+            return;
+          }
+          var html = '';
+          d.liste.forEach(function(r) {
+            html += _pzmSatirHtml(r);
+          });
+          liste.innerHTML = html;
+        })
+        .catch(function() {
+          var liste = document.getElementById('pzm-bildirim-liste');
+          if (liste) liste.innerHTML = '<p style="padding:12px 14px;font-size:12px;color:#dc2626;margin:0">Yüklenemedi.</p>';
+        });
+    }
+
+    window.pzmBildirimToggle = function(e) {
+      e.stopPropagation();
+      var dd = document.getElementById('pzm-bildirim-dropdown');
+      if (!dd) return;
+      _pzmAcik = !_pzmAcik;
+      dd.style.display = _pzmAcik ? '' : 'none';
+      if (_pzmAcik) _pzmYukle();
+    };
+
+    document.addEventListener('click', function(e) {
+      var kap = document.getElementById('pzm-bildirim-kap');
+      if (kap && !kap.contains(e.target)) {
+        var dd = document.getElementById('pzm-bildirim-dropdown');
+        if (dd) dd.style.display = 'none';
+        _pzmAcik = false;
+      }
+    });
+
+    /* İlk yüklemede badge sayısını çek */
+    fetch('/nexgen/api/musteri-pazarlama/bildirimler', { credentials: 'same-origin' })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        var sayi = document.getElementById('pzm-bildirim-sayi');
+        var etiket = document.getElementById('pzm-bildirim-etiket');
+        if (d && d.ok && d.toplam) {
+          if (sayi) { sayi.textContent = d.toplam > 99 ? '99+' : String(d.toplam); sayi.style.display = ''; }
+          if (etiket) etiket.textContent = 'Bildirimler (' + d.toplam + ')';
+        }
+      })
+      .catch(function() {});
+
+    /* 5 dk periyodik yenileme */
+    setInterval(function() {
+      if (_pzmAcik) _pzmYukle();
+    }, 300000);
+  })();
+  </script>
   {% endif %}
 </body>
 

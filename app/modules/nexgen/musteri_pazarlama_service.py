@@ -9,6 +9,7 @@ from typing import Any
 
 from modules.nexgen.cari_sorumlu_service import (
     get_musteri_operasyonu_kapsami,
+    get_pazarlama_cari_kapsami,
     load_kullanici_yetkileri,
 )
 from modules.nexgen.mo_gorusme_config import SIPARIS_ZIYARET_ESIK_GUN, TABLO
@@ -1142,4 +1143,587 @@ def dashboard_ozet(
         'siparis_bekleyenler': siparis_bek,
         'kapsam_bos': False,
         'coklu_sorumlu_cari_ids': kapsam.get('coklu_sorumlu_cari_ids') or [],
+    }
+
+
+# ---------------------------------------------------------------------------
+# ERHAN UI-3A — dashboard_v2: read-only finans/tahsilat/çek/üretim/KPI
+# ---------------------------------------------------------------------------
+
+def _v2_bakiye_ozet(con: sqlite3.Connection, cari_id: int) -> dict[str, Any]:
+    """nexgen_cari → cari_eslestirme DOGRULANDI → Cari_Har compute_bakiye."""
+    from modules.nexgen.cari360_finans_service import _legacy_ckod, _legacy_bakiye
+    ckod = _legacy_ckod(con, cari_id)
+    bak = _legacy_bakiye(con, ckod)
+    if not bak.get('eslesme'):
+        return {'eslesme': False, 'muhasebe_bakiye': None, 'bakiye_yonu': None,
+                'son_hareket_tarihi': None, 'kaynak': None}
+    raw = bak.get('bakiye')
+    if raw is None:
+        return {'eslesme': True, 'muhasebe_bakiye': None, 'bakiye_yonu': None,
+                'son_hareket_tarihi': bak.get('son_islem'), 'kaynak': bak.get('kaynak')}
+    try:
+        b = float(raw)
+    except (TypeError, ValueError):
+        b = 0.0
+    if b > 0.01:
+        yon = 'BORC'
+    elif b < -0.01:
+        yon = 'ALACAK'
+    else:
+        yon = 'SIFIR'
+    return {
+        'eslesme': True,
+        'muhasebe_bakiye': round(b, 2),
+        'bakiye_yonu': yon,
+        'son_hareket_tarihi': (bak.get('son_islem') or '')[:10] or None,
+        'kaynak': bak.get('kaynak', 'Cari_Har'),
+    }
+
+
+def _v2_tahsilat_vade(
+    con: sqlite3.Connection,
+    cari_ids: list[int],
+    today: date,
+) -> tuple[list[dict], dict[str, Any]]:
+    """mo_tahsilat_kayit → vade takvimi. NULL tarihleri takvime koyma."""
+    if not cari_ids or not _tablo_var(con, 'mo_tahsilat_kayit'):
+        return [], {'BUGUN': [], '1_2_GUN': [], '3_5_GUN': [], '6_7_GUN': [],
+                    '8_10_GUN': [], 'VADESI_GECEN': [], 'TARIHI_YOK': []}
+
+    ph, params = _in_ph(cari_ids)
+    rows = con.execute(
+        f"""SELECT id, cari_id, kayit_kodu, beklenen_tutar, alinan_tutar, kalan_tutar,
+                   planlanan_tahsilat_tarihi, alinan_tarih, odeme_tipi, durum, olusturan_id
+            FROM mo_tahsilat_kayit
+            WHERE cari_id IN ({ph})
+              AND COALESCE(aktif, 1)=1
+              AND durum NOT IN ('IPTAL', 'TAMAMLANDI')
+            ORDER BY planlanan_tahsilat_tarihi ASC, id ASC""",
+        params,
+    ).fetchall()
+
+    kayitlar: list[dict] = []
+    takvim: dict[str, list] = {
+        'BUGUN': [], '1_2_GUN': [], '3_5_GUN': [], '6_7_GUN': [],
+        '8_10_GUN': [], 'VADESI_GECEN': [], 'TARIHI_YOK': [],
+    }
+
+    for r in rows:
+        tarih_str = r['planlanan_tahsilat_tarihi']
+        tarih_d: date | None = None
+        if tarih_str:
+            try:
+                tarih_d = date.fromisoformat(str(tarih_str)[:10])
+            except ValueError:
+                pass
+
+        gecikme_gun: int | None = None
+        vade_grup: str | None = None
+        if tarih_d:
+            delta = (today - tarih_d).days
+            if today == tarih_d:
+                vade_grup = 'BUGUN'
+            elif today < tarih_d:
+                gun = (tarih_d - today).days
+                if gun <= 2:
+                    vade_grup = '1_2_GUN'
+                elif gun <= 5:
+                    vade_grup = '3_5_GUN'
+                elif gun <= 7:
+                    vade_grup = '6_7_GUN'
+                elif gun <= 10:
+                    vade_grup = '8_10_GUN'
+                else:
+                    vade_grup = None
+            else:
+                gecikme_gun = delta
+                vade_grup = 'VADESI_GECEN'
+        else:
+            vade_grup = 'TARIHI_YOK'
+
+        kayit: dict = {
+            'id': r['id'],
+            'cari_id': r['cari_id'],
+            'kayit_kodu': r['kayit_kodu'],
+            'beklenen_tutar': r['beklenen_tutar'],
+            'alinan_tutar': r['alinan_tutar'],
+            'kalan_tutar': r['kalan_tutar'],
+            'planlanan_tahsilat_tarihi': tarih_str,
+            'odeme_tipi': r['odeme_tipi'],
+            'durum': r['durum'],
+            'gecikme_gun': gecikme_gun,
+            'vade_grubu': vade_grup,
+        }
+        kayitlar.append(kayit)
+        if vade_grup and vade_grup in takvim:
+            tutar = r['kalan_tutar'] or r['beklenen_tutar'] or 0
+            takvim[vade_grup].append({
+                'cari_id': r['cari_id'],
+                'kayit_kodu': r['kayit_kodu'],
+                'tutar': tutar,
+                'gecikme_gun': gecikme_gun,
+                'tarih': tarih_str,
+            })
+
+    return kayitlar, takvim
+
+
+def _v2_cek_sozu(
+    con: sqlite3.Connection,
+    cari_ids: list[int],
+) -> list[dict]:
+    """Operasyonel çek sözü — muhasebe çeki değil.
+    Kaynak: musteri_operasyon_gorusme + nexgen_planlama_siparis.
+    Gerçek çek no / banka bilgisi döndürülmez.
+    """
+    if not cari_ids:
+        return []
+    ph, params = _in_ph(cari_ids)
+    sozler: list[dict] = []
+
+    if _tablo_var(con, 'musteri_operasyon_gorusme'):
+        rows = con.execute(
+            f"""SELECT id, cari_id, gorusme_tarihi, cek_alim_tarihi,
+                       cek_vade_gun, cek_adedi, odeme_tipi
+                FROM musteri_operasyon_gorusme
+                WHERE cari_id IN ({ph})
+                  AND COALESCE(aktif, 1)=1
+                  AND odeme_tipi='CEK'
+                  AND cek_adedi > 0
+                ORDER BY gorusme_tarihi DESC""",
+            params,
+        ).fetchall()
+        for r in rows:
+            sozler.append({
+                'cari_id': r['cari_id'],
+                'kaynak_tipi': 'GORUSME',
+                'kaynak_id': r['id'],
+                'cek_sozu_tarihi': (r['cek_alim_tarihi'] or r['gorusme_tarihi'] or '')[:10] or None,
+                'planlanan_vade_gun': r['cek_vade_gun'],
+                'cek_adedi': r['cek_adedi'],
+                'not': 'Çek Sözü — muhasebe kaydı değil',
+            })
+
+    if _tablo_var(con, 'nexgen_planlama_siparis'):
+        sip_cols = {c[1] for c in con.execute('PRAGMA table_info(nexgen_planlama_siparis)')}
+        extra = ''
+        if 'cek_teslim_tarihi' in sip_cols:
+            extra += ', cek_teslim_tarihi'
+        if 'cek_vadesi' in sip_cols:
+            extra += ', cek_vadesi'
+        rows2 = con.execute(
+            f"""SELECT id, siparis_no, cari_id, odeme_tipi{extra}
+                FROM nexgen_planlama_siparis
+                WHERE cari_id IN ({ph})
+                  AND (odeme_tipi='CEK' OR odeme_tipi='SENET')
+                  AND durum NOT IN ('TASLAK','REDDEDILDI','IPTAL','REVIZYON')
+                ORDER BY id DESC LIMIT 50""",
+            params,
+        ).fetchall()
+        for r in rows2:
+            teslim = r['cek_teslim_tarihi'] if 'cek_teslim_tarihi' in sip_cols else None
+            vade = r['cek_vadesi'] if 'cek_vadesi' in sip_cols else None
+            sozler.append({
+                'cari_id': r['cari_id'],
+                'kaynak_tipi': 'SIPARIS_PLANI',
+                'kaynak_id': r['id'],
+                'siparis_no': r['siparis_no'],
+                'cek_sozu_tarihi': (teslim or '')[:10] or None,
+                'planlanan_vade': (vade or '')[:10] or None,
+                'odeme_tipi': r['odeme_tipi'],
+                'not': 'Planlanan Çek — muhasebe kaydı değil',
+            })
+
+    return sozler
+
+
+def _v2_numune_ozet(
+    con: sqlite3.Connection,
+    cari_ids: list[int],
+    cari_map: dict[int, dict],
+) -> list[dict]:
+    """Açık numune talepleri — Erhan scope."""
+    if not cari_ids or not _tablo_var(con, 'nexgen_numune_talep'):
+        return []
+    ph, params = _in_ph(cari_ids)
+    _ACIK = (
+        'YENI_TALEP', 'TASLAK', 'BEKLEYEN_NUMUNE', 'CALISILIYOR',
+        'REVIZYONDA', 'FERHAT_TESTINDE', 'ONAY_BEKLIYOR',
+        'REVIZYON_ISTENDI', 'ONAYLANDI',
+    )
+    n_ph = ','.join(['?'] * len(_ACIK))
+    rows = con.execute(
+        f"""SELECT nt.id, nt.cari_id, nt.talep_kodu, nt.durum,
+                   nt.urun_tipi, nt.urun_adi, nt.urun_aciklama,
+                   nt.renk_kodu, nt.yeni_renk_aciklama, nt.renk_tipi,
+                   nt.olusturma_tarihi, nt.arge_test_id
+            FROM nexgen_numune_talep nt
+            WHERE nt.cari_id IN ({ph})
+              AND nt.durum IN ({n_ph})
+              AND COALESCE(nt.aktif, 1)=1
+            ORDER BY nt.id DESC LIMIT 100""",
+        [*params, *_ACIK],
+    ).fetchall()
+
+    # AR-GE durumu
+    arge_map: dict[int, str] = {}
+    arge_ids = [int(r['arge_test_id']) for r in rows if r['arge_test_id']]
+    if arge_ids and _tablo_var(con, 'nexgen_arge_test'):
+        a_ph = ','.join(['?'] * len(arge_ids))
+        for ar in con.execute(
+            f"SELECT id, durum FROM nexgen_arge_test WHERE id IN ({a_ph})", arge_ids
+        ).fetchall():
+            arge_map[int(ar['id'])] = ar['durum']
+
+    sonuc: list[dict] = []
+    for r in rows:
+        cid = int(r['cari_id'])
+        arge_d = arge_map.get(int(r['arge_test_id'])) if r['arge_test_id'] else None
+        sonuc.append({
+            'id': r['id'],
+            'cari_id': cid,
+            'cari_unvan': (cari_map.get(cid) or {}).get('unvan'),
+            'talep_no': r['talep_kodu'],
+            'durum': r['durum'],
+            'arge_durum': arge_d,
+            'urun_tipi': r['urun_tipi'],
+            'urun_adi': r['urun_adi'],
+            'renk': _renk_goster(dict(r)),
+            'olusturma_tarihi': (r['olusturma_tarihi'] or '')[:10],
+        })
+    return sonuc
+
+
+def _v2_siparis_uretim_sevk(
+    con: sqlite3.Connection,
+    cari_ids: list[int],
+    cari_map: dict[int, dict],
+) -> list[dict]:
+    """nexgen_planlama_siparis → uretim_plan → sevkiyat özet.
+    Cari360 geniş yetki gerektirmez.
+    """
+    if not cari_ids or not _tablo_var(con, 'nexgen_planlama_siparis'):
+        return []
+    ph, params = _in_ph(cari_ids)
+    sip_rows = con.execute(
+        f"""SELECT id, siparis_no, cari_id, durum, olusturma_tarihi,
+                   termin_tarihi, musteri_termin
+            FROM nexgen_planlama_siparis
+            WHERE cari_id IN ({ph})
+              AND durum NOT IN ('TASLAK', 'REDDEDILDI', 'IPTAL')
+            ORDER BY id DESC LIMIT 200""",
+        params,
+    ).fetchall()
+    if not sip_rows:
+        return []
+
+    sip_ids = [int(r['id']) for r in sip_rows]
+    sip_ph = ','.join(['?'] * len(sip_ids))
+
+    # Üretim planı durumu (son plan / sipariş başına)
+    uretim_map: dict[int, str] = {}
+    if _tablo_var(con, 'nexgen_uretim_plan'):
+        u_rows = con.execute(
+            f"""SELECT planlama_siparis_id, durum
+                FROM nexgen_uretim_plan
+                WHERE planlama_siparis_id IN ({sip_ph})
+                ORDER BY id DESC""",
+            sip_ids,
+        ).fetchall()
+        for ur in u_rows:
+            sid = int(ur['planlama_siparis_id'])
+            if sid not in uretim_map:
+                uretim_map[sid] = ur['durum']
+
+    # Sevkiyat durumu (son sevk / sipariş başına)
+    sevk_map: dict[int, dict] = {}
+    if _tablo_var(con, 'mo_musteri_sevkiyat'):
+        sv_rows = con.execute(
+            f"""SELECT siparis_id, durum, sevk_tarihi
+                FROM mo_musteri_sevkiyat
+                WHERE siparis_id IN ({sip_ph})
+                  AND COALESCE(aktif, 1)=1
+                ORDER BY sevk_tarihi DESC, id DESC""",
+            sip_ids,
+        ).fetchall()
+        for sv in sv_rows:
+            sid = int(sv['siparis_id'])
+            if sid not in sevk_map:
+                sevk_map[sid] = {'sevk_durum': sv['durum'], 'sevk_tarihi': sv['sevk_tarihi']}
+
+    sonuc: list[dict] = []
+    for r in sip_rows:
+        sid = int(r['id'])
+        cid = int(r['cari_id'])
+        sv = sevk_map.get(sid, {})
+        sonuc.append({
+            'siparis_id': sid,
+            'siparis_no': r['siparis_no'],
+            'cari_id': cid,
+            'cari_unvan': (cari_map.get(cid) or {}).get('unvan'),
+            'siparis_durum': r['durum'],
+            'siparis_tarihi': (r['olusturma_tarihi'] or '')[:10],
+            'termin': (r['termin_tarihi'] or r['musteri_termin'] or '')[:10] or None,
+            'uretim_durum': uretim_map.get(sid),
+            'sevk_durum': sv.get('sevk_durum'),
+            'sevk_tarihi': (sv.get('sevk_tarihi') or '')[:10] or None,
+        })
+    return sonuc
+
+
+def _v2_bu_ay_kpi(
+    con: sqlite3.Connection,
+    cari_ids: list[int],
+    today: date,
+) -> dict[str, Any]:
+    """Erhan'ın 13 carisi için bu ay KPI — yalnız gerçek aggregation."""
+    ay_prefix = today.strftime('%Y-%m')
+    if not cari_ids:
+        return {}
+    ph, params = _in_ph(cari_ids)
+
+    def _agg(tablo: str, tarih_kol: str, extra_where: str = '') -> int | None:
+        if not _tablo_var(con, tablo):
+            return None
+        try:
+            n = con.execute(
+                f"""SELECT COUNT(*) as n FROM {tablo}
+                    WHERE cari_id IN ({ph})
+                      AND strftime('%Y-%m', {tarih_kol}) = ?
+                      {extra_where}""",
+                [*params, ay_prefix],
+            ).fetchone()['n']
+            return int(n or 0)
+        except Exception:
+            return None
+
+    gorusme_n = _agg('musteri_operasyon_gorusme', 'gorusme_tarihi',
+                     "AND COALESCE(aktif,1)=1")
+    numune_n = _agg('nexgen_numune_talep', 'olusturma_tarihi',
+                    "AND COALESCE(aktif,1)=1")
+    siparis_n = _agg('nexgen_planlama_siparis', 'olusturma_tarihi',
+                     "AND durum NOT IN ('TASLAK','REDDEDILDI','IPTAL')")
+
+    # Tahsilat alınan (ONAYLANDI, alinan_tarih bu ay)
+    alinan_tahsilat = None
+    if _tablo_var(con, 'mo_tahsilat_kayit'):
+        try:
+            row = con.execute(
+                f"""SELECT COALESCE(SUM(alinan_tutar), 0) as toplam
+                    FROM mo_tahsilat_kayit
+                    WHERE cari_id IN ({ph})
+                      AND durum='ONAYLANDI'
+                      AND strftime('%Y-%m', alinan_tarih) = ?
+                      AND COALESCE(aktif,1)=1""",
+                [*params, ay_prefix],
+            ).fetchone()
+            alinan_tahsilat = round(float(row['toplam'] or 0), 2)
+        except Exception:
+            pass
+
+    # Bekleyen tahsilat (ONAYLANDI durumunda, kalan > 0)
+    bekleyen_tahsilat = None
+    if _tablo_var(con, 'mo_tahsilat_kayit'):
+        try:
+            row = con.execute(
+                f"""SELECT COALESCE(SUM(kalan_tutar), 0) as toplam
+                    FROM mo_tahsilat_kayit
+                    WHERE cari_id IN ({ph})
+                      AND durum='ONAYLANDI'
+                      AND (kalan_tutar IS NULL OR kalan_tutar > 0)
+                      AND COALESCE(aktif,1)=1""",
+                params,
+            ).fetchone()
+            bekleyen_tahsilat = round(float(row['toplam'] or 0), 2)
+        except Exception:
+            pass
+
+    # Geciken tahsilat (planlanan_tarih < bugün, henüz ONAYLANDI + kalan > 0)
+    geciken_tahsilat = None
+    if _tablo_var(con, 'mo_tahsilat_kayit'):
+        try:
+            today_str = today.isoformat()
+            row = con.execute(
+                f"""SELECT COALESCE(SUM(kalan_tutar), 0) as toplam
+                    FROM mo_tahsilat_kayit
+                    WHERE cari_id IN ({ph})
+                      AND durum='ONAYLANDI'
+                      AND planlanan_tahsilat_tarihi < ?
+                      AND (kalan_tutar IS NULL OR kalan_tutar > 0)
+                      AND COALESCE(aktif,1)=1""",
+                [*params, today_str],
+            ).fetchone()
+            geciken_tahsilat = round(float(row['toplam'] or 0), 2)
+        except Exception:
+            pass
+
+    # Sipariş tutarı — tahmini (fiyat * kalem kg toplamı), güvenilir değilse None
+    siparis_tutar = None
+    if _tablo_var(con, 'nexgen_planlama_siparis') and _tablo_var(con, 'nexgen_planlama_siparis_kalem'):
+        try:
+            rows = con.execute(
+                f"""SELECT ps.anlasma_birim_fiyat, k.miktar_kg
+                    FROM nexgen_planlama_siparis ps
+                    JOIN nexgen_planlama_siparis_kalem k ON k.siparis_id = ps.id
+                    WHERE ps.cari_id IN ({ph})
+                      AND strftime('%Y-%m', ps.olusturma_tarihi) = ?
+                      AND ps.durum NOT IN ('TASLAK','REDDEDILDI','IPTAL')""",
+                [*params, ay_prefix],
+            ).fetchall()
+            if rows:
+                toplam = sum(
+                    float(r['anlasma_birim_fiyat'] or 0) * float(r['miktar_kg'] or 0)
+                    for r in rows
+                )
+                siparis_tutar = round(toplam, 2)
+        except Exception:
+            siparis_tutar = None
+
+    return {
+        'bu_ay_gorusme_adedi': gorusme_n,
+        'bu_ay_numune_adedi': numune_n,
+        'bu_ay_siparis_adedi': siparis_n,
+        'bu_ay_siparis_tutari': siparis_tutar,
+        'bu_ay_siparis_tutar_notu': 'Tahmini (birim_fiyat × kg)' if siparis_tutar is not None else 'Hesaplanamadı',
+        'bu_ay_alinan_tahsilat': alinan_tahsilat,
+        'bekleyen_tahsilat': bekleyen_tahsilat,
+        'geciken_tahsilat': geciken_tahsilat,
+        'ay': ay_prefix,
+    }
+
+
+def _v2_trendler(
+    con: sqlite3.Connection,
+    cari_ids: list[int],
+    today: date,
+    gun: int = 30,
+) -> dict[str, list[dict]]:
+    """Son N gün sipariş/numune/tahsilat trendi — yalnız gerçek aggregation.
+    Verisi olmayan günler 0 olarak takvim bucket'ı döner (sahte değer değil).
+    """
+    if not cari_ids:
+        return {'siparis': [], 'numune': [], 'tahsilat': []}
+    ph, params = _in_ph(cari_ids)
+    baslangic = today - timedelta(days=gun - 1)
+    tarihler = [(baslangic + timedelta(days=i)).isoformat() for i in range(gun)]
+
+    def _seri(tablo: str, tarih_kol: str, extra_where: str = '') -> list[dict]:
+        if not _tablo_var(con, tablo):
+            return [{'tarih': t, 'deger': 0} for t in tarihler]
+        try:
+            rows = con.execute(
+                f"""SELECT strftime('%Y-%m-%d', {tarih_kol}) as gun, COUNT(*) as n
+                    FROM {tablo}
+                    WHERE cari_id IN ({ph})
+                      AND {tarih_kol} >= ?
+                      {extra_where}
+                    GROUP BY gun""",
+                [*params, baslangic.isoformat()],
+            ).fetchall()
+            agg = {r['gun']: int(r['n']) for r in rows}
+        except Exception:
+            agg = {}
+        return [{'tarih': t, 'deger': agg.get(t, 0)} for t in tarihler]
+
+    return {
+        'siparis': _seri('nexgen_planlama_siparis', 'olusturma_tarihi',
+                         "AND durum NOT IN ('TASLAK','REDDEDILDI','IPTAL')"),
+        'numune': _seri('nexgen_numune_talep', 'olusturma_tarihi',
+                        "AND COALESCE(aktif,1)=1"),
+        'tahsilat': _seri('mo_tahsilat_kayit', 'alinan_tarih',
+                          "AND durum='ONAYLANDI'"),
+    }
+
+
+def dashboard_v2(
+    con: sqlite3.Connection,
+    kullanici_id: int,
+    yk: set | None = None,
+) -> dict[str, Any]:
+    """ERHAN UI-3A — read-only dashboard veri paketi.
+
+    Güvenlik: scope daima get_pazarlama_cari_kapsami (cari_sorumlu atamaları).
+    uid hardcode yok. Cari360 geniş finans yetkisi açılmaz.
+    """
+    if yk is None:
+        yk = load_kullanici_yetkileri(con, kullanici_id)
+
+    kapsam = get_pazarlama_cari_kapsami(con, kullanici_id, yk)
+    cari_ids: list[int] = kapsam['cari_id_listesi']
+
+    if not cari_ids:
+        return {
+            'kapsam': {'cari_ids': [], 'sayi': 0},
+            'musteriler': [],
+            'tahsilat_kayitlar': [],
+            'vade_takvimi': {},
+            'cek_sozleri': [],
+            'numuneler': [],
+            'siparisler': [],
+            'kpi': {},
+            'trendler': {'siparis': [], 'numune': [], 'tahsilat': []},
+            'kapsam_bos': True,
+        }
+
+    today = date.today()
+    cari_map = _cari_unvan_map(con, cari_ids)
+
+    # 1. Müşteri listesi + bakiye
+    musteriler: list[dict] = []
+    for cid in sorted(cari_ids):
+        info = cari_map.get(cid) or {}
+        bak = _v2_bakiye_ozet(con, cid)
+        musteriler.append({
+            'cari_id': cid,
+            'cari_kod': info.get('cari_kod'),
+            'unvan': info.get('unvan'),
+            'muhasebe_bakiye': bak.get('muhasebe_bakiye'),
+            'bakiye_yonu': bak.get('bakiye_yonu'),
+            'son_hareket_tarihi': bak.get('son_hareket_tarihi'),
+            'bakiye_kaynak': bak.get('kaynak'),
+            'bakiye_eslesme': bak.get('eslesme'),
+        })
+
+    # 2. Tahsilat/vade
+    tahsilat_kayitlar, vade_takvimi = _v2_tahsilat_vade(con, cari_ids, today)
+
+    # 3. Çek sözü
+    cek_sozleri = _v2_cek_sozu(con, cari_ids)
+
+    # 4. Numune özeti
+    numuneler = _v2_numune_ozet(con, cari_ids, cari_map)
+
+    # 5. Sipariş → üretim → sevk
+    siparisler = _v2_siparis_uretim_sevk(con, cari_ids, cari_map)
+
+    # 6. KPI
+    kpi = _v2_bu_ay_kpi(con, cari_ids, today)
+
+    # 7. Trendler
+    trendler = _v2_trendler(con, cari_ids, today)
+
+    # Vade takvimi özet (sayı + tutar)
+    vade_ozet: dict[str, dict] = {}
+    for grup, kayitlar in vade_takvimi.items():
+        vade_ozet[grup] = {
+            'sayi': len(kayitlar),
+            'toplam_tutar': round(sum(float(k['tutar'] or 0) for k in kayitlar), 2),
+        }
+
+    return {
+        'kapsam': {
+            'cari_ids': sorted(cari_ids),
+            'sayi': len(cari_ids),
+        },
+        'musteriler': musteriler,
+        'tahsilat_kayitlar': tahsilat_kayitlar,
+        'vade_takvimi': vade_takvimi,
+        'vade_ozet': vade_ozet,
+        'cek_sozleri': cek_sozleri,
+        'numuneler': numuneler,
+        'siparisler': siparisler,
+        'kpi': kpi,
+        'trendler': trendler,
+        'kapsam_bos': False,
     }

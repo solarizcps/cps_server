@@ -200,35 +200,42 @@ def cari_aktif_atanmamis_mi(con, cari_id: int) -> bool:
     return bool(row)
 
 
+def get_pazarlama_cari_kapsami(
+    con,
+    kullanici_id: int,
+    yk: set[str] | None = None,
+) -> dict[str, Any]:
+    """Canonical Müşteri Operasyonu / pazarlama cari kapsamı.
+
+    Tek kaynak: cari_sorumlu aktif atamaları (ANA/YEDEK/DESTEK/YONETICI).
+    Sorumlusuz cari otomatik dahil edilmez — ownership explicit atama ile belirlenir.
+
+    - Admin / view_all → tüm aktif nexgen_cari
+    - Müşteri temsilcisi (view_own) → yalnız atanmış cariler
+    - İkinci pazarlamacı eklendiğinde aynı model; kullanıcı başına atama ayrılır
+    """
+    return get_kullanici_cari_kapsami(con, kullanici_id, yk)
+
+
 def get_musteri_operasyonu_kapsami(
     con,
     kullanici_id: int,
     yk: set[str] | None = None,
 ) -> dict[str, Any]:
-    """MO liste kapsamı: atanmış ∪ sorumlusuz aktif (başkasının atadığı hariç).
+    """MO liste kapsamı — get_pazarlama_cari_kapsami ile aynı (UI-3C).
 
-    Cari360 / diğer ekranların get_kullanici_cari_kapsami davranışını değiştirmez.
+    Eski atanmış∪sorumlusuz genişlemesi kaldırıldı.
+    dashboard_ozet ve dashboard_v2 aynı cari kümesini kullanır.
     """
     if yk is None:
         yk = load_kullanici_yetkileri(con, kullanici_id)
-    base = get_kullanici_cari_kapsami(con, kullanici_id, yk)
-    atanmamis = _atanmamis_aktif_cari_ids(con)
+    base = get_pazarlama_cari_kapsami(con, kullanici_id, yk)
     coklu = _coklu_aktif_sorumlu_cari_ids(con)
-    if base['tumunu_gorebilir_mi']:
-        atanmis = [i for i in base['cari_id_listesi'] if i not in set(atanmamis)]
-        return {
-            **base,
-            'atanmis_cari_ids': atanmis,
-            'atanmamis_cari_ids': atanmamis,
-            'coklu_sorumlu_cari_ids': coklu,
-        }
-    atanmis = list(base['cari_id_listesi'])
-    cari_ids = sorted(set(atanmis) | set(atanmamis))
+    cari_ids = list(base['cari_id_listesi'])
     return {
         **base,
-        'cari_id_listesi': cari_ids,
-        'atanmis_cari_ids': atanmis,
-        'atanmamis_cari_ids': atanmamis,
+        'atanmis_cari_ids': cari_ids if not base['tumunu_gorebilir_mi'] else cari_ids,
+        'atanmamis_cari_ids': [],
         'coklu_sorumlu_cari_ids': coklu,
     }
 
@@ -246,11 +253,7 @@ def can_mo_view_cari(
         yk = load_kullanici_yetkileri(con, kullanici_id)
     if not can_musteri_pazarlama_menu(yk):
         return False
-    if can_view_cari(con, kullanici_id, cari_id, yk):
-        return True
-    if can_cari360_view_own(yk) and cari_aktif_atanmamis_mi(con, cari_id):
-        return True
-    return False
+    return can_view_cari(con, kullanici_id, cari_id, yk)
 
 
 def _kullanici_cari_atanmis(con, kullanici_id: int, cari_id: int) -> bool:

@@ -1360,6 +1360,45 @@ def _enrich_talep(con, d: dict) -> dict:
     d['aday_siparis_uyari'] = (
         d.get('talep_turu') == 'SIPARIS' and entity == 'ADAY'
     )
+    # MTT yaşam döngüsü: Erhan ekranı için kullanıcı dostu etiket
+    # DURUM_ETIKET'ten farklı: YENI → "Mehmet'e Aktarıldı", ISLEME_ALINDI → "Mehmet İşleme Aldı"
+    _MTT_ISLEM_LBL = {
+        'ONAY_BEKLIYOR': 'Onay Bekliyor',
+        'YENI': "Mehmet'e Aktarıldı",
+        'ISLEME_ALINDI': 'Mehmet İşleme Aldı',
+        'SIPARISE_DONUSTU': 'Siparişe Dönüştü',
+        'NUMUNEYE_DONUSTU': 'Numuneye Dönüştü',
+        'KISMEN_NUMUNEYE_DONUSTU': 'Kısmen Numuneye Dönüştü',
+        'REDDEDILDI': 'Reddedildi',
+        'IPTAL': 'İptal',
+        'EKSIK_BILGI': 'Eksik Bilgi',
+    }
+    d['islem_durumu_etiket'] = _MTT_ISLEM_LBL.get(
+        d.get('durum') or '', d.get('durum') or ''
+    )
+    d.setdefault('donusum_kodu', None)
+    _sip_id = d.get('donusturulen_siparis_id')
+    _num_id = d.get('donusturulen_numune_talep_id')
+    if _sip_id and _tablo_var(con, 'nexgen_planlama_siparis'):
+        try:
+            _sr = con.execute(
+                'SELECT siparis_no FROM nexgen_planlama_siparis WHERE id=?',
+                (int(_sip_id),),
+            ).fetchone()
+            if _sr:
+                d['donusum_kodu'] = _sr['siparis_no']
+        except Exception:
+            pass
+    elif _num_id and _tablo_var(con, 'nexgen_numune_talep'):
+        try:
+            _nr = con.execute(
+                'SELECT talep_kodu FROM nexgen_numune_talep WHERE id=?',
+                (int(_num_id),),
+            ).fetchone()
+            if _nr:
+                d['donusum_kodu'] = _nr['talep_kodu']
+        except Exception:
+            pass
     # Onay Merkezi özeti
     d.setdefault('onay_durum', None)
     d.setdefault('onay_no', None)

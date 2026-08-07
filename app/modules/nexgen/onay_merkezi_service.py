@@ -134,7 +134,7 @@ def _bekleyen_adim(con, talep_id: int) -> dict | None:
 
 def _kademe_yetki_kodu(kademe: str, talep_tipi: str) -> str:
     if talep_tipi == 'TAHSILAT_KAYDI':
-        return 'onay.finans.karar'
+        return 'onay.yonetim.karar'
     if talep_tipi == 'NUMUNE_TALEBI':
         return 'onay.merkez.karar'
     if kademe == 'K2':
@@ -332,6 +332,50 @@ def liste_filtre(con, talep_tipi: str | None = None, durum: str | None = None) -
     else:
         sql += " AND t.durum IN ('BEKLIYOR','BEKLETILDI','ONAYLANDI','REVIZYON','REDDEDILDI')"
     sql += ' ORDER BY t.id DESC LIMIT 100'
+    return [dict(r) for r in con.execute(sql, params).fetchall()]
+
+
+def gecmis_filtre(
+    con,
+    talep_tipi: str | None = None,
+    limit: int = 100,
+) -> list[dict]:
+    """Karar geçmişi: ONAYLANDI + REDDEDILDI + REVIZYON.
+    aktif filtresi YOK — red/revizyon aktif=0 olsa da görünür.
+    Sıralama: son karar zamanı DESC (onay_talep_adim.tarih).
+    """
+    sql = """
+        SELECT
+            t.id, t.talep_kod, t.talep_tipi, t.kaynak_modul, t.kaynak_id, t.kaynak_kod,
+            t.cari_id, t.cari_unvan_snapshot, t.durum, t.tutar, t.para_birimi,
+            t.talep_tarihi, t.aktif,
+            sk.KullaniciAdi AS talep_eden_ad,
+            a.kullanici_ad_snapshot AS karar_veren,
+            a.tarih              AS karar_tarihi,
+            a.karar_notu         AS karar_notu
+        FROM onay_talep t
+        LEFT JOIN sistem_kullanici sk ON sk.Id = t.talep_eden_id
+        LEFT JOIN (
+            SELECT talep_id,
+                   kullanici_ad_snapshot,
+                   tarih,
+                   karar_notu
+            FROM onay_talep_adim
+            WHERE durum IN ('TAMAMLANDI', 'REDDEDILDI', 'REVIZYON')
+              AND tarih = (
+                  SELECT MAX(tarih) FROM onay_talep_adim a2
+                  WHERE a2.talep_id = onay_talep_adim.talep_id
+                    AND a2.durum IN ('TAMAMLANDI', 'REDDEDILDI', 'REVIZYON')
+              )
+        ) a ON a.talep_id = t.id
+        WHERE t.durum IN ('ONAYLANDI', 'REDDEDILDI', 'REVIZYON')
+    """
+    params: list[Any] = []
+    if talep_tipi:
+        sql += ' AND t.talep_tipi=?'
+        params.append(talep_tipi)
+    sql += ' ORDER BY COALESCE(a.tarih, t.updated_at, t.created_at) DESC LIMIT ?'
+    params.append(min(int(limit), 200))
     return [dict(r) for r in con.execute(sql, params).fetchall()]
 
 

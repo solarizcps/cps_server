@@ -189,6 +189,16 @@ def is_pazarlamaci_home_user(yk: set[str] | frozenset[str]) -> bool:
     return can_cari360_view_own(yk)
 
 
+PAZARLAMACI_HOME_PATH = '/nexgen/musteri-pazarlama'
+
+
+def pazarlamaci_home_redirect(yk: set[str] | frozenset[str]) -> Optional[str]:
+    """Canonical MO landing — login ve / guard için."""
+    if is_pazarlamaci_home_user(yk):
+        return PAZARLAMACI_HOME_PATH
+    return None
+
+
 def filter_pazarlamaci_finans_ozet(data: Mapping[str, Any]) -> dict[str, Any]:
     """Tam finans objesinden pazarlamacıya izin verilen alanları filtreler."""
     return {k: data[k] for k in PAZARLAMACI_FINANS_OZET_GORUNUR if k in data}

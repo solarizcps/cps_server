@@ -599,7 +599,7 @@ def _mtt_kalem_ozet(con, talep_id: int) -> dict[str, Any]:
             out['oncelik'] = tr['oncelik']
         kr = con.execute(
             """
-            SELECT urun_ailesi, urun_aciklama, renk_aciklama, miktar_kg, konusulan_tonaj,
+            SELECT urun_ailesi, urun_aciklama, renk_id, renk_aciklama, miktar_kg, konusulan_tonaj,
                    verilen_fiyat, para_birimi, vade_gun, odeme_tipi
             FROM nexgen_musteri_temsilcisi_talep_kalem
             WHERE talep_id=?
@@ -613,7 +613,8 @@ def _mtt_kalem_ozet(con, talep_id: int) -> dict[str, Any]:
         out['urun_ailesi'] = kd.get('urun_ailesi')
         out['urun_ailesi_etiket'] = urun_ailesi_etiket(kd.get('urun_ailesi'))
         out['urun_aciklama'] = kd.get('urun_aciklama')
-        out['renk_gosterim'] = (kd.get('renk_aciklama') or '').strip() or 'Belirtilmedi'
+        from modules.nexgen.musteri_temsilcisi_talep_service import _renk_gosterim
+        out['renk_gosterim'] = _renk_gosterim(con, kd.get('renk_id'), kd.get('renk_aciklama'))
         out['miktar_gosterim'] = miktar_gosterim(kd)
         out['verilen_fiyat'] = kd.get('verilen_fiyat')
         out['para_birimi'] = kd.get('para_birimi')
@@ -625,11 +626,13 @@ def _mtt_kalem_ozet(con, talep_id: int) -> dict[str, Any]:
 
 
 def _enrich_onay(con, d: dict) -> dict:
+    import re as _re
     d['durum_etiket'] = DURUM_ETIKET.get(d.get('durum') or '', d.get('durum'))
     d['kaynak_etiket'] = KAYNAK_ETIKET.get(d.get('kaynak_turu') or '', d.get('kaynak_turu'))
     d['olusturan_adi'] = _kullanici_adi(con, d.get('olusturan_kullanici_id'))
     d['onaylayan_adi'] = _kullanici_adi(con, d.get('onaylayan_kullanici_id'))
     d['firma_adi'] = None
+    d['cari_kod'] = None
     d['talep_turu'] = None
     d['talep_no'] = None
     if d.get('kaynak_turu') == KAYNAK_MUSTERI_TEMSILCISI_TALEP and d.get('kaynak_id'):
@@ -642,6 +645,15 @@ def _enrich_onay(con, d: dict) -> dict:
             d['tur_etiket'] = t.get('tur_etiket')
             d['mtt'] = t
             d['oncelik'] = t.get('oncelik')
+            # cari_kod (MTT popup için)
+            cid = t.get('cari_id')
+            if cid:
+                try:
+                    cr = con.execute('SELECT cari_kod FROM nexgen_cari WHERE id=?', (int(cid),)).fetchone()
+                    if cr:
+                        d['cari_kod'] = cr['cari_kod']
+                except Exception:
+                    pass
         except Exception:
             tr = con.execute(
                 f'SELECT talep_no, talep_turu, cari_id, musteri_aday_id, oncelik FROM {TABLO_MTT} WHERE id=?',
@@ -665,6 +677,65 @@ def _enrich_onay(con, d: dict) -> dict:
         })
         if not d.get('oncelik'):
             d['oncelik'] = oz.get('oncelik')
+        # Tüm kalemler listesi (popup tablosu için)
+        try:
+            from modules.nexgen.mtt_donusum_service import miktar_gosterim as _mg, urun_ailesi_etiket as _ua
+            kalem_rows = con.execute(
+                """
+                SELECT sira_no, urun_ailesi, urun_aciklama, renk_aciklama,
+                       miktar_kg, konusulan_tonaj, fiyat_birimi,
+                       verilen_fiyat, para_birimi, odeme_tipi, vade_gun,
+                       cek_vade_gun, kalem_notu
+                FROM nexgen_musteri_temsilcisi_talep_kalem
+                WHERE talep_id=?
+                ORDER BY sira_no ASC, id ASC
+                """,
+                (int(d['kaynak_id']),),
+            ).fetchall()
+            kalemler_out = []
+            for kr in kalem_rows:
+                kd = _row_dict(kr)
+                kalemler_out.append({
+                    'sira_no': kd.get('sira_no'),
+                    'urun_ailesi': kd.get('urun_ailesi'),
+                    'urun_ailesi_etiket': _ua(kd.get('urun_ailesi')),
+                    'urun_aciklama': kd.get('urun_aciklama'),
+                    'renk_aciklama': kd.get('renk_aciklama'),
+                    'miktar_gosterim': _mg(kd),
+                    'verilen_fiyat': kd.get('verilen_fiyat'),
+                    'para_birimi': kd.get('para_birimi'),
+                    'fiyat_birimi': kd.get('fiyat_birimi'),
+                    'odeme_tipi': kd.get('odeme_tipi'),
+                    'vade_gun': kd.get('vade_gun'),
+                    'cek_vade_gun': kd.get('cek_vade_gun'),
+                    'kalem_notu': kd.get('kalem_notu'),
+                })
+            d['kalemler'] = kalemler_out
+        except Exception:
+            pass
+        # Parse siparis meta from aciklama (termin, teslim, kdv)
+        ac = (d.get('aciklama') or '').strip()
+        meta: dict = {}
+        m = _re.search(r'Termin:\s*(\d{4}-\d{2}-\d{2})', ac)
+        if m:
+            meta['istenen_termin'] = m.group(1)
+        m = _re.search(r'Teslim:\s*([^|]+)', ac)
+        if m:
+            meta['teslim_sekli_etiket'] = m.group(1).strip()
+        m = _re.search(
+            r'KDV:(GAYRI|RESMI)\|oran:(\d+)\|ara:([\d.]+)\|kdv:([\d.]+)\|genel:([\d.]+)(?:\|pb:(\w+))?',
+            ac,
+        )
+        if m:
+            meta['kdv_durumu'] = m.group(1)
+            meta['kdv_orani'] = int(m.group(2))
+            meta['ara_toplam'] = float(m.group(3))
+            meta['kdv_tutari'] = float(m.group(4))
+            meta['genel_toplam'] = float(m.group(5))
+            if m.group(6):
+                meta['para_birimi'] = m.group(6).upper()
+        if meta:
+            d['siparis_meta'] = meta
     return d
 
 
@@ -787,6 +858,208 @@ def pazarlamaci_okunmamis_karar_sayisi(
         params.append(seen_ts)
     row = con.execute(sql, params).fetchone()
     return int(row['n'] or 0) if row else 0
+
+
+def _pazarlamaci_talep_turu_etiket(talep_turu: str | None) -> str:
+    tur = (talep_turu or '').strip().upper()
+    if tur == 'SIPARIS':
+        return 'SİPARİŞ TALEBİ'
+    if tur == 'NUMUNE':
+        return 'NUMUNE TALEBİ'
+    return 'TALEP'
+
+
+def _pazarlamaci_bildirim_baslik(tip: str, talep_turu: str | None = None) -> str:
+    tt = _pazarlamaci_talep_turu_etiket(talep_turu)
+    _MAP = {
+        'MTT_ONAYLANDI': f'{tt} ONAYLANDI',
+        'MTT_REDDEDILDI': f'{tt} REDDEDİLDİ',
+        'MTT_SIPARISE_DONUSTU': 'SİPARİŞE DÖNÜŞTÜ',
+        'MTT_NUMUNEYE_DONUSTU': 'NUMUNEYE DÖNÜŞTÜ',
+        'MTT_ISLEME_ALINDI': 'MEHMET İŞLEME ALDI',
+        'TAHSILAT_ONAYLANDI': 'TAHSİLAT ONAYLANDI',
+        'TAHSILAT_REDDEDILDI': 'TAHSİLAT REDDEDİLDİ',
+    }
+    return _MAP.get(tip, tip.replace('_', ' '))
+
+
+def _pazarlamaci_urun_ozet(con: sqlite3.Connection, talep_id: int) -> tuple[str | None, int]:
+    """İlk kalem özeti + ek kalem sayısı (read-only)."""
+    if not talep_id or not _tablo_var(con, TABLO_MTT):
+        return None, 0
+    try:
+        kalem_sayisi = int(con.execute(
+            'SELECT COUNT(*) AS n FROM nexgen_musteri_temsilcisi_talep_kalem WHERE talep_id=?',
+            (int(talep_id),),
+        ).fetchone()['n'] or 0)
+    except Exception:
+        kalem_sayisi = 0
+    oz = _mtt_kalem_ozet(con, int(talep_id))
+    parcalar: list[str] = []
+    urun = oz.get('urun_ailesi_etiket') or oz.get('urun_aciklama')
+    if urun:
+        parcalar.append(str(urun).strip())
+    renk = (oz.get('renk_gosterim') or '').strip()
+    if renk and renk != 'Belirtilmedi':
+        parcalar.append(renk)
+    miktar = (oz.get('miktar_gosterim') or '').strip()
+    if miktar and miktar != '—':
+        parcalar.append(miktar)
+    if not parcalar:
+        return None, max(0, kalem_sayisi - 1)
+    satir = ' · '.join(parcalar)
+    ek = max(0, kalem_sayisi - 1)
+    if ek:
+        satir += f' · +{ek} kalem'
+    return satir, ek
+
+
+def _pazarlamaci_donusum_kodu(con: sqlite3.Connection, siparis_id, numune_id) -> str | None:
+    try:
+        if siparis_id and _tablo_var(con, 'nexgen_planlama_siparis'):
+            row = con.execute(
+                'SELECT siparis_no FROM nexgen_planlama_siparis WHERE id=?',
+                (int(siparis_id),),
+            ).fetchone()
+            if row and row['siparis_no']:
+                return str(row['siparis_no']).strip()
+        if numune_id and _tablo_var(con, 'nexgen_numune_talep'):
+            row = con.execute(
+                'SELECT talep_kodu FROM nexgen_numune_talep WHERE id=?',
+                (int(numune_id),),
+            ).fetchone()
+            if row and row['talep_kodu']:
+                return str(row['talep_kodu']).strip()
+    except Exception:
+        pass
+    return None
+
+
+def pazarlamaci_bildirimler(
+    con: sqlite3.Connection,
+    kullanici_id: int,
+    *,
+    limit: int = 15,
+) -> list[dict]:
+    """Pazarlamacının kendi MTT + Tahsilat sonuç bildirimleri (salt-okunur).
+
+    MTT: nexgen_onay (ONAYLANDI/REDDEDILDI) + MTT lifecycle durumu
+    Tahsilat: onay_talep (TAHSILAT_KAYDI, ONAYLANDI/REDDEDILDI)
+    Tarih kaynağı: karar_tarihi COALESCE updated_at — sahte tarih üretilmez.
+    """
+    if not kullanici_id:
+        return []
+    import json as _json
+    sonuclar: list[dict] = []
+
+    # --- MTT sonuçları ---
+    if _tablo_var(con, TABLO):
+        rows = con.execute(f"""
+            SELECT no.id, no.durum, no.red_nedeni,
+                   COALESCE(no.karar_tarihi, no.updated_at) AS tarih,
+                   mt.id AS mtt_id, mt.talep_no, mt.talep_turu, mt.durum AS mtt_durum,
+                   mt.cari_id, mt.donusturulen_siparis_id, mt.donusturulen_numune_talep_id
+            FROM {TABLO} no
+            LEFT JOIN {TABLO_MTT} mt ON mt.id = no.kaynak_id
+            WHERE no.kaynak_turu = ?
+              AND no.olusturan_kullanici_id = ?
+              AND no.durum IN ('ONAYLANDI', 'REDDEDILDI')
+            ORDER BY COALESCE(no.karar_tarihi, no.updated_at) DESC, no.id DESC
+            LIMIT ?
+        """, (KAYNAK_MUSTERI_TEMSILCISI_TALEP, int(kullanici_id), limit)).fetchall()
+
+        for r in rows:
+            mtt_durum = r['mtt_durum'] or ''
+            onay_durum = r['durum']
+            talep_turu = r['talep_turu']
+            # Lifecycle etiket: onay sonrası MTT nerede?
+            if onay_durum == 'ONAYLANDI':
+                if mtt_durum == 'SIPARISE_DONUSTU':
+                    tip = 'MTT_SIPARISE_DONUSTU'
+                elif mtt_durum in ('NUMUNEYE_DONUSTU', 'KISMEN_NUMUNEYE_DONUSTU'):
+                    tip = 'MTT_NUMUNEYE_DONUSTU'
+                elif mtt_durum == 'ISLEME_ALINDI':
+                    tip = 'MTT_ISLEME_ALINDI'
+                else:
+                    tip = 'MTT_ONAYLANDI'
+            else:
+                tip = 'MTT_REDDEDILDI'
+
+            # Firma adı: cari join
+            firma_adi = None
+            if r['cari_id']:
+                try:
+                    cr = con.execute(
+                        'SELECT unvan FROM nexgen_cari WHERE id=?', (r['cari_id'],)
+                    ).fetchone()
+                    if cr:
+                        firma_adi = cr['unvan']
+                except Exception:
+                    pass
+
+            mtt_id = r['mtt_id']
+            urun_ozet, _kalem_ek = _pazarlamaci_urun_ozet(con, mtt_id) if mtt_id else (None, 0)
+            donusum_kodu = _pazarlamaci_donusum_kodu(
+                con, r['donusturulen_siparis_id'], r['donusturulen_numune_talep_id'],
+            )
+
+            sonuclar.append({
+                'tip': tip,
+                'baslik': _pazarlamaci_bildirim_baslik(tip, talep_turu),
+                'talep_turu': talep_turu,
+                'talep_no': r['talep_no'],
+                'firma_adi': firma_adi,
+                'urun_ozet': urun_ozet,
+                'tarih': (r['tarih'] or '')[:16],
+                'red_nedeni': r['red_nedeni'] if onay_durum == 'REDDEDILDI' else None,
+                'donusum_kodu': donusum_kodu,
+                'tutar': None,
+            })
+
+    # --- Tahsilat sonuçları ---
+    if _tablo_var(con, 'onay_talep'):
+        trows = con.execute("""
+            SELECT id, durum, COALESCE(updated_at, created_at) AS tarih,
+                   snapshot_json, talep_kod
+            FROM onay_talep
+            WHERE talep_tipi = 'TAHSILAT_KAYDI'
+              AND talep_eden_id = ?
+              AND durum IN ('ONAYLANDI', 'REDDEDILDI')
+            ORDER BY COALESCE(updated_at, created_at) DESC, id DESC
+            LIMIT ?
+        """, (int(kullanici_id), limit)).fetchall()
+
+        for r in trows:
+            snap = {}
+            try:
+                snap = _json.loads(r['snapshot_json'] or '{}')
+            except Exception:
+                pass
+            tip = 'TAHSILAT_ONAYLANDI' if r['durum'] == 'ONAYLANDI' else 'TAHSILAT_REDDEDILDI'
+            red = None
+            if r['durum'] == 'REDDEDILDI':
+                adim = con.execute(
+                    "SELECT karar_notu FROM onay_talep_adim "
+                    "WHERE talep_id=? AND durum='REDDEDILDI' ORDER BY id DESC LIMIT 1",
+                    (int(r['id']),),
+                ).fetchone()
+                red = (adim['karar_notu'] if adim else None) or snap.get('red_nedeni') or snap.get('karar_notu')
+            sonuclar.append({
+                'tip': tip,
+                'baslik': _pazarlamaci_bildirim_baslik(tip),
+                'talep_turu': 'TAHSILAT',
+                'talep_no': snap.get('kayit_kodu') or r['talep_kod'],
+                'firma_adi': snap.get('cari_unvan_snapshot'),
+                'urun_ozet': None,
+                'tarih': (snap.get('alinan_tarih') or r['tarih'] or '')[:16],
+                'red_nedeni': red,
+                'donusum_kodu': None,
+                'tutar': snap.get('alinan_tutar') or snap.get('beklenen_tutar'),
+            })
+
+    # Tarihe göre sırala, en yeni en üste
+    sonuclar.sort(key=lambda x: x['tarih'] or '', reverse=True)
+    return sonuclar[:limit]
 
 
 def mehmet_okunmamis_yeni_sayisi(
