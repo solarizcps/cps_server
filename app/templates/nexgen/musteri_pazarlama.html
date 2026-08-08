@@ -554,7 +554,7 @@
       <section class="mp-panel mp-panel-kisa">
         <h2 class="mp-baslik-kucuk">Hızlı Erişim</h2>
         <div class="mp-v2-erisim-grid">
-          <button type="button" class="mp-v2-erisim-btn mp-detay-ac" data-cari-id="">
+          <button type="button" class="mp-v2-erisim-btn" onclick="(function(){var el=document.getElementById('mp-musteri-panel');if(el)el.scrollIntoView({behavior:'smooth',block:'start'});})()">
             <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0"/></svg>
             <span>Cari Listesi</span>
           </button>
@@ -976,7 +976,6 @@
         </section>
         <div class="mp-modal-footer mp-st-footer">
           <button type="button" class="mp-btn mp-btn-outline" data-close="siparis">İptal</button>
-          <button type="button" class="mp-btn mp-btn-outline" id="mp-siparis-taslak-btn">Taslak Kaydet</button>
           <button type="button" class="mp-btn mp-btn-teal" id="mp-siparis-ozet-btn">Talebi Gönder</button>
         </div>
       </div>
@@ -2989,7 +2988,8 @@ input.mp-hata-alan, select.mp-hata-alan, textarea.mp-hata-alan {
       if (el.id === 'mp-st-pazarlamaci' || el.id === 'mp-st-siparis-no') return;
       el.disabled = false;
     });
-    document.getElementById('mp-siparis-taslak-btn').disabled = false;
+    var _tBtn = document.getElementById('mp-siparis-taslak-btn');
+    if (_tBtn) _tBtn.disabled = false;
     document.getElementById('mp-siparis-ozet-btn').disabled = false;
     showSiparisDurumBanner(null);
     syncSiparisOdemeAlanlari();
@@ -3147,7 +3147,8 @@ input.mp-hata-alan, select.mp-hata-alan, textarea.mp-hata-alan {
     document.getElementById('mp-siparis-ozet-onay-notu').value = ozet.onay_notu || '';
   }
 
-  document.getElementById('mp-siparis-taslak-btn').addEventListener('click', function(){ saveSiparisTaslak(); });
+  var _siparisBtn = document.getElementById('mp-siparis-taslak-btn');
+  if (_siparisBtn) _siparisBtn.addEventListener('click', function(){ saveSiparisTaslak(); });
   document.getElementById('mp-siparis-ozet-btn').addEventListener('click', function(){
     if (!siparisForm.reportValidity()) return;
     var p = siparisPayload();
@@ -3282,6 +3283,15 @@ input.mp-hata-alan, select.mp-hata-alan, textarea.mp-hata-alan {
         html += '<div class="mp-drawer-satir">' + esc(g.tarih) + ' · ' + esc(g.tip) + ' — ' + esc(g.not) + '</div>';
       });
       html += '</div>';
+    }
+    if (cariId) {
+      html += '<div class="mp-drawer-blok" style="margin-top:10px">' +
+        '<a href="/nexgen/cari360/' + encodeURIComponent(cariId) + '" ' +
+        'style="display:inline-flex;align-items:center;gap:6px;background:#006a8e;color:#fff;' +
+        'border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;text-decoration:none;letter-spacing:.02em">' +
+        '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">' +
+        '<path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>' +
+        'CARİ360\'I AÇ</a></div>';
     }
     if (timelineJson) {
       html += '<div class="mp-drawer-blok"><strong>Süreç</strong><div class="mp-timeline" id="mp-drawer-tl"></div></div>';
@@ -3608,8 +3618,11 @@ input.mp-hata-alan, select.mp-hata-alan, textarea.mp-hata-alan {
           } else if (kayit.cari_id && musteriData[kayit.cari_id]) {
             musteriData[kayit.cari_id].son_gorusme = (kayit.gorusme_tarihi || '').slice(0, 10) +
               ' — ' + (kayit.gorusme_tipi || '') + ' (' + (kayit.sonuc_tipi || '') + ')';
-            var kartCell = document.querySelector('#mp-kart-' + kayit.cari_id + ' td:nth-child(2)');
-            if (kartCell) kartCell.textContent = (musteriData[kayit.cari_id].son_gorusme || '—').slice(0, 18);
+            var kartRow = document.querySelector('tr[data-cari-id="' + kayit.cari_id + '"]');
+            if (kartRow) {
+              var kartCell = kartRow.querySelector('td:nth-child(2)');
+              if (kartCell) kartCell.textContent = (musteriData[kayit.cari_id].son_gorusme || '—').slice(0, 18);
+            }
           }
 
           // Form temizle → modal/overlay kapat → scroll lock kaldır → toast (body'de)
@@ -3868,7 +3881,18 @@ input.mp-hata-alan, select.mp-hata-alan, textarea.mp-hata-alan {
     if (!canvas || !jsonEl) return;
     var data;
     try { data = JSON.parse(jsonEl.textContent || '[]'); } catch(e) { return; }
-    if (!data || !data.length) return;
+    var allZero = !data || !data.length || data.every(function(d){ return !(d.deger); });
+    if (allZero) {
+      var parent = canvas.parentElement;
+      if (parent) {
+        canvas.style.display = 'none';
+        var msg = document.createElement('div');
+        msg.style.cssText = 'font-size:11px;color:#9ca3af;text-align:center;padding:18px 0';
+        msg.textContent = 'Bu dönem veri yok';
+        parent.appendChild(msg);
+      }
+      return;
+    }
     var labels = data.map(function(d) { return (d.tarih || '').slice(5); }); // MM-DD
     var values = data.map(function(d) { return d.deger || 0; });
     new Chart(canvas, {
@@ -3912,4 +3936,37 @@ input.mp-hata-alan, select.mp-hata-alan, textarea.mp-hata-alan {
   }
 })();
 </script>
+
+{% if t_revizyon_id %}
+<script>
+{# Tahsilat revizyon: bildirimden gelen t_revizyon_id ile modal otomatik açılır #}
+(function() {
+  var kayitId = {{ t_revizyon_id | int }};
+  function _tryOpen() {
+    if (typeof openModal === 'function' && typeof hydrateTahsilatDraft === 'function') {
+      openModal('tahsilat');
+      hydrateTahsilatDraft(kayitId);
+      // Revizyon bilgisi: banner göster
+      setTimeout(function() {
+        var banner = document.querySelector('#mp-modal-tahsilat .mp-durum-banner');
+        if (!banner) {
+          banner = document.createElement('div');
+          banner.className = 'mp-durum-banner';
+          var form = document.getElementById('mp-tahsilat-form');
+          if (form) form.prepend(banner);
+        }
+        if (banner) {
+          banner.style.cssText = 'background:#fff7ed;border:1px solid #fdba74;border-radius:6px;padding:8px 12px;font-size:12px;color:#9a3412;margin-bottom:8px;font-weight:600';
+          banner.textContent = 'REVİZYON İSTENDİ — Gerekli düzeltmeyi yapıp tekrar gönderin.';
+          banner.hidden = false;
+        }
+      }, 600);
+    } else {
+      setTimeout(_tryOpen, 200);
+    }
+  }
+  document.addEventListener('DOMContentLoaded', function() { setTimeout(_tryOpen, 300); });
+})();
+</script>
+{% endif %}
 {% endblock %}

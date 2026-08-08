@@ -63,6 +63,7 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
     @bp.route('/musteri-pazarlama')
     @login_gerekli
     def musteri_pazarlama_sayfa():
+        from flask import request as _req
         u, yk = _yetki_kontrol()
         con = db_fn()
         try:
@@ -81,6 +82,19 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
             if okunmamis > 0:
                 yeniler = pazarlamaci_karar_listele(con, uid, limit=1, after_ts=seen)
                 popup_karar = yeniler[0] if yeniler else None
+            # Revizyon parametresi: bildirimden "KAYDI AÇ" tıklandığında
+            t_revizyon_id = None
+            _rv = _req.args.get('t_revizyon', '').strip()
+            if _rv and _rv.isdigit():
+                _rv_int = int(_rv)
+                # Güvenlik: yalnız Erhan'ın kendi kaydı
+                _rv_row = con.execute(
+                    "SELECT id, cari_id, kayit_kodu, durum FROM mo_tahsilat_kayit "
+                    "WHERE id=? AND olusturan_id=?",
+                    (_rv_int, int(uid)),
+                ).fetchone()
+                if _rv_row and _rv_row['durum'] == 'REVIZYON_ISTENDI':
+                    t_revizyon_id = _rv_int
         finally:
             con.close()
         return render_template(
@@ -95,6 +109,7 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
             talep_sonuclari=talep_sonuclari,
             mp_karar_okunmamis=okunmamis,
             mp_popup_karar=popup_karar,
+            t_revizyon_id=t_revizyon_id,
         )
 
     @bp.route('/api/musteri-pazarlama/ozet')
@@ -141,7 +156,9 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
             from modules.nexgen.onay_service import pazarlamaci_bildirimler
             uid = kullanici_id_fn()
             liste = pazarlamaci_bildirimler(con, uid, limit=15)
-            return jsonify({'ok': True, 'liste': liste, 'toplam': len(liste)})
+            resp = jsonify({'ok': True, 'liste': liste, 'toplam': len(liste)})
+            resp.headers['Cache-Control'] = 'no-store'
+            return resp
         finally:
             con.close()
 

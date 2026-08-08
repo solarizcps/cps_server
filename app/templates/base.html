@@ -4150,6 +4150,7 @@ window.__cpsRootMap = function(pathname) {
       MTT_ISLEME_ALINDI:    { col: '#92400e' },
       TAHSILAT_ONAYLANDI:   { col: '#065f46' },
       TAHSILAT_REDDEDILDI:  { col: '#991b1b' },
+      TAHSILAT_REVIZYON:    { col: '#92400e' },
     };
 
     function _esc(s) {
@@ -4176,19 +4177,29 @@ window.__cpsRootMap = function(pathname) {
       var tutarSatir = (tutar && r.talep_turu === 'TAHSILAT')
         ? '<div style="font-size:11px;color:#0f766e;font-weight:600;margin-top:2px">' + _esc(tutar) + '</div>'
         : '';
+      var revizyonLink = '';
+      if (r.tip === 'TAHSILAT_REVIZYON' && r.tahsilat_kayit_id) {
+        revizyonLink = '<div style="margin-top:6px"><a href="/nexgen/musteri-pazarlama?t_revizyon=' + encodeURIComponent(r.tahsilat_kayit_id) + '" ' +
+          'style="display:inline-block;background:#92400e;color:#fff;border-radius:4px;padding:3px 10px;font-size:11px;font-weight:700;text-decoration:none">' +
+          'KAYDI AÇ &amp; DÜZELt</a></div>';
+      }
       return '<div style="padding:10px 14px;border-bottom:1px solid #f3f4f6">' +
         '<div style="font-size:11px;font-weight:800;color:' + st.col + ';letter-spacing:.02em;line-height:1.3">' + baslik + '</div>' +
         '<div style="font-size:11px;font-weight:600;color:#0f766e;margin-top:3px;font-family:ui-monospace,monospace">' + kod + '</div>' +
         '<div style="font-size:11px;color:#6b7280;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + firma + '">' + firma + '</div>' +
-        urun + tutarSatir + donusum + red +
+        urun + tutarSatir + donusum + red + revizyonLink +
         (tarih ? '<div style="font-size:10px;color:#9ca3af;margin-top:3px">' + tarih + '</div>' : '') +
         '</div>';
+    }
+
+    function _pzmFetchOpts() {
+      return { credentials: 'same-origin', cache: 'no-store' };
     }
 
     function _pzmYukle() {
       var liste = document.getElementById('pzm-bildirim-liste');
       if (liste) liste.innerHTML = '<p style="padding:12px 14px;font-size:12px;color:#9ca3af;margin:0">Yükleniyor…</p>';
-      fetch('/nexgen/api/musteri-pazarlama/bildirimler', { credentials: 'same-origin' })
+      fetch('/nexgen/api/musteri-pazarlama/bildirimler?_=' + Date.now(), _pzmFetchOpts())
         .then(function(r) { return r.json(); })
         .then(function(d) {
           var sayi = document.getElementById('pzm-bildirim-sayi');
@@ -4221,9 +4232,11 @@ window.__cpsRootMap = function(pathname) {
       e.stopPropagation();
       var dd = document.getElementById('pzm-bildirim-dropdown');
       if (!dd) return;
-      _pzmAcik = !_pzmAcik;
-      dd.style.display = _pzmAcik ? '' : 'none';
-      if (_pzmAcik) _pzmYukle();
+      var gorunur = dd.style.display !== 'none' && window.getComputedStyle(dd).display !== 'none';
+      var aciliyor = !gorunur;
+      _pzmAcik = aciliyor;
+      dd.style.display = aciliyor ? '' : 'none';
+      if (aciliyor) _pzmYukle();
     };
 
     document.addEventListener('click', function(e) {
@@ -4235,8 +4248,8 @@ window.__cpsRootMap = function(pathname) {
       }
     });
 
-    /* İlk yüklemede badge sayısını çek */
-    fetch('/nexgen/api/musteri-pazarlama/bildirimler', { credentials: 'same-origin' })
+    /* İlk yüklemede badge sayısını çek (liste yalnız dropdown açılışında) */
+    fetch('/nexgen/api/musteri-pazarlama/bildirimler?_=' + Date.now(), _pzmFetchOpts())
       .then(function(r) { return r.json(); })
       .then(function(d) {
         var sayi = document.getElementById('pzm-bildirim-sayi');

@@ -879,6 +879,7 @@ def _pazarlamaci_bildirim_baslik(tip: str, talep_turu: str | None = None) -> str
         'MTT_ISLEME_ALINDI': 'MEHMET İŞLEME ALDI',
         'TAHSILAT_ONAYLANDI': 'TAHSİLAT ONAYLANDI',
         'TAHSILAT_REDDEDILDI': 'TAHSİLAT REDDEDİLDİ',
+        'TAHSILAT_REVIZYON': 'TAHSİLAT REVİZYON İSTENDİ',
     }
     return _MAP.get(tip, tip.replace('_', ' '))
 
@@ -1016,16 +1017,26 @@ def pazarlamaci_bildirimler(
                 'tutar': None,
             })
 
-    # --- Tahsilat sonuçları ---
+    # --- Tahsilat sonuçları (ONAYLANDI + REDDEDILDI + REVIZYON) ---
     if _tablo_var(con, 'onay_talep'):
         trows = con.execute("""
-            SELECT id, durum, COALESCE(updated_at, created_at) AS tarih,
-                   snapshot_json, talep_kod
-            FROM onay_talep
-            WHERE talep_tipi = 'TAHSILAT_KAYDI'
-              AND talep_eden_id = ?
-              AND durum IN ('ONAYLANDI', 'REDDEDILDI')
-            ORDER BY COALESCE(updated_at, created_at) DESC, id DESC
+            SELECT ot.id, ot.durum, ot.snapshot_json, ot.talep_kod,
+                   COALESCE(
+                     (SELECT ota.tarih FROM onay_talep_adim ota
+                      WHERE ota.talep_id = ot.id
+                        AND ota.durum IN ('ONAYLANDI', 'REDDEDILDI', 'REVIZYON')
+                      ORDER BY ota.id DESC LIMIT 1),
+                     ot.updated_at, ot.created_at
+                   ) AS tarih,
+                   (SELECT ota2.karar_notu FROM onay_talep_adim ota2
+                    WHERE ota2.talep_id = ot.id
+                      AND ota2.durum IN ('REVIZYON', 'REDDEDILDI')
+                    ORDER BY ota2.id DESC LIMIT 1) AS son_karar_notu
+            FROM onay_talep ot
+            WHERE ot.talep_tipi = 'TAHSILAT_KAYDI'
+              AND ot.talep_eden_id = ?
+              AND ot.durum IN ('ONAYLANDI', 'REDDEDILDI', 'REVIZYON')
+            ORDER BY tarih DESC, ot.id DESC
             LIMIT ?
         """, (int(kullanici_id), limit)).fetchall()
 
@@ -1035,15 +1046,33 @@ def pazarlamaci_bildirimler(
                 snap = _json.loads(r['snapshot_json'] or '{}')
             except Exception:
                 pass
-            tip = 'TAHSILAT_ONAYLANDI' if r['durum'] == 'ONAYLANDI' else 'TAHSILAT_REDDEDILDI'
+            if r['durum'] == 'ONAYLANDI':
+                tip = 'TAHSILAT_ONAYLANDI'
+            elif r['durum'] == 'REDDEDILDI':
+                tip = 'TAHSILAT_REDDEDILDI'
+            else:
+                tip = 'TAHSILAT_REVIZYON'
             red = None
-            if r['durum'] == 'REDDEDILDI':
-                adim = con.execute(
-                    "SELECT karar_notu FROM onay_talep_adim "
-                    "WHERE talep_id=? AND durum='REDDEDILDI' ORDER BY id DESC LIMIT 1",
-                    (int(r['id']),),
-                ).fetchone()
-                red = (adim['karar_notu'] if adim else None) or snap.get('red_nedeni') or snap.get('karar_notu')
+            if r['durum'] in ('REDDEDILDI', 'REVIZYON'):
+                red = r['son_karar_notu'] or snap.get('red_nedeni') or snap.get('karar_notu')
+            # mo_tahsilat_kayit.id — revizyon için modal hydrate (onay_talep.kaynak_id)
+            tahsilat_kayit_id = None
+            if r['durum'] == 'REVIZYON':
+                try:
+                    ot_row = con.execute(
+                        "SELECT kaynak_id FROM onay_talep WHERE id=? AND kaynak_id IS NOT NULL LIMIT 1",
+                        (int(r['id']),),
+                    ).fetchone()
+                    if ot_row and ot_row['kaynak_id']:
+                        kayit_row = con.execute(
+                            "SELECT id FROM mo_tahsilat_kayit "
+                            "WHERE id=? AND olusturan_id=? AND durum='REVIZYON_ISTENDI' LIMIT 1",
+                            (int(ot_row['kaynak_id']), int(kullanici_id)),
+                        ).fetchone()
+                        if kayit_row:
+                            tahsilat_kayit_id = int(kayit_row['id'])
+                except Exception:
+                    pass
             sonuclar.append({
                 'tip': tip,
                 'baslik': _pazarlamaci_bildirim_baslik(tip),
@@ -1051,14 +1080,18 @@ def pazarlamaci_bildirimler(
                 'talep_no': snap.get('kayit_kodu') or r['talep_kod'],
                 'firma_adi': snap.get('cari_unvan_snapshot'),
                 'urun_ozet': None,
-                'tarih': (snap.get('alinan_tarih') or r['tarih'] or '')[:16],
+                'tarih': (r['tarih'] or '')[:16],
                 'red_nedeni': red,
                 'donusum_kodu': None,
                 'tutar': snap.get('alinan_tutar') or snap.get('beklenen_tutar'),
+                'tahsilat_kayit_id': tahsilat_kayit_id,
             })
 
-    # Tarihe göre sırala, en yeni en üste
-    sonuclar.sort(key=lambda x: x['tarih'] or '', reverse=True)
+    # Karar zamanına göre sırala — en yeni en üste (oluşturma/tahsilat günü değil)
+    def _bildirim_sort_key(item: dict) -> str:
+        return (item.get('tarih') or '').replace('T', ' ').strip()
+
+    sonuclar.sort(key=_bildirim_sort_key, reverse=True)
     return sonuclar[:limit]
 
 
