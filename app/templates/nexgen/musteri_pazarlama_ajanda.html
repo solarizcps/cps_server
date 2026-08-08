@@ -1,0 +1,1022 @@
+{% extends "base.html" %}
+{% set page_title = "Ajanda" %}
+
+{% block content %}
+<div class="mpa-root" id="mpa-root">
+  <div class="mpa-toast" id="mpa-toast" hidden></div>
+
+  {# ── Sayfa header kartı ── #}
+  <div class="mpa-page-card mpa-page-hdr-card">
+    <div class="mpa-page-hdr-top">
+      <div class="mpa-page-hdr-sol">
+        <a href="/nexgen/musteri-pazarlama" class="mpa-geri" title="Müşteri Operasyonu">←</a>
+        <div>
+          <h1 class="mpa-baslik">AJANDA</h1>
+          <p class="mpa-alt">Görüşmelerinizi planlayın, takip edin ve yönetin.</p>
+        </div>
+      </div>
+      <button type="button" class="mpa-btn mpa-btn-primary" id="mpa-plan-ac">+ Görüşme Planla</button>
+    </div>
+    <nav class="mpa-nav" id="mpa-nav">
+      <button type="button" class="mpa-sekme mpa-sekme-aktif" data-sekme="ajanda" id="mpa-sekme-ajanda">AJANDA</button>
+      <button type="button" class="mpa-sekme" data-sekme="bu-hafta" id="mpa-sekme-bu-hafta">BU HAFTA</button>
+    </nav>
+  </div>
+
+  {% if aj.zorunlu_sonuc %}
+  <div class="mpa-zorunlu-uyari" id="mpa-zorunlu-uyari" role="alert">
+    <div class="mpa-zorunlu-uyari-ic">
+      <strong>GİRİLMEMİŞ GÖRÜŞME SONUÇLARI VAR</strong>
+      <p>Önceki günlerden kalan {{ aj.zorunlu_sonuc|length }} planın sonucu girilmedi.</p>
+      <ul class="mpa-zorunlu-uyari-liste">
+        {% for z in aj.zorunlu_sonuc %}
+        <li>
+          <span class="mpa-zu-firma">{{ z.musteri }}</span>
+          <span>{{ z.tarih }} {{ z.saat }} — {{ z.gorusme_tipi }}</span>
+          <span class="mpa-zu-bek">{{ z.bekleyen_metin }}</span>
+          <a href="/nexgen/musteri-pazarlama?gorusme_ac=1&amp;source=ajanda&amp;cari_id={{ z.cari_id }}&amp;ajanda_id={{ z.ajanda_id }}&amp;gorusme_tipi={{ z.gorusme_tipi|urlencode }}&amp;unvan={{ z.musteri|urlencode }}{% if z.plan_notu %}&amp;plan_notu={{ z.plan_notu|urlencode }}{% endif %}"
+            class="mpa-btn mpa-btn-primary mpa-btn-xs">Görüşme Sonucunu Gir</a>
+        </li>
+        {% endfor %}
+      </ul>
+      <a href="/nexgen/musteri-pazarlama" class="mpa-btn mpa-btn-outline mpa-btn-xs">Müşteri Operasyonu'na dön</a>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── AJANDA: 3 kolon ana alan ── #}
+  <div class="mpa-main-grid" id="mpa-view-ajanda">
+    {# Sol #}
+    <aside class="mpa-col mpa-col-sol">
+      <section class="mpa-card mpa-card-ozet">
+        <h2 class="mpa-card-title">BU HAFTA ÖZETİ</h2>
+        <div class="mpa-hafta-etiket" id="mpa-ozet-hafta"></div>
+        <div class="mpa-ozet-list">
+          <div class="mpa-ozet-row">
+            <span class="mpa-ozet-ico mpa-ico-toplam">📅</span>
+            <span class="mpa-ozet-lbl">Toplam Görüşme</span>
+            <strong id="mpa-oz-toplam">{{ aj.ozet.toplam }}</strong>
+          </div>
+          <div class="mpa-ozet-row mpa-oz-yesil">
+            <span class="mpa-ozet-ico">✓</span>
+            <span class="mpa-ozet-lbl">Tamamlanan</span>
+            <strong id="mpa-oz-tamamlanan">{{ aj.ozet.tamamlanan }}</strong>
+          </div>
+          <div class="mpa-ozet-row mpa-oz-mavi">
+            <span class="mpa-ozet-ico">○</span>
+            <span class="mpa-ozet-lbl">Planlanan</span>
+            <strong id="mpa-oz-planlanan">{{ aj.ozet.planlanan }}</strong>
+          </div>
+          <div class="mpa-ozet-row mpa-oz-gri">
+            <span class="mpa-ozet-ico">×</span>
+            <span class="mpa-ozet-lbl">İptal</span>
+            <strong id="mpa-oz-iptal">{{ aj.ozet.iptal }}</strong>
+          </div>
+          <div class="mpa-ozet-row mpa-oz-turuncu">
+            <span class="mpa-ozet-ico">!</span>
+            <span class="mpa-ozet-lbl">Görüşülmeyen</span>
+            <strong id="mpa-oz-gorusulmeyen">{{ aj.ozet.gorusulmeyen_firmalar }}</strong>
+          </div>
+        </div>
+      </section>
+      <section class="mpa-card mpa-card-firmalar">
+        <h2 class="mpa-card-title">GÖRÜŞÜLMEDİĞİ FİRMALAR</h2>
+        <div class="mpa-firma-liste" id="mpa-firma-liste">
+          {% for f in aj.gorusulmeyen_firmalar[:6] %}
+          <div class="mpa-firma-item">
+            <div class="mpa-firma-avatar">{{ (f.unvan or '?')[:2]|upper }}</div>
+            <div class="mpa-firma-body">
+              <div class="mpa-firma-ad" title="{{ f.unvan }}">{{ f.unvan }}</div>
+              <div class="mpa-firma-son">{{ f.son_gorusme }}</div>
+            </div>
+            <button type="button" class="mpa-btn-planla mpa-btn-planla-sm" data-cari-id="{{ f.cari_id }}" data-unvan="{{ f.unvan|e }}">Planla</button>
+          </div>
+          {% else %}
+          <div class="mpa-bos">Yakın dönemde görüşülmeyen firma yok.</div>
+          {% endfor %}
+        </div>
+      </section>
+    </aside>
+
+    {# Orta — Takvim #}
+    <main class="mpa-col mpa-col-orta">
+      <div class="mpa-card mpa-card-takvim">
+        <div class="mpa-takvim-toolbar">
+          <div class="mpa-takvim-nav">
+            <button type="button" class="mpa-nav-btn" id="mpa-hafta-once" aria-label="Önceki">‹</button>
+            <button type="button" class="mpa-nav-btn" id="mpa-hafta-sonra" aria-label="Sonraki">›</button>
+            <button type="button" class="mpa-nav-btn mpa-nav-bugun" id="mpa-bugun-btn">Bugün</button>
+          </div>
+          <div class="mpa-hafta-baslik" id="mpa-hafta-baslik"></div>
+        </div>
+        <div class="mpa-takvim-scroll">
+          <div class="mpa-takvim" id="mpa-takvim"></div>
+        </div>
+        <div class="mpa-legend">
+          <span><i class="mpa-leg mpa-leg-yesil"></i>Tamamlandı</span>
+          <span><i class="mpa-leg mpa-leg-mavi"></i>Planlandı</span>
+          <span><i class="mpa-leg mpa-leg-turuncu"></i>Sonuç Bekliyor</span>
+          <span><i class="mpa-leg mpa-leg-gri"></i>İptal</span>
+        </div>
+      </div>
+    </main>
+
+    {# Sağ #}
+    <aside class="mpa-col mpa-col-sag">
+      <section class="mpa-card mpa-card-gun">
+        <h2 class="mpa-card-title">SEÇİLİ GÜN DETAYI</h2>
+        <div class="mpa-gun-tarih" id="mpa-gun-tarih"></div>
+        <div class="mpa-gun-stats">
+          <div class="mpa-stat-box"><small>Toplam</small><strong id="mpa-gun-toplam">0</strong></div>
+          <div class="mpa-stat-box mpa-stat-mavi"><small>Planlanan</small><strong id="mpa-gun-planlanan">0</strong></div>
+          <div class="mpa-stat-box mpa-stat-yesil"><small>Tamamlanan</small><strong id="mpa-gun-tamamlanan">0</strong></div>
+        </div>
+        <div class="mpa-gun-liste" id="mpa-gun-liste"></div>
+        <button type="button" class="mpa-btn mpa-btn-primary mpa-btn-block" id="mpa-gune-plan-ekle">+ Bu Güne Görüşme Ekle</button>
+      </section>
+    </aside>
+  </div>
+
+  {# ── BU HAFTA: liste görünümü ── #}
+  <div class="mpa-page-card mpa-bu-hafta-view" id="mpa-view-bu-hafta" hidden>
+    <div class="mpa-bh-hdr">
+      <h2 class="mpa-card-title">BU HAFTA GÖRÜŞMELERİ</h2>
+      <div class="mpa-bh-aralik" id="mpa-bh-aralik"></div>
+    </div>
+    <div class="mpa-bh-liste" id="mpa-bh-liste"></div>
+  </div>
+
+  {# ── Alt bölüm ── #}
+  <section class="mpa-page-card mpa-alt-bolum">
+    <div class="mpa-alt-baslik">
+      <h2>GÖRÜŞME PLANLA — GÖRÜŞÜLMEDİĞİ FİRMALAR</h2>
+      <span class="mpa-alt-not">Planlanan firmalar ajandaya kaydedilir</span>
+    </div>
+    <div class="mpa-alt-scroll" id="mpa-alt-firmalar">
+      {% for f in aj.gorusulmeyen_firmalar %}
+      <div class="mpa-alt-kart">
+        <div class="mpa-alt-avatar">{{ (f.unvan or '?')[:2]|upper }}</div>
+        <div class="mpa-alt-ad" title="{{ f.unvan }}">{{ f.unvan }}</div>
+        <div class="mpa-alt-son">{{ f.son_gorusme }}</div>
+        <button type="button" class="mpa-btn mpa-btn-outline mpa-btn-planla" data-cari-id="{{ f.cari_id }}" data-unvan="{{ f.unvan|e }}">Planla</button>
+      </div>
+      {% else %}
+      <div class="mpa-bos">Görüşülmeyen firma bulunmuyor.</div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+
+{# Plan form overlay #}
+<div class="mpa-overlay" id="mpa-plan-overlay" hidden>
+  <div class="mpa-plan-modal" role="dialog">
+    <div class="mpa-plan-hdr">
+      <h2>Görüşme Planla</h2>
+      <button type="button" class="mpa-plan-kapat" id="mpa-plan-kapat" aria-label="Kapat">×</button>
+    </div>
+    <form id="mpa-plan-form" class="mpa-plan-form" autocomplete="off">
+      <div class="mpa-plan-body">
+      <div class="mpa-fld"><label>Firma *</label>
+        <select id="mpa-p-cari" name="mpa_plan_cari" required autocomplete="off">
+          <option value="">Seçin</option>
+          {% for m in aj.musteriler %}
+          <option value="{{ m.cari_id }}">{{ m.unvan }}{% if m.cari_kod %} ({{ m.cari_kod }}){% endif %}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="mpa-fld-ikili">
+        <div class="mpa-fld"><label>Tarih *</label><input type="date" id="mpa-p-tarih" name="mpa_plan_tarih" required autocomplete="off"></div>
+        <div class="mpa-fld"><label>Saat *</label><input type="time" id="mpa-p-saat" name="mpa_plan_saat" required value="09:00" autocomplete="off"></div>
+      </div>
+      <div class="mpa-fld"><label>Görüşme tipi *</label>
+        <select id="mpa-p-tip" name="mpa_plan_tip" required autocomplete="off">
+          <option value="">Seçin</option>
+          {% for t in gorusme_tipleri_all %}
+          <option value="{{ t }}">{{ t }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="mpa-fld"><label>Kısa plan notu</label><input type="text" id="mpa-p-not" name="mpa_plan_not" maxlength="300" placeholder="Opsiyonel" autocomplete="off" data-lpignore="true" data-form-type="other"></div>
+      </div>
+      <div class="mpa-plan-footer">
+        <button type="button" class="mpa-btn mpa-btn-outline" id="mpa-plan-vazgec">Vazgeç</button>
+        <button type="submit" class="mpa-btn mpa-btn-primary" id="mpa-plan-submit">Görüşme Planla</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# Görüşme detay modal #}
+<div class="mpa-overlay" id="mpa-gorusme-detay-overlay" hidden>
+  <div class="mpa-plan-modal mpa-detay-modal" role="dialog">
+    <div class="mpa-plan-hdr">
+      <h2>Görüşme Detayı</h2>
+      <button type="button" class="mpa-plan-kapat" id="mpa-detay-kapat" aria-label="Kapat">×</button>
+    </div>
+    <div class="mpa-detay-body" id="mpa-detay-body"></div>
+  </div>
+</div>
+
+<script type="application/json" id="mpa-init-json">{{ {
+  'hafta_bas': aj.hafta_bas,
+  'hafta_bit': aj.hafta_bit,
+  'planlar': aj.planlar,
+  'ozet': aj.ozet,
+  'gorusulmeyen_firmalar': aj.gorusulmeyen_firmalar
+} | tojson }}</script>
+
+<style>
+.mpa-zorunlu-uyari {
+  margin: 0 0 10px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.mpa-zorunlu-uyari strong { color: #991b1b; font-size: 13px; }
+.mpa-zorunlu-uyari p { margin: 6px 0 10px; font-size: 12px; color: #7f1d1d; }
+.mpa-zorunlu-uyari-liste { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 8px; }
+.mpa-zorunlu-uyari-liste li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 10px;
+  align-items: center;
+  font-size: 12px;
+  padding: 8px 10px;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #fecaca;
+}
+.mpa-zu-firma { font-weight: 700; color: #0f172a; }
+.mpa-zu-bek { color: #b91c1c; font-weight: 600; }
+
+[hidden] { display: none !important; }
+
+/* ── Root: beyaz zemin, global header korunur ── */
+.mpa-root {
+  --mpa-primary: #2563eb;
+  --mpa-primary-h: #1d4ed8;
+  --mpa-teal: #0d9488;
+  --mpa-border: #e2e8f0;
+  --mpa-bg: #f4f6f9;
+  --mpa-text: #0f172a;
+  --mpa-muted: #64748b;
+  background: var(--mpa-bg);
+  margin: -8px -12px 0;
+  padding: 10px 12px 14px;
+  min-height: calc(100vh - 120px);
+  box-sizing: border-box;
+  overflow-x: hidden;
+  font-family: inherit;
+  color: var(--mpa-text);
+}
+
+/* ── Beyaz kartlar ── */
+.mpa-page-card {
+  background: #fff;
+  border: 1px solid var(--mpa-border);
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(15,23,42,.04);
+  margin-bottom: 8px;
+}
+.mpa-page-hdr-card { padding: 12px 16px 0; }
+.mpa-page-hdr-top {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+}
+.mpa-page-hdr-sol { display: flex; align-items: flex-start; gap: 10px; }
+.mpa-geri {
+  color: var(--mpa-muted); text-decoration: none; font-size: 18px;
+  line-height: 1; padding: 4px 2px; flex-shrink: 0;
+}
+.mpa-geri:hover { color: var(--mpa-primary); }
+.mpa-baslik { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: .03em; color: #1e293b; }
+.mpa-alt { margin: 2px 0 0; font-size: 12px; color: var(--mpa-muted); }
+
+.mpa-nav {
+  display: flex; gap: 0; margin-top: 10px;
+  border-top: 1px solid #f1f5f9;
+}
+.mpa-sekme {
+  border: none; background: none; padding: 8px 14px; font-size: 11px; font-weight: 700;
+  letter-spacing: .05em; color: var(--mpa-muted); cursor: pointer;
+  border-bottom: 2px solid transparent; font-family: inherit; margin-bottom: -1px;
+}
+.mpa-sekme-aktif { color: var(--mpa-primary); border-bottom-color: var(--mpa-primary); }
+
+/* ── 3 kolon grid ── */
+.mpa-main-grid {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr) 230px;
+  gap: 8px;
+  margin-bottom: 8px;
+  height: calc(100vh - 290px);
+  min-height: 400px;
+  max-height: 520px;
+}
+.mpa-col { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.mpa-card {
+  background: #fff; border: 1px solid var(--mpa-border); border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(15,23,42,.04); padding: 10px 12px;
+  display: flex; flex-direction: column; min-height: 0;
+}
+.mpa-card-title {
+  margin: 0 0 6px; font-size: 10px; font-weight: 800;
+  letter-spacing: .07em; color: #475569; text-transform: uppercase;
+}
+.mpa-col-sol { gap: 6px; }
+.mpa-card-ozet { flex-shrink: 0; }
+.mpa-card-firmalar { flex: 1; overflow: hidden; }
+.mpa-hafta-etiket { font-size: 10px; color: var(--mpa-muted); margin-bottom: 6px; }
+
+/* Sol özet satırları */
+.mpa-ozet-list { display: flex; flex-direction: column; gap: 4px; }
+.mpa-ozet-row {
+  display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 4px;
+  padding: 4px 6px; background: #f8fafc; border-radius: 6px; font-size: 11px;
+}
+.mpa-ozet-ico { font-size: 11px; text-align: center; }
+.mpa-ozet-lbl { color: var(--mpa-muted); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mpa-ozet-row strong { font-size: 14px; font-weight: 700; }
+.mpa-oz-yesil strong { color: #059669; }
+.mpa-oz-mavi strong { color: #2563eb; }
+.mpa-oz-gri strong { color: #94a3b8; }
+.mpa-oz-turuncu strong { color: #d97706; }
+
+/* Sol firma listesi */
+.mpa-firma-liste { overflow-y: auto; flex: 1; }
+.mpa-firma-item {
+  display: grid; grid-template-columns: 28px 1fr auto; gap: 6px; align-items: center;
+  padding: 5px 0; border-bottom: 1px solid #f1f5f9;
+}
+.mpa-firma-avatar {
+  width: 28px; height: 28px; border-radius: 50%; background: #e0e7ff; color: #3730a3;
+  font-size: 9px; font-weight: 800; display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.mpa-firma-body { min-width: 0; }
+.mpa-firma-ad {
+  font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mpa-firma-son { font-size: 9px; color: var(--mpa-muted); margin-top: 1px; }
+.mpa-btn-planla-sm {
+  border: none; background: none; color: var(--mpa-primary); font-size: 10px;
+  font-weight: 700; cursor: pointer; padding: 2px 4px; font-family: inherit; white-space: nowrap;
+}
+.mpa-btn-planla-sm:hover { text-decoration: underline; }
+
+/* ── Takvim ── */
+.mpa-col-orta { min-width: 0; }
+.mpa-card-takvim { flex: 1; padding: 8px 10px; overflow: hidden; }
+.mpa-takvim-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 6px; flex-shrink: 0;
+}
+.mpa-takvim-nav { display: flex; gap: 4px; align-items: center; }
+.mpa-nav-btn {
+  width: 26px; height: 26px; border: 1px solid var(--mpa-border); background: #fff;
+  border-radius: 6px; cursor: pointer; font-size: 14px; line-height: 1; color: #475569;
+  font-family: inherit;
+}
+.mpa-nav-btn:hover { background: #f8fafc; border-color: #cbd5e1; }
+.mpa-nav-bugun { width: auto; padding: 0 10px; font-size: 11px; font-weight: 600; }
+.mpa-hafta-baslik { font-size: 13px; font-weight: 700; color: #1e293b; text-align: center; flex: 1; }
+
+.mpa-takvim-scroll { flex: 1; overflow: auto; border: 1px solid var(--mpa-border); border-radius: 8px; background: #fff; }
+.mpa-takvim {
+  display: grid;
+  grid-template-columns: 34px repeat(7, minmax(0, 1fr));
+  min-width: 0;
+}
+.mpa-takvim-hdr {
+  padding: 6px 2px; text-align: center; font-size: 10px; font-weight: 700;
+  background: #f8fafc; border-bottom: 1px solid var(--mpa-border);
+  border-right: 1px solid #f1f5f9; color: #475569; position: sticky; top: 0; z-index: 2;
+}
+.mpa-takvim-hdr small { display: block; font-size: 13px; font-weight: 800; color: #1e293b; margin-top: 1px; }
+.mpa-takvim-hdr.mpa-bugun { background: #eff6ff; }
+.mpa-takvim-hdr.mpa-bugun small { color: var(--mpa-primary); }
+.mpa-takvim-hdr.mpa-secili-gun { background: #f0fdfa; }
+.mpa-takvim-hdr.mpa-secili-gun small { color: var(--mpa-teal); }
+
+.mpa-takvim-saat {
+  padding: 4px 3px 0 0; font-size: 9px; color: #94a3b8; text-align: right;
+  border-right: 1px solid var(--mpa-border); border-bottom: 1px solid #f1f5f9;
+  box-sizing: border-box; line-height: 1;
+}
+.mpa-takvim-hucre {
+  border-right: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9;
+  box-sizing: border-box; cursor: pointer; padding: 2px;
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+  background: #fff;
+}
+.mpa-takvim-hucre.mpa-secili { background: #f0fdfa; }
+.mpa-takvim-hucre.mpa-bugun-kol { background: #fafbff; }
+
+/* Görüşme kartları — referans pastel */
+.mpa-ev-kart {
+  border-radius: 5px; padding: 3px 5px; font-size: 9px; line-height: 1.25;
+  border-left: 3px solid transparent; overflow: hidden; flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(15,23,42,.06);
+}
+.mpa-ev-kart .mpa-ev-saat { font-weight: 800; font-size: 9px; }
+.mpa-ev-kart .mpa-ev-firma {
+  font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: 9px; margin-top: 1px;
+}
+.mpa-ev-kart .mpa-ev-tip { color: inherit; opacity: .75; font-size: 8px; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mpa-ev-kart.mpa-durum-planlandi { background: #dbeafe; border-left-color: #3b82f6; color: #1e3a8a; }
+.mpa-ev-kart.mpa-durum-gerceklesti { background: #d1fae5; border-left-color: #10b981; color: #065f46; }
+.mpa-ev-kart.mpa-durum-sonuc_bekliyor { background: #fef3c7; border-left-color: #f59e0b; color: #92400e; }
+.mpa-ev-kart.mpa-durum-zorunlu_sonuc_bekliyor { background: #fee2e2; border-left-color: #dc2626; color: #991b1b; }
+.mpa-ev-kart.mpa-durum-iptal { background: #f1f5f9; border-left-color: #94a3b8; color: #64748b; }
+
+.mpa-legend {
+  display: flex; gap: 10px; font-size: 9px; color: var(--mpa-muted);
+  margin-top: 5px; flex-shrink: 0; flex-wrap: wrap;
+}
+.mpa-leg { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 3px; vertical-align: middle; }
+.mpa-leg-yesil { background: #d1fae5; border: 1px solid #10b981; }
+.mpa-leg-mavi { background: #dbeafe; border: 1px solid #3b82f6; }
+.mpa-leg-turuncu { background: #fef3c7; border: 1px solid #f59e0b; }
+.mpa-leg-gri { background: #f1f5f9; border: 1px solid #94a3b8; }
+
+/* ── Sağ panel ── */
+.mpa-card-gun { flex: 1; overflow: hidden; }
+.mpa-gun-tarih { font-size: 11px; font-weight: 700; color: #1e293b; margin-bottom: 6px; line-height: 1.3; }
+.mpa-gun-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-bottom: 8px; }
+.mpa-stat-box {
+  background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 6px;
+  padding: 5px 4px; text-align: center;
+}
+.mpa-stat-box small { display: block; font-size: 8px; color: var(--mpa-muted); text-transform: uppercase; letter-spacing: .04em; }
+.mpa-stat-box strong { font-size: 16px; font-weight: 800; color: #1e293b; }
+.mpa-stat-mavi strong { color: #2563eb; }
+.mpa-stat-yesil strong { color: #059669; }
+.mpa-gun-liste { flex: 1; overflow-y: auto; margin-bottom: 6px; min-height: 0; }
+.mpa-gun-ev {
+  border: 1px solid var(--mpa-border); border-radius: 8px; padding: 8px;
+  margin-bottom: 5px; background: #fff;
+}
+.mpa-gun-ev-ust { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; }
+.mpa-gun-ev-saat { font-size: 10px; font-weight: 700; color: var(--mpa-primary); }
+.mpa-gun-ev-firma {
+  font-size: 11px; font-weight: 700; color: #1e293b;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px;
+}
+.mpa-gun-ev-tip { font-size: 9px; color: var(--mpa-muted); margin-bottom: 5px; }
+.mpa-durum-chip {
+  display: inline-block; font-size: 8px; font-weight: 700; padding: 2px 6px; border-radius: 4px;
+}
+.mpa-durum-planlandi { background: #dbeafe; color: #1e40af; }
+.mpa-durum-sonuc_bekliyor { background: #fef3c7; color: #92400e; }
+.mpa-durum-zorunlu_sonuc_bekliyor { background: #fee2e2; color: #991b1b; font-weight: 700; }
+.mpa-durum-gerceklesti { background: #d1fae5; color: #065f46; }
+.mpa-durum-iptal { background: #f1f5f9; color: #64748b; }
+.mpa-gun-ev-ozet { font-size: 9px; color: #475569; margin: 4px 0; line-height: 1.35; }
+.mpa-gun-ev-ozet div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mpa-gun-ev-aks { margin-top: 5px; }
+.mpa-gun-ev-aks a, .mpa-gun-ev-aks button {
+  font-size: 10px; font-weight: 600; text-decoration: none;
+}
+
+/* ── Alt bölüm ── */
+.mpa-alt-bolum { padding: 10px 14px 12px; }
+.mpa-alt-baslik {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  margin-bottom: 8px;
+}
+.mpa-alt-baslik h2 { margin: 0; font-size: 10px; font-weight: 800; letter-spacing: .06em; color: #475569; }
+.mpa-alt-not { font-size: 9px; color: #94a3b8; }
+.mpa-alt-scroll {
+  display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+.mpa-alt-kart {
+  flex: 0 0 148px; background: #f8fafc; border: 1px solid var(--mpa-border);
+  border-radius: 8px; padding: 10px 10px 8px; text-align: center;
+}
+.mpa-alt-avatar {
+  width: 36px; height: 36px; border-radius: 50%; background: #e0e7ff; color: #3730a3;
+  font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 6px;
+}
+.mpa-alt-ad {
+  font-size: 10px; font-weight: 700; color: #1e293b;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 3px;
+}
+.mpa-alt-son { font-size: 9px; color: var(--mpa-muted); margin-bottom: 6px; min-height: 22px; }
+.mpa-alt-kart .mpa-btn { width: 100%; padding: 4px 8px; font-size: 10px; }
+
+/* ── Butonlar ── */
+.mpa-btn {
+  border: none; border-radius: 7px; padding: 7px 14px; font-size: 12px; font-weight: 600;
+  cursor: pointer; font-family: inherit; white-space: nowrap;
+}
+.mpa-btn-primary { background: var(--mpa-primary); color: #fff; }
+.mpa-btn-primary:hover { background: var(--mpa-primary-h); }
+.mpa-btn-outline { background: #fff; border: 1px solid var(--mpa-border); color: #475569; }
+.mpa-btn-outline:hover { background: #f8fafc; }
+.mpa-btn-block { width: 100%; }
+.mpa-btn-xs { padding: 4px 10px; font-size: 10px; }
+
+.mpa-bos { font-size: 11px; color: #94a3b8; padding: 8px 0; text-align: center; }
+
+/* ── Modal ── */
+.mpa-overlay {
+  position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 9000;
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+  /* mp-sayfa dışında — kendi design token scope */
+  --mpa-primary: #2563eb;
+  --mpa-primary-h: #1d4ed8;
+  --mpa-border: #e2e8f0;
+  --mpa-muted: #64748b;
+}
+.mpa-plan-modal {
+  background: #fff; border-radius: 10px; width: min(420px, 96vw);
+  max-height: min(90vh, 520px); overflow: hidden;
+  box-shadow: 0 8px 32px rgba(15,23,42,.15);
+  display: flex; flex-direction: column;
+}
+.mpa-plan-hdr { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--mpa-border); flex-shrink: 0; }
+.mpa-plan-hdr h2 { margin: 0; font-size: 14px; }
+.mpa-plan-kapat { border: none; background: none; font-size: 22px; cursor: pointer; color: var(--mpa-muted); }
+.mpa-plan-form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.mpa-plan-body { padding: 14px 16px 8px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+.mpa-fld { margin-bottom: 10px; }
+.mpa-fld label { display: block; font-size: 11px; font-weight: 600; margin-bottom: 4px; color: #475569; }
+.mpa-fld input, .mpa-fld select { width: 100%; padding: 6px 8px; border: 1px solid var(--mpa-border); border-radius: 6px; font-size: 12px; font-family: inherit; box-sizing: border-box; }
+.mpa-fld-ikili { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.mpa-plan-footer {
+  display: flex; justify-content: flex-end; align-items: center; gap: 8px;
+  padding: 12px 16px; border-top: 1px solid var(--mpa-border);
+  flex: 0 0 auto; flex-shrink: 0; background: #fff;
+  position: sticky; bottom: 0; z-index: 2;
+}
+.mpa-overlay .mpa-btn-primary {
+  background: var(--mpa-primary);
+  color: #fff;
+  border: 1px solid var(--mpa-primary-h);
+  min-width: 120px;
+}
+.mpa-overlay .mpa-btn-primary:hover { background: var(--mpa-primary-h); }
+.mpa-overlay .mpa-btn-primary:disabled { opacity: .55; cursor: not-allowed; }
+.mpa-fld textarea {
+  width: 100%; padding: 6px 8px; border: 1px solid var(--mpa-border);
+  border-radius: 6px; font-size: 12px; font-family: inherit; box-sizing: border-box; resize: vertical;
+}
+
+/* ── BU HAFTA liste görünümü ── */
+.mpa-bu-hafta-view { padding: 12px 16px 14px; margin-bottom: 8px; min-height: 360px; max-height: calc(100vh - 290px); overflow: hidden; display: flex; flex-direction: column; }
+.mpa-bh-hdr { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; flex-shrink: 0; }
+.mpa-bh-aralik { font-size: 12px; font-weight: 700; color: #1e293b; }
+.mpa-bh-liste { flex: 1; overflow-y: auto; }
+.mpa-bh-row {
+  display: grid; grid-template-columns: 72px 52px minmax(0, 1fr) 100px 88px auto;
+  gap: 8px; align-items: center; padding: 8px 10px;
+  border: 1px solid var(--mpa-border); border-radius: 8px; margin-bottom: 6px; background: #fff;
+  font-size: 11px;
+}
+.mpa-bh-row-hdr {
+  display: grid; grid-template-columns: 72px 52px minmax(0, 1fr) 100px 88px auto;
+  gap: 8px; padding: 0 10px 6px; font-size: 9px; font-weight: 800;
+  letter-spacing: .05em; color: #94a3b8; text-transform: uppercase;
+}
+.mpa-bh-tarih { font-weight: 700; color: #1e293b; }
+.mpa-bh-saat { font-weight: 700; color: var(--mpa-primary); }
+.mpa-bh-firma { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mpa-bh-tip { color: var(--mpa-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mpa-detay-modal { width: min(440px, 96vw); }
+.mpa-detay-body { padding: 14px 16px; font-size: 12px; line-height: 1.45; }
+.mpa-detay-row { margin-bottom: 8px; }
+.mpa-detay-row strong { display: block; font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 2px; }
+.mpa-detay-row span { color: #1e293b; word-break: break-word; }
+.mpa-toast {
+  position: fixed; top: 70px; right: 16px; z-index: 9999; background: #0f172a; color: #fff;
+  padding: 10px 16px; border-radius: 8px; font-size: 12px; max-width: 320px;
+}
+</style>
+
+<script>
+(function() {
+  var initEl = document.getElementById('mpa-init-json');
+  var init = initEl ? JSON.parse(initEl.textContent) : {};
+  var planlar = init.planlar || [];
+  var haftaBas = init.hafta_bas;
+  var haftaBit = init.hafta_bit;
+  var seciliGun = new Date().toISOString().slice(0, 10);
+  var aktifSekme = 'ajanda';
+  var idemKey = null;
+  var AYLAR = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+  var GUNLER = ['Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi','Pazar'];
+  var GUNLER_KISA = ['Pzt','Sal','Çar','Per','Cum','Cmt','Paz'];
+  var SAATLER = [9,10,11,12,13,14,15,16,17,18];
+  var ROW_H = 54;
+
+  function esc(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+  }
+  function kisaUnvan(ad, max) {
+    max = max || 22;
+    ad = (ad || '').trim();
+    if (ad.length <= max) return ad;
+    return ad.slice(0, max - 1) + '…';
+  }
+  function toast(msg) {
+    var el = document.getElementById('mpa-toast');
+    if (!el) return;
+    el.textContent = msg;
+    el.hidden = false;
+    clearTimeout(el._t);
+    el._t = setTimeout(function(){ el.hidden = true; }, 3200);
+  }
+  function newIdemKey() {
+    return 'aj-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
+  }
+  function parseDate(s) { return new Date(s + 'T12:00:00'); }
+  function addDays(s, n) {
+    var d = parseDate(s);
+    d.setDate(d.getDate() + n);
+    return d.toISOString().slice(0, 10);
+  }
+  function haftaPazartesi(s) {
+    var d = parseDate(s);
+    var day = d.getDay();
+    var diff = day === 0 ? -6 : 1 - day;
+    d.setDate(d.getDate() + diff);
+    return d.toISOString().slice(0, 10);
+  }
+  function formatHafta(bas, bit) {
+    var db = parseDate(bas), de = parseDate(bit);
+    return db.getDate() + ' – ' + de.getDate() + ' ' + AYLAR[de.getMonth()] + ' ' + de.getFullYear();
+  }
+  function formatGunUzun(s) {
+    var d = parseDate(s);
+    var gun = d.getDay();
+    var idx = gun === 0 ? 6 : gun - 1;
+    return GUNLER[idx] + ', ' + d.getDate() + ' ' + AYLAR[d.getMonth()] + ' ' + d.getFullYear();
+  }
+  function durumEtiket(k) {
+    if (k.durum_etiket) return k.durum_etiket;
+    var dg = (k.durum_gorunum || k.durum || 'planlandi').toUpperCase();
+    if (dg === 'ZORUNLU_SONUC_BEKLIYOR') return 'Zorunlu Sonuç Bekliyor';
+    if (dg === 'SONUC_BEKLIYOR') return 'Sonuç Bekliyor';
+    if (dg === 'GERCEKLESTI') return 'Gerçekleşti';
+    if (dg === 'IPTAL') return 'İptal';
+    return 'Planlandı';
+  }
+  function planAksiyonGerekli(k) {
+    var dg = (k.durum_gorunum || '').toUpperCase();
+    if (dg === 'SONUC_BEKLIYOR' || dg === 'ZORUNLU_SONUC_BEKLIYOR') return true;
+    return (k.durum || '').toUpperCase() === 'PLANLANDI';
+  }
+  function planAksiyonMetin(k) {
+    var dg = (k.durum_gorunum || '').toUpperCase();
+    if (dg === 'SONUC_BEKLIYOR' || dg === 'ZORUNLU_SONUC_BEKLIYOR') return 'Görüşme Sonucunu Gir';
+    return 'Görüşme Aç';
+  }
+  function gorusmeOzetHtml(k) {
+    var oz = k.gorusme_ozet;
+    if (!oz) return '';
+    var html = '';
+    if (oz.sonuc_tipi) html += '<div><strong>Sonuç:</strong> ' + esc(oz.sonuc_tipi) + '</div>';
+    if (oz.kisa_not) html += '<div title="' + esc(oz.kisa_not) + '"><strong>Not:</strong> ' + esc(kisaUnvan(oz.kisa_not, 60)) + '</div>';
+    if (oz.sonraki_aksiyon) html += '<div title="' + esc(oz.sonraki_aksiyon) + '"><strong>Sonraki:</strong> ' + esc(kisaUnvan(oz.sonraki_aksiyon, 40)) + '</div>';
+    return html ? '<div class="mpa-gun-ev-ozet">' + html + '</div>' : '';
+  }
+  function openGorusmeDetay(k) {
+    var oz = k.gorusme_ozet || {};
+    var body = document.getElementById('mpa-detay-body');
+    var ov = document.getElementById('mpa-gorusme-detay-overlay');
+    if (!body || !ov) return;
+    body.innerHTML =
+      '<div class="mpa-detay-row"><strong>Firma</strong><span>' + esc(k.musteri) + '</span></div>' +
+      '<div class="mpa-detay-row"><strong>Gerçek Görüşme Tarihi</strong><span>' + esc((oz.gorusme_tarihi || '').slice(0, 16) || '—') + '</span></div>' +
+      '<div class="mpa-detay-row"><strong>Görüşme Tipi</strong><span>' + esc(oz.gorusme_tipi || k.gorusme_tipi || '—') + '</span></div>' +
+      '<div class="mpa-detay-row"><strong>Sonuç Tipi</strong><span>' + esc(oz.sonuc_tipi || '—') + '</span></div>' +
+      '<div class="mpa-detay-row"><strong>Görüşme Notu</strong><span>' + esc(oz.kisa_not || '—') + '</span></div>' +
+      '<div class="mpa-detay-row"><strong>Sonraki Aksiyon</strong><span>' + esc(oz.sonraki_aksiyon || '—') + '</span></div>' +
+      '<div class="mpa-detay-row"><strong>Sonraki Takip</strong><span>' + esc(oz.sonraki_takip_tarihi || '—') + '</span></div>';
+    ov.hidden = false;
+    document.body.style.overflow = 'hidden';
+  }
+  function closeGorusmeDetay() {
+    var ov = document.getElementById('mpa-gorusme-detay-overlay');
+    if (ov) ov.hidden = true;
+    if (!document.getElementById('mpa-plan-overlay') || document.getElementById('mpa-plan-overlay').hidden) {
+      document.body.style.overflow = '';
+    }
+  }
+  function setAktifSekme(sekme) {
+    aktifSekme = sekme;
+    document.querySelectorAll('.mpa-sekme').forEach(function(btn) {
+      btn.classList.toggle('mpa-sekme-aktif', btn.dataset.sekme === sekme);
+    });
+    var viewAjanda = document.getElementById('mpa-view-ajanda');
+    var viewBuHafta = document.getElementById('mpa-view-bu-hafta');
+    if (viewAjanda) viewAjanda.hidden = sekme !== 'ajanda';
+    if (viewBuHafta) viewBuHafta.hidden = sekme !== 'bu-hafta';
+    if (sekme === 'bu-hafta') renderBuHaftaListe();
+  }
+  function renderBuHaftaListe() {
+    var listEl = document.getElementById('mpa-bh-liste');
+    var aralikEl = document.getElementById('mpa-bh-aralik');
+    if (!listEl) return;
+    if (aralikEl) aralikEl.textContent = formatHafta(haftaBas, haftaBit);
+    var liste = planlar.slice().sort(function(a, b) {
+      var ta = (a.tarih || '') + ' ' + (a.saat || '');
+      var tb = (b.tarih || '') + ' ' + (b.saat || '');
+      return ta.localeCompare(tb);
+    });
+    if (!liste.length) {
+      listEl.innerHTML = '<div class="mpa-bos">Bu hafta için planlanmış görüşme yok.</div>';
+      return;
+    }
+    var html = '<div class="mpa-bh-row-hdr"><span>Tarih</span><span>Saat</span><span>Firma</span><span>Tip</span><span>Durum</span><span></span></div>';
+    html += liste.map(function(k) {
+      var aks = '';
+      if (planAksiyonGerekli(k)) {
+        aks = gorusmeSonucBtnHtml(k);
+      } else if ((k.durum || '').toUpperCase() === 'GERCEKLESTI' && k.gorusme_ozet) {
+        aks = '<button type="button" class="mpa-btn mpa-btn-outline mpa-btn-xs mpa-btn-detay" data-plan-id="' + k.id + '">Görüşme Detayı</button>';
+      } else {
+        aks = '<span class="mpa-durum-chip ' + durumClass(k.durum_gorunum) + '">' + esc(durumEtiket(k)) + '</span>';
+      }
+      var tarihKisa = '';
+      if (k.tarih) {
+        var d = parseDate(k.tarih);
+        var gun = d.getDay();
+        var idx = gun === 0 ? 6 : gun - 1;
+        tarihKisa = GUNLER_KISA[idx] + ' ' + d.getDate() + '.' + (d.getMonth() + 1);
+      }
+      return '<div class="mpa-bh-row">' +
+        '<span class="mpa-bh-tarih">' + esc(tarihKisa) + '</span>' +
+        '<span class="mpa-bh-saat">' + esc(k.saat || '-') + '</span>' +
+        '<span class="mpa-bh-firma" title="' + esc(k.musteri) + '">' + esc(kisaUnvan(k.musteri, 36)) + '</span>' +
+        '<span class="mpa-bh-tip">' + esc(k.gorusme_tipi || '') + '</span>' +
+        '<span class="mpa-durum-chip ' + durumClass(k.durum_gorunum) + '">' + esc(durumEtiket(k)) + '</span>' +
+        '<span>' + aks + '</span></div>';
+    }).join('');
+    listEl.innerHTML = html;
+    listEl.querySelectorAll('.mpa-btn-detay').forEach(function(btn) {
+      btn.onclick = function() {
+        var pid = parseInt(btn.dataset.planId, 10);
+        var plan = planlar.find(function(p){ return p.id === pid; });
+        if (plan) openGorusmeDetay(plan);
+      };
+    });
+  }
+  function gorusmeAcUrl(plan) {
+    var q = [
+      'gorusme_ac=1',
+      'source=ajanda',
+      'cari_id=' + encodeURIComponent(plan.cari_id || ''),
+      'ajanda_id=' + encodeURIComponent(plan.id || plan.ajanda_id || '')
+    ];
+    if (plan.gorusme_tipi) q.push('gorusme_tipi=' + encodeURIComponent(plan.gorusme_tipi));
+    if (plan.musteri) q.push('unvan=' + encodeURIComponent(plan.musteri));
+    if (plan.plan_notu) q.push('plan_notu=' + encodeURIComponent(plan.plan_notu));
+    return '/nexgen/musteri-pazarlama?' + q.join('&');
+  }
+  function gorusmeSonucBtnHtml(k) {
+    return '<a href="' + esc(gorusmeAcUrl(k)) + '" class="mpa-btn mpa-btn-primary mpa-btn-xs">' +
+      esc(planAksiyonMetin(k)) + '</a>';
+  }
+  function durumClass(dg) {
+    return 'mpa-durum-' + (dg || 'planlandi').toLowerCase();
+  }
+  function evKartClass(dg) {
+    return 'mpa-ev-kart mpa-durum-' + (dg || 'planlandi').toLowerCase();
+  }
+  function gunPlanlari(tarih) {
+    return planlar.filter(function(p){ return (p.tarih || '') === tarih; })
+      .sort(function(a,b){ return (a.saat||'').localeCompare(b.saat||''); });
+  }
+  function haftaGunleri(bas) {
+    var out = [];
+    for (var i = 0; i < 7; i++) out.push(addDays(bas, i));
+    return out;
+  }
+  function saatPlanlari(gun, saat) {
+    return gunPlanlari(gun).filter(function(p) {
+      return parseInt((p.saat || '09:00').split(':')[0], 10) === saat;
+    });
+  }
+  function evKartHtml(k) {
+    return '<div class="' + evKartClass(k.durum_gorunum) + '" title="' + esc(k.musteri) + '">' +
+      '<div class="mpa-ev-saat">' + esc(k.saat) + '</div>' +
+      '<div class="mpa-ev-firma">' + esc(kisaUnvan(k.musteri, 20)) + '</div>' +
+      '<div class="mpa-ev-tip">' + esc(k.gorusme_tipi || '') + '</div></div>';
+  }
+  function ozetGuncelle() {
+    var toplam = planlar.length;
+    var tam = planlar.filter(function(p){ return (p.durum||'').toUpperCase()==='GERCEKLESTI'; }).length;
+    var plan = planlar.filter(function(p){ return (p.durum||'').toUpperCase()==='PLANLANDI'; }).length;
+    var ipt = planlar.filter(function(p){ return (p.durum||'').toUpperCase()==='IPTAL'; }).length;
+    var el;
+    if ((el = document.getElementById('mpa-oz-toplam'))) el.textContent = toplam;
+    if ((el = document.getElementById('mpa-oz-tamamlanan'))) el.textContent = tam;
+    if ((el = document.getElementById('mpa-oz-planlanan'))) el.textContent = plan;
+    if ((el = document.getElementById('mpa-oz-iptal'))) el.textContent = ipt;
+    if ((el = document.getElementById('mpa-ozet-hafta'))) el.textContent = formatHafta(haftaBas, haftaBit);
+    if ((el = document.getElementById('mpa-hafta-baslik'))) el.textContent = formatHafta(haftaBas, haftaBit);
+  }
+  function renderTakvim() {
+    var el = document.getElementById('mpa-takvim');
+    if (!el) return;
+    var gunler = haftaGunleri(haftaBas);
+    var bugun = new Date().toISOString().slice(0, 10);
+    var html = '<div class="mpa-takvim-hdr"></div>';
+    gunler.forEach(function(g, i) {
+      var cls = 'mpa-takvim-hdr';
+      if (g === bugun) cls += ' mpa-bugun';
+      if (g === seciliGun) cls += ' mpa-secili-gun';
+      var d = parseDate(g);
+      html += '<div class="' + cls + '" data-gun-hdr="' + g + '">' + GUNLER_KISA[i] +
+        '<small>' + d.getDate() + '</small></div>';
+    });
+    SAATLER.forEach(function(saat) {
+      var maxKart = 1;
+      gunler.forEach(function(g) {
+        var cnt = saatPlanlari(g, saat).length;
+        if (cnt > maxKart) maxKart = cnt;
+      });
+      var rowH = Math.max(ROW_H, maxKart * 46 + 4);
+      var saatStr = (saat < 10 ? '0' : '') + saat + ':00';
+      html += '<div class="mpa-takvim-saat" style="height:' + rowH + 'px">' + saatStr + '</div>';
+      gunler.forEach(function(g) {
+        var cls = 'mpa-takvim-hucre';
+        if (g === seciliGun) cls += ' mpa-secili';
+        if (g === bugun) cls += ' mpa-bugun-kol';
+        var kartlar = saatPlanlari(g, saat);
+        var kartHtml = kartlar.map(evKartHtml).join('');
+        html += '<div class="' + cls + '" data-gun="' + g + '" style="height:' + rowH + 'px">' + kartHtml + '</div>';
+      });
+    });
+    el.innerHTML = html;
+    el.querySelectorAll('.mpa-takvim-hucre, .mpa-takvim-hdr[data-gun-hdr]').forEach(function(h) {
+      h.addEventListener('click', function() {
+        seciliGun = h.dataset.gun || h.dataset.gunHdr;
+        renderTakvim();
+        renderGunDetay();
+      });
+    });
+  }
+  function renderGunDetay() {
+    var liste = gunPlanlari(seciliGun);
+    var elTarih = document.getElementById('mpa-gun-tarih');
+    if (elTarih) elTarih.textContent = formatGunUzun(seciliGun);
+    var tam = liste.filter(function(p){ return (p.durum||'').toUpperCase()==='GERCEKLESTI'; }).length;
+    var plan = liste.filter(function(p){ return (p.durum||'').toUpperCase()==='PLANLANDI'; }).length;
+    var el;
+    if ((el = document.getElementById('mpa-gun-toplam'))) el.textContent = liste.length;
+    if ((el = document.getElementById('mpa-gun-planlanan'))) el.textContent = plan;
+    if ((el = document.getElementById('mpa-gun-tamamlanan'))) el.textContent = tam;
+    var listEl = document.getElementById('mpa-gun-liste');
+    if (!listEl) return;
+    if (!liste.length) {
+      listEl.innerHTML = '<div class="mpa-bos">Bu gün için plan yok.</div>';
+      return;
+    }
+    listEl.innerHTML = liste.map(function(k) {
+      var aks = '';
+      if (planAksiyonGerekli(k)) {
+        aks = gorusmeSonucBtnHtml(k);
+      } else if ((k.durum || '').toUpperCase() === 'GERCEKLESTI' && k.gorusme_ozet) {
+        aks = '<button type="button" class="mpa-btn mpa-btn-outline mpa-btn-xs mpa-btn-detay" data-plan-id="' + k.id + '">Görüşme Detayı</button>';
+      } else {
+        aks = '<span class="mpa-durum-chip ' + durumClass(k.durum_gorunum) + '">' + esc(k.durum_etiket || k.durum) + '</span>';
+      }
+      var ozetHtml = gorusmeOzetHtml(k);
+      return '<div class="mpa-gun-ev">' +
+        '<div class="mpa-gun-ev-ust"><span class="mpa-gun-ev-saat">' + esc(k.saat) + '</span>' +
+        '<span class="mpa-durum-chip ' + durumClass(k.durum_gorunum) + '">' + esc(durumEtiket(k)) + '</span></div>' +
+        '<div class="mpa-gun-ev-firma" title="' + esc(k.musteri) + '">' + esc(kisaUnvan(k.musteri, 28)) + '</div>' +
+        '<div class="mpa-gun-ev-tip">' + esc(k.gorusme_tipi || '') + '</div>' +
+        ozetHtml +
+        '<div class="mpa-gun-ev-aks">' + aks + '</div></div>';
+    }).join('');
+    listEl.querySelectorAll('.mpa-btn-detay').forEach(function(btn) {
+      btn.onclick = function() {
+        var pid = parseInt(btn.dataset.planId, 10);
+        var plan = liste.find(function(p){ return p.id === pid; });
+        if (plan) openGorusmeDetay(plan);
+      };
+    });
+  }
+  function loadHafta(bas) {
+    haftaBas = bas;
+    haftaBit = addDays(bas, 6);
+    fetch('/nexgen/api/musteri-pazarlama/ajanda?bas=' + encodeURIComponent(haftaBas) + '&bit=' + encodeURIComponent(haftaBit))
+      .then(function(r){ return r.json(); })
+      .then(function(d) {
+        if (!d.ok) { toast(d.mesaj || 'Yüklenemedi'); return; }
+        planlar = d.liste || [];
+        ozetGuncelle();
+        renderTakvim();
+        renderGunDetay();
+        if (aktifSekme === 'bu-hafta') renderBuHaftaListe();
+      }).catch(function(){ toast('Bağlantı hatası'); });
+  }
+  function openPlanForm(opts) {
+    opts = opts || {};
+    var ov = document.getElementById('mpa-plan-overlay');
+    var form = document.getElementById('mpa-plan-form');
+    if (!ov || !form) return;
+    form.reset();
+    idemKey = newIdemKey();
+    if (opts.cariId) document.getElementById('mpa-p-cari').value = String(opts.cariId);
+    document.getElementById('mpa-p-tarih').value = opts.tarih || seciliGun;
+    document.getElementById('mpa-p-saat').value = opts.saat || '09:00';
+    if (opts.tip) document.getElementById('mpa-p-tip').value = opts.tip;
+    ov.hidden = false;
+    document.body.style.overflow = 'hidden';
+  }
+  function closePlanForm() {
+    var ov = document.getElementById('mpa-plan-overlay');
+    if (ov) ov.hidden = true;
+    document.body.style.overflow = '';
+  }
+  function bindPlanlaBtns() {
+    document.querySelectorAll('.mpa-btn-planla, .mpa-btn-planla-sm').forEach(function(btn) {
+      btn.onclick = function() {
+        openPlanForm({ cariId: parseInt(btn.dataset.cariId, 10) });
+      };
+    });
+  }
+
+  document.getElementById('mpa-hafta-once').addEventListener('click', function() { loadHafta(addDays(haftaBas, -7)); });
+  document.getElementById('mpa-hafta-sonra').addEventListener('click', function() { loadHafta(addDays(haftaBas, 7)); });
+  document.getElementById('mpa-bugun-btn').addEventListener('click', function() {
+    var bugun = new Date().toISOString().slice(0, 10);
+    seciliGun = bugun;
+    loadHafta(haftaPazartesi(bugun));
+  });
+  document.getElementById('mpa-sekme-ajanda').addEventListener('click', function() {
+    setAktifSekme('ajanda');
+  });
+  document.getElementById('mpa-sekme-bu-hafta').addEventListener('click', function() {
+    var bugun = new Date().toISOString().slice(0, 10);
+    seciliGun = bugun;
+    var buHaftaBas = haftaPazartesi(bugun);
+    setAktifSekme('bu-hafta');
+    if (buHaftaBas !== haftaBas) {
+      loadHafta(buHaftaBas);
+    } else {
+      renderBuHaftaListe();
+    }
+  });
+  document.getElementById('mpa-plan-ac').addEventListener('click', function() { openPlanForm(); });
+  document.getElementById('mpa-gune-plan-ekle').addEventListener('click', function() { openPlanForm({ tarih: seciliGun }); });
+  document.getElementById('mpa-plan-kapat').addEventListener('click', closePlanForm);
+  document.getElementById('mpa-plan-vazgec').addEventListener('click', closePlanForm);
+  document.getElementById('mpa-detay-kapat').addEventListener('click', closeGorusmeDetay);
+  document.getElementById('mpa-gorusme-detay-overlay').addEventListener('click', function(e) {
+    if (e.target === e.currentTarget) closeGorusmeDetay();
+  });
+  document.getElementById('mpa-plan-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    var cariEl = document.getElementById('mpa-p-cari');
+    var tarihEl = document.getElementById('mpa-p-tarih');
+    var saatEl = document.getElementById('mpa-p-saat');
+    var tipEl = document.getElementById('mpa-p-tip');
+    var notEl = document.getElementById('mpa-p-not');
+    var cariId = parseInt(cariEl.value, 10);
+    var tarih = tarihEl.value;
+    var saat = saatEl.value;
+    var tip = tipEl.value;
+    var not = notEl.value.trim();
+    if (!cariId) { toast('Firma seçimi zorunludur.'); cariEl.focus(); return; }
+    if (!tarih) { toast('Tarih zorunludur.'); tarihEl.focus(); return; }
+    if (!saat) { toast('Saat zorunludur.'); saatEl.focus(); return; }
+    if (!tip) { toast('Görüşme tipi zorunludur.'); tipEl.focus(); return; }
+    if (!idemKey) idemKey = newIdemKey();
+    var submitBtn = document.getElementById('mpa-plan-submit');
+    if (submitBtn) submitBtn.disabled = true;
+    fetch('/nexgen/api/musteri-pazarlama/ajanda', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cari_id: cariId, plan_tarihi: tarih + 'T' + saat,
+        gorusme_tipi: tip, plan_notu: not || null, idempotency_key: idemKey
+      })
+    }).then(function(r){ return r.json(); }).then(function(d) {
+      if (submitBtn) submitBtn.disabled = false;
+      if (!d.ok) { toast(d.mesaj || 'Kayıt başarısız'); return; }
+      toast(d.mesaj || 'Görüşme planlandı');
+      closePlanForm();
+      seciliGun = tarih;
+      loadHafta(haftaPazartesi(tarih));
+    }).catch(function(){
+      if (submitBtn) submitBtn.disabled = false;
+      toast('Bağlantı hatası');
+    });
+  });
+
+  bindPlanlaBtns();
+  ozetGuncelle();
+  renderTakvim();
+  renderGunDetay();
+})();
+</script>
+{% endblock %}

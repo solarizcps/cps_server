@@ -1792,6 +1792,18 @@ def kaydet_gorusme_opsiyonel_talep(
                 aday = aday_getir(con, int(kayit['musteri_aday_id']), kullanici_id, yk)
 
         gid = int(kayit['id'])
+        ajanda_id = g_payload.get('ajanda_id')
+        if ajanda_id and kayit.get('cari_id'):
+            from modules.nexgen.mo_ajanda_service import MoAjandaError, ajanda_tamamla
+            ajanda_tamamla(
+                con,
+                int(ajanda_id),
+                gid,
+                kullanici_id,
+                int(kayit['cari_id']),
+                yk,
+                commit=False,
+            )
         trow = None
         if talep_norm:
             t_payload = {

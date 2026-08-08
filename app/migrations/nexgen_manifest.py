@@ -473,6 +473,13 @@ MANIFEST: tuple[MigEntry, ...] = (
             ("nexgen_planlama_siparis_kalem", "mtt_kalem_id"),
         ),
     ),
+    MigEntry(
+        151, "151_musteri_operasyon_ajanda",
+        "151_musteri_operasyon_ajanda.py",
+        "MO Ajanda V1 — planlanmis gorusmeler",
+        dependencies=(149,),
+        required_tables=("musteri_operasyon_ajanda",),
+    ),
 )
 
 BY_VERSION = {m.version: m for m in MANIFEST}

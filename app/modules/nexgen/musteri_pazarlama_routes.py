@@ -7,7 +7,7 @@ from flask import abort, jsonify, render_template, request, session
 from modules.auth import login_gerekli, kullanici_yetkileri
 from modules.nexgen.cari360_yetki import can_cari360_view_all, can_musteri_pazarlama_menu
 from modules.nexgen.cari_sorumlu_service import can_mo_view_cari
-from modules.nexgen.mo_gorusme_config import GORUSME_TIPLERI, ONCELIKLER, SONUC_TIPLERI
+from modules.nexgen.mo_gorusme_config import GORUSME_TIPLERI, GORUSME_TIPLERI_ALL, ONCELIKLER, SONUC_TIPLERI
 from modules.nexgen.mo_gorusme_service import (
     MoGorusmeError,
     acik_takip_sayisi,
@@ -104,6 +104,7 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
             v2=v2,
             kullanici_ad=u.get('KullaniciAdi') or '',
             gorusme_tipleri=GORUSME_TIPLERI,
+            gorusme_tipleri_all=GORUSME_TIPLERI_ALL,
             sonuc_tipleri=SONUC_TIPLERI,
             oncelikler=ONCELIKLER,
             talep_sonuclari=talep_sonuclari,
@@ -211,6 +212,98 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
                 'ok': False,
                 'mesaj': 'Talep kaydı bulunamadı veya artık erişilemiyor.',
             }), kod
+        finally:
+            con.close()
+
+    @bp.route('/musteri-pazarlama/ajanda')
+    @login_gerekli
+    def musteri_pazarlama_ajanda_sayfa():
+        from datetime import date as _date
+        u, yk = _yetki_kontrol()
+        hafta_arg = (request.args.get('hafta') or '').strip()
+        hafta_ref = None
+        if hafta_arg:
+            try:
+                hafta_ref = _date.fromisoformat(hafta_arg[:10])
+            except ValueError:
+                hafta_ref = None
+        con = db_fn()
+        try:
+            from modules.nexgen.musteri_pazarlama_service import ajanda_sayfa_verisi
+            aj_veri = ajanda_sayfa_verisi(con, kullanici_id_fn(), yk, hafta_ref=hafta_ref)
+        finally:
+            con.close()
+        return render_template(
+            'nexgen/musteri_pazarlama_ajanda.html',
+            active='nexgen',
+            aj=aj_veri,
+            kullanici_ad=u.get('KullaniciAdi') or '',
+            gorusme_tipleri_all=GORUSME_TIPLERI_ALL,
+        )
+
+    @bp.route('/api/musteri-pazarlama/ajanda', methods=['GET'])
+    @login_gerekli
+    def api_mo_ajanda_liste():
+        _yetki_kontrol()
+        filtre = (request.args.get('filtre') or 'bugun').strip().lower()
+        bas = (request.args.get('bas') or '').strip()
+        bit = (request.args.get('bit') or '').strip()
+        uid = kullanici_id_fn()
+        yk = kullanici_yetkileri(session.get('kullanici') or {})
+        con = db_fn()
+        try:
+            if bas and bit:
+                from modules.nexgen.musteri_pazarlama_service import ajanda_tarih_araligi_listele
+                liste = ajanda_tarih_araligi_listele(con, uid, yk, bas, bit)
+                return jsonify({'ok': True, 'liste': liste, 'bas': bas, 'bit': bit})
+            from modules.nexgen.mo_ajanda_service import ajanda_listele
+            liste = ajanda_listele(con, uid, yk, filtre=filtre)
+            return jsonify({'ok': True, 'liste': liste, 'filtre': filtre})
+        finally:
+            con.close()
+
+    @bp.route('/api/musteri-pazarlama/ajanda', methods=['POST'])
+    @login_gerekli
+    def api_mo_ajanda_olustur():
+        _yetki_kontrol()
+        payload = request.get_json(silent=True) or {}
+        uid = kullanici_id_fn()
+        yk = kullanici_yetkileri(session.get('kullanici') or {})
+        con = db_fn()
+        try:
+            from modules.nexgen.mo_ajanda_service import MoAjandaError, ajanda_olustur
+            sonuc = ajanda_olustur(con, payload, uid, yk)
+            return jsonify(sonuc)
+        except MoAjandaError as e:
+            return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod
+        finally:
+            con.close()
+
+    @bp.route('/api/musteri-pazarlama/ajanda/zorunlu-sonuc', methods=['GET'])
+    @login_gerekli
+    def api_mo_ajanda_zorunlu_sonuc():
+        u, yk = _yetki_kontrol()
+        con = db_fn()
+        try:
+            from modules.nexgen.musteri_pazarlama_service import _ajanda_zorunlu_gate_items
+            items = _ajanda_zorunlu_gate_items(con, kullanici_id_fn(), yk)
+            return jsonify({'ok': True, 'kayitlar': items, 'zorunlu_sonuc_gate': items})
+        finally:
+            con.close()
+
+    @bp.route('/api/musteri-pazarlama/ajanda/<int:ajanda_id>/iptal', methods=['POST'])
+    @login_gerekli
+    def api_mo_ajanda_iptal(ajanda_id):
+        _yetki_kontrol()
+        uid = kullanici_id_fn()
+        yk = kullanici_yetkileri(session.get('kullanici') or {})
+        con = db_fn()
+        try:
+            from modules.nexgen.mo_ajanda_service import MoAjandaError, ajanda_iptal
+            sonuc = ajanda_iptal(con, ajanda_id, uid, yk)
+            return jsonify(sonuc)
+        except MoAjandaError as e:
+            return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod
         finally:
             con.close()
 

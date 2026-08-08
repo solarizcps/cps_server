@@ -12,7 +12,7 @@ from modules.nexgen.cari_sorumlu_service import (
     get_pazarlama_cari_kapsami,
     load_kullanici_yetkileri,
 )
-from modules.nexgen.mo_gorusme_config import SIPARIS_ZIYARET_ESIK_GUN, TABLO
+from modules.nexgen.mo_gorusme_config import GORUSME_GUN_ESIK, SIPARIS_ZIYARET_ESIK_GUN, TABLO
 from modules.nexgen.mo_gorusme_service import (
     bugunun_gorusme_sayaclari,
     can_mo_gorusme_yaz,
@@ -689,6 +689,79 @@ def _tutar_metin(tutar: float | int | None) -> str | None:
     return f'{val:,.0f} TL'.replace(',', '.')
 
 
+def _ajanda_zorunlu_gate_items(
+    con,
+    kullanici_id: int,
+    yk: set[str] | None = None,
+) -> list[dict[str, Any]]:
+    try:
+        from modules.nexgen.mo_ajanda_service import ajanda_zorunlu_sonuc_listele
+        kayitlar = ajanda_zorunlu_sonuc_listele(con, kullanici_id, yk)
+    except Exception:
+        return []
+    items: list[dict[str, Any]] = []
+    for k in kayitlar:
+        plan_tarih = k.get('tarih') or ''
+        plan_saat = k.get('saat') or '—'
+        bek = int(k.get('bekleyen_gun') or 0)
+        items.append({
+            'ajanda_id': k.get('id'),
+            'cari_id': k.get('cari_id'),
+            'musteri': k.get('musteri') or '-',
+            'tarih': plan_tarih,
+            'saat': plan_saat,
+            'gorusme_tipi': k.get('gorusme_tipi') or '',
+            'plan_notu': k.get('plan_notu') or '',
+            'bekleyen_gun': bek,
+            'bekleyen_metin': f'{bek} gündür' if bek else '—',
+            'durum_gorunum': k.get('durum_gorunum') or 'ZORUNLU_SONUC_BEKLIYOR',
+            'durum_etiket': k.get('durum_etiket') or 'Zorunlu Sonuç Bekliyor',
+        })
+    return items
+
+
+def _ajanda_bugun_isler(
+    con,
+    kullanici_id: int,
+    yk: set[str] | None = None,
+) -> dict[str, Any]:
+    """Bugun Benim Isim — Ajanda V1 ozeti."""
+    try:
+        from modules.nexgen.mo_ajanda_service import ajanda_ozet_bugun
+        oz = ajanda_ozet_bugun(con, kullanici_id, yk)
+    except Exception:
+        return {'mod': 'bos', 'kayitlar': [], 'kayitlar_tum': [], 'bos_mesaj': None}
+
+    items: list[dict[str, Any]] = []
+    for k in oz.get('kayitlar') or []:
+        dg = (k.get('durum_gorunum') or 'PLANLANDI').upper()
+        aksiyon = 'Görüşme Sonucunu Gir' if dg in ('SONUC_BEKLIYOR', 'ZORUNLU_SONUC_BEKLIYOR') else 'Görüşme Aç'
+        plan_tarih = k.get('tarih') or ''
+        plan_saat = k.get('saat') or '—'
+        neden = f"{plan_tarih} {plan_saat} — {k.get('gorusme_tipi') or ''}".strip(' —')
+        items.append({
+            'tip': 'ajanda',
+            'cari_id': k.get('cari_id'),
+            'musteri': k.get('musteri') or '-',
+            'saat': plan_saat,
+            'gorusme_tipi': k.get('gorusme_tipi') or '',
+            'plan_notu': k.get('plan_notu') or '',
+            'ajanda_id': k.get('id'),
+            'durum_gorunum': k.get('durum_gorunum') or 'PLANLANDI',
+            'durum_etiket': k.get('durum_etiket') or 'Planlandı',
+            'neden': neden,
+            'surec_asama': k.get('durum_etiket') or 'Planlandı',
+            'aksiyon_tip': 'gorusme',
+            'aksiyon': aksiyon,
+        })
+    return {
+        'mod': oz.get('mod') or 'bos',
+        'kayitlar': items[:4],
+        'kayitlar_tum': items,
+        'bos_mesaj': oz.get('bos_mesaj'),
+    }
+
+
 def _oncelikli_isler_flat(oneriler: list[dict[str, Any]], limit: int = 4) -> list[dict[str, Any]]:
     sirali = sorted(
         oneriler,
@@ -1059,11 +1132,16 @@ def dashboard_ozet(
     if not cari_ids and not kapsam['tumunu_gorebilir_mi']:
         from modules.nexgen.musteri_aday_service import aday_havuz_liste
         aday_kartlar = aday_havuz_liste(con, kullanici_id, yk)
+        aj_is = _ajanda_bugun_isler(con, kullanici_id, yk)
+        zorunlu_gate = _ajanda_zorunlu_gate_items(con, kullanici_id, yk)
         return {
             'bugunun_isleri': bugunun,
             'akilli_oneriler': [],
-            'oncelikli_isler': [],
-            'oncelikli_isler_tum': [],
+            'oncelikli_isler': aj_is['kayitlar'],
+            'oncelikli_isler_tum': aj_is['kayitlar_tum'],
+            'ajanda_ozet_mod': aj_is['mod'],
+            'ajanda_bos_mesaj': aj_is['bos_mesaj'],
+            'zorunlu_sonuc_gate': zorunlu_gate,
             'hafta_ziyaretleri': [],
             'tahsilat_takibi': [],
             'numune_gruplu': [],
@@ -1113,6 +1191,8 @@ def dashboard_ozet(
     from modules.nexgen.musteri_aday_service import aday_havuz_liste
     adaylar = aday_havuz_liste(con, kullanici_id, yk)
     oneriler = _akilli_oneriler(con, cari_ids, riskli_ids, cari_map)
+    aj_is = _ajanda_bugun_isler(con, kullanici_id, yk)
+    zorunlu_gate = _ajanda_zorunlu_gate_items(con, kullanici_id, yk)
     numune_bek = _numune_bekleyenler(con, cari_ids, cari_map)
     siparis_bek = _siparis_bekleyenler(con, cari_ids, cari_map)
     # Ana şerit sayaçları = panel listeleri ile aynı sorgu politikası
@@ -1130,8 +1210,11 @@ def dashboard_ozet(
     return {
         'bugunun_isleri': bugunun,
         'akilli_oneriler': oneriler,
-        'oncelikli_isler': _oncelikli_isler_flat(oneriler, 4),
-        'oncelikli_isler_tum': _oncelikli_isler_flat(oneriler, 12),
+        'oncelikli_isler': aj_is['kayitlar'],
+        'oncelikli_isler_tum': aj_is['kayitlar_tum'],
+        'ajanda_ozet_mod': aj_is['mod'],
+        'ajanda_bos_mesaj': aj_is['bos_mesaj'],
+        'zorunlu_sonuc_gate': zorunlu_gate,
         'hafta_ziyaretleri': _hafta_ziyaretleri(con, cari_ids, cari_map),
         'tahsilat_takibi': _tahsilat_takibi(con, cari_ids, cari_map),
         'numune_gruplu': _numune_gruplu_ozet(numune_bek, 4),
@@ -1726,4 +1809,154 @@ def dashboard_v2(
         'kpi': kpi,
         'trendler': trendler,
         'kapsam_bos': False,
+    }
+
+
+def _ajanda_hafta_araligi(ref: date | None = None) -> tuple[str, str]:
+    d = ref or date.today()
+    bas = d - timedelta(days=d.weekday())
+    bit = bas + timedelta(days=6)
+    return bas.isoformat(), bit.isoformat()
+
+
+def ajanda_tarih_araligi_listele(
+    con: sqlite3.Connection,
+    kullanici_id: int,
+    yk: set[str] | None,
+    bas_tarih: str,
+    bit_tarih: str,
+) -> list[dict[str, Any]]:
+    """Ajanda sayfası — belirli hafta aralığındaki planlar."""
+    from modules.nexgen.mo_ajanda_config import TABLO as AJ_TABLO
+    from modules.nexgen.mo_ajanda_service import _cari_map, _row_dict, _tablo_var
+    from modules.nexgen.cari_sorumlu_service import can_mo_view_cari
+
+    if yk is None:
+        yk = load_kullanici_yetkileri(con, kullanici_id)
+    if not _tablo_var(con, AJ_TABLO):
+        return []
+    rows = con.execute(
+        f"""
+        SELECT a.*, c.unvan AS cari_unvan
+        FROM {AJ_TABLO} a
+        LEFT JOIN nexgen_cari c ON c.id = a.cari_id
+        WHERE a.aktif=1 AND a.kullanici_id=?
+          AND substr(a.plan_tarihi, 1, 10) BETWEEN ? AND ?
+        ORDER BY a.plan_tarihi ASC, a.id ASC
+        """,
+        (kullanici_id, bas_tarih[:10], bit_tarih[:10]),
+    ).fetchall()
+    cari_ids = sorted({int(r['cari_id']) for r in rows if r['cari_id']})
+    cm = _cari_map(con, cari_ids)
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        if not can_mo_view_cari(con, kullanici_id, int(r['cari_id']), yk):
+            continue
+        out.append(_row_dict(r, cm))
+    from modules.nexgen.mo_ajanda_service import ajanda_enrich_gorusme_ozet
+    return ajanda_enrich_gorusme_ozet(con, out)
+
+
+def _ajanda_gun_farki(tarih_str: str | None) -> int:
+    if not tarih_str:
+        return 9999
+    for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d'):
+        try:
+            dt = datetime.strptime(str(tarih_str)[:19], fmt)
+            return max(0, (datetime.now() - dt).days)
+        except ValueError:
+            continue
+    return 9999
+
+
+def ajanda_gorusulmeyen_firmalar(
+    con: sqlite3.Connection,
+    kullanici_id: int,
+    yk: set[str] | None = None,
+    *,
+    limit: int = 30,
+) -> list[dict[str, Any]]:
+    """Erhan cari scope + son_gorusme_ozet_map — eşik üstü veya hiç görüşülmemiş."""
+    if yk is None:
+        yk = load_kullanici_yetkileri(con, kullanici_id)
+    kapsam = get_musteri_operasyonu_kapsami(con, kullanici_id, yk)
+    cari_ids = list(kapsam.get('cari_id_listesi') or [])
+    if not cari_ids:
+        return []
+    cari_map = _cari_unvan_map(con, cari_ids)
+    son_map = son_gorusme_ozet_map(con, cari_ids)
+    out: list[dict[str, Any]] = []
+    for cid in cari_ids:
+        info = cari_map.get(cid) or {}
+        son = son_map.get(cid)
+        if son:
+            if _ajanda_gun_farki(son.get('gorusme_tarihi')) < GORUSME_GUN_ESIK:
+                continue
+            tarih = (son.get('gorusme_tarihi') or '')[:10]
+            tip = son.get('gorusme_tipi') or ''
+            son_metin = f'{tarih} — {tip}' if tarih else tip or '—'
+        else:
+            son_metin = 'Henüz görüşme yok'
+        out.append({
+            'cari_id': cid,
+            'unvan': info.get('unvan') or '—',
+            'cari_kod': info.get('cari_kod') or '',
+            'son_gorusme': son_metin,
+        })
+    out.sort(key=lambda x: (x.get('unvan') or '').lower())
+    return out[:limit]
+
+
+def ajanda_hafta_ozet(planlar: list[dict[str, Any]]) -> dict[str, int]:
+    toplam = len(planlar)
+    tamamlanan = sum(1 for p in planlar if (p.get('durum') or '').upper() == 'GERCEKLESTI')
+    planlanan = sum(1 for p in planlar if (p.get('durum') or '').upper() == 'PLANLANDI')
+    iptal = sum(1 for p in planlar if (p.get('durum') or '').upper() == 'IPTAL')
+    return {
+        'toplam': toplam,
+        'tamamlanan': tamamlanan,
+        'planlanan': planlanan,
+        'iptal': iptal,
+    }
+
+
+def ajanda_sayfa_verisi(
+    con: sqlite3.Connection,
+    kullanici_id: int,
+    yk: set[str] | None = None,
+    *,
+    hafta_ref: date | None = None,
+) -> dict[str, Any]:
+    """Ajanda tam sayfa — haftalık planlar, özet, görüşülmeyen firmalar."""
+    if yk is None:
+        yk = load_kullanici_yetkileri(con, kullanici_id)
+    hafta_bas, hafta_bit = _ajanda_hafta_araligi(hafta_ref)
+    planlar = ajanda_tarih_araligi_listele(con, kullanici_id, yk, hafta_bas, hafta_bit)
+    ozet = ajanda_hafta_ozet(planlar)
+    gorusulmeyen = ajanda_gorusulmeyen_firmalar(con, kullanici_id, yk)
+    ozet['gorusulmeyen_firmalar'] = len(gorusulmeyen)
+
+    kapsam = get_musteri_operasyonu_kapsami(con, kullanici_id, yk)
+    cari_ids = list(kapsam.get('cari_id_listesi') or [])
+    musteriler: list[dict[str, Any]] = []
+    if cari_ids:
+        cm = _cari_unvan_map(con, cari_ids)
+        for cid in sorted(cari_ids, key=lambda c: (cm.get(c) or {}).get('unvan') or ''):
+            info = cm.get(cid) or {}
+            musteriler.append({
+                'cari_id': cid,
+                'unvan': info.get('unvan') or '—',
+                'cari_kod': info.get('cari_kod') or '',
+            })
+
+    zorunlu_gate = _ajanda_zorunlu_gate_items(con, kullanici_id, yk)
+
+    return {
+        'hafta_bas': hafta_bas,
+        'hafta_bit': hafta_bit,
+        'planlar': planlar,
+        'ozet': ozet,
+        'gorusulmeyen_firmalar': gorusulmeyen,
+        'musteriler': musteriler,
+        'zorunlu_sonuc': zorunlu_gate,
     }
