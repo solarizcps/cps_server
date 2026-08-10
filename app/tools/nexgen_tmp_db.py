@@ -5,8 +5,14 @@ from __future__ import annotations
 import hashlib
 import os
 import shutil
+import socket
 import sqlite3
+import subprocess
+import sys
 import tempfile
+import time
+import urllib.error
+import urllib.request
 from contextlib import contextmanager
 from typing import Any
 
@@ -267,3 +273,168 @@ def cleanup_tmp(info: dict) -> None:
     tmp_dir = info.get("tmp_dir")
     if tmp_dir and os.path.isdir(tmp_dir):
         shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+def sistem_kur_usd_snapshot(db_path: str) -> dict[str, Any]:
+    """sistem_kur USD — COUNT + ordered Tarih:Satis aggregate hash (read-only)."""
+    uri = f"file:{os.path.abspath(db_path)}?mode=ro"
+    con = sqlite3.connect(uri, uri=True)
+    try:
+        count = con.execute(
+            "SELECT COUNT(*) FROM sistem_kur WHERE ParaBirimi='USD'"
+        ).fetchone()[0]
+        rows = con.execute(
+            """
+            SELECT Tarih, Satis FROM sistem_kur
+            WHERE ParaBirimi='USD'
+            ORDER BY Tarih, Satis
+            """
+        ).fetchall()
+        agg = "|".join(f"{r[0]}:{r[1]}" for r in rows)
+        return {
+            "count": int(count),
+            "agg": agg,
+            "agg_hash": hashlib.sha256(agg.encode("utf-8")).hexdigest(),
+        }
+    finally:
+        con.close()
+
+
+def find_free_port(host: str = "127.0.0.1", exclude: set[int] | None = None) -> int:
+    """Dinamik local port; 8080 ve exclude set dışında."""
+    blocked = set(exclude or set())
+    blocked.add(8080)
+    for _ in range(64):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.bind((host, 0))
+            port = int(sock.getsockname()[1])
+        if port not in blocked:
+            return port
+    raise RuntimeError("find_free_port: 8080 dışında boş port bulunamadı")
+
+
+def wait_flask_health(url: str, proc: subprocess.Popen, timeout_s: float = 60.0) -> None:
+    """Flask subprocess hazır olana kadar /giris healthcheck."""
+    deadline = time.time() + timeout_s
+    last_err = ""
+    while time.time() < deadline:
+        rc = proc.poll()
+        if rc is not None:
+            raise RuntimeError(f"Flask subprocess erken kapandı: rc={rc}")
+        try:
+            with urllib.request.urlopen(url, timeout=3) as resp:
+                if resp.status == 200:
+                    return
+        except Exception as exc:
+            last_err = str(exc)
+            time.sleep(0.4)
+    raise RuntimeError(f"Flask healthcheck timeout: {url} ({last_err})")
+
+
+def assert_live_db_unchanged(
+    live_db: str,
+    fp_before: dict[str, Any],
+    kur_before: dict[str, Any],
+    fp_after: dict[str, Any],
+    kur_after: dict[str, Any],
+) -> None:
+    if fp_after.get("sha256") != fp_before.get("sha256"):
+        raise RuntimeError(
+            "LIVE DB SHA CHANGED: "
+            f"before={fp_before.get('sha256')} after={fp_after.get('sha256')}"
+        )
+    if fp_after.get("size") != fp_before.get("size"):
+        raise RuntimeError(
+            f"LIVE DB size changed: {fp_before.get('size')} → {fp_after.get('size')}"
+        )
+    if kur_after != kur_before:
+        raise RuntimeError(
+            f"sistem_kur USD snapshot changed: before={kur_before} after={kur_after}"
+        )
+
+
+@contextmanager
+def browser_test_server_context(
+    live_db: str | None = None,
+    prefix: str = "browser_regression_",
+    health_path: str = "/giris",
+    health_timeout_s: float = 90.0,
+):
+    """Temp DB kopyası + ayrı Flask subprocess + live DB fingerprint guard.
+
+    Yield dict: tmp_db, port, base_url, test_env, fp_before, kur_before, ...
+    """
+    tools_dir = os.path.dirname(os.path.abspath(__file__))
+    app_dir = os.path.dirname(tools_dir)
+    live_db = os.path.abspath(live_db or os.path.join(app_dir, "mock_data.db"))
+    if not os.path.isfile(live_db):
+        raise FileNotFoundError(live_db)
+
+    fp_before = db_fingerprint(live_db)
+    kur_before = sistem_kur_usd_snapshot(live_db)
+
+    tmp_dir = tempfile.mkdtemp(prefix=prefix)
+    tmp_db = os.path.join(tmp_dir, "mock_data_tmp.db")
+    shutil.copy2(live_db, tmp_db)
+    assert_resolved_db_is_tmp(tmp_db, live_db)
+
+    port = find_free_port(exclude={8080})
+    if port == 8080:
+        raise RuntimeError("Test port 8080 olamaz — aktif dev server ile çakışır")
+    base_url = f"http://127.0.0.1:{port}"
+
+    env = os.environ.copy()
+    env["CPS_MOCK_DB_PATH"] = tmp_db
+    env["CPS_PORT"] = str(port)
+    env["CPS_TEST_ENDPOINT"] = "1"
+    env["FLASK_DEBUG"] = "0"
+
+    proc = subprocess.Popen(
+        [sys.executable, "app.py"],
+        cwd=app_dir,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    info: dict[str, Any] = {
+        "live_db": live_db,
+        "tmp_db": tmp_db,
+        "tmp_dir": tmp_dir,
+        "port": port,
+        "base_url": base_url,
+        "fp_before": fp_before,
+        "fp_after": None,
+        "kur_before": kur_before,
+        "kur_after": None,
+        "live_db_unchanged": None,
+        "proc": proc,
+        "test_env": {
+            "CPS_MOCK_DB_PATH": tmp_db,
+            "CPS_PORT": str(port),
+            "CPS_BASE": base_url,
+            "CPS_TEST_ENDPOINT": "1",
+        },
+    }
+    try:
+        wait_flask_health(base_url + health_path, proc, health_timeout_s)
+        yield info
+    finally:
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=12)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=8)
+        cleanup_tmp({"tmp_dir": tmp_dir})
+        fp_after = db_fingerprint(live_db)
+        kur_after = sistem_kur_usd_snapshot(live_db)
+        info["fp_after"] = fp_after
+        info["kur_after"] = kur_after
+        try:
+            assert_live_db_unchanged(live_db, fp_before, kur_before, fp_after, kur_after)
+            info["live_db_unchanged"] = True
+        except RuntimeError:
+            info["live_db_unchanged"] = False
+            raise

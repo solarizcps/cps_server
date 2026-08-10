@@ -79,7 +79,23 @@ from modules.nexgen.rf_formul_politika import (
 
 nexgen_bp = Blueprint('nexgen', __name__, url_prefix='/nexgen')
 
-DB_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'mock_data.db')
+
+def _resolve_nexgen_db_path():
+    """Config.MOCK_DB_PATH / CPS_MOCK_DB_PATH — enjeksiyon modülü ile aynı pattern."""
+    env_path = os.environ.get('CPS_MOCK_DB_PATH')
+    if env_path:
+        return os.path.abspath(env_path)
+    try:
+        from config import Config
+        p = getattr(Config, 'MOCK_DB_PATH', None)
+        if p:
+            return os.path.abspath(p)
+    except Exception:
+        pass
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'mock_data.db'))
+
+
+DB_PATH = _resolve_nexgen_db_path()
 
 
 # ─────────────────────────────────────────────────────────────
@@ -93,7 +109,7 @@ DB_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'mock_data.db')
 # Yardımcı: DB bağlantısı
 # ─────────────────────────────────────────────────────────────
 def _db():
-    con = sqlite3.connect(DB_PATH)
+    con = sqlite3.connect(_resolve_nexgen_db_path())
     con.row_factory = sqlite3.Row
     return con
 

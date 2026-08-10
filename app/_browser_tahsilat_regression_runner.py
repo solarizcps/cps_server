@@ -15,10 +15,18 @@ BASE = os.environ.get('CPS_BASE', 'http://127.0.0.1:8080')
 USER = 'erhan'
 PASS = '147258'
 APP_DIR = os.path.dirname(__file__)
+LIVE_DB = os.path.join(APP_DIR, 'mock_data.db')
 SHOT = os.path.join(APP_DIR, '_shot_tahsilat_regression')
 os.makedirs(SHOT, exist_ok=True)
 
-REPORT: dict = {'unit': {}, 'browser': {}, 'scripts': {}}
+sys.path.insert(0, APP_DIR)
+from tools.nexgen_tmp_db import (  # noqa: E402
+    browser_test_server_context,
+    db_fingerprint,
+    sistem_kur_usd_snapshot,
+)
+
+REPORT: dict = {'unit': {}, 'browser': {}, 'scripts': {}, 'live_db': {}}
 
 
 def ok(bucket: str, name: str, passed: bool, note: str = '') -> None:
@@ -45,9 +53,18 @@ def run_unit_suite() -> int:
     return proc.returncode
 
 
-def run_script(name: str, script: str) -> int:
+def run_script(name: str, script: str, env: dict | None = None) -> int:
     path = os.path.join(APP_DIR, script)
-    proc = subprocess.run([sys.executable, path], cwd=APP_DIR, capture_output=True, text=True)
+    run_env = os.environ.copy()
+    if env:
+        run_env.update(env)
+    proc = subprocess.run(
+        [sys.executable, path],
+        cwd=APP_DIR,
+        capture_output=True,
+        text=True,
+        env=run_env,
+    )
     out = (proc.stdout or '') + (proc.stderr or '')
     passed = proc.returncode == 0
     ok('scripts', name, passed, f'rc={proc.returncode}')
@@ -55,9 +72,9 @@ def run_script(name: str, script: str) -> int:
     return proc.returncode
 
 
-def login(page) -> None:
+def login(page, base_url: str) -> None:
     import re
-    page.goto(f'{BASE}/giris', wait_until='networkidle')
+    page.goto(f'{base_url}/giris', wait_until='networkidle')
     page.fill('input[name="kullanici"]', USER)
     page.fill('input[name="sifre"]', PASS)
     page.click('button[type="submit"]')
@@ -75,13 +92,13 @@ def dismiss_karar_popup_if_visible(page) -> None:
     pop.wait_for(state='hidden', timeout=5000)
 
 
-def browser_ui_lock() -> int:
+def browser_ui_lock(base_url: str) -> int:
     rc = 0
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page(viewport={'width': 1440, 'height': 900})
-        login(page)
-        page.goto(f'{BASE}/nexgen/musteri-pazarlama', wait_until='networkidle')
+        login(page, base_url)
+        page.goto(f'{base_url}/nexgen/musteri-pazarlama', wait_until='networkidle')
         time.sleep(0.5)
         dismiss_karar_popup_if_visible(page)
         page.locator('.mp-v2-hizli-btn[data-modal="tahsilat"], .mp-hizli-btn[data-modal="tahsilat"]').first.click()
@@ -147,13 +164,58 @@ def browser_ui_lock() -> int:
 
 def main() -> int:
     rc = 0
+    fp_before = db_fingerprint(LIVE_DB)
+    kur_before = sistem_kur_usd_snapshot(LIVE_DB)
+    REPORT['live_db']['fp_before'] = {
+        'sha256': fp_before['sha256'],
+        'size': fp_before['size'],
+    }
+    REPORT['live_db']['kur_before'] = kur_before
+
     if run_unit_suite():
         rc = 1
-    if run_script('sevk_ui', '_browser_faz_tahsilat_sevk_ui_1.py'):
+
+    try:
+        with browser_test_server_context(live_db=LIVE_DB) as srv:
+            test_env = srv['test_env']
+            base_url = srv['base_url']
+            REPORT['browser_server'] = {
+                'tmp_db': srv['tmp_db'],
+                'port': srv['port'],
+                'base_url': base_url,
+            }
+            if ':8080' in base_url or srv['port'] == 8080:
+                ok('scripts', 'port_not_8080', False, f'port={srv["port"]}')
+                return 1
+            ok('scripts', 'port_not_8080', True, f'port={srv["port"]}')
+
+            if run_script('sevk_ui', '_browser_faz_tahsilat_sevk_ui_1.py', test_env):
+                rc = 1
+            if run_script('tcmb_try_ui', '_browser_faz_tahsilat_tcmb_try_ui_1.py', test_env):
+                rc = 1
+            if browser_ui_lock(base_url):
+                rc = 1
+    except Exception as exc:
+        ok('scripts', 'browser_server_lifecycle', False, str(exc))
         rc = 1
-    if run_script('tcmb_try_ui', '_browser_faz_tahsilat_tcmb_try_ui_1.py'):
-        rc = 1
-    if browser_ui_lock():
+
+    fp_after = db_fingerprint(LIVE_DB)
+    kur_after = sistem_kur_usd_snapshot(LIVE_DB)
+    REPORT['live_db']['fp_after'] = {
+        'sha256': fp_after['sha256'],
+        'size': fp_after['size'],
+    }
+    REPORT['live_db']['kur_after'] = kur_after
+    unchanged = (
+        fp_after['sha256'] == fp_before['sha256']
+        and fp_after['size'] == fp_before['size']
+        and kur_after == kur_before
+    )
+    REPORT['live_db']['unchanged'] = unchanged
+    ok('live_db', 'LIVE_DB_UNCHANGED', unchanged, (
+        f"sha={fp_after['sha256'][:16]}… kur_count={kur_after['count']}"
+    ))
+    if not unchanged:
         rc = 1
 
     out = os.path.join(SHOT, 'regression_report.json')

@@ -25,8 +25,26 @@ from modules.nexgen.mo_tahsilat_config import (
     KAYNAK_MUSTERI_OPERASYONU,
 )
 from modules.nexgen.mo_tahsilat_sevk_service import tahsilat_sevk_adaylari
+from tools.nexgen_tmp_db import assert_resolved_db_is_tmp, install_live_db_write_guard
 
 REPORT: dict = {'tests': {}}
+LIVE_DB = os.path.join(os.path.dirname(__file__), 'mock_data.db')
+KUR_TARIHLERI = ('2026-08-01', '2026-08-15')
+
+
+def resolve_test_db_path() -> str:
+    db = os.environ.get('CPS_MOCK_DB_PATH')
+    if not db:
+        raise RuntimeError(
+            'CPS_MOCK_DB_PATH zorunlu — browser testleri izole DB olmadan çalışamaz'
+        )
+    db = os.path.abspath(db)
+    live = os.path.abspath(LIVE_DB)
+    if os.path.normcase(db) == os.path.normcase(live):
+        raise RuntimeError(f'CPS_MOCK_DB_PATH live DB ile aynı: {db}')
+    install_live_db_write_guard(live)
+    assert_resolved_db_is_tmp(db, live)
+    return db
 
 
 def ok(name: str, passed: bool, note: str = '') -> None:
@@ -109,6 +127,7 @@ def setup_test_data(con: sqlite3.Connection) -> dict:
         'siparis_id': siparis_id,
         'sevk1': sevk1,
         'sevk2': sevk2,
+        'kur_tarihleri': list(KUR_TARIHLERI),
         'aday': aday,
     }
 
@@ -121,7 +140,11 @@ def cleanup(con: sqlite3.Connection, ctx: dict) -> None:
         con.execute('DELETE FROM mo_musteri_sevkiyat_kalem WHERE sevkiyat_id=?', (r['id'],))
     con.execute('DELETE FROM mo_musteri_sevkiyat WHERE siparis_id=?', (sid,))
     con.execute('DELETE FROM nexgen_planlama_siparis WHERE id=?', (sid,))
-    con.execute("DELETE FROM sistem_kur WHERE ParaBirimi='USD' AND Tarih IN ('2026-08-01','2026-08-15')")
+    for tarih in ctx.get('kur_tarihleri', KUR_TARIHLERI):
+        con.execute(
+            "DELETE FROM sistem_kur WHERE ParaBirimi='USD' AND Tarih=?",
+            (tarih,),
+        )
 
 
 def login(page) -> None:
@@ -168,7 +191,7 @@ def wait_try_hedef(page, amount: float = 18900.0, timeout_ms: int = 8000) -> Non
 
 
 def main() -> int:
-    db = os.path.join(os.path.dirname(__file__), 'mock_data.db')
+    db = resolve_test_db_path()
     con = sqlite3.connect(db, timeout=60)
     con.row_factory = sqlite3.Row
     ctx = None

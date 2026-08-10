@@ -5,6 +5,9 @@ CPS DEV - Config
 
 import os
 
+_APP_DIR = os.path.dirname(os.path.abspath(__file__))
+_DEFAULT_MOCK_DB = os.path.join(_APP_DIR, 'mock_data.db')
+
 
 class Config:
     # ===================== DB MODE =====================
@@ -12,7 +15,8 @@ class Config:
     DB_MODE = 'mock'
 
     # ===================== MOCK =====================
-    MOCK_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'mock_data.db')
+    # CPS_MOCK_DB_PATH: browser regression / test server izolasyonu (opsiyonel)
+    MOCK_DB_PATH = os.environ.get('CPS_MOCK_DB_PATH') or _DEFAULT_MOCK_DB
 
     # ===================== PROD (MSSQL) =====================
     # LAN IP — Korgun SQL Server
@@ -28,7 +32,8 @@ class Config:
 
     # ===================== SERVER =====================
     HOST  = '0.0.0.0'
-    PORT  = 8080
+    # CPS_PORT: ayrı test Flask sunucusu (opsiyonel; yoksa 8080)
+    PORT  = int(os.environ.get('CPS_PORT', '8080'))
     MAX_UPLOAD_MB = 100
     ALLOWED_EXT   = {'jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf', 'docx', 'xlsx', 'doc', 'xls'}
     UPLOAD_ROOT   = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')

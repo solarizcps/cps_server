@@ -21,8 +21,25 @@ os.makedirs(SHOT, exist_ok=True)
 
 sys.path.insert(0, os.path.dirname(__file__))
 from modules.nexgen.mo_tahsilat_sevk_service import tahsilat_sevk_adaylari
+from tools.nexgen_tmp_db import assert_resolved_db_is_tmp, install_live_db_write_guard
 
 REPORT: dict = {'tests': {}}
+LIVE_DB = os.path.join(os.path.dirname(__file__), 'mock_data.db')
+
+
+def resolve_test_db_path() -> str:
+    db = os.environ.get('CPS_MOCK_DB_PATH')
+    if not db:
+        raise RuntimeError(
+            'CPS_MOCK_DB_PATH zorunlu — browser testleri izole DB olmadan çalışamaz'
+        )
+    db = os.path.abspath(db)
+    live = os.path.abspath(LIVE_DB)
+    if os.path.normcase(db) == os.path.normcase(live):
+        raise RuntimeError(f'CPS_MOCK_DB_PATH live DB ile aynı: {db}')
+    install_live_db_write_guard(live)
+    assert_resolved_db_is_tmp(db, live)
+    return db
 
 
 def ok(name: str, passed: bool, note: str = '') -> None:
@@ -49,6 +66,11 @@ def setup_test_data(con: sqlite3.Connection) -> dict:
         """,
         (kur_tarih,),
     )
+    kur_row = con.execute(
+        "SELECT rowid FROM sistem_kur WHERE ParaBirimi='USD' AND Tarih=?",
+        (kur_tarih,),
+    ).fetchone()
+    kur_rowid = int(kur_row[0]) if kur_row else None
 
     cur = con.execute(
         """
@@ -87,6 +109,7 @@ def setup_test_data(con: sqlite3.Connection) -> dict:
         'siparis_id': siparis_id,
         'sevk_id': sevk_id,
         'kur_tarih': kur_tarih,
+        'kur_rowid': kur_rowid,
         'kalan_fx': float(sevk['kalan']) if sevk else 400.0,
         'try_hedef': round(float(sevk['kalan']) * 47.25, 2) if sevk else 18900.0,
     }
@@ -126,8 +149,33 @@ def wait_try_preview(page, timeout_ms: int = 8000) -> None:
     page.wait_for_timeout(500)
 
 
+def cleanup_test_kur(con: sqlite3.Connection, ctx: dict) -> None:
+    """Yalnız testin INSERT ettiği USD kur satırını sil."""
+    rowid = ctx.get('kur_rowid')
+    kur_tarih = ctx.get('kur_tarih')
+    if rowid is not None:
+        con.execute('DELETE FROM sistem_kur WHERE rowid=?', (rowid,))
+    elif kur_tarih:
+        con.execute(
+            "DELETE FROM sistem_kur WHERE ParaBirimi='USD' AND Tarih=?",
+            (kur_tarih,),
+        )
+
+
+def cleanup_test_data(con: sqlite3.Connection, ctx: dict) -> None:
+    con.execute('DELETE FROM mo_tahsilat_kayit WHERE siparis_id=?', (ctx['siparis_id'],))
+    rows = con.execute(
+        'SELECT id FROM mo_musteri_sevkiyat WHERE siparis_id=?', (ctx['siparis_id'],)
+    ).fetchall()
+    for r in rows:
+        con.execute('DELETE FROM mo_musteri_sevkiyat_kalem WHERE sevkiyat_id=?', (r['id'],))
+    con.execute('DELETE FROM mo_musteri_sevkiyat WHERE siparis_id=?', (ctx['siparis_id'],))
+    con.execute('DELETE FROM nexgen_planlama_siparis WHERE id=?', (ctx['siparis_id'],))
+    cleanup_test_kur(con, ctx)
+
+
 def main() -> int:
-    db = os.path.join(os.path.dirname(__file__), 'mock_data.db')
+    db = resolve_test_db_path()
     con = sqlite3.connect(db, timeout=60)
     con.row_factory = sqlite3.Row
     ctx = None
@@ -233,10 +281,7 @@ def main() -> int:
 
             page.select_option('#mp-t-odeme-tipi', 'NAKIT')
             con.execute('DELETE FROM mo_tahsilat_kayit WHERE siparis_id=?', (ctx['siparis_id'],))
-            con.execute(
-                "DELETE FROM sistem_kur WHERE ParaBirimi='USD' AND Tarih <= ?",
-                (ctx['kur_tarih'],),
-            )
+            cleanup_test_kur(con, ctx)
             con.commit()
             api_res = page.request.post(
                 f'{BASE}/nexgen/api/musteri-pazarlama/tahsilat-kayit',
@@ -279,13 +324,7 @@ def main() -> int:
     finally:
         if ctx:
             try:
-                con.execute('DELETE FROM mo_tahsilat_kayit WHERE siparis_id=?', (ctx['siparis_id'],))
-                rows = con.execute('SELECT id FROM mo_musteri_sevkiyat WHERE siparis_id=?', (ctx['siparis_id'],)).fetchall()
-                for r in rows:
-                    con.execute('DELETE FROM mo_musteri_sevkiyat_kalem WHERE sevkiyat_id=?', (r['id'],))
-                con.execute('DELETE FROM mo_musteri_sevkiyat WHERE siparis_id=?', (ctx['siparis_id'],))
-                con.execute('DELETE FROM nexgen_planlama_siparis WHERE id=?', (ctx['siparis_id'],))
-                con.execute("DELETE FROM sistem_kur WHERE ParaBirimi='USD' AND Tarih <= ?", (ctx['kur_tarih'],))
+                cleanup_test_data(con, ctx)
                 con.commit()
             except Exception:
                 pass

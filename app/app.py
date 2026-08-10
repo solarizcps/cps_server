@@ -427,7 +427,7 @@ if __name__ == '__main__':
     # BAŞLANGIÇ KORUMASI: mock_data.db yoksa sessizce devam etme
     # -------------------------------------------------------
     import os as _os
-    _db_check = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), 'mock_data.db')
+    _db_check = Config.MOCK_DB_PATH
     if not _os.path.exists(_db_check):
         print("=" * 60)
         print("  [KRITIK HATA] Canlı veritabanı bulunamadı!")
