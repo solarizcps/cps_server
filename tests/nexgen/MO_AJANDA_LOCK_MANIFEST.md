@@ -141,5 +141,58 @@ Python 3.13.13, pytest 9.1.1
 ## Park Edilen Konular (Bu LOCK Dışı)
 
 1. Tonaj input/format bugı (10.000 → 100000)
-2. Cari360 görüşmelerinde ticari özet render
+2. ~~Cari360 görüşmelerinde ticari özet render~~ → CARI360-GORUSME-TICARI-OZET-LOCK ile kapatıldı
+3. Ürün / ürün ailesi structured alanı
+
+---
+
+# CARI360-GORUSME-TICARI-OZET-LOCK
+
+## LOCK NAME
+
+CARI360-GORUSME-TICARI-OZET-LOCK
+
+## Tarih
+
+2026-08-10
+
+## Gerçek E2E Kanıtı (VISUAL PASS)
+
+Cari360 → SEHA AYAKKABI VE TEKSTİL SAN. TİC. A.Ş. → Görüşmeler → 10.08.2026 12:58
+
+Kullanıcı ekran onayı:
+- Konu/not altında: `5 USD/KG · 100000 ton · NAKİT`
+- Yeni kolon oluşmadı
+- Mevcut tablo layout'u bozulmadı
+
+## Canonical Kaynak
+
+`musteri_operasyon_gorusme` → `list_gorusmeler()` → `fiyat_ozet_metin()` → `fiyat_ozet`
+
+## İş Kuralları (Kilitli)
+
+1. API response'ta `fiyat_ozet` varsa → Konu hücresi altında tek ticari özet satırı.
+2. `fiyat_ozet` boş/null → ek satır render edilmez.
+3. UI fiyat/miktar/ödeme hesabı yapmaz; yalnız `g.fiyat_ozet` kullanır.
+4. Yeni kolon eklenmez.
+5. MO-GORUSME-AJANDA-CARI360-SYNC-LOCK ve MO-AJANDA-TICARI-GORUSME-DETAIL-LOCK bozulmaz.
+
+## Regression Test Dosyası
+
+| Dosya | Test Sayısı | Kapsam |
+|---|---|---|
+| `tests/nexgen/test_cari360_gorusme_ticari_display_lock.py` | 4 | Cari360 ticari özet LOCK (A-C + template smoke) |
+
+## Son Test Sonucu
+
+```
+140 passed / 0 failed
+Python 3.13.13, pytest 9.1.1
+2026-08-10
+```
+
+## Park Edilen Konular (Bu LOCK Dışı)
+
+1. Tonaj 10.000 → DB 100000 input/format bugı
+2. Cari360 Timeline ticari özet
 3. Ürün / ürün ailesi structured alanı
