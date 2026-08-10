@@ -500,3 +500,97 @@ def ajanda_tamamla(
         """,
         (DURUM_GERCEKLESTI, int(gorusme_id), _now(), ajanda_id, kullanici_id, DURUM_PLANLANDI),
     )
+
+
+def gercek_gorusmeyi_ajandaya_bagla(
+    con: sqlite3.Connection,
+    gorusme_id: int,
+    kullanici_id: int,
+    cari_id: int,
+    gorusme_tarihi: str,
+    gorusme_tipi: str = '',
+    *,
+    commit: bool = False,
+) -> dict[str, Any]:
+    """Gerçek görüşme kaydını Ajanda ile senkronize eder.
+
+    A) Aynı kullanici+cari+gün için PLANLANDI kayıt varsa: o kaydı tamamlar.
+    B) Yoksa: yeni GERCEKLESTI geçmiş kaydı oluşturur.
+    C) Aynı gorusme_id zaten bağlıysa: idempotent dönüş.
+    D) IPTAL kayıt eşleşmez; ad-hoc satır oluşturulur.
+    """
+    if not _tablo_var(con, TABLO):
+        return {'durum': 'skip', 'sebep': 'tablo_yok'}
+
+    # Idempotency: bu görüşme zaten bir ajanda kaydına bağlı mı?
+    existing = con.execute(
+        f'SELECT id, durum FROM {TABLO} WHERE gorusme_id=? AND aktif=1',
+        (int(gorusme_id),),
+    ).fetchone()
+    if existing:
+        return {'durum': 'idempotent', 'ajanda_id': int(existing['id'])}
+
+    gun = (gorusme_tarihi or '')[:10]
+    if not gun:
+        return {'durum': 'skip', 'sebep': 'tarih_eksik'}
+
+    # A) Aynı gün+cari+kullanıcı için tek PLANLANDI kayıt ara
+    plan_row = con.execute(
+        f"""
+        SELECT id, gorusme_id FROM {TABLO}
+        WHERE kullanici_id=? AND cari_id=? AND aktif=1 AND durum=?
+          AND DATE(plan_tarihi)=?
+        ORDER BY plan_tarihi ASC
+        LIMIT 1
+        """,
+        (int(kullanici_id), int(cari_id), DURUM_PLANLANDI, gun),
+    ).fetchone()
+
+    if plan_row:
+        # Mevcut plan tamamla
+        con.execute(
+            f"""
+            UPDATE {TABLO}
+            SET durum=?, gorusme_id=?, guncelleme_tarihi=?
+            WHERE id=? AND kullanici_id=? AND durum=? AND gorusme_id IS NULL
+            """,
+            (DURUM_GERCEKLESTI, int(gorusme_id), _now(),
+             int(plan_row['id']), int(kullanici_id), DURUM_PLANLANDI),
+        )
+        if commit:
+            con.commit()
+        return {'durum': 'plan_tamamlandi', 'ajanda_id': int(plan_row['id'])}
+
+    # B) Plan yok — ad-hoc GERCEKLESTI kaydı
+    idem = f'ADHOC-GOR-{int(gorusme_id)}'
+    mevcut_adhoc = con.execute(
+        f'SELECT id FROM {TABLO} WHERE idempotency_key=? AND aktif=1',
+        (idem,),
+    ).fetchone()
+    if mevcut_adhoc:
+        return {'durum': 'idempotent', 'ajanda_id': int(mevcut_adhoc['id'])}
+
+    tip = (gorusme_tipi or '').strip()
+    if not tip or tip not in GORUSME_TIPLERI_ALL:
+        tip = GORUSME_TIPLERI_ALL[0]
+
+    plan_tarihi = (gorusme_tarihi or _now())[:19]
+    con.execute(
+        f"""
+        INSERT INTO {TABLO} (
+            cari_id, kullanici_id, plan_tarihi, gorusme_tipi, plan_notu,
+            durum, gorusme_id, idempotency_key, aktif,
+            olusturan_kullanici_id, olusturma_tarihi
+        ) VALUES (?,?,?,?,?,?,?,?,1,?,?)
+        """,
+        (
+            int(cari_id), int(kullanici_id), plan_tarihi,
+            tip, None,
+            DURUM_GERCEKLESTI, int(gorusme_id),
+            idem, int(kullanici_id), _now(),
+        ),
+    )
+    new_id = con.execute('SELECT last_insert_rowid()').fetchone()[0]
+    if commit:
+        con.commit()
+    return {'durum': 'adhoc_olusturuldu', 'ajanda_id': int(new_id)}

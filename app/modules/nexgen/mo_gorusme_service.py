@@ -52,6 +52,47 @@ def _today() -> str:
     return date.today().isoformat()
 
 
+_GORUSME_TARIHI_FMT = '%Y-%m-%d %H:%M:%S'
+
+
+def _normalize_gorusme_tarihi(raw: str) -> str:
+    s = (raw or '').strip()
+    if not s:
+        return _now()
+    if len(s) == 10:
+        s = s + ' 12:00:00'
+    return s[:19]
+
+
+def _parse_gorusme_tarihi(gt: str) -> datetime:
+    return datetime.strptime(gt[:19], _GORUSME_TARIHI_FMT)
+
+
+def gerceklesmis_gorusme_tarihi_sql(alias: str = 'g') -> str:
+    """Yalnız geçmiş/şimdi gerçekleşmiş görüşme tarihleri (plan değil)."""
+    return f"substr({alias}.gorusme_tarihi, 1, 19) <= datetime('now','localtime')"
+
+
+def is_gerceklesmis_gorusme_tarihi(gt: str | None) -> bool:
+    if not gt:
+        return False
+    try:
+        return _parse_gorusme_tarihi(str(gt)) <= datetime.now()
+    except ValueError:
+        return False
+
+
+def _assert_gorusme_tarihi_gerceklesmis(gt: str) -> str:
+    norm = _normalize_gorusme_tarihi(gt)
+    try:
+        dt = _parse_gorusme_tarihi(norm)
+    except ValueError:
+        raise MoGorusmeError('Görüşme tarihi geçersiz.', 400)
+    if dt > datetime.now():
+        raise MoGorusmeError('Gerçekleşmiş görüşme tarihi gelecekte olamaz.', 400)
+    return norm
+
+
 def _tablo_var(con, name: str) -> bool:
     return bool(con.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
@@ -528,11 +569,9 @@ def _validate_payload(payload: dict, *, require_idem: bool = True) -> dict[str, 
         else:
             raise MoGorusmeError('Görüşme notu gerekli.', 400)
 
-    gt = (payload.get('gorusme_tarihi') or '').strip()
-    if not gt:
-        gt = _now()
-    elif len(gt) == 10:
-        gt = gt + ' 12:00:00'
+    gt = _assert_gorusme_tarihi_gerceklesmis(
+        (payload.get('gorusme_tarihi') or '').strip() or _now(),
+    )
 
     oncelik = (payload.get('oncelik') or 'NORMAL').strip().upper()
     if oncelik not in ONCELIKLER:
@@ -838,14 +877,14 @@ def list_gorusmeler(
         from modules.nexgen.musteri_aday_service import can_aday_gor
         if not can_aday_gor(con, kullanici_id, int(musteri_aday_id), yk):
             raise MoGorusmeError('Görüntüleme yetkiniz yok.', 403)
-        where_sql = 'g.musteri_aday_id=? AND g.aktif=1'
+        where_sql = f'g.musteri_aday_id=? AND g.aktif=1 AND {gerceklesmis_gorusme_tarihi_sql("g")}'
         where_params: list[Any] = [int(musteri_aday_id)]
     else:
         if cari_id is None:
             raise MoGorusmeError('cari_id veya musteri_aday_id zorunlu.', 400)
         if not can_mo_view_cari(con, kullanici_id, cari_id, yk):
             raise MoGorusmeError('Görüntüleme yetkiniz yok.', 403)
-        where_sql = 'g.cari_id=? AND g.aktif=1'
+        where_sql = f"g.cari_id=? AND g.aktif=1 AND {gerceklesmis_gorusme_tarihi_sql('g')}"
         where_params = [int(cari_id)]
     if not _tablo_var(con, TABLO):
         return []
@@ -942,9 +981,13 @@ def gorusme_guncelle(
     if takip_durum and takip_durum not in TAKIP_DURUMLARI:
         raise MoGorusmeError('takip_durumu geçersiz.', 400)
 
-    gt = (payload.get('gorusme_tarihi') or mevcut.get('gorusme_tarihi') or '').strip()
-    if gt and len(gt) == 10:
-        gt = gt + ' 12:00:00'
+    gt_raw = (payload.get('gorusme_tarihi') or mevcut.get('gorusme_tarihi') or '').strip()
+    if not gt_raw:
+        gt = _assert_gorusme_tarihi_gerceklesmis(_now())
+    elif 'gorusme_tarihi' in payload:
+        gt = _assert_gorusme_tarihi_gerceklesmis(gt_raw)
+    else:
+        gt = _normalize_gorusme_tarihi(gt_raw)
 
     konu = payload.get('konu') if 'konu' in payload else mevcut.get('konu')
     aksiyon = payload.get('sonraki_aksiyon') if 'sonraki_aksiyon' in payload else mevcut.get('sonraki_aksiyon')
@@ -1048,6 +1091,7 @@ def son_gorusme_ozet_map(
         FROM {TABLO} g
         LEFT JOIN sistem_kullanici sk ON sk.Id = g.kullanici_id
         WHERE g.cari_id IN ({ph}) AND g.aktif=1
+          AND {gerceklesmis_gorusme_tarihi_sql('g')}
         ORDER BY g.gorusme_tarihi DESC, g.id DESC
         """,
         cari_ids,
@@ -1074,6 +1118,7 @@ def son_gorusmeler_grup(
         FROM {TABLO} g
         LEFT JOIN sistem_kullanici sk ON sk.Id = g.kullanici_id
         WHERE g.cari_id IN ({ph}) AND g.aktif=1
+          AND {gerceklesmis_gorusme_tarihi_sql('g')}
         ORDER BY g.gorusme_tarihi DESC, g.id DESC
         """,
         cari_ids,

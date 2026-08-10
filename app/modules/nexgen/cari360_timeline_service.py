@@ -22,13 +22,22 @@ from modules.nexgen.cari360_relation_policy import (
     resolve_tek_sorumlu,
 )
 from modules.nexgen.mo_gorusme_config import TABLO as GORUSME_TABLO
+from modules.nexgen.mo_gorusme_service import is_gerceklesmis_gorusme_tarihi
 
 # Olay önceliği (aynı olay_tarihi için; düşük = önce listede DESC sonrası tie-break)
 _EVENT_PRIORITY = {
     'SEVKIYAT': 10,
+    'TAHSILAT': 15,
     'URETIM_COMPLETED': 20,
     'URETIM_STARTED': 30,
     'SIPARIS_CREATED': 40,
+    'SIPARIS_ONAYLANDI': 42,
+    'SIPARIS_REDDEDILDI': 43,
+    'SIPARIS_REVIZYON': 44,
+    'CEK_KAYDI': 45,
+    'MTT_ONAY': 46,
+    'MTT_YASAM': 45,
+    'ONAY_TALEBI': 46,
     'RF_APPROVED': 50,
     'RF_CREATED': 60,
     'ARGE_CREATED': 70,
@@ -221,7 +230,8 @@ def build_ops_timeline(
         ):
             d = dict(r)
             gorusme_by_id[int(d['id'])] = d
-            gorusme_rows.append(d)
+            if is_gerceklesmis_gorusme_tarihi(d.get('gorusme_tarihi')):
+                gorusme_rows.append(d)
             for k in ('kullanici_id', 'olusturan_kullanici_id'):
                 uid = _iid(d.get(k))
                 if uid:
@@ -357,16 +367,23 @@ def build_ops_timeline(
                     user_ids.add(uid)
         qstats['q_rf'] = 1
 
-    # 6) Siparişler
+    # 6) Siparişler — durum/çek/tahsilat alanları dahil
     siparis_rows: list[dict] = []
+    _siparis_scols: set[str] = set()
     if _tablo_var(con, 'nexgen_planlama_siparis'):
         scols = _kolonlar(con, 'nexgen_planlama_siparis')
+        _siparis_scols = scols
         mo_sel = ', mo_gorusme_id' if 'mo_gorusme_id' in scols else ', NULL AS mo_gorusme_id'
+        extra_cols = ''
+        for _ec in ('cek_vadesi', 'cek_vade_gun', 'odeme_tipi', 'vade_gun',
+                    'tahsilat_durumu', 'revizyon_gerekce'):
+            if _ec in scols:
+                extra_cols += f', {_ec}'
         for r in con.execute(
             f"""
             SELECT id, siparis_no, durum, olusturma_tarihi, guncelleme_tarihi,
                    olusturan_id, cari_id, notlar, talep_referansi, idempotency_key
-                   {mo_sel}
+                   {mo_sel}{extra_cols}
             FROM nexgen_planlama_siparis
             WHERE cari_id=?
             """,
@@ -854,6 +871,110 @@ def build_ops_timeline(
             metadata={'mo_gorusme_id': gid},
         ))
 
+    # Sipariş durum/çek/onay/revizyon ek olayları
+    for s in siparis_rows:
+        sid = int(s['id'])
+        no = s.get('siparis_no') or str(sid)
+        durum = (s.get('durum') or '').strip().upper()
+        guncelleme = s.get('guncelleme_tarihi') or s.get('olusturma_tarihi') or ''
+        olusturma = s.get('olusturma_tarihi') or ''
+
+        # Onay / Red / Revizyon — yalnız onay_talep kaydı yoksa üret; varsa ONAY_TALEBI duplicate önler
+        _onay_var = _tablo_var(con, 'onay_talep') and bool(con.execute(
+            "SELECT 1 FROM onay_talep WHERE kaynak_modul='nexgen_planlama_siparis' AND kaynak_id=? LIMIT 1",
+            (sid,),
+        ).fetchone())
+        if not _onay_var and durum in ('ONAYLANDI', 'REDDEDILDI', 'REVIZYON') and guncelleme and guncelleme[:16] != olusturma[:16]:
+            lbl = {'ONAYLANDI': 'Sipariş onaylandı', 'REDDEDILDI': 'Sipariş reddedildi',
+                   'REVIZYON': 'Sipariş revizyon istendi'}.get(durum, durum)
+            renk_val = 'uyari' if durum == 'REDDEDILDI' else ''
+            acik = s.get('revizyon_gerekce') or no
+            _add(_event(
+                olay_kodu=f'SIPARIS_{durum}',
+                entity_type='nexgen_planlama_siparis',
+                entity_id=sid,
+                cari_id=cid,
+                olay_tarihi=guncelleme,
+                baslik=lbl,
+                aciklama=str(acik),
+                durum=durum,
+                kategori='siparisler',
+                detay_url=f'{kart}?tab=siparisler',
+                dedupe_key=f'SIPARIS_{durum}:{sid}',
+                renk=renk_val,
+                kayit_no=no,
+                hareket_turu='Sipariş',
+            ))
+
+        # Çek kaydı — odeme_tipi=CEK ve cek_vadesi varsa
+        cek_vadesi = s.get('cek_vadesi')
+        odeme_tipi = (s.get('odeme_tipi') or '').upper()
+        if odeme_tipi == 'CEK' and cek_vadesi:
+            _add(_event(
+                olay_kodu='CEK_KAYDI',
+                entity_type='nexgen_planlama_siparis',
+                entity_id=sid,
+                cari_id=cid,
+                olay_tarihi=olusturma,
+                baslik='Çek kaydı',
+                aciklama=f'{no} · Vade: {str(cek_vadesi)[:10]}',
+                durum='CEK',
+                kategori='tahsilatlar',
+                detay_url=f'{kart}?tab=siparisler',
+                dedupe_key=f'CEK_KAYDI:{sid}',
+                kayit_no=no,
+                hareket_turu='Çek',
+            ))
+
+    # Tahsilat kayıtları — mo_tahsilat_kayit
+    if _tablo_var(con, 'mo_tahsilat_kayit'):
+        for r in con.execute(
+            """SELECT id, siparis_id, durum, odeme_tipi, alinan_tarih,
+                      alinan_tutar, beklenen_tutar, aktif
+               FROM mo_tahsilat_kayit
+               WHERE cari_id=? AND COALESCE(aktif,1)=1
+               ORDER BY COALESCE(alinan_tarih,'') DESC, id DESC""",
+            (cid,),
+        ).fetchall():
+            d = dict(r)
+            td = (d.get('durum') or '').upper()
+            tarih = d.get('alinan_tarih') or ''
+            if not tarih:
+                continue
+            tutar_str = ''
+            try:
+                t = float(d.get('alinan_tutar') or 0)
+                if t:
+                    tutar_str = f'{t:,.2f} TL'
+            except (TypeError, ValueError):
+                pass
+            lbl = {'ONAYLANDI': 'Tahsilat alındı', 'BEKLIYOR': 'Tahsilat bekliyor',
+                   'REDDEDILDI': 'Tahsilat reddedildi'}.get(td, f'Tahsilat — {td}')
+            sip_ids_local = {
+                int(row[0])
+                for row in con.execute('SELECT id FROM nexgen_planlama_siparis WHERE cari_id=?', (cid,))
+            }
+            sip_id_t = d.get('siparis_id')
+            if sip_id_t and int(sip_id_t) not in sip_ids_local:
+                continue  # başka cariye ait
+            _add(_event(
+                olay_kodu='TAHSILAT',
+                entity_type='mo_tahsilat_kayit',
+                entity_id=int(d['id']),
+                cari_id=cid,
+                olay_tarihi=tarih,
+                baslik=lbl,
+                aciklama=tutar_str,
+                durum=td,
+                kategori='tahsilatlar',
+                detay_url=f'{kart}?tab=siparisler',
+                dedupe_key=f'TAHSILAT:{d["id"]}',
+                kayit_no=str(d.get('siparis_id') or d['id']),
+                hareket_turu='Tahsilat',
+                renk='uyari' if td == 'REDDEDILDI' else '',
+            ))
+        qstats['q_tahsilat'] = 1
+
     # Üretim aggregate (plan)
     for p in plan_rows:
         pid = int(p['id'])
@@ -974,6 +1095,265 @@ def build_ops_timeline(
             metadata={'siparis_id': sip_id},
         ))
 
+    # Onay Merkezi olayları — onay_talep kaynağından
+    # SIPARIS_ONAYLANDI ile duplicate oluşturmamak için ayrı olay_kodu: ONAY_TALEBI
+    if _tablo_var(con, 'onay_talep'):
+        _ONAY_LBL = {
+            'ONAYLANDI': 'Onaylandı', 'REDDEDILDI': 'Reddedildi',
+            'REVIZYON': 'Revizyon istendi', 'BEKLIYOR': 'Onay bekliyor',
+            'BEKLETILDI': 'Bekletildi', 'IPTAL': 'İptal',
+        }
+        _ONAY_RENK = {
+            'ONAYLANDI': '', 'REDDEDILDI': 'uyari',
+            'REVIZYON': 'uyari', 'BEKLIYOR': '',
+        }
+        # aktif filtresi kaldırıldı: onaylanan/reddedilen talepler de Timeline'a girer
+        # Karar tarihi için onay_talep_adim'den son karar adımını JOIN ile getir
+        _has_adim = _tablo_var(con, 'onay_talep_adim')
+        _adim_tarih_map: dict[int, str] = {}
+        # karar_bilgi_map: talep_id -> {zaman, veren, notu}
+        _karar_bilgi: dict[int, dict] = {}
+        if _has_adim:
+            # onay_talep_adim.tarih = gerçek karar zamanı
+            _adim_cols = {c[1] for c in con.execute('PRAGMA table_info(onay_talep_adim)').fetchall()}
+            _tarih_col = 'tarih' if 'tarih' in _adim_cols else ('updated_at' if 'updated_at' in _adim_cols else 'created_at')
+            _veren_col = 'kullanici_ad_snapshot' if 'kullanici_ad_snapshot' in _adim_cols else "''"
+            for _ar in con.execute(
+                f"""SELECT a.talep_id, a.{_tarih_col} AS karar_zaman,
+                           a.{_veren_col} AS karar_veren, a.karar_notu
+                   FROM onay_talep_adim a
+                   INNER JOIN (
+                       SELECT talep_id, MAX({_tarih_col}) AS mz
+                       FROM onay_talep_adim
+                       WHERE durum IN ('ONAYLANDI','TAMAMLANDI','REDDEDILDI','REVIZYON')
+                       GROUP BY talep_id
+                   ) mx ON mx.talep_id=a.talep_id AND mx.mz=a.{_tarih_col}
+                   WHERE a.durum IN ('ONAYLANDI','TAMAMLANDI','REDDEDILDI','REVIZYON')""",
+            ).fetchall():
+                _tid_a = int(_ar['talep_id'])
+                if _tid_a not in _karar_bilgi:
+                    _karar_bilgi[_tid_a] = {
+                        'zaman': str(_ar['karar_zaman'] or ''),
+                        'veren': str(_ar['karar_veren'] or ''),
+                        'notu': str(_ar['karar_notu'] or ''),
+                    }
+                    _adim_tarih_map[_tid_a] = str(_ar['karar_zaman'] or '')
+
+        for _ot_row in con.execute(
+            """SELECT id, talep_kod, talep_tipi, kaynak_modul, kaynak_id,
+                      kaynak_kod, durum, tutar, para_birimi, talep_tarihi, created_at
+               FROM onay_talep
+               WHERE cari_id=?
+               ORDER BY id DESC""",
+            (cid,),
+        ).fetchall():
+            ot = dict(_ot_row)
+            tid = int(ot['id'])
+            ot_durum = (ot.get('durum') or '').upper()
+            # Karar tarihi: ONAYLANDI/REDDEDILDI/REVIZYON → gerçek adım zamanı
+            talep_tarihi = ot.get('talep_tarihi') or ot.get('created_at') or ''
+            if ot_durum in ('ONAYLANDI', 'REDDEDILDI', 'REVIZYON', 'IPTAL'):
+                tarih = _adim_tarih_map.get(tid) or talep_tarihi
+            else:
+                tarih = talep_tarihi
+            if not tarih:
+                continue
+            tip = ot.get('talep_tipi') or ''
+            kod = ot.get('talep_kod') or str(tid)
+            try:
+                tutar_v = float(ot.get('tutar') or 0)
+                tutar_s = f' · {tutar_v:,.2f} {ot.get("para_birimi") or ""}'.rstrip()
+            except (TypeError, ValueError):
+                tutar_s = ''
+            baslik_tip = {
+                'SATIS_SIPARISI': 'Sipariş onay talebi',
+                'NUMUNE_TALEBI': 'Numune onay talebi',
+                'TAHSILAT_KAYDI': 'Tahsilat onay talebi',
+            }.get(tip, 'Onay talebi')
+            baslik = f'{baslik_tip} — {_ONAY_LBL.get(ot_durum, ot_durum)}'
+            # Açıklamaya karar veren + not ekle (duplicate-free)
+            _kb = _karar_bilgi.get(tid)
+            _aciklama_parcalar = [f'{kod}{tutar_s}']
+            if _kb and _kb.get('veren'):
+                _aciklama_parcalar.append(f'Karar: {_kb["veren"]}')
+            if _kb and _kb.get('notu'):
+                _aciklama_parcalar.append(_kb['notu'])
+            _add(_event(
+                olay_kodu='ONAY_TALEBI',
+                entity_type='onay_talep',
+                entity_id=tid,
+                cari_id=cid,
+                olay_tarihi=tarih,
+                baslik=baslik,
+                aciklama=' · '.join(_aciklama_parcalar),
+                durum=ot_durum,
+                kategori='onaylar',
+                detay_url='/nexgen/onay-merkezi',
+                dedupe_key=f'ONAY_TALEBI:{tid}',
+                renk=_ONAY_RENK.get(ot_durum, ''),
+                kayit_no=kod,
+                hareket_turu='Onay',
+            ))
+        qstats['q_onay_talep'] = 1
+
+    # MTT Yönetim Onayları (nexgen_onay) — Timeline federasyonu
+    # nexgen_onay.cari_id yoktur; nexgen_musteri_temsilcisi_talep.cari_id ile bağlanır
+    if _tablo_var(con, 'nexgen_onay') and _tablo_var(con, 'nexgen_musteri_temsilcisi_talep'):
+        _MTT_LBL = {
+            'ONAY_BEKLIYOR': 'Onay bekliyor',
+            'ONAYLANDI': 'Onaylandı',
+            'REDDEDILDI': 'Reddedildi',
+        }
+        _MTT_TIP = {
+            'SIPARIS_TALEBI_ONAY': 'Sipariş Talebi',
+            'NUMUNE_TALEBI_ONAY': 'Numune Talebi',
+        }
+        _MTT_RENK = {'REDDEDILDI': 'uyari', 'ONAY_BEKLIYOR': '', 'ONAYLANDI': ''}
+        for _mrow in con.execute(
+            """SELECT o.id, o.onay_no, o.onay_turu, o.durum,
+                      o.karar_tarihi, o.red_nedeni, o.created_at,
+                      sk_on.KullaniciAdi AS karar_veren,
+                      m.talep_no
+               FROM nexgen_onay o
+               JOIN nexgen_musteri_temsilcisi_talep m ON m.id=o.kaynak_id
+               LEFT JOIN sistem_kullanici sk_on ON sk_on.Id=o.onaylayan_kullanici_id
+               WHERE o.kaynak_turu='MUSTERI_TEMSILCISI_TALEP'
+                 AND m.cari_id=?
+               ORDER BY o.id DESC""",
+            (cid,),
+        ).fetchall():
+            _md = dict(_mrow)
+            _mdurum = (_md.get('durum') or '').upper()
+            _mdurum_lbl = _MTT_LBL.get(_mdurum, _mdurum)
+            _mtip = _MTT_TIP.get(_md.get('onay_turu') or '', 'MTT Onayı')
+            _mbaslik = f'NexGen {_mtip} — {_mdurum_lbl}'
+            # Tarih: kararlanmışsa karar_tarihi, yoksa oluşturma
+            _mtarih = str(_md.get('karar_tarihi') or _md.get('created_at') or '')
+            if not _mtarih:
+                continue
+            _macik_parcalar = [_md.get('talep_no') or _md.get('onay_no') or '']
+            if _md.get('karar_veren'):
+                _macik_parcalar.append(_md['karar_veren'])
+            if _md.get('red_nedeni'):
+                _macik_parcalar.append(_md['red_nedeni'])
+            _add(_event(
+                olay_kodu='MTT_ONAY',
+                entity_type='nexgen_onay',
+                entity_id=int(_md['id']),
+                cari_id=cid,
+                olay_tarihi=_mtarih,
+                baslik=_mbaslik,
+                aciklama=' · '.join(p for p in _macik_parcalar if p),
+                durum=_mdurum,
+                kategori='onaylar',
+                detay_url='/nexgen/onay-merkezi',
+                dedupe_key=f'MTT_ONAY:{_md["id"]}',
+                renk=_MTT_RENK.get(_mdurum, ''),
+                kayit_no=_md.get('onay_no') or str(_md['id']),
+                hareket_turu='Onay',
+            ))
+        qstats['q_mtt_onay'] = 1
+
+    # MTT Yaşam Döngüsü olayları — Mehmet tarafı geçişleri
+    # MTT_ONAY onay kararını, MTT_YASAM Mehmet işlem geçişlerini temsil eder — ayrı dedupe
+    if _tablo_var(con, 'nexgen_musteri_temsilcisi_talep'):
+        _MTT_YD_LBL = {
+            'YENI': "Mehmet'e Aktarıldı",
+            'ISLEME_ALINDI': 'Mehmet İşleme Aldı',
+            'SIPARISE_DONUSTU': 'Siparişe Dönüştü',
+            'NUMUNEYE_DONUSTU': 'Numuneye Dönüştü',
+            'KISMEN_NUMUNEYE_DONUSTU': 'Kısmen Numuneye Dönüştü',
+        }
+        _MTT_YD_RENK = {
+            'SIPARISE_DONUSTU': '',
+            'NUMUNEYE_DONUSTU': '',
+            'KISMEN_NUMUNEYE_DONUSTU': '',
+            'YENI': '',
+            'ISLEME_ALINDI': '',
+        }
+        _MTT_TIP2 = {
+            'SIPARIS': 'Sipariş Talebi',
+            'NUMUNE': 'Numune Talebi',
+        }
+        # Sipariş/numune kodlarını toplu çek
+        _yd_sip_ids: list[int] = []
+        _yd_num_ids: list[int] = []
+        _yd_mtt_rows = con.execute(
+            'SELECT id, talep_no, talep_turu, durum, '
+            'isleme_alinma_tarihi, donusturulme_tarihi, updated_at, '
+            'donusturulen_siparis_id, donusturulen_numune_talep_id '
+            'FROM nexgen_musteri_temsilcisi_talep '
+            'WHERE cari_id=? AND durum IN (\'YENI\',\'ISLEME_ALINDI\','
+            '\'SIPARISE_DONUSTU\',\'NUMUNEYE_DONUSTU\',\'KISMEN_NUMUNEYE_DONUSTU\')',
+            (cid,),
+        ).fetchall()
+        for _yd in _yd_mtt_rows:
+            if _yd['donusturulen_siparis_id']:
+                _yd_sip_ids.append(int(_yd['donusturulen_siparis_id']))
+            if _yd['donusturulen_numune_talep_id']:
+                _yd_num_ids.append(int(_yd['donusturulen_numune_talep_id']))
+        _yd_sip_map: dict[int, str] = {}
+        _yd_num_map: dict[int, str] = {}
+        if _yd_sip_ids and _tablo_var(con, 'nexgen_planlama_siparis'):
+            _ph = ','.join('?' * len(_yd_sip_ids))
+            for _sr in con.execute(
+                f'SELECT id, siparis_no FROM nexgen_planlama_siparis WHERE id IN ({_ph})',
+                _yd_sip_ids,
+            ).fetchall():
+                _yd_sip_map[int(_sr['id'])] = _sr['siparis_no'] or ''
+        if _yd_num_ids and _tablo_var(con, 'nexgen_numune_talep'):
+            _ph = ','.join('?' * len(_yd_num_ids))
+            for _nr in con.execute(
+                f'SELECT id, talep_kodu FROM nexgen_numune_talep WHERE id IN ({_ph})',
+                _yd_num_ids,
+            ).fetchall():
+                _yd_num_map[int(_nr['id'])] = _nr['talep_kodu'] or ''
+
+        for _yd in _yd_mtt_rows:
+            _yd_dur = (_yd['durum'] or '').upper()
+            _yd_lbl = _MTT_YD_LBL.get(_yd_dur)
+            if not _yd_lbl:
+                continue
+            # Canonical tarih: donusturulme > isleme_alinma > updated_at
+            if _yd_dur in ('SIPARISE_DONUSTU', 'NUMUNEYE_DONUSTU', 'KISMEN_NUMUNEYE_DONUSTU'):
+                _yd_tarih = str(_yd['donusturulme_tarihi'] or _yd['updated_at'] or '')
+            elif _yd_dur == 'ISLEME_ALINDI':
+                _yd_tarih = str(_yd['isleme_alinma_tarihi'] or _yd['updated_at'] or '')
+            else:
+                _yd_tarih = str(_yd['updated_at'] or '')
+            if not _yd_tarih:
+                continue
+            _yd_tip = _MTT_TIP2.get(_yd['talep_turu'] or '', 'MTT')
+            _yd_baslik = f'{_yd_tip} — {_yd_lbl}'
+            # Dönüşüm kodu
+            _yd_kod = ''
+            _sip_id = _yd['donusturulen_siparis_id']
+            _num_id = _yd['donusturulen_numune_talep_id']
+            if _sip_id and int(_sip_id) in _yd_sip_map:
+                _yd_kod = _yd_sip_map[int(_sip_id)]
+            elif _num_id and int(_num_id) in _yd_num_map:
+                _yd_kod = _yd_num_map[int(_num_id)]
+            _yd_acik = _yd['talep_no'] or ''
+            if _yd_kod:
+                _yd_acik = f'{_yd_acik} → {_yd_kod}'
+            _add(_event(
+                olay_kodu='MTT_YASAM',
+                entity_type='nexgen_musteri_temsilcisi_talep',
+                entity_id=int(_yd['id']),
+                cari_id=cid,
+                olay_tarihi=_yd_tarih,
+                baslik=_yd_baslik,
+                aciklama=_yd_acik,
+                durum=_yd_dur,
+                kategori='onaylar',
+                detay_url='/nexgen/onay-merkezi',
+                dedupe_key=f'MTT_YASAM:{_yd["id"]}:{_yd_dur}',
+                renk=_MTT_YD_RENK.get(_yd_dur, ''),
+                kayit_no=_yd['talep_no'] or str(_yd['id']),
+                hareket_turu='Onay',
+            ))
+        qstats['q_mtt_yasam'] = 1
+
     # Sıralama: olay_tarihi DESC → oncelik DESC → entity_id DESC
     def _sort_key(e: dict[str, Any]) -> tuple:
         eid = e.get('entity_id')
@@ -988,6 +1368,20 @@ def build_ops_timeline(
         )
 
     events.sort(key=_sort_key, reverse=True)
+
+    # ERP-yönetici whitelist: teknik log olaylarını Timeline'dan çıkar
+    _IZIN = frozenset({
+        'GORUSME_CREATED', 'GORUSME_UPDATED', 'GORUSME_IPTAL',
+        'NUMUNE_CREATED', 'NUMUNE_ONAYLANDI', 'NUMUNE_REDDEDILDI',
+        # SIPARIS_ONAYLANDI/REDDEDILDI/REVIZYON kaldırıldı — onay sistemi olan siparişlerde
+        # ONAY_TALEBI zaten aynı bilgiyi taşır; olmayan siparişlerde üretilir (koşullu)
+        'SIPARIS_CREATED', 'SIPARIS_ONAYLANDI', 'SIPARIS_REDDEDILDI',
+        'SIPARIS_REVIZYON', 'SIPARIS_IPTAL',
+        'CEK_KAYDI', 'CEK_GUNCELLENDI',
+        'TAHSILAT', 'ONAY_TALEBI', 'MTT_ONAY', 'MTT_YASAM',
+        'SEVKIYAT',
+    })
+    events = [e for e in events if e.get('olay_kodu') in _IZIN]
 
     meta = {
         'query_stats': qstats,

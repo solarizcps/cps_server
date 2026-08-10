@@ -1804,6 +1804,18 @@ def kaydet_gorusme_opsiyonel_talep(
                 yk,
                 commit=False,
             )
+        elif not ajanda_id and kayit.get('cari_id'):
+            # ajanda_id payload'da yoksa canonical sync — plan bul veya adhoc kayıt oluştur
+            from modules.nexgen.mo_ajanda_service import gercek_gorusmeyi_ajandaya_bagla
+            gercek_gorusmeyi_ajandaya_bagla(
+                con,
+                gorusme_id=gid,
+                kullanici_id=kullanici_id,
+                cari_id=int(kayit['cari_id']),
+                gorusme_tarihi=g_payload.get('gorusme_tarihi') or '',
+                gorusme_tipi=g_payload.get('gorusme_tipi') or '',
+                commit=False,
+            )
         trow = None
         if talep_norm:
             t_payload = {
