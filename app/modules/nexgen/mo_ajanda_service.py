@@ -125,17 +125,30 @@ def _row_dict(r, cari_map: dict[int, dict] | None = None) -> dict[str, Any]:
     return d
 
 
+_TICARI_OZET_KOLONLAR = (
+    'fiyat_verildi', 'verilen_fiyat', 'fiyat_para_birimi', 'fiyat_birimi',
+    'konusulan_tonaj', 'odeme_tipi', 'vade_gun', 'cek_vade_gun', 'cek_adedi',
+    'ticari_not', 'cek_notu',
+)
+
+
 def gorusme_ozet_map(con: sqlite3.Connection, gorusme_ids: list[int]) -> dict[int, dict[str, Any]]:
-    """Ajanda GERCEKLESTI kartları için minimal görüşme özeti."""
+    """Ajanda GERCEKLESTI kartları için görüşme özeti (+ ticari snapshot)."""
     from modules.nexgen.mo_gorusme_config import TABLO as G_TABLO
+    from modules.nexgen.mo_gorusme_service import _kolon_var, fiyat_ozet_metin
+
     ids = sorted({int(i) for i in gorusme_ids if i not in (None, '', 0, '0')})
     if not ids or not _tablo_var(con, G_TABLO):
         return {}
+    has_ticari = _kolon_var(con, G_TABLO, 'fiyat_verildi')
+    ticari_sql = ''
+    if has_ticari:
+        ticari_sql = ', ' + ', '.join(_TICARI_OZET_KOLONLAR)
     ph = ','.join('?' * len(ids))
     rows = con.execute(
         f"""
         SELECT id, gorusme_tarihi, gorusme_tipi, sonuc_tipi, kisa_not,
-               sonraki_aksiyon, sonraki_takip_tarihi
+               sonraki_aksiyon, sonraki_takip_tarihi{ticari_sql}
         FROM {G_TABLO}
         WHERE id IN ({ph}) AND COALESCE(aktif, 1)=1
         """,
@@ -143,7 +156,7 @@ def gorusme_ozet_map(con: sqlite3.Connection, gorusme_ids: list[int]) -> dict[in
     ).fetchall()
     out: dict[int, dict[str, Any]] = {}
     for r in rows:
-        out[int(r['id'])] = {
+        d: dict[str, Any] = {
             'gorusme_id': int(r['id']),
             'gorusme_tarihi': r['gorusme_tarihi'] or '',
             'gorusme_tipi': r['gorusme_tipi'] or '',
@@ -152,6 +165,14 @@ def gorusme_ozet_map(con: sqlite3.Connection, gorusme_ids: list[int]) -> dict[in
             'sonraki_aksiyon': r['sonraki_aksiyon'] or '',
             'sonraki_takip_tarihi': r['sonraki_takip_tarihi'] or '',
         }
+        if has_ticari:
+            for col in _TICARI_OZET_KOLONLAR:
+                d[col] = r[col] if col in r.keys() else None
+            d['fiyat_ozet'] = fiyat_ozet_metin(d)
+        else:
+            d['fiyat_verildi'] = 0
+            d['fiyat_ozet'] = None
+        out[int(r['id'])] = d
     return out
 
 
