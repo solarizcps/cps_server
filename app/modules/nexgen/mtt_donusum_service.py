@@ -918,7 +918,9 @@ def _assert_mtt_ticari_kilit(talep: dict, data: dict) -> dict:
         if src_vade_i is not None:
             payload['vade_gun'] = src_vade_i
     else:
-        payload['vade_gun'] = None
+        # CEK: vade_gun normalizasyonu pzm_write katmanında cek_vade_gun'dan yapılır.
+        # Burada payload'a müdahale etme; cek_vade_gun payload'da kalır.
+        pass
 
     # çek vadesi
     in_cek = payload.get('cek_vadesi')

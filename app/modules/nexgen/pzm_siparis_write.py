@@ -517,8 +517,23 @@ def pzm_vade_gun_dogrula(raw, *, odeme_tipi: str | None = None, zorunlu: bool = 
         return v
 
     if tip == 'CEK':
-        # Çek: vade_gun kullanılmaz; cek_vadesi ayrı doğrulanır
-        return None
+        # CEK: canonical vade_gun = cek_vade_gun alanından normalize edilir.
+        # Bu fonksiyon ham vade_gun alanını işler; CEK'te vade_gun payload'da
+        # boş gelir (kullanıcı cek_vade_gun girer). pzm_ticari_sartlar_dogrula
+        # CEK için vade_gun'u cek_vade_gun'dan besleyerek çağırır.
+        # Burada raw doğrudan cek_vade_gun değeri olarak geçer.
+        if raw in (None, ''):
+            return None  # zorunlu kontrolü pzm_cek_vade_gun_dogrula'da
+        if isinstance(raw, str):
+            s = raw.strip()
+            if not s.isdigit():
+                return None
+            raw = s
+        try:
+            v = int(raw)
+        except (TypeError, ValueError):
+            return None
+        return v if v >= 1 else None
 
     # odeme_tipi yok (eski / taslak yumuşak)
     if raw in (None, ''):
@@ -589,9 +604,6 @@ def pzm_ticari_sartlar_dogrula(
         pb = None
 
     vade_zorunlu = zorunlu or bool(tip)
-    vade_gun = pzm_vade_gun_dogrula(
-        data.get('vade_gun'), odeme_tipi=tip, zorunlu=vade_zorunlu,
-    )
     odeme_notu = pzm_odeme_notu_normalize(data.get('odeme_notu'))
     cek_vadesi = None
     cek_vade_gun = None
@@ -603,6 +615,14 @@ def pzm_ticari_sartlar_dogrula(
         if zorunlu and not raw_cv:
             raise PzmWriteError('Çek vadesi zorunludur.')
         cek_vadesi = raw_cv or None
+        # CEK: canonical vade_gun = cek_vade_gun (tahsilat motoru tek kaynaktan okur)
+        vade_gun = pzm_vade_gun_dogrula(
+            cek_vade_gun, odeme_tipi=tip, zorunlu=False,
+        )
+    else:
+        vade_gun = pzm_vade_gun_dogrula(
+            data.get('vade_gun'), odeme_tipi=tip, zorunlu=vade_zorunlu,
+        )
     return {
         'odeme_tipi': tip,
         'vade_gun': vade_gun,
@@ -1136,6 +1156,21 @@ def pzm_v2_kalem_dogrula(
     }
 
 
+def _pzm_tek_kalem_header_fiyat_sync(kalemler_raw: list, data: dict) -> None:
+    """Tek kalem: header anlasma_birim_fiyat → kalem birim_fiyat (çok kalemde kör kopya yok)."""
+    if len(kalemler_raw) != 1:
+        return
+    kr = kalemler_raw[0]
+    if not isinstance(kr, dict):
+        return
+    if kr.get('birim_fiyat') not in (None, ''):
+        return
+    hdr_bf = data.get('anlasma_birim_fiyat') or data.get('birim_fiyat')
+    if hdr_bf in (None, ''):
+        return
+    kr['birim_fiyat'] = hdr_bf
+
+
 def pzm_v2_payload_dogrula(
     con,
     data: dict,
@@ -1209,10 +1244,11 @@ def pzm_v2_payload_dogrula(
     fiyat_zorunlu = bool(ticari_zorunlu and kalem_fiyat_var)
     termin_zorunlu = bool(ticari_zorunlu)
 
+    _pzm_tek_kalem_header_fiyat_sync(kalemler_raw, data)
+
     kalemler = []
     seen = set()
     for i, kr in enumerate(kalemler_raw, start=1):
-        # Başlık fiyatı kaleme düşürülmez — fiyat tek kaynağı kalem
         k = pzm_v2_kalem_dogrula(
             con, kr, i, cari_id,
             fiyat_zorunlu=fiyat_zorunlu,
