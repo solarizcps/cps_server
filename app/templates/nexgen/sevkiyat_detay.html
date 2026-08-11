@@ -2,93 +2,343 @@
 {% set page_title = "Sevkiyat Detay" %}
 
 {% block content %}
-<div class="ng-sayfa" style="padding:16px 20px;">
-  <div class="ng-baslik-blok" style="margin-bottom:16px;">
-    {% if depo_sade_mod %}
-    <div class="svk-depo-nav">
-      <a href="/nexgen/depo/" class="svk-depo-nav-link">Mal Kabul</a>
-      <span class="svk-depo-nav-sep">|</span>
-      <a href="/nexgen/sevkiyat" class="svk-depo-nav-link active">Sevkiyat Operasyonu</a>
-    </div>
-    <h1 class="svk-depo-sayfa-baslik" id="svkd-baslik">Sevkiyat</h1>
-    {% else %}
-    <div class="ng-baslik">
-      <a href="/nexgen/" class="ng-bc-link">NexGen</a>
-      <span class="ng-bc-sep">›</span>
-      <a href="/nexgen/sevkiyat" class="ng-bc-link">Müşteri Sevkiyat</a>
-      <span class="ng-bc-sep">›</span>
-      <span class="ng-baslik-metin" id="svkd-baslik">Sevkiyat</span>
-    </div>
-    {% endif %}
-  </div>
+<style>
+/* ROOT CAUSE: max-width:960px kaldırıldı. Tam genişlik, padding ile nefes alıyor. */
+.svkd-wrap {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 14px 28px 40px;
+}
 
-  <div id="svkd-yukleniyor" style="padding:24px;color:#64748b;">Yükleniyor…</div>
+/* Breadcrumb */
+.svkd-bc { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #64748b; margin-bottom: 16px; flex-wrap: wrap; }
+.svkd-bc a { color: #006a8e; text-decoration: none; }
+.svkd-bc a:hover { text-decoration: underline; }
+.svkd-bc-sep { color: #cbd5e1; }
+
+/* ===== BAŞLIK ===== */
+.svkd-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+.svkd-header-icon {
+  width: 42px; height: 42px;
+  background: #006a8e;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.svkd-header-icon svg { width: 22px; height: 22px; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.svkd-header-meta { display: flex; flex-direction: column; min-width: 0; }
+.svkd-header-sub { font-size: 10px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+.svkd-header-no { font-size: 20px; font-weight: 700; color: #0f172a; line-height: 1.2; white-space: nowrap; }
+.svkd-header-actions {
+  display: flex; align-items: center; gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+/* Durum badge */
+.svkd-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; border: 1.5px solid; white-space: nowrap; }
+.svkd-badge-sevk    { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
+.svkd-badge-teslim  { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0; }
+.svkd-badge-hazir   { background: #fff7ed; color: #ea580c; border-color: #fed7aa; }
+.svkd-badge-yukle   { background: #fefce8; color: #ca8a04; border-color: #fde68a; }
+.svkd-badge-tamam   { background: #f8fafc; color: #475569; border-color: #cbd5e1; }
+.svkd-badge-default { background: #f1f5f9; color: #64748b; border-color: #e2e8f0; }
+
+/* Buton */
+.svkd-btn { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 7px 14px; border-radius: 7px; border: none; cursor: pointer; transition: opacity .15s; white-space: nowrap; }
+.svkd-btn:hover { opacity: .88; }
+.svkd-btn-primary { background: #006a8e; color: #fff; }
+.svkd-btn-outline { background: #fff; color: #475569; border: 1.5px solid #e2e8f0; }
+
+/* ===== KART ===== */
+.svkd-kart { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
+.svkd-kart-baslik { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: #475569; padding: 10px 16px 8px; border-bottom: 1px solid #f1f5f9; }
+
+/* ===== ÖZET BANT ===== */
+/* Sipariş 15%, Müşteri 40%, KG 15%, Sevk 30% */
+.svkd-ozet-grid {
+  display: grid;
+  grid-template-columns: 15fr 40fr 15fr 30fr;
+  gap: 0;
+}
+.svkd-ozet-item { padding: 12px 18px; border-right: 1px solid #f1f5f9; }
+.svkd-ozet-item:last-child { border-right: none; }
+.svkd-ozet-lbl { font-size: 10px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; display: flex; align-items: center; gap: 5px; }
+.svkd-ozet-lbl svg { width: 12px; height: 12px; flex-shrink: 0; }
+.svkd-ozet-val { font-size: 14px; font-weight: 700; color: #0f172a; }
+.svkd-ozet-val.musteri { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.svkd-ozet-val a { color: #006a8e; text-decoration: none; }
+.svkd-ozet-val a:hover { text-decoration: underline; }
+
+/* ===== SEVKİYAT BİLGİLERİ ===== */
+/* Kompakt 4 kolon, 2 satır */
+.svkd-bilgi-grid { display: grid; grid-template-columns: repeat(4, 1fr); }
+.svkd-bilgi-item { padding: 8px 16px 9px; border-right: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9; }
+.svkd-bilgi-item:nth-child(4n) { border-right: none; }
+.svkd-bilgi-item:nth-last-child(-n+4) { border-bottom: none; }
+.svkd-bilgi-lbl { font-size: 10px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 2px; }
+.svkd-bilgi-val { font-size: 12.5px; font-weight: 600; color: #1e293b; line-height: 1.4; }
+.svkd-bilgi-val.empty { color: #cbd5e1; font-weight: 400; }
+
+/* Notlar */
+.svkd-notlar { padding: 8px 16px; font-size: 12px; color: #475569; border-top: 1px solid #f1f5f9; background: #fafafa; }
+
+/* ===== TERMİN ===== */
+.svkd-termin-grid { display: grid; grid-template-columns: repeat(4, 1fr) auto; gap: 0; align-items: center; }
+.svkd-termin-item { padding: 10px 16px; border-right: 1px solid #f8fafc; }
+.svkd-termin-item:last-child { border-right: none; padding-right: 16px; }
+.svkd-termin-lbl { font-size: 10px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 2px; }
+.svkd-termin-val { font-size: 13px; font-weight: 600; color: #1e293b; }
+.svkd-termin-durum { font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 14px; white-space: nowrap; }
+.svkd-td-gec { background: #fef2f2; color: #dc2626; }
+.svkd-td-erk { background: #f0fdf4; color: #16a34a; }
+.svkd-td-zam { background: #eff6ff; color: #2563eb; }
+.svkd-td-yok { background: #f1f5f9; color: #94a3b8; }
+
+/* ===== TAHSİLAT ===== */
+.svkd-tahsilat-wrap { display: flex; align-items: flex-start; gap: 40px; padding: 12px 18px; flex-wrap: wrap; }
+.svkd-tahsilat-sol { min-width: 160px; }
+.svkd-tahsilat-lbl { font-size: 10px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+.svkd-tahsilat-tarih { font-size: 22px; font-weight: 700; color: #0f172a; }
+.svkd-tahsilat-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.svkd-tahsilat-chip { font-size: 11px; color: #475569; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 6px; padding: 2px 8px; }
+.svkd-tahsilat-not { font-size: 10.5px; color: #94a3b8; line-height: 1.5; max-width: 620px; margin-top: 6px; }
+
+/* ===== ÜRÜN TABLOSU ===== */
+.svkd-tablo-wrap { overflow-x: auto; }
+.svkd-tablo { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.svkd-tablo th { text-align: left; padding: 8px 16px; font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .06em; background: #f8fafc; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
+.svkd-tablo td { padding: 10px 16px; border-bottom: 1px solid #f8fafc; color: #1e293b; font-weight: 500; vertical-align: middle; }
+.svkd-tablo tbody tr:last-child td { border-bottom: none; }
+.svkd-tablo td:last-child { font-weight: 700; color: #006a8e; }
+
+/* Alt */
+.svkd-footer { display: flex; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+.svkd-geri { font-size: 12px; color: #64748b; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; }
+.svkd-geri:hover { color: #006a8e; }
+
+/* Responsive */
+@media (max-width: 1100px) {
+  .svkd-ozet-grid { grid-template-columns: repeat(2, 1fr); }
+  .svkd-termin-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 700px) {
+  .svkd-bilgi-grid { grid-template-columns: repeat(2, 1fr); }
+  .svkd-ozet-grid { grid-template-columns: 1fr 1fr; }
+  .svkd-termin-grid { grid-template-columns: 1fr 1fr; }
+  .svkd-header { flex-wrap: wrap; }
+  .svkd-wrap { padding: 12px 14px 32px; }
+}
+</style>
+
+<div class="svkd-wrap">
+
+  <!-- Breadcrumb -->
+  {% if depo_sade_mod %}
+  <div class="svkd-bc">
+    <a href="/nexgen/depo/">Mal Kabul</a>
+    <span class="svkd-bc-sep">›</span>
+    <a href="/nexgen/sevkiyat">Sevkiyat Operasyonu</a>
+    <span class="svkd-bc-sep">›</span>
+    <span id="svkd-baslik">—</span>
+  </div>
+  {% else %}
+  <div class="svkd-bc">
+    <a href="/nexgen/">NexGen</a>
+    <span class="svkd-bc-sep">›</span>
+    <a href="/nexgen/sevkiyat">Müşteri Sevkiyat</a>
+    <span class="svkd-bc-sep">›</span>
+    <span id="svkd-baslik">—</span>
+  </div>
+  {% endif %}
+
+  <!-- Yükleniyor -->
+  <div id="svkd-yukleniyor" style="padding:40px 0;color:#64748b;text-align:center;font-size:13px;">Yükleniyor…</div>
+
+  <!-- Ana içerik -->
   <div id="svkd-icerik" style="display:none;">
-    <div class="pzm-kart" style="padding:16px;margin-bottom:12px;font-size:12px;">
-      <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-bottom:12px;">
-        <div><span style="color:#64748b;">Durum</span><br><strong id="svkd-durum"></strong></div>
-        <div><span style="color:#64748b;">Sevkiyat no</span><br><strong id="svkd-no"></strong></div>
-        <div><span style="color:#64748b;">Sipariş</span><br><strong id="svkd-siparis"></strong></div>
-        <div><span style="color:#64748b;">Müşteri</span><br><strong id="svkd-musteri"></strong></div>
-        <div><span style="color:#64748b;">Toplam kg</span><br><strong id="svkd-kg"></strong></div>
+
+    <!-- ===== BAŞLIK: tek yatay satır ===== -->
+    <div class="svkd-header">
+      <div class="svkd-header-icon">
+        <svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 4v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+      </div>
+      <div class="svkd-header-meta">
+        <div class="svkd-header-sub">Müşteri Sevkiyat</div>
+        <div class="svkd-header-no" id="svkd-no">—</div>
+      </div>
+      <div class="svkd-header-actions">
+        <span id="svkd-durum-badge" class="svkd-badge svkd-badge-default"></span>
         {% if can_yaz %}
-        <div style="margin-left:auto;">
-          <button type="button" id="svkd-durum-btn" class="pzm-btn pzm-btn-lacivert pzm-btn-sm" onclick="svkdDurumAc()" style="display:none;"></button>
-        </div>
+        <button type="button" id="svkd-durum-btn" class="svkd-btn svkd-btn-primary" onclick="svkdDurumAc()" style="display:none;"></button>
         {% endif %}
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;border-top:1px solid #e2e8f0;padding-top:12px;">
-        <div><b>Hazırlık</b><br><span id="svkd-hazirlik">—</span></div>
-        <div><b>Sevk tarihi</b><br><span id="svkd-sevk">—</span></div>
-        <div><b>Teslim tarihi</b><br><span id="svkd-teslim">—</span></div>
-        <div><b>İrsaliye</b><br><span id="svkd-irsaliye">—</span></div>
-        <div><b>Plaka</b><br><span id="svkd-plaka">—</span></div>
-        <div><b>Şoför</b><br><span id="svkd-sofor">—</span></div>
-        <div><b>Kargo</b><br><span id="svkd-kargo">—</span></div>
-        <div><b>Teslim alan</b><br><span id="svkd-teslim-alan">—</span></div>
-      </div>
-      <div id="svkd-notlar" style="margin-top:10px;color:#475569;"></div>
-    </div>
-
-    <div class="pzm-kart" style="padding:16px;margin-bottom:12px;font-size:12px;">
-      <strong>Termin karşılaştırması</strong>
-      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:8px;">
-        <div>Müşteri termin<br><span id="svkd-mt">—</span></div>
-        <div>Verilen termin<br><span id="svkd-vt">—</span></div>
-        <div>Gerçek sevk<br><span id="svkd-gs">—</span></div>
-        <div>Gerçek teslim<br><span id="svkd-gt">—</span></div>
-        <div>Durum<br><strong id="svkd-td">—</strong></div>
+        <button type="button" class="svkd-btn svkd-btn-outline" onclick="window.print()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          Yazdır
+        </button>
       </div>
     </div>
 
-    <div class="pzm-kart" style="padding:16px;margin-bottom:12px;font-size:12px;" id="svkd-tahsilat-blok">
-      <strong>Tahsilat (sipariş bazlı plan)</strong>
-      <div id="svkd-tahsilat" style="margin-top:8px;color:#475569;"></div>
+    <!-- ===== ÖZET BANT — geniş 4 kolon ===== -->
+    <div class="svkd-kart" style="margin-bottom:10px;">
+      <div class="svkd-ozet-grid">
+        <div class="svkd-ozet-item">
+          <div class="svkd-ozet-lbl">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Sipariş
+          </div>
+          <div class="svkd-ozet-val" id="svkd-siparis">—</div>
+        </div>
+        <div class="svkd-ozet-item">
+          <div class="svkd-ozet-lbl">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            Müşteri
+          </div>
+          <div class="svkd-ozet-val musteri" id="svkd-musteri">—</div>
+        </div>
+        <div class="svkd-ozet-item">
+          <div class="svkd-ozet-lbl">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 4v5h-7V8z"/></svg>
+            Toplam KG
+          </div>
+          <div class="svkd-ozet-val" id="svkd-kg">—</div>
+        </div>
+        <div class="svkd-ozet-item">
+          <div class="svkd-ozet-lbl">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Sevk Tarihi
+          </div>
+          <div class="svkd-ozet-val" id="svkd-sevk-ozet">—</div>
+        </div>
+      </div>
     </div>
 
-    <div class="pzm-kart" style="overflow:auto;">
-      <table class="pzm-tablo">
-        <thead>
-          <tr>
-            <th class="pzm-th">Ürün</th>
-            <th class="pzm-th">Renk</th>
-            <th class="pzm-th">Formül</th>
-            <th class="pzm-th">Miktar kg</th>
-          </tr>
-        </thead>
-        <tbody id="svkd-kalemler"></tbody>
-      </table>
+    <!-- ===== SEVKİYAT BİLGİLERİ — kompakt ===== -->
+    <div class="svkd-kart">
+      <div class="svkd-kart-baslik">Sevkiyat Bilgileri</div>
+      <div class="svkd-bilgi-grid">
+        <div class="svkd-bilgi-item">
+          <div class="svkd-bilgi-lbl">Hazırlık Tarihi</div>
+          <div class="svkd-bilgi-val" id="svkd-hazirlik">—</div>
+        </div>
+        <div class="svkd-bilgi-item">
+          <div class="svkd-bilgi-lbl">Sevk Tarihi</div>
+          <div class="svkd-bilgi-val" id="svkd-sevk">—</div>
+        </div>
+        <div class="svkd-bilgi-item">
+          <div class="svkd-bilgi-lbl">Teslim Tarihi</div>
+          <div class="svkd-bilgi-val" id="svkd-teslim">—</div>
+        </div>
+        <div class="svkd-bilgi-item">
+          <div class="svkd-bilgi-lbl">İrsaliye</div>
+          <div class="svkd-bilgi-val" id="svkd-irsaliye">—</div>
+        </div>
+        <div class="svkd-bilgi-item">
+          <div class="svkd-bilgi-lbl">Plaka</div>
+          <div class="svkd-bilgi-val" id="svkd-plaka">—</div>
+        </div>
+        <div class="svkd-bilgi-item">
+          <div class="svkd-bilgi-lbl">Şoför</div>
+          <div class="svkd-bilgi-val" id="svkd-sofor">—</div>
+        </div>
+        <div class="svkd-bilgi-item">
+          <div class="svkd-bilgi-lbl">Kargo</div>
+          <div class="svkd-bilgi-val" id="svkd-kargo">—</div>
+        </div>
+        <div class="svkd-bilgi-item">
+          <div class="svkd-bilgi-lbl">Teslim Alan</div>
+          <div class="svkd-bilgi-val" id="svkd-teslim-alan">—</div>
+        </div>
+      </div>
+      <div id="svkd-notlar" style="display:none;" class="svkd-notlar"></div>
     </div>
-  </div>
+
+    <!-- ===== TERMİN KARŞILAŞTIRMASI — kompakt ===== -->
+    <div class="svkd-kart">
+      <div class="svkd-kart-baslik">Termin Karşılaştırması</div>
+      <div class="svkd-termin-grid">
+        <div class="svkd-termin-item">
+          <div class="svkd-termin-lbl">Müşteri Termin</div>
+          <div class="svkd-termin-val" id="svkd-mt">—</div>
+        </div>
+        <div class="svkd-termin-item">
+          <div class="svkd-termin-lbl">Verilen Termin</div>
+          <div class="svkd-termin-val" id="svkd-vt">—</div>
+        </div>
+        <div class="svkd-termin-item">
+          <div class="svkd-termin-lbl">Gerçek Sevk</div>
+          <div class="svkd-termin-val" id="svkd-gs">—</div>
+        </div>
+        <div class="svkd-termin-item">
+          <div class="svkd-termin-lbl">Gerçek Teslim</div>
+          <div class="svkd-termin-val" id="svkd-gt">—</div>
+        </div>
+        <div class="svkd-termin-item">
+          <div class="svkd-termin-lbl">Durum</div>
+          <div style="margin-top:3px;"><span class="svkd-termin-durum svkd-td-yok" id="svkd-td">—</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== TAHSİLAT PLANI — sade ===== -->
+    <div class="svkd-kart" id="svkd-tahsilat-blok">
+      <div class="svkd-kart-baslik">Tahsilat Planı</div>
+      <div class="svkd-tahsilat-wrap">
+        <div class="svkd-tahsilat-sol">
+          <div class="svkd-tahsilat-lbl">Planlanan Tahsilat</div>
+          <div class="svkd-tahsilat-tarih" id="svkd-tahsilat-tarih">—</div>
+          <div class="svkd-tahsilat-chips" id="svkd-tahsilat-chips"></div>
+        </div>
+        <div id="svkd-tahsilat-not" style="display:none;" class="svkd-tahsilat-not"></div>
+      </div>
+    </div>
+
+    <!-- ===== ÜRÜN DETAYLARI ===== -->
+    <div class="svkd-kart">
+      <div class="svkd-kart-baslik">Ürün Detayları</div>
+      <div class="svkd-tablo-wrap">
+        <table class="svkd-tablo">
+          <thead>
+            <tr>
+              <th>Ürün</th>
+              <th>Renk</th>
+              <th>Formül</th>
+              <th>Miktar (KG)</th>
+            </tr>
+          </thead>
+          <tbody id="svkd-kalemler"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Alt -->
+    <div class="svkd-footer">
+      <a href="/nexgen/sevkiyat" class="svkd-geri">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        Geri Dön
+      </a>
+    </div>
+
+  </div><!-- /svkd-icerik -->
 </div>
 
+<!-- Durum güncelleme modal (iş kuralı değişmedi) -->
 <div id="svkd-durum-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:9000;align-items:center;justify-content:center;">
-  <div style="background:#fff;border-radius:10px;max-width:480px;width:94%;padding:20px;">
-    <strong id="svkd-dm-baslik">Durum güncelle</strong>
-    <div id="svkd-dm-alanlar" style="margin-top:12px;font-size:12px;"></div>
-    <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
-      <button type="button" class="pzm-btn pzm-btn-outline pzm-btn-sm" onclick="svkdDurumKapat()">İptal</button>
-      <button type="button" class="pzm-btn pzm-btn-lacivert pzm-btn-sm" onclick="svkdDurumKaydet()">Onayla</button>
+  <div style="background:#fff;border-radius:12px;max-width:480px;width:94%;padding:22px;box-shadow:0 8px 32px rgba(0,0,0,.18);">
+    <div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:14px;" id="svkd-dm-baslik">Durum güncelle</div>
+    <div id="svkd-dm-alanlar" style="font-size:12px;"></div>
+    <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;">
+      <button type="button" class="svkd-btn svkd-btn-outline" onclick="svkdDurumKapat()">İptal</button>
+      <button type="button" class="svkd-btn svkd-btn-primary" onclick="svkdDurumKaydet()">Onayla</button>
     </div>
   </div>
 </div>
@@ -97,17 +347,63 @@
 var _svkdId = {{ sevkiyat_id }};
 var _svkdCanYaz = {{ 'true' if can_yaz else 'false' }};
 var _svkdSonraki = null;
-var _svkdPaket = null;
 
 function svkdEsc(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+function svkdFmtTarih(v) {
+  if (!v) return '—';
+  var s = String(v).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  var p = s.split('-');
+  return p[2] + '.' + p[1] + '.' + p[0];
+}
+
+/* Enum → kullanıcı dostu etiket */
+function svkdKuralEtiket(kural) {
+  var m = {
+    'SEVKTEN_SONRA': 'Sevkten Sonra',
+    'SEVKTE': 'Sevkte',
+    'SIPARIS_TARIHINDE': 'Sipariş Tarihinde',
+    'NAKIT': 'Nakit'
+  };
+  return m[(kural || '').toUpperCase()] || kural || '—';
+}
+
+function svkdKaynakEtiket(kaynak) {
+  var m = {
+    'GERCEK_SEVK+X_GUN': 'Gerçek Sevk + Gün',
+    'GERCEK_SEVK': 'Gerçek Sevk',
+    'SIPARIS_TARIHI': 'Sipariş Tarihi'
+  };
+  return m[(kaynak || '')] || kaynak || '';
+}
+
+function svkdBadgeClass(durum) {
+  var m = {
+    'SEVK_EDILDI': 'svkd-badge-sevk',
+    'TESLIM_EDILDI': 'svkd-badge-teslim',
+    'TAMAMLANDI': 'svkd-badge-tamam',
+    'YUKLENIYOR': 'svkd-badge-yukle',
+    'HAZIRLANIYOR': 'svkd-badge-hazir'
+  };
+  return m[durum] || 'svkd-badge-default';
+}
+
+function svkdTerminClass(durum) {
+  if (!durum || durum === '—') return 'svkd-td-yok';
+  if (durum === 'Gecikmiş') return 'svkd-td-gec';
+  if (durum === 'Erken') return 'svkd-td-erk';
+  if (durum === 'Zamanında') return 'svkd-td-zam';
+  return 'svkd-td-yok';
+}
+
 var DURUM_LBL = {
   YUKLENIYOR: 'Yükleniyor olarak işaretle',
-  SEVK_EDILDI: 'Sevk edildi',
-  TESLIM_EDILDI: 'Teslim edildi',
-  TAMAMLANDI: 'Tamamlandı'
+  SEVK_EDILDI: 'Sevk edildi olarak işaretle',
+  TESLIM_EDILDI: 'Teslim edildi olarak işaretle',
+  TAMAMLANDI: 'Tamamlandı olarak işaretle'
 };
 
 function svkdYukle() {
@@ -119,55 +415,102 @@ function svkdYukle() {
         return;
       }
       var s = d.sevkiyat;
-      _svkdPaket = s;
       _svkdSonraki = s.sonraki_durum;
+
       document.getElementById('svkd-yukleniyor').style.display = 'none';
       document.getElementById('svkd-icerik').style.display = 'block';
-      document.getElementById('svkd-baslik').textContent = s.sevkiyat_no || ('#' + s.id);
-      document.getElementById('svkd-durum').textContent = s.durum_etiket || s.durum;
-      document.getElementById('svkd-no').textContent = s.sevkiyat_no || '—';
-      document.getElementById('svkd-siparis').textContent = s.siparis_no || s.siparis_id;
+
+      /* Breadcrumb + no */
+      var no = s.sevkiyat_no || ('#' + s.id);
+      document.getElementById('svkd-baslik').textContent = no;
+      document.getElementById('svkd-no').textContent = no;
+
+      /* Durum badge */
+      var badge = document.getElementById('svkd-durum-badge');
+      badge.textContent = s.durum_etiket || s.durum || '—';
+      badge.className = 'svkd-badge ' + svkdBadgeClass(s.durum);
+
+      /* Özet bant */
+      document.getElementById('svkd-siparis').textContent = s.siparis_no || (s.siparis_id ? '#' + s.siparis_id : '—');
       document.getElementById('svkd-musteri').textContent = s.cari_unvan || '—';
-      document.getElementById('svkd-kg').textContent = s.toplam_kg;
-      document.getElementById('svkd-hazirlik').textContent = (s.hazirlik_tarihi || '—').slice(0, 10);
-      document.getElementById('svkd-sevk').textContent = (s.sevk_tarihi || '—').slice(0, 10);
-      document.getElementById('svkd-teslim').textContent = (s.teslim_tarihi || '—').slice(0, 10);
-      document.getElementById('svkd-irsaliye').textContent = s.irsaliye_no || '—';
-      document.getElementById('svkd-plaka').textContent = s.arac_plaka || '—';
-      document.getElementById('svkd-sofor').textContent = s.sofor || '—';
-      document.getElementById('svkd-kargo').textContent = s.kargo_firmasi || '—';
-      document.getElementById('svkd-teslim-alan').textContent = s.teslim_alan || '—';
-      if (s.notlar) document.getElementById('svkd-notlar').textContent = 'Not: ' + s.notlar;
+      document.getElementById('svkd-kg').textContent = s.toplam_kg != null ? s.toplam_kg + ' kg' : '—';
+      document.getElementById('svkd-sevk-ozet').textContent = svkdFmtTarih(s.sevk_tarihi);
 
+      /* Sevkiyat bilgileri */
+      function sv(id, v) {
+        var el = document.getElementById(id);
+        var val = typeof v === 'string' ? v : (v || '—');
+        el.textContent = val;
+        if (!v || v === '—') el.classList.add('empty'); else el.classList.remove('empty');
+      }
+      sv('svkd-hazirlik', svkdFmtTarih(s.hazirlik_tarihi));
+      sv('svkd-sevk', svkdFmtTarih(s.sevk_tarihi));
+      sv('svkd-teslim', svkdFmtTarih(s.teslim_tarihi));
+      sv('svkd-irsaliye', s.irsaliye_no);
+      sv('svkd-plaka', s.arac_plaka);
+      sv('svkd-sofor', s.sofor);
+      sv('svkd-kargo', s.kargo_firmasi);
+      sv('svkd-teslim-alan', s.teslim_alan);
+
+      if (s.notlar) {
+        var notEl = document.getElementById('svkd-notlar');
+        notEl.textContent = s.notlar;
+        notEl.style.display = 'block';
+      }
+
+      /* Termin */
       var t = s.termin || {};
-      document.getElementById('svkd-mt').textContent = t.musteri_termin || '—';
-      document.getElementById('svkd-vt').textContent = t.verilen_termin || '—';
-      document.getElementById('svkd-gs').textContent = t.gercek_sevk_tarihi || '—';
-      document.getElementById('svkd-gt').textContent = t.gercek_teslim_tarihi || '—';
-      document.getElementById('svkd-td').textContent = s.termin_durum || '—';
+      document.getElementById('svkd-mt').textContent = svkdFmtTarih(t.musteri_termin) || '—';
+      document.getElementById('svkd-vt').textContent = svkdFmtTarih(t.verilen_termin) || '—';
+      document.getElementById('svkd-gs').textContent = svkdFmtTarih(t.gercek_sevk_tarihi) || '—';
+      document.getElementById('svkd-gt').textContent = svkdFmtTarih(t.gercek_teslim_tarihi) || '—';
+      var tdEl = document.getElementById('svkd-td');
+      var tdLbl = s.termin_durum || '—';
+      tdEl.textContent = tdLbl;
+      tdEl.className = 'svkd-termin-durum ' + svkdTerminClass(tdLbl);
 
+      /* Tahsilat — sade */
       var th = s.tahsilat || {};
       if (th.tahsilat_kurali) {
-        document.getElementById('svkd-tahsilat').innerHTML =
-          'Kural: <b>' + svkdEsc(th.tahsilat_kurali) + '</b> · Plan: ' + svkdEsc(th.planlanan_tahsilat_tarihi || '—')
-          + ' · Kaynak: ' + svkdEsc(th.tahsilat_tarih_kaynagi || '—')
-          + '<br><span style="font-size:11px;">' + svkdEsc(th.tahsilat_kural_notu || '') + '</span>';
+        document.getElementById('svkd-tahsilat-tarih').textContent =
+          svkdFmtTarih(th.planlanan_tahsilat_tarihi) || '—';
+
+        var chips = [];
+        if (th.tahsilat_kurali) chips.push(svkdKuralEtiket(th.tahsilat_kurali));
+        if (th.tahsilat_gun_sayisi) chips.push('+' + th.tahsilat_gun_sayisi + ' Gün');
+        if (th.tahsilat_tarih_kaynagi) chips.push(svkdKaynakEtiket(th.tahsilat_tarih_kaynagi));
+        document.getElementById('svkd-tahsilat-chips').innerHTML = chips.map(function(c) {
+          return '<span class="svkd-tahsilat-chip">' + svkdEsc(c) + '</span>';
+        }).join('');
+
+        /* Teknik not ikincil — görünür ama küçük */
+        if (th.tahsilat_kural_notu) {
+          var notEl2 = document.getElementById('svkd-tahsilat-not');
+          notEl2.textContent = th.tahsilat_kural_notu;
+          notEl2.style.display = 'block';
+        }
       } else {
         document.getElementById('svkd-tahsilat-blok').style.display = 'none';
       }
 
+      /* Ürün tablosu */
       var kb = document.getElementById('svkd-kalemler');
       kb.innerHTML = '';
       (s.kalemler || []).forEach(function(k) {
         var tr = document.createElement('tr');
-        tr.innerHTML = '<td>' + svkdEsc(k.urun_adi) + '</td><td>' + svkdEsc(k.renk_ad) + '</td><td>' + svkdEsc(k.formul_ad) + '</td><td>' + svkdEsc(k.miktar_kg) + '</td>';
+        tr.innerHTML =
+          '<td>' + svkdEsc(k.urun_adi || '—') + '</td>' +
+          '<td>' + svkdEsc(k.renk_ad || '—') + '</td>' +
+          '<td>' + svkdEsc(k.formul_ad || '—') + '</td>' +
+          '<td>' + svkdEsc(k.miktar_kg != null ? k.miktar_kg + ' kg' : '—') + '</td>';
         kb.appendChild(tr);
       });
 
+      /* Durum butonu */
       var btn = document.getElementById('svkd-durum-btn');
       if (btn) {
         if (_svkdCanYaz && _svkdSonraki) {
-          btn.style.display = 'inline-block';
+          btn.style.display = 'inline-flex';
           btn.disabled = false;
           btn.textContent = DURUM_LBL[_svkdSonraki] || ('→ ' + _svkdSonraki);
         } else {
@@ -175,6 +518,9 @@ function svkdYukle() {
           btn.disabled = true;
         }
       }
+    })
+    .catch(function() {
+      document.getElementById('svkd-yukleniyor').textContent = 'Yüklenirken hata oluştu.';
     });
 }
 
@@ -185,13 +531,14 @@ function svkdDurumAc() {
   var today = new Date().toISOString().slice(0, 10);
   alan.innerHTML = '';
   if (_svkdSonraki === 'SEVK_EDILDI') {
-    alan.innerHTML = '<label>Sevk tarihi<input type="date" id="svkd-sevk-t" class="pzm-inp" value="' + today + '" style="width:100%;margin-top:4px;"></label>';
+    alan.innerHTML = '<label style="display:block;">Sevk tarihi<input type="date" id="svkd-sevk-t" style="display:block;width:100%;margin-top:4px;padding:6px 8px;border:1.5px solid #e2e8f0;border-radius:6px;font-size:12px;" value="' + today + '"></label>';
   } else if (_svkdSonraki === 'TESLIM_EDILDI') {
-    alan.innerHTML = '<label>Teslim tarihi<input type="date" id="svkd-teslim-t" class="pzm-inp" value="' + today + '" style="width:100%;margin-top:4px;"></label>'
-      + '<label style="display:block;margin-top:8px;">Teslim alan<input type="text" id="svkd-ta" class="pzm-inp" style="width:100%;margin-top:4px;"></label>'
-      + '<label style="display:block;margin-top:8px;">Teslim notu<textarea id="svkd-tn" rows="2" class="pzm-inp" style="width:100%;margin-top:4px;font-family:inherit;"></textarea></label>';
+    alan.innerHTML =
+      '<label style="display:block;">Teslim tarihi<input type="date" id="svkd-teslim-t" style="display:block;width:100%;margin-top:4px;padding:6px 8px;border:1.5px solid #e2e8f0;border-radius:6px;font-size:12px;" value="' + today + '"></label>' +
+      '<label style="display:block;margin-top:10px;">Teslim alan<input type="text" id="svkd-ta" style="display:block;width:100%;margin-top:4px;padding:6px 8px;border:1.5px solid #e2e8f0;border-radius:6px;font-size:12px;"></label>' +
+      '<label style="display:block;margin-top:10px;">Not<textarea id="svkd-tn" rows="2" style="display:block;width:100%;margin-top:4px;padding:6px 8px;border:1.5px solid #e2e8f0;border-radius:6px;font-size:12px;font-family:inherit;resize:vertical;"></textarea></label>';
   } else {
-    alan.innerHTML = '<p>Bu adıma geçilsin mi?</p>';
+    alan.innerHTML = '<p style="color:#475569;font-size:12px;margin:0;">Bu adıma geçilsin mi?</p>';
   }
   document.getElementById('svkd-durum-modal').style.display = 'flex';
 }
@@ -217,10 +564,10 @@ function svkdDurumKaydet() {
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(payload)
   }).then(function(r) { return r.json(); }).then(function(d) {
-    if (!d.ok) { alert(d.mesaj || 'Güncellenemedi'); return; }
+    if (!d.ok) { alert(d.mesaj || 'Güncellenemedi'); svkdDurumKapat(); return; }
     svkdDurumKapat();
     svkdYukle();
-  });
+  }).catch(function() { alert('Sunucu hatası.'); });
 }
 
 svkdYukle();

@@ -10,6 +10,7 @@ from __future__ import annotations
 from flask import abort, jsonify, render_template, request, session
 
 from modules.auth import login_gerekli, kullanici_yetkileri
+from modules.nexgen.cari360_finans_service import load_cari360_finans
 from modules.nexgen.cari360_kart_service import Cari360KartError, load_cari_kart
 from modules.nexgen.cari360_dosya_service import (
     Cari360DosyaError,
@@ -21,6 +22,7 @@ from modules.nexgen.cari360_ops_read_service import (
     enrich_gorusmeler_bagli_numuneler,
     enrich_gorusmeler_zincir_flags,
     load_cari360_numuneler,
+    load_cari360_onaylar,
     load_cari360_ozet,
     load_cari360_sevkiyatlar,
     load_cari360_siparisler,
@@ -52,7 +54,7 @@ from modules.nexgen.mo_gorusme_service import (
 )
 
 _CARI360_TABS = (
-    'genel', 'yetkililer', 'siparisler', 'uretim', 'sevkiyatlar', 'urunler',
+    'genel', 'siparisler', 'uretim', 'sevkiyatlar', 'urunler',
     'numuneler', 'gorusmeler',
 )
 
@@ -91,11 +93,16 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
     @bp.route('/cari360/<int:cari_id>', strict_slashes=False)
     @login_gerekli
     def cari360_dosya_sayfa(cari_id):
-        """Cari Kart shell — operasyon görünümü (read-only ops + mevcut sekmeler)."""
+        """Cari Kart shell — operasyon görünümü (read-only ops + mevcut sekmeler).
+
+        Erişim: can_cari360_dosya_ekrani — yalnız cari360.view_own (pazarlamacı) geçemez.
+        """
         yk = _yk()
         uid = kullanici_id_fn()
         if not uid:
             abort(401)
+        if not can_cari360_dosya_ekrani(yk):
+            abort(403)
         con = db_fn()
         try:
             data = load_cari_kart(con, cari_id, uid, yk)
@@ -177,7 +184,10 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
     @bp.route('/api/cari360/<int:cari_id>/siparisler', methods=['GET'])
     @login_gerekli
     def api_cari360_siparisler(cari_id):
-        return _ops_json(load_cari360_siparisler, cari_id)
+        page_size = max(1, min(int(request.args.get('page_size') or 50), 100))
+        page = max(1, int(request.args.get('page') or 1))
+        offset = (page - 1) * page_size
+        return _ops_json(load_cari360_siparisler, cari_id, limit=page_size, offset=offset)
 
     @bp.route('/api/cari360/<int:cari_id>/ticari-ozet', methods=['GET'])
     @login_gerekli
@@ -204,6 +214,107 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
     @login_gerekli
     def api_cari360_numuneler(cari_id):
         return _ops_json(load_cari360_numuneler, cari_id)
+
+    @bp.route('/api/cari360/<int:cari_id>/tahsilat', methods=['GET'])
+    @login_gerekli
+    def api_cari360_tahsilat(cari_id):
+        """Tahsilat kayıtları — mo_tahsilat_kayit üzerinden."""
+        yk = _yk()
+        uid = kullanici_id_fn()
+        if not uid:
+            return jsonify({'ok': False, 'mesaj': 'Oturum gerekli.'}), 401
+        con = db_fn()
+        try:
+            if not can_view_cari(con, uid, cari_id, yk):
+                return jsonify({'ok': False, 'mesaj': 'Yetki yok.'}), 403
+            row = con.execute('SELECT id FROM nexgen_cari WHERE id=?', (cari_id,)).fetchone()
+            if not row:
+                return jsonify({'ok': False, 'mesaj': 'Cari bulunamadı.'}), 404
+
+            def _tablo_var(n):
+                return bool(con.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (n,)
+                ).fetchone())
+
+            if not _tablo_var('mo_tahsilat_kayit'):
+                return jsonify({'ok': True, 'liste': [], 'ozet': {}})
+
+            rows = con.execute(
+                """SELECT tk.id, tk.siparis_id, tk.durum, tk.odeme_tipi,
+                          tk.alinan_tarih, tk.alinan_tutar, tk.beklenen_tutar,
+                          tk.kalan_tutar, tk.aktif,
+                          ps.siparis_no
+                   FROM mo_tahsilat_kayit tk
+                   LEFT JOIN nexgen_planlama_siparis ps ON ps.id = tk.siparis_id
+                   WHERE tk.cari_id=? AND COALESCE(tk.aktif,1)=1
+                   ORDER BY COALESCE(tk.alinan_tarih,'') DESC, tk.id DESC""",
+                (cari_id,),
+            ).fetchall()
+            liste = [dict(r) for r in rows]
+            toplam_alinan = sum(
+                float(r['alinan_tutar'] or 0) for r in liste if r['durum'] == 'ONAYLANDI'
+            )
+            bekleyen = [r for r in liste if r['durum'] not in ('ONAYLANDI', 'IPTAL', 'REDDEDILDI')]
+            son = next((r for r in liste if r['durum'] == 'ONAYLANDI'), None)
+            ozet = {
+                'toplam_alinan': round(toplam_alinan, 2),
+                'bekleyen_adet': len(bekleyen),
+                'son_tahsilat_tarihi': (son['alinan_tarih'] if son else None),
+                'son_tahsilat_tutari': (float(son['alinan_tutar'] or 0) if son else None),
+            }
+            return jsonify({'ok': True, 'liste': liste, 'count': len(liste), 'ozet': ozet})
+        except Exception as e:
+            return jsonify({'ok': False, 'mesaj': str(e)}), 500
+
+    @bp.route('/api/cari360/<int:cari_id>/finans', methods=['GET'])
+    @login_gerekli
+    def api_cari360_finans(cari_id):
+        """Finans sekmesi — gerçek kaynaklardan: tahsilat, vade, çek, legacy bakiye."""
+        yk = _yk()
+        uid = kullanici_id_fn()
+        if not uid:
+            return jsonify({'ok': False, 'mesaj': 'Oturum gerekli.'}), 401
+        con = db_fn()
+        try:
+            if not can_view_cari(con, uid, cari_id, yk):
+                return jsonify({'ok': False, 'mesaj': 'Yetki yok.'}), 403
+            row = con.execute('SELECT id FROM nexgen_cari WHERE id=?', (cari_id,)).fetchone()
+            if not row:
+                return jsonify({'ok': False, 'mesaj': 'Cari bulunamadı.'}), 404
+            data = load_cari360_finans(con, cari_id)
+            return jsonify({'ok': True, **data})
+        except Exception as e:
+            return jsonify({'ok': False, 'mesaj': str(e)}), 500
+        finally:
+            con.close()
+
+    @bp.route('/api/cari360/<int:cari_id>/onaylar', methods=['GET'])
+    @login_gerekli
+    def api_cari360_onaylar(cari_id):
+        """Onay Merkezi kayıtları — read-only, cari_id filtreli."""
+        yk = _yk()
+        uid = kullanici_id_fn()
+        if not uid:
+            return jsonify({'ok': False, 'mesaj': 'Oturum gerekli.'}), 401
+        con = db_fn()
+        try:
+            if not can_view_cari(con, uid, cari_id, yk):
+                return jsonify({'ok': False, 'mesaj': 'Yetki yok.'}), 403
+            row = con.execute('SELECT id FROM nexgen_cari WHERE id=?', (cari_id,)).fetchone()
+            if not row:
+                return jsonify({'ok': False, 'mesaj': 'Cari bulunamadı.'}), 404
+            limit = max(1, min(int(request.args.get('limit') or 50), 200))
+            offset = max(0, int(request.args.get('offset') or 0))
+            durum_filtre = (request.args.get('durum') or '').strip() or None
+            data = load_cari360_onaylar(
+                con, cari_id, uid, yk,
+                limit=limit, offset=offset, durum_filtre=durum_filtre,
+            )
+            return jsonify({'ok': True, **data})
+        except Exception as e:
+            return jsonify({'ok': False, 'mesaj': str(e)}), 500
+        finally:
+            con.close()
 
     @bp.route('/api/cari360/<int:cari_id>/gorusme', methods=['GET'])
     @login_gerekli

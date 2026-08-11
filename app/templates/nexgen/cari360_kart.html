@@ -8,59 +8,83 @@
      data-can-write="{{ '1' if data.can_write_yetkili else '0' }}"
      data-can-write-gorusme="{{ '1' if data.can_write_gorusme else '0' }}">
 
-  <header class="ckart-ust">
-    <div class="ckart-ust-sol">
-      <a href="/nexgen/yonetim#cari" class="ckart-back">← Yönetim Merkezi’ne Dön</a>
-      <div class="ckart-kod">{{ c.cari_kod }}</div>
-      <h1 class="ckart-unvan">{{ c.unvan }}</h1>
-      <div class="ckart-meta">
-        {% if c.aktif %}
-        <span class="ckart-badge ckart-badge-aktif">AKTİF</span>
-        {% else %}
-        <span class="ckart-badge ckart-badge-pasif">PASİF</span>
-        {% endif %}
-        <span class="ckart-meta-item">İç sorumlu pazarlamacı:
-          <strong>{{ data.sorumlu_adi or 'Atanmamış' }}</strong>
-          {% if data.sorumlu_atanmamis %}
-          <span class="ckart-chip ckart-chip-warn" title="Bu müşteri için aktif pazarlamacı atanmamış.">Sorumlu Atanmamış</span>
-          {% elif data.sorumlu_uyarilari and 'COKLU_AKTIF_SORUMLU' in data.sorumlu_uyarilari %}
-          <span class="ckart-chip ckart-chip-warn" title="Birden fazla aktif sorumlu kaydı var; V1’de yalnız seçilen tek kişi gösterilir.">Kontrol Gerekli</span>
-          {% endif %}
-        </span>
-        <span class="ckart-meta-item">Oluşturma tarihi:
-          <strong>{{ c.created_at or '—' }}</strong>
-        </span>
-        <span class="ckart-meta-item">Son güncelleme:
-          <strong>{{ c.updated_at or '—' }}</strong>
-        </span>
-      </div>
-    </div>
-  </header>
+    {# ── Üst Kart V2 ── #}
+  <div class="ckart-ust-v2">
+    <div class="ckart-ust-v2-ic">
 
-  <div class="ckart-kpi" id="ckart-kpi" aria-label="Operasyon özeti">
-    <div class="ckart-kpi-item"><span class="ckart-kpi-lbl">Toplam Sipariş</span><strong id="kpi-toplam-siparis">…</strong></div>
-    <div class="ckart-kpi-item"><span class="ckart-kpi-lbl">Aktif Sipariş</span><strong id="kpi-aktif-siparis">…</strong></div>
-    <div class="ckart-kpi-item"><span class="ckart-kpi-lbl">Toplam Sevkiyat</span><strong id="kpi-toplam-sevkiyat">…</strong></div>
-    <div class="ckart-kpi-item"><span class="ckart-kpi-lbl">Toplam Sevk KG</span><strong id="kpi-toplam-sevk-kg">…</strong></div>
-    <div class="ckart-kpi-item"><span class="ckart-kpi-lbl">Son Sevkiyat</span><strong id="kpi-son-sevkiyat">…</strong></div>
-    <div class="ckart-kpi-item"><span class="ckart-kpi-lbl">Son Görüşme</span><strong id="kpi-son-gorusme">…</strong></div>
+      {# SOL: Avatar + Kimlik #}
+      <div class="ckart-ust-v2-sol">
+        <a href="/nexgen/yonetim#cari" class="ckart-back-v2">&#8592; Yönetim Merkezi'ne Dön</a>
+        <div class="ckart-ust-v2-kimlik">
+          <div class="ckart-avatar-v2">{{ (c.kisa_ad or c.unvan or '?')[:2]|upper }}</div>
+          <div class="ckart-kimlik-ic">
+            <div class="ckart-unvan-v2">{{ c.kisa_ad or c.unvan }}</div>
+            <div class="ckart-unvan-tam-v2">{{ c.unvan }}</div>
+            <div class="ckart-rozetler-v2">
+              {% if c.aktif %}<span class="ckart-badge-v2 ckart-badge-aktif-v2">Aktif</span>
+              {% else %}<span class="ckart-badge-v2 ckart-badge-pasif-v2">Pasif</span>{% endif %}
+              {% if c.cari_tipi_label %}<span class="ckart-badge-v2 ckart-badge-outline-v2">{{ c.cari_tipi_label }}</span>{% endif %}
+              <span class="ckart-badge-v2 ckart-badge-mono-v2">{{ c.cari_kod }}</span>
+              {% if data.sorumlu_atanmamis %}<span class="ckart-chip ckart-chip-warn">Sorumlu Atanmamış</span>
+              {% elif data.sorumlu_uyarilari and 'COKLU_AKTIF_SORUMLU' in data.sorumlu_uyarilari %}<span class="ckart-chip ckart-chip-warn">Kontrol Gerekli</span>{% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {# ORTA: Meta özet #}
+      <div class="ckart-ust-v2-meta">
+        <div class="ckart-meta-blok-v2">
+          <span class="ckart-meta-lbl-v2">Sorumlu Pazarlamacı</span>
+          <span class="ckart-meta-val-v2">{{ data.sorumlu_adi or 'Atanmamış' }}</span>
+        </div>
+        <div class="ckart-meta-blok-v2">
+          <span class="ckart-meta-lbl-v2">Son Görüşme</span>
+          <span class="ckart-meta-val-v2" id="kpi-son-gorusme-ust">—</span>
+        </div>
+        <div class="ckart-meta-blok-v2">
+          <span class="ckart-meta-lbl-v2">Son Sevkiyat</span>
+          <span class="ckart-meta-val-v2" id="kpi-son-sevkiyat-ust">—</span>
+        </div>
+      </div>
+
+      {# SAĞ: Son Alış Fiyatı kartı #}
+      <div class="ckart-ust-v2-sag">
+        <div class="ckart-son-alis-kart" id="ckart-son-alis-kart" style="display:none">
+          <div class="ckart-son-alis-lbl">SON ALIŞ FİYATI</div>
+          <div class="ckart-son-alis-fiyat" id="ckart-son-alis-fiyat">—</div>
+          <div class="ckart-son-alis-urun" id="ckart-son-alis-urun"></div>
+          <div class="ckart-son-alis-vade" id="ckart-son-alis-vade"></div>
+          <div class="ckart-son-alis-sip" id="ckart-son-alis-sip"></div>
+        </div>
+        <div class="ckart-aksiyonlar-v2">
+          {% if data.can_edit_genel %}<a class="ckart-btn-gold-v2" href="/nexgen/yonetim?edit={{ cari_id }}#cari" style="text-decoration:none">Düzenle</a>{% endif %}
+          <button type="button" class="ckart-btn-outline-v2" onclick="window.print()">Yazdır</button>
+        </div>
+      </div>
+
+    </div>
   </div>
 
-  <nav class="ckart-sekme-bar" aria-label="Cari Kart sekmeleri">
+  <div class="ckart-kpi-v2" id="ckart-kpi" aria-label="Operasyon özeti">
+    <div class="ckart-kpi-item-v2"><span class="ckart-kpi-lbl-v2">Toplam Sipariş</span><strong id="kpi-toplam-siparis">…</strong></div>
+    <div class="ckart-kpi-item-v2"><span class="ckart-kpi-lbl-v2">Aktif Sipariş</span><strong id="kpi-aktif-siparis">…</strong></div>
+    <div class="ckart-kpi-item-v2"><span class="ckart-kpi-lbl-v2">Toplam Sevkiyat</span><strong id="kpi-toplam-sevkiyat">…</strong></div>
+    <div class="ckart-kpi-item-v2"><span class="ckart-kpi-lbl-v2">Toplam Sevk KG</span><strong id="kpi-toplam-sevk-kg">…</strong></div>
+    <div class="ckart-kpi-item-v2"><span class="ckart-kpi-lbl-v2">Son Sevkiyat</span><strong id="kpi-son-sevkiyat">…</strong></div>
+    <div class="ckart-kpi-item-v2"><span class="ckart-kpi-lbl-v2">Son Görüşme</span><strong id="kpi-son-gorusme">…</strong></div>
+  </div>
+
+  <nav class="ckart-sekme-bar ckart-sekme-bar-v2" aria-label="Cari Kart sekmeleri">
     <button type="button" class="ckart-sekme{% if aktif_tab == 'genel' %} aktif{% endif %}"
             data-tab="genel" onclick="ckartTab('genel')">Genel Bilgiler</button>
-    <button type="button" class="ckart-sekme{% if aktif_tab == 'yetkililer' %} aktif{% endif %}"
-            data-tab="yetkililer" onclick="ckartTab('yetkililer')">
-      Yetkililer{% if yetkili_sayisi %}<span class="ckart-sekme-badge" id="ckart-yetkili-badge">{{ yetkili_sayisi }}</span>{% else %}<span class="ckart-sekme-badge" id="ckart-yetkili-badge" style="display:none"></span>{% endif %}
-    </button>
     <button type="button" class="ckart-sekme{% if aktif_tab == 'siparisler' %} aktif{% endif %}"
             data-tab="siparisler" onclick="ckartTab('siparisler')">Sipariş Geçmişi</button>
     <button type="button" class="ckart-sekme{% if aktif_tab == 'uretim' %} aktif{% endif %}"
             data-tab="uretim" onclick="ckartTab('uretim')">Üretim</button>
     <button type="button" class="ckart-sekme{% if aktif_tab == 'sevkiyatlar' %} aktif{% endif %}"
             data-tab="sevkiyatlar" onclick="ckartTab('sevkiyatlar')">Sevkiyatlar</button>
-    <button type="button" class="ckart-sekme{% if aktif_tab == 'urunler' %} aktif{% endif %}"
-            data-tab="urunler" onclick="ckartTab('urunler')">Son Aldığı Ürünler</button>
+    {# Son Aldığı Ürünler sekmesi kaldırıldı — C360-UX-REV #}
     <button type="button" class="ckart-sekme{% if aktif_tab == 'numuneler' %} aktif{% endif %}"
             data-tab="numuneler" onclick="ckartTab('numuneler')">
       Numuneler{% if numune_sayisi %}<span class="ckart-sekme-badge" id="ckart-numune-badge">{{ numune_sayisi }}</span>{% else %}<span class="ckart-sekme-badge" id="ckart-numune-badge" style="display:none"></span>{% endif %}
@@ -69,18 +93,37 @@
             data-tab="gorusmeler" onclick="ckartTab('gorusmeler')">
       Görüşmeler{% if gorusme_sayisi %}<span class="ckart-sekme-badge" id="ckart-gorusme-badge">{{ gorusme_sayisi }}</span>{% else %}<span class="ckart-sekme-badge" id="ckart-gorusme-badge" style="display:none"></span>{% endif %}
     </button>
+    {# Finans — aktif #}
+    <button type="button" class="ckart-sekme"
+            data-tab="finans" onclick="ckartTab('finans')">Finans</button>
+    {# Onaylar — aktif #}
+    <button type="button" class="ckart-sekme"
+            data-tab="onaylar" onclick="ckartTab('onaylar')">Onaylar<span class="ckart-sekme-badge" id="ckart-onay-badge" style="display:none"></span></button>
+    {# Hafıza — aktif #}
+    <button type="button" class="ckart-sekme"
+            data-tab="hafiza" onclick="ckartTab('hafiza')">Hafıza / Timeline</button>
+    <button type="button" class="ckart-sekme ckart-sekme-yakinda"
+            data-tab="dosyalar" onclick="ckartTab('dosyalar')" title="Yakında aktif olacak">Dosyalar</button>
+    <button type="button" class="ckart-sekme ckart-sekme-yakinda"
+            data-tab="notlar" onclick="ckartTab('notlar')" title="Yakında aktif olacak">Notlar</button>
   </nav>
 
-  <section id="ckart-panel-genel" class="ckart-panel"{% if aktif_tab != 'genel' %} style="display:none"{% endif %}>
-    <div class="ckart-panel-bas">
-      <h2 class="ckart-h2">Genel Bilgiler</h2>
-      {% if data.can_edit_genel %}
-      <a class="ckart-btn-birincil" href="/nexgen/yonetim#cari?edit={{ cari_id }}" style="text-decoration:none;display:inline-block">Bilgileri Düzenle</a>
-      {% endif %}
-    </div>
-    <div class="ckart-genel-grid">
+    <section id="ckart-panel-genel" class="ckart-panel"{% if aktif_tab != 'genel' %} style="display:none"{% endif %}>
+
+    {# ── İki kolon: sol=Genel Bilgiler, sag=Son Hareketler ── #}
+    <div class="ckart-genel-split">
+
+      {# SOL: Genel Bilgiler #}
+      <div class="ckart-genel-sol">
+        <div class="ckart-panel-bas" style="margin-bottom:14px">
+          <h2 class="ckart-h2" style="margin:0">Genel Bilgiler</h2>
+          {% if data.can_edit_genel %}
+          <a class="ckart-btn-birincil" href="/nexgen/yonetim?edit={{ cari_id }}#cari" style="text-decoration:none;display:inline-block">Bilgileri Düzenle</a>
+          {% endif %}
+        </div>
+        <div class="ckart-genel-grid">
       <div class="ckart-genel-kol">
-        <h3 class="ckart-h3">Firma Bilgileri</h3>
+        <h3 class="ckart-h3 ckart-h3-v2">Firma Bilgileri</h3>
         <dl class="ckart-dl ckart-dl-stack">
           <div><dt>Cari kodu</dt><dd>{{ c.cari_kod or '—' }}</dd></div>
           <div><dt>Cari kısa adı</dt><dd>{{ c.kisa_ad or '—' }}</dd></div>
@@ -93,7 +136,7 @@
         </dl>
       </div>
       <div class="ckart-genel-kol">
-        <h3 class="ckart-h3">İletişim ve Adres</h3>
+        <h3 class="ckart-h3 ckart-h3-v2">İletişim ve Adres</h3>
         <dl class="ckart-dl ckart-dl-stack">
           <div><dt>Telefon</dt><dd>{{ c.telefon or '—' }}</dd></div>
           <div><dt>Telefon 2</dt><dd>{{ c.telefon2 or '—' }}</dd></div>
@@ -108,7 +151,7 @@
         </dl>
       </div>
       <div class="ckart-genel-kol">
-        <h3 class="ckart-h3">Ticari / Resmi Bilgiler</h3>
+        <h3 class="ckart-h3 ckart-h3-v2">Ticari / Resmi Bilgiler</h3>
         <dl class="ckart-dl ckart-dl-stack">
           <div><dt>Vergi dairesi</dt><dd>{{ c.vergi_dairesi or '—' }}</dd></div>
           <div><dt>Vergi numarası</dt><dd>{{ c.vergi_no or '—' }}</dd></div>
@@ -139,77 +182,31 @@
           <div><dt>Son güncelleme</dt><dd>{{ c.updated_at or '—' }}</dd></div>
         </dl>
       </div>
-    </div>
+        </div>{# /ckart-genel-grid #}
+      </div>{# /ckart-genel-sol #}
 
-    <div class="ckart-son-hareketler" id="ckart-son-hareketler">
-      <div class="ckart-panel-bas" style="margin-top:18px">
-        <h2 class="ckart-h2">Son Hareketler</h2>
-        <button type="button" class="ckart-btn-ikincil" id="ckart-hafiza-tumu" onclick="ckartHafizaModalAc()">Tümünü Gör</button>
+      {# SAG: Son Hareketler — timeline kart #}
+      <div class="ckart-genel-sag" id="ckart-son-hareketler">
+        <div class="ckart-timeline-header">
+          <h2 class="ckart-h2 ckart-h2-gold-v2" style="margin:0">Son Hareketler</h2>
+          <button type="button" class="ckart-btn-ikincil" id="ckart-hafiza-tumu" onclick="ckartHafizaModalAc()">Tümünü Gör</button>
+        </div>
+        <div class="ckart-timeline-body">
+          <p class="ckart-muted" id="ckart-hafiza-yukle" style="text-align:left;padding:8px 0 !important;margin:0">Yükleniyor…</p>
+          <ul class="ckart-hafiza-liste" id="ckart-hafiza-liste" style="display:none"></ul>
+        </div>
       </div>
-      <p class="ckart-muted" id="ckart-hafiza-yukle" style="text-align:left;padding:8px 0 !important;margin:0">Yükleniyor…</p>
-      <ul class="ckart-hafiza-liste" id="ckart-hafiza-liste" style="display:none"></ul>
-    </div>
-  </section>
 
-  <section id="ckart-panel-yetkililer" class="ckart-panel"{% if aktif_tab != 'yetkililer' %} style="display:none"{% endif %}>
-    <div class="ckart-panel-bas">
-      <h2 class="ckart-h2">Müşteri Yetkilileri</h2>
-      {% if data.can_write_yetkili %}
-      <button type="button" class="ckart-btn-birincil" onclick="ckartYetkiliYeni()">Yeni Yetkili</button>
-      {% endif %}
-    </div>
-    <div class="ckart-tablo-wrap">
-      <table class="ckart-tablo" id="ckart-yetkili-tablo">
-        <thead>
-          <tr>
-            <th>Ad Soyad</th>
-            <th>Ünvan</th>
-            <th>Departman</th>
-            <th>Telefon</th>
-            <th>Cep</th>
-            <th>E-posta</th>
-            <th>Ana</th>
-            <th>Durum</th>
-            <th>Notlar</th>
-            <th style="text-align:right">İşlem</th>
-          </tr>
-        </thead>
-        <tbody id="ckart-yetkili-tbody">
-          <tr><td colspan="10" class="ckart-muted">Yükleniyor…</td></tr>
-        </tbody>
-      </table>
     </div>
   </section>
 
   <section id="ckart-panel-siparisler" class="ckart-panel"{% if aktif_tab != 'siparisler' %} style="display:none"{% endif %}>
-    <h2 class="ckart-h2">Sipariş Geçmişi</h2>
-    <div id="ckart-ticari-ozet" class="ckart-ticari" style="display:none" aria-live="polite">
-      <h3 class="ckart-h3 ckart-ticari-baslik">Ticari Özet</h3>
-      <p id="ckart-ticari-mesaj" class="ckart-ticari-mesaj" style="display:none"></p>
-      <div id="ckart-ticari-ozet-satir" class="ckart-ticari-satir"></div>
-      <div id="ckart-ticari-urun-wrap" style="display:none;margin-top:12px">
-        <div class="ckart-ticari-altbaslik">Ürün Bazlı Son Fiyatlar</div>
-        <div class="ckart-tablo-wrap">
-          <table class="ckart-tablo ckart-ticari-tablo" id="ckart-ticari-urun-tablo">
-            <thead>
-              <tr>
-                <th>Ürün</th>
-                <th>Son Net Fiyat</th>
-                <th>Para Birimi</th>
-                <th>İskonto</th>
-                <th>Vade</th>
-                <th>Son Sipariş</th>
-                <th>Tarih</th>
-                <th>Kaynak</th>
-              </tr>
-            </thead>
-            <tbody id="ckart-ticari-urun-tbody"></tbody>
-          </table>
-        </div>
-      </div>
+    {# Ticari Özet paneli kaldırıldı — C360-UX-REV2. Backend/API korunuyor. #}
+    <div class="ckart-siparis-section-hdr">
+      <h2 class="ckart-h2 ckart-siparis-section-title">Sipariş Geçmişi</h2>
     </div>
-    <div class="ckart-tablo-wrap">
-      <table class="ckart-tablo" id="ckart-siparis-tablo">
+    <div class="ckart-tablo-wrap ckart-siparis-tablo-wrap" role="region" aria-label="Sipariş geçmişi tablosu">
+      <table class="ckart-tablo ckart-siparis-tablo" id="ckart-siparis-tablo">
         <thead>
           <tr id="ckart-siparis-thead-row">
             <th>Sipariş No</th>
@@ -230,6 +227,11 @@
           <tr><td colspan="12" class="ckart-muted">Sekme açıldığında yüklenecek.</td></tr>
         </tbody>
       </table>
+    </div>
+    <!-- Sipariş Pagination -->
+    <div id="ckart-sip-pagination" style="display:none;padding:10px 0 4px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+      <span id="ckart-sip-pg-info" style="font-size:11.5px;color:#64748b;"></span>
+      <div id="ckart-sip-pg-btns" style="display:flex;align-items:center;gap:4px;"></div>
     </div>
   </section>
 
@@ -280,7 +282,7 @@
     </div>
   </section>
 
-  <section id="ckart-panel-urunler" class="ckart-panel"{% if aktif_tab != 'urunler' %} style="display:none"{% endif %}>
+  <section id="ckart-panel-urunler" class="ckart-panel" style="display:none" aria-hidden="true">
     <h2 class="ckart-h2">Son Aldığı Ürünler</h2>
     <div class="ckart-tablo-wrap">
       <table class="ckart-tablo" id="ckart-urun-tablo">
@@ -362,6 +364,183 @@
       </table>
     </div>
   </section>
+
+  {# ── Finans Sekmesi ── #}
+  <section id="ckart-panel-finans" class="ckart-panel" style="display:none">
+    <div class="ckart-panel-bas">
+      <h2 class="ckart-h2">Finans</h2>
+    </div>
+    <div id="ckart-finans-yukleniyor" style="padding:24px;color:#6b7280;font-size:13px;">Yükleniyor…</div>
+    <div id="ckart-finans-icerik" style="display:none">
+
+      {# Legacy bakiye bloğu #}
+      <div id="ckart-finans-bakiye-blok" style="margin-bottom:24px">
+        <h3 class="ckart-h3" style="margin-bottom:12px">Cari Hesap</h3>
+        <div id="ckart-finans-eslesme-uyari" class="ckart-finans-uyari" style="display:none"></div>
+        <div id="ckart-finans-bakiye-grid" class="ckart-finans-kpi-grid" style="display:none">
+          <div class="ckart-finans-kpi"><span class="ckart-finans-kpi-label">Bakiye</span><strong id="cfk-bakiye">—</strong></div>
+          <div class="ckart-finans-kpi"><span class="ckart-finans-kpi-label">Borç</span><strong id="cfk-borc">—</strong></div>
+          <div class="ckart-finans-kpi"><span class="ckart-finans-kpi-label">Alacak</span><strong id="cfk-alacak">—</strong></div>
+          <div class="ckart-finans-kpi"><span class="ckart-finans-kpi-label">Açık Bakiye</span><strong id="cfk-acik">—</strong></div>
+        </div>
+        <div id="ckart-finans-kart-bakiye-blok" style="display:none">
+          <p class="ckart-finans-kpi-label" style="margin-bottom:6px">Kart Bakiyesi <span style="font-size:10px;color:#9ca3af">(Cari_Kart snapshot)</span></p>
+          <strong id="cfk-kart-bakiye" style="font-size:18px"></strong>
+        </div>
+      </div>
+
+      {# Tahsilat bloğu #}
+      <div style="margin-bottom:24px">
+        <h3 class="ckart-h3" style="margin-bottom:12px">Tahsilat</h3>
+        <div class="ckart-finans-kpi-grid">
+          <div class="ckart-finans-kpi"><span class="ckart-finans-kpi-label">Alınan Toplam</span><strong id="cfk-alinan">—</strong></div>
+          <div class="ckart-finans-kpi"><span class="ckart-finans-kpi-label">Bekleyen Toplam</span><strong id="cfk-bekleyen">—</strong></div>
+          <div class="ckart-finans-kpi"><span class="ckart-finans-kpi-label">Kalan Toplam</span><strong id="cfk-kalan">—</strong></div>
+          <div class="ckart-finans-kpi"><span class="ckart-finans-kpi-label">Son Tahsilat</span><strong id="cfk-son-tahsilat">—</strong></div>
+          <div class="ckart-finans-kpi"><span class="ckart-finans-kpi-label">Gecikmiş Ödeme</span><strong id="cfk-gecikme">—</strong></div>
+        </div>
+      </div>
+
+      {# Vade / Çek bloğu #}
+      <div style="margin-bottom:24px">
+        <h3 class="ckart-h3" style="margin-bottom:12px">Vade &amp; Çek</h3>
+        <div class="ckart-finans-kpi-grid">
+          <div class="ckart-finans-kpi"><span class="ckart-finans-kpi-label">Ortalama Vade</span><strong id="cfk-ort-vade">—</strong></div>
+          <div class="ckart-finans-kpi"><span class="ckart-finans-kpi-label">Çekli Sipariş</span><strong id="cfk-cek-sayi">—</strong></div>
+          <div class="ckart-finans-kpi" style="grid-column:span 2"><span class="ckart-finans-kpi-label">Çek Vadeleri</span><strong id="cfk-cek-vadeler">—</strong></div>
+        </div>
+      </div>
+
+      {# Risk / Limit — kaynak yok #}
+      <div>
+        <h3 class="ckart-h3" style="margin-bottom:12px">Risk &amp; Limit</h3>
+        <div class="ckart-finans-kpi-grid">
+          <div class="ckart-finans-kpi"><span class="ckart-finans-kpi-label">Risk</span><strong style="color:#9ca3af;font-size:12px">Tanımlı değil</strong></div>
+          <div class="ckart-finans-kpi"><span class="ckart-finans-kpi-label">Limit</span><strong style="color:#9ca3af;font-size:12px">Tanımlı değil</strong></div>
+        </div>
+      </div>
+
+    </div>{# /ckart-finans-icerik #}
+  </section>
+
+  {# Onaylar paneli — read-only #}
+  <section id="ckart-panel-onaylar" class="ckart-panel" style="display:none">
+    <div class="ckart-panel-bas">
+      <h2 class="ckart-h2">Onay Merkezi Geçmişi</h2>
+      <a href="/nexgen/onay-merkezi" class="ckart-btn-ikincil" style="text-decoration:none;font-size:12px">Onay Merkezine Git →</a>
+    </div>
+    {# Özet sayaçlar #}
+    <div id="ckart-onaylar-ozet" style="display:none;display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+      <span style="font-size:12px;padding:4px 12px;border-radius:20px;background:#dbeafe;color:#1e40af;font-weight:600">
+        Bekleyen: <span id="ckart-onay-ozet-bekleyen">0</span>
+      </span>
+      <span style="font-size:12px;padding:4px 12px;border-radius:20px;background:#d1fae5;color:#065f46;font-weight:600">
+        Onaylanan: <span id="ckart-onay-ozet-onaylandi">0</span>
+      </span>
+      <span style="font-size:12px;padding:4px 12px;border-radius:20px;background:#fee2e2;color:#991b1b;font-weight:600">
+        Reddedilen: <span id="ckart-onay-ozet-reddedildi">0</span>
+      </span>
+    </div>
+    {# Filtre + toplam #}
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+      <select id="ckart-onaylar-filtre"
+              onchange="ckartOnaylarFiltrele()"
+              style="font-size:12px;padding:4px 10px;border:1px solid #e5e7eb;border-radius:6px;color:var(--ck-text)">
+        <option value="">Tüm Durumlar</option>
+        <option value="BEKLIYOR">Bekleyen</option>
+        <option value="ONAYLANDI">Onaylandı</option>
+        <option value="REDDEDILDI">Reddedildi</option>
+        <option value="REVIZYON">Revizyon</option>
+      </select>
+      <span id="ckart-onaylar-toplam" style="font-size:12px;color:var(--ck-text-soft)"></span>
+    </div>
+    <div id="ckart-onaylar-yukleniyor" style="color:var(--ck-text-soft);font-size:13px;padding:16px 0">Yükleniyor…</div>
+    <div id="ckart-onaylar-bos" style="display:none;color:var(--ck-text-soft);font-size:13px;padding:16px 0">Bu cari için onay kaydı bulunmuyor.</div>
+    <div id="ckart-onaylar-hata" style="display:none;color:#dc2626;font-size:13px;padding:8px 0"></div>
+    <div id="ckart-onaylar-liste" style="display:none">
+      <table class="ckart-onaylar-tablo">
+        <thead>
+          <tr>
+            <th style="width:32px">#</th>
+            <th>Talep No</th>
+            <th>Tip</th>
+            <th>Durum</th>
+            <th>Tutar</th>
+            <th>Vade</th>
+            <th>Tarih</th>
+            <th>Karar Veren</th>
+            <th>Karar Tarihi</th>
+            <th>Karar Notu</th>
+          </tr>
+        </thead>
+        <tbody id="ckart-onaylar-tbody"></tbody>
+      </table>
+      {# Pagination #}
+      <div id="ckart-onaylar-pager" style="display:none;margin-top:12px;display:flex;gap:8px;align-items:center">
+        <button id="ckart-onaylar-onceki" onclick="ckartOnaylarSayfa(-1)"
+                style="font-size:12px;padding:4px 12px;border:1px solid #e5e7eb;border-radius:6px;cursor:pointer;background:#fff">
+          ← Önceki
+        </button>
+        <span id="ckart-onaylar-sayfa-info" style="font-size:12px;color:var(--ck-text-soft)"></span>
+        <button id="ckart-onaylar-sonraki" onclick="ckartOnaylarSayfa(1)"
+                style="font-size:12px;padding:4px 12px;border:1px solid #e5e7eb;border-radius:6px;cursor:pointer;background:#fff">
+          Sonraki →
+        </button>
+      </div>
+    </div>
+  </section>
+
+  {# ── Onay Detay Popup (modal) ── #}
+  {# Onay popup global GOP (base.html) tarafından sağlanıyor — yerel popup kaldırıldı #}
+
+  {# Hafıza / Timeline paneli — tam liste #}
+  <section id="ckart-panel-hafiza" class="ckart-panel" style="display:none">
+    <div class="ckart-panel-bas">
+      <h2 class="ckart-h2">Hafıza / Timeline</h2>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="ckart-hafiza-tab-kat" style="font-size:12px;padding:4px 8px;border:1px solid #e5e7eb;border-radius:6px;color:var(--ck-text)">
+          <option value="">Tüm Olaylar</option>
+          <option value="siparisler">Siparişler</option>
+          <option value="tahsilatlar">Tahsilat / Çek</option>
+          <option value="onaylar">Onaylar</option>
+          <option value="numuneler">Numuneler</option>
+          <option value="sevkiyatlar">Sevkiyatlar</option>
+          <option value="uretim">Üretim</option>
+          <option value="gorusmeler">Görüşmeler</option>
+        </select>
+      </div>
+    </div>
+    <div id="ckart-hafiza-tab-yukleniyor" style="color:var(--ck-text-soft);font-size:13px;padding:16px 0">Yükleniyor…</div>
+    <div id="ckart-hafiza-tab-bos" style="display:none;color:var(--ck-text-soft);font-size:13px;padding:16px 0">Kayıt bulunamadı.</div>
+    <div id="ckart-hafiza-tab-liste" style="display:none">
+      <ul id="ckart-hafiza-tab-ul" class="ckart-hafiza-liste" style="list-style:none;margin:0;padding:0"></ul>
+    </div>
+  </section>
+
+  <section id="ckart-panel-dosyalar" class="ckart-panel" style="display:none">
+    <div class="ckart-panel-bas">
+      <h2 class="ckart-h2">Dosyalar</h2>
+    </div>
+    <div class="ckart-panel-yakinda">
+      <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z"/>
+      </svg>
+      <span>Bu sekme yakında aktif olacak.</span>
+    </div>
+  </section>
+
+  <section id="ckart-panel-notlar" class="ckart-panel" style="display:none">
+    <div class="ckart-panel-bas">
+      <h2 class="ckart-h2">Notlar</h2>
+    </div>
+    <div class="ckart-panel-yakinda">
+      <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z"/>
+      </svg>
+      <span>Bu sekme yakında aktif olacak.</span>
+    </div>
+  </section>
+
 </div>
 
 {# Global overlay — display:none parent altında değil #}
@@ -390,35 +569,6 @@
     </div>
     <div class="ckart-modal-foot">
       <button type="button" class="ckart-btn-ikincil" onclick="ckartHafizaModalKapat()">Kapat</button>
-    </div>
-  </div>
-</div>
-
-<div id="ckart-modal-overlay" class="ckart-overlay" aria-hidden="true">
-  <div class="ckart-modal" role="dialog" aria-modal="true" aria-labelledby="ckart-modal-baslik">
-    <div class="ckart-modal-head">
-      <h3 id="ckart-modal-baslik">Yetkili</h3>
-      <button type="button" class="ckart-modal-x" onclick="ckartModalKapat()" aria-label="Kapat">×</button>
-    </div>
-    <div class="ckart-modal-body">
-      <input type="hidden" id="ckart-y-id" value="">
-      <label class="ckart-lbl">Ad Soyad <span class="ckart-req">*</span>
-        <input type="text" id="ckart-y-ad" class="ckart-inp" autocomplete="off">
-      </label>
-      <div class="ckart-grid2">
-        <label class="ckart-lbl">Ünvan<input type="text" id="ckart-y-unvan" class="ckart-inp"></label>
-        <label class="ckart-lbl">Departman<input type="text" id="ckart-y-dep" class="ckart-inp"></label>
-        <label class="ckart-lbl">Telefon<input type="text" id="ckart-y-tel" class="ckart-inp"></label>
-        <label class="ckart-lbl">Cep Telefonu<input type="text" id="ckart-y-cep" class="ckart-inp"></label>
-      </div>
-      <label class="ckart-lbl">E-posta<input type="email" id="ckart-y-eposta" class="ckart-inp"></label>
-      <label class="ckart-chk"><input type="checkbox" id="ckart-y-ana"> Ana Yetkili</label>
-      <label class="ckart-lbl">Notlar<textarea id="ckart-y-notlar" class="ckart-inp ckart-ta" rows="2"></textarea></label>
-      <p id="ckart-modal-hata" class="ckart-hata" style="display:none"></p>
-    </div>
-    <div class="ckart-modal-foot">
-      <button type="button" class="ckart-btn-ikincil" onclick="ckartModalKapat()">İptal</button>
-      <button type="button" class="ckart-btn-birincil" onclick="ckartYetkiliKaydet()">Kaydet</button>
     </div>
   </div>
 </div>
@@ -482,16 +632,526 @@
 </div>
 
 <style>
-.ckart { max-width: 1100px; margin: 0 auto 32px; padding: 0 12px 24px; }
+/* ════════════════════════════════════════════════════
+   CARI KART V2 — NexGen ERP Tasarım Dili
+   ════════════════════════════════════════════════════ */
+
+/* C360 sayfasına özel main padding override — genişlik için */
+main { padding: 16px 12px !important; }
+
+/* ════════════════════════════════════════════════════
+   C360 RENK SİSTEMİ — Reçete Merkezi Tokenları
+   Kaynak: recete_liste.html :root, rm-* değişkenleri
+   ════════════════════════════════════════════════════ */
+:root {
+  /* ── Reçete Merkezi ana tokenlar (rm-* → ck-* alias) ── */
+  --ck-teal:        #006a8e;   /* rm-teal  — panel header, ana başlık bant */
+  --ck-teal-dark:   #005a7a;   /* rm-teal-dark */
+  --ck-orange:      #f97316;   /* rm-orange — aktif adım, dikkat, vurgu */
+  --ck-orange-bg:   #fff7ed;   /* turuncu açık zemin */
+  --ck-orange-bd:   #fed7aa;   /* turuncu border */
+  --ck-green:       #16a34a;   /* rm-green — onaylı, aktif, başarı */
+  --ck-green-bg:    #f0fdf4;   /* rm-green açık */
+  --ck-green-bd:    #bbf7d0;   /* yeşil border */
+  --ck-blue:        #2563eb;   /* rm-blue — link, seçim */
+  --ck-blue-bg:     #eff6ff;   /* rm-blue-bg */
+  --ck-blue-bg2:    #dbeafe;   /* rm-blue-bg2 */
+  /* ── Zemin ── */
+  --ck-bg:          #f8fafc;   /* rm-bg */
+  --ck-bg2:         #f1f5f9;   /* rm-bg2 — tablo header, bilgi yüzeyi */
+  --ck-surface:     #ffffff;   /* rm-white */
+  /* ── Altın — sadece Solariz vurgu ── */
+  --ck-gold:        #f6c343;   /* rm-gold */
+  --ck-gold-dark:   #92400e;
+  --ck-gold-bg:     #fef9e7;
+  /* ── Sınır ── */
+  --ck-border:      #e2e8f0;   /* rm-border */
+  --ck-border2:     #cbd5e1;   /* rm-border2 */
+  /* ── Metin hiyerarşisi ── */
+  --ck-t1:          #0f172a;   /* rm-t1 — ana başlık */
+  --ck-t2:          #374151;   /* rm-t2 */
+  --ck-t3:          #6b7280;   /* rm-t3 */
+  --ck-t4:          #9ca3af;   /* rm-t4 */
+  /* ── Radius / Shadow ── */
+  --ck-radius:      10px;
+  --ck-radius-sm:   7px;
+  --ck-shadow:      0 1px 3px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04);
+  --ck-shadow-md:   0 2px 8px rgba(15,23,42,0.07);
+  /* ── Legacy uyumluluk (üst kart kullanıyor) ── */
+  --ck-gold-light:  #fef9e7;
+  --ck-gold-soft:   #fde68a;
+  --ck-text:        #0f172a;
+  --ck-text-mid:    #374151;
+  --ck-text-soft:   #6b7280;
+  --ck-text-mute:   #9ca3af;
+  --ck-blue-light:  #eff6ff;
+  --ck-blue-muted:  #f1f5f9;
+  --ck-blue-dark:   #1e40af;
+  --ck-navy:        #0f172a;
+  --ck-border-mid:  #cbd5e1;
+  --ck-surface-alt: #f8fafc;
+  --ck-green-light: #f0fdf4;
+  --ck-green-border:#bbf7d0;
+  --ck-red:         #dc2626;
+  --ck-red-light:   #fee2e2;
+  --ck-red-border:  #fecaca;
+}
+
+/* ══════════════════════════════
+   ÜST MÜŞTERİ KARTI
+   ══════════════════════════════ */
+.ckart-ust-v2 {
+  display: block !important;
+  position: static !important;
+  overflow: visible !important;
+  background: #fff;
+  border: 1px solid var(--ck-border);
+  border-radius: var(--ck-radius);
+  padding: 16px 24px 20px;
+  box-shadow: var(--ck-shadow);
+  margin-bottom: 8px;
+}
+
+.ckart-back-v2 {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 600;
+  color: #006a8e; text-decoration: none;
+  margin-bottom: 14px; opacity: 0.85;
+  letter-spacing: .01em;
+}
+.ckart-back-v2:hover { opacity: 1; text-decoration: underline; }
+
+/* 3-sütun ızgara: Sol(avatar+kimlik) | Orta(meta) | Sağ(iletişim+btn) */
+.ckart-ust-v2-ic {
+  display: grid;
+  grid-template-columns: minmax(0, 340px) minmax(0, 1fr) minmax(0, 210px);
+  gap: 0 24px;
+  align-items: center;   /* dikey ortalama — daha dengeli */
+}
+
+/* SOL */
+.ckart-ust-v2-sol { min-width: 0; }
+.ckart-ust-v2-kimlik { display: flex; gap: 16px; align-items: center; }
+/* Avatar — RM panel-hdr teal: müşteri kısaltması */
+.ckart-avatar-v2 {
+  width: 68px; height: 68px; border-radius: 12px; flex-shrink: 0;
+  background: #006a8e;
+  color: #fff; font-weight: 800; font-size: 22px; letter-spacing: 1px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,106,142,.25);
+}
+.ckart-kimlik-ic { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ckart-unvan-v2 {
+  font-size: 17px; font-weight: 700; color: var(--ck-t1); line-height: 1.2;
+  overflow-wrap: anywhere; word-break: break-word;
+}
+.ckart-unvan-tam-v2 {
+  font-size: 11.5px; color: var(--ck-t3); line-height: 1.45;
+  overflow-wrap: anywhere; word-break: break-word;
+}
+.ckart-rozetler-v2 { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.ckart-badge-v2 {
+  display: inline-block; border-radius: 5px;
+  padding: 2px 9px; font-size: 10px; font-weight: 700; letter-spacing: .05em;
+  white-space: nowrap;
+}
+/* AKTİF badge — RM ngrc-d-aktif: yeşil */
+.ckart-badge-aktif-v2  { background: #f0fdf4; color: #16a34a; border: 1px solid var(--ck-green-bd); }
+.ckart-badge-pasif-v2  { background: #f3f4f6; color: var(--ck-text-soft); }
+.ckart-badge-outline-v2 {
+  background: transparent; color: var(--ck-text-mid);
+  border: 1px solid var(--ck-border);
+}
+.ckart-badge-mono-v2 {
+  background: transparent; color: var(--ck-text-soft);
+  border: 1px solid var(--ck-border);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  letter-spacing: 0;
+}
+
+/* ORTA — meta bloklar */
+.ckart-ust-v2-meta {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  border-left: 1px solid var(--ck-border);
+  border-right: 1px solid var(--ck-border);
+  padding: 0 20px;
+  min-width: 0;
+  align-self: stretch;  /* tam yükseklik */
+}
+.ckart-meta-blok-v2 {
+  display: flex; flex-direction: column; justify-content: center; gap: 6px;
+  padding: 4px 14px;
+  min-width: 0;
+}
+.ckart-meta-blok-v2:not(:last-child) { border-right: 1px solid #f0f1f3; }
+.ckart-meta-lbl-v2 {
+  font-size: 9.5px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--ck-text-mute);
+}
+.ckart-meta-val-v2 {
+  font-size: 13px; font-weight: 600; color: var(--ck-text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* SAĞ — son alış fiyatı kartı + aksiyonlar */
+.ckart-ust-v2-sag {
+  display: flex; flex-direction: column; gap: 12px; min-width: 0;
+  align-self: stretch; justify-content: center;
+}
+.ckart-son-alis-kart {
+  border: 1.5px solid #bbf7d0;
+  border-radius: 8px;
+  background: #f0fdf4;
+  padding: 10px 14px 10px 12px;
+  min-width: 180px; max-width: 260px;
+  position: relative;
+}
+.ckart-son-alis-kart::before {
+  content: '✦';
+  position: absolute; top: 8px; left: 10px;
+  font-size: 9px; color: #16a34a; opacity: .7;
+}
+.ckart-son-alis-lbl {
+  font-size: 8.5px; font-weight: 800; color: #16a34a;
+  text-transform: uppercase; letter-spacing: .5px;
+  padding-left: 14px; margin-bottom: 4px;
+}
+.ckart-son-alis-fiyat {
+  font-size: 22px; font-weight: 800; color: #0f172a;
+  line-height: 1.1; white-space: nowrap;
+}
+.ckart-son-alis-fiyat .ckart-son-alis-birim {
+  font-size: 12px; font-weight: 500; color: #6b7280;
+}
+.ckart-son-alis-urun {
+  font-size: 10.5px; color: #334155; font-weight: 600;
+  margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ckart-son-alis-vade {
+  font-size: 10px; color: #6b7280; margin-top: 2px;
+}
+.ckart-son-alis-sip {
+  font-size: 9.5px; color: #6b7280; margin-top: 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ckart-iletisim-v2 { display: flex; flex-direction: column; gap: 5px; }
+.ckart-iletisim-satir-v2 {
+  display: flex; gap: 8px; align-items: baseline;
+  font-size: 11.5px; color: var(--ck-text-mid);
+  overflow: hidden; white-space: nowrap;
+}
+.ckart-iletisim-lbl-v2 {
+  width: 34px; font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--ck-text-mute); flex-shrink: 0;
+}
+.ckart-aksiyonlar-v2 {
+  display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap;
+}
+.ckart-btn-gold-v2 {
+  background: var(--ck-gold); color: #fff; border: none;
+  border-radius: var(--ck-radius-sm);
+  padding: 7px 16px; font-size: 12px; font-weight: 600; cursor: pointer;
+  text-decoration: none; display: inline-block;
+  transition: background .12s;
+}
+.ckart-btn-gold-v2:hover { background: #b07c10; color: #fff; }
+.ckart-btn-outline-v2 {
+  background: transparent; border: 1px solid var(--ck-border);
+  border-radius: var(--ck-radius-sm);
+  padding: 7px 16px; font-size: 12px; font-weight: 500;
+  color: var(--ck-text-mid); cursor: pointer;
+  transition: border-color .12s, color .12s;
+}
+.ckart-btn-outline-v2:hover { border-color: #9ca3af; color: var(--ck-text); }
+
+/* ══════════════════════════════
+   KPI KARTLARI
+   ══════════════════════════════ */
+/* KPI v2 — RM rm-kpi-* dili */
+.ckart-kpi-v2 {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 8px;
+}
+.ckart-kpi-item-v2 {
+  background: #ffffff;
+  border: 1px solid var(--ck-border);
+  border-radius: var(--ck-radius);
+  padding: 14px 12px 12px;
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  box-shadow: var(--ck-shadow);
+  min-width: 0;
+}
+.ckart-kpi-lbl-v2 {
+  display: block;
+  font-size: 9.5px; font-weight: 600; color: var(--ck-t3);
+  text-transform: uppercase; letter-spacing: .05em; text-align: center;
+  order: -1;
+}
+/* RM'de kpi değerleri: font-weight:800, teal renk */
+.ckart-kpi-item-v2 strong {
+  display: block; font-size: 22px; color: #006a8e; font-weight: 800;
+  line-height: 1.1; text-align: center;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ══════════════════════════════
+   SEKME BARI
+   ══════════════════════════════ */
+/* Sekme bar v2 — RM panel altı sekme dili */
+.ckart-sekme-bar-v2 {
+  background: #ffffff;
+  border: 1px solid var(--ck-border);
+  border-bottom: 3px solid #006a8e;
+  border-radius: var(--ck-radius) var(--ck-radius) 0 0;
+  padding: 0 8px;
+  overflow-x: auto; white-space: nowrap;
+  display: flex; align-items: stretch;
+}
+.ckart-sekme-bar-v2 .ckart-sekme {
+  border: none; background: none;
+  border-bottom: 3px solid transparent; border-radius: 0;
+  padding: 10px 15px; font-size: 12px; font-weight: 500;
+  color: var(--ck-t3);
+  cursor: pointer; white-space: nowrap;
+  transition: color .12s, border-color .12s;
+  flex-shrink: 0; margin-bottom: -3px;
+}
+.ckart-sekme-bar-v2 .ckart-sekme:hover { color: #006a8e; background: #f8fafc; }
+/* RM sekme dili: border-bottom altın (#f59e0b), renk teal */
+.ckart-sekme-bar-v2 .ckart-sekme.aktif {
+  border-bottom-color: #f59e0b;   /* rm-gold / RM'deki aktif sekme çizgisi */
+  color: #006a8e; font-weight: 700;
+  background: #f8fafc;
+}
+
+/* ── YAKINDA sekmeler ── */
+.ckart-sekme-yakinda {
+  opacity: 0.45; cursor: default; font-style: italic;
+}
+.ckart-sekme-yakinda:hover {
+  color: var(--ck-text-soft) !important;
+  border-bottom-color: transparent !important;
+}
+.ckart-panel-yakinda {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 160px; gap: 10px; color: var(--ck-text-mute); font-size: 13px;
+}
+.ckart-panel-yakinda svg { opacity: 0.35; }
+
+/* ── FİNANS SEKMESİ ── */
+.ckart-finans-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px 20px;
+}
+.ckart-finans-kpi {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ckart-finans-kpi strong { font-size: 15px; font-weight: 700; color: #111827; }
+.ckart-finans-kpi-label { font-size: 10.5px; color: #6b7280; text-transform: uppercase; letter-spacing: .05em; }
+.ckart-finans-uyari {
+  background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px;
+  padding: 8px 12px; font-size: 12px; color: #92400e; margin-bottom: 10px;
+}
+
+/* ── Onaylar tablosu ── */
+.ckart-onaylar-tablo {
+  width: 100%; border-collapse: collapse; font-size: 12.5px;
+}
+.ckart-onaylar-tablo th {
+  text-align: left; padding: 6px 10px; font-size: 11px; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--ck-text-soft); border-bottom: 1px solid #e5e7eb;
+  white-space: nowrap;
+}
+.ckart-onaylar-tablo td {
+  padding: 7px 10px; border-bottom: 1px solid #f3f4f6; color: var(--ck-text); vertical-align: middle;
+}
+.ckart-onaylar-tablo tr:hover td { background: #fafafa; }
+
+/* ── Hafıza tab filtrelenmiş liste ── */
+#ckart-hafiza-tab-ul .ckart-hafiza-satir {
+  display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
+  padding: 7px 4px; border-bottom: 1px solid #f3f4f6; cursor: default;
+}
+
+/* ── BAŞLIK RENKLERİ ── */
+.ckart-h3-v2 { color: var(--ck-gold) !important; border-bottom-color: var(--ck-gold-light) !important; }
+.ckart-h2-gold-v2 { color: var(--ck-gold) !important; }
+
+/* ══════════════════════════════
+   GENEL BİLGİLER — İKİ KOLON SPLIT
+   ══════════════════════════════ */
+/* ── SPLIT: Sol Genel Bilgiler + Sağ Son Hareketler ── */
+.ckart-genel-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 0;
+  align-items: stretch;
+}
+.ckart-genel-sol {
+  min-width: 0;
+  padding-right: 24px;
+  border-right: 1px solid #e5e7eb;
+}
+.ckart-genel-sag {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding-left: 24px;
+}
+
+/* ── Timeline header ── */
+.ckart-timeline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e5e7eb;
+}
+.ckart-timeline-body {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 520px;
+}
+
+/* ── Timeline satır: [Badge] Başlık / Açıklama / Tarih + Detay ── */
+.ckart-hafiza-satir {
+  display: block !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 10px 8px !important;
+  background: transparent !important;
+  border-bottom: 1px solid #f3f4f6 !important;
+  cursor: default;
+}
+.ckart-hafiza-satir:last-child { border-bottom: none !important; }
+.ckart-hafiza-satir:hover { background: #fefce8 !important; border-radius: 6px !important; }
+
+/* Satır 1: badge + başlık */
+.ckart-hafiza-row1 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 3px;
+}
+.ckart-hafiza-bas {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1a1a2e;
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Satır 2: kısa açıklama */
+.ckart-hafiza-oz {
+  font-size: 11px;
+  color: #6b7280;
+  margin: 0 0 5px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Satır 3: tarih solda, detay sağda */
+.ckart-hafiza-row3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ckart-hafiza-satir time {
+  font-size: 10px;
+  color: #9ca3af;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ckart-hafiza-detay {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #b87333;
+  text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.ckart-hafiza-detay:hover { text-decoration: underline; }
+.ckart-hafiza-meta { display: none !important; }
+
+/* ── Badge ── */
+.ckart-hafiza-kaynak {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  border-radius: 4px;
+  padding: 2px 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.5;
+}
+.ckart-hbadge-sevkiyat { background: #d1fae5; color: #065f46; }
+.ckart-hbadge-siparis  { background: #dbeafe; color: #1e40af; }
+.ckart-hbadge-numune   { background: #fef9c3; color: #92400e; }
+.ckart-hbadge-gorusme  { background: #ede9fe; color: #5b21b6; }
+.ckart-hbadge-onay     { background: #fef3c7; color: #92400e; }
+.ckart-hbadge-arge     { background: #fee2e2; color: #991b1b; }
+.ckart-hbadge-tahsilat { background: #ecfdf5; color: #065f46; }
+.ckart-hbadge-uretim   { background: #fff7ed; color: #9a3412; }
+.ckart-hbadge-default  { background: #f3f4f6; color: #374151; }
+
+/* ── Responsive: <1150px → alt alta ── */
+@media (max-width: 1150px) {
+  .ckart-genel-split { grid-template-columns: 1fr; }
+  .ckart-genel-sol { padding-right: 0; border-right: none; border-bottom: 1px solid #e5e7eb; padding-bottom: 20px; margin-bottom: 20px; }
+  .ckart-genel-sag { padding-left: 0; }
+  .ckart-timeline-body { max-height: 320px; }
+}
+
+/* ══════════════════════════════
+   RESPONSİVE
+   ══════════════════════════════ */
+@media (max-width: 1100px) {
+  .ckart-ust-v2-ic { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .ckart-ust-v2-sag { display: none; }
+  .ckart-ust-v2-meta { border-right: none; padding-right: 0; }
+  .ckart-kpi-v2 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .ckart-ust-v2-ic { grid-template-columns: 1fr; gap: 16px 0; }
+  .ckart-ust-v2-meta {
+    border: none; border-top: 1px solid var(--ck-border);
+    padding: 14px 0 0; grid-template-columns: 1fr 1fr;
+  }
+  .ckart-meta-blok-v2:last-child { display: none; }
+  .ckart-kpi-v2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ckart-avatar-v2 { width: 52px; height: 52px; font-size: 18px; }
+}
+
+
+/* Cari360 ana container — tam kullanılabilir genişlik */
+.ckart { width: 100%; max-width: 100%; margin: 0 0 20px; padding: 0; box-sizing: border-box; }
 .ckart-ust {
   position: relative;
   z-index: 1;
-  background: #fff;
-  border: 1px solid rgba(17,24,39,0.07);
-  border-radius: 12px;
-  padding: 16px 18px 14px;
-  box-shadow: 0 1px 4px rgba(15,23,42,0.04);
-  margin-bottom: 10px;
+  background: #ffffff;
+  border: 1px solid var(--ck-border);
+  border-radius: var(--ck-radius);
+  padding: 14px 18px 12px;
+  box-shadow: var(--ck-shadow);
+  margin-bottom: 8px;
   overflow: hidden;
 }
 .ckart-back {
@@ -518,89 +1178,192 @@
 .ckart-badge-pasif { background: #f3f4f6; color: #6b7280; }
 /* FAZ-3D: operasyon zinciri etiketleri — mevcut badge diline uyumlu */
 .ckart-chip {
-  display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .2px;
+  display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .15px;
   padding: 2px 7px; border-radius: 999px; margin-left: 4px; vertical-align: middle;
-  white-space: nowrap; line-height: 1.4;
+  white-space: nowrap; line-height: 1.4; border: 1px solid transparent;
 }
-.ckart-chip-info { background: #f3f4f6; color: #4b5563; }
-.ckart-chip-ok { background: #ecfdf5; color: #047857; }
-.ckart-chip-warn { background: #fff7ed; color: #c2410c; }
-.ckart-chip-danger { background: #fef2f2; color: #b91c1c; }
+/* Chip renkleri — RM ngrc-o-* badge dili */
+.ckart-chip-info   { background: #f1f5f9;      color: var(--ck-t3);     border-color: var(--ck-border); }
+.ckart-chip-ok     { background: #f0fdf4;  color: #16a34a;  border-color: var(--ck-green-bd); }
+.ckart-chip-warn   { background: #fff7ed; color: #c2410c;          border-color: var(--ck-orange-bd); }
+.ckart-chip-danger { background: var(--ck-red-light); color: var(--ck-red);    border-color: var(--ck-red-border); }
 .ckart-chip-wrap { display: inline-flex; flex-wrap: wrap; gap: 3px; align-items: center; max-width: 100%; }
+/* KPI — RM rm-kpi-* sınıflarına uyumlu */
 .ckart-kpi {
   display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 8px; margin: 0 0 12px;
+  gap: 8px; margin: 0 0 10px;
 }
 .ckart-kpi-item {
-  background: #fff; border: 1px solid rgba(17,24,39,0.07); border-radius: 10px;
-  padding: 10px 12px; box-shadow: 0 1px 4px rgba(15,23,42,0.04);
+  background: #ffffff;
+  border: 1px solid var(--ck-border);
+  border-radius: var(--ck-radius);
+  padding: 10px 14px;
+  box-shadow: var(--ck-shadow);
   min-width: 0;
 }
 .ckart-kpi-lbl {
-  display: block; font-size: 10px; font-weight: 700; color: #6b7280;
-  text-transform: uppercase; letter-spacing: .35px; margin-bottom: 4px;
+  display: block; font-size: 9px; font-weight: 600;
+  color: var(--ck-t3);
+  text-transform: uppercase; letter-spacing: .4px; margin-bottom: 5px;
 }
+/* RM'de kpi değerleri: font-size:20px font-weight:800 color:#0f172a */
 .ckart-kpi-item strong {
-  display: block; font-size: 15px; color: #111827; font-weight: 700;
+  display: block; font-size: 18px;
+  color: #006a8e;   /* rm-teal — ana değer teal */
+  font-weight: 800;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .ckart-sevk-sub td { background: #fafafa; font-size: 12px; color: #4b5563; }
+/* Sekme barı — RM panel-hdr altındaki sekme dili */
 .ckart-sekme-bar {
-  position: relative;
-  z-index: 2;
-  display: flex; gap: 2px; flex-wrap: wrap;
-  background: #fff; border: 1px solid rgba(17,24,39,0.07);
-  border-radius: 10px 10px 0 0; padding: 6px 8px;
-  box-shadow: 0 1px 4px rgba(15,23,42,0.04);
+  position: relative; z-index: 2;
+  display: flex; gap: 0; flex-wrap: nowrap; overflow-x: auto;
+  background: #ffffff;
+  border: 1px solid var(--ck-border);
+  border-bottom: 3px solid #006a8e;
+  border-radius: var(--ck-radius) var(--ck-radius) 0 0;
+  padding: 0 6px;
+  box-shadow: var(--ck-shadow);
   clear: both;
 }
 .ckart-sekme {
-  border: none; background: transparent; color: #6b7280;
-  padding: 8px 16px; border-radius: 7px; font-size: 13px; font-weight: 500; cursor: pointer;
+  border: none; background: transparent;
+  color: var(--ck-t3);
+  padding: 10px 16px;
+  font-size: 12.5px; font-weight: 500; cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -3px;
+  white-space: nowrap; flex-shrink: 0;
+  transition: color .12s, background .12s;
 }
-.ckart-sekme:hover { background: #f9fafb; color: #374151; }
-.ckart-sekme.aktif { background: #fef3c7; color: #92400e; font-weight: 700; }
+.ckart-sekme:hover {
+  color: #006a8e;
+  background: #f8fafc;
+}
+/* Aktif sekme — RM'deki #f59e0b gold çizgisi */
+.ckart-sekme.aktif {
+  color: #006a8e;
+  font-weight: 700;
+  border-bottom: 3px solid #f59e0b;
+  background: #f8fafc;
+}
 .ckart-panel {
-  background: #fff; border: 1px solid rgba(17,24,39,0.07); border-top: none;
-  border-radius: 0 0 12px 12px; padding: 18px 18px 22px;
-  box-shadow: 0 2px 8px rgba(15,23,42,0.04);
+  background: #f8fafc;   /* rm-bg — açık gri-mavi zemin */
+  border: 1px solid var(--ck-border); border-top: none;
+  border-radius: 0 0 var(--ck-radius) var(--ck-radius);
+  padding: 18px 16px 24px;
+  box-shadow: var(--ck-shadow-md);
 }
-.ckart-h2 { margin: 0 0 14px; font-size: 15px; color: #111827; font-weight: 700; }
+/* Canvas'ta sol panel başlığı altın uppercase */
+#ckart-panel-genel .ckart-genel-sol > .ckart-panel-bas .ckart-h2 {
+  font-size: 13px; font-weight: 800; color: #b87333;
+  text-transform: uppercase; letter-spacing: .07em;
+}
+.ckart-h2 { margin: 0 0 12px; font-size: 13.5px; color: var(--ck-t1); font-weight: 700; }
+
+/* Sipariş Geçmişi — RM panel-hdr stilinde güçlü başlık */
+#ckart-panel-siparisler > .ckart-panel > .ckart-h2,
+#ckart-panel-siparisler > .ckart-h2,
+#ckart-panel-siparisler .ckart-panel > .ckart-h2:first-child {
+  font-size: 13px; font-weight: 800; color: var(--ck-surface);
+  background: #006a8e;
+  padding: 8px 14px;
+  border-radius: var(--ck-radius-sm);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  border-left: none;
+  display: inline-block;
+  margin-bottom: 12px;
+}
+/* Ticari Özet — RM kart dili (rm-bg beyaz surface, teal başlık) */
 .ckart-ticari {
-  margin: 0 0 14px; padding: 10px 12px; border: 1px solid #f0f1f3;
-  border-radius: 8px; background: #fffdf7;
+  margin: 0 0 12px; padding: 0;
+  border: 1px solid var(--ck-border);
+  border-radius: var(--ck-radius-sm);
+  background: #ffffff;
+  box-shadow: var(--ck-shadow);
+  overflow: hidden;
 }
-.ckart-ticari-baslik { margin: 0 0 8px; border-bottom: none; padding-bottom: 0; }
-.ckart-ticari-mesaj { margin: 0 0 8px; font-size: 12px; color: #6b7280; }
-.ckart-ticari-satir {
-  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 8px 14px; font-size: 12px; color: #4b5563;
+/* Ticari Özet panel CSS — C360-UX-REV2 kaldırıldı */
+.ckart-odeme-chip {
+  display: inline-block; font-size: 10px; font-weight: 700;
+  padding: 2px 7px; border-radius: 999px; margin: 0 4px 3px 0;
+  border: 1px solid transparent; white-space: nowrap;
 }
-.ckart-ticari-satir > div { min-width: 0; }
-.ckart-ticari-satir .lbl { display: block; font-size: 10px; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: .3px; margin-bottom: 2px; }
-.ckart-ticari-satir .val { color: #111827; font-weight: 600; font-size: 13px; overflow-wrap: anywhere; }
-.ckart-ticari-altbaslik { font-size: 12px; font-weight: 700; color: #92400e; margin: 0 0 6px; }
-.ckart-ticari-tablo th, .ckart-ticari-tablo td { padding: 7px 8px; font-size: 12px; }
-.ckart-ticari-kaynak { font-size: 11px; color: #92400e; white-space: nowrap; }
+.ckart-siparis-section-hdr {
+  margin: 14px 0 8px; padding: 0 2px;
+}
+.ckart-siparis-section-title {
+  margin: 0; font-size: 13px; font-weight: 800;
+  color: #006a8e; text-transform: uppercase; letter-spacing: .06em;
+}
+.ckart-ticari-altbaslik {
+  font-size: 10.5px; font-weight: 700; color: #006a8e;
+  margin: 0; padding: 8px 16px;
+  border-top: 1px solid var(--ck-border);
+  text-transform: uppercase; letter-spacing: .06em;
+  background: #f8fafc;
+}
+/* Ürün Bazlı Son Fiyatlar — RM tablo dili */
+.ckart-ticari-tablo { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+#ckart-ticari-urun-tablo th:nth-child(1),
+#ckart-ticari-urun-tablo td:nth-child(1) { width: 36%; }
+#ckart-ticari-urun-tablo th:nth-child(2),
+#ckart-ticari-urun-tablo td:nth-child(2) { width: 12%; white-space: nowrap; }
+#ckart-ticari-urun-tablo th:nth-child(3),
+#ckart-ticari-urun-tablo td:nth-child(3) { width: 8%; white-space: nowrap; }
+#ckart-ticari-urun-tablo th:nth-child(4),
+#ckart-ticari-urun-tablo td:nth-child(4) { width: 16%; }
+#ckart-ticari-urun-tablo th:nth-child(5),
+#ckart-ticari-urun-tablo td:nth-child(5) { width: 12%; white-space: nowrap; }
+#ckart-ticari-urun-tablo th:nth-child(6),
+#ckart-ticari-urun-tablo td:nth-child(6) { width: auto; }
+.ckart-ticari-tablo th {
+  background: #f1f5f9; color: #006a8e;
+  padding: 8px 10px; font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .3px; border-bottom: 2px solid #006a8e;
+  border-right: 1px solid var(--ck-border);
+  text-align: left; white-space: nowrap;
+}
+.ckart-ticari-tablo th:last-child { border-right: none; }
+.ckart-ticari-tablo td { padding: 8px 10px; border-bottom: 1px solid var(--ck-border); color: var(--ck-t2); }
+.ckart-ticari-tablo tbody tr:hover td { background: var(--ck-blue-bg); }
+.ckart-ticari-kaynak { font-size: 11px; color: var(--ck-blue); white-space: nowrap; font-weight: 600; }
 @media (max-width: 1100px) {
+  .ckart-ticari-satir { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
   .ckart-ticari-satir { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 .ckart-panel-bas { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
 .ckart-panel-bas .ckart-h2 { margin: 0; }
 .ckart-dl {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 12px 18px; margin: 0;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px 16px; margin: 0;
 }
-.ckart-dl dt { font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 3px; }
-.ckart-dl dd { margin: 0; font-size: 14px; color: #111827; }
+.ckart-dl dt {
+  font-size: 10px; font-weight: 700; color: #9ca3af;
+  text-transform: uppercase; letter-spacing: .06em; margin-bottom: 3px;
+}
+.ckart-dl dd {
+  margin: 0; font-size: 13.5px; font-weight: 500; color: #111827;
+  line-height: 1.4;
+}
 .ckart-genel-grid {
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px 20px;
+  gap: 0 32px;
 }
-.ckart-genel-kol { min-width: 0; }
+.ckart-genel-kol {
+  min-width: 0;
+  border-right: 1px solid #f3f4f6;
+  padding-right: 20px;
+}
+.ckart-genel-kol:last-child { border-right: none; padding-right: 0; }
 .ckart-h3 {
-  margin: 0 0 10px; font-size: 13px; font-weight: 700; color: #92400e;
-  border-bottom: 1px solid #f3f4f6; padding-bottom: 6px;
+  margin: 0 0 10px; font-size: 10.5px; font-weight: 800;
+  color: #006a8e;
+  border-bottom: 1px solid var(--ck-border); padding-bottom: 8px;
+  text-transform: uppercase; letter-spacing: .08em;
 }
 .ckart-dl-stack { grid-template-columns: 1fr; gap: 10px; }
 .ckart-wrap { overflow-wrap: anywhere; word-break: break-word; }
@@ -608,11 +1371,225 @@
   .ckart-genel-grid { grid-template-columns: 1fr; }
 }
 .ckart-tablo-wrap { overflow-x: auto; border: 1px solid #f0f1f3; border-radius: 10px; }
+/* C360-2: Sipariş Geçmişi — panel + tablo layout */
+#ckart-panel-siparisler {
+  min-width: 0;
+  padding: 16px 14px 20px;
+}
+#ckart-panel-siparisler > .ckart-siparis-tablo-wrap {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  border-radius: var(--ck-radius);
+  border: 1px solid var(--ck-border);
+  box-shadow: var(--ck-shadow);
+}
+#ckart-panel-siparisler #ckart-siparis-tablo.ckart-siparis-tablo {
+  width: 100%; min-width: 1320px; table-layout: auto; border-collapse: collapse;
+}
+/* Sipariş tablosu — RM tablo-col-hdr dili */
+#ckart-panel-siparisler #ckart-siparis-tablo thead tr {
+  background: #006a8e;
+}
+#ckart-panel-siparisler #ckart-siparis-tablo th {
+  white-space: nowrap;
+  font-size: 9.5px; font-weight: 700;
+  color: #ffffff; letter-spacing: .35px;
+  padding: 7px 8px;
+  border-bottom: none;
+  border-right: 1px solid rgba(255,255,255,.15);
+  text-transform: uppercase;
+  text-align: left;
+}
+#ckart-panel-siparisler #ckart-siparis-tablo th:last-child { border-right: none; }
+#ckart-panel-siparisler #ckart-siparis-tablo td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: middle;
+  font-size: 11.5px;
+  color: #0f172a;
+  background: #ffffff;
+}
+#ckart-panel-siparisler #ckart-siparis-tablo tbody tr:last-child td { border-bottom: none; }
+#ckart-panel-siparisler #ckart-siparis-tablo tbody tr.ckart-siparis-data-row:hover > td {
+  background: #f8fafc;
+}
+#ckart-panel-siparisler #ckart-siparis-tablo tbody tr.ckart-siparis-data-row.acik > td {
+  background: #f1f5f9;
+  border-bottom-color: #cbd5e1;
+}
+#ckart-panel-siparisler #ckart-siparis-tablo td.ckart-sip-no-td {
+  white-space: nowrap; min-width: 148px; font-weight: 600;
+}
+#ckart-panel-siparisler #ckart-siparis-tablo td.ckart-sip-no-td .ckart-sip-no-text {
+  display: inline-block; font-size: 11.5px; font-weight: 700;
+  color: #006a8e;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: .15px; vertical-align: middle;
+}
+
+/* ══════════════════════════════════════════════════
+   C360 Sipariş — disclosure + kalem alt tablo
+   ══════════════════════════════════════════════════ */
+
+.ckart-sip-disclosure {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; margin-right: 4px;
+  padding: 0; border: 1px solid #e2e8f0; border-radius: 3px;
+  background: #f8fafc; color: #006a8e;
+  font-size: 12px; font-weight: 700; line-height: 1;
+  cursor: pointer; vertical-align: middle; flex-shrink: 0;
+  transition: background .12s, border-color .12s;
+}
+.ckart-sip-disclosure:hover { background: #eff6ff; border-color: #006a8e; }
+.ckart-sip-disclosure.acik { background: #eff6ff; border-color: #006a8e; color: #006a8e; }
+.ckart-sip-disclosure-spacer {
+  display: inline-block; width: 18px; height: 18px; margin-right: 4px; vertical-align: middle;
+}
+.ckart-kalem-count {
+  font-size: 11px; font-weight: 600; color: #006a8e; white-space: nowrap;
+}
+.ckart-sip-no-wrap {
+  display: inline-flex; align-items: center; gap: 2px; flex-wrap: nowrap;
+}
+.ckart-sip-no {
+  font-size: 11.5px; font-weight: 700; color: #006a8e;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: .15px;
+}
+
+.ckart-siparis-kalem-row > td.ckart-siparis-kalem-td {
+  padding: 4px 8px 6px;
+  border-top: none;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+.ckart-siparis-kalem-inner {
+  box-sizing: border-box;
+  padding: 0 6px 6px;
+  overflow: hidden;
+}
+
+.ckart-kalem-detail-wrap {
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  background: #ffffff;
+  overflow: hidden;
+}
+.ckart-kalem-detail-hdr {
+  display: flex; align-items: center; gap: 6px;
+  min-height: 28px; padding: 5px 10px;
+  background: #eff6ff;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 10px; font-weight: 800;
+  color: #006a8e; text-transform: uppercase; letter-spacing: .4px;
+}
+.ckart-kalem-detail-tablo {
+  width: 100%; border-collapse: collapse; font-size: 10.5px; table-layout: fixed;
+}
+.ckart-kalem-detail-tablo thead tr { background: #f1f5f9; }
+.ckart-kalem-detail-tablo th {
+  padding: 5px 8px; font-size: 9px; font-weight: 700;
+  color: #6b7280; text-transform: uppercase; letter-spacing: .3px;
+  border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0;
+  text-align: left; white-space: nowrap;
+}
+.ckart-kalem-detail-tablo th:last-child { border-right: none; }
+.ckart-kalem-detail-tablo td {
+  padding: 7px 8px; border-bottom: 1px solid #e2e8f0;
+  border-right: 1px solid #f1f5f9;
+  color: #0f172a; vertical-align: middle; font-size: 11px;
+  background: #ffffff;
+}
+.ckart-kalem-detail-tablo td:last-child { border-right: none; }
+.ckart-kalem-detail-tablo tbody tr:last-child td { border-bottom: none; }
+.ckart-kalem-detail-tablo .ck-kalem-urun { font-weight: 700; color: #0f172a; }
+.ckart-kalem-detail-tablo .ck-kalem-formul { font-size: 10.5px; color: #0f172a; font-weight: 600; }
+.ckart-kalem-detail-tablo .ck-kalem-renk { font-size: 10.5px; color: #334155; font-weight: 600; white-space: nowrap; }
+.ckart-kalem-detail-tablo .ck-kalem-fiyat { color: #b45309; font-weight: 700; white-space: nowrap; }
+.ckart-kalem-detail-tablo .ck-kalem-plan {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10.5px; color: #006a8e; font-weight: 600;
+}
+.ckart-kalem-detail-tablo .ck-kalem-miktar { color: #006a8e; font-weight: 700; white-space: nowrap; }
+.ckart-kalem-detail-tablo .ck-kalem-urun-sub { font-size: 10px; font-weight: 500; color: #6b7280; margin-top: 2px; }
+.ckart-kalem-detail-tablo .ck-kalem-sira { color: #6b7280; font-weight: 700; text-align: center; width: 28px; }
+.ckart-kalem-detail-ftr {
+  display: flex; flex-wrap: wrap; gap: 8px 18px;
+  padding: 6px 10px; font-size: 10px; color: #6b7280;
+  border-top: 1px solid #e2e8f0; background: #f8fafc;
+}
+.ckart-kalem-detail-ftr .ckart-kalem-ftr-item {
+  display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap;
+}
+.ckart-kalem-detail-ftr .lbl {
+  font-size: 9px; font-weight: 700; color: #6b7280;
+  text-transform: uppercase; letter-spacing: .35px;
+}
+.ckart-kalem-detail-ftr strong { color: #0f172a; font-weight: 700; font-size: 10.5px; }
+.ckart-kalem-detail-tablo .ck-kalem-plan a.ckart-link {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10.5px; color: #006a8e; font-weight: 600; text-decoration: none;
+}
+.ckart-kalem-detail-tablo .ck-kalem-plan a.ckart-link:hover { text-decoration: underline; }
+.ck-sevk-yok { color: #b45309; font-size: 10.5px; font-weight: 600; }
+.ck-sevk-link { color: #006a8e; font-size: 10.5px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+.ck-sevk-link:hover { text-decoration: underline; }
+.ck-sevk-link .ck-sevk-arrow { font-size: 9px; opacity: 0.75; }
+.ck-sevk-tarih { font-size: 10.5px; color: #334155; }
+.ckart-ticari-satir .ckart-odeme-chip.ckart-odeme-nakit { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0; }
+.ckart-ticari-satir .ckart-odeme-chip.ckart-odeme-vadeli { background: #eff6ff; color: #006a8e; border-color: #bfdbfe; }
+.ckart-ticari-satir .ckart-odeme-chip.ckart-odeme-cek { background: #fff7ed; color: #f97316; border-color: #fed7aa; }
+.ckart-ticari-satir .ckart-odeme-chip.ckart-odeme-default { background: #f1f5f9; color: #6b7280; border-color: #e2e8f0; }
+
+/* Durum / ödeme badge — ana tablo */
+.ckart-sip-durum-badge,
+.ckart-odeme-badge {
+  display: inline-block;
+  font-size: 9.5px; font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  letter-spacing: .12px;
+  text-transform: uppercase;
+}
+.ckart-sip-durum-uretimde { background: #fff7ed; color: #f97316; border-color: #fed7aa; }
+.ckart-sip-durum-taslak   { background: #f1f5f9; color: #6b7280; border-color: #e2e8f0; }
+.ckart-sip-durum-tamamlandi { background: #eff6ff; color: #006a8e; border-color: #bfdbfe; }
+.ckart-sip-durum-onay     { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0; }
+.ckart-sip-durum-default  { background: #f8fafc; color: #0f172a; border-color: #e2e8f0; }
+.ckart-odeme-nakit  { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0; }
+.ckart-odeme-vadeli { background: #eff6ff; color: #006a8e; border-color: #bfdbfe; }
+.ckart-odeme-cek    { background: #fff7ed; color: #f97316; border-color: #fed7aa; }
+.ckart-odeme-default { background: #f1f5f9; color: #6b7280; border-color: #e2e8f0; }
+.ckart-kalem-durum {
+  display: inline-block; font-size: 9px; font-weight: 700;
+  letter-spacing: .12px; padding: 2px 7px; border-radius: 999px;
+  border: 1px solid transparent; white-space: nowrap; text-transform: uppercase;
+}
+.ckart-kalem-durum-aktif      { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0; }
+.ckart-kalem-durum-tamamlandi { background: #eff6ff; color: #006a8e; border-color: #bfdbfe; }
+.ckart-kalem-durum-iptal      { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
+.ckart-kalem-durum-default    { background: #f1f5f9; color: #6b7280; border-color: #e2e8f0; }
 .ckart-tablo { width: 100%; border-collapse: collapse; font-size: 13px; }
 .ckart-tablo th {
   text-align: left; background: #f9fafb; padding: 9px 10px; font-size: 11px;
   color: #6b7280; text-transform: uppercase; letter-spacing: .3px; border-bottom: 1px solid #f0f1f3;
   white-space: nowrap;
+}
+/* Sipariş tablosu — RM tablo header dili: bg bg2, color teal, 2px teal bottom */
+#ckart-panel-siparisler .ckart-tablo th,
+#ckart-panel-siparisler .ckart-siparis-tablo th {
+  background: #f1f5f9 !important;
+  color: #006a8e !important;
+  border-bottom: 2px solid #006a8e !important;
+  border-right: 1px solid var(--ck-border2);
+  font-size: 10px;
 }
 .ckart-tablo td { padding: 10px; border-bottom: 1px solid #f3f4f6; vertical-align: top; color: #111827; }
 .ckart-tablo tr:last-child td { border-bottom: none; }
@@ -641,21 +1618,23 @@
 .ckart-takip-gecikti { color: #b91c1c; font-weight: 700; font-size: 12px; }
 .ckart-takip-ok { color: #047857; font-weight: 600; font-size: 12px; }
 .ckart-muted { color: #9ca3af; text-align: center; padding: 20px !important; }
-.ckart-son-hareketler { border-top: 1px solid #e5e7eb; padding-top: 4px; }
-.ckart-hafiza-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ckart-son-hareketler { border-top: 1px solid var(--ck-border); padding-top: 6px; margin-top: 4px; }
+.ckart-hafiza-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
 .ckart-hafiza-satir {
-  display: grid; grid-template-columns: 118px 1fr auto; gap: 10px 12px; align-items: start;
-  border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 12px; background: #fafafa;
+  display: grid; grid-template-columns: 104px 1fr auto; gap: 8px 10px; align-items: start;
+  border: 1px solid #eef0f2; border-radius: var(--ck-radius-sm); padding: 8px 11px;
+  background: #fafafa; transition: background .1s;
 }
-.ckart-hafiza-satir time { font-size: 11px; color: #6b7280; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.ckart-hafiza-bas { font-size: 13px; font-weight: 650; color: #111827; margin: 0 0 2px; }
-.ckart-hafiza-oz { font-size: 12px; color: #4b5563; margin: 0 0 4px; overflow-wrap: anywhere; }
-.ckart-hafiza-meta { font-size: 11px; color: #6b7280; display: flex; flex-wrap: wrap; gap: 6px 10px; }
+.ckart-hafiza-satir:hover { background: #f5f5f5; }
+.ckart-hafiza-satir time { font-size: 10.5px; color: var(--ck-text-soft); font-variant-numeric: tabular-nums; white-space: nowrap; padding-top: 1px; }
+.ckart-hafiza-bas { font-size: 12.5px; font-weight: 600; color: var(--ck-text); margin: 0 0 2px; }
+.ckart-hafiza-oz { font-size: 11.5px; color: var(--ck-text-mid); margin: 0 0 3px; overflow-wrap: anywhere; }
+.ckart-hafiza-meta { font-size: 10.5px; color: var(--ck-text-soft); display: flex; flex-wrap: wrap; gap: 4px 8px; }
 .ckart-hafiza-kaynak {
-  font-size: 10px; font-weight: 700; letter-spacing: .3px; color: #92400e;
-  background: #fff7ed; border: 1px solid #fed7aa; border-radius: 999px; padding: 2px 8px; white-space: nowrap;
+  font-size: 9.5px; font-weight: 700; letter-spacing: .03em; color: #92400e;
+  background: #fff7ed; border: 1px solid #fcd9aa; border-radius: 999px; padding: 1px 7px; white-space: nowrap;
 }
-.ckart-hafiza-detay { font-size: 12px; font-weight: 600; color: #92400e; text-decoration: none; align-self: center; }
+.ckart-hafiza-detay { font-size: 11px; font-weight: 600; color: var(--ck-gold-dark); text-decoration: none; align-self: center; white-space: nowrap; }
 .ckart-hafiza-detay:hover { text-decoration: underline; }
 .ckart-hafiza-modal { width: min(720px, 100%); max-height: 86vh; display: flex; flex-direction: column; }
 .ckart-hafiza-modal .ckart-modal-body { overflow: auto; flex: 1; }
@@ -667,27 +1646,32 @@
 @media (max-width: 700px) {
   .ckart-hafiza-satir { grid-template-columns: 1fr; }
 }
+/* Butonlar — RM rm-yeni-btn / rm-boyut-btn dili */
 .ckart-btn-birincil, .ckart-btn-ikincil, .ckart-btn-mini {
   border: none; border-radius: 8px; cursor: pointer; font-weight: 600;
 }
+/* RM birincil: teal (#006a8e) */
 .ckart-btn-birincil {
-  background: #f59e0b; color: #111827; padding: 8px 14px; font-size: 13px;
+  background: #006a8e; color: #fff; padding: 8px 14px; font-size: 13px;
 }
-.ckart-btn-birincil:hover { background: #d97706; color: #fff; }
+.ckart-btn-birincil:hover { background: #005a7a; color: #fff; }
 .ckart-btn-ikincil {
-  background: #f3f4f6; color: #374151; padding: 8px 14px; font-size: 13px;
+  background: #f1f5f9; color: #374151; padding: 8px 14px; font-size: 13px;
+  border: 1px solid #e2e8f0;
 }
+.ckart-btn-ikincil:hover { background: #e2e8f0; }
 .ckart-btn-mini {
-  background: #fff; border: 1px solid #e5e7eb; color: #374151;
+  background: #fff; border: 1px solid #e2e8f0; color: #374151;
   padding: 3px 8px; font-size: 11px; margin-left: 4px; border-radius: 6px;
 }
-.ckart-btn-mini:hover { border-color: #f59e0b; color: #92400e; }
+.ckart-btn-mini:hover { border-color: #006a8e; color: #006a8e; }
 .ckart-pill-ana { color: #0f766e; font-weight: 700; font-size: 11px; }
 .ckart-pill-pasif { color: #9ca3af; font-size: 11px; }
 .ckart-sekme-badge {
-  display: inline-block; margin-left: 6px; min-width: 18px; padding: 1px 6px;
-  border-radius: 999px; background: #f59e0b; color: #111827;
-  font-size: 11px; font-weight: 700; line-height: 1.4; vertical-align: middle;
+  display: inline-block; margin-left: 5px; min-width: 16px; padding: 1px 5px;
+  border-radius: 999px; background: var(--ck-gold); color: #fff;
+  font-size: 9.5px; font-weight: 700; line-height: 1.5; vertical-align: middle;
+  text-align: center;
 }
 .ckart-link { color: #92400e; text-decoration: underline; font-size: 11px; }
 
@@ -744,12 +1728,11 @@
   var root = document.getElementById('ckart');
   if (!root) return;
   var CARI_ID = parseInt(root.getAttribute('data-cari-id'), 10);
-  var CAN_WRITE = root.getAttribute('data-can-write') === '1';
   var CAN_WRITE_G = root.getAttribute('data-can-write-gorusme') === '1';
-  var _cache = [];
   var _gorusmeCache = [];
   var _gIdem = null;
   var _opsLoaded = { siparisler: false, ticariOzet: false, uretim: false, sevkiyatlar: false, urunler: false, numuneler: false };
+  var _ckartKpiCache = { toplam_siparis: null, aktif_siparis: null };
 
   function esc(s) {
     return String(s == null ? '' : s)
@@ -760,6 +1743,81 @@
   function dash(v) {
     if (v == null || v === '') return '—';
     return String(v);
+  }
+
+  /** Trailing zero temizle, anlamlı ondalığı koru, TR virgül ayırıcı. */
+  /** YYYY-MM-DD → DD.MM.YYYY (sadece Cari360 presentation) */
+  function ckartFmtDate(val) {
+    if (!val) return '—';
+    var s = String(val).trim();
+    var m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) return m[3] + '.' + m[2] + '.' + m[1];
+    return s;
+  }
+
+  /** Binlik ayırıcılı tam sayı formatı (TRY gibi büyük değerler için) */
+  function ckartFmtBinlik(val) {
+    if (val == null || val === '') return '—';
+    var n = Math.round(Number(String(val).replace(',', '.')));
+    if (!isFinite(n)) return String(val);
+    return n.toLocaleString('tr-TR');
+  }
+
+  /**
+   * Ana sipariş satırı FİYAT alanı:
+   * - 1 kalem → gerçek birim fiyat (net_birim_fiyat öncelikli)
+   * - N kalem, tümü aynı fiyat → o fiyat
+   * - N kalem, farklı fiyat → "Çoklu"
+   * - fiyat yoksa → "—"
+   */
+  function ckartAnaFiyat(s) {
+    var kals = s.kalemler || [];
+    if (!kals.length) return '<span class="ckart-muted">—</span>';
+    var pb = s.para_birimi || '';
+    var prices = kals.map(function(k) {
+      var raw = (k.net_birim_fiyat != null && k.net_birim_fiyat !== '')
+        ? k.net_birim_fiyat : k.birim_fiyat;
+      if (raw == null || raw === '') return null;
+      var n = Number(String(raw).replace(',', '.'));
+      return isFinite(n) ? n : null;
+    }).filter(function(v) { return v !== null; });
+    if (!prices.length) return '<span class="ckart-muted">—</span>';
+    var allSame = prices.every(function(v) { return Math.abs(v - prices[0]) < 0.00001; });
+    if (allSame) {
+      return esc(formatFiyatPb(prices[0], pb));
+    }
+    return '<span class="ckart-muted" title="' + esc(prices.map(function(p){ return formatFiyatPb(p, pb); }).join(', ')) + '">Çoklu</span>';
+  }
+
+  function formatDecimalTrim(value) {
+    if (value == null || value === '') return '—';
+    var s = String(value).trim();
+    if (!s) return '—';
+    var normalized = s.replace(',', '.');
+    var n = Number(normalized);
+    if (!isFinite(n)) return s;
+    if (n === 0) return '0';
+    if (normalized.indexOf('.') >= 0) {
+      normalized = normalized.replace(/0+$/, '').replace(/\.$/, '');
+    }
+    return normalized.replace('.', ',');
+  }
+
+  /** İskonto: % öneki + formatDecimalTrim kuralı. */
+  function formatPercentTrim(value) {
+    if (value === 'BELIRTILMEMIS' || value == null || value === '') return 'Belirtilmemiş';
+    var formatted = formatDecimalTrim(value);
+    if (formatted === '—') return '—';
+    return '%' + formatted;
+  }
+
+  /** Son net fiyat + para birimi (presentation only). */
+  function formatFiyatPb(netRaw, paraBirimi) {
+    var fiyat = formatDecimalTrim(netRaw);
+    if (fiyat === '—') return '—';
+    var pb = (paraBirimi != null && String(paraBirimi).trim() !== '')
+      ? String(paraBirimi).trim() : '';
+    return pb ? (fiyat + ' ' + pb) : fiyat;
   }
 
   /* FAZ-3D: API alanlarından etiket — backend politikasını yeniden hesaplamaz */
@@ -908,40 +1966,94 @@
       nexgen_numune_talep: 'Numune',
       nexgen_numune_talep_gelisme: 'Numune',
       nexgen_arge_olay: 'AR-GE',
+      nexgen_arge_test: 'AR-GE',
+      nexgen_rf_renk: 'RF/Renk',
       nexgen_planlama_siparis: 'Sipariş',
-      nexgen_uretim_plan: 'Plan',
-      nexgen_uretim_batch: 'Batch',
+      nexgen_uretim_plan: 'Üretim',
+      nexgen_uretim_batch: 'Üretim',
       nexgen_uretim_parca: 'Üretim',
       mo_musteri_sevkiyat: 'Sevkiyat',
       mo_tahsilat_kayit: 'Tahsilat',
+      mo_cek_kayit: 'Çek',
       onay_talep: 'Onay',
       nexgen_cari: 'Cari',
-      cari_sorumlu: 'Sorumlu',
-      cari_yetkili: 'Yetkili'
+      cari_sorumlu: 'Pazarlamacı',
+      cari_yetkili: 'Yetkili',
+      SIPARIS_CREATED: 'Sipariş',
+      SIPARIS_ONAYLANDI: 'Onay',
+      SIPARIS_REDDEDILDI: 'Ret',
+      SIPARIS_REVIZYON: 'Revizyon',
+      TAHSILAT: 'Tahsilat',
+      CEK_KAYDI: 'Çek',
+      ONAY_TALEBI: 'Onay',
+      GORUSME_CREATED: 'Görüşme',
+      NUMUNE_CREATED: 'Numune',
+      SEVKIYAT: 'Sevkiyat',
+      URETIM_STARTED: 'Üretim',
+      URETIM_COMPLETED: 'Üretim',
+      PAZARLAMACI: 'Pazarlamacı',
     };
     return m[st] || (st || '—');
   }
 
+  /* Olay kodu veya source_type → ERP yöneticisine okunabilir modül etiketi */
+  function ckartHafizaOlayEtiket(kod) {
+    var m = {
+      /* olay_kodu bazlı */
+      GORUSME_CREATED: 'Görüşme', GORUSME_UPDATED: 'Görüşme', GORUSME_IPTAL: 'Görüşme',
+      NUMUNE_CREATED: 'Numune', NUMUNE_ONAYLANDI: 'Numune', NUMUNE_REDDEDILDI: 'Numune',
+      SIPARIS_CREATED: 'NexGen Sipariş', SIPARIS_ONAYLANDI: 'NexGen Sipariş',
+      SIPARIS_REDDEDILDI: 'NexGen Sipariş', SIPARIS_REVIZYON: 'NexGen Sipariş',
+      SIPARIS_IPTAL: 'NexGen Sipariş',
+      CEK_KAYDI: 'Çek', CEK_GUNCELLENDI: 'Çek',
+      TAHSILAT: 'NexGen Tahsilat',
+      SEVKIYAT: 'Sevkiyat',
+      ONAY_TALEBI: 'Onay Merkezi',
+      /* source_type bazlı fallback */
+      musteri_operasyon_gorusme: 'Görüşme',
+      nexgen_numune_talep: 'Numune',
+      nexgen_planlama_siparis: 'NexGen Sipariş',
+      mo_musteri_sevkiyat: 'Sevkiyat',
+      mo_tahsilat_kayit: 'NexGen Tahsilat',
+      mo_cek_kayit: 'Çek',
+      onay_talep: 'Onay Merkezi',
+    };
+    return m[kod] || ckartHafizaKaynakEtiket(kod);
+  }
+
+  /* Badge renk class'ı — hem entity_type hem olay_kodu'na göre */
+  function ckartHafizaBadgeClass(st) {
+    if (!st) return 'ckart-hbadge-default';
+    var s = st.toLowerCase();
+    if (s.indexOf('sevkiyat') !== -1) return 'ckart-hbadge-sevkiyat';
+    if (s.indexOf('siparis') !== -1 || s.indexOf('planlama') !== -1) return 'ckart-hbadge-siparis';
+    if (s.indexOf('numune') !== -1) return 'ckart-hbadge-numune';
+    if (s.indexOf('gorusme') !== -1) return 'ckart-hbadge-gorusme';
+    if (s.indexOf('onay') !== -1 || s.indexOf('ret') !== -1 || s.indexOf('revizyon') !== -1) return 'ckart-hbadge-onay';
+    if (s.indexOf('arge') !== -1 || s.indexOf('ar_ge') !== -1 || s.indexOf('rf') !== -1) return 'ckart-hbadge-arge';
+    if (s.indexOf('tahsilat') !== -1 || s.indexOf('cek') !== -1) return 'ckart-hbadge-tahsilat';
+    if (s.indexOf('uretim') !== -1 || s.indexOf('batch') !== -1) return 'ckart-hbadge-uretim';
+    return 'ckart-hbadge-default';
+  }
+
   function ckartHafizaSatirHtml(ev) {
-    var url = ev.detay_url || ('/nexgen/cari360/' + CARI_ID);
-    var meta = [];
-    if (ev.status) meta.push(ev.status);
-    if (ev.sonraki_asama) meta.push('Sonraki: ' + ev.sonraki_asama);
-    if (ev.termin) meta.push('Termin: ' + String(ev.termin).slice(0, 10));
-    if (ev.gecikme) meta.push(ev.gecikme);
-    if (ev.kayit_no) meta.push('#' + ev.kayit_no);
+    /* Referans düzen:
+       [Badge] Başlık
+       Kısa açıklama
+       Tarih          Detay →
+    */
     return (
       '<li class="ckart-hafiza-satir">' +
-        '<time>' + ckartHafizaFmtTarih(ev.event_date) + '</time>' +
-        '<div>' +
-          '<div class="ckart-hafiza-bas"></div>' +
-          '<p class="ckart-hafiza-oz"></p>' +
-          '<div class="ckart-hafiza-meta"></div>' +
-        '</div>' +
-        '<div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">' +
+        '<div class="ckart-hafiza-row1">' +
           '<span class="ckart-hafiza-kaynak"></span>' +
-          '<a class="ckart-hafiza-detay" href=""></a>' +
+          '<div class="ckart-hafiza-bas"></div>' +
         '</div>' +
+        '<p class="ckart-hafiza-oz"></p>' +
+        '<div class="ckart-hafiza-row3">' +
+          '<time>' + ckartHafizaFmtTarih(ev.event_date) + '</time>' +
+          '<a class="ckart-hafiza-detay" href="">Detay →</a>' +
+        '</div>' +
+        '<div class="ckart-hafiza-meta"></div>' +
       '</li>'
     );
   }
@@ -969,8 +2081,15 @@
       if (ev.termin) bits.push('Termin: ' + String(ev.termin).slice(0, 10));
       if (ev.gecikme) bits.push(ev.gecikme);
       if (ev.kayit_no) bits.push('#' + ev.kayit_no);
-      metaEl.textContent = bits.join(' · ') || ckartHafizaKaynakEtiket(ev.source_type);
-      li.querySelector('.ckart-hafiza-kaynak').textContent = ckartHafizaKaynakEtiket(ev.source_type);
+      /* karar notu varsa göster */
+      var knotu = (ev.metadata && ev.metadata.karar_notu) || ev.karar_notu || '';
+      if (knotu) bits.push('Not: ' + knotu.slice(0, 60) + (knotu.length > 60 ? '…' : ''));
+      metaEl.textContent = bits.join(' · ') || ckartHafizaOlayEtiket(ev.olay_kodu || ev.source_type);
+      var kaynak = li.querySelector('.ckart-hafiza-kaynak');
+      /* olay_kodu varsa öncelik ver; yoksa source_type fallback */
+      var _badgeSrc = ev.olay_kodu || ev.source_type || '';
+      kaynak.textContent = ckartHafizaOlayEtiket(_badgeSrc);
+      kaynak.className = 'ckart-hafiza-kaynak ' + ckartHafizaBadgeClass(_badgeSrc);
       var a = li.querySelector('.ckart-hafiza-detay');
       a.href = ev.detay_url || ('/nexgen/cari360/' + CARI_ID);
       a.textContent = 'Detay';
@@ -1052,6 +2171,318 @@
   }
   window.ckartHafizaModalKapat = ckartHafizaModalKapat;
 
+  var _ckartFinansYuklendi = false;
+  function ckartFinansYukle() {
+    if (_ckartFinansYuklendi) return;
+    _ckartFinansYuklendi = true;
+    var yuk = document.getElementById('ckart-finans-yukleniyor');
+    var icerik = document.getElementById('ckart-finans-icerik');
+
+    function fmt(v, suffix) {
+      if (v == null) return '—';
+      var n = parseFloat(v);
+      if (isNaN(n)) return String(v);
+      return n.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + (suffix || ' ₺');
+    }
+    function fmtN(v) {
+      if (v == null || v === '') return '—';
+      return v;
+    }
+
+    ckartFetchJson('/nexgen/api/cari360/' + CARI_ID + '/finans')
+      .then(function(d) {
+        if (!d || !d.ok) throw new Error((d && d.mesaj) || 'Finans verisi alınamadı');
+
+        // --- Legacy bakiye ---
+        var es = d.eslesme || {};
+        var uyariEl = document.getElementById('ckart-finans-eslesme-uyari');
+        var bakiyeGrid = document.getElementById('ckart-finans-bakiye-grid');
+        var kartBakBlok = document.getElementById('ckart-finans-kart-bakiye-blok');
+
+        if (!es.eslesme) {
+          // Eşleşme yok — yalnız mesaj göster
+          uyariEl.textContent = es.mesaj || 'Finans eşleşmesi yok.';
+          uyariEl.style.display = '';
+        } else if (es.uyari) {
+          // Cari_Har yok — kart bakiyesi fallback
+          uyariEl.textContent = es.uyari;
+          uyariEl.style.display = '';
+          kartBakBlok.style.display = '';
+          var cfkKart = document.getElementById('cfk-kart-bakiye');
+          if (cfkKart) cfkKart.textContent = es.bakiye != null ? fmt(es.bakiye) : 'Veri yok';
+          // Borç/Alacak kesinlikle 0 gösterme — veri yok
+          var cfkBak2 = document.getElementById('cfk-bakiye'); if (cfkBak2) cfkBak2.textContent = '—';
+          var cfkBorc2 = document.getElementById('cfk-borc'); if (cfkBorc2) cfkBorc2.textContent = 'Veri yok';
+          var cfkAlacak2 = document.getElementById('cfk-alacak'); if (cfkAlacak2) cfkAlacak2.textContent = 'Veri yok';
+          var cfkAcik2 = document.getElementById('cfk-acik'); if (cfkAcik2) cfkAcik2.textContent = 'Veri yok';
+          bakiyeGrid.style.display = '';
+        } else if (es.mesaj) {
+          uyariEl.textContent = es.mesaj;
+          uyariEl.style.display = '';
+        } else {
+          // Tam Cari_Har verisi mevcut
+          bakiyeGrid.style.display = '';
+          var cfkBak = document.getElementById('cfk-bakiye'); if (cfkBak) cfkBak.textContent = fmt(es.bakiye);
+          var cfkBorc = document.getElementById('cfk-borc'); if (cfkBorc) cfkBorc.textContent = fmt(es.borc);
+          var cfkAlacak = document.getElementById('cfk-alacak'); if (cfkAlacak) cfkAlacak.textContent = fmt(es.alacak);
+          var cfkAcik = document.getElementById('cfk-acik'); if (cfkAcik) cfkAcik.textContent = fmt(es.acik_bakiye);
+        }
+
+        // --- Tahsilat ---
+        var t = d.tahsilat || {};
+        var cfkAlinan = document.getElementById('cfk-alinan'); if (cfkAlinan) cfkAlinan.textContent = fmt(t.alinan_toplam);
+        var cfkBekl = document.getElementById('cfk-bekleyen'); if (cfkBekl) cfkBekl.textContent = fmt(t.bekleyen_toplam);
+        var cfkKalan = document.getElementById('cfk-kalan'); if (cfkKalan) cfkKalan.textContent = fmt(t.kalan_toplam);
+        var sonStr = t.son_tahsilat_tarihi
+          ? (t.son_tahsilat_tarihi + (t.son_tahsilat_tutari != null ? ' / ' + fmt(t.son_tahsilat_tutari) : ''))
+          : '—';
+        var cfkSon = document.getElementById('cfk-son-tahsilat'); if (cfkSon) cfkSon.textContent = sonStr;
+        var gecN = t.gecikme_sayisi;
+        var cfkGec = document.getElementById('cfk-gecikme');
+        if (cfkGec) {
+          cfkGec.textContent = gecN != null ? gecN + ' kayıt' : '—';
+          if (gecN && gecN > 0) cfkGec.style.color = '#dc2626';
+        }
+
+        // --- Vade / Çek ---
+        var vc = d.vade_cek || {};
+        var cfkVade = document.getElementById('cfk-ort-vade');
+        if (cfkVade) cfkVade.textContent = vc.ortalama_vade_gun != null ? vc.ortalama_vade_gun + ' gün' : '—';
+        var cfkCek = document.getElementById('cfk-cek-sayi');
+        if (cfkCek) cfkCek.textContent = vc.cekli_siparis_sayisi != null ? String(vc.cekli_siparis_sayisi) : '—';
+        var vad = (vc.cek_vadeleri || []);
+        var cfkCekV = document.getElementById('cfk-cek-vadeler');
+        if (cfkCekV) cfkCekV.textContent = vad.length ? vad.slice(0, 5).join(' · ') : '—';
+
+        if (yuk) yuk.style.display = 'none';
+        if (icerik) icerik.style.display = '';
+      })
+      .catch(function(err) {
+        if (yuk) yuk.textContent = 'Finans verisi yüklenemedi: ' + err.message;
+      });
+  }
+
+  /* ── Onaylar sekmesi — pagination, filtre, özet, popup ── */
+  var _ckartOnayOffset = 0;
+  var _ckartOnayLimit = 50;
+
+  var _DURUM_CSS = {
+    ONAYLANDI: 'background:#d1fae5;color:#065f46',
+    REDDEDILDI: 'background:#fee2e2;color:#991b1b',
+    REVIZYON: 'background:#fef3c7;color:#92400e',
+    BEKLIYOR: 'background:#dbeafe;color:#1e40af',
+    BEKLETILDI: 'background:#f3f4f6;color:#374151',
+    IPTAL: 'background:#f3f4f6;color:#9ca3af',
+  };
+  var _TIP_ETIKET = {
+    SATIS_SIPARISI: 'Satış Siparişi', NUMUNE_TALEBI: 'Numune',
+    TAHSILAT_KAYDI: 'Tahsilat', SATIN_ALMA_SIPARISI: 'Satın Alma',
+  };
+
+  function ckartOnaylarYukle() { _ckartOnayOffset = 0; _ckartOnaylarGetir(); }
+  function ckartOnaylarFiltrele() { _ckartOnayOffset = 0; _ckartOnaylarGetir(); }
+  window.ckartOnaylarFiltrele = ckartOnaylarFiltrele;
+  function ckartOnaylarSayfa(yon) {
+    _ckartOnayOffset = Math.max(0, _ckartOnayOffset + yon * _ckartOnayLimit);
+    _ckartOnaylarGetir();
+  }
+  window.ckartOnaylarSayfa = ckartOnaylarSayfa;
+
+  function _ckartOnaylarGetir() {
+    var yuk = document.getElementById('ckart-onaylar-yukleniyor');
+    var bos = document.getElementById('ckart-onaylar-bos');
+    var hata = document.getElementById('ckart-onaylar-hata');
+    var liste = document.getElementById('ckart-onaylar-liste');
+    var tbody = document.getElementById('ckart-onaylar-tbody');
+    var badge = document.getElementById('ckart-onay-badge');
+    var filtre = (document.getElementById('ckart-onaylar-filtre') || {}).value || '';
+
+    if (yuk) { yuk.style.display = ''; yuk.textContent = 'Yükleniyor…'; }
+    if (bos) bos.style.display = 'none';
+    if (hata) hata.style.display = 'none';
+    if (liste) liste.style.display = 'none';
+
+    var url = '/nexgen/api/cari360/' + CARI_ID + '/onaylar?limit=' + _ckartOnayLimit + '&offset=' + _ckartOnayOffset;
+    if (filtre) url += '&durum=' + encodeURIComponent(filtre);
+
+    ckartFetchJson(url)
+      .then(function(d) {
+        if (yuk) yuk.style.display = 'none';
+        if (!d.ok) {
+          if (hata) { hata.textContent = d.mesaj || 'Hata.'; hata.style.display = ''; }
+          return;
+        }
+        // Özet
+        var oz = d.ozet || {};
+        var ozEl = document.getElementById('ckart-onaylar-ozet');
+        if (ozEl) ozEl.style.display = 'flex';
+        setText('ckart-onay-ozet-bekleyen', oz.bekleyen || 0);
+        setText('ckart-onay-ozet-onaylandi', oz.onaylandi || 0);
+        setText('ckart-onay-ozet-reddedildi', oz.reddedildi || 0);
+        // Badge
+        if (badge) {
+          if ((oz.bekleyen || 0) > 0) {
+            badge.textContent = oz.bekleyen;
+            badge.style.display = '';
+          } else {
+            badge.style.display = 'none';
+          }
+        }
+        if (typeof onayBildirimBadgeGuncelle === 'function') {
+          onayBildirimBadgeGuncelle(oz.bekleyen || 0);
+        }
+        // Toplam
+        var toplam = d.toplam || 0;
+        setText('ckart-onaylar-toplam', toplam + ' kayıt');
+        if (!d.liste || !d.liste.length) {
+          if (bos) bos.style.display = '';
+          return;
+        }
+        if (liste) liste.style.display = '';
+        // Tablo
+        var rows = '';
+        d.liste.forEach(function(r) {
+          var css = _DURUM_CSS[r.durum] || 'background:#f3f4f6;color:#374151';
+          var tutar = r.tutar ? r.tutar + ' ' + (r.para_birimi || '') : '—';
+          var vade = r.vade_gun ? r.vade_gun + ' gün' : '—';
+          var notTitle = (r.son_karar_notu || '').replace(/"/g,'&quot;');
+          rows += '<tr style="cursor:pointer" onclick="gopAc(' + r.id + ',' + CARI_ID + ')">' +
+            '<td style="color:var(--ck-text-soft);font-size:11px">' + (r.sira || '') + '</td>' +
+            '<td style="font-family:monospace;font-size:11px">' + (r.talep_kod || r.id) + '</td>' +
+            '<td>' + (r.talep_tipi_etiket || _TIP_ETIKET[r.talep_tipi] || r.talep_tipi || '—') + '</td>' +
+            '<td><span style="' + css + ';padding:2px 7px;border-radius:4px;font-size:10px;font-weight:600">' + (r.durum || '—') + '</span></td>' +
+            '<td style="text-align:right;font-size:12px">' + tutar + '</td>' +
+            '<td style="text-align:right;font-size:12px">' + vade + '</td>' +
+            '<td style="color:var(--ck-text-soft);font-size:11px">' + (r.talep_tarihi || '—').slice(0,10) + '</td>' +
+            '<td style="font-size:11px;color:var(--ck-text-soft)">' + (r.karar_veren || '—') + '</td>' +
+            '<td style="color:var(--ck-text-soft);font-size:11px">' + (r.karar_tarihi || '—') + '</td>' +
+            '<td style="font-size:11px;color:var(--ck-text-soft);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + notTitle + '">' + (r.son_karar_notu || '—') + '</td>' +
+            '</tr>';
+        });
+        if (tbody) tbody.innerHTML = rows;
+        // Pagination
+        var pager = document.getElementById('ckart-onaylar-pager');
+        var info = document.getElementById('ckart-onaylar-sayfa-info');
+        var onceki = document.getElementById('ckart-onaylar-onceki');
+        var sonraki = document.getElementById('ckart-onaylar-sonraki');
+        if (pager) pager.style.display = toplam > _ckartOnayLimit ? '' : 'none';
+        if (info) info.textContent = (_ckartOnayOffset + 1) + '–' + Math.min(_ckartOnayOffset + _ckartOnayLimit, toplam) + ' / ' + toplam;
+        if (onceki) onceki.disabled = _ckartOnayOffset === 0;
+        if (sonraki) sonraki.disabled = !d.has_more;
+
+        // URL'den talep_id gelirse otomatik aç
+        try {
+          var u = new URL(window.location.href);
+          var tid = parseInt(u.searchParams.get('talep_id') || '');
+          if (tid && typeof gopAc === 'function') { gopAc(tid, CARI_ID); }
+        } catch(_) {}
+      })
+      .catch(function(err) {
+        if (yuk) yuk.style.display = 'none';
+        if (hata) { hata.textContent = 'Onaylar yüklenemedi: ' + err.message; hata.style.display = ''; }
+      });
+  }
+
+  /* ── Onay satır tıklama: global GOP popup kullanıyor ── */
+  /* ── GOP popup karar verdikten sonra bu fonksiyon çağrılır ── */
+  window._ckartOnaylarGetir = _ckartOnaylarGetir;
+
+  /* ── Hafıza / Timeline sekmesi (tam liste) ── */
+  var _ckartHafizaTabYuklendi = false;
+  var _ckartHafizaTabTumVeri = [];
+  function ckartHafizaTabYukle() {
+    if (_ckartHafizaTabYuklendi) { _ckartHafizaTabFiltrele(); return; }
+    _ckartHafizaTabYuklendi = true;
+    var yuk = document.getElementById('ckart-hafiza-tab-yukleniyor');
+    var bos = document.getElementById('ckart-hafiza-tab-bos');
+    var liste = document.getElementById('ckart-hafiza-tab-liste');
+    var kat = document.getElementById('ckart-hafiza-tab-kat');
+    if (kat) kat.addEventListener('change', _ckartHafizaTabFiltrele);
+
+    ckartFetchJson('/nexgen/api/cari360/' + CARI_ID + '/hafiza?limit=200')
+      .then(function(d) {
+        if (yuk) yuk.style.display = 'none';
+        if (!d || !d.ok) {
+          if (bos) bos.style.display = '';
+          return;
+        }
+        var arr = d.liste || d.olaylar || d.events || d.data || [];
+        if (!arr.length) {
+          if (bos) bos.style.display = '';
+          return;
+        }
+        _ckartHafizaTabTumVeri = arr;
+        if (liste) liste.style.display = '';
+        _ckartHafizaTabFiltrele();
+      })
+      .catch(function(err) {
+        if (yuk) yuk.textContent = 'Timeline yüklenemedi: ' + err.message;
+      });
+  }
+
+  function _ckartHafizaTabFiltrele() {
+    var kat = document.getElementById('ckart-hafiza-tab-kat');
+    var ul = document.getElementById('ckart-hafiza-tab-ul');
+    var bos = document.getElementById('ckart-hafiza-tab-bos');
+    if (!ul) return;
+    var secili = kat ? kat.value : '';
+
+    /* kategori alanı yoksa entity_type veya olay_kodu'ndan türet */
+    var _katMap = {
+      nexgen_planlama_siparis: 'siparisler', nexgen_siparis: 'siparisler',
+      mo_tahsilat_kayit: 'tahsilatlar', mo_cek_kayit: 'tahsilatlar',
+      onay_talep: 'onaylar',
+      nexgen_numune_talep: 'numuneler', nexgen_numune_talep_gelisme: 'numuneler',
+      mo_musteri_sevkiyat: 'sevkiyatlar',
+      nexgen_uretim_plan: 'uretim', nexgen_uretim_batch: 'uretim', nexgen_uretim_parca: 'uretim',
+      musteri_operasyon_gorusme: 'gorusmeler',
+    };
+    function _kategoriAl(e) {
+      if (e.kategori) return e.kategori;
+      var et = e.entity_type || '';
+      if (_katMap[et]) return _katMap[et];
+      var ok = (e.olay_kodu || '').toUpperCase();
+      if (ok.indexOf('SIPARIS') !== -1) return 'siparisler';
+      if (ok.indexOf('TAHSILAT') !== -1 || ok.indexOf('CEK') !== -1) return 'tahsilatlar';
+      if (ok.indexOf('ONAY') !== -1) return 'onaylar';
+      if (ok.indexOf('NUMUNE') !== -1) return 'numuneler';
+      if (ok.indexOf('SEVKIYAT') !== -1) return 'sevkiyatlar';
+      if (ok.indexOf('URETIM') !== -1 || ok.indexOf('BATCH') !== -1) return 'uretim';
+      if (ok.indexOf('GORUSME') !== -1) return 'gorusmeler';
+      return 'diger';
+    }
+
+    var liste = secili
+      ? _ckartHafizaTabTumVeri.filter(function(e) { return _kategoriAl(e) === secili; })
+      : _ckartHafizaTabTumVeri;
+
+    if (!liste.length) {
+      ul.innerHTML = '';
+      if (bos) { bos.style.display = ''; bos.textContent = secili ? 'Bu kategoride kayıt yok.' : 'Kayıt yok.'; }
+      return;
+    }
+    if (bos) bos.style.display = 'none';
+
+    /* Badge: entity_type veya olay_kodu üzerinden renk ve etiket belirle */
+    var html = '';
+    liste.slice(0, 200).forEach(function(e) {
+      var src = e.entity_type || '';
+      var ok = e.olay_kodu || '';
+      /* Önce entity_type'a göre badge; yoksa olay_kodu */
+      var bdgClass = ckartHafizaBadgeClass(ok || src);
+      var etiket = ckartHafizaKaynakEtiket(src) !== (src || '—') ? ckartHafizaKaynakEtiket(src) : ckartHafizaKaynakEtiket(ok);
+      var tarih = (e.olay_tarihi || '').slice(0, 10);
+      var oz = e.aciklama || e.ozet || '';
+      html += '<li class="ckart-hafiza-satir">' +
+        '<span class="ckart-hafiza-kaynak ' + bdgClass + '">' + etiket + '</span>' +
+        '<span class="ckart-hafiza-bas">' + (e.baslik || ok || '') + '</span>' +
+        (oz ? '<span class="ckart-hafiza-oz" style="color:var(--ck-text-soft)"> · ' + oz.slice(0,120) + '</span>' : '') +
+        '<span class="ckart-hafiza-zaman" style="margin-left:auto;color:var(--ck-text-mute);font-size:11px;white-space:nowrap">' + tarih + '</span>' +
+        '</li>';
+    });
+    ul.innerHTML = html;
+  }
+
   function ckartOzetYukle() {
     ckartFetchJson('/nexgen/api/cari360/' + CARI_ID + '/ozet')
       .then(function(d) {
@@ -1063,8 +2494,17 @@
         setText('kpi-toplam-sevk-kg', k.toplam_sevk_kg != null ? k.toplam_sevk_kg : 0);
         setText('kpi-son-sevkiyat', dash(k.son_sevkiyat_tarihi));
         setText('kpi-son-gorusme', dash(k.son_gorusme_tarihi));
-        if (d.yetkili_sayisi != null) setBadge('ckart-yetkili-badge', d.yetkili_sayisi);
+        setText('kpi-son-gorusme-ust', dash(k.son_gorusme_tarihi));
+        setText('kpi-son-sevkiyat-ust', dash(k.son_sevkiyat_tarihi));
+        /* KPI değer rengi: #006a8e (RM teal) — CSS variable override'ını önlemek için inline */
+        ['kpi-toplam-siparis','kpi-aktif-siparis','kpi-toplam-sevkiyat',
+         'kpi-toplam-sevk-kg','kpi-son-sevkiyat','kpi-son-gorusme'].forEach(function(id){
+          var el = document.getElementById(id);
+          if (el) el.style.color = '#006a8e';
+        });
         if (d.gorusme_sayisi != null) setBadge('ckart-gorusme-badge', d.gorusme_sayisi);
+        _ckartKpiCache.toplam_siparis = k.toplam_siparis != null ? k.toplam_siparis : 0;
+        _ckartKpiCache.aktif_siparis = k.aktif_siparis != null ? k.aktif_siparis : 0;
       })
       .catch(function(e) {
         console.error('Cari360 özet', e);
@@ -1082,119 +2522,292 @@
     return k || '—';
   }
 
+  function ckartOdemeDagilimiHtml(o) {
+    if (!o) return '—';
+    var chips = [];
+    if (o.nakit_adet) chips.push('<span class="ckart-odeme-chip ckart-odeme-nakit">' + esc(String(o.nakit_adet)) + ' Nakit</span>');
+    if (o.vadeli_adet) chips.push('<span class="ckart-odeme-chip ckart-odeme-vadeli">' + esc(String(o.vadeli_adet)) + ' Vadeli</span>');
+    if (o.cek_adet) chips.push('<span class="ckart-odeme-chip ckart-odeme-cek">' + esc(String(o.cek_adet)) + ' Çek</span>');
+    if (o.legacy_odeme_yok_adet) {
+      chips.push('<span class="ckart-odeme-chip ckart-odeme-default">' + esc(String(o.legacy_odeme_yok_adet)) + ' Ödeme Tipi Yok</span>');
+    }
+    if (o.bilinmeyen_odeme_adet) {
+      chips.push('<span class="ckart-odeme-chip ckart-odeme-default">' + esc(String(o.bilinmeyen_odeme_adet)) + ' Belirsiz</span>');
+    }
+    return chips.length ? chips.join('') : '—';
+  }
+
+  function ckartOdemeDagilimiMetni(o) {
+    if (!o) return '—';
+    var parcalar = [];
+    if (o.nakit_adet) parcalar.push(String(o.nakit_adet) + ' Nakit');
+    if (o.vadeli_adet) parcalar.push(String(o.vadeli_adet) + ' Vadeli');
+    if (o.cek_adet) parcalar.push(String(o.cek_adet) + ' Çek');
+    if (o.legacy_odeme_yok_adet) parcalar.push(String(o.legacy_odeme_yok_adet) + ' Ödeme Tipi Yok');
+    if (o.bilinmeyen_odeme_adet) parcalar.push(String(o.bilinmeyen_odeme_adet) + ' Belirsiz');
+    return parcalar.length ? parcalar.join(' · ') : '—';
+  }
+
+  // Ticari Özet paneli kaldırıldı — C360-UX-REV2.
+  // Bu fonksiyon yalnız "Son Alış Fiyatı" kartını besler; panel render yok.
   function ckartTicariOzetRender(d) {
-    var box = document.getElementById('ckart-ticari-ozet');
-    if (!box) return;
-    if (!d || !d.ok || !d.ticari_gorunur) {
-      box.style.display = 'none';
-      return;
-    }
-    box.style.display = '';
-    var o = d.ticari_ozet || {};
-    var msg = document.getElementById('ckart-ticari-mesaj');
-    if (msg) {
-      if (o.mesaj) {
-        msg.style.display = '';
-        msg.textContent = o.mesaj;
-      } else {
-        msg.style.display = 'none';
-        msg.textContent = '';
-      }
-    }
-    var nakitVadeli = (o.nakit_adet || 0) + ' / ' + (o.vadeli_adet || 0);
-    if (o.belirtilmemis_odeme_adet) {
-      nakitVadeli += ' (belirsiz: ' + o.belirtilmemis_odeme_adet + ')';
-    }
-    var ortVade = (o.ortalama_vade_gun != null && o.ortalama_vade_gun !== '')
-      ? (o.ortalama_vade_gun + ' gün')
-      : '—';
-    if (o.min_vade_gun != null && o.max_vade_gun != null) {
-      ortVade += ' (' + o.min_vade_gun + '–' + o.max_vade_gun + ')';
-    }
-    var toplam = '—';
-    if (o.toplam_siparis_try != null && o.toplam_siparis_try !== '') {
-      toplam = o.toplam_siparis_try + ' TRY';
-      if (o.toplam_kaynak_notu) toplam += '*';
-    } else if (o.toplam_siparis_para_birimleri) {
-      var parts = [];
-      Object.keys(o.toplam_siparis_para_birimleri).forEach(function(pb) {
-        var v = o.toplam_siparis_para_birimleri[pb];
-        if (v != null && v !== '') parts.push(v + ' ' + pb);
-      });
-      if (parts.length) toplam = parts.join(' · ');
-    }
-    var pbKeys = Object.keys(o.para_birimi_dagilimi || {});
-    var pbTxt = pbKeys.length ? pbKeys.join(', ') : '—';
-    var sonSip = (o.son_siparis_no || '—');
-    if (o.son_siparis_tarihi) sonSip += ' · ' + o.son_siparis_tarihi;
-    var satir = document.getElementById('ckart-ticari-ozet-satir');
-    if (satir) {
-      satir.innerHTML =
-        '<div><span class="lbl">Son Sipariş</span><span class="val">' + esc(sonSip) + '</span></div>'
-        + '<div><span class="lbl">Nakit / Vadeli</span><span class="val">' + esc(nakitVadeli) + '</span></div>'
-        + '<div><span class="lbl">Ortalama Vade</span><span class="val">' + esc(ortVade) + '</span></div>'
-        + '<div><span class="lbl">Kayıtlı Sipariş Toplamı</span><span class="val">' + esc(toplam) + '</span></div>'
-        + '<div><span class="lbl">Para Birimleri</span><span class="val">' + esc(pbTxt) + '</span></div>';
-    }
+    if (!d || !d.ok) return;
+    // Son Alış Fiyatı kartı — üst kartta göster
     var urunler = d.urun_fiyatlari || [];
-    var uwrap = document.getElementById('ckart-ticari-urun-wrap');
-    var utb = document.getElementById('ckart-ticari-urun-tbody');
-    if (uwrap && utb) {
-      if (!urunler.length) {
-        uwrap.style.display = 'none';
-        utb.innerHTML = '';
+    if (urunler.length) {
+      var top = urunler[0];
+      var netRaw = (top.son_net_birim_fiyat != null && top.son_net_birim_fiyat !== '')
+        ? top.son_net_birim_fiyat : (top.son_birim_fiyat != null ? top.son_birim_fiyat : null);
+      var fiyatStr = formatDecimalTrim(netRaw);
+      var pb = top.para_birimi || '';
+      var formul = top.formul_adi || top.urun_adi || '—';
+      var renk = top.renk_adi || '';
+      // Son Vade — her zaman göster, değer yoksa "—"
+      var vg = top.son_vade_gun;
+      var vadeStr;
+      if (vg == null || vg === '') {
+        vadeStr = 'Son Vade: —';
       } else {
-        uwrap.style.display = '';
-        utb.innerHTML = urunler.map(function(u) {
-          var ad = u.urun_adi || '—';
-          if (u.renk_adi) ad += ' / ' + u.renk_adi;
-          var net = (u.son_net_birim_fiyat != null && u.son_net_birim_fiyat !== '')
-            ? u.son_net_birim_fiyat
-            : (u.son_birim_fiyat != null ? u.son_birim_fiyat : '—');
-          var isk = u.son_iskonto_orani;
-          if (isk === 'BELIRTILMEMIS' || isk == null || isk === '') isk = 'Belirtilmemiş';
-          else isk = isk + '%';
-          var vade = (u.son_vade_gun == null || u.son_vade_gun === '') ? '—' : String(u.son_vade_gun);
-          var sip = u.son_siparis_no || '—';
-          if (u.detay_url) {
-            sip = '<a class="ckart-link" href="' + esc(u.detay_url) + '">' + esc(u.son_siparis_no || '—') + '</a>';
-          } else {
-            sip = esc(sip);
-          }
-          return '<tr>'
-            + '<td class="ckart-wrap">' + esc(ad) + '</td>'
-            + '<td>' + esc(dash(net)) + '</td>'
-            + '<td>' + esc(dash(u.para_birimi)) + '</td>'
-            + '<td>' + esc(isk) + '</td>'
-            + '<td>' + esc(vade) + '</td>'
-            + '<td>' + sip + '</td>'
-            + '<td>' + esc(dash(u.son_siparis_tarihi)) + '</td>'
-            + '<td class="ckart-ticari-kaynak">' + esc(ckartTicariKaynakEtiket(u.fiyat_kaynagi)) + '</td>'
-            + '</tr>';
-        }).join('');
+        var vgNum = Number(vg);
+        vadeStr = vgNum === 0 ? 'Son Vade: Nakit' : 'Son Vade: ' + vgNum + ' Gün';
+      }
+      var sipTarihFmt = top.son_siparis_tarihi ? ckartFmtDate(top.son_siparis_tarihi) : '';
+      var sipStr = (top.son_siparis_no || '') + (sipTarihFmt ? ' · ' + sipTarihFmt : '');
+      var urunSatir = formul + (renk ? ' · ' + renk : '');
+      var kart = document.getElementById('ckart-son-alis-kart');
+      var elFiyat = document.getElementById('ckart-son-alis-fiyat');
+      var elUrun = document.getElementById('ckart-son-alis-urun');
+      var elVade = document.getElementById('ckart-son-alis-vade');
+      var elSip = document.getElementById('ckart-son-alis-sip');
+      if (kart && elFiyat && netRaw != null) {
+        elFiyat.innerHTML = esc(fiyatStr) + ' ' + esc(pb) + '<span class="ckart-son-alis-birim"> / kg</span>';
+        if (elUrun) elUrun.textContent = urunSatir;
+        if (elVade) elVade.textContent = vadeStr;
+        if (elSip && sipStr) elSip.textContent = sipStr;
+        kart.style.display = '';
       }
     }
   }
 
+  // Son Alış Fiyatı kartı için ticari-ozet API'si çağrılmaya devam eder.
+  // Panel render edilmez; yalnız urun_fiyatlari kullanılır.
   window.ckartTicariOzetYukle = function(force) {
     if (_opsLoaded.ticariOzet && !force) return;
     ckartFetchJson('/nexgen/api/cari360/' + CARI_ID + '/ticari-ozet')
       .then(function(d) {
         _opsLoaded.ticariOzet = true;
-        if (d && d.ok) {
-          ckartTicariOzetRender(d);
-        } else {
-          var box = document.getElementById('ckart-ticari-ozet');
-          if (box) box.style.display = 'none';
-        }
+        if (d && d.ok) ckartTicariOzetRender(d);
       })
       .catch(function(e) {
-        // 403/404 → blok hiç render edilmez (hassas veri sızmaz)
-        console.warn('Cari360 ticari özet', e && e.message ? e.message : e);
-        var box = document.getElementById('ckart-ticari-ozet');
-        if (box) box.style.display = 'none';
+        console.warn('Cari360 ticari özet (Son Alış Fiyatı)', e && e.message ? e.message : e);
         _opsLoaded.ticariOzet = true;
       });
+  };
+
+  function ckartSiparisDurumBadge(durum) {
+    var d = (durum == null || durum === '') ? '' : String(durum).trim().toUpperCase();
+    if (!d) return '—';
+    var cls = 'ckart-sip-durum-badge ';
+    if (d.indexOf('URETIM') !== -1) cls += 'ckart-sip-durum-uretimde';
+    else if (d === 'TASLAK' || d.indexOf('REVIZYON') !== -1) cls += 'ckart-sip-durum-taslak';
+    else if (d.indexOf('TAMAMLANDI') !== -1 || d.indexOf('KAPANDI') !== -1 || d.indexOf('SEVK') !== -1) cls += 'ckart-sip-durum-tamamlandi';
+    else if (d.indexOf('ONAY') !== -1) cls += 'ckart-sip-durum-onay';
+    else cls += 'ckart-sip-durum-default';
+    return '<span class="' + cls + '">' + esc(durum) + '</span>';
+  }
+
+  function ckartOdemeBadge(odeme) {
+    var raw = (odeme == null || odeme === '') ? '' : String(odeme).trim();
+    if (!raw) return '<span class="ckart-odeme-badge ckart-odeme-default">Belirtilmemiş</span>';
+    var d = raw.toUpperCase();
+    var cls = 'ckart-odeme-badge ';
+    if (d === 'NAKIT') cls += 'ckart-odeme-nakit';
+    else if (d === 'VADELI') cls += 'ckart-odeme-vadeli';
+    else if (d === 'CEK' || d === 'ÇEK') cls += 'ckart-odeme-cek';
+    else cls += 'ckart-odeme-default';
+    return '<span class="' + cls + '">' + esc(raw) + '</span>';
+  }
+
+  function ckartSipDisclosureIcon(open) {
+    return open ? '▾' : '›';
+  }
+
+  function ckartKalemCountLabel(count) {
+    return String(count) + ' Kalem';
+  }
+
+  function ckartKalemDurumBadge(k) {
+    var durumStr = (k.durum || '').toUpperCase();
+    var durumCls = 'ckart-kalem-durum ';
+    if (durumStr === 'AKTIF') durumCls += 'ckart-kalem-durum-aktif';
+    else if (durumStr.indexOf('TAMAMLANDI') !== -1 || durumStr.indexOf('KAPANDI') !== -1) durumCls += 'ckart-kalem-durum-tamamlandi';
+    else if (durumStr.indexOf('IPTAL') !== -1) durumCls += 'ckart-kalem-durum-iptal';
+    else durumCls += 'ckart-kalem-durum-default';
+    return k.durum ? '<span class="' + durumCls + '">' + esc(k.durum) + '</span>' : '—';
+  }
+
+  function ckartKdvDurumuLabel(raw) {
+    var v = (raw || '').toUpperCase();
+    if (v === 'RESMI') return 'RESMİ';
+    if (v === 'GAYRI_RESMI' || v === 'GAYRI') return 'GAYRİRESMİ';
+    return '—';
+  }
+
+  function ckartKalemSevkFooterLabel(kalemler, s) {
+    if (!kalemler || !kalemler.length) {
+      return (s.son_sevkiyat_tarihi && s.son_sevkiyat_tarihi !== '') ? s.son_sevkiyat_tarihi : '—';
+    }
+    var dates = [];
+    kalemler.forEach(function(k) {
+      if (k.sevk_tarihi) dates.push(k.sevk_tarihi);
+    });
+    if (!dates.length) return '—';
+    var uniq = dates.filter(function(d, i) { return dates.indexOf(d) === i; });
+    if (uniq.length === 1) return uniq[0];
+    return 'Karma';
+  }
+
+  function ckartKalemSevkHtml(k) {
+    /* Kalem bazlı sevkiyat hücresi.
+       - sevk_tarihi yoksa: "Sevk Edilmedi" (muted turuncu)
+       - sevk_tarihi varsa + sevkiyat_id varsa: tıklanabilir link
+       - sevkiyat_count > 1: "N Sevkiyat · Son: Tarih" tarzında
+    */
+    if (!k.sevk_tarihi || k.sevk_tarihi === '') {
+      return '<span class="ck-sevk-yok">Sevk Edilmedi</span>';
+    }
+    var tarihStr = ckartFmtDate(k.sevk_tarihi);
+    var count = k.sevkiyat_count || 1;
+    var label = count > 1
+      ? count + ' Sevkiyat · ' + tarihStr
+      : tarihStr;
+    if (k.sevkiyat_id && Number(k.sevkiyat_id) > 0) {
+      var url = '/nexgen/sevkiyat/' + Number(k.sevkiyat_id);
+      return '<a class="ck-sevk-link" href="' + url + '" target="_blank" title="' + esc(k.sevkiyat_no || '') + '">'
+        + esc(label) + ' <span class="ck-sevk-arrow" aria-hidden="true">↗</span></a>';
+    }
+    return '<span class="ck-sevk-tarih">' + esc(label) + '</span>';
+  }
+
+  function ckartPlanLinkHtml(k) {
+    if (!k.plan_kodu) return '—';
+    var pid = k.uretim_plan_id;
+    if (pid != null && pid !== '' && Number(pid) > 0) {
+      return '<a class="ckart-link ck-kalem-plan" href="/nexgen/uretim-emirleri?vurgu='
+        + esc(String(pid)) + '">' + esc(k.plan_kodu) + '</a>';
+    }
+    return '<span class="ck-kalem-plan">' + esc(k.plan_kodu) + '</span>';
+  }
+
+  function ckartKalemDetailFooterHtml(s, ticari, kalemler) {
+    var items = [];
+    if (ticari && s.toplam_tutar != null && s.toplam_tutar !== '') {
+      items.push('<span class="ckart-kalem-ftr-item"><span class="lbl">Toplam Tutar</span><strong>'
+        + esc(formatFiyatPb(s.toplam_tutar, s.para_birimi)) + '</strong></span>');
+    }
+    if (ticari && s.toplam_tutar_try != null && s.toplam_tutar_try !== '') {
+      items.push('<span class="ckart-kalem-ftr-item"><span class="lbl">TRY Karşılığı</span><strong>'
+        + esc(formatDecimalTrim(s.toplam_tutar_try)) + ' TRY</strong></span>');
+    }
+    items.push('<span class="ckart-kalem-ftr-item"><span class="lbl">Sevk</span><strong>'
+      + esc(ckartKalemSevkFooterLabel(kalemler, s)) + '</strong></span>');
+    items.push('<span class="ckart-kalem-ftr-item"><span class="lbl">Fatura</span><strong>'
+      + esc(ckartKdvDurumuLabel(s.kdv_durumu)) + '</strong></span>');
+    return items.join('');
+  }
+
+  function ckartKalemDetailTableHtml(kalemler, s, ticari) {
+    if (!kalemler || !kalemler.length) return '';
+    var count = kalemler.length;
+    var faturaLbl = ckartKdvDurumuLabel(s.kdv_durumu);
+    var rows = kalemler.map(function(k, ki) {
+      var siraNo = k.sira_no != null ? k.sira_no : ki + 1;
+      var formul = k.formul_ad || '—';
+      var renk = k.renk_ad || '—';
+      var miktarKg = k.miktar_kg != null ? formatDecimalTrim(k.miktar_kg) + ' kg' : '—';
+      var bfCell = '—';
+      if (ticari && k.birim_fiyat != null) {
+        var bfRaw = k.net_birim_fiyat != null ? k.net_birim_fiyat : k.birim_fiyat;
+        bfCell = '<span class="ck-kalem-fiyat">' + esc(formatFiyatPb(bfRaw, s.para_birimi)) + '</span>';
+      }
+      var satirTutar = '—';
+      if (ticari && k.satir_tutari != null) {
+        satirTutar = esc(formatFiyatPb(k.satir_tutari, s.para_birimi));
+      }
+      var sevkCell = ckartKalemSevkHtml(k);
+      return '<tr>'
+        + '<td class="ck-kalem-sira">' + esc(String(siraNo)) + '</td>'
+        + '<td class="ck-kalem-formul-cell"><span class="ck-kalem-formul">' + esc(formul) + '</span></td>'
+        + '<td><span class="ck-kalem-renk">' + esc(renk) + '</span></td>'
+        + '<td class="ck-kalem-miktar">' + esc(miktarKg) + '</td>'
+        + '<td>' + bfCell + '</td>'
+        + '<td>' + esc(k.termin_tarihi || '—') + '</td>'
+        + '<td>' + sevkCell + '</td>'
+        + '<td>' + esc(faturaLbl) + '</td>'
+        + '<td>' + ckartPlanLinkHtml(k) + '</td>'
+        + '<td>' + ckartKalemDurumBadge(k) + '</td>'
+        + '<td>' + satirTutar + '</td>'
+        + '</tr>';
+    }).join('');
+
+    var ftrHtml = ckartKalemDetailFooterHtml(s, ticari, kalemler);
+
+    return '<div class="ckart-kalem-detail-wrap">'
+      + '<div class="ckart-kalem-detail-hdr">▾ ' + esc(String(count)) + ' KALEM DETAYI</div>'
+      + '<table class="ckart-kalem-detail-tablo"><thead><tr>'
+      + '<th>#</th><th>Formül</th><th>Renk</th>'
+      + '<th>Miktar</th><th>Birim Fiyat</th><th>Termin</th><th>Sevk Tarihi</th><th>Fatura</th>'
+      + '<th>Üretim Planı</th><th>Durum</th><th>Satır Tutarı</th>'
+      + '</tr></thead><tbody>' + rows + '</tbody></table>'
+      + (ftrHtml ? '<div class="ckart-kalem-detail-ftr">' + ftrHtml + '</div>' : '')
+      + '</div>';
+  }
+
+  /* Sipariş pagination state */
+  var _sipPage = 1;
+  var _sipPageSize = 50;
+
+  function ckartSipPaginationRender(page, totalPages, totalCount, pageSize) {
+    var pgWrap = document.getElementById('ckart-sip-pagination');
+    var pgInfo = document.getElementById('ckart-sip-pg-info');
+    var pgBtns = document.getElementById('ckart-sip-pg-btns');
+    if (!pgWrap) return;
+    if (totalPages <= 1) { pgWrap.style.display = 'none'; return; }
+    pgWrap.style.display = 'flex';
+    var from = (page - 1) * pageSize + 1;
+    var to = Math.min(page * pageSize, totalCount);
+    pgInfo.textContent = 'Toplam ' + totalCount + ' kayıt · ' + from + '–' + to + ' gösteriliyor';
+    var btns = [];
+    /* Önceki */
+    btns.push('<button type="button" onclick="ckartSipGitPage(' + (page - 1) + ')" '
+      + (page <= 1 ? 'disabled ' : '') + 'style="' + _sipBtnStyle(false) + '">‹</button>');
+    /* Sayfa numaraları */
+    for (var i = 1; i <= totalPages; i++) {
+      var active = (i === page);
+      btns.push('<button type="button" onclick="ckartSipGitPage(' + i + ')" style="'
+        + _sipBtnStyle(active) + '">' + i + '</button>');
+    }
+    /* Sonraki */
+    btns.push('<button type="button" onclick="ckartSipGitPage(' + (page + 1) + ')" '
+      + (page >= totalPages ? 'disabled ' : '') + 'style="' + _sipBtnStyle(false) + '">›</button>');
+    pgBtns.innerHTML = btns.join('');
+  }
+
+  function _sipBtnStyle(active) {
+    var base = 'font-size:11.5px;padding:3px 9px;border-radius:5px;border:1px solid #e2e8f0;cursor:pointer;transition:background .1s;';
+    return active
+      ? base + 'background:#006a8e;color:#fff;border-color:#006a8e;font-weight:700;'
+      : base + 'background:#fff;color:#475569;';
+  }
+
+  window.ckartSipGitPage = function(page) {
+    if (page < 1) return;
+    _sipPage = page;
+    _opsLoaded.siparisler = false;
+    window.ckartSiparisYukle(true);
+    /* Tablo başına scroll */
+    var tbl = document.getElementById('ckart-siparis-tablo');
+    if (tbl) tbl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
 
   window.ckartSiparisYukle = function(force) {
@@ -1203,12 +2816,20 @@
     if (_opsLoaded.siparisler && !force) return;
     ckartTicariOzetYukle(force);
     tb.innerHTML = '<tr><td colspan="17" class="ckart-muted">Yükleniyor…</td></tr>';
-    ckartFetchJson('/nexgen/api/cari360/' + CARI_ID + '/siparisler')
+    var url = '/nexgen/api/cari360/' + CARI_ID + '/siparisler?page=' + _sipPage + '&page_size=' + _sipPageSize;
+    ckartFetchJson(url)
       .then(function(d) {
         if (!d || !d.ok) throw new Error((d && d.mesaj) || 'Yüklenemedi');
         var liste = d.liste || [];
         var ticari = !!d.ticari_gorunur;
         _opsLoaded.siparisler = true;
+        /* Pagination render */
+        ckartSipPaginationRender(
+          d.page || _sipPage,
+          d.total_pages || 1,
+          d.total_count || liste.length,
+          d.page_size || _sipPageSize
+        );
         var head = document.getElementById('ckart-siparis-thead-row');
         if (head) {
           if (ticari) {
@@ -1250,34 +2871,60 @@
           }
           var ticariCells = '';
           if (ticari) {
-            var odeme = s.odeme_tipi || 'Belirtilmemiş';
             var vade = (s.vade_gun == null || s.vade_gun === '') ? '—' : String(s.vade_gun);
-            var tutar = (s.toplam_tutar != null && s.toplam_tutar !== '') ? s.toplam_tutar : '—';
-            var tryT = (s.toplam_tutar_try != null && s.toplam_tutar_try !== '') ? s.toplam_tutar_try : '—';
+            var tutar = (s.toplam_tutar != null && s.toplam_tutar !== '')
+              ? formatDecimalTrim(s.toplam_tutar) : '—';
+            var tryT = (s.toplam_tutar_try != null && s.toplam_tutar_try !== '')
+              ? ckartFmtBinlik(s.toplam_tutar_try) : '—';
+            var anaFiyat = ckartAnaFiyat(s);
             ticariCells =
-              '<td>' + esc(odeme) + '</td>'
+              '<td>' + ckartOdemeBadge(s.odeme_tipi) + '</td>'
               + '<td>' + esc(vade) + '</td>'
               + '<td>' + esc(dash(s.para_birimi)) + '</td>'
               + '<td>' + esc(tutar) + '</td>'
               + '<td>' + esc(tryT) + '</td>'
-              + '<td>' + esc(ckartTicariKaynakEtiket(s.fiyat_durumu)) + '</td>';
+              + '<td>' + anaFiyat + '</td>';
           }
-          return '<tr>'
-            + '<td><strong>' + esc(s.siparis_no || '—') + '</strong> '
-            + ckartZincirChipHtml(s, { max: 2 }) + '</td>'
-            + '<td>' + esc(dash(s.siparis_tarihi)) + '</td>'
-            + '<td>' + esc(dash(s.durum)) + '</td>'
+          var kalemler = s.kalemler || [];
+          var sipRowId = 'ckart-sip-' + esc(s.id || s.siparis_no || Math.random().toString(36).slice(2));
+          var hasKalem = kalemler.length > 0;
+          var kalemCount = s.kalem_sayisi != null ? s.kalem_sayisi : kalemler.length;
+          var disclosureBtn = hasKalem
+            ? '<button type="button" class="ckart-sip-disclosure" data-target="' + sipRowId + '" '
+              + 'aria-expanded="false" title="Kalem detayı" aria-label="Kalem detayı">'
+              + ckartSipDisclosureIcon(false) + '</button>'
+            : '<span class="ckart-sip-disclosure-spacer"></span>';
+          var kalemCell = hasKalem
+            ? '<span class="ckart-kalem-count">' + esc(ckartKalemCountLabel(kalemCount)) + '</span>'
+            : esc(String(kalemCount));
+          var sipNoCell = '<span class="ckart-sip-no-wrap">' + disclosureBtn
+            + '<strong class="ckart-sip-no">' + esc(s.siparis_no || '—') + '</strong>'
+            + ckartZincirChipHtml(s, { max: 2 }) + '</span>';
+          var headerRow = '<tr class="ckart-siparis-data-row" data-sip-row="' + sipRowId + '">'
+            + '<td>' + sipNoCell + '</td>'
+            + '<td>' + esc(ckartFmtDate(s.siparis_tarihi)) + '</td>'
+            + '<td>' + ckartSiparisDurumBadge(s.durum) + '</td>'
             + ticariCells
-            + '<td>' + esc(dash(s.termin)) + '</td>'
+            + '<td>' + esc(ckartFmtDate(s.termin)) + '</td>'
             + '<td>' + esc(s.plan_sayisi != null ? s.plan_sayisi : 0) + '</td>'
             + '<td>' + esc(s.batch_sayisi != null ? s.batch_sayisi : 0) + '</td>'
             + '<td>' + esc(dash(s.uretilen_kg)) + '</td>'
-            + '<td>' + esc(s.kalem_sayisi != null ? s.kalem_sayisi : 0) + '</td>'
+            + '<td>' + kalemCell + '</td>'
             + '<td class="ckart-wrap">' + numHtml + '</td>'
-            + '<td>' + esc(dash(s.son_sevkiyat_tarihi)) + '</td>'
+            + '<td>' + esc(ckartFmtDate(s.son_sevkiyat_tarihi)) + '</td>'
             + '<td>' + esc(dash(s.sevk_edilen_kg)) + '</td>'
             + '<td style="text-align:right;white-space:nowrap">' + link + '</td>'
             + '</tr>';
+
+          var kalemRow = '';
+          if (hasKalem) {
+            var colSpan = ticari ? 18 : 12;
+            kalemRow = '<tr id="' + sipRowId + '" class="ckart-siparis-kalem-row" style="display:none">'
+              + '<td colspan="' + colSpan + '" class="ckart-siparis-kalem-td">'
+              + ckartKalemDetailTableHtml(kalemler, s, ticari)
+              + '</td></tr>';
+          }
+          return headerRow + kalemRow;
         }).join('');
       })
       .catch(function(e) {
@@ -1285,6 +2932,24 @@
         tb.innerHTML = '<tr><td colspan="18" class="ckart-muted">Sipariş geçmişi yüklenemedi. Lütfen yeniden deneyin.</td></tr>';
       });
   };
+
+  /* Sipariş kalem disclosure — event delegation */
+  document.getElementById('ckart-siparis-tablo').addEventListener('click', function(e) {
+    var btn = e.target.closest('.ckart-sip-disclosure');
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    var targetId = btn.getAttribute('data-target');
+    if (!targetId) return;
+    var row = document.getElementById(targetId);
+    if (!row) return;
+    var dataRow = document.querySelector('tr[data-sip-row="' + targetId + '"]');
+    var open = row.style.display !== 'none';
+    row.style.display = open ? 'none' : '';
+    btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+    btn.textContent = ckartSipDisclosureIcon(!open);
+    if (dataRow) dataRow.classList.toggle('acik', !open);
+  });
 
   window.ckartUretimYukle = function(force) {
     var tb = document.getElementById('ckart-uretim-tbody');
@@ -1506,13 +3171,17 @@
     });
     var panels = {
       genel: 'ckart-panel-genel',
-      yetkililer: 'ckart-panel-yetkililer',
       siparisler: 'ckart-panel-siparisler',
       uretim: 'ckart-panel-uretim',
       sevkiyatlar: 'ckart-panel-sevkiyatlar',
       urunler: 'ckart-panel-urunler',
       numuneler: 'ckart-panel-numuneler',
-      gorusmeler: 'ckart-panel-gorusmeler'
+      gorusmeler: 'ckart-panel-gorusmeler',
+      finans: 'ckart-panel-finans',
+      onaylar: 'ckart-panel-onaylar',
+      hafiza: 'ckart-panel-hafiza',
+      dosyalar: 'ckart-panel-dosyalar',
+      notlar: 'ckart-panel-notlar'
     };
     Object.keys(panels).forEach(function(k) {
       var el = document.getElementById(panels[k]);
@@ -1523,13 +3192,15 @@
       u.searchParams.set('tab', tab);
       history.replaceState(null, '', u.toString());
     } catch (e) {}
-    if (tab === 'yetkililer') ckartYetkiliYukle();
     if (tab === 'gorusmeler') ckartGorusmeYukle();
-    if (tab === 'siparisler') ckartSiparisYukle();
+    if (tab === 'siparisler') { _sipPage = 1; ckartSiparisYukle(); }
     if (tab === 'uretim') ckartUretimYukle();
     if (tab === 'sevkiyatlar') ckartSevkYukle();
     if (tab === 'urunler') ckartUrunYukle();
     if (tab === 'numuneler') ckartNumuneYukle();
+    if (tab === 'finans') ckartFinansYukle();
+    if (tab === 'onaylar') ckartOnaylarYukle();
+    if (tab === 'hafiza') ckartHafizaTabYukle();
   };
 
   ckartOzetYukle();
@@ -1558,196 +3229,6 @@
     if (initTab === 'urunler') ckartUrunYukle();
     if (initTab === 'numuneler') ckartNumuneYukle();
   } catch (e) {}
-
-  window.ckartYetkiliYukle = function() {
-    var tb = document.getElementById('ckart-yetkili-tbody');
-    if (!tb) return;
-    tb.innerHTML = '<tr><td colspan="10" class="ckart-muted">Yükleniyor…</td></tr>';
-    ckartFetchJson('/nexgen/api/yonetim/cari-yetkili?cari_id=' + encodeURIComponent(CARI_ID))
-      .then(function(d){
-        if (!d || !d.ok) {
-          tb.innerHTML = '<tr><td colspan="10" class="ckart-muted">' + esc((d && (d.hata || d.mesaj)) || 'Yüklenemedi') + '</td></tr>';
-          return;
-        }
-        if (typeof d.can_write === 'boolean') CAN_WRITE = d.can_write;
-        _cache = d.yetkililer || [];
-        var aktifN = _cache.filter(function(y){ return y.aktif == 1; }).length;
-        setBadge('ckart-yetkili-badge', aktifN);
-        if (!_cache.length) {
-          tb.innerHTML = '<tr><td colspan="10" class="ckart-muted">Henüz müşteri yetkilisi yok.</td></tr>';
-          return;
-        }
-        tb.innerHTML = _cache.map(function(y){
-          var ana = (y.ana_yetkili == 1 && y.aktif == 1) ? '<span class="ckart-pill-ana">ANA</span>' : '—';
-          var durum = y.aktif == 1 ? 'Aktif' : '<span class="ckart-pill-pasif">Pasif</span>';
-          var btns = '';
-          if (CAN_WRITE) {
-            btns += '<button type="button" class="ckart-btn-mini" onclick="ckartYetkiliDuzenle('+y.id+')">Düzenle</button>';
-            if (y.aktif == 1) {
-              btns += '<button type="button" class="ckart-btn-mini" onclick="ckartYetkiliAna('+y.id+')">Ana Yap</button>';
-              btns += '<button type="button" class="ckart-btn-mini" onclick="ckartYetkiliAktif('+y.id+',0)">Pasifleştir</button>';
-            } else {
-              btns += '<button type="button" class="ckart-btn-mini" onclick="ckartYetkiliAktif('+y.id+',1)">Aktifleştir</button>';
-            }
-          }
-          return '<tr>'
-            + '<td><strong>'+esc(y.ad_soyad)+'</strong></td>'
-            + '<td>'+esc(y.unvan||'—')+'</td>'
-            + '<td>'+esc(y.departman||'—')+'</td>'
-            + '<td>'+esc(y.telefon||'—')+'</td>'
-            + '<td>'+esc(y.cep_telefonu||'—')+'</td>'
-            + '<td>'+esc(y.eposta||'—')+'</td>'
-            + '<td>'+ana+'</td>'
-            + '<td>'+durum+'</td>'
-            + '<td>'+esc(y.notlar||'—')+'</td>'
-            + '<td style="text-align:right;white-space:nowrap">'+btns+'</td>'
-            + '</tr>';
-        }).join('');
-      })
-      .catch(function(e){
-        console.error('Cari360 yetkililer', e);
-        tb.innerHTML = '<tr><td colspan="10" class="ckart-muted">Yetkililer yüklenemedi. Lütfen yeniden deneyin.</td></tr>';
-      });
-  };
-
-  function formTemizle() {
-    document.getElementById('ckart-y-id').value = '';
-    document.getElementById('ckart-y-ad').value = '';
-    document.getElementById('ckart-y-unvan').value = '';
-    document.getElementById('ckart-y-dep').value = '';
-    document.getElementById('ckart-y-tel').value = '';
-    document.getElementById('ckart-y-cep').value = '';
-    document.getElementById('ckart-y-eposta').value = '';
-    document.getElementById('ckart-y-ana').checked = false;
-    document.getElementById('ckart-y-ana').disabled = false;
-    document.getElementById('ckart-y-notlar').value = '';
-    var h = document.getElementById('ckart-modal-hata');
-    h.style.display = 'none'; h.textContent = '';
-  }
-
-  window.ckartModalKapat = function() {
-    var ov = document.getElementById('ckart-modal-overlay');
-    ov.classList.remove('acik');
-    ov.setAttribute('aria-hidden', 'true');
-  };
-
-  function modalAc(baslik) {
-    document.getElementById('ckart-modal-baslik').textContent = baslik;
-    var ov = document.getElementById('ckart-modal-overlay');
-    ov.classList.add('acik');
-    ov.setAttribute('aria-hidden', 'false');
-  }
-
-  window.ckartYetkiliYeni = function() {
-    if (!CAN_WRITE) return;
-    formTemizle();
-    modalAc('Yeni Yetkili');
-    setTimeout(function(){ document.getElementById('ckart-y-ad').focus(); }, 50);
-  };
-
-  window.ckartYetkiliDuzenle = function(id) {
-    var y = _cache.find(function(x){ return x.id == id; });
-    if (!y) return;
-    formTemizle();
-    document.getElementById('ckart-y-id').value = y.id;
-    document.getElementById('ckart-y-ad').value = y.ad_soyad || '';
-    document.getElementById('ckart-y-unvan').value = y.unvan || '';
-    document.getElementById('ckart-y-dep').value = y.departman || '';
-    document.getElementById('ckart-y-tel').value = y.telefon || '';
-    document.getElementById('ckart-y-cep').value = y.cep_telefonu || '';
-    document.getElementById('ckart-y-eposta').value = y.eposta || '';
-    document.getElementById('ckart-y-ana').checked = false;
-    document.getElementById('ckart-y-ana').disabled = true; /* ana ayrı aksiyon */
-    document.getElementById('ckart-y-notlar').value = y.notlar || '';
-    modalAc('Yetkili Düzenle');
-  };
-
-  window.ckartYetkiliKaydet = function() {
-    var editId = document.getElementById('ckart-y-id').value;
-    var ad = document.getElementById('ckart-y-ad').value.trim();
-    var h = document.getElementById('ckart-modal-hata');
-    if (!ad) { h.textContent = 'Ad Soyad zorunludur.'; h.style.display = 'block'; return; }
-    var payload = {
-      cari_id: CARI_ID,
-      ad_soyad: ad,
-      unvan: document.getElementById('ckart-y-unvan').value.trim(),
-      departman: document.getElementById('ckart-y-dep').value.trim(),
-      telefon: document.getElementById('ckart-y-tel').value.trim(),
-      cep_telefonu: document.getElementById('ckart-y-cep').value.trim(),
-      eposta: document.getElementById('ckart-y-eposta').value.trim(),
-      notlar: document.getElementById('ckart-y-notlar').value.trim()
-    };
-    var url = '/nexgen/api/yonetim/cari-yetkili-ekle';
-    if (editId) {
-      url = '/nexgen/api/yonetim/cari-yetkili-guncelle';
-      payload.id = parseInt(editId, 10);
-    } else {
-      payload.ana_yetkili = document.getElementById('ckart-y-ana').checked ? 1 : 0;
-    }
-    fetch(url, {
-      method:'POST', credentials:'same-origin',
-      headers:{'Content-Type':'application/json', 'Accept':'application/json'},
-      body: JSON.stringify(payload)
-    })
-      .then(function(r){
-        var ct = (r.headers.get('content-type') || '').toLowerCase();
-        if (ct.indexOf('application/json') === -1) {
-          return r.text().then(function(t){
-            console.error('Yetkili kaydet non-JSON', r.status, t.slice(0,200));
-            throw new Error('Yanıt JSON değil');
-          });
-        }
-        return r.json().then(function(d){ return {status:r.status, d:d}; });
-      })
-      .then(function(x){
-        if (x.d && x.d.ok) { ckartModalKapat(); ckartYetkiliYukle(); return; }
-        h.textContent = (x.d && x.d.hata) || ('Hata ('+x.status+')');
-        h.style.display = 'block';
-      })
-      .catch(function(e){ console.error(e); h.textContent = 'Kayıt yapılamadı. Lütfen yeniden deneyin.'; h.style.display = 'block'; });
-  };
-
-  window.ckartYetkiliAna = function(id) {
-    fetch('/nexgen/api/yonetim/cari-yetkili-ana', {
-      method:'POST', credentials:'same-origin',
-      headers:{'Content-Type':'application/json', 'Accept':'application/json'},
-      body: JSON.stringify({id: id, cari_id: CARI_ID})
-    })
-    .then(function(r){
-      var ct = (r.headers.get('content-type') || '').toLowerCase();
-      if (ct.indexOf('application/json') === -1) throw new Error('non-json');
-      return r.json();
-    })
-    .then(function(d){
-      if (d.ok) ckartYetkiliYukle();
-      else alert(d.hata || 'Hata');
-    })
-    .catch(function(e){ console.error(e); alert('İşlem yapılamadı'); });
-  };
-
-  window.ckartYetkiliAktif = function(id, aktif) {
-    var msg = aktif ? 'Bu yetkiliyi aktifleştir?' : 'Bu yetkiliyi pasifleştir?';
-    if (!confirm(msg)) return;
-    fetch('/nexgen/api/yonetim/cari-yetkili-aktif', {
-      method:'POST', credentials:'same-origin',
-      headers:{'Content-Type':'application/json', 'Accept':'application/json'},
-      body: JSON.stringify({id: id, aktif: aktif, cari_id: CARI_ID})
-    })
-    .then(function(r){
-      var ct = (r.headers.get('content-type') || '').toLowerCase();
-      if (ct.indexOf('application/json') === -1) throw new Error('non-json');
-      return r.json();
-    })
-    .then(function(d){
-      if (d.ok) ckartYetkiliYukle();
-      else alert(d.hata || 'Hata');
-    })
-    .catch(function(e){ console.error(e); alert('İşlem yapılamadı'); });
-  };
-
-  document.getElementById('ckart-modal-overlay').addEventListener('click', function(e){
-    if (e.target === this) ckartModalKapat();
-  });
 
   function loadGorusmeYetkililer(selectedId) {
     var sel = document.getElementById('ckart-g-yetkili');
@@ -2065,9 +3546,6 @@
     if (e.target === this) ckartGorusmeModalKapat();
   });
 
-  if (document.getElementById('ckart-panel-yetkililer').style.display !== 'none') {
-    ckartYetkiliYukle();
-  }
   if (document.getElementById('ckart-panel-gorusmeler').style.display !== 'none') {
     ckartGorusmeYukle();
   }

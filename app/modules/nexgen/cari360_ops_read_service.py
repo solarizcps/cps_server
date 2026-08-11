@@ -203,6 +203,38 @@ def load_cari360_ozet(
             (cid,),
         ).fetchone()[0])
 
+    # Tahsilat özeti — mo_tahsilat_kayit üzerinden (yetki gerektirmez; sadece özet)
+    tahsilat_ozet: dict[str, Any] = {
+        'son_tahsilat_tarihi': None,
+        'son_tahsilat_tutari': None,
+        'toplam_alinan': None,
+        'bekleyen_adet': 0,
+    }
+    if _tablo_var(con, 'mo_tahsilat_kayit'):
+        son = con.execute(
+            """SELECT alinan_tarih, alinan_tutar FROM mo_tahsilat_kayit
+               WHERE cari_id=? AND COALESCE(aktif,1)=1 AND durum='ONAYLANDI'
+               ORDER BY alinan_tarih DESC, id DESC LIMIT 1""",
+            (cid,),
+        ).fetchone()
+        if son and son['alinan_tarih']:
+            tahsilat_ozet['son_tahsilat_tarihi'] = _fmt_dt(son['alinan_tarih'])
+            tahsilat_ozet['son_tahsilat_tutari'] = _fmt_num(son['alinan_tutar'])
+        top = con.execute(
+            """SELECT COALESCE(SUM(alinan_tutar), 0) FROM mo_tahsilat_kayit
+               WHERE cari_id=? AND COALESCE(aktif,1)=1 AND durum='ONAYLANDI'""",
+            (cid,),
+        ).fetchone()
+        if top:
+            tahsilat_ozet['toplam_alinan'] = _fmt_num(top[0])
+        bek = con.execute(
+            """SELECT COUNT(*) FROM mo_tahsilat_kayit
+               WHERE cari_id=? AND COALESCE(aktif,1)=1
+               AND durum NOT IN ('ONAYLANDI','IPTAL','REDDEDILDI')""",
+            (cid,),
+        ).fetchone()
+        tahsilat_ozet['bekleyen_adet'] = int(bek[0] or 0)
+
     return {
         'cari': cari,
         'kpi': {
@@ -216,6 +248,7 @@ def load_cari360_ozet(
         'yetkili_sayisi': yetkili_sayisi,
         'gorusme_sayisi': gorusme_sayisi,
         'acik_takip': acik_takip,
+        'tahsilat_ozet': tahsilat_ozet,
     }
 
 
@@ -226,14 +259,22 @@ def load_cari360_siparisler(
     yk: set[str] | None,
     *,
     limit: int = 50,
+    offset: int = 0,
 ) -> dict[str, Any]:
-    """Son N sipariş — read-only."""
+    """Son N sipariş — read-only. Pagination: limit/offset."""
     _assert_cari(con, cari_id, kullanici_id, yk)
     cid = int(cari_id)
     limit = max(1, min(int(limit or 50), 100))
+    offset = max(0, int(offset or 0))
 
     if not _tablo_var(con, 'nexgen_planlama_siparis'):
-        return {'liste': [], 'count': 0}
+        return {'liste': [], 'count': 0, 'total_count': 0, 'page': 1, 'page_size': limit, 'total_pages': 0}
+
+    # Gerçek toplam — DB'den ayrı COUNT sorgusu
+    total_count = con.execute(
+        'SELECT COUNT(*) FROM nexgen_planlama_siparis WHERE cari_id=?',
+        (cid,),
+    ).fetchone()[0]
 
     # FAZ-3C: Cari360 GET read-only — soft-write/backfill çağrılmaz
     # (backfill_kalem_uretim_planlari omurga_link içinde kalır; yazma ekranları kullanabilir)
@@ -255,9 +296,9 @@ def load_cari360_siparisler(
         FROM nexgen_planlama_siparis
         WHERE cari_id=?
         ORDER BY COALESCE(olusturma_tarihi, '') DESC, id DESC
-        LIMIT ?
+        LIMIT ? OFFSET ?
         """,
-        (cid, limit),
+        (cid, limit, offset),
     ).fetchall()
 
     gorusme_ids = {
@@ -268,52 +309,81 @@ def load_cari360_siparisler(
     gorusme_by_id = load_gorusme_cari_map(con, gorusme_ids)
     sorumlu_meta = resolve_tek_sorumlu(con, cid)
 
+    # ─── Batch ön-yükleme (N+1 önlemi) ───────────────────────────────────────
+    siparis_ids = [int(r['id']) for r in rows]
+    kcols_set = _kolonlar(con, 'nexgen_planlama_siparis_kalem') if has_kalem else set()
+    has_nt_col = 'numune_talep_id' in kcols_set
+    has_rf_col = 'rf_renk_id' in kcols_set
+
+    # Ticari yetkiyi şimdi hesapla (batch'ten önce bilinmeli)
+    from modules.nexgen.cari360_ticari_ozet_service import enrich_siparis_listesi_ticari
+    ticari_ok = can_view_cari_ticari(con, kullanici_id, cid, yk)
+
+    # Kalem batch — tek query
+    kalem_map: dict[int, list[dict[str, Any]]] = {}
+    if has_kalem and siparis_ids:
+        kalem_map = _load_siparis_kalemleri_batch(con, siparis_ids, ticari_ok)
+
+    # Aggregate counts — tek query (COUNT + RF + numune)
+    agg_count: dict[int, int] = {}
+    agg_rf: dict[int, int] = {}
+    if has_kalem and siparis_ids:
+        ph = ','.join('?' * len(siparis_ids))
+        for agg_row in con.execute(
+            f'SELECT planlama_siparis_id AS sid, COUNT(*) AS cnt'
+            f' FROM nexgen_planlama_siparis_kalem'
+            f' WHERE planlama_siparis_id IN ({ph})'
+            f' GROUP BY planlama_siparis_id',
+            siparis_ids,
+        ).fetchall():
+            agg_count[int(agg_row['sid'])] = int(agg_row['cnt'])
+        if has_rf_col:
+            for agg_row in con.execute(
+                f'SELECT planlama_siparis_id AS sid, COUNT(*) AS cnt'
+                f' FROM nexgen_planlama_siparis_kalem'
+                f' WHERE planlama_siparis_id IN ({ph})'
+                f'   AND rf_renk_id IS NOT NULL AND rf_renk_id!=0'
+                f' GROUP BY planlama_siparis_id',
+                siparis_ids,
+            ).fetchall():
+                agg_rf[int(agg_row['sid'])] = int(agg_row['cnt'])
+
+    # Numune batch — tek query
+    numune_map: dict[int, list[dict[str, Any]]] = {sid: [] for sid in siparis_ids}
+    if has_kalem and has_nt_col and _tablo_var(con, 'nexgen_numune_talep') and siparis_ids:
+        ph = ','.join('?' * len(siparis_ids))
+        for nr in con.execute(
+            f"""
+            SELECT DISTINCT k.planlama_siparis_id AS sid, k.numune_talep_id AS nid, n.talep_kodu
+            FROM nexgen_planlama_siparis_kalem k
+            JOIN nexgen_numune_talep n ON n.id = k.numune_talep_id
+            WHERE k.planlama_siparis_id IN ({ph})
+              AND k.numune_talep_id IS NOT NULL
+            ORDER BY k.planlama_siparis_id, n.talep_kodu
+            """,
+            siparis_ids,
+        ).fetchall():
+            nid = int(nr['nid'])
+            sid_n = int(nr['sid'])
+            numune_map.setdefault(sid_n, []).append({
+                'id': nid,
+                'talep_kodu': nr['talep_kodu'] or f'#{nid}',
+                'detay_url': f'/nexgen/numune-talep?id={nid}',
+            })
+    # ─── /Batch ───────────────────────────────────────────────────────────────
+
     liste: list[dict[str, Any]] = []
     for r in rows:
         sid = int(r['id'])
         termin = r['termin_tarihi'] or r['musteri_termin'] or r['onerilen_termin']
 
-        kalem_sayisi = 0
-        rf_kalem_sayisi = 0
-        bagli_numune_sayisi = 0
-        bagli_numuneler: list[dict[str, Any]] = []
-        if has_kalem:
-            kalem_sayisi = int(con.execute(
-                'SELECT COUNT(*) FROM nexgen_planlama_siparis_kalem '
-                'WHERE planlama_siparis_id=?',
-                (sid,),
-            ).fetchone()[0])
-            if 'rf_renk_id' in _kolonlar(con, 'nexgen_planlama_siparis_kalem'):
-                rf_kalem_sayisi = int(con.execute(
-                    'SELECT COUNT(*) FROM nexgen_planlama_siparis_kalem '
-                    'WHERE planlama_siparis_id=? AND rf_renk_id IS NOT NULL AND rf_renk_id!=0',
-                    (sid,),
-                ).fetchone()[0])
-            has_nt_col = 'numune_talep_id' in {
-                c[1] for c in con.execute(
-                    'PRAGMA table_info(nexgen_planlama_siparis_kalem)'
-                ).fetchall()
-            }
-            if has_nt_col and _tablo_var(con, 'nexgen_numune_talep'):
-                nrows = con.execute(
-                    """
-                    SELECT DISTINCT k.numune_talep_id AS nid, n.talep_kodu
-                    FROM nexgen_planlama_siparis_kalem k
-                    JOIN nexgen_numune_talep n ON n.id = k.numune_talep_id
-                    WHERE k.planlama_siparis_id=?
-                      AND k.numune_talep_id IS NOT NULL
-                    ORDER BY n.talep_kodu, k.numune_talep_id
-                    """,
-                    (sid,),
-                ).fetchall()
-                for nr in nrows:
-                    nid = int(nr['nid'])
-                    bagli_numuneler.append({
-                        'id': nid,
-                        'talep_kodu': nr['talep_kodu'] or f'#{nid}',
-                        'detay_url': f'/nexgen/numune-talep?id={nid}',
-                    })
-                bagli_numune_sayisi = len(bagli_numuneler)
+        kalem_sayisi = agg_count.get(sid, 0)
+        rf_kalem_sayisi = agg_rf.get(sid, 0)
+        bagli_numuneler = numune_map.get(sid, [])
+        bagli_numune_sayisi = len(bagli_numuneler)
+
+        if False:  # N+1 döngüsü kaldırıldı; batch yukarıda
+            pass
 
         # Sipariş kaleminde kg kolonu yok (L/S/M). Toplam KG uydurulmaz.
         toplam_kg = None
@@ -420,15 +490,23 @@ def load_cari360_siparisler(
             'baglanti_kaynagi': rel['baglanti_kaynagi'],
             'dogrudan_operasyon': rel['dogrudan_operasyon'],
             'manuel_inceleme': rel['manuel_inceleme'],
+            # C360-2: batch kalem detayları (ticari_ok zaten uygulandı)
+            'kalemler': kalem_map.get(sid, []),
         })
 
     # T4: hassas ticari alanlar yalnız can_view_cari_ticari ile
-    from modules.nexgen.cari360_ticari_ozet_service import enrich_siparis_listesi_ticari
-    ticari_ok = can_view_cari_ticari(con, kullanici_id, cid, yk)
+    # ticari_ok ve import batch'ten önce yapıldı; burada yeniden hesaplamıyoruz
     liste = enrich_siparis_listesi_ticari(con, liste, ticari_gorunur=ticari_ok)
+    import math as _math
+    total_pages = max(1, _math.ceil(total_count / limit)) if total_count else 1
+    current_page = (offset // limit) + 1
     return {
         'liste': liste,
         'count': len(liste),
+        'total_count': total_count,
+        'page': current_page,
+        'page_size': limit,
+        'total_pages': total_pages,
         'ticari_gorunur': ticari_ok,
         'sorumlu': sorumlu_meta.get('sorumlu'),
         'sorumlu_uyarilari': sorumlu_meta.get('sorumlu_uyarilari') or [],
@@ -657,6 +735,180 @@ def _kolonlar(con: sqlite3.Connection, table: str) -> set[str]:
     if not _tablo_var(con, table):
         return set()
     return {c[1] for c in con.execute(f'PRAGMA table_info({table})').fetchall()}
+
+
+def _load_kalem_sevk_tarihleri_batch(
+    con: sqlite3.Connection,
+    kalem_ids: list[int],
+) -> dict[int, dict[str, Any]]:
+    """Kalem bazlı sevkiyat özeti — mo_musteri_sevkiyat_kalem.siparis_kalem_id FK.
+
+    Döndürür: {kalem_id: {sevk_tarihi, sevkiyat_id, sevkiyat_no, sevkiyat_count}}
+    - sevk_tarihi: MIN(sevk_tarihi) — ilk gerçek sevkiyat tarihi
+    - sevkiyat_id: ilk sevkiyatın id'si (link için)
+    - sevkiyat_no: ilk sevkiyatın no'su
+    - sevkiyat_count: kaç aktif sevkiyat var (kısmi sevk tespiti)
+    Filtre: aktif=1, durum IN ('SEVK_EDILDI','TESLIM_EDILDI','TAMAMLANDI'), sevk_tarihi NOT NULL.
+    """
+    if not kalem_ids or not _tablo_var(con, 'mo_musteri_sevkiyat_kalem'):
+        return {}
+    if not _tablo_var(con, 'mo_musteri_sevkiyat'):
+        return {}
+    ph = ','.join('?' * len(kalem_ids))
+    # İlk sevkiyat (MIN tarih) için id ve no'yu subquery ile çek
+    rows = con.execute(
+        f"""
+        SELECT
+            k.siparis_kalem_id,
+            COUNT(*) AS sevkiyat_count,
+            MIN(s.sevk_tarihi) AS sevk_tarihi,
+            MIN(s.id) AS ilk_sevkiyat_id
+        FROM mo_musteri_sevkiyat_kalem k
+        JOIN mo_musteri_sevkiyat s ON s.id = k.sevkiyat_id
+        WHERE k.siparis_kalem_id IN ({ph})
+          AND COALESCE(s.aktif, 1)=1
+          AND s.sevk_tarihi IS NOT NULL AND s.sevk_tarihi != ''
+          AND s.durum IN ('SEVK_EDILDI','TESLIM_EDILDI','TAMAMLANDI')
+        GROUP BY k.siparis_kalem_id
+        """,
+        kalem_ids,
+    ).fetchall()
+
+    # sevkiyat_no için ayrı lookup (MIN id'nin no'su)
+    ilk_ids = [r['ilk_sevkiyat_id'] for r in rows if r['ilk_sevkiyat_id'] is not None]
+    sev_no_map: dict[int, str] = {}
+    if ilk_ids:
+        ph2 = ','.join('?' * len(ilk_ids))
+        sev_rows = con.execute(
+            f'SELECT id, sevkiyat_no FROM mo_musteri_sevkiyat WHERE id IN ({ph2})',
+            ilk_ids,
+        ).fetchall()
+        for sr in sev_rows:
+            sev_no_map[int(sr['id'])] = sr['sevkiyat_no'] or ''
+
+    out: dict[int, dict[str, Any]] = {}
+    for r in rows:
+        kid = r['siparis_kalem_id']
+        st = r['sevk_tarihi']
+        if kid is None or not st:
+            continue
+        sev_id = r['ilk_sevkiyat_id']
+        out[int(kid)] = {
+            'sevk_tarihi': _fmt_dt(st) or '',
+            'sevkiyat_id': int(sev_id) if sev_id else None,
+            'sevkiyat_no': sev_no_map.get(int(sev_id), '') if sev_id else '',
+            'sevkiyat_count': int(r['sevkiyat_count']),
+        }
+    return out
+
+
+def _load_siparis_kalemleri_batch(
+    con: sqlite3.Connection,
+    siparis_ids: list[int],
+    ticari_gorunur: bool,
+) -> dict[int, list[dict[str, Any]]]:
+    """Tek query ile tüm sipariş kalemlerini çek; N+1 önlenir.
+
+    RF label ve plan kodu JOIN ile getir.
+    Ticari alanlar (birim_fiyat, satir_tutari vb.) yalnızca ticari_gorunur=True ise eklenir.
+    """
+    if not siparis_ids or not _tablo_var(con, 'nexgen_planlama_siparis_kalem'):
+        return {}
+
+    kcols = _kolonlar(con, 'nexgen_planlama_siparis_kalem')
+    has_rf = 'rf_renk_id' in kcols
+    has_plan = _tablo_var(con, 'nexgen_uretim_plan')
+    has_rf_tbl = _tablo_var(con, 'nexgen_rf_renk')
+
+    ph = ','.join('?' * len(siparis_ids))
+
+    # RF label JOIN (LEFT JOIN; yoksa NULL)
+    rf_join = ''
+    rf_sel = ''
+    if has_rf and has_rf_tbl:
+        rf_sel = ', rf.rf_kod AS _rf_kod, rf.ad AS _rf_ad, rf.durum AS _rf_durum'
+        rf_join = ' LEFT JOIN nexgen_rf_renk rf ON rf.id = k.rf_renk_id'
+
+    # Üretim plan_kodu JOIN
+    plan_join = ''
+    plan_sel = ''
+    if has_plan and 'uretim_plan_id' in kcols:
+        plan_sel = ', p.plan_kodu AS _plan_kodu'
+        plan_join = ' LEFT JOIN nexgen_uretim_plan p ON p.id = k.uretim_plan_id'
+
+    sql = (
+        f'SELECT k.*{rf_sel}{plan_sel}'
+        f' FROM nexgen_planlama_siparis_kalem k{rf_join}{plan_join}'
+        f' WHERE k.planlama_siparis_id IN ({ph})'
+        f' ORDER BY k.planlama_siparis_id, k.sira_no'
+    )
+    kalem_rows = con.execute(sql, siparis_ids).fetchall()
+    sevk_map = _load_kalem_sevk_tarihleri_batch(
+        con, [int(kr['id']) for kr in kalem_rows],
+    )
+
+    result: dict[int, list[dict[str, Any]]] = {sid: [] for sid in siparis_ids}
+    for kr in kalem_rows:
+        sid = int(kr['planlama_siparis_id'])
+        # miktar_kg = L + S + M  (L/S/M birim ton değil; proje convention: doğrudan kg)
+        ml = float(kr['miktar_l'] or 0)
+        ms = float(kr['miktar_s'] or 0)
+        mm = float(kr['miktar_m'] or 0)
+        miktar_kg = _fmt_num(ml + ms + mm)
+
+        # RF label
+        rf_label: str | None = None
+        if has_rf and has_rf_tbl:
+            rf_kod = (kr['_rf_kod'] or '').strip() if '_rf_kod' in kr.keys() else ''
+            rf_ad = (kr['_rf_ad'] or '').strip() if '_rf_ad' in kr.keys() else ''
+            rf_durum = (kr['_rf_durum'] or '').strip() if '_rf_durum' in kr.keys() else ''
+            if rf_kod and rf_durum and rf_durum != rf_kod:
+                rf_label = f'{rf_kod} / {rf_durum}'
+            elif rf_kod:
+                rf_label = rf_kod
+            elif rf_ad:
+                rf_label = rf_ad
+
+        # plan kodu
+        plan_kodu: str | None = None
+        if '_plan_kodu' in kr.keys():
+            plan_kodu = kr['_plan_kodu'] or None
+
+        kalem: dict[str, Any] = {
+            'id': int(kr['id']),
+            'sira_no': kr['sira_no'],
+            'urun_ailesi': kr['urun_ailesi'] or '',
+            'formul_id': kr['formul_id'],
+            'formul_ad': kr['formul_ad'] or '',
+            'renk_varyant_id': kr['renk_varyant_id'],
+            'renk_ad': kr['renk_ad'] or '',
+            'rf_renk_id': kr['rf_renk_id'] if has_rf else None,
+            'rf_label': rf_label,
+            'miktar_l': _fmt_num(ml),
+            'miktar_s': _fmt_num(ms),
+            'miktar_m': _fmt_num(mm),
+            'miktar_kg': miktar_kg,
+            'termin_tarihi': _fmt_dt(kr['termin_tarihi']),
+            'uretim_plan_id': kr['uretim_plan_id'] if 'uretim_plan_id' in kcols else None,
+            'plan_kodu': plan_kodu,
+            'numune_talep_id': kr['numune_talep_id'] if 'numune_talep_id' in kcols else None,
+            'durum': kr['durum'] or '',
+            'mtt_kalem_id': kr['mtt_kalem_id'] if 'mtt_kalem_id' in kcols else None,
+            'sevk_tarihi': (sevk_map.get(int(kr['id'])) or {}).get('sevk_tarihi'),
+            'sevkiyat_id': (sevk_map.get(int(kr['id'])) or {}).get('sevkiyat_id'),
+            'sevkiyat_no': (sevk_map.get(int(kr['id'])) or {}).get('sevkiyat_no'),
+            'sevkiyat_count': (sevk_map.get(int(kr['id'])) or {}).get('sevkiyat_count', 0),
+        }
+        # Ticari alanlar — yetki korumalı
+        if ticari_gorunur:
+            kalem['birim_fiyat'] = _fmt_num(kr['birim_fiyat']) if 'birim_fiyat' in kcols else None
+            kalem['iskonto_orani'] = _fmt_num(kr['iskonto_orani']) if 'iskonto_orani' in kcols else None
+            kalem['net_birim_fiyat'] = _fmt_num(kr['net_birim_fiyat']) if 'net_birim_fiyat' in kcols else None
+            kalem['satir_tutari'] = _fmt_num(kr['satir_tutari']) if 'satir_tutari' in kcols else None
+            kalem['satir_tutari_try'] = _fmt_num(kr['satir_tutari_try']) if 'satir_tutari_try' in kcols else None
+
+        result[sid].append(kalem)
+    return result
 
 
 def _norm_kod(v: Any) -> str:
@@ -1939,4 +2191,353 @@ def load_cari360_uretim(
         'sorumlu': sorumlu_meta.get('sorumlu'),
         'sorumlu_uyarilari': sorumlu_meta.get('sorumlu_uyarilari') or [],
         'sorumlu_atanmamis': bool(sorumlu_meta.get('sorumlu_atanmamis')),
+    }
+
+
+def load_cari360_onaylar(
+    con,
+    cari_id: int,
+    kullanici_id: int,
+    yk,
+    *,
+    limit: int = 50,
+    offset: int = 0,
+    durum_filtre: str | None = None,
+):
+    """Onay Merkezi kayitlari - read-only, cari_id filtreli.
+    Kaynak: onay_talep + onay_talep_adim.
+    Write yapilmaz. Satir no, filtre, pagination, ozet destekler.
+    """
+    def _tv(n):
+        return bool(con.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (n,)
+        ).fetchone())
+
+    cid = int(cari_id)
+    limit = max(1, min(int(limit or 50), 200))
+    offset = max(0, int(offset or 0))
+
+    row = con.execute("SELECT id FROM nexgen_cari WHERE id=?", (cid,)).fetchone()
+    if not row:
+        raise ValueError(f"Cari bulunamadi: {cid}")
+
+    if not _tv("onay_talep"):
+        return {"liste": [], "count": 0, "toplam": 0, "has_more": False,
+                "ozet": {"bekleyen": 0, "onaylandi": 0, "reddedildi": 0}}
+
+    has_adim = _tv("onay_talep_adim")
+
+    # Ozet sayimlar — aktif filtresi YOK, tüm geçmiş görünsün
+    ozet_rows = con.execute(
+        "SELECT durum, COUNT(*) AS n FROM onay_talep WHERE cari_id=? GROUP BY durum",
+        (cid,),
+    ).fetchall()
+    ozet: dict[str, int] = {"bekleyen": 0, "onaylandi": 0, "reddedildi": 0}
+    for oz in ozet_rows:
+        d = (oz["durum"] or "").upper()
+        if d in ("BEKLIYOR", "BEKLETILDI"):
+            ozet["bekleyen"] += int(oz["n"] or 0)
+        elif d == "ONAYLANDI":
+            ozet["onaylandi"] += int(oz["n"] or 0)
+        elif d in ("REDDEDILDI", "REVIZYON"):
+            ozet["reddedildi"] += int(oz["n"] or 0)
+
+    # Filtreli liste — aktif filtresi YOK, tüm durum geçmişi listelenir
+    base_where = "cari_id=?"
+    params: list = [cid]
+    if durum_filtre and durum_filtre.upper() != "TUMU":
+        df = durum_filtre.upper()
+        if df == "BEKLIYOR":
+            base_where += " AND durum IN ('BEKLIYOR','BEKLETILDI')"
+        else:
+            base_where += " AND durum=?"
+            params.append(df)
+
+    toplam_row = con.execute(
+        f"SELECT COUNT(*) AS n FROM onay_talep WHERE {base_where}", params
+    ).fetchone()
+    toplam = int(toplam_row["n"] or 0) if toplam_row else 0
+
+    list_where = base_where.replace("cari_id=?", "t.cari_id=?").replace(" AND durum", " AND t.durum")
+    karar_join = ""
+    order_by = "ORDER BY COALESCE(t.talep_tarihi, t.created_at) DESC, t.id DESC"
+    if has_adim:
+        karar_join = """
+        LEFT JOIN (
+            SELECT talep_id, MAX(tarih) AS karar_zaman
+            FROM onay_talep_adim
+            WHERE durum IN ('TAMAMLANDI','ONAYLANDI','REDDEDILDI','REVIZYON')
+            GROUP BY talep_id
+        ) _kz ON _kz.talep_id = t.id"""
+        order_by = """
+        ORDER BY
+          CASE WHEN t.durum IN ('BEKLIYOR','BEKLETILDI')
+               THEN COALESCE(t.talep_tarihi, t.created_at)
+               ELSE COALESCE(_kz.karar_zaman, t.updated_at, t.talep_tarihi, t.created_at)
+          END DESC,
+          t.id DESC"""
+
+    sql = (
+        f"SELECT t.id, t.talep_kod, t.talep_tipi, t.kaynak_modul, t.kaynak_id, t.kaynak_kod, "
+        f"t.durum, t.tutar, t.para_birimi, t.vade_gun, t.talep_tarihi, t.created_at, t.updated_at "
+        f"FROM onay_talep t{karar_join} WHERE {list_where} {order_by} LIMIT ? OFFSET ?"
+    )
+    rows = con.execute(sql, params + [limit, offset]).fetchall()
+
+    talep_ids = [int(r["id"]) for r in rows]
+    # karar_map: talep_id -> {notu, veren, tarihi}
+    karar_map: dict[int, dict] = {}
+    if has_adim and talep_ids:
+        ph = ",".join("?" * len(talep_ids))
+        # Hangi kolonlar mevcut? kullanici_ad_snapshot yoksa boş döner
+        adim_cols = [c[1] for c in con.execute(
+            "PRAGMA table_info(onay_talep_adim)"
+        ).fetchall()]
+        veren_col = "kullanici_ad_snapshot" if "kullanici_ad_snapshot" in adim_cols else "''"
+        # tarih: gerçek karar zamanı; created_at kullanılmaz
+        tarih_col = "tarih" if "tarih" in adim_cols else ("updated_at" if "updated_at" in adim_cols else "created_at")
+        adim_sql = (
+            f"SELECT talep_id, karar_notu, {veren_col} AS karar_veren, "
+            f"{tarih_col} AS karar_tarihi "
+            f"FROM onay_talep_adim "
+            f"WHERE talep_id IN ({ph}) "
+            f"AND durum IN ('REVIZYON','REDDEDILDI','TAMAMLANDI','ONAYLANDI') "
+            f"ORDER BY id DESC"
+        )
+        for a in con.execute(adim_sql, talep_ids).fetchall():
+            tid = int(a["talep_id"])
+            if tid not in karar_map:
+                _kt = str(a["karar_tarihi"] or "")
+                # Tarih+saat göster ([:16] → "YYYY-MM-DD HH:MM"); [:10] yasak
+                karar_map[tid] = {
+                    "notu": a["karar_notu"] or "",
+                    "veren": a["karar_veren"] or "",
+                    "tarihi": _kt[:16] if _kt else "",
+                }
+
+    _TIP = {
+        "SATIS_SIPARISI": "Satis Siparisi",
+        "NUMUNE_TALEBI": "Numune",
+        "TAHSILAT_KAYDI": "Tahsilat",
+        "SATIN_ALMA_SIPARISI": "Satin Alma",
+    }
+    _RENK = {
+        "ONAYLANDI": "yesil", "REDDEDILDI": "kirmizi",
+        "REVIZYON": "sari", "BEKLIYOR": "mavi", "BEKLETILDI": "gri",
+    }
+
+    liste = []
+    for sira, r in enumerate(rows, start=offset + 1):
+        tid = int(r["id"])
+        durum = (r["durum"] or "").upper()
+        try:
+            tutar_fmt = str(round(float(r["tutar"]), 2)) if r["tutar"] not in (None, "") else None
+        except (TypeError, ValueError):
+            tutar_fmt = None
+        tarih = str(r["talep_tarihi"] or r["created_at"] or "")[:16]
+        liste.append({
+            "sira": sira,
+            "id": tid,
+            "talep_kod": r["talep_kod"] or "",
+            "talep_tipi": r["talep_tipi"] or "",
+            "talep_tipi_etiket": _TIP.get(r["talep_tipi"] or "", r["talep_tipi"] or ""),
+            "kaynak_modul": r["kaynak_modul"] or "",
+            "kaynak_id": r["kaynak_id"],
+            "kaynak_kod": r["kaynak_kod"] or "",
+            "durum": durum,
+            "durum_renk": _RENK.get(durum, "gri"),
+            "tutar": tutar_fmt,
+            "para_birimi": r["para_birimi"] or "",
+            "vade_gun": r["vade_gun"],
+            "talep_tarihi": tarih,
+            "son_karar_notu": (karar_map.get(tid) or {}).get("notu") or "",
+            "karar_veren": (karar_map.get(tid) or {}).get("veren") or "",
+            "karar_tarihi": (karar_map.get(tid) or {}).get("tarihi") or "",
+            "detay_url": "/nexgen/onay-merkezi",
+        })
+
+    # MTT Yönetim Onayları (nexgen_onay) — Cari360 federasyonu
+    # nexgen_onay.cari_id yok; nexgen_musteri_temsilcisi_talep.cari_id üzerinden filtrele
+    if _tv("nexgen_onay") and _tv("nexgen_musteri_temsilcisi_talep"):
+        _MTIP = {
+            "SIPARIS_TALEBI_ONAY": "Sipariş Talebi",
+            "NUMUNE_TALEBI_ONAY": "Numune Talebi",
+        }
+        _MRENK = {
+            "ONAYLANDI": "yesil", "REDDEDILDI": "kirmizi", "ONAY_BEKLIYOR": "mavi",
+        }
+        # Ozet sayaçlarına MTT bekleyenleri ekle
+        mtt_bek = con.execute(
+            """SELECT COUNT(*) AS n FROM nexgen_onay o
+               JOIN nexgen_musteri_temsilcisi_talep m ON m.id=o.kaynak_id
+               WHERE o.kaynak_turu='MUSTERI_TEMSILCISI_TALEP'
+                 AND o.durum='ONAY_BEKLIYOR'
+                 AND m.cari_id=?""",
+            (cid,),
+        ).fetchone()
+        if mtt_bek:
+            ozet["bekleyen"] += int(mtt_bek["n"] or 0)
+        mtt_on = con.execute(
+            """SELECT COUNT(*) AS n FROM nexgen_onay o
+               JOIN nexgen_musteri_temsilcisi_talep m ON m.id=o.kaynak_id
+               WHERE o.kaynak_turu='MUSTERI_TEMSILCISI_TALEP'
+                 AND o.durum='ONAYLANDI'
+                 AND m.cari_id=?""",
+            (cid,),
+        ).fetchone()
+        if mtt_on:
+            ozet["onaylandi"] += int(mtt_on["n"] or 0)
+        mtt_red = con.execute(
+            """SELECT COUNT(*) AS n FROM nexgen_onay o
+               JOIN nexgen_musteri_temsilcisi_talep m ON m.id=o.kaynak_id
+               WHERE o.kaynak_turu='MUSTERI_TEMSILCISI_TALEP'
+                 AND o.durum='REDDEDILDI'
+                 AND m.cari_id=?""",
+            (cid,),
+        ).fetchone()
+        if mtt_red:
+            ozet["reddedildi"] += int(mtt_red["n"] or 0)
+
+        # Durum filtresi uygula
+        mtt_durum_where = ""
+        mtt_params: list = [cid]
+        if durum_filtre and durum_filtre.upper() != "TUMU":
+            df = durum_filtre.upper()
+            if df == "BEKLIYOR":
+                mtt_durum_where = "AND o.durum='ONAY_BEKLIYOR'"
+            elif df == "ONAYLANDI":
+                mtt_durum_where = "AND o.durum='ONAYLANDI'"
+            elif df == "REDDEDILDI":
+                mtt_durum_where = "AND o.durum='REDDEDILDI'"
+            else:
+                mtt_durum_where = "AND 1=0"  # diğer filtreler MTT'yi kapsamaz
+
+        mtt_rows = con.execute(
+            f"""SELECT o.id, o.onay_no, o.onay_turu, o.durum,
+                       o.aciklama, o.karar_tarihi, o.red_nedeni, o.created_at,
+                       sk_on.KullaniciAdi AS karar_veren,
+                       m.id AS mtt_id, m.talep_no, m.talep_turu, m.cari_id,
+                       m.durum AS mtt_durum,
+                       m.isleme_alinma_tarihi, m.donusturulme_tarihi,
+                       m.donusturulen_siparis_id, m.donusturulen_numune_talep_id,
+                       m.gorusme_id
+                FROM nexgen_onay o
+                JOIN nexgen_musteri_temsilcisi_talep m ON m.id=o.kaynak_id
+                LEFT JOIN sistem_kullanici sk_on ON sk_on.Id=o.onaylayan_kullanici_id
+                WHERE o.kaynak_turu='MUSTERI_TEMSILCISI_TALEP'
+                  AND m.cari_id=?
+                  {mtt_durum_where}
+                ORDER BY COALESCE(o.karar_tarihi, o.created_at) DESC""",
+            mtt_params,
+        ).fetchall()
+
+        # MTT yaşam döngüsü etiketleri
+        _MTT_ISLEM_LBL = {
+            'ONAY_BEKLIYOR': 'Onay Bekliyor',
+            'YENI': "Mehmet'e Aktarıldı",
+            'ISLEME_ALINDI': 'Mehmet İşleme Aldı',
+            'SIPARISE_DONUSTU': 'Siparişe Dönüştü',
+            'NUMUNEYE_DONUSTU': 'Numuneye Dönüştü',
+            'KISMEN_NUMUNEYE_DONUSTU': 'Kısmen Numuneye Dönüştü',
+            'REDDEDILDI': 'Reddedildi',
+            'IPTAL': 'İptal',
+            'EKSIK_BILGI': 'Eksik Bilgi',
+        }
+
+        # Dönüşüm kodlarını toplu çek (N+1'den kaçın)
+        sip_ids = [int(r['donusturulen_siparis_id']) for r in mtt_rows
+                   if r['donusturulen_siparis_id']]
+        num_ids = [int(r['donusturulen_numune_talep_id']) for r in mtt_rows
+                   if r['donusturulen_numune_talep_id']]
+        sip_kod_map: dict[int, str] = {}
+        num_kod_map: dict[int, str] = {}
+        if sip_ids and _tv("nexgen_planlama_siparis"):
+            ph_s = ','.join('?' * len(sip_ids))
+            for sr in con.execute(
+                f"SELECT id, siparis_no FROM nexgen_planlama_siparis WHERE id IN ({ph_s})",
+                sip_ids,
+            ).fetchall():
+                sip_kod_map[int(sr['id'])] = sr['siparis_no'] or ''
+        if num_ids and _tv("nexgen_numune_talep"):
+            ph_n = ','.join('?' * len(num_ids))
+            for nr in con.execute(
+                f"SELECT id, talep_kodu FROM nexgen_numune_talep WHERE id IN ({ph_n})",
+                num_ids,
+            ).fetchall():
+                num_kod_map[int(nr['id'])] = nr['talep_kodu'] or ''
+
+        for mrow in mtt_rows:
+            m = dict(mrow)
+            ot_durum_raw = (m.get("durum") or "").upper()
+            mtt_durum_val = (m.get("mtt_durum") or "").upper()
+            # Cari360 onay durum normalleştirmesi: ONAY_BEKLIYOR → BEKLIYOR
+            durum_norm = "BEKLIYOR" if ot_durum_raw == "ONAY_BEKLIYOR" else ot_durum_raw
+            kt = str(m.get("karar_tarihi") or "")
+            talep_t = str(m.get("created_at") or "")[:16]
+            # Dönüşüm bilgileri
+            sip_id = m.get("donusturulen_siparis_id")
+            num_id = m.get("donusturulen_numune_talep_id")
+            donusum_kodu = ""
+            if sip_id and int(sip_id) in sip_kod_map:
+                donusum_kodu = sip_kod_map[int(sip_id)]
+            elif num_id and int(num_id) in num_kod_map:
+                donusum_kodu = num_kod_map[int(num_id)]
+            # İşlem durumu etiketi (MTT tarafının son durumu)
+            islem_durumu_etiket = _MTT_ISLEM_LBL.get(mtt_durum_val, mtt_durum_val)
+            # Canonical zaman: dönüşüm > işleme alınma > karar > oluşturma
+            donusturulme = str(m.get("donusturulme_tarihi") or "")
+            isleme_alinma = str(m.get("isleme_alinma_tarihi") or "")
+            liste.append({
+                "sira": None,
+                "id": int(m["id"]),
+                "talep_kod": m.get("onay_no") or f"MTT-{m['id']}",
+                "talep_tipi": m.get("onay_turu") or "",
+                "talep_tipi_etiket": _MTIP.get(m.get("onay_turu") or "", "MTT Onayı"),
+                "kaynak_modul": "nexgen_onay",
+                "kaynak_id": m["id"],
+                "kaynak_kod": m.get("talep_no") or "",
+                "durum": durum_norm,
+                "durum_renk": _MRENK.get(ot_durum_raw, "gri"),
+                "tutar": None,
+                "para_birimi": "",
+                "vade_gun": None,
+                "talep_tarihi": talep_t,
+                "son_karar_notu": m.get("red_nedeni") or m.get("aciklama") or "",
+                "karar_veren": m.get("karar_veren") or "",
+                "karar_tarihi": kt[:16] if kt else "",
+                "detay_url": "/nexgen/onay-merkezi",
+                "kaynak_etiket": "Müşteri Operasyonu",
+                # MTT yaşam döngüsü alanları
+                "mtt_id": int(m.get("mtt_id") or m["id"]),
+                "mtt_kod": m.get("talep_no") or "",
+                "mtt_tipi": m.get("talep_turu") or "",
+                "mtt_durum": mtt_durum_val,
+                "mtt_durum_etiket": islem_durumu_etiket,
+                "islem_durumu": mtt_durum_val,
+                "islem_durumu_etiket": islem_durumu_etiket,
+                "gorusme_id": m.get("gorusme_id"),
+                "donusturulen_siparis_id": sip_id,
+                "donusturulen_numune_talep_id": num_id,
+                "donusum_kodu": donusum_kodu,
+                "isleme_alinma_tarihi": isleme_alinma[:16] if isleme_alinma else "",
+                "donusturulme_tarihi": donusturulme[:16] if donusturulme else "",
+            })
+
+        # Sıra numaralarını güncelle (tüm liste birleşince)
+        liste.sort(
+            key=lambda x: (x.get("karar_tarihi") or x.get("talep_tarihi") or ""),
+            reverse=True,
+        )
+        for idx, item in enumerate(liste, start=offset + 1):
+            item["sira"] = idx
+
+    return {
+        "liste": liste,
+        "count": len(liste),
+        "toplam": toplam,
+        "has_more": (offset + limit) < toplam,
+        "offset": offset,
+        "limit": limit,
+        "ozet": ozet,
+        "bekleyen": ozet["bekleyen"],
     }
