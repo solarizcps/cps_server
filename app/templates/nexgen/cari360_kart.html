@@ -241,21 +241,28 @@
       <table class="ckart-tablo" id="ckart-uretim-tablo">
         <thead>
           <tr>
+            <th style="width:24px;"></th>
+            <th>Tarih</th>
             <th>Plan</th>
             <th>Sipariş</th>
-            <th>Durum</th>
-            <th>Batch</th>
-            <th>Alt Emir</th>
-            <th>Hedef KG</th>
-            <th>Üretilen KG</th>
-            <th>Kalem Bağ</th>
-            <th style="text-align:right">İşlem</th>
+            <th>Sipariş Durumu</th>
+            <th>Ürün</th>
+            <th>Formül</th>
+            <th>Renk</th>
+            <th style="text-align:right">Üretilecek</th>
+            <th style="text-align:right">Üretilen</th>
+            <th style="text-align:right">Kalan</th>
+            <th>İlerleme</th>
           </tr>
         </thead>
         <tbody id="ckart-uretim-tbody">
-          <tr><td colspan="9" class="ckart-muted">Sekme açıldığında yüklenecek.</td></tr>
+          <tr><td colspan="12" class="ckart-muted">Sekme açıldığında yüklenecek.</td></tr>
         </tbody>
       </table>
+    </div>
+    <div id="ckart-uretim-pagination" style="display:none;padding:10px 0 4px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+      <span id="ckart-uretim-pg-info" style="font-size:11.5px;color:#64748b;"></span>
+      <div id="ckart-uretim-pg-btns" style="display:flex;align-items:center;gap:4px;"></div>
     </div>
   </section>
 
@@ -1111,6 +1118,63 @@ main { padding: 16px 12px !important; }
 .ckart-hbadge-tahsilat { background: #ecfdf5; color: #065f46; }
 .ckart-hbadge-uretim   { background: #fff7ed; color: #9a3412; }
 .ckart-hbadge-default  { background: #f3f4f6; color: #374151; }
+
+/* ── Üretim sekmesi expand ── */
+.ckart-urt-expand-btn {
+  background: none; border: none; cursor: pointer;
+  font-size: 13px; color: #64748b; padding: 0 4px; line-height: 1;
+  transition: color .15s;
+}
+.ckart-urt-expand-btn:hover { color: #006a8e; }
+.ckart-urt-detail-row td {
+  background: #f8fafc;
+  border-top: none;
+  padding: 0;
+}
+.ckart-urt-detail-panel {
+  padding: 12px 16px 14px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px 20px;
+}
+.ckart-urt-detail-group { min-width: 0; }
+.ckart-urt-detail-group-title {
+  font-size: 10px; font-weight: 700; letter-spacing: .5px;
+  text-transform: uppercase; color: #94a3b8;
+  margin-bottom: 6px; padding-bottom: 4px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.ckart-urt-detail-field {
+  display: flex; align-items: baseline; gap: 6px;
+  font-size: 12px; margin-bottom: 4px; line-height: 1.4;
+}
+.ckart-urt-detail-field .lbl {
+  color: #64748b; min-width: 110px; flex-shrink: 0; font-size: 11px;
+}
+.ckart-urt-detail-field .val { color: #0f172a; font-weight: 500; }
+.ckart-urt-progress-bar {
+  height: 6px; border-radius: 3px; background: #e2e8f0;
+  overflow: hidden; margin-top: 2px; margin-bottom: 6px;
+}
+.ckart-urt-progress-fill {
+  height: 100%; border-radius: 3px; background: #006a8e; transition: width .3s;
+}
+.ckart-urt-chip-warn {
+  display: inline-block; font-size: 9px; font-weight: 700;
+  padding: 1px 6px; border-radius: 999px;
+  background: #fef3c7; color: #92400e; border: 1px solid #fcd34d;
+  margin-left: 5px; text-transform: uppercase; letter-spacing: .1px;
+}
+/* Üretim durum badge'leri */
+.ckart-urt-dur { display:inline-block; font-size:9.5px; font-weight:700;
+  padding:2px 7px; border-radius:999px; border:1px solid transparent;
+  white-space:nowrap; letter-spacing:.12px; text-transform:uppercase; }
+.ckart-urt-dur-uretimde   { background:#fff7ed; color:#f97316; border-color:#fed7aa; }
+.ckart-urt-dur-basladi    { background:#fff7ed; color:#d97706; border-color:#fde68a; }
+.ckart-urt-dur-bitti      { background:#eff6ff; color:#006a8e; border-color:#bfdbfe; }
+.ckart-urt-dur-planlandi  { background:#f0fdf4; color:#16a34a; border-color:#bbf7d0; }
+.ckart-urt-dur-on_calisma { background:#f1f5f9; color:#475569; border-color:#e2e8f0; }
+.ckart-urt-dur-default    { background:#f8fafc; color:#0f172a; border-color:#e2e8f0; }
 
 /* ── Responsive: <1150px → alt alta ── */
 @media (max-width: 1150px) {
@@ -3349,45 +3413,287 @@ main { padding: 16px 12px !important; }
     if (dataRow) dataRow.classList.toggle('acik', !open);
   });
 
+  /* ── Üretim sekmesi ── */
+  var _urtPage = 1;
+  var _urtPageSize = 20;
+
+  function _urtDurumBadge(d) {
+    if (!d) return '<span class="ckart-urt-dur ckart-urt-dur-default">—</span>';
+    var lbl = { ON_CALISMA:'Ön Çalışma', PLANLANDI:'Planlandı', BASLADI:'Başladı',
+                URETIMDE:'Üretimde', BITTI:'Tamamlandı', IPTAL:'İptal' }[d] || d;
+    var cls = { ON_CALISMA:'on_calisma', PLANLANDI:'planlandi', BASLADI:'basladi',
+                URETIMDE:'uretimde', BITTI:'bitti' }[d] || 'default';
+    return '<span class="ckart-urt-dur ckart-urt-dur-' + cls + '">' + esc(lbl) + '</span>';
+  }
+
+  function _urtSipDurumBadge(d) {
+    if (!d) return '<span class="ckart-sip-durum-badge ckart-sip-durum-default">—</span>';
+    var MAP = {
+      TASLAK:'Taslak', TALEP:'Talep', ONAY_BEKLIYOR:'Onay Bekliyor',
+      MPR_BEKLIYOR:'MRP Bekliyor', PLANLAMAYA_HAZIR:'Planlamaya Hazır',
+      REVIZYON:'Revizyon', ONAYLANDI:'Onaylandı',
+      URETIMDE:'Üretimde', TAMAMLANDI:'Tamamlandı', REDDEDILDI:'Reddedildi'
+    };
+    var lbl = MAP[d] || d;
+    var clsMap = {
+      URETIMDE:'uretimde', TAMAMLANDI:'tamamlandi',
+      ONAYLANDI:'onay', TASLAK:'taslak', TALEP:'taslak',
+      ONAY_BEKLIYOR:'taslak', REDDEDILDI:'taslak'
+    };
+    var cls = 'ckart-sip-durum-badge ckart-sip-durum-' + (clsMap[d] || 'default');
+    return '<span class="' + cls + '">' + esc(lbl) + '</span>';
+  }
+
+  function _urtFmtKg(v) {
+    if (v == null || v === '') return '—';
+    var n = parseFloat(v);
+    if (isNaN(n)) return '—';
+    return n.toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 3 }) + ' kg';
+  }
+
+  function _urtProgressCell(pct) {
+    var p = Math.min(Math.max(parseInt(pct) || 0, 0), 100);
+    var bar = '<div style="width:52px;height:5px;background:#e2e8f0;border-radius:3px;overflow:hidden;display:inline-block;vertical-align:middle;margin-right:4px;">'
+      + '<div style="width:' + p + '%;height:100%;background:#006a8e;border-radius:3px;"></div></div>';
+    return bar + '<span style="font-size:11px;color:#475569;">%' + p + '</span>';
+  }
+
+  function _urtUrunCell(u) {
+    var ailesi = (u.urun_ailesi || '').trim();
+    var fAd = (u.formul_ad || '').trim();
+    if (!ailesi) return '—';
+    if (fAd && fAd !== ailesi) {
+      return esc(ailesi) + '<br><span style="font-size:10px;color:#64748b;">' + esc(fAd) + '</span>';
+    }
+    return esc(ailesi);
+  }
+
+  function _urtFormulCell(u) {
+    var kod = (u.formul_kodu || '').trim();
+    var ad  = (u.formul_ad || '').trim();
+    if (!kod) return '—';
+    var warn = u.formul_farkli ? ' <span class="ckart-urt-chip-warn">!</span>' : '';
+    if (ad && ad.toLowerCase() !== kod.toLowerCase()) {
+      return esc(kod) + warn + '<br><span style="font-size:10px;color:#64748b;">' + esc(ad) + '</span>';
+    }
+    return esc(kod) + warn;
+  }
+
+  function _urtRenkCell(u) {
+    var kod = (u.renk_kodu || '').trim();
+    var ad  = (u.renk_ad || '').trim();
+    var warn = u.renk_farkli ? ' <span class="ckart-urt-chip-warn">!</span>' : '';
+    if (!kod) return '—';
+    /* renk_ad "0250 — TURUNCU" gibi birleşik geliyorsa ayırmaya çalış */
+    if (ad) {
+      var parts = ad.split('—');
+      var adSon = (parts.length > 1 ? parts[parts.length - 1] : ad).trim();
+      if (adSon && adSon !== kod) {
+        return esc(kod) + warn + '<br><span style="font-size:10px;color:#64748b;">' + esc(adSon) + '</span>';
+      }
+    }
+    return esc(kod) + warn;
+  }
+
+  function _urtDetailHtml(u, rowId) {
+    var html = '<div class="ckart-urt-detail-panel">';
+
+    /* A — Sipariş Bilgisi */
+    html += '<div class="ckart-urt-detail-group">';
+    html += '<div class="ckart-urt-detail-group-title">Sipariş Bilgisi</div>';
+    if (u.siparis_no) {
+      var sipLink = u.siparis_url
+        ? '<a class="ckart-link" href="' + esc(u.siparis_url) + '">' + esc(u.siparis_no) + ' ↗</a>'
+        : esc(u.siparis_no);
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">Sipariş No</span><span class="val">' + sipLink + '</span></div>';
+    }
+    if (u.siparis_durum) {
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">Sipariş Durumu</span><span class="val">' + esc(u.siparis_durum) + '</span></div>';
+    }
+    if (u.termin_tarihi) {
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">Termin</span><span class="val">' + esc(u.termin_tarihi) + '</span></div>';
+    }
+    if (u.urun_ailesi) {
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">Ürün</span><span class="val">' + esc(u.urun_ailesi) + '</span></div>';
+    }
+    if (u.kalem_id) {
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">Kalem ID</span><span class="val">#' + esc(String(u.kalem_id)) + '</span></div>';
+    }
+    html += '</div>';
+
+    /* B — Teknik Bilgi */
+    html += '<div class="ckart-urt-detail-group">';
+    html += '<div class="ckart-urt-detail-group-title">Teknik Bilgi</div>';
+    var fKod = u.formul_kodu || '';
+    var fAd  = u.formul_ad || '';
+    var sfKod = u.siparis_formul_kodu || '';
+    var fWarn = u.formul_farkli ? '<span class="ckart-urt-chip-warn">Formül Farklı</span>' : '';
+    if (sfKod && sfKod !== fKod) {
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">Sipariş Formülü</span><span class="val">' + esc(sfKod) + (u.siparis_formul_ad ? ' · ' + esc(u.siparis_formul_ad) : '') + '</span></div>';
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">Üretim Formülü</span><span class="val">' + esc(fKod) + fWarn + '</span></div>';
+    } else {
+      if (fKod) html += '<div class="ckart-urt-detail-field"><span class="lbl">Formül</span><span class="val">' + esc(fKod) + (fAd ? ' · ' + esc(fAd) : '') + '</span></div>';
+    }
+    if (u.rf_renk_id) {
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">RF Renk ID</span><span class="val">' + esc(String(u.rf_renk_id)) + '</span></div>';
+    }
+    if (u.renk_kodu) {
+      var rWarn = u.renk_farkli ? '<span class="ckart-urt-chip-warn">Renk Farklı</span>' : '';
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">Renk Kodu</span><span class="val">' + esc(u.renk_kodu) + rWarn + '</span></div>';
+    }
+    if (u.renk_ad) {
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">Renk Adı</span><span class="val">' + esc(u.renk_ad) + '</span></div>';
+    }
+    if (u.kalip_carpani) {
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">Kalıp Çarpanı</span><span class="val">' + esc(String(u.kalip_carpani)) + '</span></div>';
+    }
+    html += '</div>';
+
+    /* C — Üretim İlerlemesi */
+    html += '<div class="ckart-urt-detail-group">';
+    html += '<div class="ckart-urt-detail-group-title">Üretim İlerlemesi</div>';
+    html += '<div class="ckart-urt-detail-field"><span class="lbl">Üretilecek KG</span><span class="val">' + _urtFmtKg(u.hedef_kg) + '</span></div>';
+    html += '<div class="ckart-urt-detail-field"><span class="lbl">Üretilen KG</span><span class="val"><strong>' + _urtFmtKg(u.uretilen_kg) + '</strong></span></div>';
+    html += '<div class="ckart-urt-detail-field"><span class="lbl">Kalan KG</span><span class="val">' + _urtFmtKg(u.kalan_kg) + '</span></div>';
+    var pct = u.tamamlanma_yuzdesi || 0;
+    html += '<div class="ckart-urt-detail-field"><span class="lbl">Tamamlanma</span><span class="val">%' + pct + '</span></div>';
+    html += '<div class="ckart-urt-progress-bar"><div class="ckart-urt-progress-fill" style="width:' + Math.min(pct,100) + '%"></div></div>';
+    html += '</div>';
+
+    /* D — Üretim Yapısı */
+    html += '<div class="ckart-urt-detail-group">';
+    html += '<div class="ckart-urt-detail-group-title">Üretim Yapısı</div>';
+    html += '<div class="ckart-urt-detail-field"><span class="lbl">Batch Sayısı</span><span class="val">' + esc(String(u.batch_sayisi || 0)) + '</span></div>';
+    if ((u.batch_kodlari || []).length) {
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">Batch Kodları</span><span class="val">' + esc(u.batch_kodlari.join(', ')) + '</span></div>';
+    }
+    html += '<div class="ckart-urt-detail-field"><span class="lbl">Alt Emir (Parça)</span><span class="val">' + esc(String(u.alt_emir_sayisi || 0)) + '</span></div>';
+    var poz = u.parcalar_ozet || {};
+    var pozParts = [];
+    if (poz.BITTI) pozParts.push('Bitti: ' + poz.BITTI);
+    if (poz.DEVAM) pozParts.push('Devam: ' + poz.DEVAM);
+    if (poz.BEKLEME) pozParts.push('Bekliyor: ' + poz.BEKLEME);
+    if (poz.HAZIR) pozParts.push('Hazır: ' + poz.HAZIR);
+    if (pozParts.length) {
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">Parça Dağılımı</span><span class="val" style="font-size:11px;">' + esc(pozParts.join(' · ')) + '</span></div>';
+    }
+    var planLink = '<a class="ckart-link" href="' + esc(u.plan_url || '#') + '">Üretim Emri Detayı ↗</a>';
+    html += '<div style="margin-top:8px;">' + planLink;
+    if (u.siparis_url) {
+      html += ' &nbsp; <a class="ckart-link" href="' + esc(u.siparis_url) + '">Siparişe Git ↗</a>';
+    }
+    html += '</div>';
+    html += '</div>';
+
+    html += '</div>'; /* panel */
+    return html;
+  }
+
+  function ckartUretimPaginationRender(page, totalPages, totalCount, pageSize) {
+    var pgWrap = document.getElementById('ckart-uretim-pagination');
+    var pgInfo = document.getElementById('ckart-uretim-pg-info');
+    var pgBtns = document.getElementById('ckart-uretim-pg-btns');
+    if (!pgWrap) return;
+    if (!totalPages || totalPages <= 1) { pgWrap.style.display = 'none'; return; }
+    pgWrap.style.display = 'flex';
+    var from = (page - 1) * pageSize + 1;
+    var to = Math.min(page * pageSize, totalCount);
+    pgInfo.textContent = 'Toplam ' + totalCount + ' kayıt · ' + from + '–' + to + ' gösteriliyor';
+    var btns = [];
+    btns.push('<button type="button" onclick="ckartUretimGitPage(' + (page-1) + ')" '
+      + (page <= 1 ? 'disabled ' : '') + 'style="' + _sipBtnStyle(false) + '">‹</button>');
+    for (var i = 1; i <= totalPages; i++) {
+      btns.push('<button type="button" onclick="ckartUretimGitPage(' + i + ')" style="'
+        + _sipBtnStyle(i === page) + '">' + i + '</button>');
+    }
+    btns.push('<button type="button" onclick="ckartUretimGitPage(' + (page+1) + ')" '
+      + (page >= totalPages ? 'disabled ' : '') + 'style="' + _sipBtnStyle(false) + '">›</button>');
+    pgBtns.innerHTML = btns.join('');
+  }
+
+  window.ckartUretimGitPage = function(page) {
+    if (page < 1) return;
+    _urtPage = page;
+    _opsLoaded.uretim = false;
+    window.ckartUretimYukle(true);
+    var tbl = document.getElementById('ckart-uretim-tablo');
+    if (tbl) tbl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+
   window.ckartUretimYukle = function(force) {
     var tb = document.getElementById('ckart-uretim-tbody');
     if (!tb) return;
     if (_opsLoaded.uretim && !force) return;
-    tb.innerHTML = '<tr><td colspan="9" class="ckart-muted">Yükleniyor…</td></tr>';
-    ckartFetchJson('/nexgen/api/cari360/' + CARI_ID + '/uretim')
+    tb.innerHTML = '<tr><td colspan="12" class="ckart-muted">Üretim kayıtları yükleniyor…</td></tr>';
+    var url = '/nexgen/api/cari360/' + CARI_ID + '/uretim?page=' + _urtPage + '&page_size=' + _urtPageSize;
+    ckartFetchJson(url)
       .then(function(d) {
         if (!d || !d.ok) throw new Error((d && d.mesaj) || 'Yüklenemedi');
         var liste = d.liste || [];
         _opsLoaded.uretim = true;
+        ckartUretimPaginationRender(
+          d.page || _urtPage,
+          d.total_pages || 0,
+          d.total_count || liste.length,
+          d.page_size || _urtPageSize
+        );
         if (!liste.length) {
-          tb.innerHTML = '<tr><td colspan="9" class="ckart-muted">Bu cari için üretim planı yok.</td></tr>';
+          tb.innerHTML = '<tr><td colspan="12" class="ckart-muted">Bu cariye ait üretim planı bulunamadı.</td></tr>';
           return;
         }
-        tb.innerHTML = liste.map(function(u) {
-          var batch = (u.batch_sayisi || 0);
-          if ((u.batch_kodlari || []).length) {
-            batch = batch + ' <span class="ckart-pill-pasif">' + esc((u.batch_kodlari || []).join(', ')) + '</span>';
-          }
-          var link = u.siparis_url
-            ? '<a class="ckart-link" href="' + esc(u.siparis_url) + '">Sipariş</a>'
-            : '—';
-          return '<tr>'
-            + '<td><strong>' + esc(u.plan_kodu || '—') + '</strong> '
-            + ckartZincirChipHtml(u, { max: 2 }) + '</td>'
+        var rows = [];
+        liste.forEach(function(u) {
+          var rowId = 'urt-detail-' + u.id;
+          var expandBtn = '<button type="button" class="ckart-urt-expand-btn" '
+            + 'aria-expanded="false" data-urt-target="' + rowId + '" title="Detay">▶</button>';
+          var warn = u.zincir_eksik
+            ? ' <span class="ckart-chip-warn" style="font-size:9px;">!</span>'
+            : '';
+          rows.push('<tr class="ckart-sip-row" style="cursor:pointer;" data-urt-row="' + rowId + '">'
+            + '<td>' + expandBtn + '</td>'
+            + '<td style="white-space:nowrap;">' + esc(dash(u.plan_tarihi ? u.plan_tarihi.substring(0,10) : '')) + '</td>'
+            + '<td><strong>' + esc(u.plan_kodu || '—') + '</strong>' + warn + '</td>'
             + '<td>' + esc(dash(u.siparis_no)) + '</td>'
-            + '<td>' + esc(dash(u.durum)) + '</td>'
-            + '<td>' + batch + '</td>'
-            + '<td>' + esc(u.alt_emir_sayisi != null ? u.alt_emir_sayisi : 0) + '</td>'
-            + '<td>' + esc(dash(u.hedef_kg != null ? u.hedef_kg : u.planlanan_kg)) + '</td>'
-            + '<td><strong>' + esc(dash(u.uretilen_kg)) + '</strong></td>'
-            + '<td>' + (u.kalem_bagli ? 'Evet' : '—') + '</td>'
-            + '<td style="text-align:right">' + link + '</td>'
-            + '</tr>';
-        }).join('');
+            + '<td>' + _urtSipDurumBadge(u.siparis_durum) + '</td>'
+            + '<td>' + _urtUrunCell(u) + '</td>'
+            + '<td>' + _urtFormulCell(u) + '</td>'
+            + '<td>' + _urtRenkCell(u) + '</td>'
+            + '<td style="text-align:right;">' + _urtFmtKg(u.hedef_kg) + '</td>'
+            + '<td style="text-align:right;"><strong>' + _urtFmtKg(u.uretilen_kg) + '</strong></td>'
+            + '<td style="text-align:right;">' + _urtFmtKg(u.kalan_kg) + '</td>'
+            + '<td>' + _urtProgressCell(u.tamamlanma_yuzdesi) + '</td>'
+            + '</tr>');
+          rows.push('<tr id="' + rowId + '" class="ckart-urt-detail-row" style="display:none;">'
+            + '<td colspan="12">' + _urtDetailHtml(u, rowId) + '</td>'
+            + '</tr>');
+        });
+        tb.innerHTML = rows.join('');
+
+        /* Expand click delegasyonu */
+        tb.querySelectorAll('.ckart-urt-expand-btn').forEach(function(btn) {
+          btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var targetId = btn.getAttribute('data-urt-target');
+            var detailRow = document.getElementById(targetId);
+            if (!detailRow) return;
+            var open = detailRow.style.display !== 'none';
+            detailRow.style.display = open ? 'none' : '';
+            btn.textContent = open ? '▶' : '▼';
+            btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+          });
+        });
+        /* Satıra tıklama → expand toggle */
+        tb.querySelectorAll('tr.ckart-sip-row').forEach(function(row) {
+          row.addEventListener('click', function(e) {
+            if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON') return;
+            var btn = row.querySelector('.ckart-urt-expand-btn');
+            if (btn) btn.click();
+          });
+        });
       })
       .catch(function(e) {
         console.error('Cari360 üretim', e);
-        tb.innerHTML = '<tr><td colspan="9" class="ckart-muted">Üretim yüklenemedi. Lütfen yeniden deneyin.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="12" class="ckart-muted">' + esc((e && e.message) || 'Üretim yüklenemedi. Lütfen yeniden deneyin.') + '</td></tr>';
       });
   };
 

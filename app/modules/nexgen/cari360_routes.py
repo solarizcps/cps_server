@@ -268,7 +268,11 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
     @bp.route('/api/cari360/<int:cari_id>/uretim', methods=['GET'])
     @login_gerekli
     def api_cari360_uretim(cari_id):
-        return _ops_json(load_cari360_uretim, cari_id)
+        page = max(1, int(request.args.get('page') or 1))
+        page_size = max(1, min(int(request.args.get('page_size') or 20), 100))
+        durum_filtre = (request.args.get('durum') or '').strip() or None
+        return _ops_json(load_cari360_uretim, cari_id,
+                         page=page, page_size=page_size, durum_filtre=durum_filtre)
 
     @bp.route('/api/cari360/<int:cari_id>/sevkiyatlar', methods=['GET'])
     @login_gerekli
