@@ -295,7 +295,6 @@ def main() -> int:
                 {'cid': str(ctx['cari_id']), 'kid': kid},
             )
             page.select_option('#mp-t-cari', str(ctx['cari_id']))
-            page.dispatch_event('#mp-t-cari', 'change')
             page.wait_for_function(
                 '(sid) => document.getElementById("mp-t-sevkiyat") && document.getElementById("mp-t-sevkiyat").value === String(sid)',
                 arg=ctx['sevk1'],
