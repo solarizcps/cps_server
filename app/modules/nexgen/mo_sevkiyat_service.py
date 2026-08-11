@@ -32,6 +32,10 @@ class MoSevkiyatError(Exception):
         super().__init__(mesaj)
 
 
+SEVKIYAT_FIYAT_SNAPSHOT_EKSIK = 'SEVKIYAT_FIYAT_SNAPSHOT_EKSIK'
+SEVKIYAT_PB_SNAPSHOT_EKSIK = 'SEVKIYAT_PB_SNAPSHOT_EKSIK'
+
+
 def _now() -> str:
     return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
@@ -133,17 +137,187 @@ def _siparis_guard(con, siparis_id: int) -> dict:
     return d
 
 
-def _kalem_satir(con, sevkiyat_id: int) -> list[dict]:
-    rows = con.execute(
+def _kalem_tablosu_var(con) -> bool:
+    return _tablo_var(con, 'nexgen_planlama_siparis_kalem')
+
+
+def _sevk_snapshot_kolonlari_var(con) -> bool:
+    if not _tablo_var(con, 'mo_musteri_sevkiyat_kalem'):
+        return False
+    cols = {c[1] for c in con.execute('PRAGMA table_info(mo_musteri_sevkiyat_kalem)').fetchall()}
+    return (
+        'birim_fiyat_snapshot' in cols
+        and 'para_birimi_snapshot' in cols
+        and 'fiyat_kaynagi' in cols
+    )
+
+
+def _siparis_aktif_kalem_sayisi(con, siparis_id: int) -> int:
+    if not _kalem_tablosu_var(con):
+        return 0
+    row = con.execute(
         """
+        SELECT COUNT(*) AS n FROM nexgen_planlama_siparis_kalem
+        WHERE planlama_siparis_id=? AND IFNULL(durum, 'AKTIF')='AKTIF'
+        """,
+        (siparis_id,),
+    ).fetchone()
+    return int(row['n'] or 0) if row else 0
+
+
+def _coz_sevk_fiyat_snapshot(
+    con: sqlite3.Connection,
+    siparis_id: int,
+    siparis_kalem_id: int,
+) -> dict[str, Any]:
+    """Sevk anı fiyat/PB snapshot — tahmin yok, 0 yok."""
+    from modules.nexgen.pzm_siparis_read import pzm_payload_unpack, pzm_siparis_finans_alanlari
+    from modules.nexgen.pzm_siparis_write import pzm_kalem_ticari_hesapla
+
+    out: dict[str, Any] = {
+        'birim_fiyat_snapshot': None,
+        'para_birimi_snapshot': None,
+        'fiyat_kaynagi': None,
+        'fiyat_snapshot_uyari': None,
+    }
+    hdr = con.execute(
+        """
+        SELECT anlasma_para_birimi, anlasma_birim_fiyat, talep_referansi
+        FROM nexgen_planlama_siparis WHERE id=?
+        """,
+        (siparis_id,),
+    ).fetchone()
+    if hdr:
+        fin = pzm_siparis_finans_alanlari(dict(hdr), pzm_payload_unpack(hdr['talep_referansi']))
+        pb = fin.get('anlasma_para_birimi')
+        if pb:
+            out['para_birimi_snapshot'] = str(pb).strip().upper()
+
+    if not _kalem_tablosu_var(con):
+        out['fiyat_snapshot_uyari'] = 'Sipariş kalem tablosu yok — fiyat snapshot NULL.'
+        return out
+
+    sk = con.execute(
+        """
+        SELECT birim_fiyat, net_birim_fiyat, iskonto_orani,
+               miktar_l, miktar_s, miktar_m
+        FROM nexgen_planlama_siparis_kalem
+        WHERE id=? AND planlama_siparis_id=?
+        """,
+        (siparis_kalem_id, siparis_id),
+    ).fetchone()
+    if not sk:
+        out['fiyat_snapshot_uyari'] = 'Sipariş kalemi bulunamadı — fiyat snapshot NULL.'
+        return out
+
+    if sk['net_birim_fiyat'] not in (None, ''):
+        try:
+            out['birim_fiyat_snapshot'] = round(float(sk['net_birim_fiyat']), 4)
+            out['fiyat_kaynagi'] = 'KALEM_NET'
+            return out
+        except (TypeError, ValueError):
+            pass
+
+    if sk['birim_fiyat'] not in (None, ''):
+        try:
+            tic = pzm_kalem_ticari_hesapla(
+                sk['birim_fiyat'],
+                sk['iskonto_orani'],
+                sk['miktar_l'],
+                sk['miktar_s'],
+                sk['miktar_m'],
+                sira=1,
+                fiyat_zorunlu=False,
+            )
+            net = tic.get('net_birim_fiyat')
+            if net not in (None, ''):
+                out['birim_fiyat_snapshot'] = round(float(net), 4)
+                out['fiyat_kaynagi'] = 'KALEM_BRUT'
+                return out
+        except Exception:
+            pass
+
+    if hdr and _siparis_aktif_kalem_sayisi(con, siparis_id) == 1:
+        hb = hdr['anlasma_birim_fiyat']
+        if hb not in (None, ''):
+            try:
+                out['birim_fiyat_snapshot'] = round(float(hb), 4)
+                out['fiyat_kaynagi'] = 'SIPARIS_BASLIK'
+                return out
+            except (TypeError, ValueError):
+                pass
+
+    out['fiyat_snapshot_uyari'] = (
+        'Canonical fiyat bulunamadı — birim_fiyat_snapshot NULL bırakıldı.'
+    )
+    return out
+
+
+def _snapshot_zorunlu_dogrula(snap: dict[str, Any], *, kalem_etiket: str = '') -> None:
+    """Migration 153+ — pozitif kg sevkiyat kalemi snapshot zorunlu."""
+    ek = f' ({kalem_etiket})' if kalem_etiket else ''
+    bf = snap.get('birim_fiyat_snapshot')
+    pb = snap.get('para_birimi_snapshot')
+    fk = snap.get('fiyat_kaynagi')
+    if bf in (None, ''):
+        raise MoSevkiyatError(
+            f'Sevkiyat oluşturulamadı: sipariş kaleminde geçerli birim fiyat bulunamadı.{ek}',
+            409,
+        )
+    if fk in (None, ''):
+        raise MoSevkiyatError(
+            f'Sevkiyat oluşturulamadı: sipariş kaleminde geçerli birim fiyat bulunamadı.{ek}',
+            409,
+        )
+    if pb in (None, ''):
+        raise MoSevkiyatError(
+            f'Sevkiyat oluşturulamadı: para birimi snapshot çözülemedi.{ek}',
+            409,
+        )
+
+
+def _kalem_snapshots_hazirla(
+    con: sqlite3.Connection,
+    siparis_id: int,
+    kalemler: list[dict],
+) -> dict[int, dict[str, Any]]:
+    """Tüm kalem snapshot'larını header insert öncesi çöz — partial sevkiyat önleme."""
+    out: dict[int, dict[str, Any]] = {}
+    for i, k in enumerate(kalemler):
+        sk_id = int(k['siparis_kalem_id'])
+        snap = _coz_sevk_fiyat_snapshot(con, siparis_id, sk_id)
+        _snapshot_zorunlu_dogrula(snap, kalem_etiket=f'kalem {i + 1}')
+        out[sk_id] = snap
+    return out
+
+
+def _kalem_satir(con, sevkiyat_id: int) -> list[dict]:
+    snap_sel = ''
+    if _sevk_snapshot_kolonlari_var(con):
+        snap_sel = ', birim_fiyat_snapshot, para_birimi_snapshot, fiyat_kaynagi'
+    rows = con.execute(
+        f"""
         SELECT id, sevkiyat_id, siparis_kalem_id, urun_adi, renk_ad, formul_ad,
-               miktar_kg, miktar_adet, notlar
+               miktar_kg, miktar_adet, notlar{snap_sel}
         FROM mo_musteri_sevkiyat_kalem WHERE sevkiyat_id=?
         ORDER BY id
         """,
         (sevkiyat_id,),
     ).fetchall()
-    return [dict(r) for r in rows]
+    out = []
+    for r in rows:
+        d = dict(r)
+        bf = d.get('birim_fiyat_snapshot')
+        kg = float(d.get('miktar_kg') or 0)
+        if bf not in (None, '') and kg > 0:
+            try:
+                d['sevk_tutari_snapshot'] = round(float(bf) * kg, 2)
+            except (TypeError, ValueError):
+                d['sevk_tutari_snapshot'] = None
+        else:
+            d['sevk_tutari_snapshot'] = None
+        out.append(d)
+    return out
 
 
 def _detay(con, sevkiyat_id: int) -> dict[str, Any]:
@@ -237,10 +411,6 @@ from modules.nexgen.mo_uretim_kg_read import uretilen_kg_siparis
 
 # Geriye uyumluluk (test / eski import)
 _uretilen_kg_siparis = uretilen_kg_siparis
-
-
-def _kalem_tablosu_var(con) -> bool:
-    return _tablo_var(con, 'nexgen_planlama_siparis_kalem')
 
 
 def son_sevkiyat_ozet(con, cari_id: int) -> dict[str, Any] | None:
@@ -557,6 +727,11 @@ def sevkiyat_olustur(
     irsaliye_raw = (payload.get('irsaliye_no') or '').strip() or None
     _irsaliye_duplicate_kontrol(con, irsaliye_raw)
 
+    has_snap = _sevk_snapshot_kolonlari_var(con)
+    snap_map: dict[int, dict[str, Any]] = {}
+    if has_snap:
+        snap_map = _kalem_snapshots_hazirla(con, siparis_id, kalemler)
+
     now = _now()
     cur = con.execute(
         """
@@ -590,18 +765,37 @@ def sevkiyat_olustur(
                 adet = float(adet)
             except (TypeError, ValueError):
                 adet = None
-        con.execute(
-            """
-            INSERT INTO mo_musteri_sevkiyat_kalem
-                (sevkiyat_id, siparis_kalem_id, urun_adi, renk_ad, formul_ad,
-                 miktar_kg, miktar_adet, notlar)
-            VALUES (?,?,?,?,?,?,?,?)
-            """,
-            (
-                sid, k['siparis_kalem_id'], k['urun_adi'], k['renk_ad'], k['formul_ad'],
-                k['miktar_kg'], adet, k['notlar'],
-            ),
-        )
+        snap = snap_map.get(int(k['siparis_kalem_id']), {}) if has_snap else {}
+        if has_snap:
+            con.execute(
+                """
+                INSERT INTO mo_musteri_sevkiyat_kalem
+                    (sevkiyat_id, siparis_kalem_id, urun_adi, renk_ad, formul_ad,
+                     miktar_kg, miktar_adet, notlar,
+                     birim_fiyat_snapshot, para_birimi_snapshot, fiyat_kaynagi)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    sid, k['siparis_kalem_id'], k['urun_adi'], k['renk_ad'], k['formul_ad'],
+                    k['miktar_kg'], adet, k['notlar'],
+                    snap.get('birim_fiyat_snapshot'),
+                    snap.get('para_birimi_snapshot'),
+                    snap.get('fiyat_kaynagi'),
+                ),
+            )
+        else:
+            con.execute(
+                """
+                INSERT INTO mo_musteri_sevkiyat_kalem
+                    (sevkiyat_id, siparis_kalem_id, urun_adi, renk_ad, formul_ad,
+                     miktar_kg, miktar_adet, notlar)
+                VALUES (?,?,?,?,?,?,?,?)
+                """,
+                (
+                    sid, k['siparis_kalem_id'], k['urun_adi'], k['renk_ad'], k['formul_ad'],
+                    k['miktar_kg'], adet, k['notlar'],
+                ),
+            )
     _audit_append(
         con, sid, 'SEVKIYAT_OLUSTURULDU',
         onceki_durum=None, yeni_durum='HAZIRLANIYOR',

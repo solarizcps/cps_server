@@ -42,12 +42,70 @@ def db_fingerprint(path: str) -> dict[str, Any]:
     }
 
 
+CANONICAL_DB_WRITE_FORBIDDEN_IN_TEST = 'CANONICAL_DB_WRITE_FORBIDDEN_IN_TEST'
+
+
 def _norm(p: str) -> str:
-    return os.path.normcase(os.path.normpath(os.path.abspath(p)))
+    try:
+        return os.path.normcase(os.path.realpath(os.path.abspath(p)))
+    except OSError:
+        return os.path.normcase(os.path.normpath(os.path.abspath(p)))
+
+
+def canonical_db_path(live_path: str | None = None) -> str:
+    """Canonical mock_data.db absolute path."""
+    tools_dir = os.path.dirname(os.path.abspath(__file__))
+    app_dir = os.path.dirname(tools_dir)
+    return _norm(live_path or os.path.join(app_dir, 'mock_data.db'))
+
+
+def _script_context_hint() -> str:
+    import inspect
+
+    for frame in inspect.stack()[2:8]:
+        fn = frame.filename or ''
+        if fn.endswith('nexgen_tmp_db.py') or fn.endswith('test_db_guard.py'):
+            continue
+        if '_test_' in fn or '_browser_' in fn or os.sep + 'tests' + os.sep in fn:
+            return fn
+    return '<unknown>'
+
+
+def _log_canonical_rw_attempt(action: str, database: Any, live: str) -> None:
+    """Append-only diagnostic — does not write canonical DB."""
+    if os.environ.get('CPS_GUARD_RW_TRACE', '1').strip().lower() in ('0', 'false', 'no'):
+        return
+    try:
+        import inspect
+
+        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        log_path = os.path.join(root, 'backup', 'guard05_rw_trace.log')
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        stack = []
+        for frame in inspect.stack()[2:12]:
+            fn = frame.filename or ''
+            if fn.endswith('nexgen_tmp_db.py') or fn.endswith('test_db_guard.py'):
+                continue
+            stack.append(f'{fn}:{frame.lineno}')
+        with open(log_path, 'a', encoding='utf-8') as f:
+            f.write(
+                f'{time.strftime("%Y-%m-%d %H:%M:%S")} pid={os.getpid()} '
+                f'action={action} path={database!r} live={live!r} '
+                f'script={_script_context_hint()} argv={sys.argv[:2]!r} '
+                f'stack={" | ".join(stack[:5])}\n'
+            )
+    except OSError:
+        pass
 
 
 class LiveDbWriteError(RuntimeError):
     """Test ortamında canlı mock_data.db yazım girişimi."""
+
+    CODE = CANONICAL_DB_WRITE_FORBIDDEN_IN_TEST
+
+    def __init__(self, message: str, *, attempted_path: str | None = None):
+        self.attempted_path = attempted_path
+        super().__init__(message)
 
 
 _GUARD: dict[str, Any] | None = None
@@ -79,7 +137,7 @@ def install_live_db_write_guard(live_path: str | None = None) -> dict[str, Any]:
 
     tools_dir = os.path.dirname(os.path.abspath(__file__))
     app_dir = os.path.dirname(tools_dir)
-    live = _norm(live_path or os.path.join(app_dir, "mock_data.db"))
+    live = canonical_db_path(live_path or os.path.join(app_dir, "mock_data.db"))
 
     real_connect = sqlite3.connect
     real_copy2 = shutil.copy2
@@ -97,9 +155,9 @@ def install_live_db_write_guard(live_path: str | None = None) -> dict[str, Any]:
         "real_copyfile": real_copyfile,
     }
 
-    def _is_live_target(database: Any) -> bool:
+    def _resolve_db_path(database: Any) -> str | None:
         if database is None:
-            return False
+            return None
         s = str(database)
         try:
             if s.startswith("file:"):
@@ -107,13 +165,28 @@ def install_live_db_write_guard(live_path: str | None = None) -> dict[str, Any]:
 
                 u = urlparse(s)
                 path_part = unquote(u.path)
-                # file:///C:/path → /C:/path on Windows
                 if os.name == "nt" and path_part.startswith("/") and len(path_part) >= 3 and path_part[2] == ":":
                     path_part = path_part[1:]
-                return _norm(path_part) == live
-            return _norm(s) == live
+                return _norm(path_part)
+            if s == ':memory:':
+                return None
+            return _norm(s)
         except Exception:
+            return None
+
+    def _is_live_target(database: Any) -> bool:
+        resolved = _resolve_db_path(database)
+        if not resolved:
             return False
+        return resolved == live
+
+    def _forbidden_message(database: Any, action: str) -> str:
+        ctx = _script_context_hint()
+        return (
+            f'{CANONICAL_DB_WRITE_FORBIDDEN_IN_TEST}: {action} blocked for canonical DB. '
+            f'attempted_path={database!r} live={live!r} script={ctx}. '
+            f'Use tools.nexgen_tmp_db.tmp_db_context() or :memory: for writes.'
+        )
 
     def _is_ro_uri(database: Any, kwargs: dict) -> bool:
         s = str(database)
@@ -130,8 +203,10 @@ def install_live_db_write_guard(live_path: str | None = None) -> dict[str, Any]:
                 state["allowed_ro_connects"] += 1
                 return real_connect(*args, **kwargs)
             state["blocked_connects"] += 1
+            _log_canonical_rw_attempt('sqlite3.connect', database, live)
             raise LiveDbWriteError(
-                f"LIVE DB write connect blocked: {database!r} (live={live})"
+                _forbidden_message(database, 'sqlite3.connect'),
+                attempted_path=str(database),
             )
         return real_connect(*args, **kwargs)
 
@@ -140,7 +215,8 @@ def install_live_db_write_guard(live_path: str | None = None) -> dict[str, Any]:
             if dst and _norm(str(dst)) == live:
                 state["blocked_copies"] += 1
                 raise LiveDbWriteError(
-                    f"LIVE DB copy-{kind} blocked → {dst!r}"
+                    _forbidden_message(dst, f'shutil.{kind}'),
+                    attempted_path=str(dst),
                 )
         except LiveDbWriteError:
             raise
@@ -176,6 +252,26 @@ def uninstall_live_db_write_guard() -> None:
     shutil.copy = _GUARD["real_copy"]  # type: ignore[assignment]
     shutil.copyfile = _GUARD["real_copyfile"]  # type: ignore[assignment]
     _GUARD = None
+
+
+def connect_sqlite(database: str, *, readonly: bool = False, **kwargs: Any) -> sqlite3.Connection:
+    """Test-safe sqlite connect — canonical RW blocked when guard active."""
+    if readonly:
+        path = os.path.abspath(database)
+        uri = f'file:{path}?mode=ro'
+        return sqlite3.connect(uri, uri=True, **kwargs)
+    return sqlite3.connect(database, **kwargs)
+
+
+def bootstrap_canonical_write_guard(live_path: str | None = None) -> str:
+    """Ad-hoc _test_* / _browser_* script import-time guard."""
+    live = canonical_db_path(live_path)
+    install_live_db_write_guard(live)
+    return live
+
+
+def guard_is_active() -> bool:
+    return _GUARD is not None
 
 
 def assert_resolved_db_is_tmp(resolved: str, live_path: str) -> None:
