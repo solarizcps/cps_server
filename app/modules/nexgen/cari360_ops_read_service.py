@@ -252,6 +252,280 @@ def load_cari360_ozet(
     }
 
 
+def _siparis_date_next_day(iso_date: str) -> str:
+    """Bitiş tarihi filtresi: < ertesi gün."""
+    import datetime
+    try:
+        dt = datetime.date.fromisoformat(iso_date.strip()[:10])
+        return (dt + datetime.timedelta(days=1)).isoformat()
+    except ValueError:
+        return iso_date.strip()[:10]
+
+
+def _build_siparis_filter_sql(
+    con: sqlite3.Connection,
+    *,
+    siparis_no: str | None = None,
+    tarih_baslangic: str | None = None,
+    tarih_bitis: str | None = None,
+    durumlar: list[str] | None = None,
+    termin_baslangic: str | None = None,
+    termin_bitis: str | None = None,
+    odeme_tipleri: list[str] | None = None,
+    vade_min: int | None = None,
+    vade_max: int | None = None,
+    para_birimleri: list[str] | None = None,
+    toplam_min: float | None = None,
+    toplam_max: float | None = None,
+    plan_kodu: str | None = None,
+    batch_kodu: str | None = None,
+    sevk_baslangic: str | None = None,
+    sevk_bitis: str | None = None,
+    try_min: float | None = None,
+    try_max: float | None = None,
+    fiyat_tipleri: list[str] | None = None,
+    fiyat_min: float | None = None,
+    fiyat_max: float | None = None,
+    uretilen_kg_min: float | None = None,
+    uretilen_kg_max: float | None = None,
+    kalem_min: int | None = None,
+    kalem_max: int | None = None,
+    numune_durumlari: list[str] | None = None,
+    sevk_kg_min: float | None = None,
+    sevk_kg_max: float | None = None,
+) -> tuple[str, list[Any]]:
+    """Sipariş listesi COUNT/SELECT için parameterized WHERE parçaları."""
+    filter_clauses: list[str] = []
+    filter_params: list[Any] = []
+    scols = _kolonlar(con, 'nexgen_planlama_siparis') if _tablo_var(con, 'nexgen_planlama_siparis') else set()
+    has_kalem_tbl = _tablo_var(con, 'nexgen_planlama_siparis_kalem')
+    has_plan_tbl = _tablo_var(con, 'nexgen_uretim_plan')
+    has_batch_tbl = _tablo_var(con, 'nexgen_uretim_batch')
+    has_sevk_tbl = _tablo_var(con, 'mo_musteri_sevkiyat')
+    has_sevk_kalem_tbl = _tablo_var(con, 'mo_musteri_sevkiyat_kalem')
+    has_parca_tbl = _tablo_var(con, 'nexgen_uretim_parca')
+    kcols = _kolonlar(con, 'nexgen_planlama_siparis_kalem') if has_kalem_tbl else set()
+
+    if siparis_no and siparis_no.strip():
+        filter_clauses.append('siparis_no LIKE ?')
+        filter_params.append('%' + siparis_no.strip() + '%')
+
+    if tarih_baslangic and tarih_baslangic.strip():
+        filter_clauses.append("COALESCE(olusturma_tarihi, '') >= ?")
+        filter_params.append(tarih_baslangic.strip()[:10])
+
+    if tarih_bitis and tarih_bitis.strip():
+        filter_clauses.append("COALESCE(olusturma_tarihi, '') < ?")
+        filter_params.append(_siparis_date_next_day(tarih_bitis))
+
+    if durumlar:
+        clean = [d.strip().upper() for d in durumlar if d and d.strip()]
+        if clean:
+            ph = ','.join('?' * len(clean))
+            filter_clauses.append(f'durum IN ({ph})')
+            filter_params.extend(clean)
+
+    if termin_baslangic and termin_baslangic.strip():
+        filter_clauses.append("COALESCE(termin_tarihi, '') >= ?")
+        filter_params.append(termin_baslangic.strip()[:10])
+
+    if termin_bitis and termin_bitis.strip():
+        filter_clauses.append("COALESCE(termin_tarihi, '') < ?")
+        filter_params.append(_siparis_date_next_day(termin_bitis))
+
+    if odeme_tipleri and 'odeme_tipi' in scols:
+        parts: list[str] = []
+        normal = [o.strip().upper() for o in odeme_tipleri if o and o.strip() and o.strip().upper() != 'BELIRTILMEMIS']
+        if normal:
+            ph = ','.join('?' * len(normal))
+            parts.append(f'UPPER(TRIM(COALESCE(odeme_tipi, ""))) IN ({ph})')
+            filter_params.extend(normal)
+        if any(o.strip().upper() == 'BELIRTILMEMIS' for o in odeme_tipleri if o):
+            parts.append("(odeme_tipi IS NULL OR TRIM(COALESCE(odeme_tipi, '')) = '')")
+        if parts:
+            filter_clauses.append('(' + ' OR '.join(parts) + ')')
+
+    if vade_min is not None and 'vade_gun' in scols:
+        filter_clauses.append('CAST(vade_gun AS INTEGER) >= ?')
+        filter_params.append(int(vade_min))
+
+    if vade_max is not None and 'vade_gun' in scols:
+        filter_clauses.append('CAST(vade_gun AS INTEGER) <= ?')
+        filter_params.append(int(vade_max))
+
+    if para_birimleri and 'anlasma_para_birimi' in scols:
+        pbs = [p.strip().upper() for p in para_birimleri if p and p.strip()]
+        if pbs:
+            ph = ','.join('?' * len(pbs))
+            filter_clauses.append(f'UPPER(TRIM(COALESCE(anlasma_para_birimi, ""))) IN ({ph})')
+            filter_params.extend(pbs)
+
+    if has_kalem_tbl and (toplam_min is not None or toplam_max is not None):
+        if 'satir_tutari' in kcols and 'birim_fiyat' in kcols:
+            sum_expr = (
+                '(SELECT SUM(CASE WHEN k.birim_fiyat IS NOT NULL THEN k.satir_tutari END) '
+                'FROM nexgen_planlama_siparis_kalem k '
+                'WHERE k.planlama_siparis_id = nexgen_planlama_siparis.id)'
+            )
+            if toplam_min is not None:
+                filter_clauses.append(f'{sum_expr} >= ?')
+                filter_params.append(float(toplam_min))
+            if toplam_max is not None:
+                filter_clauses.append(f'{sum_expr} <= ?')
+                filter_params.append(float(toplam_max))
+
+    if plan_kodu and plan_kodu.strip() and has_plan_tbl:
+        filter_clauses.append(
+            """
+            EXISTS (
+                SELECT 1 FROM nexgen_uretim_plan p
+                WHERE p.planlama_siparis_id = nexgen_planlama_siparis.id
+                  AND COALESCE(p.durum, '') NOT IN ('IPTAL')
+                  AND p.plan_kodu LIKE ?
+            )
+            """
+        )
+        filter_params.append('%' + plan_kodu.strip() + '%')
+
+    if batch_kodu and batch_kodu.strip() and has_plan_tbl and has_batch_tbl:
+        filter_clauses.append(
+            """
+            EXISTS (
+                SELECT 1 FROM nexgen_uretim_batch b
+                JOIN nexgen_uretim_plan p ON p.id = b.plan_id
+                WHERE p.planlama_siparis_id = nexgen_planlama_siparis.id
+                  AND COALESCE(p.durum, '') NOT IN ('IPTAL')
+                  AND b.batch_kodu LIKE ?
+            )
+            """
+        )
+        filter_params.append('%' + batch_kodu.strip() + '%')
+
+    if has_sevk_tbl and (sevk_baslangic or sevk_bitis):
+        sevk_expr = (
+            '(SELECT MAX(COALESCE(sevk_tarihi, olusturma_tarihi)) '
+            'FROM mo_musteri_sevkiyat sv '
+            'WHERE sv.siparis_id = nexgen_planlama_siparis.id AND COALESCE(sv.aktif, 1)=1)'
+        )
+        if sevk_baslangic and sevk_baslangic.strip():
+            filter_clauses.append(f"COALESCE({sevk_expr}, '') >= ?")
+            filter_params.append(sevk_baslangic.strip()[:10])
+        if sevk_bitis and sevk_bitis.strip():
+            filter_clauses.append(f"COALESCE({sevk_expr}, '') < ?")
+            filter_params.append(_siparis_date_next_day(sevk_bitis))
+
+    if has_kalem_tbl and (try_min is not None or try_max is not None):
+        if 'satir_tutari_try' in kcols and 'birim_fiyat' in kcols:
+            try_expr = (
+                '(SELECT SUM(CASE WHEN k.birim_fiyat IS NOT NULL THEN k.satir_tutari_try END) '
+                'FROM nexgen_planlama_siparis_kalem k '
+                'WHERE k.planlama_siparis_id = nexgen_planlama_siparis.id)'
+            )
+            if try_min is not None:
+                filter_clauses.append(f'{try_expr} >= ?')
+                filter_params.append(float(try_min))
+            if try_max is not None:
+                filter_clauses.append(f'{try_expr} <= ?')
+                filter_params.append(float(try_max))
+
+    if has_kalem_tbl and 'birim_fiyat' in kcols and (
+        fiyat_tipleri or fiyat_min is not None or fiyat_max is not None
+    ):
+        fiyatli_n = (
+            '(SELECT COUNT(*) FROM nexgen_planlama_siparis_kalem k '
+            'WHERE k.planlama_siparis_id = nexgen_planlama_siparis.id '
+            'AND COALESCE(k.net_birim_fiyat, k.birim_fiyat) IS NOT NULL)'
+        )
+        fiyat_min_expr = (
+            '(SELECT MIN(COALESCE(k.net_birim_fiyat, k.birim_fiyat)) '
+            'FROM nexgen_planlama_siparis_kalem k '
+            'WHERE k.planlama_siparis_id = nexgen_planlama_siparis.id '
+            'AND COALESCE(k.net_birim_fiyat, k.birim_fiyat) IS NOT NULL)'
+        )
+        fiyat_max_expr = (
+            '(SELECT MAX(COALESCE(k.net_birim_fiyat, k.birim_fiyat)) '
+            'FROM nexgen_planlama_siparis_kalem k '
+            'WHERE k.planlama_siparis_id = nexgen_planlama_siparis.id '
+            'AND COALESCE(k.net_birim_fiyat, k.birim_fiyat) IS NOT NULL)'
+        )
+        if fiyat_tipleri:
+            tip_parts: list[str] = []
+            tips = {t.strip().upper() for t in fiyat_tipleri if t and t.strip()}
+            if 'TEK_FIYAT' in tips:
+                tip_parts.append(f'({fiyatli_n} > 0 AND {fiyat_min_expr} = {fiyat_max_expr})')
+            if 'COKLU' in tips:
+                tip_parts.append(f'({fiyatli_n} > 0 AND {fiyat_min_expr} != {fiyat_max_expr})')
+            if 'BELIRTILMEMIS' in tips:
+                tip_parts.append(f'({fiyatli_n} = 0)')
+            if tip_parts:
+                filter_clauses.append('(' + ' OR '.join(tip_parts) + ')')
+        if fiyat_min is not None:
+            filter_clauses.append(f'{fiyat_min_expr} >= ?')
+            filter_params.append(float(fiyat_min))
+        if fiyat_max is not None:
+            filter_clauses.append(f'{fiyat_max_expr} <= ?')
+            filter_params.append(float(fiyat_max))
+
+    if has_plan_tbl and has_parca_tbl and (uretilen_kg_min is not None or uretilen_kg_max is not None):
+        uretilen_expr = (
+            '(SELECT COALESCE(SUM(pr.uretilen_kg), 0) '
+            'FROM nexgen_uretim_parca pr '
+            'JOIN nexgen_uretim_plan p ON p.id = pr.plan_id '
+            'WHERE p.planlama_siparis_id = nexgen_planlama_siparis.id '
+            "AND COALESCE(p.durum, '') NOT IN ('IPTAL'))"
+        )
+        if uretilen_kg_min is not None:
+            filter_clauses.append(f'{uretilen_expr} >= ?')
+            filter_params.append(float(uretilen_kg_min))
+        if uretilen_kg_max is not None:
+            filter_clauses.append(f'{uretilen_expr} <= ?')
+            filter_params.append(float(uretilen_kg_max))
+
+    if has_kalem_tbl and (kalem_min is not None or kalem_max is not None):
+        kalem_expr = (
+            '(SELECT COUNT(*) FROM nexgen_planlama_siparis_kalem k '
+            'WHERE k.planlama_siparis_id = nexgen_planlama_siparis.id)'
+        )
+        if kalem_min is not None:
+            filter_clauses.append(f'{kalem_expr} >= ?')
+            filter_params.append(int(kalem_min))
+        if kalem_max is not None:
+            filter_clauses.append(f'{kalem_expr} <= ?')
+            filter_params.append(int(kalem_max))
+
+    if has_kalem_tbl and numune_durumlari and 'numune_talep_id' in kcols:
+        numune_parts: list[str] = []
+        nd = {n.strip().upper() for n in numune_durumlari if n and n.strip()}
+        numune_exists = (
+            'EXISTS (SELECT 1 FROM nexgen_planlama_siparis_kalem k '
+            'WHERE k.planlama_siparis_id = nexgen_planlama_siparis.id '
+            'AND k.numune_talep_id IS NOT NULL)'
+        )
+        if 'VAR' in nd:
+            numune_parts.append(numune_exists)
+        if 'YOK' in nd:
+            numune_parts.append(f'NOT {numune_exists}')
+        if numune_parts:
+            filter_clauses.append('(' + ' OR '.join(numune_parts) + ')')
+
+    if has_sevk_tbl and has_sevk_kalem_tbl and (sevk_kg_min is not None or sevk_kg_max is not None):
+        sevk_kg_expr = (
+            '(SELECT COALESCE(SUM(k.miktar_kg), 0) '
+            'FROM mo_musteri_sevkiyat_kalem k '
+            'JOIN mo_musteri_sevkiyat s ON s.id = k.sevkiyat_id '
+            'WHERE s.siparis_id = nexgen_planlama_siparis.id AND COALESCE(s.aktif, 1)=1)'
+        )
+        if sevk_kg_min is not None:
+            filter_clauses.append(f'{sevk_kg_expr} >= ?')
+            filter_params.append(float(sevk_kg_min))
+        if sevk_kg_max is not None:
+            filter_clauses.append(f'{sevk_kg_expr} <= ?')
+            filter_params.append(float(sevk_kg_max))
+
+    filter_sql = (' AND ' + ' AND '.join(filter_clauses)) if filter_clauses else ''
+    return filter_sql, filter_params
+
+
 def load_cari360_siparisler(
     con: sqlite3.Connection,
     cari_id: int,
@@ -260,8 +534,36 @@ def load_cari360_siparisler(
     *,
     limit: int = 50,
     offset: int = 0,
+    siparis_no: str | None = None,
+    tarih_baslangic: str | None = None,
+    tarih_bitis: str | None = None,
+    durumlar: list[str] | None = None,
+    termin_baslangic: str | None = None,
+    termin_bitis: str | None = None,
+    odeme_tipleri: list[str] | None = None,
+    vade_min: int | None = None,
+    vade_max: int | None = None,
+    para_birimleri: list[str] | None = None,
+    toplam_min: float | None = None,
+    toplam_max: float | None = None,
+    plan_kodu: str | None = None,
+    batch_kodu: str | None = None,
+    sevk_baslangic: str | None = None,
+    sevk_bitis: str | None = None,
+    try_min: float | None = None,
+    try_max: float | None = None,
+    fiyat_tipleri: list[str] | None = None,
+    fiyat_min: float | None = None,
+    fiyat_max: float | None = None,
+    uretilen_kg_min: float | None = None,
+    uretilen_kg_max: float | None = None,
+    kalem_min: int | None = None,
+    kalem_max: int | None = None,
+    numune_durumlari: list[str] | None = None,
+    sevk_kg_min: float | None = None,
+    sevk_kg_max: float | None = None,
 ) -> dict[str, Any]:
-    """Son N sipariş — read-only. Pagination: limit/offset."""
+    """Son N sipariş — read-only. Pagination: limit/offset. Filtre: server-side WHERE."""
     _assert_cari(con, cari_id, kullanici_id, yk)
     cid = int(cari_id)
     limit = max(1, min(int(limit or 50), 100))
@@ -270,10 +572,42 @@ def load_cari360_siparisler(
     if not _tablo_var(con, 'nexgen_planlama_siparis'):
         return {'liste': [], 'count': 0, 'total_count': 0, 'page': 1, 'page_size': limit, 'total_pages': 0}
 
-    # Gerçek toplam — DB'den ayrı COUNT sorgusu
+    filter_sql, filter_params = _build_siparis_filter_sql(
+        con,
+        siparis_no=siparis_no,
+        tarih_baslangic=tarih_baslangic,
+        tarih_bitis=tarih_bitis,
+        durumlar=durumlar,
+        termin_baslangic=termin_baslangic,
+        termin_bitis=termin_bitis,
+        odeme_tipleri=odeme_tipleri,
+        vade_min=vade_min,
+        vade_max=vade_max,
+        para_birimleri=para_birimleri,
+        toplam_min=toplam_min,
+        toplam_max=toplam_max,
+        plan_kodu=plan_kodu,
+        batch_kodu=batch_kodu,
+        sevk_baslangic=sevk_baslangic,
+        sevk_bitis=sevk_bitis,
+        try_min=try_min,
+        try_max=try_max,
+        fiyat_tipleri=fiyat_tipleri,
+        fiyat_min=fiyat_min,
+        fiyat_max=fiyat_max,
+        uretilen_kg_min=uretilen_kg_min,
+        uretilen_kg_max=uretilen_kg_max,
+        kalem_min=kalem_min,
+        kalem_max=kalem_max,
+        numune_durumlari=numune_durumlari,
+        sevk_kg_min=sevk_kg_min,
+        sevk_kg_max=sevk_kg_max,
+    )
+
+    # Filtrelenmiş toplam — COUNT aynı WHERE'i kullanır
     total_count = con.execute(
-        'SELECT COUNT(*) FROM nexgen_planlama_siparis WHERE cari_id=?',
-        (cid,),
+        f'SELECT COUNT(*) FROM nexgen_planlama_siparis WHERE cari_id=?{filter_sql}',
+        [cid] + filter_params,
     ).fetchone()[0]
 
     # FAZ-3C: Cari360 GET read-only — soft-write/backfill çağrılmaz
@@ -294,11 +628,11 @@ def load_cari360_siparisler(
                termin_tarihi, musteri_termin, onerilen_termin
                {mo_sel}
         FROM nexgen_planlama_siparis
-        WHERE cari_id=?
+        WHERE cari_id=?{filter_sql}
         ORDER BY COALESCE(olusturma_tarihi, '') DESC, id DESC
         LIMIT ? OFFSET ?
         """,
-        (cid, limit, offset),
+        [cid] + filter_params + [limit, offset],
     ).fetchall()
 
     gorusme_ids = {

@@ -187,7 +187,77 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
         page_size = max(1, min(int(request.args.get('page_size') or 50), 100))
         page = max(1, int(request.args.get('page') or 1))
         offset = (page - 1) * page_size
-        return _ops_json(load_cari360_siparisler, cari_id, limit=page_size, offset=offset)
+        # C360-FILTER-SIPARIS-01/02: filtre parametreleri
+        siparis_no = (request.args.get('siparis_no') or '').strip() or None
+        tarih_baslangic = (request.args.get('tarih_baslangic') or '').strip() or None
+        tarih_bitis = (request.args.get('tarih_bitis') or '').strip() or None
+        durum_raw = (request.args.get('durum') or '').strip()
+        durumlar = [d.strip() for d in durum_raw.split(',') if d.strip()] if durum_raw else None
+        termin_baslangic = (request.args.get('termin_baslangic') or '').strip() or None
+        termin_bitis = (request.args.get('termin_bitis') or '').strip() or None
+        odeme_raw = (request.args.get('odeme') or '').strip()
+        odeme_tipleri = [d.strip() for d in odeme_raw.split(',') if d.strip()] if odeme_raw else None
+        pb_raw = (request.args.get('pb') or '').strip()
+        para_birimleri = [d.strip() for d in pb_raw.split(',') if d.strip()] if pb_raw else None
+        plan_kodu = (request.args.get('plan_kodu') or '').strip() or None
+        batch_kodu = (request.args.get('batch_kodu') or '').strip() or None
+        sevk_baslangic = (request.args.get('sevk_baslangic') or '').strip() or None
+        sevk_bitis = (request.args.get('sevk_bitis') or '').strip() or None
+        fiyat_raw = (request.args.get('fiyat_tipi') or '').strip()
+        fiyat_tipleri = [d.strip() for d in fiyat_raw.split(',') if d.strip()] if fiyat_raw else None
+        numune_raw = (request.args.get('numune') or '').strip()
+        numune_durumlari = [d.strip() for d in numune_raw.split(',') if d.strip()] if numune_raw else None
+
+        def _parse_int_opt(key: str):
+            raw = (request.args.get(key) or '').strip()
+            if not raw:
+                return None
+            try:
+                return int(raw)
+            except ValueError:
+                return None
+
+        def _parse_float_opt(key: str):
+            raw = (request.args.get(key) or '').strip().replace(',', '.')
+            if not raw:
+                return None
+            try:
+                return float(raw)
+            except ValueError:
+                return None
+
+        return _ops_json(
+            load_cari360_siparisler, cari_id,
+            limit=page_size, offset=offset,
+            siparis_no=siparis_no,
+            tarih_baslangic=tarih_baslangic,
+            tarih_bitis=tarih_bitis,
+            durumlar=durumlar,
+            termin_baslangic=termin_baslangic,
+            termin_bitis=termin_bitis,
+            odeme_tipleri=odeme_tipleri,
+            vade_min=_parse_int_opt('vade_min'),
+            vade_max=_parse_int_opt('vade_max'),
+            para_birimleri=para_birimleri,
+            toplam_min=_parse_float_opt('toplam_min'),
+            toplam_max=_parse_float_opt('toplam_max'),
+            plan_kodu=plan_kodu,
+            batch_kodu=batch_kodu,
+            sevk_baslangic=sevk_baslangic,
+            sevk_bitis=sevk_bitis,
+            try_min=_parse_float_opt('try_min'),
+            try_max=_parse_float_opt('try_max'),
+            fiyat_tipleri=fiyat_tipleri,
+            fiyat_min=_parse_float_opt('fiyat_min'),
+            fiyat_max=_parse_float_opt('fiyat_max'),
+            uretilen_kg_min=_parse_float_opt('uretilen_kg_min'),
+            uretilen_kg_max=_parse_float_opt('uretilen_kg_max'),
+            kalem_min=_parse_int_opt('kalem_min'),
+            kalem_max=_parse_int_opt('kalem_max'),
+            numune_durumlari=numune_durumlari,
+            sevk_kg_min=_parse_float_opt('sevk_kg_min'),
+            sevk_kg_max=_parse_float_opt('sevk_kg_max'),
+        )
 
     @bp.route('/api/cari360/<int:cari_id>/ticari-ozet', methods=['GET'])
     @login_gerekli
