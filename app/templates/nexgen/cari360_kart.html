@@ -3590,15 +3590,21 @@ main { padding: 16px 12px !important; }
       u.searchParams.set('tab', tab);
       history.replaceState(null, '', u.toString());
     } catch (e) {}
+    /* C360-CANONICAL-REFRESH-01: her tab aktivasyonunda cache invalidate + fresh KPI */
+    ckartOzetYukle();
+    if (tab === 'siparisler') {
+      _opsLoaded.siparisler = false;
+      _opsLoaded.ticariOzet = false;
+      ckartSiparisYukle(true);
+    }
+    if (tab === 'uretim') { _opsLoaded.uretim = false; ckartUretimYukle(true); }
+    if (tab === 'sevkiyatlar') { _opsLoaded.sevkiyatlar = false; ckartSevkYukle(true); }
+    if (tab === 'urunler') { _opsLoaded.urunler = false; ckartUrunYukle(true); }
+    if (tab === 'numuneler') { _opsLoaded.numuneler = false; ckartNumuneYukle(true); }
+    if (tab === 'finans') { _ckartFinansYuklendi = false; ckartFinansYukle(); }
+    if (tab === 'hafiza') { _ckartHafizaTabYuklendi = false; ckartHafizaTabYukle(); }
     if (tab === 'gorusmeler') ckartGorusmeYukle();
-    if (tab === 'siparisler') { _sipPage = 1; ckartSiparisYukle(); }
-    if (tab === 'uretim') ckartUretimYukle();
-    if (tab === 'sevkiyatlar') ckartSevkYukle();
-    if (tab === 'urunler') ckartUrunYukle();
-    if (tab === 'numuneler') ckartNumuneYukle();
-    if (tab === 'finans') ckartFinansYukle();
     if (tab === 'onaylar') ckartOnaylarYukle();
-    if (tab === 'hafiza') ckartHafizaTabYukle();
   };
 
   ckartOzetYukle();
