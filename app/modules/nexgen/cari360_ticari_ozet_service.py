@@ -251,7 +251,7 @@ def load_cari360_ticari_ozet(
         'id', 'siparis_no', 'durum', 'olusturma_tarihi', 'talep_referansi',
         'anlasma_para_birimi', 'anlasma_birim_fiyat',
     ]
-    for col in ('odeme_tipi', 'vade_gun', 'kur', 'kur_tarihi', 'kur_kaynagi'):
+    for col in ('odeme_tipi', 'vade_gun', 'cek_vade_gun', 'kur', 'kur_tarihi', 'kur_kaynagi'):
         if col in scols:
             sel.append(col)
 
@@ -294,14 +294,26 @@ def load_cari360_ticari_ozet(
             continue
         payload = pzm_payload_unpack(r['talep_referansi'] if 'talep_referansi' in scols else None)
         tarih = pzm_siparis_tarihi_coz(payload, r['olusturma_tarihi'])
+        # cek_vade_gun: DB kolon öncelikli, yoksa talep_referansi JSON fallback
+        _cvg_raw = r['cek_vade_gun'] if 'cek_vade_gun' in scols else None
+        if _cvg_raw in (None, ''):
+            _cvg_json = (payload or {}).get('cek_vade_gun')
+            if _cvg_json not in (None, ''):
+                try:
+                    _cvg_raw = int(_cvg_json)
+                except (TypeError, ValueError):
+                    _cvg_raw = None
+        _ot_h = (r['odeme_tipi'] if 'odeme_tipi' in scols else None)
+        _ot_h_str = (str(_ot_h).strip().upper() if _ot_h not in (None, '') else None)
         headers.append({
             'id': int(r['id']),
             'siparis_no': r['siparis_no'] or '',
             'durum': durum,
             'tarih': tarih,
             'olusturma_tarihi': r['olusturma_tarihi'],
-            'odeme_tipi': (r['odeme_tipi'] if 'odeme_tipi' in scols else None),
+            'odeme_tipi': _ot_h_str,
             'vade_gun': r['vade_gun'] if 'vade_gun' in scols else None,
+            'cek_vade_gun': _cvg_raw,
             'para_birimi': _normalize_pb(r['anlasma_para_birimi']),
             'kur': _dec(r['kur']) if 'kur' in scols else None,
             'kur_kaynagi': (r['kur_kaynagi'] if 'kur_kaynagi' in scols else None),
@@ -513,6 +525,8 @@ def load_cari360_ticari_ozet(
                         'son_siparis_no': None,
                         'son_siparis_tarihi': None,
                         'son_vade_gun': None,
+                        'son_odeme_tipi': None,
+                        'son_gosterilecek_vade_gun': None,
                         'fiyat_kaynagi': None,
                         'toplam_miktar_kg': Decimal('0'),
                         'siparis_ids': set(),
@@ -532,13 +546,25 @@ def load_cari360_ticari_ozet(
                     g['son_iskonto_orani'] = iskonto
                     g['son_iskonto_belirtilmemis'] = (fiyat_kaynagi == 'ESKI_BASLIK_FIYATI')
                     g['fiyat_kaynagi'] = fiyat_kaynagi
-                    vg_son = h['vade_gun']
-                    try:
-                        g['son_vade_gun'] = int(vg_son) if vg_son not in (None, '') else None
-                    except (TypeError, ValueError):
-                        g['son_vade_gun'] = None
-                    if ot == 'NAKIT':
-                        g['son_vade_gun'] = 0
+                    g['son_odeme_tipi'] = ot
+                    # canonical vade resolver — enrich_siparis_listesi_ticari ile aynı mantık
+                    if ot == 'CEK':
+                        _cvg = h.get('cek_vade_gun')
+                        try:
+                            g['son_vade_gun'] = int(_cvg) if _cvg not in (None, '') else None
+                        except (TypeError, ValueError):
+                            g['son_vade_gun'] = None
+                        g['son_gosterilecek_vade_gun'] = g['son_vade_gun']
+                    elif ot == 'VADELI':
+                        _vg = h['vade_gun']
+                        try:
+                            g['son_vade_gun'] = int(_vg) if _vg not in (None, '') else None
+                        except (TypeError, ValueError):
+                            g['son_vade_gun'] = None
+                        g['son_gosterilecek_vade_gun'] = g['son_vade_gun']
+                    else:
+                        g['son_vade_gun'] = 0 if ot == 'NAKIT' else None
+                        g['son_gosterilecek_vade_gun'] = None
 
                 # min/max/ağırlıklı: yalnız KALEM_SNAPSHOT + net + miktar>0
                 if fiyat_kaynagi == 'KALEM_SNAPSHOT' and net is not None and k['miktar'] > 0:
@@ -696,7 +722,9 @@ def load_cari360_ticari_ozet(
             'son_siparis_id': g['son_siparis_id'],
             'son_siparis_no': g['son_siparis_no'],
             'son_siparis_tarihi': g['son_siparis_tarihi'],
+            'son_odeme_tipi': g['son_odeme_tipi'],
             'son_vade_gun': g['son_vade_gun'],
+            'son_gosterilecek_vade_gun': g['son_gosterilecek_vade_gun'],
             'fiyat_kaynagi': g['fiyat_kaynagi'],
             'toplam_miktar_kg': _dec_str_qty(g['toplam_miktar_kg']),
             'siparis_adedi': len(g['siparis_ids']),

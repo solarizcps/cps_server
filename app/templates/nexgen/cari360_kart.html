@@ -2664,14 +2664,16 @@ main { padding: 16px 12px !important; }
       var pb = top.para_birimi || '';
       var formul = top.formul_adi || top.urun_adi || '—';
       var renk = top.renk_adi || '';
-      // Son Vade — her zaman göster, değer yoksa "—"
-      var vg = top.son_vade_gun;
+      // Son Vade — canonical resolver: gosterilecek_vade_gun öncelikli, odeme_tipi NAKIT kontrolü
       var vadeStr;
-      if (vg == null || vg === '') {
-        vadeStr = 'Son Vade: —';
+      var sonOt = (top.son_odeme_tipi || '').toUpperCase();
+      var gvg = top.son_gosterilecek_vade_gun;
+      if (sonOt === 'NAKIT') {
+        vadeStr = 'Son Vade: Nakit';
+      } else if (gvg != null && gvg !== '') {
+        vadeStr = 'Son Vade: ' + Number(gvg) + ' Gün';
       } else {
-        var vgNum = Number(vg);
-        vadeStr = vgNum === 0 ? 'Son Vade: Nakit' : 'Son Vade: ' + vgNum + ' Gün';
+        vadeStr = 'Son Vade: —';
       }
       var sipTarihFmt = top.son_siparis_tarihi ? ckartFmtDate(top.son_siparis_tarihi) : '';
       var sipStr = (top.son_siparis_no || '') + (sipTarihFmt ? ' · ' + sipTarihFmt : '');
