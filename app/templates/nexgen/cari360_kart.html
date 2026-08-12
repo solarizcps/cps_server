@@ -1866,7 +1866,6 @@ main { padding: 16px 12px !important; }
    */
   function ckartAnaFiyat(s) {
     var kals = s.kalemler || [];
-    if (!kals.length) return '<span class="ckart-muted">—</span>';
     var pb = s.para_birimi || '';
     var prices = kals.map(function(k) {
       var raw = (k.net_birim_fiyat != null && k.net_birim_fiyat !== '')
@@ -1875,7 +1874,16 @@ main { padding: 16px 12px !important; }
       var n = Number(String(raw).replace(',', '.'));
       return isFinite(n) ? n : null;
     }).filter(function(v) { return v !== null; });
-    if (!prices.length) return '<span class="ckart-muted">—</span>';
+    if (!prices.length) {
+      // Legacy fallback: kalemde fiyat yoksa header anlasma_birim_fiyat kullan (ESKI_BASLIK_FIYATI)
+      if (s.fiyat_durumu === 'ESKI_BASLIK_FIYATI' && s.anlasma_birim_fiyat != null && s.anlasma_birim_fiyat !== '') {
+        var legN = Number(String(s.anlasma_birim_fiyat).replace(',', '.'));
+        if (isFinite(legN)) {
+          return '<span title="Başlık fiyatı (kalem snapshot yok)">' + esc(formatFiyatPb(legN, pb)) + '</span>';
+        }
+      }
+      return '<span class="ckart-muted">—</span>';
+    }
     var allSame = prices.every(function(v) { return Math.abs(v - prices[0]) < 0.00001; });
     if (allSame) {
       return esc(formatFiyatPb(prices[0], pb));
@@ -3337,7 +3345,9 @@ main { padding: 16px 12px !important; }
           }
           var ticariCells = '';
           if (ticari) {
-            var vade = (s.vade_gun == null || s.vade_gun === '') ? '—' : String(s.vade_gun);
+            // gosterilecek_vade_gun: backend canonical resolve (CEK→cek_vade_gun, VADELI→vade_gun)
+            var _vadeVal = s.gosterilecek_vade_gun != null ? s.gosterilecek_vade_gun : s.vade_gun;
+            var vade = (_vadeVal == null || _vadeVal === '') ? '—' : String(_vadeVal);
             var tutar = (s.toplam_tutar != null && s.toplam_tutar !== '')
               ? formatDecimalTrim(s.toplam_tutar) : '—';
             var tryT = (s.toplam_tutar_try != null && s.toplam_tutar_try !== '')

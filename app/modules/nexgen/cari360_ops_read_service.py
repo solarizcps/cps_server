@@ -36,6 +36,12 @@ _SIPARIS_PASIF = frozenset({
     'REDDEDILDI', 'IPTAL', 'IPTAL_EDILDI', 'TAMAMLANDI', 'KAPANDI', 'IPTALEDILDI',
 })
 
+# Fiziksel olarak gerçekleşmiş sevkiyat durumları.
+# HAZIRLANIYOR = hazırlık aşaması, henüz fiziksel sevk değil → SEVK KG'ye dahil edilmez.
+_SEVK_GERCEKLESMIS = frozenset({
+    'SEVK_EDILDI', 'TESLIM_EDILDI', 'TAMAMLANDI',
+})
+
 
 class Cari360OpsError(Exception):
     def __init__(self, mesaj: str, kod: int = 400):
@@ -141,31 +147,35 @@ def load_cari360_ozet(
     toplam_sevk_kg = 0.0
     son_sevkiyat_tarihi = None
     if _tablo_var(con, 'mo_musteri_sevkiyat'):
+        # Yalnız fiziksel gerçekleşmiş sevkiyatlar (_SEVK_GERCEKLESMIS)
+        _sg_ph = ','.join('?' * len(_SEVK_GERCEKLESMIS))
+        _sg_list = list(_SEVK_GERCEKLESMIS)
         toplam_sevkiyat = int(con.execute(
-            'SELECT COUNT(*) FROM mo_musteri_sevkiyat '
-            'WHERE cari_id=? AND COALESCE(aktif, 1)=1',
-            (cid,),
+            f'SELECT COUNT(*) FROM mo_musteri_sevkiyat '
+            f'WHERE cari_id=? AND COALESCE(aktif, 1)=1 AND durum IN ({_sg_ph})',
+            [cid] + _sg_list,
         ).fetchone()[0])
         if _tablo_var(con, 'mo_musteri_sevkiyat_kalem'):
             kg_row = con.execute(
-                """
+                f"""
                 SELECT COALESCE(SUM(k.miktar_kg), 0)
                 FROM mo_musteri_sevkiyat_kalem k
                 JOIN mo_musteri_sevkiyat s ON s.id = k.sevkiyat_id
                 WHERE s.cari_id=? AND COALESCE(s.aktif, 1)=1
+                  AND s.durum IN ({_sg_ph})
                 """,
-                (cid,),
+                [cid] + _sg_list,
             ).fetchone()
             toplam_sevk_kg = float(kg_row[0] or 0)
         son = con.execute(
-            """
+            f"""
             SELECT COALESCE(sevk_tarihi, olusturma_tarihi) AS t
             FROM mo_musteri_sevkiyat
-            WHERE cari_id=? AND COALESCE(aktif, 1)=1
+            WHERE cari_id=? AND COALESCE(aktif, 1)=1 AND durum IN ({_sg_ph})
             ORDER BY COALESCE(sevk_tarihi, olusturma_tarihi) DESC, id DESC
             LIMIT 1
             """,
-            (cid,),
+            [cid] + _sg_list,
         ).fetchone()
         if son and son['t']:
             son_sevkiyat_tarihi = son['t']
@@ -725,27 +735,31 @@ def load_cari360_siparisler(
         kalan_kg = None
         son_sevk = None
         if has_sevk:
+            _sp_ph = ','.join('?' * len(_SEVK_GERCEKLESMIS))
+            _sp_list = list(_SEVK_GERCEKLESMIS)
             son_row = con.execute(
-                """
+                f"""
                 SELECT COALESCE(sevk_tarihi, olusturma_tarihi) AS t
                 FROM mo_musteri_sevkiyat
                 WHERE siparis_id=? AND COALESCE(aktif, 1)=1
+                  AND durum IN ({_sp_ph})
                 ORDER BY COALESCE(sevk_tarihi, olusturma_tarihi) DESC, id DESC
                 LIMIT 1
                 """,
-                (sid,),
+                [sid] + _sp_list,
             ).fetchone()
             if son_row and son_row['t']:
                 son_sevk = son_row['t']
             if has_sevk_kalem:
                 kg_row = con.execute(
-                    """
+                    f"""
                     SELECT COALESCE(SUM(k.miktar_kg), 0)
                     FROM mo_musteri_sevkiyat_kalem k
                     JOIN mo_musteri_sevkiyat s ON s.id = k.sevkiyat_id
                     WHERE s.siparis_id=? AND COALESCE(s.aktif, 1)=1
+                      AND s.durum IN ({_sp_ph})
                     """,
-                    (sid,),
+                    [sid] + _sp_list,
                 ).fetchone()
                 sevk_kg = _fmt_num(kg_row[0] or 0)
 

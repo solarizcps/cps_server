@@ -115,6 +115,33 @@ def _vade_gun_deger(odeme_tipi: str | None, vade_gun: Any) -> int | None:
         return None
 
 
+def _normalize_odeme_tipi_raw(raw: Any) -> str | None:
+    """Canonical odeme_tipi normalize — NULL/boş → None."""
+    if raw in (None, ''):
+        return None
+    ot = str(raw).strip().upper()
+    if ot == 'ÇEK':
+        ot = 'CEK'
+    return ot or None
+
+
+def sinifla_odeme_tipi_sayac(raw: Any) -> str:
+    """
+    Ticari özet ödeme bucket.
+    Dönüş: nakit | vadeli | cek | legacy | bilinmeyen
+    """
+    ot = _normalize_odeme_tipi_raw(raw)
+    if ot is None:
+        return 'legacy'
+    if ot == 'NAKIT':
+        return 'nakit'
+    if ot == 'VADELI':
+        return 'vadeli'
+    if ot == 'CEK':
+        return 'cek'
+    return 'bilinmeyen'
+
+
 def _urun_anahtari(
     formul_id: Any,
     rf_renk_id: Any,
@@ -189,6 +216,9 @@ def load_cari360_ticari_ozet(
             'son_siparis_durumu': None,
             'nakit_adet': 0,
             'vadeli_adet': 0,
+            'cek_adet': 0,
+            'legacy_odeme_yok_adet': 0,
+            'bilinmeyen_odeme_adet': 0,
             'belirtilmemis_odeme_adet': 0,
             'ortalama_vade_gun': None,
             'min_vade_gun': None,
@@ -348,7 +378,8 @@ def load_cari360_ticari_ozet(
 
     # --- sipariş seviyesinde fiyat durumu / toplamlar ---
     son_siparisler: list[dict[str, Any]] = []
-    nakit_adet = vadeli_adet = belirsiz_odeme = 0
+    nakit_adet = vadeli_adet = cek_adet = 0
+    legacy_odeme_yok_adet = bilinmeyen_odeme_adet = 0
     vade_list: list[int] = []
     toplam_try = Decimal('0')
     has_try_total = False
@@ -372,9 +403,10 @@ def load_cari360_ticari_ozet(
         ot_raw = h['odeme_tipi']
         ot = (str(ot_raw).strip().upper() if ot_raw not in (None, '') else None)
 
-        if ot == 'NAKIT':
+        bucket = sinifla_odeme_tipi_sayac(ot_raw)
+        if bucket == 'nakit':
             nakit_adet += 1
-        elif ot == 'VADELI':
+        elif bucket == 'vadeli':
             vadeli_adet += 1
             vg = h['vade_gun']
             try:
@@ -383,8 +415,12 @@ def load_cari360_ticari_ozet(
                 vg_i = None
             if vg_i is not None and vg_i >= 1:
                 vade_list.append(vg_i)
+        elif bucket == 'cek':
+            cek_adet += 1
+        elif bucket == 'legacy':
+            legacy_odeme_yok_adet += 1
         else:
-            belirsiz_odeme += 1
+            bilinmeyen_odeme_adet += 1
 
         fiyatli_n = 0
         fiyatsiz_n = 0
@@ -686,7 +722,10 @@ def load_cari360_ticari_ozet(
             'son_siparis_durumu': son['durum'],
             'nakit_adet': nakit_adet,
             'vadeli_adet': vadeli_adet,
-            'belirtilmemis_odeme_adet': belirsiz_odeme,
+            'cek_adet': cek_adet,
+            'legacy_odeme_yok_adet': legacy_odeme_yok_adet,
+            'bilinmeyen_odeme_adet': bilinmeyen_odeme_adet,
+            'belirtilmemis_odeme_adet': bilinmeyen_odeme_adet,
             'ortalama_vade_gun': ortalama_vade,
             'min_vade_gun': min_vade,
             'max_vade_gun': max_vade,
@@ -733,7 +772,7 @@ def enrich_siparis_listesi_ticari(
     scols = _cols(con, 'nexgen_planlama_siparis')
     placeholders = ','.join('?' * len(ids))
     sel = ['id', 'anlasma_para_birimi', 'anlasma_birim_fiyat', 'talep_referansi', 'olusturma_tarihi']
-    for col in ('odeme_tipi', 'vade_gun', 'kur', 'kur_kaynagi'):
+    for col in ('odeme_tipi', 'vade_gun', 'kur', 'kur_kaynagi', 'cek_vadesi', 'cek_vade_gun'):
         if col in scols:
             sel.append(col)
     rows = {
@@ -784,9 +823,34 @@ def enrich_siparis_listesi_ticari(
             continue
         payload = pzm_payload_unpack(r['talep_referansi'])
         item['siparis_tarihi'] = _fmt_dt(pzm_siparis_tarihi_coz(payload, r['olusturma_tarihi']))
+        kdv_raw = (payload or {}).get('kdv_durumu')
+        item['kdv_durumu'] = (
+            str(kdv_raw).strip().upper() if kdv_raw not in (None, '') else None
+        )
         ot = r['odeme_tipi'] if 'odeme_tipi' in scols else None
         item['odeme_tipi'] = (str(ot).strip().upper() if ot not in (None, '') else None)
         item['vade_gun'] = r['vade_gun'] if 'vade_gun' in scols else None
+        item['cek_vadesi'] = (r['cek_vadesi'] if 'cek_vadesi' in scols else None)
+        # cek_vade_gun: DB kolonu varsa oradan, yoksa talep_referansi JSON snapshot'tan
+        cvg_raw = r['cek_vade_gun'] if 'cek_vade_gun' in scols else None
+        if cvg_raw in (None, ''):
+            _pl = payload or pzm_payload_unpack(r['talep_referansi'])
+            _cvg_json = (_pl or {}).get('cek_vade_gun')
+            if _cvg_json not in (None, ''):
+                try:
+                    cvg_raw = int(_cvg_json)
+                except (TypeError, ValueError):
+                    cvg_raw = None
+        item['cek_vade_gun'] = cvg_raw
+        # gosterilecek_vade_gun: backend canonical resolve — UI business logic üretmez
+        _ot = item['odeme_tipi']
+        if _ot == 'CEK':
+            item['gosterilecek_vade_gun'] = cvg_raw
+        elif _ot == 'VADELI':
+            _vg = item['vade_gun']
+            item['gosterilecek_vade_gun'] = (int(_vg) if _vg not in (None, '') else None)
+        else:
+            item['gosterilecek_vade_gun'] = None
         item['para_birimi'] = _normalize_pb(r['anlasma_para_birimi'])
         item['kur'] = str(r['kur']) if 'kur' in scols and r['kur'] not in (None, '') else None
         sm = sums.get(sid) or {}
@@ -794,10 +858,12 @@ def enrich_siparis_listesi_ticari(
         fn = int(sm.get('fiyatli_n') or 0)
         if fn == 0 and r['anlasma_birim_fiyat'] not in (None, '') and kn == 1:
             item['fiyat_durumu'] = 'ESKI_BASLIK_FIYATI'
+            item['anlasma_birim_fiyat'] = _dec_str(_dec(r['anlasma_birim_fiyat']))
             item['toplam_tutar'] = None
             item['toplam_tutar_try'] = None
         elif fn == 0:
             item['fiyat_durumu'] = 'BELIRTILMEMIS'
+            item['anlasma_birim_fiyat'] = None
             item['toplam_tutar'] = None
             item['toplam_tutar_try'] = None
         elif fn < kn:
