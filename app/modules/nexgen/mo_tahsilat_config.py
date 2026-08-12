@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 KAYNAK_MUSTERI_OPERASYONU = 'MUSTERI_OPERASYONU'
+KAYNAK_MANUEL_FINANS = 'MANUEL_FINANS'
 
 ODEME_SEKILLERI = frozenset({'NAKIT', 'HAVALE', 'CEK', 'SENET', 'DIGER'})
 ODEME_SEKLI_ETIKET = {
@@ -59,5 +60,11 @@ TAHSILAT_EDILEN_DURUMLARI = frozenset({
     KAYIT_DURUM_MUHASEBE_BEKLIYOR,
 })
 
+# Tahsilata uygun sevkiyat operasyon durumları
+SEVK_TAHSILAT_DURUMLARI = frozenset({
+    'SEVK_EDILDI',
+    'TESLIM_EDILDI',
+    'TAMAMLANDI',
+})
 
 CARI_ENTEGRASYON_AKTIF = False

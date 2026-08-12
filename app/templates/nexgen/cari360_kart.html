@@ -380,59 +380,267 @@
   <section id="ckart-panel-finans" class="ckart-panel" style="display:none">
     <div class="ckart-panel-bas">
       <h2 class="ckart-h2">Finans</h2>
+      {% if has_finans_write %}
+      <button class="ckart-btn-ikincil" onclick="cfkManuelTahsilatAc()"
+              style="font-size:12px;padding:4px 14px">+ Manuel Tahsilat</button>
+      {% endif %}
     </div>
     <div id="ckart-finans-yukleniyor" style="padding:24px;color:#6b7280;font-size:13px;">Yükleniyor…</div>
     <div id="ckart-finans-icerik" style="display:none">
 
-      {# Legacy bakiye bloğu #}
-      <div id="ckart-finans-bakiye-blok" style="margin-bottom:24px">
-        <h3 class="ckart-h3" style="margin-bottom:12px">Cari Hesap</h3>
+      {# ── CARİ HESAP ── #}
+      <div class="cfk-blok">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <h3 class="ckart-h3" style="margin:0">Cari Hesap</h3>
+          <span id="cfk-hesap-badge" style="font-size:11px;padding:2px 10px;border-radius:12px;display:none"></span>
+        </div>
         <div id="ckart-finans-eslesme-uyari" class="ckart-finans-uyari" style="display:none"></div>
         <div id="ckart-finans-bakiye-grid" class="ckart-finans-kpi-grid" style="display:none">
-          <div class="ckart-finans-kpi"><span class="ckart-finans-kpi-label">Bakiye</span><strong id="cfk-bakiye">—</strong></div>
-          <div class="ckart-finans-kpi"><span class="ckart-finans-kpi-label">Borç</span><strong id="cfk-borc">—</strong></div>
-          <div class="ckart-finans-kpi"><span class="ckart-finans-kpi-label">Alacak</span><strong id="cfk-alacak">—</strong></div>
-          <div class="ckart-finans-kpi"><span class="ckart-finans-kpi-label">Açık Bakiye</span><strong id="cfk-acik">—</strong></div>
+          <div class="ckart-finans-kpi">
+            <span class="ckart-finans-kpi-label">Bakiye</span>
+            <strong id="cfk-bakiye" style="font-size:20px">—</strong>
+          </div>
+          <div class="ckart-finans-kpi">
+            <span class="ckart-finans-kpi-label">Borç</span>
+            <strong id="cfk-borc" style="color:#dc2626">—</strong>
+          </div>
+          <div class="ckart-finans-kpi">
+            <span class="ckart-finans-kpi-label">Alacak</span>
+            <strong id="cfk-alacak" style="color:#059669">—</strong>
+          </div>
+          <div class="ckart-finans-kpi">
+            <span class="ckart-finans-kpi-label">Açık Bakiye</span>
+            <strong id="cfk-acik" style="color:#d97706">—</strong>
+          </div>
         </div>
-        <div id="ckart-finans-kart-bakiye-blok" style="display:none">
-          <p class="ckart-finans-kpi-label" style="margin-bottom:6px">Kart Bakiyesi <span style="font-size:10px;color:#9ca3af">(Cari_Kart snapshot)</span></p>
-          <strong id="cfk-kart-bakiye" style="font-size:18px"></strong>
+        <div id="ckart-finans-kart-bakiye-blok" style="display:none;margin-top:8px">
+          <p class="ckart-finans-kpi-label" style="margin-bottom:4px">
+            Kart Bakiyesi
+            <span style="font-size:10px;color:#9ca3af">(Cari_Kart Snapshot)</span>
+          </p>
+          <strong id="cfk-kart-bakiye" style="font-size:20px"></strong>
+        </div>
+        <div id="cfk-bakiye-hareket-ozet" style="display:none;margin-top:12px;border-top:1px solid #f3f4f6;padding-top:12px">
+          <p style="font-size:11px;color:#6b7280;margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Bakiye Hareket Özeti</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+            <div style="font-size:12px;color:#374151">Toplam Borç: <span id="cfk-oz-borc" style="float:right;color:#dc2626;font-weight:600">—</span></div>
+            <div style="font-size:12px;color:#374151">Toplam Alacak: <span id="cfk-oz-alacak" style="float:right;color:#059669;font-weight:600">—</span></div>
+            <div style="font-size:12px;color:#374151">Net Bakiye: <span id="cfk-oz-net" style="float:right;font-weight:600">—</span></div>
+          </div>
         </div>
       </div>
 
-      {# Tahsilat bloğu #}
-      <div style="margin-bottom:24px">
-        <h3 class="ckart-h3" style="margin-bottom:12px">Tahsilat</h3>
-        <div class="ckart-finans-kpi-grid">
-          <div class="ckart-finans-kpi"><span class="ckart-finans-kpi-label">Alınan Toplam</span><strong id="cfk-alinan">—</strong></div>
-          <div class="ckart-finans-kpi"><span class="ckart-finans-kpi-label">Bekleyen Toplam</span><strong id="cfk-bekleyen">—</strong></div>
-          <div class="ckart-finans-kpi"><span class="ckart-finans-kpi-label">Kalan Toplam</span><strong id="cfk-kalan">—</strong></div>
-          <div class="ckart-finans-kpi"><span class="ckart-finans-kpi-label">Son Tahsilat</span><strong id="cfk-son-tahsilat">—</strong></div>
-          <div class="ckart-finans-kpi"><span class="ckart-finans-kpi-label">Gecikmiş Ödeme</span><strong id="cfk-gecikme">—</strong></div>
+      {# ── TAHSİLAT ── #}
+      <div class="cfk-blok">
+        <h3 class="ckart-h3" style="margin-bottom:10px">Tahsilat</h3>
+        <div class="ckart-finans-kpi-grid" style="grid-template-columns:repeat(5,1fr)">
+          <div class="ckart-finans-kpi">
+            <span class="ckart-finans-kpi-label">Alınan Toplam</span>
+            <strong id="cfk-alinan">—</strong>
+          </div>
+          <div class="ckart-finans-kpi">
+            <span class="ckart-finans-kpi-label">Bekleyen Toplam</span>
+            <strong id="cfk-bekleyen">—</strong>
+          </div>
+          <div class="ckart-finans-kpi">
+            <span class="ckart-finans-kpi-label">Kalan Toplam</span>
+            <strong id="cfk-kalan" style="color:#d97706">—</strong>
+          </div>
+          <div class="ckart-finans-kpi">
+            <span class="ckart-finans-kpi-label">Son Tahsilat</span>
+            <strong id="cfk-son-tahsilat">—</strong>
+            <small id="cfk-son-tahsilat-tutar" style="display:block;color:#6b7280;font-weight:400"></small>
+          </div>
+          <div class="ckart-finans-kpi">
+            <span class="ckart-finans-kpi-label">Gecikmiş Ödeme</span>
+            <strong id="cfk-gecikme">—</strong>
+          </div>
+        </div>
+        <div id="cfk-fx-uyari" style="display:none;font-size:11px;color:#92400e;background:#fef3c7;border-radius:6px;padding:6px 10px;margin-top:8px"></div>
+
+        {# Son Tahsilat Hareketleri #}
+        <div style="margin-top:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <p style="font-size:12px;font-weight:600;color:#374151;text-transform:uppercase;letter-spacing:.04em;margin:0">Son Tahsilat Hareketleri</p>
+            <a id="cfk-tum-tahsilat-link" href="#" onclick="cfkTahsilatSayfaGit(1);return false"
+               style="font-size:12px;color:var(--ck-accent)">Tüm Tahsilatlar →</a>
+          </div>
+          <div id="cfk-tahsilat-yukleniyor" style="font-size:12px;color:#6b7280;padding:8px 0">Yükleniyor…</div>
+          <div id="cfk-tahsilat-bos" style="display:none;font-size:12px;color:#9ca3af;padding:8px 0">Tahsilat kaydı bulunamadı.</div>
+          <div id="cfk-tahsilat-liste" style="display:none">
+            <table style="width:100%;border-collapse:collapse;font-size:12px">
+              <thead>
+                <tr style="background:#f9fafb;border-bottom:1px solid #e5e7eb">
+                  <th style="padding:6px 8px;text-align:left;font-weight:600;color:#6b7280">Tarih</th>
+                  <th style="padding:6px 8px;text-align:left;font-weight:600;color:#6b7280">Belge No</th>
+                  <th style="padding:6px 8px;text-align:left;font-weight:600;color:#6b7280">Tür</th>
+                  <th style="padding:6px 8px;text-align:left;font-weight:600;color:#6b7280">Kaynak</th>
+                  <th style="padding:6px 8px;text-align:right;font-weight:600;color:#6b7280">PB</th>
+                  <th style="padding:6px 8px;text-align:right;font-weight:600;color:#6b7280">Tutar</th>
+                  <th style="padding:6px 8px;text-align:left;font-weight:600;color:#6b7280">İlişkili Sipariş</th>
+                  <th style="padding:6px 8px;text-align:left;font-weight:600;color:#6b7280">Durum</th>
+                </tr>
+              </thead>
+              <tbody id="cfk-tahsilat-tbody"></tbody>
+            </table>
+            <div id="cfk-tahsilat-pager" style="display:none;margin-top:10px;display:flex;gap:8px;align-items:center">
+              <button onclick="cfkTahsilatSayfaGit(-1)"
+                      style="font-size:12px;padding:3px 10px;border:1px solid #e5e7eb;border-radius:5px;cursor:pointer;background:#fff">← Önceki</button>
+              <span id="cfk-tahsilat-sayfa-info" style="font-size:12px;color:#6b7280"></span>
+              <button onclick="cfkTahsilatSayfaGit(1)"
+                      style="font-size:12px;padding:3px 10px;border:1px solid #e5e7eb;border-radius:5px;cursor:pointer;background:#fff">Sonraki →</button>
+            </div>
+          </div>
         </div>
       </div>
 
-      {# Vade / Çek bloğu #}
-      <div style="margin-bottom:24px">
-        <h3 class="ckart-h3" style="margin-bottom:12px">Vade &amp; Çek</h3>
-        <div class="ckart-finans-kpi-grid">
-          <div class="ckart-finans-kpi"><span class="ckart-finans-kpi-label">Ortalama Vade</span><strong id="cfk-ort-vade">—</strong></div>
-          <div class="ckart-finans-kpi"><span class="ckart-finans-kpi-label">Çekli Sipariş</span><strong id="cfk-cek-sayi">—</strong></div>
-          <div class="ckart-finans-kpi" style="grid-column:span 2"><span class="ckart-finans-kpi-label">Çek Vadeleri</span><strong id="cfk-cek-vadeler">—</strong></div>
+      {# ── VADE & ÇEK ── #}
+      <div class="cfk-blok">
+        <h3 class="ckart-h3" style="margin-bottom:10px">Vade &amp; Çek</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          {# Sol: KPI'lar #}
+          <div>
+            <div class="ckart-finans-kpi-grid" style="grid-template-columns:1fr 1fr 1fr">
+              <div class="ckart-finans-kpi">
+                <span class="ckart-finans-kpi-label">Ortalama Vade</span>
+                <strong id="cfk-ort-vade" style="font-size:22px;color:#1d4ed8">—</strong>
+              </div>
+              <div class="ckart-finans-kpi">
+                <span class="ckart-finans-kpi-label">Çekli Sipariş</span>
+                <strong id="cfk-cek-sayi">—</strong>
+              </div>
+              <div class="ckart-finans-kpi">
+                <span class="ckart-finans-kpi-label">Çek Vadeleri</span>
+                <strong id="cfk-cek-vadeler" style="font-size:13px;color:#1d4ed8">—</strong>
+              </div>
+            </div>
+            <p style="font-size:10px;color:#9ca3af;margin-top:6px">Sipariş çekleri · TASLAK/İPTAL hariç</p>
+          </div>
+          {# Sağ: Yaklaşan çek evrakları #}
+          <div>
+            <p style="font-size:11px;font-weight:600;color:#374151;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Yaklaşan Çekler</p>
+            <div id="cfk-cek-liste-yukleniyor" style="font-size:12px;color:#6b7280">Yükleniyor…</div>
+            <div id="cfk-cek-bos" style="display:none;font-size:12px;color:#9ca3af">Gerçek çek evrakı bulunamadı.</div>
+            <table id="cfk-cek-tablo" style="display:none;width:100%;border-collapse:collapse;font-size:12px">
+              <thead>
+                <tr style="background:#f9fafb;border-bottom:1px solid #e5e7eb">
+                  <th style="padding:5px 6px;text-align:left;color:#6b7280">Vade Tarihi</th>
+                  <th style="padding:5px 6px;text-align:left;color:#6b7280">Belge No</th>
+                  <th style="padding:5px 6px;text-align:right;color:#6b7280">Tutar</th>
+                  <th style="padding:5px 6px;text-align:right;color:#6b7280">PB</th>
+                  <th style="padding:5px 6px;text-align:left;color:#6b7280">İlişkili Sipariş</th>
+                </tr>
+              </thead>
+              <tbody id="cfk-cek-tbody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
 
-      {# Risk / Limit — kaynak yok #}
-      <div>
-        <h3 class="ckart-h3" style="margin-bottom:12px">Risk &amp; Limit</h3>
-        <div class="ckart-finans-kpi-grid">
-          <div class="ckart-finans-kpi"><span class="ckart-finans-kpi-label">Risk</span><strong style="color:#9ca3af;font-size:12px">Tanımlı değil</strong></div>
-          <div class="ckart-finans-kpi"><span class="ckart-finans-kpi-label">Limit</span><strong style="color:#9ca3af;font-size:12px">Tanımlı değil</strong></div>
+      {# ── RİSK & LİMİT ── #}
+      <div class="cfk-blok">
+        <h3 class="ckart-h3" style="margin-bottom:10px">Risk &amp; Limit</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px">
+          <div class="ckart-finans-kpi">
+            <span class="ckart-finans-kpi-label">Risk</span>
+            <strong id="cfk-risk" style="color:#9ca3af;font-size:12px">Tanımlı değil</strong>
+          </div>
+          <div class="ckart-finans-kpi">
+            <span class="ckart-finans-kpi-label">Limit</span>
+            <strong id="cfk-limit" style="color:#9ca3af;font-size:12px">Tanımlı değil</strong>
+          </div>
+          <div class="ckart-finans-kpi">
+            <span class="ckart-finans-kpi-label">Kredi Kullanım Oranı</span>
+            <strong id="cfk-kredi-oran" style="color:#9ca3af;font-size:12px">—</strong>
+          </div>
+          <div class="ckart-finans-kpi">
+            <span class="ckart-finans-kpi-label">Risk Notu</span>
+            <strong id="cfk-risk-notu" style="color:#9ca3af;font-size:12px">Belirtilmemiş</strong>
+          </div>
         </div>
       </div>
+
+      <p style="font-size:10px;color:#9ca3af;margin-top:8px">
+        Finansal veriler Cari Kart, Cari Hareket, Tahsilat ve Çek kayıtlarından hesaplanır.
+      </p>
 
     </div>{# /ckart-finans-icerik #}
   </section>
+
+  {# Manuel Tahsilat Modal #}
+  <div id="cfk-manuel-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;overflow-y:auto">
+    <div style="background:#fff;border-radius:12px;max-width:480px;margin:60px auto;padding:24px;box-shadow:0 8px 32px rgba(0,0,0,.18)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+        <h3 style="font-size:16px;font-weight:700;margin:0">Manuel Tahsilat Girişi</h3>
+        <button onclick="cfkManuelTahsilatKapat()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#6b7280">✕</button>
+      </div>
+      <div id="cfk-manuel-hata" style="display:none;background:#fee2e2;color:#991b1b;border-radius:6px;padding:8px 12px;font-size:12px;margin-bottom:12px"></div>
+      <div style="display:grid;gap:12px">
+        <div>
+          <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px">Tahsilat Tarihi *</label>
+          <input type="date" id="cfk-m-tarih" style="width:100%;padding:7px 10px;border:1px solid #e5e7eb;border-radius:6px;font-size:13px">
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px">Tahsilat Türü *</label>
+          <select id="cfk-m-tur" style="width:100%;padding:7px 10px;border:1px solid #e5e7eb;border-radius:6px;font-size:13px">
+            <option value="">— Seçin —</option>
+            <option value="NAKIT">Nakit</option>
+            <option value="HAVALE">Havale</option>
+            <option value="CEK">Çek</option>
+            <option value="SENET">Senet</option>
+            <option value="DIGER">Diğer</option>
+          </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div>
+            <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px">Tutar *</label>
+            <input type="number" id="cfk-m-tutar" min="0.01" step="0.01" placeholder="0.00"
+                   style="width:100%;padding:7px 10px;border:1px solid #e5e7eb;border-radius:6px;font-size:13px">
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px">Para Birimi</label>
+            <select id="cfk-m-pb" style="width:100%;padding:7px 10px;border:1px solid #e5e7eb;border-radius:6px;font-size:13px">
+              <option value="TRY">TRY</option>
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+            </select>
+          </div>
+        </div>
+        <div id="cfk-m-cek-blok" style="display:none">
+          <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px">Çek Vade Tarihi</label>
+          <input type="date" id="cfk-m-cek-vade" style="width:100%;padding:7px 10px;border:1px solid #e5e7eb;border-radius:6px;font-size:13px">
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px">İlişkili Sipariş <span style="font-weight:400;color:#9ca3af">(opsiyonel)</span></label>
+          <select id="cfk-m-siparis" style="width:100%;padding:7px 10px;border:1px solid #e5e7eb;border-radius:6px;font-size:13px">
+            <option value="">— Seçin —</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px">İlişkili Sevkiyat <span style="font-weight:400;color:#9ca3af">(opsiyonel)</span></label>
+          <select id="cfk-m-sevkiyat" style="width:100%;padding:7px 10px;border:1px solid #e5e7eb;border-radius:6px;font-size:13px">
+            <option value="">— Seçin —</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px">Belge / Referans No</label>
+          <input type="text" id="cfk-m-ref" placeholder="Opsiyonel"
+                 style="width:100%;padding:7px 10px;border:1px solid #e5e7eb;border-radius:6px;font-size:13px">
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px">Not</label>
+          <input type="text" id="cfk-m-not" placeholder="Opsiyonel"
+                 style="width:100%;padding:7px 10px;border:1px solid #e5e7eb;border-radius:6px;font-size:13px">
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px">
+        <button onclick="cfkManuelTahsilatKapat()"
+                style="padding:8px 18px;border:1px solid #e5e7eb;border-radius:6px;background:#fff;cursor:pointer;font-size:13px">İptal</button>
+        <button id="cfk-m-kaydet" onclick="cfkManuelTahsilatKaydet()"
+                style="padding:8px 18px;border:none;border-radius:6px;background:#1d4ed8;color:#fff;cursor:pointer;font-size:13px;font-weight:600">Kaydet</button>
+      </div>
+    </div>
+  </div>
 
   {# Onaylar paneli — read-only #}
   <section id="ckart-panel-onaylar" class="ckart-panel" style="display:none">
@@ -953,6 +1161,12 @@ main { padding: 16px 12px !important; }
 .ckart-panel-yakinda svg { opacity: 0.35; }
 
 /* ── FİNANS SEKMESİ ── */
+.cfk-blok {
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #f3f4f6;
+}
+.cfk-blok:last-of-type { border-bottom: none; }
 .ckart-finans-kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -2274,95 +2488,326 @@ main { padding: 16px 12px !important; }
   window.ckartHafizaModalKapat = ckartHafizaModalKapat;
 
   var _ckartFinansYuklendi = false;
+  var _cfkTahsilatOffset = 0;
+  var _cfkTahsilatLimit = 10;
+  var _cfkTahsilatToplam = 0;
+
+  function cfkFmt(v, pb) {
+    if (v == null) return '—';
+    var n = parseFloat(v);
+    if (isNaN(n)) return String(v);
+    var s = n.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    return s + ' ' + (pb === 'TRY' || !pb ? '₺' : pb);
+  }
+  function cfkSet(id, val) {
+    var el = document.getElementById(id); if (el) el.textContent = val != null ? val : '—';
+  }
+  function cfkDurumBadge(raw) {
+    var m = {
+      'ONAYLANDI': {bg:'#d1fae5',c:'#065f46',t:'Onaylandı'},
+      'MUHASEBE_ONAY_BEKLIYOR': {bg:'#dbeafe',c:'#1e40af',t:'Onay Bekliyor'},
+      'TASLAK': {bg:'#f3f4f6',c:'#374151',t:'Taslak'},
+      'REDDEDILDI': {bg:'#fee2e2',c:'#991b1b',t:'Reddedildi'},
+      'REVIZYON_ISTENDI': {bg:'#fef3c7',c:'#92400e',t:'Revizyon'},
+    };
+    var st = m[raw] || {bg:'#f3f4f6',c:'#6b7280',t: raw||'—'};
+    return '<span style="font-size:11px;padding:2px 8px;border-radius:12px;background:'+st.bg+';color:'+st.c+';font-weight:600">'+esc(st.t)+'</span>';
+  }
+  function cfkKaynakBadge(raw) {
+    var renk = raw === 'MANUEL_FINANS' ? '#ede9fe;color:#5b21b6' : '#e0f2fe;color:#0369a1';
+    var etiket = raw === 'MANUEL_FINANS' ? 'Manuel Finans' : 'Müşteri Op.';
+    return '<span style="font-size:10px;padding:1px 6px;border-radius:10px;background:'+renk+';font-weight:500">'+esc(etiket)+'</span>';
+  }
+
   function ckartFinansYukle() {
     if (_ckartFinansYuklendi) return;
     _ckartFinansYuklendi = true;
     var yuk = document.getElementById('ckart-finans-yukleniyor');
     var icerik = document.getElementById('ckart-finans-icerik');
 
-    function fmt(v, suffix) {
-      if (v == null) return '—';
-      var n = parseFloat(v);
-      if (isNaN(n)) return String(v);
-      return n.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + (suffix || ' ₺');
-    }
-    function fmtN(v) {
-      if (v == null || v === '') return '—';
-      return v;
-    }
-
     ckartFetchJson('/nexgen/api/cari360/' + CARI_ID + '/finans')
       .then(function(d) {
         if (!d || !d.ok) throw new Error((d && d.mesaj) || 'Finans verisi alınamadı');
 
-        // --- Legacy bakiye ---
+        // ── Cari Hesap (Legacy bakiye) ──
         var es = d.eslesme || {};
         var uyariEl = document.getElementById('ckart-finans-eslesme-uyari');
         var bakiyeGrid = document.getElementById('ckart-finans-bakiye-grid');
         var kartBakBlok = document.getElementById('ckart-finans-kart-bakiye-blok');
+        var badge = document.getElementById('cfk-hesap-badge');
+        var ozBlok = document.getElementById('cfk-bakiye-hareket-ozet');
 
         if (!es.eslesme) {
-          // Eşleşme yok — yalnız mesaj göster
-          uyariEl.textContent = es.mesaj || 'Finans eşleşmesi yok.';
-          uyariEl.style.display = '';
+          if (uyariEl) { uyariEl.textContent = es.mesaj || 'Finans eşleşmesi yok.'; uyariEl.style.display = ''; }
+          if (badge) { badge.textContent = 'Eşleşme Yok'; badge.style.cssText = 'display:inline-block;background:#f3f4f6;color:#6b7280'; }
         } else if (es.uyari) {
-          // Cari_Har yok — kart bakiyesi fallback
-          uyariEl.textContent = es.uyari;
-          uyariEl.style.display = '';
-          kartBakBlok.style.display = '';
-          var cfkKart = document.getElementById('cfk-kart-bakiye');
-          if (cfkKart) cfkKart.textContent = es.bakiye != null ? fmt(es.bakiye) : 'Veri yok';
-          // Borç/Alacak kesinlikle 0 gösterme — veri yok
-          var cfkBak2 = document.getElementById('cfk-bakiye'); if (cfkBak2) cfkBak2.textContent = '—';
-          var cfkBorc2 = document.getElementById('cfk-borc'); if (cfkBorc2) cfkBorc2.textContent = 'Veri yok';
-          var cfkAlacak2 = document.getElementById('cfk-alacak'); if (cfkAlacak2) cfkAlacak2.textContent = 'Veri yok';
-          var cfkAcik2 = document.getElementById('cfk-acik'); if (cfkAcik2) cfkAcik2.textContent = 'Veri yok';
-          bakiyeGrid.style.display = '';
+          if (uyariEl) { uyariEl.textContent = es.uyari; uyariEl.style.display = ''; }
+          if (kartBakBlok) kartBakBlok.style.display = '';
+          cfkSet('cfk-kart-bakiye', es.bakiye != null ? cfkFmt(es.bakiye) : 'Veri yok');
+          cfkSet('cfk-bakiye', '—'); cfkSet('cfk-borc', 'Veri yok');
+          cfkSet('cfk-alacak', 'Veri yok'); cfkSet('cfk-acik', 'Veri yok');
+          if (bakiyeGrid) bakiyeGrid.style.display = '';
+          if (badge) { badge.textContent = 'Kart Snap.'; badge.style.cssText = 'display:inline-block;background:#fef3c7;color:#92400e;font-size:11px;padding:2px 8px;border-radius:10px'; }
         } else if (es.mesaj) {
-          uyariEl.textContent = es.mesaj;
-          uyariEl.style.display = '';
+          if (uyariEl) { uyariEl.textContent = es.mesaj; uyariEl.style.display = ''; }
         } else {
-          // Tam Cari_Har verisi mevcut
-          bakiyeGrid.style.display = '';
-          var cfkBak = document.getElementById('cfk-bakiye'); if (cfkBak) cfkBak.textContent = fmt(es.bakiye);
-          var cfkBorc = document.getElementById('cfk-borc'); if (cfkBorc) cfkBorc.textContent = fmt(es.borc);
-          var cfkAlacak = document.getElementById('cfk-alacak'); if (cfkAlacak) cfkAlacak.textContent = fmt(es.alacak);
-          var cfkAcik = document.getElementById('cfk-acik'); if (cfkAcik) cfkAcik.textContent = fmt(es.acik_bakiye);
+          if (bakiyeGrid) bakiyeGrid.style.display = '';
+          cfkSet('cfk-bakiye', cfkFmt(es.bakiye));
+          cfkSet('cfk-borc', cfkFmt(es.borc));
+          cfkSet('cfk-alacak', cfkFmt(es.alacak));
+          cfkSet('cfk-acik', cfkFmt(es.acik_bakiye));
+          if (badge) { badge.textContent = 'Canlı Veri'; badge.style.cssText = 'display:inline-block;background:#d1fae5;color:#065f46;font-size:11px;padding:2px 8px;border-radius:10px'; }
+          if (ozBlok) {
+            ozBlok.style.display = '';
+            cfkSet('cfk-oz-borc', cfkFmt(es.borc));
+            cfkSet('cfk-oz-alacak', cfkFmt(es.alacak));
+            cfkSet('cfk-oz-net', cfkFmt(es.bakiye));
+          }
         }
 
-        // --- Tahsilat ---
+        // ── Tahsilat KPI ──
         var t = d.tahsilat || {};
-        var cfkAlinan = document.getElementById('cfk-alinan'); if (cfkAlinan) cfkAlinan.textContent = fmt(t.alinan_toplam);
-        var cfkBekl = document.getElementById('cfk-bekleyen'); if (cfkBekl) cfkBekl.textContent = fmt(t.bekleyen_toplam);
-        var cfkKalan = document.getElementById('cfk-kalan'); if (cfkKalan) cfkKalan.textContent = fmt(t.kalan_toplam);
-        var sonStr = t.son_tahsilat_tarihi
-          ? (t.son_tahsilat_tarihi + (t.son_tahsilat_tutari != null ? ' / ' + fmt(t.son_tahsilat_tutari) : ''))
-          : '—';
-        var cfkSon = document.getElementById('cfk-son-tahsilat'); if (cfkSon) cfkSon.textContent = sonStr;
+        cfkSet('cfk-alinan', cfkFmt(t.alinan_toplam));
+        cfkSet('cfk-bekleyen', cfkFmt(t.bekleyen_toplam));
+        cfkSet('cfk-kalan', cfkFmt(t.kalan_toplam));
+        var sonT = document.getElementById('cfk-son-tahsilat');
+        var sonTutar = document.getElementById('cfk-son-tahsilat-tutar');
+        if (sonT) sonT.textContent = t.son_tahsilat_tarihi || '—';
+        if (sonTutar && t.son_tahsilat_tutari != null) sonTutar.textContent = cfkFmt(t.son_tahsilat_tutari);
         var gecN = t.gecikme_sayisi;
-        var cfkGec = document.getElementById('cfk-gecikme');
-        if (cfkGec) {
-          cfkGec.textContent = gecN != null ? gecN + ' kayıt' : '—';
-          if (gecN && gecN > 0) cfkGec.style.color = '#dc2626';
+        var gecEl = document.getElementById('cfk-gecikme');
+        if (gecEl) {
+          gecEl.textContent = gecN != null ? gecN + ' kayıt' : '—';
+          if (gecN && gecN > 0) gecEl.style.color = '#dc2626';
         }
+        var fxEl = document.getElementById('cfk-fx-uyari');
+        if (fxEl && t.fx_uyari) { fxEl.textContent = t.fx_uyari; fxEl.style.display = ''; }
 
-        // --- Vade / Çek ---
+        // ── Tahsilat listesi — inline (ilk sayfa) ──
+        _cfkTahsilatToplam = (d.tahsilat_liste || {}).toplam || 0;
+        cfkTahsilatRender((d.tahsilat_liste || {}).liste || []);
+
+        // ── Vade & Çek ──
         var vc = d.vade_cek || {};
-        var cfkVade = document.getElementById('cfk-ort-vade');
-        if (cfkVade) cfkVade.textContent = vc.ortalama_vade_gun != null ? vc.ortalama_vade_gun + ' gün' : '—';
-        var cfkCek = document.getElementById('cfk-cek-sayi');
-        if (cfkCek) cfkCek.textContent = vc.cekli_siparis_sayisi != null ? String(vc.cekli_siparis_sayisi) : '—';
+        var vadeEl = document.getElementById('cfk-ort-vade');
+        if (vadeEl) vadeEl.textContent = vc.ortalama_vade_gun != null ? vc.ortalama_vade_gun + ' Gün' : '—';
+        cfkSet('cfk-cek-sayi', vc.cekli_siparis_sayisi != null ? String(vc.cekli_siparis_sayisi) : '—');
         var vad = (vc.cek_vadeleri || []);
         var cfkCekV = document.getElementById('cfk-cek-vadeler');
-        if (cfkCekV) cfkCekV.textContent = vad.length ? vad.slice(0, 5).join(' · ') : '—';
+        if (cfkCekV) cfkCekV.textContent = vad.length ? vad.slice(0, 3).join(' · ') : '—';
+
+        // ── Gerçek çekler ──
+        var cekler = d.gercek_cekler || [];
+        var cekYuk = document.getElementById('cfk-cek-liste-yukleniyor');
+        var cekBos = document.getElementById('cfk-cek-bos');
+        var cekTablo = document.getElementById('cfk-cek-tablo');
+        if (cekYuk) cekYuk.style.display = 'none';
+        if (cekler.length === 0) {
+          if (cekBos) cekBos.style.display = '';
+        } else {
+          if (cekTablo) cekTablo.style.display = '';
+          var cbody = document.getElementById('cfk-cek-tbody');
+          if (cbody) {
+            var cekHtml = '';
+            cekler.slice(0, 10).forEach(function(c) {
+              cekHtml += '<tr style="border-bottom:1px solid #f3f4f6">' +
+                '<td style="padding:5px 6px;color:#1d4ed8;font-weight:600">' + esc(c.vade_tarihi || '—') + '</td>' +
+                '<td style="padding:5px 6px">' + esc(c.belge_no || '—') + '</td>' +
+                '<td style="padding:5px 6px;text-align:right;font-weight:600">' + c.tutar.toLocaleString('tr-TR', {minimumFractionDigits:2}) + '</td>' +
+                '<td style="padding:5px 6px;text-align:right">' + esc(c.para_birimi) + '</td>' +
+                '<td style="padding:5px 6px">' + esc(c.siparis_no || '—') + '</td>' +
+                '</tr>';
+            });
+            cbody.innerHTML = cekHtml;
+          }
+        }
+
+        // ── Risk & Limit ──
+        var riskEl = document.getElementById('cfk-risk');
+        var limitEl = document.getElementById('cfk-limit');
+        var kranEl = document.getElementById('cfk-kredi-oran');
+        var rnEl = document.getElementById('cfk-risk-notu');
+        if (d.risk != null) {
+          if (riskEl) { riskEl.textContent = cfkFmt(d.risk); riskEl.style.color = d.risk > 0 ? '#d97706' : '#059669'; }
+        }
+        if (d.limit != null) {
+          if (limitEl) { limitEl.textContent = cfkFmt(d.limit); limitEl.style.color = '#374151'; }
+          if (d.risk != null && d.limit > 0 && kranEl) {
+            kranEl.textContent = ((d.risk / d.limit) * 100).toFixed(1) + '%';
+          }
+        }
+        if (rnEl) rnEl.textContent = d.risk_notu || 'Belirtilmemiş';
 
         if (yuk) yuk.style.display = 'none';
         if (icerik) icerik.style.display = '';
       })
       .catch(function(err) {
-        if (yuk) yuk.textContent = 'Finans verisi yüklenemedi: ' + err.message;
+        if (yuk) yuk.textContent = 'Finans verisi yüklenemedi: ' + (err.message || err);
       });
   }
+
+  function cfkTahsilatRender(liste) {
+    var yukEl = document.getElementById('cfk-tahsilat-yukleniyor');
+    var bosEl = document.getElementById('cfk-tahsilat-bos');
+    var listeEl = document.getElementById('cfk-tahsilat-liste');
+    var tbEl = document.getElementById('cfk-tahsilat-tbody');
+    var pagerEl = document.getElementById('cfk-tahsilat-pager');
+    var infoEl = document.getElementById('cfk-tahsilat-sayfa-info');
+
+    if (yukEl) yukEl.style.display = 'none';
+    if (!liste || liste.length === 0) {
+      if (bosEl) bosEl.style.display = '';
+      return;
+    }
+    if (listeEl) listeEl.style.display = '';
+    var html = '';
+    liste.forEach(function(r) {
+      var durumCss = {
+        'ONAYLANDI':'background:#d1fae5;color:#065f46',
+        'MUHASEBE_ONAY_BEKLIYOR':'background:#dbeafe;color:#1e40af',
+        'TASLAK':'background:#f3f4f6;color:#374151',
+        'REDDEDILDI':'background:#fee2e2;color:#991b1b',
+      }[r.durum_raw] || 'background:#f3f4f6;color:#6b7280';
+      var kaynakCss = r.kaynak_raw === 'MANUEL_FINANS'
+        ? 'background:#ede9fe;color:#5b21b6' : 'background:#e0f2fe;color:#0369a1';
+      html += '<tr style="border-bottom:1px solid #f3f4f6">' +
+        '<td style="padding:6px 8px">' + esc(r.tarih || '—') + '</td>' +
+        '<td style="padding:6px 8px;color:#374151">' + esc(r.belge_no || '—') + '</td>' +
+        '<td style="padding:6px 8px">' + esc(r.tur || '—') + '</td>' +
+        '<td style="padding:6px 8px"><span style="font-size:10px;padding:2px 6px;border-radius:10px;'+kaynakCss+'">'+esc(r.kaynak||'—')+'</span></td>' +
+        '<td style="padding:6px 8px;text-align:right">' + esc(r.para_birimi||'TRY') + '</td>' +
+        '<td style="padding:6px 8px;text-align:right;font-weight:600">' + (r.tutar||0).toLocaleString('tr-TR',{minimumFractionDigits:2}) + '</td>' +
+        '<td style="padding:6px 8px">' + esc(r.siparis_no || '—') + '</td>' +
+        '<td style="padding:6px 8px"><span style="font-size:11px;padding:2px 8px;border-radius:12px;'+durumCss+'">'+esc(r.durum||'—')+'</span></td>' +
+        '</tr>';
+    });
+    if (tbEl) tbEl.innerHTML = html;
+
+    // Pagination
+    var sayfa = Math.floor(_cfkTahsilatOffset / _cfkTahsilatLimit) + 1;
+    var topSayfa = Math.ceil(_cfkTahsilatToplam / _cfkTahsilatLimit);
+    if (infoEl) infoEl.textContent = sayfa + ' / ' + topSayfa + ' (' + _cfkTahsilatToplam + ' kayıt)';
+    if (pagerEl && _cfkTahsilatToplam > _cfkTahsilatLimit) pagerEl.style.display = 'flex';
+  }
+
+  function cfkTahsilatSayfaGit(yon) {
+    var yeniOffset = _cfkTahsilatOffset + (yon * _cfkTahsilatLimit);
+    if (yeniOffset < 0) return;
+    if (yeniOffset >= _cfkTahsilatToplam && _cfkTahsilatToplam > 0) return;
+    _cfkTahsilatOffset = yeniOffset;
+    var yukEl = document.getElementById('cfk-tahsilat-yukleniyor');
+    var listeEl = document.getElementById('cfk-tahsilat-liste');
+    if (yukEl) { yukEl.style.display = ''; }
+    if (listeEl) listeEl.style.display = 'none';
+    ckartFetchJson('/nexgen/api/cari360/' + CARI_ID + '/tahsilat-liste?limit=' + _cfkTahsilatLimit + '&offset=' + _cfkTahsilatOffset)
+      .then(function(d) {
+        if (d && d.ok) {
+          _cfkTahsilatToplam = d.toplam || 0;
+          cfkTahsilatRender(d.liste || []);
+        }
+      });
+  }
+
+  // Manuel Tahsilat Modal
+  function cfkModalSeceneklerDoldur() {
+    fetch('/nexgen/api/cari360/' + CARI_ID + '/modal-secenekler')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok) return;
+        var spSel = document.getElementById('cfk-m-siparis');
+        var svSel = document.getElementById('cfk-m-sevkiyat');
+        if (spSel) {
+          spSel.innerHTML = '<option value="">— Seçin —</option>';
+          (d.siparisler || []).forEach(function(s) {
+            var o = document.createElement('option');
+            o.value = s.id;
+            o.textContent = s.siparis_no + (s.durum ? ' (' + s.durum + ')' : '');
+            spSel.appendChild(o);
+          });
+        }
+        if (svSel) {
+          svSel.innerHTML = '<option value="">— Seçin —</option>';
+          (d.sevkiyatlar || []).forEach(function(s) {
+            var o = document.createElement('option');
+            o.value = s.id;
+            o.textContent = s.sevkiyat_no + (s.durum ? ' (' + s.durum + ')' : '');
+            svSel.appendChild(o);
+          });
+        }
+      })
+      .catch(function() {});
+  }
+
+  function cfkManuelTahsilatAc() {
+    var m = document.getElementById('cfk-manuel-modal');
+    if (m) m.style.display = '';
+    var tarihEl = document.getElementById('cfk-m-tarih');
+    if (tarihEl && !tarihEl.value) {
+      tarihEl.value = new Date().toISOString().slice(0, 10);
+    }
+    var turEl = document.getElementById('cfk-m-tur');
+    if (turEl) turEl.onchange = function() {
+      var cekBlok = document.getElementById('cfk-m-cek-blok');
+      if (cekBlok) cekBlok.style.display = turEl.value === 'CEK' ? '' : 'none';
+    };
+    cfkModalSeceneklerDoldur();
+  }
+  function cfkManuelTahsilatKapat() {
+    var m = document.getElementById('cfk-manuel-modal'); if (m) m.style.display = 'none';
+    var hata = document.getElementById('cfk-manuel-hata'); if (hata) hata.style.display = 'none';
+  }
+  function cfkManuelTahsilatKaydet() {
+    var hata = document.getElementById('cfk-manuel-hata');
+    var btn = document.getElementById('cfk-m-kaydet');
+    var tarih = (document.getElementById('cfk-m-tarih') || {}).value || '';
+    var tur = (document.getElementById('cfk-m-tur') || {}).value || '';
+    var tutar = parseFloat((document.getElementById('cfk-m-tutar') || {}).value || '0');
+    var pb = (document.getElementById('cfk-m-pb') || {}).value || 'TRY';
+    var ref = (document.getElementById('cfk-m-ref') || {}).value || '';
+    var not = (document.getElementById('cfk-m-not') || {}).value || '';
+    var cekVade = (document.getElementById('cfk-m-cek-vade') || {}).value || '';
+
+    if (!tarih) { if (hata) { hata.textContent = 'Tarih zorunludur.'; hata.style.display = ''; } return; }
+    if (!tur) { if (hata) { hata.textContent = 'Tür zorunludur.'; hata.style.display = ''; } return; }
+    if (!tutar || tutar <= 0) { if (hata) { hata.textContent = 'Geçerli tutar giriniz.'; hata.style.display = ''; } return; }
+
+    if (btn) { btn.disabled = true; btn.textContent = 'Kaydediliyor…'; }
+    if (hata) hata.style.display = 'none';
+
+    fetch('/nexgen/api/cari360/' + CARI_ID + '/manuel-tahsilat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        alinan_tarih: tarih, odeme_tipi: tur, alinan_tutar: tutar,
+        para_birimi: pb, odeme_referansi: ref || null, aciklama: not || null,
+        cek_vade_tarihi: (tur === 'CEK' && cekVade) ? cekVade : null,
+        siparis_id: (document.getElementById('cfk-m-siparis') || {}).value ? parseInt((document.getElementById('cfk-m-siparis') || {}).value) : null,
+        sevkiyat_id: (document.getElementById('cfk-m-sevkiyat') || {}).value ? parseInt((document.getElementById('cfk-m-sevkiyat') || {}).value) : null,
+      }),
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(res) {
+      if (res && res.ok) {
+        cfkManuelTahsilatKapat();
+        _ckartFinansYuklendi = false;
+        ckartFinansYukle();
+      } else {
+        if (hata) { hata.textContent = (res && res.mesaj) || 'Hata oluştu.'; hata.style.display = ''; }
+        if (btn) { btn.disabled = false; btn.textContent = 'Kaydet'; }
+      }
+    })
+    .catch(function(e) {
+      if (hata) { hata.textContent = e.message || 'Bağlantı hatası.'; hata.style.display = ''; }
+      if (btn) { btn.disabled = false; btn.textContent = 'Kaydet'; }
+    });
+  }
+
+  // Finans fonksiyonları — IIFE dışından erişim için window expose
+  window.cfkManuelTahsilatAc = cfkManuelTahsilatAc;
+  window.cfkManuelTahsilatKapat = cfkManuelTahsilatKapat;
+  window.cfkManuelTahsilatKaydet = cfkManuelTahsilatKaydet;
+  window.cfkTahsilatSayfaGit = cfkTahsilatSayfaGit;
+  window.cfkModalSeceneklerDoldur = cfkModalSeceneklerDoldur;
 
   /* ── Onaylar sekmesi — pagination, filtre, özet, popup ── */
   var _ckartOnayOffset = 0;

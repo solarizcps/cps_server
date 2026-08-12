@@ -10,7 +10,12 @@ from __future__ import annotations
 from flask import abort, jsonify, render_template, request, session
 
 from modules.auth import login_gerekli, kullanici_yetkileri
-from modules.nexgen.cari360_finans_service import load_cari360_finans
+from modules.nexgen.cari360_finans_service import (
+    FinansManuelTahsilatError,
+    load_cari360_finans,
+    load_cari360_tahsilat_liste,
+    manuel_tahsilat_olustur,
+)
 from modules.nexgen.cari360_kart_service import Cari360KartError, load_cari_kart
 from modules.nexgen.cari360_dosya_service import (
     Cari360DosyaError,
@@ -38,6 +43,7 @@ from modules.nexgen.cari360_relation_policy import (
 from modules.nexgen.cari360_ticari_ozet_service import load_cari360_ticari_ozet
 from modules.nexgen.cari360_yetki import can_cari360_dosya_ekrani
 from modules.nexgen.cari_sorumlu_service import can_view_cari
+from modules.nexgen.cari360_yetki import can_cari360_finans_write
 from modules.nexgen.mo_gorusme_config import (
     GORUSME_TIPLERI,
     SONRAKI_AKSIYON_ORNEKLERI,
@@ -154,6 +160,7 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
             gorusme_tipleri=GORUSME_TIPLERI,
             sonuc_tipleri=SONUC_TIPLERI,
             sonraki_aksiyon_ornekleri=SONRAKI_AKSIYON_ORNEKLERI,
+            has_finans_write=can_cari360_finans_write(yk),
         )
 
     def _ops_json(fn, cari_id, **kwargs):
@@ -362,8 +369,105 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
             row = con.execute('SELECT id FROM nexgen_cari WHERE id=?', (cari_id,)).fetchone()
             if not row:
                 return jsonify({'ok': False, 'mesaj': 'Cari bulunamadı.'}), 404
-            data = load_cari360_finans(con, cari_id)
+            t_limit = max(1, min(int(request.args.get('tahsilat_limit') or 10), 50))
+            t_offset = max(0, int(request.args.get('tahsilat_offset') or 0))
+            data = load_cari360_finans(con, cari_id,
+                                       tahsilat_limit=t_limit,
+                                       tahsilat_offset=t_offset)
             return jsonify({'ok': True, **data})
+        except Exception as e:
+            return jsonify({'ok': False, 'mesaj': str(e)}), 500
+        finally:
+            con.close()
+
+    @bp.route('/api/cari360/<int:cari_id>/tahsilat-liste', methods=['GET'])
+    @login_gerekli
+    def api_cari360_tahsilat_liste(cari_id):
+        """Tahsilat listesi — paginated, tüm kaynaklar."""
+        yk = _yk()
+        uid = kullanici_id_fn()
+        if not uid:
+            return jsonify({'ok': False, 'mesaj': 'Oturum gerekli.'}), 401
+        con = db_fn()
+        try:
+            if not can_view_cari(con, uid, cari_id, yk):
+                return jsonify({'ok': False, 'mesaj': 'Yetki yok.'}), 403
+            limit = max(1, min(int(request.args.get('limit') or 10), 100))
+            offset = max(0, int(request.args.get('offset') or 0))
+            data = load_cari360_tahsilat_liste(con, cari_id, limit=limit, offset=offset)
+            return jsonify({'ok': True, **data})
+        except Exception as e:
+            return jsonify({'ok': False, 'mesaj': str(e)}), 500
+        finally:
+            con.close()
+
+    @bp.route('/api/cari360/<int:cari_id>/manuel-tahsilat', methods=['POST'])
+    @login_gerekli
+    def api_cari360_manuel_tahsilat(cari_id):
+        """Manuel finans tahsilatı — yalnız finans write yetkisi."""
+        yk = _yk()
+        uid = kullanici_id_fn()
+        if not uid:
+            return jsonify({'ok': False, 'mesaj': 'Oturum gerekli.'}), 401
+        if not can_cari360_finans_write(yk):
+            return jsonify({'ok': False, 'mesaj': 'Finans yazma yetkisi gerekli.'}), 403
+        con = db_fn()
+        try:
+            if not can_view_cari(con, uid, cari_id, yk):
+                return jsonify({'ok': False, 'mesaj': 'Yetki yok.'}), 403
+            row = con.execute('SELECT id FROM nexgen_cari WHERE id=?', (cari_id,)).fetchone()
+            if not row:
+                return jsonify({'ok': False, 'mesaj': 'Cari bulunamadı.'}), 404
+            body = request.get_json(silent=True) or {}
+            result = manuel_tahsilat_olustur(
+                con, cari_id, uid,
+                alinan_tarih=body.get('alinan_tarih', ''),
+                odeme_tipi=body.get('odeme_tipi', ''),
+                alinan_tutar=float(body.get('alinan_tutar') or 0),
+                para_birimi=body.get('para_birimi') or 'TRY',
+                siparis_id=body.get('siparis_id') or None,
+                sevkiyat_id=body.get('sevkiyat_id') or None,
+                aciklama=body.get('aciklama') or None,
+                odeme_referansi=body.get('odeme_referansi') or None,
+                cek_vade_tarihi=body.get('cek_vade_tarihi') or None,
+            )
+            return jsonify(result)
+        except FinansManuelTahsilatError as e:
+            return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod
+        except Exception as e:
+            return jsonify({'ok': False, 'mesaj': str(e)}), 500
+        finally:
+            con.close()
+
+    @bp.route('/api/cari360/<int:cari_id>/modal-secenekler', methods=['GET'])
+    @login_gerekli
+    def api_cari360_modal_secenekler(cari_id):
+        """Manuel tahsilat modali için cari'ye ait sipariş ve sevkiyat listeleri."""
+        yk = _yk()
+        uid = kullanici_id_fn()
+        if not uid:
+            return jsonify({'ok': False, 'mesaj': 'Oturum gerekli.'}), 401
+        con = db_fn()
+        try:
+            if not can_view_cari(con, uid, cari_id, yk):
+                return jsonify({'ok': False, 'mesaj': 'Yetki yok.'}), 403
+            siparisler = con.execute(
+                """SELECT id, siparis_no, durum FROM nexgen_planlama_siparis
+                   WHERE cari_id=? AND (durum IS NULL OR durum != 'IPTAL')
+                   ORDER BY id DESC LIMIT 50""",
+                (cari_id,)
+            ).fetchall()
+            sevkiyatlar = con.execute(
+                """SELECT id, sevkiyat_no, durum FROM mo_musteri_sevkiyat
+                   WHERE cari_id=? AND COALESCE(aktif,1)=1
+                   ORDER BY id DESC LIMIT 50""",
+                (cari_id,)
+            ).fetchall()
+            return jsonify({
+                'ok': True,
+                'siparisler': [{'id': r[0], 'siparis_no': r[1], 'durum': r[2]} for r in siparisler],
+                'sevkiyatlar': [{'id': r[0], 'sevkiyat_no': r[1], 'durum': r[2]} for r in sevkiyatlar],
+            })
         except Exception as e:
             return jsonify({'ok': False, 'mesaj': str(e)}), 500
         finally:
