@@ -654,25 +654,30 @@ def pzm_cari_dogrula(con, cari_id_raw, uid: int | None = None) -> dict[str, Any]
     if uid:
         try:
             from modules.nexgen.cari_sorumlu_service import (
-                can_create_order,
                 load_kullanici_yetkileri,
                 _kullanici_cari_atanmis,
             )
             from modules.nexgen.cari360_yetki import (
                 can_cari360_view_all,
                 can_cari360_crm_write,
+                can_siparis_onaya_gonder,
                 _yk_has,
             )
             yk = load_kullanici_yetkileri(con, int(uid))
             if can_cari360_view_all(yk) or '*' in (yk or set()):
+                # Yönetim / view_all — tüm carilere erişim
+                pass
+            elif can_siparis_onaya_gonder(yk):
+                # Planlama / sipariş operasyonu capability.
+                # nexgen.plan.manage:can_manage yetkisi aktif cari üzerinde
+                # sipariş oluşturmak için yeterlidir; cari_sorumlu ataması şart değil.
                 pass
             elif (
                 _yk_has(yk, 'cari360.view_own', 'can_view')
                 or can_cari360_crm_write(yk)
             ):
-                if not can_create_order(con, int(uid), cari_id, yk) and not _kullanici_cari_atanmis(
-                    con, int(uid), cari_id
-                ):
+                # Müşteri temsilcisi / pazarlamacı: yalnız atanmış carilerde işlem.
+                if not _kullanici_cari_atanmis(con, int(uid), cari_id):
                     raise PzmWriteError('Bu cari için işlem yetkiniz yok.', 403)
         except PzmWriteError:
             raise
