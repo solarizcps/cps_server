@@ -3881,7 +3881,7 @@ main { padding: 16px 12px !important; }
     if (n.ana_formul_grup_kodu) html += '<div class="ckart-urt-detail-field"><span class="lbl">Formül Kodu</span><span class="val">' + esc(n.ana_formul_grup_kodu) + '</span></div>';
     if (n.formul_grup_adi) html += '<div class="ckart-urt-detail-field"><span class="lbl">Formül Adı</span><span class="val">' + esc(n.formul_grup_adi) + '</span></div>';
     if (n.renk) html += '<div class="ckart-urt-detail-field"><span class="lbl">Renk</span><span class="val">' + esc(n.renk) + '</span></div>';
-    if (n.rf) html += '<div class="ckart-urt-detail-field"><span class="lbl">RF</span><span class="val">' + esc(n.rf) + '</span></div>';
+    if (n.rf) html += '<div class="ckart-urt-detail-field"><span class="lbl">Katalog Rengi</span><span class="val">' + esc(n.rf) + '</span></div>';
     if (arge && arge.arge_kodu) html += '<div class="ckart-urt-detail-field"><span class="lbl">AR-GE Kodu</span><span class="val">' + esc(arge.arge_kodu) + '</span></div>';
     html += '</div>';
 
@@ -3902,7 +3902,7 @@ main { padding: 16px 12px !important; }
     html += '<div class="ckart-urt-detail-group-title">D — Bağlantılar</div>';
     html += '<div class="ckart-urt-detail-field"><span class="lbl">Bağlı Siparişler</span><span class="val">' + sipHtml + '</span></div>';
     html += '<div class="ckart-urt-detail-field"><span class="lbl">Numune No</span><span class="val">' + esc(n.talep_kodu || '—') + '</span></div>';
-    if (arge && arge.id) html += '<div class="ckart-urt-detail-field"><span class="lbl">AR-GE</span><span class="val"><a class="ckart-link" href="/nexgen/arge/nx-ar/' + esc(String(arge.id)) + '">NX-AR-' + esc(String(arge.id)) + ' ↗</a></span></div>';
+    if (arge && arge.id) { var _argeLabel = (arge.arge_kodu || '').trim() || '—'; html += '<div class="ckart-urt-detail-field"><span class="lbl">AR-GE</span><span class="val">' + (_argeLabel !== '—' ? '<a class="ckart-link" href="/nexgen/arge/nx-ar/' + esc(String(arge.id)) + '">' + esc(_argeLabel) + ' ↗</a>' : '—') + '</span></div>'; }
     html += '</div>';
 
     html += '</div>'; /* ckart-urt-detail-panel */

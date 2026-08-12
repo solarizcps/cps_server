@@ -329,6 +329,45 @@ if d_block_match:
 else:
     fail('d_detay_url_removed_from_d_block')
 
+print('\n=== FIX-04: BUSINESS TRUTH LOCKS ===')
+
+print('\n[41] LOCK: FIX-1 — D blok arge_kodu field kullanılıyor (NX-AR-{id} yok)')
+if 'arge.arge_kodu' in html and 'NX-AR-\' + esc(String(arge.id))' not in html:
+    ok('d_arge_kodu_canonical_display')
+else:
+    fail('d_arge_kodu_canonical_display', 'arge_kodu yoksa veya eski NX-AR-{id} hala var')
+
+print('\n[42] LOCK: FIX-1 — D blok arge_kodu NULL → link gösterilmiyor')
+if '_argeLabel !== ' in html and "'—'" in html:
+    ok('d_arge_null_no_fake_link')
+else:
+    fail('d_arge_null_no_fake_link', '_argeLabel guard bulunamadı')
+
+print('\n[43] LOCK: FIX-2 — B blok RF label yerine Katalog Rengi var')
+if 'Katalog Rengi' in html:
+    ok('b_rf_label_katalog_rengi')
+else:
+    fail('b_rf_label_katalog_rengi', 'Katalog Rengi label bulunamadı')
+
+print('\n[44] LOCK: FIX-2 — B blok eski RF label yok (numune _numDetayHtml içinde)')
+m_detay = _re.search(r'function _numDetayHtml\(n\)(.*?)(?=\n  function |\n  var _num)', html, re.DOTALL)
+if m_detay:
+    detay_src = m_detay.group(0)
+    if "'lbl'>RF<" not in detay_src and '"lbl">RF<' not in detay_src:
+        ok('b_old_rf_label_removed')
+    else:
+        fail('b_old_rf_label_removed', 'Eski RF label hala var')
+else:
+    fail('b_old_rf_label_removed', '_numDetayHtml bulunamadı')
+
+print('\n[45] LOCK: FIX-3 DOKUNULMADI — durum enum display map değiştirilmedi')
+# CALISILIYOR JS map'inde var (badge renklendirme); ARGE_HAZIR C blokta ham string olarak geliyor
+# FIX-3 SKIP → arge.durum ham string olarak gösteriliyor
+if 'CALISILIYOR' in html:
+    ok('fix3_not_touched')
+else:
+    fail('fix3_not_touched', 'CALISILIYOR badge map beklenmedik şekilde değişti')
+
 # Summary
 print(f'\n{"="*50}')
 print(f'PASS: {len(PASS)}  FAIL: {len(FAIL)}')

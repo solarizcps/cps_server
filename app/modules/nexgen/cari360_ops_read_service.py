@@ -1639,6 +1639,7 @@ def _arge_card(
     rf = rf_info or {}
     return {
         'id': aid,
+        'arge_kodu': (d.get('arge_kodu') or '').strip() or None,
         'test_no': d.get('test_no') or f'#{aid}',
         'durum': d.get('durum') or None,
         'aktif': int(d.get('aktif') or 0),
@@ -1871,7 +1872,7 @@ def _batch_load_arge_for_numuneler(
         arge_by_id[aid] = rowdict
 
     sel = (
-        'id, test_no, durum, aktif, calisma_tipi, olusturma_tarihi, '
+        'id, arge_kodu, test_no, durum, aktif, calisma_tipi, olusturma_tarihi, '
         'rf_renk_id, talep_referansi, cari_id, renk_kodu, yeni_renk_adi, '
         'formul_grup_adi, ana_formul_grup_kodu'
     )

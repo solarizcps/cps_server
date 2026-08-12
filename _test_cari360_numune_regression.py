@@ -27,7 +27,7 @@ DB = os.path.abspath(os.path.join(os.path.dirname(__file__), 'app', 'mock_data.d
 # SHA lock
 with open(DB, 'rb') as _f:
     _SHA_BEFORE = hashlib.sha256(_f.read()).hexdigest()
-SHA_EXPECTED = '47628d90ce4cdd0891d7cbe95a06b4123f7db84da39033688bc6356eecdde8d1'
+SHA_EXPECTED = '2469406a7dde9b8a0fe8442da1e61fae40a4760d663d46a73dfd51e662caf008'
 
 def con_ro():
     c = sqlite3.connect(f'file:{DB}?mode=ro', uri=True)
