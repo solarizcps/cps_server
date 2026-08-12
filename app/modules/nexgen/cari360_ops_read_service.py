@@ -2100,17 +2100,25 @@ def load_cari360_numuneler(
     yk: set[str] | None,
     *,
     limit: int = 50,
+    page: int = 1,
+    page_size: int = 10,
 ) -> dict[str, Any]:
     """Numune talepleri — yalnız nexgen_numune_talep.cari_id = nexgen_cari.id.
 
     cari_id NULL (ADAY) kayıtlar gelmez. RF: numune.rf → arge.rf → —.
+    Pagination: page/page_size parametreleri kullanılır; limit parametre artık yok sayılır.
     """
     _assert_cari(con, cari_id, kullanici_id, yk)
     cid = int(cari_id)
-    limit = max(1, min(int(limit or 50), 50))
+    page = max(1, int(page or 1))
+    page_size = max(1, min(int(page_size or 10), 100))
+    offset = (page - 1) * page_size
+    limit = page_size  # backward compat için local limit
 
     empty = {
         'liste': [], 'count': 0,
+        'page': page, 'page_size': page_size,
+        'total_count': 0, 'total_pages': 0,
         'ozet': {
             'toplam': 0, 'aktif': 0, 'onaylanan': 0,
             'revizyonda': 0, 'reddedilen': 0,
@@ -2150,19 +2158,30 @@ def load_cari360_numuneler(
 
     ncols = _kolonlar(con, 'nexgen_numune_talep')
     mo_sel = ', mo_gorusme_id' if 'mo_gorusme_id' in ncols else ', NULL AS mo_gorusme_id'
+    vedat_sonuc_sel = ', vedat_sonuc' if 'vedat_sonuc' in ncols else ', NULL AS vedat_sonuc'
+    vedat_miktar_sel = ', vedat_numune_miktari' if 'vedat_numune_miktari' in ncols else ', NULL AS vedat_numune_miktari'
+    numune_adedi_sel = ', numune_adedi' if 'numune_adedi' in ncols else ', NULL AS numune_adedi'
+
+    total_count = con.execute(
+        'SELECT COUNT(*) FROM nexgen_numune_talep WHERE cari_id=? AND COALESCE(aktif, 1)=1',
+        (cid,),
+    ).fetchone()[0]
+    import math as _math
+    total_pages = max(1, _math.ceil(total_count / page_size)) if total_count > 0 else 0
+
     rows = con.execute(
         f"""
         SELECT id, talep_kodu, olusturma_tarihi, guncelleme_tarihi,
                urun_tipi, urun_adi, renk_kodu, yeni_renk_aciklama, renk_tipi,
                talep_nedeni, talep_kaynagi, karsilama_yolu, durum, aktif,
                rf_renk_id, arge_test_id, talep_eden_kullanici_id
-               {mo_sel}
+               {mo_sel}{vedat_sonuc_sel}{vedat_miktar_sel}{numune_adedi_sel}
         FROM nexgen_numune_talep
         WHERE cari_id=? AND COALESCE(aktif, 1)=1
         ORDER BY COALESCE(guncelleme_tarihi, olusturma_tarihi, '') DESC, id DESC
-        LIMIT ?
+        LIMIT ? OFFSET ?
         """,
-        (cid, limit),
+        (cid, page_size, offset),
     ).fetchall()
 
     # Toplu AR-GE / RF / formül / revizyon (N+1 yok)
@@ -2346,9 +2365,12 @@ def load_cari360_numuneler(
             'rf_renk_id': int(rf_id) if rf_id is not None else None,
             'rf_kaynak': rf_kaynak,
             'rf_kod': (aktif_rf or {}).get('rf_kod'),
-            'formul_grup_adi': (aktif_arge or {}).get('formul_grup_adi'),
-            'ana_formul_grup_kodu': (aktif_arge or {}).get('ana_formul_grup_kodu'),
+            'formul_grup_adi': (aktif_arge or {}).get('formul_grup_adi') or None,
+            'ana_formul_grup_kodu': (aktif_arge or {}).get('ana_formul_grup_kodu') or None,
             'durum': r['durum'] or None,
+            'vedat_sonuc': r['vedat_sonuc'] or None,
+            'vedat_numune_miktari': r['vedat_numune_miktari'] or None,
+            'numune_adedi': r['numune_adedi'] if r['numune_adedi'] not in (None, 0, '') else None,
             'son_guncelleme': _fmt_dt(r['guncelleme_tarihi'] or r['olusturma_tarihi']),
             'mo_gorusme_id': int(r['mo_gorusme_id']) if r['mo_gorusme_id'] not in (None, 0, '') else None,
             'arge_test_id': int(r['arge_test_id']) if r['arge_test_id'] not in (None, 0, '') else None,
@@ -2384,6 +2406,10 @@ def load_cari360_numuneler(
     out = {
         'liste': liste,
         'count': ozet['toplam'],
+        'page': page,
+        'page_size': page_size,
+        'total_count': total_count,
+        'total_pages': total_pages,
         'ozet': ozet,
         'sorumlu': sorumlu_meta.get('sorumlu'),
         'sorumlu_uyarilari': sorumlu_meta.get('sorumlu_uyarilari') or [],

@@ -312,29 +312,27 @@
 
   <section id="ckart-panel-numuneler" class="ckart-panel"{% if aktif_tab != 'numuneler' %} style="display:none"{% endif %}>
     <h2 class="ckart-h2">Numuneler</h2>
-    <div id="ckart-numune-ozet" class="ckart-numune-ozet ckart-muted" style="display:none;margin:0 0 10px;font-size:12px;"></div>
     <div class="ckart-tablo-wrap">
       <table class="ckart-tablo" id="ckart-numune-tablo">
         <thead>
           <tr>
-            <th>Talep No</th>
+            <th style="width:28px"></th>
             <th>Tarih</th>
-            <th>Talep Eden</th>
-            <th>Ürün Tipi</th>
-            <th>Ürün / Model</th>
+            <th>Talep No</th>
+            <th>Ürün</th>
+            <th>Formül</th>
             <th>Renk</th>
-            <th>Talep Türü</th>
-            <th>RF</th>
             <th>Durum</th>
-            <th>Bağlı Siparişler</th>
-            <th>Son Güncelleme</th>
-            <th style="text-align:right">İşlem</th>
           </tr>
         </thead>
         <tbody id="ckart-numune-tbody">
-          <tr><td colspan="12" class="ckart-muted">Sekme açıldığında yüklenecek.</td></tr>
+          <tr><td colspan="7" class="ckart-muted">Sekme açıldığında yüklenecek.</td></tr>
         </tbody>
       </table>
+    </div>
+    <div id="ckart-numune-pagination" style="display:none;padding:10px 0 4px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+      <span id="ckart-numune-pg-info" style="font-size:11.5px;color:#64748b;"></span>
+      <div id="ckart-numune-pg-btns" style="display:flex;align-items:center;gap:4px;"></div>
     </div>
   </section>
 
@@ -3785,87 +3783,231 @@ main { padding: 16px 12px !important; }
       });
   };
 
+  /* ---- Numune Takip ---- */
+  var _numunePage = 1;
+  var _numunePageSize = 10;
+
+  /* Durum badge — Üretim ckart-urt-dur standardı */
+  function _numuneDurumBadge(d) {
+    if (!d) return '<span class="ckart-urt-dur ckart-urt-dur-default">—</span>';
+    var lblMap = {
+      TASLAK: 'Taslak', BEKLEYEN_NUMUNE: 'Bekleyen', CALISILIYOR: 'Çalışılıyor',
+      REVIZYONDA: 'Revizyonda', ONAY_BEKLIYOR: 'Onay Bekliyor',
+      FERHAT_TESTINDE: 'Ferhat Testinde', FERHAT_BEKLIYOR: 'Ferhat Bekliyor',
+      DENEMEDE: 'Denemede', ONAYLANDI: 'Onaylandı', REDDEDILDI: 'Reddedildi',
+    };
+    var clsMap = {
+      TASLAK: 'on_calisma', BEKLEYEN_NUMUNE: 'planlandi',
+      CALISILIYOR: 'uretimde', REVIZYONDA: 'uretimde', ONAY_BEKLIYOR: 'uretimde',
+      FERHAT_TESTINDE: 'basladi', FERHAT_BEKLIYOR: 'basladi', DENEMEDE: 'basladi',
+      ONAYLANDI: 'bitti', REDDEDILDI: 'default',
+    };
+    var lbl = lblMap[d] || d;
+    var cls = clsMap[d] || 'default';
+    return '<span class="ckart-urt-dur ckart-urt-dur-' + cls + '">' + esc(lbl) + '</span>';
+  }
+
+  /* Ürün hücresi — _urtUrunCell pattern */
+  function _numUrunCell(n) {
+    var tip = (n.urun_tipi || '').trim();
+    var ad  = (n.urun_adi  || '').trim();
+    if (!tip && !ad) return '—';
+    var main = tip || ad;
+    if (ad && ad !== tip) {
+      return esc(main) + '<br><span style="font-size:10px;color:#64748b;">' + esc(ad) + '</span>';
+    }
+    return esc(main);
+  }
+
+  /* Formül hücresi — _urtFormulCell pattern; canonical: ana_formul_grup_kodu */
+  function _numFormulCell(n) {
+    var kod = (n.ana_formul_grup_kodu || '').trim();
+    var ad  = (n.formul_grup_adi || '').trim();
+    if (!kod) return '—';
+    if (ad && ad.toLowerCase() !== kod.toLowerCase()) {
+      return esc(kod) + '<br><span style="font-size:10px;color:#64748b;">' + esc(ad) + '</span>';
+    }
+    return esc(kod);
+  }
+
+  /* Talep No hücresi — iki satır: kod + zincir etiketi */
+  function _numTalepNoCell(n) {
+    var kod = n.talep_kodu || '—';
+    var main = '<strong>' + esc(kod) + '</strong>';
+    var alt = (n.talep_turu || '').trim();
+    if (alt) {
+      return main + '<br><span style="font-size:10px;color:#64748b;">' + esc(alt) + '</span>';
+    }
+    return main;
+  }
+
+  /* Expand detay — Üretim ckart-urt-detail-panel standardı */
+  function _numDetayHtml(n) {
+    var sips = n.bagli_siparisler || [];
+    var sipHtml = sips.length
+      ? sips.map(function(s) {
+          var t = esc(s.siparis_no || ('#' + s.id));
+          return s.detay_url
+            ? '<a class="ckart-link" href="' + esc(s.detay_url) + '">' + t + '</a>'
+            : t;
+        }).join(', ')
+      : '—';
+    var arge = n.aktif_arge_testi;
+    var miktarStr = '—';
+    if (n.vedat_numune_miktari) miktarStr = esc(String(n.vedat_numune_miktari));
+    else if (n.numune_adedi != null) miktarStr = esc(String(n.numune_adedi));
+
+    var html = '<div class="ckart-urt-detail-panel">';
+
+    /* A — Numune Bilgisi */
+    html += '<div class="ckart-urt-detail-group">';
+    html += '<div class="ckart-urt-detail-group-title">A — Numune Bilgisi</div>';
+    html += '<div class="ckart-urt-detail-field"><span class="lbl">Talep No</span><span class="val">'
+      + (n.detay_url ? '<a class="ckart-link" href="' + esc(n.detay_url) + '">' + esc(n.talep_kodu || '—') + ' ↗</a>' : esc(n.talep_kodu || '—'))
+      + '</span></div>';
+    html += '<div class="ckart-urt-detail-field"><span class="lbl">Tarih</span><span class="val">' + esc(dash(n.tarih)) + '</span></div>';
+    if (n.talep_eden) html += '<div class="ckart-urt-detail-field"><span class="lbl">Talep Eden</span><span class="val">' + esc(n.talep_eden) + '</span></div>';
+    if (n.talep_turu) html += '<div class="ckart-urt-detail-field"><span class="lbl">Talep Türü</span><span class="val">' + esc(n.talep_turu) + '</span></div>';
+    html += '<div class="ckart-urt-detail-field"><span class="lbl">Durum</span><span class="val">' + esc(dash(n.durum)) + '</span></div>';
+    html += '<div class="ckart-urt-detail-field"><span class="lbl">Son Güncelleme</span><span class="val">' + esc(dash(n.son_guncelleme)) + '</span></div>';
+    if (n.mo_gorusme_id) html += '<div class="ckart-urt-detail-field"><span class="lbl">Görüşme</span><span class="val">#' + esc(String(n.mo_gorusme_id)) + '</span></div>';
+    html += '</div>';
+
+    /* B — Teknik Bilgi */
+    html += '<div class="ckart-urt-detail-group">';
+    html += '<div class="ckart-urt-detail-group-title">B — Teknik Bilgi</div>';
+    if (n.urun_tipi) html += '<div class="ckart-urt-detail-field"><span class="lbl">Ürün Tipi</span><span class="val">' + esc(n.urun_tipi) + '</span></div>';
+    if (n.urun_adi) html += '<div class="ckart-urt-detail-field"><span class="lbl">Ürün / Model</span><span class="val">' + esc(n.urun_adi) + '</span></div>';
+    if (n.ana_formul_grup_kodu) html += '<div class="ckart-urt-detail-field"><span class="lbl">Formül Kodu</span><span class="val">' + esc(n.ana_formul_grup_kodu) + '</span></div>';
+    if (n.formul_grup_adi) html += '<div class="ckart-urt-detail-field"><span class="lbl">Formül Adı</span><span class="val">' + esc(n.formul_grup_adi) + '</span></div>';
+    if (n.renk) html += '<div class="ckart-urt-detail-field"><span class="lbl">Renk</span><span class="val">' + esc(n.renk) + '</span></div>';
+    if (n.rf) html += '<div class="ckart-urt-detail-field"><span class="lbl">RF</span><span class="val">' + esc(n.rf) + '</span></div>';
+    if (arge && arge.arge_kodu) html += '<div class="ckart-urt-detail-field"><span class="lbl">AR-GE Kodu</span><span class="val">' + esc(arge.arge_kodu) + '</span></div>';
+    html += '</div>';
+
+    /* C — Numune Süreci / Sonuç */
+    html += '<div class="ckart-urt-detail-group">';
+    html += '<div class="ckart-urt-detail-group-title">C — Numune Süreci / Sonuç</div>';
+    if (arge) html += '<div class="ckart-urt-detail-field"><span class="lbl">AR-GE Durumu</span><span class="val">' + esc(dash(arge.durum)) + '</span></div>';
+    html += '<div class="ckart-urt-detail-field"><span class="lbl">Miktar</span><span class="val">' + miktarStr + '</span></div>';
+    html += '<div class="ckart-urt-detail-field"><span class="lbl">Sonuç</span><span class="val">' + esc(dash(n.vedat_sonuc)) + '</span></div>';
+    if (arge && arge.sonuc_notu) html += '<div class="ckart-urt-detail-field"><span class="lbl">Sonuç Notu</span><span class="val">' + esc(arge.sonuc_notu) + '</span></div>';
+    if (n.zincir_uyarilari && n.zincir_uyarilari.length) {
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">Uyarılar</span><span class="val">' + n.zincir_uyarilari.map(function(u) { return esc(u); }).join(', ') + '</span></div>';
+    }
+    html += '</div>';
+
+    /* D — Bağlantılar */
+    html += '<div class="ckart-urt-detail-group">';
+    html += '<div class="ckart-urt-detail-group-title">D — Bağlantılar</div>';
+    html += '<div class="ckart-urt-detail-field"><span class="lbl">Bağlı Siparişler</span><span class="val">' + sipHtml + '</span></div>';
+    html += '<div class="ckart-urt-detail-field"><span class="lbl">Numune No</span><span class="val">' + esc(n.talep_kodu || '—') + '</span></div>';
+    if (arge && arge.id) html += '<div class="ckart-urt-detail-field"><span class="lbl">AR-GE</span><span class="val"><a class="ckart-link" href="/nexgen/arge/nx-ar/' + esc(String(arge.id)) + '">NX-AR-' + esc(String(arge.id)) + ' ↗</a></span></div>';
+    html += '</div>';
+
+    html += '</div>'; /* ckart-urt-detail-panel */
+    return html;
+  }
+
+  /* Pagination — Üretim ckartUretimPaginationRender pattern */
+  function _numunePaginationRender(page, totalPages, totalCount, pageSize) {
+    var pgWrap = document.getElementById('ckart-numune-pagination');
+    var pgInfo = document.getElementById('ckart-numune-pg-info');
+    var pgBtns = document.getElementById('ckart-numune-pg-btns');
+    if (!pgWrap) return;
+    if (!totalPages || totalPages <= 1) { pgWrap.style.display = 'none'; return; }
+    pgWrap.style.display = 'flex';
+    var from = (page - 1) * pageSize + 1;
+    var to = Math.min(page * pageSize, totalCount);
+    pgInfo.textContent = 'Toplam ' + totalCount + ' kayıt · ' + from + '–' + to + ' gösteriliyor';
+    var btns = [];
+    btns.push('<button type="button" onclick="ckartNumuneGitPage(' + (page - 1) + ')" '
+      + (page <= 1 ? 'disabled ' : '') + 'style="' + _sipBtnStyle(false) + '">‹</button>');
+    for (var i = 1; i <= totalPages; i++) {
+      btns.push('<button type="button" onclick="ckartNumuneGitPage(' + i + ')" style="'
+        + _sipBtnStyle(i === page) + '">' + i + '</button>');
+    }
+    btns.push('<button type="button" onclick="ckartNumuneGitPage(' + (page + 1) + ')" '
+      + (page >= totalPages ? 'disabled ' : '') + 'style="' + _sipBtnStyle(false) + '">›</button>');
+    pgBtns.innerHTML = btns.join('');
+  }
+
+  window.ckartNumuneGitPage = function(page) {
+    if (page < 1) return;
+    _numunePage = page;
+    _opsLoaded.numuneler = false;
+    window.ckartNumuneYukle(true);
+    var tbl = document.getElementById('ckart-numune-tablo');
+    if (tbl) tbl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+
   window.ckartNumuneYukle = function(force) {
     var tb = document.getElementById('ckart-numune-tbody');
     if (!tb) return;
     if (_opsLoaded.numuneler && !force) return;
-    tb.innerHTML = '<tr><td colspan="12" class="ckart-muted">Yükleniyor…</td></tr>';
-    ckartFetchJson('/nexgen/api/cari360/' + CARI_ID + '/numuneler')
+    tb.innerHTML = '<tr><td colspan="7" class="ckart-muted">Numune kayıtları yükleniyor…</td></tr>';
+    var url = '/nexgen/api/cari360/' + CARI_ID + '/numuneler?page=' + _numunePage + '&page_size=' + _numunePageSize;
+    ckartFetchJson(url)
       .then(function(d) {
         if (!d || !d.ok) throw new Error((d && d.mesaj) || 'Yüklenemedi');
         var liste = d.liste || [];
         var oz = d.ozet || {};
         _opsLoaded.numuneler = true;
-        setBadge('ckart-numune-badge', d.count != null ? d.count : liste.length);
-        var ozEl = document.getElementById('ckart-numune-ozet');
-        if (ozEl) {
-          ozEl.style.display = '';
-          ozEl.textContent =
-            'Toplam: ' + (oz.toplam != null ? oz.toplam : 0)
-            + ' · Aktif: ' + (oz.aktif != null ? oz.aktif : 0)
-            + ' · Onaylanan: ' + (oz.onaylanan != null ? oz.onaylanan : 0)
-            + ' · Revizyonda: ' + (oz.revizyonda != null ? oz.revizyonda : 0)
-            + ' · Reddedilen: ' + (oz.reddedilen != null ? oz.reddedilen : 0);
-        }
+        setBadge('ckart-numune-badge', d.total_count != null ? d.total_count : (d.count != null ? d.count : liste.length));
+        _numunePaginationRender(
+          d.page || _numunePage,
+          d.total_pages || 0,
+          d.total_count || liste.length,
+          d.page_size || _numunePageSize
+        );
         if (!liste.length) {
-          tb.innerHTML = '<tr><td colspan="12" class="ckart-muted">Bu cari için numune talebi yok.</td></tr>';
+          tb.innerHTML = '<tr><td colspan="7" class="ckart-muted">Bu cari için numune talebi bulunamadı.</td></tr>';
           return;
         }
-        tb.innerHTML = liste.map(function(n) {
-          var link = n.detay_url
-            ? '<a class="ckart-link" href="' + esc(n.detay_url) + '">Aç</a>'
-            : '—';
-          var sips = n.bagli_siparisler || [];
-          var sipHtml = '—';
-          if (sips.length) {
-            sipHtml = sips.map(function(s) {
-              var t = esc(s.siparis_no || ('#' + s.id));
-              return s.detay_url
-                ? '<a class="ckart-link" href="' + esc(s.detay_url) + '">' + t + '</a>'
-                : t;
-            }).join(', ');
-            if (n.bagli_siparis_sayisi != null) {
-              sipHtml = '<span class="ckart-muted">(' + esc(n.bagli_siparis_sayisi) + ')</span> ' + sipHtml;
-            }
-          }
-          /* FAZ-2D/3D: RF hücresi + satır zincir etiketleri */
-          var rfCell = esc(dash(n.rf));
-          if (n.pointer_uyumsuzlugu) {
-            rfCell = ckartChipHtml('RF_POINTER_UYUSMAZLIGI');
-            if (n.numune_rf || n.arge_rf) {
-              rfCell += '<div class="ckart-muted" style="font-size:11px">'
-                + esc(dash(n.numune_rf || n.rf)) + ' / ' + esc(dash(n.arge_rf)) + '</div>';
-            }
-          } else if (n.legacy_baglanti && !n.rf) {
-            rfCell = ckartChipHtml('LEGACY_RF')
-              + '<div class="ckart-muted" style="font-size:11px">'
-              + esc(dash(n.legacy_rf_text || 'legacy text')) + '</div>';
-          } else if (n.tekil_formul && (n.tekil_formul.kod || n.tekil_formul.ad)) {
-            rfCell = rfCell + '<div class="ckart-muted" style="font-size:11px">'
-              + esc(n.tekil_formul.kod || n.tekil_formul.ad) + '</div>';
-          } else if (n.formul_belirsiz) {
-            rfCell = rfCell + '<div class="ckart-muted" style="font-size:11px">Birden Fazla Formül</div>';
-          }
-          return '<tr>'
-            + '<td><strong>' + esc(n.talep_kodu || '—') + '</strong> '
-            + ckartZincirChipHtml(n, { max: 2, skipRf: true }) + '</td>'
-            + '<td>' + esc(dash(n.tarih)) + '</td>'
-            + '<td>' + esc(dash(n.talep_eden)) + '</td>'
-            + '<td>' + esc(dash(n.urun_tipi)) + '</td>'
-            + '<td class="ckart-wrap">' + esc(dash(n.urun_adi)) + '</td>'
+        var rows = [];
+        liste.forEach(function(n) {
+          var rowId = 'num-detail-' + n.id;
+          var expandBtn = '<button type="button" class="ckart-urt-expand-btn" '
+            + 'aria-expanded="false" data-num-target="' + rowId + '" title="Detay">▶</button>';
+          rows.push('<tr class="ckart-sip-row" style="cursor:pointer;" data-num-row="' + rowId + '">'
+            + '<td>' + expandBtn + '</td>'
+            + '<td style="white-space:nowrap;">' + esc(dash(n.tarih ? String(n.tarih).substring(0, 10) : '')) + '</td>'
+            + '<td>' + _numTalepNoCell(n) + '</td>'
+            + '<td>' + _numUrunCell(n) + '</td>'
+            + '<td>' + _numFormulCell(n) + '</td>'
             + '<td>' + esc(dash(n.renk)) + '</td>'
-            + '<td>' + esc(dash(n.talep_turu)) + '</td>'
-            + '<td class="ckart-wrap">' + rfCell + '</td>'
-            + '<td>' + esc(dash(n.durum)) + '</td>'
-            + '<td class="ckart-wrap">' + sipHtml + '</td>'
-            + '<td>' + esc(dash(n.son_guncelleme)) + '</td>'
-            + '<td style="text-align:right">' + link + '</td>'
-            + '</tr>';
-        }).join('');
+            + '<td>' + _numuneDurumBadge(n.durum) + '</td>'
+            + '</tr>');
+          rows.push('<tr id="' + rowId + '" class="ckart-urt-detail-row" style="display:none;">'
+            + '<td colspan="7">' + _numDetayHtml(n) + '</td>'
+            + '</tr>');
+        });
+        tb.innerHTML = rows.join('');
+
+        /* Expand click delegasyonu — Üretim ile aynı pattern */
+        tb.querySelectorAll('.ckart-urt-expand-btn[data-num-target]').forEach(function(btn) {
+          btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var targetId = btn.getAttribute('data-num-target');
+            var detailRow = document.getElementById(targetId);
+            if (!detailRow) return;
+            var open = detailRow.style.display !== 'none';
+            detailRow.style.display = open ? 'none' : '';
+            btn.textContent = open ? '▶' : '▼';
+            btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+          });
+        });
+        tb.querySelectorAll('tr.ckart-sip-row[data-num-row]').forEach(function(row) {
+          row.addEventListener('click', function(e) {
+            if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON') return;
+            var btn = row.querySelector('.ckart-urt-expand-btn[data-num-target]');
+            if (btn) btn.click();
+          });
+        });
       })
       .catch(function(e) {
         console.error('Cari360 numuneler', e);
-        tb.innerHTML = '<tr><td colspan="12" class="ckart-muted">Numuneler yüklenemedi. Lütfen yeniden deneyin.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="7" class="ckart-muted">' + esc((e && e.message) || 'Numuneler yüklenemedi. Lütfen yeniden deneyin.') + '</td></tr>';
       });
   };
 

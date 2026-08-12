@@ -287,7 +287,10 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
     @bp.route('/api/cari360/<int:cari_id>/numuneler', methods=['GET'])
     @login_gerekli
     def api_cari360_numuneler(cari_id):
-        return _ops_json(load_cari360_numuneler, cari_id)
+        page = max(1, int(request.args.get('page') or 1))
+        page_size = max(1, min(int(request.args.get('page_size') or 10), 100))
+        return _ops_json(load_cari360_numuneler, cari_id,
+                         page=page, page_size=page_size)
 
     @bp.route('/api/cari360/<int:cari_id>/tahsilat', methods=['GET'])
     @login_gerekli
