@@ -916,6 +916,80 @@ def list_gorusmeler(
     return out
 
 
+def list_gorusmeler_paginated(
+    con: sqlite3.Connection,
+    cari_id: int,
+    kullanici_id: int = 0,
+    yk: set[str] | None = None,
+    page: int = 1,
+    page_size: int = 10,
+) -> dict[str, Any]:
+    """Server-side pagination için yeni endpoint — Cari Kart Görüşmeler sekmesi.
+
+    Response contract:
+      items        list[dict]
+      total_count  int
+      page         int
+      page_size    int
+      total_pages  int
+    Sıralama: ACIK takipler önce, ardından gorusme_tarihi DESC (mevcut business rule korunur).
+    """
+    if not can_mo_view_cari(con, kullanici_id, cari_id, yk):
+        raise MoGorusmeError('Görüntüleme yetkiniz yok.', 403)
+    if not _tablo_var(con, TABLO):
+        return {'items': [], 'total_count': 0, 'page': 1, 'page_size': page_size, 'total_pages': 0}
+
+    page_size = max(1, min(100, int(page_size)))
+    page = max(1, int(page))
+
+    where_sql = f"g.cari_id=? AND g.aktif=1 AND {gerceklesmis_gorusme_tarihi_sql('g')}"
+    where_params: list[Any] = [int(cari_id)]
+
+    total_count = int(con.execute(
+        f'SELECT COUNT(*) FROM {TABLO} g WHERE {where_sql}',
+        where_params,
+    ).fetchone()[0] or 0)
+
+    total_pages = max(1, (total_count + page_size - 1) // page_size)
+    page = min(page, total_pages)
+    offset = (page - 1) * page_size
+
+    yetkili_join, yetkili_sel = _yetkili_select_sql(con)
+    order = 'g.gorusme_tarihi DESC, g.id DESC'
+    if _kolon_var(con, TABLO, 'takip_durumu'):
+        order = (
+            "CASE WHEN g.takip_durumu='ACIK' THEN 0 ELSE 1 END, "
+            "g.gorusme_tarihi DESC, g.id DESC"
+        )
+
+    rows = con.execute(
+        f"""
+        SELECT g.*, {_kullanici_select_sql()}, {yetkili_sel}
+        FROM {TABLO} g
+        LEFT JOIN sistem_kullanici sk ON sk.Id = g.kullanici_id
+        {yetkili_join}
+        WHERE {where_sql}
+        ORDER BY {order}
+        LIMIT ? OFFSET ?
+        """,
+        (*where_params, page_size, offset),
+    ).fetchall()
+
+    items = []
+    for r in rows:
+        d = _enrich_baglantilar(con, _row_dict(r))
+        d['can_edit'] = can_mo_gorusme_duzenle(con, kullanici_id, d, yk)
+        items.append(d)
+
+    return {
+        'items': items,
+        'total_count': total_count,
+        'page': page,
+        'page_size': page_size,
+        'total_pages': total_pages,
+    }
+
+
 def gorusme_guncelle(
     con: sqlite3.Connection,
     gorusme_id: int,

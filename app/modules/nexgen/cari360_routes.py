@@ -50,6 +50,7 @@ from modules.nexgen.mo_gorusme_service import (
     gorusme_guncelle,
     gorusme_kaydet,
     list_gorusmeler,
+    list_gorusmeler_paginated,
     takip_durum_ayarla,
 )
 
@@ -396,7 +397,7 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
     @bp.route('/api/cari360/<int:cari_id>/gorusme', methods=['GET'])
     @login_gerekli
     def api_cari360_gorusme_liste(cari_id):
-        """Aynı list_gorusmeler servisi — Cari Kart Görüşmeler."""
+        """Paginated görüşmeler — Cari Kart Görüşmeler sekmesi."""
         yk = _yk()
         uid = kullanici_id_fn()
         if not uid:
@@ -410,18 +411,30 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
             ).fetchone()
             if not row:
                 return jsonify({'ok': False, 'mesaj': 'Cari bulunamadı.'}), 404
-            liste = list_gorusmeler(con, cari_id, uid, yk)
-            liste = enrich_gorusmeler_bagli_numuneler(con, cari_id, liste)
-            liste, sm = enrich_gorusmeler_zincir_flags(con, cari_id, liste)
-            gorusme_sayisi = int(con.execute(
-                'SELECT COUNT(*) FROM musteri_operasyon_gorusme '
-                'WHERE cari_id=? AND COALESCE(aktif, 1)=1',
-                (cari_id,),
-            ).fetchone()[0])
+
+            try:
+                page = int(request.args.get('page', 1))
+            except (TypeError, ValueError):
+                page = 1
+            try:
+                page_size = int(request.args.get('page_size', 10))
+            except (TypeError, ValueError):
+                page_size = 10
+
+            paged = list_gorusmeler_paginated(con, cari_id, uid, yk, page=page, page_size=page_size)
+            items = paged['items']
+            items = enrich_gorusmeler_bagli_numuneler(con, cari_id, items)
+            items, sm = enrich_gorusmeler_zincir_flags(con, cari_id, items)
+
             return jsonify({
                 'ok': True,
-                'liste': liste,
-                'count': gorusme_sayisi,
+                'liste': items,
+                'items': items,
+                'total_count': paged['total_count'],
+                'page': paged['page'],
+                'page_size': paged['page_size'],
+                'total_pages': paged['total_pages'],
+                'count': paged['total_count'],
                 'acik_takip': acik_takip_sayisi(con, cari_id),
                 'can_write': can_mo_gorusme_yaz(con, uid, cari_id, yk),
                 'sorumlu': sm.get('sorumlu'),

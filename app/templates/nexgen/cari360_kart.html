@@ -348,25 +348,26 @@
       {% endif %}
     </div>
     <div class="ckart-tablo-wrap">
-      <table class="ckart-tablo ckart-gorusme-tablo" id="ckart-gorusme-tablo">
+      <table class="ckart-tablo" id="ckart-gorusme-tablo">
         <thead>
           <tr>
+            <th style="width:28px"></th>
             <th>Tarih</th>
             <th>Pazarlamacı</th>
             <th>Yetkili</th>
             <th>Tür</th>
-            <th>Konu</th>
-            <th>Numune</th>
             <th>Sonuç</th>
-            <th>Sonraki Aksiyon</th>
             <th>Takip</th>
-            <th style="text-align:right">İşlem</th>
           </tr>
         </thead>
         <tbody id="ckart-gorusme-tbody">
-          <tr><td colspan="10" class="ckart-muted">Yükleniyor…</td></tr>
+          <tr><td colspan="7" class="ckart-muted">Yükleniyor…</td></tr>
         </tbody>
       </table>
+    </div>
+    <div id="ckart-gorusme-pagination" style="display:none;padding:10px 0 4px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+      <span id="ckart-gorusme-pg-info" style="font-size:11.5px;color:#64748b;"></span>
+      <div id="ckart-gorusme-pg-btns" style="display:flex;align-items:center;gap:4px;"></div>
     </div>
   </section>
 
@@ -1819,7 +1820,7 @@ main { padding: 16px 12px !important; }
   var CAN_WRITE_G = root.getAttribute('data-can-write-gorusme') === '1';
   var _gorusmeCache = [];
   var _gIdem = null;
-  var _opsLoaded = { siparisler: false, ticariOzet: false, uretim: false, sevkiyatlar: false, urunler: false, numuneler: false };
+  var _opsLoaded = { siparisler: false, ticariOzet: false, uretim: false, sevkiyatlar: false, urunler: false, numuneler: false, gorusmeler: false };
   var _ckartKpiCache = { toplam_siparis: null, aktif_siparis: null };
 
   function esc(s) {
@@ -4051,7 +4052,7 @@ main { padding: 16px 12px !important; }
     if (tab === 'numuneler') { _opsLoaded.numuneler = false; ckartNumuneYukle(true); }
     if (tab === 'finans') { _ckartFinansYuklendi = false; ckartFinansYukle(); }
     if (tab === 'hafiza') { _ckartHafizaTabYuklendi = false; ckartHafizaTabYukle(); }
-    if (tab === 'gorusmeler') ckartGorusmeYukle();
+    if (tab === 'gorusmeler') { _gorPage = 1; _opsLoaded.gorusmeler = false; ckartGorusmeYukle(true); }
     if (tab === 'onaylar') ckartOnaylarYukle();
   };
 
@@ -4112,7 +4113,8 @@ main { padding: 16px 12px !important; }
   }
 
   function gorusmeSonrasiYenile() {
-    ckartGorusmeYukle();
+    _opsLoaded.gorusmeler = false;
+    ckartGorusmeYukle(true);
     if (typeof ckartOzetYukle === 'function') ckartOzetYukle();
   }
 
@@ -4123,76 +4125,256 @@ main { padding: 16px 12px !important; }
     if (!on) document.getElementById('ckart-g-takip').value = '';
   };
 
-  window.ckartGorusmeYukle = function() {
+  /* ---- Görüşmeler Pagination state ---- */
+  var _gorPage = 1;
+  var _gorPageSize = 10;
+  var _gorTotalCount = 0;
+
+  /* Takip badge */
+  function _gorTakipBadge(g) {
+    var tg = (g.takip_gorunum || g.takip_durumu || '').toUpperCase();
+    if (!tg || tg === 'NULL') return '<span class="ckart-urt-dur ckart-urt-dur-default">—</span>';
+    var map = {
+      'ACIK':       ['ckart-urt-dur-beklemede',  'Açık'],
+      'GECIKTI':    ['ckart-urt-dur-red',         'Gecikti'],
+      'TAMAMLANDI': ['ckart-urt-dur-tamamlandi',  'Tamamlandı'],
+      'IPTAL':      ['ckart-urt-dur-default',     'İptal'],
+    };
+    var cls = map[tg] ? map[tg][0] : 'ckart-urt-dur-default';
+    var lbl = map[tg] ? map[tg][1] : tg;
+    return '<span class="ckart-urt-dur ' + cls + '">' + esc(lbl) + '</span>';
+  }
+
+  /* Sonuç badge */
+  function _gorSonucBadge(sonuc) {
+    if (!sonuc) return '<span class="ckart-urt-dur ckart-urt-dur-default">—</span>';
+    var olumlu = ['Olumlu', 'Sipariş Bekleniyor', 'Sipariş Verecek', 'Tamamlandı'];
+    var olumsuz = ['Olumsuz'];
+    var bekleyen = ['Beklemede', 'Dönüş Bekleniyor', 'Fiyat İstedi', 'Teklif Gönderilecek', 'Numune İstedi'];
+    var cls = 'ckart-urt-dur-default';
+    if (olumlu.indexOf(sonuc) !== -1) cls = 'ckart-urt-dur-tamamlandi';
+    else if (olumsuz.indexOf(sonuc) !== -1) cls = 'ckart-urt-dur-red';
+    else if (bekleyen.indexOf(sonuc) !== -1) cls = 'ckart-urt-dur-beklemede';
+    return '<span class="ckart-urt-dur ' + cls + '">' + esc(sonuc) + '</span>';
+  }
+
+  /* Expand detail HTML — 4 blok */
+  function _gorDetayHtml(g) {
+    var html = '<div class="ckart-urt-detail-panel">';
+
+    /* A — Görüşme Bilgisi */
+    html += '<div class="ckart-urt-detail-group">';
+    html += '<div class="ckart-urt-detail-group-title">A — Görüşme Bilgisi</div>';
+    html += '<div class="ckart-urt-detail-field"><span class="lbl">Tarih</span><span class="val">' + esc((g.gorusme_tarihi || '').slice(0,16) || '—') + '</span></div>';
+    html += '<div class="ckart-urt-detail-field"><span class="lbl">Pazarlamacı</span><span class="val">' + esc(g.pazarlamaci_adi || g.kullanici_adi || '—') + '</span></div>';
+    var yetVal = g.yetkili_adi || '—';
+    if (g.yetkili_unvan) yetVal += ' / ' + g.yetkili_unvan;
+    html += '<div class="ckart-urt-detail-field"><span class="lbl">Yetkili</span><span class="val">' + esc(yetVal) + '</span></div>';
+    html += '<div class="ckart-urt-detail-field"><span class="lbl">Görüşme Türü</span><span class="val">' + esc(g.gorusme_tipi || '—') + '</span></div>';
+    html += '<div class="ckart-urt-detail-field"><span class="lbl">Sonuç</span><span class="val">' + esc(g.sonuc_tipi || '—') + '</span></div>';
+    html += '<div class="ckart-urt-detail-field"><span class="lbl">Öncelik</span><span class="val">' + esc(g.oncelik || 'NORMAL') + '</span></div>';
+    if (g.konu) {
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">Konu</span><span class="val">' + esc(g.konu) + '</span></div>';
+    }
+    html += '<div class="ckart-urt-detail-field"><span class="lbl">Görüşme Notu</span><span class="val" style="white-space:pre-wrap">' + esc(g.kisa_not || '—') + '</span></div>';
+    html += '</div>';
+
+    /* B — Ticari Bilgi */
+    html += '<div class="ckart-urt-detail-group">';
+    html += '<div class="ckart-urt-detail-group-title">B — Ticari Bilgi</div>';
+    if (parseInt(g.fiyat_verildi || 0)) {
+      var fiyat = g.verilen_fiyat != null ? String(g.verilen_fiyat) : '—';
+      var pb = g.fiyat_para_birimi || '—';
+      var birim = g.fiyat_birimi || 'KG';
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">Verilen Fiyat</span><span class="val">' + esc(fiyat) + '</span></div>';
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">Para Birimi</span><span class="val">' + esc(pb) + '</span></div>';
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">Fiyat Birimi</span><span class="val">' + esc(birim) + '</span></div>';
+      if (g.konusulan_tonaj != null) {
+        html += '<div class="ckart-urt-detail-field"><span class="lbl">Konuşulan Tonaj</span><span class="val">' + esc(String(g.konusulan_tonaj)) + ' ton</span></div>';
+      }
+      if (g.odeme_tipi) {
+        html += '<div class="ckart-urt-detail-field"><span class="lbl">Ödeme Tipi</span><span class="val">' + esc(g.odeme_tipi) + '</span></div>';
+      }
+      if (g.odeme_tipi === 'CEK') {
+        if (g.cek_vade_gun != null) html += '<div class="ckart-urt-detail-field"><span class="lbl">Çek Vadesi</span><span class="val">' + esc(String(g.cek_vade_gun)) + ' gün</span></div>';
+        if (g.cek_adedi != null) html += '<div class="ckart-urt-detail-field"><span class="lbl">Çek Adedi</span><span class="val">' + esc(String(g.cek_adedi)) + '</span></div>';
+      } else if (g.odeme_tipi === 'VADELI') {
+        if (g.vade_gun != null) html += '<div class="ckart-urt-detail-field"><span class="lbl">Vade</span><span class="val">' + esc(String(g.vade_gun)) + ' gün</span></div>';
+      }
+      if (g.ticari_not) html += '<div class="ckart-urt-detail-field"><span class="lbl">Ticari Not</span><span class="val">' + esc(g.ticari_not) + '</span></div>';
+      if (g.cek_notu) html += '<div class="ckart-urt-detail-field"><span class="lbl">Çek Notu</span><span class="val">' + esc(g.cek_notu) + '</span></div>';
+    } else {
+      html += '<div class="ckart-urt-detail-field"><span class="lbl" style="color:#94a3b8">—</span><span class="val ckart-muted" style="padding:0">Ticari bilgi girilmemiş.</span></div>';
+    }
+    html += '</div>';
+
+    /* C — Sonuç / Takip */
+    html += '<div class="ckart-urt-detail-group">';
+    html += '<div class="ckart-urt-detail-group-title">C — Sonuç / Takip</div>';
+    html += '<div class="ckart-urt-detail-field"><span class="lbl">Sonuç</span><span class="val">' + esc(g.sonuc_tipi || '—') + '</span></div>';
+    var etiketler = [];
+    try { etiketler = JSON.parse(g.sonuc_etiketler || '[]'); } catch(e2) { etiketler = []; }
+    if (etiketler.length) {
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">Sonuç Etiketleri</span><span class="val">' + esc(etiketler.join(', ')) + '</span></div>';
+    }
+    var tg2 = g.takip_gorunum || g.takip_durumu || '';
+    html += '<div class="ckart-urt-detail-field"><span class="lbl">Takip Durumu</span><span class="val">' + esc(tg2 || '—') + '</span></div>';
+    if (g.sonraki_takip_tarihi) {
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">Takip Tarihi</span><span class="val">' + esc(String(g.sonraki_takip_tarihi).slice(0,10)) + '</span></div>';
+    }
+    if (g.sonraki_aksiyon) {
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">Sonraki Aksiyon</span><span class="val">' + esc(g.sonraki_aksiyon) + '</span></div>';
+    }
+    /* Takip Tamamla butonu — mevcut yetki contract korunur */
+    if (CAN_WRITE_G && (tg2 === 'ACIK' || tg2 === 'GECIKTI')) {
+      html += '<div class="ckart-urt-detail-field"><span class="lbl"></span><span class="val"><button type="button" class="ckart-btn-mini" onclick="ckartTakipTamamla(' + g.id + ')">Takip Tamamla</button></span></div>';
+    }
+    if (g.can_edit) {
+      html += '<div class="ckart-urt-detail-field"><span class="lbl"></span><span class="val"><button type="button" class="ckart-btn-mini" onclick="ckartGorusmeDuzenle(' + g.id + ')">Düzenle</button></span></div>';
+    }
+    html += '</div>';
+
+    /* D — Bağlantılar */
+    html += '<div class="ckart-urt-detail-group">';
+    html += '<div class="ckart-urt-detail-group-title">D — Bağlantılar</div>';
+    /* Numune — FAKE URL FORBIDDEN; sadece text */
+    var numVal = '—';
+    if (g.kaynak_numune_kodu) numVal = esc(g.kaynak_numune_kodu);
+    html += '<div class="ckart-urt-detail-field"><span class="lbl">Bağlı Numune</span><span class="val">' + numVal + '</span></div>';
+    /* Sipariş — route doğrulanamadığından text */
+    var sipVal = '—';
+    if (g.kaynak_siparis_id) sipVal = esc('#' + g.kaynak_siparis_id);
+    html += '<div class="ckart-urt-detail-field"><span class="lbl">Bağlı Sipariş</span><span class="val">' + sipVal + '</span></div>';
+    /* Kaynak */
+    html += '<div class="ckart-urt-detail-field"><span class="lbl">Kaynak</span><span class="val">' + esc(g.kaynak || '—') + '</span></div>';
+    html += '</div>';
+
+    html += '</div>'; /* ckart-urt-detail-panel */
+    return html;
+  }
+
+  /* Pagination render — aynı _sipBtnStyle kullanılır */
+  function _gorPaginationRender(page, totalPages, totalCount, pageSize) {
+    var pgWrap = document.getElementById('ckart-gorusme-pagination');
+    var pgInfo = document.getElementById('ckart-gorusme-pg-info');
+    var pgBtns = document.getElementById('ckart-gorusme-pg-btns');
+    if (!pgWrap) return;
+    if (!totalPages || totalPages <= 1) { pgWrap.style.display = 'none'; return; }
+    pgWrap.style.display = 'flex';
+    var from = (page - 1) * pageSize + 1;
+    var to = Math.min(page * pageSize, totalCount);
+    pgInfo.textContent = 'Toplam ' + totalCount + ' kayıt · ' + from + '–' + to + ' gösteriliyor';
+    var btns = [];
+    btns.push('<button type="button" onclick="ckartGorGitPage(' + (page - 1) + ')" '
+      + (page <= 1 ? 'disabled ' : '') + 'style="' + _sipBtnStyle(false) + '">‹</button>');
+    var start = Math.max(1, page - 2);
+    var end = Math.min(totalPages, page + 2);
+    if (start > 1) { btns.push('<button type="button" onclick="ckartGorGitPage(1)" style="' + _sipBtnStyle(false) + '">1</button>'); if (start > 2) btns.push('<span style="padding:0 4px;color:#94a3b8">…</span>'); }
+    for (var i = start; i <= end; i++) {
+      btns.push('<button type="button" onclick="ckartGorGitPage(' + i + ')" style="' + _sipBtnStyle(i === page) + '">' + i + '</button>');
+    }
+    if (end < totalPages) { if (end < totalPages - 1) btns.push('<span style="padding:0 4px;color:#94a3b8">…</span>'); btns.push('<button type="button" onclick="ckartGorGitPage(' + totalPages + ')" style="' + _sipBtnStyle(false) + '">' + totalPages + '</button>'); }
+    btns.push('<button type="button" onclick="ckartGorGitPage(' + (page + 1) + ')" '
+      + (page >= totalPages ? 'disabled ' : '') + 'style="' + _sipBtnStyle(false) + '">›</button>');
+    pgBtns.innerHTML = btns.join('');
+  }
+
+  window.ckartGorGitPage = function(page) {
+    if (page < 1) return;
+    _gorPage = page;
+    _opsLoaded.gorusmeler = false;
+    window.ckartGorusmeYukle(true);
+    var tbl = document.getElementById('ckart-gorusme-tablo');
+    if (tbl) tbl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+
+  window.ckartGorusmeYukle = function(force) {
     var tb = document.getElementById('ckart-gorusme-tbody');
     if (!tb) return;
-    tb.innerHTML = '<tr><td colspan="9" class="ckart-muted">Yükleniyor…</td></tr>';
-    ckartFetchJson('/nexgen/api/cari360/' + CARI_ID + '/gorusme')
+    if (_opsLoaded.gorusmeler && !force) return;
+    tb.innerHTML = '<tr><td colspan="7" class="ckart-muted">Yükleniyor…</td></tr>';
+    var url = '/nexgen/api/cari360/' + CARI_ID + '/gorusme?page=' + _gorPage + '&page_size=' + _gorPageSize;
+    ckartFetchJson(url)
       .then(function(d){
         if (!d || !d.ok) {
-          tb.innerHTML = '<tr><td colspan="9" class="ckart-muted">' + esc((d && d.mesaj) || 'Yüklenemedi') + '</td></tr>';
+          tb.innerHTML = '<tr><td colspan="7" class="ckart-muted">' + esc((d && d.mesaj) || 'Yüklenemedi') + '</td></tr>';
           return;
         }
         if (typeof d.can_write === 'boolean') CAN_WRITE_G = d.can_write;
         var ozet = document.getElementById('ckart-gorusme-ozet');
-        var acik = d.acik_takip || 0;
-        if (ozet) ozet.textContent = 'Açık takip: ' + acik;
-        setBadge('ckart-gorusme-badge', d.count != null ? d.count : (d.liste || []).length);
-        _gorusmeCache = d.liste || [];
+        if (ozet) ozet.textContent = 'Açık takip: ' + (d.acik_takip || 0);
+        _gorTotalCount = d.total_count || d.count || 0;
+        setBadge('ckart-gorusme-badge', _gorTotalCount);
+        _gorPaginationRender(
+          d.page || _gorPage,
+          d.total_pages || 0,
+          _gorTotalCount,
+          d.page_size || _gorPageSize
+        );
+        _gorusmeCache = d.liste || d.items || [];
         if (!_gorusmeCache.length) {
-          tb.innerHTML = '<tr><td colspan="10" class="ckart-muted">Henüz görüşme kaydı yok.</td></tr>';
+          tb.innerHTML = '<tr><td colspan="7" class="ckart-muted">Henüz görüşme kaydı yok.</td></tr>';
           return;
         }
-        tb.innerHTML = _gorusmeCache.map(function(g){
-          var konu = (g.konu || '').trim() || '—';
-          var notu = (g.kisa_not || '').trim();
-          var konuHtml = '<div class="ckart-konu-cell"><div class="ckart-konu-baslik" title="'+esc(konu)+'">'+esc(konu)+'</div>';
-          if (notu) {
-            konuHtml += '<div class="ckart-not-2" title="'+esc(notu)+'">'+esc(notu)+'</div>';
-          }
-          if (g.fiyat_ozet) {
-            konuHtml += '<div class="ckart-ticari-ozet" title="'+esc(g.fiyat_ozet)+'">'+esc(g.fiyat_ozet)+'</div>';
-          }
-          konuHtml += '</div>';
+        _opsLoaded.gorusmeler = true;
+        var rows = [];
+        _gorusmeCache.forEach(function(g) {
+          var rowId = 'gor-detail-' + g.id;
+          var expandBtn = '<button type="button" class="ckart-urt-expand-btn" '
+            + 'aria-expanded="false" data-gor-target="' + rowId + '" title="Detay">▶</button>';
           var yetHtml = '—';
           if (g.yetkili_adi) {
-            yetHtml = '<div class="ckart-yetkili-cell">'+esc(g.yetkili_adi);
-            if (g.yetkili_unvan) yetHtml += '<span class="ckart-yetkili-unvan">'+esc(g.yetkili_unvan)+'</span>';
-            yetHtml += '</div>';
+            yetHtml = '<strong>' + esc(g.yetkili_adi) + '</strong>';
+            if (g.yetkili_unvan) yetHtml += '<div class="ckart-urt-2nd">' + esc(g.yetkili_unvan) + '</div>';
           }
-          var numHtml = '—';
-          if (g.kaynak_numune_kodu && g.kaynak_numune_url) {
-            numHtml = '<a class="ckart-link" href="'+esc(g.kaynak_numune_url)+'">'+esc(g.kaynak_numune_kodu)+'</a>';
-          } else if (g.kaynak_numune_kodu) {
-            numHtml = esc(g.kaynak_numune_kodu);
-          }
-          var btns = '';
-          if (g.can_edit) {
-            btns += '<button type="button" class="ckart-btn-mini" onclick="ckartGorusmeDuzenle('+g.id+')">Düzenle</button>';
-          }
-          var tg = g.takip_gorunum || g.takip_durumu || '';
-          if (CAN_WRITE_G && (tg === 'ACIK' || tg === 'GECIKTI' || g.takip_durumu === 'ACIK')) {
-            btns += '<button type="button" class="ckart-btn-mini" onclick="ckartTakipTamamla('+g.id+')">Takip Tamamla</button>';
-          }
-          return '<tr>'
-            + '<td style="white-space:nowrap">'+esc((g.gorusme_tarihi||'').slice(0,16))+'</td>'
-            + '<td>'+esc(g.pazarlamaci_adi || g.kullanici_adi || '—')+'</td>'
-            + '<td>'+yetHtml+'</td>'
-            + '<td>'+esc(g.gorusme_tipi||'—')+'</td>'
-            + '<td>'+konuHtml+'</td>'
-            + '<td>'+numHtml+'</td>'
-            + '<td>'+esc(g.sonuc_tipi||'—')+'</td>'
-            + '<td>'+esc(g.sonraki_aksiyon||'—')+'</td>'
-            + '<td>'+takipEtiket(g)+'</td>'
-            + '<td style="text-align:right;white-space:nowrap">'+btns+'</td>'
-            + '</tr>';
-        }).join('');
+          rows.push('<tr class="ckart-sip-row" style="cursor:pointer;" data-gor-row="' + rowId + '">'
+            + '<td>' + expandBtn + '</td>'
+            + '<td style="white-space:nowrap">' + esc((g.gorusme_tarihi || '').slice(0,16)) + '</td>'
+            + '<td><strong>' + esc(g.pazarlamaci_adi || g.kullanici_adi || '—') + '</strong></td>'
+            + '<td>' + yetHtml + '</td>'
+            + '<td>' + esc(g.gorusme_tipi || '—') + '</td>'
+            + '<td>' + _gorSonucBadge(g.sonuc_tipi) + '</td>'
+            + '<td>' + _gorTakipBadge(g) + '</td>'
+            + '</tr>');
+          rows.push('<tr id="' + rowId + '" class="ckart-urt-detail-row" style="display:none">'
+            + '<td colspan="7" style="padding:0">' + _gorDetayHtml(g) + '</td>'
+            + '</tr>');
+        });
+        tb.innerHTML = rows.join('');
       })
       .catch(function(e){
         console.error('Cari360 görüşmeler', e);
-        tb.innerHTML = '<tr><td colspan="10" class="ckart-muted">Görüşmeler yüklenemedi. Lütfen yeniden deneyin.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="7" class="ckart-muted">Görüşmeler yüklenemedi. Lütfen yeniden deneyin.</td></tr>';
       });
   };
+
+  /* Expand event delegation — aynı Numuneler/Üretim pattern */
+  document.addEventListener('click', function(ev) {
+    var btn = ev.target.closest && ev.target.closest('[data-gor-target]');
+    if (btn) {
+      ev.stopPropagation();
+      var targetId = btn.getAttribute('data-gor-target');
+      var detailRow = document.getElementById(targetId);
+      if (!detailRow) return;
+      var expanded = btn.getAttribute('aria-expanded') === 'true';
+      btn.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+      btn.textContent = expanded ? '▶' : '▼';
+      detailRow.style.display = expanded ? 'none' : '';
+      return;
+    }
+    var row = ev.target.closest && ev.target.closest('[data-gor-row]');
+    if (row && !ev.target.closest('button')) {
+      var targetId2 = row.getAttribute('data-gor-row');
+      var detailRow2 = document.getElementById(targetId2);
+      if (!detailRow2) return;
+      var expandBtn2 = row.querySelector('[data-gor-target]');
+      var expanded2 = detailRow2.style.display === 'none' || detailRow2.style.display === '';
+      var isHidden = detailRow2.style.display === 'none';
+      if (expandBtn2) expandBtn2.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+      if (expandBtn2) expandBtn2.textContent = isHidden ? '▼' : '▶';
+      detailRow2.style.display = isHidden ? '' : 'none';
+    }
+  });
 
   function loadGorusmeNumuneler(selectedId) {
     var sel = document.getElementById('ckart-g-numune');
@@ -4399,7 +4581,7 @@ main { padding: 16px 12px !important; }
   });
 
   if (document.getElementById('ckart-panel-gorusmeler').style.display !== 'none') {
-    ckartGorusmeYukle();
+    ckartGorusmeYukle(true);
   }
 })();
 </script>
