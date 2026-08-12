@@ -529,14 +529,70 @@ def pasife_al(con, atama_id: int) -> dict[str, Any]:
 
 
 def list_pazarlamaci_adaylari(con) -> list[dict[str, Any]]:
-    """Yönetim UI kullanıcı dropdown için aktif kullanıcılar."""
+    """Yönetim UI kullanıcı dropdown — geriye dönük alias."""
+    return list_mo_sorumlu_adaylari(con)
+
+
+def list_mo_sorumlu_adaylari(con) -> list[dict[str, Any]]:
+    """MO ANA sorumlu adayları — cari360.view_own veya mevcut aktif ataması olan kullanıcılar."""
     rows = con.execute(
         """
-        SELECT sk.Id, sk.KullaniciAdi, sr.Ad AS rol_adi
+        SELECT DISTINCT sk.Id, sk.KullaniciAdi, sk.AdSoyad, sr.Ad AS rol_adi
         FROM sistem_kullanici sk
         LEFT JOIN sistem_rol sr ON sr.Id = sk.RolId
-        WHERE sk.Aktif=1
+        WHERE sk.Aktif=1 AND (
+            EXISTS (
+                SELECT 1 FROM sistem_rol_yetki ry
+                JOIN sistem_yetki y ON y.Id = ry.YetkiId
+                WHERE ry.RolId = sk.RolId
+                  AND y.Kod = 'cari360.view_own'
+                  AND ry.can_view = 1
+            )
+            OR EXISTS (
+                SELECT 1 FROM cari_sorumlu cs
+                WHERE cs.kullanici_id = sk.Id
+                  AND cs.aktif = 1
+                  AND (cs.bitis_tarihi IS NULL OR cs.bitis_tarihi = ''
+                       OR cs.bitis_tarihi > datetime('now', 'localtime'))
+            )
+        )
         ORDER BY sk.KullaniciAdi
         """
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+def validate_mo_sorumlu_aday(con, kullanici_id: int) -> bool:
+    """Seçilen kullanıcı MO sorumlu adayı listesinde mi?"""
+    kid = int(kullanici_id)
+    return kid in {int(a['Id']) for a in list_mo_sorumlu_adaylari(con)}
+
+
+def ensure_ana_sorumlu_atama(
+    con,
+    cari_id: int,
+    kullanici_id: int,
+    atayan_kullanici_id: int | None = None,
+    atama_notu: str | None = None,
+) -> dict[str, Any]:
+    """Idempotent ANA atama — aynı kullanıcı zaten ANA ise noop."""
+    mevcut = con.execute(
+        f"""
+        SELECT id, kullanici_id FROM cari_sorumlu
+        WHERE cari_id=? AND sorumluluk_rolu='ANA' AND {_AKTIF_WHERE}
+        """,
+        (cari_id,),
+    ).fetchone()
+    if mevcut:
+        if int(mevcut['kullanici_id']) == int(kullanici_id):
+            return {'ok': True, 'id': int(mevcut['id']), 'noop': True}
+        return {
+            'ok': False,
+            'hata': (
+                f'Bu cari için zaten aktif ANA sorumlu var '
+                f'(kullanici_id={mevcut["kullanici_id"]}).'
+            ),
+        }
+    return atama_ekle(
+        con, cari_id, kullanici_id, 'ANA', atayan_kullanici_id, atama_notu,
+    )

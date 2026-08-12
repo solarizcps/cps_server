@@ -474,6 +474,14 @@
           </div>
         </div>
       </div>
+      <div class="ckari-bolum" id="cari-create-sorumlu-wrap" style="display:none;">
+        <div class="ckari-bolum-bas">Müşteri Temsilcisi / Sorumlu <span style="color:#dc2626">*</span></div>
+        <div class="ngsk-fg">
+          <select id="cari-modal-sorumlu" class="ngsk-inp">
+            <option value="">Seçiniz…</option>
+          </select>
+        </div>
+      </div>
       <div class="ckari-bolum">
         <div class="ckari-bolum-bas">Vergi / Resmi</div>
         <div class="ckari-grid2">
@@ -1638,6 +1646,8 @@ function cariFormPayload() {
     dil: v('cari-modal-dil')
   };
   if (_cariModalAdmin) p.unvan = v('cari-modal-unvan');
+  var sid = v('cari-modal-sorumlu');
+  if (sid) p.sorumlu_kullanici_id = parseInt(sid, 10);
   return p;
 }
 
@@ -1658,6 +1668,13 @@ function cariYeniModalAc() {
   if (req) req.style.display = '';
   var sp = document.getElementById('cari-sorumlu-panel');
   if (sp) sp.style.display = 'none';
+  var csw = document.getElementById('cari-create-sorumlu-wrap');
+  if (csw) csw.style.display = 'block';
+  var ssel = document.getElementById('cari-modal-sorumlu');
+  if (ssel) ssel.value = '';
+  cariSorumluAdaylariYukle(function(){
+    cariCreateSorumluSelectDoldur();
+  });
   kodInp.value = '';
   kodInp.readOnly = true;
   document.getElementById('cari-modal-baslik').textContent = 'Yeni Cari';
@@ -1720,6 +1737,8 @@ function cariDuzenleModalAc(id, kod, unvan) {
         if (req) req.style.display = '';
       }
       var sp = document.getElementById('cari-sorumlu-panel');
+      var csw = document.getElementById('cari-create-sorumlu-wrap');
+      if (csw) csw.style.display = 'none';
       if (sp && _cariModalAdmin && typeof CAN_SORUMLU_MANAGE !== 'undefined' && CAN_SORUMLU_MANAGE) {
         sp.style.display = 'block';
         cariSorumluYukle(id);
@@ -1757,9 +1776,26 @@ function cariSorumluSelectDoldur() {
   (_cariSorumluAdaylar || []).forEach(function(k){
     var o = document.createElement('option');
     o.value = k.Id;
-    o.textContent = (k.KullaniciAdi || '') + (k.rol_adi ? (' (' + k.rol_adi + ')') : '');
+    o.textContent = cariSorumluAdayEtiket(k);
     sel.appendChild(o);
   });
+}
+
+function cariCreateSorumluSelectDoldur() {
+  var sel = document.getElementById('cari-modal-sorumlu');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Seçiniz…</option>';
+  (_cariSorumluAdaylar || []).forEach(function(k){
+    var o = document.createElement('option');
+    o.value = k.Id;
+    o.textContent = cariSorumluAdayEtiket(k);
+    sel.appendChild(o);
+  });
+}
+
+function cariSorumluAdayEtiket(k) {
+  var ad = (k.AdSoyad || k.KullaniciAdi || ('#' + k.Id)).trim();
+  return ad + (k.rol_adi ? (' (' + k.rol_adi + ')') : '');
 }
 
 function cariSorumluYukle(cariId) {
@@ -1863,6 +1899,12 @@ function cariKaydet() {
 
   if ((!id || _cariModalAdmin) && !unvan) {
     hataDiv.textContent='Unvan zorunlu.'; hataDiv.style.display='block'; return;
+  }
+  if (!id) {
+    var sorumluVal = (document.getElementById('cari-modal-sorumlu') || {}).value || '';
+    if (!sorumluVal) {
+      hataDiv.textContent='Müşteri temsilcisi (sorumlu) zorunlu.'; hataDiv.style.display='block'; return;
+    }
   }
   if (!id && !kod) { hataDiv.textContent='Cari kodu üretilemedi, sayfayı yenileyin.'; hataDiv.style.display='block'; return; }
 

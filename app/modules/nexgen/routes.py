@@ -13398,6 +13398,10 @@ def api_cari_ekle():
     """Yeni cari ekle — yalnız yönetici."""
     from modules.auth import kullanici_yetkileri
     from modules.nexgen.cari_genel_bilgi_service import CariGenelError, insert_cari_with_genel, is_cari_admin
+    from modules.nexgen.cari_sorumlu_service import (
+        ensure_ana_sorumlu_atama,
+        validate_mo_sorumlu_aday,
+    )
 
     yk = kullanici_yetkileri(session.get('kullanici') or {})
     if not is_cari_admin(yk) or not yetki_var('nexgen.yonetim.manage', 'can_create'):
@@ -13405,8 +13409,17 @@ def api_cari_ekle():
     d = request.get_json(silent=True) or {}
     kod = (d.get('cari_kod') or '').strip()
     unvan = (d.get('unvan') or '').strip()
+    sorumlu_raw = d.get('sorumlu_kullanici_id')
+    if not sorumlu_raw:
+        return jsonify({'ok': False, 'hata': 'Müşteri temsilcisi (sorumlu) zorunlu.'}), 400
+    try:
+        sorumlu_uid = int(sorumlu_raw)
+    except (TypeError, ValueError):
+        return jsonify({'ok': False, 'hata': 'Geçersiz sorumlu kullanıcı.'}), 400
     con = _db()
     try:
+        if not validate_mo_sorumlu_aday(con, sorumlu_uid):
+            return jsonify({'ok': False, 'hata': 'Seçilen sorumlu geçerli bir pazarlamacı değil.'}), 400
         con.execute('BEGIN IMMEDIATE')
         yeni_id = insert_cari_with_genel(con, kod, unvan, d, _kullanici_id(), yk)
         from modules.nexgen.finans_cari_provision_service import (
@@ -13418,8 +13431,14 @@ def api_cari_ekle():
             kullanici_id=_kullanici_id(),
             owns_transaction=False,
         )
+        sr = ensure_ana_sorumlu_atama(
+            con, yeni_id, sorumlu_uid, atayan_kullanici_id=_kullanici_id(),
+            atama_notu='Cari oluşturma ile atandı',
+        )
+        if not sr.get('ok'):
+            raise CariGenelError(sr.get('hata') or 'Sorumlu ataması başarısız.', 400)
         con.commit()
-        return jsonify({'ok': True, 'id': yeni_id})
+        return jsonify({'ok': True, 'id': yeni_id, 'sorumlu_atama_id': sr.get('id')})
     except CariGenelError as e:
         con.rollback()
         return jsonify({'ok': False, 'hata': e.mesaj}), e.kod
@@ -13550,13 +13569,23 @@ def api_cari_sorumlu_liste():
 
 
 @nexgen_bp.route('/api/yonetim/cari-sorumlu-adaylar', methods=['GET'])
-@yetki_gerekli('cari360.sorumlu.manage', 'can_manage')
+@login_gerekli
 def api_cari_sorumlu_adaylar():
-    from modules.nexgen.cari_sorumlu_service import list_pazarlamaci_adaylari
+    from flask import abort
+    from modules.auth import kullanici_yetkileri
+    from modules.nexgen.cari_genel_bilgi_service import is_cari_admin
+    from modules.nexgen.cari_sorumlu_service import can_manage_sorumlu, list_mo_sorumlu_adaylari
 
+    yk = kullanici_yetkileri(session.get('kullanici') or {})
+    can_read = (
+        can_manage_sorumlu(yk)
+        or (is_cari_admin(yk) and yetki_var('nexgen.yonetim.manage', 'can_create'))
+    )
+    if not can_read:
+        abort(403)
     con = _db()
     try:
-        return jsonify({'ok': True, 'kullanicilar': list_pazarlamaci_adaylari(con)})
+        return jsonify({'ok': True, 'kullanicilar': list_mo_sorumlu_adaylari(con)})
     finally:
         con.close()
 
