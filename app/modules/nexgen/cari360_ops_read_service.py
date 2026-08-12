@@ -848,35 +848,93 @@ def load_cari360_siparisler(
     }
 
 
+def _siparis_batch_kodlari(con: sqlite3.Connection, siparis_id: int | None) -> list[str]:
+    """Canonical batch_kodu listesi — nexgen_uretim_batch üzerinden."""
+    if not siparis_id or not _tablo_var(con, 'nexgen_uretim_batch'):
+        return []
+    if not _tablo_var(con, 'nexgen_uretim_plan'):
+        return []
+    rows = con.execute(
+        """
+        SELECT DISTINCT b.batch_kodu
+        FROM nexgen_uretim_batch b
+        JOIN nexgen_uretim_plan p ON p.id = b.plan_id
+        WHERE p.planlama_siparis_id=?
+          AND COALESCE(p.durum, '') NOT IN ('IPTAL')
+          AND b.batch_kodu IS NOT NULL AND TRIM(b.batch_kodu) != ''
+        ORDER BY b.id ASC
+        """,
+        (int(siparis_id),),
+    ).fetchall()
+    return [str(r['batch_kodu']) for r in rows if r['batch_kodu']]
+
+
+def _siparis_plan_url(con: sqlite3.Connection, siparis_id: int | None) -> str | None:
+    if not siparis_id or not _tablo_var(con, 'nexgen_uretim_plan'):
+        return None
+    row = con.execute(
+        """
+        SELECT id FROM nexgen_uretim_plan
+        WHERE planlama_siparis_id=? AND COALESCE(durum, '') NOT IN ('IPTAL')
+        ORDER BY id ASC LIMIT 1
+        """,
+        (int(siparis_id),),
+    ).fetchone()
+    if not row:
+        return None
+    return f'/nexgen/uretim-emirleri?vurgu={int(row["id"])}'
+
+
 def load_cari360_sevkiyatlar(
     con: sqlite3.Connection,
     cari_id: int,
     kullanici_id: int,
     yk: set[str] | None,
     *,
-    limit: int = 50,
+    page: int = 1,
+    page_size: int = 10,
 ) -> dict[str, Any]:
-    """Son N sevkiyat + kalem satırları."""
+    """Canonical mo_musteri_sevkiyat — cari_id doğrudan filtre, pagination."""
+    from modules.nexgen.mo_sevkiyat_config import DURUM_ETIKET
+
     _assert_cari(con, cari_id, kullanici_id, yk)
     cid = int(cari_id)
-    limit = max(1, min(int(limit or 50), 100))
+    page = max(1, int(page or 1))
+    page_size = max(1, min(int(page_size or 10), 100))
+    offset = (page - 1) * page_size
+
+    empty = {
+        'liste': [], 'count': 0, 'total_count': 0,
+        'page': page, 'page_size': page_size, 'total_pages': 0,
+    }
 
     if not _tablo_var(con, 'mo_musteri_sevkiyat'):
-        return {'liste': [], 'count': 0}
+        return empty
 
     has_kalem = _tablo_var(con, 'mo_musteri_sevkiyat_kalem')
     has_sip = _tablo_var(con, 'nexgen_planlama_siparis')
 
+    total_count = int(con.execute(
+        """
+        SELECT COUNT(*) FROM mo_musteri_sevkiyat
+        WHERE cari_id=? AND COALESCE(aktif, 1)=1
+        """,
+        (cid,),
+    ).fetchone()[0])
+    total_pages = max(1, (total_count + page_size - 1) // page_size) if total_count else 0
+
     rows = con.execute(
         """
         SELECT id, sevkiyat_no, irsaliye_no, sevk_tarihi, olusturma_tarihi,
-               durum, siparis_id
+               hazirlik_tarihi, teslim_tarihi, durum, siparis_id,
+               arac_plaka, sofor, kargo_firmasi, kargo_takip_no,
+               teslim_alan, teslim_durumu, notlar
         FROM mo_musteri_sevkiyat
         WHERE cari_id=? AND COALESCE(aktif, 1)=1
         ORDER BY COALESCE(sevk_tarihi, olusturma_tarihi) DESC, id DESC
-        LIMIT ?
+        LIMIT ? OFFSET ?
         """,
-        (cid, limit),
+        (cid, page_size, offset),
     ).fetchall()
 
     sip_ids = {
@@ -889,21 +947,27 @@ def load_cari360_sevkiyatlar(
     for r in rows:
         sevk_id = int(r['id'])
         siparis_no = None
+        siparis_tarihi = None
         siparis_id = r['siparis_id']
         if siparis_id and has_sip:
             sn = con.execute(
-                'SELECT siparis_no FROM nexgen_planlama_siparis WHERE id=?',
+                """
+                SELECT siparis_no, olusturma_tarihi, durum
+                FROM nexgen_planlama_siparis WHERE id=?
+                """,
                 (int(siparis_id),),
             ).fetchone()
             if sn:
                 siparis_no = sn['siparis_no']
+                siparis_tarihi = _fmt_dt(sn['olusturma_tarihi'])
 
         kalemler: list[dict[str, Any]] = []
         sevk_toplam_kg = 0.0
         if has_kalem:
             krows = con.execute(
                 """
-                SELECT urun_adi, renk_ad, miktar_kg
+                SELECT siparis_kalem_id, urun_adi, renk_ad, formul_ad,
+                       miktar_kg, miktar_adet, notlar
                 FROM mo_musteri_sevkiyat_kalem
                 WHERE sevkiyat_id=?
                 ORDER BY id ASC
@@ -914,50 +978,64 @@ def load_cari360_sevkiyatlar(
                 kg = float(k['miktar_kg'] or 0)
                 sevk_toplam_kg += kg
                 kalemler.append({
+                    'siparis_kalem_id': int(k['siparis_kalem_id']) if k['siparis_kalem_id'] else None,
                     'urun': k['urun_adi'] or '—',
                     'renk': k['renk_ad'] or '—',
+                    'formul_ad': k['formul_ad'] or '',
                     'sevk_kg': _fmt_num(kg) or 0,
+                    'miktar_adet': k['miktar_adet'],
+                    'notlar': k['notlar'] or '',
                 })
 
-        # Tablo satırı: ilk kalem + expand için tüm kalemler
         ilk = kalemler[0] if kalemler else {'urun': '—', 'renk': '—', 'sevk_kg': 0}
-        batch_sayisi = 0
-        if siparis_id and _tablo_var(con, 'nexgen_uretim_plan') and _tablo_var(con, 'nexgen_uretim_batch'):
-            batch_sayisi = int(con.execute(
-                """
-                SELECT COUNT(*) FROM nexgen_uretim_batch b
-                JOIN nexgen_uretim_plan p ON p.id = b.plan_id
-                WHERE p.planlama_siparis_id=?
-                  AND COALESCE(p.durum, '') NOT IN ('IPTAL')
-                """,
-                (int(siparis_id),),
-            ).fetchone()[0])
+        batch_kodlari = _siparis_batch_kodlari(con, int(siparis_id) if siparis_id else None)
+        batch_kodu = batch_kodlari[0] if batch_kodlari else ''
+        plan_url = _siparis_plan_url(con, int(siparis_id) if siparis_id else None)
 
         rel = classify_siparis_parent(
             siparis_id, cid, sip_cari_map, null_tipi='DOGRUDAN_SEVKIYAT',
         )
-        uretim_var = bool(batch_sayisi)
+        uretim_var = bool(batch_kodlari)
         zincir_uy = list(rel['zincir_uyarilari'])
         if siparis_id and not uretim_var:
-            zincir_uy.append('URETIM_BILGISI_YOK')  # hata değil
+            zincir_uy.append('URETIM_BILGISI_YOK')
+
+        durum_raw = r['durum'] or ''
+        gercek_sevk = (r['sevk_tarihi'] or '').strip()
         liste.append({
             'id': sevk_id,
             'sevkiyat_no': r['sevkiyat_no'] or '',
             'irsaliye_no': r['irsaliye_no'] or '',
-            'tarih': _fmt_dt(r['sevk_tarihi'] or r['olusturma_tarihi']),
+            'gercek_sevk_tarihi': _fmt_dt(gercek_sevk) if gercek_sevk else None,
+            'tarih': _fmt_dt(gercek_sevk or r['olusturma_tarihi']),
+            'hazirlik_tarihi': _fmt_dt(r['hazirlik_tarihi']) if r['hazirlik_tarihi'] else None,
+            'teslim_tarihi': _fmt_dt(r['teslim_tarihi']) if r['teslim_tarihi'] else None,
             'siparis_id': int(siparis_id) if siparis_id else None,
             'siparis_no': siparis_no or '',
+            'siparis_tarihi': siparis_tarihi,
             'siparis_url': (
                 f'/nexgen/pazarlama?siparis={int(siparis_id)}' if siparis_id else None
             ),
-            'batch_sayisi': batch_sayisi,
+            'sevkiyat_url': f'/nexgen/sevkiyat/{sevk_id}',
+            'plan_url': plan_url,
+            'batch_kodu': batch_kodu,
+            'batch_kodlari': batch_kodlari,
+            'batch_sayisi': len(batch_kodlari),
             'urun': ilk['urun'],
             'renk': ilk['renk'],
             'sevk_kg': _fmt_num(sevk_toplam_kg) or 0,
             'kalem_kg_ozet': ilk['sevk_kg'] if len(kalemler) == 1 else None,
-            'durum': r['durum'] or '',
+            'durum': durum_raw,
+            'durum_etiket': DURUM_ETIKET.get(durum_raw, durum_raw),
             'kalem_sayisi': len(kalemler),
             'kalemler': kalemler,
+            'arac_plaka': r['arac_plaka'] or '',
+            'sofor': r['sofor'] or '',
+            'kargo_firmasi': r['kargo_firmasi'] or '',
+            'kargo_takip_no': r['kargo_takip_no'] or '',
+            'teslim_alan': r['teslim_alan'] or '',
+            'teslim_durumu': r['teslim_durumu'] or '',
+            'notlar': r['notlar'] or '',
             'parent_type': rel['parent_type'] or 'SIPARIS',
             'parent_id': rel['parent_id'],
             'baslangic_tipi': 'SEVKIYAT',
@@ -972,6 +1050,10 @@ def load_cari360_sevkiyatlar(
     return {
         'liste': liste,
         'count': len(liste),
+        'total_count': total_count,
+        'page': page,
+        'page_size': page_size,
+        'total_pages': total_pages,
         'sorumlu': sorumlu_meta.get('sorumlu'),
         'sorumlu_uyarilari': sorumlu_meta.get('sorumlu_uyarilari') or [],
         'sorumlu_atanmamis': bool(sorumlu_meta.get('sorumlu_atanmamis')),

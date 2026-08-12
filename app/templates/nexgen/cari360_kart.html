@@ -272,6 +272,7 @@
       <table class="ckart-tablo" id="ckart-sevk-tablo">
         <thead>
           <tr>
+            <th style="width:28px"></th>
             <th>Sevkiyat / İrsaliye</th>
             <th>Tarih</th>
             <th>Sipariş No</th>
@@ -283,9 +284,13 @@
           </tr>
         </thead>
         <tbody id="ckart-sevk-tbody">
-          <tr><td colspan="8" class="ckart-muted">Sekme açıldığında yüklenecek.</td></tr>
+          <tr><td colspan="9" class="ckart-muted">Sekme açıldığında yüklenecek.</td></tr>
         </tbody>
       </table>
+    </div>
+    <div id="ckart-sevk-pagination" style="display:none;padding:10px 0 4px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+      <span id="ckart-sevk-pg-info" style="font-size:11.5px;color:#64748b;"></span>
+      <div id="ckart-sevk-pg-btns" style="display:flex;align-items:center;gap:4px;"></div>
     </div>
   </section>
 
@@ -3696,24 +3701,183 @@ main { padding: 16px 12px !important; }
       });
   };
 
+  var _sevkPage = 1;
+  var _sevkPageSize = 10;
+
+  function _sevkDurumBadge(s) {
+    var d = (s && s.durum) || '';
+    var lbl = (s && s.durum_etiket) || d || '—';
+    var cls = 'default';
+    if (d === 'SEVK_EDILDI' || d === 'TESLIM_EDILDI' || d === 'TAMAMLANDI') cls = 'bitti';
+    else if (d === 'YUKLENIYOR') cls = 'uretimde';
+    else if (d === 'HAZIRLANIYOR') cls = 'planlandi';
+    return '<span class="ckart-urt-dur ckart-urt-dur-' + cls + '">' + esc(lbl) + '</span>';
+  }
+
+  function _sevkDetailHtml(s) {
+    var html = '<div class="ckart-urt-detail-panel">';
+
+    /* A — Sevkiyat Bilgisi */
+    html += '<div class="ckart-urt-detail-group">';
+    html += '<div class="ckart-urt-detail-group-title">Sevkiyat Bilgisi</div>';
+    html += '<div class="ckart-urt-detail-field"><span class="lbl">Sevkiyat No</span><span class="val"><strong>'
+      + esc(s.sevkiyat_no || '—') + '</strong></span></div>';
+    if (s.irsaliye_no) {
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">İrsaliye No</span><span class="val">'
+        + esc(s.irsaliye_no) + '</span></div>';
+    }
+    html += '<div class="ckart-urt-detail-field"><span class="lbl">Gerçek Sevk Tarihi</span><span class="val">'
+      + esc(dash(s.gercek_sevk_tarihi)) + '</span></div>';
+    html += '<div class="ckart-urt-detail-field"><span class="lbl">Durum</span><span class="val">'
+      + _sevkDurumBadge(s) + '</span></div>';
+    if (s.hazirlik_tarihi) {
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">Hazırlık Tarihi</span><span class="val">'
+        + esc(s.hazirlik_tarihi) + '</span></div>';
+    }
+    if (s.teslim_tarihi) {
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">Teslim Tarihi</span><span class="val">'
+        + esc(s.teslim_tarihi) + '</span></div>';
+    }
+    if (s.kargo_firmasi) {
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">Kargo</span><span class="val">'
+        + esc(s.kargo_firmasi) + (s.kargo_takip_no ? ' · ' + esc(s.kargo_takip_no) : '') + '</span></div>';
+    }
+    if (s.arac_plaka || s.sofor) {
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">Araç / Şoför</span><span class="val">'
+        + esc([s.arac_plaka, s.sofor].filter(Boolean).join(' · ')) + '</span></div>';
+    }
+    html += '</div>';
+
+    /* B — Ürün / Kalem */
+    html += '<div class="ckart-urt-detail-group">';
+    html += '<div class="ckart-urt-detail-group-title">Ürün / Kalem</div>';
+    (s.kalemler || []).forEach(function(k, idx) {
+      if ((s.kalemler || []).length > 1) {
+        html += '<div class="ckart-urt-detail-field"><span class="lbl">Kalem ' + (idx + 1) + '</span><span class="val"></span></div>';
+      }
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">Ürün</span><span class="val">'
+        + esc(k.urun || '—') + '</span></div>';
+      if (k.formul_ad) {
+        html += '<div class="ckart-urt-detail-field"><span class="lbl">Formül</span><span class="val">'
+          + esc(k.formul_ad) + '</span></div>';
+      }
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">Renk</span><span class="val">'
+        + esc(k.renk || '—') + '</span></div>';
+      if ((s.batch_kodlari || []).length) {
+        html += '<div class="ckart-urt-detail-field"><span class="lbl">Batch</span><span class="val">'
+          + esc(s.batch_kodlari.join(', ')) + '</span></div>';
+      }
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">Sevk Miktarı</span><span class="val"><strong>'
+        + esc(dash(k.sevk_kg)) + ' kg</strong></span></div>';
+    });
+    if (!(s.kalemler || []).length) {
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">Kalem</span><span class="val">—</span></div>';
+    }
+    html += '</div>';
+
+    /* C — Sipariş Bağlantısı */
+    html += '<div class="ckart-urt-detail-group">';
+    html += '<div class="ckart-urt-detail-group-title">Sipariş Bağlantısı</div>';
+    if (s.siparis_no) {
+      var sipLink = s.siparis_url
+        ? '<a class="ckart-link" href="' + esc(s.siparis_url) + '">' + esc(s.siparis_no) + ' ↗</a>'
+        : esc(s.siparis_no);
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">Sipariş No</span><span class="val">' + sipLink + '</span></div>';
+    }
+    if (s.siparis_tarihi) {
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">Sipariş Tarihi</span><span class="val">'
+        + esc(s.siparis_tarihi) + '</span></div>';
+    }
+    (s.kalemler || []).forEach(function(k, idx) {
+      if (k.siparis_kalem_id) {
+        html += '<div class="ckart-urt-detail-field"><span class="lbl">Sipariş Kalemi</span><span class="val">'
+          + esc((s.kalemler.length > 1 ? ('#' + (idx + 1) + ' · ') : '') + (k.urun || '—')) + '</span></div>';
+      }
+    });
+    html += '</div>';
+
+    /* D — Bağlantılar */
+    html += '<div class="ckart-urt-detail-group">';
+    html += '<div class="ckart-urt-detail-group-title">Bağlantılar</div>';
+    html += '<div style="margin-top:4px;">';
+    if (s.sevkiyat_url) {
+      html += '<a class="ckart-link" href="' + esc(s.sevkiyat_url) + '">Sevkiyat Detayı ↗</a>';
+    }
+    if (s.siparis_url) {
+      html += ' &nbsp; <a class="ckart-link" href="' + esc(s.siparis_url) + '">Siparişe Git ↗</a>';
+    }
+    if (s.plan_url) {
+      html += ' &nbsp; <a class="ckart-link" href="' + esc(s.plan_url) + '">Üretim Emri ↗</a>';
+    }
+    html += '</div>';
+    html += '</div>';
+
+    html += '</div>';
+    return html;
+  }
+
+  function ckartSevkPaginationRender(page, totalPages, totalCount, pageSize) {
+    var pgWrap = document.getElementById('ckart-sevk-pagination');
+    var pgInfo = document.getElementById('ckart-sevk-pg-info');
+    var pgBtns = document.getElementById('ckart-sevk-pg-btns');
+    if (!pgWrap) return;
+    if (!totalPages || totalPages <= 1) { pgWrap.style.display = 'none'; return; }
+    pgWrap.style.display = 'flex';
+    var from = (page - 1) * pageSize + 1;
+    var to = Math.min(page * pageSize, totalCount);
+    pgInfo.textContent = 'Toplam ' + totalCount + ' kayıt · ' + from + '–' + to + ' gösteriliyor';
+    var btns = [];
+    btns.push('<button type="button" onclick="ckartSevkGitPage(' + (page - 1) + ')" '
+      + (page <= 1 ? 'disabled ' : '') + 'style="' + _sipBtnStyle(false) + '">‹</button>');
+    for (var i = 1; i <= totalPages; i++) {
+      btns.push('<button type="button" onclick="ckartSevkGitPage(' + i + ')" style="'
+        + _sipBtnStyle(i === page) + '">' + i + '</button>');
+    }
+    btns.push('<button type="button" onclick="ckartSevkGitPage(' + (page + 1) + ')" '
+      + (page >= totalPages ? 'disabled ' : '') + 'style="' + _sipBtnStyle(false) + '">›</button>');
+    pgBtns.innerHTML = btns.join('');
+  }
+
+  window.ckartSevkGitPage = function(page) {
+    if (page < 1) return;
+    _sevkPage = page;
+    _opsLoaded.sevkiyatlar = false;
+    window.ckartSevkYukle(true);
+    var tbl = document.getElementById('ckart-sevk-tablo');
+    if (tbl) tbl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+
   window.ckartSevkYukle = function(force) {
     var tb = document.getElementById('ckart-sevk-tbody');
     if (!tb) return;
     if (_opsLoaded.sevkiyatlar && !force) return;
-    tb.innerHTML = '<tr><td colspan="8" class="ckart-muted">Yükleniyor…</td></tr>';
-    ckartFetchJson('/nexgen/api/cari360/' + CARI_ID + '/sevkiyatlar')
+    tb.innerHTML = '<tr><td colspan="9" class="ckart-muted">Yükleniyor…</td></tr>';
+    var url = '/nexgen/api/cari360/' + CARI_ID + '/sevkiyatlar?page=' + _sevkPage + '&page_size=' + _sevkPageSize;
+    ckartFetchJson(url)
       .then(function(d) {
         if (!d || !d.ok) throw new Error((d && d.mesaj) || 'Yüklenemedi');
         var liste = d.liste || [];
         _opsLoaded.sevkiyatlar = true;
+        ckartSevkPaginationRender(
+          d.page || _sevkPage,
+          d.total_pages || 0,
+          d.total_count != null ? d.total_count : liste.length,
+          d.page_size || _sevkPageSize
+        );
         if (!liste.length) {
-          tb.innerHTML = '<tr><td colspan="8" class="ckart-muted">Bu cari için sevkiyat kaydı yok.</td></tr>';
+          tb.innerHTML = '<tr><td colspan="9" class="ckart-muted">Bu cari için sevkiyat kaydı yok.</td></tr>';
           return;
         }
-        var html = [];
+        var rows = [];
         liste.forEach(function(s) {
+          var rowId = 'sevk-detail-' + s.id;
+          var expandBtn = '<button type="button" class="ckart-urt-expand-btn" '
+            + 'aria-expanded="false" data-sevk-target="' + rowId + '" title="Detay">▶</button>';
           var no = esc(s.sevkiyat_no || '—');
-          if (s.irsaliye_no) no += '<div class="ckart-muted" style="padding:0!important;text-align:left">İrs: ' + esc(s.irsaliye_no) + '</div>';
+          if (s.irsaliye_no) {
+            no += '<div class="ckart-muted" style="padding:0!important;text-align:left;font-size:11px;">İrs: '
+              + esc(s.irsaliye_no) + '</div>';
+          }
           var urun = esc(s.urun || '—');
           var renk = esc(s.renk || '—');
           if ((s.kalem_sayisi || 0) > 1) {
@@ -3723,33 +3887,52 @@ main { padding: 16px 12px !important; }
           if (s.siparis_url) {
             sipHtml = '<a class="ckart-link" href="' + esc(s.siparis_url) + '">' + esc(dash(s.siparis_no)) + '</a>';
           }
-          html.push('<tr>'
-            + '<td><strong>' + no + '</strong> '
-            + ckartZincirChipHtml(s, { max: 2 }) + '</td>'
-            + '<td>' + esc(dash(s.tarih)) + '</td>'
+          var batchLbl = '—';
+          if ((s.batch_kodlari || []).length === 1) batchLbl = esc(s.batch_kodlari[0]);
+          else if ((s.batch_kodlari || []).length > 1) {
+            batchLbl = esc(s.batch_kodlari[0]) + ' <span class="ckart-pill-pasif">+' + (s.batch_kodlari.length - 1) + '</span>';
+          }
+          var tarihLbl = s.gercek_sevk_tarihi || s.tarih || '—';
+          rows.push('<tr class="ckart-sip-row" style="cursor:pointer;" data-sevk-row="' + rowId + '">'
+            + '<td>' + expandBtn + '</td>'
+            + '<td><strong>' + no + '</strong></td>'
+            + '<td>' + esc(dash(tarihLbl)) + '</td>'
             + '<td>' + sipHtml + '</td>'
-            + '<td>' + esc(s.batch_sayisi != null ? s.batch_sayisi : 0) + '</td>'
+            + '<td>' + batchLbl + '</td>'
             + '<td>' + urun + '</td>'
             + '<td>' + renk + '</td>'
-            + '<td><strong>' + esc(dash(s.sevk_kg)) + '</strong></td>'
-            + '<td>' + esc(dash(s.durum)) + '</td>'
+            + '<td style="text-align:right;"><strong>' + esc(dash(s.sevk_kg)) + '</strong></td>'
+            + '<td>' + _sevkDurumBadge(s) + '</td>'
             + '</tr>');
-          if ((s.kalemler || []).length > 1) {
-            s.kalemler.forEach(function(k) {
-              html.push('<tr class="ckart-sevk-sub">'
-                + '<td></td><td></td><td></td><td></td>'
-                + '<td>' + esc(k.urun || '—') + '</td>'
-                + '<td>' + esc(k.renk || '—') + '</td>'
-                + '<td>' + esc(dash(k.sevk_kg)) + '</td>'
-                + '<td></td></tr>');
-            });
-          }
+          rows.push('<tr id="' + rowId + '" class="ckart-urt-detail-row" style="display:none;">'
+            + '<td colspan="9">' + _sevkDetailHtml(s) + '</td>'
+            + '</tr>');
         });
-        tb.innerHTML = html.join('');
+        tb.innerHTML = rows.join('');
+
+        tb.querySelectorAll('.ckart-urt-expand-btn').forEach(function(btn) {
+          btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var targetId = btn.getAttribute('data-sevk-target');
+            var detailRow = document.getElementById(targetId);
+            if (!detailRow) return;
+            var open = detailRow.style.display !== 'none';
+            detailRow.style.display = open ? 'none' : '';
+            btn.textContent = open ? '▶' : '▼';
+            btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+          });
+        });
+        tb.querySelectorAll('tr.ckart-sip-row[data-sevk-row]').forEach(function(row) {
+          row.addEventListener('click', function(e) {
+            if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON') return;
+            var btn = row.querySelector('.ckart-urt-expand-btn');
+            if (btn) btn.click();
+          });
+        });
       })
       .catch(function(e) {
         console.error('Cari360 sevkiyatlar', e);
-        tb.innerHTML = '<tr><td colspan="8" class="ckart-muted">Sevkiyatlar yüklenemedi. Lütfen yeniden deneyin.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="9" class="ckart-muted">Sevkiyatlar yüklenemedi. Lütfen yeniden deneyin.</td></tr>';
       });
   };
 
