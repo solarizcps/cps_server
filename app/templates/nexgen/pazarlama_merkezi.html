@@ -4974,6 +4974,7 @@ function pzmDetayReadonly(t) {
   var d = (t.durum || '').toUpperCase();
   if (d === 'ONAY_BEKLIYOR') return true;
   if (d === 'URETIMDE' || d === 'IPTAL') return true;
+  if (d === 'TAMAMLANDI') return true;
   var st = _pzmMprState[String(t.id)];
   if (st && st.planlar.length && st.planlar.every(function(p) {
     return p.durum === 'URETIMDE' || p.durum === 'BITTI';

@@ -19801,7 +19801,7 @@ def _pzm_v2_mpr_olustur(con, talep_id):
         }
 
     mevcut_planlar = _pzm_siparis_mpr_planlar(con, talep_id)
-    if mevcut_planlar and hdr['durum'] in ('MPR_BEKLIYOR', 'PLANLAMAYA_HAZIR', 'URETIMDE'):
+    if mevcut_planlar and hdr['durum'] in ('MPR_BEKLIYOR', 'PLANLAMAYA_HAZIR', 'URETIMDE', 'TAMAMLANDI'):
         return {
             'ok': True,
             'planlar': mevcut_planlar,
