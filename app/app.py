@@ -126,8 +126,13 @@ def index():
     if u and is_nexgen_arge_tablet_kullanici(u):
         return redirect('/nexgen/tablet/arge')
     if u:
+        yk = kullanici_yetkileri(u)
+        from modules.enjeksiyon.home_yetki import enjeksiyon_home_redirect
+        landing = enjeksiyon_home_redirect(u, yk)
+        if landing:
+            return redirect(landing)
         from modules.nexgen.cari360_yetki import pazarlamaci_home_redirect
-        landing = pazarlamaci_home_redirect(kullanici_yetkileri(u))
+        landing = pazarlamaci_home_redirect(yk)
         if landing:
             return redirect(landing)
     return render_template('index.html', db_mode=Config.DB_MODE)
@@ -142,9 +147,14 @@ def inject_globals():
     yetkiler = g.get('yetkiler', set()) if u else set()
     can_mo_menu = False
     pz_home = False
+    enj_home = False
     home_landing_url = '/'
     if u:
         try:
+            from modules.enjeksiyon.home_yetki import (
+                ENJEKSIYON_HOME_PATH,
+                is_enjeksiyon_home_user,
+            )
             from modules.nexgen.cari360_yetki import (
                 can_musteri_pazarlama_menu,
                 is_pazarlamaci_home_user,
@@ -152,11 +162,15 @@ def inject_globals():
             )
             can_mo_menu = bool(can_musteri_pazarlama_menu(yetkiler))
             pz_home = bool(is_pazarlamaci_home_user(yetkiler))
-            if pz_home:
+            enj_home = bool(is_enjeksiyon_home_user(u, yetkiler))
+            if enj_home:
+                home_landing_url = ENJEKSIYON_HOME_PATH
+            elif pz_home:
                 home_landing_url = PAZARLAMACI_HOME_PATH
         except Exception:
             can_mo_menu = False
             pz_home = False
+            enj_home = False
     return {
         'DB_MODE':    Config.DB_MODE,
         'APP_NAME':   'CPS Dev',
@@ -168,6 +182,7 @@ def inject_globals():
         'arge_tablet_mod': is_nexgen_arge_tablet_kullanici(session.get('kullanici')) if session.get('kullanici') else False,
         'can_musteri_operasyonu_menu': can_mo_menu,
         'pazarlamaci_home_user': pz_home,
+        'enjeksiyon_home_user': enj_home,
         'home_landing_url': home_landing_url,
     }
 

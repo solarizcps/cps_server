@@ -73,6 +73,8 @@ window.__cpsRootMap = function(pathname) {
 
 
   window.__cpsArgeTabletMod = {{ arge_tablet_mod | tojson }};
+  // ENJ_SIDEBAR_COLLAPSED_V1: Enjeksiyon home user için sidebar init collapsed
+  window.__cpsEnjHome = {{ enjeksiyon_home_user | tojson }};
 
 
   // localStorage'dan tab listesini al, aktif sayfayi otomatik ekle
@@ -100,6 +102,9 @@ window.__cpsRootMap = function(pathname) {
 
 
   }
+
+  // ENJ_TAB_SKIP_V1 (13.08.2026): Enjeksiyon home user — tab bar boş kalır (spacer görevi görür)
+  if (window.__cpsEnjHome) { return; }
 
 
   function _curKey(){
@@ -268,8 +273,10 @@ window.__cpsRootMap = function(pathname) {
 
 
 
-    {# FERHAT_TAB_GIZLE_V1 (15.05.2026): Enjeksiyon + AR-GE tablet icin tab gizli #}
-    {% if not arge_tablet_mod and g_user and g_user.RolAd != 'Enjeksiyon' %}
+    {# HEADER_SPACER_V2 (13.08.2026): dynNavTabs her zaman render edilir — flex:1 spacer.
+       AR-GE tablet mod'da tab JS zaten return eder; Enjeksiyon için boş kalır ama
+       header-right sağa iter. Önceki Enjeksiyon koşulu header alignment'ı bozuyordu. #}
+    {% if not arge_tablet_mod %}
     <div id="dynNavTabs" class="nav-tabs"></div>
     {% endif %}
 
@@ -737,7 +744,7 @@ window.__cpsRootMap = function(pathname) {
         <span class="sn-baslik">Genel</span>
 
 
-        <span class="sn-count">{% if yetki('tasks') %}{% if pazarlamaci_home_user %}1{% else %}2{% endif %}{% else %}1{% endif %}</span>
+        <span class="sn-count">{% if yetki('tasks') %}{% if pazarlamaci_home_user or enjeksiyon_home_user %}1{% else %}2{% endif %}{% else %}1{% endif %}</span>
 
 
       </div>
@@ -745,7 +752,7 @@ window.__cpsRootMap = function(pathname) {
 
       <div class="sn-grup{% if not _genel_acik %} kapali{% endif %}" data-grup="genel">
 
-        {% if not pazarlamaci_home_user %}
+        {% if not pazarlamaci_home_user and not enjeksiyon_home_user %}
         <a href="/" class="si {% if active == 'home' %}active{% endif %}" title="Özet">
 
 
@@ -1150,26 +1157,29 @@ window.__cpsRootMap = function(pathname) {
       {# ENJ_F4_PLANLAMA_REMOVED (MENU_FIX_V1 05.06.2026): Duplicate data-grup="uretim" kaldirildi.
          Planlama rolu icin enjeksiyon linki zaten Planlama menusunde mevcut. #}
 
-      <!-- FERHAT_SAHA_MENU_V3 (15.05.2026 - Sade: sadece Enjeksiyon) -->
+      <!-- ENJEKSIYON_SAHA_MENU_V5: Solariz enjeksiyon saha + Gelen İşler (permission bazlı) -->
       {% if yetki('enjeksiyon') %}
-      <div class="sn-sec sn-toggle{% if aktif_grup in ('enjeksiyon', 'uretim') %} acik{% endif %}" data-grup="ferhat">
-        <span class="sn-arrow">{% if aktif_grup in ('enjeksiyon', 'uretim') %}▼{% else %}►{% endif %}</span>
+      {% set _enj_link_sayisi = (1 + (1 if yetki('saha.ferhat_islem') else 0)) %}
+      <div class="sn-sec sn-toggle{% if aktif_grup in ('enjeksiyon', 'uretim', 'nx_ar_saha') %} acik{% endif %}" data-grup="enjeksiyon_saha">
+        <span class="sn-arrow">{% if aktif_grup in ('enjeksiyon', 'uretim', 'nx_ar_saha') %}▼{% else %}►{% endif %}</span>
         <svg class="sn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10v4"/><path d="M11 10v4"/><path d="M15 10v4"/></svg>
         <span class="sn-baslik">Saha</span>
-        <span class="sn-count">2</span>
+        <span class="sn-count">{{ _enj_link_sayisi }}</span>
       </div>
-      <div class="sn-grup{% if aktif_grup not in ('enjeksiyon', 'uretim') %} kapali{% endif %}" data-grup="ferhat">
+      <div class="sn-grup{% if aktif_grup not in ('enjeksiyon', 'uretim', 'nx_ar_saha') %} kapali{% endif %}" data-grup="enjeksiyon_saha">
         <a href="/enjeksiyon/" class="si {% if '/enjeksiyon' in rp %}active{% endif %}" title="Enjeksiyon">
           <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10v4"/><path d="M11 10v4"/><path d="M15 10v4"/></svg></span>
           <span class="sl">Enjeksiyon</span>
         </a>
+        {% if yetki('saha.ferhat_islem') %}
         <a href="/saha/numune-talep" class="si {% if '/saha/numune-talep' in rp %}active{% endif %}" title="Gelen İşler">
           <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6"/><path d="M9 16h6"/></svg></span>
           <span class="sl">Gelen İşler</span>
         </a>
+        {% endif %}
       </div>
       {% endif %}
-      <!-- /FERHAT_SAHA_MENU_V3 -->
+      <!-- /ENJEKSIYON_SAHA_MENU_V5 -->
 
 <!-- ============ PLANLAMA ============ -->
 
@@ -1605,7 +1615,7 @@ window.__cpsRootMap = function(pathname) {
 
 
     </nav>
-<!-- MENU_SIDEBAR_STATE_PERSIST_FIX v1 (05.06.2026) -->
+<!-- MENU_SIDEBAR_STATE_PERSIST_FIX v2 (13.08.2026) -->
 <script>
 (function(){
   var KEY = 'cps_sidebar_expanded';
@@ -1631,7 +1641,16 @@ window.__cpsRootMap = function(pathname) {
     }
   }
 
-  applyExpanded(readExpanded());
+  // ENJ_SIDEBAR_COLLAPSED_V1 (13.08.2026):
+  // Enjeksiyon home kullanıcısı için sidebar başlangıçta daima collapsed.
+  // window.__cpsEnjHome flag'i Jinja inject_globals'dan gelir (enj_home_user).
+  // Toggle çalışınca saveExpanded normal akışa döner.
+  if (window.__cpsEnjHome) {
+    saveExpanded(false);
+    applyExpanded(false);
+  } else {
+    applyExpanded(readExpanded());
+  }
 
   document.addEventListener('click', function(ev) {
     var tog = ev.target.closest && ev.target.closest('.sb-tog');
@@ -3037,6 +3056,7 @@ window.__cpsRootMap = function(pathname) {
 
 
     if (window.__cpsArgeTabletMod) return;
+    if (window.__cpsEnjHome) return;
 
 
     var box = document.getElementById('dynNavTabs');

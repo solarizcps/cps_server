@@ -336,6 +336,9 @@ def yetki_gerekli(kod, action='can_view'):
         def wrapper(*args, **kwargs):
             if not session.get('kullanici'):
                 return redirect(url_for('auth.login', next=request.path))
+            # AR-GE tablet kullanıcısı /nexgen/tablet/arge rotasına her zaman girebilir
+            if _is_arge_tablet(session.get('kullanici')) and request.path.startswith('/nexgen/tablet/arge'):
+                return f(*args, **kwargs)
             if not yetki_var(kod, action):
                 abort(403)
             return f(*args, **kwargs)
@@ -350,6 +353,15 @@ def login_gerekli(f):
             return redirect(url_for('auth.login', next=request.path))
         return f(*args, **kwargs)
     return wrapper
+
+
+def _is_arge_tablet(user_dict) -> bool:
+    """AR-GE tablet kullanıcısı kontrolü — döngüsel import önlemek için lazy."""
+    try:
+        from modules.nexgen.mo_arge_tablet_yetki import is_nexgen_arge_tablet_kullanici
+        return is_nexgen_arge_tablet_kullanici(user_dict)
+    except Exception:
+        return False
 
 
 # ============== ROUTES ==============
@@ -400,18 +412,14 @@ def login():
                 nxt = '/uretim/'
             elif _tip == 'usta':
                 nxt = '/hedef/'
-            # FERHAT_TABLET_V1 (16.07.2026): Ferhat usta → saha tablet
-            elif (u.get('KullaniciAdi') or '').lower() == 'ferhat':
-                nxt = '/nexgen/tablet/ferhat'
-            # FERHAT_LOGIN_REDIRECT_V1 (15.05.2026): Enjeksiyon rolu direkt saha
+            # ENJEKSIYON_HOME_V2: Enjeksiyon rolu → Solariz saha (username override yok)
             elif _rol_ad == 'Enjeksiyon':
                 nxt = '/enjeksiyon/'
             # OET_LOGIN_REDIRECT_V1 (09.06.2026): Online E-Ticaret rolu direkt OET
             elif _rol_ad == 'Online E-Ticaret':
                 nxt = '/online-eticaret/'
-            # VEDAT_ARGE_REDIRECT_V1 (10.07.2026): AR-GE Operatörü — next'i yoksay
-            # RolId=42 (migration_091) veya string kontrolü — server DB Türkçe karakter farkına karşı
-            elif u.get('RolId') == 42 or _rol_ad in ('AR-GE Operatörü', 'AR-GE Operatoru'):
+            # VEDAT_ARGE_REDIRECT_V1: AR-GE Operatörü — helper ile tanı, next'i yoksay
+            elif _is_arge_tablet(u):
                 nxt = '/nexgen/tablet/arge'
             # FAZ-ALI: NexGen Üretim Operatörü → /nexgen/tablet (next yok sayılır)
             elif is_nexgen_uretim_operator(u):
@@ -423,7 +431,6 @@ def login():
             if not nxt:
                 from modules.nexgen.cari360_yetki import pazarlamaci_home_redirect
                 nxt = pazarlamaci_home_redirect(kullanici_yetkileri(u)) or '/'
-
 
             return redirect(nxt)
         hata = 'Kullanıcı adı veya şifre hatalı.'
@@ -477,16 +484,10 @@ def sifre_degistir():
                 ) + 1
                 basarili = True
                 # Sifre degistirme sonrasi rol bazli yonlendirme
-                _rol_ad = u.get('RolAd') or (
-                    session['kullanici'].get('Rol') or
-                    session['kullanici'].get('RolAd')
-                )
-                if _rol_ad == 'AR-GE Operatoru' or _rol_ad == 'AR-GE Operatörü':
+                if _is_arge_tablet(session.get('kullanici') or u):
                     return redirect('/nexgen/tablet/arge')
                 if is_nexgen_uretim_operator(session.get('kullanici') or u):
                     return redirect(_NEXGEN_URETIM_OP_HOME)
-                if (u.get('KullaniciAdi') or '').lower() == 'ferhat':
-                    return redirect('/nexgen/tablet/ferhat')
                 elif u.get('Tip') == 'personel':
                     return redirect('/uretim/')
                 elif u.get('Tip') == 'usta':
@@ -573,6 +574,18 @@ def _tip_guard():
             if nexgen_depo_sade_sevkiyat_detay_yasak(path):
                 return redirect('/nexgen/sevkiyat')
             return redirect(nexgen_depo_sade_home())
+        return
+
+    from modules.nexgen.mo_arge_tablet_yetki import (
+        is_nexgen_arge_tablet_kullanici,
+        nexgen_arge_tablet_home,
+        nexgen_arge_tablet_path_ok,
+    )
+    if is_nexgen_arge_tablet_kullanici(_kul):
+        if not nexgen_arge_tablet_path_ok(path):
+            if path.startswith('/nexgen/api/') or path.startswith('/api/'):
+                abort(403)
+            return redirect(nexgen_arge_tablet_home())
         return
 
     # 4) Tip al
