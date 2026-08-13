@@ -501,16 +501,16 @@
   {# ══════════════════════════════════════════════════════════════════════
      EKRAN 3 — Sipariş Detayı (Yeni Sipariş ile aynı layout)
   ══════════════════════════════════════════════════════════════════════ #}
-  <div id="ekran-detay" class="pzm-ekran" style="display:none;">
+  <div id="ekran-detay" class="pzm-ekran" style="display:none;" data-pzm-det-ia="v3">
+    {# ── Geri / üst bar ── #}
     <div class="pzm-detay-ust">
       <button type="button" class="rm-page-geri pzm-detay-liste-btn" onclick="pzmEkranGec('liste')">
         <span>←</span><span>Sipariş Listesi</span>
       </button>
       <div class="pzm-detay-ust-right">
-        <div class="pzm-detay-ust-meta">
-          <span class="pzm-detay-ust-lbl">Sipariş</span>
-          <span class="pzm-sip-no" id="pzm-detay-no">—</span>
-        </div>
+        {# hidden nav anchors — still used by JS for navigation state #}
+        <span class="pzm-detay-ust-lbl" id="pzm-det-tur-lbl" style="display:none;">Sipariş</span>
+        <span class="pzm-sip-no" id="pzm-detay-no" style="display:none;">—</span>
         {% if can_admin %}
         <button type="button" class="pzm-btn pzm-btn-red-outline pzm-admin-sil-btn"
                 id="pzm-detay-btn-sil" style="display:none;"
@@ -518,84 +518,106 @@
         {% endif %}
       </div>
     </div>
-    <div class="pzm-layout pzm-detay-layout">
-      <div class="pzm-form-col">
-        <div class="rm-panel pzm-kart pzm-akk pzm-akk-acik" id="pzm-det-akk-1">
-          <div class="rm-panel-hdr pzm-kart-hdr pzm-akk-hdr" onclick="pzmDetPanelToggle(1)" title="Aç/Kapat">
-            <span class="rm-panel-no">1</span>
-            <svg class="rm-panel-ikon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-            </svg>
-            <span class="rm-panel-baslik">Sipariş Bilgileri</span>
-            <span class="rm-panel-hdr-alt pzm-kart-hdr-sub" id="pzm-det-baslik-no">—</span>
-            <span class="pzm-akk-ikon" id="pzm-det-ikon-1">▼</span>
+
+    {# ── V3 body: header → stepper → 2-col layout ── #}
+    <div id="pzm-det-v3-body">
+
+      {# ── Kimlik / Özet Kart — MTT header family ── #}
+      <div id="pzm-det-v3-hdr"></div>
+
+      {# ── Süreç Akışı Stepper ── #}
+      <div class="pzm-det-v3-stepper-wrap" id="pzm-det-v3-stepper"></div>
+
+      {# ── 2-col layout ── #}
+      <div class="pzm-det-v3-layout">
+
+        {# ── SOL KOLON — ana içerik ── #}
+        <div class="pzm-det-v3-main" id="pzm-det-v3-main">
+
+          {# 1 — Sipariş Bilgileri + Ticari #}
+          <div class="pzm-det-v3-kart" id="pzm-det-akk-1">
+            <div class="pzm-det-v3-kart-hdr">SİPARİŞ BİLGİLERİ</div>
+            <div class="pzm-det-v3-kart-body" id="pzm-det-baslik-icerik"></div>
           </div>
-          <div class="pzm-akk-body">
-            <div class="pzm-kart-body" id="pzm-det-baslik-icerik"></div>
-          </div>
-        </div>
-        <div class="rm-panel pzm-kart pzm-kalem-liste-kart pzm-akk pzm-akk-acik" id="pzm-det-akk-2">
-          <div class="rm-panel-hdr pzm-kart-hdr pzm-kalem-hdr pzm-akk-hdr" onclick="pzmDetPanelToggle(2)" title="Aç/Kapat">
-            <span class="rm-panel-no">2</span>
-            <svg class="rm-panel-ikon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
-            </svg>
-            <span class="rm-panel-baslik">Kaydedilen Kalemler</span>
-            <span class="rm-panel-hdr-alt pzm-kart-hdr-sub" id="pzm-det-kalem-badge">Toplam: 0 kalem</span>
-            <span class="pzm-akk-ikon" id="pzm-det-ikon-2">▼</span>
-          </div>
-          <div class="pzm-akk-body">
-            <div class="pzm-kart-body pzm-kalem-tablo-wrap" id="pzm-det-kalem-wrap"></div>
-          </div>
-        </div>
-        {% if can_manage %}
-        <div class="rm-panel pzm-kart pzm-akk pzm-akk-acik" id="pzm-det-akk-3">
-          <div class="rm-panel-hdr pzm-kart-hdr pzm-akk-hdr" onclick="pzmDetPanelToggle(3)" title="Aç/Kapat">
-            <span class="rm-panel-no">3</span>
-            <svg class="rm-panel-ikon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-            </svg>
-            <span class="rm-panel-baslik">Malzeme İhtiyaç Analizi</span>
-            <span class="pzm-akk-ikon" id="pzm-det-ikon-3">▼</span>
-          </div>
-          <div class="pzm-akk-body">
-            <div class="pzm-kart-body" id="pzm-det-mpr-icerik"></div>
-          </div>
-        </div>
-        {% endif %}
-        <div id="pzm-det-eksik-wrap"></div>
-      </div>
-      <div class="pzm-ozet-col">
-        <div class="rm-panel pzm-kart pzm-ozet-sticky">
-          <div class="rm-panel-hdr pzm-kart-hdr">
-            <svg class="rm-panel-ikon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-            </svg>
-            <span class="rm-panel-baslik">Sipariş Özeti</span>
-          </div>
-          <div class="pzm-kart-body pzm-ozet-body">
-            <div class="pzm-ozet-cari">
-              <span class="pzm-ozet-cari-lbl">Müşteri</span>
-              <span class="pzm-ozet-cari-val" id="pzm-det-oz-cari">—</span>
+
+          {# 2 — Kalemler #}
+          <div class="pzm-det-v3-kart" id="pzm-det-akk-2">
+            <div class="pzm-det-v3-kart-hdr">
+              ÜRÜN / SİPARİŞ KALEMLERİ
+              <span class="pzm-det-v3-badge" id="pzm-det-kalem-badge"></span>
             </div>
-            <div class="pzm-ozet-grid">
-              <div class="pzm-ozet-satir"><span>Kalem Sayısı</span><strong id="pzm-det-oz-kalem">0</strong></div>
-              <div class="pzm-ozet-satir"><span>Terlik KG</span><strong id="pzm-det-oz-terlik" class="pzm-ozet-kg">0 kg</strong></div>
-              <div class="pzm-ozet-satir"><span>Taban KG</span><strong id="pzm-det-oz-taban" class="pzm-ozet-kg">0 kg</strong></div>
-              <div class="pzm-ozet-satir"><span>Dökme KG</span><strong id="pzm-det-oz-dokme" class="pzm-ozet-kg">0 kg</strong></div>
-              <div class="pzm-ozet-satir pzm-ozet-vurgu"><span>Toplam KG</span><strong id="pzm-det-oz-toplam" class="pzm-ozet-kg">0 kg</strong></div>
-              <div class="pzm-ozet-satir"><span>Ara Toplam (KDV Hariç)</span><strong id="pzm-det-oz-ara">—</strong></div>
-              <div class="pzm-ozet-satir"><span>KDV Tutarı</span><strong id="pzm-det-oz-kdv">—</strong></div>
-              <div class="pzm-ozet-satir pzm-ozet-vurgu"><span>Genel Toplam (KDV Dahil)</span><strong id="pzm-det-oz-genel">—</strong></div>
-              <div class="pzm-ozet-satir"><span>En Yakın Termin</span><strong id="pzm-det-oz-termin">—</strong></div>
-              <div class="pzm-ozet-satir pzm-ozet-durum-satir"><span>Durum</span><strong id="pzm-det-oz-durum">—</strong></div>
-            </div>
-            <div id="pzm-det-islem-ozet" class="pzm-det-islem-ozet-wrap"></div>
+            <div class="pzm-det-v3-kart-body pzm-kalem-tablo-wrap" id="pzm-det-kalem-wrap"></div>
           </div>
-          <div class="pzm-mpr-aksiyon-wrap pzm-ozet-aksiyon" id="pzm-detay-alt-butonlar"></div>
+
+          {# 3 — MRP / Malzeme İhtiyacı (conditional) #}
+          {% if can_manage %}
+          <div class="pzm-det-v3-kart" id="pzm-det-akk-3" style="display:none;">
+            <div class="pzm-det-v3-kart-hdr">MALZEME İHTİYACI / MRP</div>
+            <div class="pzm-det-v3-kart-body" id="pzm-det-mpr-icerik"></div>
+          </div>
+          {% endif %}
+
+          <div id="pzm-det-eksik-wrap"></div>
+        </div>
+
+        {# ── SAĞ KOLON ── #}
+        <div class="pzm-det-v3-side" id="pzm-det-v3-side">
+
+          {# Sıradaki Adım #}
+          <div class="pzm-det-v3-kart pzm-det-v3-siradaki" id="pzm-det-v3-siradaki">
+            <div class="pzm-det-v3-kart-hdr pzm-det-v3-kart-hdr-teal">SIRADAKİ ADIM</div>
+            <div class="pzm-det-v3-kart-body" id="pzm-det-v3-siradaki-body"></div>
+          </div>
+
+          {# Sipariş Özeti (KG + Finans) #}
+          <div class="pzm-det-v3-kart" id="pzm-det-v3-ozet-kart">
+            <div class="pzm-det-v3-kart-hdr">SİPARİŞ ÖZETİ</div>
+            <div class="pzm-det-v3-kart-body">
+              <div class="pzm-det-v3-ozet-grid">
+                <div class="pzm-det-v3-ozet-row pzm-det-v3-ozet-sub"><span>Terlik</span><strong id="pzm-det-oz-terlik">—</strong></div>
+                <div class="pzm-det-v3-ozet-row pzm-det-v3-ozet-sub"><span>Taban</span><strong id="pzm-det-oz-taban">—</strong></div>
+                <div class="pzm-det-v3-ozet-row pzm-det-v3-ozet-sub"><span>Dökme</span><strong id="pzm-det-oz-dokme">—</strong></div>
+                <div class="pzm-det-v3-ozet-row pzm-det-v3-ozet-vurgu"><span>Toplam KG</span><strong id="pzm-det-oz-toplam">—</strong></div>
+                <div class="pzm-det-v3-ozet-row pzm-det-v3-ozet-sub"><span>Ara Toplam</span><strong id="pzm-det-oz-ara">—</strong></div>
+                <div class="pzm-det-v3-ozet-row pzm-det-v3-ozet-sub"><span>KDV</span><strong id="pzm-det-oz-kdv">—</strong></div>
+                <div class="pzm-det-v3-ozet-row pzm-det-v3-ozet-vurgu"><span>Genel Toplam</span><strong id="pzm-det-oz-genel">—</strong></div>
+              </div>
+            </div>
+          </div>
+
+          {# Teknik / MRP status #}
+          <div class="pzm-det-v3-kart" id="pzm-det-v3-teknik-kart">
+            <div class="pzm-det-v3-kart-hdr">TEKNİK / MRP DURUMU</div>
+            <div class="pzm-det-v3-kart-body" id="pzm-det-v3-teknik-body"></div>
+          </div>
+
+          {# Üretim Özeti (conditional — MPR+ ise) #}
+          <div class="pzm-det-v3-kart" id="pzm-det-v3-uretim-kart" style="display:none;">
+            <div class="pzm-det-v3-kart-hdr">ÜRETİM ÖZETİ</div>
+            <div class="pzm-det-v3-kart-body" id="pzm-det-v3-uretim-body"></div>
+          </div>
+
+          {# Aksiyon butonları — eski uyum için korunur #}
+          <div class="pzm-det-v3-kart pzm-det-v3-aksiyon-kart" id="pzm-det-v3-aksiyon-kart" style="display:none;">
+            <div class="pzm-det-v3-kart-body" id="pzm-detay-alt-butonlar"></div>
+          </div>
+
+          {# hidden — eski sidebar uyum #}
+          <span id="pzm-det-oz-cari" style="display:none;"></span>
+          <span id="pzm-det-oz-kalem" style="display:none;"></span>
+          <span id="pzm-det-oz-termin" style="display:none;"></span>
+          <span id="pzm-det-oz-durum" style="display:none;"></span>
+          <div id="pzm-det-islem-ozet" style="display:none;"></div>
         </div>
       </div>
-    </div>
+
+    </div>{# /pzm-det-v3-body #}
+
+    {# ── Eski accordion ID'leri — diğer kod parçaları için backward compat ── #}
+    <span id="pzm-det-baslik-no" style="display:none;"></span>
+    <span id="pzm-det-ikon-1" style="display:none;"></span>
+    <span id="pzm-det-ikon-2" style="display:none;"></span>
+    <span id="pzm-det-ikon-3" style="display:none;"></span>
   </div>{# /ekran-detay #}
 
   {% if can_manage %}
@@ -1144,6 +1166,229 @@ button.rm-page-geri { appearance:none; }
 @media (max-width:900px) {
   .mtt-v3-layout { grid-template-columns:1fr; }
   .mtt-v3-ozet-cols { grid-template-columns:repeat(2,1fr); }
+}
+
+/* ═══════════════════════════════════════════════════════
+   PZM SIPARIS DETAY V3 — yeni IA (data-pzm-det-ia="v3")
+   MTT Detail V3 ile aynı görsel dil
+═══════════════════════════════════════════════════════ */
+#ekran-detay[data-pzm-det-ia="v3"] {
+  font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+}
+/* 2-col layout */
+.pzm-det-v3-layout {
+  display:grid; grid-template-columns:1fr 300px; gap:16px; align-items:start; margin-top:12px;
+}
+.pzm-det-v3-main { display:flex; flex-direction:column; gap:14px; min-width:0; }
+.pzm-det-v3-side { display:flex; flex-direction:column; gap:12px; min-width:0; }
+
+/* Header kart */
+.pzm-det-v3-hdr-kart {
+  background:#fff; border:1px solid var(--rm-border); border-radius:10px;
+  padding:16px 20px; margin-bottom:12px;
+}
+.pzm-det-v3-hdr-top {
+  display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px;
+}
+.pzm-det-v3-hdr-left { display:flex; flex-direction:column; gap:6px; min-width:0; }
+.pzm-det-v3-hdr-badges { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+.pzm-det-v3-siparis-no {
+  font-size:17px; font-weight:600; color:var(--rm-t1); letter-spacing:-.01em; line-height:1.2;
+}
+.pzm-det-v3-siparis-no a {
+  font-size:12px; font-weight:600; color:#92400e; text-decoration:underline; margin-left:10px;
+}
+.pzm-det-v3-cari {
+  font-size:15px; font-weight:600; color:var(--rm-teal-dark); line-height:1.3;
+}
+.pzm-det-v3-hdr-meta {
+  display:grid; grid-template-columns:repeat(4,1fr); gap:0;
+  border:1px solid var(--rm-border); border-radius:8px; overflow:hidden;
+}
+.pzm-det-v3-hdr-meta-col {
+  padding:12px 16px; background:#fff; border-right:1px solid var(--rm-border);
+}
+.pzm-det-v3-hdr-meta-col:last-child { border-right:none; }
+.pzm-det-v3-hdr-meta-col label {
+  display:block; font-size:11px; font-weight:600; text-transform:uppercase;
+  color:var(--rm-t3); letter-spacing:.03em; margin-bottom:5px; line-height:1.2;
+}
+.pzm-det-v3-hdr-meta-col .val {
+  font-size:14px; font-weight:600; color:var(--rm-t1); line-height:1.3;
+}
+.pzm-det-v3-hdr-mtt-ref {
+  font-size:11px; color:var(--rm-t3); margin-top:8px;
+}
+.pzm-det-v3-hdr-mtt-ref a { color:var(--rm-teal-dark); font-weight:600; text-decoration:none; }
+
+/* Kart ortak */
+.pzm-det-v3-kart {
+  background:#fff; border:1px solid var(--rm-border); border-radius:10px; overflow:hidden;
+}
+.pzm-det-v3-kart-hdr {
+  background:var(--rm-teal-dark); color:#fff;
+  padding:9px 16px; font-size:11.5px; font-weight:600; letter-spacing:.03em;
+  display:flex; align-items:center; gap:8px;
+}
+.pzm-det-v3-kart-hdr-teal { background:var(--rm-teal-dark); }
+.pzm-det-v3-badge {
+  margin-left:auto; font-size:11px; font-weight:500; color:rgba(255,255,255,.75);
+}
+.pzm-det-v3-kart-body { padding:14px 16px; }
+
+/* Sipariş bilgileri grid */
+.pzm-det-v3-info-grid {
+  display:grid; grid-template-columns:repeat(4,1fr); gap:0;
+  border:1px solid var(--rm-border); border-radius:7px; overflow:hidden; margin-bottom:10px;
+}
+.pzm-det-v3-info-cell {
+  padding:11px 14px; border-right:1px solid var(--rm-border); background:#fff;
+}
+.pzm-det-v3-info-cell:last-child { border-right:none; }
+.pzm-det-v3-info-cell label {
+  display:block; font-size:10.5px; font-weight:600; text-transform:uppercase;
+  color:var(--rm-t3); letter-spacing:.03em; margin-bottom:4px; line-height:1.2;
+}
+.pzm-det-v3-info-cell .val {
+  font-size:13px; font-weight:600; color:var(--rm-t1); line-height:1.35;
+}
+
+/* Ticari bilgiler compact row */
+.pzm-det-v3-ticari-grid {
+  display:grid; gap:0;
+  border:1px solid var(--rm-border); border-radius:7px; overflow:hidden; margin-top:10px;
+}
+.pzm-det-v3-ticari-item {
+  padding:10px 14px; display:flex; flex-direction:column; gap:3px;
+  border-right:1px solid var(--rm-border);
+}
+.pzm-det-v3-ticari-item:last-child { border-right:none; }
+.pzm-det-v3-ticari-item label {
+  font-size:10.5px; font-weight:600; text-transform:uppercase;
+  color:var(--rm-t3); letter-spacing:.03em; line-height:1.2;
+}
+.pzm-det-v3-ticari-item .val {
+  font-size:13px; font-weight:600; color:var(--rm-t1); line-height:1.3;
+}
+.pzm-det-v3-genel-not {
+  margin-top:10px; padding:10px 14px; background:var(--rm-bg); border-radius:7px;
+  font-size:12.5px; color:var(--rm-t2); line-height:1.5;
+}
+
+/* Kalem tablo v3 */
+#ekran-detay[data-pzm-det-ia="v3"] .pzm-kalem-tablo {
+  width:100%; border-collapse:collapse; font-size:12px;
+}
+#ekran-detay[data-pzm-det-ia="v3"] .pzm-kalem-tablo th {
+  background:var(--rm-bg2); color:var(--rm-t3); font-size:11px; font-weight:600;
+  text-transform:uppercase; letter-spacing:.03em; padding:8px 10px;
+  border-bottom:2px solid var(--rm-border); text-align:left; white-space:nowrap;
+}
+#ekran-detay[data-pzm-det-ia="v3"] .pzm-kalem-tablo td {
+  padding:9px 10px; border-bottom:1px solid var(--rm-border); color:var(--rm-t1);
+  vertical-align:middle;
+}
+#ekran-detay[data-pzm-det-ia="v3"] .pzm-kalem-tablo tr:last-child td { border-bottom:none; }
+#ekran-detay[data-pzm-det-ia="v3"] .pzm-kalem-tablo .r { text-align:right; }
+#ekran-detay[data-pzm-det-ia="v3"] .pzm-kalem-tablo .pzm-kg-hucre { font-weight:600; }
+.pzm-det-v3-kalem-footer {
+  display:flex; justify-content:flex-end; align-items:center;
+  padding:8px 12px; border-top:2px solid var(--rm-border);
+  font-size:12.5px; font-weight:600; color:var(--rm-t1); gap:8px;
+}
+
+/* Teknik durum badge satırları */
+.pzm-det-v3-status-rows { display:flex; flex-direction:column; gap:8px; }
+.pzm-det-v3-status-row {
+  display:flex; align-items:center; justify-content:space-between;
+  font-size:12.5px; color:var(--rm-t2); padding:6px 0; border-bottom:1px solid var(--rm-border);
+}
+.pzm-det-v3-status-row:last-child { border-bottom:none; }
+.pzm-det-v3-status-row label { font-weight:500; }
+.pzm-det-v3-status-badge { font-weight:600; display:flex; align-items:center; gap:4px; }
+.pzm-det-v3-status-ok { color:var(--rm-green); }
+.pzm-det-v3-status-warn { color:#b45309; }
+.pzm-det-v3-status-wait { color:var(--rm-t3); }
+.pzm-det-v3-status-err { color:var(--rm-red); }
+
+/* Sıradaki adım */
+.pzm-det-v3-siradaki .pzm-det-v3-kart-body { padding:12px 14px; }
+.pzm-det-v3-siradaki-aciklama {
+  font-size:12.5px; color:var(--rm-t2); margin-bottom:12px; line-height:1.55;
+}
+.pzm-det-v3-siradaki-btns { display:flex; flex-direction:column; gap:8px; }
+
+/* Sipariş özeti sağ */
+.pzm-det-v3-ozet-grid { display:flex; flex-direction:column; gap:0; }
+.pzm-det-v3-ozet-row {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:7px 0; border-bottom:1px solid var(--rm-border); font-size:12.5px;
+}
+.pzm-det-v3-ozet-row:last-child { border-bottom:none; }
+.pzm-det-v3-ozet-row span { color:var(--rm-t3); font-weight:500; }
+.pzm-det-v3-ozet-row strong { color:var(--rm-t1); font-weight:600; }
+.pzm-det-v3-ozet-vurgu span { color:var(--rm-t2); font-weight:600; font-size:13px; }
+.pzm-det-v3-ozet-vurgu strong { font-size:13.5px; font-weight:700; color:var(--rm-teal-dark); }
+.pzm-det-v3-ozet-sub span,.pzm-det-v3-ozet-sub strong { font-size:12px; }
+
+/* Üretim özeti */
+.pzm-det-v3-uretim-row {
+  display:flex; justify-content:space-between; font-size:12.5px;
+  padding:6px 0; border-bottom:1px solid var(--rm-border);
+}
+.pzm-det-v3-uretim-row:last-child { border-bottom:none; }
+.pzm-det-v3-uretim-row span { color:var(--rm-t3); font-weight:500; }
+.pzm-det-v3-uretim-row strong { font-weight:600; color:var(--rm-t1); }
+.pzm-det-v3-tablet-link {
+  display:block; margin-top:12px; text-align:center; padding:8px 12px;
+  background:var(--rm-bg2); border:1px solid var(--rm-border); border-radius:7px;
+  font-size:12px; font-weight:600; color:var(--rm-teal-dark); text-decoration:none;
+}
+.pzm-det-v3-tablet-link:hover { background:var(--rm-border); }
+
+/* Aksiyon kart */
+.pzm-det-v3-aksiyon-kart .pzm-det-v3-kart-body { padding:12px 14px; }
+#ekran-detay[data-pzm-det-ia="v3"] #pzm-detay-alt-butonlar {
+  display:flex; flex-direction:column; gap:8px;
+}
+#ekran-detay[data-pzm-det-ia="v3"] .pzm-ozet-aksiyon-stack { gap:8px; }
+#ekran-detay[data-pzm-det-ia="v3"] .pzm-btn-blk { width:100%; }
+
+/* Readonly banner */
+.pzm-det-v3-readonly-bant {
+  background:#f0fdf4; border:1px solid rgba(22,163,74,.25); border-radius:6px;
+  padding:8px 12px; font-size:12px; color:#166534; font-weight:500; margin-bottom:10px;
+}
+.pzm-det-v3-eksik-bant {
+  background:var(--rm-red-bg); border:1px solid rgba(220,38,38,.2); border-radius:6px;
+  padding:8px 12px; font-size:12px; color:var(--rm-red); font-weight:500; margin-bottom:10px;
+}
+
+/* Kimlik kart — MTT family parity */
+.pzm-det-kimlik-kart { margin-bottom:12px; }
+.pzm-det-v3-c360-link {
+  font-size:11.5px; font-weight:600; color:var(--rm-teal-dark);
+  text-decoration:none; white-space:nowrap;
+}
+.pzm-det-v3-c360-link:hover { text-decoration:underline; }
+
+/* Siparişi Sil — secondary danger, hidden in main top bar */
+.pzm-detay-ust .pzm-admin-sil-btn {
+  font-size:11.5px; padding:4px 10px; font-weight:500;
+  border-width:1px; opacity:.75;
+}
+.pzm-detay-ust .pzm-admin-sil-btn:hover { opacity:1; }
+
+/* Stepper — üstte, header'ın hemen altında */
+.pzm-det-v3-stepper-wrap { margin-top:0; margin-bottom:12px; }
+.pzm-det-v3-stepper-wrap .mtt-v3-proses { margin-top:0; }
+
+/* Responsive */
+@media (max-width:1200px) { .pzm-det-v3-layout { grid-template-columns:1fr 280px; } }
+@media (max-width:900px) {
+  .pzm-det-v3-layout { grid-template-columns:1fr; }
+  .pzm-det-v3-hdr-meta { grid-template-columns:repeat(2,1fr); }
+  .pzm-det-v3-info-grid { grid-template-columns:repeat(2,1fr); }
 }
 
 /* override detay-kart padding to use v3 */
@@ -2025,7 +2270,7 @@ button.rm-page-geri { appearance:none; }
 .pzm-mi-rapor-panel.aktif { display:block; }
 .pzm-mi-rapor-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }
 .pzm-mi-rapor-tablo {
-  width:100%; border-collapse:collapse; font-size:11px; min-width:980px;
+  width:100%; border-collapse:collapse; font-size:11px;
 }
 .pzm-mi-rapor-tablo th.pzm-mi-col-yolda,
 .pzm-mi-rapor-tablo td.pzm-mi-col-yolda { max-width:72px; }
@@ -2045,11 +2290,13 @@ button.rm-page-geri { appearance:none; }
 .pzm-mi-rapor-badge.yesil { background:var(--rm-green-bg, #dcfce7); color:#166534; }
 .pzm-mi-rapor-badge.kirmizi { background:var(--rm-red-bg, #fee2e2); color:#991b1b; }
 .pzm-mi-rapor-excel {
-  display:block; width:100%; padding:12px 14px; border:none; border-top:1px solid var(--rm-border);
-  background:var(--rm-gold, #f6c343); color:var(--rm-t1, #0f172a);
-  font-size:12px; font-weight:800; cursor:pointer; opacity:1;
+  display:inline-flex; align-items:center; gap:6px;
+  padding:7px 14px; border:1px solid var(--rm-gold, #f6c343); border-radius:6px;
+  background:#fff; color:var(--rm-t1, #0f172a);
+  font-size:12px; font-weight:700; cursor:pointer; margin:10px 0 4px 0;
 }
-.pzm-mi-rapor-excel[disabled] { cursor:not-allowed; opacity:.85; }
+.pzm-mi-rapor-excel:hover { background:var(--rm-gold-bg, #fef9e7); }
+.pzm-mi-rapor-excel[disabled] { cursor:not-allowed; opacity:.55; }
 .pzm-detay-kalem-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
 .pzm-plan-kart-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
 .pzm-mpr-aksiyon-wrap {
@@ -3493,7 +3740,7 @@ function pzmTabloSatirHtml(t, idx) {
     '  <td class="pzm-td" style="font-size:11px;color:var(--rm-t3);">' + tarih + '</td>',
     '  <td class="pzm-td-r">' + (kg ? '<span class="pzm-kg-deger">' + kg + '</span>' : '<span style="color:var(--rm-t4)">—</span>') + '</td>',
     '  <td class="pzm-td" style="font-size:11px;font-weight:600;color:var(--rm-t3);">' + pzmEsc(term) + '</td>',
-    '  <td class="pzm-td">' + pzmRozetHtml(t.durum, t.durum_etiket) + '</td>',
+    '  <td class="pzm-td">' + pzmRozetHtml(t.gorunen_durum || t.durum, t.durum_etiket) + '</td>',
     '  <td class="pzm-td"><button class="pzm-btn-ac" onclick="event.stopPropagation();pzmDetayAc(' + t.id + ')">Aç →</button></td>',
     '</tr>',
   ].join('');
@@ -3763,7 +4010,7 @@ function pzmMiRaporKartShell(tid, tab, topluHtml, detayHtml) {
   } else {
     html += ' disabled title="Önce malzeme ihtiyacı analizini tamamlayın"';
   }
-  html += '>Excel\'e Aktar</button>';
+  html += '>⬇ Excel\'e Aktar</button>';
   html += '</div>';
   return html;
 }
@@ -4040,22 +4287,22 @@ function pzmDetayOzetHesap(st, kalemler) {
   if (!st) return o;
   o.planSayisi = (st.planlar || []).length;
   (st.planlar || []).forEach(function(p) {
-    o.talep += parseFloat(p.talep_kg || 0);
+    /* talep_kg planlardan TOPLANMIYOR — plan sayısı ile orantılı double-count olur.
+       Canonical talep her zaman sipariş kalemleri toplamından gelir (aşağıda). */
     o.uret += parseFloat(p.uretilecek_kg || 0);
     o.fatura += parseFloat(p.faturalanacak_kg || p.uretilecek_kg || 0);
     o.fark += parseFloat(p.fazla_kg || 0);
     o.formulAdedi += parseInt(p.formul_adedi || 0, 10);
   });
-  o.talep = Math.round(o.talep * 1000) / 1000;
   o.uret = Math.round(o.uret * 1000) / 1000;
   o.fatura = Math.round(o.fatura * 1000) / 1000;
   o.fark = Math.round(o.fark * 1000) / 1000;
-  /* Talep KG plan yoksa veya RF eksikse kalemlerden hesapla */
-  if (o.talep === 0 && kalemler && kalemler.length) {
+  /* Canonical talep KG: her zaman sipariş kalemlerinden — plan sayısından bağımsız */
+  if (kalemler && kalemler.length) {
     o.talep = Math.round(pzmKalemlerToplamTalepKg(kalemler) * 1000) / 1000;
     o.talepKaynagi = 'kalem';
   } else {
-    o.talepKaynagi = 'plan';
+    o.talepKaynagi = 'kalem';
   }
   /* Toplam hammadde KG — stokSonuclari içindeki toplam_hammadde_kg */
   if (st.stokSonuclari) {
@@ -5959,24 +6206,706 @@ function pzmDetayRender(t) {
   pzmDetayMttRolBilgisiYukle(t);
   var st = pzmMprStateEnsure(t.id);
   pzmDetayHydrate(t, st);
+  pzmDetayAdminSilBtnGuncelle(t);
 
-  var no = t.siparis_no || ('T-' + t.id);
+  // ── V3 IA renderers ──
+  pzmDetV3HdrRender(t);
+  pzmDetV3BilgilerRender(t);
+  pzmDetV3KalemRender(t);
+  pzmDetV3MprPanelGoster(t, st);
+  pzmDetV3SagKolonRender(t, st);
+  pzmDetV3StepperRender(t, st);
+
+  // Eski sidebar uyum: hidden span'ları doldur (nav/hydrate kodu okuyabilir)
   var noEl = $id('pzm-detay-no');
   if (noEl) {
+    var no = t.siparis_no || ('T-' + t.id);
     noEl.textContent = no;
-    if (t.cari_id) {
-      var c360 = '/nexgen/cari360/' + t.cari_id + '?tab=siparisler';
-      noEl.innerHTML = pzmEsc(no)
-        + ' <a class="pzm-link" href="' + c360 + '" title="Cari 360" style="margin-left:8px;font-size:12px;font-weight:600;color:#92400e;text-decoration:underline">Cari 360 →</a>';
+  }
+  var cariEl = $id('pzm-det-oz-cari');
+  if (cariEl) cariEl.textContent = t.cari_unvan || '';
+  var durumEl = $id('pzm-det-oz-durum');
+  if (durumEl) durumEl.innerHTML = pzmRozetHtml(t.durum, t.durum_etiket);
+}
+
+/* ═══════════════════════════════════════════
+   V3 HEADER KART — MTT family visual parity
+═══════════════════════════════════════════ */
+function pzmDurumChip(durum, etiket) {
+  /* Canonical semantic colors aligned with MTT badge language */
+  var d = (durum || '').toUpperCase();
+  var lbl = pzmDurumEtiketUi(durum, etiket);
+  var cls = '';
+  if (d === 'TAMAMLANDI' || d === 'ONAYLANDI') cls = 'mtt-badge-onay-green';
+  else if (d === 'IPTAL' || d === 'REDDEDILDI') cls = 'mtt-badge-onay-red';
+  else if (d === 'ONAY_BEKLIYOR') cls = 'mtt-badge-onay-bek';
+  else cls = 'mtt-badge-tur';
+  return '<span class="mtt-chip ' + cls + '" style="font-size:13px;font-weight:600;padding:3px 10px;">' + pzmEsc(lbl) + '</span>';
+}
+
+function pzmDetV3HdrRender(t) {
+  var el = $id('pzm-det-v3-hdr');
+  if (!el) return;
+  var no = t.siparis_no || ('T-' + t.id);
+  var tic = pzmDetayTicariOku(t);
+  var kalemler = pzmDetayKalemler(t);
+  var kg = pzmDetayKgOzet(kalemler);
+  var fin = pzmDetayFinansOzet(t, kalemler);
+  var gorunenDurum = t.gorunen_durum || t.durum;
+  var gorunenEtiket = t.durum_etiket;
+
+  /* Tür badge */
+  var turBadge = '<span class="mtt-chip mtt-badge-tur" style="font-size:13px;font-weight:600;padding:3px 10px;">Sipari\u015f</span>';
+
+  /* Durum badge */
+  var durumBadge = pzmDurumChip(gorunenDurum, gorunenEtiket);
+
+  /* Öncelik badge */
+  var onc = (tic.siparis_onceligi || '').toUpperCase();
+  var oncBadge = '';
+  if (onc === 'ACIL' || onc === 'KRITIK') {
+    oncBadge = '<span class="mtt-chip mtt-badge-acil" style="font-size:12px;padding:3px 8px;">' + pzmEsc(tic.siparis_onceligi || onc) + '</span>';
+  } else {
+    var oncLbl = onc || 'NORMAL';
+    oncBadge = '<span class="mtt-chip" style="background:#f1f5f9;color:#64748b;font-size:12px;padding:3px 8px;">' + pzmEsc(oncLbl) + '</span>';
+  }
+
+  /* Yönetim onay badge (MTT kaynaklı ise) */
+  var mttRo = pzmDetayMttKaynakli(t);
+  var onayBadge = mttRo
+    ? '<span class="mtt-chip mtt-badge-onay-green" style="font-size:12px;padding:3px 8px;">\u2713 Y\u00f6netim Onayl\u0131</span>'
+    : '';
+
+  /* Cari 360 — secondary link */
+  var c360 = t.cari_id
+    ? '<a href="/nexgen/cari360/' + t.cari_id + '?tab=siparisler" class="pzm-det-v3-c360-link">Cari 360 \u2192</a>'
+    : '';
+
+  /* Kaynak MTT ref */
+  var mttKaynakId = pzmDetayMttKaynakId(t);
+  var mttRolObj = pzmDetayMttRolBilgisi(t) || {};
+  var mttNo = mttRolObj.talep_no || (mttKaynakId ? ('MTT-' + mttKaynakId) : null);
+
+  /* Summary grid (4 col) */
+  var pb = fin.pb === 'TRY' ? 'TRY' : fin.pb;
+  var genelToplam = (fin.genel && fin.pb) ? pzmTicariParaFmt(fin.genel, pb) : '\u2014';
+  var toplamKg = (Math.round((kg.toplam || parseFloat(t.toplam_kg || 0)) * 1000) / 1000).toLocaleString('tr') + ' kg';
+  var termin = pzmTarihGoster(tic.istened_termin || t.en_yakin_termin || t.termin_tarihi || '') || '\u2014';
+
+  el.innerHTML =
+    '<div class="mtt-v3-ozet-kart pzm-det-kimlik-kart">' +
+      '<div class="mtt-v3-ozet-badges">' +
+        '<span class="pzm-sip-no" style="font-size:16px;font-weight:700;color:var(--rm-t1);letter-spacing:-.01em;">' + pzmEsc(no) + '</span>' +
+        turBadge + durumBadge + oncBadge + onayBadge +
+        (c360 ? '<span style="flex:1;min-width:12px;"></span>' + c360 : '') +
+      '</div>' +
+      '<div class="mtt-v3-ozet-cols">' +
+        '<div class="mtt-v3-ozet-col">' +
+          '<label>M\u00fc\u015fteri</label>' +
+          '<div class="val">' + pzmEsc(t.cari_unvan || '\u2014') + '</div>' +
+          (mttNo ? '<div class="sub">Kaynak: <strong style="color:var(--rm-teal-dark);">' + pzmEsc(mttNo) + '</strong></div>' : '') +
+        '</div>' +
+        '<div class="mtt-v3-ozet-col"><label>Termin</label><div class="val">' + pzmEsc(termin) + '</div></div>' +
+        '<div class="mtt-v3-ozet-col"><label>Toplam KG</label><div class="val">' + pzmEsc(toplamKg) + '</div></div>' +
+        '<div class="mtt-v3-ozet-col"><label>Genel Toplam</label><div class="val">' + pzmEsc(genelToplam) + '</div></div>' +
+      '</div>' +
+    '</div>';
+}
+
+/* ═══════════════════════════════════════════
+   V3 SİPARİŞ BİLGİLERİ + TİCARİ
+═══════════════════════════════════════════ */
+function pzmDetV3BilgilerRender(t) {
+  var el = $id('pzm-det-baslik-icerik');
+  if (!el) return;
+  var tic = pzmDetayTicariOku(t);
+  var mttRo = pzmDetayMttKaynakli(t);
+  var d = (t.durum || '').toUpperCase();
+  var html = '';
+
+  // Bannerlar
+  if (pzmDetayReadonly(t)) {
+    html += '<div class="pzm-det-v3-readonly-bant">Bu sipariş salt okunur modda görüntülenmektedir.</div>';
+  }
+  if (mttRo) {
+    html += '<div class="pzm-det-v3-readonly-bant">Yönetim onaylı MTT — ticari şartlar ve fiyatlar kilitli.</div>';
+  }
+  var opE = pzmDetayOperasyonEksikleri(t);
+  if (opE.length && d === 'TASLAK') {
+    html += '<div class="pzm-det-v3-eksik-bant">Eksik: ' + pzmEsc(opE[0]) + '</div>';
+  }
+
+  // Sipariş bilgi grid: Müşteri / Teslim / Öncelik / Termin
+  var terminGoster = pzmTarihGoster(tic.istenen_termin || t.en_yakin_termin || '') || '—';
+  var oncelikGoster = pzmEsc(pzmDetayEtiket('oncelik', tic.siparis_onceligi) || '—');
+  html += '<div class="pzm-det-v3-info-grid">' +
+    '<div class="pzm-det-v3-info-cell"><label>Müşteri</label><div class="val">' + pzmEsc(t.cari_unvan || '—') + '</div></div>' +
+    '<div class="pzm-det-v3-info-cell"><label>Teslim Şekli</label><div class="val">' + pzmEsc(pzmDetayEtiket('teslim', tic.teslim_sekli) || '—') + '</div></div>' +
+    '<div class="pzm-det-v3-info-cell"><label>Öncelik</label><div class="val">' + oncelikGoster + '</div></div>' +
+    '<div class="pzm-det-v3-info-cell"><label>Termin</label><div class="val">' + pzmEsc(terminGoster) + '</div></div>' +
+    '</div>';
+
+  // Ticari bilgiler compact row: Fiyat / PB / Ödeme / Vade(CEK/VADELI) / KDV
+  var ticariRows = [];
+  // Birim fiyat — kalemden veya anlasma fiyatından
+  var kalemler = pzmDetayKalemler(t);
+  var ilkBf = (kalemler.length && kalemler[0].birim_fiyat) ? kalemler[0].birim_fiyat : null;
+  var pb = tic.para_birimi || 'TRY';
+  if (pb === 'TL') pb = 'TRY';
+  if (ilkBf) ticariRows.push({ lbl:'Birim Fiyat', val: pzmTicariParaFmt(ilkBf, pb) + '/kg' });
+  ticariRows.push({ lbl:'Para Birimi', val: pzmEsc(pzmDetayEtiket('pb', pb) || pb) });
+  ticariRows.push({ lbl:'Ödeme', val: pzmEsc(pzmDetayEtiket('odeme', tic.odeme_tipi) || '—') });
+  if (tic.odeme_tipi === 'CEK') {
+    var cekStr = '';
+    if (tic.cek_vade_gun != null) cekStr += tic.cek_vade_gun + ' gün';
+    if (tic.cek_vadesi) cekStr += (cekStr ? ' · ' : '') + pzmTarihGoster(tic.cek_vadesi);
+    ticariRows.push({ lbl:'Çek Vadesi', val: cekStr || '—' });
+  } else if (tic.odeme_tipi === 'VADELI' || tic.odeme_tipi === 'KREDI_KARTI') {
+    if (tic.vade_gun != null) ticariRows.push({ lbl:'Vade Günü', val: tic.vade_gun + ' gün' });
+  }
+  ticariRows.push({ lbl:'KDV', val: pzmEsc(pzmDetayEtiket('kdv', tic.kdv_durumu) || '—') });
+
+  var colTpl = 'repeat(' + ticariRows.length + ',1fr)';
+  html += '<div class="pzm-det-v3-ticari-grid" style="grid-template-columns:' + colTpl + ';">';
+  ticariRows.forEach(function(r) {
+    html += '<div class="pzm-det-v3-ticari-item"><label>' + r.lbl + '</label><div class="val">' + r.val + '</div></div>';
+  });
+  html += '</div>';
+
+  // Sipariş tarihi + genel not
+  var sipTarih = pzmTarihGoster(t.olusturma_tarihi) || '—';
+  var genelNot = tic.genel_not || t.notlar || '';
+  html += '<div style="margin-top:10px;font-size:11.5px;color:var(--rm-t3);">Sipariş Tarihi: <strong style="color:var(--rm-t2);">' + pzmEsc(sipTarih) + '</strong>';
+  var acandAd = mttRo ? ((pzmDetayMttRolBilgisi(t) || {}).pazarlamaci_adi || '') : (t.olusturan_ad || '');
+  if (acandAd) html += '&nbsp;·&nbsp;Açan: <strong style="color:var(--rm-t2);">' + pzmEsc(acandAd) + '</strong>';
+  html += '</div>';
+  if (genelNot) {
+    html += '<div class="pzm-det-v3-genel-not">' + pzmEsc(genelNot) + '</div>';
+  }
+
+  // MTT sürec ozeti V3'te kaldirildi — stepper ve sag kolon zaten iceriyor
+
+  el.innerHTML = html;
+}
+
+/* ═══════════════════════════════════════════
+   V3 ÜRÜN / SİPARİŞ KALEMLERİ
+═══════════════════════════════════════════ */
+function pzmDetV3KalemRender(t) {
+  var wrap = $id('pzm-det-kalem-wrap');
+  var badge = $id('pzm-det-kalem-badge');
+  var kalemler = pzmDetayKalemler(t);
+  if (badge) badge.textContent = kalemler.length + ' kalem';
+  if (!wrap) return;
+
+  var pb = pzmDetayTicariOku(t).para_birimi || 'TRY';
+  if (pb === 'TL') pb = 'TRY';
+  var mttRo = pzmDetayMttKaynakli(t);
+
+  var html = '<table class="pzm-kalem-tablo">';
+  if (mttRo) {
+    // MTT kaynaklı: Ürün / Müşteri Renk / Formül / Teknik Renk / KG / Termin / Fiyat / Teknik Durum
+    html += '<thead><tr>' +
+      '<th>#</th><th>Ürün</th><th>Müşteri Renk</th>' +
+      '<th>Formül</th>' +
+      '<th>Teknik Renk</th>' +
+      '<th class="r">KG</th>' +
+      '<th>Termin</th>' +
+      '<th class="r">Birim Fiyat</th>' +
+      '<th>Teknik Durum</th>' +
+      '</tr></thead><tbody>';
+    kalemler.forEach(function(k, idx) {
+      var ref = pzmDetayMttKalemRef(t, k);
+      var tk = pzmKalemToplam(k) || pzmKalemTalepKg(k);
+      var teknikTam = !!k.formul_id && !!(k.rf_renk_id || k.renk_varyant_id) && !!k.termin_tarihi;
+      var durumCls = teknikTam ? 'style="color:var(--rm-green);font-weight:600;"' : 'style="color:#b45309;font-weight:600;"';
+      var durumTxt = teknikTam ? '✓ Tamamlandı' : '⏳ Bekliyor';
+      var bfStr = k.birim_fiyat ? pzmTicariParaFmt(k.birim_fiyat, pb) + '/kg' : '—';
+      html += '<tr>' +
+        '<td>' + (k.sira_no || idx + 1) + '</td>' +
+        '<td>' + pzmAileChip(k.urun_ailesi) + '</td>' +
+        '<td>' + pzmEsc(ref.renk_aciklama || ref.musteri_renk_aciklama || '—') + '</td>' +
+        '<td>' + pzmEsc(k.formul_ad || '—') + '</td>' +
+        '<td>' + pzmEsc(k.renk_ad || '—') + '</td>' +
+        '<td class="r pzm-kg-hucre">' + tk.toLocaleString('tr') + ' kg</td>' +
+        '<td>' + pzmEsc(pzmTarihGoster(k.termin_tarihi) || '—') + '</td>' +
+        '<td class="r">' + bfStr + '</td>' +
+        '<td ' + durumCls + '>' + durumTxt + '</td>' +
+        '</tr>';
+    });
+  } else {
+    // Normal sipariş: Ürün / Formül / Renk / L/S/M / Toplam KG / Termin / Birim Fiyat / Toplam Tutar / Not
+    html += '<thead><tr>' +
+      '<th>#</th><th>Ürün</th><th>Formül</th><th>Renk</th>' +
+      '<th class="r">L</th><th class="r">S</th><th class="r">M</th>' +
+      '<th class="r">Toplam KG</th>' +
+      '<th>Termin</th>' +
+      '<th class="r">Birim Fiyat</th>' +
+      '<th class="r">Toplam</th>' +
+      '<th>Not</th>' +
+      '</tr></thead><tbody>';
+    kalemler.forEach(function(k, idx) {
+      var tk = pzmKalemToplam(k) || pzmKalemTalepKg(k);
+      var bfStr = pzmTabloBirimFiyatKg(k.birim_fiyat, pb);
+      var ttStr = pzmTabloToplamTutar(k, pb);
+      html += '<tr>' +
+        '<td>' + (k.sira_no || idx + 1) + '</td>' +
+        '<td>' + pzmAileChip(k.urun_ailesi) + '</td>' +
+        '<td>' + pzmEsc(k.formul_ad || '—') + '</td>' +
+        '<td>' + pzmEsc(k.renk_ad || '—') + '</td>' +
+        '<td class="r">' + (k.miktar_l ? parseFloat(k.miktar_l).toLocaleString('tr') : '—') + '</td>' +
+        '<td class="r">' + (k.miktar_s ? parseFloat(k.miktar_s).toLocaleString('tr') : '—') + '</td>' +
+        '<td class="r">' + (k.miktar_m ? parseFloat(k.miktar_m).toLocaleString('tr') : '—') + '</td>' +
+        '<td class="r pzm-kg-hucre">' + tk.toLocaleString('tr') + ' kg</td>' +
+        '<td>' + pzmEsc(pzmTarihGoster(k.termin_tarihi) || '—') + '</td>' +
+        '<td class="r">' + pzmEsc(bfStr) + '</td>' +
+        '<td class="r">' + pzmEsc(ttStr) + '</td>' +
+        '<td>' + pzmEsc(k.notlar || '—') + '</td>' +
+        '</tr>';
+    });
+  }
+  if (!kalemler.length) {
+    html += '<tr><td colspan="12" style="text-align:center;color:var(--rm-t3);padding:20px;">Kayıtlı kalem bulunamadı.</td></tr>';
+  }
+  html += '</tbody></table>';
+
+  // Footer: Toplam KG
+  var kg = pzmDetayKgOzet(kalemler);
+  var topKg = (Math.round((kg.toplam || parseFloat(t.toplam_kg || 0)) * 1000) / 1000).toLocaleString('tr');
+  html += '<div class="pzm-det-v3-kalem-footer">Toplam: <strong>' + topKg + ' kg</strong></div>';
+  wrap.innerHTML = html;
+}
+
+/* ═══════════════════════════════════════════
+   V3 MRP PANEL GÖRÜNÜRLÜK
+═══════════════════════════════════════════ */
+function pzmDetV3MprPanelGoster(t, st) {
+  var kart = $id('pzm-det-akk-3');
+  var el = $id('pzm-det-mpr-icerik');
+  if (!kart) return;
+  var d = (t.durum || '').toUpperCase();
+  // MRP panelini göster: ONAYLANDI ve sonrası (IPTAL hariç)
+  var goster = (d !== 'IPTAL' && d !== 'TASLAK' && d !== 'REVIZYON' &&
+    d !== 'REDDEDILDI' && d !== 'ONAY_BEKLIYOR') ||
+    st.mprHesaplandi || st.planlar.length > 0;
+  kart.style.display = goster ? '' : 'none';
+  if (el) {
+    if (d === 'IPTAL') {
+      el.innerHTML = '<div class="pzm-mrp-kutu pzm-mrp-bekliyor">İptal edilmiş sipariş için malzeme ihtiyacı analizi yapılamaz.</div>';
+    } else {
+      // V3: Operasyon özeti gösterilmez; sadece malzeme ihtiyaç raporu ve alt emir
+      el.innerHTML = pzmDetV3MprIcerik(t, st);
     }
   }
-  pzmDetayAdminSilBtnGuncelle(t);
-  pzmDetayBaslikRender(t);
-  pzmDetayKalemTabloRender(t);
-  pzmDetayMprPanelRender(t, st);
-  pzmDetayOzetSidebarGuncelle(t, st);
-  pzmDetayAltBand(t, st);
 }
+
+/* ═══════════════════════════════════════════
+   V3 SAĞ KOLON — Sıradaki Adım + Özet + Teknik/MRP + Üretim
+═══════════════════════════════════════════ */
+function pzmDetV3SagKolonRender(t, st) {
+  pzmDetV3SiradakiRender(t, st);
+  pzmDetV3OzetRender(t);
+  pzmDetV3TeknikMrpRender(t, st);
+  pzmDetV3UretimRender(t, st);
+  pzmDetV3AksijonRender(t, st);
+}
+
+function pzmDetV3SiradakiRender(t, st) {
+  var el = $id('pzm-det-v3-siradaki-body');
+  if (!el) return;
+  var d = (t.durum || '').toUpperCase();
+  var html = '';
+
+  if (d === 'TASLAK' || d === 'REVIZYON' || d === 'REDDEDILDI') {
+    var opE = pzmDetayOperasyonEksikleri(t);
+    var mttRo = pzmDetayMttKaynakli(t);
+    if (opE.length) {
+      html += '<div class="pzm-det-v3-siradaki-aciklama" style="color:var(--rm-red);">' + pzmEsc(opE[0]) + '</div>';
+    } else {
+      html += '<div class="pzm-det-v3-siradaki-aciklama">Sipariş gönderilmeye hazır.</div>';
+    }
+    html += '<div class="pzm-det-v3-siradaki-btns">';
+    if (pzmOnayaGonderIzinli(t)) {
+      html += '<button type="button" class="pzm-btn pzm-btn-lacivert pzm-btn-blk" onclick="pzmOnayaGonder(' + t.id + ')">Merkezi Onay\'a Gönder</button>';
+    }
+    if (!pzmDetayReadonly(t) && _pzmCanManage) {
+      html += '<button type="button" class="pzm-btn pzm-btn-outline pzm-btn-blk" onclick="pzmSipariseDondur(' + t.id + ')">' + (mttRo ? 'Taslağı Güncelle' : 'Siparişi Düzenle') + '</button>';
+    }
+    html += '</div>';
+
+  } else if (d === 'ONAY_BEKLIYOR') {
+    html += '<div class="pzm-det-v3-siradaki-aciklama">Merkezi onay kuyruğunda. Onay tamamlanana kadar düzenlenemez.</div>';
+
+  } else if (d === 'ONAYLANDI') {
+    var teknikEksik = pzmDetayMttKaynakli(t) && pzmDetayKalemler(t).some(function(k) {
+      return !k.formul_id || !(k.rf_renk_id || k.renk_varyant_id) || !k.termin_tarihi;
+    });
+    var mprBlok = pzmMprBlokMesaj(t);
+    var opE2 = pzmDetayOperasyonEksikleri(t);
+    var mprDisabled = !_pzmCanManage || st.loading || st.hydrating || teknikEksik || opE2.length > 0 || !!mprBlok;
+    if (teknikEksik) {
+      html += '<div class="pzm-det-v3-siradaki-aciklama" style="color:#b45309;">Teknik bilgiler eksik. Tüm kalemlerin formül, teknik renk ve termini doldurulmalı.</div>';
+    } else if (mprBlok) {
+      html += '<div class="pzm-det-v3-siradaki-aciklama" style="color:var(--rm-red);">' + pzmEsc(mprBlok) + '</div>';
+    } else {
+      html += '<div class="pzm-det-v3-siradaki-aciklama">Teknik bilgiler tamamlandı. Malzeme ihtiyacı hesaplanabilir.</div>';
+    }
+    html += '<div class="pzm-det-v3-siradaki-btns">';
+    html += '<button type="button" class="pzm-btn pzm-btn-lacivert pzm-btn-blk"' +
+      (mprDisabled ? ' disabled' : '') +
+      ' onclick="pzmDetayMprHesapla(' + t.id + ')">Malzeme İhtiyacını Hesapla</button>';
+    html += '</div>';
+
+  } else if (d === 'MPR_BEKLIYOR' || d === 'PLANLAMAYA_HAZIR') {
+    /* Canonical check: sevkiyat veya üretim canonical state'e bakarak
+       stale parent durum'un yanlış next-action göstermesini önle */
+    var sev2 = t.sevkiyat_ozet || null;
+    var sevkBitti = sev2 && (sev2.durum || '').toUpperCase() === 'SEVK_EDILDI';
+    var gecerliPlanlar2 = (st.planlar || []).filter(function(p) {
+      return (p.durum || '').toUpperCase() !== 'IPTAL';
+    });
+    var uretimTamandi2 = gecerliPlanlar2.length > 0 && gecerliPlanlar2.every(function(p) {
+      return (p.durum || '').toUpperCase() === 'BITTI';
+    });
+    if (sevkBitti) {
+      /* Sipariş sevk edilmiş — stale parent durum, gerçek adım finans */
+      var tah2 = t.tahsilat_ozet || null;
+      var tahDurum2 = tah2 ? (tah2.durum || '').toUpperCase() : '';
+      html += '<div class="pzm-det-v3-siradaki-aciklama" style="color:var(--rm-green);">Sevkiyat tamamlandı. ' +
+        (tah2 ? 'Tahsilat takibi: <strong>' + pzmEsc(tahDurum2 || tah2.durum || '—') + '</strong>.' : 'Tahsilat kaydı bekleniyor.') + '</div>';
+    } else if (uretimTamandi2) {
+      html += '<div class="pzm-det-v3-siradaki-aciklama" style="color:var(--rm-green);">Üretim tamamlandı. Sevkiyat planlanabilir.</div>';
+    } else {
+      var uretimAktif = pzmDetayUretimAktif(st, t);
+      var uretimMsg = pzmDetayUretimBlokMesaj(st, t);
+      if (st.uretimeGonderiliyor) {
+        html += '<div class="pzm-det-v3-siradaki-aciklama">Üretime gönderiliyor…</div>';
+      } else if (uretimAktif) {
+        html += '<div class="pzm-det-v3-siradaki-aciklama" style="color:var(--rm-green);">Üretime gönderilebilir.</div>';
+      } else {
+        html += '<div class="pzm-det-v3-siradaki-aciklama">' + pzmEsc(uretimMsg || 'Malzeme ihtiyacı hazır.') + '</div>';
+      }
+      html += '<div class="pzm-det-v3-siradaki-btns">';
+      html += '<button type="button" class="rm-btn rm-btn-gold pzm-btn-blk"' +
+        (uretimAktif && !st.uretimeGonderiliyor ? '' : ' disabled') +
+        ' onclick="pzmDetayUretimeGonder(' + t.id + ')">' +
+        (st.uretimeGonderiliyor ? 'Gönderiliyor…' : 'Üretime Gönder') + '</button>';
+      html += '</div>';
+    }
+
+  } else if (d === 'URETIMDE') {
+    html += '<div class="pzm-det-v3-siradaki-aciklama">Üretim devam ediyor. Ali Tablet ekranından takip edebilirsiniz.</div>';
+    var ilkPlan = (st.planlar && st.planlar.length) ? st.planlar[0] : null;
+    if (ilkPlan && ilkPlan.batch_kodu) {
+      html += '<a href="/nexgen/tablet/uretim-islem/' + encodeURIComponent(ilkPlan.batch_kodu) + '" class="pzm-det-v3-tablet-link" target="_blank">Üretim Detayı →</a>';
+    }
+
+  } else if (d === 'IPTAL') {
+    html += '<div class="pzm-det-v3-siradaki-aciklama" style="color:var(--rm-t3);">Bu sipariş iptal edilmiştir.</div>';
+
+  } else {
+    html += '<div class="pzm-det-v3-siradaki-aciklama" style="color:var(--rm-t3);">' + pzmEsc(t.durum_etiket || t.durum || '—') + '</div>';
+  }
+
+  // İptal butonu (duruma göre)
+  if (d !== 'IPTAL' && !pzmDetayReadonly(t) && _pzmCanManage) {
+    html += '<div style="margin-top:10px;">';
+    html += '<button type="button" class="pzm-btn pzm-btn-red-outline pzm-btn-blk" onclick="pzmIptal(' + t.id + ')">İptal Et</button>';
+    html += '</div>';
+  }
+
+  el.innerHTML = html;
+}
+
+function pzmDetV3OzetRender(t) {
+  var kalemler = pzmDetayKalemler(t);
+  var kg = pzmDetayKgOzet(kalemler);
+  var fin = pzmDetayFinansOzet(t, kalemler);
+  var pb = fin.pb === 'TRY' ? 'TRY' : fin.pb;
+  var fmtKg = function(v) { return (Math.round(v * 1000) / 1000).toLocaleString('tr') + ' kg'; };
+
+  var terlikEl = $id('pzm-det-oz-terlik');
+  var tabanEl  = $id('pzm-det-oz-taban');
+  var dokmeEl  = $id('pzm-det-oz-dokme');
+  var toplamEl = $id('pzm-det-oz-toplam');
+  var araEl    = $id('pzm-det-oz-ara');
+  var kdvEl    = $id('pzm-det-oz-kdv');
+  var genelEl  = $id('pzm-det-oz-genel');
+  if (terlikEl) terlikEl.textContent = fmtKg(kg.terlik);
+  if (tabanEl)  tabanEl.textContent  = fmtKg(kg.taban);
+  if (dokmeEl)  dokmeEl.textContent  = fmtKg(kg.dokme);
+  if (toplamEl) toplamEl.textContent = fmtKg(kg.toplam || parseFloat(t.toplam_kg || 0));
+  if (araEl)    araEl.textContent    = kalemler.length ? pzmTicariParaFmt(fin.ara, pb) : '—';
+  if (kdvEl)    kdvEl.textContent    = kalemler.length ? pzmTicariParaFmt(fin.kdv, pb) : '—';
+  if (genelEl)  genelEl.textContent  = kalemler.length ? pzmTicariParaFmt(fin.genel, pb) : '—';
+
+  // hidden uyum alanları
+  var kalemEl  = $id('pzm-det-oz-kalem');
+  var terminEl = $id('pzm-det-oz-termin');
+  if (kalemEl)  kalemEl.textContent  = String(kg.kalem);
+  if (terminEl) terminEl.textContent = pzmTarihGoster(kg.enYakin || t.en_yakin_termin || '') || '—';
+}
+
+function pzmDetV3TeknikMrpRender(t, st) {
+  var el = $id('pzm-det-v3-teknik-body');
+  if (!el) return;
+  var kalemler = pzmDetayKalemler(t);
+  var mttRo = pzmDetayMttKaynakli(t);
+  var html = '<div class="pzm-det-v3-status-rows">';
+
+  // Teknik durum (MTT kaynaklı ise)
+  if (mttRo) {
+    var tamKalem = kalemler.filter(function(k) {
+      return !!k.formul_id && !!(k.rf_renk_id || k.renk_varyant_id) && !!k.termin_tarihi;
+    }).length;
+    var teknikOk = tamKalem === kalemler.length && kalemler.length > 0;
+    html += '<div class="pzm-det-v3-status-row">' +
+      '<label>Teknik</label>' +
+      '<span class="pzm-det-v3-status-badge ' + (teknikOk ? 'pzm-det-v3-status-ok' : 'pzm-det-v3-status-warn') + '">' +
+      (teknikOk ? '✓' : '⏳') + ' ' + tamKalem + ' / ' + kalemler.length +
+      '</span></div>';
+  }
+
+  // MRP durumu
+  var mprOk = st.mprHesaplandi && st.planlar.length > 0;
+  html += '<div class="pzm-det-v3-status-row">' +
+    '<label>MRP</label>' +
+    '<span class="pzm-det-v3-status-badge ' + (mprOk ? 'pzm-det-v3-status-ok' : 'pzm-det-v3-status-wait') + '">' +
+    (mprOk ? '✓ Hazır' : (st.loading || st.hydrating ? 'Hesaplanıyor…' : '— Bekleniyor')) +
+    '</span></div>';
+
+  // Stok durumu
+  if (st.stokYuklendi) {
+    var stokOk = !st.stokEksik;
+    html += '<div class="pzm-det-v3-status-row">' +
+      '<label>Stok</label>' +
+      '<span class="pzm-det-v3-status-badge ' + (stokOk ? 'pzm-det-v3-status-ok' : 'pzm-det-v3-status-err') + '">' +
+      (stokOk ? '✓ Hazır' : '✗ Eksik') + '</span></div>';
+  }
+
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function pzmDetV3UretimRender(t, st) {
+  var kart = $id('pzm-det-v3-uretim-kart');
+  var body = $id('pzm-det-v3-uretim-body');
+  if (!kart) return;
+
+  var d = (t.durum || '').toUpperCase();
+  var hasPlans = st.planlar && st.planlar.length > 0;
+
+  if (!hasPlans && d !== 'URETIMDE') {
+    kart.style.display = 'none';
+    return;
+  }
+  kart.style.display = '';
+
+  if (!body) return;
+  var html = '<div style="display:flex;flex-direction:column;gap:0;">';
+  var oz = pzmDetayOzetHesap(st, pzmMiKalemKaynak(t));
+
+  // Plan listesi
+  if (st.planlar.length) {
+    st.planlar.forEach(function(p) {
+      html += '<div class="pzm-det-v3-uretim-row"><span>Plan</span><strong>' + pzmEsc(p.plan_kodu || '—') + '</strong></div>';
+      if (p.batch_kodu) html += '<div class="pzm-det-v3-uretim-row"><span>Batch</span><strong>' + pzmEsc(p.batch_kodu) + '</strong></div>';
+    });
+    if (oz.uret) html += '<div class="pzm-det-v3-uretim-row"><span>Üretilecek</span><strong>' + pzmKgFmt(oz.uret) + '</strong></div>';
+    if (oz.fatura) html += '<div class="pzm-det-v3-uretim-row"><span>Sipariş (Fatura)</span><strong>' + pzmKgFmt(oz.fatura) + '</strong></div>';
+    if (oz.formulAdedi) html += '<div class="pzm-det-v3-uretim-row"><span>Formül/Batch</span><strong>' + oz.formulAdedi + ' adet</strong></div>';
+  }
+
+  html += '</div>';
+
+  // Tablet linki
+  var ilkPlan = st.planlar.length ? st.planlar[0] : (st.sonUretimSonuc && st.sonUretimSonuc.planlar && st.sonUretimSonuc.planlar[0]) || null;
+  var batchKodu = (ilkPlan && ilkPlan.batch_kodu) ? ilkPlan.batch_kodu : null;
+  if (batchKodu) {
+    html += '<a href="/nexgen/tablet/uretim-islem/' + encodeURIComponent(batchKodu) + '" class="pzm-det-v3-tablet-link" target="_blank">Üretim Detayı →</a>';
+  }
+
+  body.innerHTML = html;
+}
+
+function pzmDetV3AksijonRender(t, st) {
+  var kart = $id('pzm-det-v3-aksiyon-kart');
+  // Aksiyon butonlarını eski pzmDetayAltBand ile doldur (uyum)
+  pzmDetayAltBand(t, st);
+  // Aksiyon kart görünürlüğü: içerik varsa göster
+  var btns = $id('pzm-detay-alt-butonlar');
+  if (kart && btns) {
+    kart.style.display = btns.innerHTML.trim() ? '' : 'none';
+  }
+}
+
+/* ═══════════════════════════════════════════
+   V3 MRP PANEL — sadece malzeme raporu
+   Operasyon ozeti (Talep KG / Uretilecek KG vs.) gosterilmez.
+   Bu sayilar sag kolonda compact olarak var.
+═══════════════════════════════════════════ */
+function pzmDetV3MprIcerik(t, st) {
+  if (st.loading) return '<div class="pzm-det-bilgi-kutu">Malzeme ihtiyacı analiz ediliyor…</div>';
+  if (st.hydrating) return '<div class="pzm-det-bilgi-kutu">Mevcut analiz sonuçları yükleniyor…</div>';
+
+  var html = '';
+  if (st.mprHesaplandi && st.planlar.length) {
+    // Malzeme İhtiyaç Raporu (Toplu + Detaylı + Hammadde)
+    var raporHtml = pzmMiRaporBlokHtml(st, t);
+    if (raporHtml) html += raporHtml;
+
+    // Alt Emir / Batch Detayları
+    var aeHtml = pzmAltEmirOzetHtml(st);
+    if (aeHtml) {
+      html += '<div class="pzm-mi-bolum-baslik">Alt Emir / Batch Detayları</div>';
+      html += aeHtml;
+    } else if (st.stokYuklendi && st.altEmirYukleniyor) {
+      html += '<div class="pzm-mi-bolum-baslik">Alt Emir / Batch Detayları</div>';
+      html += '<div class="pzm-det-bilgi-kutu">Alt emir verisi yükleniyor…</div>';
+    }
+    if (!html) html = '<div class="pzm-mrp-kutu pzm-mrp-bekliyor">Malzeme ihtiyaç raporu oluşturuluyor…</div>';
+    return html;
+  }
+  if (st.rfEksik) {
+    return '<div class="pzm-mrp-kutu pzm-mrp-bekliyor">Teknik formüller eksik — malzeme ihtiyacı hesaplanamaz.</div>';
+  }
+  // Hesaplanmamis: analiz butonu
+  var mprBlok = pzmMprBlokMesaj(t);
+  var mprDisabled = !_pzmCanManage || st.loading || st.hydrating || pzmDetayReadonly(t) || st.planlar.length > 0 || !!mprBlok;
+  html += '<div style="padding:8px 0;">';
+  html += '<button type="button" class="pzm-btn pzm-btn-lacivert pzm-btn-sm"';
+  html += mprDisabled ? ' disabled' : '';
+  if (mprBlok) html += ' title="' + pzmEsc(mprBlok) + '"';
+  html += ' onclick="pzmDetayMprHesapla(' + t.id + ')">Malzeme İhtiyacını Analiz Et</button>';
+  if (mprBlok) html += ' <span style="font-size:11px;color:var(--rm-t3);margin-left:8px;">' + pzmEsc(mprBlok) + '</span>';
+  html += '</div>';
+  return html;
+}
+
+/* ═══════════════════════════════════════════
+   V3 SÜREÇ AKIŞI STEPPER — Canonical Sources
+═══════════════════════════════════════════ */
+function pzmDetV3StepperRender(t, st) {
+  var el = $id('pzm-det-v3-stepper');
+  if (!el) return;
+  var mtt = pzmDetayMttRolBilgisi(t) || {};
+  var mttRo = pzmDetayMttKaynakli(t);
+
+  /* ── Canonical step state hesabı ─────────────────────────────────── */
+
+  /* 1. Görüşme: MTT kaynaklı sipariş varsa görüşme gerçekleşmiş */
+  var gorusme = mttRo;
+
+  /* 2. MTT: MTT kaydı varsa tamamlanmış */
+  var mttDone = mttRo;
+
+  /* 3. Yönetim Onayı: TASLAK/REVIZYON/REDDEDILDI değilse onaylanmış */
+  var d = (t.durum || '').toUpperCase();
+  var onaylandiDurumlar = ['ONAYLANDI','MPR_BEKLIYOR','PLANLAMAYA_HAZIR','URETIMDE','TAMAMLANDI','IPTAL'];
+  var onayDone = onaylandiDurumlar.indexOf(d) >= 0;
+
+  /* 4. Teknik: Onaylandıktan sonra, MRP hesaplanmadan önce teknik adım.
+        Gerçek tamamlanma: kalemler üzerinde formül+renk+termin var ve onay alınmış. */
+  var kalemler = pzmDetayKalemler(t);
+  var teknikTam = kalemler.length > 0 && kalemler.every(function(k) {
+    return !!k.formul_id && !!(k.rf_renk_id || k.renk_varyant_id) && !!k.termin_tarihi;
+  });
+  var teknikDone = onayDone && (teknikTam || st.planlar.length > 0);
+
+  /* 5. MRP: En az 1 geçerli (IPTAL olmayan) plan mevcut */
+  var gecerliPlanlar = (st.planlar || []).filter(function(p) {
+    return (p.durum || '').toUpperCase() !== 'IPTAL';
+  });
+  var mrpDone = gecerliPlanlar.length > 0;
+
+  /* 6. Üretim: plan state'lerinden hesapla */
+  var uretimBasladi = gecerliPlanlar.some(function(p) {
+    var pd = (p.durum || '').toUpperCase();
+    return pd === 'URETIMDE' || pd === 'BITTI';
+  });
+  var uretimTamandi = gecerliPlanlar.length > 0 && gecerliPlanlar.every(function(p) {
+    return (p.durum || '').toUpperCase() === 'BITTI';
+  });
+  var uretimDone = uretimTamandi;
+  var uretimAktif = uretimBasladi && !uretimTamandi;
+
+  /* 7. Sevkiyat: mo_musteri_sevkiyat canonical pointer */
+  var sev = t.sevkiyat_ozet || null;
+  var sevkDurum = sev ? (sev.durum || '').toUpperCase() : '';
+  var sevkDone = sevkDurum === 'SEVK_EDILDI' || sevkDurum === 'TAMAMLANDI';
+  var sevkAktif = sev && !sevkDone;
+
+  /* 8. Finans: mo_tahsilat_kayit canonical pointer */
+  var tah = t.tahsilat_ozet || null;
+  var tahDurum = tah ? (tah.durum || '').toUpperCase() : '';
+  var finTamamlananlar = ['TAMAMLANDI', 'ODENDI', 'KAPANDI'];
+  var finDone = finTamamlananlar.indexOf(tahDurum) >= 0;
+  var finAktif = tah && !finDone;
+
+  /* ── MONOTONIC RULE: downstream DONE evidence geçmiş adımları kapatır ──
+     Bir aşama canonical olarak tamamlandıysa, önceki aşamalar DONE sayılır.
+     Plan 195 gibi anomaliler presentation'ı geri çekemez. */
+  if (sevkDone) {
+    uretimDone  = true;
+    uretimAktif = false;
+    mrpDone     = true;
+    teknikDone  = true;
+  } else if (uretimTamandi) {
+    mrpDone    = true;
+    teknikDone = true;
+  }
+
+  /* ── Adım nesneleri ─────────────────────────────────────────────── */
+  /* done=true → ✓, aktif=true → ● (current), ikisi de false → ○ */
+  var steps = [
+    { lbl:'Görüşme',    done: gorusme,    aktif: false,     tarih: mtt.created_at || '' },
+    { lbl:'MTT',        done: mttDone,    aktif: false,     tarih: mtt.created_at || '' },
+    { lbl:'Yön. Onayı', done: onayDone,   aktif: false,     tarih: mtt.onay_tarihi || '' },
+    { lbl:'Teknik',     done: teknikDone, aktif: false,     tarih: '' },
+    { lbl:'MRP',        done: mrpDone,    aktif: false,     tarih: '' },
+    { lbl:'Üretim',     done: uretimDone, aktif: uretimAktif, tarih: t.uretime_gonderim_tarihi || '' },
+    { lbl:'Sevkiyat',   done: sevkDone,   aktif: sevkAktif, tarih: (sev && sev.sevk_tarihi) ? sev.sevk_tarihi : '' },
+    { lbl:'Finans',     done: finDone,    aktif: finAktif,  tarih: (tah && tah.hedef_vade_tarihi) ? tah.hedef_vade_tarihi : '' },
+  ];
+
+  /* ── Single-current enforcement: aktif yalnız canonical olarak en ileri açık adım ──
+     Monotonic rule'dan sonra hâlâ birden fazla aktif kalma ihtimali yoktur,
+     ama güvence olarak kontrol et: birden fazla aktif varsa yalnız sonuncuyu koru. */
+  var aktifCount = steps.filter(function(s) { return s.aktif; }).length;
+  if (aktifCount > 1) {
+    var lastAktifIdx = -1;
+    for (var si = steps.length - 1; si >= 0; si--) {
+      if (steps[si].aktif) { lastAktifIdx = si; break; }
+    }
+    steps.forEach(function(s, si) { if (s.aktif && si !== lastAktifIdx) s.aktif = false; });
+  }
+
+  /* Hiçbir adım aktif değilse ilk tamamlanmamış adımı aktif say */
+  var herhangiBirAktif = steps.some(function(s) { return s.aktif; });
+  if (!herhangiBirAktif) {
+    for (var ai = 0; ai < steps.length; ai++) {
+      if (!steps[ai].done) { steps[ai].aktif = true; break; }
+    }
+  }
+
+  var html = '<div class="mtt-v3-proses" style="margin:0;">' +
+    '<div class="mtt-v3-proses-lbl">SÜREÇ AKIŞI</div>' +
+    '<div class="mtt-v3-proses-flow">';
+
+  steps.forEach(function(s) {
+    var cls = s.done ? 'done' : (s.aktif ? 'aktif' : '');
+    var circle = s.done ? '✓' : (s.aktif ? '●' : '○');
+    html += '<div class="mtt-v3-proses-step ' + cls + '">' +
+      '<div class="mtt-v3-step-circle">' + circle + '</div>' +
+      '<div class="mtt-v3-step-lbl">' + pzmEsc(s.lbl) + '</div>' +
+      (s.tarih ? '<div class="mtt-v3-step-tarih">' + pzmEsc(s.tarih.slice(0,10)) + '</div>' : '') +
+      '</div>';
+  });
+
+  html += '</div></div>';
+  el.innerHTML = html;
+}
+
 
 window.pzmDetayMprHesapla = function(tid) {
   var t = pzmTalepBul(tid);

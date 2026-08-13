@@ -38,7 +38,7 @@ from datetime import datetime, date
 from flask import (
     Blueprint, render_template, abort,
     request, jsonify, session, g,
-    Response, redirect, url_for, flash, current_app
+    Response, redirect, url_for, flash, current_app, make_response
 )
 from modules.auth import yetki_gerekli, yetki_var, login_gerekli, is_superadmin, kullanici_yetkileri
 from modules.nexgen.kod_uretici import (
@@ -19232,10 +19232,44 @@ def _pzm_talep_satir_dict(row, con=None):
         d['dokme_kg'] = ozet.get('dokme_kg', 0)
         d['en_yakin_termin'] = ozet.get('en_yakin_termin')
         sip_durum = (d.get('durum') or '').upper()
-        if sip_durum in ('ONAYLANDI', 'MPR_BEKLIYOR', 'PLANLAMAYA_HAZIR', 'URETIMDE'):
+        gorunen_d = (d.get('gorunen_durum') or sip_durum).upper()
+        if sip_durum in ('ONAYLANDI', 'MPR_BEKLIYOR', 'PLANLAMAYA_HAZIR', 'URETIMDE', 'TAMAMLANDI') \
+                or gorunen_d in ('URETIMDE', 'TAMAMLANDI', 'PLANLAMAYA_HAZIR'):
             d['mpr_planlar'] = _pzm_siparis_mpr_planlar(con, d['id'])
         else:
             d['mpr_planlar'] = []
+        # Sevkiyat canonical pointer (read-only)
+        try:
+            if _pzm_tablo_var(con, 'mo_musteri_sevkiyat'):
+                sev_row = con.execute(
+                    "SELECT sevkiyat_no, durum, sevk_tarihi FROM mo_musteri_sevkiyat"
+                    " WHERE siparis_id=? AND aktif=1 ORDER BY id DESC LIMIT 1",
+                    (d['id'],),
+                ).fetchone()
+                if sev_row:
+                    d['sevkiyat_ozet'] = {
+                        'sevkiyat_no': sev_row['sevkiyat_no'],
+                        'durum': sev_row['durum'],
+                        'sevk_tarihi': sev_row['sevk_tarihi'],
+                    }
+        except Exception:
+            pass
+        # Tahsilat canonical pointer (read-only)
+        try:
+            if _pzm_tablo_var(con, 'mo_tahsilat_kayit'):
+                tah_row = con.execute(
+                    "SELECT kayit_kodu, durum, hedef_vade_tarihi FROM mo_tahsilat_kayit"
+                    " WHERE siparis_id=? AND aktif=1 ORDER BY id DESC LIMIT 1",
+                    (d['id'],),
+                ).fetchone()
+                if tah_row:
+                    d['tahsilat_ozet'] = {
+                        'kayit_kodu': tah_row['kayit_kodu'],
+                        'durum': tah_row['durum'],
+                        'hedef_vade_tarihi': tah_row['hedef_vade_tarihi'],
+                    }
+        except Exception:
+            pass
     if con is not None and d.get('olusturan_id'):
         sk = con.execute(
             'SELECT KullaniciAdi FROM sistem_kullanici WHERE Id=?',
@@ -19369,7 +19403,7 @@ def pazarlama_merkezi():
             mtt_okunmamis = 0
     finally:
         con.close()
-    return render_template(
+    html = render_template(
         'nexgen/pazarlama_merkezi.html',
         active='nexgen',
         cariler=cariler,
@@ -19383,6 +19417,11 @@ def pazarlama_merkezi():
         mtt_kuyruk_sayisi=mtt_kuyruk,
         mtt_okunmamis_yeni=mtt_okunmamis,
     )
+    resp = make_response(html)
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
+    resp.headers['Expires'] = '0'
+    return resp
 
 
 @nexgen_bp.route('/api/pazarlama/cariler')
