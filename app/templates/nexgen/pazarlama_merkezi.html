@@ -668,7 +668,8 @@
     </div>
   </div>
 
-  <div id="ekran-mtt-detay" class="pzm-ekran" style="display:none;">
+  {# MTT detay IA shell v2 — runtime marker for lock/E2E #}
+  <div id="ekran-mtt-detay" class="pzm-ekran mtt-ia-shell-v2" style="display:none;" data-mtt-ia="v2">
     <div class="pzm-detay-ust">
       <button type="button" class="rm-page-geri pzm-detay-liste-btn" onclick="pzmEkranGec('mtt')">
         <span>←</span><span>Talep Listesi</span>
@@ -681,10 +682,10 @@
       </div>
     </div>
     <div class="mtt-detay-shell">
+      <div class="mtt-sticky-aksiyon mtt-sticky-aksiyon-top" id="mtt-detay-aksiyon" aria-label="Talep aksiyonları"></div>
       <div class="pzm-detay-wrap mtt-detay-wrap" id="mtt-detay-body">
         {# JS #}
       </div>
-      <div class="mtt-sticky-aksiyon" id="mtt-detay-aksiyon" aria-label="Talep aksiyonları"></div>
     </div>
   </div>
   {% endif %}
@@ -797,8 +798,357 @@ button.rm-page-geri { appearance:none; }
 .mtt-aday-tag { font-size:9px; font-weight:700; color:#b45309; margin-left:4px; }
 .mtt-detay-shell { display:flex; flex-direction:column; min-height:0; }
 .mtt-detay-wrap { display:grid; gap:8px; padding-bottom:8px; }
-.mtt-detay-kart { padding:8px 10px; }
-.mtt-detay-kart > .pzm-kart-hdr { padding:6px 10px; font-size:11px; letter-spacing:.3px; }
+/* ── MTT v3 typography scope — canonical Solariz font, no new external fonts ── */
+#ekran-mtt-detay[data-mtt-ia="v2"] {
+  --rm-font:'Segoe UI','Segoe UI Variable',system-ui,-apple-system,sans-serif;
+  font-family:'Segoe UI','Segoe UI Variable',system-ui,-apple-system,sans-serif;
+  font-size:13px;
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+/* Scope: weight 900 override — no element in MTT detail should exceed 700 */
+#ekran-mtt-detay[data-mtt-ia="v2"] [style*="font-weight:900"],
+#ekran-mtt-detay[data-mtt-ia="v2"] .pzm-ozet-vurgu .pzm-ozet-kg {
+  font-weight:700 !important;
+}
+/* Talep no başlık */
+#ekran-mtt-detay[data-mtt-ia="v2"] .pzm-sip-no {
+  font-family:'Segoe UI','Segoe UI Variable',system-ui,-apple-system,sans-serif;
+  font-size:18px;
+  font-weight:600;
+  letter-spacing:normal;
+  line-height:1.25;
+}
+/* Sağ üst page reference — muted label + small red no */
+#ekran-mtt-detay[data-mtt-ia="v2"] #mtt-detay-tur-lbl {
+  font-size:10.5px;
+  font-weight:600;
+  color:var(--rm-t3);
+  text-transform:uppercase;
+  letter-spacing:.03em;
+}
+#ekran-mtt-detay[data-mtt-ia="v2"] #mtt-detay-no {
+  font-family:'Segoe UI','Segoe UI Variable',system-ui,-apple-system,sans-serif;
+  font-size:13px;
+  font-weight:600;
+  color:var(--rm-red);
+  letter-spacing:normal;
+}
+/* Özet kart label/value */
+#ekran-mtt-detay[data-mtt-ia="v2"] .mtt-v3-ozet-col label {
+  font-size:11px; font-weight:600; letter-spacing:.03em; line-height:1.2;
+}
+#ekran-mtt-detay[data-mtt-ia="v2"] .mtt-v3-ozet-col .val {
+  font-size:15px; font-weight:600; line-height:1.35;
+}
+#ekran-mtt-detay[data-mtt-ia="v2"] .mtt-v3-ozet-col .bekleme-val {
+  font-size:20px; font-weight:700; line-height:1.2;
+}
+#ekran-mtt-detay[data-mtt-ia="v2"] .mtt-v3-ozet-col .sub {
+  font-size:11.5px; font-weight:400; line-height:1.3;
+}
+/* Section header (petrol bar) — yumuşatılmış */
+#ekran-mtt-detay[data-mtt-ia="v2"] .mtt-v3-talep-hdr,
+#ekran-mtt-detay[data-mtt-ia="v2"] .mtt-v3-ticari-hdr {
+  font-size:12px; font-weight:600; letter-spacing:.03em; text-transform:none; line-height:1.4;
+}
+/* "Ne İstiyor?" ana değer */
+#ekran-mtt-detay[data-mtt-ia="v2"] .mtt-v3-talep-ne-lbl {
+  font-size:11px; font-weight:600; letter-spacing:.03em; line-height:1.2;
+}
+#ekran-mtt-detay[data-mtt-ia="v2"] .mtt-v3-talep-ne-val {
+  font-size:17px; font-weight:600; line-height:1.35; letter-spacing:normal;
+}
+/* Meta grid label/value */
+#ekran-mtt-detay[data-mtt-ia="v2"] .mtt-v3-talep-meta-item label {
+  font-size:11px; font-weight:600; letter-spacing:.03em; line-height:1.2;
+}
+#ekran-mtt-detay[data-mtt-ia="v2"] .mtt-v3-talep-meta-item .val {
+  font-size:15px; font-weight:600; line-height:1.35;
+}
+/* Notlar */
+#ekran-mtt-detay[data-mtt-ia="v2"] .mtt-v3-not-blok label {
+  font-size:11px; font-weight:600; letter-spacing:.03em; line-height:1.2;
+}
+#ekran-mtt-detay[data-mtt-ia="v2"] .mtt-v3-not-val {
+  font-size:13px; font-weight:400; line-height:1.55;
+}
+/* Ürün tablo */
+#ekran-mtt-detay[data-mtt-ia="v2"] .pzm-tablo thead th {
+  font-size:11px; font-weight:600; letter-spacing:.02em; line-height:1.3;
+}
+#ekran-mtt-detay[data-mtt-ia="v2"] .pzm-tablo tbody td {
+  font-size:13px; font-weight:400; line-height:1.45;
+}
+#ekran-mtt-detay[data-mtt-ia="v2"] .pzm-tablo tbody td strong {
+  font-weight:600;
+}
+/* Ticari grid */
+#ekran-mtt-detay[data-mtt-ia="v2"] .mtt-v3-ticari-item label {
+  font-size:11px; font-weight:600; letter-spacing:.03em; line-height:1.2;
+}
+#ekran-mtt-detay[data-mtt-ia="v2"] .mtt-v3-ticari-item .val {
+  font-size:15px; font-weight:600; line-height:1.35;
+}
+/* Sağ kolon: Sıradaki adım */
+#ekran-mtt-detay[data-mtt-ia="v2"] .mtt-v3-siradaki-hdr {
+  font-size:12px; font-weight:600; letter-spacing:.03em;
+}
+#ekran-mtt-detay[data-mtt-ia="v2"] .mtt-v3-siradaki-aciklama {
+  font-size:13px; font-weight:400; line-height:1.5;
+}
+#ekran-mtt-detay[data-mtt-ia="v2"] .mtt-v3-siradaki-btns .pzm-btn {
+  font-size:13.5px !important; font-weight:600 !important;
+}
+/* Teknik kutu */
+#ekran-mtt-detay[data-mtt-ia="v2"] .mtt-v3-teknik-lbl {
+  font-size:11.5px; font-weight:600; letter-spacing:.03em;
+}
+#ekran-mtt-detay[data-mtt-ia="v2"] .mtt-v3-teknik li {
+  font-size:13px; font-weight:400; line-height:1.5;
+}
+#ekran-mtt-detay[data-mtt-ia="v2"] .mtt-v3-teknik-aciklama {
+  font-size:11.5px; font-weight:400; font-style:italic;
+}
+/* Dönüşüm sonucu */
+#ekran-mtt-detay[data-mtt-ia="v2"] .mtt-v3-donusum-lbl {
+  font-size:11.5px; font-weight:600; letter-spacing:.03em;
+}
+#ekran-mtt-detay[data-mtt-ia="v2"] .mtt-v3-donusum-bos {
+  font-size:13px; font-weight:400;
+}
+/* Process stepper */
+#ekran-mtt-detay[data-mtt-ia="v2"] .mtt-v3-proses-lbl {
+  font-size:11px; font-weight:600; letter-spacing:.04em;
+}
+#ekran-mtt-detay[data-mtt-ia="v2"] .mtt-v3-step-lbl {
+  font-size:12px; font-weight:500; line-height:1.3;
+}
+#ekran-mtt-detay[data-mtt-ia="v2"] .mtt-v3-proses-step.done .mtt-v3-step-lbl {
+  font-weight:600;
+}
+#ekran-mtt-detay[data-mtt-ia="v2"] .mtt-v3-proses-step.aktif .mtt-v3-step-lbl {
+  font-size:12.5px; font-weight:700;
+}
+#ekran-mtt-detay[data-mtt-ia="v2"] .mtt-v3-step-tarih {
+  font-size:11px; font-weight:400; line-height:1.2;
+}
+#ekran-mtt-detay[data-mtt-ia="v2"] .mtt-v3-step-circle {
+  font-size:14px; font-weight:600;
+}
+/* Badge'ler */
+#ekran-mtt-detay[data-mtt-ia="v2"] .mtt-chip {
+  font-size:12px; font-weight:600; letter-spacing:normal;
+}
+/* Raw ID'ler monospace sadece meta collapse içinde */
+#ekran-mtt-detay[data-mtt-ia="v2"] .mtt-meta-collapse {
+  font-family:'Segoe UI','Segoe UI Variable',system-ui,-apple-system,sans-serif;
+  font-size:12px;
+}
+/* ── MTT v3 layout ── */
+.mtt-v3-layout { display:grid; grid-template-columns:1fr 300px; gap:16px; align-items:start; margin-top:12px; }
+.mtt-v3-main { display:flex; flex-direction:column; gap:14px; min-width:0; }
+.mtt-v3-side { display:flex; flex-direction:column; gap:12px; min-width:0; }
+
+/* ── Özet header kart ── */
+.mtt-v3-ozet-kart {
+  background:var(--rm-white); border:1px solid var(--rm-border); border-radius:10px;
+  padding:16px 20px; margin-bottom:4px;
+}
+.mtt-v3-ozet-badges { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:14px; }
+.mtt-v3-ozet-cols {
+  display:grid; grid-template-columns:repeat(4,1fr); gap:0;
+  border:1px solid var(--rm-border); border-radius:8px; overflow:hidden;
+}
+.mtt-v3-ozet-col {
+  padding:14px 16px; background:var(--rm-white);
+  border-right:1px solid var(--rm-border);
+}
+.mtt-v3-ozet-col:last-child { border-right:none; }
+.mtt-v3-ozet-col label {
+  display:block; font-size:11px; font-weight:600; text-transform:uppercase;
+  color:var(--rm-t3); letter-spacing:.03em; margin-bottom:6px; line-height:1.2;
+}
+.mtt-v3-ozet-col .val {
+  font-size:15px; font-weight:600; color:var(--rm-t1); line-height:1.35;
+}
+.mtt-v3-ozet-col .sub { font-size:11.5px; color:var(--rm-t3); margin-top:3px; line-height:1.3; }
+.mtt-v3-ozet-col .bekleme-val { font-size:20px; font-weight:700; color:var(--rm-teal-dark); }
+@media (max-width:900px) { .mtt-v3-ozet-cols { grid-template-columns:repeat(2,1fr); } }
+
+/* ── Müşteri Talebi kart ── */
+.mtt-v3-talep-kart {
+  background:var(--rm-white); border:1px solid var(--rm-border); border-radius:10px;
+  overflow:hidden;
+}
+.mtt-v3-talep-hdr {
+  background:var(--rm-teal-dark); color:#fff;
+  padding:10px 18px; font-size:12px; font-weight:600; letter-spacing:.03em;
+  text-transform:none; line-height:1.4;
+}
+.mtt-v3-talep-ne {
+  padding:16px 18px 12px; border-bottom:1px solid var(--rm-border);
+}
+.mtt-v3-talep-ne-lbl {
+  font-size:11px; font-weight:600; text-transform:uppercase; color:var(--rm-t3);
+  letter-spacing:.03em; margin-bottom:4px; line-height:1.2;
+}
+.mtt-v3-talep-ne-val {
+  font-size:17px; font-weight:600; color:var(--rm-teal-dark); line-height:1.35;
+  letter-spacing:normal;
+}
+.mtt-v3-talep-meta {
+  display:grid; grid-template-columns:repeat(4,1fr); gap:0;
+  border-bottom:1px solid var(--rm-border);
+}
+.mtt-v3-talep-meta-item {
+  padding:12px 16px; border-right:1px solid var(--rm-border);
+}
+.mtt-v3-talep-meta-item:last-child { border-right:none; }
+.mtt-v3-talep-meta-item label {
+  display:block; font-size:11px; font-weight:600; text-transform:uppercase;
+  color:var(--rm-t3); letter-spacing:.03em; margin-bottom:4px; line-height:1.2;
+}
+.mtt-v3-talep-meta-item .val { font-size:15px; font-weight:600; color:var(--rm-t1); line-height:1.35; }
+.mtt-v3-talep-meta-item .val.termin { color:var(--rm-teal-dark); }
+.mtt-v3-talep-meta-item .val.acil { color:var(--rm-red); }
+.mtt-v3-talep-notlar { padding:14px 18px; display:flex; flex-direction:column; gap:12px; }
+.mtt-v3-not-blok label {
+  display:block; font-size:11px; font-weight:600; text-transform:uppercase;
+  color:var(--rm-t3); letter-spacing:.03em; margin-bottom:4px; line-height:1.2;
+}
+.mtt-v3-not-val { font-size:13px; color:var(--rm-t1); line-height:1.5; }
+.mtt-v3-not-val.red-not { color:#b91c1c; }
+@media (max-width:900px) { .mtt-v3-talep-meta { grid-template-columns:repeat(2,1fr); } }
+
+/* ── Ürün kalemleri kart ── */
+.mtt-v3-kalem-kart {
+  background:var(--rm-white); border:1px solid var(--rm-border); border-radius:10px;
+  overflow:hidden;
+}
+.mtt-v3-kalem-kart .pzm-tablo th { font-size:11px; font-weight:600; letter-spacing:.02em; padding:10px 12px; background:var(--rm-bg2); }
+.mtt-v3-kalem-kart .pzm-tablo td { font-size:13px; font-weight:400; padding:11px 12px; line-height:1.45; }
+
+/* ── Ticari bilgiler kart (SIPARIS) ── */
+.mtt-v3-ticari-kart {
+  background:var(--rm-white); border:1px solid var(--rm-border); border-radius:10px;
+  overflow:hidden;
+}
+.mtt-v3-ticari-hdr {
+  background:var(--rm-teal-dark); color:#fff;
+  padding:10px 18px; font-size:12px; font-weight:600; letter-spacing:.03em;
+  text-transform:none; line-height:1.4;
+}
+.mtt-v3-ticari-grid {
+  display:grid; grid-template-columns:repeat(4,1fr); gap:0; padding:0;
+}
+.mtt-v3-ticari-item {
+  padding:12px 16px; border-right:1px solid var(--rm-border);
+  border-bottom:none;
+}
+/* last child border handled inline per row count */
+.mtt-v3-ticari-item:last-child { border-right:none; }
+.mtt-v3-ticari-item label {
+  display:block; font-size:11px; font-weight:600; text-transform:uppercase;
+  color:var(--rm-t3); letter-spacing:.03em; margin-bottom:4px; line-height:1.2;
+}
+.mtt-v3-ticari-item .val { font-size:15px; font-weight:600; color:var(--rm-t1); line-height:1.35; }
+@media (max-width:900px) { .mtt-v3-ticari-grid { grid-template-columns:repeat(2,1fr); } }
+
+/* ── Sağ kolon kart'lar ── */
+.mtt-v3-siradaki {
+  background:var(--rm-white); border:1px solid var(--rm-border); border-radius:10px;
+  overflow:hidden;
+}
+.mtt-v3-siradaki-hdr {
+  background:var(--rm-teal-dark); color:#fff;
+  padding:10px 18px; font-size:12px; font-weight:600; letter-spacing:.03em;
+  text-transform:none; line-height:1.4;
+}
+.mtt-v3-siradaki-body { padding:14px 16px; }
+.mtt-v3-siradaki-aciklama { font-size:13px; color:var(--rm-t2); margin-bottom:12px; line-height:1.5; }
+.mtt-v3-siradaki-btns { display:flex; flex-direction:column; gap:8px; }
+.mtt-v3-siradaki-btns .pzm-btn {
+  width:100%; justify-content:center; height:40px !important;
+  font-size:13.5px !important; font-weight:600 !important;
+}
+
+.mtt-v3-teknik {
+  background:var(--rm-yellow-bg); border:1px solid #fde68a; border-radius:10px;
+  padding:14px 16px;
+}
+.mtt-v3-teknik-lbl {
+  font-size:11.5px; font-weight:600; text-transform:uppercase; color:#92400e;
+  letter-spacing:.03em; margin-bottom:8px; line-height:1.3;
+}
+.mtt-v3-teknik ul { margin:0 0 0 16px; padding:0; }
+.mtt-v3-teknik li { font-size:13px; color:#92400e; padding:3px 0; font-weight:400; line-height:1.5; }
+.mtt-v3-teknik-aciklama { font-size:11.5px; color:#a16207; margin-top:8px; font-style:italic; font-weight:400; }
+
+.mtt-v3-donusum {
+  background:var(--rm-white); border:1px solid var(--rm-border); border-radius:10px;
+  padding:14px 16px;
+}
+.mtt-v3-donusum-lbl {
+  font-size:11.5px; font-weight:600; text-transform:uppercase; color:var(--rm-t3);
+  letter-spacing:.03em; margin-bottom:8px; line-height:1.3;
+}
+.mtt-v3-donusum-bos { font-size:13px; color:var(--rm-t3); font-style:italic; }
+
+/* ── Süreç akışı stepper ── */
+.mtt-v3-proses {
+  background:var(--rm-white); border:1px solid var(--rm-border); border-radius:10px;
+  padding:16px 20px; margin-top:4px;
+}
+.mtt-v3-proses-lbl {
+  font-size:11px; font-weight:600; text-transform:uppercase; color:var(--rm-t3);
+  letter-spacing:.04em; margin-bottom:16px; line-height:1.3;
+}
+.mtt-v3-proses-flow {
+  display:flex; flex-wrap:wrap; align-items:flex-start; gap:0;
+  position:relative;
+}
+.mtt-v3-proses-step {
+  display:flex; flex-direction:column; align-items:center;
+  flex:1; min-width:80px; position:relative; text-align:center;
+}
+.mtt-v3-proses-step::before {
+  content:''; position:absolute; top:16px; left:-50%;
+  width:100%; height:2px; background:var(--rm-border); z-index:0;
+}
+.mtt-v3-proses-step:first-child::before { display:none; }
+.mtt-v3-proses-step.done::before { background:var(--rm-green); }
+.mtt-v3-proses-step.aktif::before { background:var(--rm-teal-dark); }
+.mtt-v3-step-circle {
+  width:32px; height:32px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:14px; font-weight:600; position:relative; z-index:1;
+  background:var(--rm-bg2); border:2px solid var(--rm-border); color:var(--rm-t3);
+  margin-bottom:6px;
+}
+.mtt-v3-proses-step.done .mtt-v3-step-circle {
+  background:var(--rm-green-bg); border-color:var(--rm-green); color:var(--rm-green); font-size:16px;
+}
+.mtt-v3-proses-step.aktif .mtt-v3-step-circle {
+  background:var(--rm-blue-bg); border-color:var(--rm-teal-dark); color:var(--rm-teal-dark);
+  box-shadow:0 0 0 3px rgba(0,106,142,.15);
+}
+.mtt-v3-step-lbl { font-size:12px; color:var(--rm-t3); font-weight:500; line-height:1.3; }
+.mtt-v3-proses-step.done .mtt-v3-step-lbl { color:var(--rm-green); font-weight:600; }
+.mtt-v3-proses-step.aktif .mtt-v3-step-lbl { color:var(--rm-teal-dark); font-weight:700; font-size:12.5px; }
+.mtt-v3-step-tarih { font-size:11px; color:var(--rm-t4); margin-top:2px; font-weight:400; }
+@media (max-width:1200px) {
+  .mtt-v3-layout { grid-template-columns:1fr 280px; }
+  .mtt-v3-talep-meta { grid-template-columns:repeat(2,1fr); }
+}
+@media (max-width:900px) {
+  .mtt-v3-layout { grid-template-columns:1fr; }
+  .mtt-v3-ozet-cols { grid-template-columns:repeat(2,1fr); }
+}
+
+/* override detay-kart padding to use v3 */
+.mtt-detay-kart { padding:0; }
+.mtt-detay-kart > .pzm-kart-hdr { padding:10px 18px; font-size:11px; letter-spacing:.4px; }
 .mtt-hero {
   display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:6px 10px;
   font-size:12px; padding:8px 10px; background:var(--rm-bg2); border:1px solid var(--rm-border);
@@ -832,6 +1182,53 @@ button.rm-page-geri { appearance:none; }
   background:rgba(255,255,255,.96); border-top:1px solid var(--rm-border);
   box-shadow:0 -4px 12px rgba(15,23,42,.06);
 }
+.mtt-sticky-aksiyon-top {
+  top:0; bottom:auto; margin-top:0; margin-bottom:6px;
+  border-top:0; border-bottom:1px solid var(--rm-border);
+  box-shadow:0 4px 12px rgba(15,23,42,.06);
+}
+.mtt-sticky-aksiyon-hint { width:100%; font-size:11px; color:var(--rm-t3); font-weight:600; }
+.mtt-ozet-hdr {
+  display:grid; gap:8px; padding:10px 12px;
+  background:var(--rm-white); border:1px solid var(--rm-border); border-radius:8px;
+}
+.mtt-ozet-hdr-row1 { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+.mtt-ozet-hdr-row2 {
+  display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px 10px; font-size:12px;
+}
+.mtt-ozet-hdr-row2 label { display:block; font-size:9px; color:var(--rm-t3); font-weight:700; text-transform:uppercase; margin-bottom:1px; }
+.mtt-ozet-hdr-row2 > div > div { font-weight:600; color:var(--rm-t1); word-break:break-word; }
+.mtt-badge-tur { background:var(--rm-blue-bg); color:var(--rm-teal-dark); }
+.mtt-badge-onay { background:var(--rm-green-bg); color:var(--rm-green); }
+.mtt-badge-onay-red {
+  background:#fef2f2; color:#b91c1c;
+  border:1px solid rgba(185,28,28,.25);
+  font-weight:600;
+}
+.mtt-badge-onay-green {
+  background:var(--rm-green-bg); color:var(--rm-green);
+  border:1px solid rgba(22,163,74,.3);
+  font-weight:600;
+}
+.mtt-badge-onay-bek { background:var(--rm-yellow-bg); color:var(--rm-yellow); }
+.mtt-badge-acil {
+  background:var(--rm-red-bg); color:var(--rm-red);
+  border:1px solid rgba(220,38,38,.25);
+  font-weight:700; text-transform:uppercase;
+}
+.mtt-timeline-compact { display:flex; flex-wrap:wrap; gap:4px; align-items:center; font-size:11px; color:var(--rm-t3); }
+.mtt-timeline-compact .mtt-tl-aktif { color:var(--rm-teal-dark); font-weight:800; }
+.mtt-timeline-more { margin-top:4px; font-size:11px; color:var(--rm-t3); }
+.mtt-timeline-more summary { cursor:pointer; font-weight:600; color:var(--rm-t2); }
+.mtt-teknik-ozet {
+  background:var(--rm-yellow-bg); border:1px solid #fde68a; color:#92400e;
+  padding:8px 10px; border-radius:8px; font-size:12px;
+}
+.mtt-teknik-ozet ul { margin:4px 0 0 16px; padding:0; }
+.mtt-meta-collapse { font-size:11px; color:var(--rm-t3); margin-top:4px; }
+.mtt-meta-collapse summary { cursor:pointer; font-weight:600; }
+.mtt-ticari-bos { font-size:12px; color:var(--rm-t3); font-style:italic; }
+@media (max-width:900px){ .mtt-ozet-hdr-row2 { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 .mtt-disabled-hint { width:100%; font-size:11px; color:var(--rm-t3); }
 .mtt-bekleniyor { font-size:12px; font-weight:700; color:#be185d; }
 .mtt-uyari { background:#fff7ed; border:1px solid #fdba74; color:#9a3412; padding:8px 10px; border-radius:8px; font-size:12px; font-weight:600; }
@@ -3014,7 +3411,46 @@ window.pzmOnayaGonder = function(tid) {
 };
 
 /* ────────────── Ekran Geçişi ────────────── */
-window.pzmEkranGec = function(ekran) {
+/* ── CPS NAV HISTORY: URL ↔ ekran state sync ── */
+var _pzmNavSuppressHistory = false; // popstate restore sırasında tekrar push yapılmasın
+
+function _pzmNavBuildUrl(ekran, id) {
+  var u = new URL(window.location.href);
+  u.searchParams.delete('ekran');
+  u.searchParams.delete('mtt');
+  u.searchParams.delete('siparis');
+  u.searchParams.delete('talep');
+  if (ekran === 'mtt-detay' && id) {
+    u.searchParams.set('ekran', 'mtt-detay');
+    u.searchParams.set('mtt', String(id));
+  } else if (ekran === 'detay' && id) {
+    u.searchParams.set('siparis', String(id));
+  } else if (ekran === 'mtt') {
+    u.searchParams.set('ekran', 'mtt');
+  } else if (ekran === 'yeni') {
+    u.searchParams.set('ekran', 'yeni');
+  }
+  // 'liste' = clean URL (varsayılan)
+  return u.pathname + (u.search !== '?' ? u.search : '');
+}
+
+function _pzmNavPush(ekran, id) {
+  if (_pzmNavSuppressHistory) return;
+  var url = _pzmNavBuildUrl(ekran, id);
+  var state = { ekran: ekran, id: id || null };
+  var cur = history.state;
+  // replaceState: sadece birebir aynı state için (double-click vs)
+  // pushState: her farklı ekran/id için yeni history entry
+  if (cur && cur.ekran === ekran && cur.id === (id || null)) {
+    history.replaceState(state, '', url);
+  } else {
+    history.pushState(state, '', url);
+  }
+  // URL'yi her zaman güncelle (async çağrılar sonrası)
+  // Not: pushState zaten URL'yi günceller; bu satır güvenlik için
+}
+
+window.pzmEkranGec = function(ekran, _noHistory) {
   var onceki = _pzmAktifEkran;
   ['liste','yeni','detay','mtt','mtt-detay'].forEach(function(e) {
     var el = $id('ekran-' + e);
@@ -3031,6 +3467,10 @@ window.pzmEkranGec = function(ekran) {
     mttKuyrukOkundu().then(function(){ mttListeYukle({ kuyrukOkundu: true }); });
   }
   if (ekran !== 'yeni') pzmMttBannerGizle();
+  // history push — liste veya panel geçişlerinde yaz (yeni form hariç)
+  if (!_noHistory && ekran !== 'mtt-detay') {
+    _pzmNavPush(ekran, ekran === 'detay' ? (_pzmDetayAktifId || null) : null);
+  }
 };
 
 /* ────────────── EKRAN 1: Siparişler Listesi ────────────── */
@@ -5457,13 +5897,14 @@ function pzmMttDetayReopenCanonicalHydrate(t) {
   return true;
 }
 
-window.pzmDetayAc = function(id) {
+window.pzmDetayAc = function(id, _noHistory) {
   var t = pzmTalepBul(id);
   if (!t) return;
   pzmMttDetayReopenCanonicalHydrate(t);
   _pzmDetayAktifId = id;
   pzmDetayRender(t);
-  pzmEkranGec('detay');
+  pzmEkranGec('detay', true); // ekran geçişi; history burada yönetiliyor
+  if (!_noHistory) _pzmNavPush('detay', id);
 };
 
 /** UX V2: Detay açıp ilgili panele odaklan (eski stage no → yeni panel). */
@@ -7571,20 +8012,25 @@ window.mttListeYukle = function(opts) {
     .catch(function(){ alert('Bağlantı hatası'); });
 };
 
-window.mttDetayAc = function(id) {
+window.mttDetayAc = function(id, _noHistory) {
   _mttAktifId = id;
-  fetch('/nexgen/api/musteri-temsilcisi-talep/' + id, { credentials: 'same-origin' })
+  fetch('/nexgen/api/musteri-temsilcisi-talep/' + id + '?_=' + Date.now(), { credentials: 'same-origin' })
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (!d || !d.ok) { alert((d && d.mesaj) || 'Detay yüklenemedi'); return; }
       mttDetayRender(d.kayit);
-      pzmEkranGec('mtt-detay');
+      pzmEkranGec('mtt-detay', true);
+      if (!_noHistory && !_pzmNavSuppressHistory) {
+        // Her zaman pushState: fetch async tamamlandığında önceki state farklı olabilir
+        var url = _pzmNavBuildUrl('mtt-detay', id);
+        history.pushState({ ekran: 'mtt-detay', id: id }, '', url);
+      }
     })
     .catch(function(){ alert('Bağlantı hatası'); });
 };
 
 window.mttFiyatGoster = function(fiyat, para) {
-  if (fiyat == null || fiyat === '') return '—';
+  if (fiyat == null || fiyat === '') return '';
   var n = Number(fiyat);
   var s = isNaN(n) ? String(fiyat) : String(n).replace('.', ',');
   var pb = (para || '').toString().trim().toUpperCase();
@@ -7592,241 +8038,453 @@ window.mttFiyatGoster = function(fiyat, para) {
   return pb ? (s + ' ' + pb + '/kg') : (s + ' /kg');
 };
 
+window.mttYonetimOnayli = function(t) {
+  return (t.onay_durum === 'ONAYLANDI') ||
+    ['YENI', 'ISLEME_ALINDI', 'KISMEN_NUMUNEYE_DONUSTU', 'SIPARISE_DONUSTU', 'NUMUNEYE_DONUSTU'].indexOf(t.durum) >= 0 ||
+    (t.durum && t.durum !== 'ONAY_BEKLIYOR' && t.durum !== 'REDDEDILDI' && t.durum !== 'IPTAL' && t.onay_durum !== 'REDDEDILDI');
+};
+
+window.mttTeknikEksikListe = function(t, kalemler) {
+  kalemler = kalemler || [];
+  var isNumune = t.talep_turu === 'NUMUNE';
+  var seen = {};
+  var out = [];
+  function add(label) {
+    if (!label || seen[label]) return;
+    seen[label] = true;
+    out.push(label);
+  }
+  if (t.teknik_eksik_alanlar && t.teknik_eksik_alanlar.length) {
+    t.teknik_eksik_alanlar.forEach(add);
+    return out;
+  }
+  kalemler.forEach(function(k) {
+    if (!k.urun_ailesi) add('Ürün ailesi');
+    if (isNumune) {
+      add('Ana formül / karşılama yolu');
+      if (!k.renk_id) add('Renk kaydı seçimi');
+      add('Numune tipi');
+      add('Termin / öncelik');
+      if (!k.miktar_kg && !k.konusulan_tonaj) add('Kesin miktar');
+    } else {
+      add('Ana formül');
+      add('EVA formülü');
+      if (!k.renk_id) add('Renk kaydı seçimi');
+      add('Boyut / varyant');
+      add('Termin');
+      if (!k.miktar_kg && !k.konusulan_tonaj) add('Kesin miktar');
+    }
+  });
+  if (!kalemler.length) {
+    add(isNumune ? 'Numune teknik alanları' : 'Sipariş teknik alanları');
+  }
+  return out;
+};
+
+window.mttTicariSatirlar = function(t) {
+  var rows = [];
+  function push(label, val) {
+    if (val == null || val === '') return;
+    rows.push({ label: label, value: val });
+  }
+  var fiyat = mttFiyatGoster(t.verilen_fiyat, t.para_birimi);
+  if (fiyat) push('Verilen Fiyat', fiyat);
+  push('Para Birimi', t.para_birimi);
+  if (t.verilen_fiyat != null && t.verilen_fiyat !== '') push('Fiyat Birimi', 'KG');
+  push('Ödeme Tipi', t.odeme_tipi);
+  if (t.vade_gun != null) push('Vade Günü', String(t.vade_gun) + ' gün');
+  if (t.cek_vade_gun != null) push('Çek Vadesi', String(t.cek_vade_gun) + ' gün');
+  if (t.konusulan_tonaj != null && t.konusulan_tonaj !== '') {
+    push('Konuşulan Tonaj', String(t.konusulan_tonaj).replace('.', ',') + ' ton');
+  }
+  return rows;
+};
+
+window.mttNumuneTicariNot = function(t) {
+  var rows = mttTicariSatirlar(t);
+  if (!rows.length) return '';
+  var inner = rows.map(function(r) {
+    return '<div><label>' + mttEsc(r.label) + '</label><div>' + mttEsc(r.value) + '</div></div>';
+  }).join('');
+  return '<details class="mtt-meta-collapse">' +
+    '<summary>Ticari Not</summary>' +
+    '<div class="mtt-grid" style="margin-top:6px;">' + inner + '</div>' +
+    '</details>';
+};
+
+window.mttBuildAksiyonBand = function(t) {
+  var html = '';
+  var hint = '';
+
+  if (t.durum === 'ONAY_BEKLIYOR') {
+    hint = 'Yönetim onayı bekleniyor.';
+    return hint ? ('<span class="mtt-sticky-aksiyon-hint">' + mttEsc(hint) + '</span>') : '';
+  }
+
+  if (t.durum === 'YENI') {
+    html =
+      '<button type="button" class="pzm-btn pzm-btn-lacivert" onclick="mttIsle(' + t.id + ')">İşleme Al</button>' +
+      '<button type="button" class="pzm-btn pzm-btn-red-outline" onclick="mttReddet(' + t.id + ')">Reddet</button>';
+    return html;
+  }
+
+  if (t.durum === 'ISLEME_ALINDI') {
+    var isSiparis = t.talep_turu === 'SIPARIS';
+    var sipOk = isSiparis && !t.aday_siparis_uyari;
+    var numOk = t.talep_turu === 'NUMUNE';
+    if (isSiparis) {
+      html += sipOk
+        ? '<button type="button" class="pzm-btn pzm-btn-lacivert" onclick="mttSipariseDonustur(' + t.id + ')">Siparişe Dönüştür</button>'
+        : '<button type="button" class="pzm-btn pzm-btn-outline" disabled title="' +
+          mttEsc(t.aday_siparis_uyari
+            ? 'Bu firma henüz aday müşteridir. Sipariş açmadan önce cariye dönüştürülmelidir.'
+            : 'Yalnız işleme alınmış SIPARIS taleplerinde aktif.') +
+          '">Siparişe Dönüştür</button>';
+    } else if (t.talep_turu === 'NUMUNE') {
+      html += numOk
+        ? '<button type="button" class="pzm-btn pzm-btn-lacivert" onclick="mttNumuneyeDonustur(' + t.id + ')">Numuneye Dönüştür</button>'
+        : '<button type="button" class="pzm-btn pzm-btn-outline" disabled>Numuneye Dönüştür</button>';
+    }
+    html += '<button type="button" class="pzm-btn pzm-btn-red-outline" onclick="mttReddet(' + t.id + ')">Reddet</button>';
+    return html;
+  }
+
+  if (t.durum === 'KISMEN_NUMUNEYE_DONUSTU') {
+    return '<button type="button" class="pzm-btn pzm-btn-lacivert" onclick="mttNumuneyeDonustur(' + t.id + ')">Kalan Kalemleri Dönüştür</button>';
+  }
+
+  if (t.durum === 'EKSIK_BILGI') {
+    return '<span class="mtt-bekleniyor">Eski kayıt — eksik bilgi bekliyordu</span>';
+  }
+
+  return '';
+};
+
+window.mttTimelineHtml = function(t) {
+  var tlAdim = 'gorusme';
+  if (t.durum === 'ONAY_BEKLIYOR') tlAdim = 'yonetim';
+  else if (t.durum === 'YENI' || t.durum === 'ISLEME_ALINDI') tlAdim = 'mehmet';
+  else if (t.durum === 'SIPARISE_DONUSTU' || t.durum === 'NUMUNEYE_DONUSTU' || t.durum === 'KISMEN_NUMUNEYE_DONUSTU') tlAdim = 'siparis';
+  else if (t.gorusme_id) tlAdim = 'mtt';
+
+  var compactSteps = ['Görüşme', 'MTT', 'Yönetim Onayı', 'Mehmet'];
+  var compactKeys = ['gorusme', 'mtt', 'yonetim', 'mehmet'];
+  var moreSteps = ['Sipariş', 'Üretim', 'Sevkiyat', 'Finans'];
+  var moreKeys = ['siparis', 'uretim', 'sevkiyat', 'finans'];
+  var allKeys = compactKeys.concat(moreKeys);
+  var aktifIdx = Math.max(0, allKeys.indexOf(tlAdim));
+
+  var compactHtml = '<div class="mtt-timeline-compact">' + compactSteps.map(function(lbl, i) {
+    return (i ? '<span class="mtt-tl-sep">→</span>' : '') +
+      '<span class="' + (i === aktifIdx ? 'mtt-tl-aktif' : '') + '">' + mttEsc(lbl) + '</span>';
+  }).join('') + '</div>';
+
+  var showMoreOpen = aktifIdx >= compactKeys.length;
+  var moreInner = moreSteps.map(function(lbl, i) {
+    var idx = compactKeys.length + i;
+    return (i ? '<span class="mtt-tl-sep">→</span>' : '') +
+      '<span class="' + (idx === aktifIdx ? 'mtt-tl-aktif' : '') + '">' + mttEsc(lbl) + '</span>';
+  }).join('');
+
+  return compactHtml +
+    '<details class="mtt-timeline-more"' + (showMoreOpen ? ' open' : '') + '>' +
+      '<summary>Sonraki adımlar</summary>' +
+      '<div class="mtt-timeline-compact">' + moreInner + '</div>' +
+    '</details>';
+};
+
 window.mttDetayRender = function mttDetayRender(t) {
+  /* mtt-ia-shell-v2 mtt-v3 — tek detail renderer, tüm durumlar */
   var noEl = $id('mtt-detay-no');
   if (noEl) noEl.textContent = t.talep_no || ('#' + t.id);
   var turLbl = $id('mtt-detay-tur-lbl');
   if (turLbl) turLbl.textContent = t.tur_etiket || (t.talep_turu === 'NUMUNE' ? 'Numune Talebi' : 'Sipariş Talebi');
 
   var firma = t.firma_adi || '—';
-  var cariEtiket = t.entity_type === 'ADAY' ? 'Aday' : 'Cari';
   var kalemler = t.kalemler || [];
-  var k0 = kalemler[0] || {};
-  var heroAile = k0.urun_ailesi_etiket || k0.urun_ailesi || '—';
-  var heroRenk = k0.renk_gosterim || k0.renk_aciklama || 'Belirtilmedi';
-  var heroMik = k0.miktar_gosterim || '—';
-  var heroFiyat = mttFiyatGoster(
-    k0.verilen_fiyat != null ? k0.verilen_fiyat : t.verilen_fiyat,
-    t.para_birimi
-  );
-  var yonetimOnayli = (t.onay_durum === 'ONAYLANDI') ||
-    ['YENI','ISLEME_ALINDI','KISMEN_NUMUNEYE_DONUSTU','SIPARISE_DONUSTU','NUMUNEYE_DONUSTU'].indexOf(t.durum) >= 0 ||
-    (t.durum && t.durum !== 'ONAY_BEKLIYOR' && t.durum !== 'REDDEDILDI' && t.durum !== 'IPTAL' && t.onay_durum !== 'REDDEDILDI');
-  var tlAdim = 'gorusme';
-  if (t.durum === 'ONAY_BEKLIYOR') tlAdim = 'yonetim';
-  else if (t.durum === 'YENI' || t.durum === 'ISLEME_ALINDI') tlAdim = 'mehmet';
-  else if (t.durum === 'SIPARISE_DONUSTU' || t.durum === 'NUMUNEYE_DONUSTU' || t.durum === 'KISMEN_NUMUNEYE_DONUSTU') tlAdim = 'siparis';
-  else if (t.gorusme_id) tlAdim = 'mtt';
-  var tlSteps = ['Görüşme','MTT','Yönetim Onayı','Mehmet','Sipariş','Üretim','Sevkiyat','Finans'];
-  var tlKeys = ['gorusme','mtt','yonetim','mehmet','siparis','uretim','sevkiyat','finans'];
-  var tlAktifIdx = Math.max(0, tlKeys.indexOf(tlAdim));
-  var tlHtml = '<div class="mtt-timeline">' + tlSteps.map(function(lbl, i){
-    return (i ? '<span class="mtt-tl-sep">→</span>' : '') +
-      '<span class="' + (i === tlAktifIdx ? 'mtt-tl-aktif' : '') + '">' + mttEsc(lbl) + '</span>';
-  }).join('') + '</div>';
+  var isSiparis = t.talep_turu === 'SIPARIS';
+  var isNumune = t.talep_turu === 'NUMUNE';
+  var yonetimOnayli = mttYonetimOnayli(t);
+  var termin = t.istenen_termin || 'Belirtilmedi';
+  var toplamMiktar = t.toplam_miktar_ozet || '—';
+  var teknikEksik = mttTeknikEksikListe(t, kalemler);
 
-  var kalHtml = kalemler.length ? kalemler.map(function(k){
+  // ── Raw note cleaner: KDV:RESMI|oran:... machine metadata'yı gizle ──
+  function mttCleanNote(val) {
+    if (!val) return '';
+    var s = val;
+    s = s.replace(/\s*\|\s*KDV:[A-Z0-9]+\|[\s\S]*$/i, '');
+    s = s.replace(/^(?:Sipari\u015f|Numune) talebi\s*\|[\s\S]*$/i, '');
+    return s.trim();
+  }
+
+  // ── Üst özet kart ──
+  var onayBadge = yonetimOnayli
+    ? '<span class="mtt-chip mtt-badge-onay-green">\u2713 Y\u00f6netim Onayl\u0131</span>'
+    : (t.durum === 'ONAY_BEKLIYOR'
+      ? '<span class="mtt-chip mtt-badge-onay-bek">Onay Bekliyor</span>'
+      : '');
+  var _onc = (t.oncelik || '').toUpperCase();
+  var acilBadge = (_onc === 'ACIL' || _onc === 'KRITIK')
+    ? '<span class="mtt-chip mtt-badge-acil">' + mttEsc(t.oncelik) + '</span>'
+    : '';
+  var metaCollapse = '<details class="mtt-meta-collapse" style="margin-top:10px;">' +
+    '<summary>Teknik referanslar</summary>' +
+    '<div class="mtt-grid" style="margin-top:6px;">' +
+      '<div><label>Cari / Aday</label><div>' + mttEsc(t.entity_type === 'ADAY' ? 'Aday' : 'Cari') +
+        (t.cari_id ? ' \u00b7 #' + mttEsc(t.cari_id) : '') + (t.musteri_aday_id ? ' \u00b7 Aday #' + mttEsc(t.musteri_aday_id) : '') + '</div></div>' +
+      '<div><label>Kaynak G\u00f6r\u00fc\u015fme</label><div>#' + mttEsc(t.gorusme_id || '\u2014') +
+        (t.gorusme_tarihi ? ' \u00b7 ' + mttEsc(String(t.gorusme_tarihi).slice(0, 16)) : '') + '</div></div>' +
+      (t.onay_no ? ('<div><label>Onay No</label><div>' + mttEsc(t.onay_no) + '</div></div>') : '') +
+      (t.isleme_alinma_tarihi ? ('<div><label>\u0130\u015fleme Alma</label><div>' + mttEsc(t.isleme_alinma_tarihi) + '</div></div>') : '') +
+    '</div></details>';
+
+  var ozetHdr =
+    '<div class="mtt-v3-ozet-kart">' +
+      '<div class="mtt-v3-ozet-badges">' +
+        '<span class="pzm-sip-no" style="font-size:16px;font-weight:600;">' + mttEsc(t.talep_no || ('#' + t.id)) + '</span>' +
+        '<span class="mtt-chip mtt-badge-tur" style="font-size:14px;font-weight:600;padding:3px 10px;">' + mttEsc(t.tur_etiket || t.talep_turu) + '</span>' +
+        mttDurumBadge(t.durum) + acilBadge + onayBadge +
+      '</div>' +
+      '<div class="mtt-v3-ozet-cols">' +
+        '<div class="mtt-v3-ozet-col"><label>M\u00fc\u015fteri</label>' +
+          '<div class="val">' + mttEsc(firma) + '</div>' +
+          (t.cari_id ? '<div class="sub">Cari \u00b7 #' + mttEsc(t.cari_id) + '</div>' : '') + '</div>' +
+        '<div class="mtt-v3-ozet-col"><label>Pazarlamac\u0131</label><div class="val">' + mttEsc(t.pazarlamaci_adi || '\u2014') + '</div></div>' +
+        '<div class="mtt-v3-ozet-col"><label>Atanan</label>' +
+          '<div class="val">' + mttEsc(t.atanan_adi || '\u2014') + '</div>' +
+          (!t.atanan_adi ? '<div class="sub" style="color:var(--rm-orange);">\u0130\u015fleme alma bekliyor</div>' : '') + '</div>' +
+        '<div class="mtt-v3-ozet-col"><label>Bekleme S\u00fcresi</label>' +
+          '<div class="bekleme-val">' + mttEsc(t.bekleme || '\u2014') + '</div>' +
+          (t.created_at ? '<div class="sub">' + mttEsc(String(t.created_at).slice(0,10)) + "\'dan beri</div>" : '') + '</div>' +
+      '</div>' +
+      metaCollapse +
+    '</div>';
+
+  // ── M\u00fc\u015fteri Talebi kart ──
+  var ilkKalem = kalemler[0] || {};
+  var urunOzet = (ilkKalem.urun_ailesi_etiket || ilkKalem.urun_ailesi || '');
+  if (ilkKalem.renk_gosterim || ilkKalem.renk_aciklama) urunOzet += (urunOzet ? ' \u2014 ' : '') + (ilkKalem.renk_gosterim || ilkKalem.renk_aciklama);
+  var istenenUrun = t.istenen_urun || urunOzet || '\u2014';
+  // UI-only dedup: remove consecutive repeated tokens split by · or —
+  (function() {
+    var raw = istenenUrun;
+    // split on · and — separators, normalize, remove adjacent duplicates
+    var parts = raw.split(/\s*[\u00b7\u2014]\s*/);
+    var seen = [], deduped = [];
+    parts.forEach(function(p) {
+      var key = p.trim().toLowerCase();
+      if (!seen.length || seen[seen.length - 1] !== key) {
+        seen.push(key);
+        deduped.push(p.trim());
+      }
+    });
+    // rebuild: first part — rest joined by ·
+    if (deduped.length > 1) {
+      istenenUrun = deduped[0] + ' \u2014 ' + deduped.slice(1).join(' \u00b7 ');
+    } else {
+      istenenUrun = deduped[0] || raw;
+    }
+  })();
+  if (kalemler.length > 1) istenenUrun += ' + ' + (kalemler.length - 1) + ' kalem';
+  var terminClass = termin === 'Belirtilmedi' ? '' : ' termin';
+  var acilClass = (_onc === 'ACIL' || _onc === 'KRITIK') ? ' acil' : '';
+
+  var seenNot = {};
+  function notBlok(lbl, val) {
+    var clean = mttCleanNote(val);
+    if (!clean || seenNot[clean]) return '';
+    seenNot[clean] = true;
+    return '<div class="mtt-v3-not-blok"><label>' + lbl + '</label><div class="mtt-v3-not-val">' + mttEsc(clean) + '</div></div>';
+  }
+  var notlarHtml = '';
+  notlarHtml += notBlok('G\u00f6r\u00fc\u015fme Notu', t.gorusme_notu);
+  notlarHtml += notBlok('Pazarlamac\u0131n\u0131n Mehmet\'e Notu', t.aciklama);
+  notlarHtml += notBlok(isNumune ? 'M\u00fc\u015fteri Amac\u0131 / Notu' : 'M\u00fc\u015fteri Notu', t.musteri_notu);
+  if (t.red_nedeni) notlarHtml += '<div class="mtt-v3-not-blok"><label>Red Nedeni</label><div class="mtt-v3-not-val red-not">' + mttEsc(t.red_nedeni) + '</div></div>';
+
+  var musteriTalep =
+    '<div class="mtt-v3-talep-kart">' +
+      '<div class="mtt-v3-talep-hdr">M\u00dc\u015eTER\u0130 TALEB\u0130</div>' +
+      '<div class="mtt-v3-talep-ne">' +
+        '<div class="mtt-v3-talep-ne-lbl">Ne \u0130stiyor?</div>' +
+        '<div class="mtt-v3-talep-ne-val">' + mttEsc(istenenUrun) + '</div>' +
+      '</div>' +
+      '<div class="mtt-v3-talep-meta">' +
+        '<div class="mtt-v3-talep-meta-item"><label>Talep Edilen Miktar</label><div class="val">' + mttEsc(toplamMiktar) + '</div></div>' +
+        '<div class="mtt-v3-talep-meta-item"><label>Termin</label><div class="val' + terminClass + '">' + mttEsc(termin) + '</div></div>' +
+        (t.teslim_sekli_etiket
+          ? '<div class="mtt-v3-talep-meta-item"><label>Teslim \u015eekli</label><div class="val">' + mttEsc(t.teslim_sekli_etiket) + '</div></div>'
+          : (t.karsilama_yolu
+            ? '<div class="mtt-v3-talep-meta-item"><label>Kar\u015f\u0131lama</label><div class="val">' + mttEsc(t.karsilama_yolu) + '</div></div>'
+            : '<div class="mtt-v3-talep-meta-item"></div>')) +
+        '<div class="mtt-v3-talep-meta-item"><label>\u00d6ncelik</label><div class="val' + acilClass + '">' + mttEsc(t.oncelik || 'NORMAL') + '</div></div>' +
+      '</div>' +
+      (notlarHtml ? '<div class="mtt-v3-talep-notlar">' + notlarHtml + '</div>' : '') +
+    '</div>';
+
+  // ── \u00dcr\u00fcn kalemleri kart ──
+  var kalemHead = '<th>#</th><th>\u00dcr\u00fcn T\u00fcr\u00fc</th><th>\u00dcr\u00fcn / Malzeme</th><th>Renk</th><th>Miktar / Tonaj</th>';
+  if (isSiparis) kalemHead += '<th>Verilen Fiyat</th>';
+  kalemHead += '<th>Not</th><th>D\u00f6n\u00fc\u015f\u00fcm Durumu</th>';
+  var colSpan = isSiparis ? 8 : 7;
+  var kalHtml = kalemler.length ? kalemler.map(function(k) {
     var dd = k.donusturme_durumu || 'BEKLIYOR';
     var donHtml = mttEsc(k.donusturme_durumu_etiket || dd);
     if (k.donusturulen_numune_talep_id) {
-      donHtml += ' · <a href="/nexgen/numune-talep?id=' + encodeURIComponent(k.donusturulen_numune_talep_id) + '">' +
+      donHtml += ' \u00b7 <a href="/nexgen/numune-talep?id=' + encodeURIComponent(k.donusturulen_numune_talep_id) + '">' +
         mttEsc(k.numune_talep_kodu || ('#' + k.donusturulen_numune_talep_id)) + '</a>';
-    } else if (t.donusturulen_siparis_id && t.talep_turu === 'SIPARIS' && t.durum === 'SIPARISE_DONUSTU') {
-      donHtml = 'Siparişe dönüştü · <a href="/nexgen/pazarlama-merkezi?siparis=' +
+    } else if (t.donusturulen_siparis_id && isSiparis && t.durum === 'SIPARISE_DONUSTU') {
+      donHtml = 'Sipari\u015fe d\u00f6n\u00fc\u015ft\u00fc \u00b7 <a href="/nexgen/pazarlama-merkezi?siparis=' +
         encodeURIComponent(t.donusturulen_siparis_id) + '">#' + mttEsc(t.donusturulen_siparis_id) + '</a>';
     }
-    var fiyat = mttFiyatGoster(k.verilen_fiyat != null ? k.verilen_fiyat : t.verilen_fiyat, t.para_birimi);
+    var fiyatTd = isSiparis
+      ? ('<td>' + mttEsc(mttFiyatGoster(k.verilen_fiyat != null ? k.verilen_fiyat : t.verilen_fiyat, t.para_birimi)) + '</td>')
+      : '';
     return '<tr>' +
       '<td>' + mttEsc(k.sira_no) + '</td>' +
-      '<td><strong>' + mttEsc(k.urun_ailesi_etiket || k.urun_ailesi || '—') + '</strong></td>' +
-      '<td>' + mttEsc(k.urun_aciklama || '—') + '</td>' +
+      '<td><strong>' + mttEsc(k.urun_ailesi_etiket || k.urun_ailesi || '\u2014') + '</strong></td>' +
+      '<td>' + mttEsc(k.urun_aciklama || '\u2014') + '</td>' +
       '<td>' + mttEsc(k.renk_gosterim || k.renk_aciklama || 'Belirtilmedi') + '</td>' +
-      '<td>' + mttEsc(k.miktar_gosterim || '—') + '</td>' +
-      '<td>' + mttEsc(fiyat) + '</td>' +
-      '<td>' + mttEsc(t.para_birimi || '—') + '</td>' +
-      '<td>' + mttEsc(k.kalem_notu || '—') + '</td>' +
-      '<td>' + mttEsc(k.teknik_durum || '—') + '</td>' +
+      '<td>' + mttEsc(k.miktar_gosterim || '\u2014') + '</td>' +
+      fiyatTd +
+      '<td>' + mttEsc(k.kalem_notu || '\u2014') + '</td>' +
       '<td>' + donHtml + '</td>' +
       '</tr>';
-  }).join('') : '<tr><td colspan="10">Kalem yok</td></tr>';
-
-  var aksiyon = '';
-  if (t.durum === 'YENI') {
-    aksiyon =
-      '<button type="button" class="pzm-btn pzm-btn-lacivert" onclick="mttIsle(' + t.id + ')">İşleme Al</button>' +
-      '<button type="button" class="pzm-btn pzm-btn-red-outline" onclick="mttReddet(' + t.id + ')">Reddet</button>';
-  } else if (t.durum === 'ISLEME_ALINDI') {
-    aksiyon =
-      '<button type="button" class="pzm-btn pzm-btn-red-outline" onclick="mttReddet(' + t.id + ')">Reddet</button>';
-  } else if (t.durum === 'EKSIK_BILGI') {
-    aksiyon = '<span class="mtt-bekleniyor">Eski kayıt — eksik bilgi bekliyordu</span>';
-  } else if (t.durum === 'KISMEN_NUMUNEYE_DONUSTU') {
-    aksiyon =
-      '<button type="button" class="pzm-btn pzm-btn-lacivert" onclick="mttNumuneyeDonustur(' + t.id + ')">Kalan Kalemleri Dönüştür</button>';
-  }
-
-  var isIslemde = t.durum === 'ISLEME_ALINDI';
-  var isKismen = t.durum === 'KISMEN_NUMUNEYE_DONUSTU';
-  var sipOk = isIslemde && t.talep_turu === 'SIPARIS' && !t.aday_siparis_uyari;
-  var numOk = (isIslemde || isKismen) && t.talep_turu === 'NUMUNE';
-  var donusum = '';
-  if (t.talep_turu === 'SIPARIS') {
-    donusum = sipOk
-      ? '<button type="button" class="pzm-btn pzm-btn-lacivert" onclick="mttSipariseDonustur(' + t.id + ')">Siparişe Dönüştür</button>'
-      : '<button type="button" class="pzm-btn pzm-btn-outline" disabled title="' +
-        mttEsc(t.aday_siparis_uyari
-          ? 'Bu firma henüz aday müşteridir. Sipariş açmadan önce cariye dönüştürülmelidir.'
-          : 'Yalnız işleme alınmış SIPARIS taleplerinde aktif.') +
-        '">Siparişe Dönüştür</button>';
-  } else if (t.talep_turu === 'NUMUNE') {
-    donusum = numOk
-      ? '<button type="button" class="pzm-btn pzm-btn-lacivert" onclick="mttNumuneyeDonustur(' + t.id + ')">Numuneye Dönüştür</button>'
-      : '<button type="button" class="pzm-btn pzm-btn-outline" disabled>Numuneye Dönüştür</button>';
-  }
-
-  var uyari = t.aday_siparis_uyari
-    ? '<div class="mtt-uyari">Bu firma henüz aday müşteridir. Sipariş açmadan önce cariye dönüştürülmelidir.</div>'
+  }).join('') : ('<tr><td colspan="' + colSpan + '">Kalem yok</td></tr>');
+  var kalemOzet = kalemler.length > 1 && toplamMiktar !== '\u2014'
+    ? '<div style="padding:8px 18px;font-size:13px;"><strong>Toplam:</strong> ' + mttEsc(toplamMiktar) + ' \u00b7 ' + kalemler.length + ' kalem</div>'
     : '';
+  var urunKalemleri =
+    '<div class="mtt-v3-kalem-kart">' +
+      '<div class="mtt-v3-talep-hdr">\u00dcR\u00dcN / TALEP KALЕМLER\u0130 (' + kalemler.length + ')</div>' +
+      kalemOzet +
+      '<div style="overflow-x:auto;">' +
+      '<table class="pzm-tablo mtt-kalem-tablo"><thead><tr>' + kalemHead + '</tr></thead><tbody>' + kalHtml + '</tbody></table></div>' +
+    '</div>';
 
-  var teknikHtml = kalemler.length ? kalemler.map(function(k){
-    var gelen = [];
-    if (k.urun_ailesi) gelen.push('Ürün türü: ' + (k.urun_ailesi_etiket || k.urun_ailesi));
-    if (k.renk_gosterim || k.renk_aciklama) gelen.push('Renk: ' + (k.renk_gosterim || k.renk_aciklama));
-    if (k.miktar_gosterim && k.miktar_gosterim !== '—') gelen.push('Miktar: ' + k.miktar_gosterim);
-    var eksik = [];
-    if (t.talep_turu === 'NUMUNE') {
-      if (!k.urun_ailesi) eksik.push('Ürün ailesi');
-      eksik.push('Ana formül / karşılama yolu');
-      if (!k.renk_id) eksik.push('Renk kaydı seçimi');
-      eksik.push('Numune tipi', 'Termin / öncelik');
-      if (!k.miktar_kg && !k.konusulan_tonaj) eksik.push('Kesin miktar');
-    } else {
-      if (!k.urun_ailesi) eksik.push('Ürün ailesi');
-      eksik.push('Ana formül', 'EVA formülü');
-      if (!k.renk_id) eksik.push('Renk kaydı seçimi');
-      eksik.push('Boyut / varyant', 'Termin');
-      if (!k.miktar_kg && !k.konusulan_tonaj) eksik.push('Kesin miktar');
-    }
-    return '<div class="mtt-teknik-satir"><strong>#' + mttEsc(k.sira_no) + '</strong> · ' +
-      mttEsc(k.urun_aciklama || '—') +
-      '<div style="color:var(--rm-t3);margin-top:2px;">Pazarlamacıdan: ' + mttEsc(gelen.join(' · ') || '—') + '</div>' +
-      '<div style="color:#9a3412;margin-top:2px;">Tamamlanacak: ' + mttEsc(eksik.join(', ')) + '</div></div>';
-  }).join('') : '<div class="mtt-not">Kalem yok</div>';
-
-  var sonucHtml = '';
-  if (t.durum === 'SIPARISE_DONUSTU' && t.donusturulen_siparis_id) {
-    sonucHtml =
-      '<div class="pzm-kart mtt-detay-kart">' +
-        '<div class="pzm-kart-hdr">7 · Dönüşüm Sonucu</div>' +
-        '<div class="mtt-grid">' +
-          '<div><label>Sipariş ID</label><div>#' + mttEsc(t.donusturulen_siparis_id) + '</div></div>' +
-          '<div><label>Dönüşüm</label><div>' + mttEsc(t.donusturulme_tarihi || '—') + '</div></div>' +
-        '</div>' +
-        '<div class="mtt-aksiyon-band">' +
-          '<a class="pzm-btn pzm-btn-lacivert" href="/nexgen/pazarlama-merkezi?siparis=' +
-            encodeURIComponent(t.donusturulen_siparis_id) + '">Siparişi Aç</a>' +
+  // ── Ticari bilgiler kart (SIPARIS only) — tek satır, dinamik grid ──
+  var ticariHtml = '';
+  if (isSiparis) {
+    var ticariRows = mttTicariSatirlar(t);
+    if (ticariRows.length) {
+      // Tüm cells aynı satırda: grid-template-columns dinamik
+      var cols = ticariRows.length;
+      var gridStyle = 'grid-template-columns:repeat(' + cols + ',1fr);';
+      ticariHtml = '<div class="mtt-v3-ticari-kart">' +
+        '<div class="mtt-v3-ticari-hdr">T\u0130CAR\u0130 B\u0130LG\u0130LER</div>' +
+        '<div class="mtt-v3-ticari-grid" style="' + gridStyle + '">' +
+        ticariRows.map(function(r, ri) {
+          var borderRight = ri === ticariRows.length - 1 ? 'border-right:none;' : '';
+          return '<div class="mtt-v3-ticari-item" style="' + borderRight + '">' +
+            '<label>' + mttEsc(r.label) + '</label>' +
+            '<div class="val">' + mttEsc(r.value) + '</div></div>';
+        }).join('') +
         '</div></div>';
-  } else if (t.durum === 'NUMUNEYE_DONUSTU' || t.durum === 'KISMEN_NUMUNEYE_DONUSTU') {
-    var ozetDon = (t.kalem_donusum_ozet && t.kalem_donusum_ozet.ozet) || '';
-    sonucHtml =
-      '<div class="pzm-kart mtt-detay-kart">' +
-        '<div class="pzm-kart-hdr">7 · Dönüşüm Sonucu</div>' +
-        (ozetDon ? '<div class="mtt-blok"><div class="mtt-not">' + mttEsc(ozetDon) + '</div></div>' : '') +
-        (t.donusturulen_numune_talep_id
-          ? ('<div class="mtt-aksiyon-band">' +
-             '<a class="pzm-btn pzm-btn-lacivert" href="/nexgen/numune-talep?id=' +
-             encodeURIComponent(t.donusturulen_numune_talep_id) + '">İlk Numuneyi Aç</a></div>')
-          : '') +
+    }
+  }
+
+  // ── Sa\u011f: S\u0131radaki Ad\u0131m kart ──
+  var aksiyonBand = mttBuildAksiyonBand(t);
+  var siradakiAciklama = '';
+  if (t.durum === 'YENI') siradakiAciklama = 'Bu talebi sahiplenerek i\u015fleme ba\u015flay\u0131n.';
+  else if (t.durum === 'ISLEME_ALINDI' && isNumune) siradakiAciklama = 'Numune talebini olu\u015fturmaya haz\u0131rs\u0131n\u0131z.';
+  else if (t.durum === 'ISLEME_ALINDI' && isSiparis) siradakiAciklama = 'Sipari\u015fe d\u00f6n\u00fc\u015ft\u00fcrmeye haz\u0131rs\u0131n\u0131z.';
+  else if (t.durum === 'ONAY_BEKLIYOR') siradakiAciklama = 'Y\u00f6netim onay\u0131 bekleniyor, \u015fu an aksiyon al\u0131namaz.';
+  else if (t.durum === 'KISMEN_NUMUNEYE_DONUSTU') siradakiAciklama = 'Kalan kalemleri numuneye d\u00f6n\u00fc\u015ft\u00fcr\u00fcn.';
+  var siradakiHtml =
+    '<div class="mtt-v3-siradaki">' +
+      '<div class="mtt-v3-siradaki-hdr">S\u0131radaki Ad\u0131m</div>' +
+      '<div class="mtt-v3-siradaki-body">' +
+        (siradakiAciklama ? '<div class="mtt-v3-siradaki-aciklama">' + mttEsc(siradakiAciklama) + '</div>' : '') +
+        '<div class="mtt-v3-siradaki-btns">' + (aksiyonBand || '<span class="mtt-disabled-hint">Bu durumda aksiyon yok.</span>') + '</div>' +
+      '</div>' +
+    '</div>';
+
+  // ── Sa\u011f: Teknik eksikler kart ──
+  var teknikSagHtml = '';
+  if (teknikEksik.length) {
+    teknikSagHtml =
+      '<div class="mtt-v3-teknik">' +
+        '<div class="mtt-v3-teknik-lbl">Formda Tamamlanacak Teknik Bilgiler</div>' +
+        '<ul>' + teknikEksik.map(function(x) { return '<li>' + mttEsc(x) + '</li>'; }).join('') + '</ul>' +
+        '<div class="mtt-v3-teknik-aciklama">Bu bilgiler bu ekranda doldurulmaz.</div>' +
       '</div>';
   }
 
+  // ── Sa\u011f: D\u00f6n\u00fc\u015f\u00fcm sonucu kart ──
+  var donusumHtml;
+  if (t.durum === 'SIPARISE_DONUSTU' && t.donusturulen_siparis_id) {
+    donusumHtml = '<div class="mtt-v3-donusum">' +
+      '<div class="mtt-v3-donusum-lbl">D\u00f6n\u00fc\u015f\u00fcm Sonucu</div>' +
+      '<div style="font-size:13px;font-weight:700;margin-bottom:8px;">Sipari\u015f No: #' + mttEsc(t.donusturulen_siparis_id) + '</div>' +
+      '<a class="pzm-btn pzm-btn-lacivert" style="width:100%;justify-content:center;" href="/nexgen/pazarlama-merkezi?siparis=' +
+        encodeURIComponent(t.donusturulen_siparis_id) + '">Sipari\u015fi A\u00e7 \u2192</a></div>';
+  } else if (t.durum === 'NUMUNEYE_DONUSTU' || t.durum === 'KISMEN_NUMUNEYE_DONUSTU') {
+    var ozetDon = (t.kalem_donusum_ozet && t.kalem_donusum_ozet.ozet) || '';
+    donusumHtml = '<div class="mtt-v3-donusum">' +
+      '<div class="mtt-v3-donusum-lbl">D\u00f6n\u00fc\u015f\u00fcm Sonucu</div>' +
+      (ozetDon ? '<div style="font-size:13px;margin-bottom:8px;">' + mttEsc(ozetDon) + '</div>' : '') +
+      (t.donusturulen_numune_talep_id
+        ? '<a class="pzm-btn pzm-btn-lacivert" style="width:100%;justify-content:center;" href="/nexgen/numune-talep?id=' +
+          encodeURIComponent(t.donusturulen_numune_talep_id) + '">Numune Talebini A\u00e7 \u2192</a>' : '') +
+      '</div>';
+  } else {
+    donusumHtml = ''; // dönüşüm yoksa kart DOM'a render edilmez
+  }
+
+  // ── Süreç akışı — circle stepper ──
+  var prosesAdimlar = [
+    {key:'gorusme',  lbl:'Görüşme',          tarih: t.gorusme_tarihi ? String(t.gorusme_tarihi).slice(0,10) : null},
+    {key:'mtt',      lbl:'MTT Oluşturuldu',  tarih: t.created_at ? String(t.created_at).slice(0,10) : null},
+    {key:'yonetim',  lbl:'Yönetim Onayı',    tarih: null},
+    {key:'mehmet',   lbl:'Mehmet',            tarih: t.isleme_alinma_tarihi ? String(t.isleme_alinma_tarihi).slice(0,10) : null},
+    {key:'siparis',  lbl:'Sipariş / Numune', tarih: t.donusturulme_tarihi ? String(t.donusturulme_tarihi).slice(0,10) : null},
+    {key:'uretim',   lbl:'Üretim',           tarih: null},
+    {key:'sevkiyat', lbl:'Sevkiyat',         tarih: null},
+    {key:'finans',   lbl:'Finans',           tarih: null},
+  ];
+  var aktifKeyMap = {
+    'ONAY_BEKLIYOR':'yonetim','YENI':'mehmet','ISLEME_ALINDI':'mehmet',
+    'KISMEN_NUMUNEYE_DONUSTU':'siparis','SIPARISE_DONUSTU':'siparis','NUMUNEYE_DONUSTU':'siparis',
+    'REDDEDILDI':'mehmet',
+  };
+  var aktifKey = aktifKeyMap[t.durum] || (t.gorusme_id ? 'mtt' : 'gorusme');
+  var aktifIdx = 0;
+  prosesAdimlar.forEach(function(s, i) { if (s.key === aktifKey) aktifIdx = i; });
+  var prosesHtml = '<div class="mtt-v3-proses"><div class="mtt-v3-proses-lbl">Süreç Akışı</div><div class="mtt-v3-proses-flow">';
+  prosesAdimlar.forEach(function(s, i) {
+    var cls = i < aktifIdx ? 'done' : (i === aktifIdx ? 'aktif' : '');
+    var icon = i < aktifIdx ? '✓' : (i === aktifIdx ? '●' : '○');
+    prosesHtml +=
+      '<div class="mtt-v3-proses-step ' + cls + '">' +
+        '<div class="mtt-v3-step-circle">' + icon + '</div>' +
+        '<div class="mtt-v3-step-lbl">' + mttEsc(s.lbl) + '</div>' +
+        (s.tarih ? '<div class="mtt-v3-step-tarih">' + mttEsc(s.tarih) + '</div>' : '') +
+      '</div>';
+  });
+  prosesHtml += '</div></div>';
+
+  // ── Uyarı banner ──
+  var uyari = '';
+  if (t.aday_siparis_uyari) uyari += '<div class="mtt-uyari">Bu firma henüz aday müşteridir. Sipariş açmadan önce cariye dönüştürülmelidir.</div>';
+  if (t.durum === 'EKSIK_BILGI') uyari += '<div class="mtt-uyari">Eski kayıt — eksik bilgi bekliyordu (yeni talepler bu duruma alınamaz).</div>';
+
+  // ── Render ──
   var body = $id('mtt-detay-body');
   if (!body) return;
   body.innerHTML =
+    ozetHdr +
     uyari +
-    '<div class="mtt-hero">' +
-      '<div class="mtt-hero-title">' + mttEsc(t.tur_etiket || t.talep_turu) + ' · ' + mttEsc(t.talep_no || ('#' + t.id)) +
-        (yonetimOnayli ? ' · YÖNETİM ONAYLI' : '') + '</div>' +
-      tlHtml +
-      '<div class="mtt-hero-chip">' +
-        '<span class="mtt-chip">' + mttEsc(heroAile) + '</span>' +
-        '<span class="mtt-chip">' + mttEsc(heroRenk) + '</span>' +
-        '<span class="mtt-chip">' + mttEsc(heroMik) + '</span>' +
-        (t.talep_turu === 'SIPARIS' ? ('<span class="mtt-chip">' + mttEsc(heroFiyat) + '</span>') : '') +
-        (t.vade_gun != null ? ('<span class="mtt-chip">' + mttEsc(t.vade_gun) + ' Gün</span>') : '') +
-        (kalemler.length > 1 ? ('<span class="mtt-chip">' + kalemler.length + ' kalem</span>') : '') +
-      '</div>' +
-      '<div><label>Durum</label><div>' + mttDurumBadge(t.durum) + '</div></div>' +
-      '<div><label>Müşteri</label><div>' + mttEsc(firma) + '</div></div>' +
-      '<div><label>Cari / Aday</label><div>' + mttEsc(cariEtiket) + '</div></div>' +
-      '<div><label>Pazarlamacı</label><div>' + mttEsc(t.pazarlamaci_adi || '—') + '</div></div>' +
-      '<div><label>Öncelik</label><div>' + mttEsc(t.oncelik || '—') + '</div></div>' +
-      '<div><label>Onay</label><div>' + mttEsc(t.onay_durum_etiket || t.onay_durum || '—') +
-        (t.onay_no ? ' · ' + mttEsc(t.onay_no) : '') + '</div></div>' +
-      '<div><label>Bekleme</label><div>' + mttEsc(t.bekleme || '—') + '</div></div>' +
-      '<div><label>Atanan</label><div>' + mttEsc(t.atanan_adi || '—') + '</div></div>' +
-      '<div><label>İşleme Alma</label><div>' + mttEsc(t.isleme_alinma_tarihi || '—') + '</div></div>' +
-      '<div><label>İstenen ürün</label><div>' + mttEsc(t.istenen_urun || (k0.urun_aciklama || '—')) + '</div></div>' +
+    '<div class="mtt-v3-layout">' +
+      '<div class="mtt-v3-main">' + musteriTalep + urunKalemleri + ticariHtml + '</div>' +
+      '<div class="mtt-v3-side">' + siradakiHtml + teknikSagHtml + donusumHtml + '</div>' +
     '</div>' +
-    (t.durum === 'EKSIK_BILGI'
-      ? '<div class="mtt-uyari">Eski kayıt — eksik bilgi bekliyordu (yeni talepler bu duruma alınamaz).</div>'
-      : '') +
-    '<div class="pzm-kart mtt-detay-kart">' +
-      '<div class="pzm-kart-hdr">2 · Müşteri ve Görüşme</div>' +
-      '<div class="mtt-grid">' +
-        '<div><label>Müşteri</label><div>' + mttEsc(firma) + '</div></div>' +
-        '<div><label>Cari / Aday</label><div>' + mttEsc(cariEtiket) +
-          (t.cari_id ? ' · #' + mttEsc(t.cari_id) : '') +
-          (t.musteri_aday_id ? ' · Aday #' + mttEsc(t.musteri_aday_id) : '') +
-          '</div></div>' +
-        '<div><label>Pazarlamacı</label><div>' + mttEsc(t.pazarlamaci_adi || '—') + '</div></div>' +
-        '<div><label>Kaynak Görüşme</label><div>#' + mttEsc(t.gorusme_id || '—') +
-          (t.gorusme_tarihi ? ' · ' + mttEsc(String(t.gorusme_tarihi).slice(0,16)) : '') + '</div></div>' +
-      '</div>' +
-      '<div class="mtt-blok"><label>Görüşme Notu</label><div class="mtt-not">' + mttEsc(t.gorusme_notu || '—') + '</div></div>' +
-      (t.musteri_notu ? '<div class="mtt-blok"><label>Müşteri Ne İstemiş / Amaç</label><div class="mtt-not">' + mttEsc(t.musteri_notu) + '</div></div>' : '') +
-      (t.aciklama ? '<div class="mtt-blok"><label>Pazarlamacının Mehmet’e Notu</label><div class="mtt-not">' + mttEsc(t.aciklama) + '</div></div>' : '') +
-      (t.red_nedeni ? '<div class="mtt-blok mtt-red"><label>Red Nedeni</label><div class="mtt-not">' + mttEsc(t.red_nedeni) + '</div></div>' : '') +
-    '</div>' +
-    '<div class="pzm-kart mtt-detay-kart">' +
-      '<div class="pzm-kart-hdr">3 · Ürün / Talep Kalemleri (' + kalemler.length + ')</div>' +
-      '<div style="overflow-x:auto;">' +
-      '<table class="pzm-tablo mtt-kalem-tablo"><thead><tr>' +
-      '<th>#</th><th>Ürün Türü</th><th>Ürün / İstenen Malzeme</th><th>Renk</th><th>Miktar / Tonaj</th>' +
-      '<th>Verilen Fiyat</th><th>Para Birimi</th><th>Not</th><th>Teknik Durum</th><th>Dönüşüm Durumu</th>' +
-      '</tr></thead><tbody>' + kalHtml + '</tbody></table></div>' +
-    '</div>' +
-    '<div class="pzm-kart mtt-detay-kart">' +
-      '<div class="pzm-kart-hdr">4 · Ticari Bilgiler</div>' +
-      '<div class="mtt-grid">' +
-        '<div><label>Verilen Fiyat</label><div>' + mttEsc(mttFiyatGoster(t.verilen_fiyat, t.para_birimi)) + '</div></div>' +
-        '<div><label>Para Birimi</label><div>' + mttEsc(t.para_birimi || '—') + '</div></div>' +
-        '<div><label>Fiyat Birimi</label><div>KG</div></div>' +
-        '<div><label>Ödeme Tipi</label><div>' + mttEsc(t.odeme_tipi || '—') + '</div></div>' +
-        '<div><label>Vade Günü</label><div>' + (t.vade_gun != null ? mttEsc(t.vade_gun) + ' gün' : '—') + '</div></div>' +
-        '<div><label>Çek Vadesi</label><div>' + (t.cek_vade_gun != null ? mttEsc(t.cek_vade_gun) + ' gün' : '—') + '</div></div>' +
-        '<div><label>Konuşulan Tonaj</label><div>' + (t.konusulan_tonaj != null ? mttEsc(String(t.konusulan_tonaj).replace('.', ',') + ' ton') : '—') + '</div></div>' +
-        '<div><label>Müşteri Notu</label><div>' + mttEsc(t.musteri_notu || '—') + '</div></div>' +
-      '</div>' +
-      (t.aciklama ? '<div class="mtt-blok"><label>Pazarlamacının Mehmet’e Notu</label><div class="mtt-not">' + mttEsc(t.aciklama) + '</div></div>' : '') +
-    '</div>' +
-    '<div class="pzm-kart mtt-detay-kart">' +
-      '<div class="pzm-kart-hdr">5 · Teknik Tamamlama</div>' +
-      '<p style="font-size:11px;color:var(--rm-t3);margin:0 0 6px;">Pazarlamacı alanları korunur. Mehmet yalnız teknik eksikleri Sipariş/Numune formunda tamamlar.</p>' +
-      teknikHtml +
-    '</div>' +
-    '<div class="pzm-kart mtt-detay-kart">' +
-      '<div class="pzm-kart-hdr">6 · Siparişe veya Numuneye Dönüştür</div>' +
-      '<p style="font-size:11px;color:var(--rm-t3);margin:0;">Ana aksiyonlar alt banttadır. Dönüşüm sonrası mevcut form hydrate edilir.</p>' +
-    '</div>' +
-    sonucHtml;
+    prosesHtml;
 
   var aksEl = $id('mtt-detay-aksiyon');
-  if (aksEl) {
-    var band = (aksiyon || '') + (donusum || '');
-    aksEl.innerHTML = band || '<span class="mtt-disabled-hint">Bu durumda dönüşüm aksiyonu yok.</span>';
-  }
-}
+  if (aksEl) aksEl.innerHTML = '';
+};
 
 window.mttSipariseDonustur = function(id) {
   fetch('/nexgen/api/musteri-temsilcisi-talep/' + id + '/siparis-hazirla', { credentials: 'same-origin' })
@@ -8143,9 +8801,13 @@ window.mttReddet = function(id) {
 
   // Cari360 deep-link query
   var deepSiparis = null;
+  var deepMtt = null;
+  var deepEkran = null;
   try {
     var qs = new URLSearchParams(window.location.search || '');
     deepSiparis = parseInt(qs.get('siparis') || qs.get('talep') || '', 10) || null;
+    deepMtt = parseInt(qs.get('mtt') || '', 10) || null;
+    deepEkran = qs.get('ekran') || null; // 'mtt' | 'mtt-detay' | 'yeni'
     var deepCari = parseInt(qs.get('cari_id') || '', 10) || null;
     if (deepCari && fc) fc.value = String(deepCari);
   } catch (e) {}
@@ -8154,8 +8816,47 @@ window.mttReddet = function(id) {
   pzmTabloRender(_pzmTalepCache || []);
   pzmBadgeGuncelle(true);
   pzmListePagerGuncelle();
-  // Varsayılan ekran: Siparişler Listesi
-  pzmEkranGec('liste');
+
+  // ── FLICKER FIX: deep-link varsa liste ASLA gösterilmez ──
+  // URL'de ?ekran=mtt-detay&mtt=ID varsa, kullanıcıya liste göstermeden
+  // doğrudan mtt-detay shell'ini aç + loading state koy.
+  if (deepMtt) {
+    // Shell'i hemen göster, içeriği async doldur
+    ['liste','yeni','detay','mtt'].forEach(function(e) {
+      var el = $id('ekran-' + e);
+      if (el) el.style.display = 'none';
+    });
+    var detayEl = $id('ekran-mtt-detay');
+    if (detayEl) detayEl.style.display = '';
+    var bodyEl = $id('mtt-detay-body');
+    if (bodyEl) bodyEl.innerHTML = '<div style="padding:40px;text-align:center;color:#6b7280;font-size:14px;">Yükleniyor…</div>';
+    // Tab highlight: mtt
+    var mttTab = $id('tab-btn-mtt');
+    if (mttTab) mttTab.classList.add('aktif');
+    _pzmAktifEkran = 'mtt-detay';
+  } else if (deepSiparis) {
+    // Sipariş detay deep-link: detay shell göster, liste gizle
+    ['liste','yeni','mtt','mtt-detay'].forEach(function(e) {
+      var el = $id('ekran-' + e);
+      if (el) el.style.display = 'none';
+    });
+    var detayEl2 = $id('ekran-detay');
+    if (detayEl2) detayEl2.style.display = '';
+    _pzmAktifEkran = 'detay';
+  } else if (deepEkran === 'mtt') {
+    // MTT liste
+    pzmEkranGec('mtt', true);
+  } else {
+    // Normal başlangıç: liste
+    pzmEkranGec('liste', true);
+  }
+
+  // history.state yoksa URL'den ilk state'i yaz
+  if (!history.state) {
+    var _initState = { ekran: deepMtt ? 'mtt-detay' : (deepEkran || (deepSiparis ? 'detay' : 'liste')),
+                       id: deepMtt || deepSiparis || null };
+    history.replaceState(_initState, '', window.location.href);
+  }
   var st = $id('pzm-siparis-tarihi');
   if (st) st.value = pzmBugun();
   pzmFiyatSuffixGuncelle();
@@ -8165,27 +8866,75 @@ window.mttReddet = function(id) {
   pzmAkkSifirla();
   pzmTalepListesiYenile();
 
+  // ── popstate: back/forward → URL'deki state'i restore et ──
+  window.addEventListener('popstate', function(e) {
+    var st2 = (e.state && e.state.ekran) ? e.state : null;
+    if (!st2) {
+      // state yoksa URL'den oku
+      try {
+        var qs2 = new URLSearchParams(window.location.search || '');
+        var em = parseInt(qs2.get('mtt') || '', 10) || null;
+        var es = parseInt(qs2.get('siparis') || '', 10) || null;
+        var ee = qs2.get('ekran') || 'liste';
+        st2 = { ekran: em ? 'mtt-detay' : (es ? 'detay' : ee), id: em || es || null };
+      } catch(_) { st2 = { ekran: 'liste', id: null }; }
+    }
+    _pzmNavSuppressHistory = true;
+    try {
+      if (st2.ekran === 'mtt-detay' && st2.id) {
+        // popstate flicker fix: önce shell'i doğrudan göster, async tamamlanınca içerik
+        (function() {
+          ['liste','yeni','detay','mtt'].forEach(function(e) {
+            var el = $id('ekran-' + e); if (el) el.style.display = 'none';
+          });
+          var dEl = $id('ekran-mtt-detay'); if (dEl) dEl.style.display = '';
+          var bEl = $id('mtt-detay-body');
+          if (bEl && !bEl.querySelector('.mtt-v3-layout')) {
+            bEl.innerHTML = '<div style="padding:40px;text-align:center;color:#6b7280;font-size:14px;">Yükleniyor…</div>';
+          }
+          _pzmAktifEkran = 'mtt-detay';
+        })();
+        mttDetayAc(st2.id, true);
+      } else if (st2.ekran === 'detay' && st2.id) {
+        pzmDetayAc(st2.id, true);
+      } else if (st2.ekran === 'mtt') {
+        pzmEkranGec('mtt', true);
+      } else if (st2.ekran === 'yeni') {
+        pzmEkranGec('yeni', true);
+      } else {
+        pzmEkranGec('liste', true);
+      }
+    } finally {
+      _pzmNavSuppressHistory = false;
+    }
+  });
+
   if (deepSiparis) {
-    var tries = 0;
-    var tmr = setInterval(function() {
-      tries += 1;
-      if (_pzmListeBusy && tries < 60) return;
-      clearInterval(tmr);
-      var hit = pzmTalepBul(deepSiparis);
-      if (hit) { pzmDetayAc(deepSiparis); return; }
-      fetch('/nexgen/api/pazarlama/talepler?per_page=50&q=' + encodeURIComponent(String(deepSiparis)))
+    // Sipariş deep-link: shell zaten açık, doğrudan restore
+    var hit = pzmTalepBul(deepSiparis);
+    if (hit) {
+      pzmDetayAc(deepSiparis, true);
+    } else {
+      // Cache'de yok, fetch et
+      fetch('/nexgen/api/pazarlama/talepler?per_page=50&q=' + encodeURIComponent(String(deepSiparis)), { credentials: 'same-origin' })
         .then(function(r){ return r.json(); })
         .then(function(d){
           if (!d || !d.ok) return;
           var t0 = (d.liste || []).find(function(x){ return Number(x.id) === deepSiparis; });
           if (t0) {
             if (!pzmTalepBul(t0.id)) _pzmTalepCache.unshift(t0);
-            pzmDetayAc(t0.id);
+            pzmDetayAc(t0.id, true);
           }
         })
         .catch(function(){});
-    }, 150);
+    }
   }
+
+  if (deepMtt) {
+    // MTT detay: shell zaten açık (flicker fix), içeriği async doldur
+    mttDetayAc(deepMtt, true);
+  }
+  // deepEkran=mtt zaten yukarıda işlendi
 })();
 
 })();
