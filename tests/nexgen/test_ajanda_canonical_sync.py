@@ -143,7 +143,7 @@ class AjandaCanonicalSyncTests(unittest.TestCase):
         gor_id = _insert_gorusme(self.con, CARI_A, UID_ERHAN, GORUSME_TARIHI_TODAY, 'A-GOR-1')
 
         result = gercek_gorusmeyi_ajandaya_bagla(
-            self.con, gor_id, UID_ERHAN, CARI_A, GORUSME_TARIHI_TODAY
+            self.con, gor_id, UID_ERHAN, GORUSME_TARIHI_TODAY, cari_id=CARI_A
         )
         self.assertEqual(result['durum'], 'plan_tamamlandi')
         self.assertEqual(result['ajanda_id'], aj_id)
@@ -167,7 +167,7 @@ class AjandaCanonicalSyncTests(unittest.TestCase):
         gor_id = _insert_gorusme(self.con, CARI_A, UID_ERHAN, GORUSME_TARIHI_TODAY, 'B-GOR-1')
 
         result = gercek_gorusmeyi_ajandaya_bagla(
-            self.con, gor_id, UID_ERHAN, CARI_A, GORUSME_TARIHI_TODAY
+            self.con, gor_id, UID_ERHAN, GORUSME_TARIHI_TODAY, cari_id=CARI_A
         )
         self.assertEqual(result['durum'], 'adhoc_olusturuldu')
         new_id = result['ajanda_id']
@@ -186,14 +186,14 @@ class AjandaCanonicalSyncTests(unittest.TestCase):
         gor_id = _insert_gorusme(self.con, CARI_A, UID_ERHAN, GORUSME_TARIHI_TODAY, 'C-GOR-1')
 
         r1 = gercek_gorusmeyi_ajandaya_bagla(
-            self.con, gor_id, UID_ERHAN, CARI_A, GORUSME_TARIHI_TODAY
+            self.con, gor_id, UID_ERHAN, GORUSME_TARIHI_TODAY, cari_id=CARI_A
         )
         count_before = self.con.execute(
             'SELECT COUNT(*) FROM musteri_operasyon_ajanda'
         ).fetchone()[0]
 
         r2 = gercek_gorusmeyi_ajandaya_bagla(
-            self.con, gor_id, UID_ERHAN, CARI_A, GORUSME_TARIHI_TODAY
+            self.con, gor_id, UID_ERHAN, GORUSME_TARIHI_TODAY, cari_id=CARI_A
         )
         count_after = self.con.execute(
             'SELECT COUNT(*) FROM musteri_operasyon_ajanda'
@@ -211,7 +211,7 @@ class AjandaCanonicalSyncTests(unittest.TestCase):
         gor_id = _insert_gorusme(self.con, CARI_A, UID_ERHAN, GORUSME_TARIHI_TODAY, 'D-GOR-CARIA')
 
         result = gercek_gorusmeyi_ajandaya_bagla(
-            self.con, gor_id, UID_ERHAN, CARI_A, GORUSME_TARIHI_TODAY
+            self.con, gor_id, UID_ERHAN, GORUSME_TARIHI_TODAY, cari_id=CARI_A
         )
         # CARI_B planı eşleşmez → adhoc
         self.assertEqual(result['durum'], 'adhoc_olusturuldu')
@@ -230,7 +230,7 @@ class AjandaCanonicalSyncTests(unittest.TestCase):
         gor_id = _insert_gorusme(self.con, CARI_A, UID_ERHAN, GORUSME_TARIHI_TODAY, 'E-GOR-ERHAN')
 
         result = gercek_gorusmeyi_ajandaya_bagla(
-            self.con, gor_id, UID_ERHAN, CARI_A, GORUSME_TARIHI_TODAY
+            self.con, gor_id, UID_ERHAN, GORUSME_TARIHI_TODAY, cari_id=CARI_A
         )
         self.assertEqual(result['durum'], 'adhoc_olusturuldu')
 
@@ -252,7 +252,7 @@ class AjandaCanonicalSyncTests(unittest.TestCase):
         gor_id = _insert_gorusme(self.con, CARI_A, UID_ERHAN, GORUSME_TARIHI_TODAY, 'F-GOR-1')
 
         result = gercek_gorusmeyi_ajandaya_bagla(
-            self.con, gor_id, UID_ERHAN, CARI_A, GORUSME_TARIHI_TODAY
+            self.con, gor_id, UID_ERHAN, GORUSME_TARIHI_TODAY, cari_id=CARI_A
         )
         self.assertEqual(result['durum'], 'adhoc_olusturuldu')
 
@@ -272,7 +272,7 @@ class AjandaCanonicalSyncTests(unittest.TestCase):
         gor_id = _insert_gorusme(self.con, CARI_A, UID_ERHAN, GORUSME_TARIHI_TODAY, 'G-GOR-TODAY')
 
         result = gercek_gorusmeyi_ajandaya_bagla(
-            self.con, gor_id, UID_ERHAN, CARI_A, GORUSME_TARIHI_TODAY
+            self.con, gor_id, UID_ERHAN, GORUSME_TARIHI_TODAY, cari_id=CARI_A
         )
         self.assertEqual(result['durum'], 'adhoc_olusturuldu')
 
@@ -313,10 +313,10 @@ class AjandaCanonicalSyncTests(unittest.TestCase):
         gor_id = _insert_gorusme(self.con, CARI_A, UID_ERHAN, GORUSME_TARIHI_TODAY, 'I-GOR')
 
         r1 = gercek_gorusmeyi_ajandaya_bagla(
-            self.con, gor_id, UID_ERHAN, CARI_A, GORUSME_TARIHI_TODAY
+            self.con, gor_id, UID_ERHAN, GORUSME_TARIHI_TODAY, cari_id=CARI_A
         )
         r2 = gercek_gorusmeyi_ajandaya_bagla(
-            self.con, gor_id, UID_ERHAN, CARI_A, GORUSME_TARIHI_TODAY
+            self.con, gor_id, UID_ERHAN, GORUSME_TARIHI_TODAY, cari_id=CARI_A
         )
 
         self.assertEqual(r2['durum'], 'idempotent')

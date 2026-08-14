@@ -25,12 +25,16 @@ def _schema(con: sqlite3.Connection) -> None:
         CREATE TABLE nexgen_cari (
             id INTEGER PRIMARY KEY, unvan TEXT, cari_kod TEXT, aktif INTEGER DEFAULT 1
         );
+        CREATE TABLE sistem_kullanici (
+            Id INTEGER PRIMARY KEY, KullaniciAdi TEXT, AdSoyad TEXT
+        );
         CREATE TABLE musteri_operasyon_gorusme (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             cari_id INTEGER, kullanici_id INTEGER,
             gorusme_tipi TEXT, sonuc_tipi TEXT, kisa_not TEXT,
             gorusme_tarihi TEXT, sonraki_aksiyon TEXT, sonraki_takip_tarihi TEXT,
             idempotency_key TEXT NOT NULL UNIQUE, aktif INTEGER DEFAULT 1,
+            olusturan_kullanici_id INTEGER,
             fiyat_verildi INTEGER DEFAULT 0,
             verilen_fiyat REAL, fiyat_para_birimi TEXT, fiyat_birimi TEXT,
             konusulan_tonaj REAL, odeme_tipi TEXT,
@@ -48,6 +52,7 @@ def _schema(con: sqlite3.Connection) -> None:
         """
     )
     con.execute('INSERT INTO nexgen_cari VALUES (?,?,?,1)', (CARI_ID, 'Ticari Test', 'TT01'))
+    con.execute('INSERT INTO sistem_kullanici VALUES (?,?,?)', (UID, 'erhan', 'Erhan Test'))
     con.commit()
 
 
@@ -62,6 +67,7 @@ def _insert_gorusme(con, **kw) -> int:
         'sonraki_aksiyon': None,
         'sonraki_takip_tarihi': None,
         'idempotency_key': 'TIC-KEY',
+        'olusturan_kullanici_id': UID,
         'fiyat_verildi': 0,
         'verilen_fiyat': None,
         'fiyat_para_birimi': None,
