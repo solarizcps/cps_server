@@ -478,6 +478,26 @@ MANIFEST: tuple[MigEntry, ...] = (
         "151_musteri_operasyon_ajanda.py",
         "MO Ajanda V1 — planlanmis gorusmeler",
         dependencies=(149,),
+    MigEntry(
+        156, "156_musteri_operasyon_ajanda_aday",
+        "156_musteri_operasyon_ajanda_aday.py",
+        "Ajanda aday destegi: musteri_aday_id + firma_adi_gorunum + XOR check",
+        dependencies=(151, 142),
+        required_columns=(
+            ("musteri_operasyon_ajanda", "musteri_aday_id"),
+            ("musteri_operasyon_ajanda", "firma_adi_gorunum"),
+        ),
+    ),
+    MigEntry(
+        157, "157_mo_ajanda_plan_snapshot",
+        "157_mo_ajanda_plan_snapshot.py",
+        "Ajanda plan snapshot (yetkili, telefon, sehir)",
+        dependencies=(151,),
+        required_columns=(
+            ("musteri_operasyon_ajanda", "plan_yetkili_metin"),
+            ("musteri_operasyon_ajanda", "plan_telefon"),
+            ("musteri_operasyon_ajanda", "plan_sehir"),
+        ),
         required_tables=("musteri_operasyon_ajanda",),
     ),
 )

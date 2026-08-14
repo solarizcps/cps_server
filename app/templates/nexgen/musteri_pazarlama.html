@@ -616,204 +616,237 @@
 </aside>
 <div class="mp-drawer-back" id="mp-drawer-back" hidden></div>
 
-{# Görüşme Modal #}
+{# Görüşme Modal — FAZ 2B Görsel 2 #}
 <div class="mp-modal-overlay" id="mp-modal-gorusme" hidden>
   <div class="mp-modal mp-modal-gorusme" role="dialog" aria-labelledby="mp-modal-baslik">
-    <div class="mp-modal-hdr">
-      <h2 id="mp-modal-baslik">GÖRÜŞME / ZİYARET KAYDI</h2>
+    <div class="mp-gor-hdr">
+      <h2 id="mp-modal-baslik">GÖRÜŞME KAYDI</h2>
       <button type="button" class="mp-modal-kapat" data-close="gorusme" aria-label="Kapat">×</button>
     </div>
-    <div class="mp-modal-meta" id="mp-modal-meta"></div>
+    <div class="mp-gor-mod-bar">
+      <div class="mp-gor-seg" role="tablist" aria-label="Görüşme modu">
+        <button type="button" class="mp-gor-seg-btn mp-gor-seg-aktif" id="mp-f-mod-yapildi-btn">
+          <span class="mp-gor-seg-ico">✓</span> Görüşme Yapıldı
+        </button>
+        <button type="button" class="mp-gor-seg-btn" id="mp-f-mod-planla-btn">
+          <span class="mp-gor-seg-ico">📅</span> Görüşme Planla
+        </button>
+      </div>
+      <div class="mp-gor-info-band">Yapılan görüşme: bugün veya son 2 gün • Planlanan görüşme: ileri tarih serbest</div>
+      <div class="mp-gor-info-band mp-gor-plan-band" id="mp-gor-plan-band" hidden></div>
+    </div>
+    <div class="mp-modal-meta" id="mp-modal-meta" hidden></div>
     <form id="mp-gorusme-form" class="mp-modal-form mp-modal-form-sticky">
-      <div class="mp-modal-body">
+      <div class="mp-modal-body mp-gor-body">
       <input type="hidden" name="cari_id" id="mp-f-cari-id">
       <input type="hidden" name="musteri_aday_id" id="mp-f-aday-id">
       <input type="hidden" name="ajanda_id" id="mp-f-ajanda-id" value="">
-      <div class="mp-fld" id="mp-musteri-mod-wrap">
-        <label>Müşteri</label>
-        <div class="mp-mod-secim">
-          <label class="mp-mod-opt"><input type="radio" name="musteri_mod" id="mp-mod-mevcut-r" value="mevcut" checked> Mevcut Müşteri</label>
-          <label class="mp-mod-opt"><input type="radio" name="musteri_mod" id="mp-mod-yeni-r" value="yeni"> Yeni Müşteri</label>
-        </div>
-      </div>
-      <div id="mp-mod-mevcut">
-        <div class="mp-fld" id="mp-f-cari-sec-wrap">
-          <label for="mp-f-cari-sec">Müşteri seç *</label>
-          <select id="mp-f-cari-sec">
-            <option value="">— Seçin —</option>
-            {% for m in ozet.musteriler if (m.entity_type or 'CARI') == 'CARI' %}
-            <option value="{{ m.cari_id }}">{{ m.unvan }}{% if m.cari_kod %} ({{ m.cari_kod }}){% endif %}</option>
-            {% endfor %}
-          </select>
-        </div>
-      </div>
-      <div id="mp-mod-yeni" hidden>
-        <div class="mp-fld">
-          <label for="mp-f-firma">Firma Adı *</label>
-          <input type="text" id="mp-f-firma" name="firma_adi" maxlength="200" placeholder="Firma unvanı…">
-        </div>
-        <div class="mp-fld-ikili">
-          <div class="mp-fld">
-            <label for="mp-f-aday-yetkili">Yetkili</label>
-            <input type="text" id="mp-f-aday-yetkili" name="yetkili_adi" maxlength="120">
-          </div>
-          <div class="mp-fld">
-            <label for="mp-f-aday-tel">Telefon</label>
-            <input type="text" id="mp-f-aday-tel" name="telefon" maxlength="40">
+      <input type="hidden" name="mod" id="mp-f-mod" value="YAPILDI">
+      <input type="hidden" name="not_metni" id="mp-f-aday-not" value="">
+
+      <section class="mp-gor-section mp-gor-plan-readonly" id="mp-gor-sec-plan-readonly" hidden>
+        <h3 class="mp-gor-sec-title">Planlanan Görüşme</h3>
+        <div class="mp-gor-plan-readonly-grid" id="mp-gor-plan-readonly-body"></div>
+      </section>
+
+      <h3 class="mp-gor-sec-title mp-gor-ajanda-sonuc-baslik" id="mp-gor-ajanda-sonuc-baslik" hidden>Görüşmede Ne Oldu?</h3>
+
+      <section class="mp-gor-section" id="mp-gor-sec-kim">
+        <h3 class="mp-gor-sec-title">1. Kiminle?</h3>
+        <div class="mp-fld" id="mp-musteri-mod-wrap">
+          <div class="mp-gor-seg mp-gor-seg-sm" role="radiogroup" aria-label="Müşteri tipi">
+            <label class="mp-gor-seg-btn mp-gor-seg-aktif" id="mp-gor-lbl-mevcut">
+              <input type="radio" name="musteri_mod" id="mp-mod-mevcut-r" value="mevcut" checked class="mp-gor-radio"> Mevcut Müşteri
+            </label>
+            <label class="mp-gor-seg-btn" id="mp-gor-lbl-yeni">
+              <input type="radio" name="musteri_mod" id="mp-mod-yeni-r" value="yeni" class="mp-gor-radio"> Yeni Müşteri
+            </label>
           </div>
         </div>
-        <div class="mp-fld-ikili">
-          <div class="mp-fld">
-            <label for="mp-f-aday-sehir">Şehir</label>
-            <input type="text" id="mp-f-aday-sehir" name="sehir" maxlength="80">
-          </div>
-          <div class="mp-fld">
-            <label for="mp-f-aday-not">Not</label>
-            <input type="text" id="mp-f-aday-not" name="not_metni" maxlength="300">
-          </div>
-        </div>
-      </div>
-      <div class="mp-fld" id="mp-f-yetkili-wrap">
-        <label for="mp-f-yetkili-metin">Müşteri Yetkilisi</label>
-        <input type="text" id="mp-f-yetkili-metin" name="yetkili_metin" maxlength="120"
-               placeholder="Ahmet Bey / Satın Alma / Resepsiyon" autocomplete="off">
-      </div>
-      <div class="mp-fld-ikili">
-        <div class="mp-fld">
-          <label for="mp-f-tip">Görüşme Türü *</label>
-          <select id="mp-f-tip" name="gorusme_tipi" required>
-            <option value="">Seçin</option>
-            {% for t in gorusme_tipleri %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
-          </select>
-        </div>
-        <div class="mp-fld">
-          <label for="mp-f-tarih">Görüşme Tarihi *</label>
-          <input type="datetime-local" id="mp-f-tarih" name="gorusme_tarihi" required>
-        </div>
-      </div>
-      <div class="mp-fld">
-        <label for="mp-f-not">Görüşme Notu *</label>
-        <textarea id="mp-f-not" name="kisa_not" rows="2" required minlength="3"
-                  placeholder="Görüşme özeti ve konuşulan detaylar..." class="mp-not-kompakt"></textarea>
-      </div>
-      <div class="mp-fld">
-        <label for="mp-f-fiyat-verildi">Fiyat Verildi mi?</label>
-        <select id="mp-f-fiyat-verildi" name="fiyat_verildi">
-          <option value="0" selected>Hayır</option>
-          <option value="1">Evet</option>
-        </select>
-      </div>
-      <div id="mp-fiyat-blok" class="mp-fiyat-blok" hidden>
-        <div class="mp-fld-ikili">
-          <div class="mp-fld">
-            <label for="mp-f-verilen-fiyat">Verilen Fiyat *</label>
-            <input type="text" inputmode="decimal" id="mp-f-verilen-fiyat" name="verilen_fiyat" placeholder="12.50" autocomplete="off">
-          </div>
-          <div class="mp-fld">
-            <label for="mp-f-para">Para Birimi *</label>
-            <select id="mp-f-para" name="fiyat_para_birimi">
-              <option value="">Seçin</option>
-              <option value="TRY">TRY</option>
-              <option value="USD">USD</option>
-              <option value="EUR">EUR</option>
+        <div id="mp-mod-mevcut">
+          <div class="mp-fld" id="mp-f-cari-sec-wrap">
+            <label for="mp-f-cari-sec">Müşteri *</label>
+            <select id="mp-f-cari-sec">
+              <option value="">— Seçin —</option>
+              {% for m in ozet.musteriler if (m.entity_type or 'CARI') == 'CARI' %}
+              <option value="{{ m.cari_id }}">{{ m.unvan }}{% if m.cari_kod %} ({{ m.cari_kod }}){% endif %}</option>
+              {% endfor %}
             </select>
           </div>
+          <div class="mp-fld" id="mp-f-yetkili-wrap">
+            <label for="mp-f-yetkili-metin">Müşteri Yetkilisi</label>
+            <input type="text" id="mp-f-yetkili-metin" name="yetkili_metin" maxlength="120"
+                   placeholder="Ahmet Bey / Satın Alma" autocomplete="off">
+          </div>
         </div>
-        <div class="mp-fld-ikili">
+        <div id="mp-mod-yeni" hidden>
           <div class="mp-fld">
-            <label for="mp-f-tonaj">Konuşulan Tonaj</label>
-            <div class="mp-fld-suffix">
-              <input type="text" inputmode="decimal" id="mp-f-tonaj" name="konusulan_tonaj" placeholder="25" autocomplete="off">
-              <span class="mp-suffix">ton</span>
+            <label for="mp-f-firma">Firma Adı *</label>
+            <input type="text" id="mp-f-firma" name="firma_adi" maxlength="200" placeholder="Firma unvanı…">
+          </div>
+          <div class="mp-gor-row-3">
+            <div class="mp-fld">
+              <label for="mp-f-aday-yetkili">Yetkili</label>
+              <input type="text" id="mp-f-aday-yetkili" name="yetkili_adi" maxlength="120" placeholder="Abdullah">
+            </div>
+            <div class="mp-fld">
+              <label for="mp-f-aday-tel">Telefon</label>
+              <input type="text" id="mp-f-aday-tel" name="telefon" maxlength="40" placeholder="0564 446">
+            </div>
+            <div class="mp-fld">
+              <label for="mp-f-aday-sehir">Şehir</label>
+              <input type="text" id="mp-f-aday-sehir" name="sehir" maxlength="80" placeholder="Urfa">
             </div>
           </div>
-          <div class="mp-fld">
-            <label for="mp-f-odeme">Ödeme Tipi *</label>
-            <select id="mp-f-odeme" name="odeme_tipi">
+          <div class="mp-gor-info-band mp-gor-firma-band" id="mp-gor-firma-preview" hidden>
+            Ajandada <strong id="mp-gor-firma-preview-ad">—</strong> adıyla görünecek.
+          </div>
+        </div>
+      </section>
+
+      <section class="mp-gor-section" id="mp-gor-sec-zaman">
+        <h3 class="mp-gor-sec-title" id="mp-gor-sec-zaman-title">2. Ne zaman ve nasıl?</h3>
+        <div class="mp-gor-row-2">
+          <div class="mp-fld" id="mp-gor-zaman-tip-wrap">
+            <label for="mp-f-tip">Görüşme Türü *</label>
+            <select id="mp-f-tip" name="gorusme_tipi" required>
               <option value="">Seçin</option>
-              <option value="NAKIT">NAKİT</option>
-              <option value="VADELI">VADELİ</option>
-              <option value="CEK">ÇEK</option>
+              {% for t in gorusme_tipleri %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
             </select>
           </div>
-        </div>
-        <div class="mp-fld" id="mp-f-vade-wrap" hidden>
-          <label for="mp-f-vade-gun">Vade (Gün) *</label>
-          <input type="number" id="mp-f-vade-gun" name="vade_gun" min="1" max="730" placeholder="30, 60, 90">
-        </div>
-        <div id="mp-f-cek-wrap" class="mp-fld-ikili" hidden>
           <div class="mp-fld">
-            <label for="mp-f-cek-vade">Çek Vadesi (Gün) *</label>
-            <input type="number" id="mp-f-cek-vade" name="cek_vade_gun" min="1" max="730" placeholder="90, 120">
-          </div>
-          <div class="mp-fld">
-            <label for="mp-f-cek-adet">Çek Adedi</label>
-            <input type="number" id="mp-f-cek-adet" name="cek_adedi" min="1" max="99" placeholder="2">
+            <label for="mp-f-tarih" id="mp-f-tarih-label">Görüşme Tarihi *</label>
+            <input type="datetime-local" id="mp-f-tarih" name="gorusme_tarihi" required>
           </div>
         </div>
-      </div>
-      {# FAZ-F3: Talep Oluştur — Sonuç alanından bağımsız #}
-      <div class="mp-talep-blok" id="mp-talep-blok">
-        <div class="mp-talep-baslik">Talep Oluştur</div>
-        <div class="mp-talep-secim" role="radiogroup" aria-label="Talep Oluştur">
-          <label class="mp-talep-opt">
-            <input type="radio" name="mp_talep_secim" value="YOK" checked> Talep Yok
-          </label>
-          <label class="mp-talep-opt">
-            <input type="radio" name="mp_talep_secim" value="SIPARIS"> Sipariş Talebi
-          </label>
-          <label class="mp-talep-opt">
-            <input type="radio" name="mp_talep_secim" value="NUMUNE"> Numune Talebi
-          </label>
+      </section>
+
+      <section class="mp-gor-section" id="mp-gor-sec-konus">
+        <h3 class="mp-gor-sec-title" id="mp-gor-sec3-title">3. Ne konuşuldu?</h3>
+        <div class="mp-fld" id="mp-f-not-wrap">
+          <label for="mp-f-not" id="mp-f-not-label">Görüşme özeti *</label>
+          <textarea id="mp-f-not" name="kisa_not" rows="3" minlength="3"
+                    placeholder="Konuşulanları kısa ve net yazın…" class="mp-not-kompakt"></textarea>
         </div>
-        <div id="mp-talep-detay" class="mp-talep-detay" hidden>
-          <div class="mp-fld-ikili">
-            <div class="mp-fld">
-              <label>Talep Türü</label>
-              <input type="text" id="mp-talep-turu-goster" readonly value="" class="mp-readonly">
+        <div class="mp-fld" id="mp-f-konu-wrap">
+          <label class="mp-gor-konu-lbl">Konular</label>
+          <div class="mp-konu-etiketler" id="mp-konu-etiketler">
+            <label class="mp-konu-pill"><input type="checkbox" class="mp-konu-cb" value="Fiyat"><span>Fiyat</span></label>
+            <label class="mp-konu-pill"><input type="checkbox" class="mp-konu-cb" value="Sipariş"><span>Sipariş</span></label>
+            <label class="mp-konu-pill"><input type="checkbox" class="mp-konu-cb" value="Numune"><span>Numune</span></label>
+            <label class="mp-konu-pill"><input type="checkbox" class="mp-konu-cb" value="Tahsilat"><span>Tahsilat</span></label>
+            <label class="mp-konu-pill"><input type="checkbox" class="mp-konu-cb" value="Diğer"><span>Diğer</span></label>
+          </div>
+        </div>
+      </section>
+
+      <section class="mp-gor-section mp-gor-ticari-kart" id="mp-gor-ticari-wrap">
+        <button type="button" class="mp-gor-ticari-hdr" id="mp-gor-ticari-toggle" aria-expanded="true">
+          <span>4. Fiyat / Sipariş Detayı (opsiyonel)</span>
+          <span class="mp-gor-chevron" id="mp-gor-ticari-chevron">▾</span>
+        </button>
+        <div class="mp-gor-ticari-ic" id="mp-fiyat-blok">
+          <div class="mp-gor-ticari-grid">
+            <div class="mp-fld mp-gor-col-urun">
+              <label for="mp-f-urun-kalite">Ürün veya kalite</label>
+              <input type="text" id="mp-f-urun-kalite" name="ticari_not" maxlength="200" placeholder="Ürün veya kalite">
             </div>
-            <div class="mp-fld">
-              <label for="mp-talep-oncelik">Öncelik</label>
-              <select id="mp-talep-oncelik">
-                <option value="NORMAL" selected>Normal</option>
-                <option value="YUKSEK">Yüksek</option>
-                <option value="ACIL">Acil</option>
+            <div class="mp-fld mp-gor-col-miktar">
+              <label for="mp-f-miktar">Miktar</label>
+              <input type="text" inputmode="decimal" id="mp-f-miktar" name="konusulan_tonaj" placeholder="10.000" autocomplete="off">
+            </div>
+            <div class="mp-fld mp-gor-col-birim">
+              <label for="mp-f-birim">Birim</label>
+              <select id="mp-f-birim" name="fiyat_birimi">
+                <option value="KG">KG</option>
+                <option value="CIFT">ÇİFT</option>
+                <option value="ADET">ADET</option>
+                <option value="TON">TON</option>
+              </select>
+            </div>
+            <div class="mp-fld mp-gor-col-fiyat">
+              <label for="mp-f-verilen-fiyat">Birim Fiyat</label>
+              <input type="text" inputmode="decimal" id="mp-f-verilen-fiyat" name="verilen_fiyat" placeholder="5,00" autocomplete="off">
+            </div>
+            <div class="mp-fld mp-gor-col-pb">
+              <label for="mp-f-para">PB</label>
+              <select id="mp-f-para" name="fiyat_para_birimi">
+                <option value="">—</option>
+                <option value="TRY">TRY</option>
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
               </select>
             </div>
           </div>
+          <div class="mp-gor-fiyat-toggle-row" id="mp-f-fiyat-verildi-wrap">
+            <label class="mp-gor-toggle">
+              <input type="checkbox" id="mp-f-fiyat-verildi-toggle">
+              <span class="mp-gor-toggle-ui"></span>
+              <span class="mp-gor-toggle-lbl">Fiyat verildi</span>
+            </label>
+            <span class="mp-gor-toggle-hint">Konuşulanı kaydeder, sipariş oluşturmaz.</span>
+            <select id="mp-f-fiyat-verildi" name="fiyat_verildi" hidden aria-hidden="true" tabindex="-1">
+              <option value="0" selected>Hayır</option>
+              <option value="1">Evet</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <div class="mp-gor-odeme-wrap mp-gor-section" id="mp-gor-odeme-wrap" hidden>
+        <div class="mp-gor-odeme-baslik">Ödeme Koşulu</div>
+        <div class="mp-gor-odeme-grid">
+          <div class="mp-fld mp-gor-odeme-col-tip">
+            <label for="mp-f-odeme">Ödeme Tipi *</label>
+            <select id="mp-f-odeme" name="odeme_tipi">
+              <option value="">Seçin</option>
+              <option value="NAKIT">Nakit</option>
+              <option value="VADELI">Vadeli</option>
+              <option value="CEK">Çek</option>
+            </select>
+          </div>
+          <div class="mp-fld mp-gor-odeme-col-vade" id="mp-f-vade-wrap" hidden>
+            <label for="mp-f-vade-gun">Vade (gün) *</label>
+            <input type="number" id="mp-f-vade-gun" name="vade_gun" min="1" max="730" placeholder="30, 60, 90">
+          </div>
+          <div class="mp-gor-odeme-cek-row" id="mp-f-cek-wrap" hidden>
+            <div class="mp-fld mp-gor-odeme-col-vade">
+              <label for="mp-f-cek-vade">Vade (gün) *</label>
+              <input type="number" id="mp-f-cek-vade" name="cek_vade_gun" min="1" max="730" placeholder="90, 120">
+            </div>
+            <div class="mp-fld mp-gor-odeme-col-adet">
+              <label for="mp-f-cek-adet">Çek Adedi</label>
+              <input type="number" id="mp-f-cek-adet" name="cek_adedi" min="1" max="99" placeholder="2">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <section class="mp-gor-section" id="mp-gor-sec-sonuc">
+        <div class="mp-gor-row-3" id="mp-f-sonuc-takip-wrap">
+          <div class="mp-fld" id="mp-f-sonuc-wrap">
+            <label for="mp-f-sonuc">Görüşme Sonucu *</label>
+            <select id="mp-f-sonuc" name="sonuc_tipi" required>
+              <option value="">Seçin</option>
+              <option value="Tamamlandı">Görüşme tamamlandı</option>
+              <option value="Dönüş Bekleniyor">Takip edilecek</option>
+              <option value="Fiyat İstedi">Fiyat verildi</option>
+              <option value="Sipariş Bekleniyor">Sipariş konuşuldu</option>
+              <option value="Numune İstedi">Numune konuşuldu</option>
+              <option value="Olumsuz">Olumsuz</option>
+            </select>
+          </div>
           <div class="mp-fld">
-            <label for="mp-talep-aciklama">Talep Açıklaması / Müşteri İsteği *</label>
-            <textarea id="mp-talep-aciklama" rows="2" maxlength="500" placeholder="Temsilciye iletilecek kısa not…"></textarea>
+            <label for="mp-f-aksiyon">Sonraki Adım</label>
+            <input type="text" id="mp-f-aksiyon" name="sonraki_aksiyon" maxlength="200" placeholder="Teklif gönder">
           </div>
-          <div class="mp-fld" id="mp-talep-numune-amac-wrap" hidden>
-            <label for="mp-talep-numune-amac">Numune Amacı / Müşteri Beklentisi *</label>
-            <textarea id="mp-talep-numune-amac" rows="2" maxlength="500" placeholder="Müşteri ne için numune istiyor?"></textarea>
+          <div class="mp-fld">
+            <label for="mp-f-takip">Takip Tarihi</label>
+            <input type="date" id="mp-f-takip" name="sonraki_takip_tarihi" placeholder="gg.aa.yyyy">
           </div>
-          <div class="mp-talep-kalem-ust">
-            <span class="mp-talep-baslik">Talep Kalemleri</span>
-            <button type="button" class="mp-link-btn" id="mp-talep-kalem-ekle">+ Kalem Ekle</button>
-          </div>
-          <div id="mp-talep-kalemler" class="mp-talep-kalemler"></div>
-          <p class="mp-talep-hata" id="mp-talep-hata" hidden></p>
         </div>
-      </div>
-      <div class="mp-fld">
-        <label for="mp-f-sonuc">Sonuç *</label>
-        <select id="mp-f-sonuc" name="sonuc_tipi" required>
-          <option value="">Seçin</option>
-          {% for s in sonuc_tipleri %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
-        </select>
-      </div>
-      <div class="mp-fld-ikili">
-        <div class="mp-fld">
-          <label for="mp-f-aksiyon">Sonraki Aksiyon</label>
-          <input type="text" id="mp-f-aksiyon" name="sonraki_aksiyon" maxlength="200" placeholder="Teklif gönder…">
-        </div>
-        <div class="mp-fld">
-          <label for="mp-f-takip">Takip Tarihi</label>
-          <input type="date" id="mp-f-takip" name="sonraki_takip_tarihi">
-        </div>
-      </div>
+      </section>
+
       <div class="mp-modal-gecmis" id="mp-modal-gecmis" hidden>
         <div class="mp-gecmis-ust">
           <h3 id="mp-modal-gecmis-baslik">Son Görüşmeler</h3>
@@ -822,9 +855,9 @@
         <div id="mp-modal-gecmis-liste"></div>
       </div>
       </div>{# /.mp-modal-body #}
-      <div class="mp-modal-footer mp-modal-footer-sticky" id="mp-gorusme-footer">
+      <div class="mp-modal-footer mp-modal-footer-sticky mp-gor-footer" id="mp-gorusme-footer">
         <button type="button" class="mp-btn mp-btn-outline" data-close="gorusme" id="mp-gorusme-iptal">İptal</button>
-        <button type="submit" class="mp-btn mp-btn-teal mp-btn-kaydet" id="mp-kaydet-btn">Kaydet</button>
+        <button type="submit" class="mp-btn mp-btn-teal mp-btn-kaydet" id="mp-kaydet-btn">GÖRÜŞMEYİ KAYDET</button>
       </div>
     </form>
   </div>
@@ -1027,58 +1060,261 @@
   <div class="mp-modal" role="dialog">
     <div class="mp-modal-hdr">
       <h2>TAHSİLAT KAYDI</h2>
+      <p style="margin:0 0 0 0;font-size:12px;color:#64748b;font-weight:400;padding:0 14px 8px;">Müşteriden alınan ödeme bilgisini girin.</p>
       <button type="button" class="mp-modal-kapat" data-close="tahsilat" aria-label="Kapat">×</button>
     </div>
     <form id="mp-tahsilat-form" class="mp-modal-form">
       <input type="hidden" name="kayit_id" id="mp-t-kayit-id" value="">
-      <div class="mp-fld"><label>Müşteri *</label>
-        <select id="mp-t-cari" name="cari_id" required>
-          <option value="">Seçin</option>
-          {% for m in ozet.musteriler %}<option value="{{ m.cari_id }}">{{ m.unvan }}</option>{% endfor %}
-        </select>
-      </div>
-      <div class="mp-fld"><label>Bağlı sipariş</label>
-        <select id="mp-t-siparis" name="siparis_id">
-          <option value="">Önce müşteri seçin</option>
-        </select>
-      </div>
-      <div class="mp-fld mp-fld-ikili">
-        <div><label>Planlanan tahsilat tarihi</label><input type="date" name="planlanan_tahsilat_tarihi" id="mp-t-plan-tarih" readonly></div>
-        <div><label>Beklenen tutar</label><input type="number" step="0.01" name="beklenen_tutar" id="mp-t-beklenen"></div>
-      </div>
-      <div class="mp-fld mp-fld-ikili">
-        <div><label>Alınan tutar *</label><input type="number" step="0.01" name="alinan_tutar" required min="0.01"></div>
-        <div><label>Alınan tarih</label><input type="date" name="alinan_tarih"></div>
-      </div>
-      <div class="mp-fld mp-fld-ikili">
-        <div><label>Ödeme tipi</label>
-          <select name="odeme_tipi">
-            <option value="NAKIT">Nakit</option>
-            <option value="CEK">Çek</option>
-            <option value="HAVALE">Havale</option>
-            <option value="SENET">Senet</option>
-            <option value="DIGER">Diğer</option>
-          </select>
+
+      {# ===== BÖLÜM 1 — SİPARİŞ ===== #}
+      <div class="mp-t-bolum">
+        <div class="mp-t-bolum-baslik"><span class="mp-t-bolum-no">1</span> Sipariş</div>
+        <div class="mp-fld-ust">
+          <div class="mp-fld" style="flex:1;min-width:0;">
+            <label>Müşteri *</label>
+            <select id="mp-t-cari" name="cari_id" required>
+              <option value="">Seçin</option>
+              {% for m in ozet.musteriler %}<option value="{{ m.cari_id }}">{{ m.unvan }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="mp-fld" style="flex:1;min-width:0;">
+            <label>Sipariş <span id="mp-t-siparis-zorunlu" hidden style="color:#ef4444">*</span></label>
+            <select id="mp-t-siparis" name="siparis_id">
+              <option value="">Önce müşteri seçin</option>
+            </select>
+          </div>
+          {# Sipariş Para Birimi — hidden, JS için korunuyor #}
+          <input type="hidden" id="mp-t-sip-pb" readonly>
         </div>
-        <div><label>Kısmi / Tam</label>
-          <select name="kismi_mi" id="mp-t-kismi">
-            <option value="0">Tam</option>
-            <option value="1">Kısmi</option>
-          </select>
+        <div class="mp-fld-ust" id="mp-t-sevk-wrap" hidden style="margin-top:6px;">
+          <div class="mp-fld" style="flex:1;min-width:0;">
+            <label>Sevkiyat <span style="color:#ef4444">*</span></label>
+            <select id="mp-t-sevkiyat" name="sevkiyat_id">
+              <option value="">Sipariş seçin</option>
+            </select>
+            <div id="mp-t-sevk-secim-uyari" hidden style="margin-top:6px;padding:8px 10px;background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;color:#c2410c;font-size:11px;font-weight:600;"></div>
+          </div>
+        </div>
+        {# Özet satır: Sevkiyat | Sevk Tarihi | Tahsil Edilecek | Vade #}
+        <div id="mp-t-sevk-ozet" hidden style="display:flex;gap:0;margin-top:8px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+          <div style="flex:1;padding:10px 14px;border-right:1px solid #e2e8f0;">
+            <div style="color:#64748b;font-size:11px;margin-bottom:3px;">Sevkiyat</div>
+            <strong style="font-size:13px;color:#0f172a;" id="mp-t-sevk-no">—</strong>
+          </div>
+          <div style="flex:1;padding:10px 14px;border-right:1px solid #e2e8f0;">
+            <div style="color:#64748b;font-size:11px;margin-bottom:3px;">Sevk Tarihi</div>
+            <strong style="font-size:13px;color:#0f172a;" id="mp-t-sevk-tarih">—</strong>
+          </div>
+          <div style="flex:1;padding:10px 14px;border-right:1px solid #e2e8f0;">
+            <div style="color:#64748b;font-size:11px;margin-bottom:3px;">Tahsil Edilecek</div>
+            <strong style="font-size:13px;color:#0f172a;" id="mp-t-sevk-hedef">—</strong>
+          </div>
+          <div style="flex:1;padding:10px 14px;">
+            <div style="color:#64748b;font-size:11px;margin-bottom:3px;">Vade</div>
+            <strong style="font-size:13px;color:#0f172a;" id="mp-t-sevk-vade">—</strong>
+          </div>
+          {# hidden eski alanlar — JS uyumu için #}
+          <span hidden id="mp-t-sevk-kg"></span>
+          <span hidden id="mp-t-sevk-tahsil"></span>
+        </div>
+        <div id="mp-t-sevk-tcmb-panel" hidden>
+          <div class="mp-sevk-hesap-grid" hidden>
+            <div><span class="mp-sevk-tcmb-lbl">Sipariş Miktarı</span><strong id="mp-t-sevk-sip-miktar">—</strong></div>
+            <div><span class="mp-sevk-tcmb-lbl">Birim Fiyat</span><strong id="mp-t-sevk-birim-fiyat">—</strong></div>
+            <div><span class="mp-sevk-tcmb-lbl">Bu Sevkiyat</span><strong id="mp-t-sevk-miktar">—</strong></div>
+            <div><span class="mp-sevk-tcmb-lbl">Sevk Tutarı</span><strong id="mp-t-sevk-tutar">—</strong></div>
+          </div>
+          <div id="mp-t-sevk-hesap-formula" class="mp-sevk-hesap-formula" hidden style="display:none!important"></div>
+          <div style="margin-top:10px;display:none;" id="mp-sevk-kalan-tekrar-blok">
+            <div style="margin-bottom:4px;">
+              <span style="color:#64748b;font-size:11px;">Gerçek Sevk Tarihi</span>
+              <strong style="margin-left:6px;font-size:12px;" id="mp-t-sevk-tcmb-sevk">—</strong>
+            </div>
+            <div style="margin-bottom:4px;">
+              <span style="color:#64748b;font-size:11px;">Sevk Kalanı</span>
+              <strong style="margin-left:6px;font-size:12px;" id="mp-t-sevk-tcmb-fx">—</strong>
+            </div>
+          </div>
+          <div id="mp-t-sevk-tcmb-err" class="mp-sevk-tcmb-err" hidden></div>
+        </div>
+        {# Sipariş özet (hidden — JS uyumu) #}
+        <div id="mp-t-siparis-ozet" hidden>
+          <span hidden id="mp-t-sip-miktar"></span>
+          <span hidden id="mp-t-sip-birim"></span>
+          <span hidden id="mp-t-sip-tutar"></span>
+          <span hidden id="mp-t-sip-sevk"></span>
+          <span hidden id="mp-t-sip-vade"></span>
+          <span hidden id="mp-t-sip-hedef-vade"></span>
+        </div>
+        <div id="mp-t-sevk-yok-uyari" hidden style="margin-top:8px;padding:10px 14px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;color:#c2410c;font-size:12px;font-weight:600;">
+          Sevk bekleniyor — tahsilat oluşturulamaz.
         </div>
       </div>
-      <div class="mp-fld"><label>Kalan tutar</label><input type="number" step="0.01" name="kalan_tutar" id="mp-t-kalan" readonly></div>
-      <div class="mp-fld"><label>Çek / havale / senet referansı</label><input type="text" name="odeme_referansi"></div>
-      <div class="mp-fld"><label>Açıklama</label><textarea name="aciklama" rows="2"></textarea></div>
-      <div class="mp-fld"><label>Onay Notu</label><textarea name="onay_notu" rows="2"></textarea></div>
-      <p class="mp-modal-not">Onay sonrası cari hareket yalnız entegrasyon aktifse yazılır. Şu an: Cari entegrasyonu bekliyor.</p>
+
+      {# ===== BÖLÜM 2 — ÖDEME ===== #}
+      <div class="mp-t-bolum">
+        <div class="mp-t-bolum-baslik"><span class="mp-t-bolum-no">2</span> Ödeme</div>
+        {# TCMB panel — boş, JS uyumu için #}
+        <div id="mp-t-tcmb-panel" hidden></div>
+        <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:12px;">
+          <div class="mp-fld" style="flex:0 0 auto;min-width:130px;margin:0;">
+            <label>Ödeme Şekli</label>
+            <select name="odeme_tipi" id="mp-t-odeme-tipi" style="min-width:120px;">
+              <option value="NAKIT">Nakit</option>
+              <option value="CEK">Çek</option>
+              <option value="HAVALE">Havale</option>
+              <option value="SENET">Senet</option>
+              <option value="DIGER">Diğer</option>
+            </select>
+            {# Tahsilat Para Birimi — hidden, JS uyumu #}
+            <select name="odeme_tipi_pb" id="mp-t-tahsilat-pb" hidden style="display:none;">
+              <option value="TRY" selected>TRY</option>
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+            </select>
+          </div>
+          {# Döviz Kuru — USD/EUR için göster #}
+          <div id="mp-t-manuel-kur-wrap" class="mp-fld" style="flex:0 0 auto;min-width:160px;margin:0;">
+            <label for="mp-t-manuel-kur">Döviz Kuru <span style="color:#ef4444;">*</span></label>
+            <input type="text" inputmode="decimal" id="mp-t-manuel-kur" name="tcmb_satis_kur_snapshot"
+              placeholder="Örn. 47,25"
+              autocomplete="off"
+              style="font-weight:700;border:1.5px solid #e2e8f0;border-radius:6px;padding:6px 10px;font-size:14px;width:120px;">
+            <div style="color:#64748b;font-size:11px;margin-top:3px;" id="mp-t-manuel-kur-hint">1 USD kaç TL? Güncel satış kurunu yazın.</div>
+          </div>
+          {# Tahsilat Hedefi — büyük kart #}
+          <div style="flex:1;min-width:160px;background:#f0f9ff;border:1.5px solid #bae6fd;border-radius:10px;padding:12px 16px;position:relative;">
+            <div style="color:#0369a1;font-size:11px;font-weight:600;margin-bottom:4px;">Tahsilat Hedefi</div>
+            <div style="font-size:22px;font-weight:800;color:#0f172a;" id="mp-t-hedef-display">—</div>
+            <div style="font-size:11px;color:#64748b;margin-top:2px;" id="mp-t-hedef-formula"></div>
+            {# hidden input — form submit için #}
+            <input type="hidden" name="beklenen_tutar" id="mp-t-beklenen">
+            <label id="mp-t-hedef-label" hidden></label>
+            <span id="mp-t-sevk-tcmb-try" hidden></span>
+          </div>
+        </div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;">
+          <div class="mp-fld" style="flex:2;min-width:200px;margin:0;">
+            <label id="mp-t-alinan-label" style="font-size:13px;font-weight:700;">Alınan Tutar *</label>
+            <input type="text" inputmode="decimal" class="mp-money-inp" name="alinan_tutar" id="mp-t-alinan" required placeholder="0,00 TL"
+              style="font-size:20px;font-weight:800;padding:12px 14px;border-radius:8px;">
+          </div>
+          <div class="mp-fld" style="flex:1;min-width:150px;margin:0;">
+            <label>Kalan</label>
+            <div style="background:#fff7f7;border:1.5px solid #fecaca;border-radius:8px;padding:12px 14px;font-size:18px;font-weight:800;color:#dc2626;" id="mp-t-kalan-display">—</div>
+            <input type="hidden" name="kalan_tutar" id="mp-t-kalan">
+          </div>
+        </div>
+      </div>
+
+      {# ===== BÖLÜM 3 — ÇEK BİLGİLERİ (sadece CEK) ===== #}
+      <div id="mp-cek-panel" hidden>
+        <div class="mp-t-bolum">
+          <div class="mp-t-bolum-baslik" style="display:flex;justify-content:space-between;align-items:center;">
+            <span><span class="mp-t-bolum-no">3</span> Çek Bilgileri</span>
+            <button type="button" id="mp-cek-ekle-btn" class="mp-btn mp-btn-outline" style="font-size:11px;padding:3px 10px;">+ Çek Ekle</button>
+          </div>
+          <table id="mp-cek-tablo">
+            <colgroup>
+              <col class="c-no">
+              <col class="c-tutar">
+              <col class="c-alim">
+              <col class="c-vade">
+              <col class="c-cekno">
+              <col class="c-banka">
+              <col class="c-sil">
+            </colgroup>
+            <thead>
+              <tr>
+                <th style="text-align:center;">#</th>
+                <th style="text-align:right;">Tutar (TRY)</th>
+                <th>Alım Tarihi</th>
+                <th>Vade Tarihi</th>
+                <th>Çek No</th>
+                <th>Banka</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="mp-cek-tbody"></tbody>
+          </table>
+          <div id="mp-cek-baglam-kutu" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin:8px 0 0;padding:8px 12px;font-size:12px;color:#374151;" hidden>
+            <div id="mp-cek-baglam-ic" style="color:#94a3b8;">Sipariş seçilince bağlam yüklenir…</div>
+          </div>
+          <div id="mp-cek-ozet" style="margin:10px 0 0;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 14px;" hidden>
+            <div class="cek-oz-grid-ust">
+              <div><span style="color:#6b7280;font-size:11px;">Çek Adedi</span><strong class="cek-oz-val" id="mp-cek-oz-adet">—</strong></div>
+              <div><span style="color:#6b7280;font-size:11px;">Toplam Çek</span><strong class="cek-oz-val" id="mp-cek-oz-toplam">—</strong></div>
+              <div><span style="color:#6b7280;font-size:11px;">Kalan</span><strong class="cek-oz-val" id="mp-cek-oz-kalan">—</strong></div>
+              <div id="mp-cek-oz-fazla-wrap" hidden><span style="color:#6b7280;font-size:11px;">Fazla Tahsilat</span><strong class="cek-oz-val" id="mp-cek-oz-fazla" style="color:#dc2626;">—</strong></div>
+              <div><span style="color:#6b7280;font-size:11px;">Karşılama</span><strong class="cek-oz-val" id="mp-cek-oz-karsilama">—</strong></div>
+            </div>
+            <div id="mp-cek-oz-hedef-asim" style="display:none;margin:8px 0 0;font-size:12px;color:#dc2626;font-weight:600;"></div>
+            <div class="cek-oz-grid-vade">
+              <div><span style="color:#6b7280;font-size:11px;">Onaylanan Vade</span><strong class="cek-oz-val" id="mp-cek-oz-onaylanan">—</strong></div>
+              <div><span style="color:#6b7280;font-size:11px;">Ağırlıklı Ort. Vade</span><strong class="cek-oz-val" id="mp-cek-oz-vade">—</strong></div>
+              <div><span style="color:#6b7280;font-size:11px;">Ort. Vade Tarihi</span><strong class="cek-oz-val" id="mp-cek-oz-vade-tarih">—</strong></div>
+              <div><span style="color:#6b7280;font-size:11px;">Vade Farkı</span><strong class="cek-oz-val" id="mp-cek-oz-sapma">—</strong></div>
+            </div>
+            <div class="cek-oz-grid-alt">
+              <div>
+                <span style="color:#6b7280;font-size:11px;">Finansman Etkisi</span>
+                <strong class="cek-oz-val" id="mp-cek-oz-finansman">—</strong>
+                <div id="mp-cek-oz-finansman-detay" style="display:none;margin-top:4px;font-size:11px;color:#6b7280;line-height:1.5;">
+                  <span id="mp-cek-oz-finansman-oran"></span><br>
+                  <span id="mp-cek-oz-finansman-formul"></span>
+                </div>
+              </div>
+              <div>
+                <span style="color:#6b7280;font-size:11px;">Durum</span>
+                <strong class="cek-oz-val" id="mp-cek-oz-durum">—</strong>
+                <div id="mp-cek-oz-fazla-vade-mesaj" style="display:none;margin-top:4px;font-size:11px;color:#dc2626;font-weight:600;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {# ===== ÇEK PANELİ BİTİŞ ===== #}
+
+      {# ===== BÖLÜM 4 — DETAY / AÇIKLAMA ===== #}
+      <div class="mp-t-bolum" id="mp-t-detay-bolum">
+        <div class="mp-t-bolum-baslik"><span class="mp-t-bolum-no" id="mp-t-detay-no">3</span> Tahsilat Detay Bilgileri</div>
+        <div class="mp-fld-ust">
+          <div class="mp-fld mp-fld-1-2" style="padding:0;">
+            <label>Tahsilat Tarihi *</label>
+            <input type="date" name="alinan_tarih" id="mp-t-alinan-tarih" required>
+          </div>
+          <div class="mp-fld mp-fld-1-2" id="mp-t-ref-wrap" style="padding:0;">
+            <label>Referans (opsiyonel)</label>
+            <input type="text" name="odeme_referansi" id="mp-t-ref">
+          </div>
+        </div>
+        <div class="mp-fld" style="padding:0;margin-top:6px;">
+          <label>Açıklama (opsiyonel)</label>
+          <textarea name="aciklama" rows="2"></textarea>
+        </div>
+        <div class="mp-fld" id="mp-t-onay-notu-wrap" style="display:none;padding:0;margin-top:6px;">
+          <label>Onay Notu</label>
+          <textarea name="onay_notu" rows="2"></textarea>
+        </div>
+
+        <!-- Vade aşımı istisna açıklaması — yalnız fazla vade durumunda gösterilir -->
+        <div class="mp-fld" id="mp-t-istisna-aciklama-wrap" style="display:none;margin-top:8px;padding:10px 12px;background:#fff7ed;border-left:3px solid #f59e0b;border-radius:6px;">
+          <label style="color:#92400e;font-weight:600;font-size:12px;">⚠ Yönetim İstisna Onayı — Açıklama Zorunlu</label>
+          <textarea id="mp-t-istisna-aciklama" rows="3" style="margin-top:6px;width:100%;font-size:13px;border:1px solid #fbbf24;border-radius:4px;padding:6px 8px;" placeholder="Müşteri neden anlaşılan vadeden daha uzun vadeli çek verdi?"></textarea>
+          <span style="font-size:11px;color:#92400e;">Bu açıklama yönetime iletilecek ve kayda alınacaktır.</span>
+        </div>
+      </div>
+
+      <p class="mp-modal-not" style="display:flex;align-items:center;gap:6px;font-size:11px;color:#64748b;">
+        <svg width="14" height="14" viewBox="0 0 20 20" fill="none" style="flex-shrink:0;"><circle cx="10" cy="10" r="9" stroke="#006a8e" stroke-width="1.5"/><path d="M10 9v5M10 7h.01" stroke="#006a8e" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Kur ve hedef tutar otomatik olarak kayda alınır.
+      </p>
       <div class="mp-modal-footer mp-modal-footer-sticky">
         <button type="button" class="mp-btn mp-btn-outline" data-close="tahsilat">İptal</button>
         <button type="button" class="mp-btn mp-btn-teal" id="mp-tahsilat-taslak-btn">Taslak Kaydet</button>
-        <button type="button" class="mp-btn mp-btn-teal" id="mp-tahsilat-gonder-btn">YÖNETİM ONAYINA GÖNDER</button>
+        <button type="button" class="mp-btn mp-btn-teal" id="mp-tahsilat-gonder-btn" style="font-weight:800;font-size:13px;">ONAYA GÖNDER</button>
       </div>
-    </form>
-  </div>
+    </form>  </div>
 </div>
 
 <style>
@@ -1281,7 +1517,7 @@ header.mp-page-hdr { z-index: 0; }
 .mp-gecmis-bos { color: #64748b; font-size: 11px; padding: 6px 0; margin: 0; min-height: 0; }
 #mp-modal-gecmis { margin-top: 2px; }
 #mp-modal-gecmis.mp-gecmis-bos-wrap { min-height: 44px; max-height: 56px; }
-#mp-modal-gorusme .mp-not-kompakt { min-height: 68px; max-height: 76px; height: 72px; resize: none; }
+#mp-modal-gorusme .mp-not-kompakt { min-height: 72px; max-height: 90px; height: 80px; resize: none; }
 .mp-m-aks { display: flex; gap: 3px; flex-wrap: nowrap; white-space: nowrap; }
 .mp-drawer-back { position: fixed; inset: 0; background: rgba(15,23,42,.35); z-index: 9998; }
 .mp-drawer-back[hidden], .mp-drawer[hidden] { display: none !important; }
@@ -1307,8 +1543,214 @@ header.mp-page-hdr { z-index: 0; }
   width: 100%; max-width: 520px;
   max-height: 88vh; display: flex; flex-direction: column; overflow: hidden;
 }
-/* Görüşme: base yeterli */
-.mp-modal-gorusme { max-height: 88vh; }
+/* Görüşme modal — FAZ 2B Görsel 2 (820px geniş) */
+#mp-modal-gorusme.mp-modal-overlay { align-items: center; padding: 16px; overflow: hidden; }
+.mp-modal-gorusme {
+  width: 820px; max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(15,23,42,.16), 0 4px 12px rgba(15,23,42,.08);
+}
+.mp-modal-gorusme > .mp-gor-hdr,
+.mp-modal-gorusme > .mp-gor-mod-bar,
+.mp-modal-gorusme > .mp-modal-meta { flex: 0 0 auto; }
+.mp-modal-gorusme > .mp-modal-form-sticky {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.mp-gor-hdr {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 20px 10px; border-bottom: 1px solid #f1f5f9; flex: 0 0 auto; background: #fff;
+}
+.mp-gor-hdr h2 { margin: 0; font-size: 15px; font-weight: 800; color: #0f172a; letter-spacing: .02em; }
+.mp-gor-mod-bar { padding: 0 20px 12px; flex: 0 0 auto; background: #fff; border-bottom: 1px solid #f1f5f9; }
+.mp-gor-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1px solid #d1d5db; border-radius: 8px; overflow: hidden; }
+.mp-gor-seg-sm { margin-top: 4px; }
+.mp-gor-seg-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 10px 12px; font-size: 12px; font-weight: 700; border: none; background: #fff;
+  color: #475569; cursor: pointer; font-family: inherit; transition: background .15s, color .15s;
+}
+.mp-gor-seg-btn + .mp-gor-seg-btn { border-left: 1px solid #d1d5db; }
+label.mp-gor-seg-btn { margin: 0; }
+.mp-gor-seg-btn.mp-gor-seg-aktif { background: #0f766e; color: #fff; }
+.mp-gor-seg-ico { font-size: 13px; line-height: 1; }
+.mp-gor-radio { position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
+.mp-gor-info-band {
+  margin-top: 10px; padding: 8px 12px; background: #eff6ff; border: 1px solid #bfdbfe;
+  border-radius: 8px; font-size: 11px; color: #1e40af; line-height: 1.4;
+}
+.mp-gor-firma-band { margin-top: 8px; }
+.mp-gor-firma-band strong { color: #0f766e; font-weight: 700; }
+.mp-gor-body {
+  padding: 12px 20px 96px;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+.mp-modal-gorusme .mp-gor-footer {
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 5;
+  background: #fff;
+  border-top: 1px solid #e2e8f0;
+  box-shadow: 0 -4px 16px rgba(15,23,42,.08);
+  padding: 10px 20px;
+}
+.mp-gor-section { display: grid; gap: 8px; }
+.mp-gor-sec-title { margin: 0 0 2px; font-size: 13px; font-weight: 700; color: #1e293b; }
+.mp-gor-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.mp-gor-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.mp-gor-konu-lbl { display: block; font-size: 11px; font-weight: 600; color: #374151; margin-bottom: 6px; }
+.mp-konu-etiketler { display: flex; flex-wrap: wrap; gap: 8px; }
+.mp-konu-pill { position: relative; cursor: pointer; margin: 0; }
+.mp-konu-pill input { position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
+.mp-konu-pill span {
+  display: inline-flex; align-items: center; gap: 4px; padding: 6px 14px;
+  border: 1px solid #d1d5db; border-radius: 999px; font-size: 11px; font-weight: 600;
+  color: #475569; background: #fff; transition: all .15s;
+}
+.mp-konu-pill input:checked + span {
+  background: #0f766e; border-color: #0f766e; color: #fff;
+}
+.mp-konu-pill input:checked + span::before { content: '✓'; font-size: 10px; }
+.mp-gor-ticari-kart {
+  border: 1px solid #bfdbfe; border-radius: 10px; background: #f0f9ff; overflow: hidden;
+}
+.mp-modal-gorusme .mp-gor-ticari-kart:not(.mp-gor-ticari-kapali) {
+  overflow: visible;
+}
+.mp-gor-ticari-hdr {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; background: transparent; border: none; cursor: pointer;
+  font-size: 12px; font-weight: 700; color: #1e40af; font-family: inherit; text-align: left;
+}
+.mp-gor-chevron { font-size: 14px; color: #64748b; transition: transform .2s; }
+.mp-gor-ticari-kart.mp-gor-ticari-kapali .mp-gor-ticari-ic { display: none; }
+.mp-gor-ticari-kart.mp-gor-ticari-kapali .mp-gor-chevron { transform: rotate(-90deg); }
+.mp-gor-ticari-ic { padding: 0 14px 12px; display: grid; gap: 10px; }
+.mp-gor-ticari-grid {
+  display: grid; grid-template-columns: 32fr 18fr 12fr 20fr 12fr; gap: 8px; align-items: end;
+}
+.mp-gor-fiyat-toggle-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding-top: 2px; }
+.mp-gor-toggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; margin: 0; }
+.mp-gor-toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+.mp-gor-toggle-ui {
+  width: 36px; height: 20px; border-radius: 999px; background: #cbd5e1; position: relative; transition: background .15s;
+}
+.mp-gor-toggle-ui::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+  border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.15);
+}
+.mp-gor-toggle input:checked + .mp-gor-toggle-ui { background: #0f766e; }
+.mp-gor-toggle input:checked + .mp-gor-toggle-ui::after { transform: translateX(16px); }
+.mp-gor-toggle-lbl { font-size: 12px; font-weight: 600; color: #1e293b; }
+.mp-gor-toggle-hint { font-size: 10px; color: #64748b; }
+.mp-gor-footer .mp-btn-kaydet { min-width: 180px; font-weight: 700; letter-spacing: .02em; }
+#mp-modal-gorusme.mp-gor-mod-plan #mp-gor-sec-sonuc,
+#mp-modal-gorusme.mp-gor-mod-plan #mp-gor-ticari-wrap,
+#mp-modal-gorusme.mp-gor-mod-plan #mp-gor-odeme-wrap,
+#mp-modal-gorusme.mp-gor-mod-plan #mp-f-konu-wrap { display: none !important; }
+
+#mp-modal-gorusme.mp-gor-ajanda-sonuc .mp-gor-mod-bar,
+#mp-modal-gorusme.mp-gor-ajanda-sonuc #mp-gor-sec-kim,
+#mp-modal-gorusme.mp-gor-ajanda-sonuc #mp-modal-meta,
+#mp-modal-gorusme.mp-gor-ajanda-sonuc #mp-gor-plan-band,
+#mp-modal-gorusme.mp-gor-ajanda-sonuc #mp-modal-gecmis,
+#mp-modal-gorusme.mp-gor-ajanda-sonuc #mp-gor-zaman-tip-wrap,
+#mp-modal-gorusme.mp-gor-ajanda-sonuc #mp-gor-sec-zaman-title,
+#mp-modal-gorusme.mp-gor-ajanda-sonuc #mp-gor-sec-konus > .mp-gor-sec-title { display: none !important; }
+#mp-modal-gorusme.mp-gor-ajanda-sonuc #mp-gor-sec-plan-readonly,
+#mp-modal-gorusme.mp-gor-ajanda-sonuc #mp-gor-ajanda-sonuc-baslik { display: block !important; }
+#mp-modal-gorusme.mp-gor-ajanda-sonuc #mp-gor-sec-zaman .mp-gor-row-2 { grid-template-columns: 1fr; }
+.mp-gor-plan-readonly-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+  padding: 12px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+.mp-gor-plan-readonly-item { min-width: 0; }
+.mp-gor-plan-readonly-lbl {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  margin-bottom: 2px;
+}
+.mp-gor-plan-readonly-val {
+  display: block;
+  font-size: 13px;
+  color: #0f172a;
+  word-break: break-word;
+}
+.mp-gor-ajanda-sonuc-baslik { margin: 4px 0 8px; }
+.mp-gor-odeme-wrap {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+.mp-gor-odeme-wrap:not([hidden]) {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px dashed #e2e8f0;
+}
+.mp-gor-odeme-baslik {
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-bottom: 8px;
+}
+.mp-gor-odeme-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+.mp-gor-odeme-col-tip { grid-column: 1; min-width: 0; }
+#mp-f-vade-wrap:not([hidden]) {
+  display: block;
+  grid-column: 2;
+  min-width: 0;
+}
+#mp-f-cek-wrap:not([hidden]) {
+  display: grid;
+  grid-column: 2 / -1;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: end;
+  min-width: 0;
+}
+.mp-gor-odeme-cek-row .mp-fld { min-width: 0; }
+
+@media (max-width: 720px) {
+  .mp-gor-plan-readonly-grid { grid-template-columns: 1fr; }
+  .mp-gor-odeme-grid { grid-template-columns: 1fr; }
+  .mp-gor-odeme-col-tip,
+  #mp-f-vade-wrap:not([hidden]),
+  #mp-f-cek-wrap:not([hidden]) { grid-column: 1; }
+  #mp-f-cek-wrap:not([hidden]) { grid-template-columns: 1fr; }
+}
+@media (max-width: 768px) {
+  .mp-gor-row-2, .mp-gor-row-3, .mp-gor-ticari-grid { grid-template-columns: 1fr; }
+  .mp-modal-gorusme { width: 100%; max-width: calc(100vw - 16px); max-height: calc(100vh - 32px); }
+}
 /* Header — temiz, modern, kompakt */
 .mp-modal-gorusme .mp-modal-hdr {
   display: flex; justify-content: space-between; align-items: center;
@@ -1349,6 +1791,16 @@ header.mp-page-hdr { z-index: 0; }
 /* Görüşme scroll body */
 .mp-modal-body { padding: 6px 14px 5px; display: grid; gap: 4px; overflow-y: auto; flex: 1 1 auto; min-height: 0; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: transparent transparent; }
 .mp-modal-body:hover { scrollbar-color: #cbd5e1 transparent; }
+/* Görüşme modal body — footer güvenli alanı (genel .mp-modal-body padding'ini ezer) */
+.mp-modal-gorusme .mp-modal-body.mp-gor-body {
+  padding: 12px 20px 96px;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
 .mp-panel-ust-sekme { flex-wrap: wrap; gap: 8px; }
 .mp-sekme { display: flex; gap: 4px; }
 .mp-sekme-btn { border: 1px solid var(--border); background: #fff; color: #64748b; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; cursor: pointer; }
@@ -1364,6 +1816,15 @@ header.mp-page-hdr { z-index: 0; }
 .mp-fld input, .mp-fld select, .mp-fld textarea { width: 100%; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; box-sizing: border-box; min-height: 28px; }
 .mp-fld textarea { min-height: 46px; resize: vertical; }
 .mp-fld-ikili { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+/* Yeni bölüm yapısı */
+.mp-t-bolum { margin: 0 0 8px; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 14px 8px; background: #fff; }
+.mp-t-bolum-baslik { font-size: 12px; font-weight: 700; color: #374151; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+.mp-t-bolum-no { background: #006a8e; color: #fff; border-radius: 50%; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; flex-shrink: 0; }
+.mp-fld-ust { display: flex; flex-wrap: wrap; gap: 6px; }
+.mp-fld-ust .mp-fld { flex: 1 1 180px; min-width: 140px; padding: 0; border: none; background: none; margin: 0; }
+.mp-fld-2-3 { flex: 2 1 220px; }
+.mp-fld-1-3 { flex: 1 1 110px; }
+.mp-fld-1-2 { flex: 1 1 160px; }
 /* ── MODAL İÇİ FORM TASARIM OVERRIDE — referans görsel ── */
 /* Label: biraz koyu — sadece renk ve font-weight değişiyor, margin öncekiyle aynı */
 .mp-modal .mp-fld label { font-size: 11px; font-weight: 600; color: #374151; margin-bottom: 1px; }
@@ -1422,24 +1883,139 @@ header.mp-page-hdr { z-index: 0; }
   padding: 5px 12px; min-height: 28px; font-size: 11px;
 }
 
-/* Tahsilat: form scroll — gap:0 (spacing margin-bottom ile sağlanıyor, global gap:5px override) */
+/* Tahsilat: GENIŞ modal — referans görsele göre 850-920px */
+#mp-modal-tahsilat.mp-modal-overlay { align-items: center; padding: 20px; }
+#mp-modal-tahsilat > .mp-modal {
+  max-width: min(920px, calc(100vw - 40px));
+  width: min(920px, calc(100vw - 40px));
+  max-height: min(88vh, 820px);
+}
+/* Tahsilat: form scroll */
 #mp-modal-tahsilat .mp-modal-form {
-  overflow-y: auto; flex: 1 1 auto; min-height: 0; padding: 0;
+  overflow-y: auto; overflow-x: hidden; flex: 1 1 auto; min-height: 0; padding: 10px 16px 0;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin; scrollbar-color: transparent transparent;
-  display: flex; flex-direction: column; gap: 0;
+  display: flex; flex-direction: column; gap: 10px;
 }
 #mp-modal-tahsilat .mp-modal-form:hover { scrollbar-color: #cbd5e1 transparent; }
-/* Tahsilat form içeriği — alanlar */
-#mp-modal-tahsilat .mp-modal-form > .mp-fld,
-#mp-modal-tahsilat .mp-modal-form > .mp-fld-ikili { padding: 0 14px; margin-bottom: 3px; }
-#mp-modal-tahsilat .mp-modal-form > .mp-fld:first-child { margin-top: 4px; }
-/* p.mp-modal-not için yatay margin */
-#mp-modal-tahsilat .mp-modal-form > p { margin: 0 14px 3px; }
-/* Footer sticky altta */
-#mp-modal-tahsilat .mp-modal-form > .mp-modal-footer-sticky { position: sticky; bottom: 0; margin-top: auto; }
-/* Tahsilat textarea kompakt */
-#mp-modal-tahsilat textarea { min-height: 40px; height: 40px; }
+/* Bölüm kutuları — referans görsele göre ferah */
+#mp-modal-tahsilat .mp-t-bolum {
+  margin: 0; border: 1px solid #e2e8f0; border-radius: 10px;
+  padding: 12px 16px 12px; background: #fff; flex-shrink: 0;
+}
+#mp-modal-tahsilat .mp-t-bolum-baslik { margin-bottom: 10px; font-size: 12.5px; }
+/* Bölüm 1 üst satır: Müşteri (flex:2) | Sipariş (flex:2) | PB (sabit 90px) */
+#mp-modal-tahsilat .mp-fld-ust { gap: 10px; }
+#mp-modal-tahsilat .mp-fld-ust .mp-fld { min-width: 0; }
+/* Sipariş özet şeridi */
+#mp-t-siparis-ozet {
+  margin: 8px 0 0 !important;
+  background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px;
+  padding: 8px 14px; font-size: 12px;
+  display: flex !important; gap: 0; flex-wrap: nowrap; align-items: stretch;
+}
+#mp-t-siparis-ozet[hidden] { display: none !important; }
+#mp-t-siparis-ozet span { flex: 1; padding: 0 10px; border-right: 1px solid #bae6fd; }
+#mp-t-siparis-ozet span:first-child { padding-left: 0; }
+#mp-t-siparis-ozet span:last-child { border-right: none; }
+#mp-t-sevk-ozet {
+  display: flex; flex-wrap: wrap; gap: 0; margin-top: 8px; padding: 8px 12px;
+  background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; font-size: 12px;
+}
+#mp-t-sevk-ozet[hidden] { display: none !important; }
+#mp-t-sevk-ozet span { flex: 1; min-width: 100px; padding: 0 10px; border-right: 1px solid #bae6fd; }
+#mp-t-sevk-ozet span:first-child { padding-left: 0; }
+#mp-t-sevk-ozet span:last-child { border-right: none; }
+#mp-t-sevk-wrap[hidden] { display: none !important; }
+#mp-t-sevk-tcmb-panel {
+  margin-top: 8px; padding: 10px 12px; background: #f8fafc;
+  border: 1px solid #cbd5e1; border-radius: 8px; font-size: 12px;
+}
+#mp-t-sevk-tcmb-panel[hidden] { display: none !important; }
+.mp-sevk-hesap-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px 12px; margin-bottom: 8px;
+  padding-bottom: 8px; border-bottom: 1px dashed #cbd5e1;
+}
+.mp-sevk-hesap-formula {
+  margin: 0 0 8px; padding: 6px 8px; background: #eff6ff; border-radius: 6px;
+  color: #1e40af; font-size: 12px; font-weight: 600;
+}
+.mp-sevk-hesap-formula[hidden] { display: none !important; }
+.mp-sevk-tcmb-grid {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px 12px;
+}
+.mp-sevk-tcmb-lbl { display: block; color: #64748b; font-size: 11px; margin-bottom: 2px; }
+.mp-sevk-tcmb-grid strong { color: #0f172a; font-size: 13px; }
+.mp-sevk-tcmb-err {
+  margin-top: 8px; padding: 8px 10px; background: #fef2f2; border: 1px solid #fecaca;
+  border-radius: 6px; color: #b91c1c; font-size: 12px; font-weight: 600;
+}
+.mp-sevk-tcmb-err[hidden] { display: none !important; }
+#mp-t-tahsilat-pb.mp-sevk-pb-lock { background: #f8fafc; pointer-events: none; opacity: 0.85; }
+#mp-t-beklenen.mp-sevk-hedef-ro { background: #f8fafc !important; font-weight: 700; color: #006a8e; cursor: default; }
+/* TCMB paneli — sarı kutu sağ hizalı referans gibi */
+#mp-t-tcmb-panel {
+  margin: 8px 0 0 !important; padding: 10px 14px !important;
+  background: #fefce8 !important; border: 1px solid #fde68a !important;
+  border-radius: 8px; font-size: 12px; flex: none !important; width: 100% !important;
+  display: flex !important; align-items: center; gap: 0; flex-wrap: nowrap;
+}
+#mp-t-tcmb-panel[hidden] { display: none !important; }
+#mp-t-tcmb-panel .mp-tcmb-sol { flex: 1; display: flex; gap: 20px; align-items: center; }
+#mp-t-tcmb-panel .mp-tcmb-badge {
+  background: #fef9c3; border-radius: 8px; padding: 8px 16px;
+  font-size: 15px; font-weight: 800; color: #78350f;
+  white-space: nowrap; text-align: center; min-width: 160px;
+}
+/* Tahsilat Hedefi / Alınan / Kalan — 3 eşit sütun */
+#mp-modal-tahsilat .mp-t-tutar-satir { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 10px; }
+/* ÇEK tablosu — no overflow-x, kolonlar % ile */
+#mp-cek-tablo { width: 100%; border-collapse: collapse; font-size: 12.5px; table-layout: fixed; }
+#mp-cek-tablo th { font-weight: 600; border-bottom: 1px solid #e2e8f0; padding: 7px 6px; color: #475569; background: #f8fafc; font-size: 11.5px; }
+#mp-cek-tablo td { border-bottom: 1px solid #f1f5f9; vertical-align: middle; padding: 6px 4px; }
+/* Kolon genişlikleri: # | Tutar | Alım | Vade | No | Banka | Sil */
+#mp-cek-tablo col.c-no   { width: 28px; }
+#mp-cek-tablo col.c-tutar { width: 15%; }
+#mp-cek-tablo col.c-alim  { width: 14%; }
+#mp-cek-tablo col.c-vade  { width: 14%; }
+#mp-cek-tablo col.c-cekno { width: 15%; }
+#mp-cek-tablo col.c-banka { width: auto; }
+#mp-cek-tablo col.c-sil   { width: 28px; }
+#mp-cek-tablo .mp-inp-sm  { font-size: 12px; padding: 3px 5px; }
+/* Çek özet paneli — 4+4 grid */
+#mp-cek-ozet {
+  margin: 10px 0 0 !important;
+  border-radius: 8px; padding: 12px 14px !important;
+}
+#mp-cek-ozet .cek-oz-grid-ust,
+#mp-cek-ozet .cek-oz-grid-vade {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px 12px;
+}
+#mp-cek-ozet .cek-oz-grid-vade {
+  margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(0,0,0,.06);
+}
+#mp-cek-ozet .cek-oz-grid-alt {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 12px;
+  margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(0,0,0,.06);
+}
+#mp-cek-ozet .cek-oz-val { font-size: 14px; font-weight: 700; display: block; margin-top: 2px; }
+/* Tahsilat textarea */
+#mp-modal-tahsilat textarea { min-height: 44px; height: 44px; resize: vertical; }
+/* Footer sticky */
+#mp-modal-tahsilat .mp-modal-form > .mp-modal-footer-sticky {
+  position: sticky; bottom: 0; margin-top: auto; flex-shrink: 0;
+}
+/* p.mp-modal-not */
+#mp-modal-tahsilat .mp-modal-form > p { margin: 0; }
+/* Tablet/küçük ekran: sütunlar wrap'a geçer */
+@media (max-width: 600px) {
+  #mp-modal-tahsilat > .mp-modal { max-width: calc(100vw - 20px); width: calc(100vw - 20px); }
+  #mp-t-siparis-ozet { flex-wrap: wrap; }
+  #mp-cek-ozet .cek-oz-grid-ust,
+  #mp-cek-ozet .cek-oz-grid-alt { grid-template-columns: repeat(2, 1fr); }
+}
+.mp-inp-sm { border: 1px solid #cbd5e1; border-radius: 4px; padding: 3px 5px; font-size: 12px; width: 100%; box-sizing: border-box; }
+.mp-inp-sm:focus { outline: none; border-color: #006a8e; }
 
 /* Sipariş: geniş modal — overflow hidden, scroll yalnız .mp-st-scroll'da */
 .mp-modal-siparis { max-width: min(920px, 96vw); max-height: 88vh; }
@@ -1521,8 +2097,7 @@ header.mp-page-hdr { z-index: 0; }
 }
 .mp-modal-footer-sticky .mp-btn-outline:hover,
 .mp-modal-footer .mp-btn-outline:hover { background: #f9fafb; color: #374151; }
-#mp-fiyat-blok { display: grid; gap: 5px; padding: 4px 0 0; }
-.mp-talep-blok { border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px 10px; background: #f9fafb; display: grid; gap: 5px; }
+#mp-fiyat-blok { display: grid; gap: 8px; }
 .mp-talep-baslik { font-size: 11px; font-weight: 700; color: #0f766e; }
 .mp-talep-secim { display: flex; flex-wrap: wrap; gap: 8px 12px; }
 .mp-talep-opt { font-size: 11px; color: #334155; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
@@ -1579,7 +2154,7 @@ input.mp-hata-alan, select.mp-hata-alan, textarea.mp-hata-alan {
 @media (min-width: 769px) {
   .mp-modal-overlay { align-items: center; padding: 16px; }
   .mp-modal { border-radius: 14px; max-height: 88vh; }
-  .mp-modal-gorusme { max-height: 88vh; }
+  .mp-modal-gorusme { max-height: calc(100vh - 32px); }
   .mp-modal-genis { max-height: 91vh; }
 }
 /* ── v2 Layout ── */
@@ -1953,6 +2528,245 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
   var aktifAdayId = null;
   var gorusmeModKilitli = false;
   var gecmisTamAcik = false;
+  var gorusmeAjandaSonuc = false;
+
+  function gorusmeKaydetBtnMetni(mod) {
+    if (gorusmeAjandaSonuc) return 'GÖRÜŞMEYİ TAMAMLA';
+    return (mod || '').toUpperCase() === 'PLANLA' ? 'AJANDAYA PLAN EKLE' : 'GÖRÜŞMEYİ KAYDET';
+  }
+
+  function formatPlanTarihDisplay(raw) {
+    if (!raw) return '—';
+    var s = String(raw).slice(0, 16).replace('T', ' ');
+    var m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:\s+(\d{2}:\d{2}))?/);
+    if (!m) return s;
+    return m[3] + '.' + m[2] + '.' + m[1] + (m[4] ? ' ' + m[4] : '');
+  }
+
+  function renderPlanReadonlyCard(opts) {
+    var body = document.getElementById('mp-gor-plan-readonly-body');
+    if (!body) return;
+    var rows = [
+      ['Firma', opts.unvan || '—'],
+      ['Müşteri', opts.musteriTip || (opts.adayId ? 'Yeni Müşteri' : 'Mevcut Müşteri')],
+      ['Görüşülecek kişi', opts.planYetkili || '—'],
+      ['Telefon', opts.planTelefon || '—'],
+      ['Şehir', opts.planSehir || '—'],
+      ['Planlanan tarih-saat', formatPlanTarihDisplay(opts.planTarihi)],
+      ['Görüşme türü', opts.gorusmeTipi || '—'],
+      ['Plan notu', opts.planNotu || '—']
+    ];
+    body.innerHTML = rows.map(function(row) {
+      return '<div class="mp-gor-plan-readonly-item"><span class="mp-gor-plan-readonly-lbl">' +
+        esc(row[0]) + '</span><span class="mp-gor-plan-readonly-val">' + esc(row[1]) + '</span></div>';
+    }).join('');
+  }
+
+  function enterGorusmeAjandaSonucMode(opts) {
+    gorusmeAjandaSonuc = true;
+    gorusmeModKilitli = true;
+    var ov = document.getElementById('mp-modal-gorusme');
+    if (ov) ov.classList.add('mp-gor-ajanda-sonuc');
+    var baslik = document.getElementById('mp-modal-baslik');
+    if (baslik) baslik.textContent = 'GÖRÜŞMEYİ SONUÇLANDIR';
+    var planSec = document.getElementById('mp-gor-sec-plan-readonly');
+    if (planSec) planSec.hidden = false;
+    renderPlanReadonlyCard(opts || {});
+    setGorusmeMod('YAPILDI', { skipRender: true });
+  }
+
+  function exitGorusmeAjandaSonucMode() {
+    gorusmeAjandaSonuc = false;
+    var ov = document.getElementById('mp-modal-gorusme');
+    if (ov) ov.classList.remove('mp-gor-ajanda-sonuc');
+    var baslik = document.getElementById('mp-modal-baslik');
+    if (baslik) baslik.textContent = 'GÖRÜŞME KAYDI';
+    var planSec = document.getElementById('mp-gor-sec-plan-readonly');
+    if (planSec) planSec.hidden = true;
+    var planBody = document.getElementById('mp-gor-plan-readonly-body');
+    if (planBody) planBody.innerHTML = '';
+  }
+
+  function getGorusmeMod() {
+    return ((document.getElementById('mp-f-mod') || {}).value || 'YAPILDI').toUpperCase();
+  }
+
+  function getGorusmeMusteriTipi() {
+    var isYeni = document.getElementById('mp-mod-yeni-r') && document.getElementById('mp-mod-yeni-r').checked;
+    return isYeni ? 'YENI' : 'MEVCUT';
+  }
+
+  function clearGorusmeYapildiAlanlari() {
+    document.querySelectorAll('.mp-konu-cb').forEach(function(cb){ cb.checked = false; });
+    var sonuc = document.getElementById('mp-f-sonuc');
+    var aksiyon = document.getElementById('mp-f-aksiyon');
+    var takip = document.getElementById('mp-f-takip');
+    if (sonuc) sonuc.value = '';
+    if (aksiyon) aksiyon.value = '';
+    if (takip) takip.value = '';
+    ['mp-f-urun-kalite', 'mp-f-miktar', 'mp-f-verilen-fiyat'].forEach(function(id){
+      var el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    clearOdemeAlanlari();
+    var birim = document.getElementById('mp-f-birim');
+    if (birim) birim.value = 'KG';
+    var para = document.getElementById('mp-f-para');
+    if (para) para.value = '';
+    var fv = document.getElementById('mp-f-fiyat-verildi');
+    if (fv) fv.value = '0';
+    var fvToggle = document.getElementById('mp-f-fiyat-verildi-toggle');
+    if (fvToggle) fvToggle.checked = false;
+    var kart = document.getElementById('mp-gor-ticari-wrap');
+    var tg = document.getElementById('mp-gor-ticari-toggle');
+    if (kart) kart.classList.add('mp-gor-ticari-kapali');
+    if (tg) tg.setAttribute('aria-expanded', 'false');
+  }
+
+  function clearGorusmeMusteriGecisState(toMod) {
+    var isYeni = toMod === 'yeni';
+    var cariSel = document.getElementById('mp-f-cari-sec');
+    if (isYeni) {
+      if (cariSel) { cariSel.value = ''; cariSel.disabled = false; }
+      document.getElementById('mp-f-cari-id').value = '';
+      document.getElementById('mp-f-aday-id').value = '';
+      aktifCariId = null;
+      aktifAdayId = null;
+      var yetkili = document.getElementById('mp-f-yetkili-metin');
+      if (yetkili) yetkili.value = '';
+      document.getElementById('mp-modal-gecmis').hidden = true;
+    } else {
+      ['mp-f-firma', 'mp-f-aday-yetkili', 'mp-f-aday-tel', 'mp-f-aday-sehir'].forEach(function(id){
+        var el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      syncFirmaPreview();
+    }
+    clearGorusmeYapildiAlanlari();
+  }
+
+  function renderGorusmeUiState() {
+    var mod = getGorusmeMod();
+    var isPlan = mod === 'PLANLA';
+    var isYeni = getGorusmeMusteriTipi() === 'YENI';
+    var ov = document.getElementById('mp-modal-gorusme');
+    var yapildiBtn = document.getElementById('mp-f-mod-yapildi-btn');
+    var planlaBtn = document.getElementById('mp-f-mod-planla-btn');
+    var konuWrap = document.getElementById('mp-f-konu-wrap');
+    var ticariWrap = document.getElementById('mp-gor-ticari-wrap');
+    var sonucSec = document.getElementById('mp-gor-sec-sonuc');
+    var sec3Title = document.getElementById('mp-gor-sec3-title');
+    var notLabel = document.getElementById('mp-f-not-label');
+    var notEl = document.getElementById('mp-f-not');
+    var sonucEl = document.getElementById('mp-f-sonuc');
+    var tarihLabel = document.getElementById('mp-f-tarih-label');
+    if (gorusmeAjandaSonuc) {
+      if (ov) ov.classList.add('mp-gor-ajanda-sonuc');
+      if (yapildiBtn) yapildiBtn.classList.remove('mp-gor-seg-aktif');
+      if (planlaBtn) planlaBtn.classList.remove('mp-gor-seg-aktif');
+      if (konuWrap) konuWrap.hidden = false;
+      if (ticariWrap) ticariWrap.hidden = false;
+      if (sonucSec) sonucSec.hidden = false;
+      if (sec3Title) sec3Title.textContent = '3. Ne konuşuldu?';
+      if (notLabel) notLabel.textContent = 'Görüşme özeti *';
+      if (notEl) notEl.required = true;
+      if (sonucEl) sonucEl.required = true;
+      if (tarihLabel) tarihLabel.textContent = 'Gerçek görüşme tarihi ve saati *';
+      if (kaydetBtn) kaydetBtn.textContent = gorusmeKaydetBtnMetni(mod);
+      var baslik = document.getElementById('mp-modal-baslik');
+      if (baslik) baslik.textContent = 'GÖRÜŞMEYİ SONUÇLANDIR';
+      return;
+    }
+    if (ov) ov.classList.remove('mp-gor-ajanda-sonuc');
+    if (ov) ov.classList.toggle('mp-gor-mod-plan', isPlan);
+    if (yapildiBtn) yapildiBtn.classList.toggle('mp-gor-seg-aktif', !isPlan);
+    if (planlaBtn) planlaBtn.classList.toggle('mp-gor-seg-aktif', isPlan);
+    if (!(gorusmeModKilitli && aktifAdayId)) {
+      var mevcutEl = document.getElementById('mp-mod-mevcut');
+      var yeniEl = document.getElementById('mp-mod-yeni');
+      if (mevcutEl) mevcutEl.hidden = isYeni;
+      if (yeniEl) yeniEl.hidden = !isYeni;
+    }
+    if (konuWrap) konuWrap.hidden = isPlan;
+    if (ticariWrap) ticariWrap.hidden = isPlan;
+    if (sonucSec) sonucSec.hidden = isPlan;
+    if (isPlan) {
+      if (sec3Title) sec3Title.textContent = '3. Plan Notu';
+      if (notLabel) notLabel.textContent = 'Plan Notu';
+      if (notEl) notEl.required = false;
+      if (sonucEl) { sonucEl.required = false; sonucEl.value = ''; }
+    } else {
+      if (sec3Title) sec3Title.textContent = '3. Ne konuşuldu?';
+      if (notLabel) notLabel.textContent = 'Görüşme özeti *';
+      if (notEl) notEl.required = true;
+      if (sonucEl) sonucEl.required = true;
+      if (tarihLabel) tarihLabel.textContent = 'Görüşme Tarihi *';
+    }
+    if (isPlan) {
+      if (tarihLabel) tarihLabel.textContent = 'Planlanan Görüşme Tarihi *';
+    }
+    syncMusteriSegLabels();
+    if (kaydetBtn) kaydetBtn.textContent = gorusmeKaydetBtnMetni(mod);
+  }
+
+  function syncFirmaPreview() {
+    var band = document.getElementById('mp-gor-firma-preview');
+    var adEl = document.getElementById('mp-gor-firma-preview-ad');
+    var firma = ((document.getElementById('mp-f-firma') || {}).value || '').trim();
+    var isYeni = document.getElementById('mp-mod-yeni-r') && document.getElementById('mp-mod-yeni-r').checked;
+    if (!band || !adEl) return;
+    if (isYeni && firma) {
+      adEl.textContent = firma;
+      band.hidden = false;
+    } else {
+      band.hidden = true;
+      adEl.textContent = '—';
+    }
+  }
+
+  function syncMusteriSegLabels() {
+    var isYeni = document.getElementById('mp-mod-yeni-r') && document.getElementById('mp-mod-yeni-r').checked;
+    var lm = document.getElementById('mp-gor-lbl-mevcut');
+    var ly = document.getElementById('mp-gor-lbl-yeni');
+    if (lm) lm.classList.toggle('mp-gor-seg-aktif', !isYeni);
+    if (ly) ly.classList.toggle('mp-gor-seg-aktif', isYeni);
+    syncFirmaPreview();
+  }
+
+  function syncTicariFromKonu() {
+    if (getGorusmeMod() === 'PLANLA') return;
+    var tags = collectKonuEtiketleri();
+    var kart = document.getElementById('mp-gor-ticari-wrap');
+    if (!kart || kart.hidden) return;
+    if (tags.indexOf('Fiyat') >= 0 || tags.indexOf('Sipariş') >= 0) {
+      kart.classList.remove('mp-gor-ticari-kapali');
+      var tg = document.getElementById('mp-gor-ticari-toggle');
+      if (tg) tg.setAttribute('aria-expanded', 'true');
+    }
+  }
+
+  function setGorusmeMod(mod, opts) {
+    opts = opts || {};
+    if (gorusmeAjandaSonuc && (mod || '').toUpperCase() !== 'YAPILDI') return;
+    var modEl = document.getElementById('mp-f-mod');
+    var norm = (mod || 'YAPILDI').toUpperCase();
+    if (modEl) modEl.value = norm;
+    if (!opts.skipRender) renderGorusmeUiState();
+    if (norm !== 'PLANLA') syncTicariFromKonu();
+  }
+  var yapildiModBtn = document.getElementById('mp-f-mod-yapildi-btn');
+  var planlaModBtn = document.getElementById('mp-f-mod-planla-btn');
+  if (yapildiModBtn) yapildiModBtn.addEventListener('click', function(e){
+    e.preventDefault();
+    if (gorusmeAjandaSonuc) return;
+    setGorusmeMod('YAPILDI');
+  });
+  if (planlaModBtn) planlaModBtn.addEventListener('click', function(e){
+    e.preventDefault();
+    if (gorusmeAjandaSonuc) return;
+    setGorusmeMod('PLANLA');
+  });
+
   var GECMIS_ONIZLEME = 3;
   var MAX_TALEP_KALEM = 20;
 
@@ -1979,10 +2793,27 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     return true;
   }
 
-  function talepSecim() {
-    var el = document.querySelector('input[name="mp_talep_secim"]:checked');
-    return el ? el.value : 'YOK';
+  function collectKonuEtiketleri() {
+    var tags = [];
+    document.querySelectorAll('.mp-konu-cb:checked').forEach(function(cb){
+      tags.push(cb.value);
+    });
+    if (tags.indexOf('Sipariş') >= 0 && tags.indexOf('Sipariş konuşuldu') < 0) {
+      tags.push('Sipariş konuşuldu');
+    }
+    return tags;
   }
+
+  function mapKonuToSonuc(tags) {
+    if (!tags || !tags.length) return 'Genel Görüşme';
+    if (tags.indexOf('Sipariş') >= 0 || tags.indexOf('Sipariş konuşuldu') >= 0) return 'Sipariş Bekleniyor';
+    if (tags.indexOf('Numune') >= 0) return 'Numune İstedi';
+    if (tags.indexOf('Fiyat') >= 0) return 'Fiyat İstedi';
+    if (tags.indexOf('Tahsilat') >= 0) return 'Çek / Tahsilat Görüşüldü';
+    return 'Genel Görüşme';
+  }
+
+  function talepSecim() { return 'YOK'; }
 
   var SONUC_TALEP_MAP = {
     'Numune İstedi': 'NUMUNE',
@@ -2001,24 +2832,10 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     }
   }
 
-  function validateSonucTalep() {
-    var sonuc = (document.getElementById('mp-f-sonuc') || {}).value || '';
-    var need = SONUC_TALEP_MAP[sonuc];
-    if (!need) return null;
-    if (talepSecim() !== need) {
-      if (need === 'NUMUNE') {
-        return 'Sonuç «Numune İstedi» için Talep Oluştur bölümünde Numune Talebi seçilmelidir.';
-      }
-      return 'Sonuç «' + sonuc + '» için Talep Oluştur bölümünde Sipariş Talebi seçilmelidir.';
-    }
-    return null;
-  }
+  function validateSonucTalep() { return null; }
 
   function showTalepHata(msg) {
-    var h = document.getElementById('mp-talep-hata');
-    if (!h) return;
-    if (msg) { h.hidden = false; h.textContent = msg; }
-    else { h.hidden = true; h.textContent = ''; }
+    toast(msg || '');
   }
 
   function clearTalepFieldErrors() {
@@ -2309,14 +3126,26 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
   if (btnKalemEkle) btnKalemEkle.addEventListener('click', function(){ addTalepKalem(false); });
 
   function clearFiyatAlanlari() {
-    ['mp-f-verilen-fiyat','mp-f-para','mp-f-tonaj','mp-f-odeme','mp-f-vade-gun','mp-f-cek-vade','mp-f-cek-adet'].forEach(function(id){
+    ['mp-f-verilen-fiyat','mp-f-para','mp-f-miktar','mp-f-urun-kalite'].forEach(function(id){
+      var el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    var birim = document.getElementById('mp-f-birim');
+    if (birim) birim.value = 'KG';
+    clearOdemeAlanlari();
+  }
+
+  function clearOdemeAlanlari() {
+    ['mp-f-odeme','mp-f-vade-gun','mp-f-cek-vade','mp-f-cek-adet'].forEach(function(id){
       var el = document.getElementById(id);
       if (el) el.value = '';
     });
     var vw = document.getElementById('mp-f-vade-wrap');
     var cw = document.getElementById('mp-f-cek-wrap');
+    var ow = document.getElementById('mp-gor-odeme-wrap');
     if (vw) vw.hidden = true;
     if (cw) cw.hidden = true;
+    if (ow) ow.hidden = true;
   }
 
   function syncOdemeAlt() {
@@ -2337,21 +3166,94 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     }
   }
 
+  function validateGorusmeFiyatOdeme() {
+    if (getGorusmeMod() === 'PLANLA') return null;
+    var fiyatEvet = fvSel && fvSel.value === '1';
+    if (!fiyatEvet) return null;
+    var odemeEl = document.getElementById('mp-f-odeme');
+    var odeme = ((odemeEl || {}).value || '').trim().toUpperCase();
+    if (!odeme) {
+      return 'Fiyat verildi — ödeme tipi seçin (Nakit / Vadeli / Çek).';
+    }
+    if (odeme === 'VADELI') {
+      var vg = parseInt(((document.getElementById('mp-f-vade-gun') || {}).value || ''), 10);
+      if (!vg || vg <= 0) return 'Vadeli ödeme için vade (gün) zorunlu.';
+    }
+    if (odeme === 'CEK') {
+      var cv = parseInt(((document.getElementById('mp-f-cek-vade') || {}).value || ''), 10);
+      if (!cv || cv <= 0) return 'Çek ödemesi için vade (gün) zorunlu.';
+    }
+    return null;
+  }
+
+  function normalizeGorusmeFiyatPayload(payload, fiyatEvet) {
+    if (!fiyatEvet) {
+      ['odeme_tipi','vade_gun','cek_vade_gun','cek_adedi','cek_notu'].forEach(function(k){
+        delete payload[k];
+      });
+      return;
+    }
+    var odeme = (payload.odeme_tipi || '').trim().toUpperCase();
+    if (odeme === 'NAKIT') {
+      payload.vade_gun = 0;
+      delete payload.cek_vade_gun;
+      delete payload.cek_adedi;
+    } else if (odeme === 'VADELI') {
+      delete payload.cek_vade_gun;
+      delete payload.cek_adedi;
+    } else if (odeme === 'CEK') {
+      delete payload.vade_gun;
+    }
+  }
+
   function syncFiyatBlok() {
-    var fv = document.getElementById('mp-f-fiyat-verildi');
-    var blok = document.getElementById('mp-fiyat-blok');
-    var evet = fv && fv.value === '1';
-    var siparisTalep = talepSecim() === 'SIPARIS';
-    // F6: SIPARIS talebinde ödeme/para alanları görünür kalsın
-    if (blok) blok.hidden = !(evet || siparisTalep);
-    if (!evet && !siparisTalep) clearFiyatAlanlari();
+    syncFiyatToggleFromSelect();
+    var evet = fvSel && fvSel.value === '1';
+    var odemeWrap = document.getElementById('mp-gor-odeme-wrap');
+    if (odemeWrap) odemeWrap.hidden = !evet;
+    if (!evet) clearOdemeAlanlari();
     else syncOdemeAlt();
   }
 
+  function syncFiyatToggleFromSelect() {
+    var fvToggle = document.getElementById('mp-f-fiyat-verildi-toggle');
+    if (fvToggle && fvSel) fvToggle.checked = fvSel.value === '1';
+  }
+
+  function syncFiyatSelectFromToggle() {
+    if (fvSel) {
+      var fvToggle = document.getElementById('mp-f-fiyat-verildi-toggle');
+      fvSel.value = (fvToggle && fvToggle.checked) ? '1' : '0';
+    }
+  }
+
   var fvSel = document.getElementById('mp-f-fiyat-verildi');
-  if (fvSel) fvSel.addEventListener('change', syncFiyatBlok);
+  var fvToggleEl = document.getElementById('mp-f-fiyat-verildi-toggle');
+  if (fvToggleEl) {
+    fvToggleEl.addEventListener('change', function(){
+      syncFiyatSelectFromToggle();
+      syncFiyatBlok();
+    });
+  }
   var odemeSel = document.getElementById('mp-f-odeme');
   if (odemeSel) odemeSel.addEventListener('change', syncOdemeAlt);
+  document.querySelectorAll('.mp-konu-cb').forEach(function(cb){
+    cb.addEventListener('change', syncTicariFromKonu);
+  });
+  var ticariToggle = document.getElementById('mp-gor-ticari-toggle');
+  if (ticariToggle) {
+    ticariToggle.addEventListener('click', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      if (getGorusmeMod() === 'PLANLA') return;
+      var kart = document.getElementById('mp-gor-ticari-wrap');
+      if (!kart || kart.hidden) return;
+      var kapali = kart.classList.toggle('mp-gor-ticari-kapali');
+      ticariToggle.setAttribute('aria-expanded', kapali ? 'false' : 'true');
+    });
+  }
+  var firmaInput = document.getElementById('mp-f-firma');
+  if (firmaInput) firmaInput.addEventListener('input', syncFirmaPreview);
 
   function gorusmeGecmisUrl() {
     if (aktifAdayId) return '/nexgen/api/musteri-pazarlama/gorusme?aday_id=' + aktifAdayId;
@@ -2444,11 +3346,9 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     var rYen = document.getElementById('mp-mod-yeni-r');
     if (rMev) rMev.checked = !isYeni;
     if (rYen) rYen.checked = isYeni;
-    document.getElementById('mp-mod-mevcut').hidden = isYeni;
-    document.getElementById('mp-mod-yeni').hidden = !isYeni;
     var firma = document.getElementById('mp-f-firma');
     if (firma) firma.required = isYeni;
-    if (isYeni) {
+    if (isYeni && !opts.lock) {
       document.getElementById('mp-f-cari-id').value = '';
       document.getElementById('mp-f-aday-id').value = '';
       aktifCariId = null;
@@ -2461,11 +3361,13 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
       gorusmeModKilitli = false;
       document.getElementById('mp-musteri-mod-wrap').hidden = false;
     }
+    renderGorusmeUiState();
   }
 
   document.querySelectorAll('input[name="musteri_mod"]').forEach(function(r){
     r.addEventListener('change', function(){
       if (gorusmeModKilitli) return;
+      clearGorusmeMusteriGecisState(r.value);
       setMusteriMod(r.value, { keepLock: true });
     });
   });
@@ -2498,6 +3400,9 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
       var ameta = aktifAdayId ? (adayData[aktifAdayId] || {}) : {};
       idempotencyKey = newIdemKey();
       form.reset();
+      exitGorusmeAjandaSonucMode();
+      clearGorusmeYapildiAlanlari();
+      setGorusmeMod('YAPILDI', { skipRender: true });
       document.getElementById('mp-f-cari-id').value = cariId || '';
       document.getElementById('mp-f-aday-id').value = aktifAdayId || '';
       document.getElementById('mp-f-ajanda-id').value = opts.ajandaId ? String(opts.ajandaId) : '';
@@ -2508,6 +3413,25 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
       syncFiyatBlok();
       if (yetkiliMetin) yetkiliMetin.value = '';
       resetTalepState();
+      var planBand = document.getElementById('mp-gor-plan-band');
+      if (planBand) {
+        if (opts.planNotu && opts.ajandaId) {
+          planBand.textContent = 'Plan notu: ' + opts.planNotu;
+          planBand.hidden = false;
+        } else {
+          planBand.hidden = true;
+          planBand.textContent = '';
+        }
+      }
+      if (opts.planYetkili && yetkiliMetin) yetkiliMetin.value = opts.planYetkili;
+      if (opts.planTelefon) {
+        var telEl = document.getElementById('mp-f-aday-tel');
+        if (telEl) telEl.value = opts.planTelefon;
+      }
+      if (opts.planSehir) {
+        var sehirEl = document.getElementById('mp-f-aday-sehir');
+        if (sehirEl) sehirEl.value = opts.planSehir;
+      }
       if (aktifAdayId) {
         setMusteriMod('mevcut', { lock: true });
         document.getElementById('mp-mod-mevcut').hidden = true;
@@ -2516,6 +3440,10 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
           '<strong>' + esc(unvan || ameta.unvan || 'Aday') + '</strong>' +
           '<span class="mp-aday">ADAY</span>' +
           '<span>Kaydı giren: {{ kullanici_ad|e }}</span>';
+        if (opts.gorusmeTipi) {
+          var tipElA = document.getElementById('mp-f-tip');
+          if (tipElA) tipElA.value = opts.gorusmeTipi;
+        }
         loadGorusmeGecmis();
       } else if (cariId) {
         setMusteriMod('mevcut', { lock: true });
@@ -2530,10 +3458,6 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
           var tipEl = document.getElementById('mp-f-tip');
           if (tipEl) tipEl.value = opts.gorusmeTipi;
         }
-        if (opts.planNotu) {
-          var notEl = document.getElementById('mp-f-not');
-          if (notEl && !notEl.value) notEl.value = opts.planNotu;
-        }
         fetch('/nexgen/api/musteri-pazarlama/gorusme?cari_id=' + cariId).then(function(r){ return r.json(); }).then(function(d){
           var el = document.getElementById('mp-modal-meta');
           if (d.sorumlu_pazarlamaci) el.innerHTML += '<span>Sorumlu: ' + esc(d.sorumlu_pazarlamaci) + '</span>';
@@ -2546,6 +3470,20 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
           '<strong>Müşteri seçin veya yeni oluşturun</strong>' +
           '<span>Kaydı giren: {{ kullanici_ad|e }}</span>';
       }
+      if (opts.ajandaSonuc && opts.ajandaId) {
+        enterGorusmeAjandaSonucMode({
+          unvan: unvan || meta.unvan || ameta.unvan || ameta.firma_adi || '',
+          adayId: aktifAdayId,
+          musteriTip: opts.musteriTip || '',
+          planYetkili: opts.planYetkili || '',
+          planTelefon: opts.planTelefon || '',
+          planSehir: opts.planSehir || '',
+          planTarihi: opts.planTarihi || '',
+          gorusmeTipi: opts.gorusmeTipi || '',
+          planNotu: opts.planNotu || ''
+        });
+      }
+      renderGorusmeUiState();
     } else if (name === 'numune') {
       var gorusmeIdArg = arguments.length > 4 ? arguments[4] : null;
       resetNumuneModal(cariId, unvan, gorusmeIdArg);
@@ -2558,7 +3496,8 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
       var savedSip = cariId ? sessionStorage.getItem('mo_siparis_draft_' + cariId) : null;
       if (savedSip) hydrateSiparisDraft(parseInt(savedSip, 10));
     } else if (name === 'tahsilat') {
-      resetTahsilatModal(cariId, null);
+      var tahCariId = cariId || aktifCariId || null;
+      resetTahsilatModal(tahCariId, null);
     } else if (cariId) {
       var sel = ov.querySelector('select');
       if (sel) sel.value = String(cariId);
@@ -2581,13 +3520,15 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
       if (!gateAcik) document.body.style.overflow = '';
     }
     if (name === 'gorusme') {
+      exitGorusmeAjandaSonucMode();
+      gorusmeModKilitli = false;
       if (mpReturnToContextIfAny()) return;
       if (typeof window.resumeZorunluGateAfterHandoff === 'function') {
         window.resumeZorunluGateAfterHandoff();
       }
       submitting = false;
       kaydetBtn.disabled = false;
-      kaydetBtn.textContent = 'Kaydet';
+      kaydetBtn.textContent = gorusmeKaydetBtnMetni((document.getElementById('mp-f-mod') || {}).value);
     }
   }
 
@@ -2618,6 +3559,17 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     if (name === 'gorusme' && isGorusmeFormDirty()) return; // kirli form: dış tıklama kapatmaz
     closeModal(name);
   }
+  /* Tahsilat: input içinde text seçimi sırasında mouseup backdrop'ta → click overlay'de
+     tetiklenir ve modal kapanır. mousedown modal içindeyse bu click'i yoksay. */
+  var tahsilatBackdropGuard = false;
+  if (modals.tahsilat) {
+    var tahsilatPanel = modals.tahsilat.querySelector('.mp-modal');
+    if (tahsilatPanel) {
+      modals.tahsilat.addEventListener('mousedown', function(e) {
+        tahsilatBackdropGuard = tahsilatPanel.contains(e.target);
+      });
+    }
+  }
   Object.keys(modals).forEach(function(name){
     var ov = modals[name];
     if (!ov) return;
@@ -2635,6 +3587,10 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     modals[name].addEventListener('click', function(e){
       // Yalnız gerçek overlay boş alan — içerikten bubbling ile kapatma
       if (e.target !== e.currentTarget) return;
+      if (name === 'tahsilat' && tahsilatBackdropGuard) {
+        tahsilatBackdropGuard = false;
+        return;
+      }
       tryCloseModalFromOverlay(name);
     });
   });
@@ -2687,20 +3643,860 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
   var tahsilatIdemKey = null;
   var tahsilatKayitId = null;
   var tahsilatSubmitting = false;
+  var tahsilatSevkList = [];
+  var tahsilatSevkBound = false;
+  var tahsilatSevkPb = null;
+  var tahsilatPlanCtx = null;
+  var tahsilatSevkLoadSeq = 0;
+  var tahsilatTcmbFrozen = false;
+  var tahsilatSevkFxKalan = null;
+  var tahsilatSevkTarih = null;
+  var tahsilatTryPreviewTimer = null;
+  var tahsilatTryPreviewSeq = 0;
+  var tahsilatTryPreviewBusy = false;
+  var tahsilatHydrateKayit = null;
+  var tahsilatLastKurTarih = null;
+  var tahsilatExplicitSave = false;
+
+  function moneyHas(val, amount) {
+    var s = String(val || '').replace(/\s/g, '');
+    var n = String(amount);
+    return s.indexOf(n.replace('.', ',')) >= 0 || s.replace(/\./g, '').indexOf(n.replace('.', '')) >= 0;
+  }
+
+  function fmtTcmbKur(v) {
+    if (v == null || v === '' || isNaN(v)) return '—';
+    return parseFloat(v).toLocaleString('tr-TR', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+  }
+
+  function hideSevkTcmbPanel() {
+    var panel = document.getElementById('mp-t-sevk-tcmb-panel');
+    if (panel) panel.hidden = true;
+    var err = document.getElementById('mp-t-sevk-tcmb-err');
+    if (err) { err.hidden = true; err.textContent = ''; }
+  }
+
+  function showSevkTcmbKurError(mesaj) {
+    var panel = document.getElementById('mp-t-sevk-tcmb-panel');
+    var err = document.getElementById('mp-t-sevk-tcmb-err');
+    if (panel) panel.hidden = false;
+    var kurInp = document.getElementById('mp-t-manuel-kur');
+    if (kurInp) kurInp.style.borderColor = '#ef4444';
+    if (err) {
+      err.hidden = false;
+      err.textContent = mesaj || 'Döviz satış kurunu girin.';
+    }
+    var tryEl = document.getElementById('mp-t-sevk-tcmb-try');
+    if (tryEl) tryEl.textContent = '—';
+  }
+
+  function fmtBirimFiyat(v, pb) {
+    if (v == null || v === '' || isNaN(v)) return '—';
+    return numFmt(v) + ' ' + (pb || 'TRY').toUpperCase() + '/kg';
+  }
+
+  function applySevkHesapPanel(s) {
+    if (!s) return;
+    var pb = (s.para_birimi || tahsilatSevkPb || 'USD').toUpperCase();
+    var sipM = document.getElementById('mp-t-sevk-sip-miktar');
+    var bfEl = document.getElementById('mp-t-sevk-birim-fiyat');
+    var mkEl = document.getElementById('mp-t-sevk-miktar');
+    var tutEl = document.getElementById('mp-t-sevk-tutar');
+    var formEl = document.getElementById('mp-t-sevk-hesap-formula');
+    if (sipM) {
+      sipM.textContent = s.siparis_miktar_kg != null ? (numFmt(s.siparis_miktar_kg) + ' kg') : '—';
+    }
+    if (bfEl) {
+      bfEl.textContent = s.birim_fiyat_coklu ? 'Çoklu fiyat' : fmtBirimFiyat(s.birim_fiyat_snapshot, pb);
+    }
+    if (mkEl) {
+      mkEl.textContent = s.toplam_kg != null ? (numFmt(s.toplam_kg) + ' kg') : '—';
+    }
+    if (tutEl) {
+      tutEl.textContent = s.sevk_hedef_tutar != null ? (numFmt(s.sevk_hedef_tutar) + ' ' + pb) : '—';
+    }
+    if (formEl) {
+      if (s.sevk_hesap_ozet) {
+        formEl.textContent = s.sevk_hesap_ozet;
+        formEl.hidden = false;
+      } else {
+        formEl.textContent = '';
+        formEl.hidden = true;
+      }
+    }
+  }
+
+  function showSevkTcmbPartialFx() {
+    if (!tahsilatSevkBound) { hideSevkTcmbPanel(); return; }
+    var pb = (tahsilatSevkPb || 'USD').toUpperCase();
+    var isFx = (pb === 'USD' || pb === 'EUR');
+    var panel = document.getElementById('mp-t-sevk-tcmb-panel');
+    // TRY siparişinde manuel kur gerekmez — paneli gizle
+    if (!isFx) { hideSevkTcmbPanel(); return; }
+    if (panel) panel.hidden = false;
+    var err = document.getElementById('mp-t-sevk-tcmb-err');
+    if (err) { err.hidden = true; err.textContent = ''; }
+    var sevkEl = document.getElementById('mp-t-sevk-tcmb-sevk');
+    if (sevkEl) sevkEl.textContent = tahsilatSevkTarih ? fmtTrDate(tahsilatSevkTarih) : '—';
+    var fxEl = document.getElementById('mp-t-sevk-tcmb-fx');
+    if (fxEl) {
+      fxEl.textContent = tahsilatSevkFxKalan != null ? (numFmt(tahsilatSevkFxKalan) + ' ' + pb) : '—';
+    }
+    // Manuel kur alanı: sadece USD/EUR için göster
+    var manuelWrap = document.getElementById('mp-t-manuel-kur-wrap');
+    var manuelKurPb = document.getElementById('mp-t-manuel-kur-pb');
+    var manuelHint = document.getElementById('mp-t-manuel-kur-hint');
+    if (manuelWrap) { manuelWrap.hidden = false; manuelWrap.style.display = ''; }
+    if (manuelKurPb) manuelKurPb.textContent = 'TL/' + pb;
+    if (manuelHint) manuelHint.textContent = '1 ' + pb + ' kaç TL? Güncel satış kurunu yazın.';
+    if (!tahsilatTcmbFrozen) {
+      var tryEl = document.getElementById('mp-t-sevk-tcmb-try');
+      if (tryEl) tryEl.textContent = '—';
+    }
+  }
+
+  function lockTahsilatPbForSevk(lock) {
+    var tahPbEl = document.getElementById('mp-t-tahsilat-pb');
+    if (!tahPbEl) return;
+    if (lock) {
+      tahPbEl.value = 'TRY';
+      tahPbEl.classList.add('mp-sevk-pb-lock');
+    } else {
+      tahPbEl.classList.remove('mp-sevk-pb-lock');
+    }
+  }
+
+  function getTahsilatSevkTarihi() {
+    if (tahsilatSevkTarih) return tahsilatSevkTarih;
+    var sel = document.getElementById('mp-t-sevkiyat');
+    var opt = sel && sel.options ? sel.options[sel.selectedIndex] : null;
+    if (!opt || !opt.dataset.sevk) return null;
+    try {
+      var s = JSON.parse(opt.dataset.sevk);
+      return (s.sevk_tarihi || '').slice(0, 10) || null;
+    } catch (e) { return null; }
+  }
+
+  function applyTcmbTryFromKayit(k, opts) {
+    opts = opts || {};
+    if (opts.freeze) tahsilatTcmbFrozen = true;
+    if (!tahsilatSevkBound || !k) return;
+    var panel = document.getElementById('mp-t-sevk-tcmb-panel');
+    if (panel) panel.hidden = false;
+    var err = document.getElementById('mp-t-sevk-tcmb-err');
+    if (err) { err.hidden = true; err.textContent = ''; }
+    var pb = (k.sevk_para_birimi_snapshot || tahsilatSevkPb || 'USD').toUpperCase();
+    var fx = k.sevk_kalan_fx_snapshot;
+    if (fx == null && tahsilatSevkFxKalan != null) fx = tahsilatSevkFxKalan;
+    if (fx != null) tahsilatSevkFxKalan = fx;
+    var sevkEl = document.getElementById('mp-t-sevk-tcmb-sevk');
+    var sevkTarih = k.gercek_sevk_tarihi_snapshot || tahsilatSevkTarih;
+    if (sevkTarih) tahsilatSevkTarih = String(sevkTarih).slice(0, 10);
+    if (sevkEl) sevkEl.textContent = sevkTarih ? fmtTrDate(sevkTarih) : '—';
+    var fxEl = document.getElementById('mp-t-sevk-tcmb-fx');
+    if (fxEl) fxEl.textContent = fx != null ? (numFmt(fx) + ' ' + pb) : '—';
+    // Manuel kur input'u doldur (frozen ya da hesaplı)
+    var kurInp = document.getElementById('mp-t-manuel-kur');
+    var manuelWrap = document.getElementById('mp-t-manuel-kur-wrap');
+    var manuelKurPb = document.getElementById('mp-t-manuel-kur-pb');
+    var manuelHint = document.getElementById('mp-t-manuel-kur-hint');
+    var isFx = (pb === 'USD' || pb === 'EUR');
+    if (manuelWrap) { manuelWrap.hidden = !isFx; if (isFx) manuelWrap.style.display = ''; }
+    if (manuelKurPb) manuelKurPb.textContent = isFx ? ('TL/' + pb) : '';
+    if (manuelHint) manuelHint.textContent = isFx ? ('1 ' + pb + ' kaç TL? Güncel satış kurunu yazın.') : '';
+    if (kurInp && k.tcmb_satis_kur_snapshot != null) {
+      var kurStr = parseFloat(k.tcmb_satis_kur_snapshot).toFixed(2).replace('.', ',');
+      kurInp.value = kurStr;
+      kurInp.style.borderColor = '';
+    }
+    var hedef = isTahsilatCek() ? k.paket_hedef_tutar : k.beklenen_tutar;
+    var tryEl = document.getElementById('mp-t-sevk-tcmb-try');
+    if (tryEl) tryEl.textContent = hedef != null ? formatTrMoney(hedef) : '—';
+    if (hedef != null) setMoneyInput(document.getElementById('mp-t-beklenen'), hedef, true);
+    setTahsilatHedefReadonly(true);
+    lockTahsilatPbForSevk(true);
+    updateTahsilatHedefUi();
+    updateTahsilatKalan();
+    if (isTahsilatCek() && typeof window.mpScheduleCekPreview === 'function') window.mpScheduleCekPreview();
+  }
+
+  function postTahsilatTaslak(payload) {
+    return fetch('/nexgen/api/musteri-pazarlama/tahsilat-kayit', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    }).then(function(r){ return r.json().then(function(d){ return {ok: r.ok, d: d}; }); });
+  }
+
+  function refreshTahsilatTryPreview() {
+    if (!tahsilatSevkBound || tahsilatTcmbFrozen || tahsilatTryPreviewBusy) {
+      return Promise.resolve();
+    }
+    var sevkTarih = getTahsilatSevkTarihi();
+    if (!sevkTarih) {
+      showSevkTcmbPartialFx();
+      return Promise.resolve();
+    }
+    // Manuel kur kontrolü: USD/EUR sevk için kullanıcıdan kur alınır
+    var pb = (tahsilatSevkPb || '').toUpperCase();
+    if (pb === 'USD' || pb === 'EUR') {
+      var kurInp = document.getElementById('mp-t-manuel-kur');
+      var kurRaw = kurInp ? kurInp.value.replace(',', '.').trim() : '';
+      var kurF = parseFloat(kurRaw);
+      if (!kurRaw || isNaN(kurF) || !isFinite(kurF) || kurF <= 0) {
+        // Hata göster ama submit'e izin verme — sadece UI uyarısı
+        var err = document.getElementById('mp-t-sevk-tcmb-err');
+        var tryEl = document.getElementById('mp-t-sevk-tcmb-try');
+        if (tryEl) tryEl.textContent = '—';
+        // hedef alanını sıfırla
+        setMoneyInput(document.getElementById('mp-t-beklenen'), '', false);
+        updateTahsilatKalan();
+        return Promise.resolve();
+      }
+      // Lokal hesap: TRY hedef = fx_kalan × manuel_kur
+      var fxKalan = tahsilatSevkFxKalan;
+      if (fxKalan == null) {
+        showSevkTcmbPartialFx();
+        return Promise.resolve();
+      }
+      var tryHedef = Math.round(fxKalan * kurF * 100) / 100;
+      var tryEl = document.getElementById('mp-t-sevk-tcmb-try');
+      if (tryEl) tryEl.textContent = formatTrMoney(tryHedef);
+      setMoneyInput(document.getElementById('mp-t-beklenen'), tryHedef, true);
+      updateTahsilatHedefUi();
+      updateTahsilatKalan();
+      if (isTahsilatCek() && typeof window.mpScheduleCekPreview === 'function') window.mpScheduleCekPreview();
+      return Promise.resolve();
+    }
+    // TRY: backend'den hesap al
+    if (!tahsilatTcmbFrozen && tahsilatKayitId && tahsilatLastKurTarih && sevkTarih !== tahsilatLastKurTarih) {
+      tahsilatKayitId = null;
+      tahsilatIdemKey = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + '-t');
+    }
+    tahsilatLastKurTarih = sevkTarih;
+    var seq = ++tahsilatTryPreviewSeq;
+    tahsilatTryPreviewBusy = true;
+    return Promise.resolve().then(function() {
+      if (seq !== tahsilatTryPreviewSeq) return null;
+      var p = tahsilatPayload();
+      p.kayit_id = tahsilatKayitId;
+      return postTahsilatTaslak(p);
+    }).then(function(res) {
+      if (seq !== tahsilatTryPreviewSeq) return;
+      if (res && res.d && res.d.ok && res.d.kayit) {
+        if (!tahsilatKayitId || !tahsilatExplicitSave) tahsilatKayitId = res.d.kayit.id;
+        applyTcmbTryFromKayit(res.d.kayit);
+      } else if (res && res.d && res.d.mesaj) {
+        showSevkTcmbKurError(res.d.mesaj);
+      }
+    }).catch(function() {
+      if (seq === tahsilatTryPreviewSeq) showSevkTcmbKurError('Kur bilgisi yüklenemedi.');
+    }).finally(function() {
+      if (seq === tahsilatTryPreviewSeq) tahsilatTryPreviewBusy = false;
+    });
+  }
+
+  function scheduleTahsilatTryPreview() {
+    if (!tahsilatSevkBound || tahsilatTcmbFrozen) return;
+    clearTimeout(tahsilatTryPreviewTimer);
+    tahsilatTryPreviewTimer = setTimeout(function() { refreshTahsilatTryPreview(); }, 350);
+  }
+  window.mpScheduleTahsilatTryPreview = scheduleTahsilatTryPreview;
+  window.mpRefreshTahsilatTryPreview = refreshTahsilatTryPreview;
+  window.resetTahsilatModal = resetTahsilatModal;
+
+  // ====== TCMB KUR PANELİ ======
+  function updateTcmbPanel() {
+    var legacy = document.getElementById('mp-t-tcmb-panel');
+    if (tahsilatSevkBound) {
+      if (legacy) legacy.hidden = true;
+      return;
+    }
+    var sipSel = document.getElementById('mp-t-siparis');
+    var opt = sipSel ? sipSel.options[sipSel.selectedIndex] : null;
+    var tahPb = (document.getElementById('mp-t-tahsilat-pb') || {}).value || 'TRY';
+    var sipOzet = document.getElementById('mp-t-siparis-ozet');
+    var sipPbEl = document.getElementById('mp-t-sip-pb');
+    var sipMiktar = document.getElementById('mp-t-sip-miktar');
+    var sipBirim = document.getElementById('mp-t-sip-birim');
+    var sipTutar = document.getElementById('mp-t-sip-tutar');
+    var sipSevk = document.getElementById('mp-t-sip-sevk');
+    var sipVade = document.getElementById('mp-t-sip-vade');
+    var sipHedefVade = document.getElementById('mp-t-sip-hedef-vade');
+    var sevkYokUyari = document.getElementById('mp-t-sevk-yok-uyari');
+
+    if (!opt || !opt.dataset.plan) {
+      if (legacy) legacy.hidden = true;
+      if (sipOzet) sipOzet.hidden = true;
+      if (sevkYokUyari) sevkYokUyari.hidden = true;
+      if (sipPbEl) sipPbEl.value = '';
+      _setSevkYokGuard(false);
+      return;
+    }
+    var p = JSON.parse(opt.dataset.plan);
+    var sipPb = (p.anlasma_para_birimi || 'TRY').toUpperCase();
+    if (sipPbEl) sipPbEl.value = sipPb;
+
+    // Sipariş özet — birim fiyat toplamdan ayrı göster
+    if (sipOzet) {
+      sipOzet.hidden = false;
+      sipOzet.style.display = 'flex';
+      var miktarKg = p.siparis_miktar_kg;
+      var birimFiyat = p.anlasma_birim_fiyat;
+      var toplamFx = p.siparis_toplam_fx;
+      if (sipMiktar) sipMiktar.textContent = miktarKg != null ? numFmt(miktarKg) + ' kg' : '—';
+      if (sipBirim) sipBirim.textContent = birimFiyat != null ? numFmt(birimFiyat) + ' ' + sipPb + '/kg' : '—';
+      if (sipTutar) {
+        if (toplamFx != null) {
+          sipTutar.textContent = numFmt(toplamFx) + ' ' + sipPb;
+        } else if (p.beklenen_tutar != null) {
+          sipTutar.textContent = numFmt(p.beklenen_tutar) + ' ' + sipPb;
+        } else {
+          sipTutar.textContent = '—';
+        }
+      }
+      if (sipSevk) sipSevk.textContent = p.gercek_sevk_tarihi || '—';
+      if (sipVade) sipVade.textContent = p.onaylanan_vade_gun ? p.onaylanan_vade_gun + ' gün' : '—';
+      if (sipHedefVade) sipHedefVade.textContent = p.hedef_vade_tarihi || '—';
+    }
+
+    // Sevkiyat yok uyarısı ve guard
+    var sevkVar = !!(p.gercek_sevk_tarihi || p.tahsilat_uygunluk === 'sevk_yapildi');
+    if (sevkYokUyari) sevkYokUyari.hidden = sevkVar;
+    _setSevkYokGuard(!sevkVar);
+
+    // Sevkiyat yoksa legacy TCMB hedef panelini gizle ve çıkış yap
+    if (!sevkVar) {
+      if (legacy) legacy.hidden = true;
+      return;
+    }
+
+    // TCMB paneli: sadece sipariş PB != tahsilat PB ise göster
+    if (!legacy) return;
+    if (sipPb === 'TRY' || sipPb === tahPb) {
+      legacy.hidden = true;
+      return;
+    }
+    // Canonical toplam FX ile kur çarp — birim fiyatı değil!
+    var sipTutarVal = p.siparis_toplam_fx != null ? p.siparis_toplam_fx
+                     : (p.beklenen_tutar != null ? p.beklenen_tutar : null);
+    var sipKur = p.siparis_kur || p.kur;
+    var sipKurTarih = (p.siparis_kur_tarihi || p.kur_tarihi || '').substring(0, 10);
+    if (sipKur) {
+      gosterTcmb(sipPb, sipKur, sipKurTarih, sipTutarVal, tahPb);
+    } else {
+      fetch('/yonetim/kur/api?pb=' + sipPb)
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          if (d.ok && d.kur) {
+            gosterTcmb(sipPb, d.kur, d.tarih || '', sipTutarVal, tahPb);
+          } else {
+            legacy.hidden = true;
+          }
+        }).catch(function(){ legacy.hidden = true; });
+    }
+  }
+
+  // Sevkiyat yoksa submit/onay düğmelerini devre dışı bırak
+  function _setSevkYokGuard(aktif) {
+    var submitBtn = document.querySelector('#mp-tahsilat-form [type="submit"]');
+    var onayBtn = document.getElementById('mp-t-onaya-gonder');
+    var hedefEl = document.getElementById('mp-t-beklenen');
+    if (aktif) {
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.title = 'Sevk bekleniyor — tahsilat oluşturulamaz.'; }
+      if (onayBtn) { onayBtn.disabled = true; onayBtn.title = 'Sevk bekleniyor — tahsilat oluşturulamaz.'; }
+      if (hedefEl && !tahsilatSevkBound) {
+        setMoneyInput(hedefEl, '', false);
+        updateTahsilatKalan();
+      }
+    } else {
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.title = ''; }
+      if (onayBtn) { onayBtn.disabled = false; onayBtn.title = ''; }
+    }
+  }
+
+  function gosterTcmb(sipPb, kur, tarih, sipTutar, tahPb) {
+    var panel = document.getElementById('mp-t-tcmb-panel');
+    var tarihEl = document.getElementById('mp-t-tcmb-tarih');
+    var kurEl = document.getElementById('mp-t-tcmb-kur');
+    var ozetEl = document.getElementById('mp-t-tcmb-ozet');
+    if (!panel) return;
+    panel.hidden = false;
+    if (tarihEl) tarihEl.textContent = tarih || '—';
+    if (kurEl) kurEl.textContent = parseFloat(kur).toFixed(4);
+    var try_karsilik = sipTutar != null ? (parseFloat(sipTutar) * parseFloat(kur)) : null;
+    if (ozetEl) {
+      if (try_karsilik != null && sipTutar != null) {
+        ozetEl.textContent = sipPb + '→' + tahPb + ': ' + formatTrMoney(sipTutar, false) + ' ' + sipPb + ' × ' + parseFloat(kur).toFixed(4) + ' = ' + formatTrMoney(try_karsilik);
+      } else {
+        ozetEl.textContent = sipPb + '→' + tahPb + ': ' + parseFloat(kur).toFixed(4);
+      }
+      // Tahsilat hedefini otomatik doldur (boşsa, sevk bağlı değilse, sevk var ise)
+      var hedefEl = document.getElementById('mp-t-beklenen');
+      if (hedefEl && try_karsilik != null && !(getMoneyInput(hedefEl) > 0) && !tahsilatSevkBound) {
+        setMoneyInput(hedefEl, try_karsilik, true);
+        updateTahsilatKalan();
+      }
+    }
+  }
+
+  function parseTrMoney(v) {
+    if (v == null || v === '') return 0;
+    if (typeof v === 'number') return isNaN(v) ? 0 : v;
+    var s = String(v).trim().replace(/\s*TL\s*$/i, '').trim();
+    if (!s) return 0;
+    if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.');
+    var n = parseFloat(s);
+    return isNaN(n) ? 0 : n;
+  }
+
+  function formatTrMoney(v, withCurrency) {
+    if (v == null || v === '' || isNaN(v)) return '—';
+    var n = Number(v);
+    var txt = n.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    return (withCurrency === false) ? txt : (txt + ' TL');
+  }
+
+  function fmtTrDate(iso) {
+    if (!iso) return '—';
+    var p = String(iso).slice(0, 10).split('-');
+    if (p.length === 3) return p[2] + '.' + p[1] + '.' + p[0];
+    return iso;
+  }
+
+  function getMoneyInput(el) {
+    if (!el) return 0;
+    if (document.activeElement === el) return parseTrMoney(el.value);
+    if (el.dataset.rawValue != null && el.dataset.rawValue !== '') return parseTrMoney(el.dataset.rawValue);
+    return parseTrMoney(el.value);
+  }
+
+  function setMoneyInput(el, v, forceFormat) {
+    if (!el) return;
+    var n = parseTrMoney(v);
+    el.dataset.rawValue = String(n);
+    if (forceFormat || document.activeElement !== el) {
+      el.value = n > 0 ? formatTrMoney(n) : '';
+    } else {
+      el.value = n > 0 ? String(n) : '';
+    }
+  }
+
+  function bindMoneyInput(el) {
+    if (!el || el.dataset.moneyBound) return;
+    el.dataset.moneyBound = '1';
+    el.addEventListener('focus', function() {
+      var n = getMoneyInput(el);
+      el.value = n > 0 ? String(n) : '';
+    });
+    el.addEventListener('blur', function() {
+      var n = parseTrMoney(el.value);
+      setMoneyInput(el, n, true);
+      el.dispatchEvent(new Event('input', {bubbles: true}));
+    });
+  }
+
+  function initTahsilatMoneyInputs() {
+    document.querySelectorAll('#mp-tahsilat-form .mp-money-inp').forEach(function(el) {
+      if (!el.readOnly) bindMoneyInput(el);
+      else if (el.value) setMoneyInput(el, el.value, true);
+    });
+  }
+
+  function numFmt(v) {
+    return formatTrMoney(v, false);
+  }
+
+  function setTahsilatHedefReadonly(ro) {
+    var el = document.getElementById('mp-t-beklenen');
+    if (!el) return;
+    el.readOnly = !!ro;
+    if (ro) el.classList.add('mp-sevk-hedef-ro');
+    else el.classList.remove('mp-sevk-hedef-ro');
+  }
+
+  function getTahsilatSevkPb() {
+    return tahsilatSevkPb || ((document.getElementById('mp-t-tahsilat-pb') || {}).value || 'TRY').toUpperCase();
+  }
+
+  function updateTahsilatHedefUi() {
+    var cek = isTahsilatCek();
+    var lbl = document.getElementById('mp-t-hedef-label');
+    if (lbl) {
+      lbl.textContent = cek
+        ? 'Paket Hedefi (TRY) *'
+        : (tahsilatSevkBound ? 'TRY Tahsilat Hedefi' : 'Tahsilat Hedefi (TRY)');
+    }
+    var alinanLbl = document.getElementById('mp-t-alinan-label');
+    if (alinanLbl && !cek) alinanLbl.textContent = 'Alınan Tutar (TRY) *';
+    // Hedef display kartını güncelle
+    var hedefDisp = document.getElementById('mp-t-hedef-display');
+    var hedefFormula = document.getElementById('mp-t-hedef-formula');
+    var bek = getMoneyInput(document.getElementById('mp-t-beklenen'));
+    if (hedefDisp) {
+      hedefDisp.textContent = bek > 0 ? formatTrMoney(bek) : '—';
+    }
+    if (hedefFormula) {
+      var pb = (tahsilatSevkPb || '').toUpperCase();
+      var fxKalan = tahsilatSevkFxKalan;
+      var kurInp = document.getElementById('mp-t-manuel-kur');
+      var kurVal = kurInp ? kurInp.value.replace(',', '.').trim() : '';
+      var kurF = parseFloat(kurVal);
+      if (bek > 0 && fxKalan > 0 && (pb === 'USD' || pb === 'EUR') && !isNaN(kurF) && kurF > 0) {
+        hedefFormula.textContent = numFmt(fxKalan) + ' ' + pb + ' × ' + kurVal.replace('.', ',');
+      } else {
+        hedefFormula.textContent = '';
+      }
+    }
+    // Manuel kur panelini göster/gizle
+    var manuelWrap = document.getElementById('mp-t-manuel-kur-wrap');
+    var pb2 = (tahsilatSevkPb || '').toUpperCase();
+    var isFx = (pb2 === 'USD' || pb2 === 'EUR') && tahsilatSevkBound;
+    if (manuelWrap) { manuelWrap.hidden = !isFx; if (isFx) manuelWrap.style.display = ''; }
+  }
+
+  function sevkSelectable(s) {
+    if (s && s.secilebilir === true) return true;
+    if (s && s.secilebilir === false) return false;
+    return !!(s && s.tahsilata_uygun && s.kalan != null && s.kalan > 0.009);
+  }
+
+  function formatSevkKalanDual(s) {
+    var pb = (s.para_birimi || '').toUpperCase();
+    var fx = s.kalan_fx != null ? s.kalan_fx : s.kalan;
+    if (fx == null) return '';
+    if ((pb === 'USD' || pb === 'EUR') && s.kalan_try != null && fx > 0.009) {
+      return numFmt(fx) + ' ' + pb + ' / ' + formatTrMoney(s.kalan_try);
+    }
+    if (pb) return numFmt(fx) + ' ' + pb;
+    return numFmt(fx);
+  }
+
+  function sevkOptionLabel(s) {
+    var lbl = (s.sevk_no || ('Sevk #' + s.sevkiyat_id));
+    if (s.durum === 'EKSIK_FIYAT' || s.tahsilata_uygun === false) {
+      return lbl + ' [Fiyat Eksik]';
+    }
+    if (s.kur_hesap_hatasi) {
+      return lbl + ' [Kur hatası]';
+    }
+    var kalanTxt = formatSevkKalanDual(s);
+    if (s.tahsil_tamamlandi) {
+      return lbl + ' [Tahsilat hedefi tamamen karşılandı.]';
+    }
+    if (s.kalan_negatif) {
+      return lbl + ' [Tahsilat hedefi aşıldı]';
+    }
+    if (kalanTxt) return lbl + ' · Kalan ' + kalanTxt;
+    if (s.sevk_tarihi) lbl += ' · ' + fmtTrDate(s.sevk_tarihi);
+    if (s.toplam_kg != null) lbl += ' · ' + numFmt(s.toplam_kg) + ' kg';
+    return lbl;
+  }
+
+  function updateSevkiyatSecimUyarisi(selectable, list) {
+    var el = document.getElementById('mp-t-sevk-secim-uyari');
+    if (!el) return;
+    el.style.background = '#fff7ed';
+    el.style.borderColor = '#fed7aa';
+    el.style.color = '#c2410c';
+    var pendingInfo = (list || []).filter(function(s){
+      return s.onay_bekleyen_tahsilat && (s.onay_bekleyen_rezerve_try || 0) > 0;
+    });
+    if (selectable.length > 0) {
+      if (pendingInfo.length) {
+        el.hidden = false;
+        el.style.background = '#eff6ff';
+        el.style.borderColor = '#bfdbfe';
+        el.style.color = '#1d4ed8';
+        el.textContent = formatTrMoney(pendingInfo[0].onay_bekleyen_rezerve_try)
+          + ' TL yönetim onayı bekleyen tahsilat hesaba dahil edilmiştir.';
+      } else {
+        el.hidden = true;
+        el.textContent = '';
+      }
+      return;
+    }
+    el.hidden = false;
+    var msg = 'Bu sipariş için tahsilata uygun sevkiyat seçilemiyor.';
+    if ((list || []).some(function(s){ return s.tahsil_tamamlandi || (s.kalan_fx != null && s.kalan_fx <= 0.009 && !s.kalan_negatif); })) {
+      msg = 'Tahsilat hedefi tamamen karşılandı.';
+    } else if ((list || []).some(function(s){ return s.kalan_negatif; })) {
+      msg = 'Sevkiyat tahsilat hedefi aşılmış.';
+    } else if ((list || []).some(function(s){ return s.durum === 'EKSIK_FIYAT' || s.tahsilata_uygun === false; })) {
+      msg = 'Sevkiyat fiyat bilgisi eksik.';
+    }
+    el.textContent = msg;
+  }
+
+  function tahsilatLastSevkStorageKey(siparisId) {
+    return siparisId ? ('mo_tahsilat_last_sevk_' + siparisId) : null;
+  }
+
+  function rememberTahsilatSevkiyat(siparisId, sevkiyatId) {
+    var key = tahsilatLastSevkStorageKey(siparisId);
+    if (!key || !sevkiyatId) return;
+    try { sessionStorage.setItem(key, String(sevkiyatId)); } catch (e) {}
+  }
+
+  function applyTahsilatPlanOdemeFromPlan(p) {
+    if (!p || !p.odeme_tipi) return;
+    var ot = String(p.odeme_tipi).toUpperCase();
+    var sel = document.getElementById('mp-t-odeme-tipi');
+    if (!sel) return;
+    var allowed = false;
+    for (var i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value === ot) { allowed = true; break; }
+    }
+    if (!allowed) return;
+    sel.value = ot;
+    if (typeof updateTahsilatCekUi === 'function') updateTahsilatCekUi();
+  }
+
+  function clearTahsilatSevk() {
+    tahsilatSevkList = [];
+    tahsilatSevkBound = false;
+    tahsilatSevkPb = null;
+    tahsilatTcmbFrozen = false;
+    tahsilatSevkFxKalan = null;
+    tahsilatSevkTarih = null;
+    clearTimeout(tahsilatTryPreviewTimer);
+    var wrap = document.getElementById('mp-t-sevk-wrap');
+    var sel = document.getElementById('mp-t-sevkiyat');
+    var ozet = document.getElementById('mp-t-sevk-ozet');
+    if (wrap) wrap.hidden = true;
+    if (sel) sel.innerHTML = '<option value="">Sipariş seçin</option>';
+    if (ozet) ozet.hidden = true;
+    hideSevkTcmbPanel();
+    lockTahsilatPbForSevk(false);
+    setTahsilatHedefReadonly(false);
+    updateSevkiyatSecimUyarisi([], []);
+    updateTahsilatHedefUi();
+  }
+
+  function applyTahsilatSevk(sel) {
+    var opt = sel && sel.options ? sel.options[sel.selectedIndex] : null;
+    var ozet = document.getElementById('mp-t-sevk-ozet');
+    if (!opt || !opt.dataset.sevk) {
+      tahsilatSevkBound = false;
+      tahsilatSevkPb = null;
+      tahsilatSevkTarih = null;
+      setTahsilatHedefReadonly(false);
+      if (ozet) ozet.hidden = true;
+      updateTahsilatHedefUi();
+      return;
+    }
+    var s = JSON.parse(opt.dataset.sevk);
+    tahsilatSevkBound = true;
+    tahsilatSevkPb = (s.para_birimi || 'TRY').toUpperCase();
+    tahsilatSevkFxKalan = s.kalan != null ? s.kalan : null;
+    tahsilatSevkTarih = (s.sevk_tarihi || '').slice(0, 10) || null;
+    applySevkHesapPanel(s);
+    lockTahsilatPbForSevk(true);
+    if (ozet) {
+      ozet.hidden = false;
+      ozet.style.display = 'flex';
+      document.getElementById('mp-t-sevk-no').textContent = s.sevk_no || '—';
+      document.getElementById('mp-t-sevk-tarih').textContent = fmtTrDate(s.sevk_tarihi);
+      document.getElementById('mp-t-sevk-kg').textContent = s.toplam_kg != null ? numFmt(s.toplam_kg) + ' kg' : '—';
+      var pb = tahsilatSevkPb;
+      document.getElementById('mp-t-sevk-hedef').textContent = s.sevk_hedef_tutar != null
+        ? numFmt(s.sevk_hedef_tutar) + ' ' + pb : '—';
+      document.getElementById('mp-t-sevk-tahsil').textContent = numFmt(s.tahsil_edilen || 0) + ' ' + pb;
+      // Tahsil Edilecek = kalan
+      var kalan = s.kalan != null ? numFmt(s.kalan) + ' ' + pb : '—';
+      var hedefEl = document.getElementById('mp-t-sevk-hedef');
+      if (hedefEl) hedefEl.textContent = kalan;
+      // Vade — sevkiyat API'de yok; sipariş plan option'dan al
+      var vadeEl = document.getElementById('mp-t-sevk-vade');
+      if (vadeEl) {
+        var vadeGun = s.vade_gun != null ? s.vade_gun : null;
+        if (vadeGun == null) {
+          // Plan option'dan onaylanan_vade_gun'u al
+          var sipSelEl = document.getElementById('mp-t-siparis');
+          var selOpt = sipSelEl && sipSelEl.options[sipSelEl.selectedIndex];
+          if (selOpt && selOpt.dataset.plan) {
+            try { var pd = JSON.parse(selOpt.dataset.plan); vadeGun = pd.onaylanan_vade_gun; } catch(e) {}
+          }
+        }
+        vadeEl.textContent = (vadeGun != null && vadeGun >= 0) ? vadeGun + ' gün' : '—';
+      }
+      var sipSevk = document.getElementById('mp-t-sip-sevk');
+      if (sipSevk) sipSevk.textContent = fmtTrDate(s.sevk_tarihi);
+    }
+    showSevkTcmbPartialFx();
+    setTahsilatHedefReadonly(true);
+    updateTahsilatHedefUi();
+    updateTcmbPanel();
+    if (tahsilatTcmbFrozen && tahsilatHydrateKayit) {
+      showSevkTcmbPartialFx();
+      return;
+    }
+    scheduleTahsilatTryPreview();
+    var sipSelRemember = document.getElementById('mp-t-siparis');
+    if (sipSelRemember && sipSelRemember.value && s.sevkiyat_id) {
+      rememberTahsilatSevkiyat(sipSelRemember.value, s.sevkiyat_id);
+    }
+  }
+
+  function loadTahsilatSevkiyatlar(siparisId, ctx) {
+    ctx = ctx || {};
+    var preserveTcmb = !!ctx.preserveTcmbFrozen;
+    var seq = ++tahsilatSevkLoadSeq;
+    var wrap = document.getElementById('mp-t-sevk-wrap');
+    var sel = document.getElementById('mp-t-sevkiyat');
+    tahsilatSevkList = [];
+    tahsilatSevkBound = false;
+    tahsilatSevkPb = null;
+    if (!preserveTcmb) tahsilatTcmbFrozen = false;
+    if (!siparisId || !wrap || !sel) {
+      clearTahsilatSevk();
+      return Promise.resolve();
+    }
+    var cariId = (document.getElementById('mp-t-cari') || {}).value || '';
+    var url = '/nexgen/api/musteri-pazarlama/tahsilat-sevkiyatlar?siparis_id=' + encodeURIComponent(siparisId);
+    if (cariId) url += '&cari_id=' + encodeURIComponent(cariId);
+    sel.innerHTML = '<option value="">Yükleniyor…</option>';
+    wrap.hidden = false;
+    return fetch(url).then(function(r){ return r.json(); }).then(function(d){
+      if (seq !== tahsilatSevkLoadSeq) return;
+      if (!d.ok) {
+        sel.innerHTML = '<option value="">Sevk yüklenemedi</option>';
+        return;
+      }
+      tahsilatSevkList = d.sevkiyatlar || [];
+      sel.innerHTML = '<option value="">Sevkiyat seçin</option>';
+      var selectable = [];
+      tahsilatSevkList.forEach(function(s){
+        var opt = document.createElement('option');
+        opt.value = String(s.sevkiyat_id);
+        opt.dataset.sevk = JSON.stringify(s);
+        opt.textContent = sevkOptionLabel(s);
+        var disabled = !sevkSelectable(s);
+        if (disabled) opt.disabled = true;
+        else selectable.push(s);
+        sel.appendChild(opt);
+      });
+      updateSevkiyatSecimUyarisi(selectable, tahsilatSevkList);
+      if (!tahsilatSevkList.length) {
+        wrap.hidden = true;
+        sel.innerHTML = '<option value="">Sevkiyat yok</option>';
+        return;
+      }
+      var pickId = ctx.sevkiyat_id ? String(ctx.sevkiyat_id) : null;
+      if (!pickId) {
+        try {
+          var lastKey = tahsilatLastSevkStorageKey(String(siparisId));
+          var lastId = lastKey ? sessionStorage.getItem(lastKey) : null;
+          if (lastId) pickId = String(lastId);
+        } catch (eLast) {}
+      }
+      if (pickId) {
+        var pickOpt = sel.querySelector('option[value="' + pickId + '"]');
+        if (pickOpt && !pickOpt.disabled) {
+          sel.value = pickId;
+          applyTahsilatSevk(sel);
+          return;
+        }
+      }
+      if (selectable.length === 1) {
+        sel.value = String(selectable[0].sevkiyat_id);
+        applyTahsilatSevk(sel);
+      }
+    }).catch(function(){
+      if (seq !== tahsilatSevkLoadSeq) return;
+      sel.innerHTML = '<option value="">Sevk yüklenemedi</option>';
+    });
+  }
+
+  function validateTahsilatSevkSubmit() {
+    var wrap = document.getElementById('mp-t-sevk-wrap');
+    if (!wrap || wrap.hidden) return true;
+    var selectable = tahsilatSevkList.filter(function(s){
+      return sevkSelectable(s);
+    });
+    if (!selectable.length) return true;
+    var sel = document.getElementById('mp-t-sevkiyat');
+    if (!sel || !sel.value) {
+      toast('Tahsilat için sevkiyat seçin.');
+      return false;
+    }
+    // USD/EUR: manuel kur zorunlu
+    var pb = (tahsilatSevkPb || '').toUpperCase();
+    if (tahsilatSevkBound && (pb === 'USD' || pb === 'EUR')) {
+      var kurInp = document.getElementById('mp-t-manuel-kur');
+      var kurRaw = kurInp ? kurInp.value.replace(',', '.').trim() : '';
+      var kurF = parseFloat(kurRaw);
+      if (!kurRaw || isNaN(kurF) || !isFinite(kurF) || kurF <= 0) {
+        toast('Döviz satış kurunu girin.');
+        if (kurInp) { kurInp.style.borderColor = '#ef4444'; kurInp.focus(); }
+        return false;
+      }
+    }
+    return true;
+  }
 
   function resetTahsilatModal(cariId, planCtx) {
     tahsilatForm.reset();
     tahsilatIdemKey = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + '-t');
     tahsilatKayitId = null;
+    tahsilatTcmbFrozen = false;
+    tahsilatSevkFxKalan = null;
+    tahsilatSevkTarih = null;
+    tahsilatHydrateKayit = null;
+    tahsilatLastKurTarih = null;
+    tahsilatExplicitSave = false;
+    clearTahsilatSevk();
     document.getElementById('mp-t-kayit-id').value = '';
+
+    // --- CEK panel tam reset ---
+    if (typeof window.mpResetCekPanel === 'function') window.mpResetCekPanel();
+    var cekPanelEl = document.getElementById('mp-cek-panel');
+    if (cekPanelEl) cekPanelEl.hidden = true;
+
+    // --- Hedef / kalan göstergelerini sıfırla ---
+    var hedefDisplay = document.getElementById('mp-t-hedef-display');
+    if (hedefDisplay) hedefDisplay.textContent = '—';
+    var hedefSub = document.getElementById('mp-t-hedef-sub');
+    if (hedefSub) hedefSub.textContent = '';
+    var kalanDisplay = document.getElementById('mp-t-kalan-display');
+    if (kalanDisplay) { kalanDisplay.textContent = '—'; kalanDisplay.style.color = ''; }
+
+    // --- İstisna state sıfırla ---
+    var istisnaWrap = document.getElementById('mp-t-istisna-aciklama-wrap');
+    if (istisnaWrap) { istisnaWrap.style.display = 'none'; }
+    var istisnaInput = document.getElementById('mp-t-istisna-aciklama');
+    if (istisnaInput) istisnaInput.value = '';
+    var gonderBtn = document.getElementById('mp-tahsilat-gonder-btn');
+    if (gonderBtn) { gonderBtn.textContent = 'ONAYA GÖNDER'; gonderBtn.className = gonderBtn.className.replace(/\bistisna-aktif\b/g, '').trim(); gonderBtn.style.background = ''; gonderBtn.style.border = ''; }
+
+    // --- Manuel kur wrap gizle ---
+    var kurWrap = document.getElementById('mp-t-manuel-kur-wrap');
+    if (kurWrap) { kurWrap.hidden = true; kurWrap.style.display = ''; }
+    var kurHint = document.getElementById('mp-t-manuel-kur-hint');
+    if (kurHint) kurHint.textContent = '1 USD kaç TL? Güncel satış kurunu yazın.';
+
+    var sevkUyari = document.getElementById('mp-t-sevk-secim-uyari');
+    if (sevkUyari) { sevkUyari.hidden = true; sevkUyari.textContent = ''; }
+
+    var today = new Date();
+    var isoToday = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    var alinanTarihEl = document.getElementById('mp-t-alinan-tarih');
+    if (alinanTarihEl) alinanTarihEl.value = isoToday;
     var cariSel = document.getElementById('mp-t-cari');
     cariSel.disabled = !!cariId;
     if (cariId) cariSel.value = String(cariId);
-    loadTahsilatPlanlar(cariId || cariSel.value, planCtx);
-    if (planCtx && planCtx.plan_tarih) document.getElementById('mp-t-plan-tarih').value = planCtx.plan_tarih;
-    if (planCtx && planCtx.beklenen != null) document.getElementById('mp-t-beklenen').value = planCtx.beklenen;
-    var draftId = cariId ? sessionStorage.getItem('mo_tahsilat_draft_' + cariId) : null;
-    if (draftId) hydrateTahsilatDraft(parseInt(draftId, 10));
+    loadTahsilatPlanlar(cariId || cariSel.value, planCtx).then(function(){
+      if (!tahsilatSevkBound && planCtx && planCtx.beklenen != null && !isTahsilatCek()) {
+        setMoneyInput(document.getElementById('mp-t-beklenen'), planCtx.beklenen, true);
+      }
+      if (!tahsilatSevkBound && planCtx && planCtx.paket_hedef != null) {
+        setMoneyInput(document.getElementById('mp-t-beklenen'), planCtx.paket_hedef, true);
+      }
+      updateTahsilatCekUi();
+      initTahsilatMoneyInputs();
+      var draftId = cariId ? sessionStorage.getItem('mo_tahsilat_draft_' + cariId) : null;
+      if (draftId) hydrateTahsilatDraft(parseInt(draftId, 10));
+    });
   }
 
   function hydrateTahsilatDraft(kayitId) {
@@ -2713,37 +4509,84 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
         tahsilatKayitId = k.id;
         document.getElementById('mp-t-kayit-id').value = String(k.id);
         document.getElementById('mp-t-cari').value = String(k.cari_id || '');
-        loadTahsilatPlanlar(k.cari_id, { siparis_id: k.siparis_id, plan_tarih: k.planlanan_tahsilat_tarihi, beklenen: k.beklenen_tutar });
-        setTimeout(function(){
-          if (k.siparis_id) document.getElementById('mp-t-siparis').value = String(k.siparis_id);
-          if (k.planlanan_tahsilat_tarihi) document.getElementById('mp-t-plan-tarih').value = k.planlanan_tahsilat_tarihi;
-          if (k.beklenen_tutar != null) document.getElementById('mp-t-beklenen').value = k.beklenen_tutar;
-          if (k.alinan_tutar != null) tahsilatForm.querySelector('[name="alinan_tutar"]').value = k.alinan_tutar;
-          if (k.alinan_tarih) tahsilatForm.querySelector('[name="alinan_tarih"]').value = k.alinan_tarih;
-          if (k.odeme_tipi) tahsilatForm.querySelector('[name="odeme_tipi"]').value = k.odeme_tipi;
-          if (k.odeme_referansi) tahsilatForm.querySelector('[name="odeme_referansi"]').value = k.odeme_referansi;
-          if (k.aciklama) tahsilatForm.querySelector('[name="aciklama"]').value = k.aciklama;
-          if (k.onay_notu) tahsilatForm.querySelector('[name="onay_notu"]').value = k.onay_notu;
-          updateTahsilatKalan();
-        }, 400);
+        loadTahsilatPlanlar(k.cari_id).then(function(){
+          var afterSevk = function() {
+            if (k.tcmb_satis_kur_snapshot != null && k.tcmb_satis_kur_snapshot !== '') {
+              tahsilatSevkFxKalan = k.sevk_kalan_fx_snapshot;
+              applyTcmbTryFromKayit(k);
+            } else if (!tahsilatSevkBound) {
+              var hedefVal = ((k.odeme_tipi || '').toUpperCase() === 'CEK' && k.paket_hedef_tutar != null)
+                ? k.paket_hedef_tutar : k.beklenen_tutar;
+              if (hedefVal != null) setMoneyInput(document.getElementById('mp-t-beklenen'), hedefVal, true);
+            }
+            var alinanEl = document.getElementById('mp-t-alinan');
+            if (k.alinan_tutar != null && alinanEl) setMoneyInput(alinanEl, k.alinan_tutar, true);
+            var alinanTarihEl = document.getElementById('mp-t-alinan-tarih');
+            if (k.alinan_tarih && alinanTarihEl) alinanTarihEl.value = k.alinan_tarih;
+            if (k.odeme_tipi) {
+              document.getElementById('mp-t-odeme-tipi').value = k.odeme_tipi;
+              if (typeof updateTahsilatCekUi === 'function') updateTahsilatCekUi();
+              if (typeof window.mpLoadCekBaglam === 'function') window.mpLoadCekBaglam();
+              if ((k.odeme_tipi || '').toUpperCase() === 'CEK' && typeof window.mpScheduleCekPreview === 'function') {
+                window.mpScheduleCekPreview();
+              }
+            }
+            var refEl = document.getElementById('mp-t-ref');
+            if (k.odeme_referansi && refEl) refEl.value = k.odeme_referansi;
+            var aciklamaEl = tahsilatForm.querySelector('[name="aciklama"]');
+            if (k.aciklama && aciklamaEl) aciklamaEl.value = k.aciklama;
+            var onayNotuEl = tahsilatForm.querySelector('[name="onay_notu"]');
+            if (k.onay_notu && onayNotuEl) onayNotuEl.value = k.onay_notu;
+            if (k.tcmb_satis_kur_snapshot != null && k.tcmb_satis_kur_snapshot !== '') {
+              tahsilatExplicitSave = true;
+              applyTcmbTryFromKayit(k, {freeze: true});
+              tahsilatHydrateKayit = null;
+            }
+            updateTahsilatKalan();
+            updateTcmbPanel();
+          };
+          if (k.siparis_id && k.sevkiyat_id) {
+            var sipSel = document.getElementById('mp-t-siparis');
+            if (sipSel) {
+              var sipOpt = sipSel.querySelector('option[value="' + k.siparis_id + '"]');
+              if (sipOpt) {
+                sipSel.value = String(k.siparis_id);
+                updateTcmbPanel();
+              }
+            }
+            if (k.tcmb_satis_kur_snapshot != null && k.tcmb_satis_kur_snapshot !== '') {
+              tahsilatTcmbFrozen = true;
+              tahsilatHydrateKayit = k;
+            }
+            return loadTahsilatSevkiyatlar(k.siparis_id, {
+              sevkiyat_id: k.sevkiyat_id,
+              preserveTcmbFrozen: !!(k.tcmb_satis_kur_snapshot != null && k.tcmb_satis_kur_snapshot !== '')
+            }).then(afterSevk);
+          }
+          afterSevk();
+        });
       }).catch(function(){});
   }
 
   function loadTahsilatPlanlar(cariId, planCtx) {
+    tahsilatPlanCtx = planCtx || null;
     var sipSel = document.getElementById('mp-t-siparis');
     sipSel.innerHTML = '<option value="">Yükleniyor…</option>';
     if (!cariId) {
       sipSel.innerHTML = '<option value="">Önce müşteri seçin</option>';
-      return;
+      return Promise.resolve();
     }
-    fetch('/nexgen/api/musteri-pazarlama/tahsilat-acik-planlar?cari_id=' + cariId)
+    return fetch('/nexgen/api/musteri-pazarlama/tahsilat-acik-planlar?cari_id=' + cariId)
       .then(function(r){ return r.json(); })
       .then(function(d){
         sipSel.innerHTML = '<option value="">Seçin (opsiyonel)</option>';
         (d.planlar || []).forEach(function(p){
+          var pb = p.anlasma_para_birimi || 'TRY';
           var lbl = (p.siparis_no || ('Sipariş #' + p.id));
-          if (p.planlanan_tahsilat_tarihi) lbl += ' · ' + p.planlanan_tahsilat_tarihi;
-          else if (p.tahsilat_durumu) lbl += ' · ' + p.tahsilat_durumu;
+          if (pb && pb !== 'TRY') lbl += ' [' + pb + ']';
+          if (p.gercek_sevk_tarihi) lbl += ' · Sevk ' + p.gercek_sevk_tarihi;
+          else if (p.planlanan_tahsilat_tarihi) lbl += ' · ' + p.planlanan_tahsilat_tarihi;
+          if (p.onaylanan_vade_gun) lbl += ' · ' + p.onaylanan_vade_gun + 'g';
           var opt = document.createElement('option');
           opt.value = String(p.id);
           opt.textContent = lbl;
@@ -2752,60 +4595,263 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
         });
         if (planCtx && planCtx.siparis_id) {
           sipSel.value = String(planCtx.siparis_id);
-          applyTahsilatPlan(sipSel);
+          return applyTahsilatPlan(sipSel);
         }
+        // cariId ile açıldığında, tahsilata hazır tek sipariş varsa auto-select et
+        var hazirlar = (d.planlar || []).filter(function(p){
+          return p.tahsilat_uygunluk === 'sevk_yapildi' || p.gercek_sevk_tarihi;
+        });
+        if (hazirlar.length === 1) {
+          sipSel.value = String(hazirlar[0].id);
+          return applyTahsilatPlan(sipSel);
+        }
+        return Promise.resolve();
       }).catch(function(){
         sipSel.innerHTML = '<option value="">Plan yüklenemedi</option>';
       });
   }
 
   function applyTahsilatPlan(sel) {
+    var planCtx = tahsilatPlanCtx || {};
     var opt = sel.options[sel.selectedIndex];
-    if (!opt || !opt.dataset.plan) return;
+    if (!opt || !opt.dataset.plan) {
+      var sipOzet = document.getElementById('mp-t-siparis-ozet');
+      if (sipOzet) sipOzet.hidden = true;
+      var pb = document.getElementById('mp-t-sip-pb');
+      if (pb) pb.value = '';
+      var panel = document.getElementById('mp-t-tcmb-panel');
+      if (panel) panel.hidden = true;
+      clearTahsilatSevk();
+      tahsilatPlanCtx = null;
+      return Promise.resolve();
+    }
     var p = JSON.parse(opt.dataset.plan);
-    document.getElementById('mp-t-plan-tarih').value = p.planlanan_tahsilat_tarihi || '';
-    document.getElementById('mp-t-beklenen').value = p.beklenen_tutar != null ? p.beklenen_tutar : '';
+    applyTahsilatPlanOdemeFromPlan(p);
+    updateTcmbPanel();
+    return loadTahsilatSevkiyatlar(sel.value, planCtx).then(function(){
+      tahsilatPlanCtx = null;
+      if (!tahsilatSevkBound) {
+        var odeme = (document.getElementById('mp-t-odeme-tipi').value || '').toUpperCase();
+        if (odeme !== 'CEK' && p.beklened_tutar != null) {
+          setMoneyInput(document.getElementById('mp-t-beklenen'), p.beklened_tutar, true);
+        } else if (odeme !== 'CEK' && p.beklenen_tutar != null) {
+          setMoneyInput(document.getElementById('mp-t-beklenen'), p.beklenen_tutar, true);
+        }
+        updateTahsilatKalan();
+      }
+    });
+  }
+
+  function isTahsilatCek() {
+    return (document.getElementById('mp-t-odeme-tipi').value || '').toUpperCase() === 'CEK';
+  }
+
+  function updateTahsilatCekUi() {
+    var cek = isTahsilatCek();
+    var sipZorunlu = document.getElementById('mp-t-siparis-zorunlu');
+    var alinanLabel = document.getElementById('mp-t-alinan-label');
+    var detayNo = document.getElementById('mp-t-detay-no');
+    updateTahsilatHedefUi();
+    if (alinanLabel) alinanLabel.textContent = cek ? 'Toplam Çek (otomatik)' : 'Alınan Tutar *';
+    if (sipZorunlu) sipZorunlu.hidden = !cek;
+    document.getElementById('mp-t-siparis').required = cek;
+    document.getElementById('mp-t-beklenen').required = cek;
+    var alinanEl = document.getElementById('mp-t-alinan');
+    if (alinanEl) { alinanEl.readOnly = cek; alinanEl.required = !cek; }
+    if (detayNo) detayNo.textContent = cek ? '4' : '3';
+    updateTcmbPanel();
+    var cekPanelEl = document.getElementById('mp-cek-panel');
+    if (cekPanelEl) cekPanelEl.hidden = !cek;
+    var baglamKutuEl = document.getElementById('mp-cek-baglam-kutu');
+    if (baglamKutuEl && !cek) baglamKutuEl.hidden = true;
+    if (cek) {
+      if (typeof window.mpLoadCekBaglam === 'function') window.mpLoadCekBaglam();
+      if (typeof window.mpTriggerCekPreview === 'function') window.mpTriggerCekPreview();
+    }
+  }
+
+  function validateTahsilatCekSubmit() {
+    if (!isTahsilatCek()) return true;
+    if (!document.getElementById('mp-t-siparis').value) {
+      toast('Çek tahsilatında bağlı sipariş seçilmelidir.');
+      return false;
+    }
+    var hedef = getMoneyInput(document.getElementById('mp-t-beklenen'));
+    if (!(hedef > 0)) {
+      toast('Paket hedef tutarı girilmelidir.');
+      return false;
+    }
+    if (typeof window.mpSaveCekSatirlar === 'function') {
+      var rows = document.querySelectorAll('#mp-cek-tbody tr[data-idx]');
+      if (!rows.length) {
+        toast('En az bir çek satırı girin.');
+        return false;
+      }
+      // Eksik alanlı satır kontrolü
+      var eksikVar = false;
+      rows.forEach(function(r) {
+        var tutarEl = r.querySelector('.mp-cek-tutar');
+        var vadeEl  = r.querySelector('.mp-cek-vade');
+        var alimEl  = r.querySelector('.mp-cek-alim');
+        var tutar = getMoneyInput(tutarEl);
+        var vade = (vadeEl ? vadeEl.value : '').trim();
+        var alim = (alimEl ? alimEl.value : '').trim();
+        var satırEksik = (tutar > 0) && (!vade || !alim);
+        r.style.background = satırEksik ? '#fff1f2' : '';
+        if (satırEksik) eksikVar = true;
+      });
+      if (eksikVar) {
+        toast('Çek bilgilerini tamamlayın.');
+        return false;
+      }
+    }
+    return true;
   }
 
   document.getElementById('mp-t-cari').addEventListener('change', function(){
-    loadTahsilatPlanlar(this.value);
+    var draftId = this.value ? sessionStorage.getItem('mo_tahsilat_draft_' + this.value) : null;
+    if (draftId) {
+      hydrateTahsilatDraft(parseInt(draftId, 10));
+    } else {
+      loadTahsilatPlanlar(this.value);
+    }
   });
   document.getElementById('mp-t-siparis').addEventListener('change', function(){
     applyTahsilatPlan(this);
+    if (typeof window.mpLoadCekBaglam === 'function') window.mpLoadCekBaglam();
+  });
+  var sevkSel = document.getElementById('mp-t-sevkiyat');
+  if (sevkSel) {
+    sevkSel.addEventListener('change', function(){
+      applyTahsilatSevk(this);
+      if (typeof window.mpLoadCekBaglam === 'function') window.mpLoadCekBaglam();
+    });
+  }
+  document.getElementById('mp-t-tahsilat-pb').addEventListener('change', function(){
+    if (tahsilatSevkBound) { this.value = 'TRY'; return; }
+    updateTcmbPanel();
+  });
+  document.getElementById('mp-t-odeme-tipi').addEventListener('change', function() {
+    updateTahsilatCekUi();
+    if (tahsilatSevkBound && !tahsilatTcmbFrozen) scheduleTahsilatTryPreview();
   });
   document.getElementById('mp-t-beklenen').addEventListener('input', updateTahsilatKalan);
-  tahsilatForm.querySelector('[name="alinan_tutar"]').addEventListener('input', updateTahsilatKalan);
+  document.getElementById('mp-t-alinan').addEventListener('input', updateTahsilatKalan);
+  initTahsilatMoneyInputs();
+
   function updateTahsilatKalan() {
-    var bek = parseFloat(document.getElementById('mp-t-beklenen').value || '0');
-    var al = parseFloat(tahsilatForm.querySelector('[name="alinan_tutar"]').value || '0');
-    if (bek > 0 && al > 0) {
-      document.getElementById('mp-t-kalan').value = Math.max(bek - al, 0).toFixed(2);
-      document.getElementById('mp-t-kismi').value = (al < bek - 0.009) ? '1' : '0';
+    var bek = getMoneyInput(document.getElementById('mp-t-beklenen'));
+    var al = getMoneyInput(document.getElementById('mp-t-alinan'));
+    if (isTahsilatCek()) {
+      var toplam = 0;
+      var eksikUyariGoster = false;
+      // Sadece gerçek veri satırları — uyarı satırlarını atla
+      document.querySelectorAll('#mp-cek-tbody tr[data-idx]').forEach(function(tr){
+        var tutarEl = tr.querySelector('.mp-cek-tutar');
+        var alimEl  = tr.querySelector('.mp-cek-alim');
+        var vadeEl  = tr.querySelector('.mp-cek-vade');
+        if (!tutarEl) return;
+        var v = getMoneyInput(tutarEl);
+        if (!(v > 0)) return;
+        var alim = (alimEl ? alimEl.value : '').trim();
+        var vade = (vadeEl ? vadeEl.value : '').trim();
+        var idx = tr.dataset.idx;
+        // Mevcut uyarı satırını bul (kardeş — tr içinde değil, tbody'de data-uyari-for ile)
+        var mevcutUyari = document.querySelector('#mp-cek-tbody tr.mp-cek-satir-uyari[data-uyari-for="' + idx + '"]');
+        if (alim && vade) {
+          toplam += v;
+          tr.style.background = '';
+          if (mevcutUyari) mevcutUyari.remove();
+        } else {
+          eksikUyariGoster = true;
+          tr.style.background = '#fff1f2';
+          if (!mevcutUyari) {
+            var uyariTd = document.createElement('td');
+            uyariTd.colSpan = 7;
+            uyariTd.style.cssText = 'color:#ef4444;font-size:11px;padding:2px 4px';
+            uyariTd.textContent = 'Çeki hesaba katmak için alım ve vade tarihini girin.';
+            var uyariTr = document.createElement('tr');
+            uyariTr.className = 'mp-cek-satir-uyari';
+            uyariTr.dataset.uyariFor = idx;
+            uyariTr.appendChild(uyariTd);
+            tr.insertAdjacentElement('afterend', uyariTr);
+          }
+        }
+      });
+      if (toplam > 0 || eksikUyariGoster) {
+        al = toplam;
+        setMoneyInput(document.getElementById('mp-t-alinan'), toplam, true);
+      }
     }
+    if (bek > 0 && al >= 0) {
+      var kalan = Math.max(bek - al, 0);
+      setMoneyInput(document.getElementById('mp-t-kalan'), kalan, true);
+      var kalanDisp = document.getElementById('mp-t-kalan-display');
+      if (kalanDisp) kalanDisp.textContent = formatTrMoney(kalan);
+      var kismiEl = tahsilatForm.querySelector('[name="kismi_mi"]');
+      if (kismiEl) kismiEl.value = (al < bek - 0.009) ? '1' : '0';
+    }
+  }
+
+  function tahsilatApiMesaj(res, fallback) {
+    if (!res) return fallback;
+    var d = res.d || res;
+    if (!d) return fallback;
+    if (d.mesaj) return d.mesaj;
+    if (d.hata) return d.hata;
+    return fallback;
   }
 
   function tahsilatPayload() {
     var fd = new FormData(tahsilatForm);
+    var cek = isTahsilatCek();
+    var hedef = getMoneyInput(document.getElementById('mp-t-beklenen')) || null;
+    var sevkEl = document.getElementById('mp-t-sevkiyat');
+    var sevkId = sevkEl && sevkEl.value ? parseInt(sevkEl.value, 10) : null;
+    var cariEl = document.getElementById('mp-t-cari');
+    // Manuel kur: USD/EUR için
+    var kurInp = document.getElementById('mp-t-manuel-kur');
+    var manuelKurRaw = kurInp ? kurInp.value.replace(',', '.').trim() : '';
+    var manuelKurF = parseFloat(manuelKurRaw);
+    var manuelKur = (manuelKurRaw && !isNaN(manuelKurF) && isFinite(manuelKurF) && manuelKurF > 0) ? manuelKurF : null;
     return {
       idempotency_key: tahsilatIdemKey,
       kayit_id: tahsilatKayitId,
-      cari_id: fd.get('cari_id'),
+      cari_id: (cariEl && cariEl.value) ? cariEl.value : fd.get('cari_id'),
       siparis_id: fd.get('siparis_id') || null,
-      planlanan_tahsilat_tarihi: fd.get('planlanan_tahsilat_tarihi'),
-      beklenen_tutar: fd.get('beklenen_tutar'),
-      alinan_tutar: fd.get('alinan_tutar'),
-      alinan_tarih: fd.get('alinan_tarih'),
+      sevkiyat_id: sevkId || null,
+      beklenen_tutar: cek ? null : hedef,
+      paket_hedef_tutar: cek ? hedef : null,
+      alinan_tutar: getMoneyInput(document.getElementById('mp-t-alinan')) || null,
+      alinan_tarih: fd.get('alinan_tarih') || null,
       odeme_tipi: fd.get('odeme_tipi'),
-      kismi_mi: fd.get('kismi_mi') === '1',
-      kalan_tutar: fd.get('kalan_tutar'),
-      odeme_referansi: fd.get('odeme_referansi'),
-      aciklama: fd.get('aciklama'),
-      onay_notu: fd.get('onay_notu')
+      kismi_mi: (fd.get('kismi_mi') || '0') === '1',
+      kalan_tutar: getMoneyInput(document.getElementById('mp-t-kalan')) || null,
+      odeme_referansi: fd.get('odeme_referansi') || null,
+      aciklama: fd.get('aciklama') || null,
+      onay_notu: fd.get('onay_notu') || null,
+      tcmb_satis_kur_snapshot: manuelKur
     };
   }
 
+  // Manuel kur input: gerçek zamanlı hesap
+  (function() {
+    var kurInp = document.getElementById('mp-t-manuel-kur');
+    if (kurInp) {
+      kurInp.addEventListener('input', function() {
+        kurInp.style.borderColor = '';
+        var err = document.getElementById('mp-t-sevk-tcmb-err');
+        if (err) { err.hidden = true; err.textContent = ''; }
+        scheduleTahsilatTryPreview();
+      });
+    }
+  })();
+
   document.getElementById('mp-tahsilat-taslak-btn').addEventListener('click', function(){
     if (tahsilatSubmitting) return;
+    updateTahsilatCekUi();
+    if (!validateTahsilatSevkSubmit()) return;
+    if (!validateTahsilatCekSubmit()) return;
     if (!tahsilatForm.reportValidity()) return;
     tahsilatSubmitting = true;
     var p = tahsilatPayload();
@@ -2814,17 +4860,46 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
       method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(p)
     }).then(function(r){ return r.json().then(function(d){ return {ok: r.ok, d: d}; }); })
     .then(function(res){
-      tahsilatSubmitting = false;
-      if (!res.d.ok) { toast(res.d.mesaj || 'Taslak hatası'); return; }
+      if (!res.d.ok) { tahsilatSubmitting = false; toast(res.d.mesaj || 'Taslak hatası'); return; }
       tahsilatKayitId = res.d.kayit.id;
-      var cid = document.getElementById('mp-t-cari').value;
-      if (cid) sessionStorage.setItem('mo_tahsilat_draft_' + cid, String(tahsilatKayitId));
-      toast('Tahsilat taslağı kaydedildi.');
+      tahsilatExplicitSave = true;
+      if (tahsilatSevkBound && res.d.kayit) applyTcmbTryFromKayit(res.d.kayit, {freeze: true});
+      var saveCek = (typeof window.mpSaveCekSatirlar === 'function') ? window.mpSaveCekSatirlar(tahsilatKayitId) : Promise.resolve({ok:true});
+      return saveCek.then(function(cekRes){
+        tahsilatSubmitting = false;
+        if (cekRes && !cekRes.ok) { toast(cekRes.mesaj || 'Çek kaydı hatası'); return; }
+        if (tahsilatSevkBound && !tahsilatTcmbFrozen && isTahsilatCek()) {
+          return refreshTahsilatTryPreview().then(function() {
+            var cid = document.getElementById('mp-t-cari').value;
+            if (cid) sessionStorage.setItem('mo_tahsilat_draft_' + cid, String(tahsilatKayitId));
+            toast('Tahsilat taslağı kaydedildi.');
+          });
+        }
+        var cid = document.getElementById('mp-t-cari').value;
+        if (cid) sessionStorage.setItem('mo_tahsilat_draft_' + cid, String(tahsilatKayitId));
+        toast('Tahsilat taslağı kaydedildi.');
+      });
     }).catch(function(){ tahsilatSubmitting = false; toast('Bağlantı hatası'); });
   });
 
   document.getElementById('mp-tahsilat-gonder-btn').addEventListener('click', function(){
     if (tahsilatSubmitting) return;
+    updateTahsilatCekUi();
+    updateTahsilatKalan();
+    if (!validateTahsilatSevkSubmit()) return;
+    if (!validateTahsilatCekSubmit()) return;
+
+    // Vade aşımı istisna açıklaması kontrolü (frontend doğrulama)
+    var istisnaPaneli = document.getElementById('mp-t-istisna-aciklama-wrap');
+    var istisnaAciklama = '';
+    if (istisnaPaneli && istisnaPaneli.style.display !== 'none') {
+      istisnaAciklama = (document.getElementById('mp-t-istisna-aciklama') || {}).value || '';
+      if (!istisnaAciklama.trim()) {
+        toast('Vade aşımı açıklaması zorunludur. Lütfen açıklamanızı girin.');
+        document.getElementById('mp-t-istisna-aciklama').focus();
+        return;
+      }
+    }
     if (!tahsilatForm.reportValidity()) return;
     tahsilatSubmitting = true;
     var btn = document.getElementById('mp-tahsilat-gonder-btn');
@@ -2836,18 +4911,36 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
       body: JSON.stringify(p)
     }).then(function(r){ return r.json().then(function(d){ return {ok: r.ok, d: d}; }); })
     .then(function(res){
-      if (!res.d.ok) { tahsilatSubmitting = false; btn.disabled = false; toast(res.d.mesaj || 'Kayıt hatası'); return; }
+      if (!res.d || !res.d.ok) {
+        tahsilatSubmitting = false;
+        btn.disabled = false;
+        toast(tahsilatApiMesaj(res, 'Kayıt hatası'));
+        return null;
+      }
       tahsilatKayitId = res.d.kayit.id;
-      return fetch('/nexgen/api/musteri-pazarlama/tahsilat-kayit/' + tahsilatKayitId + '/onaya-gonder', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(p)
-      }).then(function(r){ return r.json().then(function(d){ return {ok: r.ok, d: d}; }); });
+      var saveCek = (typeof window.mpSaveCekSatirlar === 'function') ? window.mpSaveCekSatirlar(tahsilatKayitId) : Promise.resolve({ok:true});
+      return saveCek.then(function(cekRes){
+        if (cekRes && cekRes.ok === false) {
+          tahsilatSubmitting = false;
+          btn.disabled = false;
+          toast(tahsilatApiMesaj({d: cekRes}, 'Çek kaydı hatası'));
+          return null;
+        }
+        return fetch('/nexgen/api/musteri-pazarlama/tahsilat-kayit/' + tahsilatKayitId + '/onaya-gonder', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(istisnaAciklama ? {vade_asim_aciklamasi: istisnaAciklama} : {})
+        }).then(function(r){ return r.json().then(function(d){ return {ok: r.ok, d: d}; }); });
+      });
     }).then(function(res2){
+      if (!res2) return;
       tahsilatSubmitting = false;
       btn.disabled = false;
-      if (!res2 || !res2.d.ok) { toast((res2 && res2.d.mesaj) || 'Onaya gönderilemedi'); return; }
-      toast('Yönetim onayına gönderildi.');
+      if (!res2.d || !res2.d.ok) {
+        toast(tahsilatApiMesaj(res2, 'Onaya gönderilemedi'));
+        return;
+      }
+      toast(istisnaAciklama ? 'Yönetim istisna onayına gönderildi' : 'Yönetim onayına gönderildi.');
       closeModal('tahsilat');
       setTimeout(function(){ location.reload(); }, 800);
     }).catch(function(){
@@ -2857,6 +4950,363 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     });
   });
   tahsilatForm.addEventListener('submit', function(e){ e.preventDefault(); });
+
+  // ===== CEK PANELİ JS =====
+  (function() {
+    var cekSatirSayac = 0;
+    var cekDebounceTimer = null;
+    var cekBaglamCache = null;
+    var odemeTipiSel = document.getElementById('mp-t-odeme-tipi');
+    var cekPanel = document.getElementById('mp-cek-panel');
+    var cekTbody = document.getElementById('mp-cek-tbody');
+    var cekOzet = document.getElementById('mp-cek-ozet');
+    var siparisSel = document.getElementById('mp-t-siparis');
+
+    function isCek() { return (odemeTipiSel.value || '').toUpperCase() === 'CEK'; }
+
+    function cekPreviewContext() {
+      var ctx = { sevk_tarihi: null, onaylanan_vade_gun: null };
+      if (cekBaglamCache) {
+        if (cekBaglamCache.gercek_sevk_tarihi) ctx.sevk_tarihi = cekBaglamCache.gercek_sevk_tarihi;
+        if (cekBaglamCache.onaylanan_vade_gun != null) ctx.onaylanan_vade_gun = cekBaglamCache.onaylanan_vade_gun;
+      }
+      var opt = siparisSel.options[siparisSel.selectedIndex];
+      if (opt && opt.dataset.plan) {
+        try {
+          var p = JSON.parse(opt.dataset.plan);
+          if (!ctx.sevk_tarihi && p.gercek_sevk_tarihi) ctx.sevk_tarihi = p.gercek_sevk_tarihi;
+          if (ctx.onaylanan_vade_gun == null && p.onaylanan_vade_gun != null) ctx.onaylanan_vade_gun = p.onaylanan_vade_gun;
+        } catch (e) {}
+      }
+      return ctx;
+    }
+
+    window.mpLoadCekBaglam = loadCekBaglam;
+    window.mpSaveCekSatirlar = function(kayitId) {
+      if (!isCek() || !kayitId) return Promise.resolve({ok: true});
+      var satirlar = collectCekSatirlar();
+      if (!satirlar.length) return Promise.resolve({ok: false, mesaj: 'En az bir çek satırı girin.'});
+      return fetch('/nexgen/api/musteri-pazarlama/tahsilat-kayit/' + kayitId + '/cekler/bulk', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({cek_satirlari: satirlar})
+      }).then(function(r){ return r.json(); });
+    };
+
+    // Sipariş değişince bağlam yükle (CEK modunda)
+    siparisSel.addEventListener('change', function() {
+      if (!isCek()) return;
+      cekBaglamCache = null;
+      loadCekBaglam();
+      schedulePreview();
+    });
+
+    function loadCekBaglam() {
+      var sipId = siparisSel.value;
+      var baglamKutu = document.getElementById('mp-cek-baglam-kutu');
+      var ic = document.getElementById('mp-cek-baglam-ic');
+      if (!sipId) {
+        cekBaglamCache = null;
+        if (baglamKutu) baglamKutu.hidden = true;
+        if (ic) ic.textContent = 'Sipariş seçilince bağlam yüklenir…';
+        return;
+      }
+      if (baglamKutu) baglamKutu.hidden = false;
+      if (ic) ic.textContent = 'Yükleniyor…';
+      fetch('/nexgen/api/musteri-pazarlama/vade-kontrol/siparis/' + sipId + '/beklenen')
+        .then(function(r){ return r.json(); })
+        .then(function(d) {
+          if (!d.ok) { if(ic) ic.textContent = 'Bağlam yüklenemedi.'; return; }
+          var b = d.baglam;
+          var fmtT = function(n){ return n != null ? formatTrMoney(n) : '—'; };
+          var sipPb = b.siparis_para_birimi || b.para_birimi || 'TRY';
+          var html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px 12px;">';
+          html += '<div><span style="color:#6b7280">Sipariş No</span><br><strong>' + (b.siparis_no || '—') + '</strong></div>';
+          if (b.siparis_toplami != null) {
+            html += '<div><span style="color:#6b7280">Sipariş Toplamı</span><br><strong>' + fmtT(b.siparis_toplami) + (b.siparis_toplami_tahmini ? ' <em style="font-size:10px;color:#94a3b8">(tahmini)</em>' : '') + '</strong></div>';
+          }
+          html += '<div><span style="color:#6b7280">Para Birimi</span><br><strong>' + sipPb + '</strong></div>';
+          html += '<div><span style="color:#6b7280">Gerçek Sevk</span><br><strong>' + (b.gercek_sevk_tarihi || '<em style="color:#f59e0b">Sevk Bekleniyor</em>') + '</strong></div>';
+          html += '<div><span style="color:#6b7280">Onaylanan Vade</span><br><strong>' + (b.onaylanan_vade_gun != null ? b.onaylanan_vade_gun + ' gün' : '—') + '</strong></div>';
+          html += '<div><span style="color:#6b7280">Hedef Çek Vadesi</span><br><strong>' + (b.hedef_vade_tarihi || '—') + '</strong></div>';
+          html += '</div>';
+          if (b.siparis_kur && sipPb !== 'TRY') {
+            var tahPb = (document.getElementById('mp-t-tahsilat-pb') || {value:'TRY'}).value || 'TRY';
+            html += '<div style="margin-top:6px;padding-top:6px;border-top:1px solid #e2e8f0;color:#78716c;font-size:11px;">';
+            html += 'TCMB: 1 ' + sipPb + ' = ' + parseFloat(b.siparis_kur).toFixed(4) + ' TRY';
+            if (b.siparis_kur_tarihi) html += ' (' + b.siparis_kur_tarihi + ')';
+            if (b.siparis_toplami) {
+              html += ' → Hedef: ' + fmtT(b.siparis_toplami * b.siparis_kur) + ' TRY';
+            }
+            html += '</div>';
+          }
+          if (ic) ic.innerHTML = html;
+          cekBaglamCache = b;
+          schedulePreview();
+        }).catch(function(){ if(ic) ic.textContent = 'Bağlam yüklenemedi.'; });
+    }
+
+    // Yeni satır ekle
+    document.getElementById('mp-cek-ekle-btn').addEventListener('click', function() {
+      addCekRow({});
+      triggerPreview();
+    });
+
+    function addCekRow(data) {
+      cekSatirSayac++;
+      var idx = cekSatirSayac;
+      var tr = document.createElement('tr');
+      tr.dataset.idx = idx;
+      tr.innerHTML =
+        '<td style="padding:3px 4px;text-align:right;color:#94a3b8">' + cekTbody.children.length + 1 + '</td>'
+        + '<td style="padding:2px 4px"><input type="text" inputmode="decimal" class="mp-cek-tutar mp-inp-sm mp-money-inp" value="' + (data.tutar ? formatTrMoney(data.tutar, false) : '') + '" placeholder="Tutar" data-idx="' + idx + '"></td>'
+        + '<td style="padding:2px 4px"><input type="date" class="mp-cek-alim mp-inp-sm" value="' + (data.cek_alim_tarihi || '') + '" data-idx="' + idx + '"></td>'
+        + '<td style="padding:2px 4px"><input type="date" class="mp-cek-vade mp-inp-sm" value="' + (data.gercek_cek_vade_tarihi || '') + '" required data-idx="' + idx + '"></td>'
+        + '<td style="padding:2px 4px"><input type="text" class="mp-cek-no mp-inp-sm" value="' + (data.odeme_referansi || '') + '" placeholder="Çek No" data-idx="' + idx + '"></td>'
+        + '<td style="padding:2px 4px"><input type="text" class="mp-cek-banka mp-inp-sm" value="' + (data.banka_adi || '') + '" placeholder="Banka" data-idx="' + idx + '"></td>'
+        + '<td style="padding:2px 4px"><button type="button" class="mp-cek-sil-btn" data-idx="' + idx + '" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:14px;line-height:1">×</button></td>';
+      cekTbody.appendChild(tr);
+      bindMoneyInput(tr.querySelector('.mp-cek-tutar'));
+      if (data.tutar) setMoneyInput(tr.querySelector('.mp-cek-tutar'), data.tutar, true);
+      // live events
+      tr.querySelectorAll('.mp-cek-tutar, .mp-cek-vade, .mp-cek-alim').forEach(function(el){
+        el.addEventListener('input', function(){
+          schedulePreview();
+          if (typeof updateTahsilatKalan === 'function') updateTahsilatKalan();
+        });
+        el.addEventListener('change', function(){
+          schedulePreview();
+          if (typeof updateTahsilatKalan === 'function') updateTahsilatKalan();
+        });
+      });
+      tr.querySelector('.mp-cek-sil-btn').addEventListener('click', function() {
+        tr.remove();
+        renumberCekRows();
+        schedulePreview();
+      });
+      data._tr_idx = idx;
+      return tr;
+    }
+
+    function renumberCekRows() {
+      var rows = cekTbody.querySelectorAll('tr');
+      rows.forEach(function(r, i){ var td = r.querySelector('td'); if(td) td.textContent = i+1; });
+    }
+
+    function collectCekSatirlar() {
+      var rows = cekTbody.querySelectorAll('tr');
+      var pb = (document.getElementById('mp-t-tahsilat-pb') || {value:'TRY'}).value || 'TRY';
+      var result = [];
+      rows.forEach(function(r) {
+        var tutarEl = r.querySelector('.mp-cek-tutar');
+        var tutar = getMoneyInput(tutarEl);
+        var vade = (r.querySelector('.mp-cek-vade').value || '').trim();
+        if (!(tutar > 0) || !vade) return;
+        result.push({
+          tutar: tutar,
+          gercek_cek_vade_tarihi: vade,
+          cek_alim_tarihi: r.querySelector('.mp-cek-alim').value || null,
+          odeme_referansi: r.querySelector('.mp-cek-no').value || null,
+          banka_adi: r.querySelector('.mp-cek-banka').value || null,
+          para_birimi: pb,
+        });
+      });
+      return result;
+    }
+
+    function schedulePreview() {
+      clearTimeout(cekDebounceTimer);
+      cekDebounceTimer = setTimeout(triggerPreview, 300);
+    }
+    window.mpScheduleCekPreview = schedulePreview;
+
+    // Reset: modal kapatılıp yeni kayıt açıldığında çağrılır
+    window.mpResetCekPanel = function() {
+      clearTimeout(cekDebounceTimer);
+      cekBaglamCache = null;
+      cekSatirSayac = 0;
+      if (cekTbody) cekTbody.innerHTML = '';
+      if (cekOzet) {
+        cekOzet.hidden = true;
+        ['mp-cek-oz-adet','mp-cek-oz-toplam','mp-cek-oz-kalan','mp-cek-oz-karsilama',
+         'mp-cek-oz-onaylanan','mp-cek-oz-vade','mp-cek-oz-vade-tarih','mp-cek-oz-sapma',
+         'mp-cek-oz-finansman','mp-cek-oz-durum'].forEach(function(id){
+          var el = document.getElementById(id);
+          if (el) { el.textContent = '—'; el.style.color = ''; }
+        });
+        // Finansman detay gizle
+        var finDetay = document.getElementById('mp-cek-oz-finansman-detay');
+        if (finDetay) { finDetay.style.display = 'none'; }
+        var finOran = document.getElementById('mp-cek-oz-finansman-oran');
+        if (finOran) finOran.textContent = '';
+        var finFormul = document.getElementById('mp-cek-oz-finansman-formul');
+        if (finFormul) finFormul.textContent = '';
+        // Fazla vade mesajı gizle
+        var fazlaEl = document.getElementById('mp-cek-oz-fazla-vade-mesaj');
+        if (fazlaEl) { fazlaEl.style.display = 'none'; fazlaEl.textContent = ''; }
+        var fazlaWrap = document.getElementById('mp-cek-oz-fazla-wrap');
+        if (fazlaWrap) fazlaWrap.hidden = true;
+        var fazlaVal = document.getElementById('mp-cek-oz-fazla');
+        if (fazlaVal) { fazlaVal.textContent = '—'; fazlaVal.style.color = '#dc2626'; }
+        var hedefAsim = document.getElementById('mp-cek-oz-hedef-asim');
+        if (hedefAsim) { hedefAsim.style.display = 'none'; hedefAsim.textContent = ''; }
+      }
+      var baglamKutu = document.getElementById('mp-cek-baglam-kutu');
+      if (baglamKutu) baglamKutu.hidden = true;
+      var baglamIc = document.getElementById('mp-cek-baglam-ic');
+      if (baglamIc) baglamIc.textContent = 'Sipariş seçilince bağlam yüklenir…';
+    };
+
+    function triggerPreview() {
+      if (!isCek()) return;
+      var sipId = siparisSel.value ? parseInt(siparisSel.value, 10) : null;
+      var hedef = getMoneyInput(document.getElementById('mp-t-beklenen'));
+      var pb = 'TRY';
+      var baglam = cekPreviewContext();
+      var payload = {
+        siparis_id: sipId,
+        tahsilat_kayit_id: tahsilatKayitId || null,
+        para_birimi: pb,
+        cek_satirlari: collectCekSatirlar(),
+      };
+      if (hedef > 0) payload.paket_hedef_tutar = hedef;
+      if (baglam.sevk_tarihi) payload.sevk_tarihi = baglam.sevk_tarihi;
+      if (baglam.onaylanan_vade_gun != null) payload.onaylanan_vade_gun = baglam.onaylanan_vade_gun;
+      fetch('/nexgen/api/musteri-pazarlama/vade-kontrol/preview', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+      }).then(function(r){ return r.json(); })
+      .then(function(d) {
+        if (!d.ok || !d.sonuc) return;
+        renderCekOzet(d.sonuc);
+      }).catch(function(){});
+    }
+    window.mpTriggerCekPreview = triggerPreview;
+
+    function fmtMoney(n) { return formatTrMoney(n); }
+
+    function renderCekOzet(s) {
+      if (!s) return;
+      cekOzet.hidden = false;
+      document.getElementById('mp-cek-oz-adet').textContent = s.cek_adedi != null ? s.cek_adedi : '—';
+      document.getElementById('mp-cek-oz-toplam').textContent = fmtMoney(s.toplam_cek_tutari);
+      var hedefTry = getMoneyInput(document.getElementById('mp-t-beklenen'));
+      if (!(hedefTry > 0) && s.paket_hedef_tutar != null) hedefTry = parseFloat(s.paket_hedef_tutar) || 0;
+      var toplamCek = s.toplam_cek_tutari != null ? parseFloat(s.toplam_cek_tutari) : 0;
+      var kalanGoster = hedefTry > 0 ? Math.max(hedefTry - toplamCek, 0) : (s.kalan_tutar != null ? Math.max(parseFloat(s.kalan_tutar), 0) : null);
+      var fazlaTahsilat = (hedefTry > 0 && toplamCek > hedefTry + 0.009) ? Math.round((toplamCek - hedefTry) * 100) / 100 : 0;
+      document.getElementById('mp-cek-oz-kalan').textContent = kalanGoster != null ? fmtMoney(kalanGoster) : '—';
+      var fazlaWrapEl = document.getElementById('mp-cek-oz-fazla-wrap');
+      var fazlaValEl = document.getElementById('mp-cek-oz-fazla');
+      if (fazlaWrapEl && fazlaValEl) {
+        if (fazlaTahsilat > 0.009) {
+          fazlaWrapEl.hidden = false;
+          fazlaValEl.textContent = fmtMoney(fazlaTahsilat);
+        } else {
+          fazlaWrapEl.hidden = true;
+          fazlaValEl.textContent = '—';
+        }
+      }
+      var karsilamaOran = s.karsilama_orani;
+      if (hedefTry > 0 && toplamCek > 0) karsilamaOran = (toplamCek / hedefTry) * 100;
+      document.getElementById('mp-cek-oz-karsilama').textContent = karsilamaOran != null ? karsilamaOran.toFixed(2) + '%' : '—';
+      var hedefAsimEl = document.getElementById('mp-cek-oz-hedef-asim');
+      if (hedefAsimEl) {
+        if (fazlaTahsilat > 0.009) {
+          hedefAsimEl.textContent = 'Hedef ' + fmtMoney(fazlaTahsilat) + ' aşılmıştır.';
+          hedefAsimEl.style.display = '';
+        } else {
+          hedefAsimEl.style.display = 'none';
+          hedefAsimEl.textContent = '';
+        }
+      }
+      document.getElementById('mp-cek-oz-onaylanan').textContent = s.onaylanan_vade_gun != null ? s.onaylanan_vade_gun + ' gün' : '—';
+      document.getElementById('mp-cek-oz-vade').textContent = s.agirlikli_ortalama_vade_gun_gosterim != null ? s.agirlikli_ortalama_vade_gun_gosterim + ' gün' : '—';
+      document.getElementById('mp-cek-oz-vade-tarih').textContent = fmtTrDate(s.agirlikli_ortalama_vade_tarihi);
+      var sapmaEl = document.getElementById('mp-cek-oz-sapma');
+      var sapma = s.vade_sapma_gun_gosterim;
+      sapmaEl.textContent = sapma != null ? ((sapma > 0 ? '+' : '') + sapma + ' gün') : '—';
+      sapmaEl.style.color = sapma > 0 ? '#dc2626' : (sapma < 0 ? '#16a34a' : '#374151');
+      document.getElementById('mp-cek-oz-finansman').textContent = s.finansman_net != null ? fmtMoney(s.finansman_net) : '—';
+
+      // Finansman detay: oran + formül
+      var finDetay = document.getElementById('mp-cek-oz-finansman-detay');
+      var finOran = document.getElementById('mp-cek-oz-finansman-oran');
+      var finFormul = document.getElementById('mp-cek-oz-finansman-formul');
+      if (finDetay && s.durum_kodu === 'FAZLA_VADE' && s.finansman_net != null && s.finansman_net > 0) {
+        var oranPct = s.finansman_aylik_oran != null ? (s.finansman_aylik_oran * 100).toFixed(2).replace('.',',' ) + '%' : '%4,00';
+        if (finOran) finOran.textContent = 'Aylık oran: ' + oranPct;
+        // Formül: toplam_cek × %oran × sapma_gün / 30
+        var cekToplam = s.toplam_cek_tutari;
+        var sapmaGun = s.vade_sapma_gun_gosterim;
+        if (finFormul && cekToplam != null && sapmaGun != null && sapmaGun > 0) {
+          var cekFmt = Math.round(cekToplam).toLocaleString('tr-TR');
+          finFormul.textContent = cekFmt + ' × %' + (s.finansman_aylik_oran != null ? (s.finansman_aylik_oran*100).toFixed(0) : '4') + ' × ' + sapmaGun + ' / 30 = ' + fmtMoney(s.finansman_net);
+        }
+        finDetay.style.display = '';
+      } else if (finDetay) {
+        finDetay.style.display = 'none';
+      }
+
+      var durumEl = document.getElementById('mp-cek-oz-durum');
+      durumEl.textContent = s.durum_etiket || s.durum_kodu || '—';
+      var durumRenk = {'VADE_UYGUN':'#16a34a','FAZLA_VADE':'#dc2626','AVANTAJ':'#16a34a','SEVK_BEKLIYOR':'#d97706','CEK_YOK':'#6b7280','NAKIT_PAKET':'#6b7280'};
+      durumEl.style.color = durumRenk[s.durum_kodu] || '#374151';
+      cekOzet.style.background = s.durum_kodu === 'FAZLA_VADE' ? '#fff1f2' : s.durum_kodu === 'VADE_UYGUN' || s.durum_kodu === 'AVANTAJ' ? '#f0fdf4' : '#fffbeb';
+      cekOzet.style.borderColor = s.durum_kodu === 'FAZLA_VADE' ? '#fecaca' : s.durum_kodu === 'VADE_UYGUN' || s.durum_kodu === 'AVANTAJ' ? '#bbf7d0' : '#fde68a';
+
+      // Fazla vade mesajı
+      var fazlaMesajEl = document.getElementById('mp-cek-oz-fazla-vade-mesaj');
+      if (fazlaMesajEl) {
+        if (s.durum_kodu === 'FAZLA_VADE' && s.vade_sapma_gun_gosterim != null && s.vade_sapma_gun_gosterim > 0) {
+          fazlaMesajEl.textContent = 'Müşteri anlaşmayı ' + s.vade_sapma_gun_gosterim + ' gün aşıyor.';
+          fazlaMesajEl.style.display = '';
+        } else {
+          fazlaMesajEl.style.display = 'none';
+        }
+      }
+
+      // --- Vade aşımı: buton metni + istisna açıklama alanı ---
+      var gonderBtn = document.getElementById('mp-tahsilat-gonder-btn');
+      var istisnaPaneli = document.getElementById('mp-t-istisna-aciklama-wrap');
+      if (s.durum_kodu === 'FAZLA_VADE') {
+        if (gonderBtn) { gonderBtn.textContent = 'YÖNETİMDEN İSTİSNA ONAYI İSTE'; gonderBtn.style.background = '#dc2626'; gonderBtn.style.borderColor = '#dc2626'; }
+        if (istisnaPaneli) istisnaPaneli.style.display = '';
+      } else {
+        if (gonderBtn) { gonderBtn.textContent = 'ONAYA GÖNDER'; gonderBtn.style.background = ''; gonderBtn.style.borderColor = ''; }
+        if (istisnaPaneli) istisnaPaneli.style.display = 'none';
+      }
+    }
+
+    // Beklenen tutar değişince preview tetikle (paket hedef)
+    document.getElementById('mp-t-beklenen').addEventListener('input', function() {
+      if (isCek()) schedulePreview();
+    });
+
+    // Hydrate: kayit_detay'dan dönen cek_satirlari varsa tabloya ekle
+    var _origHydrate = typeof hydrateTahsilatDraft === 'function' ? hydrateTahsilatDraft : null;
+    window.hydrateTahsilatDraft = function(kayitId) {
+      if (kayitId) tahsilatKayitId = kayitId;
+      if (_origHydrate) _origHydrate(kayitId);
+      if (!kayitId) return;
+      fetch('/nexgen/api/musteri-pazarlama/tahsilat-kayit/' + kayitId)
+        .then(function(r){ return r.json(); })
+        .then(function(d) {
+          if (!d.ok || !d.kayit) return;
+          var k = d.kayit;
+          if ((k.odeme_tipi || '').toUpperCase() === 'CEK' && Array.isArray(k.cek_satirlari) && k.cek_satirlari.length) {
+            cekTbody.innerHTML = '';
+            cekSatirSayac = 0;
+            k.cek_satirlari.forEach(function(c){ addCekRow(c); });
+            cekPanel.hidden = false;
+            if (typeof updateTahsilatCekUi === 'function') updateTahsilatCekUi();
+            setTimeout(function(){ triggerPreview(); }, 500);
+          }
+        }).catch(function(){});
+    };
+  })();
+  // ===== CEK PANELİ JS BİTİŞ =====
 
 
   var numuneForm = document.getElementById('mp-numune-form');
@@ -3759,22 +6209,22 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
   function resetGorusmeFormAlanlari() {
     var tip = document.getElementById('mp-f-tip');
     var not = document.getElementById('mp-f-not');
-    var sonuc = document.getElementById('mp-f-sonuc');
-    var aksiyon = document.getElementById('mp-f-aksiyon');
-    var takip = document.getElementById('mp-f-takip');
     if (tip) tip.value = '';
     if (not) not.value = '';
-    if (sonuc) sonuc.value = '';
-    if (aksiyon) aksiyon.value = '';
-    if (takip) takip.value = '';
+    ['mp-f-firma', 'mp-f-aday-yetkili', 'mp-f-aday-tel', 'mp-f-aday-sehir'].forEach(function(id){
+      var el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    clearGorusmeYapildiAlanlari();
     var ajEl = document.getElementById('mp-f-ajanda-id');
     if (ajEl) ajEl.value = '';
     document.getElementById('mp-f-tarih').value = nowLocal();
-    if (yetkiliMetin) yetkiliMetin.value = '';
-    if (fvSel) fvSel.value = '0';
-    syncFiyatBlok();
+    var yetkili = document.getElementById('mp-f-yetkili-metin');
+    if (yetkili) yetkili.value = '';
+    syncFirmaPreview();
     resetTalepState();
     idempotencyKey = newIdemKey();
+    renderGorusmeUiState();
   }
 
   form.addEventListener('submit', function(e){
@@ -3788,20 +6238,24 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     } else if (!adayId && !cariIdVal) {
       toast('Müşteri seçin'); return;
     }
-    var sonucErr = validateSonucTalep();
-    if (sonucErr) {
-      showTalepHata(sonucErr);
-      toast(sonucErr);
-      return;
+    var modPlan = (document.getElementById('mp-f-mod') || {}).value === 'PLANLA';
+    if (!modPlan) {
+      var sonucErr = validateSonucTalep();
+      if (sonucErr) {
+        showTalepHata(sonucErr);
+        toast(sonucErr);
+        return;
+      }
+      var fiyatOdemeErr = validateGorusmeFiyatOdeme();
+      if (fiyatOdemeErr) {
+        showTalepHata(fiyatOdemeErr);
+        toast(fiyatOdemeErr);
+        var odemeEl = document.getElementById('mp-f-odeme');
+        if (odemeEl) odemeEl.focus();
+        return;
+      }
     }
-    var talepPart = collectTalepPayload();
-    if (talepPart && talepPart.error) {
-      showTalepHata(talepPart.error === 'tonaj' || talepPart.error === 'kg' || talepPart.error === 'fiyat'
-        ? 'Talebi göndermek için zorunlu alanları tamamlayın.'
-        : talepPart.error);
-      toast('Talebi göndermek için zorunlu alanları tamamlayın.');
-      return;
-    }
+    var talepPart = null;
     submitting = true;
     kaydetBtn.disabled = true;
     kaydetBtn.textContent = 'Kaydediliyor…';
@@ -3836,30 +6290,43 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     }
     payload.idempotency_key = idempotencyKey;
     payload.kaynak = 'MUSTERI_OPERASYONU';
-    if (talepPart) payload.talep = talepPart;
+    if (!modPlan) {
+      var konuTags = collectKonuEtiketleri();
+      payload.sonuc_etiketler = konuTags;
+      if (!(payload.sonuc_tipi || '').trim()) {
+        payload.sonuc_tipi = mapKonuToSonuc(konuTags);
+      }
+      if (fvSel && fvSel.value === '1' && konuTags.indexOf('Fiyat') < 0) {
+        konuTags.push('Fiyat');
+        payload.sonuc_etiketler = konuTags;
+      }
+    } else {
+      delete payload.sonuc_tipi;
+      delete payload.sonuc_etiketler;
+      delete payload.sonraki_aksiyon;
+      delete payload.sonraki_takip_tarihi;
+      delete payload.fiyat_verildi;
+      ['verilen_fiyat', 'fiyat_para_birimi', 'konusulan_tonaj', 'fiyat_birimi', 'ticari_not'].forEach(function(k){
+        delete payload[k];
+      });
+      ['odeme_tipi', 'vade_gun', 'cek_vade_gun', 'cek_adedi', 'cek_notu'].forEach(function(k){
+        delete payload[k];
+      });
+      payload.fiyat_verildi = 0;
+    }
     delete payload.yetkili_id;
     delete payload.konu;
     if (payload.yetkili_metin) payload.yetkili_metin = String(payload.yetkili_metin).trim();
     if (!payload.yetkili_metin) delete payload.yetkili_metin;
-    // Fiyat snapshot — Hayır ise stale alan gönderme
-    var fiyatEvet = fvSel && fvSel.value === '1';
+    var fiyatEvet = !modPlan && fvSel && fvSel.value === '1';
     payload.fiyat_verildi = fiyatEvet ? 1 : 0;
-    delete payload.ticari_not;
     delete payload.cek_notu;
     delete payload.konu;
     delete payload.detay_not;
-    delete payload.fiyat_birimi;
-    var siparisTalep = !!(talepPart && talepPart.talep_turu === 'SIPARIS');
-    if (!fiyatEvet && !siparisTalep) {
-      ['verilen_fiyat','fiyat_para_birimi','konusulan_tonaj','odeme_tipi','vade_gun','cek_vade_gun','cek_adedi'].forEach(function(k){ delete payload[k]; });
-    } else {
-      if (!fiyatEvet) delete payload.verilen_fiyat;
-      if (payload.odeme_tipi !== 'VADELI') delete payload.vade_gun;
-      if (payload.odeme_tipi !== 'CEK') {
-        delete payload.cek_vade_gun;
-        delete payload.cek_adedi;
-      }
+    if (!fiyatEvet) {
+      ['verilen_fiyat','fiyat_para_birimi','konusulan_tonaj','fiyat_birimi','ticari_not'].forEach(function(k){ delete payload[k]; });
     }
+    normalizeGorusmeFiyatPayload(payload, fiyatEvet);
     if (payload.gorusme_tarihi && payload.gorusme_tarihi.length === 16) payload.gorusme_tarihi = payload.gorusme_tarihi.replace('T', ' ') + ':00';
     var ajId = (document.getElementById('mp-f-ajanda-id') || {}).value;
     if (ajId) payload.ajanda_id = parseInt(ajId, 10);
@@ -3868,16 +6335,10 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
       .then(function(r){ return r.json().then(function(j){ return {body:j}; }); })
       .then(function(res){
         if (res.body.ok) {
-          var kayit = res.body.kayit || {};
+          var kayit = res.body.kayit || res.body.ajanda || {};
           var aday = res.body.aday || null;
-          var lines = [res.body.mesaj || 'Görüşme kaydedildi.'];
+          var lines = [res.body.mesaj || (modPlan ? 'Plan kaydedildi.' : 'Görüşme kaydedildi.')];
           if (res.body.aciklama) lines.push(res.body.aciklama);
-
-          // Talep Oluştur ile MTT oluşturulduysa mesaj backend'den gelir
-          var mttVar = !!res.body.talep_olusturuldu;
-          if (mttVar && res.body.talep_turu === 'NUMUNE' && res.body.mesaj) {
-            lines = [res.body.mesaj];
-          }
 
           // Liste verisini modal kapanmadan önce hazırla
           if (modYeni && aday && aday.id) {
@@ -3916,7 +6377,7 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
           document.body.style.overflow = '';
           submitting = false;
           kaydetBtn.disabled = false;
-          kaydetBtn.textContent = 'Kaydet';
+          kaydetBtn.textContent = gorusmeKaydetBtnMetni((document.getElementById('mp-f-mod') || {}).value);
 
           toastLines(lines);
 
@@ -3949,12 +6410,12 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
         toast(res.body.mesaj || 'Talebi göndermek için zorunlu alanları tamamlayın.');
         submitting = false;
         kaydetBtn.disabled = false;
-        kaydetBtn.textContent = 'Kaydet';
+        kaydetBtn.textContent = gorusmeKaydetBtnMetni((document.getElementById('mp-f-mod') || {}).value);
       }).catch(function(){
         toast('Bağlantı hatası');
         submitting = false;
         kaydetBtn.disabled = false;
-        kaydetBtn.textContent = 'Kaydet';
+        kaydetBtn.textContent = gorusmeKaydetBtnMetni((document.getElementById('mp-f-mod') || {}).value);
       });
   });
 
@@ -4188,6 +6649,7 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
           if (!cid) return;
           window.suspendZorunluGateForHandoff();
           openModal('gorusme', cid, btn.getAttribute('data-unvan') || '', '', {
+            ajandaSonuc: true,
             ajandaId: btn.getAttribute('data-ajanda-id') ? parseInt(btn.getAttribute('data-ajanda-id'), 10) : null,
             gorusmeTipi: btn.getAttribute('data-gorusme-tipi') || '',
             planNotu: btn.getAttribute('data-plan-notu') || ''
@@ -4279,15 +6741,23 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
       var p = new URLSearchParams(window.location.search);
       if (p.get('gorusme_ac') !== '1') return;
       var cid = p.get('cari_id');
-      if (!cid) return;
+      var aid = p.get('musteri_aday_id');
+      if (!cid && !aid) return;
       mpReturnPath = mpResolveReturnPath(p.get('source') || '');
       if (typeof window.suspendZorunluGateForHandoff === 'function') {
         window.suspendZorunluGateForHandoff();
       }
-      openModal('gorusme', parseInt(cid, 10), p.get('unvan') || '', '', {
+      openModal('gorusme', cid ? parseInt(cid, 10) : null, p.get('unvan') || '', '', {
+        ajandaSonuc: p.get('ajanda_sonuc') === '1' && !!p.get('ajanda_id'),
         ajandaId: p.get('ajanda_id') ? parseInt(p.get('ajanda_id'), 10) : null,
+        adayId: aid ? parseInt(aid, 10) : null,
         gorusmeTipi: p.get('gorusme_tipi') || '',
-        planNotu: p.get('plan_notu') || ''
+        planNotu: p.get('plan_notu') || '',
+        planYetkili: p.get('plan_yetkili') || '',
+        planTelefon: p.get('plan_telefon') || '',
+        planSehir: p.get('plan_sehir') || '',
+        planTarihi: p.get('plan_tarihi') || '',
+        musteriTip: p.get('musteri_tip') || ''
       });
       history.replaceState({}, '', window.location.pathname);
     } catch (eAj) {}
