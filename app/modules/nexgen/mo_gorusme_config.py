@@ -71,6 +71,6 @@ TABLO = 'musteri_operasyon_gorusme'
 FIYAT_PARA_BIRIMLERI: tuple[str, ...] = ('TRY', 'USD', 'EUR')
 FIYAT_BIRIMI_KG = 'KG'
 # Eski kayıtlarda CIFT/ADET okunabilir; yeni UI seçim almaz
-FIYAT_BIRIMLERI: tuple[str, ...] = (FIYAT_BIRIMI_KG, 'CIFT', 'ADET')
+FIYAT_BIRIMLERI: tuple[str, ...] = (FIYAT_BIRIMI_KG, 'CIFT', 'ADET', 'TON')
 ODEME_TIPLERI: tuple[str, ...] = ('NAKIT', 'VADELI', 'CEK')
 VADE_GUN_MAX = 730

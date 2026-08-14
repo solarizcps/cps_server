@@ -1441,6 +1441,66 @@ def _enrich_talep(con, d: dict) -> dict:
     except Exception:
         d.setdefault('istenen_urun', None)
         d.setdefault('bekleme', None)
+    # Detay UI: termin / karşılama / toplam miktar (read-only presentation)
+    d.setdefault('istenen_termin', None)
+    d.setdefault('karsilama_yolu', None)
+    d.setdefault('teslim_sekli_etiket', None)
+    d.setdefault('toplam_miktar_ozet', None)
+    try:
+        import re
+        from modules.nexgen.mtt_donusum_service import (
+            _parse_mo_siparis_meta,
+            miktar_gosterim,
+        )
+        ac = d.get('aciklama')
+        gn = d.get('gorusme_notu')
+        meta = _parse_mo_siparis_meta(ac, gn)
+        if meta.get('istenen_termin'):
+            d['istenen_termin'] = meta['istenen_termin']
+        if meta.get('teslim_sekli_etiket'):
+            d['teslim_sekli_etiket'] = meta['teslim_sekli_etiket']
+        mk = re.search(r'Karşılama:\s*([^|]+)', ac or '')
+        if mk:
+            d['karsilama_yolu'] = mk.group(1).strip()
+        ks = d.get('kalemler') or []
+        if ks:
+            ton_sum = 0.0
+            kg_sum = 0.0
+            has_ton = has_kg = False
+            for k in ks:
+                try:
+                    if k.get('konusulan_tonaj') not in (None, ''):
+                        ton_sum += float(k['konusulan_tonaj'])
+                        has_ton = True
+                except (TypeError, ValueError):
+                    pass
+                try:
+                    if k.get('miktar_kg') not in (None, ''):
+                        kg_sum += float(k['miktar_kg'])
+                        has_kg = True
+                except (TypeError, ValueError):
+                    pass
+            parts: list[str] = []
+            if has_ton:
+                if abs(ton_sum - int(ton_sum)) < 1e-9:
+                    parts.append(f'{int(ton_sum)} ton')
+                else:
+                    parts.append(
+                        f"{str(ton_sum).rstrip('0').rstrip('.').replace('.', ',')} ton",
+                    )
+            if has_kg:
+                if abs(kg_sum - int(kg_sum)) < 1e-9:
+                    parts.append(f'{int(kg_sum):,}'.replace(',', '.') + ' kg')
+                else:
+                    parts.append(
+                        f'{kg_sum:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.') + ' kg',
+                    )
+            if parts:
+                d['toplam_miktar_ozet'] = ' · '.join(parts)
+            elif len(ks) == 1:
+                d['toplam_miktar_ozet'] = miktar_gosterim(ks[0])
+    except Exception:
+        pass
     return d
 
 
@@ -1640,6 +1700,21 @@ def kaydet_gorusme_opsiyonel_talep(
         yk = load_kullanici_yetkileri(con, kullanici_id)
 
     g_payload = {k: v for k, v in (payload or {}).items() if k != 'talep'}
+    mod = (g_payload.get('mod') or 'YAPILDI').strip().upper()
+    if mod == 'PLANLA':
+        from modules.nexgen.mo_gorusme_service import gorusme_planla_kaydet
+        plan = gorusme_planla_kaydet(con, g_payload, kullanici_id, yk, commit=True)
+        return {
+            'ok': True,
+            'kayit': plan.get('ajanda'),
+            'ajanda': plan.get('ajanda'),
+            'aday': plan.get('aday'),
+            'idempotent': plan.get('idempotent', False),
+            'entity_type': plan.get('entity_type'),
+            'mesaj': plan.get('mesaj') or 'Plan oluşturuldu.',
+            'talep_olusturuldu': False,
+        }
+
     talep_norm = _normalize_talep_input(payload.get('talep') if payload else None)
 
     idem = (g_payload.get('idempotency_key') or '').strip()
@@ -1793,25 +1868,26 @@ def kaydet_gorusme_opsiyonel_talep(
 
         gid = int(kayit['id'])
         ajanda_id = g_payload.get('ajanda_id')
-        if ajanda_id and kayit.get('cari_id'):
+        if ajanda_id:
             from modules.nexgen.mo_ajanda_service import MoAjandaError, ajanda_tamamla
             ajanda_tamamla(
                 con,
                 int(ajanda_id),
                 gid,
                 kullanici_id,
-                int(kayit['cari_id']),
+                int(kayit['cari_id']) if kayit.get('cari_id') else None,
                 yk,
+                musteri_aday_id=int(kayit['musteri_aday_id']) if kayit.get('musteri_aday_id') else None,
                 commit=False,
             )
-        elif not ajanda_id and kayit.get('cari_id'):
-            # ajanda_id payload'da yoksa canonical sync — plan bul veya adhoc kayıt oluştur
+        elif not ajanda_id and (kayit.get('cari_id') or kayit.get('musteri_aday_id')):
             from modules.nexgen.mo_ajanda_service import gercek_gorusmeyi_ajandaya_bagla
             gercek_gorusmeyi_ajandaya_bagla(
                 con,
                 gorusme_id=gid,
                 kullanici_id=kullanici_id,
-                cari_id=int(kayit['cari_id']),
+                cari_id=int(kayit['cari_id']) if kayit.get('cari_id') else None,
+                musteri_aday_id=int(kayit['musteri_aday_id']) if kayit.get('musteri_aday_id') else None,
                 gorusme_tarihi=g_payload.get('gorusme_tarihi') or '',
                 gorusme_tipi=g_payload.get('gorusme_tipi') or '',
                 commit=False,

@@ -109,14 +109,61 @@ def _cari_map(con: sqlite3.Connection, cari_ids: list[int]) -> dict[int, dict]:
     }
 
 
-def _row_dict(r, cari_map: dict[int, dict] | None = None) -> dict[str, Any]:
+def _aday_map(con: sqlite3.Connection, aday_ids: list[int]) -> dict[int, dict]:
+    if not aday_ids:
+        return {}
+    ph = ','.join('?' * len(aday_ids))
+    rows = con.execute(
+        f'SELECT id, firma_adi FROM nexgen_musteri_aday WHERE id IN ({ph})',
+        aday_ids,
+    ).fetchall()
+    return {int(r['id']): {'firma_adi': r['firma_adi']} for r in rows}
+
+
+def _kolon_var(con: sqlite3.Connection, table: str, col: str) -> bool:
+    return any(
+        c[1] == col for c in con.execute(f'PRAGMA table_info({table})').fetchall()
+    )
+
+
+def _musteri_gorunum(
+    d: dict[str, Any],
+    cari_map: dict[int, dict] | None = None,
+    aday_map: dict[int, dict] | None = None,
+) -> str:
+    snap = (d.get('firma_adi_gorunum') or '').strip()
+    if snap:
+        return snap
+    cid = d.get('cari_id')
+    if cid:
+        info = (cari_map or {}).get(int(cid)) or {}
+        return info.get('unvan') or d.get('cari_unvan') or '-'
+    aid = d.get('musteri_aday_id')
+    if aid:
+        info = (aday_map or {}).get(int(aid)) or {}
+        return info.get('firma_adi') or '-'
+    return d.get('cari_unvan') or '-'
+
+
+def _row_dict(
+    r,
+    cari_map: dict[int, dict] | None = None,
+    aday_map: dict[int, dict] | None = None,
+) -> dict[str, Any]:
     d = dict(r)
     cid = d.get('cari_id')
     info = (cari_map or {}).get(int(cid)) if cid else {}
-    d['musteri'] = info.get('unvan') or d.get('cari_unvan') or '-'
-    d['cari_kod'] = info.get('cari_kod') or ''
+    d['musteri'] = _musteri_gorunum(d, cari_map, aday_map)
+    d['cari_kod'] = info.get('cari_kod') or '' if cid else ''
     d['saat'] = (d.get('plan_tarihi') or '')[11:16] or '-'
     d['tarih'] = (d.get('plan_tarihi') or '')[:10]
+    d['plan_yetkili_metin'] = (d.get('plan_yetkili_metin') or '').strip()
+    d['plan_telefon'] = (d.get('plan_telefon') or '').strip()
+    d['plan_sehir'] = (d.get('plan_sehir') or '').strip()
+    d['plan_notu'] = (d.get('plan_notu') or '').strip()
+    d['entity_type'] = 'ADAY' if d.get('musteri_aday_id') else 'CARI'
+    d['musteri_tip_etiket'] = 'Yeni Müşteri' if d.get('musteri_aday_id') else 'Mevcut Müşteri'
+    d['olusturan_adi'] = (d.get('olusturan_adi') or '').strip()
     dg = _gorunum_durumu(d.get('durum'), d.get('plan_tarihi'), d.get('gorusme_id'))
     d['durum_gorunum'] = dg
     d['durum_etiket'] = _durum_etiket(dg)
@@ -134,6 +181,8 @@ _TICARI_OZET_KOLONLAR = (
 
 def gorusme_ozet_map(con: sqlite3.Connection, gorusme_ids: list[int]) -> dict[int, dict[str, Any]]:
     """Ajanda GERCEKLESTI kartları için görüşme özeti (+ ticari snapshot)."""
+    import json
+
     from modules.nexgen.mo_gorusme_config import TABLO as G_TABLO
     from modules.nexgen.mo_gorusme_service import _kolon_var, fiyat_ozet_metin
 
@@ -141,16 +190,23 @@ def gorusme_ozet_map(con: sqlite3.Connection, gorusme_ids: list[int]) -> dict[in
     if not ids or not _tablo_var(con, G_TABLO):
         return {}
     has_ticari = _kolon_var(con, G_TABLO, 'fiyat_verildi')
+    extra_cols: list[str] = []
+    for col in ('yetkili_metin', 'sonuc_etiketler', 'konu', 'detay_not'):
+        if _kolon_var(con, G_TABLO, col):
+            extra_cols.append(col)
     ticari_sql = ''
     if has_ticari:
         ticari_sql = ', ' + ', '.join(_TICARI_OZET_KOLONLAR)
+    extra_sql = (', ' + ', '.join(f'g.{c}' for c in extra_cols)) if extra_cols else ''
     ph = ','.join('?' * len(ids))
     rows = con.execute(
         f"""
-        SELECT id, gorusme_tarihi, gorusme_tipi, sonuc_tipi, kisa_not,
-               sonraki_aksiyon, sonraki_takip_tarihi{ticari_sql}
-        FROM {G_TABLO}
-        WHERE id IN ({ph}) AND COALESCE(aktif, 1)=1
+        SELECT g.id, g.gorusme_tarihi, g.gorusme_tipi, g.sonuc_tipi, g.kisa_not,
+               g.sonraki_aksiyon, g.sonraki_takip_tarihi,
+               sk.AdSoyad AS olusturan_adi{ticari_sql}{extra_sql}
+        FROM {G_TABLO} g
+        LEFT JOIN sistem_kullanici sk ON sk.Id = g.olusturan_kullanici_id
+        WHERE g.id IN ({ph}) AND COALESCE(g.aktif, 1)=1
         """,
         ids,
     ).fetchall()
@@ -164,7 +220,23 @@ def gorusme_ozet_map(con: sqlite3.Connection, gorusme_ids: list[int]) -> dict[in
             'kisa_not': r['kisa_not'] or '',
             'sonraki_aksiyon': r['sonraki_aksiyon'] or '',
             'sonraki_takip_tarihi': r['sonraki_takip_tarihi'] or '',
+            'olusturan_adi': (r['olusturan_adi'] if 'olusturan_adi' in r.keys() else '') or '',
         }
+        if 'yetkili_metin' in r.keys():
+            d['yetkili_metin'] = r['yetkili_metin'] or ''
+        if 'konu' in r.keys():
+            d['konu'] = r['konu'] or ''
+        if 'detay_not' in r.keys():
+            d['detay_not'] = r['detay_not'] or ''
+        if 'sonuc_etiketler' in r.keys():
+            raw = r['sonuc_etiketler'] or '[]'
+            try:
+                tags = json.loads(raw) if raw else []
+            except (TypeError, ValueError, json.JSONDecodeError):
+                tags = []
+            if not isinstance(tags, list):
+                tags = []
+            d['sonuc_etiketler'] = tags
         if has_ticari:
             for col in _TICARI_OZET_KOLONLAR:
                 d[col] = r[col] if col in r.keys() else None
@@ -205,14 +277,23 @@ def _hafta_araligi(ref: date | None = None) -> tuple[str, str]:
 def _scope_kontrol(
     con: sqlite3.Connection,
     kullanici_id: int,
-    cari_id: int,
+    cari_id: int | None,
     yk: set[str] | None = None,
+    *,
+    musteri_aday_id: int | None = None,
 ) -> None:
+    if musteri_aday_id:
+        from modules.nexgen.mo_gorusme_service import can_mo_gorusme_yaz_aday
+        if not can_mo_gorusme_yaz_aday(con, kullanici_id, int(musteri_aday_id), yk):
+            raise MoAjandaError('Bu aday icin yetkiniz yok.', 403)
+        return
+    if not cari_id:
+        raise MoAjandaError('cari_id veya musteri_aday_id zorunlu.', 400)
     if yk is None:
         yk = load_kullanici_yetkileri(con, kullanici_id)
-    if not can_mo_view_cari(con, kullanici_id, cari_id, yk):
+    if not can_mo_view_cari(con, kullanici_id, int(cari_id), yk):
         raise MoAjandaError('Bu cari icin yetkiniz yok.', 403)
-    if not can_mo_gorusme_yaz(con, kullanici_id, cari_id, yk):
+    if not can_mo_gorusme_yaz(con, kullanici_id, int(cari_id), yk):
         raise MoAjandaError('Bu cari icin plan olusturma yetkiniz yok.', 403)
 
 
@@ -227,9 +308,22 @@ def ajanda_olustur(
     if not _tablo_var(con, TABLO):
         raise MoAjandaError('Ajanda tablosu bulunamadi.', 500)
 
-    cari_id = int(payload.get('cari_id') or 0)
-    if not cari_id:
-        raise MoAjandaError('cari_id zorunlu.', 400)
+    def _opt_int(v):
+        if v in (None, '', 0, '0'):
+            return None
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return None
+
+    cari_id = _opt_int(payload.get('cari_id'))
+    musteri_aday_id = _opt_int(payload.get('musteri_aday_id'))
+    if cari_id and musteri_aday_id:
+        raise MoAjandaError('cari_id ve musteri_aday_id birlikte gonderilemez.', 400)
+    if not cari_id and not musteri_aday_id:
+        raise MoAjandaError('cari_id veya musteri_aday_id zorunlu.', 400)
+    if cari_id == 0:
+        raise MoAjandaError('Gecersiz cari_id.', 400)
 
     idem = (payload.get('idempotency_key') or '').strip()
     if not idem:
@@ -242,20 +336,43 @@ def ajanda_olustur(
     plan_tarihi = _parse_plan_tarihi(payload.get('plan_tarihi') or '')
     plan_notu = (payload.get('plan_notu') or '').strip() or None
 
-    _scope_kontrol(con, kullanici_id, cari_id, yk)
+    firma_adi_gorunum = (payload.get('firma_adi_gorunum') or '').strip() or None
+    if cari_id and not firma_adi_gorunum:
+        u = con.execute(
+            'SELECT unvan FROM nexgen_cari WHERE id=?', (cari_id,),
+        ).fetchone()
+        firma_adi_gorunum = (u['unvan'] if u else None) or None
+    elif musteri_aday_id and not firma_adi_gorunum:
+        u = con.execute(
+            'SELECT firma_adi FROM nexgen_musteri_aday WHERE id=?', (musteri_aday_id,),
+        ).fetchone()
+        firma_adi_gorunum = (u['firma_adi'] if u else None) or None
+
+    _scope_kontrol(
+        con, kullanici_id, cari_id, yk, musteri_aday_id=musteri_aday_id,
+    )
 
     mevcut = con.execute(
         f'SELECT * FROM {TABLO} WHERE idempotency_key=? AND aktif=1',
         (idem,),
     ).fetchone()
     if mevcut:
-        cm = _cari_map(con, [int(mevcut['cari_id'])])
+        cm = _cari_map(con, [int(mevcut['cari_id'])] if mevcut['cari_id'] else [])
+        am = _aday_map(con, [int(mevcut['musteri_aday_id'])] if (
+            'musteri_aday_id' in mevcut.keys() and mevcut['musteri_aday_id']
+        ) else [])
         return {
             'ok': True,
-            'kayit': _row_dict(mevcut, cm),
+            'kayit': _row_dict(mevcut, cm, am),
             'idempotent': True,
             'mesaj': 'Plan zaten kayitli.',
         }
+
+    has_aday_cols = _kolon_var(con, TABLO, 'musteri_aday_id')
+    has_plan_snap = _kolon_var(con, TABLO, 'plan_yetkili_metin')
+    plan_yetkili = (payload.get('plan_yetkili_metin') or '').strip() or None
+    plan_telefon = (payload.get('plan_telefon') or '').strip() or None
+    plan_sehir = (payload.get('plan_sehir') or '').strip() or None
 
     try:
         con.execute('BEGIN IMMEDIATE')
@@ -263,27 +380,66 @@ def ajanda_olustur(
         pass
 
     try:
-        cur = con.execute(
-            f"""
-            INSERT INTO {TABLO} (
-                cari_id, kullanici_id, plan_tarihi, gorusme_tipi, plan_notu,
-                durum, gorusme_id, idempotency_key, aktif,
-                olusturan_kullanici_id, olusturma_tarihi
-            ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, 1, ?, ?)
-            """,
-            (
-                cari_id, kullanici_id, plan_tarihi, gorusme_tipi, plan_notu,
-                DURUM_PLANLANDI, idem, kullanici_id, _now(),
-            ),
-        )
+        if has_aday_cols:
+            if has_plan_snap:
+                cur = con.execute(
+                    f"""
+                    INSERT INTO {TABLO} (
+                        cari_id, musteri_aday_id, firma_adi_gorunum,
+                        plan_yetkili_metin, plan_telefon, plan_sehir,
+                        kullanici_id, plan_tarihi, gorusme_tipi, plan_notu,
+                        durum, gorusme_id, idempotency_key, aktif,
+                        olusturan_kullanici_id, olusturma_tarihi
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 1, ?, ?)
+                    """,
+                    (
+                        cari_id, musteri_aday_id, firma_adi_gorunum,
+                        plan_yetkili, plan_telefon, plan_sehir,
+                        kullanici_id, plan_tarihi, gorusme_tipi, plan_notu,
+                        DURUM_PLANLANDI, idem, kullanici_id, _now(),
+                    ),
+                )
+            else:
+                cur = con.execute(
+                    f"""
+                    INSERT INTO {TABLO} (
+                        cari_id, musteri_aday_id, firma_adi_gorunum,
+                        kullanici_id, plan_tarihi, gorusme_tipi, plan_notu,
+                        durum, gorusme_id, idempotency_key, aktif,
+                        olusturan_kullanici_id, olusturma_tarihi
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 1, ?, ?)
+                    """,
+                    (
+                        cari_id, musteri_aday_id, firma_adi_gorunum,
+                        kullanici_id, plan_tarihi, gorusme_tipi, plan_notu,
+                        DURUM_PLANLANDI, idem, kullanici_id, _now(),
+                    ),
+                )
+        else:
+            if musteri_aday_id:
+                raise MoAjandaError('Aday ajanda icin migration 156 gerekli.', 503)
+            cur = con.execute(
+                f"""
+                INSERT INTO {TABLO} (
+                    cari_id, kullanici_id, plan_tarihi, gorusme_tipi, plan_notu,
+                    durum, gorusme_id, idempotency_key, aktif,
+                    olusturan_kullanici_id, olusturma_tarihi
+                ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, 1, ?, ?)
+                """,
+                (
+                    cari_id, kullanici_id, plan_tarihi, gorusme_tipi, plan_notu,
+                    DURUM_PLANLANDI, idem, kullanici_id, _now(),
+                ),
+            )
         aid = int(cur.lastrowid)
         row = con.execute(f'SELECT * FROM {TABLO} WHERE id=?', (aid,)).fetchone()
         if commit:
             con.commit()
-        cm = _cari_map(con, [cari_id])
+        cm = _cari_map(con, [cari_id] if cari_id else [])
+        am = _aday_map(con, [musteri_aday_id] if musteri_aday_id else [])
         return {
             'ok': True,
-            'kayit': _row_dict(row, cm),
+            'kayit': _row_dict(row, cm, am),
             'idempotent': False,
             'mesaj': 'Plan olusturuldu.',
         }
@@ -331,9 +487,13 @@ def ajanda_listele(
     hafta_bas, hafta_bit = _hafta_araligi()
 
     sql = f"""
-        SELECT a.*, c.unvan AS cari_unvan
+        SELECT a.*, c.unvan AS cari_unvan,
+               ma.firma_adi AS aday_firma_adi,
+               sk.AdSoyad AS olusturan_adi
         FROM {TABLO} a
         LEFT JOIN nexgen_cari c ON c.id = a.cari_id
+        LEFT JOIN nexgen_musteri_aday ma ON ma.id = a.musteri_aday_id
+        LEFT JOIN sistem_kullanici sk ON sk.Id = a.olusturan_kullanici_id
         WHERE a.aktif=1 AND a.kullanici_id=?
     """
     params: list[Any] = [gorunen_uid]
@@ -352,18 +512,29 @@ def ajanda_listele(
 
     rows = con.execute(sql, params).fetchall()
     cari_ids = sorted({int(r['cari_id']) for r in rows if r['cari_id']})
+    aday_ids = sorted({
+        int(r['musteri_aday_id']) for r in rows
+        if 'musteri_aday_id' in r.keys() and r['musteri_aday_id']
+    })
     cm = _cari_map(con, cari_ids)
+    am = _aday_map(con, aday_ids)
 
     out: list[dict[str, Any]] = []
     for r in rows:
-        item = _row_dict(r, cm)
-        # Admin cross-view: ajanda owner canonical; oturum cari scope uygulanmaz
+        item = _row_dict(r, cm, am)
         if baska_pazarlamaci:
             out.append(item)
-        elif not can_mo_view_cari(con, kullanici_id, int(r['cari_id']), yk):
-            continue
-        else:
+        elif r['cari_id']:
+            if not can_mo_view_cari(con, kullanici_id, int(r['cari_id']), yk):
+                continue
             out.append(item)
+        elif 'musteri_aday_id' in r.keys() and r['musteri_aday_id']:
+            from modules.nexgen.musteri_aday_service import can_aday_gor
+            if not can_aday_gor(con, kullanici_id, int(r['musteri_aday_id']), yk):
+                continue
+            out.append(item)
+        else:
+            continue
     return ajanda_enrich_gorusme_ozet(con, out)
 
 
@@ -463,9 +634,16 @@ def ajanda_getir(
         raise MoAjandaError('Ajanda kaydi bulunamadi.', 404)
     if int(row['kullanici_id']) != int(kullanici_id):
         raise MoAjandaError('Bu plan size ait degil.', 403)
-    _scope_kontrol(con, kullanici_id, int(row['cari_id']), yk)
-    cm = _cari_map(con, [int(row['cari_id'])])
-    return _row_dict(row, cm)
+    aid = row['musteri_aday_id'] if 'musteri_aday_id' in row.keys() else None
+    _scope_kontrol(
+        con, kullanici_id,
+        int(row['cari_id']) if row['cari_id'] else None,
+        yk,
+        musteri_aday_id=int(aid) if aid else None,
+    )
+    cm = _cari_map(con, [int(row['cari_id'])] if row['cari_id'] else [])
+    am = _aday_map(con, [int(aid)] if aid else [])
+    return _row_dict(row, cm, am)
 
 
 def ajanda_iptal(
@@ -513,9 +691,10 @@ def ajanda_tamamla(
     ajanda_id: int,
     gorusme_id: int,
     kullanici_id: int,
-    cari_id: int,
+    cari_id: int | None = None,
     yk: set[str] | None = None,
     *,
+    musteri_aday_id: int | None = None,
     commit: bool = True,
 ) -> None:
     if not _tablo_var(con, TABLO):
@@ -530,12 +709,20 @@ def ajanda_tamamla(
     ).fetchone()
     if not row:
         raise MoAjandaError('Ajanda kaydi bulunamadi veya tamamlanamaz.', 404)
-    if int(row['cari_id']) != int(cari_id):
+    row_aid = row['musteri_aday_id'] if 'musteri_aday_id' in row.keys() else None
+    if cari_id and row['cari_id'] and int(row['cari_id']) != int(cari_id):
         raise MoAjandaError('Ajanda cari eslesmiyor.', 400)
+    if musteri_aday_id and row_aid and int(row_aid) != int(musteri_aday_id):
+        raise MoAjandaError('Ajanda aday eslesmiyor.', 400)
     if row['gorusme_id']:
         raise MoAjandaError('Ajanda kaydi zaten tamamlanmis.', 409)
 
-    _scope_kontrol(con, kullanici_id, int(cari_id), yk)
+    _scope_kontrol(
+        con, kullanici_id,
+        int(row['cari_id']) if row['cari_id'] else None,
+        yk,
+        musteri_aday_id=int(row_aid) if row_aid else None,
+    )
 
     con.execute(
         f"""
@@ -551,10 +738,12 @@ def gercek_gorusmeyi_ajandaya_bagla(
     con: sqlite3.Connection,
     gorusme_id: int,
     kullanici_id: int,
-    cari_id: int,
     gorusme_tarihi: str,
     gorusme_tipi: str = '',
     *,
+    cari_id: int | None = None,
+    musteri_aday_id: int | None = None,
+    firma_adi_gorunum: str | None = None,
     commit: bool = False,
 ) -> dict[str, Any]:
     """Gerçek görüşme kaydını Ajanda ile senkronize eder.
@@ -575,21 +764,37 @@ def gercek_gorusmeyi_ajandaya_bagla(
     if existing:
         return {'durum': 'idempotent', 'ajanda_id': int(existing['id'])}
 
+    if not cari_id and not musteri_aday_id:
+        return {'durum': 'skip', 'sebep': 'kimlik_eksik'}
+
     gun = (gorusme_tarihi or '')[:10]
     if not gun:
         return {'durum': 'skip', 'sebep': 'tarih_eksik'}
 
-    # A) Aynı gün+cari+kullanıcı için tek PLANLANDI kayıt ara
-    plan_row = con.execute(
-        f"""
-        SELECT id, gorusme_id FROM {TABLO}
-        WHERE kullanici_id=? AND cari_id=? AND aktif=1 AND durum=?
-          AND DATE(plan_tarihi)=?
-        ORDER BY plan_tarihi ASC
-        LIMIT 1
-        """,
-        (int(kullanici_id), int(cari_id), DURUM_PLANLANDI, gun),
-    ).fetchone()
+    has_aday_cols = _kolon_var(con, TABLO, 'musteri_aday_id')
+
+    if cari_id:
+        plan_row = con.execute(
+            f"""
+            SELECT id, gorusme_id FROM {TABLO}
+            WHERE kullanici_id=? AND cari_id=? AND aktif=1 AND durum=?
+              AND DATE(plan_tarihi)=?
+            ORDER BY plan_tarihi ASC
+            LIMIT 1
+            """,
+            (int(kullanici_id), int(cari_id), DURUM_PLANLANDI, gun),
+        ).fetchone()
+    else:
+        plan_row = con.execute(
+            f"""
+            SELECT id, gorusme_id FROM {TABLO}
+            WHERE kullanici_id=? AND musteri_aday_id=? AND aktif=1 AND durum=?
+              AND DATE(plan_tarihi)=?
+            ORDER BY plan_tarihi ASC
+            LIMIT 1
+            """,
+            (int(kullanici_id), int(musteri_aday_id), DURUM_PLANLANDI, gun),
+        ).fetchone() if has_aday_cols else None
 
     if plan_row:
         # Mevcut plan tamamla
@@ -620,21 +825,42 @@ def gercek_gorusmeyi_ajandaya_bagla(
         tip = GORUSME_TIPLERI_ALL[0]
 
     plan_tarihi = (gorusme_tarihi or _now())[:19]
-    con.execute(
-        f"""
-        INSERT INTO {TABLO} (
-            cari_id, kullanici_id, plan_tarihi, gorusme_tipi, plan_notu,
-            durum, gorusme_id, idempotency_key, aktif,
-            olusturan_kullanici_id, olusturma_tarihi
-        ) VALUES (?,?,?,?,?,?,?,?,1,?,?)
-        """,
-        (
-            int(cari_id), int(kullanici_id), plan_tarihi,
-            tip, None,
-            DURUM_GERCEKLESTI, int(gorusme_id),
-            idem, int(kullanici_id), _now(),
-        ),
-    )
+    if has_aday_cols:
+        con.execute(
+            f"""
+            INSERT INTO {TABLO} (
+                cari_id, musteri_aday_id, firma_adi_gorunum,
+                kullanici_id, plan_tarihi, gorusme_tipi, plan_notu,
+                durum, gorusme_id, idempotency_key, aktif,
+                olusturan_kullanici_id, olusturma_tarihi
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,1,?,?)
+            """,
+            (
+                cari_id, musteri_aday_id, firma_adi_gorunum,
+                int(kullanici_id), plan_tarihi,
+                tip, None,
+                DURUM_GERCEKLESTI, int(gorusme_id),
+                idem, int(kullanici_id), _now(),
+            ),
+        )
+    else:
+        if not cari_id:
+            return {'durum': 'skip', 'sebep': 'aday_migration_eksik'}
+        con.execute(
+            f"""
+            INSERT INTO {TABLO} (
+                cari_id, kullanici_id, plan_tarihi, gorusme_tipi, plan_notu,
+                durum, gorusme_id, idempotency_key, aktif,
+                olusturan_kullanici_id, olusturma_tarihi
+            ) VALUES (?,?,?,?,?,?,?,?,1,?,?)
+            """,
+            (
+                int(cari_id), int(kullanici_id), plan_tarihi,
+                tip, None,
+                DURUM_GERCEKLESTI, int(gorusme_id),
+                idem, int(kullanici_id), _now(),
+            ),
+        )
     new_id = con.execute('SELECT last_insert_rowid()').fetchone()[0]
     if commit:
         con.commit()

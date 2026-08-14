@@ -50,6 +50,44 @@ from modules.nexgen.mo_tahsilat_kayit_service import (
     onaya_gonder as tahsilat_onaya_gonder,
     taslak_kaydet as tahsilat_taslak_kaydet,
 )
+from modules.nexgen.mo_tahsilat_sevk_service import tahsilat_sevk_adaylari
+from modules.nexgen.mo_tahsilat_config import (
+    KAYIT_DURUM_ISTISNA_ONAY_BEKLIYOR,
+    KAYIT_DURUM_YONETIM_ONAY_BEKLIYOR,
+)
+
+
+def _enrich_tahsilat_sevkiyat_secim(con, sevkiyatlar: list[dict]) -> list[dict]:
+    """Response mapping: seçim engeli etiketleri için meta alanlar."""
+    if not sevkiyatlar:
+        return sevkiyatlar
+    tbl = con.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='mo_tahsilat_kayit'"
+    ).fetchone()
+    if not tbl:
+        return sevkiyatlar
+    for s in sevkiyatlar:
+        if s.get('onay_bekleyen_tahsilat') is None:
+            sid = int(s.get('sevkiyat_id') or 0)
+            row = con.execute(
+                """
+                SELECT COUNT(*) AS c FROM mo_tahsilat_kayit
+                WHERE sevkiyat_id=? AND aktif=1
+                  AND durum IN (?, ?)
+                """,
+                (sid, KAYIT_DURUM_YONETIM_ONAY_BEKLIYOR, KAYIT_DURUM_ISTISNA_ONAY_BEKLIYOR),
+            ).fetchone()
+            s['onay_bekleyen_adet'] = int(row['c'] or 0) if row else 0
+            s['onay_bekleyen_tahsilat'] = s['onay_bekleyen_adet'] > 0
+        if 'secilebilir' not in s:
+            kalan = s.get('kalan_fx', s.get('kalan'))
+            s['secilebilir'] = bool(
+                s.get('tahsilata_uygun')
+                and not s.get('kur_hesap_hatasi')
+                and kalan is not None
+                and float(kalan) > 0.009
+            )
+    return sevkiyatlar
 
 
 def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
@@ -724,6 +762,41 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
         finally:
             con.close()
 
+    @bp.route('/api/musteri-pazarlama/tahsilat-sevkiyatlar')
+    @login_gerekli
+    def api_mo_tahsilat_sevkiyatlar():
+        u, yk = _yetki_kontrol()
+        try:
+            siparis_id = int(request.args.get('siparis_id') or 0)
+        except (TypeError, ValueError):
+            siparis_id = 0
+        if not siparis_id:
+            return jsonify({'ok': False, 'mesaj': 'siparis_id gerekli.'}), 400
+        cari_arg = request.args.get('cari_id')
+        uid = kullanici_id_fn()
+        con = db_fn()
+        try:
+            row = con.execute(
+                'SELECT id, cari_id FROM nexgen_planlama_siparis WHERE id=?',
+                (siparis_id,),
+            ).fetchone()
+            if not row:
+                return jsonify({'ok': False, 'mesaj': 'Sipariş bulunamadı.'}), 404
+            cari_id = int(row['cari_id'] or 0)
+            if cari_arg not in (None, ''):
+                try:
+                    if int(cari_arg) != cari_id:
+                        return jsonify({'ok': False, 'mesaj': 'Sipariş müşteri uyuşmuyor.'}), 400
+                except (TypeError, ValueError):
+                    return jsonify({'ok': False, 'mesaj': 'Geçersiz cari_id.'}), 400
+            if not can_mo_view_cari(con, uid, cari_id, yk):
+                return jsonify({'ok': False, 'mesaj': 'Bu sipariş için erişim yetkiniz yok.'}), 403
+            sevkiyatlar = tahsilat_sevk_adaylari(con, siparis_id)
+            sevkiyatlar = _enrich_tahsilat_sevkiyat_secim(con, sevkiyatlar)
+            return jsonify({'ok': True, 'sevkiyatlar': sevkiyatlar, 'siparis_id': siparis_id})
+        finally:
+            con.close()
+
     @bp.route('/api/musteri-pazarlama/tahsilat-kayit', methods=['POST'])
     @login_gerekli
     def api_mo_tahsilat_kayit():
@@ -769,6 +842,7 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
     def api_mo_tahsilat_onaya_gonder(kayit_id):
         _yetki_kontrol()
         payload = request.get_json(silent=True) or {}
+        vade_asim_aciklamasi = payload.pop('vade_asim_aciklamasi', None) or None
         con = db_fn()
         try:
             con.execute('BEGIN IMMEDIATE')
@@ -776,9 +850,224 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
                 con, kayit_id, kullanici_id_fn(),
                 kullanici_yetkileri(session.get('kullanici') or {}),
                 payload=payload or None,
+                vade_asim_aciklamasi=vade_asim_aciklamasi,
             )
             return jsonify(r)
         except MoTahsilatError as e:
+            con.rollback()
+            return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod
+        finally:
+            con.close()
+
+    # ------------------------------------------------------------------
+    # Vade Kontrol — Preview + Sipariş Bağlamı + Çek CRUD
+    # ------------------------------------------------------------------
+
+    @bp.route('/api/musteri-pazarlama/vade-kontrol/preview', methods=['POST'])
+    @login_gerekli
+    def api_vade_kontrol_preview():
+        _yetki_kontrol()
+        from decimal import Decimal
+        from modules.nexgen.mo_vade_kontrol_service import CekSatiriInput, hesapla
+        payload = request.get_json(silent=True) or {}
+        try:
+            siparis_id = int(payload['siparis_id']) if payload.get('siparis_id') else None
+            tahsilat_kayit_id = int(payload['tahsilat_kayit_id']) if payload.get('tahsilat_kayit_id') else None
+            paket_hedef = payload.get('paket_hedef_tutar')
+            paket_hedef_d = Decimal(str(paket_hedef)) if paket_hedef not in (None, '') else None
+            pb = (payload.get('para_birimi') or 'TRY').strip().upper()
+            satirlar_raw = payload.get('cek_satirlari') or []
+            cek_satirlari = []
+            for s in satirlar_raw:
+                cek_satirlari.append(CekSatiriInput(
+                    tutar=Decimal(str(s['tutar'])),
+                    gercek_cek_vade_tarihi=str(s['gercek_cek_vade_tarihi']),
+                    para_birimi=(s.get('para_birimi') or pb).upper(),
+                    cek_alim_tarihi=s.get('cek_alim_tarihi') or None,
+                    odeme_referansi=s.get('odeme_referansi') or None,
+                    banka_adi=s.get('banka_adi') or None,
+                ))
+            con = db_fn()
+            try:
+                con.row_factory = __import__('sqlite3').Row
+                sonuc = hesapla(
+                    siparis_id=siparis_id,
+                    tahsilat_kayit_id=tahsilat_kayit_id,
+                    odeme_tipi='CEK',
+                    cek_satirlari=cek_satirlari,
+                    paket_hedef_tutar=paket_hedef_d,
+                    para_birimi=pb,
+                    onaylanan_vade_gun=payload.get('onaylanan_vade_gun'),
+                    sevk_tarihi=payload.get('sevk_tarihi') or None,
+                    con=con,
+                )
+            finally:
+                con.close()
+            return jsonify({'ok': True, 'sonuc': sonuc.to_dict()})
+        except Exception as e:
+            return jsonify({'ok': False, 'mesaj': str(e)}), 400
+
+    @bp.route('/api/musteri-pazarlama/vade-kontrol/siparis/<int:siparis_id>/beklenen')
+    @login_gerekli
+    def api_vade_kontrol_siparis_beklenen(siparis_id):
+        _yetki_kontrol()
+        from modules.nexgen.mo_vade_kontrol_service import siparis_vade_baglam, _gercek_sevk_tarihi_from_db
+        from modules.nexgen.mo_tahsilat_plan_service import beklenen_tutar_hesapla
+        from modules.nexgen.mo_siparis_talep_service import mo_siparis_payload_unpack
+        from datetime import date, timedelta
+        con = db_fn()
+        try:
+            con.row_factory = __import__('sqlite3').Row
+            baglam = siparis_vade_baglam(con, siparis_id)
+            if not baglam:
+                return jsonify({'ok': False, 'mesaj': 'Sipariş bulunamadı.'}), 404
+            row = con.execute(
+                """
+                SELECT anlasma_birim_fiyat, anlasma_para_birimi, talep_referansi, kur, kur_tarihi
+                FROM nexgen_planlama_siparis WHERE id=?
+                """,
+                (siparis_id,),
+            ).fetchone()
+            if row:
+                d = dict(row)
+                mo = mo_siparis_payload_unpack(d.get('talep_referansi')) or {}
+                tutar, tahmini = beklenen_tutar_hesapla(d, mo)
+                baglam['siparis_toplami'] = tutar
+                baglam['siparis_toplami_tahmini'] = tahmini
+                baglam['siparis_para_birimi'] = d.get('anlasma_para_birimi') or 'TRY'
+                baglam['siparis_kur'] = d.get('kur')
+                baglam['siparis_kur_tarihi'] = (d.get('kur_tarihi') or '')[:10] or None
+            sevk = _gercek_sevk_tarihi_from_db(con, siparis_id)
+            baglam['gercek_sevk_tarihi'] = sevk
+            hedef = None
+            if sevk and baglam.get('onaylanan_vade_gun') is not None:
+                try:
+                    d = date.fromisoformat(sevk[:10])
+                    hedef = (d + timedelta(days=int(baglam['onaylanan_vade_gun']))).isoformat()
+                except (ValueError, TypeError):
+                    pass
+            baglam['hedef_vade_tarihi'] = hedef
+            return jsonify({'ok': True, 'baglam': baglam})
+        finally:
+            con.close()
+
+    @bp.route('/api/musteri-pazarlama/tahsilat-kayit/<int:kayit_id>/cekler')
+    @login_gerekli
+    def api_cek_listele(kayit_id):
+        _yetki_kontrol()
+        from modules.nexgen.mo_tahsilat_cek_service import MoCekError, cek_listele
+        from modules.nexgen.mo_vade_kontrol_service import hesapla
+        con = db_fn()
+        try:
+            con.row_factory = __import__('sqlite3').Row
+            cekler = cek_listele(con, kayit_id)
+            # parent bilgisi
+            parent = con.execute(
+                'SELECT para_birimi, paket_hedef_tutar, onaylanan_vade_gun_snapshot, '
+                'gercek_sevk_tarihi_snapshot, odeme_tipi, siparis_id '
+                'FROM mo_tahsilat_kayit WHERE id=?', (kayit_id,)
+            ).fetchone()
+            vade_sonuc = None
+            if parent and (parent['odeme_tipi'] or '').upper() == 'CEK':
+                from decimal import Decimal
+                from modules.nexgen.mo_vade_kontrol_service import CekSatiriInput
+                satirlar = [
+                    CekSatiriInput(
+                        tutar=Decimal(str(c['tutar'])),
+                        gercek_cek_vade_tarihi=c['gercek_cek_vade_tarihi'],
+                        para_birimi=c['para_birimi'],
+                    )
+                    for c in cekler
+                ]
+                hedef_d = Decimal(str(parent['paket_hedef_tutar'])) if parent['paket_hedef_tutar'] else None
+                try:
+                    sonuc = hesapla(
+                        tahsilat_kayit_id=kayit_id,
+                        odeme_tipi='CEK',
+                        cek_satirlari=satirlar,
+                        paket_hedef_tutar=hedef_d,
+                        para_birimi=parent['para_birimi'] or 'TRY',
+                        onaylanan_vade_gun=parent['onaylanan_vade_gun_snapshot'],
+                        sevk_tarihi=parent['gercek_sevk_tarihi_snapshot'],
+                        con=con,
+                    )
+                    vade_sonuc = sonuc.to_dict()
+                except Exception:
+                    pass
+            return jsonify({'ok': True, 'cekler': cekler, 'vade_sonuc': vade_sonuc})
+        except MoCekError as e:
+            return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod
+        finally:
+            con.close()
+
+    @bp.route('/api/musteri-pazarlama/tahsilat-kayit/<int:kayit_id>/cekler', methods=['POST'])
+    @login_gerekli
+    def api_cek_ekle(kayit_id):
+        _yetki_kontrol()
+        from modules.nexgen.mo_tahsilat_cek_service import MoCekError, cek_ekle
+        payload = request.get_json(silent=True) or {}
+        con = db_fn()
+        try:
+            row = cek_ekle(con, kayit_id, payload, kullanici_id_fn())
+            con.commit()
+            return jsonify({'ok': True, 'cek': row})
+        except MoCekError as e:
+            return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod
+        finally:
+            con.close()
+
+    @bp.route('/api/musteri-pazarlama/tahsilat-kayit/<int:kayit_id>/cekler/<int:cek_id>', methods=['PUT'])
+    @login_gerekli
+    def api_cek_guncelle(kayit_id, cek_id):
+        _yetki_kontrol()
+        from modules.nexgen.mo_tahsilat_cek_service import MoCekError, cek_guncelle
+        payload = request.get_json(silent=True) or {}
+        con = db_fn()
+        try:
+            row = cek_guncelle(con, kayit_id, cek_id, payload, kullanici_id_fn())
+            con.commit()
+            return jsonify({'ok': True, 'cek': row})
+        except MoCekError as e:
+            return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod
+        finally:
+            con.close()
+
+    @bp.route('/api/musteri-pazarlama/tahsilat-kayit/<int:kayit_id>/cekler/<int:cek_id>', methods=['DELETE'])
+    @login_gerekli
+    def api_cek_sil(kayit_id, cek_id):
+        _yetki_kontrol()
+        from modules.nexgen.mo_tahsilat_cek_service import MoCekError, cek_soft_delete
+        con = db_fn()
+        try:
+            r = cek_soft_delete(con, kayit_id, cek_id, kullanici_id_fn())
+            con.commit()
+            return jsonify({'ok': True, **r})
+        except MoCekError as e:
+            return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod
+        finally:
+            con.close()
+
+    @bp.route('/api/musteri-pazarlama/tahsilat-kayit/<int:kayit_id>/cekler/bulk', methods=['POST'])
+    @login_gerekli
+    def api_cek_bulk(kayit_id):
+        _yetki_kontrol()
+        from modules.nexgen.mo_tahsilat_cek_service import MoCekError, cek_batch_replace
+        payload = request.get_json(silent=True) or {}
+        satirlar = payload.get('cek_satirlari') or []
+        con = db_fn()
+        try:
+            con.execute('BEGIN IMMEDIATE')
+            rows = cek_batch_replace(con, kayit_id, satirlar, kullanici_id_fn())
+            from modules.nexgen.mo_tahsilat_kayit_service import sync_cek_parent_tutarlar, _freeze_cek_snapshots
+            sync_cek_parent_tutarlar(con, kayit_id)
+            parent = con.execute(
+                'SELECT siparis_id FROM mo_tahsilat_kayit WHERE id=?', (kayit_id,)
+            ).fetchone()
+            if parent and parent['siparis_id']:
+                _freeze_cek_snapshots(con, kayit_id, int(parent['siparis_id']))
+            con.commit()
+            return jsonify({'ok': True, 'cekler': rows, 'cek_adedi': len(rows)})
+        except MoCekError as e:
             con.rollback()
             return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod
         finally:

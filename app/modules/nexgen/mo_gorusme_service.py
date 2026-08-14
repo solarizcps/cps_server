@@ -6,6 +6,9 @@ import json
 import sqlite3
 from datetime import date, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
+
+_IST = ZoneInfo('Europe/Istanbul')
 
 from modules.nexgen.cari360_yetki import can_cari360_view_all
 from modules.nexgen.cari_sorumlu_service import (
@@ -49,7 +52,11 @@ def _now() -> str:
 
 
 def _today() -> str:
-    return date.today().isoformat()
+    return datetime.now(_IST).date().isoformat()
+
+
+def _istanbul_today() -> date:
+    return datetime.now(_IST).date()
 
 
 _GORUSME_TARIHI_FMT = '%Y-%m-%d %H:%M:%S'
@@ -88,8 +95,14 @@ def _assert_gorusme_tarihi_gerceklesmis(gt: str) -> str:
         dt = _parse_gorusme_tarihi(norm)
     except ValueError:
         raise MoGorusmeError('Görüşme tarihi geçersiz.', 400)
-    if dt > datetime.now():
+    gun = dt.date()
+    bugun = _istanbul_today()
+    if gun > bugun:
         raise MoGorusmeError('Gerçekleşmiş görüşme tarihi gelecekte olamaz.', 400)
+    if (bugun - gun).days > 2:
+        raise MoGorusmeError(
+            'Görüşme tarihi bugün veya en fazla 2 gün öncesi olmalıdır.', 400,
+        )
     return norm
 
 
@@ -551,27 +564,39 @@ def _apply_fiyat_snapshot(con: sqlite3.Connection, gorusme_id: int, snap: dict[s
         )
 
 
-def _validate_payload(payload: dict, *, require_idem: bool = True) -> dict[str, Any]:
+def _validate_payload(payload: dict, *, require_idem: bool = True, mod: str = 'YAPILDI') -> dict[str, Any]:
+    """mod: 'YAPILDI' (varsayılan) veya 'PLANLA' — planlama modunda gelecek tarih kabul edilir."""
+    is_plan = (mod or '').strip().upper() == 'PLANLA'
+
     tip = (payload.get('gorusme_tipi') or '').strip()
     if tip not in GORUSME_TIPLERI:
         raise MoGorusmeError('Geçerli görüşme tipi seçin.', 400)
 
     sonuc = (payload.get('sonuc_tipi') or '').strip() or 'Genel Görüşme'
-    if sonuc not in SONUC_TIPLERI_ALL:
+    if not is_plan and sonuc not in SONUC_TIPLERI_ALL:
         raise MoGorusmeError('Geçerli görüşme sonucu seçin.', 400)
 
     kisa = (payload.get('kisa_not') or '').strip()
     konu = (payload.get('konu') or '').strip()
-    # Görüşme notu zorunlu; konu opsiyonel (UI'da kaldırıldı)
-    if len(kisa) < 3:
-        if len(konu) >= 2:
-            kisa = konu[:200]
-        else:
-            raise MoGorusmeError('Görüşme notu gerekli.', 400)
+    if not is_plan:
+        # Yapıldı modunda not zorunlu
+        if len(kisa) < 3:
+            if len(konu) >= 2:
+                kisa = konu[:200]
+            else:
+                raise MoGorusmeError('Görüşme notu gerekli.', 400)
+    else:
+        kisa = kisa or konu or ''
 
-    gt = _assert_gorusme_tarihi_gerceklesmis(
-        (payload.get('gorusme_tarihi') or '').strip() or _now(),
-    )
+    if is_plan:
+        # Planlama modunda gelecek tarih kabul edilir — normalize yeterli
+        gt = _normalize_gorusme_tarihi(
+            (payload.get('gorusme_tarihi') or '').strip() or _now()
+        )
+    else:
+        gt = _assert_gorusme_tarihi_gerceklesmis(
+            (payload.get('gorusme_tarihi') or '').strip() or _now(),
+        )
 
     oncelik = (payload.get('oncelik') or 'NORMAL').strip().upper()
     if oncelik not in ONCELIKLER:
@@ -596,9 +621,14 @@ def _validate_payload(payload: dict, *, require_idem: bool = True) -> dict[str, 
     aday_raw = payload.get('musteri_aday_id', payload.get('aday_id'))
     cari_id = _opt_int(cari_raw) if cari_raw not in (None, '', 0, '0') else None
     musteri_aday_id = _opt_int(aday_raw) if aday_raw not in (None, '', 0, '0') else None
+    yeni_musteri = bool(payload.get('yeni_musteri')) or (
+        (payload.get('firma_adi') or '').strip()
+        and not cari_id
+        and not musteri_aday_id
+    )
     if cari_id and musteri_aday_id:
         raise MoGorusmeError('cari_id ve musteri_aday_id birlikte gönderilemez.', 400)
-    if not cari_id and not musteri_aday_id:
+    if not cari_id and not musteri_aday_id and not yeni_musteri:
         raise MoGorusmeError('cari_id veya musteri_aday_id zorunlu.', 400)
 
     takip = (payload.get('sonraki_takip_tarihi') or payload.get('takip_tarihi') or '').strip() or None
@@ -648,8 +678,175 @@ def _validate_payload(payload: dict, *, require_idem: bool = True) -> dict[str, 
         'dosya_ref': (payload.get('dosya_ref') or '').strip() or None,
         'idempotency_key': idem,
         'kaynak': kaynak,
+        'is_plan': is_plan,
+        'yeni_musteri': yeni_musteri,
         **fiyat_snap,
     }
+
+
+def gorusme_planla_kaydet(
+    con: sqlite3.Connection,
+    payload: dict,
+    kullanici_id: int,
+    yk: set[str] | None = None,
+    *,
+    commit: bool = True,
+) -> dict[str, Any]:
+    """PLANLA — yalnız Ajanda PLANLANDI; görüşme satırı oluşturulmaz."""
+    from modules.nexgen.mo_ajanda_service import MoAjandaError, ajanda_olustur, _tablo_var as _aj_var
+    from modules.nexgen.mo_ajanda_config import TABLO as AJ_TABLO
+    from modules.nexgen.musteri_aday_service import (
+        DURUM_ADAY,
+        MusteriAdayError,
+        aday_getir,
+        aday_olustur,
+        can_aday_yaz,
+    )
+
+    if not _aj_var(con, AJ_TABLO):
+        raise MoGorusmeError('Ajanda tablosu hazır değil.', 503)
+
+    norm = _validate_payload(payload, mod='PLANLA')
+    idem = norm['idempotency_key']
+    ajanda_idem = 'gorusme_plan:' + idem
+
+    mevcut_a = con.execute(
+        f'SELECT * FROM {AJ_TABLO} WHERE idempotency_key=? AND aktif=1',
+        (ajanda_idem,),
+    ).fetchone()
+    if mevcut_a:
+        from modules.nexgen.mo_ajanda_service import _cari_map, _row_dict
+        cm = _cari_map(con, [int(mevcut_a['cari_id'])] if mevcut_a['cari_id'] else [])
+        kayit = _row_dict(mevcut_a, cm)
+        aday = None
+        aid = mevcut_a['musteri_aday_id'] if 'musteri_aday_id' in mevcut_a.keys() else None
+        if aid:
+            aday = aday_getir(con, int(aid), kullanici_id, yk)
+        return {
+            'ok': True,
+            'ajanda': kayit,
+            'aday': aday,
+            'idempotent': True,
+            'mesaj': 'Plan zaten kayıtlı.',
+            'entity_type': 'ADAY' if aid else 'CARI',
+        }
+
+    yeni = bool(payload.get('yeni_musteri')) or (
+        (payload.get('firma_adi') or '').strip()
+        and not norm.get('cari_id')
+        and not norm.get('musteri_aday_id')
+    )
+
+    try:
+        con.execute('BEGIN IMMEDIATE')
+    except sqlite3.OperationalError:
+        pass
+
+    aday = None
+    try:
+        aj_payload: dict[str, Any] = {
+            'plan_tarihi': norm['gorusme_tarihi'],
+            'gorusme_tipi': norm['gorusme_tipi'],
+            'plan_notu': norm.get('kisa_not') or norm.get('konu') or None,
+            'idempotency_key': ajanda_idem,
+        }
+        if yeni:
+            if not can_aday_yaz(con, kullanici_id, yk):
+                raise MusteriAdayError('Aday oluşturma yetkiniz yok.', 403)
+            firma = (payload.get('firma_adi') or '').strip()
+            if not firma:
+                raise MoGorusmeError('Firma adı zorunlu.', 400)
+            aid = aday_olustur(con, {
+                'firma_adi': firma,
+                'yetkili_adi': payload.get('yetkili_adi'),
+                'telefon': payload.get('telefon'),
+                'sehir': payload.get('sehir'),
+                'not_metni': payload.get('not_metni'),
+                'idempotency_key': idem,
+            }, kullanici_id, commit=False)
+            aday = aday_getir(con, aid, kullanici_id, yk, _skip_auth=True)
+            aj_payload['musteri_aday_id'] = aid
+            aj_payload['firma_adi_gorunum'] = firma
+        elif norm.get('musteri_aday_id'):
+            aid = int(norm['musteri_aday_id'])
+            if not can_mo_gorusme_yaz_aday(con, kullanici_id, aid, yk):
+                raise MoGorusmeError('Bu aday için plan oluşturma yetkiniz yok.', 403)
+            aday = aday_getir(con, aid, _skip_auth=True)
+            if not aday or aday.get('durum') != DURUM_ADAY:
+                raise MoGorusmeError('Aday bulunamadı veya aktif değil.', 404)
+            aj_payload['musteri_aday_id'] = aid
+            aj_payload['firma_adi_gorunum'] = (
+                (payload.get('firma_adi_gorunum') or '').strip()
+                or aday.get('firma_adi')
+            )
+        else:
+            cari_id = int(norm['cari_id'])
+            if not can_mo_gorusme_yaz(con, kullanici_id, cari_id, yk):
+                raise MoGorusmeError('Bu cari için plan oluşturma yetkiniz yok.', 403)
+            cari = con.execute(
+                'SELECT unvan FROM nexgen_cari WHERE id=? AND aktif=1', (cari_id,),
+            ).fetchone()
+            if not cari:
+                raise MoGorusmeError('Cari bulunamadı.', 404)
+            aj_payload['cari_id'] = cari_id
+            aj_payload['firma_adi_gorunum'] = (
+                (payload.get('firma_adi_gorunum') or '').strip() or cari['unvan']
+            )
+
+        plan_yetkili = None
+        plan_telefon = None
+        plan_sehir = None
+        if yeni:
+            plan_yetkili = (
+                (payload.get('yetkili_adi') or payload.get('yetkili_metin') or '').strip() or None
+            )
+            plan_telefon = (payload.get('telefon') or '').strip() or None
+            plan_sehir = (payload.get('sehir') or '').strip() or None
+        elif norm.get('musteri_aday_id'):
+            plan_yetkili = (
+                (payload.get('yetkili_adi') or payload.get('yetkili_metin') or '').strip() or None
+            )
+            plan_telefon = (payload.get('telefon') or '').strip() or None
+            plan_sehir = (payload.get('sehir') or '').strip() or None
+            if aday:
+                plan_yetkili = plan_yetkili or (aday.get('yetkili_adi') or '').strip() or None
+                plan_telefon = plan_telefon or (aday.get('telefon') or '').strip() or None
+                plan_sehir = plan_sehir or (aday.get('sehir') or '').strip() or None
+        else:
+            plan_yetkili = (
+                (norm.get('yetkili_metin') or payload.get('yetkili_metin') or '').strip() or None
+            )
+            plan_telefon = (payload.get('telefon') or '').strip() or None
+            plan_sehir = (payload.get('sehir') or '').strip() or None
+        aj_payload['plan_yetkili_metin'] = plan_yetkili
+        aj_payload['plan_telefon'] = plan_telefon
+        aj_payload['plan_sehir'] = plan_sehir
+
+        aj_sonuc = ajanda_olustur(
+            con, aj_payload, kullanici_id, yk, commit=False,
+        )
+        if commit:
+            con.commit()
+        return {
+            'ok': True,
+            'ajanda': aj_sonuc.get('kayit'),
+            'aday': aday,
+            'idempotent': aj_sonuc.get('idempotent', False),
+            'mesaj': aj_sonuc.get('mesaj') or 'Plan oluşturuldu.',
+            'entity_type': 'ADAY' if aday else 'CARI',
+        }
+    except (MoAjandaError, MusteriAdayError, MoGorusmeError):
+        try:
+            con.rollback()
+        except Exception:
+            pass
+        raise
+    except Exception:
+        try:
+            con.rollback()
+        except Exception:
+            pass
+        raise
 
 
 def gorusme_kaydet(
@@ -663,7 +860,23 @@ def gorusme_kaydet(
     if not _tablo_var(con, TABLO):
         raise MoGorusmeError('Görüşme tablosu hazır değil.', 503)
 
-    norm = _validate_payload(payload)
+    mod = (payload.get('mod') or 'YAPILDI').strip().upper()
+    if mod == 'PLANLA':
+        plan_out = gorusme_planla_kaydet(
+            con, payload, kullanici_id, yk, commit=commit,
+        )
+        return {
+            'id': None,
+            'ajanda': plan_out.get('ajanda'),
+            'musteri_aday_id': (
+                plan_out.get('aday', {}) or {}
+            ).get('id') if plan_out.get('aday') else None,
+            'cari_id': plan_out.get('ajanda', {}).get('cari_id'),
+            **{k: v for k, v in plan_out.items() if k not in ('ajanda',)},
+        }
+
+    norm = _validate_payload(payload, mod=mod)
+    is_plan = norm.get('is_plan', False)
     aday_id = norm.get('musteri_aday_id')
     cari_id = norm.get('cari_id')
 
@@ -823,6 +1036,50 @@ def gorusme_kaydet(
             (numune_id, gid),
         )
     _apply_fiyat_snapshot(con, gid, norm)
+
+    # FAZ 2A: Ajanda entegrasyonu — YAPILDI (PLANLA ayrı akış)
+    try:
+        from modules.nexgen.mo_ajanda_service import (
+            gercek_gorusmeyi_ajandaya_bagla,
+            ajanda_olustur,
+            _tablo_var as _ajanda_tablo_var,
+            TABLO as AJANDA_TABLO,
+        )
+        if _ajanda_tablo_var(con, AJANDA_TABLO) and (cari_id or aday_id):
+            ajanda_id_explicit = payload.get('ajanda_id')
+            if not ajanda_id_explicit:
+                gercek_gorusmeyi_ajandaya_bagla(
+                    con, gid, kullanici_id,
+                    cari_id=int(cari_id) if cari_id else None,
+                    musteri_aday_id=int(aday_id) if aday_id else None,
+                    gorusme_tarihi=norm['gorusme_tarihi'],
+                    gorusme_tipi=norm['gorusme_tipi'],
+                    firma_adi_gorunum=(payload.get('firma_adi_gorunum') or payload.get('firma_adi') or '').strip() or None,
+                    commit=False,
+                )
+            takip_tarihi = norm.get('sonraki_takip_tarihi')
+            if takip_tarihi and norm.get('sonraki_aksiyon'):
+                takip_idem = 'takip_plan:' + norm['idempotency_key']
+                takip_payload: dict[str, Any] = {
+                    'kullanici_id': kullanici_id,
+                    'plan_tarihi': takip_tarihi,
+                    'gorusme_tipi': norm['gorusme_tipi'],
+                    'plan_notu': norm.get('sonraki_aksiyon') or None,
+                    'idempotency_key': takip_idem,
+                }
+                if cari_id:
+                    takip_payload['cari_id'] = int(cari_id)
+                elif aday_id:
+                    takip_payload['musteri_aday_id'] = int(aday_id)
+                    if aday:
+                        takip_payload['firma_adi_gorunum'] = aday.get('firma_adi')
+                try:
+                    ajanda_olustur(con, takip_payload, kullanici_id, yk, commit=False)
+                except Exception:
+                    pass
+    except ImportError:
+        pass
+
     if commit:
         con.commit()
     detay = gorusme_detay(con, gid, kullanici_id, yk)

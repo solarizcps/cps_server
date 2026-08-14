@@ -225,7 +225,7 @@
 <div class="mpa-overlay" id="mpa-gorusme-detay-overlay" hidden>
   <div class="mpa-plan-modal mpa-detay-modal" role="dialog">
     <div class="mpa-plan-hdr">
-      <h2>Görüşme Detayı</h2>
+      <h2 id="mpa-detay-baslik">Görüşme Detayı</h2>
       <button type="button" class="mpa-plan-kapat" id="mpa-detay-kapat" aria-label="Kapat">×</button>
     </div>
     <div class="mpa-detay-body" id="mpa-detay-body"></div>
@@ -808,8 +808,60 @@
   }
   function planAksiyonMetin(k) {
     var dg = (k.durum_gorunum || '').toUpperCase();
-    if (dg === 'SONUC_BEKLIYOR' || dg === 'ZORUNLU_SONUC_BEKLIYOR') return 'Görüşme Sonucunu Gir';
-    return 'Görüşme Aç';
+    if (dg === 'SONUC_BEKLIYOR' || dg === 'ZORUNLU_SONUC_BEKLIYOR') return 'GÖRÜŞMEYİ SONUÇLANDIR';
+    return 'GÖRÜŞMEYİ SONUÇLANDIR';
+  }
+  function detayRow(lbl, val) {
+    return '<div class="mpa-detay-blok-item"><span class="mpa-detay-lbl">' + esc(lbl) +
+      '</span><span class="mpa-detay-val">' + esc(val || '—') + '</span></div>';
+  }
+  function formatEtiketList(tags) {
+    if (!tags) return '';
+    if (typeof tags === 'string') {
+      try { tags = JSON.parse(tags); } catch (e0) { return tags; }
+    }
+    if (!Array.isArray(tags) || !tags.length) return '';
+    return tags.join(', ');
+  }
+  function openPlanDetay(k) {
+    var body = document.getElementById('mpa-detay-body');
+    var ov = document.getElementById('mpa-gorusme-detay-overlay');
+    var baslik = document.getElementById('mpa-detay-baslik');
+    if (!body || !ov) return;
+    if (baslik) baslik.textContent = 'Plan Detayı';
+    var planTarih = formatDetayTarih(k.plan_tarihi || ((k.tarih || '') + ' ' + (k.saat || '')));
+    var html =
+      '<div class="mpa-detay-hero">' +
+        '<div class="mpa-detay-firma">' + esc(k.musteri || '—') + '</div>' +
+        (planTarih ? '<div class="mpa-detay-meta">' + esc(planTarih) + '</div>' : '') +
+      '</div>' +
+      '<div class="mpa-detay-takip-blok">' +
+        detayRow('Firma', k.musteri) +
+        detayRow('Müşteri', k.musteri_tip_etiket || (k.musteri_aday_id ? 'Yeni Müşteri' : 'Mevcut Müşteri')) +
+        detayRow('Görüşülecek Kişi', k.plan_yetkili_metin) +
+        detayRow('Telefon', k.plan_telefon) +
+        detayRow('Şehir', k.plan_sehir) +
+        detayRow('Tarih-Saat', planTarih) +
+        detayRow('Görüşme Türü', k.gorusme_tipi) +
+        detayRow('Plan Notu', k.plan_notu) +
+        detayRow('Planlayan', k.olusturan_adi) +
+        detayRow('Durum', durumEtiket(k)) +
+      '</div>';
+    if (!ajandaReadonly && planAksiyonGerekli(k)) {
+      html += '<div class="mpa-detay-aks" style="margin-top:14px">' +
+        '<a href="' + esc(gorusmeAcUrl(k)) + '" class="mpa-btn mpa-btn-primary">GÖRÜŞMEYİ SONUÇLANDIR</a></div>';
+    }
+    body.innerHTML = html;
+    ov.hidden = false;
+    document.body.style.overflow = 'hidden';
+  }
+  function openAjandaKayitDetay(k) {
+    var durum = (k.durum || '').toUpperCase();
+    if (durum === 'GERCEKLESTI' && k.gorusme_ozet) {
+      openGorusmeDetay(k);
+      return;
+    }
+    openPlanDetay(k);
   }
   function gorusmeOzetHtml(k) {
     var oz = k.gorusme_ozet;
@@ -901,30 +953,45 @@
     var oz = k.gorusme_ozet || {};
     var body = document.getElementById('mpa-detay-body');
     var ov = document.getElementById('mpa-gorusme-detay-overlay');
+    var baslik = document.getElementById('mpa-detay-baslik');
     if (!body || !ov) return;
-    var tarih = formatDetayTarih(oz.gorusme_tarihi || '');
+    if (baslik) baslik.textContent = 'Gerçekleşen Görüşme Detayı';
+    var gercekTarih = formatDetayTarih(oz.gorusme_tarihi || '');
+    var planTarih = formatDetayTarih(k.plan_tarihi || ((k.tarih || '') + ' ' + (k.saat || '')));
     var tip = (oz.gorusme_tipi || k.gorusme_tipi || '').trim();
-    var yetkili = (oz.yetkili_metin || oz.yetkili_adi || k.yetkili_metin || '').trim();
-    var metaParts = [];
-    if (tarih) metaParts.push(tarih);
-    if (tip) metaParts.push(tip);
-    if (yetkili) metaParts.push(yetkili);
-    var metaLine = metaParts.join(' · ');
+    var yetkili = (oz.yetkili_metin || k.plan_yetkili_metin || '').trim();
+    var etiketler = formatEtiketList(oz.sonuc_etiketler);
     var sonuc = (oz.sonuc_tipi || '').trim();
     var sonucHtml = sonuc
       ? '<div class="mpa-detay-sonuc-wrap"><span class="mpa-detay-sonuc-chip">' + esc(sonuc.toUpperCase()) + '</span></div>'
       : '';
+    var fiyatVerildi = parseInt(oz.fiyat_verildi, 10) === 1 ? 'Evet' : (oz.fiyat_verildi === 0 ? 'Hayır' : '—');
     body.innerHTML =
       '<div class="mpa-detay-hero">' +
         '<div class="mpa-detay-firma">' + esc(k.musteri || '—') + '</div>' +
-        (metaLine ? '<div class="mpa-detay-meta">' + esc(metaLine) + '</div>' : '') +
+        (yetkili ? '<div class="mpa-detay-meta">' + esc(yetkili) + '</div>' : '') +
         sonucHtml +
+      '</div>' +
+      '<div class="mpa-detay-takip-blok">' +
+        detayRow('Firma', k.musteri) +
+        detayRow('Görüşülen Kişi', yetkili) +
+        detayRow('Telefon', k.plan_telefon) +
+        detayRow('Şehir', k.plan_sehir) +
+        detayRow('Planlanan Tarih', planTarih) +
+        detayRow('Gerçek Görüşme Tarihi', gercekTarih) +
+        detayRow('Görüşme Türü', tip) +
+        detayRow('Ne İçin Gidildi (Plan Notu)', k.plan_notu) +
+        detayRow('Görüşme Özeti', oz.kisa_not) +
+        detayRow('Konu Etiketleri', etiketler) +
+        detayRow('Müşteri Ne İstedi', oz.konu) +
       '</div>' +
       ticariDetayHtml(oz) +
       '<div class="mpa-detay-takip-blok">' +
-        '<div class="mpa-detay-blok-item"><span class="mpa-detay-lbl">Görüşme Notu</span><span class="mpa-detay-val">' + esc(oz.kisa_not || '—') + '</span></div>' +
-        '<div class="mpa-detay-blok-item"><span class="mpa-detay-lbl">Sonraki Aksiyon</span><span class="mpa-detay-val">' + esc(oz.sonraki_aksiyon || '—') + '</span></div>' +
-        '<div class="mpa-detay-blok-item"><span class="mpa-detay-lbl">Takip</span><span class="mpa-detay-val">' + esc(formatTakipSatir(oz)) + '</span></div>' +
+        detayRow('Fiyat Verildi', fiyatVerildi) +
+        detayRow('Görüşme Sonucu', sonuc) +
+        detayRow('Sonraki Adım', oz.sonraki_aksiyon) +
+        detayRow('Takip Tarihi', formatDetayTarih(oz.sonraki_takip_tarihi || '')) +
+        detayRow('Kaydı Oluşturan', oz.olusturan_adi || k.olusturan_adi) +
       '</div>';
     ov.hidden = false;
     document.body.style.overflow = 'hidden';
@@ -999,12 +1066,23 @@
     var q = [
       'gorusme_ac=1',
       'source=ajanda',
-      'cari_id=' + encodeURIComponent(plan.cari_id || ''),
+      'ajanda_sonuc=1',
       'ajanda_id=' + encodeURIComponent(plan.id || plan.ajanda_id || '')
     ];
+    if (plan.cari_id) q.push('cari_id=' + encodeURIComponent(plan.cari_id));
+    if (plan.musteri_aday_id) q.push('musteri_aday_id=' + encodeURIComponent(plan.musteri_aday_id));
     if (plan.gorusme_tipi) q.push('gorusme_tipi=' + encodeURIComponent(plan.gorusme_tipi));
     if (plan.musteri) q.push('unvan=' + encodeURIComponent(plan.musteri));
+    if (plan.musteri_tip_etiket) q.push('musteri_tip=' + encodeURIComponent(plan.musteri_tip_etiket));
     if (plan.plan_notu) q.push('plan_notu=' + encodeURIComponent(plan.plan_notu));
+    if (plan.plan_yetkili_metin) q.push('plan_yetkili=' + encodeURIComponent(plan.plan_yetkili_metin));
+    if (plan.plan_telefon) q.push('plan_telefon=' + encodeURIComponent(plan.plan_telefon));
+    if (plan.plan_sehir) q.push('plan_sehir=' + encodeURIComponent(plan.plan_sehir));
+    if (plan.plan_tarihi) {
+      q.push('plan_tarihi=' + encodeURIComponent(plan.plan_tarihi));
+    } else if (plan.tarih) {
+      q.push('plan_tarihi=' + encodeURIComponent(plan.tarih + ' ' + (plan.saat || '09:00') + ':00'));
+    }
     return '/nexgen/musteri-pazarlama?' + q.join('&');
   }
   function gorusmeSonucBtnHtml(k) {
@@ -1032,7 +1110,7 @@
     });
   }
   function evKartHtml(k) {
-    return '<div class="' + evKartClass(k.durum_gorunum) + '" title="' + esc(k.musteri) + '">' +
+    return '<div class="' + evKartClass(k.durum_gorunum) + '" data-plan-id="' + k.id + '" title="' + esc(k.musteri) + '">' +
       '<div class="mpa-ev-saat">' + esc(k.saat) + '</div>' +
       '<div class="mpa-ev-firma">' + esc(kisaUnvan(k.musteri, 20)) + '</div>' +
       '<div class="mpa-ev-tip">' + esc(k.gorusme_tipi || '') + '</div></div>';
@@ -1083,6 +1161,15 @@
       });
     });
     el.innerHTML = html;
+    el.querySelectorAll('.mpa-ev-kart[data-plan-id]').forEach(function(kart) {
+      kart.style.cursor = 'pointer';
+      kart.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        var pid = parseInt(kart.dataset.planId, 10);
+        var plan = planlar.find(function(p){ return p.id === pid; });
+        if (plan) openAjandaKayitDetay(plan);
+      });
+    });
     el.querySelectorAll('.mpa-takvim-hucre, .mpa-takvim-hdr[data-gun-hdr]').forEach(function(h) {
       h.addEventListener('click', function() {
         seciliGun = h.dataset.gun || h.dataset.gunHdr;
@@ -1117,16 +1204,30 @@
         aks = '<span class="mpa-durum-chip ' + durumClass(k.durum_gorunum) + '">' + esc(k.durum_etiket || k.durum) + '</span>';
       }
       var ozetHtml = gorusmeOzetHtml(k);
-      return '<div class="mpa-gun-ev">' +
+      var planNotuHtml = (k.plan_notu && (k.durum || '').toUpperCase() === 'PLANLANDI')
+        ? '<div class="mpa-gun-ev-plan-not" title="' + esc(k.plan_notu) + '"><strong>Plan:</strong> ' + esc(kisaUnvan(k.plan_notu, 48)) + '</div>'
+        : '';
+      return '<div class="mpa-gun-ev mpa-gun-ev-click" data-plan-id="' + k.id + '">' +
         '<div class="mpa-gun-ev-ust"><span class="mpa-gun-ev-saat">' + esc(k.saat) + '</span>' +
         '<span class="mpa-durum-chip ' + durumClass(k.durum_gorunum) + '">' + esc(durumEtiket(k)) + '</span></div>' +
         '<div class="mpa-gun-ev-firma" title="' + esc(k.musteri) + '">' + esc(kisaUnvan(k.musteri, 28)) + '</div>' +
         '<div class="mpa-gun-ev-tip">' + esc(k.gorusme_tipi || '') + '</div>' +
+        planNotuHtml +
         ozetHtml +
         '<div class="mpa-gun-ev-aks">' + aks + '</div></div>';
     }).join('');
+    listEl.querySelectorAll('.mpa-gun-ev-click[data-plan-id]').forEach(function(row) {
+      row.style.cursor = 'pointer';
+      row.addEventListener('click', function(ev) {
+        if (ev.target.closest('a, button')) return;
+        var pid = parseInt(row.dataset.planId, 10);
+        var plan = liste.find(function(p){ return p.id === pid; });
+        if (plan) openAjandaKayitDetay(plan);
+      });
+    });
     listEl.querySelectorAll('.mpa-btn-detay').forEach(function(btn) {
-      btn.onclick = function() {
+      btn.onclick = function(ev) {
+        ev.stopPropagation();
         var pid = parseInt(btn.dataset.planId, 10);
         var plan = liste.find(function(p){ return p.id === pid; });
         if (plan) openGorusmeDetay(plan);

@@ -1831,6 +1831,7 @@ def ajanda_tarih_araligi_listele(
     """Ajanda sayfası — belirli hafta aralığındaki planlar."""
     from modules.nexgen.mo_ajanda_config import TABLO as AJ_TABLO
     from modules.nexgen.mo_ajanda_service import (
+        _aday_map,
         _cari_map,
         _row_dict,
         _tablo_var,
@@ -1838,6 +1839,7 @@ def ajanda_tarih_araligi_listele(
         ajanda_gorunen_kullanici,
     )
     from modules.nexgen.cari_sorumlu_service import can_mo_view_cari
+    from modules.nexgen.musteri_aday_service import can_aday_gor
 
     if yk is None:
         yk = load_kullanici_yetkileri(con, oturum_kullanici_id)
@@ -1848,9 +1850,13 @@ def ajanda_tarih_araligi_listele(
         return []
     rows = con.execute(
         f"""
-        SELECT a.*, c.unvan AS cari_unvan
+        SELECT a.*, c.unvan AS cari_unvan,
+               ma.firma_adi AS aday_firma_adi,
+               sk.AdSoyad AS olusturan_adi
         FROM {AJ_TABLO} a
         LEFT JOIN nexgen_cari c ON c.id = a.cari_id
+        LEFT JOIN nexgen_musteri_aday ma ON ma.id = a.musteri_aday_id
+        LEFT JOIN sistem_kullanici sk ON sk.Id = a.olusturan_kullanici_id
         WHERE a.aktif=1 AND a.kullanici_id=?
           AND substr(a.plan_tarihi, 1, 10) BETWEEN ? AND ?
         ORDER BY a.plan_tarihi ASC, a.id ASC
@@ -1858,15 +1864,26 @@ def ajanda_tarih_araligi_listele(
         (gorunen_uid, bas_tarih[:10], bit_tarih[:10]),
     ).fetchall()
     cari_ids = sorted({int(r['cari_id']) for r in rows if r['cari_id']})
+    aday_ids = sorted({
+        int(r['musteri_aday_id']) for r in rows
+        if 'musteri_aday_id' in r.keys() and r['musteri_aday_id']
+    })
     cm = _cari_map(con, cari_ids)
+    am = _aday_map(con, aday_ids)
     out: list[dict[str, Any]] = []
     for r in rows:
         if baska_pazarlamaci:
-            out.append(_row_dict(r, cm))
-        elif not can_mo_view_cari(con, oturum_kullanici_id, int(r['cari_id']), yk):
-            continue
+            out.append(_row_dict(r, cm, am))
+        elif r['cari_id']:
+            if not can_mo_view_cari(con, oturum_kullanici_id, int(r['cari_id']), yk):
+                continue
+            out.append(_row_dict(r, cm, am))
+        elif 'musteri_aday_id' in r.keys() and r['musteri_aday_id']:
+            if not can_aday_gor(con, oturum_kullanici_id, int(r['musteri_aday_id']), yk):
+                continue
+            out.append(_row_dict(r, cm, am))
         else:
-            out.append(_row_dict(r, cm))
+            continue
     return ajanda_enrich_gorusme_ozet(con, out)
 
 

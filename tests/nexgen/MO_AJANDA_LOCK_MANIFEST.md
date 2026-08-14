@@ -196,3 +196,79 @@ Python 3.13.13, pytest 9.1.1
 1. Tonaj 10.000 → DB 100000 input/format bugı
 2. Cari360 Timeline ticari özet
 3. Ürün / ürün ailesi structured alanı
+
+---
+
+# CARI360-V2-LAYOUT-LOCK
+
+## LOCK NAME
+
+CARI360-V2-LAYOUT-LOCK
+
+## Tarih
+
+2026-08-10
+
+## Gerçek E2E Kanıtı (VISUAL PASS)
+
+Cari360 V2 recover sonrası kullanıcı visual onayı:
+- V2 üst müşteri kartı geri geldi
+- Container genişliği ~1360px
+- 13 sekme (Finans, Onaylar, Hafıza/Timeline, Dosyalar, Notlar dahil)
+- Görüşmeler ticari özet korundu
+
+## İş Kuralları (Kilitli)
+
+1. `.ckart { max-width: 1360px }` — eski 1100px baseline'a dönülmez.
+2. `.ckart-ust-v2` header bloğu korunur.
+3. `.ckart-sekme-bar-v2` ve 13 sekme exact isimleri korunur.
+4. `ckartFinansYukle`, `ckartOnaylarYukle`, `ckartHafizaTabYukle`, `ckartGorusmeYukle` korunur.
+5. CARI360-GORUSME-TICARI-OZET-LOCK (`.ckart-ticari-ozet`, `g.fiyat_ozet`) bozulmaz.
+
+## Regression Test Dosyası
+
+| Dosya | Test Sayısı | Kapsam |
+|---|---|---|
+| `tests/nexgen/test_cari360_v2_layout_lock.py` | 5 | V2 layout template contract (A-E) |
+
+## Park Edilen Konular (Bu LOCK Dışı)
+
+Sipariş kalem, model/formül/renk, finans, sevkiyat, timeline veri geliştirmeleri — ayrı fazlar.
+
+---
+
+# CARI360-V2-LAYOUT-LOCK
+
+## LOCK NAME
+
+CARI360-V2-LAYOUT-LOCK
+
+## Tarih
+
+2026-08-10
+
+## Gerçek E2E Kanıtı (VISUAL PASS)
+
+Cari360 V2 recover sonrası kullanıcı visual onayı:
+- V2 üst müşteri kartı geri geldi
+- Container genişliği ~1360px
+- 13 sekme (Finans, Onaylar, Hafıza/Timeline, Dosyalar, Notlar dahil)
+- Görüşmeler ticari özet korundu
+
+## İş Kuralları (Kilitli)
+
+1. `.ckart { max-width: 1360px }` — eski 1100px baseline'a dönülmez.
+2. `.ckart-ust-v2` header bloğu korunur.
+3. `.ckart-sekme-bar-v2` ve 13 sekme exact isimleri korunur.
+4. `ckartFinansYukle`, `ckartOnaylarYukle`, `ckartHafizaTabYukle`, `ckartGorusmeYukle` korunur.
+5. CARI360-GORUSME-TICARI-OZET-LOCK (`.ckart-ticari-ozet`, `g.fiyat_ozet`) bozulmaz.
+
+## Regression Test Dosyası
+
+| Dosya | Test Sayısı | Kapsam |
+|---|---|---|
+| `tests/nexgen/test_cari360_v2_layout_lock.py` | 5 | V2 layout template contract (A-E) |
+
+## Park Edilen Konular (Bu LOCK Dışı)
+
+Sipariş kalem, model/formül/renk, finans, sevkiyat, timeline veri geliştirmeleri — ayrı fazlar.
