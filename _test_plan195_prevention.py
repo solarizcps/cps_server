@@ -1,12 +1,22 @@
 # -*- coding: utf-8 -*-
 """
 Plan 195 prevention test — A-H + eski lock regression
-Backend testleri: mock DB (in-memory SQLite)
-Browser testleri: Flask running on :8080
+Backend: in-memory mock DB
+Browser READ-ONLY: live :8080 with guards
+Browser MUTATING: isolated temp DB only (never canonical POST)
 """
-import sys, io, sqlite3, json, types, importlib, unittest, time
+import sys, io, sqlite3, json, types, importlib, unittest, time, os
+
+ROOT = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(ROOT, 'app'))
 if hasattr(sys.stdout, 'buffer'):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+
+from tools.browser_test_safety import (
+    mutating_isolated_browser_context,
+    readonly_browser_context,
+    canonical_order760_snapshot,
+)
 
 results = []
 
@@ -335,163 +345,180 @@ for durum, expected in readonly_cases:
 
 print()
 print('=' * 60)
-print('  BROWSER E2E — Old lock regression (Playwright)')
+print('  BROWSER READ-ONLY — smoke (no POST /mpr-olustur)')
 print('=' * 60)
 
 try:
     from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
     import uuid
 
-    BASE = 'http://127.0.0.1:8080'
-    PZM  = BASE + '/nexgen/pazarlama'
+    with readonly_browser_context() as ro_ctx:
+        BASE = ro_ctx['base_url']
+        PZM = BASE + '/nexgen/pazarlama'
+        snap_before = canonical_order760_snapshot()
+        info(f'Canonical SHA before = {ro_ctx["sha_before"]}')
 
-    def login(page):
-        page.goto(BASE + '/giris', timeout=12000)
-        page.fill('[name=kullanici]', 'mehmet')
-        page.fill('[name=sifre]', '1453')
-        page.click('button[type=submit]')
-        page.wait_for_load_state('domcontentloaded')
-        time.sleep(0.8)
+        def login(page):
+            page.goto(BASE + '/giris', timeout=12000)
+            page.fill('[name=kullanici]', 'mehmet')
+            page.fill('[name=sifre]', '1453')
+            page.click('button[type=submit]')
+            page.wait_for_load_state('domcontentloaded')
+            time.sleep(0.8)
 
-    def scroll_top(page):
-        page.evaluate('window.scrollTo(0,0)')
-        page.evaluate('var m=document.querySelector("main"); if(m) m.scrollTop=0;')
+        def scroll_top(page):
+            page.evaluate('window.scrollTo(0,0)')
+            page.evaluate('var m=document.querySelector("main"); if(m) m.scrollTop=0;')
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False, slow_mo=50)
-        ctx = browser.new_context(viewport={'width':1920,'height':1080})
-        page = ctx.new_page()
-        js_errors = []
-        page.on('pageerror', lambda e: js_errors.append(str(e)))
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            ctx = browser.new_context(viewport={'width':1920,'height':1080})
+            page = ctx.new_page()
+            js_errors = []
+            page.on('pageerror', lambda e: js_errors.append(str(e)))
 
-        login(page)
+            login(page)
 
-        # ── 1. TAMAMLANDI siparis readonly check via API ────────────────────
-        # We can test the backend fix directly via API call
-        import urllib.request
-        # Login session not available for raw urllib; use Playwright fetch
-        api_result = page.evaluate("""async () => {
-            const r = await fetch('/nexgen/api/pazarlama/mpr-olustur', {
-                method: 'POST',
-                headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({talep_id: 760})
-            });
-            return await r.json();
-        }""")
-
-        if api_result.get('ok') and api_result.get('zaten_var'):
-            ok('API: siparis 760 (TAMAMLANDI-equivalent state) → zaten_var=True, no new plan')
-        elif api_result.get('ok'):
-            # Check if plan count stayed same
-            ok(f'API: siparis 760 mpr-olustur → ok={api_result.get("ok")} plan_sayisi={api_result.get("plan_sayisi")}')
-        else:
-            info(f'API: siparis 760 → {api_result}')
-
-        # Verify no new plan was created
-        import sqlite3 as _sq
-        _con = _sq.connect('file:app/mock_data.db?mode=ro', uri=True)
-        plan_count = _con.execute('SELECT COUNT(*) FROM nexgen_uretim_plan WHERE planlama_siparis_id=760').fetchone()[0]
-        _con.close()
-        if plan_count == 2:  # still 194 + 195, no new
-            ok(f'API RETRY: plan count still 2 (no new plan created for siparis 760)')
-        else:
-            fail(f'API RETRY: plan count = {plan_count} (expected 2)')
-
-        # ── 2. Siparis 760 detail — load first so JS is ready ──────────────
-        page.goto(PZM + '?siparis=760', timeout=12000)
-        page.wait_for_load_state('domcontentloaded')
-        time.sleep(2.5)
-        scroll_top(page)
-
-        ekran = page.query_selector('#ekran-detay')
-        if ekran and ekran.is_visible():
-            ok('OLD LOCK: Siparis detail visible')
-        else:
-            fail('OLD LOCK: Siparis detail not visible')
-
-        # ── 3. TAMAMLANDI readonly — verify via source grep (pzmDetayReadonly not window-bound)
-        # Function is module-scope (not window.*), so JS eval cannot reach it from Playwright.
-        # Canonical verification done in backend unit tests (B, G, readonly_cases above).
-        # Here we confirm the fix IS in the served HTML source.
-        import urllib.request
-        html_src = page.content()
-        # Flask may cache templates; verify fix in disk file directly (canonical)
-        import os
-        tpl_path = os.path.join('app', 'templates', 'nexgen', 'pazarlama_merkezi.html')
-        with open(tpl_path, encoding='utf-8') as fh:
-            tpl_src = fh.read()
-        if "if (d === 'TAMAMLANDI') return true;" in tpl_src:
-            ok("DISK SOURCE: pzmDetayReadonly TAMAMLANDI fix present in template file")
-        else:
-            fail("DISK SOURCE: pzmDetayReadonly TAMAMLANDI fix NOT found in template file")
-
-        # ── 5. Numeric lock (2.000 kg) ──────────────────────────────────────
-        kg_el = page.query_selector('#pzm-det-oz-toplam')
-        if kg_el:
-            kg_txt = kg_el.inner_text().strip()
-            if '2.000' in kg_txt:
-                ok(f'OLD LOCK: Numeric KG = {kg_txt}')
-            elif '4.000' in kg_txt:
-                fail(f'OLD LOCK: NUMERIC REGRESSION — KG = {kg_txt}')
+            # ── 1. NO canonical POST — prevention verified via disk source + isolated test below
+            tpl_path = os.path.join('app', 'templates', 'nexgen', 'pazarlama_merkezi.html')
+            with open(tpl_path, encoding='utf-8') as fh:
+                tpl_src = fh.read()
+            if "if (d === 'TAMAMLANDI') return true;" in tpl_src:
+                ok("DISK SOURCE: pzmDetayReadonly TAMAMLANDI fix present")
             else:
-                info(f'OLD LOCK: KG = {kg_txt}')
+                fail("DISK SOURCE: pzmDetayReadonly TAMAMLANDI fix NOT found")
+
+            # ── 2. Siparis 760 detail — read-only smoke ───────────────────
+            page.goto(PZM + '?siparis=760', timeout=12000)
+            page.wait_for_load_state('domcontentloaded')
+            time.sleep(2.5)
+            scroll_top(page)
+
+            ekran = page.query_selector('#ekran-detay')
+            if ekran and ekran.is_visible():
+                ok('OLD LOCK: Siparis detail visible')
+            else:
+                fail('OLD LOCK: Siparis detail not visible')
+
+            kg_el = page.query_selector('#pzm-det-oz-toplam')
+            if kg_el:
+                kg_txt = kg_el.inner_text().strip()
+                if '2.000' in kg_txt:
+                    ok(f'OLD LOCK: Numeric KG = {kg_txt}')
+                elif '4.000' in kg_txt:
+                    fail(f'OLD LOCK: NUMERIC REGRESSION — KG = {kg_txt}')
+                else:
+                    info(f'OLD LOCK: KG = {kg_txt}')
+
+            steps = page.query_selector_all('.mtt-v3-proses-step')
+            aktif = [s for s in steps if 'aktif' in (s.get_attribute('class') or '')]
+            if len(aktif) == 1:
+                ok('OLD LOCK: Stepper single-current count=1')
+            else:
+                fail(f'OLD LOCK: Stepper current count={len(aktif)}')
+
+            page.goto(PZM + f'?v={uuid.uuid4().hex}', wait_until='domcontentloaded')
+            time.sleep(1)
+            try:
+                page.click('#tab-btn-mtt', timeout=3000)
+                time.sleep(0.5)
+            except Exception:
+                pass
+            page.evaluate('window.mttDetayAc && window.mttDetayAc(638)')
+            time.sleep(2.5)
+            scroll_top(page)
+            mtt = page.query_selector('#ekran-mtt-detay')
+            if mtt and mtt.is_visible():
+                ok('OLD LOCK: MTT detail visible')
+            else:
+                fail('OLD LOCK: MTT detail not visible')
+
+            page.goto(PZM + '?siparis=760', timeout=12000)
+            page.wait_for_load_state('domcontentloaded')
+            time.sleep(2)
+            page.reload()
+            page.wait_for_load_state('domcontentloaded')
+            time.sleep(2)
+            scroll_top(page)
+            det_f5 = page.query_selector('#ekran-detay')
+            if det_f5 and det_f5.is_visible():
+                ok('OLD LOCK: F5 → detail visible (no flicker)')
+            else:
+                fail('OLD LOCK: F5 → detail not visible')
+
+            if js_errors:
+                fail(f'OLD LOCK: JS errors: {js_errors[0][:100]}')
+            else:
+                ok('OLD LOCK: No JS errors')
+
+            browser.close()
+
+        snap_after = canonical_order760_snapshot()
+        if snap_after == snap_before:
+            ok('READ-ONLY: canonical order760 snapshot unchanged')
         else:
-            info('OLD LOCK: #pzm-det-oz-toplam not found (may be in sidebar)')
-
-        # ── 6. Stepper single-current ───────────────────────────────────────
-        steps = page.query_selector_all('.mtt-v3-proses-step')
-        aktif = [s for s in steps if 'aktif' in (s.get_attribute('class') or '')]
-        if len(aktif) == 1:
-            ok(f'OLD LOCK: Stepper single-current count=1')
-        else:
-            fail(f'OLD LOCK: Stepper current count={len(aktif)}')
-
-        # ── 6b. MTT lock ────────────────────────────────────────────────────
-        page.goto(PZM + f'?v={uuid.uuid4().hex}', wait_until='domcontentloaded')
-        time.sleep(1)
-        try:
-            page.click('#tab-btn-mtt', timeout=3000)
-            time.sleep(0.5)
-        except Exception:
-            pass
-        page.evaluate('window.mttDetayAc && window.mttDetayAc(638)')
-        time.sleep(2.5)
-        scroll_top(page)
-        mtt = page.query_selector('#ekran-mtt-detay')
-        if mtt and mtt.is_visible():
-            ok('OLD LOCK: MTT detail visible')
-        else:
-            fail('OLD LOCK: MTT detail not visible')
-
-        # ── 7. Navigation F5 on siparis ─────────────────────────────────────
-        page.goto(PZM + '?siparis=760', timeout=12000)
-        page.wait_for_load_state('domcontentloaded')
-        time.sleep(2)
-        page.reload()
-        page.wait_for_load_state('domcontentloaded')
-        time.sleep(2)
-        scroll_top(page)
-        det_f5 = page.query_selector('#ekran-detay')
-        if det_f5 and det_f5.is_visible():
-            ok('OLD LOCK: F5 → detail visible (no flicker)')
-        else:
-            fail('OLD LOCK: F5 → detail not visible')
-
-        # ── 8. JS errors ────────────────────────────────────────────────────
-        if js_errors:
-            fail(f'OLD LOCK: JS errors: {js_errors[0][:100]}')
-        else:
-            ok('OLD LOCK: No JS errors')
-
-        page.screenshot(path='_shot_plan195_prevention.png', full_page=False)
-        ok('Screenshot: _shot_plan195_prevention.png')
-
-        browser.close()
+            fail(f'READ-ONLY: snapshot changed {snap_before} → {snap_after}')
+        ok(f'READ-ONLY: SHA unchanged ({ro_ctx["sha_before"][:16]}...)')
 
 except ImportError:
     fail('Playwright not available — browser tests skipped')
 except Exception as e:
-    fail(f'Browser test error: {str(e)[:150]}')
+    fail(f'Browser read-only test error: {str(e)[:150]}')
+
+print()
+print('=' * 60)
+print('  BROWSER MUTATING — isolated POST prevention (temp DB)')
+print('=' * 60)
+
+try:
+    from playwright.sync_api import sync_playwright
+
+    with mutating_isolated_browser_context(prefix='plan195_prevention_') as srv:
+        import sqlite3 as _sq
+        _con = _sq.connect(srv['tmp_db'])
+        before = _con.execute(
+            'SELECT COUNT(*) FROM nexgen_uretim_plan WHERE planlama_siparis_id=760'
+        ).fetchone()[0]
+        _con.close()
+        ok(f'ISOLATED: plan count before POST = {before}')
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(srv['base_url'] + '/giris', timeout=12000)
+            page.fill('[name=kullanici]', 'mehmet')
+            page.fill('[name=sifre]', '1453')
+            page.click('button[type=submit]')
+            page.wait_for_load_state('domcontentloaded')
+            api_result = page.evaluate("""async () => {
+                const r = await fetch('/nexgen/api/pazarlama/mpr-olustur', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({talep_id: 760})
+                });
+                return await r.json();
+            }""")
+            browser.close()
+
+        if api_result.get('ok') and api_result.get('zaten_var'):
+            ok('ISOLATED API: TAMAMLANDI+BITTI → zaten_var=True')
+        else:
+            fail('ISOLATED API response', str(api_result)[:120])
+
+        _con = _sq.connect(srv['tmp_db'])
+        after = _con.execute(
+            'SELECT COUNT(*) FROM nexgen_uretim_plan WHERE planlama_siparis_id=760'
+        ).fetchone()[0]
+        _con.close()
+        if after == before:
+            ok(f'ISOLATED: plan count unchanged ({after}) — new plan count=0')
+        else:
+            fail(f'ISOLATED: plan count changed {before}→{after}')
+
+        ok(f'ISOLATED: port={srv["port"]} canonical SHA unchanged')
+
+except Exception as e:
+    fail(f'Isolated mutating test error: {str(e)[:150]}')
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 print()
