@@ -219,6 +219,7 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
     @login_gerekli
     def musteri_pazarlama_ajanda_sayfa():
         from datetime import date as _date
+        MO_AJANDA_ERHAN_UID = 49
         u, yk = _yetki_kontrol()
         hafta_arg = (request.args.get('hafta') or '').strip()
         hafta_ref = None
@@ -227,10 +228,21 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
                 hafta_ref = _date.fromisoformat(hafta_arg[:10])
             except ValueError:
                 hafta_ref = None
+        uid = kullanici_id_fn()
         con = db_fn()
         try:
             from modules.nexgen.musteri_pazarlama_service import ajanda_sayfa_verisi
-            aj_veri = ajanda_sayfa_verisi(con, kullanici_id_fn(), yk, hafta_ref=hafta_ref)
+            from modules.nexgen.cari360_yetki import can_cari360_view_all
+            cross_hedef = None
+            hedef_uid = None
+            ajanda_readonly = False
+            if can_cari360_view_all(yk) and int(uid) != MO_AJANDA_ERHAN_UID:
+                cross_hedef = MO_AJANDA_ERHAN_UID
+                hedef_uid = MO_AJANDA_ERHAN_UID
+                ajanda_readonly = True
+            aj_veri = ajanda_sayfa_verisi(
+                con, uid, yk, hafta_ref=hafta_ref, hedef_kullanici_id=cross_hedef,
+            )
         finally:
             con.close()
         return render_template(
@@ -239,6 +251,8 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
             aj=aj_veri,
             kullanici_ad=u.get('KullaniciAdi') or '',
             gorusme_tipleri_all=GORUSME_TIPLERI_ALL,
+            hedef_kullanici_id=hedef_uid,
+            ajanda_readonly=ajanda_readonly,
         )
 
     @bp.route('/api/musteri-pazarlama/ajanda', methods=['GET'])
@@ -250,15 +264,38 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
         bit = (request.args.get('bit') or '').strip()
         uid = kullanici_id_fn()
         yk = kullanici_yetkileri(session.get('kullanici') or {})
+        MO_AJANDA_ERHAN_UID = 49
+        from modules.nexgen.cari360_yetki import can_cari360_view_all
+        if can_cari360_view_all(yk) and int(uid) != MO_AJANDA_ERHAN_UID:
+            hedef_uid = MO_AJANDA_ERHAN_UID
+        else:
+            hedef_raw = (request.args.get('hedef_kullanici_id') or '').strip()
+            hedef_uid = int(hedef_raw) if hedef_raw.isdigit() else None
         con = db_fn()
         try:
             if bas and bit:
                 from modules.nexgen.musteri_pazarlama_service import ajanda_tarih_araligi_listele
-                liste = ajanda_tarih_araligi_listele(con, uid, yk, bas, bit)
-                return jsonify({'ok': True, 'liste': liste, 'bas': bas, 'bit': bit})
-            from modules.nexgen.mo_ajanda_service import ajanda_listele
-            liste = ajanda_listele(con, uid, yk, filtre=filtre)
-            return jsonify({'ok': True, 'liste': liste, 'filtre': filtre})
+                from modules.nexgen.mo_ajanda_service import MoAjandaError
+                try:
+                    liste = ajanda_tarih_araligi_listele(
+                        con, uid, yk, bas, bit, hedef_kullanici_id=hedef_uid,
+                    )
+                except MoAjandaError as e:
+                    return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod
+                return jsonify({
+                    'ok': True,
+                    'liste': liste,
+                    'bas': bas,
+                    'bit': bit,
+                    'hedef_kullanici_id': hedef_uid,
+                })
+            from modules.nexgen.mo_ajanda_service import ajanda_listele, MoAjandaError
+            try:
+                liste = ajanda_listele(con, uid, yk, filtre=filtre, hedef_kullanici_id=hedef_uid)
+            except MoAjandaError as e:
+                return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod
+            return jsonify({'ok': True, 'liste': liste, 'filtre': filtre,
+                            'hedef_kullanici_id': hedef_uid})
         finally:
             con.close()
 

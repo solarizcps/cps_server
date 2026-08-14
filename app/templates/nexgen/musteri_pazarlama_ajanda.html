@@ -11,11 +11,18 @@
       <div class="mpa-page-hdr-sol">
         <a href="/nexgen/musteri-pazarlama" class="mpa-geri" title="Müşteri Operasyonu">←</a>
         <div>
+          {% if ajanda_readonly %}
+          <h1 class="mpa-baslik">ERHAN ATLAR — AJANDA</h1>
+          <p class="mpa-alt">Pazarlamacı: Erhan Atlar</p>
+          {% else %}
           <h1 class="mpa-baslik">AJANDA</h1>
           <p class="mpa-alt">Görüşmelerinizi planlayın, takip edin ve yönetin.</p>
+          {% endif %}
         </div>
       </div>
+      {% if not ajanda_readonly %}
       <button type="button" class="mpa-btn mpa-btn-primary" id="mpa-plan-ac">+ Görüşme Planla</button>
+      {% endif %}
     </div>
     <nav class="mpa-nav" id="mpa-nav">
       <button type="button" class="mpa-sekme mpa-sekme-aktif" data-sekme="ajanda" id="mpa-sekme-ajanda">AJANDA</button>
@@ -34,8 +41,10 @@
           <span class="mpa-zu-firma">{{ z.musteri }}</span>
           <span>{{ z.tarih }} {{ z.saat }} — {{ z.gorusme_tipi }}</span>
           <span class="mpa-zu-bek">{{ z.bekleyen_metin }}</span>
+          {% if not ajanda_readonly %}
           <a href="/nexgen/musteri-pazarlama?gorusme_ac=1&amp;source=ajanda&amp;cari_id={{ z.cari_id }}&amp;ajanda_id={{ z.ajanda_id }}&amp;gorusme_tipi={{ z.gorusme_tipi|urlencode }}&amp;unvan={{ z.musteri|urlencode }}{% if z.plan_notu %}&amp;plan_notu={{ z.plan_notu|urlencode }}{% endif %}"
             class="mpa-btn mpa-btn-primary mpa-btn-xs">Görüşme Sonucunu Gir</a>
+          {% endif %}
         </li>
         {% endfor %}
       </ul>
@@ -89,7 +98,9 @@
               <div class="mpa-firma-ad" title="{{ f.unvan }}">{{ f.unvan }}</div>
               <div class="mpa-firma-son">{{ f.son_gorusme }}</div>
             </div>
+            {% if not ajanda_readonly %}
             <button type="button" class="mpa-btn-planla mpa-btn-planla-sm" data-cari-id="{{ f.cari_id }}" data-unvan="{{ f.unvan|e }}">Planla</button>
+            {% endif %}
           </div>
           {% else %}
           <div class="mpa-bos">Yakın dönemde görüşülmeyen firma yok.</div>
@@ -132,7 +143,9 @@
           <div class="mpa-stat-box mpa-stat-yesil"><small>Tamamlanan</small><strong id="mpa-gun-tamamlanan">0</strong></div>
         </div>
         <div class="mpa-gun-liste" id="mpa-gun-liste"></div>
+        {% if not ajanda_readonly %}
         <button type="button" class="mpa-btn mpa-btn-primary mpa-btn-block" id="mpa-gune-plan-ekle">+ Bu Güne Görüşme Ekle</button>
+        {% endif %}
       </section>
     </aside>
   </div>
@@ -158,7 +171,9 @@
         <div class="mpa-alt-avatar">{{ (f.unvan or '?')[:2]|upper }}</div>
         <div class="mpa-alt-ad" title="{{ f.unvan }}">{{ f.unvan }}</div>
         <div class="mpa-alt-son">{{ f.son_gorusme }}</div>
+        {% if not ajanda_readonly %}
         <button type="button" class="mpa-btn mpa-btn-outline mpa-btn-planla" data-cari-id="{{ f.cari_id }}" data-unvan="{{ f.unvan|e }}">Planla</button>
+        {% endif %}
       </div>
       {% else %}
       <div class="mpa-bos">Görüşülmeyen firma bulunmuyor.</div>
@@ -222,7 +237,9 @@
   'hafta_bit': aj.hafta_bit,
   'planlar': aj.planlar,
   'ozet': aj.ozet,
-  'gorusulmeyen_firmalar': aj.gorusulmeyen_firmalar
+  'gorusulmeyen_firmalar': aj.gorusulmeyen_firmalar,
+  'hedef_kullanici_id': hedef_kullanici_id,
+  'ajanda_readonly': ajanda_readonly
 } | tojson }}</script>
 
 <style>
@@ -719,6 +736,8 @@
   var planlar = init.planlar || [];
   var haftaBas = init.hafta_bas;
   var haftaBit = init.hafta_bit;
+  var hedefKullaniciId = init.hedef_kullanici_id || null;
+  var ajandaReadonly = !!init.ajanda_readonly;
   var seciliGun = new Date().toISOString().slice(0, 10);
   var aktifSekme = 'ajanda';
   var idemKey = null;
@@ -782,6 +801,7 @@
     return 'Planlandı';
   }
   function planAksiyonGerekli(k) {
+    if (ajandaReadonly) return false;
     var dg = (k.durum_gorunum || '').toUpperCase();
     if (dg === 'SONUC_BEKLIYOR' || dg === 'ZORUNLU_SONUC_BEKLIYOR') return true;
     return (k.durum || '').toUpperCase() === 'PLANLANDI';
@@ -1113,10 +1133,14 @@
       };
     });
   }
+  function ajandaHedefQuery() {
+    if (!hedefKullaniciId) return '';
+    return '&hedef_kullanici_id=' + encodeURIComponent(String(hedefKullaniciId));
+  }
   function loadHafta(bas) {
     haftaBas = bas;
     haftaBit = addDays(bas, 6);
-    fetch('/nexgen/api/musteri-pazarlama/ajanda?bas=' + encodeURIComponent(haftaBas) + '&bit=' + encodeURIComponent(haftaBit))
+    fetch('/nexgen/api/musteri-pazarlama/ajanda?bas=' + encodeURIComponent(haftaBas) + '&bit=' + encodeURIComponent(haftaBit) + ajandaHedefQuery())
       .then(function(r){ return r.json(); })
       .then(function(d) {
         if (!d.ok) { toast(d.mesaj || 'Yüklenemedi'); return; }
@@ -1175,54 +1199,55 @@
       renderBuHaftaListe();
     }
   });
-  document.getElementById('mpa-plan-ac').addEventListener('click', function() { openPlanForm(); });
-  document.getElementById('mpa-gune-plan-ekle').addEventListener('click', function() { openPlanForm({ tarih: seciliGun }); });
-  document.getElementById('mpa-plan-kapat').addEventListener('click', closePlanForm);
-  document.getElementById('mpa-plan-vazgec').addEventListener('click', closePlanForm);
   document.getElementById('mpa-detay-kapat').addEventListener('click', closeGorusmeDetay);
   document.getElementById('mpa-gorusme-detay-overlay').addEventListener('click', function(e) {
     if (e.target === e.currentTarget) closeGorusmeDetay();
   });
-  document.getElementById('mpa-plan-form').addEventListener('submit', function(e) {
-    e.preventDefault();
-    var cariEl = document.getElementById('mpa-p-cari');
-    var tarihEl = document.getElementById('mpa-p-tarih');
-    var saatEl = document.getElementById('mpa-p-saat');
-    var tipEl = document.getElementById('mpa-p-tip');
-    var notEl = document.getElementById('mpa-p-not');
-    var cariId = parseInt(cariEl.value, 10);
-    var tarih = tarihEl.value;
-    var saat = saatEl.value;
-    var tip = tipEl.value;
-    var not = notEl.value.trim();
-    if (!cariId) { toast('Firma seçimi zorunludur.'); cariEl.focus(); return; }
-    if (!tarih) { toast('Tarih zorunludur.'); tarihEl.focus(); return; }
-    if (!saat) { toast('Saat zorunludur.'); saatEl.focus(); return; }
-    if (!tip) { toast('Görüşme tipi zorunludur.'); tipEl.focus(); return; }
-    if (!idemKey) idemKey = newIdemKey();
-    var submitBtn = document.getElementById('mpa-plan-submit');
-    if (submitBtn) submitBtn.disabled = true;
-    fetch('/nexgen/api/musteri-pazarlama/ajanda', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        cari_id: cariId, plan_tarihi: tarih + 'T' + saat,
-        gorusme_tipi: tip, plan_notu: not || null, idempotency_key: idemKey
-      })
-    }).then(function(r){ return r.json(); }).then(function(d) {
-      if (submitBtn) submitBtn.disabled = false;
-      if (!d.ok) { toast(d.mesaj || 'Kayıt başarısız'); return; }
-      toast(d.mesaj || 'Görüşme planlandı');
-      closePlanForm();
-      seciliGun = tarih;
-      loadHafta(haftaPazartesi(tarih));
-    }).catch(function(){
-      if (submitBtn) submitBtn.disabled = false;
-      toast('Bağlantı hatası');
+  if (!ajandaReadonly) {
+    document.getElementById('mpa-plan-ac').addEventListener('click', function() { openPlanForm(); });
+    document.getElementById('mpa-gune-plan-ekle').addEventListener('click', function() { openPlanForm({ tarih: seciliGun }); });
+    document.getElementById('mpa-plan-kapat').addEventListener('click', closePlanForm);
+    document.getElementById('mpa-plan-vazgec').addEventListener('click', closePlanForm);
+    document.getElementById('mpa-plan-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      var cariEl = document.getElementById('mpa-p-cari');
+      var tarihEl = document.getElementById('mpa-p-tarih');
+      var saatEl = document.getElementById('mpa-p-saat');
+      var tipEl = document.getElementById('mpa-p-tip');
+      var notEl = document.getElementById('mpa-p-not');
+      var cariId = parseInt(cariEl.value, 10);
+      var tarih = tarihEl.value;
+      var saat = saatEl.value;
+      var tip = tipEl.value;
+      var not = notEl.value.trim();
+      if (!cariId) { toast('Firma seçimi zorunludur.'); cariEl.focus(); return; }
+      if (!tarih) { toast('Tarih zorunludur.'); tarihEl.focus(); return; }
+      if (!saat) { toast('Saat zorunludur.'); saatEl.focus(); return; }
+      if (!tip) { toast('Görüşme tipi zorunludur.'); tipEl.focus(); return; }
+      if (!idemKey) idemKey = newIdemKey();
+      var submitBtn = document.getElementById('mpa-plan-submit');
+      if (submitBtn) submitBtn.disabled = true;
+      fetch('/nexgen/api/musteri-pazarlama/ajanda', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cari_id: cariId, plan_tarihi: tarih + 'T' + saat,
+          gorusme_tipi: tip, plan_notu: not || null, idempotency_key: idemKey
+        })
+      }).then(function(r){ return r.json(); }).then(function(d) {
+        if (submitBtn) submitBtn.disabled = false;
+        if (!d.ok) { toast(d.mesaj || 'Kayıt başarısız'); return; }
+        toast(d.mesaj || 'Görüşme planlandı');
+        closePlanForm();
+        seciliGun = tarih;
+        loadHafta(haftaPazartesi(tarih));
+      }).catch(function(){
+        if (submitBtn) submitBtn.disabled = false;
+        toast('Bağlantı hatası');
+      });
     });
-  });
-
-  bindPlanlaBtns();
+    bindPlanlaBtns();
+  }
   ozetGuncelle();
   renderTakvim();
   renderGunDetay();

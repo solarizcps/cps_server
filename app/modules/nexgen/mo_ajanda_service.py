@@ -295,15 +295,36 @@ def ajanda_olustur(
         raise
 
 
+def ajanda_gorunen_kullanici(
+    oturum_kullanici_id: int,
+    yk: set[str] | None,
+    hedef_kullanici_id: int | None = None,
+) -> tuple[int, bool]:
+    """Oturum + hedef → görünen pazarlamacı uid ve admin cross-view bayrağı."""
+    from modules.nexgen.cari360_yetki import can_cari360_view_all
+
+    oturum_uid = int(oturum_kullanici_id)
+    if hedef_kullanici_id and int(hedef_kullanici_id) != oturum_uid:
+        if not can_cari360_view_all(yk or set()):
+            raise MoAjandaError('Başka pazarlamacının ajandası için yetki yok.', 403)
+        return int(hedef_kullanici_id), True
+    return oturum_uid, False
+
+
 def ajanda_listele(
     con: sqlite3.Connection,
     kullanici_id: int,
     yk: set[str] | None = None,
     *,
     filtre: str = 'bugun',
+    hedef_kullanici_id: int | None = None,
 ) -> list[dict[str, Any]]:
     if not _tablo_var(con, TABLO):
         return []
+
+    gorunen_uid, baska_pazarlamaci = ajanda_gorunen_kullanici(
+        kullanici_id, yk, hedef_kullanici_id,
+    )
 
     f = (filtre or 'bugun').strip().lower()
     today = _today()
@@ -315,7 +336,7 @@ def ajanda_listele(
         LEFT JOIN nexgen_cari c ON c.id = a.cari_id
         WHERE a.aktif=1 AND a.kullanici_id=?
     """
-    params: list[Any] = [kullanici_id]
+    params: list[Any] = [gorunen_uid]
 
     if f == 'bugun':
         sql += " AND substr(a.plan_tarihi, 1, 10) = ?"
@@ -336,9 +357,13 @@ def ajanda_listele(
     out: list[dict[str, Any]] = []
     for r in rows:
         item = _row_dict(r, cm)
-        if not can_mo_view_cari(con, kullanici_id, int(r['cari_id']), yk):
+        # Admin cross-view: ajanda owner canonical; oturum cari scope uygulanmaz
+        if baska_pazarlamaci:
+            out.append(item)
+        elif not can_mo_view_cari(con, kullanici_id, int(r['cari_id']), yk):
             continue
-        out.append(item)
+        else:
+            out.append(item)
     return ajanda_enrich_gorusme_ozet(con, out)
 
 
@@ -347,7 +372,6 @@ def ajanda_zorunlu_sonuc_listele(
     kullanici_id: int,
     yk: set[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Önceki gün(ler)den kalan sonuçsuz PLANLANDI kayıtları — blocking gate."""
     today = _today()
     planli = ajanda_listele(con, kullanici_id, yk, filtre='planli')
     out: list[dict[str, Any]] = []

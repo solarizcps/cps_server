@@ -1821,18 +1821,29 @@ def _ajanda_hafta_araligi(ref: date | None = None) -> tuple[str, str]:
 
 def ajanda_tarih_araligi_listele(
     con: sqlite3.Connection,
-    kullanici_id: int,
+    oturum_kullanici_id: int,
     yk: set[str] | None,
     bas_tarih: str,
     bit_tarih: str,
+    *,
+    hedef_kullanici_id: int | None = None,
 ) -> list[dict[str, Any]]:
     """Ajanda sayfası — belirli hafta aralığındaki planlar."""
     from modules.nexgen.mo_ajanda_config import TABLO as AJ_TABLO
-    from modules.nexgen.mo_ajanda_service import _cari_map, _row_dict, _tablo_var
+    from modules.nexgen.mo_ajanda_service import (
+        _cari_map,
+        _row_dict,
+        _tablo_var,
+        ajanda_enrich_gorusme_ozet,
+        ajanda_gorunen_kullanici,
+    )
     from modules.nexgen.cari_sorumlu_service import can_mo_view_cari
 
     if yk is None:
-        yk = load_kullanici_yetkileri(con, kullanici_id)
+        yk = load_kullanici_yetkileri(con, oturum_kullanici_id)
+    gorunen_uid, baska_pazarlamaci = ajanda_gorunen_kullanici(
+        oturum_kullanici_id, yk, hedef_kullanici_id,
+    )
     if not _tablo_var(con, AJ_TABLO):
         return []
     rows = con.execute(
@@ -1844,16 +1855,18 @@ def ajanda_tarih_araligi_listele(
           AND substr(a.plan_tarihi, 1, 10) BETWEEN ? AND ?
         ORDER BY a.plan_tarihi ASC, a.id ASC
         """,
-        (kullanici_id, bas_tarih[:10], bit_tarih[:10]),
+        (gorunen_uid, bas_tarih[:10], bit_tarih[:10]),
     ).fetchall()
     cari_ids = sorted({int(r['cari_id']) for r in rows if r['cari_id']})
     cm = _cari_map(con, cari_ids)
     out: list[dict[str, Any]] = []
     for r in rows:
-        if not can_mo_view_cari(con, kullanici_id, int(r['cari_id']), yk):
+        if baska_pazarlamaci:
+            out.append(_row_dict(r, cm))
+        elif not can_mo_view_cari(con, oturum_kullanici_id, int(r['cari_id']), yk):
             continue
-        out.append(_row_dict(r, cm))
-    from modules.nexgen.mo_ajanda_service import ajanda_enrich_gorusme_ozet
+        else:
+            out.append(_row_dict(r, cm))
     return ajanda_enrich_gorusme_ozet(con, out)
 
 
@@ -1922,21 +1935,30 @@ def ajanda_hafta_ozet(planlar: list[dict[str, Any]]) -> dict[str, int]:
 
 def ajanda_sayfa_verisi(
     con: sqlite3.Connection,
-    kullanici_id: int,
+    oturum_kullanici_id: int,
     yk: set[str] | None = None,
     *,
     hafta_ref: date | None = None,
+    hedef_kullanici_id: int | None = None,
 ) -> dict[str, Any]:
     """Ajanda tam sayfa — haftalık planlar, özet, görüşülmeyen firmalar."""
+    from modules.nexgen.mo_ajanda_service import ajanda_gorunen_kullanici
+
     if yk is None:
-        yk = load_kullanici_yetkileri(con, kullanici_id)
+        yk = load_kullanici_yetkileri(con, oturum_kullanici_id)
+    gorunen_uid, _ = ajanda_gorunen_kullanici(
+        oturum_kullanici_id, yk, hedef_kullanici_id,
+    )
     hafta_bas, hafta_bit = _ajanda_hafta_araligi(hafta_ref)
-    planlar = ajanda_tarih_araligi_listele(con, kullanici_id, yk, hafta_bas, hafta_bit)
+    planlar = ajanda_tarih_araligi_listele(
+        con, oturum_kullanici_id, yk, hafta_bas, hafta_bit,
+        hedef_kullanici_id=hedef_kullanici_id,
+    )
     ozet = ajanda_hafta_ozet(planlar)
-    gorusulmeyen = ajanda_gorusulmeyen_firmalar(con, kullanici_id, yk)
+    gorusulmeyen = ajanda_gorusulmeyen_firmalar(con, gorunen_uid, yk)
     ozet['gorusulmeyen_firmalar'] = len(gorusulmeyen)
 
-    kapsam = get_musteri_operasyonu_kapsami(con, kullanici_id, yk)
+    kapsam = get_musteri_operasyonu_kapsami(con, gorunen_uid, yk)
     cari_ids = list(kapsam.get('cari_id_listesi') or [])
     musteriler: list[dict[str, Any]] = []
     if cari_ids:
@@ -1949,7 +1971,7 @@ def ajanda_sayfa_verisi(
                 'cari_kod': info.get('cari_kod') or '',
             })
 
-    zorunlu_gate = _ajanda_zorunlu_gate_items(con, kullanici_id, yk)
+    zorunlu_gate = _ajanda_zorunlu_gate_items(con, gorunen_uid, yk)
 
     return {
         'hafta_bas': hafta_bas,
